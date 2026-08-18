@@ -321,7 +321,7 @@ frames would reproject through the wrong clip.
 * **In:** `scene.posedInstances` (the dense list of `SkinnedState` indices to pose — a sweep of the
   state buffer would pose freed slots), `scene.skinnedStateBuffer`, `scene.skinnedGeomBuffer`,
   `scene.skinnedBoneBuffer`, `scene.clipBuffer`, `scene.boneSampleBuffer`.
-* **Out:** `scene.bonePalettes`, the view's `PaletteArena` — GPU-only storage with a CPU-side offset
+* **Out:** `scene.bonePalettes`, the view's `BonePaletteBuffer` — GPU-only storage with a CPU-side offset
   allocator, because a `RangeBuffer` would re-upload its stale CPU mirror over what this wrote.
 * **Skipped** when the view places no skinned instance.
 

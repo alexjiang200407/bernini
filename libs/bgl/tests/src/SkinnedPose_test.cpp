@@ -211,6 +211,20 @@ namespace
 		return palette;
 	}
 
+	/** Where `instance`'s palette begins. Never assume 0: the arena reserves element 0 as its null. */
+	uint32_t
+	PaletteBaseOf(bgl::SceneView* view, bgl::MeshInstanceHandle instance)
+	{
+		auto  buffers      = view->GetInstanceBuffers();
+		auto& meshBuffer   = std::get<1>(buffers);
+		auto& skinnedState = std::get<3>(buffers);
+
+		const bgl::idl::Mesh& mesh = meshBuffer.AtIndex(instance.handle.index);
+		REQUIRE_FALSE(mesh.skinnedState.Null());
+
+		return skinnedState.AtIndex(mesh.skinnedState.offset).palette.offsetStart;
+	}
+
 	void
 	CheckNear(const glm::vec3& actual, const glm::vec3& expected)
 	{
@@ -291,10 +305,12 @@ TEST_CASE("the pose pass writes the palette a rig's hierarchy implies", "[skinne
 		// rate 0 holds frame 0, which is the bind pose: pose * inverseBind is then exactly identity
 		// for every bone. A wrong inverse bind, a missed hierarchy level and a mis-strided sample
 		// fetch all break this, which is why it is the first thing asserted.
-		view->CreateSkinnedMeshInstance(geom, glm::mat4(1.0f), { 0, 0.0f, 0.0f });
+		const auto instance =
+			view->CreateSkinnedMeshInstance(geom, glm::mat4(1.0f), { 0, 0.0f, 0.0f });
 		gfx->DrawFrame(target, job);
 
-		const Palette palette = ReadPalette(gfxBase, viewRaw, 0, float4sPerPose);
+		const Palette palette =
+			ReadPalette(gfxBase, viewRaw, PaletteBaseOf(viewRaw, instance), float4sPerPose);
 
 		for (uint32_t bone = 0; bone < c_BoneCount; ++bone)
 		{
@@ -310,10 +326,12 @@ TEST_CASE("the pose pass writes the palette a rig's hierarchy implies", "[skinne
 	SECTION("a parent's rotation reaches its grandchild")
 	{
 		// Frame 1 swings bone 1 by 90 degrees about +Z, about its own bind position (0,1,0).
-		view->CreateSkinnedMeshInstance(geom, glm::mat4(1.0f), { 0, 1.0f, 0.0f });
+		const auto instance =
+			view->CreateSkinnedMeshInstance(geom, glm::mat4(1.0f), { 0, 1.0f, 0.0f });
 		gfx->DrawFrame(target, job);
 
-		const Palette palette = ReadPalette(gfxBase, viewRaw, 0, float4sPerPose);
+		const Palette palette =
+			ReadPalette(gfxBase, viewRaw, PaletteBaseOf(viewRaw, instance), float4sPerPose);
 
 		// Bone 0 never moves: it is the root and its own local pose is unchanged.
 		CheckNear(palette.Apply(0, glm::vec3(0.0f, 0.0f, 0.0f)), glm::vec3(0.0f));
@@ -335,10 +353,12 @@ TEST_CASE("the pose pass writes the palette a rig's hierarchy implies", "[skinne
 	{
 		// Half of a 90-degree swing is 45, and nlerp of the two endpoint quaternions is exactly the
 		// half-angle rotation here (a single axis, so the shortest arc is unambiguous).
-		view->CreateSkinnedMeshInstance(geom, glm::mat4(1.0f), { 0, 0.5f, 0.0f });
+		const auto instance =
+			view->CreateSkinnedMeshInstance(geom, glm::mat4(1.0f), { 0, 0.5f, 0.0f });
 		gfx->DrawFrame(target, job);
 
-		const Palette palette = ReadPalette(gfxBase, viewRaw, 0, float4sPerPose);
+		const Palette palette =
+			ReadPalette(gfxBase, viewRaw, PaletteBaseOf(viewRaw, instance), float4sPerPose);
 
 		const float c = std::cos(glm::radians(45.0f));
 		const float s = std::sin(glm::radians(45.0f));
@@ -368,20 +388,15 @@ TEST_CASE("the pose pass writes the palette a rig's hierarchy implies", "[skinne
 		gfx->DrawFrame(target, job);
 		CHECK(viewRaw->GetPosedInstanceCount() == c_Instances);
 
-		auto  instanceBuffers = viewRaw->GetInstanceBuffers();
-		auto& meshBuffer      = std::get<1>(instanceBuffers);
-		auto& skinnedStates   = std::get<3>(instanceBuffers);
-
 		// The first and the last, so both a slice allocated before the growth and one allocated after
 		// it are covered.
 		for (const uint32_t which : { 0u, c_Instances - 1 })
 		{
-			const uint32_t meshIndex = handles[which].handle.index;
-			const uint32_t base =
-				skinnedStates.AtIndex(meshBuffer.AtIndex(meshIndex).skinnedState.offset)
-					.paletteBase;
-
-			const Palette palette = ReadPalette(gfxBase, viewRaw, base, float4sPerPose);
+			const Palette palette = ReadPalette(
+				gfxBase,
+				viewRaw,
+				PaletteBaseOf(viewRaw, handles[which]),
+				float4sPerPose);
 			CheckNear(palette.Apply(1, glm::vec3(0.0f, 2.0f, 0.0f)), glm::vec3(-1.0f, 1.0f, 0.0f));
 			CheckNear(palette.Apply(2, glm::vec3(0.0f, 3.0f, 0.0f)), glm::vec3(-2.0f, 1.0f, 0.0f));
 		}
@@ -392,7 +407,8 @@ TEST_CASE("the pose pass writes the palette a rig's hierarchy implies", "[skinne
 		// rate 1 from phase 0: at time = one frame the current pose is frame 1 and the previous, one
 		// frame of clock earlier, is frame 0 -- the bind pose. That pair is what a motion vector is
 		// derived from, so the two halves must not be the same bytes.
-		view->CreateSkinnedMeshInstance(geom, glm::mat4(1.0f), { 0, 0.0f, 1.0f });
+		const auto instance =
+			view->CreateSkinnedMeshInstance(geom, glm::mat4(1.0f), { 0, 0.0f, 1.0f });
 
 		// Two frames, because prevTime equals time on the first one by construction (see ViewData) --
 		// a single draw would compare a pose against itself and pass on a palette that never wrote
@@ -403,7 +419,8 @@ TEST_CASE("the pose pass writes the palette a rig's hierarchy implies", "[skinne
 		job.time = 1.0f / c_SampleRate;
 		gfx->DrawFrame(target, job);
 
-		const Palette both = ReadPalette(gfxBase, viewRaw, 0, float4sPerPose * 2);
+		const Palette both =
+			ReadPalette(gfxBase, viewRaw, PaletteBaseOf(viewRaw, instance), float4sPerPose * 2);
 
 		// Current half: bone 1 swung.
 		CheckNear(both.Apply(1, glm::vec3(0.0f, 2.0f, 0.0f)), glm::vec3(-1.0f, 1.0f, 0.0f));

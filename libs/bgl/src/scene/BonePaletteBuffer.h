@@ -20,19 +20,19 @@ namespace bgl
 	 * carry forward. An allocation made before a growth keeps its offset, which is what lets an
 	 * instance hold one across frames.
 	 */
-	class PaletteArena
+	class BonePaletteBuffer
 	{
 	public:
-		PaletteArena() noexcept = default;
+		BonePaletteBuffer() noexcept = default;
 
-		PaletteArena(const PaletteArena&)     = delete;
-		PaletteArena(PaletteArena&&) noexcept = default;
+		BonePaletteBuffer(const BonePaletteBuffer&)     = delete;
+		BonePaletteBuffer(BonePaletteBuffer&&) noexcept = default;
 
-		PaletteArena&
-		operator=(const PaletteArena&) = delete;
+		BonePaletteBuffer&
+		operator=(const BonePaletteBuffer&) = delete;
 
-		PaletteArena&
-		operator=(PaletteArena&&) noexcept = default;
+		BonePaletteBuffer&
+		operator=(BonePaletteBuffer&&) noexcept = default;
 
 		/**
 		 * @throws std::runtime_error if the device cannot allocate the initial storage.

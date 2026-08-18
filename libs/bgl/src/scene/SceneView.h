@@ -1,10 +1,10 @@
 #pragma once
 #include "idl/idl.h"
 #include "resource/ResourceManager.h"
+#include "scene/BonePaletteBuffer.h"
 #include "scene/CullState.h"
 #include "scene/EntryBuffer.h"
 #include "scene/PackedBuffer.h"
-#include "scene/PaletteArena.h"
 #include "scene/TransparentSortState.h"
 #include "scene/UploadBuffer.h"
 #include "types/EnvironmentMap.h"
@@ -133,7 +133,7 @@ namespace bgl
 		 * The arena the pose pass writes and the skinned mesh shader reads. Exposed because the pass
 		 * reaches it through the FrameGraph by name, which nothing else can resolve.
 		 */
-		[[nodiscard]] const PaletteArena&
+		[[nodiscard]] const BonePaletteBuffer&
 		GetPalettes() const noexcept
 		{
 			return m_Palettes;
@@ -344,7 +344,7 @@ namespace bgl
 		EntryBuffer<idl::VatState>       m_VatStates;
 		EntryBuffer<idl::SkinnedState>   m_SkinnedStates;
 
-		PaletteArena m_Palettes;
+		BonePaletteBuffer m_Palettes;
 
 		// The SkinnedState indices the pose pass dispatches over, one workgroup each. Dense and
 		// CPU-authored rather than a sweep of m_SkinnedStates: erasing a slot only releases it, so a

@@ -311,12 +311,12 @@ namespace bgl
 
 		const core::multi_slot_handle palette = m_Palettes.Allocate(float4s);
 
-		auto state        = idl::SkinnedState();
-		state.geom        = rig.record;
-		state.clip        = desc.clip;
-		state.phase       = desc.phase;
-		state.rate        = desc.rate;
-		state.paletteBase = palette.index;
+		auto state    = idl::SkinnedState();
+		state.geom    = rig.record;
+		state.clip    = desc.clip;
+		state.phase   = desc.phase;
+		state.rate    = desc.rate;
+		state.palette = palette;
 
 		const core::slot_handle stateHandle = m_SkinnedStates.Add(state);
 		try
@@ -388,12 +388,17 @@ namespace bgl
 					geom.geomType);
 
 				// A drawable with no pipeline is not a drawable: HistogramInstances asserts on a pso
-				// past the bucket count, and the sort would skip it regardless. The slot is still
+				// past the bucket count, and the sort would skip it regardless. A null slot is still
 				// pushed, because overrides, selection marks and the epoch re-resolve all address a
 				// submesh by its index in this vector.
-				meta.submeshInstances.push_back(
-					instance.pso < c_PsoCount ? m_InstanceBuffer.Add(std::move(instance)) :
-												core::slot_handle{});
+				if (instance.pso < c_PsoCount)
+				{
+					meta.submeshInstances.emplace_back(m_InstanceBuffer.Add(std::move(instance)));
+				}
+				else
+				{
+					meta.submeshInstances.emplace_back();
+				}
 			}
 
 			SyncInstanceScratch();

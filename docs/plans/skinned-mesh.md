@@ -227,7 +227,7 @@ and the instance's `SkinnedState` back and asserts both; each documented refusal
 per bone (strided above the group size), clip sampled at `time` with nlerp between the two frames it
 falls between, hierarchy walked by depth level with a barrier per level, multiplied by `inverseBind`,
 written three rows a bone. Dispatched twice per instance for `time` and `prevTime` (ADR-5). Owns the
-`PaletteArena` and the slice each instance holds in it. `SkinnedPosePass` ordered ahead of
+`BonePaletteBuffer` and the slice each instance holds in it. `SkinnedPosePass` ordered ahead of
 `ForwardPass`. Still nothing draws.
 *Gate:* **acceptance 2** — palette readback asserted bone-for-bone.
 

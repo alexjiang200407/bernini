@@ -94,8 +94,12 @@ BoneSample SampleBone(SkinnedGeom geom, Clip clip, uint bone, float frames)
     return blended;
 }
 
-// Poses one instance into the palette starting at `paletteBase`. Every thread of the group must reach
-// this, and reach every barrier in it, or the ones that do hang.
+// Poses one instance into the palette starting at `paletteBase`.
+//
+// Every barrier below must be reached by every thread of the group the same number of times. It is:
+// the only loop carrying one is bounded by `geom.maxDepth`, which is group-uniform (the whole group
+// poses one instance, so it reads one geom), and the strided per-bone loops that *are* thread-varying
+// contain no barrier. Nothing returns early inside here either.
 void PoseInto(SkinnedGeom geom, Clip clip, SkinnedState state, float time, uint paletteBase, uint localIdx)
 {
     let frames = ClipFrames(clip, state.phase, state.rate, time);
@@ -108,8 +112,8 @@ void PoseInto(SkinnedGeom geom, Clip clip, SkinnedState state, float time, uint 
 
     // One level at a time: a bone's parent is always a lower index, but a lower index is not
     // necessarily a shallower one, so composing in index order would read a parent this pass has not
-    // composed yet. Every thread runs every level, including the ones with no bone at that depth,
-    // because the barrier is group-wide.
+    // composed yet. The bound is group-uniform, so every thread runs every level -- including a
+    // thread holding no bone at that depth, which still has to arrive at the barrier.
     for (uint level = 1; level <= geom.maxDepth; ++level)
     {
         for (uint bone = localIdx; bone < geom.boneCount; bone += cPoseGroupSize)
@@ -147,6 +151,8 @@ void main(uint groupIdx: SV_GroupID, uint localIdx: SV_GroupIndex)
         return;
     }
 
+    // Group-uniform, so the early-out above and every barrier below are reached by the whole group
+    // or by none of it.
     let stateIdx = gUniforms.posedInstances[groupIdx];
     SkinnedState state = gUniforms.skinnedStates.Get(stateIdx);
     SkinnedGeom geom = gUniforms.skinnedGeoms.Get(state.geom);
@@ -154,6 +160,8 @@ void main(uint groupIdx: SV_GroupID, uint localIdx: SV_GroupIndex)
 
     let stride = geom.boneCount * cFloat4sPerBone;
 
-    PoseInto(geom, clip, state, gUniforms.time, state.paletteBase, localIdx);
-    PoseInto(geom, clip, state, gUniforms.prevTime, state.paletteBase + stride, localIdx);
+    let base = state.palette.GetStart();
+
+    PoseInto(geom, clip, state, gUniforms.time, base, localIdx);
+    PoseInto(geom, clip, state, gUniforms.prevTime, base + stride, localIdx);
 }

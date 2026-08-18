@@ -1,4 +1,5 @@
 import Entry;
+import Range;
 import SkinnedGeom;
 
 // A skinned instance's playback record, written once at spawn and never touched per frame -- time is
@@ -17,9 +18,9 @@ public struct SkinnedState
     // Play-rate multiplier on the clip's authored sampleRate.
     public float rate;
 
-    // Where this instance's bone palette begins, in float4s. Two palettes live there back to back --
-    // the pose at ViewData::time first, then the pose at ViewData::prevTime cFloat4sPerBone *
-    // boneCount later -- so the mesh shader can skin both and derive a motion vector without a
-    // history buffer. Allocated at spawn and freed with the instance.
-    public uint paletteBase;
+    // This instance's slice of the view's bone-palette buffer, in float4s. Two palettes live in it
+    // back to back -- the pose at ViewData::time first, then the pose at ViewData::prevTime
+    // cFloat4sPerBone * boneCount later -- so the mesh shader can skin both and derive a motion
+    // vector without a history buffer. Allocated at spawn and freed with the instance.
+    public Range<float4> palette;
 };

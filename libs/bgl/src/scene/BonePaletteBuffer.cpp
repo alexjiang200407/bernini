@@ -1,4 +1,4 @@
-#include "scene/PaletteArena.h"
+#include "scene/BonePaletteBuffer.h"
 #include "scene/GrowableGpuBuffer.h"
 
 namespace bgl
@@ -11,7 +11,7 @@ namespace bgl
 	}
 
 	void
-	PaletteArena::Init(ResourceManagerRef resourceManager)
+	BonePaletteBuffer::Init(ResourceManagerRef resourceManager)
 	{
 		m_ResourceManager = std::move(resourceManager);
 
@@ -22,13 +22,18 @@ namespace bgl
 
 		m_Storage.Init(std::move(desc), m_ResourceManager);
 		m_Offsets.grow(c_InitialFloat4s);
+
+		// Element 0 is spent so an offset of 0 reads as null, the same sentinel every other
+		// shader-visible index in the tree uses. Without it a legitimately-first allocation would be
+		// indistinguishable from an unset Range.
+		[[maybe_unused]] const auto reserved = m_Offsets.allocate_slots(1);
 	}
 
 	core::multi_slot_handle
-	PaletteArena::Allocate(uint32_t float4Count)
+	BonePaletteBuffer::Allocate(uint32_t float4Count)
 	{
-		gassert(IsInitialized(), "PaletteArena is uninitialized; call Init() first");
-		gassert(float4Count > 0, "PaletteArena::Allocate requires a positive count");
+		gassert(IsInitialized(), "BonePaletteBuffer is uninitialized; call Init() first");
+		gassert(float4Count > 0, "BonePaletteBuffer::Allocate requires a positive count");
 
 		// allocate_slots throws when nothing fits rather than returning null, and "does not fit" is
 		// the ordinary case that triggers a growth here, not an error.
@@ -57,7 +62,7 @@ namespace bgl
 			handle = tryAllocate(float4Count);
 			core::throw_runtime_error_if(
 				handle.is_null(),
-				"PaletteArena: {} float4s do not fit even after growing to {}",
+				"BonePaletteBuffer: {} float4s do not fit even after growing to {}",
 				float4Count,
 				Capacity());
 		}
@@ -66,9 +71,9 @@ namespace bgl
 	}
 
 	void
-	PaletteArena::Free(core::multi_slot_handle handle) noexcept
+	BonePaletteBuffer::Free(core::multi_slot_handle handle) noexcept
 	{
-		gassert(IsInitialized(), "PaletteArena is uninitialized; call Init() first");
+		gassert(IsInitialized(), "BonePaletteBuffer is uninitialized; call Init() first");
 		m_Offsets.erase(handle);
 	}
 }
