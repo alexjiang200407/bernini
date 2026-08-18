@@ -64,10 +64,10 @@ namespace
 		{
 			const size_t base = size_t(v) * c_Stride;
 
-			const std::array<float, 3> pos    = { positions[v].x, positions[v].y, positions[v].z };
-			const std::array<float, 3> normal = { 0.0f, 0.0f, 1.0f };
-			const std::array<float, 2> uv     = { positions[v].x + 0.5f, positions[v].y * 0.5f };
-			const std::array<float, 4> tan    = { 1.0f, 0.0f, 0.0f, 1.0f };
+			const std::array<float, 3> pos = { { positions[v].x, positions[v].y, positions[v].z } };
+			const std::array<float, 3> normal = { { 0.0f, 0.0f, 1.0f } };
+			const std::array<float, 2> uv  = { { positions[v].x + 0.5f, positions[v].y * 0.5f } };
+			const std::array<float, 4> tan = { { 1.0f, 0.0f, 0.0f, 1.0f } };
 
 			PutFloats(mesh.vertexData, base + 0, pos);
 			PutFloats(mesh.vertexData, base + 12, normal);
@@ -79,8 +79,8 @@ namespace
 			// writes for a vertex it never assigned to a bone, which assetlib's CPU reference returns
 			// unskinned rather than collapsed.
 			const bool                    unbound = unboundTopEdge && v >= 2;
-			const std::array<uint16_t, 4> joints  = { bone[v], 0, 0, 0 };
-			const std::array<uint16_t, 4> weights = { uint16_t(unbound ? 0 : 0xFFFF), 0, 0, 0 };
+			const std::array<uint16_t, 4> joints  = { { bone[v], 0, 0, 0 } };
+			const std::array<uint16_t, 4> weights = { { uint16_t(unbound ? 0 : 0xFFFF), 0, 0, 0 } };
 			PutU16x4(mesh.vertexData, base + 48, joints);
 			PutU16x4(mesh.vertexData, base + 56, weights);
 		}
@@ -93,7 +93,10 @@ namespace
 		mesh.meshlets.push_back(meshlet);
 
 		for (uint32_t v = 0; v < 4; ++v) mesh.meshletVertices.push_back(v);
-		for (const uint8_t t : { 0, 1, 2, 2, 1, 3 }) mesh.meshletTriangles.push_back(t);
+		// Meshlet-local indices, and uint8_t rather than a bare braced list: an int list narrows on
+		// the way in, which MSVC refuses under the project's warning-as-error settings.
+		const std::array<uint8_t, 6> tris = { { 0, 1, 2, 2, 1, 3 } };
+		for (const uint8_t t : tris) mesh.meshletTriangles.push_back(t);
 
 		auto submesh                  = assetlib::Submesh();
 		submesh.layout.attributeCount = 6;
