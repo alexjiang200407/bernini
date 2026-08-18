@@ -305,6 +305,25 @@ in with a panel feature -- see task 5c. Meanwhile the panel was smoke-run (the e
 its targets and runs with a clean log) and every layer beneath it is covered by `bgl_tests` and
 `gamelib_tests`.
 
+**5d — bone tags, and a camera that uses them.** *(added after running the panel.)* The Animation
+panel opens at a fixed yaw, which shows a rig a profile whenever its forward axis is not the one that
+yaw assumed -- the test coyote faces +X where glTF's convention is +Z, so it opens side-on and the
+user orbits once.
+
+Deriving the facing from bone *names* was tried and removed: it worked on the coyote but only because
+that rig is named in English, and a heuristic that guesses which bone is a head is the wrong shape for
+something an author can simply state. The replacement is to let them state it -- display the skeleton
+in the editor and let a bone carry a tag ("head", "root", "attachment") -- and read the camera's
+facing off that.
+
+Bigger than it looks, and genuinely its own feature: `Bone` has no tag field, so it needs a `.bskel`
+format change, the importer writing it, editor UI, and an answer to what happens to a user's tags when
+the `.bskel` is re-cooked from its glTF -- `.bskel` is a derived file, so tags have to survive a
+re-import or live beside it. That last question is the design, not the UI. Crosses this feature's
+"no change to the import path" non-goal, which is why it is not done here.
+*Gate:* a rig whose bones carry a `head` tag opens facing the camera, whatever axis it faces, with no
+name matching anywhere in the path.
+
 **5c — a `headless` seam on `RenderTargetWindowDesc`.** *(added by review of task 5, and task 5's
 own review is the argument for it: the tier switch shipped a bug where the geom was acquired through
 the new tier while the instance was created through the old one, which every automated gate passed
