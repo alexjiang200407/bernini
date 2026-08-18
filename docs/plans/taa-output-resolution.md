@@ -121,6 +121,21 @@ deleted in the same commit; what it measured is above, and what it proposed is d
   that set it could only see the half a still frame shows. Rejected: exposing the jitter sequence
   length instead, whose effect appears over tens of frames rather than in one a viewer can look at.*
 
+- **ADR-11 — What the resolve does *not* do is bound a ghost, and a hashed one survives it.** The
+  neighbourhood clamp and the reprojection are what bound a trail, and ADR-4 keeps both on the render
+  3×3, so nothing here tightens what the clamp admits. On stochastic coverage that box spans strand
+  and backdrop at once and a dragged mixture is legal inside it — which is #372's sigma box and
+  variance store's problem, not this change's. What moving the accumulation onto the output grid
+  removes is the *spreading*: a render-grid ghost used to be stretched over the window on present,
+  covering twice the screen with a soft edge. Below scale 1 the residue is also a little longer-lived
+  than at 1.0, because an output pixel takes a strong sample only on the phases that serve it:
+  measured on one output grid and one band, trail 1.23e-3 at scale 1.0 against 1.90e-3 at 0.5.
+
+  *A cross-resolution figure for what the stretch used to cost is deliberately absent. A squared
+  difference rewards a blur, so the same ghost carried to a bigger grid by a filter scores lower than
+  one reconstructed onto it — the metric cannot answer that question in either direction, and an
+  earlier attempt here to answer it anyway was wrong.*
+
 ## Non-goals
 
 - **The vendor upscalers** — FSR 2/3, MetalFX Temporal, DLSS, XeSS. They replace `TaaResolve.slang`

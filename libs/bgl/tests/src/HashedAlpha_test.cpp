@@ -734,11 +734,21 @@ namespace
 	// arrive at the same camera, and differences the two over each band -- the backdrop the two
 	// renders share cancels out, so a band reads what the pan itself left there.
 	SmearBands
-	StrandSmear(const std::string& stillPath, const std::string& pannedPath, bool taaEnabled)
+	StrandSmear(
+		const std::string& stillPath,
+		const std::string& pannedPath,
+		bool               taaEnabled,
+		Frame              viewFrame = {})
 	{
 		const std::string stillNextPath = stillPath + ".next.png";
 
-		PatchScene still = MakeCardScene(MakeRampTexture(), taaEnabled, true);
+		PatchScene still = MakeCardScene(
+			MakeRampTexture(),
+			taaEnabled,
+			true,
+			20.0f,
+			bgl::LayerType::kHashed,
+			viewFrame);
 		for (int frame = 0; frame < c_ConvergeFrames; ++frame)
 		{
 			still.gfx->DrawFrame(still.target, still.job);
@@ -748,7 +758,13 @@ namespace
 		still.gfx->DrawFrame(still.target, still.job);
 		still.gfx->ScreenshotPng(still.target, stillNextPath);
 
-		PatchScene panned = MakeCardScene(MakeRampTexture(), taaEnabled, true);
+		PatchScene panned = MakeCardScene(
+			MakeRampTexture(),
+			taaEnabled,
+			true,
+			20.0f,
+			bgl::LayerType::kHashed,
+			viewFrame);
 		for (int frame = 0; frame < c_SmearPanFrames; ++frame)
 		{
 			panned.job.camera =
@@ -757,8 +773,21 @@ namespace
 		}
 		panned.gfx->ScreenshotPng(panned.target, pannedPath);
 
+		// The bands are authored against c_Width and follow the frame, so a smaller one measures the
+		// same content rather than whatever lands at those coordinates.
+		const float bandScale = static_cast<float>(viewFrame.width) / static_cast<float>(c_Width);
+		const auto  at        = [bandScale](int v) {
+			return static_cast<int>(static_cast<float>(v) * bandScale);
+		};
+
 		const auto band = [&](const std::string& path, int x) {
-			return bgl::test::FrameDelta(path, stillPath, x, c_BandY, c_BandW, c_BandH);
+			return bgl::test::FrameDelta(
+				path,
+				stillPath,
+				at(x),
+				at(c_BandY),
+				at(c_BandW),
+				at(c_BandH));
 		};
 
 		return SmearBands{ band(pannedPath, c_TrailBandX),
@@ -1576,5 +1605,38 @@ TEST_CASE(
 			"footprint-fixed " << size << "x" << size << ": flicker = " << m.flicker
 							   << "  detail = " << m.detail << "  luma = " << m.luma
 							   << "  box = " << m.boxSize);
+	}
+}
+
+// What a render scale costs a hashed smear, which is the risk the output-grid accumulation's plan
+// named and left to be measured rather than assumed: below 1 an output pixel takes a strong sample
+// only on the jitter phases that serve it, so its effective feedback is longer -- and a longer
+// feedback holds a wrong reprojection longer too.
+//
+// Both cases render into the same output grid and are read over the same band, which is the only
+// way these bands compare. A squared difference is not comparable across a resampling step at all:
+// it rewards a blur, so the same ghost carried to a bigger grid by a filter scores *lower* than one
+// reconstructed onto it. That rules out asking this instrument what the present-time stretch used to
+// do -- see docs/plans/taa-output-resolution.md.
+//
+// Reported rather than gated, like the rest of the resolution sweep.
+TEST_CASE(
+	"A hashed smear is measured across render scales",
+	"[hashedalpha][taa][resolution][render]")
+{
+	for (const float scale : { 1.0f, 0.5f })
+	{
+		const Frame frame{ c_Width, c_Height, 1.0f, scale };
+		const auto  tag = std::to_string(static_cast<int>(scale * 100.0f));
+
+		const SmearBands on = StrandSmear(
+			"assets/golden/strand_smear_scale_" + tag + "_still.got.png",
+			"assets/golden/strand_smear_scale_" + tag + "_panned.got.png",
+			true,
+			frame);
+
+		WARN(
+			"render scale " << scale << ": trail = " << on.trail << "  lead = " << on.lead
+							<< "  trail floor = " << on.trailFloor);
 	}
 }
