@@ -286,11 +286,9 @@ TEST_CASE("alphaMode and alphaCutoff survive a .bmaterial round trip", "[bmateri
 	CHECK(loaded.pbr.alphaCutoff == 0.25f);
 }
 
-// Retiring `occlude` took its byte out of the stream rather than reserving it, so a material baked
-// before that reads as a different layout from the same major version -- which is exactly what the
-// major is for. The reader must reject it and say so, because the alternative is parsing the fields
-// after it as garbage.
-TEST_CASE("a material from before the format break is rejected, not misread", "[bmaterial]")
+// A material's layout is the schema it carries, so the number stamped after the magic decides one
+// thing: a file from a newer engine is refused rather than misread.
+TEST_CASE("the format number refuses a newer material and nothing else", "[bmaterial]")
 {
 	BMaterial material;
 	material.pbr.alphaMode        = AlphaMode::kBlend;
@@ -299,12 +297,14 @@ TEST_CASE("a material from before the format break is rejected, not misread", "[
 
 	std::vector<std::byte> bytes = serializeMaterial(material);
 
-	// The major sits right after the magic. Stamping the previous one is what a file baked before
-	// the break looks like.
+	// The major sits right after the magic. It is a label: a file that carries its schema reads
+	// whatever older number it was stamped with, and only one from a newer engine is refused.
 	REQUIRE(bytes.size() > 6);
 	bytes[4] = std::byte{ 8 };
 	bytes[5] = std::byte{ 0 };
+	CHECK(deserializeMaterial(bytes).pbr.alphaMode == AlphaMode::kBlend);
 
+	bytes[4] = std::byte{ 99 };
 	CHECK_THROWS_AS(deserializeMaterial(bytes), std::runtime_error);
 }
 
