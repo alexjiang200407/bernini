@@ -4,6 +4,8 @@
 #include "chunk_io.h"
 #include "mounted_io.h"
 
+#include <catch2/matchers/catch_matchers_string.hpp>
+
 using namespace assetlib;
 
 namespace
@@ -141,18 +143,33 @@ TEST_CASE("the chunk reader rejects a malformed container", "[bmesh][io][chunk]"
 		REQUIRE_THROWS_AS(deserialize(bytes), std::runtime_error);
 	}
 
-	// The entry checks, which need the table itself doctored rather than the header.
+	// The entry checks, which need the table itself doctored rather than the header. Entry 0 is
+	// the schema's; the mutations land on the first data chunk, so they test what a data chunk's
+	// entry is checked for.
 	const auto patchedEntry = [](auto mutate) {
 		auto          bytes = serialize(MakeSampleMesh());
 		chunk::Header header{};
 		std::memcpy(&header, bytes.data(), sizeof(header));
 
+		const size_t at = header.chunkTableOffset + sizeof(chunk::Entry);
 		chunk::Entry entry{};
-		std::memcpy(&entry, bytes.data() + header.chunkTableOffset, sizeof(entry));
+		std::memcpy(&entry, bytes.data() + at, sizeof(entry));
+		REQUIRE(entry.id != chunk::c_SchemaChunk);
 		mutate(entry);
-		std::memcpy(bytes.data() + header.chunkTableOffset, &entry, sizeof(entry));
+		std::memcpy(bytes.data() + at, &entry, sizeof(entry));
 		return bytes;
 	};
+
+	SECTION("a chunk whose element size disagrees with the layout it names")
+	{
+		// The first data chunk is the nodes, 60 bytes each; halving the element size keeps the
+		// payload a whole number of elements, so only the schema can tell it is wrong.
+		const auto bytes = patchedEntry([](chunk::Entry& e) { e.elementSize = 30; });
+		REQUIRE_THROWS_WITH(
+			deserialize(bytes),
+			Catch::Matchers::ContainsSubstring(
+				"chunk 1 says 30-byte elements but its layout Node is 60 bytes"));
+	}
 
 	SECTION("a chunk whose element size is not what the reader asks for")
 	{

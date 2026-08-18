@@ -53,19 +53,20 @@ be read by what replaces them — is cheapest while there is exactly one project
   into it. `readChunks` already fetches chunks by id, so a survey costs one more small range read and
   the header does not change shape. *Rejected: a header field, which every reader would have to
   learn separately.*
-- **ADR-10 — The schema is its own library, `assetlib_schema`**, a peer of `assetlib_structs`
-  that links `core` only: it describes the PODs, and a tool that wants to read a file's schema
-  should not have to link the codec — KTX, meshoptimizer, tinygltf — to do it. The per-container
-  builders stay in `assetlib` beside the io that writes them. *Rejected: inside `assetlib`
-  (the plan's first answer, changed on review of #386); `core`, for a `bgl` or editor reader that
-  does not exist.*
+- **ADR-10 — The schema is its own library, `libs/schema`**, that links `core` only and knows
+  nothing of assets: a tool that wants to read a file's schema should not have to link the codec —
+  KTX, meshoptimizer, tinygltf — to do it, and nothing in it is asset-specific, so it is not named
+  as if it were (it was `assetlib_schema` until review of #390). The registrations of the asset
+  PODs are `assetlib`'s `AssetSchemaBuilder`, beside the io that writes them. *Rejected: inside
+  `assetlib` (the plan's first answer, changed on review of #386); `core`, for a `bgl` or editor
+  reader that does not exist.*
 - **ADR-11 — The version number survives as a label** — bumped whenever a schema changes, printed
   by `describe`, and checked only one way: a file newer than the reader is refused. *Rejected:
   dropping it, which leaves nothing human-readable to tell files apart.*
 - **ADR-12 — Conversion rules.** Same name and kind: copy. Integer or enum widening: convert.
   Nested struct: recurse. Fixed array: copy the shorter count, default the rest. Only in the current
-  schema: its declared default. Only in the file: dropped. `RenamedFrom("old")`: matched under the old
-  name. Anything else — narrowing, float↔integer, struct↔scalar — is ADR-6's error. *Rejected:
+  schema: its declared default. Only in the file: dropped. A field declared with its old name
+  (`AddRenamedField`): matched under either. Anything else — narrowing, float↔integer, struct↔scalar — is ADR-6's error. *Rejected:
   narrowing with a range check; a value that does not fit is data loss, and it should be a hook.*
 - **ADR-13 — A hook is registered per container** with a predicate over the file's schema and a
   body that sees the old chunk bytes through the old schema, by name, beside the converted current
