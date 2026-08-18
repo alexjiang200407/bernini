@@ -93,10 +93,11 @@ AnimationPreviewWindow::Clear()
 void
 AnimationPreviewWindow::ClearGeometry()
 {
-	if (m_Assets != nullptr && (!m_Instances.empty() || !m_Geoms.empty() || !m_VatDraws.empty()))
+	if (m_Assets != nullptr &&
+	    (!m_Instances.empty() || !m_Geoms.empty() || !m_AnimatedDraws.empty()))
 	{
 		GetRenderer()->Invoke([&] {
-			for (const VatDraw& draw : m_VatDraws)
+			for (const AnimatedDraw& draw : m_AnimatedDraws)
 			{
 				try
 				{
@@ -104,7 +105,7 @@ AnimationPreviewWindow::ClearGeometry()
 				}
 				catch (const std::exception& e)
 				{
-					qWarning("AnimationPreview: failed to destroy a VAT instance: %s", e.what());
+					qWarning("AnimationPreview: failed to destroy an instance: %s", e.what());
 				}
 			}
 
@@ -134,7 +135,7 @@ AnimationPreviewWindow::ClearGeometry()
 		});
 	}
 
-	m_VatDraws.clear();
+	m_AnimatedDraws.clear();
 	m_Instances.clear();
 	m_Geoms.clear();
 }
@@ -143,6 +144,15 @@ void
 AnimationPreviewWindow::LoadMesh(
 	const std::filesystem::path& absolutePath,
 	const std::string&           animationsRelPath)
+{
+	LoadMeshAs(absolutePath, animationsRelPath, m_Source);
+}
+
+void
+AnimationPreviewWindow::LoadMeshAs(
+	const std::filesystem::path&  absolutePath,
+	const std::string&            animationsRelPath,
+	const editor::AnimationSource source)
 {
 	const QString name = QString::fromStdString(absolutePath.filename().string());
 
@@ -175,7 +185,11 @@ AnimationPreviewWindow::LoadMesh(
 	// moment the rig walks off it, which is the same reason the engine culls VAT by this box.
 	auto vatBoundsMin = glm::vec3(0.0f);
 	auto vatBoundsMax = glm::vec3(0.0f);
-	bool vatBounded   = false;
+
+	// One plan for the whole load, so the three tier-dependent decisions cannot drift apart. Filled
+	// inside the task below, where `animations` is final -- it may still be resolved from the
+	// bindings scan.
+	auto steps = editor::AnimationLoadSteps();
 
 	// The mesh read, the candidate scan and -- the expensive part -- a stale rig's re-bake, all
 	// off the UI and render threads. AcquireVatMesh afterwards finds the .bvat fresh and only
@@ -194,14 +208,15 @@ AnimationPreviewWindow::LoadMesh(
 			if (animations.empty() && !bindings.animations.empty())
 				animations = bindings.animations.front();
 
-			if (!animations.empty())
+			steps = editor::PlanAnimationLoad(source, !animations.empty());
+
+			if (steps.bakeVat)
 			{
 				progress.Report(0, 0, "Baking animation textures...");
 				const assetlib::BVat vat =
 					game::EnsureVatBaked(assetlib::AssetStore(m_DataRoot), rel, animations);
 				vatBoundsMin = vat.boundsMin;
 				vatBoundsMax = vat.boundsMax;
-				vatBounded   = true;
 			}
 		});
 
@@ -225,6 +240,9 @@ AnimationPreviewWindow::LoadMesh(
 		return;
 	}
 
+	m_MeshPath   = absolutePath;
+	m_Animations = animations;
+
 	try
 	{
 		struct Loaded
@@ -232,7 +250,10 @@ AnimationPreviewWindow::LoadMesh(
 			glm::vec3                   center;
 			float                       radius;
 			std::vector<game::ClipInfo> clips;
-			QString                     vatRefusal;  // empty when VAT stood up
+
+			// Empty when the tier stood up. A refusal is shown rather than thrown: the mesh is
+			// still on screen in its bind pose, which beats a viewport cleared to nothing.
+			QString refusal;
 		};
 
 		const auto plan = editor::PlanAnimationDraws(mesh);
@@ -275,28 +296,42 @@ AnimationPreviewWindow::LoadMesh(
 
 				try
 				{
-					const game::AssetManager::VatMesh vat =
-						m_Assets->AcquireVatMesh(rel, animations, placement.meshIndex);
-					m_Geoms.push_back(vat.geom);
-					m_VatDraws.push_back(
-						{ vat.geom,
-					      placement.world,
-					      m_Assets->CreateVatInstance(
-							  GetPreviewViewRef(),
-							  vat.geom,
-							  placement.world,
-							  bgl::VatInstanceDesc{ 0, 0.0f, 1.0f }) });
-					out.clips    = vat.clips;
+					// The two tiers differ only in which door the acquire takes: both hand back a
+					// geom and the same clip table, and both spawn on {clip 0, phase 0, rate 1}.
+					bgl::GeomHandle             geom;
+					std::vector<game::ClipInfo> clips;
+
+					if (source == editor::AnimationSource::kSkinned)
+					{
+						const game::AssetManager::SkinnedMesh skinned =
+							m_Assets->AcquireSkinnedMesh(rel, animations, placement.meshIndex);
+						geom  = skinned.geom;
+						clips = std::move(skinned.clips);
+					}
+					else
+					{
+						game::AssetManager::VatMesh vat =
+							m_Assets->AcquireVatMesh(rel, animations, placement.meshIndex);
+						geom  = vat.geom;
+						clips = std::move(vat.clips);
+					}
+
+					m_Geoms.push_back(geom);
+					m_AnimatedDraws.push_back(
+						{ geom, placement.world, SpawnAnimated(geom, placement.world, 0, source) });
+					out.clips    = std::move(clips);
 					m_ActiveClip = 0;
 				}
 				catch (const std::exception& e)
 				{
-					out.vatRefusal = QString::fromUtf8(e.what());
+					out.refusal = QString::fromUtf8(e.what());
 					acquireStatic(placement);  // grows the bind-pose bounds itself
 					continue;
 				}
 
-				if (vatBounded)
+				// Reached only when the bake above ran and succeeded: a bake that threw fails the
+				// task, and a failed task returns before any of this.
+				if (steps.frameByBakeBounds)
 					bmesh::GrowBounds(
 						placement.world,
 						vatBoundsMin,
@@ -334,8 +369,19 @@ AnimationPreviewWindow::LoadMesh(
 		Q_EMIT AnimationSourcesChanged(candidates, active < candidates.size() ? active : -1);
 		Q_EMIT ClipsChanged(editor::ToClipInfos(loaded.clips));
 
-		if (!loaded.vatRefusal.isEmpty())
-			OfferBakeForRefusal(mesh, absolutePath, animations, name, loaded.vatRefusal);
+		// The load stood something up, so the tier it was loaded through is now what is on screen.
+		m_Source = source;
+
+		if (!loaded.refusal.isEmpty() && steps.offerBakeOnRefusal)
+			OfferBakeForRefusal(mesh, absolutePath, animations, name, loaded.refusal);
+		else if (!loaded.refusal.isEmpty())
+			QMessageBox::warning(
+				window(),
+				QStringLiteral("Open Mesh"),
+				QStringLiteral(
+					"'%1' could not be previewed skinned:\n\n%2\n\nShowing its bind "
+					"pose instead.")
+					.arg(name, loaded.refusal));
 	}
 	catch (const std::exception& e)
 	{
@@ -448,30 +494,74 @@ AnimationPreviewWindow::OfferBakeForRefusal(
 	LoadMesh(absolutePath, animations);
 }
 
+bgl::MeshInstanceHandle
+AnimationPreviewWindow::SpawnAnimated(
+	const bgl::GeomHandle         geom,
+	const glm::mat4&              world,
+	const uint32_t                clip,
+	const editor::AnimationSource source)
+{
+	// The two descs carry the same three fields deliberately, so this is the whole of what the tiers
+	// differ by at spawn time. Phase 0 and rate 1: the panel's transport is the clock.
+	if (source == editor::AnimationSource::kSkinned)
+	{
+		return m_Assets->CreateSkinnedInstance(
+			GetPreviewViewRef(),
+			geom,
+			world,
+			bgl::SkinnedInstanceDesc{ clip, 0.0f, 1.0f });
+	}
+
+	return m_Assets->CreateVatInstance(
+		GetPreviewViewRef(),
+		geom,
+		world,
+		bgl::VatInstanceDesc{ clip, 0.0f, 1.0f });
+}
+
+void
+AnimationPreviewWindow::SetAnimationSource(const editor::AnimationSource source)
+{
+	if (source == m_Source)
+		return;
+
+	// With nothing shown there is no upload to swap, so the tier is just remembered for the next
+	// load.
+	if (m_MeshPath.empty())
+	{
+		m_Source = source;
+		Q_EMIT PreviewSourceChanged(m_Source);
+		return;
+	}
+
+	// A re-load, not a re-spawn: the tiers are different uploads, so there is no instance to move
+	// between them. LoadMeshAs commits m_Source only once it has stood something up, so a load that
+	// fails leaves the panel -- and the signal below -- describing what is still on screen.
+	LoadMeshAs(m_MeshPath, m_Animations, source);
+
+	Q_EMIT PreviewSourceChanged(m_Source);
+}
+
 void
 AnimationPreviewWindow::SetActiveClip(const uint32_t index)
 {
-	if (m_Assets == nullptr || m_VatDraws.empty() || index == m_ActiveClip)
+	if (m_Assets == nullptr || m_AnimatedDraws.empty() || index == m_ActiveClip)
 		return;
 
 	// There is no mutate-instance API by design: a clip switch is destroy + recreate, and the
 	// caller rewinds its transport so the new clip starts from its first frame.
 	GetRenderer()->Invoke([&] {
-		for (VatDraw& draw : m_VatDraws)
+		for (AnimatedDraw& draw : m_AnimatedDraws)
 		{
 			try
 			{
 				m_Assets->DestroyInstance(GetPreviewViewRef(), draw.instance);
 				draw.instance = bgl::MeshInstanceHandle();
-				draw.instance = m_Assets->CreateVatInstance(
-					GetPreviewViewRef(),
-					draw.geom,
-					draw.world,
-					bgl::VatInstanceDesc{ index, 0.0f, 1.0f });
+				draw.instance = SpawnAnimated(draw.geom, draw.world, index, m_Source);
 			}
 			catch (const std::exception& e)
 			{
-				qWarning("AnimationPreview: failed to switch a VAT instance's clip: %s", e.what());
+				qWarning("AnimationPreview: failed to switch an instance's clip: %s", e.what());
 			}
 		}
 	});

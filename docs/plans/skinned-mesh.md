@@ -282,10 +282,40 @@ zero; a mismatched skeleton signature is refused.
   `libs/gamelib/tests/src/util/RigFixture.h` for the same reason: both need a rig on disk, and it
   was 150 lines.
 
-**5 — editor: the Animation panel plays skinned.** A source toggle (skinned / VAT) on the panel;
-`AnimationPreviewWindow` acquires through whichever is selected and respawns on a clip change the
-way it does today. The transport is untouched (ADR-3).
-*Gate:* **acceptance 4**.
+**5 — editor: the Animation panel plays skinned.** *(landed)* A "Preview As" selector (Skinned /
+VAT) on the panel; `AnimationPreviewWindow` acquires through whichever is selected and respawns on a
+clip change the way it does today. The transport is untouched (ADR-3), which was the point of ADR-3.
+Switching re-loads, because the tiers are different uploads.
+
+*Gate:* **acceptance 4, only partly.** The tier-dependent decisions are extracted into
+`PlanAnimationLoad` and pinned by `editor_tests` — that the skinned tier does not bake (seconds of
+CPU skinning for a texture pair it never samples, and it would make the preview need a *bakeable*
+material), does not frame by the bake's box, and does not offer a bake to answer a refusal.
+
+What is **not** covered is the panel itself: constructing it, loading a rig, toggling. That is a
+pre-existing, already-documented gap rather than one this task introduced --
+`apps/editor/CLAUDE.md` names `AnimationPreviewWindow` and `MainWindow` as **not covered**, because
+`RenderTargetWindow`'s constructor calls `CreateRenderTarget` with a real `winId()` and
+`headless = false` and does not guard a null device. The doc prescribes the fix: **a `headless` flag
+on `RenderTargetWindowDesc`**. (The loading screen is *not* the obstacle -- `editor::test::OnLoadingScreen`
+already handles it.)
+
+That seam is shared by every render-target window, so it belongs in its own change rather than riding
+in with a panel feature -- see task 5c. Meanwhile the panel was smoke-run (the editor launches, builds
+its targets and runs with a clean log) and every layer beneath it is covered by `bgl_tests` and
+`gamelib_tests`.
+
+**5c — a `headless` seam on `RenderTargetWindowDesc`.** *(added by review of task 5, and task 5's
+own review is the argument for it: the tier switch shipped a bug where the geom was acquired through
+the new tier while the instance was created through the old one, which every automated gate passed
+and only a reading caught. A toggle is the one thing no test in the tree can perform.)* Every
+render-target window is untestable today because the constructor demands a real `winId()`, which is
+why `apps/editor/CLAUDE.md` lists `AnimationPreviewWindow` and `MainWindow` as uncovered. A `headless`
+flag on the desc -- the fix that doc already prescribes -- unblocks a real panel test, which is what
+closes acceptance 4 properly, and unblocks the other windows with it. Independent of the skinned path;
+listed here because task 5 is what made the gap concrete.
+*Gate:* an `editor_tests` case that constructs `AnimationPreviewWindow` headless, loads a synthesized
+rig, and toggles the tier -- acceptance 4 as originally written.
 
 **5b — the scene's buffer registration stops being positional.** *(added by review of task 1.)*
 `Scene::ImportResources` walks `GetBuffers()` with `std::apply` and takes each buffer's FrameGraph
