@@ -2,7 +2,10 @@
 #include "Windows/AnimationEditor/TimelineScrubber.h"
 #include "Windows/AnimationEditor/animation_draws.h"
 
+#include <assetlib/skeleton.h>
+#include <assetlib_structs/Animation.h>
 #include <assetlib_structs/BMesh.h>
+#include <assetlib_structs/Skeleton.h>
 
 #include <catch2/catch_approx.hpp>
 
@@ -140,5 +143,117 @@ TEST_CASE("A load's tier-dependent steps all follow from the source", "[animatio
 			CHECK_FALSE(steps.bakeVat);
 			CHECK_FALSE(steps.offerBakeOnRefusal);
 		}
+	}
+}
+
+namespace
+{
+	/** A two-bone rig: a root, and a head `offset` away from it. */
+	assetlib::Skeleton
+	RigFacing(const glm::vec3& offset, const char* headName = "Head")
+	{
+		auto skeleton = assetlib::Skeleton();
+
+		auto root        = assetlib::Bone();
+		root.bindPose    = { glm::vec3(0.0f), glm::quat(1.0f, 0.0f, 0.0f, 0.0f), glm::vec3(1.0f) };
+		root.inverseBind = glm::mat4(1.0f);
+		root.parent      = assetlib::c_InvalidIndex;
+		root.nameOffset  = skeleton.stringPool.add("Pelvis");
+		skeleton.bones.push_back(root);
+
+		auto head        = assetlib::Bone();
+		head.bindPose    = { offset, glm::quat(1.0f, 0.0f, 0.0f, 0.0f), glm::vec3(1.0f) };
+		head.inverseBind = glm::mat4(1.0f);
+		head.parent      = 0;
+		head.nameOffset  = skeleton.stringPool.add(headName);
+		skeleton.bones.push_back(head);
+
+		return skeleton;
+	}
+
+	/** One clip of one frame holding `skeleton` in its bind pose. */
+	assetlib::AnimationSet
+	RestClip(const assetlib::Skeleton& skeleton)
+	{
+		auto animations              = assetlib::AnimationSet();
+		animations.boneCount         = static_cast<uint32_t>(skeleton.bones.size());
+		animations.skeletonSignature = assetlib::skeletonSignature(skeleton);
+
+		auto clip        = assetlib::AnimationClip();
+		clip.firstSample = 0;
+		clip.frameCount  = 1;
+		clip.sampleRate  = 30.0f;
+		animations.clips.push_back(clip);
+
+		for (const assetlib::Bone& bone : skeleton.bones)
+			animations.samples.push_back(bone.bindPose);
+
+		return animations;
+	}
+}
+
+TEST_CASE("The opening camera faces whichever axis a rig's head is on", "[animation][camera]")
+{
+	using editor::RestFacingYaw;
+
+	// The orbit camera puts its eye at (sin(yaw), _, cos(yaw)), so these are the yaws that put the
+	// eye where the head points -- which is the whole reason a constant cannot do this job. The test
+	// coyote faces +X; glTF's own convention is +Z.
+	SECTION("a rig facing +Z, which is glTF's convention")
+	{
+		const auto skeleton = RigFacing(glm::vec3(0.0f, 1.0f, 5.0f));
+		const auto yaw      = RestFacingYaw(skeleton, RestClip(skeleton));
+		REQUIRE(yaw.has_value());
+		CHECK(*yaw == Catch::Approx(0.0f).margin(1e-4));
+	}
+
+	SECTION("a rig facing +X, which is what the test coyote does")
+	{
+		const auto skeleton = RigFacing(glm::vec3(5.0f, 1.0f, 0.0f));
+		const auto yaw      = RestFacingYaw(skeleton, RestClip(skeleton));
+		REQUIRE(yaw.has_value());
+		CHECK(*yaw == Catch::Approx(glm::half_pi<float>()).margin(1e-4));
+	}
+
+	SECTION("a rig facing -Z")
+	{
+		const auto skeleton = RigFacing(glm::vec3(0.0f, 1.0f, -5.0f));
+		const auto yaw      = RestFacingYaw(skeleton, RestClip(skeleton));
+		REQUIRE(yaw.has_value());
+		CHECK(std::abs(*yaw) == Catch::Approx(glm::pi<float>()).margin(1e-4));
+	}
+
+	SECTION("a head directly above its root says nothing")
+	{
+		// An upright rig whose head is straight up has no horizontal facing to read, and a guess
+		// would be worse than the caller's default.
+		const auto skeleton = RigFacing(glm::vec3(0.0f, 5.0f, 0.0f));
+		CHECK_FALSE(RestFacingYaw(skeleton, RestClip(skeleton)).has_value());
+	}
+
+	SECTION("a rig that does not name a head says nothing")
+	{
+		const auto skeleton = RigFacing(glm::vec3(5.0f, 1.0f, 0.0f), "Bone_02");
+		CHECK_FALSE(RestFacingYaw(skeleton, RestClip(skeleton)).has_value());
+	}
+
+	SECTION("the shortest 'head' wins, so a forehead does not beat the head")
+	{
+		auto skeleton = RigFacing(glm::vec3(5.0f, 1.0f, 0.0f), "Coyote Head");
+
+		// Named after the head bone but longer, and placed the other way: picking it would point the
+		// camera at the rig's back.
+		auto forehead        = assetlib::Bone();
+		forehead.bindPose    = { glm::vec3(-9.0f, 0.0f, 0.0f),
+			                     glm::quat(1.0f, 0.0f, 0.0f, 0.0f),
+			                     glm::vec3(1.0f) };
+		forehead.inverseBind = glm::mat4(1.0f);
+		forehead.parent      = 0;
+		forehead.nameOffset  = skeleton.stringPool.add("Coyote L Forehead");
+		skeleton.bones.push_back(forehead);
+
+		const auto yaw = RestFacingYaw(skeleton, RestClip(skeleton));
+		REQUIRE(yaw.has_value());
+		CHECK(*yaw == Catch::Approx(glm::half_pi<float>()).margin(1e-4));
 	}
 }

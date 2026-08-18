@@ -191,6 +191,10 @@ AnimationPreviewWindow::LoadMeshAs(
 	auto posedMax   = glm::vec3(0.0f);
 	bool posedKnown = false;
 
+	// Which way the rig looks, so the camera can open in front of its face rather than at whichever
+	// side a fixed yaw happens to land on. Both tiers want it; only the skeleton knows it.
+	auto facingYaw = std::optional<float>();
+
 	// One plan for the whole load, so the three tier-dependent decisions cannot drift apart. Filled
 	// inside the task below, where `animations` is final -- it may still be resolved from the
 	// bindings scan.
@@ -224,9 +228,10 @@ AnimationPreviewWindow::LoadMeshAs(
 				posedMax   = vat.boundsMax;
 				posedKnown = true;
 			}
-			else if (!animations.empty())
+
+			if (!animations.empty())
 			{
-				progress.Report(0, 0, "Measuring the pose...");
+				progress.Report(0, 0, "Reading the rig...");
 
 				// Through a store, like every other read: a project opens as a mount, so a rig that
 				// ships inside a .bpak is only reachable that way.
@@ -235,12 +240,20 @@ AnimationPreviewWindow::LoadMeshAs(
 				const assetlib::AnimationSet clips    = store.LoadAnimations(animations);
 				const assetlib::Skeleton     skeleton = store.LoadSkeleton(clips.skeleton);
 
-				// Mesh 0: the panel frames the whole file, and a .bmesh with several rigged meshes
-				// is not something the importer produces.
-				const assetlib::Bounds bounds = assetlib::posedBounds(mesh, 0, skeleton, clips);
-				posedMin                      = bounds.min;
-				posedMax                      = bounds.max;
-				posedKnown                    = true;
+				facingYaw = editor::RestFacingYaw(skeleton, clips);
+
+				// The VAT tier already has this box from its bake; the skinned tier has to measure
+				// one. Mesh 0: the panel frames the whole file, and a .bmesh with several rigged
+				// meshes is not something the importer produces.
+				if (!posedKnown)
+				{
+					progress.Report(0, 0, "Measuring the pose...");
+
+					const assetlib::Bounds bounds = assetlib::posedBounds(mesh, 0, skeleton, clips);
+					posedMin                      = bounds.min;
+					posedMax                      = bounds.max;
+					posedKnown                    = true;
+				}
 			}
 		});
 
@@ -274,6 +287,7 @@ AnimationPreviewWindow::LoadMeshAs(
 			glm::vec3                   center;
 			float                       radius;
 			std::vector<game::ClipInfo> clips;
+			std::optional<float>        facingYaw;
 
 			// Empty when the tier stood up. A refusal is shown rather than thrown: the mesh is
 			// still on screen in its bind pose, which beats a viewport cleared to nothing.
@@ -366,14 +380,20 @@ AnimationPreviewWindow::LoadMeshAs(
 						aabbMax);
 			}
 
-			out.center = (aabbMin + aabbMax) * 0.5f;
-			out.radius = std::max(0.001f, glm::length(aabbMax - aabbMin) * 0.5f);
+			out.facingYaw = facingYaw;
+			out.center    = (aabbMin + aabbMax) * 0.5f;
+			out.radius    = std::max(0.001f, glm::length(aabbMax - aabbMin) * 0.5f);
 			return out;
 		});
 
-		// Head on, slightly above: what the panel is for is watching a clip play, and a profile
-		// hides the half of a gait that reads best from the front.
-		m_Orbit.FocusOn(loaded.center, loaded.radius, 0.0f, glm::radians(15.0f));
+		// Head on, slightly above: what the panel is for is watching a clip play, and a profile hides
+		// the half of a gait that reads best from the front. A rig whose skeleton does not say which
+		// way it faces keeps the straight-on default.
+		m_Orbit.FocusOn(
+			loaded.center,
+			loaded.radius,
+			loaded.facingYaw.value_or(0.0f),
+			glm::radians(15.0f));
 		UpdateCamera();
 		SetTime(0.0f);
 

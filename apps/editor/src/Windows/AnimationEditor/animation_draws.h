@@ -44,4 +44,20 @@ namespace editor
 
 	[[nodiscard]] AnimationLoadSteps
 	PlanAnimationLoad(AnimationSource source, bool hasAnimations);
+
+	/**
+	 * The orbit yaw that puts the camera in front of a rig's face, or nothing when the skeleton does
+	 * not say which way it faces.
+	 *
+	 * A fixed yaw cannot do this. Authoring conventions disagree on a rig's forward axis -- the test
+	 * coyote's runs along +X where glTF's own convention is +Z -- so any constant shows some rigs a
+	 * profile. The skeleton does know, though: the horizontal direction from the root bone to the
+	 * head bone is where the rig looks, whatever axis that lands on.
+	 *
+	 * Found by name, because that is the only thing that distinguishes a head from any other bone at
+	 * the end of a chain. A rig whose bones are unnamed, or named in another language, gets nothing
+	 * back rather than a wrong guess -- the caller keeps its default.
+	 */
+	[[nodiscard]] std::optional<float>
+	RestFacingYaw(const assetlib::Skeleton& skeleton, const assetlib::AnimationSet& animations);
 }
