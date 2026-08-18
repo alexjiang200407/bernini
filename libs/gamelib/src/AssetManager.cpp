@@ -529,12 +529,12 @@ namespace game
 			clipInfo.reserve(animations.clips.size());
 			for (const assetlib::AnimationClip& clip : animations.clips)
 			{
-				clipInfo.push_back(
-					{ std::string(animations.stringPool.at(clip.nameOffset)),
-				      clip.frameCount,
-				      clip.sampleRate,
-				      clip.duration,
-				      clip.loop != 0 });
+				clipInfo.emplace_back(
+					std::string(animations.stringPool.at(clip.nameOffset)),
+					clip.frameCount,
+					clip.sampleRate,
+					clip.duration,
+					clip.loop != 0);
 			}
 
 			auto record = GeomRecord();

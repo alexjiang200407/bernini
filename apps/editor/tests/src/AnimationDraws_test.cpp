@@ -64,8 +64,8 @@ TEST_CASE("A skinned entry plays as VAT; a static one stands beside it", "[anima
 TEST_CASE("The clip table converts field for field", "[animation]")
 {
 	const auto infos = editor::ToClipInfos(
-		std::array{ game::AssetManager::ClipInfo{ "walk", 24, 30.0f, 0.767f, true },
-	                game::AssetManager::ClipInfo{ "die", 12, 15.0f, 0.733f, false } });
+		std::array{ game::ClipInfo{ "walk", 24, 30.0f, 0.767f, true },
+	                game::ClipInfo{ "die", 12, 15.0f, 0.733f, false } });
 
 	REQUIRE(infos.size() == 2);
 	CHECK(infos[0].name == "walk");

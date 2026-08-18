@@ -21,11 +21,11 @@ namespace editor
 	}
 
 	std::vector<ClipInfo>
-	ToClipInfos(std::span<const game::AssetManager::ClipInfo> clips)
+	ToClipInfos(std::span<const game::ClipInfo> clips)
 	{
 		auto infos = std::vector<ClipInfo>();
 		infos.reserve(clips.size());
-		for (const game::AssetManager::ClipInfo& clip : clips)
+		for (const game::ClipInfo& clip : clips)
 			infos.push_back(
 				{ clip.name, clip.frameCount, clip.sampleRate, clip.duration, clip.loop });
 		return infos;

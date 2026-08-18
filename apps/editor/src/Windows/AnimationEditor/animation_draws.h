@@ -23,5 +23,5 @@ namespace editor
 
 	/** The acquired clip table in the transport's own terms -- a field-for-field copy. */
 	[[nodiscard]] std::vector<ClipInfo>
-	ToClipInfos(std::span<const game::AssetManager::ClipInfo> clips);
+	ToClipInfos(std::span<const game::ClipInfo> clips);
 }

@@ -298,7 +298,9 @@ feature is what made the tedium visible.
 *Gate:* both arrays gone, `just test` unchanged, and one test that a buffer reports the name it was
 initialised with.
 
-**6 — docs, and the plan comes out.** `docs/skinning.md` as the subsystem page — the pose pass, the
+**6 — docs, and the plan comes out.** *(`docs/skinning.md` was created early, in task 4's review: a
+reviewer asked for a 24-line javadoc's reasoning to move into docs, and there was nowhere to put it.
+This task extends it rather than writing it.)* `docs/skinning.md` as the subsystem page — the pose pass, the
 palette layout and its lifetime, the `prevTime` constraint from ADR-5, the interface→file table;
 `geometry_layout.md` and `passes.md` amended. `ROADMAP.md` ticked — and line 145 **reworded**, not
 just checked: it currently says skinned motion vectors need a double-buffered palette, which ADR-5
