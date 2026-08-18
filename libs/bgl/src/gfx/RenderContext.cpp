@@ -666,24 +666,25 @@ namespace bgl
 			const uint32_t current = rt.GetCurrentHistoryIndex();
 			const uint32_t prev    = current ^ 1u;
 
-			auto taaArgs            = TaaResolvePass::Args();
-			taaArgs.sceneColor      = rt.GetSceneColorSrv();
-			taaArgs.motionVectors   = rt.GetMotionVectorSrv();
-			taaArgs.prevHistory     = rt.GetHistorySrv(prev);
-			taaArgs.history         = rt.GetHistoryRtv(current);
-			taaArgs.prevHistoryName = GetHistoryName(prev);
-			taaArgs.historyName     = GetHistoryName(current);
-			taaArgs.pointSampler    = m_PointClampSampler;
-			taaArgs.linearSampler   = m_LinearClampSampler;
-			taaArgs.viewport        = viewport;
-			taaArgs.renderSize      = renderSize;
-			taaArgs.depth           = rt.GetDepthSrv();
-			taaArgs.clipToView      = m_TaaClipToView;
-			taaArgs.viewToPrevClip  = m_TaaViewToPrevClip;
-			taaArgs.jitter          = m_TaaJitter;
-			taaArgs.cameraPairValid = m_DrawCount == 1;
-			taaArgs.historyValid    = rt.IsHistoryValid() && !m_ShadingChanged;
-			taaArgs.cameraStill     = m_CameraStill;
+			auto taaArgs                = TaaResolvePass::Args();
+			taaArgs.sceneColor          = rt.GetSceneColorSrv();
+			taaArgs.motionVectors       = rt.GetMotionVectorSrv();
+			taaArgs.prevHistory         = rt.GetHistorySrv(prev);
+			taaArgs.history             = rt.GetHistoryRtv(current);
+			taaArgs.prevHistoryName     = GetHistoryName(prev);
+			taaArgs.historyName         = GetHistoryName(current);
+			taaArgs.pointSampler        = m_PointClampSampler;
+			taaArgs.linearSampler       = m_LinearClampSampler;
+			taaArgs.viewport            = viewport;
+			taaArgs.renderSize          = renderSize;
+			taaArgs.reconstructionWidth = rt.GetTaaReconstructionWidth();
+			taaArgs.depth               = rt.GetDepthSrv();
+			taaArgs.clipToView          = m_TaaClipToView;
+			taaArgs.viewToPrevClip      = m_TaaViewToPrevClip;
+			taaArgs.jitter              = m_TaaJitter;
+			taaArgs.cameraPairValid     = m_DrawCount == 1;
+			taaArgs.historyValid        = rt.IsHistoryValid() && !m_ShadingChanged;
+			taaArgs.cameraStill         = m_CameraStill;
 			m_TaaResolve.AttachToFrameGraph(m_FrameGraph, taaArgs);
 
 			// The display curve is applied to what the resolve produced, not to the raw frame.

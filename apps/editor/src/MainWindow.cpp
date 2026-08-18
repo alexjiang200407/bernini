@@ -126,6 +126,11 @@ MainWindow::Build()
 		// once. The Render menu moves every viewport from here.
 		levelDesc.renderScale = settings["levelEditor"]["renderScale"].GetOrDefault(1.0f);
 
+		// What the resolve reconstructs a scaled frame with. Beside the scale because it is only
+		// legible against one: at scale 1 it changes nothing.
+		levelDesc.taaReconstructionWidth =
+			settings["levelEditor"]["taaReconstructionWidth"].GetOrDefault(0.4f);
+
 		auto levelEnv = LevelEditorEnv();
 		levelEnv.environmentMap =
 			settings["levelEditor"]["environmentMap"].GetOrDefault(std::string());
@@ -143,6 +148,7 @@ MainWindow::Build()
 		matDesc.initialPreviewInstances = matSettings["initialPreviewInstances"].GetOrDefault(16u);
 		matDesc.taaEnabled              = matSettings["temporalAA"].GetOrDefault(true);
 		matDesc.renderScale             = matSettings["renderScale"].GetOrDefault(1.0f);
+		matDesc.taaReconstructionWidth  = matSettings["taaReconstructionWidth"].GetOrDefault(0.4f);
 		matDesc.previewEnv.environmentMap =
 			matSettings["environmentMap"].GetOrDefault(std::string());
 		matDesc.previewEnv.dataRoot = matSettings["dataRoot"].GetOrDefault(std::string());
@@ -167,8 +173,9 @@ MainWindow::Build()
 		animDesc.renderer = m_Renderer.get();
 		animDesc.initialPreviewInstances =
 			animSettings["initialPreviewInstances"].GetOrDefault(16u);
-		animDesc.taaEnabled  = animSettings["temporalAA"].GetOrDefault(true);
-		animDesc.renderScale = animSettings["renderScale"].GetOrDefault(1.0f);
+		animDesc.taaEnabled             = animSettings["temporalAA"].GetOrDefault(true);
+		animDesc.renderScale            = animSettings["renderScale"].GetOrDefault(1.0f);
+		animDesc.taaReconstructionWidth = animSettings["taaReconstructionWidth"].GetOrDefault(0.4f);
 		// Falls back to the material editor's environment: both are asset previews wanting the
 		// same neutral look, and a config predating this panel would otherwise light it with
 		// nothing -- which draws black and says nothing.
@@ -350,6 +357,44 @@ MainWindow::SetUpRenderScaleMenu(QMenu* render)
 		connect(action, &QAction::triggered, this, [this, factor]() {
 			for (RenderTargetWindow* view : findChildren<RenderTargetWindow*>())
 				view->SetRenderScale(factor);
+		});
+	}
+
+	SetUpReconstructionWidthMenu(render);
+}
+
+// Beside the render scale because it is only legible against one: below 1.0 the resolve builds each
+// output pixel out of the jittered render samples nearest it, and this is how wide "nearest" is. At
+// scale 1.0 every output pixel has a sample of its own and nothing here moves the image.
+void
+MainWindow::SetUpReconstructionWidthMenu(QMenu* render)
+{
+	// Either side of the 0.4 a target ships with, which is what the resolve was measured at.
+	static constexpr std::array c_Widths = { 0.25f, 0.3f, 0.4f, 0.5f, 0.6f };
+
+	QMenu* width = render->addMenu("TAA Reconstruction Width");
+	width->setStatusTip(
+		"How wide a kernel the temporal resolve rebuilds each output pixel with, in output pixels. "
+		"Narrower is sharper on a held frame and slower to settle on a moving one; it has no "
+		"effect "
+		"at a render scale of 1.");
+
+	auto* group = new QActionGroup(width);
+	group->setExclusive(true);
+
+	const QList<RenderTargetWindow*> views = findChildren<RenderTargetWindow*>();
+	const float current = views.isEmpty() ? 0.4f : views.first()->GetTaaReconstructionWidth();
+
+	for (const float value : c_Widths)
+	{
+		QAction* action = width->addAction(QString("%1 px").arg(value));
+		action->setCheckable(true);
+		action->setChecked(qFuzzyCompare(value, current));
+		group->addAction(action);
+
+		connect(action, &QAction::triggered, this, [this, value]() {
+			for (RenderTargetWindow* view : findChildren<RenderTargetWindow*>())
+				view->SetTaaReconstructionWidth(value);
 		});
 	}
 }

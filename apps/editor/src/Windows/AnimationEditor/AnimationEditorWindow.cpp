@@ -32,11 +32,12 @@ namespace
 AnimationEditorWindow::AnimationEditorWindow(QWidget* parent, AnimationEditorWindowDesc desc) :
 	QWidget(parent)
 {
-	auto rt             = RenderTargetWindowDesc();
-	rt.renderer         = desc.renderer;
-	rt.initialInstances = desc.initialPreviewInstances;
-	rt.taaEnabled       = desc.taaEnabled;
-	rt.renderScale      = desc.renderScale;
+	auto rt                   = RenderTargetWindowDesc();
+	rt.renderer               = desc.renderer;
+	rt.initialInstances       = desc.initialPreviewInstances;
+	rt.taaEnabled             = desc.taaEnabled;
+	rt.renderScale            = desc.renderScale;
+	rt.taaReconstructionWidth = desc.taaReconstructionWidth;
 
 	m_Preview = new AnimationPreviewWindow(this, std::move(rt), std::move(desc.previewEnv));
 	m_Preview->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);

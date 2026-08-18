@@ -232,21 +232,23 @@ namespace
 		const std::string& path,
 		bool               taaEnabled,
 		int                frames,
-		ScenePopulator     populate    = AddQuad,
-		CameraProvider     cameraAt    = StillCamera,
-		ClockProvider      clockAt     = StoppedClock,
-		float              renderScale = 1.0f,
-		int                outputScale = 1)
+		ScenePopulator     populate            = AddQuad,
+		CameraProvider     cameraAt            = StillCamera,
+		ClockProvider      clockAt             = StoppedClock,
+		float              renderScale         = 1.0f,
+		int                outputScale         = 1,
+		float              reconstructionWidth = bgl::RenderTargetDesc().taaReconstructionWidth)
 	{
 		auto gfx = bgl::CreateGraphics(TestOptions());
 		REQUIRE(gfx != nullptr);
 
-		auto targetDesc        = bgl::RenderTargetDesc();
-		targetDesc.width       = static_cast<int>(c_Width) * outputScale;
-		targetDesc.height      = static_cast<int>(c_Height) * outputScale;
-		targetDesc.headless    = true;
-		targetDesc.taaEnabled  = taaEnabled;
-		targetDesc.renderScale = renderScale;
+		auto targetDesc                   = bgl::RenderTargetDesc();
+		targetDesc.width                  = static_cast<int>(c_Width) * outputScale;
+		targetDesc.height                 = static_cast<int>(c_Height) * outputScale;
+		targetDesc.headless               = true;
+		targetDesc.taaEnabled             = taaEnabled;
+		targetDesc.renderScale            = renderScale;
+		targetDesc.taaReconstructionWidth = reconstructionWidth;
 
 		auto target = gfx->CreateRenderTarget(targetDesc);
 		REQUIRE(target != nullptr);
@@ -1504,4 +1506,121 @@ TEST_CASE(
 
 	CHECK(rawError > 0.01f);
 	CHECK(taaError < rawError);
+}
+
+// The reconstruction kernel is the one thing about the resolve a viewport can sweep while watching
+// a scene, so what it can and cannot reach is worth pinning.
+//
+// It cannot reach scale 1.0. There is one jitter phase per output pixel there and PhaseWeight
+// weighs it against its own mean, so the ratio is one whatever the width is -- which is what keeps
+// every figure this file measures independent of the setting.
+TEST_CASE(
+	"The reconstruction width sharpens an upscale and cannot touch scale 1.0",
+	"[taa][render]")
+{
+	constexpr float c_HalfScale = 0.5f;
+
+	// Either side of the 0.4 the target ships with, and far enough apart that the difference is not
+	// the measurement's own noise.
+	constexpr float c_Narrow = 0.25f;
+	constexpr float c_Wide   = 0.6f;
+
+	SECTION("at scale 1.0 the width changes nothing")
+	{
+		const std::string narrow = "assets/golden/taa_width_full_narrow.got.png";
+		const std::string wide   = "assets/golden/taa_width_full_wide.got.png";
+
+		RenderTo(
+			narrow,
+			true,
+			c_ConvergeFrames,
+			AddFineFence,
+			StillCamera,
+			StoppedClock,
+			1.0f,
+			1,
+			c_Narrow);
+		RenderTo(
+			wide,
+			true,
+			c_ConvergeFrames,
+			AddFineFence,
+			StillCamera,
+			StoppedClock,
+			1.0f,
+			1,
+			c_Wide);
+
+		// Byte-exact, not merely close: the two renders differ in one shader constant that the
+		// arithmetic cancels, so anything but zero here means it did not cancel.
+		CHECK(bgl::test::MatchesGolden(narrow, wide, 0.0f));
+	}
+
+	SECTION("at half render scale a narrower kernel resolves more detail")
+	{
+		const std::string narrow = "assets/golden/taa_width_half_narrow.got.png";
+		const std::string wide   = "assets/golden/taa_width_half_wide.got.png";
+
+		RenderTo(
+			narrow,
+			true,
+			c_ConvergeFrames,
+			AddFineFence,
+			StillCamera,
+			StoppedClock,
+			c_HalfScale,
+			1,
+			c_Narrow);
+		RenderTo(
+			wide,
+			true,
+			c_ConvergeFrames,
+			AddFineFence,
+			StillCamera,
+			StoppedClock,
+			c_HalfScale,
+			1,
+			c_Wide);
+
+		constexpr int c_FenceBoxX = 98;
+		constexpr int c_FenceBoxY = 98;
+		constexpr int c_FenceBox  = 60;
+
+		const float narrowDetail =
+			bgl::test::AliasEnergy(narrow, c_FenceBoxX, c_FenceBoxY, c_FenceBox, c_FenceBox);
+		const float wideDetail =
+			bgl::test::AliasEnergy(wide, c_FenceBoxX, c_FenceBoxY, c_FenceBox, c_FenceBox);
+
+		INFO("fence detail: narrow = " << narrowDetail << ", wide = " << wideDetail);
+
+		// Held and converged, so this is the half of the trade a still frame can see. What the
+		// narrow setting costs is the frames a moving pixel waits, which is why 0.4 and not 0.25 is
+		// what a target ships with.
+		CHECK(narrowDetail > wideDetail);
+	}
+
+	SECTION("a width that is not a positive number is the caller's error")
+	{
+		auto gfx = bgl::CreateGraphics(TestOptions());
+		REQUIRE(gfx != nullptr);
+
+		auto targetDesc                   = bgl::RenderTargetDesc();
+		targetDesc.width                  = static_cast<int>(c_Width);
+		targetDesc.height                 = static_cast<int>(c_Height);
+		targetDesc.headless               = true;
+		targetDesc.taaEnabled             = true;
+		targetDesc.taaReconstructionWidth = 0.0f;
+
+		CHECK_THROWS_AS(gfx->CreateRenderTarget(targetDesc), bgl::GraphicsError);
+
+		targetDesc.taaReconstructionWidth = bgl::RenderTargetDesc().taaReconstructionWidth;
+
+		auto target = gfx->CreateRenderTarget(targetDesc);
+		REQUIRE(target != nullptr);
+
+		CHECK_THROWS_AS(target->SetTaaReconstructionWidth(-1.0f), bgl::GraphicsError);
+
+		// The rejected call leaves the target usable at what it had.
+		CHECK(target->GetTaaReconstructionWidth() == targetDesc.taaReconstructionWidth);
+	}
 }

@@ -27,6 +27,11 @@ struct RenderTargetWindowDesc
 	// resolution-dependent temporal artifact can then be reproduced on hardware that does not have
 	// that display. Clamped to [0.1, 4].
 	float renderScale = 1.0f;
+
+	// The width, in output pixels, of the kernel the TAA resolve reconstructs each output pixel
+	// with. Narrower is sharper and slower to settle, and it does nothing at a render scale of 1,
+	// where each output pixel has a sample of its own. Clamped to [0.1, 2].
+	float taaReconstructionWidth = 0.4f;
 };
 
 class RenderTargetWindow : public QWidget
@@ -82,6 +87,19 @@ public:
 	GetRenderScale() const noexcept
 	{
 		return m_RenderScale;
+	}
+
+	// Sets how wide a kernel the resolve reconstructs each output pixel with, in output pixels.
+	// Nothing is reallocated and the accumulation is kept, so this can be swept while watching one
+	// scene -- and it changes nothing at a render scale of 1. Out-of-range values are clamped and
+	// warned about rather than rejected, like the render scale beside it.
+	void
+	SetTaaReconstructionWidth(float width);
+
+	[[nodiscard]] float
+	GetTaaReconstructionWidth() const noexcept
+	{
+		return m_TaaReconstructionWidth;
 	}
 
 protected:
@@ -190,6 +208,9 @@ private:
 
 	// Clamped copy of the desc's, so SyncSize reads one value however it was set. GUI thread.
 	float m_RenderScale = 1.0f;
+
+	// Clamped copy of the desc's, kept so the menu can show what this viewport is on. GUI thread.
+	float m_TaaReconstructionWidth = 0.4f;
 
 	// Read by DrawFrame, so written only from the render thread: the GUI thread hands new values over
 	// through the Renderer rather than assigning them here, and no frame sees a half-written camera.

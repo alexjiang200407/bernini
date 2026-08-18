@@ -28,6 +28,7 @@
         "initialInstances": 1000,
         "temporalAA": true,
         "renderScale": 1.0,
+        "taaReconstructionWidth": 0.4,
         "environmentMap": "assets/Environments/forest.benv",
         "dataRoot": "assets"
     },
@@ -35,6 +36,7 @@
         "initialPreviewInstances": 16,
         "temporalAA": true,
         "renderScale": 1.0,
+        "taaReconstructionWidth": 0.4,
         "environmentMap": "assets/Environments/forest.benv",
         "dataRoot": "assets"
     },
@@ -42,6 +44,7 @@
         "initialPreviewInstances": 16,
         "temporalAA": true,
         "renderScale": 1.0,
+        "taaReconstructionWidth": 0.4,
         "environmentMap": "assets/Environments/forest.benv",
         "dataRoot": "assets"
     },

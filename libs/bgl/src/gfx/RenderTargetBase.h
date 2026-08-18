@@ -65,6 +65,24 @@ namespace bgl
 			return m_RenderScale;
 		}
 
+		[[nodiscard]] float
+		GetTaaReconstructionWidth() const noexcept final
+		{
+			return m_TaaReconstructionWidth;
+		}
+
+		void
+		SetTaaReconstructionWidth(float width) final
+		{
+			if (!(width > 0.0f) || !std::isfinite(width))
+			{
+				throw GraphicsError(
+					"RenderTargetDesc::taaReconstructionWidth must be positive and finite");
+			}
+
+			m_TaaReconstructionWidth = width;
+		}
+
 		/**
 		 * Re-derives the render size and recreates every attachment sized by it. The output size,
 		 * the swapchain and the frame ring are untouched; the accumulation is discarded, since a
@@ -281,5 +299,9 @@ namespace bgl
 		uint32_t m_RenderHeight = 0;
 		float    m_RenderScale  = 1.0f;
 		uint64_t m_FrameCount   = 0;
+
+		// Not backend state: nothing is allocated from it, so it needs neither an override nor a
+		// GPU idle to change.
+		float m_TaaReconstructionWidth = RenderTargetDesc().taaReconstructionWidth;
 	};
 }

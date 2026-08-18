@@ -108,6 +108,10 @@ namespace bgl
 		// and in render texels, which is where the sample it moved actually landed.
 		const glm::vec2 jitterTexels = args.jitter * glm::vec2(0.5f, -0.5f) * args.renderSize;
 
+		gassert(
+			args.reconstructionWidth > 0.0f,
+			"TaaResolve needs a positive reconstruction width");
+
 		// One phase unless the output grid is the denser of the two, which is what leaves the
 		// reconstruction kernel at unity everywhere a render scale does not upscale.
 		const auto subPixels = glm::vec2(
@@ -183,6 +187,10 @@ namespace bgl
 			if (auto u = taa["resampling"]; u.IsValid())
 			{
 				u = args.renderSize == outputSize ? 0.0f : 1.0f;
+			}
+			if (auto u = taa["sampleWeightK"]; u.IsValid())
+			{
+				u = 1.0f / (2.0f * args.reconstructionWidth * args.reconstructionWidth);
 			}
 			if (auto u = taa["blendWeight"]; u.IsValid())
 			{

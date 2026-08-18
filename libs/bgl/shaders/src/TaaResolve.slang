@@ -44,6 +44,13 @@ struct TaaResolveData
     // written so that one sample per output pixel falls out as the untouched render-grid resolve.
     float resampling;
 
+    // Reciprocal of twice the squared width of PhaseWeight's kernel, in output pixels. A knob rather
+    // than a constant because narrowing it sharpens a held frame without limit while lengthening the
+    // wait a moving pixel has for the phase that serves it, and that trade is judged by eye at a
+    // render scale. It cannot move an image at scale 1.0: one phase weighs itself against its own
+    // mean whatever the width is.
+    float sampleWeightK;
+
     // How much of the resolved pixel comes from this frame. Zero history -- the first frame, or the
     // first after a resize -- takes the scene colour whole.
     float blendWeight;
@@ -153,11 +160,6 @@ float3 SampleHistoryCatmullRom(float2 uv, float2 texel)
     return sum / weight;
 }
 
-// Reciprocal of twice the squared width of the reconstruction kernel below, at one output pixel per
-// render pixel. PhaseWeight scales it with the sub-pixel count, which is what holds that width at
-// 0.4 of an *output* pixel wherever the grids differ.
-static const float c_SampleWeightK = 3.125;
-
 // How much of this frame an output pixel takes along one axis, given how far its centre sits from
 // where the frame's sample landed -- divided by the same kernel averaged over the sub-pixel phases
 // one render sample serves.
@@ -168,15 +170,24 @@ static const float c_SampleWeightK = 3.125;
 // Normalized, that case is a single phase whose weight is its own mean, which is exactly one, and
 // the kernel only ever redistributes a frame's weight between the sub-pixels sharing its sample.
 //
-// Separable, and normalized per axis rather than once over the pair, so that identity is exact
-// rather than approached: x/x is one, where exp(-a)*exp(-b) is not exp(-(a+b)).
+// Separable, and normalized per axis rather than once over the pair, because a kernel normalized
+// once over the pair could not reduce to unity per axis: exp(-a)*exp(-b) is not exp(-(a+b)).
 float PhaseWeight(float offset, float jitterTexel, float subPixels)
 {
-    // Width is 0.4 of an *output* pixel, which is 0.4 of a render pixel only where the two grids
-    // coincide. A kernel kept at render width would let an output pixel take a strong share of a
-    // sample a whole output pixel away, and reconstruct the frame softer than a plain filtered
-    // upscale of it -- measured, and the reason this factor is here.
-    float k = c_SampleWeightK * subPixels * subPixels;
+    // The width the caller asks for is in *output* pixels, which is render pixels only where the two
+    // grids coincide. A kernel kept at render width would let an output pixel take a strong share of
+    // a sample a whole output pixel away, and reconstruct the frame softer than a plain filtered
+    // upscale of it -- measured, and the reason the sub-pixel count is in here.
+    // One phase weighs itself against its own mean, so the answer is one and no width can move it.
+    // Returned rather than divided out: a backend free to implement the division as an approximate
+    // reciprocal makes x/x land a bit either side of one, and that bit is the whole of what a render
+    // scale of 1.0 would otherwise show for a setting that cannot reach it.
+    if (subPixels <= 1.0)
+    {
+        return 1.0;
+    }
+
+    float k = gTaaResolveData.sampleWeightK * subPixels * subPixels;
 
     float sum = 0.0;
     for (float i = 0.0; i < subPixels; i += 1.0)

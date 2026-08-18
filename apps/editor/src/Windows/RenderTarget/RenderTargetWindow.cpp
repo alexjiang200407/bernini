@@ -48,6 +48,27 @@ namespace
 
 		return clamped;
 	}
+
+	// Below a fifth of a pixel the kernel starves every phase but the one that lands dead centre and
+	// the accumulation stops converging; above two it spans neighbours the reconstruction exists to
+	// keep apart. Either is a typo in config.json rather than an intent.
+	constexpr float c_MinReconstructionWidth = 0.1f;
+	constexpr float c_MaxReconstructionWidth = 2.0f;
+
+	float
+	ClampReconstructionWidth(float width)
+	{
+		const float clamped = std::clamp(width, c_MinReconstructionWidth, c_MaxReconstructionWidth);
+		if (clamped != width)
+		{
+			qWarning(
+				"RenderTarget: TAA reconstruction width %.3f out of range, using %.3f",
+				static_cast<double>(width),
+				static_cast<double>(clamped));
+		}
+
+		return clamped;
+	}
 }
 
 RenderTargetWindow::RenderTargetWindow(QWidget* parent, RenderTargetWindowDesc desc) :
@@ -57,15 +78,17 @@ RenderTargetWindow::RenderTargetWindow(QWidget* parent, RenderTargetWindowDesc d
 	m_ResizeTimer->setSingleShot(true);
 	connect(m_ResizeTimer, &QTimer::timeout, this, [this]() { SyncSize(width(), height()); });
 
-	m_RenderScale = ClampRenderScale(m_Desc.renderScale);
+	m_RenderScale            = ClampRenderScale(m_Desc.renderScale);
+	m_TaaReconstructionWidth = ClampReconstructionWidth(m_Desc.taaReconstructionWidth);
 
 	m_Width  = GetPhysicalExtent(width(), devicePixelRatio());
 	m_Height = GetPhysicalExtent(height(), devicePixelRatio());
 
-	auto rtvDesc        = bgl::RenderTargetDesc();
-	rtvDesc.width       = m_Width;
-	rtvDesc.height      = m_Height;
-	rtvDesc.renderScale = m_RenderScale;
+	auto rtvDesc                   = bgl::RenderTargetDesc();
+	rtvDesc.width                  = m_Width;
+	rtvDesc.height                 = m_Height;
+	rtvDesc.renderScale            = m_RenderScale;
+	rtvDesc.taaReconstructionWidth = m_TaaReconstructionWidth;
 	// Resolved here on the GUI thread; the render target is created from the value on the render
 	// thread. macOS takes the widget's CAMetalLayer rather than its native view -- see
 	// platform::MetalLayerForView.
@@ -273,6 +296,25 @@ RenderTargetWindow::SetRenderScale(float scale)
 		m_RenderTarget->GetRenderHeight(),
 		m_Width,
 		m_Height);
+}
+
+void
+RenderTargetWindow::SetTaaReconstructionWidth(float width)
+{
+	if (m_RenderTarget == nullptr || m_Desc.renderer == nullptr)
+		return;
+
+	const float clamped = ClampReconstructionWidth(width);
+	if (clamped == m_TaaReconstructionWidth)
+		return;
+
+	m_TaaReconstructionWidth = clamped;
+
+	// A per-frame shader constant: nothing is reallocated, the accumulation is kept, and the next
+	// frame reconstructs with it. Posted to the render thread all the same, because that is what
+	// reads it between frames.
+	m_Desc.renderer->Invoke(
+		[&] { m_RenderTarget->SetTaaReconstructionWidth(m_TaaReconstructionWidth); });
 }
 
 void

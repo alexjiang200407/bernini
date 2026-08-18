@@ -38,6 +38,7 @@ namespace bgl
 			static_cast<uint32_t>(desc.width),
 			static_cast<uint32_t>(desc.height),
 			desc.renderScale);
+		SetTaaReconstructionWidth(desc.taaReconstructionWidth);
 
 		if (!desc.headless)
 		{

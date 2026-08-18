@@ -23,6 +23,7 @@ namespace bgl
 			static_cast<uint32_t>(desc.width),
 			static_cast<uint32_t>(desc.height),
 			desc.renderScale);
+		SetTaaReconstructionWidth(desc.taaReconstructionWidth);
 
 		for (UINT i = 0; i < c_SwapchainImageCount; i++)
 		{

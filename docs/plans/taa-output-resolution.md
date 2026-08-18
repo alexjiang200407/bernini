@@ -52,8 +52,9 @@ deleted in the same commit; what it measured is above, and what it proposed is d
   render sample serves**. Eight phases then fill a grid four times as dense: an output pixel no
   sample landed near this frame takes almost none of the current frame rather than a full-weight
   wrong colour. The normalizer is what makes ADR-6 reachable — at output = render every pixel sits
-  the same distance from its sample, so the kernel is a per-frame constant, and dividing it out
-  leaves the weight exactly 1 and the scale-1.0 image untouched. It also states the kernel's job
+  the same distance from its sample, so the kernel is a per-frame constant, and normalizing it away
+  leaves the weight exactly 1 and the scale-1.0 image untouched — returned as unity rather than
+  divided out, for the reason ADR-6 records. It also states the kernel's job
   honestly: redistribute the frame's weight between sub-pixel phases, not change how much of the
   frame is taken. *Rejected: switching the kernel off when the grids coincide, because a scale of
   1.01 would then jump from full weight to as little as a fifth of it. Rejected: taking the nearest
@@ -74,19 +75,22 @@ deleted in the same commit; what it measured is above, and what it proposed is d
   which offset frame N renders with at scale 1.0 — the image differs, every golden is re-pinned and
   ADR-6's gate is gone before a single 2× figure can be trusted.*
 
-- **ADR-6 — The scale-1.0 resolve reduces to the render-grid one, and that is the first gate.**
-  Where the two grids coincide the reconstruction kernel is identically one, the nearest sample is
-  the pixel's own texel, and the neighbourhood clamp and both motion discriminators read the same
-  texels they read before — so the arithmetic is the same arithmetic, and every existing `[taa]` and
-  `[hashedalpha]` figure holds without being re-measured. Nothing at 2× is read until it does.
+- **ADR-6 — Bit-identity at scale 1.0 is the first gate.** Where the two grids coincide the
+  reconstruction kernel is identically one, the nearest sample is the pixel's own texel, and the
+  neighbourhood clamp and both motion discriminators read the same texels they read before — so the
+  arithmetic is the same arithmetic, and every existing `[taa]` and `[hashedalpha]` figure holds
+  without being re-measured. Held: all 58 `[taa]` captures — pans, ghosts, parallax, material edits,
+  animation and the resolution sweep — are byte-for-byte what they were before the resolve moved.
+  Nothing at 2× is read until that is true.
 
-  *Amended during implementation. This began as "bit-identical, byte for byte", and that is not
-  reachable: changing the shader's source at all changes which multiply-adds the backend contracts
-  into fmas, which moves last bits anywhere in the frame. Measured across 58 captures spanning pans,
-  ghosts, parallax, material edits, animation and the resolution sweep, the residue is at most 4 of
-  262,144 bytes differing by one 8-bit level — and 20 of those captures differed until the
-  interpolated uv was kept rather than reconstructed where the grids coincide, which is the part
-  that was worth chasing. The gate above is what that evidence supports.*
+  *Reaching it took three goes, and the two failures are worth keeping. Twenty captures differed
+  until the interpolated uv was kept rather than reconstructed where the grids coincide. Four
+  survived that, and were briefly written off in this document as the backend contracting different
+  multiply-adds — wrongly: the cause was `PhaseWeight` dividing a kernel by its own single-phase
+  mean, which a backend may implement as an approximate reciprocal, so `x/x` landed a bit either
+  side of one. Returning unity at one phase rather than computing it took the residue to zero. The
+  lesson generalises: a property this gate rests on has to be structural, not arithmetic that ought
+  to cancel.*
 
 - **ADR-7 — A 4×-supersampled truth harness is built, and the far-mesh figure asserts.** No such
   harness exists today; the numbers in Context were measured ad hoc, and the `[resolution]` sweep in
@@ -106,6 +110,17 @@ deleted in the same commit; what it measured is above, and what it proposed is d
   disabled, because `SetTaaEnabled` exists precisely so a viewport can be compared against itself
   without recreating anything.*
 
+- **ADR-10 — The kernel's width is a per-target knob, in output pixels, defaulting to 0.4.**
+  `RenderTargetDesc::taaReconstructionWidth` and `IRenderTarget::SetTaaReconstructionWidth`, and a
+  Render Scale-shaped entry in the editor's Render menu beside it. Narrowing it sharpens a held
+  frame without limit — a still pixel eventually sees every phase — while lengthening the wait a
+  moving pixel has for the phase that serves it, and only a moving image shows the second half. That
+  is a judgement to be made by eye at a render scale, on the scene in front of you, which is exactly
+  what the Render Scale menu already exists for. It reallocates nothing and keeps the accumulation,
+  so it can be swept mid-scene. *Rejected: leaving it the measured constant, because the measurement
+  that set it could only see the half a still frame shows. Rejected: exposing the jitter sequence
+  length instead, whose effect appears over tens of frames rather than in one a viewer can look at.*
+
 ## Non-goals
 
 - **The vendor upscalers** — FSR 2/3, MetalFX Temporal, DLSS, XeSS. They replace `TaaResolve.slang`
@@ -124,8 +139,8 @@ deleted in the same commit; what it measured is above, and what it proposed is d
 ## Acceptance
 
 - `just run bgl_tests -- "[taa]"` at scale 1.0: every measured figure passes unchanged, and a
-  byte-level capture diff against the pre-change resolve shows no more than the fma residue ADR-6
-  records. This gate passes before any 2× figure is read.
+  byte-level capture diff against the pre-change resolve is empty across all 58 captures. This gate
+  passes before any 2× figure is read.
 - A new `[taa][render][truth]` case renders a 4× supersampled truth, box-downsamples it to output
   size, and measures mean |Δ| over the subject. The gates are **relative**, because a bound copied
   off one machine's measurement is a bound about that machine: under a slow orbit at half render

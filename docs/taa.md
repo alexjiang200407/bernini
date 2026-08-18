@@ -39,6 +39,13 @@ it was reported on. `renderScale` under `levelEditor`,
 `materialEditor` and `animationEditor` in `config.json` sets the value the editor starts at; the menu moves every viewport
 from there, live, because the comparison is what shows a temporal artifact.
 
+Beside it is **TAA Reconstruction Width** (`taaReconstructionWidth`, same three keys, 0.4 by
+default): how wide a kernel the resolve rebuilds each output pixel with, in output pixels. It is the
+one number in the resolve whose trade a still image only half shows — narrower keeps sharpening a
+held frame, and what it costs is the frames a moving pixel waits for the jitter phase that serves it
+— so it is swept by eye on a scene rather than fixed at whatever a test measured. At a render scale
+of 1 it does nothing at all: each output pixel has a sample of its own there.
+
 **This document is a map, not a mirror.** The headers at each linked path are the source of truth.
 
 ---
@@ -85,13 +92,16 @@ from there, live, because the comparison is what shows a temporal artifact.
   against 5.2e-4 and 2.2e-4 for the filtered upscale it replaces.
 
 * **An output pixel takes the render sample whose jitter landed nearest it, weighted by how near.**
-  A Gaussian of 0.4 *output* pixels, normalized over the sub-pixel phases one render sample serves.
+  A Gaussian of `RenderTargetDesc::taaReconstructionWidth` *output* pixels, 0.4 by default,
+  normalized over the sub-pixel phases one render sample serves.
   Both halves matter. Unnormalized, the kernel would scale the blend by the jitter's phase even where
   there is nothing to choose between, and would change the image at scale 1.0, where there is one
-  phase and its weight is its own mean — exactly one. Measured at a *render* pixel's width instead of
+  phase and its weight is its own mean — exactly one, and *returned* as one rather than divided out,
+  because a backend may implement that division as an approximate reciprocal and land either side of
+  it. Measured at a *render* pixel's width instead of
   an output pixel's, the reconstruction gives an output pixel a strong share of a sample a whole
   output pixel away and comes out softer than a plain filtered upscale (1.3e-4 against that same
-  5.8e-5). Narrower still keeps improving a *held* frame without limit and is not taken: what it
+  5.8e-5). Narrower still keeps improving a *held* frame without limit and is not the default: what it
   costs is the frames a moving pixel waits for the phase that serves it, which no still measurement
   can see.
 

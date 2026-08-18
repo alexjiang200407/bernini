@@ -61,6 +61,10 @@ namespace bgl
 			// viewport's extent at render scale 1.0, where the resolve is a plain accumulation.
 			glm::vec2 renderSize{ 0.0f };
 
+			// The width, in output pixels, of the kernel an output pixel weights its nearest render
+			// sample by. A no-op wherever the two grids coincide.
+			float reconstructionWidth = 0.4f;
+
 			// False on the first frame, the first after a resize, and the first after the scene's
 			// shading changed; the resolve then takes the scene colour whole rather than blending
 			// against an accumulation that describes something else.
