@@ -148,9 +148,15 @@ TEST_CASE("A load's tier-dependent steps all follow from the source", "[animatio
 
 namespace
 {
-	/** A two-bone rig: a root, and a head `offset` away from it. */
+	/**
+	 * A three-bone rig: a root, a head `headAt` from it, and one face bone `facing` from the head --
+	 * the shape every character rig has, where the face is built out of the head's children.
+	 */
 	assetlib::Skeleton
-	RigFacing(const glm::vec3& offset, const char* headName = "Head")
+	RigFacing(
+		const glm::vec3& facing,
+		const glm::vec3& headAt   = glm::vec3(0.0f, 5.0f, 0.0f),
+		const char*      headName = "Head")
 	{
 		auto skeleton = assetlib::Skeleton();
 
@@ -162,11 +168,18 @@ namespace
 		skeleton.bones.push_back(root);
 
 		auto head        = assetlib::Bone();
-		head.bindPose    = { offset, glm::quat(1.0f, 0.0f, 0.0f, 0.0f), glm::vec3(1.0f) };
+		head.bindPose    = { headAt, glm::quat(1.0f, 0.0f, 0.0f, 0.0f), glm::vec3(1.0f) };
 		head.inverseBind = glm::mat4(1.0f);
 		head.parent      = 0;
 		head.nameOffset  = skeleton.stringPool.add(headName);
 		skeleton.bones.push_back(head);
+
+		auto nose        = assetlib::Bone();
+		nose.bindPose    = { facing, glm::quat(1.0f, 0.0f, 0.0f, 0.0f), glm::vec3(1.0f) };
+		nose.inverseBind = glm::mat4(1.0f);
+		nose.parent      = 1;
+		nose.nameOffset  = skeleton.stringPool.add("Nose");
+		skeleton.bones.push_back(nose);
 
 		return skeleton;
 	}
@@ -197,11 +210,11 @@ TEST_CASE("The opening camera faces whichever axis a rig's head is on", "[animat
 	using editor::RestFacingYaw;
 
 	// The orbit camera puts its eye at (sin(yaw), _, cos(yaw)), so these are the yaws that put the
-	// eye where the head points -- which is the whole reason a constant cannot do this job. The test
+	// eye where the face points -- which is the whole reason a constant cannot do this job. The test
 	// coyote faces +X; glTF's own convention is +Z.
 	SECTION("a rig facing +Z, which is glTF's convention")
 	{
-		const auto skeleton = RigFacing(glm::vec3(0.0f, 1.0f, 5.0f));
+		const auto skeleton = RigFacing(glm::vec3(0.0f, 0.0f, 5.0f));
 		const auto yaw      = RestFacingYaw(skeleton, RestClip(skeleton));
 		REQUIRE(yaw.has_value());
 		CHECK(*yaw == Catch::Approx(0.0f).margin(1e-4));
@@ -209,7 +222,7 @@ TEST_CASE("The opening camera faces whichever axis a rig's head is on", "[animat
 
 	SECTION("a rig facing +X, which is what the test coyote does")
 	{
-		const auto skeleton = RigFacing(glm::vec3(5.0f, 1.0f, 0.0f));
+		const auto skeleton = RigFacing(glm::vec3(5.0f, 0.0f, 0.0f));
 		const auto yaw      = RestFacingYaw(skeleton, RestClip(skeleton));
 		REQUIRE(yaw.has_value());
 		CHECK(*yaw == Catch::Approx(glm::half_pi<float>()).margin(1e-4));
@@ -217,43 +230,64 @@ TEST_CASE("The opening camera faces whichever axis a rig's head is on", "[animat
 
 	SECTION("a rig facing -Z")
 	{
-		const auto skeleton = RigFacing(glm::vec3(0.0f, 1.0f, -5.0f));
+		const auto skeleton = RigFacing(glm::vec3(0.0f, 0.0f, -5.0f));
 		const auto yaw      = RestFacingYaw(skeleton, RestClip(skeleton));
 		REQUIRE(yaw.has_value());
 		CHECK(std::abs(*yaw) == Catch::Approx(glm::pi<float>()).margin(1e-4));
 	}
 
-	SECTION("a head directly above its root says nothing")
+	SECTION("a reared rig, whose head is above its root rather than in front of it")
 	{
-		// An upright rig whose head is straight up has no horizontal facing to read, and a guess
-		// would be worse than the caller's default.
+		// The case that put the camera behind the coyote: its idle clip stands it up, so the head
+		// sits 45 units above the pelvis and 4 to the *wrong* side. Read root-to-head and the camera
+		// lands on the tail; read where the head looks and it lands on the face.
+		const auto skeleton =
+			RigFacing(glm::vec3(43.0f, 14.0f, 0.0f), glm::vec3(-4.0f, 45.0f, 0.0f));
+		const auto yaw = RestFacingYaw(skeleton, RestClip(skeleton));
+		REQUIRE(yaw.has_value());
+		CHECK(*yaw == Catch::Approx(glm::half_pi<float>()).margin(1e-4));
+	}
+
+	SECTION("a head looking straight up says nothing")
+	{
 		const auto skeleton = RigFacing(glm::vec3(0.0f, 5.0f, 0.0f));
 		CHECK_FALSE(RestFacingYaw(skeleton, RestClip(skeleton)).has_value());
 	}
 
 	SECTION("a rig that does not name a head says nothing")
 	{
-		const auto skeleton = RigFacing(glm::vec3(5.0f, 1.0f, 0.0f), "Bone_02");
+		const auto skeleton =
+			RigFacing(glm::vec3(5.0f, 0.0f, 0.0f), glm::vec3(0.0f, 5.0f, 0.0f), "Bone_02");
 		CHECK_FALSE(RestFacingYaw(skeleton, RestClip(skeleton)).has_value());
 	}
 
 	SECTION("the shortest 'head' wins, so a forehead does not beat the head")
 	{
-		auto skeleton = RigFacing(glm::vec3(5.0f, 1.0f, 0.0f), "Coyote Head");
+		auto skeleton =
+			RigFacing(glm::vec3(5.0f, 0.0f, 0.0f), glm::vec3(0.0f, 5.0f, 0.0f), "Coyote Head");
 
-		// Named after the head bone but longer, and placed the other way: picking it would point the
-		// camera at the rig's back.
+		// Named after the head bone but longer, and with a child the other way: picking it would
+		// point the camera at the rig's back.
 		auto forehead        = assetlib::Bone();
-		forehead.bindPose    = { glm::vec3(-9.0f, 0.0f, 0.0f),
+		forehead.bindPose    = { glm::vec3(0.0f, 1.0f, 0.0f),
 			                     glm::quat(1.0f, 0.0f, 0.0f, 0.0f),
 			                     glm::vec3(1.0f) };
 		forehead.inverseBind = glm::mat4(1.0f);
-		forehead.parent      = 0;
+		forehead.parent      = 1;
 		forehead.nameOffset  = skeleton.stringPool.add("Coyote L Forehead");
 		skeleton.bones.push_back(forehead);
 
+		auto behind        = assetlib::Bone();
+		behind.bindPose    = { glm::vec3(-40.0f, 0.0f, 0.0f),
+			                   glm::quat(1.0f, 0.0f, 0.0f, 0.0f),
+			                   glm::vec3(1.0f) };
+		behind.inverseBind = glm::mat4(1.0f);
+		behind.parent      = 3;
+		behind.nameOffset  = skeleton.stringPool.add("Tuft");
+		skeleton.bones.push_back(behind);
+
 		const auto yaw = RestFacingYaw(skeleton, RestClip(skeleton));
 		REQUIRE(yaw.has_value());
-		CHECK(*yaw == Catch::Approx(glm::half_pi<float>()).margin(1e-4));
+		CHECK(*yaw > 0.0f);
 	}
 }

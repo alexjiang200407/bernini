@@ -50,13 +50,15 @@ namespace editor
 	 * not say which way it faces.
 	 *
 	 * A fixed yaw cannot do this. Authoring conventions disagree on a rig's forward axis -- the test
-	 * coyote's runs along +X where glTF's own convention is +Z -- so any constant shows some rigs a
-	 * profile. The skeleton does know, though: the horizontal direction from the root bone to the
-	 * head bone is where the rig looks, whatever axis that lands on.
+	 * coyote faces +X where glTF's own convention is +Z -- so any constant shows some rigs a profile.
+	 * The skeleton does know: a head looks toward its own children, which are what a face is made of.
 	 *
-	 * Found by name, because that is the only thing that distinguishes a head from any other bone at
-	 * the end of a chain. A rig whose bones are unnamed, or named in another language, gets nothing
-	 * back rather than a wrong guess -- the caller keeps its default.
+	 * Root-to-head is the obvious reading and it is wrong: a rig whose clip rears it up puts the head
+	 * above the root rather than in front of it, leaving only noise in the horizontal part.
+	 *
+	 * The head is found by name, because nothing else distinguishes it from any other bone at the end
+	 * of a chain. A rig whose bones are unnamed, or named in another language, or whose head has no
+	 * children, gets nothing back rather than a wrong guess -- the caller keeps its default.
 	 */
 	[[nodiscard]] std::optional<float>
 	RestFacingYaw(const assetlib::Skeleton& skeleton, const assetlib::AnimationSet& animations);

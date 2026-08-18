@@ -74,12 +74,33 @@ namespace editor
 		if (pose.size() <= *head)
 			return std::nullopt;
 
-		const glm::vec3 root   = glm::vec3(pose[0][3]);
-		const glm::vec3 toHead = glm::vec3(pose[*head][3]) - root;
-		const auto      facing = glm::vec2(toHead.x, toHead.z);
+		const glm::vec3 headPos = glm::vec3(pose[*head][3]);
 
-		// A head directly above its root -- an upright biped seen from the top down -- says nothing
-		// about which way the rig looks.
+		// Where the head looks, which is toward its own children: a face is built out of them --
+		// nose, jaw, eyes, cheeks -- and they outnumber and outweigh the ears that point elsewhere.
+		//
+		// *Not* the direction from the root to the head. That is the obvious reading and it is wrong
+		// on any rig whose clip stands it up: the test coyote rears, putting its head 45 units above
+		// its pelvis and 4 to the side, so the horizontal part of root-to-head is noise -- and acting
+		// on it put the camera behind the animal.
+		auto sum      = glm::vec3(0.0f);
+		auto children = 0;
+		for (uint32_t i = 0; i < skeleton.bones.size(); ++i)
+		{
+			if (skeleton.bones[i].parent != *head)
+				continue;
+
+			sum += glm::vec3(pose[i][3]);
+			++children;
+		}
+
+		if (children == 0)
+			return std::nullopt;
+
+		const glm::vec3 look   = sum / static_cast<float>(children) - headPos;
+		const auto      facing = glm::vec2(look.x, look.z);
+
+		// A head looking straight up or down says nothing about which way the rig faces.
 		if (glm::length(facing) < 1e-4f)
 			return std::nullopt;
 
