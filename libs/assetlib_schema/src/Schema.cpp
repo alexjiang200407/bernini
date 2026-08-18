@@ -203,6 +203,21 @@ namespace assetlib::schema
 		return m_Layouts[index];
 	}
 
+	LayoutRef
+	Schema::GetLayoutRef(std::string_view name) const
+	{
+		const auto it = std::ranges::find(m_Layouts, name, &Layout::name);
+		if (it == m_Layouts.end())
+			throw_runtime_error("schema: no layout named {}", name);
+		return LayoutRef(*this, static_cast<uint32_t>(it - m_Layouts.begin()));
+	}
+
+	const Layout&
+	LayoutRef::GetLayout() const
+	{
+		return m_Schema->GetLayout(m_Index);
+	}
+
 	size_t
 	Schema::GetElementSize(const Field& field) const
 	{

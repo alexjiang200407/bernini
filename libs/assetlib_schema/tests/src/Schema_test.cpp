@@ -387,6 +387,16 @@ TEST_CASE("every disk POD's builder covers its sizeof", "[schema]")
 	CHECK(FieldOf(*schema.Find("Bone"), "inverseBind").count == 16);
 }
 
+TEST_CASE("a layout is referred to by name, and the reference knows its schema", "[schema]")
+{
+	const Schema    schema  = RealSchema();
+	const LayoutRef submesh = schema.GetLayoutRef("Submesh");
+	CHECK(&submesh.GetSchema() == &schema);
+	CHECK(submesh.GetLayout().name == "Submesh");
+	CHECK(submesh.GetIndex() == *schema.FindIndex(typeid(Submesh)));
+	REQUIRE_THROWS_WITH(schema.GetLayoutRef("Nope"), ContainsSubstring("no layout named Nope"));
+}
+
 TEST_CASE("a schema round-trips through its byte form", "[schema]")
 {
 	const Schema schema = RealSchema();
