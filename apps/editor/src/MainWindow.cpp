@@ -369,8 +369,10 @@ MainWindow::SetUpRenderScaleMenu(QMenu* render)
 void
 MainWindow::SetUpReconstructionWidthMenu(QMenu* render)
 {
-	// Either side of the 0.4 a target ships with, which is what the resolve was measured at.
-	static constexpr std::array c_Widths = { 0.25f, 0.3f, 0.4f, 0.5f, 0.6f };
+	// Either side of the 0.4 a target ships with, and up to twice it: on hashed alpha the wide end is
+	// where a trail stops being visible, and stopping the menu at the default's own neighbourhood
+	// would put that out of reach.
+	static constexpr std::array c_Widths = { 0.25f, 0.4f, 0.6f, 0.8f, 1.0f };
 
 	QMenu* width = render->addMenu("TAA Reconstruction Width");
 	width->setStatusTip(

@@ -41,6 +41,9 @@ namespace
 		// on a coarser grid and the resolve reconstructs the frame back onto the output one.
 		float renderScale = 1.0f;
 
+		// How wide a kernel that reconstruction uses, in output pixels.
+		float taaReconstructionWidth = bgl::RenderTargetDesc().taaReconstructionWidth;
+
 		[[nodiscard]] float
 		TanHalfFov() const noexcept
 		{
@@ -488,12 +491,13 @@ namespace
 		auto gfx = bgl::CreateGraphics(opts);
 		REQUIRE(gfx != nullptr);
 
-		auto targetDesc        = bgl::RenderTargetDesc();
-		targetDesc.width       = static_cast<int>(frame.width);
-		targetDesc.height      = static_cast<int>(frame.height);
-		targetDesc.headless    = true;
-		targetDesc.taaEnabled  = taaEnabled;
-		targetDesc.renderScale = frame.renderScale;
+		auto targetDesc                   = bgl::RenderTargetDesc();
+		targetDesc.width                  = static_cast<int>(frame.width);
+		targetDesc.height                 = static_cast<int>(frame.height);
+		targetDesc.headless               = true;
+		targetDesc.taaEnabled             = taaEnabled;
+		targetDesc.renderScale            = frame.renderScale;
+		targetDesc.taaReconstructionWidth = frame.taaReconstructionWidth;
 
 		auto target = gfx->CreateRenderTarget(targetDesc);
 		REQUIRE(target != nullptr);
@@ -1638,5 +1642,36 @@ TEST_CASE(
 		WARN(
 			"render scale " << scale << ": trail = " << on.trail << "  lead = " << on.lead
 							<< "  trail floor = " << on.trailFloor);
+	}
+}
+
+// The other half of the reconstruction kernel's trade, and the half a still frame cannot show. A
+// wider kernel gives every frame a meaningful share of every output pixel instead of only the ones
+// its jitter phase lands near, so the effective feedback shortens -- and a shorter feedback drops a
+// wrong reprojection sooner. Sharpness pays for it, which is what the truth harness in
+// TaaResolve_test measures going the other way.
+//
+// Both ends matter because the default is a choice between them, and neither number alone can make
+// it. Reported, not gated.
+TEST_CASE(
+	"A hashed smear is measured across reconstruction widths",
+	"[hashedalpha][taa][resolution][render]")
+{
+	for (const float width : { 0.25f, 0.4f, 0.6f, 1.0f })
+	{
+		Frame frame{ c_Width, c_Height, 1.0f, 0.5f };
+		frame.taaReconstructionWidth = width;
+
+		const auto tag = std::to_string(static_cast<int>(width * 100.0f));
+
+		const SmearBands on = StrandSmear(
+			"assets/golden/strand_smear_width_" + tag + "_still.got.png",
+			"assets/golden/strand_smear_width_" + tag + "_panned.got.png",
+			true,
+			frame);
+
+		WARN(
+			"reconstruction width " << width << " at half render scale: trail = " << on.trail
+									<< "  lead = " << on.lead);
 	}
 }
