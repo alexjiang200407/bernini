@@ -68,6 +68,38 @@ namespace assetlib::schema
 		std::vector<Field> fields;
 	};
 
+	class Schema;
+
+	/**
+	 * One layout and the schema it belongs to -- what a nested field's layoutIndex resolves within.
+	 * A layout on its own cannot say what its struct fields are made of.
+	 */
+	class LayoutRef
+	{
+	public:
+		LayoutRef(const Schema& schema, uint32_t index) noexcept : m_Schema(&schema), m_Index(index)
+		{}
+
+		[[nodiscard]] const Schema&
+		GetSchema() const noexcept
+		{
+			return *m_Schema;
+		}
+
+		[[nodiscard]] uint32_t
+		GetIndex() const noexcept
+		{
+			return m_Index;
+		}
+
+		[[nodiscard]] const Layout&
+		GetLayout() const;
+
+	private:
+		const Schema* m_Schema;
+		uint32_t      m_Index;
+	};
+
 	/**
 	 * The layouts one container stores, in dependency order: a struct field refers to a layout at
 	 * a lower index. Two schemas are compared by name, so the byte form carries names, types,
@@ -99,6 +131,10 @@ namespace assetlib::schema
 
 		[[nodiscard]] const Layout&
 		GetLayout(uint32_t index) const;
+
+		/** @throws std::runtime_error if no layout has that name. */
+		[[nodiscard]] LayoutRef
+		GetLayoutRef(std::string_view name) const;
 
 		[[nodiscard]] std::span<const Layout>
 		GetLayouts() const noexcept
