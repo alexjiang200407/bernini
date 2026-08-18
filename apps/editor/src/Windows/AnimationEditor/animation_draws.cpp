@@ -29,7 +29,7 @@ namespace editor
 			return {};
 
 		const bool vat = source == AnimationSource::kVat;
-		return { .bakeVat = vat, .frameByBakeBounds = vat, .offerBakeOnRefusal = vat };
+		return { .bakeVat = vat, .offerBakeOnRefusal = vat };
 	}
 
 	std::vector<ClipInfo>

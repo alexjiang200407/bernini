@@ -27,19 +27,15 @@ namespace editor
 	ToClipInfos(std::span<const game::ClipInfo> clips);
 
 	/**
-	 * What a load has to do differently for each tier. Three decisions that all follow from the
-	 * source, kept together so they cannot drift apart -- the panel reads them once rather than
-	 * testing the source at three points of a long function.
+	 * What a load has to do differently for each tier. Both decisions follow from the source, kept
+	 * together so they cannot drift apart -- the panel reads them once rather than testing the source
+	 * at two points of a long function.
 	 */
 	struct AnimationLoadSteps
 	{
 		// The VAT tier draws from a bake and must find it fresh; the skinned tier reads the rig, so
 		// baking for it is seconds of CPU skinning for a texture pair nothing samples.
 		bool bakeVat = false;
-
-		// Only a bake has a box closing over every frame of every clip. A skinned rig is framed by
-		// its bind pose, so a clip that travels can leave the camera behind.
-		bool frameByBakeBounds = false;
 
 		// Only a VAT refusal is a bake's to answer. A skinned refusal is about the rig or the
 		// material, and offering to bake would send the user somewhere that cannot help.

@@ -19,7 +19,9 @@
 #include <assetlib/AssetStore.h>
 #include <assetlib/bmaterial_io.h>
 #include <assetlib/bmesh_io.h>
+#include <assetlib/bskel_io.h>
 #include <assetlib/material_bake.h>
+#include <assetlib/skinning.h>
 #include <assetlib_structs/BMesh.h>
 #include <gamelib/AssetManager.h>
 #include <gamelib/vat_freshness.h>
@@ -180,11 +182,14 @@ AnimationPreviewWindow::LoadMeshAs(
 	editor::AnimationBindings bindings;
 	std::string               animations = animationsRelPath;
 
-	// The bake's box, kept for the camera: it closes over every frame of every clip, so a clip
-	// with root motion frames wherever the animation travels -- the bind-pose box goes stale the
-	// moment the rig walks off it, which is the same reason the engine culls VAT by this box.
-	auto vatBoundsMin = glm::vec3(0.0f);
-	auto vatBoundsMax = glm::vec3(0.0f);
+	// The box every pose of every clip falls in, which is what the camera must frame. A bind-pose
+	// box is not it: a rig whose clips are authored in different units than its bind pose poses two
+	// orders of magnitude larger, and framing by the bind pose then puts the camera inside the model.
+	// VAT reads the box its bake already closed over; the skinned tier measures one (posedBounds),
+	// which costs microseconds because it bounds the bones rather than skinning every vertex.
+	auto posedMin   = glm::vec3(0.0f);
+	auto posedMax   = glm::vec3(0.0f);
+	bool posedKnown = false;
 
 	// One plan for the whole load, so the three tier-dependent decisions cannot drift apart. Filled
 	// inside the task below, where `animations` is final -- it may still be resolved from the
@@ -215,8 +220,27 @@ AnimationPreviewWindow::LoadMeshAs(
 				progress.Report(0, 0, "Baking animation textures...");
 				const assetlib::BVat vat =
 					game::EnsureVatBaked(assetlib::AssetStore(m_DataRoot), rel, animations);
-				vatBoundsMin = vat.boundsMin;
-				vatBoundsMax = vat.boundsMax;
+				posedMin   = vat.boundsMin;
+				posedMax   = vat.boundsMax;
+				posedKnown = true;
+			}
+			else if (!animations.empty())
+			{
+				progress.Report(0, 0, "Measuring the pose...");
+
+				// Through a store, like every other read: a project opens as a mount, so a rig that
+				// ships inside a .bpak is only reachable that way.
+				const auto store = assetlib::AssetStore(m_DataRoot);
+
+				const assetlib::AnimationSet clips    = store.LoadAnimations(animations);
+				const assetlib::Skeleton     skeleton = store.LoadSkeleton(clips.skeleton);
+
+				// Mesh 0: the panel frames the whole file, and a .bmesh with several rigged meshes
+				// is not something the importer produces.
+				const assetlib::Bounds bounds = assetlib::posedBounds(mesh, 0, skeleton, clips);
+				posedMin                      = bounds.min;
+				posedMax                      = bounds.max;
+				posedKnown                    = true;
 			}
 		});
 
@@ -329,15 +353,10 @@ AnimationPreviewWindow::LoadMeshAs(
 					continue;
 				}
 
-				// Reached only when the bake above ran and succeeded: a bake that threw fails the
-				// task, and a failed task returns before any of this.
-				if (steps.frameByBakeBounds)
-					bmesh::GrowBounds(
-						placement.world,
-						vatBoundsMin,
-						vatBoundsMax,
-						aabbMin,
-						aabbMax);
+				// Reached only when the measurement above ran: whichever produced it, a throw fails
+				// the task and a failed task returns before any of this.
+				if (posedKnown)
+					bmesh::GrowBounds(placement.world, posedMin, posedMax, aabbMin, aabbMax);
 				else
 					bmesh::GrowBoundsForMesh(
 						mesh,
@@ -352,9 +371,9 @@ AnimationPreviewWindow::LoadMeshAs(
 			return out;
 		});
 
-		// The 3/4 hero view: authoring conventions disagree on which axis a rig faces, so a
-		// straight-on default shows a profile as often as a face; the diagonal reads either way.
-		m_Orbit.FocusOn(loaded.center, loaded.radius, glm::radians(45.0f), glm::radians(15.0f));
+		// Head on, slightly above: what the panel is for is watching a clip play, and a profile
+		// hides the half of a gait that reads best from the front.
+		m_Orbit.FocusOn(loaded.center, loaded.radius, 0.0f, glm::radians(15.0f));
 		UpdateCamera();
 		SetTime(0.0f);
 

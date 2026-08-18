@@ -118,7 +118,6 @@ TEST_CASE("A load's tier-dependent steps all follow from the source", "[animatio
 	{
 		const auto steps = PlanAnimationLoad(AnimationSource::kVat, /*hasAnimations*/ true);
 		CHECK(steps.bakeVat);
-		CHECK(steps.frameByBakeBounds);
 		CHECK(steps.offerBakeOnRefusal);
 	}
 
@@ -128,7 +127,6 @@ TEST_CASE("A load's tier-dependent steps all follow from the source", "[animatio
 		// skinned path never samples, and it would also make the preview need a bakeable material.
 		const auto steps = PlanAnimationLoad(AnimationSource::kSkinned, /*hasAnimations*/ true);
 		CHECK_FALSE(steps.bakeVat);
-		CHECK_FALSE(steps.frameByBakeBounds);
 		CHECK_FALSE(steps.offerBakeOnRefusal);
 	}
 
@@ -140,7 +138,6 @@ TEST_CASE("A load's tier-dependent steps all follow from the source", "[animatio
 		{
 			const auto steps = PlanAnimationLoad(source, /*hasAnimations*/ false);
 			CHECK_FALSE(steps.bakeVat);
-			CHECK_FALSE(steps.frameByBakeBounds);
 			CHECK_FALSE(steps.offerBakeOnRefusal);
 		}
 	}
