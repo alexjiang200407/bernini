@@ -8,6 +8,7 @@ import idl.Meshlet;
 import idl.PsoType;
 import idl.Submesh;
 import idl.Clip;
+import clip_playback;
 import idl.VatGeom;
 import idl.VatState;
 import forward.common;
@@ -24,50 +25,17 @@ ConstantBuffer<ForwardData> forwardData;
 ConstantBuffer<ViewData> viewData;
 ConstantBuffer<VatData> vatData;
 
-// The clip-space frame position at `time`: phase advances along the clip at the authored sample
-// rate scaled by the instance's rate. A looping clip wraps; a one-shot clip holds its last frame.
-float ClipFrames(Clip clip, VatState state, float time)
-{
-    float frames = state.phase + time * state.rate * clip.sampleRate;
-    float count = float(clip.frameCount);
-
-    if (clip.loop != 0)
-    {
-        frames = fmod(frames, count);
-        if (frames < 0.0)
-        {
-            frames += count;
-        }
-    }
-    else
-    {
-        frames = clamp(frames, 0.0, count - 1.0);
-    }
-
-    return frames;
-}
-
-// The two rows a fractional frame falls between, and its blend weight. On a loop the upper row
-// wraps onto frame 0 rather than reading the pad row -- the pad duplicates the *last* frame (it
-// exists so a clip never bleeds into the one stacked below), so wrapping the index is what makes
-// the last-to-first crossing seamless.
+// The rows a fractional frame falls between. The pad row after each clip exists so a clip never
+// bleeds into the one stacked below; ClipFrameIndices wraps a looping clip onto frame 0 rather than
+// reading it, which is what makes the last-to-first crossing seamless.
 void FrameRows(Clip clip, float frames, out uint row0, out uint row1, out float weight)
 {
-    uint f0 = uint(frames);
-    uint f1 = f0 + 1;
-
-    if (clip.loop != 0)
-    {
-        f1 = (f1 == clip.frameCount) ? 0 : f1;
-    }
-    else
-    {
-        f1 = min(f1, clip.frameCount - 1);
-    }
+    uint f0;
+    uint f1;
+    ClipFrameIndices(clip, frames, f0, f1, weight);
 
     row0 = clip.firstFrame + f0;
     row1 = clip.firstFrame + f1;
-    weight = frames - float(f0);
 }
 
 float3 SamplePosition(VatGeom geom, Clip clip, uint column, float frames)
@@ -115,7 +83,7 @@ ForwardVSOut EvaluateVertex(Mesh mesh, Submesh submesh, SubmeshInstance instance
 
     // A vertex's column is always an exact texel, so the fetch is Loads by coordinate; only the
     // frame is fractional, blended across the two rows it falls between.
-    float frames = ClipFrames(clip, state, viewData.time);
+    float frames = ClipFrames(clip, state.phase, state.rate, viewData.time);
     float3 position = SamplePosition(geom, clip, column, frames);
     float3 normal = SampleNormal(geom, clip, column, frames);
 
@@ -132,7 +100,7 @@ ForwardVSOut EvaluateVertex(Mesh mesh, Submesh submesh, SubmeshInstance instance
     // The pose the previous frame drew, through the previous frame's camera: the instance
     // transform is immutable, so re-evaluating at prevTime is the whole reprojection. Nothing
     // downstream changes -- that is ForwardVSOut's contract.
-    float prevFrames = ClipFrames(clip, state, viewData.prevTime);
+    float prevFrames = ClipFrames(clip, state.phase, state.rate, viewData.prevTime);
     float3 prevPosition = SamplePosition(geom, clip, column, prevFrames);
     float4 prevWorldPos = mul(mesh.transform, float4(prevPosition, 1.0));
 

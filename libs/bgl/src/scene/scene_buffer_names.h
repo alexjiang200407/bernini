@@ -31,6 +31,10 @@ namespace bgl
 	constexpr std::string_view c_SkinnedStateBufferName = "scene.skinnedStateBuffer"sv;
 	constexpr std::string_view c_SelectedInstancesName  = "scene.selectedInstances"sv;
 
+	// Written by the pose pass rather than uploaded, so neither is in c_Buffers -- see SceneView.
+	constexpr std::string_view c_PosedInstancesName = "scene.posedInstances"sv;
+	constexpr std::string_view c_BonePaletteName    = "scene.bonePalettes"sv;
+
 	constexpr std::string_view c_InstanceVisibilityName = "scene.instanceVisibility"sv;
 	constexpr std::string_view c_CompactedInstancesName = "scene.compactedInstances"sv;
 

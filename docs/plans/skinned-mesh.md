@@ -70,9 +70,15 @@ already optional attributes of the same interleaved buffer, arriving together or
 (`docs/asset_standards.md:229-230`). *Rejected:* a separate skinned vertex buffer, which would
 duplicate position/normal/uv for every rigged mesh and fork `DecodeVertex`.
 
-**ADR-7 — the palette is `float3x4` per bone.** The fourth row of a skinning matrix is always
-`(0,0,0,1)`. *Rejected:* `float4x4`, which is marginally simpler in the shader but makes the
-largest per-instance allocation in the frame 33% bigger, and this one is doubled by ADR-5.
+**ADR-7 — the palette *stores* three rows a bone; the walk *composes* in `float4x4`.** The fourth
+row of a skinning matrix is always `(0,0,0,1)`, so storing it wastes a quarter of the largest
+per-instance allocation in the frame — doubled again by ADR-5. But the walk composes through `mul()`,
+and giving it a second matrix shape would mean reasoning about a packed layout at every step, so the
+groupshared transforms stay `float4x4` and only the buffer is packed. *Rejected:* `float4x4`
+throughout (33% more memory for nothing), and `float3x4` throughout (a bespoke affine multiply, on a
+matrix convention the rest of the shaders do not use). The cost of the split is that
+`cMaxBonesPerRig` is sized by the *unpacked* form: 192 bones at 64 bytes is the 12 KiB groupshared
+budget, where the plan originally assumed 256 at 48.
 
 **ADR-8 — inter-frame blending is nlerp with hemisphere correction,** not slerp. Clips are
 resampled to 30 Hz, so the rotation between adjacent frames is small and nlerp's error with it.
@@ -217,14 +223,28 @@ and the instance's `SkinnedState` back and asserts both; each documented refusal
 `ISceneView` into `bgl/InstanceDesc.h` so they are `bgl::VatInstanceDesc` rather than
 `bgl::ISceneView::VatInstanceDesc`.
 
-**2 — `bgl`: the pose compute pass.** `PoseSkinned.slang` — workgroup per instance, thread per bone
-(strided above the group size), clip sampled at `time` with nlerp between the two frames it falls
-between, hierarchy walked by depth level with a barrier per level, multiplied by `inverseBind`,
-written as `float3x4`. Dispatched twice per instance for `time` and `prevTime` (ADR-5). Owns the
-palette buffer and the range each instance holds in it. `SkinnedPosePass` ordered ahead of
+**2 — `bgl`: the pose compute pass.** *(landed)* `PoseSkinned.slang` — workgroup per instance, thread
+per bone (strided above the group size), clip sampled at `time` with nlerp between the two frames it
+falls between, hierarchy walked by depth level with a barrier per level, multiplied by `inverseBind`,
+written three rows a bone. Dispatched twice per instance for `time` and `prevTime` (ADR-5). Owns the
+`BonePaletteBuffer` and the slice each instance holds in it. `SkinnedPosePass` ordered ahead of
 `ForwardPass`. Still nothing draws.
-*Gate:* **acceptance 2** — palette readback asserted bone-for-bone, at an integral and a fractional
-frame, plus a `rate = 0` hold and a looping clip's wrap across its seam.
+*Gate:* **acceptance 2** — palette readback asserted bone-for-bone.
+
+*Two things this task had to fix rather than add:*
+- **A drawable with no pipeline is no longer enqueued.** Task 1 left a skinned submesh resolving to
+  `PsoType::kInvalid` on the reasoning that the counting sort skips it. It does — but
+  `HistogramInstances.slang:38` `dbg_assert`s on a pso past the bucket count *before* skipping, so the
+  first frame that rendered a skinned instance aborted at teardown on a recorded GPU assertion. No
+  task-1 test drew a frame, which is why it was latent. `WritePlacement` now enqueues a
+  `SubmeshInstance` only when its pso names a real bucket, keeping the slot so `submeshIndex` still
+  addresses it. That is a general invariant, not a skinned special case, and it stops being reachable
+  at all once task 3 gives the tier a pipeline.
+- **The pass is attached under the *view's* namespace, not a cull namespace.** The graph decides a
+  pass is a root by whether it writes an imported resource, and a name resolved inside a cull
+  namespace matches no import — so attached where the plan implied (beside `ForwardPass`, after
+  `SetResourceNamespace(cullNamespace)`) the pass was silently culled and never ran. It belongs
+  outside that scope anyway: a palette is per instance, not per frustum.
 
 **3 — `bgl`: draw it.** `PsoType::kOpaque_SkinnedMesh_PBR` and its `c_Psos` row, and
 `Forward_SkinnedMesh.slang`: decode `joints0`/`weights0`, four palette matrices, linear blend on

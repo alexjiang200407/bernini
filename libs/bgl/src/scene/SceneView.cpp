@@ -87,6 +87,16 @@ namespace bgl
 			m_SkinnedStates.Init(std::move(skinnedStateBufferDesc), m_ResourceManager);
 		}
 
+		m_Palettes.Init(m_ResourceManager);
+
+		{
+			auto desc         = UploadBufferDesc();
+			desc.initialCount = 1;
+			desc.debugName    = "Posed Instances";
+
+			m_PosedInstances.Init(std::move(desc), m_ResourceManager);
+		}
+
 		EnsureCullStateCount(1);
 		m_TransparentSort.Init(paddedInstances, m_ResourceManager);
 
@@ -149,6 +159,8 @@ namespace bgl
 		m_MeshBuffer.Release();
 		m_VatStates.Release();
 		m_SkinnedStates.Release();
+		m_Palettes.Release();
+		m_PosedInstances.Release();
 
 		for (CullState& cullState : m_CullStates)
 		{
@@ -276,20 +288,32 @@ namespace bgl
 				"range for the geom's clip table");
 		}
 
-		auto state  = idl::SkinnedState();
-		state.geom  = rig.record;
-		state.clip  = desc.clip;
-		state.phase = desc.phase;
-		state.rate  = desc.rate;
+		// Two palettes, back to back: the pose at `time` and the pose at `prevTime`, which is what
+		// lets the mesh shader write a motion vector without a history buffer.
+		const uint32_t float4s = idl::cFloat4sPerBone * rig.boneCount * 2;
+
+		const core::multi_slot_handle palette = m_Palettes.Allocate(float4s);
+
+		auto state    = idl::SkinnedState();
+		state.geom    = rig.record;
+		state.clip    = desc.clip;
+		state.phase   = desc.phase;
+		state.rate    = desc.rate;
+		state.palette = palette;
 
 		const core::slot_handle stateHandle = m_SkinnedStates.Add(state);
 		try
 		{
-			return WritePlacement(geom, transform, stateHandle);
+			const MeshInstanceHandle instance = WritePlacement(geom, transform, stateHandle);
+
+			m_MeshBuffer.MetaAt(instance.handle.index).palette = palette;
+			m_PosedDirty                                       = true;
+			return instance;
 		}
 		catch (...)
 		{
 			m_SkinnedStates.Erase(stateHandle);
+			m_Palettes.Free(palette);
 			throw;
 		}
 	}
@@ -346,7 +370,18 @@ namespace bgl
 					MaterialHandle{},
 					geom.geomType);
 
-				meta.submeshInstances.push_back(m_InstanceBuffer.Add(std::move(instance)));
+				// A drawable with no pipeline is not a drawable: HistogramInstances asserts on a pso
+				// past the bucket count, and the sort would skip it regardless. A null slot is still
+				// pushed, because overrides, selection marks and the epoch re-resolve all address a
+				// submesh by its index in this vector.
+				if (instance.pso < c_PsoCount)
+				{
+					meta.submeshInstances.emplace_back(m_InstanceBuffer.Add(std::move(instance)));
+				}
+				else
+				{
+					meta.submeshInstances.emplace_back();
+				}
 			}
 
 			SyncInstanceScratch();
@@ -391,6 +426,8 @@ namespace bgl
 			if (meta.geomType == GeomType::kSkinnedMesh)
 			{
 				m_SkinnedStates.Erase(meta.animState);
+				m_Palettes.Free(meta.palette);
+				m_PosedDirty = true;
 			}
 			else
 			{
@@ -461,6 +498,29 @@ namespace bgl
 		}
 
 		return m_CurrentSelectedInstances.Values();
+	}
+
+	void
+	SceneView::RebuildPosedList()
+	{
+		auto list = std::vector<uint32_t>();
+
+		for (uint32_t meshIndex = 0; meshIndex < m_MeshBuffer.Capacity(); ++meshIndex)
+		{
+			if (!m_MeshBuffer.IsIndexValid(meshIndex))
+			{
+				continue;
+			}
+
+			const MeshMeta& meta = m_MeshBuffer.MetaAt(meshIndex);
+			if (meta.geomType == GeomType::kSkinnedMesh && meta.animState)
+			{
+				list.push_back(meta.animState.index);
+			}
+		}
+
+		m_PosedInstances.Assign(list);
+		m_PosedDirty = false;
 	}
 
 	void
@@ -711,6 +771,13 @@ namespace bgl
 		}
 		m_CurrentSelectedInstances.Update(cmdList);
 
+		if (m_PosedDirty)
+		{
+			RebuildPosedList();
+		}
+		m_PosedInstances.Update(cmdList);
+		m_Palettes.Update(cmdList);
+
 		ForEachNamedBuffer(*this, c_Buffers, [cmdList](std::string_view, auto& buffer) {
 			buffer.Update(cmdList);
 		});
@@ -773,6 +840,23 @@ namespace bgl
 			auto name = std::string(c_SelectedInstancesName);
 			fg.ImportBuffer(name, m_CurrentSelectedInstances.GetBufferHandle());
 			resourceNames.push_back(std::move(name));
+		}
+
+		{
+			// Same order as the selection list above, and for the same reason: rebuilding can grow the
+			// buffer, and a growth mints a new handle.
+			if (m_PosedDirty)
+			{
+				RebuildPosedList();
+			}
+
+			auto posed = std::string(c_PosedInstancesName);
+			fg.ImportBuffer(posed, m_PosedInstances.GetBufferHandle());
+			resourceNames.push_back(std::move(posed));
+
+			auto palettes = std::string(c_BonePaletteName);
+			fg.ImportBuffer(palettes, m_Palettes.GetBufferHandle());
+			resourceNames.push_back(std::move(palettes));
 		}
 
 		// Each frustum's outputs get their own scope inside the view's, so N of them can carry the

@@ -16,7 +16,7 @@ source of truth; when this doc disagrees, trust the header, then fix this doc.
 
 `RenderContext` ([gfx/RenderContext.cpp](libs/bgl/src/gfx/RenderContext.cpp)) drives the frame and
 owns the long-lived pass objects (`m_Forward`, `m_Skybox`, `m_TransparentSort`,
-`m_CompactInstances`, `m_OutlineMask`, `m_PreparePresentPass`); `Graphics` owns one context and
+`m_CompactInstances`, `m_SkinnedPose`, `m_OutlineMask`, `m_PreparePresentPass`); `Graphics` owns one context and
 forwards the frame methods to it. A frame is built between `BeginFrame` and `EndFrame`, with one `Draw` per
 view in between; the passes are added in this order and, because the graph never reorders, execute
 in it:
@@ -27,7 +27,8 @@ flowchart TD
     CLR --> D["per Draw(view)"]
     subgraph D["per Draw(view) — resources imported under the view's namespace"]
         IMP["Scene / SceneView import their buffers"] --> SKY["Skybox (only if the view has one)"]
-        SKY --> TS["Transparent Sort (3 sub-passes)"]
+        SKY --> POSE["Pose Skinned (one workgroup per skinned instance)"]
+        POSE --> TS["Transparent Sort (3 sub-passes)"]
         TS --> CI["Compact Instances (3 sub-passes)"]
         CI --> FWD["Forward (indirect dispatch per PSO bucket, then one for the sorted list)"]
         FWD --> SM["Outline Mask (only when the view has a selection)"]
@@ -307,6 +308,31 @@ many instances turn out to be transparent; only the sort itself is bounded.
   rather than per frustum since only a camera sorts transparents, the last two consumed by
   `Forward`. The pass itself owns no buffers, only its two kernels.
 * **Skipped** when the view's instance count is 0 — the seeded args make that draw a no-op.
+
+### Pose Skinned — [passes/SkinnedPosePass.{h,cpp}](libs/bgl/src/passes/SkinnedPosePass.cpp)
+
+Writes every skinned instance's bone palette: one workgroup per instance, one thread per bone
+(striding when a rig has more bones than `cPoseGroupSize`). Per bone it samples the instance's clip at
+`ViewData::time`, blends the two frames the fractional position falls between (nlerp with a hemisphere
+flip), then the group walks the hierarchy **one depth level at a time** with a barrier between levels
+and multiplies each result by the bone's inverse bind. `cMaxBonesPerRig` is what that groupshared
+array costs, not a taste limit.
+
+It runs **twice per instance in one dispatch**, at `time` and at `prevTime`, writing two palettes back
+to back from `SkinnedState::paletteBase`. That is how skinned geometry gets a motion vector without a
+history buffer — and it holds only while time is the sole input to a pose, so a clip switched between
+frames would reproject through the wrong clip.
+
+* **Attached under the view's namespace, not a cull namespace.** A palette is per instance, not per
+  frustum, so it is posed once however many frustums the view is culled against. It also has to be:
+  the graph decides a pass is a root by whether it writes an *imported* resource, and a name resolved
+  inside a cull namespace matches no import, which would cull the pass entirely.
+* **In:** `scene.posedInstances` (the dense list of `SkinnedState` indices to pose — a sweep of the
+  state buffer would pose freed slots), `scene.skinnedStateBuffer`, `scene.skinnedGeomBuffer`,
+  `scene.skinnedBoneBuffer`, `scene.clipBuffer`, `scene.boneSampleBuffer`.
+* **Out:** `scene.bonePalettes`, the view's `BonePaletteBuffer` — GPU-only storage with a CPU-side offset
+  allocator, because a `RangeBuffer` would re-upload its stale CPU mirror over what this wrote.
+* **Skipped** when the view places no skinned instance.
 
 ### Forward — [passes/ForwardPass.{h,cpp}](libs/bgl/src/passes/ForwardPass.cpp)
 
