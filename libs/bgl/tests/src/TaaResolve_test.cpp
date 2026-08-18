@@ -5,6 +5,7 @@
 #include "util/TestEnvironment.h"
 #include "util/TestOptions.h"
 #include "util/VatSynth.h"
+#include "util/jitter.h"
 #include <bgl/Camera.h>
 #include <bgl/IGraphics.h>
 #include <bgl/IScene.h>
@@ -97,16 +98,17 @@ namespace
 		int                      count,
 		float                    startX,
 		bgl::MaterialHandle      light,
-		bgl::MaterialHandle      dark)
+		bgl::MaterialHandle      dark,
+		float                    slatWidth = c_SlatWidth)
 	{
 		const bgl::GeomHandle slats[] = {
-			scene->AddPlaneGeom(1, 1, c_SlatWidth, c_QuadScale * 2.0f, light),
-			scene->AddPlaneGeom(1, 1, c_SlatWidth, c_QuadScale * 2.0f, dark),
+			scene->AddPlaneGeom(1, 1, slatWidth, c_QuadScale * 2.0f, light),
+			scene->AddPlaneGeom(1, 1, slatWidth, c_QuadScale * 2.0f, dark),
 		};
 
 		for (int i = 0; i < count; ++i)
 		{
-			const float x = startX + static_cast<float>(i) * c_SlatWidth;
+			const float x = startX + static_cast<float>(i) * slatWidth;
 			view->CreateStaticMeshInstance(
 				slats[i % 2],
 				glm::translate(glm::mat4(1.0f), glm::vec3(x, 0.0f, 0.0f)));
@@ -130,6 +132,47 @@ namespace
 	{
 		bgl::test::ApplyEnvironment(scene.Get(), view.Get());
 		AddSlatWall(scene, view, c_SlatCount, c_FenceStartX);
+	}
+
+	// The same fence with slats about two output pixels across, which is one render pixel at half
+	// render scale. That is the regime the output-resolution accumulation exists for: the fence
+	// above is nearly three render pixels per slat even at half scale, where a filtered upscale
+	// already reproduces it and nothing can beat it by much.
+	constexpr float c_FineSlatWidth = 0.1875f;
+	constexpr int   c_FineSlatCount = 76;
+
+	// Finer still: about one *output* pixel per slat, which is below what a single sample per output
+	// pixel can resolve at all. The fence above is the reconstruction's regime -- what a render grid
+	// misses and an output grid can hold; this one is the regime where drawing the frame once gets
+	// it visibly wrong, which is what the supersampled truth needs in order to bite.
+	constexpr float c_SubPixelSlatWidth = 0.09375f;
+
+	void
+	AddSubPixelFence(const bgl::SceneRef& scene, const bgl::SceneViewRef& view)
+	{
+		bgl::test::ApplyEnvironment(scene.Get(), view.Get());
+		AddSlatWall(
+			scene,
+			view,
+			c_FineSlatCount,
+			-0.5f * static_cast<float>(c_FineSlatCount) * c_SubPixelSlatWidth,
+			scene->CreatePbrMaterial(Grey(c_SlatLight)),
+			scene->CreatePbrMaterial(Grey(c_SlatDark)),
+			c_SubPixelSlatWidth);
+	}
+
+	void
+	AddFineFence(const bgl::SceneRef& scene, const bgl::SceneViewRef& view)
+	{
+		bgl::test::ApplyEnvironment(scene.Get(), view.Get());
+		AddSlatWall(
+			scene,
+			view,
+			c_FineSlatCount,
+			-0.5f * static_cast<float>(c_FineSlatCount) * c_FineSlatWidth,
+			scene->CreatePbrMaterial(Grey(c_SlatLight)),
+			scene->CreatePbrMaterial(Grey(c_SlatDark)),
+			c_FineSlatWidth);
 	}
 
 	bgl::SceneDesc
@@ -189,18 +232,23 @@ namespace
 		const std::string& path,
 		bool               taaEnabled,
 		int                frames,
-		ScenePopulator     populate = AddQuad,
-		CameraProvider     cameraAt = StillCamera,
-		ClockProvider      clockAt  = StoppedClock)
+		ScenePopulator     populate            = AddQuad,
+		CameraProvider     cameraAt            = StillCamera,
+		ClockProvider      clockAt             = StoppedClock,
+		float              renderScale         = 1.0f,
+		int                outputScale         = 1,
+		float              reconstructionWidth = bgl::RenderTargetDesc().taaReconstructionWidth)
 	{
 		auto gfx = bgl::CreateGraphics(TestOptions());
 		REQUIRE(gfx != nullptr);
 
-		auto targetDesc       = bgl::RenderTargetDesc();
-		targetDesc.width      = static_cast<int>(c_Width);
-		targetDesc.height     = static_cast<int>(c_Height);
-		targetDesc.headless   = true;
-		targetDesc.taaEnabled = taaEnabled;
+		auto targetDesc                   = bgl::RenderTargetDesc();
+		targetDesc.width                  = static_cast<int>(c_Width) * outputScale;
+		targetDesc.height                 = static_cast<int>(c_Height) * outputScale;
+		targetDesc.headless               = true;
+		targetDesc.taaEnabled             = taaEnabled;
+		targetDesc.renderScale            = renderScale;
+		targetDesc.taaReconstructionWidth = reconstructionWidth;
 
 		auto target = gfx->CreateRenderTarget(targetDesc);
 		REQUIRE(target != nullptr);
@@ -209,9 +257,14 @@ namespace
 		auto view  = gfx->CreateSceneView(scene, 128);
 		populate(scene, view);
 
-		auto job     = bgl::RenderJob();
-		job.view     = view;
-		job.viewport = FullViewport();
+		auto job = bgl::RenderJob();
+		job.view = view;
+
+		// The job's viewport is the target's output size, which the renderer maps onto the render
+		// grid itself. Same framing at every scale, so the same box measures the same content.
+		job.viewport = bgl::Viewport(
+			static_cast<float>(c_Width * outputScale),
+			static_cast<float>(c_Height * outputScale));
 
 		for (int frame = 0; frame < frames; ++frame)
 		{
@@ -998,4 +1051,653 @@ TEST_CASE(
 
 	INFO("edge box delta, alone against sharing the renderer: " << delta);
 	CHECK(delta == 0.0f);
+}
+
+// The two grids and how one derives from the other. Every figure this file measures is read at the
+// default scale, where they coincide -- so what this pins is that the default really is the
+// coincidence, and that a scale moves the render grid and nothing else.
+TEST_CASE("A render scale moves the geometry grid and not the output", "[taa][render]")
+{
+	auto gfx = bgl::CreateGraphics(TestOptions());
+	REQUIRE(gfx != nullptr);
+
+	auto targetDesc       = bgl::RenderTargetDesc();
+	targetDesc.width      = static_cast<int>(c_Width);
+	targetDesc.height     = static_cast<int>(c_Height);
+	targetDesc.headless   = true;
+	targetDesc.taaEnabled = true;
+
+	SECTION("the default scale leaves the two the same size")
+	{
+		auto target = gfx->CreateRenderTarget(targetDesc);
+		REQUIRE(target != nullptr);
+
+		CHECK(target->GetRenderWidth() == target->GetWidth());
+		CHECK(target->GetRenderHeight() == target->GetHeight());
+	}
+
+	SECTION("a scale below one renders on a coarser grid, presenting at the same size")
+	{
+		targetDesc.renderScale = 0.5f;
+
+		auto target = gfx->CreateRenderTarget(targetDesc);
+		REQUIRE(target != nullptr);
+
+		CHECK(target->GetWidth() == c_Width);
+		CHECK(target->GetHeight() == c_Height);
+		CHECK(target->GetRenderWidth() == c_Width / 2);
+		CHECK(target->GetRenderHeight() == c_Height / 2);
+	}
+
+	SECTION("a scale above one supersamples, and still presents at the same size")
+	{
+		targetDesc.renderScale = 2.0f;
+
+		auto target = gfx->CreateRenderTarget(targetDesc);
+		REQUIRE(target != nullptr);
+
+		CHECK(target->GetWidth() == c_Width);
+		CHECK(target->GetRenderWidth() == c_Width * 2);
+	}
+
+	SECTION("a resize keeps the scale")
+	{
+		targetDesc.renderScale = 0.5f;
+
+		auto target = gfx->CreateRenderTarget(targetDesc);
+		REQUIRE(target != nullptr);
+
+		gfx->Resize(target, c_Width * 2, c_Height * 2);
+
+		CHECK(target->GetWidth() == c_Width * 2);
+		CHECK(target->GetRenderWidth() == c_Width);
+	}
+
+	SECTION("the scale can be changed on a live target, without moving the output")
+	{
+		auto target = gfx->CreateRenderTarget(targetDesc);
+		REQUIRE(target != nullptr);
+
+		auto scene = gfx->CreateScene(QuadSceneDesc());
+		auto view  = gfx->CreateSceneView(scene, 4);
+		AddQuad(scene, view);
+
+		auto job     = bgl::RenderJob();
+		job.view     = view;
+		job.camera   = Camera();
+		job.viewport = FullViewport();
+
+		gfx->DrawFrame(target, job);
+
+		auto* base = target->As<bgl::RenderTargetBase>();
+		REQUIRE(base != nullptr);
+
+		// What a scale change must not disturb: the output grid, and so the backbuffers and the two
+		// histories allocated against it.
+		const bgl::TextureHandle backbuffer = base->GetBackbufferTexture(0);
+		const bgl::TextureHandle history    = base->GetHistoryTexture(0);
+
+		REQUIRE(base->IsHistoryValid());
+
+		gfx->SetRenderScale(target, 0.5f);
+
+		CHECK(target->GetWidth() == c_Width);
+		CHECK(target->GetHeight() == c_Height);
+		CHECK(target->GetRenderWidth() == c_Width / 2);
+		CHECK(target->GetRenderHeight() == c_Height / 2);
+
+		// The same textures, not merely the same size: rebuilding them would cost the frame ring its
+		// fences and the accumulation its buffers, for a change that moved neither grid they sit on.
+		CHECK(base->GetBackbufferTexture(0) == backbuffer);
+		CHECK(base->GetHistoryTexture(0) == history);
+
+		// The accumulation is dropped even though its buffers are kept: it describes samples the new
+		// render grid does not take.
+		CHECK_FALSE(base->IsHistoryValid());
+
+		// The frame after must still draw: every attachment the geometry passes write was released
+		// and rebuilt underneath it.
+		CHECK_NOTHROW(gfx->DrawFrame(target, job));
+	}
+
+	SECTION("a scale that is not a positive number is the caller's error")
+	{
+		targetDesc.renderScale = 0.0f;
+		CHECK_THROWS_AS(gfx->CreateRenderTarget(targetDesc), bgl::GraphicsError);
+
+		targetDesc.renderScale = -1.0f;
+		CHECK_THROWS_AS(gfx->CreateRenderTarget(targetDesc), bgl::GraphicsError);
+
+		targetDesc.renderScale = std::numeric_limits<float>::quiet_NaN();
+		CHECK_THROWS_AS(gfx->CreateRenderTarget(targetDesc), bgl::GraphicsError);
+	}
+}
+
+// Eight positions walk one render pixel, and the resolve at scale 1.0 is what every measured figure
+// in this file was taken against -- so the length must not move there. It grows only where the
+// output grid is denser than the render one and those eight would have to serve four pixels each.
+TEST_CASE("The jitter sequence grows only when the output grid is denser", "[taa]")
+{
+	CHECK(bgl::JitterSequenceLength(256, 256, 256, 256) == bgl::c_JitterSequenceLength);
+
+	// Supersampling: every output pixel already sees several render samples per frame.
+	CHECK(bgl::JitterSequenceLength(512, 512, 256, 256) == bgl::c_JitterSequenceLength);
+
+	CHECK(bgl::JitterSequenceLength(128, 128, 256, 256) == 4 * bgl::c_JitterSequenceLength);
+
+	// Capped: past this the tail costs more than the phases are worth.
+	CHECK(bgl::JitterSequenceLength(64, 64, 256, 256) == bgl::c_MaxJitterSequenceLength);
+}
+
+// The claim of the whole change, at its smallest: at half render scale the accumulation lives on
+// the output grid, so jittered half-resolution frames reconstruct an image closer to the full-scale
+// one than any single half-resolution frame stretched to the same size can be.
+//
+// The full-scale converged frame stands in for the truth here, which is enough to order two
+// candidates against each other; what it cannot do is say how far either is from the real thing,
+// and that is what the supersampled truth measures instead.
+//
+// Detail energy deliberately is not the instrument. A half-scale render of the fence aliases, and
+// aliasing is adjacent-pixel energy too -- the raw upscale scores *higher* than the reconstruction
+// while looking worse, because the energy it carries is moire rather than slats.
+TEST_CASE(
+	"An upscaling resolve lands closer to the full-scale image than a stretch",
+	"[taa][render]")
+{
+	const std::string upscaled  = "assets/golden/taa_scale_half_off.got.png";
+	const std::string resolved  = "assets/golden/taa_scale_half_on.got.png";
+	const std::string reference = "assets/golden/taa_scale_full_on.got.png";
+
+	constexpr float c_HalfScale = 0.5f;
+
+	RenderTo(upscaled, false, 1, AddFineFence, StillCamera, StoppedClock, c_HalfScale);
+	RenderTo(
+		resolved,
+		true,
+		c_ConvergeFrames,
+		AddFineFence,
+		StillCamera,
+		StoppedClock,
+		c_HalfScale);
+	RenderTo(reference, true, c_ConvergeFrames, AddFineFence);
+
+	constexpr int c_FenceBoxX = 98;
+	constexpr int c_FenceBoxY = 98;
+	constexpr int c_FenceBox  = 60;
+
+	// The output grid, not the render one: what a half-scale target presents is still the size it
+	// was asked for, which is what makes these three boxes the same box.
+	const bgl::test::Rgba resolvedMean =
+		bgl::test::MeanColor(resolved, c_FenceBoxX, c_FenceBoxY, c_FenceBox, c_FenceBox);
+	const bgl::test::Rgba referenceMean =
+		bgl::test::MeanColor(reference, c_FenceBoxX, c_FenceBoxY, c_FenceBox, c_FenceBox);
+
+	const float referenceDetail =
+		bgl::test::AliasEnergy(reference, c_FenceBoxX, c_FenceBoxY, c_FenceBox, c_FenceBox);
+
+	const float stretchError = bgl::test::FrameDelta(
+		upscaled,
+		reference,
+		c_FenceBoxX,
+		c_FenceBoxY,
+		c_FenceBox,
+		c_FenceBox);
+	const float resolveError = bgl::test::FrameDelta(
+		resolved,
+		reference,
+		c_FenceBoxX,
+		c_FenceBoxY,
+		c_FenceBox,
+		c_FenceBox);
+
+	INFO(
+		"distance from the full-scale image: stretch = " << stretchError
+														 << ", reconstruction = " << resolveError);
+
+	// The box has to be on the fence at all, or both distances are noise against noise.
+	CHECK(referenceDetail > 3e-4f);
+
+	CHECK(resolveError < stretchError);
+
+	// Converged to the same picture, not merely to a sharp one: a reconstruction that drifts,
+	// darkens or tints would satisfy the detail bound above on its own.
+	INFO(
+		"fence mean: resolved = " << resolvedMean.r << "," << resolvedMean.g << ","
+								  << resolvedMean.b << "  reference = " << referenceMean.r << ","
+								  << referenceMean.g << "," << referenceMean.b);
+
+	CHECK(resolvedMean.r == Catch::Approx(referenceMean.r).margin(0.03));
+	CHECK(resolvedMean.g == Catch::Approx(referenceMean.g).margin(0.03));
+	CHECK(resolvedMean.b == Catch::Approx(referenceMean.b).margin(0.03));
+}
+
+// The other half of the reconstruction kernel's trade. Narrowing it sharpens a held frame without
+// limit, because a still pixel eventually sees every phase; what it costs is the frames a moving
+// pixel waits for the phase that serves it, which no still measurement can see. This is that cost,
+// bounded: under the drift the reconstruction must still beat the stretch it replaces.
+TEST_CASE("An upscaling resolve keeps its lead while the camera moves", "[taa][render]")
+{
+	const std::string upscaled  = "assets/golden/taa_scale_half_off_drift.got.png";
+	const std::string resolved  = "assets/golden/taa_scale_half_on_drift.got.png";
+	const std::string reference = "assets/golden/taa_scale_full_on_drift.got.png";
+
+	constexpr float c_HalfScale = 0.5f;
+
+	RenderTo(
+		upscaled,
+		false,
+		c_DriftFrames,
+		AddFineFence,
+		DriftingCamera,
+		StoppedClock,
+		c_HalfScale);
+	RenderTo(
+		resolved,
+		true,
+		c_DriftFrames,
+		AddFineFence,
+		DriftingCamera,
+		StoppedClock,
+		c_HalfScale);
+	RenderTo(reference, true, c_DriftFrames, AddFineFence, DriftingCamera);
+
+	constexpr int c_FenceBoxX = 98;
+	constexpr int c_FenceBoxY = 98;
+	constexpr int c_FenceBox  = 60;
+
+	const float referenceDetail =
+		bgl::test::AliasEnergy(reference, c_FenceBoxX, c_FenceBoxY, c_FenceBox, c_FenceBox);
+
+	const float stretchError = bgl::test::FrameDelta(
+		upscaled,
+		reference,
+		c_FenceBoxX,
+		c_FenceBoxY,
+		c_FenceBox,
+		c_FenceBox);
+	const float resolveError = bgl::test::FrameDelta(
+		resolved,
+		reference,
+		c_FenceBoxX,
+		c_FenceBoxY,
+		c_FenceBox,
+		c_FenceBox);
+
+	INFO(
+		"under drift, distance from the full-scale image: stretch = "
+		<< stretchError << ", reconstruction = " << resolveError);
+
+	CHECK(referenceDetail > 3e-4f);
+	CHECK(resolveError < stretchError);
+}
+
+// Above 1.0 the same resolve is a downsample, and the present-time stretch that used to perform it
+// is gone -- so what a supersampled target hands back must still be the size it was asked for, and
+// still be the same picture.
+TEST_CASE("A supersampling target presents and captures at its output size", "[taa][render]")
+{
+	const std::string supersampled = "assets/golden/taa_scale_double_on.got.png";
+	const std::string reference    = "assets/golden/taa_scale_double_ref.got.png";
+
+	constexpr float c_DoubleScale = 2.0f;
+
+	RenderTo(
+		supersampled,
+		true,
+		c_ConvergeFrames,
+		AddQuad,
+		StillCamera,
+		StoppedClock,
+		c_DoubleScale);
+	RenderTo(reference, true, c_ConvergeFrames);
+
+	// Interior of the quad: flat, so neither the jitter nor the extra samples can change it, and any
+	// difference is the downsample being wrong rather than better.
+	const bgl::test::Rgba interior = bgl::test::MeanColor(supersampled, 118, 118, 20, 20);
+	const bgl::test::Rgba expected = bgl::test::MeanColor(reference, 118, 118, 20, 20);
+
+	INFO(
+		"quad interior: supersampled = " << interior.r << "," << interior.g << "," << interior.b
+										 << "  reference = " << expected.r << "," << expected.g
+										 << "," << expected.b);
+
+	CHECK(expected.Luma() > 0.1f);
+	CHECK(interior.r == Catch::Approx(expected.r).margin(0.02));
+	CHECK(interior.g == Catch::Approx(expected.g).margin(0.02));
+	CHECK(interior.b == Catch::Approx(expected.b).margin(0.02));
+
+	// MeanColor throws on a box outside the image, so both boxes landing is the size assertion: a
+	// 2x capture would have put this one somewhere else entirely.
+	CHECK(bgl::test::MeanColor(supersampled, 236, 236, 16, 16).Luma() < 0.02f);
+}
+
+// The measurement the whole change is judged by, and the only one here that can say a frame is
+// *right* rather than unchanged or self-consistent: mean |delta| against the same frame rendered at
+// four times the linear resolution, unjittered and unaccumulated, box-filtered back down. Sixteen
+// samples per output pixel.
+//
+// The camera drifts, because that is the case a render-grid accumulation loses -- re-fetching its
+// history at a fractional texel offset every frame and shedding contrast near Nyquist on each one,
+// which at half render scale took the measurements that motivated this change past the error of
+// drawing nothing at all.
+//
+// Both sides render at the same scale. What is asked is whether accumulating beats not accumulating
+// at a given cost, not whether half a frame beats a whole one.
+//
+// Two fences, because the answer differs by how fine the content is and the difference is the
+// finding. At the render grid's Nyquist -- slats about one render pixel across -- the output-grid
+// accumulation has samples to reconstruct from and wins outright. Below it, where the render grid
+// never sampled the detail in the first place, no accumulation can invent it: the bound there is
+// that it must not be *worse* than drawing nothing, which is exactly the state this replaces.
+TEST_CASE(
+	"An upscaling resolve beats no antialiasing against a supersampled truth",
+	"[taa][render][truth]")
+{
+	constexpr int   c_TruthScale = 4;
+	constexpr float c_HalfScale  = 0.5f;
+
+	constexpr int c_FenceBoxX = 98;
+	constexpr int c_FenceBoxY = 98;
+	constexpr int c_FenceBox  = 60;
+
+	const auto measure = [&](const std::string& name, ScenePopulator populate) {
+		const std::string truth = "assets/golden/taa_truth_" + name + ".got.png";
+		const std::string raw   = "assets/golden/taa_truth_" + name + "_raw.got.png";
+		const std::string taau  = "assets/golden/taa_truth_" + name + "_taau.got.png";
+
+		RenderTo(
+			truth,
+			false,
+			c_DriftFrames,
+			populate,
+			DriftingCamera,
+			StoppedClock,
+			1.0f,
+			c_TruthScale);
+		RenderTo(raw, false, c_DriftFrames, populate, DriftingCamera, StoppedClock, c_HalfScale);
+		RenderTo(taau, true, c_DriftFrames, populate, DriftingCamera, StoppedClock, c_HalfScale);
+
+		const float rawError = bgl::test::MeanAbsDiffToTruth(
+			raw,
+			truth,
+			c_TruthScale,
+			c_FenceBoxX,
+			c_FenceBoxY,
+			c_FenceBox,
+			c_FenceBox);
+
+		const float taauError = bgl::test::MeanAbsDiffToTruth(
+			taau,
+			truth,
+			c_TruthScale,
+			c_FenceBoxX,
+			c_FenceBoxY,
+			c_FenceBox,
+			c_FenceBox);
+
+		WARN(
+			name << " under drift, mean |delta| from the supersampled truth: raw = " << rawError
+				 << ", reconstruction = " << taauError);
+
+		return std::pair(rawError, taauError);
+	};
+
+	const auto [atNyquistRaw, atNyquistTaau] = measure("nyquist", AddFineFence);
+	const auto [belowNyquistRaw, belowTaau]  = measure("subpixel", AddSubPixelFence);
+
+	// Both raw frames have to be wrong in the first place, or every bound below is satisfied by
+	// nothing happening.
+	CHECK(atNyquistRaw > 0.01f);
+	CHECK(belowNyquistRaw > 0.01f);
+
+	// At the render grid's Nyquist the reconstruction has samples to work with, and the margin is
+	// what the change buys. Measured at 18% better; the bound is set below that rather than at it,
+	// because a figure read off one backend is not a bound on another.
+	CHECK(atNyquistTaau < atNyquistRaw * 0.9f);
+
+	// Below it, the bound is only that accumulating is not a loss. Measured at parity, which is the
+	// honest ceiling: samples never taken cannot be recovered, and the follow-up that would move
+	// this is a wider reconstruction gather, not a resolve knob.
+	CHECK(belowTaau <= belowNyquistRaw);
+}
+
+// The other end of the same instrument: at full render scale the resolve has always beaten the raw
+// frame, and it must still, because the output grid is where it now accumulates and scale 1.0 is the
+// case every figure in this file was measured at.
+TEST_CASE(
+	"A full-scale resolve still beats no antialiasing against the truth",
+	"[taa][render][truth]")
+{
+	const std::string truth = "assets/golden/taa_truth_still.got.png";
+	const std::string raw   = "assets/golden/taa_truth_still_raw.got.png";
+	const std::string held  = "assets/golden/taa_truth_still_taa.got.png";
+
+	constexpr int c_TruthScale = 4;
+
+	RenderTo(truth, false, 1, AddSubPixelFence, StillCamera, StoppedClock, 1.0f, c_TruthScale);
+	RenderTo(raw, false, 1, AddSubPixelFence);
+	RenderTo(held, true, c_ConvergeFrames, AddSubPixelFence);
+
+	constexpr int c_FenceBoxX = 98;
+	constexpr int c_FenceBoxY = 98;
+	constexpr int c_FenceBox  = 60;
+
+	const float rawError = bgl::test::MeanAbsDiffToTruth(
+		raw,
+		truth,
+		c_TruthScale,
+		c_FenceBoxX,
+		c_FenceBoxY,
+		c_FenceBox,
+		c_FenceBox);
+
+	const float taaError = bgl::test::MeanAbsDiffToTruth(
+		held,
+		truth,
+		c_TruthScale,
+		c_FenceBoxX,
+		c_FenceBoxY,
+		c_FenceBox,
+		c_FenceBox);
+
+	WARN(
+		"held, mean |delta| from the supersampled truth: raw = " << rawError
+																 << ", resolved = " << taaError);
+
+	CHECK(rawError > 0.01f);
+	CHECK(taaError < rawError);
+}
+
+// The reconstruction kernel is the one thing about the resolve a viewport can sweep while watching
+// a scene, so what it can and cannot reach is worth pinning.
+//
+// It cannot reach scale 1.0. There is one jitter phase per output pixel there and PhaseWeight
+// weighs it against its own mean, so the ratio is one whatever the width is -- which is what keeps
+// every figure this file measures independent of the setting.
+TEST_CASE(
+	"The reconstruction width sharpens an upscale and cannot touch scale 1.0",
+	"[taa][render]")
+{
+	constexpr float c_HalfScale = 0.5f;
+
+	// Either side of the 0.4 the target ships with, and far enough apart that the difference is not
+	// the measurement's own noise.
+	constexpr float c_Narrow = 0.25f;
+	constexpr float c_Wide   = 0.6f;
+
+	SECTION("at scale 1.0 the width changes nothing")
+	{
+		const std::string narrow = "assets/golden/taa_width_full_narrow.got.png";
+		const std::string wide   = "assets/golden/taa_width_full_wide.got.png";
+
+		RenderTo(
+			narrow,
+			true,
+			c_ConvergeFrames,
+			AddFineFence,
+			StillCamera,
+			StoppedClock,
+			1.0f,
+			1,
+			c_Narrow);
+		RenderTo(
+			wide,
+			true,
+			c_ConvergeFrames,
+			AddFineFence,
+			StillCamera,
+			StoppedClock,
+			1.0f,
+			1,
+			c_Wide);
+
+		// Byte-exact, not merely close: the two renders differ in one shader constant that the
+		// arithmetic cancels, so anything but zero here means it did not cancel.
+		CHECK(bgl::test::MatchesGolden(narrow, wide, 0.0f));
+	}
+
+	SECTION("at half render scale a narrower kernel resolves more detail")
+	{
+		const std::string narrow = "assets/golden/taa_width_half_narrow.got.png";
+		const std::string wide   = "assets/golden/taa_width_half_wide.got.png";
+
+		RenderTo(
+			narrow,
+			true,
+			c_ConvergeFrames,
+			AddFineFence,
+			StillCamera,
+			StoppedClock,
+			c_HalfScale,
+			1,
+			c_Narrow);
+		RenderTo(
+			wide,
+			true,
+			c_ConvergeFrames,
+			AddFineFence,
+			StillCamera,
+			StoppedClock,
+			c_HalfScale,
+			1,
+			c_Wide);
+
+		constexpr int c_FenceBoxX = 98;
+		constexpr int c_FenceBoxY = 98;
+		constexpr int c_FenceBox  = 60;
+
+		const float narrowDetail =
+			bgl::test::AliasEnergy(narrow, c_FenceBoxX, c_FenceBoxY, c_FenceBox, c_FenceBox);
+		const float wideDetail =
+			bgl::test::AliasEnergy(wide, c_FenceBoxX, c_FenceBoxY, c_FenceBox, c_FenceBox);
+
+		INFO("fence detail: narrow = " << narrowDetail << ", wide = " << wideDetail);
+
+		// Held and converged, so this is the half of the trade a still frame can see. What the
+		// narrow setting costs is the frames a moving pixel waits, which is why 0.4 and not 0.25 is
+		// what a target ships with.
+		CHECK(narrowDetail > wideDetail);
+	}
+
+	SECTION("a width that is not a positive number is the caller's error")
+	{
+		auto gfx = bgl::CreateGraphics(TestOptions());
+		REQUIRE(gfx != nullptr);
+
+		auto targetDesc                   = bgl::RenderTargetDesc();
+		targetDesc.width                  = static_cast<int>(c_Width);
+		targetDesc.height                 = static_cast<int>(c_Height);
+		targetDesc.headless               = true;
+		targetDesc.taaEnabled             = true;
+		targetDesc.taaReconstructionWidth = 0.0f;
+
+		CHECK_THROWS_AS(gfx->CreateRenderTarget(targetDesc), bgl::GraphicsError);
+
+		targetDesc.taaReconstructionWidth = bgl::RenderTargetDesc().taaReconstructionWidth;
+
+		auto target = gfx->CreateRenderTarget(targetDesc);
+		REQUIRE(target != nullptr);
+
+		CHECK_THROWS_AS(target->SetTaaReconstructionWidth(-1.0f), bgl::GraphicsError);
+
+		// The rejected call leaves the target usable at what it had.
+		CHECK(target->GetTaaReconstructionWidth() == targetDesc.taaReconstructionWidth);
+	}
+}
+
+// The accuracy half of the reconstruction width's trade, against the only reference that can judge
+// it. HashedAlpha_test measures the other half -- what a width costs a smear -- and the default is a
+// choice between the two, so neither is worth reading alone.
+//
+// Measured at the render grid's Nyquist, because that is the only place a width can matter: below
+// it the samples were never taken and every width lands within a percent of every other, and above
+// it there is nothing to reconstruct.
+TEST_CASE("The reconstruction width is measured against the truth", "[taa][render][truth]")
+{
+	constexpr int   c_TruthScale = 4;
+	constexpr float c_HalfScale  = 0.5f;
+
+	constexpr int c_FenceBoxX = 98;
+	constexpr int c_FenceBoxY = 98;
+	constexpr int c_FenceBox  = 60;
+
+	const std::string truth = "assets/golden/taa_width_truth.got.png";
+	RenderTo(truth, false, 1, AddFineFence, StillCamera, StoppedClock, 1.0f, c_TruthScale);
+
+	const auto errorOf = [&](const std::string& path) {
+		return bgl::test::MeanAbsDiffToTruth(
+			path,
+			truth,
+			c_TruthScale,
+			c_FenceBoxX,
+			c_FenceBoxY,
+			c_FenceBox,
+			c_FenceBox);
+	};
+
+	const std::string raw = "assets/golden/taa_width_truth_raw.got.png";
+	RenderTo(raw, false, 1, AddFineFence, StillCamera, StoppedClock, c_HalfScale);
+
+	const float rawError = errorOf(raw);
+
+	float narrowest = 0.0f;
+	float widest    = 0.0f;
+
+	for (const float width : { 0.25f, 0.4f, 0.6f, 0.8f, 1.0f })
+	{
+		const auto        tag = std::to_string(static_cast<int>(width * 100.0f));
+		const std::string got = "assets/golden/taa_width_truth_" + tag + ".got.png";
+
+		RenderTo(
+			got,
+			true,
+			c_ConvergeFrames,
+			AddFineFence,
+			StillCamera,
+			StoppedClock,
+			c_HalfScale,
+			1,
+			width);
+
+		const float error = errorOf(got);
+
+		if (width == 0.25f)
+			narrowest = error;
+		if (width == 1.0f)
+			widest = error;
+
+		WARN("reconstruction width " << width << ": mean |delta| from the truth = " << error);
+	}
+
+	// The raw frame has to be wrong in the first place, or every figure above is read against noise.
+	CHECK(rawError > 0.01f);
+
+	// Every width beats drawing nothing; that is what the accumulation is for, and it must not
+	// depend on the setting.
+	CHECK(widest < rawError);
+
+	// And the axis runs the way the kernel says it does. Measured 0.0044 against 0.0105, so this
+	// pins the direction rather than the gap -- a width that stopped sharpening a held frame would
+	// mean the kernel had stopped selecting between phases.
+	CHECK(narrowest < widest);
 }

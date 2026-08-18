@@ -37,18 +37,6 @@ namespace bgl
 		~RenderTarget() noexcept override;
 
 		[[nodiscard]] uint32_t
-		GetWidth() const noexcept override
-		{
-			return m_Width;
-		}
-
-		[[nodiscard]] uint32_t
-		GetHeight() const noexcept override
-		{
-			return m_Height;
-		}
-
-		[[nodiscard]] uint32_t
 		GetFrameIndex() const noexcept override
 		{
 			return m_FrameIndex;
@@ -257,6 +245,9 @@ namespace bgl
 		void
 		ResizeBackbuffers(uint32_t width, uint32_t height) override;
 
+		void
+		SetRenderScale(float scale) override;
+
 	private:
 		struct Backbuffer
 		{
@@ -274,10 +265,24 @@ namespace bgl
 		void
 		CreateAttachments();
 
+		// Split by which size owns them: a render scale rebuilds only the render half, where a
+		// resize rebuilds both.
+		void
+		CreateOutputAttachments();
+
+		void
+		CreateRenderAttachments();
+
 		// Frees every texture and view the ring owns. Immediate, not deferred: the caller has
 		// already idled the GPU for this target, which is the precondition ResizeBackbuffers states.
 		void
 		ReleaseAttachments() noexcept;
+
+		void
+		ReleaseOutputAttachments() noexcept;
+
+		void
+		ReleaseRenderAttachments() noexcept;
 
 		// Blits the frame just recorded into the layer's next drawable and presents it. Null layer
 		// (headless) is a no-op.
@@ -291,11 +296,9 @@ namespace bgl
 		// Borrowed: the window system owns the layer and outlives the target.
 		CA::MetalLayer* m_Layer = nullptr;
 
-		uint32_t m_Width          = 0;
-		uint32_t m_Height         = 0;
-		bool     m_TaaEnabled     = false;
-		bool     m_OutlineEnabled = true;
-		bool     m_TaaAllocated   = false;
+		bool m_TaaEnabled     = false;
+		bool m_OutlineEnabled = true;
+		bool m_TaaAllocated   = false;
 
 		std::array<Backbuffer, c_SwapchainImageCount>          m_Backbuffers;
 		std::array<uint64_t, c_SwapchainImageCount>            m_FrameFences{};

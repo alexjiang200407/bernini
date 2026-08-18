@@ -60,18 +60,6 @@ namespace bgl
 		operator=(RenderTarget&&) noexcept = delete;
 
 		[[nodiscard]] uint32_t
-		GetWidth() const noexcept override
-		{
-			return static_cast<uint32_t>(m_Width);
-		}
-
-		[[nodiscard]] uint32_t
-		GetHeight() const noexcept override
-		{
-			return static_cast<uint32_t>(m_Height);
-		}
-
-		[[nodiscard]] uint32_t
 		GetFrameIndex() const noexcept override
 		{
 			return m_FrameIndex;
@@ -280,9 +268,17 @@ namespace bgl
 		void
 		ResizeBackbuffers(uint32_t width, uint32_t height) override;
 
+		void
+		SetRenderScale(float scale) override;
+
 	private:
 		void
 		CreateSwapchain(HWND hWnd);
+
+		// Rebuilds every backbuffer handle and attachment against the sizes now recorded, and
+		// resets the frame ring -- the half a resize and a scale change have in common.
+		void
+		RecreateRenderTargets();
 
 		void
 		CreateRenderTargets();
@@ -292,6 +288,20 @@ namespace bgl
 
 		void
 		CreateAttachments();
+
+		// Split by which size owns them: a render scale rebuilds only the render half, where a
+		// resize rebuilds both.
+		void
+		CreateRenderAttachments();
+
+		void
+		CreateHistoryAttachments();
+
+		void
+		DestroyRenderAttachments();
+
+		void
+		DestroyHistoryAttachments();
 
 		void
 		DestroyRenderTargets();
@@ -306,8 +316,6 @@ namespace bgl
 		bool  m_TaaAllocated   = false;
 		bool  m_EnableDebug    = false;
 		void* m_Wnd            = nullptr;
-		int   m_Width          = 0;
-		int   m_Height         = 0;
 
 		wrl::ComPtr<IDXGISwapChain3> m_SwapChain;
 

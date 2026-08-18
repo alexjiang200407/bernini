@@ -60,6 +60,9 @@ namespace bgl
 		Resize(const RenderTargetRef& target, uint32_t width, uint32_t height);
 
 		void
+		SetRenderScale(const RenderTargetRef& target, float scale);
+
+		void
 		ScreenshotPng(const RenderTargetRef& target, const std::string& filepath);
 
 		assetlib::ImageData

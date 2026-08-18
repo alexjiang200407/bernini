@@ -89,6 +89,11 @@ private:
 	void
 	SetUpRenderScaleMenu(QMenu* render);
 
+	// The reconstruction-width entries, which sit under the scale ones because they only mean
+	// anything at a scale below 1.
+	void
+	SetUpReconstructionWidthMenu(QMenu* render);
+
 	Ui::MainWindow m_Ui;
 
 	QString m_InstanceName;

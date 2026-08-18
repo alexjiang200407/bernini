@@ -21,11 +21,17 @@ struct RenderTargetWindowDesc
 	// frees the history buffers and their RTVs, which a runtime toggle cannot.
 	bool taaEnabled = true;
 
-	// Multiplies the render resolution on top of the display's device pixel ratio. Below 1 the
-	// target is rendered smaller than the window and stretched back over it on present, which puts a
-	// viewport on another display's pixel density -- a resolution-dependent temporal artifact can
-	// then be reproduced on hardware that does not have that display. Clamped to [0.1, 4].
+	// How dense the grid the geometry passes draw on is, relative to the window's own resolution.
+	// Below 1 the frame is rendered smaller and the TAA resolve reconstructs the window's resolution
+	// back out of it, which puts a viewport on another display's pixel density -- a
+	// resolution-dependent temporal artifact can then be reproduced on hardware that does not have
+	// that display. Clamped to [0.1, 4].
 	float renderScale = 1.0f;
+
+	// The width, in output pixels, of the kernel the TAA resolve reconstructs each output pixel
+	// with. Narrower is sharper and slower to settle, and it does nothing at a render scale of 1,
+	// where each output pixel has a sample of its own. Clamped to [0.1, 2].
+	float taaReconstructionWidth = 0.4f;
 };
 
 class RenderTargetWindow : public QWidget
@@ -63,9 +69,10 @@ public:
 		return m_Desc.taaEnabled;
 	}
 
-	// Rescales the render target against the window it fills, so one display can be driven at
-	// another's pixel density without leaving the editor running. Out-of-range values are clamped
-	// and warned about rather than rejected: this arrives from config.json as often as from the menu.
+	// Rescales the grid the geometry passes draw on against the window the target fills, so one
+	// display can be driven at another's pixel density without leaving the editor running. What is
+	// presented and what a screenshot captures do not move. Out-of-range values are clamped and
+	// warned about rather than rejected: this arrives from config.json as often as from the menu.
 	void
 	SetRenderScale(float scale);
 
@@ -80,6 +87,19 @@ public:
 	GetRenderScale() const noexcept
 	{
 		return m_RenderScale;
+	}
+
+	// Sets how wide a kernel the resolve reconstructs each output pixel with, in output pixels.
+	// Nothing is reallocated and the accumulation is kept, so this can be swept while watching one
+	// scene -- and it changes nothing at a render scale of 1. Out-of-range values are clamped and
+	// warned about rather than rejected, like the render scale beside it.
+	void
+	SetTaaReconstructionWidth(float width);
+
+	[[nodiscard]] float
+	GetTaaReconstructionWidth() const noexcept
+	{
+		return m_TaaReconstructionWidth;
 	}
 
 protected:
@@ -189,12 +209,18 @@ private:
 	// Clamped copy of the desc's, so SyncSize reads one value however it was set. GUI thread.
 	float m_RenderScale = 1.0f;
 
+	// Clamped copy of the desc's, kept so the menu can show what this viewport is on. GUI thread.
+	float m_TaaReconstructionWidth = 0.4f;
+
 	// Read by DrawFrame, so written only from the render thread: the GUI thread hands new values over
 	// through the Renderer rather than assigning them here, and no frame sees a half-written camera.
 	bgl::Camera m_RenderCamera;
-	float       m_RenderTime   = 0.0f;
-	uint32_t    m_RenderWidth  = 1;
-	uint32_t    m_RenderHeight = 1;
+	float       m_RenderTime = 0.0f;
+
+	// The *output* size the job's viewport carries. The target derives the grid its geometry passes
+	// draw on from this and its own render scale, which is why nothing here tracks that grid.
+	uint32_t m_DrawWidth  = 1;
+	uint32_t m_DrawHeight = 1;
 
 	QElapsedTimer m_FrameClock;  // monotonic clock for the timings above
 	qint64        m_LastFrameStartNs = -1;

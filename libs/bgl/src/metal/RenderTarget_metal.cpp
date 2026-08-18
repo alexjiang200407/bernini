@@ -31,10 +31,15 @@ namespace bgl
 		CommandQueueRef         queue,
 		ResourceManagerRef      resourceManager) :
 		m_Device(std::move(device)), m_Queue(std::move(queue)),
-		m_ResourceManager(std::move(resourceManager)), m_Width(static_cast<uint32_t>(desc.width)),
-		m_Height(static_cast<uint32_t>(desc.height)), m_TaaEnabled(desc.taaEnabled),
+		m_ResourceManager(std::move(resourceManager)), m_TaaEnabled(desc.taaEnabled),
 		m_TaaAllocated(desc.taaEnabled)
 	{
+		SetSize(
+			static_cast<uint32_t>(desc.width),
+			static_cast<uint32_t>(desc.height),
+			desc.renderScale);
+		SetTaaReconstructionWidth(desc.taaReconstructionWidth);
+
 		if (!desc.headless)
 		{
 			if (desc.wnd == nullptr)
@@ -55,7 +60,7 @@ namespace bgl
 			// would forbid.
 			m_Layer->setFramebufferOnly(false);
 			m_Layer->setDrawableSize(
-				CGSize{ static_cast<CGFloat>(m_Width), static_cast<CGFloat>(m_Height) });
+				CGSize{ static_cast<CGFloat>(GetWidth()), static_cast<CGFloat>(GetHeight()) });
 		}
 
 		for (CommandAllocatorRef& allocator : m_FrameAllocators)
@@ -76,11 +81,18 @@ namespace bgl
 	void
 	RenderTarget::CreateAttachments()
 	{
+		CreateOutputAttachments();
+		CreateRenderAttachments();
+	}
+
+	void
+	RenderTarget::CreateOutputAttachments()
+	{
 		for (uint32_t i = 0; i < c_SwapchainImageCount; ++i)
 		{
 			auto texDesc          = TextureDesc();
-			texDesc.width         = m_Width;
-			texDesc.height        = m_Height;
+			texDesc.width         = GetWidth();
+			texDesc.height        = GetHeight();
 			texDesc.format        = c_BackbufferFormat;
 			texDesc.usage         = TextureUsageFlag::kRenderTarget;
 			texDesc.initialLayout = BarrierLayout::kRenderTarget;
@@ -96,9 +108,45 @@ namespace bgl
 			m_Backbuffers[i].rtv = m_ResourceManager->CreateRtv(m_Backbuffers[i].texture, rtvDesc);
 		}
 
+		if (!m_TaaAllocated)
+		{
+			return;
+		}
+
+		for (uint32_t i = 0; i < m_History.size(); ++i)
+		{
+			auto historyDesc   = TextureDesc();
+			historyDesc.width  = GetWidth();
+			historyDesc.height = GetHeight();
+			historyDesc.format = c_SceneColorFormat;
+			historyDesc.usage =
+				TextureUsage{ TextureUsageFlag::kRenderTarget, TextureUsageFlag::kSRV };
+			historyDesc.initialLayout = BarrierLayout::kRenderTarget;
+			historyDesc.debugName     = std::format("TAA History: {}", i);
+			historyDesc.clearValue.SetColor(Color(0.0f, 0.0f, 0.0f, 1.0f));
+
+			m_History[i].texture = m_ResourceManager->CreateTexture(historyDesc);
+
+			auto historyRtvDesc      = RtvDesc();
+			historyRtvDesc.format    = c_SceneColorFormat;
+			historyRtvDesc.debugName = std::format("TAA History RTV: {}", i);
+
+			m_History[i].rtv = m_ResourceManager->CreateRtv(m_History[i].texture, historyRtvDesc);
+
+			auto historySrvDesc      = SrvDesc();
+			historySrvDesc.format    = c_SceneColorFormat;
+			historySrvDesc.debugName = std::format("TAA History SRV: {}", i);
+
+			m_History[i].srv = m_ResourceManager->CreateSrv(m_History[i].texture, historySrvDesc);
+		}
+	}
+
+	void
+	RenderTarget::CreateRenderAttachments()
+	{
 		auto depthDesc   = TextureDesc();
-		depthDesc.width  = m_Width;
-		depthDesc.height = m_Height;
+		depthDesc.width  = GetRenderWidth();
+		depthDesc.height = GetRenderHeight();
 		depthDesc.format = c_DepthFormat;
 		depthDesc.usage  = TextureUsage{ TextureUsageFlag::kDepthStencil, TextureUsageFlag::kSRV };
 		depthDesc.initialLayout = BarrierLayout::kDepthWrite;
@@ -120,8 +168,8 @@ namespace bgl
 		m_DepthSrv = m_ResourceManager->CreateSrv(m_DepthTexture, depthSrvDesc);
 
 		auto motionDesc   = TextureDesc();
-		motionDesc.width  = m_Width;
-		motionDesc.height = m_Height;
+		motionDesc.width  = GetRenderWidth();
+		motionDesc.height = GetRenderHeight();
 		motionDesc.format = c_MotionFormat;
 		// kSRV as well: the buffer exists to be resampled by a later pass, and Metal bakes the usage
 		// into the texture at creation rather than deriving it from how it is bound.
@@ -139,8 +187,8 @@ namespace bgl
 		m_MotionRtv = m_ResourceManager->CreateRtv(m_MotionTexture, motionRtvDesc);
 
 		auto sceneColorDesc   = TextureDesc();
-		sceneColorDesc.width  = m_Width;
-		sceneColorDesc.height = m_Height;
+		sceneColorDesc.width  = GetRenderWidth();
+		sceneColorDesc.height = GetRenderHeight();
 		sceneColorDesc.format = c_SceneColorFormat;
 		sceneColorDesc.usage =
 			TextureUsage{ TextureUsageFlag::kRenderTarget, TextureUsageFlag::kSRV };
@@ -169,8 +217,8 @@ namespace bgl
 		m_MotionSrv = m_ResourceManager->CreateSrv(m_MotionTexture, motionSrvDesc);
 
 		auto maskDesc   = TextureDesc();
-		maskDesc.width  = m_Width;
-		maskDesc.height = m_Height;
+		maskDesc.width  = GetRenderWidth();
+		maskDesc.height = GetRenderHeight();
 		maskDesc.format = c_OutlineMaskFormat;
 		maskDesc.usage  = TextureUsage{ TextureUsageFlag::kRenderTarget, TextureUsageFlag::kSRV };
 		maskDesc.initialLayout = BarrierLayout::kRenderTarget;
@@ -190,42 +238,17 @@ namespace bgl
 		maskSrvDesc.debugName = "Outline Mask SRV";
 
 		m_OutlineMaskSrv = m_ResourceManager->CreateSrv(m_OutlineMaskTexture, maskSrvDesc);
-
-		if (!m_TaaAllocated)
-		{
-			return;
-		}
-
-		for (uint32_t i = 0; i < m_History.size(); ++i)
-		{
-			auto historyDesc   = TextureDesc();
-			historyDesc.width  = m_Width;
-			historyDesc.height = m_Height;
-			historyDesc.format = c_SceneColorFormat;
-			historyDesc.usage =
-				TextureUsage{ TextureUsageFlag::kRenderTarget, TextureUsageFlag::kSRV };
-			historyDesc.initialLayout = BarrierLayout::kRenderTarget;
-			historyDesc.debugName     = std::format("TAA History: {}", i);
-			historyDesc.clearValue.SetColor(Color(0.0f, 0.0f, 0.0f, 1.0f));
-
-			m_History[i].texture = m_ResourceManager->CreateTexture(historyDesc);
-
-			auto historyRtvDesc      = RtvDesc();
-			historyRtvDesc.format    = c_SceneColorFormat;
-			historyRtvDesc.debugName = std::format("TAA History RTV: {}", i);
-
-			m_History[i].rtv = m_ResourceManager->CreateRtv(m_History[i].texture, historyRtvDesc);
-
-			auto historySrvDesc      = SrvDesc();
-			historySrvDesc.format    = c_SceneColorFormat;
-			historySrvDesc.debugName = std::format("TAA History SRV: {}", i);
-
-			m_History[i].srv = m_ResourceManager->CreateSrv(m_History[i].texture, historySrvDesc);
-		}
 	}
 
 	void
 	RenderTarget::ReleaseAttachments() noexcept
+	{
+		ReleaseOutputAttachments();
+		ReleaseRenderAttachments();
+	}
+
+	void
+	RenderTarget::ReleaseOutputAttachments() noexcept
 	{
 		for (Backbuffer& backbuffer : m_Backbuffers)
 		{
@@ -247,9 +270,16 @@ namespace bgl
 			history = {};
 		}
 
-		// The accumulation cannot be rescaled, so a resize starts it over.
 		m_HistoryValid        = false;
 		m_CurrentHistoryIndex = 0;
+	}
+
+	void
+	RenderTarget::ReleaseRenderAttachments() noexcept
+	{
+		// The accumulation describes samples the new grid does not take, so whatever rebuilds these
+		// starts it over -- the buffers themselves are the output's and stay.
+		m_HistoryValid = false;
 
 		if (!m_OutlineMaskSrv.IsNull())
 			m_ResourceManager->DestroySrv(m_OutlineMaskSrv, false);
@@ -335,12 +365,12 @@ namespace bgl
 	{
 		ReleaseAttachments();
 
-		m_Width  = width;
-		m_Height = height;
+		SetSize(width, height, GetRenderScale());
+
 		if (m_Layer != nullptr)
 		{
 			m_Layer->setDrawableSize(
-				CGSize{ static_cast<CGFloat>(m_Width), static_cast<CGFloat>(m_Height) });
+				CGSize{ static_cast<CGFloat>(GetWidth()), static_cast<CGFloat>(GetHeight()) });
 		}
 		CreateAttachments();
 
@@ -348,5 +378,21 @@ namespace bgl
 		m_FrameFences.fill(0);
 		m_FrameIndex         = 0;
 		m_LastPresentedIndex = 0;
+	}
+
+	void
+	RenderTarget::SetRenderScale(float scale)
+	{
+		if (scale == GetRenderScale())
+		{
+			return;
+		}
+
+		// Only what the render size sizes. The backbuffers and the histories are the output's and a
+		// scale does not move it, so the frame ring keeps describing textures that still exist and
+		// needs no reset.
+		ReleaseRenderAttachments();
+		SetSize(GetWidth(), GetHeight(), scale);
+		CreateRenderAttachments();
 	}
 }

@@ -115,6 +115,24 @@ protected:
 	void
 	dropEvent(QDropEvent* event) override;
 
+	/**
+	 * Lights the preview from `benvPath`, releasing whatever the last one bound.
+	 *
+	 * Without the release each dropped environment would keep its predecessor's three cube maps
+	 * uploaded for the life of the window, and the scene's texture slots are bounded.
+	 */
+	void
+	SetEnvironment(const std::string& benvPath);
+
+	// Puts the environment config.json named back, if a drop displaced it. Part of Clear, because a
+	// preview that has given up its mesh but kept the backdrop somebody dropped on it is showing
+	// neither what it was configured with nor what it was asked to show.
+	void
+	RestoreConfiguredEnvironment();
+
+	void
+	ApplyEnvironmentFrom(const std::string& benvPath, const std::filesystem::path& dataRoot);
+
 	void
 	mousePressEvent(QMouseEvent* event) override;
 	void
@@ -161,8 +179,16 @@ private:
 	std::vector<VatDraw>                 m_VatDraws;
 	std::filesystem::path                m_DataRoot;
 
-	// What the constructor's ApplyEnvironment bound; released only by scene teardown today.
+	// What the last ApplyEnvironment bound, so the next one can release it.
 	editor::AppliedEnvironment m_Environment;
+
+	// What the window was configured with, kept whole because a drop carries only a path and Clear
+	// has to be able to get back to this. The configured root stands in until a project opens and
+	// m_DataRoot names its own.
+	editor::EnvironmentApplyDesc m_Configured;
+
+	// The `.benv` currently bound, so Clear can tell a drop from the configured one it already has.
+	std::string m_AppliedEnv;
 
 	editor::OrbitCamera m_Orbit;
 

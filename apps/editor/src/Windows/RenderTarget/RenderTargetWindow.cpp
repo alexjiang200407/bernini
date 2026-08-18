@@ -28,10 +28,12 @@ namespace
 	// are physical ones. Rendering at the logical size leaves the compositor upscaling every frame
 	// on a high-DPI display -- half resolution on a 2x screen, which reads as blur everywhere and
 	// is worst on detail near the pixel scale.
+	//
+	// The render scale is not folded in here: this is the size the target *presents* at, and the
+	// grid the geometry passes draw on is the target's own business now.
 	uint32_t
 	GetPhysicalExtent(int logical, qreal ratio)
 	{
-		// The scale can take a narrow window below one physical pixel, which Resize rejects.
 		return std::max<uint32_t>(
 			1,
 			static_cast<uint32_t>(std::lround(std::max(1, logical) * ratio)));
@@ -46,6 +48,27 @@ namespace
 
 		return clamped;
 	}
+
+	// Below a fifth of a pixel the kernel starves every phase but the one that lands dead centre and
+	// the accumulation stops converging; above two it spans neighbours the reconstruction exists to
+	// keep apart. Either is a typo in config.json rather than an intent.
+	constexpr float c_MinReconstructionWidth = 0.1f;
+	constexpr float c_MaxReconstructionWidth = 2.0f;
+
+	float
+	ClampReconstructionWidth(float width)
+	{
+		const float clamped = std::clamp(width, c_MinReconstructionWidth, c_MaxReconstructionWidth);
+		if (clamped != width)
+		{
+			qWarning(
+				"RenderTarget: TAA reconstruction width %.3f out of range, using %.3f",
+				static_cast<double>(width),
+				static_cast<double>(clamped));
+		}
+
+		return clamped;
+	}
 }
 
 RenderTargetWindow::RenderTargetWindow(QWidget* parent, RenderTargetWindowDesc desc) :
@@ -55,14 +78,17 @@ RenderTargetWindow::RenderTargetWindow(QWidget* parent, RenderTargetWindowDesc d
 	m_ResizeTimer->setSingleShot(true);
 	connect(m_ResizeTimer, &QTimer::timeout, this, [this]() { SyncSize(width(), height()); });
 
-	m_RenderScale = ClampRenderScale(m_Desc.renderScale);
+	m_RenderScale            = ClampRenderScale(m_Desc.renderScale);
+	m_TaaReconstructionWidth = ClampReconstructionWidth(m_Desc.taaReconstructionWidth);
 
-	m_Width  = GetPhysicalExtent(width(), devicePixelRatio() * m_RenderScale);
-	m_Height = GetPhysicalExtent(height(), devicePixelRatio() * m_RenderScale);
+	m_Width  = GetPhysicalExtent(width(), devicePixelRatio());
+	m_Height = GetPhysicalExtent(height(), devicePixelRatio());
 
-	auto rtvDesc   = bgl::RenderTargetDesc();
-	rtvDesc.width  = m_Width;
-	rtvDesc.height = m_Height;
+	auto rtvDesc                   = bgl::RenderTargetDesc();
+	rtvDesc.width                  = m_Width;
+	rtvDesc.height                 = m_Height;
+	rtvDesc.renderScale            = m_RenderScale;
+	rtvDesc.taaReconstructionWidth = m_TaaReconstructionWidth;
 	// Resolved here on the GUI thread; the render target is created from the value on the render
 	// thread. macOS takes the widget's CAMetalLayer rather than its native view -- see
 	// platform::MetalLayerForView.
@@ -85,19 +111,22 @@ RenderTargetWindow::RenderTargetWindow(QWidget* parent, RenderTargetWindowDesc d
 			m_Desc.initialInstances);
 	});
 
-	m_RenderWidth  = m_Width;
-	m_RenderHeight = m_Height;
+	m_DrawWidth  = m_Width;
+	m_DrawHeight = m_Height;
 
 	setAttribute(Qt::WA_PaintOnScreen);
 	setAttribute(Qt::WA_NoSystemBackground);
 	setAttribute(Qt::WA_OpaquePaintEvent);
 
 	// The density every temporal artifact is judged at, and the one thing about a viewport that a
-	// screenshot cannot be read back from: SyncSize reports each later change, this reports the first.
+	// screenshot cannot be read back from -- a capture is the output size whatever the scale.
+	// SyncSize reports each later change, this reports the first.
 	qWarning(
-		"RenderTarget: created %ux%u (scale %.2f, device pixel ratio %.2f)",
+		"RenderTarget: created %ux%u, rendering %ux%u (scale %.2f, device pixel ratio %.2f)",
 		m_Width,
 		m_Height,
+		m_RenderTarget->GetRenderWidth(),
+		m_RenderTarget->GetRenderHeight(),
 		static_cast<double>(m_RenderScale),
 		static_cast<double>(devicePixelRatio()));
 
@@ -129,7 +158,7 @@ RenderTargetWindow::DrawFrame()
 	job.camera   = m_RenderCamera;
 	job.time     = m_RenderTime;
 	job.view     = m_SceneView;
-	job.viewport = bgl::Viewport(m_RenderWidth, m_RenderHeight);
+	job.viewport = bgl::Viewport(m_DrawWidth, m_DrawHeight);
 
 	m_Desc.renderer->GetGraphics()->DrawFrame(m_RenderTarget, job);
 }
@@ -246,16 +275,46 @@ RenderTargetWindow::SetOutlineEnabled(bool enabled)
 void
 RenderTargetWindow::SetRenderScale(float scale)
 {
+	if (m_RenderTarget == nullptr || m_Desc.renderer == nullptr)
+		return;
+
 	const float clamped = ClampRenderScale(scale);
 	if (clamped == m_RenderScale)
 		return;
 
 	m_RenderScale = clamped;
 
-	// Not deferred through the settle timer: this is one deliberate step, not a drag, and the point
-	// of it is seeing the new density immediately.
-	m_ResizeTimer->stop();
-	SyncSize(width(), height());
+	// Only the geometry passes' grid moves, so the swapchain, the backbuffers and the frame ring
+	// stay: this is not a resize and must not go through the settle timer that batches one.
+	m_Desc.renderer->Invoke(
+		[&] { m_Desc.renderer->GetGraphics()->SetRenderScale(m_RenderTarget, m_RenderScale); });
+
+	qWarning(
+		"RenderTarget: render scale %.2f, rendering %ux%u into %ux%u",
+		static_cast<double>(m_RenderScale),
+		m_RenderTarget->GetRenderWidth(),
+		m_RenderTarget->GetRenderHeight(),
+		m_Width,
+		m_Height);
+}
+
+void
+RenderTargetWindow::SetTaaReconstructionWidth(float width)
+{
+	if (m_RenderTarget == nullptr || m_Desc.renderer == nullptr)
+		return;
+
+	const float clamped = ClampReconstructionWidth(width);
+	if (clamped == m_TaaReconstructionWidth)
+		return;
+
+	m_TaaReconstructionWidth = clamped;
+
+	// A per-frame shader constant: nothing is reallocated, the accumulation is kept, and the next
+	// frame reconstructs with it. Posted to the render thread all the same, because that is what
+	// reads it between frames.
+	m_Desc.renderer->Invoke(
+		[&] { m_RenderTarget->SetTaaReconstructionWidth(m_TaaReconstructionWidth); });
 }
 
 void
@@ -305,8 +364,8 @@ RenderTargetWindow::SyncSize(int w, int h)
 		return;
 	}
 
-	const uint32_t width  = GetPhysicalExtent(w, devicePixelRatio() * m_RenderScale);
-	const uint32_t height = GetPhysicalExtent(h, devicePixelRatio() * m_RenderScale);
+	const uint32_t width  = GetPhysicalExtent(w, devicePixelRatio());
+	const uint32_t height = GetPhysicalExtent(h, devicePixelRatio());
 	if (width == m_Width && height == m_Height)
 	{
 		return;
@@ -325,13 +384,15 @@ RenderTargetWindow::SyncSize(int w, int h)
 	// Blocking, so the size the frame loop reads changes between frames and never mid-frame.
 	m_Desc.renderer->Invoke([&] {
 		m_Desc.renderer->GetGraphics()->Resize(m_RenderTarget, width, height);
-		m_RenderWidth  = width;
-		m_RenderHeight = height;
+		m_DrawWidth  = width;
+		m_DrawHeight = height;
 	});
 
 	qWarning(
-		"RenderTarget: resized to %ux%u in %.1f ms",
+		"RenderTarget: resized to %ux%u, rendering %ux%u, in %.1f ms",
 		width,
 		height,
+		m_RenderTarget->GetRenderWidth(),
+		m_RenderTarget->GetRenderHeight(),
 		static_cast<double>(resizeClock.nsecsElapsed()) * 1.0e-6);
 }

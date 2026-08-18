@@ -4,6 +4,7 @@
 #include "resource/Rtv.h"
 #include "resource/Srv.h"
 #include "resource/Texture.h"
+#include <bgl/IGraphics.h>
 #include <bgl/IRenderTarget.h>
 
 namespace bgl
@@ -33,6 +34,65 @@ namespace bgl
 
 		RenderTargetBase&
 		operator=(RenderTargetBase&&) noexcept = delete;
+
+		[[nodiscard]] uint32_t
+		GetWidth() const noexcept final
+		{
+			return m_Width;
+		}
+
+		[[nodiscard]] uint32_t
+		GetHeight() const noexcept final
+		{
+			return m_Height;
+		}
+
+		[[nodiscard]] uint32_t
+		GetRenderWidth() const noexcept final
+		{
+			return m_RenderWidth;
+		}
+
+		[[nodiscard]] uint32_t
+		GetRenderHeight() const noexcept final
+		{
+			return m_RenderHeight;
+		}
+
+		[[nodiscard]] float
+		GetRenderScale() const noexcept
+		{
+			return m_RenderScale;
+		}
+
+		[[nodiscard]] float
+		GetTaaReconstructionWidth() const noexcept final
+		{
+			return m_TaaReconstructionWidth;
+		}
+
+		void
+		SetTaaReconstructionWidth(float width) final
+		{
+			if (!(width > 0.0f) || !std::isfinite(width))
+			{
+				throw GraphicsError(
+					"RenderTargetDesc::taaReconstructionWidth must be positive and finite");
+			}
+
+			m_TaaReconstructionWidth = width;
+		}
+
+		/**
+		 * Re-derives the render size and recreates every attachment sized by it. The output size,
+		 * the swapchain and the frame ring are untouched; the accumulation is discarded, since a
+		 * history gathered on one render grid describes samples the new one does not take.
+		 *
+		 * @pre the GPU is idle for this target.
+		 * @throws GraphicsError if `scale` is not a positive, finite number.
+		 */
+		virtual void
+		SetRenderScale(float scale) = 0;
 
 		/** The frame-in-flight index the next frame records into. */
 		[[nodiscard]] virtual uint32_t
@@ -111,8 +171,8 @@ namespace bgl
 
 		/**
 		 * The R8 coverage mask the outline-mask pass draws the outlined submesh instances into,
-		 * and the post-process dilates into the outline. Cleared to zero each frame; sized with
-		 * the target like every other attachment.
+		 * and the post-process dilates into the outline. Cleared to zero each frame; sized with the
+		 * render grid, like every other attachment a geometry pass draws into.
 		 */
 		[[nodiscard]] virtual TextureHandle
 		GetOutlineMaskTexture() const noexcept = 0;
@@ -125,8 +185,9 @@ namespace bgl
 
 		/**
 		 * The two accumulation buffers TAA ping-pongs between: index `GetCurrentHistoryIndex()` is the one
-		 * this frame's resolve writes, the other is the one it reads. Null on a target without TAA,
-		 * which allocates neither.
+		 * this frame's resolve writes, the other is the one it reads. Sized with the *output* grid,
+		 * which is what the resolve reconstructs onto. Null on a target without TAA, which allocates
+		 * neither.
 		 *
 		 * @pre `index` is 0 or 1.
 		 */
@@ -196,7 +257,51 @@ namespace bgl
 	protected:
 		RenderTargetBase() noexcept = default;
 
+		/**
+		 * Records the output size every attachment is allocated from, and re-derives the render
+		 * size. Called from a backend's constructor before it creates them, and again from its
+		 * `ResizeBackbuffers` and `SetRenderScale`.
+		 *
+		 * @throws GraphicsError if either dimension is zero, or `scale` is not a positive, finite
+		 *         number. Both arrive from the caller unchecked -- `RenderTargetDesc` on the way in
+		 *         and `IGraphics::Resize` afterwards -- so this is the only place they are validated.
+		 */
+		void
+		SetSize(uint32_t width, uint32_t height, float scale)
+		{
+			if (width == 0 || height == 0)
+			{
+				throw GraphicsError("A render target cannot be zero-sized");
+			}
+
+			if (!(scale > 0.0f) || !std::isfinite(scale))
+			{
+				throw GraphicsError("RenderTargetDesc::renderScale must be positive and finite");
+			}
+
+			m_Width       = width;
+			m_Height      = height;
+			m_RenderScale = scale;
+
+			// Floored at a pixel: a narrow window under a small scale would otherwise ask for a
+			// zero-sized attachment, which every backend rejects.
+			m_RenderWidth =
+				std::max(1u, static_cast<uint32_t>(std::lround(static_cast<float>(width) * scale)));
+			m_RenderHeight = std::max(
+				1u,
+				static_cast<uint32_t>(std::lround(static_cast<float>(height) * scale)));
+		}
+
 	private:
-		uint64_t m_FrameCount = 0;
+		uint32_t m_Width        = 0;
+		uint32_t m_Height       = 0;
+		uint32_t m_RenderWidth  = 0;
+		uint32_t m_RenderHeight = 0;
+		float    m_RenderScale  = 1.0f;
+		uint64_t m_FrameCount   = 0;
+
+		// Not backend state: nothing is allocated from it, so it needs neither an override nor a
+		// GPU idle to change.
+		float m_TaaReconstructionWidth = RenderTargetDesc().taaReconstructionWidth;
 	};
 }

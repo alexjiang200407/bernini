@@ -21,6 +21,25 @@ namespace bgl
 		// The one frustum a Draw culls against. Shadow cascades will take 1..N.
 		constexpr uint32_t c_CameraCullIdx = 0;
 
+		// An output-space viewport on the grid the geometry passes render into. The identity at
+		// scale 1.0, where the two grids are the same size.
+		Viewport
+		ToRenderViewport(const RenderTargetBase& rt, const Viewport& viewport)
+		{
+			const float x =
+				static_cast<float>(rt.GetRenderWidth()) / static_cast<float>(rt.GetWidth());
+			const float y =
+				static_cast<float>(rt.GetRenderHeight()) / static_cast<float>(rt.GetHeight());
+
+			return Viewport(
+				viewport.minX * x,
+				viewport.maxX * x,
+				viewport.minY * y,
+				viewport.maxY * y,
+				viewport.minZ,
+				viewport.maxZ);
+		}
+
 		// Backbuffer readbacks come back as B8G8R8A8; these formats need R/B swapped to write RGBA.
 		bool
 		IsBgra(Format format)
@@ -445,9 +464,12 @@ namespace bgl
 			throw GraphicsError("RenderJob passed to Draw requires a SceneView");
 		}
 
-		auto       view     = job.view->As<SceneView>();
-		auto       scene    = view->GetScene()->As<Scene>();
-		const auto viewport = job.viewport;
+		auto view  = job.view->As<SceneView>();
+		auto scene = view->GetScene()->As<Scene>();
+
+		// The job's viewport is output-space, because that is the frame a client can see. The
+		// geometry passes are handed the render grid instead, and only the resolve spans both.
+		const Viewport viewport = ToRenderViewport(*m_ActiveTarget, job.viewport);
 
 		// The client's Camera never carries the jitter: TAA is a renderer concern, and a caller that
 		// reads GetViewProjection() back -- to pick, or to project a gizmo -- must not get a matrix
@@ -457,7 +479,12 @@ namespace bgl
 		                             HaltonJitter(
 										 m_ActiveTarget->GetFrameCount(),
 										 viewport.maxX - viewport.minX,
-										 viewport.maxY - viewport.minY) :
+										 viewport.maxY - viewport.minY,
+										 JitterSequenceLength(
+											 m_ActiveTarget->GetRenderWidth(),
+											 m_ActiveTarget->GetRenderHeight(),
+											 m_ActiveTarget->GetWidth(),
+											 m_ActiveTarget->GetHeight())) :
 		                             glm::vec2(0.0f);
 
 		// Left-multiplied, so it adds jitter * clip.w to clip.xy and lands as a constant NDC offset
@@ -603,19 +630,35 @@ namespace bgl
 		const auto viewport =
 			Viewport(static_cast<float>(rt.GetWidth()), static_cast<float>(rt.GetHeight()));
 
+		const auto renderSize = glm::vec2(
+			static_cast<float>(rt.GetRenderWidth()),
+			static_cast<float>(rt.GetRenderHeight()));
+
 		auto postProcessArgs       = PostProcessPass::Args();
 		postProcessArgs.source     = rt.GetSceneColorSrv();
 		postProcessArgs.sourceName = std::string(c_SceneColorName);
 		postProcessArgs.backBuffer = rt.GetBackbufferRtv(index);
-		postProcessArgs.sampler    = m_PointClampSampler;
 		postProcessArgs.viewport   = viewport;
+
+		// With the resolve running, the source is the history and already on this viewport's grid,
+		// so a point tap is what keeps it exact. Without it, the scene colour arrives on the render
+		// grid and something has to carry it across.
+		const bool sourceOnOutputGrid =
+			rt.IsTaaEnabled() ||
+			(rt.GetRenderWidth() == rt.GetWidth() && rt.GetRenderHeight() == rt.GetHeight());
+
+		postProcessArgs.sampler = sourceOnOutputGrid ? m_PointClampSampler : m_LinearClampSampler;
+		postProcessArgs.maskSampler = m_PointClampSampler;
 
 		if (m_OutlineMaskDrawn)
 		{
 			postProcessArgs.outlineMask    = rt.GetOutlineMaskSrv();
 			postProcessArgs.outlineEnabled = true;
-			postProcessArgs.maskSize =
-				glm::vec2(static_cast<float>(rt.GetWidth()), static_cast<float>(rt.GetHeight()));
+			// The mask's own grid, which is the render one: the dilate walks its texels and the
+			// outline's width is a share of the frame either way.
+			postProcessArgs.maskSize = glm::vec2(
+				static_cast<float>(rt.GetRenderWidth()),
+				static_cast<float>(rt.GetRenderHeight()));
 		}
 
 		if (rt.IsTaaEnabled())
@@ -623,23 +666,25 @@ namespace bgl
 			const uint32_t current = rt.GetCurrentHistoryIndex();
 			const uint32_t prev    = current ^ 1u;
 
-			auto taaArgs            = TaaResolvePass::Args();
-			taaArgs.sceneColor      = rt.GetSceneColorSrv();
-			taaArgs.motionVectors   = rt.GetMotionVectorSrv();
-			taaArgs.prevHistory     = rt.GetHistorySrv(prev);
-			taaArgs.history         = rt.GetHistoryRtv(current);
-			taaArgs.prevHistoryName = GetHistoryName(prev);
-			taaArgs.historyName     = GetHistoryName(current);
-			taaArgs.pointSampler    = m_PointClampSampler;
-			taaArgs.linearSampler   = m_LinearClampSampler;
-			taaArgs.viewport        = viewport;
-			taaArgs.depth           = rt.GetDepthSrv();
-			taaArgs.clipToView      = m_TaaClipToView;
-			taaArgs.viewToPrevClip  = m_TaaViewToPrevClip;
-			taaArgs.jitter          = m_TaaJitter;
-			taaArgs.cameraPairValid = m_DrawCount == 1;
-			taaArgs.historyValid    = rt.IsHistoryValid() && !m_ShadingChanged;
-			taaArgs.cameraStill     = m_CameraStill;
+			auto taaArgs                = TaaResolvePass::Args();
+			taaArgs.sceneColor          = rt.GetSceneColorSrv();
+			taaArgs.motionVectors       = rt.GetMotionVectorSrv();
+			taaArgs.prevHistory         = rt.GetHistorySrv(prev);
+			taaArgs.history             = rt.GetHistoryRtv(current);
+			taaArgs.prevHistoryName     = GetHistoryName(prev);
+			taaArgs.historyName         = GetHistoryName(current);
+			taaArgs.pointSampler        = m_PointClampSampler;
+			taaArgs.linearSampler       = m_LinearClampSampler;
+			taaArgs.viewport            = viewport;
+			taaArgs.renderSize          = renderSize;
+			taaArgs.reconstructionWidth = rt.GetTaaReconstructionWidth();
+			taaArgs.depth               = rt.GetDepthSrv();
+			taaArgs.clipToView          = m_TaaClipToView;
+			taaArgs.viewToPrevClip      = m_TaaViewToPrevClip;
+			taaArgs.jitter              = m_TaaJitter;
+			taaArgs.cameraPairValid     = m_DrawCount == 1;
+			taaArgs.historyValid        = rt.IsHistoryValid() && !m_ShadingChanged;
+			taaArgs.cameraStill         = m_CameraStill;
 			m_TaaResolve.AttachToFrameGraph(m_FrameGraph, taaArgs);
 
 			// The display curve is applied to what the resolve produced, not to the raw frame.
@@ -735,6 +780,32 @@ namespace bgl
 		m_CommandList->Close();
 
 		rt.ResizeBackbuffers(width, height);
+	}
+
+	void
+	RenderContext::SetRenderScale(const RenderTargetRef& target, float scale)
+	{
+		if (m_FrameActive)
+		{
+			throw GraphicsError("SetRenderScale cannot be called between BeginFrame and EndFrame");
+		}
+
+		RenderTargetBase& rt = *target->As<RenderTargetBase>();
+
+		if (rt.GetRenderScale() == scale)
+		{
+			return;
+		}
+
+		// The same idle a resize needs: the attachments about to be released may still be referenced
+		// by a frame in flight, and by the command list's own retained references.
+		m_CommandQueue->Flush();
+
+		m_BootstrapAllocator->ResetAllocator();
+		m_CommandList->Open(m_CommandQueue.Get(), m_BootstrapAllocator.Get());
+		m_CommandList->Close();
+
+		rt.SetRenderScale(scale);
 	}
 
 	CaptureTicket

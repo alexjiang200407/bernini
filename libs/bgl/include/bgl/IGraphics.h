@@ -141,6 +141,20 @@ namespace bgl
 		Resize(const RenderTargetRef& target, uint32_t width, uint32_t height) = 0;
 
 		/**
+		 * Re-derives a target's render size from its output size and recreates the attachments the
+		 * geometry passes draw into. The presented size is unchanged, and so is every capture; what
+		 * moves is how densely the frame is sampled before the TAA resolve reconstructs it.
+		 *
+		 * The accumulation is discarded, since a history gathered on one render grid describes
+		 * samples the new one does not take.
+		 *
+		 * @throws GraphicsError if called between BeginFrame and EndFrame, or if `scale` is not a
+		 *         positive, finite number.
+		 */
+		virtual void
+		SetRenderScale(const RenderTargetRef& target, float scale) = 0;
+
+		/**
 		 * Blocks until every submitted frame -- queued presents included -- has drained from the
 		 * GPU. A client that is about to hide the last window it presents to should call this while
 		 * the window is still on screen: a present left pending across the hide is never consumed,

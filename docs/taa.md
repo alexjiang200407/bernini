@@ -32,12 +32,19 @@ What TAA leaves behind is **resolution-dependent**: the jitter walks a pixel foo
 of an edge or a hashed strand falls inside one pixel decides how much the neighbourhood clamp has to
 throw away, and a flicker that is obvious at 1080p can be invisible on a 4K panel. The editor's
 Render menu carries a **Render Scale** for that: it multiplies each viewport's render resolution on
-top of the display's device pixel ratio, and the result is stretched back over the window on present
-(`DXGI_SCALING_STRETCH`; a `CAMetalLayer` drawable smaller than its bounds). Half scale on a 2×
-display is a 1080p sample grid inside a 4K window, which is what makes the artifact reproducible on
-the machine that does not have the display it was reported on. `renderScale` under `levelEditor`,
+top of the display's device pixel ratio, and the resolve reconstructs the window's own resolution
+back out of the jittered frames. Half scale on a 2× display is a 1080p sample grid inside a 4K
+window, which is what makes the artifact reproducible on the machine that does not have the display
+it was reported on. `renderScale` under `levelEditor`,
 `materialEditor` and `animationEditor` in `config.json` sets the value the editor starts at; the menu moves every viewport
 from there, live, because the comparison is what shows a temporal artifact.
+
+Beside it is **TAA Reconstruction Width** (`taaReconstructionWidth`, same three keys, 0.4 by
+default): how wide a kernel the resolve rebuilds each output pixel with, in output pixels. It is the
+one number in the resolve whose trade a still image only half shows — narrower keeps sharpening a
+held frame, and what it costs is the frames a moving pixel waits for the jitter phase that serves it
+— so it is swept by eye on a scene rather than fixed at whatever a test measured. At a render scale
+of 1 it does nothing at all: each output pixel has a sample of its own there.
 
 **This document is a map, not a mirror.** The headers at each linked path are the source of truth.
 
@@ -59,14 +66,50 @@ from there, live, because the comparison is what shows a temporal artifact.
   able to hide. The subtraction is in the *mesh* shader deliberately: see the shared-module hazard in
   [Slang Shaders](docs/slang_shaders.md).
 
-* **Halton(2, 3), eight terms, indexed by the target's own frame count.** Long enough to cover the
-  footprint, short enough that the ghosting tail stays inside what the blend weight forgives. The
+* **Halton(2, 3), eight terms per output sub-pixel, indexed by the target's own frame count.** Long
+  enough to cover the footprint, short enough that the ghosting tail stays inside what the blend
+  weight forgives. Eight is the length where one render sample serves one output pixel; a denser
+  output grid multiplies it by the sub-pixels one render pixel covers, capped at thirty-two, because
+  each of those sub-pixels wants the same walk. It is derived per target rather than raised for
+  everyone — raising it would change which offset frame N renders with at scale 1.0, where every
+  figure this document quotes was measured. The offset spans a *render* pixel either way. The
   sequence is 1-based, because term 0 of every radical inverse is 0 — a frame that samples exactly
   where an unjittered one does contributes nothing new. The index is `RenderTargetBase::GetFrameCount`,
   not the renderer's frame counter, for the reason the history ping-pong is per target (below): two
   viewports drawn by one renderer would otherwise each see every second term — four lopsided
   positions instead of the footprint — and a third would change what the first two converge to.
   The alpha hash seed advances on the same count.
+
+* **The accumulation lives on the output grid, not the render one.** A target carries two sizes:
+  scene colour, depth, velocity and the outline mask follow `RenderTargetDesc::renderScale`, while
+  the backbuffer and both histories are the size the target presents at. The resolve is the only
+  pass that spans them. This is what makes a render scale a *reconstruction* rather than a stretch —
+  and what attacks the loss a render-grid accumulation cannot: a moving mesh re-fetches its history
+  at a fractional texel offset every frame, Catmull-Rom sheds a little contrast per fetch near
+  Nyquist, and the features that fall inside that band are exactly the pixel-scale ones. Accumulating
+  on a finer grid puts them outside it. Measured on slats about one render pixel across at half
+  scale: mean squared distance from the full-scale image 5.8e-5 held and 7.4e-5 under a drift,
+  against 5.2e-4 and 2.2e-4 for the filtered upscale it replaces.
+
+* **An output pixel takes the render sample whose jitter landed nearest it, weighted by how near.**
+  A Gaussian of `RenderTargetDesc::taaReconstructionWidth` *output* pixels, 0.4 by default,
+  normalized over the sub-pixel phases one render sample serves.
+  Both halves matter. Unnormalized, the kernel would scale the blend by the jitter's phase even where
+  there is nothing to choose between, and would change the image at scale 1.0, where there is one
+  phase and its weight is its own mean — exactly one, and *returned* as one rather than divided out,
+  because a backend may implement that division as an approximate reciprocal and land either side of
+  it. Measured at a *render* pixel's width instead of
+  an output pixel's, the reconstruction gives an output pixel a strong share of a sample a whole
+  output pixel away and comes out softer than a plain filtered upscale (1.3e-4 against that same
+  5.8e-5). Narrower still keeps improving a *held* frame without limit and is not the default: what it
+  costs is the frames a moving pixel waits for the phase that serves it, which no still measurement
+  can see.
+
+* **The clamp box, the depth read and the object-motion discriminator all stay on the render 3×3.**
+  A 3×3 on the output grid is nine taps of a reconstruction — it can report no colour the render
+  neighbourhood did not already contain, while moving what "no survivor in the 3×3" means for the
+  variance store that hashed alpha depends on. Only the history fetch and its Catmull-Rom taps are
+  in output texels.
 
 * **The resolve writes history and nothing else.** `PostProcess` reads what it produced and applies
   the display curve. Merging the two would save a full-screen pass and cost the seam: bloom, grading
@@ -426,9 +469,12 @@ Two couplings worth knowing:
   second still holding the old material. Every viewport in the editor owns its view, which is what
   makes that fine; sharing one would mean moving the record onto the target.
 
-* **A resize discards the accumulation.** The buffers are screen-sized and the history cannot be
-  rescaled into, so the backend's attachment teardown clears `m_HistoryValid` and the next frame
-  takes the scene colour whole. Resizing into a stale history reprojects garbage for one frame.
+* **A resize discards the accumulation, and so does a render-scale change.** The buffers are
+  screen-sized and the history cannot be rescaled into, so the backend's attachment teardown clears
+  `m_HistoryValid` and the next frame takes the scene colour whole. Resizing into a stale history
+  reprojects garbage for one frame. A scale change is the same event for a different reason: the
+  history is still the right size, but it was gathered from samples the new render grid does not
+  take.
 
 * **The two halves are imported under separate graph names** (`taaHistory0` / `taaHistory1`). The
   frame graph tracks resource state by name, so a single name for both would have the pass declaring
@@ -450,7 +496,9 @@ Two couplings worth knowing:
 
 * **`PostProcess` is still the only writer of the backbuffer.** The capture path reads back the last
   presented backbuffer, so anything that inserts itself after the post-process breaks the
-  screenshot's claim to be what was displayed.
+  screenshot's claim to be what was displayed. Which also fixes a capture's size at the target's
+  *output* size, whatever the render scale: a supersampled viewport hands back the window's
+  resolution, not twice it.
 
 * **A converged TAA frame is not reproducible in one frame.** Any test that asserts on TAA output has
   to drive a fixed number of frames first; a golden captured on frame 1 asserts nothing about the

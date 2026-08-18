@@ -17,8 +17,14 @@ namespace bgl
 		m_Device(std::move(device)), m_CommandQueue(std::move(queue)),
 		m_ResourceManager(std::move(resourceManager)), m_Headless(desc.headless),
 		m_TaaEnabled(desc.taaEnabled), m_TaaAllocated(desc.taaEnabled), m_EnableDebug(enableDebug),
-		m_Wnd(desc.wnd), m_Width(desc.width), m_Height(desc.height)
+		m_Wnd(desc.wnd)
 	{
+		SetSize(
+			static_cast<uint32_t>(desc.width),
+			static_cast<uint32_t>(desc.height),
+			desc.renderScale);
+		SetTaaReconstructionWidth(desc.taaReconstructionWidth);
+
 		for (UINT i = 0; i < c_SwapchainImageCount; i++)
 		{
 			m_CommandAllocator[i] = m_Device->CreateCommandAllocator();
@@ -62,8 +68,8 @@ namespace bgl
 	RenderTarget::CreateSwapchain(HWND hWnd)
 	{
 		DXGI_SWAP_CHAIN_DESC1 sd = {};
-		sd.Width                 = static_cast<UINT>(m_Width);
-		sd.Height                = static_cast<UINT>(m_Height);
+		sd.Width                 = GetWidth();
+		sd.Height                = GetHeight();
 		sd.Format                = DXGI_FORMAT_B8G8R8A8_UNORM;
 		sd.BufferCount           = c_SwapchainImageCount;
 		sd.BufferUsage           = DXGI_USAGE_RENDER_TARGET_OUTPUT;
@@ -98,8 +104,8 @@ namespace bgl
 		{
 			TextureDesc textureDesc{};
 			textureDesc.format        = Format::BGRA8_UNORM;
-			textureDesc.width         = static_cast<uint32_t>(m_Width);
-			textureDesc.height        = static_cast<uint32_t>(m_Height);
+			textureDesc.width         = GetWidth();
+			textureDesc.height        = GetHeight();
 			textureDesc.dimension     = TextureDimension::kTexture2D;
 			textureDesc.usage         = TextureUsageFlag::kRenderTarget;
 			textureDesc.initialLayout = BarrierLayout::kPresent;
@@ -133,8 +139,8 @@ namespace bgl
 			for (auto i = 0u; i < c_SwapchainImageCount; i++)
 			{
 				auto texDesc      = TextureDesc();
-				texDesc.width     = static_cast<uint32_t>(m_Width);
-				texDesc.height    = static_cast<uint32_t>(m_Height);
+				texDesc.width     = GetWidth();
+				texDesc.height    = GetHeight();
 				texDesc.debugName = std::format("Offscreen Back Buffer: {}", i);
 				texDesc.dimension = TextureDimension::kTexture2D;
 				texDesc.format    = Format::SBGRA8_UNORM;
@@ -170,11 +176,18 @@ namespace bgl
 	void
 	RenderTarget::CreateAttachments()
 	{
+		CreateRenderAttachments();
+		CreateHistoryAttachments();
+	}
+
+	void
+	RenderTarget::CreateRenderAttachments()
+	{
 		{
 			auto depthTextureDesc      = TextureDesc();
 			depthTextureDesc.format    = Format::D24S8;
-			depthTextureDesc.width     = static_cast<uint32_t>(m_Width);
-			depthTextureDesc.height    = static_cast<uint32_t>(m_Height);
+			depthTextureDesc.width     = GetRenderWidth();
+			depthTextureDesc.height    = GetRenderHeight();
 			depthTextureDesc.dimension = TextureDimension::kTexture2D;
 			depthTextureDesc.debugName = "Depth Buffer";
 			depthTextureDesc.usage =
@@ -204,8 +217,8 @@ namespace bgl
 			// kSRV as well as kRenderTarget: the buffer exists to be resampled by a later pass.
 			auto motionTextureDesc      = TextureDesc();
 			motionTextureDesc.format    = c_MotionVectorFormat;
-			motionTextureDesc.width     = static_cast<uint32_t>(m_Width);
-			motionTextureDesc.height    = static_cast<uint32_t>(m_Height);
+			motionTextureDesc.width     = GetRenderWidth();
+			motionTextureDesc.height    = GetRenderHeight();
 			motionTextureDesc.dimension = TextureDimension::kTexture2D;
 			motionTextureDesc.debugName = "Motion Vectors";
 			motionTextureDesc.usage =
@@ -227,8 +240,8 @@ namespace bgl
 		{
 			auto sceneColorDesc      = TextureDesc();
 			sceneColorDesc.format    = c_SceneColorFormat;
-			sceneColorDesc.width     = static_cast<uint32_t>(m_Width);
-			sceneColorDesc.height    = static_cast<uint32_t>(m_Height);
+			sceneColorDesc.width     = GetRenderWidth();
+			sceneColorDesc.height    = GetRenderHeight();
 			sceneColorDesc.dimension = TextureDimension::kTexture2D;
 			sceneColorDesc.debugName = "Scene Color";
 			sceneColorDesc.usage =
@@ -266,8 +279,8 @@ namespace bgl
 		{
 			auto maskDesc      = TextureDesc();
 			maskDesc.format    = c_OutlineMaskFormat;
-			maskDesc.width     = static_cast<uint32_t>(m_Width);
-			maskDesc.height    = static_cast<uint32_t>(m_Height);
+			maskDesc.width     = GetRenderWidth();
+			maskDesc.height    = GetRenderHeight();
 			maskDesc.dimension = TextureDimension::kTexture2D;
 			maskDesc.debugName = "Outline Mask";
 			maskDesc.usage =
@@ -292,7 +305,11 @@ namespace bgl
 			m_OutlineMask.srvHandle =
 				m_ResourceManager->CreateSrv(m_OutlineMask.textureHandle, srvDesc);
 		}
+	}
 
+	void
+	RenderTarget::CreateHistoryAttachments()
+	{
 		if (!m_TaaAllocated)
 		{
 			return;
@@ -302,8 +319,8 @@ namespace bgl
 		{
 			auto historyDesc      = TextureDesc();
 			historyDesc.format    = c_SceneColorFormat;
-			historyDesc.width     = static_cast<uint32_t>(m_Width);
-			historyDesc.height    = static_cast<uint32_t>(m_Height);
+			historyDesc.width     = GetWidth();
+			historyDesc.height    = GetHeight();
 			historyDesc.dimension = TextureDimension::kTexture2D;
 			historyDesc.debugName = std::format("TAA History: {}", i);
 			historyDesc.usage =
@@ -353,8 +370,7 @@ namespace bgl
 	{
 		DestroyRenderTargets();
 
-		m_Width  = static_cast<int>(width);
-		m_Height = static_cast<int>(height);
+		SetSize(width, height, GetRenderScale());
 
 		if (!m_Headless)
 		{
@@ -365,7 +381,32 @@ namespace bgl
 				DXGI_FORMAT_B8G8R8A8_UNORM,
 				0) >>
 				d3d12ErrChecker;
+		}
 
+		RecreateRenderTargets();
+	}
+
+	void
+	RenderTarget::SetRenderScale(float scale)
+	{
+		if (scale == GetRenderScale())
+		{
+			return;
+		}
+
+		// Only what the render size sizes. The swapchain, its backbuffers and the histories are all
+		// the output's and a scale does not move it, so the frame ring keeps describing textures
+		// that still exist and needs no reset.
+		DestroyRenderAttachments();
+		SetSize(GetWidth(), GetHeight(), scale);
+		CreateRenderAttachments();
+	}
+
+	void
+	RenderTarget::RecreateRenderTargets()
+	{
+		if (!m_Headless)
+		{
 			m_FrameIndex = m_SwapChain->GetCurrentBackBufferIndex();
 			CreateRenderTargets();
 		}
@@ -394,6 +435,36 @@ namespace bgl
 			m_ResourceManager->DestroyTexture(m_BackBuffers[i].textureHandle, false);
 		}
 
+		DestroyHistoryAttachments();
+		DestroyRenderAttachments();
+	}
+
+	void
+	RenderTarget::DestroyHistoryAttachments()
+	{
+		for (TextureRtvSrvHandle& history : m_History)
+		{
+			if (history.srvHandle.IsNull())
+			{
+				continue;
+			}
+			m_ResourceManager->DestroySrv(history.srvHandle, false);
+			m_ResourceManager->DestroyRtv(history.rtvHandle, false);
+			m_ResourceManager->DestroyTexture(history.textureHandle, false);
+			history = {};
+		}
+
+		m_HistoryValid        = false;
+		m_CurrentHistoryIndex = 0;
+	}
+
+	void
+	RenderTarget::DestroyRenderAttachments()
+	{
+		// The accumulation describes samples the new grid does not take, so whatever rebuilds these
+		// starts it over -- the buffers themselves are the output's and stay.
+		m_HistoryValid = false;
+
 		m_ResourceManager->DestroySrv(m_DepthBuffer.srvHandle, false);
 		m_ResourceManager->DestroyDsv(m_DepthBuffer.dsvHandle, false);
 		m_ResourceManager->DestroyTexture(m_DepthBuffer.textureHandle, false);
@@ -413,21 +484,5 @@ namespace bgl
 		m_ResourceManager->DestroyRtv(m_OutlineMask.rtvHandle, false);
 		m_ResourceManager->DestroyTexture(m_OutlineMask.textureHandle, false);
 		m_OutlineMask = {};
-
-		for (TextureRtvSrvHandle& history : m_History)
-		{
-			if (history.srvHandle.IsNull())
-			{
-				continue;
-			}
-			m_ResourceManager->DestroySrv(history.srvHandle, false);
-			m_ResourceManager->DestroyRtv(history.rtvHandle, false);
-			m_ResourceManager->DestroyTexture(history.textureHandle, false);
-			history = {};
-		}
-
-		// The accumulation cannot be rescaled, so a resize starts it over.
-		m_HistoryValid        = false;
-		m_CurrentHistoryIndex = 0;
 	}
 }

@@ -24,6 +24,7 @@ struct AnimationEditorWindowDesc
 	uint32_t                     initialPreviewInstances = 16;
 	bool                         taaEnabled              = true;
 	float                        renderScale             = 1.0f;
+	float                        taaReconstructionWidth  = 0.4f;
 	editor::EnvironmentApplyDesc previewEnv;
 };
 

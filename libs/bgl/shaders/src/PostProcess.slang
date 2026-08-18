@@ -4,8 +4,17 @@ import util.Tonemap;
 struct PostProcessData
 {
     TextureHandle sceneColor;
+
+    // Point when the source is already on the backbuffer's grid, linear when a render-resolution
+    // scene colour has to be carried across -- which is only a frame the TAA resolve did not run.
     SamplerState.Handle sampler;
+
     TextureHandle outlineMask;
+
+    // The mask is on the render grid and the dilate below is a coverage test, so this one is always
+    // a point sampler however the scene colour is filtered.
+    SamplerState.Handle maskSampler;
+
     float2 maskSize;
     uint outlineEnabled;
 };
@@ -17,9 +26,9 @@ ConstantBuffer<PostProcessData> gPostProcessData;
 static const float3 c_OutlineColor = float3(1.0, 0.5, 0.0);
 
 // The width is authored at c_OutlineRefHeightPx and scaled by the mask's height, so the outline
-// keeps its share of the frame rather than a texel count: a viewport rendered below its window's
-// resolution is stretched back up to it, and a fixed texel count would arrive proportionally
-// thicker.
+// keeps its share of the frame rather than a texel count: the mask is on the render grid and the
+// image is reconstructed onto a denser or coarser output one, and a fixed texel count would arrive
+// proportionally thicker.
 static const float c_OutlineWidthPx = 4.0;
 static const float c_OutlineRefHeightPx = 2160.0;
 
@@ -31,7 +40,7 @@ static const int c_MaxOutlineWidthPx = 8;
 // the mask minus the mask itself, which contours the silhouette without tinting the surface.
 float SampleOutline(float2 uv)
 {
-    if (gPostProcessData.outlineMask.SampleLevel(gPostProcessData.sampler, uv, 0.0).r > 0.0)
+    if (gPostProcessData.outlineMask.SampleLevel(gPostProcessData.maskSampler, uv, 0.0).r > 0.0)
     {
         return 0.0;
     }
@@ -50,7 +59,7 @@ float SampleOutline(float2 uv)
         for (int dx = -radius; dx <= radius; ++dx)
         {
             float2 offset = float2(dx, dy) * texelSize;
-            covered = max(covered, gPostProcessData.outlineMask.SampleLevel(gPostProcessData.sampler, uv + offset, 0.0).r);
+            covered = max(covered, gPostProcessData.outlineMask.SampleLevel(gPostProcessData.maskSampler, uv + offset, 0.0).r);
         }
     }
 

@@ -224,6 +224,76 @@ namespace bgl::test
 	}
 
 	float
+	MeanAbsDiffToTruth(
+		const std::string& path,
+		const std::string& truthPath,
+		int                factor,
+		int                x,
+		int                y,
+		int                w,
+		int                h)
+	{
+		int            cw = 0, ch = 0, cc = 0, tw = 0, th = 0, tc = 0;
+		unsigned char* candidate = stbi_load(path.c_str(), &cw, &ch, &cc, 4);
+		if (candidate == nullptr)
+			throw std::runtime_error("MeanAbsDiffToTruth: cannot read '" + path + "'");
+
+		unsigned char* truth = stbi_load(truthPath.c_str(), &tw, &th, &tc, 4);
+		if (truth == nullptr)
+		{
+			stbi_image_free(candidate);
+			throw std::runtime_error("MeanAbsDiffToTruth: cannot read '" + truthPath + "'");
+		}
+
+		const bool scaled = factor > 0 && tw == cw * factor && th == ch * factor;
+		const bool inside = w > 0 && h > 0 && x >= 0 && y >= 0 && x + w <= cw && y + h <= ch;
+
+		if (!scaled || !inside)
+		{
+			stbi_image_free(candidate);
+			stbi_image_free(truth);
+			throw std::runtime_error(
+				"MeanAbsDiffToTruth: '" + truthPath + "' must be " + std::to_string(factor) +
+				"x '" + path + "' and contain the box");
+		}
+
+		double sum   = 0.0;
+		size_t count = 0;
+
+		for (int row = y; row < y + h; ++row)
+		{
+			for (int col = x; col < x + w; ++col)
+			{
+				const size_t texel = (static_cast<size_t>(row) * cw + col) * 4;
+
+				for (int c = 0; c < 3; ++c)
+				{
+					double box = 0.0;
+					for (int sy = 0; sy < factor; ++sy)
+					{
+						for (int sx = 0; sx < factor; ++sx)
+						{
+							const size_t s = ((static_cast<size_t>(row) * factor + sy) * tw +
+							                  col * factor + sx) *
+							                 4;
+							box += truth[s + c];
+						}
+					}
+					box /= static_cast<double>(factor) * factor;
+
+					sum += std::abs(static_cast<double>(candidate[texel + c]) - box) / 255.0;
+					++count;
+				}
+			}
+		}
+
+		stbi_image_free(candidate);
+		stbi_image_free(truth);
+
+		return count > 0 ? static_cast<float>(sum / static_cast<double>(count)) : 0.0f;
+	}
+
+	float
 	BackgroundBleed(const std::string& path, const std::string& referencePath, float threshold)
 	{
 		int            pw = 0, ph = 0, pc = 0, rw = 0, rh = 0, rc = 0;
