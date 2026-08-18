@@ -1624,3 +1624,80 @@ TEST_CASE(
 		CHECK(target->GetTaaReconstructionWidth() == targetDesc.taaReconstructionWidth);
 	}
 }
+
+// The accuracy half of the reconstruction width's trade, against the only reference that can judge
+// it. HashedAlpha_test measures the other half -- what a width costs a smear -- and the default is a
+// choice between the two, so neither is worth reading alone.
+//
+// Measured at the render grid's Nyquist, because that is the only place a width can matter: below
+// it the samples were never taken and every width lands within a percent of every other, and above
+// it there is nothing to reconstruct.
+TEST_CASE("The reconstruction width is measured against the truth", "[taa][render][truth]")
+{
+	constexpr int   c_TruthScale = 4;
+	constexpr float c_HalfScale  = 0.5f;
+
+	constexpr int c_FenceBoxX = 98;
+	constexpr int c_FenceBoxY = 98;
+	constexpr int c_FenceBox  = 60;
+
+	const std::string truth = "assets/golden/taa_width_truth.got.png";
+	RenderTo(truth, false, 1, AddFineFence, StillCamera, StoppedClock, 1.0f, c_TruthScale);
+
+	const auto errorOf = [&](const std::string& path) {
+		return bgl::test::MeanAbsDiffToTruth(
+			path,
+			truth,
+			c_TruthScale,
+			c_FenceBoxX,
+			c_FenceBoxY,
+			c_FenceBox,
+			c_FenceBox);
+	};
+
+	const std::string raw = "assets/golden/taa_width_truth_raw.got.png";
+	RenderTo(raw, false, 1, AddFineFence, StillCamera, StoppedClock, c_HalfScale);
+
+	const float rawError = errorOf(raw);
+
+	float narrowest = 0.0f;
+	float widest    = 0.0f;
+
+	for (const float width : { 0.25f, 0.4f, 0.6f, 0.8f, 1.0f })
+	{
+		const auto        tag = std::to_string(static_cast<int>(width * 100.0f));
+		const std::string got = "assets/golden/taa_width_truth_" + tag + ".got.png";
+
+		RenderTo(
+			got,
+			true,
+			c_ConvergeFrames,
+			AddFineFence,
+			StillCamera,
+			StoppedClock,
+			c_HalfScale,
+			1,
+			width);
+
+		const float error = errorOf(got);
+
+		if (width == 0.25f)
+			narrowest = error;
+		if (width == 1.0f)
+			widest = error;
+
+		WARN("reconstruction width " << width << ": mean |delta| from the truth = " << error);
+	}
+
+	// The raw frame has to be wrong in the first place, or every figure above is read against noise.
+	CHECK(rawError > 0.01f);
+
+	// Every width beats drawing nothing; that is what the accumulation is for, and it must not
+	// depend on the setting.
+	CHECK(widest < rawError);
+
+	// And the axis runs the way the kernel says it does. Measured 0.0044 against 0.0105, so this
+	// pins the direction rather than the gap -- a width that stopped sharpening a held frame would
+	// mean the kernel had stopped selecting between phases.
+	CHECK(narrowest < widest);
+}
