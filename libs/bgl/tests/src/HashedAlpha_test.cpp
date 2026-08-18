@@ -1621,7 +1621,7 @@ TEST_CASE(
 // way these bands compare. A squared difference is not comparable across a resampling step at all:
 // it rewards a blur, so the same ghost carried to a bigger grid by a filter scores *lower* than one
 // reconstructed onto it. That rules out asking this instrument what the present-time stretch used to
-// do -- see docs/plans/taa-output-resolution.md.
+// do, in either direction.
 //
 // Reported rather than gated, like the rest of the resolution sweep.
 TEST_CASE(
