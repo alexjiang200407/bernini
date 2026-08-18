@@ -32,6 +32,7 @@ namespace bgl
 		core::slot_handle   vatGeom;
 		core::slot_handle   skinnedGeom;
 		uint32_t            clipCount = 0;
+		uint32_t            boneCount = 0;  // kSkinnedMesh only
 	};
 
 	class Scene : public core::RefCounter<IScene>
@@ -109,6 +110,10 @@ namespace bgl
 		{
 			core::slot_handle record;
 			uint32_t          clipCount = 0;
+
+			// Bones the rig carries, which is what sizes an instance's palette. 0 on a VAT geom: its
+			// pose is fetched, not composed, so nothing on that path needs a bone count.
+			uint32_t boneCount = 0;
 		};
 
 		[[nodiscard]] AnimGeomInfo
@@ -122,7 +127,7 @@ namespace bgl
 		GetGeomSkinnedInfo(uint32_t index) const noexcept
 		{
 			const GeomRecord& geom = m_Geoms[index];
-			return { geom.skinnedGeom, geom.clipCount };
+			return { geom.skinnedGeom, geom.clipCount, geom.boneCount };
 		}
 
 		/**
