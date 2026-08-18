@@ -1,10 +1,10 @@
-#include <assetlib_schema/Schema.h>
+#include <schema/Schema.h>
 
 #include <core/err/util.h>
 #include <core/io/ByteReader.h>
 #include <core/io/ByteWriter.h>
 
-namespace assetlib::schema
+namespace schema
 {
 	using core::throw_runtime_error;
 

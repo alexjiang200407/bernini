@@ -1,11 +1,10 @@
-#include <assetlib_schema/Schema.h>
-#include <assetlib_schema/SchemaBuilder.h>
-#include <assetlib_schema/convert.h>
+#include <schema/LayoutBuilder.h>
+#include <schema/Schema.h>
+#include <schema/convert.h>
 
 #include <catch2/matchers/catch_matchers_string.hpp>
 
-using namespace assetlib;
-using namespace assetlib::schema;
+using namespace schema;
 using Catch::Matchers::ContainsSubstring;
 
 /*
@@ -97,19 +96,15 @@ namespace
 		LayoutBuilder<InnerV2>(schema, "Inner")
 			.AddField("a", &InnerV2::a)
 			.AddField("b", &InnerV2::b)
-			.AddField("c", &InnerV2::c)
-			.DefaultTo(uint16_t(9))
+			.AddField("c", &InnerV2::c, uint16_t(9))
 			.Finish();
 		LayoutBuilder<V2>(schema, "Thing")
-			.AddField("lodBias", &V2::lodBias)
-			.DefaultTo(1.5f)
+			.AddField("lodBias", &V2::lodBias, 1.5f)
 			.AddField("count", &V2::count)
-			.AddField("weights", &V2::weights)
-			.DefaultTo(std::array<float, 3>{ { -1.0f, -2.0f, -3.0f } })
+			.AddField("weights", &V2::weights, { -1.0f, -2.0f, -3.0f })
 			.AddField("inner", &V2::inner)
 			.AddField("inners", &V2::inners)
-			.AddField("drawMode", &V2::drawMode)
-			.RenamedFrom("mode")
+			.AddRenamedField("drawMode", "mode", &V2::drawMode)
 			.AddField("bias", &V2::bias)
 			.AddField("flags", &V2::flags)
 			.AddField("generation", &V2::generation)
@@ -254,10 +249,7 @@ TEST_CASE("the current name wins over the former one when a file carries both", 
 		.AddField("drawMode", &Old::drawMode)
 		.Finish();
 	Schema wanted;
-	LayoutBuilder<New>(wanted, "T")
-		.AddField("drawMode", &New::drawMode)
-		.RenamedFrom("mode")
-		.Finish();
+	LayoutBuilder<New>(wanted, "T").AddRenamedField("drawMode", "mode", &New::drawMode).Finish();
 
 	const Old  in  = { 1, 2 };
 	const auto out = convert(LayoutRef(stored, 0), Bytes(in), LayoutRef(wanted, 0));
@@ -453,8 +445,7 @@ TEST_CASE("a value field that became an array keeps its value as element zero", 
 	LayoutBuilder<Old>(stored, "T").AddField("x", &Old::x).Finish();
 	Schema wanted;
 	LayoutBuilder<New>(wanted, "T")
-		.AddField("x", &New::x)
-		.DefaultTo(std::array<float, 2>{ { 5.0f, 6.0f } })
+		.AddField("x", &New::x, std::array<float, 2>{ { 5.0f, 6.0f } })
 		.Finish();
 
 	const Old  in  = { 3.0f };

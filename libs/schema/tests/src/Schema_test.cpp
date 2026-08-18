@@ -1,5 +1,6 @@
-#include <assetlib_schema/Schema.h>
-#include <assetlib_schema/SchemaBuilder.h>
+#include <schema/LayoutBuilder.h>
+#include <schema/Schema.h>
+#include <schema/SchemaBuilder.h>
 
 #include <assetlib_structs/Animation.h>
 #include <assetlib_structs/Mesh.h>
@@ -11,7 +12,7 @@
 #include <catch2/matchers/catch_matchers_string.hpp>
 
 using namespace assetlib;
-using namespace assetlib::schema;
+using namespace schema;
 using Catch::Matchers::ContainsSubstring;
 
 namespace
@@ -338,24 +339,29 @@ TEST_CASE("Add refuses what a builder cannot produce", "[schema]")
 
 	SECTION("a default of the wrong size")
 	{
+		// The builder's typed overload cannot produce one; a hand-built layout can.
+		Layout layout;
+		layout.name = "T";
+		layout.size = 4;
+		layout.fields.push_back(
+			{ .name         = "a",
+		      .valueType    = ValueType::kU8,
+		      .offset       = 0,
+		      .defaultValue = std::vector<std::byte>(4) });
+		layout.fields.push_back({ .name = "b", .valueType = ValueType::kU8, .offset = 1 });
+		layout.fields.push_back({ .name = "c", .valueType = ValueType::kU16, .offset = 2 });
 		REQUIRE_THROWS_WITH(
-			LayoutBuilder<Inner>(schema, "Inner2")
-				.AddField("a", &Inner::a)
-				.DefaultTo(uint32_t(0))
-				.AddField("b", &Inner::b)
-				.Finish(),
+			schema.Add(std::move(layout)),
 			ContainsSubstring("default is 4 bytes, the field is 1"));
 	}
 }
 
-TEST_CASE("RenamedFrom and DefaultTo qualify the field just declared", "[schema]")
+TEST_CASE("a renamed field carries its old name, a defaulted one its default", "[schema]")
 {
 	Schema schema;
 	LayoutBuilder<Inner>(schema, "Inner")
 		.AddField("a", &Inner::a)
-		.AddField("width", &Inner::b)
-		.RenamedFrom("b")
-		.DefaultTo(uint16_t(7))
+		.AddRenamedField("width", "b", &Inner::b, uint16_t(7))
 		.Finish();
 
 	const Field& width = FieldOf(*schema.Find("Inner"), "width");
@@ -385,6 +391,45 @@ TEST_CASE("every disk POD's builder covers its sizeof", "[schema]")
 	CHECK(
 		FieldOf(*schema.Find("VertexLayout"), "attributes").count == VertexLayout::c_MaxAttributes);
 	CHECK(FieldOf(*schema.Find("Bone"), "inverseBind").count == 16);
+}
+
+TEST_CASE("a schema is assembled as one chain, and a derived builder keeps the chain", "[schema]")
+{
+	struct RigBuilder final : SchemaBuilderBase<RigBuilder>
+	{
+		RigBuilder&
+		AddInner()
+		{
+			return AddLayout<Inner>("Inner", [](auto& layout) {
+				layout.AddField("a", &Inner::a).AddField("b", &Inner::b);
+			});
+		}
+	};
+
+	const Schema schema = RigBuilder()
+	                          .AddInner()
+	                          .AddLayout<Outer>(
+								  "Outer",
+								  [](auto& layout) {
+									  layout.AddField("inner", &Outer::inner)
+										  .AddField("f", &Outer::f)
+										  .AddField("v", &Outer::v)
+										  .AddField("colour", &Outer::colour)
+										  .AddField("inners", &Outer::inners)
+										  .AddField("wide", &Outer::wide);
+								  })
+	                          .Finish();
+	REQUIRE(schema.GetLayouts().size() == 2);
+	CHECK(schema.Find("Outer")->size == sizeof(Outer));
+
+	// The plain one, for a schema with no registrations of its own.
+	const Schema plain =
+		SchemaBuilder()
+			.AddLayout<Inner>(
+				"Inner",
+				[](auto& layout) { layout.AddField("a", &Inner::a).AddField("b", &Inner::b); })
+			.Finish();
+	CHECK(plain.GetLayouts().size() == 1);
 }
 
 TEST_CASE("a layout is referred to by name, and the reference knows its schema", "[schema]")

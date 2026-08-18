@@ -1,7 +1,7 @@
 #pragma once
-#include <assetlib_schema/Schema.h>
+#include <schema/Schema.h>
 
-namespace assetlib::schema
+namespace schema
 {
 	/**
 	 * Whether every value of `stored` is representable as `wanted`: the same type, or a wider
@@ -24,7 +24,7 @@ namespace assetlib::schema
 	/**
 	 * A run of `stored`'s layout rewritten as `wanted`'s, field by field, by name -- the reader for
 	 * any file written before the current struct took shape. Per field of the wanted layout: the
-	 * stored field of the same name, or of the name it was RenamedFrom, is copied if its type
+	 * stored field of the same name, or of the name AddRenamedField says it had, is copied if its type
 	 * matches, widened if `widens` allows, recursed into if both are structs, and truncated or
 	 * padded to the wanted count if both are arrays; a field the file does not carry reads as its
 	 * default, or zero; a field the engine no longer has is dropped.
@@ -39,6 +39,14 @@ namespace assetlib::schema
 	 */
 	[[nodiscard]] std::vector<std::byte>
 	convert(LayoutRef stored, std::span<const std::byte> storedBytes, LayoutRef wanted);
+
+	/**
+	 * Whether two layouts describe the same bytes: same size, and field for field the same name,
+	 * type, offset and count, recursively. Names of the layouts themselves do not count. What lets
+	 * a reader copy a chunk instead of converting it.
+	 */
+	[[nodiscard]] bool
+	sameLayout(LayoutRef a, LayoutRef b);
 
 	/** How a field's shape reads in a message: "u16", "f32[3]", "struct VertexAttribute[8]". */
 	[[nodiscard]] std::string

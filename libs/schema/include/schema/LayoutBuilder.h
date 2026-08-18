@@ -1,9 +1,9 @@
 #pragma once
-#include <assetlib_schema/Schema.h>
 #include <core/glm.h>
 #include <core/type_traits.h>
+#include <schema/Schema.h>
 
-namespace assetlib::schema
+namespace schema
 {
 	/**
 	 * What a member's C++ type is to the schema: a value, a struct, or a run of either. A glm
@@ -37,6 +37,12 @@ namespace assetlib::schema
 	template <typename T>
 		requires std::is_enum_v<T>
 	struct FieldTraits<T> : FieldTraits<std::underlying_type_t<T>>
+	{};
+
+	// A char is a byte of text, and its signedness is the platform's -- a file written where char
+	// is signed must read where it is not.
+	template <>
+	struct FieldTraits<char> : FieldTraits<uint8_t>
 	{};
 
 	template <glm::length_t L, typename T, glm::qualifier Q>
@@ -97,8 +103,8 @@ namespace assetlib::schema
 	 *     LayoutBuilder<Submesh>(schema, "Submesh")
 	 *         .AddField("layout", &Submesh::layout)          // VertexLayout, registered earlier
 	 *         .AddField("vertexByteOffset", &Submesh::vertexByteOffset)
-	 *         .AddField("lodBias", &Submesh::lodBias).DefaultTo(0.0f)
-	 *         .AddField("materialIndex", &Submesh::material).RenamedFrom("material")
+	 *         .AddField("lodBias", &Submesh::lodBias, 0.0f)
+	 *         .AddRenamedField("materialIndex", "material", &Submesh::material)
 	 *         .Finish();
 	 */
 	template <core::type_traits::trivially_copyable T>
@@ -123,14 +129,65 @@ namespace assetlib::schema
 		LayoutBuilder&
 		AddField(std::string_view name, M T::* member)
 		{
+			return Describe(name, member, {}, {});
+		}
+
+		/**
+		 * A field with what it reads as from a file that does not carry it. The default is the whole
+		 * field: a scalar for a scalar, an array for an array.
+		 */
+		template <typename M>
+		LayoutBuilder&
+		AddField(std::string_view name, M T::* member, const std::type_identity_t<M>& defaultValue)
+		{
+			return Describe(name, member, {}, ToBytes(defaultValue));
+		}
+
+		/** A field a file may still carry under `formerly`, the name it had before it was renamed. */
+		template <typename M>
+		LayoutBuilder&
+		AddRenamedField(std::string_view name, std::string_view formerly, M T::* member)
+		{
+			return Describe(name, member, formerly, {});
+		}
+
+		template <typename M>
+		LayoutBuilder&
+		AddRenamedField(
+			std::string_view name,
+			std::string_view formerly,
+			M T::*                         member,
+			const std::type_identity_t<M>& defaultValue)
+		{
+			return Describe(name, member, formerly, ToBytes(defaultValue));
+		}
+
+		/** @return The index the schema gave the layout. @throws whatever Schema::Add throws. */
+		uint32_t
+		Finish()
+		{
+			return m_Schema.Add(std::move(m_Layout), typeid(T));
+		}
+
+	private:
+		template <typename M>
+		LayoutBuilder&
+		Describe(
+			std::string_view name,
+			M T::*                 member,
+			std::string_view       formerly,
+			std::vector<std::byte> defaultValue)
+		{
 			using Traits = FieldTraits<std::remove_cvref_t<M>>;
 
 			Field field;
-			field.name      = std::string(name);
-			field.type      = Traits::c_Type;
-			field.valueType = Traits::c_ValueType;
-			field.offset    = OffsetOf(member);
-			field.count     = Traits::c_Count;
+			field.name         = std::string(name);
+			field.type         = Traits::c_Type;
+			field.valueType    = Traits::c_ValueType;
+			field.offset       = OffsetOf(member);
+			field.count        = Traits::c_Count;
+			field.formerly     = std::string(formerly);
+			field.defaultValue = std::move(defaultValue);
 
 			if constexpr (!std::is_void_v<typename Traits::Struct>)
 			{
@@ -146,42 +203,13 @@ namespace assetlib::schema
 			return *this;
 		}
 
-		/** The name the last field may still carry in a file written before it was renamed. */
-		LayoutBuilder&
-		RenamedFrom(std::string_view oldName)
-		{
-			GetLast().formerly = std::string(oldName);
-			return *this;
-		}
-
-		/**
-		 * What the last field reads as from a file that does not carry it. The value is the whole
-		 * field: a scalar for a scalar, an array for an array.
-		 */
 		template <core::type_traits::trivially_copyable V>
-		LayoutBuilder&
-		DefaultTo(const V& value)
+		static std::vector<std::byte>
+		ToBytes(const V& value)
 		{
-			auto& bytes = GetLast().defaultValue;
-			bytes.resize(sizeof(V));
+			std::vector<std::byte> bytes(sizeof(V));
 			std::copy_n(reinterpret_cast<const std::byte*>(&value), sizeof(V), bytes.data());
-			return *this;
-		}
-
-		/** @return The index the schema gave the layout. @throws whatever Schema::Add throws. */
-		uint32_t
-		Finish()
-		{
-			return m_Schema.Add(std::move(m_Layout), typeid(T));
-		}
-
-	private:
-		Field&
-		GetLast()
-		{
-			if (m_Layout.fields.empty())
-				throw std::runtime_error("schema: " + m_Layout.name + ": no field to qualify");
-			return m_Layout.fields.back();
+			return bytes;
 		}
 
 		template <typename M>

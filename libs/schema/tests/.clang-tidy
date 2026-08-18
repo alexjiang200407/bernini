@@ -1,5 +1,5 @@
 # Test code is engine code, so its fixtures are PascalCase like the rest of the engine. Only
-# assetlib_schema's own published functions are camelBack -- see ../.clang-tidy -- and a helper that
+# schema's own published functions are camelBack -- see ../.clang-tidy -- and a helper that
 # registers a fixture struct is not part of that vocabulary.
 InheritParentConfig: true
 

@@ -1,8 +1,8 @@
-#include <assetlib_schema/convert.h>
+#include <schema/convert.h>
 
 #include <core/err/util.h>
 
-namespace assetlib::schema
+namespace schema
 {
 	using core::throw_runtime_error;
 
@@ -344,6 +344,28 @@ namespace assetlib::schema
 				wantedLayout,
 				out.data() + i * wantedLayout.size);
 		return out;
+	}
+
+	bool
+	sameLayout(LayoutRef a, LayoutRef b)
+	{
+		const Layout& left  = a.GetLayout();
+		const Layout& right = b.GetLayout();
+		if (left.size != right.size || left.fields.size() != right.fields.size())
+			return false;
+		for (size_t i = 0; i < left.fields.size(); ++i)
+		{
+			const Field& l = left.fields[i];
+			const Field& r = right.fields[i];
+			if (l.name != r.name || l.type != r.type || l.valueType != r.valueType ||
+			    l.offset != r.offset || l.count != r.count || l.HoldsValues() != r.HoldsValues())
+				return false;
+			if (!l.HoldsValues() && !sameLayout(
+										LayoutRef(a.GetSchema(), l.layoutIndex),
+										LayoutRef(b.GetSchema(), r.layoutIndex)))
+				return false;
+		}
+		return true;
 	}
 
 	std::string
