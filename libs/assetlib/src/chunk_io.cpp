@@ -202,6 +202,66 @@ namespace assetlib::chunk
 		return m_Bytes.Take();
 	}
 
+	namespace
+	{
+		Header
+		readHeader(std::span<const std::byte> bytes, std::string_view what)
+		{
+			core::throw_runtime_error_if(
+				bytes.size() < sizeof(Header),
+				"{}: stream shorter than a header",
+				what);
+			ByteReader reader(bytes);
+			return reader.ReadPod<Header>();
+		}
+
+		/** The checked table of a whole stream; what every whole-file read shares. */
+		std::vector<Entry>
+		readTable(std::span<const std::byte> bytes, const Header& header, std::string_view what)
+		{
+			core::throw_runtime_error_if(
+				header.fileSize > bytes.size(),
+				"{}: stream shorter than declared file size",
+				what);
+
+			const auto tableBytes = static_cast<size_t>(header.chunkCount) * sizeof(Entry);
+			core::throw_runtime_error_if(
+				tableBytes > bytes.size() || header.chunkTableOffset > bytes.size() - tableBytes,
+				"{}: chunk table extends past end of stream",
+				what);
+
+			ByteReader reader(bytes);
+			reader.Seek(header.chunkTableOffset);
+			std::vector<Entry> table(header.chunkCount);
+			for (Entry& entry : table)
+			{
+				entry = reader.ReadPod<Entry>();
+				checkEntry(entry, bytes.size(), what);
+			}
+			return table;
+		}
+
+		schema::Schema
+		readStoredSchema(
+			std::span<const std::byte> bytes,
+			const Header&              header,
+			std::span<const Entry>     table,
+			std::string_view           what)
+		{
+			const auto entry = std::ranges::find(table, c_SchemaChunk, &Entry::id);
+			if (entry == table.end())
+				throwPredatesSchema(header.versionMajor, what);
+			try
+			{
+				return schema::deserialize(bytes.subspan(entry->offset, entry->byteSize));
+			}
+			catch (const std::runtime_error& error)
+			{
+				throw_runtime_error("{}: {}", what, error.what());
+			}
+		}
+	}
+
 	Reader::Reader(
 		std::span<const std::byte> bytes,
 		uint32_t                   magic,
@@ -209,40 +269,21 @@ namespace assetlib::chunk
 		std::string_view           what,
 		const schema::Schema&      current) : m_Bytes(bytes), m_Current(&current), m_What(what)
 	{
-		if (bytes.size() < sizeof(Header))
-			throw_runtime_error("{}: stream shorter than a header", what);
-
-		ByteReader reader(bytes);
-		m_Header = reader.ReadPod<Header>();
-
+		m_Header = readHeader(bytes, what);
 		checkHeader(m_Header, magic, versionMajor, what);
+		m_Table  = readTable(bytes, m_Header, what);
+		m_Stored = readStoredSchema(bytes, m_Header, m_Table, what);
+	}
 
-		if (m_Header.fileSize > bytes.size())
-			throw_runtime_error("{}: stream shorter than declared file size", what);
-
-		const auto tableBytes = static_cast<size_t>(m_Header.chunkCount) * sizeof(Entry);
-		if (tableBytes > bytes.size() || m_Header.chunkTableOffset > bytes.size() - tableBytes)
-			throw_runtime_error("{}: chunk table extends past end of stream", what);
-
-		reader.Seek(m_Header.chunkTableOffset);
-		m_Table.resize(m_Header.chunkCount);
-		for (Entry& entry : m_Table)
-		{
-			entry = reader.ReadPod<Entry>();
-			checkEntry(entry, bytes.size(), what);
-		}
-
-		const Entry* schemaEntry = Find(c_SchemaChunk);
-		if (schemaEntry == nullptr)
-			throwPredatesSchema(m_Header.versionMajor, what);
-		try
-		{
-			m_Stored = schema::deserialize(Payload(*schemaEntry));
-		}
-		catch (const std::runtime_error& error)
-		{
-			throw_runtime_error("{}: {}", what, error.what());
-		}
+	Inspection
+	inspect(std::span<const std::byte> bytes, std::string_view what)
+	{
+		Inspection out;
+		out.header = readHeader(bytes, what);
+		core::throw_runtime_error_if(out.header.byteOrder != 0, "{}: unsupported byte order", what);
+		const auto table = readTable(bytes, out.header, what);
+		out.stored       = readStoredSchema(bytes, out.header, table, what);
+		return out;
 	}
 
 	const Entry*
