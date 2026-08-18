@@ -5,6 +5,7 @@
 #include "scene/EntryBuffer.h"
 #include "scene/PackedBuffer.h"
 #include "scene/RangeBuffer.h"
+#include "scene/TextureAssetStore.h"
 #include "types/SubmeshInstance.h"
 #include "types/VertexGen.h"
 #include <bgl/IScene.h>
@@ -165,6 +166,13 @@ namespace bgl
 			return m_Samplers[static_cast<size_t>(kind)];
 		}
 
+		// The view this scene created for a texture asset, or a null handle if it created none.
+		[[nodiscard]] SrvHandle
+		GetTextureSrv(core::slot_handle textureSlot) const noexcept
+		{
+			return m_Textures.GetSrv(textureSlot);
+		}
+
 		void
 		AttachToFrameGraph(FrameGraph& fg, uint32_t drawIdx);
 
@@ -312,15 +320,6 @@ namespace bgl
 		[[nodiscard]] idl::LoosePbrMaterial
 		BuildLoosePbrMaterial(const LoosePbrMaterialDesc& desc) const;
 
-		// Creates the texture and queues `img` for upload at the next Update. Null handle (and
-		// nothing queued) when the pool is exhausted.
-		[[nodiscard]] TextureHandle
-		CreateTextureAsset(assetlib::ImageData img, std::string debugName);
-
-		// A 1x1 RGBA8 texture through the same deferred-upload path as any loaded image.
-		[[nodiscard]] TextureHandle
-		CreateSolidTexture(uint8_t r, uint8_t g, uint8_t b, uint8_t a);
-
 		SceneDesc   m_Desc;
 		std::string m_NamePrefix;
 
@@ -354,56 +353,11 @@ namespace bgl
 
 		std::array<SamplerHandle, static_cast<size_t>(StandardSampler::kCount)> m_Samplers;
 
-		// 1x1 defaults a PbrMaterial falls back to per channel: white base/ORM, flat
-		// tangent-space normal (0.5,0.5,1).
-		enum class DefaultTexture : uint32_t
-		{
-			kWhite,
-			kFlatNormal,
-			kCount
-		};
-		std::array<TextureHandle, static_cast<size_t>(DefaultTexture::kCount)> m_DefaultTextures;
-
-		// Every texture asset's shader resource view, keyed by the texture's slot index. A texture
-		// carries no descriptor of its own, and destroying one does not cascade to its views, so the
-		// scene that created both releases both.
-		std::unordered_map<uint32_t, SrvHandle> m_TextureSrvs;
-
-		// The descriptor a GPU struct must carry to reach the texture in `slot`, or a null one when
-		// that texture has no view. Null is not an error here: a material may name a channel no
-		// texture was ever routed to.
-		[[nodiscard]] DescriptorHandle
-		SrvDescriptorFor(core::slot_handle textureSlot) const noexcept;
-
-	public:
-		// The view this scene created for a texture asset, or a null handle if it created none.
-		[[nodiscard]] SrvHandle
-		GetTextureSrv(core::slot_handle textureSlot) const noexcept;
-
-	private:
-		// Decoded pixels awaiting upload, flushed by Update onto the command list of the context
-		// that draws this scene. Scene-owned so one scene's textures never ride another context's
-		// timeline -- an upload must be ordered against the frames that sample it.
-		struct PendingTextureUpload
-		{
-			TextureHandle       handle;
-			assetlib::ImageData image;
-
-			PendingTextureUpload(TextureHandle texture, assetlib::ImageData data) noexcept :
-				handle(texture), image(std::move(data))
-			{}
-
-			PendingTextureUpload(PendingTextureUpload&&) noexcept = default;
-			PendingTextureUpload(const PendingTextureUpload&)     = delete;
-
-			PendingTextureUpload&
-			operator=(PendingTextureUpload&&) noexcept = default;
-
-			PendingTextureUpload&
-			operator=(const PendingTextureUpload&) = delete;
-		};
-		std::vector<PendingTextureUpload> m_PendingTextureUploads;
-
 		core::SharedRef<IResourceManager> m_ResourceManager;
+
+		// Scene-owned so one scene's textures never ride another context's timeline -- an upload
+		// must be ordered against the frames that sample it, which is why Update flushes it.
+		// Constructed from m_ResourceManager, so it must stay declared after it.
+		TextureAssetStore m_Textures;
 	};
 }

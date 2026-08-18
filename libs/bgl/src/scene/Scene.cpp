@@ -247,7 +247,8 @@ namespace bgl
 	}
 
 	Scene::Scene(SceneDesc desc, core::SharedRef<IResourceManager> resourceManager) :
-		m_Desc(std::move(desc)), m_ResourceManager(std::move(resourceManager))
+		m_Desc(std::move(desc)), m_ResourceManager(std::move(resourceManager)),
+		m_Textures(m_ResourceManager)
 	{
 		m_NamePrefix = std::format("s{}:", g_NextSceneId.fetch_add(1));
 
@@ -268,13 +269,6 @@ namespace bgl
 		m_Samplers[static_cast<size_t>(StandardSampler::kLinearClamp)] =
 			m_ResourceManager->CreateSampler(
 				SamplerDesc().SetAllFilters(true).SetAllAddressModes(SamplerAddressMode::kClamp));
-
-		// Default material textures: white (base color / ORM -> ao=1, factors drive
-		// roughness+metal) and a flat tangent-space normal (0.5,0.5,1).
-		m_DefaultTextures[static_cast<size_t>(DefaultTexture::kWhite)] =
-			CreateSolidTexture(255, 255, 255, 255);
-		m_DefaultTextures[static_cast<size_t>(DefaultTexture::kFlatNormal)] =
-			CreateSolidTexture(128, 128, 255, 255);
 	}
 
 	void
@@ -397,48 +391,10 @@ namespace bgl
 			},
 			buffers);
 
-		// Flush any textures loaded since the last frame (materials, environment maps). Scene-owned
-		// so the upload rides the same timeline as the frames that sample it -- another context's
-		// list flushing it would leave the two unordered on the GPU.
-		if (!m_PendingTextureUploads.empty())
-		{
-			cmdList->BeginEvent("Scene Texture Uploads");
-
-			std::vector<TextureHandle>      handles;
-			std::vector<TextureBarrierDesc> barriers;
-			handles.reserve(m_PendingTextureUploads.size());
-			barriers.reserve(m_PendingTextureUploads.size());
-
-			for (const PendingTextureUpload& pending : m_PendingTextureUploads)
-			{
-				std::vector<TextureSubresourceData> subresources;
-				subresources.reserve(pending.image.subresources.size());
-				for (const auto& s : pending.image.subresources)
-				{
-					subresources.push_back(
-						{ pending.image.pixels.data() + s.offset, s.rowPitch, s.slicePitch });
-				}
-
-				cmdList->WriteTexture(pending.handle, subresources);
-
-				// COPY_DEST -> SHADER_RESOURCE so the forward pass can sample it. These bindless
-				// textures aren't frame-graph resources, so we barrier directly.
-				TextureBarrierDesc barrier;
-				barrier.syncBefore   = BarrierSyncFlag::kCopy;
-				barrier.accessBefore = BarrierAccessFlag::kCopyDest;
-				barrier.layoutBefore = BarrierLayout::kCopyDest;
-				barrier.syncAfter    = BarrierSyncFlag::kPixelShader;
-				barrier.accessAfter  = BarrierAccessFlag::kShaderResource;
-				barrier.layoutAfter  = BarrierLayout::kShaderResource;
-
-				handles.push_back(pending.handle);
-				barriers.push_back(barrier);
-			}
-
-			cmdList->Barrier(handles, barriers);
-			cmdList->EndEvent();
-			m_PendingTextureUploads.clear();
-		}
+		// Textures loaded since the last frame (materials, environment maps) go up on this list, so
+		// the upload rides the same timeline as the frames that sample it -- another context's list
+		// flushing it would leave the two unordered on the GPU.
+		m_Textures.Flush(cmdList);
 	}
 
 	void
@@ -616,10 +572,12 @@ namespace bgl
 
 			auto rollback = GeomRollback();
 
-			auto record      = idl::VatGeom();
-			record.positions = idl::TextureHandle{ SrvDescriptorFor(desc.positions.textureSlot) };
-			record.normals   = idl::TextureHandle{ SrvDescriptorFor(desc.normals.textureSlot) };
-			record.boundsMin = glm::vec4(desc.boundsMin, 0.0f);
+			auto record = idl::VatGeom();
+			record.positions =
+				idl::TextureHandle{ m_Textures.GetDescriptor(desc.positions.textureSlot) };
+			record.normals =
+				idl::TextureHandle{ m_Textures.GetDescriptor(desc.normals.textureSlot) };
+			record.boundsMin    = glm::vec4(desc.boundsMin, 0.0f);
 			record.boundsExtent = glm::vec4(desc.boundsMax - desc.boundsMin, 0.0f);
 			record.clips        = rollback.Track(m_VatClips, m_VatClips.Add(std::span(clips)));
 			record.columnBases  = rollback.Track(m_VatColumns, m_VatColumns.Add(columnBases));
@@ -1157,9 +1115,9 @@ namespace bgl
 	idl::PbrMaterial
 	Scene::BuildPbrMaterial(const PbrMaterialDesc& desc) const
 	{
-		const auto white = m_DefaultTextures[static_cast<size_t>(DefaultTexture::kWhite)].slot;
+		const auto white = m_Textures.GetDefaultSlot(TextureAssetStore::DefaultTexture::kWhite);
 		const auto flatNormal =
-			m_DefaultTextures[static_cast<size_t>(DefaultTexture::kFlatNormal)].slot;
+			m_Textures.GetDefaultSlot(TextureAssetStore::DefaultTexture::kFlatNormal);
 
 		// A caller-supplied texture resolves to its bindless descriptor; an invalid
 		// (default-constructed) handle falls back to the given default texture. The descriptor comes
@@ -1167,7 +1125,7 @@ namespace bgl
 		// has to be whatever the backend's shader can dereference.
 		const auto resolve = [this](TextureAssetHandle tex, core::slot_handle fallback) {
 			const core::slot_handle slot = tex.textureSlot ? tex.textureSlot : fallback;
-			return idl::TextureHandle{ SrvDescriptorFor(slot) };
+			return idl::TextureHandle{ m_Textures.GetDescriptor(slot) };
 		};
 
 		idl::PbrMaterial material{};
@@ -1217,9 +1175,9 @@ namespace bgl
 	idl::LoosePbrMaterial
 	Scene::BuildLoosePbrMaterial(const LoosePbrMaterialDesc& desc) const
 	{
-		const auto white = m_DefaultTextures[static_cast<size_t>(DefaultTexture::kWhite)].slot;
+		const auto white = m_Textures.GetDefaultSlot(TextureAssetStore::DefaultTexture::kWhite);
 		const auto flatNormal =
-			m_DefaultTextures[static_cast<size_t>(DefaultTexture::kFlatNormal)].slot;
+			m_Textures.GetDefaultSlot(TextureAssetStore::DefaultTexture::kFlatNormal);
 
 		// A routed channel resolves to (its texture's bindless index, its channel). An unrouted
 		// channel falls back to a default texture + channel chosen so the sampled value matches the
@@ -1233,7 +1191,7 @@ namespace bgl
 			const core::slot_handle slot   = routed ? route.texture.textureSlot : fallbackTex;
 
 			idl::ChannelSource cs{};
-			cs.texture = idl::TextureHandle{ SrvDescriptorFor(slot) };
+			cs.texture = idl::TextureHandle{ m_Textures.GetDescriptor(slot) };
 			cs.channel = routed ? route.channel : fallbackChannel;
 			return cs;
 		};
@@ -1431,117 +1389,16 @@ namespace bgl
 		m_Geoms.release_slot(geom.handle.index);
 	}
 
-	DescriptorHandle
-	Scene::SrvDescriptorFor(core::slot_handle textureSlot) const noexcept
-	{
-		return GetTextureSrv(textureSlot).descriptor;
-	}
-
-	SrvHandle
-	Scene::GetTextureSrv(core::slot_handle textureSlot) const noexcept
-	{
-		const auto it = m_TextureSrvs.find(textureSlot.index);
-		return it == m_TextureSrvs.end() ? SrvHandle{} : it->second;
-	}
-
 	TextureAssetHandle
 	Scene::AddTextureAsset(assetlib::ImageData img, std::string debugName)
 	{
-		const TextureHandle handle = CreateTextureAsset(std::move(img), std::move(debugName));
-		if (handle.IsNull())
-		{
-			return TextureAssetHandle{};
-		}
-
-		// CreateTextureAsset made the view, so this lookup always hits.
-		return TextureAssetHandle{ handle.slot, m_TextureSrvs.at(handle.slot.index).bindlessIndex };
-	}
-
-	TextureHandle
-	Scene::CreateTextureAsset(assetlib::ImageData img, std::string debugName)
-	{
-		TextureDesc desc;
-		desc.width     = img.width;
-		desc.height    = img.height;
-		desc.mipLevels = img.mipLevels;
-		desc.arraySize = img.arraySize;
-		desc.format    = FromVkFormat(img.vkFormat);
-		desc.usage     = TextureUsageFlag::kSRV;
-		desc.dimension =
-			img.isCubemap ? TextureDimension::kTextureCube : TextureDimension::kTexture2D;
-		desc.initialLayout = BarrierLayout::kCopyDest;
-		desc.debugName     = std::move(debugName);
-
-		const TextureHandle handle = m_ResourceManager->CreateTexture(desc);
-		if (handle.IsNull())
-		{
-			return handle;
-		}
-
-		SrvDesc srvDesc;
-		srvDesc.format    = desc.format;
-		srvDesc.dimension = desc.dimension;
-		srvDesc.mipLevels = desc.mipLevels;
-		srvDesc.arraySize = desc.arraySize;
-		srvDesc.debugName = desc.debugName;
-
-		const SrvHandle srv = m_ResourceManager->CreateSrv(handle, srvDesc);
-		if (srv.IsNull())
-		{
-			m_ResourceManager->DestroyTexture(handle, /*deferred*/ false);
-			return TextureHandle{};
-		}
-		m_TextureSrvs.emplace(handle.slot.index, srv);
-
-		m_PendingTextureUploads.push_back({ handle, std::move(img) });
-		return handle;
-	}
-
-	TextureHandle
-	Scene::CreateSolidTexture(uint8_t r, uint8_t g, uint8_t b, uint8_t a)
-	{
-		auto img     = assetlib::ImageData();
-		img.width    = 1;
-		img.height   = 1;
-		img.vkFormat = assetlib::VkFormat::R8G8B8A8_UNORM;
-		img.pixels   = core::fixed_buffer<std::byte>(4);
-
-		const uint8_t pixel[4] = { r, g, b, a };
-		std::memcpy(img.pixels.data(), pixel, sizeof(pixel));
-		img.subresources.push_back({ 0, 4, 4 });
-
-		return CreateTextureAsset(std::move(img), "Solid Texture");
+		return m_Textures.Add(std::move(img), std::move(debugName));
 	}
 
 	void
 	Scene::DeleteTextureAsset(TextureAssetHandle texture)
 	{
-		// Destroying retires the slot at once, so a texture already deleted fails this check even
-		// while the GPU is still finishing with it. There is nothing to remember here.
-		const TextureHandle handle = TextureHandle::From(texture);
-		if (handle.IsNull() || !m_ResourceManager->ValidTextureHandle(handle))
-		{
-			throw SceneError(
-				"TextureAssetHandle passed to DeleteTextureAsset has expired or is invalid");
-		}
-
-		// A delete can arrive before Update ever flushed the upload -- a caller may release a
-		// texture without a frame in between (e.g. a render that failed before drawing). The slot
-		// retires now, so the queued write must go with it or the flush writes a stale handle.
-		std::erase_if(m_PendingTextureUploads, [&](const PendingTextureUpload& pending) {
-			return pending.handle == handle;
-		});
-
-		// Frames already submitted may still sample this texture, so only the *release* is deferred:
-		// the resource manager recycles the bindless slot no earlier than the last frame that could
-		// read it. The view is not cascaded to by DestroyTexture, so it goes on the same gate.
-		if (const auto it = m_TextureSrvs.find(handle.slot.index); it != m_TextureSrvs.end())
-		{
-			m_ResourceManager->DestroySrv(it->second);
-			m_TextureSrvs.erase(it);
-		}
-
-		m_ResourceManager->DestroyTexture(handle);
+		m_Textures.Delete(texture);
 		++m_ShadingEpoch;
 	}
 }
