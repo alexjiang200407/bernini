@@ -92,6 +92,12 @@ The persistent shader cache: how compiled DXIL, reflection, and driver PSOs are 
 
 How `bgl_idlgen` generates CPU/GPU structs, enums, and constants from one Slang IDL module.
 
+**[Skinned Meshes](./docs/skinning.md)**
+
+A rig posed on the GPU into a bone palette and drawn from it: the compute pass and its
+barrier-per-depth-level walk, why the previous pose is re-evaluated rather than remembered, and
+where the skeleton signature is checked (and why it cannot be checked in `bgl`).
+
 **[Vertex Animation Textures](./docs/vat.md)**
 
 A rig's clips baked to a position/normal texture pair and drawn as crowds: the `.bvat`

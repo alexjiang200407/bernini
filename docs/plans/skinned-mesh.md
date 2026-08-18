@@ -263,13 +263,24 @@ has no such reference, is pinned by luma probes at positions derived from the ri
 `VatPlayback_test` pins playback. A golden remains worth adding when there is a rig whose correct
 appearance a human has actually looked at.
 
-**4 — `gamelib`: acquisition.** `AcquireSkinnedMesh(relPath, animationsRelPath, meshIndex)` reading
-`.bmesh` + `.bskel` + `.banim` through the `AssetStore` and returning a geom plus a clip table, and
+**4 — `gamelib`: acquisition.** *(landed)* `AcquireSkinnedMesh(relPath, animationsRelPath,
+meshIndex)` reading `.bmesh` + `.bskel` + `.banim` and returning a geom plus a clip table, and
 `CreateSkinnedInstance`. No bake and no freshness rule — unlike VAT there is no derived product, the
-containers *are* the source, which is most of why this task is small.
-It also owns the `skeletonSignature` check, which `bgl` cannot make (see task 1).
+containers *are* the source, which is most of why this task is small. It owns the
+`skeletonSignature` check, which `bgl` cannot make (see task 1).
 *Gate:* `gamelib_tests` acquires a fixture rig, shares the geom on a second acquire, and releases to
 zero; a mismatched skeleton signature is refused.
+
+*Two things worth recording:*
+- **A caller never names the skeleton.** The clip set names its own rig
+  (`AnimationSet::skeleton`), so `AcquireSkinnedMesh` follows it rather than taking a third path.
+  A mesh, a rig and a clip set cannot be paired wrongly by hand — only by a rig that changed after
+  the clips were cooked, which is exactly what the signature catches.
+- **`VatClipInfo` became `ClipInfo`.** Both tiers hand back the same clip description, and a caller
+  showing a clip list should not have to know which door it came through — the same consolidation
+  ADR-10 made for `idl::Clip`. The rig fixture the acquire suites share moved to
+  `libs/gamelib/tests/src/util/RigFixture.h` for the same reason: both need a rig on disk, and it
+  was 150 lines.
 
 **5 — editor: the Animation panel plays skinned.** A source toggle (skinned / VAT) on the panel;
 `AnimationPreviewWindow` acquires through whichever is selected and respawns on a clip change the
@@ -287,7 +298,9 @@ feature is what made the tedium visible.
 *Gate:* both arrays gone, `just test` unchanged, and one test that a buffer reports the name it was
 initialised with.
 
-**6 — docs, and the plan comes out.** `docs/skinning.md` as the subsystem page — the pose pass, the
+**6 — docs, and the plan comes out.** *(`docs/skinning.md` was created early, in task 4's review: a
+reviewer asked for a 24-line javadoc's reasoning to move into docs, and there was nowhere to put it.
+This task extends it rather than writing it.)* `docs/skinning.md` as the subsystem page — the pose pass, the
 palette layout and its lifetime, the `prevTime` constraint from ADR-5, the interface→file table;
 `geometry_layout.md` and `passes.md` amended. `ROADMAP.md` ticked — and line 145 **reworded**, not
 just checked: it currently says skinned motion vectors need a double-buffered palette, which ADR-5
