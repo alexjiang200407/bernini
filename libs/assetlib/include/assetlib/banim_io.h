@@ -12,7 +12,8 @@ namespace assetlib
 	/**
 	 * Reconstructs a clip set from a container byte stream, validated as it is read.
 	 *
-	 * @throws std::runtime_error on bad magic, unsupported version, a truncated / malformed stream,
+	 * @throws std::runtime_error on bad magic, a version newer than this build, a file from before the schema chunk, a
+	 *         field no rule converts (see chunk_io.h), a truncated / malformed stream,
 	 *         or a clip whose samples fall outside the pool.
 	 */
 	[[nodiscard]] AnimationSet

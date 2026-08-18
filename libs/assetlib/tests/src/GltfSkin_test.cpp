@@ -436,10 +436,10 @@ TEST_CASE("A mesh carrying joints must name a skeleton", "[bmesh][io][skeleton]"
 	}
 }
 
-TEST_CASE("A mesh baked before skeletons existed still loads", "[bmesh][io]")
+TEST_CASE("A mesh that names no skeleton loads as a static mesh", "[bmesh][io]")
 {
-	// The skeleton chunk was added at minor version 1. Chunks are addressed by id and an absent one is
-	// not an error, so this v3.0 file must still read -- and read as what it is, a static mesh.
+	// Chunks are addressed by id and an absent or empty one is not an error, so a mesh with nothing
+	// in its skeleton chunk reads as what it is, a static mesh.
 	const fs::path bmesh = "assets/Meshes/apples.bmesh";
 	REQUIRE(fs::exists(bmesh));
 

@@ -12,7 +12,8 @@ namespace assetlib
 	 * Reconstructs a skeleton from a container byte stream, validated as it is read: an out-of-order
 	 * or out-of-range parent is a malformed file, not something a caller has to re-check.
 	 *
-	 * @throws std::runtime_error on bad magic, unsupported version, a truncated / malformed stream,
+	 * @throws std::runtime_error on bad magic, a version newer than this build, a file from before the schema chunk, a
+	 *         field no rule converts (see chunk_io.h), a truncated / malformed stream,
 	 *         or bones that are not topologically sorted.
 	 */
 	[[nodiscard]] Skeleton

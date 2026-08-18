@@ -21,7 +21,8 @@ namespace assetlib
 	/**
 	 * Reconstructs a BMesh from a container byte stream.
 	 *
-	 * @throws std::runtime_error on bad magic, unsupported version, a truncated / malformed stream, or a
+	 * @throws std::runtime_error on bad magic, a version newer than this build, a file from before the schema chunk, a
+	 *         field no rule converts (see chunk_io.h), a truncated / malformed stream, or a
 	 *         mesh that carries joints and names no skeleton.
 	 */
 	[[nodiscard]] BMesh

@@ -415,11 +415,15 @@ Three different spaces are in play and they are easy to conflate. The contract, 
     it *by number* with a message that says to re-import — reading on would take KTX2 bytes as
     string lengths.
 
-**`.bmesh`, `.bskel` and `.banim` are the same chunked container**, in
+**`.bmesh`, `.bskel`, `.banim` and `.bvat` are the same chunked container**, in
 [libs/assetlib/src/chunk_io.h](libs/assetlib/src/chunk_io.h): a 32-byte header, 16-byte-aligned chunks,
-a chunk table at the end. Chunks are addressed by id and an **absent chunk is not an error**, which is
-what a minor version bump means — `.bmesh` v3.**1** added the skeleton path, and every v3.0 file on disk
-still reads, as the static mesh it is. A **major** bump is the one with no migration path.
+a chunk table at the end. Chunks are addressed by id and an **absent chunk is not an error**. Chunk 0
+is the file's **schema** — every struct its chunks hold, field by field — and a reader converts each
+chunk from the layout the file stores to the one the engine wants, by field name
+([libs/schema](libs/schema/include/schema/Schema.h)), so a struct that
+gained, lost, widened or renamed a field leaves every file on disk readable. The version in the
+header is a label; the one thing it decides is that a file **newer than the reader is refused**. A
+file from before the schema chunk is refused too, with a message that says so.
 
 ---
 

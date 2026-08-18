@@ -1,6 +1,6 @@
 #pragma once
 
-namespace assetlib::schema
+namespace schema
 {
 	/** What a field is: one value, one struct, or a run of either. */
 	enum class Type : uint8_t
