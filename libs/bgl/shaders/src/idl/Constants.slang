@@ -39,6 +39,10 @@ public static const uint cSortPadKey = 0xFFFFFFFF;
 // A root bone's `parent`, matching assetlib's own sentinel for one.
 public static const uint cInvalidBone = 0xFFFFFFFF;
 
+// Bones that may influence one vertex. joints0/weights0 are a vec4 pair, so the importer that writes
+// them and the shader that blends them both work in fours; assetlib names the same number.
+public static const uint cInfluencesPerVertex = 4;
+
 // float4s one bone's palette entry occupies. A skinning matrix's last row is always (0,0,0,1), so it
 // is stored as three rows rather than four -- the palette is the largest per-instance allocation in
 // the frame, and motion vectors double it.
