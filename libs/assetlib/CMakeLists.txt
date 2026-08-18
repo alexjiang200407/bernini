@@ -42,7 +42,7 @@ target_link_libraries(assetlib
 	PUBLIC
 		core
 		assetlib_structs
-		assetlib_schema
+		schema
 	PRIVATE
 		nlohmann_json::nlohmann_json
 		meshoptimizer::meshoptimizer
