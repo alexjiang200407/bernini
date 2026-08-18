@@ -414,9 +414,10 @@ Three different spaces are in play and they are easy to conflate. The contract, 
     takes (`drawsLoose`), and for the same reason — `Textures/` is regenerated per platform, so a
     fresh checkout has sources and no bakes. Only a route with neither throws.
   * **v1 was a three-blob format** (prefilter + irradiance + skybox as embedded KTX2), retired with
-    no migration path. It opened with the same magic and version-field layout, so the reader refuses
-    it *by number* with a message that says to re-import — reading on would take KTX2 bytes as
-    string lengths.
+    no migration path; v2 a flat stream of three paths. Both predate the schema chunk, and both are
+    refused as such — the reader never reads on into the blobs. Since v3 the three env containers
+    are the same chunked, self-describing container as the rest, one record and a string pool each,
+    with `EnvMapRoute` a layout the sky and the lighting share.
 
 **`.bmesh`, `.bskel`, `.banim` and `.bvat` are the same chunked container**, in
 [libs/assetlib/src/chunk_io.h](libs/assetlib/src/chunk_io.h): a 32-byte header, 16-byte-aligned chunks,

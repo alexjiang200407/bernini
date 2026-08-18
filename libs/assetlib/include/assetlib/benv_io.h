@@ -48,8 +48,9 @@ namespace assetlib
 	/**
 	 * Reconstructs a BEnv from a `.benv` byte stream.
 	 *
-	 * @throws std::runtime_error on bad magic, a truncated stream, or an unsupported version --
-	 *         including 1, the retired blob format that embedded the maps themselves.
+	 * @throws std::runtime_error on bad magic, a version newer than this build, a file from before the
+	 *         schema chunk -- 1, the retired blob format, and 2, the flat stream, both are -- a field
+	 *         no rule converts, or a truncated stream.
 	 */
 	[[nodiscard]] BEnv
 	deserializeEnv(std::span<const std::byte> bytes);

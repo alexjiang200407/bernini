@@ -209,6 +209,9 @@ namespace assetlib::chunk
 		std::string_view           what,
 		const schema::Schema&      current) : m_Bytes(bytes), m_Current(&current), m_What(what)
 	{
+		if (bytes.size() < sizeof(Header))
+			throw_runtime_error("{}: stream shorter than a header", what);
+
 		ByteReader reader(bytes);
 		m_Header = reader.ReadPod<Header>();
 
