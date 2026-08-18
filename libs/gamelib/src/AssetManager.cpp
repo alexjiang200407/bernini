@@ -486,13 +486,13 @@ namespace game
 
 		const auto animationsNorm = assetlib::normalizePath(animationsRelPath);
 
-		const assetlib::AnimationSet animations =
-			assetlib::loadAnimations(m_DataRoot / animationsNorm);
+		// Through the store, like every other read here: a project opens as a mount, so a rig that
+		// ships inside a .bpak is only reachable that way.
+		const assetlib::AnimationSet animations = m_Store.LoadAnimations(animationsNorm);
 
 		// The clip set names its own rig, so the pair cannot be mismatched by a caller -- only by a
 		// rig that changed after the clips were cooked, which is what the signature catches.
-		const assetlib::Skeleton skeleton =
-			assetlib::loadSkeleton(m_DataRoot / animations.skeleton);
+		const assetlib::Skeleton skeleton = m_Store.LoadSkeleton(animations.skeleton);
 
 		core::throw_runtime_error_if(
 			!assetlib::animationsMatchSkeleton(animations, skeleton),
@@ -501,7 +501,7 @@ namespace game
 			animationsNorm,
 			animations.skeleton);
 
-		const assetlib::BMesh mesh = assetlib::load(m_DataRoot / relPath);
+		const assetlib::BMesh mesh = m_Store.LoadMesh(relPath);
 
 		core::throw_runtime_error_if(
 			meshIndex >= mesh.meshes.size(),
