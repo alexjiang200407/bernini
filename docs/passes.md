@@ -167,11 +167,12 @@ pixel, the UV displacement from where its surface sat last frame to where it sit
 samples history at `uv - motion`. It is `RG16_FLOAT`, owned by the render target beside the depth
 buffer, and cleared to zero each frame — a pixel nothing drew reads as static.
 
-Every instance transform is fixed for its lifetime (there is no `SetTransform`), so the camera is
-the whole of the motion: the mesh shader reprojects one world position through `viewProj` and
-`prevViewProj` and hands the pixel stage both clip positions. A movable — or skinned — instance
-plugs in by substituting its own previous-frame position for the second of those, with no change to
-the pixel stage. `SceneView::AdvanceCamera` is what holds the previous frame's matrices; drawing one
+Every instance transform is fixed for its lifetime (there is no `SetTransform`), so for static
+geometry the camera is the whole of the motion: the mesh shader reprojects one world position through
+`viewProj` and `prevViewProj` and hands the pixel stage both clip positions. An animated instance
+plugs into that seam by substituting its own previous-frame position for the second of those, with no
+change to the pixel stage — VAT re-samples its textures at `prevTime`, and the skinned tier blends by
+the second half of its palette slice, which `Pose Skinned` filled at `prevTime` for exactly this. `SceneView::AdvanceCamera` is what holds the previous frame's matrices; drawing one
 view twice in a frame reports the same history to both draws rather than letting the second treat
 the first as history.
 
@@ -332,7 +333,9 @@ The main geometry pass: a mesh-shader forward render, in two phases. It holds `c
 raster/depth/blend state + mesh-shader source). Each row names its amplification/mesh module —
 `Forward_StaticMesh` for the static family, `Forward_VatMesh` for `kOpaque_VatMesh_PBR`, which fetches
 position and normal from the baked texture pair by (column, frame) instead of the vertex bytes
-(see [VAT](docs/vat.md)); the pixel shader varies per bucket (`Forward_Null`, `Forward_PBR`,
+(see [VAT](docs/vat.md)), and `Forward_SkinnedMesh` for `kOpaque_SkinnedMesh_PBR`, which blends the
+bind-pose vertex bytes by the bone palette `Pose Skinned` wrote this frame; the pixel shader varies
+per bucket (`Forward_Null`, `Forward_PBR`,
 `Forward_PBR_Loose`, `Forward_PBR_AlphaTest`, `Forward_PBR_Loose_AlphaTest`,
 `Forward_PBR_HashedAlpha`, `Forward_PBR_Loose_HashedAlpha`, `Forward_Transparent`,
 `Forward_Assert`). **`c_Psos` order must match `PsoType`** — a `static_assert` catches an empty row

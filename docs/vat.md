@@ -49,7 +49,8 @@ truth; when this doc disagrees, trust the header, then fix this doc.
   `Entry<VatState>` (null for static meshes — it occupies alignment padding, so `sizeof` is
   unchanged); `SubmeshInstance` keeps its 16 bytes, and its `pso` remains the one derived sort key
   (`SubmeshPso(geomType, material)`). The geometry family is `GeomType::kVatMesh`, one PSO bucket
-  (`kOpaque_VatMesh_PBR`) sharing the PBR pixel stage untouched.
+  (`kOpaque_VatMesh_PBR`) sharing the PBR pixel stage untouched — the same arrangement the skinned
+  tier uses for `kOpaque_SkinnedMesh_PBR`.
 * **Every VAT door demands opaque `kPBR`.** No null, cutout or loose variant of the VAT pipeline
   exists, so `AddVatMeshGeom`, `SetSubmeshMaterial` and `SetSubmeshMaterialOverride` all refuse
   anything else — which is what keeps the single bucket total.

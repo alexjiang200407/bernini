@@ -246,13 +246,22 @@ written three rows a bone. Dispatched twice per instance for `time` and `prevTim
   `SetResourceNamespace(cullNamespace)`) the pass was silently culled and never ran. It belongs
   outside that scope anyway: a palette is per instance, not per frustum.
 
-**3 — `bgl`: draw it.** `PsoType::kOpaque_SkinnedMesh_PBR` and its `c_Psos` row, and
+**3 — `bgl`: draw it.** *(landed)* `PsoType::kOpaque_SkinnedMesh_PBR` and its `c_Psos` row, and
 `Forward_SkinnedMesh.slang`: decode `joints0`/`weights0`, four palette matrices, linear blend on
-position, normal and tangent; the `prevTime` palette gives the previous clip position at the
-`common.slang:25` seam, so motion vectors fall out. `ForwardPass` binds the skinned buffers and
-maps the bucket in `util.cpp`.
-*Gate:* **acceptance 1 and 3** — bind-pose-equals-static, the golden image, and the
-animating-vs-held velocity assertion. GPU validation run (**acceptance 5**).
+position, normal and tangent; the `prevTime` half of the palette slice gives the previous clip
+position at the `common.slang:25` seam, so motion vectors fall out. `ForwardPass` binds the skinned
+buffers through a `skinnedData` cbuffer and `util.cpp` maps the bucket.
+*Gate:* **acceptance 1 and 3**, GPU validation run (**acceptance 5**).
+
+*One deliberate substitution:* **no golden image was committed.** Acceptance 3 asked for one, but a
+golden blesses whatever this code produced — it can only catch a later regression, never an error
+present when it was minted. The bind-pose case has something strictly better available: the *static*
+path renders the same `.bmesh` bytes and was correct before any of this existed, so the gate is a
+whole-frame `FrameDelta` between the two, which is an independent reference. The posed frame, which
+has no such reference, is pinned by luma probes at positions derived from the rig's own arithmetic
+(where a 90-degree swing about a known pivot must and must not put geometry), the way
+`VatPlayback_test` pins playback. A golden remains worth adding when there is a rig whose correct
+appearance a human has actually looked at.
 
 **4 — `gamelib`: acquisition.** `AcquireSkinnedMesh(relPath, animationsRelPath, meshIndex)` reading
 `.bmesh` + `.bskel` + `.banim` through the `AssetStore` and returning a geom plus a clip table, and

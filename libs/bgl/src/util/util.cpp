@@ -142,14 +142,12 @@ namespace bgl
 				gfatal("VAT geometry is only drawable with an opaque kPBR material");
 			return PsoType::kOpaque_VatMesh_PBR;
 
-		// No pipeline yet: the skinned forward kernel is not written, and ForwardPass builds one
-		// PSO per PsoType at device init, so a bucket declared ahead of its shader would fail every
-		// device bring-up. kInvalid is the value the counting sort already skips, so a skinned
-		// instance uploads its tables and its state and simply draws nothing until the kernel lands.
+		// Constrained at every door that binds a material to skinned geometry, exactly as VAT is
+		// above, so any other type reaching here is bgl's own bug.
 		case GeomType::kSkinnedMesh:
 			if (material != MaterialType::kPBR || cutout || blend || hashed)
 				gfatal("Skinned geometry is only drawable with an opaque kPBR material");
-			return PsoType::kInvalid;
+			return PsoType::kOpaque_SkinnedMesh_PBR;
 
 		case GeomType::kInvalid:
 		case GeomType::kCount:
