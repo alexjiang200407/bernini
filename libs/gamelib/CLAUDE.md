@@ -43,7 +43,9 @@ here, not in either of them.
 ### AssetManager: identity is the path, lifetime is a reference count
 
 **Identity.** A path maps to one texture upload and one material, however many times it is asked for.
-Geometry is keyed by `path#meshIndex`, because a `.bmesh` holds several meshes. Cubes and spheres have
+Geometry is keyed by `path#meshIndex`, because a `.bmesh` holds several meshes -- plus a tier suffix,
+because one mesh may be live as static, VAT (`#vat`) and skinned (`#skinned`) geometry at once, and
+those are three different uploads. Cubes and spheres have
 no file, so they are not shared — but they are refcounted like anything else. Loading options
 (`AssetManagerOptions`) are fixed at construction for the same reason: an option that varied per call
 would make the shared material depend on who asked first.

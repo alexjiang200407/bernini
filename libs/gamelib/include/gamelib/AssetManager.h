@@ -137,8 +137,8 @@ namespace game
 		bgl::GeomHandle
 		AcquireMesh(std::string_view relPath, uint32_t meshIndex = 0);
 
-		/** One clip of an acquired VAT mesh; its index in VatMesh::clips is what an instance names. */
-		struct VatClipInfo
+		/** One clip of an acquired mesh; its index in the acquire's clip table is what an instance names. */
+		struct ClipInfo
 		{
 			std::string name;
 			uint32_t    frameCount = 0;
@@ -150,8 +150,19 @@ namespace game
 		/** An acquired VAT mesh: the geom to instance, and the clips its instances can play. */
 		struct VatMesh
 		{
-			bgl::GeomHandle          geom;
-			std::vector<VatClipInfo> clips;
+			bgl::GeomHandle       geom;
+			std::vector<ClipInfo> clips;
+		};
+
+		/**
+		 * An acquired skinned mesh. Deliberately the same shape as VatMesh, down to the clip type: the
+		 * two tiers describe a clip identically, and a caller that shows a clip list should not have to
+		 * know which one it acquired.
+		 */
+		struct SkinnedMesh
+		{
+			bgl::GeomHandle       geom;
+			std::vector<ClipInfo> clips;
 		};
 
 		/**
@@ -179,6 +190,36 @@ namespace game
 		 */
 		VatMesh
 		AcquireVatMesh(
+			std::string_view relPath,
+			std::string_view animationsRelPath,
+			uint32_t         meshIndex = 0);
+
+		/**
+		 * Uploads mesh `meshIndex` of the `.bmesh` at `relPath` as skinned geometry -- posed each frame
+		 * from its rig rather than fetched from a bake -- or shares it from a previous call, acquiring
+		 * its materials like AcquireMesh does.
+		 *
+		 * Unlike AcquireVatMesh there is no derived product and so no freshness rule: `.bskel` and
+		 * `.banim` *are* the source and are read as they are. `animationsRelPath` names the clip set;
+		 * the skeleton is whichever one that set was cooked against (`AnimationSet::skeleton`), so a
+		 * caller never names it and the two cannot be paired wrongly by hand.
+		 *
+		 * This is also where a clip set cooked against a since-reordered rig is caught. `bgl` cannot
+		 * make that check -- computing a skeleton's signature needs assetlib, which it does not link --
+		 * so a mismatch reaching AddSkinnedMeshGeom would animate wrongly rather than fail.
+		 *
+		 * While the geom is live, every acquire must name the `.banim` it was first acquired with, for
+		 * the same reason AcquireVatMesh does: a shared acquire returns the cached clip table without
+		 * re-reading the container.
+		 *
+		 * @throws std::runtime_error if an input cannot be read, if `meshIndex` is out of range, if the
+		 *         clip set does not match the skeleton it names, or if the geom is live with clips from
+		 *         a different `.banim`; bgl::SceneError for anything AddSkinnedMeshGeom refuses -- a
+		 *         submesh without skin binding, or one whose material is not opaque kPBR. A failed
+		 *         acquire owns nothing.
+		 */
+		SkinnedMesh
+		AcquireSkinnedMesh(
 			std::string_view relPath,
 			std::string_view animationsRelPath,
 			uint32_t         meshIndex = 0);
@@ -276,6 +317,21 @@ namespace game
 			bgl::GeomHandle             geom,
 			const glm::mat4&            transform,
 			const bgl::VatInstanceDesc& desc);
+
+		/**
+		 * The skinned counterpart of CreateInstance: places a geom AcquireSkinnedMesh returned, spawned
+		 * on `desc`'s clip, phase and rate. The same references are taken and the same DestroyInstance
+		 * releases them.
+		 *
+		 * @throws bgl::SceneError if `view` is null, the geom is not this manager's or has expired, or
+		 *         `desc.clip` is out of the geom's clip table.
+		 */
+		bgl::MeshInstanceHandle
+		CreateSkinnedInstance(
+			bgl::SceneViewRef               view,
+			bgl::GeomHandle                 geom,
+			const glm::mat4&                transform,
+			const bgl::SkinnedInstanceDesc& desc);
 
 		/**
 		 * Destroys `instance` in `view` and drops its reference on its geometry. `view` is the one it was
@@ -412,8 +468,14 @@ namespace game
 			// container, and the normalized .banim path those clips came from -- what a shared
 			// acquire is checked against.
 			std::vector<bgl::TextureAssetHandle> vatTextures;
-			std::vector<VatClipInfo>             vatClips;
+			std::vector<ClipInfo>                vatClips;
 			std::string                          vatAnimations;
+
+			// Skinned only, and the same bargain as vatClips/vatAnimations above: the clip table a
+			// shared acquire hands back without re-reading the container, and the normalized .banim
+			// path it came from. No textures -- a skinned pose is computed, not fetched.
+			std::vector<ClipInfo> skinnedClips;
+			std::string           skinnedAnimations;
 
 			uint32_t refCount = 0;
 		};

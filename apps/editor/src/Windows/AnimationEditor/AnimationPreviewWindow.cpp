@@ -208,10 +208,10 @@ AnimationPreviewWindow::LoadMesh(
 	{
 		struct Loaded
 		{
-			glm::vec3                                    center;
-			float                                        radius;
-			std::vector<game::AssetManager::VatClipInfo> clips;
-			QString                                      vatRefusal;  // empty when VAT stood up
+			glm::vec3                                 center;
+			float                                     radius;
+			std::vector<game::AssetManager::ClipInfo> clips;
+			QString                                   vatRefusal;  // empty when VAT stood up
 		};
 
 		const auto plan = editor::PlanAnimationDraws(mesh);

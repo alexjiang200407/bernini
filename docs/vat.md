@@ -122,7 +122,7 @@ until placement playback gives it a clock of its own.
 | `BVat`, `VatClip`, `VatColumns` | [libs/assetlib_structs/include/assetlib_structs/BVat.h](libs/assetlib_structs/include/assetlib_structs/BVat.h) | The container: bounds, tables, palettes, embedded KTX2 payloads |
 | `VatGeomDesc`, `VatClipDesc`, `VatVertex` | [libs/bgl/include/bgl/IScene.h](libs/bgl/include/bgl/IScene.h) | What a decoded `.bvat` (or a test) hands the scene — bgl never reads the container itself |
 | `ISceneView::VatInstanceDesc` | [libs/bgl/include/bgl/ISceneView.h](libs/bgl/include/bgl/ISceneView.h) | The spawn record: clip, phase (fractional frames), rate (0 freezes) |
-| `AssetManager::VatMesh`, `VatClipInfo` | [libs/gamelib/include/gamelib/AssetManager.h](libs/gamelib/include/gamelib/AssetManager.h) | An acquire's result: the geom plus the clip table to pick from |
+| `AssetManager::VatMesh`, `ClipInfo` | [libs/gamelib/include/gamelib/AssetManager.h](libs/gamelib/include/gamelib/AssetManager.h) | An acquire's result: the geom plus the clip table to pick from. `ClipInfo` is shared with the skinned tier, which describes a clip identically. |
 | `idl::VatGeom`, `idl::VatState` | [libs/bgl/idl/src](libs/bgl/idl/src) | The GPU records (IDL-generated; regenerate with `just idl`) |
 | `idl::Clip` | [libs/bgl/idl/src/Clip.slang](libs/bgl/idl/src/Clip.slang) | One clip's frame span and rate, **shared with the skinned tier** — `firstFrame` is a texture row here. Both tiers allocate out of one `scene.clipBuffer`. |
 

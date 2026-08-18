@@ -2,20 +2,24 @@
 
 #include <gamelib/vat_freshness.h>
 
+#include <assetlib/banim_io.h>
 #include <assetlib/benv_io.h>
 #include <assetlib/benvl_io.h>
 #include <assetlib/bmaterial_io.h>
 #include <assetlib/bmesh_io.h>
+#include <assetlib/bskel_io.h>
 #include <assetlib/bsky_io.h>
 #include <assetlib/bvat_io.h>
 #include <assetlib/env_bake.h>
 #include <assetlib/image_io.h>
 #include <assetlib/vat_bake.h>
+#include <assetlib_structs/Animation.h>
 #include <assetlib_structs/BEnv.h>
 #include <assetlib_structs/BMaterial.h>
 #include <assetlib_structs/BMesh.h>
 #include <assetlib_structs/BVat.h>
 #include <assetlib_structs/ImageData.h>
+#include <assetlib_structs/Skeleton.h>
 #include <core/err/util.h>
 
 namespace game
@@ -406,7 +410,7 @@ namespace game
 			desc.boundsMin = vat.boundsMin;
 			desc.boundsMax = vat.boundsMax;
 
-			auto clipInfo = std::vector<VatClipInfo>();
+			auto clipInfo = std::vector<ClipInfo>();
 			clipInfo.reserve(vat.clips.size());
 			desc.clips.reserve(vat.clips.size());
 			for (const assetlib::VatClip& clip : vat.clips)
@@ -446,6 +450,113 @@ namespace game
 		{
 			for (const bgl::MaterialHandle material : acquiredMaterials) ReleaseMaterial(material);
 			for (const bgl::TextureAssetHandle texture : acquiredTextures) ReleaseTexture(texture);
+			throw;
+		}
+	}
+
+	AssetManager::SkinnedMesh
+	AssetManager::AcquireSkinnedMesh(
+		std::string_view relPath,
+		std::string_view animationsRelPath,
+		uint32_t         meshIndex)
+	{
+		// Its own keyspace beside AcquireMesh's and AcquireVatMesh's: one mesh may be live as static,
+		// as VAT and as skinned geometry at once, and all three are different uploads.
+		const auto key = std::format("{}#{}#skinned", relPath, meshIndex);
+
+		if (const auto it = m_GeomByPath.find(key); it != m_GeomByPath.end())
+		{
+			GeomRecord& record = m_Geoms.at(it->second);
+			core::throw_runtime_error_if(
+				record.skinnedAnimations != assetlib::normalizePath(animationsRelPath),
+				"AssetManager: '{}' is live with clips from '{}'; release it to zero before "
+				"acquiring with '{}'",
+				key,
+				record.skinnedAnimations,
+				animationsRelPath);
+			++record.refCount;
+			return SkinnedMesh{ record.handle, record.skinnedClips };
+		}
+
+		const auto animationsNorm = assetlib::normalizePath(animationsRelPath);
+
+		const assetlib::AnimationSet animations =
+			assetlib::loadAnimations(m_DataRoot / animationsNorm);
+
+		// The clip set names its own rig, so the pair cannot be mismatched by a caller -- only by a
+		// rig that changed after the clips were cooked, which is what the signature catches.
+		const assetlib::Skeleton skeleton =
+			assetlib::loadSkeleton(m_DataRoot / animations.skeleton);
+
+		core::throw_runtime_error_if(
+			!assetlib::animationsMatchSkeleton(animations, skeleton),
+			"AssetManager: '{}' was cooked against a different version of '{}'; a bone has been "
+			"inserted, removed or reordered since, so its joint indices name different bones now",
+			animationsNorm,
+			animations.skeleton);
+
+		const assetlib::BMesh mesh = assetlib::load(m_DataRoot / relPath);
+
+		core::throw_runtime_error_if(
+			meshIndex >= mesh.meshes.size(),
+			"AssetManager: mesh index {} out of range in '{}'",
+			meshIndex,
+			relPath);
+
+		const assetlib::Mesh& entry = mesh.meshes[meshIndex];
+
+		// Given back if any later step throws: a failed acquire owns nothing.
+		auto acquiredMaterials = std::vector<bgl::MaterialHandle>();
+		try
+		{
+			auto materials        = std::vector<bgl::MaterialHandle>(mesh.materials.size());
+			auto submeshMaterials = std::vector<bgl::MaterialHandle>(entry.submeshCount);
+
+			for (uint32_t i = 0; i < entry.submeshCount; ++i)
+			{
+				const uint32_t index = mesh.submeshes[entry.firstSubmesh + i].material;
+				if (index >= mesh.materials.size())
+					continue;
+
+				const bgl::MaterialHandle handle = AcquireMaterial(mesh.materials[index]);
+				acquiredMaterials.push_back(handle);
+
+				materials[index]    = handle;
+				submeshMaterials[i] = handle;
+			}
+
+			auto clipInfo = std::vector<ClipInfo>();
+			clipInfo.reserve(animations.clips.size());
+			for (const assetlib::AnimationClip& clip : animations.clips)
+			{
+				clipInfo.push_back(
+					{ std::string(animations.stringPool.at(clip.nameOffset)),
+				      clip.frameCount,
+				      clip.sampleRate,
+				      clip.duration,
+				      clip.loop != 0 });
+			}
+
+			auto record = GeomRecord();
+			record.handle =
+				m_Scene->AddSkinnedMeshGeom(mesh, meshIndex, materials, skeleton, animations);
+			record.key               = key;
+			record.submeshMaterials  = std::move(submeshMaterials);
+			record.skinnedClips      = clipInfo;
+			record.skinnedAnimations = animationsNorm;
+			record.refCount          = 1;
+
+			const uint32_t slot = record.handle.handle.index;
+			m_GeomByPath.emplace(key, slot);
+
+			const bgl::GeomHandle handle = record.handle;
+			m_Geoms.emplace(slot, std::move(record));
+
+			return SkinnedMesh{ handle, std::move(clipInfo) };
+		}
+		catch (...)
+		{
+			for (const bgl::MaterialHandle material : acquiredMaterials) ReleaseMaterial(material);
 			throw;
 		}
 	}
@@ -553,6 +664,32 @@ namespace game
 		}
 
 		const bgl::MeshInstanceHandle instance = view->CreateVatMeshInstance(geom, transform, desc);
+
+		RegisterInstance(std::move(view), geom.handle.index, instance);
+
+		return instance;
+	}
+
+	bgl::MeshInstanceHandle
+	AssetManager::CreateSkinnedInstance(
+		bgl::SceneViewRef               view,
+		bgl::GeomHandle                 geom,
+		const glm::mat4&                transform,
+		const bgl::SkinnedInstanceDesc& desc)
+	{
+		if (!view)
+			throw bgl::SceneError("CreateSkinnedInstance requires a valid SceneView");
+
+		const auto it = m_Geoms.find(geom.handle.index);
+		if (it == m_Geoms.end() || !m_Scene->IsGeomAlive(geom))
+		{
+			throw bgl::SceneError(
+				"GeomHandle passed to CreateSkinnedInstance is not owned by this AssetManager, or "
+				"has expired");
+		}
+
+		const bgl::MeshInstanceHandle instance =
+			view->CreateSkinnedMeshInstance(geom, transform, desc);
 
 		RegisterInstance(std::move(view), geom.handle.index, instance);
 
