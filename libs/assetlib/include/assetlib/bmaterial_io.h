@@ -12,7 +12,8 @@ namespace assetlib
 	/**
 	 * Reconstructs a BMaterial from a `.bmaterial` byte stream.
 	 *
-	 * @throws std::runtime_error on bad magic, unsupported version, or a truncated stream.
+	 * @throws std::runtime_error on bad magic, a version newer than this build, a file from before the
+	 *         schema chunk, a field no rule converts, or a truncated stream.
 	 */
 	[[nodiscard]] BMaterial
 	deserializeMaterial(std::span<const std::byte> bytes);

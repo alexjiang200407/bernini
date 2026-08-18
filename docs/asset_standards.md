@@ -297,7 +297,9 @@ Three different spaces are in play and they are easy to conflate. The contract, 
   [libs/assetlib_structs/include/assetlib_structs/BVat.h](libs/assetlib_structs/include/assetlib_structs/BVat.h);
   I/O: [libs/assetlib/include/assetlib/bvat_io.h](libs/assetlib/include/assetlib/bvat_io.h);
   bake: [libs/assetlib/include/assetlib/vat_bake.h](libs/assetlib/include/assetlib/vat_bake.h).
-* **`.bmaterial`** (v8) — **a shading-model tag plus that model's parameters**. Struct:
+* **`.bmaterial`** (v11) — **a shading-model tag plus that model's parameters**, on the same chunked
+  container as the mesh (below): a material record, the model's payload as its own chunk, a string
+  pool for every path. Struct:
   [libs/assetlib_structs/include/assetlib_structs/BMaterial.h](libs/assetlib_structs/include/assetlib_structs/BMaterial.h);
   I/O: [libs/assetlib/include/assetlib/bmaterial_io.h](libs/assetlib/include/assetlib/bmaterial_io.h);
   bake: [libs/assetlib/include/assetlib/material_bake.h](libs/assetlib/include/assetlib/material_bake.h).
@@ -349,13 +351,14 @@ Three different spaces are in play and they are easy to conflate. The contract, 
     untouched rather than half-stripped. Run it with `assetlib_cli strip` (below); it is irreversible,
     so it asks before rewriting a file in place.
 
-  **There is exactly one readable version, and no migration path.** `deserializeMaterial` refuses any
-  other major rather than guessing at a layout it does not know — an older file is converted, not
-  tolerated, so there is one shape in the reader and no branch that can rot. A minor version is additive
-  within a major, and a reader honours it field by field.
+  **There is one shape in the reader, and older files read into it.** `deserializeMaterial` converts a
+  file's payload from the layout its schema chunk records to the current one, by field name — a
+  material baked before `transmissionFactor` existed reads with 0, one whose alpha mode was a byte
+  reads it widened — so the reader has one shape and no branch that can rot, and the format number
+  decides only that a newer file is refused.
 
-  **Adding a shading model** means: a `ShadingModel` enumerator, a payload struct, a `write*`/`read*`
-  pair in `bmaterial_io.cpp`, a case in `texture_prune.cpp`'s mark phase (**an unmarked map is swept as
+  **Adding a shading model** means: a `ShadingModel` enumerator, a payload struct, a record layout, a
+  chunk and a `pack*`/`unpack*` pair in `bmaterial_io.cpp`, a case in `texture_prune.cpp`'s mark phase (**an unmarked map is swept as
   garbage**), a case in `asset_describe.cpp`, and a renderer path in `gamelib`'s `AssetManager` — which
   today rejects any model but `kPbr` rather than rendering it wrong. Each of those is a `switch` on
   `shadingModel` with no `default`, so the compiler names every one of them.
