@@ -1,7 +1,9 @@
 #include <assetlib/banim_io.h>
+#include <assetlib/bmaterial_io.h>
 #include <assetlib/bmesh_io.h>
 #include <assetlib/bskel_io.h>
 #include <assetlib_structs/Animation.h>
+#include <assetlib_structs/BMaterial.h>
 #include <assetlib_structs/BMesh.h>
 #include <assetlib_structs/Skeleton.h>
 
@@ -41,4 +43,14 @@ TEST_CASE(
 	CHECK(
 		loadAnimationSkeletonPath(std::filesystem::path("assets/Frozen/rig_v2.banim")) ==
 		"Skeletons/rig.bskel");
+}
+
+TEST_CASE("the first self-describing .bmaterial still loads", "[frozen][bmaterial]")
+{
+	const auto material = loadMaterial(std::filesystem::path("assets/Frozen/apple_v11.bmaterial"));
+	CHECK(material.shadingModel == ShadingModel::kPbr);
+	CHECK_FALSE(material.name.empty());
+	CHECK_FALSE(material.pbr.baseColorTexture.empty());
+	CHECK(material.pbr.alphaMode == AlphaMode::kOpaque);
+	CHECK(material.pbr.baseColorFactor == glm::vec4(1.0f));
 }

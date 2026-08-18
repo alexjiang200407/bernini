@@ -9,7 +9,7 @@ namespace core::io
 namespace assetlib
 {
 	/**
-	 * How every container this library writes stores a string: a uint32 length, then the raw bytes
+	 * How the flat containers (`.bsky`, `.benvl`, `.benv`) store a string: a uint32 length, then the raw bytes
 	 * with no terminator.
 	 *
 	 * Shared rather than repeated per container. The encoding is not interesting, but three private
