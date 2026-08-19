@@ -83,15 +83,18 @@ the transport, the clip list and the scrubber are the same code either way — w
   bake deliberately. See [vat.md](docs/vat.md); note this is the *editor's* rule — `AcquireVatMesh`
   still bakes on demand, which is what loading a level wants.
 
-* **The tier decides three things, and they live together.** `PlanAnimationLoad` returns them as one
+* **The tier decides two things, and they live together.** `PlanAnimationLoad` returns them as one
   `AnimationLoadSteps` so they cannot drift apart: whether the load needs a `.bvat` already baked
-  (the skinned tier does not — a bake is seconds of CPU skinning for a texture pair it never samples,
-  and it would make the preview need a *bakeable* material), whether the posed box is read off that
-  bake or measured, and
-  whether a refusal is one a bake could answer. Three fields rather than three tests of the source
-  spread through a long function, and the box is the one that punishes drift hardest: it culls the
-  geom as well as framing the camera, so taking it from the wrong place hides the mesh rather than
+  (the skinned tier does not — a bake is seconds of CPU skinning for a texture pair it never samples),
+  and whether the posed box is read off that bake or measured. Two fields rather than two tests of the
+  source spread through a long function, and the box is the one that punishes drift hardest: it culls
+  the geom as well as framing the camera, so taking it from the wrong place hides the mesh rather than
   mis-aiming the view. This is the seam `editor_tests` drives; see below.
+
+  **Whether to offer a bake is not one of them.** Both tiers refuse a material that draws unbaked, so
+  the offer follows from `editor::BakeableMaterials` finding one rather than from the source — it was
+  once tier-gated, which left the skinned tier reporting exactly the refusal a bake answers without
+  offering it.
 
 * **The camera opens at a fixed yaw and elevation.** Nothing in the path knows which way a rig faces:
   authoring conventions disagree on the forward axis, so any fixed yaw shows some rigs a profile —

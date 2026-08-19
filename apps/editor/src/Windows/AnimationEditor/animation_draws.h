@@ -1,5 +1,7 @@
 #pragma once
 
+#include <assetlib/AssetStore.h>
+
 #include "Mesh/BMeshUtil.h"
 #include "Windows/AnimationEditor/PlaybackTransport.h"
 #include "Windows/AnimationEditor/animation_source.h"
@@ -38,16 +40,27 @@ namespace editor
 		// tier reads the rig, so a bake would be that cost for a texture pair nothing samples.
 		bool needsFreshBake = false;
 
-		// Only a VAT refusal is a bake's to answer. A skinned refusal is about the rig or the
-		// material, and offering to bake would send the user somewhere that cannot help.
-		bool offerBakeOnRefusal = false;
-
 		// Where the posed box comes from: the bake closed over one for the whole file, so VAT reads
 		// it, while the skinned tier measures one per mesh entry. That box frames the camera *and*
 		// culls the geom, so getting it from the wrong place hides the mesh rather than mis-aiming
 		// the camera.
 		bool framedByBake = false;
 	};
+
+	/**
+	 * The mesh's materials that a bake would change, by the same verdict gamelib routes on --
+	 * `DrawsLoose` covers never-baked *and* stale-by-stamp, since an edited source drifts from the
+	 * triplet baked off it and only a re-bake closes the gap.
+	 *
+	 * Empty means a bake cannot answer this refusal: a material with no routes has nothing to bake,
+	 * and one already drawing its baked triplet was refused for another reason. That is what decides
+	 * whether the panel offers to bake, so it is a rule rather than a detail of the dialog.
+	 *
+	 * A material that will not load is skipped, not thrown on: the refusal is already being reported
+	 * and a second failure on top of it helps nobody.
+	 */
+	[[nodiscard]] std::vector<std::string>
+	BakeableMaterials(const assetlib::AssetStore& store, std::span<const std::string> materials);
 
 	[[nodiscard]] AnimationLoadSteps
 	PlanAnimationLoad(AnimationSource source, bool hasAnimations);

@@ -2,7 +2,11 @@
 #include "Windows/AnimationEditor/TimelineScrubber.h"
 #include "Windows/AnimationEditor/animation_draws.h"
 
+#include <assetlib/bmaterial_io.h>
+#include <assetlib_structs/BMaterial.h>
 #include <assetlib_structs/BMesh.h>
+
+#include <QTemporaryDir>
 
 #include <catch2/catch_approx.hpp>
 
@@ -109,16 +113,56 @@ TEST_CASE("The scrubber's press-to-tick mapping spans the groove exactly", "[ani
 	CHECK(TimelineScrubber::ValueForX(5, 10, 1000) == 0);
 }
 
+// Whether the panel offers to bake is this, not the tier: a refusal it can answer gets the button
+// and one it cannot gets a plain message. The offer used to be gated on the VAT tier, which meant a
+// skinned mesh refused *for exactly this reason* was told to fix it and not offered the fix.
+TEST_CASE("Only a material a bake would change is offered for baking", "[animation][source]")
+{
+	const QTemporaryDir dir;
+	REQUIRE(dir.isValid());
+
+	const auto root = std::filesystem::path(dir.path().toStdWString());
+	std::filesystem::create_directories(root / "Materials");
+
+	const auto write = [&root](const char* name, const assetlib::BMaterial& material) {
+		assetlib::saveMaterial(material, root / "Materials" / name);
+		return std::string("Materials/") + name;
+	};
+
+	// Routed at a texture that exists, never baked -- what a fresh import leaves behind, and the
+	// state that refuses a skinned preview.
+	std::ofstream(root / "Materials" / "albedo.ktx2", std::ios::binary).put('\0');
+
+	auto unbaked                  = assetlib::BMaterial();
+	unbaked.pbr.routes[0].texture = "Materials/albedo.ktx2";
+	const std::string unbakedPath = write("unbaked.bmaterial", unbaked);
+
+	// Nothing routed: a bake has nothing to composite, so offering one would be a dead end.
+	const std::string emptyPath = write("empty.bmaterial", assetlib::BMaterial());
+
+	const auto                     store = assetlib::AssetStore(root);
+	const std::vector<std::string> bakeable =
+		editor::BakeableMaterials(store, std::vector<std::string>{ unbakedPath, emptyPath, "" });
+
+	REQUIRE(bakeable.size() == 1);
+	CHECK(bakeable[0] == unbakedPath);
+
+	// A material that will not load is skipped rather than thrown on: a refusal is already being
+	// reported, and a second failure on top of it helps nobody.
+	CHECK(
+		editor::BakeableMaterials(store, std::vector<std::string>{ "Materials/gone.bmaterial" })
+			.empty());
+}
+
 TEST_CASE("A load's tier-dependent steps all follow from the source", "[animation][source]")
 {
 	using editor::AnimationSource;
 	using editor::PlanAnimationLoad;
 
-	SECTION("the VAT tier needs a bake, frames by its box, and a bake can answer its refusal")
+	SECTION("the VAT tier needs a bake and frames by its box")
 	{
 		const auto steps = PlanAnimationLoad(AnimationSource::kVat, /*hasAnimations*/ true);
 		CHECK(steps.needsFreshBake);
-		CHECK(steps.offerBakeOnRefusal);
 		CHECK(steps.framedByBake);
 	}
 
@@ -129,7 +173,6 @@ TEST_CASE("A load's tier-dependent steps all follow from the source", "[animatio
 		// It is a requirement, not an action -- no load bakes; the panel offers and the user takes it.
 		const auto steps = PlanAnimationLoad(AnimationSource::kSkinned, /*hasAnimations*/ true);
 		CHECK_FALSE(steps.needsFreshBake);
-		CHECK_FALSE(steps.offerBakeOnRefusal);
 
 		// It measures its own box instead. That box culls the geom as well as framing the camera,
 		// so reading it off a bake the skinned tier never made would hide the mesh, not just
@@ -139,13 +182,12 @@ TEST_CASE("A load's tier-dependent steps all follow from the source", "[animatio
 
 	SECTION("with no clip file, neither tier does anything")
 	{
-		// Nothing to play: the mesh stands in its bind pose as static geometry, so a bake and a bake
-		// offer are both meaningless -- including on the VAT tier, which would otherwise need one.
+		// Nothing to play: the mesh stands in its bind pose as static geometry, so a bake is
+		// meaningless -- including on the VAT tier, which would otherwise need one.
 		for (const AnimationSource source : { AnimationSource::kSkinned, AnimationSource::kVat })
 		{
 			const auto steps = PlanAnimationLoad(source, /*hasAnimations*/ false);
 			CHECK_FALSE(steps.needsFreshBake);
-			CHECK_FALSE(steps.offerBakeOnRefusal);
 			CHECK_FALSE(steps.framedByBake);
 		}
 	}
