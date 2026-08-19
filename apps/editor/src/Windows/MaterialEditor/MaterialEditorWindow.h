@@ -50,6 +50,7 @@ public:
 	void
 	SetDataRoot(const QString& dataRoot);
 
+	/** Back to the default sphere and a blank graph, dropping whatever was open. */
 	void
 	Reset();
 

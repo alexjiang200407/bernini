@@ -617,11 +617,11 @@ MaterialEditorWindow::SetDataRoot(const QString& dataRoot)
 void
 MaterialEditorWindow::Reset()
 {
-	// ShowDefaultSphere clears the preview's geometry, mesh path and material paths, then emits
+	// The preview's Reset clears its geometry, mesh path and material paths, then emits
 	// GeometryChanged -- which is what rebuilds the graphs, empty, one per submesh.
 	if (m_Preview)
 	{
-		m_Preview->ShowDefaultSphere();
+		m_Preview->Reset();
 		return;
 	}
 

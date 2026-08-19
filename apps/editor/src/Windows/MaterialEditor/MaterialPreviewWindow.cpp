@@ -66,21 +66,17 @@ MaterialPreviewWindow::MaterialPreviewWindow(
 	// Wheel events only reach a widget that can take focus, and the camera needs them to dolly.
 	setFocusPolicy(Qt::StrongFocus);
 
-	m_ExposureOverride    = env.exposureOverride;
-	m_SkyMipLevelOverride = env.skyMipLevelOverride;
-	m_ConfiguredRoot      = env.dataRoot;
+	m_Environment.configured = std::move(env);
 
 	m_DefaultMaterial = GetRenderer()->Invoke([&] {
-		bgl::IScene*     scene = GetPreviewScene();
-		bgl::ISceneView* view  = GetPreviewView();
+		bgl::IScene* scene = GetPreviewScene();
 
-		m_Environment = editor::ApplyEnvironment(
+		editor::BindEnvironment(
 			scene,
-			view,
-			env.environmentMap,
-			env.dataRoot,
-			env.exposureOverride,
-			env.skyMipLevelOverride,
+			GetPreviewView(),
+			m_Environment,
+			m_Environment.configured.environmentMap,
+			m_Environment.configured.dataRoot,
 			"MaterialPreview");
 
 		return scene->CreatePbrMaterial(
@@ -182,6 +178,13 @@ MaterialPreviewWindow::ShowDefaultSphere()
 	FocusOn(glm::vec3(0.0f), 1.0f);
 
 	Q_EMIT GeometryChanged();
+}
+
+void
+MaterialPreviewWindow::Reset()
+{
+	ShowDefaultSphere();
+	RestoreConfiguredEnvironment();
 }
 
 void
@@ -436,23 +439,37 @@ MaterialPreviewWindow::dropEvent(QDropEvent* event)
 void
 MaterialPreviewWindow::SetEnvironment(const std::string& benvPath)
 {
+	// A dropped `.benv` belongs to the open project, so its own data root is the one that resolves
+	// it. The configured root only stands in before a project is opened.
+	const std::filesystem::path& dataRoot =
+		m_DataRoot.empty() ? m_Environment.configured.dataRoot : m_DataRoot;
+
 	GetRenderer()->Invoke([&] {
-		bgl::IScene* scene = GetPreviewScene();
-
-		// A dropped `.benv` belongs to the open project, so its own data root is the one that
-		// resolves it. The configured root only stands in before a project is opened.
-		const editor::AppliedEnvironment applied = editor::ApplyEnvironment(
-			scene,
+		editor::BindEnvironment(
+			GetPreviewScene(),
 			GetPreviewView(),
+			m_Environment,
 			benvPath,
-			m_DataRoot.empty() ? m_ConfiguredRoot : m_DataRoot,
-			m_ExposureOverride,
-			m_SkyMipLevelOverride,
+			dataRoot,
 			"MaterialPreview");
+	});
+}
 
-		// After the new one is bound, never before: releasing first would leave the view naming a
-		// slot that had been handed back.
-		m_Environment = editor::ReplaceEnvironment(scene, m_Environment, applied);
+void
+MaterialPreviewWindow::RestoreConfiguredEnvironment()
+{
+	const std::optional<std::string> restore = editor::GetEnvironmentToRestore(m_Environment);
+	if (!restore)
+		return;
+
+	GetRenderer()->Invoke([&] {
+		editor::BindEnvironment(
+			GetPreviewScene(),
+			GetPreviewView(),
+			m_Environment,
+			*restore,
+			m_Environment.configured.dataRoot,
+			"MaterialPreview");
 	});
 }
 
