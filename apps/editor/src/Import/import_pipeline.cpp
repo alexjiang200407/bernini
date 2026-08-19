@@ -180,7 +180,7 @@ namespace editor
 				// so it belongs beside the parse rather than on the thread drawing the loading screen.
 				if (options.mesh)
 				{
-					progress.Report(0, 0, QString("Deriving tangents..."));
+					progress.Report(0, 0, QString("Building the mesh..."));
 					mesh     = assetlib::toBMesh(*imported);
 					tangents = assetlib::generateTangents(*mesh);
 				}
