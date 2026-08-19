@@ -119,9 +119,10 @@ namespace bgl
 	/**
 	 * A rig's baked clip set, as textures already uploaded through AddTextureAsset: positions
 	 * `R16G16B16A16_UNORM` unorm-packed in [boundsMin, boundsMax] -- one box over every frame of
-	 * every clip -- and normals `R8G8B8A8_UNORM` as unit object-space `xyz * 0.5 + 0.5`. Columns
-	 * are geometry-local vertex indices; frame `f` of clip `c` is row `clips[c].firstRow + f`, which
-	 * is the row index the shared idl::Clip carries as `firstFrame`.
+	 * every clip -- and normals `R8G8B8A8_UNORM`, `rgb` the unit object-space normal as
+	 * `xyz * 0.5 + 0.5` and `a` the tangent's twist about it, `radians / 2pi + 0.5` (see
+	 * docs/vat.md). Columns are geometry-local vertex indices; frame `f` of clip `c` is row
+	 * `clips[c].firstRow + f`, which is the row index the shared idl::Clip carries as `firstFrame`.
 	 *
 	 * bgl never reads a `.bvat` (it stays codec-free); whoever decodes one -- gamelib, or a test
 	 * synthesizing textures from scratch -- fills this in.

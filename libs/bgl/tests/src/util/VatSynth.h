@@ -22,7 +22,7 @@ namespace bgl::test::vat_synth
 		glm::vec3                  boundsMin,
 		glm::vec3                  boundsMax);
 
-	/** A normal texture of +Z everywhere, for geometry that only translates in its plane. */
+	/** A normal texture of +Z and no twist everywhere, for geometry that only translates in its plane. */
 	[[nodiscard]] assetlib::ImageData
 	MakeFlatNormalTexture(uint32_t columns, uint32_t rows);
 

@@ -25,7 +25,8 @@ truth; when this doc disagrees, trust the header, then fix this doc.
   of one rig's clip set, never shared, so it is embedded in the container as KTX2 payload chunks
   rather than referenced as files — nothing to hash-name, nothing for prune to learn, deleting the
   asset is deleting the file. Positions are `R16G16B16A16_UNORM`, unorm-packed in **one AABB closed over
-  every frame of every clip**; normals `R8G8B8A8_UNORM` as `xyz * 0.5 + 0.5`.
+  every frame of every clip**; normals `R8G8B8A8_UNORM`, `rgb` as `xyz * 0.5 + 0.5` and `a` the
+  tangent's twist (below).
 * **A `.bvat` is a build product, not an asset.** Wholly derived from the three inputs it stamps
   (`.bmesh`, `.bskel`, `.banim`), git-ignored, written beside its mesh and named for the pair —
   `<mesh>@<clips>-<hash>.bvat`, `assetlib::vatPathFor` — so each clip set bakes once and switching
@@ -70,10 +71,22 @@ truth; when this doc disagrees, trust the header, then fix this doc.
 * **Culling bounds come from the bake's box, not the bind pose.** Every submesh's sphere is the
   all-clips AABB's — conservative for any frame of any clip; bind-pose bounds pop the moment a
   limb moves.
-* **No baked tangent.** The import does derive bind-pose tangents into the mesh's vertex bytes,
-  but a bind-pose basis is wrong the moment a limb rotates — so the VAT path deliberately ignores
-  them, emits the degenerate tangent, and the pixel guard falls back to the geometric normal.
-  Normal maps are inert on this tier by design.
+* **The tangent is rebuilt, not baked: bind tangent, shortest arc, baked twist.** A bind-pose
+  tangent is wrong the moment a limb rotates, and a third per-frame texture would cost a third of
+  the tier's memory for one vector. So the vertex stage carries the mesh's bind tangent onto the
+  posed normal by the shortest arc between the two normals — exact for every pose but a turn
+  *about* the normal — and the bake measures that residual turn against the CPU-skinned tangent
+  and writes it into the normal texture's alpha channel, which was padding: `twist / 2π + 0.5`,
+  one unorm8 step ≈ 1.4°. The two rotations live in
+  [libs/assetlib/src/vat_tangent.h](libs/assetlib/src/vat_tangent.h) and are repeated verbatim in
+  [Forward_VatMesh.slang](libs/bgl/shaders/src/Forward_VatMesh.slang); antiparallel normals, which
+  have no shortest arc, leave the tangent alone on both sides so the twist still closes the gap,
+  and the bake measures against the normal *as the texel stores it*, so the two sides see the same
+  input. Between frames the normal blends linearly like the position and the twist blends the
+  short way round, so a pair of frames straddling ±π does not sweep the frame through zero. A
+  mesh with no tangent (or no normal) bakes no twist and draws the degenerate tangent the pixel
+  guard turns into the geometric normal — the normal map is inert for exactly the meshes it would
+  be inert for on the static path. The handedness `w` never moves, so it rides the vertex bytes.
 * **The skeletal side-channel ships in the container.** Each real frame's skinning palette is
   baked (`BVat::palettes`, addressed per clip) for future attachments/GPU consumers; nothing on
   the GPU reads it yet.
