@@ -54,7 +54,7 @@ doc disagrees, trust the header, then fix this doc.
 |---|---|---|
 | `schema::Schema`, `Layout`, `Field`, `LayoutRef` | [libs/schema/include/schema/Schema.h](libs/schema/include/schema/Schema.h) | The layouts one container stores; `serialize`/`deserialize` are the byte form a file carries |
 | `schema::LayoutBuilder<T>` | [libs/schema/include/schema/LayoutBuilder.h](libs/schema/include/schema/LayoutBuilder.h) | One POD's layout from member pointers; `AddField(name, member[, default])`, `AddRenamedField(name, formerly, member[, default])` |
-| `schema::SchemaBuilderBase<Derived>`, `SchemaBuilder` | [libs/schema/include/schema/SchemaBuilder.h](libs/schema/include/schema/SchemaBuilder.h) | A schema as one chain of `AddLayout` calls; derive to add named registrations |
+| `schema::SchemaBuilder` | [libs/schema/include/schema/SchemaBuilder.h](libs/schema/include/schema/SchemaBuilder.h) | A schema as one chain of `AddLayout` calls; derive to add named registrations, which come first in a chain |
 | `schema::convert`, `convertValues`, `widens`, `sameLayout`, `fieldShape` | [libs/schema/include/schema/convert.h](libs/schema/include/schema/convert.h) | Stored → wanted, by name; the lossless-widening rule; the message helper |
 | `schema::ElementView` | [libs/schema/include/schema/ElementView.h](libs/schema/include/schema/ElementView.h) | Stored bytes read by field name — what a hook looks through |
 | `assetlib::AssetSchemaBuilder` | [libs/assetlib/src/AssetSchemaBuilder.h](libs/assetlib/src/AssetSchemaBuilder.h) | The registrations of the `assetlib_structs` PODs (`AddTransform`, `AddNode`, `AddSubmesh`, …) |
@@ -123,7 +123,8 @@ flowchart TD
 ## Usage Sketch
 
 ```cpp
-// A container's schema, once, beside its io. Register a struct's parts before the struct.
+// A container's schema, once, beside its io. Register a struct's parts before the struct; the
+// shared registrations first, a container's private records last.
 const schema::Schema& meshSchema()
 {
 	static const schema::Schema c_Schema = AssetSchemaBuilder()

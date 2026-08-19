@@ -13,17 +13,18 @@ namespace assetlib
 	AssetSchemaBuilder&
 	AssetSchemaBuilder::AddTransform()
 	{
-		return AddLayout<Transform>("Transform", [](auto& layout) {
+		AddLayout<Transform>("Transform", [](auto& layout) {
 			layout.AddField("translation", &Transform::translation)
 				.AddField("rotation", &Transform::rotation)
 				.AddField("scale", &Transform::scale);
 		});
+		return *this;
 	}
 
 	AssetSchemaBuilder&
 	AssetSchemaBuilder::AddNode()
 	{
-		return AddLayout<Node>("Node", [](auto& layout) {
+		AddLayout<Node>("Node", [](auto& layout) {
 			layout.AddField("localTransform", &Node::localTransform)
 				.AddField("parent", &Node::parent, c_InvalidIndex)
 				.AddField("firstChild", &Node::firstChild, c_InvalidIndex)
@@ -31,16 +32,18 @@ namespace assetlib
 				.AddField("mesh", &Node::mesh, c_InvalidIndex)
 				.AddField("nameOffset", &Node::nameOffset);
 		});
+		return *this;
 	}
 
 	AssetSchemaBuilder&
 	AssetSchemaBuilder::AddMesh()
 	{
-		return AddLayout<Mesh>("Mesh", [](auto& layout) {
+		AddLayout<Mesh>("Mesh", [](auto& layout) {
 			layout.AddField("firstSubmesh", &Mesh::firstSubmesh)
 				.AddField("submeshCount", &Mesh::submeshCount)
 				.AddField("nameOffset", &Mesh::nameOffset);
 		});
+		return *this;
 	}
 
 	AssetSchemaBuilder&
@@ -51,17 +54,18 @@ namespace assetlib
 				.AddField("format", &VertexAttribute::format)
 				.AddField("offset", &VertexAttribute::offset);
 		});
-		return AddLayout<VertexLayout>("VertexLayout", [](auto& layout) {
+		AddLayout<VertexLayout>("VertexLayout", [](auto& layout) {
 			layout.AddField("attributes", &VertexLayout::attributes)
 				.AddField("attributeCount", &VertexLayout::attributeCount)
 				.AddField("stride", &VertexLayout::stride);
 		});
+		return *this;
 	}
 
 	AssetSchemaBuilder&
 	AssetSchemaBuilder::AddSubmesh()
 	{
-		return AddLayout<Submesh>("Submesh", [](auto& layout) {
+		AddLayout<Submesh>("Submesh", [](auto& layout) {
 			layout.AddField("layout", &Submesh::layout)
 				.AddField("vertexByteOffset", &Submesh::vertexByteOffset)
 				.AddField("vertexCount", &Submesh::vertexCount)
@@ -75,12 +79,13 @@ namespace assetlib
 				.AddField("aabbMax", &Submesh::aabbMax)
 				.AddField("nameOffset", &Submesh::nameOffset);
 		});
+		return *this;
 	}
 
 	AssetSchemaBuilder&
 	AssetSchemaBuilder::AddMeshlet()
 	{
-		return AddLayout<Meshlet>("Meshlet", [](auto& layout) {
+		AddLayout<Meshlet>("Meshlet", [](auto& layout) {
 			layout.AddField("vertexOffset", &Meshlet::vertexOffset)
 				.AddField("triangleOffset", &Meshlet::triangleOffset)
 				.AddField("vertexCount", &Meshlet::vertexCount)
@@ -88,23 +93,25 @@ namespace assetlib
 				.AddField("boundingCenter", &Meshlet::boundingCenter)
 				.AddField("boundingRadius", &Meshlet::boundingRadius);
 		});
+		return *this;
 	}
 
 	AssetSchemaBuilder&
 	AssetSchemaBuilder::AddBone()
 	{
-		return AddLayout<Bone>("Bone", [](auto& layout) {
+		AddLayout<Bone>("Bone", [](auto& layout) {
 			layout.AddField("bindPose", &Bone::bindPose)
 				.AddField("inverseBind", &Bone::inverseBind)
 				.AddField("parent", &Bone::parent, c_InvalidIndex)
 				.AddField("nameOffset", &Bone::nameOffset);
 		});
+		return *this;
 	}
 
 	AssetSchemaBuilder&
 	AssetSchemaBuilder::AddAnimationClip()
 	{
-		return AddLayout<AnimationClip>("AnimationClip", [](auto& layout) {
+		AddLayout<AnimationClip>("AnimationClip", [](auto& layout) {
 			layout.AddField("nameOffset", &AnimationClip::nameOffset)
 				.AddField("firstSample", &AnimationClip::firstSample)
 				.AddField("frameCount", &AnimationClip::frameCount)
@@ -114,20 +121,22 @@ namespace assetlib
 				.AddField("locomotionSpeed", &AnimationClip::locomotionSpeed)
 				.AddField("loop", &AnimationClip::loop);
 		});
+		return *this;
 	}
 
 	AssetSchemaBuilder&
 	AssetSchemaBuilder::AddSourceStamp()
 	{
-		return AddLayout<SourceStamp>("SourceStamp", [](auto& layout) {
+		AddLayout<SourceStamp>("SourceStamp", [](auto& layout) {
 			layout.AddField("size", &SourceStamp::size).AddField("hash", &SourceStamp::hash);
 		});
+		return *this;
 	}
 
 	AssetSchemaBuilder&
 	AssetSchemaBuilder::AddVatClip()
 	{
-		return AddLayout<VatClip>("VatClip", [](auto& layout) {
+		AddLayout<VatClip>("VatClip", [](auto& layout) {
 			layout.AddField("nameOffset", &VatClip::nameOffset)
 				.AddField("firstRow", &VatClip::firstRow)
 				.AddField("frameCount", &VatClip::frameCount)
@@ -136,14 +145,16 @@ namespace assetlib
 				.AddField("duration", &VatClip::duration)
 				.AddField("loop", &VatClip::loop);
 		});
+		return *this;
 	}
 
 	AssetSchemaBuilder&
 	AssetSchemaBuilder::AddVatColumns()
 	{
-		return AddLayout<VatColumns>("VatColumns", [](auto& layout) {
+		AddLayout<VatColumns>("VatColumns", [](auto& layout) {
 			layout.AddField("columnBase", &VatColumns::columnBase)
 				.AddField("vertexCount", &VatColumns::vertexCount);
 		});
+		return *this;
 	}
 }

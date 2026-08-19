@@ -145,6 +145,7 @@ namespace
 				.AddNode()
 				.AddMesh()
 				.AddVertexLayout()
+				.AddMeshlet()
 				.AddLayout<SubmeshNext>(
 					"Submesh",
 					[](auto& l) {
@@ -161,7 +162,6 @@ namespace
 							.AddField("aabbMax", &SubmeshNext::aabbMax)
 							.AddField("lodBias", &SubmeshNext::lodBias, 1.0f);
 					})
-				.AddMeshlet()
 				.Finish();
 		return c_Schema;
 	}

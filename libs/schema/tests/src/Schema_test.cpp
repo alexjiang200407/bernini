@@ -393,16 +393,19 @@ TEST_CASE("every disk POD's builder covers its sizeof", "[schema]")
 	CHECK(FieldOf(*schema.Find("Bone"), "inverseBind").count == 16);
 }
 
-TEST_CASE("a schema is assembled as one chain, and a derived builder keeps the chain", "[schema]")
+TEST_CASE(
+	"a schema is assembled as one chain; a derived builder adds its own registrations first",
+	"[schema]")
 {
-	struct RigBuilder final : SchemaBuilderBase<RigBuilder>
+	struct RigBuilder final : SchemaBuilder
 	{
 		RigBuilder&
 		AddInner()
 		{
-			return AddLayout<Inner>("Inner", [](auto& layout) {
+			AddLayout<Inner>("Inner", [](auto& layout) {
 				layout.AddField("a", &Inner::a).AddField("b", &Inner::b);
 			});
+			return *this;
 		}
 	};
 

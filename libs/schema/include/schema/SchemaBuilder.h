@@ -5,17 +5,16 @@
 namespace schema
 {
 	/**
-	 * Assembles a Schema as one chain, a layout per call, and hands it over from Finish(). The
-	 * chain keeps the derived type -- `Derived` is the class deriving from this -- so a builder
-	 * that adds named registrations of its own (`AddTransform()`, `AddNode()`) chains them with
-	 * AddLayout in any order.
+	 * Assembles a Schema as one chain, a layout per call, and hands it over from Finish(). A
+	 * builder with registrations of its own derives from this and returns itself from them; since
+	 * AddLayout returns the base, such a chain registers its own layouts first and the private
+	 * ones last -- which is also the order a struct's parts want.
 	 *
 	 *     const Schema schema = SchemaBuilder()
 	 *         .AddLayout<Stamp>("Stamp", [](auto& l) { l.AddField("size", &Stamp::size); })
 	 *         .Finish();
 	 */
-	template <typename Derived>
-	class SchemaBuilderBase
+	class SchemaBuilder
 	{
 	public:
 		/**
@@ -25,14 +24,13 @@ namespace schema
 		template <
 			core::type_traits::trivially_copyable T,
 			std::invocable<LayoutBuilder<T>&>     Describe>
-		Derived&
+		SchemaBuilder&
 		AddLayout(std::string_view name, Describe&& describe)
-			requires std::derived_from<Derived, SchemaBuilderBase<Derived>>
 		{
 			LayoutBuilder<T> layout(m_Schema, name);
 			describe(layout);
 			layout.Finish();
-			return static_cast<Derived&>(*this);
+			return *this;
 		}
 
 		[[nodiscard]] Schema
@@ -44,7 +42,4 @@ namespace schema
 	protected:
 		Schema m_Schema;
 	};
-
-	class SchemaBuilder final : public SchemaBuilderBase<SchemaBuilder>
-	{};
 }
