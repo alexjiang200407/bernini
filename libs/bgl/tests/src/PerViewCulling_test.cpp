@@ -125,8 +125,7 @@ TEST_CASE("One view culled against two frustums keeps both results", "[culling][
 	view->EnsureCullStateCount(2);
 	REQUIRE(view->GetCullStateCount() == 2);
 
-	auto  sceneBuffers  = scene->GetBuffers();
-	auto& submeshBuffer = std::get<0>(sceneBuffers);
+	auto& submeshBuffer = scene->GetSubmeshBuffer();
 
 	// Element 0 of the submesh buffer is the reserved null, so the cube's submesh is found through
 	// its geom's range rather than at a fixed index.
@@ -170,9 +169,8 @@ TEST_CASE("One view culled against two frustums keeps both results", "[culling][
 
 	// Off the instance buffer's capacity, which is what CullState sizes against -- a readback
 	// smaller than its source overruns, since the copy is bounded by the source's byte size.
-	auto           instanceBuffers = view->GetInstanceBuffers();
 	const uint32_t paddedCount =
-		core::round_up(std::get<0>(instanceBuffers).Capacity(), bgl::idl::cHistogramGroupSize);
+		core::round_up(view->GetInstanceBuffer().Capacity(), bgl::idl::cHistogramGroupSize);
 
 	bgl::ReadbackBufferHandle rbCompacted[2];
 	bgl::ReadbackBufferHandle rbPrefixSum[2];

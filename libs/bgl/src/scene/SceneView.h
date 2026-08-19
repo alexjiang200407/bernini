@@ -3,9 +3,11 @@
 #include "resource/ResourceManager.h"
 #include "scene/CullState.h"
 #include "scene/EntryBuffer.h"
+#include "scene/NamedBuffer.h"
 #include "scene/PackedBuffer.h"
 #include "scene/TransparentSortState.h"
 #include "scene/UploadBuffer.h"
+#include "scene/scene_buffer_names.h"
 #include "types/EnvironmentMap.h"
 #include "types/SubmeshInstance.h"
 #include "types/ViewMatrices.h"
@@ -166,10 +168,17 @@ namespace bgl
 		}
 
 		// The cull inputs: one per view, shared by every frustum it is culled against.
-		auto
-		GetInstanceBuffers()
+
+		[[nodiscard]] auto&
+		GetInstanceBuffer() noexcept
 		{
-			return std::tie(m_InstanceBuffer, m_MeshBuffer, m_VatStates);
+			return m_InstanceBuffer;
+		}
+
+		[[nodiscard]] auto&
+		GetMeshBuffer() noexcept
+		{
+			return m_MeshBuffer;
 		}
 
 		/**
@@ -325,5 +334,16 @@ namespace bgl
 		ViewMatrices            m_Camera;
 		ViewMatrices            m_PrevCamera;
 		std::optional<uint64_t> m_CameraFrame;
+
+		// The per-view buffers imported into the frame graph, each with the name it is imported
+		// under. Declared after the members it names. m_CurrentSelectedInstances is not one of them:
+		// it must be rebuilt before its handle is read, so ImportResources takes it separately.
+		static constexpr auto c_Buffers = std::tuple{
+			NamedBuffer{ c_InstanceBufferName, &SceneView::m_InstanceBuffer },
+			NamedBuffer{ c_MeshInstanceBufferName, &SceneView::m_MeshBuffer },
+			NamedBuffer{ c_VatStateBufferName, &SceneView::m_VatStates },
+		};
+
+		static_assert(HasDistinctNames(c_Buffers), "two view buffers would import under one name");
 	};
 }

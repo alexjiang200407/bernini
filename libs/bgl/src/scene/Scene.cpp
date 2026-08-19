@@ -3,7 +3,6 @@
 #include "fg/FrameGraph.h"
 #include "idl/Constants.h"
 #include "idl/Meshlet.h"
-#include "scene/scene_buffer_names.h"
 #include "types/SubmeshInstance.h"
 #include "types/vk_format.h"
 #include "uniforms/Uniforms.h"
@@ -18,26 +17,6 @@ namespace bgl
 	namespace
 	{
 		constexpr uint32_t c_MaxDispatchMeshGroups = 65535;
-
-		struct BufferInfo
-		{
-			std::string_view name;
-		};
-
-		// Order MUST stay in lockstep with Scene::GetBuffers() and with
-		// ForwardPass's c_ForwardDataBuffers.
-		static constexpr std::array<BufferInfo, 10> c_BufferInfo = {
-			{ { c_SubmeshBufferName },
-			  { c_MeshletBufferName },
-			  { c_VertexMapBufferName },
-			  { c_VertexDataBufferName },
-			  { c_IndexBufferName },
-			  { c_PbrMaterialBufferName },
-			  { c_LooseMaterialBufferName },
-			  { c_VatGeomBufferName },
-			  { c_VatClipBufferName },
-			  { c_VatColumnBufferName } }
-		};
 
 		// The interleaved vertex layout the procedural geometry emits: position,
 		// normal, uv, tangent, tightly packed at a 48-byte stride. This is exactly
@@ -385,12 +364,12 @@ namespace bgl
 	void
 	Scene::Update(ICommandList* cmdList)
 	{
-		auto buffers = GetBuffers();
-		std::apply(
-			[cmdList](auto&... buffer) {
-				(..., (buffer.IsInitialized() ? buffer.Update(cmdList) : void()));
-			},
-			buffers);
+		ForEachNamedBuffer(*this, c_Buffers, [cmdList](std::string_view, auto& buffer) {
+			if (buffer.IsInitialized())
+			{
+				buffer.Update(cmdList);
+			}
+		});
 
 		// Textures loaded since the last frame (materials, environment maps) go up on this list, so
 		// the upload rides the same timeline as the frames that sample it -- another context's list
@@ -421,22 +400,15 @@ namespace bgl
 	void
 	Scene::ImportResources(FrameGraph& fg, std::vector<std::string>& resourceNames)
 	{
-		resourceNames.reserve(resourceNames.size() + c_BufferInfo.size());
+		resourceNames.reserve(resourceNames.size() + std::tuple_size_v<decltype(c_Buffers)>);
 
-		auto   buffers = GetBuffers();
-		size_t i       = 0;
-		std::apply(
-			[&](auto&... buffer) {
-				(..., [&] {
-					// Import every buffer (including the GPU-only compute buffer): the
-					// Update pass declares them as copy-dest so the graph transitions
-					// them, and the FrameGraph tracks the state each is left in.
-					std::string name(c_BufferInfo[i++].name);
-					fg.ImportBuffer(name, buffer.GetBufferHandle());
-					resourceNames.push_back(std::move(name));
-				}());
-			},
-			buffers);
+		// Import every buffer (including the GPU-only compute buffer): the Update pass declares
+		// them as copy-dest so the graph transitions them, and the FrameGraph tracks the state
+		// each is left in.
+		ForEachNamedBuffer(*this, c_Buffers, [&](std::string_view name, const auto& buffer) {
+			fg.ImportBuffer(name, buffer.GetBufferHandle());
+			resourceNames.emplace_back(name);
+		});
 	}
 
 	GeomHandle
