@@ -76,10 +76,18 @@ the transport, the clip list and the scrubber are the same code either way — w
   drops its geometry and acquires again rather than swapping a handle. Not a limitation to route
   around later: a tier is a property of the upload.
 
+* **Switching *to* VAT can refuse.** The VAT tier draws from a bake, and the panel will not make one
+  unprompted — seconds of the user's time is a decision, not a load step. `game::VatFreshness` asks
+  whether a usable bake exists; anything but `kFresh` stops the load and offers **Bake Now**, and
+  declining leaves the panel on the tier it was already showing. A **Bake VAT** button makes the same
+  bake deliberately. See [vat.md](docs/vat.md); note this is the *editor's* rule — `AcquireVatMesh`
+  still bakes on demand, which is what loading a level wants.
+
 * **The tier decides three things, and they live together.** `PlanAnimationLoad` returns them as one
-  `AnimationLoadSteps` so they cannot drift apart: whether to bake a `.bvat` first (the skinned tier
-  does not — seconds of CPU skinning for a texture pair it never samples, and it would make the
-  preview need a *bakeable* material), whether the posed box is read off that bake or measured, and
+  `AnimationLoadSteps` so they cannot drift apart: whether the load needs a `.bvat` already baked
+  (the skinned tier does not — a bake is seconds of CPU skinning for a texture pair it never samples,
+  and it would make the preview need a *bakeable* material), whether the posed box is read off that
+  bake or measured, and
   whether a refusal is one a bake could answer. Three fields rather than three tests of the source
   spread through a long function, and the box is the one that punishes drift hardest: it culls the
   geom as well as framing the camera, so taking it from the wrong place hides the mesh rather than

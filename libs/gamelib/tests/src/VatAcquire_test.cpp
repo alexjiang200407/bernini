@@ -497,3 +497,49 @@ TEST_CASE("A .bvat that cannot be read is re-baked, not thrown from", "[vat]")
 		CHECK(rebaked.stringPool.at(rebaked.clips[0].nameOffset) == "slide");
 	}
 }
+
+TEST_CASE("VatFreshness asks EnsureVatBaked's question without baking", "[vat]")
+{
+	DataRoot root("bernini_vat_freshness");
+	WriteRig(root.path);
+
+	const auto  store = assetlib::AssetStore(root.path);
+	const auto  bvat = root.path / assetlib::vatPathFor("Meshes/rig.bmesh", "Animations/rig.banim");
+	const auto* mesh = "Meshes/rig.bmesh";
+	const auto* clips = "Animations/rig.banim";
+
+	// Nothing on disk, and asking must not put anything there -- that is the whole distinction from
+	// EnsureVatBaked, and what lets the editor offer the bake instead of taking the decision.
+	CHECK(game::VatFreshness(store, mesh, clips) == game::VatBakeState::kMissing);
+	CHECK_FALSE(fs::exists(bvat));
+
+	(void)game::EnsureVatBaked(store, mesh, clips);
+	REQUIRE(fs::exists(bvat));
+
+	// Fresh, and it hands back what it parsed so a caller that then loads pays for one read.
+	auto carried = assetlib::BVat();
+	CHECK(game::VatFreshness(store, mesh, clips, &carried) == game::VatBakeState::kFresh);
+	CHECK(carried.animations == "Animations/rig.banim");
+	REQUIRE(carried.clips.size() == 1);
+
+	// A bake of another clip set is not this pair's bake. Written under this pair's name so the
+	// clip-set check is what answers, not the file simply being absent.
+	WriteClips(root.path, "Animations/rig_march.banim", "march", 2.0f, 3);
+	const auto march = game::EnsureVatBaked(store, mesh, "Animations/rig_march.banim");
+	assetlib::saveVat(march, bvat);
+	CHECK(game::VatFreshness(store, mesh, clips) == game::VatBakeState::kOtherClips);
+
+	// A moved input stamp: same clip set, different bytes behind it.
+	(void)game::EnsureVatBaked(store, mesh, clips);
+	REQUIRE(game::VatFreshness(store, mesh, clips) == game::VatBakeState::kFresh);
+	WriteClips(root.path, "Animations/rig.banim", "slide", 1.0f, 4);
+	CHECK(game::VatFreshness(store, mesh, clips) == game::VatBakeState::kStale);
+
+	// Unparseable reads as absent: it is wholly derived, so re-baking beats reporting a container
+	// error for a file nobody authored.
+	{
+		auto out = std::ofstream(bvat, std::ios::binary | std::ios::trunc);
+		out << "not a container";
+	}
+	CHECK(game::VatFreshness(store, mesh, clips) == game::VatBakeState::kMissing);
+}

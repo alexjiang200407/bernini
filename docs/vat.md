@@ -93,7 +93,8 @@ truth; when this doc disagrees, trust the header, then fix this doc.
 | Interface | File | Role |
 |---|---|---|
 | `AssetManager::AcquireVatMesh` | [libs/gamelib/include/gamelib/AssetManager.h](libs/gamelib/include/gamelib/AssetManager.h) | Load the `.bvat` beside a mesh — or bake it there — and stand the geom up with its materials |
-| `EnsureVatBaked` | [libs/gamelib/include/gamelib/vat_freshness.h](libs/gamelib/include/gamelib/vat_freshness.h) | The freshness rule's one home: return the pair's `.bvat` fresh, re-baking in place when stale — pure assetlib, safe off the render thread |
+| `EnsureVatBaked` | [libs/gamelib/include/gamelib/vat_freshness.h](libs/gamelib/include/gamelib/vat_freshness.h) | Return the pair's `.bvat` fresh, re-baking in place when it is not — `VatFreshness` plus a bake, so the rule is asked here too. Pure assetlib, safe off the render thread |
+| `VatFreshness` | [libs/gamelib/include/gamelib/vat_freshness.h](libs/gamelib/include/gamelib/vat_freshness.h) | The freshness rule's one home, *asked* rather than enforced — for a caller that must not bake unprompted. Hands back what it parsed, so asking then loading is one read |
 | `AssetManager::CreateVatInstance` | [libs/gamelib/include/gamelib/AssetManager.h](libs/gamelib/include/gamelib/AssetManager.h) | `CreateInstance`'s VAT twin; same reference edges, same `DestroyInstance` |
 
 ### editor — the Animation panel
@@ -211,6 +212,12 @@ flowchart TD
   name the clip set it was first acquired with, or it throws: the fast path returns the cached
   clip table without reading the container. Switching clip sets means releasing the geom to zero
   first — the eviction is what lets the freshness check see the new request.
+* **The editor does not bake on demand; it asks.** A bake is seconds, so the Animation panel calls
+  `VatFreshness` and, when the answer is not `kFresh`, refuses the load and offers **Bake Now**
+  instead of spending that time unasked. Declining leaves the panel on the tier it was already
+  showing. The panel also carries a **Bake VAT** button, so the bake can be made deliberately rather
+  than only in answer to a refusal. Nothing else in the tree works this way — `AcquireVatMesh` still
+  bakes on demand, which is what a game loading a level wants.
 * **A mesh with non-opaque or loose materials cannot be acquired as VAT** — the per-submesh
   opaque-`kPBR` rule surfaces here as a throw *after* the bake and material acquires; the unwind
   releases everything taken, so a failed acquire owns nothing.

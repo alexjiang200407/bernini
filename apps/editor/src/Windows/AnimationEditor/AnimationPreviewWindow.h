@@ -8,6 +8,7 @@
 
 #include <bgl/GeomHandle.h>
 #include <bgl/MeshInstanceHandle.h>
+#include <gamelib/vat_freshness.h>
 
 namespace assetlib
 {
@@ -101,6 +102,23 @@ public:
 	void
 	Clear();
 
+	/**
+	 * Bakes the shown mesh's `.bvat` for the clip set it is playing, under a loading screen, and
+	 * reloads if VAT is what is on screen. A bake is seconds of CPU skinning, which is why nothing
+	 * does it implicitly -- see AnimationLoadSteps::needsFreshBake.
+	 *
+	 * Does nothing when no mesh is shown or it has no clips: there is no pair to bake.
+	 */
+	void
+	BakeShownVat();
+
+	/** Whether BakeShownVat has something to bake -- what the Bake VAT button's enabled state is. */
+	[[nodiscard]] bool
+	CanBakeVat() const noexcept
+	{
+		return !m_MeshPath.empty() && !m_Animations.empty();
+	}
+
 Q_SIGNALS:
 	/** The preview now shows the mesh at this data-root-relative path (empty: cleared). */
 	void
@@ -169,6 +187,22 @@ protected:
 	wheelEvent(QWheelEvent* event) override;
 
 private:
+	/**
+	 * The "not baked / out of date" dialog with its Bake Now button, shown when the VAT tier is
+	 * asked for and no usable bake exists. Taking the offer bakes and re-enters the load; declining
+	 * leaves the panel showing what it already had, the tier included.
+	 */
+	void
+	OfferBakeForTier(
+		const std::filesystem::path& absolutePath,
+		const std::string&           animations,
+		const QString&               name,
+		game::VatBakeState           state);
+
+	/** The bake itself, off the UI thread. False when it was cancelled or failed (it reports). */
+	[[nodiscard]] bool
+	BakeVat(const std::filesystem::path& absolutePath, const std::string& animations);
+
 	/**
 	 * The refusal dialog, with a Bake Now button when the cause is fixable here: materials the
 	 * mesh names that are routed but never composited. Baking runs like the Content Explorer's --
