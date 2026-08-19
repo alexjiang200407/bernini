@@ -3,6 +3,7 @@
 #include "Render/OrbitCamera.h"
 #include "Render/environment.h"
 #include "Windows/AnimationEditor/PlaybackTransport.h"
+#include "Windows/AnimationEditor/animation_source.h"
 #include "Windows/RenderTarget/RenderTargetWindow.h"
 
 #include <bgl/GeomHandle.h>
@@ -75,9 +76,26 @@ public:
 	void
 	LoadMesh(const std::filesystem::path& absolutePath, const std::string& animationsRelPath = {});
 
-	/** Respawns the VAT instances on clip `index`; the caller's transport is the clock. */
+	/** Respawns the animated instances on clip `index`; the caller's transport is the clock. */
 	void
 	SetActiveClip(uint32_t index);
+
+	/**
+	 * Which tier the preview animates through. Switching re-loads the shown mesh, because the two
+	 * are different uploads -- and that is the point of having the switch: the skinned pose is what
+	 * the rig says, the VAT one is what the bake made of it, and the difference between them is a
+	 * bake bug you can otherwise only find in the game.
+	 *
+	 * A no-op if nothing is shown, or if `source` is already the active one.
+	 */
+	void
+	SetAnimationSource(editor::AnimationSource source);
+
+	[[nodiscard]] editor::AnimationSource
+	GetAnimationSource() const noexcept
+	{
+		return m_Source;
+	}
 
 	/** Back to the empty state: geometry released, environment kept. */
 	void
@@ -99,6 +117,14 @@ Q_SIGNALS:
 	/** The `.banim` candidates for the shown mesh, and which one is playing (-1: none). */
 	void
 	AnimationSourcesChanged(const QStringList& candidates, int activeIndex);
+
+	/**
+	 * The tier the panel is *actually* previewing through. Emitted after every SetAnimationSource,
+	 * including one whose load failed -- the caller's control has already moved by then, and this is
+	 * what snaps it back to what is on screen.
+	 */
+	void
+	PreviewSourceChanged(editor::AnimationSource source);
 
 	/** The clip table now playable (empty: bind pose only). Feed it to the transport. */
 	void
@@ -163,21 +189,53 @@ private:
 	void
 	ClearGeometry();
 
-	// One VAT placement's live state: respawned in place on a clip switch.
-	struct VatDraw
+	/**
+	 * Places one animated instance on `clip` at phase 0, rate 1.
+	 *
+	 * `source` is explicit rather than read from m_Source: during a tier switch the geom has been
+	 * acquired through the *candidate* tier while m_Source still names the old one, and creating an
+	 * instance of the wrong kind for a geom is a SceneError.
+	 */
+	[[nodiscard]] bgl::MeshInstanceHandle
+	SpawnAnimated(
+		bgl::GeomHandle         geom,
+		const glm::mat4&        world,
+		uint32_t                clip,
+		editor::AnimationSource source);
+
+	/**
+	 * LoadMesh's body, carrying the tier to load *through* rather than reading m_Source. m_Source is
+	 * assigned only once the load has stood something up, so a failed switch leaves the panel
+	 * describing what is still on screen.
+	 */
+	void
+	LoadMeshAs(
+		const std::filesystem::path& absolutePath,
+		const std::string&           animationsRelPath,
+		editor::AnimationSource      source);
+
+	// One animated placement's live state, whichever tier it was acquired through: respawned in
+	// place on a clip switch.
+	struct AnimatedDraw
 	{
 		bgl::GeomHandle         geom;
 		glm::mat4               world = glm::mat4(1.0f);
 		bgl::MeshInstanceHandle instance;
 	};
 
-	game::AssetManager* m_Assets     = nullptr;
-	uint32_t            m_ActiveClip = 0;  // what the live VAT instances were spawned on
+	game::AssetManager*     m_Assets     = nullptr;
+	uint32_t                m_ActiveClip = 0;  // what the live animated instances were spawned on
+	editor::AnimationSource m_Source     = editor::AnimationSource::kSkinned;
 
 	std::vector<bgl::MeshInstanceHandle> m_Instances;  // static entries
 	std::vector<bgl::GeomHandle>         m_Geoms;      // one entry per acquire, repeats included
-	std::vector<VatDraw>                 m_VatDraws;
+	std::vector<AnimatedDraw>            m_AnimatedDraws;
 	std::filesystem::path                m_DataRoot;
+
+	// What LoadMesh was last called with, so a source switch can re-load without the caller
+	// re-supplying them.
+	std::filesystem::path m_MeshPath;
+	std::string           m_Animations;
 
 	// What the last ApplyEnvironment bound, so the next one can release it.
 	editor::AppliedEnvironment m_Environment;

@@ -108,3 +108,37 @@ TEST_CASE("The scrubber's press-to-tick mapping spans the groove exactly", "[ani
 	CHECK(TimelineScrubber::ValueForX(5, 0, 1000) == 0);
 	CHECK(TimelineScrubber::ValueForX(5, 10, 1000) == 0);
 }
+
+TEST_CASE("A load's tier-dependent steps all follow from the source", "[animation][source]")
+{
+	using editor::AnimationSource;
+	using editor::PlanAnimationLoad;
+
+	SECTION("the VAT tier bakes, frames by the bake's box, and a bake can answer its refusal")
+	{
+		const auto steps = PlanAnimationLoad(AnimationSource::kVat, /*hasAnimations*/ true);
+		CHECK(steps.bakeVat);
+		CHECK(steps.offerBakeOnRefusal);
+	}
+
+	SECTION("the skinned tier does none of them")
+	{
+		// The bake is the one that matters: it is seconds of CPU skinning for a texture pair the
+		// skinned path never samples, and it would also make the preview need a bakeable material.
+		const auto steps = PlanAnimationLoad(AnimationSource::kSkinned, /*hasAnimations*/ true);
+		CHECK_FALSE(steps.bakeVat);
+		CHECK_FALSE(steps.offerBakeOnRefusal);
+	}
+
+	SECTION("with no clip file, neither tier does anything")
+	{
+		// Nothing to play: the mesh stands in its bind pose as static geometry, so a bake and a bake
+		// offer are both meaningless -- including on the VAT tier, which would otherwise bake.
+		for (const AnimationSource source : { AnimationSource::kSkinned, AnimationSource::kVat })
+		{
+			const auto steps = PlanAnimationLoad(source, /*hasAnimations*/ false);
+			CHECK_FALSE(steps.bakeVat);
+			CHECK_FALSE(steps.offerBakeOnRefusal);
+		}
+	}
+}
