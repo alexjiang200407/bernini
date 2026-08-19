@@ -28,8 +28,8 @@ class QWheelEvent;
 /**
  * The Animation panel's viewport: a dropped or opened rigged `.bmesh` shown wearing its own
  * materials against the configured environment, under an orbit camera. A rigged mesh with clips
- * plays as VAT -- its skinned entries acquired through AcquireVatMesh, its static entries beside
- * them -- and one with none stands in its bind pose. A mesh with no rig at all is refused:
+ * plays through whichever tier is selected -- skinned by default, or VAT -- with its static entries
+ * beside it, and one with no clips stands in its bind pose. A mesh with no rig at all is refused:
  * nothing to animate.
  *
  * Everything is acquired through `game::AssetManager`, so a mesh renders here exactly as it does

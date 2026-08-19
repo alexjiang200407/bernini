@@ -88,6 +88,13 @@ AnimationPreviewWindow::Clear()
 	ClearGeometry();
 	RestoreConfiguredEnvironment();
 	SetTime(0.0f);
+
+	// What "a mesh is shown" is read off -- SetAnimationSource takes an empty path as nothing to
+	// swap. Left set, a load that failed and cleared would make the next tier switch re-attempt the
+	// mesh that just failed instead of simply remembering the preference.
+	m_MeshPath.clear();
+	m_Animations.clear();
+
 	Q_EMIT MeshChanged(QString());
 	Q_EMIT AnimationSourcesChanged(QStringList(), -1);
 	Q_EMIT ClipsChanged({});
