@@ -7,8 +7,10 @@
 #include <assetlib/bskel_io.h>
 #include <assetlib/skeleton.h>
 #include <assetlib_structs/Animation.h>
+#include <assetlib_structs/Bounds.h>
 #include <assetlib_structs/Skeleton.h>
 #include <bgl/IGraphics.h>
+#include <catch2/catch_approx.hpp>
 
 // Acquiring a rig as skinned geometry. Unlike the VAT acquire there is no bake and no freshness
 // rule -- the containers are the source -- so what this pins instead is the sharing, the release,
@@ -168,4 +170,40 @@ TEST_CASE("a skinned acquire that cannot stand leaves nothing behind", "[skinned
 	const auto material = assets.AcquireMaterial("Materials/skin.bmaterial");
 	CHECK(assets.MaterialRefCount(material) == 1);
 	assets.ReleaseMaterial(material);
+}
+
+TEST_CASE("a skinned acquire passes its posed box down to the geom", "[skinned][acquire]")
+{
+	DataRoot root("bernini_skinned_acquire_bounds");
+	WriteRig(root.path);
+
+	auto gfx = bgl::CreateGraphics(HeadlessOptions());
+	REQUIRE(gfx != nullptr);
+
+	auto scene  = gfx->CreateScene(bgl::SceneDesc());
+	auto assets = game::AssetManager(scene, root.path);
+
+	// The one box AddSkinnedMeshGeom refuses, which is what makes the forwarding observable from
+	// out here: the acquire has no accessor for the sphere it built, but a box that cannot build
+	// one throws, and it can only throw if the box arrived.
+	const auto inverted =
+		assetlib::Bounds{ glm::vec3(1.0f, -1.0f, -1.0f), glm::vec3(-1.0f, 1.0f, 1.0f) };
+
+	CHECK_THROWS_AS(
+		assets.AcquireSkinnedMesh("Meshes/rig.bmesh", "Animations/rig.banim", 0, inverted),
+		bgl::SceneError);
+
+	// Measured here instead, and the walk produces a box that stands: the fixture's quad spans
+	// x in [-1, 1] and its one clip slides the root to x = 1, so the pose reaches x = 2.
+	const auto mesh = assets.AcquireSkinnedMesh("Meshes/rig.bmesh", "Animations/rig.banim");
+	REQUIRE(mesh.geom.IsValid());
+
+	// A shared acquire never looks at the argument -- not even to validate it. The sphere belongs
+	// to the geom, which already exists, so the box that would have been refused above is ignored.
+	const auto shared =
+		assets.AcquireSkinnedMesh("Meshes/rig.bmesh", "Animations/rig.banim", 0, inverted);
+	CHECK(shared.geom.handle.index == mesh.geom.handle.index);
+
+	assets.ReleaseGeom(shared.geom);
+	assets.ReleaseGeom(mesh.geom);
 }

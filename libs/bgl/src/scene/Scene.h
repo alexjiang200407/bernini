@@ -248,7 +248,8 @@ namespace bgl
 			uint32_t                        meshIndex,
 			std::span<const MaterialHandle> materials,
 			const assetlib::Skeleton&       skeleton,
-			const assetlib::AnimationSet&   animations) override;
+			const assetlib::AnimationSet&   animations,
+			const assetlib::Bounds&         posedBounds) override;
 
 		TextureAssetHandle
 		AddTextureAsset(assetlib::ImageData img, std::string debugName = "") override;

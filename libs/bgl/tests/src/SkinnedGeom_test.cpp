@@ -1,6 +1,7 @@
 #include "scene/Scene.h"
 #include "scene/SceneView.h"
 #include "util/TestOptions.h"
+#include <assetlib_structs/Bounds.h>
 #include <bgl/IGraphics.h>
 #include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
@@ -17,6 +18,11 @@ namespace
 
 	constexpr uint32_t c_BoneCount = 3;
 	constexpr uint32_t c_Frames    = 3;  // clip 0 takes two, clip 1 the third
+
+	// Nothing here draws or culls, so any well-formed box does. The cases that are *about* the box
+	// build their own.
+	const auto c_AnyPose =
+		assetlib::Bounds{ glm::vec3(-1.0f, -1.0f, -1.0f), glm::vec3(1.0f, 1.0f, 1.0f) };
 
 	bgl::GraphicsOptions
 	HeadlessOptions()
@@ -190,7 +196,7 @@ TEST_CASE("AddSkinnedMeshGeom uploads a rig's bones, clips and samples", "[skinn
 	const std::array<bgl::MaterialHandle, 1> materials  = { { material } };
 
 	const auto geom =
-		scene->AddSkinnedMeshGeom(MakeSkinnedMesh(), 0, materials, skeleton, animations);
+		scene->AddSkinnedMeshGeom(MakeSkinnedMesh(), 0, materials, skeleton, animations, c_AnyPose);
 	REQUIRE(geom.IsValid());
 	REQUIRE(geom.geomType == bgl::GeomType::kSkinnedMesh);
 
@@ -303,8 +309,13 @@ TEST_CASE("CreateSkinnedMeshInstance writes the playback record once", "[skinned
 	REQUIRE(view != nullptr);
 
 	const std::array<bgl::MaterialHandle, 1> materials = { { OpaquePbr(scene) } };
-	const auto                               geom =
-		scene->AddSkinnedMeshGeom(MakeSkinnedMesh(), 0, materials, MakeRig(), MakeClips());
+	const auto                               geom      = scene->AddSkinnedMeshGeom(
+		MakeSkinnedMesh(),
+		0,
+		materials,
+		MakeRig(),
+		MakeClips(),
+		c_AnyPose);
 	REQUIRE(geom.IsValid());
 
 	auto desc  = bgl::SkinnedInstanceDesc();
@@ -374,8 +385,13 @@ TEST_CASE("AddSkinnedMeshGeom refuses a rig the pose pass could not walk", "[ski
 	const auto add = [&](const assetlib::Skeleton&     skeleton,
 	                     const assetlib::AnimationSet& animations,
 	                     bool                          withSkin = true) {
-		return scene
-		    ->AddSkinnedMeshGeom(MakeSkinnedMesh(withSkin), 0, materials, skeleton, animations);
+		return scene->AddSkinnedMeshGeom(
+			MakeSkinnedMesh(withSkin),
+			0,
+			materials,
+			skeleton,
+			animations,
+			c_AnyPose);
 	};
 
 	SECTION("a skeleton with no bones")
@@ -436,14 +452,42 @@ TEST_CASE("AddSkinnedMeshGeom refuses a rig the pose pass could not walk", "[ski
 		const std::array<bgl::MaterialHandle, 1> masked = { { scene->CreatePbrMaterial(cutout) } };
 
 		CHECK_THROWS_AS(
-			scene->AddSkinnedMeshGeom(MakeSkinnedMesh(), 0, masked, MakeRig(), MakeClips()),
+			scene->AddSkinnedMeshGeom(
+				MakeSkinnedMesh(),
+				0,
+				masked,
+				MakeRig(),
+				MakeClips(),
+				c_AnyPose),
 			bgl::SceneError);
 	}
 
 	SECTION("a meshIndex past the mesh table")
 	{
 		CHECK_THROWS_AS(
-			scene->AddSkinnedMeshGeom(MakeSkinnedMesh(), 1, materials, MakeRig(), MakeClips()),
+			scene->AddSkinnedMeshGeom(
+				MakeSkinnedMesh(),
+				1,
+				materials,
+				MakeRig(),
+				MakeClips(),
+				c_AnyPose),
+			bgl::SceneError);
+	}
+
+	SECTION("a posed box whose min is past its max")
+	{
+		const auto inverted =
+			assetlib::Bounds{ glm::vec3(1.0f, -1.0f, -1.0f), glm::vec3(-1.0f, 1.0f, 1.0f) };
+
+		CHECK_THROWS_AS(
+			scene->AddSkinnedMeshGeom(
+				MakeSkinnedMesh(),
+				0,
+				materials,
+				MakeRig(),
+				MakeClips(),
+				inverted),
 			bgl::SceneError);
 	}
 
@@ -468,8 +512,13 @@ TEST_CASE("a refused skinned add leaves the scene's arenas untouched", "[skinned
 	// failed add left anything behind, the *next* add lands somewhere else -- which is the only
 	// evidence of a leak that does not need an occupancy accessor the buffers do not expose.
 	const auto offsetsOfAFreshAdd = [&] {
-		const auto geom =
-			scene->AddSkinnedMeshGeom(MakeSkinnedMesh(), 0, materials, MakeRig(), MakeClips());
+		const auto geom = scene->AddSkinnedMeshGeom(
+			MakeSkinnedMesh(),
+			0,
+			materials,
+			MakeRig(),
+			MakeClips(),
+			c_AnyPose);
 		REQUIRE(geom.IsValid());
 
 		auto        buffers = scene->GetBuffers();
@@ -492,21 +541,79 @@ TEST_CASE("a refused skinned add leaves the scene's arenas untouched", "[skinned
 	// AttachSkinnedRecords' own rollback is what has to hold for the second kind.
 	auto badRig            = MakeRig();
 	badRig.bones[1].parent = 2;
-	CHECK_THROWS(scene->AddSkinnedMeshGeom(MakeSkinnedMesh(), 0, materials, badRig, MakeClips()));
+	CHECK_THROWS(
+		scene->AddSkinnedMeshGeom(MakeSkinnedMesh(), 0, materials, badRig, MakeClips(), c_AnyPose));
 
 	auto shortPool                = MakeClips();
 	shortPool.clips[1].frameCount = 4;
-	CHECK_THROWS(scene->AddSkinnedMeshGeom(MakeSkinnedMesh(), 0, materials, MakeRig(), shortPool));
-
 	CHECK_THROWS(
-		scene->AddSkinnedMeshGeom(MakeSkinnedMesh(false), 0, materials, MakeRig(), MakeClips()));
+		scene
+			->AddSkinnedMeshGeom(MakeSkinnedMesh(), 0, materials, MakeRig(), shortPool, c_AnyPose));
+
+	CHECK_THROWS(scene->AddSkinnedMeshGeom(
+		MakeSkinnedMesh(false),
+		0,
+		materials,
+		MakeRig(),
+		MakeClips(),
+		c_AnyPose));
 
 	auto masked                                              = bgl::PbrMaterialDesc();
 	masked.layerType                                         = bgl::LayerType::kMask;
 	const std::array<bgl::MaterialHandle, 1> maskedMaterials = { { scene->CreatePbrMaterial(
 		masked) } };
-	CHECK_THROWS(
-		scene->AddSkinnedMeshGeom(MakeSkinnedMesh(), 0, maskedMaterials, MakeRig(), MakeClips()));
+	CHECK_THROWS(scene->AddSkinnedMeshGeom(
+		MakeSkinnedMesh(),
+		0,
+		maskedMaterials,
+		MakeRig(),
+		MakeClips(),
+		c_AnyPose));
 
 	CHECK(offsetsOfAFreshAdd() == before);
+}
+
+TEST_CASE("a skinned submesh culls by its posed box, not its bind pose", "[skinned][culling]")
+{
+	auto gfx = bgl::CreateGraphics(HeadlessOptions());
+	REQUIRE(gfx != nullptr);
+
+	auto  sceneHandle = gfx->CreateScene(TestSceneDesc());
+	auto* scene       = sceneHandle->As<bgl::Scene>();
+	REQUIRE(scene != nullptr);
+
+	const std::array<bgl::MaterialHandle, 1> materials = { { OpaquePbr(scene) } };
+
+	// Off-center and two orders of magnitude past the fixture's bind pose, which is the shape of the
+	// real failure: a rig whose clips are authored in different units poses far outside the box it
+	// was cooked with, and culling by that box makes it vanish.
+	const auto posed =
+		assetlib::Bounds{ glm::vec3(-100.0f, 0.0f, -100.0f), glm::vec3(100.0f, 300.0f, 100.0f) };
+
+	const auto skinned =
+		scene->AddSkinnedMeshGeom(MakeSkinnedMesh(), 0, materials, MakeRig(), MakeClips(), posed);
+	REQUIRE(skinned.IsValid());
+
+	// The same bytes as static geometry: its sphere is the cooked bind pose, so the two spheres
+	// differing is the whole point -- and a skinned add that ignored its box would match it.
+	const auto asStatic = scene->AddStaticMeshGeom(MakeSkinnedMesh(), 0, materials);
+	REQUIRE(asStatic.IsValid());
+
+	auto  buffers       = scene->GetBuffers();
+	auto& submeshBuffer = std::get<0>(buffers);
+
+	const glm::vec4 skinnedSphere =
+		submeshBuffer.AtIndex(scene->GetGeomSubmeshes(skinned.handle.index).range.offsetStart)
+			.boundingSphere;
+	const glm::vec4 staticSphere =
+		submeshBuffer.AtIndex(scene->GetGeomSubmeshes(asStatic.handle.index).range.offsetStart)
+			.boundingSphere;
+
+	const glm::vec3 center = (posed.min + posed.max) * 0.5f;
+	CHECK(skinnedSphere.x == Catch::Approx(center.x));
+	CHECK(skinnedSphere.y == Catch::Approx(center.y));
+	CHECK(skinnedSphere.z == Catch::Approx(center.z));
+	CHECK(skinnedSphere.w == Catch::Approx(glm::length(posed.max - posed.min) * 0.5f));
+
+	CHECK(skinnedSphere.w > staticSphere.w);
 }
