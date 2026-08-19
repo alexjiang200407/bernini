@@ -272,6 +272,14 @@ MainWindow::Build()
 		m_AnimationEditor,
 		&AnimationEditorWindow::SetDockVisible));
 
+	// The Material tab the same way, back to the default sphere. Unsaved graph edits go with it,
+	// and nothing asks: the panel writes only on Save.
+	m_TabVisibility.push_back(connect(
+		m_MaterialEditorDock,
+		&QDockWidget::visibilityChanged,
+		m_MaterialEditor,
+		&MaterialEditorWindow::SetDockVisible));
+
 	m_Ui.menuWindow->addAction(m_LevelEditorDock->toggleViewAction());
 	m_Ui.menuWindow->addAction(m_MaterialEditorDock->toggleViewAction());
 	m_Ui.menuWindow->addAction(m_AnimationEditorDock->toggleViewAction());

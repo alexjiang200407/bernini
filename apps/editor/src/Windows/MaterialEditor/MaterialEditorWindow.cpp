@@ -633,6 +633,13 @@ MaterialEditorWindow::Reset()
 }
 
 void
+MaterialEditorWindow::SetDockVisible(const bool visible)
+{
+	if (!visible)
+		Reset();
+}
+
+void
 MaterialEditorWindow::AttachMaterialToMesh(int submeshIndex, const QString& materialPath)
 {
 	if (m_Preview == nullptr)
