@@ -14,6 +14,7 @@
 #include "resource/ResourceManager.h"
 #include "resource/Shader.h"
 #include "scene/Scene.h"
+#include "scene/scene_buffer_names.h"
 #include "types/RenderState.h"
 #include "uniforms/Uniforms.h"
 #include "util/util.h"
@@ -34,13 +35,13 @@ namespace bgl
 
 		static constexpr std::array<MaterialBuffer, 2> c_MaterialBuffers = { {
 			{
-				"scene.pbrMaterialBuffer",
+				c_PbrMaterialBufferName,
 				"pbrMaterials",
 				BarrierAccessFlag::kShaderResource,
 				BarrierSyncFlag::kVertexShader,
 			},
 			{
-				"scene.looseMaterialBuffer",
+				c_LooseMaterialBufferName,
 				"looseMaterials",
 				BarrierAccessFlag::kShaderResource,
 				BarrierSyncFlag::kVertexShader,
@@ -73,28 +74,23 @@ namespace bgl
 		};
 
 		static constexpr std::array<SceneBuffer, 4> c_VatBuffers = {
-			{ { "scene.vatGeomBuffer",
+			{ { c_VatGeomBufferName,
 			    "vatGeomBuffer",
 			    BarrierAccessFlag::kShaderResource,
 			    BarrierSyncFlag::kVertexShader },
-			  { "scene.vatStateBuffer",
+			  { c_VatStateBufferName,
 			    "vatStateBuffer",
 			    BarrierAccessFlag::kShaderResource,
 			    BarrierSyncFlag::kVertexShader },
-			  { "scene.vatClipBuffer",
+			  { c_VatClipBufferName,
 			    "vatClipBuffer",
 			    BarrierAccessFlag::kShaderResource,
 			    BarrierSyncFlag::kVertexShader },
-			  { "scene.vatColumnBuffer",
+			  { c_VatColumnBufferName,
 			    "vatColumnBuffer",
 			    BarrierAccessFlag::kShaderResource,
 			    BarrierSyncFlag::kVertexShader } }
 		};
-
-		constexpr auto c_DispatchArgsBuffer = "compactedInstances.compactDispatchArgs"sv;
-
-		constexpr auto c_SortedTransparentBuffer = "scene.sortedTransparentInstances"sv;
-		constexpr auto c_TransparentArgsBuffer   = "transparentSort.dispatchArgs"sv;
 
 		constexpr auto c_MotionVectorFormat = Format::RG16_FLOAT;
 		constexpr auto c_SceneColorFormat   = Format::RGBA16_FLOAT;
@@ -306,15 +302,15 @@ namespace bgl
 		                    BarrierAccessFlag::kDepthWrite,
 		                    BarrierLayout::kDepthWrite })
 			.AddBufferArg(
-				BufferArg{ std::string(c_DispatchArgsBuffer),
+				BufferArg{ std::string(c_CompactDispatchArgsName),
 		                   BarrierSyncFlag::kIndirectArgument,
 		                   BarrierAccessFlag::kIndirectArgument })
 			.AddBufferArg(
-				BufferArg{ std::string(c_SortedTransparentBuffer),
+				BufferArg{ std::string(c_SortedTransparentInstancesName),
 		                   BarrierSyncFlag::kVertexShader,
 		                   BarrierAccessFlag::kUnorderedAccess })
 			.AddBufferArg(
-				BufferArg{ std::string(c_TransparentArgsBuffer),
+				BufferArg{ std::string(c_TransparentDispatchArgsName),
 		                   BarrierSyncFlag::kIndirectArgument,
 		                   BarrierAccessFlag::kIndirectArgument });
 
@@ -450,7 +446,7 @@ namespace bgl
 		                           .AddColorAttachment(draw.targets.motionVector)
 		                           .SetDepthAttachment(draw.targets.depth);
 
-		const auto dispatchArgs = resources.GetBuffer(c_DispatchArgsBuffer);
+		const auto dispatchArgs = resources.GetBuffer(c_CompactDispatchArgsName);
 
 		// Opaque and alpha-test: PSO-bucketed, drawn indirect over the counting-sort output. The
 		// transparent buckets are skipped here -- their order is depth, not PSO, so they draw below.
@@ -484,8 +480,8 @@ namespace bgl
 	ForwardPass::DrawTransparent(const DrawData& draw, const PassContext& resources)
 	{
 		ICommandList* cmd             = resources.GetCommandList();
-		const auto    sortedInstances = resources.GetBuffer(c_SortedTransparentBuffer);
-		const auto    transparentArgs = resources.GetBuffer(c_TransparentArgsBuffer);
+		const auto    sortedInstances = resources.GetBuffer(c_SortedTransparentInstancesName);
+		const auto    transparentArgs = resources.GetBuffer(c_TransparentDispatchArgsName);
 
 		// The sort leaves the whole list farthest-first and both transparent PSOs share one pipeline,
 		// so the depth-sorted draw is a single dispatch whose count lives entirely on the GPU.

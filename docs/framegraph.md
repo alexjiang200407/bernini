@@ -49,7 +49,10 @@ source of truth; when this doc disagrees, trust the header, then fix this doc.
   `ImportTexture` register an existing RHI handle under a string name; passes refer to that name.
   Attachments are resolved to their textures via the `IResourceManager`. A declared access whose
   name was never imported is a *transient*: it participates in dependency/ordering by name but has
-  no handle, so `PassContext::GetBuffer/GetTexture` throws for it.
+  no handle, so `PassContext::GetBuffer/GetTexture` throws for it. Because the match is by string,
+  every scene-side name is a constant in
+  [scene_buffer_names.h](../libs/bgl/src/scene/scene_buffer_names.h) that producer and consumer both
+  spell, rather than a literal typed at each end.
 
 * **Namespaces let many scopes share one graph, and they nest.** `SetResourceNamespace(ns)` prefixes
   subsequent imports and the name-resolution of subsequently-added passes. `ResolveName` tries
@@ -221,17 +224,17 @@ flowchart TD
 // Build (render thread) — order of imports vs passes is free.
 fg.RegisterQueue("main", queue, cmdList);
 fg.ImportTexture("backbuffer", backbufferHandle);          // resumes last frame's state
-fg.ImportBuffer("scene.meshletBuffer", meshletBufHandle);
+fg.ImportBuffer(c_MeshletBufferName, meshletBufHandle);
 
 PassDesc pass;
 pass.SetName("Forward")
     .AddColorAttachment(backbufferRtv)                     // graph transitions it to render-target
-    .AddBufferArg("scene.meshletBuffer",
+    .AddBufferArg(c_MeshletBufferName,
                   BarrierSyncFlag::kMeshShading,
                   BarrierAccessFlag::kShaderResource)      // graph transitions it to SRV
     .SetExec([](const PassContext& ctx) {
         ICommandList* cmd = ctx.GetCommandList();
-        BufferHandle  mb  = ctx.GetBuffer("scene.meshletBuffer");
+        BufferHandle  mb  = ctx.GetBuffer(c_MeshletBufferName);
         // record dispatch/draw — no Barrier() calls here
     });
 fg.AddPass(std::move(pass));

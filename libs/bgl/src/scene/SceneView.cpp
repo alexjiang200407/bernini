@@ -2,6 +2,7 @@
 #include "fg/FrameGraph.h"
 #include "idl/Constants.h"
 #include "scene/Scene.h"
+#include "scene/scene_buffer_names.h"
 #include "types/SubmeshInstance.h"
 #include "util/util.h"
 #include <core/math.h>
@@ -18,12 +19,10 @@ namespace bgl
 		// Paired positionally with SceneView::GetInstanceBuffers(); shorten one and you must
 		// shorten the other.
 		static constexpr std::array<BufferInfo, 3> c_InstanceBufferInfo = { {
-			{ "scene.instanceBuffer" },
-			{ "scene.meshInstanceBuffer" },
-			{ "scene.vatStateBuffer" },
+			{ c_InstanceBufferName },
+			{ c_MeshInstanceBufferName },
+			{ c_VatStateBufferName },
 		} };
-
-		constexpr std::string_view c_SelectedInstancesName = "scene.selectedInstances";
 
 		// The counting sort dispatches whole groups, so the instance buffer's tail past the live count
 		// must read as skippable: a default SubmeshInstance names no mesh and carries pso kInvalid,

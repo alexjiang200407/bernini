@@ -3,6 +3,7 @@
 #include "fg/FrameGraph.h"
 #include "idl/Constants.h"
 #include "idl/Meshlet.h"
+#include "scene/scene_buffer_names.h"
 #include "types/SubmeshInstance.h"
 #include "types/vk_format.h"
 #include "uniforms/Uniforms.h"
@@ -26,16 +27,16 @@ namespace bgl
 		// Order MUST stay in lockstep with Scene::GetBuffers() and with
 		// ForwardPass's c_ForwardDataBuffers.
 		static constexpr std::array<BufferInfo, 10> c_BufferInfo = {
-			{ { "scene.submeshBuffer" },
-			  { "scene.meshletBuffer" },
-			  { "scene.vertexMapBuffer" },
-			  { "scene.vertexDataBuffer" },
-			  { "scene.indexBuffer" },
-			  { "scene.pbrMaterialBuffer" },
-			  { "scene.looseMaterialBuffer" },
-			  { "scene.vatGeomBuffer" },
-			  { "scene.vatClipBuffer" },
-			  { "scene.vatColumnBuffer" } }
+			{ { c_SubmeshBufferName },
+			  { c_MeshletBufferName },
+			  { c_VertexMapBufferName },
+			  { c_VertexDataBufferName },
+			  { c_IndexBufferName },
+			  { c_PbrMaterialBufferName },
+			  { c_LooseMaterialBufferName },
+			  { c_VatGeomBufferName },
+			  { c_VatClipBufferName },
+			  { c_VatColumnBufferName } }
 		};
 
 		// The interleaved vertex layout the procedural geometry emits: position,

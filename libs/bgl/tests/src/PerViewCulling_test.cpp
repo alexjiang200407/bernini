@@ -12,6 +12,7 @@
 #include "scene/CullState.h"
 #include "scene/Scene.h"
 #include "scene/SceneView.h"
+#include "scene/scene_buffer_names.h"
 #include "util/GpuValidation.h"
 #include "util/TestOptions.h"
 #include <bgl/Camera.h>
@@ -225,11 +226,11 @@ TEST_CASE("One view culled against two frustums keeps both results", "[culling][
 			bgl::PassDesc()
 				.SetName("Readback {}", cullIdx)
 				.AddBufferArg(
-					"scene.compactedInstances",
+					bgl::c_CompactedInstancesName,
 					bgl::BarrierSyncFlag::kCopy,
 					bgl::BarrierAccessFlag::kCopySource)
 				.AddBufferArg(
-					"compactedInstances.psoPrefixSumBuffer",
+					bgl::c_PsoPrefixSumName,
 					bgl::BarrierSyncFlag::kCopy,
 					bgl::BarrierAccessFlag::kCopySource)
 				.SetSideEffect()
@@ -237,10 +238,10 @@ TEST_CASE("One view culled against two frustums keeps both results", "[culling][
 					auto* cmd = ctx.GetCommandList();
 					cmd->CopyBufferToReadback(
 						rbCompacted[cullIdx],
-						ctx.GetBuffer("scene.compactedInstances"));
+						ctx.GetBuffer(bgl::c_CompactedInstancesName));
 					cmd->CopyBufferToReadback(
 						rbPrefixSum[cullIdx],
-						ctx.GetBuffer("compactedInstances.psoPrefixSumBuffer"));
+						ctx.GetBuffer(bgl::c_PsoPrefixSumName));
 				}));
 	}
 

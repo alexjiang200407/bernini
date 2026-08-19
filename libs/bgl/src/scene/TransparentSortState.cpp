@@ -1,17 +1,10 @@
 #include "scene/TransparentSortState.h"
 #include "fg/FrameGraph.h"
 #include "idl/DispatchArgs.h"
+#include "scene/scene_buffer_names.h"
 
 namespace bgl
 {
-	namespace
-	{
-		constexpr std::string_view c_SortedName       = "scene.sortedTransparentInstances";
-		constexpr std::string_view c_EntriesName      = "scene.transparentSortEntries";
-		constexpr std::string_view c_CountName        = "scene.transparentSortCount";
-		constexpr std::string_view c_DispatchArgsName = "transparentSort.dispatchArgs";
-	}
-
 	void
 	TransparentSortState::Init(uint32_t paddedInstances, ResourceManagerRef resourceManager)
 	{
@@ -88,10 +81,10 @@ namespace bgl
 			updateArgs.emplace_back(name);
 		};
 
-		importUpdated(c_SortedName, m_SortedInstances);
-		importUpdated(c_EntriesName, m_Entries);
-		importUpdated(c_CountName, m_Count);
+		importUpdated(c_SortedTransparentInstancesName, m_SortedInstances);
+		importUpdated(c_TransparentSortEntriesName, m_Entries);
+		importUpdated(c_TransparentSortCountName, m_Count);
 
-		fg.ImportBuffer(c_DispatchArgsName, m_DispatchArgs.GetBufferHandle());
+		fg.ImportBuffer(c_TransparentDispatchArgsName, m_DispatchArgs.GetBufferHandle());
 	}
 }

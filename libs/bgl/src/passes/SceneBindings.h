@@ -1,5 +1,6 @@
 #pragma once
 #include "fg/PassDesc.h"
+#include "scene/scene_buffer_names.h"
 #include "uniforms/Uniforms.h"
 #include "util/util.h"
 
@@ -18,42 +19,42 @@ namespace bgl
 	// built on those shaders declares and binds all seven, so the set lives here rather than in
 	// any one pass.
 	constexpr std::array<SceneBuffer, 7> c_ForwardDataBuffers = {
-		{ { "scene.instanceBuffer",
+		{ { c_InstanceBufferName,
 		    "instanceBuffer",
 		    BarrierAccessFlag::kShaderResource,
 		    BarrierSyncFlag::kVertexShader },
-		  { "scene.meshInstanceBuffer",
+		  { c_MeshInstanceBufferName,
 		    "meshBuffer",
 		    BarrierAccessFlag::kShaderResource,
 		    BarrierSyncFlag::kVertexShader },
-		  { "scene.submeshBuffer",
+		  { c_SubmeshBufferName,
 		    "submeshBuffer",
 		    BarrierAccessFlag::kShaderResource,
 		    BarrierSyncFlag::kVertexShader },
-		  { "scene.meshletBuffer",
+		  { c_MeshletBufferName,
 		    "meshletBuffer",
 		    BarrierAccessFlag::kShaderResource,
 		    BarrierSyncFlag::kVertexShader },
-		  { "scene.vertexMapBuffer",
+		  { c_VertexMapBufferName,
 		    "vertexMapBuffer",
 		    BarrierAccessFlag::kShaderResource,
 		    BarrierSyncFlag::kVertexShader },
-		  { "scene.vertexDataBuffer",
+		  { c_VertexDataBufferName,
 		    "vertexDataBuffer",
 		    BarrierAccessFlag::kShaderResource,
 		    BarrierSyncFlag::kVertexShader },
-		  { "scene.indexBuffer",
+		  { c_IndexBufferName,
 		    "indexBuffer",
 		    BarrierAccessFlag::kShaderResource,
 		    BarrierSyncFlag::kVertexShader } }
 	};
 
 	constexpr std::array<SceneBuffer, 2> c_ExpansionBuffers = {
-		{ { "scene.compactedInstances",
+		{ { c_CompactedInstancesName,
 		    "compactedInstances",
 		    BarrierAccessFlag::kUnorderedAccess,
 		    BarrierSyncFlag::kVertexShader },
-		  { "compactedInstances.psoPrefixSumBuffer",
+		  { c_PsoPrefixSumName,
 		    "psoPrefixSum",
 		    BarrierAccessFlag::kUnorderedAccess,
 		    BarrierSyncFlag::kVertexShader } }
