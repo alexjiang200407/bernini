@@ -58,7 +58,8 @@ not obvious from a signature. The headers linked below are the source of truth.
 | Stage | Where | What it does |
 |---|---|---|
 | Import | `assetlib` | A glTF skin becomes `.bskel` (bones, topologically sorted, with inverse binds) + `.banim` (clips resampled to a fixed rate, frame-major local TRS) + `joints0`/`weights0` on the `.bmesh` |
-| Acquire | [`AssetManager::AcquireSkinnedMesh`](libs/gamelib/include/gamelib/AssetManager.h) | Reads the three containers, checks the clip set still matches its rig, uploads |
+| Bound | [`assetlib::posedBounds`](libs/assetlib/include/assetlib/skinning.h) | Skins every vertex at every frame for the box the geom culls by |
+| Acquire | [`AssetManager::AcquireSkinnedMesh`](libs/gamelib/include/gamelib/AssetManager.h) | Reads the three containers, checks the clip set still matches its rig, bounds the pose unless given a box, uploads |
 | Upload | [`IScene::AddSkinnedMeshGeom`](libs/bgl/include/bgl/IScene.h) | Bones, clip table and sample pool become scene buffers; per-bone depth is derived here |
 | Place | [`ISceneView::CreateSkinnedMeshInstance`](libs/bgl/include/bgl/ISceneView.h) | Writes the playback record and reserves the instance's palette slice |
 | Pose | [`SkinnedPosePass`](libs/bgl/src/passes/SkinnedPosePass.h) | One workgroup per instance: sample, blend, walk the hierarchy, multiply by inverse bind |
@@ -72,9 +73,18 @@ not obvious from a signature. The headers linked below are the source of truth.
   `AcquireSkinnedMesh` is the only door that catches it; anything constructing a geom another way
   inherits the gap, which is why `AddSkinnedMeshGeom` documents it.
 
-* **Culling bounds are the bind pose's.** A submesh keeps its cooked bind-pose sphere, because there
-  is no all-clips box for a skinned rig the way there is for a bake. A pose that swings a limb outside
-  that sphere culls early. Nothing widens it yet.
+* **Culling bounds are the caller's posed box, and `bgl` cannot measure it.** `AddSkinnedMeshGeom`
+  takes one and derives every submesh's sphere from it, the same rule VAT follows. The bind pose is
+  not a substitute: it stops holding the moment a limb moves, and a rig whose clips are authored in
+  different units than its bind pose poses two orders of magnitude larger, so bind-pose culling makes
+  it disappear as soon as the camera turns. Measuring the box means skinning a vertex, which means
+  decoding a vertex layout — `assetlib`, which `bgl` does not link. `assetlib::posedBounds` is that
+  walk (every vertex at every frame, the same one `bakeVat` makes), and `AcquireSkinnedMesh` makes it
+  unless the caller hands over a box it already has. The editor does: the walk is seconds on a dense
+  rig and the acquire runs on the render thread, so the panel measures it inside its loading screen
+  and passes the result down — one box per animated mesh entry, because it is that geom's culling
+  volume and a `.bmesh` may hold two rigged meshes. Measuring it at load is a stopgap: it belongs in
+  the container, the way `bakeVat` writes `boundsMin`/`boundsMax` into a `.bvat`.
 
 * **The palette buffer is GPU-written, so it is not a `RangeBuffer`.** That type mirrors its contents
   on the CPU and re-uploads a dirty range, which would overwrite what the pose pass wrote.

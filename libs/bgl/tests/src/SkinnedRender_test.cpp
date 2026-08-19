@@ -2,6 +2,7 @@
 #include "util/TestEnvironment.h"
 #include "util/TestOptions.h"
 #include "util/VelocityReadback.h"
+#include <assetlib_structs/Bounds.h>
 #include <bgl/Camera.h>
 #include <bgl/IGraphics.h>
 #include <bgl/IScene.h>
@@ -39,6 +40,11 @@ namespace
 	{
 		std::memcpy(bytes.data() + at, values.data(), values.size() * sizeof(uint16_t));
 	}
+
+	// Every pose the swing below reaches, with room to spare. The strip's own bind-pose box does not
+	// hold once the top edge rotates, and the geom culls by this -- see IScene::AddSkinnedMeshGeom.
+	const auto c_StripPosedBounds =
+		assetlib::Bounds{ glm::vec3(-3.0f, -3.0f, -3.0f), glm::vec3(3.0f, 3.0f, 3.0f) };
 
 	/**
 	 * A vertical strip from y = 0 to y = 2, two triangles. Its bottom vertices are bound entirely to
@@ -123,11 +129,8 @@ namespace
 		submesh.meshletCount          = 1;
 		submesh.material              = 0;
 
-		// Deliberately wider than the bind pose: skinned culling bounds come from the bind pose (see
-		// IScene::AddSkinnedMeshGeom), so a test about a pose leaving it would otherwise be a test
-		// about culling.
-		submesh.aabbMin = glm::vec3(-3.0f);
-		submesh.aabbMax = glm::vec3(3.0f);
+		submesh.aabbMin = glm::vec3(-0.5f, 0.0f, 0.0f);
+		submesh.aabbMax = glm::vec3(0.5f, 2.0f, 0.0f);
 		mesh.submeshes.push_back(submesh);
 
 		auto entry         = assetlib::Mesh();
@@ -272,7 +275,8 @@ TEST_CASE(
 		0,
 		materials,
 		MakeTwoBoneRig(),
-		MakeSwingClip());
+		MakeSwingClip(),
+		c_StripPosedBounds);
 	REQUIRE(staticGeom.IsValid());
 	REQUIRE(skinnedGeom.IsValid());
 
@@ -342,7 +346,8 @@ TEST_CASE("a posed skinned mesh moves the bones' vertices and nothing else", "[s
 		0,
 		materials,
 		MakeTwoBoneRig(),
-		MakeSwingClip());
+		MakeSwingClip(),
+		c_StripPosedBounds);
 	REQUIRE(geom.IsValid());
 
 	auto job     = bgl::RenderJob();
@@ -406,7 +411,8 @@ TEST_CASE("a vertex bound to no bone keeps its bind pose", "[skinned][render]")
 		0,
 		materials,
 		MakeTwoBoneRig(),
-		MakeSwingClip());
+		MakeSwingClip(),
+		c_StripPosedBounds);
 	REQUIRE(geom.IsValid());
 
 	auto job     = bgl::RenderJob();
@@ -471,7 +477,8 @@ TEST_CASE(
 		0,
 		materials,
 		MakeTwoBoneRig(),
-		MakeSwingClip());
+		MakeSwingClip(),
+		c_StripPosedBounds);
 
 	auto job     = bgl::RenderJob();
 	job.view     = view;

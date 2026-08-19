@@ -8,6 +8,7 @@
 #include "scene/SceneView.h"
 #include "util/TestEnvironment.h"
 #include "util/TestOptions.h"
+#include <assetlib_structs/Bounds.h>
 #include <bgl/Camera.h>
 #include <bgl/IGraphics.h>
 #include <catch2/catch_approx.hpp>
@@ -273,9 +274,13 @@ TEST_CASE("the pose pass writes the palette a rig's hierarchy implies", "[skinne
 
 	const std::array<bgl::MaterialHandle, 1> materials = { { pbr } };
 
-	const auto geom =
-		scene
-			->AddSkinnedMeshGeom(MakeSkinnedTriangle(), 0, materials, MakeChain(), MakeSwingClip());
+	const auto geom = scene->AddSkinnedMeshGeom(
+		MakeSkinnedTriangle(),
+		0,
+		materials,
+		MakeChain(),
+		MakeSwingClip(),
+		assetlib::Bounds{ glm::vec3(-4.0f), glm::vec3(4.0f) });
 	REQUIRE(geom.IsValid());
 
 	auto camera = bgl::Camera();

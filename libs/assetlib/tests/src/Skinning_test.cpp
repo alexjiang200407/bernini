@@ -2,6 +2,7 @@
 #include <assetlib/skinning.h>
 #include <assetlib_structs/Animation.h>
 #include <assetlib_structs/BMesh.h>
+#include <assetlib_structs/Bounds.h>
 #include <assetlib_structs/Skeleton.h>
 
 #include <catch2/catch_approx.hpp>

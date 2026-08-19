@@ -1,6 +1,7 @@
 #pragma once
 #include <assetlib_structs/Animation.h>
 #include <assetlib_structs/BMesh.h>
+#include <assetlib_structs/Bounds.h>
 #include <assetlib_structs/ImageData.h>
 #include <assetlib_structs/Skeleton.h>
 #include <bgl/GeomHandle.h>
@@ -290,10 +291,15 @@ namespace bgl
 		 * `assetlib_structs` PODs with nothing to decode, so there is no desc to mirror them into.
 		 *
 		 * Each submesh must carry `joints0` and `weights0` -- a submesh with no skin binding has no
-		 * bones to follow and would draw its bind pose while the rest of the mesh moved. Culling
-		 * bounds come from each submesh's cooked bind-pose sphere, which is the one thing this shares
-		 * with the static path and not with VAT: a skinned submesh has no all-clips box to widen to
-		 * yet, so a pose that leaves the bind-pose sphere can cull early.
+		 * bones to follow and would draw its bind pose while the rest of the mesh moved.
+		 *
+		 * Every submesh's culling sphere comes from `posedBounds`, not its bind pose -- the same rule
+		 * VAT follows, and for the same reason: the bind pose's box does not hold once a limb moves,
+		 * and a rig whose clips are authored in different units than its bind pose poses two orders of
+		 * magnitude larger, so bind-pose culling makes it vanish. bgl cannot measure the box itself:
+		 * skinning a vertex means decoding a vertex layout, which lives in assetlib. Whoever loaded
+		 * the containers measures it -- `assetlib::posedBounds` is that walk, and gamelib's acquire
+		 * makes it.
 		 *
 		 * `materials` must resolve every submesh to an opaque `kPBR` material, the same constraint
 		 * VAT carries and for the same reason: no other variant of the pipeline exists.
@@ -303,11 +309,13 @@ namespace bgl
 		 * @param materials   Materials parallel to `mesh.materials`, resolved by the caller.
 		 * @param skeleton    The rig the mesh's joint indices address.
 		 * @param animations  Clips cooked against `skeleton`.
+		 * @param posedBounds A box holding the mesh in every pose of every clip, in model space.
 		 * @throws SceneError for anything AddStaticMeshGeom refuses, a skeleton with no bones or more
 		 *         than `cMaxBonesPerRig`, bones that are not topologically sorted, an `animations`
 		 *         whose bone count disagrees with `skeleton`, an empty or zero-frame clip table, a
-		 *         clip whose samples fall outside the pool, a submesh without skin binding, or a
-		 *         submesh whose material does not resolve to opaque kPBR.
+		 *         clip whose samples fall outside the pool, a submesh without skin binding, a submesh
+		 *         whose material does not resolve to opaque kPBR, or a `posedBounds` whose min exceeds
+		 *         its max on any axis.
 		 *
 		 * `AnimationSet::skeletonSignature` is deliberately **not** checked here: computing a
 		 * skeleton's signature needs assetlib, which bgl does not link. A clip set cooked against a
@@ -320,7 +328,8 @@ namespace bgl
 			uint32_t                        meshIndex,
 			std::span<const MaterialHandle> materials,
 			const assetlib::Skeleton&       skeleton,
-			const assetlib::AnimationSet&   animations) = 0;
+			const assetlib::AnimationSet&   animations,
+			const assetlib::Bounds&         posedBounds) = 0;
 
 		virtual TextureAssetHandle
 		AddTextureAsset(assetlib::ImageData img, std::string debugName = "") = 0;
