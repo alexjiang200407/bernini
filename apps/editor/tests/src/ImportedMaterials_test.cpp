@@ -422,6 +422,37 @@ TEST_CASE("A cutout import survives the round-trip to disk", "[importedmaterials
 	CHECK(material.pbr.routes[assetlib::channelIndex(PbrChannel::kBaseColorA)].channel == 3);
 }
 
+// The whole chain in one assertion: the glTF extension the importer reads, through the graph the
+// sink rebuilds, to the .bmaterial the renderer loads. 0 is the value that matters -- every animal
+// in the pack was authored with its specular switched off, and anywhere along here that drops it
+// the surface gets a 0.04 sheen back with nothing in the file to say why.
+TEST_CASE("An import's specular factors survive the round-trip to disk", "[importedmaterials]")
+{
+	const TempProject project;
+
+	auto fur                = PbrMaterial();
+	fur.specularFactor      = 0.0f;
+	fur.specularColorFactor = glm::vec3(1.0f, 0.77f, 0.34f);
+
+	const auto imported = ImportWith({ fur }, { "Fur" });
+	auto       mesh     = assetlib::toBMesh(imported);
+
+	editor::WriteImportedMaterials(
+		imported,
+		mesh,
+		project.Data(),
+		project.MaterialDir(),
+		project.TextureDir(),
+		StemsFor(imported));
+
+	const assetlib::BMaterial material =
+		assetlib::loadMaterial(project.MaterialDir() / "Fur.bmaterial");
+
+	CHECK(material.pbr.specularFactor == 0.0f);
+	CHECK(material.pbr.specularColorFactor.g == Catch::Approx(0.77f));
+	CHECK(material.pbr.specularColorFactor.b == Catch::Approx(0.34f));
+}
+
 TEST_CASE("One texture used as two maps routes both at the same file", "[importedmaterials]")
 {
 	const TempProject project;

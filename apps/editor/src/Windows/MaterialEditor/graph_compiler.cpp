@@ -50,6 +50,9 @@ namespace editor
 		desc.alphaCutoff        = output->GetAlphaCutoff();
 		desc.transmissionFactor = output->GetTransmission();
 
+		desc.specularColorFactor = output->GetSpecularColorFactor();
+		desc.specularFactor      = output->GetSpecularFactor();
+
 		const auto route = [&](unsigned int channel) {
 			const ChannelData::Route wired = output->Route(channel);
 

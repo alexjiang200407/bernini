@@ -150,6 +150,49 @@ TEST_CASE("A blend import carries its transmission through the graph", "[materia
 	CHECK(material.pbr.transmissionFactor == Catch::Approx(0.85f));
 }
 
+// The sink is what CompileMaterial reads, so a factor the node does not hold is silently reset the
+// first time an imported material is opened and saved -- and a squirrel whose author switched the
+// specular off gets its sheen back with nothing in the file to say why.
+TEST_CASE("An import carries its specular factors through the graph", "[materialimport]")
+{
+	auto imported                = assetlib::imp::BMaterialImport();
+	imported.specularFactor      = 0.0f;
+	imported.specularColorFactor = glm::vec3(1.0f, 0.77f, 0.34f);
+
+	MaterialGraphModel model(MakeMaterialNodeRegistry(nullptr, nullptr));
+	BuildImportedMaterialGraph(model, imported, AllMaps());
+
+	REQUIRE(model.OutputNode() != nullptr);
+	CHECK(model.OutputNode()->GetSpecularFactor() == 0.0f);
+
+	const assetlib::BMaterial material =
+		CompileMaterial(model, QStringLiteral("squirrel"), c_DataRoot);
+
+	CHECK(material.pbr.specularFactor == 0.0f);
+	CHECK(material.pbr.specularColorFactor.g == Catch::Approx(0.77f));
+
+	// An opaque sink carries them as much as any other: specular is not a property of the alpha mode.
+	CHECK(material.pbr.alphaMode == assetlib::AlphaMode::kOpaque);
+}
+
+// A graph saved before the specular keys existed carries none of them, and must load as glTF's
+// defaults rather than as whatever the sink happened to hold.
+TEST_CASE("A graph with no specular keys loads at the defaults", "[materialimport]")
+{
+	MaterialGraphModel    model(MakeMaterialNodeRegistry(nullptr, nullptr));
+	const QtNodes::NodeId id = model.addNode(QStringLiteral("MaterialOutput"));
+
+	auto* output = model.delegateModel<MaterialOutputNode>(id);
+	REQUIRE(output != nullptr);
+
+	auto factors        = QJsonObject();
+	factors["metallic"] = 0.25;
+	output->load(factors);
+
+	CHECK(output->GetSpecularFactor() == 1.0f);
+	CHECK(output->GetSpecularColorFactor() == glm::vec3(1.0f));
+}
+
 // Every sink but the blend one compiles to a mode that never reads transmission, and a graph saved
 // before the factor existed carries no key for it. Both must land on 0 rather than on whatever the
 // sink happened to hold -- that is what leaves hair, foliage and every material baked so far
