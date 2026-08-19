@@ -4,6 +4,7 @@
 
 #include <assetlib/skeleton.h>
 
+#include "AssetSchemaBuilder.h"
 #include "chunk_io.h"
 #include "fs_util.h"
 
@@ -20,7 +21,7 @@ namespace assetlib
 
 	namespace
 	{
-		constexpr uint16_t c_VersionMajor = 1;
+		constexpr uint16_t c_VersionMajor = 2;
 		constexpr uint16_t c_VersionMinor = 0;
 
 		constexpr std::string_view c_What = "banim";
@@ -30,76 +31,90 @@ namespace assetlib
 			kClips = 1,
 			kSamples,
 			kStringPool,
-			kSkeletonRef  // the .bskel path, then the signature and bone count it was cooked against
+			kSkeletonRef,  // the signature and bone count the clips were cooked against
+			kSkeletonPath  // the .bskel path
 		};
 
+		/** What the clips were cooked against, so a rig that has changed since is refused. */
 		struct SkeletonRef
 		{
 			uint64_t signature;
 			uint32_t boneCount;
-			uint32_t pathLength;
 		};
 
 		static_assert(sizeof(SkeletonRef) == 16);
 
-		std::vector<std::byte>
+		const schema::Schema&
+		animationSchema()
+		{
+			static const schema::Schema c_Schema =
+				AssetSchemaBuilder()
+					.AddTransform()
+					.AddAnimationClip()
+					.AddLayout<SkeletonRef>(
+						"SkeletonRef",
+						[](auto& layout) {
+							layout.AddField("signature", &SkeletonRef::signature)
+								.AddField("boneCount", &SkeletonRef::boneCount);
+						})
+					.Finish();
+			return c_Schema;
+		}
+
+		std::vector<SkeletonRef>
 		packSkeletonRef(const AnimationSet& animations)
 		{
 			SkeletonRef ref{};
-			ref.signature  = animations.skeletonSignature;
-			ref.boneCount  = animations.boneCount;
-			ref.pathLength = static_cast<uint32_t>(animations.skeleton.size());
-
-			std::vector<std::byte> out(sizeof(ref) + animations.skeleton.size());
-			std::memcpy(out.data(), &ref, sizeof(ref));
-			std::memcpy(out.data() + sizeof(ref), animations.skeleton.data(), ref.pathLength);
-			return out;
+			ref.signature = animations.skeletonSignature;
+			ref.boneCount = animations.boneCount;
+			return { ref };
 		}
 
 		void
-		unpackSkeletonRef(AnimationSet& animations, std::span<const std::byte> bytes)
+		unpackSkeletonRef(
+			AnimationSet&                animations,
+			std::span<const SkeletonRef> ref,
+			std::span<const char>        path)
 		{
-			if (bytes.empty())
-				return;
-
-			if (bytes.size() < sizeof(SkeletonRef))
-				throw_runtime_error("banim: the skeleton reference chunk is truncated");
-
-			SkeletonRef ref{};
-			std::memcpy(&ref, bytes.data(), sizeof(ref));
-
-			if (sizeof(ref) + ref.pathLength > bytes.size())
-				throw_runtime_error("banim: the skeleton path runs past its chunk");
-
-			animations.skeletonSignature = ref.signature;
-			animations.boneCount         = ref.boneCount;
-			animations.skeleton.assign(
-				reinterpret_cast<const char*>(bytes.data() + sizeof(ref)),
-				ref.pathLength);
+			core::throw_runtime_error_if(
+				ref.size() > 1,
+				"banim: the skeleton reference chunk holds {} entries",
+				ref.size());
+			if (!ref.empty())
+			{
+				animations.skeletonSignature = ref[0].signature;
+				animations.boneCount         = ref[0].boneCount;
+			}
+			animations.skeleton.assign(path.begin(), path.end());
 		}
 	}
 
 	std::vector<std::byte>
 	serializeAnimations(const AnimationSet& animations)
 	{
-		chunk::Writer writer;
+		chunk::Writer writer(animationSchema());
 		writer.Add(ChunkId::kClips, animations.clips);
 		writer.Add(ChunkId::kSamples, animations.samples);
 		writer.Add(ChunkId::kStringPool, animations.stringPool.bytes());
 		writer.Add(ChunkId::kSkeletonRef, packSkeletonRef(animations));
+		writer.Add(ChunkId::kSkeletonPath, std::span<const char>(animations.skeleton));
 		return writer.Finish(magic::c_BAnim, c_VersionMajor, c_VersionMinor);
 	}
 
 	AnimationSet
 	deserializeAnimations(std::span<const std::byte> bytes)
 	{
-		const chunk::Reader reader(bytes, magic::c_BAnim, c_VersionMajor, c_What);
+		const chunk::Reader
+			reader(bytes, magic::c_BAnim, c_VersionMajor, c_What, animationSchema());
 
 		AnimationSet animations;
 		animations.clips      = reader.Read<AnimationClip>(ChunkId::kClips);
 		animations.samples    = reader.Read<Transform>(ChunkId::kSamples);
 		animations.stringPool = core::string_pool(reader.Read<char>(ChunkId::kStringPool));
-		unpackSkeletonRef(animations, reader.Read<std::byte>(ChunkId::kSkeletonRef));
+		unpackSkeletonRef(
+			animations,
+			reader.Read<SkeletonRef>(ChunkId::kSkeletonRef),
+			reader.Read<char>(ChunkId::kSkeletonPath));
 
 		validateAnimationSet(animations);
 		return animations;
@@ -126,17 +141,14 @@ namespace assetlib
 	namespace
 	{
 		constexpr std::array<uint32_t, 1> c_WantedRefChunks = { { uint32_t(
-			ChunkId::kSkeletonRef) } };
+			ChunkId::kSkeletonPath) } };
 
 		std::string
 		skeletonPathFromChunks(const chunk::ChunkData& chunks)
 		{
-			if (!chunks.Contains(uint32_t(ChunkId::kSkeletonRef)))
-				return {};
-
-			AnimationSet animations;
-			unpackSkeletonRef(animations, chunks.Get(uint32_t(ChunkId::kSkeletonRef)));
-			return animations.skeleton;
+			const auto path =
+				chunks.Read<char>(static_cast<uint32_t>(ChunkId::kSkeletonPath), animationSchema());
+			return std::string(path.begin(), path.end());
 		}
 	}
 

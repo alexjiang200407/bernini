@@ -2,12 +2,13 @@
 
 #include <assetlib_structs/BEnv.h>
 #include <assetlib_structs/magic.h>
+#include <core/err/util.h>
 #include <core/file/file.h>
-#include <core/io/ByteReader.h>
-#include <core/io/ByteWriter.h>
+#include <core/str/string_pool.h>
 
+#include "AssetSchemaBuilder.h"
+#include "chunk_io.h"
 #include "fs_util.h"
-#include "string_io.h"
 
 #include "mounted_io.h"
 
@@ -15,51 +16,74 @@ namespace assetlib
 {
 	namespace
 	{
-		// 1 was the retired blob format that embedded the three maps as KTX2 chunks. Refusing it by
-		// number is what turns a stale file into "re-import" rather than a misread: its version field
-		// sits at the same offset, and what follows would be read as string lengths.
-		constexpr uint16_t c_EnvVersionMajor = 2;
+		constexpr uint16_t c_EnvVersionMajor = 3;
 		constexpr uint16_t c_EnvVersionMinor = 0;
+
+		constexpr std::string_view c_What = "benv";
+
+		enum class ChunkId : uint32_t
+		{
+			kEnv = 1,  // one EnvRecord
+			kStringPool
+		};
+
+		struct EnvRecord
+		{
+			uint32_t nameOffset;
+			uint32_t skyOffset;
+			uint32_t lightingOffset;
+		};
+
+		static_assert(sizeof(EnvRecord) == 12);
+
+		const schema::Schema&
+		envSchema()
+		{
+			static const schema::Schema c_Schema =
+				schema::SchemaBuilder()
+					.AddLayout<EnvRecord>(
+						"EnvRecord",
+						[](auto& layout) {
+							layout.AddField("nameOffset", &EnvRecord::nameOffset)
+								.AddField("skyOffset", &EnvRecord::skyOffset)
+								.AddField("lightingOffset", &EnvRecord::lightingOffset);
+						})
+					.Finish();
+			return c_Schema;
+		}
 	}
 
 	std::vector<std::byte>
 	serializeEnv(const BEnv& env)
 	{
-		core::io::ByteWriter writer;
-		writer.WritePod(magic::c_BEnv);
-		writer.WritePod(c_EnvVersionMajor);
-		writer.WritePod(c_EnvVersionMinor);
+		core::string_pool pool;
+		EnvRecord         record{};
+		record.nameOffset     = pool.add(env.name);
+		record.skyOffset      = pool.add(env.sky);
+		record.lightingOffset = pool.add(env.lighting);
 
-		writeString(writer, env.name);
-		writeString(writer, env.sky);
-		writeString(writer, env.lighting);
-
-		return writer.Take();
+		chunk::Writer writer(envSchema());
+		writer.Add(ChunkId::kEnv, std::vector<EnvRecord>{ record });
+		writer.Add(ChunkId::kStringPool, pool.bytes());
+		return writer.Finish(magic::c_BEnv, c_EnvVersionMajor, c_EnvVersionMinor);
 	}
 
 	BEnv
 	deserializeEnv(std::span<const std::byte> bytes)
 	{
-		core::io::ByteReader reader(bytes);
+		const chunk::Reader reader(bytes, magic::c_BEnv, c_EnvVersionMajor, c_What, envSchema());
 
-		if (reader.ReadPod<uint32_t>() != magic::c_BEnv)
-			throw std::runtime_error("benv: bad magic");
-
-		const auto versionMajor = reader.ReadPod<uint16_t>();
-
-		// The minor version is additive within a major, and nothing here is optional yet.
-		static_cast<void>(reader.ReadPod<uint16_t>());
-
-		if (versionMajor != c_EnvVersionMajor)
-			throw std::runtime_error(
-				"benv: unsupported version " + std::to_string(versionMajor) + " (expected " +
-				std::to_string(c_EnvVersionMajor) +
-				"); a v1 .benv holds baked maps and must be re-imported as .bsky + .benvl");
+		const auto records = reader.Require<EnvRecord>(ChunkId::kEnv);
+		core::throw_runtime_error_if(
+			records.size() != 1,
+			"benv: the env chunk holds {} entries, not one",
+			records.size());
+		const core::string_pool pool(reader.Read<char>(ChunkId::kStringPool));
 
 		BEnv env;
-		env.name     = readString(reader);
-		env.sky      = readString(reader);
-		env.lighting = readString(reader);
+		env.name     = pool.at(records[0].nameOffset);
+		env.sky      = pool.at(records[0].skyOffset);
+		env.lighting = pool.at(records[0].lightingOffset);
 		return env;
 	}
 

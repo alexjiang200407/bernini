@@ -2,65 +2,95 @@
 #include <assetlib_structs/BEnv.h>
 #include <assetlib_structs/magic.h>
 
+#include "AssetSchemaBuilder.h"
+#include "chunk_io.h"
 #include "env_route_io.h"
 #include "fs_util.h"
-#include "string_io.h"
 
+#include <core/err/util.h>
 #include <core/file/file.h>
-#include <core/io/ByteReader.h>
-#include <core/io/ByteWriter.h>
+#include <core/str/string_pool.h>
 
 #include "mounted_io.h"
 
 namespace assetlib
 {
-	using core::io::ByteReader;
-	using core::io::ByteWriter;
-
 	namespace
 	{
-		constexpr uint16_t c_VersionMajor = 2;
+		constexpr uint16_t c_VersionMajor = 3;  // 3: a chunk container with a schema
 		constexpr uint16_t c_VersionMinor = 0;
+
+		constexpr std::string_view c_What = "bsky";
+
+		enum class ChunkId : uint32_t
+		{
+			kSky = 1,  // one SkyRecord
+			kStringPool
+		};
+
+		struct SkyRecord
+		{
+			uint32_t       nameOffset;
+			uint32_t       mipLevel;
+			float          rotationY;
+			EnvRouteRecord sky;
+		};
+
+		static_assert(sizeof(SkyRecord) == 40);
+
+		const schema::Schema&
+		skySchema()
+		{
+			static const schema::Schema c_Schema =
+				AssetSchemaBuilder()
+					.AddSourceStamp()
+					.AddLayout<EnvRouteRecord>("EnvMapRoute", describeEnvRoute)
+					.AddLayout<SkyRecord>(
+						"SkyRecord",
+						[](auto& layout) {
+							layout.AddField("nameOffset", &SkyRecord::nameOffset)
+								.AddField("mipLevel", &SkyRecord::mipLevel)
+								.AddField("rotationY", &SkyRecord::rotationY)
+								.AddField("sky", &SkyRecord::sky);
+						})
+					.Finish();
+			return c_Schema;
+		}
 	}
 
 	std::vector<std::byte>
 	serializeSky(const BSky& sky)
 	{
-		ByteWriter writer;
-		writer.WritePod(magic::c_BSky);
-		writer.WritePod(c_VersionMajor);
-		writer.WritePod(c_VersionMinor);
+		core::string_pool pool;
+		SkyRecord         record{};
+		record.nameOffset = pool.add(sky.name);
+		record.mipLevel   = sky.mipLevel;
+		record.rotationY  = sky.rotationY;
+		record.sky        = packRoute(sky.sky, pool);
 
-		writeString(writer, sky.name);
-		writeRoute(writer, sky.sky);
-		writer.WritePod(sky.mipLevel);
-		writer.WritePod(sky.rotationY);
-
-		return writer.Take();
+		chunk::Writer writer(skySchema());
+		writer.Add(ChunkId::kSky, std::vector<SkyRecord>{ record });
+		writer.Add(ChunkId::kStringPool, pool.bytes());
+		return writer.Finish(magic::c_BSky, c_VersionMajor, c_VersionMinor);
 	}
 
 	BSky
 	deserializeSky(std::span<const std::byte> bytes)
 	{
-		ByteReader reader(bytes);
+		const chunk::Reader reader(bytes, magic::c_BSky, c_VersionMajor, c_What, skySchema());
 
-		if (reader.ReadPod<uint32_t>() != magic::c_BSky)
-			throw std::runtime_error("bsky: bad magic");
-
-		const auto versionMajor = reader.ReadPod<uint16_t>();
-		// The minor version is additive within a major, and nothing here is optional yet.
-		static_cast<void>(reader.ReadPod<uint16_t>());
-
-		if (versionMajor != c_VersionMajor)
-			throw std::runtime_error(
-				"bsky: unsupported version " + std::to_string(versionMajor) + " (expected " +
-				std::to_string(c_VersionMajor) + ")");
+		const auto records = reader.Require<SkyRecord>(ChunkId::kSky);
+		core::throw_runtime_error_if(
+			records.size() != 1,
+			"bsky: the sky chunk holds {} entries, not one",
+			records.size());
+		const core::string_pool pool(reader.Read<char>(ChunkId::kStringPool));
 
 		BSky sky;
-		sky.name      = readString(reader);
-		sky.sky       = readRoute(reader);
-		sky.mipLevel  = reader.ReadPod<uint32_t>();
-		sky.rotationY = reader.ReadPod<float>();
+		sky.name      = pool.at(records[0].nameOffset);
+		sky.mipLevel  = records[0].mipLevel;
+		sky.rotationY = records[0].rotationY;
+		sky.sky       = unpackRoute(records[0].sky, pool);
 		return sky;
 	}
 

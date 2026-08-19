@@ -4,93 +4,173 @@
 #include <assetlib_structs/magic.h>
 #include <core/file/LooseFileSystem.h>
 
+#include "AssetSchemaBuilder.h"
+#include "chunk_io.h"
 #include "fs_util.h"
-#include "string_io.h"
 
+#include <core/err/util.h>
 #include <core/file/file.h>
-#include <core/io/ByteReader.h>
-#include <core/io/ByteWriter.h>
+#include <core/str/string_pool.h>
 
 #include "mounted_io.h"
 
 namespace assetlib
 {
-	using core::io::ByteReader;
-	using core::io::ByteWriter;
-
 	namespace
 	{
-		constexpr uint16_t c_VersionMajor = 10;
+		constexpr uint16_t c_VersionMajor = 11;  // 11: a chunk container with a schema
 		constexpr uint16_t c_VersionMinor = 0;
 
-		void
-		writePbr(ByteWriter& writer, const PbrParams& pbr)
+		constexpr std::string_view c_What = "bmaterial";
+
+		enum class ChunkId : uint32_t
 		{
-			writer.WritePod(pbr.baseColorFactor);
-			writer.WritePod(pbr.metallicFactor);
-			writer.WritePod(pbr.roughnessFactor);
-			writeString(writer, pbr.baseColorTexture);
-			writeString(writer, pbr.normalTexture);
-			writeString(writer, pbr.ormTexture);
-			for (const ChannelRoute& route : pbr.routes)
+			kMaterial = 1,  // one MaterialRecord
+			kStringPool,
+			kPbr  // one PbrRecord, when the shading model is PBR
+		};
+
+		/** The part of a BMaterial every shading model has; its strings live in the pool. */
+		struct MaterialRecord
+		{
+			uint32_t shadingModel;
+			uint32_t nameOffset;
+			uint32_t editorGraphOffset;
+		};
+
+		static_assert(sizeof(MaterialRecord) == 12);
+
+		struct RouteRecord
+		{
+			uint32_t textureOffset;
+			uint16_t channel;
+		};
+
+		static_assert(sizeof(RouteRecord) == 8);
+
+		/** PbrParams as it is stored: paths as pool offsets, the routes and stamps as arrays. */
+		struct PbrRecord
+		{
+			glm::vec4                                    baseColorFactor;
+			float                                        metallicFactor;
+			float                                        roughnessFactor;
+			uint32_t                                     alphaMode;
+			float                                        alphaCutoff;
+			float                                        transmissionFactor;
+			uint32_t                                     baseColorTextureOffset;
+			uint32_t                                     normalTextureOffset;
+			uint32_t                                     ormTextureOffset;
+			std::array<RouteRecord, c_LooseChannelCount> routes;
+			std::array<SourceStamp, c_LooseChannelCount> routeStamps;
+		};
+
+		static_assert(sizeof(PbrRecord) == 48 + c_LooseChannelCount * (8 + 16));
+
+		const schema::Schema&
+		materialSchema()
+		{
+			static const schema::Schema c_Schema =
+				AssetSchemaBuilder()
+					.AddSourceStamp()
+					.AddLayout<MaterialRecord>(
+						"MaterialRecord",
+						[](auto& layout) {
+							layout.AddField("shadingModel", &MaterialRecord::shadingModel)
+								.AddField("nameOffset", &MaterialRecord::nameOffset)
+								.AddField("editorGraphOffset", &MaterialRecord::editorGraphOffset);
+						})
+					.AddLayout<RouteRecord>(
+						"RouteRecord",
+						[](auto& layout) {
+							layout.AddField("textureOffset", &RouteRecord::textureOffset)
+								.AddField("channel", &RouteRecord::channel);
+						})
+					.AddLayout<PbrRecord>(
+						"PbrRecord",
+						[](auto& layout) {
+							layout
+								.AddField(
+									"baseColorFactor",
+									&PbrRecord::baseColorFactor,
+									glm::vec4(1.0f))
+								.AddField("metallicFactor", &PbrRecord::metallicFactor, 1.0f)
+								.AddField("roughnessFactor", &PbrRecord::roughnessFactor, 1.0f)
+								.AddField("alphaMode", &PbrRecord::alphaMode)
+								.AddField("alphaCutoff", &PbrRecord::alphaCutoff, 0.5f)
+								.AddField("transmissionFactor", &PbrRecord::transmissionFactor)
+								.AddField(
+									"baseColorTextureOffset",
+									&PbrRecord::baseColorTextureOffset)
+								.AddField("normalTextureOffset", &PbrRecord::normalTextureOffset)
+								.AddField("ormTextureOffset", &PbrRecord::ormTextureOffset)
+								.AddField("routes", &PbrRecord::routes)
+								.AddField("routeStamps", &PbrRecord::routeStamps);
+						})
+					.Finish();
+			return c_Schema;
+		}
+
+		std::vector<PbrRecord>
+		packPbr(const PbrParams& pbr, core::string_pool& pool)
+		{
+			PbrRecord record{};
+			record.baseColorFactor        = pbr.baseColorFactor;
+			record.metallicFactor         = pbr.metallicFactor;
+			record.roughnessFactor        = pbr.roughnessFactor;
+			record.alphaMode              = static_cast<uint32_t>(pbr.alphaMode);
+			record.alphaCutoff            = pbr.alphaCutoff;
+			record.transmissionFactor     = pbr.transmissionFactor;
+			record.baseColorTextureOffset = pool.add(pbr.baseColorTexture);
+			record.normalTextureOffset    = pool.add(pbr.normalTexture);
+			record.ormTextureOffset       = pool.add(pbr.ormTexture);
+			for (size_t i = 0; i < c_LooseChannelCount; ++i)
 			{
-				writeString(writer, route.texture);
-				writer.WritePod(route.channel);
+				record.routes[i].textureOffset = pool.add(pbr.routes[i].texture);
+				record.routes[i].channel       = pbr.routes[i].channel;
+				record.routeStamps[i]          = pbr.routeStamps[i];
 			}
-			for (const SourceStamp& stamp : pbr.routeStamps)
-			{
-				writer.WritePod(stamp.size);
-				writer.WritePod(stamp.hash);
-			}
-			writer.WritePod(static_cast<uint32_t>(pbr.alphaMode));
-			writer.WritePod(pbr.alphaCutoff);
-			writer.WritePod(pbr.transmissionFactor);
+			return { record };
 		}
 
 		PbrParams
-		readPbr(ByteReader& reader)
+		unpackPbr(const PbrRecord& record, const core::string_pool& pool)
 		{
 			PbrParams pbr;
-			pbr.baseColorFactor  = reader.ReadPod<glm::vec4>();
-			pbr.metallicFactor   = reader.ReadPod<float>();
-			pbr.roughnessFactor  = reader.ReadPod<float>();
-			pbr.baseColorTexture = readString(reader);
-			pbr.normalTexture    = readString(reader);
-			pbr.ormTexture       = readString(reader);
-			for (ChannelRoute& route : pbr.routes)
+			pbr.baseColorFactor    = record.baseColorFactor;
+			pbr.metallicFactor     = record.metallicFactor;
+			pbr.roughnessFactor    = record.roughnessFactor;
+			pbr.alphaMode          = static_cast<AlphaMode>(record.alphaMode);
+			pbr.alphaCutoff        = record.alphaCutoff;
+			pbr.transmissionFactor = record.transmissionFactor;
+			pbr.baseColorTexture   = pool.at(record.baseColorTextureOffset);
+			pbr.normalTexture      = pool.at(record.normalTextureOffset);
+			pbr.ormTexture         = pool.at(record.ormTextureOffset);
+			for (size_t i = 0; i < c_LooseChannelCount; ++i)
 			{
-				route.texture = readString(reader);
-				route.channel = reader.ReadPod<uint16_t>();
+				pbr.routes[i].texture = pool.at(record.routes[i].textureOffset);
+				pbr.routes[i].channel = record.routes[i].channel;
+				pbr.routeStamps[i]    = record.routeStamps[i];
 			}
-			for (SourceStamp& stamp : pbr.routeStamps)
-			{
-				stamp.size = reader.ReadPod<uint64_t>();
-				stamp.hash = reader.ReadPod<uint64_t>();
-			}
-			pbr.alphaMode          = static_cast<AlphaMode>(reader.ReadPod<uint32_t>());
-			pbr.alphaCutoff        = reader.ReadPod<float>();
-			pbr.transmissionFactor = reader.ReadPod<float>();
 			return pbr;
 		}
-
 	}
 
 	std::vector<std::byte>
 	serializeMaterial(const BMaterial& material)
 	{
-		ByteWriter writer;
-		writer.WritePod(magic::c_BMaterial);
-		writer.WritePod(c_VersionMajor);
-		writer.WritePod(c_VersionMinor);
+		core::string_pool pool;
+		MaterialRecord    record{};
+		record.shadingModel      = static_cast<uint32_t>(material.shadingModel);
+		record.nameOffset        = pool.add(material.name);
+		record.editorGraphOffset = pool.add(material.editorGraph);
 
-		writer.WritePod(static_cast<uint32_t>(material.shadingModel));
-		writeString(writer, material.name);
-		writeString(writer, material.editorGraph);
+		chunk::Writer writer(materialSchema());
+		writer.Add(ChunkId::kMaterial, std::vector<MaterialRecord>{ record });
 
 		switch (material.shadingModel)
 		{
 		case ShadingModel::kPbr:
-			writePbr(writer, material.pbr);
+			writer.Add(ChunkId::kPbr, packPbr(material.pbr, pool));
 			break;
 
 		case ShadingModel::kCount:
@@ -99,41 +179,45 @@ namespace assetlib
 				std::to_string(static_cast<uint32_t>(material.shadingModel)));
 		}
 
-		return writer.Take();
+		writer.Add(ChunkId::kStringPool, pool.bytes());
+		return writer.Finish(magic::c_BMaterial, c_VersionMajor, c_VersionMinor);
 	}
 
 	BMaterial
 	deserializeMaterial(std::span<const std::byte> bytes)
 	{
-		ByteReader reader(bytes);
+		const chunk::Reader
+			reader(bytes, magic::c_BMaterial, c_VersionMajor, c_What, materialSchema());
 
-		if (reader.ReadPod<uint32_t>() != magic::c_BMaterial)
-			throw std::runtime_error("bmaterial: bad magic");
+		const auto records = reader.Require<MaterialRecord>(ChunkId::kMaterial);
+		core::throw_runtime_error_if(
+			records.size() != 1,
+			"bmaterial: the material chunk holds {} entries, not one",
+			records.size());
+		const core::string_pool pool(reader.Read<char>(ChunkId::kStringPool));
 
-		const auto versionMajor = reader.ReadPod<uint16_t>();
-		static_cast<void>(reader.ReadPod<uint16_t>());  // minor; additive within a major
-
-		if (versionMajor != c_VersionMajor)
+		const MaterialRecord& record = records[0];
+		if (record.shadingModel >= static_cast<uint32_t>(ShadingModel::kCount))
 			throw std::runtime_error(
-				"bmaterial: unsupported version " + std::to_string(versionMajor) + " (expected " +
-				std::to_string(c_VersionMajor) + "); re-bake the material");
+				"bmaterial: unknown shading model " + std::to_string(record.shadingModel));
 
-		BMaterial  material;
-		const auto shadingModel = reader.ReadPod<uint32_t>();
-
-		if (shadingModel >= static_cast<uint32_t>(ShadingModel::kCount))
-			throw std::runtime_error(
-				"bmaterial: unknown shading model " + std::to_string(shadingModel));
-
-		material.shadingModel = static_cast<ShadingModel>(shadingModel);
-		material.name         = readString(reader);
-		material.editorGraph  = readString(reader);
+		BMaterial material;
+		material.shadingModel = static_cast<ShadingModel>(record.shadingModel);
+		material.name         = pool.at(record.nameOffset);
+		material.editorGraph  = pool.at(record.editorGraphOffset);
 
 		switch (material.shadingModel)
 		{
 		case ShadingModel::kPbr:
-			material.pbr = readPbr(reader);
+		{
+			const auto pbr = reader.Require<PbrRecord>(ChunkId::kPbr);
+			core::throw_runtime_error_if(
+				pbr.size() != 1,
+				"bmaterial: the PBR chunk holds {} entries, not one",
+				pbr.size());
+			material.pbr = unpackPbr(pbr[0], pool);
 			break;
+		}
 
 		// Already excluded by the range check above; the case exists so a new model cannot be added
 		// without the compiler pointing at this switch.

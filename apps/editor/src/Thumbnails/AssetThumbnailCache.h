@@ -125,6 +125,7 @@ private:
 		std::shared_ptr<CookedMeshes>          cooked;
 		std::shared_ptr<game::TexturePrefetch> prefetch;
 		qint64                                 stamp = 0;
+		QString                                failure;
 	};
 
 	// One asset's trip through the GPU: built, drawn and submitted on its first tick, resolved on a
@@ -140,7 +141,7 @@ private:
 	};
 
 	// Hands a finished read back. Called by a worker via a queued invocation, so it always runs on the
-	// UI thread. A null `prefetch` means the read failed and only clears the in-flight entry.
+	// UI thread. A null `prefetch` means the read failed, and the path is rejected with its reason.
 	void
 	Enqueue(const QString& path, ThumbnailType type, PendingRender pending);
 

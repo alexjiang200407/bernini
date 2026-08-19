@@ -14,9 +14,14 @@ plain CPU code — and it is the reference every later GPU path is diffed agains
 deliberately the unoptimised form.
 
 `.bmesh`, `.bskel`, `.banim` and `.bvat` are one chunked container format, in `src/chunk_io.h`. A chunk is
-addressed by id and an absent one is not an error, so adding data is a **minor** version bump and
-leaves what is already on disk readable. `.bmaterial` is deliberately not one of them: it is a flat,
-string-heavy stream with no bulk POD pools to chunk.
+addressed by id and an absent one is not an error. Chunk 0 is the file's schema (`schema`):
+every POD a chunk holds is registered as a layout — the shared ones as `AssetSchemaBuilder`'s chain, a
+container's private ones beside its io — and a reader converts each chunk from the layout the file
+stores to the current one by field name, so a struct that changed shape leaves old files readable.
+A change of *meaning* is a `chunk::Hook` whose predicate reads the file's schema, never its version;
+rename the field when its meaning changes, so the schema can see it. `.bmaterial` is one of them too:
+its strings live in a pool chunk and its records are PODs with pool offsets, so one converter serves
+every container.
 
 ## Headers forward declare
 

@@ -7,7 +7,7 @@ not by what the thing feels like. That is the whole rule; everything below is de
 |---|---|---|
 | `libs/core/include/core/containers/`, `libs/core/include/core/str/` | `lower_case` throughout | These substitute for standard-library types. `static_vector` has to be usable where a `std::vector` was, down to `value_type` and `push_back`. |
 | the rest of `libs/core/` | `lower_case` free functions, `PascalCase` types and methods | A `core` helper is read beside `std::` ones in the same expression — `split_once(str, "/")`, not `SplitOnce`. |
-| `libs/assetlib/`, `libs/assetlib_structs/` | `camelBack` free functions, `PascalCase` types and methods | The codec surface has always spelled them this way -- `loadKTX2`, `bake`, `serialize` -- and a caller reads `loadKTX2(path)` beside `load(path)`. `assetlib_structs` holds the PODs it decodes into, and `toMatrix(node.localTransform)` is read in the same expression as the rest. |
+| `libs/assetlib/`, `libs/assetlib_structs/`, `libs/schema/` | `camelBack` free functions, `PascalCase` types and methods | The codec surface has always spelled them this way -- `loadKTX2`, `bake`, `serialize` -- and a caller reads `loadKTX2(path)` beside `load(path)`. `assetlib_structs` holds the PODs it decodes into, and `toMatrix(node.localTransform)` is read in the same expression as the rest; `schema` describes them, and `schema::serialize(schema)` beside `serialize(mesh)`. |
 | `libs/assetlib/tests/` | `PascalCase`, as everywhere else | A fixture is engine code. Only the published codec functions read beside `std::`. |
 | everything else | `PascalCase` types and functions | Engine code. `bgl`, `gamelib`, `apps`, `examples`. |
 
@@ -73,7 +73,9 @@ Windows" component all work too.
 | [`libs/core/tests/.clang-tidy`](../libs/core/tests/.clang-tidy) | `PascalCase` functions again: a fixture is engine code. |
 | [`libs/assetlib/.clang-tidy`](../libs/assetlib/.clang-tidy) | `camelBack` free functions. |
 | [`libs/assetlib_structs/.clang-tidy`](../libs/assetlib_structs/.clang-tidy) | `camelBack` free functions, like the codec that decodes into them. |
+| [`libs/schema/.clang-tidy`](../libs/schema/.clang-tidy) | `camelBack` free functions, like the codec whose layouts it describes. |
 | [`libs/assetlib/tests/.clang-tidy`](../libs/assetlib/tests/.clang-tidy) | `PascalCase` functions again. |
+| [`libs/schema/tests/.clang-tidy`](../libs/schema/tests/.clang-tidy) | `PascalCase` functions again. |
 | [`apps/editor/.clang-tidy`](../apps/editor/.clang-tidy) | The names Qt and Catch2 own: virtual hooks, `StringMaker::convert`, the `QtNodes` namespace. |
 
 Each of the narrowing files sets `InheritParentConfig: true`. Without it a child config *replaces*

@@ -2,81 +2,105 @@
 #include <assetlib_structs/BEnv.h>
 #include <assetlib_structs/magic.h>
 
+#include "AssetSchemaBuilder.h"
+#include "chunk_io.h"
 #include "env_route_io.h"
 #include "fs_util.h"
-#include "string_io.h"
 
+#include <core/err/util.h>
 #include <core/file/file.h>
-#include <core/io/ByteReader.h>
-#include <core/io/ByteWriter.h>
+#include <core/str/string_pool.h>
 
 #include "mounted_io.h"
 
 namespace assetlib
 {
-	using core::io::ByteReader;
-	using core::io::ByteWriter;
-
 	namespace
 	{
-		constexpr uint16_t c_VersionMajor = 2;
+		constexpr uint16_t c_VersionMajor = 3;  // 3: a chunk container with a schema
+		constexpr uint16_t c_VersionMinor = 0;
 
-		// 1 appended the authored exposure override. Minor 0 files carry none, and read back with
-		// none, which is exactly what "nobody has tuned this" means.
-		constexpr uint16_t c_VersionMinor = 1;
+		constexpr std::string_view c_What = "benvl";
+
+		enum class ChunkId : uint32_t
+		{
+			kLighting = 1,  // one LightingRecord
+			kStringPool
+		};
+
+		struct LightingRecord
+		{
+			uint32_t       nameOffset;
+			float          exposure;
+			uint32_t       exposureAuthored;  // 1 when exposureOverride is set
+			float          exposureOverride;
+			EnvRouteRecord prefilter;
+			EnvRouteRecord irradiance;
+		};
+
+		static_assert(sizeof(LightingRecord) == 64);
+
+		const schema::Schema&
+		envLightingSchema()
+		{
+			static const schema::Schema c_Schema =
+				AssetSchemaBuilder()
+					.AddSourceStamp()
+					.AddLayout<EnvRouteRecord>("EnvMapRoute", describeEnvRoute)
+					.AddLayout<LightingRecord>(
+						"LightingRecord",
+						[](auto& layout) {
+							layout.AddField("nameOffset", &LightingRecord::nameOffset)
+								.AddField("exposure", &LightingRecord::exposure, 1.0f)
+								.AddField("exposureAuthored", &LightingRecord::exposureAuthored)
+								.AddField("exposureOverride", &LightingRecord::exposureOverride)
+								.AddField("prefilter", &LightingRecord::prefilter)
+								.AddField("irradiance", &LightingRecord::irradiance);
+						})
+					.Finish();
+			return c_Schema;
+		}
 	}
 
 	std::vector<std::byte>
 	serializeEnvLighting(const BEnvLighting& lighting)
 	{
-		ByteWriter writer;
-		writer.WritePod(magic::c_BEnvL);
-		writer.WritePod(c_VersionMajor);
-		writer.WritePod(c_VersionMinor);
+		core::string_pool pool;
+		LightingRecord    record{};
+		record.nameOffset       = pool.add(lighting.name);
+		record.exposure         = lighting.exposure;
+		record.exposureAuthored = lighting.exposureOverride.has_value() ? 1u : 0u;
+		record.exposureOverride = lighting.exposureOverride.value_or(0.0f);
+		record.prefilter        = packRoute(lighting.prefilter, pool);
+		record.irradiance       = packRoute(lighting.irradiance, pool);
 
-		writeString(writer, lighting.name);
-		writeRoute(writer, lighting.prefilter);
-		writeRoute(writer, lighting.irradiance);
-		writer.WritePod(lighting.exposure);
-
-		writer.WritePod(static_cast<uint8_t>(lighting.exposureOverride.has_value() ? 1 : 0));
-		writer.WritePod(lighting.exposureOverride.value_or(0.0f));
-
-		return writer.Take();
+		chunk::Writer writer(envLightingSchema());
+		writer.Add(ChunkId::kLighting, std::vector<LightingRecord>{ record });
+		writer.Add(ChunkId::kStringPool, pool.bytes());
+		return writer.Finish(magic::c_BEnvL, c_VersionMajor, c_VersionMinor);
 	}
 
 	BEnvLighting
 	deserializeEnvLighting(std::span<const std::byte> bytes)
 	{
-		ByteReader reader(bytes);
+		const chunk::Reader
+			reader(bytes, magic::c_BEnvL, c_VersionMajor, c_What, envLightingSchema());
 
-		if (reader.ReadPod<uint32_t>() != magic::c_BEnvL)
-			throw std::runtime_error("benvl: bad magic");
+		const auto records = reader.Require<LightingRecord>(ChunkId::kLighting);
+		core::throw_runtime_error_if(
+			records.size() != 1,
+			"benvl: the lighting chunk holds {} entries, not one",
+			records.size());
+		const core::string_pool pool(reader.Read<char>(ChunkId::kStringPool));
 
-		const auto versionMajor = reader.ReadPod<uint16_t>();
-		const auto versionMinor = reader.ReadPod<uint16_t>();
-
-		if (versionMajor != c_VersionMajor)
-			throw std::runtime_error(
-				"benvl: unsupported version " + std::to_string(versionMajor) + " (expected " +
-				std::to_string(c_VersionMajor) + ")");
-
-		BEnvLighting lighting;
-		lighting.name       = readString(reader);
-		lighting.prefilter  = readRoute(reader);
-		lighting.irradiance = readRoute(reader);
-		lighting.exposure   = reader.ReadPod<float>();
-
-		// Minor versions are additive, so a newer writer's tail is read only when this file claims
-		// to carry it -- and a minor 0 file simply has no authored exposure.
-		if (versionMinor >= 1)
-		{
-			const auto authored = reader.ReadPod<uint8_t>();
-			const auto value    = reader.ReadPod<float>();
-			if (authored != 0)
-				lighting.exposureOverride = value;
-		}
-
+		const LightingRecord& record = records[0];
+		BEnvLighting          lighting;
+		lighting.name       = pool.at(record.nameOffset);
+		lighting.exposure   = record.exposure;
+		lighting.prefilter  = unpackRoute(record.prefilter, pool);
+		lighting.irradiance = unpackRoute(record.irradiance, pool);
+		if (record.exposureAuthored != 0)
+			lighting.exposureOverride = record.exposureOverride;
 		return lighting;
 	}
 

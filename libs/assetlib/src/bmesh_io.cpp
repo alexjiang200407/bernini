@@ -10,6 +10,7 @@
 
 #include <assetlib/mesh_tangents.h>
 
+#include "AssetSchemaBuilder.h"
 #include "chunk_io.h"
 #include "fs_util.h"
 
@@ -21,10 +22,10 @@ namespace assetlib
 {
 	namespace
 	{
-		constexpr uint16_t c_VersionMajor = 3;
-
-		// A chunk is addressed by id and an absent one is not an error, so a mesh without the
-		// skeleton chunk still reads -- it simply names no skeleton, which is what a static mesh is.
+		// 4: the schema chunk. A chunk is addressed by id and an absent one is not an error, so a
+		// mesh without the skeleton chunk still reads -- it simply names no skeleton, which is what
+		// a static mesh is.
+		constexpr uint16_t c_VersionMajor = 4;
 		constexpr uint16_t c_VersionMinor = 0;
 
 		constexpr std::string_view c_What = "bmesh";
@@ -44,6 +45,20 @@ namespace assetlib
 			kMaterialPaths,
 			kSkeletonPath
 		};
+
+		const schema::Schema&
+		meshSchema()
+		{
+			static const schema::Schema c_Schema = AssetSchemaBuilder()
+			                                           .AddTransform()
+			                                           .AddNode()
+			                                           .AddMesh()
+			                                           .AddVertexLayout()
+			                                           .AddSubmesh()
+			                                           .AddMeshlet()
+			                                           .Finish();
+			return c_Schema;
+		}
 
 		bool
 		carriesJoints(const Submesh& submesh) noexcept
@@ -79,7 +94,7 @@ namespace assetlib
 	{
 		requireSkeletonIfSkinned(mesh);
 
-		chunk::Writer writer;
+		chunk::Writer writer(meshSchema());
 		writer.Add(ChunkId::kNodes, mesh.nodes);
 		writer.Add(ChunkId::kRoots, mesh.roots);
 		writer.Add(ChunkId::kMeshes, mesh.meshes);
@@ -91,16 +106,14 @@ namespace assetlib
 		writer.Add(ChunkId::kIndexData, mesh.indexData);
 		writer.Add(ChunkId::kStringPool, mesh.stringPool.bytes());
 		writer.Add(ChunkId::kMaterialPaths, chunk::packStrings(mesh.materials));
-		writer.Add(
-			ChunkId::kSkeletonPath,
-			std::vector<char>(mesh.skeleton.begin(), mesh.skeleton.end()));
+		writer.Add(ChunkId::kSkeletonPath, std::span<const char>(mesh.skeleton));
 		return writer.Finish(magic::c_BMesh, c_VersionMajor, c_VersionMinor);
 	}
 
 	BMesh
 	deserialize(std::span<const std::byte> bytes)
 	{
-		const chunk::Reader reader(bytes, magic::c_BMesh, c_VersionMajor, c_What);
+		const chunk::Reader reader(bytes, magic::c_BMesh, c_VersionMajor, c_What, meshSchema());
 
 		BMesh mesh;
 		mesh.nodes            = reader.Require<Node>(ChunkId::kNodes);
@@ -144,7 +157,8 @@ namespace assetlib
 	namespace
 	{
 		constexpr std::array<uint32_t, 2> c_WantedRefChunks = {
-			{ uint32_t(ChunkId::kMaterialPaths), uint32_t(ChunkId::kSkeletonPath) }
+			{ static_cast<uint32_t>(ChunkId::kMaterialPaths),
+			  static_cast<uint32_t>(ChunkId::kSkeletonPath) }
 		};
 
 		MeshRefs
@@ -154,7 +168,7 @@ namespace assetlib
 			// exactly what a static import produces.
 			MeshRefs refs;
 			if (const std::span<const std::byte> paths =
-			        chunks.Get(uint32_t(ChunkId::kMaterialPaths));
+			        chunks.Get(static_cast<uint32_t>(ChunkId::kMaterialPaths));
 			    !paths.empty())
 				refs.materials = chunk::unpackStrings(
 					std::span<const char>(
@@ -162,7 +176,7 @@ namespace assetlib
 						paths.size()));
 
 			if (const std::span<const std::byte> skeleton =
-			        chunks.Get(uint32_t(ChunkId::kSkeletonPath));
+			        chunks.Get(static_cast<uint32_t>(ChunkId::kSkeletonPath));
 			    !skeleton.empty())
 				refs.skeleton.assign(
 					reinterpret_cast<const char*>(skeleton.data()),

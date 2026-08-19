@@ -1,6 +1,7 @@
 #include <assetlib/bvat_io.h>
 #include <assetlib_structs/BVat.h>
 
+#include "AssetSchemaBuilder.h"
 #include "chunk_io.h"
 #include "fs_util.h"
 
@@ -17,7 +18,8 @@ namespace assetlib
 
 	namespace
 	{
-		constexpr uint16_t c_VersionMajor = 2;
+		constexpr uint16_t c_VersionMajor =
+			3;  // 3: the schema chunk; the input paths are their own chunk
 		constexpr uint16_t c_VersionMinor = 0;
 
 		constexpr std::string_view c_What = "bvat";
@@ -34,7 +36,9 @@ namespace assetlib
 			// The pixel payloads stay last in id as in intent: every seek-only read names the
 			// chunks before this line and never touches these.
 			kPositionsKtx2,
-			kNormalsKtx2
+			kNormalsKtx2,
+
+			kInputPaths  // mesh, skeleton, animations -- the three paths kInputs stamps
 		};
 
 		struct VatInfo
@@ -54,63 +58,78 @@ namespace assetlib
 			SourceStamp mesh;
 			SourceStamp skeleton;
 			SourceStamp animations;
-			uint32_t    meshLength;
-			uint32_t    skeletonLength;
-			uint32_t    animationsLength;
-			uint32_t    pad;
 		};
 
-		static_assert(sizeof(VatInputsRef) == 72);
+		static_assert(sizeof(VatInputsRef) == 56);
 
-		std::vector<std::byte>
+		const schema::Schema&
+		vatSchema()
+		{
+			static const schema::Schema c_Schema =
+				AssetSchemaBuilder()
+					.AddSourceStamp()
+					.AddVatClip()
+					.AddVatColumns()
+					.AddLayout<VatInfo>(
+						"VatInfo",
+						[](auto& layout) {
+							layout.AddField("boundsMin", &VatInfo::boundsMin)
+								.AddField("boundsMax", &VatInfo::boundsMax)
+								.AddField("width", &VatInfo::width)
+								.AddField("height", &VatInfo::height)
+								.AddField("boneCount", &VatInfo::boneCount);
+						})
+					.AddLayout<VatInputsRef>(
+						"VatInputsRef",
+						[](auto& layout) {
+							layout.AddField("signature", &VatInputsRef::signature)
+								.AddField("mesh", &VatInputsRef::mesh)
+								.AddField("skeleton", &VatInputsRef::skeleton)
+								.AddField("animations", &VatInputsRef::animations);
+						})
+					.Finish();
+			return c_Schema;
+		}
+
+		std::vector<VatInputsRef>
 		packInputs(const BVat& vat)
 		{
 			VatInputsRef ref{};
-			ref.signature        = vat.skeletonSignature;
-			ref.mesh             = vat.meshStamp;
-			ref.skeleton         = vat.skeletonStamp;
-			ref.animations       = vat.animationsStamp;
-			ref.meshLength       = static_cast<uint32_t>(vat.mesh.size());
-			ref.skeletonLength   = static_cast<uint32_t>(vat.skeleton.size());
-			ref.animationsLength = static_cast<uint32_t>(vat.animations.size());
+			ref.signature  = vat.skeletonSignature;
+			ref.mesh       = vat.meshStamp;
+			ref.skeleton   = vat.skeletonStamp;
+			ref.animations = vat.animationsStamp;
+			return { ref };
+		}
 
-			std::vector<std::byte> out(
-				sizeof(ref) + vat.mesh.size() + vat.skeleton.size() + vat.animations.size());
-			std::byte* at = out.data();
-			std::memcpy(at, &ref, sizeof(ref));
-			at += sizeof(ref);
-			std::memcpy(at, vat.mesh.data(), vat.mesh.size());
-			at += vat.mesh.size();
-			std::memcpy(at, vat.skeleton.data(), vat.skeleton.size());
-			at += vat.skeleton.size();
-			std::memcpy(at, vat.animations.data(), vat.animations.size());
-			return out;
+		std::vector<char>
+		packInputPaths(const BVat& vat)
+		{
+			const std::array<std::string, 3> paths = { vat.mesh, vat.skeleton, vat.animations };
+			return chunk::packStrings(paths);
 		}
 
 		void
-		unpackInputs(BVat& vat, std::span<const std::byte> bytes)
+		unpackInputs(BVat& vat, std::span<const VatInputsRef> ref, std::span<const char> paths)
 		{
-			if (bytes.size() < sizeof(VatInputsRef))
-				throw_runtime_error("bvat: the inputs chunk is truncated");
+			core::throw_runtime_error_if(
+				ref.size() != 1,
+				"bvat: the inputs chunk holds {} entries, not one",
+				ref.size());
 
-			VatInputsRef ref{};
-			std::memcpy(&ref, bytes.data(), sizeof(ref));
+			const auto names = chunk::unpackStrings(paths);
+			core::throw_runtime_error_if(
+				names.size() != 3,
+				"bvat: the input paths chunk names {} paths, not three",
+				names.size());
 
-			const size_t paths = size_t(ref.meshLength) + ref.skeletonLength + ref.animationsLength;
-			if (sizeof(ref) + paths > bytes.size())
-				throw_runtime_error("bvat: an input path runs past its chunk");
-
-			vat.skeletonSignature = ref.signature;
-			vat.meshStamp         = ref.mesh;
-			vat.skeletonStamp     = ref.skeleton;
-			vat.animationsStamp   = ref.animations;
-
-			const char* at = reinterpret_cast<const char*>(bytes.data()) + sizeof(ref);
-			vat.mesh.assign(at, ref.meshLength);
-			at += ref.meshLength;
-			vat.skeleton.assign(at, ref.skeletonLength);
-			at += ref.skeletonLength;
-			vat.animations.assign(at, ref.animationsLength);
+			vat.skeletonSignature = ref[0].signature;
+			vat.meshStamp         = ref[0].mesh;
+			vat.skeletonStamp     = ref[0].skeleton;
+			vat.animationsStamp   = ref[0].animations;
+			vat.mesh              = names[0];
+			vat.skeleton          = names[1];
+			vat.animations        = names[2];
 		}
 
 		/**
@@ -174,12 +193,13 @@ namespace assetlib
 
 		std::vector<VatInfo> infoChunk(1, info);
 
-		chunk::Writer writer;
+		chunk::Writer writer(vatSchema());
 		writer.Add(ChunkId::kInfo, infoChunk);
 		writer.Add(ChunkId::kClips, vat.clips);
 		writer.Add(ChunkId::kColumns, vat.columns);
 		writer.Add(ChunkId::kPalettes, vat.palettes);
 		writer.Add(ChunkId::kInputs, packInputs(vat));
+		writer.Add(ChunkId::kInputPaths, packInputPaths(vat));
 		writer.Add(ChunkId::kStringPool, vat.stringPool.bytes());
 		writer.Add(ChunkId::kPositionsKtx2, vat.positionsKtx2);
 		writer.Add(ChunkId::kNormalsKtx2, vat.normalsKtx2);
@@ -202,20 +222,8 @@ namespace assetlib
 			std::vector<T>
 			Read(ChunkId id) const
 			{
-				if (reader != nullptr)
-					return reader->Read<T>(id);
-
-				const std::span<const std::byte> bytes = chunks->Get(static_cast<uint32_t>(id));
-				if (bytes.empty())
-					return {};
-
-				core::throw_runtime_error_if(
-					bytes.size() % sizeof(T) != 0,
-					"bvat: chunk byte size is not a multiple of the element size");
-
-				std::vector<T> out(bytes.size() / sizeof(T));
-				std::memcpy(out.data(), bytes.data(), bytes.size());
-				return out;
+				return reader != nullptr ? reader->Read<T>(id) :
+				                           chunks->Read<T>(static_cast<uint32_t>(id), vatSchema());
 			}
 		};
 
@@ -237,10 +245,10 @@ namespace assetlib
 			vat.palettes   = source.Read<glm::mat4>(ChunkId::kPalettes);
 			vat.stringPool = core::string_pool(source.Read<char>(ChunkId::kStringPool));
 
-			const auto inputs = source.Read<std::byte>(ChunkId::kInputs);
-			if (inputs.empty())
-				throw_runtime_error("bvat: the inputs chunk is missing");
-			unpackInputs(vat, inputs);
+			unpackInputs(
+				vat,
+				source.Read<VatInputsRef>(ChunkId::kInputs),
+				source.Read<char>(ChunkId::kInputPaths));
 
 			validateVat(vat);
 			return vat;
@@ -250,7 +258,7 @@ namespace assetlib
 	BVat
 	deserializeVat(std::span<const std::byte> bytes)
 	{
-		const chunk::Reader reader(bytes, magic::c_BVat, c_VersionMajor, c_What);
+		const chunk::Reader reader(bytes, magic::c_BVat, c_VersionMajor, c_What, vatSchema());
 
 		BVat vat          = readTables(TableSource{ &reader, nullptr });
 		vat.positionsKtx2 = reader.Require<std::byte>(ChunkId::kPositionsKtx2);
@@ -278,25 +286,28 @@ namespace assetlib
 
 	namespace
 	{
-		constexpr std::array<uint32_t, 6> c_WantedTableChunks = { { uint32_t(ChunkId::kInfo),
-			                                                        uint32_t(ChunkId::kClips),
-			                                                        uint32_t(ChunkId::kColumns),
-			                                                        uint32_t(ChunkId::kPalettes),
-			                                                        uint32_t(ChunkId::kInputs),
-			                                                        uint32_t(
-																		ChunkId::kStringPool) } };
+		constexpr std::array<uint32_t, 7> c_WantedTableChunks = {
+			{ static_cast<uint32_t>(ChunkId::kInfo),
+			  static_cast<uint32_t>(ChunkId::kClips),
+			  static_cast<uint32_t>(ChunkId::kColumns),
+			  static_cast<uint32_t>(ChunkId::kPalettes),
+			  static_cast<uint32_t>(ChunkId::kInputs),
+			  static_cast<uint32_t>(ChunkId::kInputPaths),
+			  static_cast<uint32_t>(ChunkId::kStringPool) }
+		};
 
-		constexpr std::array<uint32_t, 1> c_WantedRefChunks = { { uint32_t(ChunkId::kInputs) } };
+		constexpr std::array<uint32_t, 2> c_WantedRefChunks = {
+			{ static_cast<uint32_t>(ChunkId::kInputs), static_cast<uint32_t>(ChunkId::kInputPaths) }
+		};
 
 		VatRefs
 		refsFromChunks(const chunk::ChunkData& chunks)
 		{
-			core::throw_runtime_error_if(
-				!chunks.Contains(uint32_t(ChunkId::kInputs)),
-				"bvat: the inputs chunk is missing");
-
 			BVat vat;
-			unpackInputs(vat, chunks.Get(uint32_t(ChunkId::kInputs)));
+			unpackInputs(
+				vat,
+				chunks.Read<VatInputsRef>(static_cast<uint32_t>(ChunkId::kInputs), vatSchema()),
+				chunks.Read<char>(static_cast<uint32_t>(ChunkId::kInputPaths), vatSchema()));
 			return VatRefs{ vat.mesh, vat.skeleton, vat.animations };
 		}
 	}

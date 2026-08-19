@@ -11,6 +11,8 @@
 #include "MountAt.h"
 #include "mounted_io.h"
 
+#include <catch2/matchers/catch_matchers_string.hpp>
+
 using namespace assetlib;
 
 TEST_CASE("a BMaterial survives a serialize round-trip", "[bmaterial][io]")
@@ -503,14 +505,22 @@ TEST_CASE("attachMaterial binds a material to an imported submesh", "[bmesh][bma
 	REQUIRE(mesh.materials.size() == 1);
 }
 
-TEST_CASE("an older BMaterial version is refused rather than guessed at", "[bmaterial][io]")
+TEST_CASE(
+	"the format number refuses only a newer file; an older stamp reads by its schema",
+	"[bmaterial][io]")
 {
-	// 6 stored a MaterialMode where 7 has none, so its payload is offset by four bytes from here on.
-	// Reading it as a 7 would silently mis-parse every field after the shading model.
+	// What a file's layout is comes from the schema it carries, never from the number, so an older
+	// number over the current schema is the same file. A number this build has never written is the
+	// one thing it refuses.
 	auto bytes = serializeMaterial(BMaterial());
 
 	const auto six = uint16_t{ 6 };
 	std::memcpy(bytes.data() + 4, &six, sizeof(six));
+	REQUIRE(deserializeMaterial(bytes).shadingModel == ShadingModel::kPbr);
 
-	REQUIRE_THROWS_AS(deserializeMaterial(bytes), std::runtime_error);
+	const auto future = uint16_t{ 200 };
+	std::memcpy(bytes.data() + 4, &future, sizeof(future));
+	REQUIRE_THROWS_WITH(
+		deserializeMaterial(bytes),
+		Catch::Matchers::ContainsSubstring("bmaterial: written by a newer engine (format 200"));
 }

@@ -119,6 +119,12 @@ write it, and why the agent's git config keys cannot be committed.
 
 PBR texture (format/color-space/channel) and static-mesh (vertex layout, meshlets, tangents) conventions, plus the in-flight DDS → KTX2 migration.
 
+**[Asset Schema](./docs/asset_schema.md)**
+
+Every container carries its own schema (chunk 0) and a reader converts a file's structs to the
+engine's by field name: why layout comes from the file and never from the version number, which
+shape changes cost no code, what a `chunk::Hook` is for, `assetlib_cli migrate`, and `assets/Frozen`.
+
 **[Asset Archives](./docs/archives.md)**
 
 The `core::file::IFileSystem` read seam, the `.bpak` format and what `pack` puts in one, and
@@ -134,7 +140,7 @@ authoring traps — gamma, cube-seam edge fixup, resampling — that still bite 
 
 The two GitHub Apps that give AI work its own identity: `morgana-coding-agent`, which posts `bcp-revise`'s PR replies and co-authors commits from your machine, and the review agent that reviews a PR when you comment `/review` from a GitHub Actions runner. Covers registration, key custody, secrets, and revocation for both.
 
-**[Specs](./docs/specs/)**
+**Specs** (`docs/specs/`, none at present)
 
 One file per problem we have decided **not** to solve yet: what it is, the trigger that makes it
 urgent, and the design already settled on so nobody re-derives it. Unlike a doc above, a spec

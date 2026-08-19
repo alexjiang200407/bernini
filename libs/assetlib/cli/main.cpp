@@ -13,12 +13,14 @@
 #include <assetlib/bsky_io.h>
 #include <assetlib/bvat_io.h>
 #include <assetlib/container_format.h>
+#include <assetlib/container_info.h>
 #include <assetlib/env_bake.h>
 #include <assetlib/env_import.h>
 #include <assetlib/envmap_bake.h>
 #include <assetlib/image_io.h>
 #include <assetlib/material_bake.h>
 #include <assetlib/mesh_tangents.h>
+#include <assetlib/migrate.h>
 #include <assetlib/pak_io.h>
 #include <assetlib/pak_pack.h>
 #include <assetlib/skeleton.h>
@@ -31,6 +33,7 @@
 #include <assetlib_structs/magic.h>
 #include <core/err/util.h>
 #include <core/file/LooseFileSystem.h>
+#include <core/file/file.h>
 #include <spdlog/spdlog.h>
 
 namespace
@@ -323,6 +326,12 @@ main(int argc, char** argv)
 		"-b,--brief",
 		describeBrief,
 		"Mesh only: print the summary and material table, but not every submesh");
+	bool describeSchema = false;
+	describe->add_flag(
+		"-s,--schema",
+		describeSchema,
+		"Also print the file's format number and the schema it was written with -- every struct it "
+		"stores, field by field -- which is what an older file actually holds");
 
 	std::string refsDataRoot;
 	std::string refsAsset;
@@ -396,6 +405,25 @@ main(int argc, char** argv)
 		"Write here instead of rewriting the input. The routes and the node graph are not "
 		"recoverable, so prefer this over stripping a material you still intend to author");
 	strip->add_flag("-y,--yes", stripYes, "Rewrite the input without asking for confirmation");
+
+	std::string migrateRoot;
+	bool        migrateDryRun = false;
+	bool        migrateYes    = false;
+
+	auto* migrate = app.add_subcommand(
+		"migrate",
+		"Re-save every container under a project's data root at the current schema. A file that is "
+		"already current is left untouched, so running it twice rewrites nothing the second time; "
+		"a "
+		"file that cannot be read is reported and skipped");
+	migrate->add_option("data-root", migrateRoot, "Project data directory")
+		->required()
+		->check(CLI::ExistingDirectory);
+	migrate->add_flag(
+		"-n,--dry-run",
+		migrateDryRun,
+		"Report what would be rewritten; write nothing");
+	migrate->add_flag("-y,--yes", migrateYes, "Rewrite without asking for confirmation");
 
 	std::string expInput;
 	float       expSet   = 0.0f;
@@ -669,6 +697,15 @@ main(int argc, char** argv)
 				return store.has_value() ? store->Describe(asset) : assetlib::describe(asset);
 			};
 
+			if (describeSchema)
+			{
+				const auto info =
+					assetlib::inspectContainer(core::file::read_file_bytes(path.string()));
+				std::cout
+					<< std::format("format {}.{}\nschema\n", info.versionMajor, info.versionMinor)
+					<< assetlib::describe(info.schema) << '\n';
+			}
+
 			switch (sniff(path))
 			{
 			case ContainerType::kMesh:
@@ -740,6 +777,65 @@ main(int argc, char** argv)
 		catch (const std::exception& e)
 		{
 			spdlog::error("strip failed: {}", e.what());
+			return 1;
+		}
+	}
+
+	if (*migrate)
+	{
+		try
+		{
+			const std::filesystem::path root(migrateRoot);
+
+			const auto print = [&](const assetlib::MigrateReport& report, bool preview) {
+				for (const auto& file : report.files)
+				{
+					const auto relative =
+						std::filesystem::relative(file.path, root).generic_string();
+					switch (file.outcome)
+					{
+					case assetlib::MigratedFile::Outcome::kUnchanged:
+						break;
+					case assetlib::MigratedFile::Outcome::kRewritten:
+						std::cout << (preview ? "would rewrite  " : "rewrote        ") << relative
+								  << '\n';
+						break;
+					case assetlib::MigratedFile::Outcome::kFailed:
+						std::cout << "cannot convert " << relative << ": " << file.message << '\n';
+						break;
+					}
+				}
+				std::cout << std::format(
+					"{} unchanged, {} {}, {} cannot be converted\n",
+					report.Count(assetlib::MigratedFile::Outcome::kUnchanged),
+					report.Count(assetlib::MigratedFile::Outcome::kRewritten),
+					preview ? "to rewrite" : "rewritten",
+					report.Count(assetlib::MigratedFile::Outcome::kFailed));
+			};
+
+			// The preview walk never writes, so a read-only file or a full disk shows up only in the
+			// real one -- which is why the real walk's report is the one printed last.
+			const auto preview = assetlib::migrateProject(root, true);
+			print(preview, true);
+			if (migrateDryRun)
+				return preview.Count(assetlib::MigratedFile::Outcome::kFailed) == 0 ? 0 : 1;
+
+			const auto toRewrite = preview.Count(assetlib::MigratedFile::Outcome::kRewritten);
+			if (toRewrite == 0)
+				return preview.Count(assetlib::MigratedFile::Outcome::kFailed) == 0 ? 0 : 1;
+			if (!migrateYes && !confirm(std::format("Rewrite {} file(s) in place?", toRewrite)))
+			{
+				spdlog::info("Left '{}' alone.", root.string());
+				return 0;
+			}
+
+			const auto report = assetlib::migrateProject(root, false);
+			print(report, false);
+			return report.Count(assetlib::MigratedFile::Outcome::kFailed) == 0 ? 0 : 1;
+		}
+		catch (const std::exception& e)
+		{
+			spdlog::error("migrate failed: {}", e.what());
 			return 1;
 		}
 	}

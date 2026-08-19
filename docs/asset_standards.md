@@ -297,7 +297,9 @@ Three different spaces are in play and they are easy to conflate. The contract, 
   [libs/assetlib_structs/include/assetlib_structs/BVat.h](libs/assetlib_structs/include/assetlib_structs/BVat.h);
   I/O: [libs/assetlib/include/assetlib/bvat_io.h](libs/assetlib/include/assetlib/bvat_io.h);
   bake: [libs/assetlib/include/assetlib/vat_bake.h](libs/assetlib/include/assetlib/vat_bake.h).
-* **`.bmaterial`** (v8) — **a shading-model tag plus that model's parameters**. Struct:
+* **`.bmaterial`** (v11) — **a shading-model tag plus that model's parameters**, on the same chunked
+  container as the mesh (below): a material record, the model's payload as its own chunk, a string
+  pool for every path. Struct:
   [libs/assetlib_structs/include/assetlib_structs/BMaterial.h](libs/assetlib_structs/include/assetlib_structs/BMaterial.h);
   I/O: [libs/assetlib/include/assetlib/bmaterial_io.h](libs/assetlib/include/assetlib/bmaterial_io.h);
   bake: [libs/assetlib/include/assetlib/material_bake.h](libs/assetlib/include/assetlib/material_bake.h).
@@ -349,13 +351,14 @@ Three different spaces are in play and they are easy to conflate. The contract, 
     untouched rather than half-stripped. Run it with `assetlib_cli strip` (below); it is irreversible,
     so it asks before rewriting a file in place.
 
-  **There is exactly one readable version, and no migration path.** `deserializeMaterial` refuses any
-  other major rather than guessing at a layout it does not know — an older file is converted, not
-  tolerated, so there is one shape in the reader and no branch that can rot. A minor version is additive
-  within a major, and a reader honours it field by field.
+  **There is one shape in the reader, and older files read into it.** `deserializeMaterial` converts a
+  file's payload from the layout its schema chunk records to the current one, by field name — a
+  material baked before `transmissionFactor` existed reads with 0, one whose alpha mode was a byte
+  reads it widened — so the reader has one shape and no branch that can rot, and the format number
+  decides only that a newer file is refused.
 
-  **Adding a shading model** means: a `ShadingModel` enumerator, a payload struct, a `write*`/`read*`
-  pair in `bmaterial_io.cpp`, a case in `texture_prune.cpp`'s mark phase (**an unmarked map is swept as
+  **Adding a shading model** means: a `ShadingModel` enumerator, a payload struct, a record layout, a
+  chunk and a `pack*`/`unpack*` pair in `bmaterial_io.cpp`, a case in `texture_prune.cpp`'s mark phase (**an unmarked map is swept as
   garbage**), a case in `asset_describe.cpp`, and a renderer path in `gamelib`'s `AssetManager` — which
   today rejects any model but `kPbr` rather than rendering it wrong. Each of those is a `switch` on
   `shadingModel` with no `default`, so the compiler names every one of them.
@@ -411,15 +414,20 @@ Three different spaces are in play and they are easy to conflate. The contract, 
     takes (`drawsLoose`), and for the same reason — `Textures/` is regenerated per platform, so a
     fresh checkout has sources and no bakes. Only a route with neither throws.
   * **v1 was a three-blob format** (prefilter + irradiance + skybox as embedded KTX2), retired with
-    no migration path. It opened with the same magic and version-field layout, so the reader refuses
-    it *by number* with a message that says to re-import — reading on would take KTX2 bytes as
-    string lengths.
+    no migration path; v2 a flat stream of three paths. Both predate the schema chunk, and both are
+    refused as such — the reader never reads on into the blobs. Since v3 the three env containers
+    are the same chunked, self-describing container as the rest, one record and a string pool each,
+    with `EnvMapRoute` a layout the sky and the lighting share.
 
-**`.bmesh`, `.bskel` and `.banim` are the same chunked container**, in
+**`.bmesh`, `.bskel`, `.banim` and `.bvat` are the same chunked container**, in
 [libs/assetlib/src/chunk_io.h](libs/assetlib/src/chunk_io.h): a 32-byte header, 16-byte-aligned chunks,
-a chunk table at the end. Chunks are addressed by id and an **absent chunk is not an error**, which is
-what a minor version bump means — `.bmesh` v3.**1** added the skeleton path, and every v3.0 file on disk
-still reads, as the static mesh it is. A **major** bump is the one with no migration path.
+a chunk table at the end. Chunks are addressed by id and an **absent chunk is not an error**. Chunk 0
+is the file's **schema** — every struct its chunks hold, field by field — and a reader converts each
+chunk from the layout the file stores to the one the engine wants, by field name
+([libs/schema](libs/schema/include/schema/Schema.h)), so a struct that
+gained, lost, widened or renamed a field leaves every file on disk readable. The version in the
+header is a label; the one thing it decides is that a file **newer than the reader is refused**. A
+file from before the schema chunk is refused too, with a message that says so.
 
 ---
 
