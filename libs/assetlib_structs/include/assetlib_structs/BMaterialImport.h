@@ -27,6 +27,11 @@ namespace assetlib::imp
 		// which is glTF's own default and the coverage reading BLEND has always had here.
 		float transmissionFactor = 0.0f;
 
+		// KHR_materials_specular; see PbrParams. Absent extension means glTF's own defaults, which
+		// are the flat 0.04 dielectric the renderer had before the extension was read.
+		glm::vec3 specularColorFactor = glm::vec3(1.0f);
+		float     specularFactor      = 1.0f;
+
 		/**
 		 * Whether metallic-roughness is really this material's shading model. False when it declares one
 		 * the engine cannot represent (KHR_materials_unlit, KHR_materials_pbrSpecularGlossiness), whose

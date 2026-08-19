@@ -61,6 +61,27 @@ TEST_CASE("a blend material's transmission survives a round trip", "[bmaterial][
 	CHECK(deserializeMaterial(serializeMaterial(coverage)).pbr.transmissionFactor == 0.0f);
 }
 
+TEST_CASE("a material's specular factors survive a round trip", "[bmaterial][io]")
+{
+	BMaterial mat;
+	mat.name                    = "fur";
+	mat.pbr.specularFactor      = 0.0f;
+	mat.pbr.specularColorFactor = glm::vec3(1.0f, 0.77f, 0.34f);
+
+	const auto restored = deserializeMaterial(serializeMaterial(mat));
+
+	// 0 is the value the whole feature exists to carry, and it is also the value a zero-initialized
+	// read would produce by accident -- so the tint is what proves the field was really stored.
+	CHECK(restored.pbr.specularFactor == 0.0f);
+	CHECK(restored.pbr.specularColorFactor.g == Catch::Approx(0.77f));
+	CHECK(restored.pbr.specularColorFactor.b == Catch::Approx(0.34f));
+
+	BMaterial  plain;
+	const auto defaulted = deserializeMaterial(serializeMaterial(plain));
+	CHECK(defaulted.pbr.specularFactor == 1.0f);
+	CHECK(defaulted.pbr.specularColorFactor == glm::vec3(1.0f));
+}
+
 TEST_CASE("a Loose BMaterial round-trips its routes", "[bmaterial][io]")
 {
 	BMaterial mat;

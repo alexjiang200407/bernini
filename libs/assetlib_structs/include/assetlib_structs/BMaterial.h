@@ -92,6 +92,11 @@ namespace assetlib
 		// transmission (glass, a lens), and read by no other mode. glTF's KHR_materials_transmission.
 		float transmissionFactor = 0.0f;
 
+		// glTF's KHR_materials_specular: the colour tints a dielectric's F0, the factor weights the
+		// whole specular lobe. 1 and white are glTF's defaults and the flat 0.04 dielectric.
+		glm::vec3 specularColorFactor = glm::vec3(1.0f);
+		float     specularFactor      = 1.0f;
+
 		std::array<ChannelRoute, c_LooseChannelCount> routes;
 
 		std::array<SourceStamp, c_LooseChannelCount> routeStamps;

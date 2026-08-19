@@ -677,6 +677,45 @@ namespace assetlib
 			return std::clamp(static_cast<float>(factor.GetNumberAsDouble()), 0.0f, 1.0f);
 		}
 
+		/**
+		 * KHR_materials_specular's `specularColorFactor` and `specularFactor`, or glTF's own defaults
+		 * -- white and 1 -- when the extension or a field of it is absent.
+		 *
+		 * The extension is the only thing in glTF that can say a surface has *no* specular, which is
+		 * what a Phong export with its specular switched off means. Without it every such material
+		 * arrives at the flat 0.04 dielectric and wears a sheen its author removed.
+		 */
+		void
+		readSpecular(const tinygltf::Material& material, BMaterialImport& out)
+		{
+			const auto it = material.extensions.find("KHR_materials_specular");
+			if (it == material.extensions.end())
+				return;
+
+			if (it->second.Has("specularFactor"))
+			{
+				const tinygltf::Value& factor = it->second.Get("specularFactor");
+				if (factor.IsNumber())
+					out.specularFactor =
+						std::clamp(static_cast<float>(factor.GetNumberAsDouble()), 0.0f, 1.0f);
+			}
+
+			if (!it->second.Has("specularColorFactor"))
+				return;
+
+			const tinygltf::Value& color = it->second.Get("specularColorFactor");
+			if (!color.IsArray() || color.ArrayLen() != static_cast<size_t>(glm::vec3::length()))
+				return;
+
+			for (glm::length_t i = 0; i < glm::vec3::length(); ++i)
+			{
+				const tinygltf::Value& component = color.Get(static_cast<size_t>(i));
+				if (component.IsNumber())
+					out.specularColorFactor[i] =
+						std::max(static_cast<float>(component.GetNumberAsDouble()), 0.0f);
+			}
+		}
+
 		AlphaMode
 		toAlphaMode(const std::string& gltfAlphaMode)
 		{
@@ -703,6 +742,7 @@ namespace assetlib
 				material.alphaMode          = toAlphaMode(gltfMat.alphaMode);
 				material.alphaCutoff        = static_cast<float>(gltfMat.alphaCutoff);
 				material.transmissionFactor = toTransmission(gltfMat);
+				readSpecular(gltfMat, material);
 				material.baseColorTexture =
 					mapTexture(model, pbr.baseColorTexture.index, imageToTexture);
 				material.ormTexture =
