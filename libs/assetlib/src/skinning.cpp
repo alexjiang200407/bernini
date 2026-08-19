@@ -1,6 +1,10 @@
+#include <assetlib/skeleton.h>
 #include <assetlib/skinning.h>
+#include <assetlib_structs/Animation.h>
 #include <assetlib_structs/BMesh.h>
+#include <assetlib_structs/Bounds.h>
 #include <assetlib_structs/Mesh.h>
+#include <assetlib_structs/Skeleton.h>
 #include <assetlib_structs/VertexLayout.h>
 
 #include <core/err/util.h>
@@ -136,6 +140,64 @@ namespace assetlib
 			out[v] = total > 0.0f ? SkinnedVertex{ skinnedPosition, skinnedNormal } :
 			                        SkinnedVertex{ position, normal };
 		}
+
+		return out;
+	}
+
+	Bounds
+	posedBounds(
+		const BMesh&        mesh,
+		const uint32_t      meshIndex,
+		const Skeleton&     skeleton,
+		const AnimationSet& animations)
+	{
+		core::throw_runtime_error_if(
+			meshIndex >= mesh.meshes.size(),
+			"posedBounds: mesh index {} out of range",
+			meshIndex);
+
+		const Mesh& entry = mesh.meshes[meshIndex];
+
+		auto out = Bounds{ glm::vec3(std::numeric_limits<float>::max()),
+			               glm::vec3(std::numeric_limits<float>::lowest()) };
+
+		const auto grow = [&](const glm::vec3& p) {
+			out.min = glm::min(out.min, p);
+			out.max = glm::max(out.max, p);
+		};
+
+		for (uint32_t clip = 0; clip < animations.clips.size(); ++clip)
+		{
+			for (uint32_t frame = 0; frame < animations.clips[clip].frameCount; ++frame)
+			{
+				const std::vector<glm::mat4> skinning = skinningMatrices(
+					skeleton,
+					poseModelTransforms(skeleton, animations, clip, frame));
+
+				for (uint32_t i = 0; i < entry.submeshCount; ++i)
+				{
+					const Submesh& submesh = mesh.submeshes[entry.firstSubmesh + i];
+					for (const SkinnedVertex& vertex : skinSubmesh(mesh, submesh, skinning))
+						grow(vertex.position);
+				}
+			}
+		}
+
+		// A rig with no clips has only its bind pose to be bounded by.
+		if (glm::any(glm::greaterThan(out.min, out.max)))
+		{
+			for (uint32_t i = 0; i < entry.submeshCount; ++i)
+			{
+				const Submesh& submesh = mesh.submeshes[entry.firstSubmesh + i];
+				grow(submesh.aabbMin);
+				grow(submesh.aabbMax);
+			}
+		}
+
+		core::throw_runtime_error_if(
+			glm::any(glm::greaterThan(out.min, out.max)),
+			"posedBounds: mesh {} has no submesh to bound",
+			meshIndex);
 
 		return out;
 	}

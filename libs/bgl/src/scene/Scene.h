@@ -20,8 +20,9 @@ namespace bgl
 
 	/**
 	 * One live geom. Every geom has a submesh range; a kVatMesh one additionally owns its VatGeom
-	 * entry (whose Range fields name the clip and column ranges DeleteGeom frees) and records its
-	 * clip count for instance-creation validation.
+	 * entry (whose Range fields name the clip and column ranges DeleteGeom frees) and a kSkinnedMesh
+	 * one its SkinnedGeom entry (naming the bone, sample and clip ranges). Both record their clip
+	 * count for instance-creation validation.
 	 *
 	 * Namespace-scope rather than nested in Scene: a nested class's default member initializers
 	 * only resolve once the enclosing class is complete, which would leave this
@@ -31,7 +32,9 @@ namespace bgl
 	{
 		idl::RangeWithCount submeshes;
 		core::slot_handle   vatGeom;
-		uint32_t            vatClipCount = 0;
+		core::slot_handle   skinnedGeom;
+		uint32_t            clipCount = 0;
+		uint32_t            boneCount = 0;  // kSkinnedMesh only
 	};
 
 	class Scene : public core::RefCounter<IScene>
@@ -103,6 +106,30 @@ namespace bgl
 			return m_Loose;
 		}
 
+		[[nodiscard]] auto&
+		GetClipBuffer() noexcept
+		{
+			return m_Clips;
+		}
+
+		[[nodiscard]] auto&
+		GetSkinnedGeomBuffer() noexcept
+		{
+			return m_SkinnedGeoms;
+		}
+
+		[[nodiscard]] auto&
+		GetSkinnedBoneBuffer() noexcept
+		{
+			return m_SkinnedBones;
+		}
+
+		[[nodiscard]] auto&
+		GetBoneSampleBuffer() noexcept
+		{
+			return m_BoneSamples;
+		}
+
 		// --- SceneView support -------------------------------------------------
 		// Instances live in SceneViews and reference this Scene's geometry by value: a view copies
 		// the submesh range below into its per-placement Mesh. The Scene keeps no record of who
@@ -123,21 +150,33 @@ namespace bgl
 		}
 
 		/**
-		 * The kVatMesh half of a geom record: the VatGeom entry a VatState points at, and the clip
-		 * count instance creation validates against. The handle is invalid on a static geom.
+		 * The animated half of a geom record: the per-rig entry a playback state points at, and the
+		 * clip count instance creation validates against. The handle is invalid on a geom of another
+		 * type, which is what makes it the type check's evidence rather than a second flag.
 		 * Only valid while the geom is alive; check IsGeomAlive first.
 		 */
-		struct VatGeomInfo
+		struct AnimGeomInfo
 		{
 			core::slot_handle record;
 			uint32_t          clipCount = 0;
+
+			// Bones the rig carries, which is what sizes an instance's palette. 0 on a VAT geom: its
+			// pose is fetched, not composed, so nothing on that path needs a bone count.
+			uint32_t boneCount = 0;
 		};
 
-		[[nodiscard]] VatGeomInfo
+		[[nodiscard]] AnimGeomInfo
 		GetGeomVatInfo(uint32_t index) const noexcept
 		{
 			const GeomRecord& geom = m_Geoms[index];
-			return { geom.vatGeom, geom.vatClipCount };
+			return { geom.vatGeom, geom.clipCount };
+		}
+
+		[[nodiscard]] AnimGeomInfo
+		GetGeomSkinnedInfo(uint32_t index) const noexcept
+		{
+			const GeomRecord& geom = m_Geoms[index];
+			return { geom.skinnedGeom, geom.clipCount, geom.boneCount };
 		}
 
 		/**
@@ -252,6 +291,15 @@ namespace bgl
 			std::span<const MaterialHandle> materials,
 			const VatGeomDesc&              desc) override;
 
+		GeomHandle
+		AddSkinnedMeshGeom(
+			const assetlib::BMesh&          mesh,
+			uint32_t                        meshIndex,
+			std::span<const MaterialHandle> materials,
+			const assetlib::Skeleton&       skeleton,
+			const assetlib::AnimationSet&   animations,
+			const assetlib::Bounds&         posedBounds) override;
+
 		TextureAssetHandle
 		AddTextureAsset(assetlib::ImageData img, std::string debugName = "") override;
 
@@ -316,6 +364,32 @@ namespace bgl
 		ValidateVatDesc(const VatGeomDesc& desc) const;
 
 		/**
+		 * Refuses a rig the pose pass could not walk or address: no bones or more than
+		 * `cMaxBonesPerRig`, a `parent` that is not lower than its own bone's index, a clip set whose
+		 * bone count disagrees with the skeleton's, an empty or zero-frame clip table, or a clip
+		 * whose frames run past the end of the sample pool. The clip set's `skeletonSignature` is
+		 * not among these -- computing one needs assetlib; see IScene::AddSkinnedMeshGeom.
+		 *
+		 * Static-only, because it reads nothing of the scene: the checks are all about the two
+		 * containers agreeing with each other.
+		 */
+		static void
+		ValidateSkinnedRig(
+			const assetlib::Skeleton&     skeleton,
+			const assetlib::AnimationSet& animations);
+
+		/**
+		 * AttachVatRecords' counterpart: allocates the bone, sample and clip ranges plus the
+		 * SkinnedGeom record onto `base` and flips it to kSkinnedMesh. On any failure the geometry
+		 * half is taken back down (DeleteGeom) so a failed skinned add leaks nothing.
+		 */
+		GeomHandle
+		AttachSkinnedRecords(
+			GeomHandle                    base,
+			const assetlib::Skeleton&     skeleton,
+			const assetlib::AnimationSet& animations);
+
+		/**
 		 * The tail AddVatMeshGeom and AddVatMeshGeom share: allocates the clip and column ranges plus the
 		 * VatGeom record onto `base` and flips it to kVatMesh. On any failure the geometry half is
 		 * taken back down (DeleteGeom) so a failed VAT add leaks nothing.
@@ -375,9 +449,16 @@ namespace bgl
 		EntryBuffer<idl::PbrMaterial>      m_Pbr;
 		EntryBuffer<idl::LoosePbrMaterial> m_Loose;
 
+		// One clip table for every animated tier: a Clip means the same thing to both, so a second
+		// buffer of the same element type would only be two things to grow.
+		RangeBuffer<idl::Clip> m_Clips;
+
 		EntryBuffer<idl::VatGeom> m_VatGeoms;
-		RangeBuffer<idl::VatClip> m_VatClips;
 		RangeBuffer<uint32_t>     m_VatColumns;
+
+		EntryBuffer<idl::SkinnedGeom> m_SkinnedGeoms;
+		RangeBuffer<idl::SkinnedBone> m_SkinnedBones;
+		RangeBuffer<idl::BoneSample>  m_BoneSamples;
 
 		std::array<SamplerHandle, static_cast<size_t>(StandardSampler::kCount)> m_Samplers;
 
@@ -399,8 +480,11 @@ namespace bgl
 			NamedBuffer{ c_PbrMaterialBufferName, &Scene::m_Pbr },
 			NamedBuffer{ c_LooseMaterialBufferName, &Scene::m_Loose },
 			NamedBuffer{ c_VatGeomBufferName, &Scene::m_VatGeoms },
-			NamedBuffer{ c_VatClipBufferName, &Scene::m_VatClips },
+			NamedBuffer{ c_ClipBufferName, &Scene::m_Clips },
 			NamedBuffer{ c_VatColumnBufferName, &Scene::m_VatColumns },
+			NamedBuffer{ c_SkinnedGeomBufferName, &Scene::m_SkinnedGeoms },
+			NamedBuffer{ c_SkinnedBoneBufferName, &Scene::m_SkinnedBones },
+			NamedBuffer{ c_BoneSampleBufferName, &Scene::m_BoneSamples },
 		};
 
 		static_assert(HasDistinctNames(c_Buffers), "two scene buffers would import under one name");

@@ -38,6 +38,8 @@ namespace bgl
 			return "InvalidSubmeshInstance";
 		case idl::ErrorCode::kInvalidPsoType:
 			return "InvalidPsoType";
+		case idl::ErrorCode::kInvalidBoneIndex:
+			return "InvalidBoneIndex";
 		case idl::ErrorCode::kNullEntryDeref:
 			return "NullEntryDeref";
 		case idl::ErrorCode::kNullRangeDeref:

@@ -78,6 +78,25 @@ namespace bgl
 			m_VatStates.Init(std::move(vatStateBufferDesc), m_ResourceManager);
 		}
 
+		{
+			// One entry, for the same reason as the VAT states above.
+			auto skinnedStateBufferDesc         = EntryBufferDesc();
+			skinnedStateBufferDesc.initialCount = 1;
+			skinnedStateBufferDesc.debugName    = "Skinned State Buffer";
+
+			m_SkinnedStates.Init(std::move(skinnedStateBufferDesc), m_ResourceManager);
+		}
+
+		m_Palettes.Init(m_ResourceManager);
+
+		{
+			auto desc         = UploadBufferDesc();
+			desc.initialCount = 1;
+			desc.debugName    = "Posed Instances";
+
+			m_PosedInstances.Init(std::move(desc), m_ResourceManager);
+		}
+
 		EnsureCullStateCount(1);
 		m_TransparentSort.Init(paddedInstances, m_ResourceManager);
 
@@ -139,6 +158,9 @@ namespace bgl
 		m_InstanceBuffer.Release();
 		m_MeshBuffer.Release();
 		m_VatStates.Release();
+		m_SkinnedStates.Release();
+		m_Palettes.Release();
+		m_PosedInstances.Release();
 
 		for (CullState& cullState : m_CullStates)
 		{
@@ -194,7 +216,7 @@ namespace bgl
 				"GeomHandle passed to CreateStaticMeshInstance has expired or is invalid");
 		}
 
-		return CreateInstance(geom, transform, core::slot_handle{});
+		return WritePlacement(geom, transform, core::slot_handle{});
 	}
 
 	MeshInstanceHandle
@@ -214,7 +236,7 @@ namespace bgl
 				"GeomHandle passed to CreateVatMeshInstance has expired or is invalid");
 		}
 
-		const Scene::VatGeomInfo vat = m_SceneRaw->GetGeomVatInfo(geom.handle.index);
+		const Scene::AnimGeomInfo vat = m_SceneRaw->GetGeomVatInfo(geom.handle.index);
 		if (desc.clip >= vat.clipCount)
 		{
 			throw SceneError(
@@ -231,7 +253,7 @@ namespace bgl
 		const core::slot_handle stateHandle = m_VatStates.Add(state);
 		try
 		{
-			return CreateInstance(geom, transform, stateHandle);
+			return WritePlacement(geom, transform, stateHandle);
 		}
 		catch (...)
 		{
@@ -241,7 +263,63 @@ namespace bgl
 	}
 
 	MeshInstanceHandle
-	SceneView::CreateInstance(GeomHandle geom, glm::mat4 transform, core::slot_handle vatState)
+	SceneView::CreateSkinnedMeshInstance(
+		GeomHandle                 geom,
+		glm::mat4                  transform,
+		const SkinnedInstanceDesc& desc)
+	{
+		if (geom.geomType != GeomType::kSkinnedMesh)
+		{
+			throw SceneError(
+				"GeomHandle passed to CreateSkinnedMeshInstance must be of type kSkinnedMesh");
+		}
+
+		if (!m_SceneRaw->IsGeomAlive(geom))
+		{
+			throw SceneError(
+				"GeomHandle passed to CreateSkinnedMeshInstance has expired or is invalid");
+		}
+
+		const Scene::AnimGeomInfo rig = m_SceneRaw->GetGeomSkinnedInfo(geom.handle.index);
+		if (desc.clip >= rig.clipCount)
+		{
+			throw SceneError(
+				"SkinnedInstanceDesc::clip passed to CreateSkinnedMeshInstance is out of "
+				"range for the geom's clip table");
+		}
+
+		// Two palettes, back to back: the pose at `time` and the pose at `prevTime`, which is what
+		// lets the mesh shader write a motion vector without a history buffer.
+		const uint32_t float4s = idl::cFloat4sPerBone * rig.boneCount * 2;
+
+		const core::multi_slot_handle palette = m_Palettes.Allocate(float4s);
+
+		auto state    = idl::SkinnedState();
+		state.geom    = rig.record;
+		state.clip    = desc.clip;
+		state.phase   = desc.phase;
+		state.rate    = desc.rate;
+		state.palette = palette;
+
+		const core::slot_handle stateHandle = m_SkinnedStates.Add(state);
+		try
+		{
+			const MeshInstanceHandle instance = WritePlacement(geom, transform, stateHandle);
+
+			m_MeshBuffer.MetaAt(instance.handle.index).palette = palette;
+			m_PosedDirty                                       = true;
+			return instance;
+		}
+		catch (...)
+		{
+			m_SkinnedStates.Erase(stateHandle);
+			m_Palettes.Free(palette);
+			throw;
+		}
+	}
+
+	MeshInstanceHandle
+	SceneView::WritePlacement(GeomHandle geom, glm::mat4 transform, core::slot_handle animState)
 	{
 		try
 		{
@@ -255,17 +333,25 @@ namespace bgl
 			mesh.submeshes = submeshes;
 
 			// Only a real handle: assigning a null one would write its index over the null
-			// sentinel the Entry defaults to.
-			if (vatState)
+			// sentinel the Entry defaults to. Which field it lands in follows the geom's type --
+			// the two are never both set.
+			if (animState)
 			{
-				mesh.vatState = vatState;
+				if (geom.geomType == GeomType::kSkinnedMesh)
+				{
+					mesh.skinnedState = animState;
+				}
+				else
+				{
+					mesh.vatState = animState;
+				}
 			}
 
 			auto meshHandle = m_MeshBuffer.Add(mesh);
 
-			auto& meta    = m_MeshBuffer.MetaAt(meshHandle.index);
-			meta.geomType = geom.geomType;
-			meta.vatState = vatState;
+			auto& meta     = m_MeshBuffer.MetaAt(meshHandle.index);
+			meta.geomType  = geom.geomType;
+			meta.animState = animState;
 
 			const uint32_t submeshCount = submeshes.count;
 			meta.submeshInstances.reserve(submeshCount);
@@ -284,7 +370,18 @@ namespace bgl
 					MaterialHandle{},
 					geom.geomType);
 
-				meta.submeshInstances.push_back(m_InstanceBuffer.Add(std::move(instance)));
+				// A drawable with no pipeline is not a drawable: HistogramInstances asserts on a pso
+				// past the bucket count, and the sort would skip it regardless. A null slot is still
+				// pushed, because overrides, selection marks and the epoch re-resolve all address a
+				// submesh by its index in this vector.
+				if (instance.pso < c_PsoCount)
+				{
+					meta.submeshInstances.emplace_back(m_InstanceBuffer.Add(std::move(instance)));
+				}
+				else
+				{
+					meta.submeshInstances.emplace_back();
+				}
 			}
 
 			SyncInstanceScratch();
@@ -324,9 +421,18 @@ namespace bgl
 			}
 		}
 
-		if (meta.vatState)
+		if (meta.animState)
 		{
-			m_VatStates.Erase(meta.vatState);
+			if (meta.geomType == GeomType::kSkinnedMesh)
+			{
+				m_SkinnedStates.Erase(meta.animState);
+				m_Palettes.Free(meta.palette);
+				m_PosedDirty = true;
+			}
+			else
+			{
+				m_VatStates.Erase(meta.animState);
+			}
 		}
 
 		m_MeshBuffer.EraseByIndex(meshIndex);
@@ -395,6 +501,29 @@ namespace bgl
 	}
 
 	void
+	SceneView::RebuildPosedList()
+	{
+		auto list = std::vector<uint32_t>();
+
+		for (uint32_t meshIndex = 0; meshIndex < m_MeshBuffer.Capacity(); ++meshIndex)
+		{
+			if (!m_MeshBuffer.IsIndexValid(meshIndex))
+			{
+				continue;
+			}
+
+			const MeshMeta& meta = m_MeshBuffer.MetaAt(meshIndex);
+			if (meta.geomType == GeomType::kSkinnedMesh && meta.animState)
+			{
+				list.push_back(meta.animState.index);
+			}
+		}
+
+		m_PosedInstances.Assign(list);
+		m_PosedDirty = false;
+	}
+
+	void
 	SceneView::RebuildSelectedList()
 	{
 		auto list = std::vector<uint32_t>();
@@ -459,12 +588,13 @@ namespace bgl
 
 		MeshMeta& meta = MetaFor(instance, submeshIndex, "SetSubmeshMaterialOverride");
 
-		if (meta.geomType == GeomType::kVatMesh && (material.materialType != MaterialType::kPBR ||
-		                                            material.layerType != LayerType::kOpaque))
+		if (meta.geomType != GeomType::kStaticMesh &&
+		    (material.materialType != MaterialType::kPBR ||
+		     material.layerType != LayerType::kOpaque))
 		{
 			throw SceneError(
-				"SetSubmeshMaterialOverride: a VAT instance takes only an opaque kPBR material -- "
-				"the VAT pipeline has no other variant yet");
+				"SetSubmeshMaterialOverride: an animated instance takes only an opaque kPBR "
+				"material -- neither the VAT nor the skinned pipeline has another variant yet");
 		}
 
 		meta.overrides[submeshIndex] = material;
@@ -641,6 +771,13 @@ namespace bgl
 		}
 		m_CurrentSelectedInstances.Update(cmdList);
 
+		if (m_PosedDirty)
+		{
+			RebuildPosedList();
+		}
+		m_PosedInstances.Update(cmdList);
+		m_Palettes.Update(cmdList);
+
 		ForEachNamedBuffer(*this, c_Buffers, [cmdList](std::string_view, auto& buffer) {
 			buffer.Update(cmdList);
 		});
@@ -703,6 +840,23 @@ namespace bgl
 			auto name = std::string(c_SelectedInstancesName);
 			fg.ImportBuffer(name, m_CurrentSelectedInstances.GetBufferHandle());
 			resourceNames.push_back(std::move(name));
+		}
+
+		{
+			// Same order as the selection list above, and for the same reason: rebuilding can grow the
+			// buffer, and a growth mints a new handle.
+			if (m_PosedDirty)
+			{
+				RebuildPosedList();
+			}
+
+			auto posed = std::string(c_PosedInstancesName);
+			fg.ImportBuffer(posed, m_PosedInstances.GetBufferHandle());
+			resourceNames.push_back(std::move(posed));
+
+			auto palettes = std::string(c_BonePaletteName);
+			fg.ImportBuffer(palettes, m_Palettes.GetBufferHandle());
+			resourceNames.push_back(std::move(palettes));
 		}
 
 		// Each frustum's outputs get their own scope inside the view's, so N of them can carry the

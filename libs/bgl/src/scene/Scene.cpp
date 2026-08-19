@@ -8,6 +8,7 @@
 #include "uniforms/Uniforms.h"
 #include "util/util.h"
 #include <assetlib_structs/BMaterial.h>  // the channel layout the static_asserts below pin us to
+#include <assetlib_structs/Bounds.h>
 #include <bgl/PsoType.h>
 #include <core/math.h>
 #include <numbers>
@@ -17,6 +18,21 @@ namespace bgl
 	namespace
 	{
 		constexpr uint32_t c_MaxDispatchMeshGroups = 65535;
+
+		// bgl links assetlib_structs, not assetlib, so findAttribute() is out of reach here -- the
+		// layout is a small fixed array and this is the whole of what the check needs.
+		bool
+		HasSkinBinding(const assetlib::VertexLayout& layout) noexcept
+		{
+			bool joints  = false;
+			bool weights = false;
+			for (uint8_t i = 0; i < layout.attributeCount; ++i)
+			{
+				joints |= layout.attributes[i].semantic == assetlib::VertexSemantic::kJoints0;
+				weights |= layout.attributes[i].semantic == assetlib::VertexSemantic::kWeights0;
+			}
+			return joints && weights;
+		}
 
 		// The interleaved vertex layout the procedural geometry emits: position,
 		// normal, uv, tangent, tightly packed at a 48-byte stride. This is exactly
@@ -332,11 +348,11 @@ namespace bgl
 		}
 
 		{
-			auto vatClipBufferDesc         = RangeBufferDesc();
-			vatClipBufferDesc.initialCount = 1;
-			vatClipBufferDesc.debugName    = "Vat Clip Buffer";
+			auto clipBufferDesc         = RangeBufferDesc();
+			clipBufferDesc.initialCount = 1;
+			clipBufferDesc.debugName    = "Clip Buffer";
 
-			m_VatClips.Init(std::move(vatClipBufferDesc), m_ResourceManager);
+			m_Clips.Init(std::move(clipBufferDesc), m_ResourceManager);
 		}
 
 		{
@@ -345,6 +361,31 @@ namespace bgl
 			vatColumnBufferDesc.debugName    = "Vat Column Buffer";
 
 			m_VatColumns.Init(std::move(vatColumnBufferDesc), m_ResourceManager);
+		}
+
+		// One entry each for the same reason as the VAT arenas above.
+		{
+			auto skinnedGeomBufferDesc         = EntryBufferDesc();
+			skinnedGeomBufferDesc.initialCount = 1;
+			skinnedGeomBufferDesc.debugName    = "Skinned Geom Buffer";
+
+			m_SkinnedGeoms.Init(std::move(skinnedGeomBufferDesc), m_ResourceManager);
+		}
+
+		{
+			auto skinnedBoneBufferDesc         = RangeBufferDesc();
+			skinnedBoneBufferDesc.initialCount = 1;
+			skinnedBoneBufferDesc.debugName    = "Skinned Bone Buffer";
+
+			m_SkinnedBones.Init(std::move(skinnedBoneBufferDesc), m_ResourceManager);
+		}
+
+		{
+			auto boneSampleBufferDesc         = RangeBufferDesc();
+			boneSampleBufferDesc.initialCount = 1;
+			boneSampleBufferDesc.debugName    = "Bone Sample Buffer";
+
+			m_BoneSamples.Init(std::move(boneSampleBufferDesc), m_ResourceManager);
 		}
 	}
 
@@ -535,7 +576,7 @@ namespace bgl
 	{
 		try
 		{
-			auto clips = std::vector<idl::VatClip>();
+			auto clips = std::vector<idl::Clip>();
 			clips.reserve(desc.clips.size());
 			for (const VatClipDesc& clip : desc.clips)
 			{
@@ -552,12 +593,12 @@ namespace bgl
 				idl::TextureHandle{ m_Textures.GetDescriptor(desc.normals.textureSlot) };
 			record.boundsMin    = glm::vec4(desc.boundsMin, 0.0f);
 			record.boundsExtent = glm::vec4(desc.boundsMax - desc.boundsMin, 0.0f);
-			record.clips        = rollback.Track(m_VatClips, m_VatClips.Add(std::span(clips)));
+			record.clips        = rollback.Track(m_Clips, m_Clips.Add(std::span(clips)));
 			record.columnBases  = rollback.Track(m_VatColumns, m_VatColumns.Add(columnBases));
 
-			GeomRecord& geom  = m_Geoms[base.handle.index];
-			geom.vatGeom      = m_VatGeoms.Add(record);
-			geom.vatClipCount = static_cast<uint32_t>(clips.size());
+			GeomRecord& geom = m_Geoms[base.handle.index];
+			geom.vatGeom     = m_VatGeoms.Add(record);
+			geom.clipCount   = static_cast<uint32_t>(clips.size());
 
 			rollback.Commit();
 
@@ -675,6 +716,211 @@ namespace bgl
 			BoundingSphereOf(desc.boundsMin, desc.boundsMax));
 
 		return AttachVatRecords(base, desc, desc.columnBases);
+	}
+
+	void
+	Scene::ValidateSkinnedRig(
+		const assetlib::Skeleton&     skeleton,
+		const assetlib::AnimationSet& animations)
+	{
+		const size_t boneCount = skeleton.bones.size();
+		if (boneCount == 0)
+		{
+			throw SceneError("skinned geometry: a skeleton with no bones skins nothing");
+		}
+		if (boneCount > idl::cMaxBonesPerRig)
+		{
+			throw SceneError(
+				"skinned geometry: the rig has more bones than cMaxBonesPerRig -- the pose pass "
+				"holds one instance's transforms in groupshared memory, which is what bounds it");
+		}
+
+		for (size_t i = 0; i < boneCount; ++i)
+		{
+			const uint32_t parent = skeleton.bones[i].parent;
+			// A forward-pass walk reads parent[i] before it writes i, so an equal or higher parent
+			// would read a transform this frame has not written -- garbage, not a wrong pose.
+			if (parent != idl::cInvalidBone && parent >= i)
+			{
+				throw SceneError(
+					"skinned geometry: bones are not topologically sorted; every parent must be a "
+					"lower index than its own bone");
+			}
+		}
+
+		if (animations.boneCount != boneCount)
+		{
+			throw SceneError(
+				"skinned geometry: the clip set was cooked against a rig of a different bone "
+				"count");
+		}
+		if (animations.clips.empty())
+		{
+			throw SceneError("skinned geometry: the clip table is empty; there is no pose to play");
+		}
+
+		for (const assetlib::AnimationClip& clip : animations.clips)
+		{
+			// The shader clamps to frameCount - 1, and on a uint a zero underflows to four billion
+			// frames of out-of-bounds reads.
+			if (clip.frameCount == 0)
+			{
+				throw SceneError("skinned geometry: a clip with no frames has no pose to sample");
+			}
+
+			// idl::Clip addresses frames, not samples, so a base that is not a whole number of
+			// frames in has no representation -- and would silently truncate to the frame below.
+			if (clip.firstSample % boneCount != 0)
+			{
+				throw SceneError(
+					"skinned geometry: a clip's first sample is not on a frame boundary");
+			}
+
+			const uint64_t end = static_cast<uint64_t>(clip.firstSample) +
+			                     static_cast<uint64_t>(clip.frameCount) * boneCount;
+			if (end > animations.samples.size())
+			{
+				throw SceneError(
+					"skinned geometry: a clip's frames run past the end of the sample pool");
+			}
+		}
+	}
+
+	GeomHandle
+	Scene::AttachSkinnedRecords(
+		GeomHandle                    base,
+		const assetlib::Skeleton&     skeleton,
+		const assetlib::AnimationSet& animations)
+	{
+		try
+		{
+			const uint32_t boneCount = static_cast<uint32_t>(skeleton.bones.size());
+
+			// Depth is derived rather than read: no container carries it, and one forward pass is
+			// enough because a parent always precedes its child.
+			auto     bones    = std::vector<idl::SkinnedBone>();
+			uint32_t maxDepth = 0;
+			bones.reserve(boneCount);
+			for (const assetlib::Bone& bone : skeleton.bones)
+			{
+				const uint32_t depth =
+					bone.parent == idl::cInvalidBone ? 0 : bones[bone.parent].depth + 1;
+				maxDepth = std::max(maxDepth, depth);
+				bones.push_back({ bone.inverseBind, bone.parent, depth });
+			}
+
+			auto samples = std::vector<idl::BoneSample>();
+			samples.reserve(animations.samples.size());
+			for (const assetlib::Transform& sample : animations.samples)
+			{
+				samples.push_back(
+					{ glm::vec4(sample.translation, 0.0f),
+				      glm::vec4(
+						  sample.rotation.x,
+						  sample.rotation.y,
+						  sample.rotation.z,
+						  sample.rotation.w),
+				      glm::vec4(sample.scale, 0.0f) });
+			}
+
+			auto clips = std::vector<idl::Clip>();
+			clips.reserve(animations.clips.size());
+			for (const assetlib::AnimationClip& clip : animations.clips)
+			{
+				clips.push_back(
+					{ clip.firstSample / boneCount,
+				      clip.frameCount,
+				      clip.sampleRate,
+				      clip.loop ? 1u : 0u });
+			}
+
+			auto rollback = GeomRollback();
+
+			auto record      = idl::SkinnedGeom();
+			record.bones     = rollback.Track(m_SkinnedBones, m_SkinnedBones.Add(std::span(bones)));
+			record.samples   = rollback.Track(m_BoneSamples, m_BoneSamples.Add(std::span(samples)));
+			record.clips     = rollback.Track(m_Clips, m_Clips.Add(std::span(clips)));
+			record.boneCount = boneCount;
+			record.maxDepth  = maxDepth;
+
+			GeomRecord& geom = m_Geoms[base.handle.index];
+			geom.skinnedGeom = m_SkinnedGeoms.Add(record);
+			geom.clipCount   = static_cast<uint32_t>(clips.size());
+			geom.boneCount   = boneCount;
+
+			rollback.Commit();
+
+			base.geomType = GeomType::kSkinnedMesh;
+			return base;
+		}
+		catch (const std::runtime_error& e)
+		{
+			// The geometry half committed above; take it back down so a failed skinned add leaks
+			// nothing. The handle is still the kStaticMesh one here, which is what DeleteGeom
+			// accepts.
+			DeleteGeom(base);
+			throw SceneError(e.what());
+		}
+		catch (...)
+		{
+			// Not everything the block can raise is a runtime_error -- an allocation failure is
+			// not -- and the cleanup must run on every path.
+			DeleteGeom(base);
+			throw;
+		}
+	}
+
+	GeomHandle
+	Scene::AddSkinnedMeshGeom(
+		const assetlib::BMesh&          mesh,
+		uint32_t                        meshIndex,
+		std::span<const MaterialHandle> materials,
+		const assetlib::Skeleton&       skeleton,
+		const assetlib::AnimationSet&   animations,
+		const assetlib::Bounds&         posedBounds)
+	{
+		ValidateSkinnedRig(skeleton, animations);
+
+		if (glm::any(glm::greaterThan(posedBounds.min, posedBounds.max)))
+		{
+			throw SceneError("AddSkinnedMeshGeom: posedBounds min exceeds max");
+		}
+
+		if (meshIndex >= mesh.meshes.size())
+		{
+			throw SceneError("AddSkinnedMeshGeom: meshIndex out of range");
+		}
+
+		const assetlib::Mesh& entry = mesh.meshes[meshIndex];
+		for (uint32_t s = 0; s < entry.submeshCount; ++s)
+		{
+			const assetlib::Submesh& submesh = mesh.submeshes[entry.firstSubmesh + s];
+
+			if (!HasSkinBinding(submesh.layout))
+			{
+				throw SceneError(
+					"AddSkinnedMeshGeom: every submesh needs joints0 and weights0 -- one without "
+					"skin binding would hold its bind pose while the rest of the mesh moved");
+			}
+
+			const uint32_t       index = submesh.material;
+			const MaterialHandle bound =
+				index < materials.size() ? materials[index] : MaterialHandle{};
+			if (!bound.IsValid() || bound.materialType != MaterialType::kPBR ||
+			    bound.layerType != LayerType::kOpaque)
+			{
+				throw SceneError(
+					"AddSkinnedMeshGeom: every submesh needs an opaque kPBR material -- the "
+					"skinned pipeline has no other variant yet");
+			}
+		}
+
+		GeomHandle base = AddPreparedMesh(
+			CookStaticMesh(mesh, meshIndex),
+			materials,
+			BoundingSphereOf(posedBounds.min, posedBounds.max));
+
+		return AttachSkinnedRecords(base, skeleton, animations);
 	}
 
 	GeomHandle
@@ -1283,10 +1529,9 @@ namespace bgl
 	void
 	Scene::SetSubmeshMaterial(GeomHandle geom, uint32_t submeshIndex, MaterialHandle material)
 	{
-		if (geom.geomType != GeomType::kStaticMesh && geom.geomType != GeomType::kVatMesh)
+		if (geom.geomType == GeomType::kInvalid || geom.geomType == GeomType::kCount)
 		{
-			throw SceneError(
-				"GeomHandle passed to SetSubmeshMaterial must be of type kStaticMesh or kVatMesh");
+			throw SceneError("GeomHandle passed to SetSubmeshMaterial has no valid geom type");
 		}
 		if (!IsGeomAlive(geom))
 		{
@@ -1296,12 +1541,13 @@ namespace bgl
 		{
 			throw SceneError("Invalid MaterialHandle passed to SetSubmeshMaterial");
 		}
-		if (geom.geomType == GeomType::kVatMesh && (material.materialType != MaterialType::kPBR ||
-		                                            material.layerType != LayerType::kOpaque))
+		if (geom.geomType != GeomType::kStaticMesh &&
+		    (material.materialType != MaterialType::kPBR ||
+		     material.layerType != LayerType::kOpaque))
 		{
 			throw SceneError(
-				"SetSubmeshMaterial: VAT geometry takes only an opaque kPBR material -- the VAT "
-				"pipeline has no other variant yet");
+				"SetSubmeshMaterial: animated geometry takes only an opaque kPBR material -- "
+				"neither the VAT nor the skinned pipeline has another variant yet");
 		}
 
 		const idl::RangeWithCount& submeshes = m_Geoms[geom.handle.index].submeshes;
@@ -1319,10 +1565,9 @@ namespace bgl
 	void
 	Scene::DeleteGeom(GeomHandle geom)
 	{
-		if (geom.geomType != GeomType::kStaticMesh && geom.geomType != GeomType::kVatMesh)
+		if (geom.geomType == GeomType::kInvalid || geom.geomType == GeomType::kCount)
 		{
-			throw SceneError(
-				"GeomHandle passed to DeleteGeom must be of type kStaticMesh or kVatMesh");
+			throw SceneError("GeomHandle passed to DeleteGeom has no valid geom type");
 		}
 
 		if (!IsGeomAlive(geom))
@@ -1337,9 +1582,18 @@ namespace bgl
 		if (record.vatGeom)
 		{
 			const idl::VatGeom vat = m_VatGeoms[record.vatGeom];
-			m_VatClips.EraseByIndex(vat.clips.range.offsetStart);
+			m_Clips.EraseByIndex(vat.clips.range.offsetStart);
 			m_VatColumns.EraseByIndex(vat.columnBases.offsetStart);
 			m_VatGeoms.Erase(record.vatGeom);
+		}
+
+		if (record.skinnedGeom)
+		{
+			const idl::SkinnedGeom skinned = m_SkinnedGeoms[record.skinnedGeom];
+			m_SkinnedBones.EraseByIndex(skinned.bones.offsetStart);
+			m_BoneSamples.EraseByIndex(skinned.samples.offsetStart);
+			m_Clips.EraseByIndex(skinned.clips.range.offsetStart);
+			m_SkinnedGeoms.Erase(record.skinnedGeom);
 		}
 
 		const auto& submeshes = record.submeshes;

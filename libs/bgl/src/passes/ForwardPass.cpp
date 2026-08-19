@@ -73,6 +73,21 @@ namespace bgl
 			"compactedInstances"sv,
 		};
 
+		static constexpr std::array<SceneBuffer, 3> c_SkinnedBuffers = {
+			{ { "scene.skinnedGeomBuffer",
+			    "skinnedGeomBuffer",
+			    BarrierAccessFlag::kShaderResource,
+			    BarrierSyncFlag::kVertexShader },
+			  { "scene.skinnedStateBuffer",
+			    "skinnedStateBuffer",
+			    BarrierAccessFlag::kShaderResource,
+			    BarrierSyncFlag::kVertexShader },
+			  { "scene.bonePalettes",
+			    "bonePaletteBuffer",
+			    BarrierAccessFlag::kShaderResource,
+			    BarrierSyncFlag::kVertexShader } }
+		};
+
 		static constexpr std::array<SceneBuffer, 4> c_VatBuffers = {
 			{ { c_VatGeomBufferName,
 			    "vatGeomBuffer",
@@ -82,8 +97,8 @@ namespace bgl
 			    "vatStateBuffer",
 			    BarrierAccessFlag::kShaderResource,
 			    BarrierSyncFlag::kVertexShader },
-			  { c_VatClipBufferName,
-			    "vatClipBuffer",
+			  { c_ClipBufferName,
+			    "clipBuffer",
 			    BarrierAccessFlag::kShaderResource,
 			    BarrierSyncFlag::kVertexShader },
 			  { c_VatColumnBufferName,
@@ -97,6 +112,7 @@ namespace bgl
 
 		constexpr auto c_GeomSrc             = "Forward_StaticMesh"sv;
 		constexpr auto c_VatGeomSrc          = "Forward_VatMesh"sv;
+		constexpr auto c_SkinnedGeomSrc      = "Forward_SkinnedMesh"sv;
 		constexpr auto c_PbrPixelSrc         = "Forward_PBR"sv;
 		constexpr auto c_LoosePixelSrc       = "Forward_PBR_Loose"sv;
 		constexpr auto c_NullPixelSrc        = "Forward_Null"sv;
@@ -146,6 +162,13 @@ namespace bgl
 			  false,
 			  ComparisonFunc::kLess,
 			  c_VatGeomSrc },
+			// kOpaque_SkinnedMesh_PBR
+			{ c_PbrPixelSrc,
+			  RasterCullMode::kBack,
+			  true,
+			  false,
+			  ComparisonFunc::kLess,
+			  c_SkinnedGeomSrc },
 		} };
 
 		static_assert(
@@ -278,6 +301,7 @@ namespace bgl
 		ValidateBinderNames(m_Kernels, "materialData"sv, UniformKeys(c_MaterialBuffers));
 		ValidateBinderNames(m_Kernels, "materialData"sv, c_MaterialDataFields);
 		ValidateBinderNames(m_Kernels, "vatData"sv, UniformKeys(c_VatBuffers));
+		ValidateBinderNames(m_Kernels, "skinnedData"sv, UniformKeys(c_SkinnedBuffers));
 	}
 
 	void
@@ -334,6 +358,11 @@ namespace bgl
 			desc.AddBufferArg(binding.graphName, binding.sync, binding.access);
 		}
 
+		for (const auto& binding : c_SkinnedBuffers)
+		{
+			desc.AddBufferArg(binding.graphName, binding.sync, binding.access);
+		}
+
 		desc.SetExec([this, draw](const PassContext& resources) { Execute(draw, resources); });
 
 		fg.AddPass(std::move(desc));
@@ -358,6 +387,11 @@ namespace bgl
 		if (auto foundVatData = kernel.FindUniforms("vatData"))
 		{
 			BindSceneBuffers(*foundVatData, c_VatBuffers, resources);
+		}
+
+		if (auto foundSkinnedData = kernel.FindUniforms("skinnedData"))
+		{
+			BindSceneBuffers(*foundSkinnedData, c_SkinnedBuffers, resources);
 		}
 
 		if (auto foundViewData = kernel.FindUniforms("viewData"))

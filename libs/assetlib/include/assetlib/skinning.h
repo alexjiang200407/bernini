@@ -3,8 +3,34 @@
 
 namespace assetlib
 {
+	struct AnimationSet;
 	struct BMesh;
+	struct Bounds;
+	struct Skeleton;
 	struct Submesh;
+
+	/**
+	 * The tightest box holding mesh `meshIndex` in every pose of every clip: every vertex skinned at
+	 * every frame, which is the same walk bakeVat makes and the same answer it arrives at.
+	 *
+	 * A bind-pose box is not a substitute. A rig whose clips are authored in different units than its
+	 * bind pose -- a common export -- poses one to two orders of magnitude larger, so a camera framed
+	 * or a culling volume sized by the bind pose is wrong by that factor.
+	 *
+	 * Bounding the *bones* instead is tempting and much cheaper, but it is not close enough to use:
+	 * applying every bone's matrix to the whole bind-pose box over-estimates by ~3x on a rig at that
+	 * scale, because each bone is credited with moving vertices it has no weight on. Skinning is
+	 * milliseconds for a character-sized rig, and it is exact.
+	 *
+	 * @throws std::runtime_error if `meshIndex` is out of range, or for anything poseModelTransforms
+	 *         or skinSubmesh refuses (a clip set cooked against another rig, a bad joint index).
+	 */
+	[[nodiscard]] Bounds
+	posedBounds(
+		const BMesh&        mesh,
+		uint32_t            meshIndex,
+		const Skeleton&     skeleton,
+		const AnimationSet& animations);
 
 	/** One vertex after skinning, in model space. */
 	struct SkinnedVertex

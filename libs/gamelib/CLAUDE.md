@@ -28,8 +28,11 @@ here, not in either of them.
   because nothing retains CPU geometry after the GPU upload — feed it while the `BMesh` is still
   in scope. Pure CPU, no bgl involvement; the editor's material preview drives click-to-select
   with it.
-- `EnsureVatBaked` (`vat_freshness.h`) — the `.bvat` freshness rule in one place: return the pair's
-  container fresh, re-baking in place when a stamp moved. One bake file per (mesh, clip set)
+- `VatFreshness` / `EnsureVatBaked` (`vat_freshness.h`) — the `.bvat` freshness rule in one place,
+  in both moods. `VatFreshness` *asks* — usable, missing, stale, or baked from other clips — and
+  makes nothing; `EnsureVatBaked` is that answer plus a bake when it is not usable, returning the
+  pair's container fresh. A caller that must not spend seconds unprompted asks (the editor's
+  Animation panel offers **Bake Now** instead); one loading a level enforces. One bake file per (mesh, clip set)
   (`assetlib::vatPathFor`), so switching clip sets never re-bakes an earlier switch's work. Pure assetlib, so
   a caller can pay the bake on a worker thread and acquire after; `AcquireVatMesh` runs the same
   function.
@@ -43,7 +46,9 @@ here, not in either of them.
 ### AssetManager: identity is the path, lifetime is a reference count
 
 **Identity.** A path maps to one texture upload and one material, however many times it is asked for.
-Geometry is keyed by `path#meshIndex`, because a `.bmesh` holds several meshes. Cubes and spheres have
+Geometry is keyed by `path#meshIndex`, because a `.bmesh` holds several meshes -- plus a tier suffix,
+because one mesh may be live as static, VAT (`#vat`) and skinned (`#skinned`) geometry at once, and
+those are three different uploads. Cubes and spheres have
 no file, so they are not shared — but they are refcounted like anything else. Loading options
 (`AssetManagerOptions`) are fixed at construction for the same reason: an option that varied per call
 would make the shared material depend on who asked first.

@@ -1,6 +1,9 @@
 #pragma once
+#include <assetlib_structs/Animation.h>
 #include <assetlib_structs/BMesh.h>
+#include <assetlib_structs/Bounds.h>
 #include <assetlib_structs/ImageData.h>
+#include <assetlib_structs/Skeleton.h>
 #include <bgl/GeomHandle.h>
 #include <bgl/GeomType.h>
 #include <bgl/LayerType.h>
@@ -117,7 +120,8 @@ namespace bgl
 	 * A rig's baked clip set, as textures already uploaded through AddTextureAsset: positions
 	 * `R16G16B16A16_UNORM` unorm-packed in [boundsMin, boundsMax] -- one box over every frame of
 	 * every clip -- and normals `R8G8B8A8_UNORM` as unit object-space `xyz * 0.5 + 0.5`. Columns
-	 * are geometry-local vertex indices; frame `f` of clip `c` is row `clips[c].firstRow + f`.
+	 * are geometry-local vertex indices; frame `f` of clip `c` is row `clips[c].firstRow + f`, which
+	 * is the row index the shared idl::Clip carries as `firstFrame`.
 	 *
 	 * bgl never reads a `.bvat` (it stays codec-free); whoever decodes one -- gamelib, or a test
 	 * synthesizing textures from scratch -- fills this in.
@@ -276,6 +280,56 @@ namespace bgl
 			uint32_t                        meshIndex,
 			std::span<const MaterialHandle> materials,
 			const VatGeomDesc&              desc) = 0;
+
+		/**
+		 * Adds one mesh of a loaded BMesh as skinned geometry: the bind-pose submeshes upload exactly
+		 * as AddStaticMeshGeom does, and every instance's pose is computed each frame from `skeleton`
+		 * and `animations` instead of being fetched from a bake. The rig's bones, clip table and
+		 * sample pool upload with the geometry and are shared by every instance of it.
+		 *
+		 * Unlike VAT this takes the containers as they are: `Skeleton` and `AnimationSet` are
+		 * `assetlib_structs` PODs with nothing to decode, so there is no desc to mirror them into.
+		 *
+		 * Each submesh must carry `joints0` and `weights0` -- a submesh with no skin binding has no
+		 * bones to follow and would draw its bind pose while the rest of the mesh moved.
+		 *
+		 * Every submesh's culling sphere comes from `posedBounds`, not its bind pose -- the same rule
+		 * VAT follows, and for the same reason: the bind pose's box does not hold once a limb moves,
+		 * and a rig whose clips are authored in different units than its bind pose poses two orders of
+		 * magnitude larger, so bind-pose culling makes it vanish. bgl cannot measure the box itself:
+		 * skinning a vertex means decoding a vertex layout, which lives in assetlib. Whoever loaded
+		 * the containers measures it -- `assetlib::posedBounds` is that walk, and gamelib's acquire
+		 * makes it.
+		 *
+		 * `materials` must resolve every submesh to an opaque `kPBR` material, the same constraint
+		 * VAT carries and for the same reason: no other variant of the pipeline exists.
+		 *
+		 * @param mesh        A BMesh loaded from disk, carrying skin binding on every submesh.
+		 * @param meshIndex   Index into `mesh.meshes`.
+		 * @param materials   Materials parallel to `mesh.materials`, resolved by the caller.
+		 * @param skeleton    The rig the mesh's joint indices address.
+		 * @param animations  Clips cooked against `skeleton`.
+		 * @param posedBounds A box holding the mesh in every pose of every clip, in model space.
+		 * @throws SceneError for anything AddStaticMeshGeom refuses, a skeleton with no bones or more
+		 *         than `cMaxBonesPerRig`, bones that are not topologically sorted, an `animations`
+		 *         whose bone count disagrees with `skeleton`, an empty or zero-frame clip table, a
+		 *         clip whose samples fall outside the pool, a submesh without skin binding, a submesh
+		 *         whose material does not resolve to opaque kPBR, or a `posedBounds` whose min exceeds
+		 *         its max on any axis.
+		 *
+		 * `AnimationSet::skeletonSignature` is deliberately **not** checked here: computing a
+		 * skeleton's signature needs assetlib, which bgl does not link. A clip set cooked against a
+		 * since-reordered rig of the same bone count therefore passes this door and animates wrongly.
+		 * Whoever loaded the two containers owns that check -- gamelib's acquire makes it.
+		 */
+		virtual GeomHandle
+		AddSkinnedMeshGeom(
+			const assetlib::BMesh&          mesh,
+			uint32_t                        meshIndex,
+			std::span<const MaterialHandle> materials,
+			const assetlib::Skeleton&       skeleton,
+			const assetlib::AnimationSet&   animations,
+			const assetlib::Bounds&         posedBounds) = 0;
 
 		virtual TextureAssetHandle
 		AddTextureAsset(assetlib::ImageData img, std::string debugName = "") = 0;

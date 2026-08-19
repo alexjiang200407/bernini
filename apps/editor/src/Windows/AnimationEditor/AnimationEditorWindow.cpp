@@ -4,6 +4,8 @@
 #include "Windows/AnimationEditor/TimelineScrubber.h"
 #include "util/mime_files.h"
 
+#include "Windows/AnimationEditor/animation_source.h"
+
 #include <QComboBox>
 #include <QDir>
 #include <QDoubleSpinBox>
@@ -86,6 +88,20 @@ AnimationEditorWindow::AnimationEditorWindow(QWidget* parent, AnimationEditorWin
 			m_SourceSelector->addItems(candidates);
 			m_SourceSelector->setCurrentIndex(activeIndex);
 			m_SourceSelector->setEnabled(candidates.size() > 1);
+			m_TierSelector->setEnabled(!candidates.isEmpty());
+			m_BakeVatButton->setEnabled(m_Preview->CanBakeVat());
+			m_SyncingUi = false;
+		});
+
+	// The tier the panel is *actually* on, which is not always the one just clicked: a switch whose
+	// load fails leaves the old tier on screen, and this is what puts the combo back on it.
+	connect(
+		m_Preview,
+		&AnimationPreviewWindow::PreviewSourceChanged,
+		this,
+		[this](const editor::AnimationSource source) {
+			m_SyncingUi = true;
+			m_TierSelector->setCurrentIndex(source == editor::AnimationSource::kSkinned ? 0 : 1);
 			m_SyncingUi = false;
 		});
 
@@ -147,6 +163,32 @@ AnimationEditorWindow::BuildPropertiesColumn()
 		LoadShownMesh(m_SourceSelector->itemText(index));
 	});
 	layout->addWidget(m_SourceSelector);
+
+	layout->addSpacing(8);
+	layout->addWidget(new QLabel(QStringLiteral("Preview As"), column));
+
+	m_TierSelector = new QComboBox(column);
+	m_TierSelector->setEnabled(false);
+	m_TierSelector->addItem(QStringLiteral("Skinned"));
+	m_TierSelector->addItem(QStringLiteral("VAT (baked)"));
+	m_TierSelector->setToolTip(QStringLiteral(
+		"Skinned poses the rig directly; VAT plays what the bake made of it. "
+		"Switching re-uploads the mesh."));
+	connect(m_TierSelector, &QComboBox::activated, this, [this](int index) {
+		if (m_SyncingUi || index < 0)
+			return;
+		m_Preview->SetAnimationSource(
+			index == 0 ? editor::AnimationSource::kSkinned : editor::AnimationSource::kVat);
+	});
+	layout->addWidget(m_TierSelector);
+
+	m_BakeVatButton = new QPushButton(QStringLiteral("Bake VAT"), column);
+	m_BakeVatButton->setEnabled(false);
+	m_BakeVatButton->setToolTip(QStringLiteral(
+		"Skins every vertex of every frame into the texture pair the VAT tier draws from. "
+		"Takes a few seconds, so nothing does it for you."));
+	connect(m_BakeVatButton, &QPushButton::clicked, this, [this] { m_Preview->BakeShownVat(); });
+	layout->addWidget(m_BakeVatButton);
 
 	layout->addSpacing(8);
 	layout->addWidget(new QLabel(QStringLiteral("Clips"), column));

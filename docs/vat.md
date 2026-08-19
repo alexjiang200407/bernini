@@ -49,7 +49,8 @@ truth; when this doc disagrees, trust the header, then fix this doc.
   `Entry<VatState>` (null for static meshes — it occupies alignment padding, so `sizeof` is
   unchanged); `SubmeshInstance` keeps its 16 bytes, and its `pso` remains the one derived sort key
   (`SubmeshPso(geomType, material)`). The geometry family is `GeomType::kVatMesh`, one PSO bucket
-  (`kOpaque_VatMesh_PBR`) sharing the PBR pixel stage untouched.
+  (`kOpaque_VatMesh_PBR`) sharing the PBR pixel stage untouched — the same arrangement the skinned
+  tier uses for `kOpaque_SkinnedMesh_PBR`.
 * **Every VAT door demands opaque `kPBR`.** No null, cutout or loose variant of the VAT pipeline
   exists, so `AddVatMeshGeom`, `SetSubmeshMaterial` and `SetSubmeshMaterialOverride` all refuse
   anything else — which is what keeps the single bucket total.
@@ -92,7 +93,8 @@ truth; when this doc disagrees, trust the header, then fix this doc.
 | Interface | File | Role |
 |---|---|---|
 | `AssetManager::AcquireVatMesh` | [libs/gamelib/include/gamelib/AssetManager.h](libs/gamelib/include/gamelib/AssetManager.h) | Load the `.bvat` beside a mesh — or bake it there — and stand the geom up with its materials |
-| `EnsureVatBaked` | [libs/gamelib/include/gamelib/vat_freshness.h](libs/gamelib/include/gamelib/vat_freshness.h) | The freshness rule's one home: return the pair's `.bvat` fresh, re-baking in place when stale — pure assetlib, safe off the render thread |
+| `EnsureVatBaked` | [libs/gamelib/include/gamelib/vat_freshness.h](libs/gamelib/include/gamelib/vat_freshness.h) | Return the pair's `.bvat` fresh, re-baking in place when it is not — `VatFreshness` plus a bake, so the rule is asked here too. Pure assetlib, safe off the render thread |
+| `VatFreshness` | [libs/gamelib/include/gamelib/vat_freshness.h](libs/gamelib/include/gamelib/vat_freshness.h) | The freshness rule's one home, *asked* rather than enforced — for a caller that must not bake unprompted. Hands back what it parsed, so asking then loading is one read |
 | `AssetManager::CreateVatInstance` | [libs/gamelib/include/gamelib/AssetManager.h](libs/gamelib/include/gamelib/AssetManager.h) | `CreateInstance`'s VAT twin; same reference edges, same `DestroyInstance` |
 
 ### editor — the Animation panel
@@ -121,8 +123,9 @@ until placement playback gives it a clock of its own.
 | `BVat`, `VatClip`, `VatColumns` | [libs/assetlib_structs/include/assetlib_structs/BVat.h](libs/assetlib_structs/include/assetlib_structs/BVat.h) | The container: bounds, tables, palettes, embedded KTX2 payloads |
 | `VatGeomDesc`, `VatClipDesc`, `VatVertex` | [libs/bgl/include/bgl/IScene.h](libs/bgl/include/bgl/IScene.h) | What a decoded `.bvat` (or a test) hands the scene — bgl never reads the container itself |
 | `ISceneView::VatInstanceDesc` | [libs/bgl/include/bgl/ISceneView.h](libs/bgl/include/bgl/ISceneView.h) | The spawn record: clip, phase (fractional frames), rate (0 freezes) |
-| `AssetManager::VatMesh`, `VatClipInfo` | [libs/gamelib/include/gamelib/AssetManager.h](libs/gamelib/include/gamelib/AssetManager.h) | An acquire's result: the geom plus the clip table to pick from |
-| `idl::VatGeom`, `idl::VatState`, `idl::VatClip` | [libs/bgl/idl/src](libs/bgl/idl/src) | The GPU records (IDL-generated; regenerate with `just idl`) |
+| `AssetManager::VatMesh`, `ClipInfo` | [libs/gamelib/include/gamelib/AssetManager.h](libs/gamelib/include/gamelib/AssetManager.h) | An acquire's result: the geom plus the clip table to pick from. `ClipInfo` is shared with the skinned tier, which describes a clip identically. |
+| `idl::VatGeom`, `idl::VatState` | [libs/bgl/idl/src](libs/bgl/idl/src) | The GPU records (IDL-generated; regenerate with `just idl`) |
+| `idl::Clip` | [libs/bgl/idl/src/Clip.slang](libs/bgl/idl/src/Clip.slang) | One clip's frame span and rate, **shared with the skinned tier** — `firstFrame` is a texture row here. Both tiers allocate out of one `scene.clipBuffer`. |
 
 ## Topology
 
@@ -209,6 +212,12 @@ flowchart TD
   name the clip set it was first acquired with, or it throws: the fast path returns the cached
   clip table without reading the container. Switching clip sets means releasing the geom to zero
   first — the eviction is what lets the freshness check see the new request.
+* **The editor does not bake on demand; it asks.** A bake is seconds, so the Animation panel calls
+  `VatFreshness` and, when the answer is not `kFresh`, refuses the load and offers **Bake Now**
+  instead of spending that time unasked. Declining leaves the panel on the tier it was already
+  showing. The panel also carries a **Bake VAT** button, so the bake can be made deliberately rather
+  than only in answer to a refusal. Nothing else in the tree works this way — `AcquireVatMesh` still
+  bakes on demand, which is what a game loading a level wants.
 * **A mesh with non-opaque or loose materials cannot be acquired as VAT** — the per-submesh
   opaque-`kPBR` rule surfaces here as a throw *after* the bake and material acquires; the unwind
   releases everything taken, so a failed acquire owns nothing.

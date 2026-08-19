@@ -92,6 +92,13 @@ The persistent shader cache: how compiled DXIL, reflection, and driver PSOs are 
 
 How `bgl_idlgen` generates CPU/GPU structs, enums, and constants from one Slang IDL module.
 
+**[Skinned Meshes](./docs/skinning.md)**
+
+A rig posed on the GPU into a bone palette and drawn from it: the compute pass and its
+barrier-per-depth-level walk, why the previous pose is re-evaluated rather than remembered, where the
+skeleton signature is checked and why the culling box cannot be measured (both for the same reason —
+`bgl` does not link `assetlib`), and what the editor's Animation panel does with the tier.
+
 **[Vertex Animation Textures](./docs/vat.md)**
 
 A rig's clips baked to a position/normal texture pair and drawn as crowds: the `.bvat`
@@ -140,12 +147,16 @@ authoring traps — gamma, cube-seam edge fixup, resampling — that still bite 
 
 The two GitHub Apps that give AI work its own identity: `morgana-coding-agent`, which posts `bcp-revise`'s PR replies and co-authors commits from your machine, and the review agent that reviews a PR when you comment `/review` from a GitHub Actions runner. Covers registration, key custody, secrets, and revocation for both.
 
-**Specs** (`docs/specs/`, none at present)
+**[Specs](./docs/specs/)**
 
 One file per problem we have decided **not** to solve yet: what it is, the trigger that makes it
 urgent, and the design already settled on so nobody re-derives it. Unlike a doc above, a spec
 describes code that does not exist; unlike a plan, it is not tied to a change that happened. Read one
 before building the thing it describes, and delete it when that thing lands.
+
+- [A looping clip plays one frame too long](./docs/specs/clip_loop_convention.md) — the importer counts
+  a loop's duplicated end frame in `frameCount` and the shader does not, so every real looping clip
+  hitches once per cycle and runs ~3 % slow.
 
 **[Plans and Decision Records](./docs/plans/)**
 

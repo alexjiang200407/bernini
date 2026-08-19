@@ -16,13 +16,24 @@ namespace bgl
 	constexpr std::string_view c_LooseMaterialBufferName = "scene.looseMaterialBuffer"sv;
 
 	constexpr std::string_view c_VatGeomBufferName   = "scene.vatGeomBuffer"sv;
-	constexpr std::string_view c_VatClipBufferName   = "scene.vatClipBuffer"sv;
 	constexpr std::string_view c_VatColumnBufferName = "scene.vatColumnBuffer"sv;
+
+	// Not vat-prefixed: both animated tiers play from one clip table (see docs/skinning.md).
+	constexpr std::string_view c_ClipBufferName = "scene.clipBuffer"sv;
+
+	constexpr std::string_view c_SkinnedGeomBufferName = "scene.skinnedGeomBuffer"sv;
+	constexpr std::string_view c_SkinnedBoneBufferName = "scene.skinnedBoneBuffer"sv;
+	constexpr std::string_view c_BoneSampleBufferName  = "scene.boneSampleBuffer"sv;
 
 	constexpr std::string_view c_InstanceBufferName     = "scene.instanceBuffer"sv;
 	constexpr std::string_view c_MeshInstanceBufferName = "scene.meshInstanceBuffer"sv;
 	constexpr std::string_view c_VatStateBufferName     = "scene.vatStateBuffer"sv;
+	constexpr std::string_view c_SkinnedStateBufferName = "scene.skinnedStateBuffer"sv;
 	constexpr std::string_view c_SelectedInstancesName  = "scene.selectedInstances"sv;
+
+	// Written by the pose pass rather than uploaded, so neither is in c_Buffers -- see SceneView.
+	constexpr std::string_view c_PosedInstancesName = "scene.posedInstances"sv;
+	constexpr std::string_view c_BonePaletteName    = "scene.bonePalettes"sv;
 
 	constexpr std::string_view c_InstanceVisibilityName = "scene.instanceVisibility"sv;
 	constexpr std::string_view c_CompactedInstancesName = "scene.compactedInstances"sv;

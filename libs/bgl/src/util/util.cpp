@@ -142,6 +142,13 @@ namespace bgl
 				gfatal("VAT geometry is only drawable with an opaque kPBR material");
 			return PsoType::kOpaque_VatMesh_PBR;
 
+		// Constrained at every door that binds a material to skinned geometry, exactly as VAT is
+		// above, so any other type reaching here is bgl's own bug.
+		case GeomType::kSkinnedMesh:
+			if (material != MaterialType::kPBR || cutout || blend || hashed)
+				gfatal("Skinned geometry is only drawable with an opaque kPBR material");
+			return PsoType::kOpaque_SkinnedMesh_PBR;
+
 		case GeomType::kInvalid:
 		case GeomType::kCount:
 		default:

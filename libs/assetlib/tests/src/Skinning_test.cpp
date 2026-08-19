@@ -2,6 +2,7 @@
 #include <assetlib/skinning.h>
 #include <assetlib_structs/Animation.h>
 #include <assetlib_structs/BMesh.h>
+#include <assetlib_structs/Bounds.h>
 #include <assetlib_structs/Skeleton.h>
 
 #include <catch2/catch_approx.hpp>
@@ -300,5 +301,92 @@ TEST_CASE("Skinning refuses a submesh it cannot read", "[skinning]")
 			                                  VertexFormat::kFloat32x3,
 			                                  0 };
 		CHECK_THROWS_AS(skinSubmesh(fixture.mesh, positionless, skinning), std::runtime_error);
+	}
+}
+
+TEST_CASE("posedBounds measures the pose, not the bind pose", "[skinning][bounds]")
+{
+	// One bone, two vertices at opposite corners of a unit box, both welded to it.
+	SkinnedMesh fixture;
+	fixture.Add(
+		glm::vec3(-1.0f),
+		glm::vec3(0.0f, 0.0f, 1.0f),
+		{ { 0, 0, 0, 0 } },
+		{ { 65535, 0, 0, 0 } });
+	fixture.Add(
+		glm::vec3(1.0f),
+		glm::vec3(0.0f, 0.0f, 1.0f),
+		{ { 0, 0, 0, 0 } },
+		{ { 65535, 0, 0, 0 } });
+
+	fixture.submesh.aabbMin = glm::vec3(-1.0f);
+	fixture.submesh.aabbMax = glm::vec3(1.0f);
+	fixture.mesh.submeshes.push_back(fixture.submesh);
+	fixture.mesh.meshes.push_back({ .firstSubmesh = 0, .submeshCount = 1, .nameOffset = 0 });
+
+	auto skeleton = assetlib::Skeleton();
+
+	auto bone        = assetlib::Bone();
+	bone.bindPose    = { glm::vec3(0.0f), glm::quat(1.0f, 0.0f, 0.0f, 0.0f), glm::vec3(1.0f) };
+	bone.inverseBind = glm::mat4(1.0f);
+	bone.parent      = assetlib::c_InvalidIndex;
+	bone.nameOffset  = 0;
+	skeleton.bones.push_back(bone);
+
+	auto animations              = assetlib::AnimationSet();
+	animations.boneCount         = 1;
+	animations.skeletonSignature = assetlib::skeletonSignature(skeleton);
+
+	auto clip        = assetlib::AnimationClip();
+	clip.firstSample = 0;
+	clip.frameCount  = 2;
+	clip.sampleRate  = 30.0f;
+	animations.clips.push_back(clip);
+
+	const auto still =
+		assetlib::Transform{ glm::vec3(0.0f), glm::quat(1.0f, 0.0f, 0.0f, 0.0f), glm::vec3(1.0f) };
+
+	SECTION("a clip authored at a different scale than its bind pose")
+	{
+		// The failure this exists for: an export whose clips are in centimetres against a bind pose
+		// in metres poses two orders of magnitude larger, and a bind-pose box is then useless for
+		// framing a camera or sizing a culling volume. The real coyote does exactly this.
+		animations.samples.push_back(still);
+		animations.samples.push_back(
+			{ glm::vec3(0.0f), glm::quat(1.0f, 0.0f, 0.0f, 0.0f), glm::vec3(100.0f) });
+
+		const assetlib::Bounds bounds =
+			assetlib::posedBounds(fixture.mesh, 0, skeleton, animations);
+
+		CHECK(bounds.min.x == Catch::Approx(-100.0f));
+		CHECK(bounds.max.y == Catch::Approx(100.0f));
+	}
+
+	SECTION("a clip that travels is bounded where it travels to")
+	{
+		animations.samples.push_back(still);
+		animations.samples.push_back(
+			{ glm::vec3(50.0f, 0.0f, 0.0f), glm::quat(1.0f, 0.0f, 0.0f, 0.0f), glm::vec3(1.0f) });
+
+		const assetlib::Bounds bounds =
+			assetlib::posedBounds(fixture.mesh, 0, skeleton, animations);
+
+		// Frame 0 puts the vertices on [-1, 1]; frame 1 slides them to [49, 51].
+		CHECK(bounds.min.x == Catch::Approx(-1.0f));
+		CHECK(bounds.max.x == Catch::Approx(51.0f));
+	}
+
+	SECTION("a rig whose clips never move it is bounded exactly by its vertices")
+	{
+		animations.samples.push_back(still);
+		animations.samples.push_back(still);
+
+		const assetlib::Bounds bounds =
+			assetlib::posedBounds(fixture.mesh, 0, skeleton, animations);
+
+		// Tight, not conservative: bounding the *bone* would have swept the whole box by the bone's
+		// own transform and come back larger than the geometry.
+		CHECK(bounds.min.x == Catch::Approx(-1.0f));
+		CHECK(bounds.max.x == Catch::Approx(1.0f));
 	}
 }

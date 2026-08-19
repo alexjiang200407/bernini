@@ -1,10 +1,12 @@
 #pragma once
 #include <assetlib/AssetStore.h>
 #include <assetlib_structs/BMaterial.h>
+#include <assetlib_structs/Bounds.h>
 #include <assetlib_structs/ImageData.h>
 #include <bgl/IScene.h>
 #include <bgl/ISceneView.h>
 #include <core/str/str.h>
+#include <gamelib/ClipInfo.h>
 
 namespace game
 {
@@ -156,21 +158,22 @@ namespace game
 		bgl::GeomHandle
 		AcquireMesh(std::string_view relPath, uint32_t meshIndex = 0);
 
-		/** One clip of an acquired VAT mesh; its index in VatMesh::clips is what an instance names. */
-		struct VatClipInfo
-		{
-			std::string name;
-			uint32_t    frameCount = 0;
-			float       sampleRate = 30.0f;
-			float       duration   = 0.0f;
-			bool        loop       = false;
-		};
-
 		/** An acquired VAT mesh: the geom to instance, and the clips its instances can play. */
 		struct VatMesh
 		{
-			bgl::GeomHandle          geom;
-			std::vector<VatClipInfo> clips;
+			bgl::GeomHandle       geom;
+			std::vector<ClipInfo> clips;
+		};
+
+		/**
+		 * An acquired skinned mesh. Deliberately the same shape as VatMesh, down to the clip type: the
+		 * two tiers describe a clip identically, and a caller that shows a clip list should not have to
+		 * know which one it acquired.
+		 */
+		struct SkinnedMesh
+		{
+			bgl::GeomHandle       geom;
+			std::vector<ClipInfo> clips;
 		};
 
 		/**
@@ -205,6 +208,36 @@ namespace game
 			std::string_view relPath,
 			std::string_view animationsRelPath,
 			uint32_t         meshIndex = 0);
+
+		/**
+		 * Uploads mesh `meshIndex` of the `.bmesh` at `relPath` as skinned geometry, or shares it from
+		 * a previous call, acquiring its materials like AcquireMesh does. See
+		 * [Skinned Meshes](docs/skinning.md).
+		 *
+		 * `animationsRelPath` names the clip set; the skeleton is the one that set was cooked against,
+		 * so a caller never names it. A live geom must be re-acquired with the same `.banim`.
+		 *
+		 * `posedBounds` is the box the geom culls by, and is measured here (assetlib::posedBounds)
+		 * when it is not given. That measurement skins every vertex at every frame -- seconds on a
+		 * dense rig -- so a caller already holding the box, or one that cannot block the thread it
+		 * acquires on, passes its own. It is not validated against the rig: an under-sized box culls
+		 * the mesh early, which is the caller's mistake to make.
+		 *
+		 * A **shared** acquire ignores it entirely -- not even to validate it. The sphere belongs to
+		 * the geom, and the geom already exists, so nothing this call passes can change it. Release
+		 * the geom to zero to re-bound it.
+		 *
+		 * @throws std::runtime_error if an input cannot be read, `meshIndex` is out of range, the clip
+		 *         set no longer matches the skeleton it names, or the geom is live with clips from a
+		 *         different `.banim`; bgl::SceneError for anything AddSkinnedMeshGeom refuses. A
+		 *         failed acquire owns nothing.
+		 */
+		SkinnedMesh
+		AcquireSkinnedMesh(
+			std::string_view                       relPath,
+			std::string_view                       animationsRelPath,
+			uint32_t                               meshIndex   = 0,
+			const std::optional<assetlib::Bounds>& posedBounds = std::nullopt);
 
 		/**
 		 * A `.benv` followed to its uploads: one texture reference per baked map it references, plus
@@ -295,10 +328,25 @@ namespace game
 		 */
 		bgl::MeshInstanceHandle
 		CreateVatInstance(
-			bgl::SceneViewRef                       view,
-			bgl::GeomHandle                         geom,
-			const glm::mat4&                        transform,
-			const bgl::ISceneView::VatInstanceDesc& desc);
+			bgl::SceneViewRef           view,
+			bgl::GeomHandle             geom,
+			const glm::mat4&            transform,
+			const bgl::VatInstanceDesc& desc);
+
+		/**
+		 * The skinned counterpart of CreateInstance: places a geom AcquireSkinnedMesh returned, spawned
+		 * on `desc`'s clip, phase and rate. The same references are taken and the same DestroyInstance
+		 * releases them.
+		 *
+		 * @throws bgl::SceneError if `view` is null, the geom is not this manager's or has expired, or
+		 *         `desc.clip` is out of the geom's clip table.
+		 */
+		bgl::MeshInstanceHandle
+		CreateSkinnedInstance(
+			bgl::SceneViewRef               view,
+			bgl::GeomHandle                 geom,
+			const glm::mat4&                transform,
+			const bgl::SkinnedInstanceDesc& desc);
 
 		/**
 		 * Destroys `instance` in `view` and drops its reference on its geometry. `view` is the one it was
@@ -435,8 +483,14 @@ namespace game
 			// container, and the normalized .banim path those clips came from -- what a shared
 			// acquire is checked against.
 			std::vector<bgl::TextureAssetHandle> vatTextures;
-			std::vector<VatClipInfo>             vatClips;
+			std::vector<ClipInfo>                vatClips;
 			std::string                          vatAnimations;
+
+			// Skinned only, and the same bargain as vatClips/vatAnimations above: the clip table a
+			// shared acquire hands back without re-reading the container, and the normalized .banim
+			// path it came from. No textures -- a skinned pose is computed, not fetched.
+			std::vector<ClipInfo> skinnedClips;
+			std::string           skinnedAnimations;
 
 			uint32_t refCount = 0;
 		};

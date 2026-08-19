@@ -437,9 +437,9 @@ namespace
 
 	void
 	AddVatQuadOverBackdrop(
-		const bgl::SceneRef&                    scene,
-		const bgl::SceneViewRef&                view,
-		const bgl::ISceneView::VatInstanceDesc& desc)
+		const bgl::SceneRef&        scene,
+		const bgl::SceneViewRef&    view,
+		const bgl::VatInstanceDesc& desc)
 	{
 		bgl::test::ApplyEnvironment(scene.Get(), view.Get());
 

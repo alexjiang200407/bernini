@@ -64,8 +64,8 @@ TEST_CASE("A skinned entry plays as VAT; a static one stands beside it", "[anima
 TEST_CASE("The clip table converts field for field", "[animation]")
 {
 	const auto infos = editor::ToClipInfos(
-		std::array{ game::AssetManager::VatClipInfo{ "walk", 24, 30.0f, 0.767f, true },
-	                game::AssetManager::VatClipInfo{ "die", 12, 15.0f, 0.733f, false } });
+		std::array{ game::ClipInfo{ "walk", 24, 30.0f, 0.767f, true },
+	                game::ClipInfo{ "die", 12, 15.0f, 0.733f, false } });
 
 	REQUIRE(infos.size() == 2);
 	CHECK(infos[0].name == "walk");
@@ -107,4 +107,46 @@ TEST_CASE("The scrubber's press-to-tick mapping spans the groove exactly", "[ani
 	// Degenerate widths never divide by zero.
 	CHECK(TimelineScrubber::ValueForX(5, 0, 1000) == 0);
 	CHECK(TimelineScrubber::ValueForX(5, 10, 1000) == 0);
+}
+
+TEST_CASE("A load's tier-dependent steps all follow from the source", "[animation][source]")
+{
+	using editor::AnimationSource;
+	using editor::PlanAnimationLoad;
+
+	SECTION("the VAT tier needs a bake, frames by its box, and a bake can answer its refusal")
+	{
+		const auto steps = PlanAnimationLoad(AnimationSource::kVat, /*hasAnimations*/ true);
+		CHECK(steps.needsFreshBake);
+		CHECK(steps.offerBakeOnRefusal);
+		CHECK(steps.framedByBake);
+	}
+
+	SECTION("the skinned tier does none of them")
+	{
+		// The bake is the one that matters: it is seconds of CPU skinning for a texture pair the
+		// skinned path never samples, and it would also make the preview need a bakeable material.
+		// It is a requirement, not an action -- no load bakes; the panel offers and the user takes it.
+		const auto steps = PlanAnimationLoad(AnimationSource::kSkinned, /*hasAnimations*/ true);
+		CHECK_FALSE(steps.needsFreshBake);
+		CHECK_FALSE(steps.offerBakeOnRefusal);
+
+		// It measures its own box instead. That box culls the geom as well as framing the camera,
+		// so reading it off a bake the skinned tier never made would hide the mesh, not just
+		// mis-aim the camera.
+		CHECK_FALSE(steps.framedByBake);
+	}
+
+	SECTION("with no clip file, neither tier does anything")
+	{
+		// Nothing to play: the mesh stands in its bind pose as static geometry, so a bake and a bake
+		// offer are both meaningless -- including on the VAT tier, which would otherwise need one.
+		for (const AnimationSource source : { AnimationSource::kSkinned, AnimationSource::kVat })
+		{
+			const auto steps = PlanAnimationLoad(source, /*hasAnimations*/ false);
+			CHECK_FALSE(steps.needsFreshBake);
+			CHECK_FALSE(steps.offerBakeOnRefusal);
+			CHECK_FALSE(steps.framedByBake);
+		}
+	}
 }

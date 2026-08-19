@@ -129,10 +129,15 @@ private:
 	AnimationPreviewWindow* m_Preview = nullptr;
 	QStackedWidget*         m_Stage   = nullptr;  // the drop prompt, or the viewport + transport
 
-	QLabel*      m_MeshLabel      = nullptr;
-	QComboBox*   m_SourceSelector = nullptr;
-	QListWidget* m_ClipList       = nullptr;
-	QLabel*      m_ClipMetadata   = nullptr;
+	QLabel*    m_MeshLabel      = nullptr;
+	QComboBox* m_SourceSelector = nullptr;  // which .banim is played
+
+	// Which tier it is played through: the rig posed live, or the bake made of it.
+	QComboBox*   m_TierSelector  = nullptr;
+	QPushButton* m_BakeVatButton = nullptr;
+
+	QListWidget* m_ClipList     = nullptr;
+	QLabel*      m_ClipMetadata = nullptr;
 
 	QWidget*          m_TransportBar = nullptr;
 	QToolButton*      m_PlayButton   = nullptr;

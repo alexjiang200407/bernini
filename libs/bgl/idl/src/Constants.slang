@@ -33,3 +33,29 @@ public static const uint cTransparentSortGroupSize = 512; // one thread per comp
 // Fills the sort's tail so padding never displaces a real entry. Reserved: TransparentDepthKeys
 // caps real keys below it, or padding could sort into the drawn prefix.
 public static const uint cSortPadKey = 0xFFFFFFFF;
+
+// A root bone's `parent`, matching assetlib's own sentinel for one.
+public static const uint cInvalidBone = 0xFFFFFFFF;
+
+// Bones that may influence one vertex. joints0/weights0 are a vec4 pair, so the importer that writes
+// them and the shader that blends them both work in fours; assetlib names the same number.
+public static const uint cInfluencesPerVertex = 4;
+
+// float4s one bone's palette entry occupies. A skinning matrix's last row is always (0,0,0,1), so it
+// is stored as three rows rather than four -- the palette is the largest per-instance allocation in
+// the frame, and motion vectors double it.
+public static const uint cFloat4sPerBone = 3;
+
+// Threads per pose-pass workgroup. One group poses one instance, one thread a bone at a time, so a
+// rig with more bones than this strides.
+public static const uint cPoseGroupSize = 64;
+
+// Bones per rig. One workgroup poses one instance and holds every bone's model transform in
+// groupshared memory to walk the hierarchy, so this is a groupshared budget, not taste: the walk
+// composes float4x4s, so 64 bytes a bone reserves 12 KiB -- inside Vulkan's guaranteed 16 KiB floor
+// (D3D12 allows 32 KiB, Metal more) with room left for anything else the pass needs. Ample for a
+// humanoid or equine rig; one past it must be split, or the walk must spill to a buffer.
+//
+// The palette it *writes* is three float4s a bone, not four (cFloat4sPerBone) -- that is storage the
+// mesh shader reads back, where the constant row is worth dropping.
+public static const uint cMaxBonesPerRig = 192;

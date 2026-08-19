@@ -7,6 +7,46 @@
 
 namespace game
 {
+	VatBakeState
+	VatFreshness(
+		const assetlib::AssetStore& store,
+		std::string_view            meshRelPath,
+		std::string_view            animationsRelPath,
+		assetlib::BVat*             out)
+	{
+		const std::string bvatRel =
+			assetlib::vatPathFor(meshRelPath, animationsRelPath).generic_string();
+
+		if (!store.Exists(bvatRel))
+			return VatBakeState::kMissing;
+
+		try
+		{
+			assetlib::BVat vat = store.LoadVat(bvatRel);
+
+			if (assetlib::normalizePath(vat.animations) !=
+			    assetlib::normalizePath(animationsRelPath))
+			{
+				return VatBakeState::kOtherClips;
+			}
+
+			// See EnsureVatBaked: a read-only store's bakes are pack's output and trusted.
+			if (!store.IsReadOnly() && store.VatIsStale(vat))
+				return VatBakeState::kStale;
+
+			if (out != nullptr)
+				*out = std::move(vat);
+
+			return VatBakeState::kFresh;
+		}
+		catch (const std::exception&)
+		{
+			// One that will not parse is one that is not there: wholly derived, so re-baking beats
+			// reporting a container error for a file nobody authored.
+			return VatBakeState::kMissing;
+		}
+	}
+
 	assetlib::BVat
 	EnsureVatBaked(
 		const assetlib::AssetStore& store,
@@ -16,41 +56,21 @@ namespace game
 		const std::string bvatRel =
 			assetlib::vatPathFor(meshRelPath, animationsRelPath).generic_string();
 
+		// Through the same door the editor asks with, and taking what it parsed: the rule lives in
+		// one place, and the fresh path still costs one read.
+		auto vat = assetlib::BVat();
+		if (VatFreshness(store, meshRelPath, animationsRelPath, &vat) == VatBakeState::kFresh)
+			return vat;
+
 		// The whole store's answer and not this path's: an overlay over an archive is writable even
 		// for a `.bvat` only the archive carries, and re-baking that one into the overlay is exactly
 		// what an edited rig needs.
-		const bool trusted = store.IsReadOnly();
-
-		// Loaded whole before the staleness check: the fresh path needs the pixel chunks anyway,
-		// so one read serves both, and only the rare stale case pays for pixels it then discards.
-		if (store.Exists(bvatRel))
-		{
-			// A `.bvat` that will not parse -- truncated, or written before a major bump -- is
-			// treated as one that is not there. It is wholly derived, so re-baking it is always
-			// cheaper than failing the load it was meant to serve; a store with nowhere to bake
-			// says so below rather than propagating a parse error.
-			try
-			{
-				auto vat = store.LoadVat(bvatRel);
-
-				// The clip-set check binds even when the stamps are not asked about: a bake of the
-				// wrong clips drawn as if it were the right ones is worse than a refusal.
-				const bool rightClips = assetlib::normalizePath(vat.animations) ==
-				                        assetlib::normalizePath(animationsRelPath);
-
-				if (rightClips && (trusted || !store.VatIsStale(vat)))
-					return vat;
-			}
-			catch (const std::exception&)
-			{}
-		}
-
 		core::throw_runtime_error_if(
-			trusted,
+			store.IsReadOnly(),
 			"vat: no usable bake of '{}' in a read-only store, and there is nowhere to make one",
 			bvatRel);
 
-		auto vat = assetlib::bakeVat(
+		vat = assetlib::bakeVat(
 			store,
 			assetlib::VatBakeDesc{ std::string(meshRelPath), std::string(animationsRelPath) });
 

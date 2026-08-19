@@ -33,6 +33,24 @@ compile_shader(
 )
 
 compile_shader(
+    FILE         "${CMAKE_CURRENT_SOURCE_DIR}/src/Forward_SkinnedMesh.slang"
+    OUT_DIR      "${SHADER_OUT_DIR}"
+    TARGET       "dxil"
+    STAGE        "as_6_6"
+    INCLUDES     ${SLANG_SOURCE_ROOT}
+    ENTRY_POINTS "ASMain"
+)
+
+compile_shader(
+    FILE         "${CMAKE_CURRENT_SOURCE_DIR}/src/Forward_SkinnedMesh.slang"
+    OUT_DIR      "${SHADER_OUT_DIR}"
+    TARGET       "dxil"
+    STAGE        "ms_6_6"
+    INCLUDES     ${SLANG_SOURCE_ROOT}
+    ENTRY_POINTS "MSMain"
+)
+
+compile_shader(
     FILE         "${CMAKE_CURRENT_SOURCE_DIR}/src/Forward_VatMesh.slang"
     OUT_DIR      "${SHADER_OUT_DIR}"
     TARGET       "dxil"
@@ -150,6 +168,14 @@ compile_shader(
 
 compile_shader(
     FILE         "${CMAKE_CURRENT_SOURCE_DIR}/src/PrefixSumInstances.slang"
+    OUT_DIR      "${SHADER_OUT_DIR}"
+    TARGET       "dxil"
+    STAGE        "cs_6_6"
+    INCLUDES     ${SLANG_SOURCE_ROOT}
+)
+
+compile_shader(
+    FILE         "${CMAKE_CURRENT_SOURCE_DIR}/src/PoseSkinned.slang"
     OUT_DIR      "${SHADER_OUT_DIR}"
     TARGET       "dxil"
     STAGE        "cs_6_6"
