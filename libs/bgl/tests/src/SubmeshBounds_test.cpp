@@ -115,8 +115,7 @@ TEST_CASE("A submesh's cooked AABB lands on the GPU as its bounding sphere", "[c
 	const auto cubeGeom = scene->AddCubeGeom(bgl::MaterialHandle());
 	REQUIRE(cubeGeom.IsValid());
 
-	auto  buffers       = scene->GetBuffers();
-	auto& submeshBuffer = std::get<0>(buffers);
+	auto& submeshBuffer = scene->GetSubmeshBuffer();
 
 	const float bigBoxRadius = glm::length(glm::vec3(2.0f));
 	const float offBoxRadius = glm::length(glm::vec3(1.0f, 2.0f, 3.0f));

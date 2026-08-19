@@ -3,9 +3,11 @@
 #include "resource/ResourceManager.h"
 #include "scene/ComputeBuffer.h"
 #include "scene/EntryBuffer.h"
+#include "scene/NamedBuffer.h"
 #include "scene/PackedBuffer.h"
 #include "scene/RangeBuffer.h"
 #include "scene/TextureAssetStore.h"
+#include "scene/scene_buffer_names.h"
 #include "types/SubmeshInstance.h"
 #include "types/VertexGen.h"
 #include <bgl/IScene.h>
@@ -59,20 +61,46 @@ namespace bgl
 			return m_Desc;
 		}
 
-		auto
-		GetBuffers()
+		[[nodiscard]] auto&
+		GetSubmeshBuffer() noexcept
 		{
-			return std::tie(
-				m_SubmeshBuffer,
-				m_MeshletBuffer,
-				m_VertexMapBuffer,
-				m_VertexDataBuffer,
-				m_IndexBuffer,
-				m_Pbr,
-				m_Loose,
-				m_VatGeoms,
-				m_VatClips,
-				m_VatColumns);
+			return m_SubmeshBuffer;
+		}
+
+		[[nodiscard]] auto&
+		GetMeshletBuffer() noexcept
+		{
+			return m_MeshletBuffer;
+		}
+
+		[[nodiscard]] auto&
+		GetVertexMapBuffer() noexcept
+		{
+			return m_VertexMapBuffer;
+		}
+
+		[[nodiscard]] auto&
+		GetVertexDataBuffer() noexcept
+		{
+			return m_VertexDataBuffer;
+		}
+
+		[[nodiscard]] auto&
+		GetIndexBuffer() noexcept
+		{
+			return m_IndexBuffer;
+		}
+
+		[[nodiscard]] auto&
+		GetPbrMaterialBuffer() noexcept
+		{
+			return m_Pbr;
+		}
+
+		[[nodiscard]] auto&
+		GetLooseMaterialBuffer() noexcept
+		{
+			return m_Loose;
 		}
 
 		// --- SceneView support -------------------------------------------------
@@ -359,5 +387,22 @@ namespace bgl
 		// must be ordered against the frames that sample it, which is why Update flushes it.
 		// Constructed from m_ResourceManager, so it must stay declared after it.
 		TextureAssetStore m_Textures;
+
+		// Every buffer the scene imports into the frame graph, each with the name it is imported
+		// under. Declared after the members it names.
+		static constexpr auto c_Buffers = std::tuple{
+			NamedBuffer{ c_SubmeshBufferName, &Scene::m_SubmeshBuffer },
+			NamedBuffer{ c_MeshletBufferName, &Scene::m_MeshletBuffer },
+			NamedBuffer{ c_VertexMapBufferName, &Scene::m_VertexMapBuffer },
+			NamedBuffer{ c_VertexDataBufferName, &Scene::m_VertexDataBuffer },
+			NamedBuffer{ c_IndexBufferName, &Scene::m_IndexBuffer },
+			NamedBuffer{ c_PbrMaterialBufferName, &Scene::m_Pbr },
+			NamedBuffer{ c_LooseMaterialBufferName, &Scene::m_Loose },
+			NamedBuffer{ c_VatGeomBufferName, &Scene::m_VatGeoms },
+			NamedBuffer{ c_VatClipBufferName, &Scene::m_VatClips },
+			NamedBuffer{ c_VatColumnBufferName, &Scene::m_VatColumns },
+		};
+
+		static_assert(HasDistinctNames(c_Buffers), "two scene buffers would import under one name");
 	};
 }

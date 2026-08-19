@@ -57,9 +57,8 @@ TEST_CASE("DeleteMaterial frees a material slot for reuse", "[material][delete][
 	auto* scene       = sceneHandle->As<bgl::Scene>();
 	REQUIRE(scene != nullptr);
 
-	auto  buffers     = scene->GetBuffers();
-	auto& pbrBuffer   = std::get<5>(buffers);
-	auto& looseBuffer = std::get<6>(buffers);
+	auto& pbrBuffer   = scene->GetPbrMaterialBuffer();
+	auto& looseBuffer = scene->GetLooseMaterialBuffer();
 
 	SECTION("A PBR material's slot is released and recycled")
 	{

@@ -3,19 +3,11 @@
 #include "idl/CullView.h"
 #include "idl/DispatchArgs.h"
 #include "idl/InstanceVisibility.h"
+#include "scene/scene_buffer_names.h"
 #include <bgl/PsoType.h>
 
 namespace bgl
 {
-	namespace
-	{
-		constexpr std::string_view c_CompactedInstancesName = "scene.compactedInstances";
-		constexpr std::string_view c_InstanceVisibilityName = "scene.instanceVisibility";
-		constexpr std::string_view c_PsoPrefixSumName = "compactedInstances.psoPrefixSumBuffer";
-		constexpr std::string_view c_DispatchArgsName = "compactedInstances.compactDispatchArgs";
-		constexpr std::string_view c_CullViewName     = "cull.view";
-	}
-
 	void
 	CullState::Init(uint32_t paddedInstances, ResourceManagerRef resourceManager)
 	{
@@ -108,7 +100,7 @@ namespace bgl
 		importUpdated(c_InstanceVisibilityName, m_InstanceVisibility);
 
 		fg.ImportBuffer(c_PsoPrefixSumName, m_PsoPrefixSum.GetBufferHandle());
-		fg.ImportBuffer(c_DispatchArgsName, m_CompactedDispatchArgs.GetBufferHandle());
+		fg.ImportBuffer(c_CompactDispatchArgsName, m_CompactedDispatchArgs.GetBufferHandle());
 		fg.ImportBuffer(c_CullViewName, m_CullView.GetBufferHandle());
 	}
 }

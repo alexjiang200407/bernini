@@ -141,12 +141,14 @@ TEST_CASE("Buffer contents around mesh deletion", "[delete][buffers][scene]")
 	REQUIRE(inst.IsValid());
 
 	// Geometry range buffers live on the Scene; instance buffers on the SceneView.
-	auto geomBuffers = scene->GetBuffers();
-	[[maybe_unused]] auto& [submeshBuffer, meshletBuffer, vertexMapBuffer, vertexDataBuffer, indexBuffer, pbrBuffer, looseBuffer, vatGeomBuffer, vatClipBuffer, vatColumnBuffer] =
-		geomBuffers;
+	auto& submeshBuffer    = scene->GetSubmeshBuffer();
+	auto& meshletBuffer    = scene->GetMeshletBuffer();
+	auto& vertexMapBuffer  = scene->GetVertexMapBuffer();
+	auto& vertexDataBuffer = scene->GetVertexDataBuffer();
+	auto& indexBuffer      = scene->GetIndexBuffer();
 
-	auto instBuffers = view->GetInstanceBuffers();
-	[[maybe_unused]] auto& [instanceBuffer, meshBuffer, vatStateBuffer] = instBuffers;
+	auto& instanceBuffer = view->GetInstanceBuffer();
+	auto& meshBuffer     = view->GetMeshBuffer();
 
 	// inst.handle now refers to the per-placement Mesh record; the mesh instance owns
 	// one submesh-instance per submesh (the cube has exactly one).
@@ -252,8 +254,7 @@ TEST_CASE("A submesh maps 1:1 to a GPU submesh whatever its meshlet count", "[sc
 	// Two source submeshes in, two GPU submeshes out -- the 65-meshlet one did not split.
 	CHECK(scene->GetGeomSubmeshes(geom.handle.index).count == 2u);
 
-	auto           geomBuffers   = scene->GetBuffers();
-	auto&          submeshBuffer = std::get<0>(geomBuffers);
+	auto&          submeshBuffer = scene->GetSubmeshBuffer();
 	const uint32_t root          = scene->GetGeomSubmeshes(geom.handle.index).range.offsetStart;
 
 	// The whole source submesh is dispatched from one GPU submesh, so all of its meshlets are there.
@@ -428,9 +429,8 @@ TEST_CASE("A live instance re-resolves its PSO after SetSubmeshMaterial", "[mate
 	auto inst = view->CreateStaticMeshInstance(geom, glm::mat4(1.0f));
 	REQUIRE(inst.IsValid());
 
-	auto  instBuffers    = view->GetInstanceBuffers();
-	auto& instanceBuffer = std::get<0>(instBuffers);
-	auto& meshBuffer     = std::get<1>(instBuffers);
+	auto& instanceBuffer = view->GetInstanceBuffer();
+	auto& meshBuffer     = view->GetMeshBuffer();
 
 	const auto& meta = meshBuffer.MetaAt(inst.handle.index);
 	REQUIRE(meta.submeshInstances.size() == 1);
@@ -547,9 +547,8 @@ TEST_CASE("A material override changes one instance and not its siblings", "[mat
 	REQUIRE(worn.IsValid());
 	REQUIRE(plain.IsValid());
 
-	auto  instBuffers    = view->GetInstanceBuffers();
-	auto& instanceBuffer = std::get<0>(instBuffers);
-	auto& meshBuffer     = std::get<1>(instBuffers);
+	auto& instanceBuffer = view->GetInstanceBuffer();
+	auto& meshBuffer     = view->GetMeshBuffer();
 
 	const auto psoOf = [&](bgl::MeshInstanceHandle instance) {
 		const auto& meta = meshBuffer.MetaAt(instance.handle.index);

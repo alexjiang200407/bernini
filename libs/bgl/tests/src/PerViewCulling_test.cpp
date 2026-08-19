@@ -12,6 +12,7 @@
 #include "scene/CullState.h"
 #include "scene/Scene.h"
 #include "scene/SceneView.h"
+#include "scene/scene_buffer_names.h"
 #include "util/GpuValidation.h"
 #include "util/TestOptions.h"
 #include <bgl/Camera.h>
@@ -124,8 +125,7 @@ TEST_CASE("One view culled against two frustums keeps both results", "[culling][
 	view->EnsureCullStateCount(2);
 	REQUIRE(view->GetCullStateCount() == 2);
 
-	auto  sceneBuffers  = scene->GetBuffers();
-	auto& submeshBuffer = std::get<0>(sceneBuffers);
+	auto& submeshBuffer = scene->GetSubmeshBuffer();
 
 	// Element 0 of the submesh buffer is the reserved null, so the cube's submesh is found through
 	// its geom's range rather than at a fixed index.
@@ -169,9 +169,8 @@ TEST_CASE("One view culled against two frustums keeps both results", "[culling][
 
 	// Off the instance buffer's capacity, which is what CullState sizes against -- a readback
 	// smaller than its source overruns, since the copy is bounded by the source's byte size.
-	auto           instanceBuffers = view->GetInstanceBuffers();
 	const uint32_t paddedCount =
-		core::round_up(std::get<0>(instanceBuffers).Capacity(), bgl::idl::cHistogramGroupSize);
+		core::round_up(view->GetInstanceBuffer().Capacity(), bgl::idl::cHistogramGroupSize);
 
 	bgl::ReadbackBufferHandle rbCompacted[2];
 	bgl::ReadbackBufferHandle rbPrefixSum[2];
@@ -225,11 +224,11 @@ TEST_CASE("One view culled against two frustums keeps both results", "[culling][
 			bgl::PassDesc()
 				.SetName("Readback {}", cullIdx)
 				.AddBufferArg(
-					"scene.compactedInstances",
+					bgl::c_CompactedInstancesName,
 					bgl::BarrierSyncFlag::kCopy,
 					bgl::BarrierAccessFlag::kCopySource)
 				.AddBufferArg(
-					"compactedInstances.psoPrefixSumBuffer",
+					bgl::c_PsoPrefixSumName,
 					bgl::BarrierSyncFlag::kCopy,
 					bgl::BarrierAccessFlag::kCopySource)
 				.SetSideEffect()
@@ -237,10 +236,10 @@ TEST_CASE("One view culled against two frustums keeps both results", "[culling][
 					auto* cmd = ctx.GetCommandList();
 					cmd->CopyBufferToReadback(
 						rbCompacted[cullIdx],
-						ctx.GetBuffer("scene.compactedInstances"));
+						ctx.GetBuffer(bgl::c_CompactedInstancesName));
 					cmd->CopyBufferToReadback(
 						rbPrefixSum[cullIdx],
-						ctx.GetBuffer("compactedInstances.psoPrefixSumBuffer"));
+						ctx.GetBuffer(bgl::c_PsoPrefixSumName));
 				}));
 	}
 

@@ -22,8 +22,6 @@ namespace bgl
 		constexpr auto c_GeomSrc  = "Forward_StaticMesh"sv;
 		constexpr auto c_PixelSrc = "OutlineMask"sv;
 
-		constexpr auto c_SelectedInstancesBuffer = "scene.selectedInstances"sv;
-
 		constexpr auto c_MaskFormat = Format::R8_UNORM;
 	}
 
@@ -73,7 +71,7 @@ namespace bgl
 		                    BarrierAccessFlag::kRenderTarget,
 		                    BarrierLayout::kRenderTarget })
 			.AddBufferArg(
-				BufferArg{ std::string(c_SelectedInstancesBuffer),
+				BufferArg{ std::string(c_SelectedInstancesName),
 		                   BarrierSyncFlag::kVertexShader,
 		                   BarrierAccessFlag::kShaderResource });
 
@@ -125,7 +123,7 @@ namespace bgl
 		{
 			auto& expansion = *foundExpansion;
 
-			const auto selected = resources.GetBuffer(c_SelectedInstancesBuffer);
+			const auto selected = resources.GetBuffer(c_SelectedInstancesName);
 
 			// kDepthSorted starts the list at zero, exactly like the transparent phase; the
 			// prefix-sum key is never read under it, and is bound only so it holds a live handle.

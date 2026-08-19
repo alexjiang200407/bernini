@@ -37,6 +37,7 @@ function(enable_strict_compiler)
                 /wd4710        # Function not inlined optimization info
                 /wd4711        # Function selected for automatic inline expansion info
                 /wd4820        # struct alignment padding notifications
+                /wd4371        # Layout may differ from a pre-VS2015 compiler's packing
                 /wd5039        # Pointer to potentially throwing function passed to extern "C"
                 /wd4514        # Unused function
                 /wd5045        # Spectre mitigation warnin  

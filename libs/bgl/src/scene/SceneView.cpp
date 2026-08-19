@@ -2,6 +2,7 @@
 #include "fg/FrameGraph.h"
 #include "idl/Constants.h"
 #include "scene/Scene.h"
+#include "scene/scene_buffer_names.h"
 #include "types/SubmeshInstance.h"
 #include "util/util.h"
 #include <core/math.h>
@@ -10,21 +11,6 @@ namespace bgl
 {
 	namespace
 	{
-		struct BufferInfo
-		{
-			std::string_view name;
-		};
-
-		// Paired positionally with SceneView::GetInstanceBuffers(); shorten one and you must
-		// shorten the other.
-		static constexpr std::array<BufferInfo, 3> c_InstanceBufferInfo = { {
-			{ "scene.instanceBuffer" },
-			{ "scene.meshInstanceBuffer" },
-			{ "scene.vatStateBuffer" },
-		} };
-
-		constexpr std::string_view c_SelectedInstancesName = "scene.selectedInstances";
-
 		// The counting sort dispatches whole groups, so the instance buffer's tail past the live count
 		// must read as skippable: a default SubmeshInstance names no mesh and carries pso kInvalid,
 		// which both the histogram and the compaction skip.
@@ -655,8 +641,9 @@ namespace bgl
 		}
 		m_CurrentSelectedInstances.Update(cmdList);
 
-		auto buffers = GetInstanceBuffers();
-		std::apply([cmdList](auto&... buffer) { (..., buffer.Update(cmdList)); }, buffers);
+		ForEachNamedBuffer(*this, c_Buffers, [cmdList](std::string_view, auto& buffer) {
+			buffer.Update(cmdList);
+		});
 
 		const uint32_t count  = m_InstanceBuffer.Size();
 		const uint32_t padded = core::round_up(count, idl::cHistogramGroupSize);
@@ -695,19 +682,12 @@ namespace bgl
 	{
 		fg.SetResourceNamespace(m_NamePrefix);
 
-		resourceNames.reserve(resourceNames.size() + c_InstanceBufferInfo.size());
+		resourceNames.reserve(resourceNames.size() + std::tuple_size_v<decltype(c_Buffers)>);
 
-		auto   buffers = GetInstanceBuffers();
-		size_t i       = 0;
-		std::apply(
-			[&](auto&... buffer) {
-				(..., [&] {
-					std::string name(c_InstanceBufferInfo[i++].name);
-					fg.ImportBuffer(name, buffer.GetBufferHandle());
-					resourceNames.push_back(std::move(name));
-				}());
-			},
-			buffers);
+		ForEachNamedBuffer(*this, c_Buffers, [&](std::string_view name, const auto& buffer) {
+			fg.ImportBuffer(name, buffer.GetBufferHandle());
+			resourceNames.emplace_back(name);
+		});
 
 		m_TransparentSort.ImportResources(fg, resourceNames);
 
