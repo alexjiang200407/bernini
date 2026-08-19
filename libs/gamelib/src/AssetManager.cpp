@@ -1037,13 +1037,15 @@ namespace game
 	{
 		const assetlib::PbrParams& pbr = record.source.pbr;
 
-		auto desc               = bgl::PbrMaterialDesc();
-		desc.baseColorFactor    = pbr.baseColorFactor;
-		desc.metallicFactor     = pbr.metallicFactor;
-		desc.roughnessFactor    = pbr.roughnessFactor;
-		desc.layerType          = ToLayerType(pbr.alphaMode, m_Options.hashedAsBlend);
-		desc.alphaCutoff        = pbr.alphaCutoff;
-		desc.transmissionFactor = pbr.transmissionFactor;
+		auto desc                = bgl::PbrMaterialDesc();
+		desc.baseColorFactor     = pbr.baseColorFactor;
+		desc.metallicFactor      = pbr.metallicFactor;
+		desc.roughnessFactor     = pbr.roughnessFactor;
+		desc.layerType           = ToLayerType(pbr.alphaMode, m_Options.hashedAsBlend);
+		desc.alphaCutoff         = pbr.alphaCutoff;
+		desc.transmissionFactor  = pbr.transmissionFactor;
+		desc.specularColorFactor = pbr.specularColorFactor;
+		desc.specularFactor      = pbr.specularFactor;
 
 		desc.baseColorTexture = record.textures[0];
 		desc.normalTexture    = record.textures[1];
@@ -1057,13 +1059,15 @@ namespace game
 	{
 		const assetlib::PbrParams& pbr = record.source.pbr;
 
-		auto desc               = bgl::LoosePbrMaterialDesc();
-		desc.baseColorFactor    = pbr.baseColorFactor;
-		desc.metallicFactor     = pbr.metallicFactor;
-		desc.roughnessFactor    = pbr.roughnessFactor;
-		desc.layerType          = ToLayerType(pbr.alphaMode, m_Options.hashedAsBlend);
-		desc.alphaCutoff        = pbr.alphaCutoff;
-		desc.transmissionFactor = pbr.transmissionFactor;
+		auto desc                = bgl::LoosePbrMaterialDesc();
+		desc.baseColorFactor     = pbr.baseColorFactor;
+		desc.metallicFactor      = pbr.metallicFactor;
+		desc.roughnessFactor     = pbr.roughnessFactor;
+		desc.layerType           = ToLayerType(pbr.alphaMode, m_Options.hashedAsBlend);
+		desc.alphaCutoff         = pbr.alphaCutoff;
+		desc.transmissionFactor  = pbr.transmissionFactor;
+		desc.specularColorFactor = pbr.specularColorFactor;
+		desc.specularFactor      = pbr.specularFactor;
 
 		const auto route = [&](size_t index) {
 			auto out    = bgl::ChannelRouteDesc();
