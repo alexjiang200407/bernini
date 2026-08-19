@@ -3,6 +3,11 @@ import idl.Clip;
 // Where a clip's playback sits at `time`, shared by every animated tier: phase advances along the
 // clip at the authored sample rate scaled by the instance's rate. A looping clip wraps; a one-shot
 // clip holds its last frame. `rate = 0` holds `phase` under any clock.
+//
+// A loop wraps over `frameCount - 1`, not `frameCount`: the importer counts both ends, and marks a
+// clip looping precisely because its last frame repeats its first, so one cycle is that many
+// intervals. Wrapping over `frameCount` spends an extra interval blending the duplicate onto the
+// frame it duplicates -- the clip holds still for one frame and runs slow by 1/(frameCount - 1).
 public float ClipFrames(Clip clip, float phase, float rate, float time)
 {
     float frames = phase + time * rate * clip.sampleRate;
@@ -10,10 +15,13 @@ public float ClipFrames(Clip clip, float phase, float rate, float time)
 
     if (clip.loop != 0)
     {
-        frames = fmod(frames, count);
+        // clip.loop is only ever set on a clip of more than one frame, so this cannot be zero.
+        float cycle = count - 1.0;
+
+        frames = fmod(frames, cycle);
         if (frames < 0.0)
         {
-            frames += count;
+            frames += cycle;
         }
     }
     else
@@ -25,25 +33,16 @@ public float ClipFrames(Clip clip, float phase, float rate, float time)
 }
 
 // The two frames of the clip a fractional position falls between, relative to the clip's own frame 0,
-// and its blend weight. On a loop the upper frame wraps onto 0 rather than running past the last: a
-// looping clip's last frame duplicates its first, so wrapping the index is what makes the crossing
-// seamless instead of stuttering on the duplicate.
+// and its blend weight. The upper index tops out at `frameCount - 1` on either kind of clip: on a
+// loop that frame is the authored duplicate of frame 0, so the seam reads it rather than wrapping
+// onto 0, and VAT's pad row past it stays unread.
 //
 // Relative, not absolute, because the two tiers add different bases to it -- a texture row for VAT, a
 // frame-major sample offset for a skinned rig.
 public void ClipFrameIndices(Clip clip, float frames, out uint f0, out uint f1, out float weight)
 {
     f0 = uint(frames);
-    f1 = f0 + 1;
-
-    if (clip.loop != 0)
-    {
-        f1 = (f1 == clip.frameCount) ? 0 : f1;
-    }
-    else
-    {
-        f1 = min(f1, clip.frameCount - 1);
-    }
+    f1 = min(f0 + 1, clip.frameCount - 1);
 
     weight = frames - float(f0);
 }

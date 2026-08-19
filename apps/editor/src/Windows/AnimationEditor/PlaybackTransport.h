@@ -21,9 +21,15 @@ namespace editor
 	 * The clip transport behind the Animation panel: pure time arithmetic over a clip table, no
 	 * Qt and no bgl. The preview instance is always {clip, phase 0, rate 1}, so this clock *is*
 	 * the whole transport: GetTimeSeconds is what the panel writes into RenderJob::time, and
-	 * GetCurrentFrame mirrors the shader's ClipFrames exactly -- a looping clip wraps at `frameCount`
-	 * frames, a one-shot clamps to its last. Frame math derives from frameCount and sampleRate;
-	 * the recorded duration is metadata for display, never arithmetic.
+	 * GetCurrentFrame mirrors the shader's ClipFrames exactly -- both span `frameCount - 1` frame
+	 * intervals, a looping clip wrapping over them and a one-shot clamping to the last. That span is
+	 * the whole clip either way: frames cover the closed interval [0, duration], and a loop's last
+	 * frame repeats its first. Frame math derives from frameCount and sampleRate; the recorded
+	 * duration is metadata for display, never arithmetic.
+	 *
+	 * Mirroring the shader is a requirement, not a convenience: the panel's playhead and the pose on
+	 * screen come from these two separate pieces of arithmetic, so a difference between them shows
+	 * up as a scrubber that lies.
 	 */
 	class PlaybackTransport
 	{
@@ -77,9 +83,9 @@ namespace editor
 		GetCurrentFrame() const noexcept;
 
 		/**
-		 * One period of the active clip in seconds -- where the timeline ends: the wrap point
-		 * `frameCount / sampleRate` for a loop, the last frame `(frameCount - 1) / sampleRate`
-		 * for a one-shot. Zero with no clips.
+		 * One period of the active clip in seconds -- where the timeline ends, and for a loop where
+		 * it wraps: `(frameCount - 1) / sampleRate`, the clip's `frameCount` frames being the ends
+		 * of that many intervals. Zero with no clips.
 		 */
 		[[nodiscard]] float
 		GetPeriodSeconds() const noexcept;

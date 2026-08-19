@@ -26,8 +26,9 @@ ConstantBuffer<ViewData> viewData;
 ConstantBuffer<VatData> vatData;
 
 // The rows a fractional frame falls between. The pad row after each clip exists so a clip never
-// bleeds into the one stacked below; ClipFrameIndices wraps a looping clip onto frame 0 rather than
-// reading it, which is what makes the last-to-first crossing seamless.
+// bleeds into the one stacked below; ClipFrameIndices tops out at the clip's last real row, so the
+// pad is never reached -- on a loop that row repeats frame 0, which is what makes the crossing
+// seamless.
 void FrameRows(Clip clip, float frames, out uint row0, out uint row1, out float weight)
 {
     uint f0;

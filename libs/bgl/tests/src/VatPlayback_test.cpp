@@ -119,12 +119,16 @@ TEST_CASE("VAT playback follows the clock", "[vat][playback][render]")
 		CHECK(LumaAtWorldX(png, -0.75f) < 0.01f);  // frame 0's left edge is gone
 	}
 
-	SECTION("a looping clip crosses its seam without reading the pad row")
+	SECTION("a loop's cycle is frameCount - 1 frames, not frameCount")
 	{
-		// Phase 1.5 on a 2-frame loop: halfway from the last frame back to the first, so the pose
-		// is offset 0.5. Reading forward into the pad row instead would duplicate the last frame
-		// and leave the pose at offset 1 -- which the 1.75 probe would light up.
-		view->CreateVatMeshInstance(geom, glm::mat4(1.0f), VatDesc{ c_LoopClip, 1.5f, 0.0f });
+		// The clip is [origin, +step, origin]: three frames, the last repeating the first, which is
+		// what the importer writes and what marks it looping. So a cycle is two intervals, and
+		// phase 2.5 is half an interval past a full one -- offset 0.5, the same pose as phase 0.5.
+		//
+		// Wrapping over frameCount instead spends a third interval blending frame 2 onto frame 0,
+		// which are the same pose: the quad holds still at offset 0 for that interval and the clip
+		// runs slow. The 1.25 probe is dark in that case and lit in this one.
+		view->CreateVatMeshInstance(geom, glm::mat4(1.0f), VatDesc{ c_LoopClip, 2.5f, 0.0f });
 
 		gfx->DrawFrame(target, job);
 		const auto* png = "assets/golden/vat_loop_seam.got.png";
@@ -133,6 +137,20 @@ TEST_CASE("VAT playback follows the clock", "[vat][playback][render]")
 		CHECK(LumaAtWorldX(png, 1.25f) > 0.05f);
 		CHECK(LumaAtWorldX(png, 1.75f) < 0.01f);
 		CHECK(LumaAtWorldX(png, -0.75f) < 0.01f);
+	}
+
+	SECTION("a loop returns to its first frame after a whole cycle")
+	{
+		// Phase 2.0 is exactly one cycle, so the pose is frame 0's. Reading the duplicate end frame
+		// would put it here too -- they are the same pose -- so this pins the wrap, not the row.
+		view->CreateVatMeshInstance(geom, glm::mat4(1.0f), VatDesc{ c_LoopClip, 2.0f, 0.0f });
+
+		gfx->DrawFrame(target, job);
+		const auto* png = "assets/golden/vat_loop_wrap.got.png";
+		gfx->ScreenshotPng(target, png);
+
+		CHECK(LumaAtWorldX(png, -0.75f) > 0.05f);
+		CHECK(LumaAtWorldX(png, 1.25f) < 0.01f);
 	}
 
 	SECTION("a one-shot clip holds its last frame")

@@ -65,7 +65,7 @@ namespace bgl::test::vat_synth
 	namespace
 	{
 		constexpr uint32_t c_Columns = 4;
-		constexpr uint32_t c_Rows    = 3;
+		constexpr uint32_t c_Rows    = 7;
 
 		const glm::vec3 c_BoundsMin(-1.5f, -1.5f, -1.0f);
 		const glm::vec3 c_BoundsMax(2.5f, 1.5f, 1.0f);
@@ -81,9 +81,17 @@ namespace bgl::test::vat_synth
 				corner.x += c_Step;
 			}
 
+			// The loop, shaped the way the importer writes one: frame 2 repeats frame 0, which is
+			// what marks the clip looping and what a cycle of frameCount - 1 intervals ends on.
 			WritePositionRow(image, 0, c_QuadAtOrigin, c_BoundsMin, c_BoundsMax);
 			WritePositionRow(image, 1, moved, c_BoundsMin, c_BoundsMax);
-			WritePositionRow(image, 2, moved, c_BoundsMin, c_BoundsMax);  // the pad
+			WritePositionRow(image, 2, c_QuadAtOrigin, c_BoundsMin, c_BoundsMax);
+			WritePositionRow(image, 3, c_QuadAtOrigin, c_BoundsMin, c_BoundsMax);  // the pad
+
+			// The one-shot, which has no such duplicate: it ends where it ends.
+			WritePositionRow(image, 4, c_QuadAtOrigin, c_BoundsMin, c_BoundsMax);
+			WritePositionRow(image, 5, moved, c_BoundsMin, c_BoundsMax);
+			WritePositionRow(image, 6, moved, c_BoundsMin, c_BoundsMax);  // the pad
 			return image;
 		}
 
@@ -112,7 +120,7 @@ namespace bgl::test::vat_synth
 			"vat-sliding-quad-normals");
 		desc.boundsMin = c_BoundsMin;
 		desc.boundsMax = c_BoundsMax;
-		desc.clips     = { { 0, 2, c_SampleRate, true }, { 0, 2, c_SampleRate, false } };
+		desc.clips     = { { 0, 3, c_SampleRate, true }, { 4, 2, c_SampleRate, false } };
 
 		const auto verts   = MakeQuadVertices();
 		const auto indices = std::array<uint32_t, 6>{ { 0, 1, 2, 2, 1, 3 } };

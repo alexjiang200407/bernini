@@ -89,6 +89,43 @@ namespace
 		return set;
 	}
 
+	/**
+	 * The swing again, but authored as a loop: three frames whose last repeats the first, which is
+	 * both what the importer produces and what makes it a loop (`posesMatch(first, last)`). A cycle
+	 * is therefore two intervals, not three -- see clip_playback.slang.
+	 */
+	assetlib::AnimationSet
+	MakeSwingLoop()
+	{
+		auto set      = assetlib::AnimationSet();
+		set.boneCount = c_BoneCount;
+
+		const auto swing = glm::quat(0.70710678f, 0.0f, 0.0f, 0.70710678f);
+
+		for (uint32_t f = 0; f < 3; ++f)
+		{
+			for (uint32_t b = 0; b < c_BoneCount; ++b)
+			{
+				auto sample        = assetlib::Transform();
+				sample.translation = glm::vec3(0.0f, b == 0 ? 0.0f : 1.0f, 0.0f);
+				sample.rotation    = (f == 1 && b == 1) ? swing : glm::quat(1.0f, 0.0f, 0.0f, 0.0f);
+				sample.scale       = glm::vec3(1.0f);
+				set.samples.push_back(sample);
+			}
+		}
+
+		auto clip        = assetlib::AnimationClip();
+		clip.firstSample = 0;
+		clip.frameCount  = 3;
+		clip.sampleRate  = c_SampleRate;
+		clip.duration    = 2.0f / c_SampleRate;
+		clip.loop        = 1;
+		clip.nameOffset  = 0;
+		set.clips.push_back(clip);
+
+		return set;
+	}
+
 	/** One triangle carrying skin binding; the geometry is irrelevant, the rig is the subject. */
 	assetlib::BMesh
 	MakeSkinnedTriangle()
@@ -403,6 +440,60 @@ TEST_CASE("the pose pass writes the palette a rig's hierarchy implies", "[skinne
 				float4sPerPose);
 			CheckNear(palette.Apply(1, glm::vec3(0.0f, 2.0f, 0.0f)), glm::vec3(-1.0f, 1.0f, 0.0f));
 			CheckNear(palette.Apply(2, glm::vec3(0.0f, 3.0f, 0.0f)), glm::vec3(-2.0f, 1.0f, 0.0f));
+		}
+	}
+
+	SECTION("a loop's cycle is frameCount - 1 frames")
+	{
+		// The same swing authored as a loop: [bind, swung, bind]. A cycle is two intervals, so
+		// phase 2.5 is half an interval into the second cycle -- the half-swing, exactly what
+		// phase 0.5 gives. Wrapping over frameCount instead would spend a third interval blending
+		// frame 2 onto frame 0, which are the same pose, and leave this at the bind pose.
+		const auto looping = scene->AddSkinnedMeshGeom(
+			MakeSkinnedTriangle(),
+			0,
+			materials,
+			MakeChain(),
+			MakeSwingLoop(),
+			assetlib::Bounds{ glm::vec3(-4.0f), glm::vec3(4.0f) });
+		REQUIRE(looping.IsValid());
+
+		const auto instance =
+			view->CreateSkinnedMeshInstance(looping, glm::mat4(1.0f), { 0, 2.5f, 0.0f });
+		gfx->DrawFrame(target, job);
+
+		const Palette palette =
+			ReadPalette(gfxBase, viewRaw, PaletteBaseOf(viewRaw, instance), float4sPerPose);
+
+		const float c = std::cos(glm::radians(45.0f));
+		const float s = std::sin(glm::radians(45.0f));
+
+		CheckNear(palette.Apply(1, glm::vec3(0.0f, 2.0f, 0.0f)), glm::vec3(-s, 1.0f + c, 0.0f));
+	}
+
+	SECTION("a whole cycle returns a loop to its first frame")
+	{
+		// Phase 2.0 is exactly one cycle, so the pose is frame 0's -- the bind pose, which this rig
+		// answers with an identity palette.
+		const auto looping = scene->AddSkinnedMeshGeom(
+			MakeSkinnedTriangle(),
+			0,
+			materials,
+			MakeChain(),
+			MakeSwingLoop(),
+			assetlib::Bounds{ glm::vec3(-4.0f), glm::vec3(4.0f) });
+		REQUIRE(looping.IsValid());
+
+		const auto instance =
+			view->CreateSkinnedMeshInstance(looping, glm::mat4(1.0f), { 0, 2.0f, 0.0f });
+		gfx->DrawFrame(target, job);
+
+		const Palette palette =
+			ReadPalette(gfxBase, viewRaw, PaletteBaseOf(viewRaw, instance), float4sPerPose);
+
+		for (uint32_t b = 0; b < c_BoneCount; ++b)
+		{
+			CheckNear(palette.Apply(b, glm::vec3(1.0f, 2.0f, 3.0f)), glm::vec3(1.0f, 2.0f, 3.0f));
 		}
 	}
 

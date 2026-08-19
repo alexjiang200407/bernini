@@ -122,8 +122,9 @@ and portability.
       instance contours its bind pose until it gets a VAT variant.
     - [x] Free inter-frame interpolation — fractional frames blend the two rows they fall between
       as two `Load`s and a lerp (a mesh-stage sampler breaks Metal's stage binding, and U is
-      always an exact column); the pad row duplicates each clip's end frame to stop bleed, and a
-      looping clip's seam wraps the upper row onto frame 0 rather than reading it.
+      always an exact column); the pad row duplicates each clip's end frame to stop bleed, and
+      playback never reaches it -- the upper row index tops out at the clip's last real frame,
+      which on a loop is a repeat of frame 0.
     - [ ] **In-place bake policy** — a clip authored with travel in the joints bakes that travel
       into the textures (the coyote's box spans ~130 units), but ground contact and locomotion are
       the game's: decide whether `bakeVat` subtracts root translation and hands it to gameplay as

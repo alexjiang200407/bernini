@@ -11,7 +11,9 @@ namespace
 	using editor::ClipInfo;
 	using editor::PlaybackTransport;
 
-	// 4 frames at 10 Hz: a loop wraps at 0.4 s, a one-shot ends at frame 3 = 0.3 s.
+	// 4 frames at 10 Hz, so 3 intervals: both kinds end at frame 3 = 0.3 s, a loop wrapping there
+	// and a one-shot stopping. The recorded 0.3 s is the importer's own duration for such a clip
+	// ((frameCount - 1) / sampleRate), which is the same arithmetic from the other side.
 	std::vector<ClipInfo>
 	OneClip(bool loop)
 	{
@@ -87,22 +89,26 @@ TEST_CASE("SelectClip rewinds but keeps play state and speed", "[animation]")
 	CHECK(transport.GetActiveClip().name == "run");
 }
 
-TEST_CASE("A looping clip wraps at frameCount frames, as the shader does", "[animation]")
+TEST_CASE("A looping clip wraps at frameCount - 1 frames, as the shader does", "[animation]")
 {
 	auto transport = Loaded(true);
 	transport.Play();
 
-	CHECK(transport.GetPeriodSeconds() == Catch::Approx(0.4f));
+	// The clip's own recorded duration, which is what a loop's period must be: its last frame is a
+	// repeat of its first, so the cycle ends there rather than one interval later. A transport that
+	// wrapped a step late would put the playhead somewhere the GPU is not.
+	CHECK(transport.GetPeriodSeconds() == Catch::Approx(0.3f));
+	CHECK(transport.GetPeriodSeconds() == Catch::Approx(transport.GetActiveClip().duration));
 
 	transport.Advance(0.45f);
-	CHECK(transport.GetTimeSeconds() == Catch::Approx(0.05f));
-	CHECK(transport.GetCurrentFrame() == Catch::Approx(0.5f));
+	CHECK(transport.GetTimeSeconds() == Catch::Approx(0.15f));
+	CHECK(transport.GetCurrentFrame() == Catch::Approx(1.5f));
 
 	// Backwards across zero lands inside the period from the top.
 	transport.SetSpeed(-1.0f);
-	transport.Advance(0.15f);
-	CHECK(transport.GetTimeSeconds() == Catch::Approx(0.3f));
-	CHECK(transport.GetCurrentFrame() == Catch::Approx(3.0f));
+	transport.Advance(0.25f);
+	CHECK(transport.GetTimeSeconds() == Catch::Approx(0.2f));
+	CHECK(transport.GetCurrentFrame() == Catch::Approx(2.0f));
 }
 
 TEST_CASE("A one-shot clamps to its last frame and rewinds on Play from the end", "[animation]")
@@ -145,7 +151,7 @@ TEST_CASE("Scrub parks the clock inside the clip's domain", "[animation]")
 {
 	auto looped = Loaded(true);
 	looped.Scrub(0.45f);
-	CHECK(looped.GetTimeSeconds() == Catch::Approx(0.05f));
+	CHECK(looped.GetTimeSeconds() == Catch::Approx(0.15f));
 
 	auto oneShot = Loaded(false);
 	oneShot.Scrub(0.5f);
@@ -169,12 +175,13 @@ TEST_CASE("StepFrames pauses and moves whole frames", "[animation]")
 	CHECK(transport.GetCurrentFrame() == Catch::Approx(2.0f));
 	CHECK(transport.GetTimeSeconds() == Catch::Approx(0.2f));
 
-	// A loop wraps in both directions; frame 3 + 1 is frame 0.
-	transport.Scrub(0.3f);
+	// A loop wraps in both directions. Frame 2 is the last distinct one -- frame 3 repeats frame 0 --
+	// so stepping off it lands on 0, and stepping back off 0 lands on 2.
+	transport.Scrub(0.2f);
 	transport.StepFrames(1);
 	CHECK(transport.GetCurrentFrame() == Catch::Approx(0.0f));
 	transport.StepFrames(-1);
-	CHECK(transport.GetCurrentFrame() == Catch::Approx(3.0f));
+	CHECK(transport.GetCurrentFrame() == Catch::Approx(2.0f));
 
 	// A one-shot clamps at both ends instead.
 	auto oneShot = Loaded(false);

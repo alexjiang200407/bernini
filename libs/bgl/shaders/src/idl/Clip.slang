@@ -5,8 +5,9 @@
 // pool for a skinned rig -- so the three fields below mean the same thing to both, which is what lets
 // per-clip metadata grow in one place.
 //
-// `frameCount` is what playback wraps over, and the importer and the shader disagree about whether it
-// counts a looping clip's duplicated end frame -- see docs/specs/clip_loop_convention.md.
+// Frames span the closed interval [0, duration], so `frameCount` counts both ends. A looping clip's
+// last frame duplicates its first -- that is what marks it looping -- so a cycle is `frameCount - 1`
+// intervals and playback wraps over that, not over `frameCount`.
 public struct Clip
 {
     public uint firstFrame;
