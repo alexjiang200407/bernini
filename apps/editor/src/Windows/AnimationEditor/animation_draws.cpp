@@ -20,6 +20,18 @@ namespace editor
 		return plan;
 	}
 
+	AnimationLoadSteps
+	PlanAnimationLoad(const AnimationSource source, const bool hasAnimations)
+	{
+		// With no clip file there is nothing to play on either tier: the mesh stands in its bind
+		// pose as static geometry, and neither a bake nor a bake offer means anything.
+		if (!hasAnimations)
+			return {};
+
+		const bool vat = source == AnimationSource::kVat;
+		return { .bakeVat = vat, .offerBakeOnRefusal = vat };
+	}
+
 	std::vector<ClipInfo>
 	ToClipInfos(std::span<const game::ClipInfo> clips)
 	{
