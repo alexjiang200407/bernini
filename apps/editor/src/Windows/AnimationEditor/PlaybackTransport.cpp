@@ -85,14 +85,18 @@ namespace editor
 
 		m_Playing = false;
 
-		const auto& clip  = m_Clips[m_ActiveClip];
-		const int   count = static_cast<int>(clip.frameCount);
+		const auto& clip = m_Clips[m_ActiveClip];
+
+		// The span both kinds of clip cover, matching clip_playback.slang: frameCount frames are the
+		// ends of frameCount - 1 intervals. Floored at 1 because a one-frame clip would otherwise
+		// take a modulo by zero -- the importer never marks one looping, but nothing here checks.
+		const int cycle = std::max(1, static_cast<int>(clip.frameCount) - 1);
 
 		int frame = static_cast<int>(std::lround(GetCurrentFrame())) + frames;
 		if (clip.loop)
-			frame = ((frame % count) + count) % count;
+			frame = ((frame % cycle) + cycle) % cycle;
 		else
-			frame = std::clamp(frame, 0, count - 1);
+			frame = std::clamp(frame, 0, cycle);
 
 		m_Time = static_cast<float>(frame) / clip.sampleRate;
 	}
@@ -124,18 +128,18 @@ namespace editor
 		// The shader's ClipFrames with phase 0 and rate 1; m_Time is already in the clip's
 		// domain, so the wrap/clamp below only guards the exact period boundary.
 		const auto& clip   = m_Clips[m_ActiveClip];
-		const float count  = static_cast<float>(clip.frameCount);
+		const float cycle  = std::max(1.0f, static_cast<float>(clip.frameCount) - 1.0f);
 		float       frames = m_Time * clip.sampleRate;
 
 		if (clip.loop)
 		{
-			frames = std::fmod(frames, count);
+			frames = std::fmod(frames, cycle);
 			if (frames < 0.0f)
-				frames += count;
+				frames += cycle;
 		}
 		else
 		{
-			frames = std::clamp(frames, 0.0f, count - 1.0f);
+			frames = std::clamp(frames, 0.0f, cycle);
 		}
 
 		return frames;
@@ -147,9 +151,8 @@ namespace editor
 		if (!HasClips())
 			return 0.0f;
 
-		const auto& clip  = m_Clips[m_ActiveClip];
-		const float count = static_cast<float>(clip.frameCount);
-		return (clip.loop ? count : count - 1.0f) / clip.sampleRate;
+		const auto& clip = m_Clips[m_ActiveClip];
+		return std::max(1.0f, static_cast<float>(clip.frameCount) - 1.0f) / clip.sampleRate;
 	}
 
 	bool

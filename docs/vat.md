@@ -38,9 +38,17 @@ truth; when this doc disagrees, trust the header, then fix this doc.
   nothing.
 * **Clips stack along V; each is padded with a duplicate of its *last* frame.** Frame `f` of a
   clip is row `firstRow + f`; the pad row exists so fractional-frame blending never bleeds into
-  the clip stacked below. It is clamp-shaped: a looping clip's seam must **wrap the upper row
-  index onto frame 0**, never read the pad — which the `Load`-based fetch makes a one-index
-  select ([Forward_VatMesh.slang](libs/bgl/shaders/src/Forward_VatMesh.slang)).
+  the clip stacked below. Playback never reads it: the upper row index tops out at
+  `frameCount - 1` ([clip_playback.slang](libs/bgl/shaders/src/clip_playback.slang)), so the pad
+  is unreachable by construction rather than by a rule the fetch has to remember.
+* **A looping clip's cycle is `frameCount - 1` frames.** The importer counts both ends
+  (`round(duration × sampleRate) + 1`) and marks a clip looping precisely because its last frame
+  repeats its first, so that last frame *is* frame 0 coming round again — the seam blends onto it
+  and the wrap happens there. Wrapping over `frameCount` instead spends an extra interval blending
+  the duplicate onto the frame it duplicates: the clip holds still for one frame and runs slow by
+  `1/(frameCount - 1)`, which on a 30-frame walk cycle is a hitch once per stride. A hand-authored
+  fixture must therefore repeat its first frame at the end to be a loop at all — see
+  `bgl::test::vat_synth`.
 * **Fetch is `TextureHandle::Load` by exact texel, not a sampler.** A vertex's column is always
   exact, so filtering buys nothing along U — and a `SamplerState.Handle` inside a mesh-stage
   cbuffer creates a Mixed-category parameter Metal's stage-binding path mis-indexes. Fractional

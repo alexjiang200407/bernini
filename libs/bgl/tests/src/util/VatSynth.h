@@ -40,12 +40,19 @@ namespace bgl::test::vat_synth
 	extern const std::array<glm::vec3, 4> c_QuadAtOrigin;
 
 	/**
-	 * The sliding quad: a 4-vertex quad on [-1, 1]² that translates `c_Step` in X between its two
-	 * frames, so a pose is readable as an offset -- frame f puts the quad on [f-1, f+1]. Two clips
-	 * share the same two rows and differ only in loop, so the wrap and the clamp are probed
-	 * against one texture. Rows: [origin, +step, +step (pad)] -- the pad duplicates the *last*
-	 * frame, exactly as the bake writes it, which is what makes it the wrong row for a loop's
-	 * seam to read.
+	 * The sliding quad: a 4-vertex quad on [-1, 1]² that translates `c_Step` in X, so a pose is
+	 * readable as an offset -- a quad at offset d covers [d-1, d+1].
+	 *
+	 * Two clips, each shaped the way the importer writes its kind, because playback's wrap depends
+	 * on that shape (see clip_playback.slang):
+	 *
+	 * - `c_LoopClip`, rows 0-2 as [origin, +step, origin] and row 3 the pad. Three frames, the last
+	 *   repeating the first -- which is what marks a clip looping -- so a cycle is *two* intervals.
+	 * - `c_ClampClip`, rows 4-5 as [origin, +step] and row 6 the pad. A one-shot ends where it ends,
+	 *   so nothing is duplicated.
+	 *
+	 * Each pad duplicates its clip's *last* frame, exactly as the bake writes it; it exists to stop
+	 * fractional-frame blending bleeding into the clip stacked below, and playback never reads it.
 	 *
 	 * Uploads the pair and registers the quad as a VAT geom with both clips, drawn with
 	 * `material`, which must be opaque PBR -- what AddVatMeshGeom demands.
