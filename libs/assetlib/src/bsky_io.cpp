@@ -33,7 +33,6 @@ namespace assetlib
 			uint32_t       nameOffset;
 			uint32_t       mipLevel;
 			float          rotationY;
-			uint32_t       pad;
 			EnvRouteRecord sky;
 		};
 
@@ -52,7 +51,6 @@ namespace assetlib
 							layout.AddField("nameOffset", &SkyRecord::nameOffset)
 								.AddField("mipLevel", &SkyRecord::mipLevel)
 								.AddField("rotationY", &SkyRecord::rotationY)
-								.AddField("pad", &SkyRecord::pad)
 								.AddField("sky", &SkyRecord::sky);
 						})
 					.Finish();

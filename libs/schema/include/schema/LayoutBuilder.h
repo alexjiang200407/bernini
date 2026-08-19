@@ -17,22 +17,44 @@ namespace schema
 	template <typename T>
 	concept SchemaValue = std::is_arithmetic_v<T> && !std::is_same_v<T, bool>;
 
+	/** The scalar kind of an arithmetic type: by float-ness, signedness and width. */
+	template <SchemaValue T>
+	consteval ValueType
+	valueTypeOf()
+	{
+		if constexpr (std::is_floating_point_v<T>)
+			return sizeof(T) == 4 ? ValueType::kF32 : ValueType::kF64;
+		else if constexpr (std::is_signed_v<T>)
+		{
+			if constexpr (sizeof(T) == 1)
+				return ValueType::kI8;
+			else if constexpr (sizeof(T) == 2)
+				return ValueType::kI16;
+			else if constexpr (sizeof(T) == 4)
+				return ValueType::kI32;
+			else
+				return ValueType::kI64;
+		}
+		else
+		{
+			if constexpr (sizeof(T) == 1)
+				return ValueType::kU8;
+			else if constexpr (sizeof(T) == 2)
+				return ValueType::kU16;
+			else if constexpr (sizeof(T) == 4)
+				return ValueType::kU32;
+			else
+				return ValueType::kU64;
+		}
+	}
+
 	template <SchemaValue T>
 	struct FieldTraits<T>
 	{
-		static constexpr Type      c_Type = Type::kValue;
-		static constexpr ValueType c_ValueType =
-			std::is_floating_point_v<T> ? (sizeof(T) == 4 ? ValueType::kF32 : ValueType::kF64) :
-			std::is_signed_v<T>         ? (sizeof(T) == 1 ? ValueType::kI8 :
-		                                   sizeof(T) == 2 ? ValueType::kI16 :
-		                                   sizeof(T) == 4 ? ValueType::kI32 :
-		                                                    ValueType::kI64) :
-										  (sizeof(T) == 1 ? ValueType::kU8 :
-		                                   sizeof(T) == 2 ? ValueType::kU16 :
-		                                   sizeof(T) == 4 ? ValueType::kU32 :
-		                                                    ValueType::kU64);
-		static constexpr uint32_t c_Count = 1;
-		using Struct                      = void;
+		static constexpr Type      c_Type      = Type::kValue;
+		static constexpr ValueType c_ValueType = valueTypeOf<T>();
+		static constexpr uint32_t  c_Count     = 1;
+		using Struct                           = void;
 	};
 
 	template <typename T>
@@ -126,7 +148,7 @@ namespace schema
 		operator=(LayoutBuilder&&) = delete;
 
 		/** @throws std::runtime_error if the member is a struct the schema has not registered. */
-		template <typename M>
+		template <core::type_traits::trivially_copyable M>
 		LayoutBuilder&
 		AddField(std::string_view name, M T::* member)
 		{
@@ -137,7 +159,7 @@ namespace schema
 		 * A field with what it reads as from a file that does not carry it. The default is the whole
 		 * field: a scalar for a scalar, an array for an array.
 		 */
-		template <typename M>
+		template <core::type_traits::trivially_copyable M>
 		LayoutBuilder&
 		AddField(std::string_view name, M T::* member, const std::type_identity_t<M>& defaultValue)
 		{
@@ -145,14 +167,14 @@ namespace schema
 		}
 
 		/** A field a file may still carry under `formerly`, the name it had before it was renamed. */
-		template <typename M>
+		template <core::type_traits::trivially_copyable M>
 		LayoutBuilder&
 		AddRenamedField(std::string_view name, std::string_view formerly, M T::* member)
 		{
 			return Describe(name, member, formerly, {});
 		}
 
-		template <typename M>
+		template <core::type_traits::trivially_copyable M>
 		LayoutBuilder&
 		AddRenamedField(
 			std::string_view name,
@@ -171,7 +193,7 @@ namespace schema
 		}
 
 	private:
-		template <typename M>
+		template <core::type_traits::trivially_copyable M>
 		LayoutBuilder&
 		Describe(
 			std::string_view name,
@@ -214,7 +236,7 @@ namespace schema
 			return bytes;
 		}
 
-		template <typename M>
+		template <core::type_traits::trivially_copyable M>
 		static uint32_t
 		OffsetOf(M T::* member) noexcept
 		{

@@ -286,17 +286,18 @@ namespace assetlib
 
 	namespace
 	{
-		constexpr std::array<uint32_t, 7> c_WantedTableChunks = { { uint32_t(ChunkId::kInfo),
-			                                                        uint32_t(ChunkId::kClips),
-			                                                        uint32_t(ChunkId::kColumns),
-			                                                        uint32_t(ChunkId::kPalettes),
-			                                                        uint32_t(ChunkId::kInputs),
-			                                                        uint32_t(ChunkId::kInputPaths),
-			                                                        uint32_t(
-																		ChunkId::kStringPool) } };
+		constexpr std::array<uint32_t, 7> c_WantedTableChunks = {
+			{ static_cast<uint32_t>(ChunkId::kInfo),
+			  static_cast<uint32_t>(ChunkId::kClips),
+			  static_cast<uint32_t>(ChunkId::kColumns),
+			  static_cast<uint32_t>(ChunkId::kPalettes),
+			  static_cast<uint32_t>(ChunkId::kInputs),
+			  static_cast<uint32_t>(ChunkId::kInputPaths),
+			  static_cast<uint32_t>(ChunkId::kStringPool) }
+		};
 
 		constexpr std::array<uint32_t, 2> c_WantedRefChunks = {
-			{ uint32_t(ChunkId::kInputs), uint32_t(ChunkId::kInputPaths) }
+			{ static_cast<uint32_t>(ChunkId::kInputs), static_cast<uint32_t>(ChunkId::kInputPaths) }
 		};
 
 		VatRefs
@@ -305,8 +306,8 @@ namespace assetlib
 			BVat vat;
 			unpackInputs(
 				vat,
-				chunks.Read<VatInputsRef>(uint32_t(ChunkId::kInputs), vatSchema()),
-				chunks.Read<char>(uint32_t(ChunkId::kInputPaths), vatSchema()));
+				chunks.Read<VatInputsRef>(static_cast<uint32_t>(ChunkId::kInputs), vatSchema()),
+				chunks.Read<char>(static_cast<uint32_t>(ChunkId::kInputPaths), vatSchema()));
 			return VatRefs{ vat.mesh, vat.skeleton, vat.animations };
 		}
 	}

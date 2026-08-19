@@ -157,7 +157,8 @@ namespace assetlib
 	namespace
 	{
 		constexpr std::array<uint32_t, 2> c_WantedRefChunks = {
-			{ uint32_t(ChunkId::kMaterialPaths), uint32_t(ChunkId::kSkeletonPath) }
+			{ static_cast<uint32_t>(ChunkId::kMaterialPaths),
+			  static_cast<uint32_t>(ChunkId::kSkeletonPath) }
 		};
 
 		MeshRefs
@@ -167,7 +168,7 @@ namespace assetlib
 			// exactly what a static import produces.
 			MeshRefs refs;
 			if (const std::span<const std::byte> paths =
-			        chunks.Get(uint32_t(ChunkId::kMaterialPaths));
+			        chunks.Get(static_cast<uint32_t>(ChunkId::kMaterialPaths));
 			    !paths.empty())
 				refs.materials = chunk::unpackStrings(
 					std::span<const char>(
@@ -175,7 +176,7 @@ namespace assetlib
 						paths.size()));
 
 			if (const std::span<const std::byte> skeleton =
-			        chunks.Get(uint32_t(ChunkId::kSkeletonPath));
+			        chunks.Get(static_cast<uint32_t>(ChunkId::kSkeletonPath));
 			    !skeleton.empty())
 				refs.skeleton.assign(
 					reinterpret_cast<const char*>(skeleton.data()),

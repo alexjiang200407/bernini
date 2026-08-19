@@ -125,7 +125,7 @@ private:
 		std::shared_ptr<CookedMeshes>          cooked;
 		std::shared_ptr<game::TexturePrefetch> prefetch;
 		qint64                                 stamp = 0;
-		QString failure;  // why the read failed; empty when it did not
+		QString                                failure;
 	};
 
 	// One asset's trip through the GPU: built, drawn and submitted on its first tick, resolved on a

@@ -16,8 +16,6 @@ namespace assetlib
 {
 	namespace
 	{
-		// 1 was the retired blob format that embedded the three maps as KTX2 chunks; 2 the flat
-		// stream of three paths; 3 the chunk container with a schema.
 		constexpr uint16_t c_EnvVersionMajor = 3;
 		constexpr uint16_t c_EnvVersionMinor = 0;
 
@@ -34,10 +32,9 @@ namespace assetlib
 			uint32_t nameOffset;
 			uint32_t skyOffset;
 			uint32_t lightingOffset;
-			uint32_t pad;
 		};
 
-		static_assert(sizeof(EnvRecord) == 16);
+		static_assert(sizeof(EnvRecord) == 12);
 
 		const schema::Schema&
 		envSchema()
@@ -49,8 +46,7 @@ namespace assetlib
 						[](auto& layout) {
 							layout.AddField("nameOffset", &EnvRecord::nameOffset)
 								.AddField("skyOffset", &EnvRecord::skyOffset)
-								.AddField("lightingOffset", &EnvRecord::lightingOffset)
-								.AddField("pad", &EnvRecord::pad);
+								.AddField("lightingOffset", &EnvRecord::lightingOffset);
 						})
 					.Finish();
 			return c_Schema;

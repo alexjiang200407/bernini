@@ -1,4 +1,5 @@
 #pragma once
+#include <core/type_traits.h>
 #include <schema/LayoutBuilder.h>
 #include <schema/Schema.h>
 #include <schema/convert.h>
@@ -32,12 +33,12 @@ namespace schema
 		 * @throws std::runtime_error if there is no such field, it holds structs, its shape is not
 		 *         T's, or `element` is past the end.
 		 */
-		template <typename T>
+		template <core::type_traits::trivially_copyable T>
+			requires std::is_void_v<typename FieldTraits<std::remove_cvref_t<T>>::Struct>
 		[[nodiscard]] T
 		Get(std::string_view field, size_t element = 0) const
 		{
 			using Traits = FieldTraits<std::remove_cvref_t<T>>;
-			static_assert(std::is_void_v<typename Traits::Struct>, "a struct field is GetStruct");
 
 			const auto bytes = ReadValues(field, element, Traits::c_ValueType, Traits::c_Count);
 			assert(bytes.size() == sizeof(T));

@@ -21,8 +21,7 @@ namespace assetlib
 
 	namespace
 	{
-		constexpr uint16_t c_VersionMajor =
-			2;  // 2: the schema chunk; the skeleton path is its own chunk
+		constexpr uint16_t c_VersionMajor = 2;
 		constexpr uint16_t c_VersionMinor = 0;
 
 		constexpr std::string_view c_What = "banim";
@@ -41,7 +40,6 @@ namespace assetlib
 		{
 			uint64_t signature;
 			uint32_t boneCount;
-			uint32_t pad;
 		};
 
 		static_assert(sizeof(SkeletonRef) == 16);
@@ -57,8 +55,7 @@ namespace assetlib
 						"SkeletonRef",
 						[](auto& layout) {
 							layout.AddField("signature", &SkeletonRef::signature)
-								.AddField("boneCount", &SkeletonRef::boneCount)
-								.AddField("pad", &SkeletonRef::pad);
+								.AddField("boneCount", &SkeletonRef::boneCount);
 						})
 					.Finish();
 			return c_Schema;
@@ -150,7 +147,7 @@ namespace assetlib
 		skeletonPathFromChunks(const chunk::ChunkData& chunks)
 		{
 			const auto path =
-				chunks.Read<char>(uint32_t(ChunkId::kSkeletonPath), animationSchema());
+				chunks.Read<char>(static_cast<uint32_t>(ChunkId::kSkeletonPath), animationSchema());
 			return std::string(path.begin(), path.end());
 		}
 	}

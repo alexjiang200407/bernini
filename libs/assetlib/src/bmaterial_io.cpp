@@ -36,16 +36,14 @@ namespace assetlib
 			uint32_t shadingModel;
 			uint32_t nameOffset;
 			uint32_t editorGraphOffset;
-			uint32_t pad;
 		};
 
-		static_assert(sizeof(MaterialRecord) == 16);
+		static_assert(sizeof(MaterialRecord) == 12);
 
 		struct RouteRecord
 		{
 			uint32_t textureOffset;
 			uint16_t channel;
-			uint16_t pad;
 		};
 
 		static_assert(sizeof(RouteRecord) == 8);
@@ -79,15 +77,13 @@ namespace assetlib
 						[](auto& layout) {
 							layout.AddField("shadingModel", &MaterialRecord::shadingModel)
 								.AddField("nameOffset", &MaterialRecord::nameOffset)
-								.AddField("editorGraphOffset", &MaterialRecord::editorGraphOffset)
-								.AddField("pad", &MaterialRecord::pad);
+								.AddField("editorGraphOffset", &MaterialRecord::editorGraphOffset);
 						})
 					.AddLayout<RouteRecord>(
 						"RouteRecord",
 						[](auto& layout) {
 							layout.AddField("textureOffset", &RouteRecord::textureOffset)
-								.AddField("channel", &RouteRecord::channel)
-								.AddField("pad", &RouteRecord::pad);
+								.AddField("channel", &RouteRecord::channel);
 						})
 					.AddLayout<PbrRecord>(
 						"PbrRecord",
