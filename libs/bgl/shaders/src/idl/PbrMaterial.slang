@@ -6,6 +6,8 @@ public struct PbrMaterial
 {
     public float4 baseColorFactor;
 
+    public float4 specular;
+
     public TextureHandle baseColorTexture; // SRGB
     public TextureHandle normalTexture;    // BC5_UNORM
     public TextureHandle ormTexture;       // UNORM

@@ -65,7 +65,10 @@ are the source of truth; when this doc disagrees, trust them, then fix this doc.
   underlying scalar and erase the name). An `import`ed type pulls in the corresponding generated
   `#include`. A `float3` field in a C++-mirrored struct is **refused** outright — MSL sizes it 16
   where C++ says 12, so no shared layout exists; carry a `float4` (VAT's bounds are min + extent
-  for exactly this reason).
+  for exactly this reason). A `float4` placed *after* scalars is refused unless the bytes ahead of
+  it already sum to a multiple of 16, because MSL aligns it to 16 and the C++ rules do not, and no
+  struct alignment can rescue an interior mismatch. `Meshlet`'s trailing `float4` is legal on exactly
+  that count; declaring the widest members first is how not to have to check.
 
 * **The C++ headers are generated into the build tree, and are not committed.** A struct's layout
   follows the backend it was generated for — MSL aligns a resource handle to 8 where the C/C++ scalar

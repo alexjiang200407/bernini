@@ -1354,6 +1354,7 @@ namespace bgl
 		material.baseColorFactor    = desc.baseColorFactor;
 		material.metallicFactor     = desc.metallicFactor;
 		material.roughnessFactor    = desc.roughnessFactor;
+		material.specular           = glm::vec4(desc.specularColorFactor, desc.specularFactor);
 		material.transmissionFactor = desc.transmissionFactor;
 		material.alphaCutoff        = desc.alphaCutoff;
 
@@ -1456,6 +1457,7 @@ namespace bgl
 		material.baseColorFactor    = desc.baseColorFactor;
 		material.metallicFactor     = desc.metallicFactor;
 		material.roughnessFactor    = desc.roughnessFactor;
+		material.specular           = glm::vec4(desc.specularColorFactor, desc.specularFactor);
 		material.transmissionFactor = desc.transmissionFactor;
 		material.alphaCutoff        = desc.alphaCutoff;
 

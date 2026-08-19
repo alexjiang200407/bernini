@@ -19,6 +19,8 @@ public static const uint cLooseChannelCount = 9;
 public struct LoosePbrMaterial
 {
     public float4 baseColorFactor;
+
+    public float4 specular;
     public ChannelSource sources[9];
     public float metallicFactor;
     public float roughnessFactor;
