@@ -300,6 +300,10 @@ namespace assetlib::chunk
 		std::string_view           m_What;
 	};
 
+	/** The in-memory form of a container -- what a Reader assembles and a hook repairs. */
+	template <typename T>
+	concept LoadedContainer = std::is_class_v<T> && !std::is_trivially_copyable_v<T>;
+
 	/**
 	 * A meaning change, as code: the one thing the by-name conversion cannot do is know what a
 	 * value the new shape does not carry should become. `applies` reads the file's schema -- "this
@@ -307,10 +311,6 @@ namespace assetlib::chunk
 	 * carries the old shape under a newer number is still repaired. `run` sees the file through
 	 * the reader and the converted result, and fixes what it must.
 	 */
-	/** The in-memory form of a container -- what a Reader assembles and a hook repairs. */
-	template <typename T>
-	concept LoadedContainer = std::is_class_v<T> && !std::is_trivially_copyable_v<T>;
-
 	template <LoadedContainer T>
 	struct Hook
 	{

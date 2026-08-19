@@ -1,4 +1,5 @@
 #pragma once
+#include <core/err/util.h>
 #include <core/glm.h>
 #include <core/type_traits.h>
 #include <schema/Schema.h>
@@ -193,9 +194,10 @@ namespace schema
 			{
 				const auto index = m_Schema.FindIndex(typeid(typename Traits::Struct));
 				if (!index)
-					throw std::runtime_error(
-						"schema: " + m_Layout.name + "." + field.name +
-						" is a struct the schema does not hold; register it first");
+					core::throw_runtime_error(
+						"schema: {}.{} is a struct the schema does not hold; register it first",
+						m_Layout.name,
+						field.name);
 				field.layoutIndex = *index;
 			}
 
