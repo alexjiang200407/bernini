@@ -305,6 +305,30 @@ in with a panel feature -- see task 5c. Meanwhile the panel was smoke-run (the e
 its targets and runs with a clean log) and every layer beneath it is covered by `bgl_tests` and
 `gamelib_tests`.
 
+**5e — a skinned geom culls by its posed box.** *(landed)* `AddSkinnedMeshGeom` took no bounds and
+so kept each submesh's cooked bind-pose sphere. On the test coyote that sphere is ~100x too small --
+the clips are authored in different units than the bind pose -- so a skinned instance vanishes the
+moment the camera turns, which is the same "Too large" defect that made the preview camera open
+inside the model, seen from the culling side instead of the framing side. `assetlib::posedBounds`
+already existed for the framing half; this passes it down. `AcquireSkinnedMesh` measures the box
+unless a caller hands one over -- the editor already measures it inside its loading screen, and the
+acquire runs on the render thread where a seconds-long per-vertex walk cannot go.
+`assetlib::Bounds` moved to `assetlib_structs` so `bgl` can name it, which is the same reason it can
+name `Skeleton`.
+
+Review pushed back on handing the box *back* on `SkinnedMesh`, and was right: nothing read it. The
+editor supplies its own and never asks for one, so the field existed only for the test that read it.
+It is gone, and the forwarding is observed instead through the one box `AddSkinnedMeshGeom` refuses.
+
+Measuring at load is a stopgap either way. The box belongs in the container, the way `bakeVat`
+already writes `boundsMin`/`boundsMax` into a `.bvat` -- a game should not skin a rig on its loading
+thread to learn how big it gets. That crosses this feature's "no change to the import path" non-goal,
+so it is not done here.
+*Gate:* `bgl_tests` asserts a skinned submesh's sphere is the posed box's and not the bind pose's
+(verified failing without the fix: radius 1.73 against 206) and that an inverted box is refused;
+`gamelib_tests` pins that a caller's box reaches the geom and that a shared acquire ignores one
+(verified failing when the forwarding is removed).
+
 **5d — bone tags, and a camera that uses them.** *(added after running the panel.)* The Animation
 panel opens at a fixed yaw, which shows a rig a profile whenever its forward axis is not the one that
 yaw assumed -- the test coyote faces +X where glTF's convention is +Z, so it opens side-on and the

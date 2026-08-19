@@ -5,15 +5,9 @@ namespace assetlib
 {
 	struct AnimationSet;
 	struct BMesh;
+	struct Bounds;
 	struct Skeleton;
 	struct Submesh;
-
-	/** An axis-aligned box, as the bounds helpers below return one. */
-	struct Bounds
-	{
-		glm::vec3 min;
-		glm::vec3 max;
-	};
 
 	/**
 	 * The tightest box holding mesh `meshIndex` in every pose of every clip: every vertex skinned at

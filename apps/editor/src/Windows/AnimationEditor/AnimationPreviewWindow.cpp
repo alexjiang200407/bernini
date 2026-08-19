@@ -23,6 +23,7 @@
 #include <assetlib/material_bake.h>
 #include <assetlib/skinning.h>
 #include <assetlib_structs/BMesh.h>
+#include <assetlib_structs/Bounds.h>
 #include <gamelib/AssetManager.h>
 #include <gamelib/vat_freshness.h>
 
@@ -182,14 +183,24 @@ AnimationPreviewWindow::LoadMeshAs(
 	editor::AnimationBindings bindings;
 	std::string               animations = animationsRelPath;
 
-	// The box every pose of every clip falls in, which is what the camera must frame. A bind-pose
-	// box is not it: a rig whose clips are authored in different units than its bind pose poses two
-	// orders of magnitude larger, and framing by the bind pose then puts the camera inside the model.
-	// VAT reads the box its bake already closed over; the skinned tier measures one (posedBounds),
-	// which costs microseconds because it bounds the bones rather than skinning every vertex.
+	// The box every pose of every clip falls in: what the camera frames, and what the skinned geom
+	// culls by. A bind-pose box is not it -- a rig whose clips are authored in different units than
+	// its bind pose poses two orders of magnitude larger, so the bind pose puts the camera inside the
+	// model and culls the mesh away as soon as it moves.
+	//
+	// VAT reads the box its bake already closed over, one for the file. The skinned tier measures
+	// one per animated mesh entry, off the UI and render threads because posedBounds skins every
+	// vertex at every frame -- per entry and not per file because the box is that geom's culling
+	// volume, and a .bmesh may hold two separately rigged meshes.
 	auto posedMin   = glm::vec3(0.0f);
 	auto posedMax   = glm::vec3(0.0f);
 	bool posedKnown = false;
+
+	auto skinnedBounds = std::unordered_map<uint32_t, assetlib::Bounds>();
+
+	// Planned inside the task below so the measurement knows which mesh entries animate; the empty
+	// case is judged out here, where it reads as a refusal rather than a failed load.
+	auto plan = editor::AnimationDrawPlan();
 
 	// One plan for the whole load, so the three tier-dependent decisions cannot drift apart. Filled
 	// inside the task below, where `animations` is final -- it may still be resolved from the
@@ -214,6 +225,7 @@ AnimationPreviewWindow::LoadMeshAs(
 				animations = bindings.animations.front();
 
 			steps = editor::PlanAnimationLoad(source, !animations.empty());
+			plan  = editor::PlanAnimationDraws(mesh);
 
 			if (steps.bakeVat)
 			{
@@ -237,12 +249,15 @@ AnimationPreviewWindow::LoadMeshAs(
 				const assetlib::AnimationSet clips    = store.LoadAnimations(animations);
 				const assetlib::Skeleton     skeleton = store.LoadSkeleton(clips.skeleton);
 
-				// Mesh 0: the panel frames the whole file, and a .bmesh with several rigged meshes
-				// is not something the importer produces.
-				const assetlib::Bounds bounds = assetlib::posedBounds(mesh, 0, skeleton, clips);
-				posedMin                      = bounds.min;
-				posedMax                      = bounds.max;
-				posedKnown                    = true;
+				for (const bmesh::InstancePlacement& placement : plan.animated)
+				{
+					if (skinnedBounds.contains(placement.meshIndex))
+						continue;
+
+					skinnedBounds.emplace(
+						placement.meshIndex,
+						assetlib::posedBounds(mesh, placement.meshIndex, skeleton, clips));
+				}
 			}
 		});
 
@@ -282,7 +297,6 @@ AnimationPreviewWindow::LoadMeshAs(
 			QString refusal;
 		};
 
-		const auto plan = editor::PlanAnimationDraws(mesh);
 		if (plan.animated.empty() && plan.statics.empty())
 			throw std::runtime_error("no node references a mesh");
 
@@ -320,6 +334,18 @@ AnimationPreviewWindow::LoadMeshAs(
 					continue;
 				}
 
+				// The box this placement poses in: measured above for the skinned tier, read off
+				// the bake for VAT. It is the geom's culling volume as well as the camera's frame,
+				// so it is resolved per mesh entry rather than shared across the file.
+				const std::optional<assetlib::Bounds> posed = [&] {
+					if (source != editor::AnimationSource::kSkinned)
+						return posedKnown ? std::optional(assetlib::Bounds{ posedMin, posedMax }) :
+						                    std::nullopt;
+
+					const auto it = skinnedBounds.find(placement.meshIndex);
+					return it != skinnedBounds.end() ? std::optional(it->second) : std::nullopt;
+				}();
+
 				try
 				{
 					// The two tiers differ only in which door the acquire takes: both hand back a
@@ -329,8 +355,13 @@ AnimationPreviewWindow::LoadMeshAs(
 
 					if (source == editor::AnimationSource::kSkinned)
 					{
+						// Handed over rather than measured again: this runs on the render thread,
+						// and posedBounds is seconds on a dense rig. Absent only if the measurement
+						// was skipped, and then the acquire makes it -- a stall beats culling the
+						// mesh by a box of nothing.
 						const game::AssetManager::SkinnedMesh skinned =
-							m_Assets->AcquireSkinnedMesh(rel, animations, placement.meshIndex);
+							m_Assets
+								->AcquireSkinnedMesh(rel, animations, placement.meshIndex, posed);
 						geom  = skinned.geom;
 						clips = std::move(skinned.clips);
 					}
@@ -355,10 +386,8 @@ AnimationPreviewWindow::LoadMeshAs(
 					continue;
 				}
 
-				// Reached only when the measurement above ran: whichever produced it, a throw fails
-				// the task and a failed task returns before any of this.
-				if (posedKnown)
-					bmesh::GrowBounds(placement.world, posedMin, posedMax, aabbMin, aabbMax);
+				if (posed)
+					bmesh::GrowBounds(placement.world, posed->min, posed->max, aabbMin, aabbMax);
 				else
 					bmesh::GrowBoundsForMesh(
 						mesh,

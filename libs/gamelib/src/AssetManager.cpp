@@ -12,12 +12,14 @@
 #include <assetlib/bvat_io.h>
 #include <assetlib/env_bake.h>
 #include <assetlib/image_io.h>
+#include <assetlib/skinning.h>
 #include <assetlib/vat_bake.h>
 #include <assetlib_structs/Animation.h>
 #include <assetlib_structs/BEnv.h>
 #include <assetlib_structs/BMaterial.h>
 #include <assetlib_structs/BMesh.h>
 #include <assetlib_structs/BVat.h>
+#include <assetlib_structs/Bounds.h>
 #include <assetlib_structs/ImageData.h>
 #include <assetlib_structs/Skeleton.h>
 #include <core/err/util.h>
@@ -462,9 +464,10 @@ namespace game
 
 	AssetManager::SkinnedMesh
 	AssetManager::AcquireSkinnedMesh(
-		std::string_view relPath,
-		std::string_view animationsRelPath,
-		uint32_t         meshIndex)
+		std::string_view                       relPath,
+		std::string_view                       animationsRelPath,
+		uint32_t                               meshIndex,
+		const std::optional<assetlib::Bounds>& posedBounds)
 	{
 		// Its own keyspace beside AcquireMesh's and AcquireVatMesh's: one mesh may be live as static,
 		// as VAT and as skinned geometry at once, and all three are different uploads.
@@ -543,9 +546,17 @@ namespace game
 					clip.loop != 0);
 			}
 
+			// The box the geom culls by. Not the bind pose's: a rig whose clips are authored in
+			// different units than its bind pose poses two orders of magnitude larger, and culling
+			// by the bind pose makes it vanish as soon as the camera moves.
+			const assetlib::Bounds bounds =
+				posedBounds ? *posedBounds :
+							  assetlib::posedBounds(mesh, meshIndex, skeleton, animations);
+
 			auto record = GeomRecord();
 			record.handle =
-				m_Scene->AddSkinnedMeshGeom(mesh, meshIndex, materials, skeleton, animations);
+				m_Scene
+					->AddSkinnedMeshGeom(mesh, meshIndex, materials, skeleton, animations, bounds);
 			record.key               = key;
 			record.submeshMaterials  = std::move(submeshMaterials);
 			record.skinnedClips      = clipInfo;

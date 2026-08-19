@@ -8,6 +8,7 @@
 #include "uniforms/Uniforms.h"
 #include "util/util.h"
 #include <assetlib_structs/BMaterial.h>  // the channel layout the static_asserts below pin us to
+#include <assetlib_structs/Bounds.h>
 #include <bgl/PsoType.h>
 #include <core/math.h>
 #include <numbers>
@@ -875,9 +876,15 @@ namespace bgl
 		uint32_t                        meshIndex,
 		std::span<const MaterialHandle> materials,
 		const assetlib::Skeleton&       skeleton,
-		const assetlib::AnimationSet&   animations)
+		const assetlib::AnimationSet&   animations,
+		const assetlib::Bounds&         posedBounds)
 	{
 		ValidateSkinnedRig(skeleton, animations);
+
+		if (glm::any(glm::greaterThan(posedBounds.min, posedBounds.max)))
+		{
+			throw SceneError("AddSkinnedMeshGeom: posedBounds min exceeds max");
+		}
 
 		if (meshIndex >= mesh.meshes.size())
 		{
@@ -908,9 +915,10 @@ namespace bgl
 			}
 		}
 
-		// No sphere override: unlike VAT there is no all-clips box to widen to, so each submesh keeps
-		// its cooked bind-pose sphere. A pose that leaves it culls early; see IScene.
-		GeomHandle base = AddPreparedMesh(CookStaticMesh(mesh, meshIndex), materials, std::nullopt);
+		GeomHandle base = AddPreparedMesh(
+			CookStaticMesh(mesh, meshIndex),
+			materials,
+			BoundingSphereOf(posedBounds.min, posedBounds.max));
 
 		return AttachSkinnedRecords(base, skeleton, animations);
 	}
