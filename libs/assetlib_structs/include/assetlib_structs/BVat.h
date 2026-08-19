@@ -92,8 +92,11 @@ namespace assetlib
 
 		/**
 		 * The texture pair, as encoded KTX2 byte streams (decodeKTX2 reads them): positions
-		 * `R16G16B16A16_UNORM` packed in the bounds, normals `R8G8B8A8_UNORM` as unit object-space
-		 * `xyz * 0.5 + 0.5`. Empty on a tables-only read (loadVatTables), never in a full one.
+		 * `R16G16B16A16_UNORM` packed in the bounds; normals `R8G8B8A8_UNORM`, `rgb` the unit
+		 * object-space normal as `xyz * 0.5 + 0.5` and `a` the tangent's twist -- the turn about
+		 * that normal, as `radians / 2pi + 0.5`, that the bind tangent carried onto it by the
+		 * shortest arc still needs (see docs/vat.md). Empty on a tables-only read (loadVatTables),
+		 * never in a full one.
 		 */
 		std::vector<std::byte> positionsKtx2;
 		std::vector<std::byte> normalsKtx2;

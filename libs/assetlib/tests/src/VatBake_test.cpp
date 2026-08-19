@@ -20,7 +20,9 @@
 
 #include "MountAt.h"
 #include "VatFixture.h"
+#include "chunk_io.h"
 #include "mounted_io.h"
+#include "vat_tangent.h"
 #include <assetlib/AssetStore.h>
 
 using namespace assetlib;
@@ -52,6 +54,102 @@ namespace
 		};
 		return glm::vec3(channel(0), channel(1), channel(2));
 	}
+
+	float
+	TexelTwist(const ImageData& image, uint32_t x, uint32_t y)
+	{
+		const std::byte* texel = image.pixels.data() + image.subresources[0].offset +
+		                         y * image.subresources[0].rowPitch + uint64_t(x) * 4;
+		return unpackTwist(static_cast<float>(std::to_integer<uint8_t>(texel[3])) / 255.0f);
+	}
+
+	/**
+	 * A one-bone rig and a skinned quad carrying a tangent, with one clip whose frames pose the
+	 * bone: rest, a quarter turn about the normal (pure twist -- the shortest arc sees nothing), a
+	 * tilt about X (pure arc), the tilt twisted, and the normal turned right round.
+	 */
+	struct TangentFixture
+	{
+		Skeleton     skeleton;
+		AnimationSet animations;
+		BMesh        mesh;
+
+		static constexpr uint32_t c_Frames = 5;
+
+		TangentFixture()
+		{
+			Bone root{};
+			root.bindPose = { glm::vec3(0.0f), glm::quat(1.0f, 0.0f, 0.0f, 0.0f), glm::vec3(1.0f) };
+			root.parent   = c_InvalidIndex;
+			root.nameOffset = skeleton.stringPool.add("root");
+			skeleton.bones.push_back(root);
+			skeleton.bones[0].inverseBind = glm::mat4(1.0f);
+
+			animations.skeleton          = "Skeletons/one.bskel";
+			animations.skeletonSignature = skeletonSignature(skeleton);
+			animations.boneCount         = 1;
+
+			AnimationClip clip{};
+			clip.nameOffset  = animations.stringPool.add("poses");
+			clip.firstSample = 0;
+			clip.frameCount  = c_Frames;
+			clip.sampleRate  = 30.0f;
+			clip.duration    = (c_Frames - 1) / 30.0f;
+			animations.clips.push_back(clip);
+
+			const glm::vec3 x(1.0f, 0.0f, 0.0f);
+			const glm::vec3 y(0.0f, 1.0f, 0.0f);
+			const glm::vec3 z(0.0f, 0.0f, 1.0f);
+			const auto      turn = [](float degrees, const glm::vec3& axis) {
+				return glm::angleAxis(glm::radians(degrees), axis);
+			};
+			const std::array<glm::quat, c_Frames> poses = { {
+				glm::quat(1.0f, 0.0f, 0.0f, 0.0f),
+				turn(90.0f, z),
+				turn(60.0f, x),
+				turn(60.0f, x) * turn(90.0f, z),
+				turn(180.0f, y),
+			} };
+			for (const glm::quat& pose : poses)
+				animations.samples.push_back({ glm::vec3(0.0f), pose, glm::vec3(1.0f) });
+
+			Submesh quad{};
+			quad.layout.attributeCount = 5;
+			quad.layout.attributes[0]  = { VertexSemantic::kPosition, VertexFormat::kFloat32x3, 0 };
+			quad.layout.attributes[1]  = { VertexSemantic::kNormal, VertexFormat::kFloat32x3, 12 };
+			quad.layout.attributes[2]  = { VertexSemantic::kJoints0, VertexFormat::kUint16x4, 24 };
+			quad.layout.attributes[3] = { VertexSemantic::kWeights0, VertexFormat::kUnorm16x4, 32 };
+			quad.layout.attributes[4] = { VertexSemantic::kTangent, VertexFormat::kFloat32x4, 40 };
+			quad.layout.stride        = 56;
+
+			// Four corners of a +Z-facing quad, tangent +X.
+			AddVertex(quad, glm::vec3(-1.0f, -1.0f, 0.0f), glm::vec4(1.0f, 0.0f, 0.0f, 1.0f));
+			AddVertex(quad, glm::vec3(1.0f, -1.0f, 0.0f), glm::vec4(1.0f, 0.0f, 0.0f, 1.0f));
+			AddVertex(quad, glm::vec3(-1.0f, 1.0f, 0.0f), glm::vec4(1.0f, 0.0f, 0.0f, 1.0f));
+			AddVertex(quad, glm::vec3(1.0f, 1.0f, 0.0f), glm::vec4(1.0f, 0.0f, 0.0f, -1.0f));
+			mesh.submeshes.push_back(quad);
+			mesh.skeleton = "Skeletons/one.bskel";
+		}
+
+		void
+		AddVertex(Submesh& submesh, const glm::vec3& position, const glm::vec4& tangent)
+		{
+			const size_t base = mesh.vertexData.size();
+			mesh.vertexData.resize(base + submesh.layout.stride);
+
+			const glm::vec3               normal(0.0f, 0.0f, 1.0f);
+			const std::array<uint16_t, 4> joints  = { { 0, 0, 0, 0 } };
+			const std::array<uint16_t, 4> weights = { { c_Unorm16Max, 0, 0, 0 } };
+
+			std::byte* at = mesh.vertexData.data() + base;
+			std::memcpy(at, &position, sizeof(position));
+			std::memcpy(at + 12, &normal, sizeof(normal));
+			std::memcpy(at + 24, joints.data(), sizeof(joints));
+			std::memcpy(at + 32, weights.data(), sizeof(weights));
+			std::memcpy(at + 40, &tangent, sizeof(tangent));
+			++submesh.vertexCount;
+		}
+	};
 
 	/** The margin one unorm16 step spans on `axis` of the box, the bake's quantization unit. */
 	float
@@ -150,6 +248,74 @@ TEST_CASE("A baked texel matches the CPU skin within unorm tolerance", "[vat]")
 	}
 }
 
+// What the shader rebuilds from a texel -- the bind tangent carried onto the posed normal by the
+// shortest arc, then turned by the alpha -- must be the tangent the CPU skin produced, in every
+// pose. The quarter turn about the normal is the frame that matters: the arc alone cannot see it.
+TEST_CASE("A baked twist turns the bind tangent onto the skinned one", "[vat]")
+{
+	TangentFixture fixture;
+	const BVat     vat = bakeVat(fixture.mesh, fixture.skeleton, fixture.animations);
+	REQUIRE(vat.width == 4);
+	REQUIRE(vat.height == TangentFixture::c_Frames + 1);
+
+	const ImageData normals = decodeKTX2(vat.normalsKtx2);
+
+	const glm::vec3 bindNormal(0.0f, 0.0f, 1.0f);
+	const glm::vec3 bindTangent(1.0f, 0.0f, 0.0f);
+
+	// One unorm8 step of twist is 2 pi / 255, and the normal's own steps lean the frame by about as
+	// much again.
+	const float margin = 2.0f * glm::two_pi<float>() / 255.0f;
+
+	for (uint32_t frame = 0; frame < TangentFixture::c_Frames; ++frame)
+	{
+		const auto palette = skinningMatrices(
+			fixture.skeleton,
+			poseModelTransforms(fixture.skeleton, fixture.animations, 0, frame));
+		const auto skinned = skinSubmesh(fixture.mesh, fixture.mesh.submeshes[0], palette);
+
+		for (uint32_t v = 0; v < 4; ++v)
+		{
+			const glm::vec3 posedNormal = TexelNormal(normals, v, frame);
+			const float     twist       = TexelTwist(normals, v, frame);
+			const glm::vec3 rebuilt =
+				vatPosedTangent(bindNormal, bindTangent, glm::normalize(posedNormal), twist);
+
+			const glm::vec3 expected = glm::normalize(skinned[v].blendedTangent);
+			INFO("frame " << frame << " vertex " << v);
+			for (int axis = 0; axis < 3; ++axis)
+				CHECK(rebuilt[axis] == Catch::Approx(expected[axis]).margin(margin));
+		}
+	}
+
+	SECTION("the quarter turn about the normal is a twist the arc alone would miss")
+	{
+		const glm::vec3 posedNormal = glm::normalize(TexelNormal(normals, 0, 1));
+		CHECK(posedNormal.z == Catch::Approx(1.0f).margin(2.0f / 255.0f));
+
+		// Arc only: the bind tangent, unmoved. The skin turned it onto +Y.
+		const glm::vec3 arcOnly = rotateByShortestArc(bindTangent, bindNormal, posedNormal);
+		CHECK(arcOnly.x == Catch::Approx(1.0f).margin(1e-2f));
+		CHECK(TexelTwist(normals, 0, 1) == Catch::Approx(glm::half_pi<float>()).margin(margin));
+	}
+
+	SECTION("the rest frame and a pure tilt bake no twist")
+	{
+		CHECK(TexelTwist(normals, 0, 0) == Catch::Approx(0.0f).margin(margin));
+		CHECK(TexelTwist(normals, 0, 2) == Catch::Approx(0.0f).margin(margin));
+	}
+
+	SECTION("a mesh without a tangent bakes no twist either")
+	{
+		VatFixture      plain;
+		const BVat      plainVat     = bakeVat(plain.mesh, plain.skeleton, plain.animations);
+		const ImageData plainNormals = decodeKTX2(plainVat.normalsKtx2);
+		for (uint32_t row = 0; row < plainVat.height; ++row)
+			for (uint32_t column = 0; column < plainVat.width; ++column)
+				CHECK(TexelTwist(plainNormals, column, row) == Catch::Approx(0.0f).margin(margin));
+	}
+}
+
 TEST_CASE("Each clip ends on a duplicated padding row", "[vat]")
 {
 	VatFixture fixture;
@@ -234,6 +400,39 @@ TEST_CASE("A .bvat round-trips, and its tables read without the pixels", "[vat]"
 		CHECK(refs.animations == "Animations/rig.banim");
 
 		fs::remove(path);
+	}
+
+	SECTION("a bake from before the twist does not read")
+	{
+		// The normals chunk changed id when its alpha stopped being padding; a file still carrying
+		// the old id is missing the chunk the reader requires, which is what sends it to a re-bake.
+		auto bytes  = serializeVat(vat);
+		auto header = chunk::Header();
+		std::memcpy(&header, bytes.data(), sizeof(header));
+
+		bool patched = false;
+		for (uint32_t i = 0; i < header.chunkCount; ++i)
+		{
+			auto entry = chunk::Entry();
+			std::memcpy(
+				&entry,
+				bytes.data() + header.chunkTableOffset + i * sizeof(entry),
+				sizeof(entry));
+			if (entry.id == 10)
+			{
+				entry.id = 8;
+				std::memcpy(
+					bytes.data() + header.chunkTableOffset + i * sizeof(entry),
+					&entry,
+					sizeof(entry));
+				patched = true;
+			}
+		}
+		REQUIRE(patched);
+
+		CHECK_THROWS_WITH(
+			deserializeVat(bytes),
+			Catch::Matchers::ContainsSubstring("missing required chunk"));
 	}
 
 	SECTION("a clip with no frames is a malformed file, not a caller's problem")

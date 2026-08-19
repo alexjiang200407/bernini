@@ -70,14 +70,23 @@ namespace assetlib
 				if (assetTypeFromExtension(file) != AssetType::kVat)
 					continue;
 
-				// Tables alone: the pixels are the bulk of the file, and both the staleness verdict
-				// and the paths to re-bake from are in the chunks this reads.
-				const BVat tables = loadVatTables(file);
-				if (!vatIsStale(tables, loose))
+				// Read whole, not tables alone: a bake from before a format change reads its
+				// tables cleanly and is stale all the same, and only the full read asks for the
+				// chunks the runtime will. The archive copies every byte of it next, so the pixels
+				// cost nothing here that they do not cost anyway.
+				bool fresh = false;
+				try
+				{
+					fresh = !vatIsStale(loadVat(file), loose);
+				}
+				catch (const std::exception&)
+				{}
+				if (fresh)
 					continue;
 
+				const VatRefs refs = loadVatRefs(file);
 				saveVat(
-					bakeVat(AssetStore(dataRoot), VatBakeDesc{ tables.mesh, tables.animations }),
+					bakeVat(AssetStore(dataRoot), VatBakeDesc{ refs.mesh, refs.animations }),
 					file);
 				++rebaked;
 			}
