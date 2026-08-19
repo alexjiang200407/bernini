@@ -199,6 +199,70 @@ TEST_CASE("Two bones blend a vertex between them", "[skinning]")
 	CHECK(skinned[0].position.y == Catch::Approx(3.0f).margin(1e-3));
 }
 
+// The VAT bake reconstructs a posed tangent from the posed normal plus a baked twist, and the
+// twist is measured against this: a tangent that did not follow its bone would bake as a twist that
+// is not there.
+TEST_CASE("A tangent rides its bone's rotation, and a mesh without one skins to zero", "[skinning]")
+{
+	SECTION("with a tangent attribute")
+	{
+		BMesh   mesh;
+		Submesh submesh{};
+		submesh.layout.attributeCount = 5;
+		submesh.layout.attributes[0]  = { VertexSemantic::kPosition, VertexFormat::kFloat32x3, 0 };
+		submesh.layout.attributes[1]  = { VertexSemantic::kNormal, VertexFormat::kFloat32x3, 12 };
+		submesh.layout.attributes[2]  = { VertexSemantic::kJoints0, VertexFormat::kUint16x4, 24 };
+		submesh.layout.attributes[3]  = { VertexSemantic::kWeights0, VertexFormat::kUnorm16x4, 32 };
+		submesh.layout.attributes[4]  = { VertexSemantic::kTangent, VertexFormat::kFloat32x4, 40 };
+		submesh.layout.stride         = 56;
+		submesh.vertexCount           = 1;
+
+		const glm::vec3               position(0.0f);
+		const glm::vec3               normal(0.0f, 0.0f, 1.0f);
+		const std::array<uint16_t, 4> joints  = { { 0, 0, 0, 0 } };
+		const std::array<uint16_t, 4> weights = { { c_Unorm16Max, 0, 0, 0 } };
+		const glm::vec4               tangent(1.0f, 0.0f, 0.0f, -1.0f);
+
+		mesh.vertexData.resize(56);
+		std::byte* at = mesh.vertexData.data();
+		std::memcpy(at, &position, sizeof(position));
+		std::memcpy(at + 12, &normal, sizeof(normal));
+		std::memcpy(at + 24, joints.data(), sizeof(joints));
+		std::memcpy(at + 32, weights.data(), sizeof(weights));
+		std::memcpy(at + 40, &tangent, sizeof(tangent));
+
+		// A quarter turn about the normal: the normal stays put and only the tangent can show it.
+		const std::vector<glm::mat4> skinning(
+			1,
+			glm::rotate(glm::mat4(1.0f), glm::half_pi<float>(), glm::vec3(0.0f, 0.0f, 1.0f)));
+
+		const auto skinned = skinSubmesh(mesh, submesh, skinning);
+		REQUIRE(skinned.size() == 1);
+		CHECK(skinned[0].blendedNormal.z == Catch::Approx(1.0f));
+		CHECK(skinned[0].blendedTangent.x == Catch::Approx(0.0f).margin(1e-6));
+		CHECK(skinned[0].blendedTangent.y == Catch::Approx(1.0f));
+		CHECK(skinned[0].blendedTangent.z == Catch::Approx(0.0f).margin(1e-6));
+	}
+
+	SECTION("without one")
+	{
+		SkinnedMesh fixture;
+		fixture.Add(
+			glm::vec3(0.0f),
+			glm::vec3(0.0f, 1.0f, 0.0f),
+			{ { 0, 0, 0, 0 } },
+			{ { c_Unorm16Max, 0, 0, 0 } });
+
+		const std::vector<glm::mat4> skinning(
+			2,
+			glm::rotate(glm::mat4(1.0f), glm::half_pi<float>(), glm::vec3(1.0f, 0.0f, 0.0f)));
+
+		const auto skinned = skinSubmesh(fixture.mesh, fixture.submesh, skinning);
+		REQUIRE(skinned.size() == 1);
+		CHECK(skinned[0].blendedTangent == glm::vec3(0.0f));
+	}
+}
+
 TEST_CASE("A submesh with no joints comes through unskinned", "[skinning]")
 {
 	BMesh   mesh;

@@ -40,6 +40,10 @@ namespace assetlib
 		// Blended, so not unit length: two rotations shorten it and a scaled bone lengthens it.
 		// Zero when the submesh carries no normals.
 		glm::vec3 blendedNormal;
+
+		// The tangent's xyz, blended as the normal is; its handedness is the bind tangent's `w`,
+		// which no rotation changes. Zero when the submesh carries no tangents.
+		glm::vec3 blendedTangent;
 	};
 
 	/**
@@ -48,10 +52,10 @@ namespace assetlib
 	 * Linear blend skinning, four influences, deliberately unoptimised -- see libs/assetlib/CLAUDE.md
 	 * for why this lives here rather than in bgl.
 	 *
-	 * Normals ride the same matrices rather than their inverse transpose. That is an accepted
-	 * limitation, not a property of rigs: it is exact only while a bone's scale is uniform, and
-	 * nothing rejects the non-uniform scale glTF permits -- a squash-and-stretch rig imports
-	 * cleanly and skins normals that are wrong. The GPU path will make the same trade.
+	 * Normals and tangents ride the same matrices rather than their inverse transpose. That is an
+	 * accepted limitation, not a property of rigs: it is exact only while a bone's scale is
+	 * uniform, and nothing rejects the non-uniform scale glTF permits -- a squash-and-stretch rig
+	 * imports cleanly and skins normals that are wrong. The GPU path will make the same trade.
 	 *
 	 * A submesh carrying no joints is returned unskinned, and so is a vertex whose four weights are
 	 * all zero -- which is what an exporter writes for a vertex it never assigned to a bone.

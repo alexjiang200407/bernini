@@ -65,6 +65,8 @@ namespace assetlib
 			decodableOffset(submesh.layout, VertexSemantic::kPosition, VertexFormat::kFloat32x3);
 		const auto normalOffset =
 			decodableOffset(submesh.layout, VertexSemantic::kNormal, VertexFormat::kFloat32x3);
+		const auto tangentOffset =
+			decodableOffset(submesh.layout, VertexSemantic::kTangent, VertexFormat::kFloat32x4);
 		const auto jointsOffset =
 			decodableOffset(submesh.layout, VertexSemantic::kJoints0, VertexFormat::kUint16x4);
 		const auto weightsOffset =
@@ -98,15 +100,19 @@ namespace assetlib
 			const auto normal   = normalOffset ?
 			                          readAt<glm::vec3>(mesh.vertexData, base + *normalOffset) :
 			                          glm::vec3(0.0f);
+			const auto tangent  = tangentOffset ?
+			                          readAt<glm::vec3>(mesh.vertexData, base + *tangentOffset) :
+			                          glm::vec3(0.0f);
 
 			if (!jointsOffset)
 			{
-				out[v] = { position, normal };
+				out[v] = { position, normal, tangent };
 				continue;
 			}
 
 			glm::vec3 skinnedPosition(0.0f);
 			glm::vec3 skinnedNormal(0.0f);
+			glm::vec3 skinnedTangent(0.0f);
 			float     total = 0.0f;
 
 			for (size_t i = 0; i < c_InfluencesPerVertex; ++i)
@@ -130,6 +136,7 @@ namespace assetlib
 				const glm::mat4& matrix = skinning[joint];
 				skinnedPosition += weight * glm::vec3(matrix * glm::vec4(position, 1.0f));
 				skinnedNormal += weight * glm::mat3(matrix) * normal;
+				skinnedTangent += weight * glm::mat3(matrix) * tangent;
 				total += weight;
 			}
 
@@ -137,8 +144,9 @@ namespace assetlib
 			// renormalizes that to four zero weights rather than refusing the mesh. Blending them
 			// would put the vertex at the origin -- which, once the bake fits one AABB around every
 			// clip, drags that box out and costs precision on every other vertex of the rig.
-			out[v] = total > 0.0f ? SkinnedVertex{ skinnedPosition, skinnedNormal } :
-			                        SkinnedVertex{ position, normal };
+			out[v] = total > 0.0f ?
+			             SkinnedVertex{ skinnedPosition, skinnedNormal, skinnedTangent } :
+			             SkinnedVertex{ position, normal, tangent };
 		}
 
 		return out;
