@@ -426,6 +426,35 @@ TEST_CASE("posedBounds measures the pose, not the bind pose", "[skinning][bounds
 		CHECK(bounds.max.y == Catch::Approx(100.0f));
 	}
 
+	SECTION("a vertex with no influences is bounded where it was authored")
+	{
+		// The bind position, not the origin. posedBounds blends into an accumulator that starts at
+		// zero, so a vertex whose weights are all zero -- what an exporter writes for one it never
+		// assigned -- would otherwise drag the box to (0,0,0) and cost every other vertex precision.
+		// skinSubmesh's own path has this pinned; this is the same rule through the bounds walk.
+		SkinnedMesh loose;
+		loose.Add(
+			glm::vec3(7.0f, 8.0f, 9.0f),
+			glm::vec3(0.0f, 0.0f, 1.0f),
+			{ { 0, 0, 0, 0 } },
+			{ { 0, 0, 0, 0 } });  // never assigned
+		loose.submesh.aabbMin = glm::vec3(7.0f, 8.0f, 9.0f);
+		loose.submesh.aabbMax = glm::vec3(7.0f, 8.0f, 9.0f);
+		loose.mesh.submeshes.push_back(loose.submesh);
+		loose.mesh.meshes.push_back({ .firstSubmesh = 0, .submeshCount = 1, .nameOffset = 0 });
+
+		// A pose that would move it a long way if it were influenced at all.
+		animations.samples.push_back(still);
+		animations.samples.push_back(
+			{ glm::vec3(500.0f, 0.0f, 0.0f), glm::quat(1.0f, 0.0f, 0.0f, 0.0f), glm::vec3(1.0f) });
+
+		const assetlib::Bounds bounds = assetlib::posedBounds(loose.mesh, 0, skeleton, animations);
+
+		CHECK(bounds.min.x == Catch::Approx(7.0f));
+		CHECK(bounds.max.x == Catch::Approx(7.0f));
+		CHECK(bounds.max.z == Catch::Approx(9.0f));
+	}
+
 	SECTION("a clip that travels is bounded where it travels to")
 	{
 		animations.samples.push_back(still);

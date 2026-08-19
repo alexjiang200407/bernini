@@ -19,8 +19,9 @@ namespace assetlib
 	 *
 	 * Bounding the *bones* instead is tempting and much cheaper, but it is not close enough to use:
 	 * applying every bone's matrix to the whole bind-pose box over-estimates by ~3x on a rig at that
-	 * scale, because each bone is credited with moving vertices it has no weight on. Skinning is
-	 * milliseconds for a character-sized rig, and it is exact.
+	 * scale, because each bone is credited with moving vertices it has no weight on. This is exact
+	 * instead, and costs a vertex per frame per clip -- seconds on a rig with a full clip set (1372
+	 * frames over 4309 vertices is ~3.5 s in a debug build), so it belongs on a worker.
 	 *
 	 * @throws std::runtime_error if `meshIndex` is out of range, or for anything poseModelTransforms
 	 *         or skinSubmesh refuses (a clip set cooked against another rig, a bad joint index).
