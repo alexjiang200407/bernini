@@ -133,7 +133,8 @@ private:
 	QComboBox* m_SourceSelector = nullptr;  // which .banim is played
 
 	// Which tier it is played through: the rig posed live, or the bake made of it.
-	QComboBox* m_TierSelector = nullptr;
+	QComboBox*   m_TierSelector  = nullptr;
+	QPushButton* m_BakeVatButton = nullptr;
 
 	QListWidget* m_ClipList     = nullptr;
 	QLabel*      m_ClipMetadata = nullptr;

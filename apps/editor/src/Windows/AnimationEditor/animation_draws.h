@@ -33,9 +33,10 @@ namespace editor
 	 */
 	struct AnimationLoadSteps
 	{
-		// The VAT tier draws from a bake and must find it fresh; the skinned tier reads the rig, so
-		// baking for it is seconds of CPU skinning for a texture pair nothing samples.
-		bool bakeVat = false;
+		// The VAT tier draws from a bake and must find one already fresh -- a load never makes one,
+		// because a bake is seconds of CPU skinning and therefore the user's decision. The skinned
+		// tier reads the rig, so a bake would be that cost for a texture pair nothing samples.
+		bool needsFreshBake = false;
 
 		// Only a VAT refusal is a bake's to answer. A skinned refusal is about the rig or the
 		// material, and offering to bake would send the user somewhere that cannot help.

@@ -214,6 +214,9 @@ AnimationPreviewWindow::LoadMeshAs(
 	// bindings scan.
 	auto steps = editor::AnimationLoadSteps();
 
+	// Only meaningful on the VAT tier; kFresh so the skinned tier never reads it as a refusal.
+	auto bakeState = game::VatBakeState::kFresh;
+
 	// The mesh read, the candidate scan and -- the expensive part -- a stale rig's re-bake, all
 	// off the UI and render threads. AcquireVatMesh afterwards finds the .bvat fresh and only
 	// uploads.
@@ -234,14 +237,24 @@ AnimationPreviewWindow::LoadMeshAs(
 			steps = editor::PlanAnimationLoad(source, !animations.empty());
 			plan  = editor::PlanAnimationDraws(mesh);
 
-			if (steps.bakeVat)
+			if (steps.needsFreshBake)
 			{
-				progress.Report(0, 0, "Baking animation textures...");
-				const assetlib::BVat vat =
-					game::EnsureVatBaked(assetlib::AssetStore(m_DataRoot), rel, animations);
-				posedMin   = vat.boundsMin;
-				posedMax   = vat.boundsMax;
-				posedKnown = true;
+				progress.Report(0, 0, "Checking the bake...");
+
+				// Asked, not enforced: a bake is seconds of CPU skinning, so a load that made one
+				// behind the user would be the panel deciding to spend their time. The answer is
+				// carried out to the offer below. Reading it here also *is* the load -- VatFreshness
+				// hands back what it parsed, so the fresh path costs one read and no bake.
+				auto vat = assetlib::BVat();
+				bakeState =
+					game::VatFreshness(assetlib::AssetStore(m_DataRoot), rel, animations, &vat);
+
+				if (bakeState == game::VatBakeState::kFresh)
+				{
+					posedMin   = vat.boundsMin;
+					posedMax   = vat.boundsMax;
+					posedKnown = true;
+				}
 			}
 
 			// The VAT tier already has this box from its bake; the skinned tier has to measure one.
@@ -285,6 +298,16 @@ AnimationPreviewWindow::LoadMeshAs(
 			window(),
 			QStringLiteral("Open Mesh"),
 			QStringLiteral("'%1' has no rig -- nothing to animate.").arg(name));
+		return;
+	}
+
+	// Nothing to draw from, so the load stops here rather than showing a bind pose that reads as
+	// the tier working badly. Baking is offered, and taking it re-enters this function -- which
+	// finds the bake fresh and goes on. Declining leaves whatever was already on screen, m_Source
+	// included, so a refused switch to VAT does not silently become a switch.
+	if (bakeState != game::VatBakeState::kFresh)
+	{
+		OfferBakeForTier(absolutePath, animations, name, bakeState);
 		return;
 	}
 
@@ -456,6 +479,104 @@ AnimationPreviewWindow::LoadMeshAs(
 
 		Clear();
 	}
+}
+
+namespace
+{
+	QString
+	BakeStateReason(const game::VatBakeState state)
+	{
+		switch (state)
+		{
+		case game::VatBakeState::kStale:
+			return QStringLiteral(
+				"its bake is out of date -- the mesh, the rig or the clips have moved since "
+				"(a git pull makes every bake stale here)");
+		case game::VatBakeState::kOtherClips:
+			return QStringLiteral("its bake was made from a different clip set");
+		case game::VatBakeState::kMissing:
+		case game::VatBakeState::kFresh:
+			break;
+		}
+		return QStringLiteral("it has not been baked yet");
+	}
+}
+
+bool
+AnimationPreviewWindow::BakeVat(
+	const std::filesystem::path& absolutePath,
+	const std::string&           animations)
+{
+	const QString name = QString::fromStdString(absolutePath.filename().string());
+
+	const auto rel =
+		absolutePath.lexically_relative(m_DataRoot).lexically_normal().generic_string();
+
+	// Off the UI thread: a bake is CPU skinning of every vertex at every frame, seconds on a dense
+	// rig. EnsureVatBaked is pure assetlib, which is what lets it run here at all.
+	const background::TaskResult result = background::RunWithLoadingScreen(
+		this,
+		QStringLiteral("Baking %1").arg(name),
+		[&](background::Progress& progress) {
+			progress.Report(0, 0, "Baking animation textures...");
+			(void)game::EnsureVatBaked(assetlib::AssetStore(m_DataRoot), rel, animations);
+		});
+
+	if (result.Cancelled())
+		return false;
+
+	if (result.Failed())
+	{
+		QMessageBox::warning(
+			window(),
+			QStringLiteral("Bake VAT"),
+			QStringLiteral("Could not bake '%1':\n\n%2").arg(name, result.error));
+		return false;
+	}
+
+	return true;
+}
+
+void
+AnimationPreviewWindow::BakeShownVat()
+{
+	if (!CanBakeVat())
+		return;
+
+	if (!BakeVat(m_MeshPath, m_Animations))
+		return;
+
+	// Only the VAT tier draws from what just changed. Reloading the skinned tier would re-upload a
+	// rig for a file it never samples.
+	if (m_Source == editor::AnimationSource::kVat)
+		LoadMeshAs(m_MeshPath, m_Animations, editor::AnimationSource::kVat);
+}
+
+void
+AnimationPreviewWindow::OfferBakeForTier(
+	const std::filesystem::path& absolutePath,
+	const std::string&           animations,
+	const QString&               name,
+	const game::VatBakeState     state)
+{
+	auto box = QMessageBox(window());
+	box.setIcon(QMessageBox::Information);
+	box.setWindowTitle(QStringLiteral("Preview as VAT"));
+	box.setText(
+		QStringLiteral("'%1' cannot be previewed as VAT: %2.").arg(name, BakeStateReason(state)));
+	box.setInformativeText(QStringLiteral(
+		"Baking skins every vertex of every frame into a texture pair, which takes a few "
+		"seconds. The Skinned tier needs no bake."));
+
+	QPushButton* bakeButton = box.addButton(QStringLiteral("Bake Now"), QMessageBox::AcceptRole);
+	box.addButton(QMessageBox::Cancel);
+	box.exec();
+
+	if (box.clickedButton() != bakeButton)
+		return;
+
+	if (BakeVat(absolutePath, animations))
+		LoadMeshAs(absolutePath, animations, editor::AnimationSource::kVat);
 }
 
 void

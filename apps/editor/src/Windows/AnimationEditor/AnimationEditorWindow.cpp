@@ -89,6 +89,7 @@ AnimationEditorWindow::AnimationEditorWindow(QWidget* parent, AnimationEditorWin
 			m_SourceSelector->setCurrentIndex(activeIndex);
 			m_SourceSelector->setEnabled(candidates.size() > 1);
 			m_TierSelector->setEnabled(!candidates.isEmpty());
+			m_BakeVatButton->setEnabled(m_Preview->CanBakeVat());
 			m_SyncingUi = false;
 		});
 
@@ -180,6 +181,14 @@ AnimationEditorWindow::BuildPropertiesColumn()
 			index == 0 ? editor::AnimationSource::kSkinned : editor::AnimationSource::kVat);
 	});
 	layout->addWidget(m_TierSelector);
+
+	m_BakeVatButton = new QPushButton(QStringLiteral("Bake VAT"), column);
+	m_BakeVatButton->setEnabled(false);
+	m_BakeVatButton->setToolTip(QStringLiteral(
+		"Skins every vertex of every frame into the texture pair the VAT tier draws from. "
+		"Takes a few seconds, so nothing does it for you."));
+	connect(m_BakeVatButton, &QPushButton::clicked, this, [this] { m_Preview->BakeShownVat(); });
+	layout->addWidget(m_BakeVatButton);
 
 	layout->addSpacing(8);
 	layout->addWidget(new QLabel(QStringLiteral("Clips"), column));
