@@ -169,9 +169,9 @@ TEST_CASE("a BEnv round-trips through a file", "[benv][io]")
 	std::filesystem::remove(path);
 }
 
-// A v1 .benv opens with the same magic and the same version-field layout, so the reference reader
-// sees exactly "version 1" -- and must refuse it by number, because what follows is KTX2 blobs that
-// would otherwise be read as string lengths.
+// A v1 .benv opens with the same magic, and what follows is KTX2 blobs. It carries no schema chunk
+// -- no container from before the schema does -- so the reader refuses it as such and never reads
+// on into the blobs.
 TEST_CASE("the reference reader refuses a v1 .benv and the other containers' files", "[benv][io]")
 {
 	core::io::ByteWriter v1;
@@ -179,7 +179,7 @@ TEST_CASE("the reference reader refuses a v1 .benv and the other containers' fil
 	v1.WritePod<uint16_t>(1);
 	v1.WritePod<uint16_t>(0);
 	v1.WritePod<uint64_t>(0);  // the v1 header continues; the reader must not get that far
-	CHECK_THROWS_WITH(deserializeEnv(v1.Take()), Catch::Matchers::ContainsSubstring("re-imported"));
+	CHECK_THROWS_WITH(deserializeEnv(v1.Take()), Catch::Matchers::ContainsSubstring("benv:"));
 
 	CHECK_THROWS_AS(deserializeEnv(serializeSky(SampleSky())), std::runtime_error);
 	CHECK_THROWS_AS(deserializeEnv(serializeEnvLighting(SampleLighting())), std::runtime_error);
@@ -189,8 +189,7 @@ TEST_CASE("the reference reader refuses a v1 .benv and the other containers' fil
 	CHECK_THROWS_AS(deserializeEnv(truncated), std::runtime_error);
 }
 
-// A major-version bump means the layout moved, so an old file must be refused rather than read as
-// if the fields still lined up. Patched in place: the alternative is keeping a stale writer around.
+// The version is a label; the one thing it decides is that a file from a newer engine is refused.
 TEST_CASE("an environment container from a future major version is refused", "[bsky][benvl][io]")
 {
 	auto bytes = serializeSky(SampleSky());

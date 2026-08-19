@@ -14,6 +14,9 @@ class TexturePreviewCache;
  * thumbnail instead, and a texture its decoded pixels -- looked up on every paint, requested on the
  * first miss, and filled in later, because neither a render nor a decode can be made to happen
  * inside data(). Everything else (folders and files the editor cannot draw) keeps the shell icon.
+ * An asset the editor cannot read shows a warning in place of its thumbnail and says why in its
+ * tooltip -- the container's own message, so a file from a newer engine or one no rule can convert
+ * is a thing you can see and act on, rather than a tile that stays on the shell icon forever.
  *
  * A QFileSystemModel subclass rather than a proxy: the views index straight into this model in a
  * dozen places, and a proxy would put a mapToSource in front of every one of them for nothing.
@@ -47,9 +50,9 @@ private:
 	[[nodiscard]] StampedPixmapCache*
 	CacheFor(const QString& path) const;
 
-	// Repaints the one tile whose thumbnail just arrived.
+	// Repaints the one tile whose thumbnail just arrived, or whose read just failed.
 	void
-	OnThumbnailReady(const QString& path);
+	OnThumbnailChanged(const QString& path);
 
 	AssetThumbnailCache* m_Thumbnails      = nullptr;
 	TexturePreviewCache* m_TexturePreviews = nullptr;

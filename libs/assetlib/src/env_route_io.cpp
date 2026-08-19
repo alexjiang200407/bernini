@@ -1,30 +1,35 @@
 #include "env_route_io.h"
 
-#include "string_io.h"
-
 #include <assetlib_structs/BEnv.h>
-#include <core/io/ByteReader.h>
-#include <core/io/ByteWriter.h>
+#include <core/str/string_pool.h>
 
 namespace assetlib
 {
 	void
-	writeRoute(core::io::ByteWriter& writer, const EnvMapRoute& route)
+	describeEnvRoute(schema::LayoutBuilder<EnvRouteRecord>& layout)
 	{
-		writeString(writer, route.source);
-		writeString(writer, route.baked);
-		writer.WritePod(route.stamp.size);
-		writer.WritePod(route.stamp.hash);
+		layout.AddField("sourceOffset", &EnvRouteRecord::sourceOffset)
+			.AddField("bakedOffset", &EnvRouteRecord::bakedOffset)
+			.AddField("stamp", &EnvRouteRecord::stamp);
+	}
+
+	EnvRouteRecord
+	packRoute(const EnvMapRoute& route, core::string_pool& pool)
+	{
+		EnvRouteRecord record{};
+		record.sourceOffset = pool.add(route.source);
+		record.bakedOffset  = pool.add(route.baked);
+		record.stamp        = route.stamp;
+		return record;
 	}
 
 	EnvMapRoute
-	readRoute(core::io::ByteReader& reader)
+	unpackRoute(const EnvRouteRecord& record, const core::string_pool& pool)
 	{
 		EnvMapRoute route;
-		route.source     = readString(reader);
-		route.baked      = readString(reader);
-		route.stamp.size = reader.ReadPod<uint64_t>();
-		route.stamp.hash = reader.ReadPod<uint64_t>();
+		route.source = pool.at(record.sourceOffset);
+		route.baked  = pool.at(record.bakedOffset);
+		route.stamp  = record.stamp;
 		return route;
 	}
 }

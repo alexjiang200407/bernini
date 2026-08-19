@@ -328,6 +328,21 @@ namespace assetlib::chunk
 				hook.run(reader, value);
 	}
 
+	/** What a container says about itself before any payload is read: its header and its schema. */
+	struct Inspection
+	{
+		Header         header;
+		schema::Schema stored;
+	};
+
+	/**
+	 * The header and schema of any chunk container, whatever its magic -- for a tool that asks what
+	 * a file is rather than loads it.
+	 * @throws std::runtime_error on a malformed table, or a file from before the schema chunk.
+	 */
+	[[nodiscard]] Inspection
+	inspect(std::span<const std::byte> bytes, std::string_view what);
+
 	/**
 	 * The bytes of the named chunks of `source`, and nothing else: the header, the chunk table,
 	 * the schema and each requested chunk are the only reads. A survey of every container in a

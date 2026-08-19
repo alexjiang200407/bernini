@@ -29,6 +29,11 @@ public:
 	[[nodiscard]] QPixmap
 	Lookup(const QString& path) const;
 
+	// Why `path`'s current content could not be produced, or empty: nothing has failed on it, or
+	// the failure had no reason to give, or the file has changed since.
+	[[nodiscard]] QString
+	GetRejection(const QString& path) const;
+
 	// Produces `path` unless a current copy is cached, one is already being produced, or producing
 	// it has already failed and the file has not changed since. Emits Ready on success.
 	virtual void
@@ -37,6 +42,10 @@ public:
 Q_SIGNALS:
 	void
 	Ready(const QString& path, const QPixmap& pixmap);
+
+	// `path`'s content could not be produced; `reason` is what a person should see, or empty.
+	void
+	Rejected(const QString& path, const QString& reason);
 
 protected:
 	explicit StampedPixmapCache(int budgetKb, QObject* parent = nullptr);
@@ -69,9 +78,12 @@ protected:
 	 *
 	 * The memory is one cache entry, so eviction under budget pressure can forget it: a wasted
 	 * retry, not a correctness problem. A success already stored under `stamp` is kept.
+	 *
+	 * @param reason What a person should see about the failure -- an unreadable container's own
+	 *        message -- or empty when there is nothing to say.
 	 */
 	void
-	Reject(const QString& path, qint64 stamp);
+	Reject(const QString& path, qint64 stamp, const QString& reason = {});
 
 	// Drops every cached pixmap and every claim.
 	void
@@ -85,6 +97,7 @@ private:
 	{
 		QPixmap pixmap;
 		qint64  stamp = 0;
+		QString rejection;  // set on a rejected entry, whose pixmap is null
 	};
 
 	mutable QCache<QString, Entry> m_Cache;
