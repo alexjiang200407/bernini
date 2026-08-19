@@ -50,7 +50,9 @@ path is the source of truth; when this doc disagrees, trust the struct, then fix
   `idl::cMaxPrimsPerMeshlet` (124) triangles. These are declared once in the IDL module
   [Constants.slang](libs/bgl/idl/src/Constants.slang) and consumed by both the CPU (generated
   [Constants.h](libs/bgl/src/idl/Constants.h)) and the shaders (`import idl.Constants`). A meshlet
-  carries a bounding sphere for culling.
+  carries a bounding sphere, written by the scene but read by nothing yet: culling today is
+  per-instance, against the submesh's sphere
+  ([CullInstances.slang](libs/bgl/shaders/src/CullInstances.slang)).
 
 * **A `Submesh` is pure geometry, and is 1:1 with a source submesh.** It carries one vertex layout,
   its meshlet/vertex/index ranges, and a local-space bounding sphere — and *nothing about shading*.
