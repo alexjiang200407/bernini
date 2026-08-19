@@ -95,8 +95,9 @@ How `bgl_idlgen` generates CPU/GPU structs, enums, and constants from one Slang 
 **[Skinned Meshes](./docs/skinning.md)**
 
 A rig posed on the GPU into a bone palette and drawn from it: the compute pass and its
-barrier-per-depth-level walk, why the previous pose is re-evaluated rather than remembered, and
-where the skeleton signature is checked (and why it cannot be checked in `bgl`).
+barrier-per-depth-level walk, why the previous pose is re-evaluated rather than remembered, where the
+skeleton signature is checked and why the culling box cannot be measured (both for the same reason —
+`bgl` does not link `assetlib`), and what the editor's Animation panel does with the tier.
 
 **[Vertex Animation Textures](./docs/vat.md)**
 

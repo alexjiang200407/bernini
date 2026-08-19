@@ -139,15 +139,24 @@ and portability.
       reactions must be full-body baked clips.
     - [ ] Tier boundary policy — anything needing those features must sit above the VAT boundary.
   - [ ] Skinned Meshes & Animation — hero tier and the near-distance tier of rank and file
-    - [ ] Bone palette buffer, GPU-resident, per-instance indexed.
+    - [x] Bone palette buffer, GPU-resident, per-instance indexed.
     - [ ] Pose sampling — fixed clip count at compile time, unused slots weighted to zero.
+      *One* clip per instance ships, sampled with nlerp between the two frames it falls between;
+      the weighted multi-slot form waits on the crossfade below.
     - [ ] Cross fade blending — slerp local rotations then walk the hierarchy, never blend model space.
-    - [ ] Local→model hierarchy walk — workgroup per unit, thread per bone, barrier per depth level,
+    - [x] Local→model hierarchy walk — workgroup per unit, thread per bone, barrier per depth level,
       group size 64.
     - [ ] GPU skinning (compute) to a transient vertex buffer — hero tier only; everything else skins
       in the vertex shader or fetches VAT.
-    - [ ] Double-buffer the bone palette — required for skinned motion vectors.
+    - [x] Skinned motion vectors — **not** by double-buffering the palette, which is what this line
+      used to call for. The pose pass writes two palettes per instance in one dispatch, at `time`
+      and at `prevTime`, and the mesh shader skins both: correct on the first frame and on an
+      instance spawned mid-frame, where a history buffer holds garbage. It holds only while time is
+      the sole input to a pose — a clip switched between frames reprojects through the wrong clip,
+      which is the state machine's problem to own. See [docs/skinning.md](docs/skinning.md).
     - [ ] Animation preview + playback at different LODs, including the skinned→VAT swap.
+      The editor's Animation panel previews either tier and switches between them by re-loading;
+      the runtime LOD swap is what remains.
     - [ ] Bone mask — small per-bone weight array, needed by additive flinch on the skinned tier.
   - [ ] State Machine — flat tables, tiny per-unit interpreter, ticked for all units regardless of
     tier and regardless of visibility.
