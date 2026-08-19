@@ -27,9 +27,9 @@ namespace editor
 	ToClipInfos(std::span<const game::ClipInfo> clips);
 
 	/**
-	 * What a load has to do differently for each tier. Both decisions follow from the source, kept
+	 * What a load has to do differently for each tier. Every decision follows from the source, kept
 	 * together so they cannot drift apart -- the panel reads them once rather than testing the source
-	 * at two points of a long function.
+	 * at three points of a long function.
 	 */
 	struct AnimationLoadSteps
 	{
@@ -40,6 +40,12 @@ namespace editor
 		// Only a VAT refusal is a bake's to answer. A skinned refusal is about the rig or the
 		// material, and offering to bake would send the user somewhere that cannot help.
 		bool offerBakeOnRefusal = false;
+
+		// Where the posed box comes from: the bake closed over one for the whole file, so VAT reads
+		// it, while the skinned tier measures one per mesh entry. That box frames the camera *and*
+		// culls the geom, so getting it from the wrong place hides the mesh rather than mis-aiming
+		// the camera.
+		bool framedByBake = false;
 	};
 
 	[[nodiscard]] AnimationLoadSteps

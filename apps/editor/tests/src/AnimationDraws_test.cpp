@@ -119,6 +119,7 @@ TEST_CASE("A load's tier-dependent steps all follow from the source", "[animatio
 		const auto steps = PlanAnimationLoad(AnimationSource::kVat, /*hasAnimations*/ true);
 		CHECK(steps.bakeVat);
 		CHECK(steps.offerBakeOnRefusal);
+		CHECK(steps.framedByBake);
 	}
 
 	SECTION("the skinned tier does none of them")
@@ -128,6 +129,11 @@ TEST_CASE("A load's tier-dependent steps all follow from the source", "[animatio
 		const auto steps = PlanAnimationLoad(AnimationSource::kSkinned, /*hasAnimations*/ true);
 		CHECK_FALSE(steps.bakeVat);
 		CHECK_FALSE(steps.offerBakeOnRefusal);
+
+		// It measures its own box instead. That box culls the geom as well as framing the camera,
+		// so reading it off a bake the skinned tier never made would hide the mesh, not just
+		// mis-aim the camera.
+		CHECK_FALSE(steps.framedByBake);
 	}
 
 	SECTION("with no clip file, neither tier does anything")
@@ -139,6 +145,7 @@ TEST_CASE("A load's tier-dependent steps all follow from the source", "[animatio
 			const auto steps = PlanAnimationLoad(source, /*hasAnimations*/ false);
 			CHECK_FALSE(steps.bakeVat);
 			CHECK_FALSE(steps.offerBakeOnRefusal);
+			CHECK_FALSE(steps.framedByBake);
 		}
 	}
 }

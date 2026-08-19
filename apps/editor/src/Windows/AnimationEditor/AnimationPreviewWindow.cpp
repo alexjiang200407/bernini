@@ -238,7 +238,7 @@ AnimationPreviewWindow::LoadMeshAs(
 			}
 
 			// The VAT tier already has this box from its bake; the skinned tier has to measure one.
-			if (!posedKnown && !animations.empty())
+			if (!steps.framedByBake && !animations.empty())
 			{
 				progress.Report(0, 0, "Measuring the pose...");
 
@@ -405,7 +405,7 @@ AnimationPreviewWindow::LoadMeshAs(
 		// Straight on, slightly above -- and arbitrary, because nothing here knows which way a rig
 		// faces. Authoring conventions disagree on the forward axis, so any fixed yaw shows some rigs
 		// a profile; the coyote is one of them, and orbiting once is the answer until bones can be
-		// tagged (see docs/plans/skinned-mesh.md).
+		// tagged (see docs/skinning.md).
 		m_Orbit.FocusOn(loaded.center, loaded.radius, 0.0f, glm::radians(15.0f));
 		UpdateCamera();
 		SetTime(0.0f);

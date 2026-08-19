@@ -65,6 +65,48 @@ not obvious from a signature. The headers linked below are the source of truth.
 | Pose | [`SkinnedPosePass`](libs/bgl/src/passes/SkinnedPosePass.h) | One workgroup per instance: sample, blend, walk the hierarchy, multiply by inverse bind |
 | Draw | `Forward_SkinnedMesh.slang` | Blends the bind-pose vertex bytes by the palette; position, normal and tangent through one matrix |
 
+## In the editor
+
+The Animation panel previews a rig through **either** tier, chosen by a "Preview As" selector
+(`AnimationEditorWindow`'s `m_TierSelector`). Both doors hand back a geom and the same clip table, so
+the transport, the clip list and the scrubber are the same code either way — which is the point of
+`RenderJob::time` being the only per-frame input.
+
+* **Switching tiers re-loads.** They are different uploads (`#vat` against `#skinned`), so the panel
+  drops its geometry and acquires again rather than swapping a handle. Not a limitation to route
+  around later: a tier is a property of the upload.
+
+* **The tier decides three things, and they live together.** `PlanAnimationLoad` returns them as one
+  `AnimationLoadSteps` so they cannot drift apart: whether to bake a `.bvat` first (the skinned tier
+  does not — seconds of CPU skinning for a texture pair it never samples, and it would make the
+  preview need a *bakeable* material), whether the posed box is read off that bake or measured, and
+  whether a refusal is one a bake could answer. Three fields rather than three tests of the source
+  spread through a long function, and the box is the one that punishes drift hardest: it culls the
+  geom as well as framing the camera, so taking it from the wrong place hides the mesh rather than
+  mis-aiming the view. This is the seam `editor_tests` drives; see below.
+
+* **The camera opens at a fixed yaw and elevation.** Nothing in the path knows which way a rig faces:
+  authoring conventions disagree on the forward axis, so any fixed yaw shows some rigs a profile —
+  the test coyote faces +X where glTF's convention is +Z, and opens side-on. Deriving it from bone
+  *names* was built and removed: it worked on that rig only because it is named in English, and
+  guessing which bone is a head is the wrong shape for something an author can state. The
+  replacement is a bone **tag**, which needs a `.bskel` format change and an answer to what happens to
+  a user's tags when the file is re-cooked from its glTF — its own feature, not this one. Until then,
+  orbiting once is the cost.
+
+* **Framing uses the posed box, never the bind pose.** See the culling contract below: it is the same
+  box and the same reason, and it is why the panel measures it inside its loading screen rather than
+  on the render thread.
+
+* **The panel itself is not covered by a test**, and this is a pre-existing gap rather than one the
+  skinned tier introduced: `RenderTargetWindow`'s constructor calls `CreateRenderTarget` with a real
+  `winId()` and `headless = false`, so no test can construct `AnimationPreviewWindow`. What *is*
+  covered is `PlanAnimationLoad` — the tier-dependent decisions lifted clear of the window, which is
+  the shape `apps/editor/CLAUDE.md` prescribes for exactly this. The uncovered part is the toggle, and
+  it has already shipped one bug that every automated gate passed: a tier switch that acquired the
+  geom through the new tier while creating the instance through the old one. A `headless` flag on
+  `RenderTargetWindowDesc` is the seam that closes it.
+
 ## Risky / Non-obvious Contracts
 
 * **The skeleton signature is checked in `gamelib`, not `bgl`.** Computing one needs `assetlib`, which
