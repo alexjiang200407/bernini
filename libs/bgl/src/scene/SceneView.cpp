@@ -192,12 +192,12 @@ namespace bgl
 	}
 
 	bool
-	SceneView::AdvanceShading() noexcept
+	SceneView::AdvanceTemporalEpoch() noexcept
 	{
-		const uint64_t epoch = m_ShadingEpoch + m_SceneRaw->GetShadingEpoch();
-		const bool     moved = epoch != m_DrawnShadingEpoch;
+		const uint64_t epoch = m_TemporalEpoch + m_SceneRaw->GetTemporalEpoch();
+		const bool     moved = epoch != m_DrawnTemporalEpoch;
 
-		m_DrawnShadingEpoch = epoch;
+		m_DrawnTemporalEpoch = epoch;
 		return moved;
 	}
 
@@ -598,7 +598,7 @@ namespace bgl
 		}
 
 		meta.overrides[submeshIndex] = material;
-		++m_ShadingEpoch;
+		++m_TemporalEpoch;
 
 		RefreshSubmeshInstance(instance.handle.index, submeshIndex);
 	}
@@ -609,7 +609,7 @@ namespace bgl
 		MeshMeta& meta = MetaFor(instance, submeshIndex, "ClearSubmeshMaterialOverride");
 
 		meta.overrides[submeshIndex] = MaterialHandle{};
-		++m_ShadingEpoch;
+		++m_TemporalEpoch;
 
 		RefreshSubmeshInstance(instance.handle.index, submeshIndex);
 	}
@@ -634,7 +634,7 @@ namespace bgl
 
 		m_EnvironmentMap.irradiance = resolve(desc.irradiance, "irradiance", true);
 		m_EnvironmentMap.prefilter  = resolve(desc.prefilter, "prefilter", true);
-		++m_ShadingEpoch;
+		++m_TemporalEpoch;
 	}
 
 	void
@@ -667,7 +667,7 @@ namespace bgl
 		}
 
 		m_Skybox = std::make_optional(std::move(desc));
-		++m_ShadingEpoch;
+		++m_TemporalEpoch;
 	}
 
 	void
