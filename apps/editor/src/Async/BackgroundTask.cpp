@@ -7,6 +7,7 @@
 #include <QPushButton>
 #include <QRunnable>
 #include <QThreadPool>
+#include <QTimer>
 #include <QWidget>
 
 namespace background
@@ -105,9 +106,10 @@ namespace background
 				std::function<void(Progress&)> work,
 				Progress                       progress,
 				QEventLoop*                    loop,
-				TaskResult*                    result) :
+				TaskResult*                    result,
+				std::atomic<bool>*             finished) :
 				m_Work(std::move(work)), m_Progress(std::move(progress)), m_Loop(loop),
-				m_Result(result)
+				m_Result(result), m_Finished(finished)
 			{
 				setAutoDelete(true);
 			}
@@ -136,6 +138,10 @@ namespace background
 					m_Result->error  = QStringLiteral("an unknown error occurred");
 				}
 
+				// Written before the quit is posted, and read by the screen's poll: whichever of the two
+				// reaches the UI thread first must see a result that is already complete.
+				m_Finished->store(true, std::memory_order_release);
+
 				// Queued, so quit() runs on the UI thread from inside the nested loop. Posting this
 				// before exec() begins is safe: the event waits in the queue until exec() drains it.
 				QMetaObject::invokeMethod(m_Loop, &QEventLoop::quit, Qt::QueuedConnection);
@@ -144,8 +150,9 @@ namespace background
 		private:
 			std::function<void(Progress&)> m_Work;
 			Progress                       m_Progress;
-			QEventLoop*                    m_Loop   = nullptr;
-			TaskResult*                    m_Result = nullptr;
+			QEventLoop*                    m_Loop     = nullptr;
+			TaskResult*                    m_Result   = nullptr;
+			std::atomic<bool>*             m_Finished = nullptr;
 		};
 	}
 
@@ -201,16 +208,30 @@ namespace background
 
 		dialog.setValue(0);
 
+		// A nested loop entered from a platform callback -- a drop, which is the one that bites -- need
+		// not service Qt's posted-event source, so the worker's quit() may never arrive. Timers are
+		// serviced there, so poll for completion as well; whichever lands first ends the loop.
+		auto finished = std::atomic<bool>(false);
+
+		QTimer poll;
+		poll.setInterval(30);
+		QObject::connect(&poll, &QTimer::timeout, &dialog, [&loop, &finished]() {
+			if (finished.load(std::memory_order_acquire))
+				loop.quit();
+		});
+		poll.start();
+
 		// A private pool, so an import never queues behind a texture-preview decode.
 		//
-		// Declared last, so it is destroyed first: its destructor waits for the task, and `loop` and
-		// `result` must outlive that wait. Normally the task is long finished by then, but
+		// Declared last, so it is destroyed first: its destructor waits for the task, and `loop`,
+		// `result` and `finished` must outlive that wait. Normally the task is long finished by then, but
 		// QCoreApplication::exit() -- a session logoff -- exits every event loop on this thread,
 		// including the nested one below, while the worker is still running. The wait is what keeps it
 		// from writing into a dead stack frame.
 		QThreadPool pool;
 		pool.setMaxThreadCount(1);
-		pool.start(new WorkTask(work, Progress(&relay, source.get_token()), &loop, &result));
+		pool.start(
+			new WorkTask(work, Progress(&relay, source.get_token()), &loop, &result, &finished));
 
 		// Spins rather than blocks, so the DX12 viewports keep painting behind the dialog.
 		loop.exec();
