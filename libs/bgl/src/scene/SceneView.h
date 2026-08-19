@@ -246,9 +246,9 @@ namespace bgl
 
 		/**
 		 * Whether this view has changed in a way no motion vector describes -- a material's
-		 * contents, a submesh's binding, the environment -- since the previous call, and records
-		 * this draw as having seen it. A frame that sees it true cannot reproject the frames before
-		 * it and has to drop them.
+		 * contents, a submesh's binding, the environment, an instance placed or deleted -- since
+		 * the previous call, and records this draw as having seen it. A frame that sees it true
+		 * cannot reproject the frames before it and has to drop them.
 		 */
 		[[nodiscard]] bool
 		AdvanceTemporalEpoch() noexcept;

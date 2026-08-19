@@ -389,6 +389,10 @@ namespace bgl
 			// m_SceneEpoch is deliberately not advanced: these instances are current, but their
 			// siblings may not be, and marking the view clean would strand them on a stale material.
 
+			// An instance that was not there last frame has no history to reproject from, and an
+			// animated one arrives posed on a clip the previous frame never drew.
+			++m_TemporalEpoch;
+
 			auto instanceHandle   = MeshInstanceHandle();
 			instanceHandle.handle = meshHandle;
 
@@ -436,6 +440,7 @@ namespace bgl
 		}
 
 		m_MeshBuffer.EraseByIndex(meshIndex);
+		++m_TemporalEpoch;
 
 		// The erases above can move any dense index, selected or not -- but with no mark
 		// anywhere, there is no list to stale.

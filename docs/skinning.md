@@ -29,8 +29,13 @@ not obvious from a signature. The headers linked below are the source of truth.
   and on an instance spawned mid-frame, where a history buffer holds garbage, and it needs no
   ping-pong.
 
-  **It holds only while time is the sole input to a pose.** A clip switched between frames would
-  reproject through the wrong clip. Whoever adds a state machine or a blend owns that.
+  **It holds only while time is the sole input to a pose.** A clip switched between frames
+  reprojects through the wrong clip -- the pose at `prevTime` is evaluated on the clip the instance
+  now holds, which nothing drew. A switch is destroy + recreate, so the view's temporal epoch moves
+  and the TAA resolve takes that frame whole rather than reprojecting into it (see
+  [Temporal Antialiasing](docs/taa.md)); what that buys is one unaccumulated frame instead of a
+  ghost. A *blend* between clips has no such edge to hang off, and whoever adds a state machine
+  owns it.
 
 * **Skinning happens in the mesh shader, not a compute pre-pass.** There is no transient skinned
   vertex buffer: nothing yet needs to *read back* skinned positions (physics, attachments), and until
