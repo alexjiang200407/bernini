@@ -1,7 +1,6 @@
 #include "ContentExplorerWindow.h"
 
 #include "Import/drop_import.h"
-#include "Project/Project.h"
 #include "Windows/ContentExplorer/AssetOperations.h"
 #include "Windows/ContentExplorer/asset_rules.h"
 #include "util/asset_paths.h"

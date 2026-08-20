@@ -152,7 +152,7 @@ namespace
 	}
 }
 
-// Each part lands in its category by default: that is the layout Project::Create scaffolds and every
+// Each part lands in its category by default: that is the layout assetlib::Project::Create scaffolds and every
 // reference in the project is written against.
 TEST_CASE("Each part defaults to its own category", "[envimportdialog]")
 {

@@ -32,7 +32,7 @@ target_precompile_headers(assetlib
 	PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src/pch.h
 )
 
-find_package(nlohmann_json CONFIG REQUIRED)     # required by tinygltf
+find_package(nlohmann_json CONFIG REQUIRED)     # the project file, and tinygltf
 find_package(Stb REQUIRED)                      # image decoding used by tinygltf
 find_path(TINYGLTF_INCLUDE_DIRS "tiny_gltf.h")  # header-only glTF 2.0 loader
 find_package(meshoptimizer CONFIG REQUIRED)     # vertex optimization + meshlet generation
@@ -127,6 +127,7 @@ if (BUILD_TESTS)
 		PRIVATE
 			assetlib
 			core
+			nlohmann_json::nlohmann_json
 			Catch2::Catch2
 			Catch2::Catch2WithMain
 	)
