@@ -579,9 +579,8 @@ TEST_CASE("a skinned submesh culls by its posed box, not its bind pose", "[skinn
 
 	const std::array<bgl::MaterialHandle, 1> materials = { { OpaquePbr(scene) } };
 
-	// Off-center and two orders of magnitude past the fixture's bind pose, which is the shape of the
-	// real failure: a rig whose clips are authored in different units poses far outside the box it
-	// was cooked with, and culling by that box makes it vanish.
+	// Off-center and far past the fixture's bind pose, which is the shape of the real failure: a clip
+	// carrying root motion poses well outside the bind box, and culling by that box makes it vanish.
 	const auto posed =
 		assetlib::Bounds{ glm::vec3(-100.0f, 0.0f, -100.0f), glm::vec3(100.0f, 300.0f, 100.0f) };
 

@@ -58,11 +58,20 @@ not obvious from a signature. The headers linked below are the source of truth.
   the CPU reference this path is measured against. Weights are otherwise used as authored: the
   importer already normalises anything summing to nonzero.
 
+* **A bone's transform is the product of every node between it and its bone parent, at every frame.**
+  glTF lets ordinary nodes sit between two joints, and a DCC export routinely puts one above the root
+  joint — an armature carrying the rig's unit conversion and the clip's travel. Composing that chain
+  into the *bind pose* alone is not enough: the joint below usually carries a redundant TRS track of
+  its own, and the first frame of any clip then overwrites what the chain contributed. So
+  `importAnimations` walks the same chain `importSkin` does, evaluating each node at the sample time.
+  This is where a clip's `rootMotion` comes from on such a rig, and it is why a travelling clip is not
+  flagged `loop` — its last frame no longer repeats its first.
+
 ## The path, end to end
 
 | Stage | Where | What it does |
 |---|---|---|
-| Import | `assetlib` | A glTF skin becomes `.bskel` (bones, topologically sorted, with inverse binds) + `.banim` (clips resampled to a fixed rate, frame-major local TRS) + `joints0`/`weights0` on the `.bmesh` |
+| Import | `assetlib` | A glTF skin becomes `.bskel` (bones, topologically sorted, with inverse binds, each composed from its whole node chain) + `.banim` (clips resampled to a fixed rate, frame-major local TRS, composed the same way) + `joints0`/`weights0` on the `.bmesh` |
 | Bound | [`assetlib::posedBounds`](libs/assetlib/include/assetlib/skinning.h) | Skins every vertex at every frame for the box the geom culls by |
 | Acquire | [`AssetManager::AcquireSkinnedMesh`](libs/gamelib/include/gamelib/AssetManager.h) | Reads the three containers, checks the clip set still matches its rig, bounds the pose unless given a box, uploads |
 | Upload | [`IScene::AddSkinnedMeshGeom`](libs/bgl/include/bgl/IScene.h) | Bones, clip table and sample pool become scene buffers; per-bone depth is derived here |
@@ -133,9 +142,9 @@ the transport, the clip list and the scrubber are the same code either way — w
 
 * **Culling bounds are the caller's posed box, and `bgl` cannot measure it.** `AddSkinnedMeshGeom`
   takes one and derives every submesh's sphere from it, the same rule VAT follows. The bind pose is
-  not a substitute: it stops holding the moment a limb moves, and a rig whose clips are authored in
-  different units than its bind pose poses two orders of magnitude larger, so bind-pose culling makes
-  it disappear as soon as the camera turns. Measuring the box means skinning a vertex, which means
+  not a substitute: it stops holding the moment a limb moves, and a clip carrying root motion walks
+  the whole rig out of it, so bind-pose culling makes it disappear as soon as it does. Measuring the
+  box means skinning a vertex, which means
   decoding a vertex layout — `assetlib`, which `bgl` does not link. `assetlib::posedBounds` is that
   walk (every vertex at every frame, the same one `bakeVat` makes), and `AcquireSkinnedMesh` makes it
   unless the caller hands over a box it already has. The editor does: the walk is seconds on a dense

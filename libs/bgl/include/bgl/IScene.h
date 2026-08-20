@@ -304,9 +304,8 @@ namespace bgl
 		 * bones to follow and would draw its bind pose while the rest of the mesh moved.
 		 *
 		 * Every submesh's culling sphere comes from `posedBounds`, not its bind pose -- the same rule
-		 * VAT follows, and for the same reason: the bind pose's box does not hold once a limb moves,
-		 * and a rig whose clips are authored in different units than its bind pose poses two orders of
-		 * magnitude larger, so bind-pose culling makes it vanish. bgl cannot measure the box itself:
+		 * VAT follows, and for the same reason: the bind pose's box stops holding once a limb moves or
+		 * a clip's root motion carries the rig out of it. bgl cannot measure the box itself:
 		 * skinning a vertex means decoding a vertex layout, which lives in assetlib. Whoever loaded
 		 * the containers measures it -- `assetlib::posedBounds` is that walk, and gamelib's acquire
 		 * makes it.

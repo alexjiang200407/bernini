@@ -189,9 +189,8 @@ AnimationPreviewWindow::LoadMeshAs(
 	std::string               animations = animationsRelPath;
 
 	// The box every pose of every clip falls in: what the camera frames, and what the skinned geom
-	// culls by. A bind-pose box is not it -- a rig whose clips are authored in different units than
-	// its bind pose poses two orders of magnitude larger, so the bind pose puts the camera inside the
-	// model and culls the mesh away as soon as it moves.
+	// culls by. A bind-pose box is not it -- a clip carrying root motion walks the rig clean out of
+	// it, so the camera frames the wrong place and the mesh culls away as soon as it travels.
 	//
 	// VAT reads the box its bake already closed over, one for the file. The skinned tier measures
 	// one per animated mesh entry, off the UI and render threads because posedBounds skins every

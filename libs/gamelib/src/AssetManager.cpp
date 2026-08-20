@@ -546,9 +546,8 @@ namespace game
 					clip.loop != 0);
 			}
 
-			// The box the geom culls by. Not the bind pose's: a rig whose clips are authored in
-			// different units than its bind pose poses two orders of magnitude larger, and culling
-			// by the bind pose makes it vanish as soon as the camera moves.
+			// The box the geom culls by. Not the bind pose's: a clip carrying root motion walks the
+			// rig out of that box, and culling by it makes the mesh vanish as soon as it does.
 			const assetlib::Bounds bounds =
 				posedBounds ? *posedBounds :
 							  assetlib::posedBounds(mesh, meshIndex, skeleton, animations);
