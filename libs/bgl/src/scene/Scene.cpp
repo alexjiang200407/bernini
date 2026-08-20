@@ -906,12 +906,11 @@ namespace bgl
 			const uint32_t       index = submesh.material;
 			const MaterialHandle bound =
 				index < materials.size() ? materials[index] : MaterialHandle{};
-			if (!bound.IsValid() || bound.materialType != MaterialType::kPBR ||
-			    bound.layerType != LayerType::kOpaque)
+			if (!AcceptsMaterial(GeomType::kSkinnedMesh, bound))
 			{
 				throw SceneError(
-					"AddSkinnedMeshGeom: every submesh needs an opaque kPBR material -- the "
-					"skinned pipeline has no other variant yet");
+					"AddSkinnedMeshGeom: every submesh needs a kPBR material that is not blended "
+					"-- the skinned pipeline has no blended variant yet");
 			}
 		}
 
@@ -1543,13 +1542,11 @@ namespace bgl
 		{
 			throw SceneError("Invalid MaterialHandle passed to SetSubmeshMaterial");
 		}
-		if (geom.geomType != GeomType::kStaticMesh &&
-		    (material.materialType != MaterialType::kPBR ||
-		     material.layerType != LayerType::kOpaque))
+		if (!AcceptsMaterial(geom.geomType, material))
 		{
 			throw SceneError(
-				"SetSubmeshMaterial: animated geometry takes only an opaque kPBR material -- "
-				"neither the VAT nor the skinned pipeline has another variant yet");
+				"SetSubmeshMaterial: animated geometry takes an opaque kPBR material, and a cutout "
+				"or hashed one when it is skinned -- neither pipeline has a blended variant");
 		}
 
 		const idl::RangeWithCount& submeshes = m_Geoms[geom.handle.index].submeshes;

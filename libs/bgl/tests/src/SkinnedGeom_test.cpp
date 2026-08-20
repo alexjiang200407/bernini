@@ -278,17 +278,28 @@ TEST_CASE("AddSkinnedMeshGeom uploads a rig's bones, clips and samples", "[skinn
 		}
 	}
 
-	SECTION("a skinned geom's material can be rebound, opaque kPBR only")
+	SECTION("a skinned geom's material can be rebound, opaque or cutout kPBR")
 	{
 		auto rebound           = bgl::PbrMaterialDesc();
 		rebound.metallicFactor = 0.25f;
 		CHECK_NOTHROW(scene->SetSubmeshMaterial(geom, 0, scene->CreatePbrMaterial(rebound)));
 
+		// A cutout discards; it does not blend, so it still draws in the opaque bucket and needs no
+		// sorting. An eye highlight on a rig is the case that asked for it.
 		auto masked      = bgl::PbrMaterialDesc();
 		masked.layerType = bgl::LayerType::kMask;
+		CHECK_NOTHROW(scene->SetSubmeshMaterial(geom, 0, scene->CreatePbrMaterial(masked)));
+
+		auto blended      = bgl::PbrMaterialDesc();
+		blended.layerType = bgl::LayerType::kBlend;
 		CHECK_THROWS_AS(
-			scene->SetSubmeshMaterial(geom, 0, scene->CreatePbrMaterial(masked)),
+			scene->SetSubmeshMaterial(geom, 0, scene->CreatePbrMaterial(blended)),
 			bgl::SceneError);
+
+		// Hashed too: its coverage is stochastic, but its depth is not, so it is an opaque shape.
+		auto hashed      = bgl::PbrMaterialDesc();
+		hashed.layerType = bgl::LayerType::kHashed;
+		CHECK_NOTHROW(scene->SetSubmeshMaterial(geom, 0, scene->CreatePbrMaterial(hashed)));
 	}
 }
 
@@ -441,21 +452,38 @@ TEST_CASE("AddSkinnedMeshGeom refuses a rig the pose pass could not walk", "[ski
 		CHECK_THROWS_AS(add(MakeRig(), MakeClips(), false), bgl::SceneError);
 	}
 
-	SECTION("a submesh whose material is not opaque kPBR")
+	SECTION("a submesh whose material blends, which the skinned pipeline has no variant for")
 	{
-		auto cutout                                     = bgl::PbrMaterialDesc();
-		cutout.layerType                                = bgl::LayerType::kMask;
-		const std::array<bgl::MaterialHandle, 1> masked = { { scene->CreatePbrMaterial(cutout) } };
+		auto blend                                       = bgl::PbrMaterialDesc();
+		blend.layerType                                  = bgl::LayerType::kBlend;
+		const std::array<bgl::MaterialHandle, 1> blended = { { scene->CreatePbrMaterial(blend) } };
 
 		CHECK_THROWS_AS(
 			scene->AddSkinnedMeshGeom(
 				MakeSkinnedMesh(),
 				0,
-				masked,
+				blended,
 				MakeRig(),
 				MakeClips(),
 				c_AnyPose),
 			bgl::SceneError);
+	}
+
+	SECTION("but a cutout submesh is uploaded, since a discard is still an opaque draw")
+	{
+		auto cutout                                     = bgl::PbrMaterialDesc();
+		cutout.layerType                                = bgl::LayerType::kMask;
+		const std::array<bgl::MaterialHandle, 1> masked = { { scene->CreatePbrMaterial(cutout) } };
+
+		const bgl::GeomHandle geom = scene->AddSkinnedMeshGeom(
+			MakeSkinnedMesh(),
+			0,
+			masked,
+			MakeRig(),
+			MakeClips(),
+			c_AnyPose);
+
+		CHECK(geom.IsValid());
 	}
 
 	SECTION("a meshIndex past the mesh table")
@@ -553,14 +581,14 @@ TEST_CASE("a refused skinned add leaves the scene's arenas untouched", "[skinned
 		MakeClips(),
 		c_AnyPose));
 
-	auto masked                                              = bgl::PbrMaterialDesc();
-	masked.layerType                                         = bgl::LayerType::kMask;
-	const std::array<bgl::MaterialHandle, 1> maskedMaterials = { { scene->CreatePbrMaterial(
-		masked) } };
+	auto blend                                                = bgl::PbrMaterialDesc();
+	blend.layerType                                           = bgl::LayerType::kBlend;
+	const std::array<bgl::MaterialHandle, 1> blendedMaterials = { { scene->CreatePbrMaterial(
+		blend) } };
 	CHECK_THROWS(scene->AddSkinnedMeshGeom(
 		MakeSkinnedMesh(),
 		0,
-		maskedMaterials,
+		blendedMaterials,
 		MakeRig(),
 		MakeClips(),
 		c_AnyPose));
@@ -579,9 +607,8 @@ TEST_CASE("a skinned submesh culls by its posed box, not its bind pose", "[skinn
 
 	const std::array<bgl::MaterialHandle, 1> materials = { { OpaquePbr(scene) } };
 
-	// Off-center and two orders of magnitude past the fixture's bind pose, which is the shape of the
-	// real failure: a rig whose clips are authored in different units poses far outside the box it
-	// was cooked with, and culling by that box makes it vanish.
+	// Off-center and far past the fixture's bind pose, which is the shape of the real failure: a clip
+	// carrying root motion poses well outside the bind box, and culling by that box makes it vanish.
 	const auto posed =
 		assetlib::Bounds{ glm::vec3(-100.0f, 0.0f, -100.0f), glm::vec3(100.0f, 300.0f, 100.0f) };
 

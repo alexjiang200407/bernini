@@ -13,9 +13,8 @@ namespace assetlib
 	 * The tightest box holding mesh `meshIndex` in every pose of every clip: every vertex skinned at
 	 * every frame, which is the same walk bakeVat makes and the same answer it arrives at.
 	 *
-	 * A bind-pose box is not a substitute. A rig whose clips are authored in different units than its
-	 * bind pose -- a common export -- poses one to two orders of magnitude larger, so a camera framed
-	 * or a culling volume sized by the bind pose is wrong by that factor.
+	 * A bind-pose box is not a substitute: a pose reaches outside it the moment a limb extends, and a
+	 * clip carrying root motion walks the whole rig out of it.
 	 *
 	 * Bounding the *bones* instead is tempting and much cheaper, but it is not close enough to use:
 	 * applying every bone's matrix to the whole bind-pose box over-estimates by ~3x on a rig at that

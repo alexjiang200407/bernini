@@ -410,11 +410,10 @@ TEST_CASE("posedBounds measures the pose, not the bind pose", "[skinning][bounds
 	const auto still =
 		assetlib::Transform{ glm::vec3(0.0f), glm::quat(1.0f, 0.0f, 0.0f, 0.0f), glm::vec3(1.0f) };
 
-	SECTION("a clip authored at a different scale than its bind pose")
+	SECTION("a clip that scales the root far past its bind pose")
 	{
-		// The failure this exists for: an export whose clips are in centimetres against a bind pose
-		// in metres poses two orders of magnitude larger, and a bind-pose box is then useless for
-		// framing a camera or sizing a culling volume. The real coyote does exactly this.
+		// A bind-pose box is no use for framing a camera or sizing a culling volume once a clip
+		// leaves it, and a root scale is the bluntest way to leave it.
 		animations.samples.push_back(still);
 		animations.samples.push_back(
 			{ glm::vec3(0.0f), glm::quat(1.0f, 0.0f, 0.0f, 0.0f), glm::vec3(100.0f) });

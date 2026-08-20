@@ -143,10 +143,16 @@ namespace bgl
 			return PsoType::kOpaque_VatMesh_PBR;
 
 		// Constrained at every door that binds a material to skinned geometry, exactly as VAT is
-		// above, so any other type reaching here is bgl's own bug.
+		// above, so any other type reaching here is bgl's own bug. Cutout and hashed join opaque
+		// because both still draw an opaque shape -- they discard, they do not blend, so neither
+		// needs sorting. Only kBlend is missing, and it is the one that would.
 		case GeomType::kSkinnedMesh:
-			if (material != MaterialType::kPBR || cutout || blend || hashed)
-				gfatal("Skinned geometry is only drawable with an opaque kPBR material");
+			if (material != MaterialType::kPBR || blend)
+				gfatal("Skinned geometry is not drawable with a blended kPBR material");
+			if (cutout)
+				return PsoType::kAlphaTest_SkinnedMesh_PBR;
+			if (hashed)
+				return PsoType::kHashedAlpha_SkinnedMesh_PBR;
 			return PsoType::kOpaque_SkinnedMesh_PBR;
 
 		case GeomType::kInvalid:
@@ -154,6 +160,22 @@ namespace bgl
 		default:
 			gfatal("Invalid GeomType");
 		}
+	}
+
+	bool
+	AcceptsMaterial(const GeomType geomType, const MaterialHandle material) noexcept
+	{
+		if (geomType == GeomType::kStaticMesh)
+			return true;
+
+		if (!material.IsValid() || material.materialType != MaterialType::kPBR)
+			return false;
+
+		if (material.layerType == LayerType::kOpaque)
+			return true;
+
+		return geomType == GeomType::kSkinnedMesh &&
+		       (material.layerType == LayerType::kMask || material.layerType == LayerType::kHashed);
 	}
 
 	bool
