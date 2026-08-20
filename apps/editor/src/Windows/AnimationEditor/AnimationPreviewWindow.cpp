@@ -5,6 +5,7 @@
 #include "Render/Renderer.h"
 #include "Windows/AnimationEditor/animation_bindings.h"
 #include "Windows/AnimationEditor/animation_draws.h"
+#include "Windows/MaterialEditor/material_io.h"
 #include "util/mime_files.h"
 
 #include <QDragEnterEvent>
@@ -17,10 +18,8 @@
 #include <QWheelEvent>
 
 #include <assetlib/AssetStore.h>
-#include <assetlib/bmaterial_io.h>
 #include <assetlib/bmesh_io.h>
 #include <assetlib/bskel_io.h>
-#include <assetlib/material_bake.h>
 #include <assetlib/skinning.h>
 #include <assetlib_structs/BMesh.h>
 #include <assetlib_structs/Bounds.h>
@@ -608,8 +607,9 @@ AnimationPreviewWindow::OfferBakeForRefusal(
 	if (bakeButton == nullptr || box.clickedButton() != bakeButton)
 		return;
 
-	auto desc     = assetlib::MaterialBakeDesc();
-	desc.dataRoot = m_DataRoot;
+	auto files = QStringList();
+	files.reserve(static_cast<qsizetype>(loose.size()));
+	for (const std::string& relPath : loose) files << QString::fromStdString(relPath);
 
 	// One loading screen over all of them; compositing is file-only, so it runs off the UI
 	// thread like the Content Explorer's bake. Baking reads each material off disk, so the
@@ -617,15 +617,7 @@ AnimationPreviewWindow::OfferBakeForRefusal(
 	const background::TaskResult result = background::RunWithLoadingScreen(
 		this,
 		QStringLiteral("Baking materials"),
-		[&](background::Progress& progress) {
-			for (const std::string& relPath : loose)
-			{
-				progress.Report(0, 0, QStringLiteral("Baking %1...").arg(relPath.c_str()));
-				auto material = assetlib::loadMaterial(m_DataRoot / relPath);
-				assetlib::bakeMaterial(material, desc, progress.Cancellation());
-				assetlib::saveMaterial(material, m_DataRoot / relPath);
-			}
-		},
+		[&](background::Progress& progress) { editor::BakeMaterials(m_DataRoot, files, progress); },
 		background::Cancellable::kYes);
 
 	if (result.Cancelled())

@@ -43,6 +43,26 @@ namespace editor
 		fileActions->addWidget(widgets.saveAs);
 		propertiesLayout->addLayout(fileActions);
 
+		// The whole mesh rather than the selected submesh: a mesh with a dozen submeshes is a dozen
+		// trips through the selector otherwise. Submeshes wearing one material share a graph, so the
+		// file is written once however many of them name it.
+		widgets.saveAll = new QPushButton(QStringLiteral("Save All"), propertiesPanel);
+		widgets.saveAll->setToolTip(QStringLiteral(
+			"Write every material of this mesh.\nA submesh whose graph has no file yet is skipped "
+			"-- "
+			"Save As gives it one."));
+
+		widgets.bakeAll = new QPushButton(QStringLiteral("Bake All"), propertiesPanel);
+		widgets.bakeAll->setToolTip(QStringLiteral(
+			"Save every material of this mesh, then composite each down to its baked "
+			"textures.\nA bake reads the routes off disk, so it saves first."));
+
+		auto* meshActions = new QHBoxLayout();
+		meshActions->setContentsMargins(0, 0, 0, 0);
+		meshActions->addWidget(widgets.saveAll);
+		meshActions->addWidget(widgets.bakeAll);
+		propertiesLayout->addLayout(meshActions);
+
 		widgets.setDefault =
 			new QPushButton(QStringLiteral("Set Default Material"), propertiesPanel);
 		widgets.setDefault->setToolTip(QStringLiteral(
@@ -85,7 +105,7 @@ namespace editor
 		propertiesLayout->addWidget(widgets.outputSelector);
 
 		// The material's current baked textures, if any. Read-only: the graph authors the routes they are
-		// composited from, and the Content Explorer's Bake is what rewrites them.
+		// composited from, and Bake All above -- or the Content Explorer's Bake -- is what rewrites them.
 		widgets.bakedTextures = new QLabel(propertiesPanel);
 		widgets.bakedTextures->setTextInteractionFlags(Qt::TextSelectableByMouse);
 		widgets.bakedTextures->setWordWrap(true);

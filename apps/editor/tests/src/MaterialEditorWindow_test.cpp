@@ -149,3 +149,117 @@ TEST_CASE(
 	REQUIRE_FALSE(summary.isEmpty());
 	CHECK(summary.contains(QString::fromUtf8("—")));
 }
+
+// Save All and Bake All act on the mesh rather than on the selected submesh, and the two rules that
+// decides are here rather than in the window: which files a batch touches, and what it says
+// afterwards. The window itself cannot be driven -- both end in a modal, and without a graphics
+// device there are no submesh graphs to batch over in the first place.
+
+TEST_CASE("A material two submeshes wear is one file to bake", "[materialeditor]")
+{
+	// Submeshes sharing a material share a graph, so the set hands the same path over once per
+	// *graph* -- but a Save As can put a second graph on a path another already holds. Baking it
+	// twice would decode, resize and re-encode every map a second time to write what is already
+	// there.
+	const QStringList paths = {
+		"C:/Data/Materials/Leaf.bmaterial",
+		"C:/Data/Materials/Bark.bmaterial",
+		"C:/Data/Materials/Leaf.bmaterial",
+	};
+
+	CHECK(
+		editor::UniqueMaterialFiles(paths) ==
+		QStringList{ "C:/Data/Materials/Leaf.bmaterial", "C:/Data/Materials/Bark.bmaterial" });
+}
+
+TEST_CASE("The same file spelled two ways is one file to bake", "[materialeditor]")
+{
+	// The mesh's own reference is resolved against the data root; a file dialog hands one back
+	// verbatim. Compared as strings these are two files, and the bake would run twice.
+	const QStringList paths = {
+		"C:/Data/Materials/Leaf.bmaterial",
+		"C:/Data/Textures/../Materials/Leaf.bmaterial",
+	};
+
+	CHECK(editor::UniqueMaterialFiles(paths).size() == 1);
+}
+
+TEST_CASE("A graph with no file is nothing to bake", "[materialeditor]")
+{
+	// The default sphere, and any submesh the mesh never bound. Save As is what gives one a file;
+	// until then there is no path to hand a bake.
+	CHECK(
+		editor::UniqueMaterialFiles({ QString(), "C:/Data/Materials/Leaf.bmaterial", QString() })
+			.size() == 1);
+}
+
+TEST_CASE("Nothing is said when every material was written", "[materialeditor]")
+{
+	// The common case, and the one a dialog would only get in the way of: the panel's own refresh --
+	// the path label, the stale marker -- is the report.
+	auto clean  = editor::MaterialSaveResult();
+	clean.saved = 3;
+
+	CHECK(editor::MaterialSaveSummary(clean).isEmpty());
+}
+
+TEST_CASE("A skipped submesh says how to give it a file", "[materialeditor]")
+{
+	// Silently writing four of five materials is the failure mode this exists to prevent: the user
+	// has to be told the fifth was left, and that Save As is what fixes it.
+	auto skipped    = editor::MaterialSaveResult();
+	skipped.saved   = 4;
+	skipped.unsaved = 1;
+
+	const QString summary = editor::MaterialSaveSummary(skipped);
+
+	REQUIRE_FALSE(summary.isEmpty());
+	CHECK(summary.contains("4 materials"));
+	CHECK(summary.contains("1 submesh"));
+	CHECK_FALSE(summary.contains("1 submeshes"));
+	CHECK(summary.contains("Save As"));
+}
+
+TEST_CASE("A material that could not be written is named", "[materialeditor]")
+{
+	// A read-only file or a data root that has gone. The others are still written -- one bad path
+	// must not cost the rest their save -- so the summary has to say which one it was.
+	auto failed   = editor::MaterialSaveResult();
+	failed.saved  = 1;
+	failed.failed = { "C:/Data/Materials/Leaf.bmaterial" };
+
+	const QString summary = editor::MaterialSaveSummary(failed);
+
+	CHECK(summary.contains("1 material"));
+	CHECK(summary.contains("Leaf.bmaterial"));
+}
+
+TEST_CASE("Nothing written is not reported as saving nothing", "[materialeditor]")
+{
+	// Every graph skipped -- the default sphere, or a mesh nothing has been saved for yet. "Saved 0
+	// materials." leads with a non-event; what the user needs is the reason and the way out.
+	auto none    = editor::MaterialSaveResult();
+	none.unsaved = 2;
+
+	const QString summary = editor::MaterialSaveSummary(none);
+
+	CHECK_FALSE(summary.contains("Saved 0"));
+	CHECK(summary.startsWith("Skipped 2 submeshes"));
+}
+
+TEST_CASE("A material the mesh could not be made to name is reported once", "[materialeditor]")
+{
+	// The `.bmaterial` landed and the `.bmesh` did not, which is neither a save failure nor a skip:
+	// the material is on disk, and the mesh still points somewhere else. Reported in the same summary
+	// rather than in a modal per submesh -- whatever stopped the write is the mesh file, which every
+	// submesh of the graph shares.
+	auto partial       = editor::MaterialSaveResult();
+	partial.saved      = 2;
+	partial.unattached = { "C:/Data/Materials/Leaf.bmaterial" };
+
+	const QString summary = editor::MaterialSaveSummary(partial);
+
+	CHECK(summary.contains("Saved 2 materials"));
+	CHECK(summary.contains("Leaf.bmaterial"));
+	CHECK_FALSE(summary.contains("Could not write"));
+}

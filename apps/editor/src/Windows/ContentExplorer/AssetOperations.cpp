@@ -2,6 +2,7 @@
 
 #include "Async/BackgroundTask.h"
 #include "Windows/ContentExplorer/asset_rules.h"
+#include "Windows/MaterialEditor/material_io.h"
 
 #include <QDir>
 #include <QFileInfo>
@@ -12,9 +13,6 @@
 #include <QPushButton>
 
 #include <assetlib/AssetStore.h>
-#include <assetlib/bmaterial_io.h>
-#include <assetlib/material_bake.h>
-#include <assetlib_structs/BMaterial.h>
 
 AssetOperations::AssetOperations(QWidget* parent, AssetsHeldOpenFn assetsHeldOpen) :
 	QObject(parent), m_Parent(parent), m_AssetsHeldOpen(std::move(assetsHeldOpen))
@@ -30,13 +28,6 @@ void
 AssetOperations::Bake(const QString& asset)
 {
 	const std::filesystem::path dataRoot = m_DataRoot.toStdWString();
-	const std::filesystem::path materialPath =
-		dataRoot / std::filesystem::path(asset.toStdWString());
-
-	auto desc     = assetlib::MaterialBakeDesc();
-	desc.dataRoot = dataRoot;
-
-	auto material = assetlib::BMaterial();
 
 	// Compositing decodes, resizes and re-encodes a KTX2 for each map, so it runs off the UI thread. It
 	// touches files only, never bgl. Baking reads the material off disk, so the routes it composites are
@@ -45,14 +36,7 @@ AssetOperations::Bake(const QString& asset)
 		m_Parent,
 		QString("Baking %1").arg(QFileInfo(asset).fileName()),
 		[&](background::Progress& progress) {
-			progress.Report(0, 0, "Reading material...");
-			material = assetlib::loadMaterial(materialPath);
-
-			progress.Report(0, 0, "Compositing maps...");
-			assetlib::bakeMaterial(material, desc, progress.Cancellation());
-
-			progress.Report(0, 0, "Writing material...");
-			assetlib::saveMaterial(material, materialPath);
+			editor::BakeMaterials(dataRoot, { asset }, progress);
 		},
 		background::Cancellable::kYes);
 

@@ -72,6 +72,8 @@ MaterialEditorWindow::MaterialEditorWindow(QWidget* parent, MaterialEditorWindow
 	m_OpenButton         = ui.open;
 	m_SaveButton         = ui.save;
 	m_SaveAsButton       = ui.saveAs;
+	m_SaveAllButton      = ui.saveAll;
+	m_BakeAllButton      = ui.bakeAll;
 	m_SetDefaultButton   = ui.setDefault;
 	m_GenerateTangents   = ui.generateTangents;
 	m_SubmeshSelector    = ui.submeshSelector;
@@ -91,6 +93,8 @@ MaterialEditorWindow::MaterialEditorWindow(QWidget* parent, MaterialEditorWindow
 	});
 	connect(m_SaveButton, &QPushButton::clicked, this, [this]() { SaveCurrentMaterial(false); });
 	connect(m_SaveAsButton, &QPushButton::clicked, this, [this]() { SaveCurrentMaterial(true); });
+	connect(m_SaveAllButton, &QPushButton::clicked, this, &MaterialEditorWindow::SaveAllMaterials);
+	connect(m_BakeAllButton, &QPushButton::clicked, this, &MaterialEditorWindow::BakeAllMaterials);
 
 	connect(m_SetDefaultButton, &QPushButton::clicked, this, [this]() {
 		SetDefaultMaterial(m_Graphs.CurrentSubmesh());
@@ -439,6 +443,12 @@ MaterialEditorWindow::RefreshActions()
 	m_OpenButton->setEnabled(hasGraph);
 	m_SaveAsButton->setEnabled(hasGraph);
 
+	// Both act on the mesh's materials, so neither needs a selection -- but with nothing bound to a
+	// file yet there is nothing for either to act on.
+	const bool anyBound = !m_Graphs.OpenPaths().isEmpty();
+	m_SaveAllButton->setEnabled(anyBound);
+	m_BakeAllButton->setEnabled(anyBound);
+
 	const QString materialPath = hasGraph ? m_Graphs.At(graphIndex).materialPath : QString();
 
 	// "Save" needs somewhere to write. The default sphere has no backing asset, so it stays disabled
@@ -504,8 +514,8 @@ MaterialEditorWindow::RefreshActions()
 	// The path leads, because the label clips it once the panel is narrow.
 	m_MaterialLabel->setToolTip(
 		stale ? QStringLiteral(
-					"%1\n\nThe baked textures do not match its sources. Bake it from the "
-					"Content Explorer to update.")
+					"%1\n\nThe baked textures do not match its sources. Bake All, or the "
+					"Content Explorer's Bake, updates them.")
 					.arg(materialPath) :
 				materialPath);
 }
@@ -581,10 +591,111 @@ MaterialEditorWindow::SaveCurrentMaterial(bool saveAs)
 	const int submesh = m_Graphs.CurrentSubmesh();
 	if (m_Preview != nullptr && m_Preview->SubmeshMaterialPaths().value(submesh).isEmpty())
 	{
-		AttachMaterialToMesh(submesh, path);
+		if (const QString error = AttachMaterialToMesh(submesh, path); !error.isEmpty())
+			QMessageBox::warning(window(), QStringLiteral("Save Material"), error);
 	}
 
 	RefreshActions();
+}
+
+void
+MaterialEditorWindow::SaveAllMaterials()
+{
+	auto result = editor::MaterialSaveResult();
+
+	for (MaterialGraphSet::Graph& entry : m_Graphs.All())
+	{
+		if (entry.model == nullptr)
+			continue;
+
+		if (entry.materialPath.isEmpty())
+		{
+			++result.unsaved;
+			continue;
+		}
+
+		try
+		{
+			assetlib::saveMaterial(
+				editor::BuildMaterial(*entry.model, entry.materialPath, m_DataRoot),
+				std::filesystem::path(entry.materialPath.toStdWString()));
+		}
+		catch (const std::exception& e)
+		{
+			qWarning(
+				"MaterialEditor: failed to save '%s': %s",
+				qPrintable(entry.materialPath),
+				e.what());
+			result.failed << entry.materialPath;
+			continue;
+		}
+
+		++result.saved;
+
+		// Save's rule, applied to every submesh the graph drives: one with no material yet is bound by
+		// its first write, and one that already has a material is left to Set Default Material.
+		if (m_Preview == nullptr)
+			continue;
+
+		for (const uint32_t submesh : entry.submeshes)
+		{
+			const int index = static_cast<int>(submesh);
+			if (!m_Preview->SubmeshMaterialPaths().value(index).isEmpty())
+				continue;
+
+			// Whatever stopped the write is the `.bmesh` itself, which every submesh here shares, so
+			// the rest would fail the same way -- and a batch must not raise one modal per submesh.
+			if (!AttachMaterialToMesh(index, entry.materialPath).isEmpty())
+			{
+				result.unattached << entry.materialPath;
+				break;
+			}
+		}
+	}
+
+	// Every graph, not just the ones written: two graphs can hold one path, and a stamp cannot
+	// separate two writes inside one millisecond.
+	m_Graphs.ForgetOnDisk();
+	RefreshActions();
+
+	if (const QString summary = editor::MaterialSaveSummary(result); !summary.isEmpty())
+		QMessageBox::information(window(), QStringLiteral("Save All"), summary);
+}
+
+void
+MaterialEditorWindow::BakeAllMaterials()
+{
+	SaveAllMaterials();
+
+	const QStringList files = editor::UniqueMaterialFiles(m_Graphs.OpenPaths());
+	if (files.isEmpty())
+		return;
+
+	auto relative = QStringList();
+	relative.reserve(files.size());
+	for (const QString& file : files) relative << Rebase(file, m_DataRoot, true);
+
+	// Compositing decodes, resizes and re-encodes a KTX2 per map, so it runs off the UI thread. It
+	// touches files only, never bgl.
+	const background::TaskResult result = background::RunWithLoadingScreen(
+		window(),
+		QStringLiteral("Baking materials"),
+		[&](background::Progress& progress) {
+			editor::BakeMaterials(m_DataRoot, relative, progress);
+		},
+		background::Cancellable::kYes);
+
+	// The panel reads its staleness marker and its baked-texture listing off the file, which the bake
+	// has just rewritten -- a cancelled run included, since the files before the cancel are baked.
+	RefreshMaterialState();
+
+	if (result.Failed())
+	{
+		QMessageBox::warning(
+			window(),
+			QStringLiteral("Bake All"),
+			QStringLiteral("Could not bake:\n\n%1").arg(result.error));
+	}
 }
 
 void
@@ -598,7 +709,9 @@ MaterialEditorWindow::SetDefaultMaterial(int submeshIndex)
 	if (path.isEmpty())
 		return;  // nothing on disk to point the mesh at; Save first
 
-	AttachMaterialToMesh(submeshIndex, path);
+	if (const QString error = AttachMaterialToMesh(submeshIndex, path); !error.isEmpty())
+		QMessageBox::warning(window(), QStringLiteral("Set Default Material"), error);
+
 	RefreshActions();
 }
 
@@ -639,19 +752,19 @@ MaterialEditorWindow::SetDockVisible(const bool visible)
 		Reset();
 }
 
-void
+QString
 MaterialEditorWindow::AttachMaterialToMesh(int submeshIndex, const QString& materialPath)
 {
 	if (m_Preview == nullptr)
-		return;
+		return {};
 
 	const std::filesystem::path meshPath = m_Preview->MeshPath();
 	if (meshPath.empty())
-		return;
+		return {};
 
 	const uint32_t source = m_Preview->SourceSubmesh(static_cast<uint32_t>(submeshIndex));
 	if (source == assetlib::c_InvalidIndex)
-		return;
+		return {};
 
 	try
 	{
@@ -673,14 +786,14 @@ MaterialEditorWindow::AttachMaterialToMesh(int submeshIndex, const QString& mate
 			"MaterialEditor: saved the material but could not attach it to '%s': %s",
 			meshPath.string().c_str(),
 			e.what());
-		QMessageBox::warning(
-			window(),
-			QStringLiteral("Save Material"),
-			QStringLiteral(
-				"The material was saved, but the mesh could not be updated to "
-				"reference it:\n%1")
-				.arg(QString::fromLatin1(e.what())));
+
+		return QStringLiteral(
+				   "The material was saved, but the mesh could not be updated to "
+				   "reference it:\n%1")
+		    .arg(QString::fromLatin1(e.what()));
 	}
+
+	return {};
 }
 
 void
