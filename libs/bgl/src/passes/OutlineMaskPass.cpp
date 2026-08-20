@@ -19,7 +19,10 @@ namespace bgl
 {
 	namespace
 	{
-		constexpr auto c_GeomSrc  = "Forward_StaticMesh"sv;
+		// The tier-branching stage, so a selected rig or crowd contours the shape it is posed in
+		// rather than the bind pose its vertex bytes hold. A selection mixes tiers freely, and this
+		// pass dispatches its whole list at once.
+		constexpr auto c_GeomSrc  = "Forward_AnyMesh"sv;
 		constexpr auto c_PixelSrc = "OutlineMask"sv;
 
 		constexpr auto c_MaskFormat = Format::R8_UNORM;
@@ -75,9 +78,15 @@ namespace bgl
 		                   BarrierSyncFlag::kVertexShader,
 		                   BarrierAccessFlag::kShaderResource });
 
-		for (const auto& binding : c_ForwardDataBuffers)
+		for (const std::span<const SceneBuffer> bindings :
+		     { std::span<const SceneBuffer>(c_ForwardDataBuffers),
+		       std::span<const SceneBuffer>(c_SkinnedBuffers),
+		       std::span<const SceneBuffer>(c_VatBuffers) })
 		{
-			desc.AddBufferArg(binding.graphName, binding.sync, binding.access);
+			for (const SceneBuffer& binding : bindings)
+			{
+				desc.AddBufferArg(binding.graphName, binding.sync, binding.access);
+			}
 		}
 
 		desc.SetExec([this, draw, selectedCount](const PassContext& resources) {
@@ -103,6 +112,16 @@ namespace bgl
 			BindSceneBuffers(*foundForwardData, c_ForwardDataBuffers, resources);
 		}
 
+		if (auto foundSkinnedData = m_Kernel.FindUniforms("skinnedData"))
+		{
+			BindSceneBuffers(*foundSkinnedData, c_SkinnedBuffers, resources);
+		}
+
+		if (auto foundVatData = m_Kernel.FindUniforms("vatData"))
+		{
+			BindSceneBuffers(*foundVatData, c_VatBuffers, resources);
+		}
+
 		if (auto foundViewData = m_Kernel.FindUniforms("viewData"))
 		{
 			auto& viewData = *foundViewData;
@@ -114,7 +133,9 @@ namespace bgl
 			viewData["jitter"]       = glm::vec2(0.0f);
 			viewData["prevJitter"]   = glm::vec2(0.0f);
 
-			// Both the same clock, like the matrices: the mask has no motion vector to feed.
+			// Both the same clock, like the matrices: the mask has no motion vector to feed. An
+			// animated instance still poses at `time`, so its contour follows the pose the forward
+			// pass drew.
 			viewData["time"]     = draw.clock.time;
 			viewData["prevTime"] = draw.clock.time;
 		}

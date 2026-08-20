@@ -73,46 +73,13 @@ namespace bgl
 			"compactedInstances"sv,
 		};
 
-		static constexpr std::array<SceneBuffer, 3> c_SkinnedBuffers = {
-			{ { "scene.skinnedGeomBuffer",
-			    "skinnedGeomBuffer",
-			    BarrierAccessFlag::kShaderResource,
-			    BarrierSyncFlag::kVertexShader },
-			  { "scene.skinnedStateBuffer",
-			    "skinnedStateBuffer",
-			    BarrierAccessFlag::kShaderResource,
-			    BarrierSyncFlag::kVertexShader },
-			  { "scene.bonePalettes",
-			    "bonePaletteBuffer",
-			    BarrierAccessFlag::kShaderResource,
-			    BarrierSyncFlag::kVertexShader } }
-		};
-
-		static constexpr std::array<SceneBuffer, 4> c_VatBuffers = {
-			{ { c_VatGeomBufferName,
-			    "vatGeomBuffer",
-			    BarrierAccessFlag::kShaderResource,
-			    BarrierSyncFlag::kVertexShader },
-			  { c_VatStateBufferName,
-			    "vatStateBuffer",
-			    BarrierAccessFlag::kShaderResource,
-			    BarrierSyncFlag::kVertexShader },
-			  { c_ClipBufferName,
-			    "clipBuffer",
-			    BarrierAccessFlag::kShaderResource,
-			    BarrierSyncFlag::kVertexShader },
-			  { c_VatColumnBufferName,
-			    "vatColumnBuffer",
-			    BarrierAccessFlag::kShaderResource,
-			    BarrierSyncFlag::kVertexShader } }
-		};
-
 		constexpr auto c_MotionVectorFormat = Format::RG16_FLOAT;
 		constexpr auto c_SceneColorFormat   = Format::RGBA16_FLOAT;
 
 		constexpr auto c_GeomSrc             = "Forward_StaticMesh"sv;
 		constexpr auto c_VatGeomSrc          = "Forward_VatMesh"sv;
 		constexpr auto c_SkinnedGeomSrc      = "Forward_SkinnedMesh"sv;
+		constexpr auto c_AnyGeomSrc          = "Forward_AnyMesh"sv;
 		constexpr auto c_PbrPixelSrc         = "Forward_PBR"sv;
 		constexpr auto c_LoosePixelSrc       = "Forward_PBR_Loose"sv;
 		constexpr auto c_NullPixelSrc        = "Forward_Null"sv;
@@ -145,10 +112,21 @@ namespace bgl
 			{ c_PbrCutoutPixelSrc, RasterCullMode::kNone, true, false },
 			// kAlphaTest_StaticMesh_LoosePbr
 			{ c_LooseCutoutPixelSrc, RasterCullMode::kNone, true, false },
-			// kTransparent_StaticMesh_PBR
-			{ c_TransparentSrc, RasterCullMode::kNone, false, true },
+			// kTransparent_StaticMesh_PBR: the whole sorted list draws through this one pipeline,
+			// so its geometry stage is the tier-branching one.
+			{ c_TransparentSrc,
+			  RasterCullMode::kNone,
+			  false,
+			  true,
+			  ComparisonFunc::kLess,
+			  c_AnyGeomSrc },
 			// kTransparent_StaticMesh_LoosePbr
-			{ c_TransparentSrc, RasterCullMode::kNone, false, true },
+			{ c_TransparentSrc,
+			  RasterCullMode::kNone,
+			  false,
+			  true,
+			  ComparisonFunc::kLess,
+			  c_AnyGeomSrc },
 			// kHashedAlpha_StaticMesh_PBR: opaque shape -- the coverage is stochastic, the depth is not.
 			{ c_PbrHashedPixelSrc, RasterCullMode::kNone, true, false },
 			// kHashedAlpha_StaticMesh_LoosePbr
@@ -162,6 +140,28 @@ namespace bgl
 			  false,
 			  ComparisonFunc::kLess,
 			  c_VatGeomSrc },
+			// kAlphaTest_VatMesh_PBR: an opaque draw that discards, so it needs no sorting.
+			{ c_PbrCutoutPixelSrc,
+			  RasterCullMode::kNone,
+			  true,
+			  false,
+			  ComparisonFunc::kLess,
+			  c_VatGeomSrc },
+			// kHashedAlpha_VatMesh_PBR: stochastic coverage, so also an opaque shape.
+			{ c_PbrHashedPixelSrc,
+			  RasterCullMode::kNone,
+			  true,
+			  false,
+			  ComparisonFunc::kLess,
+			  c_VatGeomSrc },
+			// kTransparent_VatMesh_PBR: never drawn from its own bucket -- the depth-sorted list is,
+			// through kTransparent_StaticMesh_PBR's kernel. The row exists so the bucket has one.
+			{ c_TransparentSrc,
+			  RasterCullMode::kNone,
+			  false,
+			  true,
+			  ComparisonFunc::kLess,
+			  c_AnyGeomSrc },
 			// kOpaque_SkinnedMesh_PBR
 			{ c_PbrPixelSrc,
 			  RasterCullMode::kBack,
@@ -183,6 +183,13 @@ namespace bgl
 			  false,
 			  ComparisonFunc::kLess,
 			  c_SkinnedGeomSrc },
+			// kTransparent_SkinnedMesh_PBR: as above, a bucket rather than a draw.
+			{ c_TransparentSrc,
+			  RasterCullMode::kNone,
+			  false,
+			  true,
+			  ComparisonFunc::kLess,
+			  c_AnyGeomSrc },
 		} };
 
 		static_assert(

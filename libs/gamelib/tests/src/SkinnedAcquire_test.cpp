@@ -151,9 +151,9 @@ TEST_CASE("a skinned acquire that cannot stand leaves nothing behind", "[skinned
 {
 	DataRoot root("bernini_skinned_acquire_refuse");
 
-	// A blended material: the skinned pipeline has no blended variant, so AddSkinnedMeshGeom refuses
-	// -- after the acquire has already taken its material, which is the unwind under test.
-	WriteRig(root.path, assetlib::AlphaMode::kBlend);
+	// A loose material: the skinned pipeline has no loose variant, so AddSkinnedMeshGeom refuses --
+	// after the acquire has already taken its material, which is the unwind under test.
+	WriteRig(root.path, true);
 
 	auto gfx = bgl::CreateGraphics(HeadlessOptions());
 	REQUIRE(gfx != nullptr);

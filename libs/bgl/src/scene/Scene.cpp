@@ -631,13 +631,11 @@ namespace bgl
 	{
 		ValidateVatDesc(desc);
 
-		if (!material.IsValid() || material.materialType != MaterialType::kPBR ||
-		    material.layerType != LayerType::kOpaque)
+		if (!AcceptsMaterial(GeomType::kVatMesh, material))
 		{
 			throw SceneError(
-				"AddVatMeshGeom: an opaque kPBR material is required -- the VAT pipeline has no "
-				"other "
-				"variant yet");
+				"AddVatMeshGeom: a kPBR material is required -- the VAT pipeline has no unlit or "
+				"loose variant");
 		}
 		// The procedural path never splits a primitive, so there is exactly one submesh to base.
 		if (desc.columnBases.size() > 1)
@@ -693,20 +691,18 @@ namespace bgl
 				"AddVatMeshGeom: columnBases must carry one entry per submesh, in submesh order");
 		}
 
-		// The check every VAT door makes, per submesh here: no null or cutout VAT variant exists
-		// for an unlit or masked submesh to ride.
+		// The check every VAT door makes, per submesh here: no unlit VAT variant exists for a
+		// null-material submesh to ride.
 		for (uint32_t s = 0; s < entry.submeshCount; ++s)
 		{
 			const uint32_t       index = mesh.submeshes[entry.firstSubmesh + s].material;
 			const MaterialHandle bound =
 				index < materials.size() ? materials[index] : MaterialHandle{};
-			if (!bound.IsValid() || bound.materialType != MaterialType::kPBR ||
-			    bound.layerType != LayerType::kOpaque)
+			if (!AcceptsMaterial(GeomType::kVatMesh, bound))
 			{
 				throw SceneError(
-					"AddVatMeshGeom: every submesh needs an opaque kPBR material -- the VAT "
-					"pipeline "
-					"has no other variant yet");
+					"AddVatMeshGeom: every submesh needs a kPBR material -- the VAT pipeline has "
+					"no unlit or loose variant");
 			}
 		}
 
@@ -909,8 +905,8 @@ namespace bgl
 			if (!AcceptsMaterial(GeomType::kSkinnedMesh, bound))
 			{
 				throw SceneError(
-					"AddSkinnedMeshGeom: every submesh needs a kPBR material that is not blended "
-					"-- the skinned pipeline has no blended variant yet");
+					"AddSkinnedMeshGeom: every submesh needs a kPBR material -- the skinned "
+					"pipeline has no unlit or loose variant");
 			}
 		}
 
@@ -1545,8 +1541,8 @@ namespace bgl
 		if (!AcceptsMaterial(geom.geomType, material))
 		{
 			throw SceneError(
-				"SetSubmeshMaterial: animated geometry takes an opaque kPBR material, and a cutout "
-				"or hashed one when it is skinned -- neither pipeline has a blended variant");
+				"SetSubmeshMaterial: animated geometry takes a kPBR material -- neither animated "
+				"pipeline has an unlit or loose variant");
 		}
 
 		const idl::RangeWithCount& submeshes = m_Geoms[geom.handle.index].submeshes;

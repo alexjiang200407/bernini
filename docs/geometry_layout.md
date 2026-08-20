@@ -110,7 +110,7 @@ path is the source of truth; when this doc disagrees, trust the struct, then fix
   pos/normal/uv/tangent — see `VertexGen` in
   [types/VertexGen.h](libs/bgl/src/types/VertexGen.h), whose field order *is* that layout. See
   `DecodeVertex` in
-  [Forward_StaticMesh.slang](libs/bgl/shaders/src/Forward_StaticMesh.slang).
+  [forward/vertexdecode.slang](libs/bgl/shaders/src/forward/vertexdecode.slang).
 
 * **CPU-side mirror buffers own the storage and hand back offsets.** Geometry is uploaded through
   `RangeBuffer` / `EntryBuffer` / `PackedBuffer` — GPU-mirrored containers whose `Add`/`EmplaceBack`
@@ -205,7 +205,7 @@ flowchart TD
 
 ### The per-meshlet-vertex indirection chain
 
-For lane `gtid` of a meshlet (see [Forward_StaticMesh.slang](libs/bgl/shaders/src/Forward_StaticMesh.slang)):
+For lane `gtid` of a meshlet (see [forward/mesh_stage.slang](libs/bgl/shaders/src/forward/mesh_stage.slang)):
 
 1. **vertexMap lookup** — `vertexMapBuffer[submesh.vertexMap, meshlet.relativeVertexOffset + gtid]`
    yields a **geometry-local vertex index**. The meshlet's vertices are a compacted window inside

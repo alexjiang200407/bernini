@@ -17,10 +17,14 @@ namespace bgl
 		kHashedAlpha_StaticMesh_LoosePbr = 8,
 		kAssert_StaticMesh = 9,
 		kOpaque_VatMesh_PBR = 10,
-		kOpaque_SkinnedMesh_PBR = 11,
-		kAlphaTest_SkinnedMesh_PBR = 12,
-		kHashedAlpha_SkinnedMesh_PBR = 13,
-		kCount = 14,
+		kAlphaTest_VatMesh_PBR = 11,
+		kHashedAlpha_VatMesh_PBR = 12,
+		kTransparent_VatMesh_PBR = 13,
+		kOpaque_SkinnedMesh_PBR = 14,
+		kAlphaTest_SkinnedMesh_PBR = 15,
+		kHashedAlpha_SkinnedMesh_PBR = 16,
+		kTransparent_SkinnedMesh_PBR = 17,
+		kCount = 18,
 	};
 
 	static_assert(sizeof(PsoType) == 4);

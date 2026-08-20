@@ -110,7 +110,8 @@ the shader cannot see.
 
 ## Blended surfaces
 
-`LayerType::kBlend` resolves to the two `kTransparent_*` buckets, whose PSOs blend
+`LayerType::kBlend` resolves to the `kTransparent_*` buckets — one per (tier, material type) pair
+that can carry it — whose PSOs blend
 **premultiplied** — `SrcBlend = One`, `DestBlend = InvSrcAlpha`. `Forward_Transparent` therefore
 returns radiance already weighted by its own coverage, rather than radiance the blend then scales,
 and the alpha it returns is coverage rather than the material's own.
@@ -339,16 +340,25 @@ frames would reproject through the wrong clip.
 
 The main geometry pass: a mesh-shader forward render, in two phases. It holds `c_PsoCount`
 `MeshletKernel`s, one per `PsoType`, built from the `c_Psos` config table (pixel-shader module +
-raster/depth/blend state + mesh-shader source). Each row names its amplification/mesh module —
-`Forward_StaticMesh` for the static family, `Forward_VatMesh` for `kOpaque_VatMesh_PBR`, which fetches
-position and normal from the baked texture pair by (column, frame) instead of the vertex bytes
-(see [VAT](docs/vat.md)), and `Forward_SkinnedMesh` for `kOpaque_SkinnedMesh_PBR`, which blends the
-bind-pose vertex bytes by the bone palette `Pose Skinned` wrote this frame; the pixel shader varies
-per bucket (`Forward_Null`, `Forward_PBR`,
-`Forward_PBR_Loose`, `Forward_PBR_AlphaTest`, `Forward_PBR_Loose_AlphaTest`,
-`Forward_PBR_HashedAlpha`, `Forward_PBR_Loose_HashedAlpha`, `Forward_Transparent`,
-`Forward_Assert`). **`c_Psos` order must match `PsoType`** — a `static_assert` catches an empty row
-but not a misordering.
+raster/depth/blend state + mesh-shader source).
+
+Each row names its amplification/mesh module, one per **tier**: `Forward_StaticMesh`,
+`Forward_VatMesh` — which fetches position and normal from the baked texture pair by (column, frame)
+instead of the vertex bytes (see [VAT](docs/vat.md)) — and `Forward_SkinnedMesh`, which blends the
+bind-pose vertex bytes by the bone palette `Pose Skinned` wrote this frame. All three are the same
+shader with one function swapped: the instance expansion, the meshlet lookup, the triangle fetch, the
+vertex decode and the reprojection live in `forward/mesh_stage.slang`, and each tier's vertex
+evaluation in its own `forward/{static,skinned,vat}_vertex.slang`. Only the mesh-output loops are
+still written out per entry point — Slang's Metal backend crashes on any function taking
+`OutputVertices`, so nothing but `MSMain` may index them. `Forward_AnyMesh` is the fourth, and calls whichever of
+the three an instance's `Mesh` names — see the transparent phase below.
+
+The pixel shader varies per bucket instead (`Forward_Null`, `Forward_PBR`, `Forward_PBR_Loose`,
+`Forward_PBR_AlphaTest`, `Forward_PBR_Loose_AlphaTest`, `Forward_PBR_HashedAlpha`,
+`Forward_PBR_Loose_HashedAlpha`, `Forward_Transparent`, `Forward_Assert`), and is chosen by layer
+alone — every tier draws every layer, so the buckets are the (tier × layer) product with the loose
+material type static-only. **`c_Psos` order must match `PsoType`** — a `static_assert` catches an
+empty row but not a misordering.
 
 **Opaque and alpha-test** are PSO-bucketed: per bucket it populates the cbuffers the kernel declares
 — `forwardData` (the scene geometry tables), `viewData` (this frame's and the previous frame's
@@ -362,11 +372,19 @@ colour/velocity/depth framebuffer), and calls
 
 **Transparent buckets are skipped there** — blending needs depth order, not PSO order — and drawn
 afterwards by `DrawTransparent`, inside the same pass, off the depth-sorted
-`sortedTransparentInstances` list that [Transparent Sort](#transparent-sort) built. Both transparent
-PSOs share one pipeline and the list is drawn whole, so the transparent phase is **one
+`sortedTransparentInstances` list that [Transparent Sort](#transparent-sort) built. Every transparent
+PSO shares one pipeline and the list is drawn whole, so the transparent phase is **one
 `DispatchMeshIndirect`** whose grid is a GPU value the CPU never sees. Their blend state is
 premultiplied and their pixel shader returns premultiplied colour to match — see
 [Blended surfaces](#blended-surfaces).
+
+That one list holds **every tier at once**, which is why the transparent pipeline's geometry module is
+`Forward_AnyMesh` rather than a tier's own: it reads the tier off the instance's `Mesh` — `vatState`
+and `skinnedState` are null for anything but their own tier and are never both set — and calls that
+tier's vertex evaluation. So a blended rig standing behind a blended window composites in depth order
+and not in tier order, which one dispatch per tier could not do. The branch is uniform across a
+mesh-shader group, one instance being one group's work, so it costs register pressure rather than
+divergence. Nothing mirrors the PSO table into Slang for it.
 
 A surface that has to hide its own back layers uses `kHashed` ([Hashed alpha](#hashed-alpha)) rather
 than blending: stochastic coverage writes real depth, so it self-occludes in the opaque phase with no
@@ -378,7 +396,8 @@ The depth-sorted path starts at zero; the opaque path reads `psoPrefixSum` index
 
 * **In:** the scene-colour and velocity buffers as render targets; `compactDispatchArgs` and
   `transparentSort.dispatchArgs` as indirect args; the seven `c_ForwardDataBuffers` scene
-  buffers, the two `c_ExpansionBuffers`, `sortedTransparentInstances`, and the two
+  buffers, the three `c_SkinnedBuffers` and four `c_VatBuffers`, the two `c_ExpansionBuffers`,
+  `sortedTransparentInstances`, and the two
   `c_MaterialBuffers` (PBR + loose). A cbuffer the shader does not declare is skipped, but a
   scene-buffer key missing from a cbuffer that *is* declared is fatal (`gfatal`); a missing
   `materialData` key is skipped silently.
@@ -389,10 +408,12 @@ The depth-sorted path starts at zero; the opaque path reads `psoPrefixSum` index
 
 Draws the view's selected submesh instances (`ISceneView::SetSubmeshSelected`) into the target's
 R8 outline mask, which `PostProcess` dilates into the editor's selection outline. The kernel is
-the shared `Forward_StaticMesh` amplification/mesh shaders with a trivial coverage pixel shader
+the shared `Forward_AnyMesh` amplification/mesh shaders with a trivial coverage pixel shader
 (`OutlineMask.slang`), dispatched **directly** — `DispatchMesh(count, 1, 1)` over the view's
 CPU-built selected list with `baseTable = kDepthSorted`, the same expansion shape as the
-transparent phase, so no culling and no indirect args are involved.
+transparent phase, so no culling and no indirect args are involved. A selection mixes tiers as freely
+as the sorted list does, so it takes the same tier-branching geometry stage and a selected rig
+contours the pose it is drawn in.
 
 * **No depth and no culling:** the mask is the full silhouette, through occluders, whichever way
   its triangles face — selection feedback answers "where is the thing I selected".

@@ -55,11 +55,11 @@ never read it. That shifts the bindings of everything else those programs declar
 silent: materials sample the wrong descriptor and the frame comes back black rather than erroring.
 
 *Bug precedent:* the temporal-AA work needed the jitter offsets in the pixel stage and moved
-`ConstantBuffer<ViewData> viewData` from `Forward_StaticMesh.slang` into `forward/common.slang`, which
-every pixel module imports. Eight test cases began rendering black. The fix was to keep the
-declaration in the mesh module and hand the pixel stage a value it had already corrected -- when the
-pixel stage needs something a constant buffer holds, prefer passing it through the stage output over
-widening who can see the buffer.
+`ConstantBuffer<ViewData> viewData` into `forward/common.slang`, which every pixel module imports.
+Eight test cases began rendering black. The fix was to keep the declaration where only the geometry
+stages see it -- `forward/mesh_stage.slang` -- and hand the pixel stage a value it had already
+corrected. When the pixel stage needs something a constant buffer holds, prefer passing it through the
+stage output over widening who can see the buffer.
 
 ## Formatting
 

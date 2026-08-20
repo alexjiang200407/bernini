@@ -252,8 +252,8 @@ namespace bgl
 		 * culling bounds come from the desc's box, not the bind pose -- they must hold under every
 		 * frame of every clip.
 		 *
-		 * `material` is required, opaque `kPBR` only: the VAT pipeline shades through the PBR pixel
-		 * stage, and no other variant of it exists yet. The same constraint holds for
+		 * `material` is required and must be `kPBR`, in any layer: the VAT pipeline shades through
+		 * the PBR pixel stages and has no unlit or loose variant. The same constraint holds for
 		 * SetSubmeshMaterial on this geom.
 		 *
 		 * @throws SceneError if a texture handle or the material is invalid or of the wrong kind,
@@ -277,12 +277,12 @@ namespace bgl
 		 *
 		 * `desc.columnBases` must carry one entry per submesh of `meshes[meshIndex]`, in submesh
 		 * order -- the bake's per-submesh column bases. Every submesh must resolve to a valid
-		 * opaque `kPBR` material: the VAT pipeline has no null or cutout variant for an unlit or
-		 * masked submesh to ride.
+		 * `kPBR` material: the VAT pipeline has no unlit variant for a null-material submesh to
+		 * ride.
 		 *
 		 * @throws SceneError for anything AddStaticMeshGeom or AddVatMeshGeom refuses, a columnBases count
 		 *         that does not match the submesh count, or a submesh whose material does not
-		 *         resolve to opaque kPBR.
+		 *         resolve to kPBR.
 		 */
 		virtual GeomHandle
 		AddVatMeshGeom(
@@ -310,9 +310,8 @@ namespace bgl
 		 * the containers measures it -- `assetlib::posedBounds` is that walk, and gamelib's acquire
 		 * makes it.
 		 *
-		 * `materials` must resolve every submesh to a `kPBR` material that is not blended: opaque,
-		 * cutout and hashed all draw an opaque shape, so they need no sorting. Blending would, and
-		 * the skinned pipeline has no variant that does it.
+		 * `materials` must resolve every submesh to a `kPBR` material, in any layer: the skinned
+		 * pipeline shades through the PBR pixel stages and has no unlit or loose variant.
 		 *
 		 * @param mesh        A BMesh loaded from disk, carrying skin binding on every submesh.
 		 * @param meshIndex   Index into `mesh.meshes`.
@@ -324,8 +323,8 @@ namespace bgl
 		 *         than `cMaxBonesPerRig`, bones that are not topologically sorted, an `animations`
 		 *         whose bone count disagrees with `skeleton`, an empty or zero-frame clip table, a
 		 *         clip whose samples fall outside the pool, a submesh without skin binding, a submesh
-		 *         whose material resolves to a blended or non-kPBR one, or a `posedBounds` whose min
-		 *         exceeds its max on any axis.
+		 *         whose material does not resolve to kPBR, or a `posedBounds` whose min exceeds its
+		 *         max on any axis.
 		 *
 		 * `AnimationSet::skeletonSignature` is deliberately **not** checked here: computing a
 		 * skeleton's signature needs assetlib, which bgl does not link. A clip set cooked against a

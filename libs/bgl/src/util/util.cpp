@@ -133,22 +133,27 @@ namespace bgl
 				gfatal("Invalid MaterialType");
 			}
 
-		// One opaque PBR bucket; alpha variants arrive when a use case does. The material is
-		// constrained to kPBR/kOpaque at every door that binds one to VAT geometry (AddVatMeshGeom,
-		// SetSubmeshMaterial, SetSubmeshMaterialOverride), so any other type reaching here is
-		// bgl's own bug.
+		// The material is constrained to kPBR at every door that binds one to VAT geometry
+		// (AddVatMeshGeom, SetSubmeshMaterial, SetSubmeshMaterialOverride), so any other type
+		// reaching here is bgl's own bug.
 		case GeomType::kVatMesh:
-			if (material != MaterialType::kPBR || cutout || blend || hashed)
-				gfatal("VAT geometry is only drawable with an opaque kPBR material");
+			if (material != MaterialType::kPBR)
+				gfatal("VAT geometry is only drawable with a kPBR material");
+			if (blend)
+				return PsoType::kTransparent_VatMesh_PBR;
+			if (cutout)
+				return PsoType::kAlphaTest_VatMesh_PBR;
+			if (hashed)
+				return PsoType::kHashedAlpha_VatMesh_PBR;
 			return PsoType::kOpaque_VatMesh_PBR;
 
 		// Constrained at every door that binds a material to skinned geometry, exactly as VAT is
-		// above, so any other type reaching here is bgl's own bug. Cutout and hashed join opaque
-		// because both still draw an opaque shape -- they discard, they do not blend, so neither
-		// needs sorting. Only kBlend is missing, and it is the one that would.
+		// above.
 		case GeomType::kSkinnedMesh:
-			if (material != MaterialType::kPBR || blend)
-				gfatal("Skinned geometry is not drawable with a blended kPBR material");
+			if (material != MaterialType::kPBR)
+				gfatal("Skinned geometry is only drawable with a kPBR material");
+			if (blend)
+				return PsoType::kTransparent_SkinnedMesh_PBR;
 			if (cutout)
 				return PsoType::kAlphaTest_SkinnedMesh_PBR;
 			if (hashed)
@@ -168,21 +173,16 @@ namespace bgl
 		if (geomType == GeomType::kStaticMesh)
 			return true;
 
-		if (!material.IsValid() || material.materialType != MaterialType::kPBR)
-			return false;
-
-		if (material.layerType == LayerType::kOpaque)
-			return true;
-
-		return geomType == GeomType::kSkinnedMesh &&
-		       (material.layerType == LayerType::kMask || material.layerType == LayerType::kHashed);
+		return material.IsValid() && material.materialType == MaterialType::kPBR;
 	}
 
 	bool
 	IsTransparentPso(uint32_t pso) noexcept
 	{
 		return pso == static_cast<uint32_t>(PsoType::kTransparent_StaticMesh_PBR) ||
-		       pso == static_cast<uint32_t>(PsoType::kTransparent_StaticMesh_LoosePbr);
+		       pso == static_cast<uint32_t>(PsoType::kTransparent_StaticMesh_LoosePbr) ||
+		       pso == static_cast<uint32_t>(PsoType::kTransparent_VatMesh_PBR) ||
+		       pso == static_cast<uint32_t>(PsoType::kTransparent_SkinnedMesh_PBR);
 	}
 
 	uint32_t

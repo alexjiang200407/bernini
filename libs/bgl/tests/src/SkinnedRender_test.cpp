@@ -521,3 +521,217 @@ TEST_CASE(
 	CHECK(animating > 1e-3f);
 	CHECK(held < 1e-5f);
 }
+
+/**
+ * Blending on the skinned tier, and the decision behind it: the depth-sorted list holds every tier
+ * at once and is drawn by one pipeline whose geometry stage branches per instance, so a blended rig
+ * takes its place among blended static geometry by depth rather than by tier.
+ *
+ * The static path is the reference again. A blended strip at bind pose is the same surface whichever
+ * pipeline posed it, so any arrangement that swaps one for the other must composite to the same
+ * pixels -- and swapping the two panes' depths must not, or the comparison proves nothing.
+ */
+TEST_CASE("a blended skinned mesh sorts among blended static geometry", "[skinned][render]")
+{
+	auto opts             = bgl::GraphicsOptions();
+	opts.shaderCacheDir   = bgl::test::ShaderCacheDir();
+	opts.enableDebugLayer = true;
+
+	auto gfx = bgl::CreateGraphics(opts);
+	REQUIRE(gfx != nullptr);
+
+	auto targetDesc     = bgl::RenderTargetDesc();
+	targetDesc.width    = static_cast<int>(c_Width);
+	targetDesc.height   = static_cast<int>(c_Height);
+	targetDesc.headless = true;
+	auto target         = gfx->CreateRenderTarget(targetDesc);
+
+	auto sceneDesc                        = bgl::SceneDesc();
+	sceneDesc.initialGeom                 = 8;
+	sceneDesc.initialMeshlets             = 16;
+	sceneDesc.initialSubmeshes            = 8;
+	sceneDesc.initialVertexBufferByteSize = 8192;
+	sceneDesc.initialIndices              = 128;
+	sceneDesc.initialPbrMaterials         = 4;
+
+	auto scene = gfx->CreateScene(sceneDesc);
+	auto view  = gfx->CreateSceneView(scene, 8);
+
+	bgl::test::ApplyEnvironment(scene.Get(), view.Get());
+
+	const auto blendMaterial = [&](const glm::vec3& tint) {
+		auto desc            = bgl::PbrMaterialDesc();
+		desc.baseColorFactor = glm::vec4(tint, 0.5f);
+		desc.metallicFactor  = 0.0f;
+		desc.roughnessFactor = 0.5f;
+		desc.layerType       = bgl::LayerType::kBlend;
+		return std::array<bgl::MaterialHandle, 1>{ { scene->CreatePbrMaterial(desc) } };
+	};
+
+	const auto red  = blendMaterial(glm::vec3(0.9f, 0.1f, 0.1f));
+	const auto blue = blendMaterial(glm::vec3(0.1f, 0.1f, 0.9f));
+
+	const auto staticGeom = [&](std::span<const bgl::MaterialHandle> materials) {
+		return scene->AddStaticMeshGeom(MakeSkinnedStrip(), 0, materials);
+	};
+	const auto skinnedGeom = [&](std::span<const bgl::MaterialHandle> materials) {
+		return scene->AddSkinnedMeshGeom(
+			MakeSkinnedStrip(),
+			0,
+			materials,
+			MakeTwoBoneRig(),
+			MakeSwingClip(),
+			c_StripPosedBounds);
+	};
+
+	const auto staticRed   = staticGeom(red);
+	const auto staticBlue  = staticGeom(blue);
+	const auto skinnedRed  = skinnedGeom(red);
+	const auto skinnedBlue = skinnedGeom(blue);
+
+	auto job     = bgl::RenderJob();
+	job.view     = view;
+	job.camera   = StripCamera();
+	job.viewport = bgl::Viewport(static_cast<float>(c_Width), static_cast<float>(c_Height));
+
+	// The two panes are the same strip a unit apart along the view axis, so they overlap on screen
+	// and the near one blends over the far one.
+	constexpr float c_Near = 0.0f;
+	constexpr float c_Far  = -1.0f;
+
+	const auto at = [](float z) {
+		return glm::translate(glm::mat4(1.0f), glm::vec3(0.0f, 0.0f, z));
+	};
+
+	// rate 0 holds frame 0, the bind pose, which is the static geometry vertex for vertex.
+	const auto place = [&](bgl::GeomHandle geom, float z) {
+		return geom.geomType == bgl::GeomType::kSkinnedMesh ?
+		           view->CreateSkinnedMeshInstance(geom, at(z), { 0, 0.0f, 0.0f }) :
+		           view->CreateStaticMeshInstance(geom, at(z));
+	};
+
+	const auto render = [&](const char* png, bgl::GeomHandle nearGeom, bgl::GeomHandle farGeom) {
+		const auto nearInstance = place(nearGeom, c_Near);
+		const auto farInstance  = place(farGeom, c_Far);
+
+		gfx->DrawFrame(target, job);
+		gfx->ScreenshotPng(target, png);
+
+		view->DeleteMeshInstance(nearInstance);
+		view->DeleteMeshInstance(farInstance);
+		return std::string(png);
+	};
+
+	const auto whole = [&](const std::string& a, const std::string& b) {
+		return bgl::test::FrameDelta(a, b, 0, 0, int(c_Width), int(c_Height));
+	};
+
+	const auto reference =
+		render("assets/golden/blend_sort_reference.got.png", staticRed, staticBlue);
+
+	// The control. Red over blue and blue over red are different images, so an equality below is a
+	// statement about ordering and not about two panes that happen to composite alike.
+	const auto swapped = render("assets/golden/blend_sort_swapped.got.png", staticBlue, staticRed);
+	REQUIRE(whole(reference, swapped) > 1e-4f);
+
+	// Skinned in front of a static pane, then behind one. Drawing the tiers as separate passes would
+	// break exactly one of these, whichever order the passes ran in.
+	const auto skinnedNear =
+		render("assets/golden/blend_sort_skinned_near.got.png", skinnedRed, staticBlue);
+	CHECK(whole(reference, skinnedNear) < 1e-6f);
+
+	const auto skinnedFar =
+		render("assets/golden/blend_sort_skinned_far.got.png", staticRed, skinnedBlue);
+	CHECK(whole(reference, skinnedFar) < 1e-6f);
+}
+
+/**
+ * The outline mask on an animated instance. It draws through the same tier-branching geometry stage
+ * the transparent phase does, so a selected rig contours the pose it is drawn in -- where before it
+ * contoured the bind pose its vertex bytes hold, whatever the forward pass had put on screen.
+ *
+ * Selecting changes nothing but the outline, so the difference between the two frames *is* the
+ * outline, whatever colour it is drawn in. That makes the negative probe the sharp one: a band above
+ * the bind pose's top edge would say the mask never posed.
+ */
+TEST_CASE("a selected skinned instance contours its pose", "[skinned][selection][render]")
+{
+	auto opts             = bgl::GraphicsOptions();
+	opts.shaderCacheDir   = bgl::test::ShaderCacheDir();
+	opts.enableDebugLayer = true;
+
+	auto gfx = bgl::CreateGraphics(opts);
+	REQUIRE(gfx != nullptr);
+
+	auto targetDesc     = bgl::RenderTargetDesc();
+	targetDesc.width    = static_cast<int>(c_Width);
+	targetDesc.height   = static_cast<int>(c_Height);
+	targetDesc.headless = true;
+	auto target         = gfx->CreateRenderTarget(targetDesc);
+
+	auto sceneDesc                        = bgl::SceneDesc();
+	sceneDesc.initialGeom                 = 4;
+	sceneDesc.initialMeshlets             = 8;
+	sceneDesc.initialSubmeshes            = 4;
+	sceneDesc.initialVertexBufferByteSize = 4096;
+	sceneDesc.initialIndices              = 64;
+	sceneDesc.initialPbrMaterials         = 4;
+
+	auto scene = gfx->CreateScene(sceneDesc);
+	auto view  = gfx->CreateSceneView(scene, 4);
+
+	bgl::test::ApplyEnvironment(scene.Get(), view.Get());
+
+	auto material            = bgl::PbrMaterialDesc();
+	material.baseColorFactor = glm::vec4(0.8f, 0.4f, 0.2f, 1.0f);
+	material.metallicFactor  = 0.0f;
+	material.roughnessFactor = 0.5f;
+
+	const std::array<bgl::MaterialHandle, 1> materials = { { scene->CreatePbrMaterial(material) } };
+
+	const auto geom = scene->AddSkinnedMeshGeom(
+		MakeSkinnedStrip(),
+		0,
+		materials,
+		MakeTwoBoneRig(),
+		MakeSwingClip(),
+		c_StripPosedBounds);
+	REQUIRE(geom.IsValid());
+
+	// rate 1 at frame 1's time: bone 1 has swung 90 degrees, which carries the strip's top edge from
+	// (0, 2) onto x = -1. The two edges the probes sit on are a half unit clear of each other's
+	// shape, so neither box can see the other's band.
+	const auto instance = view->CreateSkinnedMeshInstance(geom, glm::mat4(1.0f), { 0, 0.0f, 1.0f });
+
+	auto job     = bgl::RenderJob();
+	job.view     = view;
+	job.camera   = StripCamera();
+	job.viewport = bgl::Viewport(static_cast<float>(c_Width), static_cast<float>(c_Height));
+	job.time     = 1.0f / c_SampleRate;
+
+	const auto capture = [&](const std::string& path) {
+		// Two frames: the first uploads and presents, the screenshot reads the last presented.
+		gfx->DrawFrame(target, job);
+		gfx->DrawFrame(target, job);
+		gfx->ScreenshotPng(target, path);
+		return path;
+	};
+
+	const auto off = capture("assets/golden/skinned_outline_off.got.png");
+	view->SetSubmeshSelected(instance, 0, true);
+	const auto on = capture("assets/golden/skinned_outline_on.got.png");
+
+	// A box straddling a silhouette edge: whatever the two frames differ by there is the band.
+	const auto bandAt = [&](const glm::vec3& world) {
+		const glm::ivec2 px = PixelOf(job.camera, world);
+		return bgl::test::FrameDelta(off, on, px.x - 8, px.y - 8, 16, 16);
+	};
+
+	const float posed    = bandAt(glm::vec3(-1.0f, 1.0f, 0.0f));
+	const float bindPose = bandAt(glm::vec3(0.0f, 2.0f, 0.0f));
+
+	INFO("outline energy: " << posed << " at the swung edge, " << bindPose << " at the bind one");
+
+	CHECK(posed > 1e-3f);
+	CHECK(bindPose < 1e-5f);
+}

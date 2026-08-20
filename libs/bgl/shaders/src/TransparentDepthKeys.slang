@@ -11,7 +11,8 @@ import idl.InstanceVisibility;
 // than its counting-sort bucket, so it is the only kind this pass keys.
 bool IsTransparentPso(PsoType pso)
 {
-    return pso == PsoType::kTransparent_StaticMesh_PBR || pso == PsoType::kTransparent_StaticMesh_LoosePbr;
+    return pso == PsoType::kTransparent_StaticMesh_PBR || pso == PsoType::kTransparent_StaticMesh_LoosePbr ||
+           pso == PsoType::kTransparent_VatMesh_PBR || pso == PsoType::kTransparent_SkinnedMesh_PBR;
 }
 
 struct Uniforms
