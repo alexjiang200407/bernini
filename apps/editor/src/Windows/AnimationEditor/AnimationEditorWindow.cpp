@@ -1,8 +1,8 @@
 #include "AnimationEditorWindow.h"
 
-#include "Project/Project.h"
 #include "Windows/AnimationEditor/TimelineScrubber.h"
 #include "util/mime_files.h"
+#include <assetlib/Project.h>
 
 #include "Windows/AnimationEditor/animation_source.h"
 
@@ -380,9 +380,10 @@ AnimationEditorWindow::LoadShownMesh(const QString& animationsRelPath)
 void
 AnimationEditorWindow::OpenMeshDialog()
 {
-	const QString start = m_DataRoot.isEmpty() ? QString() :
-	                                             m_DataRoot + QLatin1Char('/') +
-	                                                 QLatin1String(Project::c_MeshesDirectoryName);
+	auto start = QString();
+	if (!m_DataRoot.isEmpty())
+		start =
+			m_DataRoot + QLatin1Char('/') + QLatin1String(assetlib::Project::c_MeshesDirectoryName);
 
 	const QString file = QFileDialog::getOpenFileName(
 		this,

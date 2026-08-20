@@ -1,8 +1,8 @@
 #include "import_writers.h"
 
-#include "Project/Project.h"
 #include "Windows/MaterialEditor/MaterialGraphModel.h"
 #include "Windows/MaterialEditor/material_graph.h"
+#include <assetlib/Project.h>
 
 #include <QStringList>
 
@@ -134,7 +134,7 @@ namespace editor
 	{
 		namespace fs = std::filesystem;
 
-		const fs::path root = dataRoot / Project::c_SkeletonsDirectoryName;
+		const fs::path root = dataRoot / assetlib::Project::c_SkeletonsDirectoryName;
 
 		std::error_code ec;
 		if (!fs::exists(root, ec))

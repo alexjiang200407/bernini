@@ -1,5 +1,5 @@
 #include "Import/import_writers.h"
-#include "Project/Project.h"
+#include <assetlib/Project.h>
 
 #include "util/QtSupport.h"
 
@@ -28,7 +28,7 @@ namespace
 		{
 			m_Root = fs::temp_directory_path() /
 			         ("bernini_rig_test_" + std::to_string(reinterpret_cast<uintptr_t>(this)));
-			for (const std::string_view category : Project::c_RequiredDirectories)
+			for (const std::string_view category : assetlib::Project::c_RequiredDirectories)
 				fs::create_directories(m_Root / category);
 		}
 
@@ -52,13 +52,13 @@ namespace
 		[[nodiscard]] fs::path
 		Bskel() const
 		{
-			return m_Root / Project::c_SkeletonsDirectoryName / "unit.bskel";
+			return m_Root / assetlib::Project::c_SkeletonsDirectoryName / "unit.bskel";
 		}
 
 		[[nodiscard]] fs::path
 		Banim() const
 		{
-			return m_Root / Project::c_AnimationsDirectoryName / "unit.banim";
+			return m_Root / assetlib::Project::c_AnimationsDirectoryName / "unit.banim";
 		}
 
 	private:
@@ -260,7 +260,8 @@ TEST_CASE(
 {
 	const TempRoot root;
 
-	const fs::path kept = root.Data() / Project::c_SkeletonsDirectoryName / "existing.bskel";
+	const fs::path kept =
+		root.Data() / assetlib::Project::c_SkeletonsDirectoryName / "existing.bskel";
 	{
 		std::ofstream out(kept, std::ios::binary);
 		out << "not really a skeleton";
@@ -351,7 +352,8 @@ TEST_CASE("A rig is found by signature, not by name", "[importedrig]")
 	SECTION("two rigs with the same signature are ambiguous, not a coin toss")
 	{
 		assetlib::BMesh second;
-		const fs::path twin = root.Data() / Project::c_SkeletonsDirectoryName / "coyote_twin.bskel";
+		const fs::path  twin =
+			root.Data() / assetlib::Project::c_SkeletonsDirectoryName / "coyote_twin.bskel";
 		editor::WriteImportedRig(
 			SkinnedImport(),
 			second,
@@ -403,11 +405,13 @@ TEST_CASE("Clips import on their own, attached to the rig already there", "[impo
 
 	// On disk, where the clips import must find it: its box is measured against project meshes,
 	// not against geometry it has no copy of.
-	const fs::path meshPath = root.Data() / Project::c_MeshesDirectoryName / "unit.bmesh";
+	const fs::path meshPath =
+		root.Data() / assetlib::Project::c_MeshesDirectoryName / "unit.bmesh";
 	fs::create_directories(meshPath.parent_path());
 	assetlib::save(mesh, meshPath);
 
-	const fs::path runPath = root.Data() / Project::c_AnimationsDirectoryName / "coyote_run.banim";
+	const fs::path runPath =
+		root.Data() / assetlib::Project::c_AnimationsDirectoryName / "coyote_run.banim";
 	editor::WriteImportedClips(imported, root.Data(), runPath);
 
 	REQUIRE(fs::exists(runPath));
@@ -422,7 +426,8 @@ TEST_CASE("Clips import on their own, attached to the rig already there", "[impo
 			.has_value());
 
 	// The point of the exercise: one rig, one mesh, many clip sets.
-	CHECK_FALSE(fs::exists(root.Data() / Project::c_MeshesDirectoryName / "coyote_run.bmesh"));
+	CHECK_FALSE(
+		fs::exists(root.Data() / assetlib::Project::c_MeshesDirectoryName / "coyote_run.bmesh"));
 }
 
 TEST_CASE("Clips with no rig to attach to are refused", "[importedrig]")
