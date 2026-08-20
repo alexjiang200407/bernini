@@ -1,13 +1,12 @@
-#include "Project/Project.h"
-
-#include "util/QtSupport.h"
 #include <assetlib/AssetStore.h>
+#include <assetlib/Project.h>
 #include <assetlib/bmaterial_io.h>
 #include <assetlib/pak_pack.h>
 #include <assetlib_structs/BMaterial.h>
 
-#include <QTemporaryDir>
 #include <nlohmann/json.hpp>
+
+using namespace assetlib;
 
 namespace
 {
@@ -19,13 +18,22 @@ namespace
 	/** An empty directory, and the path of a project file that does not exist inside it yet. */
 	struct Sandbox
 	{
-		QTemporaryDir temp;
+		fs::path root;
+
+		// Named per case, like assetlib::test::DataRoot: run_tests.py shards a suite across
+		// concurrent processes, so two cases sharing a root would race each other's remove_all.
+		explicit Sandbox(const char* name) : root(fs::temp_directory_path() / name)
+		{
+			fs::remove_all(root);
+			fs::create_directories(root);
+		}
+
+		~Sandbox() { fs::remove_all(root); }
 
 		fs::path
 		ProjectFile() const
 		{
-			return temp.path().toStdString() / fs::path("MyGame") /
-			       ("MyGame" + std::string(Project::c_FileExtension));
+			return root / "MyGame" / ("MyGame" + std::string(Project::c_FileExtension));
 		}
 	};
 
@@ -49,7 +57,7 @@ namespace
 
 TEST_CASE("Creating a project scaffolds the data tree", "[project]")
 {
-	const Sandbox sandbox;
+	const Sandbox sandbox("bernini_project_creating_project_scaffolds_data_tree");
 
 	const Project project = Project::Create(sandbox.ProjectFile(), "MyGame");
 
@@ -62,7 +70,7 @@ TEST_CASE("Creating a project scaffolds the data tree", "[project]")
 
 TEST_CASE("Creating a project brings its root directory into being", "[project]")
 {
-	const Sandbox sandbox;
+	const Sandbox sandbox("bernini_project_creating_project_brings_root_directory_into");
 
 	// The MyGame/ directory does not exist yet -- Create is what makes it, which is exactly what the
 	// editor's "new project" flow relies on.
@@ -76,7 +84,7 @@ TEST_CASE("Creating a project brings its root directory into being", "[project]"
 
 TEST_CASE("Creating a project writes its metadata", "[project]")
 {
-	const Sandbox sandbox;
+	const Sandbox sandbox("bernini_project_creating_project_writes_metadata");
 
 	Project::Create(sandbox.ProjectFile(), "MyGame");
 
@@ -89,7 +97,7 @@ TEST_CASE("Creating a project writes its metadata", "[project]")
 
 TEST_CASE("A project keeps the name it was given", "[project]")
 {
-	const Sandbox sandbox;
+	const Sandbox sandbox("bernini_project_project_keeps_name_given");
 
 	// The display name is not the file name, and must not be quietly derived from it.
 	const Project project = Project::Create(sandbox.ProjectFile(), "Something Else Entirely");
@@ -99,7 +107,7 @@ TEST_CASE("A project keeps the name it was given", "[project]")
 
 TEST_CASE("The data directory hangs off the project file", "[project]")
 {
-	const Sandbox sandbox;
+	const Sandbox sandbox("bernini_project_data_directory_hangs_off_project_file");
 
 	const Project project = Project::Create(sandbox.ProjectFile(), "MyGame");
 
@@ -108,7 +116,7 @@ TEST_CASE("The data directory hangs off the project file", "[project]")
 
 TEST_CASE("Opening a project round-trips what creating it wrote", "[project]")
 {
-	const Sandbox sandbox;
+	const Sandbox sandbox("bernini_project_opening_project_roundtrips_creating_wrote");
 
 	const Project created = Project::Create(sandbox.ProjectFile(), "Round Trip");
 	const Project opened  = Project::Open(sandbox.ProjectFile());
@@ -120,7 +128,7 @@ TEST_CASE("Opening a project round-trips what creating it wrote", "[project]")
 
 TEST_CASE("An unnamed project falls back to its file name", "[project]")
 {
-	const Sandbox sandbox;
+	const Sandbox sandbox("bernini_project_unnamed_project_falls_back_file_name");
 
 	WriteText(sandbox.ProjectFile(), R"({ "version": 1 })");
 
@@ -129,7 +137,7 @@ TEST_CASE("An unnamed project falls back to its file name", "[project]")
 
 TEST_CASE("An unversioned project is read as current", "[project]")
 {
-	const Sandbox sandbox;
+	const Sandbox sandbox("bernini_project_unversioned_project_read_as_current");
 
 	// Nothing observable hangs off the version yet. This pins the behaviour before something does.
 	WriteText(sandbox.ProjectFile(), R"({ "name": "MyGame" })");
@@ -141,7 +149,7 @@ TEST_CASE("An unversioned project is read as current", "[project]")
 
 TEST_CASE("An older project survives a round trip as an older project", "[project]")
 {
-	const Sandbox sandbox;
+	const Sandbox sandbox("bernini_project_older_project_survives_round_trip_as_older_p");
 
 	WriteText(sandbox.ProjectFile(), R"({ "name": "MyGame", "version": 0 })");
 
@@ -154,7 +162,7 @@ TEST_CASE("An older project survives a round trip as an older project", "[projec
 
 TEST_CASE("Opening a project recreates a missing data directory", "[project]")
 {
-	const Sandbox sandbox;
+	const Sandbox sandbox("bernini_project_opening_project_recreates_missing_data_direc");
 
 	Project::Create(sandbox.ProjectFile(), "MyGame");
 
@@ -174,7 +182,7 @@ TEST_CASE("Opening a project recreates a missing data directory", "[project]")
 
 TEST_CASE("Opening a project leaves what is already in it alone", "[project]")
 {
-	const Sandbox sandbox;
+	const Sandbox sandbox("bernini_project_opening_project_leaves_already_alone");
 
 	const Project created = Project::Create(sandbox.ProjectFile(), "MyGame");
 
@@ -190,14 +198,14 @@ TEST_CASE("Opening a project leaves what is already in it alone", "[project]")
 
 TEST_CASE("A project that is not there cannot be opened", "[project]")
 {
-	const Sandbox sandbox;
+	const Sandbox sandbox("bernini_project_project_there_cannot_be_opened");
 
 	REQUIRE_THROWS_AS(Project::Open(sandbox.ProjectFile()), std::runtime_error);
 }
 
 TEST_CASE("A malformed project cannot be opened", "[project]")
 {
-	const Sandbox sandbox;
+	const Sandbox sandbox("bernini_project_malformed_project_cannot_be_opened");
 
 	WriteText(sandbox.ProjectFile(), "{ this is not json");
 
@@ -206,7 +214,7 @@ TEST_CASE("A malformed project cannot be opened", "[project]")
 
 TEST_CASE("A data directory blocked by a file is refused", "[project]")
 {
-	const Sandbox sandbox;
+	const Sandbox sandbox("bernini_project_data_directory_blocked_by_file_refused");
 
 	WriteText(sandbox.ProjectFile(), R"({ "name": "MyGame", "version": 1 })");
 
@@ -221,7 +229,7 @@ TEST_CASE("A data directory blocked by a file is refused", "[project]")
 
 TEST_CASE("Saving a project twice writes the same project", "[project]")
 {
-	const Sandbox sandbox;
+	const Sandbox sandbox("bernini_project_saving_project_twice_writes_same_project");
 
 	const Project     project     = Project::Create(sandbox.ProjectFile(), "MyGame");
 	const std::string afterCreate = ReadText(sandbox.ProjectFile());
@@ -274,7 +282,7 @@ TEST_CASE("The scaffolded categories are not the user's to delete", "[project]")
  */
 TEST_CASE("A project reads and writes the loose tree, archive or not", "[project]")
 {
-	const Sandbox sandbox;
+	const Sandbox sandbox("bernini_project_project_reads_writes_loose_tree_archive_or");
 	const auto    file = sandbox.ProjectFile();
 
 	Project created = Project::Create(file, "MyGame");

@@ -2,6 +2,7 @@
 
 #include <QMainWindow>
 
+#include <assetlib/Project.h>
 #include <gamelib/AssetManager.h>
 
 #include "ui_MainWindow.h"
@@ -9,7 +10,6 @@
 class QDockWidget;
 class QLabel;
 class QMenu;
-class Project;
 class ContentExplorerWindow;
 class AssetThumbnailCache;
 class AnimationEditorWindow;
@@ -48,7 +48,7 @@ private:
 	CleanUnusedTextures();
 
 	void
-	SetActiveProject(Project project);
+	SetActiveProject(assetlib::Project project);
 
 	void
 	ShowEmptyState();
@@ -98,16 +98,16 @@ private:
 
 	QString m_InstanceName;
 
-	std::unique_ptr<Project> m_Project;
-	ContentExplorerWindow*   m_ContentExplorer     = nullptr;
-	LevelEditorWindow*       m_LevelEditor         = nullptr;
-	MaterialEditorWindow*    m_MaterialEditor      = nullptr;
-	AnimationEditorWindow*   m_AnimationEditor     = nullptr;
-	QDockWidget*             m_LevelEditorDock     = nullptr;
-	QDockWidget*             m_MaterialEditorDock  = nullptr;
-	QDockWidget*             m_AnimationEditorDock = nullptr;
-	QDockWidget*             m_ContentExplorerDock = nullptr;
-	QLabel*                  m_FrameStats          = nullptr;
+	std::unique_ptr<assetlib::Project> m_Project;
+	ContentExplorerWindow*             m_ContentExplorer     = nullptr;
+	LevelEditorWindow*                 m_LevelEditor         = nullptr;
+	MaterialEditorWindow*              m_MaterialEditor      = nullptr;
+	AnimationEditorWindow*             m_AnimationEditor     = nullptr;
+	QDockWidget*                       m_LevelEditorDock     = nullptr;
+	QDockWidget*                       m_MaterialEditorDock  = nullptr;
+	QDockWidget*                       m_AnimationEditorDock = nullptr;
+	QDockWidget*                       m_ContentExplorerDock = nullptr;
+	QLabel*                            m_FrameStats          = nullptr;
 
 	std::unique_ptr<Renderer> m_Renderer;
 

@@ -810,10 +810,11 @@ materials in `Materials/kirk/` route from it. A reference into *any depth* of th
 tracks: `remove_all` does not ask what a file is for, so a `notes.txt` the user dropped in the folder
 goes with it, and the count they are warned with has to say so.
 
-Which directories the *project* cannot spare is not a question assetlib can answer — it does not know
-what a project is. That rule is `Project::IsRequiredDirectory`: the data root, and the categories
-`Project::Create` scaffolds (`Meshes`, `Textures`, `textures_src`, `Materials`, `Levels`). `Project::Open`
-puts a missing one straight back, so deleting one would not even stick. A folder made *inside* a
+Which directories the *project* cannot spare is not a question the reference graph answers — it plans
+a deletion from what points at what, and a category with nothing in it points at nothing. That rule is
+`assetlib::Project::IsRequiredDirectory`: the data root, and the categories `Project::Create` scaffolds
+(`Meshes`, `Textures`, `textures_src`, `Materials`, `Levels`). `Project::Open` puts a missing one
+straight back, so deleting one would not even stick. A folder made *inside* a
 category, like `textures_src/kirk`, is the user's.
 
 Three things the implementation must get right, each of which is a real failure and not a hypothetical:

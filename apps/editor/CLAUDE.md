@@ -91,7 +91,7 @@ why `just test` cannot forward arguments to a suite. The only thing genuinely lo
 
 ```bash
 just test editor                        # the suite; about fifteen seconds
-just run editor_tests -- "[project]"    # one tag
+just run editor_tests -- "[assetimporter]"  # one tag
 just run editor_tests -- "~[render]"    # skip the GPU cases; back to about a second
 just run editor_tests -- --list-tests
 ```

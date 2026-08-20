@@ -12,7 +12,6 @@
 #include <QTabWidget>
 
 #include "Async/BackgroundTask.h"
-#include "Project/Project.h"
 #include "Render/Renderer.h"
 #include "Thumbnails/AssetThumbnailCache.h"
 #include "Windows/AnimationEditor/AnimationEditorWindow.h"
@@ -22,6 +21,7 @@
 #include "Windows/MaterialEditor/MaterialEditorWindow.h"
 #include "Windows/RenderTarget/RenderTargetWindow.h"
 #include "util/window_title.h"
+#include <assetlib/Project.h>
 
 #include <QActionGroup>
 #include <QMenuBar>
@@ -466,11 +466,11 @@ MainWindow::NewProject()
 		return;
 
 	const auto root        = std::filesystem::path(location.toStdWString()) / name.toStdString();
-	const auto projectFile = root / (name.toStdString() + Project::c_FileExtension);
+	const auto projectFile = root / (name.toStdString() + assetlib::Project::c_FileExtension);
 
 	try
 	{
-		SetActiveProject(Project::Create(projectFile, name.toStdString()));
+		SetActiveProject(assetlib::Project::Create(projectFile, name.toStdString()));
 	}
 	catch (const std::exception& e)
 	{
@@ -482,7 +482,7 @@ void
 MainWindow::OpenProject()
 {
 	const auto filter =
-		QString("Bernini Project (*%1)").arg(QString::fromUtf8(Project::c_FileExtension));
+		QString("Bernini Project (*%1)").arg(QString::fromUtf8(assetlib::Project::c_FileExtension));
 	const auto file = QFileDialog::getOpenFileName(this, "Open Project", QString(), filter);
 	if (file.isEmpty())
 		return;
@@ -495,7 +495,7 @@ MainWindow::OpenProjectAt(const std::filesystem::path& path)
 {
 	try
 	{
-		SetActiveProject(Project::Open(path));
+		SetActiveProject(assetlib::Project::Open(path));
 		return true;
 	}
 	catch (const std::exception& e)
@@ -610,9 +610,9 @@ MainWindow::CleanUnusedTextures()
 }
 
 void
-MainWindow::SetActiveProject(Project project)
+MainWindow::SetActiveProject(assetlib::Project project)
 {
-	m_Project = std::make_unique<Project>(std::move(project));
+	m_Project = std::make_unique<assetlib::Project>(std::move(project));
 
 	const auto dataDir = QString::fromStdWString(m_Project->GetDataDirectory().wstring());
 
