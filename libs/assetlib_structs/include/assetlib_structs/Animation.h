@@ -35,6 +35,23 @@ namespace assetlib
 	static_assert(sizeof(AnimationClip) == 40);
 
 	/**
+	 * The box one mesh entry sweeps through every pose of every clip, measured at cook so a load
+	 * culls by it without re-skinning the rig -- see assetlib::findPosedBounds.
+	 *
+	 * `sourceSignature` names the geometry and bind the box was measured against
+	 * (assetlib::posedBoundsSignature); a pairing whose signature differs is measured instead.
+	 */
+	struct PosedBox
+	{
+		uint64_t  sourceSignature;
+		glm::vec3 min;
+		glm::vec3 max;
+		uint32_t  meshIndex;
+	};
+
+	static_assert(sizeof(PosedBox) == 40);
+
+	/**
 	 * The clips authored against one skeleton, and the poses they sample.
 	 *
 	 * `samples` is frame-major -- bone `b` of frame `f` of a clip is
@@ -50,5 +67,7 @@ namespace assetlib
 		std::vector<AnimationClip> clips;
 		std::vector<Transform>     samples;
 		core::string_pool          stringPool;
+
+		std::vector<PosedBox> posedBoxes;  // empty until a cook bakes them
 	};
 }

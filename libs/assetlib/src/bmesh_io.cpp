@@ -9,6 +9,7 @@
 #include <assetlib_structs/BMeshImport.h>
 
 #include <assetlib/mesh_tangents.h>
+#include <assetlib/skinning.h>
 
 #include "AssetSchemaBuilder.h"
 #include "chunk_io.h"
@@ -366,6 +367,7 @@ namespace assetlib
 			{
 				AnimationSet animations = mesh.animations;
 				animations.skeleton     = baked.skeleton;
+				bakePosedBounds(animations, baked, mesh.skeleton);
 				saveAnimations(animations, outDir / animationFileName(name));
 			}
 		}

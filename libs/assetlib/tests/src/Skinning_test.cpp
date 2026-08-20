@@ -1,3 +1,4 @@
+#include <assetlib/banim_io.h>
 #include <assetlib/skeleton.h>
 #include <assetlib/skinning.h>
 #include <assetlib_structs/Animation.h>
@@ -480,5 +481,113 @@ TEST_CASE("posedBounds measures the pose, not the bind pose", "[skinning][bounds
 		// own transform and come back larger than the geometry.
 		CHECK(bounds.min.x == Catch::Approx(-1.0f));
 		CHECK(bounds.max.x == Catch::Approx(1.0f));
+	}
+}
+
+TEST_CASE("A baked posed box answers only for the pairing it measured", "[skinning][bounds]")
+{
+	SkinnedMesh fixture;
+	fixture.Add(
+		glm::vec3(-1.0f),
+		glm::vec3(0.0f, 0.0f, 1.0f),
+		{ { 0, 0, 0, 0 } },
+		{ { 65535, 0, 0, 0 } });
+	fixture.Add(
+		glm::vec3(1.0f),
+		glm::vec3(0.0f, 0.0f, 1.0f),
+		{ { 0, 0, 0, 0 } },
+		{ { 65535, 0, 0, 0 } });
+
+	fixture.submesh.aabbMin = glm::vec3(-1.0f);
+	fixture.submesh.aabbMax = glm::vec3(1.0f);
+	fixture.mesh.submeshes.push_back(fixture.submesh);
+	fixture.mesh.meshes.push_back({ .firstSubmesh = 0, .submeshCount = 1, .nameOffset = 0 });
+
+	auto skeleton = assetlib::Skeleton();
+
+	auto bone        = assetlib::Bone();
+	bone.bindPose    = { glm::vec3(0.0f), glm::quat(1.0f, 0.0f, 0.0f, 0.0f), glm::vec3(1.0f) };
+	bone.inverseBind = glm::mat4(1.0f);
+	bone.parent      = assetlib::c_InvalidIndex;
+	bone.nameOffset  = 0;
+	skeleton.bones.push_back(bone);
+
+	auto animations              = assetlib::AnimationSet();
+	animations.boneCount         = 1;
+	animations.skeletonSignature = assetlib::skeletonSignature(skeleton);
+
+	auto clip        = assetlib::AnimationClip();
+	clip.firstSample = 0;
+	clip.frameCount  = 2;
+	clip.sampleRate  = 30.0f;
+	animations.clips.push_back(clip);
+
+	animations.samples.push_back(
+		{ glm::vec3(0.0f), glm::quat(1.0f, 0.0f, 0.0f, 0.0f), glm::vec3(1.0f) });
+	animations.samples.push_back(
+		{ glm::vec3(50.0f, 0.0f, 0.0f), glm::quat(1.0f, 0.0f, 0.0f, 0.0f), glm::vec3(1.0f) });
+
+	assetlib::bakePosedBounds(animations, fixture.mesh, skeleton);
+
+	SECTION("the bake stores what the measure returns, through the .banim and back")
+	{
+		const assetlib::AnimationSet loaded =
+			assetlib::deserializeAnimations(assetlib::serializeAnimations(animations));
+
+		const std::optional<assetlib::Bounds> found =
+			assetlib::findPosedBounds(loaded, fixture.mesh, 0, skeleton);
+
+		REQUIRE(found.has_value());
+		CHECK(found->min.x == Catch::Approx(-1.0f));
+		CHECK(found->max.x == Catch::Approx(51.0f));
+	}
+
+	SECTION("a mesh that changed since the bake is measured, not matched")
+	{
+		fixture.mesh.vertexData[0] ^= std::byte{ 0x01 };
+		CHECK_FALSE(assetlib::findPosedBounds(animations, fixture.mesh, 0, skeleton).has_value());
+	}
+
+	SECTION("a bind re-authored since the bake is measured, not matched")
+	{
+		// The one skeleton edit skeletonSignature deliberately lets through -- see skeleton.h.
+		skeleton.bones[0].inverseBind = glm::translate(glm::mat4(1.0f), glm::vec3(0.5f));
+		CHECK_FALSE(assetlib::findPosedBounds(animations, fixture.mesh, 0, skeleton).has_value());
+	}
+
+	SECTION("a submesh table regrouped over identical bytes is measured, not matched")
+	{
+		// The vertex blob alone cannot see this edit, which is why the tables are in the hash.
+		fixture.mesh.submeshes[0].vertexCount = 1;
+		CHECK_FALSE(assetlib::findPosedBounds(animations, fixture.mesh, 0, skeleton).has_value());
+	}
+
+	SECTION("a mesh entry the bake never saw finds nothing")
+	{
+		CHECK_FALSE(assetlib::findPosedBounds(animations, fixture.mesh, 1, skeleton).has_value());
+	}
+
+	SECTION("rebaking the same source replaces its entries rather than stacking them")
+	{
+		assetlib::bakePosedBounds(animations, fixture.mesh, skeleton);
+		CHECK(animations.posedBoxes.size() == 1);
+	}
+
+	SECTION("a mesh with no skin gets no box; its submeshes already carry one")
+	{
+		SkinnedMesh rigid;
+		rigid.Add(
+			glm::vec3(2.0f),
+			glm::vec3(0.0f, 0.0f, 1.0f),
+			{ { 0, 0, 0, 0 } },
+			{ { 65535, 0, 0, 0 } });
+		rigid.submesh.layout.attributeCount = 2;  // position and normal only
+		rigid.mesh.submeshes.push_back(rigid.submesh);
+		rigid.mesh.meshes.push_back({ .firstSubmesh = 0, .submeshCount = 1, .nameOffset = 0 });
+
+		auto rebaked = assetlib::AnimationSet(animations);
+		rebaked.posedBoxes.clear();
+		assetlib::bakePosedBounds(rebaked, rigid.mesh, skeleton);
+		CHECK(rebaked.posedBoxes.empty());
 	}
 }

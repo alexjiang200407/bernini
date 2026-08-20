@@ -528,6 +528,16 @@ namespace assetlib
 			animations.samples.size(),
 			byteSize(animations.samples.size() * sizeof(Transform)));
 
+		if (animations.posedBoxes.empty())
+			out += "  posedBoxes   none (a load measures instead -- see assetlib_cli bakebounds)\n";
+		for (const PosedBox& box : animations.posedBoxes)
+			out += std::format(
+				"  posedBox     mesh {} of source {:016x}: {} .. {}\n",
+				box.meshIndex,
+				box.sourceSignature,
+				vec3(box.min),
+				vec3(box.max));
+
 		for (size_t i = 0; i < animations.clips.size(); ++i)
 		{
 			const AnimationClip& clip = animations.clips[i];
