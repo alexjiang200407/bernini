@@ -2,8 +2,8 @@
 
 #include "Async/BackgroundTask.h"
 #include "Import/import_writers.h"
-#include "Project/Project.h"
 #include "Windows/AssetImporter/EnvironmentImporterDialog.h"
+#include <assetlib/Project.h>
 
 #include <QFileInfo>
 #include <QMessageBox>
@@ -127,8 +127,8 @@ namespace editor
 		}
 
 		const std::array<ImportedDir, 2> dirs = { {
-			{ textureDir, textureDirExisted, Project::c_TexturesSrcDirectoryName },
-			{ materialDir, materialDirExisted, Project::c_MaterialsDirectoryName },
+			{ textureDir, textureDirExisted, assetlib::Project::c_TexturesSrcDirectoryName },
+			{ materialDir, materialDirExisted, assetlib::Project::c_MaterialsDirectoryName },
 		} };
 
 		auto replaced = QStringList();

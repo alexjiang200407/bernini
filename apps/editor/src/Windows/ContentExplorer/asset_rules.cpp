@@ -1,6 +1,6 @@
 #include "asset_rules.h"
 
-#include "Project/Project.h"
+#include <assetlib/Project.h>
 
 #include <QDir>
 #include <QFileSystemModel>
@@ -25,7 +25,8 @@ namespace editor
 
 		if (model.isDir(index))
 		{
-			return Project::IsRequiredDirectory(relative.toStdWString()) ? QString() : relative;
+			return assetlib::Project::IsRequiredDirectory(relative.toStdWString()) ? QString() :
+			                                                                         relative;
 		}
 
 		return assetlib::assetTypeFromExtension(path.toStdWString()) ? relative : QString();

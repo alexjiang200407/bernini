@@ -1,9 +1,9 @@
 #include "material_io.h"
 
 #include "Async/BackgroundTask.h"
-#include "Project/Project.h"
 #include "Windows/MaterialEditor/MaterialGraphModel.h"
 #include "Windows/MaterialEditor/material_graph.h"
+#include <assetlib/Project.h>
 
 #include <QFileInfo>
 #include <QMessageBox>
@@ -97,7 +97,7 @@ namespace editor
 		if (dataRoot.empty())
 			return name;
 
-		auto dir = dataRoot / Project::c_MaterialsDirectoryName;
+		auto dir = dataRoot / assetlib::Project::c_MaterialsDirectoryName;
 
 		std::error_code ec;
 		if (!std::filesystem::is_directory(dir, ec))

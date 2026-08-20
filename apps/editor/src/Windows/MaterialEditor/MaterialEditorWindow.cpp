@@ -27,7 +27,6 @@
 #include <assetlib_structs/BMesh.h>
 
 #include "Async/BackgroundTask.h"
-#include "Project/Project.h"
 #include "Render/Renderer.h"
 #include "Thumbnails/TexturePreviewCache.h"
 #include "Windows/MaterialEditor/MaterialGraphModel.h"
