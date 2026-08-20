@@ -80,8 +80,8 @@ not obvious from a signature. The headers linked below are the source of truth.
 | Stage | Where | What it does |
 |---|---|---|
 | Import | `assetlib` | A glTF skin becomes `.bskel` (bones, topologically sorted, with inverse binds, each composed from its whole node chain) + `.banim` (clips resampled to a fixed rate, frame-major local TRS, composed the same way) + `joints0`/`weights0` on the `.bmesh` |
-| Bound | [`assetlib::posedBounds`](libs/assetlib/include/assetlib/skinning.h) | Skins every vertex at every frame for the box the geom culls by |
-| Acquire | [`AssetManager::AcquireSkinnedMesh`](libs/gamelib/include/gamelib/AssetManager.h) | Reads the three containers, checks the clip set still matches its rig, bounds the pose unless given a box, uploads |
+| Bound | [`assetlib::bakePosedBounds`](libs/assetlib/include/assetlib/skinning.h) | At import: skins every vertex at every frame (`posedBounds`) and stores the box in the `.banim`, keyed by a content signature so a re-authored source falls back to measuring |
+| Acquire | [`AssetManager::AcquireSkinnedMesh`](libs/gamelib/include/gamelib/AssetManager.h) | Reads the three containers, checks the clip set still matches its rig, culls by the baked box (`findPosedBounds`) — measuring only a pairing the cook never saw — uploads |
 | Upload | [`IScene::AddSkinnedMeshGeom`](libs/bgl/include/bgl/IScene.h) | Bones, clip table and sample pool become scene buffers; per-bone depth is derived here |
 | Place | [`ISceneView::CreateSkinnedMeshInstance`](libs/bgl/include/bgl/ISceneView.h) | Writes the playback record and reserves the instance's palette slice |
 | Pose | [`SkinnedPosePass`](libs/bgl/src/passes/SkinnedPosePass.h) | One workgroup per instance: sample, blend, walk the hierarchy, multiply by inverse bind |
@@ -128,8 +128,8 @@ the transport, the clip list and the scrubber are the same code either way — w
   orbiting once is the cost.
 
 * **Framing uses the posed box, never the bind pose.** See the culling contract below: it is the same
-  box and the same reason, and it is why the panel measures it inside its loading screen rather than
-  on the render thread.
+  box and the same reason. The panel reads it off the `.banim`'s bake, and only a pairing the cook
+  never measured is walked — inside its loading screen rather than on the render thread.
 
 * **The panel itself is not covered by a test**, and this is a pre-existing gap rather than one the
   skinned tier introduced: `RenderTargetWindow`'s constructor calls `CreateRenderTarget` with a real
@@ -154,12 +154,14 @@ the transport, the clip list and the scrubber are the same code either way — w
   the whole rig out of it, so bind-pose culling makes it disappear as soon as it does. Measuring the
   box means skinning a vertex, which means
   decoding a vertex layout — `assetlib`, which `bgl` does not link. `assetlib::posedBounds` is that
-  walk (every vertex at every frame, the same one `bakeVat` makes), and `AcquireSkinnedMesh` makes it
-  unless the caller hands over a box it already has. The editor does: the walk is seconds on a dense
-  rig and the acquire runs on the render thread, so the panel measures it inside its loading screen
-  and passes the result down — one box per animated mesh entry, because it is that geom's culling
-  volume and a `.bmesh` may hold two rigged meshes. Measuring it at load is a stopgap: it belongs in
-  the container, the way `bakeVat` writes `boundsMin`/`boundsMax` into a `.bvat`.
+  walk (every vertex at every frame, the same one `bakeVat` makes), and it is paid at **import**:
+  `bakePosedBounds` stores the result in the `.banim`, the way `bakeVat` writes
+  `boundsMin`/`boundsMax` into a `.bvat` — one box per rigged mesh entry, because it is that geom's
+  culling volume and a `.bmesh` may hold two rigged meshes. Each box is keyed by a signature over
+  the vertex data and the inverse binds (`posedBoundsSignature`), so a source re-authored since the
+  bake simply stops matching. `AcquireSkinnedMesh` reads the bake (`findPosedBounds`) and walks only
+  a pairing the cook never measured — a caller that cannot block still hands over its own box. A
+  project imported before the boxes existed is retrofitted with `assetlib_cli bakebounds`.
 
 * **The palette buffer is GPU-written, so it is not a `RangeBuffer`.** That type mirrors its contents
   on the CPU and re-uploads a dirty range, which would overwrite what the pose pass wrote.
