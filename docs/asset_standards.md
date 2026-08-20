@@ -266,8 +266,7 @@ Three different spaces are in play and they are easy to conflate. The contract, 
 
 * **Vertex normals and tangents are authored in object space** and transformed to world space per
   vertex by the mesh shader, both by the mesh's `transform`
-  ([libs/bgl/shaders/src/Forward_StaticMesh.slang](libs/bgl/shaders/src/Forward_StaticMesh.slang),
-  `EvaluateVertices`). A tangent is a direction, so it transforms exactly like the normal; only
+  ([forward/static_vertex.slang](libs/bgl/shaders/src/forward/static_vertex.slang), `StaticVertex`). A tangent is a direction, so it transforms exactly like the normal; only
   `tangent.w` is left alone, because it is a sign and not a direction.
 * **Uniform scale only.** Both are transformed by the plain upper-left `float3x3` of the model matrix,
   not its inverse-transpose. Under a **non-uniform** scale that skews the basis and the lighting is
@@ -393,8 +392,9 @@ Three different spaces are in play and they are easy to conflate. The contract, 
   (`libs/bgl/idl/src/PsoType.slang`) appended at the end, because `c_Psos` in `ForwardPass.cpp` is
   index-parallel to the enum and its static_assert catches only an empty row, not a misordered one;
   arms in `GetPsoFromGeomAndMaterial` (`libs/bgl/src/util/util.cpp`); and material storage in
-  `Scene`. The amp/mesh stages are shared: every pixel module draws through the same
-  `Forward_StaticMesh` / `Forward_VatMesh` geometry.
+  `Scene`. The amp/mesh stages are shared: every pixel module draws through one of the four
+  geometry modules — `Forward_StaticMesh`, `Forward_VatMesh`, `Forward_SkinnedMesh`, or the
+  tier-branching `Forward_AnyMesh` — and a new layer adds no geometry code.
 * **`.bskel`** (v1) — a skeleton: bones, their bind pose and inverse bind matrices, and a name pool.
   Struct: [libs/assetlib_structs/include/assetlib_structs/Skeleton.h](libs/assetlib_structs/include/assetlib_structs/Skeleton.h);
   I/O: [libs/assetlib/include/assetlib/bskel_io.h](libs/assetlib/include/assetlib/bskel_io.h).

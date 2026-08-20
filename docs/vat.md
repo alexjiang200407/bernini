@@ -57,12 +57,13 @@ truth; when this doc disagrees, trust the header, then fix this doc.
 * **The linkage rides `idl::Mesh`, not the sort key.** Each placement's GPU record carries an
   `Entry<VatState>` (null for static meshes — it occupies alignment padding, so `sizeof` is
   unchanged); `SubmeshInstance` keeps its 16 bytes, and its `pso` remains the one derived sort key
-  (`SubmeshPso(geomType, material)`). The geometry family is `GeomType::kVatMesh`, one PSO bucket
-  (`kOpaque_VatMesh_PBR`) sharing the PBR pixel stage untouched — the same arrangement the skinned
-  tier uses for `kOpaque_SkinnedMesh_PBR`.
-* **Every VAT door demands opaque `kPBR`.** No null, cutout or loose variant of the VAT pipeline
-  exists, so `AddVatMeshGeom`, `SetSubmeshMaterial` and `SetSubmeshMaterialOverride` all refuse
-  anything else — which is what keeps the single bucket total.
+  (`SubmeshPso(geomType, material)`). The geometry family is `GeomType::kVatMesh`, one PSO bucket per
+  layer (`kOpaque_VatMesh_PBR`, `kAlphaTest_`, `kHashedAlpha_`, `kTransparent_`) sharing the PBR pixel
+  stages untouched — the same arrangement the skinned tier uses.
+* **Every VAT door demands `kPBR`, in any layer.** No null and no loose variant of the VAT pipeline
+  exists, so `AddVatMeshGeom`, `SetSubmeshMaterial` and `SetSubmeshMaterialOverride` refuse those —
+  and nothing else. A blended VAT instance is drawn from the depth-sorted list rather than its own
+  bucket, through the tier-branching `Forward_AnyMesh` (see [Passes](docs/passes.md)).
 * **Motion vectors are the pose re-evaluated at `prevTime`.** The instance transform is
   immutable, so the previous frame's clip-space position is one extra position fetch through
   `prevViewProj` — real velocity from day one, because TAA ghosting on the majority path is not
@@ -240,9 +241,9 @@ flowchart TD
   showing. The panel also carries a **Bake VAT** button, so the bake can be made deliberately rather
   than only in answer to a refusal. Nothing else in the tree works this way — `AcquireVatMesh` still
   bakes on demand, which is what a game loading a level wants.
-* **A mesh with non-opaque or loose materials cannot be acquired as VAT** — the per-submesh
-  opaque-`kPBR` rule surfaces here as a throw *after* the bake and material acquires; the unwind
-  releases everything taken, so a failed acquire owns nothing.
+* **A mesh with loose materials cannot be acquired as VAT** — the per-submesh `kPBR` rule surfaces
+  here as a throw *after* the bake and material acquires; the unwind releases everything taken, so a
+  failed acquire owns nothing.
 
 ## Usage Sketch
 
