@@ -351,7 +351,7 @@ AnimationPreviewWindow::LoadMeshAs(
 			for (const bmesh::InstancePlacement& placement : plan.animated)
 			{
 				// A rig with no clip file anywhere falls back to bind pose as static geometry --
-				// and so does one the VAT pipeline refuses (an unbaked or non-opaque material): a
+				// and so does one the VAT pipeline refuses (an unbaked or blended material): a
 				// mesh standing still beats a viewport cleared to nothing, and the refusal is
 				// surfaced once the load completes.
 				if (animations.empty())

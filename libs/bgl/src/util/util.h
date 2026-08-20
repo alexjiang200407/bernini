@@ -24,10 +24,9 @@ namespace bgl
 
 	/**
 	 * Whether `geomType` can be drawn with `material`, which is what every door binding one to
-	 * animated geometry checks. Static geometry takes every layer; the skinned pipeline adds cutout
-	 * and hashed to opaque, since both discard rather than blend and so stay in the opaque bucket;
-	 * VAT has opaque alone. Only blending is missing from the skinned set, and it is the one that
-	 * would need the depth-sorted list.
+	 * animated geometry checks. Static geometry takes every layer; both animated tiers take every
+	 * layer but blend, since a discarding surface stays in the opaque bucket while a blended one
+	 * needs the depth-sorted list, which draws through the static geometry stage alone.
 	 *
 	 * An invalid handle is rejected -- animated geometry has no unlit variant to fall back to.
 	 */

@@ -133,19 +133,22 @@ namespace bgl
 				gfatal("Invalid MaterialType");
 			}
 
-		// One opaque PBR bucket; alpha variants arrive when a use case does. The material is
-		// constrained to kPBR/kOpaque at every door that binds one to VAT geometry (AddVatMeshGeom,
-		// SetSubmeshMaterial, SetSubmeshMaterialOverride), so any other type reaching here is
-		// bgl's own bug.
+		// The material is constrained to kPBR at every door that binds one to VAT geometry
+		// (AddVatMeshGeom, SetSubmeshMaterial, SetSubmeshMaterialOverride), so any other type
+		// reaching here is bgl's own bug. Blending is still missing: it needs the depth-sorted
+		// list, which draws through the static geometry stage alone.
 		case GeomType::kVatMesh:
-			if (material != MaterialType::kPBR || cutout || blend || hashed)
-				gfatal("VAT geometry is only drawable with an opaque kPBR material");
+			if (material != MaterialType::kPBR || blend)
+				gfatal("VAT geometry is not drawable with a blended kPBR material");
+			if (cutout)
+				return PsoType::kAlphaTest_VatMesh_PBR;
+			if (hashed)
+				return PsoType::kHashedAlpha_VatMesh_PBR;
 			return PsoType::kOpaque_VatMesh_PBR;
 
 		// Constrained at every door that binds a material to skinned geometry, exactly as VAT is
-		// above, so any other type reaching here is bgl's own bug. Cutout and hashed join opaque
-		// because both still draw an opaque shape -- they discard, they do not blend, so neither
-		// needs sorting. Only kBlend is missing, and it is the one that would.
+		// above. Cutout and hashed join opaque because both still draw an opaque shape -- they
+		// discard, they do not blend, so neither needs sorting.
 		case GeomType::kSkinnedMesh:
 			if (material != MaterialType::kPBR || blend)
 				gfatal("Skinned geometry is not drawable with a blended kPBR material");
@@ -171,11 +174,7 @@ namespace bgl
 		if (!material.IsValid() || material.materialType != MaterialType::kPBR)
 			return false;
 
-		if (material.layerType == LayerType::kOpaque)
-			return true;
-
-		return geomType == GeomType::kSkinnedMesh &&
-		       (material.layerType == LayerType::kMask || material.layerType == LayerType::kHashed);
+		return material.layerType != LayerType::kBlend;
 	}
 
 	bool

@@ -252,9 +252,10 @@ namespace bgl
 		 * culling bounds come from the desc's box, not the bind pose -- they must hold under every
 		 * frame of every clip.
 		 *
-		 * `material` is required, opaque `kPBR` only: the VAT pipeline shades through the PBR pixel
-		 * stage, and no other variant of it exists yet. The same constraint holds for
-		 * SetSubmeshMaterial on this geom.
+		 * `material` is required and must be a `kPBR` one that is not blended: opaque, cutout and
+		 * hashed all draw an opaque shape, so they need no sorting. Blending would, and the VAT
+		 * pipeline has no variant that does it. The same constraint holds for SetSubmeshMaterial on
+		 * this geom.
 		 *
 		 * @throws SceneError if a texture handle or the material is invalid or of the wrong kind,
 		 *         `clips` is empty, the primitive needs more meshlets than one dispatch can launch,
@@ -277,12 +278,12 @@ namespace bgl
 		 *
 		 * `desc.columnBases` must carry one entry per submesh of `meshes[meshIndex]`, in submesh
 		 * order -- the bake's per-submesh column bases. Every submesh must resolve to a valid
-		 * opaque `kPBR` material: the VAT pipeline has no null or cutout variant for an unlit or
-		 * masked submesh to ride.
+		 * `kPBR` material that is not blended: the VAT pipeline has no unlit variant for a
+		 * null-material submesh to ride, and no blended one.
 		 *
 		 * @throws SceneError for anything AddStaticMeshGeom or AddVatMeshGeom refuses, a columnBases count
-		 *         that does not match the submesh count, or a submesh whose material does not
-		 *         resolve to opaque kPBR.
+		 *         that does not match the submesh count, or a submesh whose material resolves to a
+		 *         blended or non-kPBR one.
 		 */
 		virtual GeomHandle
 		AddVatMeshGeom(

@@ -162,6 +162,20 @@ namespace bgl
 			  false,
 			  ComparisonFunc::kLess,
 			  c_VatGeomSrc },
+			// kAlphaTest_VatMesh_PBR: an opaque draw that discards, so it needs no sorting.
+			{ c_PbrCutoutPixelSrc,
+			  RasterCullMode::kNone,
+			  true,
+			  false,
+			  ComparisonFunc::kLess,
+			  c_VatGeomSrc },
+			// kHashedAlpha_VatMesh_PBR: stochastic coverage, so also an opaque shape.
+			{ c_PbrHashedPixelSrc,
+			  RasterCullMode::kNone,
+			  true,
+			  false,
+			  ComparisonFunc::kLess,
+			  c_VatGeomSrc },
 			// kOpaque_SkinnedMesh_PBR
 			{ c_PbrPixelSrc,
 			  RasterCullMode::kBack,

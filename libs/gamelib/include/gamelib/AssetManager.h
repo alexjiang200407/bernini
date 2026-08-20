@@ -199,9 +199,9 @@ namespace game
 		 *
 		 * @throws std::runtime_error if an input cannot be read or the bake refuses it, or if the
 		 *         geom is live with clips from a different `.banim` than the one named, or
-		 *         bgl::SceneError if a submesh's material does not resolve to opaque kPBR -- the
-		 *         VAT pipeline has no other variant, so a mesh with cutout or loose materials
-		 *         cannot be acquired as VAT. A failed acquire owns nothing.
+		 *         bgl::SceneError if a submesh's material does not resolve to an unblended kPBR one
+		 *         -- the VAT pipeline has no blended variant, so a mesh with blend or loose
+		 *         materials cannot be acquired as VAT. A failed acquire owns nothing.
 		 */
 		VatMesh
 		AcquireVatMesh(
