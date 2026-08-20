@@ -125,8 +125,8 @@ ForwardVSOut EvaluateVertex(Mesh mesh, Submesh submesh, SubmeshInstance instance
 
     vertexOut.uv = vertex.uv;
 
-    // Unlike VAT there *is* an authored tangent, and it is skinned by the same basis, so normal maps
-    // work on this tier. w is handedness and must survive the transform untouched.
+    // The tangent is skinned by the same basis as the normal. w is handedness and must survive the
+    // transform untouched.
     vertexOut.tangent = float4(mul((float3x3)mesh.transform, mul(skinRotation, vertex.tangent.xyz)), vertex.tangent.w);
 
     vertexOut.materialIndex = instance.material.GetOffset();

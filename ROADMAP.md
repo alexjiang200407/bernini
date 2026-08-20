@@ -107,8 +107,9 @@ and portability.
   - [ ] Vertex Animation Textures (VAT) — the bake/draw/load core shipped, see
     [docs/vat.md](docs/vat.md); the lines below the fold are editor tooling and authoring policy still open.
     - [x] Bake pipeline: resampled clip → position texture (+ normal), unorm-packed in the mesh
-      bounding box — `assetlib_cli bakevat`, one `.bvat` per (rig, clip set) with both textures embedded. A
-      tangent is deliberately not baked ([docs/vat.md](docs/vat.md)).
+      bounding box — `assetlib_cli bakevat`, one `.bvat` per (rig, clip set) with both textures embedded. The
+      tangent is not baked but rebuilt: bind tangent, shortest arc onto the baked normal, and a
+      twist baked into the normal texture's alpha ([docs/vat.md](docs/vat.md)).
     - [x] Use one global bounding box across all clips of a rig, or blended samples are meaningless.
     - [x] **Per-frame skeletal side-channel** — baked bone palette alongside each VAT frame; required
       for the death handoff, the cavalry saddle transform, and attachments. Baked and tested; no

@@ -11,7 +11,7 @@ import Clip;
 public struct VatGeom
 {
     public TextureHandle positions; // R16G16B16A16_UNORM
-    public TextureHandle normals;   // R8G8B8A8_UNORM, xyz * 0.5 + 0.5
+    public TextureHandle normals;   // R8G8B8A8_UNORM, xyz * 0.5 + 0.5; w the tangent twist, radians / 2pi + 0.5
 
     public float4 boundsMin;
     public float4 boundsExtent;

@@ -18,8 +18,8 @@ import forward.ExpansionData;
 
 // The VAT geometry stage: position and normal come from the baked texture pair by
 // (column, frame) instead of the vertex bytes, which carry only the attributes a bake cannot --
-// the UVs, and the connectivity the meshlets encode. Everything downstream of ForwardVSOut is the
-// static path's, untouched.
+// the UVs, the bind-pose frame the tangent is rebuilt from, and the connectivity the meshlets
+// encode. Everything downstream of ForwardVSOut is the static path's, untouched.
 
 ConstantBuffer<ForwardData> forwardData;
 ConstantBuffer<ViewData> viewData;
@@ -52,17 +52,57 @@ float3 SamplePosition(VatGeom geom, Clip clip, uint column, float frames)
     return geom.boundsMin.xyz + packed * geom.boundsExtent.xyz;
 }
 
-float3 SampleNormal(VatGeom geom, Clip clip, uint column, float frames)
+// xyz the object-space normal, w the tangent's twist in radians -- both as the bake packed them
+// (see docs/vat.md). The normal is not renormalized: the static path hands the pixel stage an
+// unnormalized normal too.
+float4 SampleNormalTwist(VatGeom geom, Clip clip, uint column, float frames)
 {
     uint row0, row1;
     float weight;
     FrameRows(clip, frames, row0, row1, weight);
 
-    float3 n0 = geom.normals.Load(uint2(column, row0)).xyz * 2.0 - 1.0;
-    float3 n1 = geom.normals.Load(uint2(column, row1)).xyz * 2.0 - 1.0;
+    float4 t0 = geom.normals.Load(uint2(column, row0));
+    float4 t1 = geom.normals.Load(uint2(column, row1));
+    float3 normal = lerp(t0.xyz, t1.xyz, weight) * 2.0 - 1.0;
 
-    // Not renormalized: the static path hands the pixel stage an unnormalized normal too.
-    return lerp(n0, n1, weight);
+    // The twist is an angle, so two frames whose twists straddle +-pi blend the short way round
+    // rather than sweeping through zero.
+    float turns = t1.w - t0.w;
+    turns -= round(turns);
+    float twist = (t0.w - 0.5 + weight * turns) * 2.0 * 3.14159265359;
+
+    return float4(normal, twist);
+}
+
+// `v` carried by the shortest arc from unit `from` onto unit `to`. Antiparallel directions have no
+// shortest arc and leave `v` as it is; the bake (assetlib's vat_tangent.h) makes the same choice,
+// which is what keeps the twist it measured exact here.
+float3 RotateByShortestArc(float3 v, float3 from, float3 to)
+{
+    float c = dot(from, to);
+    if (c < -1.0 + 1e-4)
+    {
+        return v;
+    }
+    float3 axis = cross(from, to);
+    return v * c + cross(axis, v) + axis * (dot(axis, v) / (1.0 + c));
+}
+
+// The posed tangent: the bind tangent carried onto the posed normal, then turned about it by the
+// baked twist. A submesh with no tangent or no normal yields the degenerate tangent the pixel
+// stage's guard reads as "shade with the geometric normal".
+float3 PosedTangent(float3 bindNormal, float3 bindTangent, float3 posedNormal, float twist)
+{
+    float bindLen2 = dot(bindNormal, bindNormal);
+    float posedLen2 = dot(posedNormal, posedNormal);
+    if (bindLen2 < 1e-8 || posedLen2 < 1e-8)
+    {
+        return float3(0.0, 0.0, 0.0);
+    }
+
+    float3 n = posedNormal * rsqrt(posedLen2);
+    float3 carried = RotateByShortestArc(bindTangent, bindNormal * rsqrt(bindLen2), n);
+    return carried * cos(twist) + cross(n, carried) * sin(twist);
 }
 
 // Returns its result rather than writing through the mesh output. Slang's Metal backend crashes on
@@ -86,7 +126,9 @@ ForwardVSOut EvaluateVertex(Mesh mesh, Submesh submesh, SubmeshInstance instance
     // frame is fractional, blended across the two rows it falls between.
     float frames = ClipFrames(clip, state.phase, state.rate, viewData.time);
     float3 position = SamplePosition(geom, clip, column, frames);
-    float3 normal = SampleNormal(geom, clip, column, frames);
+    float4 normalTwist = SampleNormalTwist(geom, clip, column, frames);
+    float3 normal = normalTwist.xyz;
+    float3 tangent = PosedTangent(vertex.normal, vertex.tangent.xyz, normal, normalTwist.w);
 
     float4 worldPos = mul(mesh.transform, float4(position, 1.0));
 
@@ -110,11 +152,7 @@ ForwardVSOut EvaluateVertex(Mesh mesh, Submesh submesh, SubmeshInstance instance
     vertexOut.worldPos = worldPos.xyz;
     vertexOut.normal = mul((float3x3)mesh.transform, normal);
     vertexOut.uv = vertex.uv;
-
-    // No tangent is baked (a bind-pose basis is wrong the moment a limb rotates), so this tier
-    // emits the degenerate one the pixel stage's guard turns into the geometric normal -- normal
-    // maps are inert here by design.
-    vertexOut.tangent = float4(0.0, 0.0, 0.0, 0.0);
+    vertexOut.tangent = float4(mul((float3x3)mesh.transform, tangent), vertex.tangent.w);
 
     vertexOut.materialIndex = instance.material.GetOffset();
     vertexOut.materialIsLoose = 0u;

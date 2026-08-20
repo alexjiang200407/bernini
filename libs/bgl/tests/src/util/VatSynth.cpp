@@ -50,7 +50,7 @@ namespace bgl::test::vat_synth
 			image.pixels[i + 0] = std::byte{ 128 };
 			image.pixels[i + 1] = std::byte{ 128 };
 			image.pixels[i + 2] = std::byte{ 255 };
-			image.pixels[i + 3] = std::byte{ 255 };
+			image.pixels[i + 3] = std::byte{ 128 };  // no tangent twist, as the bake packs one
 		}
 		return image;
 	}

@@ -19,8 +19,9 @@ namespace assetlib
 	 *
 	 * Bounding the *bones* instead is tempting and much cheaper, but it is not close enough to use:
 	 * applying every bone's matrix to the whole bind-pose box over-estimates by ~3x on a rig at that
-	 * scale, because each bone is credited with moving vertices it has no weight on. Skinning is
-	 * milliseconds for a character-sized rig, and it is exact.
+	 * scale, because each bone is credited with moving vertices it has no weight on. This is exact
+	 * instead, and costs a vertex per frame per clip -- seconds on a rig with a full clip set (1372
+	 * frames over 4309 vertices is ~3.5 s in a debug build), so it belongs on a worker.
 	 *
 	 * @throws std::runtime_error if `meshIndex` is out of range, or for anything poseModelTransforms
 	 *         or skinSubmesh refuses (a clip set cooked against another rig, a bad joint index).
@@ -40,6 +41,10 @@ namespace assetlib
 		// Blended, so not unit length: two rotations shorten it and a scaled bone lengthens it.
 		// Zero when the submesh carries no normals.
 		glm::vec3 blendedNormal;
+
+		// The tangent's xyz, blended as the normal is; its handedness is the bind tangent's `w`,
+		// which no rotation changes. Zero when the submesh carries no tangents.
+		glm::vec3 blendedTangent;
 	};
 
 	/**
@@ -48,10 +53,10 @@ namespace assetlib
 	 * Linear blend skinning, four influences, deliberately unoptimised -- see libs/assetlib/CLAUDE.md
 	 * for why this lives here rather than in bgl.
 	 *
-	 * Normals ride the same matrices rather than their inverse transpose. That is an accepted
-	 * limitation, not a property of rigs: it is exact only while a bone's scale is uniform, and
-	 * nothing rejects the non-uniform scale glTF permits -- a squash-and-stretch rig imports
-	 * cleanly and skins normals that are wrong. The GPU path will make the same trade.
+	 * Normals and tangents ride the same matrices rather than their inverse transpose. That is an
+	 * accepted limitation, not a property of rigs: it is exact only while a bone's scale is
+	 * uniform, and nothing rejects the non-uniform scale glTF permits -- a squash-and-stretch rig
+	 * imports cleanly and skins normals that are wrong. The GPU path will make the same trade.
 	 *
 	 * A submesh carrying no joints is returned unskinned, and so is a vertex whose four weights are
 	 * all zero -- which is what an exporter writes for a vertex it never assigned to a bone.

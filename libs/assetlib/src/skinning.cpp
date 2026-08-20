@@ -56,37 +56,159 @@ namespace assetlib
 
 			return offset;
 		}
+
+		/** Where a submesh's skinning inputs are, resolved and bounds-checked once. */
+		struct SkinLayout
+		{
+			std::optional<uint16_t> position;
+			std::optional<uint16_t> normal;
+			std::optional<uint16_t> tangent;
+			std::optional<uint16_t> joints;
+			std::optional<uint16_t> weights;
+			size_t                  stride = 0;
+			size_t                  first  = 0;
+		};
+
+		SkinLayout
+		resolveSkinLayout(const BMesh& mesh, const Submesh& submesh)
+		{
+			auto out     = SkinLayout();
+			out.position = decodableOffset(
+				submesh.layout,
+				VertexSemantic::kPosition,
+				VertexFormat::kFloat32x3);
+			out.normal =
+				decodableOffset(submesh.layout, VertexSemantic::kNormal, VertexFormat::kFloat32x3);
+			out.tangent =
+				decodableOffset(submesh.layout, VertexSemantic::kTangent, VertexFormat::kFloat32x4);
+			out.joints =
+				decodableOffset(submesh.layout, VertexSemantic::kJoints0, VertexFormat::kUint16x4);
+			out.weights = decodableOffset(
+				submesh.layout,
+				VertexSemantic::kWeights0,
+				VertexFormat::kUnorm16x4);
+
+			if (!out.position)
+				throw_runtime_error("skinning: a submesh with no position attribute");
+
+			// One without the other is a layout nothing can act on: indices with no share, or shares
+			// naming no bone.
+			if (out.joints.has_value() != out.weights.has_value())
+				throw_runtime_error(
+					"skinning: a submesh carrying only one half of its skin attributes");
+
+			out.stride        = submesh.layout.stride;
+			out.first         = submesh.vertexByteOffset;
+			const size_t span = static_cast<size_t>(submesh.vertexCount) * out.stride;
+
+			if (out.stride == 0 || out.first + span > mesh.vertexData.size())
+				throw_runtime_error(
+					"skinning: a submesh whose {} vertices fall outside the mesh's vertex data",
+					submesh.vertexCount);
+
+			return out;
+		}
+
+		/** A vertex's bind position and its influences, decoded out of the interleaved blob. */
+		struct SkinInfluences
+		{
+			glm::vec3                                   position;
+			std::array<uint16_t, c_InfluencesPerVertex> joints{};
+			std::array<float, c_InfluencesPerVertex>    weights{};
+			bool                                        skinned = false;
+		};
+
+		/**
+		 * The submesh's vertices decoded once. None of this changes between poses, so a walk over
+		 * many frames that decoded per frame would pay for it every time.
+		 *
+		 * @throws std::runtime_error if a vertex names a bone the pose does not hold.
+		 */
+		std::vector<SkinInfluences>
+		decodeInfluences(
+			const BMesh&      mesh,
+			const Submesh&    submesh,
+			const SkinLayout& layout,
+			size_t            boneCount)
+		{
+			auto out = std::vector<SkinInfluences>(submesh.vertexCount);
+
+			for (uint32_t v = 0; v < submesh.vertexCount; ++v)
+			{
+				const size_t base = layout.first + static_cast<size_t>(v) * layout.stride;
+
+				SkinInfluences& vertex = out[v];
+				vertex.position = readAt<glm::vec3>(mesh.vertexData, base + *layout.position);
+
+				if (!layout.joints)
+					continue;
+
+				for (size_t i = 0; i < c_InfluencesPerVertex; ++i)
+				{
+					const auto joint = readAt<uint16_t>(
+						mesh.vertexData,
+						base + *layout.joints + i * sizeof(uint16_t));
+					const auto quantized = readAt<uint16_t>(
+						mesh.vertexData,
+						base + *layout.weights + i * sizeof(uint16_t));
+
+					if (quantized != 0 && joint >= boneCount)
+						throw_runtime_error(
+							"skinning: a vertex names bone {}, and the pose holds {}",
+							joint,
+							boneCount);
+
+					vertex.joints[i] = joint;
+					vertex.weights[i] =
+						static_cast<float>(quantized) / std::numeric_limits<uint16_t>::max();
+					vertex.skinned |= vertex.weights[i] > 0.0f;
+				}
+			}
+
+			return out;
+		}
+
+		/**
+		 * One decoded vertex's skinned position. An unskinned one keeps its bind position rather than
+		 * blending to the origin -- see skinSubmesh.
+		 */
+		glm::vec3
+		skinnedPosition(const SkinInfluences& vertex, std::span<const glm::mat4> skinning) noexcept
+		{
+			if (!vertex.skinned)
+				return vertex.position;
+
+			glm::vec3 skinned(0.0f);
+			for (size_t i = 0; i < c_InfluencesPerVertex; ++i)
+			{
+				if (vertex.weights[i] == 0.0f)
+					continue;
+
+				// decodeInfluences refused an out-of-range joint against the bone count; this holds
+				// only while that is the same count the pose was built for.
+				assert(vertex.joints[i] < skinning.size());
+
+				skinned += vertex.weights[i] *
+				           glm::vec3(skinning[vertex.joints[i]] * glm::vec4(vertex.position, 1.0f));
+			}
+
+			return skinned;
+		}
 	}
 
 	std::vector<SkinnedVertex>
 	skinSubmesh(const BMesh& mesh, const Submesh& submesh, std::span<const glm::mat4> skinning)
 	{
-		const auto positionOffset =
-			decodableOffset(submesh.layout, VertexSemantic::kPosition, VertexFormat::kFloat32x3);
-		const auto normalOffset =
-			decodableOffset(submesh.layout, VertexSemantic::kNormal, VertexFormat::kFloat32x3);
-		const auto jointsOffset =
-			decodableOffset(submesh.layout, VertexSemantic::kJoints0, VertexFormat::kUint16x4);
-		const auto weightsOffset =
-			decodableOffset(submesh.layout, VertexSemantic::kWeights0, VertexFormat::kUnorm16x4);
+		const SkinLayout layout = resolveSkinLayout(mesh, submesh);
 
-		if (!positionOffset)
-			throw_runtime_error("skinning: a submesh with no position attribute");
+		const auto& positionOffset = layout.position;
+		const auto& normalOffset   = layout.normal;
+		const auto& tangentOffset  = layout.tangent;
+		const auto& jointsOffset   = layout.joints;
+		const auto& weightsOffset  = layout.weights;
 
-		// One without the other is a layout nothing can act on: indices with no share, or shares
-		// naming no bone.
-		if (jointsOffset.has_value() != weightsOffset.has_value())
-			throw_runtime_error(
-				"skinning: a submesh carrying only one half of its skin attributes");
-
-		const size_t stride = submesh.layout.stride;
-		const size_t first  = submesh.vertexByteOffset;
-		const size_t span   = static_cast<size_t>(submesh.vertexCount) * stride;
-
-		if (stride == 0 || first + span > mesh.vertexData.size())
-			throw_runtime_error(
-				"skinning: a submesh whose {} vertices fall outside the mesh's vertex data",
-				submesh.vertexCount);
+		const size_t stride = layout.stride;
+		const size_t first  = layout.first;
 
 		std::vector<SkinnedVertex> out(submesh.vertexCount);
 
@@ -98,15 +220,19 @@ namespace assetlib
 			const auto normal   = normalOffset ?
 			                          readAt<glm::vec3>(mesh.vertexData, base + *normalOffset) :
 			                          glm::vec3(0.0f);
+			const auto tangent  = tangentOffset ?
+			                          readAt<glm::vec3>(mesh.vertexData, base + *tangentOffset) :
+			                          glm::vec3(0.0f);
 
 			if (!jointsOffset)
 			{
-				out[v] = { position, normal };
+				out[v] = { position, normal, tangent };
 				continue;
 			}
 
 			glm::vec3 skinnedPosition(0.0f);
 			glm::vec3 skinnedNormal(0.0f);
+			glm::vec3 skinnedTangent(0.0f);
 			float     total = 0.0f;
 
 			for (size_t i = 0; i < c_InfluencesPerVertex; ++i)
@@ -130,6 +256,7 @@ namespace assetlib
 				const glm::mat4& matrix = skinning[joint];
 				skinnedPosition += weight * glm::vec3(matrix * glm::vec4(position, 1.0f));
 				skinnedNormal += weight * glm::mat3(matrix) * normal;
+				skinnedTangent += weight * glm::mat3(matrix) * tangent;
 				total += weight;
 			}
 
@@ -137,8 +264,9 @@ namespace assetlib
 			// renormalizes that to four zero weights rather than refusing the mesh. Blending them
 			// would put the vertex at the origin -- which, once the bake fits one AABB around every
 			// clip, drags that box out and costs precision on every other vertex of the rig.
-			out[v] = total > 0.0f ? SkinnedVertex{ skinnedPosition, skinnedNormal } :
-			                        SkinnedVertex{ position, normal };
+			out[v] = total > 0.0f ?
+			             SkinnedVertex{ skinnedPosition, skinnedNormal, skinnedTangent } :
+			             SkinnedVertex{ position, normal, tangent };
 		}
 
 		return out;
@@ -166,6 +294,23 @@ namespace assetlib
 			out.max = glm::max(out.max, p);
 		};
 
+		// Only where there are frames to walk: a rig with no clips is bounded by its bind pose below,
+		// and decoding here would refuse a malformed layout it used to reach that fallback with.
+		auto submeshes = std::vector<std::vector<SkinInfluences>>();
+		if (!animations.clips.empty())
+		{
+			submeshes.reserve(entry.submeshCount);
+			for (uint32_t i = 0; i < entry.submeshCount; ++i)
+			{
+				const Submesh& submesh = mesh.submeshes[entry.firstSubmesh + i];
+				submeshes.push_back(decodeInfluences(
+					mesh,
+					submesh,
+					resolveSkinLayout(mesh, submesh),
+					skeleton.bones.size()));
+			}
+		}
+
 		for (uint32_t clip = 0; clip < animations.clips.size(); ++clip)
 		{
 			for (uint32_t frame = 0; frame < animations.clips[clip].frameCount; ++frame)
@@ -174,11 +319,10 @@ namespace assetlib
 					skeleton,
 					poseModelTransforms(skeleton, animations, clip, frame));
 
-				for (uint32_t i = 0; i < entry.submeshCount; ++i)
+				for (const std::vector<SkinInfluences>& vertices : submeshes)
 				{
-					const Submesh& submesh = mesh.submeshes[entry.firstSubmesh + i];
-					for (const SkinnedVertex& vertex : skinSubmesh(mesh, submesh, skinning))
-						grow(vertex.position);
+					for (const SkinInfluences& vertex : vertices)
+						grow(skinnedPosition(vertex, skinning));
 				}
 			}
 		}

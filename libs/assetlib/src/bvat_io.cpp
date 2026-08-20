@@ -19,7 +19,7 @@ namespace assetlib
 	namespace
 	{
 		constexpr uint16_t c_VersionMajor =
-			3;  // 3: the schema chunk; the input paths are their own chunk
+			4;  // 4: the normal texture's alpha is the tangent twist, under a new chunk id
 		constexpr uint16_t c_VersionMinor = 0;
 
 		constexpr std::string_view c_What = "bvat";
@@ -32,13 +32,13 @@ namespace assetlib
 			kPalettes,
 			kInputs,
 			kStringPool,
+			kInputPaths = 9,  // mesh, skeleton, animations -- the three paths kInputs stamps
 
-			// The pixel payloads stay last in id as in intent: every seek-only read names the
-			// chunks before this line and never touches these.
-			kPositionsKtx2,
-			kNormalsKtx2,
-
-			kInputPaths  // mesh, skeleton, animations -- the three paths kInputs stamps
+			// The pixel payloads stay last in intent: every seek-only read names the chunks above
+			// and never touches these. A bake from before the twist rode the normals' alpha has
+			// them under id 8, so it fails to load and is re-baked rather than drawn twisted.
+			kPositionsKtx2 = 7,
+			kNormalsKtx2   = 10,
 		};
 
 		struct VatInfo

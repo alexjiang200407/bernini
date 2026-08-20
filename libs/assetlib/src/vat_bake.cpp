@@ -17,6 +17,7 @@
 #include <core/hash.h>
 
 #include "ref_paths.h"
+#include "vat_tangent.h"
 
 #include "mounted_io.h"
 
@@ -78,28 +79,58 @@ namespace assetlib
 			}
 		}
 
-		/** One frame's normals into row `row` of the normal texture, re-unit and biased to unorm. */
+		glm::vec3
+		unitOrZero(const glm::vec3& v) noexcept
+		{
+			const float len2 = glm::dot(v, v);
+			return len2 > 0.0f ? v / std::sqrt(len2) : v;
+		}
+
+		/**
+		 * One frame's normals into row `row` of the normal texture, re-unit and biased to unorm,
+		 * with the tangent's twist against `bindPose` in the alpha (see vat_tangent.h).
+		 */
 		void
 		packNormalRow(
 			ImageData&                     normals,
 			uint32_t                       row,
-			std::span<const SkinnedVertex> vertices) noexcept
+			std::span<const SkinnedVertex> vertices,
+			std::span<const SkinnedVertex> bindPose) noexcept
 		{
+			assert(bindPose.size() == vertices.size());
 			auto* texel = normals.pixels.data() + uint64_t(row) * normals.subresources[0].rowPitch;
 
-			for (const SkinnedVertex& vertex : vertices)
+			for (size_t v = 0; v < vertices.size(); ++v)
 			{
 				// Blending shortens a normal, so it is re-unit here; one a submesh never carried
 				// stays zero, which packs to mid-grey -- the degenerate the shader's guard reads.
-				glm::vec3   n    = vertex.blendedNormal;
-				const float len2 = glm::dot(n, n);
-				if (len2 > 0.0f)
-					n /= std::sqrt(len2);
+				const glm::vec3 n = unitOrZero(vertices[v].blendedNormal);
 
-				texel[0] = std::byte(glm::packUnorm1x8(n.x * 0.5f + 0.5f));
-				texel[1] = std::byte(glm::packUnorm1x8(n.y * 0.5f + 0.5f));
-				texel[2] = std::byte(glm::packUnorm1x8(n.z * 0.5f + 0.5f));
-				texel[3] = std::byte(std::numeric_limits<uint8_t>::max());  // padding, as above
+				const uint8_t nx = glm::packUnorm1x8(n.x * 0.5f + 0.5f);
+				const uint8_t ny = glm::packUnorm1x8(n.y * 0.5f + 0.5f);
+				const uint8_t nz = glm::packUnorm1x8(n.z * 0.5f + 0.5f);
+
+				// Measured against the normal as the shader will read it back, not the exact one:
+				// the arc's antiparallel guard is a branch, and the two sides must take it on the
+				// same input.
+				const glm::vec3 stored = unitOrZero(
+					glm::vec3(
+						glm::unpackUnorm1x8(nx),
+						glm::unpackUnorm1x8(ny),
+						glm::unpackUnorm1x8(nz)) *
+						2.0f -
+					1.0f);
+
+				const float twist = vatTangentTwist(
+					unitOrZero(bindPose[v].blendedNormal),
+					unitOrZero(bindPose[v].blendedTangent),
+					stored,
+					unitOrZero(vertices[v].blendedTangent));
+
+				texel[0] = std::byte(nx);
+				texel[1] = std::byte(ny);
+				texel[2] = std::byte(nz);
+				texel[3] = std::byte(glm::packUnorm1x8(packTwist(twist)));
 				texel += 4;
 			}
 		}
@@ -207,6 +238,18 @@ namespace assetlib
 		vat.width  = static_cast<uint32_t>(columns);
 		vat.height = static_cast<uint32_t>(rows);
 
+		// The bind pose is the identity skin: the frame every baked tangent's twist is measured from.
+		auto bindRow = std::vector<SkinnedVertex>();
+		bindRow.reserve(vat.width);
+		{
+			const auto identity = std::vector<glm::mat4>(vat.boneCount, glm::mat4(1.0f));
+			for (const Submesh& submesh : mesh.submeshes)
+			{
+				const auto skinned = skinSubmesh(mesh, submesh, identity);
+				bindRow.insert(bindRow.end(), skinned.begin(), skinned.end());
+			}
+		}
+
 		// Every frame is skinned once and kept: the AABB must close over all of them before the
 		// first texel can be quantized against it.
 		auto skinnedFrames = std::vector<std::vector<SkinnedVertex>>();
@@ -257,7 +300,7 @@ namespace assetlib
 			{
 				const uint32_t row = clip.firstRow + frame;
 				packPositionRow(positions, row, skinnedFrames[frameIndex], vat.boundsMin, extent);
-				packNormalRow(normals, row, skinnedFrames[frameIndex]);
+				packNormalRow(normals, row, skinnedFrames[frameIndex], bindRow);
 			}
 
 			const uint32_t last = clip.firstRow + clip.frameCount - 1;
