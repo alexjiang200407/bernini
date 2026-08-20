@@ -96,7 +96,7 @@ AssetImporterDialog::AssetImporterDialog(
 
 	m_MeshSection = addSection(
 		"Mesh folder:",
-		assetlib::Project::c_MeshesDirectoryName,
+		assetlib::c_MeshesDirectoryName,
 		"meshFolder",
 		"Folder under Meshes/ to write the .bmesh into. Nested folders are allowed "
 		"(animals/coyote); the category itself is fixed, because every reference in the project is "
@@ -113,7 +113,7 @@ AssetImporterDialog::AssetImporterDialog(
 	// its folder follows the mesh box rather than one of its own.
 	m_SkeletonSection = addSection(
 		"Skeleton folder:",
-		assetlib::Project::c_SkeletonsDirectoryName,
+		assetlib::c_SkeletonsDirectoryName,
 		"skeletonFolder",
 		"Folder under Skeletons/ to write the .bskel into. Only written when the source carries a "
 		"skin.");
@@ -134,7 +134,7 @@ AssetImporterDialog::AssetImporterDialog(
 	// No file rows: writeTextures names its output by index, so there is nothing here to name.
 	m_TextureSection = addSection(
 		"Texture folder:",
-		assetlib::Project::c_TexturesSrcDirectoryName,
+		assetlib::c_TexturesSrcDirectoryName,
 		"textureFolder",
 		"Folder under textures_src/ for the extracted textures. Each import wants its own: they "
 		"are named tex0.ktx2, tex1.ktx2 by index, so two imports sharing a folder would overwrite "
@@ -152,7 +152,7 @@ AssetImporterDialog::AssetImporterDialog(
 
 	m_MaterialSection = addSection(
 		"Material folder:",
-		assetlib::Project::c_MaterialsDirectoryName,
+		assetlib::c_MaterialsDirectoryName,
 		"materialFolder",
 		"Folder under Materials/ to write the derived .bmaterial files into. Materials may share "
 		"one with another import, since each names its own files.");
@@ -186,7 +186,7 @@ AssetImporterDialog::AssetImporterDialog(
 
 	m_AnimationSection = addSection(
 		"Animation folder:",
-		assetlib::Project::c_AnimationsDirectoryName,
+		assetlib::c_AnimationsDirectoryName,
 		"animationFolder",
 		"Folder under Animations/ to write the .banim into.");
 	m_AnimationName = m_AnimationSection->AddFile(
@@ -309,7 +309,7 @@ AssetImporterDialog::PlanFiles() const
 			"The mesh",
 			m_MeshSection,
 			m_MeshName,
-			assetlib::Project::c_MeshesDirectoryName,
+			assetlib::c_MeshesDirectoryName,
 			c_MeshExtension);
 
 		// Planned whether or not the source turns out to carry a skin: that is not known until it is
@@ -318,7 +318,7 @@ AssetImporterDialog::PlanFiles() const
 			"The skeleton",
 			m_SkeletonSection,
 			m_SkeletonName,
-			assetlib::Project::c_SkeletonsDirectoryName,
+			assetlib::c_SkeletonsDirectoryName,
 			c_SkeletonExtension);
 	}
 
@@ -328,7 +328,7 @@ AssetImporterDialog::PlanFiles() const
 			"The animations",
 			m_AnimationSection,
 			m_AnimationName,
-			assetlib::Project::c_AnimationsDirectoryName,
+			assetlib::c_AnimationsDirectoryName,
 			c_AnimExtension);
 	}
 
@@ -343,7 +343,7 @@ AssetImporterDialog::PlanFiles() const
 				QString("The material '%1'").arg(m_MaterialLabels[i]),
 				m_MaterialSection,
 				m_MaterialNames[static_cast<size_t>(i)],
-				assetlib::Project::c_MaterialsDirectoryName,
+				assetlib::c_MaterialsDirectoryName,
 				c_MaterialExtension);
 		}
 	}
@@ -397,22 +397,22 @@ AssetImporterDialog::GetOutputs() const
 	auto outputs = ImportOutputs();
 
 	outputs.mesh =
-		File(m_MeshSection, m_MeshName, assetlib::Project::c_MeshesDirectoryName, c_MeshExtension);
+		File(m_MeshSection, m_MeshName, assetlib::c_MeshesDirectoryName, c_MeshExtension);
 	outputs.skeleton = File(
 		m_SkeletonSection,
 		m_SkeletonName,
-		assetlib::Project::c_SkeletonsDirectoryName,
+		assetlib::c_SkeletonsDirectoryName,
 		c_SkeletonExtension);
 	outputs.animations = File(
 		m_AnimationSection,
 		m_AnimationName,
-		assetlib::Project::c_AnimationsDirectoryName,
+		assetlib::c_AnimationsDirectoryName,
 		c_AnimExtension);
 
 	outputs.materialDir =
-		Folder(m_MaterialSection->GetFolder(), assetlib::Project::c_MaterialsDirectoryName);
+		Folder(m_MaterialSection->GetFolder(), assetlib::c_MaterialsDirectoryName);
 	outputs.textureDir =
-		Folder(m_TextureSection->GetFolder(), assetlib::Project::c_TexturesSrcDirectoryName);
+		Folder(m_TextureSection->GetFolder(), assetlib::c_TexturesSrcDirectoryName);
 
 	for (QLineEdit* name : m_MaterialNames)
 		outputs.materialStems << (name == nullptr ? QString() : name->text().trimmed());

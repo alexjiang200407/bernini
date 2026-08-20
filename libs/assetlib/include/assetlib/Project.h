@@ -1,5 +1,6 @@
 #pragma once
 #include <assetlib/AssetStore.h>
+#include <assetlib/project_layout.h>
 
 namespace assetlib
 {
@@ -7,42 +8,6 @@ namespace assetlib
 	{
 	public:
 		static constexpr auto c_FileExtension = ".berniniproject";
-
-		static constexpr auto c_MeshesDirectoryName      = "Meshes";
-		static constexpr auto c_TexturesDirectoryName    = "Textures";
-		static constexpr auto c_TexturesSrcDirectoryName = "textures_src";
-		static constexpr auto c_MaterialsDirectoryName   = "Materials";
-		static constexpr auto c_LevelsDirectoryName      = "Levels";
-
-		// One per environment container, because the three have different lifetimes: a sky is re-authored
-		// in seconds, the lighting convolved from it takes minutes, and the `.benv` naming the pair is a
-		// few bytes that outlives both.
-		static constexpr auto c_EnvironmentsDirectoryName = "Environments";
-		static constexpr auto c_EnvLightingDirectoryName  = "EnvLighting";
-		static constexpr auto c_SkyDirectoryName          = "Sky";
-
-		// Split for the same reason, and a sharper one: a rig outlives its clips. Re-cooking a clip set
-		// leaves the skeleton untouched, and re-authoring a rest pose does not invalidate a clip -- which
-		// is what skeletonSignature exists to check, and only means anything if the two can move apart.
-		static constexpr auto c_SkeletonsDirectoryName  = "Skeletons";
-		static constexpr auto c_AnimationsDirectoryName = "Animations";
-
-		/**
-		 * Every category Create scaffolds and IsRequiredDirectory protects, in one place -- anything that
-		 * needs to know the layout reads it here rather than restating it and drifting.
-		 */
-		static constexpr std::array<std::string_view, 10> c_RequiredDirectories = { {
-			c_MeshesDirectoryName,
-			c_TexturesDirectoryName,
-			c_TexturesSrcDirectoryName,
-			c_MaterialsDirectoryName,
-			c_LevelsDirectoryName,
-			c_EnvironmentsDirectoryName,
-			c_EnvLightingDirectoryName,
-			c_SkyDirectoryName,
-			c_SkeletonsDirectoryName,
-			c_AnimationsDirectoryName,
-		} };
 
 		/**
 		 * Creates a new project on disk: scaffolds the Data directory tree
