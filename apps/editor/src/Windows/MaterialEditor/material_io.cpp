@@ -11,6 +11,7 @@
 
 #include <assetlib/bmaterial_io.h>
 #include <assetlib/bmesh_io.h>
+#include <assetlib/material_bake.h>
 #include <assetlib/mesh_tangents.h>
 #include <assetlib_structs/BMesh.h>
 
@@ -103,6 +104,82 @@ namespace editor
 			dir = dataRoot;
 
 		return QString::fromStdWString((dir / name.toStdWString()).wstring());
+	}
+
+	QStringList
+	UniqueMaterialFiles(const QStringList& paths)
+	{
+		auto unique = QStringList();
+		unique.reserve(paths.size());
+
+		for (const QString& path : paths)
+		{
+			if (path.isEmpty())
+				continue;
+
+			const auto names = [&path](const QString& kept) {
+				return IsSameMaterialFile(kept, path);
+			};
+
+			if (!std::ranges::any_of(unique, names))
+				unique << path;
+		}
+
+		return unique;
+	}
+
+	QString
+	MaterialSaveSummary(const MaterialSaveResult& result)
+	{
+		if (result.unsaved == 0 && result.failed.isEmpty())
+			return {};
+
+		const auto count = [](const int n, const char* one, const char* many) {
+			return QStringLiteral("%1 %2").arg(n).arg(QLatin1String(n == 1 ? one : many));
+		};
+
+		auto lines = QStringList();
+		lines << QStringLiteral("Saved %1.").arg(count(result.saved, "material", "materials"));
+
+		if (result.unsaved > 0)
+		{
+			lines << QStringLiteral(
+						 "Skipped %1 with no material file yet; Save As gives one a file.")
+						 .arg(count(result.unsaved, "submesh", "submeshes"));
+		}
+
+		if (!result.failed.isEmpty())
+			lines << QStringLiteral("Could not write:\n%1")
+						 .arg(result.failed.join(QLatin1Char('\n')));
+
+		return lines.join(QStringLiteral("\n\n"));
+	}
+
+	void
+	BakeMaterials(
+		const std::filesystem::path& dataRoot,
+		const QStringList&           materials,
+		background::Progress&        progress)
+	{
+		auto desc     = assetlib::MaterialBakeDesc();
+		desc.dataRoot = dataRoot;
+
+		int done = 0;
+		for (const QString& relative : materials)
+		{
+			progress.Report(
+				done,
+				static_cast<int>(materials.size()),
+				QStringLiteral("Baking %1...").arg(QFileInfo(relative).fileName()));
+
+			const std::filesystem::path file = dataRoot / relative.toStdWString();
+
+			assetlib::BMaterial material = assetlib::loadMaterial(file);
+			assetlib::bakeMaterial(material, desc, progress.Cancellation());
+			assetlib::saveMaterial(material, file);
+
+			++done;
+		}
 	}
 
 	bool

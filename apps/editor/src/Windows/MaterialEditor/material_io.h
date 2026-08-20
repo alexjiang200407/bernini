@@ -1,8 +1,11 @@
 #pragma once
 
 #include <QString>
+#include <QStringList>
 
 #include <assetlib_structs/BMaterial.h>
+
+#include "Async/BackgroundTask.h"
 
 class MaterialGraphModel;
 class QWidget;
@@ -51,6 +54,49 @@ namespace editor
 	 */
 	[[nodiscard]] QString
 	DefaultMaterialPath(const std::filesystem::path& dataRoot, const QString& name);
+
+	/**
+	 * The distinct material files among `paths`, first spelling first, with the empty ones dropped.
+	 *
+	 * Compared by IsSameMaterialFile rather than as strings, so one file reached two ways is one file:
+	 * baking it twice decodes, resizes and re-encodes every map a second time to write what is already
+	 * there.
+	 */
+	[[nodiscard]] QStringList
+	UniqueMaterialFiles(const QStringList& paths);
+
+	/** What one Save All wrote, and what it could not. */
+	struct MaterialSaveResult
+	{
+		int saved = 0;
+
+		// Graphs with no file yet. Skipped rather than prompted: a batch action that opens a file
+		// dialog per submesh is not one.
+		int unsaved = 0;
+
+		QStringList failed;
+	};
+
+	/**
+	 * What to tell the user after a Save All, or an empty string when a dialog would say nothing worth
+	 * a click -- everything written and nothing skipped. The panel's own refresh reports a clean run.
+	 */
+	[[nodiscard]] QString
+	MaterialSaveSummary(const MaterialSaveResult& result);
+
+	/**
+	 * Composites each of `materials` -- data-root-relative, as every asset reference is -- down to its
+	 * baked triplet and rewrites it, reporting through `progress`.
+	 *
+	 * Reads each off disk, so what it bakes is the routes last saved. Throws out of the first failure
+	 * or cancellation rather than carrying on: every map is named by the hash of its inputs, so a
+	 * half-finished run leaves only correct, reusable files behind.
+	 */
+	void
+	BakeMaterials(
+		const std::filesystem::path& dataRoot,
+		const QStringList&           materials,
+		background::Progress&        progress);
 
 	/**
 	 * Derives a tangent for every submesh of the `.bmesh` at `meshPath` that has none, and rewrites
