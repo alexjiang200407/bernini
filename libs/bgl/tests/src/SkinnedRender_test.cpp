@@ -644,3 +644,94 @@ TEST_CASE("a blended skinned mesh sorts among blended static geometry", "[skinne
 		render("assets/golden/blend_sort_skinned_far.got.png", staticRed, skinnedBlue);
 	CHECK(whole(reference, skinnedFar) < 1e-6f);
 }
+
+/**
+ * The outline mask on an animated instance. It draws through the same tier-branching geometry stage
+ * the transparent phase does, so a selected rig contours the pose it is drawn in -- where before it
+ * contoured the bind pose its vertex bytes hold, whatever the forward pass had put on screen.
+ *
+ * Selecting changes nothing but the outline, so the difference between the two frames *is* the
+ * outline, whatever colour it is drawn in. That makes the negative probe the sharp one: a band above
+ * the bind pose's top edge would say the mask never posed.
+ */
+TEST_CASE("a selected skinned instance contours its pose", "[skinned][selection][render]")
+{
+	auto opts             = bgl::GraphicsOptions();
+	opts.shaderCacheDir   = bgl::test::ShaderCacheDir();
+	opts.enableDebugLayer = true;
+
+	auto gfx = bgl::CreateGraphics(opts);
+	REQUIRE(gfx != nullptr);
+
+	auto targetDesc     = bgl::RenderTargetDesc();
+	targetDesc.width    = static_cast<int>(c_Width);
+	targetDesc.height   = static_cast<int>(c_Height);
+	targetDesc.headless = true;
+	auto target         = gfx->CreateRenderTarget(targetDesc);
+
+	auto sceneDesc                        = bgl::SceneDesc();
+	sceneDesc.initialGeom                 = 4;
+	sceneDesc.initialMeshlets             = 8;
+	sceneDesc.initialSubmeshes            = 4;
+	sceneDesc.initialVertexBufferByteSize = 4096;
+	sceneDesc.initialIndices              = 64;
+	sceneDesc.initialPbrMaterials         = 4;
+
+	auto scene = gfx->CreateScene(sceneDesc);
+	auto view  = gfx->CreateSceneView(scene, 4);
+
+	bgl::test::ApplyEnvironment(scene.Get(), view.Get());
+
+	auto material            = bgl::PbrMaterialDesc();
+	material.baseColorFactor = glm::vec4(0.8f, 0.4f, 0.2f, 1.0f);
+	material.metallicFactor  = 0.0f;
+	material.roughnessFactor = 0.5f;
+
+	const std::array<bgl::MaterialHandle, 1> materials = { { scene->CreatePbrMaterial(material) } };
+
+	const auto geom = scene->AddSkinnedMeshGeom(
+		MakeSkinnedStrip(),
+		0,
+		materials,
+		MakeTwoBoneRig(),
+		MakeSwingClip(),
+		c_StripPosedBounds);
+	REQUIRE(geom.IsValid());
+
+	// rate 1 at frame 1's time: bone 1 has swung 90 degrees, which carries the strip's top edge from
+	// (0, 2) onto x = -1. The two edges the probes sit on are a half unit clear of each other's
+	// shape, so neither box can see the other's band.
+	const auto instance = view->CreateSkinnedMeshInstance(geom, glm::mat4(1.0f), { 0, 0.0f, 1.0f });
+
+	auto job     = bgl::RenderJob();
+	job.view     = view;
+	job.camera   = StripCamera();
+	job.viewport = bgl::Viewport(static_cast<float>(c_Width), static_cast<float>(c_Height));
+	job.time     = 1.0f / c_SampleRate;
+
+	const auto capture = [&](const std::string& path) {
+		// Two frames: the first uploads and presents, the screenshot reads the last presented.
+		gfx->DrawFrame(target, job);
+		gfx->DrawFrame(target, job);
+		gfx->ScreenshotPng(target, path);
+		return path;
+	};
+
+	const auto off = capture("assets/golden/skinned_outline_off.got.png");
+	view->SetSubmeshSelected(instance, 0, true);
+	const auto on = capture("assets/golden/skinned_outline_on.got.png");
+
+	// A box straddling a silhouette edge: whatever the two frames differ by there is the band.
+	const auto bandAt = [&](const glm::vec3& world) {
+		const glm::ivec2 px = PixelOf(job.camera, world);
+		return bgl::test::FrameDelta(off, on, px.x - 8, px.y - 8, 16, 16);
+	};
+
+	const float posed    = bandAt(glm::vec3(-1.0f, 1.0f, 0.0f));
+	const float bindPose = bandAt(glm::vec3(0.0f, 2.0f, 0.0f));
+
+	INFO("outline energy: " << posed << " at the swung edge, " << bindPose << " at the bind one");
+
+	CHECK(posed > 1e-3f);
+	CHECK(bindPose < 1e-5f);
+}

@@ -73,40 +73,6 @@ namespace bgl
 			"compactedInstances"sv,
 		};
 
-		static constexpr std::array<SceneBuffer, 3> c_SkinnedBuffers = {
-			{ { "scene.skinnedGeomBuffer",
-			    "skinnedGeomBuffer",
-			    BarrierAccessFlag::kShaderResource,
-			    BarrierSyncFlag::kVertexShader },
-			  { "scene.skinnedStateBuffer",
-			    "skinnedStateBuffer",
-			    BarrierAccessFlag::kShaderResource,
-			    BarrierSyncFlag::kVertexShader },
-			  { "scene.bonePalettes",
-			    "bonePaletteBuffer",
-			    BarrierAccessFlag::kShaderResource,
-			    BarrierSyncFlag::kVertexShader } }
-		};
-
-		static constexpr std::array<SceneBuffer, 4> c_VatBuffers = {
-			{ { c_VatGeomBufferName,
-			    "vatGeomBuffer",
-			    BarrierAccessFlag::kShaderResource,
-			    BarrierSyncFlag::kVertexShader },
-			  { c_VatStateBufferName,
-			    "vatStateBuffer",
-			    BarrierAccessFlag::kShaderResource,
-			    BarrierSyncFlag::kVertexShader },
-			  { c_ClipBufferName,
-			    "clipBuffer",
-			    BarrierAccessFlag::kShaderResource,
-			    BarrierSyncFlag::kVertexShader },
-			  { c_VatColumnBufferName,
-			    "vatColumnBuffer",
-			    BarrierAccessFlag::kShaderResource,
-			    BarrierSyncFlag::kVertexShader } }
-		};
-
 		constexpr auto c_MotionVectorFormat = Format::RG16_FLOAT;
 		constexpr auto c_SceneColorFormat   = Format::RGBA16_FLOAT;
 

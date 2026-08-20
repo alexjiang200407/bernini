@@ -119,8 +119,7 @@ and portability.
       full transport (clip list, scrub, step, speed) against its own clock; the `.bvat` hidden as
       the build product it is. See [docs/vat.md](docs/vat.md).
     - [ ] Editor viewport playback — VAT instances placed and playing in the level viewport, which
-      needs a clock; the outline mask still draws VAT through the static kernel, so a selected
-      instance contours its bind pose until it gets a VAT variant.
+      needs a clock.
     - [x] Free inter-frame interpolation — fractional frames blend the two rows they fall between
       as two `Load`s and a lerp (a mesh-stage sampler breaks Metal's stage binding, and U is
       always an exact column); the pad row duplicates each clip's end frame to stop bleed, and
