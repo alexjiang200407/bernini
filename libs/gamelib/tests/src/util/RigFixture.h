@@ -51,12 +51,21 @@ namespace game::test
 		assetlib::writeKTX2(image, path, false, assetlib::Ktx2Compression::kNone);
 	}
 
+	/**
+	 * The rig's material. `loose` writes it the way a material whose bake has gone stale is written:
+	 * a routed base colour with no stamp against it and no baked triplet, which is what
+	 * assetlib::drawsLoose reads as "sample the routes". Neither animated pipeline has a loose
+	 * variant, so that is the shape both refuse.
+	 */
 	inline void
-	WriteMaterial(const fs::path& path, assetlib::AlphaMode alphaMode)
+	WriteMaterial(const fs::path& path, bool loose)
 	{
-		auto material                 = assetlib::BMaterial();
-		material.pbr.baseColorTexture = "Textures/white.ktx2";
-		material.pbr.alphaMode        = alphaMode;
+		auto material = assetlib::BMaterial();
+
+		if (loose)
+			material.pbr.routes[0].texture = "Textures/white.ktx2";
+		else
+			material.pbr.baseColorTexture = "Textures/white.ktx2";
 
 		fs::create_directories(path.parent_path());
 		assetlib::saveMaterial(material, path);
@@ -70,7 +79,7 @@ namespace game::test
 	 * manager's job.
 	 */
 	inline void
-	WriteRig(const fs::path& dataRoot, assetlib::AlphaMode alphaMode = assetlib::AlphaMode::kOpaque)
+	WriteRig(const fs::path& dataRoot, bool looseMaterial = false)
 	{
 		auto skeleton = assetlib::Skeleton();
 
@@ -188,7 +197,7 @@ namespace game::test
 		assetlib::saveAnimations(animations, dataRoot / "Animations/rig.banim");
 
 		WriteTexture(dataRoot / "Textures/white.ktx2");
-		WriteMaterial(dataRoot / "Materials/skin.bmaterial", alphaMode);
+		WriteMaterial(dataRoot / "Materials/skin.bmaterial", looseMaterial);
 	}
 
 	/**

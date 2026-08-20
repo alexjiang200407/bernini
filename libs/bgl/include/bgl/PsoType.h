@@ -19,10 +19,12 @@ namespace bgl
 		kOpaque_VatMesh_PBR = 10,
 		kAlphaTest_VatMesh_PBR = 11,
 		kHashedAlpha_VatMesh_PBR = 12,
-		kOpaque_SkinnedMesh_PBR = 13,
-		kAlphaTest_SkinnedMesh_PBR = 14,
-		kHashedAlpha_SkinnedMesh_PBR = 15,
-		kCount = 16,
+		kTransparent_VatMesh_PBR = 13,
+		kOpaque_SkinnedMesh_PBR = 14,
+		kAlphaTest_SkinnedMesh_PBR = 15,
+		kHashedAlpha_SkinnedMesh_PBR = 16,
+		kTransparent_SkinnedMesh_PBR = 17,
+		kCount = 18,
 	};
 
 	static_assert(sizeof(PsoType) == 4);

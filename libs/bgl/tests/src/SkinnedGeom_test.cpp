@@ -278,28 +278,24 @@ TEST_CASE("AddSkinnedMeshGeom uploads a rig's bones, clips and samples", "[skinn
 		}
 	}
 
-	SECTION("a skinned geom's material can be rebound, opaque or cutout kPBR")
+	SECTION("a skinned geom's material can be rebound to any layer of kPBR, but not to loose")
 	{
 		auto rebound           = bgl::PbrMaterialDesc();
 		rebound.metallicFactor = 0.25f;
 		CHECK_NOTHROW(scene->SetSubmeshMaterial(geom, 0, scene->CreatePbrMaterial(rebound)));
 
-		// A cutout discards; it does not blend, so it still draws in the opaque bucket and needs no
-		// sorting. An eye highlight on a rig is the case that asked for it.
-		auto masked      = bgl::PbrMaterialDesc();
-		masked.layerType = bgl::LayerType::kMask;
-		CHECK_NOTHROW(scene->SetSubmeshMaterial(geom, 0, scene->CreatePbrMaterial(masked)));
+		for (const bgl::LayerType layer :
+		     { bgl::LayerType::kMask, bgl::LayerType::kBlend, bgl::LayerType::kHashed })
+		{
+			auto layerDesc      = bgl::PbrMaterialDesc();
+			layerDesc.layerType = layer;
+			CHECK_NOTHROW(scene->SetSubmeshMaterial(geom, 0, scene->CreatePbrMaterial(layerDesc)));
+		}
 
-		auto blended      = bgl::PbrMaterialDesc();
-		blended.layerType = bgl::LayerType::kBlend;
-		CHECK_THROWS_AS(
-			scene->SetSubmeshMaterial(geom, 0, scene->CreatePbrMaterial(blended)),
-			bgl::SceneError);
-
-		// Hashed too: its coverage is stochastic, but its depth is not, so it is an opaque shape.
-		auto hashed      = bgl::PbrMaterialDesc();
-		hashed.layerType = bgl::LayerType::kHashed;
-		CHECK_NOTHROW(scene->SetSubmeshMaterial(geom, 0, scene->CreatePbrMaterial(hashed)));
+		// The skinned geometry stage writes materialIsLoose = 0: there is no loose variant of it,
+		// and a loose handle would index the wrong material buffer rather than fail.
+		const auto loose = scene->CreateLoosePbrMaterial(bgl::LoosePbrMaterialDesc());
+		CHECK_THROWS_AS(scene->SetSubmeshMaterial(geom, 0, loose), bgl::SceneError);
 	}
 }
 
@@ -452,38 +448,43 @@ TEST_CASE("AddSkinnedMeshGeom refuses a rig the pose pass could not walk", "[ski
 		CHECK_THROWS_AS(add(MakeRig(), MakeClips(), false), bgl::SceneError);
 	}
 
-	SECTION("a submesh whose material blends, which the skinned pipeline has no variant for")
+	SECTION("a submesh whose material is loose, which the skinned pipeline has no variant for")
 	{
-		auto blend                                       = bgl::PbrMaterialDesc();
-		blend.layerType                                  = bgl::LayerType::kBlend;
-		const std::array<bgl::MaterialHandle, 1> blended = { { scene->CreatePbrMaterial(blend) } };
+		const std::array<bgl::MaterialHandle, 1> loose = { { scene->CreateLoosePbrMaterial(
+			bgl::LoosePbrMaterialDesc()) } };
 
 		CHECK_THROWS_AS(
 			scene->AddSkinnedMeshGeom(
 				MakeSkinnedMesh(),
 				0,
-				blended,
+				loose,
 				MakeRig(),
 				MakeClips(),
 				c_AnyPose),
 			bgl::SceneError);
 	}
 
-	SECTION("but a cutout submesh is uploaded, since a discard is still an opaque draw")
+	SECTION("but every layer of a kPBR one is uploaded")
 	{
-		auto cutout                                     = bgl::PbrMaterialDesc();
-		cutout.layerType                                = bgl::LayerType::kMask;
-		const std::array<bgl::MaterialHandle, 1> masked = { { scene->CreatePbrMaterial(cutout) } };
+		for (const bgl::LayerType layer :
+		     { bgl::LayerType::kMask, bgl::LayerType::kBlend, bgl::LayerType::kHashed })
+		{
+			auto layerDesc      = bgl::PbrMaterialDesc();
+			layerDesc.layerType = layer;
 
-		const bgl::GeomHandle geom = scene->AddSkinnedMeshGeom(
-			MakeSkinnedMesh(),
-			0,
-			masked,
-			MakeRig(),
-			MakeClips(),
-			c_AnyPose);
+			const std::array<bgl::MaterialHandle, 1> layered = { { scene->CreatePbrMaterial(
+				layerDesc) } };
 
-		CHECK(geom.IsValid());
+			const bgl::GeomHandle uploaded = scene->AddSkinnedMeshGeom(
+				MakeSkinnedMesh(),
+				0,
+				layered,
+				MakeRig(),
+				MakeClips(),
+				c_AnyPose);
+
+			CHECK(uploaded.IsValid());
+		}
 	}
 
 	SECTION("a meshIndex past the mesh table")
@@ -581,14 +582,12 @@ TEST_CASE("a refused skinned add leaves the scene's arenas untouched", "[skinned
 		MakeClips(),
 		c_AnyPose));
 
-	auto blend                                                = bgl::PbrMaterialDesc();
-	blend.layerType                                           = bgl::LayerType::kBlend;
-	const std::array<bgl::MaterialHandle, 1> blendedMaterials = { { scene->CreatePbrMaterial(
-		blend) } };
+	const std::array<bgl::MaterialHandle, 1> looseMaterials = { { scene->CreateLoosePbrMaterial(
+		bgl::LoosePbrMaterialDesc()) } };
 	CHECK_THROWS(scene->AddSkinnedMeshGeom(
 		MakeSkinnedMesh(),
 		0,
-		blendedMaterials,
+		looseMaterials,
 		MakeRig(),
 		MakeClips(),
 		c_AnyPose));

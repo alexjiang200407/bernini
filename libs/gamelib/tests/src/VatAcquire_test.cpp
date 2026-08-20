@@ -370,10 +370,9 @@ TEST_CASE("A VAT acquire that cannot stand leaves nothing behind", "[vat]")
 {
 	DataRoot root("bernini_vat_acquire_refuse");
 
-	// A blended material: the VAT pipeline has no blended variant, so the acquire must refuse --
-	// after it has already baked and taken its textures and material, which is the unwind under
-	// test.
-	WriteRig(root.path, assetlib::AlphaMode::kBlend);
+	// A loose material: the VAT pipeline has no loose variant, so the acquire must refuse -- after
+	// it has already baked and taken its textures and material, which is the unwind under test.
+	WriteRig(root.path, true);
 
 	auto gfx = bgl::CreateGraphics(HeadlessOptions());
 

@@ -311,7 +311,7 @@ TEST_CASE("VAT instances draw the frame they were frozen at", "[vat][render]")
 			bgl::SceneError);
 	}
 
-	SECTION("a VAT geom demands its textures, clips and an unblended PBR material")
+	SECTION("a VAT geom demands its textures, clips and a PBR material")
 	{
 		auto broken = desc;
 		broken.clips.clear();
@@ -336,36 +336,27 @@ TEST_CASE("VAT instances draw the frame they were frozen at", "[vat][render]")
 			scene->AddVatMeshGeom(verts, indices, desc, bgl::MaterialHandle{}),
 			bgl::SceneError);
 
-		auto blend          = bgl::PbrMaterialDesc();
-		blend.layerType     = bgl::LayerType::kBlend;
-		const auto blendPbr = scene->CreatePbrMaterial(blend);
-		CHECK_THROWS_AS(scene->AddVatMeshGeom(verts, indices, desc, blendPbr), bgl::SceneError);
+		// A loose material routes its channels rather than sampling a baked triplet, and no VAT
+		// pipeline reads them.
+		const auto loose = scene->CreateLoosePbrMaterial(bgl::LoosePbrMaterialDesc());
+		CHECK_THROWS_AS(scene->AddVatMeshGeom(verts, indices, desc, loose), bgl::SceneError);
 	}
 
-	SECTION("an override cannot smuggle a blend onto a VAT instance, but cutout and hashed pass")
+	SECTION("every layer of a kPBR material binds to a VAT instance")
 	{
 		const auto instance =
 			view->CreateVatMeshInstance(geom, glm::mat4(1.0f), bgl::VatInstanceDesc{ 0, 0.0f });
 
-		auto blend          = bgl::PbrMaterialDesc();
-		blend.layerType     = bgl::LayerType::kBlend;
-		const auto blendPbr = scene->CreatePbrMaterial(blend);
+		for (const bgl::LayerType layer :
+		     { bgl::LayerType::kMask, bgl::LayerType::kBlend, bgl::LayerType::kHashed })
+		{
+			auto layerDesc      = bgl::PbrMaterialDesc();
+			layerDesc.layerType = layer;
+			const auto pbrLayer = scene->CreatePbrMaterial(layerDesc);
 
-		// Refused with an exception, never resolved: SubmeshPso(kVatMesh, blend) is a gfatal, so the
-		// door has to close here, on the caller's thread, as an ordinary argument error.
-		CHECK_THROWS_AS(view->SetSubmeshMaterialOverride(instance, 0, blendPbr), bgl::SceneError);
-		CHECK_THROWS_AS(scene->SetSubmeshMaterial(geom, 0, blendPbr), bgl::SceneError);
-
-		// Both discard rather than blend, so both draw in the opaque bucket the VAT geometry stage
-		// already feeds.
-		auto cutout      = bgl::PbrMaterialDesc();
-		cutout.layerType = bgl::LayerType::kMask;
-		CHECK_NOTHROW(
-			view->SetSubmeshMaterialOverride(instance, 0, scene->CreatePbrMaterial(cutout)));
-
-		auto hashed      = bgl::PbrMaterialDesc();
-		hashed.layerType = bgl::LayerType::kHashed;
-		CHECK_NOTHROW(scene->SetSubmeshMaterial(geom, 0, scene->CreatePbrMaterial(hashed)));
+			CHECK_NOTHROW(view->SetSubmeshMaterialOverride(instance, 0, pbrLayer));
+			CHECK_NOTHROW(scene->SetSubmeshMaterial(geom, 0, pbrLayer));
+		}
 
 		// An opaque PBR override is the supported skin path and must still work.
 		auto skinDesc            = bgl::PbrMaterialDesc();
@@ -502,15 +493,11 @@ TEST_CASE("A VAT mesh's submeshes read their own columns", "[vat][render]")
 		CHECK_THROWS_AS(scene->AddVatMeshGeom(mesh, 0, materials, desc), bgl::SceneError);
 	}
 
-	SECTION("a submesh without an unblended PBR material is refused")
+	SECTION("a submesh without a PBR material is refused")
 	{
 		desc.columnBases = { 0, 3 };
 
-		auto blend          = bgl::PbrMaterialDesc();
-		blend.layerType     = bgl::LayerType::kBlend;
-		const auto blendPbr = scene->CreatePbrMaterial(blend);
-
-		const auto mixed = std::array<bgl::MaterialHandle, 2>{ { pbrA, blendPbr } };
+		const auto mixed = std::array<bgl::MaterialHandle, 2>{ { pbrA, bgl::MaterialHandle{} } };
 		CHECK_THROWS_AS(scene->AddVatMeshGeom(mesh, 0, mixed, desc), bgl::SceneError);
 
 		const auto missing = std::array<bgl::MaterialHandle, 1>{ { pbrA } };
@@ -564,14 +551,14 @@ TEST_CASE("VAT geometry draws with a cutout or hashed material", "[vat][alphates
 	// placements of one quad shade identically however far apart they sit. The coverage ratio below
 	// is read off exactly that.
 	const auto materialWith = [&](bgl::LayerType layer, float alpha) {
-		auto desc            = bgl::PbrMaterialDesc();
-		desc.baseColorFactor = glm::vec4(0.85f, 0.45f, 0.15f, alpha);
-		desc.metallicFactor  = 0.0f;
-		desc.roughnessFactor = 1.0f;
-		desc.specularFactor  = 0.0f;
-		desc.layerType       = layer;
-		desc.alphaCutoff     = 0.5f;
-		return scene->CreatePbrMaterial(desc);
+		auto pbr            = bgl::PbrMaterialDesc();
+		pbr.baseColorFactor = glm::vec4(0.85f, 0.45f, 0.15f, alpha);
+		pbr.metallicFactor  = 0.0f;
+		pbr.roughnessFactor = 1.0f;
+		pbr.specularFactor  = 0.0f;
+		pbr.layerType       = layer;
+		pbr.alphaCutoff     = 0.5f;
+		return scene->CreatePbrMaterial(pbr);
 	};
 
 	auto desc      = bgl::VatGeomDesc();
@@ -683,5 +670,61 @@ TEST_CASE("VAT geometry draws with a cutout or hashed material", "[vat][alphates
 		const float coverage = hashed / solid;
 		CHECK(coverage > 0.42f);
 		CHECK(coverage < 0.58f);
+	}
+
+	SECTION("a blended VAT quad takes its place in the depth-sorted list")
+	{
+		const auto blendGeom =
+			scene->AddVatMeshGeom(verts, indices, desc, materialWith(bgl::LayerType::kBlend, 0.5f));
+
+		auto paneDesc            = bgl::PbrMaterialDesc();
+		paneDesc.baseColorFactor = glm::vec4(0.1f, 0.1f, 0.9f, 0.5f);
+		paneDesc.metallicFactor  = 0.0f;
+		paneDesc.roughnessFactor = 1.0f;
+		paneDesc.specularFactor  = 0.0f;
+		paneDesc.layerType       = bgl::LayerType::kBlend;
+
+		// The same 2x2 square the quad's bind pose covers, so the two overlap about the origin.
+		const auto pane = scene->AddPlaneGeom(1, 1, 2.0f, 2.0f, scene->CreatePbrMaterial(paneDesc));
+
+		const auto atZ = [](float z) {
+			return glm::translate(glm::mat4(1.0f), glm::vec3(0.0f, 0.0f, z));
+		};
+
+		// Frame 1 of clip 0: the sheared quad, whose right edge reaches past the pane entirely.
+		const auto frame1 = bgl::VatInstanceDesc{ 0, 1.0f };
+
+		const auto render = [&](const char* png, float vatZ, float paneZ) {
+			const auto vatInstance  = view->CreateVatMeshInstance(blendGeom, atZ(vatZ), frame1);
+			const auto paneInstance = view->CreateStaticMeshInstance(pane, atZ(paneZ));
+
+			gfx->DrawFrame(target, job);
+			gfx->ScreenshotPng(target, png);
+
+			view->DeleteMeshInstance(vatInstance);
+			view->DeleteMeshInstance(paneInstance);
+		};
+
+		const auto* nearPng = "assets/golden/vat_blend_near.got.png";
+		render(nearPng, 0.0f, -1.0f);
+
+		// Only the sheared quad reaches here; the pane stops at x = 1. A lit sample is the VAT
+		// geometry stage running inside the transparent phase, which draws the whole sorted list
+		// through one pipeline.
+		CHECK(lumaAt(nearPng, boxAt(c_PosedOnlyX, 0.0f, 14)) > 0.02f);
+
+		const auto overlap = boxAt(0.0f, 0.0f, 30);
+		const auto nearHue =
+			bgl::test::MeanColor(nearPng, overlap[0], overlap[1], overlap[2], overlap[3]);
+
+		const auto* farPng = "assets/golden/vat_blend_far.got.png";
+		render(farPng, -1.0f, 0.0f);
+		const auto farHue =
+			bgl::test::MeanColor(farPng, overlap[0], overlap[1], overlap[2], overlap[3]);
+
+		// The quad is warm and the pane is blue, so which one leads over the overlap says which was
+		// composited last -- and that is the sort order, not the tier.
+		CHECK(nearHue.r > nearHue.b);
+		CHECK(farHue.b > farHue.r);
 	}
 }

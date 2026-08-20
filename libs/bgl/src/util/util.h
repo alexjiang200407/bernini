@@ -24,9 +24,8 @@ namespace bgl
 
 	/**
 	 * Whether `geomType` can be drawn with `material`, which is what every door binding one to
-	 * animated geometry checks. Static geometry takes every layer; both animated tiers take every
-	 * layer but blend, since a discarding surface stays in the opaque bucket while a blended one
-	 * needs the depth-sorted list, which draws through the static geometry stage alone.
+	 * animated geometry checks. Static geometry takes anything; the animated tiers take every layer
+	 * of a `kPBR` material and no other material type, having neither an unlit nor a loose variant.
 	 *
 	 * An invalid handle is rejected -- animated geometry has no unlit variant to fall back to.
 	 */
@@ -36,7 +35,7 @@ namespace bgl
 	/**
 	 * Whether `pso` draws with alpha blending. Its instances are excluded from the PSO-bucketed
 	 * counting sort and drawn from a separate depth-sorted list instead, since blending order is
-	 * depth-first, not PSO-first.
+	 * depth-first, not PSO-first. Mirrored by TransparentDepthKeys.slang, which keys that list.
 	 */
 	bool
 	IsTransparentPso(uint32_t pso) noexcept;

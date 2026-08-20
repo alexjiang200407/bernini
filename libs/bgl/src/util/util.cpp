@@ -135,11 +135,12 @@ namespace bgl
 
 		// The material is constrained to kPBR at every door that binds one to VAT geometry
 		// (AddVatMeshGeom, SetSubmeshMaterial, SetSubmeshMaterialOverride), so any other type
-		// reaching here is bgl's own bug. Blending is still missing: it needs the depth-sorted
-		// list, which draws through the static geometry stage alone.
+		// reaching here is bgl's own bug.
 		case GeomType::kVatMesh:
-			if (material != MaterialType::kPBR || blend)
-				gfatal("VAT geometry is not drawable with a blended kPBR material");
+			if (material != MaterialType::kPBR)
+				gfatal("VAT geometry is only drawable with a kPBR material");
+			if (blend)
+				return PsoType::kTransparent_VatMesh_PBR;
 			if (cutout)
 				return PsoType::kAlphaTest_VatMesh_PBR;
 			if (hashed)
@@ -147,11 +148,12 @@ namespace bgl
 			return PsoType::kOpaque_VatMesh_PBR;
 
 		// Constrained at every door that binds a material to skinned geometry, exactly as VAT is
-		// above. Cutout and hashed join opaque because both still draw an opaque shape -- they
-		// discard, they do not blend, so neither needs sorting.
+		// above.
 		case GeomType::kSkinnedMesh:
-			if (material != MaterialType::kPBR || blend)
-				gfatal("Skinned geometry is not drawable with a blended kPBR material");
+			if (material != MaterialType::kPBR)
+				gfatal("Skinned geometry is only drawable with a kPBR material");
+			if (blend)
+				return PsoType::kTransparent_SkinnedMesh_PBR;
 			if (cutout)
 				return PsoType::kAlphaTest_SkinnedMesh_PBR;
 			if (hashed)
@@ -171,17 +173,16 @@ namespace bgl
 		if (geomType == GeomType::kStaticMesh)
 			return true;
 
-		if (!material.IsValid() || material.materialType != MaterialType::kPBR)
-			return false;
-
-		return material.layerType != LayerType::kBlend;
+		return material.IsValid() && material.materialType == MaterialType::kPBR;
 	}
 
 	bool
 	IsTransparentPso(uint32_t pso) noexcept
 	{
 		return pso == static_cast<uint32_t>(PsoType::kTransparent_StaticMesh_PBR) ||
-		       pso == static_cast<uint32_t>(PsoType::kTransparent_StaticMesh_LoosePbr);
+		       pso == static_cast<uint32_t>(PsoType::kTransparent_StaticMesh_LoosePbr) ||
+		       pso == static_cast<uint32_t>(PsoType::kTransparent_VatMesh_PBR) ||
+		       pso == static_cast<uint32_t>(PsoType::kTransparent_SkinnedMesh_PBR);
 	}
 
 	uint32_t
