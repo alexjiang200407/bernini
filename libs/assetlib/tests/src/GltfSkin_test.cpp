@@ -34,21 +34,26 @@ namespace
 		fs::path dir;
 		fs::path gltf;
 
+		/** A substring of the document and what to put in its place. */
+		struct Edit
+		{
+			std::string_view find;
+			std::string_view replace;
+		};
+
 		/**
-		 * @param find Substring of the document to replace before it is written, so a case can
-		 *        doctor one accessor without restating the whole rig. Empty writes it verbatim.
+		 * @param edits Applied in order before the document is written, so a case can doctor one
+		 *        accessor -- or graft a node above the rig -- without restating the whole file.
 		 */
-		explicit SkinnedGltf(
-			const char*      name,
-			std::string_view find    = {},
-			std::string_view replace = {}) : dir(fs::temp_directory_path() / name)
+		explicit SkinnedGltf(const char* name, std::initializer_list<Edit> edits = {}) :
+			dir(fs::temp_directory_path() / name)
 		{
 			fs::remove_all(dir);
 			fs::create_directories(dir);
 			gltf = dir / "rig.gltf";
 
 			WriteBuffer();
-			WriteDocument(find, replace);
+			WriteDocument(edits);
 		}
 
 		~SkinnedGltf() { fs::remove_all(dir); }
@@ -63,7 +68,8 @@ namespace
 		static constexpr size_t c_MoveValues  = 240;  // 2 x vec3 float
 		static constexpr size_t c_SpinTimes   = 264;  // 3 x float
 		static constexpr size_t c_SpinValues  = 276;  // 3 x vec4 float
-		static constexpr size_t c_Length      = 324;
+		static constexpr size_t c_UnitScale   = 324;  // 2 x vec3 float
+		static constexpr size_t c_Length      = 348;
 
 	private:
 		void
@@ -118,6 +124,11 @@ namespace
 			                             0.0f,
 			                             1.0f } });
 
+			// A scale track pinned at 1. Redundant on its own, and every exporter that puts a unit
+			// conversion on an armature node above the rig writes one anyway -- which is what makes
+			// it the thing that overwrites a composed bind pose.
+			put(c_UnitScale, std::array<float, 6>{ { 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f } });
+
 			std::ofstream out(dir / "rig.bin", std::ios::binary);
 			out.write(
 				reinterpret_cast<const char*>(bytes.data()),
@@ -125,7 +136,7 @@ namespace
 		}
 
 		void
-		WriteDocument(std::string_view find, std::string_view replace) const
+		WriteDocument(std::initializer_list<Edit> edits) const
 		{
 			std::string document = R"({
   "asset": { "version": "2.0" },
@@ -148,7 +159,7 @@ namespace
       "samplers": [ { "input": 7, "output": 8, "interpolation": "LINEAR" } ],
       "channels": [ { "sampler": 0, "target": { "node": 1, "path": "rotation" } } ] }
   ],
-  "buffers": [ { "byteLength": 324, "uri": "rig.bin" } ],
+  "buffers": [ { "byteLength": 348, "uri": "rig.bin" } ],
   "bufferViews": [
     { "buffer": 0, "byteOffset": 0,   "byteLength": 36 },
     { "buffer": 0, "byteOffset": 36,  "byteLength": 12 },
@@ -158,7 +169,8 @@ namespace
     { "buffer": 0, "byteOffset": 232, "byteLength": 8 },
     { "buffer": 0, "byteOffset": 240, "byteLength": 24 },
     { "buffer": 0, "byteOffset": 264, "byteLength": 12 },
-    { "buffer": 0, "byteOffset": 276, "byteLength": 48 }
+    { "buffer": 0, "byteOffset": 276, "byteLength": 48 },
+    { "buffer": 0, "byteOffset": 324, "byteLength": 24 }
   ],
   "accessors": [
     { "bufferView": 0, "componentType": 5126, "count": 3, "type": "VEC3",
@@ -172,15 +184,16 @@ namespace
     { "bufferView": 6, "componentType": 5126, "count": 2, "type": "VEC3" },
     { "bufferView": 7, "componentType": 5126, "count": 3, "type": "SCALAR",
       "min": [ 0 ], "max": [ 1 ] },
-    { "bufferView": 8, "componentType": 5126, "count": 3, "type": "VEC4" }
+    { "bufferView": 8, "componentType": 5126, "count": 3, "type": "VEC4" },
+    { "bufferView": 9, "componentType": 5126, "count": 2, "type": "VEC3" }
   ]
 })";
 
-			if (!find.empty())
+			for (const Edit& edit : edits)
 			{
-				const size_t at = document.find(find);
+				const size_t at = document.find(edit.find);
 				REQUIRE(at != std::string::npos);
-				document.replace(at, find.size(), replace);
+				document.replace(at, edit.find.size(), edit.replace);
 			}
 
 			std::ofstream out(gltf, std::ios::binary);
@@ -347,6 +360,105 @@ TEST_CASE("A clip's root motion and loop flag come from its own samples", "[gltf
 	CHECK(spin.locomotionSpeed == Catch::Approx(0.0f));
 }
 
+namespace
+{
+	// The scene as the fixture writes it -- both joints at the top level. What an armature case
+	// replaces, to hang the rig off a node above it instead.
+	constexpr std::string_view c_JointsAtTopLevel = R"("scenes": [ { "nodes": [ 0, 1 ] } ],
+  "nodes": [
+    { "mesh": 0, "skin": 0, "name": "body" },
+    { "name": "hips", "translation": [ 0, 1, 0 ], "children": [ 2 ] },
+    { "name": "spine", "translation": [ 0, 2, 0 ] }
+  ],)";
+}
+
+TEST_CASE("A node above the root joint poses the rig, not just its bind pose", "[gltf][animation]")
+{
+	// The bug this pins cost the whole animal library: an exporter puts the rig's unit conversion on
+	// an armature node above the root joint, and writes a redundant unit-scale track on the joint
+	// itself. Folding the armature into the bind pose alone is not enough -- the first frame of any
+	// clip overwrites that scale with the joint's own 1, and the rig poses a hundred times too large.
+	const SkinnedGltf source(
+		"bernini_gltf_armature_scale",
+		{ { c_JointsAtTopLevel,
+	        R"("scenes": [ { "nodes": [ 0, 3 ] } ],
+  "nodes": [
+    { "mesh": 0, "skin": 0, "name": "body" },
+    { "name": "hips", "translation": [ 0, 1, 0 ], "children": [ 2 ] },
+    { "name": "spine", "translation": [ 0, 2, 0 ] },
+    { "name": "armature", "translation": [ 0, 0, 5 ], "scale": [ 0.01, 0.01, 0.01 ],
+      "children": [ 1 ] }
+  ],)" },
+	      { R"("samplers": [ { "input": 5, "output": 6, "interpolation": "LINEAR" } ],
+      "channels": [ { "sampler": 0, "target": { "node": 1, "path": "translation" } } ] },)",
+	        R"("samplers": [ { "input": 5, "output": 6, "interpolation": "LINEAR" },
+                     { "input": 5, "output": 9, "interpolation": "LINEAR" } ],
+      "channels": [ { "sampler": 0, "target": { "node": 1, "path": "translation" } },
+                    { "sampler": 1, "target": { "node": 1, "path": "scale" } } ] },)" } });
+
+	const auto import = loadFromGltf(source.gltf);
+
+	REQUIRE(import.skeleton.bones.size() == 2);
+	REQUIRE(import.animations.clips.size() == 2);
+
+	// Catch has no printer for a glm::vec3, so a scale is checked through its extremes -- which also
+	// says it stayed uniform, and prints a number when it did not.
+	const auto checkScale = [](const glm::vec3& scale, float expected) {
+		REQUIRE(std::max({ scale.x, scale.y, scale.z }) == Catch::Approx(expected));
+		REQUIRE(std::min({ scale.x, scale.y, scale.z }) == Catch::Approx(expected));
+	};
+
+	// The bind pose has always composed the armature in.
+	checkScale(import.skeleton.bones[0].bindPose.scale, 0.01f);
+	CHECK(import.skeleton.bones[0].bindPose.translation.z == Catch::Approx(5.0f));
+
+	const AnimationClip& walk = import.animations.clips[0];
+
+	const auto poseOf = [&](uint32_t frame) {
+		return import.animations.samples[walk.firstSample + frame * import.animations.boneCount];
+	};
+
+	// Every frame, not just the first: the joint's own unit-scale track must lose to the armature's
+	// conversion at all times, or the rig grows the moment a clip starts.
+	for (uint32_t frame = 0; frame < walk.frameCount; ++frame)
+		checkScale(poseOf(frame).scale, 0.01f);
+
+	// The joint travels 2 along +Z, under an armature that shrinks it by a hundred and stands at 5.
+	CHECK(poseOf(0).translation.z == Catch::Approx(5.0f));
+	CHECK(poseOf(walk.frameCount - 1).translation.z == Catch::Approx(5.02f));
+
+	// Which is what the clip travels. Composing nothing would report the joint's raw 2.
+	CHECK(walk.rootMotion.z == Catch::Approx(0.02f));
+}
+
+TEST_CASE("A clip's root motion may be authored above the root joint", "[gltf][animation]")
+{
+	// The same armature, animated. A channel on it is the clip's travel -- drop it and every clip of
+	// a rig built this way reports itself as an in-place cycle going nowhere.
+	const SkinnedGltf source(
+		"bernini_gltf_armature_motion",
+		{ { c_JointsAtTopLevel,
+	        R"("scenes": [ { "nodes": [ 0, 3 ] } ],
+  "nodes": [
+    { "mesh": 0, "skin": 0, "name": "body" },
+    { "name": "hips", "translation": [ 0, 1, 0 ], "children": [ 2 ] },
+    { "name": "spine", "translation": [ 0, 2, 0 ] },
+    { "name": "armature", "children": [ 1 ] }
+  ],)" },
+	      { R"("channels": [ { "sampler": 0, "target": { "node": 1, "path": "translation" } } ] },)",
+	        R"("channels": [ { "sampler": 0, "target": { "node": 1, "path": "translation" } },
+                    { "sampler": 0, "target": { "node": 3, "path": "translation" } } ] },)" } });
+
+	const auto import = loadFromGltf(source.gltf);
+
+	REQUIRE(import.animations.clips.size() == 2);
+	const AnimationClip& walk = import.animations.clips[0];
+
+	// Two metres on the armature and two more on the joint beneath it, at unit scale.
+	CHECK(walk.rootMotion.z == Catch::Approx(4.0f));
+	CHECK(walk.locomotionSpeed == Catch::Approx(4.0f));
+}
+
 TEST_CASE("Baking a skinned import writes the rig beside the mesh", "[gltf][skeleton][io]")
 {
 	const SkinnedGltf source("bernini_gltf_skin_bake");
@@ -381,8 +493,8 @@ TEST_CASE("A malformed animation sampler is rejected, not read past", "[gltf][sk
 	{
 		const SkinnedGltf source(
 			"bernini_gltf_sampler_short",
-			R"({ "bufferView": 6, "componentType": 5126, "count": 2, "type": "VEC3" })",
-			R"({ "bufferView": 6, "componentType": 5126, "count": 1, "type": "VEC3" })");
+			{ { R"({ "bufferView": 6, "componentType": 5126, "count": 2, "type": "VEC3" })",
+		        R"({ "bufferView": 6, "componentType": 5126, "count": 1, "type": "VEC3" })" } });
 
 		CHECK_THROWS_WITH(
 			loadFromGltf(source.gltf),
@@ -395,8 +507,7 @@ TEST_CASE("A malformed animation sampler is rejected, not read past", "[gltf][sk
 		// the end of it. Accessor 4 is the rig's inverse bind matrices -- real MAT4 data.
 		const SkinnedGltf source(
 			"bernini_gltf_sampler_mat4",
-			R"("input": 5, "output": 6)",
-			R"("input": 5, "output": 4)");
+			{ { R"("input": 5, "output": 6)", R"("input": 5, "output": 4)" } });
 
 		CHECK_THROWS_WITH(
 			loadFromGltf(source.gltf),

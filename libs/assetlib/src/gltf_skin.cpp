@@ -70,23 +70,47 @@ namespace assetlib
 		}
 
 		/**
-		 * A joint's transform relative to its *bone* parent. Identical to the node's own local
-		 * transform in the ordinary case, which is taken untouched rather than round-tripped through a
-		 * matrix.
+		 * Every node's own local transform, indexed by node. Read once because a `matrix` node
+		 * decomposes on every read, and animation asks for these per bone per frame.
+		 */
+		std::vector<Transform>
+		readNodeTransforms(const tinygltf::Model& model)
+		{
+			std::vector<Transform> poses;
+			poses.reserve(model.nodes.size());
+			for (const tinygltf::Node& node : model.nodes) poses.push_back(readNodeTransform(node));
+
+			return poses;
+		}
+
+		/**
+		 * The nodes between `parentNode` (exclusive) and `node`, outermost first. glTF permits
+		 * ordinary nodes between two joints, and a bone's transform is the product of all of them.
+		 */
+		std::vector<uint32_t>
+		boneNodeChain(uint32_t node, uint32_t parentNode, std::span<const uint32_t> nodeParents)
+		{
+			std::vector<uint32_t> chain;
+			for (uint32_t cur = node; cur != parentNode; cur = nodeParents[cur])
+				chain.push_back(cur);
+
+			std::ranges::reverse(chain);
+			return chain;
+		}
+
+		/**
+		 * A bone's transform relative to its *bone* parent, from the poses of its chain nodes.
+		 * A one-node chain is taken untouched rather than round-tripped through a matrix, which is
+		 * both exact and the overwhelmingly common case.
 		 */
 		Transform
-		boneLocalTransform(
-			const tinygltf::Model&    model,
-			uint32_t                  node,
-			uint32_t                  parentNode,
-			std::span<const uint32_t> nodeParents)
+		composeBoneTransform(std::span<const uint32_t> chain, std::span<const Transform> nodePoses)
 		{
-			if (nodeParents[node] == parentNode)
-				return readNodeTransform(model.nodes[node]);
+			if (chain.size() == 1)
+				return nodePoses[chain[0]];
 
 			glm::mat4 local(1.0f);
-			for (uint32_t cur = node; cur != parentNode; cur = nodeParents[cur])
-				local = toMatrix(readNodeTransform(model.nodes[cur])) * local;
+			for (const uint32_t node : chain) local = local * toMatrix(nodePoses[node]);
 
 			return decomposeTransform(local);
 		}
@@ -200,8 +224,8 @@ namespace assetlib
 			return glm::vec4(0.0f);
 		}
 
-		/** The sampler index driving each of a bone's three channels, or c_InvalidIndex. */
-		struct BoneChannels
+		/** The sampler index driving each of a node's three channels, or c_InvalidIndex. */
+		struct NodeChannels
 		{
 			uint32_t translationSampler = c_InvalidIndex;
 			uint32_t rotationSampler    = c_InvalidIndex;
@@ -299,7 +323,10 @@ namespace assetlib
 		if (!inverseBinds.empty() && inverseBindComponents != 16)
 			throw_runtime_error("bskel: inverseBindMatrices is not a matrix accessor");
 
+		const auto nodePoses = readNodeTransforms(model);
+
 		out.skeleton.bones.reserve(order.size());
+		out.boneNodes.reserve(order.size());
 
 		for (const uint32_t joint : order)
 		{
@@ -318,7 +345,9 @@ namespace assetlib
 				parentNode  = static_cast<uint32_t>(skin.joints[jointParents[joint]]);
 			}
 
-			bone.bindPose   = boneLocalTransform(model, node, parentNode, nodeParents);
+			out.boneNodes.push_back(boneNodeChain(node, parentNode, nodeParents));
+
+			bone.bindPose   = composeBoneTransform(out.boneNodes.back(), nodePoses);
 			bone.nameOffset = out.skeleton.stringPool.add(model.nodes[node].name);
 
 			// glTF's default when the accessor is absent: the joints are already in bind pose.
@@ -349,12 +378,17 @@ namespace assetlib
 		out.boneCount         = boneCount;
 		out.skeletonSignature = skeletonSignature(skin.skeleton);
 
-		std::vector<Transform> bindPose(boneCount);
-		for (uint32_t b = 0; b < boneCount; ++b) bindPose[b] = skin.skeleton.bones[b].bindPose;
+		const auto authoredPoses = readNodeTransforms(model);
+
+		// A node is a clip's business only if some bone's transform is a product of it. That is every
+		// joint, plus the non-joint nodes glTF allowed between one joint and the next.
+		std::vector<bool> inBoneChain(model.nodes.size(), false);
+		for (const std::vector<uint32_t>& chain : skin.boneNodes)
+			for (const uint32_t node : chain) inBoneChain[node] = true;
 
 		for (const tinygltf::Animation& animation : model.animations)
 		{
-			std::vector<BoneChannels>                     channels(boneCount);
+			std::unordered_map<uint32_t, NodeChannels>    channels;
 			std::unordered_map<uint32_t, KeyframeSampler> samplers;
 
 			float first = std::numeric_limits<float>::max();
@@ -363,12 +397,12 @@ namespace assetlib
 			for (const tinygltf::AnimationChannel& channel : animation.channels)
 			{
 				if (channel.target_node < 0 ||
-				    static_cast<size_t>(channel.target_node) >= skin.nodeToBone.size())
+				    static_cast<size_t>(channel.target_node) >= model.nodes.size())
 					continue;
 
-				const uint32_t bone = skin.nodeToBone[static_cast<size_t>(channel.target_node)];
-				if (bone == c_InvalidIndex)
-					continue;  // a node this rig does not skin from -- a camera, a prop, a morph target
+				const auto node = static_cast<uint32_t>(channel.target_node);
+				if (!inBoneChain[node])
+					continue;  // a node no bone hangs off -- a camera, a prop, a morph target
 
 				const auto samplerIndex = static_cast<uint32_t>(channel.sampler);
 				if (channel.sampler < 0 ||
@@ -413,11 +447,11 @@ namespace assetlib
 				}
 
 				if (channel.target_path == "translation")
-					channels[bone].translationSampler = samplerIndex;
+					channels[node].translationSampler = samplerIndex;
 				else if (channel.target_path == "rotation")
-					channels[bone].rotationSampler = samplerIndex;
+					channels[node].rotationSampler = samplerIndex;
 				else if (channel.target_path == "scale")
-					channels[bone].scaleSampler = samplerIndex;
+					channels[node].scaleSampler = samplerIndex;
 				// "weights" drives morph targets, which this pipeline has no representation for.
 			}
 
@@ -436,35 +470,40 @@ namespace assetlib
 
 			out.samples.resize(out.samples.size() + static_cast<size_t>(frameCount) * boneCount);
 
+			// Only the nodes this clip animates are re-read per frame; the rest hold the pose they
+			// were authored at, which is what a bone with no channel at all must come out as.
+			auto nodePoses = authoredPoses;
+
 			for (uint32_t f = 0; f < frameCount; ++f)
 			{
 				// The last frame lands on `duration` exactly, so a clip always covers its whole range
 				// however the rate divides it.
 				const float time = first + std::min(static_cast<float>(f) / sampleRate, duration);
 
-				for (uint32_t b = 0; b < boneCount; ++b)
+				for (const auto& [node, driven] : channels)
 				{
-					Transform pose = bindPose[b];
+					Transform& pose = nodePoses[node];
 
-					if (channels[b].translationSampler != c_InvalidIndex)
+					if (driven.translationSampler != c_InvalidIndex)
 					{
-						const auto value =
-							evaluate(samplers.at(channels[b].translationSampler), time);
+						const auto value = evaluate(samplers.at(driven.translationSampler), time);
 						pose.translation = glm::vec3(value);
 					}
-					if (channels[b].rotationSampler != c_InvalidIndex)
+					if (driven.rotationSampler != c_InvalidIndex)
 					{
-						const auto value = evaluate(samplers.at(channels[b].rotationSampler), time);
+						const auto value = evaluate(samplers.at(driven.rotationSampler), time);
 						pose.rotation    = glm::quat(value.w, value.x, value.y, value.z);
 					}
-					if (channels[b].scaleSampler != c_InvalidIndex)
+					if (driven.scaleSampler != c_InvalidIndex)
 					{
-						const auto value = evaluate(samplers.at(channels[b].scaleSampler), time);
+						const auto value = evaluate(samplers.at(driven.scaleSampler), time);
 						pose.scale       = glm::vec3(value);
 					}
-
-					out.samples[clip.firstSample + static_cast<size_t>(f) * boneCount + b] = pose;
 				}
+
+				for (uint32_t b = 0; b < boneCount; ++b)
+					out.samples[clip.firstSample + static_cast<size_t>(f) * boneCount + b] =
+						composeBoneTransform(skin.boneNodes[b], nodePoses);
 			}
 
 			const std::span<const Transform> firstPose(
