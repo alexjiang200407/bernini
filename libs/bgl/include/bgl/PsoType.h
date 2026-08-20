@@ -18,7 +18,9 @@ namespace bgl
 		kAssert_StaticMesh = 9,
 		kOpaque_VatMesh_PBR = 10,
 		kOpaque_SkinnedMesh_PBR = 11,
-		kCount = 12,
+		kAlphaTest_SkinnedMesh_PBR = 12,
+		kHashedAlpha_SkinnedMesh_PBR = 13,
+		kCount = 14,
 	};
 
 	static_assert(sizeof(PsoType) == 4);

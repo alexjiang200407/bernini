@@ -169,6 +169,20 @@ namespace bgl
 			  false,
 			  ComparisonFunc::kLess,
 			  c_SkinnedGeomSrc },
+			// kAlphaTest_SkinnedMesh_PBR: an opaque draw that discards, so it needs no sorting.
+			{ c_PbrCutoutPixelSrc,
+			  RasterCullMode::kNone,
+			  true,
+			  false,
+			  ComparisonFunc::kLess,
+			  c_SkinnedGeomSrc },
+			// kHashedAlpha_SkinnedMesh_PBR: stochastic coverage, so also an opaque shape.
+			{ c_PbrHashedPixelSrc,
+			  RasterCullMode::kNone,
+			  true,
+			  false,
+			  ComparisonFunc::kLess,
+			  c_SkinnedGeomSrc },
 		} };
 
 		static_assert(

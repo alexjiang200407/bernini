@@ -593,13 +593,12 @@ namespace bgl
 
 		MeshMeta& meta = MetaFor(instance, submeshIndex, "SetSubmeshMaterialOverride");
 
-		if (meta.geomType != GeomType::kStaticMesh &&
-		    (material.materialType != MaterialType::kPBR ||
-		     material.layerType != LayerType::kOpaque))
+		if (!AcceptsMaterial(meta.geomType, material))
 		{
 			throw SceneError(
-				"SetSubmeshMaterialOverride: an animated instance takes only an opaque kPBR "
-				"material -- neither the VAT nor the skinned pipeline has another variant yet");
+				"SetSubmeshMaterialOverride: an animated instance takes an opaque kPBR material, "
+				"and a cutout or hashed one when it is skinned -- neither pipeline has a blended "
+				"variant");
 		}
 
 		meta.overrides[submeshIndex] = material;

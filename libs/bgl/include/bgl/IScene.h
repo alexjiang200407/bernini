@@ -310,8 +310,9 @@ namespace bgl
 		 * the containers measures it -- `assetlib::posedBounds` is that walk, and gamelib's acquire
 		 * makes it.
 		 *
-		 * `materials` must resolve every submesh to an opaque `kPBR` material, the same constraint
-		 * VAT carries and for the same reason: no other variant of the pipeline exists.
+		 * `materials` must resolve every submesh to a `kPBR` material that is not blended: opaque,
+		 * cutout and hashed all draw an opaque shape, so they need no sorting. Blending would, and
+		 * the skinned pipeline has no variant that does it.
 		 *
 		 * @param mesh        A BMesh loaded from disk, carrying skin binding on every submesh.
 		 * @param meshIndex   Index into `mesh.meshes`.
@@ -323,8 +324,8 @@ namespace bgl
 		 *         than `cMaxBonesPerRig`, bones that are not topologically sorted, an `animations`
 		 *         whose bone count disagrees with `skeleton`, an empty or zero-frame clip table, a
 		 *         clip whose samples fall outside the pool, a submesh without skin binding, a submesh
-		 *         whose material does not resolve to opaque kPBR, or a `posedBounds` whose min exceeds
-		 *         its max on any axis.
+		 *         whose material resolves to a blended or non-kPBR one, or a `posedBounds` whose min
+		 *         exceeds its max on any axis.
 		 *
 		 * `AnimationSet::skeletonSignature` is deliberately **not** checked here: computing a
 		 * skeleton's signature needs assetlib, which bgl does not link. A clip set cooked against a

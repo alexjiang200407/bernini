@@ -58,6 +58,14 @@ not obvious from a signature. The headers linked below are the source of truth.
   the CPU reference this path is measured against. Weights are otherwise used as authored: the
   importer already normalises anything summing to nonzero.
 
+* **A rigid mesh parented to a joint is bound to that bone at import, not attached at runtime.**
+  Eyes, teeth and props are modelled as unskinned meshes parented to a bone, which in every DCC means
+  "follow it" — and full weight on that bone is exactly what that means in skinning terms. So the
+  importer transforms such a mesh's vertices into the rig's space and writes `joints0`/`weights0` for
+  it, and the runtime needs no notion of parenting at all: it draws through the skinned path like any
+  other mesh, VAT bakes it, and `posedBounds` measures it. The limit is that the baked transform is
+  per mesh, so a mesh instanced by *two* nodes cannot take one — it keeps its bind pose, as before.
+
 * **A bone's transform is the product of every node between it and its bone parent, at every frame.**
   glTF lets ordinary nodes sit between two joints, and a DCC export routinely puts one above the root
   joint — an armature carrying the rig's unit conversion and the clip's travel. Composing that chain
@@ -166,5 +174,9 @@ the transport, the clip list and the scrubber are the same code either way — w
 * **One mesh may be live as static, VAT and skinned at once.** Three keyspaces in the `AssetManager`
   (`path#index`, `#vat`, `#skinned`), three uploads — which is what lets the editor compare tiers.
 
-* **Opaque `kPBR` only.** The skinned pipeline has one PSO bucket, the same constraint VAT ships with,
-  enforced at every door that binds a material to skinned geometry.
+* **`kPBR`, anything but blended.** Opaque, cutout and hashed all draw an *opaque shape* — they
+  discard rather than blend, so their depth is real and nothing has to be sorted — and each is one row
+  of `ForwardPass`'s PSO table against the same skinned geometry shader. Blending is the one that
+  would need the depth-sorted list, and there is no skinned variant of it. VAT still ships opaque
+  alone. `AcceptsMaterial` (`src/util/util.h`) is the rule, and every door that binds a material to
+  animated geometry asks it.
