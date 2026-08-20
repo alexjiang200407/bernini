@@ -133,7 +133,7 @@ TEST_CASE(
 	CHECK(info.schema.Find("PbrRecord") != nullptr);
 
 	const std::string text = describe(info.schema);
-	CHECK_THAT(text, ContainsSubstring("PbrRecord (264 bytes)"));
+	CHECK_THAT(text, ContainsSubstring("PbrRecord (280 bytes)"));
 	CHECK_THAT(text, ContainsSubstring("routeStamps"));
 	CHECK_THAT(text, ContainsSubstring("struct SourceStamp[9]"));
 

@@ -120,6 +120,11 @@ TEST_CASE(
 	CHECK(loaded.pbr.alphaMode == AlphaMode::kBlend);  // widened from a byte
 	CHECK(loaded.pbr.alphaCutoff == 0.4f);
 	CHECK(loaded.pbr.transmissionFactor == 0.0f);  // never stored: the default
+
+	// Never stored either, and the defaults are glTF's own -- so a material baked before the specular
+	// fields existed shades exactly as it did, and the whole project needs no re-bake.
+	CHECK(loaded.pbr.specularFactor == 1.0f);
+	CHECK(loaded.pbr.specularColorFactor == glm::vec3(1.0f));
 	CHECK(loaded.pbr.baseColorTexture == "textures_src/glass.png");
 	CHECK(loaded.pbr.normalTexture.empty());
 	CHECK(loaded.pbr.routes[3].texture == "textures_src/glass_a.png");

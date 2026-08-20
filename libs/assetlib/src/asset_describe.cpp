@@ -211,6 +211,12 @@ namespace assetlib
 			out += std::format("  metallicFactor    {:.3g}\n", pbr.metallicFactor);
 			out += std::format("  roughnessFactor   {:.3g}\n", pbr.roughnessFactor);
 			out += std::format("  transmission      {:.3g}\n", pbr.transmissionFactor);
+			out += std::format(
+				"  specular          {:.3g} x ({:.3g}, {:.3g}, {:.3g})\n",
+				pbr.specularFactor,
+				pbr.specularColorFactor.x,
+				pbr.specularColorFactor.y,
+				pbr.specularColorFactor.z);
 
 			// The triplet is what a `baked` material draws from; a `loose` one keeps it as the last
 			// bake's output, which is why it is printed either way.

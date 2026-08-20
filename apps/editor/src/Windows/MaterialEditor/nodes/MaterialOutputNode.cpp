@@ -230,6 +230,18 @@ MaterialOutputNode::embeddedWidget()
 	m_Roughness = MakeFactorSpin(m_Widget, m_RoughnessFactor);
 	form->addRow(QStringLiteral("Roughness Factor"), m_Roughness);
 
+	m_SpecularColorButton = new QPushButton(m_Widget);
+	m_SpecularColorButton->setFlat(true);
+	m_SpecularColorButton->setAutoFillBackground(true);
+	RefreshSpecularSwatch();
+	form->addRow(QStringLiteral("Specular Color Factor"), m_SpecularColorButton);
+
+	m_Specular = MakeFactorSpin(m_Widget, m_SpecularFactor);
+	m_Specular->setToolTip(QStringLiteral(
+		"Weights the whole specular lobe. 1 is an ordinary dielectric; 0 is a surface with no "
+		"reflection at all, which is what a Phong export with its specular switched off means."));
+	form->addRow(QStringLiteral("Specular Factor"), m_Specular);
+
 	AddExtraRows(m_Widget, form);
 
 	// Queued, not called directly: the click arrives while the proxy widget is dispatching the mouse
@@ -252,6 +264,18 @@ MaterialOutputNode::embeddedWidget()
 		Q_EMIT Changed();
 	});
 
+	connect(
+		m_SpecularColorButton,
+		&QPushButton::clicked,
+		this,
+		&MaterialOutputNode::PickSpecularColor,
+		Qt::QueuedConnection);
+
+	connect(m_Specular, &QDoubleSpinBox::valueChanged, this, [this](double value) {
+		m_SpecularFactor = static_cast<float>(value);
+		Q_EMIT Changed();
+	});
+
 	// Normal has only X and Y, but it still expands -- a normal map's R and G can come from
 	// different sources, and Z is reconstructed in the shader either way.
 	for (unsigned int group = 0; group < c_GroupCount; ++group)
@@ -271,10 +295,10 @@ MaterialOutputNode::embeddedWidget()
 	return m_Widget;
 }
 
-void
-MaterialOutputNode::PickBaseColor()
+QWidget*
+MaterialOutputNode::DialogOwner() const
 {
-	// The dialog must NOT be parented to m_Widget. An embedded widget is reparented into a
+	// A dialog must NOT be parented to m_Widget. An embedded widget is reparented into a
 	// QGraphicsProxyWidget, and Qt embeds a proxied widget's child windows into the graphics scene
 	// too -- so the dialog's real window comes up blank while its contents are painted onto the node
 	// canvas, and the scene is left with a stray proxy afterwards. Parent it to the editor's actual
@@ -284,9 +308,15 @@ MaterialOutputNode::PickBaseColor()
 	if (owner == nullptr || owner->graphicsProxyWidget() != nullptr)
 		owner = QApplication::activeWindow();
 
+	return owner;
+}
+
+void
+MaterialOutputNode::PickBaseColor()
+{
 	const QColor picked = QColorDialog::getColor(
 		ToColor(m_BaseColorFactor),
-		owner,
+		DialogOwner(),
 		QStringLiteral("Base Color Factor"),
 		QColorDialog::ShowAlphaChannel);
 
@@ -295,6 +325,22 @@ MaterialOutputNode::PickBaseColor()
 
 	m_BaseColorFactor = ToFactor(picked);
 	RefreshColorSwatch();
+	Q_EMIT Changed();
+}
+
+void
+MaterialOutputNode::PickSpecularColor()
+{
+	const QColor picked = QColorDialog::getColor(
+		ToColor(glm::vec4(m_SpecularColorFactor, 1.0f)),
+		DialogOwner(),
+		QStringLiteral("Specular Color Factor"));
+
+	if (!picked.isValid())
+		return;
+
+	m_SpecularColorFactor = glm::vec3(ToFactor(picked));
+	RefreshSpecularSwatch();
 	Q_EMIT Changed();
 }
 
@@ -312,6 +358,18 @@ MaterialOutputNode::RefreshColorSwatch()
 	m_ColorButton->setText(QStringLiteral("A %1").arg(m_BaseColorFactor.a, 0, 'f', 2));
 }
 
+void
+MaterialOutputNode::RefreshSpecularSwatch()
+{
+	if (m_SpecularColorButton == nullptr)
+		return;
+
+	const QColor color = ToColor(glm::vec4(m_SpecularColorFactor, 1.0f));
+
+	m_SpecularColorButton->setStyleSheet(
+		QStringLiteral("background-color: %1; border: 1px solid #202020;").arg(color.name()));
+}
+
 QJsonObject
 MaterialOutputNode::save() const
 {
@@ -323,6 +381,11 @@ MaterialOutputNode::save() const
 	json["baseColorA"] = m_BaseColorFactor.a;
 	json["metallic"]   = m_MetallicFactor;
 	json["roughness"]  = m_RoughnessFactor;
+
+	json["specularR"] = m_SpecularColorFactor.r;
+	json["specularG"] = m_SpecularColorFactor.g;
+	json["specularB"] = m_SpecularColorFactor.b;
+	json["specular"]  = m_SpecularFactor;
 
 	// Which groups are split, so a reloaded graph has the same ports its connections refer to.
 	auto split = QJsonArray();
@@ -348,6 +411,10 @@ MaterialOutputNode::load(const QJsonObject& json)
 	m_MetallicFactor  = factor("metallic", 1.0f);
 	m_RoughnessFactor = factor("roughness", 1.0f);
 
+	m_SpecularColorFactor =
+		glm::vec3(factor("specularR", 1.0f), factor("specularG", 1.0f), factor("specularB", 1.0f));
+	m_SpecularFactor = factor("specular", 1.0f);
+
 	// Restore the port layout by assigning the counts directly: load() runs while the node is being
 	// created, before any connection has been restored, so there is nothing to rebase and the
 	// insert/remove signals SetGroupExpanded emits would be premature.
@@ -361,10 +428,13 @@ MaterialOutputNode::load(const QJsonObject& json)
 
 	// The widgets only exist once the node has been shown; keep them in step when they do.
 	RefreshColorSwatch();
+	RefreshSpecularSwatch();
 	if (m_Metallic != nullptr)
 		m_Metallic->setValue(m_MetallicFactor);
 	if (m_Roughness != nullptr)
 		m_Roughness->setValue(m_RoughnessFactor);
+	if (m_Specular != nullptr)
+		m_Specular->setValue(m_SpecularFactor);
 	for (unsigned int group = 0; group < c_GroupCount; ++group)
 	{
 		if (m_ExpandBoxes[group] != nullptr)

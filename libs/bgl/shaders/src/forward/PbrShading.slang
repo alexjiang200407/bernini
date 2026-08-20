@@ -79,6 +79,7 @@ public SurfaceLobes EvaluateSurface(
     float4 baseColor,
     float3 orm,
     float2 normalXY,
+    float4 specularFactors,
     bool isFrontFace,
     float3 cameraPos,
     TextureCubeHandle irradianceMap,
@@ -102,10 +103,14 @@ public SurfaceLobes EvaluateSurface(
     float cosTheta = max(dot(N, V), 0.0);
 
     // Calculate Surface Reflectivity Base (F0)
-    float3 F0 = float3(0.04, 0.04, 0.04);
+    float3 F0 = min(float3(0.04, 0.04, 0.04) * specularFactors.rgb, float3(1.0, 1.0, 1.0));
     F0 = lerp(F0, albedo, metallic);
 
-    float3 F = FresnelSchlickRoughness(cosTheta, F0, roughness);
+    // KHR_materials_specular weights the dielectric lobe alone: a metal's reflection is its base
+    // colour, and the extension leaves it be.
+    float specularWeight = lerp(saturate(specularFactors.a), 1.0, metallic);
+
+    float3 F = FresnelSchlickRoughness(cosTheta, F0, roughness) * specularWeight;
     float3 kS = F;
     float3 kD = 1.0 - kS;
     kD *= 1.0 - metallic;
@@ -157,7 +162,9 @@ public SurfaceLobes EvaluateSurface(
     float2 envBRDF = brdfLUT.Sample(clampSampler, float2(cosTheta, roughness)).rg;
 
     SurfaceLobes lobes;
-    lobes.reflectance = (F * envBRDF.x + envBRDF.y) * ao;
+    // envBRDF.y is the split-sum's F90 term, which the weight scales as much as F0 -- it is already
+    // in F. Left unweighted, a surface with the specular switched off keeps a grazing rim of it.
+    lobes.reflectance = (F * envBRDF.x + envBRDF.y * specularWeight) * ao;
     lobes.diffuse = kD * diffuse * ao * exposure;
     lobes.specular = prefilteredColor * lobes.reflectance * exposure;
 

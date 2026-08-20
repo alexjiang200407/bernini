@@ -57,6 +57,8 @@ namespace assetlib
 			uint32_t                                     alphaMode;
 			float                                        alphaCutoff;
 			float                                        transmissionFactor;
+			glm::vec3                                    specularColorFactor;
+			float                                        specularFactor;
 			uint32_t                                     baseColorTextureOffset;
 			uint32_t                                     normalTextureOffset;
 			uint32_t                                     ormTextureOffset;
@@ -64,7 +66,7 @@ namespace assetlib
 			std::array<SourceStamp, c_LooseChannelCount> routeStamps;
 		};
 
-		static_assert(sizeof(PbrRecord) == 48 + c_LooseChannelCount * (8 + 16));
+		static_assert(sizeof(PbrRecord) == 64 + c_LooseChannelCount * (8 + 16));
 
 		const schema::Schema&
 		materialSchema()
@@ -99,6 +101,11 @@ namespace assetlib
 								.AddField("alphaCutoff", &PbrRecord::alphaCutoff, 0.5f)
 								.AddField("transmissionFactor", &PbrRecord::transmissionFactor)
 								.AddField(
+									"specularColorFactor",
+									&PbrRecord::specularColorFactor,
+									glm::vec3(1.0f))
+								.AddField("specularFactor", &PbrRecord::specularFactor, 1.0f)
+								.AddField(
 									"baseColorTextureOffset",
 									&PbrRecord::baseColorTextureOffset)
 								.AddField("normalTextureOffset", &PbrRecord::normalTextureOffset)
@@ -120,6 +127,8 @@ namespace assetlib
 			record.alphaMode              = static_cast<uint32_t>(pbr.alphaMode);
 			record.alphaCutoff            = pbr.alphaCutoff;
 			record.transmissionFactor     = pbr.transmissionFactor;
+			record.specularColorFactor    = pbr.specularColorFactor;
+			record.specularFactor         = pbr.specularFactor;
 			record.baseColorTextureOffset = pool.add(pbr.baseColorTexture);
 			record.normalTextureOffset    = pool.add(pbr.normalTexture);
 			record.ormTextureOffset       = pool.add(pbr.ormTexture);
@@ -136,15 +145,17 @@ namespace assetlib
 		unpackPbr(const PbrRecord& record, const core::string_pool& pool)
 		{
 			PbrParams pbr;
-			pbr.baseColorFactor    = record.baseColorFactor;
-			pbr.metallicFactor     = record.metallicFactor;
-			pbr.roughnessFactor    = record.roughnessFactor;
-			pbr.alphaMode          = static_cast<AlphaMode>(record.alphaMode);
-			pbr.alphaCutoff        = record.alphaCutoff;
-			pbr.transmissionFactor = record.transmissionFactor;
-			pbr.baseColorTexture   = pool.at(record.baseColorTextureOffset);
-			pbr.normalTexture      = pool.at(record.normalTextureOffset);
-			pbr.ormTexture         = pool.at(record.ormTextureOffset);
+			pbr.baseColorFactor     = record.baseColorFactor;
+			pbr.metallicFactor      = record.metallicFactor;
+			pbr.roughnessFactor     = record.roughnessFactor;
+			pbr.alphaMode           = static_cast<AlphaMode>(record.alphaMode);
+			pbr.alphaCutoff         = record.alphaCutoff;
+			pbr.transmissionFactor  = record.transmissionFactor;
+			pbr.specularColorFactor = record.specularColorFactor;
+			pbr.specularFactor      = record.specularFactor;
+			pbr.baseColorTexture    = pool.at(record.baseColorTextureOffset);
+			pbr.normalTexture       = pool.at(record.normalTextureOffset);
+			pbr.ormTexture          = pool.at(record.ormTextureOffset);
 			for (size_t i = 0; i < c_LooseChannelCount; ++i)
 			{
 				pbr.routes[i].texture = pool.at(record.routes[i].textureOffset);

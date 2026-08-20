@@ -111,6 +111,9 @@ CompileMaterial(
 		pbr.alphaCutoff        = output->GetAlphaCutoff();
 		pbr.transmissionFactor = output->GetTransmission();
 
+		pbr.specularColorFactor = output->GetSpecularColorFactor();
+		pbr.specularFactor      = output->GetSpecularFactor();
+
 		for (unsigned int i = 0; i < assetlib::c_LooseChannelCount; ++i)
 		{
 			const ChannelData::Route wired = output->Route(i);
@@ -170,6 +173,10 @@ BuildImportedMaterialGraph(
 	factors["roughness"]    = material.roughnessFactor;
 	factors["alphaCutoff"]  = material.alphaCutoff;
 	factors["transmission"] = material.transmissionFactor;
+	factors["specularR"]    = material.specularColorFactor.r;
+	factors["specularG"]    = material.specularColorFactor.g;
+	factors["specularB"]    = material.specularColorFactor.b;
+	factors["specular"]     = material.specularFactor;
 	output->load(factors);
 
 	struct Wire

@@ -37,14 +37,18 @@ namespace
 	 */
 	constexpr const char* c_MaterialsGltf = R"({
   "asset": { "version": "2.0" },
-  "extensionsUsed": [ "KHR_materials_unlit", "KHR_materials_pbrSpecularGlossiness", "KHR_materials_transmission" ],
+  "extensionsUsed": [ "KHR_materials_unlit", "KHR_materials_pbrSpecularGlossiness", "KHR_materials_transmission", "KHR_materials_specular" ],
   "materials": [
     { "name": "plain", "pbrMetallicRoughness": { "metallicFactor": 0.25, "roughnessFactor": 0.5 } },
     { "name": "leaves", "alphaMode": "MASK", "alphaCutoff": 0.3 },
     { "name": "glass", "alphaMode": "BLEND" },
     { "name": "sign", "extensions": { "KHR_materials_unlit": {} } },
     { "name": "old", "extensions": { "KHR_materials_pbrSpecularGlossiness": {} } },
-    { "name": "lens", "alphaMode": "BLEND", "extensions": { "KHR_materials_transmission": { "transmissionFactor": 0.85 } } }
+    { "name": "lens", "alphaMode": "BLEND", "extensions": { "KHR_materials_transmission": { "transmissionFactor": 0.85 } } },
+    { "name": "fur", "extensions": { "KHR_materials_specular": { "specularFactor": 0.0 } } },
+    { "name": "gilded", "extensions": { "KHR_materials_specular": { "specularColorFactor": [ 1.0, 0.77, 0.34 ] } } },
+    { "name": "clamped", "extensions": { "KHR_materials_specular": { "specularFactor": 3.5, "specularColorFactor": [ -1.0, 0.5, 0.5 ] } } },
+    { "name": "empty", "extensions": { "KHR_materials_specular": {} } }
   ]
 })";
 
@@ -194,7 +198,7 @@ TEST_CASE(
 TEST_CASE("A glTF's alpha mode and cutoff come across", "[bmesh][gltf]")
 {
 	const auto mesh = LoadMaterialsGltf();
-	REQUIRE(mesh.materials.size() == 6);
+	REQUIRE(mesh.materials.size() == 10);
 
 	// Each of glTF's three alpha modes maps to its own: OPAQUE, MASK (alpha test), BLEND (alpha blend).
 	CHECK(mesh.materials[0].alphaMode == AlphaMode::kOpaque);
@@ -213,7 +217,7 @@ TEST_CASE("A glTF's alpha mode and cutoff come across", "[bmesh][gltf]")
 TEST_CASE("A glTF's transmission factor comes across", "[bmesh][gltf]")
 {
 	const auto mesh = LoadMaterialsGltf();
-	REQUIRE(mesh.materials.size() == 6);
+	REQUIRE(mesh.materials.size() == 10);
 
 	CHECK(mesh.materials[5].alphaMode == AlphaMode::kBlend);
 	CHECK(mesh.materials[5].transmissionFactor == Catch::Approx(0.85f));
@@ -224,10 +228,38 @@ TEST_CASE("A glTF's transmission factor comes across", "[bmesh][gltf]")
 	CHECK(mesh.materials[2].transmissionFactor == 0.0f);
 }
 
+// The only thing in glTF that can say a surface has *no* specular. A Phong export with its specular
+// switched off carries that intent nowhere else, and without the extension every such material
+// arrives at the flat 0.04 dielectric and wears a sheen its author removed.
+TEST_CASE("A glTF's specular factors come across", "[bmesh][gltf]")
+{
+	const auto mesh = LoadMaterialsGltf();
+	REQUIRE(mesh.materials.size() == 10);
+
+	CHECK(mesh.materials[6].specularFactor == 0.0f);
+	CHECK(mesh.materials[6].specularColorFactor == glm::vec3(1.0f));
+
+	CHECK(mesh.materials[7].specularFactor == Catch::Approx(1.0f));
+	CHECK(mesh.materials[7].specularColorFactor.r == Catch::Approx(1.0f));
+	CHECK(mesh.materials[7].specularColorFactor.g == Catch::Approx(0.77f));
+	CHECK(mesh.materials[7].specularColorFactor.b == Catch::Approx(0.34f));
+
+	// Out-of-range values clamp rather than reaching the shader: a factor above 1 would brighten the
+	// lobe past the dielectric it scales, and a negative tint is not a colour.
+	CHECK(mesh.materials[8].specularFactor == Catch::Approx(1.0f));
+	CHECK(mesh.materials[8].specularColorFactor.r == 0.0f);
+
+	// A declared but empty extension is every default, which is also what no extension at all means.
+	CHECK(mesh.materials[9].specularFactor == Catch::Approx(1.0f));
+	CHECK(mesh.materials[9].specularColorFactor == glm::vec3(1.0f));
+	CHECK(mesh.materials[0].specularFactor == Catch::Approx(1.0f));
+	CHECK(mesh.materials[0].specularColorFactor == glm::vec3(1.0f));
+}
+
 TEST_CASE("A material declaring another shading model is not PBR", "[bmesh][gltf]")
 {
 	const auto mesh = LoadMaterialsGltf();
-	REQUIRE(mesh.materials.size() == 6);
+	REQUIRE(mesh.materials.size() == 10);
 
 	// Metallic-roughness is glTF's shading model, so a material is PBR unless it says otherwise. The
 	// two that do say otherwise carry fields that are glTF's defaults rather than the author's intent,
@@ -245,8 +277,11 @@ TEST_CASE("probeGltfMaterials reports the PBR materials", "[bmesh][gltf]")
 	const auto probed = probeGltfMaterials(path);
 	std::filesystem::remove(path);
 
-	CHECK(probed.size() == 6);
-	CHECK(std::ranges::count_if(probed, &GltfMaterial::isPbr) == 4);
+	CHECK(probed.size() == 10);
+
+	// KHR_materials_specular layers on metallic-roughness rather than replacing it, so the four
+	// materials declaring it are PBR; only unlit and pbrSpecularGlossiness are not.
+	CHECK(std::ranges::count_if(probed, &GltfMaterial::isPbr) == 8);
 }
 
 TEST_CASE("probeGltfMaterials sees what a full import sees", "[bmesh][gltf]")

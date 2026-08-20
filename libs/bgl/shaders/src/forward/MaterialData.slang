@@ -67,6 +67,11 @@ extension PbrMaterial : IPbrMaterial, IAlphaTestMaterial
         return transmissionFactor;
     }
 
+    float4 GetSpecular()
+    {
+        return specular;
+    }
+
     float2 GetBaseColorDimensions()
     {
         return baseColorTexture.GetDimensions();
@@ -144,6 +149,11 @@ extension LoosePbrMaterial : IPbrMaterial, IAlphaTestMaterial
         return transmissionFactor;
     }
 
+    float4 GetSpecular()
+    {
+        return specular;
+    }
+
     // The alpha carrier's resolution: coverage machinery cares about the channel being tested,
     // and the loose colour channels may come from other maps at other sizes.
     float2 GetBaseColorDimensions()
@@ -168,6 +178,7 @@ SurfaceLobes EvaluateWithBaseColor<M : IPbrMaterial>(ForwardVSOut input, M mater
         baseColor,
         material.GetORM(wrapSampler, input.uv),
         material.GetNormalXY(wrapSampler, input.uv),
+        material.GetSpecular(),
         isFrontFace,
         materialData.cameraPos,
         materialData.irradianceMap,

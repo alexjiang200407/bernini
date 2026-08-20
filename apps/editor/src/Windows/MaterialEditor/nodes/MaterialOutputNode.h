@@ -122,6 +122,20 @@ public:
 		return m_RoughnessFactor;
 	}
 
+	// glTF's KHR_materials_specular: the colour tints a dielectric's F0, the factor weights the whole
+	// specular lobe. Every sink carries them -- specular is not a property of the alpha mode.
+	[[nodiscard]] glm::vec3
+	GetSpecularColorFactor() const noexcept
+	{
+		return m_SpecularColorFactor;
+	}
+
+	[[nodiscard]] float
+	GetSpecularFactor() const noexcept
+	{
+		return m_SpecularFactor;
+	}
+
 Q_SIGNALS:
 	void
 	Changed();
@@ -135,11 +149,21 @@ protected:
 	AddExtraRows(QWidget* parent, QFormLayout* form);
 
 private:
+	// The window a modal dialog must be parented to; never the embedded widget. See the definition.
+	[[nodiscard]] QWidget*
+	DialogOwner() const;
+
 	void
 	PickBaseColor();
 
 	void
+	PickSpecularColor();
+
+	void
 	RefreshColorSwatch();
+
+	void
+	RefreshSpecularSwatch();
 
 	void
 	SetGroupExpanded(unsigned int group, bool expanded);
@@ -170,13 +194,17 @@ private:
 	std::array<std::shared_ptr<ChannelData>, c_GroupCount>   m_Bundles;
 	std::array<std::shared_ptr<ChannelData>, c_ChannelCount> m_Channels;
 
-	glm::vec4 m_BaseColorFactor = glm::vec4(1.0f);
-	float     m_MetallicFactor  = 1.0f;
-	float     m_RoughnessFactor = 0.2f;
+	glm::vec4 m_BaseColorFactor     = glm::vec4(1.0f);
+	float     m_MetallicFactor      = 1.0f;
+	float     m_RoughnessFactor     = 0.2f;
+	glm::vec3 m_SpecularColorFactor = glm::vec3(1.0f);
+	float     m_SpecularFactor      = 1.0f;
 
-	QWidget*                             m_Widget      = nullptr;
-	QPushButton*                         m_ColorButton = nullptr;
-	QDoubleSpinBox*                      m_Metallic    = nullptr;
-	QDoubleSpinBox*                      m_Roughness   = nullptr;
-	std::array<QCheckBox*, c_GroupCount> m_ExpandBoxes = {};
+	QWidget*                             m_Widget              = nullptr;
+	QPushButton*                         m_ColorButton         = nullptr;
+	QDoubleSpinBox*                      m_Metallic            = nullptr;
+	QDoubleSpinBox*                      m_Roughness           = nullptr;
+	QPushButton*                         m_SpecularColorButton = nullptr;
+	QDoubleSpinBox*                      m_Specular            = nullptr;
+	std::array<QCheckBox*, c_GroupCount> m_ExpandBoxes         = {};
 };

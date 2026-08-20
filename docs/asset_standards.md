@@ -144,6 +144,24 @@ such extension imports at 0, which is glTF's own default. It takes `.bmaterial` 
 every material baked before it is rejected until re-baked — the container reads a version, not a
 schema, and a field appended silently would be read as whatever bytes followed it.
 
+### Specular
+
+The dielectric F0 every non-metal reflects — the renderer's flat `0.04` — is a *default*, not a law.
+`PbrParams::specularColorFactor` tints it and `specularFactor` weights the whole specular lobe, so a
+surface can be made to reflect a tinted sheen or none at all. A metal is untouched by both: its
+reflection is its base colour, and the extension leaves that alone.
+
+`specularFactor = 0` is the case that matters. A Phong export with its specular switched off carries
+that intent nowhere else, and glTF has no other way to say it — a material without the extension is
+implicitly a full dielectric, so the surface arrives wearing a sheen its author removed.
+
+glTF carries the pair as `KHR_materials_specular`, which the importer reads; the two texture inputs
+that extension also defines (`specularTexture`, `specularColorTexture`) are **not** read, so a
+material that varies specular per-texel imports at its factors. Unlike transmission this costs no
+version bump: since `.bmaterial` became [self-describing](asset_schema.md), a field appended with a
+default reads back at that default out of every file written before it, and `1` / white is exactly
+the flat `0.04` those files already shaded at.
+
 `kHashed` is the one mode **no import can produce**: glTF has only `OPAQUE`, `MASK` and `BLEND`, so it
 is reachable solely by picking that sink. It turns alpha into stochastic coverage rather than a
 threshold, which is what lets a self-occluding surface keep every layer — and it resolves only under
@@ -192,7 +210,8 @@ source texture.
   back an `ImageData` whose `vkFormat` is the BC7 block format (with block-aware subresource pitches).
   A material bake instead writes the per-map targets above, which load without transcoding.
 * **Factors are linear** and live in the material, not the texture:
-  `baseColorFactor` (linear, multiplies the *decoded* albedo), `metallicFactor`, `roughnessFactor`.
+  `baseColorFactor` (linear, multiplies the *decoded* albedo), `metallicFactor`, `roughnessFactor`,
+  `specularColorFactor` and `specularFactor` ([above](#specular)).
   See `PbrMaterialDesc` in [libs/bgl/include/bgl/IScene.h](libs/bgl/include/bgl/IScene.h) and, on disk,
   `PbrParams` — the `.bmaterial`'s PBR payload — in
   [libs/assetlib_structs/include/assetlib_structs/BMaterial.h](libs/assetlib_structs/include/assetlib_structs/BMaterial.h).
@@ -353,8 +372,8 @@ Three different spaces are in play and they are easy to conflate. The contract, 
 
   **There is one shape in the reader, and older files read into it.** `deserializeMaterial` converts a
   file's payload from the layout its schema chunk records to the current one, by field name — a
-  material baked before `transmissionFactor` existed reads with 0, one whose alpha mode was a byte
-  reads it widened — so the reader has one shape and no branch that can rot, and the format number
+  material baked before `transmissionFactor` existed reads with 0, one baked before the specular
+  factors reads them at 1 and white, one whose alpha mode was a byte reads it widened — so the reader has one shape and no branch that can rot, and the format number
   decides only that a newer file is refused.
 
   **Adding a shading model** means: a `ShadingModel` enumerator, a payload struct, a record layout, a
@@ -681,6 +700,10 @@ Five rules, each of which is a way to get this wrong:
   kept for the blend (`AlphaMode::kBlend` → `LayerType::kBlend`) rather than tested against a cutoff.
   `KHR_materials_transmission` rides along with it, because `BLEND` is what both a lens and a hair
   card export as and the extension is the only thing in the file that separates them.
+* **The sink carries every factor, or the editor silently drops it.** `CompileMaterial` rebuilds
+  `PbrParams` from the sink node alone, so a factor the node does not hold is reset to its default
+  the first time an imported material is opened and saved. That is why the specular pair sits on the
+  shared `MaterialOutputNode` rather than on one sink: specular is not a property of the alpha mode.
 * **Materials cannot come across without textures.** They route at the extracted `texN.ktx2` files, so
   the box is disabled when *Import textures* is off. A material naming textures nothing wrote is the
   dangling reference that made an import produce meshes `gamelib`'s `AcquireMaterial` threw on.

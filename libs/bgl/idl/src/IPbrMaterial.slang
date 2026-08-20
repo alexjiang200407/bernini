@@ -6,4 +6,6 @@ public interface IPbrMaterial
     float3 GetORM(SamplerState.Handle s, float2 uv);
     float2 GetNormalXY(SamplerState.Handle s, float2 uv);
     float GetTransmission();
+
+    float4 GetSpecular();
 };
