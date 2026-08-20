@@ -156,10 +156,11 @@ namespace bgl
 		// regardless of the camera -- as being at rest during a pan.
 		bool m_CameraStill = false;
 
-		// Whether any of this frame's draws shades differently from the frame before -- a material
-		// rebound, rewritten or deleted, an environment replaced. The accumulation describes a
-		// scene that no longer exists, so the resolve is told to start again from this frame.
-		bool m_ShadingChanged = false;
+		// Whether any of this frame's draws changed in a way no motion vector describes -- a material
+		// rebound, rewritten or deleted, an environment replaced, an instance placed or deleted. The
+		// accumulation describes a scene that no longer exists, so the resolve is told to start
+		// again from this frame.
+		bool m_TemporalBreak = false;
 
 		// Whether any of this frame's draws attached an outline-mask pass; what tells the
 		// post-process the mask holds this frame's content rather than a cleared texture.

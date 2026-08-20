@@ -1388,7 +1388,7 @@ namespace bgl
 
 		// Every rewrite counts, including one landing on the bytes already there: an entry is a
 		// GPU-layout mirror whose padding no comparison can trust.
-		++m_ShadingEpoch;
+		++m_TemporalEpoch;
 	}
 
 	idl::LoosePbrMaterial
@@ -1486,7 +1486,7 @@ namespace bgl
 		// See UpdatePbrMaterial: the entry is rewritten in place, so every submesh bound to this
 		// material follows it and the handle stays valid, and every rewrite moves the shading epoch.
 		m_Loose.Set(material.handle, BuildLoosePbrMaterial(desc));
-		++m_ShadingEpoch;
+		++m_TemporalEpoch;
 	}
 
 	void
@@ -1503,7 +1503,7 @@ namespace bgl
 					"MaterialHandle passed to DeleteMaterial has expired or is invalid");
 			}
 			m_Pbr.Erase(material.handle);
-			++m_ShadingEpoch;
+			++m_TemporalEpoch;
 			return;
 
 		case MaterialType::kLoosePbr:
@@ -1513,7 +1513,7 @@ namespace bgl
 					"MaterialHandle passed to DeleteMaterial has expired or is invalid");
 			}
 			m_Loose.Erase(material.handle);
-			++m_ShadingEpoch;
+			++m_TemporalEpoch;
 			return;
 
 		case MaterialType::kInvalid:
@@ -1559,7 +1559,7 @@ namespace bgl
 		// Nothing is uploaded: the epoch is what carries this to instances already placed.
 		m_SubmeshBuffer.MetaAt(submeshes.range.offsetStart)[submeshIndex] = material;
 		++m_MaterialEpoch;
-		++m_ShadingEpoch;
+		++m_TemporalEpoch;
 	}
 
 	void
@@ -1626,6 +1626,6 @@ namespace bgl
 	Scene::DeleteTextureAsset(TextureAssetHandle texture)
 	{
 		m_Textures.Delete(texture);
-		++m_ShadingEpoch;
+		++m_TemporalEpoch;
 	}
 }

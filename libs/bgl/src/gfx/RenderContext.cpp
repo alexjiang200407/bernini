@@ -404,7 +404,7 @@ namespace bgl
 		m_FrameGraph.Reset();
 		m_DrawCount        = 0;
 		m_CameraStill      = true;
-		m_ShadingChanged   = false;
+		m_TemporalBreak    = false;
 		m_OutlineMaskDrawn = false;
 		++m_FrameCounter;
 		rt.AdvanceFrameCount();
@@ -513,7 +513,7 @@ namespace bgl
 		// panning view must veto the widening for all of them, or its pixels bank a passing edge.
 		m_CameraStill &= camera.unjitteredViewProj == prevCamera.unjitteredViewProj;
 
-		m_ShadingChanged |= view->AdvanceShading();
+		m_TemporalBreak |= view->AdvanceTemporalEpoch();
 
 		const glm::mat4 invView = glm::inverse(job.camera.GetView());
 
@@ -691,7 +691,7 @@ namespace bgl
 			taaArgs.viewToPrevClip      = m_TaaViewToPrevClip;
 			taaArgs.jitter              = m_TaaJitter;
 			taaArgs.cameraPairValid     = m_DrawCount == 1;
-			taaArgs.historyValid        = rt.IsHistoryValid() && !m_ShadingChanged;
+			taaArgs.historyValid        = rt.IsHistoryValid() && !m_TemporalBreak;
 			taaArgs.cameraStill         = m_CameraStill;
 			m_TaaResolve.AttachToFrameGraph(m_FrameGraph, taaArgs);
 

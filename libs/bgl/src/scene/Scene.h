@@ -207,18 +207,18 @@ namespace bgl
 		}
 
 		/**
-		 * Bumped by every change to what a surface already on screen shades as: a material's
+		 * Bumped by every change to the scene that no motion vector describes: a material's
 		 * contents, a submesh's binding, a texture's release. A SceneView polls it; see
-		 * SceneView::AdvanceShading.
+		 * SceneView::AdvanceTemporalEpoch.
 		 *
 		 * Discrete rebinds only. State a caller moves every frame -- a camera, a transform -- is
 		 * not in it: reprojection follows that, and an epoch that moved with it would leave a
 		 * moving scene permanently unaccumulated.
 		 */
 		[[nodiscard]] uint64_t
-		GetShadingEpoch() const noexcept
+		GetTemporalEpoch() const noexcept
 		{
-			return m_ShadingEpoch;
+			return m_TemporalEpoch;
 		}
 
 		[[nodiscard]] const std::string&
@@ -433,8 +433,8 @@ namespace bgl
 		// Moves whenever a submesh's default material does. SceneViews poll it; see MaterialEpoch.
 		uint64_t m_MaterialEpoch = 0;
 
-		// Moves whenever the scene shades differently. SceneViews poll it; see GetShadingEpoch.
-		uint64_t m_ShadingEpoch = 0;
+		// Moves on a change no motion vector describes. SceneViews poll it; see GetTemporalEpoch.
+		uint64_t m_TemporalEpoch = 0;
 
 		// One default material per submesh of a range, keyed at its root. It rides on the RangeBuffer
 		// as Meta, not a parallel array, so it is allocated and freed with the geometry it belongs to.

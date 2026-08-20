@@ -113,8 +113,9 @@ and every change — tick, scrub, frame step, clip switch — reaches the viewpo
 `RenderTargetWindow::SetTime`, the seam that feeds `RenderJob::time` the way `SetCamera` feeds the
 camera. The preview's instances are always `{clip, phase 0, rate 1}`, which is what lets the
 transport be pure time arithmetic: seconds are the whole story, a clip switch is destroy +
-recreate (there is no mutate-instance API), and a `.banim` switch reloads the mesh naming the new
-file, releasing the geom to zero — which is what a live geom's refusal of a different clip set
+recreate (there is no mutate-instance API, and the respawn is also what drops the TAA accumulation
+across the switch -- see [Temporal Antialiasing](docs/taa.md)), and a `.banim` switch reloads the
+mesh naming the new file, releasing the geom to zero — which is what a live geom's refusal of a different clip set
 requires. A viewport nobody clocks
 draws at time zero, freezing VAT instances on their phase — the level viewport's state today,
 until placement playback gives it a clock of its own.

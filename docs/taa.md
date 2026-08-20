@@ -140,15 +140,15 @@ of 1 it does nothing at all: each output pixel has a sample of its own there.
   coverage on a distant card — so only genuine HDR outliers pay the compression. The weighting is
   undone afterwards, so what is stored stays linear.
 
-* **A change to how the scene *shades* drops the accumulation, because no motion vector describes
-  it.** Reprojection answers "where was this surface last frame", and a material rewritten, rebound
-  or deleted moves nothing — the pixel's velocity is zero and the history is fetched from exactly
-  where it was written, so the resolve blends the old material with the new one for as long as the
-  clamp lets it. At rest that is a long time: the box is *widened* by remembered spread, which is
-  what the material editor's texture edits ghost through. `Scene::GetShadingEpoch` and its per-view
-  counterpart count those changes, `SceneView::AdvanceShading` reports one to the frame that draws
-  after it, and the resolve then takes the scene colour whole exactly as the first frame does. The
-  cost is one unaccumulated frame per edit; the alternative is a ghost lasting tens.
+* **A change *no motion vector describes* drops the accumulation.** Reprojection answers "where was
+  this surface last frame", and a material rewritten, rebound or deleted moves nothing — the pixel's
+  velocity is zero and the history is fetched from exactly where it was written, so the resolve
+  blends the old material with the new one for as long as the clamp lets it. At rest that is a long
+  time: the box is *widened* by remembered spread, which is what the material editor's texture edits
+  ghost through. `Scene::GetTemporalEpoch` and its per-view counterpart count those changes,
+  `SceneView::AdvanceTemporalEpoch` reports one to the frame that draws after it, and the resolve
+  then takes the scene colour whole exactly as the first frame does. The cost is one unaccumulated
+  frame per edit; the alternative is a ghost lasting tens.
 
   It counts **discrete rebinds only** — a material's contents, a submesh's binding, a texture's
   release, an environment map. Anything a caller moves every frame (the camera, a transform, the
@@ -157,6 +157,18 @@ of 1 it does nothing at all: each output pixel has a sample of its own there.
   there still counts, since the entries are GPU-layout mirrors whose padding no comparison can
   trust — a material editor rewriting on every keystroke pays one unaccumulated frame per rewrite,
   which is a frame it was going to pay anyway for the edits that did change something.
+
+  **Placing or deleting an instance counts too**, and that is what carries the Animation panel's
+  clip switch. A mesh that was not on screen last frame has no history to reproject from; an
+  animated one is worse than absent, because the pose *and* the motion vector it writes come from
+  the clip it now holds, so the frame after a switch reprojects along a velocity computed inside a
+  clip that was never drawn — the ghost is of a pose the vector points nowhere near. There is no
+  mutate-instance API by design, so a clip switch, a VAT↔skinned tier switch and a mesh load all
+  reach this through destroy + respawn and need no call of their own. Scrubbing the timeline does
+  not: no instance churns, the pose moves within one clip, and the vector written across the jump
+  is the one reprojection wants. This is the boundary that keeps the rule affordable — a caller
+  that spawned or despawned every frame would never accumulate, and would need a batched-placement
+  API rather than a wider epoch.
 
 * **Depth is read for one thing only: what the camera alone would move a pixel by.** Depth-based
   disocclusion rejection — store linear depth in history alpha, reject history whose stored depth belongs to a
@@ -306,8 +318,8 @@ of 1 it does nothing at all: each output pixel has a sample of its own there.
 | `IRenderTarget::SetTaaEnabled` | [bgl/IRenderTarget.h](libs/bgl/include/bgl/IRenderTarget.h) | Runs or stops it at runtime, on a target that allocated. |
 | `HaltonJitter` | [util/jitter.h](libs/bgl/src/util/jitter.h) | The sub-pixel offset for a frame, in NDC. |
 | `TaaResolvePass` | [passes/TaaResolvePass.h](libs/bgl/src/passes/TaaResolvePass.h) | Reprojects, clamps, blends into the new history. |
-| `Scene::GetShadingEpoch` | [scene/Scene.h](libs/bgl/src/scene/Scene.h) | Counts the changes to how the scene shades that no motion vector can carry. |
-| `SceneView::AdvanceShading` | [scene/SceneView.h](libs/bgl/src/scene/SceneView.h) | Reports one to the frame drawing this view, and records that it has. |
+| `Scene::GetTemporalEpoch` | [scene/Scene.h](libs/bgl/src/scene/Scene.h) | Counts the changes to the scene that no motion vector can carry. |
+| `SceneView::AdvanceTemporalEpoch` | [scene/SceneView.h](libs/bgl/src/scene/SceneView.h) | Reports one to the frame drawing this view, and records that it has. |
 | `PostProcessPass` | [passes/PostProcessPass.h](libs/bgl/src/passes/PostProcessPass.h) | Applies the display curve to whatever the last HDR stage produced. |
 | `ViewData::jitter` / `prevJitter` | [forward/ViewData.slang](libs/bgl/shaders/src/forward/ViewData.slang) | What the mesh shader subtracts back out. |
 | History accessors | [gfx/RenderTargetBase.h](libs/bgl/src/gfx/RenderTargetBase.h) | The ping-pong pair, its index, and its validity. |
@@ -463,9 +475,9 @@ Two couplings worth knowing:
   first frame after turning it back on takes the scene colour whole, exactly as the first frame ever
   does.
 
-* **A shading change is recorded on the view, so the target that draws first consumes it.** The
+* **The change is recorded on the view, so the target that draws first consumes it.** The
   epoch sits beside the previous frame's camera, which is per-view for the same reason, and
-  `AdvanceShading` reports the change once. One view drawn to two targets therefore leaves the
+  `AdvanceTemporalEpoch` reports the change once. One view drawn to two targets therefore leaves the
   second still holding the old material. Every viewport in the editor owns its view, which is what
   makes that fine; sharing one would mean moving the record onto the target.
 

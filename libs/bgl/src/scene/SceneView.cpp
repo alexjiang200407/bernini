@@ -192,12 +192,12 @@ namespace bgl
 	}
 
 	bool
-	SceneView::AdvanceShading() noexcept
+	SceneView::AdvanceTemporalEpoch() noexcept
 	{
-		const uint64_t epoch = m_ShadingEpoch + m_SceneRaw->GetShadingEpoch();
-		const bool     moved = epoch != m_DrawnShadingEpoch;
+		const uint64_t epoch = m_TemporalEpoch + m_SceneRaw->GetTemporalEpoch();
+		const bool     moved = epoch != m_DrawnTemporalEpoch;
 
-		m_DrawnShadingEpoch = epoch;
+		m_DrawnTemporalEpoch = epoch;
 		return moved;
 	}
 
@@ -389,6 +389,10 @@ namespace bgl
 			// m_SceneEpoch is deliberately not advanced: these instances are current, but their
 			// siblings may not be, and marking the view clean would strand them on a stale material.
 
+			// An instance that was not there last frame has no history to reproject from, and an
+			// animated one arrives posed on a clip the previous frame never drew.
+			++m_TemporalEpoch;
+
 			auto instanceHandle   = MeshInstanceHandle();
 			instanceHandle.handle = meshHandle;
 
@@ -436,6 +440,7 @@ namespace bgl
 		}
 
 		m_MeshBuffer.EraseByIndex(meshIndex);
+		++m_TemporalEpoch;
 
 		// The erases above can move any dense index, selected or not -- but with no mark
 		// anywhere, there is no list to stale.
@@ -598,7 +603,7 @@ namespace bgl
 		}
 
 		meta.overrides[submeshIndex] = material;
-		++m_ShadingEpoch;
+		++m_TemporalEpoch;
 
 		RefreshSubmeshInstance(instance.handle.index, submeshIndex);
 	}
@@ -609,7 +614,7 @@ namespace bgl
 		MeshMeta& meta = MetaFor(instance, submeshIndex, "ClearSubmeshMaterialOverride");
 
 		meta.overrides[submeshIndex] = MaterialHandle{};
-		++m_ShadingEpoch;
+		++m_TemporalEpoch;
 
 		RefreshSubmeshInstance(instance.handle.index, submeshIndex);
 	}
@@ -634,7 +639,7 @@ namespace bgl
 
 		m_EnvironmentMap.irradiance = resolve(desc.irradiance, "irradiance", true);
 		m_EnvironmentMap.prefilter  = resolve(desc.prefilter, "prefilter", true);
-		++m_ShadingEpoch;
+		++m_TemporalEpoch;
 	}
 
 	void
@@ -667,7 +672,7 @@ namespace bgl
 		}
 
 		m_Skybox = std::make_optional(std::move(desc));
-		++m_ShadingEpoch;
+		++m_TemporalEpoch;
 	}
 
 	void
