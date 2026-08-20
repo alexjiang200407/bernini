@@ -3,6 +3,7 @@
 #include <assetlib/bmesh_io.h>
 #include <assetlib/bskel_io.h>
 #include <assetlib/skeleton.h>
+#include <assetlib/skinning.h>
 #include <assetlib_structs/Animation.h>
 #include <assetlib_structs/BMesh.h>
 #include <assetlib_structs/BMeshImport.h>
@@ -457,6 +458,102 @@ TEST_CASE("A clip's root motion may be authored above the root joint", "[gltf][a
 	// Two metres on the armature and two more on the joint beneath it, at unit scale.
 	CHECK(walk.rootMotion.z == Catch::Approx(4.0f));
 	CHECK(walk.locomotionSpeed == Catch::Approx(4.0f));
+}
+
+TEST_CASE("A rigid mesh parented to a joint rides that bone", "[gltf][skeleton][animation]")
+{
+	// Eyes, teeth and props are modelled this way: an unskinned mesh parented to a bone, which in
+	// every DCC means "follow it". Nothing at runtime knows about parenting, so the import binds such
+	// a mesh to that bone at full weight -- which is what the parenting already meant.
+	const SkinnedGltf source(
+		"bernini_gltf_attachment",
+		{ { c_JointsAtTopLevel,
+	        R"("scenes": [ { "nodes": [ 0, 1 ] } ],
+  "nodes": [
+    { "mesh": 0, "skin": 0, "name": "body" },
+    { "name": "hips", "translation": [ 0, 1, 0 ], "children": [ 2, 3 ] },
+    { "name": "spine", "translation": [ 0, 2, 0 ] },
+    { "name": "eye", "mesh": 1, "translation": [ 0, 0, 3 ] }
+  ],)" },
+	      { R"("meshes": [ { "name": "body", "primitives": [ {
+    "attributes": { "POSITION": 0, "JOINTS_0": 1, "WEIGHTS_0": 2 },
+    "indices": 3, "mode": 4 } ] } ],)",
+	        R"("meshes": [ { "name": "body", "primitives": [ {
+    "attributes": { "POSITION": 0, "JOINTS_0": 1, "WEIGHTS_0": 2 },
+    "indices": 3, "mode": 4 } ] },
+    { "name": "eye", "primitives": [ {
+    "attributes": { "POSITION": 0 }, "indices": 3, "mode": 4 } ] } ],)" } });
+
+	const auto import = loadFromGltf(source.gltf);
+
+	REQUIRE(import.meshes.size() == 2);
+	REQUIRE(import.skeleton.bones.size() == 2);
+
+	const Submesh& eye = import.submeshes[import.meshes[1].firstSubmesh];
+
+	// hips is bone 0 -- and the eye carries a binding it was never authored with.
+	const auto joints  = attributeOffset(eye.layout, VertexSemantic::kJoints0);
+	const auto weights = attributeOffset(eye.layout, VertexSemantic::kWeights0);
+	REQUIRE(joints);
+	REQUIRE(weights);
+
+	const auto at = [&](std::optional<int> offset, uint32_t vertex, uint32_t component) {
+		return U16At(
+			import.vertexData,
+			eye.vertexByteOffset + static_cast<size_t>(vertex) * eye.layout.stride +
+				static_cast<size_t>(*offset) + component * sizeof(uint16_t));
+	};
+
+	for (uint32_t vertex = 0; vertex < eye.vertexCount; ++vertex)
+	{
+		REQUIRE(at(joints, vertex, 0) == 0);
+		REQUIRE(at(weights, vertex, 0) == std::numeric_limits<uint16_t>::max());
+		REQUIRE(at(weights, vertex, 1) == 0);  // the other three influences skin nothing
+	}
+
+	// Full weight on a bone undoes that bone's inverse bind, so the vertices have to arrive in the
+	// rig's space rather than the node's: the eye's own origin sits at hips + (0,0,3).
+	const auto position = [&](uint32_t vertex) {
+		glm::vec3 value;
+		std::memcpy(
+			&value,
+			import.vertexData.data() + eye.vertexByteOffset +
+				static_cast<size_t>(vertex) * eye.layout.stride,
+			sizeof(value));
+		return value;
+	};
+	CHECK(position(0) == glm::vec3(0.0f, 1.0f, 3.0f));
+
+	SECTION("and travels with it once a clip plays")
+	{
+		// The whole point, and what a bind-pose placement cannot do. `walk` slides hips two along +Z,
+		// so every vertex of a mesh hanging off hips must move exactly that far -- through the same
+		// CPU skinning path the GPU is measured against.
+		const BMesh        mesh  = toBMesh(import);
+		const Skeleton&    rig   = import.skeleton;
+		const AnimationSet clips = import.animations;
+
+		const AnimationClip& walk = clips.clips[0];
+
+		const auto skinnedAt = [&](uint32_t frame) {
+			return skinSubmesh(
+				mesh,
+				mesh.submeshes[mesh.meshes[1].firstSubmesh],
+				skinningMatrices(rig, poseModelTransforms(rig, clips, 0, frame)));
+		};
+
+		const auto first = skinnedAt(0);
+		const auto last  = skinnedAt(walk.frameCount - 1);
+		REQUIRE(first.size() == eye.vertexCount);
+
+		for (size_t vertex = 0; vertex < first.size(); ++vertex)
+		{
+			const glm::vec3 travelled = last[vertex].position - first[vertex].position;
+			CHECK(travelled.x == Catch::Approx(0.0f).margin(1e-5f));
+			CHECK(travelled.y == Catch::Approx(0.0f).margin(1e-5f));
+			CHECK(travelled.z == Catch::Approx(2.0f));
+		}
+	}
 }
 
 TEST_CASE("Baking a skinned import writes the rig beside the mesh", "[gltf][skeleton][io]")

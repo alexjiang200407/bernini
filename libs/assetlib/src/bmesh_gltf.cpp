@@ -311,6 +311,105 @@ namespace assetlib
 		}
 
 		/**
+		 * A rigid mesh hanging off a joint: the bone it rides, and the transform taking its vertices
+		 * into the space the rig poses in.
+		 *
+		 * Such a mesh is bound to that bone at full weight, which is what it already means -- so it
+		 * draws through the skinned path and the runtime needs no notion of parenting. See
+		 * docs/skinning.md.
+		 */
+		struct Attachment
+		{
+			uint32_t  bone    = c_InvalidIndex;
+			glm::mat4 toModel = glm::mat4(1.0f);
+
+			[[nodiscard]] bool
+			IsAttached() const noexcept
+			{
+				return bone != c_InvalidIndex;
+			}
+		};
+
+		/**
+		 * Which mesh entries are attachments, indexed by glTF mesh.
+		 *
+		 * A mesh qualifies when exactly one node references it, that node carries no skin of its own,
+		 * and an ancestor of it is a joint. The single-reference rule is the limit: a mesh instanced
+		 * by two nodes would need one baked transform per node, and it keeps today's behaviour --
+		 * drawn once, at its bind pose.
+		 */
+		std::vector<Attachment>
+		planAttachments(const tinygltf::Model& model, const SkinImport& skin)
+		{
+			std::vector<Attachment> attachments(model.meshes.size());
+			if (skin.skeleton.bones.empty())
+				return attachments;
+
+			std::vector<uint32_t> referrer(model.meshes.size(), c_InvalidIndex);
+			std::vector<bool>     shared(model.meshes.size(), false);
+
+			for (size_t node = 0; node < model.nodes.size(); ++node)
+			{
+				const int meshIndex = model.nodes[node].mesh;
+				if (meshIndex < 0 || static_cast<size_t>(meshIndex) >= model.meshes.size())
+					continue;
+
+				const auto entry = static_cast<size_t>(meshIndex);
+				if (referrer[entry] != c_InvalidIndex)
+					shared[entry] = true;
+				else
+					referrer[entry] = static_cast<uint32_t>(node);
+			}
+
+			const auto nodeParents = buildNodeParents(model);
+
+			for (size_t entry = 0; entry < model.meshes.size(); ++entry)
+			{
+				if (shared[entry] || referrer[entry] == c_InvalidIndex)
+					continue;
+
+				const uint32_t node = referrer[entry];
+				if (model.nodes[node].skin >= 0)
+					continue;
+
+				uint32_t ancestor = nodeParents[node];
+				while (ancestor != c_InvalidIndex && skin.nodeToBone[ancestor] == c_InvalidIndex)
+					ancestor = nodeParents[ancestor];
+
+				if (ancestor == c_InvalidIndex)
+					continue;
+
+				// Every node from the scene root down, which is the space a bone's model transform
+				// lands in -- the root bone's bind pose already carries the chain above it.
+				glm::mat4 toModel(1.0f);
+				for (uint32_t cur = node; cur != c_InvalidIndex; cur = nodeParents[cur])
+					toModel = toMatrix(readNodeTransform(model.nodes[cur])) * toModel;
+
+				attachments[entry] = { skin.nodeToBone[ancestor], toModel };
+			}
+
+			return attachments;
+		}
+
+		/** Bone `bone` at full weight for every vertex, which is what a rigid parenting is. */
+		void
+		bindWholly(
+			uint32_t               bone,
+			size_t                 vertexCount,
+			std::vector<uint16_t>& joints,
+			std::vector<uint16_t>& weights)
+		{
+			joints.assign(vertexCount * c_InfluencesPerVertex, 0);
+			weights.assign(vertexCount * c_InfluencesPerVertex, 0);
+
+			for (size_t i = 0; i < vertexCount; ++i)
+			{
+				joints[i * c_InfluencesPerVertex]  = static_cast<uint16_t>(bone);
+				weights[i * c_InfluencesPerVertex] = std::numeric_limits<uint16_t>::max();
+			}
+		}
+
+		/**
 		 * A primitive's skin binding, remapped into bone order and quantized: four `uint16` bone
 		 * indices and four `unorm16` weights per vertex, or nothing at all.
 		 *
@@ -382,7 +481,8 @@ namespace assetlib
 			BMeshImport&               mesh,
 			const tinygltf::Model&     model,
 			const tinygltf::Primitive& primitive,
-			std::span<const uint32_t>  jointToBone)
+			std::span<const uint32_t>  jointToBone,
+			const Attachment&          attachment)
 		{
 			const auto posIt = primitive.attributes.find("POSITION");
 			if (posIt == primitive.attributes.end())
@@ -421,6 +521,17 @@ namespace assetlib
 			std::vector<uint16_t> joints;
 			std::vector<uint16_t> weights;
 			readSkinAttributes(model, primitive, vertexCount, jointToBone, joints, weights);
+
+			// A primitive that already carries a binding keeps it; planAttachments only ever names a
+			// node with no skin, so the two cannot both be meant.
+			if (attachment.IsAttached() && joints.empty())
+				bindWholly(attachment.bone, vertexCount, joints, weights);
+
+			// Positions come out in bone space rather than the node's, which is what full weight on
+			// that bone then undoes -- so the node's own transform must not be applied again.
+			const auto  normalMatrix = glm::transpose(glm::inverse(glm::mat3(attachment.toModel)));
+			const float handedness =
+				glm::determinant(glm::mat3(attachment.toModel)) < 0.0f ? -1.0f : 1.0f;
 
 			// Build the interleaved layout from the present attributes only.
 			Submesh  submesh{};
@@ -467,6 +578,34 @@ namespace assetlib
 				{
 					if (!attr.view.Present())
 						continue;
+
+					if (attachment.IsAttached())
+					{
+						if (attr.semantic == VertexSemantic::kPosition)
+						{
+							const auto p = glm::vec3(
+								attachment.toModel * glm::vec4(attr.view.At<glm::vec3>(i), 1.0f));
+							appendBytes(mesh.vertexData, &p, sizeof(p));
+							continue;
+						}
+						if (attr.semantic == VertexSemantic::kNormal)
+						{
+							const auto n =
+								glm::normalize(normalMatrix * attr.view.At<glm::vec3>(i));
+							appendBytes(mesh.vertexData, &n, sizeof(n));
+							continue;
+						}
+						if (attr.semantic == VertexSemantic::kTangent)
+						{
+							const auto source = attr.view.At<glm::vec4>(i);
+							const auto t      = glm::vec4(
+								glm::normalize(glm::mat3(attachment.toModel) * glm::vec3(source)),
+								source.w * handedness);
+							appendBytes(mesh.vertexData, &t, sizeof(t));
+							continue;
+						}
+					}
+
 					appendBytes(
 						mesh.vertexData,
 						attr.view.ComponentAt(i, 0),
@@ -486,10 +625,12 @@ namespace assetlib
 				}
 			}
 
-			// Prefer the accessor's declared bounds; otherwise compute from positions.
+			// Prefer the accessor's declared bounds; otherwise compute from positions. An
+			// attachment's are in the node's space, which the vertices above have already left.
 			glm::vec3 aabbMin(std::numeric_limits<float>::max());
 			glm::vec3 aabbMax(std::numeric_limits<float>::lowest());
-			if (posAccessor.minValues.size() == 3 && posAccessor.maxValues.size() == 3)
+			if (!attachment.IsAttached() && posAccessor.minValues.size() == 3 &&
+			    posAccessor.maxValues.size() == 3)
 			{
 				aabbMin = glm::vec3(
 					posAccessor.minValues[0],
@@ -504,9 +645,12 @@ namespace assetlib
 			{
 				for (size_t i = 0; i < vertexCount; ++i)
 				{
-					const glm::vec3 p = candidates[0].view.At<glm::vec3>(i);
-					aabbMin           = glm::min(aabbMin, p);
-					aabbMax           = glm::max(aabbMax, p);
+					auto p = candidates[0].view.At<glm::vec3>(i);
+					if (attachment.IsAttached())
+						p = glm::vec3(attachment.toModel * glm::vec4(p, 1.0f));
+
+					aabbMin = glm::min(aabbMin, p);
+					aabbMax = glm::max(aabbMax, p);
 				}
 			}
 			submesh.aabbMin = aabbMin;
@@ -837,9 +981,15 @@ namespace assetlib
 		mesh.skeleton         = skin.skeleton;
 		mesh.animations       = importAnimations(model, skin, sampleRate);
 
-		for (const auto& gltfMesh : model.meshes)
+		// Before the submeshes too: a rigid mesh parented to a joint is bound to it at import, and
+		// that rewrites its vertices.
+		const std::vector<Attachment> attachments = planAttachments(model, skin);
+
+		for (size_t meshIndex = 0; meshIndex < model.meshes.size(); ++meshIndex)
 		{
 			throwIfCancelled(cancel);
+
+			const tinygltf::Mesh& gltfMesh = model.meshes[meshIndex];
 
 			Mesh entry{};
 			entry.firstSubmesh = static_cast<uint32_t>(mesh.submeshes.size());
@@ -851,7 +1001,7 @@ namespace assetlib
 					throw std::runtime_error("bmesh: only triangle primitives are supported");
 
 				const size_t before = mesh.submeshes.size();
-				buildSubmesh(mesh, model, primitive, skin.jointToBone);
+				buildSubmesh(mesh, model, primitive, skin.jointToBone, attachments[meshIndex]);
 				if (mesh.submeshes.size() == before)
 					continue;  // primitive was skipped (e.g. no positions)
 

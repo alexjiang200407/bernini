@@ -196,6 +196,23 @@ namespace assetlib
 			return fileSystem->Exists(path) ? path : std::format("{} (missing)", path);
 		}
 
+		std::string_view
+		alphaModeName(AlphaMode mode) noexcept
+		{
+			switch (mode)
+			{
+			case AlphaMode::kMask:
+				return "mask";
+			case AlphaMode::kBlend:
+				return "blend";
+			case AlphaMode::kHashed:
+				return "hashed";
+			case AlphaMode::kOpaque:
+				break;
+			}
+			return "opaque";
+		}
+
 		void
 		describePbr(
 			std::string&                   out,
@@ -217,6 +234,10 @@ namespace assetlib
 				pbr.specularColorFactor.x,
 				pbr.specularColorFactor.y,
 				pbr.specularColorFactor.z);
+
+			// The animated tiers draw opaque geometry only, so this is the field that decides whether
+			// a submesh can be skinned at all.
+			out += std::format("  alphaMode         {}\n", alphaModeName(pbr.alphaMode));
 
 			// The triplet is what a `baked` material draws from; a `loose` one keeps it as the last
 			// bake's output, which is why it is printed either way.
