@@ -94,4 +94,54 @@ namespace editor
 		bgl::IScene*              scene,
 		const AppliedEnvironment& previous,
 		const AppliedEnvironment& applied);
+
+	/**
+	 * A viewport's environment: the one it was configured with, and the one bound over it.
+	 *
+	 * A drop replaces what is bound without touching what was configured, which is what lets a
+	 * viewport giving up what it was showing get back to the `.benv` config.json named.
+	 */
+	struct EnvironmentBinding
+	{
+		EnvironmentApplyDesc configured;
+
+		// The `.benv` bound now, and the maps it took: the path says whether a drop displaced the
+		// configured one, the handles are what the next bind releases.
+		std::string        boundPath;
+		AppliedEnvironment bound;
+	};
+
+	/**
+	 * The `.benv` a reset has to bind to undo a drop; nothing when there is nothing to undo.
+	 *
+	 * Nothing also for a viewport configured without an environment, which cannot undo one: an
+	 * empty apply binds nothing and so displaces nothing, leaving the drop lit either way. That is
+	 * deliberate -- the only other reading of "clear" there is an unlit preview, and black is worse
+	 * than somebody else's backdrop.
+	 */
+	[[nodiscard]] std::optional<std::string>
+	GetEnvironmentToRestore(const EnvironmentBinding& binding);
+
+	/**
+	 * Lights `view` from `benvPath` and records it in `binding`, handing back what it displaced.
+	 *
+	 * The pair that a viewport owning an environment wants instead of ApplyEnvironment: applying
+	 * without releasing keeps every predecessor's three cube maps uploaded for the life of the
+	 * window, and the scene's texture slots are bounded.
+	 *
+	 * Must be called on the render thread.
+	 *
+	 * @param dataRoot What the paths inside the `.benv` resolve against -- the open project's for a
+	 *        drop, and `binding.configured`'s for the one config.json named, which is relative to
+	 *        whatever that named.
+	 * @throws bgl::SceneError if a displaced handle was already deleted.
+	 */
+	void
+	BindEnvironment(
+		bgl::IScene*                 scene,
+		bgl::ISceneView*             view,
+		EnvironmentBinding&          binding,
+		const std::string&           benvPath,
+		const std::filesystem::path& dataRoot,
+		const char*                  who);
 }

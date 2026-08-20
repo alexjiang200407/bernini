@@ -196,7 +196,8 @@ assetlib_cli envmap forest.hdr -p Project/Data --name forest \
 ```
 
 In the editor, dropping a `.hdr` on the Content Explorer opens the same import; dropping a `.benv` on
-the material preview relights it.
+the material or animation preview relights it until that panel is left, which puts the configured one
+back.
 
 ---
 

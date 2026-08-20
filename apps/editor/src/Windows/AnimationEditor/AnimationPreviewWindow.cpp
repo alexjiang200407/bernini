@@ -52,17 +52,15 @@ AnimationPreviewWindow::AnimationPreviewWindow(
 	// Wheel events only reach a widget that can take focus, and the camera needs them to dolly.
 	setFocusPolicy(Qt::StrongFocus);
 
-	m_Configured = std::move(env);
-	m_AppliedEnv = m_Configured.environmentMap;
+	m_Environment.configured = std::move(env);
 
 	GetRenderer()->Invoke([&] {
-		m_Environment = editor::ApplyEnvironment(
+		editor::BindEnvironment(
 			GetPreviewScene(),
 			GetPreviewView(),
-			m_Configured.environmentMap,
-			m_Configured.dataRoot,
-			m_Configured.exposureOverride,
-			m_Configured.skyMipLevelOverride,
+			m_Environment,
+			m_Environment.configured.environmentMap,
+			m_Environment.configured.dataRoot,
 			"AnimationPreview");
 	});
 
@@ -789,50 +787,36 @@ AnimationPreviewWindow::SetEnvironment(const std::string& benvPath)
 {
 	// A dropped `.benv` belongs to the open project, so its own data root is the one that resolves
 	// it. The configured root only stands in before a project is opened.
-	ApplyEnvironmentFrom(benvPath, m_DataRoot.empty() ? m_Configured.dataRoot : m_DataRoot);
+	const std::filesystem::path& dataRoot =
+		m_DataRoot.empty() ? m_Environment.configured.dataRoot : m_DataRoot;
+
+	GetRenderer()->Invoke([&] {
+		editor::BindEnvironment(
+			GetPreviewScene(),
+			GetPreviewView(),
+			m_Environment,
+			benvPath,
+			dataRoot,
+			"AnimationPreview");
+	});
 }
 
 void
 AnimationPreviewWindow::RestoreConfiguredEnvironment()
 {
-	// Only when a drop displaced it: an apply re-uploads three cube maps, and the dock is hidden
-	// and shown far more often than an environment is dropped on it.
-	if (m_AppliedEnv == m_Configured.environmentMap)
+	const std::optional<std::string> restore = editor::GetEnvironmentToRestore(m_Environment);
+	if (!restore)
 		return;
 
-	// The configured root, not the project's: this path came from config.json and is relative to
-	// whatever that named.
-	//
-	// A window configured with no environment at all cannot restore one -- an empty apply binds
-	// nothing and so displaces nothing, leaving the drop in place. That is deliberate: the only
-	// other reading of "clear" there is an unlit preview, and black is worse than somebody else's
-	// backdrop.
-	ApplyEnvironmentFrom(m_Configured.environmentMap, m_Configured.dataRoot);
-}
-
-void
-AnimationPreviewWindow::ApplyEnvironmentFrom(
-	const std::string&           benvPath,
-	const std::filesystem::path& dataRoot)
-{
 	GetRenderer()->Invoke([&] {
-		bgl::IScene* scene = GetPreviewScene();
-
-		const editor::AppliedEnvironment applied = editor::ApplyEnvironment(
-			scene,
+		editor::BindEnvironment(
+			GetPreviewScene(),
 			GetPreviewView(),
-			benvPath,
-			dataRoot,
-			m_Configured.exposureOverride,
-			m_Configured.skyMipLevelOverride,
+			m_Environment,
+			*restore,
+			m_Environment.configured.dataRoot,
 			"AnimationPreview");
-
-		// After the new one is bound, never before: releasing first would leave the view naming a
-		// slot that had been handed back.
-		m_Environment = editor::ReplaceEnvironment(scene, m_Environment, applied);
 	});
-
-	m_AppliedEnv = benvPath;
 }
 
 void

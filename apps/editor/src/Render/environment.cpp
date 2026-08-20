@@ -100,4 +100,38 @@ namespace editor
 		bound.skybox     = replace(previous.skybox, applied.skybox);
 		return bound;
 	}
+
+	std::optional<std::string>
+	GetEnvironmentToRestore(const EnvironmentBinding& binding)
+	{
+		if (binding.configured.environmentMap.empty() ||
+		    binding.boundPath == binding.configured.environmentMap)
+			return std::nullopt;
+
+		return binding.configured.environmentMap;
+	}
+
+	void
+	BindEnvironment(
+		bgl::IScene*                 scene,
+		bgl::ISceneView*             view,
+		EnvironmentBinding&          binding,
+		const std::string&           benvPath,
+		const std::filesystem::path& dataRoot,
+		const char*                  who)
+	{
+		const AppliedEnvironment applied = ApplyEnvironment(
+			scene,
+			view,
+			benvPath,
+			dataRoot,
+			binding.configured.exposureOverride,
+			binding.configured.skyMipLevelOverride,
+			who);
+
+		// After the new one is bound, never before: releasing first would leave the view naming a
+		// slot that had been handed back.
+		binding.bound     = ReplaceEnvironment(scene, binding.bound, applied);
+		binding.boundPath = benvPath;
+	}
 }

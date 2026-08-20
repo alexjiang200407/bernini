@@ -159,12 +159,7 @@ protected:
 	void
 	dropEvent(QDropEvent* event) override;
 
-	/**
-	 * Lights the preview from `benvPath`, releasing whatever the last one bound.
-	 *
-	 * Without the release each dropped environment would keep its predecessor's three cube maps
-	 * uploaded for the life of the window, and the scene's texture slots are bounded.
-	 */
+	// Lights the preview from a dropped `.benv`, resolved against the open project's data root.
 	void
 	SetEnvironment(const std::string& benvPath);
 
@@ -173,9 +168,6 @@ protected:
 	// neither what it was configured with nor what it was asked to show.
 	void
 	RestoreConfiguredEnvironment();
-
-	void
-	ApplyEnvironmentFrom(const std::string& benvPath, const std::filesystem::path& dataRoot);
 
 	void
 	mousePressEvent(QMouseEvent* event) override;
@@ -271,16 +263,10 @@ private:
 	std::filesystem::path m_MeshPath;
 	std::string           m_Animations;
 
-	// What the last ApplyEnvironment bound, so the next one can release it.
-	editor::AppliedEnvironment m_Environment;
-
-	// What the window was configured with, kept whole because a drop carries only a path and Clear
-	// has to be able to get back to this. The configured root stands in until a project opens and
-	// m_DataRoot names its own.
-	editor::EnvironmentApplyDesc m_Configured;
-
-	// The `.benv` currently bound, so Clear can tell a drop from the configured one it already has.
-	std::string m_AppliedEnv;
+	// The configured environment is kept whole because a drop carries only a path and Clear has to
+	// be able to get back to it. Its root stands in until a project opens and m_DataRoot names its
+	// own.
+	editor::EnvironmentBinding m_Environment;
 
 	editor::OrbitCamera m_Orbit;
 

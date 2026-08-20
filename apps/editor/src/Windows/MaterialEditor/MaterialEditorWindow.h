@@ -50,8 +50,20 @@ public:
 	void
 	SetDataRoot(const QString& dataRoot);
 
+	/** Back to the default sphere and a blank graph, dropping whatever was open. */
 	void
 	Reset();
+
+	/**
+	 * Leaving the panel resets it: the dock's tab switching away (or the dock closing) puts the
+	 * default sphere back, which drops the open materials and every held-open path with them.
+	 * MainWindow drives this from QDockWidget::visibilityChanged -- a tabified dock's widget gets
+	 * no hideEvent on a tab switch.
+	 *
+	 * Unsaved graph edits go with it. The panel writes nothing until Save, and there is no prompt.
+	 */
+	void
+	SetDockVisible(bool visible);
 
 	/**
 	 * The material files the editor has open, absolute, in no order. Deleting one behind an open graph

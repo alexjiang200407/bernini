@@ -145,9 +145,14 @@ public:
 	void
 	LoadMesh(const std::filesystem::path& path);
 
-	// Restores the default sphere (shown when no mesh is selected).
+	/**
+	 * Back to what the window opens as: the default sphere, lit by the configured environment.
+	 *
+	 * What leaving the panel does, so the next visit starts from the same place a fresh editor
+	 * would rather than from whatever the last one dropped on it.
+	 */
 	void
-	ShowDefaultSphere();
+	Reset();
 
 Q_SIGNALS:
 	// The preview geometry changed, so its submeshes did too.
@@ -171,14 +176,15 @@ protected:
 	void
 	dropEvent(QDropEvent* event) override;
 
-	/**
-	 * Lights the preview from `benvPath`, releasing whatever the last one bound.
-	 *
-	 * Without the release each dropped environment would keep its predecessor's three cube maps
-	 * uploaded for the life of the window, and the scene's texture slots are bounded.
-	 */
+	// Lights the preview from a dropped `.benv`, resolved against the open project's data root.
 	void
 	SetEnvironment(const std::string& benvPath);
+
+	// Puts the environment config.json named back, if a drop displaced it. Part of Reset, because a
+	// preview showing the sphere under somebody else's backdrop is showing neither what it was
+	// configured with nor what it was asked to show.
+	void
+	RestoreConfiguredEnvironment();
 
 	void
 	mousePressEvent(QMouseEvent* event) override;
@@ -203,6 +209,10 @@ private:
 	void
 	ClearGeometry();
 
+	// Restores the default sphere (shown when no mesh is selected).
+	void
+	ShowDefaultSphere();
+
 	std::vector<bgl::GeomHandle> m_Geoms;
 	std::vector<InstanceRef>     m_Instances;
 	std::vector<SubmeshRef>      m_SubmeshRefs;
@@ -212,11 +222,10 @@ private:
 	std::filesystem::path        m_MeshPath;  // empty for the default sphere
 	std::filesystem::path        m_DataRoot;  // empty until a project is opened
 
-	// What the last ApplyEnvironment bound, so the next one can release it.
-	editor::AppliedEnvironment m_Environment;
-	std::optional<float>       m_ExposureOverride;
-	std::optional<uint32_t>    m_SkyMipLevelOverride;
-	std::filesystem::path      m_ConfiguredRoot;  // stands in until a project is opened
+	// The configured environment is kept whole because a drop carries only a path and Reset has to
+	// be able to get back to it. Its root stands in until a project opens and m_DataRoot names its
+	// own.
+	editor::EnvironmentBinding m_Environment;
 
 	editor::OrbitCamera m_Orbit;
 

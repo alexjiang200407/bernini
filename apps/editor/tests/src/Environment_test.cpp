@@ -137,3 +137,39 @@ TEST_CASE("Only the maps an environment replaced are released", "[environment][r
 	});
 	REQUIRE(ran);
 }
+
+// What a preview leaving its panel has to do about the backdrop, decided without a device: the
+// restore exists to undo a *drop*, and re-applying costs three cube map uploads. A panel is left
+// and returned to far more often than an environment is dropped on it, so the ordinary case must
+// come back with nothing to do.
+
+TEST_CASE("A preview nobody dropped on has nothing to restore", "[environment]")
+{
+	auto binding                      = editor::EnvironmentBinding();
+	binding.configured.environmentMap = "Environments/studio.benv";
+	binding.boundPath                 = "Environments/studio.benv";
+
+	CHECK_FALSE(editor::GetEnvironmentToRestore(binding).has_value());
+}
+
+TEST_CASE("A dropped environment is restored to the configured one", "[environment]")
+{
+	auto binding                      = editor::EnvironmentBinding();
+	binding.configured.environmentMap = "Environments/studio.benv";
+	binding.boundPath                 = "Environments/sunset.benv";
+
+	const std::optional<std::string> restore = editor::GetEnvironmentToRestore(binding);
+	REQUIRE(restore.has_value());
+	CHECK(*restore == "Environments/studio.benv");
+}
+
+TEST_CASE("A preview configured with no environment keeps the drop", "[environment]")
+{
+	// Restoring "nothing" is an apply that binds nothing, so it would displace nothing and the drop
+	// would stay lit anyway -- and the only other reading of it is an unlit preview, which is worse
+	// than somebody else's backdrop.
+	auto binding      = editor::EnvironmentBinding();
+	binding.boundPath = "Environments/sunset.benv";
+
+	CHECK_FALSE(editor::GetEnvironmentToRestore(binding).has_value());
+}
