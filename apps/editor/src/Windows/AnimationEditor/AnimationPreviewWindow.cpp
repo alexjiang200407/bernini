@@ -191,10 +191,11 @@ AnimationPreviewWindow::LoadMeshAs(
 	// culls by. A bind-pose box is not it -- a clip carrying root motion walks the rig clean out of
 	// it, so the camera frames the wrong place and the mesh culls away as soon as it travels.
 	//
-	// VAT reads the box its bake already closed over, one for the file. The skinned tier measures
-	// one per animated mesh entry, off the UI and render threads because posedBounds skins every
-	// vertex at every frame -- per entry and not per file because the box is that geom's culling
-	// volume, and a .bmesh may hold two separately rigged meshes.
+	// VAT reads the box its bake already closed over, one for the file. The skinned tier reads
+	// its own bake off the .banim, one per animated mesh entry -- the box is that geom's culling
+	// volume, and a .bmesh may hold two separately rigged meshes. Only a pairing the cook never
+	// measured is walked here, off the UI and render threads: posedBounds skins every vertex at
+	// every frame.
 	auto posedMin   = glm::vec3(0.0f);
 	auto posedMax   = glm::vec3(0.0f);
 	bool posedKnown = false;
@@ -253,10 +254,10 @@ AnimationPreviewWindow::LoadMeshAs(
 				}
 			}
 
-			// The VAT tier already has this box from its bake; the skinned tier has to measure one.
+			// The VAT tier already has this box from its bake; the skinned tier reads its own.
 			if (!steps.framedByBake && !animations.empty())
 			{
-				progress.Report(0, 0, "Measuring the pose...");
+				progress.Report(0, 0, "Reading the pose bounds...");
 
 				// Through a store, like every other read: a project opens as a mount, so a rig that
 				// ships inside a .bpak is only reachable that way.
@@ -270,9 +271,15 @@ AnimationPreviewWindow::LoadMeshAs(
 					if (skinnedBounds.contains(placement.meshIndex))
 						continue;
 
+					const std::optional<assetlib::Bounds> baked =
+						assetlib::findPosedBounds(clips, mesh, placement.meshIndex, skeleton);
+					if (!baked)
+						progress.Report(0, 0, "Measuring the pose...");
+
 					skinnedBounds.emplace(
 						placement.meshIndex,
-						assetlib::posedBounds(mesh, placement.meshIndex, skeleton, clips));
+						baked ? *baked :
+								assetlib::posedBounds(mesh, placement.meshIndex, skeleton, clips));
 				}
 			}
 		});
