@@ -73,10 +73,10 @@ public:
 	OpenMaterialPaths() const;
 
 	/**
-	 * Re-reads the open material from disk, for a caller that has just rewritten one -- the Content
-	 * Explorer's Bake. The graph is authored here and is not what changed; the panel's staleness marker
-	 * and baked-texture listing are read off the file, so nothing else would notice until the next time
-	 * the user touched a control.
+	 * Re-reads the open material from disk, for a caller that has just rewritten one -- a bake, from
+	 * here or from the Content Explorer. The graph is authored here and is not what changed; the panel's
+	 * staleness marker and baked-texture listing are read off the file, so nothing else would notice
+	 * until the next time the user touched a control.
 	 */
 	void
 	RefreshMaterialState();
@@ -131,7 +131,32 @@ private:
 	void
 	SaveCurrentMaterial(bool saveAs);
 
+	/**
+	 * Writes every graph that already has a file, by exactly the rule Save follows -- the mesh binding
+	 * a first write leaves included. A graph with no file yet is skipped rather than prompted.
+	 *
+	 * Reports only what it skipped or could not write: a clean run is reported by the panel it
+	 * refreshes.
+	 */
 	void
+	SaveAllMaterials();
+
+	/**
+	 * Save All, then composites each of the mesh's distinct materials down to its baked triplet.
+	 *
+	 * Saving first is not a convenience: a bake reads the routes off disk, so an unsaved edit would
+	 * otherwise be baked in its previous state without saying so.
+	 */
+	void
+	BakeAllMaterials();
+
+	/**
+	 * Writes `materialPath` into the `.bmesh` as `submeshIndex`'s material.
+	 *
+	 * @return empty when it landed or when there was no mesh to write to, otherwise what to tell the
+	 *         user. The caller says it: a batch must not raise one modal per submesh.
+	 */
+	[[nodiscard]] QString
 	AttachMaterialToMesh(int submeshIndex, const QString& materialPath);
 
 	void
@@ -161,6 +186,8 @@ private:
 	QPushButton*       m_OpenButton         = nullptr;
 	QPushButton*       m_SaveButton         = nullptr;
 	QPushButton*       m_SaveAsButton       = nullptr;
+	QPushButton*       m_SaveAllButton      = nullptr;
+	QPushButton*       m_BakeAllButton      = nullptr;
 	QPushButton*       m_SetDefaultButton   = nullptr;
 	QLabel*            m_MaterialLabel      = nullptr;
 	QLabel*            m_BakedTexturesLabel = nullptr;

@@ -29,8 +29,8 @@ namespace editor
 	/**
 	 * A one-per-line listing of the baked textures `material` currently names -- base colour, normal and
 	 * ORM -- or an empty string when it names none (never baked, or not a PBR material). An unrouted map
-	 * shows as a dash. Shown read-only: the graph authors the routes these are composited from, and the
-	 * Content Explorer's Bake is what rewrites them.
+	 * shows as a dash. Shown read-only: the graph authors the routes these are composited from, and a
+	 * bake -- this panel's Bake All, or the Content Explorer's -- is what rewrites them.
 	 */
 	[[nodiscard]] QString
 	BakedTexturesSummary(const assetlib::BMaterial& material);
@@ -75,6 +75,10 @@ namespace editor
 		int unsaved = 0;
 
 		QStringList failed;
+
+		// Written, but the mesh could not be made to name them: the `.bmaterial` is on disk and the
+		// mesh still points elsewhere.
+		QStringList unattached;
 	};
 
 	/**

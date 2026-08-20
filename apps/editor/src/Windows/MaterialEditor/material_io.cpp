@@ -131,7 +131,7 @@ namespace editor
 	QString
 	MaterialSaveSummary(const MaterialSaveResult& result)
 	{
-		if (result.unsaved == 0 && result.failed.isEmpty())
+		if (result.unsaved == 0 && result.failed.isEmpty() && result.unattached.isEmpty())
 			return {};
 
 		const auto count = [](const int n, const char* one, const char* many) {
@@ -139,7 +139,9 @@ namespace editor
 		};
 
 		auto lines = QStringList();
-		lines << QStringLiteral("Saved %1.").arg(count(result.saved, "material", "materials"));
+
+		if (result.saved > 0)
+			lines << QStringLiteral("Saved %1.").arg(count(result.saved, "material", "materials"));
 
 		if (result.unsaved > 0)
 		{
@@ -151,6 +153,12 @@ namespace editor
 		if (!result.failed.isEmpty())
 			lines << QStringLiteral("Could not write:\n%1")
 						 .arg(result.failed.join(QLatin1Char('\n')));
+
+		if (!result.unattached.isEmpty())
+		{
+			lines << QStringLiteral("Written, but the mesh could not be made to name them:\n%1")
+						 .arg(result.unattached.join(QLatin1Char('\n')));
+		}
 
 		return lines.join(QStringLiteral("\n\n"));
 	}
