@@ -452,16 +452,8 @@ AnimationPreviewWindow::LoadMeshAs(
 		// The load stood something up, so the tier it was loaded through is now what is on screen.
 		m_Source = source;
 
-		if (!loaded.refusal.isEmpty() && steps.offerBakeOnRefusal)
+		if (!loaded.refusal.isEmpty())
 			OfferBakeForRefusal(mesh, absolutePath, animations, name, loaded.refusal);
-		else if (!loaded.refusal.isEmpty())
-			QMessageBox::warning(
-				window(),
-				QStringLiteral("Open Mesh"),
-				QStringLiteral(
-					"'%1' could not be previewed skinned:\n\n%2\n\nShowing its bind "
-					"pose instead.")
-					.arg(name, loaded.refusal));
 	}
 	catch (const std::exception& e)
 	{
@@ -585,29 +577,13 @@ AnimationPreviewWindow::OfferBakeForRefusal(
 	const QString&               name,
 	const QString&               refusal)
 {
-	// The materials the bake could fix, by the same verdict gamelib routes on: drawsLoose covers
-	// never-baked *and* stale-by-stamp -- an edited source drifts from the triplet baked off it, and
-	// only a re-bake closes the gap. A material with no routes has nothing to bake; one drawing its
-	// baked triplet was refused for another reason.
-	auto loose = std::vector<std::string>();
-	for (const std::string& relPath : mesh.materials)
-	{
-		if (relPath.empty())
-			continue;
-
-		try
-		{
-			const assetlib::AssetStore store(m_DataRoot);
-
-			const assetlib::BMaterial material = store.LoadMaterial(relPath);
-			if (store.DrawsLoose(material))
-				loose.push_back(relPath);
-		}
-		catch (const std::exception& e)
-		{
-			qWarning("AnimationPreview: could not read '%s': %s", relPath.c_str(), e.what());
-		}
-	}
+	// Every material of the file, not the refusing submesh's alone -- the refusal arrives as a
+	// message, not as the entry that raised it. So a file whose refusal is about a rig (no skin
+	// binding, a clip set cooked against another skeleton) can still offer a bake for some unrelated
+	// unbaked material of its own: that bake is worth doing and the text says only what is true, but
+	// it will not lift this refusal.
+	const std::vector<std::string> loose =
+		editor::BakeableMaterials(assetlib::AssetStore(m_DataRoot), mesh.materials);
 
 	auto box = QMessageBox(window());
 	box.setIcon(QMessageBox::Information);
@@ -621,8 +597,8 @@ AnimationPreviewWindow::OfferBakeForRefusal(
 		box.setInformativeText(
 			QStringLiteral(
 				"%1 of its materials %2 drawing unbaked (never baked, or the bake is stale "
-				"-- a git pull makes every bake stale here), and the VAT pipeline draws "
-				"baked materials only.")
+				"-- a git pull makes every bake stale here), and this preview draws baked "
+				"materials only.")
 				.arg(loose.size())
 				.arg(loose.size() == 1 ? "is" : "are"));
 		bakeButton = box.addButton(QStringLiteral("Bake Now"), QMessageBox::AcceptRole);

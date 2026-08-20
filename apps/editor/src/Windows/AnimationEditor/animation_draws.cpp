@@ -1,5 +1,7 @@
 #include "animation_draws.h"
 
+#include <QtGlobal>
+
 #include <assetlib/bmesh_io.h>
 
 namespace editor
@@ -29,7 +31,29 @@ namespace editor
 			return {};
 
 		const bool vat = source == AnimationSource::kVat;
-		return { .needsFreshBake = vat, .offerBakeOnRefusal = vat, .framedByBake = vat };
+		return { .needsFreshBake = vat, .framedByBake = vat };
+	}
+
+	std::vector<std::string>
+	BakeableMaterials(const assetlib::AssetStore& store, std::span<const std::string> materials)
+	{
+		auto loose = std::vector<std::string>();
+		for (const std::string& relPath : materials)
+		{
+			if (relPath.empty())
+				continue;
+
+			try
+			{
+				if (store.DrawsLoose(store.LoadMaterial(relPath)))
+					loose.push_back(relPath);
+			}
+			catch (const std::exception& e)
+			{
+				qWarning("AnimationPreview: could not read '%s': %s", relPath.c_str(), e.what());
+			}
+		}
+		return loose;
 	}
 
 	std::vector<ClipInfo>
