@@ -92,7 +92,7 @@ if (BUILD_TESTS)
 
 	source_group(TREE "${CMAKE_CURRENT_SOURCE_DIR}/tests/src" PREFIX "Source Files" FILES ${GAMELIB_TESTS_SOURCES})
 
-	# The pixel test lights its view from "assets/Environments/forest.benv", resolved from the
+	# The pixel test lights its view from "assets/Data/Environments/forest.benv", resolved from the
 	# runtime output directory like every bgl test asset; copy_assets is what stages it there.
 	add_dependencies(gamelib_tests copy_assets)
 

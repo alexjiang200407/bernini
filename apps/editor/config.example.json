@@ -29,29 +29,29 @@
         "temporalAA": true,
         "renderScale": 1.0,
         "taaReconstructionWidth": 0.4,
-        "environmentMap": "assets/Environments/forest.benv",
-        "dataRoot": "assets"
+        "environmentMap": "assets/Data/Environments/forest.benv",
+        "dataRoot": "assets/Data"
     },
     "materialEditor": {
         "initialPreviewInstances": 16,
         "temporalAA": true,
         "renderScale": 1.0,
         "taaReconstructionWidth": 0.4,
-        "environmentMap": "assets/Environments/forest.benv",
-        "dataRoot": "assets"
+        "environmentMap": "assets/Data/Environments/forest.benv",
+        "dataRoot": "assets/Data"
     },
     "animationEditor": {
         "initialPreviewInstances": 16,
         "temporalAA": true,
         "renderScale": 1.0,
         "taaReconstructionWidth": 0.4,
-        "environmentMap": "assets/Environments/forest.benv",
-        "dataRoot": "assets"
+        "environmentMap": "assets/Data/Environments/forest.benv",
+        "dataRoot": "assets/Data"
     },
     "thumbnails": {
         "dimension": 256,
         "initialInstances": 256,
-        "environmentMap": "assets/Environments/forest.benv",
-        "dataRoot": "assets"
+        "environmentMap": "assets/Data/Environments/forest.benv",
+        "dataRoot": "assets/Data"
     }
 }
