@@ -169,11 +169,15 @@ The rule is one line: *an archive carries what the runtime reads and nothing tha
 `packProject` ([pak_pack.h:75](../libs/assetlib/include/assetlib/pak_pack.h)) derives that from
 `assetTypeFromExtension` ([asset_refs.h](../libs/assetlib/include/assetlib/asset_refs.h)) rather than
 from a list kept beside it, so a new container type joins the archive by being registered once. On
-top of that there is exactly **one** explicit exclusion: any path with a `textures_src` component.
+top of that sit the explicit exclusions: any path with a `textures_src` or `meshes_src` component,
+and the `.bimport` import document by its *type* — it is a registered extension, so without its own
+rule it would ride into the archive it must never reach.
 
 | | |
 |---|---|
 | `textures_src/` | excluded — authoring source; the bake reads it, the runtime never does |
+| `meshes_src/` | excluded — the imported `.glb` sources and their `.bimport` documents |
+| `.bimport` | excluded by type, wherever it sits — authored; a read-only store uses the baked-in bindings. Deliberate, so silent (never in `skippedByExtension`) |
 | `.glb` / `.hdr` awaiting import | excluded, by the same rule |
 | the `.berniniproject` file | excluded — editor metadata |
 | the shader cache (`.bsc`, `pipelines.psolib`) | excluded — per-machine, write-back, disposable |

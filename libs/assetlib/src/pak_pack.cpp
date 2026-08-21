@@ -20,15 +20,17 @@ namespace assetlib
 {
 	namespace
 	{
-		constexpr std::string_view c_AuthoringDir = "textures_src";
+		constexpr std::array<std::string_view, 2> c_AuthoringDirs = { { "textures_src",
+			                                                            "meshes_src" } };
 
 		bool
 		isAuthoringSource(const std::filesystem::path& relative)
 		{
 			for (const std::filesystem::path& part : relative)
 			{
-				if (part == c_AuthoringDir)
-					return true;
+				for (const std::string_view dir : c_AuthoringDirs)
+					if (part == dir)
+						return true;
 			}
 			return false;
 		}
@@ -126,6 +128,9 @@ namespace assetlib
 				++report.skippedByExtension[file.extension().generic_string()];
 				continue;
 			}
+			// Authored, and the game never reads it: a read-only store uses the baked-in bindings.
+			if (type == AssetType::kImportDocument)
+				continue;
 
 			const std::string                          key   = relativeKey(file, dataRoot);
 			const std::vector<std::byte>               bytes = loose.Read(key);

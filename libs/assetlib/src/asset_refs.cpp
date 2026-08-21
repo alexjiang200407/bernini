@@ -9,6 +9,7 @@
 #include <assetlib/bsky_io.h>
 #include <assetlib/bvat_io.h>
 #include <assetlib/container_format.h>
+#include <assetlib/import_document.h>
 #include <assetlib_structs/BEnv.h>
 #include <assetlib_structs/BMaterial.h>
 
@@ -92,6 +93,19 @@ namespace assetlib
 			}
 
 			addEdge(edges, referrer, skeleton, RefKind::kClipSkeleton);
+		}
+
+		/** The document holds its source and every material its bindings name. */
+		void
+		collectImportDocumentEdges(
+			std::vector<AssetRef>&         edges,
+			const core::file::IFileSystem& files,
+			const std::string&             referrer)
+		{
+			const ImportDocument document = loadImportDocument(files, referrer);
+			addEdge(edges, referrer, importedSourceKeyFor(referrer), RefKind::kImportedSource);
+			for (const MaterialBinding& binding : document.bindings)
+				addEdge(edges, referrer, binding.material, RefKind::kSubmeshMaterial);
 		}
 
 		/** The three inputs a `.bvat` was baked from -- what a re-bake reads. */
@@ -253,6 +267,8 @@ namespace assetlib
 			return AssetType::kAnimation;
 		if (ext == c_VatExtension)
 			return AssetType::kVat;
+		if (ext == c_ImportDocumentExtension)
+			return AssetType::kImportDocument;
 
 		return std::nullopt;
 	}
@@ -330,6 +346,11 @@ namespace assetlib
 			{
 				collectVatEdges(edges, files, referrer);
 				++graph.vatsScanned;
+			}
+			else if (kind == c_ImportDocumentExtension)
+			{
+				collectImportDocumentEdges(edges, files, referrer);
+				++graph.importDocumentsScanned;
 			}
 		}
 

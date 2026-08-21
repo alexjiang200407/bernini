@@ -104,6 +104,8 @@ namespace
 			return "was resampled against";
 		case assetlib::RefKind::kVatSource:
 			return "was baked from";
+		case assetlib::RefKind::kImportedSource:
+			return "was imported from";
 		}
 
 		return "references";
@@ -935,13 +937,14 @@ main(int argc, char** argv)
 			const auto graph = assetlib::AssetRefGraph::Scan(store);
 
 			spdlog::info(
-				"Scanned {} meshes, {} materials, {} environment assets, {} clip sets and {} VAT "
-				"bakes: {} references",
+				"Scanned {} meshes, {} materials, {} environment assets, {} clip sets, {} VAT "
+				"bakes and {} import documents: {} references",
 				graph.meshesScanned,
 				graph.materialsScanned,
 				graph.environmentsScanned,
 				graph.clipSetsScanned,
 				graph.vatsScanned,
+				graph.importDocumentsScanned,
 				graph.Edges().size());
 
 			// The listing is the command's output, so it goes to stdout rather than through the logger.

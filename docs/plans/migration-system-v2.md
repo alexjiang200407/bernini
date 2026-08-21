@@ -25,10 +25,32 @@ This feature untangles them, and that dissolves migration as a concept:
   forgotten; the by-name-with-defaults tolerance it provided lives on in the text formats for the
   only files that still need it.
 
-**Dependency:** this plan assumes `feat/remove-non-project-assetlib` (plan merged as #418) lands
-first: `Project` down in `assetlib`, one project-based `--project` import path, `assetlib::bake`
-deleted, `assets/` itself a project. One import path is one place to stamp cache keys. The survey
-below cites the pre-#418 tree; the tasks name where code lives after it.
+**Dependency:** this plan assumes `feat/remove-non-project-assetlib` lands first — its plan is
+`docs/plans/remove-non-project-assetlib.md` *on that branch* (reviewed as #418; a feature plan
+never reaches master, so it is cited here by decision rather than by link). One
+import path is one place to stamp cache keys. The specific post-states this plan's tasks stand
+on, by that plan's own decisions:
+
+- **Its ADR-3/task 3**: the five project-layout import writers become `assetlib::` (camelBack),
+  storing *mount keys* via `mountKeyFor` — task 2b integrates the source copy and the document
+  write there, and the document's binding/material values are mount keys by construction.
+- **Its ADR-9/task 2**: the project layout is one table, `assetlib/project_layout.h`, which every
+  directory-naming default reads. `meshes_src` becomes a row in that table, and `pak_pack`'s
+  exclusion reads it — task 2a's local `c_AuthoringDirs` array is interim and collapses into the
+  table when it lands.
+- **Its ADR-7/task 4**: `assets/` becomes `assets/Test.berniniproject` over `assets/Data/`, but
+  the loose `.glb` sources, `golden/` and `Frozen/` stay *outside* the project. So this plan's
+  adoption of `apples.bmesh` (task 3) must *copy* `assets/apples.glb` into
+  `assets/Data/meshes_src/` — the loose original is not in the store and cannot be the recorded
+  source.
+- **Its ADR-4**: the CLI writes no materials — a CLI import writes an import document with an
+  empty bindings object, and the mesh draws unlit until the editor binds, exactly as that plan
+  already ships.
+- **Its ADR-1/8 and tasks 5–6**: every CLI command takes `--project` only; `assetlib::bake` is
+  deleted and `bake` imports through the moved writers — so ADR-7's `.gltf` refusal and the
+  source copy live in one place for both front ends.
+
+The survey below cites the pre-#418 tree; the tasks name where code lives after it.
 
 ## Decisions
 
@@ -158,10 +180,15 @@ below cites the pre-#418 tree; the tasks name where code lives after it.
   current-keyed entry loads without its source, which keeps synthetic test fixtures
   (`RigFixture`) buildable — writers stamp the engine's constants, never a stored value, so they
   are current by construction. Import copies the self-contained source into the project
-  (`meshes_src/`, the `textures_src` pattern); `.gltf` is refused with "export as .glb".
+  (`meshes_src/`, the `textures_src` pattern); a `.gltf` — JSON with sidecar `.bin` and image
+  files — is refused with "export as .glb", so `meshes_src/` only ever holds one self-contained
+  file per source.
   *Rejected: per-container freshness — half a rig re-bakes; blanket source-mandatory —
   unimplementable for synthetic fixtures; sidecar-set copying for `.gltf` — a directory contract
-  nothing can stamp.*
+  nothing can stamp; and packing a `.gltf` to `.glb` at import (inline the `uri`s into one BIN
+  chunk, rewrite the `bufferViews`) — lossless in principle, but a packer to build and keep
+  correct when every DCC already exports `.glb`, and a model-level round-trip instead would
+  silently re-encode what it does not model. One export click is the cheaper contract.*
 - **ADR-8 — A read-only store trusts its keys because `pack` makes them true.** The seam skips
   regeneration on a read-only store (the game cannot bake), which is only sound if nothing stale
   ever enters an archive: with schema-less chunks, a stale entry read as current parses garbage —
@@ -211,7 +238,7 @@ below cites the pre-#418 tree; the tasks name where code lives after it.
 - `feat/remove-non-project-assetlib`'s scope (Project move, import-path collapse, CLI
   `--project`, `assets/` as a project) — it lands there; this feature builds on it.
 - Re-extracting or re-encoding textures on regeneration (ADR-1's promotion rule; `.ktx2` stays).
-- `.gltf` sources (ADR-7's refusal).
+- `.gltf` sources (ADR-7's refusal; the packing alternative is in its rejected list).
 - Editor re-import UX beyond loading (no "Reimport" button; the import-conflict refusal stands).
 - Backfilling arbitrary old projects. `bernini-test-project` gets one adoption pass (sources
   attached, materials carried) — the last hand-carry.
@@ -314,20 +341,33 @@ reader still present until the final task, which is why deletion is last.
 
 1. **The re-cut plan** — this file; deletes `docs/plans/migrate-assets.md` (ADR-11).
    Gate: review.
-2. **assetlib + editor: sources copied and the import document authored** — import copies the
-   `.glb` into `meshes_src/` (`.gltf` refused, submesh-key collisions refused), writes the import
-   document (bindings + parameters), reference edges protect both; `pack` excludes `meshes_src`;
-   the bake fills the mesh's material fields from the document. The attach flow writes the
-   document *alongside* today's `attachMaterial` + mesh save — the dual write keeps rebinding
-   working until task 3's load-apply supersedes the mesh-write half. Gate: import round-trip
-   shows copy, document, edges, bound mesh; collision refusal; pack exclusion test.
+2. **The import document, its edges, and the pack boundary** *(re-sliced in its own PR: the
+   original task assumed the single post-`remove-non-project-assetlib` import path, which has not
+   landed; this half is independent of where the writers live and lands first as 2a)* —
+   a. **assetlib: the document format and graph seam** — the `.bimport` text format (bindings +
+      parameters, unknown keys preserved, canonical bytes), the key convention beside its source,
+      `AssetType::kImportDocument` / `RefKind::kImportedSource`, the scan reading documents so a
+      referenced `.glb` and `.bmaterial` are held, rename re-pointing a document's materials,
+      `pack` excluding `meshes_src` and the document itself.
+      Gate: `just test assetlib` — round-trip/canonical/unknown-key/collision tests, the scan
+      edges, the pack exclusion.
+   b. **assetlib + editor: the import writes both** *(after `remove-non-project-assetlib`
+      lands)* — the source copied into `meshes_src/` (`.gltf` refused, ADR-7), submesh-key
+      collisions refused, the document written by import and attach flows — the attach flow
+      dual-writes beside today's `attachMaterial` + mesh save until task 3's load-apply
+      supersedes the mesh-write half — and the bake fills the mesh's material fields from the
+      document.
+      Gate: import round-trip shows copy, document, edges, bound mesh; `.gltf` and collision
+      refusals.
 3. **assetlib: the cache header and the seam on geometry** — header (key + chunk table) on
    `.bmesh`/`.bskel`/`.banim`, token constants, per-source-group key check (read-only store →
    fresh), in-memory regeneration returning a group's existing outputs with parameters read from
    the document and bindings applied over the result (ADR-6); missing source on a stale entry
    refuses. Deletes the geometry `Frozen_test` cases and their fixtures (ADR-9), and adopts the
-   committed `assets/` geometry: `apples.bmesh` re-saves at the new header with its source
-   (`assets/apples.glb`), and its import document is authored from the bindings already in the
+   committed `assets/` geometry: `apples.bmesh` re-saves at the new header with its source —
+   `assets/apples.glb` copied into `assets/Data/meshes_src/` (the loose original stays outside
+   the project, per the dependency's ADR-7) — and its import document is authored from the
+   bindings already in the
    file — the smallest instance of the adoption pass, needed because `GltfSkin_test` and the
    thumbnail test assert those bindings.
    Gate: stale key and stale stamp each regenerate; a wrong-keyed entry swapped in regenerates
