@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 """Build the CLI tools and stage them, with their DLLs, into a directory you can put on PATH.
 
-Only assetlib_cli is installed. It is the one binary that takes explicit paths and reads
-nothing relative to its working directory, so it is the only one that makes sense to run
-from outside the build tree; the editor and the examples resolve `assets/` from the cwd
-and must be launched from their output dir (`just run`).
+Only assetlib_cli is installed. It is the one binary that is told which project to work in
+and reads nothing relative to its working directory, so it is the only one that makes sense
+to run from outside the build tree; the editor and the examples resolve `assets/` from the
+cwd and must be launched from their output dir (`just run`).
 
 The install gathers the exe plus just the DLLs it actually imports -- not the whole build
 output, which also holds Qt, SDL and the D3D12/DXC stack that has no business on a PATH the

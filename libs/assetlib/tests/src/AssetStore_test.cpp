@@ -37,6 +37,37 @@ TEST_CASE("a loose source reads and writes the same directory", "[assetsource]")
  * reporting nothing to sweep. Both used to check for themselves; the source is where it belongs now
  * that they take one.
  */
+// Every CLI command now names its asset with a mount key, so this is the one conversion standing
+// between a typed argument and a write. A key that escaped the data root would let `tangents` or
+// `exposure` rewrite a file the project does not own.
+TEST_CASE("a write resolves to the data root, and cannot climb out of it", "[assetsource]")
+{
+	const DataRoot   root("assetsource_writepath");
+	const AssetStore store(root.path);
+
+	CHECK(store.ResolveWritePath("Meshes/a.bmesh") == root.path / "Meshes/a.bmesh");
+
+	SECTION("a key is normalized on the way, so two spellings of one asset write to one file")
+	{
+		CHECK(
+			store.ResolveWritePath("Meshes/../Meshes/a.bmesh") ==
+			store.ResolveWritePath("Meshes/a.bmesh"));
+		CHECK(
+			store.ResolveWritePath("./Meshes/a.bmesh") == store.ResolveWritePath("Meshes/a.bmesh"));
+	}
+
+	SECTION("anything that names something outside the project is refused")
+	{
+		CHECK_THROWS_AS(store.ResolveWritePath("../escaped.bmesh"), std::runtime_error);
+		CHECK_THROWS_AS(store.ResolveWritePath("Meshes/../../escaped.bmesh"), std::runtime_error);
+		CHECK_THROWS_AS(store.ResolveWritePath(".."), std::runtime_error);
+		CHECK_THROWS_AS(store.ResolveWritePath(""), std::runtime_error);
+
+		// An absolute path is not a key at all, however plausible it looks.
+		CHECK_THROWS_AS(store.ResolveWritePath("/etc/passwd"), std::runtime_error);
+	}
+}
+
 TEST_CASE("a source over a directory that is not there is a caller error", "[assetsource]")
 {
 	const DataRoot root("assetsource_missing");

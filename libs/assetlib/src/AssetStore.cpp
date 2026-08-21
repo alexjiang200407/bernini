@@ -3,6 +3,8 @@
 #include <core/err/util.h>
 #include <core/file/LooseFileSystem.h>
 
+#include "ref_paths.h"
+
 namespace assetlib
 {
 	AssetStore::AssetStore(std::filesystem::path dataRoot) :
@@ -27,4 +29,11 @@ namespace assetlib
 			core::throw_runtime_error("assetlib::AssetStore: a source must have somewhere to read");
 	}
 
+	std::filesystem::path
+	AssetStore::ResolveWritePath(std::string_view path) const
+	{
+		const std::string key = normalizeRef(path);
+		requireInsideDataRoot("assetlib::AssetStore::ResolveWritePath", key);
+		return m_DataRoot / key;
+	}
 }
