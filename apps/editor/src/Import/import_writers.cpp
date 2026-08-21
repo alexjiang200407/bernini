@@ -131,7 +131,7 @@ namespace editor
 	{
 		namespace fs = std::filesystem;
 
-		const fs::path root = dataRoot / assetlib::Project::c_SkeletonsDirectoryName;
+		const fs::path root = dataRoot / assetlib::c_SkeletonsDirectoryName;
 
 		std::error_code ec;
 		if (!fs::exists(root, ec))

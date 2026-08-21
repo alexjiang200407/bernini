@@ -349,7 +349,7 @@ main(int argc, char** argv)
 		"and every dangling reference listed");
 
 	std::string pruneDataRoot;
-	std::string pruneTextureDir = "Textures";
+	std::string pruneTextureDir = assetlib::c_TexturesDirectoryName;
 	bool        pruneDryRun     = false;
 	bool        pruneYes        = false;
 

@@ -127,8 +127,8 @@ namespace editor
 		}
 
 		const std::array<ImportedDir, 2> dirs = { {
-			{ textureDir, textureDirExisted, assetlib::Project::c_TexturesSrcDirectoryName },
-			{ materialDir, materialDirExisted, assetlib::Project::c_MaterialsDirectoryName },
+			{ textureDir, textureDirExisted, assetlib::c_TexturesSrcDirectoryName },
+			{ materialDir, materialDirExisted, assetlib::c_MaterialsDirectoryName },
 		} };
 
 		auto replaced = QStringList();

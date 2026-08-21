@@ -206,7 +206,7 @@ TEST_CASE("The content explorer is rooted at the project's data directory", "[co
 	// from that list rather than restated, so adding a category does not fail this on arithmetic.
 	REQUIRE(WaitFor([&] {
 		return model->rowCount(Hierarchy(window)->rootIndex()) ==
-		       static_cast<int>(assetlib::Project::c_RequiredDirectories.size());
+		       static_cast<int>(assetlib::c_RequiredDirectories.size());
 	}));
 }
 

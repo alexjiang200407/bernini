@@ -55,6 +55,17 @@ convention rather than something the code checks: any directory passed to `-d` i
   that is already four slices. Also rejected: deriving graph-less materials in `assetlib`, which
   creates exactly the second routing table that ADR forbids.*
 
+- **ADR-9 — The project layout is one table in `assetlib`, and every default that names a directory
+  reads it.** `assetlib/project_layout.h` holds the ten category names and `c_RequiredDirectories`
+  with no `AssetStore` dependency. Raised in review on #420: `assetlib` was already naming seven of
+  these ten across `env_import.h`, `env_bake.h`, `texture_prune.h`, `material_bake.h`,
+  `pak_pack.cpp` and `cli/main.cpp` — `"Textures"` four times, `"textures_src"` twice — none aware of the others, and
+  ADR-2 would otherwise have added a tenth rather than collapsing them. *Rejected: leaving the
+  scatter, because the layout is what a reference **means** — a `.bmesh` naming `Textures/skin.ktx2`
+  and the bake that writes that file have to agree, and they are written in different translation
+  units. Also rejected: keeping the constants on `Project`, because `material_bake` needs a directory
+  name and has no business pulling a project and its mount in behind it.*
+
 - **ADR-5 — An asset argument is a mount key through the project's store; an output that is not a
   project asset stays a `std::filesystem::path`.** `obj`'s `.obj` dump, `pack`'s `.bpak` and
   `strip`'s shipping copy are host paths; everything read from or written into the project is a key.
@@ -168,27 +179,34 @@ capability removed.
    no behaviour change. **Gate:** `just test assetlib editor` — `Project_test` passes in its new home
    and the editor suite is unchanged.
 
-2. `refactor(assetlib): move the project import writers down from the editor` — the five writers into
+2. `refactor(assetlib): one table for the project layout` — `project_layout.h`; `Project`'s
+   constants move to namespace scope, and `env_import`'s four directory defaults, `env_bake`'s and
+   `texture_prune`'s and `material_bake`'s `textureDir`, and `pak_pack`'s `c_AuthoringDir` all read
+   from it. Places that know where a texture lives: 4 -> 1. **Gate:** `just test` — `Pack_test`'s
+   authoring-source exclusion and `MaterialBake_test`'s output paths both run off these defaults, so
+   a wrong constant fails rather than merely reads oddly.
+
+3. `refactor(assetlib): move the project import writers down from the editor` — the five writers into
    `assetlib::`, storing mount keys via `normalizeRef` instead of `Rebase`d host paths;
    `WriteImportedMaterials` stays in
    the editor and calls into them. **Gate:** `just test editor` — `ImportedRig_test` still passes —
    plus a new `assetlib_tests` case pinning the moved writers' file set.
 
-3. `feat(assets): assets/ becomes a project` — `assets/Test.berniniproject` over `assets/Data/`, the
+4. `feat(assets): assets/ becomes a project` — `assets/Test.berniniproject` over `assets/Data/`, the
    six category directories moved beneath it and the four missing ones scaffolded; `golden/`,
    `Frozen/` and the `.glb` sources stay put; ~17 path references updated. **Gate:** `just test` —
    every golden image in `assets/golden` still matches.
 
-4. `feat(assetlib): assetlib_cli takes a project, and only a project` — `--project
+5. `feat(assetlib): assetlib_cli takes a project, and only a project` — `--project
    <file.berniniproject>` on all thirteen commands, asset arguments become mount keys, `envmap` loses
    `-o/-c/-i`, `describe` loses its store-less path, `refs`/`prune`/`pack`/`migrate`/`bakevat` swap
    `-d` for `--project`. `bake` unchanged in this task. **Gate:** a new `assetlib_tests` case
    asserting each command resolves its arguments through the project's store.
 
-5. `feat(assetlib): one importer` — `bake` imports into the project through task 2's writers;
+6. `feat(assetlib): one importer` — `bake` imports into the project through task 3's writers;
    `assetlib::bake` deleted. **Gate:** the acceptance round-trip — import `assets/suzanne.glb` into a
    fresh project, assert the file set, then `describe`, `refs` and `pack` it.
 
 Each task carries the doc changes it makes false, per
-[bcp-implement § 7](../../.claude/skills/bcp-implement/SKILL.md); task 4 carries the bulk of
+[bcp-implement § 7](../../.claude/skills/bcp-implement/SKILL.md); task 5 carries the bulk of
 `docs/asset_standards.md`'s CLI cookbook.
