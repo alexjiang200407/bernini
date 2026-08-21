@@ -72,7 +72,7 @@ main(int argc, char** argv)
 		auto view  = graphics->CreateSceneView(scene, 100);
 
 		// The manager holds the data root; every asset reference below is relative to it.
-		auto assets = game::AssetManager(scene, "assets");
+		auto assets = game::AssetManager(scene, "assets/Data");
 
 		const auto env = assets.AcquireEnvironment("Environments/forest.benv");
 		if (env.HasLighting())
