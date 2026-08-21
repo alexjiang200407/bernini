@@ -66,6 +66,15 @@ convention rather than something the code checks: any directory passed to `-d` i
   units. Also rejected: keeping the constants on `Project`, because `material_bake` needs a directory
   name and has no business pulling a project and its mount in behind it.*
 
+- **ADR-10 — `assetlib` gets its own host-path-to-mount-key conversion (`mountKeyFor`, internal to
+  `src/`), and the editor's Qt `Rebase` stays.** The two are three lines of
+  `std::filesystem::relative(...).generic_string()` apiece. *Rejected: making `Rebase` call
+  `mountKeyFor`, because `Rebase` also does the opposite direction (join then `weakly_canonical`) and
+  returns its input unchanged on error, and the material graph's saved JSON depends on both — a
+  behavioural change there is not worth folding into a move. Recorded so the duplication is a choice
+  rather than an oversight; the editor half disappears if the material graph ever stops storing
+  paths as `QString`.*
+
 - **ADR-5 — An asset argument is a mount key through the project's store; an output that is not a
   project asset stays a `std::filesystem::path`.** `obj`'s `.obj` dump, `pack`'s `.bpak` and
   `strip`'s shipping copy are host paths; everything read from or written into the project is a key.
@@ -187,10 +196,12 @@ capability removed.
    a wrong constant fails rather than merely reads oddly.
 
 3. `refactor(assetlib): move the project import writers down from the editor` — the five writers into
-   `assetlib::`, storing mount keys via `normalizeRef` instead of `Rebase`d host paths;
-   `WriteImportedMaterials` stays in
-   the editor and calls into them. **Gate:** `just test editor` — `ImportedRig_test` still passes —
-   plus a new `assetlib_tests` case pinning the moved writers' file set.
+   `assetlib::`, camelBack per the library's `.clang-tidy`, storing mount keys via a new
+   `mountKeyFor` instead of `Rebase`d host paths; `WriteImportedMaterials` stays in the editor.
+   **Gate:** the nine `[importedrig]`/`[importedmesh]` cases move with the code into
+   `assetlib_tests` and still pass — they already assert the stored reference is
+   `Skeletons/unit.bskel`, which is exactly the property `Rebase` used to provide — plus one new
+   assertion that the ambiguous-rig message names both rigs as keys rather than host paths.
 
 4. `feat(assets): assets/ becomes a project` — `assets/Test.berniniproject` over `assets/Data/`, the
    six category directories moved beneath it and the four missing ones scaffolded; `golden/`,

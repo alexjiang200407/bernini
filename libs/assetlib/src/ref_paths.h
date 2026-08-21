@@ -20,6 +20,15 @@ namespace assetlib
 	[[nodiscard]] std::string
 	extensionOf(std::string_view key);
 
+	/**
+	 * `path` as a mount key relative to `dataRoot`: `/`-separated, as every stored reference is.
+	 *
+	 * Returns `path`'s own generic spelling when the two share no common root, which is the only
+	 * answer that keeps a caller writing *something* rather than a `..` chain out of the project.
+	 */
+	[[nodiscard]] std::string
+	mountKeyFor(const std::filesystem::path& dataRoot, const std::filesystem::path& path);
+
 	/** Whether `path` lies beneath `directory`. Both normalized, and neither is inside itself. */
 	[[nodiscard]] bool
 	isUnder(std::string_view path, std::string_view directory) noexcept;
