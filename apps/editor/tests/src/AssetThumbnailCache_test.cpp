@@ -23,9 +23,9 @@ namespace
 {
 	// The shared asset directory doubles as a data root: apples.bmesh names its materials by paths
 	// relative to it ("Materials/apples/Apple1.bmaterial"), and they are there.
-	constexpr auto c_DataRoot     = "assets";
-	constexpr auto c_MeshPath     = "assets/Meshes/apples.bmesh";
-	constexpr auto c_MaterialPath = "assets/Materials/apples/Apple1.bmaterial";
+	constexpr auto c_DataRoot     = "assets/Data";
+	constexpr auto c_MeshPath     = "assets/Data/Meshes/apples.bmesh";
+	constexpr auto c_MaterialPath = "assets/Data/Materials/apples/Apple1.bmaterial";
 
 	// Where the renders are left for a human to look at, following bgl_tests' convention of writing a
 	// `.got.png` beside the goldens.
@@ -435,10 +435,10 @@ TEST_CASE("An asset that cannot be read yields no thumbnail", "[thumbnails][rend
 
 	QSignalSpy ready(&cache, &StampedPixmapCache::Ready);
 
-	cache.Request("assets/Meshes/does_not_exist.bmesh");
+	cache.Request("assets/Data/Meshes/does_not_exist.bmesh");
 
 	REQUIRE(!WaitFor([&] { return ready.count() > 0; }, 2000));
-	REQUIRE(cache.Lookup("assets/Meshes/does_not_exist.bmesh").isNull());
+	REQUIRE(cache.Lookup("assets/Data/Meshes/does_not_exist.bmesh").isNull());
 }
 
 TEST_CASE("An asset that cannot be read says why", "[thumbnails][render]")
@@ -451,7 +451,7 @@ TEST_CASE("An asset that cannot be read says why", "[thumbnails][render]")
 	REQUIRE(cache.IsReady());
 	cache.SetAssets(&*fixture.assets);
 
-	const QString path = "assets/Meshes/predates_schema_test.bmesh";
+	const QString path = "assets/Data/Meshes/predates_schema_test.bmesh";
 	{
 		// A 32-byte header at format 3 with an empty chunk table: the shape a file had before this
 		// container carried its schema.

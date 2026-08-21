@@ -24,7 +24,7 @@ main(int argc, char** argv)
 		bool        skyBoxEnabled = true;
 		bool        headless      = false;
 		uint32_t    frames        = 16;
-		std::string dataRootPath  = "assets";
+		std::string dataRootPath  = "assets/Data";
 		std::string modelPath     = "Meshes/apples.bmesh";
 		float       exposure      = 1.0f;
 		bool        exposureGiven = false;

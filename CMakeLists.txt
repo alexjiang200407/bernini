@@ -31,8 +31,11 @@ file(GLOB_RECURSE ASSET_FILES CONFIGURE_DEPENDS "${CMAKE_SOURCE_DIR}/assets/*")
 
 set(ASSET_STAMP "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/.assets.stamp")
 
+# Removed first because copy_directory merges: a renamed asset would otherwise linger here and a
+# suite would keep passing against the stale copy.
 add_custom_command(
     OUTPUT "${ASSET_STAMP}"
+    COMMAND ${CMAKE_COMMAND} -E rm -rf "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/assets"
     COMMAND ${CMAKE_COMMAND} -E copy_directory
             "${CMAKE_SOURCE_DIR}/assets"
             "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/assets"
