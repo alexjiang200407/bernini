@@ -1,6 +1,6 @@
-#include "Revisions/GitRevisionControl.h"
+#include "VersionControl/GitVersionControl.h"
 
-#include "Revisions/git_cli.h"
+#include "VersionControl/git_cli.h"
 
 #include <QFile>
 
@@ -73,7 +73,7 @@ TEST_CASE("A project with nothing changed has no pending changes", "[vcs]")
 	repo.Write("Data/Meshes/coyote.bmesh", "one");
 	repo.Commit("first");
 
-	CHECK(editor::GitRevisionControl(repo.path).ListChanges().empty());
+	CHECK(editor::GitVersionControl(repo.path).ListChanges().empty());
 }
 
 TEST_CASE("An asset the project has never seen is Added", "[vcs]")
@@ -83,7 +83,7 @@ TEST_CASE("An asset the project has never seen is Added", "[vcs]")
 	repo.Commit("first");
 	repo.Write("Data/Meshes/squirrel.bmesh", "new");
 
-	const auto change = Only(editor::GitRevisionControl(repo.path).ListChanges());
+	const auto change = Only(editor::GitVersionControl(repo.path).ListChanges());
 
 	CHECK(change.kind == editor::ChangeKind::kAdded);
 	CHECK(change.path == QString("Data/Meshes/squirrel.bmesh"));
@@ -101,7 +101,7 @@ TEST_CASE("An asset staged for the first time is still Added", "[vcs]")
 	REQUIRE(editor::RunGit(repo.path, { "add", "-A" }).Succeeded());
 
 	CHECK(
-		Only(editor::GitRevisionControl(repo.path).ListChanges()).kind ==
+		Only(editor::GitVersionControl(repo.path).ListChanges()).kind ==
 		editor::ChangeKind::kAdded);
 }
 
@@ -116,7 +116,7 @@ TEST_CASE("A new folder of assets lists every asset in it", "[vcs]")
 	repo.Write("Data/Levels/forest/trees.blevel", "new");
 	repo.Write("Data/Levels/forest/rocks.blevel", "new");
 
-	const auto changes = editor::GitRevisionControl(repo.path).ListChanges();
+	const auto changes = editor::GitVersionControl(repo.path).ListChanges();
 
 	REQUIRE(changes.size() == 2);
 	CHECK(changes[0].path == QString("Data/Levels/forest/rocks.blevel"));
@@ -130,7 +130,7 @@ TEST_CASE("An asset written over is Modified", "[vcs]")
 	repo.Commit("first");
 	repo.Write("Data/Meshes/coyote.bmesh", "two");
 
-	const auto change = Only(editor::GitRevisionControl(repo.path).ListChanges());
+	const auto change = Only(editor::GitVersionControl(repo.path).ListChanges());
 
 	CHECK(change.kind == editor::ChangeKind::kModified);
 	CHECK(change.path == QString("Data/Meshes/coyote.bmesh"));
@@ -143,7 +143,7 @@ TEST_CASE("An asset removed from disk is Deleted", "[vcs]")
 	repo.Commit("first");
 	fs::remove(repo.path / "Data/Meshes/coyote.bmesh");
 
-	const auto change = Only(editor::GitRevisionControl(repo.path).ListChanges());
+	const auto change = Only(editor::GitVersionControl(repo.path).ListChanges());
 
 	CHECK(change.kind == editor::ChangeKind::kDeleted);
 	CHECK(change.path == QString("Data/Meshes/coyote.bmesh"));
@@ -161,7 +161,7 @@ TEST_CASE("An asset staged and then deleted is not a pending change at all", "[v
 	REQUIRE(editor::RunGit(repo.path, { "add", "-A" }).Succeeded());
 	fs::remove(repo.path / "Data/Meshes/squirrel.bmesh");
 
-	CHECK(editor::GitRevisionControl(repo.path).ListChanges().empty());
+	CHECK(editor::GitVersionControl(repo.path).ListChanges().empty());
 }
 
 // The same shape, but the asset *was* submitted before, so removing it is a deletion to publish.
@@ -175,7 +175,7 @@ TEST_CASE("A submitted asset staged then deleted is Deleted", "[vcs]")
 	REQUIRE(editor::RunGit(repo.path, { "add", "-A" }).Succeeded());
 	fs::remove(repo.path / "Data/Meshes/coyote.bmesh");
 
-	const auto change = Only(editor::GitRevisionControl(repo.path).ListChanges());
+	const auto change = Only(editor::GitVersionControl(repo.path).ListChanges());
 
 	CHECK(change.kind == editor::ChangeKind::kDeleted);
 	CHECK(change.path == QString("Data/Meshes/coyote.bmesh"));
@@ -193,7 +193,7 @@ TEST_CASE("An asset moved somewhere else is Renamed, and says where from", "[vcs
 			{ "Data/Meshes/coyote.bmesh", "Data/Meshes/wolf.bmesh" })
 			.Succeeded());
 
-	const auto change = Only(editor::GitRevisionControl(repo.path).ListChanges());
+	const auto change = Only(editor::GitVersionControl(repo.path).ListChanges());
 
 	CHECK(change.kind == editor::ChangeKind::kRenamed);
 	CHECK(change.path == QString("Data/Meshes/wolf.bmesh"));
@@ -210,7 +210,7 @@ TEST_CASE("A path with a space in it survives", "[vcs]")
 	repo.Write("Data/Meshes/arctic wolf.bmesh", "new");
 
 	CHECK(
-		Only(editor::GitRevisionControl(repo.path).ListChanges()).path ==
+		Only(editor::GitVersionControl(repo.path).ListChanges()).path ==
 		QString("Data/Meshes/arctic wolf.bmesh"));
 }
 
@@ -222,7 +222,7 @@ TEST_CASE("A path outside ASCII survives", "[vcs]")
 	repo.Write("Data/Meshes/\xE3\x82\xAD\xE3\x83\x84\xE3\x83\x8D.bmesh", "new");
 
 	CHECK(
-		Only(editor::GitRevisionControl(repo.path).ListChanges()).path ==
+		Only(editor::GitVersionControl(repo.path).ListChanges()).path ==
 		QString::fromUtf8("Data/Meshes/\xE3\x82\xAD\xE3\x83\x84\xE3\x83\x8D.bmesh"));
 }
 
@@ -239,7 +239,7 @@ TEST_CASE("An asset the project ignores is not a pending change", "[vcs]")
 	repo.Write("Data/Meshes/coyote.bvat", "baked");
 	repo.Write("Data/Meshes/squirrel.bmesh", "new");
 
-	const auto change = Only(editor::GitRevisionControl(repo.path).ListChanges());
+	const auto change = Only(editor::GitVersionControl(repo.path).ListChanges());
 
 	CHECK(change.path == QString("Data/Meshes/squirrel.bmesh"));
 }
@@ -254,7 +254,7 @@ TEST_CASE("Changes come back ordered by path", "[vcs]")
 	repo.Write("Data/Meshes/apples.bmesh", "new");
 	repo.Write("Data/Meshes/squirrel.bmesh", "new");
 
-	const auto changes = editor::GitRevisionControl(repo.path).ListChanges();
+	const auto changes = editor::GitVersionControl(repo.path).ListChanges();
 
 	REQUIRE(changes.size() == 3);
 	CHECK(changes[0].path == QString("Data/Meshes/apples.bmesh"));
@@ -269,7 +269,7 @@ TEST_CASE("A project that is not in a repository cannot be read", "[vcs]")
 	fs::remove_all(plain, ec);
 	fs::create_directories(plain);
 
-	CHECK_THROWS_AS(editor::GitRevisionControl(plain).ListChanges(), std::runtime_error);
+	CHECK_THROWS_AS(editor::GitVersionControl(plain).ListChanges(), std::runtime_error);
 
 	fs::remove_all(plain, ec);
 }

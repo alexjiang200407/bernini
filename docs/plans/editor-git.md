@@ -32,8 +32,8 @@ no git output reaches the user verbatim. *Rejected:* git's own vocabulary — it
 may be replaced, and it is vocabulary the target user does not have. The Perforce family of words
 was taken instead because artists in games already have it.
 
-**ADR-3 — the UI talks to an interface, not to a process.** `IRevisionControl` carries the verbs;
-`GitRevisionControl` is the only implementation and no git type crosses the seam. *Rejected:*
+**ADR-3 — the UI talks to an interface, not to a process.** `IVersionControl` carries the verbs;
+`GitVersionControl` is the only implementation and no git type crosses the seam. *Rejected:*
 calling `QProcess` from the widget — a backend swap would then be a UI rewrite, and the seam is what
 makes any of this testable at all
 ([apps/editor/CLAUDE.md](../../apps/editor/CLAUDE.md) § What is testable).
@@ -94,7 +94,7 @@ checks rather than a subsystem.
 - **Credentials, remotes, authentication.** Whoever cloned the project configured them.
 - **A general "an asset changed on disk" invalidation.** ADR-10 refuses the update instead, and a
   live-reload path for open assets is its own feature with its own reasons to exist.
-- **A second `IRevisionControl` implementation.** The seam exists so one is possible, not so one is
+- **A second `IVersionControl` implementation.** The seam exists so one is possible, not so one is
   written now.
 
 ## Acceptance
@@ -158,12 +158,12 @@ the commit identity per invocation: a runner with no `user.email` cannot commit.
 
 | Where | What |
 |---|---|
-| `apps/editor/src/Revisions/` | new: the process runner, the seam, the git implementation |
+| `apps/editor/src/VersionControl/` | new: the process runner, the seam, the git implementation |
 | `apps/editor/src/Windows/VersionControl/` | new: the two dialogs the menu opens |
 | `apps/editor/qt/Windows/VersionControl/` | new: `PendingChangesDialog.ui`, `HistoryDialog.ui` |
 | `apps/editor/src/MainWindow.cpp` | the Version Control menu, built as the Render menu is |
 | `apps/editor/tests/src/` | new `[vcs]` cases |
-| `docs/` | a page for the subsystem, written when task 5 lands |
+| `docs/` | a page for the subsystem, written when task 6 lands |
 
 **What could break.** Nothing existing calls into this, so the risk is outward: a `QProcess` started
 on a worker thread must be created on that thread; a Submit that publishes gigabytes of LFS objects
@@ -173,7 +173,7 @@ Submit, Get Latest, Revert and Undo write.
 
 ## Tasks
 
-**1 — the process runner and repository discovery.** `Revisions/git_cli.{h,cpp}`: `RunGit(directory,
+**1 — the process runner and repository discovery.** `VersionControl/git_cli.{h,cpp}`: `RunGit(directory,
 arguments)` returning exit code, stdout and stderr, synchronous and safe to call from a worker; and
 `FindRepositoryRoot(path)` returning `std::optional<std::filesystem::path>`. No shell, so no
 quoting. *Gate:* `[vcs]` — the root found from a nested subdirectory; `nullopt` outside a
@@ -182,29 +182,37 @@ path named `-o` reaching git as a path and not an option; a path outside the rep
 refused; output larger than a pipe buffer read without deadlocking; a command that would prompt for
 credentials failing rather than blocking.
 
-**2 — the seam and the change list.** `Revisions/IRevisionControl.h` with `ListChanges()` and the
-`PendingChange` / `ChangeKind` PODs; `Revisions/GitRevisionControl.{h,cpp}` implementing it over
+**2 — the seam and the change list.** `VersionControl/IVersionControl.h` with `ListChanges()` and the
+`PendingChange` / `ChangeKind` PODs; `VersionControl/GitVersionControl.{h,cpp}` implementing it over
 `git status --porcelain=v2 -z`. *Gate:* `[vcs]` — each of added, modified, deleted, renamed and
 untracked mapping to one `ChangeKind`; a path with a space and one with non-ASCII bytes surviving;
 a clean repository listing nothing; an ignored file absent.
 
-**3 — Submit, Get Latest, Revert, and their refusals.** The three verbs on `IRevisionControl`, each
-returning an outcome the UI can display without knowing what git said; Get Latest is fast-forward
-only (ADR-8). *Gate:* `[vcs]`, over two clones of one temporary repository — Submit refuses after
+**3 — Submit, Get Latest, Revert, and their refusals.** The three verbs on `IVersionControl`, each
+returning a `VersionControlOutcome` — a status and the assets it is about, never a message, so the
+UI writes the words; Get
+Latest is fast-forward only (ADR-8). *Gate:* `[vcs]`, over two clones of one temporary repository — Submit refuses after
 the other clone has published, and the reason names assets rather than git; Get Latest refuses when
 the local line has moved and leaves the tree byte-identical with no merge in progress; Get Latest
-fast-forwards when it has not; Revert restores; Submit refuses when the commit identity is unset;
-an incoming deletion of a material a local level still references is refused with both named, and
-the tree is left byte-identical (ADR-10).
+fast-forwards when it has not; Revert restores; Submit refuses when the commit identity is unset.
 
-**4 — History and Undo.** `ListHistory(limit)` returning a `Submission` per entry — who, when, the
+**4 — the reference guard.** ADR-10's on-disk half: before Get Latest applies, the tree the update
+would produce must leave no reference dangling, asked of `assetlib::AssetRefGraph`. It is a task of
+its own rather than part of 3 because it is not backend knowledge — a second `IVersionControl`
+must not have to reimplement it — so where the check sits relative to the seam is a design decision
+worth reviewing on its own, and 3 is already the largest task here. *Gate:* `[vcs]` — an incoming
+deletion of a material a local level still references is refused with both named and the tree left
+byte-identical; the same deletion is allowed when the update deletes the referring level too; an
+incoming deletion nothing references is allowed.
+
+**5 — History and Undo.** `ListHistory(limit)` returning a `Submission` per entry — who, when, the
 message, the assets it touched — and `UndoSubmission(id)`, which records the restoration as a new
 submission (ADR-9). *Gate:* `[vcs]` — history newest first with the right assets per entry; Undo
 restores the files and appends an entry rather than removing one; the undone submission is still
 listed afterwards; Undo refuses, changing nothing, when the assets have moved on since, and again
 when restoring them would leave a reference dangling.
 
-**5 — the Version Control menu and its dialogs.** A top-level menu built in `MainWindow::Build` as
+**6 — the Version Control menu and its dialogs.** A top-level menu built in `MainWindow::Build` as
 the Render menu is, with *Get Latest*, *Submit Changes…* and *History…*; `PendingChangesDialog`
 (the change list with per-asset checkboxes, a message field, Submit, and Revert per asset) and
 `HistoryDialog` (the submission list and Undo), each verb run through
