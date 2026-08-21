@@ -52,8 +52,8 @@ must feed data that matches.
   no tangent renders with the *geometric* normal (the shader NaN-guards a degenerate tangent), so the
   map silently does nothing — no error, no warning, just a flat surface. Leaving that to an explicit
   step meant every asset arrived broken until someone remembered to run it, which is what a real
-  import found. So both importers — the editor's and `assetlib_cli bake` — call `generateTangents`,
-  which rewrites only the submeshes that have none and leaves an authored basis alone. Deriving is
+  import found. So the import calls `generateTangents`, which rewrites only the submeshes that have
+  none and leaves an authored basis alone. Deriving is
   strictly better than the geometric-normal fallback, and never better than a basis the DCC tool
   exported, so authoring upstream is still the right thing to do. `assetlib_cli tangents -p <project> <mesh>`
   applies it to a `.bmesh` already on disk.
@@ -542,9 +542,9 @@ they did not ask for and cannot see coming. Names are also checked against the p
 typed — importing into a folder another import already owns is the case this exists for, and finding
 the clash out after OK would mean filling the form in twice.
 
-**The editor's import writes the rig too**, not only `assetlib_cli bake`: a `.bskel` whenever the
-source carries a skin and the mesh is coming across with it, and a `.banim` when the importer's
-*Import animations* box is ticked. The
+**The import writes the rig too**: a `.bskel` whenever the source carries a skin and the mesh is
+coming across with it, and a `.banim` when the editor's *Import animations* box is ticked — the CLI
+always writes both. The
 skeleton is deliberately **not** behind that box — a mesh carrying joints while naming no skeleton is
 one `save` refuses, so making the rig optional would make a skinned glTF unimportable rather than
 merely rig-less. The clips are the half a user can decline. Both are rolled back with the mesh if the
@@ -563,8 +563,8 @@ They land in `Skeletons/` and `Animations/`, one category directory each, the wa
 family splits across `Environments/` / `Sky/` / `EnvLighting/` — and for the same reason, sharpened:
 a rig outlives its clips. Re-cooking a clip set leaves the skeleton alone, and re-authoring a rest
 pose does not invalidate a clip, which is exactly what `skeletonSignature` is there to check and only
-means anything if the two can move apart. `assetlib_cli bake` still writes both beside the `.bmesh`,
-because a baked directory is its own data root and has no project layout to belong to.
+means anything if the two can move apart. Both importers write them into those categories, because
+both address a project.
 
 Not yet done, and deliberately: rotation/translation compression (samples are full-float `Transform`s
 today — the 16 B/bone form is a runtime palette concern, not an import one), per-LOD bone subsets and
@@ -891,11 +891,13 @@ Three rules of its own:
 # Every command works inside one project, named the same way, and every asset argument is a key
 # relative to its data root -- never a path on disk. `<project>` below is a .berniniproject file.
 
-# Bake a source model into the modular on-disk form (.bmesh + texN.ktx2, and the rig when skinned)
-assetlib_cli bake model.glb -o assets/model -n model
+# Import a source model into the project: Meshes/model.bmesh, its textures into
+# textures_src/model/, and -- when the source carries a skin -- Skeletons/ and Animations/.
+# The .glb is a path on disk; everything written is a key. Import never overwrites
+assetlib_cli bake -p <project> model.glb -n model
 
-# A rigged source also emits model.bskel + model.banim; -r picks the rate its clips resample to
-assetlib_cli bake soldier.glb -o assets/soldier -n soldier -r 60
+# -r picks the rate a rigged source's clips resample to
+assetlib_cli bake -p <project> soldier.glb -n soldier -r 60
 
 # Inspect the baked geometry in a viewer (meshlet-reconstructed, or --raw for the source indices).
 # The .obj is not a project asset, so -o is a path on disk

@@ -2,6 +2,7 @@
 #include <assetlib/AssetStore.h>
 #include <assetlib/Project.h>
 #include <assetlib/asset_describe.h>
+#include <assetlib/asset_import.h>
 #include <assetlib/asset_refs.h>
 #include <assetlib/assetlib.h>
 #include <assetlib/benvl_io.h>
@@ -10,6 +11,7 @@
 #include <assetlib/bmesh_io.h>
 #include <assetlib/bskel_io.h>
 #include <assetlib/bvat_io.h>
+#include <assetlib/container_format.h>
 #include <assetlib/container_info.h>
 #include <assetlib/env_import.h>
 #include <assetlib/material_bake.h>
@@ -17,6 +19,7 @@
 #include <assetlib/migrate.h>
 #include <assetlib/pak_io.h>
 #include <assetlib/pak_pack.h>
+#include <assetlib/project_layout.h>
 #include <assetlib/rebake_bounds.h>
 #include <assetlib/skeleton.h>
 #include <assetlib/texture_prune.h>
@@ -168,19 +171,18 @@ main(int argc, char** argv)
 	};
 
 	std::string input;
-	std::string outDir;
 	std::string name       = "mesh";
 	float       sampleRate = assetlib::c_DefaultSampleRate;
 
 	auto* bake = app.add_subcommand(
 		"bake",
-		"Convert a glTF (.glb/.gltf) into a modular .bmesh + .ktx2 texture set, plus a .bskel and "
-		".banim when it carries a skin");
-	bake->add_option("input", input, "Source .glb/.gltf file")
+		"Import a glTF (.glb/.gltf) into a project: the mesh into Meshes/, its textures into "
+		"textures_src/, and the rig into Skeletons/ and Animations/ when it carries a skin");
+	addProject(bake);
+	bake->add_option("input", input, "Source .glb/.gltf file, a path on disk")
 		->required()
 		->check(CLI::ExistingFile);
-	bake->add_option("-o,--out", outDir, "Output directory")->required();
-	bake->add_option("-n,--name", name, "Base name for the .bmesh (default: mesh)");
+	bake->add_option("-n,--name", name, "Base name for the imported assets (default: mesh)");
 	bake->add_option(
 			"-r,--sample-rate",
 			sampleRate,
@@ -418,31 +420,105 @@ main(int argc, char** argv)
 	{
 		try
 		{
-			const auto imported = assetlib::loadFromGltf(input, {}, sampleRate);
-			const auto tangents = assetlib::bake(imported, outDir, name);
+			const assetlib::Project     project  = assetlib::Project::Open(projectFile);
+			const std::filesystem::path dataRoot = project.GetDataDirectory();
 
-			if (tangents.skipped > 0)
-				spdlog::warn(
-					"{} submesh(es) have no tangent and no way to derive one (no normals, no UVs, "
-					"or no triangles) -- a normal map on those will not render",
-					tangents.skipped);
+			namespace fs = std::filesystem;
 
-			spdlog::info(
-				"Baked '{}' -> {}/{}.bmesh ({} materials, {} textures)",
-				input,
-				outDir,
-				name,
-				imported.materials.size(),
-				imported.textures.size());
+			const fs::path bmeshPath = dataRoot / assetlib::c_MeshesDirectoryName /
+			                           (name + std::string(assetlib::c_MeshExtension));
+			const fs::path bskelPath =
+				dataRoot / assetlib::c_SkeletonsDirectoryName / assetlib::skeletonFileName(name);
+			const fs::path banimPath =
+				dataRoot / assetlib::c_AnimationsDirectoryName / assetlib::animationFileName(name);
 
-			if (!imported.skeleton.bones.empty())
+			// Its own folder, because writeTextures names its output tex0.ktx2 by index -- two
+			// imports sharing one would overwrite each other's files.
+			const fs::path textureDir = dataRoot / assetlib::c_TexturesSrcDirectoryName / name;
+
+			// Import never overwrites, the same rule the editor's does: what it would replace is a
+			// mesh someone authored materials against, and none of it is recoverable.
+			auto            collisions = std::vector<std::string>();
+			std::error_code ec;
+			for (const fs::path& candidate : { bmeshPath, bskelPath, banimPath, textureDir })
+				if (fs::exists(candidate, ec))
+					collisions.push_back(fs::relative(candidate, dataRoot, ec).generic_string());
+
+			if (!collisions.empty())
+			{
+				std::string named;
+				for (const std::string& collision : collisions)
+				{
+					if (!named.empty())
+						named += ", ";
+					named += collision;
+				}
+
+				core::throw_runtime_error(
+					"'{}' already holds {}. Import under another --name, or remove them first",
+					project.GetName(),
+					named);
+			}
+
+			// What to take back down if a later step throws: only what this import creates, which is
+			// all of it -- nothing above was already there.
+			const std::array<assetlib::ImportedFile, 3> written = { {
+				{ bmeshPath, false },
+				{ bskelPath, false },
+				{ banimPath, false },
+			} };
+			const std::array<assetlib::ImportedDir, 1>  dirs    = { {
+				{ textureDir, false, dataRoot / assetlib::c_TexturesSrcDirectoryName },
+			} };
+
+			try
+			{
+				const auto imported = assetlib::loadFromGltf(input, {}, sampleRate);
+
+				assetlib::writeTextures(imported, textureDir);
+
+				assetlib::BMesh mesh    = assetlib::toBMesh(imported);
+				const auto      derived = assetlib::generateTangents(mesh);
+
+				assetlib::writeImportedRig(imported, mesh, dataRoot, bskelPath, banimPath, true);
+				assetlib::writeImportedMesh(mesh, bmeshPath);
+
+				if (derived.skipped > 0)
+					spdlog::warn(
+						"{} submesh(es) have no tangent and no way to derive one (no normals, no "
+						"UVs, or no triangles) -- a normal map on those will not render",
+						derived.skipped);
+
 				spdlog::info(
-					"Baked the rig -> {}/{} ({} bones, {} clips at {} Hz)",
-					outDir,
-					assetlib::skeletonFileName(name),
-					imported.skeleton.bones.size(),
-					imported.animations.clips.size(),
-					sampleRate);
+					"Imported '{}' into '{}': {}, {} texture(s) -> {}/",
+					input,
+					project.GetName(),
+					fs::relative(bmeshPath, dataRoot, ec).generic_string(),
+					imported.textures.size(),
+					fs::relative(textureDir, dataRoot, ec).generic_string());
+
+				if (!imported.skeleton.bones.empty())
+					spdlog::info(
+						"  rig -> {} ({} bones, {} clips at {} Hz)",
+						fs::relative(bskelPath, dataRoot, ec).generic_string(),
+						imported.skeleton.bones.size(),
+						imported.animations.clips.size(),
+						sampleRate);
+
+				// Nothing here writes a material: a glTF's are PBR, which is that format's shading
+				// model rather than necessarily the engine's, and the board that decides what a
+				// material routes where lives in the editor. The textures land for one to be
+				// authored against.
+				if (!imported.materials.empty())
+					spdlog::info(
+						"  {} source material(s) left unassigned -- author them in the editor",
+						imported.materials.size());
+			}
+			catch (...)
+			{
+				assetlib::rollBackImport(written, dirs);
+				throw;
+			}
 		}
 		catch (const std::exception& e)
 		{

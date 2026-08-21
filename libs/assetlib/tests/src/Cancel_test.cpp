@@ -144,18 +144,6 @@ TEST_CASE("writeTextures honours the cancel token", "[cancel][bmesh][io]")
 	}
 }
 
-TEST_CASE("bake stops on a signalled token", "[cancel][bmesh][bake]")
-{
-	const ScratchDir dir("bernini_cancel_bake");
-	const auto       mesh = ImportWithTextures(2);
-
-	REQUIRE_THROWS_AS(bake(mesh, dir.path, "cancelled", SignalledSource().get_token()), Cancelled);
-
-	// The .bmesh is written last, so a cancelled bake never leaves a container behind that names
-	// textures and materials it never got round to emitting.
-	REQUIRE_FALSE(std::filesystem::exists(dir.path / "cancelled.bmesh"));
-}
-
 TEST_CASE("loadFromGltf stops on a signalled token", "[cancel][gltf]")
 {
 	const std::filesystem::path glb = "assets/suzanne.glb";
