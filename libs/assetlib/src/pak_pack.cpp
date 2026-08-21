@@ -26,7 +26,7 @@ namespace assetlib
 		{
 			for (const std::filesystem::path& part : relative)
 			{
-				if (part == c_TexturesSrcDirectoryName)
+				if (part == c_TexturesSrcDirectoryName || part == c_MeshesSrcDirectoryName)
 					return true;
 			}
 			return false;
@@ -125,6 +125,9 @@ namespace assetlib
 				++report.skippedByExtension[file.extension().generic_string()];
 				continue;
 			}
+			// Authored, and the game never reads it: a read-only store uses the baked-in bindings.
+			if (type == AssetType::kImportDocument)
+				continue;
 
 			const std::string                          key   = relativeKey(file, dataRoot);
 			const std::vector<std::byte>               bytes = loose.Read(key);

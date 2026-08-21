@@ -1,6 +1,7 @@
 #include <assetlib/banim_io.h>
 #include <assetlib/bskel_io.h>
 #include <assetlib/bvat_io.h>
+#include <assetlib/import_document.h>
 #include <assetlib/pak_io.h>
 #include <assetlib/pak_pack.h>
 #include <assetlib/vat_bake.h>
@@ -48,6 +49,12 @@ namespace
 			fs::create_directories(root.path / "ShaderCache");
 			std::ofstream(root.path / "ShaderCache/pipelines.psolib") << "per-machine";
 			std::ofstream(root.path / ".overlay.json") << "{}";
+
+			fs::create_directories(root.path / "meshes_src");
+			std::ofstream(root.path / "meshes_src/kirk.glb") << "the imported source";
+			std::ofstream(root.path / "meshes_src/kirk.bimport")
+				<< serializeImportDocument(ImportDocument{});
+			std::ofstream(root.path / "stray.bimport") << serializeImportDocument(ImportDocument{});
 		}
 
 		return environment;
@@ -107,6 +114,15 @@ TEST_CASE("pack carries what the runtime reads and nothing that produces it", "[
 		// No entry anywhere under the authoring directory, however deep.
 		for (const std::string& entry : entries)
 			CHECK(entry.find("textures_src/") == std::string::npos);
+	}
+
+	SECTION("an imported source and its document are out, wherever they sit")
+	{
+		CHECK_FALSE(Contains(entries, "meshes_src/kirk.glb"));
+		CHECK_FALSE(Contains(entries, "meshes_src/kirk.bimport"));
+		// A stray document outside meshes_src is excluded by its *type*, not the directory --
+		// the game never reads one, so it must not ride in on being a registered extension.
+		CHECK_FALSE(Contains(entries, "stray.bimport"));
 	}
 
 	// An extension nothing claims is an extension the archive does not carry. Counting them is what

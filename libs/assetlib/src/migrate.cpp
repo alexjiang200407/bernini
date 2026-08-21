@@ -45,6 +45,7 @@ namespace assetlib
 				return serializeEnv(deserializeEnv(bytes));
 			case AssetType::kTexture:
 			case AssetType::kVat:
+			case AssetType::kImportDocument:
 				return std::nullopt;
 			}
 			return std::nullopt;

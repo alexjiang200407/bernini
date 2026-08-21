@@ -16,6 +16,9 @@ namespace assetlib
 	inline constexpr auto c_MeshesDirectoryName      = "Meshes";
 	inline constexpr auto c_TexturesDirectoryName    = "Textures";
 	inline constexpr auto c_TexturesSrcDirectoryName = "textures_src";
+	// The imported .glb sources and their .bimport documents. Not yet in c_RequiredDirectories:
+	// the import that scaffolds and fills it is the next task's.
+	inline constexpr auto c_MeshesSrcDirectoryName = "meshes_src";
 	inline constexpr auto c_MaterialsDirectoryName   = "Materials";
 	inline constexpr auto c_LevelsDirectoryName      = "Levels";
 

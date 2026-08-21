@@ -1,5 +1,7 @@
 #include <assetlib/AssetStore.h>
 #include <assetlib/asset_refs.h>
+#include <assetlib/import_document.h>
+#include <core/file/file.h>
 
 #include <assetlib/banim_io.h>
 #include <assetlib/benv_io.h>
@@ -440,4 +442,53 @@ TEST_CASE("Renaming a skeleton re-points the whole rig that hangs off it", "[ass
 	REQUIRE(fs::exists(moved));
 	CHECK(loadVatRefs(moved).animations == "Animations/hero.banim");
 	CHECK_FALSE(vatIsStale(loadVatTables(moved), MountAt(root.path)));
+}
+
+TEST_CASE("Renaming a material re-points the import document that binds it", "[assetrename]")
+{
+	const DataRoot root("bernini_rename_importdoc");
+
+	BMaterial material;
+	material.name = "skin";
+	core::file::write_atomic(
+		root.path / "Materials" / "old.bmaterial",
+		serializeMaterial(material));
+
+	ImportDocument document;
+	document.bindings = { { "kirk[0]", "Materials/old.bmaterial" } };
+	fs::create_directories(root.path / "meshes_src");
+	{
+		const std::string text = serializeImportDocument(document);
+		core::file::write_atomic(
+			root.path / "meshes_src" / "kirk.bimport",
+			std::as_bytes(std::span(text.data(), text.size())));
+	}
+	std::ofstream(root.path / "meshes_src" / "kirk.glb") << "source";
+
+	const RenamePlan plan =
+		planRename(root.Scan(), "Materials/old.bmaterial", "Materials/new.bmaterial");
+	REQUIRE(renameAsset(plan, root.Source()).status == RenameStatus::kRenamed);
+
+	const ImportDocument rewritten =
+		loadImportDocument(root.Source().GetFiles(), "meshes_src/kirk.bimport");
+	REQUIRE(rewritten.bindings.size() == 1);
+	CHECK(rewritten.bindings[0].material == "Materials/new.bmaterial");
+}
+
+TEST_CASE("An import document cannot be renamed away from its source", "[assetrename]")
+{
+	const DataRoot root("bernini_rename_importdoc_refuse");
+
+	fs::create_directories(root.path / "meshes_src");
+	{
+		const std::string text = serializeImportDocument(ImportDocument{});
+		core::file::write_atomic(
+			root.path / "meshes_src" / "kirk.bimport",
+			std::as_bytes(std::span(text.data(), text.size())));
+	}
+	std::ofstream(root.path / "meshes_src" / "kirk.glb") << "source";
+
+	// The source key is derived from the document's own path; a lone rename would orphan the
+	// pair. Renaming the directory moves them together and stays allowed.
+	CHECK_THROWS(planRename(root.Scan(), "meshes_src/kirk.bimport", "meshes_src/hero.bimport"));
 }
