@@ -212,6 +212,198 @@ namespace editor
 		return deleted;
 	}
 
+	VersionControlOutcome
+	GitVersionControl::PublishOrUnrecord(const QString& recordedOver)
+	{
+		if (RunGit(m_RepositoryRoot, { QStringLiteral("push"), QStringLiteral("--quiet") })
+		        .Succeeded())
+		{
+			return {};
+		}
+
+		// Someone published between the check and here. Unrecord it rather than leave work that looks
+		// submitted; what the user did stays on disk either way.
+		const auto unrecorded = RunGit(
+			m_RepositoryRoot,
+			{ QStringLiteral("reset"), QStringLiteral("--soft"), recordedOver });
+
+		// Recorded, unpublishable, and now un-unrecordable: no refusal can describe this truthfully,
+		// and the state needs someone who knows what a repository is.
+		core::throw_runtime_error_if(
+			!unrecorded.Succeeded(),
+			"the project's changes were recorded but could neither be published nor undone");
+
+		if (!RunGit(m_RepositoryRoot, { QStringLiteral("fetch"), QStringLiteral("--quiet") })
+		         .Succeeded())
+		{
+			return { .status = VersionControlStatus::kWorkHasMovedOn };
+		}
+		return {
+			.status = VersionControlStatus::kWorkHasMovedOn,
+			.assets = ChangedBetween(QStringLiteral("HEAD"), QStringLiteral("@{upstream}")),
+		};
+	}
+
+	std::vector<std::filesystem::path>
+	GitVersionControl::AdditionsOf(const QString& id) const
+	{
+		const auto result = RunGit(
+			m_RepositoryRoot,
+			{ QStringLiteral("diff-tree"),
+		      QStringLiteral("--no-commit-id"),
+		      QStringLiteral("--name-only"),
+		      QStringLiteral("--diff-filter=A"),
+		      QStringLiteral("-r"),
+		      QStringLiteral("--root"),
+		      QStringLiteral("-z"),
+		      id });
+
+		core::throw_runtime_error_if(
+			!result.Succeeded(),
+			"a submission in the project's history could not be read");
+
+		std::vector<std::filesystem::path> added;
+		for (const QString& path : PathsFrom(result))
+		{
+			added.push_back(m_RepositoryRoot / path.toStdWString());
+		}
+		return added;
+	}
+
+	std::vector<Submission>
+	GitVersionControl::ListHistory(int limit) const
+	{
+		core::throw_runtime_error_if(
+			limit <= 0,
+			"a history of {} submissions was asked for",
+			limit);
+
+		// -z separates whole entries, and the unit separator the fields inside one, so a message
+		// holding a newline cannot be read as the start of the next entry.
+		const auto listed = RunGit(
+			m_RepositoryRoot,
+			{ QStringLiteral("log"),
+		      QStringLiteral("-n%1").arg(limit),
+		      QStringLiteral("-z"),
+		      QStringLiteral("--format=%H%x1f%an%x1f%aI%x1f%B") });
+
+		core::throw_runtime_error_if(
+			!listed.Succeeded(),
+			"the project's history could not be read");
+
+		std::vector<Submission> history;
+		for (const QByteArray& entry : listed.out.split('\0'))
+		{
+			const QList<QByteArray> fields = entry.split('\x1f');
+			if (fields.size() < 4)
+			{
+				continue;
+			}
+
+			Submission submission;
+			submission.id      = QString::fromUtf8(fields[0]).trimmed();
+			submission.author  = QString::fromUtf8(fields[1]);
+			submission.when    = QDateTime::fromString(QString::fromUtf8(fields[2]), Qt::ISODate);
+			submission.message = QString::fromUtf8(fields[3]).trimmed();
+
+			// One command per entry rather than one for the lot: --name-only cannot be told apart
+			// from the message in a single stream. `limit` is what keeps the count down.
+			const auto touched = RunGit(
+				m_RepositoryRoot,
+				{ QStringLiteral("diff-tree"),
+			      QStringLiteral("--no-commit-id"),
+			      QStringLiteral("--name-only"),
+			      QStringLiteral("-r"),
+			      QStringLiteral("--root"),
+			      QStringLiteral("-z"),
+			      submission.id });
+
+			core::throw_runtime_error_if(
+				!touched.Succeeded(),
+				"a submission in the project's history could not be read");
+
+			submission.assets = PathsFrom(touched);
+			history.push_back(std::move(submission));
+		}
+		return history;
+	}
+
+	VersionControlOutcome
+	GitVersionControl::UndoSubmission(const QString& id)
+	{
+		if (!HasIdentity())
+		{
+			return { .status = VersionControlStatus::kNoIdentity };
+		}
+
+		if (!RunGit(m_RepositoryRoot, { QStringLiteral("fetch"), QStringLiteral("--quiet") })
+		         .Succeeded())
+		{
+			return { .status = VersionControlStatus::kCouldNotReachShared };
+		}
+
+		const auto behind = CountSubmissions(QStringLiteral("HEAD..@{upstream}"));
+		if (!behind.has_value())
+		{
+			return { .status = VersionControlStatus::kCouldNotReachShared };
+		}
+		if (*behind > 0)
+		{
+			return {
+				.status = VersionControlStatus::kWorkHasMovedOn,
+				.assets = ChangedBetween(QStringLiteral("HEAD"), QStringLiteral("@{upstream}")),
+			};
+		}
+
+		// An unsubmitted change is enough to stop a revert halfway through, so it is refused rather
+		// than discovered.
+		if (auto pending = ListChanges(); !pending.empty())
+		{
+			std::vector<QString> inTheWay;
+			for (const PendingChange& change : pending)
+			{
+				inTheWay.push_back(change.path);
+			}
+			return { .status = VersionControlStatus::kAssetsInTheWay,
+				     .assets = std::move(inTheWay) };
+		}
+
+		// ADR-10: undoing a submission that added assets takes them away again.
+		if (auto guarded = GuardDeletions(AdditionsOf(id));
+		    guarded.status != VersionControlStatus::kDone)
+		{
+			return guarded;
+		}
+
+		const auto recordedOver =
+			RunGit(m_RepositoryRoot, { QStringLiteral("rev-parse"), QStringLiteral("HEAD") });
+		core::throw_runtime_error_if(
+			!recordedOver.Succeeded(),
+			"the project's history could not be read");
+
+		const auto undone =
+			RunGit(m_RepositoryRoot, { QStringLiteral("revert"), QStringLiteral("--no-edit"), id });
+
+		if (!undone.Succeeded())
+		{
+			// A clash with what came after it. --abort puts the assets back exactly as they were.
+			const auto aborted =
+				RunGit(m_RepositoryRoot, { QStringLiteral("revert"), QStringLiteral("--abort") });
+
+			// Half-undone, with the clash still on disk: a refusal saying nothing happened would be a
+			// lie, and this is the state ADR-5 exists to keep the user out of.
+			core::throw_runtime_error_if(
+				!aborted.Succeeded(),
+				"an undo could not be applied and could not be put back either");
+			return {
+				.status = VersionControlStatus::kAssetsChangedSince,
+				.assets = ChangedBetween(id, QStringLiteral("HEAD")),
+			};
+		}
+
+		return PublishOrUnrecord(QString::fromUtf8(recordedOver.out).trimmed());
+	}
+
 	std::vector<PendingChange>
 	GitVersionControl::ListChanges() const
 	{
@@ -350,6 +542,12 @@ namespace editor
 			return { .status = VersionControlStatus::kNothingToDo };
 		}
 
+		const auto recordedOver =
+			RunGit(m_RepositoryRoot, { QStringLiteral("rev-parse"), QStringLiteral("HEAD") });
+		core::throw_runtime_error_if(
+			!recordedOver.Succeeded(),
+			"the project's history could not be read");
+
 		const auto committed = RunGit(
 			m_RepositoryRoot,
 			{ QStringLiteral("commit"), QStringLiteral("--quiet"), QStringLiteral("-m"), message });
@@ -357,32 +555,7 @@ namespace editor
 			!committed.Succeeded(),
 			"the project's changes could not be recorded");
 
-		if (!RunGit(m_RepositoryRoot, { QStringLiteral("push"), QStringLiteral("--quiet") })
-		         .Succeeded())
-		{
-			// Someone published between the check above and here. Unrecord it rather than leave work
-			// that looks submitted; the assets stay staged, so nothing the user did is lost.
-			const auto unrecorded = RunGit(
-				m_RepositoryRoot,
-				{ QStringLiteral("reset"), QStringLiteral("--soft"), QStringLiteral("HEAD~1") });
-
-			// Recorded, unpublishable, and now un-unrecordable: no refusal can describe this
-			// truthfully, and the state needs someone who knows what a repository is.
-			core::throw_runtime_error_if(
-				!unrecorded.Succeeded(),
-				"the project's changes were recorded but could neither be published nor undone");
-
-			if (!RunGit(m_RepositoryRoot, { QStringLiteral("fetch"), QStringLiteral("--quiet") })
-			         .Succeeded())
-			{
-				return { .status = VersionControlStatus::kWorkHasMovedOn };
-			}
-			return {
-				.status = VersionControlStatus::kWorkHasMovedOn,
-				.assets = ChangedBetween(QStringLiteral("HEAD"), QStringLiteral("@{upstream}")),
-			};
-		}
-		return {};
+		return PublishOrUnrecord(QString::fromUtf8(recordedOver.out).trimmed());
 	}
 
 	VersionControlOutcome

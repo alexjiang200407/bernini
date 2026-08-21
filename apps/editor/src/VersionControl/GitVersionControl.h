@@ -29,6 +29,12 @@ namespace editor
 		[[nodiscard]] VersionControlOutcome
 		Revert(const std::vector<QString>& assets) override;
 
+		[[nodiscard]] std::vector<Submission>
+		ListHistory(int limit) const override;
+
+		[[nodiscard]] VersionControlOutcome
+		UndoSubmission(const QString& id) override;
+
 		[[nodiscard]] const std::filesystem::path&
 		GetRepositoryRoot() const noexcept
 		{
@@ -50,6 +56,19 @@ namespace editor
 		/** Every asset that differs between two points, which is what an update would change. */
 		[[nodiscard]] std::vector<QString>
 		ChangedBetween(const QString& from, const QString& to) const;
+
+		/**
+		 * Publishes what was just recorded, unrecording it again when the shared project turns out to
+		 * have moved in between -- so a recorded change that cannot be published never survives.
+		 *
+		 * @param recordedOver what HEAD was before the recording, to go back to.
+		 */
+		[[nodiscard]] VersionControlOutcome
+		PublishOrUnrecord(const QString& recordedOver);
+
+		/** Absolute paths a submission added, which undoing it would take away again. */
+		[[nodiscard]] std::vector<std::filesystem::path>
+		AdditionsOf(const QString& id) const;
 
 		/**
 		 * ADR-10 over `deleted`: kAssetsStillInUse naming both ends of every reference that would

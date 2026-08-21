@@ -213,12 +213,13 @@ a never-submitted asset another still needs; an update deleting nothing never re
 all.
 
 **5 — History and Undo.** Undo deletes, so it calls task 4's guard as Get Latest and Revert do.
-`ListHistory(limit)` returning a `Submission` per entry — who, when, the
-message, the assets it touched — and `UndoSubmission(id)`, which records the restoration as a new
-submission (ADR-9). *Gate:* `[vcs]` — history newest first with the right assets per entry; Undo
-restores the files and appends an entry rather than removing one; the undone submission is still
-listed afterwards; Undo refuses, changing nothing, when the assets have moved on since, and again
-when restoring them would leave a reference dangling.
+`ListHistory(limit)` returning a `Submission` per entry — who, when, the message, the assets it
+touched, and an id the UI carries back without reading — and `UndoSubmission(id)`, which records the
+restoration as a new submission and publishes it (ADR-9). *Gate:* `[vcs]` — history newest first
+with the right assets per entry; Undo takes the asset away, appends an entry rather than removing
+one, and leaves the undone submission still listed; the undo reaches the other clone; Undo refuses,
+changing nothing, when a later submission changed the same asset, when unsubmitted work is in the
+way, when the shared project has moved on, and when what it would remove is still needed.
 
 **6 — the Version Control menu and its dialogs.** A top-level menu built in `MainWindow::Build` as
 the Render menu is, with *Get Latest*, *Submit Changes…* and *History…*; `PendingChangesDialog`
