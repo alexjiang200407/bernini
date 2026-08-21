@@ -118,6 +118,19 @@ target_precompile_headers(editor_lib
 		${CMAKE_CURRENT_SOURCE_DIR}/src/pch.h
 )
 
+# Discarding a RunGit result has been a real bug five times over in review: a failed stage reads as
+# "nothing to submit", a failed unrecord leaves work that looks published. Every one was silent,
+# because `[[nodiscard]]` warns and this target does not turn warnings into errors. Turned on for
+# this subsystem alone -- the strict set as a whole is what Qt and moc output trip.
+file(GLOB VERSION_CONTROL_SOURCES CONFIGURE_DEPENDS
+	${CMAKE_CURRENT_SOURCE_DIR}/src/VersionControl/*.cpp
+)
+if(MSVC)
+	set_source_files_properties(${VERSION_CONTROL_SOURCES} PROPERTIES COMPILE_OPTIONS "/we4834")
+else()
+	set_source_files_properties(${VERSION_CONTROL_SOURCES} PROPERTIES COMPILE_OPTIONS "-Werror=unused-result")
+endif()
+
 # No enable_strict_compiler here -- Qt and moc output trip the strict set -- but instrumentation
 # is not a warning.
 enable_coverage(editor_lib)

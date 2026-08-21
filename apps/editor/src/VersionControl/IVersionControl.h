@@ -1,5 +1,6 @@
 #pragma once
 
+#include <QDateTime>
 #include <QString>
 
 namespace editor
@@ -33,10 +34,11 @@ namespace editor
 		kNoIdentity,           // who is submitting has never been set up
 		kNothingToDo,          // nothing was chosen, or there is nothing to get
 		kCouldNotReachShared,  // the shared project could not be reached at all
-		kWorkHasMovedOn,       // Submit: the shared project has work this one does not
+		kWorkHasMovedOn,       // Submit and Undo: the shared project has work this one does not
 		kWouldNotFastForward,  // Get Latest: this project has submitted work the shared one does not
-		kAssetsInTheWay,       // Get Latest: unsubmitted changes the update would overwrite
-		kAssetsStillInUse,  // any verb that deletes: an asset something else still needs would go
+		kAssetsInTheWay,      // Get Latest and Undo: unsubmitted changes the change would overwrite
+		kAssetsStillInUse,    // any verb that deletes: an asset something else still needs would go
+		kAssetsChangedSince,  // Undo: later submissions have changed the assets it would restore
 	};
 
 	/** What a verb answered with. */
@@ -46,6 +48,21 @@ namespace editor
 
 		// What the status is *about*, so the UI can name assets rather than describe a backend.
 		// Empty whenever the status is about nothing in particular, kDone included.
+		std::vector<QString> assets;
+	};
+
+	/** One entry in the project's history: a submission somebody made. */
+	struct Submission
+	{
+		// The backend's own name for this entry. Opaque: the UI carries it back to UndoSubmission
+		// and neither shows nor interprets it.
+		QString id;
+
+		QString   author;
+		QDateTime when;
+		QString   message;
+
+		// Repository-relative, as ListChanges reports them.
 		std::vector<QString> assets;
 	};
 
@@ -110,5 +127,26 @@ namespace editor
 		 */
 		[[nodiscard]] virtual VersionControlOutcome
 		Revert(const std::vector<QString>& assets) = 0;
+
+		/**
+		 * The last `limit` submissions, newest first.
+		 *
+		 * @throws std::runtime_error if `limit` is not positive, or the history cannot be read.
+		 */
+		[[nodiscard]] virtual std::vector<Submission>
+		ListHistory(int limit) const = 0;
+
+		/**
+		 * Puts the assets a submission touched back as they were before it, and publishes *that* as
+		 * the newest submission.
+		 *
+		 * The undone entry stays in the history: the record of what happened is most of what a
+		 * history is for, and rewriting it would leave this project unable to publish again.
+		 *
+		 * @param id as ListHistory reported it.
+		 * @throws std::runtime_error if the repository cannot be read or written.
+		 */
+		[[nodiscard]] virtual VersionControlOutcome
+		UndoSubmission(const QString& id) = 0;
 	};
 }
