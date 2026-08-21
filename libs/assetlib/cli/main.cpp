@@ -65,7 +65,10 @@ namespace
 		}
 
 		char text[32] = {};
-		std::snprintf(text, sizeof(text), unit == 0 ? "%.0f %s" : "%.1f %s", value, c_Units[unit]);
+		if (unit == 0)
+			std::snprintf(text, sizeof(text), "%.0f %s", value, c_Units[unit]);
+		else
+			std::snprintf(text, sizeof(text), "%.1f %s", value, c_Units[unit]);
 		return text;
 	}
 
@@ -466,13 +469,13 @@ main(int argc, char** argv)
 		try
 		{
 			const auto imported = assetlib::loadFromGltf(input, {}, sampleRate);
-			const auto tangents = assetlib::bake(imported, outDir, name);
+			const auto derived  = assetlib::bake(imported, outDir, name);
 
-			if (tangents.skipped > 0)
+			if (derived.skipped > 0)
 				spdlog::warn(
 					"{} submesh(es) have no tangent and no way to derive one (no normals, no UVs, "
 					"or no triangles) -- a normal map on those will not render",
-					tangents.skipped);
+					derived.skipped);
 
 			spdlog::info(
 				"Baked '{}' -> {}/{}.bmesh ({} materials, {} textures)",
@@ -712,7 +715,7 @@ main(int argc, char** argv)
 
 			// With a project the stamps are checked against what is on disk; without one only what
 			// the container records can be reported.
-			const auto describe = [&store](const auto& asset) {
+			const auto describeAsset = [&store](const auto& asset) {
 				return store.has_value() ? store->Describe(asset) : assetlib::describe(asset);
 			};
 
@@ -731,16 +734,16 @@ main(int argc, char** argv)
 				std::cout << assetlib::describe(assetlib::load(path), !describeBrief);
 				break;
 			case ContainerType::kMaterial:
-				std::cout << describe(assetlib::loadMaterial(path));
+				std::cout << describeAsset(assetlib::loadMaterial(path));
 				break;
 			case ContainerType::kEnv:
-				std::cout << describe(assetlib::loadEnv(path));
+				std::cout << describeAsset(assetlib::loadEnv(path));
 				break;
 			case ContainerType::kSky:
-				std::cout << describe(assetlib::loadSky(path));
+				std::cout << describeAsset(assetlib::loadSky(path));
 				break;
 			case ContainerType::kEnvLighting:
-				std::cout << describe(assetlib::loadEnvLighting(path));
+				std::cout << describeAsset(assetlib::loadEnvLighting(path));
 				break;
 			case ContainerType::kSkeleton:
 				std::cout << assetlib::describe(assetlib::loadSkeleton(path));
@@ -754,7 +757,7 @@ main(int argc, char** argv)
 			}
 			case ContainerType::kVat:
 				// Tables only: the pixel chunks are tens of MB and describe never reads a texel.
-				std::cout << describe(assetlib::loadVatTables(path));
+				std::cout << describeAsset(assetlib::loadVatTables(path));
 				break;
 			}
 		}

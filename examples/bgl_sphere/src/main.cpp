@@ -89,12 +89,9 @@ main(int argc, char** argv)
 		      .metallicFactor  = metallic,
 		      .roughnessFactor = roughness });
 
-		auto cube   = scene->AddCubeGeom(metalMat);
 		auto sphere = scene->AddSphereGeom(32, 32, sphereRadius, metalMat);
 
-		auto transform = glm::mat4(1.0f);
-
-		auto inst2 = view->CreateStaticMeshInstance(sphere, transform);
+		view->CreateStaticMeshInstance(sphere, glm::mat4(1.0f));
 
 		const float aspect = static_cast<float>(width) / static_cast<float>(height);
 

@@ -54,3 +54,5 @@ target_link_libraries(bgl_d3d12
 add_library(bgl_d3d12_agility OBJECT
     ${CMAKE_CURRENT_SOURCE_DIR}/agility/D3D12Agility.cpp
 )
+
+enable_strict_compiler(bgl_d3d12_agility)

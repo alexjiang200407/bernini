@@ -21,6 +21,8 @@ if(RENDERER_BACKEND STREQUAL "DX12")
     target_link_libraries(bgl_sphere PRIVATE bgl_d3d12_agility Shell32)
 endif()
 
+enable_strict_compiler(bgl_sphere)
+
 target_precompile_headers(bgl_sphere
     PUBLIC
         ${CMAKE_SOURCE_DIR}/PCH/pch.h

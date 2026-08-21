@@ -12,5 +12,7 @@ target_include_directories(assetlib_structs
 
 target_link_libraries(assetlib_structs PUBLIC core)
 
+enable_strict_compiler(assetlib_structs)
+
 source_group(TREE "${CMAKE_CURRENT_SOURCE_DIR}/include/assetlib_structs"
 	PREFIX "Header Files" FILES ${ASSETLIB_STRUCTS_HEADERS})

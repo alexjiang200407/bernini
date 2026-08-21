@@ -24,6 +24,8 @@ target_link_libraries(example_util
 
 target_include_directories(example_util PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 
+enable_strict_compiler(example_util)
+
 target_precompile_headers(example_util
     PUBLIC
         ${CMAKE_SOURCE_DIR}/PCH/pch.h
