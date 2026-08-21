@@ -209,7 +209,7 @@ TEST_CASE("A baked cutout material cuts its silhouette out of a plane", "[alphat
 	bgl::test::ApplyEnvironment(scene.Get(), view.Get());
 
 	assetlib::ImageData baseColor =
-		assetlib::loadKTX2("assets/Textures/basecolor_38b0077028376769.ktx2");
+		assetlib::loadKTX2("assets/Data/Textures/basecolor_38b0077028376769.ktx2");
 
 	// The asset is itself under test. A cutout's base color has to be in a format that *has* alpha: if
 	// this ever loads as BC1, the material was re-baked as opaque and the cutout is dead -- which would

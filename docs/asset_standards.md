@@ -432,7 +432,7 @@ Three different spaces are in play and they are easy to conflate. The contract, 
 * **`.benv`** (v2) — **an environment by reference**: `BEnv { name, sky, lighting }`, two data-root
   relative paths to a `.bsky` and a `.benvl`, no pixels. On disk the family follows the same
   per-kind directories materials use: the `.benv` in `Environments/`, the `.bsky` in `Sky/`, the
-  `.benvl` in `EnvLighting/`, and every baked map in `Textures/` — `assets/` mirrors this exactly
+  `.benvl` in `EnvLighting/`, and every baked map in `Textures/` — `assets/Data/` mirrors this exactly
   as it does for `Materials/`. Composing by path lets a sky be re-authored
   without touching the lighting minutes of convolution produced, and lets two environments share one
   sky; weather joins later through the minor version. Struct in the same `BEnv.h`; I/O:
