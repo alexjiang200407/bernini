@@ -161,7 +161,8 @@ the transport, the clip list and the scrubber are the same code either way — w
   the vertex data and the inverse binds (`posedBoundsSignature`), so a source re-authored since the
   bake simply stops matching. `AcquireSkinnedMesh` reads the bake (`findPosedBounds`) and walks only
   a pairing the cook never measured — a caller that cannot block still hands over its own box. A
-  project imported before the boxes existed is retrofitted with `assetlib_cli bakebounds`.
+  project imported before the boxes existed is retrofitted with
+  `assetlib_cli bakebounds -p <project>`.
 
 * **The palette buffer is GPU-written, so it is not a `RangeBuffer`.** That type mirrors its contents
   on the CPU and re-uploads a dirty range, which would overwrite what the pose pass wrote.
