@@ -60,7 +60,10 @@ namespace
 		}
 
 		char text[32] = {};
-		std::snprintf(text, sizeof(text), unit == 0 ? "%.0f %s" : "%.1f %s", value, c_Units[unit]);
+		if (unit == 0)
+			std::snprintf(text, sizeof(text), "%.0f %s", value, c_Units[unit]);
+		else
+			std::snprintf(text, sizeof(text), "%.1f %s", value, c_Units[unit]);
 		return text;
 	}
 
@@ -669,7 +672,9 @@ main(int argc, char** argv)
 
 			// The store's overload, always: it stats each routed source against what is on disk, so
 			// a stale bake is reported rather than merely recorded.
-			const auto describe = [&store](const auto& asset) { return store.Describe(asset); };
+			const auto describeAsset = [&store](const auto& asset) {
+				return store.Describe(asset);
+			};
 
 			if (describeSchema)
 			{
@@ -687,16 +692,16 @@ main(int argc, char** argv)
 				std::cout << assetlib::describe(store.LoadMesh(key), !describeBrief);
 				break;
 			case ContainerType::kMaterial:
-				std::cout << describe(store.LoadMaterial(key));
+				std::cout << describeAsset(store.LoadMaterial(key));
 				break;
 			case ContainerType::kEnv:
-				std::cout << describe(store.LoadEnv(key));
+				std::cout << describeAsset(store.LoadEnv(key));
 				break;
 			case ContainerType::kSky:
-				std::cout << describe(store.LoadSky(key));
+				std::cout << describeAsset(store.LoadSky(key));
 				break;
 			case ContainerType::kEnvLighting:
-				std::cout << describe(store.LoadEnvLighting(key));
+				std::cout << describeAsset(store.LoadEnvLighting(key));
 				break;
 			case ContainerType::kSkeleton:
 				std::cout << assetlib::describe(store.LoadSkeleton(key));
@@ -710,7 +715,7 @@ main(int argc, char** argv)
 			}
 			case ContainerType::kVat:
 				// Tables only: the pixel chunks are tens of MB and describe never reads a texel.
-				std::cout << describe(store.LoadVatTables(key));
+				std::cout << describeAsset(store.LoadVatTables(key));
 				break;
 			}
 		}
