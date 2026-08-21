@@ -75,6 +75,13 @@ convention rather than something the code checks: any directory passed to `-d` i
   rather than an oversight; the editor half disappears if the material graph ever stops storing
   paths as `QString`.*
 
+- **ADR-11 — `list` is the one command that takes no project.** Its subject is a `.bpak`, which is
+  what a project *produces* rather than something inside one, and `PakFile` reads a standalone
+  archive. *Rejected: requiring `--project` and ignoring it, which would make the flag a ritual;
+  and defaulting the archive to the project's own, which invents surface for a debugging command.
+  This does not reopen the two-entrypoint problem — that was two ways to do the same work, and
+  nothing else inspects an archive.*
+
 - **ADR-5 — An asset argument is a mount key through the project's store; an output that is not a
   project asset stays a `std::filesystem::path`.** `obj`'s `.obj` dump, `pack`'s `.bpak` and
   `strip`'s shipping copy are host paths; everything read from or written into the project is a key.
@@ -211,8 +218,10 @@ capability removed.
 5. `feat(assetlib): assetlib_cli takes a project, and only a project` — `--project
    <file.berniniproject>` on all thirteen commands, asset arguments become mount keys, `envmap` loses
    `-o/-c/-i`, `describe` loses its store-less path, `refs`/`prune`/`pack`/`migrate`/`bakevat` swap
-   `-d` for `--project`. `bake` unchanged in this task. **Gate:** a new `assetlib_tests` case
-   asserting each command resolves its arguments through the project's store.
+   `-d` for `--project`. `bake` unchanged in this task. **Gate:** `assetlib_tests` covers
+   `AssetStore::ResolveWritePath`, the one conversion standing between a typed key and a write --
+   no suite runs the CLI binary, so the commands themselves are exercised by hand against
+   `assets/Test.berniniproject` and the transcript goes in the PR body.
 
 6. `feat(assetlib): one importer` — `bake` imports into the project through task 3's writers;
    `assetlib::bake` deleted. **Gate:** the acceptance round-trip — import `assets/suzanne.glb` into a

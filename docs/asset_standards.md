@@ -55,7 +55,7 @@ must feed data that matches.
   import found. So both importers — the editor's and `assetlib_cli bake` — call `generateTangents`,
   which rewrites only the submeshes that have none and leaves an authored basis alone. Deriving is
   strictly better than the geometric-normal fallback, and never better than a basis the DCC tool
-  exported, so authoring upstream is still the right thing to do. `assetlib_cli tangents <mesh>`
+  exported, so authoring upstream is still the right thing to do. `assetlib_cli tangents -p <project> <mesh>`
   applies it to a `.bmesh` already on disk.
 * **All static geometry is meshletized.** Meshes are clustered into meshlets (meshopt) at bake time —
   **64 vertices / 124 triangles** — and drawn through a mesh-shader pipeline, not raw index buffers.
@@ -888,53 +888,56 @@ Three rules of its own:
 ## Usage
 
 ```bash
-# Bake a source model into the modular on-disk form (.bmesh + matN.bmaterial + texN.ktx2)
+# Every command works inside one project, named the same way, and every asset argument is a key
+# relative to its data root -- never a path on disk. `<project>` below is a .berniniproject file.
+
+# Bake a source model into the modular on-disk form (.bmesh + texN.ktx2, and the rig when skinned)
 assetlib_cli bake model.glb -o assets/model -n model
 
 # A rigged source also emits model.bskel + model.banim; -r picks the rate its clips resample to
 assetlib_cli bake soldier.glb -o assets/soldier -n soldier -r 60
 
-# Inspect the baked geometry in a viewer (meshlet-reconstructed, or --raw for the source indices)
-assetlib_cli obj assets/model/model.bmesh -o model.obj
+# Inspect the baked geometry in a viewer (meshlet-reconstructed, or --raw for the source indices).
+# The .obj is not a project asset, so -o is a path on disk
+assetlib_cli obj -p <project> Meshes/model.bmesh -o model.obj
 
 # Derive a tangent basis in place, for a mesh imported before the importers did it themselves
-assetlib_cli tangents Data/Meshes/model.bmesh
+assetlib_cli tangents -p <project> Meshes/model.bmesh
 
-# Convolve an HDRI into a project's split environment set: float sources into textures_src/, a
+# Convolve an HDRI into the project's split environment set: float sources into textures_src/, a
 # baked Sky/forest.bsky + EnvLighting/forest.benvl, and an Environments/forest.benv naming the pair
-assetlib_cli envmap forest.hdr -p Data --name forest
+assetlib_cli envmap -p <project> forest.hdr --name forest
 
-# Print what is actually inside a container (the kind is read from the file's magic)
-assetlib_cli describe Data/Meshes/model.bmesh            # hierarchy, submeshes, layouts, materials
-assetlib_cli describe Data/Meshes/model.bmesh --brief    # summary + material table only
-assetlib_cli describe Data/Materials/skin.bmaterial      # factors, triplet, routing table, bake state
-assetlib_cli describe Data/Sky/forest.bsky               # presentation + the radiance route
-assetlib_cli describe Data/EnvLighting/forest.benvl      # exposure + the prefilter/irradiance pair
-assetlib_cli describe Data/Environments/forest.benv      # the .bsky and .benvl it composes
-assetlib_cli describe Data/Meshes/soldier.bskel          # bones, parents, bind pose, signature
-
-# ...and a clip set resolves its skeleton, so a stale binding is reported rather than left to a pose
-assetlib_cli describe Data/Meshes/soldier.banim -d Data
-
-# ...and with a data root, each routed source is stat'd, so a stale bake is reported per channel.
-# A .benv holds no pixels, so for one the root instead says whether what it names is there.
-assetlib_cli describe Data/Materials/skin.bmaterial -d Data
-assetlib_cli describe Data/Environments/forest.benv -d Data
+# Print what is actually inside a container (the kind is read from the file's magic, not its name).
+# Every routed source is stat'd against the project, so a stale bake is always reported; a clip set
+# resolves its skeleton, and a .benv says whether the files it names are there
+assetlib_cli describe -p <project> Meshes/model.bmesh          # hierarchy, submeshes, layouts, materials
+assetlib_cli describe -p <project> Meshes/model.bmesh --brief  # summary + material table only
+assetlib_cli describe -p <project> Materials/skin.bmaterial    # factors, triplet, routes, bake state
+assetlib_cli describe -p <project> Sky/forest.bsky             # presentation + the radiance route
+assetlib_cli describe -p <project> EnvLighting/forest.benvl    # exposure + the prefilter/irradiance pair
+assetlib_cli describe -p <project> Environments/forest.benv    # the .bsky and .benvl it composes
+assetlib_cli describe -p <project> Skeletons/soldier.bskel     # bones, parents, bind pose, signature
+assetlib_cli describe -p <project> Animations/soldier.banim    # clips, and the rig they bind to
 
 # Cut a material down to its shippable form: the triplet, the factors and the name. The routes and
-# the node graph do not survive it, so -o is the safe way to keep the authoring copy
-assetlib_cli strip Data/Materials/skin.bmaterial -o Ship/Materials/skin.bmaterial
-assetlib_cli strip Data/Materials/skin.bmaterial      # rewrites in place; asks first, -y skips
+# the node graph do not survive it, so -o is the safe way to keep the authoring copy -- and a
+# shipping tree is not a project, so that one is a path on disk
+assetlib_cli strip -p <project> Materials/skin.bmaterial -o Ship/Materials/skin.bmaterial
+assetlib_cli strip -p <project> Materials/skin.bmaterial   # rewrites in place; asks first, -y skips
+
+# Show or author the exposure a lighting renders at
+assetlib_cli exposure -p <project> EnvLighting/forest.benvl --set 1.0
 
 # List the baked maps no material references any more, and delete nothing
-assetlib_cli prune -d Data --dry-run
+assetlib_cli prune -p <project> --dry-run
 
 # Delete them. Asks first; -y skips the prompt, and a closed stdin answers no
-assetlib_cli prune -d Data
+assetlib_cli prune -p <project>
 
 # Why will the editor not let me delete this? -- who references it, and how
-assetlib_cli refs -d Data Textures/basecolor_700a22db7b7ef785.ktx2
-assetlib_cli refs -d Data                    # summary, and every dangling reference in the project
+assetlib_cli refs -p <project> Textures/basecolor_700a22db7b7ef785.ktx2
+assetlib_cli refs -p <project>              # summary, and every dangling reference in the project
 ```
 
 `describe` is the counterpart of `obj`: `obj` dumps the geometry for a viewer, `describe` dumps
