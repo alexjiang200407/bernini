@@ -36,6 +36,7 @@ namespace editor
 		kWorkHasMovedOn,       // Submit: the shared project has work this one does not
 		kWouldNotFastForward,  // Get Latest: this project has submitted work the shared one does not
 		kAssetsInTheWay,       // Get Latest: unsubmitted changes the update would overwrite
+		kAssetsStillInUse,  // any verb that deletes: an asset something else still needs would go
 	};
 
 	/** What a verb answered with. */

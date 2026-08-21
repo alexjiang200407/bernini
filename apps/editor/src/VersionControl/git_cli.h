@@ -66,8 +66,9 @@ namespace editor
 	 * root first, and anything that normalizes to outside it -- `..`, an absolute path elsewhere, a
 	 * Windows drive-relative `D:foo` -- comes back nullopt rather than reaching git.
 	 *
-	 * Lexical, so it neither touches the filesystem nor requires the file to exist: an asset another
-	 * artist deleted still has to be namable.
+	 * Symlinks are resolved on both sides before the comparison, so a path that reaches outside the
+	 * repository through one is refused too, and a repository reached through one still matches. A
+	 * file that does not exist is still namable: only the part of the path that does exist resolves.
 	 */
 	[[nodiscard]] std::optional<QString>
 	RepositoryRelativePath(

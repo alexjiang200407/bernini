@@ -1,6 +1,7 @@
 #include "VersionControl/GitVersionControl.h"
 
 #include "VersionControl/git_cli.h"
+#include "VersionControl/reference_guard.h"
 
 #include <core/err/util.h>
 
@@ -111,8 +112,10 @@ namespace
 
 namespace editor
 {
-	GitVersionControl::GitVersionControl(std::filesystem::path repositoryRoot) noexcept :
-		m_RepositoryRoot(std::move(repositoryRoot))
+	GitVersionControl::GitVersionControl(
+		std::filesystem::path repositoryRoot,
+		std::filesystem::path dataDirectory) noexcept :
+		m_RepositoryRoot(std::move(repositoryRoot)), m_DataDirectory(std::move(dataDirectory))
 	{}
 
 	bool
@@ -156,6 +159,57 @@ namespace editor
 			"the project could not be compared with the shared one");
 
 		return PathsFrom(result);
+	}
+
+	VersionControlOutcome
+	GitVersionControl::GuardDeletions(const std::vector<std::filesystem::path>& deleted) const
+	{
+		const auto stillInUse = FindAssetsStillInUse(m_DataDirectory, deleted);
+		if (stillInUse.empty())
+		{
+			return {};
+		}
+
+		// Both ends of every reference that would break: the asset going away, and what would be
+		// left pointing at nothing. Which is which the UI can tell from the order it reads them in.
+		std::vector<QString> named;
+		for (const AssetStillInUse& blocked : stillInUse)
+		{
+			for (const std::filesystem::path& path : { blocked.asset, blocked.neededBy })
+			{
+				if (auto relative = RepositoryRelativePath(m_RepositoryRoot, path);
+				    relative.has_value() && std::ranges::find(named, *relative) == named.end())
+				{
+					named.push_back(*std::move(relative));
+				}
+			}
+		}
+		return { .status = VersionControlStatus::kAssetsStillInUse, .assets = std::move(named) };
+	}
+
+	std::vector<std::filesystem::path>
+	GitVersionControl::IncomingDeletions() const
+	{
+		// --diff-filter=D against the two points: present here, gone there.
+		const auto result = RunGit(
+			m_RepositoryRoot,
+			{ QStringLiteral("diff"),
+		      QStringLiteral("--name-only"),
+		      QStringLiteral("--diff-filter=D"),
+		      QStringLiteral("-z"),
+		      QStringLiteral("HEAD"),
+		      QStringLiteral("@{upstream}") });
+
+		core::throw_runtime_error_if(
+			!result.Succeeded(),
+			"the project could not be compared with the shared one");
+
+		std::vector<std::filesystem::path> deleted;
+		for (const QString& path : PathsFrom(result))
+		{
+			deleted.push_back(m_RepositoryRoot / path.toStdWString());
+		}
+		return deleted;
 	}
 
 	std::vector<PendingChange>
@@ -377,6 +431,14 @@ namespace editor
 				     .assets = std::move(inTheWay) };
 		}
 
+		// ADR-10, and the last check before anything moves: two people can each be right and still
+		// break the project between them.
+		if (auto guarded = GuardDeletions(IncomingDeletions());
+		    guarded.status != VersionControlStatus::kDone)
+		{
+			return guarded;
+		}
+
 		const auto merged = RunGit(
 			m_RepositoryRoot,
 			{ QStringLiteral("merge"),
@@ -419,6 +481,16 @@ namespace editor
 		for (const QString& asset : *fenced)
 		{
 			(std::ranges::find(submitted, asset) != submitted.end() ? restore : remove) << asset;
+		}
+
+		std::vector<std::filesystem::path> removing;
+		for (const QString& asset : remove)
+		{
+			removing.push_back(m_RepositoryRoot / asset.toStdWString());
+		}
+		if (auto guarded = GuardDeletions(removing); guarded.status != VersionControlStatus::kDone)
+		{
+			return guarded;
 		}
 
 		if (!restore.isEmpty())

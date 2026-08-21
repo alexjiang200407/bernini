@@ -9,7 +9,13 @@ namespace editor
 	class GitVersionControl : public IVersionControl
 	{
 	public:
-		explicit GitVersionControl(std::filesystem::path repositoryRoot) noexcept;
+		/**
+		 * @param repositoryRoot what the backend runs in.
+		 * @param dataDirectory the project's assets, which ADR-10's reference check is asked about.
+		 */
+		GitVersionControl(
+			std::filesystem::path repositoryRoot,
+			std::filesystem::path dataDirectory) noexcept;
 
 		[[nodiscard]] std::vector<PendingChange>
 		ListChanges() const override;
@@ -45,6 +51,18 @@ namespace editor
 		[[nodiscard]] std::vector<QString>
 		ChangedBetween(const QString& from, const QString& to) const;
 
+		/**
+		 * ADR-10 over `deleted`: kAssetsStillInUse naming both ends of every reference that would
+		 * break, or kDone when nothing left behind would point at a hole.
+		 */
+		[[nodiscard]] VersionControlOutcome
+		GuardDeletions(const std::vector<std::filesystem::path>& deleted) const;
+
+		/** Absolute paths the shared project's work would remove. */
+		[[nodiscard]] std::vector<std::filesystem::path>
+		IncomingDeletions() const;
+
 		std::filesystem::path m_RepositoryRoot;
+		std::filesystem::path m_DataDirectory;
 	};
 }

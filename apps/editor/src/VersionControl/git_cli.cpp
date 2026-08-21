@@ -31,6 +31,15 @@ namespace
 		return c_GitPath;
 	}
 
+	/** `path` with its symlinks resolved as far as it exists, or normalized when it cannot be. */
+	fs::path
+	Resolved(const fs::path& path)
+	{
+		std::error_code ec;
+		const fs::path  resolved = fs::weakly_canonical(path, ec);
+		return ec ? path.lexically_normal() : resolved;
+	}
+
 	/**
 	 * The directory to run git in: `path` itself, or its parent when it names a file.
 	 *
@@ -134,12 +143,12 @@ namespace editor
 			return std::nullopt;
 		}
 
-		const fs::path resolved = path.is_absolute() ? path.lexically_normal() :
-		                                               (repositoryRoot / path).lexically_normal();
+		const fs::path joined = path.is_absolute() ? path.lexically_normal() :
+		                                             (repositoryRoot / path).lexically_normal();
 
 		// "." is what lexically_relative returns for the root itself, which addresses the whole
 		// repository rather than anything in it -- not what a caller naming one asset can have meant.
-		const fs::path relative = resolved.lexically_relative(repositoryRoot.lexically_normal());
+		const fs::path relative = Resolved(joined).lexically_relative(Resolved(repositoryRoot));
 		if (relative.empty() || relative == "." || *relative.begin() == "..")
 		{
 			return std::nullopt;
