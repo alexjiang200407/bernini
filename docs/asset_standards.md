@@ -44,6 +44,11 @@ must feed data that matches.
   split matters because a glTF material is only glTF's shading model, and the choice to accept it is
   the editor's to make per import, not a property of the container. See
   [Importing a glTF's materials](#importing-a-gltfs-materials).
+
+  It is also why the split cannot be closed by moving code down. The board *is* the routing table --
+  `CompileMaterial` reads a material's nine routes back out of it, so there is no second table to
+  disagree with -- and the board is QtNodes. Deriving materials in `assetlib` would mean either
+  linking Qt into a CLI that is deliberately free of it, or writing that second table.
 * **Honest vertex layout.** The importer packs *only* the attributes the source primitive provides
   and never fabricates a normal. The tangent is the one exception, and the bullet below says why.
   Missing optional attributes decode to defaults on the GPU. **Position is the only required attribute**, and it must be the first one. See
@@ -887,9 +892,18 @@ Three rules of its own:
 
 ## Usage
 
+Every command opens one project and addresses its assets by key. There is no data-root flag: a
+directory that is not a project is refused by the project file's absence, where `-d <any directory>`
+used to be accepted and enumerate empty -- indistinguishable from a project with nothing in it. The
+project is always named explicitly and never discovered from the working directory, which is what
+lets `assetlib_cli` sit on `PATH` and read nothing relative to where it was invoked.
+
+`list` is the one exception, and takes no project: its subject is a `.bpak`, which is what a project
+*produces* rather than something inside one.
+
 ```bash
-# Every command works inside one project, named the same way, and every asset argument is a key
-# relative to its data root -- never a path on disk. `<project>` below is a .berniniproject file.
+# `<project>` below is a .berniniproject file; every asset argument is a key relative to its data
+# root, never a path on disk.
 
 # Import a source model into the project: Meshes/model.bmesh, its textures into
 # textures_src/model/, and -- when the source carries a skin -- Skeletons/ and Animations/.

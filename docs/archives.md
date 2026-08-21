@@ -264,6 +264,10 @@ assetlib_cli pack -p <project> [-o <archive>]     # default: Data.bpak beside th
 assetlib_cli list <archive>                       # the entry table, as text
 ```
 
+`list` is the only command that takes no `--project`, for the same reason the default target sits
+beside the data root: an archive is what a project produces, not a member of it, and `PakFile` reads
+one standalone.
+
 The walk and the exclusion rule live in `assetlib` (`packProject`), not in the CLI, so the gate is an
 `assetlib_tests` gate.
 
