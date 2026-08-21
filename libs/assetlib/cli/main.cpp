@@ -436,13 +436,33 @@ main(int argc, char** argv)
 			// imports sharing one would overwrite each other's files.
 			const fs::path textureDir = dataRoot / assetlib::c_TexturesSrcDirectoryName / name;
 
+			const auto imported = assetlib::loadFromGltf(input, {}, sampleRate);
+
+			// Only what this import will actually write. writeImportedRig no-ops on a source with no
+			// skin, so a static mesh neither claims Skeletons/<name>.bskel nor may take one back
+			// down: refusing over a file it never touches is the mild failure, deleting someone
+			// else's on a rollback is not.
+			const bool writesRig   = !imported.skeleton.bones.empty();
+			const bool writesClips = writesRig && !imported.animations.clips.empty();
+
+			auto files = std::vector<fs::path>{ bmeshPath };
+			if (writesRig)
+				files.push_back(bskelPath);
+			if (writesClips)
+				files.push_back(banimPath);
+
 			// Import never overwrites, the same rule the editor's does: what it would replace is a
 			// mesh someone authored materials against, and none of it is recoverable.
 			auto            collisions = std::vector<std::string>();
 			std::error_code ec;
-			for (const fs::path& candidate : { bmeshPath, bskelPath, banimPath, textureDir })
-				if (fs::exists(candidate, ec))
-					collisions.push_back(fs::relative(candidate, dataRoot, ec).generic_string());
+
+			const auto noteIfPresent = [&](const fs::path& target) {
+				if (fs::exists(target, ec))
+					collisions.push_back(fs::relative(target, dataRoot, ec).generic_string());
+			};
+
+			for (const fs::path& file : files) noteIfPresent(file);
+			noteIfPresent(textureDir);
 
 			if (!collisions.empty())
 			{
@@ -460,21 +480,18 @@ main(int argc, char** argv)
 					named);
 			}
 
-			// What to take back down if a later step throws: only what this import creates, which is
-			// all of it -- nothing above was already there.
-			const std::array<assetlib::ImportedFile, 3> written = { {
-				{ bmeshPath, false },
-				{ bskelPath, false },
-				{ banimPath, false },
-			} };
-			const std::array<assetlib::ImportedDir, 1>  dirs    = { {
+			// What to take back down if a later step throws. The refusal above means none of it was
+			// there, so everything this writes is this import's to remove.
+			auto written = std::vector<assetlib::ImportedFile>();
+			written.reserve(files.size());
+			for (const fs::path& file : files) written.push_back({ file, false });
+
+			const std::array<assetlib::ImportedDir, 1> dirs = { {
 				{ textureDir, false, dataRoot / assetlib::c_TexturesSrcDirectoryName },
 			} };
 
 			try
 			{
-				const auto imported = assetlib::loadFromGltf(input, {}, sampleRate);
-
 				assetlib::writeTextures(imported, textureDir);
 
 				assetlib::BMesh mesh    = assetlib::toBMesh(imported);

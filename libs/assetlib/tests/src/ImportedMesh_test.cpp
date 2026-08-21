@@ -1,4 +1,3 @@
-#include <assetlib/Project.h>
 #include <assetlib/asset_import.h>
 
 #include <assetlib_structs/BMesh.h>
