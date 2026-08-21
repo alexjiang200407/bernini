@@ -161,6 +161,36 @@ namespace bgl
 			return m_OutlineMaskSrv;
 		}
 
+		[[nodiscard]] TextureHandle
+		GetBoneOverlayTexture() const noexcept override
+		{
+			return m_BoneOverlayTexture;
+		}
+
+		[[nodiscard]] RtvHandle
+		GetBoneOverlayRtv() const noexcept override
+		{
+			return m_BoneOverlayRtv;
+		}
+
+		[[nodiscard]] SrvHandle
+		GetBoneOverlaySrv() const noexcept override
+		{
+			return m_BoneOverlaySrv;
+		}
+
+		[[nodiscard]] TextureHandle
+		GetBoneOverlayDepthTexture() const noexcept override
+		{
+			return m_BoneOverlayDepth;
+		}
+
+		[[nodiscard]] DsvHandle
+		GetBoneOverlayDsv() const noexcept override
+		{
+			return m_BoneOverlayDsv;
+		}
+
 		[[nodiscard]] bool
 		IsTaaEnabled() const noexcept override
 		{
@@ -177,6 +207,22 @@ namespace bgl
 		SetOutlineEnabled(bool enabled) noexcept override
 		{
 			m_OutlineEnabled = enabled;
+		}
+
+		[[nodiscard]] bool
+		IsBoneOverlayEnabled() const noexcept override
+		{
+			return m_BoneOverlayEnabled;
+		}
+
+		void
+		SetBoneOverlayEnabled(bool enabled) noexcept override
+		{
+			m_BoneOverlayEnabled = enabled;
+			if (enabled && m_BoneOverlayTexture.IsNull())
+			{
+				CreateBoneOverlayAttachments();
+			}
 		}
 
 		void
@@ -273,6 +319,14 @@ namespace bgl
 		void
 		CreateRenderAttachments();
 
+		// The overlay's own colour and depth, at the output size. Made on demand -- the first
+		// SetBoneOverlayEnabled(true) -- and remade by a resize only while the overlay is on.
+		void
+		CreateBoneOverlayAttachments() noexcept;
+
+		void
+		ReleaseBoneOverlayAttachments() noexcept;
+
 		// Frees every texture and view the ring owns. Immediate, not deferred: the caller has
 		// already idled the GPU for this target, which is the precondition ResizeBackbuffers states.
 		void
@@ -296,9 +350,10 @@ namespace bgl
 		// Borrowed: the window system owns the layer and outlives the target.
 		CA::MetalLayer* m_Layer = nullptr;
 
-		bool m_TaaEnabled     = false;
-		bool m_OutlineEnabled = true;
-		bool m_TaaAllocated   = false;
+		bool m_TaaEnabled         = false;
+		bool m_OutlineEnabled     = true;
+		bool m_BoneOverlayEnabled = false;
+		bool m_TaaAllocated       = false;
 
 		std::array<Backbuffer, c_SwapchainImageCount>          m_Backbuffers;
 		std::array<uint64_t, c_SwapchainImageCount>            m_FrameFences{};
@@ -316,6 +371,12 @@ namespace bgl
 		TextureHandle m_OutlineMaskTexture;
 		RtvHandle     m_OutlineMaskRtv;
 		SrvHandle     m_OutlineMaskSrv;
+
+		TextureHandle m_BoneOverlayTexture;
+		RtvHandle     m_BoneOverlayRtv;
+		SrvHandle     m_BoneOverlaySrv;
+		TextureHandle m_BoneOverlayDepth;
+		DsvHandle     m_BoneOverlayDsv;
 
 		// Allocated only when m_TaaAllocated; a target that never resolves pays neither the memory nor
 		// the two RTV slots.

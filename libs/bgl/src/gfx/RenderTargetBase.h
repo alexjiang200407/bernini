@@ -184,6 +184,33 @@ namespace bgl
 		GetOutlineMaskSrv() const noexcept = 0;
 
 		/**
+		 * What the bone overlay draws its solids into, and the post-process composites over the
+		 * tonemapped frame: colour with coverage in alpha, plus a depth buffer of its own so the
+		 * bones occlude each other without ever testing against the scene.
+		 *
+		 * Sized with the *output* grid, not the render one -- the overlay is composited after the
+		 * resolve, so it is authored at the resolution it is shown at and a render scale below 1
+		 * cannot soften it.
+		 *
+		 * Null until SetBoneOverlayEnabled(true) has been called once; a target nobody inspects
+		 * never allocates them. A resize re-creates them only if the overlay is on.
+		 */
+		[[nodiscard]] virtual TextureHandle
+		GetBoneOverlayTexture() const noexcept = 0;
+
+		[[nodiscard]] virtual RtvHandle
+		GetBoneOverlayRtv() const noexcept = 0;
+
+		[[nodiscard]] virtual SrvHandle
+		GetBoneOverlaySrv() const noexcept = 0;
+
+		[[nodiscard]] virtual TextureHandle
+		GetBoneOverlayDepthTexture() const noexcept = 0;
+
+		[[nodiscard]] virtual DsvHandle
+		GetBoneOverlayDsv() const noexcept = 0;
+
+		/**
 		 * The two accumulation buffers TAA ping-pongs between: index `GetCurrentHistoryIndex()` is the one
 		 * this frame's resolve writes, the other is the one it reads. Sized with the *output* grid,
 		 * which is what the resolve reconstructs onto. Null on a target without TAA, which allocates

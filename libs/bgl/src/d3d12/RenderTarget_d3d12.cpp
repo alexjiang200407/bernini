@@ -171,6 +171,10 @@ namespace bgl
 		constexpr auto c_SceneColorFormat = Format::RGBA16_FLOAT;
 
 		constexpr auto c_OutlineMaskFormat = Format::R8_UNORM;
+
+		// Straight colour with coverage in alpha: the overlay's solids shade themselves and the
+		// composite only has to blend, unlike the outline's R8 coverage mask.
+		constexpr auto c_BoneOverlayFormat = Format::RGBA8_UNORM;
 	}
 
 	void
@@ -178,6 +182,13 @@ namespace bgl
 	{
 		CreateRenderAttachments();
 		CreateHistoryAttachments();
+
+		// A resize tore the last pair down with the rest of the output half; only a target that had
+		// the overlay on gets them back.
+		if (m_BoneOverlayEnabled)
+		{
+			CreateBoneOverlayAttachments();
+		}
 	}
 
 	void
@@ -427,6 +438,75 @@ namespace bgl
 	}
 
 	void
+	RenderTarget::CreateBoneOverlayAttachments() noexcept
+	{
+		{
+			auto colorDesc      = TextureDesc();
+			colorDesc.format    = c_BoneOverlayFormat;
+			colorDesc.width     = GetWidth();
+			colorDesc.height    = GetHeight();
+			colorDesc.dimension = TextureDimension::kTexture2D;
+			colorDesc.debugName = "Bone Overlay";
+			colorDesc.usage =
+				TextureUsage{ TextureUsageFlag::kRenderTarget, TextureUsageFlag::kSRV };
+			colorDesc.initialLayout = BarrierLayout::kRenderTarget;
+
+			colorDesc.clearValue.SetColor(Color(0.0f, 0.0f, 0.0f, 0.0f));
+
+			m_BoneOverlay.textureHandle = m_ResourceManager->CreateTexture(colorDesc);
+
+			auto rtvDesc      = RtvDesc();
+			rtvDesc.format    = c_BoneOverlayFormat;
+			rtvDesc.debugName = "Bone Overlay RTV";
+
+			m_BoneOverlay.rtvHandle =
+				m_ResourceManager->CreateRtv(m_BoneOverlay.textureHandle, rtvDesc);
+
+			auto srvDesc      = SrvDesc();
+			srvDesc.format    = c_BoneOverlayFormat;
+			srvDesc.debugName = "Bone Overlay SRV";
+
+			m_BoneOverlay.srvHandle =
+				m_ResourceManager->CreateSrv(m_BoneOverlay.textureHandle, srvDesc);
+		}
+
+		{
+			auto depthDesc          = TextureDesc();
+			depthDesc.format        = Format::D24S8;
+			depthDesc.width         = GetWidth();
+			depthDesc.height        = GetHeight();
+			depthDesc.dimension     = TextureDimension::kTexture2D;
+			depthDesc.debugName     = "Bone Overlay Depth";
+			depthDesc.usage         = TextureUsage{ TextureUsageFlag::kDepthStencil };
+			depthDesc.initialLayout = BarrierLayout::kDepthWrite;
+
+			depthDesc.clearValue.SetDepthStencil(1.0f, 0);
+
+			m_BoneOverlayDepth.textureHandle = m_ResourceManager->CreateTexture(depthDesc);
+
+			auto dsvDesc      = DsvDesc();
+			dsvDesc.format    = Format::D24S8;
+			dsvDesc.debugName = "Bone Overlay Depth DSV";
+
+			m_BoneOverlayDepth.dsvHandle =
+				m_ResourceManager->CreateDsv(m_BoneOverlayDepth.textureHandle, dsvDesc);
+		}
+	}
+
+	void
+	RenderTarget::DestroyBoneOverlayAttachments() noexcept
+	{
+		m_ResourceManager->DestroyDsv(m_BoneOverlayDepth.dsvHandle, false);
+		m_ResourceManager->DestroyTexture(m_BoneOverlayDepth.textureHandle, false);
+		m_BoneOverlayDepth = {};
+
+		m_ResourceManager->DestroySrv(m_BoneOverlay.srvHandle, false);
+		m_ResourceManager->DestroyRtv(m_BoneOverlay.rtvHandle, false);
+		m_ResourceManager->DestroyTexture(m_BoneOverlay.textureHandle, false);
+		m_BoneOverlay = {};
+	}
+
+	void
 	RenderTarget::DestroyRenderTargets()
 	{
 		for (UINT i = 0; i < c_SwapchainImageCount; i++)
@@ -437,6 +517,7 @@ namespace bgl
 
 		DestroyHistoryAttachments();
 		DestroyRenderAttachments();
+		DestroyBoneOverlayAttachments();
 	}
 
 	void

@@ -156,6 +156,7 @@ namespace bgl
 
 		m_CompactInstances.Init(m_Device, m_ResourceManager);
 		m_SkinnedPose.Init(m_Device);
+		m_BoneOverlay.Init(m_Device);
 		m_TransparentSort.Init(m_Device);
 		m_Forward.Init(m_Device);
 		m_Skybox.Init(m_Device);
@@ -225,6 +226,7 @@ namespace bgl
 		m_BrdfLut.Release();
 		m_CompactInstances.Release(false);
 		m_SkinnedPose.Release();
+		m_BoneOverlay.Release();
 		m_TransparentSort.Release();
 
 #if defined(BERNINI_GPU_DEBUG)
@@ -402,10 +404,12 @@ namespace bgl
 #endif
 
 		m_FrameGraph.Reset();
-		m_DrawCount        = 0;
-		m_CameraStill      = true;
-		m_TemporalBreak    = false;
-		m_OutlineMaskDrawn = false;
+		m_DrawCount         = 0;
+		m_CameraStill       = true;
+		m_TemporalBreak     = false;
+		m_OutlineMaskDrawn  = false;
+		m_BoneOverlayDrawn  = false;
+		m_BoneOverlayActive = rt.IsBoneOverlayEnabled();
 		++m_FrameCounter;
 		rt.AdvanceFrameCount();
 		m_FrameGraph.RegisterQueue("main", m_CommandQueue, m_CommandList);
@@ -423,6 +427,13 @@ namespace bgl
 		m_FrameGraph.ImportTexture(c_DepthName, rt.GetDepthTexture());
 		m_FrameGraph.ImportTexture(c_OutlineMaskName, rt.GetOutlineMaskTexture());
 
+		// Only a target that has asked for the overlay owns these, so only it names them.
+		if (m_BoneOverlayActive)
+		{
+			m_FrameGraph.ImportTexture(c_BoneOverlayName, rt.GetBoneOverlayTexture());
+			m_FrameGraph.ImportTexture(c_BoneOverlayDepthName, rt.GetBoneOverlayDepthTexture());
+		}
+
 		if (rt.IsTaaEnabled())
 		{
 			for (uint32_t i = 0; i < 2; ++i)
@@ -434,21 +445,33 @@ namespace bgl
 		// The backbuffer is not cleared: the tonemap covers it whole, and it is the only pass that
 		// writes it. Zero motion is "this pixel did not move", which is what an untouched pixel
 		// should read as.
-		const std::array<ClearPass::ColorTarget, 3> colorTargets{
-			{ { std::string(c_SceneColorName), rt.GetSceneColorRtv(), { 0.0f, 0.0f, 0.0f, 1.0f } },
-			  { std::string(c_MotionVectorsName),
-			    rt.GetMotionVectorRtv(),
-			    { 0.0f, 0.0f, 0.0f, 0.0f } },
-			  { std::string(c_OutlineMaskName),
-			    rt.GetOutlineMaskRtv(),
-			    { 0.0f, 0.0f, 0.0f, 0.0f } } }
-		};
-		ClearPass().AttachToFrameGraph(
-			m_FrameGraph,
-			m_ResourceManager.Get(),
-			colorTargets,
-			std::string(c_DepthName),
-			rt.GetDepthDsv());
+		auto colorTargets =
+			std::vector<ClearPass::ColorTarget>{ { std::string(c_SceneColorName),
+			                                       rt.GetSceneColorRtv(),
+			                                       { { 0.0f, 0.0f, 0.0f, 1.0f } } },
+			                                     { std::string(c_MotionVectorsName),
+			                                       rt.GetMotionVectorRtv(),
+			                                       { { 0.0f, 0.0f, 0.0f, 0.0f } } },
+			                                     { std::string(c_OutlineMaskName),
+			                                       rt.GetOutlineMaskRtv(),
+			                                       { { 0.0f, 0.0f, 0.0f, 0.0f } } } };
+
+		auto depthTargets =
+			std::vector<ClearPass::DepthTarget>{ { std::string(c_DepthName), rt.GetDepthDsv() } };
+
+		// Cleared here rather than per draw: several draws share one target, and a clear inside the
+		// overlay pass would wipe the bones the draw before it put down.
+		if (m_BoneOverlayActive)
+		{
+			colorTargets.push_back(
+				{ std::string(c_BoneOverlayName),
+			      rt.GetBoneOverlayRtv(),
+			      { { 0.0f, 0.0f, 0.0f, 0.0f } } });
+			depthTargets.push_back({ std::string(c_BoneOverlayDepthName), rt.GetBoneOverlayDsv() });
+		}
+
+		ClearPass()
+			.AttachToFrameGraph(m_FrameGraph, m_ResourceManager.Get(), colorTargets, depthTargets);
 
 		m_FrameActive = true;
 	}
@@ -536,6 +559,7 @@ namespace bgl
 		draw.cullIdx                      = c_CameraCullIdx;
 		draw.cullState                    = &view->GetCullState(c_CameraCullIdx);
 		draw.viewState.viewport           = viewport;
+		draw.viewState.outputViewport     = job.viewport;
 		draw.viewState.viewProj           = viewProj;
 		draw.viewState.prevViewProj       = prevCamera.viewProj;
 		draw.viewState.jitter             = jitter;
@@ -548,6 +572,8 @@ namespace bgl
 		draw.targets.depth                = m_ActiveTarget->GetDepthDsv();
 		draw.targets.motionVector         = m_ActiveTarget->GetMotionVectorRtv();
 		draw.targets.outlineMask          = m_ActiveTarget->GetOutlineMaskRtv();
+		draw.targets.boneOverlay          = m_ActiveTarget->GetBoneOverlayRtv();
+		draw.targets.boneOverlayDepth     = m_ActiveTarget->GetBoneOverlayDsv();
 
 		draw.samplers.anisoLinearWrap = scene->GetSampler(Scene::StandardSampler::kAnisoLinearWrap);
 		draw.samplers.linearClamp     = scene->GetSampler(Scene::StandardSampler::kLinearClamp);
@@ -611,6 +637,16 @@ namespace bgl
 		m_TransparentSort.AttachToFrameGraph(m_FrameGraph, draw);
 		m_Forward.AttachToFrameGraph(m_FrameGraph, draw);
 
+		// Back under the view's namespace: the overlay reads the palette, which is the view's, and
+		// nothing it touches is per frustum.
+		if (m_BoneOverlayActive && view->GetPosedInstanceCount() > 0)
+		{
+			m_FrameGraph.SetResourceNamespace(view->GetResourceNamespace());
+			m_BoneOverlay.AttachToFrameGraph(m_FrameGraph, draw);
+			m_FrameGraph.SetResourceNamespace(view->GetCullNamespace(draw.cullIdx));
+			m_BoneOverlayDrawn = true;
+		}
+
 		if (const auto selected = view->GetSelectedInstances();
 		    !selected.empty() && m_ActiveTarget->IsOutlineEnabled())
 		{
@@ -667,6 +703,12 @@ namespace bgl
 			postProcessArgs.maskSize = glm::vec2(
 				static_cast<float>(rt.GetRenderWidth()),
 				static_cast<float>(rt.GetRenderHeight()));
+		}
+
+		if (m_BoneOverlayActive && m_BoneOverlayDrawn)
+		{
+			postProcessArgs.boneOverlay        = rt.GetBoneOverlaySrv();
+			postProcessArgs.boneOverlayEnabled = true;
 		}
 
 		if (rt.IsTaaEnabled())

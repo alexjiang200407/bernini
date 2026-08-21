@@ -6,9 +6,9 @@
 
 namespace bgl
 {
-	// Clears a set of render targets (and an optional depth target). Each target
-	// is declared to the graph by name so the graph derives its transition to
-	// render-target / depth-write; the pass only records the clears, never barriers.
+	// Clears a set of render targets and depth targets. Each target is declared to the graph by name
+	// so the graph derives its transition to render-target / depth-write; the pass only records the
+	// clears, never barriers.
 	class ClearPass
 	{
 	public:
@@ -19,13 +19,18 @@ namespace bgl
 			std::array<float, 4> clearColor;
 		};
 
+		struct DepthTarget
+		{
+			std::string name;
+			DsvHandle   dsv;
+		};
+
 		void
 		AttachToFrameGraph(
 			FrameGraph&                  fg,
 			IResourceManager*            resourceManager,
 			std::span<const ColorTarget> colors,
-			std::string                  depthName,
-			DsvHandle                    depth)
+			std::span<const DepthTarget> depths)
 		{
 			PassDesc desc;
 			desc.SetName("Clear");
@@ -39,31 +44,42 @@ namespace bgl
 				                BarrierLayout::kRenderTarget });
 			}
 
-			if (!depth.IsNull())
+			for (const DepthTarget& depth : depths)
 			{
+				if (depth.dsv.IsNull())
+				{
+					continue;
+				}
+
 				desc.AddTextureArg(
-					TextureArg{ std::move(depthName),
+					TextureArg{ depth.name,
 				                BarrierSyncFlag::kDepthStencil,
 				                BarrierAccessFlag::kDepthWrite,
 				                BarrierLayout::kDepthWrite });
 			}
 
-			std::vector<ColorTarget> targets(colors.begin(), colors.end());
-			desc.SetExec([resourceManager, targets, depth](const PassContext& resources) {
-				ICommandList* cmd = resources.GetCommandList();
-				if (!depth.IsNull())
-				{
-					resourceManager->ClearDsv(cmd, depth, 1.0f, 0);
-				}
-				for (const ColorTarget& color : targets)
-				{
-					float clear[4] = { color.clearColor[0],
-						               color.clearColor[1],
-						               color.clearColor[2],
-						               color.clearColor[3] };
-					resourceManager->ClearRtv(cmd, color.rtv, clear);
-				}
-			});
+			std::vector<ColorTarget> colorTargets(colors.begin(), colors.end());
+			std::vector<DepthTarget> depthTargets(depths.begin(), depths.end());
+
+			desc.SetExec(
+				[resourceManager, colorTargets, depthTargets](const PassContext& resources) {
+					ICommandList* cmd = resources.GetCommandList();
+					for (const DepthTarget& depth : depthTargets)
+					{
+						if (!depth.dsv.IsNull())
+						{
+							resourceManager->ClearDsv(cmd, depth.dsv, 1.0f, 0);
+						}
+					}
+					for (const ColorTarget& color : colorTargets)
+					{
+						float clear[4] = { color.clearColor[0],
+						                   color.clearColor[1],
+						                   color.clearColor[2],
+						                   color.clearColor[3] };
+						resourceManager->ClearRtv(cmd, color.rtv, clear);
+					}
+				});
 
 			fg.AddPass(std::move(desc));
 		}

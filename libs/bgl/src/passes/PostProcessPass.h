@@ -47,6 +47,11 @@ namespace bgl
 			SamplerHandle maskSampler;
 			glm::vec2     maskSize{ 0.0f };
 			bool          outlineEnabled = false;
+
+			// Set only when a bone-overlay pass ran this frame. Authored on the output grid, so it
+			// is sampled at the same point the tonemap writes and needs no width term of its own.
+			SrvHandle boneOverlay;
+			bool      boneOverlayEnabled = false;
 		};
 
 		PostProcessPass() = default;

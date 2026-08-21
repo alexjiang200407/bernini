@@ -85,6 +85,7 @@ not obvious from a signature. The headers linked below are the source of truth.
 | Upload | [`IScene::AddSkinnedMeshGeom`](libs/bgl/include/bgl/IScene.h) | Bones, clip table and sample pool become scene buffers; per-bone depth is derived here |
 | Place | [`ISceneView::CreateSkinnedMeshInstance`](libs/bgl/include/bgl/ISceneView.h) | Writes the playback record and reserves the instance's palette slice |
 | Pose | [`SkinnedPosePass`](libs/bgl/src/passes/SkinnedPosePass.h) | One workgroup per instance: sample, blend, walk the hierarchy, multiply by inverse bind |
+| Overlay | [`BoneOverlayPass`](libs/bgl/src/passes/BoneOverlayPass.h) | Only when a target asked for it: undoes the inverse bind to recover where each bone stands, and draws the skeleton as octahedral solids over the frame |
 | Draw | `forward/skinned_vertex.slang` | Blends the bind-pose vertex bytes by the palette; position, normal and tangent through one matrix. Entered from `Forward_SkinnedMesh.slang`, or from `Forward_AnyMesh.slang` where a draw mixes tiers |
 
 ## In the editor
