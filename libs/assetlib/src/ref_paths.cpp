@@ -11,6 +11,20 @@ namespace assetlib
 	}
 
 	std::string
+	mountKeyFor(const std::filesystem::path& dataRoot, const std::filesystem::path& path)
+	{
+		if (path.empty() || dataRoot.empty())
+			return path.generic_string();
+
+		std::error_code             ec;
+		const std::filesystem::path relative = std::filesystem::relative(path, dataRoot, ec);
+		if (ec || relative.empty())
+			return path.generic_string();
+
+		return relative.generic_string();
+	}
+
+	std::string
 	extensionOf(std::string_view key)
 	{
 		const size_t slash = key.find_last_of('/');
