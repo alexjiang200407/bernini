@@ -1,3 +1,4 @@
+#include <assetlib/bmesh_io.h>
 #include <assetlib/skeleton.h>
 #include <assetlib/skinning.h>
 #include <assetlib_structs/Animation.h>
@@ -8,6 +9,7 @@
 #include <assetlib_structs/VertexLayout.h>
 
 #include <core/err/util.h>
+#include <core/hash.h>
 #include <core/type_traits.h>
 
 namespace assetlib
@@ -344,5 +346,82 @@ namespace assetlib
 			meshIndex);
 
 		return out;
+	}
+
+	uint64_t
+	posedBoundsSignature(const BMesh& mesh, const Skeleton& skeleton) noexcept
+	{
+		uint64_t hash =
+			core::hash_bytes(mesh.vertexData.data(), mesh.vertexData.size(), core::hash_seed());
+
+		// The tables that say which of those bytes a mesh index means: without them, a re-export
+		// that regroups entries over identical bytes would keep matching a box that no longer
+		// holds. Materials are left out -- swapping one does not move a vertex.
+		for (const Mesh& entry : mesh.meshes)
+		{
+			hash = core::hash_pod(entry.firstSubmesh, hash);
+			hash = core::hash_pod(entry.submeshCount, hash);
+		}
+		for (const Submesh& submesh : mesh.submeshes)
+		{
+			hash = core::hash_pod(submesh.vertexByteOffset, hash);
+			hash = core::hash_pod(submesh.vertexCount, hash);
+			hash = core::hash_pod(submesh.layout.stride, hash);
+			for (uint32_t i = 0; i < submesh.layout.attributeCount; ++i)
+			{
+				const VertexAttribute& attribute = submesh.layout.attributes[i];
+				hash                             = core::hash_pod(attribute.semantic, hash);
+				hash                             = core::hash_pod(attribute.format, hash);
+				hash                             = core::hash_pod(attribute.offset, hash);
+			}
+		}
+
+		for (const Bone& bone : skeleton.bones) hash = core::hash_pod(bone.inverseBind, hash);
+		return hash;
+	}
+
+	void
+	bakePosedBounds(AnimationSet& animations, const BMesh& mesh, const Skeleton& skeleton)
+	{
+		const uint64_t signature = posedBoundsSignature(mesh, skeleton);
+
+		std::erase_if(animations.posedBoxes, [&](const PosedBox& box) {
+			return box.sourceSignature == signature;
+		});
+
+		for (uint32_t meshIndex = 0; meshIndex < mesh.meshes.size(); ++meshIndex)
+		{
+			// An entry with no skin keeps its submesh boxes; a posed box for it would only repeat them.
+			if (!isSkinned(mesh, meshIndex))
+				continue;
+
+			// See skinning.h: the box is derived data, never a cook gate.
+			try
+			{
+				const Bounds bounds = posedBounds(mesh, meshIndex, skeleton, animations);
+				animations.posedBoxes.push_back(
+					PosedBox{ signature, bounds.min, bounds.max, meshIndex });
+			}
+			catch (const std::exception&)
+			{}
+		}
+	}
+
+	std::optional<Bounds>
+	findPosedBounds(
+		const AnimationSet& animations,
+		const BMesh&        mesh,
+		const uint32_t      meshIndex,
+		const Skeleton&     skeleton) noexcept
+	{
+		if (animations.posedBoxes.empty())
+			return std::nullopt;
+
+		const uint64_t signature = posedBoundsSignature(mesh, skeleton);
+		for (const PosedBox& box : animations.posedBoxes)
+			if (box.sourceSignature == signature && box.meshIndex == meshIndex)
+				return Bounds{ box.min, box.max };
+
+		return std::nullopt;
 	}
 }

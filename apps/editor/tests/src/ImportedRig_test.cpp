@@ -7,10 +7,14 @@
 #include <assetlib/bmesh_io.h>
 #include <assetlib/bskel_io.h>
 #include <assetlib/skeleton.h>
+#include <assetlib/skinning.h>
 #include <assetlib_structs/Animation.h>
 #include <assetlib_structs/BMesh.h>
 #include <assetlib_structs/BMeshImport.h>
+#include <assetlib_structs/Bounds.h>
 #include <assetlib_structs/Skeleton.h>
+
+#include <catch2/catch_approx.hpp>
 
 namespace
 {
@@ -157,6 +161,77 @@ TEST_CASE("The clips are written only when the import asked for them", "[importe
 	// bone array their indices address.
 	CHECK(clips.skeleton == mesh.skeleton);
 	CHECK(assetlib::animationsMatchSkeleton(clips, assetlib::loadSkeleton(root.Bskel())));
+}
+
+namespace
+{
+	/** Two vertices welded to the hips: a mesh with a skin, so there is a box to measure. */
+	assetlib::BMesh
+	SkinnedQuad()
+	{
+		assetlib::BMesh mesh;
+
+		auto submesh                  = assetlib::Submesh();
+		submesh.layout.attributeCount = 3;
+		submesh.layout.attributes[0]  = { assetlib::VertexSemantic::kPosition,
+			                              assetlib::VertexFormat::kFloat32x3,
+			                              0 };
+		submesh.layout.attributes[1]  = { assetlib::VertexSemantic::kJoints0,
+			                              assetlib::VertexFormat::kUint16x4,
+			                              12 };
+		submesh.layout.attributes[2]  = { assetlib::VertexSemantic::kWeights0,
+			                              assetlib::VertexFormat::kUnorm16x4,
+			                              20 };
+		submesh.layout.stride         = 28;
+
+		for (const glm::vec3& position : { glm::vec3(-1.0f), glm::vec3(1.0f) })
+		{
+			const size_t base = mesh.vertexData.size();
+			mesh.vertexData.resize(base + submesh.layout.stride);
+
+			const std::array<uint16_t, 4> joints{};
+			const std::array<uint16_t, 4> weights{ { 65535, 0, 0, 0 } };
+
+			std::byte* at = mesh.vertexData.data() + base;
+			std::memcpy(at, &position, sizeof(position));
+			std::memcpy(at + 12, joints.data(), sizeof(joints));
+			std::memcpy(at + 20, weights.data(), sizeof(weights));
+			++submesh.vertexCount;
+		}
+
+		mesh.submeshes.push_back(submesh);
+		mesh.meshes.push_back({ .firstSubmesh = 0, .submeshCount = 1, .nameOffset = 0 });
+		return mesh;
+	}
+}
+
+TEST_CASE("The import bakes the posed box beside the clips it writes", "[importedrig]")
+{
+	const TempRoot root;
+	const auto     imported = SkinnedImport();
+
+	// The rig tests above pass an empty mesh on purpose -- no skin, no box.
+	assetlib::BMesh mesh = SkinnedQuad();
+
+	editor::WriteImportedRig(
+		imported,
+		mesh,
+		root.Data(),
+		root.Bskel(),
+		root.Banim(),
+		/*writeClips*/ true);
+
+	// Found through the containers as a load would find it: the box, the signature and the
+	// skeleton all survive their round trip through disk.
+	const std::optional<assetlib::Bounds> baked = assetlib::findPosedBounds(
+		assetlib::loadAnimations(root.Banim()),
+		mesh,
+		0,
+		assetlib::loadSkeleton(root.Bskel()));
+
+	REQUIRE(baked.has_value());
+	CHECK(baked->min.x == Catch::Approx(-1.0f));
+	CHECK(baked->max.x == Catch::Approx(1.0f));
 }
 
 TEST_CASE("A static import writes no rig at all", "[importedrig]")
@@ -317,7 +392,7 @@ TEST_CASE("Clips import on their own, attached to the rig already there", "[impo
 	const TempRoot root;
 	const auto     imported = SkinnedImport();
 
-	assetlib::BMesh mesh;
+	assetlib::BMesh mesh = SkinnedQuad();
 	editor::WriteImportedRig(
 		imported,
 		mesh,
@@ -325,6 +400,12 @@ TEST_CASE("Clips import on their own, attached to the rig already there", "[impo
 		root.Bskel(),
 		root.Banim(),
 		/*writeClips*/ false);
+
+	// On disk, where the clips import must find it: its box is measured against project meshes,
+	// not against geometry it has no copy of.
+	const fs::path meshPath = root.Data() / Project::c_MeshesDirectoryName / "unit.bmesh";
+	fs::create_directories(meshPath.parent_path());
+	assetlib::save(mesh, meshPath);
 
 	const fs::path runPath = root.Data() / Project::c_AnimationsDirectoryName / "coyote_run.banim";
 	editor::WriteImportedClips(imported, root.Data(), runPath);
@@ -334,6 +415,11 @@ TEST_CASE("Clips import on their own, attached to the rig already there", "[impo
 	const assetlib::AnimationSet clips = assetlib::loadAnimations(runPath);
 	CHECK(clips.skeleton == mesh.skeleton);
 	CHECK(assetlib::animationsMatchSkeleton(clips, assetlib::loadSkeleton(root.Bskel())));
+
+	// A clips-only import serves the same loads a full one does, so it bakes the same boxes.
+	CHECK(
+		assetlib::findPosedBounds(clips, mesh, 0, assetlib::loadSkeleton(root.Bskel()))
+			.has_value());
 
 	// The point of the exercise: one rig, one mesh, many clip sets.
 	CHECK_FALSE(fs::exists(root.Data() / Project::c_MeshesDirectoryName / "coyote_run.bmesh"));

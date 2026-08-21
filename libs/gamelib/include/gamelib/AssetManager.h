@@ -217,11 +217,12 @@ namespace game
 		 * `animationsRelPath` names the clip set; the skeleton is the one that set was cooked against,
 		 * so a caller never names it. A live geom must be re-acquired with the same `.banim`.
 		 *
-		 * `posedBounds` is the box the geom culls by, and is measured here (assetlib::posedBounds)
-		 * when it is not given. That measurement skins every vertex at every frame -- seconds on a
-		 * dense rig -- so a caller already holding the box, or one that cannot block the thread it
-		 * acquires on, passes its own. It is not validated against the rig: an under-sized box culls
-		 * the mesh early, which is the caller's mistake to make.
+		 * `posedBounds` is the box the geom culls by. When it is not given, the `.banim`'s baked box
+		 * is read (assetlib::findPosedBounds), and only a pairing the cook never measured falls back
+		 * to measuring here (assetlib::posedBounds) -- which skins every vertex at every frame,
+		 * seconds on a dense rig, so a caller that cannot block the thread it acquires on passes its
+		 * own. It is not validated against the rig: an under-sized box culls the mesh early, which
+		 * is the caller's mistake to make.
 		 *
 		 * A **shared** acquire ignores it entirely -- not even to validate it. The sphere belongs to
 		 * the geom, and the geom already exists, so nothing this call passes can change it. Release

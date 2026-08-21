@@ -23,6 +23,7 @@
 #include <assetlib/migrate.h>
 #include <assetlib/pak_io.h>
 #include <assetlib/pak_pack.h>
+#include <assetlib/rebake_bounds.h>
 #include <assetlib/skeleton.h>
 #include <assetlib/texture_prune.h>
 #include <assetlib/vat_bake.h>
@@ -424,6 +425,24 @@ main(int argc, char** argv)
 		migrateDryRun,
 		"Report what would be rewritten; write nothing");
 	migrate->add_flag("-y,--yes", migrateYes, "Rewrite without asking for confirmation");
+
+	std::string boundsRoot;
+	bool        boundsDryRun = false;
+	bool        boundsYes    = false;
+
+	auto* bakebounds = app.add_subcommand(
+		"bakebounds",
+		"Bake every rig's posed culling boxes into its .banim, measured against every .bmesh that "
+		"names its skeleton -- the retrofit for a project imported before loads could read them. "
+		"A clip set whose boxes are current is left untouched");
+	bakebounds->add_option("data-root", boundsRoot, "Project data directory")
+		->required()
+		->check(CLI::ExistingDirectory);
+	bakebounds->add_flag(
+		"-n,--dry-run",
+		boundsDryRun,
+		"Report what would be rewritten; write nothing");
+	bakebounds->add_flag("-y,--yes", boundsYes, "Rewrite without asking for confirmation");
 
 	std::string expInput;
 	float       expSet   = 0.0f;
@@ -836,6 +855,73 @@ main(int argc, char** argv)
 		catch (const std::exception& e)
 		{
 			spdlog::error("migrate failed: {}", e.what());
+			return 1;
+		}
+	}
+
+	if (*bakebounds)
+	{
+		try
+		{
+			const std::filesystem::path root(boundsRoot);
+
+			const auto print = [&](const assetlib::RebakeBoundsReport& report, bool preview) {
+				for (const auto& file : report.files)
+				{
+					const auto relative =
+						std::filesystem::relative(file.path, root).generic_string();
+					switch (file.outcome)
+					{
+					case assetlib::RebakedFile::Outcome::kCurrent:
+						break;
+					case assetlib::RebakedFile::Outcome::kRebaked:
+						std::cout << (preview ? "would rebake " : "rebaked      ") << relative
+								  << '\n';
+						break;
+					case assetlib::RebakedFile::Outcome::kOrphaned:
+						std::cout << "no mesh skins " << relative << '\n';
+						break;
+					case assetlib::RebakedFile::Outcome::kFailed:
+						std::cout << "cannot rebake " << relative << ": " << file.message << '\n';
+						break;
+					}
+				}
+				std::cout << std::format(
+					"{} current, {} {}, {} orphaned, {} cannot be rebaked\n",
+					report.Count(assetlib::RebakedFile::Outcome::kCurrent),
+					report.Count(assetlib::RebakedFile::Outcome::kRebaked),
+					preview ? "to rebake" : "rebaked",
+					report.Count(assetlib::RebakedFile::Outcome::kOrphaned),
+					report.Count(assetlib::RebakedFile::Outcome::kFailed));
+			};
+
+			// The preview costs a signature per mesh; only the real walk pays the measure, and a
+			// write that fails shows up only there -- so its report is the one printed last.
+			const auto preview = assetlib::rebakePosedBounds(root, true);
+			print(preview, true);
+			if (boundsDryRun)
+				return preview.Count(assetlib::RebakedFile::Outcome::kFailed) == 0 ? 0 : 1;
+
+			const auto toRebake = preview.Count(assetlib::RebakedFile::Outcome::kRebaked);
+			if (toRebake == 0)
+				return preview.Count(assetlib::RebakedFile::Outcome::kFailed) == 0 ? 0 : 1;
+			if (!boundsYes &&
+			    !confirm(
+					std::format(
+						"Rebake {} clip set(s) in place? Each is seconds of CPU skinning.",
+						toRebake)))
+			{
+				spdlog::info("Left '{}' alone.", root.string());
+				return 0;
+			}
+
+			const auto report = assetlib::rebakePosedBounds(root, false);
+			print(report, false);
+			return report.Count(assetlib::RebakedFile::Outcome::kFailed) == 0 ? 0 : 1;
+		}
+		catch (const std::exception& e)
+		{
+			spdlog::error("bakebounds failed: {}", e.what());
 			return 1;
 		}
 	}

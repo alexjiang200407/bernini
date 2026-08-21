@@ -307,8 +307,8 @@ namespace bgl
 		 * VAT follows, and for the same reason: the bind pose's box stops holding once a limb moves or
 		 * a clip's root motion carries the rig out of it. bgl cannot measure the box itself:
 		 * skinning a vertex means decoding a vertex layout, which lives in assetlib. Whoever loaded
-		 * the containers measures it -- `assetlib::posedBounds` is that walk, and gamelib's acquire
-		 * makes it.
+		 * the containers supplies it -- read off the `.banim`'s bake (`assetlib::findPosedBounds`)
+		 * or measured (`assetlib::posedBounds`), which is gamelib's acquire either way.
 		 *
 		 * `materials` must resolve every submesh to a `kPBR` material, in any layer: the skinned
 		 * pipeline shades through the PBR pixel stages and has no unlit or loose variant.

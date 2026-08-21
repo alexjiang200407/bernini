@@ -12,6 +12,8 @@
 #include <assetlib/bskel_io.h>
 #include <assetlib/container_format.h>
 #include <assetlib/skeleton.h>
+#include <assetlib/skinning.h>
+#include <assetlib/vat_bake.h>
 
 namespace editor
 {
@@ -116,6 +118,7 @@ namespace editor
 
 		assetlib::AnimationSet clips = imported.animations;
 		clips.skeleton               = mesh.skeleton;
+		assetlib::bakePosedBounds(clips, mesh, imported.skeleton);
 		assetlib::saveAnimations(clips, banimPath);
 	}
 
@@ -184,6 +187,49 @@ namespace editor
 		return matches.front();
 	}
 
+	namespace
+	{
+		/**
+		 * Bake the posed boxes into `clips` for every project mesh that skins to the rig at
+		 * `rigRel`. Matching the path is enough: FindMatchingSkeleton has already refused a
+		 * project where two skeletons share a signature, so a mesh reaching this rig by signature
+		 * names exactly this file.
+		 */
+		void
+		BakeBoundsForRig(
+			assetlib::AnimationSet&      clips,
+			const std::filesystem::path& dataRoot,
+			const std::string&           rigRel,
+			const assetlib::Skeleton&    skeleton)
+		{
+			namespace fs = std::filesystem;
+
+			std::error_code ec;
+			const auto      walk = fs::directory_options::skip_permission_denied;
+			for (const fs::directory_entry& entry :
+			     fs::recursive_directory_iterator(dataRoot, walk, ec))
+			{
+				if (!entry.is_regular_file(ec) ||
+				    entry.path().extension() != assetlib::c_MeshExtension)
+					continue;
+
+				try
+				{
+					if (assetlib::normalizePath(assetlib::loadMeshRefs(entry.path()).skeleton) !=
+					    rigRel)
+						continue;
+
+					assetlib::bakePosedBounds(clips, assetlib::load(entry.path()), skeleton);
+				}
+				catch (const std::exception&)
+				{
+					// A mesh that cannot be read has no box to bake; the asset scan is where a
+					// broken one gets reported.
+				}
+			}
+		}
+	}
+
 	void
 	WriteImportedClips(
 		const assetlib::imp::BMeshImport& imported,
@@ -212,6 +258,15 @@ namespace editor
 		assetlib::AnimationSet clips = imported.animations;
 		clips.skeleton =
 			Rebase(QString::fromStdWString(rig.wstring()), dataRoot, true).toStdString();
+
+		// Measured against the rig the clips will resolve at load, not the imported copy: the two
+		// share a signature but a re-authored bind pose deliberately does not change one.
+		BakeBoundsForRig(
+			clips,
+			dataRoot,
+			assetlib::normalizePath(clips.skeleton),
+			assetlib::loadSkeleton(rig));
+
 		assetlib::saveAnimations(clips, banimPath);
 	}
 

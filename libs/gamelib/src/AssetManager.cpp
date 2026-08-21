@@ -548,9 +548,14 @@ namespace game
 
 			// The box the geom culls by. Not the bind pose's: a clip carrying root motion walks the
 			// rig out of that box, and culling by it makes the mesh vanish as soon as it does.
-			const assetlib::Bounds bounds =
-				posedBounds ? *posedBounds :
-							  assetlib::posedBounds(mesh, meshIndex, skeleton, animations);
+			const assetlib::Bounds bounds = [&] {
+				if (posedBounds)
+					return *posedBounds;
+				if (const auto baked =
+				        assetlib::findPosedBounds(animations, mesh, meshIndex, skeleton))
+					return *baked;
+				return assetlib::posedBounds(mesh, meshIndex, skeleton, animations);
+			}();
 
 			auto record = GeomRecord();
 			record.handle =

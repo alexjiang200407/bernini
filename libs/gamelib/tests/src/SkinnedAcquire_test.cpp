@@ -3,9 +3,11 @@
 #include "util/RigFixture.h"
 #include "util/TestOptions.h"
 
+#include <assetlib/AssetStore.h>
 #include <assetlib/banim_io.h>
 #include <assetlib/bskel_io.h>
 #include <assetlib/skeleton.h>
+#include <assetlib/skinning.h>
 #include <assetlib_structs/Animation.h>
 #include <assetlib_structs/Bounds.h>
 #include <assetlib_structs/Skeleton.h>
@@ -206,4 +208,44 @@ TEST_CASE("a skinned acquire passes its posed box down to the geom", "[skinned][
 
 	assets.ReleaseGeom(shared.geom);
 	assets.ReleaseGeom(mesh.geom);
+}
+
+TEST_CASE(
+	"a skinned acquire culls by the .banim's baked box instead of measuring",
+	"[skinned][acquire]")
+{
+	DataRoot root("bernini_skinned_acquire_baked");
+	WriteRig(root.path);
+
+	// The bake an import writes, replayed by hand -- except the box is the one box the scene
+	// refuses. An acquire that throws on it can only have read the bake; one that measures gets
+	// the valid box the walk always produces, and stands.
+	const auto store    = assetlib::AssetStore(root.path);
+	const auto mesh     = store.LoadMesh("Meshes/rig.bmesh");
+	const auto skeleton = store.LoadSkeleton("Skeletons/rig.bskel");
+
+	auto animations = store.LoadAnimations("Animations/rig.banim");
+	animations.posedBoxes.push_back(
+		assetlib::PosedBox{ assetlib::posedBoundsSignature(mesh, skeleton),
+	                        glm::vec3(1.0f, -1.0f, -1.0f),
+	                        glm::vec3(-1.0f, 1.0f, 1.0f),
+	                        0 });
+	assetlib::saveAnimations(animations, root.path / "Animations/rig.banim");
+
+	auto gfx = bgl::CreateGraphics(HeadlessOptions());
+	REQUIRE(gfx != nullptr);
+
+	auto scene  = gfx->CreateScene(bgl::SceneDesc());
+	auto assets = game::AssetManager(scene, root.path);
+
+	CHECK_THROWS_AS(
+		assets.AcquireSkinnedMesh("Meshes/rig.bmesh", "Animations/rig.banim"),
+		bgl::SceneError);
+
+	// A caller's own box still outranks the bake.
+	const auto valid = assetlib::Bounds{ glm::vec3(-2.0f), glm::vec3(2.0f) };
+	const auto own =
+		assets.AcquireSkinnedMesh("Meshes/rig.bmesh", "Animations/rig.banim", 0, valid);
+	REQUIRE(own.geom.IsValid());
+	assets.ReleaseGeom(own.geom);
 }

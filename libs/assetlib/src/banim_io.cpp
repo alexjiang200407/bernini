@@ -31,8 +31,9 @@ namespace assetlib
 			kClips = 1,
 			kSamples,
 			kStringPool,
-			kSkeletonRef,  // the signature and bone count the clips were cooked against
-			kSkeletonPath  // the .bskel path
+			kSkeletonRef,   // the signature and bone count the clips were cooked against
+			kSkeletonPath,  // the .bskel path
+			kPosedBoxes     // PosedBox entries: the posed culling boxes this file carries
 		};
 
 		/** What the clips were cooked against, so a rig that has changed since is refused. */
@@ -56,6 +57,14 @@ namespace assetlib
 						[](auto& layout) {
 							layout.AddField("signature", &SkeletonRef::signature)
 								.AddField("boneCount", &SkeletonRef::boneCount);
+						})
+					.AddLayout<PosedBox>(
+						"PosedBox",
+						[](auto& layout) {
+							layout.AddField("sourceSignature", &PosedBox::sourceSignature)
+								.AddField("min", &PosedBox::min)
+								.AddField("max", &PosedBox::max)
+								.AddField("meshIndex", &PosedBox::meshIndex);
 						})
 					.Finish();
 			return c_Schema;
@@ -98,6 +107,8 @@ namespace assetlib
 		writer.Add(ChunkId::kStringPool, animations.stringPool.bytes());
 		writer.Add(ChunkId::kSkeletonRef, packSkeletonRef(animations));
 		writer.Add(ChunkId::kSkeletonPath, std::span<const char>(animations.skeleton));
+		if (!animations.posedBoxes.empty())
+			writer.Add(ChunkId::kPosedBoxes, animations.posedBoxes);
 		return writer.Finish(magic::c_BAnim, c_VersionMajor, c_VersionMinor);
 	}
 
@@ -111,6 +122,7 @@ namespace assetlib
 		animations.clips      = reader.Read<AnimationClip>(ChunkId::kClips);
 		animations.samples    = reader.Read<Transform>(ChunkId::kSamples);
 		animations.stringPool = core::string_pool(reader.Read<char>(ChunkId::kStringPool));
+		animations.posedBoxes = reader.Read<PosedBox>(ChunkId::kPosedBoxes);
 		unpackSkeletonRef(
 			animations,
 			reader.Read<SkeletonRef>(ChunkId::kSkeletonRef),

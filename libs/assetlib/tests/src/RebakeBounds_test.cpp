@@ -1,0 +1,160 @@
+#include <assetlib/banim_io.h>
+#include <assetlib/bmesh_io.h>
+#include <assetlib/bskel_io.h>
+#include <assetlib/rebake_bounds.h>
+#include <assetlib/skeleton.h>
+#include <assetlib/skinning.h>
+#include <assetlib_structs/Animation.h>
+#include <assetlib_structs/BMesh.h>
+#include <assetlib_structs/Bounds.h>
+#include <assetlib_structs/Skeleton.h>
+
+#include "RefsSandbox.h"
+
+#include <catch2/catch_approx.hpp>
+
+using namespace assetlib;
+using namespace assetlib::test;
+
+namespace
+{
+	namespace fs = std::filesystem;
+
+	/** One bone at identity, so the posed box is readable straight off the samples. */
+	Skeleton
+	MakeRig()
+	{
+		Skeleton skeleton;
+
+		auto bone        = Bone();
+		bone.bindPose    = { glm::vec3(0.0f), glm::quat(1.0f, 0.0f, 0.0f, 0.0f), glm::vec3(1.0f) };
+		bone.inverseBind = glm::mat4(1.0f);
+		bone.parent      = c_InvalidIndex;
+		bone.nameOffset  = 0;
+		skeleton.bones.push_back(bone);
+		return skeleton;
+	}
+
+	/** A 2-frame clip: still, then the root at x = 50. */
+	AnimationSet
+	MakeClips(const Skeleton& skeleton)
+	{
+		auto animations              = AnimationSet();
+		animations.skeleton          = "Skeletons/rig.bskel";
+		animations.skeletonSignature = skeletonSignature(skeleton);
+		animations.boneCount         = 1;
+
+		auto clip        = AnimationClip();
+		clip.firstSample = 0;
+		clip.frameCount  = 2;
+		clip.sampleRate  = 30.0f;
+		animations.clips.push_back(clip);
+
+		animations.samples.push_back(
+			{ glm::vec3(0.0f), glm::quat(1.0f, 0.0f, 0.0f, 0.0f), glm::vec3(1.0f) });
+		animations.samples.push_back(
+			{ glm::vec3(50.0f, 0.0f, 0.0f), glm::quat(1.0f, 0.0f, 0.0f, 0.0f), glm::vec3(1.0f) });
+		return animations;
+	}
+
+	/** Two vertices at opposite corners of a unit box, both welded to bone 0. */
+	BMesh
+	MakeSkinnedMesh(const glm::vec3& corner)
+	{
+		BMesh mesh;
+
+		auto submesh                  = Submesh();
+		submesh.layout.attributeCount = 3;
+		submesh.layout.attributes[0]  = { VertexSemantic::kPosition, VertexFormat::kFloat32x3, 0 };
+		submesh.layout.attributes[1]  = { VertexSemantic::kJoints0, VertexFormat::kUint16x4, 12 };
+		submesh.layout.attributes[2]  = { VertexSemantic::kWeights0, VertexFormat::kUnorm16x4, 20 };
+		submesh.layout.stride         = 28;
+
+		for (const glm::vec3& position : { -corner, corner })
+		{
+			const size_t base = mesh.vertexData.size();
+			mesh.vertexData.resize(base + submesh.layout.stride);
+
+			const std::array<uint16_t, 4> joints{};
+			const std::array<uint16_t, 4> weights{ { 65535, 0, 0, 0 } };
+
+			std::byte* at = mesh.vertexData.data() + base;
+			std::memcpy(at, &position, sizeof(position));
+			std::memcpy(at + 12, joints.data(), sizeof(joints));
+			std::memcpy(at + 20, weights.data(), sizeof(weights));
+			++submesh.vertexCount;
+		}
+
+		submesh.aabbMin = -corner;
+		submesh.aabbMax = corner;
+		mesh.submeshes.push_back(submesh);
+		mesh.meshes.push_back({ .firstSubmesh = 0, .submeshCount = 1, .nameOffset = 0 });
+		mesh.skeleton = "Skeletons/rig.bskel";
+		return mesh;
+	}
+
+	void
+	WriteProject(const DataRoot& root)
+	{
+		const Skeleton skeleton = MakeRig();
+
+		fs::create_directories(root.path / "Meshes");
+		fs::create_directories(root.path / "Skeletons");
+		fs::create_directories(root.path / "Animations");
+		save(MakeSkinnedMesh(glm::vec3(1.0f)), root.path / "Meshes/rig.bmesh");
+		saveSkeleton(skeleton, root.path / "Skeletons/rig.bskel");
+		saveAnimations(MakeClips(skeleton), root.path / "Animations/rig.banim");
+	}
+}
+
+TEST_CASE("The rebake writes the box a load then finds", "[rebake]")
+{
+	const DataRoot root("bernini_rebake_bounds");
+	WriteProject(root);
+
+	SECTION("a dry run reports the work and touches nothing")
+	{
+		const RebakeBoundsReport preview = rebakePosedBounds(root.path, true);
+		CHECK(preview.Count(RebakedFile::Outcome::kRebaked) == 1);
+		CHECK(loadAnimations(root.path / "Animations/rig.banim").posedBoxes.empty());
+	}
+
+	SECTION("the real run bakes, and a second run rewrites nothing")
+	{
+		const RebakeBoundsReport report = rebakePosedBounds(root.path, false);
+		CHECK(report.Count(RebakedFile::Outcome::kRebaked) == 1);
+		CHECK(report.Count(RebakedFile::Outcome::kFailed) == 0);
+
+		const std::optional<Bounds> baked = findPosedBounds(
+			loadAnimations(root.path / "Animations/rig.banim"),
+			load(root.path / "Meshes/rig.bmesh"),
+			0,
+			loadSkeleton(root.path / "Skeletons/rig.bskel"));
+
+		REQUIRE(baked.has_value());
+		CHECK(baked->min.x == Catch::Approx(-1.0f));
+		CHECK(baked->max.x == Catch::Approx(51.0f));
+
+		const RebakeBoundsReport again = rebakePosedBounds(root.path, false);
+		CHECK(again.Count(RebakedFile::Outcome::kCurrent) == 1);
+		CHECK(again.Count(RebakedFile::Outcome::kRebaked) == 0);
+	}
+
+	SECTION("a mesh re-authored since the bake makes its clip set stale again")
+	{
+		(void)rebakePosedBounds(root.path, false);
+		save(MakeSkinnedMesh(glm::vec3(3.0f)), root.path / "Meshes/rig.bmesh");
+
+		const RebakeBoundsReport preview = rebakePosedBounds(root.path, true);
+		CHECK(preview.Count(RebakedFile::Outcome::kRebaked) == 1);
+	}
+
+	SECTION("a clip set no mesh skins to is reported, not guessed at")
+	{
+		fs::remove(root.path / "Meshes/rig.bmesh");
+
+		const RebakeBoundsReport report = rebakePosedBounds(root.path, false);
+		CHECK(report.Count(RebakedFile::Outcome::kOrphaned) == 1);
+		CHECK(loadAnimations(root.path / "Animations/rig.banim").posedBoxes.empty());
+	}
+}
