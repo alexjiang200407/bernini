@@ -40,7 +40,7 @@ doc disagrees, trust the header, then fix this doc.
   its `sizeof`, so a forgotten field fails at registration. The on-disk schema table is the same
   whether it was authored by a builder or, one day, by a generator.
 * **Load in memory; write current on explicit save.** Opening a project never dirties it — the
-  containers are binaries under version control. `assetlib_cli migrate` rewrites a whole project
+  containers are binaries under version control. `assetlib_cli migrate -p <project>` rewrites a whole project
   deliberately, leaves a file that is already current untouched (so a second run rewrites nothing),
   and reports a file it cannot read rather than half-writing it.
 * **`assets/Frozen/` holds one file per container at its first self-describing schema, never

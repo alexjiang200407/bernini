@@ -43,7 +43,7 @@ namespace editor
 	 * it -- so the `.bmesh` is written from the UI thread too, once its materials exist to be named.
 	 *
 	 * Refuses to overwrite anything, reports a failure to the user, and on either a failure or a cancel
-	 * removes the half-written files it had produced -- see RollBackImport.
+	 * removes the half-written files it had produced -- see assetlib::rollBackImport.
 	 *
 	 * What counts as a collision differs by category. A materials folder may be shared with another
 	 * import, since `options.outputs` names each file, so only a colliding *file* refuses this one. A
@@ -63,7 +63,7 @@ namespace editor
 	 * Converts a Radiance `.hdr` into the environment family: a `.bsky`, the `.benvl` convolved from
 	 * the same radiance, and the `.benv` naming the pair.
 	 *
-	 * Unlike ImportMesh there is no RollBackImport here -- `assetlib::importEnvironment` undoes its own
+	 * Unlike ImportMesh there is no rollBackImport here -- `assetlib::importEnvironment` undoes its own
 	 * half-written work, including on a cancel, so the editor has nothing to clean up after.
 	 */
 	[[nodiscard]] ImportOutcome

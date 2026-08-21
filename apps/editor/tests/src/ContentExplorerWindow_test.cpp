@@ -1,10 +1,10 @@
 #include "Windows/ContentExplorer/ContentExplorerWindow.h"
 #include "Windows/ContentExplorer/asset_rules.h"
 
-#include "Project/Project.h"
 #include "Thumbnails/TexturePreviewCache.h"
 #include "util/QtSupport.h"
 #include "util/asset_paths.h"
+#include <assetlib/Project.h>
 
 #include <QDir>
 #include <QDragEnterEvent>
@@ -29,9 +29,9 @@ namespace
 
 		Sandbox()
 		{
-			Project::Create(
+			assetlib::Project::Create(
 				temp.path().toStdString() / fs::path("MyGame") /
-					("MyGame" + std::string(Project::c_FileExtension)),
+					("MyGame" + std::string(assetlib::Project::c_FileExtension)),
 				"MyGame");
 		}
 
@@ -202,11 +202,11 @@ TEST_CASE("The content explorer is rooted at the project's data directory", "[co
 	// project's business.
 	REQUIRE(QDir(model->filePath(Hierarchy(window)->rootIndex())) == QDir(sandbox.DataRootPath()));
 
-	// And it fills in, on a worker thread -- one row per category Project::Create scaffolds, counted
+	// And it fills in, on a worker thread -- one row per category assetlib::Project::Create scaffolds, counted
 	// from that list rather than restated, so adding a category does not fail this on arithmetic.
 	REQUIRE(WaitFor([&] {
 		return model->rowCount(Hierarchy(window)->rootIndex()) ==
-		       static_cast<int>(Project::c_RequiredDirectories.size());
+		       static_cast<int>(assetlib::c_RequiredDirectories.size());
 	}));
 }
 
@@ -364,7 +364,7 @@ TEST_CASE("A rename accepts only names every platform can round-trip", "[content
 
 TEST_CASE("The directories the project is scaffolded with cannot be deleted", "[contentexplorer]")
 {
-	// Every asset path in the project is written against this layout, and Project::Open puts a missing
+	// Every asset path in the project is written against this layout, and assetlib::Project::Open puts a missing
 	// category straight back -- so deleting one would not even stick.
 	const QString category = GENERATE(
 		QString("Meshes"),

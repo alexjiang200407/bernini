@@ -9,8 +9,8 @@ namespace bgl::test
 	void
 	ApplyEnvironment(bgl::IScene* scene, bgl::ISceneView* view)
 	{
-		auto env =
-			assetlib::AssetStore("assets").ResolveEnvironment("assets/Environments/forest.benv");
+		auto env = assetlib::AssetStore("assets/Data")
+		               .ResolveEnvironment("assets/Data/Environments/forest.benv");
 
 		view->SetEnvironmentMap(
 			{ scene->AddTextureAsset(std::move(env.maps.irradiance)),
@@ -23,8 +23,8 @@ namespace bgl::test
 	LoadSkybox(bgl::IScene* scene)
 	{
 		return scene->AddTextureAsset(
-			assetlib::AssetStore("assets")
-				.ResolveEnvironment("assets/Environments/forest.benv")
+			assetlib::AssetStore("assets/Data")
+				.ResolveEnvironment("assets/Data/Environments/forest.benv")
 				.maps.skybox);
 	}
 }

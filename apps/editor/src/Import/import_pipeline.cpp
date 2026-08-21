@@ -2,8 +2,10 @@
 
 #include "Async/BackgroundTask.h"
 #include "Import/import_writers.h"
-#include "Project/Project.h"
+
 #include "Windows/AssetImporter/EnvironmentImporterDialog.h"
+#include <assetlib/Project.h>
+#include <assetlib/asset_import.h>
 
 #include <QFileInfo>
 #include <QMessageBox>
@@ -90,8 +92,7 @@ namespace editor
 		const bool      materialDirExisted = !materialDir.empty() && fs::exists(materialDir, ec);
 
 		// Each lands in its own category directory, like the materials and textures this import also
-		// writes -- not beside the mesh. `assetlib::bake` names them beside it because a baked directory
-		// is its own data root; a project has a layout, and a rig is an asset in it.
+		// writes -- not beside the mesh. A project has a layout, and a rig is an asset in it.
 		//
 		// Sampled unconditionally: whether the source turns out to carry a skin is not known until it is
 		// parsed, and by then a file that was already there cannot be told from one this import wrote.
@@ -102,7 +103,7 @@ namespace editor
 		const fs::path banimPath = under(options.outputs.animations);
 
 		// Only what this import may actually write.
-		auto files = std::vector<ImportedFile>();
+		auto files = std::vector<assetlib::ImportedFile>();
 		if (options.mesh)
 		{
 			files.push_back({ bmeshPath, fs::exists(bmeshPath, ec) });
@@ -126,13 +127,13 @@ namespace editor
 			}
 		}
 
-		const std::array<ImportedDir, 2> dirs = { {
-			{ textureDir, textureDirExisted, Project::c_TexturesSrcDirectoryName },
-			{ materialDir, materialDirExisted, Project::c_MaterialsDirectoryName },
+		const std::array<assetlib::ImportedDir, 2> dirs = { {
+			{ textureDir, textureDirExisted, dataRoot / assetlib::c_TexturesSrcDirectoryName },
+			{ materialDir, materialDirExisted, dataRoot / assetlib::c_MaterialsDirectoryName },
 		} };
 
 		auto replaced = QStringList();
-		for (const ImportedFile& file : files)
+		for (const assetlib::ImportedFile& file : files)
 			if (file.existed)
 				replaced << QString::fromStdWString(file.path.wstring());
 
@@ -203,7 +204,7 @@ namespace editor
 							tangents.skipped,
 							qPrintable(name));
 
-					WriteImportedRig(
+					assetlib::writeImportedRig(
 						*imported,
 						*mesh,
 						dataRoot,
@@ -220,11 +221,11 @@ namespace editor
 							textureDir,
 							options.outputs.materialStems);
 
-					WriteImportedMesh(*mesh, bmeshPath);
+					assetlib::writeImportedMesh(*mesh, bmeshPath);
 				}
 				else if (options.animations)
 				{
-					WriteImportedClips(*imported, dataRoot, banimPath);
+					assetlib::writeImportedClips(*imported, dataRoot, banimPath);
 				}
 
 				return ImportOutcome::kImported;
@@ -238,7 +239,7 @@ namespace editor
 		// A cancelled cook throws where it stood, so the textures may be half-written and the mesh may
 		// name materials that never landed. Neither outcome may leave that behind for the user to trip
 		// over.
-		RollBackImport(files, dirs);
+		assetlib::rollBackImport(files, dirs);
 
 		if (result.Cancelled())
 			return ImportOutcome::kCancelled;

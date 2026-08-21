@@ -44,6 +44,11 @@ must feed data that matches.
   split matters because a glTF material is only glTF's shading model, and the choice to accept it is
   the editor's to make per import, not a property of the container. See
   [Importing a glTF's materials](#importing-a-gltfs-materials).
+
+  It is also why the split cannot be closed by moving code down. The board *is* the routing table --
+  `CompileMaterial` reads a material's nine routes back out of it, so there is no second table to
+  disagree with -- and the board is QtNodes. Deriving materials in `assetlib` would mean either
+  linking Qt into a CLI that is deliberately free of it, or writing that second table.
 * **Honest vertex layout.** The importer packs *only* the attributes the source primitive provides
   and never fabricates a normal. The tangent is the one exception, and the bullet below says why.
   Missing optional attributes decode to defaults on the GPU. **Position is the only required attribute**, and it must be the first one. See
@@ -52,10 +57,10 @@ must feed data that matches.
   no tangent renders with the *geometric* normal (the shader NaN-guards a degenerate tangent), so the
   map silently does nothing — no error, no warning, just a flat surface. Leaving that to an explicit
   step meant every asset arrived broken until someone remembered to run it, which is what a real
-  import found. So both importers — the editor's and `assetlib_cli bake` — call `generateTangents`,
-  which rewrites only the submeshes that have none and leaves an authored basis alone. Deriving is
+  import found. So the import calls `generateTangents`, which rewrites only the submeshes that have
+  none and leaves an authored basis alone. Deriving is
   strictly better than the geometric-normal fallback, and never better than a basis the DCC tool
-  exported, so authoring upstream is still the right thing to do. `assetlib_cli tangents <mesh>`
+  exported, so authoring upstream is still the right thing to do. `assetlib_cli tangents -p <project> <mesh>`
   applies it to a `.bmesh` already on disk.
 * **All static geometry is meshletized.** Meshes are clustered into meshlets (meshopt) at bake time —
   **64 vertices / 124 triangles** — and drawn through a mesh-shader pipeline, not raw index buffers.
@@ -432,7 +437,7 @@ Three different spaces are in play and they are easy to conflate. The contract, 
 * **`.benv`** (v2) — **an environment by reference**: `BEnv { name, sky, lighting }`, two data-root
   relative paths to a `.bsky` and a `.benvl`, no pixels. On disk the family follows the same
   per-kind directories materials use: the `.benv` in `Environments/`, the `.bsky` in `Sky/`, the
-  `.benvl` in `EnvLighting/`, and every baked map in `Textures/` — `assets/` mirrors this exactly
+  `.benvl` in `EnvLighting/`, and every baked map in `Textures/` — `assets/Data/` mirrors this exactly
   as it does for `Materials/`. Composing by path lets a sky be re-authored
   without touching the lighting minutes of convolution produced, and lets two environments share one
   sky; weather joins later through the minor version. Struct in the same `BEnv.h`; I/O:
@@ -542,9 +547,9 @@ they did not ask for and cannot see coming. Names are also checked against the p
 typed — importing into a folder another import already owns is the case this exists for, and finding
 the clash out after OK would mean filling the form in twice.
 
-**The editor's import writes the rig too**, not only `assetlib_cli bake`: a `.bskel` whenever the
-source carries a skin and the mesh is coming across with it, and a `.banim` when the importer's
-*Import animations* box is ticked. The
+**The import writes the rig too**: a `.bskel` whenever the source carries a skin and the mesh is
+coming across with it, and a `.banim` when the editor's *Import animations* box is ticked — the CLI
+always writes both. The
 skeleton is deliberately **not** behind that box — a mesh carrying joints while naming no skeleton is
 one `save` refuses, so making the rig optional would make a skinned glTF unimportable rather than
 merely rig-less. The clips are the half a user can decline. Both are rolled back with the mesh if the
@@ -563,8 +568,8 @@ They land in `Skeletons/` and `Animations/`, one category directory each, the wa
 family splits across `Environments/` / `Sky/` / `EnvLighting/` — and for the same reason, sharpened:
 a rig outlives its clips. Re-cooking a clip set leaves the skeleton alone, and re-authoring a rest
 pose does not invalidate a clip, which is exactly what `skeletonSignature` is there to check and only
-means anything if the two can move apart. `assetlib_cli bake` still writes both beside the `.bmesh`,
-because a baked directory is its own data root and has no project layout to belong to.
+means anything if the two can move apart. Both importers write them into those categories, because
+both address a project.
 
 Not yet done, and deliberately: rotation/translation compression (samples are full-float `Transform`s
 today — the 16 B/bone form is a runtime palette concern, not an import one), per-LOD bone subsets and
@@ -810,10 +815,11 @@ materials in `Materials/kirk/` route from it. A reference into *any depth* of th
 tracks: `remove_all` does not ask what a file is for, so a `notes.txt` the user dropped in the folder
 goes with it, and the count they are warned with has to say so.
 
-Which directories the *project* cannot spare is not a question assetlib can answer — it does not know
-what a project is. That rule is `Project::IsRequiredDirectory`: the data root, and the categories
-`Project::Create` scaffolds (`Meshes`, `Textures`, `textures_src`, `Materials`, `Levels`). `Project::Open`
-puts a missing one straight back, so deleting one would not even stick. A folder made *inside* a
+Which directories the *project* cannot spare is not a question the reference graph answers — it plans
+a deletion from what points at what, and a category with nothing in it points at nothing. That rule is
+`assetlib::Project::IsRequiredDirectory`: the data root, and the categories `Project::Create` scaffolds
+(`Meshes`, `Textures`, `textures_src`, `Materials`, `Levels`). `Project::Open` puts a missing one
+straight back, so deleting one would not even stick. A folder made *inside* a
 category, like `textures_src/kirk`, is the user's.
 
 Three things the implementation must get right, each of which is a real failure and not a hypothetical:
@@ -886,54 +892,68 @@ Three rules of its own:
 
 ## Usage
 
+Every command opens one project and addresses its assets by key. There is no data-root flag: a
+directory that is not a project is refused by the project file's absence, where `-d <any directory>`
+used to be accepted and enumerate empty -- indistinguishable from a project with nothing in it. The
+project is always named explicitly and never discovered from the working directory, which is what
+lets `assetlib_cli` sit on `PATH` and read nothing relative to where it was invoked.
+
+`list` is the one exception, and takes no project: its subject is a `.bpak`, which is what a project
+*produces* rather than something inside one.
+
 ```bash
-# Bake a source model into the modular on-disk form (.bmesh + matN.bmaterial + texN.ktx2)
-assetlib_cli bake model.glb -o assets/model -n model
+# `<project>` below is a .berniniproject file; every asset argument is a key relative to its data
+# root, never a path on disk.
 
-# A rigged source also emits model.bskel + model.banim; -r picks the rate its clips resample to
-assetlib_cli bake soldier.glb -o assets/soldier -n soldier -r 60
+# Import a source model into the project: Meshes/model.bmesh, its textures into
+# textures_src/model/, and -- when the source carries a skin -- Skeletons/ and Animations/.
+# The .glb is a path on disk; everything written is a key. Import never overwrites
+assetlib_cli bake -p <project> model.glb -n model
 
-# Inspect the baked geometry in a viewer (meshlet-reconstructed, or --raw for the source indices)
-assetlib_cli obj assets/model/model.bmesh -o model.obj
+# -r picks the rate a rigged source's clips resample to
+assetlib_cli bake -p <project> soldier.glb -n soldier -r 60
+
+# Inspect the baked geometry in a viewer (meshlet-reconstructed, or --raw for the source indices).
+# The .obj is not a project asset, so -o is a path on disk
+assetlib_cli obj -p <project> Meshes/model.bmesh -o model.obj
 
 # Derive a tangent basis in place, for a mesh imported before the importers did it themselves
-assetlib_cli tangents Data/Meshes/model.bmesh
+assetlib_cli tangents -p <project> Meshes/model.bmesh
 
-# Convolve an HDRI into a project's split environment set: float sources into textures_src/, a
+# Convolve an HDRI into the project's split environment set: float sources into textures_src/, a
 # baked Sky/forest.bsky + EnvLighting/forest.benvl, and an Environments/forest.benv naming the pair
-assetlib_cli envmap forest.hdr -p Data --name forest
+assetlib_cli envmap -p <project> forest.hdr --name forest
 
-# Print what is actually inside a container (the kind is read from the file's magic)
-assetlib_cli describe Data/Meshes/model.bmesh            # hierarchy, submeshes, layouts, materials
-assetlib_cli describe Data/Meshes/model.bmesh --brief    # summary + material table only
-assetlib_cli describe Data/Materials/skin.bmaterial      # factors, triplet, routing table, bake state
-assetlib_cli describe Data/Sky/forest.bsky               # presentation + the radiance route
-assetlib_cli describe Data/EnvLighting/forest.benvl      # exposure + the prefilter/irradiance pair
-assetlib_cli describe Data/Environments/forest.benv      # the .bsky and .benvl it composes
-assetlib_cli describe Data/Meshes/soldier.bskel          # bones, parents, bind pose, signature
-
-# ...and a clip set resolves its skeleton, so a stale binding is reported rather than left to a pose
-assetlib_cli describe Data/Meshes/soldier.banim -d Data
-
-# ...and with a data root, each routed source is stat'd, so a stale bake is reported per channel.
-# A .benv holds no pixels, so for one the root instead says whether what it names is there.
-assetlib_cli describe Data/Materials/skin.bmaterial -d Data
-assetlib_cli describe Data/Environments/forest.benv -d Data
+# Print what is actually inside a container (the kind is read from the file's magic, not its name).
+# Every routed source is stat'd against the project, so a stale bake is always reported; a clip set
+# resolves its skeleton, and a .benv says whether the files it names are there
+assetlib_cli describe -p <project> Meshes/model.bmesh          # hierarchy, submeshes, layouts, materials
+assetlib_cli describe -p <project> Meshes/model.bmesh --brief  # summary + material table only
+assetlib_cli describe -p <project> Materials/skin.bmaterial    # factors, triplet, routes, bake state
+assetlib_cli describe -p <project> Sky/forest.bsky             # presentation + the radiance route
+assetlib_cli describe -p <project> EnvLighting/forest.benvl    # exposure + the prefilter/irradiance pair
+assetlib_cli describe -p <project> Environments/forest.benv    # the .bsky and .benvl it composes
+assetlib_cli describe -p <project> Skeletons/soldier.bskel     # bones, parents, bind pose, signature
+assetlib_cli describe -p <project> Animations/soldier.banim    # clips, and the rig they bind to
 
 # Cut a material down to its shippable form: the triplet, the factors and the name. The routes and
-# the node graph do not survive it, so -o is the safe way to keep the authoring copy
-assetlib_cli strip Data/Materials/skin.bmaterial -o Ship/Materials/skin.bmaterial
-assetlib_cli strip Data/Materials/skin.bmaterial      # rewrites in place; asks first, -y skips
+# the node graph do not survive it, so -o is the safe way to keep the authoring copy -- and a
+# shipping tree is not a project, so that one is a path on disk
+assetlib_cli strip -p <project> Materials/skin.bmaterial -o Ship/Materials/skin.bmaterial
+assetlib_cli strip -p <project> Materials/skin.bmaterial   # rewrites in place; asks first, -y skips
+
+# Show or author the exposure a lighting renders at
+assetlib_cli exposure -p <project> EnvLighting/forest.benvl --set 1.0
 
 # List the baked maps no material references any more, and delete nothing
-assetlib_cli prune -d Data --dry-run
+assetlib_cli prune -p <project> --dry-run
 
 # Delete them. Asks first; -y skips the prompt, and a closed stdin answers no
-assetlib_cli prune -d Data
+assetlib_cli prune -p <project>
 
 # Why will the editor not let me delete this? -- who references it, and how
-assetlib_cli refs -d Data Textures/basecolor_700a22db7b7ef785.ktx2
-assetlib_cli refs -d Data                    # summary, and every dangling reference in the project
+assetlib_cli refs -p <project> Textures/basecolor_700a22db7b7ef785.ktx2
+assetlib_cli refs -p <project>              # summary, and every dangling reference in the project
 ```
 
 `describe` is the counterpart of `obj`: `obj` dumps the geometry for a viewer, `describe` dumps

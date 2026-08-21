@@ -1,7 +1,9 @@
+#include <assetlib/asset_import.h>
 #include <assetlib/banim_io.h>
 #include <assetlib/bmesh_gltf.h>
 #include <assetlib/bmesh_io.h>
 #include <assetlib/bskel_io.h>
+#include <assetlib/mesh_tangents.h>
 #include <assetlib/skeleton.h>
 #include <assetlib/skinning.h>
 #include <assetlib_structs/Animation.h>
@@ -556,13 +558,18 @@ TEST_CASE("A rigid mesh parented to a joint rides that bone", "[gltf][skeleton][
 	}
 }
 
-TEST_CASE("Baking a skinned import writes the rig beside the mesh", "[gltf][skeleton][io]")
+TEST_CASE("Importing a skinned mesh writes the rig it names", "[gltf][skeleton][io]")
 {
 	const SkinnedGltf source("bernini_gltf_skin_bake");
 	const auto        import = loadFromGltf(source.gltf);
 
 	const fs::path outDir = source.dir / "baked";
-	bake(import, outDir, "rig");
+	fs::create_directories(outDir);
+
+	BMesh baked = toBMesh(import);
+	static_cast<void>(generateTangents(baked));
+	writeImportedRig(import, baked, outDir, outDir / "rig.bskel", outDir / "rig.banim", true);
+	writeImportedMesh(baked, outDir / "rig.bmesh");
 
 	const auto mesh = load(outDir / "rig.bmesh");
 
@@ -648,7 +655,7 @@ TEST_CASE("A mesh that names no skeleton loads as a static mesh", "[bmesh][io]")
 {
 	// Chunks are addressed by id and an absent or empty one is not an error, so a mesh with nothing
 	// in its skeleton chunk reads as what it is, a static mesh.
-	const fs::path bmesh = "assets/Meshes/apples.bmesh";
+	const fs::path bmesh = "assets/Data/Meshes/apples.bmesh";
 	REQUIRE(fs::exists(bmesh));
 
 	const auto mesh = load(bmesh);

@@ -1,5 +1,5 @@
-#include "Project/Project.h"
 #include "Windows/AnimationEditor/animation_bindings.h"
+#include <assetlib/Project.h>
 
 #include <assetlib/banim_io.h>
 #include <assetlib/bmesh_io.h>
@@ -21,7 +21,7 @@ namespace
 		{
 			m_Root = fs::temp_directory_path() /
 			         ("bernini_bindings_test_" + std::to_string(reinterpret_cast<uintptr_t>(this)));
-			for (const std::string_view category : Project::c_RequiredDirectories)
+			for (const std::string_view category : assetlib::c_RequiredDirectories)
 				fs::create_directories(m_Root / category);
 		}
 
@@ -154,7 +154,7 @@ TEST_CASE("A project with no Animations directory has no candidates, not an erro
 {
 	const TempRoot root;
 	WriteMesh(root.Data(), "Meshes/unit.bmesh", "Skeletons/rig.bskel");
-	fs::remove_all(root.Data() / Project::c_AnimationsDirectoryName);
+	fs::remove_all(root.Data() / assetlib::c_AnimationsDirectoryName);
 
 	const auto bindings = editor::ResolveAnimationBindings(root.Data(), "Meshes/unit.bmesh");
 

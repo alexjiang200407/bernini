@@ -1,5 +1,6 @@
 #pragma once
 #include <assetlib/cancel.h>
+#include <assetlib/project_layout.h>
 
 namespace assetlib
 {
@@ -26,10 +27,10 @@ namespace assetlib
 		 * subdirectory *inside* the category rather than replacing it, so the categories stay the
 		 * layout every other reference is written against.
 		 */
-		std::filesystem::path skyDir         = "Sky";
-		std::filesystem::path lightingDir    = "EnvLighting";
-		std::filesystem::path environmentDir = "Environments";
-		std::filesystem::path sourceDir      = "textures_src";
+		std::filesystem::path skyDir         = c_SkyDirectoryName;
+		std::filesystem::path lightingDir    = c_EnvLightingDirectoryName;
+		std::filesystem::path environmentDir = c_EnvironmentsDirectoryName;
+		std::filesystem::path sourceDir      = c_TexturesSrcDirectoryName;
 
 		bool sky         = true;  // write the `.bsky`
 		bool lighting    = true;  // write the `.benvl` -- the prefilter/irradiance pair
