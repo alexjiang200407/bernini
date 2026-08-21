@@ -7,6 +7,8 @@ add_executable(bgl_window ${BGL_WINDOW_SOURCES})
 
 target_link_libraries(bgl_window PRIVATE core bgl example_util)
 
+enable_strict_compiler(bgl_window)
+
 target_precompile_headers(bgl_window
     PUBLIC ${CMAKE_SOURCE_DIR}/PCH/pch.h
 )

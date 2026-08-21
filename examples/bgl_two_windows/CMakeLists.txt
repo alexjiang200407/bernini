@@ -19,6 +19,8 @@ if(RENDERER_BACKEND STREQUAL "DX12")
     target_link_libraries(bgl_two_windows PRIVATE bgl_d3d12_agility)
 endif()
 
+enable_strict_compiler(bgl_two_windows)
+
 target_precompile_headers(bgl_two_windows
     PUBLIC
         ${CMAKE_SOURCE_DIR}/PCH/pch.h

@@ -4,7 +4,7 @@
 #include <core/err/util.h>
 
 int
-main(int argc, char** argv)
+main(int, char**)
 {
 	core::install_crash_handlers();
 

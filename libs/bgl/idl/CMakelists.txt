@@ -12,4 +12,9 @@ target_precompile_headers(bgl_idlgen
 
 target_link_libraries(bgl_idlgen PUBLIC slang::slang CLI11::CLI11 core)
 
+# No enable_strict_compiler here. This switches over slang's reflection enums and handles the subset
+# it generates for, throwing on the rest -- so /Wall's C4061 fires once per unhandled enumerator, and
+# naming them all would break the build on every slang bump to add cases that reach the same throw.
+# The warning earns its keep on our own enums, where a new one falling into `default:` is a bug.
+
 add_subdirectory(src)

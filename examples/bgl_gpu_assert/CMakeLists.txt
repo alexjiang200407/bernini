@@ -19,6 +19,8 @@ if(RENDERER_BACKEND STREQUAL "DX12")
     target_link_libraries(bgl_gpu_assert PRIVATE bgl_d3d12_agility)
 endif()
 
+enable_strict_compiler(bgl_gpu_assert)
+
 target_precompile_headers(bgl_gpu_assert
     PUBLIC
         ${CMAKE_SOURCE_DIR}/PCH/pch.h

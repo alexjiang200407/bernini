@@ -77,6 +77,8 @@ target_link_libraries(assetlib_cli
 		CLI11::CLI11
 )
 
+enable_strict_compiler(assetlib_cli)
+
 target_precompile_headers(assetlib_cli
 	PUBLIC ${CMAKE_SOURCE_DIR}/PCH/pch.h
 )
