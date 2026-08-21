@@ -378,18 +378,15 @@ main(int argc, char** argv)
 		"Report what would be rewritten; write nothing");
 	migrate->add_flag("-y,--yes", migrateYes, "Rewrite without asking for confirmation");
 
-	std::string boundsRoot;
-	bool        boundsDryRun = false;
-	bool        boundsYes    = false;
+	bool boundsDryRun = false;
+	bool boundsYes    = false;
 
 	auto* bakebounds = app.add_subcommand(
 		"bakebounds",
 		"Bake every rig's posed culling boxes into its .banim, measured against every .bmesh that "
 		"names its skeleton -- the retrofit for a project imported before loads could read them. "
 		"A clip set whose boxes are current is left untouched");
-	bakebounds->add_option("data-root", boundsRoot, "Project data directory")
-		->required()
-		->check(CLI::ExistingDirectory);
+	addProject(bakebounds);
 	bakebounds->add_flag(
 		"-n,--dry-run",
 		boundsDryRun,
@@ -751,7 +748,8 @@ main(int argc, char** argv)
 	{
 		try
 		{
-			const std::filesystem::path root(boundsRoot);
+			const assetlib::Project     project = assetlib::Project::Open(projectFile);
+			const std::filesystem::path root    = project.GetDataDirectory();
 
 			const auto print = [&](const assetlib::RebakeBoundsReport& report, bool preview) {
 				for (const auto& file : report.files)
