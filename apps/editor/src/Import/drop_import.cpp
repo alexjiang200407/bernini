@@ -4,8 +4,10 @@
 #include "Windows/AssetImporter/AssetImporterDialog.h"
 
 #include <QFileInfo>
+#include <QMessageBox>
 #include <QMimeData>
 #include <QUrl>
+#include <assetlib/asset_import.h>
 
 #include <assetlib/bmesh_gltf.h>
 
@@ -55,6 +57,20 @@ namespace editor
 
 			if (!IsImportableMesh(file))
 				continue;
+
+			// Refused here, before a dialog promises an import that cannot happen.
+			try
+			{
+				assetlib::requireSelfContainedSource(std::filesystem::path(file.toStdWString()));
+			}
+			catch (const std::exception& e)
+			{
+				QMessageBox::warning(
+					parent,
+					QString("Import %1").arg(QFileInfo(file).fileName()),
+					e.what());
+				continue;
+			}
 
 			// What the file's materials are decides what the dialog may offer, so it is read before the
 			// dialog is built. A file that will not parse is left to the import to report.

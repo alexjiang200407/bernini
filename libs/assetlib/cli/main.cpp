@@ -176,18 +176,22 @@ main(int argc, char** argv)
 	};
 
 	std::string input;
-	std::string name       = "mesh";
+	std::string name;
 	float       sampleRate = assetlib::c_DefaultSampleRate;
 
 	auto* bake = app.add_subcommand(
 		"bake",
-		"Import a glTF (.glb/.gltf) into a project: the mesh into Meshes/, its textures into "
-		"textures_src/, and the rig into Skeletons/ and Animations/ when it carries a skin");
+		"Import a .glb into a project: the mesh into Meshes/, its textures into textures_src/, "
+		"the source copy and its import document into meshes_src/, and the rig into Skeletons/ "
+		"and Animations/ when it carries a skin");
 	addProject(bake);
-	bake->add_option("input", input, "Source .glb/.gltf file, a path on disk")
+	bake->add_option("input", input, "Source .glb file, a path on disk")
 		->required()
 		->check(CLI::ExistingFile);
-	bake->add_option("-n,--name", name, "Base name for the imported assets (default: mesh)");
+	bake->add_option(
+		"-n,--name",
+		name,
+		"Base name for the imported assets (default: the source's stem)");
 	bake->add_option(
 			"-r,--sample-rate",
 			sampleRate,
@@ -427,6 +431,9 @@ main(int argc, char** argv)
 
 			namespace fs = std::filesystem;
 
+			if (name.empty())
+				name = fs::path(input).stem().string();
+
 			const fs::path bmeshPath = dataRoot / assetlib::c_MeshesDirectoryName /
 			                           (name + std::string(assetlib::c_MeshExtension));
 			const fs::path bskelPath =
@@ -437,6 +444,8 @@ main(int argc, char** argv)
 			// Its own folder, because writeTextures names its output tex0.ktx2 by index -- two
 			// imports sharing one would overwrite each other's files.
 			const fs::path textureDir = dataRoot / assetlib::c_TexturesSrcDirectoryName / name;
+
+			assetlib::requireSelfContainedSource(input);
 
 			const auto imported = assetlib::loadFromGltf(input, {}, sampleRate);
 
@@ -462,6 +471,11 @@ main(int argc, char** argv)
 				if (fs::exists(target, ec))
 					collisions.push_back(fs::relative(target, dataRoot, ec).generic_string());
 			};
+
+			const fs::path sourceCopy = assetlib::importedSourcePathFor(dataRoot, name);
+			const fs::path importDoc  = assetlib::importDocumentPathFor(dataRoot, name);
+			files.push_back(sourceCopy);
+			files.push_back(importDoc);
 
 			for (const fs::path& file : files) noteIfPresent(file);
 			noteIfPresent(textureDir);
@@ -494,13 +508,16 @@ main(int argc, char** argv)
 
 			try
 			{
+				assetlib::BMesh mesh = assetlib::toBMesh(imported);
+				assetlib::requireUniqueSubmeshNames(mesh);
+
 				assetlib::writeTextures(imported, textureDir);
 
-				assetlib::BMesh mesh    = assetlib::toBMesh(imported);
-				const auto      derived = assetlib::generateTangents(mesh);
+				const auto derived = assetlib::generateTangents(mesh);
 
 				assetlib::writeImportedRig(imported, mesh, dataRoot, bskelPath, banimPath, true);
 				assetlib::writeImportedMesh(mesh, bmeshPath);
+				assetlib::writeImportedSource(input, dataRoot, name, sampleRate, &mesh);
 
 				if (derived.skipped > 0)
 					spdlog::warn(

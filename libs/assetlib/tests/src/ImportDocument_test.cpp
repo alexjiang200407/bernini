@@ -1,9 +1,15 @@
 #include <assetlib/import_document.h>
 
+#include <assetlib/asset_import.h>
 #include <assetlib/asset_refs.h>
 #include <assetlib/bmaterial_io.h>
 #include <assetlib_structs/BMaterial.h>
+#include <assetlib_structs/BMesh.h>
+#include <assetlib_structs/Node.h>
 #include <catch2/catch_test_macros.hpp>
+#include <catch2/matchers/catch_matchers.hpp>
+#include <catch2/matchers/catch_matchers_string.hpp>
+#include <core/file/LooseFileSystem.h>
 #include <core/file/file.h>
 
 #include "RefsSandbox.h"
@@ -141,4 +147,67 @@ TEST_CASE(
 		documentHoldsMaterial |=
 			ref.referrer == "meshes_src/kirk.bimport" && ref.kind == RefKind::kSubmeshMaterial;
 	CHECK(documentHoldsMaterial);
+}
+
+namespace
+{
+	BMesh
+	NamedMesh(
+		const std::vector<std::pair<std::string, uint32_t>>& submeshes,
+		const std::vector<std::string>&                      materials)
+	{
+		BMesh mesh;
+		mesh.materials = materials;
+		for (const auto& [name, material] : submeshes)
+		{
+			Submesh submesh{};
+			submesh.material   = material;
+			submesh.nameOffset = mesh.stringPool.add(name);
+			mesh.submeshes.push_back(submesh);
+		}
+		return mesh;
+	}
+}
+
+TEST_CASE("an import records the bindings the mesh carries", "[importdoc]")
+{
+	const DataRoot root("bernini_importdoc_write");
+	WriteText(root.path / "kirk.glb", "the source");
+
+	const BMesh mesh = NamedMesh(
+		{ { "kirk[0]", 0 }, { "kirk[1]", 1 }, { "props", c_InvalidIndex } },
+		{ "Materials/skin.bmaterial", "Materials/teeth.bmaterial" });
+
+	writeImportedSource(root.path / "kirk.glb", root.path, "kirk", 24.0f, &mesh);
+
+	CHECK(fs::exists(root.path / "meshes_src/kirk.glb"));
+	const ImportDocument document =
+		loadImportDocument(core::file::LooseFileSystem(root.path), "meshes_src/kirk.bimport");
+	CHECK(document.sampleRate == 24.0f);
+	REQUIRE(document.bindings.size() == 2);  // the unbound submesh records nothing
+	CHECK(document.bindings[0] == MaterialBinding{ "kirk[0]", "Materials/skin.bmaterial" });
+	CHECK(document.bindings[1] == MaterialBinding{ "kirk[1]", "Materials/teeth.bmaterial" });
+}
+
+TEST_CASE("a source that is not self-contained is refused", "[importdoc]")
+{
+	const DataRoot root("bernini_importdoc_gltf");
+	WriteText(root.path / "kirk.gltf", "{}");
+
+	CHECK_THROWS_WITH(
+		writeImportedSource(root.path / "kirk.gltf", root.path, "kirk", 30.0f, nullptr),
+		Catch::Matchers::ContainsSubstring("export as .glb"));
+}
+
+TEST_CASE("colliding submesh names are refused before anything is written", "[importdoc]")
+{
+	const BMesh colliding = NamedMesh(
+		{ { "cube", 0 }, { "cube", 1 } },
+		{ "Materials/a.bmaterial", "Materials/b.bmaterial" });
+	CHECK_THROWS(requireUniqueSubmeshNames(colliding));
+
+	const BMesh unique = NamedMesh(
+		{ { "cube", 0 }, { "sphere", 1 } },
+		{ "Materials/a.bmaterial", "Materials/b.bmaterial" });
+	CHECK_NOTHROW(requireUniqueSubmeshNames(unique));
 }

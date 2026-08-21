@@ -601,7 +601,7 @@ a clip set always deletes and leaves its skeleton behind, exactly as a mesh leav
 
 ```mermaid
 flowchart TD
-    GLTF[".glb / .gltf"] -- "loadFromGltf" --> IMP["BMeshImport (inline mats + decoded textures + rig)"]
+    GLTF[".glb"] -- "loadFromGltf" --> IMP["BMeshImport (inline mats + decoded textures + rig)"]
     IMP -- "toBMesh / bake" --> BMESH["&lt;name&gt;.bmesh (geometry + meshlets, submeshes unassigned)"]
     IMP -- "bake / writeTextures (writeKTX2)" --> TEX["texN.ktx2 (per map)"]
     IMP -- "bake (skinned sources only)" --> SKEL["&lt;name&gt;.bskel (sorted bones)"]
@@ -818,7 +818,8 @@ goes with it, and the count they are warned with has to say so.
 Which directories the *project* cannot spare is not a question the reference graph answers — it plans
 a deletion from what points at what, and a category with nothing in it points at nothing. That rule is
 `assetlib::Project::IsRequiredDirectory`: the data root, and the categories `Project::Create` scaffolds
-(`Meshes`, `Textures`, `textures_src`, `Materials`, `Levels`). `Project::Open` puts a missing one
+— the eleven rows of `project_layout.h`'s `c_RequiredDirectories`, `meshes_src` (the imported `.glb`
+sources and their `.bimport` documents) among them. `Project::Open` puts a missing one
 straight back, so deleting one would not even stick. A folder made *inside* a
 category, like `textures_src/kirk`, is the user's.
 
@@ -906,7 +907,9 @@ lets `assetlib_cli` sit on `PATH` and read nothing relative to where it was invo
 # root, never a path on disk.
 
 # Import a source model into the project: Meshes/model.bmesh, its textures into
-# textures_src/model/, and -- when the source carries a skin -- Skeletons/ and Animations/.
+# textures_src/model/, the source copy and its .bimport into meshes_src/, and -- when the
+# source carries a skin -- Skeletons/ and Animations/. Only a self-contained .glb: a .gltf's
+# sidecars cannot be one copied source, so it is refused ("export as .glb").
 # The .glb is a path on disk; everything written is a key. Import never overwrites
 assetlib_cli bake -p <project> model.glb -n model
 
