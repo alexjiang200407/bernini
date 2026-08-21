@@ -1,3 +1,4 @@
+#include <assetlib/asset_import.h>
 #include <assetlib/bmaterial_io.h>
 #include <assetlib/bmesh_gltf.h>
 #include <assetlib/bmesh_io.h>
@@ -466,7 +467,7 @@ TEST_CASE("saveMaterial / loadMaterial round-trips through a file", "[bmaterial]
 	REQUIRE(restored.pbr.roughnessFactor == Catch::Approx(0.9f));
 }
 
-TEST_CASE("bake writes a loadable .bmesh and its textures, and no materials", "[bmesh][bake]")
+TEST_CASE("an import writes a loadable .bmesh and its textures, and no materials", "[bmesh][bake]")
 {
 	const std::filesystem::path glb = "assets/suzanne.glb";
 	REQUIRE(std::filesystem::exists(glb));
@@ -477,7 +478,12 @@ TEST_CASE("bake writes a loadable .bmesh and its textures, and no materials", "[
 
 	const auto outDir = std::filesystem::temp_directory_path() / "bake_suzanne_test";
 	std::filesystem::remove_all(outDir);
-	bake(import, outDir, "suzanne");
+
+	// The import sequence an importer runs, minus the materials step neither runtime writes here.
+	writeTextures(import, outDir);
+	BMesh baked = toBMesh(import);
+	static_cast<void>(generateTangents(baked));
+	writeImportedMesh(baked, outDir / "suzanne.bmesh");
 
 	REQUIRE(std::filesystem::exists(outDir / "suzanne.bmesh"));
 

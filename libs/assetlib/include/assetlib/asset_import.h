@@ -74,7 +74,11 @@ namespace assetlib
 	{
 		std::filesystem::path path;             // empty when the import writes no such directory
 		bool                  existed = false;  // whether it was there before the import started
-		std::string_view      categoryRoot;  // the category it sits under, never itself removable
+
+		// The category directory `path` sits under, whole -- `<dataRoot>/textures_src`, not
+		// `textures_src`. Compared as a path rather than a name because an import named after its
+		// own category would otherwise look like the category itself and be left behind.
+		std::filesystem::path categoryRoot;
 	};
 
 	/**

@@ -122,10 +122,11 @@ convention rather than something the code checks: any directory passed to `-d` i
 
 ## Acceptance
 
-- A new `assetlib_tests` case creates a project, imports `assets/suzanne.glb` through the moved
-  writers, and asserts the exact file set that lands in `Meshes/`, `Textures/`, `Skeletons/` and
-  `Animations/` — no `Materials/`, per ADR-4 — then describes, refs and packs it. This is what pins
-  "one importer".
+- A new `assetlib_tests` case creates a project, imports through the moved writers, and asserts the
+  exact file set — no `Materials/`, per ADR-4 — then describes, refs and packs it. This is what pins
+  "one importer". It imports `assets/apples.glb` rather than `assets/suzanne.glb` as first written:
+  suzanne carries no textures, so it cannot pin the half of the file set that lands in
+  `textures_src/`. Neither is skinned, so the rig half stays `ImportedRig_test`'s.
 - `just test` stays green after `assets/` moves under `assets/Data/`: every golden image in
   `assets/golden` still matches, which proves the layout move broke no runtime path.
 
@@ -224,8 +225,9 @@ capability removed.
    `assets/Test.berniniproject` and the transcript goes in the PR body.
 
 6. `feat(assetlib): one importer` — `bake` imports into the project through task 3's writers;
-   `assetlib::bake` deleted. **Gate:** the acceptance round-trip — import `assets/suzanne.glb` into a
-   fresh project, assert the file set, then `describe`, `refs` and `pack` it.
+   `assetlib::bake` deleted. **Gate:** the acceptance round-trip above, plus the first coverage of
+   `rollBackImport`'s directory half — the CLI is the first caller that can name an import after its
+   own category, which the old filename-only guard would have left behind.
 
 Each task carries the doc changes it makes false, per
 [bcp-implement § 7](../../.claude/skills/bcp-implement/SKILL.md); task 5 carries the bulk of
