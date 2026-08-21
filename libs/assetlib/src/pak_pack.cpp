@@ -5,6 +5,7 @@
 #include <assetlib/bmaterial_io.h>
 #include <assetlib/bvat_io.h>
 #include <assetlib/pak_io.h>
+#include <assetlib/project_layout.h>
 #include <assetlib/vat_bake.h>
 #include <assetlib_structs/BMaterial.h>
 #include <assetlib_structs/BVat.h>
@@ -20,14 +21,12 @@ namespace assetlib
 {
 	namespace
 	{
-		constexpr std::string_view c_AuthoringDir = "textures_src";
-
 		bool
 		isAuthoringSource(const std::filesystem::path& relative)
 		{
 			for (const std::filesystem::path& part : relative)
 			{
-				if (part == c_AuthoringDir)
+				if (part == c_TexturesSrcDirectoryName)
 					return true;
 			}
 			return false;

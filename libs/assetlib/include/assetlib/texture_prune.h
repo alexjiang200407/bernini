@@ -1,5 +1,6 @@
 #pragma once
 #include <assetlib/AssetStore.h>
+#include <assetlib/project_layout.h>
 
 namespace assetlib
 {
@@ -11,7 +12,7 @@ namespace assetlib
 	 */
 	struct TexturePruneDesc
 	{
-		std::filesystem::path textureDir = "Textures";
+		std::filesystem::path textureDir = c_TexturesDirectoryName;
 	};
 
 	struct UnusedTexture
