@@ -17,7 +17,10 @@ namespace editor
 	 * nothing of theirs uses any more, while the other has a material that routes from it. Neither
 	 * side is wrong on its own, and only the tree they would produce together is.
 	 *
-	 * A referrer that `deleted` also removes holds nothing back -- both ends go the same way.
+	 * A referrer that `deleted` also removes holds nothing back -- both ends go the same way. Nor
+	 * does a derived bake: a `.bvat` names the mesh, skeleton and clips it was made from, but one
+	 * that outlived them is stale rather than broken, and is remade on demand. What holds an asset
+	 * back is `assetlib::planDeletion`'s to say, and this asks it rather than deciding again.
 	 *
 	 * This is a rule about assets and not about any backend, so it lives here rather than inside one:
 	 * a second IVersionControl calls it, and does not reimplement it.

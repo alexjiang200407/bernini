@@ -23,6 +23,9 @@ namespace editor
 		[[nodiscard]] VersionControlOutcome
 		Submit(const std::vector<QString>& assets, const QString& message) override;
 
+		[[nodiscard]] std::vector<QString>
+		ListIncoming() override;
+
 		[[nodiscard]] VersionControlOutcome
 		GetLatest() override;
 
@@ -36,7 +39,7 @@ namespace editor
 		UndoSubmission(const QString& id) override;
 
 		[[nodiscard]] const std::filesystem::path&
-		GetRepositoryRoot() const noexcept
+		GetRoot() const noexcept override
 		{
 			return m_RepositoryRoot;
 		}

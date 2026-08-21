@@ -116,6 +116,13 @@ The instrumented build mode and the `just coverage` pipeline: the `macos-clang-m
 preset, why `enable_coverage` is per-target with a `PUBLIC` link half, and how to drive
 `llvm-profdata`/`llvm-cov` by hand — including the `-object` list a correct report needs.
 
+**[Version Control](./docs/version_control.md)**
+
+Submitting, getting and undoing work from inside the editor: why the `git` command line rather than
+a linked library, why the UI never says "git", why Get Latest fast-forwards or refuses, and the two
+things that must never be written over — an asset something still references, and one a window has
+open.
+
 **[Git LFS](./docs/lfs.md)**
 
 Where the binaries under `assets/` actually live — this project's own R2 bucket, reached by a

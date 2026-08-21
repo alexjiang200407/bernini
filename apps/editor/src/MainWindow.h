@@ -16,6 +16,7 @@ class AnimationEditorWindow;
 class LevelEditorWindow;
 class MaterialEditorWindow;
 class Renderer;
+class VersionControlActions;
 
 class MainWindow : public QMainWindow
 {
@@ -94,11 +95,29 @@ private:
 	void
 	SetUpReconstructionWidthMenu(QMenu* render);
 
+	// The Version Control menu. Disabled, rather than hidden, when the project is not inside a
+	// repository -- so the answer to "where is version control" is where the question is asked.
+	void
+	SetUpVersionControlMenu();
+
+	void
+	SetVersionControlAvailable(bool available);
+
+	/**
+	 * Every asset a panel is holding open, absolute.
+	 *
+	 * Asked afresh at each use rather than kept, so no copy of the answer can go stale.
+	 */
+	[[nodiscard]] QStringList
+	GetHeldOpenPaths() const;
+
 	Ui::MainWindow m_Ui;
 
 	QString m_InstanceName;
 
 	std::unique_ptr<assetlib::Project> m_Project;
+	VersionControlActions*             m_VersionControl      = nullptr;
+	QMenu*                             m_VersionControlMenu  = nullptr;
 	ContentExplorerWindow*             m_ContentExplorer     = nullptr;
 	LevelEditorWindow*                 m_LevelEditor         = nullptr;
 	MaterialEditorWindow*              m_MaterialEditor      = nullptr;

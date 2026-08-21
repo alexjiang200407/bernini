@@ -1,5 +1,7 @@
 #include "VersionControl/git_cli.h"
 
+#include "VersionControl/contained_path.h"
+
 #include <QElapsedTimer>
 #include <QProcess>
 #include <QStandardPaths>
@@ -29,15 +31,6 @@ namespace
 	{
 		static const QString c_GitPath = QStandardPaths::findExecutable(QStringLiteral("git"));
 		return c_GitPath;
-	}
-
-	/** `path` with its symlinks resolved as far as it exists, or normalized when it cannot be. */
-	fs::path
-	Resolved(const fs::path& path)
-	{
-		std::error_code ec;
-		const fs::path  resolved = fs::weakly_canonical(path, ec);
-		return ec ? path.lexically_normal() : resolved;
 	}
 
 	/**
@@ -136,23 +129,11 @@ namespace editor
 	std::optional<QString>
 	RepositoryRelativePath(const fs::path& repositoryRoot, const fs::path& path)
 	{
-		// A Windows drive-relative path (`D:foo`) is not absolute, and appending it to the root would
-		// let it re-root the join rather than extend it.
-		if (!path.is_absolute() && path.has_root_name())
+		const auto relative = RelativeToRoot(repositoryRoot, path);
+		if (!relative.has_value())
 		{
 			return std::nullopt;
 		}
-
-		const fs::path joined = path.is_absolute() ? path.lexically_normal() :
-		                                             (repositoryRoot / path).lexically_normal();
-
-		// "." is what lexically_relative returns for the root itself, which addresses the whole
-		// repository rather than anything in it -- not what a caller naming one asset can have meant.
-		const fs::path relative = Resolved(joined).lexically_relative(Resolved(repositoryRoot));
-		if (relative.empty() || relative == "." || *relative.begin() == "..")
-		{
-			return std::nullopt;
-		}
-		return ToQString(relative);
+		return ToQString(*relative);
 	}
 }

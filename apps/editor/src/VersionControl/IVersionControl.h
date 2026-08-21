@@ -49,6 +49,11 @@ namespace editor
 		// What the status is *about*, so the UI can name assets rather than describe a backend.
 		// Empty whenever the status is about nothing in particular, kDone included.
 		std::vector<QString> assets;
+
+		// Parallel to `assets`, and only for kAssetsStillInUse: something staying behind that still
+		// uses assets[i]. Naming one without the other says a referrer would be removed, which it
+		// would not.
+		std::vector<QString> neededBy;
 	};
 
 	/** One entry in the project's history: a submission somebody made. */
@@ -81,6 +86,15 @@ namespace editor
 	{
 	public:
 		virtual ~IVersionControl() = default;
+
+		/**
+		 * What every path this reports, and every path it accepts, is relative to.
+		 *
+		 * Not necessarily the project directory: a project can sit inside a larger repository, and the
+		 * paths are the repository's.
+		 */
+		[[nodiscard]] virtual const std::filesystem::path&
+		GetRoot() const noexcept = 0;
 
 		/**
 		 * Every asset changed since the last submission, ordered by path.
@@ -116,6 +130,18 @@ namespace editor
 		 */
 		[[nodiscard]] virtual VersionControlOutcome
 		GetLatest() = 0;
+
+		/**
+		 * The assets Get Latest would change, without changing any of them.
+		 *
+		 * Asks the shared project first, so what it reports is current rather than whatever was last
+		 * heard -- which is why it is not const-cheap and is asked once per menu action rather than
+		 * per repaint.
+		 *
+		 * @throws std::runtime_error if the repository cannot be read.
+		 */
+		[[nodiscard]] virtual std::vector<QString>
+		ListIncoming() = 0;
 
 		/**
 		 * Puts `assets` back as they were at the last submission, losing what was done to them since.

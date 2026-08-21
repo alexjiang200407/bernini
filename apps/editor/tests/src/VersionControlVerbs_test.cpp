@@ -197,6 +197,22 @@ TEST_CASE("Reverting an asset that was never submitted removes it", "[vcs]")
 	CHECK(bob.ListChanges().empty());
 }
 
+// Recorded but not published is where a failed Submit leaves things, and where `reset --soft` does
+// too. It is tracked, so `git clean` walks straight past it.
+TEST_CASE("Reverting an asset that was recorded but never published removes it", "[vcs]")
+{
+	const SharedProject shared("revert_staged");
+	WriteMesh(shared.bob / "Data/Meshes/squirrel.bmesh");
+	REQUIRE(editor::RunGit(shared.bob, { "add", "-A" }).Succeeded());
+
+	editor::GitVersionControl bob(shared.bob, shared.bob / "Data");
+	REQUIRE(
+		bob.Revert({ "Data/Meshes/squirrel.bmesh" }).status == editor::VersionControlStatus::kDone);
+
+	CHECK_FALSE(fs::exists(shared.bob / "Data/Meshes/squirrel.bmesh"));
+	CHECK(bob.ListChanges().empty());
+}
+
 TEST_CASE("Reverting one asset leaves the others alone", "[vcs]")
 {
 	const SharedProject shared("revert_one");
@@ -245,9 +261,11 @@ TEST_CASE("Get Latest refuses a deletion another asset still needs, and changes 
 	const auto outcome = bob.GetLatest();
 
 	CHECK(outcome.status == editor::VersionControlStatus::kAssetsStillInUse);
-	CHECK(
-		outcome.assets ==
-		std::vector<QString>{ "Data/textures_src/albedo.ktx2", "Data/Materials/bob.bmaterial" });
+
+	// The two sides stay apart: `albedo.ktx2` would have gone, `bob.bmaterial` is what stops it
+	// and is staying put. One list holding both would say the material was being removed too.
+	CHECK(outcome.assets == std::vector<QString>{ "Data/textures_src/albedo.ktx2" });
+	CHECK(outcome.neededBy == std::vector<QString>{ "Data/Materials/bob.bmaterial" });
 
 	// Nothing moved: the texture is still there and so is the material that needs it.
 	CHECK(fs::exists(shared.bob / "Data/textures_src/albedo.ktx2"));

@@ -170,21 +170,25 @@ namespace editor
 			return {};
 		}
 
-		// Both ends of every reference that would break: the asset going away, and what would be
-		// left pointing at nothing. Which is which the UI can tell from the order it reads them in.
+		// Kept side by side rather than merged into one list: a referrer is staying put, and naming
+		// it among what would go says the opposite.
 		std::vector<QString> named;
+		std::vector<QString> holders;
 		for (const AssetStillInUse& blocked : stillInUse)
 		{
-			for (const std::filesystem::path& path : { blocked.asset, blocked.neededBy })
+			auto asset    = RepositoryRelativePath(m_RepositoryRoot, blocked.asset);
+			auto neededBy = RepositoryRelativePath(m_RepositoryRoot, blocked.neededBy);
+			if (!asset.has_value() || !neededBy.has_value() ||
+			    std::ranges::find(named, *asset) != named.end())
 			{
-				if (auto relative = RepositoryRelativePath(m_RepositoryRoot, path);
-				    relative.has_value() && std::ranges::find(named, *relative) == named.end())
-				{
-					named.push_back(*std::move(relative));
-				}
+				continue;
 			}
+			named.push_back(*std::move(asset));
+			holders.push_back(*std::move(neededBy));
 		}
-		return { .status = VersionControlStatus::kAssetsStillInUse, .assets = std::move(named) };
+		return { .status   = VersionControlStatus::kAssetsStillInUse,
+			     .assets   = std::move(named),
+			     .neededBy = std::move(holders) };
 	}
 
 	std::vector<std::filesystem::path>
@@ -558,6 +562,23 @@ namespace editor
 		return PublishOrUnrecord(QString::fromUtf8(recordedOver.out).trimmed());
 	}
 
+	std::vector<QString>
+	GitVersionControl::ListIncoming()
+	{
+		if (!RunGit(m_RepositoryRoot, { QStringLiteral("fetch"), QStringLiteral("--quiet") })
+		         .Succeeded())
+		{
+			return {};
+		}
+
+		const auto behind = CountSubmissions(QStringLiteral("HEAD..@{upstream}"));
+		if (!behind.has_value() || *behind == 0)
+		{
+			return {};
+		}
+		return ChangedBetween(QStringLiteral("HEAD"), QStringLiteral("@{upstream}"));
+	}
+
 	VersionControlOutcome
 	GitVersionControl::GetLatest()
 	{
@@ -678,6 +699,20 @@ namespace editor
 		}
 		if (!remove.isEmpty())
 		{
+			// Two ways an asset can be here without the last submission having it: never recorded at
+			// all, or recorded but not yet published. `clean` only ever sees the first -- the second
+			// is tracked, so it walks straight past it and reports success on work still there.
+			const auto unrecorded = RunGit(
+				m_RepositoryRoot,
+				{ QStringLiteral("rm"),
+			      QStringLiteral("-f"),
+			      QStringLiteral("--quiet"),
+			      QStringLiteral("--ignore-unmatch") },
+				remove);
+			core::throw_runtime_error_if(
+				!unrecorded.Succeeded(),
+				"an asset that was never submitted could not be removed");
+
 			const auto removed = RunGit(
 				m_RepositoryRoot,
 				{ QStringLiteral("clean"),

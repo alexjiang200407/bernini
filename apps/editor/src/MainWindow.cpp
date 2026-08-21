@@ -14,12 +14,15 @@
 #include "Async/BackgroundTask.h"
 #include "Render/Renderer.h"
 #include "Thumbnails/AssetThumbnailCache.h"
+#include "VersionControl/open_version_control.h"
 #include "Windows/AnimationEditor/AnimationEditorWindow.h"
 #include "Windows/AnimationEditor/AnimationPreviewWindow.h"
 #include "Windows/ContentExplorer/ContentExplorerWindow.h"
 #include "Windows/LevelEditor/LevelEditorWindow.h"
 #include "Windows/MaterialEditor/MaterialEditorWindow.h"
 #include "Windows/RenderTarget/RenderTargetWindow.h"
+#include "Windows/VersionControl/VersionControlActions.h"
+#include "Windows/VersionControl/version_control_rules.h"
 #include "util/window_title.h"
 #include <assetlib/Project.h>
 
@@ -234,8 +237,7 @@ MainWindow::Build()
 	// open (its next Save would write it straight back), and the mesh and clip files the Animation
 	// panel is offering. Asked at each deletion, so there is no copy of the answer to go stale.
 	m_ContentExplorer = new ContentExplorerWindow(m_ContentExplorerDock, [this] {
-		auto held = m_MaterialEditor->OpenMaterialPaths();
-		held += m_AnimationEditor->HeldOpenPaths();
+		auto held = GetHeldOpenPaths();
 		return held;
 	});
 	m_ContentExplorer->SetThumbnails(m_Thumbnails.get());
@@ -286,6 +288,7 @@ MainWindow::Build()
 	m_Ui.menuWindow->addAction(m_ContentExplorerDock->toggleViewAction());
 
 	SetUpRenderMenu();
+	SetUpVersionControlMenu();
 
 	SetUpFrameStats();
 
@@ -294,6 +297,54 @@ MainWindow::Build()
 	// absolute path in it reasonable.
 	if (startupProject.empty() || !OpenProjectAt(core::expand_home(startupProject)))
 		ShowEmptyState();
+}
+
+QStringList
+MainWindow::GetHeldOpenPaths() const
+{
+	auto held = m_MaterialEditor->OpenMaterialPaths();
+	held += m_AnimationEditor->HeldOpenPaths();
+	return held;
+}
+
+void
+MainWindow::SetVersionControlAvailable(bool available)
+{
+	// The entries grey out rather than the menu, so the answer to "where is version control" is
+	// where the question gets asked -- as the Render menu's own disabled entries do.
+	for (QAction* entry : m_VersionControlMenu->actions())
+	{
+		if (entry->isSeparator())
+			continue;
+
+		entry->setEnabled(available);
+		entry->setStatusTip(available ? QString() : editor::DescribeUnavailable());
+	}
+}
+
+void
+MainWindow::SetUpVersionControlMenu()
+{
+	m_VersionControlMenu = menuBar()->addMenu("Version Control");
+
+	m_VersionControlMenu->addAction("Get Latest", this, [this] {
+		if (m_VersionControl)
+			m_VersionControl->GetLatest();
+	});
+	m_VersionControlMenu->addAction("Submit Changes...", this, [this] {
+		if (m_VersionControl)
+			m_VersionControl->ShowPendingChanges();
+	});
+	m_VersionControlMenu->addAction("History...", this, [this] {
+		if (m_VersionControl)
+			m_VersionControl->ShowHistory();
+	});
+
+	m_VersionControlMenu->addSeparator();
+	m_VersionControlMenu->addAction("Revert All Unsubmitted Changes...", this, [this] {
+		if (m_VersionControl)
+			m_VersionControl->RevertEverything();
+	});
 }
 
 void
@@ -614,6 +665,12 @@ MainWindow::SetActiveProject(assetlib::Project project)
 {
 	m_Project = std::make_unique<assetlib::Project>(std::move(project));
 
+	delete m_VersionControl;
+	m_VersionControl = new VersionControlActions(
+		this,
+		editor::OpenVersionControl(m_Project->GetProjectFile(), m_Project->GetDataDirectory()),
+		[this] { return GetHeldOpenPaths(); });
+
 	const auto dataDir = QString::fromStdWString(m_Project->GetDataDirectory().wstring());
 
 	// A manager resolves every path against one Data root, so a new project needs a new one. The
@@ -728,6 +785,7 @@ MainWindow::ShowEmptyState()
 	m_Ui.actionCleanUnusedTextures->setEnabled(false);
 	m_Ui.menuEdit->setEnabled(false);
 	m_Ui.menuWindow->setEnabled(false);
+	SetVersionControlAvailable(false);
 
 	auto* placeholder = new QLabel(
 		"Open a project to get started.\n\nFile ▸ New Project…   or   File ▸ Open Project…",
@@ -754,6 +812,7 @@ MainWindow::ShowProjectState()
 	m_Ui.actionCleanUnusedTextures->setEnabled(true);
 	m_Ui.menuEdit->setEnabled(true);
 	m_Ui.menuWindow->setEnabled(true);
+	SetVersionControlAvailable(m_VersionControl && m_VersionControl->IsAvailable());
 
 	resizeDocks({ m_LevelEditorDock, m_ContentExplorerDock }, { 700, 220 }, Qt::Vertical);
 }
