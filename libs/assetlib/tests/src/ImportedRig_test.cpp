@@ -1,5 +1,7 @@
 #include <assetlib/Project.h>
 #include <assetlib/asset_import.h>
+#include <assetlib/import_document.h>
+#include <core/file/LooseFileSystem.h>
 
 #include <assetlib/asset_describe.h>
 #include <assetlib/asset_refs.h>
@@ -520,6 +522,21 @@ TEST_CASE("an import lands in the project's categories and reads back", "[import
 		true);
 
 	assetlib::writeImportedMesh(mesh, dataRoot / assetlib::c_MeshesDirectoryName / "apples.bmesh");
+	assetlib::requireUniqueSubmeshNames(mesh);
+	assetlib::writeImportedSource(glb, dataRoot, "apples", assetlib::c_DefaultSampleRate, &mesh);
+
+	SECTION("the source travels with the project, its document beside it")
+	{
+		CHECK(fs::exists(dataRoot / "meshes_src/apples.glb"));
+
+		const assetlib::ImportDocument document = assetlib::loadImportDocument(
+			core::file::LooseFileSystem(dataRoot),
+			"meshes_src/apples.bimport");
+		CHECK(document.sampleRate == assetlib::c_DefaultSampleRate);
+		// No materials were attached, so the import records no bindings -- assetlib writes none
+		// (ADR-4 of remove-non-project-assetlib), and the document says so rather than guessing.
+		CHECK(document.bindings.empty());
+	}
 
 	SECTION("the file set is the categories and nothing else")
 	{
@@ -530,7 +547,9 @@ TEST_CASE("an import lands in the project's categories and reads back", "[import
 
 		std::ranges::sort(written);
 
-		auto expected = std::vector<std::string>{ "Meshes/apples.bmesh" };
+		auto expected = std::vector<std::string>{ "Meshes/apples.bmesh",
+			                                      "meshes_src/apples.bimport",
+			                                      "meshes_src/apples.glb" };
 		for (size_t i = 0; i < imported.textures.size(); ++i)
 			expected.push_back("textures_src/apples/" + assetlib::textureFileName(i));
 		std::ranges::sort(expected);

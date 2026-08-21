@@ -62,6 +62,48 @@ namespace assetlib
 		const std::filesystem::path& dataRoot,
 		const std::filesystem::path& banimPath);
 
+	/**
+	 * @throws std::runtime_error unless `source` is a `.glb` -- a `.gltf`'s sidecar `.bin` and
+	 *         image files cannot be one copied file with one content stamp; the message says
+	 *         "export as .glb".
+	 */
+	void
+	requireSelfContainedSource(const std::filesystem::path& source);
+
+	/**
+	 * @throws std::runtime_error if two submeshes share a name. The name is the import document's
+	 *         binding key, so a collision could only ever mis-bind silently; the fix is naming the
+	 *         meshes in the DCC.
+	 */
+	void
+	requireUniqueSubmeshNames(const BMesh& mesh);
+
+	/** `<dataRoot>/meshes_src/<name>.glb` -- where an import copies its source. */
+	[[nodiscard]] std::filesystem::path
+	importedSourcePathFor(const std::filesystem::path& dataRoot, std::string_view name);
+
+	/** The `.bimport` beside the copied source. */
+	[[nodiscard]] std::filesystem::path
+	importDocumentPathFor(const std::filesystem::path& dataRoot, std::string_view name);
+
+	/**
+	 * Copies the self-contained source into `meshes_src/` and writes its import document beside
+	 * it: the sample rate, and -- when `mesh` is given -- the submesh-name -> material bindings
+	 * the mesh carries at this moment, which is how an import records what `attachMaterial` just
+	 * chose and how an adoption records what an existing file already held. Null `mesh` is a
+	 * clips-only import: parameters, no bindings.
+	 *
+	 * @throws what requireSelfContainedSource throws, and std::runtime_error on a copy or write
+	 *         failure.
+	 */
+	void
+	writeImportedSource(
+		const std::filesystem::path& source,
+		const std::filesystem::path& dataRoot,
+		std::string_view             name,
+		float                        sampleRate,
+		const BMesh*                 mesh);
+
 	/** A file an import writes, and whether the import is the one that made it. */
 	struct ImportedFile
 	{

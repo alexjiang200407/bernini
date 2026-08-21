@@ -1,5 +1,7 @@
 #include <assetlib/asset_import.h>
 
+#include <assetlib/import_document.h>
+
 #include <assetlib/banim_io.h>
 #include <assetlib/bmesh_io.h>
 #include <assetlib/bskel_io.h>
@@ -10,13 +12,98 @@
 #include <assetlib/vat_bake.h>
 #include <assetlib_structs/Animation.h>
 #include <assetlib_structs/BMesh.h>
+#include <assetlib_structs/Node.h>
 #include <assetlib_structs/Skeleton.h>
 #include <core/err/util.h>
+#include <core/file/file.h>
 
 #include "ref_paths.h"
 
 namespace assetlib
 {
+	void
+	requireSelfContainedSource(const std::filesystem::path& source)
+	{
+		core::throw_runtime_error_if(
+			extensionOf(source.generic_string()) != ".glb",
+			"'{}': import needs a self-contained source; export as .glb",
+			source.string());
+	}
+
+	void
+	requireUniqueSubmeshNames(const BMesh& mesh)
+	{
+		auto seen = std::unordered_set<std::string_view>();
+		for (const Submesh& submesh : mesh.submeshes)
+		{
+			const std::string_view name = mesh.stringPool.at(submesh.nameOffset);
+			core::throw_runtime_error_if(
+				!seen.insert(name).second,
+				"'{}' names two submeshes; the name is what a material binding addresses, so name "
+				"the meshes in the DCC",
+				name);
+		}
+	}
+
+	std::filesystem::path
+	importedSourcePathFor(const std::filesystem::path& dataRoot, std::string_view name)
+	{
+		return dataRoot / c_MeshesSrcDirectoryName / std::format("{}.glb", name);
+	}
+
+	std::filesystem::path
+	importDocumentPathFor(const std::filesystem::path& dataRoot, std::string_view name)
+	{
+		return dataRoot / c_MeshesSrcDirectoryName /
+		       std::format("{}{}", name, c_ImportDocumentExtension);
+	}
+
+	void
+	writeImportedSource(
+		const std::filesystem::path& source,
+		const std::filesystem::path& dataRoot,
+		std::string_view             name,
+		float                        sampleRate,
+		const BMesh*                 mesh)
+	{
+		requireSelfContainedSource(source);
+
+		const std::filesystem::path target = importedSourcePathFor(dataRoot, name);
+		std::filesystem::create_directories(target.parent_path());
+
+		std::error_code ec;
+		std::filesystem::copy_file(
+			source,
+			target,
+			std::filesystem::copy_options::overwrite_existing,
+			ec);
+		core::throw_runtime_error_if(
+			static_cast<bool>(ec),
+			"cannot copy '{}' to '{}': {}",
+			source.string(),
+			target.string(),
+			ec.message());
+
+		ImportDocument document;
+		document.sampleRate = sampleRate;
+		if (mesh != nullptr)
+		{
+			for (const Submesh& submesh : mesh->submeshes)
+			{
+				// >= size subsumes the c_InvalidIndex sentinel (0xFFFFFFFF).
+				if (submesh.material >= mesh->materials.size())
+					continue;
+				document.bindings.push_back(
+					{ std::string(mesh->stringPool.at(submesh.nameOffset)),
+				      mesh->materials[submesh.material] });
+			}
+		}
+
+		core::file::write_atomic(
+			importDocumentPathFor(dataRoot, name),
+			serializeImportDocument(document));
+	}
+
 	void
 	writeImportedMesh(const BMesh& mesh, const std::filesystem::path& bmeshPath)
 	{

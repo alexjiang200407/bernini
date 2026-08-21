@@ -84,6 +84,18 @@ namespace editor
 
 		const QString name = QFileInfo(sourceFile).fileName();
 
+		try
+		{
+			assetlib::requireSelfContainedSource(source);
+		}
+		catch (const std::exception& e)
+		{
+			QMessageBox::warning(parent, QString("Import %1").arg(name), e.what());
+			return ImportOutcome::kBlocked;
+		}
+
+		const std::string sourceName = source.stem().string();
+
 		// Sampled before a byte is written, because they decide two things: whether the import collides
 		// with something already there (and must be refused), and -- if it then fails or is cancelled --
 		// what may be deleted to undo it.
@@ -111,6 +123,14 @@ namespace editor
 		}
 		if (options.animations)
 			files.push_back({ banimPath, fs::exists(banimPath, ec) });
+
+		if (options.mesh || options.animations)
+		{
+			const fs::path sourceCopy = assetlib::importedSourcePathFor(dataRoot, sourceName);
+			const fs::path importDoc  = assetlib::importDocumentPathFor(dataRoot, sourceName);
+			files.emplace_back(sourceCopy, fs::exists(sourceCopy, ec));
+			files.emplace_back(importDoc, fs::exists(importDoc, ec));
+		}
 
 		// Named one by one rather than by the folder holding them, because two imports sharing a
 		// materials folder is what the dialog's per-file names are for: only a material file that is
@@ -204,6 +224,8 @@ namespace editor
 							tangents.skipped,
 							qPrintable(name));
 
+					assetlib::requireUniqueSubmeshNames(*mesh);
+
 					assetlib::writeImportedRig(
 						*imported,
 						*mesh,
@@ -222,10 +244,22 @@ namespace editor
 							options.outputs.materialStems);
 
 					assetlib::writeImportedMesh(*mesh, bmeshPath);
+					assetlib::writeImportedSource(
+						source,
+						dataRoot,
+						sourceName,
+						assetlib::c_DefaultSampleRate,
+						&*mesh);
 				}
 				else if (options.animations)
 				{
 					assetlib::writeImportedClips(*imported, dataRoot, banimPath);
+					assetlib::writeImportedSource(
+						source,
+						dataRoot,
+						sourceName,
+						assetlib::c_DefaultSampleRate,
+						nullptr);
 				}
 
 				return ImportOutcome::kImported;

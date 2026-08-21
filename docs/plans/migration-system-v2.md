@@ -132,8 +132,16 @@ The survey below cites the pre-#418 tree; the tasks name where code lives after 
   tree (major 11) stays unmergeable forever; carrying via the editor board — lossy today.*
 - **ADR-6 — Each source gets one authored import document; parameters key the bake, bindings are
   applied at load.** Per `.glb`: the import parameters (`sampleRate`) and the submesh-name →
-  material bindings of its outputs (what `attachMaterial` records today), written by the import
-  and the attach flows. The *initial* import is the only time the source's material table authors
+  material bindings of its outputs (what `attachMaterial` records today), written by the import —
+  and by the attach flows from task 3 on: a rebind knows only the mesh path, and mesh→source
+  exists only once the cache header records it, so until task 3 the mesh file stays authoritative
+  for bindings, and task 3 re-authors **every** document from its meshes' current state — not the
+  `assets/` adoption alone, since any project imported into between the two tasks has documents
+  whose bindings a rebind may have outrun *(corrected in task 2b's PR; the original dual-write
+  assumed a lookup that cannot exist yet)*. Deleting an import group is the document's cascade
+  delete: its `kImportedSource` and binding edges make the `.bimport` the group's root, so the
+  Content Explorer flow that already walks edges takes the source and the orphaned outputs with
+  it — no new machinery. The *initial* import is the only time the source's material table authors
   anything — it seeds the material documents and this document's bindings; a regeneration authors
   nothing, so a re-exported source that dropped or reassigned a material changes no material
   document and no binding: the authored material survives, held by its reference edges until the
@@ -351,14 +359,13 @@ reader still present until the final task, which is why deletion is last.
       `pack` excluding `meshes_src` and the document itself.
       Gate: `just test assetlib` — round-trip/canonical/unknown-key/collision tests, the scan
       edges, the pack exclusion.
-   b. **assetlib + editor: the import writes both** *(after `remove-non-project-assetlib`
-      lands)* — the source copied into `meshes_src/` (`.gltf` refused, ADR-7), submesh-key
-      collisions refused, the document written by import and attach flows — the attach flow
-      dual-writes beside today's `attachMaterial` + mesh save until task 3's load-apply
-      supersedes the mesh-write half — and the bake fills the mesh's material fields from the
-      document.
-      Gate: import round-trip shows copy, document, edges, bound mesh; `.gltf` and collision
-      refusals.
+   b. **assetlib + editor: the import writes both** — the source copied into `meshes_src/`
+      (`.gltf` refused, ADR-7), submesh-key collisions refused, `meshes_src` joins the layout
+      table, and the document written at import with the bindings the mesh carries after
+      `attachMaterial` (empty from the CLI, per the dependency's ADR-4). The attach flow's
+      document write waits for task 3 — see ADR-6's correction.
+      Gate: import round-trip shows copy, document, bound-mesh-derived bindings; `.gltf` and
+      collision refusals.
 3. **assetlib: the cache header and the seam on geometry** — header (key + chunk table) on
    `.bmesh`/`.bskel`/`.banim`, token constants, per-source-group key check (read-only store →
    fresh), in-memory regeneration returning a group's existing outputs with parameters read from
@@ -368,8 +375,11 @@ reader still present until the final task, which is why deletion is last.
    `assets/apples.glb` copied into `assets/Data/meshes_src/` (the loose original stays outside
    the project, per the dependency's ADR-7) — and its import document is authored from the
    bindings already in the
-   file — the smallest instance of the adoption pass, needed because `GltfSkin_test` and the
-   thumbnail test assert those bindings.
+   file — the smallest instance of the adoption pass (`writeImportedSource`'s from-mesh
+   derivation is that tool), needed because `GltfSkin_test` and the thumbnail test assert those
+   bindings. This task also wires the attach flow's document write, now that the header gives a
+   mesh its source, and re-authors every document's bindings from its meshes' current state at
+   adoption — the mesh was authoritative until here (ADR-6).
    Gate: stale key and stale stamp each regenerate; a wrong-keyed entry swapped in regenerates
    (the merge property); a binding-only document edit rebinds the loaded mesh without
    regeneration, on a sourceless group too; fresh leaves bytes untouched; ranged `loadMeshRefs`
