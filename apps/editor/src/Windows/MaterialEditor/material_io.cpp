@@ -97,7 +97,7 @@ namespace editor
 		if (dataRoot.empty())
 			return name;
 
-		auto dir = dataRoot / assetlib::Project::c_MaterialsDirectoryName;
+		auto dir = dataRoot / assetlib::c_MaterialsDirectoryName;
 
 		std::error_code ec;
 		if (!std::filesystem::is_directory(dir, ec))

@@ -1,5 +1,6 @@
 #pragma once
 #include <assetlib/cancel.h>
+#include <assetlib/project_layout.h>
 
 namespace assetlib
 {
@@ -16,8 +17,8 @@ namespace assetlib
 	struct MaterialBakeDesc
 	{
 		std::filesystem::path dataRoot;  // the project's Data directory
-		std::filesystem::path textureDir =
-			"Textures";  // baked maps land here, relative to dataRoot
+		// baked maps land here, relative to dataRoot
+		std::filesystem::path textureDir = c_TexturesDirectoryName;
 	};
 
 	/**

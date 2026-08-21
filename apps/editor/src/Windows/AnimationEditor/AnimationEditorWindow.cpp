@@ -382,8 +382,7 @@ AnimationEditorWindow::OpenMeshDialog()
 {
 	auto start = QString();
 	if (!m_DataRoot.isEmpty())
-		start =
-			m_DataRoot + QLatin1Char('/') + QLatin1String(assetlib::Project::c_MeshesDirectoryName);
+		start = m_DataRoot + QLatin1Char('/') + QLatin1String(assetlib::c_MeshesDirectoryName);
 
 	const QString file = QFileDialog::getOpenFileName(
 		this,

@@ -13,7 +13,7 @@ namespace
 	namespace fs = std::filesystem;
 
 	/** Every directory Project promises to scaffold under Data/, read from Project itself. */
-	constexpr auto& c_DataDirectories = Project::c_RequiredDirectories;
+	constexpr auto& c_DataDirectories = c_RequiredDirectories;
 
 	/** An empty directory, and the path of a project file that does not exist inside it yet. */
 	struct Sandbox
@@ -166,8 +166,7 @@ TEST_CASE("Opening a project recreates a missing data directory", "[project]")
 
 	Project::Create(sandbox.ProjectFile(), "MyGame");
 
-	const fs::path meshes =
-		sandbox.ProjectFile().parent_path() / "Data" / Project::c_MeshesDirectoryName;
+	const fs::path meshes = sandbox.ProjectFile().parent_path() / "Data" / c_MeshesDirectoryName;
 	fs::remove_all(meshes);
 	REQUIRE(!fs::exists(meshes));
 
@@ -186,7 +185,7 @@ TEST_CASE("Opening a project leaves what is already in it alone", "[project]")
 
 	const Project created = Project::Create(sandbox.ProjectFile(), "MyGame");
 
-	const fs::path asset = created.GetDataDirectory() / Project::c_MeshesDirectoryName / "a.bmesh";
+	const fs::path asset = created.GetDataDirectory() / c_MeshesDirectoryName / "a.bmesh";
 	WriteText(asset, "not really a mesh");
 
 	Project::Open(sandbox.ProjectFile());
@@ -220,9 +219,7 @@ TEST_CASE("A data directory blocked by a file is refused", "[project]")
 
 	// Something already occupies Data/Meshes, and it is not a directory. Open cannot scaffold over
 	// it, and has to say so rather than carry on with a project that has nowhere to put a mesh.
-	WriteText(
-		sandbox.ProjectFile().parent_path() / "Data" / Project::c_MeshesDirectoryName,
-		"in the way");
+	WriteText(sandbox.ProjectFile().parent_path() / "Data" / c_MeshesDirectoryName, "in the way");
 
 	REQUIRE_THROWS_AS(Project::Open(sandbox.ProjectFile()), std::runtime_error);
 }
@@ -243,17 +240,17 @@ TEST_CASE("The scaffolded categories are not the user's to delete", "[project]")
 {
 	// Every asset path in the project is written against this layout, and Open puts a missing category
 	// straight back -- so deleting one would not even stick.
-	CHECK(Project::IsRequiredDirectory(Project::c_MeshesDirectoryName));
-	CHECK(Project::IsRequiredDirectory(Project::c_TexturesDirectoryName));
-	CHECK(Project::IsRequiredDirectory(Project::c_TexturesSrcDirectoryName));
-	CHECK(Project::IsRequiredDirectory(Project::c_MaterialsDirectoryName));
-	CHECK(Project::IsRequiredDirectory(Project::c_LevelsDirectoryName));
+	CHECK(Project::IsRequiredDirectory(c_MeshesDirectoryName));
+	CHECK(Project::IsRequiredDirectory(c_TexturesDirectoryName));
+	CHECK(Project::IsRequiredDirectory(c_TexturesSrcDirectoryName));
+	CHECK(Project::IsRequiredDirectory(c_MaterialsDirectoryName));
+	CHECK(Project::IsRequiredDirectory(c_LevelsDirectoryName));
 
 	// One per environment container: a `.benv` names a `.bsky` and a `.benvl`, and each lives in its
 	// own category so the reference is a path the project layout guarantees.
-	CHECK(Project::IsRequiredDirectory(Project::c_EnvironmentsDirectoryName));
-	CHECK(Project::IsRequiredDirectory(Project::c_EnvLightingDirectoryName));
-	CHECK(Project::IsRequiredDirectory(Project::c_SkyDirectoryName));
+	CHECK(Project::IsRequiredDirectory(c_EnvironmentsDirectoryName));
+	CHECK(Project::IsRequiredDirectory(c_EnvLightingDirectoryName));
+	CHECK(Project::IsRequiredDirectory(c_SkyDirectoryName));
 
 	SECTION("nor is the data root they sit in, however it is spelled")
 	{
