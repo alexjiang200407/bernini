@@ -207,11 +207,11 @@ namespace assetlib
 		for (const ImportedDir& dir : dirs)
 		{
 			// remove_all is recursive, so the folder it is handed had better be the one this import made.
-			// An empty path means the import wrote no such folder; a path naming the category root itself
-			// would mean the import's subdirectory got lost somewhere, and taking the root down with it is
-			// not a recovery.
+			// An empty path means the import wrote no such folder; a path that *is* the category root
+			// would mean the import's subdirectory got lost somewhere, and taking the root down with it
+			// is not a recovery.
 			if (dir.existed || dir.path.empty() ||
-			    dir.path.filename() == fs::path(dir.categoryRoot))
+			    dir.path.lexically_normal() == dir.categoryRoot.lexically_normal())
 				continue;
 
 			fs::remove_all(dir.path, ec);

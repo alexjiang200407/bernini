@@ -1,9 +1,15 @@
 #include <assetlib/Project.h>
 #include <assetlib/asset_import.h>
 
+#include <assetlib/asset_describe.h>
+#include <assetlib/asset_refs.h>
 #include <assetlib/banim_io.h>
+#include <assetlib/bmesh_gltf.h>
 #include <assetlib/bmesh_io.h>
 #include <assetlib/bskel_io.h>
+#include <assetlib/mesh_tangents.h>
+#include <assetlib/pak_pack.h>
+#include <assetlib/project_layout.h>
 #include <assetlib/skeleton.h>
 #include <assetlib/skinning.h>
 #include <assetlib_structs/Animation.h>
@@ -468,5 +474,162 @@ TEST_CASE("Clips with no rig to attach to are refused", "[importedrig]")
 		CHECK_THROWS_AS(
 			assetlib::writeImportedClips(clipless, root.Data(), root.Banim()),
 			std::runtime_error);
+	}
+}
+
+/**
+ * The gate for "one importer": a project, imported into by the same writers the CLI and the editor
+ * both call, and then read back through the library the runtime reads with.
+ *
+ * apples.glb rather than suzanne.glb, which the plan named: suzanne carries no textures, so it
+ * cannot pin the half of the file set that lands in textures_src/. Neither is skinned -- the rig
+ * path is what every other case in this file covers.
+ */
+TEST_CASE("an import lands in the project's categories and reads back", "[importedmesh][project]")
+{
+	namespace fs = std::filesystem;
+
+	const fs::path glb = "assets/apples.glb";
+	REQUIRE(fs::exists(glb));
+
+	const fs::path root = fs::temp_directory_path() / "bernini_import_roundtrip";
+	fs::remove_all(root);
+
+	assetlib::Project project =
+		assetlib::Project::Create(root / "Round.berniniproject", "Round Trip");
+
+	const fs::path dataRoot = project.GetDataDirectory();
+
+	const auto imported = assetlib::loadFromGltf(glb);
+	REQUIRE_FALSE(imported.textures.empty());
+	REQUIRE_FALSE(imported.materials.empty());  // the glTF has them; the import must not carry them
+
+	const fs::path textureDir = dataRoot / assetlib::c_TexturesSrcDirectoryName / "apples";
+
+	assetlib::writeTextures(imported, textureDir);
+
+	assetlib::BMesh mesh = assetlib::toBMesh(imported);
+	static_cast<void>(assetlib::generateTangents(mesh));
+
+	assetlib::writeImportedRig(
+		imported,
+		mesh,
+		dataRoot,
+		dataRoot / assetlib::c_SkeletonsDirectoryName / "apples.bskel",
+		dataRoot / assetlib::c_AnimationsDirectoryName / "apples.banim",
+		true);
+
+	assetlib::writeImportedMesh(mesh, dataRoot / assetlib::c_MeshesDirectoryName / "apples.bmesh");
+
+	SECTION("the file set is the categories and nothing else")
+	{
+		auto written = std::vector<std::string>();
+		for (const fs::directory_entry& entry : fs::recursive_directory_iterator(dataRoot))
+			if (entry.is_regular_file())
+				written.push_back(fs::relative(entry.path(), dataRoot).generic_string());
+
+		std::ranges::sort(written);
+
+		auto expected = std::vector<std::string>{ "Meshes/apples.bmesh" };
+		for (size_t i = 0; i < imported.textures.size(); ++i)
+			expected.push_back("textures_src/apples/" + assetlib::textureFileName(i));
+		std::ranges::sort(expected);
+
+		// Exactly this: no Materials/, because the board that decides what a glTF material routes
+		// where is the editor's and nothing in assetlib may guess at it. Not a rig either --
+		// apples.glb carries no skin, and writeImportedRig writes nothing for one that does not.
+		CHECK(written == expected);
+	}
+
+	SECTION("the project reads back what was written")
+	{
+		project.ReloadStore();
+		const assetlib::AssetStore& store = project.GetStore();
+
+		const assetlib::BMesh loaded = store.LoadMesh("Meshes/apples.bmesh");
+		CHECK_FALSE(loaded.submeshes.empty());
+		CHECK(loaded.materials.empty());
+		for (const assetlib::Submesh& submesh : loaded.submeshes)
+			CHECK(submesh.material == assetlib::c_InvalidIndex);
+
+		// describe is what the CLI prints; it must not throw on an import with nothing attached.
+		CHECK_FALSE(assetlib::describe(loaded, false).empty());
+
+		// A reference scan finds the mesh and no dangling edge: an import that named a material it
+		// never wrote would show up here, which is the failure this file set exists to rule out.
+		const auto graph = assetlib::AssetRefGraph::Scan(store);
+		CHECK(graph.meshesScanned == 1);
+		CHECK(graph.broken.empty());
+
+		// And it packs: textures_src is authoring source and stays out, so the mesh is the payload.
+		const assetlib::PackReport report = assetlib::packProject(
+			store,
+			assetlib::PackDesc{ root / assetlib::c_DefaultArchiveName });
+		CHECK(report.entries == 1);
+	}
+
+	fs::remove_all(root);
+}
+
+// The directory half of a rollback, which nothing covered: an import writes its textures into a
+// folder of its own under textures_src/, and a failed one has to take that folder back down without
+// ever taking the category down with it.
+TEST_CASE("a rollback removes the folder an import made, never the category", "[importedrig]")
+{
+	namespace fs = std::filesystem;
+
+	const TempRoot root;
+	const fs::path category = root.Data() / assetlib::c_TexturesSrcDirectoryName;
+
+	SECTION("a folder this import made goes")
+	{
+		const fs::path made = category / "coyote";
+		fs::create_directories(made);
+		std::ofstream(made / "tex0.ktx2") << "x";
+
+		assetlib::rollBackImport({}, std::array{ assetlib::ImportedDir{ made, false, category } });
+
+		CHECK_FALSE(fs::exists(made));
+		CHECK(fs::is_directory(category));
+	}
+
+	SECTION("a folder that predated it stays, contents and all")
+	{
+		const fs::path existing = category / "shared";
+		fs::create_directories(existing);
+		std::ofstream(existing / "tex0.ktx2") << "x";
+
+		assetlib::rollBackImport(
+			{},
+			std::array{ assetlib::ImportedDir{ existing, true, category } });
+
+		CHECK(fs::exists(existing / "tex0.ktx2"));
+	}
+
+	// The guard compares whole paths, not file names. An import named after its own category makes a
+	// folder whose *name* is the category's, and taking the category down instead would delete every
+	// other import's textures with it.
+	SECTION("an import named after its own category is still only its own folder")
+	{
+		const fs::path twin  = category / assetlib::c_TexturesSrcDirectoryName;
+		const fs::path other = category / "unrelated";
+		fs::create_directories(twin);
+		fs::create_directories(other);
+		std::ofstream(other / "tex0.ktx2") << "x";
+
+		assetlib::rollBackImport({}, std::array{ assetlib::ImportedDir{ twin, false, category } });
+
+		CHECK_FALSE(fs::exists(twin));
+		CHECK(fs::exists(other / "tex0.ktx2"));
+		CHECK(fs::is_directory(category));
+	}
+
+	SECTION("the category itself is never removable, however it is spelled")
+	{
+		assetlib::rollBackImport(
+			{},
+			std::array{ assetlib::ImportedDir{ category / "." / "", false, category } });
+
+		CHECK(fs::is_directory(category));
 	}
 }

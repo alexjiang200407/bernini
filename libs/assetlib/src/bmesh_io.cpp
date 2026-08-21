@@ -1,9 +1,6 @@
 #include <assetlib/bmesh_io.h>
 #include <assetlib_structs/magic.h>
 
-#include <assetlib/banim_io.h>
-#include <assetlib/bskel_io.h>
-
 #include <assetlib/image_io.h>
 #include <assetlib_structs/BMesh.h>
 #include <assetlib_structs/BMeshImport.h>
@@ -340,40 +337,6 @@ namespace assetlib
 	animationFileName(std::string_view name)
 	{
 		return std::format("{}.banim", name);
-	}
-
-	TangentGenResult
-	bake(
-		const imp::BMeshImport&      mesh,
-		const std::filesystem::path& outDir,
-		std::string_view             name,
-		const CancelToken&           cancel)
-	{
-		createDirectories(outDir);
-
-		writeTextures(mesh, outDir, {}, cancel);
-
-		BMesh      baked    = toBMesh(mesh);
-		const auto tangents = generateTangents(baked);
-
-		// A baked directory is its own data root, so the rig is named the way a texture is: by file
-		// name alone, relative to the directory the three land in together.
-		if (!mesh.skeleton.bones.empty())
-		{
-			baked.skeleton = skeletonFileName(name);
-			saveSkeleton(mesh.skeleton, outDir / baked.skeleton);
-
-			if (!mesh.animations.clips.empty())
-			{
-				AnimationSet animations = mesh.animations;
-				animations.skeleton     = baked.skeleton;
-				bakePosedBounds(animations, baked, mesh.skeleton);
-				saveAnimations(animations, outDir / animationFileName(name));
-			}
-		}
-
-		save(baked, outDir / (std::string(name) + ".bmesh"));
-		return tangents;
 	}
 
 	namespace

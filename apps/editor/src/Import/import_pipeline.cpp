@@ -92,8 +92,7 @@ namespace editor
 		const bool      materialDirExisted = !materialDir.empty() && fs::exists(materialDir, ec);
 
 		// Each lands in its own category directory, like the materials and textures this import also
-		// writes -- not beside the mesh. `assetlib::bake` names them beside it because a baked directory
-		// is its own data root; a project has a layout, and a rig is an asset in it.
+		// writes -- not beside the mesh. A project has a layout, and a rig is an asset in it.
 		//
 		// Sampled unconditionally: whether the source turns out to carry a skin is not known until it is
 		// parsed, and by then a file that was already there cannot be told from one this import wrote.
@@ -129,8 +128,8 @@ namespace editor
 		}
 
 		const std::array<assetlib::ImportedDir, 2> dirs = { {
-			{ textureDir, textureDirExisted, assetlib::c_TexturesSrcDirectoryName },
-			{ materialDir, materialDirExisted, assetlib::c_MaterialsDirectoryName },
+			{ textureDir, textureDirExisted, dataRoot / assetlib::c_TexturesSrcDirectoryName },
+			{ materialDir, materialDirExisted, dataRoot / assetlib::c_MaterialsDirectoryName },
 		} };
 
 		auto replaced = QStringList();
