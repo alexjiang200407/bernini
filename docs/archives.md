@@ -260,7 +260,7 @@ because removal-by-patch is the case that needs it.
 ## The CLI
 
 ```bash
-assetlib_cli pack -d <data-root> [-o <archive>]   # default: Data.bpak beside the data root
+assetlib_cli pack -p <project> [-o <archive>]     # default: Data.bpak beside the project file
 assetlib_cli list <archive>                       # the entry table, as text
 ```
 

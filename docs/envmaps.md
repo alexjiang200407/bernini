@@ -42,7 +42,7 @@ disagrees, trust the header, then fix this doc.
   a dusk and a noon are forced to the same average. `BEnvLighting::exposureOverride` is the authored
   answer, kept *beside* the derivation rather than replacing it so a re-bake can refresh the proposal
   without discarding a tuned value. `EffectiveExposure()` is what a renderer reads. Author it with
-  `assetlib_cli exposure <file.benvl> --set <v>`, or `--clear` to go back to the bake.
+  `assetlib_cli exposure -p <project> <key.benvl> --set <v>`, or `--clear` to go back to the bake.
 * **The backdrop's defocus is presentation, not pixels.** The sky is baked as a chain by `skyChain`:
   mip 0 is the sharp projection, and each level below it is convolved to the width its own texel
   subtends. Which level is drawn is `BSky::mipLevel`, a container edit rather than minutes of
@@ -190,7 +190,7 @@ See [examples/bgl_base/src/main.cpp](examples/bgl_base/src/main.cpp).
 From a command line, `--project` does the import and both bakes:
 
 ```bash
-assetlib_cli envmap forest.hdr -p Project/Data --name forest \
+assetlib_cli envmap -p Project.berniniproject forest.hdr --name forest \
     --size 256 --skybox-size 512 --skybox-mips 6 --irradiance-size 128 \
     --mips 7 --samples 2048
 ```
@@ -258,9 +258,9 @@ baked map each names, and whether the bake is stale against its source; a `.benv
 composes and whether those files are there.
 
 ```bash
-assetlib_cli describe Data/Environments/forest.benv -d Data
-assetlib_cli describe Data/Sky/forest.bsky -d Data
-assetlib_cli refs -d Data Textures/forest_sky.ktx2   # what holds a baked map alive
+assetlib_cli describe -p <project> Environments/forest.benv
+assetlib_cli describe -p <project> Sky/forest.bsky
+assetlib_cli refs -p <project> Textures/forest_sky.ktx2   # what holds a baked map alive
 ```
 
 **Maintenance note.** The tables above are this document's load-bearing part, and their file links rot

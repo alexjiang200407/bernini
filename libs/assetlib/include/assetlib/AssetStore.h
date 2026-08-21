@@ -88,6 +88,19 @@ namespace assetlib
 			return m_Files->IsReadOnly();
 		}
 
+		/**
+		 * Where a write to `path` lands on disk: the data root joined with the key.
+		 *
+		 * The one place a mount key legitimately becomes a host path. Reads go through the mount,
+		 * but an archive entry cannot be rewritten, so anything that edits an asset in place has to
+		 * address the loose layer directly.
+		 *
+		 * @throws std::runtime_error unless `path` names something strictly inside the data root, so
+		 *         a key typed on a command line cannot climb out of the project.
+		 */
+		[[nodiscard]] std::filesystem::path
+		ResolveWritePath(std::string_view path) const;
+
 		/** Whether the mount answers for `path` at all. */
 		[[nodiscard]] bool
 		Exists(std::string_view path) const

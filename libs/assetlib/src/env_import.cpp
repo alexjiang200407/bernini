@@ -9,6 +9,8 @@
 #include <assetlib_structs/BEnv.h>
 #include <assetlib_structs/ImageData.h>
 
+#include <spdlog/spdlog.h>
+
 #include "fs_util.h"
 
 namespace assetlib
@@ -166,10 +168,22 @@ namespace assetlib
 		// Projected at the skybox's size, which is the largest of the three: the prefilter and the
 		// irradiance convolve it down anyway, so starting them from the finer cube costs only the
 		// projection.
-		const auto      faceSize = (std::max)(desc.skyFaceSize, desc.prefilterFaceSize);
-		const ImageData source   = isHdr(desc.source) ?
-		                               equirectToCube(loadRadianceHdr(desc.source), faceSize) :
-		                               loadKTX2(desc.source);
+		const auto faceSize = (std::max)(desc.skyFaceSize, desc.prefilterFaceSize);
+		ImageData  source   = isHdr(desc.source) ?
+		                          equirectToCube(loadRadianceHdr(desc.source), faceSize) :
+		                          loadKTX2(desc.source);
+
+		// A shipped map is RGB9E5, and that is the only form left when a route's float source has
+		// gone. Re-convolving one costs a generation of quantization, so it is a recovery path and
+		// not the one to reach for when the source is still there.
+		if (source.vkFormat == VkFormat::E5B9G9R9_UFLOAT_PACK32)
+		{
+			spdlog::warn(
+				"'{}' is RGB9E5; unpacking it to float. Re-convolving a baked map quantizes twice "
+				"-- prefer the source it was baked from",
+				desc.source.string());
+			source = unpackRgb9e5(source);
+		}
 
 		if (desc.sky)
 		{

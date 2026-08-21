@@ -1,23 +1,17 @@
 #include <CLI/CLI.hpp>
 #include <assetlib/AssetStore.h>
+#include <assetlib/Project.h>
 #include <assetlib/asset_describe.h>
 #include <assetlib/asset_refs.h>
 #include <assetlib/assetlib.h>
-#include <assetlib/banim_io.h>
-#include <assetlib/benv_io.h>
 #include <assetlib/benvl_io.h>
 #include <assetlib/bmaterial_io.h>
 #include <assetlib/bmesh_gltf.h>
 #include <assetlib/bmesh_io.h>
 #include <assetlib/bskel_io.h>
-#include <assetlib/bsky_io.h>
 #include <assetlib/bvat_io.h>
-#include <assetlib/container_format.h>
 #include <assetlib/container_info.h>
-#include <assetlib/env_bake.h>
 #include <assetlib/env_import.h>
-#include <assetlib/envmap_bake.h>
-#include <assetlib/image_io.h>
 #include <assetlib/material_bake.h>
 #include <assetlib/mesh_tangents.h>
 #include <assetlib/migrate.h>
@@ -33,8 +27,6 @@
 #include <assetlib_structs/BVat.h>
 #include <assetlib_structs/magic.h>
 #include <core/err/util.h>
-#include <core/file/LooseFileSystem.h>
-#include <core/file/file.h>
 #include <spdlog/spdlog.h>
 
 namespace
@@ -116,12 +108,12 @@ namespace
 	// from its extension -- `describe` then works on a file named anything. This is the deliberate
 	// opposite of assetlib::assetTypeFromExtension, which never opens the file.
 	ContainerType
-	sniff(const std::filesystem::path& path)
+	sniff(const assetlib::AssetStore& store, std::string_view key)
 	{
-		std::ifstream in(path, std::ios::binary);
-		uint32_t      magic = 0;
-		if (!in.read(reinterpret_cast<char*>(&magic), sizeof(magic)))
-			core::throw_runtime_error("cannot read the file header of {}", path.string());
+		const std::vector<std::byte> header = store.GetFiles().ReadRange(key, 0, sizeof(uint32_t));
+
+		uint32_t magic = 0;
+		std::memcpy(&magic, header.data(), sizeof(magic));
 
 		switch (magic)
 		{
@@ -146,29 +138,18 @@ namespace
 		core::throw_runtime_error(
 			"{} is not a container this tool knows (expected .bmesh, .bmaterial, .benv, .bsky, "
 			".benvl, .bskel, .banim or .bvat)",
-			path.string());
+			key);
 	}
 
-	// A clip set's signature only means something next to the rig it names, so describe resolves it --
-	// against the data root when one is given, and beside the file otherwise, which is how a standalone
-	// baked directory is laid out.
+	// A clip set's signature only means something next to the rig it names, so describe resolves it
+	// through the project the clips live in.
 	std::optional<assetlib::Skeleton>
-	resolveSkeleton(
-		const std::filesystem::path& animationFile,
-		const std::string&           skeleton,
-		const std::filesystem::path& dataRoot)
+	resolveSkeleton(const assetlib::AssetStore& store, const std::string& skeleton)
 	{
-		if (skeleton.empty())
+		if (skeleton.empty() || !store.Exists(skeleton))
 			return std::nullopt;
 
-		const std::filesystem::path base =
-			dataRoot.empty() ? animationFile.parent_path() : dataRoot;
-
-		std::error_code ec;
-		if (!std::filesystem::exists(base / skeleton, ec))
-			return std::nullopt;
-
-		return assetlib::loadSkeleton(base / skeleton);
+		return store.LoadSkeleton(skeleton);
 	}
 }
 
@@ -178,6 +159,16 @@ main(int argc, char** argv)
 	CLI::App app{ "Bernini asset pipeline CLI" };
 	app.set_version_flag("--version", assetlib::version());
 	app.require_subcommand(1);
+
+	// One project, named the same way by every command that addresses one. A command's asset
+	// arguments are then mount keys inside it -- never host paths, which is what let a directory that
+	// was not a project be passed and silently accepted.
+	std::string projectFile;
+	const auto  addProject = [&projectFile](CLI::App* command) {
+		command->add_option("-p,--project", projectFile, "The .berniniproject to work in")
+			->required()
+			->check(CLI::ExistingFile);
+	};
 
 	std::string input;
 	std::string outDir;
@@ -199,7 +190,6 @@ main(int argc, char** argv)
 			"Hz every animation clip is resampled to (default: 30)")
 		->check(CLI::PositiveNumber);
 
-	std::string vatDataRoot;
 	std::string vatMesh;
 	std::string vatAnimations;
 	std::string vatOut;
@@ -208,15 +198,7 @@ main(int argc, char** argv)
 		"bakevat",
 		"Bake a rig's clips into a .bvat: every skinned vertex at every frame, as a position and a "
 		"normal texture the crowd tier fetches instead of skinning");
-	bakevat
-		->add_option(
-			"-d,--data-root",
-			vatDataRoot,
-			"Directory the mesh's asset paths resolve "
-			"against: the project's Data directory, or the baked directory itself for assetlib_cli "
-			"bake output")
-		->required()
-		->check(CLI::ExistingDirectory);
+	addProject(bakevat);
 	bakevat->add_option("mesh", vatMesh, "A .bmesh, relative to the data root")->required();
 	bakevat
 		->add_option("animations", vatAnimations, "The .banim to bake, relative to the data root")
@@ -224,13 +206,10 @@ main(int argc, char** argv)
 	bakevat->add_option(
 		"-o,--out",
 		vatOut,
-		"Output .bvat (default: beside the mesh, named for the (mesh, clip set) pair -- where the "
-		"runtime loads from)");
+		"Output .bvat, relative to the data root (default: beside the mesh, named for the (mesh, "
+		"clip set) pair -- where the runtime loads from)");
 
 	std::string envInput;
-	std::string envOut;
-	std::string envCube;
-	std::string envIem;
 	uint32_t    envIemSize    = 128;
 	uint32_t    envSkyboxSize = 512;
 	uint32_t    envSkyboxMips = 6;
@@ -246,12 +225,6 @@ main(int argc, char** argv)
 	envmap->add_option("input", envInput, "Source .hdr (equirectangular) or cube map .ktx2")
 		->required()
 		->check(CLI::ExistingFile);
-	envmap->add_option("-o,--out", envOut, "Write the prefilter chain here as a loose .ktx2");
-	envmap->add_option(
-		"-c,--cube",
-		envCube,
-		"Also write the unfiltered source cube here -- this is the skybox");
-	envmap->add_option("-i,--irradiance", envIem, "Also write the irradiance map here");
 	envmap->add_option("--irradiance-size", envIemSize, "Irradiance face size (default: 128)");
 	envmap->add_option(
 		"-s,--size",
@@ -279,23 +252,23 @@ main(int argc, char** argv)
 		envThreads,
 		"Worker threads (default: hardware concurrency)");
 
-	std::string envProject;
 	std::string envName = "env";
-	envmap->add_option(
-		"-p,--project",
-		envProject,
-		"Write the split formats into this project data root instead: float sources into "
-		"textures_src/, a baked Sky/<name>.bsky and EnvLighting/<name>.benvl, and an "
-		"Environments/<name>.benv composing the pair");
-	envmap->add_option("--name", envName, "Asset name for --project outputs (default: env)");
+	addProject(envmap);
+	envmap->add_option("--name", envName, "Asset name for the written assets (default: env)");
 
 	std::string objInput;
 	std::string objOut;
 	bool        objRaw = false;
 
 	auto* obj = app.add_subcommand("obj", "Dump a .bmesh as a Wavefront .obj for inspection");
-	obj->add_option("input", objInput, "Source .bmesh file")->required()->check(CLI::ExistingFile);
-	obj->add_option("-o,--out", objOut, "Output .obj file")->required();
+	addProject(obj);
+	obj->add_option("input", objInput, "A .bmesh, relative to the data root")->required();
+	obj->add_option(
+		   "-o,--out",
+		   objOut,
+		   "Output .obj file, a path on disk -- an .obj is not a "
+		   "project asset")
+		->required();
 	obj->add_flag(
 		"--raw",
 		objRaw,
@@ -306,26 +279,17 @@ main(int argc, char** argv)
 	auto* tangents = app.add_subcommand(
 		"tangents",
 		"Derive a tangent basis for every submesh of a .bmesh that has none, in place");
-	tangents->add_option("input", tangentsInput, "Source .bmesh file")
-		->required()
-		->check(CLI::ExistingFile);
+	addProject(tangents);
+	tangents->add_option("input", tangentsInput, "A .bmesh, relative to the data root")->required();
 
 	std::string describeInput;
-	std::string describeDataRoot;
 	bool        describeBrief = false;
 
 	auto* describe =
 		app.add_subcommand("describe", "Print the contents of an asset container as text");
-	describe->add_option("input", describeInput, "Source container file")
-		->required()
-		->check(CLI::ExistingFile);
-	describe->add_option(
-		"-d,--data-root",
-		describeDataRoot,
-		"Project data directory the asset's paths resolve against. For a material, a sky or a "
-		"lighting this also stats each routed source, so a stale bake is reported; for an "
-		"environment it reports whether the files it names are there, and for a clip set it is "
-		"where its skeleton is looked up");
+	addProject(describe);
+	describe->add_option("input", describeInput, "A container, relative to the data root")
+		->required();
 	describe->add_flag(
 		"-b,--brief",
 		describeBrief,
@@ -337,22 +301,18 @@ main(int argc, char** argv)
 		"Also print the file's format number and the schema it was written with -- every struct it "
 		"stores, field by field -- which is what an older file actually holds");
 
-	std::string refsDataRoot;
 	std::string refsAsset;
 
 	auto* refs = app.add_subcommand(
 		"refs",
 		"Print what references an asset, and whether it can therefore be deleted");
-	refs->add_option("-d,--data-root", refsDataRoot, "Project data directory to scan")
-		->required()
-		->check(CLI::ExistingDirectory);
+	addProject(refs);
 	refs->add_option(
 		"asset",
 		refsAsset,
 		"Asset to report on, relative to the data root. Omitted, the whole project is summarised, "
 		"and every dangling reference listed");
 
-	std::string pruneDataRoot;
 	std::string pruneTextureDir = assetlib::c_TexturesDirectoryName;
 	bool        pruneDryRun     = false;
 	bool        pruneYes        = false;
@@ -361,9 +321,7 @@ main(int argc, char** argv)
 		"prune",
 		"Delete the baked textures under a project's data root that no material references any "
 		"more");
-	prune->add_option("-d,--data-root", pruneDataRoot, "Project data directory to prune")
-		->required()
-		->check(CLI::ExistingDirectory);
+	addProject(prune);
 	prune->add_option(
 		"-t,--texture-dir",
 		pruneTextureDir,
@@ -371,15 +329,12 @@ main(int argc, char** argv)
 	prune->add_flag("--dry-run", pruneDryRun, "List what would be deleted and delete nothing");
 	prune->add_flag("-y,--yes", pruneYes, "Delete without asking for confirmation");
 
-	std::string packDataRoot;
 	std::string packTarget;
 
 	auto* pack = app.add_subcommand(
 		"pack",
 		"Write a project's data root into one .bpak archive of everything the runtime reads");
-	pack->add_option("-d,--data-root", packDataRoot, "Project data directory to pack")
-		->required()
-		->check(CLI::ExistingDirectory);
+	addProject(pack);
 	pack->add_option(
 		"-o,--out",
 		packTarget,
@@ -400,19 +355,18 @@ main(int argc, char** argv)
 		"strip",
 		"Drop a material's authoring data, leaving the shippable form: the baked triplet, the "
 		"factors and the name");
-	strip->add_option("input", stripInput, "Source .bmaterial file")
-		->required()
-		->check(CLI::ExistingFile);
+	addProject(strip);
+	strip->add_option("input", stripInput, "A .bmaterial, relative to the data root")->required();
 	strip->add_option(
 		"-o,--out",
 		stripOut,
-		"Write here instead of rewriting the input. The routes and the node graph are not "
-		"recoverable, so prefer this over stripping a material you still intend to author");
+		"Write to this path on disk instead of rewriting the input -- a shipping tree is not a "
+		"project. The routes and the node graph are not recoverable, so prefer this over stripping "
+		"a material you still intend to author");
 	strip->add_flag("-y,--yes", stripYes, "Rewrite the input without asking for confirmation");
 
-	std::string migrateRoot;
-	bool        migrateDryRun = false;
-	bool        migrateYes    = false;
+	bool migrateDryRun = false;
+	bool migrateYes    = false;
 
 	auto* migrate = app.add_subcommand(
 		"migrate",
@@ -420,9 +374,7 @@ main(int argc, char** argv)
 		"already current is left untouched, so running it twice rewrites nothing the second time; "
 		"a "
 		"file that cannot be read is reported and skipped");
-	migrate->add_option("data-root", migrateRoot, "Project data directory")
-		->required()
-		->check(CLI::ExistingDirectory);
+	addProject(migrate);
 	migrate->add_flag(
 		"-n,--dry-run",
 		migrateDryRun,
@@ -454,7 +406,8 @@ main(int argc, char** argv)
 	auto* exposure = app.add_subcommand(
 		"exposure",
 		"Show or author the exposure a .benvl renders at, overruling the value its bake derived");
-	exposure->add_option("input", expInput, "A .benvl file")->required()->check(CLI::ExistingFile);
+	addProject(exposure);
+	exposure->add_option("input", expInput, "A .benvl, relative to the data root")->required();
 	auto* expSetOpt = exposure->add_option(
 		"-s,--set",
 		expSet,
@@ -509,12 +462,18 @@ main(int argc, char** argv)
 			desc.mesh       = vatMesh;
 			desc.animations = vatAnimations;
 
-			const assetlib::BVat vat = assetlib::bakeVat(assetlib::AssetStore(vatDataRoot), desc);
+			const assetlib::Project     project = assetlib::Project::Open(projectFile);
+			const assetlib::AssetStore& store   = project.GetStore();
 
-			const std::filesystem::path out = vatOut.empty() ?
-			                                      std::filesystem::path(vatDataRoot) /
-			                                          assetlib::vatPathFor(vatMesh, vatAnimations) :
-			                                      std::filesystem::path(vatOut);
+			const assetlib::BVat vat = assetlib::bakeVat(store, desc);
+
+			// generic_string, not string: vatPathFor hands back a path, and on Windows its native
+			// spelling is `\`-separated -- which a mount key never is.
+			std::string key = vatOut;
+			if (key.empty())
+				key = assetlib::vatPathFor(vatMesh, vatAnimations).generic_string();
+
+			const std::filesystem::path out = store.ResolveWritePath(key);
 			assetlib::saveVat(vat, out);
 
 			spdlog::info(
@@ -543,107 +502,31 @@ main(int argc, char** argv)
 	{
 		try
 		{
-			if (envOut.empty() && envProject.empty())
-				throw std::runtime_error("nothing to write: pass --out and/or --project");
+			const assetlib::Project project = assetlib::Project::Open(projectFile);
 
-			const bool fromHdr = std::filesystem::path(envInput).extension() == ".hdr";
+			auto importDesc               = assetlib::EnvImportDesc();
+			importDesc.dataRoot           = project.GetDataDirectory();
+			importDesc.source             = envInput;
+			importDesc.name               = envName;
+			importDesc.skyFaceSize        = envSkyboxSize;
+			importDesc.skyMips            = envSkyboxMips;
+			importDesc.skyMipLevel        = envSkyboxMip;
+			importDesc.prefilterFaceSize  = envSize;
+			importDesc.prefilterMips      = envMips;
+			importDesc.prefilterSamples   = envSamples;
+			importDesc.irradianceFaceSize = envIemSize;
+			importDesc.threads            = envThreads;
 
-			// Projected at the skybox's size, which is the largest of the three: the prefilter and
-			// the irradiance convolve it down anyway, and starting them from the finer cube costs
-			// only the projection.
-			assetlib::ImageData src = fromHdr ? assetlib::equirectToCube(
-													assetlib::loadRadianceHdr(envInput),
-													std::max(envSkyboxSize, envSize)) :
-			                                    assetlib::loadKTX2(envInput);
-
-			// A shipped map is RGB9E5, and that is the only form left when a route's float source
-			// has gone. Re-convolving one costs a generation of quantization, so it is a recovery
-			// path and not the one to reach for when the source is still there.
-			if (src.vkFormat == assetlib::VkFormat::E5B9G9R9_UFLOAT_PACK32)
-			{
-				spdlog::warn(
-					"'{}' is RGB9E5; unpacking it to float. Re-convolving a baked map quantizes "
-					"twice -- prefer the source it was baked from",
-					envInput);
-				src = assetlib::unpackRgb9e5(src);
-			}
-
-			if (!envCube.empty())
-			{
-				// A defocus chain rather than one blurred mip: which level the backdrop draws is a
-				// viewer's choice, so it must survive the bake. The prefilter and irradiance still
-				// read `src`, so nothing the backdrop does reaches the lighting.
-				const assetlib::ImageData cube =
-					assetlib::skyChain(src, envSkyboxSize, envSkyboxMips, 256, envThreads);
-				assetlib::writeKTX2(cube, envCube, false, assetlib::Ktx2Compression::kNone);
-				spdlog::info(
-					"Wrote the skybox cube to '{}' ({}^2 x {} mips)",
-					envCube,
-					cube.width,
-					envSkyboxMips);
-			}
-
-			assetlib::ImageData iem = assetlib::irradianceSh(src, envIemSize);
-			if (!envIem.empty())
-			{
-				assetlib::writeKTX2(iem, envIem, false, assetlib::Ktx2Compression::kNone);
-				spdlog::info("Wrote the irradiance map to '{}' ({}^2)", envIem, envIemSize);
-			}
-
-			auto desc      = assetlib::PrefilterDesc();
-			desc.faceSize  = envSize;
-			desc.mipLevels = envMips;
-			desc.samples   = envSamples;
-			desc.threads   = envThreads;
-
-			auto                stats = assetlib::PrefilterStats();
-			assetlib::ImageData out   = assetlib::prefilterRadiance(src, desc, &stats);
-
-			if (!envOut.empty())
-				assetlib::writeKTX2(out, envOut, false, assetlib::Ktx2Compression::kNone);
+			const assetlib::EnvImportResult imported = assetlib::importEnvironment(importDesc);
 
 			spdlog::info(
-				"Prefiltered '{}' ({}^2) -> '{}' ({}^2 x {} mips) in {:.2f}s",
-				envInput,
-				src.width,
-				envOut,
-				desc.faceSize,
-				desc.mipLevels,
-				stats.seconds);
-			spdlog::info(
-				"  {} texels, {} GGX samples, {:.1f}M samples/s",
-				stats.texelsWritten,
-				stats.samplesTaken,
-				stats.seconds > 0.0 ?
-					static_cast<double>(stats.samplesTaken) / stats.seconds / 1e6 :
-					0.0);
+				"Imported '{}' into '{}': {} files, exposure {:.3f}",
+				envName,
+				project.GetName(),
+				imported.written.size(),
+				imported.exposure);
 
-			if (!envProject.empty())
-			{
-				auto importDesc               = assetlib::EnvImportDesc();
-				importDesc.dataRoot           = envProject;
-				importDesc.source             = envInput;
-				importDesc.name               = envName;
-				importDesc.skyFaceSize        = envSkyboxSize;
-				importDesc.skyMips            = envSkyboxMips;
-				importDesc.skyMipLevel        = envSkyboxMip;
-				importDesc.prefilterFaceSize  = envSize;
-				importDesc.prefilterMips      = envMips;
-				importDesc.prefilterSamples   = envSamples;
-				importDesc.irradianceFaceSize = envIemSize;
-				importDesc.threads            = envThreads;
-
-				const assetlib::EnvImportResult imported = assetlib::importEnvironment(importDesc);
-
-				spdlog::info(
-					"Imported '{}' into '{}': {} files, exposure {:.3f}",
-					envName,
-					envProject,
-					imported.written.size(),
-					imported.exposure);
-
-				for (const std::string& file : imported.written) spdlog::info("  wrote {}", file);
-			}
+			for (const std::string& file : imported.written) spdlog::info("  wrote {}", file);
 		}
 		catch (const std::exception& e)
 		{
@@ -656,7 +539,10 @@ main(int argc, char** argv)
 	{
 		try
 		{
-			const auto mesh = assetlib::load(objInput);
+			const assetlib::Project     project = assetlib::Project::Open(projectFile);
+			const assetlib::AssetStore& store   = project.GetStore();
+
+			const auto mesh = store.LoadMesh(assetlib::normalizePath(objInput));
 			assetlib::writeObj(mesh, objOut, !objRaw);
 			spdlog::info(
 				"Wrote '{}' from '{}' ({} submeshes, {} source)",
@@ -676,11 +562,16 @@ main(int argc, char** argv)
 	{
 		try
 		{
-			assetlib::BMesh mesh   = assetlib::load(tangentsInput);
+			const assetlib::Project     project = assetlib::Project::Open(projectFile);
+			const assetlib::AssetStore& store   = project.GetStore();
+
+			const std::string key = assetlib::normalizePath(tangentsInput);
+
+			assetlib::BMesh mesh   = store.LoadMesh(key);
 			const auto      result = assetlib::generateTangents(mesh);
 
 			if (result.generated > 0)
-				assetlib::save(mesh, tangentsInput);
+				assetlib::save(mesh, store.ResolveWritePath(key));
 
 			spdlog::info(
 				"'{}': {} submesh(es) gained a tangent, {} already had one, {} could not have one "
@@ -701,63 +592,55 @@ main(int argc, char** argv)
 	{
 		try
 		{
-			const std::filesystem::path path(describeInput);
+			const assetlib::Project     project = assetlib::Project::Open(projectFile);
+			const assetlib::AssetStore& store   = project.GetStore();
 
-			// Straight to stdout, not the logger: this is the command's output, so it should pipe into
-			// a file or a diff without spdlog's timestamps and level prefixes in the way.
-			const auto dataRoot = std::filesystem::path(describeDataRoot);
+			const std::string key = assetlib::normalizePath(describeInput);
 
-			// Optional: a container describes on its own, and only a root lets the stamps be checked
-			// against what is actually there.
-			std::optional<assetlib::AssetStore> store;
-			if (!dataRoot.empty())
-				store.emplace(dataRoot);
-
-			// With a project the stamps are checked against what is on disk; without one only what
-			// the container records can be reported.
-			const auto describeAsset = [&store](const auto& asset) {
-				return store.has_value() ? store->Describe(asset) : assetlib::describe(asset);
-			};
+			// The store's overload, always: it stats each routed source against what is on disk, so
+			// a stale bake is reported rather than merely recorded.
+			const auto describe = [&store](const auto& asset) { return store.Describe(asset); };
 
 			if (describeSchema)
 			{
-				const auto info =
-					assetlib::inspectContainer(core::file::read_file_bytes(path.string()));
+				const auto info = assetlib::inspectContainer(store.GetFiles().Read(key));
+				// Straight to stdout, not the logger: this is the command's output, so it should
+				// pipe into a file or a diff without spdlog's timestamps and level prefixes.
 				std::cout
 					<< std::format("format {}.{}\nschema\n", info.versionMajor, info.versionMinor)
 					<< assetlib::describe(info.schema) << '\n';
 			}
 
-			switch (sniff(path))
+			switch (sniff(store, key))
 			{
 			case ContainerType::kMesh:
-				std::cout << assetlib::describe(assetlib::load(path), !describeBrief);
+				std::cout << assetlib::describe(store.LoadMesh(key), !describeBrief);
 				break;
 			case ContainerType::kMaterial:
-				std::cout << describeAsset(assetlib::loadMaterial(path));
+				std::cout << describe(store.LoadMaterial(key));
 				break;
 			case ContainerType::kEnv:
-				std::cout << describeAsset(assetlib::loadEnv(path));
+				std::cout << describe(store.LoadEnv(key));
 				break;
 			case ContainerType::kSky:
-				std::cout << describeAsset(assetlib::loadSky(path));
+				std::cout << describe(store.LoadSky(key));
 				break;
 			case ContainerType::kEnvLighting:
-				std::cout << describeAsset(assetlib::loadEnvLighting(path));
+				std::cout << describe(store.LoadEnvLighting(key));
 				break;
 			case ContainerType::kSkeleton:
-				std::cout << assetlib::describe(assetlib::loadSkeleton(path));
+				std::cout << assetlib::describe(store.LoadSkeleton(key));
 				break;
 			case ContainerType::kAnimation:
 			{
-				const auto animations = assetlib::loadAnimations(path);
-				const auto skeleton   = resolveSkeleton(path, animations.skeleton, dataRoot);
+				const auto animations = store.LoadAnimations(key);
+				const auto skeleton   = resolveSkeleton(store, animations.skeleton);
 				std::cout << assetlib::describe(animations, skeleton ? &*skeleton : nullptr);
 				break;
 			}
 			case ContainerType::kVat:
 				// Tables only: the pixel chunks are tens of MB and describe never reads a texel.
-				std::cout << describeAsset(assetlib::loadVatTables(path));
+				std::cout << describe(store.LoadVatTables(key));
 				break;
 			}
 		}
@@ -772,11 +655,15 @@ main(int argc, char** argv)
 	{
 		try
 		{
-			const std::filesystem::path in = stripInput;
+			const assetlib::Project     project = assetlib::Project::Open(projectFile);
+			const assetlib::AssetStore& store   = project.GetStore();
+
+			const std::string           key = assetlib::normalizePath(stripInput);
+			const std::filesystem::path in  = store.ResolveWritePath(key);
 			const std::filesystem::path out =
 				stripOut.empty() ? in : std::filesystem::path(stripOut);
 
-			assetlib::BMaterial material = assetlib::loadMaterial(in);
+			assetlib::BMaterial material = store.LoadMaterial(key);
 
 			// Asked before the strip, not after: the routes and the graph are the only record of how
 			// the material was authored, and rewriting the input destroys them.
@@ -807,7 +694,8 @@ main(int argc, char** argv)
 	{
 		try
 		{
-			const std::filesystem::path root(migrateRoot);
+			const assetlib::Project     project = assetlib::Project::Open(projectFile);
+			const std::filesystem::path root    = project.GetDataDirectory();
 
 			const auto print = [&](const assetlib::MigrateReport& report, bool preview) {
 				for (const auto& file : report.files)
@@ -933,7 +821,8 @@ main(int argc, char** argv)
 	{
 		try
 		{
-			const assetlib::AssetStore store{ std::filesystem::path(refsDataRoot) };
+			const assetlib::Project     project = assetlib::Project::Open(projectFile);
+			const assetlib::AssetStore& store   = project.GetStore();
 
 			const auto graph = assetlib::AssetRefGraph::Scan(store);
 
@@ -1000,10 +889,13 @@ main(int argc, char** argv)
 	{
 		try
 		{
-			const assetlib::AssetStore store{ std::filesystem::path(packDataRoot) };
+			const assetlib::Project     project = assetlib::Project::Open(projectFile);
+			const assetlib::AssetStore& store   = project.GetStore();
 
+			// Beside the project file, not inside Data/: the archive is what the project produces,
+			// and packing it into the tree it was packed from would pack itself next time.
 			auto desc   = assetlib::PackDesc();
-			desc.target = packTarget.empty() ? std::filesystem::path(packDataRoot).parent_path() /
+			desc.target = packTarget.empty() ? project.GetProjectFile().parent_path() /
 			                                       assetlib::c_DefaultArchiveName :
 			                                   std::filesystem::path(packTarget);
 
@@ -1078,7 +970,8 @@ main(int argc, char** argv)
 	{
 		try
 		{
-			const assetlib::AssetStore store{ std::filesystem::path(pruneDataRoot) };
+			const assetlib::Project     project = assetlib::Project::Open(projectFile);
+			const assetlib::AssetStore& store   = project.GetStore();
 
 			auto desc       = assetlib::TexturePruneDesc();
 			desc.textureDir = pruneTextureDir;
@@ -1146,7 +1039,11 @@ main(int argc, char** argv)
 	{
 		try
 		{
-			assetlib::BEnvLighting lighting = assetlib::loadEnvLighting(expInput);
+			const assetlib::Project     project = assetlib::Project::Open(projectFile);
+			const assetlib::AssetStore& store   = project.GetStore();
+
+			const std::string      key      = assetlib::normalizePath(expInput);
+			assetlib::BEnvLighting lighting = store.LoadEnvLighting(key);
 
 			if (*expSetOpt || expClear)
 			{
@@ -1155,7 +1052,7 @@ main(int argc, char** argv)
 				else
 					lighting.exposureOverride = expSet;
 
-				assetlib::saveEnvLighting(lighting, expInput);
+				assetlib::saveEnvLighting(lighting, store.ResolveWritePath(key));
 			}
 
 			spdlog::info(
