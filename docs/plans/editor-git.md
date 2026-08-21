@@ -158,7 +158,7 @@ the commit identity per invocation: a runner with no `user.email` cannot commit.
 
 | Where | What |
 |---|---|
-| `apps/editor/src/VersionControl/` | new: the process runner, the seam, the git implementation |
+| `apps/editor/src/VersionControl/` | new: the process runner, the seam, the git implementation, the reference guard |
 | `apps/editor/src/Windows/VersionControl/` | new: the two dialogs the menu opens |
 | `apps/editor/qt/Windows/VersionControl/` | new: `PendingChangesDialog.ui`, `HistoryDialog.ui` |
 | `apps/editor/src/MainWindow.cpp` | the Version Control menu, built as the Render menu is |
@@ -196,16 +196,24 @@ the other clone has published, and the reason names assets rather than git; Get 
 the local line has moved and leaves the tree byte-identical with no merge in progress; Get Latest
 fast-forwards when it has not; Revert restores; Submit refuses when the commit identity is unset.
 
-**4 — the reference guard.** ADR-10's on-disk half: before Get Latest applies, the tree the update
+**4 — the reference guard.** ADR-10's on-disk half: before a verb deletes anything, the tree it
 would produce must leave no reference dangling, asked of `assetlib::AssetRefGraph`. It is a task of
 its own rather than part of 3 because it is not backend knowledge — a second `IVersionControl`
 must not have to reimplement it — so where the check sits relative to the seam is a design decision
-worth reviewing on its own, and 3 is already the largest task here. *Gate:* `[vcs]` — an incoming
-deletion of a material a local level still references is refused with both named and the tree left
-byte-identical; the same deletion is allowed when the update deletes the referring level too; an
-incoming deletion nothing references is allowed.
+worth reviewing on its own, and 3 is already the largest task here. It guards **Get Latest and
+Revert**, the two verbs in 3 that remove assets; task 5's Undo is the third and calls the same rule.
 
-**5 — History and Undo.** `ListHistory(limit)` returning a `Submission` per entry — who, when, the
+A level is not in the reference graph — `assetlib::AssetType` has no such kind — so the worked case
+is a source texture a material routes from, which is the edge two people actually collide on.
+
+*Gate:* `[vcs]` — an incoming deletion of a texture a local material still routes from is refused
+with both named and the tree left byte-identical; the same deletion is allowed when the update
+deletes the routing material too; a deletion nothing references is allowed; Revert refuses to remove
+a never-submitted asset another still needs; an update deleting nothing never reads the project at
+all.
+
+**5 — History and Undo.** Undo deletes, so it calls task 4's guard as Get Latest and Revert do.
+`ListHistory(limit)` returning a `Submission` per entry — who, when, the
 message, the assets it touched — and `UndoSubmission(id)`, which records the restoration as a new
 submission (ADR-9). *Gate:* `[vcs]` — history newest first with the right assets per entry; Undo
 restores the files and appends an entry rather than removing one; the undone submission is still
