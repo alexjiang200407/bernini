@@ -1,5 +1,7 @@
 #include "Import/import_writers.h"
 
+#include <assetlib/asset_import.h>
+
 #include "Windows/AssetImporter/material_stems.h"
 #include "util/QtSupport.h"
 #include "util/asset_paths.h"
@@ -350,11 +352,11 @@ TEST_CASE(
 		project.TextureDir(),
 		QStringList{ "fur_grey" });
 
-	const std::array<editor::ImportedFile, 1> written = { {
+	const std::array<assetlib::ImportedFile, 1> written = { {
 		{ project.MaterialDir() / "fur_grey.bmaterial", false },
 	} };
 
-	editor::RollBackImport(written, {});
+	assetlib::rollBackImport(written, {});
 
 	// The folder is not this import's to take down, so undoing it means removing exactly the files it
 	// wrote -- the other import's work has to survive a failure that had nothing to do with it.
