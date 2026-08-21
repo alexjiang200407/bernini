@@ -366,7 +366,10 @@ reader still present until the final task, which is why deletion is last.
       document write waits for task 3 — see ADR-6's correction.
       Gate: import round-trip shows copy, document, bound-mesh-derived bindings; `.gltf` and
       collision refusals.
-3. **assetlib: the cache header and the seam on geometry** — header (key + chunk table) on
+3. **assetlib: the cache header and the seam on geometry** *(re-sliced in 3a's PR: the format
+   switch and the regeneration seam are each a full review; 3a lands the format — a stale key
+   refuses loudly, naming regeneration — and 3b lands the seam that performs it, the load-apply,
+   the attach-flow document write, and the document re-author)* — header (key + chunk table) on
    `.bmesh`/`.bskel`/`.banim`, token constants, per-source-group key check (read-only store →
    fresh), in-memory regeneration returning a group's existing outputs with parameters read from
    the document and bindings applied over the result (ADR-6); missing source on a stale entry
@@ -379,7 +382,9 @@ reader still present until the final task, which is why deletion is last.
    derivation is that tool), needed because `GltfSkin_test` and the thumbnail test assert those
    bindings. This task also wires the attach flow's document write, now that the header gives a
    mesh its source, and re-authors every document's bindings from its meshes' current state at
-   adoption — the mesh was authoritative until here (ADR-6).
+   adoption — the mesh was authoritative until here (ADR-6). As it reshapes the import-write
+   signatures it gathers the arguments that travel together — data root, source name, sample
+   rate — into one import-target value; 3a's per-function lists had grown past reading.
    Gate: stale key and stale stamp each regenerate; a wrong-keyed entry swapped in regenerates
    (the merge property); a binding-only document edit rebinds the loaded mesh without
    regeneration, on a sourceless group too; fresh leaves bytes untouched; ranged `loadMeshRefs`

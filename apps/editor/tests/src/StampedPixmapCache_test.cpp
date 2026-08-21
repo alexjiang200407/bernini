@@ -265,11 +265,11 @@ TEST_CASE("A rejection carries its reason until the file changes", "[thumbnails]
 
 	const std::optional<qint64> stamp = cache.BeginRequest(path);
 	REQUIRE(stamp.has_value());
-	cache.Reject(path, *stamp, "bmesh: format 3 predates the schema table");
+	cache.Reject(path, *stamp, "bmesh: written at another bake revision");
 
 	REQUIRE(rejected.count() == 1);
-	REQUIRE(rejected.at(0).at(1).toString() == "bmesh: format 3 predates the schema table");
-	REQUIRE(cache.GetRejection(path) == "bmesh: format 3 predates the schema table");
+	REQUIRE(rejected.at(0).at(1).toString() == "bmesh: written at another bake revision");
+	REQUIRE(cache.GetRejection(path) == "bmesh: written at another bake revision");
 	REQUIRE(cache.Lookup(path).isNull());
 
 	// The reason belongs to the content: under another stamp it is not the file's any more.

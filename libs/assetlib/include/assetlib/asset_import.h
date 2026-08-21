@@ -4,7 +4,9 @@
 namespace assetlib
 {
 	struct BMesh;
+	struct MaterialBinding;
 	struct Skeleton;
+	struct SourceRef;
 
 	/**
 	 * Writes `mesh` to `bmeshPath`, creating the directory the path names first: an import aimed
@@ -35,7 +37,8 @@ namespace assetlib
 		const std::filesystem::path& dataRoot,
 		const std::filesystem::path& bskelPath,
 		const std::filesystem::path& banimPath,
-		bool                         writeClips);
+		bool                         writeClips,
+		const SourceRef&             source);
 
 	/**
 	 * The `.bskel` under `dataRoot` whose signature matches `skeleton`, or empty when none does.
@@ -60,7 +63,8 @@ namespace assetlib
 	writeImportedClips(
 		const imp::BMeshImport&      imported,
 		const std::filesystem::path& dataRoot,
-		const std::filesystem::path& banimPath);
+		const std::filesystem::path& banimPath,
+		const SourceRef&             source);
 
 	/**
 	 * @throws std::runtime_error unless `source` is a `.glb` -- a `.gltf`'s sidecar `.bin` and
@@ -87,22 +91,48 @@ namespace assetlib
 	importDocumentPathFor(const std::filesystem::path& dataRoot, std::string_view name);
 
 	/**
-	 * Copies the self-contained source into `meshes_src/` and writes its import document beside
-	 * it: the sample rate, and -- when `mesh` is given -- the submesh-name -> material bindings
-	 * the mesh carries at this moment, which is how an import records what `attachMaterial` just
-	 * chose and how an adoption records what an existing file already held. Null `mesh` is a
-	 * clips-only import: parameters, no bindings.
+	 * Copies the self-contained source into `meshes_src/` and stamps it: the returned reference --
+	 * key, content stamp, parameter hash -- is what the caller sets on every container derived
+	 * from it *before* saving them. The document itself is written afterwards by
+	 * writeImportedDocument, once the bindings exist; the split is safe because bindings are
+	 * deliberately outside the parameter hash.
 	 *
-	 * @throws what requireSelfContainedSource throws, and std::runtime_error on a copy or write
-	 *         failure.
+	 * @param sampleRate The rate clips are resampled to at import -- the import's one parameter,
+	 *        and what the returned reference's parameter hash covers.
+	 * @throws what requireSelfContainedSource throws, and std::runtime_error on a copy failure.
+	 */
+	SourceRef
+	copyImportedSource(
+		const std::filesystem::path& source,
+		const std::filesystem::path& dataRoot,
+		std::string_view             name,
+		float                        sampleRate);
+
+	/**
+	 * Writes the `.bimport` beside the copied source: the sample rate, and -- when `mesh` is
+	 * given -- the submesh-name -> material bindings the mesh carries at this moment, which is how
+	 * an import records what `attachMaterial` just chose and how an adoption records what an
+	 * existing file already held. Null `mesh` is a clips-only import: parameters, no bindings.
+	 *
+	 * @throws std::runtime_error on a write failure.
 	 */
 	void
-	writeImportedSource(
-		const std::filesystem::path& source,
+	writeImportedDocument(
 		const std::filesystem::path& dataRoot,
 		std::string_view             name,
 		float                        sampleRate,
 		const BMesh*                 mesh);
+
+	/**
+	 * Rebuilds `mesh.materials` and every `Submesh::material` canonically from `bindings` -- a
+	 * pure function of the document, never a mutation of what was loaded, so two checkouts with
+	 * one document hold one array. A submesh the document does not name is unbound; a binding
+	 * naming a submesh the mesh does not have is refused.
+	 *
+	 * @throws std::runtime_error naming the submesh a binding has no target for.
+	 */
+	void
+	applyBindings(BMesh& mesh, std::span<const MaterialBinding> bindings);
 
 	/** A file an import writes, and whether the import is the one that made it. */
 	struct ImportedFile

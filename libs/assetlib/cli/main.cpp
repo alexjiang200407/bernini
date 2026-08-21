@@ -511,13 +511,24 @@ main(int argc, char** argv)
 				assetlib::BMesh mesh = assetlib::toBMesh(imported);
 				assetlib::requireUniqueSubmeshNames(mesh);
 
+				const assetlib::SourceRef source =
+					assetlib::copyImportedSource(input, dataRoot, name, sampleRate);
+				mesh.source = source;
+
 				assetlib::writeTextures(imported, textureDir);
 
 				const auto derived = assetlib::generateTangents(mesh);
 
-				assetlib::writeImportedRig(imported, mesh, dataRoot, bskelPath, banimPath, true);
+				assetlib::writeImportedRig(
+					imported,
+					mesh,
+					dataRoot,
+					bskelPath,
+					banimPath,
+					true,
+					source);
 				assetlib::writeImportedMesh(mesh, bmeshPath);
-				assetlib::writeImportedSource(input, dataRoot, name, sampleRate, &mesh);
+				assetlib::writeImportedDocument(dataRoot, name, sampleRate, &mesh);
 
 				if (derived.skipped > 0)
 					spdlog::warn(
@@ -714,12 +725,30 @@ main(int argc, char** argv)
 
 			if (describeSchema)
 			{
-				const auto info = assetlib::inspectContainer(store.GetFiles().Read(key));
+				const std::vector<std::byte> bytes = store.GetFiles().Read(key);
 				// Straight to stdout, not the logger: this is the command's output, so it should
 				// pipe into a file or a diff without spdlog's timestamps and level prefixes.
-				std::cout
-					<< std::format("format {}.{}\nschema\n", info.versionMajor, info.versionMinor)
-					<< assetlib::describe(info.schema) << '\n';
+				if (const auto entry = assetlib::inspectCacheEntry(bytes))
+				{
+					// Geometry carries a cache key where the others carry a schema.
+					std::cout << std::format(
+						"cache entry\n  bake token   {:#018x}\n  source       {}\n  source "
+						"stamp  {} bytes, {:#018x}\n  parameters   {:#018x}\n",
+						entry->bakeToken,
+						entry->source.key.empty() ? "(never recorded)" : entry->source.key,
+						entry->source.stamp.size,
+						entry->source.stamp.hash,
+						entry->source.parametersHash);
+				}
+				else
+				{
+					const auto info = assetlib::inspectContainer(bytes);
+					std::cout << std::format(
+									 "format {}.{}\nschema\n",
+									 info.versionMajor,
+									 info.versionMinor)
+							  << assetlib::describe(info.schema) << '\n';
+				}
 			}
 
 			switch (sniff(store, key))

@@ -1,0 +1,9 @@
+{
+	"bindings": {
+		"Apple1.001": "Materials/apples/Apple1.bmaterial",
+		"Apple2.001": "Materials/apples/Apple2.bmaterial"
+	},
+	"parameters": {
+		"sampleRate": 30.0
+	}
+}

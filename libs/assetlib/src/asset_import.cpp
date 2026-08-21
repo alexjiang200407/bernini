@@ -58,13 +58,25 @@ namespace assetlib
 		       std::format("{}{}", name, c_ImportDocumentExtension);
 	}
 
-	void
-	writeImportedSource(
+	namespace
+	{
+		/** The one construction the key and the document share -- a parameter added in only one
+		    place cannot silently split the hash from the file. */
+		ImportDocument
+		parametersOnly(float sampleRate)
+		{
+			ImportDocument document;
+			document.sampleRate = sampleRate;
+			return document;
+		}
+	}
+
+	SourceRef
+	copyImportedSource(
 		const std::filesystem::path& source,
 		const std::filesystem::path& dataRoot,
 		std::string_view             name,
-		float                        sampleRate,
-		const BMesh*                 mesh)
+		float                        sampleRate)
 	{
 		requireSelfContainedSource(source);
 
@@ -84,8 +96,28 @@ namespace assetlib
 			target.string(),
 			ec.message());
 
-		ImportDocument document;
-		document.sampleRate = sampleRate;
+		SourceRef ref;
+		ref.key =
+			std::format("{}/{}", c_MeshesSrcDirectoryName, target.filename().generic_string());
+		ref.stamp.size                     = std::filesystem::file_size(target);
+		const std::optional<uint64_t> hash = core::file::hash_file(target);
+		core::throw_runtime_error_if(
+			!hash.has_value(),
+			"cannot hash '{}' after copying it",
+			target.string());
+		ref.stamp.hash     = *hash;
+		ref.parametersHash = parametersHashOf(parametersOnly(sampleRate));
+		return ref;
+	}
+
+	void
+	writeImportedDocument(
+		const std::filesystem::path& dataRoot,
+		std::string_view             name,
+		float                        sampleRate,
+		const BMesh*                 mesh)
+	{
+		ImportDocument document = parametersOnly(sampleRate);
 		if (mesh != nullptr)
 		{
 			for (const Submesh& submesh : mesh->submeshes)
@@ -105,6 +137,40 @@ namespace assetlib
 	}
 
 	void
+	applyBindings(BMesh& mesh, std::span<const MaterialBinding> bindings)
+	{
+		auto bySubmesh = std::unordered_map<std::string_view, std::string_view>();
+		for (const MaterialBinding& binding : bindings)
+			bySubmesh.emplace(binding.submesh, binding.material);
+
+		mesh.materials.clear();
+		auto indexOf = std::unordered_map<std::string_view, uint32_t>();
+		auto matched = std::unordered_set<std::string_view>();
+		for (Submesh& submesh : mesh.submeshes)
+		{
+			const auto found = bySubmesh.find(mesh.stringPool.at(submesh.nameOffset));
+			if (found == bySubmesh.end())
+			{
+				submesh.material = c_InvalidIndex;
+				continue;
+			}
+			const auto [slot, added] =
+				indexOf.emplace(found->second, static_cast<uint32_t>(mesh.materials.size()));
+			if (added)
+				mesh.materials.emplace_back(found->second);
+			submesh.material = slot->second;
+			matched.insert(found->first);
+		}
+
+		for (const MaterialBinding& binding : bindings)
+			core::throw_runtime_error_if(
+				!matched.contains(binding.submesh),
+				"'{}' binds a submesh this mesh does not have -- the source changed shape; "
+				"rebind or re-export",
+				binding.submesh);
+	}
+
+	void
 	writeImportedMesh(const BMesh& mesh, const std::filesystem::path& bmeshPath)
 	{
 		std::filesystem::create_directories(bmeshPath.parent_path());
@@ -118,7 +184,8 @@ namespace assetlib
 		const std::filesystem::path& dataRoot,
 		const std::filesystem::path& bskelPath,
 		const std::filesystem::path& banimPath,
-		bool                         writeClips)
+		bool                         writeClips,
+		const SourceRef&             source)
 	{
 		if (imported.skeleton.bones.empty())
 			return;
@@ -126,7 +193,9 @@ namespace assetlib
 		// A project scaffolded before these categories existed has neither directory.
 		std::filesystem::create_directories(bskelPath.parent_path());
 
-		saveSkeleton(imported.skeleton, bskelPath);
+		Skeleton skeleton = imported.skeleton;
+		skeleton.source   = source;
+		saveSkeleton(skeleton, bskelPath);
 		mesh.skeleton = mountKeyFor(dataRoot, bskelPath);
 
 		if (!writeClips || imported.animations.clips.empty())
@@ -138,6 +207,7 @@ namespace assetlib
 
 		AnimationSet clips = imported.animations;
 		clips.skeleton     = mesh.skeleton;
+		clips.source       = source;
 		bakePosedBounds(clips, mesh, imported.skeleton);
 		saveAnimations(clips, banimPath);
 	}
@@ -249,7 +319,8 @@ namespace assetlib
 	writeImportedClips(
 		const imp::BMeshImport&      imported,
 		const std::filesystem::path& dataRoot,
-		const std::filesystem::path& banimPath)
+		const std::filesystem::path& banimPath,
+		const SourceRef&             source)
 	{
 		if (imported.animations.clips.empty())
 			throw std::runtime_error("this file carries no animation to import");
@@ -272,6 +343,7 @@ namespace assetlib
 
 		AnimationSet clips = imported.animations;
 		clips.skeleton     = mountKeyFor(dataRoot, rig);
+		clips.source       = source;
 
 		// Measured against the rig the clips will resolve at load, not the imported copy: the two
 		// share a signature but a re-authored bind pose deliberately does not change one.

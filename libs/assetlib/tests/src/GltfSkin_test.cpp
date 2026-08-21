@@ -568,7 +568,14 @@ TEST_CASE("Importing a skinned mesh writes the rig it names", "[gltf][skeleton][
 
 	BMesh baked = toBMesh(import);
 	static_cast<void>(generateTangents(baked));
-	writeImportedRig(import, baked, outDir, outDir / "rig.bskel", outDir / "rig.banim", true);
+	writeImportedRig(
+		import,
+		baked,
+		outDir,
+		outDir / "rig.bskel",
+		outDir / "rig.banim",
+		true,
+		SourceRef{});
 	writeImportedMesh(baked, outDir / "rig.bmesh");
 
 	const auto mesh = load(outDir / "rig.bmesh");

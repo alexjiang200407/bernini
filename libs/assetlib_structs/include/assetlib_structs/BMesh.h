@@ -3,6 +3,8 @@
 #include <assetlib_structs/Node.h>
 #include <core/str/string_pool.h>
 
+#include <assetlib_structs/SourceRef.h>
+
 namespace assetlib
 {
 	/**
@@ -31,5 +33,7 @@ namespace assetlib
 		std::vector<std::string> materials;
 
 		std::string skeleton;  // .bskel the joint indices address; empty for a static mesh
+
+		SourceRef source;  // the copied .glb this was derived from; empty key when never recorded
 	};
 }
