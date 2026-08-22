@@ -194,8 +194,7 @@ AnimationPreviewWindow::LoadMeshAs(
 	// VAT reads the box its bake already closed over, one for the file. The skinned tier reads
 	// its own bake off the .banim, one per animated mesh entry -- the box is that geom's culling
 	// volume, and a .bmesh may hold two separately rigged meshes. Only a pairing the cook never
-	// measured is walked here, off the UI and render threads: posedBounds skins every vertex at
-	// every frame.
+	// measured is walked here, off the UI and render threads.
 	auto posedMin   = glm::vec3(0.0f);
 	auto posedMax   = glm::vec3(0.0f);
 	bool posedKnown = false;
@@ -266,20 +265,22 @@ AnimationPreviewWindow::LoadMeshAs(
 				const assetlib::AnimationSet clips    = store.LoadAnimations(animations);
 				const assetlib::Skeleton     skeleton = store.LoadSkeleton(clips.skeleton);
 
+				const std::vector<std::optional<assetlib::Bounds>> baked =
+					assetlib::findPosedBounds(clips, mesh, skeleton);
+
 				for (const bmesh::InstancePlacement& placement : plan.animated)
 				{
 					if (skinnedBounds.contains(placement.meshIndex))
 						continue;
 
-					const std::optional<assetlib::Bounds> baked =
-						assetlib::findPosedBounds(clips, mesh, placement.meshIndex, skeleton);
-					if (!baked)
+					const std::optional<assetlib::Bounds>& box = baked[placement.meshIndex];
+					if (!box)
 						progress.Report(0, 0, "Measuring the pose...");
 
 					skinnedBounds.emplace(
 						placement.meshIndex,
-						baked ? *baked :
-								assetlib::posedBounds(mesh, placement.meshIndex, skeleton, clips));
+						box ? *box :
+							  assetlib::posedBounds(mesh, placement.meshIndex, skeleton, clips));
 				}
 			}
 		});

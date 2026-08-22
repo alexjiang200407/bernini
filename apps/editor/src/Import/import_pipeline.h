@@ -40,7 +40,7 @@ namespace editor
 	 * Everything expensive runs on a worker thread behind a cancellable loading screen, because all of
 	 * it takes long enough to freeze the editor and none of it touches Qt or bgl: parsing the glTF,
 	 * supercompressing the textures, rebuilding the vertex pool, and baking the rig's posed box --
-	 * which skins every vertex of every frame, seconds on a dense rig.
+	 * which sweeps a box per bone through every frame of every clip.
 	 *
 	 * Only the material graphs are left on the UI thread, because their nodes own QPixmaps, and the
 	 * `.bmesh` follows them there since it names the files they write.
