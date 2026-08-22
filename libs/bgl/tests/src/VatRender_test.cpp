@@ -7,6 +7,7 @@
 #include <bgl/IGraphics.h>
 #include <bgl/IScene.h>
 #include <bgl/ISceneView.h>
+#include <bgl/PreparedStaticMesh.h>
 
 namespace
 {
@@ -504,6 +505,52 @@ TEST_CASE("A VAT mesh's submeshes read their own columns", "[vat][render]")
 		CHECK_THROWS_AS(scene->AddVatMeshGeom(mesh, 0, missing, desc), bgl::SceneError);
 
 		CHECK_THROWS_AS(scene->AddVatMeshGeom(mesh, 1, materials, desc), bgl::SceneError);
+	}
+
+	SECTION("a mesh cooked off the render thread draws what the fused door draws")
+	{
+		desc.columnBases = { 0, 3 };
+
+		// The cook is the one bgl entry point allowed off the driving thread, and running it there
+		// is the whole reason this door exists.
+		auto prepared = bgl::PreparedStaticMesh();
+		auto worker   = std::thread([&] { prepared = bgl::CookStaticMesh(mesh, 0); });
+		worker.join();
+
+		const auto geom = scene->AddVatMeshGeom(std::move(prepared), materials, desc);
+		REQUIRE(geom.geomType == bgl::GeomType::kVatMesh);
+
+		view->CreateVatMeshInstance(geom, glm::mat4(1.0f), bgl::VatInstanceDesc{ 0, 0.0f });
+
+		gfx->DrawFrame(target, job);
+		const auto* png = "assets/golden/vat_mesh_columns_cooked.got.png";
+		gfx->ScreenshotPng(target, png);
+
+		// The three probes the fused door's section makes: submesh order, column bases and
+		// per-submesh materials all survived the trip through the cook.
+		CHECK(probe(png, -1.25f) > 0.05f);
+		CHECK(probe(png, 1.25f) > 0.05f);
+		CHECK(probe(png, 0.0f) < 0.01f);
+	}
+
+	SECTION("the prepared door owes every refusal the fused one does")
+	{
+		// Both checks read the submeshes the cook recorded, so they hold with the source BMesh
+		// already out of reach.
+		desc.columnBases = { 0 };
+		CHECK_THROWS_AS(
+			scene->AddVatMeshGeom(bgl::CookStaticMesh(mesh, 0), materials, desc),
+			bgl::SceneError);
+
+		desc.columnBases = { 0, 3 };
+		const auto mixed = std::array<bgl::MaterialHandle, 2>{ { pbrA, bgl::MaterialHandle{} } };
+		CHECK_THROWS_AS(
+			scene->AddVatMeshGeom(bgl::CookStaticMesh(mesh, 0), mixed, desc),
+			bgl::SceneError);
+
+		auto spent = bgl::CookStaticMesh(mesh, 0);
+		REQUIRE(scene->AddVatMeshGeom(std::move(spent), materials, desc).IsValid());
+		CHECK_THROWS_AS(scene->AddVatMeshGeom(std::move(spent), materials, desc), bgl::SceneError);
 	}
 }
 

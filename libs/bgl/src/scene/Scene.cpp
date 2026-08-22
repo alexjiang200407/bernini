@@ -242,6 +242,29 @@ namespace bgl
 		};
 	}
 
+	struct PreparedStaticMesh::Impl
+	{
+		struct Submesh
+		{
+			std::vector<uint32_t>     vertexWords;
+			std::vector<uint32_t>     vertexMap;
+			std::vector<uint32_t>     localIndices;
+			std::vector<idl::Meshlet> meshlets;
+			assetlib::VertexLayout    layout;
+			uint32_t                  vertexCount    = 0;
+			uint32_t                  material       = 0;
+			glm::vec4                 boundingSphere = glm::vec4(0.0f);
+		};
+
+		std::vector<Submesh> submeshes;
+	};
+
+	PreparedStaticMesh::PreparedStaticMesh() noexcept                     = default;
+	PreparedStaticMesh::~PreparedStaticMesh()                             = default;
+	PreparedStaticMesh::PreparedStaticMesh(PreparedStaticMesh&&) noexcept = default;
+	PreparedStaticMesh&
+	PreparedStaticMesh::operator=(PreparedStaticMesh&&) noexcept = default;
+
 	Scene::Scene(SceneDesc desc, core::SharedRef<IResourceManager> resourceManager) :
 		m_Desc(std::move(desc)), m_ResourceManager(std::move(resourceManager)),
 		m_Textures(m_ResourceManager)
@@ -677,15 +700,30 @@ namespace bgl
 		std::span<const MaterialHandle> materials,
 		const VatGeomDesc&              desc)
 	{
-		ValidateVatDesc(desc);
-
 		if (meshIndex >= mesh.meshes.size())
 		{
 			throw SceneError("AddVatMeshGeom: meshIndex out of range");
 		}
 
-		const assetlib::Mesh& entry = mesh.meshes[meshIndex];
-		if (desc.columnBases.size() != entry.submeshCount)
+		return AddVatMeshGeom(CookStaticMesh(mesh, meshIndex), materials, desc);
+	}
+
+	GeomHandle
+	Scene::AddVatMeshGeom(
+		PreparedStaticMesh              mesh,
+		std::span<const MaterialHandle> materials,
+		const VatGeomDesc&              desc)
+	{
+		ValidateVatDesc(desc);
+
+		if (mesh.m_Impl == nullptr || mesh.m_Impl->submeshes.empty())
+		{
+			throw SceneError("AddVatMeshGeom: the prepared mesh is empty or already consumed");
+		}
+
+		const std::vector<PreparedStaticMesh::Impl::Submesh>& submeshes = mesh.m_Impl->submeshes;
+
+		if (desc.columnBases.size() != submeshes.size())
 		{
 			throw SceneError(
 				"AddVatMeshGeom: columnBases must carry one entry per submesh, in submesh order");
@@ -693,11 +731,11 @@ namespace bgl
 
 		// The check every VAT door makes, per submesh here: no unlit VAT variant exists for a
 		// null-material submesh to ride.
-		for (uint32_t s = 0; s < entry.submeshCount; ++s)
+		for (const PreparedStaticMesh::Impl::Submesh& submesh : submeshes)
 		{
-			const uint32_t       index = mesh.submeshes[entry.firstSubmesh + s].material;
-			const MaterialHandle bound =
-				index < materials.size() ? materials[index] : MaterialHandle{};
+			const MaterialHandle bound = submesh.material < materials.size() ?
+			                                 materials[submesh.material] :
+			                                 MaterialHandle{};
 			if (!AcceptsMaterial(GeomType::kVatMesh, bound))
 			{
 				throw SceneError(
@@ -707,7 +745,7 @@ namespace bgl
 		}
 
 		GeomHandle base = AddPreparedMesh(
-			CookStaticMesh(mesh, meshIndex),
+			std::move(mesh),
 			materials,
 			BoundingSphereOf(desc.boundsMin, desc.boundsMax));
 
@@ -875,6 +913,27 @@ namespace bgl
 		const assetlib::AnimationSet&   animations,
 		const assetlib::Bounds&         posedBounds)
 	{
+		if (meshIndex >= mesh.meshes.size())
+		{
+			throw SceneError("AddSkinnedMeshGeom: meshIndex out of range");
+		}
+
+		return AddSkinnedMeshGeom(
+			CookStaticMesh(mesh, meshIndex),
+			materials,
+			skeleton,
+			animations,
+			posedBounds);
+	}
+
+	GeomHandle
+	Scene::AddSkinnedMeshGeom(
+		PreparedStaticMesh              mesh,
+		std::span<const MaterialHandle> materials,
+		const assetlib::Skeleton&       skeleton,
+		const assetlib::AnimationSet&   animations,
+		const assetlib::Bounds&         posedBounds)
+	{
 		ValidateSkinnedRig(skeleton, animations);
 
 		if (glm::any(glm::greaterThan(posedBounds.min, posedBounds.max)))
@@ -882,16 +941,13 @@ namespace bgl
 			throw SceneError("AddSkinnedMeshGeom: posedBounds min exceeds max");
 		}
 
-		if (meshIndex >= mesh.meshes.size())
+		if (mesh.m_Impl == nullptr || mesh.m_Impl->submeshes.empty())
 		{
-			throw SceneError("AddSkinnedMeshGeom: meshIndex out of range");
+			throw SceneError("AddSkinnedMeshGeom: the prepared mesh is empty or already consumed");
 		}
 
-		const assetlib::Mesh& entry = mesh.meshes[meshIndex];
-		for (uint32_t s = 0; s < entry.submeshCount; ++s)
+		for (const PreparedStaticMesh::Impl::Submesh& submesh : mesh.m_Impl->submeshes)
 		{
-			const assetlib::Submesh& submesh = mesh.submeshes[entry.firstSubmesh + s];
-
 			if (!HasSkinBinding(submesh.layout))
 			{
 				throw SceneError(
@@ -899,9 +955,9 @@ namespace bgl
 					"skin binding would hold its bind pose while the rest of the mesh moved");
 			}
 
-			const uint32_t       index = submesh.material;
-			const MaterialHandle bound =
-				index < materials.size() ? materials[index] : MaterialHandle{};
+			const MaterialHandle bound = submesh.material < materials.size() ?
+			                                 materials[submesh.material] :
+			                                 MaterialHandle{};
 			if (!AcceptsMaterial(GeomType::kSkinnedMesh, bound))
 			{
 				throw SceneError(
@@ -911,7 +967,7 @@ namespace bgl
 		}
 
 		GeomHandle base = AddPreparedMesh(
-			CookStaticMesh(mesh, meshIndex),
+			std::move(mesh),
 			materials,
 			BoundingSphereOf(posedBounds.min, posedBounds.max));
 
@@ -1091,29 +1147,6 @@ namespace bgl
 
 		return AddProceduralGeom(planeVerts, planeIndices, material);
 	}
-
-	struct PreparedStaticMesh::Impl
-	{
-		struct Submesh
-		{
-			std::vector<uint32_t>     vertexWords;
-			std::vector<uint32_t>     vertexMap;
-			std::vector<uint32_t>     localIndices;
-			std::vector<idl::Meshlet> meshlets;
-			assetlib::VertexLayout    layout;
-			uint32_t                  vertexCount    = 0;
-			uint32_t                  material       = 0;
-			glm::vec4                 boundingSphere = glm::vec4(0.0f);
-		};
-
-		std::vector<Submesh> submeshes;
-	};
-
-	PreparedStaticMesh::PreparedStaticMesh() noexcept                     = default;
-	PreparedStaticMesh::~PreparedStaticMesh()                             = default;
-	PreparedStaticMesh::PreparedStaticMesh(PreparedStaticMesh&&) noexcept = default;
-	PreparedStaticMesh&
-	PreparedStaticMesh::operator=(PreparedStaticMesh&&) noexcept = default;
 
 	PreparedStaticMesh
 	CookStaticMesh(const assetlib::BMesh& mesh, uint32_t meshIndex)

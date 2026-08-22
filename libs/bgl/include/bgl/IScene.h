@@ -292,6 +292,21 @@ namespace bgl
 			const VatGeomDesc&              desc) = 0;
 
 		/**
+		 * The commit half of the overload above, on the same split AddStaticMeshGeom offers: cook on
+		 * a worker, commit here. Every refusal it owes -- the columnBases count, a submesh whose
+		 * material does not resolve to kPBR -- is decided off the prepared mesh's own submeshes, so
+		 * the source BMesh need not outlive the cook.
+		 *
+		 * @param mesh From CookStaticMesh. Consumed, even on failure.
+		 * @throws SceneError for anything AddStaticMeshGeom or AddVatMeshGeom refuses.
+		 */
+		virtual GeomHandle
+		AddVatMeshGeom(
+			PreparedStaticMesh              mesh,
+			std::span<const MaterialHandle> materials,
+			const VatGeomDesc&              desc) = 0;
+
+		/**
 		 * Adds one mesh of a loaded BMesh as skinned geometry: the bind-pose submeshes upload exactly
 		 * as AddStaticMeshGeom does, and every instance's pose is computed each frame from `skeleton`
 		 * and `animations` instead of being fetched from a bake. The rig's bones, clip table and
@@ -335,6 +350,23 @@ namespace bgl
 		AddSkinnedMeshGeom(
 			const assetlib::BMesh&          mesh,
 			uint32_t                        meshIndex,
+			std::span<const MaterialHandle> materials,
+			const assetlib::Skeleton&       skeleton,
+			const assetlib::AnimationSet&   animations,
+			const assetlib::Bounds&         posedBounds) = 0;
+
+		/**
+		 * The commit half of the overload above, on the same split AddStaticMeshGeom offers: cook on
+		 * a worker, commit here. Every refusal it owes -- a submesh without skin binding, one whose
+		 * material does not resolve to kPBR -- is decided off the prepared mesh's own submeshes, so
+		 * the source BMesh need not outlive the cook.
+		 *
+		 * @param mesh From CookStaticMesh. Consumed, even on failure.
+		 * @throws SceneError for anything AddStaticMeshGeom or AddSkinnedMeshGeom refuses.
+		 */
+		virtual GeomHandle
+		AddSkinnedMeshGeom(
+			PreparedStaticMesh              mesh,
 			std::span<const MaterialHandle> materials,
 			const assetlib::Skeleton&       skeleton,
 			const assetlib::AnimationSet&   animations,

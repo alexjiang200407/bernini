@@ -3,6 +3,7 @@
 #include "util/TestOptions.h"
 #include <assetlib_structs/Bounds.h>
 #include <bgl/IGraphics.h>
+#include <bgl/PreparedStaticMesh.h>
 #include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
 
@@ -636,4 +637,156 @@ TEST_CASE("a skinned submesh culls by its posed box, not its bind pose", "[skinn
 	CHECK(skinnedSphere.w == Catch::Approx(glm::length(posed.max - posed.min) * 0.5f));
 
 	CHECK(skinnedSphere.w > staticSphere.w);
+}
+
+TEST_CASE(
+	"a skinned mesh cooked off the render thread commits what the fused door does",
+	"[skinned][cook]")
+{
+	auto gfx = bgl::CreateGraphics(HeadlessOptions());
+	REQUIRE(gfx != nullptr);
+
+	auto  sceneHandle = gfx->CreateScene(TestSceneDesc());
+	auto* scene       = sceneHandle->As<bgl::Scene>();
+	REQUIRE(scene != nullptr);
+
+	const std::array<bgl::MaterialHandle, 1> materials = { { OpaquePbr(scene) } };
+
+	const auto fused = scene->AddSkinnedMeshGeom(
+		MakeSkinnedMesh(),
+		0,
+		materials,
+		MakeRig(),
+		MakeClips(),
+		c_AnyPose);
+	REQUIRE(fused.IsValid());
+
+	// The cook is the one bgl entry point allowed off the driving thread, and running it there is
+	// the whole reason this door exists.
+	auto prepared = bgl::PreparedStaticMesh();
+	auto worker   = std::thread([&] { prepared = bgl::CookStaticMesh(MakeSkinnedMesh(), 0); });
+	worker.join();
+
+	const auto committed =
+		scene
+			->AddSkinnedMeshGeom(std::move(prepared), materials, MakeRig(), MakeClips(), c_AnyPose);
+	REQUIRE(committed.IsValid());
+	CHECK(committed.geomType == bgl::GeomType::kSkinnedMesh);
+
+	// The rig rode with the geometry, not with the BMesh the cook consumed and left behind.
+	const bgl::idl::SkinnedGeom& fusedRig =
+		scene->GetSkinnedGeomBuffer()[scene->GetGeomSkinnedInfo(fused.handle.index).record];
+	const bgl::idl::SkinnedGeom& cookedRig =
+		scene->GetSkinnedGeomBuffer()[scene->GetGeomSkinnedInfo(committed.handle.index).record];
+
+	CHECK(cookedRig.boneCount == fusedRig.boneCount);
+	CHECK(cookedRig.maxDepth == fusedRig.maxDepth);
+	CHECK(cookedRig.clips.count == fusedRig.clips.count);
+
+	const bgl::idl::RangeWithCount fusedSubmeshes = scene->GetGeomSubmeshes(fused.handle.index);
+	const bgl::idl::RangeWithCount cookedSubmeshes =
+		scene->GetGeomSubmeshes(committed.handle.index);
+
+	REQUIRE(cookedSubmeshes.count == fusedSubmeshes.count);
+	REQUIRE(cookedSubmeshes.count > 0);
+
+	for (uint32_t i = 0; i < cookedSubmeshes.count; ++i)
+	{
+		const bgl::idl::Submesh& a =
+			scene->GetSubmeshBuffer().AtIndex(fusedSubmeshes.range.offsetStart + i);
+		const bgl::idl::Submesh& b =
+			scene->GetSubmeshBuffer().AtIndex(cookedSubmeshes.range.offsetStart + i);
+
+		CHECK(b.vertexCount == a.vertexCount);
+		CHECK(b.meshlets.count == a.meshlets.count);
+		CHECK(b.boundingSphere == a.boundingSphere);
+	}
+}
+
+TEST_CASE("the prepared skinned door owes every refusal the fused one does", "[skinned][cook]")
+{
+	auto gfx = bgl::CreateGraphics(HeadlessOptions());
+	REQUIRE(gfx != nullptr);
+
+	auto  sceneHandle = gfx->CreateScene(TestSceneDesc());
+	auto* scene       = sceneHandle->As<bgl::Scene>();
+	REQUIRE(scene != nullptr);
+
+	const std::array<bgl::MaterialHandle, 1> materials = { { OpaquePbr(scene) } };
+
+	SECTION("a submesh with no skin binding")
+	{
+		// The check reads the layout the cook recorded, so a mesh with no joints is caught here
+		// even though the BMesh it came from is long gone.
+		CHECK_THROWS_AS(
+			scene->AddSkinnedMeshGeom(
+				bgl::CookStaticMesh(MakeSkinnedMesh(false), 0),
+				materials,
+				MakeRig(),
+				MakeClips(),
+				c_AnyPose),
+			bgl::SceneError);
+	}
+
+	SECTION("a submesh whose material is not kPBR")
+	{
+		const std::array<bgl::MaterialHandle, 1> loose = { { scene->CreateLoosePbrMaterial(
+			bgl::LoosePbrMaterialDesc()) } };
+
+		CHECK_THROWS_AS(
+			scene->AddSkinnedMeshGeom(
+				bgl::CookStaticMesh(MakeSkinnedMesh(), 0),
+				loose,
+				MakeRig(),
+				MakeClips(),
+				c_AnyPose),
+			bgl::SceneError);
+	}
+
+	SECTION("a prepared mesh already spent")
+	{
+		auto prepared = bgl::CookStaticMesh(MakeSkinnedMesh(), 0);
+		REQUIRE(scene
+		            ->AddSkinnedMeshGeom(
+						std::move(prepared),
+						materials,
+						MakeRig(),
+						MakeClips(),
+						c_AnyPose)
+		            .IsValid());
+
+		CHECK_THROWS_AS(
+			scene->AddSkinnedMeshGeom(
+				std::move(prepared),
+				materials,
+				MakeRig(),
+				MakeClips(),
+				c_AnyPose),
+			bgl::SceneError);
+	}
+
+	SECTION("a rig the fused door would refuse")
+	{
+		auto badRig            = MakeRig();
+		badRig.bones[1].parent = 2;
+
+		CHECK_THROWS_AS(
+			scene->AddSkinnedMeshGeom(
+				bgl::CookStaticMesh(MakeSkinnedMesh(), 0),
+				materials,
+				badRig,
+				MakeClips(),
+				c_AnyPose),
+			bgl::SceneError);
+	}
+
+	// Every refusal above must leave the scene addable.
+	CHECK(scene
+	          ->AddSkinnedMeshGeom(
+				  bgl::CookStaticMesh(MakeSkinnedMesh(), 0),
+				  materials,
+				  MakeRig(),
+				  MakeClips(),
+				  c_AnyPose)
+	          .IsValid());
 }

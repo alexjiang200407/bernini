@@ -292,9 +292,23 @@ namespace bgl
 			const VatGeomDesc&              desc) override;
 
 		GeomHandle
+		AddVatMeshGeom(
+			PreparedStaticMesh              mesh,
+			std::span<const MaterialHandle> materials,
+			const VatGeomDesc&              desc) override;
+
+		GeomHandle
 		AddSkinnedMeshGeom(
 			const assetlib::BMesh&          mesh,
 			uint32_t                        meshIndex,
+			std::span<const MaterialHandle> materials,
+			const assetlib::Skeleton&       skeleton,
+			const assetlib::AnimationSet&   animations,
+			const assetlib::Bounds&         posedBounds) override;
+
+		GeomHandle
+		AddSkinnedMeshGeom(
+			PreparedStaticMesh              mesh,
 			std::span<const MaterialHandle> materials,
 			const assetlib::Skeleton&       skeleton,
 			const assetlib::AnimationSet&   animations,
