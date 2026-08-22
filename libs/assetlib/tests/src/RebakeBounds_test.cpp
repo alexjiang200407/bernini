@@ -128,8 +128,7 @@ TEST_CASE("The rebake writes the box a load then finds", "[rebake]")
 		const std::optional<Bounds> baked = findPosedBounds(
 			loadAnimations(root.path / "Animations/rig.banim"),
 			load(root.path / "Meshes/rig.bmesh"),
-			0,
-			loadSkeleton(root.path / "Skeletons/rig.bskel"));
+			loadSkeleton(root.path / "Skeletons/rig.bskel"))[0];
 
 		REQUIRE(baked.has_value());
 		CHECK(baked->min.x == Catch::Approx(-1.0f));
