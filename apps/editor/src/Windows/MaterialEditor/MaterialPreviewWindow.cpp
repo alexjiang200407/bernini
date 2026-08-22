@@ -179,6 +179,9 @@ MaterialPreviewWindow::LoadMesh(const std::filesystem::path& path)
 
 	auto build = editor::MeshPreviewBuild();
 
+	// See the same line in AnimationPreviewWindow: the commit is the only half on the render thread.
+	double prepareMs = 0.0;
+
 	// The read, the meshlet cook and the picking copy: every part of standing a mesh up that does
 	// not need the render thread. Leaving any of them in the commit below stops the frame loop for
 	// every viewport in the editor, not just this one.
@@ -192,7 +195,12 @@ MaterialPreviewWindow::LoadMesh(const std::filesystem::path& path)
 				throw std::runtime_error("mesh contains no meshes");
 
 			progress.Report(0, 0, "Building the mesh...");
-			build = editor::PrepareMeshPreview(mesh, m_DataRoot);
+
+			const auto prepareStart = std::chrono::steady_clock::now();
+			build                   = editor::PrepareMeshPreview(mesh, m_DataRoot);
+			prepareMs               = std::chrono::duration<double, std::milli>(
+										  std::chrono::steady_clock::now() - prepareStart)
+		                                  .count();
 		});
 
 	if (!result.Completed())
@@ -219,7 +227,8 @@ MaterialPreviewWindow::LoadMesh(const std::filesystem::path& path)
 			float     radius;
 		};
 
-		const Focus focus = GetRenderer()->Invoke([&] {
+		const auto  commitStart = std::chrono::steady_clock::now();
+		const Focus focus       = GetRenderer()->Invoke([&] {
 			ClearGeometry();
 
 			bgl::IScene* scene = GetPreviewScene();
@@ -258,6 +267,15 @@ MaterialPreviewWindow::LoadMesh(const std::filesystem::path& path)
 			const float     radius = std::max(0.001f, glm::length(aabbMax - aabbMin) * 0.5f);
 			return Focus{ center, radius };
 		});
+
+		qInfo(
+			"MaterialPreview: loaded '%s' -- %.0f ms prepared on the worker, %.1f ms committed on "
+			"the render thread",
+			qPrintable(name),
+			prepareMs,
+			std::chrono::duration<double, std::milli>(
+				std::chrono::steady_clock::now() - commitStart)
+				.count());
 
 		// After the commit, because ClearGeometry inside it drops what the last load left here.
 		m_Raycaster            = std::move(build.raycaster);

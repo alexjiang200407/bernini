@@ -217,6 +217,10 @@ AnimationPreviewWindow::LoadMeshAs(
 
 	auto prepares = std::vector<editor::PreparedAnimationDraw>();
 
+	// What the split is for, said out loud in the log: `commitMs` is the only part of a load that
+	// rides the render thread, and the render thread draws every viewport in the editor.
+	double prepareMs = 0.0;
+
 	// The mesh read, the candidate scan and -- the expensive part -- a stale rig's re-bake, all
 	// off the UI and render threads. AcquireVatMesh afterwards finds the .bvat fresh and only
 	// uploads.
@@ -292,6 +296,7 @@ AnimationPreviewWindow::LoadMeshAs(
 				return;
 
 			progress.Report(0, 0, "Building the mesh...");
+			const auto prepareStart = std::chrono::steady_clock::now();
 
 			// One entry per animated placement, in order, which is what PrepareAnimationDraws reads
 			// them by: VAT's bake closed over one box for the whole file, the skinned tier has one
@@ -323,6 +328,10 @@ AnimationPreviewWindow::LoadMeshAs(
 				source,
 				plan,
 				animatedBounds);
+
+			prepareMs = std::chrono::duration<double, std::milli>(
+							std::chrono::steady_clock::now() - prepareStart)
+		                    .count();
 		});
 
 	if (!result.Completed())
@@ -374,7 +383,8 @@ AnimationPreviewWindow::LoadMeshAs(
 		if (plan.animated.empty() && plan.statics.empty())
 			throw std::runtime_error("no node references a mesh");
 
-		const Loaded loaded = GetRenderer()->Invoke([&] {
+		const auto   commitStart = std::chrono::steady_clock::now();
+		const Loaded loaded      = GetRenderer()->Invoke([&] {
 			ClearGeometry();
 
 			auto out     = Loaded();
@@ -467,6 +477,15 @@ AnimationPreviewWindow::LoadMeshAs(
 			out.radius = std::max(0.001f, glm::length(aabbMax - aabbMin) * 0.5f);
 			return out;
 		});
+
+		qInfo(
+			"AnimationPreview: loaded '%s' -- %.0f ms prepared on the worker, %.1f ms committed on "
+			"the render thread",
+			qPrintable(name),
+			prepareMs,
+			std::chrono::duration<double, std::milli>(
+				std::chrono::steady_clock::now() - commitStart)
+				.count());
 
 		// Straight on, slightly above -- and arbitrary, because nothing here knows which way a rig
 		// faces. Authoring conventions disagree on the forward axis, so any fixed yaw shows some rigs
