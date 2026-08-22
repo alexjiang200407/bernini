@@ -2,6 +2,8 @@
 #include "Windows/AnimationEditor/TimelineScrubber.h"
 #include "Windows/AnimationEditor/animation_draws.h"
 
+#include "util/MeshFixture.h"
+
 #include <assetlib/bmaterial_io.h>
 #include <assetlib_structs/BMaterial.h>
 #include <assetlib_structs/BMesh.h>
@@ -190,5 +192,74 @@ TEST_CASE("A load's tier-dependent steps all follow from the source", "[animatio
 			CHECK_FALSE(steps.needsFreshBake);
 			CHECK_FALSE(steps.framedByBake);
 		}
+	}
+}
+
+TEST_CASE("The panel's acquires are prepared before the render thread sees them", "[animation]")
+{
+	// A real .bmesh on disk, because a prepare reads one -- that is the point of it.
+	QTemporaryDir dir;
+	REQUIRE(dir.isValid());
+
+	const auto root = std::filesystem::path(dir.path().toStdWString());
+
+	auto mesh     = assetlib::BMesh();
+	mesh.skeleton = "Skeletons/rig.bskel";
+
+	const uint32_t skinned = editor::test::AddTriangleMesh(mesh, 1, true);
+	const uint32_t prop    = editor::test::AddTriangleMesh(mesh, 1, false);
+	editor::test::AddMeshNode(mesh, skinned, 0.0f);
+	editor::test::AddMeshNode(mesh, prop, 3.0f);
+
+	std::filesystem::create_directories(root / "Meshes");
+	assetlib::save(mesh, root / "Meshes" / "rig.bmesh");
+
+	const auto store = assetlib::AssetStore(root);
+	const auto plan  = editor::PlanAnimationDraws(mesh);
+	REQUIRE(plan.animated.size() == 1);
+	REQUIRE(plan.statics.size() == 1);
+
+	SECTION("with no clip set anywhere, every placement is prepared as bind-pose static geometry")
+	{
+		const auto prepares = editor::PrepareAnimationDraws(
+			store,
+			"Meshes/rig.bmesh",
+			{},
+			editor::AnimationSource::kVat,
+			plan);
+
+		REQUIRE(prepares.size() == 2);
+		for (const editor::PreparedAnimationDraw& draw : prepares)
+		{
+			CHECK_FALSE(draw.animated);
+			CHECK(draw.prepared.tier == game::MeshTier::kStatic);
+			CHECK(draw.refusal.empty());
+
+			// The cook is in hand, which is the whole claim: the commit has only an upload left.
+			CHECK(draw.prepared.meshIndex == draw.placement.meshIndex);
+		}
+
+		// Statics first, then the animated ones, which is the order the commit places them in.
+		CHECK(prepares[0].placement.meshIndex == prop);
+		CHECK(prepares[1].placement.meshIndex == skinned);
+	}
+
+	SECTION("a tier that refuses a placement drops it to static, carrying the reason")
+	{
+		// No .banim on disk, so both animated doors refuse. The panel must still stand the mesh up.
+		const auto prepares = editor::PrepareAnimationDraws(
+			store,
+			"Meshes/rig.bmesh",
+			"Animations/missing.banim",
+			editor::AnimationSource::kSkinned,
+			plan);
+
+		REQUIRE(prepares.size() == 2);
+
+		const editor::PreparedAnimationDraw& animated = prepares[1];
+		CHECK(animated.placement.meshIndex == skinned);
+		CHECK_FALSE(animated.animated);
+		CHECK(animated.prepared.tier == game::MeshTier::kStatic);
+		CHECK_FALSE(animated.refusal.empty());
 	}
 }

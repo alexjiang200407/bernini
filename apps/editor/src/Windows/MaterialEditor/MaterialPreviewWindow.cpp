@@ -4,6 +4,7 @@
 #include "Mesh/BMeshUtil.h"
 #include "Render/Renderer.h"
 #include "Render/environment.h"
+#include "Windows/MaterialEditor/mesh_preview.h"
 #include "util/mime_files.h"
 
 #include <QApplication>
@@ -18,31 +19,14 @@
 #include <QWheelEvent>
 
 #include <assetlib/bmesh_io.h>
-#include <assetlib/mesh_tangents.h>
 #include <assetlib_structs/BMesh.h>
 #include <bgl/Camera.h>
 #include <bgl/IScene.h>
 #include <bgl/ISceneView.h>
+#include <bgl/PreparedStaticMesh.h>
 
 namespace
 {
-	QString
-	ResolveMaterialPath(
-		const assetlib::BMesh&       mesh,
-		const assetlib::Submesh&     submesh,
-		const std::filesystem::path& dataRoot)
-	{
-		if (dataRoot.empty() || submesh.material >= mesh.materials.size())
-			return {};
-
-		const std::string& relative = mesh.materials[submesh.material];
-		if (relative.empty())
-			return {};
-
-		const auto resolved = (dataRoot / relative).lexically_normal();
-		return QString::fromStdWString(resolved.wstring());
-	}
-
 	QString
 	FirstMeshUrl(const QMimeData* mime)
 	{
@@ -193,6 +177,11 @@ MaterialPreviewWindow::LoadMesh(const std::filesystem::path& path)
 	assetlib::BMesh mesh;
 	const QString   name = QString::fromStdString(path.filename().string());
 
+	auto build = editor::MeshPreviewBuild();
+
+	// The read, the meshlet cook and the picking copy: every part of standing a mesh up that does
+	// not need the render thread. Leaving any of them in the commit below stops the frame loop for
+	// every viewport in the editor, not just this one.
 	const background::TaskResult result = background::RunWithLoadingScreen(
 		this,
 		QString("Loading %1").arg(name),
@@ -201,6 +190,9 @@ MaterialPreviewWindow::LoadMesh(const std::filesystem::path& path)
 			mesh = assetlib::load(path);
 			if (mesh.meshes.empty())
 				throw std::runtime_error("mesh contains no meshes");
+
+			progress.Report(0, 0, "Building the mesh...");
+			build = editor::PrepareMeshPreview(mesh, m_DataRoot);
 		});
 
 	if (!result.Completed())
@@ -238,65 +230,45 @@ MaterialPreviewWindow::LoadMesh(const std::filesystem::path& path)
 				std::max<size_t>(1, mesh.materials.size()),
 				m_DefaultMaterial);
 
-			// A .bmesh spreads its submeshes across several meshes, and a node instances a mesh (the
-			// same mesh can be instanced by several nodes). Upload each mesh once, then place an
-			// instance for every node that references one, at that node's world transform.
-			auto geomForMesh =
-				std::unordered_map<uint32_t, uint32_t>();  // mesh index -> m_Geoms index
-			auto raycastGeoms = std::vector<uint32_t>();   // m_Geoms index -> raycaster geometry
-			auto aabbMin      = glm::vec3(std::numeric_limits<float>::max());
-			auto aabbMax      = glm::vec3(std::numeric_limits<float>::lowest());
+			m_Geoms.reserve(build.meshes.size());
+			for (editor::PreparedPreviewMesh& entry : build.meshes)
+				m_Geoms.push_back(scene->AddStaticMeshGeom(std::move(entry.cooked), materials));
 
-			for (uint32_t nodeIndex = 0; nodeIndex < mesh.nodes.size(); ++nodeIndex)
+			auto aabbMin = glm::vec3(std::numeric_limits<float>::max());
+			auto aabbMax = glm::vec3(std::numeric_limits<float>::lowest());
+
+			m_Instances.reserve(build.placements.size());
+			for (const editor::PreviewPlacement& placement : build.placements)
 			{
-				const assetlib::Node& node = mesh.nodes[nodeIndex];
-				if (!bmesh::ReferencesMesh(mesh, node))
-					continue;
-
-				auto [it, inserted] =
-					geomForMesh.try_emplace(node.mesh, static_cast<uint32_t>(m_Geoms.size()));
-				if (inserted)
-				{
-					m_Geoms.push_back(scene->AddStaticMeshGeom(mesh, node.mesh, materials));
-					raycastGeoms.push_back(m_Raycaster.AddMesh(mesh, node.mesh));
-
-					// Name each of this mesh's submeshes once, in the order the selector shows them.
-					const assetlib::Mesh& entry = mesh.meshes[node.mesh];
-					for (uint32_t i = 0; i < entry.submeshCount; ++i)
-					{
-						const assetlib::Submesh& submesh = mesh.submeshes[entry.firstSubmesh + i];
-
-						const std::string_view pooled = mesh.stringPool.at(submesh.nameOffset);
-						auto                   name =
-							QString::fromUtf8(pooled.data(), static_cast<qsizetype>(pooled.size()));
-						if (name.isEmpty())
-							name = QString("Submesh %1").arg(m_SubmeshNames.size());
-						m_SubmeshNames << name;
-						m_SubmeshMaterialPaths << ResolveMaterialPath(mesh, submesh, m_DataRoot);
-						m_SubmeshRefs.push_back(
-							{ it->second,
-						      i,
-						      entry.firstSubmesh + i,
-						      assetlib::hasTangent(submesh) });
-					}
-				}
-
-				const glm::mat4 world = bmesh::GetInstanceTransform(mesh, nodeIndex);
 				m_Instances.push_back(
-					{ GetPreviewView()->CreateStaticMeshInstance(m_Geoms[it->second], world),
-				      it->second });
-				m_Raycaster.AddInstance(raycastGeoms[it->second], world);
+					{ GetPreviewView()->CreateStaticMeshInstance(
+						  m_Geoms[placement.entry],
+						  placement.world),
+				      placement.entry });
 
-				bmesh::GrowBoundsForMesh(mesh, node.mesh, world, aabbMin, aabbMax);
+				bmesh::GrowBoundsForMesh(
+					mesh,
+					build.meshes[placement.entry].meshIndex,
+					placement.world,
+					aabbMin,
+					aabbMax);
 			}
-
-			if (m_Geoms.empty())
-				throw std::runtime_error("no node references a mesh");
 
 			const glm::vec3 center = (aabbMin + aabbMax) * 0.5f;
 			const float     radius = std::max(0.001f, glm::length(aabbMax - aabbMin) * 0.5f);
 			return Focus{ center, radius };
 		});
+
+		// After the commit, because ClearGeometry inside it drops what the last load left here.
+		m_Raycaster            = std::move(build.raycaster);
+		m_SubmeshNames         = std::move(build.submeshNames);
+		m_SubmeshMaterialPaths = std::move(build.submeshMaterialPaths);
+
+		m_SubmeshRefs.clear();
+		m_SubmeshRefs.reserve(build.submeshRefs.size());
+		for (const editor::PreviewSubmeshRef& ref : build.submeshRefs)
+			m_SubmeshRefs.push_back(
+				{ ref.entry, ref.localSubmesh, ref.sourceSubmesh, ref.hasTangent });
 
 		FocusOn(focus.center, focus.radius);
 

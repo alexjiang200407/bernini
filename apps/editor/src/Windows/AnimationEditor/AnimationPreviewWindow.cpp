@@ -24,6 +24,7 @@
 #include <assetlib_structs/BMesh.h>
 #include <assetlib_structs/Bounds.h>
 #include <gamelib/AssetManager.h>
+#include <gamelib/PreparedMesh.h>
 #include <gamelib/vat_freshness.h>
 
 namespace
@@ -214,6 +215,8 @@ AnimationPreviewWindow::LoadMeshAs(
 	// Only meaningful on the VAT tier; kFresh so the skinned tier never reads it as a refusal.
 	auto bakeState = game::VatBakeState::kFresh;
 
+	auto prepares = std::vector<editor::PreparedAnimationDraw>();
+
 	// The mesh read, the candidate scan and -- the expensive part -- a stale rig's re-bake, all
 	// off the UI and render threads. AcquireVatMesh afterwards finds the .bvat fresh and only
 	// uploads.
@@ -282,6 +285,44 @@ AnimationPreviewWindow::LoadMeshAs(
 								assetlib::posedBounds(mesh, placement.meshIndex, skeleton, clips));
 				}
 			}
+
+			// The refusals below are the caller's, and each one abandons the load -- so nothing is
+			// prepared for a load that is about to stop.
+			if (mesh.skeleton.empty() || bakeState != game::VatBakeState::kFresh)
+				return;
+
+			progress.Report(0, 0, "Building the mesh...");
+
+			// One entry per animated placement, in order, which is what PrepareAnimationDraws reads
+			// them by: VAT's bake closed over one box for the whole file, the skinned tier has one
+			// per mesh entry.
+			auto animatedBounds = std::vector<std::optional<assetlib::Bounds>>();
+			animatedBounds.reserve(plan.animated.size());
+			for (const bmesh::InstancePlacement& placement : plan.animated)
+			{
+				if (source != editor::AnimationSource::kSkinned)
+				{
+					animatedBounds.push_back(
+						posedKnown ? std::optional(assetlib::Bounds{ posedMin, posedMax }) :
+									 std::nullopt);
+					continue;
+				}
+
+				const auto it = skinnedBounds.find(placement.meshIndex);
+				animatedBounds.push_back(
+					it != skinnedBounds.end() ? std::optional(it->second) : std::nullopt);
+			}
+
+			// Every read, every meshlet cook and every texture decode the acquires would make, here
+			// instead of on the render thread -- which is the whole of why this panel had to stop
+			// the frame loop to open a mesh.
+			prepares = editor::PrepareAnimationDraws(
+				assetlib::AssetStore(m_DataRoot),
+				rel,
+				animations,
+				source,
+				plan,
+				animatedBounds);
 		});
 
 	if (!result.Completed())
@@ -340,8 +381,8 @@ AnimationPreviewWindow::LoadMeshAs(
 			auto aabbMin = glm::vec3(std::numeric_limits<float>::max());
 			auto aabbMax = glm::vec3(std::numeric_limits<float>::lowest());
 
-			const auto acquireStatic = [&](const bmesh::InstancePlacement& placement) {
-				const bgl::GeomHandle geom = m_Assets->AcquireMesh(rel, placement.meshIndex);
+			const auto placeStatic = [&](const bmesh::InstancePlacement& placement,
+			                             const bgl::GeomHandle           geom) {
 				m_Geoms.push_back(geom);
 				m_Instances.push_back(
 					m_Assets->CreateInstance(GetPreviewViewRef(), geom, placement.world));
@@ -353,79 +394,71 @@ AnimationPreviewWindow::LoadMeshAs(
 					aabbMax);
 			};
 
-			for (const bmesh::InstancePlacement& placement : plan.statics) acquireStatic(placement);
-
-			for (const bmesh::InstancePlacement& placement : plan.animated)
+			for (editor::PreparedAnimationDraw& entry : prepares)
 			{
-				// A rig with no clip file anywhere falls back to bind pose as static geometry --
-				// and so does one the VAT pipeline refuses (an unbaked or loose material): a
-				// mesh standing still beats a viewport cleared to nothing, and the refusal is
-				// surfaced once the load completes.
-				if (animations.empty())
+				if (!entry.animated)
 				{
-					acquireStatic(placement);
+					placeStatic(entry.placement, m_Assets->AcquireMesh(std::move(entry.prepared)));
+					if (!entry.refusal.empty())
+						out.refusal = QString::fromUtf8(entry.refusal);
 					continue;
 				}
 
-				// The box this placement poses in: measured above for the skinned tier, read off
-				// the bake for VAT. It is the geom's culling volume as well as the camera's frame,
-				// so it is resolved per mesh entry rather than shared across the file.
-				const std::optional<assetlib::Bounds> posed = [&] {
-					if (source != editor::AnimationSource::kSkinned)
-						return posedKnown ? std::optional(assetlib::Bounds{ posedMin, posedMax }) :
-						                    std::nullopt;
-
-					const auto it = skinnedBounds.find(placement.meshIndex);
-					return it != skinnedBounds.end() ? std::optional(it->second) : std::nullopt;
-				}();
-
 				try
 				{
-					// The two tiers differ only in which door the acquire takes: both hand back a
+					// The two tiers differ only in which door the commit takes: both hand back a
 					// geom and the same clip table, and both spawn on {clip 0, phase 0, rate 1}.
 					bgl::GeomHandle             geom;
 					std::vector<game::ClipInfo> clips;
 
 					if (source == editor::AnimationSource::kSkinned)
 					{
-						// Handed over rather than measured again: this runs on the render thread,
-						// and posedBounds is seconds on a dense rig. Absent only if the measurement
-						// was skipped, and then the acquire makes it -- a stall beats culling the
-						// mesh by a box of nothing.
-						const game::AssetManager::SkinnedMesh skinned =
-							m_Assets
-								->AcquireSkinnedMesh(rel, animations, placement.meshIndex, posed);
+						game::AssetManager::SkinnedMesh skinned =
+							m_Assets->AcquireSkinnedMesh(std::move(entry.prepared));
 						geom  = skinned.geom;
 						clips = std::move(skinned.clips);
 					}
 					else
 					{
 						game::AssetManager::VatMesh vat =
-							m_Assets->AcquireVatMesh(rel, animations, placement.meshIndex);
+							m_Assets->AcquireVatMesh(std::move(entry.prepared));
 						geom  = vat.geom;
 						clips = std::move(vat.clips);
 					}
 
 					m_Geoms.push_back(geom);
 					m_AnimatedDraws.push_back(
-						{ geom, placement.world, SpawnAnimated(geom, placement.world, 0, source) });
+						{ geom,
+					      entry.placement.world,
+					      SpawnAnimated(geom, entry.placement.world, 0, source) });
 					out.clips    = std::move(clips);
 					m_ActiveClip = 0;
 				}
 				catch (const std::exception& e)
 				{
+					// A tier refuses a submesh whose material does not resolve to kPBR, and that is
+					// the *commit*'s judgement -- it needs the scene's material handles, which the
+					// prepare has no way to reach. So the bind-pose fallback is read here, on the
+					// render thread, which is the price of an asset the tier cannot draw.
 					out.refusal = QString::fromUtf8(e.what());
-					acquireStatic(placement);  // grows the bind-pose bounds itself
+					placeStatic(
+						entry.placement,
+						m_Assets->AcquireMesh(rel, entry.placement.meshIndex));
 					continue;
 				}
 
-				if (posed)
-					bmesh::GrowBounds(placement.world, posed->min, posed->max, aabbMin, aabbMax);
+				if (entry.posed)
+					bmesh::GrowBounds(
+						entry.placement.world,
+						entry.posed->min,
+						entry.posed->max,
+						aabbMin,
+						aabbMax);
 				else
 					bmesh::GrowBoundsForMesh(
 						mesh,
-						placement.meshIndex,
-						placement.world,
+						entry.placement.meshIndex,
+						entry.placement.world,
 						aabbMin,
 						aabbMax);
 			}

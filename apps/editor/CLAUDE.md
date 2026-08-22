@@ -86,6 +86,26 @@ lives beside it, and the split is by responsibility rather than by line count:
   (`material_editor_ui`), which builds and connects nothing. The `connect` calls stay in the window,
   because what a widget *does* is behaviour.
 
+## Loading a mesh into a viewport: prepare on the worker, commit on the render thread
+
+One `Renderer` thread draws **every** viewport in the editor, so a closure that reads a file or
+cooks a mesh inside `Invoke` does not stall one panel — it stops the frame loop for all of them, and
+the GUI thread is blocked waiting on it meanwhile. A playing animation stops dead.
+
+So a load splits in two. Everything up to the upload — the `.bmesh` read, the meshlet cook, the
+texture decodes, a `.bvat` bake, a posed-box measurement, the CPU picking copy — runs inside the
+window's existing `background::RunWithLoadingScreen` worker, through `game::PrepareMesh` and its
+tier twins (see `libs/gamelib/CLAUDE.md`). The `Invoke` closure that follows does nothing but hand
+those payloads to `AssetManager::Acquire*(PreparedMesh)` and place the instances.
+
+The prepare is a free function per panel — `editor::PrepareAnimationDraws` (`animation_draws.h`) and
+`editor::PrepareMeshPreview` (`mesh_preview.h`) — for the usual reason: it is the only way any of it
+is testable, since neither window can be constructed in a test.
+
+One refusal cannot be moved: a submesh whose material does not resolve to `kPBR` is judged by the
+*commit*, which needs the scene's material handles. A panel that falls back on that still reads on
+the render thread, and that is the price of an asset the tier cannot draw.
+
 ## Rules
 
 - Qt is editor only don't link to other targets
@@ -168,6 +188,11 @@ be driven through the window. Where such a rule is worth pinning, lift it into a
 that takes what it needs (`editor::IsSameMaterialFile` in `material_io.h`, `OutputCentre` in
 `material_graph.h`) and test that. Both of those paid for themselves the day they were written,
 each catching a bug in the code they were extracted from.
+
+`editor::PrepareMeshPreview` and `editor::PrepareAnimationDraws` are the same shape applied to the
+two viewport loads, and they pin something a window test could not reach anyway: that the work
+happens *before* the render thread is asked for anything. `tests/src/util/MeshFixture.h` builds the
+`.bmesh` those need — with real meshlet streams in it, because a cook reads them.
 
 Two things a test cannot drive, and why:
 

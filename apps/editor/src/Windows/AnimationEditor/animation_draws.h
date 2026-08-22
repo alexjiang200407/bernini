@@ -7,6 +7,7 @@
 #include "Windows/AnimationEditor/animation_source.h"
 
 #include <gamelib/AssetManager.h>
+#include <gamelib/PreparedMesh.h>
 
 namespace editor
 {
@@ -64,4 +65,59 @@ namespace editor
 
 	[[nodiscard]] AnimationLoadSteps
 	PlanAnimationLoad(AnimationSource source, bool hasAnimations);
+
+	/** One placement of an AnimationDrawPlan with its acquire done bar the upload. */
+	struct PreparedAnimationDraw
+	{
+		// Move-only, because game::PreparedMesh is; see the note there.
+		PreparedAnimationDraw()  = default;
+		~PreparedAnimationDraw() = default;
+
+		PreparedAnimationDraw(PreparedAnimationDraw&&) = default;
+
+		PreparedAnimationDraw&
+		operator=(PreparedAnimationDraw&&) = default;
+
+		PreparedAnimationDraw(const PreparedAnimationDraw&) = delete;
+
+		PreparedAnimationDraw&
+		operator=(const PreparedAnimationDraw&) = delete;
+
+		bmesh::InstancePlacement placement;
+		game::PreparedMesh       prepared;
+
+		// False when this was prepared as static geometry: the node is static, the rig has no clips
+		// to play, or the tier refused it below. The commit takes the static door for it.
+		bool animated = false;
+
+		// The box the geom culls by, on the animated tiers. Nullopt falls back to the bind pose's.
+		std::optional<assetlib::Bounds> posed;
+
+		// Why the tier refused this placement, dropping it to bind-pose static geometry. Empty when
+		// nothing refused it.
+		std::string refusal;
+	};
+
+	/**
+	 * Every acquire a load of `plan` will make, less the upload -- the whole of what the panel used
+	 * to do on the render thread. Reads through `store` and touches no scene, so it belongs on the
+	 * loading screen's worker; the commit that follows uploads and nothing else.
+	 *
+	 * A placement the animated tier refuses is prepared as static geometry instead, carrying the
+	 * reason: a mesh standing in its bind pose beats a viewport cleared to nothing. The refusals the
+	 * *commit* owns -- a submesh whose material does not resolve to kPBR needs the scene's material
+	 * handles -- cannot be seen from here, so a caller still handles one there.
+	 *
+	 * @param animationsRelPath The clip set both animated tiers read. Empty stands every placement
+	 *        as static geometry: a rig with no clips anywhere has nothing to play.
+	 * @param animatedBounds One entry per `plan.animated`, in order, or empty for none known.
+	 */
+	[[nodiscard]] std::vector<PreparedAnimationDraw>
+	PrepareAnimationDraws(
+		const assetlib::AssetStore&                      store,
+		std::string_view                                 relPath,
+		std::string_view                                 animationsRelPath,
+		AnimationSource                                  source,
+		const AnimationDrawPlan&                         plan,
+		std::span<const std::optional<assetlib::Bounds>> animatedBounds = {});
 }

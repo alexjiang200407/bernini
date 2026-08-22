@@ -66,4 +66,72 @@ namespace editor
 				{ clip.name, clip.frameCount, clip.sampleRate, clip.duration, clip.loop });
 		return infos;
 	}
+
+	std::vector<PreparedAnimationDraw>
+	PrepareAnimationDraws(
+		const assetlib::AssetStore&                      store,
+		std::string_view                                 relPath,
+		std::string_view                                 animationsRelPath,
+		const AnimationSource                            source,
+		const AnimationDrawPlan&                         plan,
+		std::span<const std::optional<assetlib::Bounds>> animatedBounds)
+	{
+		auto out = std::vector<PreparedAnimationDraw>();
+		out.reserve(plan.statics.size() + plan.animated.size());
+
+		const auto prepareStatic = [&](const bmesh::InstancePlacement& placement,
+		                               std::string                     refusal) {
+			auto draw      = PreparedAnimationDraw();
+			draw.placement = placement;
+			draw.prepared  = game::PrepareMesh(store, relPath, placement.meshIndex);
+			draw.refusal   = std::move(refusal);
+			out.push_back(std::move(draw));
+		};
+
+		for (const bmesh::InstancePlacement& placement : plan.statics) prepareStatic(placement, {});
+
+		for (size_t i = 0; i < plan.animated.size(); ++i)
+		{
+			const bmesh::InstancePlacement& placement = plan.animated[i];
+
+			// A rig with no clip file anywhere falls back to bind pose as static geometry.
+			if (animationsRelPath.empty())
+			{
+				prepareStatic(placement, {});
+				continue;
+			}
+
+			const std::optional<assetlib::Bounds> posed =
+				i < animatedBounds.size() ? animatedBounds[i] : std::nullopt;
+
+			try
+			{
+				// The two tiers differ only in which door the prepare takes.
+				auto prepared = source == AnimationSource::kSkinned ? game::PrepareSkinnedMesh(
+																		  store,
+																		  relPath,
+																		  animationsRelPath,
+																		  placement.meshIndex,
+																		  posed) :
+				                                                      game::PrepareVatMesh(
+																		  store,
+																		  relPath,
+																		  animationsRelPath,
+																		  placement.meshIndex);
+
+				auto draw      = PreparedAnimationDraw();
+				draw.placement = placement;
+				draw.prepared  = std::move(prepared);
+				draw.animated  = true;
+				draw.posed     = posed;
+				out.push_back(std::move(draw));
+			}
+			catch (const std::exception& e)
+			{
+				prepareStatic(placement, e.what());
+			}
+		}
+
+		return out;
+	}
 }
