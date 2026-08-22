@@ -66,6 +66,10 @@ exes *args:
 count:
     @{{ python }} scripts/count_source.py
 
+# List the local branches whose pull request merged (--delete to cut them).
+cleanup *args:
+    @{{ python }} scripts/cleanup_branches.py {{ args }}
+
 # Upload every referenced Git LFS object from the local cache to the object store.
 lfs-seed *args:
     @{{ python }} scripts/lfs_seed.py {{ args }}
