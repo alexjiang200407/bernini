@@ -21,6 +21,7 @@
 #include <core/file/file.h>
 
 #include "CacheTamper.h"
+#include "ImportUnitGroup.h"
 #include "SkinnedGltf.h"
 
 using namespace assetlib;
@@ -45,31 +46,9 @@ namespace
 		{
 			dataRoot = project.GetDataDirectory();
 
-			const auto imported = loadFromGltf(glb, { .sampleRate = sampleRate });
+			test::ImportUnitGroup(dataRoot, glb, "Materials/red.bmaterial", sampleRate);
 
-			BMesh mesh = toBMesh(imported);
-			generateTangents(mesh);
-			requireUniqueSubmeshNames(mesh);
-
-			const ImportTarget target{ dataRoot, "unit", sampleRate };
-			const SourceRef    source = copyImportedSource(glb, target);
-			mesh.source               = source;
-
-			writeImportedRig(
-				imported,
-				mesh,
-				dataRoot,
-				dataRoot / c_SkeletonsDirectoryName / "unit.bskel",
-				dataRoot / c_AnimationsDirectoryName / "unit.banim",
-				true,
-				source);
-
-			if (!mesh.submeshes.empty())
-				static_cast<void>(attachMaterial(mesh, 0, "Materials/red.bmaterial"));
-
-			meshPath = dataRoot / c_MeshesDirectoryName / "unit.bmesh";
-			writeImportedMesh(mesh, meshPath);
-			writeImportedDocument(target, &mesh);
+			meshPath     = dataRoot / c_MeshesDirectoryName / "unit.bmesh";
 			documentPath = dataRoot / "meshes_src/unit.bimport";
 
 			project.ReloadStore();

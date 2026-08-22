@@ -1,3 +1,4 @@
+#include <assetlib/banim_io.h>
 #include <assetlib/bmaterial_io.h>
 #include <assetlib/bmesh_io.h>
 #include <assetlib/bsky_io.h>
@@ -7,6 +8,10 @@
 #include <assetlib_structs/BMaterial.h>
 #include <assetlib_structs/BMesh.h>
 #include <assetlib_structs/magic.h>
+
+#include "CacheTamper.h"
+#include "ImportUnitGroup.h"
+#include "SkinnedGltf.h"
 
 #include <core/file/file.h>
 
@@ -142,4 +147,67 @@ TEST_CASE(
 	REQUIRE_THROWS_WITH(
 		inspectContainer(std::span(bytes).first(8)),
 		ContainsSubstring("stream shorter than a header"));
+}
+
+TEST_CASE("migrate regenerates a stale group on disk, once", "[migrate][regen]")
+{
+	const Project           project;
+	const test::SkinnedGltf source("bernini_migrate_regen_gltf");
+	test::ImportUnitGroup(project.root, source.PackGlb());
+
+	const auto meshPath  = project.root / "Meshes/unit.bmesh";
+	const auto bskelPath = project.root / "Skeletons/unit.bskel";
+	const auto banimPath = project.root / "Animations/unit.banim";
+
+	test::TamperHeaderByte(meshPath, test::c_TokenOffset);
+	test::TamperHeaderByte(bskelPath, test::c_TokenOffset);
+	test::TamperHeaderByte(banimPath, test::c_TokenOffset);
+
+	SECTION("the replay: one run rewrites the group, the second finds nothing to do")
+	{
+		const auto first = migrateProject(project.root, false);
+		CHECK(first.Count(MigratedFile::Outcome::kRewritten) == 3);
+		CHECK(first.Count(MigratedFile::Outcome::kFailed) == 0);
+
+		// Written current: the loads that refused the tampered files read them plainly now.
+		CHECK(load(meshPath).source.key == "meshes_src/unit.glb");
+		CHECK_FALSE(loadAnimations(banimPath).clips.empty());
+
+		const auto second = migrateProject(project.root, false);
+		CHECK(second.Count(MigratedFile::Outcome::kRewritten) == 0);
+		CHECK(second.Count(MigratedFile::Outcome::kFailed) == 0);
+	}
+
+	SECTION("a stale group whose source is gone is a per-file failure, never a guess")
+	{
+		std::filesystem::remove(project.root / "meshes_src/unit.glb");
+
+		const auto report = migrateProject(project.root, false);
+		CHECK(report.Count(MigratedFile::Outcome::kRewritten) == 0);
+		CHECK(report.Count(MigratedFile::Outcome::kFailed) == 3);
+	}
+}
+
+TEST_CASE("a rebind reaches disk through migrate without a regeneration", "[migrate][regen]")
+{
+	const Project           project;
+	const test::SkinnedGltf source("bernini_migrate_rebind_gltf");
+	test::ImportUnitGroup(project.root, source.PackGlb());
+
+	// The source is gone, so what follows cannot be a regeneration -- the document alone
+	// carries the rebind onto the disk bytes.
+	std::filesystem::remove(project.root / "meshes_src/unit.glb");
+	rebindSubmeshInDocument(
+		project.root,
+		"meshes_src/unit.glb",
+		"body",
+		"Materials/blue.bmaterial");
+
+	const auto report = migrateProject(project.root, false);
+	CHECK(report.Count(MigratedFile::Outcome::kRewritten) == 1);
+	CHECK(report.Count(MigratedFile::Outcome::kFailed) == 0);
+
+	const BMesh mesh = load(project.root / "Meshes/unit.bmesh");
+	REQUIRE(mesh.materials.size() == 1);
+	CHECK(mesh.materials[0] == "Materials/blue.bmaterial");
 }

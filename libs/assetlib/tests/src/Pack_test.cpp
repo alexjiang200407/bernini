@@ -1,21 +1,27 @@
+#include <assetlib/AssetStore.h>
+#include <assetlib/asset_import.h>
 #include <assetlib/banim_io.h>
+#include <assetlib/bmesh_io.h>
 #include <assetlib/bskel_io.h>
 #include <assetlib/bvat_io.h>
 #include <assetlib/import_document.h>
 #include <assetlib/pak_io.h>
 #include <assetlib/pak_pack.h>
 #include <assetlib/vat_bake.h>
+#include <assetlib_structs/BMesh.h>
 #include <assetlib_structs/BVat.h>
 #include <assetlib_structs/Skeleton.h>
 #include <core/file/LooseFileSystem.h>
 #include <core/file/file.h>
 
+#include "CacheTamper.h"
+#include "ImportUnitGroup.h"
 #include "MountAt.h"
 #include "RefsSandbox.h"
+#include "SkinnedGltf.h"
 #include "VatFixture.h"
 #include "chunk_io.h"
 #include "mounted_io.h"
-#include <assetlib/AssetStore.h>
 
 using namespace assetlib;
 using namespace assetlib::test;
@@ -359,4 +365,77 @@ TEST_CASE("pack fails when a stale .bvat cannot be re-baked", "[pack][vat]")
 	CHECK_THROWS_AS(
 		packProject(AssetStore(root.path), PackDesc{ root.path / "Data.bpak" }),
 		std::runtime_error);
+}
+
+TEST_CASE(
+	"a stale group re-bakes into the archive, a rebind rides along, disk untouched",
+	"[pack][regen]")
+{
+	const test::DataRoot    root("bernini_pack_regen");
+	const test::SkinnedGltf source("bernini_pack_regen_gltf");
+	test::ImportUnitGroup(root.path, source.PackGlb());
+
+	const auto meshPath = root.path / "Meshes/unit.bmesh";
+	test::TamperHeaderByte(meshPath, test::c_TokenOffset);
+	rebindSubmeshInDocument(root.path, "meshes_src/unit.glb", "body", "Materials/blue.bmaterial");
+	const auto stale = core::file::read_file_bytes(meshPath.string());
+
+	const std::filesystem::path target = root.path / "Data.bpak";
+	const PackReport            report = packProject(AssetStore(root.path), PackDesc{ target });
+	CHECK(report.geometryRebaked >= 1);
+
+	// The archive carries the current cook with the document's binding baked in -- a read-only
+	// store trusts it, which is exactly what pack just made true.
+	const AssetStore packed(root.path, std::make_shared<PakFile>(target));
+	const BMesh      mesh = packed.LoadMesh("Meshes/unit.bmesh");
+	REQUIRE(mesh.materials.size() == 1);
+	CHECK(mesh.materials[0] == "Materials/blue.bmaterial");
+
+	// In the archive only: the stale file on disk is migrate's to rewrite, never pack's.
+	CHECK(core::file::read_file_bytes(meshPath.string()) == stale);
+}
+
+TEST_CASE("a group the seam cannot serve fails the pack", "[pack][regen]")
+{
+	const test::DataRoot    root("bernini_pack_unbakeable");
+	const test::SkinnedGltf source("bernini_pack_unbakeable_gltf");
+	test::ImportUnitGroup(root.path, source.PackGlb());
+
+	test::TamperHeaderByte(root.path / "Meshes/unit.bmesh", test::c_TokenOffset);
+	std::filesystem::remove(root.path / "meshes_src/unit.glb");
+
+	CHECK_THROWS(packProject(AssetStore(root.path), PackDesc{ root.path / "Data.bpak" }));
+}
+
+TEST_CASE("a packed .bvat answers fresh inside the archive it shipped in", "[pack][regen][vat]")
+{
+	const test::DataRoot    root("bernini_pack_vat_regen");
+	const test::SkinnedGltf source("bernini_pack_vat_regen_gltf");
+	test::ImportUnitGroup(root.path, source.PackGlb());
+
+	const AssetStore  store(root.path);
+	const std::string vatKey =
+		vatPathFor("Meshes/unit.bmesh", "Animations/unit.banim").generic_string();
+	saveVat(
+		bakeVat(store, VatBakeDesc{ "Meshes/unit.bmesh", "Animations/unit.banim" }),
+		root.path / vatKey);
+
+	// The group goes stale with every byte and stamp the bake recorded still holding: a
+	// parameter edit moves only the document, so nothing but the group axis can see it -- the
+	// shape a re-export or a sibling's merge leaves when nobody ran migrate.
+	auto document       = loadImportDocument(root.path / "meshes_src/unit.bimport");
+	document.sampleRate = 60.0f;
+	core::file::write_atomic(
+		root.path / "meshes_src/unit.bimport",
+		serializeImportDocument(document));
+
+	const std::filesystem::path target = root.path / "Data.bpak";
+	const PackReport            report = packProject(store, PackDesc{ target });
+	CHECK(report.vatsRebaked == 1);  // the group axis alone fired
+
+	// Judged inside the archive, which is where a shipped build asks: the vat's stamps must
+	// describe the geometry as archived -- the seam's answers -- not the stale file the bake
+	// read them beside.
+	const AssetStore packed(root.path, std::make_shared<PakFile>(target));
+	CHECK_FALSE(packed.VatIsStale(packed.LoadVatTables(vatKey)));
 }

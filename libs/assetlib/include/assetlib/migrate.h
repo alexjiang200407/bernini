@@ -26,14 +26,19 @@ namespace assetlib
 	};
 
 	/**
-	 * Every authored container under `dataRoot` -- `.bmesh`, `.bskel`, `.banim`, `.bmaterial`,
-	 * `.bsky`, `.benvl`, `.benv`; never `.bvat`, which is derived and re-baked -- read at whatever
-	 * schema it carries and re-saved at the current one.
+	 * Every container under `dataRoot` re-saved at what the project's current state says it
+	 * should hold; never `.bvat`, which is derived and re-baked. Geometry (`.bmesh`, `.bskel`,
+	 * `.banim`) reads through the regeneration seam: a stale group re-cooks from its copied
+	 * source onto disk, and a binding-only document edit reaches the file without one -- a
+	 * missing source or a binding naming a vanished submesh is that file's failure. The rest
+	 * (`.bmaterial`, `.bsky`, `.benvl`, `.benv`) is read at whatever form the file carries and
+	 * re-saved at the current one, which is also the carry from a legacy format to its successor.
 	 *
-	 * A file whose bytes are already what the current serializer writes is left untouched: the
-	 * containers are binaries under version control, and a rewrite that changed nothing would dirty
-	 * a whole project for nothing -- so running this twice rewrites nothing the second time. A file
-	 * that cannot be read is reported and skipped, never half-written; the others still go through.
+	 * A file whose bytes are already what the current writer produces is left untouched: the
+	 * containers are files under version control, and a rewrite that changed nothing would dirty
+	 * a whole project for nothing -- so running this twice rewrites nothing the second time. A
+	 * file that cannot be read is reported and skipped, never half-written; the others still go
+	 * through.
 	 *
 	 * @param dryRun Report what would be rewritten and write nothing.
 	 * @throws std::runtime_error if `dataRoot` is not a directory.

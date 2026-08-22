@@ -2,16 +2,22 @@
 #include <assetlib/pak_pack.h>
 
 #include <assetlib/asset_refs.h>
+#include <assetlib/banim_io.h>
 #include <assetlib/bmaterial_io.h>
+#include <assetlib/bmesh_io.h>
+#include <assetlib/bskel_io.h>
 #include <assetlib/bvat_io.h>
+#include <assetlib/container_format.h>
 #include <assetlib/pak_io.h>
 #include <assetlib/project_layout.h>
+#include <assetlib/regen/RegenMesh.h>
 #include <assetlib/vat_bake.h>
 #include <assetlib_structs/BMaterial.h>
 #include <assetlib_structs/BVat.h>
 
 #include <core/err/util.h>
 #include <core/file/LooseFileSystem.h>
+#include <core/hash.h>
 
 #include "ref_paths.h"
 
@@ -55,13 +61,14 @@ namespace assetlib
 		}
 
 		// A packed .bvat's inputs may ship beside it with nowhere to write a re-bake, so the archive
-		// carries one that is correct at pack time rather than one the runtime has to judge.
+		// carries one that is correct at pack time rather than one the runtime has to judge. The
+		// group axis is part of the question: geometry regenerated in memory leaves the disk
+		// stamps untouched, so a bake over a group that is a cache miss is stale however well its
+		// own stamps hold -- shipping it would split the VAT tier from the skinned one.
 		uint32_t
-		rebakeStaleVats(
-			const std::filesystem::path&              dataRoot,
-			const std::vector<std::filesystem::path>& files)
+		rebakeStaleVats(const AssetStore& store, const std::vector<std::filesystem::path>& files)
 		{
-			const core::file::LooseFileSystem loose(dataRoot);
+			const core::file::LooseFileSystem loose(store.GetDataRoot());
 
 			uint32_t rebaked = 0;
 			for (const std::filesystem::path& file : files)
@@ -76,7 +83,10 @@ namespace assetlib
 				bool fresh = false;
 				try
 				{
-					fresh = !vatIsStale(loadVat(file), loose);
+					const BVat vat = loadVat(file);
+					fresh          = !vatIsStale(vat, loose) && !store.GeometryIsStale(vat.mesh) &&
+					                 !store.GeometryIsStale(vat.skeleton) &&
+					                 !store.GeometryIsStale(vat.animations);
 				}
 				catch (const std::exception&)
 				{}
@@ -84,13 +94,92 @@ namespace assetlib
 					continue;
 
 				const VatRefs refs = loadVatRefs(file);
-				saveVat(
-					bakeVat(AssetStore(dataRoot), VatBakeDesc{ refs.mesh, refs.animations }),
-					file);
+				saveVat(bakeVat(store, VatBakeDesc{ refs.mesh, refs.animations }), file);
 				++rebaked;
 			}
 			return rebaked;
 		}
+
+		/**
+		 * The bytes the archive will carry for a geometry entry: the seam's answer, serialized.
+		 * One construction, shared by the pack loop and the `.bvat` re-stamp, so the stamps a
+		 * vat records can never drift from the entry the archive actually stores.
+		 */
+		std::vector<std::byte>
+		currentGeometryBytes(const AssetStore& store, AssetType type, std::string_view key)
+		{
+			switch (type)
+			{
+			case AssetType::kMesh:
+			{
+				RegenMesh current = store.LoadRegenMesh(key);
+				core::throw_runtime_error_if(
+					!current.unboundBindings.empty(),
+					"assetlib::packProject: '{}' binds submesh '{}', which the mesh does not "
+					"have; rebind or re-export",
+					key,
+					current.unboundBindings.front());
+				return serialize(current.mesh);
+			}
+			case AssetType::kSkeleton:
+				return serializeSkeleton(store.LoadRegenSkeleton(key));
+			case AssetType::kAnimation:
+				return serializeAnimations(store.LoadRegenAnimations(key));
+			case AssetType::kMaterial:
+			case AssetType::kTexture:
+			case AssetType::kVat:
+			case AssetType::kSky:
+			case AssetType::kEnvLighting:
+			case AssetType::kEnvironment:
+			case AssetType::kImportDocument:
+				break;
+			}
+			core::throw_runtime_error("assetlib::packProject: '{}' is not geometry", key);
+		}
+
+		/** Each geometry key's archived bytes, computed once per pack however often asked. */
+		class ArchivedGeometry
+		{
+		public:
+			explicit ArchivedGeometry(const AssetStore& store) : m_Store(store) {}
+
+			ArchivedGeometry(const ArchivedGeometry&) = delete;
+			ArchivedGeometry(ArchivedGeometry&&)      = delete;
+			ArchivedGeometry&
+			operator=(const ArchivedGeometry&) = delete;
+			ArchivedGeometry&
+			operator=(ArchivedGeometry&&) = delete;
+
+			[[nodiscard]] const std::vector<std::byte>&
+			BytesFor(AssetType type, const std::string& key)
+			{
+				auto found = m_Bytes.find(key);
+				if (found == m_Bytes.end())
+					found = m_Bytes.emplace(key, currentGeometryBytes(m_Store, type, key)).first;
+				return found->second;
+			}
+
+			/** What the geometry at `key` stamps as inside the archive -- the stored bytes,
+			    hashed. The type is the key's own extension; a caller cannot mispair them. */
+			[[nodiscard]] SourceStamp
+			StampFor(const std::string& key)
+			{
+				const std::string extension = extensionOf(key);
+				const AssetType   type = extension == c_MeshExtension     ? AssetType::kMesh :
+				                         extension == c_SkeletonExtension ? AssetType::kSkeleton :
+				                                                            AssetType::kAnimation;
+
+				const std::vector<std::byte>& bytes = BytesFor(type, key);
+				return SourceStamp{
+					bytes.size(),
+					core::hash_bytes(bytes.data(), bytes.size(), core::hash_seed())
+				};
+			}
+
+		private:
+			const AssetStore&                                       m_Store;
+			std::unordered_map<std::string, std::vector<std::byte>> m_Bytes;
+		};
 	}
 
 	PackReport
@@ -108,9 +197,13 @@ namespace assetlib
 		const std::vector<std::filesystem::path> files = filesUnder(dataRoot);
 
 		PackReport report;
-		report.vatsRebaked = rebakeStaleVats(dataRoot, files);
+		report.vatsRebaked = rebakeStaleVats(store, files);
 
 		const core::file::LooseFileSystem loose(dataRoot);
+
+		// The seam's answer per geometry key, computed once however many askers -- the entry's
+		// own pack, and any `.bvat` stamping against it.
+		ArchivedGeometry archived(store);
 
 		PakWriter writer(desc.target);
 		for (const std::filesystem::path& file : files)
@@ -130,17 +223,73 @@ namespace assetlib
 				continue;
 
 			const std::string                          key   = relativeKey(file, dataRoot);
-			const std::vector<std::byte>               bytes = loose.Read(key);
 			const std::optional<core::file::FileStamp> stamp = loose.Stat(key);
 			if (!stamp.has_value())
 				core::throw_runtime_error("assetlib::packProject: cannot stat '{}'", key);
+
+			// Empty means "pack the disk bytes verbatim" -- most of the payload, textures above
+			// all, is never copied through this.
+			auto regenerated = std::optional<std::vector<std::byte>>();
+
+			switch (*type)
+			{
+			// Geometry carries what the seam answers; a group it cannot serve fails the pack.
+			case AssetType::kMesh:
+			case AssetType::kSkeleton:
+			case AssetType::kAnimation:
+				regenerated = archived.BytesFor(*type, key);
+				break;
+
+			case AssetType::kVat:
+			{
+				// The bake stamped the files on disk, but the archive stores the seam's answers
+				// for those same keys -- re-stamped here, so a staleness question asked *inside*
+				// the archive still answers fresh. The pixels were made current by
+				// rebakeStaleVats above. A vat whose stamps already describe the archived bytes
+				// -- the ordinary pack, nothing regenerated and nothing rebound -- copies
+				// verbatim rather than paying a decode and a re-encode.
+				BVat vat = loadVat(file);
+
+				const SourceStamp meshStamp       = archived.StampFor(normalizeRef(vat.mesh));
+				const SourceStamp skeletonStamp   = archived.StampFor(normalizeRef(vat.skeleton));
+				const SourceStamp animationsStamp = archived.StampFor(normalizeRef(vat.animations));
+
+				if (meshStamp != vat.meshStamp || skeletonStamp != vat.skeletonStamp ||
+				    animationsStamp != vat.animationsStamp)
+				{
+					vat.meshStamp       = meshStamp;
+					vat.skeletonStamp   = skeletonStamp;
+					vat.animationsStamp = animationsStamp;
+					regenerated         = serializeVat(vat);
+				}
+				break;
+			}
+
+			case AssetType::kMaterial:
+			case AssetType::kTexture:
+			case AssetType::kSky:
+			case AssetType::kEnvLighting:
+			case AssetType::kEnvironment:
+			case AssetType::kImportDocument:
+				break;
+			}
+
+			const std::vector<std::byte> bytes =
+				regenerated.has_value() ? std::move(*regenerated) : loose.Read(key);
 
 			// Asked while the bytes are already in hand, which is the only moment packing reads a
 			// material at all.
 			if (type == AssetType::kMaterial && drawsLoose(deserializeMaterial(bytes), loose))
 				report.materialsDrawingLoose.push_back(key);
 
-			writer.Add(key, bytes, *stamp);
+			const bool isGeometry = *type == AssetType::kMesh || *type == AssetType::kSkeleton ||
+			                        *type == AssetType::kAnimation;
+			if (isGeometry && bytes != loose.Read(key))
+				++report.geometryRebaked;
+
+			// The stamp describes the stored bytes -- a size the payload does not match would
+			// read as staleness inside the archive.
+			writer.Add(key, bytes, core::file::FileStamp{ bytes.size(), stamp->mtime });
 
 			++report.entries;
 			report.payloadBytes += bytes.size();
