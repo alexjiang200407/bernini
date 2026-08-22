@@ -273,6 +273,15 @@ RenderTargetWindow::SetOutlineEnabled(bool enabled)
 }
 
 void
+RenderTargetWindow::SetBoneOverlayEnabled(bool enabled)
+{
+	if (m_RenderTarget == nullptr || m_Desc.renderer == nullptr)
+		return;
+
+	m_Desc.renderer->Invoke([&] { m_RenderTarget->SetBoneOverlayEnabled(enabled); });
+}
+
+void
 RenderTargetWindow::SetRenderScale(float scale)
 {
 	if (m_RenderTarget == nullptr || m_Desc.renderer == nullptr)

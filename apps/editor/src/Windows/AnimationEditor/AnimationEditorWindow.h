@@ -12,6 +12,7 @@ class QStackedWidget;
 class QComboBox;
 class QDoubleSpinBox;
 class QLabel;
+class QCheckBox;
 class QListWidget;
 class QPushButton;
 class TimelineScrubber;
@@ -123,6 +124,12 @@ private:
 	void
 	SetClips(const std::vector<editor::ClipInfo>& clips);
 
+	// Puts the Show Bones box in step with what is previewable right now: the tier on screen and
+	// whether the mesh has clips at all. Also what pushes the overlay's state at the viewport, so
+	// the box's own checked state stays the user's intent rather than the renderer's.
+	void
+	SyncBoneOverlayUi();
+
 	void
 	SelectClip(int index);
 
@@ -135,6 +142,9 @@ private:
 	// Which tier it is played through: the rig posed live, or the bake made of it.
 	QComboBox*   m_TierSelector  = nullptr;
 	QPushButton* m_BakeVatButton = nullptr;
+
+	// The rig's skeleton over the preview; only offered on the skinned tier of a mesh with clips.
+	QCheckBox* m_ShowBones = nullptr;
 
 	QListWidget* m_ClipList     = nullptr;
 	QLabel*      m_ClipMetadata = nullptr;
@@ -153,6 +163,9 @@ private:
 
 	// True while SyncTransportUi writes the controls, so their signals do not scrub the clock.
 	bool m_SyncingUi = false;
+
+	// Whether the shown mesh has a clip table -- the other half of what decides the bone overlay.
+	bool m_HasClips = false;
 
 	QString m_DataRoot;
 	QString m_MeshRelPath;  // empty when nothing is shown

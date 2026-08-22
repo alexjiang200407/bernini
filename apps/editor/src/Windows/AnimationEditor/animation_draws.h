@@ -64,4 +64,24 @@ namespace editor
 
 	[[nodiscard]] AnimationLoadSteps
 	PlanAnimationLoad(AnimationSource source, bool hasAnimations);
+
+	/**
+	 * Whether the bone overlay can be shown for what the panel is currently previewing, and why not
+	 * when it cannot -- the reason goes in the checkbox's tooltip, because a control that greys
+	 * itself without saying why reads as broken.
+	 *
+	 * Both refusals are about there being no rig on the GPU to draw: a `.bvat` keeps its baked
+	 * palettes in the container and nothing on the GPU reads them, and a mesh with no clip file
+	 * loads as static geometry with no palette at all (see PlanAnimationLoad).
+	 */
+	struct BoneOverlayOffer
+	{
+		bool allowed = false;
+
+		// Empty when `allowed`; otherwise one sentence, shown as the tooltip.
+		std::string_view refusal;
+	};
+
+	[[nodiscard]] BoneOverlayOffer
+	OfferBoneOverlay(AnimationSource source, bool hasAnimations);
 }
