@@ -199,13 +199,13 @@ namespace game
 		};
 
 		Environment out;
+		out.skyMipLevel  = env.skyMipLevel;
+		out.skyRotationY = env.skyRotationY;
 
 		if (!env.sky.empty())
 		{
 			const assetlib::BSky sky = m_Store.LoadSky(env.sky);
 			out.skybox               = acquireRoute(sky.sky);
-			out.skyMipLevel          = sky.mipLevel;
-			out.skyRotationY         = sky.rotationY;
 		}
 
 		if (!env.lighting.empty())
@@ -213,7 +213,8 @@ namespace game
 			const assetlib::BEnvLighting lighting = m_Store.LoadEnvLighting(env.lighting);
 			out.prefilter                         = acquireRoute(lighting.prefilter);
 			out.irradiance                        = acquireRoute(lighting.irradiance);
-			out.exposure                          = lighting.exposure;
+
+			out.exposure = assetlib::effectiveExposure(env, lighting);
 		}
 
 		return out;

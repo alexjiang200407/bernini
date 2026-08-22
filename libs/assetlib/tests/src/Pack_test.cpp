@@ -14,13 +14,14 @@
 #include <core/file/LooseFileSystem.h>
 #include <core/file/file.h>
 
+#include <catch2/matchers/catch_matchers_string.hpp>
+
 #include "CacheTamper.h"
 #include "ImportUnitGroup.h"
 #include "MountAt.h"
 #include "RefsSandbox.h"
 #include "SkinnedGltf.h"
 #include "VatFixture.h"
-#include "chunk_io.h"
 #include "mounted_io.h"
 
 using namespace assetlib;
@@ -306,48 +307,19 @@ TEST_CASE("pack re-bakes a stale .bvat, and leaves a current one alone", "[pack]
 	}
 }
 
-// A bake's tables can read cleanly while its pixel chunks are ones the runtime will not accept --
-// a bake from before the normals chunk changed id is exactly that -- and a read-only mount has
-// nowhere to re-bake it, so pack is the last moment it can be made right.
-TEST_CASE("pack re-bakes a .bvat the runtime could not read", "[pack][vat]")
+// Loud rather than silently shipping: a `.bvat` from another bake revision names its inputs in a
+// layout this build does not vouch for, so pack cannot re-bake it. The loose project heals one on
+// its next load, and that has to happen before an export.
+TEST_CASE("pack refuses a .bvat from another bake revision", "[pack][vat]")
 {
 	const DataRoot root("pack_vat_old");
 	StageRig(root);
 
-	const fs::path bvat  = root.path / "Meshes/rig.bvat";
-	auto           bytes = core::file::read_file_bytes(bvat.string());
+	test::TamperHeaderByte(root.path / "Meshes/rig.bvat", test::c_TokenOffset);
 
-	auto header = chunk::Header();
-	std::memcpy(&header, bytes.data(), sizeof(header));
-	bool retired = false;
-	for (uint32_t i = 0; i < header.chunkCount; ++i)
-	{
-		std::byte* at    = bytes.data() + header.chunkTableOffset + i * sizeof(chunk::Entry);
-		auto       entry = chunk::Entry();
-		std::memcpy(&entry, at, sizeof(entry));
-		if (entry.id == 10)
-		{
-			entry.id = 8;
-			std::memcpy(at, &entry, sizeof(entry));
-			retired = true;
-		}
-	}
-	REQUIRE(retired);
-	std::ofstream(bvat, std::ios::binary | std::ios::trunc)
-		.write(
-			reinterpret_cast<const char*>(bytes.data()),
-			static_cast<std::streamsize>(bytes.size()));
-
-	// Its inputs have not moved, so the tables-only verdict is "fresh" -- and the full read is not.
-	REQUIRE_FALSE(vatIsStale(loadVatTables(bvat), MountAt(root.path)));
-	CHECK_THROWS(loadVat(bvat));
-
-	PackReport report;
-	static_cast<void>(PackAndEnumerate(root, &report));
-	CHECK(report.vatsRebaked == 1);
-
-	const PakFile pak(root.path / "Data.bpak");
-	CHECK_NOTHROW(loadVat(pak, "Meshes/rig.bvat"));
+	CHECK_THROWS_WITH(
+		packProject(AssetStore(root.path), PackDesc{ root.path / "Data.bpak" }),
+		Catch::Matchers::ContainsSubstring("another bake revision"));
 }
 
 // Loud rather than a quietly incomplete archive: a `.bvat` naming an input that is gone cannot be

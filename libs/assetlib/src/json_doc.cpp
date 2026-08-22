@@ -15,6 +15,14 @@ namespace assetlib::doc
 		return json;
 	}
 
+	std::vector<std::byte>
+	toBytes(const nlohmann::json& json)
+	{
+		const std::string text = canonicalDump(json);
+		const auto        data = std::as_bytes(std::span(text.data(), text.size()));
+		return { data.begin(), data.end() };
+	}
+
 	std::string
 	canonicalDump(const nlohmann::json& json)
 	{

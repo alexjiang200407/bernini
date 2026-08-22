@@ -3,7 +3,10 @@
 #include <assetlib_structs/magic.h>
 
 #include "AssetSchemaBuilder.h"
+#include "bake_tokens.h"
+#include "cache_io.h"
 #include "chunk_io.h"
+#include "env_legacy.h"
 #include "env_route_io.h"
 #include "fs_util.h"
 
@@ -17,18 +20,25 @@ namespace assetlib
 {
 	namespace
 	{
-		constexpr uint16_t c_VersionMajor = 3;  // 3: a chunk container with a schema
-		constexpr uint16_t c_VersionMinor = 0;
-
 		constexpr std::string_view c_What = "bsky";
 
 		enum class ChunkId : uint32_t
 		{
-			kSky = 1,  // one SkyRecord
+			kName = 1,
+			kBakedPath
+		};
+
+		// --- The chunk regime, read until the schema system goes -------------------------------
+
+		constexpr uint16_t c_LegacyVersionMajor = 3;
+
+		enum class LegacyChunkId : uint32_t
+		{
+			kSky = 1,  // one LegacySkyRecord
 			kStringPool
 		};
 
-		struct SkyRecord
+		struct LegacySkyRecord
 		{
 			uint32_t       nameOffset;
 			uint32_t       mipLevel;
@@ -36,61 +46,92 @@ namespace assetlib
 			EnvRouteRecord sky;
 		};
 
-		static_assert(sizeof(SkyRecord) == 40);
+		static_assert(sizeof(LegacySkyRecord) == 40);
 
 		const schema::Schema&
-		skySchema()
+		legacySkySchema()
 		{
 			static const schema::Schema c_Schema =
 				AssetSchemaBuilder()
 					.AddSourceStamp()
 					.AddLayout<EnvRouteRecord>("EnvMapRoute", describeEnvRoute)
-					.AddLayout<SkyRecord>(
+					.AddLayout<LegacySkyRecord>(
 						"SkyRecord",
 						[](auto& layout) {
-							layout.AddField("nameOffset", &SkyRecord::nameOffset)
-								.AddField("mipLevel", &SkyRecord::mipLevel)
-								.AddField("rotationY", &SkyRecord::rotationY)
-								.AddField("sky", &SkyRecord::sky);
+							layout.AddField("nameOffset", &LegacySkyRecord::nameOffset)
+								.AddField("mipLevel", &LegacySkyRecord::mipLevel)
+								.AddField("rotationY", &LegacySkyRecord::rotationY)
+								.AddField("sky", &LegacySkyRecord::sky);
 						})
 					.Finish();
 			return c_Schema;
 		}
+
+		LegacySkyRecord
+		legacySkyRecord(std::span<const std::byte> bytes, core::string_pool& pool)
+		{
+			const chunk::Reader
+				reader(bytes, magic::c_BSky, c_LegacyVersionMajor, c_What, legacySkySchema());
+
+			const auto records = reader.Require<LegacySkyRecord>(LegacyChunkId::kSky);
+			core::throw_runtime_error_if(
+				records.size() != 1,
+				"bsky: the sky chunk holds {} entries, not one",
+				records.size());
+			pool = core::string_pool(reader.Read<char>(LegacyChunkId::kStringPool));
+			return records[0];
+		}
+
+		BSky
+		legacyDeserializeSky(std::span<const std::byte> bytes)
+		{
+			core::string_pool     pool;
+			const LegacySkyRecord record = legacySkyRecord(bytes, pool);
+
+			BSky sky;
+			sky.name = pool.at(record.nameOffset);
+			sky.sky  = unpackRoute(record.sky, pool);
+			return sky;
+		}
+	}
+
+	SkyPresentation
+	legacySkyPresentation(std::span<const std::byte> bytes)
+	{
+		core::string_pool     pool;
+		const LegacySkyRecord record = legacySkyRecord(bytes, pool);
+		return SkyPresentation{ record.mipLevel, record.rotationY };
 	}
 
 	std::vector<std::byte>
 	serializeSky(const BSky& sky)
 	{
-		core::string_pool pool;
-		SkyRecord         record{};
-		record.nameOffset = pool.add(sky.name);
-		record.mipLevel   = sky.mipLevel;
-		record.rotationY  = sky.rotationY;
-		record.sky        = packRoute(sky.sky, pool);
+		cache::Writer writer;
+		writer.Add(ChunkId::kName, std::span<const char>(sky.name));
+		writer.Add(ChunkId::kBakedPath, std::span<const char>(sky.sky.baked));
 
-		chunk::Writer writer(skySchema());
-		writer.Add(ChunkId::kSky, std::vector<SkyRecord>{ record });
-		writer.Add(ChunkId::kStringPool, pool.bytes());
-		return writer.Finish(magic::c_BSky, c_VersionMajor, c_VersionMinor);
+		// The route *is* the cache key: the source's mount key and the stamp the bake measured.
+		return writer.Finish(
+			magic::c_BSky,
+			c_BSkyBakeToken,
+			SourceRef{ sky.sky.source, sky.sky.stamp, 0 });
 	}
 
 	BSky
 	deserializeSky(std::span<const std::byte> bytes)
 	{
-		const chunk::Reader reader(bytes, magic::c_BSky, c_VersionMajor, c_What, skySchema());
+		if (!cache::isCacheEntry(bytes))
+			return legacyDeserializeSky(bytes);
 
-		const auto records = reader.Require<SkyRecord>(ChunkId::kSky);
-		core::throw_runtime_error_if(
-			records.size() != 1,
-			"bsky: the sky chunk holds {} entries, not one",
-			records.size());
-		const core::string_pool pool(reader.Read<char>(ChunkId::kStringPool));
+		const cache::Reader reader(bytes, magic::c_BSky, c_BSkyBakeToken, c_What);
 
-		BSky sky;
-		sky.name      = pool.at(records[0].nameOffset);
-		sky.mipLevel  = records[0].mipLevel;
-		sky.rotationY = records[0].rotationY;
-		sky.sky       = unpackRoute(records[0].sky, pool);
+		BSky       sky;
+		const auto name  = reader.Read<char>(ChunkId::kName);
+		const auto baked = reader.Read<char>(ChunkId::kBakedPath);
+		sky.name.assign(name.begin(), name.end());
+		sky.sky.baked.assign(baked.begin(), baked.end());
+		sky.sky.source = reader.GetSource().key;
+		sky.sky.stamp  = reader.GetSource().stamp;
 		return sky;
 	}
 

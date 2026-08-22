@@ -3,15 +3,19 @@
 
 #include <assetlib/asset_refs.h>
 #include <assetlib/banim_io.h>
+#include <assetlib/benvl_io.h>
 #include <assetlib/bmaterial_io.h>
 #include <assetlib/bmesh_io.h>
 #include <assetlib/bskel_io.h>
+#include <assetlib/bsky_io.h>
 #include <assetlib/bvat_io.h>
 #include <assetlib/container_format.h>
+#include <assetlib/env_bake.h>
 #include <assetlib/pak_io.h>
 #include <assetlib/project_layout.h>
 #include <assetlib/regen/RegenMesh.h>
 #include <assetlib/vat_bake.h>
+#include <assetlib_structs/BEnv.h>
 #include <assetlib_structs/BMaterial.h>
 #include <assetlib_structs/BVat.h>
 
@@ -58,6 +62,54 @@ namespace assetlib
 			}
 			std::ranges::sort(out);
 			return out;
+		}
+
+		// A bake behind its routed source has nowhere to catch up once shipped, the same bind as a
+		// stale `.bvat`. A route that never recorded a source has nothing to be behind (the
+		// committed sets predate recording); one whose source is gone fails the bake loudly, which
+		// is the archive's job. Runs over a snapshot taken before the pack walk's own: a bake
+		// writes content-addressed maps, so a re-bake adds files that walk must still see.
+		uint32_t
+		rebakeStaleEnvs(const AssetStore& store, const std::vector<std::filesystem::path>& files)
+		{
+			const core::file::LooseFileSystem loose(store.GetDataRoot());
+
+			uint32_t rebaked = 0;
+			for (const std::filesystem::path& file : files)
+			{
+				const auto type = assetTypeFromExtension(file);
+				if (type != AssetType::kSky && type != AssetType::kEnvLighting)
+					continue;
+
+				try
+				{
+					if (type == AssetType::kSky)
+					{
+						BSky sky = loadSky(file);
+						if (!isSkyBakeStale(sky, loose))
+							continue;
+						bakeSky(sky, EnvBakeDesc{ store.GetDataRoot() });
+						saveSky(sky, file);
+					}
+					else
+					{
+						BEnvLighting lighting = loadEnvLighting(file);
+						if (!isEnvLightingBakeStale(lighting, loose))
+							continue;
+						bakeEnvLighting(lighting, EnvBakeDesc{ store.GetDataRoot() });
+						saveEnvLighting(lighting, file);
+					}
+				}
+				catch (const std::exception& error)
+				{
+					core::throw_runtime_error(
+						"assetlib::packProject: '{}': {}",
+						relativeKey(file, store.GetDataRoot()),
+						error.what());
+				}
+				++rebaked;
+			}
+			return rebaked;
 		}
 
 		// A packed .bvat's inputs may ship beside it with nowhere to write a re-bake, so the archive
@@ -194,10 +246,11 @@ namespace assetlib
 				"assetlib::packProject: '{}' is not a directory",
 				dataRoot.string());
 
-		const std::vector<std::filesystem::path> files = filesUnder(dataRoot);
-
 		PackReport report;
-		report.vatsRebaked = rebakeStaleVats(store, files);
+		report.envsRebaked = rebakeStaleEnvs(store, filesUnder(dataRoot));
+
+		const std::vector<std::filesystem::path> files = filesUnder(dataRoot);
+		report.vatsRebaked                             = rebakeStaleVats(store, files);
 
 		const core::file::LooseFileSystem loose(dataRoot);
 

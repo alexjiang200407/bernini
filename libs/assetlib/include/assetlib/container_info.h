@@ -40,9 +40,9 @@ namespace assetlib
 	};
 
 	/**
-	 * The cache key of a `.bmesh`, `.bskel` or `.banim`, or nullopt for any other magic -- the
-	 * geometry containers carry a key where the others carry a schema, and this is the half of
-	 * `describe --schema` that serves them.
+	 * The cache key of any cache-entry container, or nullopt for bytes in another format -- a
+	 * cache entry carries a key where a legacy container carries a schema, and this is the half
+	 * of `describe --schema` that serves it.
 	 */
 	[[nodiscard]] std::optional<CacheEntryInfo>
 	inspectCacheEntry(std::span<const std::byte> bytes);

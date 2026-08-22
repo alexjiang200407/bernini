@@ -21,9 +21,12 @@ namespace assetlib::cache
 				header.magic != magic,
 				"{}: not this container's magic",
 				what);
+			// A chunk-era file carries a version pair where this field sits, so a mismatch here
+			// cannot claim "newer" -- it may equally be a file from before the cache format.
 			core::throw_runtime_error_if(
-				header.headerVersion > c_HeaderVersion,
-				"{}: cache header version {} is newer than this build understands ({})",
+				header.headerVersion != c_HeaderVersion,
+				"{}: cache header version {} is not the {} this build reads -- a newer build's "
+				"entry, or a file from before the cache format; regenerate it from its source",
 				what,
 				header.headerVersion,
 				c_HeaderVersion);
@@ -183,6 +186,17 @@ namespace assetlib::cache
 			if (entry.id == id)
 				return &entry;
 		return nullptr;
+	}
+
+	bool
+	isCacheEntry(std::span<const std::byte> bytes) noexcept
+	{
+		if (bytes.size() < sizeof(Header))
+			return false;
+
+		Header header{};
+		std::memcpy(&header, bytes.data(), sizeof(header));
+		return header.headerVersion == c_HeaderVersion && header.fileSize == bytes.size();
 	}
 
 	PeekedKey

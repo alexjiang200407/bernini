@@ -791,8 +791,6 @@ namespace
 		auto sky      = assetlib::BSky();
 		sky.name      = name;
 		sky.sky.baked = "Textures/" + std::string(name) + "_sky.ktx2";
-		sky.mipLevel  = 1;
-		sky.rotationY = 0.25f;
 		std::filesystem::create_directories(root / "Sky");
 		assetlib::saveSky(sky, root / "Sky" / (std::string(name) + ".bsky"));
 
@@ -804,10 +802,12 @@ namespace
 		std::filesystem::create_directories(root / "EnvLighting");
 		assetlib::saveEnvLighting(lighting, root / "EnvLighting" / (std::string(name) + ".benvl"));
 
-		auto env     = assetlib::BEnv();
-		env.name     = name;
-		env.sky      = "Sky/" + std::string(name) + ".bsky";
-		env.lighting = "EnvLighting/" + std::string(name) + ".benvl";
+		auto env         = assetlib::BEnv();
+		env.name         = name;
+		env.sky          = "Sky/" + std::string(name) + ".bsky";
+		env.lighting     = "EnvLighting/" + std::string(name) + ".benvl";
+		env.skyMipLevel  = 1;
+		env.skyRotationY = 0.25f;
 		std::filesystem::create_directories(root / "Environments");
 		assetlib::saveEnv(env, root / "Environments" / (std::string(name) + ".benv"));
 	}
@@ -841,6 +841,20 @@ TEST_CASE("AssetManager acquires an environment through its own data root", "[ga
 
 		(*fx).ReleaseEnvironment(other);
 		CHECK((*fx).TextureRefCount(env.skybox) == 1);
+	}
+
+	SECTION("an authored exposure overrules the lighting's derivation")
+	{
+		auto second             = assetlib::BEnv();
+		second.name             = "forest_graded";
+		second.sky              = "Sky/forest.bsky";
+		second.lighting         = "EnvLighting/forest.benvl";
+		second.exposureOverride = 0.5f;
+		assetlib::saveEnv(second, fx.root.path / "Environments" / "forest_graded.benv");
+
+		const auto graded = (*fx).AcquireEnvironment("Environments/forest_graded.benv");
+		CHECK(graded.exposure == 0.5f);
+		(*fx).ReleaseEnvironment(graded);
 	}
 
 	SECTION("release drops the maps at zero")

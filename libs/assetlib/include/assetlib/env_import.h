@@ -42,7 +42,7 @@ namespace assetlib
 		// mip 0; how defocused it is drawn is `skyMipLevel`, which a viewer may overrule.
 		uint32_t skyMips = 6;
 
-		// Which level the written `.bsky` presents. 0 is the sharp projection.
+		// Which level the written `.benv` document presents. 0 is the sharp projection.
 		uint32_t skyMipLevel = 0;
 
 		uint32_t prefilterFaceSize  = 256;

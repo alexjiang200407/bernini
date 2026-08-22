@@ -101,7 +101,7 @@ namespace assetlib::cache
 	public:
 		/**
 		 * @param what Container name the error messages are prefixed with, e.g. "bmesh".
-		 * @throws std::runtime_error on bad magic, a header version newer than this build, a
+		 * @throws std::runtime_error on bad magic, a header version this build does not read, a
 		 *         stream that disagrees with its own sizes -- and on a bake token that is not
 		 *         `bakeToken`: the file is stale (or a sibling branch's, or newer -- one case),
 		 *         and the message says to regenerate it from its source.
@@ -171,6 +171,16 @@ namespace assetlib::cache
 		std::vector<Entry>         m_Table;
 		std::string_view           m_What;
 	};
+
+	/**
+	 * Whether `bytes` -- a whole file, never a prefix -- is this cache format, against a legacy
+	 * chunk container of the same magic: the u32 after the magic is `headerVersion` (always 1)
+	 * here and `versionMajor | versionMinor << 16` there. A v1 `.bsky`/`.benvl` *was* stamped
+	 * major 1, minor 0, so the version alone does not discriminate; `fileSize`, which no legacy
+	 * layout stores at this offset, is what settles it.
+	 */
+	[[nodiscard]] bool
+	isCacheEntry(std::span<const std::byte> bytes) noexcept;
 
 	/** A container's key, read without its payload: the token it was written at, and its source. */
 	struct PeekedKey

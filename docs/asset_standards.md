@@ -409,19 +409,21 @@ Three different spaces are in play and they are easy to conflate. The contract, 
   I/O: [libs/assetlib/include/assetlib/banim_io.h](libs/assetlib/include/assetlib/banim_io.h).
 * A baked model on disk is therefore `<name>.bmesh` + one `matN.bmaterial` per material + one texture
   file per texture + `<name>.bskel` and `<name>.banim` if it was rigged, all in one directory.
-* **`.bsky`** (v1) — the sky: one radiance cube map, the mip the backdrop samples, and its Y rotation.
-  **`.benvl`** (v1) — the lighting derived from that sky: the GGX prefilter chain, the irradiance
+* **`.bsky`** — the sky: one radiance cube map, purely derived.
+  **`.benvl`** — the lighting derived from that sky: the GGX prefilter chain, the irradiance
   convolution, and the exposure they were measured at. Both structs:
   [libs/assetlib_structs/include/assetlib_structs/BEnv.h](libs/assetlib_structs/include/assetlib_structs/BEnv.h);
   I/O: [libs/assetlib/include/assetlib/bsky_io.h](libs/assetlib/include/assetlib/bsky_io.h),
   [libs/assetlib/include/assetlib/benvl_io.h](libs/assetlib/include/assetlib/benvl_io.h).
 
-  * **Authoring containers, shaped like `.bmaterial`.** Every map is an `EnvMapRoute`: the `source`
+  * **Derived cache entries** (see [Asset Schema](asset_schema.md)): the sky's route is its cache
+    key, the lighting joins its two sources into one. Every map is an `EnvMapRoute`: the `source`
     under `textures_src/`, the machine-ready `baked` `.ktx2` under `Textures/`, and the `SourceStamp`
     the source measured when that bake ran. Paths are relative to the data root, as everywhere else.
-  * **Sky and lighting are separate files because their lifetimes are.** Rotating a sky or sampling a
-    blurrier mip is immediate; re-convolving the lighting it implies is minutes of work that the same
-    edit need not trigger.
+    The authored presentation lives on the `.benv` document, not here.
+  * **Sky and lighting are separate files because their lifetimes are.** Re-authoring a sky is
+    immediate; re-convolving the lighting it implies is minutes of work that the same edit need
+    not trigger.
   * **The bake compiles, it does not convolve.** `bakeSky`/`bakeEnvLighting`
     ([libs/assetlib/include/assetlib/env_bake.h](libs/assetlib/include/assetlib/env_bake.h)) take the
     routed float-cube intermediates and pack them RGB9E5 into content-addressed `.ktx2` under
@@ -435,8 +437,10 @@ Three different spaces are in play and they are easy to conflate. The contract, 
     data root (unreadable ones are fatal, same as materials), and its sweep recognises
     `isBakedEnvMapName` — `sky_`/`prefilter_`/`irradiance_` + 16 hex — disjoint from the material
     groups by prefix. An orphaned env map is collected; a referenced one never is.
-* **`.benv`** (v2) — **an environment by reference**: `BEnv { name, sky, lighting }`, two data-root
-  relative paths to a `.bsky` and a `.benvl`, no pixels. On disk the family follows the same
+* **`.benv`** — **an environment by reference, and the family's one authored file**: a canonical-JSON
+  text document naming a `.bsky` and a `.benvl` by data-root relative path, no pixels, carrying the
+  presentation knobs (`skyMipLevel`, `skyRotationY`, `exposureOverride`), unknown keys preserved on
+  round-trip as `.bmaterial` does. On disk the family follows the same
   per-kind directories materials use: the `.benv` in `Environments/`, the `.bsky` in `Sky/`, the
   `.benvl` in `EnvLighting/`, and every baked map in `Textures/` — `assets/Data/` mirrors this exactly
   as it does for `Materials/`. Composing by path lets a sky be re-authored
@@ -452,21 +456,16 @@ Three different spaces are in play and they are easy to conflate. The contract, 
     map while it is current, the float source it was compiled from otherwise. Same branch a material
     takes (`drawsLoose`), and for the same reason — `Textures/` is regenerated per platform, so a
     fresh checkout has sources and no bakes. Only a route with neither throws.
-  * **v1 was a three-blob format** (prefilter + irradiance + skybox as embedded KTX2), retired with
-    no migration path; v2 a flat stream of three paths. Both predate the schema chunk, and both are
-    refused as such — the reader never reads on into the blobs. Since v3 the three env containers
-    are the same chunked, self-describing container as the rest, one record and a string pool each,
-    with `EnvMapRoute` a layout the sky and the lighting share.
+  * The chunk-era env forms (v3 schema containers, and the blob formats before them) still
+    deserialize until the schema system goes; `migrate` is the carry, lifting the presentation
+    knobs they held onto the document one-time.
 
-**`.bmesh`, `.bskel`, `.banim` and `.bvat` are the same chunked container**, in
-[libs/assetlib/src/chunk_io.h](libs/assetlib/src/chunk_io.h): a 32-byte header, 16-byte-aligned chunks,
-a chunk table at the end. Chunks are addressed by id and an **absent chunk is not an error**. Chunk 0
-is the file's **schema** — every struct its chunks hold, field by field — and a reader converts each
-chunk from the layout the file stores to the one the engine wants, by field name
-([libs/schema](libs/schema/include/schema/Schema.h)), so a struct that
-gained, lost, widened or renamed a field leaves every file on disk readable. The version in the
-header is a label; the one thing it decides is that a file **newer than the reader is refused**. A
-file from before the schema chunk is refused too, with a message that says so.
+**`.bmesh`, `.bskel`, `.banim`, `.bvat`, `.bsky` and `.benvl` are the same cache-entry container**,
+in [libs/assetlib/src/cache_io.h](libs/assetlib/src/cache_io.h): a frozen header carrying the cache
+key (bake token, source stamp, parameter hash, source mount key), 16-byte-aligned schema-less
+chunks, a chunk table at the end. Chunks are addressed by id and an **absent chunk is not an
+error**. There is no conversion and no old shape to parse — a token mismatch is a cache miss, and
+the recovery is regeneration, never a reader. See [Asset Schema](asset_schema.md).
 
 ---
 
@@ -934,7 +933,7 @@ assetlib_cli envmap -p <project> forest.hdr --name forest
 assetlib_cli describe -p <project> Meshes/model.bmesh          # hierarchy, submeshes, layouts, materials
 assetlib_cli describe -p <project> Meshes/model.bmesh --brief  # summary + material table only
 assetlib_cli describe -p <project> Materials/skin.bmaterial    # factors, triplet, routes, bake state
-assetlib_cli describe -p <project> Sky/forest.bsky             # presentation + the radiance route
+assetlib_cli describe -p <project> Sky/forest.bsky             # the radiance route and its bake state
 assetlib_cli describe -p <project> EnvLighting/forest.benvl    # exposure + the prefilter/irradiance pair
 assetlib_cli describe -p <project> Environments/forest.benv    # the .bsky and .benvl it composes
 assetlib_cli describe -p <project> Skeletons/soldier.bskel     # bones, parents, bind pose, signature
@@ -946,8 +945,8 @@ assetlib_cli describe -p <project> Animations/soldier.banim    # clips, and the 
 assetlib_cli strip -p <project> Materials/skin.bmaterial -o Ship/Materials/skin.bmaterial
 assetlib_cli strip -p <project> Materials/skin.bmaterial   # rewrites in place; asks first, -y skips
 
-# Show or author the exposure a lighting renders at
-assetlib_cli exposure -p <project> EnvLighting/forest.benvl --set 1.0
+# Show or author the exposure an environment renders at
+assetlib_cli exposure -p <project> Environments/forest.benv --set 1.0
 
 # List the baked maps no material references any more, and delete nothing
 assetlib_cli prune -p <project> --dry-run
