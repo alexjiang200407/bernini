@@ -178,6 +178,10 @@ the transport, the clip list and the scrubber are the same code either way — w
   entries share one walk of the clip set, so a rig drawn as 27 meshes evaluates each pose once —
   what now dominates the bake is that pose walk (2.4 s of the 3.5 s), not the boxes.
 
+  Reading the bake back answers for every mesh entry in one call, for the same reason: the signature
+  a box is matched on (`posedBoundsSignature`) describes the whole mesh, so asking per entry hashes
+  the vertex pool once per entry — 740 ms against 29 ms on the rig above.
+
 * **The palette buffer is GPU-written, so it is not a `RangeBuffer`.** That type mirrors its contents
   on the CPU and re-uploads a dirty range, which would overwrite what the pose pass wrote.
   `BonePaletteBuffer` keeps the allocator and the storage as separate pieces for exactly that reason,

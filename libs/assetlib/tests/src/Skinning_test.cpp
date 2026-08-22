@@ -701,7 +701,7 @@ TEST_CASE(
 		REQUIRE(animations.posedBoxes.size() == 3);
 
 		const auto boxFor = [&](uint32_t meshIndex) {
-			return assetlib::findPosedBounds(animations, fixture.mesh, meshIndex, skeleton);
+			return assetlib::findPosedBounds(animations, fixture.mesh, skeleton)[meshIndex];
 		};
 
 		CHECK_FALSE(boxFor(1).has_value());
@@ -728,7 +728,7 @@ TEST_CASE(
 			const assetlib::Bounds alone =
 				assetlib::posedBounds(fixture.mesh, meshIndex, skeleton, animations);
 			const std::optional<assetlib::Bounds> baked =
-				assetlib::findPosedBounds(animations, fixture.mesh, meshIndex, skeleton);
+				assetlib::findPosedBounds(animations, fixture.mesh, skeleton)[meshIndex];
 
 			REQUIRE(baked.has_value());
 			CHECK(baked->min.x == Catch::Approx(alone.min.x));
@@ -789,7 +789,7 @@ TEST_CASE("A baked posed box answers only for the pairing it measured", "[skinni
 			assetlib::deserializeAnimations(assetlib::serializeAnimations(animations));
 
 		const std::optional<assetlib::Bounds> found =
-			assetlib::findPosedBounds(loaded, fixture.mesh, 0, skeleton);
+			assetlib::findPosedBounds(loaded, fixture.mesh, skeleton)[0];
 
 		REQUIRE(found.has_value());
 		CHECK(found->min.x == Catch::Approx(-1.0f));
@@ -799,26 +799,26 @@ TEST_CASE("A baked posed box answers only for the pairing it measured", "[skinni
 	SECTION("a mesh that changed since the bake is measured, not matched")
 	{
 		fixture.mesh.vertexData[0] ^= std::byte{ 0x01 };
-		CHECK_FALSE(assetlib::findPosedBounds(animations, fixture.mesh, 0, skeleton).has_value());
+		CHECK_FALSE(assetlib::findPosedBounds(animations, fixture.mesh, skeleton)[0].has_value());
 	}
 
 	SECTION("a bind re-authored since the bake is measured, not matched")
 	{
 		// The one skeleton edit skeletonSignature deliberately lets through -- see skeleton.h.
 		skeleton.bones[0].inverseBind = glm::translate(glm::mat4(1.0f), glm::vec3(0.5f));
-		CHECK_FALSE(assetlib::findPosedBounds(animations, fixture.mesh, 0, skeleton).has_value());
+		CHECK_FALSE(assetlib::findPosedBounds(animations, fixture.mesh, skeleton)[0].has_value());
 	}
 
 	SECTION("a submesh table regrouped over identical bytes is measured, not matched")
 	{
 		// The vertex blob alone cannot see this edit, which is why the tables are in the hash.
 		fixture.mesh.submeshes[0].vertexCount = 1;
-		CHECK_FALSE(assetlib::findPosedBounds(animations, fixture.mesh, 0, skeleton).has_value());
+		CHECK_FALSE(assetlib::findPosedBounds(animations, fixture.mesh, skeleton)[0].has_value());
 	}
 
 	SECTION("a mesh entry the bake never saw finds nothing")
 	{
-		CHECK_FALSE(assetlib::findPosedBounds(animations, fixture.mesh, 1, skeleton).has_value());
+		CHECK_FALSE(assetlib::findPosedBounds(animations, fixture.mesh, skeleton)[1].has_value());
 	}
 
 	SECTION("rebaking the same source replaces its entries rather than stacking them")

@@ -570,9 +570,11 @@ namespace game
 			const assetlib::Bounds bounds = [&] {
 				if (posedBounds)
 					return *posedBounds;
-				if (const auto baked =
-				        assetlib::findPosedBounds(animations, mesh, meshIndex, skeleton))
-					return *baked;
+
+				const auto baked = assetlib::findPosedBounds(animations, mesh, skeleton);
+				if (meshIndex < baked.size() && baked[meshIndex])
+					return *baked[meshIndex];
+
 				return assetlib::posedBounds(mesh, meshIndex, skeleton, animations);
 			}();
 
