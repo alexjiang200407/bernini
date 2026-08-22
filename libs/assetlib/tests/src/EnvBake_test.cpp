@@ -4,6 +4,8 @@
 #include <assetlib/env_bake.h>
 #include <assetlib/image_io.h>
 #include <assetlib/material_bake.h>
+#include <assetlib/pak_io.h>
+#include <assetlib/pak_pack.h>
 #include <assetlib/texture_prune.h>
 #include <assetlib_structs/BEnv.h>
 #include <assetlib_structs/ImageData.h>
@@ -359,4 +361,49 @@ TEST_CASE("the prune refuses to scan past an unreadable environment asset", "[en
 	std::filesystem::remove(root.path / "broken.bsky");
 	std::ofstream(root.path / "broken.benvl") << "not a container";
 	CHECK_THROWS_AS(findUnusedBakedTextures(AssetStore(root.path)), std::runtime_error);
+}
+
+// The archive property, extended to the env family: judged inside the archive, a shipped bake is
+// fresh -- pack is the last moment a stale one can be made so.
+TEST_CASE("pack re-bakes a sky whose routed source moved", "[envbake][pack]")
+{
+	const DataRoot root("bernini_pack_env");
+	std::filesystem::create_directories(root.path / "Sky");
+
+	BSky sky = RoutedSky(root);
+	bakeSky(sky, { root.path });
+	saveSky(sky, root.path / "Sky/test.bsky");
+
+	root.AddSource("sky_src.ktx2", 8, 2.0f);
+
+	PackReport report = packProject(AssetStore(root.path), PackDesc{ root.path / "Data.bpak" });
+	CHECK(report.envsRebaked == 1);
+
+	const PakFile pak(root.path / "Data.bpak");
+	const BSky    packed = loadSky(pak, "Sky/test.bsky");
+	CHECK(packed.sky.stamp == stampOf(MountAt(root.path), packed.sky.source));
+	CHECK(pak.Exists(packed.sky.baked));
+
+	SECTION("and a second pack re-bakes nothing")
+	{
+		const PackReport again =
+			packProject(AssetStore(root.path), PackDesc{ root.path / "Data2.bpak" });
+		CHECK(again.envsRebaked == 0);
+	}
+}
+
+TEST_CASE("a sky that never recorded its source packs verbatim", "[envbake][pack]")
+{
+	const DataRoot root("bernini_pack_env_norec");
+	std::filesystem::create_directories(root.path / "Sky");
+
+	BSky sky = RoutedSky(root);
+	bakeSky(sky, { root.path });
+	sky.sky.source.clear();
+	sky.sky.stamp = SourceStamp{};
+	saveSky(sky, root.path / "Sky/frozen.bsky");
+
+	const PackReport report =
+		packProject(AssetStore(root.path), PackDesc{ root.path / "Data.bpak" });
+	CHECK(report.envsRebaked == 0);
 }

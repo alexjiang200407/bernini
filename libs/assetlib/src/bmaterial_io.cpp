@@ -193,69 +193,6 @@ namespace assetlib
 			throw std::runtime_error("bmaterial: unwritable alpha mode");
 		}
 
-		template <typename Vec>
-		nlohmann::json
-		vecToJson(const Vec& value)
-		{
-			constexpr size_t c_N = sizeof(Vec) / sizeof(float);
-
-			auto array = nlohmann::json::array();
-			for (size_t i = 0; i < c_N; ++i)
-				array.push_back(doc::plainFloat(value[static_cast<glm::length_t>(i)]));
-			return array;
-		}
-
-		template <typename Vec>
-		void
-		vecFromJson(const nlohmann::json& json, std::string_view key, Vec& out)
-		{
-			constexpr size_t c_N = sizeof(Vec) / sizeof(float);
-
-			core::throw_runtime_error_if(
-				!json.is_array() || json.size() != c_N ||
-					!std::ranges::all_of(json, [](const auto& v) { return v.is_number(); }),
-				"bmaterial: '{}' is not an array of {} numbers",
-				key,
-				c_N);
-			for (size_t i = 0; i < c_N; ++i)
-				out[static_cast<glm::length_t>(i)] = json[i].template get<float>();
-		}
-
-		/** The value shapes the document's known keys use -- what `take` can pull out. */
-		template <typename T>
-		concept DocumentValue = std::same_as<T, std::string> || std::same_as<T, float> ||
-		                        std::same_as<T, glm::vec3> || std::same_as<T, glm::vec4>;
-
-		/** Takes `key` out of `json` into `out` when present, so what remains is the unknown. */
-		template <DocumentValue T>
-		void
-		take(nlohmann::json& json, std::string_view key, T& out)
-		{
-			const auto it = json.find(key);
-			if (it == json.end())
-				return;
-
-			if constexpr (std::is_same_v<T, glm::vec3> || std::is_same_v<T, glm::vec4>)
-				vecFromJson(*it, key, out);
-			else if constexpr (std::is_same_v<T, float>)
-			{
-				core::throw_runtime_error_if(
-					!it->is_number(),
-					"bmaterial: '{}' is not a number",
-					key);
-				out = it->get<float>();
-			}
-			else
-			{
-				core::throw_runtime_error_if(
-					!it->is_string(),
-					"bmaterial: '{}' is not a string",
-					key);
-				out = it->get<std::string>();
-			}
-			json.erase(it);
-		}
-
 		/** Writes `value` at `key`, or erases the key when the value is empty. */
 		void
 		setOrErase(nlohmann::json& object, std::string_view key, const std::string& value)
@@ -284,23 +221,23 @@ namespace assetlib
 			// The one model there is; refused rather than defaulted when it names another, since a
 			// typo that silently rendered as PBR would never be found.
 			std::string shadingModel = "pbr";
-			take(json, "shadingModel", shadingModel);
+			doc::take(json, "shadingModel", shadingModel, c_What);
 			core::throw_runtime_error_if(
 				shadingModel != "pbr",
 				"bmaterial: unknown shading model '{}'",
 				shadingModel);
 			material.shadingModel = ShadingModel::kPbr;
 
-			take(json, "name", material.name);
+			doc::take(json, "name", material.name, c_What);
 
 			// A string, not an embedded object: the graph is the editor's opaque blob, promised
 			// back byte-for-byte, and nothing here may assume it parses.
-			take(json, "editorGraph", material.editorGraph);
+			doc::take(json, "editorGraph", material.editorGraph, c_What);
 
 			PbrParams& pbr = material.pbr;
 
 			std::string alphaMode(c_AlphaModeNames[0]);
-			take(json, "alphaMode", alphaMode);
+			doc::take(json, "alphaMode", alphaMode, c_What);
 			const auto mode = std::ranges::find(c_AlphaModeNames, alphaMode);
 			core::throw_runtime_error_if(
 				mode == c_AlphaModeNames.end(),
@@ -308,13 +245,13 @@ namespace assetlib
 				alphaMode);
 			pbr.alphaMode = static_cast<AlphaMode>(mode - c_AlphaModeNames.begin());
 
-			take(json, "alphaCutoff", pbr.alphaCutoff);
-			take(json, "baseColorFactor", pbr.baseColorFactor);
-			take(json, "metallicFactor", pbr.metallicFactor);
-			take(json, "roughnessFactor", pbr.roughnessFactor);
-			take(json, "transmissionFactor", pbr.transmissionFactor);
-			take(json, "specularColorFactor", pbr.specularColorFactor);
-			take(json, "specularFactor", pbr.specularFactor);
+			doc::take(json, "alphaCutoff", pbr.alphaCutoff, c_What);
+			doc::take(json, "baseColorFactor", pbr.baseColorFactor, c_What);
+			doc::take(json, "metallicFactor", pbr.metallicFactor, c_What);
+			doc::take(json, "roughnessFactor", pbr.roughnessFactor, c_What);
+			doc::take(json, "transmissionFactor", pbr.transmissionFactor, c_What);
+			doc::take(json, "specularColorFactor", pbr.specularColorFactor, c_What);
+			doc::take(json, "specularFactor", pbr.specularFactor, c_What);
 
 			// Known keys come out; what remains -- a sibling branch's field at any depth -- stays
 			// in the json and rides `extraJson` through the round-trip.
@@ -323,9 +260,9 @@ namespace assetlib
 				core::throw_runtime_error_if(
 					!it->is_object(),
 					"bmaterial: 'baked' is not an object");
-				take(*it, "baseColor", pbr.baseColorTexture);
-				take(*it, "normal", pbr.normalTexture);
-				take(*it, "orm", pbr.ormTexture);
+				doc::take(*it, "baseColor", pbr.baseColorTexture, c_What);
+				doc::take(*it, "normal", pbr.normalTexture, c_What);
+				doc::take(*it, "orm", pbr.ormTexture, c_What);
 				if (it->empty())
 					json.erase(it);
 			}
@@ -348,7 +285,7 @@ namespace assetlib
 						channelName);
 
 					const size_t index = static_cast<size_t>(found - c_ChannelNames.begin());
-					take(route, "texture", pbr.routes[index].texture);
+					doc::take(route, "texture", pbr.routes[index].texture, c_What);
 
 					uint64_t channel = 0;
 					if (const auto channelValue = route.find("channel");
@@ -462,11 +399,11 @@ namespace assetlib
 		const PbrParams& pbr        = material.pbr;
 		json["alphaMode"]           = alphaModeName(pbr.alphaMode);
 		json["alphaCutoff"]         = doc::plainFloat(pbr.alphaCutoff);
-		json["baseColorFactor"]     = vecToJson(pbr.baseColorFactor);
+		json["baseColorFactor"]     = doc::vecToJson(pbr.baseColorFactor);
 		json["metallicFactor"]      = doc::plainFloat(pbr.metallicFactor);
 		json["roughnessFactor"]     = doc::plainFloat(pbr.roughnessFactor);
 		json["transmissionFactor"]  = doc::plainFloat(pbr.transmissionFactor);
-		json["specularColorFactor"] = vecToJson(pbr.specularColorFactor);
+		json["specularColorFactor"] = doc::vecToJson(pbr.specularColorFactor);
 		json["specularFactor"]      = doc::plainFloat(pbr.specularFactor);
 
 		// Merged into whatever `extraJson` preserved rather than rebuilt, so a sibling branch's
@@ -511,9 +448,7 @@ namespace assetlib
 		if (routes.empty())
 			json.erase("routes");
 
-		const std::string text = doc::canonicalDump(json);
-		const auto        data = std::as_bytes(std::span(text.data(), text.size()));
-		return { data.begin(), data.end() };
+		return doc::toBytes(json);
 	}
 
 	BMaterial

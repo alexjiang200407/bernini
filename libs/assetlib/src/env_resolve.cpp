@@ -27,13 +27,15 @@ namespace assetlib
 		const BEnv env = loadEnv(benvPath);
 
 		ResolvedEnvironment resolved;
+		resolved.skyRotationY = env.skyRotationY;
 
 		if (!env.sky.empty())
 		{
-			const BSky sky        = loadSky(fileSystem, env.sky);
-			resolved.maps.skybox  = loadRoute(fileSystem, sky.sky);
-			resolved.skyMipLevel  = sky.mipLevel;
-			resolved.skyRotationY = sky.rotationY;
+			const BSky sky       = loadSky(fileSystem, env.sky);
+			resolved.maps.skybox = loadRoute(fileSystem, sky.sky);
+
+			// The document records the request; the baked map decides what can be served.
+			resolved.skyMipLevel = std::min(env.skyMipLevel, resolved.maps.skybox.mipLevels - 1);
 		}
 
 		if (!env.lighting.empty())
@@ -41,7 +43,8 @@ namespace assetlib
 			const BEnvLighting lighting = loadEnvLighting(fileSystem, env.lighting);
 			resolved.maps.prefilter     = loadRoute(fileSystem, lighting.prefilter);
 			resolved.maps.irradiance    = loadRoute(fileSystem, lighting.irradiance);
-			resolved.maps.exposure      = lighting.EffectiveExposure();
+
+			resolved.maps.exposure = effectiveExposure(env, lighting);
 		}
 
 		return resolved;

@@ -402,37 +402,21 @@ TEST_CASE("A .bvat round-trips, and its tables read without the pixels", "[vat]"
 		fs::remove(path);
 	}
 
-	SECTION("a bake from before the twist does not read")
+	SECTION("a bake from before the cache format does not read")
 	{
-		// The normals chunk changed id when its alpha stopped being padding; a file still carrying
-		// the old id is missing the chunk the reader requires, which is what sends it to a re-bake.
-		auto bytes  = serializeVat(vat);
-		auto header = chunk::Header();
-		std::memcpy(&header, bytes.data(), sizeof(header));
+		// The twist-era files and every other chunk-era bake are refused whole: derived, so the
+		// refusal is what sends them to a re-bake rather than to a reader.
+		auto bytes = serializeVat(vat);
 
-		bool patched = false;
-		for (uint32_t i = 0; i < header.chunkCount; ++i)
-		{
-			auto entry = chunk::Entry();
-			std::memcpy(
-				&entry,
-				bytes.data() + header.chunkTableOffset + i * sizeof(entry),
-				sizeof(entry));
-			if (entry.id == 10)
-			{
-				entry.id = 8;
-				std::memcpy(
-					bytes.data() + header.chunkTableOffset + i * sizeof(entry),
-					&entry,
-					sizeof(entry));
-				patched = true;
-			}
-		}
-		REQUIRE(patched);
+		// A chunk-era header carried a version pair where the cache header's version field sits.
+		bytes[4] = std::byte{ 4 };
+		bytes[5] = std::byte{ 0 };
+		bytes[6] = std::byte{ 0 };
+		bytes[7] = std::byte{ 0 };
 
 		CHECK_THROWS_WITH(
 			deserializeVat(bytes),
-			Catch::Matchers::ContainsSubstring("missing required chunk"));
+			Catch::Matchers::ContainsSubstring("before the cache format"));
 	}
 
 	SECTION("a clip with no frames is a malformed file, not a caller's problem")

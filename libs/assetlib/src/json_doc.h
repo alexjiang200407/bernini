@@ -1,4 +1,6 @@
 #pragma once
+#include <core/err/util.h>
+#include <glm/glm.hpp>
 #include <nlohmann/json.hpp>
 
 // The shape every authored text document shares: parsed strictly, written canonically -- sorted
@@ -20,4 +22,76 @@ namespace assetlib::doc
 	 */
 	[[nodiscard]] double
 	plainFloat(float value);
+
+	/** The canonical dump, as the bytes a container writer stores. */
+	[[nodiscard]] std::vector<std::byte>
+	toBytes(const nlohmann::json& json);
+
+	template <typename Vec>
+	nlohmann::json
+	vecToJson(const Vec& value)
+	{
+		constexpr size_t c_N = sizeof(Vec) / sizeof(float);
+
+		auto array = nlohmann::json::array();
+		for (size_t i = 0; i < c_N; ++i)
+			array.push_back(plainFloat(value[static_cast<glm::length_t>(i)]));
+		return array;
+	}
+
+	template <typename Vec>
+	void
+	vecFromJson(const nlohmann::json& json, std::string_view key, Vec& out, std::string_view what)
+	{
+		constexpr size_t c_N = sizeof(Vec) / sizeof(float);
+
+		core::throw_runtime_error_if(
+			!json.is_array() || json.size() != c_N ||
+				!std::ranges::all_of(json, [](const auto& v) { return v.is_number(); }),
+			"{}: '{}' is not an array of {} numbers",
+			what,
+			key,
+			c_N);
+		for (size_t i = 0; i < c_N; ++i)
+			out[static_cast<glm::length_t>(i)] = json[i].template get<float>();
+	}
+
+	/** The value shapes a document's known keys use -- what `take` can pull out. */
+	template <typename T>
+	concept DocumentValue =
+		std::same_as<T, std::string> || std::same_as<T, float> || std::same_as<T, uint32_t> ||
+		std::same_as<T, glm::vec3> || std::same_as<T, glm::vec4>;
+
+	/** Takes `key` out of `json` into `out` when present, so what remains is the unknown. */
+	template <DocumentValue T>
+	void
+	take(nlohmann::json& json, std::string_view key, T& out, std::string_view what)
+	{
+		const auto it = json.find(key);
+		if (it == json.end())
+			return;
+
+		if constexpr (std::is_same_v<T, glm::vec3> || std::is_same_v<T, glm::vec4>)
+			vecFromJson(*it, key, out, what);
+		else if constexpr (std::is_same_v<T, float>)
+		{
+			core::throw_runtime_error_if(!it->is_number(), "{}: '{}' is not a number", what, key);
+			out = it->get<float>();
+		}
+		else if constexpr (std::is_same_v<T, uint32_t>)
+		{
+			core::throw_runtime_error_if(
+				!it->is_number_unsigned() || it->get<uint64_t>() > UINT32_MAX,
+				"{}: '{}' is not a 32-bit unsigned number",
+				what,
+				key);
+			out = it->get<uint32_t>();
+		}
+		else
+		{
+			core::throw_runtime_error_if(!it->is_string(), "{}: '{}' is not a string", what, key);
+			out = it->get<std::string>();
+		}
+		json.erase(it);
+	}
 }

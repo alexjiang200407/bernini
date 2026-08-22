@@ -11,12 +11,10 @@ namespace assetlib
 	std::optional<CacheEntryInfo>
 	inspectCacheEntry(std::span<const std::byte> bytes)
 	{
-		if (bytes.size() < sizeof(uint32_t))
+		if (!cache::isCacheEntry(bytes))
 			return std::nullopt;
 		uint32_t magic = 0;
 		std::memcpy(&magic, bytes.data(), sizeof(magic));
-		if (magic != magic::c_BMesh && magic != magic::c_BSkel && magic != magic::c_BAnim)
-			return std::nullopt;
 
 		const cache::PeekedKey key = cache::peekKey(bytes, magic, "cache entry");
 		return CacheEntryInfo{ magic, key.bakeToken, key.source };

@@ -13,27 +13,28 @@ from local into model space, `skinningMatrices` composes each with its inverse b
 plain CPU code — and it is the reference every later GPU path is diffed against, which is why it is
 deliberately the unoptimised form.
 
-Three container regimes, mid-migration (see docs/plans/migration-system-v2.md):
+Two container regimes, mid-migration (see docs/plans/migration-system-v2.md):
 
-`.bmaterial` is an **authored text document**: canonical JSON (`src/bmaterial_io.cpp`), factors and
-routes as named keys, the editor graph carried as an opaque string, unknown keys preserved on
-round-trip so a sibling branch's field survives a reader that has never heard of it. The chunk-era
-form still deserializes — `migrate` is the carry — until the schema system goes.
+`.bmaterial` and `.benv` are **authored text documents**: canonical JSON (`src/bmaterial_io.cpp`,
+`src/benv_io.cpp`), named keys, unknown keys preserved on round-trip so a sibling branch's field
+survives a reader that has never heard of it. `.benv` carries the env family's authored state —
+the composition and the presentation knobs (`skyMipLevel`, `skyRotationY`, `exposureOverride`).
 
-`.bmesh`, `.bskel` and `.banim` are **cache entries**, in `src/cache_io.h`: a frozen header carrying
-the cache key (bake token, source stamp, parameter hash), raw current-layout chunks with no
-self-description, and a chunk table. A chunk is addressed by id and an absent one is not an error.
-There is no conversion and no old shape to parse — a token mismatch is a cache miss, and
-`AssetStore`'s `LoadRegen*` methods are the seam that acts on one: a stale entry regenerates in
-memory from its `meshes_src/` source at the parameters its `.bimport` records, with the document's
-bindings applied over the result, while a read-only store trusts its keys because `pack` made them
-true. A change to what these containers store — layout or meaning — is one edit: bump the
-container's token in `src/bake_tokens.h` to a fresh random value.
+Everything else derived — `.bmesh`, `.bskel`, `.banim`, `.bvat`, `.bsky`, `.benvl` — is a **cache
+entry**, in `src/cache_io.h`: a frozen header carrying the cache key (bake token, source stamp,
+parameter hash, source mount key), raw current-layout chunks with no self-description, and a chunk
+table. A chunk is addressed by id and an absent one is not an error. There is no conversion and no
+old shape to parse — a token mismatch is a cache miss. For geometry, `AssetStore`'s `LoadRegen*`
+methods are the seam that acts on one: a stale entry regenerates in memory from its `meshes_src/`
+source at the parameters its `.bimport` records, with the document's bindings applied over the
+result, while a read-only store trusts its keys because `pack` made them true. For the env family
+and `.bvat` the re-bake is deliberate (`pack`, the editor) rather than at load. A change to what a
+container stores — layout or meaning — is one edit: bump its token in `src/bake_tokens.h` to a
+fresh random value.
 
-`.bvat` and the env containers still ride the schema format in `src/chunk_io.h`: chunk 0 is the
-file's schema, a reader converts each chunk by field name, and a change of *meaning* is a
-`chunk::Hook` whose predicate reads the file's schema, never its version. They convert to their own
-regimes (documents, cache entries) in later tasks of the plan.
+The chunk-era form of the authored documents and the pre-split env containers still deserializes —
+`migrate` is the carry, `src/chunk_io.h` the machinery — until the schema system goes with the
+plan's last task.
 
 ## Headers forward declare
 

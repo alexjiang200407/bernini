@@ -78,8 +78,6 @@ namespace
 		BSky sky;
 		sky.name      = "set";
 		sky.sky.baked = "sky.ktx2";
-		sky.mipLevel  = 2;
-		sky.rotationY = 0.5f;
 		saveSky(sky, root.path / "set.bsky");
 
 		BEnvLighting lighting;
@@ -90,7 +88,13 @@ namespace
 		saveEnvLighting(lighting, root.path / "set.benvl");
 
 		const auto envPath = root.path / "set.benv";
-		saveEnv(BEnv{ .name = "set", .sky = "set.bsky", .lighting = "set.benvl" }, envPath);
+		saveEnv(
+			BEnv{ .name         = "set",
+		          .sky          = "set.bsky",
+		          .lighting     = "set.benvl",
+		          .skyMipLevel  = 2,
+		          .skyRotationY = 0.5f },
+			envPath);
 		return envPath;
 	}
 }
@@ -108,7 +112,8 @@ TEST_CASE("resolving an environment loads the baked maps its chain names", "[ben
 
 	SECTION("the sky's presentation travels with it")
 	{
-		CHECK(resolved.skyMipLevel == 2);
+		// The document asks for mip 2; the baked cube holds one level, so serving clamps.
+		CHECK(resolved.skyMipLevel == 0);
 		CHECK(resolved.skyRotationY == Catch::Approx(0.5f));
 	}
 }

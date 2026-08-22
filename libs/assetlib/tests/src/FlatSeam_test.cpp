@@ -55,8 +55,6 @@ namespace
 		sky.sky.source = "textures_src/forest_sky.ktx2";
 		sky.sky.baked  = "Textures/sky_0123456789abcdef.ktx2";
 		sky.sky.stamp  = SourceStamp{ 4096, 1700000000 };
-		sky.mipLevel   = 3;
-		sky.rotationY  = 1.25f;
 		return sky;
 	}
 
