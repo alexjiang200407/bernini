@@ -182,7 +182,8 @@ rule it would ride into the archive it must never reach.
 | the `.berniniproject` file | excluded — editor metadata |
 | the shader cache (`.bsc`, `pipelines.psolib`) | excluded — per-machine, write-back, disposable |
 | `Textures/` (baked) | **included**, and it is most of the bytes |
-| `.bvat` | **included**, and packed fresh — see below |
+| `.bmesh` / `.bskel` / `.banim` | **included as the seam answers**, not as the file lies on disk — a stale group re-bakes into the archive, a rebind is baked in, and a group the seam cannot serve fails the pack. `PackReport::geometryRebaked` counts the entries that differ |
+| `.bvat` | **included**, packed fresh and re-stamped against the geometry *as archived* — see below |
 
 Everything without a registered extension falls out of the same rule and is **counted**, not dropped
 in silence: `PackReport::skippedByExtension` reports each unclaimed extension and how many of it were
@@ -203,7 +204,11 @@ directory-iteration order and that is not the same on two filesystems.
 A `.bvat` is a derived build product, so `AcquireVatMesh` normally re-bakes a stale one — it is
 seconds of CPU and the inputs are right there. Packed, its inputs may be present but **the write
 target is not**, and the staleness question stops being worth asking: `pack` bakes every stale
-`.bvat` fresh as part of packing, so what is in the archive is correct by construction.
+`.bvat` fresh as part of packing — stale by its own stamps *or* by its geometry group being a
+cache miss, since regenerated geometry moves no disk stamp — so what is in the archive is correct
+by construction. And because the archive stores the seam's answers for the geometry keys rather
+than the disk bytes the bake stamped, every packed `.bvat` is re-stamped against the entries as
+archived: the staleness question, asked *inside* the archive, answers fresh.
 
 So `EnsureVatBaked` ([vat_freshness.h](../libs/gamelib/include/gamelib/vat_freshness.h)) branches on
 `IsReadOnly` — trusting under a read-only mount, re-baking under any mount with somewhere to write.

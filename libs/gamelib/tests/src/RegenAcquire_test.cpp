@@ -2,6 +2,7 @@
 #include <gamelib/vat_freshness.h>
 
 #include "CacheTamper.h"
+#include "ImportUnitGroup.h"
 #include "SkinnedGltf.h"
 #include "util/RigFixture.h"
 #include "util/TestOptions.h"
@@ -38,41 +39,15 @@ namespace
 		return opts;
 	}
 
-	/** One imported source group, written by the same writers the CLI and the editor call. */
+	/** One imported source group, with the real material the skinned pipeline requires. */
 	void
 	ImportRig(const std::filesystem::path& dataRoot)
 	{
 		const assetlib::test::SkinnedGltf source("bernini_regen_acquire_gltf");
-		const std::filesystem::path       glb = source.PackGlb();
 
-		const auto imported = assetlib::loadFromGltf(glb);
-
-		assetlib::BMesh mesh = assetlib::toBMesh(imported);
-		assetlib::generateTangents(mesh);
-		assetlib::requireUniqueSubmeshNames(mesh);
-
-		const assetlib::ImportTarget target{ dataRoot, "unit", assetlib::c_DefaultSampleRate };
-		const assetlib::SourceRef    ref = assetlib::copyImportedSource(glb, target);
-		mesh.source                      = ref;
-
-		// The skinned pipeline refuses an unbound submesh, so the group gets a real material --
-		// recorded in the document below, exactly as an import records what attachMaterial chose.
 		game::test::WriteTexture(dataRoot / "Textures/white.ktx2");
 		game::test::WriteMaterial(dataRoot / "Materials/unit.bmaterial", false);
-		static_cast<void>(assetlib::attachMaterial(mesh, 0, "Materials/unit.bmaterial"));
-
-		assetlib::writeImportedRig(
-			imported,
-			mesh,
-			dataRoot,
-			dataRoot / assetlib::c_SkeletonsDirectoryName / "unit.bskel",
-			dataRoot / assetlib::c_AnimationsDirectoryName / "unit.banim",
-			true,
-			ref);
-		assetlib::writeImportedMesh(
-			mesh,
-			dataRoot / assetlib::c_MeshesDirectoryName / "unit.bmesh");
-		assetlib::writeImportedDocument(target, &mesh);
+		assetlib::test::ImportUnitGroup(dataRoot, source.PackGlb(), "Materials/unit.bmaterial");
 	}
 
 	void

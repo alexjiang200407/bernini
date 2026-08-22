@@ -400,10 +400,11 @@ main(int argc, char** argv)
 
 	auto* migrate = app.add_subcommand(
 		"migrate",
-		"Re-save every container under a project's data root at the current schema. A file that is "
-		"already current is left untouched, so running it twice rewrites nothing the second time; "
-		"a "
-		"file that cannot be read is reported and skipped");
+		"Re-save every container at what the project's current state says it should hold: stale "
+		"geometry regenerates from its copied source, a rebind reaches its mesh, and legacy "
+		"formats carry to their successors. A file that is already current is left untouched, so "
+		"running it twice rewrites nothing the second time; a file that cannot be read -- or a "
+		"stale group with no source -- is reported and skipped");
 	addProject(migrate);
 	migrate->add_flag(
 		"-n,--dry-run",
@@ -902,20 +903,26 @@ main(int argc, char** argv)
 					report.Count(assetlib::MigratedFile::Outcome::kFailed));
 			};
 
-			// The preview walk never writes, so a read-only file or a full disk shows up only in the
-			// real one -- which is why the real walk's report is the one printed last.
-			const auto preview = assetlib::migrateProject(root, true);
-			print(preview, true);
-			if (migrateDryRun)
-				return preview.Count(assetlib::MigratedFile::Outcome::kFailed) == 0 ? 0 : 1;
-
-			const auto toRewrite = preview.Count(assetlib::MigratedFile::Outcome::kRewritten);
-			if (toRewrite == 0)
-				return preview.Count(assetlib::MigratedFile::Outcome::kFailed) == 0 ? 0 : 1;
-			if (!migrateYes && !confirm(std::format("Rewrite {} file(s) in place?", toRewrite)))
+			// The preview walk never writes, so a read-only file or a full disk shows up only in
+			// the real one -- which is why the real walk's report is the one printed last. With
+			// -y there is nobody to show it to, and a preview now costs real work: a stale group
+			// re-imports its source once per file, so the confirmed path pays that once, not
+			// twice.
+			if (migrateDryRun || !migrateYes)
 			{
-				spdlog::info("Left '{}' alone.", root.string());
-				return 0;
+				const auto preview = assetlib::migrateProject(root, true);
+				print(preview, true);
+				if (migrateDryRun)
+					return preview.Count(assetlib::MigratedFile::Outcome::kFailed) == 0 ? 0 : 1;
+
+				const auto toRewrite = preview.Count(assetlib::MigratedFile::Outcome::kRewritten);
+				if (toRewrite == 0)
+					return preview.Count(assetlib::MigratedFile::Outcome::kFailed) == 0 ? 0 : 1;
+				if (!confirm(std::format("Rewrite {} file(s) in place?", toRewrite)))
+				{
+					spdlog::info("Left '{}' alone.", root.string());
+					return 0;
+				}
 			}
 
 			const auto report = assetlib::migrateProject(root, false);
@@ -1134,6 +1141,12 @@ main(int argc, char** argv)
 
 			if (report.vatsRebaked != 0)
 				spdlog::info("Re-baked {} stale .bvat before packing", report.vatsRebaked);
+			if (report.geometryRebaked != 0)
+				spdlog::info(
+					"Re-baked {} geometry entr{} into the archive (stale on disk, or a rebind "
+					"not yet migrated)",
+					report.geometryRebaked,
+					report.geometryRebaked == 1 ? "y" : "ies");
 
 			spdlog::info(
 				"Packed {} entries, {} MB of payload, into '{}'",
