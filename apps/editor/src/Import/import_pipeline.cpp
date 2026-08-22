@@ -179,7 +179,7 @@ namespace editor
 				const assetlib::CancelToken cancel = progress.Cancellation();
 
 				progress.Report(0, 0, QString("Parsing %1...").arg(name));
-				imported = assetlib::loadFromGltf(source, cancel);
+				imported = assetlib::loadFromGltf(source, { .cancel = cancel });
 
 				if (options.textures)
 				{

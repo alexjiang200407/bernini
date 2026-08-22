@@ -154,7 +154,7 @@ TEST_CASE("A glTF's animations are resampled to a fixed rate", "[gltf][animation
 
 	SECTION("and a different rate changes the frame count, not the length")
 	{
-		const auto faster = loadFromGltf(source.gltf, {}, 60.0f);
+		const auto faster = loadFromGltf(source.gltf, { .sampleRate = 60.0f });
 		REQUIRE(faster.animations.clips.size() == 2);
 		CHECK(faster.animations.clips[0].frameCount == 61);
 		CHECK(faster.animations.clips[0].duration == Catch::Approx(1.0f));

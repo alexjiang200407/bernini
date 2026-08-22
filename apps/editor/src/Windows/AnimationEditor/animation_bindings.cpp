@@ -7,10 +7,10 @@
 namespace editor
 {
 	AnimationBindings
-	ResolveAnimationBindings(const std::filesystem::path& dataRoot, std::string_view meshRelPath)
+	ResolveAnimationBindings(const std::filesystem::path& dataRoot, std::string_view skeleton)
 	{
 		auto bindings     = AnimationBindings();
-		bindings.skeleton = assetlib::loadMeshRefs(dataRoot / meshRelPath).skeleton;
+		bindings.skeleton = std::string(skeleton);
 		if (bindings.skeleton.empty())
 			return bindings;
 

@@ -1,4 +1,5 @@
 #include "Thumbnails/AssetThumbnailCache.h"
+#include "Mesh/mesh_load.h"
 
 #include "Mesh/BMeshUtil.h"
 #include "Render/environment.h"
@@ -143,8 +144,9 @@ namespace
 				}
 				else
 				{
-					mesh = std::make_shared<assetlib::BMesh>(
-						assetlib::load(std::filesystem::path(m_Path.toStdWString())));
+					mesh = std::make_shared<assetlib::BMesh>(editor::LoadMeshThroughSeam(
+						m_DataRoot,
+						std::filesystem::path(m_Path.toStdWString())));
 
 					if (mesh->meshes.empty())
 						throw std::runtime_error("mesh contains no meshes");

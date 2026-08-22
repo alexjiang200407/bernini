@@ -458,7 +458,7 @@ main(int argc, char** argv)
 
 			assetlib::requireSelfContainedSource(input);
 
-			const auto imported = assetlib::loadFromGltf(input, {}, sampleRate);
+			const auto imported = assetlib::loadFromGltf(input, { .sampleRate = sampleRate });
 
 			// Only what this import will actually write. writeImportedRig no-ops on a source with no
 			// skin, so a static mesh neither claims Skeletons/<name>.bskel nor may take one back

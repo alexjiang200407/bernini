@@ -9,7 +9,7 @@ namespace game
 	{
 		kFresh,       // usable as it stands
 		kMissing,     // no `.bvat` for this pair, or one that will not parse
-		kStale,       // an input moved since it was baked
+		kStale,       // an input moved since it was baked, or its geometry group is a cache miss
 		kOtherClips,  // baked from a different `.banim` than the one asked for
 	};
 

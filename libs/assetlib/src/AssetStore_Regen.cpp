@@ -99,9 +99,14 @@ namespace assetlib
 				source.key);
 
 			// The copied source lives only on the loose layer -- pack excludes it -- and the glTF
-			// parser reads a file, so this is a read that must address the host.
+			// parser reads a file, so this is a read that must address the host. Textures are
+			// skipped: a regeneration never re-extracts, so decoding them would spend an
+			// import's whole cost on pixels nothing reads.
 			RegeneratedGroup group{
-				loadFromGltf(store.ResolveWritePath(source.key), {}, checked.document->sampleRate),
+				loadFromGltf(
+					store.ResolveWritePath(source.key),
+					{ .sampleRate = checked.document->sampleRate,
+				      .textures   = GltfTextures::kSkip }),
 				SourceRef(),
 				std::move(checked.document),
 			};
@@ -115,6 +120,10 @@ namespace assetlib
 		std::string
 		groupSkeletonKey(const AssetStore& store, std::string_view sourceKey)
 		{
+			// A sourceless rig's key is empty too, so an empty ask would match the first one.
+			if (sourceKey.empty())
+				return {};
+
 			for (const std::string& path : store.GetFiles().Enumerate(c_SkeletonsDirectoryName))
 			{
 				if (extensionOf(path) != c_SkeletonExtension)
@@ -133,6 +142,117 @@ namespace assetlib
 			}
 			return {};
 		}
+	}
+
+	bool
+	AssetStore::GeometryIsStale(std::string_view path) const
+	{
+		const std::string extension = extensionOf(path);
+		if (extension != c_MeshExtension && extension != c_SkeletonExtension &&
+		    extension != c_AnimationExtension)
+			core::throw_runtime_error(
+				"'{}' is not a geometry cache entry, so it has no cache key to check",
+				path);
+
+		if (IsReadOnly())
+			return false;
+
+		if (extension == c_MeshExtension)
+			return checkKey(*this, path, magic::c_BMesh, c_BMeshBakeToken, "bmesh").stale;
+		if (extension == c_SkeletonExtension)
+			return checkKey(*this, path, magic::c_BSkel, c_BSkelBakeToken, "bskel").stale;
+		return checkKey(*this, path, magic::c_BAnim, c_BAnimBakeToken, "banim").stale;
+	}
+
+	SourceRef
+	AssetStore::GeometryGroupSource(std::string_view path) const
+	{
+		const std::string extension = extensionOf(path);
+		if (extension != c_MeshExtension && extension != c_SkeletonExtension &&
+		    extension != c_AnimationExtension)
+			core::throw_runtime_error(
+				"'{}' is not a geometry cache entry, so it has no cache key to check",
+				path);
+
+		const uint32_t magic = extension == c_MeshExtension     ? magic::c_BMesh :
+		                       extension == c_SkeletonExtension ? magic::c_BSkel :
+		                                                          magic::c_BAnim;
+
+		const std::string_view what = extension == c_MeshExtension     ? "bmesh" :
+		                              extension == c_SkeletonExtension ? "bskel" :
+		                                                                 "banim";
+
+		MountedFileReader reader(GetFiles(), path, what);
+		SourceRef         current;
+		current.key = cache::peekKey(reader, magic, what).source.key;
+		if (current.key.empty())
+			return current;
+
+		current.stamp = stampOf(*m_Files, current.key);
+
+		const std::string documentKey = importDocumentKeyFor(current.key);
+		if (GetFiles().Exists(documentKey))
+			current.parametersHash = parametersHashOf(loadImportDocument(GetFiles(), documentKey));
+		return current;
+	}
+
+	MeshRefs
+	AssetStore::LoadRegenMeshRefs(std::string_view path) const
+	{
+		if (!IsReadOnly())
+		{
+			MountedFileReader      reader(GetFiles(), path, "bmesh");
+			const cache::PeekedKey key = cache::peekKey(reader, magic::c_BMesh, "bmesh");
+			if (key.bakeToken != c_BMeshBakeToken)
+			{
+				// From the frozen headers and the document alone -- what the refs would be after
+				// a regeneration, without paying one: a scan runs this over every mesh in the
+				// project after a token bump. The document is authoritative for the materials
+				// anyway, and the group's rig answers by source key.
+				core::throw_runtime_error_if(
+					key.source.key.empty(),
+					"bmesh '{}': written at another bake revision and no source was ever "
+					"recorded, so what it references cannot be known; re-import it",
+					path);
+
+				const std::string documentKey = importDocumentKeyFor(key.source.key);
+				core::throw_runtime_error_if(
+					!GetFiles().Exists(documentKey),
+					"bmesh '{}': written at another bake revision and the import document "
+					"beside '{}' is gone, so what it references cannot be known",
+					path,
+					key.source.key);
+
+				MeshRefs refs;
+				refs.skeleton = groupSkeletonKey(*this, key.source.key);
+				for (const MaterialBinding& binding :
+				     loadImportDocument(GetFiles(), documentKey).bindings)
+					refs.materials.push_back(binding.material);
+				return refs;
+			}
+		}
+		return loadMeshRefs(*m_Files, path);
+	}
+
+	std::string
+	AssetStore::LoadRegenAnimationSkeletonPath(std::string_view path) const
+	{
+		if (!IsReadOnly())
+		{
+			MountedFileReader      reader(GetFiles(), path, "banim");
+			const cache::PeekedKey key = cache::peekKey(reader, magic::c_BAnim, "banim");
+			if (key.bakeToken != c_BAnimBakeToken)
+			{
+				const std::string rig = groupSkeletonKey(*this, key.source.key);
+				core::throw_runtime_error_if(
+					rig.empty(),
+					"'{}': written at another bake revision, and no rig of its source is in the "
+					"project to name; regenerate it from its source",
+					path);
+				return rig;
+			}
+		}
+		return loadAnimationSkeletonPath(*m_Files, path);
 	}
 
 	RegenMesh
