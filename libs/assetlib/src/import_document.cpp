@@ -2,6 +2,7 @@
 
 #include <assetlib/container_format.h>
 #include <core/err/util.h>
+#include <core/file/file.h>
 #include <core/hash.h>
 #include <nlohmann/json.hpp>
 
@@ -132,6 +133,14 @@ namespace assetlib
 	loadImportDocument(const core::file::IFileSystem& files, std::string_view key)
 	{
 		const std::vector<std::byte> bytes = files.Read(key);
+		return deserializeImportDocument(
+			std::string_view(reinterpret_cast<const char*>(bytes.data()), bytes.size()));
+	}
+
+	ImportDocument
+	loadImportDocument(const std::filesystem::path& path)
+	{
+		const std::vector<std::byte> bytes = core::file::read_file_bytes(path.string());
 		return deserializeImportDocument(
 			std::string_view(reinterpret_cast<const char*>(bytes.data()), bytes.size()));
 	}

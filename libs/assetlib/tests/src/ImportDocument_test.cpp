@@ -178,10 +178,11 @@ TEST_CASE("an import records the bindings the mesh carries", "[importdoc]")
 		{ { "kirk[0]", 0 }, { "kirk[1]", 1 }, { "props", c_InvalidIndex } },
 		{ "Materials/skin.bmaterial", "Materials/teeth.bmaterial" });
 
-	const SourceRef ref = copyImportedSource(root.path / "kirk.glb", root.path, "kirk", 24.0f);
+	const ImportTarget target{ root.path, "kirk", 24.0f };
+	const SourceRef    ref = copyImportedSource(root.path / "kirk.glb", target);
 	CHECK(ref.key == "meshes_src/kirk.glb");
 	CHECK(ref.stamp.size > 0);
-	writeImportedDocument(root.path, "kirk", 24.0f, &mesh);
+	writeImportedDocument(target, &mesh);
 
 	CHECK(fs::exists(root.path / "meshes_src/kirk.glb"));
 	const ImportDocument document =
@@ -198,7 +199,7 @@ TEST_CASE("a source that is not self-contained is refused", "[importdoc]")
 	WriteText(root.path / "kirk.gltf", "{}");
 
 	CHECK_THROWS_WITH(
-		copyImportedSource(root.path / "kirk.gltf", root.path, "kirk", 30.0f),
+		copyImportedSource(root.path / "kirk.gltf", ImportTarget{ root.path, "kirk", 30.0f }),
 		Catch::Matchers::ContainsSubstring("export as .glb"));
 }
 

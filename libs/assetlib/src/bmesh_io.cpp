@@ -8,6 +8,7 @@
 #include <assetlib/mesh_tangents.h>
 #include <assetlib/skinning.h>
 
+#include "bake_tokens.h"
 #include "cache_io.h"
 #include "chunk_io.h"
 #include "fs_util.h"
@@ -20,10 +21,6 @@ namespace assetlib
 {
 	namespace
 	{
-		// A fresh random value on ANY output-affecting change -- semantics and layout alike, since
-		// the chunks carry no self-description and a forgotten bump would parse garbage.
-		constexpr uint64_t c_BakeToken = 0x6f1d3a58c2e94b07ull;
-
 		constexpr std::string_view c_What = "bmesh";
 
 		enum class ChunkId : uint32_t
@@ -89,13 +86,13 @@ namespace assetlib
 		writer.Add(ChunkId::kStringPool, mesh.stringPool.bytes());
 		writer.Add(ChunkId::kMaterialPaths, chunk::packStrings(mesh.materials));
 		writer.Add(ChunkId::kSkeletonPath, std::span<const char>(mesh.skeleton));
-		return writer.Finish(magic::c_BMesh, c_BakeToken, mesh.source);
+		return writer.Finish(magic::c_BMesh, c_BMeshBakeToken, mesh.source);
 	}
 
 	BMesh
 	deserialize(std::span<const std::byte> bytes)
 	{
-		const cache::Reader reader(bytes, magic::c_BMesh, c_BakeToken, c_What);
+		const cache::Reader reader(bytes, magic::c_BMesh, c_BMeshBakeToken, c_What);
 
 		BMesh mesh;
 		mesh.source           = reader.GetSource();
@@ -168,7 +165,7 @@ namespace assetlib
 			cache::readCacheChunksFromFile(
 				path,
 				magic::c_BMesh,
-				c_BakeToken,
+				c_BMeshBakeToken,
 				c_WantedRefChunks,
 				c_What));
 	}
@@ -181,7 +178,7 @@ namespace assetlib
 				fileSystem,
 				path,
 				magic::c_BMesh,
-				c_BakeToken,
+				c_BMeshBakeToken,
 				c_WantedRefChunks,
 				c_What));
 	}

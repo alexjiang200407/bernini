@@ -111,7 +111,7 @@ TEST_CASE("applyBindings is a pure function of the document", "[cacheio][importd
 		{ "hull", "Materials/wood.bmaterial" },
 		{ "sail", "Materials/cloth.bmaterial" },
 	};
-	applyBindings(mesh, bindings);
+	CHECK(applyBindings(mesh, bindings).empty());
 
 	// First-appearance order over the submeshes, stale entries gone, shared materials shared.
 	CHECK(
@@ -124,22 +124,27 @@ TEST_CASE("applyBindings is a pure function of the document", "[cacheio][importd
 	SECTION("a second application of the same document is a no-op")
 	{
 		BMesh again = mesh;
-		applyBindings(again, bindings);
+		CHECK(applyBindings(again, bindings).empty());
 		CHECK(again.materials == mesh.materials);
 	}
 
 	SECTION("an unbound submesh is unbound, not defaulted")
 	{
-		applyBindings(mesh, std::vector<MaterialBinding>{ { "hull", "Materials/wood.bmaterial" } });
+		CHECK(applyBindings(
+				  mesh,
+				  std::vector<MaterialBinding>{ { "hull", "Materials/wood.bmaterial" } })
+		          .empty());
 		CHECK(mesh.submeshes[1].material == c_InvalidIndex);
 	}
 
-	SECTION("a binding whose submesh vanished is refused, never guessed at")
+	SECTION("a binding whose submesh vanished is reported, never guessed at")
 	{
-		CHECK_THROWS_WITH(
-			applyBindings(
-				mesh,
-				std::vector<MaterialBinding>{ { "anchor", "Materials/iron.bmaterial" } }),
-			Catch::Matchers::ContainsSubstring("anchor"));
+		const std::vector<std::string> unbound = applyBindings(
+			mesh,
+			std::vector<MaterialBinding>{ { "anchor", "Materials/iron.bmaterial" },
+		                                  { "hull", "Materials/wood.bmaterial" } });
+		CHECK(unbound == std::vector<std::string>{ "anchor" });
+		// The bindings that do match still land; the report is the caller's to escalate.
+		CHECK(mesh.materials == std::vector<std::string>{ "Materials/wood.bmaterial" });
 	}
 }
