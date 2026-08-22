@@ -13,7 +13,12 @@ from local into model space, `skinningMatrices` composes each with its inverse b
 plain CPU code — and it is the reference every later GPU path is diffed against, which is why it is
 deliberately the unoptimised form.
 
-Two container regimes, mid-migration (see docs/plans/migration-system-v2.md):
+Three container regimes, mid-migration (see docs/plans/migration-system-v2.md):
+
+`.bmaterial` is an **authored text document**: canonical JSON (`src/bmaterial_io.cpp`), factors and
+routes as named keys, the editor graph carried as an opaque string, unknown keys preserved on
+round-trip so a sibling branch's field survives a reader that has never heard of it. The chunk-era
+form still deserializes — `migrate` is the carry — until the schema system goes.
 
 `.bmesh`, `.bskel` and `.banim` are **cache entries**, in `src/cache_io.h`: a frozen header carrying
 the cache key (bake token, source stamp, parameter hash), raw current-layout chunks with no
@@ -25,10 +30,10 @@ bindings applied over the result, while a read-only store trusts its keys becaus
 true. A change to what these containers store — layout or meaning — is one edit: bump the
 container's token in `src/bake_tokens.h` to a fresh random value.
 
-`.bvat`, `.bmaterial` and the env containers still ride the schema format in `src/chunk_io.h`:
-chunk 0 is the file's schema, a reader converts each chunk by field name, and a change of *meaning*
-is a `chunk::Hook` whose predicate reads the file's schema, never its version. They convert to
-their own regimes (text documents, cache entries) in later tasks of the plan.
+`.bvat` and the env containers still ride the schema format in `src/chunk_io.h`: chunk 0 is the
+file's schema, a reader converts each chunk by field name, and a change of *meaning* is a
+`chunk::Hook` whose predicate reads the file's schema, never its version. They convert to their own
+regimes (documents, cache entries) in later tasks of the plan.
 
 ## Headers forward declare
 

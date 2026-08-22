@@ -23,6 +23,14 @@ namespace assetlib
 	[[nodiscard]] ContainerInfo
 	inspectContainer(std::span<const std::byte> bytes);
 
+	/**
+	 * Whether `bytes` opens as a JSON object -- an authored text document rather than a
+	 * magic-headed container. Leading whitespace is skipped, exactly as the loaders skip it, so a
+	 * tool dispatching on this agrees with what the engine will read.
+	 */
+	[[nodiscard]] bool
+	isTextAssetDocument(std::span<const std::byte> bytes) noexcept;
+
 	/** A geometry cache entry's identity: the token it was written at, and its source. */
 	struct CacheEntryInfo
 	{

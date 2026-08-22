@@ -532,22 +532,119 @@ TEST_CASE("attachMaterial binds a material to an imported submesh", "[bmesh][bma
 	REQUIRE(mesh.materials.size() == 1);
 }
 
-TEST_CASE(
-	"the format number refuses only a newer file; an older stamp reads by its schema",
-	"[bmaterial][io]")
+TEST_CASE("a material document is canonical text", "[bmaterial][io]")
 {
-	// What a file's layout is comes from the schema it carries, never from the number, so an older
-	// number over the current schema is the same file. A number this build has never written is the
-	// one thing it refuses.
-	auto bytes = serializeMaterial(BMaterial());
+	BMaterial mat;
+	mat.name                 = "canon";
+	mat.pbr.baseColorTexture = "Textures/canon_basecolor.ktx2";
 
-	const auto six = uint16_t{ 6 };
-	std::memcpy(bytes.data() + 4, &six, sizeof(six));
-	REQUIRE(deserializeMaterial(bytes).shadingModel == ShadingModel::kPbr);
+	const auto once  = serializeMaterial(mat);
+	const auto again = serializeMaterial(deserializeMaterial(once));
 
-	const auto future = uint16_t{ 200 };
-	std::memcpy(bytes.data() + 4, &future, sizeof(future));
-	REQUIRE_THROWS_WITH(
-		deserializeMaterial(bytes),
-		Catch::Matchers::ContainsSubstring("bmaterial: written by a newer engine (format 200"));
+	// One document, one byte sequence: two checkouts that agree on the content agree on the
+	// file, which is what lets git merge it like code.
+	CHECK(once == again);
+	REQUIRE_FALSE(once.empty());
+	CHECK(static_cast<char>(once.front()) == '{');
+	CHECK(static_cast<char>(once.back()) == '\n');
+}
+
+TEST_CASE("a material document preserves the keys this build does not know", "[bmaterial][io]")
+{
+	const std::string_view text = R"({
+	"name": "future",
+	"sheenFactor": 0.25,
+	"shadingModel": "pbr"
+}
+)";
+
+	const BMaterial material =
+		deserializeMaterial(std::as_bytes(std::span(text.data(), text.size())));
+	CHECK(material.name == "future");
+
+	// The unknown key rides extraJson through the round-trip -- a sibling branch's field
+	// survives a reader that has never heard of it.
+	const auto        resaved = serializeMaterial(material);
+	const std::string out(reinterpret_cast<const char*>(resaved.data()), resaved.size());
+	CHECK(out.find("\"sheenFactor\"") != std::string::npos);
+}
+
+TEST_CASE("a minimal hand-authored document defaults what it omits", "[bmaterial][io]")
+{
+	const std::string_view text = "{\n\t\"shadingModel\": \"pbr\"\n}\n";
+
+	const BMaterial material =
+		deserializeMaterial(std::as_bytes(std::span(text.data(), text.size())));
+	CHECK(material.pbr.baseColorFactor == glm::vec4(1.0f));
+	CHECK(material.pbr.metallicFactor == 1.0f);
+	CHECK(material.pbr.alphaMode == AlphaMode::kOpaque);
+	CHECK(material.pbr.baseColorTexture.empty());
+	CHECK(material.editorGraph.empty());
+}
+
+TEST_CASE("a document naming an unknown enum is refused, never defaulted", "[bmaterial][io]")
+{
+	const std::string_view alpha = R"({"alphaMode": "translucent"})";
+	CHECK_THROWS_WITH(
+		deserializeMaterial(std::as_bytes(std::span(alpha.data(), alpha.size()))),
+		Catch::Matchers::ContainsSubstring("translucent"));
+
+	const std::string_view model = R"({"shadingModel": "toon"})";
+	CHECK_THROWS_WITH(
+		deserializeMaterial(std::as_bytes(std::span(model.data(), model.size()))),
+		Catch::Matchers::ContainsSubstring("toon"));
+}
+
+TEST_CASE("unknown keys survive at every depth, the editor's save included", "[bmaterial][io]")
+{
+	// A sibling branch's field inside a route or the baked triplet, not just at the top level --
+	// dropping it on merge is the loss the document format exists to prevent.
+	const std::string_view text = R"({
+	"baked": { "baseColor": "Textures/b.ktx2", "sheenMap": "Textures/s.ktx2" },
+	"routes": { "ao": { "texture": "textures_src/ao.png", "blurRadius": 2 } },
+	"shadingModel": "pbr"
+}
+)";
+
+	const BMaterial material =
+		deserializeMaterial(std::as_bytes(std::span(text.data(), text.size())));
+	CHECK(material.pbr.baseColorTexture == "Textures/b.ktx2");
+	CHECK(material.pbr.routes[4].texture == "textures_src/ao.png");
+
+	const auto        resaved = serializeMaterial(material);
+	const std::string out(reinterpret_cast<const char*>(resaved.data()), resaved.size());
+	CHECK(out.find("\"sheenMap\"") != std::string::npos);
+	CHECK(out.find("\"blurRadius\"") != std::string::npos);
+
+	// And the round of the round-trip: the second read still holds both halves together.
+	const BMaterial again = deserializeMaterial(resaved);
+	CHECK(again.pbr.routes[4].texture == "textures_src/ao.png");
+	CHECK(serializeMaterial(again) == resaved);
+}
+
+TEST_CASE("a corrupt extraJson refuses the save rather than writing half a file", "[bmaterial][io]")
+{
+	BMaterial material;
+	material.extraJson = "not json";
+	CHECK_THROWS_WITH(serializeMaterial(material), Catch::Matchers::ContainsSubstring("extraJson"));
+}
+
+TEST_CASE("a preserved route outlives the channel it decorated", "[bmaterial][io]")
+{
+	// The struct routes nothing on this channel, so only the sibling branch's key is there --
+	// the one branch of the merge where an edit could lose data without a test noticing.
+	const std::string_view text = R"({
+	"routes": { "ao": { "blurRadius": 2 } },
+	"shadingModel": "pbr"
+}
+)";
+
+	const BMaterial material =
+		deserializeMaterial(std::as_bytes(std::span(text.data(), text.size())));
+	CHECK(material.pbr.routes[4].texture.empty());
+
+	const auto        resaved = serializeMaterial(material);
+	const std::string out(reinterpret_cast<const char*>(resaved.data()), resaved.size());
+	CHECK(out.find("\"blurRadius\"") != std::string::npos);
+	CHECK(serializeMaterial(deserializeMaterial(resaved)) == resaved);
 }

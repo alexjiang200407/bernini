@@ -22,6 +22,19 @@ namespace assetlib
 		return CacheEntryInfo{ magic, key.bakeToken, key.source };
 	}
 
+	bool
+	isTextAssetDocument(std::span<const std::byte> bytes) noexcept
+	{
+		for (const std::byte byte : bytes)
+		{
+			const char c = static_cast<char>(byte);
+			if (c == ' ' || c == '\t' || c == '\n' || c == '\r')
+				continue;
+			return c == '{';
+		}
+		return false;
+	}
+
 	ContainerInfo
 	inspectContainer(std::span<const std::byte> bytes)
 	{

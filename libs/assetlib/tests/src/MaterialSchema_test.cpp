@@ -132,8 +132,10 @@ TEST_CASE(
 	CHECK(loaded.pbr.routes[0].texture.empty());
 	CHECK(loaded.pbr.routeStamps[3] == SourceStamp{});  // never stored: zero
 
-	// And what it reads as is what a save writes: the round trip through today's layout is stable.
-	CHECK(
-		deserializeMaterial(serializeMaterial(loaded)).pbr.routes[3].texture ==
-		"textures_src/glass_a.png");
+	// And what it reads as is what a save writes -- which is the text document now, so this is
+	// the carry: a chunk-era file in, the authored form out, one migrate away from mergeable.
+	const auto resaved = serializeMaterial(loaded);
+	REQUIRE_FALSE(resaved.empty());
+	CHECK(static_cast<char>(resaved.front()) == '{');
+	CHECK(deserializeMaterial(resaved).pbr.routes[3].texture == "textures_src/glass_a.png");
 }

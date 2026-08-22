@@ -1,7 +1,9 @@
 #include <assetlib/bmaterial_io.h>
 #include <assetlib/bmesh_io.h>
+#include <assetlib/bsky_io.h>
 #include <assetlib/container_info.h>
 #include <assetlib/migrate.h>
+#include <assetlib_structs/BEnv.h>
 #include <assetlib_structs/BMaterial.h>
 #include <assetlib_structs/BMesh.h>
 #include <assetlib_structs/magic.h>
@@ -52,13 +54,13 @@ namespace
 		return serializeMaterial(material);
 	}
 
-	/** The same bytes stamped with an older format number: what an earlier build wrote. */
+	/** The same content spelled non-canonically: what a hand edit or a merge leaves behind. */
 	std::vector<std::byte>
-	Older(std::vector<std::byte> bytes)
+	Older()
 	{
-		const uint16_t older = 10;
-		std::memcpy(bytes.data() + 4, &older, sizeof(older));
-		return bytes;
+		constexpr std::string_view c_Older = R"({"shadingModel": "pbr", "name": "older"})";
+		const auto                 data = std::as_bytes(std::span(c_Older.data(), c_Older.size()));
+		return { data.begin(), data.end() };
 	}
 }
 
@@ -68,7 +70,7 @@ TEST_CASE(
 {
 	const Project project;
 	project.Write("Materials/current.bmaterial", MaterialBytes("current"));
-	project.Write("Materials/older.bmaterial", Older(MaterialBytes("older")));
+	project.Write("Materials/older.bmaterial", Older());
 	const std::vector<std::byte> flat = { std::byte{ 'B' },
 		                                  std::byte{ 'M' },
 		                                  std::byte{ 'A' },
@@ -126,16 +128,16 @@ TEST_CASE(
 	"a container says what it is and what it stores, without being loaded",
 	"[migrate][describe]")
 {
-	const auto bytes = MaterialBytes("inspected");
+	// A schema rider: the env family still carries chunk 0 until its own conversion task; the
+	// material this case used to inspect is an authored text document now, with no schema to show.
+	const auto bytes = serializeSky(BSky());
 	const auto info  = inspectContainer(bytes);
-	CHECK(info.magic == magic::c_BMaterial);
-	CHECK(info.versionMajor == 11);
-	CHECK(info.schema.Find("PbrRecord") != nullptr);
+	CHECK(info.magic == magic::c_BSky);
+	CHECK(info.schema.Find("SkyRecord") != nullptr);
 
 	const std::string text = describe(info.schema);
-	CHECK_THAT(text, ContainsSubstring("PbrRecord (280 bytes)"));
-	CHECK_THAT(text, ContainsSubstring("routeStamps"));
-	CHECK_THAT(text, ContainsSubstring("struct SourceStamp[9]"));
+	CHECK_THAT(text, ContainsSubstring("SkyRecord"));
+	CHECK_THAT(text, ContainsSubstring("EnvMapRoute"));
 
 	REQUIRE_THROWS_WITH(
 		inspectContainer(std::span(bytes).first(8)),

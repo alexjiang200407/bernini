@@ -111,5 +111,9 @@ namespace assetlib
 		std::string editorGraph;
 
 		PbrParams pbr;
+
+		// Document keys this build does not know, written back on save -- a sibling branch's new
+		// field survives a round-trip through a reader that has never heard of it.
+		std::string extraJson = "{}";
 	};
 }

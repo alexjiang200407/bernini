@@ -286,28 +286,6 @@ TEST_CASE("alphaMode and alphaCutoff survive a .bmaterial round trip", "[bmateri
 	CHECK(loaded.pbr.alphaCutoff == 0.25f);
 }
 
-// A material's layout is the schema it carries, so the number stamped after the magic decides one
-// thing: a file from a newer engine is refused rather than misread.
-TEST_CASE("the format number refuses a newer material and nothing else", "[bmaterial]")
-{
-	BMaterial material;
-	material.pbr.alphaMode        = AlphaMode::kBlend;
-	material.pbr.alphaCutoff      = 0.75f;
-	material.pbr.baseColorTexture = "Textures/basecolor_dead.ktx2";
-
-	std::vector<std::byte> bytes = serializeMaterial(material);
-
-	// The major sits right after the magic. It is a label: a file that carries its schema reads
-	// whatever older number it was stamped with, and only one from a newer engine is refused.
-	REQUIRE(bytes.size() > 6);
-	bytes[4] = std::byte{ 8 };
-	bytes[5] = std::byte{ 0 };
-	CHECK(deserializeMaterial(bytes).pbr.alphaMode == AlphaMode::kBlend);
-
-	bytes[4] = std::byte{ 99 };
-	CHECK_THROWS_AS(deserializeMaterial(bytes), std::runtime_error);
-}
-
 // kHashed is appended to the enum, so an old file's kOpaque/kMask/kBlend keep their values and a new
 // one round-trips. It carries no cutoff of its own -- the threshold is what it replaces -- so what
 // matters is only that the mode itself survives.

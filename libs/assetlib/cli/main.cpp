@@ -111,11 +111,33 @@ namespace
 
 	// Every container opens with a 4-byte magic, so the type is read from the file rather than guessed
 	// from its extension -- `describe` then works on a file named anything. This is the deliberate
-	// opposite of assetlib::assetTypeFromExtension, which never opens the file.
+	// opposite of assetlib::assetTypeFromExtension, which never opens the file. The exception is an
+	// authored text document, which has no magic to read: there the extension is the identity, as it
+	// is for the loaders.
 	ContainerType
 	sniff(const assetlib::AssetStore& store, std::string_view key)
 	{
-		const std::vector<std::byte> header = store.GetFiles().ReadRange(key, 0, sizeof(uint32_t));
+		const auto stamp = store.GetFiles().Stat(key);
+		core::throw_runtime_error_if(!stamp.has_value(), "{} does not exist", key);
+		core::throw_runtime_error_if(
+			stamp->size < sizeof(uint32_t),
+			"{} is too short to be a container",
+			key);
+
+		// 16 bytes rather than the magic's four: a text document may open with whitespace, and
+		// the dispatch must agree with what the loaders will read.
+		const std::vector<std::byte> header =
+			store.GetFiles().ReadRange(key, 0, std::min<uint64_t>(16, stamp->size));
+
+		if (assetlib::isTextAssetDocument(header))
+		{
+			core::throw_runtime_error_if(
+				assetlib::assetTypeFromExtension(std::filesystem::path(key)) !=
+					assetlib::AssetType::kMaterial,
+				"{} is a text document, and the only text container this tool knows is .bmaterial",
+				key);
+			return ContainerType::kMaterial;
+		}
 
 		uint32_t magic = 0;
 		std::memcpy(&magic, header.data(), sizeof(magic));
@@ -739,7 +761,13 @@ main(int argc, char** argv)
 				const std::vector<std::byte> bytes = store.GetFiles().Read(key);
 				// Straight to stdout, not the logger: this is the command's output, so it should
 				// pipe into a file or a diff without spdlog's timestamps and level prefixes.
-				if (const auto entry = assetlib::inspectCacheEntry(bytes))
+				if (assetlib::isTextAssetDocument(bytes))
+				{
+					// An authored text document has no schema and no cache key; it is its own
+					// description.
+					std::cout << "authored text document\n";
+				}
+				else if (const auto entry = assetlib::inspectCacheEntry(bytes))
 				{
 					// Geometry carries a cache key where the others carry a schema.
 					std::cout << std::format(

@@ -320,9 +320,10 @@ Three different spaces are in play and they are easy to conflate. The contract, 
   [libs/assetlib_structs/include/assetlib_structs/BVat.h](libs/assetlib_structs/include/assetlib_structs/BVat.h);
   I/O: [libs/assetlib/include/assetlib/bvat_io.h](libs/assetlib/include/assetlib/bvat_io.h);
   bake: [libs/assetlib/include/assetlib/vat_bake.h](libs/assetlib/include/assetlib/vat_bake.h).
-* **`.bmaterial`** (v11) — **a shading-model tag plus that model's parameters**, on the same chunked
-  container as the mesh (below): a material record, the model's payload as its own chunk, a string
-  pool for every path. Struct:
+* **`.bmaterial`** — **a shading-model tag plus that model's parameters**, as an authored text
+  document: canonical JSON, factors and routes as named keys, the editor graph carried as an
+  opaque string, unknown keys preserved on round-trip (the chunk-era v11 form still reads, and
+  `migrate` carries it forward). Struct:
   [libs/assetlib_structs/include/assetlib_structs/BMaterial.h](libs/assetlib_structs/include/assetlib_structs/BMaterial.h);
   I/O: [libs/assetlib/include/assetlib/bmaterial_io.h](libs/assetlib/include/assetlib/bmaterial_io.h);
   bake: [libs/assetlib/include/assetlib/material_bake.h](libs/assetlib/include/assetlib/material_bake.h).
@@ -374,14 +375,14 @@ Three different spaces are in play and they are easy to conflate. The contract, 
     untouched rather than half-stripped. Run it with `assetlib_cli strip` (below); it is irreversible,
     so it asks before rewriting a file in place.
 
-  **There is one shape in the reader, and older files read into it.** `deserializeMaterial` converts a
-  file's payload from the layout its schema chunk records to the current one, by field name — a
-  material baked before `transmissionFactor` existed reads with 0, one baked before the specular
-  factors reads them at 1 and white, one whose alpha mode was a byte reads it widened — so the reader has one shape and no branch that can rot, and the format number
-  decides only that a newer file is refused.
+  **There is one shape in the reader, and older files read into it.** `deserializeMaterial` takes the
+  keys it knows and defaults the rest — a material written before
+  `transmissionFactor` existed reads with 0, one from before the specular factors reads them at 1
+  and white — so the reader has one shape and no branch that can rot; keys it does not know ride
+  the document back out on save.
 
-  **Adding a shading model** means: a `ShadingModel` enumerator, a payload struct, a record layout, a
-  chunk and a `pack*`/`unpack*` pair in `bmaterial_io.cpp`, a case in `texture_prune.cpp`'s mark phase (**an unmarked map is swept as
+  **Adding a shading model** means: a `ShadingModel` enumerator, a payload struct, its document
+  keys in `bmaterial_io.cpp`, a case in `texture_prune.cpp`'s mark phase (**an unmarked map is swept as
   garbage**), a case in `asset_describe.cpp`, and a renderer path in `gamelib`'s `AssetManager` — which
   today rejects any model but `kPbr` rather than rendering it wrong. Each of those is a `switch` on
   `shadingModel` with no `default`, so the compiler names every one of them.
