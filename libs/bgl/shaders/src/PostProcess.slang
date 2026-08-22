@@ -17,6 +17,11 @@ struct PostProcessData
 
     float2 maskSize;
     uint outlineEnabled;
+
+    // The bone overlay's solids, already shaded and already on this grid: colour in rgb, coverage
+    // in alpha. Composited after the curve, so what the overlay chose is what reaches the screen.
+    TextureHandle boneOverlay;
+    uint boneOverlayEnabled;
 };
 
 ConstantBuffer<PostProcessData> gPostProcessData;
@@ -107,6 +112,14 @@ float4 PSMain(VSOut input) : SV_Target
     if (gPostProcessData.outlineEnabled != 0)
     {
         color = lerp(color, c_OutlineColor, SampleOutline(input.uv));
+    }
+
+    // Last, and after the curve: the overlay is an instrument laid over the image, not part of the
+    // scene it describes, so the display transform must not touch its colour.
+    if (gPostProcessData.boneOverlayEnabled != 0)
+    {
+        float4 bones = gPostProcessData.boneOverlay.SampleLevel(gPostProcessData.maskSampler, input.uv, 0.0);
+        color = lerp(color, bones.rgb, bones.a);
     }
 
     return float4(color, 1.0);

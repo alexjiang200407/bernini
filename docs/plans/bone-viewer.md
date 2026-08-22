@@ -38,12 +38,18 @@ term is already there, so the client supplies nothing and the toggle is the enti
 permanent GPU memory to avoid one affine inverse per bone per frame, on a pass that runs only while
 a human is looking at it.
 
-**ADR-3 — Two stages: joints, then solids.** A compute step writes each bone's joint position and
-roll basis into a per-view buffer; the raster step reads that buffer and emits geometry. *Rejected:*
-deriving the joints inline in the mesh shader — one stage and one buffer fewer, but then nothing in
-the frame is readable, and a golden image cannot distinguish a wrong inverse bind from a wrong
-palette slice from a wrong octahedron. `SkinnedPose_test.cpp` reads the palette off the GPU for
-exactly this reason, and says so in its own header comment.
+**ADR-3 — One stage: the drawing shader undoes the inverse bind itself.** *Reversed while
+implementing; it originally said two stages, with a compute step writing each bone's transform into a
+per-view buffer the raster step read.* That buffer bought one thing — numbers a test could read back
+— and cost a dispatch, a barrier, a per-view buffer sized off the palette arena, the clear that made
+its unwritten slots defined, and an allocation policy to explain. Nothing else wanted it: every
+roadmap consumer of bone transforms (attachments, the cavalry saddle, the VAT→skeletal handoff) reads
+the VAT side-channel rather than the skinned tier's palette, so it would have existed for the overlay
+alone. The mesh shader already reads the palette to place a bone, and undoing the inverse bind there
+is a few lines and no resource. *Rejected:* keeping the buffer for testability — what replaces it is
+a frame rendered twice in one run, off then on, with luma probed at each bone's projected position,
+which states where a bone was *drawn* rather than what a matrix held. The cost is worth recording: a
+wrong bone is now localised by where it appears on screen rather than by reading the number back.
 
 **ADR-4 — `PostProcess` composites the overlay; the pass does not touch the backbuffer.**
 `BoneOverlayPass` renders its solids into a colour target of its own at *output* resolution, and
@@ -95,17 +101,13 @@ as a fourth task here.
 
 ## Acceptance
 
-- `bgl_tests`, readback: a three-bone chain posed at its bind frame and at a swung frame; the joint
-  positions the overlay's compute step wrote equal the translations of
-  `assetlib::poseModelTransforms` for the same frame. A bind-pose frame must reproduce the bind
-  positions exactly, which is the cheapest check that the inverse binds and the palette agree.
 - `bgl_tests`, differential: the same posed rig rendered twice in one run, overlay off then on, the
-  two frames compared and the luma probed at the projected position of each joint. No committed
+  two frames compared and the luma probed at the projected position of each bone. No committed
   `.exp.png` — `SelectionOutline_test.cpp` and `SkinnedRender_test.cpp` both refuse one on the
   grounds that it blesses whatever the code produced, and the overlay's whole claim is *where* the
-  joints are, which a probe states and an image only implies.
-- `bgl_tests` under `--gpu-validation`: clean. The feature adds a pass, a depth resource and a
-  buffer, so the barrier derivation is new and unproven.
+  bones are, which a probe states and an image only implies.
+- `bgl_tests` under `--gpu-validation`: clean. The feature adds a pass and two target attachments,
+  so the barrier derivation is new and unproven.
 - `editor_tests`: the enable rule as a free function — skinned tier with clips enables, VAT disables,
   no clips disables — so the panel's one piece of logic is pinned without a device.
 - **Not verifiable from this machine:** the checkbox's placement and appearance. Terminal here has no
@@ -135,8 +137,6 @@ as a fourth task here.
   `kStaticMesh | kVatMesh | kSkinnedMesh`; a null material draws through `Forward_Null` at a literal
   `1.0`. The overlay therefore carries its own pipeline and shades its own solids, and adds no
   `GeomType`.
-- Buffer readback exists ([libs/bgl/src/resource/Readback.h](libs/bgl/src/resource/Readback.h)) and
-  `SkinnedPose_test.cpp` already uses it to check the pose pass stage by stage.
 - The house idiom for a visual test is **not** a committed golden: `SelectionOutline_test.cpp` and
   `SkinnedRender_test.cpp` render the frames they compare within one run — off against on, skinned
   against a static reference — and probe luma at projected world points. `test::FrameDelta` is
@@ -157,9 +157,9 @@ as a fourth task here.
 
 | | |
 |---|---|
-| `libs/bgl/idl/src/` | one new struct for a joint record (position, roll basis, parent joint), so the compute and raster stages share one definition |
-| `libs/bgl/shaders/src/` | the joint-derivation kernel and the overlay's mesh/pixel stages |
-| `libs/bgl/src/passes/BoneOverlayPass.{h,cpp}` | the new pass, both stages, its own depth |
+| `libs/bgl/shaders/src/` | the overlay's mesh and pixel stages, which undo the inverse bind themselves |
+| `libs/bgl/src/passes/BoneOverlayPass.{h,cpp}` | the new pass |
+| `libs/bgl/src/{metal,d3d12}/RenderTarget_*` | the overlay's colour and depth, output-sized and made on the first enable |
 | `libs/bgl/src/passes/PostProcessPass.{h,cpp}` and its shader | an overlay input beside the outline mask: one SRV, its grid size, its enable flag |
 | `libs/bgl/src/gfx/RenderContext.cpp` | owns the pass; attaches it before `PostProcess` when the target has the toggle on and the view has a skinned instance, and feeds its result into the composite |
 | `libs/bgl/include/bgl/IRenderTarget.h` | `SetBoneOverlayEnabled` / `IsBoneOverlayEnabled`, mirroring the outline pair |
@@ -173,21 +173,16 @@ one from a build that has none of this.
 
 ## The tasks
 
-**1 — `bgl`: joint positions off the palette.** The IDL joint record, the compute stage, the
-per-view buffer it writes, and `IRenderTarget::SetBoneOverlayEnabled` gating whether the stage runs.
-Nothing is drawn: this task lands scaffolding, and the tests are its only caller. *Gate:* the
-readback test above — bind frame and swung frame against `assetlib::poseModelTransforms`, plus a
-scene with no skinned instances leaving the buffer untouched and the stage unattached.
+**1 — `bgl`: the overlay.** `IRenderTarget::SetBoneOverlayEnabled`, the target's own
+output-resolution colour and depth (made on the first enable, so off costs nothing), the mesh and
+pixel stages — one octahedron per bone, from its parent's joint to its own, rolled by the parent's
+basis, with a marker for a root and for a bone with no length — and the composite in `PostProcess`.
+Tasks 1 and 2 of the original three, merged when ADR-3 reversed and the buffer between them went
+away. *Gate:* the off/on frame pair with luma probed at each projected bone, a blocker proven to be
+in the way before the x-ray claim is made, a frame unchanged while the overlay is off, and
+`--gpu-validation` clean.
 
-**2 — `bgl`: the solids.** The mesh and pixel stages: one octahedron per bone, from its parent's
-joint to its own, rolled by the parent's palette rotation, with a fallback shape for roots and for a
-zero-length bone. Its own depth texture and output-resolution colour target, composited by
-`PostProcess`. *Gate:* the off/on frame pair
-with luma probed at each projected joint, an unchanged frame where the target has no skinned
-instance, and `--gpu-validation` clean. `docs/passes.md`'s frame diagram and single-writer rule are corrected
-in this task's commit.
-
-**3 — `apps/editor`: the checkbox.** *Show bones* in the Animation panel, forwarded to the preview's
+**2 — `apps/editor`: the checkbox.** *Show bones* in the Animation panel, forwarded to the preview's
 render target, greyed with a tooltip on the VAT tier and on a mesh with no clips. *Gate:*
 `editor_tests` on the enable rule as a free function beside `PlanAnimationLoad`; the layout itself is
 stated as unseen.

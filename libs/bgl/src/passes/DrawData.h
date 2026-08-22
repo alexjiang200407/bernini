@@ -22,6 +22,10 @@ namespace bgl
 	{
 		Viewport viewport;
 
+		// The same view on the output grid, for a pass that draws at the size the frame is shown at
+		// rather than the size the geometry is rendered at.
+		Viewport outputViewport;
+
 		glm::mat4 viewProj{ 1.0f };
 		glm::mat4 prevViewProj{ 1.0f };
 
@@ -59,6 +63,10 @@ namespace bgl
 		RtvHandle motionVector;
 		DsvHandle depth;
 		RtvHandle outlineMask;
+
+		// The bone overlay's own pair, null on a target that has never asked for the overlay.
+		RtvHandle boneOverlay;
+		DsvHandle boneOverlayDepth;
 	};
 
 	/** What a draw shades against: the image-based environment, and the sky behind it. */

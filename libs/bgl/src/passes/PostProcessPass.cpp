@@ -68,6 +68,15 @@ namespace bgl
 			                BarrierLayout::kShaderResource });
 		}
 
+		if (args.boneOverlayEnabled)
+		{
+			desc.AddTextureArg(
+				TextureArg{ std::string(c_BoneOverlayName),
+			                BarrierSyncFlag::kPixelShader,
+			                BarrierAccessFlag::kShaderResource,
+			                BarrierLayout::kShaderResource });
+		}
+
 		desc.SetExec([this, args](const PassContext& resources) { Execute(args, resources); });
 
 		fg.AddPass(std::move(desc));
@@ -112,6 +121,18 @@ namespace bgl
 				if (auto u = tonemap["maskSize"]; u.IsValid())
 				{
 					u = args.maskSize;
+				}
+			}
+
+			if (auto u = tonemap["boneOverlayEnabled"]; u.IsValid())
+			{
+				u = args.boneOverlayEnabled ? 1u : 0u;
+			}
+			if (args.boneOverlayEnabled)
+			{
+				if (auto u = tonemap["boneOverlay"]; u.IsValid())
+				{
+					u = args.boneOverlay;
 				}
 			}
 		}

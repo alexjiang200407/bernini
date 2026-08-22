@@ -97,6 +97,14 @@ namespace bgl
 			m_PosedInstances.Init(std::move(desc), m_ResourceManager);
 		}
 
+		{
+			auto desc         = UploadBufferDesc();
+			desc.initialCount = 1;
+			desc.debugName    = "Posed Meshes";
+
+			m_PosedMeshes.Init(std::move(desc), m_ResourceManager);
+		}
+
 		EnsureCullStateCount(1);
 		m_TransparentSort.Init(paddedInstances, m_ResourceManager);
 
@@ -161,6 +169,7 @@ namespace bgl
 		m_SkinnedStates.Release();
 		m_Palettes.Release();
 		m_PosedInstances.Release();
+		m_PosedMeshes.Release();
 
 		for (CullState& cullState : m_CullStates)
 		{
@@ -306,8 +315,9 @@ namespace bgl
 		{
 			const MeshInstanceHandle instance = WritePlacement(geom, transform, stateHandle);
 
-			m_MeshBuffer.MetaAt(instance.handle.index).palette = palette;
-			m_PosedDirty                                       = true;
+			m_MeshBuffer.MetaAt(instance.handle.index).palette   = palette;
+			m_MeshBuffer.MetaAt(instance.handle.index).boneCount = rig.boneCount;
+			m_PosedDirty                                         = true;
 			return instance;
 		}
 		catch (...)
@@ -508,7 +518,9 @@ namespace bgl
 	void
 	SceneView::RebuildPosedList()
 	{
-		auto list = std::vector<uint32_t>();
+		auto list     = std::vector<uint32_t>();
+		auto meshes   = std::vector<uint32_t>();
+		auto maxBones = uint32_t(0);
 
 		for (uint32_t meshIndex = 0; meshIndex < m_MeshBuffer.Capacity(); ++meshIndex)
 		{
@@ -521,11 +533,15 @@ namespace bgl
 			if (meta.geomType == GeomType::kSkinnedMesh && meta.animState)
 			{
 				list.push_back(meta.animState.index);
+				meshes.push_back(meshIndex);
+				maxBones = std::max(maxBones, meta.boneCount);
 			}
 		}
 
 		m_PosedInstances.Assign(list);
-		m_PosedDirty = false;
+		m_PosedMeshes.Assign(meshes);
+		m_MaxPosedBoneCount = maxBones;
+		m_PosedDirty        = false;
 	}
 
 	void
@@ -779,6 +795,7 @@ namespace bgl
 			RebuildPosedList();
 		}
 		m_PosedInstances.Update(cmdList);
+		m_PosedMeshes.Update(cmdList);
 		m_Palettes.Update(cmdList);
 
 		ForEachNamedBuffer(*this, c_Buffers, [cmdList](std::string_view, auto& buffer) {
@@ -856,6 +873,10 @@ namespace bgl
 			auto posed = std::string(c_PosedInstancesName);
 			fg.ImportBuffer(posed, m_PosedInstances.GetBufferHandle());
 			resourceNames.push_back(std::move(posed));
+
+			auto meshes = std::string(c_PosedMeshesName);
+			fg.ImportBuffer(meshes, m_PosedMeshes.GetBufferHandle());
+			resourceNames.push_back(std::move(meshes));
 
 			auto palettes = std::string(c_BonePaletteName);
 			fg.ImportBuffer(palettes, m_Palettes.GetBufferHandle());
