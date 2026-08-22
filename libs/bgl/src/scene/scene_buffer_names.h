@@ -35,6 +35,10 @@ namespace bgl
 	constexpr std::string_view c_PosedInstancesName = "scene.posedInstances"sv;
 	constexpr std::string_view c_BonePaletteName    = "scene.bonePalettes"sv;
 
+	// Parallel to c_PosedInstancesName: the mesh each posed instance was placed as, so a pass that
+	// needs the instance's world transform can reach it. A SkinnedState does not name its placement.
+	constexpr std::string_view c_PosedMeshesName = "scene.posedMeshes"sv;
+
 	constexpr std::string_view c_InstanceVisibilityName = "scene.instanceVisibility"sv;
 	constexpr std::string_view c_CompactedInstancesName = "scene.compactedInstances"sv;
 

@@ -20,6 +20,11 @@ namespace bgl
 	constexpr std::string_view c_HistoryName     = "taaHistory"sv;
 	constexpr std::string_view c_OutlineMaskName = "outlineMask"sv;
 
+	// The bone overlay's own colour and depth, both on the output grid. Imported only by a target
+	// that has the overlay on, which is the only one that allocates them.
+	constexpr std::string_view c_BoneOverlayName      = "boneOverlay"sv;
+	constexpr std::string_view c_BoneOverlayDepthName = "boneOverlayDepth"sv;
+
 	// Constants shared with the GPU (meshlet caps, instance counting-sort group
 	// sizes, ...) now live in the IDL module bgl/idl/src/Constants.slang and are
 	// generated into idl::c... (see idl/Constants.h). Use those directly.
