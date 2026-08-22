@@ -49,6 +49,38 @@ namespace game
 			return bgl::LayerType::kOpaque;
 		}
 
+		// A .bmesh holds several meshes, so the file alone does not identify geometry.
+		std::string
+		MeshKey(std::string_view relPath, uint32_t meshIndex)
+		{
+			return std::format("{}#{}", relPath, meshIndex);
+		}
+
+		std::string_view
+		TierName(MeshTier tier) noexcept
+		{
+			switch (tier)
+			{
+			case MeshTier::kVat:
+				return "VAT";
+			case MeshTier::kSkinned:
+				return "skinned";
+			case MeshTier::kStatic:
+				break;
+			}
+			return "static";
+		}
+
+		void
+		RequireTier(const PreparedMesh& prepared, MeshTier tier)
+		{
+			core::throw_runtime_error_if(
+				prepared.tier != tier,
+				"AssetManager: '{}' was prepared as {} geometry, not {}",
+				prepared.relPath,
+				TierName(prepared.tier),
+				TierName(tier));
+		}
 	}
 
 	// The order MaterialRecord::textures parallels: the baked triplet, or the nine authoring routes.
@@ -232,11 +264,79 @@ namespace game
 		return CreateMaterial(material, std::move(key), prefetch);
 	}
 
+	bgl::GeomHandle
+	AssetManager::ShareGeom(std::string_view key)
+	{
+		const auto it = m_GeomByPath.find(key);
+		if (it == m_GeomByPath.end())
+			return {};
+
+		GeomRecord& record = m_Geoms.at(it->second);
+		++record.refCount;
+		return record.handle;
+	}
+
+	bgl::GeomHandle
+	AssetManager::FileGeom(GeomRecord record, std::string key)
+	{
+		const uint32_t        slot   = record.handle.handle.index;
+		const bgl::GeomHandle handle = record.handle;
+
+		m_GeomByPath.emplace(std::move(key), slot);
+		m_Geoms.emplace(slot, std::move(record));
+
+		return handle;
+	}
+
+	bgl::MaterialHandle
+	AssetManager::AcquireMaterial(const PreparedMaterial& material, TexturePrefetch* prefetch)
+	{
+		if (material.relPath.empty())
+			return {};
+
+		if (const auto it = m_MaterialByPath.find(material.relPath); it != m_MaterialByPath.end())
+		{
+			MaterialRecord& record = m_Materials.at(it->second);
+			++record.refCount;
+			return record.handle;
+		}
+
+		return CreateMaterial(material.source, material.relPath, prefetch, material.loose);
+	}
+
+	void
+	AssetManager::AcquirePreparedMaterials(
+		PreparedMesh&                     prepared,
+		std::vector<bgl::MaterialHandle>& materials,
+		std::vector<bgl::MaterialHandle>& submeshMaterials,
+		std::vector<bgl::MaterialHandle>& acquired)
+	{
+		materials.assign(prepared.materials.size(), bgl::MaterialHandle{});
+		submeshMaterials.assign(prepared.submeshMaterials.size(), bgl::MaterialHandle{});
+
+		// One reference per submesh, not per distinct material: the geom holds a reference for each
+		// submesh bound to a material, so releasing it drops exactly as many as it took.
+		for (size_t i = 0; i < prepared.submeshMaterials.size(); ++i)
+		{
+			const uint32_t index = prepared.submeshMaterials[i];
+			if (index >= prepared.materials.size())
+				continue;
+
+			const bgl::MaterialHandle handle =
+				AcquireMaterial(prepared.materials[index], &prepared.textures);
+			acquired.push_back(handle);
+
+			materials[index]    = handle;
+			submeshMaterials[i] = handle;
+		}
+	}
+
 	bgl::MaterialHandle
 	AssetManager::CreateMaterial(
 		const assetlib::BMaterial& material,
 		std::string                key,
-		TexturePrefetch*           prefetch)
+		TexturePrefetch*           prefetch,
+		std::optional<bool>        loose)
 	{
 		if (material.shadingModel != assetlib::ShadingModel::kPbr)
 			throw bgl::SceneError(
@@ -246,11 +346,11 @@ namespace game
 
 		// The disk decides: a triplet that is missing or older than the sources it was composited from
 		// cannot be sampled, so the material falls back to the routes that produced it -- when those
-		// are still there to fall back to.
-		const bool loose = m_Store.DrawsLoose(material);
+		// are still there to fall back to. A caller that has already asked passes the answer in.
+		const bool drawsLoose = loose ? *loose : m_Store.DrawsLoose(material);
 
 		// Acquire the textures first: the desc the scene needs is built out of their handles.
-		const std::vector<std::string> paths = MaterialTextures(material, loose);
+		const std::vector<std::string> paths = MaterialTextures(material, drawsLoose);
 
 		auto textures = std::vector<bgl::TextureAssetHandle>(paths.size());
 		for (size_t i = 0; i < paths.size(); ++i) textures[i] = AcquireTexture(paths[i], prefetch);
@@ -259,11 +359,11 @@ namespace game
 		record.key      = key;
 		record.source   = material;
 		record.textures = std::move(textures);
-		record.loose    = loose;
+		record.loose    = drawsLoose;
 		record.refCount = 1;
 
-		record.handle = loose ? m_Scene->CreateLoosePbrMaterial(LooseDesc(record)) :
-		                        m_Scene->CreatePbrMaterial(BakedDesc(record));
+		record.handle = drawsLoose ? m_Scene->CreateLoosePbrMaterial(LooseDesc(record)) :
+		                             m_Scene->CreatePbrMaterial(BakedDesc(record));
 
 		const uint64_t recordKey = MaterialKey(record.handle);
 		if (!key.empty())
@@ -279,64 +379,43 @@ namespace game
 	AssetManager::AcquireMesh(std::string_view relPath, uint32_t meshIndex)
 	{
 		// A .bmesh holds several meshes, so the file alone does not identify geometry.
-		const auto key = std::format("{}#{}", relPath, meshIndex);
+		if (const bgl::GeomHandle shared = ShareGeom(MeshKey(relPath, meshIndex)); shared.IsValid())
+			return shared;
 
-		if (const auto it = m_GeomByPath.find(key); it != m_GeomByPath.end())
+		return AcquireMesh(PrepareMesh(m_Store, relPath, meshIndex));
+	}
+
+	bgl::GeomHandle
+	AssetManager::AcquireMesh(PreparedMesh prepared)
+	{
+		RequireTier(prepared, MeshTier::kStatic);
+
+		const std::string key = MeshKey(prepared.relPath, prepared.meshIndex);
+		if (const bgl::GeomHandle shared = ShareGeom(key); shared.IsValid())
+			return shared;
+
+		auto materials        = std::vector<bgl::MaterialHandle>();
+		auto submeshMaterials = std::vector<bgl::MaterialHandle>();
+
+		// Given back if any later step throws: a failed acquire owns nothing.
+		auto acquired = std::vector<bgl::MaterialHandle>();
+		try
 		{
-			GeomRecord& record = m_Geoms.at(it->second);
-			++record.refCount;
-			return record.handle;
+			AcquirePreparedMaterials(prepared, materials, submeshMaterials, acquired);
+
+			auto record   = GeomRecord();
+			record.handle = m_Scene->AddStaticMeshGeom(std::move(prepared.cooked), materials);
+			record.key    = key;
+			record.submeshMaterials = std::move(submeshMaterials);
+			record.refCount         = 1;
+
+			return FileGeom(std::move(record), key);
 		}
-
-		const assetlib::BMesh mesh = m_Store.LoadMesh(relPath);
-
-		if (meshIndex >= mesh.meshes.size())
+		catch (...)
 		{
-			throw std::runtime_error(
-				std::format(
-					"AssetManager: mesh index {} out of range in '{}'",
-					meshIndex,
-					relPath));
+			for (const bgl::MaterialHandle material : acquired) ReleaseMaterial(material);
+			throw;
 		}
-
-		const assetlib::Mesh& entry = mesh.meshes[meshIndex];
-
-		// AddStaticMeshGeom wants a list parallel to the .bmesh's own material list, but only the
-		// materials *this* mesh's submeshes name are worth loading -- another mesh in the same file
-		// may name others. Anything left invalid renders unlit, which is what AddStaticMeshGeom does with
-		// an out-of-range material index anyway.
-		auto materials = std::vector<bgl::MaterialHandle>(mesh.materials.size());
-
-		// One reference per submesh, not per distinct material: the geom holds a reference for each
-		// submesh bound to a material, so releasing it drops exactly as many as it took.
-		auto submeshMaterials = std::vector<bgl::MaterialHandle>(entry.submeshCount);
-
-		for (uint32_t i = 0; i < entry.submeshCount; ++i)
-		{
-			const uint32_t index = mesh.submeshes[entry.firstSubmesh + i].material;
-			if (index >= mesh.materials.size())
-				continue;
-
-			const bgl::MaterialHandle handle = AcquireMaterial(mesh.materials[index]);
-
-			materials[index]    = handle;
-			submeshMaterials[i] = handle;
-		}
-
-		auto record             = GeomRecord();
-		record.handle           = m_Scene->AddStaticMeshGeom(mesh, meshIndex, materials);
-		record.key              = key;
-		record.submeshMaterials = std::move(submeshMaterials);
-		record.refCount         = 1;
-
-		const uint32_t slot = record.handle.handle.index;
-
-		m_GeomByPath.emplace(key, slot);
-
-		const bgl::GeomHandle handle = record.handle;
-		m_Geoms.emplace(slot, std::move(record));
-
-		return handle;
 	}
 
 	AssetManager::VatMesh
@@ -347,7 +426,7 @@ namespace game
 	{
 		// Its own keyspace beside AcquireMesh's "path#index": the same mesh may be live as static
 		// and as VAT geometry at once, and they are different uploads.
-		const auto key = std::format("{}#{}#vat", relPath, meshIndex);
+		const std::string key = MeshKey(relPath, meshIndex) + "#vat";
 
 		if (const auto it = m_GeomByPath.find(key); it != m_GeomByPath.end())
 		{
@@ -363,23 +442,29 @@ namespace game
 			return VatMesh{ record.handle, record.vatClips };
 		}
 
-		const auto bvatRel = assetlib::vatPathFor(relPath, animationsRelPath);
-		const auto vat     = EnsureVatBaked(m_Store, relPath, animationsRelPath);
+		return AcquireVatMesh(PrepareVatMesh(m_Store, relPath, animationsRelPath, meshIndex));
+	}
 
-		const assetlib::BMesh mesh = m_Store.LoadMesh(relPath);
+	AssetManager::VatMesh
+	AssetManager::AcquireVatMesh(PreparedMesh prepared)
+	{
+		RequireTier(prepared, MeshTier::kVat);
 
-		core::throw_runtime_error_if(
-			meshIndex >= mesh.meshes.size(),
-			"AssetManager: mesh index {} out of range in '{}'",
-			meshIndex,
-			relPath);
+		const std::string key = MeshKey(prepared.relPath, prepared.meshIndex) + "#vat";
 
-		const assetlib::Mesh& entry = mesh.meshes[meshIndex];
-		core::throw_runtime_error_if(
-			size_t(entry.firstSubmesh) + entry.submeshCount > vat.columns.size(),
-			"AssetManager: '{}' does not cover mesh {}'s submeshes",
-			bvatRel.string(),
-			meshIndex);
+		if (const auto it = m_GeomByPath.find(key); it != m_GeomByPath.end())
+		{
+			GeomRecord& record = m_Geoms.at(it->second);
+			core::throw_runtime_error_if(
+				record.vatAnimations != prepared.animations,
+				"AssetManager: '{}' is live with clips from '{}'; release it to zero before "
+				"acquiring with '{}'",
+				key,
+				record.vatAnimations,
+				prepared.animations);
+			++record.refCount;
+			return VatMesh{ record.handle, record.vatClips };
+		}
 
 		// Everything taken below is given back if any later step throws: a failed acquire owns
 		// nothing.
@@ -389,70 +474,30 @@ namespace game
 		{
 			// The pair is keyed on the container and the bake it holds: two meshes of one .bvat
 			// share the uploads, but a rebake from another .banim must not inherit the old pixels.
-			acquiredTextures.push_back(AddEmbeddedTexture(
-				bvatRel.string() + "#" + vat.animations + "#positions",
-				assetlib::decodeKTX2(vat.positionsKtx2)));
-			acquiredTextures.push_back(AddEmbeddedTexture(
-				bvatRel.string() + "#" + vat.animations + "#normals",
-				assetlib::decodeKTX2(vat.normalsKtx2)));
+			acquiredTextures.push_back(
+				AddEmbeddedTexture(prepared.vatPositionsKey, std::move(prepared.vatPositions)));
+			acquiredTextures.push_back(
+				AddEmbeddedTexture(prepared.vatNormalsKey, std::move(prepared.vatNormals)));
 
-			auto materials        = std::vector<bgl::MaterialHandle>(mesh.materials.size());
-			auto submeshMaterials = std::vector<bgl::MaterialHandle>(entry.submeshCount);
+			auto materials        = std::vector<bgl::MaterialHandle>();
+			auto submeshMaterials = std::vector<bgl::MaterialHandle>();
+			AcquirePreparedMaterials(prepared, materials, submeshMaterials, acquiredMaterials);
 
-			for (uint32_t i = 0; i < entry.submeshCount; ++i)
-			{
-				const uint32_t index = mesh.submeshes[entry.firstSubmesh + i].material;
-				if (index >= mesh.materials.size())
-					continue;
+			prepared.vatDesc.positions = acquiredTextures[0];
+			prepared.vatDesc.normals   = acquiredTextures[1];
 
-				const bgl::MaterialHandle handle = AcquireMaterial(mesh.materials[index]);
-				acquiredMaterials.push_back(handle);
-
-				materials[index]    = handle;
-				submeshMaterials[i] = handle;
-			}
-
-			auto desc      = bgl::VatGeomDesc();
-			desc.positions = acquiredTextures[0];
-			desc.normals   = acquiredTextures[1];
-			desc.boundsMin = vat.boundsMin;
-			desc.boundsMax = vat.boundsMax;
-
-			auto clipInfo = std::vector<ClipInfo>();
-			clipInfo.reserve(vat.clips.size());
-			desc.clips.reserve(vat.clips.size());
-			for (const assetlib::VatClip& clip : vat.clips)
-			{
-				desc.clips.push_back(
-					{ clip.firstRow, clip.frameCount, clip.sampleRate, clip.loop != 0 });
-				clipInfo.push_back(
-					{ std::string(vat.stringPool.at(clip.nameOffset)),
-				      clip.frameCount,
-				      clip.sampleRate,
-				      clip.duration,
-				      clip.loop != 0 });
-			}
-
-			desc.columnBases.reserve(entry.submeshCount);
-			for (uint32_t i = 0; i < entry.submeshCount; ++i)
-				desc.columnBases.push_back(vat.columns[entry.firstSubmesh + i].columnBase);
-
-			auto record             = GeomRecord();
-			record.handle           = m_Scene->AddVatMeshGeom(mesh, meshIndex, materials, desc);
+			auto record = GeomRecord();
+			record.handle =
+				m_Scene->AddVatMeshGeom(std::move(prepared.cooked), materials, prepared.vatDesc);
 			record.key              = key;
 			record.submeshMaterials = std::move(submeshMaterials);
 			record.vatTextures      = acquiredTextures;
-			record.vatClips         = clipInfo;
-			record.vatAnimations    = vat.animations;
+			record.vatClips         = prepared.vatClips;
+			record.vatAnimations    = prepared.animations;
 			record.refCount         = 1;
 
-			const uint32_t slot = record.handle.handle.index;
-			m_GeomByPath.emplace(key, slot);
-
-			const bgl::GeomHandle handle = record.handle;
-			m_Geoms.emplace(slot, std::move(record));
-
-			return VatMesh{ handle, std::move(clipInfo) };
+			const bgl::GeomHandle handle = FileGeom(std::move(record), key);
+			return VatMesh{ handle, std::move(prepared.vatClips) };
 		}
 		catch (...)
 		{
@@ -471,7 +516,7 @@ namespace game
 	{
 		// Its own keyspace beside AcquireMesh's and AcquireVatMesh's: one mesh may be live as static,
 		// as VAT and as skinned geometry at once, and all three are different uploads.
-		const auto key = std::format("{}#{}#skinned", relPath, meshIndex);
+		const std::string key = MeshKey(relPath, meshIndex) + "#skinned";
 
 		if (const auto it = m_GeomByPath.find(key); it != m_GeomByPath.end())
 		{
@@ -487,97 +532,70 @@ namespace game
 			return SkinnedMesh{ record.handle, record.skinnedClips };
 		}
 
-		const auto animationsNorm = assetlib::normalizePath(animationsRelPath);
+		return AcquireSkinnedMesh(
+			PrepareSkinnedMesh(m_Store, relPath, animationsRelPath, meshIndex, posedBounds));
+	}
 
-		// Through the store, like every other read here: a project opens as a mount, so a rig that
-		// ships inside a .bpak is only reachable that way.
-		const assetlib::AnimationSet animations = m_Store.LoadAnimations(animationsNorm);
+	AssetManager::SkinnedMesh
+	AssetManager::AcquireSkinnedMesh(PreparedMesh prepared)
+	{
+		RequireTier(prepared, MeshTier::kSkinned);
 
-		// The clip set names its own rig, so the pair cannot be mismatched by a caller -- only by a
-		// rig that changed after the clips were cooked, which is what the signature catches.
-		const assetlib::Skeleton skeleton = m_Store.LoadSkeleton(animations.skeleton);
+		const std::string key = MeshKey(prepared.relPath, prepared.meshIndex) + "#skinned";
 
-		core::throw_runtime_error_if(
-			!assetlib::animationsMatchSkeleton(animations, skeleton),
-			"AssetManager: '{}' was cooked against a different version of '{}'; a bone has been "
-			"inserted, removed or reordered since, so its joint indices name different bones now",
-			animationsNorm,
-			animations.skeleton);
+		if (const auto it = m_GeomByPath.find(key); it != m_GeomByPath.end())
+		{
+			GeomRecord& record = m_Geoms.at(it->second);
+			core::throw_runtime_error_if(
+				record.skinnedAnimations != prepared.animations,
+				"AssetManager: '{}' is live with clips from '{}'; release it to zero before "
+				"acquiring with '{}'",
+				key,
+				record.skinnedAnimations,
+				prepared.animations);
+			++record.refCount;
+			return SkinnedMesh{ record.handle, record.skinnedClips };
+		}
 
-		const assetlib::BMesh mesh = m_Store.LoadMesh(relPath);
-
-		core::throw_runtime_error_if(
-			meshIndex >= mesh.meshes.size(),
-			"AssetManager: mesh index {} out of range in '{}'",
-			meshIndex,
-			relPath);
-
-		const assetlib::Mesh& entry = mesh.meshes[meshIndex];
+		auto clipInfo = std::vector<ClipInfo>();
+		clipInfo.reserve(prepared.clips.clips.size());
+		for (const assetlib::AnimationClip& clip : prepared.clips.clips)
+		{
+			clipInfo.emplace_back(
+				std::string(prepared.clips.stringPool.at(clip.nameOffset)),
+				clip.frameCount,
+				clip.sampleRate,
+				clip.duration,
+				clip.loop != 0);
+		}
 
 		// Given back if any later step throws: a failed acquire owns nothing.
-		auto acquiredMaterials = std::vector<bgl::MaterialHandle>();
+		auto acquired = std::vector<bgl::MaterialHandle>();
 		try
 		{
-			auto materials        = std::vector<bgl::MaterialHandle>(mesh.materials.size());
-			auto submeshMaterials = std::vector<bgl::MaterialHandle>(entry.submeshCount);
+			auto materials        = std::vector<bgl::MaterialHandle>();
+			auto submeshMaterials = std::vector<bgl::MaterialHandle>();
+			AcquirePreparedMaterials(prepared, materials, submeshMaterials, acquired);
 
-			for (uint32_t i = 0; i < entry.submeshCount; ++i)
-			{
-				const uint32_t index = mesh.submeshes[entry.firstSubmesh + i].material;
-				if (index >= mesh.materials.size())
-					continue;
-
-				const bgl::MaterialHandle handle = AcquireMaterial(mesh.materials[index]);
-				acquiredMaterials.push_back(handle);
-
-				materials[index]    = handle;
-				submeshMaterials[i] = handle;
-			}
-
-			auto clipInfo = std::vector<ClipInfo>();
-			clipInfo.reserve(animations.clips.size());
-			for (const assetlib::AnimationClip& clip : animations.clips)
-			{
-				clipInfo.emplace_back(
-					std::string(animations.stringPool.at(clip.nameOffset)),
-					clip.frameCount,
-					clip.sampleRate,
-					clip.duration,
-					clip.loop != 0);
-			}
-
-			// The box the geom culls by. Not the bind pose's: a clip carrying root motion walks the
-			// rig out of that box, and culling by it makes the mesh vanish as soon as it does.
-			const assetlib::Bounds bounds = [&] {
-				if (posedBounds)
-					return *posedBounds;
-				if (const auto baked =
-				        assetlib::findPosedBounds(animations, mesh, meshIndex, skeleton))
-					return *baked;
-				return assetlib::posedBounds(mesh, meshIndex, skeleton, animations);
-			}();
-
-			auto record = GeomRecord();
-			record.handle =
-				m_Scene
-					->AddSkinnedMeshGeom(mesh, meshIndex, materials, skeleton, animations, bounds);
+			auto record   = GeomRecord();
+			record.handle = m_Scene->AddSkinnedMeshGeom(
+				std::move(prepared.cooked),
+				materials,
+				prepared.skeleton,
+				prepared.clips,
+				prepared.posedBounds);
 			record.key               = key;
 			record.submeshMaterials  = std::move(submeshMaterials);
 			record.skinnedClips      = clipInfo;
-			record.skinnedAnimations = animationsNorm;
+			record.skinnedAnimations = prepared.animations;
 			record.refCount          = 1;
 
-			const uint32_t slot = record.handle.handle.index;
-			m_GeomByPath.emplace(key, slot);
-
-			const bgl::GeomHandle handle = record.handle;
-			m_Geoms.emplace(slot, std::move(record));
-
+			const bgl::GeomHandle handle = FileGeom(std::move(record), key);
 			return SkinnedMesh{ handle, std::move(clipInfo) };
 		}
 		catch (...)
 		{
-			for (const bgl::MaterialHandle material : acquiredMaterials) ReleaseMaterial(material);
+			for (const bgl::MaterialHandle material : acquired) ReleaseMaterial(material);
 			throw;
 		}
 	}

@@ -115,6 +115,7 @@ truth; when this doc disagrees, trust the header, then fix this doc.
 | Interface | File | Role |
 |---|---|---|
 | `AssetManager::AcquireVatMesh` | [libs/gamelib/include/gamelib/AssetManager.h](libs/gamelib/include/gamelib/AssetManager.h) | Load the `.bvat` beside a mesh — or bake it there — and stand the geom up with its materials |
+| `game::PrepareVatMesh` | [libs/gamelib/include/gamelib/PreparedMesh.h](libs/gamelib/include/gamelib/PreparedMesh.h) | The acquire above, less the upload: the bake, the mesh read, the meshlet cook and both texture decodes over an `AssetStore` alone, so all of it can run on a worker and the render thread commits |
 | `EnsureVatBaked` | [libs/gamelib/include/gamelib/vat_freshness.h](libs/gamelib/include/gamelib/vat_freshness.h) | Return the pair's `.bvat` fresh, re-baking in place when it is not — `VatFreshness` plus a bake, so the rule is asked here too. Pure assetlib, safe off the render thread |
 | `VatFreshness` | [libs/gamelib/include/gamelib/vat_freshness.h](libs/gamelib/include/gamelib/vat_freshness.h) | The freshness rule's one home, *asked* rather than enforced — for a caller that must not bake unprompted. Hands back what it parsed, so asking then loading is one read |
 | `AssetManager::CreateVatInstance` | [libs/gamelib/include/gamelib/AssetManager.h](libs/gamelib/include/gamelib/AssetManager.h) | `CreateInstance`'s VAT twin; same reference edges, same `DestroyInstance` |

@@ -15,6 +15,7 @@
 #include <core/file/LayeredFileSystem.h>
 #include <core/file/LooseFileSystem.h>
 #include <gamelib/AssetManager.h>
+#include <gamelib/PreparedMesh.h>
 
 namespace
 {
@@ -956,4 +957,115 @@ TEST_CASE("AssetManager reads a loose material over its packed twin", "[gamelib]
 
 	CHECK((*fx).TextureRefCount(edited) == 2);
 	CHECK((*fx).TextureRefCount(packed) == 1);
+}
+
+TEST_CASE(
+	"a mesh prepared off the render thread commits without reading a file",
+	"[gamelib][assets][prepare]")
+{
+	Fixture fx("bernini_am_prepare");
+	WriteTexture(fx.root.path / "Textures" / "a.ktx2");
+	WriteBakedMaterial(fx.root.path / "Materials" / "m0.bmaterial", "Textures/a.ktx2");
+
+	const auto materials       = std::vector<std::string>{ "Materials/m0.bmaterial" };
+	const auto materialIndices = std::vector<uint32_t>{ 0 };
+	WriteMesh(fx.root.path / "Meshes" / "one.bmesh", materials, materialIndices);
+
+	// On a worker, because nothing PrepareMesh does may need the thread the scene is driven on.
+	auto prepared = game::PreparedMesh();
+	auto worker =
+		std::thread([&] { prepared = game::PrepareMesh((*fx).GetStore(), "Meshes/one.bmesh"); });
+	worker.join();
+
+	SECTION("the commit uploads the whole tree with the data root deleted under it")
+	{
+		// The only way to prove the commit reads nothing: with the files gone, an acquire that
+		// still touched the disk could not resolve the material, let alone decode its texture.
+		std::filesystem::remove_all(fx.root.path);
+
+		const bgl::GeomHandle geom = (*fx).AcquireMesh(std::move(prepared));
+		REQUIRE(geom.IsValid());
+		CHECK((*fx).GeomRefCount(geom) == 1);
+
+		// Both are cache hits by path -- which is the assertion: the commit filed them there.
+		const bgl::MaterialHandle mat = (*fx).AcquireMaterial("Materials/m0.bmaterial");
+		const auto                tex = (*fx).AcquireTexture("Textures/a.ktx2");
+
+		CHECK((*fx).MaterialRefCount(mat) == 2);
+		CHECK((*fx).TextureRefCount(tex) == 2);
+
+		(*fx).ReleaseMaterial(mat);
+		(*fx).ReleaseTexture(tex);
+
+		(*fx).ReleaseGeom(geom);
+		CHECK((*fx).MaterialRefCount(mat) == 0);
+		CHECK((*fx).TextureRefCount(tex) == 0);
+	}
+
+	SECTION("a mesh already live is shared, and the prepared payload is dropped")
+	{
+		const bgl::GeomHandle first = (*fx).AcquireMesh("Meshes/one.bmesh");
+
+		const bgl::GeomHandle second = (*fx).AcquireMesh(std::move(prepared));
+		CHECK(second.handle.index == first.handle.index);
+		CHECK((*fx).GeomRefCount(first) == 2);
+	}
+
+	SECTION("a payload spent once cannot be spent again")
+	{
+		REQUIRE((*fx).AcquireMesh(std::move(prepared)).IsValid());
+
+		// The cook inside it is consumed by the commit, so the second has nothing to upload -- and
+		// it must not be mistaken for a shared acquire, which would hand back a geom it never made.
+		CHECK_THROWS((*fx).AcquireMesh(std::move(prepared)));
+	}
+
+	SECTION("a payload prepared for another tier is refused")
+	{
+		CHECK_THROWS_AS((*fx).AcquireVatMesh(std::move(prepared)), std::runtime_error);
+		CHECK_THROWS_AS((*fx).AcquireSkinnedMesh(std::move(prepared)), std::runtime_error);
+	}
+}
+
+TEST_CASE(
+	"a prepare skips the material slots the mesh leaves unrouted",
+	"[gamelib][assets][prepare]")
+{
+	Fixture fx("bernini_am_prepare_unrouted");
+
+	// One slot naming nothing, which an import leaves behind for a submesh with no material. It
+	// must not be read: an empty path is not a file, and the submesh draws unlit.
+	const auto materials       = std::vector<std::string>{ "" };
+	const auto materialIndices = std::vector<uint32_t>{ 0 };
+	WriteMesh(fx.root.path / "Meshes" / "bare.bmesh", materials, materialIndices);
+
+	auto prepared = game::PrepareMesh((*fx).GetStore(), "Meshes/bare.bmesh");
+	CHECK(prepared.materials.size() == 1);
+	CHECK(prepared.materials[0].relPath.empty());
+	CHECK(prepared.textures.empty());
+
+	const bgl::GeomHandle geom = (*fx).AcquireMesh(std::move(prepared));
+	CHECK(geom.IsValid());
+}
+
+TEST_CASE(
+	"a texture that will not decode fails the prepare, not the commit",
+	"[gamelib][assets][prepare]")
+{
+	Fixture fx("bernini_am_prepare_bad_texture");
+
+	// A .ktx2 that is not one. The fused acquire failed on this read; the split must fail in the
+	// same place rather than committing a mesh with the scene's default map quietly swapped in.
+	const auto texture = fx.root.path / "Textures" / "broken.ktx2";
+	std::filesystem::create_directories(texture.parent_path());
+	std::ofstream(texture, std::ios::binary) << "not a ktx2";
+
+	WriteBakedMaterial(fx.root.path / "Materials" / "m0.bmaterial", "Textures/broken.ktx2");
+
+	const auto materials       = std::vector<std::string>{ "Materials/m0.bmaterial" };
+	const auto materialIndices = std::vector<uint32_t>{ 0 };
+	WriteMesh(fx.root.path / "Meshes" / "one.bmesh", materials, materialIndices);
+
+	CHECK_THROWS(game::PrepareMesh((*fx).GetStore(), "Meshes/one.bmesh"));
+	CHECK_THROWS((*fx).AcquireMesh("Meshes/one.bmesh"));
 }

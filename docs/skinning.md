@@ -82,6 +82,7 @@ not obvious from a signature. The headers linked below are the source of truth.
 | Import | `assetlib` | A glTF skin becomes `.bskel` (bones, topologically sorted, with inverse binds, each composed from its whole node chain) + `.banim` (clips resampled to a fixed rate, frame-major local TRS, composed the same way) + `joints0`/`weights0` on the `.bmesh` |
 | Bound | [`assetlib::bakePosedBounds`](libs/assetlib/include/assetlib/skinning.h) | At import: skins every vertex at every frame (`posedBounds`) and stores the box in the `.banim`, keyed by a content signature so a re-authored source falls back to measuring |
 | Acquire | [`AssetManager::AcquireSkinnedMesh`](libs/gamelib/include/gamelib/AssetManager.h) | Reads the three containers, checks the clip set still matches its rig, culls by the baked box (`findPosedBounds`) — measuring only a pairing the cook never saw — uploads |
+| Prepare | [`game::PrepareSkinnedMesh`](libs/gamelib/include/gamelib/PreparedMesh.h) | The acquire above, less the upload: over an `AssetStore` alone, so a caller that must not stall the render thread pays the reads, the cook and the measurement on a worker and commits afterwards |
 | Upload | [`IScene::AddSkinnedMeshGeom`](libs/bgl/include/bgl/IScene.h) | Bones, clip table and sample pool become scene buffers; per-bone depth is derived here |
 | Place | [`ISceneView::CreateSkinnedMeshInstance`](libs/bgl/include/bgl/ISceneView.h) | Writes the playback record and reserves the instance's palette slice |
 | Pose | [`SkinnedPosePass`](libs/bgl/src/passes/SkinnedPosePass.h) | One workgroup per instance: sample, blend, walk the hierarchy, multiply by inverse bind |
@@ -130,6 +131,13 @@ the transport, the clip list and the scrubber are the same code either way — w
 * **Framing uses the posed box, never the bind pose.** See the culling contract below: it is the same
   box and the same reason. The panel reads it off the `.banim`'s bake, and only a pairing the cook
   never measured is walked — inside its loading screen rather than on the render thread.
+
+* **The whole acquire is prepared on that loading screen, not just the box.** `PrepareAnimationDraws`
+  runs every read, every meshlet cook and every texture decode there (`editor::PrepareAnimationDraws`,
+  built on `game::PrepareSkinnedMesh` / `PrepareVatMesh`); the render thread is handed payloads with
+  nothing left but the upload. One `Renderer` thread draws every viewport in the editor, so the
+  fused acquire this replaced stopped the frame loop everywhere — including the animation that was
+  playing in this very panel.
 
 * **The panel itself is not covered by a test**, and this is a pre-existing gap rather than one the
   skinned tier introduced: `RenderTargetWindow`'s constructor calls `CreateRenderTarget` with a real

@@ -1,4 +1,5 @@
 #include <gamelib/AssetManager.h>
+#include <gamelib/PreparedMesh.h>
 
 #include "util/RigFixture.h"
 #include "util/TestOptions.h"
@@ -248,4 +249,64 @@ TEST_CASE(
 		assets.AcquireSkinnedMesh("Meshes/rig.bmesh", "Animations/rig.banim", 0, valid);
 	REQUIRE(own.geom.IsValid());
 	assets.ReleaseGeom(own.geom);
+}
+
+TEST_CASE(
+	"a rig prepared off the render thread commits without reading a file",
+	"[skinned][acquire][prepare]")
+{
+	DataRoot root("bernini_skinned_prepare");
+	WriteRig(root.path);
+
+	auto gfx = bgl::CreateGraphics(HeadlessOptions());
+	REQUIRE(gfx != nullptr);
+
+	auto scene = gfx->CreateScene(bgl::SceneDesc());
+	auto view  = gfx->CreateSceneView(scene, 8);
+
+	auto assets = game::AssetManager(scene, root.path);
+
+	// The three reads this tier makes -- the clips, the skeleton they name, the mesh -- plus the
+	// posed box and the cook, all on a worker.
+	auto prepared = game::PreparedMesh();
+	auto worker   = std::thread([&] {
+		prepared =
+			game::PrepareSkinnedMesh(assets.GetStore(), "Meshes/rig.bmesh", "Animations/rig.banim");
+	});
+	worker.join();
+
+	SECTION("the commit uploads the rig with the data root deleted under it")
+	{
+		std::filesystem::remove_all(root.path);
+
+		const auto mesh = assets.AcquireSkinnedMesh(std::move(prepared));
+		REQUIRE(mesh.geom.IsValid());
+		CHECK(mesh.geom.geomType == bgl::GeomType::kSkinnedMesh);
+
+		// The clip table came off the container the prepare read, not off a file that is gone.
+		REQUIRE(mesh.clips.size() == 1);
+		CHECK(mesh.clips[0].name == "slide");
+		CHECK(mesh.clips[0].frameCount == 2);
+	}
+
+	SECTION("the clip set it was prepared against is what a live geom is checked on")
+	{
+		REQUIRE(assets.AcquireSkinnedMesh(std::move(prepared)).geom.IsValid());
+
+		game::test::WriteClips(root.path, "Animations/other.banim", "other", 2.0f, 3);
+
+		CHECK_THROWS_AS(
+			assets.AcquireSkinnedMesh(
+				game::PrepareSkinnedMesh(
+					assets.GetStore(),
+					"Meshes/rig.bmesh",
+					"Animations/other.banim")),
+			std::runtime_error);
+	}
+
+	SECTION("a payload prepared for another tier is refused")
+	{
+		CHECK_THROWS_AS(assets.AcquireMesh(std::move(prepared)), std::runtime_error);
+		CHECK_THROWS_AS(assets.AcquireVatMesh(std::move(prepared)), std::runtime_error);
+	}
 }

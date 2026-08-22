@@ -7,40 +7,10 @@
 #include <bgl/ISceneView.h>
 #include <core/str/str.h>
 #include <gamelib/ClipInfo.h>
+#include <gamelib/PreparedMesh.h>
 
 namespace game
 {
-	/**
-	 * The texture files `material` names, relative to the data root: the nine authoring routes when
-	 * `loose`, otherwise the baked triplet. Unrouted slots come back as empty strings, so the result
-	 * is positional.
-	 *
-	 * `loose` is `assetlib::drawsLoose` against the data root -- the caller passes the verdict in
-	 * rather than it being taken here, so one material is measured against the disk once and every
-	 * derived thing agrees with it.
-	 *
-	 * Public because decoding a texture is expensive and pure CPU, while uploading it is neither --
-	 * it must happen on the render thread. A caller that wants the decode off that thread needs to
-	 * know what to decode before it acquires anything. See TexturePrefetch.
-	 */
-	[[nodiscard]] std::vector<std::string>
-	MaterialTextures(const assetlib::BMaterial& material, bool loose);
-
-	/**
-	 * Textures decoded ahead of time, keyed by the data-root-relative path they will be asked for.
-	 *
-	 * `assetlib::loadKTX2` transcodes a whole Basis mip chain and is the dominant cost of loading a
-	 * material -- but it touches no GPU state, so it can run anywhere, unlike the upload that follows.
-	 * Hand one of these to AcquireTexture / AcquireMaterial and a matching entry is consumed instead
-	 * of the file being read, leaving only the upload on the render thread.
-	 *
-	 * Entries are moved out as they are used. A supplied prefetch is the whole truth: a path it does
-	 * not carry resolves to the scene's default map (with a warning), never to a read of the file --
-	 * so handing one in *is* the guarantee that the acquiring thread does no decode. A texture whose
-	 * decode failed is simply left out, and was reported where it failed.
-	 */
-	using TexturePrefetch = core::str::unordered_str_map<assetlib::ImageData>;
-
 	/**
 	 * Per-manager loading options, fixed at construction: a path maps to one shared material, so an
 	 * option that varied per call would make what everyone shares depend on who asked first.
@@ -158,6 +128,21 @@ namespace game
 		bgl::GeomHandle
 		AcquireMesh(std::string_view relPath, uint32_t meshIndex = 0);
 
+		/**
+		 * The commit half of the acquire above: uploads what PrepareMesh already read, cooked and
+		 * decoded, consuming it. Nothing here reads a file or flattens a mesh, so a caller on the
+		 * render thread pays only the uploads.
+		 *
+		 * A geom already live under the same key is shared, exactly as the path-taking overload
+		 * shares it, and `prepared` is dropped unused -- the cache cannot be consulted from the
+		 * thread that prepared it.
+		 *
+		 * @throws std::runtime_error if `prepared` was made for another tier or has already been
+		 *         spent; bgl::SceneError for anything AddStaticMeshGeom refuses.
+		 */
+		bgl::GeomHandle
+		AcquireMesh(PreparedMesh prepared);
+
 		/** An acquired VAT mesh: the geom to instance, and the clips its instances can play. */
 		struct VatMesh
 		{
@@ -210,6 +195,18 @@ namespace game
 			uint32_t         meshIndex = 0);
 
 		/**
+		 * The commit half of the acquire above, on AcquireMesh(PreparedMesh)'s terms: PrepareVatMesh
+		 * has already made the bake fresh and decoded the texture pair, so all that is left here is
+		 * the upload.
+		 *
+		 * @throws std::runtime_error if `prepared` was made for another tier or has already been
+		 *         spent, or if the geom is live with clips from a different `.banim`;
+		 *         bgl::SceneError for anything AddVatMeshGeom refuses.
+		 */
+		VatMesh
+		AcquireVatMesh(PreparedMesh prepared);
+
+		/**
 		 * Uploads mesh `meshIndex` of the `.bmesh` at `relPath` as skinned geometry, or shares it from
 		 * a previous call, acquiring its materials like AcquireMesh does. See
 		 * [Skinned Meshes](docs/skinning.md).
@@ -239,6 +236,18 @@ namespace game
 			std::string_view                       animationsRelPath,
 			uint32_t                               meshIndex   = 0,
 			const std::optional<assetlib::Bounds>& posedBounds = std::nullopt);
+
+		/**
+		 * The commit half of the acquire above, on AcquireMesh(PreparedMesh)'s terms: PrepareSkinnedMesh
+		 * has already read the rig, checked its signature and settled the posed box, so all that is
+		 * left here is the upload.
+		 *
+		 * @throws std::runtime_error if `prepared` was made for another tier or has already been
+		 *         spent, or if the geom is live with clips from a different `.banim`;
+		 *         bgl::SceneError for anything AddSkinnedMeshGeom refuses.
+		 */
+		SkinnedMesh
+		AcquireSkinnedMesh(PreparedMesh prepared);
 
 		/**
 		 * A `.benv` followed to its uploads: one texture reference per baked map it references, plus
@@ -546,11 +555,39 @@ namespace game
 		// names. A current bake samples the optimized triplet (three reads); a stale one samples the
 		// authoring routes directly (up to nine). The only place that branch lives, so a material
 		// renders the same however it was loaded.
+		// `loose` is assetlib::drawsLoose's verdict when it has already been taken -- nullopt
+		// measures it here. A Prepare* passes its own so this touches no disk.
 		bgl::MaterialHandle
 		CreateMaterial(
 			const assetlib::BMaterial& material,
 			std::string                key,
-			TexturePrefetch*           prefetch = nullptr);
+			TexturePrefetch*           prefetch = nullptr,
+			std::optional<bool>        loose    = std::nullopt);
+
+		// AcquireMaterial over a material a Prepare* already read and measured, so nothing here
+		// touches the disk. An empty `relPath` yields an invalid handle, as the path-taking one does.
+		bgl::MaterialHandle
+		AcquireMaterial(const PreparedMaterial& material, TexturePrefetch* prefetch);
+
+		// The materials one prepared mesh's submeshes bind to: `materials` parallel to the source
+		// `.bmesh`'s list, `submeshMaterials` one per submesh. Every handle taken is appended to
+		// `acquired`, so a caller that throws afterwards can hand exactly those back.
+		void
+		AcquirePreparedMaterials(
+			PreparedMesh&                     prepared,
+			std::vector<bgl::MaterialHandle>& materials,
+			std::vector<bgl::MaterialHandle>& submeshMaterials,
+			std::vector<bgl::MaterialHandle>& acquired);
+
+		// One more reference on the geom already live under `key`, or an invalid handle when none
+		// is: the cache hit every acquire opens with.
+		[[nodiscard]] bgl::GeomHandle
+		ShareGeom(std::string_view key);
+
+		// Files a freshly built record under `key` and hands its handle back: the tail every acquire
+		// closes with.
+		bgl::GeomHandle
+		FileGeom(GeomRecord record, std::string key);
 
 		// Drops one reference to a geom by its slot, destroying it at zero. Shared by ReleaseGeom and
 		// DestroyInstance, which are the two things that hold geometry references.

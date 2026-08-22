@@ -1,4 +1,5 @@
 #include <gamelib/AssetManager.h>
+#include <gamelib/PreparedMesh.h>
 #include <gamelib/vat_freshness.h>
 
 #include "util/GoldenImage.h"
@@ -541,4 +542,50 @@ TEST_CASE("VatFreshness asks EnsureVatBaked's question without baking", "[vat]")
 		out << "not a container";
 	}
 	CHECK(game::VatFreshness(store, mesh, clips) == game::VatBakeState::kMissing);
+}
+
+TEST_CASE(
+	"a rig prepared off the render thread commits its VAT pair without reading a file",
+	"[vat][acquire][prepare]")
+{
+	DataRoot root("bernini_vat_prepare");
+	WriteRig(root.path);
+
+	auto gfx = bgl::CreateGraphics(HeadlessOptions());
+	REQUIRE(gfx != nullptr);
+
+	auto scene = gfx->CreateScene(bgl::SceneDesc());
+	auto view  = gfx->CreateSceneView(scene, 8);
+
+	auto assets = game::AssetManager(scene, root.path);
+
+	// The bake and both texture decodes -- by far the largest costs on this path -- on a worker.
+	auto prepared = game::PreparedMesh();
+	auto worker   = std::thread([&] {
+		prepared =
+			game::PrepareVatMesh(assets.GetStore(), "Meshes/rig.bmesh", "Animations/rig.banim");
+	});
+	worker.join();
+
+	// Bake-on-demand's receipt, written by the worker rather than by the acquire.
+	CHECK(fs::exists(root.path / assetlib::vatPathFor("Meshes/rig.bmesh", "Animations/rig.banim")));
+
+	SECTION("the commit uploads the pair with the data root deleted under it")
+	{
+		std::filesystem::remove_all(root.path);
+
+		const auto vat = assets.AcquireVatMesh(std::move(prepared));
+		REQUIRE(vat.geom.IsValid());
+		CHECK(vat.geom.geomType == bgl::GeomType::kVatMesh);
+
+		REQUIRE(vat.clips.size() == 1);
+		CHECK(vat.clips[0].name == "slide");
+		CHECK(vat.clips[0].frameCount == 2);
+	}
+
+	SECTION("a payload prepared for another tier is refused")
+	{
+		CHECK_THROWS_AS(assets.AcquireMesh(std::move(prepared)), std::runtime_error);
+		CHECK_THROWS_AS(assets.AcquireSkinnedMesh(std::move(prepared)), std::runtime_error);
+	}
 }

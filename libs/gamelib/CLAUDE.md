@@ -91,6 +91,21 @@ decode failed is simply left out, and was reported where it failed.
 The editor's `AssetThumbnailCache` is the reason it exists: it decodes on a worker and uploads on the
 UI thread, which is the only way a folder of meshes can populate without freezing the editor.
 
+**Preparing.** `TexturePrefetch` unfuses one step; `PreparedMesh` (`PreparedMesh.h`) unfuses the whole
+acquire. `PrepareMesh` / `PrepareVatMesh` / `PrepareSkinnedMesh` do every file read, the meshlet cook
+(`bgl::CookStaticMesh`), every texture decode, and — per tier — the `.bvat` bake or the posed-box
+measurement, over an `AssetStore` and nothing else, so they run on any thread. The matching
+`AcquireMesh(PreparedMesh)` / `AcquireVatMesh(PreparedMesh)` / `AcquireSkinnedMesh(PreparedMesh)`
+overloads then do nothing but upload, which is the half that must be on the render thread. The
+path-taking acquires are those two halves fused, and are what a caller with a thread to spare still
+uses.
+
+A `PreparedMesh` carries no `BMesh`: everything a commit reads off one — the material each submesh
+names, the submesh count — is flattened into it, so the parsed container dies on the thread that read
+it. It is single-spend (the cook inside is consumed) and tier-tagged (an acquire refuses another
+tier's payload). The one thing a prepare cannot do is consult the manager's cache, which lives on the
+render thread: a mesh already live is prepared anyway and the work is dropped by the commit.
+
 **Skins.** `SetSubmeshMaterial` changes a geom's **default**, so it reaches every instance placed from
 it. `SetInstanceSubmeshMaterial` overrides **one instance** and leaves its siblings alone — the same
 unit mesh, a different material per unit. The override outranks the default and holds a reference of
