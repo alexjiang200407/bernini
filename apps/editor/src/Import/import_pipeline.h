@@ -37,10 +37,13 @@ namespace editor
 	 * `options.outputs` says where inside each -- a project's references are written against that
 	 * layout, so an import may organise within a category and never across one.
 	 *
-	 * Parsing and supercompressing the textures run on a worker thread behind a cancellable loading
-	 * screen: they take long enough to freeze the editor. Nothing there touches bgl. The material
-	 * graphs are built afterwards, back on the UI thread -- their nodes own QPixmaps, which belong to
-	 * it -- so the `.bmesh` is written from the UI thread too, once its materials exist to be named.
+	 * Everything expensive runs on a worker thread behind a cancellable loading screen, because all of
+	 * it takes long enough to freeze the editor and none of it touches Qt or bgl: parsing the glTF,
+	 * supercompressing the textures, rebuilding the vertex pool, and baking the rig's posed box --
+	 * which skins every vertex of every frame, seconds on a dense rig.
+	 *
+	 * Only the material graphs are left on the UI thread, because their nodes own QPixmaps, and the
+	 * `.bmesh` follows them there since it names the files they write.
 	 *
 	 * Refuses to overwrite anything, reports a failure to the user, and on either a failure or a cancel
 	 * removes the half-written files it had produced -- see assetlib::rollBackImport.
