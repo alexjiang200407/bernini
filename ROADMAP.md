@@ -158,6 +158,11 @@ and portability.
     - [ ] Animation preview + playback at different LODs, including the skinned→VAT swap.
       The editor's Animation panel previews either tier and switches between them by re-loading;
       the runtime LOD swap is what remains.
+    - [x] Editor bone overlay — the Animation panel's *Show Bones*, drawn from the palette the pose
+      pass wrote rather than a second reading of the clip, so what is on screen is the pose that
+      skins. Per render target (`IRenderTarget::SetBoneOverlayEnabled`), so the level viewport
+      inherits it unchanged. Wanted before the crossfade above: a blend's failures are statements
+      about joints, and the skin is what hides them. See [docs/passes.md](docs/passes.md).
     - [ ] Bone mask — small per-bone weight array, needed by additive flinch on the skinned tier.
   - [ ] State Machine — flat tables, tiny per-unit interpreter, ticked for all units regardless of
     tier and regardless of visibility.
