@@ -4,8 +4,10 @@
 #include "util/mime_files.h"
 #include <assetlib/Project.h>
 
+#include "Windows/AnimationEditor/animation_draws.h"
 #include "Windows/AnimationEditor/animation_source.h"
 
+#include <QCheckBox>
 #include <QComboBox>
 #include <QDir>
 #include <QDoubleSpinBox>
@@ -103,6 +105,7 @@ AnimationEditorWindow::AnimationEditorWindow(QWidget* parent, AnimationEditorWin
 			m_SyncingUi = true;
 			m_TierSelector->setCurrentIndex(source == editor::AnimationSource::kSkinned ? 0 : 1);
 			m_SyncingUi = false;
+			SyncBoneOverlayUi();
 		});
 
 	connect(
@@ -181,6 +184,11 @@ AnimationEditorWindow::BuildPropertiesColumn()
 			index == 0 ? editor::AnimationSource::kSkinned : editor::AnimationSource::kVat);
 	});
 	layout->addWidget(m_TierSelector);
+
+	m_ShowBones = new QCheckBox(QStringLiteral("Show Bones"), column);
+	m_ShowBones->setEnabled(false);
+	connect(m_ShowBones, &QCheckBox::toggled, this, [this] { SyncBoneOverlayUi(); });
+	layout->addWidget(m_ShowBones);
 
 	m_BakeVatButton = new QPushButton(QStringLiteral("Bake VAT"), column);
 	m_BakeVatButton->setEnabled(false);
@@ -474,9 +482,29 @@ AnimationEditorWindow::SetClips(const std::vector<editor::ClipInfo>& clips)
 		m_ClipMetadata->clear();
 	}
 
+	m_HasClips = playable;
+	SyncBoneOverlayUi();
+
 	m_Preview->SetTime(0.0f);
 	SelectClip(playable ? 0 : -1);
 	SyncTransportUi();
+}
+
+void
+AnimationEditorWindow::SyncBoneOverlayUi()
+{
+	const editor::BoneOverlayOffer offer =
+		editor::OfferBoneOverlay(m_Preview->GetAnimationSource(), m_HasClips);
+
+	m_ShowBones->setEnabled(offer.allowed);
+	m_ShowBones->setToolTip(
+		offer.allowed ?
+			QStringLiteral("Draws the rig's skeleton over the preview, through the mesh.") :
+			QString::fromUtf8(offer.refusal.data(), qsizetype(offer.refusal.size())));
+
+	// The box keeps what the user asked for even where it cannot be honoured, so switching back to
+	// a tier that can show bones shows them again without a second click.
+	m_Preview->SetBoneOverlayEnabled(m_ShowBones->isChecked() && offer.allowed);
 }
 
 void

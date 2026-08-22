@@ -33,6 +33,28 @@ namespace editor
 		return { .needsFreshBake = vat, .framedByBake = vat };
 	}
 
+	BoneOverlayOffer
+	OfferBoneOverlay(const AnimationSource source, const bool hasAnimations)
+	{
+		if (!hasAnimations)
+		{
+			return { .allowed = false,
+				     .refusal =
+				         "This mesh has no clips, so it is drawn as static geometry and has "
+				         "no rig posed on the GPU to show." };
+		}
+
+		if (source == AnimationSource::kVat)
+		{
+			return { .allowed = false,
+				     .refusal =
+				         "The VAT tier draws baked vertices, not a rig. Switch Preview As to "
+				         "Skinned to see the bones." };
+		}
+
+		return { .allowed = true };
+	}
+
 	std::vector<std::string>
 	BakeableMaterials(const assetlib::AssetStore& store, std::span<const std::string> materials)
 	{

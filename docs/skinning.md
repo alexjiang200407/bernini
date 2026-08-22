@@ -162,6 +162,15 @@ the transport, the clip list and the scrubber are the same code either way — w
   once tier-gated, which left the skinned tier reporting exactly the refusal a bake answers without
   offering it.
 
+* **Show Bones is offered only where there is a rig on the GPU to draw.** `editor::OfferBoneOverlay`
+  returns the verdict and, when it refuses, the sentence the checkbox wears as a tooltip — a control
+  that greys itself without saying why reads as broken. Two refusals, both about the rig being absent
+  rather than the feature being off: the VAT tier draws baked vertices and its palettes stay in the
+  container with no GPU reader ([vat.md](docs/vat.md)), and a mesh with no clip file loads as static
+  geometry with no palette at all. The box keeps the user's intent while refused, so coming back to a
+  tier that can show bones shows them again without a second click; what reaches
+  `IRenderTarget::SetBoneOverlayEnabled` is the intent *and* the verdict.
+
 * **The camera opens at a fixed yaw and elevation.** Nothing in the path knows which way a rig faces:
   authoring conventions disagree on the forward axis, so any fixed yaw shows some rigs a profile —
   the test coyote faces +X where glTF's convention is +Z, and opens side-on. Deriving it from bone
@@ -179,7 +188,8 @@ the transport, the clip list and the scrubber are the same code either way — w
   skinned tier introduced: `RenderTargetWindow`'s constructor calls `CreateRenderTarget` with a real
   `winId()` and `headless = false`, so no test can construct `AnimationPreviewWindow`. What *is*
   covered is `PlanAnimationLoad` — the tier-dependent decisions lifted clear of the window, which is
-  the shape `apps/editor/CLAUDE.md` prescribes for exactly this. The uncovered part is the toggle, and
+  the shape `apps/editor/CLAUDE.md` prescribes for exactly this — and `OfferBoneOverlay` beside it, for
+  the same reason. The uncovered part is the toggle, and
   it has already shipped one bug that every automated gate passed: a tier switch that acquired the
   geom through the new tier while creating the instance through the old one. A `headless` flag on
   `RenderTargetWindowDesc` is the seam that closes it.
