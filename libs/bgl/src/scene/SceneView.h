@@ -39,6 +39,10 @@ namespace bgl
 
 		// kSkinnedMesh only: the instance's slice of the view's palette arena, freed with it.
 		core::multi_slot_handle palette;
+
+		// kSkinnedMesh only: the rig's bone count, so the posed list can be rebuilt without asking
+		// the Scene for a geom the placement no longer names.
+		uint32_t boneCount = 0;
 	};
 
 	/**
@@ -149,6 +153,17 @@ namespace bgl
 		GetPosedInstanceCount() const noexcept
 		{
 			return m_PosedInstances.Size();
+		}
+
+		/**
+		 * The largest bone count among this view's skinned placements, and zero when it has none. The
+		 * bone overlay dispatches a group per bone of the widest rig and lets the narrower ones stop
+		 * early, which is what saves it a prefix sum over the posed list.
+		 */
+		[[nodiscard]] uint32_t
+		GetMaxPosedBoneCount() const noexcept
+		{
+			return m_MaxPosedBoneCount;
 		}
 
 		[[nodiscard]] uint32_t
@@ -365,6 +380,14 @@ namespace bgl
 		// CPU-authored rather than a sweep of m_SkinnedStates: erasing a slot only releases it, so a
 		// sweep would pose freed states -- into palette slices another instance may already own.
 		UploadBuffer<uint32_t> m_PosedInstances;
+
+		// The mesh each entry of m_PosedInstances was placed as, same order and same length. A
+		// SkinnedState carries no way back to its placement, and the bone overlay needs the
+		// placement's world transform; RebuildPosedList fills both in one sweep.
+		UploadBuffer<uint32_t> m_PosedMeshes;
+
+		// The widest rig among the posed placements; RebuildPosedList derives it in the same sweep.
+		uint32_t m_MaxPosedBoneCount = 0;
 
 		// One entry per frustum this view is culled against; index 0 is the camera.
 		std::vector<CullState> m_CullStates;

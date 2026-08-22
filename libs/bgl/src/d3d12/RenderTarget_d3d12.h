@@ -184,6 +184,36 @@ namespace bgl
 			return m_OutlineMask.srvHandle;
 		}
 
+		[[nodiscard]] TextureHandle
+		GetBoneOverlayTexture() const noexcept override
+		{
+			return m_BoneOverlay.textureHandle;
+		}
+
+		[[nodiscard]] RtvHandle
+		GetBoneOverlayRtv() const noexcept override
+		{
+			return m_BoneOverlay.rtvHandle;
+		}
+
+		[[nodiscard]] SrvHandle
+		GetBoneOverlaySrv() const noexcept override
+		{
+			return m_BoneOverlay.srvHandle;
+		}
+
+		[[nodiscard]] TextureHandle
+		GetBoneOverlayDepthTexture() const noexcept override
+		{
+			return m_BoneOverlayDepth.textureHandle;
+		}
+
+		[[nodiscard]] DsvHandle
+		GetBoneOverlayDsv() const noexcept override
+		{
+			return m_BoneOverlayDepth.dsvHandle;
+		}
+
 		[[nodiscard]] bool
 		IsTaaEnabled() const noexcept override
 		{
@@ -200,6 +230,22 @@ namespace bgl
 		SetOutlineEnabled(bool enabled) noexcept override
 		{
 			m_OutlineEnabled = enabled;
+		}
+
+		[[nodiscard]] bool
+		IsBoneOverlayEnabled() const noexcept override
+		{
+			return m_BoneOverlayEnabled;
+		}
+
+		void
+		SetBoneOverlayEnabled(bool enabled) noexcept override
+		{
+			m_BoneOverlayEnabled = enabled;
+			if (enabled && m_BoneOverlay.textureHandle.IsNull())
+			{
+				CreateBoneOverlayAttachments();
+			}
 		}
 
 		void
@@ -294,6 +340,14 @@ namespace bgl
 		void
 		CreateRenderAttachments();
 
+		// The overlay's own colour and depth, at the output size. Made on demand -- the first
+		// SetBoneOverlayEnabled(true) -- and remade by a resize only while the overlay is on.
+		void
+		CreateBoneOverlayAttachments() noexcept;
+
+		void
+		DestroyBoneOverlayAttachments() noexcept;
+
 		void
 		CreateHistoryAttachments();
 
@@ -310,12 +364,13 @@ namespace bgl
 		CommandQueueRef    m_CommandQueue;
 		ResourceManagerRef m_ResourceManager;
 
-		bool  m_Headless       = false;
-		bool  m_TaaEnabled     = false;
-		bool  m_OutlineEnabled = true;
-		bool  m_TaaAllocated   = false;
-		bool  m_EnableDebug    = false;
-		void* m_Wnd            = nullptr;
+		bool  m_Headless           = false;
+		bool  m_TaaEnabled         = false;
+		bool  m_OutlineEnabled     = true;
+		bool  m_BoneOverlayEnabled = false;
+		bool  m_TaaAllocated       = false;
+		bool  m_EnableDebug        = false;
+		void* m_Wnd                = nullptr;
 
 		wrl::ComPtr<IDXGISwapChain3> m_SwapChain;
 
@@ -327,6 +382,10 @@ namespace bgl
 		TextureRtvSrvHandle m_SceneColor;
 		SrvHandle           m_MotionVectorSrv;
 		TextureRtvSrvHandle m_OutlineMask;
+
+		// Output-sized and made on demand: null until SetBoneOverlayEnabled(true).
+		TextureRtvSrvHandle m_BoneOverlay;
+		TextureDsvHandle    m_BoneOverlayDepth;
 
 		// Allocated only when m_TaaAllocated; a target that never resolves pays neither the memory nor
 		// the two RTV slots.

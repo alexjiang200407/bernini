@@ -31,10 +31,11 @@ flowchart TD
         POSE --> TS["Transparent Sort (3 sub-passes)"]
         TS --> CI["Compact Instances (3 sub-passes)"]
         CI --> FWD["Forward (indirect dispatch per PSO bucket, then one for the sorted list)"]
-        FWD --> SM["Outline Mask (only when the view has a selection)"]
+        FWD --> BO["Bone Overlay (only when the target asked for it)"]
+        BO --> SM["Outline Mask (only when the view has a selection)"]
     end
     D --> TAA["TaaResolve (only when the target has TAA)"]
-    TAA --> PPX["PostProcess (-> backbuffer; dilates the outline mask into the outline)"]
+    TAA --> PPX["PostProcess (-> backbuffer; dilates the outline mask, composites the bone overlay)"]
     PPX --> PP["PreparePresent (transition backbuffer to Present)"]
     PP --> EF["EndFrame → Compile → Execute"]
 ```
@@ -45,7 +46,8 @@ the DSV declares `depth` in its `PassDesc`** (`kDepthStencil` / `kDepthWrite`), 
 later pass read it as a shader resource and have the graph derive the write → read → write cycle;
 `TaaResolve` reads `sceneColor`, the velocity buffer, `depth` and the previous accumulation and
 writes the next one; `PostProcess` reads whichever of the two the last HDR stage produced and is the **only**
-writer of the backbuffer;
+writer of the backbuffer -- the bone overlay reaches the screen by being composited there, not by
+drawing itself;
 `PreparePresent` only transitions the backbuffer to present; `Compact Instances`
 and `Transparent Sort` are pure compute passes that touch no textures at all. All three read the scene/view buffers imported
 by [Scene](libs/bgl/src/scene/Scene.cpp)/[SceneView](libs/bgl/src/scene/SceneView.cpp)'s own
@@ -428,6 +430,38 @@ contours the pose it is drawn in.
 * **In:** `scene.selectedInstances` (the view's dense selected-drawable list) and the seven
   forward geometry tables.
 * **Out:** the outline mask.
+
+### Bone Overlay — [passes/BoneOverlayPass.{h,cpp}](libs/bgl/src/passes/BoneOverlayPass.cpp)
+
+Draws every skinned instance's skeleton as octahedral solids, one mesh group per bone: `x` indexes the
+bone, `y` the posed instance. A bone spans its parent's joint to its own, so length and roll are
+readable; a root, and a bone standing on its parent, get a small marker instead of a solid with no
+length.
+
+Where a bone stands comes back out of the palette the pose pass wrote, not from a second reading of
+the clip — so the skeleton on screen is the one that skins the mesh beside it. A palette entry is
+`model x inverseBind`, so undoing the inverse bind recovers the bone, and the placement's transform
+carries it out of model space. That last part is why the pass reads `scene.posedMeshes`: a
+`SkinnedState` names no placement, and the palette alone would stack every skeleton on the world
+origin.
+
+* **Attached** only when the draw's target has `SetBoneOverlayEnabled` and the view places something
+  skinned. Off is free: the target allocates the pair below on the first enable, so a target nobody
+  inspects has nothing to import, clear or draw into.
+* **Under the view's namespace, not a cull namespace** — like the pose pass it reads, and for the
+  same reason.
+* **Output resolution, not the render grid.** It is composited after the resolve, so it is authored
+  at the size it is shown at and a render scale below 1 cannot soften it. Its projection is the
+  unjittered one: an overlay that is never accumulated would shimmer by half a pixel with the jitter
+  in.
+* **Its own depth, never the scene's.** The bones sort among themselves and the skin they sit inside
+  cannot hide them, which is the whole point of an overlay on a rig. Cleared with the frame rather
+  than by this pass, because several draws share one target.
+* **In:** `scene.posedInstances`, `scene.posedMeshes`, `scene.meshInstanceBuffer`,
+  `scene.skinnedStateBuffer`, `scene.skinnedGeomBuffer`, `scene.skinnedBoneBuffer`,
+  `scene.bonePalettes`.
+* **Out:** `boneOverlay` (colour, coverage in alpha) and `boneOverlayDepth`, both the target's.
+  `PostProcess` composites the first over the tonemapped frame; nothing reads the second.
 
 ### TaaResolve — [passes/TaaResolvePass.{h,cpp}](libs/bgl/src/passes/TaaResolvePass.cpp)
 
