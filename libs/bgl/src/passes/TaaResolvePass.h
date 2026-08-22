@@ -69,10 +69,6 @@ namespace bgl
 			// shading changed; the resolve then takes the scene colour whole rather than blending
 			// against an accumulation that describes something else.
 			bool historyValid = false;
-
-			// Whether the unjittered camera matches last frame's bitwise. Motion vectors cannot
-			// carry this for empty pixels, whose velocity is zero under any camera.
-			bool cameraStill = false;
 		};
 
 		TaaResolvePass() = default;

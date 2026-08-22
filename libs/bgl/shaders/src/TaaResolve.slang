@@ -55,11 +55,6 @@ struct TaaResolveData
     // first after a resize -- takes the scene colour whole.
     float blendWeight;
     float historyValid;
-
-    // Whether the unjittered camera matches last frame's. A pixel's own motion cannot stand in
-    // for this: empty pixels report zero velocity under any camera, and treating them as at rest
-    // during a pan banks the passing content's spread as variance.
-    float cameraStill;
 };
 
 ConstantBuffer<TaaResolveData> gTaaResolveData;
@@ -258,23 +253,18 @@ float4 PSMain(VSOut input) : SV_Target
 
     float2 motion = gTaaResolveData.motionVectors.SampleLevel(pointClamp, sampleUv, 0.0).xy;
 
-    // Motion is jitter-free, so rest measures zero up to fma residue -- this admits that residue
-    // and no real motion, which is never a thousandth of a texel per frame.
-    const float c_RestingTexels = 1e-3;
-
     // What a surface must move by on its own before a neighbour's vector is worth borrowing: a
     // twentieth of a texel doubles no edge, and clears the reconstruction's residue on a static
     // surface -- measured bit-identical under an orbit -- by an order of magnitude.
     const float c_ObjectTexels = 0.05;
 
-    // The 3x3 the history is admitted from: min/max bounds at rest, tightening to mean +/- sigma
-    // as the pixel moves. On stochastic coverage the min/max box spans both populations whole and
-    // admits every dragged mixture -- the smear a hashed surface trails at a distance -- where the
-    // sigma box recentres on the majority. Motion is jitter-free, so rest is exactly min/max.
+    // The 3x3 the history is admitted from: variance bounds, always. On stochastic coverage a
+    // min/max box spans both populations whole and admits every dragged mixture -- the smear a
+    // hashed surface trails at a distance -- where the sigma box recentres on the majority.
     // The trade-off history is in docs/taa.md.
     //
     // The same 3x3 yields the vector of whichever neighbour moves most on its own, which stands in
-    // for the surface at a silhouette (docs/taa.md), and the longest motion in the neighbourhood.
+    // for the surface at a silhouette (docs/taa.md).
     float3 centre = RgbToYCoCg(current.rgb);
     float3 boxMin = centre;
     float3 boxMax = centre;
@@ -282,7 +272,6 @@ float4 PSMain(VSOut input) : SV_Target
     float3 m2 = centre * centre;
     float2 dilatedMotion = motion;
     float dilatedObjectTexels = max(ObjectTexels(sampleUv, motion, texel), c_ObjectTexels);
-    float neighbourhoodTexels = length(motion / texel);
 
     for (int y = -1; y <= 1; ++y)
     {
@@ -302,7 +291,6 @@ float4 PSMain(VSOut input) : SV_Target
             m2 += tap * tap;
 
             float2 tapMotion = gTaaResolveData.motionVectors.SampleLevel(pointClamp, tapUv, 0.0).xy;
-            neighbourhoodTexels = max(neighbourhoodTexels, length(tapMotion / texel));
 
             float tapObjectTexels = ObjectTexels(tapUv, tapMotion, texel);
             if (tapObjectTexels > dilatedObjectTexels)
@@ -315,16 +303,12 @@ float4 PSMain(VSOut input) : SV_Target
 
     float2 historyUv = input.uv - dilatedMotion;
 
-    // Fully tight from one texel of motion per frame. The sigma box is kept inside the min/max
-    // box: nine bounded samples can put mu +/- sigma outside it, and outside it the clamp would
-    // admit colours the neighbourhood never produced.
+    // The sigma box is kept inside the min/max box: nine bounded samples can put mu +/- sigma
+    // outside it, and outside it the clamp would admit colours the neighbourhood never produced.
     float3 mu = m1 / 9.0;
     float3 sigma = sqrt(max(m2 / 9.0 - mu * mu, 0.0));
-    float3 tightMin = clamp(mu - sigma, boxMin, boxMax);
-    float3 tightMax = clamp(mu + sigma, boxMin, boxMax);
-    float tightness = saturate(length(motion / texel));
-    boxMin = lerp(boxMin, tightMin, tightness);
-    boxMax = lerp(boxMax, tightMax, tightness);
+    boxMin = clamp(mu - sigma, boxMin, boxMax);
+    boxMax = clamp(mu + sigma, boxMin, boxMax);
 
     // Reprojected off-screen: there is no history for this pixel, and wrapping the clamp sampler's
     // edge texel in would be a smear rather than an accumulation.
@@ -333,7 +317,7 @@ float4 PSMain(VSOut input) : SV_Target
     // Branched, not folded into the blend weight below: the history texture is not cleared, so on the
     // first frame it holds whatever the allocation did, which may decode as NaN. `lerp(NaN, c, 1.0)`
     // is NaN -- the zero coefficient does not discard the operand -- and a NaN written into the
-    // accumulation stays there for the life of the target. Alpha starts the variance below at zero.
+    // accumulation stays there for the life of the target.
     if (!onScreen || gTaaResolveData.historyValid == 0.0)
     {
         // Filtered onto the output grid rather than point-taken: there is no accumulation to build
@@ -347,57 +331,18 @@ float4 PSMain(VSOut input) : SV_Target
 
     float3 history = SampleHistoryCatmullRom(historyUv, gTaaResolveData.outputTexelSize);
 
-    // A running average of the 3x3's own *spatial* luma variance, kept in the history's alpha --
-    // free because PostProcess writes the backbuffer opaque. Spatial, not temporal, so a ghost's
-    // wake earns no widening; see docs/taa.md. Bilinear, not Catmull-Rom: a negative lobe could go
-    // below zero.
-    float varPrev = gTaaResolveData.history.SampleLevel(gTaaResolveData.linearSampler, historyUv, 0.0).a;
-
-    // Motion empties the store: the sweep of passing content reads as spread, and a box opened on
-    // it the frame the camera stops re-admits exactly the wake the clamp exists to scrub. Motion
-    // anywhere in the 3x3, not the pixel's own: the backdrop beside a moving mesh reports zero
-    // and would otherwise bank the passing silhouette's contrast, then shelter its wake.
-    float resting = (gTaaResolveData.cameraStill != 0.0 && neighbourhoodTexels < c_RestingTexels) ? 1.0 : 0.0;
-    float variance = lerp(varPrev, sigma.x * sigma.x, gTaaResolveData.blendWeight) * resting;
-
-    // On stochastic coverage a resting pixel's 3x3 sometimes shows no survivor, the box collapses
-    // onto the backdrop, and the accumulated mixture is wiped -- the remembered sigma is what
-    // still knows the mixture is real on those frames. Widen by its excess over this frame's
-    // spread only, at rest only: resting history reprojects onto itself and cannot ghost. The
-    // mechanism is docs/taa.md's.
-    const float c_ChromaWiden = 0.5;
-
-    float widen = max(0.0, sqrt(variance) - sigma.x);
-    boxMin -= float3(widen, c_ChromaWiden * widen, c_ChromaWiden * widen);
-    boxMax += float3(widen, c_ChromaWiden * widen, c_ChromaWiden * widen);
-
     // Clamped rather than rejected: a pixel whose history is merely stale still carries subpixel
     // detail worth keeping once it is pulled inside what this frame could have produced.
     history = YCoCgToRgb(clamp(RgbToYCoCg(history), boxMin, boxMax));
-
-    // What converged stochastic coverage still flickers by is the accumulation's residual variance,
-    // which scales with the blend weight and which no clamp box reaches. The remembered spread is a
-    // per-pixel map of exactly where that residual lives -- and motion empties it, so an edge under
-    // a pan keeps the full weight and the deepening cannot ghost. Floored so the accumulation still
-    // tracks a lighting change a resting camera is watching.
-    const float c_ConvergeKnee = 8.0;
-    const float c_MinWeightScale = 0.25;
-
-    // Capped at twice: docs/taa.md has where the hashed pan's trailing-band guard stops it.
-    const float c_MaxMotionWeightScale = 2.0;
-    const float c_MotionWeightTexels = 1.0;
-
-    float motionScale = lerp(1.0, c_MaxMotionWeightScale, saturate(length(dilatedMotion / texel) / c_MotionWeightTexels));
 
     // On a grid denser than the render one, an output pixel no sample landed near this frame takes
     // almost none of it and waits for the phase that serves it.
     float sampleWeight = PhaseWeight(sampleOffset.x, gTaaResolveData.jitterTexels.x, gTaaResolveData.subPixels.x) *
                          PhaseWeight(sampleOffset.y, gTaaResolveData.jitterTexels.y, gTaaResolveData.subPixels.y);
 
-    float weight =
-        sampleWeight * motionScale * gTaaResolveData.blendWeight * max(c_MinWeightScale, 1.0 / (1.0 + c_ConvergeKnee * sqrt(variance)));
+    float weight = sampleWeight * gTaaResolveData.blendWeight;
 
     float3 resolved = UnToneWeight(lerp(ToneWeight(history), ToneWeight(current.rgb), weight));
 
-    return float4(resolved, variance);
+    return float4(resolved, 0.0);
 }
