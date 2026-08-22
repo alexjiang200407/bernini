@@ -195,8 +195,7 @@ AnimationPreviewWindow::LoadMeshAs(
 	// VAT reads the box its bake already closed over, one for the file. The skinned tier reads
 	// its own bake off the .banim, one per animated mesh entry -- the box is that geom's culling
 	// volume, and a .bmesh may hold two separately rigged meshes. Only a pairing the cook never
-	// measured is walked here, off the UI and render threads: posedBounds skins every vertex at
-	// every frame.
+	// measured is walked here, off the UI and render threads.
 	auto posedMin   = glm::vec3(0.0f);
 	auto posedMax   = glm::vec3(0.0f);
 	bool posedKnown = false;

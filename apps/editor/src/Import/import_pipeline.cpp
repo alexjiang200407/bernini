@@ -209,10 +209,10 @@ namespace editor
 					tangents = assetlib::generateTangents(*mesh);
 				}
 
-				// The rig's box is skinned from every vertex of every frame -- seven seconds on the
-				// test project's rhino -- and both doors below are pure assetlib, the source copy
-				// included. After the screen rather than behind it, this ran on the GUI thread with
-				// nothing on screen saying the editor was still working, which reads as a hang.
+				// The rig's box is swept through every frame of every clip, and both doors below are
+				// pure assetlib, the source copy included. After the screen rather than behind it,
+				// this ran on the GUI thread with nothing on screen saying the editor was still
+				// working, which reads as a hang.
 				if (options.mesh)
 				{
 					progress.Report(0, 0, QString("Baking the pose bounds..."));
