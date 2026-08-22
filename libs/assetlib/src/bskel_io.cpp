@@ -3,6 +3,7 @@
 
 #include <assetlib/skeleton.h>
 
+#include "bake_tokens.h"
 #include "cache_io.h"
 #include "fs_util.h"
 
@@ -16,9 +17,6 @@ namespace assetlib
 {
 	namespace
 	{
-		// A fresh random value on ANY output-affecting change -- semantics and layout alike.
-		constexpr uint64_t c_BakeToken = 0x9be47d02a15c68f3ull;
-
 		constexpr std::string_view c_What = "bskel";
 
 		enum class ChunkId : uint32_t
@@ -35,13 +33,13 @@ namespace assetlib
 		cache::Writer writer;
 		writer.Add(ChunkId::kBones, skeleton.bones);
 		writer.Add(ChunkId::kStringPool, skeleton.stringPool.bytes());
-		return writer.Finish(magic::c_BSkel, c_BakeToken, skeleton.source);
+		return writer.Finish(magic::c_BSkel, c_BSkelBakeToken, skeleton.source);
 	}
 
 	Skeleton
 	deserializeSkeleton(std::span<const std::byte> bytes)
 	{
-		const cache::Reader reader(bytes, magic::c_BSkel, c_BakeToken, c_What);
+		const cache::Reader reader(bytes, magic::c_BSkel, c_BSkelBakeToken, c_What);
 
 		Skeleton skeleton;
 		skeleton.source     = reader.GetSource();

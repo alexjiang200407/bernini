@@ -226,11 +226,11 @@ namespace editor
 
 					assetlib::requireUniqueSubmeshNames(*mesh);
 
-					const assetlib::SourceRef sourceRef = assetlib::copyImportedSource(
-						source,
-						dataRoot,
-						sourceName,
-						assetlib::c_DefaultSampleRate);
+					const assetlib::ImportTarget target{ dataRoot,
+						                                 sourceName,
+						                                 assetlib::c_DefaultSampleRate };
+					const assetlib::SourceRef    sourceRef =
+						assetlib::copyImportedSource(source, target);
 					mesh->source = sourceRef;
 
 					assetlib::writeImportedRig(
@@ -252,25 +252,17 @@ namespace editor
 							options.outputs.materialStems);
 
 					assetlib::writeImportedMesh(*mesh, bmeshPath);
-					assetlib::writeImportedDocument(
-						dataRoot,
-						sourceName,
-						assetlib::c_DefaultSampleRate,
-						&*mesh);
+					assetlib::writeImportedDocument(target, &*mesh);
 				}
 				else if (options.animations)
 				{
-					const assetlib::SourceRef sourceRef = assetlib::copyImportedSource(
-						source,
-						dataRoot,
-						sourceName,
-						assetlib::c_DefaultSampleRate);
+					const assetlib::ImportTarget target{ dataRoot,
+						                                 sourceName,
+						                                 assetlib::c_DefaultSampleRate };
+					const assetlib::SourceRef    sourceRef =
+						assetlib::copyImportedSource(source, target);
 					assetlib::writeImportedClips(*imported, dataRoot, banimPath, sourceRef);
-					assetlib::writeImportedDocument(
-						dataRoot,
-						sourceName,
-						assetlib::c_DefaultSampleRate,
-						nullptr);
+					assetlib::writeImportedDocument(target, nullptr);
 				}
 
 				return ImportOutcome::kImported;

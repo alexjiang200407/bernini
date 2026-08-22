@@ -18,9 +18,12 @@ Two container regimes, mid-migration (see docs/plans/migration-system-v2.md):
 `.bmesh`, `.bskel` and `.banim` are **cache entries**, in `src/cache_io.h`: a frozen header carrying
 the cache key (bake token, source stamp, parameter hash), raw current-layout chunks with no
 self-description, and a chunk table. A chunk is addressed by id and an absent one is not an error.
-There is no conversion and no old shape to parse — a token mismatch is a cache miss, and the file's
-only future is regeneration from its `meshes_src/` source. A change to what these containers store —
-layout or meaning — is one edit: bump the container's `c_BakeToken` to a fresh random value.
+There is no conversion and no old shape to parse — a token mismatch is a cache miss, and
+`AssetStore`'s `LoadRegen*` methods are the seam that acts on one: a stale entry regenerates in
+memory from its `meshes_src/` source at the parameters its `.bimport` records, with the document's
+bindings applied over the result, while a read-only store trusts its keys because `pack` made them
+true. A change to what these containers store — layout or meaning — is one edit: bump the
+container's token in `src/bake_tokens.h` to a fresh random value.
 
 `.bvat`, `.bmaterial` and the env containers still ride the schema format in `src/chunk_io.h`:
 chunk 0 is the file's schema, a reader converts each chunk by field name, and a change of *meaning*

@@ -82,6 +82,17 @@ namespace assetlib
 	void
 	requireUniqueSubmeshNames(const BMesh& mesh);
 
+	/**
+	 * Where an import writes and the parameters it writes with -- the trio every import write
+	 * needs, carried as one value so a write cannot take half of it.
+	 */
+	struct ImportTarget
+	{
+		std::filesystem::path dataRoot;
+		std::string           name;  // the copied source's stem: `meshes_src/<name>.glb`
+		float                 sampleRate;
+	};
+
 	/** `<dataRoot>/meshes_src/<name>.glb` -- where an import copies its source. */
 	[[nodiscard]] std::filesystem::path
 	importedSourcePathFor(const std::filesystem::path& dataRoot, std::string_view name);
@@ -97,16 +108,13 @@ namespace assetlib
 	 * writeImportedDocument, once the bindings exist; the split is safe because bindings are
 	 * deliberately outside the parameter hash.
 	 *
-	 * @param sampleRate The rate clips are resampled to at import -- the import's one parameter,
-	 *        and what the returned reference's parameter hash covers.
+	 * `target.sampleRate` -- the rate clips are resampled to at import, the import's one
+	 * parameter -- is what the returned reference's parameter hash covers.
+	 *
 	 * @throws what requireSelfContainedSource throws, and std::runtime_error on a copy failure.
 	 */
 	SourceRef
-	copyImportedSource(
-		const std::filesystem::path& source,
-		const std::filesystem::path& dataRoot,
-		std::string_view             name,
-		float                        sampleRate);
+	copyImportedSource(const std::filesystem::path& source, const ImportTarget& target);
 
 	/**
 	 * Writes the `.bimport` beside the copied source: the sample rate, and -- when `mesh` is
@@ -117,22 +125,68 @@ namespace assetlib
 	 * @throws std::runtime_error on a write failure.
 	 */
 	void
-	writeImportedDocument(
-		const std::filesystem::path& dataRoot,
-		std::string_view             name,
-		float                        sampleRate,
-		const BMesh*                 mesh);
+	writeImportedDocument(const ImportTarget& target, const BMesh* mesh);
 
 	/**
 	 * Rebuilds `mesh.materials` and every `Submesh::material` canonically from `bindings` -- a
 	 * pure function of the document, never a mutation of what was loaded, so two checkouts with
-	 * one document hold one array. A submesh the document does not name is unbound; a binding
-	 * naming a submesh the mesh does not have is refused.
+	 * one document hold one array. A submesh the document does not name is unbound.
 	 *
-	 * @throws std::runtime_error naming the submesh a binding has no target for.
+	 * @return The submeshes named by bindings this mesh does not have -- the source changed shape
+	 *         under the document. Never guessed at: the editor warns, `migrate` fails the file,
+	 *         `pack` fails the pack.
+	 */
+	[[nodiscard]] std::vector<std::string>
+	applyBindings(BMesh& mesh, std::span<const MaterialBinding> bindings);
+
+	/**
+	 * Sets `submesh`'s binding to `material` in the import document beside `sourceKey`'s copied
+	 * source, leaving everything else -- the parameters, unknown keys, every other binding --
+	 * exactly as it stands. What a rebind in the editor writes instead of the mesh file: the
+	 * binding is outside the cache key, so the mesh is neither rewritten nor staled.
+	 *
+	 * `sourceKey` is the mount key the mesh's header carries (`BMesh::source.key`); the document
+	 * path is derived here, so no caller composes it.
+	 *
+	 * @throws std::runtime_error if `sourceKey` is empty, the document is absent or malformed, or
+	 *         the write fails.
 	 */
 	void
-	applyBindings(BMesh& mesh, std::span<const MaterialBinding> bindings);
+	rebindSubmeshInDocument(
+		const std::filesystem::path& dataRoot,
+		std::string_view             sourceKey,
+		std::string_view             submesh,
+		std::string_view             material);
+
+	/** What happened to one import document under reauthorImportDocuments. */
+	struct ReauthoredDocument
+	{
+		enum class Outcome
+		{
+			kUnchanged,  // the bindings already matched the mesh
+			kRewritten,
+			kFailed  // `message` says why
+		};
+
+		std::string key;  // the document's mount key
+		Outcome     outcome;
+		std::string message;
+	};
+
+	/**
+	 * Rewrites every import document's bindings under `dataRoot` from its mesh's current state,
+	 * parameters and unknown keys preserved -- the one-time adoption pass that makes the documents
+	 * authoritative. Until it runs, a rebind saved into a `.bmesh` before documents existed is
+	 * recorded nowhere else; after it, the document is what a load applies, so running this again
+	 * later would overwrite document-only rebinds with stale mesh state.
+	 *
+	 * A mesh that will not load, a source claimed by two meshes, or a recorded source whose
+	 * document is missing is reported per document and never guessed at.
+	 *
+	 * @throws std::runtime_error if `dataRoot` is not a directory.
+	 */
+	[[nodiscard]] std::vector<ReauthoredDocument>
+	reauthorImportDocuments(const std::filesystem::path& dataRoot);
 
 	/** A file an import writes, and whether the import is the one that made it. */
 	struct ImportedFile

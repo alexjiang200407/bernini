@@ -66,6 +66,10 @@ namespace assetlib
 	[[nodiscard]] ImportDocument
 	loadImportDocument(const core::file::IFileSystem& files, std::string_view key);
 
+	/** The same read of a file on the host that no mount serves. */
+	[[nodiscard]] ImportDocument
+	loadImportDocument(const std::filesystem::path& path);
+
 	/**
 	 * The hash of the document's canonical parameter subtree -- the half of the cache key the
 	 * document contributes. Unknown parameters hash too, so a newer branch's knob keys through a

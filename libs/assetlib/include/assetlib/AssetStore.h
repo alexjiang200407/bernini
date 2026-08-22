@@ -20,6 +20,8 @@ namespace assetlib
 
 	enum class Ktx2Decode : uint32_t;
 
+	struct RegenMesh;
+
 	/**
 	 * One project's assets: what they are read from, and what a change to one is written to.
 	 *
@@ -117,6 +119,43 @@ namespace assetlib
 		/** The materials and skeleton a `.bmesh` names, read seek-only. See loadMeshRefs. */
 		[[nodiscard]] MeshRefs
 		LoadMeshRefs(std::string_view path) const;
+
+		// --- The regeneration seam -------------------------------------------------------------
+		//
+		// The Regen forms answer with the container as the project's sources say it should be. A
+		// read-only store trusts its keys outright -- `pack` made them true -- and serves the baked
+		// bytes. A writable store checks the entry's cache key: fresh bytes load as-is; a stale
+		// entry regenerates in memory from its copied source, and one whose source is missing or
+		// was never recorded, or whose import document is gone, refuses. Either way the import
+		// document's bindings are applied over the result, so a rebind is a document edit no mesh
+		// file has to follow. Nothing here writes a byte to disk.
+
+		/**
+		 * @throws std::runtime_error on what LoadMesh throws for an unreadable container, and on a
+		 *         stale entry that cannot regenerate: no recorded source, the source or its import
+		 *         document gone from the project, a re-exported source whose submesh names now
+		 *         collide -- or one that no longer carries a mesh at all.
+		 */
+		[[nodiscard]] RegenMesh
+		LoadRegenMesh(std::string_view path) const;
+
+		/**
+		 * @throws what LoadRegenMesh throws, and std::runtime_error when the re-exported source
+		 *         no longer carries a rig.
+		 */
+		[[nodiscard]] Skeleton
+		LoadRegenSkeleton(std::string_view path) const;
+
+		/**
+		 * A regenerated clip set re-resolves its skeleton -- the group's own `.bskel` when the
+		 * project holds one, else by signature as a clips-only import does -- and re-bakes its
+		 * posed boxes against the meshes the project holds now.
+		 *
+		 * @throws what LoadRegenMesh throws, and std::runtime_error when the re-exported source
+		 *         no longer carries clips, or the rig its clips attach to has vanished.
+		 */
+		[[nodiscard]] AnimationSet
+		LoadRegenAnimations(std::string_view path) const;
 
 		[[nodiscard]] Skeleton
 		LoadSkeleton(std::string_view path) const;
