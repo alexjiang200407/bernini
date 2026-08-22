@@ -27,8 +27,9 @@ intent, and close on a consensus once every question has its answer. Every invoc
 two-line fix — the grill scales down, it is never skipped, and with nobody at the keyboard it stops
 and waits on its questions rather than answering itself.
 
-It decides what this skill cannot: whether the change is wanted at all, which layer owns it, what it
-is explicitly *not* doing, and what proves it works. It is also where *this is too big for one PR*
+It decides what this skill cannot: whether the change is wanted at all, what the standard solution
+is and whether the architecture we have is the right shape for it, which layer owns it, what it is
+explicitly *not* doing, and what proves it works. It is also where *this is too big for one PR*
 surfaces, which sends the work to [bcp-feature](.claude/skills/bcp-feature/SKILL.md) before anything
 is cut.
 
@@ -205,10 +206,10 @@ Spawn it with the Agent tool, `subagent_type: bcp-precheck`, one tier below your
 
 > Review the diff against the base. Be as critical as the evidence allows.
 
-It answers four questions the author is worst placed to answer about their own diff: has this code
-already been written in `core`, does the design fight `ROADMAP.md`, does it cross a non-goal or
-contradict an ADR agreed in § 0's grill, and does it break `STYLE.md`. It reports back; it posts
-nothing and edits nothing.
+It answers the questions the author is worst placed to answer about their own diff: has this code
+already been written in `core`, does the design fight `ROADMAP.md` or depart from the standard with
+no ADR saying so, does it cross a non-goal or contradict an ADR agreed in § 0's grill, and does it
+break `STYLE.md`. It reports back; it posts nothing and edits nothing.
 
 Act on its verdict before pushing:
 

@@ -1,6 +1,6 @@
 ---
 name: bcp-grill
-description: Use before any implementation work begins — interrogates a vague intent until the reason, the boundaries and the acceptance are agreed, then closes on a consensus that goes straight into the plan, where the user confirms it by review. Runs as § 0 of bcp-implement and bcp-feature, and is also invocable alone. Writes nothing until the consensus closes. Triggers: "grill me on X", "bcp-grill", and every bcp-implement or bcp-feature invocation.
+description: Use before any implementation work begins — interrogates a vague intent until the reason, the standard solution, the fitness of the architecture we have, the boundaries and the acceptance are agreed, then closes on a consensus that goes straight into the plan, where the user confirms it by review. Runs as § 0 of bcp-implement and bcp-feature, and is also invocable alone. Writes nothing until the consensus closes. Triggers: "grill me on X", "bcp-grill", and every bcp-implement or bcp-feature invocation.
 ---
 
 # Grilling a request
@@ -53,13 +53,59 @@ answer.
 
 ## 2. Grill
 
-Three roots. Every request gets all three, however small:
+Five roots. Every request gets all five, however small, and the middle two in that order:
 
 | | |
 |---|---|
 | **Why do we need this?** | what breaks today, who it costs, what happens if it is never done |
+| **What is the standard solution?** | what a shipping engine does for this problem — the engine and the mechanism, named — with our code out of frame |
+| **Is the architecture sufficient?** | whether what we have is the right shape for that, or has to change to be |
 | **What are we not doing?** | the boundary — the adjacent thing that is explicitly out |
 | **How do we accept this?** | the suite, the tag, the golden image, the assertion that proves it |
+
+The middle two are the ones an agent handed a task never asks for itself, so they get a section
+each.
+
+### The standard first, with our code out of frame
+
+Ask what a shipping engine does before looking at what we have. The order runs one way: knowing our
+code bends the answer towards whatever would be convenient to build, and knowing the standard cannot
+bend our code.
+
+Name it concretely — the engine and the mechanism. *"Unreal's TSR and every standard TAA resolve
+carry no per-pixel history beyond colour and depth"* is a claim the user can overturn in a sentence.
+*"This isn't really standard"* is not a claim, and it will not survive contact with an
+implementation. Where you cannot name the engine and the mechanism, say you do not know rather than
+implying a consensus that may not exist.
+
+**The standard is not automatically right.** `ROADMAP.md` rules out clustered/tiled many-light
+infrastructure, which is exactly what Unreal and Unity do — a deviation this repo made knowingly and
+wrote down. A deviation is fine. A deviation nobody named is the failure, and it is a different
+thing: it arrives as a mechanism no other engine has a word for, defended one bug at a time, until
+the feature that assumes the standard shape lands on top of it.
+
+That is the case study. The TAA resolve carried a per-pixel variance store widening the clamp box at
+rest, machinery no standard resolve has, and it held until skinned meshes moved faster than a 3×3
+neighbourhood could witness — removed in `f637fa7d` at the cost of a refactor, where the question
+here costs a line. [docs/taa.md](docs/taa.md) records the recipe it returned to.
+
+So when the answer is *we are deviating*, that is **its own ADR** in § 3, with the standard named as
+the alternative it rejects. It is the line [`bcp-precheck`](.claude/agents/bcp-precheck.md) § 3 reads
+the diff back against, and the only form of it a diff can be checked against.
+
+### Is the architecture sufficient, or are we building on top of it?
+
+Not *can this be made to work*. It always can, and an agent handed a task will find the way — that is
+the failure, not the fix. The question is whether the mechanism this needs already has a home, and
+whether that home is the right shape for it.
+
+When it is not, the bias here is to **change what exists rather than layer over it**. A workaround
+fitted around a wrong shape is cheaper this week and is what the next feature breaks on. Say which of
+the two is being proposed, so the user picks rather than receiving the second by default.
+
+Changing it is not an argument against the change: a refactor that enables a feature is its own
+commit ahead of the feature ([bcp-implement § 3](.claude/skills/bcp-implement/SKILL.md)), and the
+decision to make it is an ADR like any other.
 
 Then the lenses this repo makes worth asking. Use the ones the survey lit up; skip the rest:
 
@@ -96,8 +142,11 @@ way of guessing.
 ### Even a two-line fix
 
 Every invocation is grilled. There is no size threshold and no escape hatch — a small change gets a
-small grill, the three roots in one batch, often one line each. That is a minute, and it is the pass
-that catches *this fix is at the wrong layer* while the fix is still hypothetical.
+small grill, the five roots in one batch, often one line each. Short is fine; empty is not — an
+answer to the middle two still names the thing, even when the thing is *the standard here is the
+path we already have and the bug is in it*. A stock *n/a, it's a small fix* is a skip wearing an
+answer's clothes, and the shelter was a small fix. That is a minute, and it is the pass that catches
+*this fix is at the wrong layer* while the fix is still hypothetical.
 
 ## 3. Close the grill
 
@@ -112,6 +161,10 @@ Decisions   — ADR-1 …, each with the alternative rejected, one line apiece
 Non-goals   — what this is explicitly not doing
 Acceptance  — the gate that proves it: suite, tag, golden image, assertion
 ```
+
+A deviation from the standard named in § 2 is **an ADR of its own**, with the standard as the
+alternative it rejects. Anywhere else it is invisible to the diff, and
+[`bcp-precheck`](.claude/agents/bcp-precheck.md) § 3 has nothing to read the change back against.
 
 Then **do not ask for confirmation** — write it. The caller puts it down as the head of
 `docs/plans/<name>.md` and carries on: see [bcp-implement § 0](.claude/skills/bcp-implement/SKILL.md)
@@ -144,6 +197,9 @@ assumptions this skill exists to prevent, and they are the ones that survive int
 - **Never wait on the summary.** Once the questions are answered, the consensus is written, not
   asked; the user confirms it by reviewing the plan.
 - **Never grill from an unread repo,** and never design during the survey.
+- **Name the standard before you look at our architecture,** and name it as an engine and a
+  mechanism or not at all. A deviation is a decision; a deviation nobody named is a bug with a long
+  fuse.
 - **Ask in batches**, and let each answer change the next question.
 - **A grill that overturns the request succeeded.** "We do not need this" is the cheapest outcome
   available.
