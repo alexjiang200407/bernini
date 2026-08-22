@@ -330,6 +330,40 @@ TEST_CASE("the bone overlay draws the skeleton the palette holds", "[skinned][bo
 		CHECK(BlueAt(on, camera, glm::vec3(0.0f, 0.5f, 0.0f)) > 0.25f);
 	}
 
+	SECTION("a target survives resize whether or not it ever asked for the overlay")
+	{
+		// The overlay's attachments are made on the first enable, so on every other target they are
+		// null -- and teardown and resize both run over them regardless. A backend that frees a
+		// handle it never allocated does not fail quietly: the resource manager asserts on a handle
+		// it did not issue, which terminates the process. This is a D3D12-only failure and cannot
+		// fail here, but it is the gate that catches it on the platform that can.
+		const auto instance =
+			view->CreateSkinnedMeshInstance(geom, glm::mat4(1.0f), { 0, 0.0f, 0.0f });
+		REQUIRE(instance.IsValid());
+
+		// The viewport is the caller's and does not follow a resize; a stale one is a scissor wider
+		// than the render pass, which only Metal's validation layer objects to.
+		const auto resize = [&](uint32_t width, uint32_t height) {
+			gfx->Resize(target, width, height);
+			job.viewport = bgl::Viewport(static_cast<float>(width), static_cast<float>(height));
+		};
+
+		gfx->DrawFrame(target, job);
+		resize(192, 192);
+		gfx->DrawFrame(target, job);
+
+		target->SetBoneOverlayEnabled(true);
+
+		gfx->DrawFrame(target, job);
+		resize(c_Width, c_Height);
+		gfx->DrawFrame(target, job);
+
+		// The overlay is remade at the new size and still draws, rather than coming back null.
+		const std::string on = "assets/golden/bone_overlay_resized.got.png";
+		gfx->ScreenshotPng(target, on);
+		CHECK(BlueAt(on, camera, glm::vec3(0.0f, 0.5f, 0.0f)) > 0.25f);
+	}
+
 	SECTION("a placement standing elsewhere takes its skeleton with it")
 	{
 		const auto world = glm::translate(glm::mat4(1.0f), glm::vec3(2.0f, 0.0f, 0.0f));

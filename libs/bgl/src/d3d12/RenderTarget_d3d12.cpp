@@ -496,13 +496,21 @@ namespace bgl
 	void
 	RenderTarget::DestroyBoneOverlayAttachments() noexcept
 	{
-		m_ResourceManager->DestroyDsv(m_BoneOverlayDepth.dsvHandle, false);
-		m_ResourceManager->DestroyTexture(m_BoneOverlayDepth.textureHandle, false);
+		// Null on every target that never asked for the overlay, and this runs on all of them --
+		// teardown and resize both reach it. The manager terminates on a handle it never issued, so
+		// the guards are the difference between "nothing to free" and a dead process.
+		if (!m_BoneOverlayDepth.dsvHandle.IsNull())
+			m_ResourceManager->DestroyDsv(m_BoneOverlayDepth.dsvHandle, false);
+		if (!m_BoneOverlayDepth.textureHandle.IsNull())
+			m_ResourceManager->DestroyTexture(m_BoneOverlayDepth.textureHandle, false);
 		m_BoneOverlayDepth = {};
 
-		m_ResourceManager->DestroySrv(m_BoneOverlay.srvHandle, false);
-		m_ResourceManager->DestroyRtv(m_BoneOverlay.rtvHandle, false);
-		m_ResourceManager->DestroyTexture(m_BoneOverlay.textureHandle, false);
+		if (!m_BoneOverlay.srvHandle.IsNull())
+			m_ResourceManager->DestroySrv(m_BoneOverlay.srvHandle, false);
+		if (!m_BoneOverlay.rtvHandle.IsNull())
+			m_ResourceManager->DestroyRtv(m_BoneOverlay.rtvHandle, false);
+		if (!m_BoneOverlay.textureHandle.IsNull())
+			m_ResourceManager->DestroyTexture(m_BoneOverlay.textureHandle, false);
 		m_BoneOverlay = {};
 	}
 
