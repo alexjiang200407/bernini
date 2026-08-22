@@ -152,6 +152,9 @@ namespace editor
 		auto mesh     = std::optional<assetlib::BMesh>();
 		auto tangents = assetlib::TangentGenResult();
 
+		const auto importStart = std::chrono::steady_clock::now();
+		double     workerMs    = 0.0;
+
 		background::TaskResult result = background::RunWithLoadingScreen(
 			parent,
 			QString("Importing %1").arg(name),
@@ -185,11 +188,36 @@ namespace editor
 					mesh     = assetlib::toBMesh(*imported);
 					tangents = assetlib::generateTangents(*mesh);
 				}
+
+				// The rig's box is skinned from every vertex of every frame -- seven seconds on the
+				// test project's rhino -- and both doors below are pure assetlib. After the screen
+				// rather than behind it, this ran on the GUI thread with nothing on screen saying
+				// the editor was still working, which reads as a hang.
+				if (options.mesh)
+				{
+					progress.Report(0, 0, QString("Baking the pose bounds..."));
+					assetlib::writeImportedRig(
+						*imported,
+						*mesh,
+						dataRoot,
+						bskelPath,
+						banimPath,
+						options.animations);
+				}
+				else if (options.animations)
+				{
+					progress.Report(0, 0, QString("Baking the pose bounds..."));
+					assetlib::writeImportedClips(*imported, dataRoot, banimPath);
+				}
+
+				workerMs = std::chrono::duration<double, std::milli>(
+							   std::chrono::steady_clock::now() - importStart)
+			                   .count();
 			},
 			background::Cancellable::kYes);
 
-		// The material graphs cannot run on the worker -- their nodes own QPixmaps, which belong to the
-		// GUI thread -- so the mesh is written here too, after the materials it must name are on disk.
+		// All that is left for the GUI thread: the material graphs, whose nodes own QPixmaps, and the
+		// `.bmesh` -- which follows them, since it names the files they write.
 		if (result.Completed())
 		{
 			try
@@ -204,14 +232,6 @@ namespace editor
 							tangents.skipped,
 							qPrintable(name));
 
-					assetlib::writeImportedRig(
-						*imported,
-						*mesh,
-						dataRoot,
-						bskelPath,
-						banimPath,
-						options.animations);
-
 					if (importMaterials)
 						WriteImportedMaterials(
 							*imported,
@@ -223,10 +243,16 @@ namespace editor
 
 					assetlib::writeImportedMesh(*mesh, bmeshPath);
 				}
-				else if (options.animations)
-				{
-					assetlib::writeImportedClips(*imported, dataRoot, banimPath);
-				}
+
+				// The UI half is the half that freezes the editor, so it is the one worth naming.
+				qInfo(
+					"Import: '%s' -- %.0f ms on the worker, %.0f ms on the UI thread",
+					qPrintable(name),
+					workerMs,
+					std::chrono::duration<double, std::milli>(
+						std::chrono::steady_clock::now() - importStart)
+							.count() -
+						workerMs);
 
 				return ImportOutcome::kImported;
 			}

@@ -1,5 +1,7 @@
 #include "Async/BackgroundTask.h"
 
+#include "Render/Renderer.h"
+
 #include "util/Modal.h"
 #include "util/QtSupport.h"
 
@@ -329,4 +331,38 @@ TEST_CASE("Closing the loading screen cancels rather than dismissing it", "[back
 
 	REQUIRE(stayedUp);
 	REQUIRE(result.Cancelled());
+}
+
+TEST_CASE("The frame loop keeps drawing behind a loading screen", "[background][render]")
+{
+	// The promise the whole prepare/commit split rests on: one Renderer thread draws every viewport
+	// in the editor, so a load that reads and cooks on the loading screen's worker must leave that
+	// thread free. If this ever fails, every panel freezes the moment any of them loads anything.
+	auto opts             = bgl::GraphicsOptions();
+	opts.enableDebugLayer = false;
+
+	auto renderer = Renderer(opts, bgl::SceneDesc());
+
+	auto frames = std::atomic<int>(0);
+
+	const Renderer::ViewportId viewport = renderer.AddViewport([&frames] { ++frames; });
+
+	const int before = frames.load();
+
+	// 300ms of worker, which is the shape of a mesh load: long enough that a render thread doing
+	// nothing else has to have ticked many times.
+	const background::TaskResult result =
+		background::RunWithLoadingScreen(nullptr, "Working", [](background::Progress&) {
+			QThread::msleep(300);
+		});
+
+	const int after = frames.load();
+	renderer.RemoveViewport(viewport);
+
+	CHECK(result.Completed());
+	CHECK(after > before);
+
+	// Not just "it ticked once on the way out": a zero-interval timer on an idle thread runs
+	// thousands of times in 300ms, and anything in single digits means it was blocked.
+	CHECK(after - before > 20);
 }
