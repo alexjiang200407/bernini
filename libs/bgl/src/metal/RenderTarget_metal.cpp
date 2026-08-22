@@ -112,6 +112,14 @@ namespace bgl
 			m_Backbuffers[i].rtv = m_ResourceManager->CreateRtv(m_Backbuffers[i].texture, rtvDesc);
 		}
 
+		// Ahead of the TAA early-out below: the overlay is not TAA's, and a target without a history
+		// still has to get its attachments back after a resize. Output-sized, so it is rebuilt with
+		// this half and left alone by a render-scale change.
+		if (m_BoneOverlayEnabled)
+		{
+			CreateBoneOverlayAttachments();
+		}
+
 		if (!m_TaaAllocated)
 		{
 			return;
@@ -142,14 +150,6 @@ namespace bgl
 			historySrvDesc.debugName = std::format("TAA History SRV: {}", i);
 
 			m_History[i].srv = m_ResourceManager->CreateSrv(m_History[i].texture, historySrvDesc);
-		}
-
-		// Output-sized, so it is torn down and rebuilt with this half and not with the render one --
-		// a render-scale change must leave it alone. Only a target that had the overlay on gets it
-		// back after a resize.
-		if (m_BoneOverlayEnabled)
-		{
-			CreateBoneOverlayAttachments();
 		}
 	}
 
