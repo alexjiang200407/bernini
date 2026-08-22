@@ -149,7 +149,7 @@ TEST_CASE("loadFromGltf stops on a signalled token", "[cancel][gltf]")
 	const std::filesystem::path glb = "assets/suzanne.glb";
 	REQUIRE(std::filesystem::exists(glb));
 
-	REQUIRE_THROWS_AS(loadFromGltf(glb, SignalledSource().get_token()), Cancelled);
+	REQUIRE_THROWS_AS(loadFromGltf(glb, { .cancel = SignalledSource().get_token() }), Cancelled);
 	REQUIRE_NOTHROW(loadFromGltf(glb));
 }
 

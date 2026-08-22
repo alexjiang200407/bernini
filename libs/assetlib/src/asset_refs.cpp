@@ -49,14 +49,14 @@ namespace assetlib
 		/** Every material a `.bmesh` names, in `mesh.materials` order, and the skeleton it skins to. */
 		void
 		collectMeshEdges(
-			std::vector<AssetRef>&         edges,
-			const core::file::IFileSystem& files,
-			const std::string&             referrer)
+			std::vector<AssetRef>& edges,
+			const AssetStore&      store,
+			const std::string&     referrer)
 		{
 			MeshRefs refs;
 			try
 			{
-				refs = loadMeshRefs(files, referrer);
+				refs = store.LoadRegenMeshRefs(referrer);
 			}
 			catch (const std::exception& e)
 			{
@@ -76,14 +76,14 @@ namespace assetlib
 		/** The skeleton a `.banim`'s clips were resampled against. */
 		void
 		collectAnimationEdges(
-			std::vector<AssetRef>&         edges,
-			const core::file::IFileSystem& files,
-			const std::string&             referrer)
+			std::vector<AssetRef>& edges,
+			const AssetStore&      store,
+			const std::string&     referrer)
 		{
 			std::string skeleton;
 			try
 			{
-				skeleton = loadAnimationSkeletonPath(files, referrer);
+				skeleton = store.LoadRegenAnimationSkeletonPath(referrer);
 			}
 			catch (const std::exception& e)
 			{
@@ -314,7 +314,7 @@ namespace assetlib
 
 			if (kind == c_MeshExtension)
 			{
-				collectMeshEdges(edges, files, referrer);
+				collectMeshEdges(edges, store, referrer);
 				++graph.meshesScanned;
 			}
 			else if (kind == c_MaterialExtension)
@@ -339,7 +339,7 @@ namespace assetlib
 			}
 			else if (kind == c_AnimationExtension)
 			{
-				collectAnimationEdges(edges, files, referrer);
+				collectAnimationEdges(edges, store, referrer);
 				++graph.clipSetsScanned;
 			}
 			else if (kind == c_VatExtension)

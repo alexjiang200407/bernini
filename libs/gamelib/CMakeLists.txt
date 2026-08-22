@@ -68,6 +68,7 @@ if (BUILD_TESTS)
 			${CMAKE_CURRENT_SOURCE_DIR}/src
 			${CMAKE_CURRENT_SOURCE_DIR}/tests/src
 			${CMAKE_SOURCE_DIR}/libs/bgl/tests/src
+			${CMAKE_SOURCE_DIR}/libs/assetlib/tests/src
 	)
 
 	target_force_include(gamelib_tests

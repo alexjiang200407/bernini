@@ -20,6 +20,7 @@
 #include <core/file/LooseFileSystem.h>
 #include <core/file/file.h>
 
+#include "CacheTamper.h"
 #include "SkinnedGltf.h"
 
 using namespace assetlib;
@@ -44,7 +45,7 @@ namespace
 		{
 			dataRoot = project.GetDataDirectory();
 
-			const auto imported = loadFromGltf(glb, {}, sampleRate);
+			const auto imported = loadFromGltf(glb, { .sampleRate = sampleRate });
 
 			BMesh mesh = toBMesh(imported);
 			generateTangents(mesh);
@@ -88,14 +89,10 @@ namespace
 			return std::string(mesh.stringPool.at(mesh.submeshes.at(0).nameOffset));
 		}
 
-		/** Flips one byte of the container's frozen header, at `offset`. */
 		void
 		Tamper(const fs::path& path, size_t offset) const
 		{
-			auto bytes = core::file::read_file_bytes(path.string());
-			REQUIRE(bytes.size() > offset);
-			bytes[offset] ^= std::byte{ 1 };
-			core::file::write_atomic(path, std::span<const std::byte>(bytes));
+			test::TamperHeaderByte(path, offset);
 		}
 
 	private:
@@ -107,9 +104,6 @@ namespace
 			return Project::Create(root / "Regen.berniniproject", "Regen");
 		}
 	};
-
-	constexpr size_t c_TokenOffset      = 8;   // Header::bakeToken
-	constexpr size_t c_SourceHashOffset = 32;  // Header::sourceHash
 
 	std::vector<std::byte>
 	BytesOf(const fs::path& path)
@@ -222,7 +216,7 @@ TEST_CASE("a stale bake token regenerates the mesh from its source", "[regen]")
 	const ImportedProject sandbox("bernini_regen_token", "assets/apples.glb");
 	const BMesh           fresh = load(sandbox.meshPath);
 
-	sandbox.Tamper(sandbox.meshPath, c_TokenOffset);
+	sandbox.Tamper(sandbox.meshPath, test::c_TokenOffset);
 	const auto stale = BytesOf(sandbox.meshPath);
 
 	// The plain load refuses; the seam serves the source's current cook instead.
@@ -248,7 +242,7 @@ TEST_CASE(
 	const BMesh           fresh = load(sandbox.meshPath);
 
 	// A sibling branch's binary swapped in by a merge: current token, foreign source stamp.
-	sandbox.Tamper(sandbox.meshPath, c_SourceHashOffset);
+	sandbox.Tamper(sandbox.meshPath, test::c_SourceHashOffset);
 
 	const RegenMesh current = sandbox.Store().LoadRegenMesh("Meshes/unit.bmesh");
 	CHECK(current.mesh.vertexData == fresh.vertexData);
@@ -264,7 +258,7 @@ TEST_CASE("a stale entry that cannot regenerate refuses", "[regen]")
 		BMesh synthetic  = load(sandbox.meshPath);
 		synthetic.source = SourceRef();
 		save(synthetic, sandbox.meshPath);
-		sandbox.Tamper(sandbox.meshPath, c_TokenOffset);
+		sandbox.Tamper(sandbox.meshPath, test::c_TokenOffset);
 
 		CHECK_THROWS_WITH(
 			sandbox.Store().LoadRegenMesh("Meshes/unit.bmesh"),
@@ -276,7 +270,7 @@ TEST_CASE("a stale entry that cannot regenerate refuses", "[regen]")
 		const ImportedProject sandbox("bernini_regen_nosource", "assets/apples.glb");
 
 		fs::remove(sandbox.dataRoot / "meshes_src/unit.glb");
-		sandbox.Tamper(sandbox.meshPath, c_TokenOffset);
+		sandbox.Tamper(sandbox.meshPath, test::c_TokenOffset);
 
 		CHECK_THROWS_WITH(
 			sandbox.Store().LoadRegenMesh("Meshes/unit.bmesh"),
@@ -288,7 +282,7 @@ TEST_CASE("a stale entry that cannot regenerate refuses", "[regen]")
 		const ImportedProject sandbox("bernini_regen_nodocregen", "assets/apples.glb");
 
 		fs::remove(sandbox.documentPath);
-		sandbox.Tamper(sandbox.meshPath, c_TokenOffset);
+		sandbox.Tamper(sandbox.meshPath, test::c_TokenOffset);
 
 		CHECK_THROWS_WITH(
 			sandbox.Store().LoadRegenMesh("Meshes/unit.bmesh"),
@@ -301,7 +295,7 @@ TEST_CASE("a read-only store trusts its keys and its baked bindings", "[regen]")
 	const ImportedProject sandbox("bernini_regen_readonly", "assets/apples.glb");
 
 	// Stale by stamp, and rebound in the document: a writable store would act on both.
-	sandbox.Tamper(sandbox.meshPath, c_SourceHashOffset);
+	sandbox.Tamper(sandbox.meshPath, test::c_SourceHashOffset);
 	rebindSubmeshInDocument(
 		sandbox.dataRoot,
 		"meshes_src/unit.glb",
@@ -326,7 +320,7 @@ TEST_CASE("a stale rig regenerates, and its clips follow the document's sample r
 
 	SECTION("the skeleton")
 	{
-		sandbox.Tamper(bskelPath, c_TokenOffset);
+		sandbox.Tamper(bskelPath, test::c_TokenOffset);
 
 		const Skeleton skeleton = sandbox.Store().LoadRegenSkeleton("Skeletons/unit.bskel");
 		REQUIRE(skeleton.bones.size() == fresh.bones.size());
@@ -344,7 +338,7 @@ TEST_CASE("a stale rig regenerates, and its clips follow the document's sample r
 
 		// The mesh goes stale too, so the disk walk cannot serve its box: the one under test is
 		// the box the seam measures from the regenerated form.
-		sandbox.Tamper(sandbox.meshPath, c_TokenOffset);
+		sandbox.Tamper(sandbox.meshPath, test::c_TokenOffset);
 
 		// The parameter edit alone is the staleness: the token and the source still match.
 		const AnimationSet clips = sandbox.Store().LoadRegenAnimations("Animations/unit.banim");
@@ -467,4 +461,52 @@ TEST_CASE("a rebind with no document to land in is refused", "[regen][importdoc]
 			sandbox.FirstSubmeshName(),
 			"Materials/blue.bmaterial"),
 		Catch::Matchers::ContainsSubstring("no import document"));
+}
+
+TEST_CASE("GeometryIsStale answers the key without loading a payload", "[regen]")
+{
+	const ImportedProject sandbox("bernini_regen_isstale", "assets/apples.glb");
+
+	CHECK_FALSE(sandbox.Store().GeometryIsStale("Meshes/unit.bmesh"));
+
+	sandbox.Tamper(sandbox.meshPath, test::c_TokenOffset);
+	CHECK(sandbox.Store().GeometryIsStale("Meshes/unit.bmesh"));
+
+	SECTION("a read-only store trusts its keys")
+	{
+		const AssetStore readOnly(
+			sandbox.dataRoot,
+			std::make_shared<ReadOnlyFileSystem>(sandbox.dataRoot));
+		CHECK_FALSE(readOnly.GeometryIsStale("Meshes/unit.bmesh"));
+	}
+
+	SECTION("a container without a cache key is refused, not guessed at")
+	{
+		CHECK_THROWS_WITH(
+			sandbox.Store().GeometryIsStale("meshes_src/unit.bimport"),
+			Catch::Matchers::ContainsSubstring("no cache key"));
+	}
+}
+
+TEST_CASE("skipping textures still imports the geometry and the rig", "[regen][gltf]")
+{
+	const auto full    = loadFromGltf("assets/apples.glb");
+	const auto skipped = loadFromGltf("assets/apples.glb", { .textures = GltfTextures::kSkip });
+
+	CHECK(skipped.submeshes.size() == full.submeshes.size());
+	CHECK(skipped.vertexData == full.vertexData);
+	CHECK(skipped.textures.empty());
+	CHECK(skipped.materials.empty());  // they exist to route the textures
+}
+
+TEST_CASE("a foreign-token mesh still answers a reference scan from its headers", "[regen]")
+{
+	const ImportedProject sandbox("bernini_regen_refscan", "assets/apples.glb");
+	sandbox.Tamper(sandbox.meshPath, test::c_TokenOffset);
+
+	// No regeneration behind this: the materials are the document's and the rig answers by
+	// source key, so a post-token-bump scan stays a header read per file.
+	const MeshRefs refs = sandbox.Store().LoadRegenMeshRefs("Meshes/unit.bmesh");
+	CHECK(refs.materials == std::vector<std::string>{ "Materials/red.bmaterial" });
+	CHECK(refs.skeleton.empty());  // apples carries no rig
 }

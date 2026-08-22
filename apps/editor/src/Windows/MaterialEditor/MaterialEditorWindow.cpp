@@ -1,4 +1,5 @@
 #include "MaterialEditorWindow.h"
+#include "Mesh/mesh_load.h"
 
 #include <QComboBox>
 #include <QDebug>
@@ -768,7 +769,7 @@ MaterialEditorWindow::AttachMaterialToMesh(int submeshIndex, const QString& mate
 
 	try
 	{
-		auto mesh = assetlib::load(meshPath);
+		auto mesh = editor::LoadMeshThroughSeam(m_DataRoot, meshPath);
 
 		// Like every asset reference, relative to the data root -- not to the mesh file.
 		const std::string relative = Rebase(materialPath, m_DataRoot, true).toStdString();

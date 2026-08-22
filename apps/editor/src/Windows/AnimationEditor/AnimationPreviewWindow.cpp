@@ -1,4 +1,5 @@
 #include "AnimationPreviewWindow.h"
+#include "Mesh/mesh_load.h"
 
 #include "Async/BackgroundTask.h"
 #include "Mesh/BMeshUtil.h"
@@ -222,12 +223,12 @@ AnimationPreviewWindow::LoadMeshAs(
 		QString("Loading %1").arg(name),
 		[&](background::Progress& progress) {
 			progress.Report(0, 0, "Reading mesh...");
-			mesh = assetlib::load(absolutePath);
+			mesh = editor::LoadMeshThroughSeam(m_DataRoot, absolutePath);
 			if (mesh.meshes.empty())
 				throw std::runtime_error("mesh contains no meshes");
 
 			progress.Report(0, 0, "Resolving animations...");
-			bindings = editor::ResolveAnimationBindings(m_DataRoot, rel);
+			bindings = editor::ResolveAnimationBindings(m_DataRoot, mesh.skeleton);
 			if (animations.empty() && !bindings.animations.empty())
 				animations = bindings.animations.front();
 
@@ -263,8 +264,8 @@ AnimationPreviewWindow::LoadMeshAs(
 				// ships inside a .bpak is only reachable that way.
 				const auto store = assetlib::AssetStore(m_DataRoot);
 
-				const assetlib::AnimationSet clips    = store.LoadAnimations(animations);
-				const assetlib::Skeleton     skeleton = store.LoadSkeleton(clips.skeleton);
+				const assetlib::AnimationSet clips    = store.LoadRegenAnimations(animations);
+				const assetlib::Skeleton     skeleton = store.LoadRegenSkeleton(clips.skeleton);
 
 				for (const bmesh::InstancePlacement& placement : plan.animated)
 				{

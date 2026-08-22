@@ -21,6 +21,7 @@ namespace assetlib
 	enum class Ktx2Decode : uint32_t;
 
 	struct RegenMesh;
+	struct SourceRef;
 
 	/**
 	 * One project's assets: what they are read from, and what a change to one is written to.
@@ -131,6 +132,31 @@ namespace assetlib
 		// file has to follow. Nothing here writes a byte to disk.
 
 		/**
+		 * Whether the geometry entry at `path` is a cache miss the LoadRegen forms would re-cook:
+		 * a stale bake token, a source stamp that moved, or parameters the `.bimport` no longer
+		 * matches. Always false on a read-only store, which trusts its keys. What a *derived*
+		 * consumer asks -- a `.bvat` whose group answers true is itself stale, whatever its own
+		 * stamps say.
+		 *
+		 * @throws std::runtime_error if `path` is not a `.bmesh`/`.bskel`/`.banim`, or its header
+		 *         cannot be read.
+		 */
+		[[nodiscard]] bool
+		GeometryIsStale(std::string_view path) const;
+
+		/**
+		 * The source governing `path`'s group as it stands *now*: the header's recorded key, the
+		 * copied source's current stamp, and the import document's current parameters hash. What
+		 * a derived bake records beside its output, so "the group I baked from has not moved"
+		 * stays answerable after the bake itself made the pair look current. Empty key when the
+		 * entry never recorded a source; zeroed stamp when the source file is gone.
+		 *
+		 * @throws what GeometryIsStale throws for a non-geometry path or an unreadable header.
+		 */
+		[[nodiscard]] SourceRef
+		GeometryGroupSource(std::string_view path) const;
+
+		/**
 		 * @throws std::runtime_error on what LoadMesh throws for an unreadable container, and on a
 		 *         stale entry that cannot regenerate: no recorded source, the source or its import
 		 *         document gone from the project, a re-exported source whose submesh names now
@@ -156,6 +182,31 @@ namespace assetlib
 		 */
 		[[nodiscard]] AnimationSet
 		LoadRegenAnimations(std::string_view path) const;
+
+		/**
+		 * LoadMeshRefs surviving a foreign bake token: chunks that cannot be parsed answer from
+		 * the frozen header and the import document instead -- the document's bindings are the
+		 * materials, the group's rig resolves by source key -- so nothing regenerates and a scan
+		 * of a whole project stays a header read per file. A matched token's refs read as stored,
+		 * stamps unchecked.
+		 *
+		 * @throws std::runtime_error on a foreign-token mesh with no recorded source or whose
+		 *         import document is gone -- what it references cannot be known, and the
+		 *         reference scan is fatal on exactly that.
+		 */
+		[[nodiscard]] MeshRefs
+		LoadRegenMeshRefs(std::string_view path) const;
+
+		/**
+		 * The same one regeneration for a `.banim`'s skeleton reference: a foreign-token clip set
+		 * answers with its group's own `.bskel`, found by source key from the frozen headers
+		 * alone -- never the full clip regeneration, whose posed-box walk a scan must not pay.
+		 *
+		 * @throws std::runtime_error when a foreign-token clip set's source produced no rig in
+		 *         this project -- a stale clips-only group, whose re-resolve needs the full seam.
+		 */
+		[[nodiscard]] std::string
+		LoadRegenAnimationSkeletonPath(std::string_view path) const;
 
 		[[nodiscard]] Skeleton
 		LoadSkeleton(std::string_view path) const;
