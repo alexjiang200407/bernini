@@ -219,10 +219,9 @@ namespace game
 		 *
 		 * `posedBounds` is the box the geom culls by. When it is not given, the `.banim`'s baked box
 		 * is read (assetlib::findPosedBounds), and only a pairing the cook never measured falls back
-		 * to measuring here (assetlib::posedBounds) -- which skins every vertex at every frame,
-		 * seconds on a dense rig, so a caller that cannot block the thread it acquires on passes its
-		 * own. It is not validated against the rig: an under-sized box culls the mesh early, which
-		 * is the caller's mistake to make.
+		 * to measuring here (assetlib::posedBounds) -- a pose walk rather than a vertex one, so it
+		 * costs a fraction of a second even on a dense rig. It is not validated against the rig: an
+		 * under-sized box culls the mesh early, which is the caller's mistake to make.
 		 *
 		 * A **shared** acquire ignores it entirely -- not even to validate it. The sphere belongs to
 		 * the geom, and the geom already exists, so nothing this call passes can change it. Release
