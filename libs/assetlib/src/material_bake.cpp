@@ -480,5 +480,9 @@ namespace assetlib
 		}
 
 		material.editorGraph.clear();
+
+		// Unknown keys are authoring data until a build knows otherwise: a shipped tree carries
+		// only what this build can interpret.
+		material.extraJson = "{}";
 	}
 }

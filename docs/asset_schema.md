@@ -3,11 +3,12 @@
 > **Mid-migration** (`docs/plans/migration-system-v2.md`): the geometry containers — `.bmesh`,
 > `.bskel`, `.banim` — have left this system for the cache-entry format (`src/cache_io.h`: a
 > frozen header with a bake token and source reference over schema-less chunks; stale is
-> regenerated from `meshes_src/`, never converted). This page still governs `.bmaterial`,
-> `.bvat` and the env containers until their tasks land, and is replaced wholesale when the
-> feature completes.
+> regenerated from `meshes_src/`, never converted), and `.bmaterial` has left it for an authored
+> text document (`src/bmaterial_io.cpp`), its chunk-era form still deserializing until the
+> system goes. This page still governs `.bvat` and the env containers until their tasks land,
+> and is replaced wholesale when the feature completes.
 
-Every schema-regime container Bernini writes (`.bvat`, `.bmaterial`, `.bsky`,
+Every schema-regime container Bernini writes (`.bvat`, `.bsky`,
 `.benvl`, `.benv`) is one chunked format whose chunk 0 is a **schema**: every struct the file stores,
 field by field, by name, type, offset and count. A reader converts each chunk from the layout the
 file stores to the one the engine wants — so a struct that gained, lost, widened, reordered or renamed
@@ -161,6 +162,8 @@ const chunk::Hook<BMaterial> recoverHash{
 	.run = [](const chunk::Reader& r, BMaterial& m) { /* r.View(id).Get<uint64_t>("mtime") … */ } };
 ```
 
-See [libs/assetlib/src/bmaterial_io.cpp](libs/assetlib/src/bmaterial_io.cpp) for a whole container, and
+The sketch keeps the material vocabulary it was written with; the live examples are the env
+containers now — see [libs/assetlib/src/bsky_io.cpp](libs/assetlib/src/bsky_io.cpp) for a whole
+container, and
 [libs/assetlib/tests/src/SchemaContainer_test.cpp](libs/assetlib/tests/src/SchemaContainer_test.cpp)
 for the two-branch case with a hook.

@@ -6,6 +6,7 @@
 #include <core/hash.h>
 #include <nlohmann/json.hpp>
 
+#include "json_doc.h"
 #include "ref_paths.h"
 
 namespace assetlib
@@ -27,16 +28,6 @@ namespace assetlib
 			return std::string(key.substr(0, key.size() - ext.size())).append(extension);
 		}
 
-		nlohmann::json
-		parseObject(std::string_view text, std::string_view what)
-		{
-			auto json = nlohmann::json::parse(text, nullptr, false);
-			core::throw_runtime_error_if(
-				json.is_discarded() || !json.is_object(),
-				"import document: {} is not a JSON object",
-				what);
-			return json;
-		}
 	}
 
 	std::string
@@ -54,7 +45,7 @@ namespace assetlib
 	ImportDocument
 	deserializeImportDocument(std::string_view text)
 	{
-		auto json = parseObject(text, "the document");
+		auto json = doc::parseObject(text, "import document: the document");
 
 		ImportDocument document;
 
@@ -101,9 +92,10 @@ namespace assetlib
 	std::string
 	serializeImportDocument(const ImportDocument& document)
 	{
-		auto json = parseObject(document.extraJson, "extraJson");
+		auto json = doc::parseObject(document.extraJson, "import document: extraJson");
 
-		auto parameters = parseObject(document.extraParametersJson, "extraParametersJson");
+		auto parameters =
+			doc::parseObject(document.extraParametersJson, "import document: extraParametersJson");
 		parameters[c_SampleRateKey] = document.sampleRate;
 		json[c_ParametersKey]       = std::move(parameters);
 
@@ -118,13 +110,14 @@ namespace assetlib
 		}
 		json[c_BindingsKey] = std::move(bindings);
 
-		return json.dump(1, '\t') + '\n';
+		return doc::canonicalDump(json);
 	}
 
 	uint64_t
 	parametersHashOf(const ImportDocument& document)
 	{
-		auto parameters = parseObject(document.extraParametersJson, "extraParametersJson");
+		auto parameters =
+			doc::parseObject(document.extraParametersJson, "import document: extraParametersJson");
 		parameters[c_SampleRateKey] = document.sampleRate;
 		return core::hash_string(parameters.dump(), core::hash_seed());
 	}
