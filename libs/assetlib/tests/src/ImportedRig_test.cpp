@@ -235,8 +235,7 @@ TEST_CASE("The import bakes the posed box beside the clips it writes", "[importe
 	const std::optional<assetlib::Bounds> baked = assetlib::findPosedBounds(
 		assetlib::loadAnimations(root.Banim()),
 		mesh,
-		0,
-		assetlib::loadSkeleton(root.Bskel()));
+		assetlib::loadSkeleton(root.Bskel()))[0];
 
 	REQUIRE(baked.has_value());
 	CHECK(baked->min.x == Catch::Approx(-1.0f));
@@ -450,7 +449,7 @@ TEST_CASE("Clips import on their own, attached to the rig already there", "[impo
 
 	// A clips-only import serves the same loads a full one does, so it bakes the same boxes.
 	CHECK(
-		assetlib::findPosedBounds(clips, mesh, 0, assetlib::loadSkeleton(root.Bskel()))
+		assetlib::findPosedBounds(clips, mesh, assetlib::loadSkeleton(root.Bskel()))[0]
 			.has_value());
 
 	// The point of the exercise: one rig, one mesh, many clip sets.

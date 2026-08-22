@@ -82,16 +82,17 @@ namespace assetlib
 	bakePosedBounds(AnimationSet& animations, const BMesh& mesh, const Skeleton& skeleton);
 
 	/**
-	 * The box bakePosedBounds stored for this exact pairing, or nullopt when the `.banim` carries
-	 * none -- never baked, a different mesh, or a source that changed since. The caller measures
-	 * then; the box itself is trusted verbatim.
+	 * The boxes bakePosedBounds stored for `mesh` against this clip set, one per entry of
+	 * `mesh.meshes`. An entry's box is nullopt where the `.banim` carries none -- never baked, a
+	 * different mesh, or a source that changed since; the caller measures those, and a box that is
+	 * there is trusted verbatim.
+	 *
+	 * Answers for every entry at once because the signature it matches on describes the whole mesh:
+	 * asked per entry, it would hash the vertex pool once per entry, which on a 27-entry rig is most
+	 * of a second.
 	 */
-	[[nodiscard]] std::optional<Bounds>
-	findPosedBounds(
-		const AnimationSet& animations,
-		const BMesh&        mesh,
-		uint32_t            meshIndex,
-		const Skeleton&     skeleton) noexcept;
+	[[nodiscard]] std::vector<std::optional<Bounds>>
+	findPosedBounds(const AnimationSet& animations, const BMesh& mesh, const Skeleton& skeleton);
 
 	/** One vertex after skinning, in model space. */
 	struct SkinnedVertex

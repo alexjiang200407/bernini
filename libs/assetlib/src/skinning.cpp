@@ -627,21 +627,19 @@ namespace assetlib
 		}
 	}
 
-	std::optional<Bounds>
-	findPosedBounds(
-		const AnimationSet& animations,
-		const BMesh&        mesh,
-		const uint32_t      meshIndex,
-		const Skeleton&     skeleton) noexcept
+	std::vector<std::optional<Bounds>>
+	findPosedBounds(const AnimationSet& animations, const BMesh& mesh, const Skeleton& skeleton)
 	{
+		auto out = std::vector<std::optional<Bounds>>(mesh.meshes.size());
+
 		if (animations.posedBoxes.empty())
-			return std::nullopt;
+			return out;
 
 		const uint64_t signature = posedBoundsSignature(mesh, skeleton);
 		for (const PosedBox& box : animations.posedBoxes)
-			if (box.sourceSignature == signature && box.meshIndex == meshIndex)
-				return Bounds{ box.min, box.max };
+			if (box.sourceSignature == signature && box.meshIndex < out.size())
+				out[box.meshIndex] = Bounds{ box.min, box.max };
 
-		return std::nullopt;
+		return out;
 	}
 }

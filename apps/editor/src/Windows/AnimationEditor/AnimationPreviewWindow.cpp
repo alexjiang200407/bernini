@@ -266,20 +266,22 @@ AnimationPreviewWindow::LoadMeshAs(
 				const assetlib::AnimationSet clips    = store.LoadRegenAnimations(animations);
 				const assetlib::Skeleton     skeleton = store.LoadRegenSkeleton(clips.skeleton);
 
+				const std::vector<std::optional<assetlib::Bounds>> baked =
+					assetlib::findPosedBounds(clips, mesh, skeleton);
+
 				for (const bmesh::InstancePlacement& placement : plan.animated)
 				{
 					if (skinnedBounds.contains(placement.meshIndex))
 						continue;
 
-					const std::optional<assetlib::Bounds> baked =
-						assetlib::findPosedBounds(clips, mesh, placement.meshIndex, skeleton);
-					if (!baked)
+					const std::optional<assetlib::Bounds>& box = baked[placement.meshIndex];
+					if (!box)
 						progress.Report(0, 0, "Measuring the pose...");
 
 					skinnedBounds.emplace(
 						placement.meshIndex,
-						baked ? *baked :
-								assetlib::posedBounds(mesh, placement.meshIndex, skeleton, clips));
+						box ? *box :
+							  assetlib::posedBounds(mesh, placement.meshIndex, skeleton, clips));
 				}
 			}
 		});
