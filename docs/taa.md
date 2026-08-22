@@ -46,6 +46,16 @@ held frame, and what it costs is the frames a moving pixel waits for the jitter 
 — so it is swept by eye on a scene rather than fixed at whatever a test measured. At a render scale
 of 1 it does nothing at all: each output pixel has a sample of its own there.
 
+**The resolve is deliberately the standard recipe** — jittered accumulation, YCoCg variance
+clipping, Catmull-Rom history, luma-weighted blending, silhouette dilation — and nothing else. It
+once carried a bespoke resting shelter (a per-pixel variance store that widened the clamp box and
+deepened the blend at rest, guarding converged stochastic coverage), removed 2026-08-22: it
+ghosted on any surface that rested and then moved faster than its neighbourhood could witness, and
+holding it correct cost machinery a standard resolve does not need. What the removal spends is
+resting stochastic quality — a converged hashed patch flickers at roughly the level it does
+mid-pan (measured 60–80× the sheltered figure), and sub-pixel strands at distance, hashed *and*
+alpha-tested, read dimmer — judged acceptable by eye against keeping the machinery.
+
 **This document is a map, not a mirror.** The headers at each linked path are the source of truth.
 
 ---
@@ -107,9 +117,8 @@ of 1 it does nothing at all: each output pixel has a sample of its own there.
 
 * **The clamp box, the depth read and the object-motion discriminator all stay on the render 3×3.**
   A 3×3 on the output grid is nine taps of a reconstruction — it can report no colour the render
-  neighbourhood did not already contain, while moving what "no survivor in the 3×3" means for the
-  variance store that hashed alpha depends on. Only the history fetch and its Catmull-Rom taps are
-  in output texels.
+  neighbourhood did not already contain. Only the history fetch and its Catmull-Rom taps are in
+  output texels.
 
 * **The resolve writes history and nothing else.** `PostProcess` reads what it produced and applies
   the display curve. Merging the two would save a full-screen pass and cost the seam: bloom, grading
@@ -143,9 +152,8 @@ of 1 it does nothing at all: each output pixel has a sample of its own there.
 * **A change *no motion vector describes* drops the accumulation.** Reprojection answers "where was
   this surface last frame", and a material rewritten, rebound or deleted moves nothing — the pixel's
   velocity is zero and the history is fetched from exactly where it was written, so the resolve
-  blends the old material with the new one for as long as the clamp lets it. At rest that is a long
-  time: the box is *widened* by remembered spread, which is what the material editor's texture edits
-  ghost through. `Scene::GetTemporalEpoch` and its per-view counterpart count those changes,
+  blends the old material with the new one for as long as the clamp lets it.
+  `Scene::GetTemporalEpoch` and its per-view counterpart count those changes,
   `SceneView::AdvanceTemporalEpoch` reports one to the frame that draws after it, and the resolve
   then takes the scene colour whole exactly as the first frame does. The cost is one unaccumulated
   frame per edit; the alternative is a ghost lasting tens.
@@ -217,96 +225,24 @@ of 1 it does nothing at all: each output pixel has a sample of its own there.
   several draws has no one camera to reconstruct with and reprojects by each pixel's own vector.
 
   Measured on the tilted VAT quad sweeping over a flat backdrop, animated-against-held under TAA
-  with the raw pair at exactly 0: still camera 6.9e-4 → 1.25e-4, drifting camera 8.8e-4 → 2.9e-4.
+  with the raw pair at exactly 0: still camera 6.9e-4 → 1.1e-4, drifting camera 8.8e-4 → 1.8e-4.
   Off the suite, on the test project's coyote through a throwaway headless harness, against the
-  still-camera converged image of the same pose: its ears in close-up 1.16 → 0.67 (mean |Δ|/255)
-  under a still camera, and under an orbit 0.87 → 0.68 — the held mesh under the same orbit
-  measures 0.95, so the animating one now resolves *better* than a static one under a pan, which
-  is the silhouette parallax the σ-box leaves and closest-fragment dilation would take.
-  Tightening the clamp box by the fetch's motion as well — the dilated fetch keeps the pixel's
-  own tightness, so a backdrop pixel beside a moving edge fetches from where the mesh was under
-  the min/max box — was measured twice and left out twice: on the close-up ears at parity (0.672
-  either way), and at a 1080p grid from a quarter texel of the borrowed vector, where it added
-  nothing the motion-weighted blend (below) had not already taken (the coyote's residue over
-  48/255 against its held self 353 with the blend alone, 352 with both) and cost the grazing
-  hashed strand 15% more flicker under a slow pan (1.48e-3 → 1.69e-3 at half a texel a frame),
-  because at that speed a σ box fully tight is the always-on box the next bullet rejects. The
-  thin-feature case on hashed coverage is still better served by keeping the hash cell near pixel
-  size (below).
+  still-camera converged image of the same pose: its ears in close-up 1.16 → 0.98 (mean |Δ|/255)
+  under a still camera — the dilation-alone figure; the #372 harness measured lower with the
+  since-removed resting shelter stacked on top.
 
-* **The clamp box is min/max at rest and tightens to mean ± σ under motion.** Always-on variance
-  clipping was tried first and rejected: tighter everywhere means snapping converged stochastic
-  coverage back onto each frame's noise, +49% resting flicker for −8% trail. But the wide box has
-  a blind spot that is exactly the visible artifact — on hashed coverage at a distance one strand
-  texel and one backdrop texel put the min/max corners at the extremes, so under a pan every
-  dragged mixture is admitted, and hair trails a smear. The σ box tightens with the mixture and
-  recentres on the majority population, which is the grip the clamp lacks there. Gating the
-  tightening on the pixel's own motion (fully tight from one texel per frame) takes the resting
-  image out of the trade entirely: motion has the jitter removed, so a still camera reads exactly
-  zero and every resting figure is bit-identical to min/max. Measured on a panned hashed-alpha
-  ramp over a lit backdrop: trailing-band error 1.73e-3 → 1.30e-3 against a 1.7e-4 still floor
-  (1.38e-3 by the time the motion-weighted blend below was measured against it, after the mip
-  and coverage work in between), leading-band 2.58e-3 → 2.28e-3, grazing pan flicker
-  0.0024 → 0.0021, every resting bound unchanged. The σ box stays clamped inside the min/max box, which nine bounded samples can
-  otherwise escape.
-
-* **A moving pixel leans further on the frame it can see — up to twice the base weight from one
-  texel of fetch motion.** The clamp bounds *where* an admitted history may land; nothing bounds
-  how long it stays, and what the clamp cannot pull out is the wake. First measured against the
-  empty-background pan and rejected there (0.00669 → 0.00673) — that instrument is edge spread,
-  and the box collapses onto the backdrop's own colour and scrubs the trail by itself. Against the
-  wake over *detail* the ramp is worth a third: 9.9e-5 → 6.9e-5; the animating quad's outline
-  1.25e-4 → 1.04e-4 still and 2.9e-4 → 2.3e-4 drifting; the coyote's 1080p residue over 48/255
-  against its held self 660 → 353; the panned hashed ramp's trailing band 1.38e-3 → 1.23e-3 at
-  two texels a frame and 1.21e-3 → 1.16e-3 at half a texel, its pan frame-to-frame 2.37e-3 →
-  2.28e-3, and the grazing strand's pan flicker within 2% at either speed. Rest is exactly zero
-  motion, so every resting figure is bit-identical — which is the difference from a *global*
-  doubling, which triples resting hashed flicker and is out. Capped at twice: at four times the
-  wake halves again but the hashed ramp's trailing band reaches 1.6e-3, where that band's guard
-  stops telling the σ box from the min/max one. No suite bound sits between the two states: the
-  margins are within what one GPU differs from another by on these instruments (the hashed pan
-  flicker pins Apple and Ada apart by a third), so the mechanism is guarded by these figures and
-  the coyote harness, not by a red-before line.
-
-* **The weight does deepen where remembered stochastic spread lives.** What a converged stochastic
-  region still flickers by is the accumulation's residual variance, which scales with the blend
-  weight and which no clamp box reaches — and the variance store (below) is a per-pixel map of
-  exactly where that residual lives. The resolve divides the weight by the remembered sigma,
-  floored at a quarter of the base so the accumulation still tracks a change a resting camera is
-  watching. This is separate from the motion ramp above: the gate is the store, not the motion,
-  and the store is emptied *by* motion — an edge under a pan keeps the full weight, so the
-  deepening cannot ghost. It is also what makes a lower render resolution stop flickering more
-  than a higher one: the distant strand card measured 7.7e-5 / 1.37e-4 / 2.51e-4 of frame-to-frame
-  noise at 256/128/64 and measures 2.4e-5 / 4.2e-5 / 7.5e-5 with the deepening — every rung below
-  the unaided 256 figure — with the converged still patch at 2.3e-5 against 0.0015, and every
-  resting fixed point (coverage ladder, converged luma) unchanged. The cost is the settling tail:
-  the last of a resting stochastic region's noise drains at up to four times the base time
-  constant, staged behind the store itself filling, so the first frames after a camera stops
-  settle at full speed.
-
-* **At rest the box is widened by remembered stochastic spread.** The min/max box has a second
-  blind spot on stochastic coverage, opposite the smear: on the frames where none of a sparse
-  strand's 3×3 wins its coin flip, the box collapses onto the backdrop and wipes the accumulated
-  mixture — a rebuild cycle that reads as flicker and converges far below the true coverage
-  (measured at 0.23 of an alpha-blended reference of the same texels). The history's alpha channel
-  carries a running average of the 3×3's own luma variance, and the box is widened by its excess
-  over the present frame's sigma: on a no-survivor frame that excess is the whole memory, and at a
-  standing contrast edge — where widening would shelter whatever a pan dragged past — it cancels
-  to zero. Spatial spread averaged over time rather than temporal deviation, because a ghost's
-  history deviates from the frame under it exactly as a real mixture does, but only real
-  stochastic coverage keeps producing spread *inside* single frames. The widening exists only at
-  true rest, gated on the whole 3×3's motion being zero **and** the CPU comparing this frame's
-  unjittered view-projection bitwise against last frame's — a pixel's motion alone cannot gate it,
-  since empty pixels report zero velocity under any camera and would bank a passing edge's
-  contrast during a pan; and its own motion alone is not enough under a still camera either, since
-  the backdrop beside an animating mesh reports zero while the silhouette sweeps over it, banked
-  that silhouette's contrast, and then widened its box and deepened its weight over exactly the
-  wake the clamp exists to scrub. It is the other half of the still-camera outline figure quoted
-  above, from the same off-suite harness: on the coyote's ears the dilation alone measures
-  1.16 → 0.98 and this gate alone 1.16 → 0.97; together, 0.67.
-  Resting history reprojects onto itself and cannot ghost, so the widening is free there:
-  converged distant coverage 0.23 → 0.97–0.98 of the blend reference, resting flicker 7× down,
-  and the pan trail bit-identical to the unwidened resolve.
+* **The clamp box is mean ± σ, always, kept inside the min/max box.** A plain min/max box has a
+  blind spot that is exactly the visible artifact — on hashed coverage at a distance one strand
+  texel and one backdrop texel put the corners at the extremes, so under a pan every dragged
+  mixture is admitted, and hair trails a smear. The σ box tightens with the mixture and recentres
+  on the majority population. It stays clamped inside the min/max box, which nine bounded samples
+  can otherwise escape. What always-on tightness costs is the other blind spot's shelter: on the
+  frames where none of a sparse strand's 3×3 wins its coin flip, the box collapses onto the
+  backdrop and wipes the accumulated mixture — a rebuild cycle that reads as resting flicker and
+  converges distant coverage below an alpha-blended reference (survived ratio ~0.4 at the mid
+  rung). That is the trade the standard-recipe note above records: the resting shelter that once
+  bridged those frames also ghosted on any surface that rested and then left faster than a 3×3
+  witnesses, and its correctness cost more machinery than the resting quality bought.
 
 ---
 
@@ -427,10 +363,11 @@ Two couplings worth knowing:
   shaped level's aliased partials scatter well outside it, and ungated the lift inflated those
   partials past the strands' area. Where shape exists the ceiling is the steepened value's own
   coverage, since capping a restored strand at 0.5 would clip exactly what the steepening
-  recovered. The coverage ladder measures 0.90 near, 0.96 mid and 1.29 far of the blend reference,
-  inside a [0.6, 1.4] bracket that guards hair which vanishes and hair which doubles -- and the
-  far card's adjacent-pixel contrast reads 0.0140 against the alpha test's 0.0078, so the distant
-  strands are sharper features than the crisp look the sharpening was built to chase.
+  recovered. The coverage ladder measures 0.75 near through 0.42 mid of the blend reference under
+  the standard resolve, whose collapsed box on no-survivor frames spends part of the accumulated
+  mixture (the trade recorded at the top of this document), inside a bracket that guards hair
+  which vanishes outright and hair which doubles -- and the far card's adjacent-pixel contrast
+  still reads about 1.8x the alpha test's, so the sharpening's far-field work survives the trade.
 
   The minification is the *smaller* screen axis, since a grazing card minifies along the view axis at
   any distance and anisotropic filtering resolves that axis.
@@ -438,13 +375,10 @@ Two couplings worth knowing:
 * **The base blend weight trades flicker against settling time, not against ghosting.** This is
   the opposite of the intuition and it is measured: at an equal convergence budget, halving the
   weight from 0.1 to 0.05 takes the frame-to-frame difference from 0.0020 to 0.0013 and moves the
-  trail left behind an empty-background pan by 2% — nothing (the wake over *detail* is the figure
-  the motion ramp above does move). Ghosting is bounded by the neighbourhood clamp, which is doing
+  trail left behind an empty-background pan by 2% — nothing. Ghosting is bounded by the neighbourhood clamp, which is doing
   essentially all of that work; bypassing it sends the trail from 0.0066 to 0.090. What a lower weight
   actually costs is the time constant, 10 frames to 20, so an edge takes longer to resolve after the
-  camera stops. 0.025 is where that starts to show. The variance-guided deepening (above) is how the
-  resolve gets past this trade: only pixels the store already knows are stochastic pay the longer
-  time constant.
+  camera stops. 0.025 is where that starts to show.
 
 ---
 
@@ -457,11 +391,11 @@ Two couplings worth knowing:
   neighbourhood clamp happens to launder NaN, since IEEE `min`/`max` return the non-NaN operand.
   Deleting the clamp turned every resolved frame black, which is how it surfaced.
 
-* **The history's alpha is the variance store, not scene alpha.** The resolve writes the running
-  spatial-variance average there and reads it back next frame; nothing downstream ever saw scene
-  alpha through it (`PostProcess` writes the backbuffer opaque). The no-history early return
-  writes it as zero — the store must start empty, and a scene alpha of 1 would decode as a huge
-  variance.
+* **The history's alpha carries nothing, and it is not scene alpha.** The resolve writes it as
+  zero and never reads it; nothing downstream sees scene alpha through it either (`PostProcess`
+  writes the backbuffer opaque). It once carried the removed resting shelter's variance store,
+  which is why the channel exists at all — anything revived there must remember the no-history
+  early return writes zero.
 
 * **The ping-pong is per target, not per frame counter — and so is the jitter index.**
   `GetCurrentHistoryIndex()` is state the target owns and `AdvanceHistory()` flips at `EndFrame`;

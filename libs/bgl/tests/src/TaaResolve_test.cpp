@@ -439,7 +439,8 @@ namespace
 	AddVatQuadOverBackdrop(
 		const bgl::SceneRef&        scene,
 		const bgl::SceneViewRef&    view,
-		const bgl::VatInstanceDesc& desc)
+		const bgl::VatInstanceDesc& desc,
+		const glm::mat4&            transform)
 	{
 		bgl::test::ApplyEnvironment(scene.Get(), view.Get());
 
@@ -454,13 +455,17 @@ namespace
 		const auto quad = bgl::test::vat_synth::AddSlidingQuadGeom(
 			*scene,
 			scene->CreatePbrMaterial(Grey(c_AnimQuadGrey)));
-		view->CreateVatMeshInstance(quad, AnimatedQuadTransform(), desc);
+		view->CreateVatMeshInstance(quad, transform, desc);
 	}
 
 	void
 	AddAnimatingQuadOverBackdrop(const bgl::SceneRef& scene, const bgl::SceneViewRef& view)
 	{
-		AddVatQuadOverBackdrop(scene, view, { bgl::test::vat_synth::c_LoopClip, 0.0f, 1.0f });
+		AddVatQuadOverBackdrop(
+			scene,
+			view,
+			{ bgl::test::vat_synth::c_LoopClip, 0.0f, 1.0f },
+			AnimatedQuadTransform());
 	}
 
 	// The pose the animation is captured at, held: the reference the outline is read against.
@@ -473,15 +478,16 @@ namespace
 		AddVatQuadOverBackdrop(
 			scene,
 			view,
-			{ bgl::test::vat_synth::c_LoopClip, c_ArrivedPhase, 0.0f });
+			{ bgl::test::vat_synth::c_LoopClip, c_ArrivedPhase, 0.0f },
+			AnimatedQuadTransform());
 	}
 
 	// Where a point of the quad's bake space lands on screen when the pose is at `offset`.
 	glm::ivec2
-	AnimatedQuadPx(float offset, glm::vec3 bakePoint)
+	AnimatedQuadPx(float offset, glm::vec3 bakePoint, const glm::mat4& transform)
 	{
 		const glm::vec4 world =
-			AnimatedQuadTransform() * glm::vec4(bakePoint + glm::vec3(offset, 0.0f, 0.0f), 1.0f);
+			transform * glm::vec4(bakePoint + glm::vec3(offset, 0.0f, 0.0f), 1.0f);
 		const glm::vec4 clip = Camera().GetViewProjection() * world;
 		const glm::vec2 ndc  = glm::vec2(clip) / clip.w;
 		return glm::ivec2(
@@ -503,16 +509,83 @@ namespace
 		int minX = c_Width, minY = c_Height, maxX = 0, maxY = 0;
 		for (const glm::vec3& corner : bgl::test::vat_synth::c_QuadAtOrigin)
 		{
-			const glm::ivec2 px = AnimatedQuadPx(bgl::test::vat_synth::c_Step, corner);
-			minX                = std::min(minX, px.x);
-			minY                = std::min(minY, px.y);
-			maxX                = std::max(maxX, px.x);
-			maxY                = std::max(maxY, px.y);
+			const glm::ivec2 px =
+				AnimatedQuadPx(bgl::test::vat_synth::c_Step, corner, AnimatedQuadTransform());
+			minX = std::min(minX, px.x);
+			minY = std::min(minY, px.y);
+			maxX = std::max(maxX, px.x);
+			maxY = std::max(maxY, px.y);
 		}
 		return { minX - c_Margin,
 			     minY - c_Margin,
 			     maxX - minX + 2 * c_Margin,
 			     maxY - minY + 2 * c_Margin };
+	}
+
+	// The leap fixture: the same VAT quad, untilted so the band it vacates is a clean rectangle,
+	// resting long enough to converge and then crossing its whole step in one frame -- a jump or
+	// fall clip's speed, which no pixel's 3x3 ever witnesses passing.
+	constexpr int c_WakeFrames = 8;
+
+	glm::mat4
+	LeapQuadTransform()
+	{
+		return glm::translate(glm::mat4(1.0f), glm::vec3(0.0f, 0.0f, c_ParallaxQuadZ)) *
+		       glm::scale(glm::mat4(1.0f), glm::vec3(c_AnimQuadScale));
+	}
+
+	void
+	AddLeapingQuadOverBackdrop(const bgl::SceneRef& scene, const bgl::SceneViewRef& view)
+	{
+		AddVatQuadOverBackdrop(
+			scene,
+			view,
+			{ bgl::test::vat_synth::c_ClampClip, 0.0f, 1.0f },
+			LeapQuadTransform());
+	}
+
+	// The pose the leap clamps to, held from the first frame: the reference the wake is read
+	// against, whose vacated band has only ever seen backdrop.
+	void
+	AddLeaptQuadOverBackdrop(const bgl::SceneRef& scene, const bgl::SceneViewRef& view)
+	{
+		AddVatQuadOverBackdrop(
+			scene,
+			view,
+			{ bgl::test::vat_synth::c_ClampClip, 1.0f, 0.0f },
+			LeapQuadTransform());
+	}
+
+	// At rest on the clip's first pose for the whole convergence, then one frame into the one-shot
+	// clip, which clamps there -- the pose crosses the step between two adjacent frames.
+	float
+	LeapClock(int frame)
+	{
+		return frame < c_ConvergeFrames ? 0.0f : 1.0f / bgl::test::vat_synth::c_SampleRate;
+	}
+
+	// The strip straddling the quad's resting left silhouette -- where a leap's ghost sits when
+	// one survives: the vacated interior is scrubbed the frame the backdrop's box lands on it, so
+	// what a shelter admits is the edge mixture along the old silhouette. Wholly left of where the
+	// quad lands, so both renders show only backdrop here.
+	PxBox
+	WakeRim()
+	{
+		constexpr int c_HalfWidth = 4;
+		constexpr int c_Inset     = 4;
+
+		int restMinX = c_Width, restMinY = c_Height, restMaxY = 0;
+		for (const glm::vec3& corner : bgl::test::vat_synth::c_QuadAtOrigin)
+		{
+			const glm::ivec2 rest = AnimatedQuadPx(0.0f, corner, LeapQuadTransform());
+			restMinX              = std::min(restMinX, rest.x);
+			restMinY              = std::min(restMinY, rest.y);
+			restMaxY              = std::max(restMaxY, rest.y);
+		}
+		return { restMinX - c_HalfWidth,
+			     restMinY + c_Inset,
+			     2 * c_HalfWidth + 1,
+			     restMaxY - restMinY - 2 * c_Inset };
 	}
 }
 
@@ -928,10 +1001,8 @@ TEST_CASE("An animating mesh's outline is as sharp as when it is held", "[taa][v
 	// pose and not the resolve.
 	REQUIRE(pose == 0.0f);
 
-	// Measured 6.9e-4 with the pixel's own motion alone -- the doubled outline -- 1.25e-4 with the
-	// neighbourhood's, and 1.04e-4 with the blend weighted by the fetch's motion; the bound sits
-	// between the first two, nearer the fix. The last step is not bounded apart: its margin is
-	// within what one GPU differs from another by here.
+	// Measured 6.9e-4 with the pixel's own motion alone -- the doubled outline -- and 1.1e-4 with
+	// the neighbourhood's; the bound sits between the two, nearer the fix.
 	CHECK(outline < 3.0e-4f);
 
 	// The same under a drifting camera, which is what tells a surface's own motion from the
@@ -965,13 +1036,14 @@ TEST_CASE("An animating mesh's outline is as sharp as when it is held", "[taa][v
 		"quad box delta under a drifting camera, animating against held: raw = "
 		<< driftPose << ", resolved = " << driftOutline);
 
-	// Measured 8.8e-4 reprojecting by each pixel's own vector, 2.9e-4 by the neighbour that moves
-	// most on its own, and 2.3e-4 with the blend weighted by that fetch's motion.
+	// Measured 8.8e-4 reprojecting by each pixel's own vector and 1.8e-4 by the neighbour that
+	// moves most on its own.
 	REQUIRE(driftPose == 0.0f);
 	CHECK(driftOutline < 5.0e-4f);
 
-	const glm::ivec2 topEdge       = AnimatedQuadPx(c_Step, glm::vec3(0.0f, 1.0f, 0.0f));
-	constexpr int    c_EdgeBoxSize = 32;
+	const glm::ivec2 topEdge =
+		AnimatedQuadPx(c_Step, glm::vec3(0.0f, 1.0f, 0.0f), AnimatedQuadTransform());
+	constexpr int c_EdgeBoxSize = 32;
 
 	const auto energy = [&](const std::string& path) {
 		return bgl::test::AliasEnergy(
@@ -995,6 +1067,56 @@ TEST_CASE("An animating mesh's outline is as sharp as when it is held", "[taa][v
 	CHECK(aliased > 4e-4f);
 	CHECK(resting < aliased * 0.6f);
 	CHECK(moving < aliased * 0.6f);
+}
+
+// The wake a leap leaves, as a number: the band the quad vacates in one frame, read against the
+// same band under a quad that was always at the landing pose. This is the case a resting shelter
+// ghosts on -- the resolve once widened the clamp box at rest by remembered spread, a departure of
+// many texels in one frame outran every local witness of it, and a ghost outline hung at the
+// departure position for tens of frames. The plain clamp scrubs it within a frame; this pins that
+// no future shelter reintroduces the ghost, and sweeps cannot stand in for it -- an edge crossing
+// pixels a texel at a time is visible to their own neighbourhoods, a leap is not.
+TEST_CASE(
+	"A mesh leaping from rest leaves no ghost at its departure position",
+	"[taa][vat][render]")
+{
+	const std::string leapt   = "assets/golden/taa_leap_wake.got.png";
+	const std::string held    = "assets/golden/taa_leap_held.got.png";
+	const std::string leapRaw = "assets/golden/taa_leap_wake_raw.got.png";
+	const std::string heldRaw = "assets/golden/taa_leap_held_raw.got.png";
+
+	RenderTo(
+		leapt,
+		true,
+		c_ConvergeFrames + c_WakeFrames,
+		AddLeapingQuadOverBackdrop,
+		StillCamera,
+		LeapClock);
+	RenderTo(held, true, c_ConvergeFrames, AddLeaptQuadOverBackdrop);
+	RenderTo(
+		leapRaw,
+		false,
+		c_ConvergeFrames + c_WakeFrames,
+		AddLeapingQuadOverBackdrop,
+		StillCamera,
+		LeapClock);
+	RenderTo(heldRaw, false, 1, AddLeaptQuadOverBackdrop);
+
+	const PxBox band = WakeRim();
+
+	const float pose = bgl::test::FrameDelta(leapRaw, heldRaw, band.x, band.y, band.w, band.h);
+	const float wake = bgl::test::FrameDelta(leapt, held, band.x, band.y, band.w, band.h);
+
+	INFO("wake band delta, leapt against always-there: raw = " << pose << ", resolved = " << wake);
+
+	// The clamped clip must have arrived at exactly the held pose, with the band clear of the quad
+	// in both renders, or the figure measures geometry and not the resolve.
+	REQUIRE(pose == 0.0f);
+
+	// Measured 3.5e-4 eight frames after the leap under the shelter this test exists to keep out,
+	// and 4.3e-8 with the plain clamp; the bound sits an order of magnitude under the artifact and
+	// two over the converged floor.
+	CHECK(wake < 2.0e-5f);
 }
 
 // The jitter sequence is the target's, not the renderer's. Two viewports drawn each frame by one
@@ -1384,14 +1506,12 @@ TEST_CASE("A supersampling target presents and captures at its output size", "[t
 // Both sides render at the same scale. What is asked is whether accumulating beats not accumulating
 // at a given cost, not whether half a frame beats a whole one.
 //
-// Two fences, because the answer differs by how fine the content is and the difference is the
-// finding. At the render grid's Nyquist -- slats about one render pixel across -- the output-grid
-// accumulation has samples to reconstruct from and wins outright. Below it, where the render grid
-// never sampled the detail in the first place, no accumulation can invent it: the bound there is
-// that it must not be *worse* than drawing nothing, which is exactly the state this replaces.
-TEST_CASE(
-	"An upscaling resolve beats no antialiasing against a supersampled truth",
-	"[taa][render][truth]")
+// Two fences, one at the render grid's Nyquist -- slats about one render pixel across -- and one
+// below it, where the render grid never sampled the detail at all. Under sustained drift the
+// standard resolve measures within a percent of the raw upscale on both: the Nyquist margin the
+// motion-weighted blend once bought went with it (docs/taa.md), and below Nyquist no accumulation
+// can invent samples never taken. What is pinned either side is that accumulating is not a loss.
+TEST_CASE("An upscaling resolve holds the raw upscale's ground under drift", "[taa][render][truth]")
 {
 	constexpr int   c_TruthScale = 4;
 	constexpr float c_HalfScale  = 0.5f;
@@ -1450,15 +1570,13 @@ TEST_CASE(
 	CHECK(atNyquistRaw > 0.01f);
 	CHECK(belowNyquistRaw > 0.01f);
 
-	// At the render grid's Nyquist the reconstruction has samples to work with, and the margin is
-	// what the change buys. Measured at 18% better; the bound is set below that rather than at it,
-	// because a figure read off one backend is not a bound on another.
-	CHECK(atNyquistTaau < atNyquistRaw * 0.9f);
-
-	// Below it, the bound is only that accumulating is not a loss. Measured at parity, which is the
-	// honest ceiling: samples never taken cannot be recovered, and the follow-up that would move
-	// this is a wider reconstruction gather, not a resolve knob.
-	CHECK(belowTaau <= belowNyquistRaw);
+	// Measured within a percent of the raw upscale either side under the standard resolve -- the
+	// 18% margin at Nyquist the motion-weighted blend once bought went with it (docs/taa.md) --
+	// so the bound on both is parity with slack for the noise of a drift measurement: accumulating
+	// under sustained motion costs at most a hair, and its win is the held frame, which the scale
+	// sweeps beside this pin.
+	CHECK(atNyquistTaau <= atNyquistRaw * 1.05f);
+	CHECK(belowTaau <= belowNyquistRaw * 1.05f);
 }
 
 // The other end of the same instrument: at full render scale the resolve has always beaten the raw

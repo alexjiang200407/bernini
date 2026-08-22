@@ -403,7 +403,6 @@ namespace bgl
 
 		m_FrameGraph.Reset();
 		m_DrawCount        = 0;
-		m_CameraStill      = true;
 		m_TemporalBreak    = false;
 		m_OutlineMaskDrawn = false;
 		++m_FrameCounter;
@@ -507,11 +506,6 @@ namespace bgl
 		camera.time                 = job.time;
 
 		const ViewMatrices prevCamera = view->AdvanceCamera(m_FrameCounter, camera);
-
-		// Exact comparison on purpose: a held camera reproduces the matrices bitwise, and any
-		// threshold would have to know the scene's scale. ANDed across the frame's draws -- one
-		// panning view must veto the widening for all of them, or its pixels bank a passing edge.
-		m_CameraStill &= camera.unjitteredViewProj == prevCamera.unjitteredViewProj;
 
 		m_TemporalBreak |= view->AdvanceTemporalEpoch();
 
@@ -692,7 +686,6 @@ namespace bgl
 			taaArgs.jitter              = m_TaaJitter;
 			taaArgs.cameraPairValid     = m_DrawCount == 1;
 			taaArgs.historyValid        = rt.IsHistoryValid() && !m_TemporalBreak;
-			taaArgs.cameraStill         = m_CameraStill;
 			m_TaaResolve.AttachToFrameGraph(m_FrameGraph, taaArgs);
 
 			// The display curve is applied to what the resolve produced, not to the raw frame.
