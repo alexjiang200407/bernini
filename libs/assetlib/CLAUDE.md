@@ -23,6 +23,28 @@ rename the field when its meaning changes, so the schema can see it. `.bmaterial
 its strings live in a pool chunk and its records are PODs with pool offsets, so one converter serves
 every container.
 
+The public surface is documented as a map in [docs/assetlib_api.md](../../docs/assetlib_api.md).
+
+## The bar here is the strict one
+
+assetlib and `assetlib_cli` are held to the same bar as `bgl`: the headers under `include/` are
+what a reader learns this library from, so there is one seam per concern and one place each rule
+lives. `apps/editor` gets a looser bar; this does not — see
+[the root CLAUDE.md](../../CLAUDE.md) § The bar each subsystem is held to.
+
+Concretely, before adding to `include/assetlib/`:
+
+- **A project's asset is addressed by a mount key, through `AssetStore`.** A new function that
+  takes a `std::filesystem::path` to a file the project owns is adding the second way to do a
+  thing that already has one. `std::filesystem::path` is for files no project owns — see
+  [STYLE.md](../../STYLE.md) § Paths.
+- **Do not re-carry a data root.** `MaterialBakeDesc` and `EnvBakeDesc` do, and they are the
+  standing example of what not to copy; the store already holds it.
+- **A new container type is not a new switch.** The extension, the magic and the type enum are
+  already spelled out in several places, and
+  [docs/specs/assetlib_store_codecs.md](../../docs/specs/assetlib_store_codecs.md) is the design
+  that collapses them. Read it before adding the next one.
+
 ## Headers forward declare
 
 A header forward declares the types it names from its **own** namespace — `BMesh`, `BMaterial`,

@@ -6,12 +6,34 @@ Bernini is a 3D game engine. It uses CMake as the buildsystem.
 - Do not `#include` standard c++ libraries. They're already in the precompiled header `./PCH/pch.h` for all the targets
 - Library subsystems live under `./libs` (currently `./libs/bgl`, `./libs/core`, `./libs/assetlib`, `./libs/gamelib`); executable apps live under `./apps` (currently `./apps/editor`); runnable examples under `./examples`
 - **Layering**: `bgl` (renderer) never links `assetlib` — it stays codec-free, taking decoded `assetlib_structs` PODs. `assetlib` (offline cook) never links `bgl` — the CLI baker must not drag in D3D12. `gamelib` is the seam that links both, and is where "load this asset into a scene" lives.
+- **The design bar is not the same everywhere.** See below.
 - For each subsystem `$SUBSYSTEM/src` represents the internal .cpp and .h files that WON'T be shared with others.
 - For each subsystem `$SUBSYSTEM/include` represents all the headers that will be shared to others.
 - The CMakelists will specify the src and include directory in each subsystem as a include directory for the target, so always `#include` to the relative to that. e.g. If the current source file is `$SUBSYSTEM/src/xx/Y.h` do `#include "X.h"` instead of `#include "../X.h"`
 - When we `#include` a file in `include` we use <> if we `#include` a file in a src we use ""
 - The source files are globbed. Just place source files where other sources are located.
 - Uses vcpkg with manifest mode
+
+## The bar each subsystem is held to
+
+Everything under `./libs` — `bgl`, `core`, `assetlib`, `gamelib` — and `assetlib_cli` with it, is
+held to a **strict** bar. These are libraries: their headers are the interface a reader learns the
+system from, and a client cannot route around a bad one. So the public surface must be readable on
+its own — one obvious seam per concern, a rule stated in one place, no second way to do the same
+thing. `bgl` is the reference: [docs/bgl_api.md](./docs/bgl_api.md) and the handful of `bgl::I*`
+headers behind it are what "structured" means here.
+
+`./apps/editor` is a **frontend**, and local mess in it is tolerated. It is the top of the stack,
+nothing links it, and a widget that grew awkwardly costs the person editing that widget and nobody
+else. It still follows [STYLE.md](./STYLE.md) and the layering rule — the licence is on
+*organisation*, not on style or on layering.
+
+The consequence that matters when you are working: a shortcut that would be waved through in
+`apps/editor` is a redesign in `libs`. When a change wants a second path into a library — a bake
+that takes a data root when the store is right there, a helper that restates a rule the header
+already owns — that is the point to stop and change the seam, not to add beside it. Two ways to do
+one thing is how the two start disagreeing, and in a library that disagreement reaches every
+caller.
 
 # C++ Style
 
@@ -52,6 +74,11 @@ rather than a judgement call, and how `just tidy` enforces it.
 
 What a client links against: `IGraphics`, `IScene`, `ISceneView`, `IRenderTarget`, the handle and
 descriptor types, and the lifetime/threading rules that govern them. Start here to *use* bgl.
+
+**[assetlib Public API](./docs/assetlib_api.md)**
+
+The offline half: `AssetStore` and the mount-key rule, `Project`, the reference graph behind every
+deletion and rename, one `*_io.h` per container, and the bakes. Start here to *use* assetlib.
 
 **[Geometry Layout](./docs/geometry_layout.md)**
 
@@ -147,12 +174,18 @@ authoring traps — gamma, cube-seam edge fixup, resampling — that still bite 
 
 The two GitHub Apps that give AI work its own identity: `morgana-coding-agent`, which posts `bcp-revise`'s PR replies and co-authors commits from your machine, and the review agent that reviews a PR when you comment `/review` from a GitHub Actions runner. Covers registration, key custody, secrets, and revocation for both.
 
-**Specs** (`docs/specs/`, none at present)
+**Specs** (`docs/specs/`)
 
 One file per problem we have decided **not** to solve yet: what it is, the trigger that makes it
 urgent, and the design already settled on so nobody re-derives it. Unlike a doc above, a spec
 describes code that does not exist; unlike a plan, it is not tied to a change that happened. Read one
 before building the thing it describes, and delete it when that thing lands.
+
+- [Skeleton append](./docs/specs/skeleton_append.md) — appending a bone strands every clip, and the
+  remap that will fix it.
+- [assetlib store and codecs](./docs/specs/assetlib_store_codecs.md) — finishing `AssetStore` so it
+  owns writes as well as reads, one codec trait per container, and why it waits on
+  `feat/migration-system-v2`.
 
 **[Plans and Decision Records](./docs/plans/)**
 
@@ -191,6 +224,7 @@ just idl                          # regenerate the IDL C++ headers and Slang cop
 just targets                      # list all CMake targets (+ --type EXECUTABLE, --json)
 just exes                         # resolve executable paths (--target NAME prints one, --json)
 just count                        # count source files and lines by language, tests counted separately
+just cleanup [--delete]           # list the local branches whose PR merged; --delete cuts them, nothing else
 just pr <cmd> ...                 # the only way to write to a PR: create/comments/reply/comment/edit/check. Opens PRs as you, comments as the bot, routes replies into their thread
 just watch-pr <pr>                # block until the PR fails CI, gets a submitted review or new comments, or merges; prints one JSON event. --interval, --timeout, --once, --since
 ```

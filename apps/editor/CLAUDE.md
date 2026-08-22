@@ -15,6 +15,22 @@ editor imports it (via assetlib) and converts it into the game-ready format.
   Reach for it rather than rebuilding that branch — a material must render the same however
   it was loaded.
 
+## The bar here is the loose one
+
+The editor is a frontend, and awkward local organisation is tolerated in it: nothing links this
+target, so a widget that grew badly costs whoever edits that widget and nobody else. The libraries
+underneath do not get that licence — see [the root CLAUDE.md](../../CLAUDE.md) § The bar each
+subsystem is held to.
+
+Two things the licence does **not** cover, because both leak out of the app:
+
+- [STYLE.md](../../STYLE.md) still applies in full, and so does the layering rule.
+- **Never work around a library's shape from here.** When the editor has to restate something
+  `assetlib` or `bgl` already owns — join a data root to a key by hand, re-derive a naming
+  convention, branch on a case the library should be answering — that is a seam to fix down there,
+  not a helper to add up here. The editor is the biggest client of both, so a workaround written
+  here is the reason the library's shape never gets fixed.
+
 ## config.json
 
 `config.json` (git-ignored, one per checkout, deployed next to the binary and read once by
