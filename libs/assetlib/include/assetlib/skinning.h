@@ -10,25 +10,45 @@ namespace assetlib
 	struct Submesh;
 
 	/**
-	 * The tightest box holding mesh `meshIndex` in every pose of every clip: every vertex skinned at
-	 * every frame, which is the same walk bakeVat makes and the same answer it arrives at.
+	 * A box holding mesh `meshIndex` in every pose of every clip, bounded one bone at a time: each
+	 * bone carries a box over the vertices it has weight on, in its own frame, and a pose sweeps
+	 * that box rather than the vertices inside it.
 	 *
 	 * A bind-pose box is not a substitute: a pose reaches outside it the moment a limb extends, and a
 	 * clip carrying root motion walks the whole rig out of it.
 	 *
-	 * Bounding the *bones* instead is tempting and much cheaper, but it is not close enough to use:
-	 * applying every bone's matrix to the whole bind-pose box over-estimates by ~3x on a rig at that
-	 * scale, because each bone is credited with moving vertices it has no weight on. This is exact
-	 * instead, and costs a vertex per frame per clip -- seconds on a rig with a full clip set (1372
-	 * frames over 4309 vertices is ~3.5 s in a debug build), so it belongs on a worker -- or,
-	 * better, at cook: bakePosedBounds below stores the result in the `.banim` so a load only has
-	 * to find it.
+	 * Conservative, never tight: a skinned position is a convex combination of its bones' products,
+	 * so it lies inside the bounding box of their union -- which is what accumulating a min and a
+	 * max builds. An axis-aligned box swept by a rotation gains slack the vertices themselves do
+	 * not. exactPosedBounds is what that slack is measured against -- see
+	 * docs/skinning.md. Cheap enough to measure at load: it costs a box per bone per frame instead
+	 * of a vertex, which on a 663-bone rig with 170k vertices is 1.5 M products rather than 383 M.
+	 *
+	 * The convexity holds only while the weights sum to one, and quantized ones sum to within four
+	 * unorm16 roundings of it, so a vertex may fall outside by that fraction of its distance from
+	 * the bone -- ~3e-5, and below the precision anything culls at.
 	 *
 	 * @throws std::runtime_error if `meshIndex` is out of range, or for anything poseModelTransforms
-	 *         or skinSubmesh refuses (a clip set cooked against another rig, a bad joint index).
+	 *         or decodeInfluences refuses (a clip set cooked against another rig, a bad joint index).
 	 */
 	[[nodiscard]] Bounds
 	posedBounds(
+		const BMesh&        mesh,
+		uint32_t            meshIndex,
+		const Skeleton&     skeleton,
+		const AnimationSet& animations);
+
+	/**
+	 * The tightest such box, by skinning every vertex at every frame -- the ground truth posedBounds
+	 * is diffed against, the way skinSubmesh is the reference a GPU skin is diffed against.
+	 *
+	 * Nothing in the pipeline calls this: it costs a vertex per frame per clip, which is minutes on
+	 * an AAA rig. Reach for it to measure how loose a posed box is, not to bake one.
+	 *
+	 * @throws std::runtime_error for everything posedBounds does.
+	 */
+	[[nodiscard]] Bounds
+	exactPosedBounds(
 		const BMesh&        mesh,
 		uint32_t            meshIndex,
 		const Skeleton&     skeleton,
@@ -51,8 +71,12 @@ namespace assetlib
 	 * Entries the same signature left behind earlier are replaced; another mesh's are kept, since
 	 * one clip set may be cooked beside several meshes.
 	 *
+	 * Every entry shares one walk of the clip set, so a rig drawn as many meshes evaluates each pose
+	 * once rather than once per mesh.
+	 *
 	 * A mesh entry the walk refuses gets no box rather than failing the cook: the box is derived
-	 * data, and a load measures -- and reports -- exactly as it would had this never run.
+	 * data, and a load measures -- and reports -- exactly as it would had this never run. A clip set
+	 * cooked against another rig refuses every entry, since the walk they share is what refuses.
 	 */
 	void
 	bakePosedBounds(AnimationSet& animations, const BMesh& mesh, const Skeleton& skeleton);
