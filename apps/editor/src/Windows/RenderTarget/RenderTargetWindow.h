@@ -62,6 +62,11 @@ public:
 	void
 	SetOutlineEnabled(bool enabled);
 
+	// Draws the skeleton of every skinned instance in this viewport, over the frame. Off by default,
+	// and off allocates nothing -- see IRenderTarget::SetBoneOverlayEnabled.
+	void
+	SetBoneOverlayEnabled(bool enabled);
+
 	// Whether this viewport allocated temporal-AA resources, and so has anything to toggle.
 	[[nodiscard]] bool
 	IsTaaAvailable() const noexcept

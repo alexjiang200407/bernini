@@ -7,6 +7,7 @@
 #include "device/Device.h"
 #include "fg/FrameGraph.h"
 #include "gfx/RenderTargetBase.h"
+#include "passes/BoneOverlayPass.h"
 #include "passes/BrdfLutGenPass.h"
 #include "passes/CompactInstancesPass.h"
 #include "passes/ForwardPass.h"
@@ -161,6 +162,15 @@ namespace bgl
 		// post-process the mask holds this frame's content rather than a cleared texture.
 		bool m_OutlineMaskDrawn = false;
 
+		// The overlay's toggle as it stood when this frame imported its resources. Every later
+		// decision reads this rather than the target, so a toggle flipped mid-frame cannot attach a
+		// pass naming a texture the frame never imported.
+		bool m_BoneOverlayActive = false;
+
+		// Whether any draw this frame put bones down. The composite is skipped without it, so a
+		// frame whose views place nothing skinned does not sample a target that was only cleared.
+		bool m_BoneOverlayDrawn = false;
+
 		FrameGraph m_FrameGraph;
 		uint32_t   m_DrawCount = 0;
 
@@ -185,6 +195,7 @@ namespace bgl
 		TaaResolvePass       m_TaaResolve;
 		CompactInstancesPass m_CompactInstances;
 		SkinnedPosePass      m_SkinnedPose;
+		BoneOverlayPass      m_BoneOverlay;
 		TransparentSortPass  m_TransparentSort;
 
 		SamplerHandle m_PointClampSampler;

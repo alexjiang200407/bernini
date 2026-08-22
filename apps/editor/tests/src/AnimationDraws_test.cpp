@@ -192,3 +192,52 @@ TEST_CASE("A load's tier-dependent steps all follow from the source", "[animatio
 		}
 	}
 }
+
+TEST_CASE("The bone overlay is offered only where there is a rig to draw", "[animation][bones]")
+{
+	using editor::AnimationSource;
+	using editor::OfferBoneOverlay;
+
+	SECTION("the skinned tier of a mesh with clips can show them")
+	{
+		const auto offer = OfferBoneOverlay(AnimationSource::kSkinned, /*hasAnimations*/ true);
+		CHECK(offer.allowed);
+		CHECK(offer.refusal.empty());
+	}
+
+	SECTION("the VAT tier cannot, and says why")
+	{
+		// A .bvat carries its baked palettes in the container and nothing on the GPU reads them, so
+		// there is no rig posed on that tier at all -- see docs/vat.md.
+		const auto offer = OfferBoneOverlay(AnimationSource::kVat, /*hasAnimations*/ true);
+		CHECK_FALSE(offer.allowed);
+		CHECK_FALSE(offer.refusal.empty());
+	}
+
+	SECTION("a mesh with no clips cannot, on either tier")
+	{
+		// It loads as static geometry, so no palette is ever written for it. The refusal has to name
+		// that rather than the tier, or the VAT message would send someone to switch tiers for
+		// nothing.
+		for (const AnimationSource source : { AnimationSource::kSkinned, AnimationSource::kVat })
+		{
+			const auto offer = OfferBoneOverlay(source, /*hasAnimations*/ false);
+			CHECK_FALSE(offer.allowed);
+			CHECK(offer.refusal.find("no clips") != std::string_view::npos);
+		}
+	}
+
+	SECTION("every refusal is a sentence a tooltip can carry")
+	{
+		// The reason is the whole point of the greying: a control that disables itself without
+		// saying why reads as broken.
+		for (const AnimationSource source : { AnimationSource::kSkinned, AnimationSource::kVat })
+		{
+			for (const bool hasAnimations : { true, false })
+			{
+				const auto offer = OfferBoneOverlay(source, hasAnimations);
+				CHECK(offer.allowed == offer.refusal.empty());
+			}
+		}
+	}
+}

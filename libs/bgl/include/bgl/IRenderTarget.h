@@ -116,6 +116,21 @@ namespace bgl
 		virtual void
 		SetOutlineEnabled(bool enabled) noexcept = 0;
 
+		/** Whether the bone overlay is drawn on this target. Off by default. */
+		[[nodiscard]] virtual bool
+		IsBoneOverlayEnabled() const noexcept = 0;
+
+		/**
+		 * Draws every skinned instance's skeleton over this target's frames, from the pose that skins
+		 * them. Off by default, and off is free: nothing is allocated or dispatched for it until the
+		 * first frame that asks.
+		 *
+		 * A view with no skinned placement draws nothing either way -- the overlay has no bones of its
+		 * own to show.
+		 */
+		virtual void
+		SetBoneOverlayEnabled(bool enabled) noexcept = 0;
+
 	protected:
 		IRenderTarget() noexcept = default;
 	};
