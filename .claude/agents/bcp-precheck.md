@@ -1,6 +1,6 @@
 ---
 name: bcp-precheck
-description: The critical read of a change before its pull request is opened. Reviews the working diff against the base for code that already exists in core, design that fights the roadmap, work that crosses a non-goal agreed in the grill, and STYLE.md breaks, then reports back. Posts nothing and edits nothing. Spawn it as the last step before `just pr create`.
+description: The critical read of a change before its pull request is opened. Reviews the working diff against the base for code that already exists in core, design that fights the roadmap or deviates from the standard without an ADR saying so, work that crosses a non-goal agreed in the grill, and STYLE.md breaks, then reports back. Posts nothing and edits nothing. Spawn it as the last step before `just pr create`.
 tools: Read, Grep, Glob, Bash
 model: sonnet
 ---
@@ -90,7 +90,7 @@ exists.
 Duplication inside the subsystem under change counts too: the second implementation of a pattern that
 already appears three files away is the same defect.
 
-## 3. Does the design fight the roadmap?
+## 3. Does the design fight the roadmap, or the standard?
 
 Read `ROADMAP.md` — the **Guiding Constraints** section above all, then the module this change sits
 in and the unchecked items under it. Those constraints are design rules, not aspirations, and a change that
@@ -100,6 +100,18 @@ roadmap that owns them.
 Then ask the question the roadmap makes answerable: **does this design survive the next feature?** An
 abstraction that fits today and has to be torn out for a roadmap item two lines down is worth saying
 so now, while it is three files instead of thirty. Name the roadmap item that breaks it.
+
+Then the same question one level out: **was the deviation from the standard decided, or did it just
+happen?** The grill named what a shipping engine does here
+([bcp-grill § 2](.claude/skills/bcp-grill/SKILL.md)), and a deviation from it is an ADR of its own. A
+diff that adds a mechanism no other engine carries, with nothing in § 4's agreement naming what it
+departs from, is a finding — `revise`, never `block`: the deviation may well be right, and the fix is
+the ADR that says so rather than the code. Unlike § 4's own findings this one survives a missing
+plan, because a plan nobody wrote is exactly when nobody named the deviation.
+
+You have no web tools, so this claim is held to the same grounding bar as every other one here: name
+the engine and the mechanism, or drop it. *"This feels non-standard"* is not a finding, and a
+fabricated consensus is worse than a missed one.
 
 ## 4. Does it cross a boundary that was already agreed?
 
