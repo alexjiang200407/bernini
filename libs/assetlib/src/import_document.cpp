@@ -2,6 +2,7 @@
 
 #include <assetlib/container_format.h>
 #include <core/err/util.h>
+#include <core/hash.h>
 #include <nlohmann/json.hpp>
 
 #include "ref_paths.h"
@@ -117,6 +118,14 @@ namespace assetlib
 		json[c_BindingsKey] = std::move(bindings);
 
 		return json.dump(1, '\t') + '\n';
+	}
+
+	uint64_t
+	parametersHashOf(const ImportDocument& document)
+	{
+		auto parameters = parseObject(document.extraParametersJson, "extraParametersJson");
+		parameters[c_SampleRateKey] = document.sampleRate;
+		return core::hash_string(parameters.dump(), core::hash_seed());
 	}
 
 	ImportDocument

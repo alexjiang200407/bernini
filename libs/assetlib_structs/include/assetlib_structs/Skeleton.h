@@ -2,6 +2,8 @@
 #include <assetlib_structs/Node.h>
 #include <core/str/string_pool.h>
 
+#include <assetlib_structs/SourceRef.h>
+
 namespace assetlib
 {
 	/**
@@ -30,5 +32,7 @@ namespace assetlib
 	{
 		std::vector<Bone> bones;
 		core::string_pool stringPool;
+
+		SourceRef source;  // the copied .glb this was derived from; empty key when never recorded
 	};
 }

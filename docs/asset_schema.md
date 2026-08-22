@@ -1,6 +1,13 @@
 # Asset Schema — every container describes its own layout
 
-Every asset container Bernini writes (`.bmesh`, `.bskel`, `.banim`, `.bvat`, `.bmaterial`, `.bsky`,
+> **Mid-migration** (`docs/plans/migration-system-v2.md`): the geometry containers — `.bmesh`,
+> `.bskel`, `.banim` — have left this system for the cache-entry format (`src/cache_io.h`: a
+> frozen header with a bake token and source reference over schema-less chunks; stale is
+> regenerated from `meshes_src/`, never converted). This page still governs `.bmaterial`,
+> `.bvat` and the env containers until their tasks land, and is replaced wholesale when the
+> feature completes.
+
+Every schema-regime container Bernini writes (`.bvat`, `.bmaterial`, `.bsky`,
 `.benvl`, `.benv`) is one chunked format whose chunk 0 is a **schema**: every struct the file stores,
 field by field, by name, type, offset and count. A reader converts each chunk from the layout the
 file stores to the one the engine wants — so a struct that gained, lost, widened, reordered or renamed
@@ -57,7 +64,7 @@ doc disagrees, trust the header, then fix this doc.
 | `schema::SchemaBuilder` | [libs/schema/include/schema/SchemaBuilder.h](libs/schema/include/schema/SchemaBuilder.h) | A schema as one chain of `AddLayout` calls; derive to add named registrations, which come first in a chain |
 | `schema::convert`, `convertValues`, `widens`, `sameLayout`, `fieldShape` | [libs/schema/include/schema/convert.h](libs/schema/include/schema/convert.h) | Stored → wanted, by name; the lossless-widening rule; the message helper |
 | `schema::ElementView` | [libs/schema/include/schema/ElementView.h](libs/schema/include/schema/ElementView.h) | Stored bytes read by field name — what a hook looks through |
-| `assetlib::AssetSchemaBuilder` | [libs/assetlib/src/AssetSchemaBuilder.h](libs/assetlib/src/AssetSchemaBuilder.h) | The registrations of the `assetlib_structs` PODs (`AddTransform`, `AddNode`, `AddSubmesh`, …) |
+| `assetlib::AssetSchemaBuilder` | [libs/assetlib/src/AssetSchemaBuilder.h](libs/assetlib/src/AssetSchemaBuilder.h) | The registrations of the `assetlib_structs` PODs (`AddSourceStamp`, `AddVatClip`, `AddVatColumns`) |
 | `chunk::Writer`, `chunk::Reader`, `chunk::Hook`, `readChunks`, `inspect` | [libs/assetlib/src/chunk_io.h](libs/assetlib/src/chunk_io.h) | The container: schema in chunk 0, typed entries, conversion on `Read`, hooks after it |
 | `assetlib::inspectContainer`, `describe(const Schema&)` | [libs/assetlib/include/assetlib/container_info.h](libs/assetlib/include/assetlib/container_info.h) | A file's header and schema without loading it; the text `describe --schema` prints |
 | `assetlib::migrateProject` | [libs/assetlib/include/assetlib/migrate.h](libs/assetlib/include/assetlib/migrate.h) | Re-save a whole data root at the current schema; `assetlib_cli migrate` |
@@ -125,35 +132,35 @@ flowchart TD
 ```cpp
 // A container's schema, once, beside its io. Register a struct's parts before the struct; the
 // shared registrations first, a container's private records last.
-const schema::Schema& meshSchema()
+const schema::Schema& materialSchema()
 {
 	static const schema::Schema c_Schema = AssetSchemaBuilder()
-	    .AddTransform().AddNode().AddMesh().AddVertexLayout().AddSubmesh().AddMeshlet()
-	    .AddLayout<MyPrivateRecord>("MyPrivateRecord", [](auto& l) {
-	        l.AddField("count", &MyPrivateRecord::count)
-	         .AddField("lodBias", &MyPrivateRecord::lodBias, 1.0f)                 // new: defaulted
-	         .AddRenamedField("materialIndex", "material", &MyPrivateRecord::mat); // renamed
+	    .AddSourceStamp()
+	    .AddLayout<MaterialRecord>("MaterialRecord", [](auto& l) {
+	        l.AddField("nameOffset", &MaterialRecord::nameOffset)
+	         .AddField("metallic", &MaterialRecord::metallic, 1.0f)                // new: defaulted
+	         .AddRenamedField("baseColorOffset", "albedo", &MaterialRecord::base); // renamed
 	    })
 	    .Finish();
 	return c_Schema;
 }
 
 // Writing and reading: the schema is chunk 0, every Read converts to the current shape.
-chunk::Writer writer(meshSchema());
-writer.Add(ChunkId::kNodes, mesh.nodes);
-auto bytes = writer.Finish(magic::c_BMesh, c_VersionMajor, c_VersionMinor);
+chunk::Writer writer(materialSchema());
+writer.Add(ChunkId::kRecords, records);
+auto bytes = writer.Finish(magic::c_BMaterial, c_VersionMajor, c_VersionMinor);
 
-const chunk::Reader reader(bytes, magic::c_BMesh, c_VersionMajor, "bmesh", meshSchema());
-mesh.nodes = reader.Require<Node>(ChunkId::kNodes);
-chunk::applyHooks<BMesh>(hooks, reader, mesh);   // meaning changes only; usually none
+const chunk::Reader reader(bytes, magic::c_BMaterial, c_VersionMajor, "bmaterial", materialSchema());
+auto records = reader.Require<MaterialRecord>(ChunkId::kRecords);
+chunk::applyHooks<BMaterial>(hooks, reader, material);   // meaning changes only; usually none
 
 // A meaning change, when one comes: predicate on the file's schema, never its version.
-const chunk::Hook<BMesh> recoverHash{
+const chunk::Hook<BMaterial> recoverHash{
 	.applies = [](const schema::Schema& s) { const auto* l = s.Find("SourceStamp");
 	    return l && std::ranges::find(l->fields, "mtime", &schema::Field::name) != l->fields.end(); },
-	.run = [](const chunk::Reader& r, BMesh& m) { /* r.View(id).Get<uint64_t>("mtime") … */ } };
+	.run = [](const chunk::Reader& r, BMaterial& m) { /* r.View(id).Get<uint64_t>("mtime") … */ } };
 ```
 
-See [libs/assetlib/src/bmesh_io.cpp](libs/assetlib/src/bmesh_io.cpp) for a whole container, and
+See [libs/assetlib/src/bmaterial_io.cpp](libs/assetlib/src/bmaterial_io.cpp) for a whole container, and
 [libs/assetlib/tests/src/SchemaContainer_test.cpp](libs/assetlib/tests/src/SchemaContainer_test.cpp)
 for the two-branch case with a hook.

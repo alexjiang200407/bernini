@@ -8,7 +8,7 @@
 #include <assetlib/mesh_tangents.h>
 #include <assetlib/skinning.h>
 
-#include "AssetSchemaBuilder.h"
+#include "cache_io.h"
 #include "chunk_io.h"
 #include "fs_util.h"
 
@@ -20,11 +20,9 @@ namespace assetlib
 {
 	namespace
 	{
-		// 4: the schema chunk. A chunk is addressed by id and an absent one is not an error, so a
-		// mesh without the skeleton chunk still reads -- it simply names no skeleton, which is what
-		// a static mesh is.
-		constexpr uint16_t c_VersionMajor = 4;
-		constexpr uint16_t c_VersionMinor = 0;
+		// A fresh random value on ANY output-affecting change -- semantics and layout alike, since
+		// the chunks carry no self-description and a forgotten bump would parse garbage.
+		constexpr uint64_t c_BakeToken = 0x6f1d3a58c2e94b07ull;
 
 		constexpr std::string_view c_What = "bmesh";
 
@@ -43,20 +41,6 @@ namespace assetlib
 			kMaterialPaths,
 			kSkeletonPath
 		};
-
-		const schema::Schema&
-		meshSchema()
-		{
-			static const schema::Schema c_Schema = AssetSchemaBuilder()
-			                                           .AddTransform()
-			                                           .AddNode()
-			                                           .AddMesh()
-			                                           .AddVertexLayout()
-			                                           .AddSubmesh()
-			                                           .AddMeshlet()
-			                                           .Finish();
-			return c_Schema;
-		}
 
 		bool
 		carriesJoints(const Submesh& submesh) noexcept
@@ -92,7 +76,7 @@ namespace assetlib
 	{
 		requireSkeletonIfSkinned(mesh);
 
-		chunk::Writer writer(meshSchema());
+		cache::Writer writer;
 		writer.Add(ChunkId::kNodes, mesh.nodes);
 		writer.Add(ChunkId::kRoots, mesh.roots);
 		writer.Add(ChunkId::kMeshes, mesh.meshes);
@@ -105,15 +89,16 @@ namespace assetlib
 		writer.Add(ChunkId::kStringPool, mesh.stringPool.bytes());
 		writer.Add(ChunkId::kMaterialPaths, chunk::packStrings(mesh.materials));
 		writer.Add(ChunkId::kSkeletonPath, std::span<const char>(mesh.skeleton));
-		return writer.Finish(magic::c_BMesh, c_VersionMajor, c_VersionMinor);
+		return writer.Finish(magic::c_BMesh, c_BakeToken, mesh.source);
 	}
 
 	BMesh
 	deserialize(std::span<const std::byte> bytes)
 	{
-		const chunk::Reader reader(bytes, magic::c_BMesh, c_VersionMajor, c_What, meshSchema());
+		const cache::Reader reader(bytes, magic::c_BMesh, c_BakeToken, c_What);
 
 		BMesh mesh;
+		mesh.source           = reader.GetSource();
 		mesh.nodes            = reader.Require<Node>(ChunkId::kNodes);
 		mesh.meshes           = reader.Require<Mesh>(ChunkId::kMeshes);
 		mesh.roots            = reader.Read<uint32_t>(ChunkId::kRoots);
@@ -160,25 +145,17 @@ namespace assetlib
 		};
 
 		MeshRefs
-		refsFromChunks(const chunk::ChunkData& chunks)
+		refsFromChunks(const cache::CacheData& chunks)
 		{
 			// Absent, not malformed: both chunks are optional, and a mesh that names neither is
 			// exactly what a static import produces.
-			MeshRefs refs;
-			if (const std::span<const std::byte> paths =
-			        chunks.Get(static_cast<uint32_t>(ChunkId::kMaterialPaths));
-			    !paths.empty())
-				refs.materials = chunk::unpackStrings(
-					std::span<const char>(
-						reinterpret_cast<const char*>(paths.data()),
-						paths.size()));
+			MeshRefs   refs;
+			const auto paths = chunks.Read<char>(ChunkId::kMaterialPaths, c_What);
+			if (!paths.empty())
+				refs.materials = chunk::unpackStrings(paths);
 
-			if (const std::span<const std::byte> skeleton =
-			        chunks.Get(static_cast<uint32_t>(ChunkId::kSkeletonPath));
-			    !skeleton.empty())
-				refs.skeleton.assign(
-					reinterpret_cast<const char*>(skeleton.data()),
-					skeleton.size());
+			const auto skeleton = chunks.Read<char>(ChunkId::kSkeletonPath, c_What);
+			refs.skeleton.assign(skeleton.begin(), skeleton.end());
 
 			return refs;
 		}
@@ -188,10 +165,10 @@ namespace assetlib
 	loadMeshRefs(const std::filesystem::path& path)
 	{
 		return refsFromChunks(
-			chunk::readChunksFromFile(
+			cache::readCacheChunksFromFile(
 				path,
 				magic::c_BMesh,
-				c_VersionMajor,
+				c_BakeToken,
 				c_WantedRefChunks,
 				c_What));
 	}
@@ -200,11 +177,11 @@ namespace assetlib
 	loadMeshRefs(const core::file::IFileSystem& fileSystem, std::string_view path)
 	{
 		return refsFromChunks(
-			chunk::readChunksFrom(
+			cache::readCacheChunksFrom(
 				fileSystem,
 				path,
 				magic::c_BMesh,
-				c_VersionMajor,
+				c_BakeToken,
 				c_WantedRefChunks,
 				c_What));
 	}

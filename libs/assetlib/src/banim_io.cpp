@@ -4,8 +4,7 @@
 
 #include <assetlib/skeleton.h>
 
-#include "AssetSchemaBuilder.h"
-#include "chunk_io.h"
+#include "cache_io.h"
 #include "fs_util.h"
 
 #include <assetlib_structs/magic.h>
@@ -21,8 +20,8 @@ namespace assetlib
 
 	namespace
 	{
-		constexpr uint16_t c_VersionMajor = 2;
-		constexpr uint16_t c_VersionMinor = 0;
+		// A fresh random value on ANY output-affecting change -- semantics and layout alike.
+		constexpr uint64_t c_BakeToken = 0x41f8b6d95e07c2aaull;
 
 		constexpr std::string_view c_What = "banim";
 
@@ -44,31 +43,6 @@ namespace assetlib
 		};
 
 		static_assert(sizeof(SkeletonRef) == 16);
-
-		const schema::Schema&
-		animationSchema()
-		{
-			static const schema::Schema c_Schema =
-				AssetSchemaBuilder()
-					.AddTransform()
-					.AddAnimationClip()
-					.AddLayout<SkeletonRef>(
-						"SkeletonRef",
-						[](auto& layout) {
-							layout.AddField("signature", &SkeletonRef::signature)
-								.AddField("boneCount", &SkeletonRef::boneCount);
-						})
-					.AddLayout<PosedBox>(
-						"PosedBox",
-						[](auto& layout) {
-							layout.AddField("sourceSignature", &PosedBox::sourceSignature)
-								.AddField("min", &PosedBox::min)
-								.AddField("max", &PosedBox::max)
-								.AddField("meshIndex", &PosedBox::meshIndex);
-						})
-					.Finish();
-			return c_Schema;
-		}
 
 		std::vector<SkeletonRef>
 		packSkeletonRef(const AnimationSet& animations)
@@ -101,7 +75,7 @@ namespace assetlib
 	std::vector<std::byte>
 	serializeAnimations(const AnimationSet& animations)
 	{
-		chunk::Writer writer(animationSchema());
+		cache::Writer writer;
 		writer.Add(ChunkId::kClips, animations.clips);
 		writer.Add(ChunkId::kSamples, animations.samples);
 		writer.Add(ChunkId::kStringPool, animations.stringPool.bytes());
@@ -109,16 +83,16 @@ namespace assetlib
 		writer.Add(ChunkId::kSkeletonPath, std::span<const char>(animations.skeleton));
 		if (!animations.posedBoxes.empty())
 			writer.Add(ChunkId::kPosedBoxes, animations.posedBoxes);
-		return writer.Finish(magic::c_BAnim, c_VersionMajor, c_VersionMinor);
+		return writer.Finish(magic::c_BAnim, c_BakeToken, animations.source);
 	}
 
 	AnimationSet
 	deserializeAnimations(std::span<const std::byte> bytes)
 	{
-		const chunk::Reader
-			reader(bytes, magic::c_BAnim, c_VersionMajor, c_What, animationSchema());
+		const cache::Reader reader(bytes, magic::c_BAnim, c_BakeToken, c_What);
 
 		AnimationSet animations;
+		animations.source     = reader.GetSource();
 		animations.clips      = reader.Read<AnimationClip>(ChunkId::kClips);
 		animations.samples    = reader.Read<Transform>(ChunkId::kSamples);
 		animations.stringPool = core::string_pool(reader.Read<char>(ChunkId::kStringPool));
@@ -156,10 +130,9 @@ namespace assetlib
 			ChunkId::kSkeletonPath) } };
 
 		std::string
-		skeletonPathFromChunks(const chunk::ChunkData& chunks)
+		skeletonPathFromChunks(const cache::CacheData& chunks)
 		{
-			const auto path =
-				chunks.Read<char>(static_cast<uint32_t>(ChunkId::kSkeletonPath), animationSchema());
+			const auto path = chunks.Read<char>(ChunkId::kSkeletonPath, c_What);
 			return std::string(path.begin(), path.end());
 		}
 	}
@@ -168,10 +141,10 @@ namespace assetlib
 	loadAnimationSkeletonPath(const std::filesystem::path& path)
 	{
 		return skeletonPathFromChunks(
-			chunk::readChunksFromFile(
+			cache::readCacheChunksFromFile(
 				path,
 				magic::c_BAnim,
-				c_VersionMajor,
+				c_BakeToken,
 				c_WantedRefChunks,
 				c_What));
 	}
@@ -180,11 +153,11 @@ namespace assetlib
 	loadAnimationSkeletonPath(const core::file::IFileSystem& fileSystem, std::string_view path)
 	{
 		return skeletonPathFromChunks(
-			chunk::readChunksFrom(
+			cache::readCacheChunksFrom(
 				fileSystem,
 				path,
 				magic::c_BAnim,
-				c_VersionMajor,
+				c_BakeToken,
 				c_WantedRefChunks,
 				c_What));
 	}

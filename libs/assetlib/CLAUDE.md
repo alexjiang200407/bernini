@@ -13,15 +13,19 @@ from local into model space, `skinningMatrices` composes each with its inverse b
 plain CPU code — and it is the reference every later GPU path is diffed against, which is why it is
 deliberately the unoptimised form.
 
-`.bmesh`, `.bskel`, `.banim` and `.bvat` are one chunked container format, in `src/chunk_io.h`. A chunk is
-addressed by id and an absent one is not an error. Chunk 0 is the file's schema (`schema`):
-every POD a chunk holds is registered as a layout — the shared ones as `AssetSchemaBuilder`'s chain, a
-container's private ones beside its io — and a reader converts each chunk from the layout the file
-stores to the current one by field name, so a struct that changed shape leaves old files readable.
-A change of *meaning* is a `chunk::Hook` whose predicate reads the file's schema, never its version;
-rename the field when its meaning changes, so the schema can see it. `.bmaterial` is one of them too:
-its strings live in a pool chunk and its records are PODs with pool offsets, so one converter serves
-every container.
+Two container regimes, mid-migration (see docs/plans/migration-system-v2.md):
+
+`.bmesh`, `.bskel` and `.banim` are **cache entries**, in `src/cache_io.h`: a frozen header carrying
+the cache key (bake token, source stamp, parameter hash), raw current-layout chunks with no
+self-description, and a chunk table. A chunk is addressed by id and an absent one is not an error.
+There is no conversion and no old shape to parse — a token mismatch is a cache miss, and the file's
+only future is regeneration from its `meshes_src/` source. A change to what these containers store —
+layout or meaning — is one edit: bump the container's `c_BakeToken` to a fresh random value.
+
+`.bvat`, `.bmaterial` and the env containers still ride the schema format in `src/chunk_io.h`:
+chunk 0 is the file's schema, a reader converts each chunk by field name, and a change of *meaning*
+is a `chunk::Hook` whose predicate reads the file's schema, never its version. They convert to
+their own regimes (text documents, cache entries) in later tasks of the plan.
 
 ## Headers forward declare
 

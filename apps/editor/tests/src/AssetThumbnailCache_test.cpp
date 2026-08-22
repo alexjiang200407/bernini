@@ -1,5 +1,8 @@
 #include "Render/Renderer.h"
 #include "Thumbnails/AssetThumbnailCache.h"
+#include <assetlib/bmesh_io.h>
+#include <assetlib_structs/BMesh.h>
+#include <assetlib_structs/Node.h>
 
 #include "util/QtSupport.h"
 
@@ -443,29 +446,27 @@ TEST_CASE("An asset that cannot be read yields no thumbnail", "[thumbnails][rend
 
 TEST_CASE("An asset that cannot be read says why", "[thumbnails][render]")
 {
-	// A container from before the schema chunk: the reader refuses it with a message that names the
-	// reason, and the tile gets that message rather than a shell icon and silence.
+	// A container written at another bake revision: the reader refuses it with a message that
+	// names the reason, and the tile gets that message rather than a shell icon and silence.
 	Fixture fixture;
 
 	AssetThumbnailCache cache(fixture.Desc());
 	REQUIRE(cache.IsReady());
 	cache.SetAssets(&*fixture.assets);
 
-	const QString path = "assets/Data/Meshes/predates_schema_test.bmesh";
+	const QString path = "assets/Data/Meshes/foreign_token_test.bmesh";
 	{
-		// A 32-byte header at format 3 with an empty chunk table: the shape a file had before this
-		// container carried its schema.
-		std::array<std::byte, 32> header{};
-		const uint32_t            magic = assetlib::magic::c_BMesh;
-		const uint16_t            major = 3;
-		const uint32_t            table = 32;
-		const uint64_t            size  = 32;
-		std::memcpy(header.data(), &magic, 4);
-		std::memcpy(header.data() + 4, &major, 2);
-		std::memcpy(header.data() + 16, &table, 4);
-		std::memcpy(header.data() + 24, &size, 8);
+		assetlib::BMesh mesh;
+		assetlib::Node  root{};
+		root.parent = root.firstChild = root.nextSibling = assetlib::c_InvalidIndex;
+		root.mesh                                        = assetlib::c_InvalidIndex;
+		mesh.nodes                                       = { root };
+		mesh.meshes                                      = { assetlib::Mesh{ 0, 0, 0 } };
+
+		auto bytes = assetlib::serialize(mesh);
+		bytes[8] ^= std::byte{ 1 };  // the bake token: bytes 8..16 of the frozen header
 		std::ofstream out(path.toStdString(), std::ios::binary);
-		out.write(reinterpret_cast<const char*>(header.data()), header.size());
+		out.write(reinterpret_cast<const char*>(bytes.data()), bytes.size());
 	}
 
 	QSignalSpy rejected(&cache, &StampedPixmapCache::Rejected);
@@ -473,7 +474,7 @@ TEST_CASE("An asset that cannot be read says why", "[thumbnails][render]")
 	REQUIRE(WaitFor([&] { return rejected.count() == 1; }, 5000));
 
 	const QString reason = rejected.at(0).at(1).toString();
-	CHECK(reason.contains("bmesh: format 3 predates the schema table"));
+	CHECK(reason.contains("another bake revision"));
 	CHECK(cache.GetRejection(path) == reason);
 	CHECK(cache.Lookup(path).isNull());
 

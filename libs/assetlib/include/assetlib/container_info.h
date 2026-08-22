@@ -1,4 +1,5 @@
 #pragma once
+#include <assetlib_structs/SourceRef.h>
 #include <schema/Schema.h>
 
 namespace assetlib
@@ -21,6 +22,22 @@ namespace assetlib
 	 */
 	[[nodiscard]] ContainerInfo
 	inspectContainer(std::span<const std::byte> bytes);
+
+	/** A geometry cache entry's identity: the token it was written at, and its source. */
+	struct CacheEntryInfo
+	{
+		uint32_t  magic     = 0;
+		uint64_t  bakeToken = 0;
+		SourceRef source;
+	};
+
+	/**
+	 * The cache key of a `.bmesh`, `.bskel` or `.banim`, or nullopt for any other magic -- the
+	 * geometry containers carry a key where the others carry a schema, and this is the half of
+	 * `describe --schema` that serves them.
+	 */
+	[[nodiscard]] std::optional<CacheEntryInfo>
+	inspectCacheEntry(std::span<const std::byte> bytes);
 
 	/**
 	 * A schema as text, one layout per line with its fields and their shapes -- what `describe`

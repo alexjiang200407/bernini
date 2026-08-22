@@ -65,4 +65,12 @@ namespace assetlib
 	/** @throws what `IFileSystem::Read` and `deserializeImportDocument` throw. */
 	[[nodiscard]] ImportDocument
 	loadImportDocument(const core::file::IFileSystem& files, std::string_view key);
+
+	/**
+	 * The hash of the document's canonical parameter subtree -- the half of the cache key the
+	 * document contributes. Unknown parameters hash too, so a newer branch's knob keys through a
+	 * reader that has never heard of it; bindings never do.
+	 */
+	[[nodiscard]] uint64_t
+	parametersHashOf(const ImportDocument& document);
 }
