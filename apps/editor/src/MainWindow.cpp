@@ -20,6 +20,7 @@
 #include "Windows/LevelEditor/LevelEditorWindow.h"
 #include "Windows/MaterialEditor/MaterialEditorWindow.h"
 #include "Windows/RenderTarget/RenderTargetWindow.h"
+#include "util/frame_stats_text.h"
 #include "util/window_title.h"
 #include <assetlib/Project.h>
 
@@ -220,6 +221,14 @@ MainWindow::Build()
 	addDockWidget(Qt::TopDockWidgetArea, m_AnimationEditorDock);
 
 	tabifyDockWidget(m_MaterialEditorDock, m_AnimationEditorDock);
+
+	// Neither movable nor floatable, so the three stay one tab group and exactly one viewport is
+	// ever in the frame loop. Tabifying alone only arranges them that way to begin with: a tab
+	// dragged to another area, or out into a window of its own, would put a second viewport into the
+	// loop -- which costs a vsync-locked present per frame and leaves the status bar's frame-time
+	// readout describing one of two viewports with nothing to say which.
+	for (QDockWidget* dock : { m_LevelEditorDock, m_MaterialEditorDock, m_AnimationEditorDock })
+		dock->setFeatures(QDockWidget::DockWidgetClosable);
 
 	m_ContentExplorerDock = new QDockWidget("Content Explorer", this);
 	m_ContentExplorerDock->setObjectName("ContentExplorerDock");
@@ -688,30 +697,66 @@ MainWindow::SetUpFrameStats()
 
 	m_FrameStats = new QLabel(this);
 	m_FrameStats->setObjectName("FrameStats");
-	// The count is cumulative where the two times are windowed: a session total, not a property of
-	// the 120 frames beside it.
+	// All three figures describe the current visit: a viewport clears them when it leaves the frame
+	// loop, so none of them reaches back to a previous time the tab was up.
 	m_FrameStats->setToolTip(
-		"Level Editor frame time: mean and worst over the last 120 frames, and how many frames "
-		"have overrun a vblank since startup.");
+		"The rendering viewport's frame time: mean and worst over the last 120 frames, and how "
+		"many frames have overrun a vblank since the tab was selected.");
 
 	// A permanent widget sits to the right of the bar and survives showMessage, so the project and
 	// texture-cleanup messages cannot overwrite the readout.
 	statusBar()->addPermanentWidget(m_FrameStats);
 
-	// Queued: FrameStatsUpdated is emitted on the render thread and this touches a widget.
-	connect(
-		m_LevelEditor,
-		&RenderTargetWindow::FrameStatsUpdated,
-		this,
-		[this](double meanMs, double maxMs, int missed) {
-			m_FrameStats->setText(
-				QString::asprintf(
-					"frame %.1f ms avg  %.1f ms max  %d missed",
-					meanMs,
-					maxMs,
-					missed));
-		},
-		Qt::QueuedConnection);
+	// One viewport is in the frame loop at a time -- see the dock features above -- so the readout is
+	// unambiguously about that one. A hidden viewport stops reporting rather than reporting zero, so
+	// the label has to be cleared on the way out: left alone, the tab you just left keeps its last
+	// figures on screen and they read as the tab you are now looking at.
+	for (QDockWidget* dock : { m_LevelEditorDock, m_MaterialEditorDock, m_AnimationEditorDock })
+	{
+		for (RenderTargetWindow* view : dock->findChildren<RenderTargetWindow*>())
+		{
+			const QString name = dock->windowTitle();
+
+			// Context is `view`, as in DriveViewportsFromTab: the connection dies with the viewport it
+			// names rather than outliving it holding its pointer.
+			m_TabVisibility.push_back(connect(
+				dock,
+				&QDockWidget::visibilityChanged,
+				view,
+				[this, view, name](bool visible) {
+					if (visible)
+					{
+						m_FrameStatsSource = view;
+						m_FrameStats->setText(editor::FrameStatsText(name, std::nullopt));
+					}
+					else if (m_FrameStatsSource == view)
+					{
+						m_FrameStatsSource = nullptr;
+						m_FrameStats->clear();
+					}
+				}));
+
+			// Queued: FrameStatsUpdated is emitted on the render thread and this touches a widget.
+			// Which means a sample can outlive the tab switch that made it stale, hence the source
+			// check rather than trusting the emission.
+			connect(
+				view,
+				&RenderTargetWindow::FrameStatsUpdated,
+				this,
+				[this, view, name](double meanMs, double maxMs, int missed) {
+					if (m_FrameStatsSource != view)
+						return;
+
+					m_FrameStats->setText(
+						editor::FrameStatsText(
+							name,
+							editor::FrameStats{ .meanMs = meanMs,
+				                                .maxMs  = maxMs,
+				                                .missed = missed }));
+				},
+				Qt::QueuedConnection);
+		}
+	}
 }
 
 void

@@ -15,6 +15,7 @@ class AssetThumbnailCache;
 class AnimationEditorWindow;
 class LevelEditorWindow;
 class MaterialEditorWindow;
+class RenderTargetWindow;
 class Renderer;
 
 class MainWindow : public QMainWindow
@@ -61,7 +62,8 @@ private:
 	void
 	DriveViewportsFromTab(QDockWidget* dock);
 
-	// Adds the viewport frame-time readout to the status bar and connects it to the level editor.
+	// Adds the viewport frame-time readout to the status bar and connects every viewport to it. The
+	// three viewport docks are tabbed together, so at most one of them reports at a time.
 	void
 	SetUpFrameStats();
 
@@ -108,6 +110,11 @@ private:
 	QDockWidget*                       m_AnimationEditorDock = nullptr;
 	QDockWidget*                       m_ContentExplorerDock = nullptr;
 	QLabel*                            m_FrameStats          = nullptr;
+
+	// The viewport the readout is currently about, or null when none is visible. A viewport that
+	// leaves the frame loop stops reporting, so without this its last figures would stay on the
+	// status bar and be read as the visible viewport's.
+	RenderTargetWindow* m_FrameStatsSource = nullptr;
 
 	std::unique_ptr<Renderer> m_Renderer;
 

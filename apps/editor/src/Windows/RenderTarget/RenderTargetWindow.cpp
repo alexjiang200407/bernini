@@ -346,8 +346,13 @@ RenderTargetWindow::UpdateViewport()
 
 	// RemoveViewport blocks until the frame loop has dropped this window, so no frame is in flight
 	// and the render thread cannot be mid-ReportFrameTiming. Clearing the timestamp keeps the time
-	// spent out of the loop from being measured as one enormous frame when the window rejoins.
+	// spent out of the loop from being measured as one enormous frame when the window rejoins, and
+	// the rest goes with it so a window coming back reports what it is doing now rather than
+	// averaging in whatever it was doing before it was put away.
 	m_LastFrameStartNs = -1;
+	m_FrameTimes.Reset();
+	m_MissedFrames    = 0;
+	m_FramesSinceEmit = 0;
 }
 
 void
