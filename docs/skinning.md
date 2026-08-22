@@ -80,7 +80,7 @@ not obvious from a signature. The headers linked below are the source of truth.
 | Stage | Where | What it does |
 |---|---|---|
 | Import | `assetlib` | A glTF skin becomes `.bskel` (bones, topologically sorted, with inverse binds, each composed from its whole node chain) + `.banim` (clips resampled to a fixed rate, frame-major local TRS, composed the same way) + `joints0`/`weights0` on the `.bmesh` |
-| Bound | [`assetlib::bakePosedBounds`](libs/assetlib/include/assetlib/skinning.h) | At import: skins every vertex at every frame (`posedBounds`) and stores the box in the `.banim`, keyed by a content signature so a re-authored source falls back to measuring |
+| Bound | [`assetlib::bakePosedBounds`](libs/assetlib/include/assetlib/skinning.h) | At import: sweeps a box per bone through every frame (`posedBounds`) and stores the result in the `.banim`, keyed by a content signature so a re-authored source falls back to measuring |
 | Acquire | [`AssetManager::AcquireSkinnedMesh`](libs/gamelib/include/gamelib/AssetManager.h) | Reads the three containers, checks the clip set still matches its rig, culls by the baked box (`findPosedBounds`) — measuring only a pairing the cook never saw — uploads |
 | Upload | [`IScene::AddSkinnedMeshGeom`](libs/bgl/include/bgl/IScene.h) | Bones, clip table and sample pool become scene buffers; per-bone depth is derived here |
 | Place | [`ISceneView::CreateSkinnedMeshInstance`](libs/bgl/include/bgl/ISceneView.h) | Writes the playback record and reserves the instance's palette slice |
@@ -152,9 +152,9 @@ the transport, the clip list and the scrubber are the same code either way — w
   takes one and derives every submesh's sphere from it, the same rule VAT follows. The bind pose is
   not a substitute: it stops holding the moment a limb moves, and a clip carrying root motion walks
   the whole rig out of it, so bind-pose culling makes it disappear as soon as it does. Measuring the
-  box means skinning a vertex, which means
+  box means reading a vertex's influences, which means
   decoding a vertex layout — `assetlib`, which `bgl` does not link. `assetlib::posedBounds` is that
-  walk (every vertex at every frame, the same one `bakeVat` makes), and it is paid at **import**:
+  walk, and it is paid at **import**:
   `bakePosedBounds` stores the result in the `.banim`, the way `bakeVat` writes
   `boundsMin`/`boundsMax` into a `.bvat` — one box per rigged mesh entry, because it is that geom's
   culling volume and a `.bmesh` may hold two rigged meshes. Each box is keyed by a signature over
@@ -163,6 +163,20 @@ the transport, the clip list and the scrubber are the same code either way — w
   a pairing the cook never measured — a caller that cannot block still hands over its own box. A
   project imported before the boxes existed is retrofitted with
   `assetlib_cli bakebounds -p <project>`.
+
+* **The posed box is bounded per bone, not per vertex, and is conservative.** Each bone carries one
+  box over the vertices it has weight on, in its own frame (the inverse bind is folded in once), and
+  a pose sweeps that box instead of the vertices inside it. A skinned position is a convex
+  combination of its bones' products, so the union holds it; an axis-aligned box swept by a rotation
+  gains slack the vertices do not, so the box is loose rather than tight. Measured against
+  `exactPosedBounds` — which does skin every vertex at every frame, and exists only as that
+  reference — the test project's rigs come out 1.09–1.51x by volume and 1.00–1.29x on any one axis.
+  It buys the cost: `cha800_00.glb` (663 bones, 27 mesh entries, 170k vertices, 2254 frames) bakes
+  in 3.5 s where the exact walk needs about six minutes, both in a debug build. Bounding each bone
+  by the *whole* bind-pose box would over-estimate ~3x and is what makes the per-bone approach look
+  unusable; the difference is that a bone here is credited only with the vertices it moves. All
+  entries share one walk of the clip set, so a rig drawn as 27 meshes evaluates each pose once —
+  what now dominates the bake is that pose walk (2.4 s of the 3.5 s), not the boxes.
 
 * **The palette buffer is GPU-written, so it is not a `RangeBuffer`.** That type mirrors its contents
   on the CPU and re-uploads a dirty range, which would overwrite what the pose pass wrote.
