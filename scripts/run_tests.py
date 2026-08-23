@@ -25,6 +25,10 @@ Each suite is split across several processes by default (`--jobs`), using Catch2
 `--shard-count`/`--shard-index`. Support is probed per binary, so a suite that does not take
 those flags falls back to a single process however many jobs are asked for.
 
+Each suite process is handed a temp directory of its own, so two checkouts -- or two `just test`
+runs on one machine -- do not delete each other's fixtures. See suite_env. `just run` does not do
+this, so two concurrent `just run` of one suite still collide.
+
 Output from a *sharded* run is captured and printed one shard at a time, because N processes
 interleaved on one console shred the failure reports. A single-process run is not captured: it
 writes straight to this console, so a long suite shows progress rather than going quiet for
@@ -40,8 +44,10 @@ import argparse
 import os
 import random
 import re
+import shutil
 import subprocess
 import sys
+import tempfile
 import time
 
 import util.cmake_tools as ct
@@ -94,15 +100,39 @@ def count_tests(exe, forward):
     return None
 
 
-def run_sharded(exe, forward, jobs):
+def suite_env(root, name, index=None):
+    """The environment one suite process runs in: `root`, plus a temp directory of its own.
+
+    Every fixture in the tree names its scratch directory itself and opens by removing it --
+    `temp_directory_path() / "bernini_describe"`, then `remove_all`. On macOS and Linux
+    `temp_directory_path()` is per *user*, so two suite processes reaching one such test at the
+    same time delete each other's fixture and fail on work neither of them did wrong. Two shards
+    of one run can do it; so can a second checkout, and a second `just test` on the machine.
+
+    Handing each process a temp root of its own is what a test runner is expected to do for this
+    reason -- Bazel's TEST_TMPDIR, pytest's tmp_path -- and it covers fixtures nobody has written
+    yet, where scoping each name by hand would not.
+    """
+    path = os.path.join(root, name if index is None else f"{name}-{index}")
+    os.makedirs(path, exist_ok=True)
+
+    env = os.environ.copy()
+    # TMPDIR is what POSIX reads; TMP and TEMP are what Windows reads.
+    env["TMPDIR"] = path
+    env["TMP"] = path
+    env["TEMP"] = path
+    return env
+
+
+def run_sharded(exe, forward, jobs, root, name):
     """Run `exe` as `jobs` concurrent shards; return the worst exit code.
 
     All shards are pinned to one `--rng-seed`. This suite orders tests randomly by default, and
     Catch2 partitions the *ordered* list -- so shards that each seeded themselves would shuffle
     differently, and the slices would neither cover every test nor stay disjoint. A test landing
-    in two shards runs twice at once (they collided on a shared temp directory and failed with
-    "File open failed"); a test landing in none is silently skipped. One shared seed makes every
-    shard order the list identically, so the slices form a true partition. It is printed so a
+    in two shards runs twice, wasting the work and reaching whatever it touches outside its own
+    temp directory twice over; a test landing in none is silently skipped. One shared seed makes
+    every shard order the list identically, so the slices form a true partition. It is printed so a
     failure can be reproduced. A seed the caller forwarded is left as-is.
 
     Each shard's output is captured and printed in shard order once it is all in. Interleaving
@@ -119,7 +149,7 @@ def run_sharded(exe, forward, jobs):
     for index in range(jobs):
         cmd = [exe, *forward, *seed_args, "--shard-count", str(jobs), "--shard-index", str(index)]
         procs.append(subprocess.Popen(
-            cmd, cwd=os.path.dirname(exe),
+            cmd, cwd=os.path.dirname(exe), env=suite_env(root, name, index),
             stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, errors="replace"))
 
     worst = 0
@@ -230,40 +260,52 @@ def main():
             print(name)
         return 0
 
+    # One root for the whole invocation, handed out one directory per suite process below. A
+    # second `just test` on the machine gets a different one.
+    temp_root = tempfile.mkdtemp(prefix="bernini-tests-")
+
     results = []
-    for name, exe in chosen.items():
-        if not os.path.isfile(exe):
-            hint = f"Build it with: just build {name}" if args.no_build \
-                else "The build reported success but wrote no binary there."
-            print(f"error: '{exe}' is not built. {hint}", file=sys.stderr)
-            results.append((name, 1, 0.0))
-            continue
+    try:
+        for name, exe in chosen.items():
+            if not os.path.isfile(exe):
+                hint = f"Build it with: just build {name}" if args.no_build \
+                    else "The build reported success but wrote no binary there."
+                print(f"error: '{exe}' is not built. {hint}", file=sys.stderr)
+                results.append((name, 1, 0.0))
+                continue
 
-        suite_forward = forward
+            suite_forward = forward
 
-        jobs = max(1, args.jobs)
-        if jobs > 1 and not supports_sharding(exe):
-            jobs = 1
+            jobs = max(1, args.jobs)
+            if jobs > 1 and not supports_sharding(exe):
+                jobs = 1
 
-        # Never make more shards than there are tests to run: Catch2 fails a shard that draws
-        # zero ("No tests ran"), so a small suite -- or any forwarded tag filter that matches
-        # few tests -- would report a spurious failure. Clamping keeps sharding transparent to
-        # the exit code: the suite exits as its single-process run would, only faster. A count
-        # we cannot read (None) leaves jobs alone rather than serialising a large suite.
-        if jobs > 1:
-            matching = count_tests(exe, suite_forward)
-            if matching is not None:
-                jobs = max(1, min(jobs, matching))
+            # Never make more shards than there are tests to run: Catch2 fails a shard that draws
+            # zero ("No tests ran"), so a small suite -- or any forwarded tag filter that matches
+            # few tests -- would report a spurious failure. Clamping keeps sharding transparent to
+            # the exit code: the suite exits as its single-process run would, only faster. A count
+            # we cannot read (None) leaves jobs alone rather than serialising a large suite.
+            if jobs > 1:
+                matching = count_tests(exe, suite_forward)
+                if matching is not None:
+                    jobs = max(1, min(jobs, matching))
 
-        label = f" (x{jobs})" if jobs > 1 else ""
-        print(f"\n=== {name}{label} ===", flush=True)
+            label = f" (x{jobs})" if jobs > 1 else ""
+            print(f"\n=== {name}{label} ===", flush=True)
 
-        started = time.monotonic()
-        if jobs > 1:
-            rc = run_sharded(exe, suite_forward, jobs)
-        else:
-            rc = subprocess.run([exe, *suite_forward], cwd=os.path.dirname(exe)).returncode
-        results.append((name, rc, time.monotonic() - started))
+            started = time.monotonic()
+            if jobs > 1:
+                rc = run_sharded(exe, suite_forward, jobs, temp_root, name)
+            else:
+                rc = subprocess.run(
+                    [exe, *suite_forward],
+                    cwd=os.path.dirname(exe),
+                    env=suite_env(temp_root, name)).returncode
+            results.append((name, rc, time.monotonic() - started))
+
+    finally:
+        # Best effort: a suite that left a file open on Windows must not turn a green run red.
+        shutil.rmtree(temp_root, ignore_errors=True)
 
     # A failing suite does not stop the others: one full report beats finding out about the
     # next failure only after fixing this one.
