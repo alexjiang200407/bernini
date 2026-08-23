@@ -30,7 +30,9 @@ source at the parameters its `.bimport` records, with the document's bindings ap
 result, while a read-only store trusts its keys because `pack` made them true. For the env family
 and `.bvat` the re-bake is deliberate (`pack`, the editor) rather than at load. A change to what a
 container stores — layout or meaning — is one edit: bump its token in `src/bake_tokens.h` to a
-fresh random value.
+fresh random value. A forgotten bump on a layout change fails `TokenCanary_test`, which pins each
+writer's output hash beside its token; a semantic change the fixture cannot see is still yours to
+remember.
 
 The chunk-era form of the authored documents and the pre-split env containers still deserializes —
 `migrate` is the carry, `src/chunk_io.h` the machinery — until the schema system goes with the
