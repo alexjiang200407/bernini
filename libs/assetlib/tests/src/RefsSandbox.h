@@ -14,6 +14,7 @@
 #include <assetlib_structs/BMesh.h>
 #include <assetlib_structs/ImageData.h>
 
+#include "MountAt.h"
 #include "bmesh_texture.h"
 
 /**
@@ -76,7 +77,7 @@ namespace assetlib::test
 		BMaterial material;
 		material.pbr.routes[0] = { source, 0 };
 
-		bakeMaterial(material, MaterialBakeDesc{ root.path });
+		StoreAt(root.path).BakeMaterial(material);
 		saveMaterial(material, root.path / "Materials" / name);
 		return material;
 	}

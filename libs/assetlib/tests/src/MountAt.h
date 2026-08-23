@@ -1,4 +1,5 @@
 #pragma once
+#include <assetlib/AssetStore.h>
 #include <core/file/LooseFileSystem.h>
 
 /**
@@ -12,4 +13,14 @@
 MountAt(const std::filesystem::path& root)
 {
 	return core::file::LooseFileSystem(root);
+}
+
+/**
+ * A store over `root`, for the operations that address a whole project rather than a mount --
+ * a bake, a save. The loose constructor is the whole of it: reads and writes both go to `root`.
+ */
+[[nodiscard]] inline assetlib::AssetStore
+StoreAt(const std::filesystem::path& root)
+{
+	return assetlib::AssetStore(root);
 }

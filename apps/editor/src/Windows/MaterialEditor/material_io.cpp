@@ -10,6 +10,7 @@
 #include <QMessageBox>
 #include <QPushButton>
 
+#include <assetlib/AssetStore.h>
 #include <assetlib/bmaterial_io.h>
 #include <assetlib/bmesh_io.h>
 #include <assetlib/material_bake.h>
@@ -174,8 +175,7 @@ namespace editor
 		const QStringList&           materials,
 		background::Progress&        progress)
 	{
-		auto desc     = assetlib::MaterialBakeDesc();
-		desc.dataRoot = dataRoot;
+		const assetlib::AssetStore store(dataRoot);
 
 		int done = 0;
 		for (const QString& relative : materials)
@@ -188,7 +188,7 @@ namespace editor
 			const std::filesystem::path file = dataRoot / relative.toStdWString();
 
 			assetlib::BMaterial material = assetlib::loadMaterial(file);
-			assetlib::bakeMaterial(material, desc, progress.Cancellation());
+			store.BakeMaterial(material, progress.Cancellation());
 			assetlib::saveMaterial(material, file);
 
 			++done;

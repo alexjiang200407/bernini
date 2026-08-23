@@ -49,8 +49,9 @@ Concretely, before adding to `include/assetlib/`:
   takes a `std::filesystem::path` to a file the project owns is adding the second way to do a
   thing that already has one. `std::filesystem::path` is for files no project owns — see
   [STYLE.md](../../STYLE.md) § Paths.
-- **Do not re-carry a data root.** `MaterialBakeDesc` and `EnvBakeDesc` do, and they are the
-  standing example of what not to copy; the store already holds it.
+- **Do not re-carry a data root.** `MaterialBakeDesc` and `EnvBakeDesc` used to, and were the
+  standing example of what not to copy; both are gone and a bake is `store.BakeMaterial(...)`.
+  A new descriptor carrying a `dataRoot` beside a store is the same mistake again.
 - **A new container type is a new `AssetCodec` specialization**, declared beside its io and listed
   in `Containers` in `src/container_table.cpp` — which is what `containerKinds()` is built from and
   what a static assertion holds to `AssetType`. The extension, the type enum and the bake token

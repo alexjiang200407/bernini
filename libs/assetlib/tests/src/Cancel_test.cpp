@@ -12,6 +12,7 @@
 #include <assetlib_structs/BMesh.h>
 #include <assetlib_structs/BMeshImport.h>
 
+#include "MountAt.h"
 #include "bmesh_texture.h"
 #include "fs_util.h"
 
@@ -164,7 +165,7 @@ TEST_CASE("bakeMaterial stops on a signalled token and leaves the material alone
 	mat.pbr.routes[2] = { "albedo.ktx2", 2 };
 
 	REQUIRE_THROWS_AS(
-		bakeMaterial(mat, MaterialBakeDesc{ dir.path }, SignalledSource().get_token()),
+		StoreAt(dir.path).BakeMaterial(mat, SignalledSource().get_token()),
 		Cancelled);
 
 	// A half-updated material is worse than an unbaked one: it would name maps that are not there. So
