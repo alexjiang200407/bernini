@@ -57,7 +57,7 @@ disagrees, trust the header, then fix this doc.
 * **The split-sum BRDF table is not an asset.** It is the same integral taken against a *white*
   environment, leaving a function of only `dot(N,V)` and roughness — a property of the shading model,
   not of any environment. bgl renders its own 256² `RG16_FLOAT` copy once at device init
-  ([libs/bgl/src/gfx/BrdfLut.cpp](libs/bgl/src/gfx/BrdfLut.cpp)), so there is no file to ship, to
+  ([libs/bgl/src/passes/BrdfLutGenPass.cpp](libs/bgl/src/passes/BrdfLutGenPass.cpp)), so there is no file to ship, to
   configure, or to get out of step with the shader that samples it.
 
 ## Interface Index

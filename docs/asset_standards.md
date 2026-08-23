@@ -226,9 +226,9 @@ source texture.
   [libs/assetlib_structs/include/assetlib_structs/ImageData.h](libs/assetlib_structs/include/assetlib_structs/ImageData.h)
   — carries the raw **`vkFormat`** (the KTX2 container's native Vulkan format tag), cube flag, and
   D3D12-ordered (array-major, mip-minor) subresources. This is the API-neutral type between the codec
-  (assetlib) and the RHI (bgl): the codec stores KTX2's `vkFormat` verbatim, and each backend maps it
-  to its own format — the D3D12 RHI via `VkFormatToDXGI` in
-  [libs/bgl/src/d3d12/util_d3d12.cpp](libs/bgl/src/d3d12/util_d3d12.cpp). No DXGI leaks into assetlib.
+  (assetlib) and the RHI (bgl): the codec stores KTX2's `vkFormat` verbatim, and `FromVkFormat` in
+  [libs/bgl/src/types/vk_format.h](libs/bgl/src/types/vk_format.h) turns it into a `bgl::Format`
+  each backend then maps to its own. No DXGI leaks into assetlib.
 
 ---
 
@@ -254,7 +254,7 @@ weight with no joint has nothing to skin to, so the importer emits the pair or n
 them is only drawable against the `.bskel` it names — see [Rigs](#rigs).
 
 Semantics/format enums: [libs/assetlib_structs/include/assetlib_structs/VertexLayout.h](libs/assetlib_structs/include/assetlib_structs/VertexLayout.h)
-(CPU) mirror [libs/bgl/src/idl/VertexLayout.h](libs/bgl/src/idl/VertexLayout.h) (GPU) — the enum
+(CPU) mirror [libs/bgl/idl/src/VertexLayout.slang](libs/bgl/idl/src/VertexLayout.slang) (GPU) — the enum
 ordering is shared so a layout maps field-for-field between them.
 
 ### Normal & tangent space
