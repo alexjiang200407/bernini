@@ -132,8 +132,8 @@ TEST_CASE("Acquiring a rig twice reads its containers once", "[skinned][acquire]
 	const auto first = assets.AcquireSkinnedMesh("Meshes/rig.bmesh", "Animations/rig.banim");
 	REQUIRE(first.geom.IsValid());
 
-	// Stamped, then deserialized.
-	for (const std::string& path : c_Containers) REQUIRE(files->ReadsOf(path) == 2);
+	// Three apiece: the stamp, the cache key LoadRegen* peeks at, and the deserialize.
+	for (const std::string& path : c_Containers) REQUIRE(files->ReadsOf(path) == 3);
 
 	SECTION("a re-acquire after a full release reads nothing back off the disk")
 	{
@@ -152,17 +152,17 @@ TEST_CASE("Acquiring a rig twice reads its containers once", "[skinned][acquire]
 		const auto second = assets.AcquireSkinnedMesh("Meshes/rig.bmesh", "Animations/rig.banim");
 		REQUIRE(second.geom.IsValid());
 
-		// One read apiece, not two. An uncached acquire reads a container twice -- once to stamp it
-		// and once to deserialize it -- and what is left here is the stamp. Against a directory
-		// mount, which is what the editor opens, even that read is absent: assetlib memoizes a
-		// stamp on the host path behind size and mtime, and only a mount it cannot identify (this
-		// one) re-hashes.
+		// Two apiece, not three: both staleness questions are asked again -- the stamp, and whether
+		// the entry's source has moved under it -- and the deserialize is what is skipped. Against
+		// a directory mount, which is what the editor opens, the stamp read goes too: assetlib
+		// memoizes it on the host path behind size and mtime, and only a mount it cannot identify
+		// (this one) re-hashes.
 		for (const std::string& path : c_Containers)
 		{
 			INFO(path);
-			CHECK(files->ReadsOf(path) == readsBefore[path] + 1);
+			CHECK(files->ReadsOf(path) == readsBefore[path] + 2);
 
-			// The cheap question is still asked: one that stopped would serve a stale rig.
+			// Still asked: a cache that stopped asking would serve a stale rig.
 			CHECK(files->StatsOf(path) > statsBefore[path]);
 		}
 	}
