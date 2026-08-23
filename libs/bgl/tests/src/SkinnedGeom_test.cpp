@@ -402,12 +402,6 @@ TEST_CASE("AddSkinnedMeshGeom refuses a rig the pose pass could not walk", "[ski
 		CHECK_THROWS_AS(add(assetlib::Skeleton(), MakeClips(0)), bgl::SceneError);
 	}
 
-	SECTION("more bones than the groupshared budget allows")
-	{
-		const uint32_t tooMany = bgl::idl::cMaxBonesPerRig + 1;
-		CHECK_THROWS_AS(add(MakeRig(tooMany), MakeClips(tooMany)), bgl::SceneError);
-	}
-
 	SECTION("a parent that is not a lower index than its own bone")
 	{
 		auto skeleton            = MakeRig();

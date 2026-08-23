@@ -317,8 +317,10 @@ Writes every skinned instance's bone palette: one workgroup per instance, one th
 (striding when a rig has more bones than `cPoseGroupSize`). Per bone it samples the instance's clip at
 `ViewData::time`, blends the two frames the fractional position falls between (nlerp with a hemisphere
 flip), then the group walks the hierarchy **one depth level at a time** with a barrier between levels
-and multiplies each result by the bone's inverse bind. `cMaxBonesPerRig` is what that groupshared
-array costs, not a taste limit.
+and multiplies each result by the bone's inverse bind — all of it **in the palette itself**, which
+holds an affine transform in the three rows it reserves for the skin matrix. There is no groupshared
+hierarchy array and so no ceiling on a rig's bone count; the price is that the per-level barrier
+orders device memory rather than groupshared.
 
 It runs **twice per instance in one dispatch**, at `time` and at `prevTime`, writing two palettes back
 to back from `SkinnedState::paletteBase`. That is how skinned geometry gets a motion vector without a

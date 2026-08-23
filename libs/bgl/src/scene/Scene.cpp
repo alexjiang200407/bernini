@@ -724,13 +724,6 @@ namespace bgl
 		{
 			throw SceneError("skinned geometry: a skeleton with no bones skins nothing");
 		}
-		if (boneCount > idl::cMaxBonesPerRig)
-		{
-			throw SceneError(
-				"skinned geometry: the rig has more bones than cMaxBonesPerRig -- the pose pass "
-				"holds one instance's transforms in groupshared memory, which is what bounds it");
-		}
-
 		for (size_t i = 0; i < boneCount; ++i)
 		{
 			const uint32_t parent = skeleton.bones[i].parent;

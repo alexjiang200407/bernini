@@ -36,10 +36,21 @@ struct Uniforms
 
 ConstantBuffer<Uniforms> gUniforms;
 
-// Model-space transforms of the instance this group is posing, indexed rig-locally. float4x4 rather
-// than the palette's packed three rows: every compose below goes through mul(), and paying 16 bytes a
-// bone here buys not having a second matrix convention in the walk. See cMaxBonesPerRig.
-groupshared float4x4 gModel[cMaxBonesPerRig];
+// One bone's transform, read back out of the three rows a palette slot holds. Affine, so the fourth
+// row is (0,0,0,1) and was never stored -- the same convention the mesh shader reads.
+float4x4 PaletteMatrix(uint slot)
+{
+    return float4x4(
+        gUniforms.bonePalettes[slot + 0], gUniforms.bonePalettes[slot + 1], gUniforms.bonePalettes[slot + 2], float4(0.0, 0.0, 0.0, 1.0)
+    );
+}
+
+void WritePalette(uint slot, float4x4 transform)
+{
+    gUniforms.bonePalettes[slot + 0] = transform[0];
+    gUniforms.bonePalettes[slot + 1] = transform[1];
+    gUniforms.bonePalettes[slot + 2] = transform[2];
+}
 
 // A local TRS as the matrix mul() expects: rows of the rotation scaled per axis, translation in .w.
 float4x4 LocalTransform(BoneSample sample)
@@ -104,16 +115,23 @@ void PoseInto(SkinnedGeom geom, Clip clip, SkinnedState state, float time, uint 
 {
     let frames = ClipFrames(clip, state.phase, state.rate, time);
 
+    // Composed in the palette rather than in groupshared: a model transform is affine, so it fits the
+    // three rows the slot already reserves for the skin matrix it ends up holding. Nothing bounds the
+    // bone count then -- the palette is sized per rig, and 12 KiB of groupshared was what stopped a
+    // character rig at 192.
     for (uint bone = localIdx; bone < geom.boneCount; bone += cPoseGroupSize)
     {
-        gModel[bone] = LocalTransform(SampleBone(geom, clip, bone, frames));
+        WritePalette(paletteBase + bone * cFloat4sPerBone, LocalTransform(SampleBone(geom, clip, bone, frames)));
     }
-    GroupMemoryBarrierWithGroupSync();
+    DeviceMemoryBarrierWithGroupSync();
 
     // One level at a time: a bone's parent is always a lower index, but a lower index is not
     // necessarily a shallower one, so composing in index order would read a parent this pass has not
     // composed yet. The bound is group-uniform, so every thread runs every level -- including a
     // thread holding no bone at that depth, which still has to arrive at the barrier.
+    //
+    // The barrier orders device memory, not groupshared: what one thread writes here another reads
+    // at the next level, through the palette.
     for (uint level = 1; level <= geom.maxDepth; ++level)
     {
         for (uint bone = localIdx; bone < geom.boneCount; bone += cPoseGroupSize)
@@ -121,25 +139,22 @@ void PoseInto(SkinnedGeom geom, Clip clip, SkinnedState state, float time, uint 
             SkinnedBone record = gUniforms.boneBuffer.Get(geom.bones, bone);
             if (record.depth == level)
             {
-                gModel[bone] = mul(gModel[record.parent], gModel[bone]);
+                let slot = paletteBase + bone * cFloat4sPerBone;
+                WritePalette(slot, mul(PaletteMatrix(paletteBase + record.parent * cFloat4sPerBone), PaletteMatrix(slot)));
             }
         }
-        GroupMemoryBarrierWithGroupSync();
+        DeviceMemoryBarrierWithGroupSync();
     }
 
+    // In place, and safe without a barrier between the two: the strided loops assign a bone to the
+    // same thread every time, so the slot read here is the one this thread composed above.
     for (uint bone = localIdx; bone < geom.boneCount; bone += cPoseGroupSize)
     {
         SkinnedBone record = gUniforms.boneBuffer.Get(geom.bones, bone);
-        float4x4 skin = mul(gModel[bone], record.inverseBind);
-
-        // Three rows, not four: the fourth of an affine transform is always (0,0,0,1), and the mesh
-        // shader puts it back.
-        let dst = paletteBase + bone * cFloat4sPerBone;
-        gUniforms.bonePalettes[dst + 0] = skin[0];
-        gUniforms.bonePalettes[dst + 1] = skin[1];
-        gUniforms.bonePalettes[dst + 2] = skin[2];
+        let slot = paletteBase + bone * cFloat4sPerBone;
+        WritePalette(slot, mul(PaletteMatrix(slot), record.inverseBind));
     }
-    GroupMemoryBarrierWithGroupSync();
+    DeviceMemoryBarrierWithGroupSync();
 }
 
 [shader("compute")]

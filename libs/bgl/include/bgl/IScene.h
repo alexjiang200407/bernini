@@ -319,8 +319,8 @@ namespace bgl
 		 * @param skeleton    The rig the mesh's joint indices address.
 		 * @param animations  Clips cooked against `skeleton`.
 		 * @param posedBounds A box holding the mesh in every pose of every clip, in model space.
-		 * @throws SceneError for anything AddStaticMeshGeom refuses, a skeleton with no bones or more
-		 *         than `cMaxBonesPerRig`, bones that are not topologically sorted, an `animations`
+		 * @throws SceneError for anything AddStaticMeshGeom refuses, a skeleton with no bones,
+		 *         bones that are not topologically sorted, an `animations`
 		 *         whose bone count disagrees with `skeleton`, an empty or zero-frame clip table, a
 		 *         clip whose samples fall outside the pool, a submesh without skin binding, a submesh
 		 *         whose material does not resolve to kPBR, or a `posedBounds` whose min exceeds its
