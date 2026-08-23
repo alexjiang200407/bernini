@@ -6,6 +6,7 @@
 
 #include "bmesh_texture.h"
 
+#include "MountAt.h"
 #include "mounted_io.h"
 #include <catch2/catch_approx.hpp>
 
@@ -215,7 +216,7 @@ TEST_CASE("a cutout's base color bakes to a format that keeps its alpha", "[bmat
 	cutout.pbr.routes[2] = { "leaf.ktx2", 2 };  // base B
 	cutout.pbr.routes[3] = { "leaf.ktx2", 3 };  // base A
 
-	REQUIRE_NOTHROW(bakeMaterial(cutout, MaterialBakeDesc{ dir.path }));
+	REQUIRE_NOTHROW(StoreAt(dir.path).BakeMaterial(cutout));
 
 	SECTION("it bakes BC7, not BC1")
 	{
@@ -246,7 +247,7 @@ TEST_CASE("a cutout's base color bakes to a format that keeps its alpha", "[bmat
 		opaque.pbr.routes[2] = { "leaf.ktx2", 2 };
 		opaque.pbr.routes[3] = { "leaf.ktx2", 3 };  // routed, and deliberately ignored
 
-		REQUIRE_NOTHROW(bakeMaterial(opaque, MaterialBakeDesc{ dir.path }));
+		REQUIRE_NOTHROW(StoreAt(dir.path).BakeMaterial(opaque));
 
 		const ImageData baked = loadKTX2(dir.path / opaque.pbr.baseColorTexture);
 		CHECK(baked.vkFormat == VkFormat::BC1_RGB_SRGB_BLOCK);
@@ -261,7 +262,7 @@ TEST_CASE("a cutout's base color bakes to a format that keeps its alpha", "[bmat
 		BMaterial opaque;
 		opaque.pbr.routes = cutout.pbr.routes;
 
-		REQUIRE_NOTHROW(bakeMaterial(opaque, MaterialBakeDesc{ dir.path }));
+		REQUIRE_NOTHROW(StoreAt(dir.path).BakeMaterial(opaque));
 
 		REQUIRE(opaque.pbr.baseColorTexture != cutout.pbr.baseColorTexture);
 		CHECK(std::filesystem::exists(dir.path / opaque.pbr.baseColorTexture));

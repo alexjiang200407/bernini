@@ -1,51 +1,9 @@
 #pragma once
-#include <assetlib/cancel.h>
-#include <assetlib/project_layout.h>
 
 namespace assetlib
 {
 	struct BMaterial;
 
-	/**
-	 * Where a bake reads and writes.
-	 *
-	 * Every texture path a `.bmaterial` stores -- its routed sources and its baked triplet alike -- is
-	 * relative to `dataRoot`, never to the material file. So a material in `Data/Materials/` names its
-	 * baked base colour `Textures/basecolor_a1b2c3d4.ktx2` and its source `textures_src/tex1.ktx2`,
-	 * whatever directory it happens to live in. A standalone baked model directory is its own data root.
-	 */
-	struct MaterialBakeDesc
-	{
-		std::filesystem::path dataRoot;  // the project's Data directory
-		// baked maps land here, relative to dataRoot
-		std::filesystem::path textureDir = c_TexturesDirectoryName;
-	};
-
-	/**
-	 * Composites a material's per-channel routes down to the optimized baseColor / normal / orm triplet,
-	 * writing one `.ktx2` per map into `desc.dataRoot / desc.textureDir` and updating `material` in
-	 * place.
-	 *
-	 * **Baked maps are shared, not owned.**
-	 *
-	 * @param cancel Polled once per map, before the encode that dominates the cost. `material` is then
-	 *        left as it was -- a cancelled bake never half-updates it -- but any map already written
-	 *        stays on disk, where the next bake finds it up to date and reuses it.
-	 * @throws std::runtime_error if nothing is routed, a source is missing or undecodable, or a map
-	 *         cannot be written.
-	 * @throws Cancelled if `cancel` is signalled.
-	 */
-	void
-	bakeMaterial(BMaterial& material, const MaterialBakeDesc& desc, const CancelToken& cancel = {});
-
-	/**
-	 * Whether `fileName` is a name bakeMaterial could have written: `<group>_<16 hex digits>.ktx2`.
-	 *
-	 * The counterpart of the bake's naming, and deliberately kept beside it so the two cannot drift. It
-	 * is what lets a prune tell a baked map apart from a hand-placed one sharing the directory, which
-	 * must never be swept. Matching the pattern says the bake *could* have written the file, not that
-	 * it did, and never that anything still references it.
-	 */
 	[[nodiscard]] bool
 	isBakedMapName(std::string_view fileName) noexcept;
 

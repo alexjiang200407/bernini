@@ -88,7 +88,7 @@ namespace assetlib
 						BSky sky = loadSky(file);
 						if (!isSkyBakeStale(sky, loose))
 							continue;
-						bakeSky(sky, EnvBakeDesc{ store.GetDataRoot() });
+						store.BakeSky(sky);
 						saveSky(sky, file);
 					}
 					else
@@ -96,7 +96,7 @@ namespace assetlib
 						BEnvLighting lighting = loadEnvLighting(file);
 						if (!isEnvLightingBakeStale(lighting, loose))
 							continue;
-						bakeEnvLighting(lighting, EnvBakeDesc{ store.GetDataRoot() });
+						store.BakeEnvLighting(lighting);
 						saveEnvLighting(lighting, file);
 					}
 				}

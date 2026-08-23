@@ -7,7 +7,7 @@ namespace assetlib
 	/**
 	 * Where a prune looks for the materials that keep a baked map alive, and for the maps themselves.
 	 *
-	 * Mirrors MaterialBakeDesc: `textureDir` is the directory bakeMaterial writes its output into,
+	 * `textureDir` is the directory a bake writes its output into (AssetStore::BakeMaterial's own),
 	 * relative to `dataRoot`. Prune the same pair you baked with, or the sweep will not find the maps.
 	 */
 	struct TexturePruneDesc

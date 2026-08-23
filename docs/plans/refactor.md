@@ -166,9 +166,9 @@ Then the migration, each step behind the surface task 1 fixed:
    Gate: `just test assetlib`, and `Pack_test` proves nothing dropped out of an archive.
 6. **`refactor(assetlib,gamelib,editor): every production write goes through the store`** — the 76
    production call sites converted. Gate: `just test`.
-7. **`refactor(assetlib): the path-taking family goes`** — `StoreAt` for tests, ~205 test call sites
-   converted, then the `save*`/`load*`-by-`path` declarations deleted. Last, because it is what
-   makes the old surface unreachable. Gate: `just test`, plus the `grep` in Acceptance returning
+7. **`refactor(assetlib): the path-taking family goes`** — ~205 test call sites converted onto
+   `StoreAt` (which arrived in task 4), then the `save*`/`load*`-by-`path` declarations deleted.
+   Last, because it is what makes the old surface unreachable. Gate: `just test`, plus the `grep` in Acceptance returning
    nothing.
 8. **`docs(assetlib): the API map after the seam closed`** — rewrite
    [docs/assetlib_api.md](docs/assetlib_api.md)'s half-built-seam section, delete the spec and this
