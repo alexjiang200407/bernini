@@ -180,7 +180,7 @@ namespace game
 			bvatAbs.parent_path().string(),
 			ec.message());
 
-		assetlib::saveVat(vat, bvatAbs);
+		store.Save(vat, bvatRel);
 		RecordSeamBake(store, bvatRel, vat);
 		return vat;
 	}

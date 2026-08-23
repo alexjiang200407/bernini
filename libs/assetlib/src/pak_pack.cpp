@@ -85,19 +85,19 @@ namespace assetlib
 				{
 					if (type == AssetType::kSky)
 					{
-						BSky sky = loadSky(file);
+						BSky sky = store.Load<BSky>(store.KeyFor(file));
 						if (!isSkyBakeStale(sky, loose))
 							continue;
 						store.BakeSky(sky);
-						saveSky(sky, file);
+						store.Save(sky, store.KeyFor(file));
 					}
 					else
 					{
-						BEnvLighting lighting = loadEnvLighting(file);
+						BEnvLighting lighting = store.Load<BEnvLighting>(store.KeyFor(file));
 						if (!isEnvLightingBakeStale(lighting, loose))
 							continue;
 						store.BakeEnvLighting(lighting);
-						saveEnvLighting(lighting, file);
+						store.Save(lighting, store.KeyFor(file));
 					}
 				}
 				catch (const std::exception& error)
@@ -135,7 +135,7 @@ namespace assetlib
 				bool fresh = false;
 				try
 				{
-					const BVat vat = loadVat(file);
+					const BVat vat = store.Load<BVat>(store.KeyFor(file));
 					fresh          = !vatIsStale(vat, loose) && !store.GeometryIsStale(vat.mesh) &&
 					                 !store.GeometryIsStale(vat.skeleton) &&
 					                 !store.GeometryIsStale(vat.animations);
@@ -146,7 +146,9 @@ namespace assetlib
 					continue;
 
 				const VatRefs refs = loadVatRefs(file);
-				saveVat(bakeVat(store, VatBakeDesc{ refs.mesh, refs.animations }), file);
+				store.Save(
+					bakeVat(store, VatBakeDesc{ refs.mesh, refs.animations }),
+					store.KeyFor(file));
 				++rebaked;
 			}
 			return rebaked;
@@ -305,7 +307,7 @@ namespace assetlib
 				// rebakeStaleVats above. A vat whose stamps already describe the archived bytes
 				// -- the ordinary pack, nothing regenerated and nothing rebound -- copies
 				// verbatim rather than paying a decode and a re-encode.
-				BVat vat = loadVat(file);
+				BVat vat = store.Load<BVat>(store.KeyFor(file));
 
 				const SourceStamp meshStamp       = archived.StampFor(normalizeRef(vat.mesh));
 				const SourceStamp skeletonStamp   = archived.StampFor(normalizeRef(vat.skeleton));

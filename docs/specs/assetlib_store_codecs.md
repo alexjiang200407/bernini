@@ -127,7 +127,14 @@ escape hatch nobody uses is the second way to do one thing that [CLAUDE.md](CLAU
 each subsystem is held to forbids, so it goes.
 
 `writeObj`, `loadFromGltf`, `Project::Open` and `packProject` keep their `path` parameters —
-they address the host, which is a different question. [STYLE.md](STYLE.md) § Paths draws that line:
+they address the host, which is a different question.
+
+One caller genuinely writes a container outside a project: `assetlib_cli strip --out`, whose own
+help says *"a shipping tree is not a project"*. Counting call sites missed it, because that site
+has two modes and only the non-default escapes. It encodes with the codec and writes the bytes
+itself — `core::file::write_atomic(out, AssetCodec<BMaterial>::Serialize(material))` — which is the
+shape such a caller should have: writing bytes to a path a user named is not saving a project's
+asset, and making the two look alike is what put the family here in the first place. [STYLE.md](STYLE.md) § Paths draws that line:
 a `std::filesystem::path` is a location on the host, a `string_view` is a key into a mount. What
 changes is that a *project's* asset stops being addressable the first way at all.
 
