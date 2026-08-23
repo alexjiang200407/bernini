@@ -263,3 +263,27 @@ TEST_CASE("A material the mesh could not be made to name is reported once", "[ma
 	CHECK(summary.contains("Leaf.bmaterial"));
 	CHECK_FALSE(summary.contains("Could not write"));
 }
+
+TEST_CASE("The Material Editor holds its preview mesh open", "[materialeditor]")
+{
+	// Delete Cascade asks each panel what it is holding and refuses to remove any of it. The
+	// Material Editor used to answer with its materials alone, so a `.bmesh` dropped onto its
+	// preview was invisible to that check and went, while the panel carried on drawing it and
+	// binding materials into it.
+	const QStringList materials{ "C:/Data/Materials/Leaf.bmaterial" };
+
+	const QStringList held =
+		editor::HeldOpenByMaterialEditor(materials, "C:/Data/Meshes/tree.bmesh");
+	REQUIRE(held.size() == 2);
+	CHECK(held[0] == "C:/Data/Materials/Leaf.bmaterial");
+	CHECK(held[1] == "C:/Data/Meshes/tree.bmesh");
+}
+
+TEST_CASE("The default sphere holds nothing open", "[materialeditor]")
+{
+	// A preview showing the built-in sphere has no file behind it, and an empty path in the
+	// held-open list would match a deletion of the data root itself.
+	const QStringList held =
+		editor::HeldOpenByMaterialEditor({ "C:/Data/Materials/Leaf.bmaterial" }, {});
+	CHECK(held == QStringList{ "C:/Data/Materials/Leaf.bmaterial" });
+}

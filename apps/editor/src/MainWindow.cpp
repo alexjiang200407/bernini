@@ -239,11 +239,11 @@ MainWindow::Build()
 	m_ContentExplorerDock->setFeatures(
 		QDockWidget::DockWidgetMovable | QDockWidget::DockWidgetClosable);
 
-	// The explorer refuses to delete what a panel still holds: a material the Material Editor has
-	// open (its next Save would write it straight back), and the mesh and clip files the Animation
-	// panel is offering. Asked at each deletion, so there is no copy of the answer to go stale.
+	// The explorer refuses to delete what a panel still holds: the materials the Material Editor has
+	// open and the mesh it is previewing them on, and the mesh and clip files the Animation panel is
+	// offering. Asked at each deletion, so there is no copy of the answer to go stale.
 	m_ContentExplorer = new ContentExplorerWindow(m_ContentExplorerDock, [this] {
-		auto held = m_MaterialEditor->OpenMaterialPaths();
+		auto held = m_MaterialEditor->HeldOpenPaths();
 		held += m_AnimationEditor->HeldOpenPaths();
 		return held;
 	});

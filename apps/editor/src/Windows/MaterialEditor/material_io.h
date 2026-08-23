@@ -56,6 +56,16 @@ namespace editor
 	DefaultMaterialPath(const std::filesystem::path& dataRoot, const QString& name);
 
 	/**
+	 * Everything a Material Editor showing `materials` over `previewMesh` holds open, absolute.
+	 * The mesh counts: the panel binds materials into it and writes them back through the
+	 * `.bmesh`. An empty path -- the default sphere -- holds nothing.
+	 */
+	[[nodiscard]] QStringList
+	HeldOpenByMaterialEditor(
+		const QStringList&           materials,
+		const std::filesystem::path& previewMesh);
+
+	/**
 	 * The distinct material files among `paths`, first spelling first, with the empty ones dropped.
 	 *
 	 * Compared by IsSameMaterialFile rather than as strings, so one file reached two ways is one file:

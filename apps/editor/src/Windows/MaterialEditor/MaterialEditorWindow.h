@@ -66,11 +66,11 @@ public:
 	SetDockVisible(bool visible);
 
 	/**
-	 * The material files the editor has open, absolute, in no order. Deleting one behind an open graph
-	 * would not stick: the graph still holds it, and the next Save writes it straight back.
+	 * The files the panel has open, absolute, in no order: every graph's material, and the mesh the
+	 * preview shows them on. Deleting one behind the panel would not stick.
 	 */
 	[[nodiscard]] QStringList
-	OpenMaterialPaths() const;
+	HeldOpenPaths() const;
 
 	/**
 	 * Re-reads the open material from disk, for a caller that has just rewritten one -- a bake, from

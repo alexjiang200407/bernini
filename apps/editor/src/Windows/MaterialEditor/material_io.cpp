@@ -113,6 +113,15 @@ namespace editor
 	}
 
 	QStringList
+	HeldOpenByMaterialEditor(const QStringList& materials, const std::filesystem::path& previewMesh)
+	{
+		auto held = materials;
+		if (!previewMesh.empty())
+			held << QString::fromStdWString(previewMesh.wstring());
+		return held;
+	}
+
+	QStringList
 	UniqueMaterialFiles(const QStringList& paths)
 	{
 		auto unique = QStringList();
