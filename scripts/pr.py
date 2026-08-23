@@ -36,7 +36,7 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from util import gh, watchlist  # noqa: E402
+from util import gh, gitdiff, watchlist  # noqa: E402
 
 
 def read_body(args):
@@ -63,6 +63,74 @@ def split_title(body):
     while rest and not rest[0].strip():
         rest.pop(0)
     return lines[0][2:].strip(), "\n".join(rest)
+
+
+# The table is regenerated in place on every write, so it is fenced rather than
+# merely appended: a body edited by hand between pushes keeps whatever the author
+# moved below it.
+DIFF_OPEN = "<!-- bernini:diff -->"
+DIFF_CLOSE = "<!-- /bernini:diff -->"
+
+
+def rev_parse(ref):
+    """`ref` resolved to a commit, or None if this checkout has no such ref."""
+    out = subprocess.run(["git", "rev-parse", "--verify", "--quiet", ref],
+                         capture_output=True, text=True)
+    return out.stdout.strip() or None
+
+
+def origin_ref(branch):
+    """`branch` as origin sees it, falling back to the local ref.
+
+    A stale local `master` would attribute every commit it is missing to this PR.
+    """
+    return "origin/" + branch if rev_parse("origin/" + branch) else branch
+
+
+def tip_ref(branch):
+    """The ref to diff *to* for a pull request whose head is `branch`.
+
+    HEAD only when that is what is checked out: `--head` exists to open a PR for
+    another branch, and a table computed from HEAD would describe this checkout.
+    """
+    return "HEAD" if git("rev-parse", "--abbrev-ref", "HEAD") == branch else origin_ref(branch)
+
+
+def render_breakdown(base, tip):
+    """The fenced diff table for `base...tip`, or None if it cannot be computed."""
+    rows = gitdiff.breakdown(base, tip)
+    if not rows:
+        return None
+
+    def lines(added, removed):
+        # A binary file has no line counts at all, so a row of two zeroes is a
+        # claim about content that git never made.
+        return f"+{added} \u2212{removed}" if added or removed else "\u2014"
+
+    out = [DIFF_OPEN, "## Diff", "", "| Category | Files | +/\u2212 |", "|---|---:|---:|"]
+    out += [f"| {r['category']} | {r['files']} | {lines(r['added'], r['removed'])} |"
+            for r in rows]
+    total = {k: sum(r[k] for r in rows) for k in ("files", "added", "removed")}
+    out.append(f"| **Total** | **{total['files']}** | "
+               f"**{lines(total['added'], total['removed'])}** |")
+    out.append(DIFF_CLOSE)
+    return "\n".join(out)
+
+
+def with_breakdown(body, base, tip):
+    """`body` with its diff table written, replaced in place if one is already there."""
+    table = render_breakdown(base, tip)
+    if table is None:
+        print(f"warning: no diff for {base}...{tip}; the breakdown table was left out",
+              file=sys.stderr)
+        return body
+
+    head, sep, rest = body.partition(DIFF_OPEN)
+    if sep:
+        _, closed, tail = rest.partition(DIFF_CLOSE)
+        if closed:
+            return head + table + tail
+    return body.rstrip("\n") + "\n\n" + table + "\n"
 
 
 def add_body_args(parser, required=True):
@@ -115,6 +183,7 @@ def cmd_create(args):
                  "       joins a recipe's arguments on spaces).")
 
     token = actor(args, bot_by_default=False)
+    body = with_breakdown(body, origin_ref(args.base), tip_ref(head))
     fields = {"title": title, "head": head, "base": args.base, "body": body}
     try:
         pr = gh.api(f"repos/{slug}/pulls", token=token, method="POST", fields=fields,
@@ -255,8 +324,15 @@ def cmd_comment(args):
 
 
 def cmd_edit(args):
+    """Rewrites the title or body; with neither, refreshes the diff table alone.
+
+    That bare form is the one a revision wants: code moved, the prose did not, and
+    a table describing the diff as it was is worse than none.
+    """
     slug = gh.repo_slug(args.repo)
     token = actor(args, bot_by_default=False)
+    view = gh.api(f"repos/{slug}/pulls/{args.pr}", token=token)
+
     fields = {}
     if args.body or args.body_file:
         heading, body = split_title(read_body(args))
@@ -266,7 +342,17 @@ def cmd_edit(args):
     if args.title:
         fields["title"] = args.title
     if not fields:
-        sys.exit("error: nothing to change; pass --title and/or a body")
+        fields["body"] = view.get("body") or ""
+
+    if "body" in fields:
+        head = view["head"]["ref"]
+        tip = tip_ref(head)
+        if rev_parse(tip):
+            fields["body"] = with_breakdown(fields["body"], origin_ref(view["base"]["ref"]), tip)
+        else:
+            print(f"warning: no local ref for '{head}'; the breakdown table was left as it was",
+                  file=sys.stderr)
+
     pr = gh.api(f"repos/{slug}/pulls/{args.pr}", token=token, method="PATCH", fields=fields)
     print(json.dumps({"pr": args.pr, "url": pr["html_url"]}, indent=2))
 
@@ -344,7 +430,7 @@ def main():
     add_body_args(p)
     p.set_defaults(func=cmd_comment)
 
-    p = add("edit", help="rewrite the title or body")
+    p = add("edit", help="rewrite the title or body; with neither, refresh the diff table")
     p.add_argument("pr", type=int)
     p.add_argument("--title")
     add_body_args(p, required=False)
