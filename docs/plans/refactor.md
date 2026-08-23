@@ -154,8 +154,11 @@ Then the migration, each step behind the surface task 1 fixed:
    `loadAnimationSkeletonPath`) stay named — they pull a few chunks out of a file worth megabytes
    and are not codecs. Gate: `just test assetlib`.
 3. **`refactor(assetlib): bake_tokens.h goes`** — the values moved into the specializations in task
-   1, so what is left is deleting the aliasing header and pointing its six callers at
-   `AssetCodec<T>::c_BakeToken`. Gate: `TokenCanary_test` **unchanged** and passing.
+   1, so what is left is deleting the aliasing header and pointing its 34 references at
+   `AssetCodec<T>::c_BakeToken`. Gate: `TokenCanary_test`'s **pinned literals** unchanged and
+   passing. Its *references* to the tokens necessarily move with everything else — what the gate
+   is actually for is that no `Pin{ .token, .hash }` value changes, since those are what hold the
+   writers to their revisions.
 4. **`refactor(assetlib): a bake reads and writes through the store`** — `MaterialBakeDesc` and
    `EnvBakeDesc` deleted, their call sites onto the store's bake methods. Gate:
    `just test assetlib editor`.

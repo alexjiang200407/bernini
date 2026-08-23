@@ -3,7 +3,6 @@
 
 #include <assetlib/skeleton.h>
 
-#include "bake_tokens.h"
 #include "cache_io.h"
 #include "fs_util.h"
 
@@ -33,13 +32,17 @@ namespace assetlib
 		cache::Writer writer;
 		writer.Add(ChunkId::kBones, skeleton.bones);
 		writer.Add(ChunkId::kStringPool, skeleton.stringPool.bytes());
-		return writer.Finish(magic::c_BSkel, c_BSkelBakeToken, skeleton.source);
+		return writer.Finish(magic::c_BSkel, AssetCodec<Skeleton>::c_BakeToken, skeleton.source);
 	}
 
 	Skeleton
 	deserializeSkeleton(std::span<const std::byte> bytes)
 	{
-		const cache::Reader reader(bytes, magic::c_BSkel, c_BSkelBakeToken, c_What);
+		const cache::Reader reader(
+			bytes,
+			magic::c_BSkel,
+			AssetCodec<Skeleton>::c_BakeToken,
+			c_What);
 
 		Skeleton skeleton;
 		skeleton.source     = reader.GetSource();
