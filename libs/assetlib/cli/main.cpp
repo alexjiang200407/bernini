@@ -538,7 +538,7 @@ main(int argc, char** argv)
 				const assetlib::SourceRef    source = importStore.CopyImportedSource(input, target);
 				mesh.source                         = source;
 
-				assetlib::writeTextures(imported, textureDir);
+				importStore.WriteTextures(imported, target.textureDir);
 
 				const auto derived = assetlib::generateTangents(mesh);
 

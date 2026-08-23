@@ -1,6 +1,7 @@
 #include <assetlib/asset_import.h>
 #include <assetlib/bmesh.h>
 #include <assetlib/codecs.h>
+#include <assetlib/container_info.h>
 
 #include <assetlib/AssetStore.h>
 
@@ -134,8 +135,8 @@ namespace assetlib
 		ImportDocument document = parametersOnly(target.sampleRate);
 		document.textureDir     = target.textureDir;
 
-		// Stamped from the copy rather than from the caller's reference, so what the document says
-		// the textures were extracted at cannot disagree with the source standing beside them.
+		// From the copy, not the caller's reference: the document cannot then disagree with the
+		// source standing beside it.
 		if (!document.textureDir.empty())
 			document.textureStamp = stampOf(ImportedSourcePath(target.name));
 		if (mesh != nullptr)

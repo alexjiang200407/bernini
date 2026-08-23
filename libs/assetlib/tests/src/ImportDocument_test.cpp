@@ -53,7 +53,7 @@ TEST_CASE("an import document records where its textures went", "[importdoc]")
 
 	document.textureStamp = { 4096, 0xfeedfacecafebeefull };
 
-	const ImportDocument read = deserializeImportDocument(serializeImportDocument(document));
+	const ImportDocument read = DocumentFrom(DocumentText(document));
 	CHECK(read.textureDir == "textures_src/kirk");
 	CHECK(read.textureStamp == document.textureStamp);
 
@@ -61,15 +61,15 @@ TEST_CASE("an import document records where its textures went", "[importdoc]")
 	{
 		// So a document for such an import stays byte-identical to one written before the key
 		// existed, which is what keeps migrate's byte-compare from reporting every project once.
-		const std::string none = serializeImportDocument(ImportDocument());
+		const std::string none = DocumentText(ImportDocument());
 		CHECK(none.find("texture") == std::string::npos);
-		CHECK(deserializeImportDocument(none).textureDir.empty());
-		CHECK(deserializeImportDocument(none).textureStamp == SourceStamp());
+		CHECK(DocumentFrom(none).textureDir.empty());
+		CHECK(DocumentFrom(none).textureStamp == SourceStamp());
 	}
 
 	SECTION("a document written before the key existed reads as no folder")
 	{
-		const auto old = deserializeImportDocument(R"({"parameters":{"sampleRate":30.0}})");
+		const auto old = DocumentFrom(R"({"parameters":{"sampleRate":30.0}})");
 		CHECK(old.textureDir.empty());
 		CHECK(old.textureStamp == SourceStamp());
 	}
@@ -85,8 +85,8 @@ TEST_CASE("an import document records where its textures went", "[importdoc]")
 
 	SECTION("a non-string folder is refused rather than defaulted")
 	{
-		CHECK_THROWS(deserializeImportDocument(R"({"textureDir":7})"));
-		CHECK_THROWS(deserializeImportDocument(R"({"textureStampHash":"beef"})"));
+		CHECK_THROWS(DocumentFrom(R"({"textureDir":7})"));
+		CHECK_THROWS(DocumentFrom(R"({"textureStampHash":"beef"})"));
 	}
 }
 

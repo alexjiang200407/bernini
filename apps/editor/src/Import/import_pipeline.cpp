@@ -1,4 +1,5 @@
 #include "import_pipeline.h"
+#include <assetlib/AssetStore.h>
 #include <assetlib/bmesh.h>
 #include <assetlib/envmap.h>
 
@@ -70,13 +71,12 @@ namespace editor
 			return dataRoot / fs::path(output.toStdWString());
 		};
 
-		// An extracted texture is named after the image it came from, so every import needs its own
-		// folder: two sources naming an image alike would otherwise overwrite each other.
+		// Its own folder: two sources naming an image alike would collide in a shared one.
 		const fs::path textureDir =
 			options.textures ? under(options.outputs.textureDir) : fs::path();
 
-		// The same folder as the mount key every ImportTarget below records, so a document cannot
-		// come to disagree with where the textures actually went. Empty extracts none.
+		// The same folder every ImportTarget below records, so the document cannot disagree with
+		// where the textures went.
 		const std::string textureDirKey =
 			options.textures ? options.outputs.textureDir.toStdString() : std::string();
 
@@ -193,9 +193,9 @@ namespace editor
 
 				if (options.textures)
 				{
-					assetlib::writeTextures(
+					assetlib::AssetStore(dataRoot).WriteTextures(
 						*imported,
-						textureDir,
+						textureDirKey,
 						[&](size_t done, size_t total) {
 							progress.Report(
 								static_cast<int>(done),

@@ -39,7 +39,8 @@ namespace assetlib
 	 * caller -- including `assetlib_cli bake`, which has no user to ask. attachMaterial is the only
 	 * thing that binds a material, and a caller that wants the glTF's has to derive them and call it:
 	 * the editor's import does exactly that, behind a checkbox, for the PBR ones alone. The import's
-	 * *textures* are still extracted (see writeTextures) -- they are what a material routes at.
+	 * *textures* are still extracted (see AssetStore::WriteTextures) -- they are what a material
+	 * routes at.
 	 */
 	[[nodiscard]] BMesh
 	toBMesh(const imp::BMeshImport& mesh);
@@ -61,21 +62,12 @@ namespace assetlib
 	attachMaterial(BMesh& mesh, uint32_t submeshIndex, std::string_view relativePath);
 
 	/**
-	 * The file name writeTextures gives each of an import's textures, parallel to `mesh.textures`:
-	 * the name the source gave the image, sanitised to a portable file name, with the `.ktx2`
-	 * extension.
+	 * The file name AssetStore::WriteTextures gives each of an import's textures, parallel to
+	 * `mesh.textures`: the image's own name, sanitised, `.ktx2`; `tex<index>` where the source
+	 * names none, and an index suffix where two resolve alike (compared case-insensitively).
 	 *
-	 * A name is the identity a material's route holds, so it must mean the same thing across
-	 * re-extracts of a source that has been edited: an image the source names keeps its file when
-	 * another is inserted before it, which an index-derived name could not. An image the source
-	 * names nothing falls back to `tex<index>` and is therefore *not* stable under insertion --
-	 * naming the images in the DCC is what buys that.
-	 *
-	 * Two images resolving to one name are disambiguated by index, compared case-insensitively
-	 * because the filesystems this writes to are.
-	 *
-	 * A caller that must name one of those files -- to route a material at it -- has to come
-	 * through here rather than spell the convention out a second time.
+	 * The one place that rule lives -- a caller routing a material at one of those files comes
+	 * through here. Why it is the image's name and not the index: docs/asset_standards.md.
 	 */
 	[[nodiscard]] std::vector<std::string>
 	importedTextureFileNames(const imp::BMeshImport& mesh);
@@ -105,37 +97,6 @@ namespace assetlib
 	 */
 	[[nodiscard]] bool
 	isSkinned(const BMesh& mesh, uint32_t meshIndex) noexcept;
-
-	/**
-	 * Reports that `done` of `total` textures have been written. Called before each texture, so the
-	 * first call is (0, total) and the last is (total - 1, total).
-	 */
-	using TextureProgressFn = std::function<void(size_t done, size_t total)>;
-
-	/**
-	 * Writes each detached texture in `mesh` into `outDir` as a standalone `.ktx2` file, named by
-	 * importedTextureFileNames. These are the files a material, once authored, routes at.
-	 *
-	 * `mesh.materials` is read but not written out: a texture's colour space is not a property of the
-	 * image, and the import's materials are the only record of which of them a base colour is (sRGB,
-	 * hardware-decoded) as opposed to a normal or ORM map (linear). That is the one thing glTF's PBR
-	 * materials are still used for -- see toBMesh on why nothing else about them survives the import.
-	 *
-	 * Each texture is Basis-UASTC supercompressed, which dominates the cost of an import -- pass
-	 * `onProgress` to drive a progress bar. It is called on the calling thread.
-	 *
-	 * @param cancel Polled once per texture. A single encode cannot be interrupted, so the wait for a
-	 *        signalled token is one texture long -- seconds, at 4K. Whatever was already written stays
-	 *        on disk.
-	 * @throws std::runtime_error if `outDir` cannot be created or a file cannot be written.
-	 * @throws Cancelled if `cancel` is signalled.
-	 */
-	void
-	writeTextures(
-		const imp::BMeshImport&      mesh,
-		const std::filesystem::path& outDir,
-		const TextureProgressFn&     onProgress = {},
-		const CancelToken&           cancel     = {});
 
 	/**
 	 * Writes `mesh` to `path` as a Wavefront `.obj` for inspection in an external model viewer -- a

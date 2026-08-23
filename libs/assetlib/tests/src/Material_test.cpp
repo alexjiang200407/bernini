@@ -482,18 +482,21 @@ TEST_CASE("an import writes a loadable .bmesh and its textures, and no materials
 
 	const auto outDir = std::filesystem::temp_directory_path() / "bake_suzanne_test";
 	std::filesystem::remove_all(outDir);
+	std::filesystem::create_directories(outDir);
 
 	// The import sequence an importer runs, minus the materials step neither runtime writes here.
-	writeTextures(import, outDir);
+	const AssetStore store(outDir);
+	store.WriteTextures(import, "textures");
 	BMesh baked = toBMesh(import);
 	static_cast<void>(generateTangents(baked));
-	AssetStore(outDir).Save(baked, "suzanne.bmesh");
+	store.Save(baked, "suzanne.bmesh");
 
 	REQUIRE(std::filesystem::exists(outDir / "suzanne.bmesh"));
 
 	// The textures do come across: they are what a material, once authored, routes at.
 	for (size_t i = 0; i < import.textures.size(); ++i)
-		REQUIRE(std::filesystem::exists(outDir / ("tex" + std::to_string(i) + ".ktx2")));
+		REQUIRE(
+			std::filesystem::exists(outDir / "textures" / ("tex" + std::to_string(i) + ".ktx2")));
 
 	// The glTF's PBR materials do not. Nothing is written for them, and -- this is the part that used
 	// to be wrong -- the container does not name files that were never written: every submesh comes out

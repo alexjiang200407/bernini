@@ -1,8 +1,7 @@
+#include <assetlib/AssetStore.h>
 #include <assetlib/bmesh.h>
 #include <assetlib/codecs.h>
 #include <assetlib_structs/magic.h>
-
-#include <assetlib/container_format.h>
 
 #include <assetlib/image_io.h>
 #include <assetlib_structs/BMesh.h>
@@ -35,20 +34,17 @@ namespace assetlib
 			return lowered;
 		}
 
-		// Only these come off a name; anything else after a dot is part of what the artist called
-		// the image (`Body_v1.2`, `diffuse.2k`) and truncating it would rename their texture.
+		// An allowlist, because anything else after a dot is part of the artist's name for the
+		// image (`Body_v1.2`) and truncating it would rename their texture.
 		constexpr std::string_view c_ImageExtensions[] = { ".png", ".jpg",  ".jpeg", ".ktx2",
 			                                               ".ktx", ".webp", ".tga",  ".bmp",
 			                                               ".tif", ".tiff", ".dds",  ".exr",
 			                                               ".hdr" };
 
 		/**
-		 * `name` reduced to a portable file stem: a trailing image extension dropped, every
-		 * character outside `[A-Za-z0-9-_]` folded to `_`, and the runs that produces collapsed.
-		 * Empty when nothing survives, which is the caller's cue to fall back to the index.
-		 *
-		 * A source may name an image anything at all -- a path, a UTF-8 label, `Base Color.png` --
-		 * and this name becomes a mount key, which is matched byte-for-byte inside an archive.
+		 * `name` reduced to a portable file stem: trailing image extension dropped, anything
+		 * outside `[A-Za-z0-9-_]` folded to `_` and collapsed. Empty when nothing survives.
+		 * A source may name an image anything, and this becomes a mount key.
 		 */
 		std::string
 		sanitizeTextureStem(std::string_view name)
@@ -317,8 +313,7 @@ namespace assetlib
 		auto claimed = std::set<std::string>();
 		for (size_t i = 0; i < names.size(); ++i)
 		{
-			// Appending the index can itself collide with an image literally named that way, so
-			// this repeats until the name is free rather than assuming one pass is enough.
+			// Repeats: the suffixed name can itself collide with an image named that way.
 			while (!claimed.insert(asciiLower(names[i])).second)
 				names[i] += "_" + std::to_string(i);
 
@@ -329,12 +324,13 @@ namespace assetlib
 	}
 
 	void
-	writeTextures(
-		const imp::BMeshImport&      mesh,
-		const std::filesystem::path& outDir,
-		const TextureProgressFn&     onProgress,
-		const CancelToken&           cancel)
+	AssetStore::WriteTextures(
+		const imp::BMeshImport&  mesh,
+		std::string_view         textureDir,
+		const TextureProgressFn& onProgress,
+		const CancelToken&       cancel) const
 	{
+		const std::filesystem::path outDir = ResolveWritePath(textureDir);
 		createDirectories(outDir);
 
 		// Textures used as base color are sRGB (tagged so the GPU sampler decodes them); normal and

@@ -1,5 +1,5 @@
+#include <assetlib/bmesh.h>
 #include <assetlib/bmesh_gltf.h>
-#include <assetlib/bmesh_io.h>
 #include <assetlib_structs/BMeshImport.h>
 
 using namespace assetlib;
