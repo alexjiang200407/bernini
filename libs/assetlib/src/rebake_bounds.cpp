@@ -186,7 +186,7 @@ namespace assetlib
 						continue;
 					}
 
-					saveAnimations(animations, dataRoot / animPath);
+					AssetStore(dataRoot).Save(animations, animPath);
 				}
 				entry.outcome = RebakedFile::Outcome::kRebaked;
 			}

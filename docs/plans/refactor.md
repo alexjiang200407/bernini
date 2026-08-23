@@ -30,13 +30,22 @@ whose stale files are read as current.
   see. Moving it was the fix. `bake_tokens.h` now aliases the codecs; task 3 is only its deletion.
 - **ADR-4 — The `save*`/`load*`-by-`std::filesystem::path` family is deleted outright.** This
   **reverses** the spec, which kept it "for files no project owns"; the spec is amended in this PR,
-  since an ADR is amended only by the change that reverses it. *That carve-out has zero users:
-  all 76 production call sites address a file inside a project, the CLI's `out` paths included —
-  they already go through `ResolveWritePath`. Keeping an escape hatch nobody uses is keeping the
+  since an ADR is amended only by the change that reverses it. *The carve-out looked like it had
+  zero users: every production call site addresses a file inside a project. Keeping an escape hatch nobody uses is keeping the
   second way to do one thing that [CLAUDE.md](CLAUDE.md) § The bar each subsystem is held to
   forbids. Rejected: keeping them for tests, which is the same thing with a nicer excuse — tests get
   a `StoreAt` helper instead.* `writeObj`, `loadFromGltf`, `Project::Open` and `packProject` keep
   their `path` parameters: they address the host, which is a different question.
+
+  **Amended in task 6 — the evidence was wrong.** `assetlib_cli strip --out` writes *outside* a
+  project by design; its own help says so (*"a shipping tree is not a project"*). Counting call
+  sites could not see it, because that one site has two modes and only the non-default escapes.
+  The ADR still holds — a *project's* asset is written through the store — but the conclusion
+  "therefore nothing needs a host-path write" did not. Such a caller now encodes with the codec
+  and writes the bytes itself (`core::file::write_atomic`), which is the honest shape: writing
+  bytes to a path the user named is a different operation from saving a project's asset, and it
+  should not look the same. *Rejected: keeping `saveMaterial(path)` alive for it, which is the
+  second way to do one thing wearing a justification.*
 - **ADR-5 — `mounted_io.h`'s container family goes, not the file.** *The survey found it is a third
   parallel family — one `load(fileSystem, key)` per container, which `AssetStore::Load*` forwards
   to. All eight collapse into a single `load<T>` template, since each was literally
@@ -178,10 +187,20 @@ Then the migration, each step behind the surface task 1 fixed:
    `AssetType` gains a `kCount` sentinel, because the totality assertion was anchored on
    `kImportDocument` being last and an appended type satisfied it silently — also verified by
    probe. Gate: `just test`, `Pack_test`, and `assetlib_cli describe|migrate` on the test project.
-6. **`refactor(assetlib,gamelib,editor): every production write goes through the store`** — the 76
-   production call sites converted. Gate: `just test`.
-7. **`refactor(assetlib): the path-taking family goes`** — ~205 test call sites converted onto
-   `StoreAt` (which arrived in task 4), then the `save*`/`load*`-by-`path` declarations deleted.
+6. **`refactor(assetlib,gamelib): assetlib, gamelib and the CLI write through the store`** — the
+   18 call sites in `pak_pack`, `asset_rename`, `env_import`, `rebake_bounds`, `vat_freshness` and
+   the CLI. `AssetStore::KeyFor` arrives here, the documented inverse of `ResolveWritePath`, for
+   the two callers that legitimately hold a host path: the pack walks the loose tree with a
+   directory iterator, and a rename plan names files as they sit on disk.
+
+   *The editor moves to task 7, not here.* Its seven sites and `asset_import`'s eight both need
+   **signature changes** rather than a call rewrite — the import writers take a caller-chosen path
+   and are used from 25 places, and the editor's callers have a `dataRoot` where they need a store.
+   That plumbing belongs with the deletion that forces it. Gate: `just test`, plus `pack` and
+   `strip` on the test project.
+7. **`refactor(assetlib,editor): the path-taking family goes`** — the editor's seven sites and
+   `asset_import`'s writers take a store, ~205 test call sites move onto `StoreAt` (which arrived
+   in task 4), then the `save*`/`load*`-by-`path` declarations are deleted.
    Last, because it is what makes the old surface unreachable. Gate: `just test`, plus the `grep` in Acceptance returning
    nothing.
 8. **`docs(assetlib): the API map after the seam closed`** — rewrite

@@ -320,11 +320,11 @@ namespace assetlib
 				// and `.banim` this was baked from, which changes their contents and so their stamps.
 				// The baked tables did not change, so re-reading the inputs here is what keeps the
 				// rename a load. Only now are they all in their final place.
-				BVat vat            = loadVat(file.path);
+				BVat vat            = store.Load<BVat>(store.KeyFor(file.path));
 				vat.meshStamp       = stampOf(store.GetDataRoot() / vat.mesh);
 				vat.skeletonStamp   = stampOf(store.GetDataRoot() / vat.skeleton);
 				vat.animationsStamp = stampOf(store.GetDataRoot() / vat.animations);
-				saveVat(vat, file.path);
+				store.Save(vat, store.KeyFor(file.path));
 
 				const std::filesystem::path derived =
 					store.GetDataRoot() / vatPathFor(vat.mesh, vat.animations);

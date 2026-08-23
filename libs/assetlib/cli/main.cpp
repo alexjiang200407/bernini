@@ -32,6 +32,7 @@
 #include <assetlib_structs/BVat.h>
 #include <assetlib_structs/magic.h>
 #include <core/err/util.h>
+#include <core/file/file.h>
 #include <spdlog/spdlog.h>
 
 namespace
@@ -619,14 +620,13 @@ main(int argc, char** argv)
 			if (key.empty())
 				key = assetlib::vatPathFor(vatMesh, vatAnimations).generic_string();
 
-			const std::filesystem::path out = store.ResolveWritePath(key);
-			assetlib::saveVat(vat, out);
+			store.Save(vat, key);
 
 			spdlog::info(
 				"Baked '{}' + '{}' -> '{}': {} x {} texels, {} clip(s), {} bones",
 				vatMesh,
 				vatAnimations,
-				out.string(),
+				key,
 				vat.width,
 				vat.height,
 				vat.clips.size(),
@@ -717,7 +717,7 @@ main(int argc, char** argv)
 			const auto      result = assetlib::generateTangents(mesh);
 
 			if (result.generated > 0)
-				assetlib::save(mesh, store.ResolveWritePath(key));
+				store.Save(mesh, key);
 
 			spdlog::info(
 				"'{}': {} submesh(es) gained a tangent, {} already had one, {} could not have one "
@@ -855,7 +855,11 @@ main(int argc, char** argv)
 			// Throws when the material has never been baked, leaving it untouched -- so the file is
 			// only written once there is a shippable form to write.
 			assetlib::stripAuthoringData(material);
-			assetlib::saveMaterial(material, out);
+			// Bytes to a host path, not a project write: --out names a shipping tree, which no store
+			// owns. The encode is the codec's; where it lands is the caller's.
+			core::file::write_atomic(
+				out,
+				assetlib::AssetCodec<assetlib::BMaterial>::Serialize(material));
 
 			spdlog::info("Stripped '{}' -> '{}'", in.string(), out.string());
 		}
@@ -1298,7 +1302,7 @@ main(int argc, char** argv)
 				else
 					env.exposureOverride = expSet;
 
-				assetlib::saveEnv(env, store.ResolveWritePath(key));
+				store.Save(env, key);
 			}
 
 			spdlog::info(
