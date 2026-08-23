@@ -4,7 +4,6 @@
 
 #include <assetlib/skeleton.h>
 
-#include "bake_tokens.h"
 #include "cache_io.h"
 #include "fs_util.h"
 
@@ -81,13 +80,20 @@ namespace assetlib
 		writer.Add(ChunkId::kSkeletonPath, std::span<const char>(animations.skeleton));
 		if (!animations.posedBoxes.empty())
 			writer.Add(ChunkId::kPosedBoxes, animations.posedBoxes);
-		return writer.Finish(magic::c_BAnim, c_BAnimBakeToken, animations.source);
+		return writer.Finish(
+			magic::c_BAnim,
+			AssetCodec<AnimationSet>::c_BakeToken,
+			animations.source);
 	}
 
 	AnimationSet
 	deserializeAnimations(std::span<const std::byte> bytes)
 	{
-		const cache::Reader reader(bytes, magic::c_BAnim, c_BAnimBakeToken, c_What);
+		const cache::Reader reader(
+			bytes,
+			magic::c_BAnim,
+			AssetCodec<AnimationSet>::c_BakeToken,
+			c_What);
 
 		AnimationSet animations;
 		animations.source     = reader.GetSource();
@@ -136,7 +142,7 @@ namespace assetlib
 			cache::readCacheChunksFromFile(
 				path,
 				magic::c_BAnim,
-				c_BAnimBakeToken,
+				AssetCodec<AnimationSet>::c_BakeToken,
 				c_WantedRefChunks,
 				c_What));
 	}
@@ -149,7 +155,7 @@ namespace assetlib
 				fileSystem,
 				path,
 				magic::c_BAnim,
-				c_BAnimBakeToken,
+				AssetCodec<AnimationSet>::c_BakeToken,
 				c_WantedRefChunks,
 				c_What));
 	}

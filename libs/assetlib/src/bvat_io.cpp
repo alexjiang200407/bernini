@@ -1,7 +1,6 @@
 #include <assetlib/bvat_io.h>
 #include <assetlib_structs/BVat.h>
 
-#include "bake_tokens.h"
 #include "cache_io.h"
 #include "fs_util.h"
 
@@ -173,7 +172,7 @@ namespace assetlib
 
 		// No source in the key: a `.bvat` records its three inputs and their stamps as chunks,
 		// and its freshness rule reads those -- the token covers the format alone.
-		return writer.Finish(magic::c_BVat, c_BVatBakeToken, SourceRef{});
+		return writer.Finish(magic::c_BVat, AssetCodec<BVat>::c_BakeToken, SourceRef{});
 	}
 
 	namespace
@@ -233,7 +232,7 @@ namespace assetlib
 			!cache::isCacheEntry(bytes),
 			"bvat: written before the cache format; re-bake it");
 
-		const cache::Reader reader(bytes, magic::c_BVat, c_BVatBakeToken, c_What);
+		const cache::Reader reader(bytes, magic::c_BVat, AssetCodec<BVat>::c_BakeToken, c_What);
 
 		BVat vat          = readTables(TableSource{ &reader, nullptr });
 		vat.positionsKtx2 = reader.Require<std::byte>(ChunkId::kPositionsKtx2);
@@ -287,7 +286,7 @@ namespace assetlib
 		const auto chunks = cache::readCacheChunksFromFile(
 			path,
 			magic::c_BVat,
-			c_BVatBakeToken,
+			AssetCodec<BVat>::c_BakeToken,
 			c_WantedTableChunks,
 			c_What);
 
@@ -301,7 +300,7 @@ namespace assetlib
 			fileSystem,
 			path,
 			magic::c_BVat,
-			c_BVatBakeToken,
+			AssetCodec<BVat>::c_BakeToken,
 			c_WantedTableChunks,
 			c_What);
 
@@ -315,7 +314,7 @@ namespace assetlib
 			cache::readCacheChunksFromFile(
 				path,
 				magic::c_BVat,
-				c_BVatBakeToken,
+				AssetCodec<BVat>::c_BakeToken,
 				c_WantedRefChunks,
 				c_What));
 	}
@@ -328,7 +327,7 @@ namespace assetlib
 				fileSystem,
 				path,
 				magic::c_BVat,
-				c_BVatBakeToken,
+				AssetCodec<BVat>::c_BakeToken,
 				c_WantedRefChunks,
 				c_What));
 	}

@@ -2,7 +2,6 @@
 #include <assetlib_structs/BEnv.h>
 #include <assetlib_structs/magic.h>
 
-#include "bake_tokens.h"
 #include "cache_io.h"
 #include "fs_util.h"
 
@@ -58,13 +57,17 @@ namespace assetlib
 			source.key   = lighting.prefilter.source + c_KeySeparator + lighting.irradiance.source;
 			source.stamp = lighting.prefilter.stamp;
 		}
-		return writer.Finish(magic::c_BEnvL, c_BEnvLightingBakeToken, source);
+		return writer.Finish(magic::c_BEnvL, AssetCodec<BEnvLighting>::c_BakeToken, source);
 	}
 
 	BEnvLighting
 	deserializeEnvLighting(std::span<const std::byte> bytes)
 	{
-		const cache::Reader reader(bytes, magic::c_BEnvL, c_BEnvLightingBakeToken, c_What);
+		const cache::Reader reader(
+			bytes,
+			magic::c_BEnvL,
+			AssetCodec<BEnvLighting>::c_BakeToken,
+			c_What);
 
 		BEnvLighting lighting;
 		const auto   name            = reader.Read<char>(ChunkId::kName);
