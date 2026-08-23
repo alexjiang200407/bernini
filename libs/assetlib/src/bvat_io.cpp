@@ -240,18 +240,6 @@ namespace assetlib
 		return vat;
 	}
 
-	void
-	saveVat(const BVat& vat, const std::filesystem::path& path)
-	{
-		writeFileBytes(path, serializeVat(vat), "bvat");
-	}
-
-	BVat
-	loadVat(const std::filesystem::path& path)
-	{
-		return deserializeVat(core::file::read_file_bytes(path.string()));
-	}
-
 	namespace
 	{
 		constexpr std::array<uint32_t, 7> c_WantedTableChunks = {

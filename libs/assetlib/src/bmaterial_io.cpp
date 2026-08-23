@@ -293,19 +293,6 @@ namespace assetlib
 			std::string_view(reinterpret_cast<const char*>(bytes.data()), bytes.size()));
 	}
 
-	void
-	saveMaterial(const BMaterial& material, const std::filesystem::path& path)
-	{
-		writeFileBytes(path, serializeMaterial(material), "bmaterial");
-	}
-
-	BMaterial
-	loadMaterial(const std::filesystem::path& path)
-	{
-		const auto bytes = core::file::read_file_bytes(path.string());
-		return deserializeMaterial(bytes);
-	}
-
 	namespace
 	{
 		// What a path hashed to, and the size and mtime it had when it did. mtime is not part of the

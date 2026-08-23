@@ -8,6 +8,7 @@
 
 #include <QTemporaryDir>
 
+#include "StoreAt.h"
 #include <catch2/catch_approx.hpp>
 
 // The transport glue behind the panel, pinned without a window: which mesh entries play as VAT
@@ -125,7 +126,7 @@ TEST_CASE("Only a material a bake would change is offered for baking", "[animati
 	std::filesystem::create_directories(root / "Materials");
 
 	const auto write = [&root](const char* name, const assetlib::BMaterial& material) {
-		assetlib::saveMaterial(material, root / "Materials" / name);
+		SaveAt(material, root / "Materials" / name);
 		return std::string("Materials/") + name;
 	};
 

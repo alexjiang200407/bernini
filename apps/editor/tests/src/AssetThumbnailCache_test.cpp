@@ -18,6 +18,7 @@
 #include <core/settings/Settings.h>
 #include <gamelib/AssetManager.h>
 
+#include "StoreAt.h"
 #include <catch2/catch_test_macros.hpp>
 
 using editor::test::WaitFor;
@@ -148,7 +149,7 @@ namespace
 		material.pbr.alphaMode       = alphaMode;
 
 		const std::string relative = "Materials/" + name + ".bmaterial";
-		assetlib::saveMaterial(material, std::filesystem::path(c_DataRoot) / relative);
+		SaveAt(material, std::filesystem::path(c_DataRoot) / relative);
 		return relative;
 	}
 

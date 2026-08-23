@@ -20,23 +20,6 @@ namespace assetlib
 	deserializeMaterial(std::span<const std::byte> bytes);
 
 	/**
-	 * Writes `material` to `path` as a `.bmaterial` file. Texture references are file paths (relative
-	 * to the data directory)
-	 *
-	 * @throws std::runtime_error if the file cannot be written.
-	 */
-	void
-	saveMaterial(const BMaterial& material, const std::filesystem::path& path);
-
-	/**
-	 * Loads a `.bmaterial` file previously written by saveMaterial.
-	 *
-	 * @throws std::runtime_error if the file cannot be read or is malformed.
-	 */
-	[[nodiscard]] BMaterial
-	loadMaterial(const std::filesystem::path& path);
-
-	/**
 	 * The size + content hash of `path`, as the bake records it. A file that does not exist (or
 	 * cannot be read) yields a zeroed stamp, which never compares equal to a real one -- so a
 	 * deleted source reads as stale rather than as unchanged.

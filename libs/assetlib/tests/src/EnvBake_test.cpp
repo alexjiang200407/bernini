@@ -325,11 +325,11 @@ TEST_CASE(
 
 	BSky sky = RoutedSky(root);
 	StoreAt(root.path).BakeSky(sky);
-	saveSky(sky, root.path / "forest.bsky");
+	StoreAt(root.path).Save(sky, "forest.bsky");
 
 	BEnvLighting lighting = RoutedLighting(root);
 	StoreAt(root.path).BakeEnvLighting(lighting);
-	saveEnvLighting(lighting, root.path / "forest.benvl");
+	StoreAt(root.path).Save(lighting, "forest.benvl");
 
 	// An env-named map nothing references: the leftover of a re-bake whose route changed.
 	const auto orphan = root.path / "Textures" / "sky_00000000deadbeef.ktx2";
@@ -372,7 +372,7 @@ TEST_CASE("pack re-bakes a sky whose routed source moved", "[envbake][pack]")
 
 	BSky sky = RoutedSky(root);
 	StoreAt(root.path).BakeSky(sky);
-	saveSky(sky, root.path / "Sky/test.bsky");
+	StoreAt(root.path).Save(sky, "Sky/test.bsky");
 
 	root.AddSource("sky_src.ktx2", 8, 2.0f);
 
@@ -401,7 +401,7 @@ TEST_CASE("a sky that never recorded its source packs verbatim", "[envbake][pack
 	StoreAt(root.path).BakeSky(sky);
 	sky.sky.source.clear();
 	sky.sky.stamp = SourceStamp{};
-	saveSky(sky, root.path / "Sky/frozen.bsky");
+	StoreAt(root.path).Save(sky, "Sky/frozen.bsky");
 
 	const PackReport report =
 		packProject(AssetStore(root.path), PackDesc{ root.path / "Data.bpak" });

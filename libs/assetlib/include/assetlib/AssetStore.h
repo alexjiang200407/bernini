@@ -158,7 +158,9 @@ namespace assetlib
 		void
 		Save(const T& value, std::string_view path) const
 		{
-			WriteBytes(path, AssetCodec<T>::Serialize(value), AssetCodec<T>::c_Extension);
+			// The extension without its dot is the container's name, which is what every message
+			// this library throws is prefixed with -- "bmaterial: ...", not ".bmaterial: ...".
+			WriteBytes(path, AssetCodec<T>::Serialize(value), AssetCodec<T>::c_Extension.substr(1));
 		}
 
 		// --- Bakes ---------------------------------------------------------------------------

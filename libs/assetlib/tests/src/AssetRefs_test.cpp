@@ -10,6 +10,7 @@
 #include <assetlib_structs/BMaterial.h>
 #include <assetlib_structs/Skeleton.h>
 
+#include "MountAt.h"
 #include "RefsSandbox.h"
 #include "bmesh_texture.h"
 #include "mounted_io.h"
@@ -44,7 +45,7 @@ TEST_CASE("loadMeshRefs reads what a full load would, without the geometry", "[a
 
 	const fs::path file = root.path / "Meshes" / "mesh.bmesh";
 
-	CHECK(loadMeshRefs(file).materials == load(file).materials);
+	CHECK(loadMeshRefs(file).materials == LoadAt<BMesh>(file).materials);
 	CHECK(loadMeshRefs(file).materials == materials);
 	CHECK(loadMeshRefs(file).skeleton == "Meshes/rig.bskel");
 
@@ -175,13 +176,13 @@ TEST_CASE("A skeleton cannot be deleted while a mesh skins to it", "[assetrefs][
 	          glm::mat4(1.0f),
 	          c_InvalidIndex,
 	          0 });
-	saveSkeleton(skeleton, root.path / "Animations" / "rig.bskel");
+	StoreAt(root.path).Save(skeleton, "Animations/rig.bskel");
 
 	AnimationSet animations;
 	animations.boneCount         = 1;
 	animations.skeleton          = "Animations/rig.bskel";
 	animations.skeletonSignature = skeletonSignature(skeleton);
-	saveAnimations(animations, root.path / "Animations" / "walk.banim");
+	StoreAt(root.path).Save(animations, "Animations/walk.banim");
 
 	SaveMesh(root, "mesh.bmesh", {}, "Animations/rig.bskel");
 
@@ -278,7 +279,7 @@ TEST_CASE("A material routing one texture into two channels is one blocker", "[a
 	BMaterial material;
 	material.pbr.routes[channelIndex(PbrChannel::kRoughness)] = { "textures_src/orm.ktx2", 1 };
 	material.pbr.routes[channelIndex(PbrChannel::kMetallic)]  = { "textures_src/orm.ktx2", 2 };
-	saveMaterial(material, root.path / "Materials" / "mat.bmaterial");
+	StoreAt(root.path).Save(material, "Materials/mat.bmaterial");
 
 	const AssetRefGraph graph = root.Scan();
 

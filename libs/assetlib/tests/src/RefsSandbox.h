@@ -78,7 +78,7 @@ namespace assetlib::test
 		material.pbr.routes[0] = { source, 0 };
 
 		StoreAt(root.path).BakeMaterial(material);
-		saveMaterial(material, root.path / "Materials" / name);
+		StoreAt(root.path).Save(material, std::string("Materials/") + name);
 		return material;
 	}
 
@@ -121,7 +121,7 @@ namespace assetlib::test
 		const std::vector<std::string>& materials,
 		const std::string&              skeleton = {})
 	{
-		save(MakeMesh(materials, skeleton), root.path / "Meshes" / name);
+		SaveAt(MakeMesh(materials, skeleton), root.path / "Meshes" / name);
 	}
 
 	/** The referrers of `asset`, as plain paths, so a test can compare against what it wrote. */
@@ -171,7 +171,7 @@ namespace assetlib::test
 		sky.sky.source = e.skySource;
 		sky.sky.baked  = e.skyBaked;
 		sky.sky.stamp  = current;
-		saveSky(sky, root.path / e.sky);
+		StoreAt(root.path).Save(sky, e.sky);
 
 		BEnvLighting lighting;
 		lighting.name              = "forest";
@@ -181,13 +181,13 @@ namespace assetlib::test
 		lighting.irradiance.source = e.skySource;
 		lighting.irradiance.baked  = e.irradiance;
 		lighting.irradiance.stamp  = current;
-		saveEnvLighting(lighting, root.path / e.lighting);
+		StoreAt(root.path).Save(lighting, e.lighting);
 
 		BEnv env;
 		env.name     = "forest";
 		env.sky      = e.sky;
 		env.lighting = e.lighting;
-		saveEnv(env, root.path / e.env);
+		StoreAt(root.path).Save(env, e.env);
 
 		return e;
 	}

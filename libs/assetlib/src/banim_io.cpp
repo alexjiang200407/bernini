@@ -110,18 +110,6 @@ namespace assetlib
 		return animations;
 	}
 
-	void
-	saveAnimations(const AnimationSet& animations, const std::filesystem::path& path)
-	{
-		writeFileBytes(path, serializeAnimations(animations), "banim");
-	}
-
-	AnimationSet
-	loadAnimations(const std::filesystem::path& path)
-	{
-		return deserializeAnimations(core::file::read_file_bytes(path.string()));
-	}
-
 	namespace
 	{
 		constexpr std::array<uint32_t, 1> c_WantedRefChunks = { { uint32_t(

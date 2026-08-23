@@ -29,24 +29,6 @@ namespace assetlib
 	[[nodiscard]] BMesh
 	deserialize(std::span<const std::byte> bytes);
 
-	/**
-	 * Writes `mesh` to `path` as a `.bmesh` container. Only the mesh itself is written; the textures
-	 * and materials it references are separate files (see writeTextures).
-	 *
-	 * @throws std::runtime_error if the file cannot be written, naming the OS's reason (an existing file
-	 *         that is read-only or held open by another process, a missing parent directory, ...).
-	 */
-	void
-	save(const BMesh& mesh, const std::filesystem::path& path);
-
-	/**
-	 * Loads a `.bmesh` container previously written by save.
-	 *
-	 * @throws std::runtime_error if the file cannot be read or is malformed.
-	 */
-	[[nodiscard]] BMesh
-	load(const std::filesystem::path& path);
-
 	/** Every asset a `.bmesh` names. See loadMeshRefs. */
 	struct MeshRefs
 	{

@@ -7,6 +7,8 @@
 #include <assetlib_structs/BEnv.h>
 
 #include "mounted_io.h"
+#include <assetlib/AssetCodec.h>
+#include <core/file/file.h>
 
 namespace assetlib
 {
@@ -24,7 +26,10 @@ namespace assetlib
 		const std::filesystem::path&   benvPath,
 		const core::file::IFileSystem& fileSystem)
 	{
-		const BEnv env = loadEnv(benvPath);
+		// A host path by contract: resolveEnvironment takes the `.benv` where it sits and keys
+		// only the chain below it. See AssetStore::ResolveEnvironment.
+		const BEnv env =
+			AssetCodec<BEnv>::Deserialize(core::file::read_file_bytes(benvPath.string()));
 
 		ResolvedEnvironment resolved;
 		resolved.skyRotationY = env.skyRotationY;

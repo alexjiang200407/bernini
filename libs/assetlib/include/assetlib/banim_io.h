@@ -22,16 +22,6 @@ namespace assetlib
 	deserializeAnimations(std::span<const std::byte> bytes);
 
 	/**
-	 * @throws std::runtime_error if the file cannot be written, naming the OS's reason.
-	 */
-	void
-	saveAnimations(const AnimationSet& animations, const std::filesystem::path& path);
-
-	/** @throws std::runtime_error if the file cannot be read or is malformed. */
-	[[nodiscard]] AnimationSet
-	loadAnimations(const std::filesystem::path& path);
-
-	/**
 	 * The skeleton path `path` names, read without its samples: the header, the chunk table and the
 	 * reference chunk alone. A whole-project reference scan comes through here -- the samples are
 	 * megabytes and the path is a few dozen bytes.

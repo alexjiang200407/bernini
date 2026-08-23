@@ -287,7 +287,7 @@ TEST_CASE("A project reads and writes the loose tree, archive or not", "[project
 	auto material                 = assetlib::BMaterial();
 	material.name                 = "skin";
 	material.pbr.baseColorTexture = "Textures/skin.ktx2";
-	assetlib::saveMaterial(material, created.GetDataDirectory() / "Materials/skin.bmaterial");
+	created.GetStore().Save(material, "Materials/skin.bmaterial");
 
 	created.ReloadStore();
 

@@ -1,5 +1,6 @@
 #include <assetlib/asset_import.h>
 
+#include <assetlib/AssetStore.h>
 #include <assetlib_structs/BMesh.h>
 
 namespace
@@ -28,10 +29,16 @@ TEST_CASE("A mesh import aimed at a new subfolder creates it", "[importedmesh]")
 	const TempTree root{ fs::temp_directory_path() /
 		                 ("bernini_mesh_test_" +
 		                  std::to_string(reinterpret_cast<uintptr_t>(&tag))) };
+
+	// The data root itself, which a real project always has -- Project::Create scaffolds it, and
+	// AssetStore refuses one that is not there. What this case is about is the *subfolder*.
+	fs::create_directories(root.path);
+
 	const fs::path bmeshPath = root.path / "Meshes" / "animals" / "unit.bmesh";
 
 	const assetlib::BMesh mesh;
-	assetlib::writeImportedMesh(mesh, bmeshPath);
+	// The store's own root, so the key is what the import writes and the path is what it lands at.
+	assetlib::writeImportedMesh(assetlib::AssetStore(root.path), mesh, "Meshes/animals/unit.bmesh");
 
 	CHECK(fs::exists(bmeshPath));
 }

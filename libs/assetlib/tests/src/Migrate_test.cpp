@@ -17,6 +17,7 @@
 
 #include <core/file/file.h>
 
+#include "MountAt.h"
 #include <catch2/matchers/catch_matchers_string.hpp>
 
 using namespace assetlib;
@@ -152,8 +153,8 @@ TEST_CASE("migrate regenerates a stale group on disk, once", "[migrate][regen]")
 		CHECK(first.Count(MigratedFile::Outcome::kFailed) == 0);
 
 		// Written current: the loads that refused the tampered files read them plainly now.
-		CHECK(load(meshPath).source.key == "meshes_src/unit.glb");
-		CHECK_FALSE(loadAnimations(banimPath).clips.empty());
+		CHECK(LoadAt<BMesh>(meshPath).source.key == "meshes_src/unit.glb");
+		CHECK_FALSE(LoadAt<AnimationSet>(banimPath).clips.empty());
 
 		const auto second = migrateProject(project.root, false);
 		CHECK(second.Count(MigratedFile::Outcome::kRewritten) == 0);
@@ -189,7 +190,7 @@ TEST_CASE("a rebind reaches disk through migrate without a regeneration", "[migr
 	CHECK(report.Count(MigratedFile::Outcome::kRewritten) == 1);
 	CHECK(report.Count(MigratedFile::Outcome::kFailed) == 0);
 
-	const BMesh mesh = load(project.root / "Meshes/unit.bmesh");
+	const BMesh mesh = StoreAt(project.root).Load<BMesh>("Meshes/unit.bmesh");
 	REQUIRE(mesh.materials.size() == 1);
 	CHECK(mesh.materials[0] == "Materials/blue.bmaterial");
 }

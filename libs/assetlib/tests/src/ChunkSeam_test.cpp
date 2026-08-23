@@ -8,6 +8,7 @@
 #include <core/file/LooseFileSystem.h>
 
 #include "CountingFileSystem.h"
+#include "MountAt.h"
 #include "mounted_io.h"
 
 using namespace assetlib;
@@ -113,9 +114,9 @@ namespace
 	void
 	Stage(const fs::path& root)
 	{
-		save(MakeMesh(), root / "Meshes/kirk.bmesh");
-		saveSkeleton(MakeSkeleton(), root / "Skeletons/rig.bskel");
-		saveAnimations(MakeAnimations(), root / "Animations/idle.banim");
+		SaveAt(MakeMesh(), root / "Meshes/kirk.bmesh");
+		SaveAt(MakeSkeleton(), root / "Skeletons/rig.bskel");
+		SaveAt(MakeAnimations(), root / "Animations/idle.banim");
 
 		const core::file::LooseFileSystem loose(root);
 
@@ -136,7 +137,7 @@ TEST_CASE("a chunked container loads the same from a directory and from an archi
 
 	SECTION(".bmesh")
 	{
-		const BMesh direct = load(scratch.path / "Meshes/kirk.bmesh");
+		const BMesh direct = StoreAt(scratch.path).Load<BMesh>("Meshes/kirk.bmesh");
 
 		for (const core::file::IFileSystem* mount :
 		     { static_cast<const core::file::IFileSystem*>(&loose),
@@ -169,7 +170,7 @@ TEST_CASE("a chunked container loads the same from a directory and from an archi
 
 	SECTION(".bskel")
 	{
-		const Skeleton direct = loadSkeleton(scratch.path / "Skeletons/rig.bskel");
+		const Skeleton direct = StoreAt(scratch.path).Load<Skeleton>("Skeletons/rig.bskel");
 
 		CHECK(
 			serializeSkeleton(load<Skeleton>(loose, "Skeletons/rig.bskel")) ==
@@ -181,7 +182,8 @@ TEST_CASE("a chunked container loads the same from a directory and from an archi
 
 	SECTION(".banim")
 	{
-		const AnimationSet direct = loadAnimations(scratch.path / "Animations/idle.banim");
+		const AnimationSet direct =
+			StoreAt(scratch.path).Load<AnimationSet>("Animations/idle.banim");
 
 		CHECK(
 			serializeAnimations(load<AnimationSet>(loose, "Animations/idle.banim")) ==

@@ -1,4 +1,5 @@
 #pragma once
+#include <assetlib/AssetStore.h>
 #include <assetlib/banim_io.h>
 #include <assetlib/bmaterial_io.h>
 #include <assetlib/bmesh_io.h>
@@ -68,7 +69,7 @@ namespace game::test
 			material.pbr.baseColorTexture = "Textures/white.ktx2";
 
 		fs::create_directories(path.parent_path());
-		assetlib::saveMaterial(material, path);
+		assetlib::AssetStore(path.parent_path()).Save(material, path.filename().generic_string());
 	}
 
 	/**
@@ -192,9 +193,10 @@ namespace game::test
 		fs::create_directories(dataRoot / "Meshes");
 		fs::create_directories(dataRoot / "Skeletons");
 		fs::create_directories(dataRoot / "Animations");
-		assetlib::save(mesh, dataRoot / "Meshes/rig.bmesh");
-		assetlib::saveSkeleton(skeleton, dataRoot / "Skeletons/rig.bskel");
-		assetlib::saveAnimations(animations, dataRoot / "Animations/rig.banim");
+		const assetlib::AssetStore store(dataRoot);
+		store.Save(mesh, "Meshes/rig.bmesh");
+		store.Save(skeleton, "Skeletons/rig.bskel");
+		store.Save(animations, "Animations/rig.banim");
 
 		WriteTexture(dataRoot / "Textures/white.ktx2");
 		WriteMaterial(dataRoot / "Materials/skin.bmaterial", looseMaterial);
@@ -212,7 +214,8 @@ namespace game::test
 		float            strideX,
 		uint32_t         frameCount)
 	{
-		const auto skeleton = assetlib::loadSkeleton(dataRoot / "Skeletons/rig.bskel");
+		const auto skeleton =
+			assetlib::AssetStore(dataRoot).Load<assetlib::Skeleton>("Skeletons/rig.bskel");
 
 		auto animations              = assetlib::AnimationSet();
 		animations.skeleton          = "Skeletons/rig.bskel";
@@ -235,6 +238,6 @@ namespace game::test
 			      glm::vec3(1.0f) });
 		}
 
-		assetlib::saveAnimations(animations, dataRoot / banimRel);
+		assetlib::AssetStore(dataRoot).Save(animations, banimRel.generic_string());
 	}
 }

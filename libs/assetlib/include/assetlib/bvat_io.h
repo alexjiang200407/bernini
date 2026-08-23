@@ -25,16 +25,6 @@ namespace assetlib
 	deserializeVat(std::span<const std::byte> bytes);
 
 	/**
-	 * @throws std::runtime_error if the file cannot be written, naming the OS's reason.
-	 */
-	void
-	saveVat(const BVat& vat, const std::filesystem::path& path);
-
-	/** @throws std::runtime_error if the file cannot be read or is malformed. */
-	[[nodiscard]] BVat
-	loadVat(const std::filesystem::path& path);
-
-	/**
 	 * Everything but the pixels: the header, the chunk table and the table chunks alone, leaving
 	 * `positionsKtx2` / `normalsKtx2` empty. The pixel chunks are the overwhelming bulk of the
 	 * file and are never read, so `describe` and any whole-project survey must come through here

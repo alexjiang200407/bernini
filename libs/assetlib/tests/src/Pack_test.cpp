@@ -45,7 +45,7 @@ namespace
 		bone.nameOffset  = skeleton.stringPool.add("root");
 		skeleton.bones   = { bone };
 		fs::create_directories(root.path / "Skeletons");
-		saveSkeleton(skeleton, root.path / "Skeletons/hero.bskel");
+		StoreAt(root.path).Save(skeleton, "Skeletons/hero.bskel");
 
 		const Environment environment = WriteEnvironment(root);
 
@@ -232,7 +232,7 @@ TEST_CASE("a material that draws loose is named, because the archive drops its s
 	// Routed, never baked: it draws from the authoring source that packing excludes.
 	BMaterial unbaked;
 	unbaked.pbr.routes[0] = { "textures_src/skin.ktx2", 0 };
-	saveMaterial(unbaked, root.path / "Materials/unbaked.bmaterial");
+	StoreAt(root.path).Save(unbaked, "Materials/unbaked.bmaterial");
 
 	// Baked: it draws the triplet, which packing carries.
 	BakeAndSave(root, "baked.bmaterial", "textures_src/skin.ktx2");
@@ -255,15 +255,15 @@ namespace
 		fs::create_directories(root.path / "Skeletons");
 		fs::create_directories(root.path / "Animations");
 
-		save(fixture.mesh, root.path / "Meshes/rig.bmesh");
-		saveSkeleton(fixture.skeleton, root.path / "Skeletons/rig.bskel");
-		saveAnimations(fixture.animations, root.path / "Animations/rig.banim");
+		StoreAt(root.path).Save(fixture.mesh, "Meshes/rig.bmesh");
+		StoreAt(root.path).Save(fixture.skeleton, "Skeletons/rig.bskel");
+		StoreAt(root.path).Save(fixture.animations, "Animations/rig.banim");
 
-		saveVat(
+		StoreAt(root.path).Save(
 			bakeVat(
 				AssetStore(root.path),
 				VatBakeDesc{ "Meshes/rig.bmesh", "Animations/rig.banim" }),
-			root.path / "Meshes/rig.bvat");
+			"Meshes/rig.bvat");
 	}
 }
 
@@ -292,7 +292,7 @@ TEST_CASE("pack re-bakes a stale .bvat, and leaves a current one alone", "[pack]
 		// equal length would not move it.
 		VatFixture edited;
 		edited.animations.stringPool.add("padding-so-the-size-moves");
-		saveAnimations(edited.animations, root.path / "Animations/rig.banim");
+		StoreAt(root.path).Save(edited.animations, "Animations/rig.banim");
 
 		REQUIRE(vatIsStale(loadVatTables(root.path / "Meshes/rig.bvat"), MountAt(root.path)));
 
@@ -331,7 +331,7 @@ TEST_CASE("pack fails when a stale .bvat cannot be re-baked", "[pack][vat]")
 
 	VatFixture edited;
 	edited.animations.stringPool.add("padding-so-the-size-moves");
-	saveAnimations(edited.animations, root.path / "Animations/rig.banim");
+	StoreAt(root.path).Save(edited.animations, "Animations/rig.banim");
 	fs::remove(root.path / "Skeletons/rig.bskel");
 
 	CHECK_THROWS_AS(
@@ -388,7 +388,7 @@ TEST_CASE("a packed .bvat answers fresh inside the archive it shipped in", "[pac
 	const AssetStore  store(root.path);
 	const std::string vatKey =
 		vatPathFor("Meshes/unit.bmesh", "Animations/unit.banim").generic_string();
-	saveVat(
+	SaveAt(
 		bakeVat(store, VatBakeDesc{ "Meshes/unit.bmesh", "Animations/unit.banim" }),
 		root.path / vatKey);
 

@@ -15,7 +15,9 @@
 #include <catch2/catch_approx.hpp>
 #include <catch2/matchers/catch_matchers_string.hpp>
 
+#include "MountAt.h"
 #include "SkinnedGltf.h"
+#include <assetlib/AssetStore.h>
 
 using namespace assetlib;
 using assetlib::test::SkinnedGltf;
@@ -389,17 +391,11 @@ TEST_CASE("Importing a skinned mesh writes the rig it names", "[gltf][skeleton][
 
 	BMesh baked = toBMesh(import);
 	static_cast<void>(generateTangents(baked));
-	writeImportedRig(
-		import,
-		baked,
-		outDir,
-		outDir / "rig.bskel",
-		outDir / "rig.banim",
-		true,
-		SourceRef{});
-	writeImportedMesh(baked, outDir / "rig.bmesh");
+	const AssetStore store(outDir);
+	writeImportedRig(store, import, baked, "rig.bskel", "rig.banim", true, SourceRef{});
+	writeImportedMesh(store, baked, "rig.bmesh");
 
-	const auto mesh = load(outDir / "rig.bmesh");
+	const auto mesh = StoreAt(outDir).Load<BMesh>("rig.bmesh");
 
 	// A mesh whose vertices carry joints and that names no skeleton has indices nothing can resolve,
 	// which is why the two are written together rather than the rig being an authoring choice.
@@ -407,10 +403,10 @@ TEST_CASE("Importing a skinned mesh writes the rig it names", "[gltf][skeleton][
 	CHECK(mesh.skeleton == "rig.bskel");
 	CHECK(loadMeshRefs(outDir / "rig.bmesh").skeleton == "rig.bskel");
 
-	const auto skeleton = loadSkeleton(outDir / mesh.skeleton);
+	const auto skeleton = StoreAt(outDir).Load<Skeleton>(mesh.skeleton);
 	REQUIRE(skeleton.bones.size() == 2);
 
-	const auto animations = loadAnimations(outDir / "rig.banim");
+	const auto animations = StoreAt(outDir).Load<AnimationSet>("rig.banim");
 	CHECK(animations.skeleton == "rig.bskel");
 	CHECK(animations.clips.size() == 2);
 	CHECK(animationsMatchSkeleton(animations, skeleton));
@@ -486,7 +482,7 @@ TEST_CASE("A mesh that names no skeleton loads as a static mesh", "[bmesh][io]")
 	const fs::path bmesh = "assets/Data/Meshes/apples.bmesh";
 	REQUIRE(fs::exists(bmesh));
 
-	const auto mesh = load(bmesh);
+	const auto mesh = LoadAt<BMesh>(bmesh);
 	CHECK_FALSE(mesh.materials.empty());
 	CHECK(mesh.skeleton.empty());
 	CHECK_FALSE(isSkinned(mesh));

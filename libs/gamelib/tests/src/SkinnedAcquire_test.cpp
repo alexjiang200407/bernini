@@ -36,12 +36,13 @@ namespace
 	void
 	StaleTheClips(const std::filesystem::path& dataRoot)
 	{
-		auto animations = assetlib::loadAnimations(dataRoot / "Animations/rig.banim");
+		auto animations =
+			assetlib::AssetStore(dataRoot).Load<assetlib::AnimationSet>("Animations/rig.banim");
 
 		// What a reordered rig looks like from the clips' side: same bone count, different identity.
 		animations.skeletonSignature ^= 0x9E3779B97F4A7C15ull;
 
-		assetlib::saveAnimations(animations, dataRoot / "Animations/rig.banim");
+		assetlib::AssetStore(dataRoot).Save(animations, "Animations/rig.banim");
 	}
 }
 
@@ -230,7 +231,7 @@ TEST_CASE(
 	                        glm::vec3(1.0f, -1.0f, -1.0f),
 	                        glm::vec3(-1.0f, 1.0f, 1.0f),
 	                        0 });
-	assetlib::saveAnimations(animations, root.path / "Animations/rig.banim");
+	assetlib::AssetStore(root.path).Save(animations, "Animations/rig.banim");
 
 	auto gfx = bgl::CreateGraphics(HeadlessOptions());
 	REQUIRE(gfx != nullptr);

@@ -7,6 +7,7 @@
 #include <core/file/LooseFileSystem.h>
 
 #include "CountingFileSystem.h"
+#include "MountAt.h"
 #include "RefsSandbox.h"
 #include "ref_paths.h"
 
@@ -272,7 +273,7 @@ TEST_CASE("scanning a project reads references and not geometry", "[refseam]")
 	BMesh heavy = MakeMesh({ "Materials/skin.bmaterial" });
 	heavy.vertexData.resize(512u * 1024u, std::byte{ 0x7 });
 	heavy.indexData.resize(128u * 1024u, std::byte{ 0x3 });
-	save(heavy, root.path / "Meshes/heavy.bmesh");
+	StoreAt(root.path).Save(heavy, "Meshes/heavy.bmesh");
 
 	const uint64_t meshBytes = std::filesystem::file_size(root.path / "Meshes/heavy.bmesh");
 	REQUIRE(meshBytes > 512u * 1024u);

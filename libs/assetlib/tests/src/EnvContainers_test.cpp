@@ -6,6 +6,7 @@
 
 #include <core/io/ByteWriter.h>
 
+#include "MountAt.h"
 #include "mounted_io.h"
 #include <catch2/catch_approx.hpp>
 #include <catch2/matchers/catch_matchers_string.hpp>
@@ -40,10 +41,17 @@ namespace
 		return lighting;
 	}
 
+	/** The scratch root these round trips write into -- per process since #470. */
 	std::filesystem::path
-	TempFile(const char* name)
+	TempRoot()
 	{
-		return std::filesystem::temp_directory_path() / (std::string("bernini_") + name);
+		return std::filesystem::temp_directory_path();
+	}
+
+	std::string
+	TempKey(const char* name)
+	{
+		return std::string("bernini_") + name;
 	}
 }
 
@@ -85,14 +93,14 @@ TEST_CASE("an unrouted, unbaked environment asset round-trips as empty", "[bsky]
 
 TEST_CASE("the environment containers round-trip through a file", "[bsky][benvl][io]")
 {
-	const auto skyPath      = TempFile("env_container.bsky");
-	const auto lightingPath = TempFile("env_container.benvl");
+	const auto skyPath      = TempKey("env_container.bsky");
+	const auto lightingPath = TempKey("env_container.benvl");
 
-	saveSky(SampleSky(), skyPath);
-	saveEnvLighting(SampleLighting(), lightingPath);
+	StoreAt(TempRoot()).Save(SampleSky(), skyPath);
+	StoreAt(TempRoot()).Save(SampleLighting(), lightingPath);
 
-	CHECK(loadSky(skyPath).sky == SampleSky().sky);
-	CHECK(loadEnvLighting(lightingPath).exposure == Catch::Approx(0.375f));
+	CHECK(StoreAt(TempRoot()).Load<BSky>(skyPath).sky == SampleSky().sky);
+	CHECK(StoreAt(TempRoot()).Load<BEnvLighting>(lightingPath).exposure == Catch::Approx(0.375f));
 
 	std::filesystem::remove(skyPath);
 	std::filesystem::remove(lightingPath);
@@ -156,15 +164,15 @@ TEST_CASE("a BEnv survives a serialize round-trip", "[benv][io]")
 
 TEST_CASE("a BEnv round-trips through a file", "[benv][io]")
 {
-	const auto path = TempFile("env_container.benv");
+	const auto path = TempKey("env_container.benv");
 
 	BEnv env;
 	env.name     = "forest";
 	env.sky      = "Sky/forest.bsky";
 	env.lighting = "EnvLighting/forest.benvl";
-	saveEnv(env, path);
+	StoreAt(TempRoot()).Save(env, path);
 
-	const BEnv restored = loadEnv(path);
+	const BEnv restored = StoreAt(TempRoot()).Load<BEnv>(path);
 	CHECK(restored.sky == env.sky);
 	CHECK(restored.lighting == env.lighting);
 

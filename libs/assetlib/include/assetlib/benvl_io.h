@@ -20,23 +20,6 @@ namespace assetlib
 	deserializeEnvLighting(std::span<const std::byte> bytes);
 
 	/**
-	 * Writes `lighting` to `path` as a `.benvl` file. Its texture references are paths relative to the
-	 * data directory, not to this file.
-	 *
-	 * @throws std::runtime_error if the file cannot be written.
-	 */
-	void
-	saveEnvLighting(const BEnvLighting& lighting, const std::filesystem::path& path);
-
-	/**
-	 * Loads a `.benvl` file previously written by saveEnvLighting.
-	 *
-	 * @throws std::runtime_error if the file cannot be read or is malformed.
-	 */
-	[[nodiscard]] BEnvLighting
-	loadEnvLighting(const std::filesystem::path& path);
-
-	/**
 	 * The codec for `c_EnvLightingExtension` -- a cache entry. See AssetCodec.h.
 	 *
 	 * Declared here and defined in benvl_io.cpp, because `Deserialize` returns by value and this

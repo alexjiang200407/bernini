@@ -1,6 +1,7 @@
 #include "Windows/AnimationEditor/animation_bindings.h"
 #include <assetlib/Project.h>
 
+#include "StoreAt.h"
 #include <assetlib/banim_io.h>
 #include <assetlib/bmesh_io.h>
 #include <assetlib_structs/Animation.h>
@@ -53,7 +54,7 @@ namespace
 		auto mesh     = assetlib::BMesh();
 		mesh.skeleton = std::string(skeleton);
 		fs::create_directories((dataRoot / rel).parent_path());
-		assetlib::save(mesh, dataRoot / rel);
+		SaveAt(mesh, dataRoot / rel);
 	}
 
 	// A minimal valid clip set recording `skeleton` as its rig.
@@ -77,7 +78,7 @@ namespace
 				{ glm::vec3(0.0f), glm::quat(1.0f, 0.0f, 0.0f, 0.0f), glm::vec3(1.0f) });
 
 		fs::create_directories((dataRoot / rel).parent_path());
-		assetlib::saveAnimations(animations, dataRoot / rel);
+		SaveAt(animations, dataRoot / rel);
 	}
 }
 

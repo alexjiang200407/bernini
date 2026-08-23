@@ -73,16 +73,18 @@ namespace editor
 		assetlib::BMaterial material =
 			CompileMaterial(model, QFileInfo(materialPath).completeBaseName(), dataRoot);
 
-		const auto file = std::filesystem::path(materialPath.toStdWString());
+		const assetlib::AssetStore store(dataRoot);
+		const auto                 file = std::filesystem::path(materialPath.toStdWString());
 		if (std::filesystem::exists(file))
 		{
 			try
 			{
-				const assetlib::BMaterial existing = assetlib::loadMaterial(file);
-				material.pbr.baseColorTexture      = existing.pbr.baseColorTexture;
-				material.pbr.normalTexture         = existing.pbr.normalTexture;
-				material.pbr.ormTexture            = existing.pbr.ormTexture;
-				material.pbr.routeStamps           = existing.pbr.routeStamps;
+				const assetlib::BMaterial existing =
+					store.Load<assetlib::BMaterial>(store.KeyFor(file));
+				material.pbr.baseColorTexture = existing.pbr.baseColorTexture;
+				material.pbr.normalTexture    = existing.pbr.normalTexture;
+				material.pbr.ormTexture       = existing.pbr.ormTexture;
+				material.pbr.routeStamps      = existing.pbr.routeStamps;
 
 				// Document keys this build does not know ride through a save untouched -- a
 				// sibling branch's field must survive this editor's round-trip.
@@ -185,11 +187,11 @@ namespace editor
 				static_cast<int>(materials.size()),
 				QStringLiteral("Baking %1...").arg(QFileInfo(relative).fileName()));
 
-			const std::filesystem::path file = dataRoot / relative.toStdWString();
+			const std::string key = relative.toStdString();
 
-			assetlib::BMaterial material = assetlib::loadMaterial(file);
+			assetlib::BMaterial material = store.Load<assetlib::BMaterial>(key);
 			store.BakeMaterial(material, progress.Cancellation());
-			assetlib::saveMaterial(material, file);
+			store.Save(material, key);
 
 			++done;
 		}
@@ -238,7 +240,10 @@ namespace editor
 				result               = assetlib::generateTangents(mesh);
 
 				if (result.generated > 0)
-					assetlib::save(mesh, meshPath);
+				{
+					const assetlib::AssetStore store(dataRoot);
+					store.Save(mesh, store.KeyFor(meshPath));
+				}
 			});
 
 		if (!done.Completed())
