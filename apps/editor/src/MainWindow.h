@@ -48,6 +48,14 @@ private:
 	void
 	CleanUnusedTextures();
 
+	/**
+	 * Offers to re-extract the textures of every source changed since it was imported, and does
+	 * it. On project open, because that is when a re-export first reaches the editor. An offer
+	 * rather than a step: it costs an import's worth of supercompression.
+	 */
+	void
+	OfferTextureRefresh();
+
 	void
 	SetActiveProject(assetlib::Project project);
 

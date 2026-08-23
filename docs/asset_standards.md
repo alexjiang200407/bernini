@@ -80,12 +80,18 @@ must feed data that matches.
 
 There are **two producers of textures**, and they compress differently:
 
-* **Mesh import** (`writeTextures` in
+* **Mesh import** (`AssetStore::WriteTextures` in
   [libs/assetlib/src/bmesh_io.cpp](libs/assetlib/src/bmesh_io.cpp)) writes one Basis-UASTC `.ktx2`
   per image, named after that image (`importedTextureFileNames`), which `loadKTX2` transcodes to BC7
   on every load. Small on disk, uniform, and no per-map role
   needed — only the sRGB / linear split, which it takes from the glTF's materials. These are the
   *source* textures a material routes at; they land under `textures_src/` in an editor project.
+  Naming them after the image rather than by index is what lets a re-export of the source be
+  re-extracted over them without changing what any route means —
+  `AssetStore::RefreshImportedTextures`, reached from `assetlib_cli migrate` and from the editor
+  when a project with a moved source opens. **Name the images in the DCC**: one the source leaves
+  unnamed falls back to `tex<index>`, which an inserted image still shifts. See
+  [Asset Containers](asset_containers.md) § The textures a mesh import extracts.
 * **Material bake** (`bakeMaterial` in
   [libs/assetlib/src/material_bake.cpp](libs/assetlib/src/material_bake.cpp)) composites the material
   editor's routed source textures into the triplet and writes each map into `<Data>/Textures/`
@@ -206,7 +212,7 @@ base colour is written into an sRGB map regardless of its own source's tag — k
 source texture.
 
 * **What the bake emits**: [libs/assetlib/src/bmesh_texture.cpp](libs/assetlib/src/bmesh_texture.cpp)
-  (`rgba8ToImage`) builds an RGBA8 mip chain with `stb_image_resize`; `writeTextures`
+  (`rgba8ToImage`) builds an RGBA8 mip chain with `stb_image_resize`; `AssetStore::WriteTextures`
   ([libs/assetlib/src/bmesh_io.cpp](libs/assetlib/src/bmesh_io.cpp)) tags **base-color maps as sRGB**
   (from the material's `baseColorTexture` usage) and everything else `_UNORM`, then `writeKTX2`
   ([libs/assetlib/src/image_io.cpp](libs/assetlib/src/image_io.cpp)) **Basis-UASTC-compresses** LDR
@@ -531,7 +537,7 @@ the `.bskel`, the `.banim`, and one per PBR material. Without them every output 
 name, so two imports that belonged in one folder collided and each had to be given a subfolder to keep
 them apart; naming the files is what lets `animals/coyote/` hold both skins rather than
 `animals/coyote/skin1/` and `animals/coyote/skin2/`. Textures are the exception and stay folder-only:
-`writeTextures` names its output after the image each came from, so an import can neither name them
+`AssetStore::WriteTextures` names its output after the image each came from, so an import can neither name them
 nor -- since two sources may name an image alike -- share their folder with another. The sections start **collapsed**, so a dialog nobody touches is the
 folder-per-category one it has always been, and every name starts at the source's own — an untouched
 import lands exactly where it used to.
@@ -598,7 +604,7 @@ a clip set always deletes and leaves its skeleton behind, exactly as a mesh leav
 flowchart TD
     GLTF[".glb"] -- "loadFromGltf" --> IMP["BMeshImport (inline mats + decoded textures + rig)"]
     IMP -- "toBMesh / bake" --> BMESH["&lt;name&gt;.bmesh (geometry + meshlets, submeshes unassigned)"]
-    IMP -- "bake / writeTextures (writeKTX2)" --> TEX[".ktx2 (per map)"]
+    IMP -- "bake / WriteTextures (writeKTX2)" --> TEX[".ktx2 (per map)"]
     IMP -- "bake (skinned sources only)" --> SKEL["&lt;name&gt;.bskel (sorted bones)"]
     IMP -- "bake (skinned sources only)" --> ANIM["&lt;name&gt;.banim (clips resampled to 30 Hz)"]
     SKEL -. "BMesh::skeleton" .-> BMESH

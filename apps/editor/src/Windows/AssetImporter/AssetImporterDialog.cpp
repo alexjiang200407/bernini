@@ -131,7 +131,7 @@ AssetImporterDialog::AssetImporterDialog(
 	m_ImportTextures->setToolTip("Extract the mesh's textures into the project.");
 	contents->addWidget(m_ImportTextures);
 
-	// No file rows: writeTextures names its output after the source's images, so there is nothing
+	// No file rows: WriteTextures names its output after the source's images, so there is nothing
 	// here to name.
 	m_TextureSection = addSection(
 		"Texture folder:",

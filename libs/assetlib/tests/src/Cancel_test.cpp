@@ -29,7 +29,7 @@ namespace
 		~ScratchDir() { std::filesystem::remove_all(path); }
 	};
 
-	// An import carrying `count` tiny textures and nothing else -- enough for writeTextures, and small
+	// An import carrying `count` tiny textures and nothing else -- enough for WriteTextures, and small
 	// enough that the Basis encode of each is quick.
 	imp::BMeshImport
 	ImportWithTextures(size_t count)

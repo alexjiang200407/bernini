@@ -27,6 +27,7 @@
 #include <QActionGroup>
 #include <QMenuBar>
 #include <assetlib/AssetStore.h>
+#include <assetlib/asset_import.h>
 #include <assetlib/texture_prune.h>
 #include <bgl/IGraphics.h>
 #include <core/err/util.h>
@@ -239,9 +240,7 @@ MainWindow::Build()
 	m_ContentExplorerDock->setFeatures(
 		QDockWidget::DockWidgetMovable | QDockWidget::DockWidgetClosable);
 
-	// The explorer refuses to delete what a panel still holds: the materials the Material Editor has
-	// open and the mesh it is previewing them on, and the mesh and clip files the Animation panel is
-	// offering. Asked at each deletion, so there is no copy of the answer to go stale.
+	// Asked at each deletion, so there is no copy of the answer to go stale.
 	m_ContentExplorer = new ContentExplorerWindow(m_ContentExplorerDock, [this] {
 		auto held = m_MaterialEditor->HeldOpenPaths();
 		held += m_AnimationEditor->HeldOpenPaths();
@@ -515,6 +514,127 @@ MainWindow::OpenProjectAt(const std::filesystem::path& path)
 }
 
 void
+MainWindow::OfferTextureRefresh()
+{
+	if (!m_Project)
+		return;
+
+	auto stale = std::vector<std::string>();
+
+	// File I/O, so it belongs on the worker like the prune's scan. No cancel token, so the screen
+	// offers no button that would not work.
+	const background::TaskResult scanned =
+		background::RunWithLoadingScreen(this, "Open Project", [&](background::Progress& progress) {
+			progress.Report(0, 0, "Checking imported sources...");
+			stale = m_Project->GetStore().StaleImportedTextureSources();
+		});
+
+	if (!scanned.Completed())
+	{
+		// A broken document must not stop a project opening; the asset scan reports it.
+		qWarning(
+			"Open Project: could not check for changed sources: %s",
+			qPrintable(scanned.error));
+		return;
+	}
+
+	if (stale.empty())
+		return;
+
+	auto sources = QStringList();
+	for (const std::string& source : stale) sources << QString::fromStdString(source);
+
+	auto ask = QMessageBox(this);
+	ask.setWindowTitle("Refresh Textures");
+	ask.setIcon(QMessageBox::Question);
+	ask.setText(
+		stale.size() == 1 ? QString("One imported source has changed since it was imported.") :
+							QString("%1 imported sources have changed since they were imported.")
+								.arg(stale.size()));
+	ask.setInformativeText(
+		"Re-extract their textures? The meshes and rigs already rebuild themselves; the textures "
+		"do not, so materials are drawing what the sources held at import.");
+	ask.setDetailedText(sources.join('\n'));
+	ask.setStandardButtons(QMessageBox::Yes | QMessageBox::No);
+	ask.setDefaultButton(QMessageBox::Yes);
+	if (ask.exec() != QMessageBox::Yes)
+		return;
+
+	auto superseded = QStringList();
+	auto failed     = QStringList();
+
+	// The same cost an import pays, and the same reason it runs off the UI thread.
+	const background::TaskResult refreshed = background::RunWithLoadingScreen(
+		this,
+		"Refresh Textures",
+		[&](background::Progress& progress) {
+			const assetlib::CancelToken cancel = progress.Cancellation();
+
+			for (size_t i = 0; i < stale.size(); ++i)
+			{
+				const QString name = QString::fromStdString(stale[i]);
+				try
+				{
+					const assetlib::TextureRefresh result =
+						m_Project->GetStore().RefreshImportedTextures(
+							stale[i],
+							[&](size_t done, size_t total) {
+								progress.Report(
+									static_cast<int>(done),
+									static_cast<int>(total),
+									QString("Compressing %1 (%2 of %3)...")
+										.arg(name)
+										.arg(done + 1)
+										.arg(total));
+							},
+							cancel);
+
+					for (const std::string& left : result.superseded)
+						superseded << QString::fromStdString(left);
+				}
+				catch (const assetlib::Cancelled&)
+				{
+					throw;
+				}
+				catch (const std::exception& e)
+				{
+					// Each source is a separate group: one failing does not abandon the rest.
+					failed << QString("%1: %2").arg(name, QString::fromLatin1(e.what()));
+				}
+			}
+		},
+		background::Cancellable::kYes);
+
+	if (refreshed.Cancelled())
+		return;
+
+	if (!failed.isEmpty())
+	{
+		auto problem = QMessageBox(this);
+		problem.setWindowTitle("Refresh Textures");
+		problem.setIcon(QMessageBox::Warning);
+		problem.setText("Some sources could not be re-extracted.");
+		problem.setDetailedText(failed.join('\n'));
+		problem.exec();
+	}
+
+	if (!superseded.isEmpty())
+	{
+		// Reported and not acted on -- see docs/asset_containers.md.
+		auto left = QMessageBox(this);
+		left.setWindowTitle("Refresh Textures");
+		left.setIcon(QMessageBox::Information);
+		left.setText("Some textures are no longer produced by their source.");
+		left.setInformativeText(
+			"They are still on disk and nothing has been changed. A material routing at one is "
+			"drawing what its source held at import -- re-route it in the Material Editor, or "
+			"delete it once nothing does.");
+		left.setDetailedText(superseded.join('\n'));
+		left.exec();
+	}
+}
+
+void
 MainWindow::CleanUnusedTextures()
 {
 	if (!m_Project)
@@ -640,6 +760,9 @@ MainWindow::SetActiveProject(assetlib::Project project)
 	// shares is one upload and one reference count no matter which view shows it. Each view names itself
 	// when it places an instance.
 	m_Assets = std::make_unique<game::AssetManager>(m_Renderer->GetScene(), m_Project->GetStore());
+
+	// Before the explorer roots and the thumbnails paint, so they paint the refreshed textures.
+	OfferTextureRefresh();
 
 	// Hand it over before the explorer is rooted: rooting it paints tiles, and each one that misses
 	// asks for a render straight away -- a material cannot be resolved without a manager.

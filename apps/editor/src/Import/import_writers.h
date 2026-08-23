@@ -10,7 +10,7 @@ namespace editor
 	/**
 	 * Derives a `.bmaterial` from every PBR material `imported` carries, writes it under `materialDir`,
 	 * and points each submesh cut from it at the file (relative to `dataRoot`, like every asset
-	 * reference). Each is routed at the `.ktx2` files `writeTextures` puts in `textureDir`.
+	 * reference). Each is routed at the `.ktx2` files `AssetStore::WriteTextures` puts in `textureDir`.
 	 *
 	 * Non-PBR materials are skipped, leaving their submeshes unassigned -- which both runtimes already
 	 * render unlit. Every file is written before any submesh is pointed at one, so a failure part-way
