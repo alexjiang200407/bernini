@@ -61,12 +61,24 @@ namespace assetlib
 	attachMaterial(BMesh& mesh, uint32_t submeshIndex, std::string_view relativePath);
 
 	/**
-	 * The name writeTextures gives the `index`-th texture of an import. A caller that must name one of
-	 * those files -- to route a material at it -- has to come through here rather than spell the
-	 * convention out a second time.
+	 * The file name writeTextures gives each of an import's textures, parallel to `mesh.textures`:
+	 * the name the source gave the image, sanitised to a portable file name, with the `.ktx2`
+	 * extension.
+	 *
+	 * A name is the identity a material's route holds, so it must mean the same thing across
+	 * re-extracts of a source that has been edited: an image the source names keeps its file when
+	 * another is inserted before it, which an index-derived name could not. An image the source
+	 * names nothing falls back to `tex<index>` and is therefore *not* stable under insertion --
+	 * naming the images in the DCC is what buys that.
+	 *
+	 * Two images resolving to one name are disambiguated by index, compared case-insensitively
+	 * because the filesystems this writes to are.
+	 *
+	 * A caller that must name one of those files -- to route a material at it -- has to come
+	 * through here rather than spell the convention out a second time.
 	 */
-	[[nodiscard]] std::string
-	textureFileName(size_t index);
+	[[nodiscard]] std::vector<std::string>
+	importedTextureFileNames(const imp::BMeshImport& mesh);
 
 	/** The names bake gives the rig it writes beside a `<name>.bmesh`. */
 	[[nodiscard]] std::string
@@ -101,8 +113,8 @@ namespace assetlib
 	using TextureProgressFn = std::function<void(size_t done, size_t total)>;
 
 	/**
-	 * Writes each detached texture in `mesh` into `outDir` as a standalone `.ktx2` file named `texN.ktx2`
-	 * by index. These are the files a material, once authored, routes at.
+	 * Writes each detached texture in `mesh` into `outDir` as a standalone `.ktx2` file, named by
+	 * importedTextureFileNames. These are the files a material, once authored, routes at.
 	 *
 	 * `mesh.materials` is read but not written out: a texture's colour space is not a property of the
 	 * image, and the import's materials are the only record of which of them a base colour is (sRGB,

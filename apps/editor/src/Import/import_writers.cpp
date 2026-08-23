@@ -32,11 +32,12 @@ namespace editor
 		// No device: the graph is authored, not drawn, and a TextureNode takes a null scene on purpose.
 		const auto registry = MakeMaterialNodeRegistry(nullptr, nullptr);
 
+		const std::vector<std::string> textureNames = assetlib::importedTextureFileNames(imported);
+
 		const auto texturePath = [&](uint32_t index) {
-			return index == assetlib::c_InvalidIndex ?
+			return index >= textureNames.size() ?
 			           QString() :
-			           QString::fromStdWString(
-						   (textureDir / assetlib::textureFileName(index)).wstring());
+			           QString::fromStdWString((textureDir / textureNames[index]).wstring());
 		};
 
 		auto relative = std::vector<std::string>(imported.materials.size());

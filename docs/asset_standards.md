@@ -81,8 +81,9 @@ must feed data that matches.
 There are **two producers of textures**, and they compress differently:
 
 * **Mesh import** (`writeTextures` in
-  [libs/assetlib/src/bmesh_io.cpp](libs/assetlib/src/bmesh_io.cpp)) writes Basis-UASTC `texN.ktx2`,
-  which `loadKTX2` transcodes to BC7 on every load. Small on disk, uniform, and no per-map role
+  [libs/assetlib/src/bmesh_io.cpp](libs/assetlib/src/bmesh_io.cpp)) writes one Basis-UASTC `.ktx2`
+  per image, named after that image (`importedTextureFileNames`), which `loadKTX2` transcodes to BC7
+  on every load. Small on disk, uniform, and no per-map role
   needed — only the sRGB / linear split, which it takes from the glTF's materials. These are the
   *source* textures a material routes at; they land under `textures_src/` in an editor project.
 * **Material bake** (`bakeMaterial` in
@@ -209,7 +210,7 @@ source texture.
   ([libs/assetlib/src/bmesh_io.cpp](libs/assetlib/src/bmesh_io.cpp)) tags **base-color maps as sRGB**
   (from the material's `baseColorTexture` usage) and everything else `_UNORM`, then `writeKTX2`
   ([libs/assetlib/src/image_io.cpp](libs/assetlib/src/image_io.cpp)) **Basis-UASTC-compresses** LDR
-  maps (multi-threaded, `LEVEL_FASTER`) and writes one `texN.ktx2`. HDR/float inputs (the IBL maps)
+  maps (multi-threaded, `LEVEL_FASTER`) and writes one `.ktx2` per image. HDR/float inputs (the IBL maps)
   skip compression. On load, `loadKTX2` transcodes any Basis-supercompressed KTX2 to **BC7** and hands
   back an `ImageData` whose `vkFormat` is the BC7 block format (with block-aware subresource pitches).
   A material bake instead writes the per-map targets above, which load without transcoding.
@@ -327,9 +328,9 @@ Three different spaces are in play and they are easy to conflate. The contract, 
   bake: [libs/assetlib/include/assetlib/material_bake.h](libs/assetlib/include/assetlib/material_bake.h).
 
   * **Every texture path is relative to the project's Data root**, not to the material file: a material
-    in `Data/Materials/` names `textures_src/tex1.ktx2` and `Textures/orm_a1b2c3d4.ktx2` wherever it
+    in `Data/Materials/` names `textures_src/albedo.ktx2` and `Textures/orm_a1b2c3d4.ktx2` wherever it
     lives. A standalone baked model directory is its own data root, which is how a `matN.bmaterial`
-    beside its `texN.ktx2` still resolves.
+    beside its extracted maps still resolves.
   * **Which representation the renderer draws from is derived, never stored.** `drawsLoose` measures the
     material against the disk: a triplet that is present and still matches the sources its routes name is
     sampled as the optimized triplet, and anything else falls back to the routes. A stored flag could
@@ -530,8 +531,8 @@ the `.bskel`, the `.banim`, and one per PBR material. Without them every output 
 name, so two imports that belonged in one folder collided and each had to be given a subfolder to keep
 them apart; naming the files is what lets `animals/coyote/` hold both skins rather than
 `animals/coyote/skin1/` and `animals/coyote/skin2/`. Textures are the exception and stay folder-only:
-`writeTextures` names its output `tex0.ktx2` by index, so an import can neither name them nor share
-their folder with another. The sections start **collapsed**, so a dialog nobody touches is the
+`writeTextures` names its output after the image each came from, so an import can neither name them
+nor -- since two sources may name an image alike -- share their folder with another. The sections start **collapsed**, so a dialog nobody touches is the
 folder-per-category one it has always been, and every name starts at the source's own — an untouched
 import lands exactly where it used to.
 
@@ -597,7 +598,7 @@ a clip set always deletes and leaves its skeleton behind, exactly as a mesh leav
 flowchart TD
     GLTF[".glb"] -- "loadFromGltf" --> IMP["BMeshImport (inline mats + decoded textures + rig)"]
     IMP -- "toBMesh / bake" --> BMESH["&lt;name&gt;.bmesh (geometry + meshlets, submeshes unassigned)"]
-    IMP -- "bake / writeTextures (writeKTX2)" --> TEX["texN.ktx2 (per map)"]
+    IMP -- "bake / writeTextures (writeKTX2)" --> TEX[".ktx2 (per map)"]
     IMP -- "bake (skinned sources only)" --> SKEL["&lt;name&gt;.bskel (sorted bones)"]
     IMP -- "bake (skinned sources only)" --> ANIM["&lt;name&gt;.banim (clips resampled to 30 Hz)"]
     SKEL -. "BMesh::skeleton" .-> BMESH
@@ -720,7 +721,7 @@ Seven rules, each of which is a way to get this wrong:
   `PbrParams` from the sink node alone, so a factor the node does not hold is reset to its default
   the first time an imported material is opened and saved. That is why the specular pair sits on the
   shared `MaterialOutputNode` rather than on one sink: specular is not a property of the alpha mode.
-* **Materials cannot come across without textures.** They route at the extracted `texN.ktx2` files, so
+* **Materials cannot come across without textures.** They route at the extracted `.ktx2` files, so
   the box is disabled when *Import textures* is off. A material naming textures nothing wrote is the
   dangling reference that made an import produce meshes `gamelib`'s `AcquireMaterial` threw on.
 * **Every `.bmaterial` is written before any submesh names one.** A failure part-way through therefore
@@ -820,7 +821,7 @@ the whole rule:
 
 So `Meshes/` always deletes and leaves every material, while `textures_src/kirk/` does not, because the
 materials in `Materials/kirk/` route from it. A reference into *any depth* of the directory holds it, so
-`textures_src/` is held by a material naming `textures_src/kirk/tex0.ktx2`.
+`textures_src/` is held by a material naming `textures_src/kirk/albedo.ktx2`.
 
 `DeletionPlan::contents` lists **every file** beneath the directory, not just the ones the project
 tracks: `remove_all` does not ask what a file is for, so a `notes.txt` the user dropped in the folder

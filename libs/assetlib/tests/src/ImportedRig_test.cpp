@@ -602,8 +602,8 @@ TEST_CASE("an import lands in the project's categories and reads back", "[import
 		auto expected = std::vector<std::string>{ "Meshes/apples.bmesh",
 			                                      "meshes_src/apples.bimport",
 			                                      "meshes_src/apples.glb" };
-		for (size_t i = 0; i < imported.textures.size(); ++i)
-			expected.push_back("textures_src/apples/" + assetlib::textureFileName(i));
+		for (const std::string& name : assetlib::importedTextureFileNames(imported))
+			expected.push_back("textures_src/apples/" + name);
 		std::ranges::sort(expected);
 
 		// Exactly this: no Materials/, because the board that decides what a glTF material routes

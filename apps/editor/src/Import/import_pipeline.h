@@ -50,8 +50,9 @@ namespace editor
 	 *
 	 * What counts as a collision differs by category. A materials folder may be shared with another
 	 * import, since `options.outputs` names each file, so only a colliding *file* refuses this one. A
-	 * texture folder may not: `writeTextures` names its output by index, so one already there is
-	 * another import's and writing into it would overwrite that import's files.
+	 * texture folder may not: `writeTextures` names its output after the source's images, which an
+	 * import cannot choose, so one already there is another import's and writing into it would
+	 * overwrite that import's files.
 	 *
 	 * @param parent The widget the loading screen and every message box are parented to.
 	 */

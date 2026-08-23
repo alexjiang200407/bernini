@@ -70,8 +70,8 @@ namespace editor
 			return dataRoot / fs::path(output.toStdWString());
 		};
 
-		// writeTextures names its output tex0.ktx2, tex1.ktx2 ... by index, so every import needs its
-		// own folder or the next one silently overwrites it.
+		// An extracted texture is named after the image it came from, so every import needs its own
+		// folder: two sources naming an image alike would otherwise overwrite each other.
 		const fs::path textureDir =
 			options.textures ? under(options.outputs.textureDir) : fs::path();
 
@@ -159,9 +159,9 @@ namespace editor
 			if (file.existed)
 				replaced << QString::fromStdWString(file.path.wstring());
 
-		// Only the texture folder: it is named tex0.ktx2 by index, so one already there belongs to another
-		// import and sharing it would overwrite that import's files. A materials folder is shareable, and
-		// its files are checked above.
+		// Only the texture folder: an import cannot name the files it writes there, so one already
+		// there belongs to another import and sharing it would overwrite that import's files. A
+		// materials folder is shareable, and its files are checked above.
 		if (textureDirExisted)
 			replaced << QString::fromStdWString(textureDir.wstring());
 

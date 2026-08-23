@@ -461,8 +461,8 @@ main(int argc, char** argv)
 			const fs::path banimPath =
 				dataRoot / assetlib::c_AnimationsDirectoryName / assetlib::animationFileName(name);
 
-			// Its own folder, because writeTextures names its output tex0.ktx2 by index -- two
-			// imports sharing one would overwrite each other's files.
+			// Its own folder: an extracted texture is named after the image it came from, and two
+			// sources naming an image alike would overwrite each other in a shared one.
 			const fs::path textureDir = dataRoot / assetlib::c_TexturesSrcDirectoryName / name;
 
 			assetlib::requireSelfContainedSource(input);

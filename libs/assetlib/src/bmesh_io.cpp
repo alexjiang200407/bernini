@@ -2,6 +2,8 @@
 #include <assetlib/codecs.h>
 #include <assetlib_structs/magic.h>
 
+#include <assetlib/container_format.h>
+
 #include <assetlib/image_io.h>
 #include <assetlib_structs/BMesh.h>
 #include <assetlib_structs/BMeshImport.h>
@@ -11,6 +13,7 @@
 
 #include "cache_io.h"
 #include "fs_util.h"
+#include "ref_paths.h"
 
 #include <core/file/file.h>
 
@@ -21,6 +24,55 @@ namespace assetlib
 	namespace
 	{
 		constexpr std::string_view c_What = "bmesh";
+
+		std::string
+		asciiLower(std::string_view text)
+		{
+			auto lowered = std::string(text);
+			for (char& c : lowered)
+				if (c >= 'A' && c <= 'Z')
+					c = static_cast<char>(c - 'A' + 'a');
+			return lowered;
+		}
+
+		// Only these come off a name; anything else after a dot is part of what the artist called
+		// the image (`Body_v1.2`, `diffuse.2k`) and truncating it would rename their texture.
+		constexpr std::string_view c_ImageExtensions[] = { ".png", ".jpg",  ".jpeg", ".ktx2",
+			                                               ".ktx", ".webp", ".tga",  ".bmp",
+			                                               ".tif", ".tiff", ".dds",  ".exr",
+			                                               ".hdr" };
+
+		/**
+		 * `name` reduced to a portable file stem: a trailing image extension dropped, every
+		 * character outside `[A-Za-z0-9-_]` folded to `_`, and the runs that produces collapsed.
+		 * Empty when nothing survives, which is the caller's cue to fall back to the index.
+		 *
+		 * A source may name an image anything at all -- a path, a UTF-8 label, `Base Color.png` --
+		 * and this name becomes a mount key, which is matched byte-for-byte inside an archive.
+		 */
+		std::string
+		sanitizeTextureStem(std::string_view name)
+		{
+			const std::string extension = extensionOf(name);
+			if (std::ranges::find(c_ImageExtensions, extension) !=
+			    std::ranges::end(c_ImageExtensions))
+				name.remove_suffix(extension.size());
+
+			auto stem = std::string();
+			stem.reserve(name.size());
+			for (const char c : name)
+			{
+				const bool keep = (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') ||
+				                  (c >= '0' && c <= '9') || c == '-' || c == '_';
+				if (keep)
+					stem += c;
+				else if (!stem.empty() && stem.back() != '_')
+					stem += '_';
+			}
+
+			while (!stem.empty() && stem.back() == '_') stem.pop_back();
+			return stem;
+		}
 
 		enum class ChunkId : uint32_t
 		{
@@ -245,10 +297,35 @@ namespace assetlib
 		return true;
 	}
 
-	std::string
-	textureFileName(size_t index)
+	std::vector<std::string>
+	importedTextureFileNames(const imp::BMeshImport& mesh)
 	{
-		return "tex" + std::to_string(index) + ".ktx2";
+		auto names = std::vector<std::string>();
+		names.reserve(mesh.textures.size());
+
+		for (size_t i = 0; i < mesh.textures.size(); ++i)
+		{
+			const std::string_view given =
+				i < mesh.textureNames.size() ? std::string_view(mesh.textureNames[i]) : "";
+
+			std::string stem = sanitizeTextureStem(given);
+			if (stem.empty())
+				stem = "tex" + std::to_string(i);
+			names.push_back(std::move(stem));
+		}
+
+		auto claimed = std::set<std::string>();
+		for (size_t i = 0; i < names.size(); ++i)
+		{
+			// Appending the index can itself collide with an image literally named that way, so
+			// this repeats until the name is free rather than assuming one pass is enough.
+			while (!claimed.insert(asciiLower(names[i])).second)
+				names[i] += "_" + std::to_string(i);
+
+			names[i] += c_TextureExtension;
+		}
+
+		return names;
 	}
 
 	void
@@ -267,6 +344,8 @@ namespace assetlib
 			if (material.baseColorTexture != c_InvalidIndex)
 				srgbTextures.insert(material.baseColorTexture);
 
+		const std::vector<std::string> names = importedTextureFileNames(mesh);
+
 		for (size_t i = 0; i < mesh.textures.size(); ++i)
 		{
 			throwIfCancelled(cancel);
@@ -276,7 +355,7 @@ namespace assetlib
 
 			writeKTX2(
 				mesh.textures[i],
-				outDir / textureFileName(i),
+				outDir / names[i],
 				srgbTextures.contains(static_cast<uint32_t>(i)));
 		}
 	}
