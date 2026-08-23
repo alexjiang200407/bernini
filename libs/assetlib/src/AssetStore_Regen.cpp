@@ -2,8 +2,10 @@
 #include <assetlib/RegenMesh.h>
 
 #include <assetlib/asset_import.h>
+#include <assetlib/banim_io.h>
 #include <assetlib/bmesh_gltf.h>
 #include <assetlib/bmesh_io.h>
+#include <assetlib/bskel_io.h>
 #include <assetlib/container_format.h>
 #include <assetlib/import_document.h>
 #include <assetlib/mesh_tangents.h>
@@ -17,7 +19,6 @@
 #include <core/err/util.h>
 
 #include "MountedFileReader.h"
-#include "bake_tokens.h"
 #include "cache_io.h"
 #include "import_bounds.h"
 #include "mounted_io.h"
@@ -158,10 +159,13 @@ namespace assetlib
 			return false;
 
 		if (extension == c_MeshExtension)
-			return checkKey(*this, path, magic::c_BMesh, c_BMeshBakeToken, "bmesh").stale;
+			return checkKey(*this, path, magic::c_BMesh, AssetCodec<BMesh>::c_BakeToken, "bmesh")
+			    .stale;
 		if (extension == c_SkeletonExtension)
-			return checkKey(*this, path, magic::c_BSkel, c_BSkelBakeToken, "bskel").stale;
-		return checkKey(*this, path, magic::c_BAnim, c_BAnimBakeToken, "banim").stale;
+			return checkKey(*this, path, magic::c_BSkel, AssetCodec<Skeleton>::c_BakeToken, "bskel")
+			    .stale;
+		return checkKey(*this, path, magic::c_BAnim, AssetCodec<AnimationSet>::c_BakeToken, "banim")
+		    .stale;
 	}
 
 	SourceRef
@@ -203,7 +207,7 @@ namespace assetlib
 		{
 			MountedFileReader      reader(GetFiles(), path, "bmesh");
 			const cache::PeekedKey key = cache::peekKey(reader, magic::c_BMesh, "bmesh");
-			if (key.bakeToken != c_BMeshBakeToken)
+			if (key.bakeToken != AssetCodec<BMesh>::c_BakeToken)
 			{
 				// From the frozen headers and the document alone -- what the refs would be after
 				// a regeneration, without paying one: a scan runs this over every mesh in the
@@ -241,7 +245,7 @@ namespace assetlib
 		{
 			MountedFileReader      reader(GetFiles(), path, "banim");
 			const cache::PeekedKey key = cache::peekKey(reader, magic::c_BAnim, "banim");
-			if (key.bakeToken != c_BAnimBakeToken)
+			if (key.bakeToken != AssetCodec<AnimationSet>::c_BakeToken)
 			{
 				const std::string rig = groupSkeletonKey(*this, key.source.key);
 				core::throw_runtime_error_if(
@@ -261,7 +265,8 @@ namespace assetlib
 		if (IsReadOnly())
 			return { load<BMesh>(*m_Files, path), {} };
 
-		CheckedKey checked = checkKey(*this, path, magic::c_BMesh, c_BMeshBakeToken, "bmesh");
+		CheckedKey checked =
+			checkKey(*this, path, magic::c_BMesh, AssetCodec<BMesh>::c_BakeToken, "bmesh");
 		if (!checked.stale)
 		{
 			RegenMesh current{ load<BMesh>(*m_Files, path), {} };
@@ -300,7 +305,8 @@ namespace assetlib
 		if (IsReadOnly())
 			return load<Skeleton>(*m_Files, path);
 
-		CheckedKey checked = checkKey(*this, path, magic::c_BSkel, c_BSkelBakeToken, "bskel");
+		CheckedKey checked =
+			checkKey(*this, path, magic::c_BSkel, AssetCodec<Skeleton>::c_BakeToken, "bskel");
 		if (!checked.stale)
 			return load<Skeleton>(*m_Files, path);
 
@@ -322,7 +328,8 @@ namespace assetlib
 		if (IsReadOnly())
 			return load<AnimationSet>(*m_Files, path);
 
-		CheckedKey checked = checkKey(*this, path, magic::c_BAnim, c_BAnimBakeToken, "banim");
+		CheckedKey checked =
+			checkKey(*this, path, magic::c_BAnim, AssetCodec<AnimationSet>::c_BakeToken, "banim");
 		if (!checked.stale)
 			return load<AnimationSet>(*m_Files, path);
 
