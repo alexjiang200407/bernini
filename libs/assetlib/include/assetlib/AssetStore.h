@@ -106,6 +106,19 @@ namespace assetlib
 		[[nodiscard]] std::filesystem::path
 		ResolveWritePath(std::string_view path) const;
 
+		/**
+		 * The mount key for a host path inside the data root -- the inverse of ResolveWritePath.
+		 *
+		 * For the few callers that legitimately hold a host path and need a key back: the pack
+		 * walks the loose tree with a directory iterator, and a rename plan names files as they sit
+		 * on disk. Everything else should be holding the key already and never make the round trip.
+		 *
+		 * @throws std::runtime_error unless `path` is inside the data root, which is the same
+		 *         boundary ResolveWritePath enforces in the other direction.
+		 */
+		[[nodiscard]] std::string
+		KeyFor(const std::filesystem::path& path) const;
+
 		/** Whether the mount answers for `path` at all. */
 		[[nodiscard]] bool
 		Exists(std::string_view path) const

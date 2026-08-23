@@ -216,7 +216,7 @@ namespace assetlib
 
 			result.sky = assetRef(desc.skyDir, desc.name, ".bsky");
 			created.WillWrite(result.sky);
-			saveSky(bsky, desc.dataRoot / result.sky);
+			AssetStore(desc.dataRoot).Save(bsky, result.sky);
 		}
 
 		if (desc.lighting)
@@ -249,7 +249,7 @@ namespace assetlib
 
 			result.lighting = assetRef(desc.lightingDir, desc.name, ".benvl");
 			created.WillWrite(result.lighting);
-			saveEnvLighting(lighting, desc.dataRoot / result.lighting);
+			AssetStore(desc.dataRoot).Save(lighting, result.lighting);
 
 			result.exposure = lighting.exposure;
 		}
@@ -268,7 +268,7 @@ namespace assetlib
 
 			result.environment = assetRef(desc.environmentDir, desc.name, ".benv");
 			created.WillWrite(result.environment);
-			saveEnv(env, desc.dataRoot / result.environment);
+			AssetStore(desc.dataRoot).Save(env, result.environment);
 		}
 
 		result.written = created.Created();
