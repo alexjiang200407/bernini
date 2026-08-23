@@ -116,12 +116,6 @@ namespace assetlib
 		return deserializeAnimations(core::file::read_file_bytes(path.string()));
 	}
 
-	AnimationSet
-	loadAnimations(const core::file::IFileSystem& fileSystem, std::string_view path)
-	{
-		return deserializeAnimations(fileSystem.Read(path));
-	}
-
 	namespace
 	{
 		constexpr std::array<uint32_t, 1> c_WantedRefChunks = { { uint32_t(

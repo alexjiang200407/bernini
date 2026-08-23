@@ -127,12 +127,6 @@ namespace assetlib
 		return deserialize(bytes);
 	}
 
-	BMesh
-	load(const core::file::IFileSystem& fileSystem, std::string_view path)
-	{
-		return deserialize(fileSystem.Read(path));
-	}
-
 	namespace
 	{
 		constexpr std::array<uint32_t, 2> c_WantedRefChunks = {

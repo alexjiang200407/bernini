@@ -63,7 +63,7 @@ namespace assetlib
 					auto material = BMaterial();
 					try
 					{
-						material = loadMaterial(files, key);
+						material = load<BMaterial>(files, key);
 					}
 					catch (const std::exception& e)
 					{
@@ -90,7 +90,7 @@ namespace assetlib
 				{
 					try
 					{
-						markMap(live, loadSky(files, key).sky.baked);
+						markMap(live, load<BSky>(files, key).sky.baked);
 					}
 					catch (const std::exception& e)
 					{
@@ -102,7 +102,7 @@ namespace assetlib
 				{
 					try
 					{
-						const BEnvLighting lighting = loadEnvLighting(files, key);
+						const BEnvLighting lighting = load<BEnvLighting>(files, key);
 						markMap(live, lighting.prefilter.baked);
 						markMap(live, lighting.irradiance.baked);
 					}
