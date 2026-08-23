@@ -129,17 +129,6 @@ namespace assetlib
 			return sources;
 		}
 
-		bool
-		groupIsRouted(const PbrParams& pbr, const Group& group)
-		{
-			for (size_t i = channelIndex(group.channels, 0);
-			     i < channelIndex(group.channels, group.channels.count);
-			     ++i)
-				if (!pbr.routes[i].texture.empty())
-					return true;
-			return false;
-		}
-
 		/**
 		 * Whether this group has to carry a real alpha channel.
 		 *
@@ -380,7 +369,7 @@ namespace assetlib
 
 			// A group with nothing routed is not baked at all: an empty triplet entry makes the runtime
 			// fall back to white / flat-normal, exactly what an all-default map would have been.
-			if (!groupIsRouted(pbr, group))
+			if (!groupIsRouted(pbr, group.channels))
 				continue;
 
 			throwIfCancelled(cancel);
