@@ -364,8 +364,8 @@ namespace bgl
 		ValidateVatDesc(const VatGeomDesc& desc) const;
 
 		/**
-		 * Refuses a rig the pose pass could not walk or address: no bones or more than
-		 * `cMaxBonesPerRig`, a `parent` that is not lower than its own bone's index, a clip set whose
+		 * Refuses a rig the pose pass could not walk or address: no bones, a `parent` that is not
+		 * lower than its own bone's index, a clip set whose
 		 * bone count disagrees with the skeleton's, an empty or zero-frame clip table, or a clip
 		 * whose frames run past the end of the sample pool. The clip set's `skeletonSignature` is
 		 * not among these -- computing one needs assetlib; see IScene::AddSkinnedMeshGeom.

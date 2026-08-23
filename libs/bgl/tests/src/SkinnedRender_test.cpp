@@ -141,10 +141,10 @@ namespace
 	}
 
 	assetlib::Skeleton
-	MakeTwoBoneRig()
+	MakeTwoBoneRig(uint32_t boneCount = c_BoneCount)
 	{
 		auto skeleton = assetlib::Skeleton();
-		for (uint32_t i = 0; i < c_BoneCount; ++i)
+		for (uint32_t i = 0; i < boneCount; ++i)
 		{
 			auto bone        = assetlib::Bone();
 			bone.bindPose    = { glm::vec3(0.0f, i == 0 ? 0.0f : 1.0f, 0.0f),
@@ -159,16 +159,16 @@ namespace
 	}
 
 	assetlib::AnimationSet
-	MakeSwingClip()
+	MakeSwingClip(uint32_t boneCount = c_BoneCount)
 	{
 		auto set      = assetlib::AnimationSet();
-		set.boneCount = c_BoneCount;
+		set.boneCount = boneCount;
 
 		const auto swing = glm::quat(0.70710678f, 0.0f, 0.0f, 0.70710678f);  // Rz(90), w first
 
 		for (uint32_t f = 0; f < c_Frames; ++f)
 		{
-			for (uint32_t b = 0; b < c_BoneCount; ++b)
+			for (uint32_t b = 0; b < boneCount; ++b)
 			{
 				auto sample        = assetlib::Transform();
 				sample.translation = glm::vec3(0.0f, b == 0 ? 0.0f : 1.0f, 0.0f);
@@ -303,6 +303,130 @@ TEST_CASE(
 		CHECK(LumaAt(skinnedPng, job.camera, glm::vec3(0.0f, 0.5f, 0.0f)) > 0.02f);
 		CHECK(LumaAt(skinnedPng, job.camera, glm::vec3(0.0f, 1.5f, 0.0f)) > 0.02f);
 		CHECK(LumaAt(skinnedPng, job.camera, glm::vec3(-2.0f, 1.5f, 0.0f)) < 0.01f);
+	}
+}
+
+// The ceiling that used to sit at 192 bones was the pose pass's groupshared hierarchy array. It now
+// composes in the palette, so what bounds a rig is the palette's own allocation -- but a walk that
+// wrote past its slot, or read a parent another thread had not finished composing, would show up
+// here as a strip in the wrong place rather than as a refusal.
+TEST_CASE("a rig past the old groupshared ceiling poses correctly", "[skinned][render]")
+{
+	// Well past 192, and a chain rather than a fan: bone i parents bone i+1, so the walk runs one
+	// barrier-separated level per bone. The strip is bound to bones 0 and 1 as always; the rest are
+	// there to be walked.
+	constexpr uint32_t c_DeepBones = 300;
+
+	auto opts             = bgl::GraphicsOptions();
+	opts.shaderCacheDir   = bgl::test::ShaderCacheDir();
+	opts.enableDebugLayer = true;
+
+	auto gfx = bgl::CreateGraphics(opts);
+	REQUIRE(gfx != nullptr);
+
+	auto targetDesc     = bgl::RenderTargetDesc();
+	targetDesc.width    = static_cast<int>(c_Width);
+	targetDesc.height   = static_cast<int>(c_Height);
+	targetDesc.headless = true;
+	auto target         = gfx->CreateRenderTarget(targetDesc);
+
+	auto sceneDesc                        = bgl::SceneDesc();
+	sceneDesc.initialGeom                 = 4;
+	sceneDesc.initialMeshlets             = 8;
+	sceneDesc.initialSubmeshes            = 4;
+	sceneDesc.initialVertexBufferByteSize = 4096;
+	sceneDesc.initialIndices              = 64;
+	sceneDesc.initialPbrMaterials         = 4;
+
+	auto scene = gfx->CreateScene(sceneDesc);
+	auto view  = gfx->CreateSceneView(scene, 4);
+
+	bgl::test::ApplyEnvironment(scene.Get(), view.Get());
+
+	auto material            = bgl::PbrMaterialDesc();
+	material.baseColorFactor = glm::vec4(0.8f, 0.4f, 0.2f, 1.0f);
+	material.metallicFactor  = 0.0f;
+	material.roughnessFactor = 0.5f;
+	const auto pbr           = scene->CreatePbrMaterial(material);
+
+	const std::array<bgl::MaterialHandle, 1> materials = { { pbr } };
+
+	auto job     = bgl::RenderJob();
+	job.view     = view;
+	job.camera   = StripCamera();
+	job.viewport = bgl::Viewport(static_cast<float>(c_Width), static_cast<float>(c_Height));
+
+	const auto deepGeom = scene->AddSkinnedMeshGeom(
+		MakeSkinnedStrip(),
+		0,
+		materials,
+		MakeTwoBoneRig(c_DeepBones),
+		MakeSwingClip(c_DeepBones),
+		c_StripPosedBounds);
+
+	// The refusal this used to hit is gone, and that is half of what the test is for.
+	REQUIRE(deepGeom.IsValid());
+
+	const auto staticGeom = scene->AddStaticMeshGeom(MakeSkinnedStrip(), 0, materials);
+	REQUIRE(staticGeom.IsValid());
+
+	// The same strip on the rig this suite already trusts, to measure the deep one against.
+	const auto shallowGeom = scene->AddSkinnedMeshGeom(
+		MakeSkinnedStrip(),
+		0,
+		materials,
+		MakeTwoBoneRig(),
+		MakeSwingClip(),
+		c_StripPosedBounds);
+	REQUIRE(shallowGeom.IsValid());
+
+	const auto capture = [&](const char* png, bgl::GeomHandle geom, float phase) {
+		const auto instance =
+			view->CreateSkinnedMeshInstance(geom, glm::mat4(1.0f), { 0, phase, 0.0f });
+		gfx->DrawFrame(target, job);
+		gfx->ScreenshotPng(target, png);
+		view->DeleteMeshInstance(instance);
+		return png;
+	};
+
+	SECTION("posed, it matches the two-bone rig the rest of this suite measures against")
+	{
+		// phase 1 holds the swung frame, so the walk has to compose bone 1 through bone 0 rather
+		// than hand back a local transform. Bones 2 and up weight no vertex: what they add is 298
+		// more barrier-separated levels for that composition to survive.
+		const auto* shallowPng =
+			capture("assets/golden/skinned_deep_shallow_ref.got.png", shallowGeom, 1.0f);
+		const auto* deepPng = capture("assets/golden/skinned_deep_swing.got.png", deepGeom, 1.0f);
+
+		CHECK(
+			bgl::test::FrameDelta(shallowPng, deepPng, 0, 0, int(c_Width), int(c_Height)) < 1e-6f);
+
+		// And really swung, not two bind poses matching each other: the top edge has left +Y and
+		// arrived on -X, which is only true if bone 1 composed through bone 0.
+		CHECK(LumaAt(deepPng, job.camera, glm::vec3(0.0f, 1.8f, 0.0f)) < 0.01f);
+		CHECK(LumaAt(deepPng, job.camera, glm::vec3(-0.8f, 1.0f, 0.0f)) > 0.02f);
+	}
+
+	SECTION("at bind pose it draws what the static path draws")
+	{
+		const auto staticInstance = view->CreateStaticMeshInstance(staticGeom, glm::mat4(1.0f));
+		gfx->DrawFrame(target, job);
+		gfx->ScreenshotPng(target, "assets/golden/skinned_deep_static_ref.got.png");
+		view->DeleteMeshInstance(staticInstance);
+
+		const auto* deepPng =
+			capture("assets/golden/skinned_deep_bind_pose.got.png", deepGeom, 0.0f);
+
+		CHECK(
+			bgl::test::FrameDelta(
+				"assets/golden/skinned_deep_static_ref.got.png",
+				deepPng,
+				0,
+				0,
+				int(c_Width),
+				int(c_Height)) < 1e-6f);
+
+		CHECK(LumaAt(deepPng, job.camera, glm::vec3(0.0f, 1.5f, 0.0f)) > 0.02f);
 	}
 }
 
