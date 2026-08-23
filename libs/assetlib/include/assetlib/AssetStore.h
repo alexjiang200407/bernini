@@ -1,4 +1,6 @@
 #pragma once
+#include <assetlib/AssetCodec.h>
+#include <assetlib/cancel.h>
 #include <core/file/IFileSystem.h>
 
 namespace assetlib
@@ -110,6 +112,80 @@ namespace assetlib
 		{
 			return m_Files->Exists(path);
 		}
+
+		// --- Containers, by codec ----------------------------------------------------------------
+
+		/**
+		 * The container at `path`, decoded by `T`'s codec.
+		 *
+		 * One template rather than a method per container: the type says which codec to use, so a
+		 * container is registered once (in its `AssetCodec` specialization) instead of once here as
+		 * well. `store.Load<BMesh>("Meshes/a.bmesh")`.
+		 *
+		 * @throws std::runtime_error if the container is absent, unreadable or malformed -- the
+		 *         codec's own `deserialize` decides which.
+		 */
+		template <AssetCodecFor T>
+		[[nodiscard]] T
+		Load(std::string_view path) const
+		{
+			return AssetCodec<T>::Deserialize(ReadBytes(path));
+		}
+
+		/**
+		 * Writes `value` to `path`, encoded by `T`'s codec.
+		 *
+		 * The write lands on the data root, as every write does -- a caller passes the same mount
+		 * key it would read by and never resolves one itself, which is the asymmetry this closes.
+		 *
+		 * @throws std::runtime_error if `path` escapes the data root (see ResolveWritePath), or the
+		 *         file cannot be written. Atomic: a crash mid-write leaves the previous bytes.
+		 */
+		template <AssetCodecFor T>
+		void
+		Save(const T& value, std::string_view path) const
+		{
+			WriteBytes(path, AssetCodec<T>::Serialize(value), AssetCodec<T>::c_Extension);
+		}
+
+		// --- Bakes ---------------------------------------------------------------------------
+
+		/**
+		 * Composites `material`'s routes down to its baked triplet, in place, writing the maps into
+		 * the project's texture directory.
+		 *
+		 * The store is the data root a bake reads and writes relative to, so it is not passed one.
+		 *
+		 * @throws std::runtime_error / Cancelled as bakeMaterial.
+		 */
+		void
+		BakeMaterial(BMaterial& material, const CancelToken& cancel = {}) const;
+
+		/** BakeMaterial, writing the maps into `textureDir` instead of the project's default. */
+		void
+		BakeMaterial(
+			BMaterial&         material,
+			std::string_view   textureDir,
+			const CancelToken& cancel = {}) const;
+
+		/** @throws std::runtime_error / Cancelled as bakeSky. */
+		void
+		BakeSky(BSky& sky, const CancelToken& cancel = {}) const;
+
+		/** BakeSky, writing the map into `textureDir` instead of the project's default. */
+		void
+		BakeSky(BSky& sky, std::string_view textureDir, const CancelToken& cancel = {}) const;
+
+		/** @throws std::runtime_error / Cancelled as bakeEnvLighting. */
+		void
+		BakeEnvLighting(BEnvLighting& lighting, const CancelToken& cancel = {}) const;
+
+		/** BakeEnvLighting, writing the maps into `textureDir` instead of the project's default. */
+		void
+		BakeEnvLighting(
+			BEnvLighting&      lighting,
+			std::string_view   textureDir,
+			const CancelToken& cancel = {}) const;
 
 		// --- Containers ------------------------------------------------------------------------
 
@@ -316,6 +392,20 @@ namespace assetlib
 		Describe(const BVat& vat) const;
 
 	private:
+		/**
+		 * The bytes at `path`, and the bytes of `path` written atomically. What Load and Save are
+		 * built from -- the templates stay in the header and the mount, the write primitive and the
+		 * error messages stay out of it.
+		 *
+		 * @param what Names the container in any message thrown -- the codec passes its extension.
+		 */
+		[[nodiscard]] std::vector<std::byte>
+		ReadBytes(std::string_view path) const;
+
+		void
+		WriteBytes(std::string_view path, std::span<const std::byte> bytes, std::string_view what)
+			const;
+
 		std::filesystem::path                          m_DataRoot;
 		std::shared_ptr<const core::file::IFileSystem> m_Files;
 	};

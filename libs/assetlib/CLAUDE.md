@@ -51,10 +51,16 @@ Concretely, before adding to `include/assetlib/`:
   [STYLE.md](../../STYLE.md) § Paths.
 - **Do not re-carry a data root.** `MaterialBakeDesc` and `EnvBakeDesc` do, and they are the
   standing example of what not to copy; the store already holds it.
-- **A new container type is not a new switch.** The extension, the magic and the type enum are
-  already spelled out in several places, and
-  [docs/specs/assetlib_store_codecs.md](../../docs/specs/assetlib_store_codecs.md) is the design
-  that collapses them. Read it before adding the next one.
+- **A new container type is a new `AssetCodec` specialization**, declared beside its io and listed
+  in `Containers` in `src/container_table.cpp` — which is what `containerKinds()` is built from and
+  what a static assertion holds to `AssetType`. The extension, the type enum and the bake token
+  are still spelled out in several older places as well; collapsing those onto the table is the
+  rest of [docs/specs/assetlib_store_codecs.md](../../docs/specs/assetlib_store_codecs.md), which
+  is in progress. Until it lands, adding a container means editing both, and the table's assertion
+  is what stops you forgetting the half that has no compiler behind it.
+- **A project's asset is read and written by key, through the store**: `store.Load<T>(key)` and
+  `store.Save(value, key)`. The `save*`/`load*` functions taking a `std::filesystem::path` are the
+  older surface and are being removed; do not add a caller.
 
 ## Headers forward declare
 

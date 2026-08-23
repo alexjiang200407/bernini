@@ -137,4 +137,21 @@ namespace assetlib
 		return deserializeImportDocument(
 			std::string_view(reinterpret_cast<const char*>(bytes.data()), bytes.size()));
 	}
+
+	std::vector<std::byte>
+	AssetCodec<ImportDocument>::Serialize(const ImportDocument& value)
+	{
+		const std::string text = serializeImportDocument(value);
+
+		std::vector<std::byte> bytes(text.size());
+		std::memcpy(bytes.data(), text.data(), text.size());
+		return bytes;
+	}
+
+	ImportDocument
+	AssetCodec<ImportDocument>::Deserialize(std::span<const std::byte> bytes)
+	{
+		return deserializeImportDocument(
+			std::string_view(reinterpret_cast<const char*>(bytes.data()), bytes.size()));
+	}
 }

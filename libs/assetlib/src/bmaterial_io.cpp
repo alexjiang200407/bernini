@@ -464,4 +464,16 @@ namespace assetlib
 		// bakeIsStale is false for every non-PBR model, so `pbr` is only read once it means something.
 		return bakeIsStale(material, fileSystem) && routesAreOnDisk(material.pbr, fileSystem);
 	}
+
+	std::vector<std::byte>
+	AssetCodec<BMaterial>::Serialize(const BMaterial& value)
+	{
+		return serializeMaterial(value);
+	}
+
+	BMaterial
+	AssetCodec<BMaterial>::Deserialize(std::span<const std::byte> bytes)
+	{
+		return deserializeMaterial(bytes);
+	}
 }

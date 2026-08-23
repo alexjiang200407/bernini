@@ -1,4 +1,5 @@
 #pragma once
+#include <assetlib/AssetCodec.h>
 #include <assetlib_structs/ImageData.h>
 
 namespace assetlib
@@ -71,4 +72,22 @@ namespace assetlib
 	[[nodiscard]] BEnv
 	loadEnv(const std::filesystem::path& path);
 
+	/**
+	 * The codec for `c_EnvironmentExtension` -- a authored document. See AssetCodec.h.
+	 *
+	 * Declared here and defined in benv_io.cpp, because `Deserialize` returns by value and this
+	 * header only forward declares `BEnv`.
+	 */
+	template <>
+	struct AssetCodec<BEnv>
+	{
+		static constexpr std::string_view c_Extension = c_EnvironmentExtension;
+		static constexpr AssetType        c_Type      = AssetType::kEnvironment;
+
+		[[nodiscard]] static std::vector<std::byte>
+		Serialize(const BEnv& value);
+
+		[[nodiscard]] static BEnv
+		Deserialize(std::span<const std::byte> bytes);
+	};
 }

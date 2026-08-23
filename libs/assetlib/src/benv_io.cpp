@@ -91,4 +91,16 @@ namespace assetlib
 	{
 		return deserializeEnv(fileSystem.Read(path));
 	}
+
+	std::vector<std::byte>
+	AssetCodec<BEnv>::Serialize(const BEnv& value)
+	{
+		return serializeEnv(value);
+	}
+
+	BEnv
+	AssetCodec<BEnv>::Deserialize(std::span<const std::byte> bytes)
+	{
+		return deserializeEnv(bytes);
+	}
 }

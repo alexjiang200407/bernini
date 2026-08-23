@@ -71,4 +71,16 @@ namespace assetlib
 	{
 		return deserializeSky(fileSystem.Read(path));
 	}
+
+	std::vector<std::byte>
+	AssetCodec<BSky>::Serialize(const BSky& value)
+	{
+		return serializeSky(value);
+	}
+
+	BSky
+	AssetCodec<BSky>::Deserialize(std::span<const std::byte> bytes)
+	{
+		return deserializeSky(bytes);
+	}
 }

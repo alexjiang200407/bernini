@@ -1,4 +1,5 @@
 #pragma once
+#include <assetlib/AssetCodec.h>
 
 namespace assetlib
 {
@@ -34,4 +35,26 @@ namespace assetlib
 	[[nodiscard]] BEnvLighting
 	loadEnvLighting(const std::filesystem::path& path);
 
+	/**
+	 * The codec for `c_EnvLightingExtension` -- a cache entry. See AssetCodec.h.
+	 *
+	 * Declared here and defined in benvl_io.cpp, because `Deserialize` returns by value and this
+	 * header only forward declares `BEnvLighting`.
+	 */
+	template <>
+	struct AssetCodec<BEnvLighting>
+	{
+		static constexpr std::string_view c_Extension = c_EnvLightingExtension;
+		static constexpr AssetType        c_Type      = AssetType::kEnvLighting;
+
+		// The bake revision this container is written at; see AssetCodec.h. Bump to a fresh
+		// random value whenever this writer's layout or meaning changes.
+		static constexpr uint64_t c_BakeToken = 0xd48f19c7a35b062eull;
+
+		[[nodiscard]] static std::vector<std::byte>
+		Serialize(const BEnvLighting& value);
+
+		[[nodiscard]] static BEnvLighting
+		Deserialize(std::span<const std::byte> bytes);
+	};
 }
