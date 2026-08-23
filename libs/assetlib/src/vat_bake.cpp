@@ -1,6 +1,7 @@
 #include <assetlib/vat_bake.h>
 #include <assetlib_structs/BVat.h>
 
+#include <assetlib/RegenMesh.h>
 #include <assetlib/banim_io.h>
 #include <assetlib/bmaterial_io.h>
 #include <assetlib/bmesh_io.h>
@@ -316,7 +317,9 @@ namespace assetlib
 	BVat
 	bakeVat(const AssetStore& store, const VatBakeDesc& desc)
 	{
-		const BMesh mesh = store.LoadMesh(desc.mesh);
+		// The regeneration seam, not the plain loads: a bake over a stale group would otherwise
+		// freeze the stale geometry into a texture the freshness rule then calls current.
+		const BMesh mesh = store.LoadRegenMesh(desc.mesh).mesh;
 
 		// A static mesh fails the in-memory bake anyway; refusing here names the actual gap --
 		// there is no rig to load -- instead of failing to open a file with no name.
@@ -325,8 +328,10 @@ namespace assetlib
 				"vat: '{}' names no skeleton, so there is no rig to bake",
 				desc.mesh);
 
-		BVat vat =
-			bakeVat(mesh, store.LoadSkeleton(mesh.skeleton), store.LoadAnimations(desc.animations));
+		BVat vat = bakeVat(
+			mesh,
+			store.LoadRegenSkeleton(mesh.skeleton),
+			store.LoadRegenAnimations(desc.animations));
 
 		vat.mesh            = normalizePath(desc.mesh);
 		vat.skeleton        = normalizePath(mesh.skeleton);

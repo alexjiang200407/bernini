@@ -1,7 +1,0 @@
-# schema describes the PODs assetlib writes, and its free functions are read in the same
-# expression as assetlib's own -- `schema::serialize(schema)` beside `serialize(mesh)` -- so they
-# are spelled the same way. Types and methods keep the engine's PascalCase.
-InheritParentConfig: true
-
-CheckOptions:
-  readability-identifier-naming.FunctionCase: camelBack

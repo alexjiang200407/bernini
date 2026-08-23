@@ -84,6 +84,18 @@ namespace editor
 
 		const QString name = QFileInfo(sourceFile).fileName();
 
+		try
+		{
+			assetlib::requireSelfContainedSource(source);
+		}
+		catch (const std::exception& e)
+		{
+			QMessageBox::warning(parent, QString("Import %1").arg(name), e.what());
+			return ImportOutcome::kBlocked;
+		}
+
+		const std::string sourceName = source.stem().string();
+
 		// Sampled before a byte is written, because they decide two things: whether the import collides
 		// with something already there (and must be refused), and -- if it then fails or is cancelled --
 		// what may be deleted to undo it.
@@ -111,6 +123,14 @@ namespace editor
 		}
 		if (options.animations)
 			files.push_back({ banimPath, fs::exists(banimPath, ec) });
+
+		if (options.mesh || options.animations)
+		{
+			const fs::path sourceCopy = assetlib::importedSourcePathFor(dataRoot, sourceName);
+			const fs::path importDoc  = assetlib::importDocumentPathFor(dataRoot, sourceName);
+			files.emplace_back(sourceCopy, fs::exists(sourceCopy, ec));
+			files.emplace_back(importDoc, fs::exists(importDoc, ec));
+		}
 
 		// Named one by one rather than by the folder holding them, because two imports sharing a
 		// materials folder is what the dialog's per-file names are for: only a material file that is
@@ -162,7 +182,7 @@ namespace editor
 				const assetlib::CancelToken cancel = progress.Cancellation();
 
 				progress.Report(0, 0, QString("Parsing %1...").arg(name));
-				imported = assetlib::loadFromGltf(source, cancel);
+				imported = assetlib::loadFromGltf(source, { .cancel = cancel });
 
 				if (options.textures)
 				{
@@ -190,24 +210,41 @@ namespace editor
 				}
 
 				// The rig's box is skinned from every vertex of every frame -- seven seconds on the
-				// test project's rhino -- and both doors below are pure assetlib. After the screen
-				// rather than behind it, this ran on the GUI thread with nothing on screen saying
-				// the editor was still working, which reads as a hang.
+				// test project's rhino -- and both doors below are pure assetlib, the source copy
+				// included. After the screen rather than behind it, this ran on the GUI thread with
+				// nothing on screen saying the editor was still working, which reads as a hang.
 				if (options.mesh)
 				{
 					progress.Report(0, 0, QString("Baking the pose bounds..."));
+					assetlib::requireUniqueSubmeshNames(*mesh);
+
+					const assetlib::ImportTarget target{ dataRoot,
+					                                     sourceName,
+					                                     assetlib::c_DefaultSampleRate };
+					const assetlib::SourceRef    sourceRef =
+						assetlib::copyImportedSource(source, target);
+					mesh->source = sourceRef;
+
 					assetlib::writeImportedRig(
 						*imported,
 						*mesh,
 						dataRoot,
 						bskelPath,
 						banimPath,
-						options.animations);
+						options.animations,
+						sourceRef);
 				}
 				else if (options.animations)
 				{
 					progress.Report(0, 0, QString("Baking the pose bounds..."));
-					assetlib::writeImportedClips(*imported, dataRoot, banimPath);
+
+					const assetlib::ImportTarget target{ dataRoot,
+					                                     sourceName,
+					                                     assetlib::c_DefaultSampleRate };
+					const assetlib::SourceRef    sourceRef =
+						assetlib::copyImportedSource(source, target);
+					assetlib::writeImportedClips(*imported, dataRoot, banimPath, sourceRef);
+					assetlib::writeImportedDocument(target, nullptr);
 				}
 
 				workerMs = std::chrono::duration<double, std::milli>(
@@ -242,6 +279,11 @@ namespace editor
 							options.outputs.materialStems);
 
 					assetlib::writeImportedMesh(*mesh, bmeshPath);
+
+					const assetlib::ImportTarget target{ dataRoot,
+						                                 sourceName,
+						                                 assetlib::c_DefaultSampleRate };
+					assetlib::writeImportedDocument(target, &*mesh);
 				}
 
 				// The UI half is the half that freezes the editor, so it is the one worth naming.

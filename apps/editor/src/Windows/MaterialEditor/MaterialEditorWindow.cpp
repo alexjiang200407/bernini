@@ -1,4 +1,5 @@
 #include "MaterialEditorWindow.h"
+#include "Mesh/mesh_load.h"
 
 #include <QComboBox>
 #include <QDebug>
@@ -20,6 +21,7 @@
 #include <QtNodes/NodeDelegateModelRegistry>
 
 #include <assetlib/AssetStore.h>
+#include <assetlib/asset_import.h>
 #include <assetlib/bmaterial_io.h>
 #include <assetlib/bmesh_io.h>
 #include <assetlib/mesh_tangents.h>
@@ -106,7 +108,7 @@ MaterialEditorWindow::MaterialEditorWindow(QWidget* parent, MaterialEditorWindow
 		const std::filesystem::path meshPath = m_Preview->MeshPath();
 
 		// Reloading is what puts the new vertex layout in front of the renderer.
-		if (editor::GenerateTangents(this, meshPath))
+		if (editor::GenerateTangents(this, m_DataRoot, meshPath))
 			m_Preview->LoadMesh(meshPath);
 	});
 
@@ -767,13 +769,25 @@ MaterialEditorWindow::AttachMaterialToMesh(int submeshIndex, const QString& mate
 
 	try
 	{
-		auto mesh = assetlib::load(meshPath);
+		auto mesh = editor::LoadMeshThroughSeam(m_DataRoot, meshPath);
 
 		// Like every asset reference, relative to the data root -- not to the mesh file.
 		const std::string relative = Rebase(materialPath, m_DataRoot, true).toStdString();
 
 		if (assetlib::attachMaterial(mesh, source, relative))
-			assetlib::save(mesh, meshPath);
+		{
+			// A mesh with a recorded source persists a rebind as a document edit: the binding is
+			// outside the cache key, so the mesh file is neither rewritten nor staled, and the
+			// next load applies the document. Only a sourceless mesh still saves its own file.
+			if (mesh.source.key.empty())
+				assetlib::save(mesh, meshPath);
+			else
+				assetlib::rebindSubmeshInDocument(
+					m_DataRoot,
+					mesh.source.key,
+					mesh.stringPool.at(mesh.submeshes[source].nameOffset),
+					relative);
+		}
 
 		// The mesh names it now, so the preview's cached bindings must say so too -- otherwise the
 		// next Save would still see this submesh as unbound and rewrite the `.bmesh` again.

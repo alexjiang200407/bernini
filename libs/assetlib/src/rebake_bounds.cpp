@@ -67,6 +67,9 @@ namespace assetlib
 		auto skeletons = std::unordered_map<std::string, Skeleton>();
 		auto meshes    = std::unordered_map<std::string, BMesh>();
 
+		// Plain loads, not the regeneration seam: a retrofit stamps boxes onto the bytes a
+		// project actually holds, and a stale group is migrate's job -- a foreign token here
+		// refuses loudly rather than baking boxes for a mesh the disk does not carry.
 		// `.bskel` path -> the rig, loaded once.
 		const auto skeletonAt = [&](const std::string& path) -> const Skeleton& {
 			const auto it = skeletons.find(path);

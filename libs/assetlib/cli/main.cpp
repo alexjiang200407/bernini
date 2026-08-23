@@ -5,6 +5,7 @@
 #include <assetlib/asset_import.h>
 #include <assetlib/asset_refs.h>
 #include <assetlib/assetlib.h>
+#include <assetlib/benv_io.h>
 #include <assetlib/benvl_io.h>
 #include <assetlib/bmaterial_io.h>
 #include <assetlib/bmesh_gltf.h>
@@ -102,6 +103,8 @@ namespace
 			return "was resampled against";
 		case assetlib::RefKind::kVatSource:
 			return "was baked from";
+		case assetlib::RefKind::kImportedSource:
+			return "was imported from";
 		}
 
 		return "references";
@@ -109,11 +112,36 @@ namespace
 
 	// Every container opens with a 4-byte magic, so the type is read from the file rather than guessed
 	// from its extension -- `describe` then works on a file named anything. This is the deliberate
-	// opposite of assetlib::assetTypeFromExtension, which never opens the file.
+	// opposite of assetlib::assetTypeFromExtension, which never opens the file. The exception is an
+	// authored text document, which has no magic to read: there the extension is the identity, as it
+	// is for the loaders.
 	ContainerType
 	sniff(const assetlib::AssetStore& store, std::string_view key)
 	{
-		const std::vector<std::byte> header = store.GetFiles().ReadRange(key, 0, sizeof(uint32_t));
+		const auto stamp = store.GetFiles().Stat(key);
+		core::throw_runtime_error_if(!stamp.has_value(), "{} does not exist", key);
+		core::throw_runtime_error_if(
+			stamp->size < sizeof(uint32_t),
+			"{} is too short to be a container",
+			key);
+
+		// 16 bytes rather than the magic's four: a text document may open with whitespace, and
+		// the dispatch must agree with what the loaders will read.
+		const std::vector<std::byte> header =
+			store.GetFiles().ReadRange(key, 0, std::min<uint64_t>(16, stamp->size));
+
+		if (assetlib::isTextAssetDocument(header))
+		{
+			const auto type = assetlib::assetTypeFromExtension(std::filesystem::path(key));
+			if (type == assetlib::AssetType::kMaterial)
+				return ContainerType::kMaterial;
+			if (type == assetlib::AssetType::kEnvironment)
+				return ContainerType::kEnv;
+			core::throw_runtime_error(
+				"{} is a text document, and the only text containers this tool knows are "
+				".bmaterial and .benv",
+				key);
+		}
 
 		uint32_t magic = 0;
 		std::memcpy(&magic, header.data(), sizeof(magic));
@@ -174,18 +202,22 @@ main(int argc, char** argv)
 	};
 
 	std::string input;
-	std::string name       = "mesh";
+	std::string name;
 	float       sampleRate = assetlib::c_DefaultSampleRate;
 
 	auto* bake = app.add_subcommand(
 		"bake",
-		"Import a glTF (.glb/.gltf) into a project: the mesh into Meshes/, its textures into "
-		"textures_src/, and the rig into Skeletons/ and Animations/ when it carries a skin");
+		"Import a .glb into a project: the mesh into Meshes/, its textures into textures_src/, "
+		"the source copy and its import document into meshes_src/, and the rig into Skeletons/ "
+		"and Animations/ when it carries a skin");
 	addProject(bake);
-	bake->add_option("input", input, "Source .glb/.gltf file, a path on disk")
+	bake->add_option("input", input, "Source .glb file, a path on disk")
 		->required()
 		->check(CLI::ExistingFile);
-	bake->add_option("-n,--name", name, "Base name for the imported assets (default: mesh)");
+	bake->add_option(
+		"-n,--name",
+		name,
+		"Base name for the imported assets (default: the source's stem)");
 	bake->add_option(
 			"-r,--sample-rate",
 			sampleRate,
@@ -245,7 +277,7 @@ main(int argc, char** argv)
 	envmap->add_option(
 		"--skybox-mip",
 		envSkyboxMip,
-		"Which level the written .bsky presents (default: 0 = sharp). Reads as depth of field, and "
+		"Which level the written .benv presents (default: 0 = sharp). Reads as depth of field, and "
 		"hides a source that cannot fill the face -- and unlike a baked blur it is reversible");
 	envmap->add_option("-m,--mips", envMips, "Mip count; must match MAX_REFLECTION_LOD + 1");
 	envmap->add_option("-n,--samples", envSamples, "GGX samples per texel (default: 128)");
@@ -296,12 +328,12 @@ main(int argc, char** argv)
 		"-b,--brief",
 		describeBrief,
 		"Mesh only: print the summary and material table, but not every submesh");
-	bool describeSchema = false;
+	bool describeKey = false;
 	describe->add_flag(
-		"-s,--schema",
-		describeSchema,
-		"Also print the file's format number and the schema it was written with -- every struct it "
-		"stores, field by field -- which is what an older file actually holds");
+		"-k,--key",
+		describeKey,
+		"Also print the file's cache key: bake token, source, source stamp, parameter hash -- "
+		"without loading a payload");
 
 	std::string refsAsset;
 
@@ -372,16 +404,28 @@ main(int argc, char** argv)
 
 	auto* migrate = app.add_subcommand(
 		"migrate",
-		"Re-save every container under a project's data root at the current schema. A file that is "
-		"already current is left untouched, so running it twice rewrites nothing the second time; "
-		"a "
-		"file that cannot be read is reported and skipped");
+		"Re-save every container at what the project's current state says it should hold: stale "
+		"geometry regenerates from its copied source, and a rebind reaches its mesh. A file "
+		"that is already current is left untouched, so "
+		"running it twice rewrites nothing the second time; a file that cannot be read -- or a "
+		"stale group with no source -- is reported and skipped");
 	addProject(migrate);
 	migrate->add_flag(
 		"-n,--dry-run",
 		migrateDryRun,
 		"Report what would be rewritten; write nothing");
 	migrate->add_flag("-y,--yes", migrateYes, "Rewrite without asking for confirmation");
+
+	bool reauthorYes = false;
+
+	auto* reauthor = app.add_subcommand(
+		"reauthor",
+		"Rewrite every import document's bindings from its mesh's current state -- the one-time "
+		"adoption step that makes the documents authoritative. Run it once when a project first "
+		"picks up documents; run later it would overwrite any rebind saved only to a document "
+		"with the mesh's older state");
+	addProject(reauthor);
+	reauthor->add_flag("-y,--yes", reauthorYes, "Rewrite without asking for confirmation");
 
 	bool boundsDryRun = false;
 	bool boundsYes    = false;
@@ -404,9 +448,9 @@ main(int argc, char** argv)
 
 	auto* exposure = app.add_subcommand(
 		"exposure",
-		"Show or author the exposure a .benvl renders at, overruling the value its bake derived");
+		"Show or author the exposure an environment renders at, overruling its bake's derivation");
 	addProject(exposure);
-	exposure->add_option("input", expInput, "A .benvl, relative to the data root")->required();
+	exposure->add_option("input", expInput, "A .benv, relative to the data root")->required();
 	auto* expSetOpt = exposure->add_option(
 		"-s,--set",
 		expSet,
@@ -425,6 +469,9 @@ main(int argc, char** argv)
 
 			namespace fs = std::filesystem;
 
+			if (name.empty())
+				name = fs::path(input).stem().string();
+
 			const fs::path bmeshPath = dataRoot / assetlib::c_MeshesDirectoryName /
 			                           (name + std::string(assetlib::c_MeshExtension));
 			const fs::path bskelPath =
@@ -436,7 +483,9 @@ main(int argc, char** argv)
 			// imports sharing one would overwrite each other's files.
 			const fs::path textureDir = dataRoot / assetlib::c_TexturesSrcDirectoryName / name;
 
-			const auto imported = assetlib::loadFromGltf(input, {}, sampleRate);
+			assetlib::requireSelfContainedSource(input);
+
+			const auto imported = assetlib::loadFromGltf(input, { .sampleRate = sampleRate });
 
 			// Only what this import will actually write. writeImportedRig no-ops on a source with no
 			// skin, so a static mesh neither claims Skeletons/<name>.bskel nor may take one back
@@ -460,6 +509,11 @@ main(int argc, char** argv)
 				if (fs::exists(target, ec))
 					collisions.push_back(fs::relative(target, dataRoot, ec).generic_string());
 			};
+
+			const fs::path sourceCopy = assetlib::importedSourcePathFor(dataRoot, name);
+			const fs::path importDoc  = assetlib::importDocumentPathFor(dataRoot, name);
+			files.push_back(sourceCopy);
+			files.push_back(importDoc);
 
 			for (const fs::path& file : files) noteIfPresent(file);
 			noteIfPresent(textureDir);
@@ -492,13 +546,27 @@ main(int argc, char** argv)
 
 			try
 			{
+				assetlib::BMesh mesh = assetlib::toBMesh(imported);
+				assetlib::requireUniqueSubmeshNames(mesh);
+
+				const assetlib::ImportTarget target{ dataRoot, name, sampleRate };
+				const assetlib::SourceRef    source = assetlib::copyImportedSource(input, target);
+				mesh.source                         = source;
+
 				assetlib::writeTextures(imported, textureDir);
 
-				assetlib::BMesh mesh    = assetlib::toBMesh(imported);
-				const auto      derived = assetlib::generateTangents(mesh);
+				const auto derived = assetlib::generateTangents(mesh);
 
-				assetlib::writeImportedRig(imported, mesh, dataRoot, bskelPath, banimPath, true);
+				assetlib::writeImportedRig(
+					imported,
+					mesh,
+					dataRoot,
+					bskelPath,
+					banimPath,
+					true,
+					source);
 				assetlib::writeImportedMesh(mesh, bmeshPath);
+				assetlib::writeImportedDocument(target, &mesh);
 
 				if (derived.skipped > 0)
 					spdlog::warn(
@@ -693,14 +761,34 @@ main(int argc, char** argv)
 				return store.Describe(asset);
 			};
 
-			if (describeSchema)
+			if (describeKey)
 			{
-				const auto info = assetlib::inspectContainer(store.GetFiles().Read(key));
+				const std::vector<std::byte> bytes = store.GetFiles().Read(key);
 				// Straight to stdout, not the logger: this is the command's output, so it should
 				// pipe into a file or a diff without spdlog's timestamps and level prefixes.
-				std::cout
-					<< std::format("format {}.{}\nschema\n", info.versionMajor, info.versionMinor)
-					<< assetlib::describe(info.schema) << '\n';
+				if (assetlib::isTextAssetDocument(bytes))
+				{
+					// An authored text document has no cache key; it is its own description.
+					std::cout << "authored text document\n";
+				}
+				else if (const auto entry = assetlib::inspectCacheEntry(bytes))
+				{
+					std::cout << std::format(
+						"cache entry\n  bake token   {:#018x}\n  source       {}\n  source "
+						"stamp  {} bytes, {:#018x}\n  parameters   {:#018x}\n",
+						entry->bakeToken,
+						entry->source.key.empty() ? "(never recorded)" : entry->source.key,
+						entry->source.stamp.size,
+						entry->source.stamp.hash,
+						entry->source.parametersHash);
+				}
+				else
+				{
+					core::throw_runtime_error(
+						"{} is neither a text document nor a cache entry; a chunk-era file is "
+						"no longer convertible -- re-import or re-author it",
+						key);
+				}
 			}
 
 			switch (sniff(store, key))
@@ -815,20 +903,26 @@ main(int argc, char** argv)
 					report.Count(assetlib::MigratedFile::Outcome::kFailed));
 			};
 
-			// The preview walk never writes, so a read-only file or a full disk shows up only in the
-			// real one -- which is why the real walk's report is the one printed last.
-			const auto preview = assetlib::migrateProject(root, true);
-			print(preview, true);
-			if (migrateDryRun)
-				return preview.Count(assetlib::MigratedFile::Outcome::kFailed) == 0 ? 0 : 1;
-
-			const auto toRewrite = preview.Count(assetlib::MigratedFile::Outcome::kRewritten);
-			if (toRewrite == 0)
-				return preview.Count(assetlib::MigratedFile::Outcome::kFailed) == 0 ? 0 : 1;
-			if (!migrateYes && !confirm(std::format("Rewrite {} file(s) in place?", toRewrite)))
+			// The preview walk never writes, so a read-only file or a full disk shows up only in
+			// the real one -- which is why the real walk's report is the one printed last. With
+			// -y there is nobody to show it to, and a preview now costs real work: a stale group
+			// re-imports its source once per file, so the confirmed path pays that once, not
+			// twice.
+			if (migrateDryRun || !migrateYes)
 			{
-				spdlog::info("Left '{}' alone.", root.string());
-				return 0;
+				const auto preview = assetlib::migrateProject(root, true);
+				print(preview, true);
+				if (migrateDryRun)
+					return preview.Count(assetlib::MigratedFile::Outcome::kFailed) == 0 ? 0 : 1;
+
+				const auto toRewrite = preview.Count(assetlib::MigratedFile::Outcome::kRewritten);
+				if (toRewrite == 0)
+					return preview.Count(assetlib::MigratedFile::Outcome::kFailed) == 0 ? 0 : 1;
+				if (!confirm(std::format("Rewrite {} file(s) in place?", toRewrite)))
+				{
+					spdlog::info("Left '{}' alone.", root.string());
+					return 0;
+				}
 			}
 
 			const auto report = assetlib::migrateProject(root, false);
@@ -838,6 +932,56 @@ main(int argc, char** argv)
 		catch (const std::exception& e)
 		{
 			spdlog::error("migrate failed: {}", e.what());
+			return 1;
+		}
+	}
+
+	if (*reauthor)
+	{
+		try
+		{
+			const assetlib::Project     project = assetlib::Project::Open(projectFile);
+			const std::filesystem::path root    = project.GetDataDirectory();
+
+			if (!reauthorYes &&
+			    !confirm("Rewrite the import documents' bindings from the meshes in place?"))
+			{
+				spdlog::info("Left '{}' alone.", root.string());
+				return 0;
+			}
+
+			const std::vector<assetlib::ReauthoredDocument> report =
+				assetlib::reauthorImportDocuments(root);
+
+			size_t rewritten = 0;
+			size_t failed    = 0;
+			for (const assetlib::ReauthoredDocument& document : report)
+			{
+				switch (document.outcome)
+				{
+				case assetlib::ReauthoredDocument::Outcome::kUnchanged:
+					break;
+				case assetlib::ReauthoredDocument::Outcome::kRewritten:
+					++rewritten;
+					std::cout << "reauthored      " << document.key << '\n';
+					break;
+				case assetlib::ReauthoredDocument::Outcome::kFailed:
+					++failed;
+					std::cout << "cannot reauthor " << document.key << ": " << document.message
+							  << '\n';
+					break;
+				}
+			}
+			std::cout << std::format(
+				"{} unchanged, {} reauthored, {} failed\n",
+				report.size() - rewritten - failed,
+				rewritten,
+				failed);
+			return failed == 0 ? 0 : 1;
+		}
+		catch (const std::exception& e)
+		{
+			spdlog::error("reauthor failed: {}", e.what());
 			return 1;
 		}
 	}
@@ -920,13 +1064,14 @@ main(int argc, char** argv)
 			const auto graph = assetlib::AssetRefGraph::Scan(store);
 
 			spdlog::info(
-				"Scanned {} meshes, {} materials, {} environment assets, {} clip sets and {} VAT "
-				"bakes: {} references",
+				"Scanned {} meshes, {} materials, {} environment assets, {} clip sets, {} VAT "
+				"bakes and {} import documents: {} references",
 				graph.meshesScanned,
 				graph.materialsScanned,
 				graph.environmentsScanned,
 				graph.clipSetsScanned,
 				graph.vatsScanned,
+				graph.importDocumentsScanned,
 				graph.Edges().size());
 
 			// The listing is the command's output, so it goes to stdout rather than through the logger.
@@ -996,6 +1141,12 @@ main(int argc, char** argv)
 
 			if (report.vatsRebaked != 0)
 				spdlog::info("Re-baked {} stale .bvat before packing", report.vatsRebaked);
+			if (report.geometryRebaked != 0)
+				spdlog::info(
+					"Re-baked {} geometry entr{} into the archive (stale on disk, or a rebind "
+					"not yet migrated)",
+					report.geometryRebaked,
+					report.geometryRebaked == 1 ? "y" : "ies");
 
 			spdlog::info(
 				"Packed {} entries, {} MB of payload, into '{}'",
@@ -1135,26 +1286,32 @@ main(int argc, char** argv)
 			const assetlib::Project     project = assetlib::Project::Open(projectFile);
 			const assetlib::AssetStore& store   = project.GetStore();
 
-			const std::string      key      = assetlib::normalizePath(expInput);
-			assetlib::BEnvLighting lighting = store.LoadEnvLighting(key);
+			const std::string key = assetlib::normalizePath(expInput);
+			assetlib::BEnv    env = store.LoadEnv(key);
+
+			// Read before the write, so a lighting that cannot be loaded refuses before the
+			// document changes rather than after.
+			const assetlib::BEnvLighting lighting = env.lighting.empty() ?
+			                                            assetlib::BEnvLighting() :
+			                                            store.LoadEnvLighting(env.lighting);
 
 			if (*expSetOpt || expClear)
 			{
 				if (expClear)
-					lighting.exposureOverride.reset();
+					env.exposureOverride.reset();
 				else
-					lighting.exposureOverride = expSet;
+					env.exposureOverride = expSet;
 
-				assetlib::saveEnvLighting(lighting, store.ResolveWritePath(key));
+				assetlib::saveEnv(env, store.ResolveWritePath(key));
 			}
 
 			spdlog::info(
 				"'{}': derived {:.6g}, authored {}, rendering at {:.6g}",
 				expInput,
 				lighting.exposure,
-				lighting.exposureOverride ? std::format("{:.6g}", *lighting.exposureOverride) :
-											std::string("(none)"),
-				lighting.EffectiveExposure());
+				env.exposureOverride ? std::format("{:.6g}", *env.exposureOverride) :
+									   std::string("(none)"),
+				assetlib::effectiveExposure(env, lighting));
 		}
 		catch (const std::exception& e)
 		{

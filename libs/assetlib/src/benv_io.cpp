@@ -1,14 +1,13 @@
 #include "assetlib/benv_io.h"
 
+#include <assetlib/container_info.h>
 #include <assetlib_structs/BEnv.h>
-#include <assetlib_structs/magic.h>
 #include <core/err/util.h>
 #include <core/file/file.h>
-#include <core/str/string_pool.h>
+#include <nlohmann/json.hpp>
 
-#include "AssetSchemaBuilder.h"
-#include "chunk_io.h"
 #include "fs_util.h"
+#include "json_doc.h"
 
 #include "mounted_io.h"
 
@@ -16,75 +15,62 @@ namespace assetlib
 {
 	namespace
 	{
-		constexpr uint16_t c_EnvVersionMajor = 3;
-		constexpr uint16_t c_EnvVersionMinor = 0;
-
 		constexpr std::string_view c_What = "benv";
 
-		enum class ChunkId : uint32_t
+		BEnv
+		envFromDocument(std::string_view text)
 		{
-			kEnv = 1,  // one EnvRecord
-			kStringPool
-		};
+			auto json = doc::parseObject(text, "benv: the document");
 
-		struct EnvRecord
-		{
-			uint32_t nameOffset;
-			uint32_t skyOffset;
-			uint32_t lightingOffset;
-		};
+			BEnv env;
 
-		static_assert(sizeof(EnvRecord) == 12);
+			const doc::Taker taker(json, c_What);
+			taker.Take("name", env.name);
+			taker.Take("sky", env.sky);
+			taker.Take("lighting", env.lighting);
+			taker.Take("skyMipLevel", env.skyMipLevel);
+			taker.Take("skyRotationY", env.skyRotationY);
 
-		const schema::Schema&
-		envSchema()
-		{
-			static const schema::Schema c_Schema =
-				schema::SchemaBuilder()
-					.AddLayout<EnvRecord>(
-						"EnvRecord",
-						[](auto& layout) {
-							layout.AddField("nameOffset", &EnvRecord::nameOffset)
-								.AddField("skyOffset", &EnvRecord::skyOffset)
-								.AddField("lightingOffset", &EnvRecord::lightingOffset);
-						})
-					.Finish();
-			return c_Schema;
+			if (json.contains("exposureOverride"))
+			{
+				float authored = 0.0f;
+				taker.Take("exposureOverride", authored);
+				env.exposureOverride = authored;
+			}
+
+			env.extraJson = json.dump();
+			return env;
 		}
 	}
 
 	std::vector<std::byte>
 	serializeEnv(const BEnv& env)
 	{
-		core::string_pool pool;
-		EnvRecord         record{};
-		record.nameOffset     = pool.add(env.name);
-		record.skyOffset      = pool.add(env.sky);
-		record.lightingOffset = pool.add(env.lighting);
+		auto json = doc::parseObject(env.extraJson, "benv: extraJson");
 
-		chunk::Writer writer(envSchema());
-		writer.Add(ChunkId::kEnv, std::vector<EnvRecord>{ record });
-		writer.Add(ChunkId::kStringPool, pool.bytes());
-		return writer.Finish(magic::c_BEnv, c_EnvVersionMajor, c_EnvVersionMinor);
+		json["name"]         = env.name;
+		json["sky"]          = env.sky;
+		json["lighting"]     = env.lighting;
+		json["skyMipLevel"]  = env.skyMipLevel;
+		json["skyRotationY"] = doc::plainFloat(env.skyRotationY);
+
+		if (env.exposureOverride.has_value())
+			json["exposureOverride"] = doc::plainFloat(*env.exposureOverride);
+		else
+			json.erase("exposureOverride");
+
+		return doc::toBytes(json);
 	}
 
 	BEnv
 	deserializeEnv(std::span<const std::byte> bytes)
 	{
-		const chunk::Reader reader(bytes, magic::c_BEnv, c_EnvVersionMajor, c_What, envSchema());
-
-		const auto records = reader.Require<EnvRecord>(ChunkId::kEnv);
 		core::throw_runtime_error_if(
-			records.size() != 1,
-			"benv: the env chunk holds {} entries, not one",
-			records.size());
-		const core::string_pool pool(reader.Read<char>(ChunkId::kStringPool));
-
-		BEnv env;
-		env.name     = pool.at(records[0].nameOffset);
-		env.sky      = pool.at(records[0].skyOffset);
-		env.lighting = pool.at(records[0].lightingOffset);
-		return env;
+			!isTextAssetDocument(bytes),
+			"benv: not a text document; a chunk-era file is no longer convertible -- "
+			"re-import the environment");
+		return envFromDocument(
+			std::string_view(reinterpret_cast<const char*>(bytes.data()), bytes.size()));
 	}
 
 	void

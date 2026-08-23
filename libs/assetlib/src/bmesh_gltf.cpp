@@ -934,25 +934,33 @@ namespace assetlib
 		}
 	}
 
+	namespace
+	{
+		/** The parse alone: keeps tinygltf to the glTF's JSON and buffers, no image decode. */
+		void
+		skipImageDecode(tinygltf::TinyGLTF& loader)
+		{
+			loader.SetImageLoader(
+				[](tinygltf::Image*,
+			       const int,
+			       std::string*,
+			       std::string*,
+			       int,
+			       int,
+			       const unsigned char*,
+			       int,
+			       void*) { return true; },
+				nullptr);
+		}
+	}
+
 	std::vector<GltfMaterial>
 	probeGltfMaterials(const std::filesystem::path& path)
 	{
 		tinygltf::TinyGLTF loader;
 		tinygltf::Model    model;
 
-		// Decoding every texture to answer a question about the material table is the whole cost of an
-		// import; the stub keeps the parse to the glTF's JSON and buffers.
-		loader.SetImageLoader(
-			[](tinygltf::Image*,
-		       const int,
-		       std::string*,
-		       std::string*,
-		       int,
-		       int,
-		       const unsigned char*,
-		       int,
-		       void*) { return true; },
-			nullptr);
+		skipImageDecode(loader);
 
 		loadModel(loader, model, path);
 
@@ -965,10 +973,13 @@ namespace assetlib
 	}
 
 	BMeshImport
-	loadFromGltf(const std::filesystem::path& path, const CancelToken& cancel, float sampleRate)
+	loadFromGltf(const std::filesystem::path& path, const GltfLoadOptions& options)
 	{
 		tinygltf::TinyGLTF loader;
 		tinygltf::Model    model;
+
+		if (options.textures == GltfTextures::kSkip)
+			skipImageDecode(loader);
 
 		loadModel(loader, model, path);
 
@@ -979,7 +990,7 @@ namespace assetlib
 		// come out as is the skeleton's bone order.
 		const SkinImport skin = importSkin(model);
 		mesh.skeleton         = skin.skeleton;
-		mesh.animations       = importAnimations(model, skin, sampleRate);
+		mesh.animations       = importAnimations(model, skin, options.sampleRate);
 
 		// Before the submeshes too: a rigid mesh parented to a joint is bound to it at import, and
 		// that rewrites its vertices.
@@ -987,7 +998,7 @@ namespace assetlib
 
 		for (size_t meshIndex = 0; meshIndex < model.meshes.size(); ++meshIndex)
 		{
-			throwIfCancelled(cancel);
+			throwIfCancelled(options.cancel);
 
 			const tinygltf::Mesh& gltfMesh = model.meshes[meshIndex];
 
@@ -1014,9 +1025,12 @@ namespace assetlib
 			mesh.meshes.push_back(entry);
 		}
 
-		std::vector<uint32_t> imageToTexture;
-		buildTextures(mesh, model, imageToTexture, cancel);
-		buildMaterials(mesh, model, imageToTexture);
+		if (options.textures == GltfTextures::kDecode)
+		{
+			std::vector<uint32_t> imageToTexture;
+			buildTextures(mesh, model, imageToTexture, options.cancel);
+			buildMaterials(mesh, model, imageToTexture);
+		}
 		return mesh;
 	}
 }

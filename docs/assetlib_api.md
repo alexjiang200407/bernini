@@ -35,11 +35,12 @@ when this doc disagrees, trust the header, then fix this doc.
   is settled and waiting on a live feature — see
   [docs/specs/assetlib_store_codecs.md](docs/specs/assetlib_store_codecs.md).
 
-* **One chunked container format, and every file carries its own schema.** `.bmesh`, `.bskel`,
-  `.banim`, `.bvat` and `.bmaterial` are all chunk containers; chunk 0 is the schema, and a
-  reader converts each chunk from the layout the *file* stores to the current one by field name.
-  A struct that changed shape leaves old files readable, and the version number is never what
-  decides. [docs/asset_schema.md](docs/asset_schema.md)
+* **Two container regimes, and the split is authored-vs-derived.** `.bmaterial`, `.benv` and
+  `.bimport` are canonical-JSON text documents, unknown keys preserved on round-trip; `.bmesh`,
+  `.bskel`, `.banim`, `.bvat`, `.bsky` and `.benvl` are cache entries — a frozen header carrying
+  the cache key (bake token, source stamp, parameter hash, source mount key) over schema-less
+  chunks. A key mismatch is a cache miss that regenerates, never a conversion.
+  [docs/asset_containers.md](docs/asset_containers.md)
 
 * **Every reference is data-root-relative, and layout is a table.** A `.bmesh` in
   `Meshes/props/` names `Textures/skin.ktx2`, not a path relative to itself, so a bake writing
@@ -94,7 +95,7 @@ path, load from a host path.
 | VAT bake | [vat_bake.h](libs/assetlib/include/assetlib/vat_bake.h) | A rig's clips baked to textures. [docs/vat.md](docs/vat.md) |
 | Pose and CPU skinning | [skeleton.h](libs/assetlib/include/assetlib/skeleton.h), [skinning.h](libs/assetlib/include/assetlib/skinning.h) | Deliberately the unoptimised reference every GPU path is diffed against. [docs/skinning.md](docs/skinning.md) |
 | Images | [image_io.h](libs/assetlib/include/assetlib/image_io.h) | KTX2 encode/decode, RGB9E5 pack. [docs/asset_standards.md](docs/asset_standards.md) |
-| Describe, migrate, prune | [asset_describe.h](libs/assetlib/include/assetlib/asset_describe.h), [migrate.h](libs/assetlib/include/assetlib/migrate.h), [texture_prune.h](libs/assetlib/include/assetlib/texture_prune.h) | Text for a person; re-save at the current schema; collect unreferenced bakes. |
+| Describe, migrate, prune | [asset_describe.h](libs/assetlib/include/assetlib/asset_describe.h), [migrate.h](libs/assetlib/include/assetlib/migrate.h), [texture_prune.h](libs/assetlib/include/assetlib/texture_prune.h) | Text for a person; re-save at the current form; collect unreferenced bakes. |
 | Cancellation | [cancel.h](libs/assetlib/include/assetlib/cancel.h) | `std::stop_token`, polled at the encode that dominates each bake. |
 
 ## Topology
@@ -103,7 +104,7 @@ path, load from a host path.
 flowchart TD
     GLTF[".glb / .gltf / .hdr"] -- "loadFromGltf, importEnvironment" --> IMP["BMeshImport (flattened)"]
     IMP -- "toBMesh" --> POD["BMesh, Skeleton, AnimationSet"]
-    POD -- "serialize" --> C["chunk container (schema in chunk 0)"]
+    POD -- "serialize" --> C["cache entry (key in the header)"]
 
     STORE["AssetStore"] -- "mount key, read" --> FS["core::file::IFileSystem"]
     STORE -- "ResolveWritePath" --> ROOT["data root (loose)"]
@@ -154,9 +155,10 @@ The dotted edge is the asymmetry: reads go through the store, writes go around i
   index that resolves to nothing from one that does not.
 * **`save` does not create directories**; `writeImportedMesh` does. An import aimed at a
   subfolder needs the latter.
-* **`deserialize*`** — `@throws` on a file from *before* the schema chunk. Those are unreadable
-  by design, not by omission: layout comes from the file, and a file that carries none has
-  nothing to convert from. `assetlib_cli migrate` is the upgrade path.
+* **`deserialize*`** — `@throws` on a foreign bake token or a chunk-era file. Both are
+  unreadable by design, not by omission: a cache miss regenerates from the authored side, and
+  there is nothing to convert from. `AssetStore::LoadRegen*` is the seam that regenerates;
+  `assetlib_cli migrate` rewrites a whole project.
 
 ### Reference graph
 * **`AssetRefGraph::Scan`** — `@throws` if a *referrer* cannot be read, deliberately: an edge we

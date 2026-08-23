@@ -55,4 +55,11 @@ namespace core::file
 	 */
 	void
 	write_atomic(const std::filesystem::path& path, std::span<const std::byte> bytes);
+
+	/** The text form: what a caller holding a serialized document writes without an as_bytes dance. */
+	inline void
+	write_atomic(const std::filesystem::path& path, std::string_view text)
+	{
+		write_atomic(path, std::as_bytes(std::span(text.data(), text.size())));
+	}
 }

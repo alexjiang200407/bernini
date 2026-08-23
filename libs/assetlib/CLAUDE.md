@@ -13,15 +13,26 @@ from local into model space, `skinningMatrices` composes each with its inverse b
 plain CPU code — and it is the reference every later GPU path is diffed against, which is why it is
 deliberately the unoptimised form.
 
-`.bmesh`, `.bskel`, `.banim` and `.bvat` are one chunked container format, in `src/chunk_io.h`. A chunk is
-addressed by id and an absent one is not an error. Chunk 0 is the file's schema (`schema`):
-every POD a chunk holds is registered as a layout — the shared ones as `AssetSchemaBuilder`'s chain, a
-container's private ones beside its io — and a reader converts each chunk from the layout the file
-stores to the current one by field name, so a struct that changed shape leaves old files readable.
-A change of *meaning* is a `chunk::Hook` whose predicate reads the file's schema, never its version;
-rename the field when its meaning changes, so the schema can see it. `.bmaterial` is one of them too:
-its strings live in a pool chunk and its records are PODs with pool offsets, so one converter serves
-every container.
+Two container regimes (see docs/asset_containers.md):
+
+`.bmaterial` and `.benv` are **authored text documents**: canonical JSON (`src/bmaterial_io.cpp`,
+`src/benv_io.cpp`), named keys, unknown keys preserved on round-trip so a sibling branch's field
+survives a reader that has never heard of it. `.benv` carries the env family's authored state —
+the composition and the presentation knobs (`skyMipLevel`, `skyRotationY`, `exposureOverride`).
+
+Everything else derived — `.bmesh`, `.bskel`, `.banim`, `.bvat`, `.bsky`, `.benvl` — is a **cache
+entry**, in `src/cache_io.h`: a frozen header carrying the cache key (bake token, source stamp,
+parameter hash, source mount key), raw current-layout chunks with no self-description, and a chunk
+table. A chunk is addressed by id and an absent one is not an error. There is no conversion and no
+old shape to parse — a token mismatch is a cache miss. For geometry, `AssetStore`'s `LoadRegen*`
+methods are the seam that acts on one: a stale entry regenerates in memory from its `meshes_src/`
+source at the parameters its `.bimport` records, with the document's bindings applied over the
+result, while a read-only store trusts its keys because `pack` made them true. For the env family
+and `.bvat` the re-bake is deliberate (`pack`, the editor) rather than at load. A change to what a
+container stores — layout or meaning — is one edit: bump its token in `src/bake_tokens.h` to a
+fresh random value. A forgotten bump on a layout change fails `TokenCanary_test`, which pins each
+writer's output hash beside its token; a semantic change the fixture cannot see is still yours to
+remember.
 
 The public surface is documented as a map in [docs/assetlib_api.md](../../docs/assetlib_api.md).
 

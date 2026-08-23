@@ -2,6 +2,7 @@
 
 #include <gamelib/vat_freshness.h>
 
+#include <assetlib/RegenMesh.h>
 #include <assetlib/banim_io.h>
 #include <assetlib/benv_io.h>
 #include <assetlib/benvl_io.h>
@@ -28,6 +29,23 @@ namespace game
 {
 	namespace
 	{
+		/**
+		 * The seam's mesh, its unbound bindings warned about: a scene load draws those submeshes
+		 * unlit, and warning is the strictest a load may be -- `migrate` failing the file is where
+		 * the report escalates.
+		 */
+		assetlib::BMesh
+		LoadRegenMeshWarned(const assetlib::AssetStore& store, std::string_view relPath)
+		{
+			assetlib::RegenMesh current = store.LoadRegenMesh(relPath);
+			for (const std::string& submesh : current.unboundBindings)
+				logger::warn(
+					"AssetManager: '{}': its import document binds submesh '{}', which the mesh "
+					"no longer has; rebind or re-export",
+					relPath,
+					submesh);
+			return std::move(current.mesh);
+		}
 		// The asset says what the material *is* (its glTF-shaped alpha mode); the renderer says which
 		// pass composites it. They are separate enums because assetlib cannot link bgl, and separate
 		// concepts because a layer is free to grow buckets no material ever authors. gamelib is the
@@ -181,13 +199,13 @@ namespace game
 		};
 
 		Environment out;
+		out.skyMipLevel  = env.skyMipLevel;
+		out.skyRotationY = env.skyRotationY;
 
 		if (!env.sky.empty())
 		{
 			const assetlib::BSky sky = m_Store.LoadSky(env.sky);
 			out.skybox               = acquireRoute(sky.sky);
-			out.skyMipLevel          = sky.mipLevel;
-			out.skyRotationY         = sky.rotationY;
 		}
 
 		if (!env.lighting.empty())
@@ -195,7 +213,8 @@ namespace game
 			const assetlib::BEnvLighting lighting = m_Store.LoadEnvLighting(env.lighting);
 			out.prefilter                         = acquireRoute(lighting.prefilter);
 			out.irradiance                        = acquireRoute(lighting.irradiance);
-			out.exposure                          = lighting.exposure;
+
+			out.exposure = assetlib::effectiveExposure(env, lighting);
 		}
 
 		return out;
@@ -288,7 +307,7 @@ namespace game
 			return record.handle;
 		}
 
-		const assetlib::BMesh mesh = m_Store.LoadMesh(relPath);
+		const assetlib::BMesh mesh = LoadRegenMeshWarned(m_Store, relPath);
 
 		if (meshIndex >= mesh.meshes.size())
 		{
@@ -366,7 +385,7 @@ namespace game
 		const auto bvatRel = assetlib::vatPathFor(relPath, animationsRelPath);
 		const auto vat     = EnsureVatBaked(m_Store, relPath, animationsRelPath);
 
-		const assetlib::BMesh mesh = m_Store.LoadMesh(relPath);
+		const assetlib::BMesh mesh = LoadRegenMeshWarned(m_Store, relPath);
 
 		core::throw_runtime_error_if(
 			meshIndex >= mesh.meshes.size(),
@@ -491,11 +510,11 @@ namespace game
 
 		// Through the store, like every other read here: a project opens as a mount, so a rig that
 		// ships inside a .bpak is only reachable that way.
-		const assetlib::AnimationSet animations = m_Store.LoadAnimations(animationsNorm);
+		const assetlib::AnimationSet animations = m_Store.LoadRegenAnimations(animationsNorm);
 
 		// The clip set names its own rig, so the pair cannot be mismatched by a caller -- only by a
 		// rig that changed after the clips were cooked, which is what the signature catches.
-		const assetlib::Skeleton skeleton = m_Store.LoadSkeleton(animations.skeleton);
+		const assetlib::Skeleton skeleton = m_Store.LoadRegenSkeleton(animations.skeleton);
 
 		core::throw_runtime_error_if(
 			!assetlib::animationsMatchSkeleton(animations, skeleton),
@@ -504,7 +523,7 @@ namespace game
 			animationsNorm,
 			animations.skeleton);
 
-		const assetlib::BMesh mesh = m_Store.LoadMesh(relPath);
+		const assetlib::BMesh mesh = LoadRegenMeshWarned(m_Store, relPath);
 
 		core::throw_runtime_error_if(
 			meshIndex >= mesh.meshes.size(),

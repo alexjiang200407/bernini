@@ -1,20 +1,28 @@
+#include <assetlib/AssetStore.h>
+#include <assetlib/asset_import.h>
 #include <assetlib/banim_io.h>
+#include <assetlib/bmesh_io.h>
 #include <assetlib/bskel_io.h>
 #include <assetlib/bvat_io.h>
+#include <assetlib/import_document.h>
 #include <assetlib/pak_io.h>
 #include <assetlib/pak_pack.h>
 #include <assetlib/vat_bake.h>
+#include <assetlib_structs/BMesh.h>
 #include <assetlib_structs/BVat.h>
 #include <assetlib_structs/Skeleton.h>
 #include <core/file/LooseFileSystem.h>
 #include <core/file/file.h>
 
+#include <catch2/matchers/catch_matchers_string.hpp>
+
+#include "CacheTamper.h"
+#include "ImportUnitGroup.h"
 #include "MountAt.h"
 #include "RefsSandbox.h"
+#include "SkinnedGltf.h"
 #include "VatFixture.h"
-#include "chunk_io.h"
 #include "mounted_io.h"
-#include <assetlib/AssetStore.h>
 
 using namespace assetlib;
 using namespace assetlib::test;
@@ -48,6 +56,12 @@ namespace
 			fs::create_directories(root.path / "ShaderCache");
 			std::ofstream(root.path / "ShaderCache/pipelines.psolib") << "per-machine";
 			std::ofstream(root.path / ".overlay.json") << "{}";
+
+			fs::create_directories(root.path / "meshes_src");
+			std::ofstream(root.path / "meshes_src/kirk.glb") << "the imported source";
+			std::ofstream(root.path / "meshes_src/kirk.bimport")
+				<< serializeImportDocument(ImportDocument{});
+			std::ofstream(root.path / "stray.bimport") << serializeImportDocument(ImportDocument{});
 		}
 
 		return environment;
@@ -107,6 +121,15 @@ TEST_CASE("pack carries what the runtime reads and nothing that produces it", "[
 		// No entry anywhere under the authoring directory, however deep.
 		for (const std::string& entry : entries)
 			CHECK(entry.find("textures_src/") == std::string::npos);
+	}
+
+	SECTION("an imported source and its document are out, wherever they sit")
+	{
+		CHECK_FALSE(Contains(entries, "meshes_src/kirk.glb"));
+		CHECK_FALSE(Contains(entries, "meshes_src/kirk.bimport"));
+		// A stray document outside meshes_src is excluded by its *type*, not the directory --
+		// the game never reads one, so it must not ride in on being a registered extension.
+		CHECK_FALSE(Contains(entries, "stray.bimport"));
 	}
 
 	// An extension nothing claims is an extension the archive does not carry. Counting them is what
@@ -284,48 +307,19 @@ TEST_CASE("pack re-bakes a stale .bvat, and leaves a current one alone", "[pack]
 	}
 }
 
-// A bake's tables can read cleanly while its pixel chunks are ones the runtime will not accept --
-// a bake from before the normals chunk changed id is exactly that -- and a read-only mount has
-// nowhere to re-bake it, so pack is the last moment it can be made right.
-TEST_CASE("pack re-bakes a .bvat the runtime could not read", "[pack][vat]")
+// Loud rather than silently shipping: a `.bvat` from another bake revision names its inputs in a
+// layout this build does not vouch for, so pack cannot re-bake it. The loose project heals one on
+// its next load, and that has to happen before an export.
+TEST_CASE("pack refuses a .bvat from another bake revision", "[pack][vat]")
 {
 	const DataRoot root("pack_vat_old");
 	StageRig(root);
 
-	const fs::path bvat  = root.path / "Meshes/rig.bvat";
-	auto           bytes = core::file::read_file_bytes(bvat.string());
+	test::TamperHeaderByte(root.path / "Meshes/rig.bvat", test::c_TokenOffset);
 
-	auto header = chunk::Header();
-	std::memcpy(&header, bytes.data(), sizeof(header));
-	bool retired = false;
-	for (uint32_t i = 0; i < header.chunkCount; ++i)
-	{
-		std::byte* at    = bytes.data() + header.chunkTableOffset + i * sizeof(chunk::Entry);
-		auto       entry = chunk::Entry();
-		std::memcpy(&entry, at, sizeof(entry));
-		if (entry.id == 10)
-		{
-			entry.id = 8;
-			std::memcpy(at, &entry, sizeof(entry));
-			retired = true;
-		}
-	}
-	REQUIRE(retired);
-	std::ofstream(bvat, std::ios::binary | std::ios::trunc)
-		.write(
-			reinterpret_cast<const char*>(bytes.data()),
-			static_cast<std::streamsize>(bytes.size()));
-
-	// Its inputs have not moved, so the tables-only verdict is "fresh" -- and the full read is not.
-	REQUIRE_FALSE(vatIsStale(loadVatTables(bvat), MountAt(root.path)));
-	CHECK_THROWS(loadVat(bvat));
-
-	PackReport report;
-	static_cast<void>(PackAndEnumerate(root, &report));
-	CHECK(report.vatsRebaked == 1);
-
-	const PakFile pak(root.path / "Data.bpak");
-	CHECK_NOTHROW(loadVat(pak, "Meshes/rig.bvat"));
+	CHECK_THROWS_WITH(
+		packProject(AssetStore(root.path), PackDesc{ root.path / "Data.bpak" }),
+		Catch::Matchers::ContainsSubstring("another bake revision"));
 }
 
 // Loud rather than a quietly incomplete archive: a `.bvat` naming an input that is gone cannot be
@@ -343,4 +337,77 @@ TEST_CASE("pack fails when a stale .bvat cannot be re-baked", "[pack][vat]")
 	CHECK_THROWS_AS(
 		packProject(AssetStore(root.path), PackDesc{ root.path / "Data.bpak" }),
 		std::runtime_error);
+}
+
+TEST_CASE(
+	"a stale group re-bakes into the archive, a rebind rides along, disk untouched",
+	"[pack][regen]")
+{
+	const test::DataRoot    root("bernini_pack_regen");
+	const test::SkinnedGltf source("bernini_pack_regen_gltf");
+	test::ImportUnitGroup(root.path, source.PackGlb());
+
+	const auto meshPath = root.path / "Meshes/unit.bmesh";
+	test::TamperHeaderByte(meshPath, test::c_TokenOffset);
+	rebindSubmeshInDocument(root.path, "meshes_src/unit.glb", "body", "Materials/blue.bmaterial");
+	const auto stale = core::file::read_file_bytes(meshPath.string());
+
+	const std::filesystem::path target = root.path / "Data.bpak";
+	const PackReport            report = packProject(AssetStore(root.path), PackDesc{ target });
+	CHECK(report.geometryRebaked >= 1);
+
+	// The archive carries the current cook with the document's binding baked in -- a read-only
+	// store trusts it, which is exactly what pack just made true.
+	const AssetStore packed(root.path, std::make_shared<PakFile>(target));
+	const BMesh      mesh = packed.LoadMesh("Meshes/unit.bmesh");
+	REQUIRE(mesh.materials.size() == 1);
+	CHECK(mesh.materials[0] == "Materials/blue.bmaterial");
+
+	// In the archive only: the stale file on disk is migrate's to rewrite, never pack's.
+	CHECK(core::file::read_file_bytes(meshPath.string()) == stale);
+}
+
+TEST_CASE("a group the seam cannot serve fails the pack", "[pack][regen]")
+{
+	const test::DataRoot    root("bernini_pack_unbakeable");
+	const test::SkinnedGltf source("bernini_pack_unbakeable_gltf");
+	test::ImportUnitGroup(root.path, source.PackGlb());
+
+	test::TamperHeaderByte(root.path / "Meshes/unit.bmesh", test::c_TokenOffset);
+	std::filesystem::remove(root.path / "meshes_src/unit.glb");
+
+	CHECK_THROWS(packProject(AssetStore(root.path), PackDesc{ root.path / "Data.bpak" }));
+}
+
+TEST_CASE("a packed .bvat answers fresh inside the archive it shipped in", "[pack][regen][vat]")
+{
+	const test::DataRoot    root("bernini_pack_vat_regen");
+	const test::SkinnedGltf source("bernini_pack_vat_regen_gltf");
+	test::ImportUnitGroup(root.path, source.PackGlb());
+
+	const AssetStore  store(root.path);
+	const std::string vatKey =
+		vatPathFor("Meshes/unit.bmesh", "Animations/unit.banim").generic_string();
+	saveVat(
+		bakeVat(store, VatBakeDesc{ "Meshes/unit.bmesh", "Animations/unit.banim" }),
+		root.path / vatKey);
+
+	// The group goes stale with every byte and stamp the bake recorded still holding: a
+	// parameter edit moves only the document, so nothing but the group axis can see it -- the
+	// shape a re-export or a sibling's merge leaves when nobody ran migrate.
+	auto document       = loadImportDocument(root.path / "meshes_src/unit.bimport");
+	document.sampleRate = 60.0f;
+	core::file::write_atomic(
+		root.path / "meshes_src/unit.bimport",
+		serializeImportDocument(document));
+
+	const std::filesystem::path target = root.path / "Data.bpak";
+	const PackReport            report = packProject(store, PackDesc{ target });
+	CHECK(report.vatsRebaked == 1);  // the group axis alone fired
+
+	// Judged inside the archive, which is where a shipped build asks: the vat's stamps must
+	// describe the geometry as archived -- the seam's answers -- not the stale file the bake
+	// read them beside.
+	const AssetStore packed(root.path, std::make_shared<PakFile>(target));
+	CHECK_FALSE(packed.VatIsStale(packed.LoadVatTables(vatKey)));
 }

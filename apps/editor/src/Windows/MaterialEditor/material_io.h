@@ -110,5 +110,8 @@ namespace editor
 	 *         reach the renderer. False when the user declined, nothing needed one, or it failed.
 	 */
 	[[nodiscard]] bool
-	GenerateTangents(QWidget* parent, const std::filesystem::path& meshPath);
+	GenerateTangents(
+		QWidget*                     parent,
+		const std::filesystem::path& dataRoot,
+		const std::filesystem::path& meshPath);
 }

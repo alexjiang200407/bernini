@@ -161,18 +161,25 @@ namespace assetlib::test
 		for (const std::string* map : { &e.skySource, &e.skyBaked, &e.prefilter, &e.irradiance })
 			WriteSource(root.path / *map, { { 10, 20, 30, 255 } });
 
+		// Stamped as the source measures, so the routes read as current: a sandbox exercising
+		// the reference graph must not trip pack's stale-bake path over placeholder pixels.
+		const SourceStamp current = stampOf(root.path / e.skySource);
+
 		BSky sky;
 		sky.name       = "forest";
 		sky.sky.source = e.skySource;
 		sky.sky.baked  = e.skyBaked;
+		sky.sky.stamp  = current;
 		saveSky(sky, root.path / e.sky);
 
 		BEnvLighting lighting;
 		lighting.name              = "forest";
 		lighting.prefilter.source  = e.skySource;
 		lighting.prefilter.baked   = e.prefilter;
+		lighting.prefilter.stamp   = current;
 		lighting.irradiance.source = e.skySource;
 		lighting.irradiance.baked  = e.irradiance;
+		lighting.irradiance.stamp  = current;
 		saveEnvLighting(lighting, root.path / e.lighting);
 
 		BEnv env;

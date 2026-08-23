@@ -1,6 +1,7 @@
 #include "material_io.h"
 
 #include "Async/BackgroundTask.h"
+#include "Mesh/mesh_load.h"
 #include "Windows/MaterialEditor/MaterialGraphModel.h"
 #include "Windows/MaterialEditor/material_graph.h"
 #include <assetlib/Project.h>
@@ -81,6 +82,10 @@ namespace editor
 				material.pbr.normalTexture         = existing.pbr.normalTexture;
 				material.pbr.ormTexture            = existing.pbr.ormTexture;
 				material.pbr.routeStamps           = existing.pbr.routeStamps;
+
+				// Document keys this build does not know ride through a save untouched -- a
+				// sibling branch's field must survive this editor's round-trip.
+				material.extraJson = existing.extraJson;
 			}
 			catch (const std::exception& e)
 			{
@@ -191,7 +196,10 @@ namespace editor
 	}
 
 	bool
-	GenerateTangents(QWidget* parent, const std::filesystem::path& meshPath)
+	GenerateTangents(
+		QWidget*                     parent,
+		const std::filesystem::path& dataRoot,
+		const std::filesystem::path& meshPath)
 	{
 		if (meshPath.empty())
 			return false;
@@ -223,7 +231,10 @@ namespace editor
 			[&](background::Progress& progress) {
 				progress.Report(0, 0, "Deriving tangents...");
 
-				assetlib::BMesh mesh = assetlib::load(meshPath);
+				// Through the seam, so a stale mesh regenerates first rather than refusing --
+				// and a regeneration already derives tangents, which then reports as nothing
+				// left to generate.
+				assetlib::BMesh mesh = LoadMeshThroughSeam(dataRoot, meshPath);
 				result               = assetlib::generateTangents(mesh);
 
 				if (result.generated > 0)

@@ -1,16 +1,15 @@
 #include <assetlib/bmaterial_io.h>
 
+#include <assetlib/container_info.h>
 #include <assetlib_structs/BMaterial.h>
-#include <assetlib_structs/magic.h>
 #include <core/file/LooseFileSystem.h>
 
-#include "AssetSchemaBuilder.h"
-#include "chunk_io.h"
 #include "fs_util.h"
+#include "json_doc.h"
 
 #include <core/err/util.h>
 #include <core/file/file.h>
-#include <core/str/string_pool.h>
+#include <nlohmann/json.hpp>
 
 #include "mounted_io.h"
 
@@ -18,225 +17,280 @@ namespace assetlib
 {
 	namespace
 	{
-		constexpr uint16_t c_VersionMajor = 11;  // 11: a chunk container with a schema
-		constexpr uint16_t c_VersionMinor = 0;
-
 		constexpr std::string_view c_What = "bmaterial";
 
-		enum class ChunkId : uint32_t
+		constexpr std::array<std::string_view, c_LooseChannelCount> c_ChannelNames = { {
+			"baseColorR",
+			"baseColorG",
+			"baseColorB",
+			"baseColorA",
+			"ao",
+			"roughness",
+			"metallic",
+			"normalX",
+			"normalY",
+		} };
+
+		// One list, written and erased from alike -- a key added to one half and not the other
+		// would leave a stale value on a de-routed channel.
+		constexpr std::array<std::string_view, 4> c_RouteKeys = { {
+			"texture",
+			"channel",
+			"stampSize",
+			"stampHash",
+		} };
+
+		constexpr std::array<std::string_view, 4> c_AlphaModeNames = { {
+			"opaque",
+			"mask",
+			"blend",
+			"hashed",
+		} };
+
+		/** No default, so a new mode cannot be added without the compiler pointing here. */
+		std::string_view
+		alphaModeName(AlphaMode mode)
 		{
-			kMaterial = 1,  // one MaterialRecord
-			kStringPool,
-			kPbr  // one PbrRecord, when the shading model is PBR
-		};
-
-		/** The part of a BMaterial every shading model has; its strings live in the pool. */
-		struct MaterialRecord
-		{
-			uint32_t shadingModel;
-			uint32_t nameOffset;
-			uint32_t editorGraphOffset;
-		};
-
-		static_assert(sizeof(MaterialRecord) == 12);
-
-		struct RouteRecord
-		{
-			uint32_t textureOffset;
-			uint16_t channel;
-		};
-
-		static_assert(sizeof(RouteRecord) == 8);
-
-		/** PbrParams as it is stored: paths as pool offsets, the routes and stamps as arrays. */
-		struct PbrRecord
-		{
-			glm::vec4                                    baseColorFactor;
-			float                                        metallicFactor;
-			float                                        roughnessFactor;
-			uint32_t                                     alphaMode;
-			float                                        alphaCutoff;
-			float                                        transmissionFactor;
-			glm::vec3                                    specularColorFactor;
-			float                                        specularFactor;
-			uint32_t                                     baseColorTextureOffset;
-			uint32_t                                     normalTextureOffset;
-			uint32_t                                     ormTextureOffset;
-			std::array<RouteRecord, c_LooseChannelCount> routes;
-			std::array<SourceStamp, c_LooseChannelCount> routeStamps;
-		};
-
-		static_assert(sizeof(PbrRecord) == 64 + c_LooseChannelCount * (8 + 16));
-
-		const schema::Schema&
-		materialSchema()
-		{
-			static const schema::Schema c_Schema =
-				AssetSchemaBuilder()
-					.AddSourceStamp()
-					.AddLayout<MaterialRecord>(
-						"MaterialRecord",
-						[](auto& layout) {
-							layout.AddField("shadingModel", &MaterialRecord::shadingModel)
-								.AddField("nameOffset", &MaterialRecord::nameOffset)
-								.AddField("editorGraphOffset", &MaterialRecord::editorGraphOffset);
-						})
-					.AddLayout<RouteRecord>(
-						"RouteRecord",
-						[](auto& layout) {
-							layout.AddField("textureOffset", &RouteRecord::textureOffset)
-								.AddField("channel", &RouteRecord::channel);
-						})
-					.AddLayout<PbrRecord>(
-						"PbrRecord",
-						[](auto& layout) {
-							layout
-								.AddField(
-									"baseColorFactor",
-									&PbrRecord::baseColorFactor,
-									glm::vec4(1.0f))
-								.AddField("metallicFactor", &PbrRecord::metallicFactor, 1.0f)
-								.AddField("roughnessFactor", &PbrRecord::roughnessFactor, 1.0f)
-								.AddField("alphaMode", &PbrRecord::alphaMode)
-								.AddField("alphaCutoff", &PbrRecord::alphaCutoff, 0.5f)
-								.AddField("transmissionFactor", &PbrRecord::transmissionFactor)
-								.AddField(
-									"specularColorFactor",
-									&PbrRecord::specularColorFactor,
-									glm::vec3(1.0f))
-								.AddField("specularFactor", &PbrRecord::specularFactor, 1.0f)
-								.AddField(
-									"baseColorTextureOffset",
-									&PbrRecord::baseColorTextureOffset)
-								.AddField("normalTextureOffset", &PbrRecord::normalTextureOffset)
-								.AddField("ormTextureOffset", &PbrRecord::ormTextureOffset)
-								.AddField("routes", &PbrRecord::routes)
-								.AddField("routeStamps", &PbrRecord::routeStamps);
-						})
-					.Finish();
-			return c_Schema;
-		}
-
-		std::vector<PbrRecord>
-		packPbr(const PbrParams& pbr, core::string_pool& pool)
-		{
-			PbrRecord record{};
-			record.baseColorFactor        = pbr.baseColorFactor;
-			record.metallicFactor         = pbr.metallicFactor;
-			record.roughnessFactor        = pbr.roughnessFactor;
-			record.alphaMode              = static_cast<uint32_t>(pbr.alphaMode);
-			record.alphaCutoff            = pbr.alphaCutoff;
-			record.transmissionFactor     = pbr.transmissionFactor;
-			record.specularColorFactor    = pbr.specularColorFactor;
-			record.specularFactor         = pbr.specularFactor;
-			record.baseColorTextureOffset = pool.add(pbr.baseColorTexture);
-			record.normalTextureOffset    = pool.add(pbr.normalTexture);
-			record.ormTextureOffset       = pool.add(pbr.ormTexture);
-			for (size_t i = 0; i < c_LooseChannelCount; ++i)
+			switch (mode)
 			{
-				record.routes[i].textureOffset = pool.add(pbr.routes[i].texture);
-				record.routes[i].channel       = pbr.routes[i].channel;
-				record.routeStamps[i]          = pbr.routeStamps[i];
+			case AlphaMode::kOpaque:
+				return c_AlphaModeNames[0];
+			case AlphaMode::kMask:
+				return c_AlphaModeNames[1];
+			case AlphaMode::kBlend:
+				return c_AlphaModeNames[2];
+			case AlphaMode::kHashed:
+				return c_AlphaModeNames[3];
 			}
-			return { record };
+			throw std::runtime_error("bmaterial: unwritable alpha mode");
 		}
 
-		PbrParams
-		unpackPbr(const PbrRecord& record, const core::string_pool& pool)
+		/** Writes `value` at `key`, or erases the key when the value is empty. */
+		void
+		setOrErase(nlohmann::json& object, std::string_view key, const std::string& value)
 		{
-			PbrParams pbr;
-			pbr.baseColorFactor     = record.baseColorFactor;
-			pbr.metallicFactor      = record.metallicFactor;
-			pbr.roughnessFactor     = record.roughnessFactor;
-			pbr.alphaMode           = static_cast<AlphaMode>(record.alphaMode);
-			pbr.alphaCutoff         = record.alphaCutoff;
-			pbr.transmissionFactor  = record.transmissionFactor;
-			pbr.specularColorFactor = record.specularColorFactor;
-			pbr.specularFactor      = record.specularFactor;
-			pbr.baseColorTexture    = pool.at(record.baseColorTextureOffset);
-			pbr.normalTexture       = pool.at(record.normalTextureOffset);
-			pbr.ormTexture          = pool.at(record.ormTextureOffset);
-			for (size_t i = 0; i < c_LooseChannelCount; ++i)
-			{
-				pbr.routes[i].texture = pool.at(record.routes[i].textureOffset);
-				pbr.routes[i].channel = record.routes[i].channel;
-				pbr.routeStamps[i]    = record.routeStamps[i];
-			}
-			return pbr;
+			if (value.empty())
+				object.erase(std::string(key));
+			else
+				object[std::string(key)] = value;
 		}
+
+		/** Drops object members that ended empty, so a fully-taken route leaves no husk. */
+		void
+		eraseEmptyMembers(nlohmann::json& object)
+		{
+			for (auto it = object.begin(); it != object.end();)
+				it = it->is_object() && it->empty() ? object.erase(it) : std::next(it);
+		}
+
+		BMaterial
+		materialFromDocument(std::string_view text)
+		{
+			auto json = doc::parseObject(text, "bmaterial: the document");
+
+			const doc::Taker taker(json, c_What);
+
+			BMaterial material;
+
+			// The one model there is; refused rather than defaulted when it names another, since a
+			// typo that silently rendered as PBR would never be found.
+			std::string shadingModel = "pbr";
+			taker.Take("shadingModel", shadingModel);
+			core::throw_runtime_error_if(
+				shadingModel != "pbr",
+				"bmaterial: unknown shading model '{}'",
+				shadingModel);
+			material.shadingModel = ShadingModel::kPbr;
+
+			taker.Take("name", material.name);
+
+			// A string, not an embedded object: the graph is the editor's opaque blob, promised
+			// back byte-for-byte, and nothing here may assume it parses.
+			taker.Take("editorGraph", material.editorGraph);
+
+			PbrParams& pbr = material.pbr;
+
+			std::string alphaMode(c_AlphaModeNames[0]);
+			taker.Take("alphaMode", alphaMode);
+			const auto mode = std::ranges::find(c_AlphaModeNames, alphaMode);
+			core::throw_runtime_error_if(
+				mode == c_AlphaModeNames.end(),
+				"bmaterial: unknown alpha mode '{}'",
+				alphaMode);
+			pbr.alphaMode = static_cast<AlphaMode>(mode - c_AlphaModeNames.begin());
+
+			taker.Take("alphaCutoff", pbr.alphaCutoff);
+			taker.Take("baseColorFactor", pbr.baseColorFactor);
+			taker.Take("metallicFactor", pbr.metallicFactor);
+			taker.Take("roughnessFactor", pbr.roughnessFactor);
+			taker.Take("transmissionFactor", pbr.transmissionFactor);
+			taker.Take("specularColorFactor", pbr.specularColorFactor);
+			taker.Take("specularFactor", pbr.specularFactor);
+
+			// Known keys come out; what remains -- a sibling branch's field at any depth -- stays
+			// in the json and rides `extraJson` through the round-trip.
+			if (const auto it = json.find("baked"); it != json.end())
+			{
+				core::throw_runtime_error_if(
+					!it->is_object(),
+					"bmaterial: 'baked' is not an object");
+				const doc::Taker baked(*it, c_What);
+				baked.Take("baseColor", pbr.baseColorTexture);
+				baked.Take("normal", pbr.normalTexture);
+				baked.Take("orm", pbr.ormTexture);
+				if (it->empty())
+					json.erase(it);
+			}
+
+			if (const auto it = json.find("routes"); it != json.end())
+			{
+				core::throw_runtime_error_if(
+					!it->is_object(),
+					"bmaterial: 'routes' is not an object");
+				for (auto& [channelName, route] : it->items())
+				{
+					const auto found = std::ranges::find(c_ChannelNames, channelName);
+					core::throw_runtime_error_if(
+						found == c_ChannelNames.end(),
+						"bmaterial: unknown route channel '{}'",
+						channelName);
+					core::throw_runtime_error_if(
+						!route.is_object(),
+						"bmaterial: route '{}' is not an object",
+						channelName);
+
+					const size_t index = static_cast<size_t>(found - c_ChannelNames.begin());
+					doc::Taker(route, c_What).Take("texture", pbr.routes[index].texture);
+
+					uint64_t channel = 0;
+					if (const auto channelValue = route.find("channel");
+					    channelValue != route.end())
+					{
+						core::throw_runtime_error_if(
+							!channelValue->is_number_unsigned() ||
+								channelValue->get<uint64_t>() > 3,
+							"bmaterial: route '{}' has an invalid channel",
+							channelName);
+						channel = channelValue->get<uint64_t>();
+						route.erase(channelValue);
+					}
+					pbr.routes[index].channel = static_cast<uint16_t>(channel);
+
+					for (const auto& [stampKey, field] :
+					     { std::pair<std::string_view, uint64_t*>{ "stampSize",
+					                                               &pbr.routeStamps[index].size },
+					       { "stampHash", &pbr.routeStamps[index].hash } })
+					{
+						if (const auto stampValue = route.find(stampKey); stampValue != route.end())
+						{
+							core::throw_runtime_error_if(
+								!stampValue->is_number_unsigned(),
+								"bmaterial: route '{}' has an invalid {}",
+								channelName,
+								stampKey);
+							*field = stampValue->get<uint64_t>();
+							route.erase(stampValue);
+						}
+					}
+				}
+				eraseEmptyMembers(*it);
+				if (it->empty())
+					json.erase(it);
+			}
+
+			material.extraJson = json.dump();
+			return material;
+		}
+
 	}
 
 	std::vector<std::byte>
 	serializeMaterial(const BMaterial& material)
 	{
-		core::string_pool pool;
-		MaterialRecord    record{};
-		record.shadingModel      = static_cast<uint32_t>(material.shadingModel);
-		record.nameOffset        = pool.add(material.name);
-		record.editorGraphOffset = pool.add(material.editorGraph);
+		auto json = doc::parseObject(material.extraJson, "bmaterial: extraJson");
 
-		chunk::Writer writer(materialSchema());
-		writer.Add(ChunkId::kMaterial, std::vector<MaterialRecord>{ record });
-
+		// No default, so a new model cannot be added without the compiler pointing here.
 		switch (material.shadingModel)
 		{
 		case ShadingModel::kPbr:
-			writer.Add(ChunkId::kPbr, packPbr(material.pbr, pool));
+			json["shadingModel"] = "pbr";
 			break;
-
 		case ShadingModel::kCount:
-			throw std::runtime_error(
-				"bmaterial: cannot serialize shading model " +
-				std::to_string(static_cast<uint32_t>(material.shadingModel)));
+			throw std::runtime_error("bmaterial: unwritable shading model");
 		}
 
-		writer.Add(ChunkId::kStringPool, pool.bytes());
-		return writer.Finish(magic::c_BMaterial, c_VersionMajor, c_VersionMinor);
+		json["name"] = material.name;
+
+		// A string, not an embedded object -- see materialFromDocument.
+		if (!material.editorGraph.empty())
+			json["editorGraph"] = material.editorGraph;
+		else
+			json.erase("editorGraph");
+
+		const PbrParams& pbr        = material.pbr;
+		json["alphaMode"]           = alphaModeName(pbr.alphaMode);
+		json["alphaCutoff"]         = doc::plainFloat(pbr.alphaCutoff);
+		json["baseColorFactor"]     = doc::vecToJson(pbr.baseColorFactor);
+		json["metallicFactor"]      = doc::plainFloat(pbr.metallicFactor);
+		json["roughnessFactor"]     = doc::plainFloat(pbr.roughnessFactor);
+		json["transmissionFactor"]  = doc::plainFloat(pbr.transmissionFactor);
+		json["specularColorFactor"] = doc::vecToJson(pbr.specularColorFactor);
+		json["specularFactor"]      = doc::plainFloat(pbr.specularFactor);
+
+		// Merged into whatever `extraJson` preserved rather than rebuilt, so a sibling branch's
+		// key inside `baked` or a route survives this writer too.
+		auto& baked = json["baked"];
+		if (!baked.is_object())
+			baked = nlohmann::json::object();
+		setOrErase(baked, "baseColor", pbr.baseColorTexture);
+		setOrErase(baked, "normal", pbr.normalTexture);
+		setOrErase(baked, "orm", pbr.ormTexture);
+		if (baked.empty())
+			json.erase("baked");
+
+		auto& routes = json["routes"];
+		if (!routes.is_object())
+			routes = nlohmann::json::object();
+		for (size_t i = 0; i < c_LooseChannelCount; ++i)
+		{
+			const std::string channelName(c_ChannelNames[i]);
+
+			// A stamp can outlive its route -- a bake's provenance is not dropped with a rerouted
+			// channel -- so an entry is written whenever either half says something.
+			if (!pbr.routes[i].texture.empty() || pbr.routeStamps[i] != SourceStamp{})
+			{
+				auto& route = routes[channelName];
+				if (!route.is_object())
+					route = nlohmann::json::object();
+				route[std::string(c_RouteKeys[0])] = pbr.routes[i].texture;
+				route[std::string(c_RouteKeys[1])] = pbr.routes[i].channel;
+				route[std::string(c_RouteKeys[2])] = pbr.routeStamps[i].size;
+				route[std::string(c_RouteKeys[3])] = pbr.routeStamps[i].hash;
+			}
+			else if (const auto found = routes.find(channelName); found != routes.end())
+			{
+				// The struct says nothing for this channel any more; its known keys go, anything
+				// preserved stays.
+				for (const std::string_view key : c_RouteKeys) found->erase(std::string(key));
+				if (found->empty())
+					routes.erase(found);
+			}
+		}
+		if (routes.empty())
+			json.erase("routes");
+
+		return doc::toBytes(json);
 	}
 
 	BMaterial
 	deserializeMaterial(std::span<const std::byte> bytes)
 	{
-		const chunk::Reader
-			reader(bytes, magic::c_BMaterial, c_VersionMajor, c_What, materialSchema());
-
-		const auto records = reader.Require<MaterialRecord>(ChunkId::kMaterial);
 		core::throw_runtime_error_if(
-			records.size() != 1,
-			"bmaterial: the material chunk holds {} entries, not one",
-			records.size());
-		const core::string_pool pool(reader.Read<char>(ChunkId::kStringPool));
-
-		const MaterialRecord& record = records[0];
-		if (record.shadingModel >= static_cast<uint32_t>(ShadingModel::kCount))
-			throw std::runtime_error(
-				"bmaterial: unknown shading model " + std::to_string(record.shadingModel));
-
-		BMaterial material;
-		material.shadingModel = static_cast<ShadingModel>(record.shadingModel);
-		material.name         = pool.at(record.nameOffset);
-		material.editorGraph  = pool.at(record.editorGraphOffset);
-
-		switch (material.shadingModel)
-		{
-		case ShadingModel::kPbr:
-		{
-			const auto pbr = reader.Require<PbrRecord>(ChunkId::kPbr);
-			core::throw_runtime_error_if(
-				pbr.size() != 1,
-				"bmaterial: the PBR chunk holds {} entries, not one",
-				pbr.size());
-			material.pbr = unpackPbr(pbr[0], pool);
-			break;
-		}
-
-		// Already excluded by the range check above; the case exists so a new model cannot be added
-		// without the compiler pointing at this switch.
-		case ShadingModel::kCount:
-			throw std::runtime_error("bmaterial: unreadable shading model");
-		}
-
-		return material;
+			!isTextAssetDocument(bytes),
+			"bmaterial: not a text document; a chunk-era file is no longer convertible -- "
+			"re-author the material");
+		return materialFromDocument(
+			std::string_view(reinterpret_cast<const char*>(bytes.data()), bytes.size()));
 	}
 
 	void

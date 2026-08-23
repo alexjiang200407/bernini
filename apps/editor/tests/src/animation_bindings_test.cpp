@@ -89,7 +89,7 @@ TEST_CASE("Bindings collect every .banim naming the mesh's rig, sorted", "[anima
 	WriteBanim(root.Data(), "Animations/locomotion/run.banim", "Skeletons/rig.bskel");
 	WriteBanim(root.Data(), "Animations/other.banim", "Skeletons/other.bskel");
 
-	const auto bindings = editor::ResolveAnimationBindings(root.Data(), "Meshes/unit.bmesh");
+	const auto bindings = editor::ResolveAnimationBindings(root.Data(), "Skeletons/rig.bskel");
 
 	CHECK(bindings.skeleton == "Skeletons/rig.bskel");
 	REQUIRE(bindings.animations.size() == 2);
@@ -103,7 +103,7 @@ TEST_CASE("A recorded path matches in normalized form, not by bytes", "[animatio
 	WriteMesh(root.Data(), "Meshes/unit.bmesh", "Skeletons/rig.bskel");
 	WriteBanim(root.Data(), "Animations/walk.banim", "./Skeletons//rig.bskel");
 
-	const auto bindings = editor::ResolveAnimationBindings(root.Data(), "Meshes/unit.bmesh");
+	const auto bindings = editor::ResolveAnimationBindings(root.Data(), "Skeletons/rig.bskel");
 
 	REQUIRE(bindings.animations.size() == 1);
 	CHECK(bindings.animations[0] == "Animations/walk.banim");
@@ -117,7 +117,7 @@ TEST_CASE(
 	WriteMesh(root.Data(), "Meshes/unit.bmesh", "Skeletons/rig.bskel");
 	WriteBanim(root.Data(), "Animations/other.banim", "Skeletons/other.bskel");
 
-	const auto bindings = editor::ResolveAnimationBindings(root.Data(), "Meshes/unit.bmesh");
+	const auto bindings = editor::ResolveAnimationBindings(root.Data(), "Skeletons/rig.bskel");
 
 	CHECK(bindings.skeleton == "Skeletons/rig.bskel");
 	CHECK(bindings.animations.empty());
@@ -134,7 +134,7 @@ TEST_CASE("An unreadable .banim fails resolution, as it fails the reference scan
 	}
 
 	CHECK_THROWS_AS(
-		editor::ResolveAnimationBindings(root.Data(), "Meshes/unit.bmesh"),
+		editor::ResolveAnimationBindings(root.Data(), "Skeletons/rig.bskel"),
 		std::runtime_error);
 }
 
@@ -144,7 +144,7 @@ TEST_CASE("A static mesh resolves to nothing", "[animation]")
 	WriteMesh(root.Data(), "Meshes/rock.bmesh", "");
 	WriteBanim(root.Data(), "Animations/walk.banim", "Skeletons/rig.bskel");
 
-	const auto bindings = editor::ResolveAnimationBindings(root.Data(), "Meshes/rock.bmesh");
+	const auto bindings = editor::ResolveAnimationBindings(root.Data(), "");
 
 	CHECK(bindings.skeleton.empty());
 	CHECK(bindings.animations.empty());
@@ -156,17 +156,8 @@ TEST_CASE("A project with no Animations directory has no candidates, not an erro
 	WriteMesh(root.Data(), "Meshes/unit.bmesh", "Skeletons/rig.bskel");
 	fs::remove_all(root.Data() / assetlib::c_AnimationsDirectoryName);
 
-	const auto bindings = editor::ResolveAnimationBindings(root.Data(), "Meshes/unit.bmesh");
+	const auto bindings = editor::ResolveAnimationBindings(root.Data(), "Skeletons/rig.bskel");
 
 	CHECK(bindings.skeleton == "Skeletons/rig.bskel");
 	CHECK(bindings.animations.empty());
-}
-
-TEST_CASE("A mesh that cannot be read throws", "[animation]")
-{
-	const TempRoot root;
-
-	CHECK_THROWS_AS(
-		editor::ResolveAnimationBindings(root.Data(), "Meshes/missing.bmesh"),
-		std::runtime_error);
 }

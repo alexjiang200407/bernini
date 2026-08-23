@@ -25,6 +25,9 @@ namespace assetlib
 	inline constexpr std::string_view c_AnimationExtension   = ".banim";
 	inline constexpr std::string_view c_VatExtension         = ".bvat";
 
+	// Text, not a container: the authored half of one imported source, beside its `.glb`.
+	inline constexpr std::string_view c_ImportDocumentExtension = ".bimport";
+
 	// The archive the others are packed into, rather than an asset: nothing references a `.bpak`,
 	// and assetTypeFromExtension does not know it.
 	inline constexpr std::string_view c_PakExtension = ".bpak";

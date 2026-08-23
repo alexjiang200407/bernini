@@ -153,11 +153,11 @@ write it, and why the agent's git config keys cannot be committed.
 
 PBR texture (format/color-space/channel) and static-mesh (vertex layout, meshlets, tangents) conventions, plus the in-flight DDS → KTX2 migration.
 
-**[Asset Schema](./docs/asset_schema.md)**
+**[Asset Containers](./docs/asset_containers.md)**
 
-Every container carries its own schema (chunk 0) and a reader converts a file's structs to the
-engine's by field name: why layout comes from the file and never from the version number, which
-shape changes cost no code, what a `chunk::Hook` is for, `assetlib_cli migrate`, and `assets/Frozen`.
+The two container regimes: authored text documents (canonical JSON, unknown keys preserved) and
+derived cache entries (a frozen header carrying the cache key over schema-less chunks; a mismatch
+regenerates, never converts), plus the bake-token discipline and `assetlib_cli migrate`.
 
 **[Asset Archives](./docs/archives.md)**
 

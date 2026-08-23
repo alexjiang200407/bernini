@@ -1,8 +1,8 @@
 #include <assetlib/bvat_io.h>
 #include <assetlib_structs/BVat.h>
 
-#include "AssetSchemaBuilder.h"
-#include "chunk_io.h"
+#include "bake_tokens.h"
+#include "cache_io.h"
 #include "fs_util.h"
 
 #include <assetlib_structs/magic.h>
@@ -18,10 +18,6 @@ namespace assetlib
 
 	namespace
 	{
-		constexpr uint16_t c_VersionMajor =
-			4;  // 4: the normal texture's alpha is the tangent twist, under a new chunk id
-		constexpr uint16_t c_VersionMinor = 0;
-
 		constexpr std::string_view c_What = "bvat";
 
 		enum class ChunkId : uint32_t
@@ -62,35 +58,6 @@ namespace assetlib
 
 		static_assert(sizeof(VatInputsRef) == 56);
 
-		const schema::Schema&
-		vatSchema()
-		{
-			static const schema::Schema c_Schema =
-				AssetSchemaBuilder()
-					.AddSourceStamp()
-					.AddVatClip()
-					.AddVatColumns()
-					.AddLayout<VatInfo>(
-						"VatInfo",
-						[](auto& layout) {
-							layout.AddField("boundsMin", &VatInfo::boundsMin)
-								.AddField("boundsMax", &VatInfo::boundsMax)
-								.AddField("width", &VatInfo::width)
-								.AddField("height", &VatInfo::height)
-								.AddField("boneCount", &VatInfo::boneCount);
-						})
-					.AddLayout<VatInputsRef>(
-						"VatInputsRef",
-						[](auto& layout) {
-							layout.AddField("signature", &VatInputsRef::signature)
-								.AddField("mesh", &VatInputsRef::mesh)
-								.AddField("skeleton", &VatInputsRef::skeleton)
-								.AddField("animations", &VatInputsRef::animations);
-						})
-					.Finish();
-			return c_Schema;
-		}
-
 		std::vector<VatInputsRef>
 		packInputs(const BVat& vat)
 		{
@@ -106,7 +73,7 @@ namespace assetlib
 		packInputPaths(const BVat& vat)
 		{
 			const std::array<std::string, 3> paths = { vat.mesh, vat.skeleton, vat.animations };
-			return chunk::packStrings(paths);
+			return cache::packStrings(paths);
 		}
 
 		void
@@ -117,7 +84,7 @@ namespace assetlib
 				"bvat: the inputs chunk holds {} entries, not one",
 				ref.size());
 
-			const auto names = chunk::unpackStrings(paths);
+			const auto names = cache::unpackStrings(paths);
 			core::throw_runtime_error_if(
 				names.size() != 3,
 				"bvat: the input paths chunk names {} paths, not three",
@@ -193,7 +160,7 @@ namespace assetlib
 
 		std::vector<VatInfo> infoChunk(1, info);
 
-		chunk::Writer writer(vatSchema());
+		cache::Writer writer;
 		writer.Add(ChunkId::kInfo, infoChunk);
 		writer.Add(ChunkId::kClips, vat.clips);
 		writer.Add(ChunkId::kColumns, vat.columns);
@@ -203,27 +170,29 @@ namespace assetlib
 		writer.Add(ChunkId::kStringPool, vat.stringPool.bytes());
 		writer.Add(ChunkId::kPositionsKtx2, vat.positionsKtx2);
 		writer.Add(ChunkId::kNormalsKtx2, vat.normalsKtx2);
-		return writer.Finish(magic::c_BVat, c_VersionMajor, c_VersionMinor);
+
+		// No source in the key: a `.bvat` records its three inputs and their stamps as chunks,
+		// and its freshness rule reads those -- the token covers the format alone.
+		return writer.Finish(magic::c_BVat, c_BVatBakeToken, SourceRef{});
 	}
 
 	namespace
 	{
 		/**
-		 * The table chunks arrive through two doors -- typed and validated from chunk::Reader on a
-		 * full deserialize, raw bytes from readChunksFromFile on a seek-only one -- and the tables
-		 * must assemble identically through both, so one readTables reads through this.
+		 * The table chunks arrive through two doors -- typed from cache::Reader on a full
+		 * deserialize, ranged from readCacheChunks on a seek-only one -- and the tables must
+		 * assemble identically through both, so one readTables reads through this.
 		 */
 		struct TableSource
 		{
-			const chunk::Reader*    reader = nullptr;
-			const chunk::ChunkData* chunks = nullptr;
+			const cache::Reader*    reader = nullptr;
+			const cache::CacheData* chunks = nullptr;
 
 			template <typename T>
 			std::vector<T>
 			Read(ChunkId id) const
 			{
-				return reader != nullptr ? reader->Read<T>(id) :
-				                           chunks->Read<T>(static_cast<uint32_t>(id), vatSchema());
+				return reader != nullptr ? reader->Read<T>(id) : chunks->Read<T>(id, c_What);
 			}
 		};
 
@@ -258,7 +227,13 @@ namespace assetlib
 	BVat
 	deserializeVat(std::span<const std::byte> bytes)
 	{
-		const chunk::Reader reader(bytes, magic::c_BVat, c_VersionMajor, c_What, vatSchema());
+		// Wholly derived, so a bake from before the cache format has no carry -- re-baking it is
+		// cheaper than any reader for a file nobody authored.
+		core::throw_runtime_error_if(
+			!cache::isCacheEntry(bytes),
+			"bvat: written before the cache format; re-bake it");
+
+		const cache::Reader reader(bytes, magic::c_BVat, c_BVatBakeToken, c_What);
 
 		BVat vat          = readTables(TableSource{ &reader, nullptr });
 		vat.positionsKtx2 = reader.Require<std::byte>(ChunkId::kPositionsKtx2);
@@ -301,13 +276,13 @@ namespace assetlib
 		};
 
 		VatRefs
-		refsFromChunks(const chunk::ChunkData& chunks)
+		refsFromChunks(const cache::CacheData& chunks)
 		{
 			BVat vat;
 			unpackInputs(
 				vat,
-				chunks.Read<VatInputsRef>(static_cast<uint32_t>(ChunkId::kInputs), vatSchema()),
-				chunks.Read<char>(static_cast<uint32_t>(ChunkId::kInputPaths), vatSchema()));
+				chunks.Read<VatInputsRef>(ChunkId::kInputs, c_What),
+				chunks.Read<char>(ChunkId::kInputPaths, c_What));
 			return VatRefs{ vat.mesh, vat.skeleton, vat.animations };
 		}
 	}
@@ -315,10 +290,10 @@ namespace assetlib
 	BVat
 	loadVatTables(const std::filesystem::path& path)
 	{
-		const auto chunks = chunk::readChunksFromFile(
+		const auto chunks = cache::readCacheChunksFromFile(
 			path,
 			magic::c_BVat,
-			c_VersionMajor,
+			c_BVatBakeToken,
 			c_WantedTableChunks,
 			c_What);
 
@@ -328,11 +303,11 @@ namespace assetlib
 	BVat
 	loadVatTables(const core::file::IFileSystem& fileSystem, std::string_view path)
 	{
-		const auto chunks = chunk::readChunksFrom(
+		const auto chunks = cache::readCacheChunksFrom(
 			fileSystem,
 			path,
 			magic::c_BVat,
-			c_VersionMajor,
+			c_BVatBakeToken,
 			c_WantedTableChunks,
 			c_What);
 
@@ -343,10 +318,10 @@ namespace assetlib
 	loadVatRefs(const std::filesystem::path& path)
 	{
 		return refsFromChunks(
-			chunk::readChunksFromFile(
+			cache::readCacheChunksFromFile(
 				path,
 				magic::c_BVat,
-				c_VersionMajor,
+				c_BVatBakeToken,
 				c_WantedRefChunks,
 				c_What));
 	}
@@ -355,11 +330,11 @@ namespace assetlib
 	loadVatRefs(const core::file::IFileSystem& fileSystem, std::string_view path)
 	{
 		return refsFromChunks(
-			chunk::readChunksFrom(
+			cache::readCacheChunksFrom(
 				fileSystem,
 				path,
 				magic::c_BVat,
-				c_VersionMajor,
+				c_BVatBakeToken,
 				c_WantedRefChunks,
 				c_What));
 	}
