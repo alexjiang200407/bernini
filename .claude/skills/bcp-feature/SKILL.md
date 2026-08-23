@@ -172,6 +172,9 @@ git push -u origin HEAD
 just pr create --base feat/<name> --body-file <file>
 ```
 
+The body is short by nature — [bcp-implement § 10](.claude/skills/bcp-implement/SKILL.md)'s shape,
+with the plan itself as the content and no box under `## Needs a human`, stated as such.
+
 The plan is where a design finding is cheapest of all — it costs a paragraph here and a rewrite once
 the tasks have landed.
 
@@ -247,9 +250,11 @@ from that line, since `just` joins a recipe's arguments on spaces. `just pr crea
 **you**, not as the bot -- a squash merge takes the commit's author from the PR's author, and a
 feature squashes twice -- and it arms the watch that § 4 must clear.
 
-The body says what changed, **why**, how it was verified (name the suites; say whether GPU validation
-ran), which task of the plan it is, and what still has to land. A reviewer must be able to tell a
-deliberate gap from an oversight.
+The body takes the shape and the ~350-word budget in
+[bcp-implement § 10](.claude/skills/bcp-implement/SKILL.md) — the diff breakdown is appended by
+`just pr create` itself, and the `## Needs a human` boxes are yours to write. One addition here: say
+**which task of the plan this is and what still has to land**, so a reviewer can tell a deliberate
+gap from an oversight.
 
 The plan is a hypothesis. When a task disproves it, correct `docs/plans/<name>.md` **in that task's
 PR**, so the correction is reviewed beside the code that forced it.
@@ -374,8 +379,10 @@ left to resolve its own base would diff against `origin/feat/<name>` — the sta
 merge-base with the just-rebased branch is where the feature was cut. It would report the feature
 plus every unrelated `master` commit since. The base for this one is `origin/master`.
 
-The body is the feature's story — what it adds, why, how it was verified as a whole, what was
-deliberately left out. Link the task PRs; do not restate them. Then § 4 again.
+The body is the feature's story, in [bcp-implement § 10](.claude/skills/bcp-implement/SKILL.md)'s
+shape and budget — what it adds, why, how it was verified *as a whole*. Link the task PRs; do not
+restate them. Its `## Needs a human` boxes are the union of what the task PRs left open and never
+got ticked. Then § 4 again.
 
 Read the plan against what actually shipped first: anything it still promises that the feature did
 not do is a correction for the last task PR. Whatever in it should outlive the feature — how the

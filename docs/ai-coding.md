@@ -96,12 +96,25 @@ the agent. [`scripts/pr.py`](../scripts/pr.py) is the only way it writes to a pu
 
 | | | acts as |
 | --- | --- | --- |
-| `just pr create --base B --body-file F` | opens the PR and arms the pending-watch list | **you** |
-| `just pr edit <n> --body-file F` | rewrites the title or body | **you** |
+| `just pr create --base B --body-file F` | opens the PR, appends the diff breakdown, and arms the pending-watch list | **you** |
+| `just pr edit <n> --body-file F` | rewrites the title or body, and refreshes the breakdown | **you** |
+| `just pr edit <n>` | refreshes the breakdown alone — what a revision's push wants | **you** |
 | `just pr comments <n>` | every review, thread and comment, each with the id to answer and whether it has been answered | — |
 | `just pr reply <comment-id> --body-file F` | answers **where the comment was made** — the id is looked up, and an inline comment gets a threaded reply | **the bot** |
 | `just pr comment <n> --body-file F` | a top-level summary; refuses while any thread is still unanswered | **the bot** |
 | `just pr check <n>` | author, and whether anything is unanswered; exits 2 on a problem | — |
+
+### The diff breakdown
+
+`create` and `edit` write a table of the diff by category — production, shaders, tests, docs,
+tooling, assets — into the body, between `<!-- bernini:diff -->` markers they rewrite in place.
+`scripts/util/gitdiff.py` computes it, from `git diff --numstat -M` against the PR's base as origin
+sees it; the same file already answers what a path is for the formatter and the coverage report, so
+there is one classifier rather than three.
+
+It is generated rather than asked of the agent because a hand-written table is stale the moment a
+revision pushes, and forgotten before that. Prose written above or below the markers is left alone,
+so a body is safe to edit by hand.
 
 The title heads the body file as `# one-line title` and is lifted out of the body. It travels in the
 file because `just` joins a recipe's arguments on spaces, so a `--title` containing one cannot survive
