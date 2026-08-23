@@ -129,16 +129,16 @@ Header, 16-byte-aligned payloads, entry table, string pool — in that order, al
 
 Both structs are `static_assert`-ed at 48 bytes
 ([pak_io.cpp:49](../libs/assetlib/src/pak_io.cpp)). The alignment constant is the archive's own and
-deliberately *not* `chunk::c_Align`, which happens to be the same number: sharing it would make
+deliberately *not* `cache::c_Align`, which happens to be the same number: sharing it would make
 bumping one format silently change the other's layout.
 
 **A major version mismatch is refused; a minor one is not.** So is bad magic, a non-little-endian
 byte order, a truncated file, or a table whose offsets do not lie inside it — all checked before any
 vector is sized from a field the file supplied.
 
-### It is its own format, not the chunk container
+### It is its own format, not the cache container
 
-`chunk::Writer` ([chunk_io.h](../libs/assetlib/src/chunk_io.h)) builds the whole file in memory
+`cache::Writer` ([cache_io.h](../libs/assetlib/src/cache_io.h)) builds the whole file in memory
 before writing, addresses chunks by a small `uint32` id, and has no path strings. An archive is
 gigabytes, addressed by path, and must be readable without loading it. Same *shape* — header, aligned
 payloads, table at the end — different problem.

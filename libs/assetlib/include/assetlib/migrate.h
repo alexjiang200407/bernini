@@ -8,8 +8,8 @@ namespace assetlib
 		enum class Outcome
 		{
 			kUnchanged,  // already what the current serializer writes
-			kRewritten,  // read at an older schema and re-saved -- or would be, on a dry run
-			kFailed      // could not be read or converted; `message` says why
+			kRewritten,  // not byte-identical to the current form; re-saved -- or would be, on a dry run
+			kFailed  // could not be read or converted; `message` says why
 		};
 
 		std::filesystem::path path;
@@ -31,8 +31,7 @@ namespace assetlib
 	 * `.banim`) reads through the regeneration seam: a stale group re-cooks from its copied
 	 * source onto disk, and a binding-only document edit reaches the file without one -- a
 	 * missing source or a binding naming a vanished submesh is that file's failure. The rest
-	 * (`.bmaterial`, `.bsky`, `.benvl`, `.benv`) is read at whatever form the file carries and
-	 * re-saved at the current one, which is also the carry from a legacy format to its successor.
+	 * (`.bmaterial`, `.bsky`, `.benvl`, `.benv`) is read and re-saved at the current form.
 	 *
 	 * A file whose bytes are already what the current writer produces is left untouched: the
 	 * containers are files under version control, and a rewrite that changed nothing would dirty

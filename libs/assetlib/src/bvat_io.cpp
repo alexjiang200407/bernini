@@ -3,7 +3,6 @@
 
 #include "bake_tokens.h"
 #include "cache_io.h"
-#include "chunk_io.h"
 #include "fs_util.h"
 
 #include <assetlib_structs/magic.h>
@@ -74,7 +73,7 @@ namespace assetlib
 		packInputPaths(const BVat& vat)
 		{
 			const std::array<std::string, 3> paths = { vat.mesh, vat.skeleton, vat.animations };
-			return chunk::packStrings(paths);
+			return cache::packStrings(paths);
 		}
 
 		void
@@ -85,7 +84,7 @@ namespace assetlib
 				"bvat: the inputs chunk holds {} entries, not one",
 				ref.size());
 
-			const auto names = chunk::unpackStrings(paths);
+			const auto names = cache::unpackStrings(paths);
 			core::throw_runtime_error_if(
 				names.size() != 3,
 				"bvat: the input paths chunk names {} paths, not three",

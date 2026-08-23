@@ -20,7 +20,6 @@
 
 #include "MountAt.h"
 #include "VatFixture.h"
-#include "chunk_io.h"
 #include "mounted_io.h"
 #include "vat_tangent.h"
 #include <assetlib/AssetStore.h>

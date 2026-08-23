@@ -277,4 +277,11 @@ namespace assetlib::cache
 		uint64_t                       bakeToken,
 		std::span<const uint32_t>      ids,
 		std::string_view               what);
+
+	/** A list of strings as one blob of NUL-terminated bytes (one terminator per string). */
+	[[nodiscard]] std::vector<char>
+	packStrings(std::span<const std::string> strings);
+
+	[[nodiscard]] std::vector<std::string>
+	unpackStrings(std::span<const char> pool);
 }

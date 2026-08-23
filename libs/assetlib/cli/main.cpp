@@ -328,12 +328,12 @@ main(int argc, char** argv)
 		"-b,--brief",
 		describeBrief,
 		"Mesh only: print the summary and material table, but not every submesh");
-	bool describeSchema = false;
+	bool describeKey = false;
 	describe->add_flag(
-		"-s,--schema",
-		describeSchema,
-		"Also print the file's cache key -- or, for a legacy chunk container, its format number "
-		"and the schema it was written with, every struct field by field");
+		"-k,--key",
+		describeKey,
+		"Also print the file's cache key: bake token, source, source stamp, parameter hash -- "
+		"without loading a payload");
 
 	std::string refsAsset;
 
@@ -405,8 +405,8 @@ main(int argc, char** argv)
 	auto* migrate = app.add_subcommand(
 		"migrate",
 		"Re-save every container at what the project's current state says it should hold: stale "
-		"geometry regenerates from its copied source, a rebind reaches its mesh, and legacy "
-		"formats carry to their successors. A file that is already current is left untouched, so "
+		"geometry regenerates from its copied source, and a rebind reaches its mesh. A file "
+		"that is already current is left untouched, so "
 		"running it twice rewrites nothing the second time; a file that cannot be read -- or a "
 		"stale group with no source -- is reported and skipped");
 	addProject(migrate);
@@ -761,20 +761,18 @@ main(int argc, char** argv)
 				return store.Describe(asset);
 			};
 
-			if (describeSchema)
+			if (describeKey)
 			{
 				const std::vector<std::byte> bytes = store.GetFiles().Read(key);
 				// Straight to stdout, not the logger: this is the command's output, so it should
 				// pipe into a file or a diff without spdlog's timestamps and level prefixes.
 				if (assetlib::isTextAssetDocument(bytes))
 				{
-					// An authored text document has no schema and no cache key; it is its own
-					// description.
+					// An authored text document has no cache key; it is its own description.
 					std::cout << "authored text document\n";
 				}
 				else if (const auto entry = assetlib::inspectCacheEntry(bytes))
 				{
-					// Geometry carries a cache key where the others carry a schema.
 					std::cout << std::format(
 						"cache entry\n  bake token   {:#018x}\n  source       {}\n  source "
 						"stamp  {} bytes, {:#018x}\n  parameters   {:#018x}\n",
@@ -786,12 +784,10 @@ main(int argc, char** argv)
 				}
 				else
 				{
-					const auto info = assetlib::inspectContainer(bytes);
-					std::cout << std::format(
-									 "format {}.{}\nschema\n",
-									 info.versionMajor,
-									 info.versionMinor)
-							  << assetlib::describe(info.schema) << '\n';
+					core::throw_runtime_error(
+						"{} is neither a text document nor a cache entry; if it is a chunk-era "
+						"file, migrate the project with a build from before the schema removal",
+						key);
 				}
 			}
 

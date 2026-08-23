@@ -9,7 +9,6 @@
 #include <assetlib/bmesh_io.h>
 #include <assetlib/bskel_io.h>
 #include <assetlib/bsky_io.h>
-#include <assetlib/container_info.h>
 #include <assetlib/regen/RegenMesh.h>
 #include <assetlib_structs/Animation.h>
 #include <assetlib_structs/BEnv.h>
@@ -17,8 +16,6 @@
 #include <assetlib_structs/BMesh.h>
 #include <assetlib_structs/Skeleton.h>
 
-#include "cache_io.h"
-#include "env_legacy.h"
 #include "fs_util.h"
 #include "ref_paths.h"
 
@@ -30,38 +27,11 @@ namespace assetlib
 	namespace
 	{
 		/**
-		 * The knobs a chunk-era sky and lighting carried, moved onto the environment document
-		 * that now owns them. Runs only while the referenced file is still chunk-era: after its
-		 * re-save the knobs exist nowhere but here, so there is nothing left to lift.
-		 */
-		void
-		liftLegacyEnvKnobs(const AssetStore& store, BEnv& env)
-		{
-			if (!env.sky.empty() && store.GetFiles().Exists(env.sky))
-			{
-				const auto skyBytes = store.GetFiles().Read(env.sky);
-				if (!cache::isCacheEntry(skyBytes))
-				{
-					const SkyPresentation knobs = legacySkyPresentation(skyBytes);
-					env.skyMipLevel             = knobs.mipLevel;
-					env.skyRotationY            = knobs.rotationY;
-				}
-			}
-			if (!env.lighting.empty() && store.GetFiles().Exists(env.lighting))
-			{
-				const auto lightingBytes = store.GetFiles().Read(env.lighting);
-				if (!cache::isCacheEntry(lightingBytes))
-					if (const auto authored = legacyLightingExposureOverride(lightingBytes))
-						env.exposureOverride = *authored;
-			}
-		}
-
-		/**
 		 * The bytes the project's current state says `key` should hold, or nullopt for a type
 		 * this does not migrate. Geometry goes through the regeneration seam, so a stale group
 		 * re-cooks from its copied source and a binding-only document edit reaches disk without
-		 * one (a binding naming a vanished submesh is this file's failure); everything else is a
-		 * read at whatever form the file carries, re-saved at the current one.
+		 * one (a binding naming a vanished submesh is this file's failure); everything else is
+		 * read and re-saved at the current form.
 		 */
 		std::optional<std::vector<std::byte>>
 		resave(
@@ -93,12 +63,7 @@ namespace assetlib
 			case AssetType::kEnvLighting:
 				return serializeEnvLighting(deserializeEnvLighting(bytes));
 			case AssetType::kEnvironment:
-			{
-				BEnv env = deserializeEnv(bytes);
-				if (!isTextAssetDocument(bytes))
-					liftLegacyEnvKnobs(store, env);
-				return serializeEnv(env);
-			}
+				return serializeEnv(deserializeEnv(bytes));
 			case AssetType::kTexture:
 			case AssetType::kVat:
 			case AssetType::kImportDocument:
@@ -129,8 +94,6 @@ namespace assetlib
 
 		// Meshes first, then rigs, then clips: a regenerated `.banim` re-measures its posed
 		// boxes against the meshes on disk, so the meshes must be current before it looks.
-		// Environments before the sky and lighting they reference: the lift reads knobs a
-		// chunk-era file carries, and those files' own re-save is what drops them.
 		const auto rank = [](const std::filesystem::path& path) {
 			const auto type = assetTypeFromExtension(path);
 			if (type == AssetType::kMesh)
@@ -139,9 +102,7 @@ namespace assetlib
 				return 1;
 			if (type == AssetType::kAnimation)
 				return 2;
-			if (type == AssetType::kEnvironment)
-				return 3;
-			return 4;
+			return 3;
 		};
 		std::ranges::sort(paths, [&rank](const auto& a, const auto& b) {
 			return std::pair(rank(a), std::ref(a)) < std::pair(rank(b), std::ref(b));

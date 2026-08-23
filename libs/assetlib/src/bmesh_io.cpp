@@ -10,7 +10,6 @@
 
 #include "bake_tokens.h"
 #include "cache_io.h"
-#include "chunk_io.h"
 #include "fs_util.h"
 
 #include <core/file/file.h>
@@ -84,7 +83,7 @@ namespace assetlib
 		writer.Add(ChunkId::kVertexData, mesh.vertexData);
 		writer.Add(ChunkId::kIndexData, mesh.indexData);
 		writer.Add(ChunkId::kStringPool, mesh.stringPool.bytes());
-		writer.Add(ChunkId::kMaterialPaths, chunk::packStrings(mesh.materials));
+		writer.Add(ChunkId::kMaterialPaths, cache::packStrings(mesh.materials));
 		writer.Add(ChunkId::kSkeletonPath, std::span<const char>(mesh.skeleton));
 		return writer.Finish(magic::c_BMesh, c_BMeshBakeToken, mesh.source);
 	}
@@ -106,7 +105,7 @@ namespace assetlib
 		mesh.vertexData       = reader.Read<std::byte>(ChunkId::kVertexData);
 		mesh.indexData        = reader.Read<std::byte>(ChunkId::kIndexData);
 		mesh.stringPool       = core::string_pool(reader.Read<char>(ChunkId::kStringPool));
-		mesh.materials        = chunk::unpackStrings(reader.Read<char>(ChunkId::kMaterialPaths));
+		mesh.materials        = cache::unpackStrings(reader.Read<char>(ChunkId::kMaterialPaths));
 
 		const auto skeleton = reader.Read<char>(ChunkId::kSkeletonPath);
 		mesh.skeleton.assign(skeleton.begin(), skeleton.end());
@@ -149,7 +148,7 @@ namespace assetlib
 			MeshRefs   refs;
 			const auto paths = chunks.Read<char>(ChunkId::kMaterialPaths, c_What);
 			if (!paths.empty())
-				refs.materials = chunk::unpackStrings(paths);
+				refs.materials = cache::unpackStrings(paths);
 
 			const auto skeleton = chunks.Read<char>(ChunkId::kSkeletonPath, c_What);
 			refs.skeleton.assign(skeleton.begin(), skeleton.end());

@@ -2,17 +2,13 @@
 
 #include <assetlib/container_info.h>
 #include <assetlib_structs/BMaterial.h>
-#include <assetlib_structs/magic.h>
 #include <core/file/LooseFileSystem.h>
 
-#include "AssetSchemaBuilder.h"
-#include "chunk_io.h"
 #include "fs_util.h"
 #include "json_doc.h"
 
 #include <core/err/util.h>
 #include <core/file/file.h>
-#include <core/str/string_pool.h>
 #include <nlohmann/json.hpp>
 
 #include "mounted_io.h"
@@ -21,132 +17,8 @@ namespace assetlib
 {
 	namespace
 	{
-		constexpr uint16_t c_VersionMajor =
-			11;  // 11: the last chunk layout, read but never written
-
 		constexpr std::string_view c_What = "bmaterial";
 
-		enum class ChunkId : uint32_t
-		{
-			kMaterial = 1,  // one MaterialRecord
-			kStringPool,
-			kPbr  // one PbrRecord, when the shading model is PBR
-		};
-
-		/** The part of a BMaterial every shading model has; its strings live in the pool. */
-		struct MaterialRecord
-		{
-			uint32_t shadingModel;
-			uint32_t nameOffset;
-			uint32_t editorGraphOffset;
-		};
-
-		static_assert(sizeof(MaterialRecord) == 12);
-
-		struct RouteRecord
-		{
-			uint32_t textureOffset;
-			uint16_t channel;
-		};
-
-		static_assert(sizeof(RouteRecord) == 8);
-
-		/** PbrParams as it is stored: paths as pool offsets, the routes and stamps as arrays. */
-		struct PbrRecord
-		{
-			glm::vec4                                    baseColorFactor;
-			float                                        metallicFactor;
-			float                                        roughnessFactor;
-			uint32_t                                     alphaMode;
-			float                                        alphaCutoff;
-			float                                        transmissionFactor;
-			glm::vec3                                    specularColorFactor;
-			float                                        specularFactor;
-			uint32_t                                     baseColorTextureOffset;
-			uint32_t                                     normalTextureOffset;
-			uint32_t                                     ormTextureOffset;
-			std::array<RouteRecord, c_LooseChannelCount> routes;
-			std::array<SourceStamp, c_LooseChannelCount> routeStamps;
-		};
-
-		static_assert(sizeof(PbrRecord) == 64 + c_LooseChannelCount * (8 + 16));
-
-		const schema::Schema&
-		materialSchema()
-		{
-			static const schema::Schema c_Schema =
-				AssetSchemaBuilder()
-					.AddSourceStamp()
-					.AddLayout<MaterialRecord>(
-						"MaterialRecord",
-						[](auto& layout) {
-							layout.AddField("shadingModel", &MaterialRecord::shadingModel)
-								.AddField("nameOffset", &MaterialRecord::nameOffset)
-								.AddField("editorGraphOffset", &MaterialRecord::editorGraphOffset);
-						})
-					.AddLayout<RouteRecord>(
-						"RouteRecord",
-						[](auto& layout) {
-							layout.AddField("textureOffset", &RouteRecord::textureOffset)
-								.AddField("channel", &RouteRecord::channel);
-						})
-					.AddLayout<PbrRecord>(
-						"PbrRecord",
-						[](auto& layout) {
-							layout
-								.AddField(
-									"baseColorFactor",
-									&PbrRecord::baseColorFactor,
-									glm::vec4(1.0f))
-								.AddField("metallicFactor", &PbrRecord::metallicFactor, 1.0f)
-								.AddField("roughnessFactor", &PbrRecord::roughnessFactor, 1.0f)
-								.AddField("alphaMode", &PbrRecord::alphaMode)
-								.AddField("alphaCutoff", &PbrRecord::alphaCutoff, 0.5f)
-								.AddField("transmissionFactor", &PbrRecord::transmissionFactor)
-								.AddField(
-									"specularColorFactor",
-									&PbrRecord::specularColorFactor,
-									glm::vec3(1.0f))
-								.AddField("specularFactor", &PbrRecord::specularFactor, 1.0f)
-								.AddField(
-									"baseColorTextureOffset",
-									&PbrRecord::baseColorTextureOffset)
-								.AddField("normalTextureOffset", &PbrRecord::normalTextureOffset)
-								.AddField("ormTextureOffset", &PbrRecord::ormTextureOffset)
-								.AddField("routes", &PbrRecord::routes)
-								.AddField("routeStamps", &PbrRecord::routeStamps);
-						})
-					.Finish();
-			return c_Schema;
-		}
-
-		PbrParams
-		unpackPbr(const PbrRecord& record, const core::string_pool& pool)
-		{
-			PbrParams pbr;
-			pbr.baseColorFactor     = record.baseColorFactor;
-			pbr.metallicFactor      = record.metallicFactor;
-			pbr.roughnessFactor     = record.roughnessFactor;
-			pbr.alphaMode           = static_cast<AlphaMode>(record.alphaMode);
-			pbr.alphaCutoff         = record.alphaCutoff;
-			pbr.transmissionFactor  = record.transmissionFactor;
-			pbr.specularColorFactor = record.specularColorFactor;
-			pbr.specularFactor      = record.specularFactor;
-			pbr.baseColorTexture    = pool.at(record.baseColorTextureOffset);
-			pbr.normalTexture       = pool.at(record.normalTextureOffset);
-			pbr.ormTexture          = pool.at(record.ormTextureOffset);
-			for (size_t i = 0; i < c_LooseChannelCount; ++i)
-			{
-				pbr.routes[i].texture = pool.at(record.routes[i].textureOffset);
-				pbr.routes[i].channel = record.routes[i].channel;
-				pbr.routeStamps[i]    = record.routeStamps[i];
-			}
-			return pbr;
-		}
-	}
-
-	namespace
-	{
 		constexpr std::array<std::string_view, c_LooseChannelCount> c_ChannelNames = { {
 			"baseColorR",
 			"baseColorG",
@@ -327,50 +199,6 @@ namespace assetlib
 			return material;
 		}
 
-		BMaterial
-		legacyDeserializeMaterial(std::span<const std::byte> bytes)
-		{
-			const chunk::Reader
-				reader(bytes, magic::c_BMaterial, c_VersionMajor, c_What, materialSchema());
-
-			const auto records = reader.Require<MaterialRecord>(ChunkId::kMaterial);
-			core::throw_runtime_error_if(
-				records.size() != 1,
-				"bmaterial: the material chunk holds {} entries, not one",
-				records.size());
-			const core::string_pool pool(reader.Read<char>(ChunkId::kStringPool));
-
-			const MaterialRecord& record = records[0];
-			if (record.shadingModel >= static_cast<uint32_t>(ShadingModel::kCount))
-				throw std::runtime_error(
-					"bmaterial: unknown shading model " + std::to_string(record.shadingModel));
-
-			BMaterial material;
-			material.shadingModel = static_cast<ShadingModel>(record.shadingModel);
-			material.name         = pool.at(record.nameOffset);
-			material.editorGraph  = pool.at(record.editorGraphOffset);
-
-			switch (material.shadingModel)
-			{
-			case ShadingModel::kPbr:
-			{
-				const auto pbr = reader.Require<PbrRecord>(ChunkId::kPbr);
-				core::throw_runtime_error_if(
-					pbr.size() != 1,
-					"bmaterial: the PBR chunk holds {} entries, not one",
-					pbr.size());
-				material.pbr = unpackPbr(pbr[0], pool);
-				break;
-			}
-
-			// Already excluded by the range check above; the case exists so a new model cannot be
-			// added without the compiler pointing at this switch.
-			case ShadingModel::kCount:
-				throw std::runtime_error("bmaterial: unreadable shading model");
-			}
-
-			return material;
-		}
 	}
 
 	std::vector<std::byte>
@@ -454,12 +282,12 @@ namespace assetlib
 	BMaterial
 	deserializeMaterial(std::span<const std::byte> bytes)
 	{
-		if (isTextAssetDocument(bytes))
-			return materialFromDocument(
-				std::string_view(reinterpret_cast<const char*>(bytes.data()), bytes.size()));
-
-		// The chunk regime, read until the schema system goes.
-		return legacyDeserializeMaterial(bytes);
+		core::throw_runtime_error_if(
+			!isTextAssetDocument(bytes),
+			"bmaterial: not a text document; if it is a chunk-era file, migrate the project "
+			"with a build from before the schema removal");
+		return materialFromDocument(
+			std::string_view(reinterpret_cast<const char*>(bytes.data()), bytes.size()));
 	}
 
 	void

@@ -62,7 +62,6 @@ set_target_properties(KTX::ktx PROPERTIES
 
 add_subdirectory(libs/core)
 add_subdirectory(libs/assetlib_structs)
-add_subdirectory(libs/schema)
 set(FG_BUILD_TEST OFF CACHE BOOL "" FORCE)
 add_subdirectory(libs/bgl)
 add_subdirectory(libs/assetlib)

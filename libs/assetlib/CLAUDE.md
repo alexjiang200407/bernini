@@ -13,7 +13,7 @@ from local into model space, `skinningMatrices` composes each with its inverse b
 plain CPU code — and it is the reference every later GPU path is diffed against, which is why it is
 deliberately the unoptimised form.
 
-Two container regimes, mid-migration (see docs/plans/migration-system-v2.md):
+Two container regimes (see docs/asset_containers.md):
 
 `.bmaterial` and `.benv` are **authored text documents**: canonical JSON (`src/bmaterial_io.cpp`,
 `src/benv_io.cpp`), named keys, unknown keys preserved on round-trip so a sibling branch's field
@@ -33,10 +33,6 @@ container stores — layout or meaning — is one edit: bump its token in `src/b
 fresh random value. A forgotten bump on a layout change fails `TokenCanary_test`, which pins each
 writer's output hash beside its token; a semantic change the fixture cannot see is still yours to
 remember.
-
-The chunk-era form of the authored documents and the pre-split env containers still deserializes —
-`migrate` is the carry, `src/chunk_io.h` the machinery — until the schema system goes with the
-plan's last task.
 
 ## Headers forward declare
 

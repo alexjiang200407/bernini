@@ -171,17 +171,20 @@ TEST_CASE("a BEnv round-trips through a file", "[benv][io]")
 	std::filesystem::remove(path);
 }
 
-// A v1 .benv opens with the same magic, and what follows is KTX2 blobs. It carries no schema chunk
-// -- no container from before the schema does -- so the reader refuses it as such and never reads
-// on into the blobs.
-TEST_CASE("the reference reader refuses a v1 .benv and the other containers' files", "[benv][io]")
+// A chunk-era .benv -- any of its binary forms -- is not a text document, so the reader refuses
+// it whole and never reads on into what follows the magic.
+TEST_CASE(
+	"the reference reader refuses a chunk-era .benv and the other containers' files",
+	"[benv][io]")
 {
 	core::io::ByteWriter v1;
 	v1.WritePod(magic::c_BEnv);
 	v1.WritePod<uint16_t>(1);
 	v1.WritePod<uint16_t>(0);
-	v1.WritePod<uint64_t>(0);  // the v1 header continues; the reader must not get that far
-	CHECK_THROWS_WITH(deserializeEnv(v1.Take()), Catch::Matchers::ContainsSubstring("benv:"));
+	v1.WritePod<uint64_t>(0);  // the old header continues; the reader must not get that far
+	CHECK_THROWS_WITH(
+		deserializeEnv(v1.Take()),
+		Catch::Matchers::ContainsSubstring("before the schema removal"));
 
 	CHECK_THROWS_AS(deserializeEnv(serializeSky(SampleSky())), std::runtime_error);
 	CHECK_THROWS_AS(deserializeEnv(serializeEnvLighting(SampleLighting())), std::runtime_error);
@@ -191,8 +194,6 @@ TEST_CASE("the reference reader refuses a v1 .benv and the other containers' fil
 	CHECK_THROWS_AS(deserializeEnv(truncated), std::runtime_error);
 }
 
-// The whole u32 at the version's offset, so the bytes stay a cache entry with a version this
-// build does not read -- a single patched byte would instead fall through to the legacy reader.
 TEST_CASE(
 	"an environment container at a header version this build does not read is refused",
 	"[bsky][benvl][io]")
@@ -203,11 +204,11 @@ TEST_CASE(
 		std::memcpy(bytes.data() + 4, &version, sizeof(version));
 	};
 
-	// Until the schema system goes, a version that is not the cache's routes to the legacy
-	// chunk reader, so its refusal carries that reader's message; task 8 leaves readHeader's own.
 	auto bytes = serializeSky(SampleSky());
 	patchVersion(bytes);
-	CHECK_THROWS_AS(deserializeSky(bytes), std::runtime_error);
+	CHECK_THROWS_WITH(
+		deserializeSky(bytes),
+		Catch::Matchers::ContainsSubstring("not the 1 this build reads"));
 
 	auto lightingBytes = serializeEnvLighting(SampleLighting());
 	patchVersion(lightingBytes);

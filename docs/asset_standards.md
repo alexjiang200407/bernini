@@ -145,9 +145,8 @@ before the factor existed**, so a material baked without one is unaffected — s
 [Passes § Blended surfaces](docs/passes.md#blended-surfaces) for the shading.
 
 glTF carries it as `KHR_materials_transmission`, which the importer reads; a `BLEND` material with no
-such extension imports at 0, which is glTF's own default. It takes `.bmaterial` to **major 9**, so
-every material baked before it is rejected until re-baked — the container reads a version, not a
-schema, and a field appended silently would be read as whatever bytes followed it.
+such extension imports at 0, which is glTF's own default. The factor is a document key
+with `0` as its default, so a material written before it reads back unchanged.
 
 ### Specular
 
@@ -163,7 +162,7 @@ implicitly a full dielectric, so the surface arrives wearing a sheen its author 
 glTF carries the pair as `KHR_materials_specular`, which the importer reads; the two texture inputs
 that extension also defines (`specularTexture`, `specularColorTexture`) are **not** read, so a
 material that varies specular per-texel imports at its factors. Unlike transmission this costs no
-version bump: since `.bmaterial` became [self-describing](asset_schema.md), a field appended with a
+version bump: since `.bmaterial` became [a text document](asset_containers.md), a field appended with a
 default reads back at that default out of every file written before it, and `1` / white is exactly
 the flat `0.04` those files already shaded at.
 
@@ -322,8 +321,7 @@ Three different spaces are in play and they are easy to conflate. The contract, 
   bake: [libs/assetlib/include/assetlib/vat_bake.h](libs/assetlib/include/assetlib/vat_bake.h).
 * **`.bmaterial`** — **a shading-model tag plus that model's parameters**, as an authored text
   document: canonical JSON, factors and routes as named keys, the editor graph carried as an
-  opaque string, unknown keys preserved on round-trip (the chunk-era v11 form still reads, and
-  `migrate` carries it forward). Struct:
+  opaque string, unknown keys preserved on round-trip. Struct:
   [libs/assetlib_structs/include/assetlib_structs/BMaterial.h](libs/assetlib_structs/include/assetlib_structs/BMaterial.h);
   I/O: [libs/assetlib/include/assetlib/bmaterial_io.h](libs/assetlib/include/assetlib/bmaterial_io.h);
   bake: [libs/assetlib/include/assetlib/material_bake.h](libs/assetlib/include/assetlib/material_bake.h).
@@ -416,7 +414,7 @@ Three different spaces are in play and they are easy to conflate. The contract, 
   I/O: [libs/assetlib/include/assetlib/bsky_io.h](libs/assetlib/include/assetlib/bsky_io.h),
   [libs/assetlib/include/assetlib/benvl_io.h](libs/assetlib/include/assetlib/benvl_io.h).
 
-  * **Derived cache entries** (see [Asset Schema](asset_schema.md)): the sky's route is its cache
+  * **Derived cache entries** (see [Asset Containers](asset_containers.md)): the sky's route is its cache
     key, the lighting joins its two sources into one. Every map is an `EnvMapRoute`: the `source`
     under `textures_src/`, the machine-ready `baked` `.ktx2` under `Textures/`, and the `SourceStamp`
     the source measured when that bake ran. Paths are relative to the data root, as everywhere else.
@@ -456,16 +454,13 @@ Three different spaces are in play and they are easy to conflate. The contract, 
     map while it is current, the float source it was compiled from otherwise. Same branch a material
     takes (`drawsLoose`), and for the same reason — `Textures/` is regenerated per platform, so a
     fresh checkout has sources and no bakes. Only a route with neither throws.
-  * The chunk-era env forms (v3 schema containers, and the blob formats before them) still
-    deserialize until the schema system goes; `migrate` is the carry, lifting the presentation
-    knobs they held onto the document one-time.
 
 **`.bmesh`, `.bskel`, `.banim`, `.bvat`, `.bsky` and `.benvl` are the same cache-entry container**,
 in [libs/assetlib/src/cache_io.h](libs/assetlib/src/cache_io.h): a frozen header carrying the cache
 key (bake token, source stamp, parameter hash, source mount key), 16-byte-aligned schema-less
 chunks, a chunk table at the end. Chunks are addressed by id and an **absent chunk is not an
 error**. There is no conversion and no old shape to parse — a token mismatch is a cache miss, and
-the recovery is regeneration, never a reader. See [Asset Schema](asset_schema.md).
+the recovery is regeneration, never a reader. See [Asset Containers](asset_containers.md).
 
 ---
 

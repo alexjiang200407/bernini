@@ -273,4 +273,36 @@ namespace assetlib::cache
 		MountedFileReader reader(fileSystem, path, what);
 		return readCacheChunks(reader, magic, bakeToken, ids, what);
 	}
+
+	std::vector<char>
+	packStrings(std::span<const std::string> strings)
+	{
+		std::vector<char> pool;
+		for (const auto& s : strings)
+		{
+			pool.insert(pool.end(), s.begin(), s.end());
+			pool.push_back('\0');
+		}
+		return pool;
+	}
+
+	std::vector<std::string>
+	unpackStrings(std::span<const char> pool)
+	{
+		std::vector<std::string> out;
+		std::string              current;
+		for (const char c : pool)
+		{
+			if (c == '\0')
+			{
+				out.push_back(current);
+				current.clear();
+			}
+			else
+			{
+				current.push_back(c);
+			}
+		}
+		return out;
+	}
 }

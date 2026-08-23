@@ -22,7 +22,7 @@ disagrees, trust the header, then fix this doc.
   presentation knobs (`skyMipLevel`, `skyRotationY`, `exposureOverride`). Composing by reference is
   what lets a sky be re-authored without touching the lighting that minutes of convolution produced,
   and what lets two environments share one sky. Either half may be empty. `.bsky` and `.benvl` are
-  purely derived cache entries (see [Asset Schema](asset_schema.md)): the sky's route is its cache
+  purely derived cache entries (see [Asset Containers](asset_containers.md)): the sky's route is its cache
   key, the lighting's key joins its two sources; `pack` re-bakes a stale one into the archive and
   fails loudly on one it cannot.
 * **The three are separate files because they have different lifetimes.** Re-authoring a sky is a

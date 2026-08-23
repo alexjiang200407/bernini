@@ -53,8 +53,8 @@ TEST_CASE("a cache entry round-trips its chunks and its key", "[cacheio]")
 	CHECK(reader.Require<uint32_t>(Id::kA) == std::vector<uint32_t>{ 1, 2, 3 });
 	CHECK(reader.Require<uint8_t>(Id::kB) == std::vector<uint8_t>{ 9 });
 
-	// Empty but present: Require answers an empty vector, exactly as the schema reader did --
-	// a mesh with no roots chunk is a mesh with no roots, not a malformed file.
+	// Empty but present: Require answers an empty vector -- a mesh with no roots chunk is a
+	// mesh with no roots, not a malformed file.
 	CHECK(reader.Require<uint64_t>(Id::kEmpty).empty());
 	CHECK(reader.Read<float>(Id{ 99 }).empty());
 }

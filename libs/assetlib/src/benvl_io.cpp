@@ -2,18 +2,13 @@
 #include <assetlib_structs/BEnv.h>
 #include <assetlib_structs/magic.h>
 
-#include "AssetSchemaBuilder.h"
 #include "bake_tokens.h"
 #include "cache_io.h"
-#include "chunk_io.h"
-#include "env_legacy.h"
-#include "env_route_io.h"
 #include "fs_util.h"
 
 #include <core/err/util.h>
 #include <core/file/file.h>
 #include <core/str/str.h>
-#include <core/str/string_pool.h>
 
 #include "mounted_io.h"
 
@@ -36,91 +31,6 @@ namespace assetlib
 		// both, joined. '\n' cannot appear in a mount key, which is what makes the join safe.
 		constexpr char c_KeySeparator = '\n';
 
-		// --- The chunk regime, read until the schema system goes -------------------------------
-
-		constexpr uint16_t c_LegacyVersionMajor = 3;
-
-		enum class LegacyChunkId : uint32_t
-		{
-			kLighting = 1,  // one LegacyLightingRecord
-			kStringPool
-		};
-
-		struct LegacyLightingRecord
-		{
-			uint32_t       nameOffset;
-			float          exposure;
-			uint32_t       exposureAuthored;  // 1 when an override was set
-			float          exposureOverride;
-			EnvRouteRecord prefilter;
-			EnvRouteRecord irradiance;
-		};
-
-		static_assert(sizeof(LegacyLightingRecord) == 64);
-
-		const schema::Schema&
-		legacyLightingSchema()
-		{
-			static const schema::Schema c_Schema =
-				AssetSchemaBuilder()
-					.AddSourceStamp()
-					.AddLayout<EnvRouteRecord>("EnvMapRoute", describeEnvRoute)
-					.AddLayout<LegacyLightingRecord>(
-						"LightingRecord",
-						[](auto& layout) {
-							layout.AddField("nameOffset", &LegacyLightingRecord::nameOffset)
-								.AddField("exposure", &LegacyLightingRecord::exposure, 1.0f)
-								.AddField(
-									"exposureAuthored",
-									&LegacyLightingRecord::exposureAuthored)
-								.AddField(
-									"exposureOverride",
-									&LegacyLightingRecord::exposureOverride)
-								.AddField("prefilter", &LegacyLightingRecord::prefilter)
-								.AddField("irradiance", &LegacyLightingRecord::irradiance);
-						})
-					.Finish();
-			return c_Schema;
-		}
-
-		LegacyLightingRecord
-		legacyLightingRecord(std::span<const std::byte> bytes, core::string_pool& pool)
-		{
-			const chunk::Reader
-				reader(bytes, magic::c_BEnvL, c_LegacyVersionMajor, c_What, legacyLightingSchema());
-
-			const auto records = reader.Require<LegacyLightingRecord>(LegacyChunkId::kLighting);
-			core::throw_runtime_error_if(
-				records.size() != 1,
-				"benvl: the lighting chunk holds {} entries, not one",
-				records.size());
-			pool = core::string_pool(reader.Read<char>(LegacyChunkId::kStringPool));
-			return records[0];
-		}
-
-		BEnvLighting
-		legacyDeserializeEnvLighting(std::span<const std::byte> bytes)
-		{
-			core::string_pool          pool;
-			const LegacyLightingRecord record = legacyLightingRecord(bytes, pool);
-
-			BEnvLighting lighting;
-			lighting.name       = pool.at(record.nameOffset);
-			lighting.exposure   = record.exposure;
-			lighting.prefilter  = unpackRoute(record.prefilter, pool);
-			lighting.irradiance = unpackRoute(record.irradiance, pool);
-			return lighting;
-		}
-	}
-
-	std::optional<float>
-	legacyLightingExposureOverride(std::span<const std::byte> bytes)
-	{
-		core::string_pool          pool;
-		const LegacyLightingRecord record = legacyLightingRecord(bytes, pool);
-		if (record.exposureAuthored == 0)
-			return std::nullopt;
-		return record.exposureOverride;
 	}
 
 	std::vector<std::byte>
@@ -154,9 +64,6 @@ namespace assetlib
 	BEnvLighting
 	deserializeEnvLighting(std::span<const std::byte> bytes)
 	{
-		if (!cache::isCacheEntry(bytes))
-			return legacyDeserializeEnvLighting(bytes);
-
 		const cache::Reader reader(bytes, magic::c_BEnvL, c_BEnvLightingBakeToken, c_What);
 
 		BEnvLighting lighting;
