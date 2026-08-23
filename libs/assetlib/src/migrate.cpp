@@ -67,6 +67,7 @@ namespace assetlib
 			case AssetType::kTexture:
 			case AssetType::kVat:
 			case AssetType::kImportDocument:
+			case AssetType::kCount:
 				return std::nullopt;
 			}
 			return std::nullopt;

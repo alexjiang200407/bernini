@@ -47,7 +47,10 @@ namespace assetlib
 			ContainerKind kind{ .type      = AssetCodec<T>::c_Type,
 				                .extension = AssetCodec<T>::c_Extension };
 			if constexpr (CacheEntryCodecFor<T>)
+			{
 				kind.bakeToken = AssetCodec<T>::c_BakeToken;
+				kind.magic     = AssetCodec<T>::c_Magic;
+			}
 			return kind;
 		}
 
@@ -62,8 +65,7 @@ namespace assetlib
 		// order to get wrong -- every token is a constant expression in its own header.
 		constexpr auto c_Table = buildTable(static_cast<Containers*>(nullptr));
 
-		// kImportDocument is the last enumerator, so this is how many kinds of asset exist.
-		constexpr size_t c_AssetTypeCount = static_cast<size_t>(AssetType::kImportDocument) + 1;
+		constexpr size_t c_AssetTypeCount = static_cast<size_t>(AssetType::kCount);
 
 		// Every AssetType is either a container with a codec or the one texture case, so a new
 		// asset type has to say which it is here. Without this it would simply have no codec and
@@ -95,6 +97,19 @@ namespace assetlib
 	{
 		const auto it = std::ranges::find(c_Table, type, &ContainerKind::type);
 		assert(it != c_Table.end() && "the table is total over AssetType but kTexture");
+		return *it;
+	}
+
+	std::optional<ContainerKind>
+	containerKindForMagic(uint32_t magic) noexcept
+	{
+		if (magic == 0)
+			return std::nullopt;
+
+		const auto it = std::ranges::find(c_Table, magic, &ContainerKind::magic);
+		if (it == c_Table.end())
+			return std::nullopt;
+
 		return *it;
 	}
 }
