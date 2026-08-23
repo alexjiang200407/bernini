@@ -186,6 +186,8 @@ before building the thing it describes, and delete it when that thing lands.
 - [assetlib store and codecs](./docs/specs/assetlib_store_codecs.md) — finishing `AssetStore` so it
   owns writes as well as reads, one codec trait per container, and why it waits on
   `feat/migration-system-v2`.
+- [Animation compression](./docs/specs/animation_compression.md) — a 663-bone rig's clips are 60 MB
+  uncompressed; why collapsing constant tracks was measured and dropped, and what to build instead.
 
 **[Plans and Decision Records](./docs/plans/)**
 
