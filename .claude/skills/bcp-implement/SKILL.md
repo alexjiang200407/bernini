@@ -257,13 +257,71 @@ the watch — go straight to
 [bcp-feature § 4](.claude/skills/bcp-feature/SKILL.md) and start `just watch-pr <n>` as the last
 action of the turn. The turn cannot end until you do.
 
-The PR body should say what changed, **why**, how it was verified (name the suites, and say if GPU
-validation ran), and what was deliberately left out. Known follow-ups belong there too — a reviewer
-should not have to discover them.
+## 10. The body
 
-Link `docs/plans/<name>.md` rather than restating it. Its non-goals are the *deliberately left out*
-section already, agreed with the user before the code existed, and a reviewer who reads the same
-sentence twice starts skimming both.
+It has a fixed shape, and a **budget of about 350 words**. A body over it is one where an
+explanation of the code has escaped into the pull request — that belongs in `docs/`, in the commit
+message, or nowhere. Prose is what a reviewer skims; the shape below is what they read.
+
+```markdown
+# type(scope): the title, lifted from this line
+
+<what changed and why — three sentences>
+
+## Design notes
+- **<the decision>** — <why>. *Rejected: <the alternative>, because <why not>.*
+
+## Verification
+<the suites and their result, whether GPU validation ran, the preset built — a line or two>
+
+## Left out
+- <the adjacent thing this deliberately does not do, one line — omit the section when there is none>
+
+## Needs a human
+- [ ] **Windows** — <what to run there, and why CI cannot>
+- [ ] **Eyes** — <what to look at, and what right looks like>
+```
+
+Nothing else. No *what was wrong* narrative, no *how it works now*, no note on scope: the diff, the
+commits and `docs/` each already carry one of those. `## Design notes` is where § 0's ADRs land, one
+line apiece, and `## Left out` is where its non-goals do — a reviewer must be able to tell a
+deliberate gap from an oversight, and that is the only sentence in the body they cannot get from the
+code. Where a `docs/plans/<name>.md` exists, link it from both rather than restating it.
+
+**Do not tabulate the diff.** `just pr create` appends its own breakdown — production, shaders,
+tests, docs, tooling, assets — computed from `git diff --numstat` against the base, inside a fenced
+block that every `just pr edit` rewrites. A hand-written table is wrong by the first revision, and
+this one is overwritten anyway.
+
+### What earns a box
+
+An unchecked box means **someone must act**. Never pre-tick one; when nothing is needed, say so as a
+stated negative with its reason, so silence is never mistaken for an oversight:
+
+```markdown
+## Needs a human
+- [ ] **Eyes** — the readout names the selected tab, and blanks when no viewport is rendering.
+
+Windows: not needed — no D3D12, shader or platform code; CI covers the compile.
+```
+
+**Windows.** `.github/workflows/ci.yml` compiles on `windows-latest` *and* `macos-latest`, runs **no
+suite on either**, and builds `apps/editor` on neither (Qt is absent). So a Windows compile failure
+is caught for free and never needs a box; a Windows *behaviour* difference is caught by nothing.
+Give it a box when you built on macOS and the change reaches:
+
+- D3D12 in `libs/bgl` — the RHI, barriers, descriptors, PSOs, the Agility SDK.
+- shaders — DXIL is not the Metal path, and no runner compares a `[render]` golden image.
+- paths and files — `libs/core/file`, separators, case, the mount-key rule in [STYLE.md](STYLE.md).
+- `apps/editor` — nothing builds it in CI at all.
+
+Name the command, not the need: *"`just run bgl_tests -- "[taa]" --gpu-validation` on Windows"*.
+
+**Eyes.** A box for anything whose result is a picture or a gesture, which no assertion reaches:
+editor UI — a layout, a widget, a menu, what a panel reads; anything on screen — a pass's output, a
+material, a light, a colour; anything about feel — the frame loop, a loading screen, an interaction.
+This checkout cannot capture the screen, so an editor change leaves at least one. Say what *right*
+looks like, so ticking it is a decision rather than a guess.
 
 ## Rules
 

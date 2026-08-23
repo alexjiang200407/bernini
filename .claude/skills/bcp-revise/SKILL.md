@@ -95,7 +95,14 @@ so — onto the PR's **own base** (`gh pr view {n} --json baseRefName --jq .base
 
 ```bash
 git push
+just pr edit {n}          # with no title and no body: refresh the body's diff breakdown
 ```
+
+The bare `pr edit` exists for exactly this moment. The table in the body was computed when the PR
+opened, and the revision just moved the diff out from under it. If the body's prose also changed —
+a `## Needs a human` box a fix has retired, a design note the review overturned — pass
+`--body-file <file>` and it is refreshed in the same call, in
+[bcp-implement § 10](.claude/skills/bcp-implement/SKILL.md)'s shape.
 
 ## 8. Reply on the PR
 
