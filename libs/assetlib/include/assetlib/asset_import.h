@@ -24,13 +24,15 @@ namespace assetlib
 	requireUniqueSubmeshNames(const BMesh& mesh);
 
 	/**
-	 * What an import is named and the parameter it writes with, carried as one value so a write
-	 * cannot take half of it. Where it lands is the store's, not this.
+	 * What an import is named and what it writes with, carried as one value so a write cannot take
+	 * half of it. The data root is still the store's; `textureDir` is not one, and a person picks
+	 * it in the importer.
 	 */
 	struct ImportTarget
 	{
 		std::string name;  // the copied source's stem: `meshes_src/<name>.glb`
 		float       sampleRate;
+		std::string textureDir;  // where the textures went; empty when none were extracted
 	};
 
 	/**

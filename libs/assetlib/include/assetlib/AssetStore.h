@@ -548,9 +548,9 @@ namespace assetlib
 		CopyImportedSource(const std::filesystem::path& source, const ImportTarget& target) const;
 
 		/**
-		 * Writes the `.bimport` beside the copied source: the sample rate, and -- when `mesh` is
-		 * given -- the submesh-name -> material bindings the mesh carries at this moment. Null
-		 * `mesh` is a clips-only import: parameters, no bindings.
+		 * Writes the `.bimport` beside the copied source: the sample rate, where the textures went
+		 * and the source as it stood when they did, and -- when `mesh` is given -- the
+		 * submesh-name -> material bindings it carries. Null `mesh` is a clips-only import.
 		 *
 		 * @throws std::runtime_error on a write failure.
 		 */

@@ -554,7 +554,9 @@ TEST_CASE("an import lands in the project's categories and reads back", "[import
 	static_cast<void>(assetlib::generateTangents(mesh));
 	assetlib::requireUniqueSubmeshNames(mesh);
 
-	const assetlib::ImportTarget target{ "apples", assetlib::c_DefaultSampleRate };
+	const assetlib::ImportTarget target{ "apples",
+		                                 assetlib::c_DefaultSampleRate,
+		                                 "textures_src/apples" };
 	const assetlib::AssetStore   store(dataRoot);
 	const assetlib::SourceRef    sourceRef = store.CopyImportedSource(glb, target);
 	mesh.source                            = sourceRef;

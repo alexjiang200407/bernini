@@ -28,7 +28,7 @@ namespace assetlib::test
 		generateTangents(mesh);
 		requireUniqueSubmeshNames(mesh);
 
-		const ImportTarget target{ "unit", sampleRate };
+		const ImportTarget target{ "unit", sampleRate, {} };
 		const SourceRef    source = AssetStore(dataRoot).CopyImportedSource(glb, target);
 		mesh.source               = source;
 

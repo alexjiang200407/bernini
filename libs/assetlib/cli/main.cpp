@@ -532,7 +532,9 @@ main(int argc, char** argv)
 				assetlib::requireUniqueSubmeshNames(mesh);
 
 				const assetlib::AssetStore   importStore(dataRoot);
-				const assetlib::ImportTarget target{ name, sampleRate };
+				const assetlib::ImportTarget target{ name,
+					                                 sampleRate,
+					                                 importStore.KeyFor(textureDir) };
 				const assetlib::SourceRef    source = importStore.CopyImportedSource(input, target);
 				mesh.source                         = source;
 

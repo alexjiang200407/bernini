@@ -75,6 +75,11 @@ namespace editor
 		const fs::path textureDir =
 			options.textures ? under(options.outputs.textureDir) : fs::path();
 
+		// The same folder as the mount key every ImportTarget below records, so a document cannot
+		// come to disagree with where the textures actually went. Empty extracts none.
+		const std::string textureDirKey =
+			options.textures ? options.outputs.textureDir.toStdString() : std::string();
+
 		// A derived material routes at the extracted textures, so it cannot come across without them.
 		const bool     importMaterials = options.pbrMaterials && options.textures && options.mesh;
 		const fs::path materialDir =
@@ -222,7 +227,8 @@ namespace editor
 
 					const assetlib::AssetStore   store(dataRoot);
 					const assetlib::ImportTarget target{ sourceName,
-					                                     assetlib::c_DefaultSampleRate };
+					                                     assetlib::c_DefaultSampleRate,
+					                                     textureDirKey };
 					const assetlib::SourceRef sourceRef = store.CopyImportedSource(source, target);
 					mesh->source                        = sourceRef;
 
@@ -241,7 +247,8 @@ namespace editor
 
 					const assetlib::AssetStore   store(dataRoot);
 					const assetlib::ImportTarget target{ sourceName,
-					                                     assetlib::c_DefaultSampleRate };
+					                                     assetlib::c_DefaultSampleRate,
+					                                     textureDirKey };
 					const assetlib::SourceRef sourceRef = store.CopyImportedSource(source, target);
 					store.WriteImportedClips(
 						imported->skeleton,
@@ -286,7 +293,8 @@ namespace editor
 					meshStore.Save(*mesh, meshStore.KeyFor(bmeshPath));
 
 					const assetlib::ImportTarget target{ sourceName,
-						                                 assetlib::c_DefaultSampleRate };
+						                                 assetlib::c_DefaultSampleRate,
+						                                 textureDirKey };
 					meshStore.WriteImportedDocument(target, &*mesh);
 				}
 

@@ -132,6 +132,12 @@ namespace assetlib
 	AssetStore::WriteImportedDocument(const ImportTarget& target, const BMesh* mesh) const
 	{
 		ImportDocument document = parametersOnly(target.sampleRate);
+		document.textureDir     = target.textureDir;
+
+		// Stamped from the copy rather than from the caller's reference, so what the document says
+		// the textures were extracted at cannot disagree with the source standing beside them.
+		if (!document.textureDir.empty())
+			document.textureStamp = stampOf(ImportedSourcePath(target.name));
 		if (mesh != nullptr)
 			document.bindings = bindingsOf(*mesh);
 
