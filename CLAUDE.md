@@ -247,6 +247,16 @@ suite does not stop the others; the summary at the end says which failed. To pas
 suite, use `just run`, which forwards it — `just run bgl_tests -- --gpu-validation`, or
 `just run editor_tests -- "[materialgraph]"` to run one tag.
 
+Each suite process `just test` starts gets a temp directory of its own (`TMPDIR`/`TMP`/`TEMP`), so
+two checkouts of this workspace can run their suites at once. A fixture is free to name its scratch
+directory `temp_directory_path() / "bernini_thing"` and wipe it on the way in — which is what they
+all do — because no two of those processes share that root.
+
+**`just run` does not, and that is the remaining hole**: `just run assetlib_tests -- "[importdoc]"`
+in two checkouts at the same time still collides, because both land on the per-user temp directory
+and one wipes the fixture the other is writing. It surfaces as `remove_all: Directory not empty`
+and reads like a flake. Use `just test <suite> -- "<tag>"` when another checkout may be testing.
+
 ## Configuration
 
 `just init` records this machine's settings in `scripts/config.json`, and every command reads them so they don't have to be retyped: the CMake preset, the build configuration, absolute paths to tools that aren't on PATH (`cmake`, `ninja`, `clang`, `clang-format`), the `vcpkg` checkout — exported as `VCPKG_ROOT` into every build environment, which is why that variable never has to be set by hand — and a `precommand`, a shell command run for its effect on the environment, normally `vcvarsall.bat`, whose resulting environment every build then runs in.
