@@ -1,4 +1,5 @@
 #pragma once
+#include <assetlib/AssetCodec.h>
 
 namespace assetlib
 {
@@ -29,4 +30,26 @@ namespace assetlib
 	[[nodiscard]] Skeleton
 	loadSkeleton(const std::filesystem::path& path);
 
+	/**
+	 * The codec for `c_SkeletonExtension` -- a cache entry. See AssetCodec.h.
+	 *
+	 * Declared here and defined in bskel_io.cpp, because `Deserialize` returns by value and this
+	 * header only forward declares `Skeleton`.
+	 */
+	template <>
+	struct AssetCodec<Skeleton>
+	{
+		static constexpr std::string_view c_Extension = c_SkeletonExtension;
+		static constexpr AssetType        c_Type      = AssetType::kSkeleton;
+
+		// The bake revision this container is written at; see AssetCodec.h. Bump to a fresh
+		// random value whenever this writer's layout or meaning changes.
+		static constexpr uint64_t c_BakeToken = 0x9be47d02a15c68f3ull;
+
+		[[nodiscard]] static std::vector<std::byte>
+		Serialize(const Skeleton& value);
+
+		[[nodiscard]] static Skeleton
+		Deserialize(std::span<const std::byte> bytes);
+	};
 }

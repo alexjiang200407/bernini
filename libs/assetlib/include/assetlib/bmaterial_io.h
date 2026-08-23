@@ -1,4 +1,5 @@
 #pragma once
+#include <assetlib/AssetCodec.h>
 
 namespace assetlib
 {
@@ -46,4 +47,23 @@ namespace assetlib
 	 */
 	[[nodiscard]] SourceStamp
 	stampOf(const std::filesystem::path& path);
+
+	/**
+	 * The codec for `c_MaterialExtension` -- a authored document. See AssetCodec.h.
+	 *
+	 * Declared here and defined in bmaterial_io.cpp, because `Deserialize` returns by value and this
+	 * header only forward declares `BMaterial`.
+	 */
+	template <>
+	struct AssetCodec<BMaterial>
+	{
+		static constexpr std::string_view c_Extension = c_MaterialExtension;
+		static constexpr AssetType        c_Type      = AssetType::kMaterial;
+
+		[[nodiscard]] static std::vector<std::byte>
+		Serialize(const BMaterial& value);
+
+		[[nodiscard]] static BMaterial
+		Deserialize(std::span<const std::byte> bytes);
+	};
 }

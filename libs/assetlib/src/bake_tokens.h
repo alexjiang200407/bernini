@@ -1,22 +1,26 @@
 #pragma once
+#include <assetlib/banim_io.h>
+#include <assetlib/benvl_io.h>
+#include <assetlib/bmesh_io.h>
+#include <assetlib/bskel_io.h>
+#include <assetlib/bsky_io.h>
+#include <assetlib/bvat_io.h>
 
 namespace assetlib
 {
 	/**
-	 * The engine's bake revision, one token per cache-entry container. A change to what a container
-	 * stores -- layout or meaning -- is one edit: replace its token with a fresh random value, and
-	 * every file written before the change becomes a cache miss.
+	 * The names this library's writers have always used for their bake tokens, now reading the
+	 * values out of each container's codec rather than holding a second copy.
 	 *
-	 * Shared between each container's writer and the regeneration seam, which is the one reader
-	 * allowed to see a mismatch as "regenerate" rather than an error.
-	 *
-	 * Each token is pinned beside its writer's output hash in TokenCanary_test, which is what
-	 * catches a layout change made without a bump -- a new container's token gets a section there.
+	 * The values live in `AssetCodec<T>::c_BakeToken`, beside the `Serialize` a bump has to move
+	 * with -- a token one file away from its writer is a token that gets forgotten, and a forgotten
+	 * bump makes stale files read as current. These aliases exist only so the existing writers keep
+	 * compiling; they go when their callers move to the codec.
 	 */
-	inline constexpr uint64_t c_BMeshBakeToken        = 0x6f1d3a58c2e94b07ull;
-	inline constexpr uint64_t c_BSkelBakeToken        = 0x9be47d02a15c68f3ull;
-	inline constexpr uint64_t c_BAnimBakeToken        = 0x41f8b6d95e07c2aaull;
-	inline constexpr uint64_t c_BSkyBakeToken         = 0x7c25e8b1904dfa36ull;
-	inline constexpr uint64_t c_BEnvLightingBakeToken = 0xd48f19c7a35b062eull;
-	inline constexpr uint64_t c_BVatBakeToken         = 0x25b90ce8f7143ad9ull;
+	inline constexpr uint64_t c_BMeshBakeToken        = AssetCodec<BMesh>::c_BakeToken;
+	inline constexpr uint64_t c_BSkelBakeToken        = AssetCodec<Skeleton>::c_BakeToken;
+	inline constexpr uint64_t c_BAnimBakeToken        = AssetCodec<AnimationSet>::c_BakeToken;
+	inline constexpr uint64_t c_BSkyBakeToken         = AssetCodec<BSky>::c_BakeToken;
+	inline constexpr uint64_t c_BEnvLightingBakeToken = AssetCodec<BEnvLighting>::c_BakeToken;
+	inline constexpr uint64_t c_BVatBakeToken         = AssetCodec<BVat>::c_BakeToken;
 }

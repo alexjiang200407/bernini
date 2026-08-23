@@ -67,4 +67,16 @@ namespace assetlib
 	{
 		return deserializeSkeleton(fileSystem.Read(path));
 	}
+
+	std::vector<std::byte>
+	AssetCodec<Skeleton>::Serialize(const Skeleton& value)
+	{
+		return serializeSkeleton(value);
+	}
+
+	Skeleton
+	AssetCodec<Skeleton>::Deserialize(std::span<const std::byte> bytes)
+	{
+		return deserializeSkeleton(bytes);
+	}
 }

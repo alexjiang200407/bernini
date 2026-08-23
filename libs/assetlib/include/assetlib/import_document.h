@@ -1,4 +1,5 @@
 #pragma once
+#include <assetlib/AssetCodec.h>
 #include <assetlib_structs/Animation.h>
 #include <core/file/IFileSystem.h>
 
@@ -77,4 +78,23 @@ namespace assetlib
 	 */
 	[[nodiscard]] uint64_t
 	parametersHashOf(const ImportDocument& document);
+
+	/**
+	 * The codec for `.bimport` -- an authored document, and the one whose text is not already the
+	 * shape the store moves. `serializeImportDocument` yields a `std::string` because the document
+	 * is canonical JSON a person reads; the bytes of that string are what lands on disk, so the
+	 * adaptation here is a reinterpretation and never a copy of a different form.
+	 */
+	template <>
+	struct AssetCodec<ImportDocument>
+	{
+		static constexpr std::string_view c_Extension = c_ImportDocumentExtension;
+		static constexpr AssetType        c_Type      = AssetType::kImportDocument;
+
+		[[nodiscard]] static std::vector<std::byte>
+		Serialize(const ImportDocument& value);
+
+		[[nodiscard]] static ImportDocument
+		Deserialize(std::span<const std::byte> bytes);
+	};
 }
