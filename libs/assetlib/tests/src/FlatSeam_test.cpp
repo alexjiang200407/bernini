@@ -166,7 +166,7 @@ TEST_CASE("a flat container loads the same from a directory and from an archive"
 
 		for (const core::file::IFileSystem* mount : mounts)
 		{
-			const BMaterial mounted = loadMaterial(*mount, "Materials/metal.bmaterial");
+			const BMaterial mounted = load<BMaterial>(*mount, "Materials/metal.bmaterial");
 
 			CHECK(mounted.name == direct.name);
 			CHECK(mounted.pbr.baseColorTexture == direct.pbr.baseColorTexture);
@@ -181,7 +181,7 @@ TEST_CASE("a flat container loads the same from a directory and from an archive"
 
 		for (const core::file::IFileSystem* mount : mounts)
 		{
-			const BSky mounted = loadSky(*mount, "Env/forest.bsky");
+			const BSky mounted = load<BSky>(*mount, "Env/forest.bsky");
 
 			CHECK(mounted.name == direct.name);
 			CHECK(mounted.sky == direct.sky);
@@ -195,7 +195,7 @@ TEST_CASE("a flat container loads the same from a directory and from an archive"
 
 		for (const core::file::IFileSystem* mount : mounts)
 		{
-			const BEnvLighting mounted = loadEnvLighting(*mount, "Env/forest.benvl");
+			const BEnvLighting mounted = load<BEnvLighting>(*mount, "Env/forest.benvl");
 
 			CHECK(mounted.prefilter == direct.prefilter);
 			CHECK(mounted.irradiance == direct.irradiance);
@@ -209,7 +209,7 @@ TEST_CASE("a flat container loads the same from a directory and from an archive"
 
 		for (const core::file::IFileSystem* mount : mounts)
 		{
-			const BEnv mounted = loadEnv(*mount, "Env/forest.benv");
+			const BEnv mounted = load<BEnv>(*mount, "Env/forest.benv");
 
 			CHECK(mounted.name == direct.name);
 			CHECK(mounted.sky == direct.sky);
@@ -295,10 +295,10 @@ TEST_CASE("a mounted load of an absent entry throws", "[flatseam]")
 	     { static_cast<const core::file::IFileSystem*>(&loose),
 	       static_cast<const core::file::IFileSystem*>(&pak) })
 	{
-		CHECK_THROWS_AS(loadMaterial(*mount, "Materials/gone.bmaterial"), std::runtime_error);
-		CHECK_THROWS_AS(loadSky(*mount, "Env/gone.bsky"), std::runtime_error);
-		CHECK_THROWS_AS(loadEnvLighting(*mount, "Env/gone.benvl"), std::runtime_error);
-		CHECK_THROWS_AS(loadEnv(*mount, "Env/gone.benv"), std::runtime_error);
+		CHECK_THROWS_AS(load<BMaterial>(*mount, "Materials/gone.bmaterial"), std::runtime_error);
+		CHECK_THROWS_AS(load<BSky>(*mount, "Env/gone.bsky"), std::runtime_error);
+		CHECK_THROWS_AS(load<BEnvLighting>(*mount, "Env/gone.benvl"), std::runtime_error);
+		CHECK_THROWS_AS(load<BEnv>(*mount, "Env/gone.benv"), std::runtime_error);
 		CHECK_THROWS_AS(loadKTX2(*mount, "Textures/gone.ktx2"), std::runtime_error);
 		CHECK_THROWS_AS(loadKTX2Preview(*mount, "Textures/gone.ktx2"), std::runtime_error);
 	}
@@ -319,5 +319,5 @@ TEST_CASE("a loose entry shadows its packed twin", "[flatseam]")
 	mount.Mount(std::make_shared<core::file::LooseFileSystem>(scratch.path));
 	mount.Mount(std::make_shared<PakFile>(scratch.path / "Data.bpak"));
 
-	CHECK(loadMaterial(mount, "Materials/metal.bmaterial").name == "edited_after_packing");
+	CHECK(load<BMaterial>(mount, "Materials/metal.bmaterial").name == "edited_after_packing");
 }

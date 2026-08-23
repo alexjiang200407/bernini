@@ -141,7 +141,7 @@ namespace assetlib
 			auto material = BMaterial();
 			try
 			{
-				material = loadMaterial(files, referrer);
+				material = load<BMaterial>(files, referrer);
 			}
 			catch (const std::exception& e)
 			{
@@ -191,7 +191,7 @@ namespace assetlib
 		{
 			try
 			{
-				addRouteEdges(edges, referrer, loadSky(files, referrer).sky);
+				addRouteEdges(edges, referrer, load<BSky>(files, referrer).sky);
 			}
 			catch (const std::exception& e)
 			{
@@ -210,7 +210,7 @@ namespace assetlib
 		{
 			try
 			{
-				const BEnvLighting lighting = loadEnvLighting(files, referrer);
+				const BEnvLighting lighting = load<BEnvLighting>(files, referrer);
 				addRouteEdges(edges, referrer, lighting.prefilter);
 				addRouteEdges(edges, referrer, lighting.irradiance);
 			}
@@ -231,7 +231,7 @@ namespace assetlib
 		{
 			try
 			{
-				const BEnv env = loadEnv(files, referrer);
+				const BEnv env = load<BEnv>(files, referrer);
 				addEdge(edges, referrer, env.sky, RefKind::kEnvironmentPart);
 				addEdge(edges, referrer, env.lighting, RefKind::kEnvironmentPart);
 			}

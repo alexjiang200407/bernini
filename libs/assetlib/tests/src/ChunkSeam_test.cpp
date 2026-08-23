@@ -142,7 +142,7 @@ TEST_CASE("a chunked container loads the same from a directory and from an archi
 		     { static_cast<const core::file::IFileSystem*>(&loose),
 		       static_cast<const core::file::IFileSystem*>(&pak) })
 		{
-			const BMesh mounted = load(*mount, "Meshes/kirk.bmesh");
+			const BMesh mounted = load<BMesh>(*mount, "Meshes/kirk.bmesh");
 
 			CHECK(mounted.vertexData == direct.vertexData);
 			CHECK(mounted.indexData == direct.indexData);
@@ -172,10 +172,10 @@ TEST_CASE("a chunked container loads the same from a directory and from an archi
 		const Skeleton direct = loadSkeleton(scratch.path / "Skeletons/rig.bskel");
 
 		CHECK(
-			serializeSkeleton(loadSkeleton(loose, "Skeletons/rig.bskel")) ==
+			serializeSkeleton(load<Skeleton>(loose, "Skeletons/rig.bskel")) ==
 			serializeSkeleton(direct));
 		CHECK(
-			serializeSkeleton(loadSkeleton(pak, "Skeletons/rig.bskel")) ==
+			serializeSkeleton(load<Skeleton>(pak, "Skeletons/rig.bskel")) ==
 			serializeSkeleton(direct));
 	}
 
@@ -184,10 +184,10 @@ TEST_CASE("a chunked container loads the same from a directory and from an archi
 		const AnimationSet direct = loadAnimations(scratch.path / "Animations/idle.banim");
 
 		CHECK(
-			serializeAnimations(loadAnimations(loose, "Animations/idle.banim")) ==
+			serializeAnimations(load<AnimationSet>(loose, "Animations/idle.banim")) ==
 			serializeAnimations(direct));
 		CHECK(
-			serializeAnimations(loadAnimations(pak, "Animations/idle.banim")) ==
+			serializeAnimations(load<AnimationSet>(pak, "Animations/idle.banim")) ==
 			serializeAnimations(direct));
 
 		CHECK(loadAnimationSkeletonPath(loose, "Animations/idle.banim") == direct.skeleton);
@@ -235,7 +235,7 @@ TEST_CASE("a reference read stays a ranged read through the seam", "[chunkseam]"
 	SECTION("a full load does read the whole container, which is the contrast")
 	{
 		CountingFileSystem counting(pak);
-		(void)load(counting, "Meshes/kirk.bmesh");
+		(void)load<BMesh>(counting, "Meshes/kirk.bmesh");
 
 		CHECK(counting.bytesRead == meshSize);
 		CHECK(counting.reads == 1u);

@@ -253,12 +253,6 @@ namespace assetlib
 		return deserializeVat(core::file::read_file_bytes(path.string()));
 	}
 
-	BVat
-	loadVat(const core::file::IFileSystem& fileSystem, std::string_view path)
-	{
-		return deserializeVat(fileSystem.Read(path));
-	}
-
 	namespace
 	{
 		constexpr std::array<uint32_t, 7> c_WantedTableChunks = {

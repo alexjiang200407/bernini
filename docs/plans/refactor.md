@@ -24,7 +24,10 @@ whose stale files are read as current.
   and every `save*`. *Rejected: adding `SaveMesh`/`SaveMaterial`/… beside them, which fixes the
   asymmetry and leaves the enumeration.*
 - **ADR-3 — The bake token moves into the trait**, beside the `Serialize` it has to move with.
-  *Rejected: leaving `bake_tokens.h` as a table, which is the seventh site.*
+  *Rejected: leaving `bake_tokens.h` as a table, which is the seventh site.* **Done early, in
+  task 1**: review there asked why the trait's members were not uniformly `constexpr`, and the
+  answer was that the token could not be, since its value lived in a header a public one cannot
+  see. Moving it was the fix. `bake_tokens.h` now aliases the codecs; task 3 is only its deletion.
 - **ADR-4 — The `save*`/`load*`-by-`std::filesystem::path` family is deleted outright.** This
   **reverses** the spec, which kept it "for files no project owns"; the spec is amended in this PR,
   since an ADR is amended only by the change that reverses it. *That carve-out has zero users:
@@ -34,9 +37,14 @@ whose stale files are read as current.
   forbids. Rejected: keeping them for tests, which is the same thing with a nicer excuse — tests get
   a `StoreAt` helper instead.* `writeObj`, `loadFromGltf`, `Project::Open` and `packProject` keep
   their `path` parameters: they address the host, which is a different question.
-- **ADR-5 — `mounted_io.h` is deleted too, not kept under the templates.** *The survey found it is a
-  third parallel family — one `load(fileSystem, key)` per container, which `AssetStore::Load*`
-  forwards to. Rejected: making `Load<T>` forward to it, which would leave three families as two.*
+- **ADR-5 — `mounted_io.h`'s container family goes, not the file.** *The survey found it is a third
+  parallel family — one `load(fileSystem, key)` per container, which `AssetStore::Load*` forwards
+  to. All eight collapse into a single `load<T>` template, since each was literally
+  `Deserialize(files.Read(key))` and the type was the only difference. Rejected: making `Load<T>`
+  forward to the named functions, which would leave three families as two. **Amended in task 2**:
+  the file itself stays, because its four **partial** reads —`loadMeshRefs`, `loadVatTables`,
+  `loadVatRefs`, `loadAnimationSkeletonPath` — are not codecs. Each pulls a few chunks out of a file
+  worth megabytes and stops, which is the whole reason they exist, and no codec can express that.*
 - **ADR-6 — `LoadRegen*` stays a separate seam.** *Regeneration re-cooks from a copied source on a
   cache miss: a different operation with a different failure mode, asked for deliberately. Rejected:
   folding it into `Load<T>` behind a flag.*
@@ -100,8 +108,9 @@ anything moves.
 | `include/assetlib/*_io.h` | **Gains** its `AssetCodec<T>` specialization | 1 |
 | `include/assetlib/AssetStore.h` | **Gains** `Load<T>`/`Save<T>` and the bake methods | 1 |
 | `include/assetlib/AssetStore.h` | Twenty `Load*` become forwarders; six `LoadRegen*` untouched | 2 |
-| `src/mounted_io.h`, `src/AssetStore_Containers.cpp` | Deleted | 2 |
-| `src/bake_tokens.h` | Deleted; values move into the specializations | 3 |
+| `src/mounted_io.h` | Eight whole-container loads become one `load<T>`; the four partial reads stay | 2 |
+| `src/AssetStore_Containers.cpp` | Bodies forward to `Load<T>` in 2; the file goes in 7 with the declarations | 2, 7 |
+| `src/bake_tokens.h` | Values moved into the specializations in 1; the aliasing header deleted in 3 | 1, 3 |
 | `material_bake.h`, `env_bake.h` | Descs deleted | 4 |
 | `asset_refs.cpp`, `migrate.cpp`, `asset_rename.cpp`, `pak_pack.cpp`, CLI `sniff` | Read the table | 5 |
 | `apps/editor`, `libs/gamelib`, CLI | 76 production call sites | 6 |
@@ -136,11 +145,17 @@ APIs exist side by side; that is the deliberate price of reviewing the new one w
 
 Then the migration, each step behind the surface task 1 fixed:
 
-2. **`refactor(assetlib): the store's own reads go through the codec`** — `mounted_io.h`'s container
-   half and `AssetStore_Containers.cpp` deleted; the twenty `Load*` become forwarders to `Load<T>`.
-   Gate: `just test assetlib`.
-3. **`refactor(assetlib): the bake token lives with its writer`** — `bake_tokens.h` deleted, values
-   into the specializations. Gate: `TokenCanary_test` **unchanged** and passing.
+2. **`refactor(assetlib): the store's own reads go through the codec`** — `mounted_io.h`'s eight
+   whole-container loads collapse into one `load<T>` template, and the store's own bodies forward
+   to `Load<T>`. `AssetStore_Containers.cpp` **survives** as forwarders rather than being deleted
+   here: the named `LoadMesh`/`LoadMaterial`/… methods are still declared, and a header that only
+   forward declares `BMesh` cannot define them inline, so the file goes in task 7 with its
+   declarations. The four *partial* reads (`loadMeshRefs`, `loadVatTables`, `loadVatRefs`,
+   `loadAnimationSkeletonPath`) stay named — they pull a few chunks out of a file worth megabytes
+   and are not codecs. Gate: `just test assetlib`.
+3. **`refactor(assetlib): bake_tokens.h goes`** — the values moved into the specializations in task
+   1, so what is left is deleting the aliasing header and pointing its six callers at
+   `AssetCodec<T>::c_BakeToken`. Gate: `TokenCanary_test` **unchanged** and passing.
 4. **`refactor(assetlib): a bake reads and writes through the store`** — `MaterialBakeDesc` and
    `EnvBakeDesc` deleted, their call sites onto the store's bake methods. Gate:
    `just test assetlib editor`.
