@@ -17,12 +17,17 @@ disagrees, trust the header, then fix this doc.
   hold `EnvMapRoute`s — a *source* under `textures_src/`, a *baked* map under `Textures/`, and the
   source's size + content-hash stamp as it measured at bake time. The same shape, the same staleness question,
   and the same prune. See [Asset Standards](docs/asset_standards.md) for the material side.
-* **A `.benv` holds no pixels.** It names a `.bsky` and a `.benvl` by path. Composing by reference is
+* **A `.benv` holds no pixels, and it is the family's only authored file.** It is a text document —
+  canonical JSON, like `.bmaterial` — naming a `.bsky` and a `.benvl` by path and carrying the
+  presentation knobs (`skyMipLevel`, `skyRotationY`, `exposureOverride`). Composing by reference is
   what lets a sky be re-authored without touching the lighting that minutes of convolution produced,
-  and what lets two environments share one sky. Either half may be empty.
-* **The three are separate files because they have different lifetimes.** Rotating a sky or sampling a
-  blurrier mip of it is a change a person makes and looks at immediately; re-convolving the lighting is
-  minutes of work that the same change need not trigger.
+  and what lets two environments share one sky. Either half may be empty. `.bsky` and `.benvl` are
+  purely derived cache entries (see [Asset Containers](asset_containers.md)): the sky's route is its cache
+  key, the lighting's key joins its two sources; `pack` re-bakes a stale one into the archive and
+  fails loudly on one it cannot.
+* **The three are separate files because they have different lifetimes.** Re-authoring a sky is a
+  change a person looks at immediately; re-convolving the lighting is minutes of work that the same
+  change need not trigger.
 * **Sources are float, shipped maps are `RGB9E5`.** The import writes `R32G32B32A32_SFLOAT` cubes into
   `textures_src/` as the routed sources, and the bake packs each into `E5B9G9R9_UFLOAT_PACK32` under
   `Textures/`. 4 bytes a texel, filterable everywhere without an optional feature — WebGPU core
@@ -37,16 +42,18 @@ disagrees, trust the header, then fix this doc.
 * **Exposure belongs to the maps, not to the scene.** An HDR environment's absolute scale is
   arbitrary, so `bakeEnvLighting` derives an exposure from the irradiance it produced and stores it in
   the `.benvl`. It has to be re-derived whenever the maps change, which is why it lives in the file.
-* **The derivation proposes; `exposureOverride` decides.** `exposureFor` normalizes every environment
+* **The derivation proposes; the document decides.** `exposureFor` normalizes every environment
   to middle grey, which means that used alone, no environment can be dimmer or brighter than another —
-  a dusk and a noon are forced to the same average. `BEnvLighting::exposureOverride` is the authored
-  answer, kept *beside* the derivation rather than replacing it so a re-bake can refresh the proposal
-  without discarding a tuned value. `EffectiveExposure()` is what a renderer reads. Author it with
-  `assetlib_cli exposure -p <project> <key.benvl> --set <v>`, or `--clear` to go back to the bake.
+  a dusk and a noon are forced to the same average. `BEnv::exposureOverride` is the authored
+  answer, kept on the document rather than in the derived file so a re-bake refreshes the proposal
+  without touching a tuned value. `resolveEnvironment` folds the two; the resolved
+  `maps.exposure` is what a renderer reads. Author it with
+  `assetlib_cli exposure -p <project> <key.benv> --set <v>`, or `--clear` to go back to the bake.
 * **The backdrop's defocus is presentation, not pixels.** The sky is baked as a chain by `skyChain`:
   mip 0 is the sharp projection, and each level below it is convolved to the width its own texel
-  subtends. Which level is drawn is `BSky::mipLevel`, a container edit rather than minutes of
-  convolution — and reversible, which a blur convolved into a single mip is not.
+  subtends. Which level is drawn is a document edit rather than minutes of
+  convolution — and reversible, which a blur convolved into a single mip is not. The pick is
+  `BEnv::skyMipLevel`, authored on the document and clamped at resolve to what the baked chain holds.
 * **The split-sum BRDF table is not an asset.** It is the same integral taken against a *white*
   environment, leaving a function of only `dot(N,V)` and roughness — a property of the shading model,
   not of any environment. bgl renders its own 256² `RG16_FLOAT` copy once at device init
@@ -59,9 +66,9 @@ disagrees, trust the header, then fix this doc.
 
 | Type | File | Role |
 |---|---|---|
-| `BSky` | [libs/assetlib_structs/include/assetlib_structs/BEnv.h](libs/assetlib_structs/include/assetlib_structs/BEnv.h) | One radiance route, plus how the backdrop presents it (`mipLevel`, `rotationY`) |
-| `BEnvLighting` | [libs/assetlib_structs/include/assetlib_structs/BEnv.h](libs/assetlib_structs/include/assetlib_structs/BEnv.h) | The prefilter/irradiance pair, the exposure they were measured at, and the authored one that overrules it |
-| `BEnv` | [libs/assetlib_structs/include/assetlib_structs/BEnv.h](libs/assetlib_structs/include/assetlib_structs/BEnv.h) | Paths to a `.bsky` and a `.benvl`; no pixels |
+| `BSky` | [libs/assetlib_structs/include/assetlib_structs/BEnv.h](libs/assetlib_structs/include/assetlib_structs/BEnv.h) | One radiance route; purely derived |
+| `BEnvLighting` | [libs/assetlib_structs/include/assetlib_structs/BEnv.h](libs/assetlib_structs/include/assetlib_structs/BEnv.h) | The prefilter/irradiance pair and the exposure they were measured at; purely derived |
+| `BEnv` | [libs/assetlib_structs/include/assetlib_structs/BEnv.h](libs/assetlib_structs/include/assetlib_structs/BEnv.h) | The authored document: paths to a `.bsky` and a `.benvl`, `skyMipLevel`, `skyRotationY`, `exposureOverride` |
 | `EnvMapRoute` | [libs/assetlib_structs/include/assetlib_structs/BEnv.h](libs/assetlib_structs/include/assetlib_structs/BEnv.h) | source + baked + stamp, the same shape as a material's channel route |
 
 ### Operations
@@ -221,8 +228,9 @@ the ceiling above stops showing as pixelation.
 
 That is an effect, and it belongs to the **viewport** rather than to the environment: a level viewport
 is judged on the world it is building and wants the same sky sharp. So the bake writes the whole
-range — `skyChain`, mip 0 sharp, each level below convolved to its own texel — and `BSky::mipLevel`
-picks one. `--skybox-mips` sets how many levels; `--skybox-mip` sets which one the `.bsky` presents,
+range — `skyChain`, mip 0 sharp, each level below convolved to its own texel — and
+`BEnv::skyMipLevel` picks one. `--skybox-mips` sets how many levels; `--skybox-mip` sets which one
+the `.benv` document presents,
 and `editor::ApplyEnvironment`'s `skyMipLevelOverride` lets a viewport overrule even that. The
 material preview and the thumbnail cache default to mip 3; the level viewport takes the file's own.
 
@@ -243,10 +251,10 @@ gamma mistake in another costume.
 
 ### A rotated sky rotates the lighting
 
-`BSky::rotationY` spins the backdrop's clip-to-world ray, and the IBL lookup carries the same spin
+`BEnv::skyRotationY` spins the backdrop's clip-to-world ray, and the IBL lookup carries the same spin
 (`PbrShading::ToEnvSpace`). It has to: the cubes are one environment, and a normal that skipped the
 rotation would be lit from where the sky used to be. Nothing caught this for as long as it was wrong,
-because the only environment shipped has `rotationY` 0 — `EnvOrientation_test` is what catches it now.
+because the only environment shipped has `skyRotationY` 0 — `EnvOrientation_test` is what catches it now.
 
 ## Verifying
 

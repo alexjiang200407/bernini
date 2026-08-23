@@ -129,16 +129,16 @@ Header, 16-byte-aligned payloads, entry table, string pool — in that order, al
 
 Both structs are `static_assert`-ed at 48 bytes
 ([pak_io.cpp:49](../libs/assetlib/src/pak_io.cpp)). The alignment constant is the archive's own and
-deliberately *not* `chunk::c_Align`, which happens to be the same number: sharing it would make
+deliberately *not* `cache::c_Align`, which happens to be the same number: sharing it would make
 bumping one format silently change the other's layout.
 
 **A major version mismatch is refused; a minor one is not.** So is bad magic, a non-little-endian
 byte order, a truncated file, or a table whose offsets do not lie inside it — all checked before any
 vector is sized from a field the file supplied.
 
-### It is its own format, not the chunk container
+### It is its own format, not the cache container
 
-`chunk::Writer` ([chunk_io.h](../libs/assetlib/src/chunk_io.h)) builds the whole file in memory
+`cache::Writer` ([cache_io.h](../libs/assetlib/src/cache_io.h)) builds the whole file in memory
 before writing, addresses chunks by a small `uint32` id, and has no path strings. An archive is
 gigabytes, addressed by path, and must be readable without loading it. Same *shape* — header, aligned
 payloads, table at the end — different problem.
@@ -169,16 +169,22 @@ The rule is one line: *an archive carries what the runtime reads and nothing tha
 `packProject` ([pak_pack.h:75](../libs/assetlib/include/assetlib/pak_pack.h)) derives that from
 `assetTypeFromExtension` ([asset_refs.h](../libs/assetlib/include/assetlib/asset_refs.h)) rather than
 from a list kept beside it, so a new container type joins the archive by being registered once. On
-top of that there is exactly **one** explicit exclusion: any path with a `textures_src` component.
+top of that sit the explicit exclusions: any path with a `textures_src` or `meshes_src` component,
+and the `.bimport` import document by its *type* — it is a registered extension, so without its own
+rule it would ride into the archive it must never reach.
 
 | | |
 |---|---|
 | `textures_src/` | excluded — authoring source; the bake reads it, the runtime never does |
+| `meshes_src/` | excluded — the imported `.glb` sources and their `.bimport` documents |
+| `.bimport` | excluded by type, wherever it sits — authored; a read-only store uses the baked-in bindings. Deliberate, so silent (never in `skippedByExtension`) |
 | `.glb` / `.hdr` awaiting import | excluded, by the same rule |
 | the `.berniniproject` file | excluded — editor metadata |
 | the shader cache (`.bsc`, `pipelines.psolib`) | excluded — per-machine, write-back, disposable |
 | `Textures/` (baked) | **included**, and it is most of the bytes |
-| `.bvat` | **included**, and packed fresh — see below |
+| `.bmesh` / `.bskel` / `.banim` | **included as the seam answers**, not as the file lies on disk — a stale group re-bakes into the archive, a rebind is baked in, and a group the seam cannot serve fails the pack. `PackReport::geometryRebaked` counts the entries that differ |
+| `.bvat` | **included**, packed fresh and re-stamped against the geometry *as archived* — see below |
+| `.bsky` / `.benvl` | **included**, re-baked first when a routed source moved — the re-bake runs before the pack walk because it writes new content-addressed maps the walk must still see. `PackReport::envsRebaked` counts them; a `.benv` packs verbatim (authored) |
 
 Everything without a registered extension falls out of the same rule and is **counted**, not dropped
 in silence: `PackReport::skippedByExtension` reports each unclaimed extension and how many of it were
@@ -199,14 +205,18 @@ directory-iteration order and that is not the same on two filesystems.
 A `.bvat` is a derived build product, so `AcquireVatMesh` normally re-bakes a stale one — it is
 seconds of CPU and the inputs are right there. Packed, its inputs may be present but **the write
 target is not**, and the staleness question stops being worth asking: `pack` bakes every stale
-`.bvat` fresh as part of packing, so what is in the archive is correct by construction.
+`.bvat` fresh as part of packing — stale by its own stamps *or* by its geometry group being a
+cache miss, since regenerated geometry moves no disk stamp — so what is in the archive is correct
+by construction. And because the archive stores the seam's answers for the geometry keys rather
+than the disk bytes the bake stamped, every packed `.bvat` is re-stamped against the entries as
+archived: the staleness question, asked *inside* the archive, answers fresh.
 
 So `EnsureVatBaked` ([vat_freshness.h](../libs/gamelib/include/gamelib/vat_freshness.h)) branches on
 `IsReadOnly` — trusting under a read-only mount, re-baking under any mount with somewhere to write.
 This is the one place the seam is not transparent, and it is the reason `IsReadOnly` is on the
 interface at all.
 
-Two things it does *not* relax:
+Three things it does *not* relax:
 
 - **The clip-set check still holds.** One bake file per (mesh, clip set) via `vatPathFor`; a
   container baked from a different `.banim` is stale even in an archive, and is never silently
@@ -214,6 +224,10 @@ Two things it does *not* relax:
 - **A missing one is an error, not a bake.** `pack` only re-bakes the `.bvat` files already present,
   so a rig nothing acquired before packing ships without one. That throws, naming the file, rather
   than failing somewhere inside `saveVat` on a directory that was never there.
+- **A `.bvat` from another bake revision refuses, it does not re-bake.** Its inputs are recorded in
+  a layout `pack` no longer vouches for, so it cannot know what to re-bake from. The loose project
+  heals it first: a load through `VatFreshness` reads the refusal as missing and re-bakes in place,
+  which is the state `pack` then packs.
 
 ---
 

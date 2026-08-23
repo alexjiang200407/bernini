@@ -190,7 +190,8 @@ namespace assetlib
 			throwIfCancelled(cancel);
 
 			// A chain, never a single blurred mip: the backdrop's defocus is presentation, so it
-			// belongs in `mipLevel` where a viewer can change it. The lighting still reads `source`.
+			// belongs on the `.benv` document where a viewer can change it. The lighting still
+			// reads `source`.
 			//
 			// Clamped rather than refused: a sky too small for the requested chain is a small sky,
 			// not a bad request, and the levels it can carry are still the ones a viewer would ask
@@ -207,7 +208,6 @@ namespace assetlib
 			auto bsky       = BSky();
 			bsky.name       = desc.name;
 			bsky.sky.source = ref;
-			bsky.mipLevel   = std::min(desc.skyMipLevel, skyMips - 1);
 
 			throwIfCancelled(cancel);
 			bakeSky(bsky, { desc.dataRoot });
@@ -258,6 +258,11 @@ namespace assetlib
 			env.name     = desc.name;
 			env.sky      = result.sky;
 			env.lighting = result.lighting;
+
+			// As requested, not clamped: the document records the person's ask, and resolution
+			// clamps it against the mips the baked map actually has -- so a later, larger re-bake
+			// serves the original request instead of a value shrunk to fit an older map.
+			env.skyMipLevel = desc.skyMipLevel;
 
 			result.environment = assetRef(desc.environmentDir, desc.name, ".benv");
 			created.WillWrite(result.environment);

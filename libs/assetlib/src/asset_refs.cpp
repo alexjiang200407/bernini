@@ -9,6 +9,7 @@
 #include <assetlib/bsky_io.h>
 #include <assetlib/bvat_io.h>
 #include <assetlib/container_format.h>
+#include <assetlib/import_document.h>
 #include <assetlib_structs/BEnv.h>
 #include <assetlib_structs/BMaterial.h>
 
@@ -48,14 +49,14 @@ namespace assetlib
 		/** Every material a `.bmesh` names, in `mesh.materials` order, and the skeleton it skins to. */
 		void
 		collectMeshEdges(
-			std::vector<AssetRef>&         edges,
-			const core::file::IFileSystem& files,
-			const std::string&             referrer)
+			std::vector<AssetRef>& edges,
+			const AssetStore&      store,
+			const std::string&     referrer)
 		{
 			MeshRefs refs;
 			try
 			{
-				refs = loadMeshRefs(files, referrer);
+				refs = store.LoadRegenMeshRefs(referrer);
 			}
 			catch (const std::exception& e)
 			{
@@ -75,14 +76,14 @@ namespace assetlib
 		/** The skeleton a `.banim`'s clips were resampled against. */
 		void
 		collectAnimationEdges(
-			std::vector<AssetRef>&         edges,
-			const core::file::IFileSystem& files,
-			const std::string&             referrer)
+			std::vector<AssetRef>& edges,
+			const AssetStore&      store,
+			const std::string&     referrer)
 		{
 			std::string skeleton;
 			try
 			{
-				skeleton = loadAnimationSkeletonPath(files, referrer);
+				skeleton = store.LoadRegenAnimationSkeletonPath(referrer);
 			}
 			catch (const std::exception& e)
 			{
@@ -92,6 +93,19 @@ namespace assetlib
 			}
 
 			addEdge(edges, referrer, skeleton, RefKind::kClipSkeleton);
+		}
+
+		/** The document holds its source and every material its bindings name. */
+		void
+		collectImportDocumentEdges(
+			std::vector<AssetRef>&         edges,
+			const core::file::IFileSystem& files,
+			const std::string&             referrer)
+		{
+			const ImportDocument document = loadImportDocument(files, referrer);
+			addEdge(edges, referrer, importedSourceKeyFor(referrer), RefKind::kImportedSource);
+			for (const MaterialBinding& binding : document.bindings)
+				addEdge(edges, referrer, binding.material, RefKind::kSubmeshMaterial);
 		}
 
 		/** The three inputs a `.bvat` was baked from -- what a re-bake reads. */
@@ -253,6 +267,8 @@ namespace assetlib
 			return AssetType::kAnimation;
 		if (ext == c_VatExtension)
 			return AssetType::kVat;
+		if (ext == c_ImportDocumentExtension)
+			return AssetType::kImportDocument;
 
 		return std::nullopt;
 	}
@@ -298,7 +314,7 @@ namespace assetlib
 
 			if (kind == c_MeshExtension)
 			{
-				collectMeshEdges(edges, files, referrer);
+				collectMeshEdges(edges, store, referrer);
 				++graph.meshesScanned;
 			}
 			else if (kind == c_MaterialExtension)
@@ -323,13 +339,18 @@ namespace assetlib
 			}
 			else if (kind == c_AnimationExtension)
 			{
-				collectAnimationEdges(edges, files, referrer);
+				collectAnimationEdges(edges, store, referrer);
 				++graph.clipSetsScanned;
 			}
 			else if (kind == c_VatExtension)
 			{
 				collectVatEdges(edges, files, referrer);
 				++graph.vatsScanned;
+			}
+			else if (kind == c_ImportDocumentExtension)
+			{
+				collectImportDocumentEdges(edges, files, referrer);
+				++graph.importDocumentsScanned;
 			}
 		}
 

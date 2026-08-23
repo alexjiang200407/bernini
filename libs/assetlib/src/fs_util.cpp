@@ -1,5 +1,7 @@
 #include "fs_util.h"
 
+#include <core/file/file.h>
+
 namespace assetlib
 {
 	void
@@ -46,18 +48,13 @@ namespace assetlib
 		std::span<const std::byte>   bytes,
 		std::string_view             what)
 	{
-		// Cleared so fileErrorMessage cannot blame a stale errno from an unrelated call for the failure.
-		errno = 0;
-		std::ofstream out(path, std::ios::binary);
-		if (!out)
-			throw std::runtime_error(
-				fileErrorMessage(std::string(what) + ": cannot open file for writing", path));
-
-		out.write(
-			reinterpret_cast<const char*>(bytes.data()),
-			static_cast<std::streamsize>(bytes.size()));
-		if (!out)
-			throw std::runtime_error(
-				fileErrorMessage(std::string(what) + ": failed to write file", path));
+		try
+		{
+			core::file::write_atomic(path, bytes);
+		}
+		catch (const std::exception& error)
+		{
+			throw std::runtime_error(std::string(what) + ": " + error.what());
+		}
 	}
 }

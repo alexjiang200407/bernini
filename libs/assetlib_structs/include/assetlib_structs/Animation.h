@@ -2,6 +2,8 @@
 #include <assetlib_structs/Node.h>
 #include <core/str/string_pool.h>
 
+#include <assetlib_structs/SourceRef.h>
+
 namespace assetlib
 {
 	/** The rate clips are resampled to unless a caller asks for another. */
@@ -69,5 +71,7 @@ namespace assetlib
 		core::string_pool          stringPool;
 
 		std::vector<PosedBox> posedBoxes;  // empty until a cook bakes them
+
+		SourceRef source;  // the copied .glb this was derived from; empty key when never recorded
 	};
 }

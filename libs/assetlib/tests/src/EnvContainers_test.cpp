@@ -22,8 +22,6 @@ namespace
 		sky.sky.source = "textures_src/forest_sky.ktx2";
 		sky.sky.baked  = "Textures/sky_0123456789abcdef.ktx2";
 		sky.sky.stamp  = SourceStamp{ 4096, 1700000000 };
-		sky.mipLevel   = 3;
-		sky.rotationY  = 1.25f;
 		return sky;
 	}
 
@@ -56,8 +54,6 @@ TEST_CASE("a BSky survives a serialize round-trip", "[bsky][io]")
 
 	CHECK(restored.name == sky.name);
 	CHECK(restored.sky == sky.sky);
-	CHECK(restored.mipLevel == sky.mipLevel);
-	CHECK(restored.rotationY == Catch::Approx(sky.rotationY));
 }
 
 TEST_CASE("a BEnvLighting survives a serialize round-trip", "[benvl][io]")
@@ -80,7 +76,6 @@ TEST_CASE("an unrouted, unbaked environment asset round-trips as empty", "[bsky]
 	CHECK(sky.sky.source.empty());
 	CHECK(sky.sky.baked.empty());
 	CHECK(sky.sky.stamp == SourceStamp{});
-	CHECK(sky.mipLevel == 0);
 
 	const BEnvLighting lighting = deserializeEnvLighting(serializeEnvLighting(BEnvLighting{}));
 	CHECK(lighting.prefilter.source.empty());
@@ -135,14 +130,21 @@ TEST_CASE(
 TEST_CASE("a BEnv survives a serialize round-trip", "[benv][io]")
 {
 	BEnv env;
-	env.name     = "forest";
-	env.sky      = "Sky/forest.bsky";
-	env.lighting = "EnvLighting/forest.benvl";
+	env.name             = "forest";
+	env.sky              = "Sky/forest.bsky";
+	env.lighting         = "EnvLighting/forest.benvl";
+	env.skyMipLevel      = 3;
+	env.skyRotationY     = 1.25f;
+	env.exposureOverride = 0.5f;
 
 	const BEnv restored = deserializeEnv(serializeEnv(env));
 	CHECK(restored.name == env.name);
 	CHECK(restored.sky == env.sky);
 	CHECK(restored.lighting == env.lighting);
+	CHECK(restored.skyMipLevel == 3);
+	CHECK(restored.skyRotationY == Catch::Approx(1.25f));
+	REQUIRE(restored.exposureOverride.has_value());
+	CHECK(*restored.exposureOverride == Catch::Approx(0.5f));
 
 	// Half-composed is a legal file: the import's checkboxes write whichever pieces were asked for,
 	// and what a .benv must reference is its consumer's rule, not the container's.
@@ -169,17 +171,20 @@ TEST_CASE("a BEnv round-trips through a file", "[benv][io]")
 	std::filesystem::remove(path);
 }
 
-// A v1 .benv opens with the same magic, and what follows is KTX2 blobs. It carries no schema chunk
-// -- no container from before the schema does -- so the reader refuses it as such and never reads
-// on into the blobs.
-TEST_CASE("the reference reader refuses a v1 .benv and the other containers' files", "[benv][io]")
+// A chunk-era .benv -- any of its binary forms -- is not a text document, so the reader refuses
+// it whole and never reads on into what follows the magic.
+TEST_CASE(
+	"the reference reader refuses a chunk-era .benv and the other containers' files",
+	"[benv][io]")
 {
 	core::io::ByteWriter v1;
 	v1.WritePod(magic::c_BEnv);
 	v1.WritePod<uint16_t>(1);
 	v1.WritePod<uint16_t>(0);
-	v1.WritePod<uint64_t>(0);  // the v1 header continues; the reader must not get that far
-	CHECK_THROWS_WITH(deserializeEnv(v1.Take()), Catch::Matchers::ContainsSubstring("benv:"));
+	v1.WritePod<uint64_t>(0);  // the old header continues; the reader must not get that far
+	CHECK_THROWS_WITH(
+		deserializeEnv(v1.Take()),
+		Catch::Matchers::ContainsSubstring("no longer convertible"));
 
 	CHECK_THROWS_AS(deserializeEnv(serializeSky(SampleSky())), std::runtime_error);
 	CHECK_THROWS_AS(deserializeEnv(serializeEnvLighting(SampleLighting())), std::runtime_error);
@@ -189,46 +194,58 @@ TEST_CASE("the reference reader refuses a v1 .benv and the other containers' fil
 	CHECK_THROWS_AS(deserializeEnv(truncated), std::runtime_error);
 }
 
-// The version is a label; the one thing it decides is that a file from a newer engine is refused.
-TEST_CASE("an environment container from a future major version is refused", "[bsky][benvl][io]")
+TEST_CASE(
+	"an environment container at a header version this build does not read is refused",
+	"[bsky][benvl][io]")
 {
+	const auto patchVersion = [](std::vector<std::byte>& bytes) {
+		REQUIRE(bytes.size() > 8);
+		const uint32_t version = 2;
+		std::memcpy(bytes.data() + 4, &version, sizeof(version));
+	};
+
 	auto bytes = serializeSky(SampleSky());
-	REQUIRE(bytes.size() > 6);
-	bytes[4] = std::byte{ 99 };
-	bytes[5] = std::byte{ 0 };
-	CHECK_THROWS_AS(deserializeSky(bytes), std::runtime_error);
+	patchVersion(bytes);
+	CHECK_THROWS_WITH(
+		deserializeSky(bytes),
+		Catch::Matchers::ContainsSubstring("not the 1 this build reads"));
 
 	auto lightingBytes = serializeEnvLighting(SampleLighting());
-	lightingBytes[4]   = std::byte{ 99 };
-	lightingBytes[5]   = std::byte{ 0 };
+	patchVersion(lightingBytes);
 	CHECK_THROWS_AS(deserializeEnvLighting(lightingBytes), std::runtime_error);
 }
 
-// The derived exposure normalizes every environment to middle grey, so on its own no environment
-// can be dimmer or brighter than another. The override is what says otherwise, and it has to
-// survive both a round-trip and a re-bake -- a bake that refreshed the derivation and discarded the
-// authored value would take a tuned environment back to the average with nothing to show for it.
-TEST_CASE("an authored exposure survives a round-trip beside the derived one", "[benvl][io]")
+// The authored exposure lives on the environment document, not the derived lighting: a decision a
+// re-bake must never touch belongs to the file re-bakes never write. The derivation stays on the
+// lighting, refreshed by every bake.
+TEST_CASE("an unset override serializes as absent, not as a value", "[benv][io]")
 {
-	BEnvLighting lighting     = SampleLighting();
-	lighting.exposure         = 1.25f;
-	lighting.exposureOverride = 0.5f;
+	const BEnv restored = deserializeEnv(serializeEnv(BEnv{ .name = "plain" }));
+	CHECK_FALSE(restored.exposureOverride.has_value());
+	CHECK(restored.skyMipLevel == 0);
+	CHECK(restored.skyRotationY == 0.0f);
 
-	const BEnvLighting restored = deserializeEnvLighting(serializeEnvLighting(lighting));
-
-	CHECK(restored.exposure == Catch::Approx(1.25f));
-	REQUIRE(restored.exposureOverride.has_value());
-	CHECK(*restored.exposureOverride == Catch::Approx(0.5f));
-	CHECK(restored.EffectiveExposure() == Catch::Approx(0.5f));
+	// Absent in the bytes too: an "exposureOverride": 0 that crept in would author a value.
+	const auto        bytes = serializeEnv(BEnv{ .name = "plain" });
+	const std::string text(reinterpret_cast<const char*>(bytes.data()), bytes.size());
+	CHECK(text.find("exposureOverride") == std::string::npos);
 }
 
-TEST_CASE("an unauthored exposure renders at what the bake derived", "[benvl][io]")
+TEST_CASE("a benv document preserves the keys this build does not know", "[benv][io]")
 {
-	BEnvLighting lighting = SampleLighting();
-	lighting.exposure     = 1.25f;
+	constexpr std::string_view c_Text = R"({
+	"name": "future",
+	"weather": { "rain": 0.5 },
+	"sky": "Sky/forest.bsky"
+}
+)";
 
-	const BEnvLighting restored = deserializeEnvLighting(serializeEnvLighting(lighting));
+	const BEnv env = deserializeEnv(std::as_bytes(std::span(c_Text.data(), c_Text.size())));
+	CHECK(env.name == "future");
+	CHECK(env.sky == "Sky/forest.bsky");
 
-	CHECK_FALSE(restored.exposureOverride.has_value());
-	CHECK(restored.EffectiveExposure() == Catch::Approx(1.25f));
+	const auto        resaved = serializeEnv(env);
+	const std::string out(reinterpret_cast<const char*>(resaved.data()), resaved.size());
+	CHECK(out.find("\"weather\"") != std::string::npos);
+	CHECK(serializeEnv(deserializeEnv(resaved)) == resaved);
 }

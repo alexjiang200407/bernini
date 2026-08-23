@@ -49,7 +49,7 @@ public float3 CalculateNormal(float3 worldNormal, float4 worldTangent, float2 sa
 /**
  * Turns a world direction into the direction that names the same light in the environment's cubes.
  *
- * The skybox spins its clip-to-world ray by BSky::rotationY, so the sky a camera sees along `dir`
+ * The skybox spins its clip-to-world ray by BEnv::skyRotationY, so the sky a camera sees along `dir`
  * is the texel at the rotated direction. The IBL cubes are the same environment, so a normal has to
  * be carried through the same rotation or the model is lit from where the sky used to be.
  *

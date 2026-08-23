@@ -1,37 +1,31 @@
 #include <assetlib/container_info.h>
 
-#include "chunk_io.h"
-
-#include <schema/convert.h>
+#include "cache_io.h"
 
 namespace assetlib
 {
-	ContainerInfo
-	inspectContainer(std::span<const std::byte> bytes)
+	std::optional<CacheEntryInfo>
+	inspectCacheEntry(std::span<const std::byte> bytes)
 	{
-		chunk::Inspection inspection = chunk::inspect(bytes, "container");
-		return ContainerInfo{
-			inspection.header.magic,
-			inspection.header.versionMajor,
-			inspection.header.versionMinor,
-			std::move(inspection.stored),
-		};
+		if (!cache::isCacheEntry(bytes))
+			return std::nullopt;
+		uint32_t magic = 0;
+		std::memcpy(&magic, bytes.data(), sizeof(magic));
+
+		const cache::PeekedKey key = cache::peekKey(bytes, magic, "cache entry");
+		return CacheEntryInfo{ magic, key.bakeToken, key.source };
 	}
 
-	std::string
-	describe(const schema::Schema& schema)
+	bool
+	isTextAssetDocument(std::span<const std::byte> bytes) noexcept
 	{
-		std::string out;
-		for (const schema::Layout& layout : schema.GetLayouts())
+		for (const std::byte byte : bytes)
 		{
-			out += std::format("  {} ({} bytes)\n", layout.name, layout.size);
-			for (const schema::Field& field : layout.fields)
-				out += std::format(
-					"    {:<24} {:<28} @{}\n",
-					field.name,
-					schema::fieldShape(schema, field),
-					field.offset);
+			const char c = static_cast<char>(byte);
+			if (c == ' ' || c == '\t' || c == '\n' || c == '\r')
+				continue;
+			return c == '{';
 		}
-		return out;
+		return false;
 	}
 }

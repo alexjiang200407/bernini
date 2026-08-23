@@ -3,8 +3,8 @@
 
 #include <assetlib/skeleton.h>
 
-#include "AssetSchemaBuilder.h"
-#include "chunk_io.h"
+#include "bake_tokens.h"
+#include "cache_io.h"
 #include "fs_util.h"
 
 #include <assetlib_structs/magic.h>
@@ -17,9 +17,6 @@ namespace assetlib
 {
 	namespace
 	{
-		constexpr uint16_t c_VersionMajor = 2;  // 2: the schema chunk
-		constexpr uint16_t c_VersionMinor = 0;
-
 		constexpr std::string_view c_What = "bskel";
 
 		enum class ChunkId : uint32_t
@@ -28,30 +25,24 @@ namespace assetlib
 			kStringPool
 		};
 
-		const schema::Schema&
-		skeletonSchema()
-		{
-			static const schema::Schema c_Schema =
-				AssetSchemaBuilder().AddTransform().AddBone().Finish();
-			return c_Schema;
-		}
 	}
 
 	std::vector<std::byte>
 	serializeSkeleton(const Skeleton& skeleton)
 	{
-		chunk::Writer writer(skeletonSchema());
+		cache::Writer writer;
 		writer.Add(ChunkId::kBones, skeleton.bones);
 		writer.Add(ChunkId::kStringPool, skeleton.stringPool.bytes());
-		return writer.Finish(magic::c_BSkel, c_VersionMajor, c_VersionMinor);
+		return writer.Finish(magic::c_BSkel, c_BSkelBakeToken, skeleton.source);
 	}
 
 	Skeleton
 	deserializeSkeleton(std::span<const std::byte> bytes)
 	{
-		const chunk::Reader reader(bytes, magic::c_BSkel, c_VersionMajor, c_What, skeletonSchema());
+		const cache::Reader reader(bytes, magic::c_BSkel, c_BSkelBakeToken, c_What);
 
 		Skeleton skeleton;
+		skeleton.source     = reader.GetSource();
 		skeleton.bones      = reader.Require<Bone>(ChunkId::kBones);
 		skeleton.stringPool = core::string_pool(reader.Read<char>(ChunkId::kStringPool));
 

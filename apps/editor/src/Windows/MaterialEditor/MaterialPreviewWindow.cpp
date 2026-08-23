@@ -1,4 +1,5 @@
 #include "MaterialPreviewWindow.h"
+#include "Mesh/mesh_load.h"
 
 #include "Async/BackgroundTask.h"
 #include "Mesh/BMeshUtil.h"
@@ -198,7 +199,7 @@ MaterialPreviewWindow::LoadMesh(const std::filesystem::path& path)
 		QString("Loading %1").arg(name),
 		[&](background::Progress& progress) {
 			progress.Report(0, 0, "Reading mesh...");
-			mesh = assetlib::load(path);
+			mesh = editor::LoadMeshThroughSeam(m_DataRoot, path);
 			if (mesh.meshes.empty())
 				throw std::runtime_error("mesh contains no meshes");
 		});

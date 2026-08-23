@@ -125,8 +125,6 @@ namespace assetlib
 		lighting.prefilter  = prefilter;
 		lighting.irradiance = irradiance;
 
-		// Only the derivation is refreshed. exposureOverride is what somebody decided, and a re-bake
-		// is not an occasion to discard it.
 		lighting.exposure = exposureFor(irradianceSrc);
 	}
 

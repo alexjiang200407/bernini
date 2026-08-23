@@ -37,7 +37,9 @@ namespace assetlib
 	fileErrorMessage(std::string_view what, const std::filesystem::path& path);
 
 	/**
-	 * Writes `bytes` to `path`, replacing whatever was there.
+	 * Writes `bytes` to `path`, replacing whatever was there -- atomically (temp file, then
+	 * rename), so a crash mid-write never leaves a truncated container. An authored document
+	 * truncated is work lost; a derived one merely regenerates, but shares the primitive.
 	 *
 	 * Shared rather than repeated per container, for the reason writeString is: five private copies of
 	 * an open-write-check are five chances for one to stop reporting why it failed, and the one that

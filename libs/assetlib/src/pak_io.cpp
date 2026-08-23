@@ -13,8 +13,8 @@ namespace assetlib
 {
 	namespace
 	{
-		// Deliberately not chunk::c_Align, which happens to be the same number: that one is the
-		// chunked containers' format parameter and this is the archive's. Sharing it would make
+		// Deliberately not cache::c_Align, which happens to be the same number: that one is the
+		// cache containers' format parameter and this is the archive's. Sharing it would make
 		// bumping one of the two silently change the other's on-disk layout.
 		constexpr size_t c_Align = 16;
 

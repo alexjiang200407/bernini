@@ -1,10 +1,19 @@
+#include <assetlib/banim_io.h>
+#include <assetlib/benv_io.h>
+#include <assetlib/benvl_io.h>
 #include <assetlib/bmaterial_io.h>
 #include <assetlib/bmesh_io.h>
+#include <assetlib/bsky_io.h>
 #include <assetlib/container_info.h>
 #include <assetlib/migrate.h>
+#include <assetlib_structs/BEnv.h>
 #include <assetlib_structs/BMaterial.h>
 #include <assetlib_structs/BMesh.h>
 #include <assetlib_structs/magic.h>
+
+#include "CacheTamper.h"
+#include "ImportUnitGroup.h"
+#include "SkinnedGltf.h"
 
 #include <core/file/file.h>
 
@@ -52,13 +61,13 @@ namespace
 		return serializeMaterial(material);
 	}
 
-	/** The same bytes stamped with an older format number: what an earlier build wrote. */
+	/** The same content spelled non-canonically: what a hand edit or a merge leaves behind. */
 	std::vector<std::byte>
-	Older(std::vector<std::byte> bytes)
+	Older()
 	{
-		const uint16_t older = 10;
-		std::memcpy(bytes.data() + 4, &older, sizeof(older));
-		return bytes;
+		constexpr std::string_view c_Older = R"({"shadingModel": "pbr", "name": "older"})";
+		const auto                 data = std::as_bytes(std::span(c_Older.data(), c_Older.size()));
+		return { data.begin(), data.end() };
 	}
 }
 
@@ -68,12 +77,12 @@ TEST_CASE(
 {
 	const Project project;
 	project.Write("Materials/current.bmaterial", MaterialBytes("current"));
-	project.Write("Materials/older.bmaterial", Older(MaterialBytes("older")));
+	project.Write("Materials/older.bmaterial", Older());
 	const std::vector<std::byte> flat = { std::byte{ 'B' },
 		                                  std::byte{ 'M' },
 		                                  std::byte{ 'A' },
 		                                  std::byte{ 'T' } };
-	project.Write("Materials/flat.bmaterial", flat);  // a stream from before the schema chunk
+	project.Write("Materials/flat.bmaterial", flat);  // a chunk-era stream, unreadable now
 	project.Write("notes.txt", flat);                 // not a container at all
 
 	SECTION("a dry run reports and writes nothing")
@@ -122,22 +131,65 @@ TEST_CASE("migrate refuses a root that is not a directory", "[migrate]")
 		ContainsSubstring("is not a directory"));
 }
 
-TEST_CASE(
-	"a container says what it is and what it stores, without being loaded",
-	"[migrate][describe]")
+TEST_CASE("migrate regenerates a stale group on disk, once", "[migrate][regen]")
 {
-	const auto bytes = MaterialBytes("inspected");
-	const auto info  = inspectContainer(bytes);
-	CHECK(info.magic == magic::c_BMaterial);
-	CHECK(info.versionMajor == 11);
-	CHECK(info.schema.Find("PbrRecord") != nullptr);
+	const Project           project;
+	const test::SkinnedGltf source("bernini_migrate_regen_gltf");
+	test::ImportUnitGroup(project.root, source.PackGlb());
 
-	const std::string text = describe(info.schema);
-	CHECK_THAT(text, ContainsSubstring("PbrRecord (280 bytes)"));
-	CHECK_THAT(text, ContainsSubstring("routeStamps"));
-	CHECK_THAT(text, ContainsSubstring("struct SourceStamp[9]"));
+	const auto meshPath  = project.root / "Meshes/unit.bmesh";
+	const auto bskelPath = project.root / "Skeletons/unit.bskel";
+	const auto banimPath = project.root / "Animations/unit.banim";
 
-	REQUIRE_THROWS_WITH(
-		inspectContainer(std::span(bytes).first(8)),
-		ContainsSubstring("stream shorter than a header"));
+	test::TamperHeaderByte(meshPath, test::c_TokenOffset);
+	test::TamperHeaderByte(bskelPath, test::c_TokenOffset);
+	test::TamperHeaderByte(banimPath, test::c_TokenOffset);
+
+	SECTION("the replay: one run rewrites the group, the second finds nothing to do")
+	{
+		const auto first = migrateProject(project.root, false);
+		CHECK(first.Count(MigratedFile::Outcome::kRewritten) == 3);
+		CHECK(first.Count(MigratedFile::Outcome::kFailed) == 0);
+
+		// Written current: the loads that refused the tampered files read them plainly now.
+		CHECK(load(meshPath).source.key == "meshes_src/unit.glb");
+		CHECK_FALSE(loadAnimations(banimPath).clips.empty());
+
+		const auto second = migrateProject(project.root, false);
+		CHECK(second.Count(MigratedFile::Outcome::kRewritten) == 0);
+		CHECK(second.Count(MigratedFile::Outcome::kFailed) == 0);
+	}
+
+	SECTION("a stale group whose source is gone is a per-file failure, never a guess")
+	{
+		std::filesystem::remove(project.root / "meshes_src/unit.glb");
+
+		const auto report = migrateProject(project.root, false);
+		CHECK(report.Count(MigratedFile::Outcome::kRewritten) == 0);
+		CHECK(report.Count(MigratedFile::Outcome::kFailed) == 3);
+	}
+}
+
+TEST_CASE("a rebind reaches disk through migrate without a regeneration", "[migrate][regen]")
+{
+	const Project           project;
+	const test::SkinnedGltf source("bernini_migrate_rebind_gltf");
+	test::ImportUnitGroup(project.root, source.PackGlb());
+
+	// The source is gone, so what follows cannot be a regeneration -- the document alone
+	// carries the rebind onto the disk bytes.
+	std::filesystem::remove(project.root / "meshes_src/unit.glb");
+	rebindSubmeshInDocument(
+		project.root,
+		"meshes_src/unit.glb",
+		"body",
+		"Materials/blue.bmaterial");
+
+	const auto report = migrateProject(project.root, false);
+	CHECK(report.Count(MigratedFile::Outcome::kRewritten) == 1);
+	CHECK(report.Count(MigratedFile::Outcome::kFailed) == 0);
+
+	const BMesh mesh = load(project.root / "Meshes/unit.bmesh");
+	REQUIRE(mesh.materials.size() == 1);
+	CHECK(mesh.materials[0] == "Materials/blue.bmaterial");
 }

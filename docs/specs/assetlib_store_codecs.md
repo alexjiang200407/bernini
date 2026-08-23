@@ -104,8 +104,8 @@ changes is that a *project's* asset stops being addressable the first way.
 
 * **Not an on-disk format change.** Byte-identical containers, no version bump, no re-bake.
   Purely the C++ surface.
-* **Not a rewrite of the chunk layer.** `chunk_io.h` and the schema conversion
-  ([docs/asset_schema.md](docs/asset_schema.md)) are what the codecs call, unchanged.
+* **Not a rewrite of the container layer.** `src/cache_io.h` and the document seam
+  ([docs/asset_containers.md](docs/asset_containers.md)) are what the codecs call, unchanged.
 * **Not an editor restructuring.** Call sites in `apps/editor` change mechanically because their
   callee changed; nothing else there is in scope.
 * **Not runtime-registrable.** There is no plugin story and no need for one — every container this

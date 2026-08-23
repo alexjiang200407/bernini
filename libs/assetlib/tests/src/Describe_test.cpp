@@ -365,19 +365,15 @@ TEST_CASE("describe(BSky) and describe(BEnvLighting) report bake staleness", "[d
 
 	BSky sky;
 	sky.name       = "forest";
-	sky.mipLevel   = 2;
-	sky.rotationY  = 1.5f;
 	sky.sky.source = "textures_src/forest.ktx2";
 	sky.sky.baked  = "Textures/forest_sky_ab12.ktx2";
 	sky.sky.stamp  = stampOf(source);
 
-	SECTION("a sky reports its presentation and a current bake")
+	SECTION("a sky reports its route and a current bake")
 	{
 		const std::string text = describe(sky, &files);
 
 		CHECK(text.find("bsky 'forest'") != std::string::npos);
-		CHECK(text.find("mipLevel          2") != std::string::npos);
-		CHECK(text.find("rotationY         1.5 rad") != std::string::npos);
 		CHECK(text.find("textures_src/forest.ktx2") != std::string::npos);
 		CHECK(text.find("Textures/forest_sky_ab12.ktx2") != std::string::npos);
 		CHECK(text.find("source up to date") != std::string::npos);

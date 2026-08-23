@@ -304,7 +304,7 @@ TEST_CASE(
 /**
  * A sky rotation rotates the lighting with it.
  *
- * `BSky::rotationY` spins the backdrop's ray. Nothing spun the IBL lookup, so a rotated sky used to
+ * `BEnv::skyRotationY` spins the backdrop's ray. Nothing spun the IBL lookup, so a rotated sky used to
  * light the scene from wherever it was authored -- silently, because the only environment shipped
  * has rotationY 0. Half a turn is the loudest case: the backdrop's lit side crosses the frame, and
  * the sphere's has to cross with it.

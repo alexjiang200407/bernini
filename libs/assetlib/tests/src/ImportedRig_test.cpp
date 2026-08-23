@@ -1,5 +1,7 @@
 #include <assetlib/Project.h>
 #include <assetlib/asset_import.h>
+#include <assetlib/import_document.h>
+#include <core/file/LooseFileSystem.h>
 
 #include <assetlib/asset_describe.h>
 #include <assetlib/asset_refs.h>
@@ -125,7 +127,8 @@ TEST_CASE("A skinned import writes its skeleton and the mesh names it", "[import
 		root.Data(),
 		root.Bskel(),
 		root.Banim(),
-		/*writeClips*/ false);
+		/*writeClips*/ false,
+		assetlib::SourceRef{});
 
 	REQUIRE(fs::exists(root.Bskel()));
 
@@ -153,7 +156,8 @@ TEST_CASE("The clips are written only when the import asked for them", "[importe
 		root.Data(),
 		root.Bskel(),
 		root.Banim(),
-		/*writeClips*/ true);
+		/*writeClips*/ true,
+		assetlib::SourceRef{});
 
 	REQUIRE(fs::exists(root.Banim()));
 
@@ -223,7 +227,8 @@ TEST_CASE("The import bakes the posed box beside the clips it writes", "[importe
 		root.Data(),
 		root.Bskel(),
 		root.Banim(),
-		/*writeClips*/ true);
+		/*writeClips*/ true,
+		assetlib::SourceRef{});
 
 	// Found through the containers as a load would find it: the box, the signature and the
 	// skeleton all survive their round trip through disk.
@@ -249,7 +254,8 @@ TEST_CASE("A static import writes no rig at all", "[importedrig]")
 		root.Data(),
 		root.Bskel(),
 		root.Banim(),
-		/*writeClips*/ true);
+		/*writeClips*/ true,
+		assetlib::SourceRef{});
 
 	CHECK(mesh.skeleton.empty());
 	CHECK_FALSE(fs::exists(root.Bskel()));
@@ -278,7 +284,8 @@ TEST_CASE(
 		root.Data(),
 		root.Bskel(),
 		root.Banim(),
-		/*writeClips*/ true);
+		/*writeClips*/ true,
+		assetlib::SourceRef{});
 
 	REQUIRE(fs::exists(root.Bskel()));
 	REQUIRE(fs::exists(root.Banim()));
@@ -323,7 +330,8 @@ TEST_CASE("A skinned mesh is only writable once the rig names it", "[importedrig
 		root.Data(),
 		root.Bskel(),
 		root.Banim(),
-		/*writeClips*/ true);
+		/*writeClips*/ true,
+		assetlib::SourceRef{});
 
 	REQUIRE_NOTHROW(assetlib::save(mesh, bmeshPath));
 	CHECK(assetlib::load(bmeshPath).skeleton == "Skeletons/unit.bskel");
@@ -343,7 +351,8 @@ TEST_CASE("A rig is found by signature, not by name", "[importedrig]")
 		root.Data(),
 		root.Bskel(),
 		root.Banim(),
-		/*writeClips*/ false);
+		/*writeClips*/ false,
+		assetlib::SourceRef{});
 
 	// The same rig, under a name nothing could guess from the animation file.
 	const auto found = assetlib::findMatchingSkeleton(root.Data(), imported.skeleton);
@@ -363,7 +372,8 @@ TEST_CASE("A rig is found by signature, not by name", "[importedrig]")
 			root.Data(),
 			twin,
 			root.Banim(),
-			/*writeClips*/ false);
+			/*writeClips*/ false,
+			assetlib::SourceRef{});
 
 		REQUIRE(fs::exists(twin));
 		CHECK_THROWS_AS(
@@ -420,7 +430,8 @@ TEST_CASE("Clips import on their own, attached to the rig already there", "[impo
 		root.Data(),
 		root.Bskel(),
 		root.Banim(),
-		/*writeClips*/ false);
+		/*writeClips*/ false,
+		assetlib::SourceRef{});
 
 	// On disk, where the clips import must find it: its box is measured against project meshes,
 	// not against geometry it has no copy of.
@@ -429,7 +440,7 @@ TEST_CASE("Clips import on their own, attached to the rig already there", "[impo
 	assetlib::save(mesh, meshPath);
 
 	const fs::path runPath = root.Data() / assetlib::c_AnimationsDirectoryName / "coyote_run.banim";
-	assetlib::writeImportedClips(imported, root.Data(), runPath);
+	assetlib::writeImportedClips(imported, root.Data(), runPath, assetlib::SourceRef{});
 
 	REQUIRE(fs::exists(runPath));
 
@@ -454,7 +465,7 @@ TEST_CASE("Clips with no rig to attach to are refused", "[importedrig]")
 	// Nothing has been imported yet, so there is no skeleton these clips could address. Writing them
 	// anyway would leave a .banim naming a file that does not exist.
 	CHECK_THROWS_AS(
-		assetlib::writeImportedClips(imported, root.Data(), root.Banim()),
+		assetlib::writeImportedClips(imported, root.Data(), root.Banim(), assetlib::SourceRef{}),
 		std::runtime_error);
 
 	SECTION("and so is a file carrying no clips")
@@ -466,13 +477,18 @@ TEST_CASE("Clips with no rig to attach to are refused", "[importedrig]")
 			root.Data(),
 			root.Bskel(),
 			root.Banim(),
-			/*writeClips*/ false);
+			/*writeClips*/ false,
+			assetlib::SourceRef{});
 
 		auto clipless = SkinnedImport();
 		clipless.animations.clips.clear();
 
 		CHECK_THROWS_AS(
-			assetlib::writeImportedClips(clipless, root.Data(), root.Banim()),
+			assetlib::writeImportedClips(
+				clipless,
+				root.Data(),
+				root.Banim(),
+				assetlib::SourceRef{}),
 			std::runtime_error);
 	}
 }
@@ -510,6 +526,11 @@ TEST_CASE("an import lands in the project's categories and reads back", "[import
 
 	assetlib::BMesh mesh = assetlib::toBMesh(imported);
 	static_cast<void>(assetlib::generateTangents(mesh));
+	assetlib::requireUniqueSubmeshNames(mesh);
+
+	const assetlib::ImportTarget target{ dataRoot, "apples", assetlib::c_DefaultSampleRate };
+	const assetlib::SourceRef    sourceRef = assetlib::copyImportedSource(glb, target);
+	mesh.source                            = sourceRef;
 
 	assetlib::writeImportedRig(
 		imported,
@@ -517,9 +538,29 @@ TEST_CASE("an import lands in the project's categories and reads back", "[import
 		dataRoot,
 		dataRoot / assetlib::c_SkeletonsDirectoryName / "apples.bskel",
 		dataRoot / assetlib::c_AnimationsDirectoryName / "apples.banim",
-		true);
+		true,
+		sourceRef);
 
 	assetlib::writeImportedMesh(mesh, dataRoot / assetlib::c_MeshesDirectoryName / "apples.bmesh");
+	assetlib::writeImportedDocument(target, &mesh);
+
+	// The saved mesh carries the reference it will one day be regenerated by.
+	CHECK(
+		assetlib::load(dataRoot / assetlib::c_MeshesDirectoryName / "apples.bmesh").source ==
+		sourceRef);
+
+	SECTION("the source travels with the project, its document beside it")
+	{
+		CHECK(fs::exists(dataRoot / "meshes_src/apples.glb"));
+
+		const assetlib::ImportDocument document = assetlib::loadImportDocument(
+			core::file::LooseFileSystem(dataRoot),
+			"meshes_src/apples.bimport");
+		CHECK(document.sampleRate == assetlib::c_DefaultSampleRate);
+		// No materials were attached, so the import records no bindings -- assetlib authors no
+		// material documents (the editor is their sole author), so the document says so.
+		CHECK(document.bindings.empty());
+	}
 
 	SECTION("the file set is the categories and nothing else")
 	{
@@ -530,7 +571,9 @@ TEST_CASE("an import lands in the project's categories and reads back", "[import
 
 		std::ranges::sort(written);
 
-		auto expected = std::vector<std::string>{ "Meshes/apples.bmesh" };
+		auto expected = std::vector<std::string>{ "Meshes/apples.bmesh",
+			                                      "meshes_src/apples.bimport",
+			                                      "meshes_src/apples.glb" };
 		for (size_t i = 0; i < imported.textures.size(); ++i)
 			expected.push_back("textures_src/apples/" + assetlib::textureFileName(i));
 		std::ranges::sort(expected);

@@ -1,5 +1,7 @@
 #include <assetlib/AssetStore.h>
 #include <assetlib/asset_refs.h>
+#include <assetlib/import_document.h>
+#include <core/err/util.h>
 
 #include <assetlib/banim_io.h>
 #include <assetlib/benv_io.h>
@@ -119,6 +121,17 @@ namespace assetlib
 				return serializeEnv(env);
 			}
 
+			case AssetType::kImportDocument:
+			{
+				ImportDocument document = deserializeImportDocument(
+					std::string_view(reinterpret_cast<const char*>(bytes.data()), bytes.size()));
+				for (MaterialBinding& binding : document.bindings)
+					binding.material = mapTarget(plan, binding.material);
+				const std::string text = serializeImportDocument(document);
+				const auto*       data = reinterpret_cast<const std::byte*>(text.data());
+				return std::vector<std::byte>(data, data + text.size());
+			}
+
 			case AssetType::kTexture:
 			case AssetType::kSkeleton:
 				break;
@@ -172,6 +185,14 @@ namespace assetlib
 				throw std::runtime_error(
 					"assetlib::planRename: renaming '" + plan.from + "' to '" + plan.to +
 					"' would change what kind of asset it is");
+
+			// Its source key is derived from its own path, so a lone rename would orphan the
+			// source; renaming the directory moves the pair and stays allowed.
+			core::throw_runtime_error_if(
+				plan.assetType == AssetType::kImportDocument,
+				"assetlib::planRename: '{}' sits beside the source it describes and cannot be "
+				"renamed alone",
+				plan.from);
 
 			const std::span<const AssetRef> referrers = graph.ReferrersOf(plan.from);
 			plan.referrers.assign(referrers.begin(), referrers.end());

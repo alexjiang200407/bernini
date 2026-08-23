@@ -145,9 +145,8 @@ before the factor existed**, so a material baked without one is unaffected — s
 [Passes § Blended surfaces](docs/passes.md#blended-surfaces) for the shading.
 
 glTF carries it as `KHR_materials_transmission`, which the importer reads; a `BLEND` material with no
-such extension imports at 0, which is glTF's own default. It takes `.bmaterial` to **major 9**, so
-every material baked before it is rejected until re-baked — the container reads a version, not a
-schema, and a field appended silently would be read as whatever bytes followed it.
+such extension imports at 0, which is glTF's own default. The factor is a document key
+with `0` as its default, so a material written before it reads back unchanged.
 
 ### Specular
 
@@ -163,7 +162,7 @@ implicitly a full dielectric, so the surface arrives wearing a sheen its author 
 glTF carries the pair as `KHR_materials_specular`, which the importer reads; the two texture inputs
 that extension also defines (`specularTexture`, `specularColorTexture`) are **not** read, so a
 material that varies specular per-texel imports at its factors. Unlike transmission this costs no
-version bump: since `.bmaterial` became [self-describing](asset_schema.md), a field appended with a
+version bump: since `.bmaterial` became [a text document](asset_containers.md), a field appended with a
 default reads back at that default out of every file written before it, and `1` / white is exactly
 the flat `0.04` those files already shaded at.
 
@@ -320,9 +319,9 @@ Three different spaces are in play and they are easy to conflate. The contract, 
   [libs/assetlib_structs/include/assetlib_structs/BVat.h](libs/assetlib_structs/include/assetlib_structs/BVat.h);
   I/O: [libs/assetlib/include/assetlib/bvat_io.h](libs/assetlib/include/assetlib/bvat_io.h);
   bake: [libs/assetlib/include/assetlib/vat_bake.h](libs/assetlib/include/assetlib/vat_bake.h).
-* **`.bmaterial`** (v11) — **a shading-model tag plus that model's parameters**, on the same chunked
-  container as the mesh (below): a material record, the model's payload as its own chunk, a string
-  pool for every path. Struct:
+* **`.bmaterial`** — **a shading-model tag plus that model's parameters**, as an authored text
+  document: canonical JSON, factors and routes as named keys, the editor graph carried as an
+  opaque string, unknown keys preserved on round-trip. Struct:
   [libs/assetlib_structs/include/assetlib_structs/BMaterial.h](libs/assetlib_structs/include/assetlib_structs/BMaterial.h);
   I/O: [libs/assetlib/include/assetlib/bmaterial_io.h](libs/assetlib/include/assetlib/bmaterial_io.h);
   bake: [libs/assetlib/include/assetlib/material_bake.h](libs/assetlib/include/assetlib/material_bake.h).
@@ -374,14 +373,14 @@ Three different spaces are in play and they are easy to conflate. The contract, 
     untouched rather than half-stripped. Run it with `assetlib_cli strip` (below); it is irreversible,
     so it asks before rewriting a file in place.
 
-  **There is one shape in the reader, and older files read into it.** `deserializeMaterial` converts a
-  file's payload from the layout its schema chunk records to the current one, by field name — a
-  material baked before `transmissionFactor` existed reads with 0, one baked before the specular
-  factors reads them at 1 and white, one whose alpha mode was a byte reads it widened — so the reader has one shape and no branch that can rot, and the format number
-  decides only that a newer file is refused.
+  **There is one shape in the reader, and older files read into it.** `deserializeMaterial` takes the
+  keys it knows and defaults the rest — a material written before
+  `transmissionFactor` existed reads with 0, one from before the specular factors reads them at 1
+  and white — so the reader has one shape and no branch that can rot; keys it does not know ride
+  the document back out on save.
 
-  **Adding a shading model** means: a `ShadingModel` enumerator, a payload struct, a record layout, a
-  chunk and a `pack*`/`unpack*` pair in `bmaterial_io.cpp`, a case in `texture_prune.cpp`'s mark phase (**an unmarked map is swept as
+  **Adding a shading model** means: a `ShadingModel` enumerator, a payload struct, its document
+  keys in `bmaterial_io.cpp`, a case in `texture_prune.cpp`'s mark phase (**an unmarked map is swept as
   garbage**), a case in `asset_describe.cpp`, and a renderer path in `gamelib`'s `AssetManager` — which
   today rejects any model but `kPbr` rather than rendering it wrong. Each of those is a `switch` on
   `shadingModel` with no `default`, so the compiler names every one of them.
@@ -408,19 +407,21 @@ Three different spaces are in play and they are easy to conflate. The contract, 
   I/O: [libs/assetlib/include/assetlib/banim_io.h](libs/assetlib/include/assetlib/banim_io.h).
 * A baked model on disk is therefore `<name>.bmesh` + one `matN.bmaterial` per material + one texture
   file per texture + `<name>.bskel` and `<name>.banim` if it was rigged, all in one directory.
-* **`.bsky`** (v1) — the sky: one radiance cube map, the mip the backdrop samples, and its Y rotation.
-  **`.benvl`** (v1) — the lighting derived from that sky: the GGX prefilter chain, the irradiance
+* **`.bsky`** — the sky: one radiance cube map, purely derived.
+  **`.benvl`** — the lighting derived from that sky: the GGX prefilter chain, the irradiance
   convolution, and the exposure they were measured at. Both structs:
   [libs/assetlib_structs/include/assetlib_structs/BEnv.h](libs/assetlib_structs/include/assetlib_structs/BEnv.h);
   I/O: [libs/assetlib/include/assetlib/bsky_io.h](libs/assetlib/include/assetlib/bsky_io.h),
   [libs/assetlib/include/assetlib/benvl_io.h](libs/assetlib/include/assetlib/benvl_io.h).
 
-  * **Authoring containers, shaped like `.bmaterial`.** Every map is an `EnvMapRoute`: the `source`
+  * **Derived cache entries** (see [Asset Containers](asset_containers.md)): the sky's route is its cache
+    key, the lighting joins its two sources into one. Every map is an `EnvMapRoute`: the `source`
     under `textures_src/`, the machine-ready `baked` `.ktx2` under `Textures/`, and the `SourceStamp`
     the source measured when that bake ran. Paths are relative to the data root, as everywhere else.
-  * **Sky and lighting are separate files because their lifetimes are.** Rotating a sky or sampling a
-    blurrier mip is immediate; re-convolving the lighting it implies is minutes of work that the same
-    edit need not trigger.
+    The authored presentation lives on the `.benv` document, not here.
+  * **Sky and lighting are separate files because their lifetimes are.** Re-authoring a sky is
+    immediate; re-convolving the lighting it implies is minutes of work that the same edit need
+    not trigger.
   * **The bake compiles, it does not convolve.** `bakeSky`/`bakeEnvLighting`
     ([libs/assetlib/include/assetlib/env_bake.h](libs/assetlib/include/assetlib/env_bake.h)) take the
     routed float-cube intermediates and pack them RGB9E5 into content-addressed `.ktx2` under
@@ -434,8 +435,10 @@ Three different spaces are in play and they are easy to conflate. The contract, 
     data root (unreadable ones are fatal, same as materials), and its sweep recognises
     `isBakedEnvMapName` — `sky_`/`prefilter_`/`irradiance_` + 16 hex — disjoint from the material
     groups by prefix. An orphaned env map is collected; a referenced one never is.
-* **`.benv`** (v2) — **an environment by reference**: `BEnv { name, sky, lighting }`, two data-root
-  relative paths to a `.bsky` and a `.benvl`, no pixels. On disk the family follows the same
+* **`.benv`** — **an environment by reference, and the family's one authored file**: a canonical-JSON
+  text document naming a `.bsky` and a `.benvl` by data-root relative path, no pixels, carrying the
+  presentation knobs (`skyMipLevel`, `skyRotationY`, `exposureOverride`), unknown keys preserved on
+  round-trip as `.bmaterial` does. On disk the family follows the same
   per-kind directories materials use: the `.benv` in `Environments/`, the `.bsky` in `Sky/`, the
   `.benvl` in `EnvLighting/`, and every baked map in `Textures/` — `assets/Data/` mirrors this exactly
   as it does for `Materials/`. Composing by path lets a sky be re-authored
@@ -451,21 +454,13 @@ Three different spaces are in play and they are easy to conflate. The contract, 
     map while it is current, the float source it was compiled from otherwise. Same branch a material
     takes (`drawsLoose`), and for the same reason — `Textures/` is regenerated per platform, so a
     fresh checkout has sources and no bakes. Only a route with neither throws.
-  * **v1 was a three-blob format** (prefilter + irradiance + skybox as embedded KTX2), retired with
-    no migration path; v2 a flat stream of three paths. Both predate the schema chunk, and both are
-    refused as such — the reader never reads on into the blobs. Since v3 the three env containers
-    are the same chunked, self-describing container as the rest, one record and a string pool each,
-    with `EnvMapRoute` a layout the sky and the lighting share.
 
-**`.bmesh`, `.bskel`, `.banim` and `.bvat` are the same chunked container**, in
-[libs/assetlib/src/chunk_io.h](libs/assetlib/src/chunk_io.h): a 32-byte header, 16-byte-aligned chunks,
-a chunk table at the end. Chunks are addressed by id and an **absent chunk is not an error**. Chunk 0
-is the file's **schema** — every struct its chunks hold, field by field — and a reader converts each
-chunk from the layout the file stores to the one the engine wants, by field name
-([libs/schema](libs/schema/include/schema/Schema.h)), so a struct that
-gained, lost, widened or renamed a field leaves every file on disk readable. The version in the
-header is a label; the one thing it decides is that a file **newer than the reader is refused**. A
-file from before the schema chunk is refused too, with a message that says so.
+**`.bmesh`, `.bskel`, `.banim`, `.bvat`, `.bsky` and `.benvl` are the same cache-entry container**,
+in [libs/assetlib/src/cache_io.h](libs/assetlib/src/cache_io.h): a frozen header carrying the cache
+key (bake token, source stamp, parameter hash, source mount key), 16-byte-aligned schema-less
+chunks, a chunk table at the end. Chunks are addressed by id and an **absent chunk is not an
+error**. There is no conversion and no old shape to parse — a token mismatch is a cache miss, and
+the recovery is regeneration, never a reader. See [Asset Containers](asset_containers.md).
 
 ---
 
@@ -601,7 +596,7 @@ a clip set always deletes and leaves its skeleton behind, exactly as a mesh leav
 
 ```mermaid
 flowchart TD
-    GLTF[".glb / .gltf"] -- "loadFromGltf" --> IMP["BMeshImport (inline mats + decoded textures + rig)"]
+    GLTF[".glb"] -- "loadFromGltf" --> IMP["BMeshImport (inline mats + decoded textures + rig)"]
     IMP -- "toBMesh / bake" --> BMESH["&lt;name&gt;.bmesh (geometry + meshlets, submeshes unassigned)"]
     IMP -- "bake / writeTextures (writeKTX2)" --> TEX["texN.ktx2 (per map)"]
     IMP -- "bake (skinned sources only)" --> SKEL["&lt;name&gt;.bskel (sorted bones)"]
@@ -818,7 +813,8 @@ goes with it, and the count they are warned with has to say so.
 Which directories the *project* cannot spare is not a question the reference graph answers — it plans
 a deletion from what points at what, and a category with nothing in it points at nothing. That rule is
 `assetlib::Project::IsRequiredDirectory`: the data root, and the categories `Project::Create` scaffolds
-(`Meshes`, `Textures`, `textures_src`, `Materials`, `Levels`). `Project::Open` puts a missing one
+— the eleven rows of `project_layout.h`'s `c_RequiredDirectories`, `meshes_src` (the imported `.glb`
+sources and their `.bimport` documents) among them. `Project::Open` puts a missing one
 straight back, so deleting one would not even stick. A folder made *inside* a
 category, like `textures_src/kirk`, is the user's.
 
@@ -906,7 +902,9 @@ lets `assetlib_cli` sit on `PATH` and read nothing relative to where it was invo
 # root, never a path on disk.
 
 # Import a source model into the project: Meshes/model.bmesh, its textures into
-# textures_src/model/, and -- when the source carries a skin -- Skeletons/ and Animations/.
+# textures_src/model/, the source copy and its .bimport into meshes_src/, and -- when the
+# source carries a skin -- Skeletons/ and Animations/. Only a self-contained .glb: a .gltf's
+# sidecars cannot be one copied source, so it is refused ("export as .glb").
 # The .glb is a path on disk; everything written is a key. Import never overwrites
 assetlib_cli bake -p <project> model.glb -n model
 
@@ -930,7 +928,7 @@ assetlib_cli envmap -p <project> forest.hdr --name forest
 assetlib_cli describe -p <project> Meshes/model.bmesh          # hierarchy, submeshes, layouts, materials
 assetlib_cli describe -p <project> Meshes/model.bmesh --brief  # summary + material table only
 assetlib_cli describe -p <project> Materials/skin.bmaterial    # factors, triplet, routes, bake state
-assetlib_cli describe -p <project> Sky/forest.bsky             # presentation + the radiance route
+assetlib_cli describe -p <project> Sky/forest.bsky             # the radiance route and its bake state
 assetlib_cli describe -p <project> EnvLighting/forest.benvl    # exposure + the prefilter/irradiance pair
 assetlib_cli describe -p <project> Environments/forest.benv    # the .bsky and .benvl it composes
 assetlib_cli describe -p <project> Skeletons/soldier.bskel     # bones, parents, bind pose, signature
@@ -942,8 +940,8 @@ assetlib_cli describe -p <project> Animations/soldier.banim    # clips, and the 
 assetlib_cli strip -p <project> Materials/skin.bmaterial -o Ship/Materials/skin.bmaterial
 assetlib_cli strip -p <project> Materials/skin.bmaterial   # rewrites in place; asks first, -y skips
 
-# Show or author the exposure a lighting renders at
-assetlib_cli exposure -p <project> EnvLighting/forest.benvl --set 1.0
+# Show or author the exposure an environment renders at
+assetlib_cli exposure -p <project> Environments/forest.benv --set 1.0
 
 # List the baked maps no material references any more, and delete nothing
 assetlib_cli prune -p <project> --dry-run

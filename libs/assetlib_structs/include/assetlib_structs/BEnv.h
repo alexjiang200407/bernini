@@ -23,36 +23,51 @@ namespace assetlib
 	};
 
 	/**
-	 * The sky: one radiance cube map, and how the backdrop presents it.
+	 * The sky: one radiance cube map, purely derived from its routed source.
 	 *
-	 * Separate from the lighting derived out of it because the two have different lifetimes. Rotating
-	 * a sky or sampling a blurrier mip of it is a change a person makes and looks at immediately;
-	 * re-convolving the lighting is minutes of work that the same change need not trigger.
+	 * Separate from the lighting derived out of it because the two have different lifetimes:
+	 * re-authoring a sky need not trigger the minutes of convolution the lighting costs. How the
+	 * backdrop *presents* it -- mip, rotation -- is authored state and lives on the `.benv`
+	 * document, not here.
 	 */
 	struct BSky
 	{
 		std::string name;
 		EnvMapRoute sky;
-
-		// Which mip of `sky` the backdrop samples. Above 0 defocuses it, reading as depth of field.
-		uint32_t mipLevel = 0;
-
-		float rotationY = 0.0f;  // radians, about the up axis
 	};
 
 	/**
-	 * One environment, by reference: the sky it draws and the lighting derived from that sky.
+	 * One environment, authored: the sky it draws, the lighting derived from that sky, and how a
+	 * person presents the pair.
 	 *
 	 * A `.benv` holds no pixels. Composing by path is what lets a sky be re-authored without
 	 * touching the lighting minutes of convolution produced, and what lets two environments share
-	 * one sky. Weather joins later through the container's minor version, which is why this exists
-	 * at all rather than the editor naming the pair itself.
+	 * one sky. The presentation knobs live here rather than on the derived containers because
+	 * they are decisions, not derivations -- a re-bake must never touch them.
 	 */
 	struct BEnv
 	{
 		std::string name;
 		std::string sky;       // path to a `.bsky`, relative to the data root; empty when unset
 		std::string lighting;  // path to a `.benvl`, relative to the data root; empty when unset
+
+		/**
+		 * Which mip of the sky the backdrop samples, as requested -- resolution clamps it to the
+		 * mips the baked map actually has. Above 0 defocuses it, reading as depth of field.
+		 */
+		uint32_t skyMipLevel = 0;
+
+		float skyRotationY = 0.0f;  // radians, about the up axis
+
+		/**
+		 * What a person decided this environment renders at, overruling the exposure the lighting
+		 * bake derived. Unset until somebody authors it, and untouched by every re-bake.
+		 */
+		std::optional<float> exposureOverride;
+
+		// Document keys this build does not know, written back on save -- a sibling branch's new
+		// field survives a round-trip through a reader that has never heard of it.
+		std::string extraJson = "{}";
 	};
 
 	/**
@@ -74,25 +89,18 @@ namespace assetlib
 		 * environment's absolute scale is arbitrary, so this has to move whenever the maps do --
 		 * which is why it lives in the file and not in config.
 		 *
-		 * A proposal, not the answer: it normalizes every environment to middle grey, so on its own
-		 * no environment can be dimmer or brighter than another. `exposureOverride` is what says so.
+		 * A proposal, not the answer: it normalizes every environment to middle grey, so on its
+		 * own no environment can be dimmer or brighter than another. The `.benv` document's
+		 * `exposureOverride` is what says so, kept there because it is a decision -- a re-bake
+		 * refreshes this proposal without ever touching it.
 		 */
 		float exposure = 1.0f;
-
-		/**
-		 * What a person decided this environment renders at, overruling the derivation.
-		 *
-		 * Kept beside `exposure` rather than replacing it so a re-bake can refresh the proposal
-		 * without discarding a tuned value -- the reason a bake may not simply write one number.
-		 * Unset until somebody authors it.
-		 */
-		std::optional<float> exposureOverride;
-
-		/** The exposure to render at: what was authored, or the derivation until something is. */
-		[[nodiscard]] float
-		EffectiveExposure() const noexcept
-		{
-			return exposureOverride.value_or(exposure);
-		}
 	};
+
+	/** What was authored on the environment, or the bake's derivation until something is. */
+	[[nodiscard]] inline float
+	effectiveExposure(const BEnv& env, const BEnvLighting& lighting) noexcept
+	{
+		return env.exposureOverride.value_or(lighting.exposure);
+	}
 }

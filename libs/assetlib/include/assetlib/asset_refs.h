@@ -19,12 +19,13 @@ namespace assetlib
 		// .bvat. Derived and never committed, but still in the graph: rename and delete must see
 		// its recorded inputs, or a moved mesh would leave every bake pointing at nothing.
 		kVat,
+		kImportDocument,  // .bimport -- the authored half of one imported source; text, never packed
 	};
 
 	/** Why one asset holds another alive. */
 	enum class RefKind : uint32_t
 	{
-		kSubmeshMaterial,  // a .bmesh names a .bmaterial
+		kSubmeshMaterial,  // a .bmesh, or a .bimport's binding, names a .bmaterial
 		kBakedMap,         // a .bmaterial, .bsky or .benvl names a map its bake wrote
 		kChannelRoute,     // a .bmaterial routes a channel from a source texture
 		kEnvironmentPart,  // a .benv names the .bsky or .benvl it composes
@@ -32,6 +33,7 @@ namespace assetlib
 		kMeshSkeleton,     // a .bmesh's joint indices address a .bskel
 		kClipSkeleton,     // a .banim's clips were resampled against a .bskel
 		kVatSource,        // a .bvat names the mesh, skeleton or clip set its bake read
+		kImportedSource,   // a .bimport names the .glb it was imported from
 	};
 
 	/** `referrer` names `target`. Both relative to the data root, in generic form. */
@@ -79,7 +81,10 @@ namespace assetlib
 		 * make a project unopenable.
 		 *
 		 * @throws std::runtime_error if a *referrer* -- a `.bmesh`, `.bmaterial`, `.banim`, `.benv`,
-		 *         `.bsky` or `.benvl` -- in `store` cannot be read. Fatal on purpose, and for the
+		 *         `.bsky`, `.benvl` or `.bimport` -- in `store` cannot be read. For a `.bimport`
+		 *         that includes a merge left unresolved: its edges are blockers, so a document the
+		 *         scan cannot parse is knowingly fatal rather than skipped like a `.bvat` --
+		 *         deleting through unseen edges is the worse failure. The error names the file. Fatal on purpose, and for the
 		 *         reason the prune is: edges we cannot see are edges we would delete through.
 		 */
 		[[nodiscard]] static AssetRefGraph
@@ -144,11 +149,12 @@ namespace assetlib
 
 		std::vector<AssetRef> broken;  // `target` is named by `referrer`, but is not on disk
 
-		size_t meshesScanned       = 0;
-		size_t materialsScanned    = 0;
-		size_t environmentsScanned = 0;  // .benv, .bsky and .benvl together
-		size_t clipSetsScanned     = 0;
-		size_t vatsScanned         = 0;
+		size_t meshesScanned          = 0;
+		size_t importDocumentsScanned = 0;
+		size_t materialsScanned       = 0;
+		size_t environmentsScanned    = 0;  // .benv, .bsky and .benvl together
+		size_t clipSetsScanned        = 0;
+		size_t vatsScanned            = 0;
 
 	private:
 		struct Range

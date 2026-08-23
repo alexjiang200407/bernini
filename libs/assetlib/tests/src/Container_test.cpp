@@ -1,7 +1,7 @@
 #include <assetlib/bmesh_io.h>
 #include <assetlib_structs/BMesh.h>
 
-#include "chunk_io.h"
+#include "cache_io.h"
 #include "mounted_io.h"
 
 #include <catch2/matchers/catch_matchers_string.hpp>
@@ -111,90 +111,88 @@ TEST_CASE("deserialize rejects a truncated stream", "[bmesh][io]")
 	REQUIRE_THROWS_AS(deserialize(truncated), std::runtime_error);
 }
 
-// The chunk container is shared by .bmesh, .bskel and .banim, so every one of these rejections is
+// The cache container is shared by .bmesh, .bskel and .banim, so every one of these rejections is
 // the only thing standing between a corrupt file and three different readers.
-TEST_CASE("the chunk reader rejects a malformed container", "[bmesh][io][chunk]")
+TEST_CASE("the cache reader rejects a malformed container", "[bmesh][io][cache]")
 {
 	const auto patched = [](auto mutate) {
 		auto bytes  = serialize(MakeSampleMesh());
-		auto header = chunk::Header{};
+		auto header = cache::Header{};
 		std::memcpy(&header, bytes.data(), sizeof(header));
 		mutate(header, bytes);
 		std::memcpy(bytes.data(), &header, sizeof(header));
 		return bytes;
 	};
 
-	SECTION("an unsupported major version")
+	SECTION("a header version this build does not read")
 	{
-		const auto bytes = patched([](chunk::Header& h, auto&) { h.versionMajor += 1; });
-		REQUIRE_THROWS_AS(deserialize(bytes), std::runtime_error);
+		const auto bytes = patched([](cache::Header& h, auto&) { h.headerVersion += 1; });
+		REQUIRE_THROWS_WITH(
+			deserialize(bytes),
+			Catch::Matchers::ContainsSubstring("not the 1 this build reads"));
 	}
 
-	SECTION("a byte order this build cannot read")
+	SECTION("a bake token this build did not write")
 	{
-		const auto bytes = patched([](chunk::Header& h, auto&) { h.byteOrder = 1; });
-		REQUIRE_THROWS_AS(deserialize(bytes), std::runtime_error);
+		// Stale, a sibling branch's, or newer: one case, one refusal, one recovery -- regenerate.
+		const auto bytes = patched([](cache::Header& h, auto&) { h.bakeToken ^= 1; });
+		REQUIRE_THROWS_WITH(
+			deserialize(bytes),
+			Catch::Matchers::ContainsSubstring("another bake revision"));
 	}
 
 	SECTION("a chunk table that starts past the end")
 	{
 		const auto bytes =
-			patched([](chunk::Header& h, auto&) { h.chunkTableOffset = 0xFFFF0000u; });
+			patched([](cache::Header& h, auto&) { h.chunkTableOffset = 0xFFFF0000u; });
 		REQUIRE_THROWS_AS(deserialize(bytes), std::runtime_error);
 	}
 
-	// The entry checks, which need the table itself doctored rather than the header. Entry 0 is
-	// the schema's; the mutations land on the first data chunk, so they test what a data chunk's
-	// entry is checked for.
+	SECTION("a file size that disagrees with the stream")
+	{
+		const auto bytes = patched([](cache::Header& h, auto&) { h.fileSize -= 1; });
+		REQUIRE_THROWS_AS(deserialize(bytes), std::runtime_error);
+	}
+
+	// The entry checks, which need the table itself doctored rather than the header.
 	const auto patchedEntry = [](auto mutate) {
 		auto          bytes = serialize(MakeSampleMesh());
-		chunk::Header header{};
+		cache::Header header{};
 		std::memcpy(&header, bytes.data(), sizeof(header));
 
-		const size_t at = header.chunkTableOffset + sizeof(chunk::Entry);
-		chunk::Entry entry{};
+		const size_t at = header.chunkTableOffset;
+		cache::Entry entry{};
 		std::memcpy(&entry, bytes.data() + at, sizeof(entry));
-		REQUIRE(entry.id != chunk::c_SchemaChunk);
 		mutate(entry);
 		std::memcpy(bytes.data() + at, &entry, sizeof(entry));
 		return bytes;
 	};
 
-	SECTION("a chunk whose element size disagrees with the layout it names")
-	{
-		// The first data chunk is the nodes, 60 bytes each; halving the element size keeps the
-		// payload a whole number of elements, so only the schema can tell it is wrong.
-		const auto bytes = patchedEntry([](chunk::Entry& e) { e.elementSize = 30; });
-		REQUIRE_THROWS_WITH(
-			deserialize(bytes),
-			Catch::Matchers::ContainsSubstring(
-				"chunk 1 says 30-byte elements but its layout Node is 60 bytes"));
-	}
-
 	SECTION("a chunk whose element size is not what the reader asks for")
 	{
-		const auto bytes = patchedEntry([](chunk::Entry& e) { e.elementSize += 1; });
+		// The chunks carry no self-description, so a size that disagrees with the build is the
+		// one malformation the reader itself can see -- and the message says to regenerate.
+		// 30 divides the nodes payload, so the table check passes and the typed read is what
+		// refuses -- the guard between a size-compatible layout change and parsing it silently.
+		const auto bytes = patchedEntry([](cache::Entry& e) { e.elementSize = 30; });
 		REQUIRE_THROWS_AS(deserialize(bytes), std::runtime_error);
 	}
 
 	SECTION("a chunk holding a partial element")
 	{
-		const auto bytes = patchedEntry([](chunk::Entry& e) { e.byteSize -= 1; });
+		const auto bytes = patchedEntry([](cache::Entry& e) { e.byteSize -= 1; });
 		REQUIRE_THROWS_AS(deserialize(bytes), std::runtime_error);
 	}
 
 	SECTION("a chunk that runs past the end of the stream")
 	{
-		const auto bytes = patchedEntry([](chunk::Entry& e) { e.byteSize *= 1000; });
+		const auto bytes = patchedEntry([](cache::Entry& e) { e.byteSize *= 1000; });
 		REQUIRE_THROWS_AS(deserialize(bytes), std::runtime_error);
 	}
 
 	SECTION("an offset near the top of the range, which must not wrap past the sum")
 	{
-		const auto bytes = patchedEntry([](chunk::Entry& e) {
-			e.offset   = std::numeric_limits<uint64_t>::max() - 8;
-			e.byteSize = 64;
-		});
+		const auto bytes = patchedEntry([](cache::Entry& e) { e.offset = UINT64_MAX - 8; });
 		REQUIRE_THROWS_AS(deserialize(bytes), std::runtime_error);
 	}
 }

@@ -4,7 +4,9 @@
 namespace assetlib
 {
 	struct BMesh;
+	struct MaterialBinding;
 	struct Skeleton;
+	struct SourceRef;
 
 	/**
 	 * Writes `mesh` to `bmeshPath`, creating the directory the path names first: an import aimed
@@ -35,7 +37,8 @@ namespace assetlib
 		const std::filesystem::path& dataRoot,
 		const std::filesystem::path& bskelPath,
 		const std::filesystem::path& banimPath,
-		bool                         writeClips);
+		bool                         writeClips,
+		const SourceRef&             source);
 
 	/**
 	 * The `.bskel` under `dataRoot` whose signature matches `skeleton`, or empty when none does.
@@ -60,7 +63,130 @@ namespace assetlib
 	writeImportedClips(
 		const imp::BMeshImport&      imported,
 		const std::filesystem::path& dataRoot,
-		const std::filesystem::path& banimPath);
+		const std::filesystem::path& banimPath,
+		const SourceRef&             source);
+
+	/**
+	 * @throws std::runtime_error unless `source` is a `.glb` -- a `.gltf`'s sidecar `.bin` and
+	 *         image files cannot be one copied file with one content stamp; the message says
+	 *         "export as .glb".
+	 */
+	void
+	requireSelfContainedSource(const std::filesystem::path& source);
+
+	/**
+	 * @throws std::runtime_error if two submeshes share a name. The name is the import document's
+	 *         binding key, so a collision could only ever mis-bind silently; the fix is naming the
+	 *         meshes in the DCC.
+	 */
+	void
+	requireUniqueSubmeshNames(const BMesh& mesh);
+
+	/**
+	 * Where an import writes and the parameters it writes with -- the trio every import write
+	 * needs, carried as one value so a write cannot take half of it.
+	 */
+	struct ImportTarget
+	{
+		std::filesystem::path dataRoot;
+		std::string           name;  // the copied source's stem: `meshes_src/<name>.glb`
+		float                 sampleRate;
+	};
+
+	/** `<dataRoot>/meshes_src/<name>.glb` -- where an import copies its source. */
+	[[nodiscard]] std::filesystem::path
+	importedSourcePathFor(const std::filesystem::path& dataRoot, std::string_view name);
+
+	/** The `.bimport` beside the copied source. */
+	[[nodiscard]] std::filesystem::path
+	importDocumentPathFor(const std::filesystem::path& dataRoot, std::string_view name);
+
+	/**
+	 * Copies the self-contained source into `meshes_src/` and stamps it: the returned reference --
+	 * key, content stamp, parameter hash -- is what the caller sets on every container derived
+	 * from it *before* saving them. The document itself is written afterwards by
+	 * writeImportedDocument, once the bindings exist; the split is safe because bindings are
+	 * deliberately outside the parameter hash.
+	 *
+	 * `target.sampleRate` -- the rate clips are resampled to at import, the import's one
+	 * parameter -- is what the returned reference's parameter hash covers.
+	 *
+	 * @throws what requireSelfContainedSource throws, and std::runtime_error on a copy failure.
+	 */
+	SourceRef
+	copyImportedSource(const std::filesystem::path& source, const ImportTarget& target);
+
+	/**
+	 * Writes the `.bimport` beside the copied source: the sample rate, and -- when `mesh` is
+	 * given -- the submesh-name -> material bindings the mesh carries at this moment, which is how
+	 * an import records what `attachMaterial` just chose and how an adoption records what an
+	 * existing file already held. Null `mesh` is a clips-only import: parameters, no bindings.
+	 *
+	 * @throws std::runtime_error on a write failure.
+	 */
+	void
+	writeImportedDocument(const ImportTarget& target, const BMesh* mesh);
+
+	/**
+	 * Rebuilds `mesh.materials` and every `Submesh::material` canonically from `bindings` -- a
+	 * pure function of the document, never a mutation of what was loaded, so two checkouts with
+	 * one document hold one array. A submesh the document does not name is unbound.
+	 *
+	 * @return The submeshes named by bindings this mesh does not have -- the source changed shape
+	 *         under the document. Never guessed at: the editor warns, `migrate` fails the file,
+	 *         `pack` fails the pack.
+	 */
+	[[nodiscard]] std::vector<std::string>
+	applyBindings(BMesh& mesh, std::span<const MaterialBinding> bindings);
+
+	/**
+	 * Sets `submesh`'s binding to `material` in the import document beside `sourceKey`'s copied
+	 * source, leaving everything else -- the parameters, unknown keys, every other binding --
+	 * exactly as it stands. What a rebind in the editor writes instead of the mesh file: the
+	 * binding is outside the cache key, so the mesh is neither rewritten nor staled.
+	 *
+	 * `sourceKey` is the mount key the mesh's header carries (`BMesh::source.key`); the document
+	 * path is derived here, so no caller composes it.
+	 *
+	 * @throws std::runtime_error if `sourceKey` is empty, the document is absent or malformed, or
+	 *         the write fails.
+	 */
+	void
+	rebindSubmeshInDocument(
+		const std::filesystem::path& dataRoot,
+		std::string_view             sourceKey,
+		std::string_view             submesh,
+		std::string_view             material);
+
+	/** What happened to one import document under reauthorImportDocuments. */
+	struct ReauthoredDocument
+	{
+		enum class Outcome
+		{
+			kUnchanged,  // the bindings already matched the mesh
+			kRewritten,
+			kFailed  // `message` says why
+		};
+
+		std::string key;  // the document's mount key
+		Outcome     outcome;
+		std::string message;
+	};
+
+	/**
+	 * Rewrites every import document's bindings under `dataRoot` from its mesh's current state,
+	 * parameters and unknown keys preserved -- the one-time adoption pass that makes the documents
+	 * authoritative. Until it runs, a rebind saved into a `.bmesh` before documents existed is
+	 * recorded nowhere else; after it, the document is what a load applies, so running this again
+	 * later would overwrite document-only rebinds with stale mesh state.
+	 *
+	 * A mesh that will not load, a source claimed by two meshes, or a recorded source whose
+	 * document is missing is reported per document and never guessed at.
+	 *
+	 * @throws std::runtime_error if `dataRoot` is not a directory.
+	 */
+	[[nodiscard]] std::vector<ReauthoredDocument>
+	reauthorImportDocuments(const std::filesystem::path& dataRoot);
 
 	/** A file an import writes, and whether the import is the one that made it. */
 	struct ImportedFile

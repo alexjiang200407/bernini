@@ -11,8 +11,8 @@ namespace assetlib
 	/**
 	 * Reconstructs a BSky from a `.bsky` byte stream.
 	 *
-	 * @throws std::runtime_error on bad magic, a version newer than this build, a file from before the
-	 *         schema chunk, a field no rule converts, or a truncated stream.
+	 * @throws std::runtime_error on bad magic, a cache header this build does not read, a bake
+	 *         token this build did not write, or a truncated / malformed stream.
 	 */
 	[[nodiscard]] BSky
 	deserializeSky(std::span<const std::byte> bytes);
