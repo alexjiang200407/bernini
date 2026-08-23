@@ -338,4 +338,16 @@ namespace assetlib
 				c_WantedRefChunks,
 				c_What));
 	}
+
+	std::vector<std::byte>
+	AssetCodec<BVat>::Serialize(const BVat& value)
+	{
+		return serializeVat(value);
+	}
+
+	BVat
+	AssetCodec<BVat>::Deserialize(std::span<const std::byte> bytes)
+	{
+		return deserializeVat(bytes);
+	}
 }

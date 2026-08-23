@@ -1,4 +1,5 @@
 #pragma once
+#include <assetlib/AssetCodec.h>
 #include <assetlib/cancel.h>
 #include <assetlib_structs/BMeshImport.h>
 
@@ -176,4 +177,27 @@ namespace assetlib
 	 */
 	void
 	writeObj(const BMesh& mesh, const std::filesystem::path& path, bool fromMeshlets = true);
+
+	/**
+	 * The codec for `c_MeshExtension` -- a cache entry. See AssetCodec.h.
+	 *
+	 * Declared here and defined in bmesh_io.cpp, because `Deserialize` returns by value and this
+	 * header only forward declares `BMesh`.
+	 */
+	template <>
+	struct AssetCodec<BMesh>
+	{
+		static constexpr std::string_view c_Extension = c_MeshExtension;
+		static constexpr AssetType        c_Type      = AssetType::kMesh;
+
+		// The bake revision this container is written at; see AssetCodec.h. Bump to a fresh
+		// random value whenever this writer's layout or meaning changes.
+		static constexpr uint64_t c_BakeToken = 0x6f1d3a58c2e94b07ull;
+
+		[[nodiscard]] static std::vector<std::byte>
+		Serialize(const BMesh& value);
+
+		[[nodiscard]] static BMesh
+		Deserialize(std::span<const std::byte> bytes);
+	};
 }

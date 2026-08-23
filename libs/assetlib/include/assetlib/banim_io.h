@@ -1,4 +1,5 @@
 #pragma once
+#include <assetlib/AssetCodec.h>
 
 namespace assetlib
 {
@@ -46,4 +47,27 @@ namespace assetlib
 	 */
 	[[nodiscard]] bool
 	animationsMatchSkeleton(const AnimationSet& animations, const Skeleton& skeleton) noexcept;
+
+	/**
+	 * The codec for `c_AnimationExtension` -- a cache entry. See AssetCodec.h.
+	 *
+	 * Declared here and defined in banim_io.cpp, because `Deserialize` returns by value and this
+	 * header only forward declares `AnimationSet`.
+	 */
+	template <>
+	struct AssetCodec<AnimationSet>
+	{
+		static constexpr std::string_view c_Extension = c_AnimationExtension;
+		static constexpr AssetType        c_Type      = AssetType::kAnimation;
+
+		// The bake revision this container is written at; see AssetCodec.h. Bump to a fresh
+		// random value whenever this writer's layout or meaning changes.
+		static constexpr uint64_t c_BakeToken = 0x41f8b6d95e07c2aaull;
+
+		[[nodiscard]] static std::vector<std::byte>
+		Serialize(const AnimationSet& value);
+
+		[[nodiscard]] static AnimationSet
+		Deserialize(std::span<const std::byte> bytes);
+	};
 }

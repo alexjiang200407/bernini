@@ -406,4 +406,16 @@ namespace assetlib
 			}
 		}
 	}
+
+	std::vector<std::byte>
+	AssetCodec<BMesh>::Serialize(const BMesh& value)
+	{
+		return serialize(value);
+	}
+
+	BMesh
+	AssetCodec<BMesh>::Deserialize(std::span<const std::byte> bytes)
+	{
+		return deserialize(bytes);
+	}
 }

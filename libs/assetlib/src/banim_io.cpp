@@ -166,4 +166,16 @@ namespace assetlib
 		return animations.boneCount == skeleton.bones.size() &&
 		       animations.skeletonSignature == skeletonSignature(skeleton);
 	}
+
+	std::vector<std::byte>
+	AssetCodec<AnimationSet>::Serialize(const AnimationSet& value)
+	{
+		return serializeAnimations(value);
+	}
+
+	AnimationSet
+	AssetCodec<AnimationSet>::Deserialize(std::span<const std::byte> bytes)
+	{
+		return deserializeAnimations(bytes);
+	}
 }

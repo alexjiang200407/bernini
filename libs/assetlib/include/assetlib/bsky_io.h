@@ -1,4 +1,5 @@
 #pragma once
+#include <assetlib/AssetCodec.h>
 
 namespace assetlib
 {
@@ -34,4 +35,26 @@ namespace assetlib
 	[[nodiscard]] BSky
 	loadSky(const std::filesystem::path& path);
 
+	/**
+	 * The codec for `c_SkyExtension` -- a cache entry. See AssetCodec.h.
+	 *
+	 * Declared here and defined in bsky_io.cpp, because `Deserialize` returns by value and this
+	 * header only forward declares `BSky`.
+	 */
+	template <>
+	struct AssetCodec<BSky>
+	{
+		static constexpr std::string_view c_Extension = c_SkyExtension;
+		static constexpr AssetType        c_Type      = AssetType::kSky;
+
+		// The bake revision this container is written at; see AssetCodec.h. Bump to a fresh
+		// random value whenever this writer's layout or meaning changes.
+		static constexpr uint64_t c_BakeToken = 0x7c25e8b1904dfa36ull;
+
+		[[nodiscard]] static std::vector<std::byte>
+		Serialize(const BSky& value);
+
+		[[nodiscard]] static BSky
+		Deserialize(std::span<const std::byte> bytes);
+	};
 }
