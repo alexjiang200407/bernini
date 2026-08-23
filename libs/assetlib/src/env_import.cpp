@@ -1,5 +1,7 @@
 #include <assetlib/env_import.h>
 
+#include <assetlib/AssetStore.h>
+
 #include <assetlib/benv_io.h>
 #include <assetlib/benvl_io.h>
 #include <assetlib/bsky_io.h>
@@ -210,7 +212,7 @@ namespace assetlib
 			bsky.sky.source = ref;
 
 			throwIfCancelled(cancel);
-			bakeSky(bsky, { desc.dataRoot });
+			AssetStore(desc.dataRoot).BakeSky(bsky);
 
 			result.sky = assetRef(desc.skyDir, desc.name, ".bsky");
 			created.WillWrite(result.sky);
@@ -243,7 +245,7 @@ namespace assetlib
 			lighting.irradiance.source = irradianceRef;
 
 			throwIfCancelled(cancel);
-			bakeEnvLighting(lighting, { desc.dataRoot });
+			AssetStore(desc.dataRoot).BakeEnvLighting(lighting);
 
 			result.lighting = assetRef(desc.lightingDir, desc.name, ".benvl");
 			created.WillWrite(result.lighting);

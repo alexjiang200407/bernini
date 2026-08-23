@@ -7,6 +7,7 @@
 #include <assetlib_structs/ImageData.h>
 #include <core/file/LooseFileSystem.h>
 
+#include "MountAt.h"
 #include "bmesh_texture.h"
 
 using namespace assetlib;
@@ -50,7 +51,7 @@ namespace
 		BMaterial material;
 		material.pbr.routes[0] = { source, 0 };
 
-		bakeMaterial(material, MaterialBakeDesc{ root.path });
+		StoreAt(root.path).BakeMaterial(material);
 		saveMaterial(material, root.path / "Materials" / name);
 		return material;
 	}
@@ -274,16 +275,15 @@ TEST_CASE("findUnusedBakedTextures honours a custom texture directory", "[textur
 	auto desc       = TexturePruneDesc();
 	desc.textureDir = "cooked";
 
-	auto bake       = MaterialBakeDesc{ root.path };
-	bake.textureDir = "cooked";
+	const AssetStore store(root.path);
 
 	BMaterial material;
 	material.pbr.routes[0] = { "a.ktx2", 0 };
-	bakeMaterial(material, bake);
+	store.BakeMaterial(material, "cooked");
 	const std::string orphan = material.pbr.baseColorTexture;
 
 	material.pbr.routes[0] = { "b.ktx2", 0 };
-	bakeMaterial(material, bake);
+	store.BakeMaterial(material, "cooked");
 	saveMaterial(material, root.path / "Materials" / "mat.bmaterial");
 
 	const auto scan = findUnusedBakedTextures(AssetStore(root.path), desc);

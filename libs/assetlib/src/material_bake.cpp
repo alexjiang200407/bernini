@@ -1,5 +1,9 @@
 #include <assetlib/material_bake.h>
 
+#include <assetlib/AssetStore.h>
+#include <assetlib/cancel.h>
+#include <assetlib/project_layout.h>
+
 #include <assetlib/bmaterial_io.h>
 #include <assetlib/image_io.h>
 #include <assetlib_structs/BMaterial.h>
@@ -13,6 +17,17 @@
 
 namespace assetlib
 {
+	namespace
+	{
+		// What a bake reads and writes: the store's data root, and the directory baked maps land in
+		// relative to it. Not public -- a caller names the store, which already holds the root.
+		struct BakeDesc
+		{
+			std::filesystem::path dataRoot;
+			std::filesystem::path textureDir;
+		};
+	}
+
 	namespace
 	{
 		// One decoded source texture: tightly packed RGBA8 at its own resolution.
@@ -339,8 +354,8 @@ namespace assetlib
 		}
 	}
 
-	void
-	bakeMaterial(BMaterial& material, const MaterialBakeDesc& desc, const CancelToken& cancel)
+	static void
+	bakeMaterial(BMaterial& material, const BakeDesc& desc, const CancelToken& cancel)
 	{
 		if (material.shadingModel != ShadingModel::kPbr)
 			throw std::runtime_error(
@@ -473,5 +488,20 @@ namespace assetlib
 		// Unknown keys are authoring data until a build knows otherwise: a shipped tree carries
 		// only what this build can interpret.
 		material.extraJson = "{}";
+	}
+
+	void
+	AssetStore::BakeMaterial(BMaterial& material, const CancelToken& cancel) const
+	{
+		BakeMaterial(material, c_TexturesDirectoryName, cancel);
+	}
+
+	void
+	AssetStore::BakeMaterial(
+		BMaterial&         material,
+		std::string_view   textureDir,
+		const CancelToken& cancel) const
+	{
+		bakeMaterial(material, { .dataRoot = m_DataRoot, .textureDir = textureDir }, cancel);
 	}
 }
