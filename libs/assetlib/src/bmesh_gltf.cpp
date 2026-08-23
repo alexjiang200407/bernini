@@ -789,14 +789,18 @@ namespace assetlib
 			return imageToTexture[static_cast<size_t>(source)];
 		}
 
+		constexpr std::string_view c_SpecGlossExtension = "KHR_materials_pbrSpecularGlossiness";
+
 		// glTF's shading model is metallic-roughness unless the material overrides it, so PBR-ness is
 		// decided by the absence of an extension rather than the presence of pbrMetallicRoughness --
 		// which tinygltf default-constructs whether or not the file declares it.
+		//
+		// Specular-glossiness is converted rather than refused (see readSpecularGlossiness), so it is
+		// not disqualifying; unlit is, because it names a shading model the engine does not have.
 		bool
 		isPbrMaterial(const tinygltf::Material& material)
 		{
-			return !material.extensions.contains("KHR_materials_unlit") &&
-			       !material.extensions.contains("KHR_materials_pbrSpecularGlossiness");
+			return !material.extensions.contains("KHR_materials_unlit");
 		}
 
 		/**
@@ -860,6 +864,150 @@ namespace assetlib
 			}
 		}
 
+		/**
+		 * The metallic a diffuse/specular pair implies, by Khronos' own specular-glossiness
+		 * conversion -- the positive root of the quadratic that makes a metallic-roughness surface
+		 * reflect what the authored pair did.
+		 *
+		 * @return 0 for anything at or below the 0.04 dielectric, which is every non-metal.
+		 */
+		float
+		solveMetallic(float diffuse, float specular, float oneMinusSpecularStrength) noexcept
+		{
+			constexpr auto c_DielectricSpecular = 0.04f;
+			if (specular <= c_DielectricSpecular)
+				return 0.0f;
+
+			const auto a = c_DielectricSpecular;
+			const auto b = diffuse * oneMinusSpecularStrength / (1.0f - c_DielectricSpecular) +
+			               specular - 2.0f * c_DielectricSpecular;
+			const auto c = c_DielectricSpecular - specular;
+			const auto discriminant = std::max(b * b - 4.0f * a * c, 0.0f);
+
+			return std::clamp((-b + std::sqrt(discriminant)) / (2.0f * a), 0.0f, 1.0f);
+		}
+
+		/** glTF's perceived-brightness weighting, which the conversion above solves against. */
+		float
+		perceivedBrightness(const glm::vec3& colour) noexcept
+		{
+			return std::sqrt(
+				0.299f * colour.r * colour.r + 0.587f * colour.g * colour.g +
+				0.114f * colour.b * colour.b);
+		}
+
+		glm::vec3
+		readVec3(const tinygltf::Value& ext, const char* key, const glm::vec3& fallback)
+		{
+			if (!ext.Has(key))
+				return fallback;
+
+			const tinygltf::Value& value = ext.Get(key);
+			if (!value.IsArray() || value.ArrayLen() < static_cast<size_t>(glm::vec3::length()))
+				return fallback;
+
+			glm::vec3 out = fallback;
+			for (glm::length_t i = 0; i < glm::vec3::length(); ++i)
+			{
+				const tinygltf::Value& component = value.Get(static_cast<size_t>(i));
+				if (component.IsNumber())
+					out[i] = static_cast<float>(component.GetNumberAsDouble());
+			}
+			return out;
+		}
+
+		/**
+		 * Converts KHR_materials_pbrSpecularGlossiness onto `out`'s metallic-roughness fields, by the
+		 * conversion Khronos publishes with the extension and every other importer implements
+		 * (glTF-Transform's `metalRough`, Blender's importer, three.js).
+		 *
+		 * The extension is archived -- superseded by metallic-roughness plus KHR_materials_specular --
+		 * but Sketchfab exported it for years, so refusing it means refusing a large share of the
+		 * models anyone actually has. Converting is what the rest of the ecosystem does; the
+		 * alternative here was reading the material as PBR anyway, which silently takes tinygltf's
+		 * default-constructed pbrMetallicRoughness and imports every such surface as white metal.
+		 *
+		 * **Factors only, and the texture is not composited.** `specularGlossinessTexture` carries
+		 * per-texel specular in RGB and glossiness in A, and the engine's ORM wants roughness in G --
+		 * an inversion no ChannelRoute can express, so it would have to be baked into a new image at
+		 * import. A material carrying one therefore gets a constant roughness from `glossinessFactor`
+		 * rather than a varying one; its base colour and normal are unaffected.
+		 *
+		 * @return false when the material does not declare the extension, leaving `out` untouched.
+		 */
+		bool
+		readSpecularGlossiness(
+			const tinygltf::Material&    material,
+			const tinygltf::Model&       model,
+			const std::vector<uint32_t>& imageToTexture,
+			BMaterialImport&             out)
+		{
+			const auto it = material.extensions.find(std::string(c_SpecGlossExtension));
+			if (it == material.extensions.end())
+				return false;
+
+			const tinygltf::Value& ext = it->second;
+
+			auto diffuse    = glm::vec4(1.0f);
+			auto glossiness = 1.0f;
+
+			if (ext.Has("diffuseFactor"))
+			{
+				const tinygltf::Value& value = ext.Get("diffuseFactor");
+				if (value.IsArray() && value.ArrayLen() >= static_cast<size_t>(glm::vec4::length()))
+					for (glm::length_t i = 0; i < glm::vec4::length(); ++i)
+					{
+						const tinygltf::Value& component = value.Get(static_cast<size_t>(i));
+						if (component.IsNumber())
+							diffuse[i] = static_cast<float>(component.GetNumberAsDouble());
+					}
+			}
+
+			if (ext.Has("glossinessFactor"))
+			{
+				const tinygltf::Value& value = ext.Get("glossinessFactor");
+				if (value.IsNumber())
+					glossiness =
+						std::clamp(static_cast<float>(value.GetNumberAsDouble()), 0.0f, 1.0f);
+			}
+
+			const glm::vec3 specular = readVec3(ext, "specularFactor", glm::vec3(1.0f));
+
+			const auto oneMinusSpecularStrength =
+				1.0f - std::max({ specular.r, specular.g, specular.b });
+			const auto metallic = solveMetallic(
+				perceivedBrightness(glm::vec3(diffuse)),
+				perceivedBrightness(specular),
+				oneMinusSpecularStrength);
+
+			// The base colour both halves agree on: the diffuse lobe as a non-metal sees it, blended
+			// with the specular colour a metal reflects, by the metallic just solved.
+			constexpr auto  c_DielectricSpecular = 0.04f;
+			const glm::vec3 fromDiffuse =
+				glm::vec3(diffuse) * (oneMinusSpecularStrength / (1.0f - c_DielectricSpecular) /
+			                          std::max(1.0f - metallic, 1e-4f));
+			const glm::vec3 fromSpecular =
+				(specular - glm::vec3(c_DielectricSpecular) * (1.0f - metallic)) *
+				(1.0f / std::max(metallic, 1e-4f));
+
+			const glm::vec3 baseColor =
+				glm::clamp(glm::mix(fromDiffuse, fromSpecular, metallic * metallic), 0.0f, 1.0f);
+
+			out.baseColorFactor = glm::vec4(baseColor, diffuse.a);
+			out.metallicFactor  = metallic;
+			out.roughnessFactor = 1.0f - glossiness;
+
+			if (ext.Has("diffuseTexture"))
+			{
+				const tinygltf::Value& texture = ext.Get("diffuseTexture");
+				if (texture.Has("index"))
+					out.baseColorTexture =
+						mapTexture(model, texture.Get("index").GetNumberAsInt(), imageToTexture);
+			}
+
+			return true;
+		}
+
 		AlphaMode
 		toAlphaMode(const std::string& gltfAlphaMode)
 		{
@@ -902,7 +1050,13 @@ namespace assetlib
 						static_cast<float>(pbr.baseColorFactor[3]));
 				material.metallicFactor  = static_cast<float>(pbr.metallicFactor);
 				material.roughnessFactor = static_cast<float>(pbr.roughnessFactor);
-				material.nameOffset      = mesh.stringPool.add(gltfMat.name);
+
+				// Last, so it overwrites the metallic-roughness block above: tinygltf
+				// default-constructs that whether or not the file declares it, and a
+				// specular-glossiness material declares it never.
+				readSpecularGlossiness(gltfMat, model, imageToTexture, material);
+
+				material.nameOffset = mesh.stringPool.add(gltfMat.name);
 
 				mesh.materials.push_back(material);
 			}

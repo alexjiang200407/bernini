@@ -52,6 +52,26 @@ namespace
   ]
 })";
 
+	/**
+	 * Specular-glossiness materials with values chosen so the conversion lands on exact numbers: a
+	 * black specular is unambiguously dielectric, a white one against a black diffuse is
+	 * unambiguously metal, and each has a glossiness whose complement is exact in binary.
+	 */
+	constexpr const char* c_SpecGlossGltf = R"({
+  "asset": { "version": "2.0" },
+  "extensionsUsed": [ "KHR_materials_pbrSpecularGlossiness" ],
+  "extensionsRequired": [ "KHR_materials_pbrSpecularGlossiness" ],
+  "materials": [
+    { "name": "clay", "extensions": { "KHR_materials_pbrSpecularGlossiness": {
+        "diffuseFactor": [ 0.5, 0.4, 0.3, 1.0 ], "specularFactor": [ 0.0, 0.0, 0.0 ],
+        "glossinessFactor": 0.25 } } },
+    { "name": "chrome", "extensions": { "KHR_materials_pbrSpecularGlossiness": {
+        "diffuseFactor": [ 0.0, 0.0, 0.0, 1.0 ], "specularFactor": [ 1.0, 1.0, 1.0 ],
+        "glossinessFactor": 1.0 } } },
+    { "name": "bare", "extensions": { "KHR_materials_pbrSpecularGlossiness": {} } }
+  ]
+})";
+
 	std::filesystem::path
 	WriteTempGltf(const char* json = c_TriangleGltf, const char* name = "bmesh_triangle_test.gltf")
 	{
@@ -261,14 +281,49 @@ TEST_CASE("A material declaring another shading model is not PBR", "[bmesh][gltf
 	const auto mesh = LoadMaterialsGltf();
 	REQUIRE(mesh.materials.size() == 10);
 
-	// Metallic-roughness is glTF's shading model, so a material is PBR unless it says otherwise. The
-	// two that do say otherwise carry fields that are glTF's defaults rather than the author's intent,
-	// which is why importing them as PBR would be a lie rather than an approximation.
+	// Metallic-roughness is glTF's shading model, so a material is PBR unless it says otherwise. Unlit
+	// is the only thing that does: it names a shading model the engine does not have, and its fields
+	// are glTF's defaults rather than the author's intent, so importing it as PBR would be a lie.
+	// Specular-glossiness is converted instead, which is an approximation and a documented one.
 	CHECK(mesh.materials[0].isPbr);
 	CHECK(mesh.materials[1].isPbr);
 	CHECK(mesh.materials[2].isPbr);
 	CHECK_FALSE(mesh.materials[3].isPbr);  // KHR_materials_unlit
-	CHECK_FALSE(mesh.materials[4].isPbr);  // KHR_materials_pbrSpecularGlossiness
+	CHECK(mesh.materials[4].isPbr);        // KHR_materials_pbrSpecularGlossiness, converted
+}
+
+TEST_CASE("A specular-glossiness material converts to metallic-roughness", "[bmesh][gltf]")
+{
+	const auto path = WriteTempGltf(c_SpecGlossGltf, "bmesh_specgloss_test.gltf");
+	const auto mesh = loadFromGltf(path);
+	std::filesystem::remove(path);
+
+	REQUIRE(mesh.materials.size() == 3);
+
+	// A black specular cannot be metal, so the diffuse survives as base colour -- divided by the
+	// 0.96 a dielectric does not reflect, which is what makes the two models agree on the lobe.
+	const auto& clay = mesh.materials[0];
+	CHECK(clay.isPbr);
+	CHECK(clay.metallicFactor == Catch::Approx(0.0f));
+	CHECK(clay.roughnessFactor == Catch::Approx(0.75f));
+	CHECK(clay.baseColorFactor.r == Catch::Approx(0.5f / 0.96f));
+	CHECK(clay.baseColorFactor.g == Catch::Approx(0.4f / 0.96f));
+	CHECK(clay.baseColorFactor.b == Catch::Approx(0.3f / 0.96f));
+	CHECK(clay.baseColorFactor.a == Catch::Approx(1.0f));
+
+	// A white specular over a black diffuse is the one case that solves to a full metal, and its
+	// base colour is the specular it reflects rather than the diffuse it does not have.
+	const auto& chrome = mesh.materials[1];
+	CHECK(chrome.metallicFactor == Catch::Approx(1.0f));
+	CHECK(chrome.roughnessFactor == Catch::Approx(0.0f));
+	CHECK(chrome.baseColorFactor.r == Catch::Approx(1.0f));
+
+	// An empty extension is glTF's defaults -- white diffuse, white specular, full glossiness -- and
+	// not this build's, which is the trap: tinygltf default-constructs pbrMetallicRoughness too, so
+	// a material that reached the metallic-roughness path would arrive rough and fully metallic.
+	const auto& bare = mesh.materials[2];
+	CHECK(bare.isPbr);
+	CHECK(bare.roughnessFactor == Catch::Approx(0.0f));
 }
 
 TEST_CASE("probeGltfMaterials reports the PBR materials", "[bmesh][gltf]")
@@ -279,9 +334,9 @@ TEST_CASE("probeGltfMaterials reports the PBR materials", "[bmesh][gltf]")
 
 	CHECK(probed.size() == 10);
 
-	// KHR_materials_specular layers on metallic-roughness rather than replacing it, so the four
-	// materials declaring it are PBR; only unlit and pbrSpecularGlossiness are not.
-	CHECK(std::ranges::count_if(probed, &GltfMaterial::isPbr) == 8);
+	// KHR_materials_specular layers on metallic-roughness rather than replacing it, and
+	// specular-glossiness is converted to it, so unlit is the only material here that is not PBR.
+	CHECK(std::ranges::count_if(probed, &GltfMaterial::isPbr) == 9);
 }
 
 TEST_CASE("probeGltfMaterials sees what a full import sees", "[bmesh][gltf]")

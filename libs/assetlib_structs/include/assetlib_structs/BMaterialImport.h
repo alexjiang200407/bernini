@@ -5,7 +5,8 @@
 namespace assetlib::imp
 {
 	/**
-	 * A glTF metallic-roughness material in flattened import form. Texture fields index directly into
+	 * A glTF material in flattened import form, always as metallic-roughness -- a
+	 * specular-glossiness one is converted on the way in. Texture fields index directly into
 	 * imp::BMeshImport::textures (0xFFFFFFFF when absent) -- the flattened counterpart of the modular
 	 * BMaterial, which references the same textures by file path instead. ormTexture is the glTF
 	 * metallic-roughness texture, interpreted as occlusion(R)/roughness(G)/metallic(B) -- occlusion is
@@ -33,9 +34,9 @@ namespace assetlib::imp
 		float     specularFactor      = 1.0f;
 
 		/**
-		 * Whether metallic-roughness is really this material's shading model. False when it declares one
-		 * the engine cannot represent (KHR_materials_unlit, KHR_materials_pbrSpecularGlossiness), whose
-		 * fields above are then glTF's defaults rather than the author's intent.
+		 * Whether the fields above are the author's intent. False only for KHR_materials_unlit, whose
+		 * shading model the engine does not have, leaving them at glTF's defaults. Specular-glossiness
+		 * is converted rather than refused, so it arrives true.
 		 */
 		bool isPbr = true;
 

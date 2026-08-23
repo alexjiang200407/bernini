@@ -680,15 +680,32 @@ for each file before committing to the import. `editor::MaterialStems` turns tho
 default stems, and the writer is handed whatever the fields then hold rather than deriving them a
 second time — two copies of that rule is how a preview and a file come to disagree.
 
-Five rules, each of which is a way to get this wrong:
+Seven rules, each of which is a way to get this wrong:
 
 * **PBR-ness is the absence of an extension, not the presence of `pbrMetallicRoughness`.** Metallic-
   roughness *is* glTF's shading model; tinygltf default-constructs the struct whether or not the file
-  declares it, so testing for it would call every material PBR. `KHR_materials_unlit` and
-  `KHR_materials_pbrSpecularGlossiness` are what say otherwise, and such a material is **skipped** —
-  its submeshes arrive unassigned and render unlit, which both runtimes already do. Importing one as
-  PBR would not be an approximation but a fabrication: its metallic/roughness fields are glTF's
-  defaults, not the author's.
+  declares it, so testing for it would call every material PBR. `KHR_materials_unlit` is what says
+  otherwise, and such a material is **skipped** — its submeshes arrive unassigned and render unlit,
+  which both runtimes already do. Importing one as PBR would not be an approximation but a
+  fabrication: its metallic/roughness fields are glTF's defaults, not the author's.
+* **`KHR_materials_pbrSpecularGlossiness` is converted, not skipped.** The extension is archived —
+  superseded by metallic-roughness plus `KHR_materials_specular` — but Sketchfab emitted it for
+  years, so refusing it refuses a large share of the models anyone has. `readSpecularGlossiness`
+  applies the conversion Khronos publishes with the extension and the rest of the ecosystem
+  implements (glTF-Transform's `metalRough`, Blender, three.js): roughness is `1 - glossiness`, and
+  metallic is solved from the diffuse and specular brightnesses, with the base colour blended
+  between the two by the metallic that comes out. It runs **after** the metallic-roughness block,
+  because a specular-glossiness material never declares one and would otherwise keep tinygltf's
+  defaults — white, fully metallic, fully rough.
+
+  Two consequences worth knowing before reading a converted asset. **Factors only**: a
+  `specularGlossinessTexture` carries specular in RGB and glossiness in A, and ORM wants roughness
+  in G — an inversion no `ChannelRoute` can express, so it would have to be composited into a new
+  image at import. Such a material gets a constant roughness from `glossinessFactor`; its base
+  colour and normal are unaffected. And **a black diffuse over any specular solves to metal**,
+  because metallic-roughness has no other way to express it — which is right for a chrome surface
+  and surprising on a transparent reflection layer, where it is the model's limit rather than the
+  conversion's error.
 * **The graph *is* the material.** The import builds a `MaterialGraphModel` — a Texture node per map,
   wired into the sink — and `CompileMaterial` reads the routes back out of it, exactly as the material
   editor's Save does. There is no second table mapping glTF to routes that could drift from the board,
