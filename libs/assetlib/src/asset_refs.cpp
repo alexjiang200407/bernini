@@ -1,6 +1,8 @@
 #include <assetlib/AssetStore.h>
 #include <assetlib/asset_refs.h>
 
+#include <assetlib/AssetCodec.h>
+
 #include <assetlib/banim_io.h>
 #include <assetlib/benv_io.h>
 #include <assetlib/benvl_io.h>
@@ -249,28 +251,16 @@ namespace assetlib
 	{
 		const std::string ext = lowerExtension(path);
 
-		if (ext == c_MeshExtension)
-			return AssetType::kMesh;
-		if (ext == c_MaterialExtension)
-			return AssetType::kMaterial;
+		// The one asset with no codec, so the one the table cannot answer for: a texture is an
+		// image this library encodes, not a container it serializes a struct into.
 		if (ext == c_TextureExtension)
 			return AssetType::kTexture;
-		if (ext == c_EnvironmentExtension)
-			return AssetType::kEnvironment;
-		if (ext == c_SkyExtension)
-			return AssetType::kSky;
-		if (ext == c_EnvLightingExtension)
-			return AssetType::kEnvLighting;
-		if (ext == c_SkeletonExtension)
-			return AssetType::kSkeleton;
-		if (ext == c_AnimationExtension)
-			return AssetType::kAnimation;
-		if (ext == c_VatExtension)
-			return AssetType::kVat;
-		if (ext == c_ImportDocumentExtension)
-			return AssetType::kImportDocument;
 
-		return std::nullopt;
+		const std::optional<ContainerKind> kind = containerKindForExtension(ext);
+		if (!kind.has_value())
+			return std::nullopt;
+
+		return kind->type;
 	}
 
 	bool

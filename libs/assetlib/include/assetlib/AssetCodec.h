@@ -56,6 +56,7 @@ namespace assetlib
 	template <typename T>
 	concept CacheEntryCodecFor = AssetCodecFor<T> && requires {
 		{ AssetCodec<T>::c_BakeToken } -> std::convertible_to<uint64_t>;
+		{ AssetCodec<T>::c_Magic } -> std::convertible_to<uint32_t>;
 	};
 
 	/** What the registry knows about one container, without naming its C++ type. */
@@ -64,8 +65,10 @@ namespace assetlib
 		AssetType        type;
 		std::string_view extension;  // with the leading dot, as container_format.h spells it
 
-		// 0 for an authored document, which carries no bake revision.
+		// Both 0 for an authored document: it carries no bake revision, and opens with its
+		// text rather than a magic. A cache entry has both or neither -- see CacheEntryCodecFor.
 		uint64_t bakeToken = 0;
+		uint32_t magic     = 0;
 
 		[[nodiscard]] bool
 		IsCacheEntry() const noexcept
@@ -92,4 +95,13 @@ namespace assetlib
 	/** The container `type` names. Total over AssetType, so this never fails. */
 	[[nodiscard]] const ContainerKind&
 	containerKindFor(AssetType type) noexcept;
+
+	/**
+	 * The cache entry whose files open with `magic`, or nullopt for anything else.
+	 *
+	 * Never answers for an authored document: those are text and open with their content, so a
+	 * reader tells them apart by extension after deciding the file is text at all.
+	 */
+	[[nodiscard]] std::optional<ContainerKind>
+	containerKindForMagic(uint32_t magic) noexcept;
 }

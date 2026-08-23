@@ -1,4 +1,5 @@
 #include <CLI/CLI.hpp>
+#include <assetlib/AssetCodec.h>
 #include <assetlib/AssetStore.h>
 #include <assetlib/Project.h>
 #include <assetlib/asset_describe.h>
@@ -35,17 +36,20 @@
 
 namespace
 {
-	enum class ContainerType
+
+	// Every container the table knows, for a message that cannot drift from what sniff accepts.
+	std::string
+	knownContainers()
 	{
-		kMesh,
-		kMaterial,
-		kEnv,
-		kSky,
-		kEnvLighting,
-		kSkeleton,
-		kAnimation,
-		kVat,
-	};
+		std::string list;
+		for (const assetlib::ContainerKind& kind : assetlib::containerKinds())
+		{
+			if (!list.empty())
+				list += ", ";
+			list += kind.extension;
+		}
+		return list;
+	}
 
 	std::string
 	formatBytes(uint64_t bytes)
@@ -115,7 +119,7 @@ namespace
 	// opposite of assetlib::assetTypeFromExtension, which never opens the file. The exception is an
 	// authored text document, which has no magic to read: there the extension is the identity, as it
 	// is for the loaders.
-	ContainerType
+	assetlib::AssetType
 	sniff(const assetlib::AssetStore& store, std::string_view key)
 	{
 		const auto stamp = store.GetFiles().Stat(key);
@@ -132,11 +136,11 @@ namespace
 
 		if (assetlib::isTextAssetDocument(header))
 		{
+			// A document opens with its content, so only its name can say which it is.
 			const auto type = assetlib::assetTypeFromExtension(std::filesystem::path(key));
-			if (type == assetlib::AssetType::kMaterial)
-				return ContainerType::kMaterial;
-			if (type == assetlib::AssetType::kEnvironment)
-				return ContainerType::kEnv;
+			if (type == assetlib::AssetType::kMaterial || type == assetlib::AssetType::kEnvironment)
+				return *type;
+
 			core::throw_runtime_error(
 				"{} is a text document, and the only text containers this tool knows are "
 				".bmaterial and .benv",
@@ -146,30 +150,14 @@ namespace
 		uint32_t magic = 0;
 		std::memcpy(&magic, header.data(), sizeof(magic));
 
-		switch (magic)
-		{
-		case assetlib::magic::c_BMesh:
-			return ContainerType::kMesh;
-		case assetlib::magic::c_BMaterial:
-			return ContainerType::kMaterial;
-		case assetlib::magic::c_BEnv:
-			return ContainerType::kEnv;
-		case assetlib::magic::c_BSky:
-			return ContainerType::kSky;
-		case assetlib::magic::c_BEnvL:
-			return ContainerType::kEnvLighting;
-		case assetlib::magic::c_BSkel:
-			return ContainerType::kSkeleton;
-		case assetlib::magic::c_BAnim:
-			return ContainerType::kAnimation;
-		case assetlib::magic::c_BVat:
-			return ContainerType::kVat;
-		}
+		const auto kind = assetlib::containerKindForMagic(magic);
+		core::throw_runtime_error_if(
+			!kind.has_value(),
+			"{} is not a container this tool knows (expected one of: {})",
+			key,
+			knownContainers());
 
-		core::throw_runtime_error(
-			"{} is not a container this tool knows (expected .bmesh, .bmaterial, .benv, .bsky, "
-			".benvl, .bskel, .banim or .bvat)",
-			key);
+		return kind->type;
 	}
 
 	// A clip set's signature only means something next to the rig it names, so describe resolves it
@@ -793,35 +781,43 @@ main(int argc, char** argv)
 
 			switch (sniff(store, key))
 			{
-			case ContainerType::kMesh:
+			case assetlib::AssetType::kMesh:
 				std::cout << assetlib::describe(store.LoadMesh(key), !describeBrief);
 				break;
-			case ContainerType::kMaterial:
+			case assetlib::AssetType::kMaterial:
 				std::cout << describeAsset(store.LoadMaterial(key));
 				break;
-			case ContainerType::kEnv:
+			case assetlib::AssetType::kEnvironment:
 				std::cout << describeAsset(store.LoadEnv(key));
 				break;
-			case ContainerType::kSky:
+			case assetlib::AssetType::kSky:
 				std::cout << describeAsset(store.LoadSky(key));
 				break;
-			case ContainerType::kEnvLighting:
+			case assetlib::AssetType::kEnvLighting:
 				std::cout << describeAsset(store.LoadEnvLighting(key));
 				break;
-			case ContainerType::kSkeleton:
+			case assetlib::AssetType::kSkeleton:
 				std::cout << assetlib::describe(store.LoadSkeleton(key));
 				break;
-			case ContainerType::kAnimation:
+			case assetlib::AssetType::kAnimation:
 			{
 				const auto animations = store.LoadAnimations(key);
 				const auto skeleton   = resolveSkeleton(store, animations.skeleton);
 				std::cout << assetlib::describe(animations, skeleton ? &*skeleton : nullptr);
 				break;
 			}
-			case ContainerType::kVat:
+			case assetlib::AssetType::kVat:
 				// Tables only: the pixel chunks are tens of MB and describe never reads a texel.
 				std::cout << describeAsset(store.LoadVatTables(key));
 				break;
+
+			// sniff never answers either: a texture has no codec, and an import document is text
+			// whose extension the text branch does not accept. Listed so the switch stays
+			// exhaustive, which is what makes a new AssetType a compile error here.
+			case assetlib::AssetType::kTexture:
+			case assetlib::AssetType::kImportDocument:
+			case assetlib::AssetType::kCount:
+				core::throw_runtime_error("{} is not a container describe can read", key);
 			}
 		}
 		catch (const std::exception& e)

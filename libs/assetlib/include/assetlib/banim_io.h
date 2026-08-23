@@ -1,5 +1,6 @@
 #pragma once
 #include <assetlib/AssetCodec.h>
+#include <assetlib_structs/magic.h>
 
 namespace assetlib
 {
@@ -59,6 +60,9 @@ namespace assetlib
 	{
 		static constexpr std::string_view c_Extension = c_AnimationExtension;
 		static constexpr AssetType        c_Type      = AssetType::kAnimation;
+
+		// The four bytes this container's file opens with.
+		static constexpr uint32_t c_Magic = magic::c_BAnim;
 
 		// The bake revision this container is written at; see AssetCodec.h. Bump to a fresh
 		// random value whenever this writer's layout or meaning changes.

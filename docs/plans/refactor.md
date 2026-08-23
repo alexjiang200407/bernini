@@ -162,8 +162,22 @@ Then the migration, each step behind the surface task 1 fixed:
 4. **`refactor(assetlib): a bake reads and writes through the store`** — `MaterialBakeDesc` and
    `EnvBakeDesc` deleted, their call sites onto the store's bake methods. Gate:
    `just test assetlib editor`.
-5. **`refactor(assetlib): one table answers what a container is`** — the seven sites read the table.
-   Gate: `just test assetlib`, and `Pack_test` proves nothing dropped out of an archive.
+5. **`refactor(assetlib): one table answers what a container is`** — **the identity sites** read
+   the table: `assetTypeFromExtension`, the CLI's magic `sniff`, and `pak_pack`'s extension ternary.
+   The CLI's own `ContainerType` enum — an eighth duplicate of `AssetType`, which the survey missed
+   — is deleted with them.
+
+   *"The seven sites" conflated two things.* `migrate`, `asset_rename` and most of `pak_pack` switch
+   on `AssetType` to do genuinely **different work** per type — regenerate versus re-save, which
+   fields to rewrite, what an archive re-bakes. That is behaviour, not identity, and a table cannot
+   hold it. What makes those safe is that each is exhaustive with no `default:`, so `-Wall -Werror`
+   turns a new `AssetType` into a compile error — verified by adding one and watching the build
+   fail. They stay.
+
+   `c_Magic` joins the trait here; task 1 claimed the whole public surface and missed it.
+   `AssetType` gains a `kCount` sentinel, because the totality assertion was anchored on
+   `kImportDocument` being last and an appended type satisfied it silently — also verified by
+   probe. Gate: `just test`, `Pack_test`, and `assetlib_cli describe|migrate` on the test project.
 6. **`refactor(assetlib,gamelib,editor): every production write goes through the store`** — the 76
    production call sites converted. Gate: `just test`.
 7. **`refactor(assetlib): the path-taking family goes`** — ~205 test call sites converted onto
