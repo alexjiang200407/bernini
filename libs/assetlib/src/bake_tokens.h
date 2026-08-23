@@ -9,6 +9,9 @@ namespace assetlib
 	 *
 	 * Shared between each container's writer and the regeneration seam, which is the one reader
 	 * allowed to see a mismatch as "regenerate" rather than an error.
+	 *
+	 * Each token is pinned beside its writer's output hash in TokenCanary_test, which is what
+	 * catches a layout change made without a bump -- a new container's token gets a section there.
 	 */
 	inline constexpr uint64_t c_BMeshBakeToken        = 0x6f1d3a58c2e94b07ull;
 	inline constexpr uint64_t c_BSkelBakeToken        = 0x9be47d02a15c68f3ull;
