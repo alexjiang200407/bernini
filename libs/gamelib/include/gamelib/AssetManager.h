@@ -551,6 +551,25 @@ namespace game
 			std::string                key,
 			TexturePrefetch*           prefetch = nullptr);
 
+		// Defined in the .cpp: holding the containers by value here would need their definitions in
+		// this header, which nothing else in it requires.
+		struct ContainerReads;
+
+		// The three containers a skinned acquire reads. Deserializing one is most of a second on a
+		// dense rig, and a rig drawn as many meshes acquires once per mesh entry, so each is kept
+		// beside the stamp it was read at and re-read only when that stamp moves.
+		//
+		// The cache never trusts itself: the editor authors through assetlib rather than through
+		// this, so a write is invisible here and every read re-stamps.
+		const assetlib::BMesh&
+		ReadMesh(std::string_view path);
+
+		const assetlib::Skeleton&
+		ReadSkeleton(std::string_view path);
+
+		const assetlib::AnimationSet&
+		ReadAnimations(std::string_view path);
+
 		// Drops one reference to a geom by its slot, destroying it at zero. Shared by ReleaseGeom and
 		// DestroyInstance, which are the two things that hold geometry references.
 		void
@@ -602,6 +621,8 @@ namespace game
 		std::unordered_map<uint32_t, TextureRecord>  m_Textures;
 		std::unordered_map<uint64_t, MaterialRecord> m_Materials;
 		std::unordered_map<uint32_t, GeomRecord>     m_Geoms;
+
+		std::unique_ptr<ContainerReads> m_Reads;
 
 		std::unordered_map<InstanceKey, InstanceRecord, InstanceKeyHash> m_Instances;
 	};
