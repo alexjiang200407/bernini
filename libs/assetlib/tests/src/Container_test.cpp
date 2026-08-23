@@ -125,10 +125,12 @@ TEST_CASE("the cache reader rejects a malformed container", "[bmesh][io][cache]"
 		return bytes;
 	};
 
-	SECTION("a header version newer than this build")
+	SECTION("a header version this build does not read")
 	{
 		const auto bytes = patched([](cache::Header& h, auto&) { h.headerVersion += 1; });
-		REQUIRE_THROWS_AS(deserialize(bytes), std::runtime_error);
+		REQUIRE_THROWS_WITH(
+			deserialize(bytes),
+			Catch::Matchers::ContainsSubstring("not the 1 this build reads"));
 	}
 
 	SECTION("a bake token this build did not write")

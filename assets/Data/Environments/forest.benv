@@ -1,3 +1,7 @@
-version https://git-lfs.github.com/spec/v1
-oid sha256:12a4f09863ad0fd244799618a461807b930ad432b322081c87342398d57de164
-size 352
+{
+	"lighting": "EnvLighting/forest.benvl",
+	"name": "forest",
+	"sky": "Sky/forest.bsky",
+	"skyMipLevel": 0,
+	"skyRotationY": 0.0
+}

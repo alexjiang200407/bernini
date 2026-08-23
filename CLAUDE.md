@@ -128,9 +128,9 @@ PBR texture (format/color-space/channel) and static-mesh (vertex layout, meshlet
 
 **[Asset Schema](./docs/asset_schema.md)**
 
-Every container carries its own schema (chunk 0) and a reader converts a file's structs to the
-engine's by field name: why layout comes from the file and never from the version number, which
-shape changes cost no code, what a `chunk::Hook` is for, `assetlib_cli migrate`, and `assets/Frozen`.
+The retiring chunk-0 schema regime (nothing writes it any more; legacy forms still deserialize
+until it is deleted), the cache-entry and text-document formats that replaced it, and
+`assetlib_cli migrate`.
 
 **[Asset Archives](./docs/archives.md)**
 

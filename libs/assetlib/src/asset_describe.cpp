@@ -430,11 +430,6 @@ namespace assetlib
 		std::string out;
 
 		out += std::format("bsky '{}'\n", sky.name);
-		out += std::format("  mipLevel          {}\n", sky.mipLevel);
-		out += std::format(
-			"  rotationY         {:.3g} rad ({:.3g} deg)\n",
-			sky.rotationY,
-			glm::degrees(sky.rotationY));
 
 		describeEnvRoute(out, "sky", sky.sky, fileSystem);
 
@@ -475,6 +470,17 @@ namespace assetlib
 		out += std::format("benv '{}'\n", env.name);
 		out += std::format("  sky               {}\n", referenceOr(env.sky, fileSystem));
 		out += std::format("  lighting          {}\n", referenceOr(env.lighting, fileSystem));
+		out +=
+			std::format("  skyMipLevel       {} (requested; resolution clamps)\n", env.skyMipLevel);
+		out += std::format(
+			"  skyRotationY      {:.3g} rad ({:.3g} deg)\n",
+			env.skyRotationY,
+			glm::degrees(env.skyRotationY));
+		out += std::format(
+			"  exposureOverride  {}\n",
+			env.exposureOverride.has_value() ?
+				std::format("{:.6g}", *env.exposureOverride) :
+				std::string("(unset; the lighting's derivation stands)"));
 
 		return out;
 	}

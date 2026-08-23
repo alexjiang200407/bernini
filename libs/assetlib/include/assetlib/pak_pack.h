@@ -13,6 +13,9 @@ namespace assetlib
 		/** `.bvat` files found stale and re-baked before packing. See packProject. */
 		uint32_t vatsRebaked = 0;
 
+		/** `.bsky` / `.benvl` files whose routed source moved, re-baked before packing. */
+		uint32_t envsRebaked = 0;
+
 		/**
 		 * Geometry entries whose archived bytes differ from the file on disk -- a stale group
 		 * re-baked into the archive, or a rebind baked in.

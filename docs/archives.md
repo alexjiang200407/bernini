@@ -184,6 +184,7 @@ rule it would ride into the archive it must never reach.
 | `Textures/` (baked) | **included**, and it is most of the bytes |
 | `.bmesh` / `.bskel` / `.banim` | **included as the seam answers**, not as the file lies on disk — a stale group re-bakes into the archive, a rebind is baked in, and a group the seam cannot serve fails the pack. `PackReport::geometryRebaked` counts the entries that differ |
 | `.bvat` | **included**, packed fresh and re-stamped against the geometry *as archived* — see below |
+| `.bsky` / `.benvl` | **included**, re-baked first when a routed source moved — the re-bake runs before the pack walk because it writes new content-addressed maps the walk must still see. `PackReport::envsRebaked` counts them; a `.benv` packs verbatim (authored) |
 
 Everything without a registered extension falls out of the same rule and is **counted**, not dropped
 in silence: `PackReport::skippedByExtension` reports each unclaimed extension and how many of it were
@@ -215,7 +216,7 @@ So `EnsureVatBaked` ([vat_freshness.h](../libs/gamelib/include/gamelib/vat_fresh
 This is the one place the seam is not transparent, and it is the reason `IsReadOnly` is on the
 interface at all.
 
-Two things it does *not* relax:
+Three things it does *not* relax:
 
 - **The clip-set check still holds.** One bake file per (mesh, clip set) via `vatPathFor`; a
   container baked from a different `.banim` is stale even in an archive, and is never silently
@@ -223,6 +224,10 @@ Two things it does *not* relax:
 - **A missing one is an error, not a bake.** `pack` only re-bakes the `.bvat` files already present,
   so a rig nothing acquired before packing ships without one. That throws, naming the file, rather
   than failing somewhere inside `saveVat` on a directory that was never there.
+- **A `.bvat` from another bake revision refuses, it does not re-bake.** Its inputs are recorded in
+  a layout `pack` no longer vouches for, so it cannot know what to re-bake from. The loose project
+  heals it first: a load through `VatFreshness` reads the refusal as missing and re-bakes in place,
+  which is the state `pack` then packs.
 
 ---
 

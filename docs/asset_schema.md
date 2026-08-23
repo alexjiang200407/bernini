@@ -1,15 +1,14 @@
 # Asset Schema — every container describes its own layout
 
-> **Mid-migration** (`docs/plans/migration-system-v2.md`): the geometry containers — `.bmesh`,
-> `.bskel`, `.banim` — have left this system for the cache-entry format (`src/cache_io.h`: a
-> frozen header with a bake token and source reference over schema-less chunks; stale is
-> regenerated from `meshes_src/`, never converted), and `.bmaterial` has left it for an authored
-> text document (`src/bmaterial_io.cpp`), its chunk-era form still deserializing until the
-> system goes. This page still governs `.bvat` and the env containers until their tasks land,
-> and is replaced wholesale when the feature completes.
+> **Mid-migration** (`docs/plans/migration-system-v2.md`): every container has left this system —
+> the derived ones (`.bmesh`, `.bskel`, `.banim`, `.bvat`, `.bsky`, `.benvl`) for the cache-entry
+> format (`src/cache_io.h`: a frozen header with a bake token and source reference over
+> schema-less chunks; stale is regenerated or re-baked, never converted), the authored ones
+> (`.bmaterial`, `.benv`) for text documents. Nothing writes the schema format any more; the
+> chunk-era forms of the authored documents and pre-split env containers still *deserialize*
+> until the system goes, and this page is deleted with it.
 
-Every schema-regime container Bernini writes (`.bvat`, `.bsky`,
-`.benvl`, `.benv`) is one chunked format whose chunk 0 is a **schema**: every struct the file stores,
+Every schema-regime container Bernini wrote was one chunked format whose chunk 0 is a **schema**: every struct the file stores,
 field by field, by name, type, offset and count. A reader converts each chunk from the layout the
 file stores to the one the engine wants — so a struct that gained, lost, widened, reordered or renamed
 a field leaves every file on disk readable, with no code written by anyone. `libs/schema` is the
@@ -51,10 +50,10 @@ doc disagrees, trust the header, then fix this doc.
   containers are binaries under version control. `assetlib_cli migrate -p <project>` rewrites a whole project
   deliberately, leaves a file that is already current untouched (so a second run rewrites nothing),
   and reports a file it cannot read rather than half-writing it.
-* **`assets/Frozen/` holds one file per container at its first self-describing schema, never
-  rewritten.** Every later schema edit is measured against them by `Frozen_test`: a layout edit that
-  leaves those unreadable is one that leaves every project unreadable, and that is where it fails
-  first.
+* **`assets/Frozen/` held one file per container at its first self-describing schema, never
+  rewritten**, measured by `Frozen_test` so a layout edit that broke them failed there first. Both
+  are gone: each container's cases retired with its conversion task, the last (the env family's)
+  emptying the directory.
 
 ## Interface Index
 

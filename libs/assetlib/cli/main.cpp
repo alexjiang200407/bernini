@@ -5,6 +5,7 @@
 #include <assetlib/asset_import.h>
 #include <assetlib/asset_refs.h>
 #include <assetlib/assetlib.h>
+#include <assetlib/benv_io.h>
 #include <assetlib/benvl_io.h>
 #include <assetlib/bmaterial_io.h>
 #include <assetlib/bmesh_gltf.h>
@@ -131,12 +132,15 @@ namespace
 
 		if (assetlib::isTextAssetDocument(header))
 		{
-			core::throw_runtime_error_if(
-				assetlib::assetTypeFromExtension(std::filesystem::path(key)) !=
-					assetlib::AssetType::kMaterial,
-				"{} is a text document, and the only text container this tool knows is .bmaterial",
+			const auto type = assetlib::assetTypeFromExtension(std::filesystem::path(key));
+			if (type == assetlib::AssetType::kMaterial)
+				return ContainerType::kMaterial;
+			if (type == assetlib::AssetType::kEnvironment)
+				return ContainerType::kEnv;
+			core::throw_runtime_error(
+				"{} is a text document, and the only text containers this tool knows are "
+				".bmaterial and .benv",
 				key);
-			return ContainerType::kMaterial;
 		}
 
 		uint32_t magic = 0;
@@ -273,7 +277,7 @@ main(int argc, char** argv)
 	envmap->add_option(
 		"--skybox-mip",
 		envSkyboxMip,
-		"Which level the written .bsky presents (default: 0 = sharp). Reads as depth of field, and "
+		"Which level the written .benv presents (default: 0 = sharp). Reads as depth of field, and "
 		"hides a source that cannot fill the face -- and unlike a baked blur it is reversible");
 	envmap->add_option("-m,--mips", envMips, "Mip count; must match MAX_REFLECTION_LOD + 1");
 	envmap->add_option("-n,--samples", envSamples, "GGX samples per texel (default: 128)");
@@ -328,8 +332,8 @@ main(int argc, char** argv)
 	describe->add_flag(
 		"-s,--schema",
 		describeSchema,
-		"Also print the file's format number and the schema it was written with -- every struct it "
-		"stores, field by field -- which is what an older file actually holds");
+		"Also print the file's cache key -- or, for a legacy chunk container, its format number "
+		"and the schema it was written with, every struct field by field");
 
 	std::string refsAsset;
 
@@ -444,9 +448,9 @@ main(int argc, char** argv)
 
 	auto* exposure = app.add_subcommand(
 		"exposure",
-		"Show or author the exposure a .benvl renders at, overruling the value its bake derived");
+		"Show or author the exposure an environment renders at, overruling its bake's derivation");
 	addProject(exposure);
-	exposure->add_option("input", expInput, "A .benvl, relative to the data root")->required();
+	exposure->add_option("input", expInput, "A .benv, relative to the data root")->required();
 	auto* expSetOpt = exposure->add_option(
 		"-s,--set",
 		expSet,
@@ -1286,26 +1290,32 @@ main(int argc, char** argv)
 			const assetlib::Project     project = assetlib::Project::Open(projectFile);
 			const assetlib::AssetStore& store   = project.GetStore();
 
-			const std::string      key      = assetlib::normalizePath(expInput);
-			assetlib::BEnvLighting lighting = store.LoadEnvLighting(key);
+			const std::string key = assetlib::normalizePath(expInput);
+			assetlib::BEnv    env = store.LoadEnv(key);
+
+			// Read before the write, so a lighting that cannot be loaded refuses before the
+			// document changes rather than after.
+			const assetlib::BEnvLighting lighting = env.lighting.empty() ?
+			                                            assetlib::BEnvLighting() :
+			                                            store.LoadEnvLighting(env.lighting);
 
 			if (*expSetOpt || expClear)
 			{
 				if (expClear)
-					lighting.exposureOverride.reset();
+					env.exposureOverride.reset();
 				else
-					lighting.exposureOverride = expSet;
+					env.exposureOverride = expSet;
 
-				assetlib::saveEnvLighting(lighting, store.ResolveWritePath(key));
+				assetlib::saveEnv(env, store.ResolveWritePath(key));
 			}
 
 			spdlog::info(
 				"'{}': derived {:.6g}, authored {}, rendering at {:.6g}",
 				expInput,
 				lighting.exposure,
-				lighting.exposureOverride ? std::format("{:.6g}", *lighting.exposureOverride) :
-											std::string("(none)"),
-				lighting.EffectiveExposure());
+				env.exposureOverride ? std::format("{:.6g}", *env.exposureOverride) :
+									   std::string("(none)"),
+				assetlib::effectiveExposure(env, lighting));
 		}
 		catch (const std::exception& e)
 		{
