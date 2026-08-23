@@ -49,13 +49,3 @@ public static const uint cFloat4sPerBone = 3;
 // Threads per pose-pass workgroup. One group poses one instance, one thread a bone at a time, so a
 // rig with more bones than this strides.
 public static const uint cPoseGroupSize = 64;
-
-// Bones per rig. One workgroup poses one instance and holds every bone's model transform in
-// groupshared memory to walk the hierarchy, so this is a groupshared budget, not taste: the walk
-// composes float4x4s, so 64 bytes a bone reserves 12 KiB -- inside Vulkan's guaranteed 16 KiB floor
-// (D3D12 allows 32 KiB, Metal more) with room left for anything else the pass needs. Ample for a
-// humanoid or equine rig; one past it must be split, or the walk must spill to a buffer.
-//
-// The palette it *writes* is three float4s a bone, not four (cFloat4sPerBone) -- that is storage the
-// mesh shader reads back, where the constant row is worth dropping.
-public static const uint cMaxBonesPerRig = 192;

@@ -43,10 +43,12 @@ not obvious from a signature. The headers linked below are the source of truth.
 
 * **The palette stores three rows a bone; the walk composes in `float4x4`.** A skinning matrix's
   fourth row is always `(0,0,0,1)`, and the palette is the largest per-instance allocation in the
-  frame — doubled again by the `prevTime` copy — so storing it is waste. The hierarchy walk still
-  composes full `float4x4`s, because giving it a packed shape would mean a bespoke affine multiply on
-  a convention the rest of the shaders do not use. Only the buffer is packed. That is what sizes
-  `cMaxBonesPerRig`: 192 bones of *unpacked* transform is the 12 KiB groupshared budget.
+  frame — doubled again by the `prevTime` copy — so storing it is waste. The walk still multiplies
+  full `float4x4`s, reconstructing the fourth row and re-packing around each `mul()`; what moved is
+  where the intermediate *lives*. It composes in the palette slot each bone already owns, because a
+  model transform is affine too and fits the same three rows. The walk therefore needs no storage of
+  its own, and nothing bounds a rig's bone count — where the groupshared array it used to hold capped
+  one at 192.
 
 * **Inter-frame blending is nlerp, not slerp.** Clips are resampled to a fixed rate at import, so the
   rotation between adjacent frames is small and nlerp's error with it — and slerp would spend
