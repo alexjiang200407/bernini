@@ -461,8 +461,7 @@ main(int argc, char** argv)
 			const fs::path banimPath =
 				dataRoot / assetlib::c_AnimationsDirectoryName / assetlib::animationFileName(name);
 
-			// Its own folder: an extracted texture is named after the image it came from, and two
-			// sources naming an image alike would overwrite each other in a shared one.
+			// Its own folder: two sources naming an image alike would collide in a shared one.
 			const fs::path textureDir = dataRoot / assetlib::c_TexturesSrcDirectoryName / name;
 
 			assetlib::requireSelfContainedSource(input);
@@ -892,6 +891,10 @@ main(int argc, char** argv)
 						break;
 					}
 				}
+				// Named and left where they are -- see docs/asset_containers.md.
+				for (const std::string& superseded : report.supersededTextures)
+					std::cout << "no longer extracted, still on disk: " << superseded << '\n';
+
 				std::cout << std::format(
 					"{} unchanged, {} {}, {} cannot be converted\n",
 					report.Count(assetlib::MigratedFile::Outcome::kUnchanged),

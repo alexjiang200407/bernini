@@ -3,7 +3,9 @@
 
 #include <assetlib/AssetStore.h>
 #include <assetlib/RegenMesh.h>
+#include <assetlib/asset_import.h>
 #include <assetlib/asset_refs.h>
+#include <assetlib/import_document.h>
 #include <assetlib_structs/Animation.h>
 #include <assetlib_structs/BEnv.h>
 #include <assetlib_structs/BMaterial.h>
@@ -100,6 +102,40 @@ namespace assetlib
 		});
 
 		MigrateReport report;
+
+		// Before the walk: a refresh stamps the `.bimport` the walk then reads.
+		for (const std::string& source : StaleImportedTextureSources())
+		{
+			const std::filesystem::path documentPath = GetDataRoot() / importDocumentKeyFor(source);
+
+			MigratedFile file{ documentPath, MigratedFile::Outcome::kRewritten, {} };
+			if (dryRun)
+			{
+				report.files.push_back(std::move(file));
+				continue;
+			}
+
+			try
+			{
+				const TextureRefresh refresh = RefreshImportedTextures(source);
+				for (const std::string& written : refresh.written)
+					report.files.push_back(
+						{ GetDataRoot() / written, MigratedFile::Outcome::kRewritten, {} });
+				report.supersededTextures.insert(
+					report.supersededTextures.end(),
+					refresh.superseded.begin(),
+					refresh.superseded.end());
+			}
+			catch (const std::exception& error)
+			{
+				file.outcome = MigratedFile::Outcome::kFailed;
+				file.message = error.what();
+			}
+			report.files.push_back(std::move(file));
+		}
+
+		std::ranges::sort(report.supersededTextures);
+
 		for (const std::filesystem::path& path : paths)
 		{
 			const auto type = assetTypeFromExtension(path);

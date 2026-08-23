@@ -2,6 +2,7 @@
 
 #include <assetlib/asset_import.h>
 #include <assetlib/import_document.h>
+#include <assetlib/migrate.h>
 #include <assetlib/project_layout.h>
 #include <core/file/file.h>
 
@@ -174,4 +175,53 @@ TEST_CASE("A source that is gone refuses the refresh rather than staling", "[ref
 	CHECK_THROWS_WITH(
 		project.Store().RefreshImportedTextures("meshes_src/unit.glb"),
 		ContainsSubstring("is not in this project"));
+}
+
+TEST_CASE("migrate re-extracts a moved source's textures", "[refresh][textures][migrate]")
+{
+	Project project("assetlib_texture_refresh_migrate_test");
+	test::ImportUnitGroup(
+		project.root,
+		"assets/apples.glb",
+		"Materials/red.bmaterial",
+		30.0f,
+		c_TextureDir);
+
+	RenameImageInSource(
+		project.root / "meshes_src" / "unit.glb",
+		"Apple1_u1_v1_diffuse",
+		"Apple9_u1_v1_diffuse");
+
+	SECTION("a dry run writes nothing and says the document would move")
+	{
+		const MigrateReport preview = project.Store().Migrate(true);
+
+		CHECK(std::ranges::any_of(preview.files, [](const MigratedFile& file) {
+			return file.path.filename() == "unit.bimport" &&
+			       file.outcome == MigratedFile::Outcome::kRewritten;
+		}));
+		CHECK(
+			project.Textures() ==
+			std::vector<std::string>{ "Apple1_u1_v1_diffuse.ktx2", "Apple2_u1_v1_diffuse.ktx2" });
+		CHECK(preview.supersededTextures.empty());
+	}
+
+	SECTION("the real run extracts, reports what it left, and settles")
+	{
+		const MigrateReport report = project.Store().Migrate(false);
+
+		CHECK(report.Count(MigratedFile::Outcome::kFailed) == 0);
+		CHECK(
+			report.supersededTextures ==
+			std::vector<std::string>{ "textures_src/unit/Apple1_u1_v1_diffuse.ktx2" });
+		CHECK(
+			project.Textures() == std::vector<std::string>{ "Apple1_u1_v1_diffuse.ktx2",
+		                                                    "Apple2_u1_v1_diffuse.ktx2",
+		                                                    "Apple9_u1_v1_diffuse.ktx2" });
+
+		// Running it twice rewrites nothing the second time, which is migrate's whole contract.
+		const MigrateReport again = project.Store().Migrate(false);
+		CHECK(again.Count(MigratedFile::Outcome::kRewritten) == 0);
+		CHECK(again.supersededTextures.empty());
+	}
 }

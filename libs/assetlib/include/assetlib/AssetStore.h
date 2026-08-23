@@ -552,6 +552,9 @@ namespace assetlib
 		 * a stale cache entry regenerated from its source, an authored document rewritten
 		 * canonically.
 		 *
+		 * A moved source's textures are re-extracted first, so the `.bimport` that stamps is on
+		 * disk before the walk reads any document.
+		 *
 		 * @param dryRun Report what would change without writing a byte.
 		 */
 		[[nodiscard]] MigrateReport
