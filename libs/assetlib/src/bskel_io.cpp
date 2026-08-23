@@ -62,12 +62,6 @@ namespace assetlib
 		return deserializeSkeleton(core::file::read_file_bytes(path.string()));
 	}
 
-	Skeleton
-	loadSkeleton(const core::file::IFileSystem& fileSystem, std::string_view path)
-	{
-		return deserializeSkeleton(fileSystem.Read(path));
-	}
-
 	std::vector<std::byte>
 	AssetCodec<Skeleton>::Serialize(const Skeleton& value)
 	{

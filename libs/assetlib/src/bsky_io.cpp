@@ -66,12 +66,6 @@ namespace assetlib
 		return deserializeSky(bytes);
 	}
 
-	BSky
-	loadSky(const core::file::IFileSystem& fileSystem, std::string_view path)
-	{
-		return deserializeSky(fileSystem.Read(path));
-	}
-
 	std::vector<std::byte>
 	AssetCodec<BSky>::Serialize(const BSky& value)
 	{

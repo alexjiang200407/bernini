@@ -380,7 +380,7 @@ TEST_CASE("pack re-bakes a sky whose routed source moved", "[envbake][pack]")
 	CHECK(report.envsRebaked == 1);
 
 	const PakFile pak(root.path / "Data.bpak");
-	const BSky    packed = loadSky(pak, "Sky/test.bsky");
+	const BSky    packed = load<BSky>(pak, "Sky/test.bsky");
 	CHECK(packed.sky.stamp == stampOf(MountAt(root.path), packed.sky.source));
 	CHECK(pak.Exists(packed.sky.baked));
 

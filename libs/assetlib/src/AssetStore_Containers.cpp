@@ -1,6 +1,12 @@
 #include <assetlib/AssetStore.h>
 
+#include <assetlib/banim_io.h>
+#include <assetlib/benv_io.h>
+#include <assetlib/benvl_io.h>
+#include <assetlib/bmaterial_io.h>
 #include <assetlib/bmesh_io.h>
+#include <assetlib/bskel_io.h>
+#include <assetlib/bsky_io.h>
 #include <assetlib/bvat_io.h>
 #include <assetlib_structs/Animation.h>
 #include <assetlib_structs/BEnv.h>
@@ -16,7 +22,7 @@ namespace assetlib
 	BMesh
 	AssetStore::LoadMesh(std::string_view path) const
 	{
-		return load(*m_Files, path);
+		return Load<BMesh>(path);
 	}
 
 	MeshRefs
@@ -28,13 +34,13 @@ namespace assetlib
 	Skeleton
 	AssetStore::LoadSkeleton(std::string_view path) const
 	{
-		return loadSkeleton(*m_Files, path);
+		return Load<Skeleton>(path);
 	}
 
 	AnimationSet
 	AssetStore::LoadAnimations(std::string_view path) const
 	{
-		return loadAnimations(*m_Files, path);
+		return Load<AnimationSet>(path);
 	}
 
 	std::string
@@ -46,31 +52,31 @@ namespace assetlib
 	BMaterial
 	AssetStore::LoadMaterial(std::string_view path) const
 	{
-		return loadMaterial(*m_Files, path);
+		return Load<BMaterial>(path);
 	}
 
 	BEnv
 	AssetStore::LoadEnv(std::string_view path) const
 	{
-		return loadEnv(*m_Files, path);
+		return Load<BEnv>(path);
 	}
 
 	BSky
 	AssetStore::LoadSky(std::string_view path) const
 	{
-		return loadSky(*m_Files, path);
+		return Load<BSky>(path);
 	}
 
 	BEnvLighting
 	AssetStore::LoadEnvLighting(std::string_view path) const
 	{
-		return loadEnvLighting(*m_Files, path);
+		return Load<BEnvLighting>(path);
 	}
 
 	BVat
 	AssetStore::LoadVat(std::string_view path) const
 	{
-		return loadVat(*m_Files, path);
+		return Load<BVat>(path);
 	}
 
 	BVat

@@ -86,12 +86,6 @@ namespace assetlib
 		return deserializeEnv(bytes);
 	}
 
-	BEnv
-	loadEnv(const core::file::IFileSystem& fileSystem, std::string_view path)
-	{
-		return deserializeEnv(fileSystem.Read(path));
-	}
-
 	std::vector<std::byte>
 	AssetCodec<BEnv>::Serialize(const BEnv& value)
 	{

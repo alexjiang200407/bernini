@@ -259,12 +259,12 @@ namespace assetlib
 	AssetStore::LoadRegenMesh(std::string_view path) const
 	{
 		if (IsReadOnly())
-			return { load(*m_Files, path), {} };
+			return { load<BMesh>(*m_Files, path), {} };
 
 		CheckedKey checked = checkKey(*this, path, magic::c_BMesh, c_BMeshBakeToken, "bmesh");
 		if (!checked.stale)
 		{
-			RegenMesh current{ load(*m_Files, path), {} };
+			RegenMesh current{ load<BMesh>(*m_Files, path), {} };
 			if (checked.document)
 				current.unboundBindings = applyBindings(current.mesh, checked.document->bindings);
 			return current;
@@ -298,11 +298,11 @@ namespace assetlib
 	AssetStore::LoadRegenSkeleton(std::string_view path) const
 	{
 		if (IsReadOnly())
-			return loadSkeleton(*m_Files, path);
+			return load<Skeleton>(*m_Files, path);
 
 		CheckedKey checked = checkKey(*this, path, magic::c_BSkel, c_BSkelBakeToken, "bskel");
 		if (!checked.stale)
-			return loadSkeleton(*m_Files, path);
+			return load<Skeleton>(*m_Files, path);
 
 		RegeneratedGroup group = regenerate(*this, std::move(checked), "bskel");
 		core::throw_runtime_error_if(
@@ -320,11 +320,11 @@ namespace assetlib
 	AssetStore::LoadRegenAnimations(std::string_view path) const
 	{
 		if (IsReadOnly())
-			return loadAnimations(*m_Files, path);
+			return load<AnimationSet>(*m_Files, path);
 
 		CheckedKey checked = checkKey(*this, path, magic::c_BAnim, c_BAnimBakeToken, "banim");
 		if (!checked.stale)
-			return loadAnimations(*m_Files, path);
+			return load<AnimationSet>(*m_Files, path);
 
 		RegeneratedGroup group = regenerate(*this, std::move(checked), "banim");
 		core::throw_runtime_error_if(

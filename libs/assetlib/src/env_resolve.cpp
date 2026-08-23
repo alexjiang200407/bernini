@@ -31,7 +31,7 @@ namespace assetlib
 
 		if (!env.sky.empty())
 		{
-			const BSky sky       = loadSky(fileSystem, env.sky);
+			const BSky sky       = load<BSky>(fileSystem, env.sky);
 			resolved.maps.skybox = loadRoute(fileSystem, sky.sky);
 
 			// The document records the request; the baked map decides what can be served.
@@ -40,7 +40,7 @@ namespace assetlib
 
 		if (!env.lighting.empty())
 		{
-			const BEnvLighting lighting = loadEnvLighting(fileSystem, env.lighting);
+			const BEnvLighting lighting = load<BEnvLighting>(fileSystem, env.lighting);
 			resolved.maps.prefilter     = loadRoute(fileSystem, lighting.prefilter);
 			resolved.maps.irradiance    = loadRoute(fileSystem, lighting.irradiance);
 
