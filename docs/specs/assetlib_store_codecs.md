@@ -118,11 +118,18 @@ Nothing dispatches dynamically that does not have to.
 plus an optional `textureDir`), and the `save*(x, std::filesystem::path)` free functions are
 deleted.
 
-The `load`/`save`-by-`path` pair is **kept** for files no project owns: `assetlib_cli obj` writing
-a `.obj` to an arbitrary directory, a standalone baked model directory that is its own data root,
-and `writeObj`'s debugging output. [STYLE.md](STYLE.md) § Paths already draws this line — a
-`std::filesystem::path` is a location on the host, a `string_view` is a key into a mount. What
-changes is that a *project's* asset stops being addressable the first way.
+The `load`/`save`-by-`path` pair is **deleted outright**, and this reverses what this spec said
+when it was written. It kept the pair for "files no project owns" — `assetlib_cli obj`, a
+standalone baked model directory, `writeObj`'s output. Counting the callers before building it
+found that carve-out has **zero users**: all 76 production call sites address a file inside a
+project, the CLI's `out` paths included, since those already resolve through `ResolveWritePath`. An
+escape hatch nobody uses is the second way to do one thing that [CLAUDE.md](CLAUDE.md) § The bar
+each subsystem is held to forbids, so it goes.
+
+`writeObj`, `loadFromGltf`, `Project::Open` and `packProject` keep their `path` parameters —
+they address the host, which is a different question. [STYLE.md](STYLE.md) § Paths draws that line:
+a `std::filesystem::path` is a location on the host, a `string_view` is a key into a mount. What
+changes is that a *project's* asset stops being addressable the first way at all.
 
 ## What this is not
 
