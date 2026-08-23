@@ -13,6 +13,11 @@ from local into model space, `skinningMatrices` composes each with its inverse b
 plain CPU code — and it is the reference every later GPU path is diffed against, which is why it is
 deliberately the unoptimised form.
 
+That licence is for the reference, not for everything beside it. `posedBounds` is a *derived* box
+rather than a skin, so it takes the cheap shape a shipping engine takes — a box per bone swept by
+the pose — and `exactPosedBounds` is the per-vertex walk it is proved against. See
+[docs/skinning.md](../../docs/skinning.md).
+
 Two container regimes (see docs/asset_containers.md):
 
 `.bmaterial` and `.benv` are **authored text documents**: canonical JSON (`src/bmaterial_io.cpp`,

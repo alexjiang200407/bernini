@@ -306,7 +306,7 @@ namespace bgl
 		 * Every submesh's culling sphere comes from `posedBounds`, not its bind pose -- the same rule
 		 * VAT follows, and for the same reason: the bind pose's box stops holding once a limb moves or
 		 * a clip's root motion carries the rig out of it. bgl cannot measure the box itself:
-		 * skinning a vertex means decoding a vertex layout, which lives in assetlib. Whoever loaded
+		 * reading a vertex's influences means decoding a vertex layout, which lives in assetlib. Whoever loaded
 		 * the containers supplies it -- read off the `.banim`'s bake (`assetlib::findPosedBounds`)
 		 * or measured (`assetlib::posedBounds`), which is gamelib's acquire either way.
 		 *
@@ -319,8 +319,8 @@ namespace bgl
 		 * @param skeleton    The rig the mesh's joint indices address.
 		 * @param animations  Clips cooked against `skeleton`.
 		 * @param posedBounds A box holding the mesh in every pose of every clip, in model space.
-		 * @throws SceneError for anything AddStaticMeshGeom refuses, a skeleton with no bones or more
-		 *         than `cMaxBonesPerRig`, bones that are not topologically sorted, an `animations`
+		 * @throws SceneError for anything AddStaticMeshGeom refuses, a skeleton with no bones,
+		 *         bones that are not topologically sorted, an `animations`
 		 *         whose bone count disagrees with `skeleton`, an empty or zero-frame clip table, a
 		 *         clip whose samples fall outside the pool, a submesh without skin binding, a submesh
 		 *         whose material does not resolve to kPBR, or a `posedBounds` whose min exceeds its

@@ -1,4 +1,5 @@
 #include <assetlib/banim_io.h>
+#include <assetlib/bmesh_io.h>
 #include <assetlib/skeleton.h>
 #include <assetlib/skinning.h>
 #include <assetlib_structs/Animation.h>
@@ -428,10 +429,10 @@ TEST_CASE("posedBounds measures the pose, not the bind pose", "[skinning][bounds
 
 	SECTION("a vertex with no influences is bounded where it was authored")
 	{
-		// The bind position, not the origin. posedBounds blends into an accumulator that starts at
-		// zero, so a vertex whose weights are all zero -- what an exporter writes for one it never
-		// assigned -- would otherwise drag the box to (0,0,0) and cost every other vertex precision.
-		// skinSubmesh's own path has this pinned; this is the same rule through the bounds walk.
+		// The bind position, not the origin. A vertex whose weights are all zero -- what an exporter
+		// writes for one it never assigned -- belongs to no bone's box, so anything that blended it
+		// would drag the box to (0,0,0) and cost every other vertex precision. skinSubmesh's own
+		// path has this pinned; this is the same rule through the bounds walk.
 		SkinnedMesh loose;
 		loose.Add(
 			glm::vec3(7.0f, 8.0f, 9.0f),
@@ -477,10 +478,263 @@ TEST_CASE("posedBounds measures the pose, not the bind pose", "[skinning][bounds
 		const assetlib::Bounds bounds =
 			assetlib::posedBounds(fixture.mesh, 0, skeleton, animations);
 
-		// Tight, not conservative: bounding the *bone* would have swept the whole box by the bone's
-		// own transform and come back larger than the geometry.
+		// A bone whose pose is the identity sweeps its own box back onto the vertices it was built
+		// from, so nothing is lost to the axis-aligned round trip here.
 		CHECK(bounds.min.x == Catch::Approx(-1.0f));
 		CHECK(bounds.max.x == Catch::Approx(1.0f));
+	}
+}
+
+// The property the whole bake rests on: a box that misses a vertex culls a limb that is on screen.
+// posedBounds never measures one, so containment is asserted against exactPosedBounds, which does.
+TEST_CASE("The posed box holds every vertex the exact walk finds", "[skinning][bounds]")
+{
+	// Two bones along X, and a strip of vertices spanning both -- the ends welded to one bone each
+	// and the middle split, which is where a per-bone box is loosest.
+	Skeleton skeleton;
+
+	Bone root{};
+	root.bindPose   = { glm::vec3(0.0f), glm::quat(1.0f, 0.0f, 0.0f, 0.0f), glm::vec3(1.0f) };
+	root.parent     = c_InvalidIndex;
+	root.nameOffset = skeleton.stringPool.add("root");
+	skeleton.bones.push_back(root);
+
+	Bone elbow{};
+	elbow.bindPose   = { glm::vec3(2.0f, 0.0f, 0.0f),
+		                 glm::quat(1.0f, 0.0f, 0.0f, 0.0f),
+		                 glm::vec3(1.0f) };
+	elbow.parent     = 0;
+	elbow.nameOffset = skeleton.stringPool.add("elbow");
+	skeleton.bones.push_back(elbow);
+
+	const std::vector<glm::mat4> bind = bindPoseModelTransforms(skeleton);
+	for (size_t i = 0; i < skeleton.bones.size(); ++i)
+		skeleton.bones[i].inverseBind = glm::inverse(bind[i]);
+
+	// Thirds, not halves: 65535 is odd, so two quantized halves sum to 1.0000305 and the exact walk
+	// blends fractionally past the hull the box is built to hold. Thirds divide 65535 exactly, which
+	// leaves containment a property of the algorithm rather than of the residue.
+	const auto near = Quantize(1.0f / 3.0f);
+	const auto far  = Quantize(2.0f / 3.0f);
+
+	SkinnedMesh fixture;
+	for (const float y : { -0.5f, 0.5f })
+	{
+		fixture.Add(
+			glm::vec3(0.0f, y, 0.0f),
+			glm::vec3(0.0f, 1.0f, 0.0f),
+			{ { 0, 0, 0, 0 } },
+			{ { c_Unorm16Max, 0, 0, 0 } });
+		fixture.Add(
+			glm::vec3(2.0f, y, 0.0f),
+			glm::vec3(0.0f, 1.0f, 0.0f),
+			{ { 0, 1, 0, 0 } },
+			{ { near, far, 0, 0 } });
+		fixture.Add(
+			glm::vec3(4.0f, y, 0.0f),
+			glm::vec3(0.0f, 1.0f, 0.0f),
+			{ { 1, 0, 0, 0 } },
+			{ { c_Unorm16Max, 0, 0, 0 } });
+	}
+
+	fixture.submesh.aabbMin = glm::vec3(0.0f, -0.5f, 0.0f);
+	fixture.submesh.aabbMax = glm::vec3(4.0f, 0.5f, 0.0f);
+	fixture.mesh.submeshes.push_back(fixture.submesh);
+	fixture.mesh.meshes.push_back({ .firstSubmesh = 0, .submeshCount = 1, .nameOffset = 0 });
+
+	AnimationSet animations;
+	animations.boneCount         = 2;
+	animations.skeletonSignature = skeletonSignature(skeleton);
+
+	AnimationClip clip{};
+	clip.nameOffset = animations.stringPool.add("swing");
+	clip.sampleRate = 30.0f;
+
+	const auto holds = [](const Bounds& box, const Bounds& inner) {
+		return glm::all(glm::lessThanEqual(box.min, inner.min)) &&
+		       glm::all(glm::greaterThanEqual(box.max, inner.max));
+	};
+
+	SECTION("a limb swung through a right angle")
+	{
+		constexpr uint32_t c_Frames = 7;
+		for (uint32_t frame = 0; frame < c_Frames; ++frame)
+		{
+			const float angle =
+				glm::radians(90.0f * static_cast<float>(frame) / static_cast<float>(c_Frames - 1));
+			animations.samples.push_back(skeleton.bones[0].bindPose);
+			animations.samples.push_back(
+				{ glm::vec3(2.0f, 0.0f, 0.0f),
+			      glm::angleAxis(angle, glm::vec3(0.0f, 0.0f, 1.0f)),
+			      glm::vec3(1.0f) });
+		}
+		clip.frameCount = c_Frames;
+		animations.clips.push_back(clip);
+
+		const Bounds exact = exactPosedBounds(fixture.mesh, 0, skeleton, animations);
+		const Bounds box   = posedBounds(fixture.mesh, 0, skeleton, animations);
+
+		CHECK(holds(box, exact));
+
+		// Loose, but on the order of the limb's own thickness rather than its length: the slack a
+		// rotation costs is the bone's box re-axis-aligned, not the whole rig's.
+		CHECK(box.max.y - box.min.y < 2.0f * (exact.max.y - exact.min.y));
+	}
+
+	SECTION("a limb that only travels is bounded exactly")
+	{
+		// No rotation anywhere, so the axis-aligned round trip loses nothing and the conservative
+		// box is the tight one -- which is what separates a bone-local box from sweeping the whole
+		// bind-pose box by every bone.
+		for (const float x : { 0.0f, 10.0f })
+		{
+			animations.samples.push_back(
+				{ glm::vec3(x, 0.0f, 0.0f), glm::quat(1.0f, 0.0f, 0.0f, 0.0f), glm::vec3(1.0f) });
+			animations.samples.push_back(skeleton.bones[1].bindPose);
+		}
+		clip.frameCount = 2;
+		animations.clips.push_back(clip);
+
+		const Bounds exact = exactPosedBounds(fixture.mesh, 0, skeleton, animations);
+		const Bounds box   = posedBounds(fixture.mesh, 0, skeleton, animations);
+
+		CHECK(box.min.x == Catch::Approx(exact.min.x).margin(1e-5));
+		CHECK(box.max.x == Catch::Approx(exact.max.x).margin(1e-5));
+		CHECK(box.min.y == Catch::Approx(exact.min.y).margin(1e-5));
+		CHECK(box.max.y == Catch::Approx(exact.max.y).margin(1e-5));
+	}
+
+	SECTION("a vertex no bone moves is held where it was authored")
+	{
+		fixture.Add(
+			glm::vec3(0.0f, 0.0f, 9.0f),
+			glm::vec3(0.0f, 1.0f, 0.0f),
+			{ { 0, 0, 0, 0 } },
+			{ { 0, 0, 0, 0 } });
+		fixture.mesh.submeshes[0].vertexCount = fixture.submesh.vertexCount;
+
+		animations.samples.push_back(
+			{ glm::vec3(100.0f, 0.0f, 0.0f), glm::quat(1.0f, 0.0f, 0.0f, 0.0f), glm::vec3(1.0f) });
+		animations.samples.push_back(skeleton.bones[1].bindPose);
+		clip.frameCount = 1;
+		animations.clips.push_back(clip);
+
+		const Bounds box = posedBounds(fixture.mesh, 0, skeleton, animations);
+
+		CHECK(box.max.z == Catch::Approx(9.0f));
+		CHECK(holds(box, exactPosedBounds(fixture.mesh, 0, skeleton, animations)));
+	}
+}
+
+// One walk of the clip set answers for every mesh entry at once, so the boxes come back in a
+// parallel array that has to be re-paired with the entries that produced them. An entry the decode
+// refuses leaves a gap in that pairing, which is the way it goes wrong.
+TEST_CASE(
+	"A bake over several mesh entries pairs each box with its own entry",
+	"[skinning][bounds]")
+{
+	// Four entries over one vertex pool: two that decode, one whose submesh overruns the pool, and
+	// one with no vertices at all -- which has only its submesh box to be bounded by.
+	SkinnedMesh fixture;
+	fixture.Add(
+		glm::vec3(1.0f),
+		glm::vec3(0.0f, 0.0f, 1.0f),
+		{ { 0, 0, 0, 0 } },
+		{ { c_Unorm16Max, 0, 0, 0 } });
+	fixture.Add(
+		glm::vec3(2.0f),
+		glm::vec3(0.0f, 0.0f, 1.0f),
+		{ { 0, 0, 0, 0 } },
+		{ { c_Unorm16Max, 0, 0, 0 } });
+	fixture.Add(
+		glm::vec3(5.0f),
+		glm::vec3(0.0f, 0.0f, 1.0f),
+		{ { 0, 0, 0, 0 } },
+		{ { c_Unorm16Max, 0, 0, 0 } });
+
+	const auto sliceOf = [&](uint32_t first, uint32_t count) {
+		Submesh out          = fixture.submesh;
+		out.vertexByteOffset = first * out.layout.stride;
+		out.vertexCount      = count;
+		out.aabbMin          = glm::vec3(0.0f);
+		out.aabbMax          = glm::vec3(0.0f);
+		return out;
+	};
+
+	fixture.mesh.submeshes.push_back(sliceOf(0, 1));
+	fixture.mesh.submeshes.push_back(sliceOf(1, 99));  // past the end of the pool
+	fixture.mesh.submeshes.push_back(sliceOf(2, 0));
+	fixture.mesh.submeshes.back().aabbMin = glm::vec3(-3.0f);
+	fixture.mesh.submeshes.back().aabbMax = glm::vec3(-2.0f);
+	fixture.mesh.submeshes.push_back(sliceOf(2, 1));
+
+	for (uint32_t i = 0; i < 4; ++i)
+		fixture.mesh.meshes.push_back({ .firstSubmesh = i, .submeshCount = 1, .nameOffset = 0 });
+
+	auto skeleton    = assetlib::Skeleton();
+	auto bone        = assetlib::Bone();
+	bone.bindPose    = { glm::vec3(0.0f), glm::quat(1.0f, 0.0f, 0.0f, 0.0f), glm::vec3(1.0f) };
+	bone.inverseBind = glm::mat4(1.0f);
+	bone.parent      = assetlib::c_InvalidIndex;
+	bone.nameOffset  = 0;
+	skeleton.bones.push_back(bone);
+
+	auto animations              = assetlib::AnimationSet();
+	animations.boneCount         = 1;
+	animations.skeletonSignature = assetlib::skeletonSignature(skeleton);
+
+	auto clip       = assetlib::AnimationClip();
+	clip.frameCount = 2;
+	clip.sampleRate = 30.0f;
+	animations.clips.push_back(clip);
+
+	animations.samples.push_back(
+		{ glm::vec3(0.0f), glm::quat(1.0f, 0.0f, 0.0f, 0.0f), glm::vec3(1.0f) });
+	animations.samples.push_back(
+		{ glm::vec3(10.0f, 0.0f, 0.0f), glm::quat(1.0f, 0.0f, 0.0f, 0.0f), glm::vec3(1.0f) });
+
+	REQUIRE(assetlib::isSkinned(fixture.mesh, 1));
+	assetlib::bakePosedBounds(animations, fixture.mesh, skeleton);
+
+	SECTION("the entry whose decode fails leaves the others' boxes where they belong")
+	{
+		REQUIRE(animations.posedBoxes.size() == 3);
+
+		const auto boxFor = [&](uint32_t meshIndex) {
+			return assetlib::findPosedBounds(animations, fixture.mesh, skeleton)[meshIndex];
+		};
+
+		CHECK_FALSE(boxFor(1).has_value());
+
+		// Entry 0 holds the vertex at 1, entry 3 the one at 5; a mispaired array would swap them.
+		REQUIRE(boxFor(0).has_value());
+		CHECK(boxFor(0)->min.x == Catch::Approx(1.0f));
+		CHECK(boxFor(0)->max.x == Catch::Approx(11.0f));
+
+		REQUIRE(boxFor(3).has_value());
+		CHECK(boxFor(3)->min.x == Catch::Approx(5.0f));
+		CHECK(boxFor(3)->max.x == Catch::Approx(15.0f));
+
+		// Entry 2 has no vertex to sweep, so it falls back to the box its submesh already carries.
+		REQUIRE(boxFor(2).has_value());
+		CHECK(boxFor(2)->min.x == Catch::Approx(-3.0f));
+		CHECK(boxFor(2)->max.x == Catch::Approx(-2.0f));
+	}
+
+	SECTION("each entry gets the box measuring it alone would have given it")
+	{
+		for (const uint32_t meshIndex : { 0u, 3u })
+		{
+			const assetlib::Bounds alone =
+				assetlib::posedBounds(fixture.mesh, meshIndex, skeleton, animations);
+			const std::optional<assetlib::Bounds> baked =
+				assetlib::findPosedBounds(animations, fixture.mesh, skeleton)[meshIndex];
+
+			REQUIRE(baked.has_value());
+			CHECK(baked->min.x == Catch::Approx(alone.min.x));
+			CHECK(baked->max.x == Catch::Approx(alone.max.x));
+			CHECK(baked->max.z == Catch::Approx(alone.max.z));
+		}
 	}
 }
 
@@ -535,7 +789,7 @@ TEST_CASE("A baked posed box answers only for the pairing it measured", "[skinni
 			assetlib::deserializeAnimations(assetlib::serializeAnimations(animations));
 
 		const std::optional<assetlib::Bounds> found =
-			assetlib::findPosedBounds(loaded, fixture.mesh, 0, skeleton);
+			assetlib::findPosedBounds(loaded, fixture.mesh, skeleton)[0];
 
 		REQUIRE(found.has_value());
 		CHECK(found->min.x == Catch::Approx(-1.0f));
@@ -545,26 +799,26 @@ TEST_CASE("A baked posed box answers only for the pairing it measured", "[skinni
 	SECTION("a mesh that changed since the bake is measured, not matched")
 	{
 		fixture.mesh.vertexData[0] ^= std::byte{ 0x01 };
-		CHECK_FALSE(assetlib::findPosedBounds(animations, fixture.mesh, 0, skeleton).has_value());
+		CHECK_FALSE(assetlib::findPosedBounds(animations, fixture.mesh, skeleton)[0].has_value());
 	}
 
 	SECTION("a bind re-authored since the bake is measured, not matched")
 	{
 		// The one skeleton edit skeletonSignature deliberately lets through -- see skeleton.h.
 		skeleton.bones[0].inverseBind = glm::translate(glm::mat4(1.0f), glm::vec3(0.5f));
-		CHECK_FALSE(assetlib::findPosedBounds(animations, fixture.mesh, 0, skeleton).has_value());
+		CHECK_FALSE(assetlib::findPosedBounds(animations, fixture.mesh, skeleton)[0].has_value());
 	}
 
 	SECTION("a submesh table regrouped over identical bytes is measured, not matched")
 	{
 		// The vertex blob alone cannot see this edit, which is why the tables are in the hash.
 		fixture.mesh.submeshes[0].vertexCount = 1;
-		CHECK_FALSE(assetlib::findPosedBounds(animations, fixture.mesh, 0, skeleton).has_value());
+		CHECK_FALSE(assetlib::findPosedBounds(animations, fixture.mesh, skeleton)[0].has_value());
 	}
 
 	SECTION("a mesh entry the bake never saw finds nothing")
 	{
-		CHECK_FALSE(assetlib::findPosedBounds(animations, fixture.mesh, 1, skeleton).has_value());
+		CHECK_FALSE(assetlib::findPosedBounds(animations, fixture.mesh, skeleton)[1].has_value());
 	}
 
 	SECTION("rebaking the same source replaces its entries rather than stacking them")

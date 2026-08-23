@@ -196,6 +196,178 @@ namespace assetlib
 
 			return skinned;
 		}
+
+		Bounds
+		unboundedBox() noexcept
+		{
+			return Bounds{ glm::vec3(std::numeric_limits<float>::max()),
+				           glm::vec3(std::numeric_limits<float>::lowest()) };
+		}
+
+		bool
+		isEmpty(const Bounds& box) noexcept
+		{
+			return glm::any(glm::greaterThan(box.min, box.max));
+		}
+
+		void
+		grow(Bounds& box, const glm::vec3& point) noexcept
+		{
+			box.min = glm::min(box.min, point);
+			box.max = glm::max(box.max, point);
+		}
+
+		void
+		grow(Bounds& box, const Bounds& other) noexcept
+		{
+			box.min = glm::min(box.min, other.min);
+			box.max = glm::max(box.max, other.max);
+		}
+
+		/** `box` swept by `transform`, as the axis-aligned box holding the result. */
+		Bounds
+		transformed(const glm::mat4& transform, const Bounds& box) noexcept
+		{
+			const glm::vec3 centre = (box.min + box.max) * 0.5f;
+			const glm::vec3 extent = (box.max - box.min) * 0.5f;
+
+			const glm::vec3 moved  = glm::vec3(transform * glm::vec4(centre, 1.0f));
+			const glm::vec3 spread = glm::mat3(
+										 glm::abs(glm::vec3(transform[0])),
+										 glm::abs(glm::vec3(transform[1])),
+										 glm::abs(glm::vec3(transform[2]))) *
+			                         extent;
+
+			return Bounds{ moved - spread, moved + spread };
+		}
+
+		/**
+		 * One mesh entry reduced to what a pose can move: a box per bone, in that bone's own frame,
+		 * plus the vertices no bone moves.
+		 *
+		 * A bone's box holds only the vertices it has weight on, inverse-bound into its space, so a
+		 * pose reaches it as `modelTransform * box` -- the same product skinning takes, with the
+		 * inverse bind folded in once instead of per vertex per frame.
+		 */
+		struct BoneBoxes
+		{
+			std::vector<uint32_t> bones;
+			std::vector<Bounds>   boxes;  // parallel to `bones`, in bone space
+			Bounds                unskinned = unboundedBox();
+		};
+
+		/**
+		 * @throws std::runtime_error for anything decodeInfluences refuses: a malformed vertex
+		 *         layout, or a vertex naming a bone the skeleton does not hold.
+		 */
+		BoneBoxes
+		boneBoxesFor(const BMesh& mesh, const uint32_t meshIndex, const Skeleton& skeleton)
+		{
+			const Mesh& entry = mesh.meshes[meshIndex];
+
+			auto perBone = std::vector<Bounds>(skeleton.bones.size(), unboundedBox());
+			auto out     = BoneBoxes();
+
+			for (uint32_t i = 0; i < entry.submeshCount; ++i)
+			{
+				const Submesh& submesh = mesh.submeshes[entry.firstSubmesh + i];
+
+				const std::vector<SkinInfluences> vertices = decodeInfluences(
+					mesh,
+					submesh,
+					resolveSkinLayout(mesh, submesh),
+					skeleton.bones.size());
+
+				for (const SkinInfluences& vertex : vertices)
+				{
+					// An exporter writes four zero weights for a vertex it never assigned, and
+					// skinnedPosition leaves it at its bind position -- so does this.
+					if (!vertex.skinned)
+					{
+						grow(out.unskinned, vertex.position);
+						continue;
+					}
+
+					for (size_t influence = 0; influence < c_InfluencesPerVertex; ++influence)
+					{
+						if (vertex.weights[influence] == 0.0f)
+							continue;
+
+						const uint32_t bone = vertex.joints[influence];
+						grow(
+							perBone[bone],
+							glm::vec3(
+								skeleton.bones[bone].inverseBind *
+								glm::vec4(vertex.position, 1.0f)));
+					}
+				}
+			}
+
+			for (uint32_t bone = 0; bone < perBone.size(); ++bone)
+			{
+				if (isEmpty(perBone[bone]))
+					continue;
+
+				out.bones.push_back(bone);
+				out.boxes.push_back(perBone[bone]);
+			}
+
+			return out;
+		}
+
+		/**
+		 * One box per entry, over every pose of every clip. The pose is walked once and shared:
+		 * evaluating it per entry costs a rig's whole hierarchy again for each mesh it is drawn as.
+		 *
+		 * @throws std::runtime_error for anything poseModelTransforms refuses -- above all a clip
+		 *         set cooked against another rig.
+		 */
+		std::vector<Bounds>
+		sweepPoses(
+			std::span<const BoneBoxes> entries,
+			const Skeleton&            skeleton,
+			const AnimationSet&        animations)
+		{
+			auto out = std::vector<Bounds>(entries.size(), unboundedBox());
+
+			for (uint32_t clip = 0; clip < animations.clips.size(); ++clip)
+			{
+				for (uint32_t frame = 0; frame < animations.clips[clip].frameCount; ++frame)
+				{
+					const std::vector<glm::mat4> model =
+						poseModelTransforms(skeleton, animations, clip, frame);
+
+					for (size_t entry = 0; entry < entries.size(); ++entry)
+						for (size_t i = 0; i < entries[entry].bones.size(); ++i)
+							grow(
+								out[entry],
+								transformed(
+									model[entries[entry].bones[i]],
+									entries[entry].boxes[i]));
+				}
+			}
+
+			// Whatever the pose, these sit where they were authored.
+			for (size_t entry = 0; entry < entries.size(); ++entry)
+				if (!isEmpty(entries[entry].unskinned))
+					grow(out[entry], entries[entry].unskinned);
+
+			return out;
+		}
+
+		/** The union of the entry's submesh boxes -- all a rig with no clips has to be bounded by. */
+		Bounds
+		bindPoseBounds(const BMesh& mesh, const Mesh& entry) noexcept
+		{
+			auto out = unboundedBox();
+			for (uint32_t i = 0; i < entry.submeshCount; ++i)
+			{
+				const Submesh& submesh = mesh.submeshes[entry.firstSubmesh + i];
+				grow(out, submesh.aabbMin);
+				grow(out, submesh.aabbMax);
+			}
+			return out;
+		}
 	}
 
 	std::vector<SkinnedVertex>
@@ -286,18 +458,43 @@ namespace assetlib
 			"posedBounds: mesh index {} out of range",
 			meshIndex);
 
-		const Mesh& entry = mesh.meshes[meshIndex];
-
-		auto out = Bounds{ glm::vec3(std::numeric_limits<float>::max()),
-			               glm::vec3(std::numeric_limits<float>::lowest()) };
-
-		const auto grow = [&](const glm::vec3& p) {
-			out.min = glm::min(out.min, p);
-			out.max = glm::max(out.max, p);
-		};
+		auto out = unboundedBox();
 
 		// Only where there are frames to walk: a rig with no clips is bounded by its bind pose below,
 		// and decoding here would refuse a malformed layout it used to reach that fallback with.
+		if (!animations.clips.empty())
+		{
+			const auto entries = std::array{ boneBoxesFor(mesh, meshIndex, skeleton) };
+			out                = sweepPoses(entries, skeleton, animations).front();
+		}
+
+		if (isEmpty(out))
+			out = bindPoseBounds(mesh, mesh.meshes[meshIndex]);
+
+		core::throw_runtime_error_if(
+			isEmpty(out),
+			"posedBounds: mesh {} has no submesh to bound",
+			meshIndex);
+
+		return out;
+	}
+
+	Bounds
+	exactPosedBounds(
+		const BMesh&        mesh,
+		const uint32_t      meshIndex,
+		const Skeleton&     skeleton,
+		const AnimationSet& animations)
+	{
+		core::throw_runtime_error_if(
+			meshIndex >= mesh.meshes.size(),
+			"exactPosedBounds: mesh index {} out of range",
+			meshIndex);
+
+		const Mesh& entry = mesh.meshes[meshIndex];
+
+		auto out = unboundedBox();
+
 		auto submeshes = std::vector<std::vector<SkinInfluences>>();
 		if (!animations.clips.empty())
 		{
@@ -324,25 +521,17 @@ namespace assetlib
 				for (const std::vector<SkinInfluences>& vertices : submeshes)
 				{
 					for (const SkinInfluences& vertex : vertices)
-						grow(skinnedPosition(vertex, skinning));
+						grow(out, skinnedPosition(vertex, skinning));
 				}
 			}
 		}
 
-		// A rig with no clips has only its bind pose to be bounded by.
-		if (glm::any(glm::greaterThan(out.min, out.max)))
-		{
-			for (uint32_t i = 0; i < entry.submeshCount; ++i)
-			{
-				const Submesh& submesh = mesh.submeshes[entry.firstSubmesh + i];
-				grow(submesh.aabbMin);
-				grow(submesh.aabbMax);
-			}
-		}
+		if (isEmpty(out))
+			out = bindPoseBounds(mesh, entry);
 
 		core::throw_runtime_error_if(
-			glm::any(glm::greaterThan(out.min, out.max)),
-			"posedBounds: mesh {} has no submesh to bound",
+			isEmpty(out),
+			"exactPosedBounds: mesh {} has no submesh to bound",
 			meshIndex);
 
 		return out;
@@ -389,6 +578,11 @@ namespace assetlib
 			return box.sourceSignature == signature;
 		});
 
+		auto indices = std::vector<uint32_t>();
+		auto entries = std::vector<BoneBoxes>();
+		indices.reserve(mesh.meshes.size());
+		entries.reserve(mesh.meshes.size());
+
 		for (uint32_t meshIndex = 0; meshIndex < mesh.meshes.size(); ++meshIndex)
 		{
 			// An entry with no skin keeps its submesh boxes; a posed box for it would only repeat them.
@@ -398,30 +592,54 @@ namespace assetlib
 			// See skinning.h: the box is derived data, never a cook gate.
 			try
 			{
-				const Bounds bounds = posedBounds(mesh, meshIndex, skeleton, animations);
-				animations.posedBoxes.push_back(
-					PosedBox{ signature, bounds.min, bounds.max, meshIndex });
+				entries.push_back(boneBoxesFor(mesh, meshIndex, skeleton));
+				indices.push_back(meshIndex);
 			}
 			catch (const std::exception&)
 			{}
 		}
+
+		if (entries.empty())
+			return;
+
+		auto bounds = std::vector<Bounds>();
+		try
+		{
+			bounds = sweepPoses(entries, skeleton, animations);
+		}
+		catch (const std::exception&)
+		{
+			// A clip set cooked against another rig fails every entry at once, and a box measured
+			// against the wrong rig would be trusted verbatim at load. Leave them unbaked.
+			return;
+		}
+
+		for (size_t i = 0; i < indices.size(); ++i)
+		{
+			if (isEmpty(bounds[i]))
+				bounds[i] = bindPoseBounds(mesh, mesh.meshes[indices[i]]);
+
+			if (isEmpty(bounds[i]))
+				continue;
+
+			animations.posedBoxes.push_back(
+				PosedBox{ signature, bounds[i].min, bounds[i].max, indices[i] });
+		}
 	}
 
-	std::optional<Bounds>
-	findPosedBounds(
-		const AnimationSet& animations,
-		const BMesh&        mesh,
-		const uint32_t      meshIndex,
-		const Skeleton&     skeleton) noexcept
+	std::vector<std::optional<Bounds>>
+	findPosedBounds(const AnimationSet& animations, const BMesh& mesh, const Skeleton& skeleton)
 	{
+		auto out = std::vector<std::optional<Bounds>>(mesh.meshes.size());
+
 		if (animations.posedBoxes.empty())
-			return std::nullopt;
+			return out;
 
 		const uint64_t signature = posedBoundsSignature(mesh, skeleton);
 		for (const PosedBox& box : animations.posedBoxes)
-			if (box.sourceSignature == signature && box.meshIndex == meshIndex)
-				return Bounds{ box.min, box.max };
+			if (box.sourceSignature == signature && box.meshIndex < out.size())
+				out[box.meshIndex] = Bounds{ box.min, box.max };
 
-		return std::nullopt;
+		return out;
 	}
 }

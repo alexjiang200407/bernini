@@ -331,7 +331,7 @@ TEST_CASE("a stale rig regenerates, and its clips follow the document's sample r
 		// tangents and all. A box nobody can find is a load measuring at draw time instead.
 		REQUIRE_FALSE(clips.posedBoxes.empty());
 		const RegenMesh held = sandbox.Store().LoadRegenMesh("Meshes/unit.bmesh");
-		CHECK(findPosedBounds(clips, held.mesh, 0, fresh).has_value());
+		CHECK(findPosedBounds(clips, held.mesh, fresh)[0].has_value());
 	}
 
 	SECTION("a re-exported source that dropped its mesh is reported, not served")

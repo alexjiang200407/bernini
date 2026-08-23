@@ -37,10 +37,10 @@ namespace
 	 * and the walk agree.
 	 */
 	assetlib::Skeleton
-	MakeChain()
+	MakeChain(uint32_t boneCount = c_BoneCount)
 	{
 		auto skeleton = assetlib::Skeleton();
-		for (uint32_t i = 0; i < c_BoneCount; ++i)
+		for (uint32_t i = 0; i < boneCount; ++i)
 		{
 			auto bone     = assetlib::Bone();
 			bone.bindPose = { glm::vec3(0.0f, i == 0 ? 0.0f : 1.0f, 0.0f),
@@ -57,17 +57,17 @@ namespace
 	}
 
 	assetlib::AnimationSet
-	MakeSwingClip()
+	MakeSwingClip(uint32_t boneCount = c_BoneCount)
 	{
 		auto set      = assetlib::AnimationSet();
-		set.boneCount = c_BoneCount;
+		set.boneCount = boneCount;
 
 		// Rz(90) as xyzw = (0, 0, sin45, cos45); glm::quat takes w first.
 		const auto swing = glm::quat(0.70710678f, 0.0f, 0.0f, 0.70710678f);
 
 		for (uint32_t f = 0; f < c_Frames; ++f)
 		{
-			for (uint32_t b = 0; b < c_BoneCount; ++b)
+			for (uint32_t b = 0; b < boneCount; ++b)
 			{
 				auto sample        = assetlib::Transform();
 				sample.translation = glm::vec3(0.0f, b == 0 ? 0.0f : 1.0f, 0.0f);
@@ -268,6 +268,106 @@ namespace
 		CHECK(actual.x == Catch::Approx(expected.x).margin(1e-4));
 		CHECK(actual.y == Catch::Approx(expected.y).margin(1e-4));
 		CHECK(actual.z == Catch::Approx(expected.z).margin(1e-4));
+	}
+}
+
+// Where the render suite proves a deep rig draws right, this proves every bone of one is right --
+// including the ones no vertex weights, which a picture cannot see. 192 was the old ceiling, set by
+// the groupshared array the walk used to hold; the walk now composes in the palette, so the only
+// thing a bone count costs is palette.
+TEST_CASE("a rig far past the old ceiling poses every bone", "[skinned][pose][render]")
+{
+	constexpr uint32_t c_DeepBones = 300;
+
+	auto opts             = bgl::GraphicsOptions();
+	opts.shaderCacheDir   = bgl::test::ShaderCacheDir();
+	opts.enableDebugLayer = true;
+
+	auto gfx = bgl::CreateGraphics(opts);
+	REQUIRE(gfx != nullptr);
+
+	auto* gfxBase = dynamic_cast<bgl::GraphicsBase*>(gfx.Get());
+	REQUIRE(gfxBase != nullptr);
+
+	auto targetDesc     = bgl::RenderTargetDesc();
+	targetDesc.width    = 64;
+	targetDesc.height   = 64;
+	targetDesc.headless = true;
+	auto target         = gfx->CreateRenderTarget(targetDesc);
+
+	auto sceneDesc                        = bgl::SceneDesc();
+	sceneDesc.initialGeom                 = 4;
+	sceneDesc.initialMeshlets             = 8;
+	sceneDesc.initialSubmeshes            = 4;
+	sceneDesc.initialVertexBufferByteSize = 4096;
+	sceneDesc.initialIndices              = 64;
+	sceneDesc.initialPbrMaterials         = 4;
+
+	auto scene = gfx->CreateScene(sceneDesc);
+	auto view  = gfx->CreateSceneView(scene, 4);
+
+	bgl::test::ApplyEnvironment(scene.Get(), view.Get());
+
+	auto material            = bgl::PbrMaterialDesc();
+	material.baseColorFactor = glm::vec4(1.0f);
+	const auto pbr           = scene->CreatePbrMaterial(material);
+
+	const std::array<bgl::MaterialHandle, 1> materials = { { pbr } };
+
+	const auto geom = scene->AddSkinnedMeshGeom(
+		MakeSkinnedTriangle(),
+		0,
+		materials,
+		MakeChain(c_DeepBones),
+		MakeSwingClip(c_DeepBones),
+		assetlib::Bounds{ glm::vec3(-400.0f), glm::vec3(400.0f) });
+	REQUIRE(geom.IsValid());
+
+	auto* viewRaw = dynamic_cast<bgl::SceneView*>(view.Get());
+	REQUIRE(viewRaw != nullptr);
+
+	auto job     = bgl::RenderJob();
+	job.view     = view;
+	job.viewport = bgl::Viewport(64.0f, 64.0f);
+
+	const uint32_t float4sPerPose = bgl::idl::cFloat4sPerBone * c_DeepBones;
+
+	SECTION("at bind pose every one of the 300 is identity")
+	{
+		const auto instance =
+			view->CreateSkinnedMeshInstance(geom, glm::mat4(1.0f), { 0, 0.0f, 0.0f });
+		gfx->DrawFrame(target, job);
+
+		const Palette palette =
+			ReadPalette(gfxBase, viewRaw, PaletteBaseOf(viewRaw, instance), float4sPerPose);
+
+		for (uint32_t bone = 0; bone < c_DeepBones; ++bone)
+			CheckNear(
+				palette.Apply(bone, glm::vec3(1.0f, 2.0f, 3.0f)),
+				glm::vec3(1.0f, 2.0f, 3.0f));
+	}
+
+	SECTION("swung, the root's rotation still reaches the 299th bone")
+	{
+		const auto instance =
+			view->CreateSkinnedMeshInstance(geom, glm::mat4(1.0f), { 0, 1.0f, 0.0f });
+		gfx->DrawFrame(target, job);
+
+		const Palette palette =
+			ReadPalette(gfxBase, viewRaw, PaletteBaseOf(viewRaw, instance), float4sPerPose);
+
+		// Bone 0 is the root and never moves.
+		CheckNear(palette.Apply(0, glm::vec3(0.0f)), glm::vec3(0.0f));
+
+		// Every bone below the swing lands its own origin on (1,1,0), whatever its depth: the chain
+		// continues along the rotated axis, and each bone's inverse bind takes exactly its own bind
+		// offset back off again. A bone that never composed through its parent would report
+		// (0, 1 - i, 0) instead -- at bone 299 that is 298 units away, not a rounding difference.
+		for (uint32_t bone = 1; bone < c_DeepBones; ++bone)
+		{
+			INFO("bone " << bone);
+			CheckNear(palette.Apply(bone, glm::vec3(0.0f)), glm::vec3(1.0f, 1.0f, 0.0f));
+		}
 	}
 }
 
