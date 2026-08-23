@@ -32,6 +32,57 @@ namespace game
 		// pass composites it. They are separate enums because assetlib cannot link bgl, and separate
 		// concepts because a layer is free to grow buckets no material ever authors. gamelib is the
 		// only library that links both, so this is the one place they meet.
+		/** A container as it was read, beside the stamp it was read at. */
+		template <std::movable T>
+		struct Cached
+		{
+			assetlib::SourceStamp stamp;
+			T                     value;
+		};
+
+		/** Reads the container a mount key names -- what ReadCached defers to when its stamp moves. */
+		template <class Load, class T>
+		concept ContainerLoader = std::invocable<Load, std::string_view> &&
+		                          std::same_as<std::invoke_result_t<Load, std::string_view>, T>;
+
+		/**
+		 * `path`'s container, read through `load` only when its stamp has moved since it was last
+		 * read. Stamping costs a read of the file; deserializing one costs most of a second on a
+		 * dense rig, and that is what this skips.
+		 */
+		template <std::movable T, ContainerLoader<T> Load>
+		const T&
+		ReadCached(
+			core::str::unordered_str_map<Cached<T>>& reads,
+			const assetlib::AssetStore&              store,
+			const std::string_view                   path,
+			Load&&                                   load)
+		{
+			const assetlib::SourceStamp stamp = store.StampOf(path);
+
+			// Heterogeneous lookup reaches find but not operator[], so a miss inserts by key.
+			const auto it = reads.find(path);
+
+			if (it != reads.end() && it->second.stamp == stamp)
+				return it->second.value;
+
+			// Loaded before anything enters the map, because StampOf zeroes an absent path and so
+			// does a fresh entry: a node inserted first would outlive a throwing load holding that
+			// zeroed stamp, and the next read of the same missing path would match it and hand back
+			// an empty container instead of failing again.
+			T value = load(path);
+
+			if (it != reads.end())
+			{
+				it->second.value = std::move(value);
+				it->second.stamp = stamp;
+				return it->second.value;
+			}
+
+			return reads.try_emplace(std::string(path), Cached<T>{ stamp, std::move(value) })
+			    .first->second.value;
+		}
+
 		bgl::LayerType
 		ToLayerType(assetlib::AlphaMode mode, bool hashedAsBlend)
 		{
@@ -81,7 +132,8 @@ namespace game
 		bgl::SceneRef        scene,
 		assetlib::AssetStore store,
 		AssetManagerOptions  options) :
-		m_Scene(std::move(scene)), m_Store(std::move(store)), m_Options(options)
+		m_Scene(std::move(scene)), m_Store(std::move(store)), m_Options(options),
+		m_Reads(std::make_unique<ContainerReads>())
 	{
 		// Held, not borrowed. The destructor hands every asset back to the scene, so the scene has to
 		// still be there -- and with a bare reference that was only true if the caller happened to
@@ -462,6 +514,39 @@ namespace game
 		}
 	}
 
+	// The references ReadMesh and its siblings hand back stay valid as these grow:
+	// std::unordered_map is node-based, so an insert never moves an existing value.
+	struct AssetManager::ContainerReads
+	{
+		core::str::unordered_str_map<Cached<assetlib::BMesh>>        meshes;
+		core::str::unordered_str_map<Cached<assetlib::Skeleton>>     skeletons;
+		core::str::unordered_str_map<Cached<assetlib::AnimationSet>> animations;
+	};
+
+	const assetlib::BMesh&
+	AssetManager::ReadMesh(const std::string_view path)
+	{
+		return ReadCached(m_Reads->meshes, m_Store, path, [this](const std::string_view p) {
+			return m_Store.LoadMesh(p);
+		});
+	}
+
+	const assetlib::Skeleton&
+	AssetManager::ReadSkeleton(const std::string_view path)
+	{
+		return ReadCached(m_Reads->skeletons, m_Store, path, [this](const std::string_view p) {
+			return m_Store.LoadSkeleton(p);
+		});
+	}
+
+	const assetlib::AnimationSet&
+	AssetManager::ReadAnimations(const std::string_view path)
+	{
+		return ReadCached(m_Reads->animations, m_Store, path, [this](const std::string_view p) {
+			return m_Store.LoadAnimations(p);
+		});
+	}
+
 	AssetManager::SkinnedMesh
 	AssetManager::AcquireSkinnedMesh(
 		std::string_view                       relPath,
@@ -491,11 +576,11 @@ namespace game
 
 		// Through the store, like every other read here: a project opens as a mount, so a rig that
 		// ships inside a .bpak is only reachable that way.
-		const assetlib::AnimationSet animations = m_Store.LoadAnimations(animationsNorm);
+		const assetlib::AnimationSet& animations = ReadAnimations(animationsNorm);
 
 		// The clip set names its own rig, so the pair cannot be mismatched by a caller -- only by a
 		// rig that changed after the clips were cooked, which is what the signature catches.
-		const assetlib::Skeleton skeleton = m_Store.LoadSkeleton(animations.skeleton);
+		const assetlib::Skeleton& skeleton = ReadSkeleton(animations.skeleton);
 
 		core::throw_runtime_error_if(
 			!assetlib::animationsMatchSkeleton(animations, skeleton),
@@ -504,7 +589,7 @@ namespace game
 			animationsNorm,
 			animations.skeleton);
 
-		const assetlib::BMesh mesh = m_Store.LoadMesh(relPath);
+		const assetlib::BMesh& mesh = ReadMesh(relPath);
 
 		core::throw_runtime_error_if(
 			meshIndex >= mesh.meshes.size(),
