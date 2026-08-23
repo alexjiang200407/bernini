@@ -330,112 +330,154 @@ AnimationPreviewWindow::LoadMeshAs(
 			// Empty when the tier stood up. A refusal is shown rather than thrown: the mesh is
 			// still on screen in its bind pose, which beats a viewport cleared to nothing.
 			QString refusal;
+
+			// Which mesh entries took that fallback. Without them the dialog can say a clip cannot
+			// play but not which part of the mesh stopped moving, which is the whole diagnosis when
+			// one submesh of twenty-seven is the one refused.
+			std::vector<uint32_t> refusedEntries;
 		};
 
 		if (plan.animated.empty() && plan.statics.empty())
 			throw std::runtime_error("no node references a mesh");
 
-		const Loaded loaded = GetRenderer()->Invoke([&] {
-			ClearGeometry();
+		// Behind a loading screen, because acquiring is where the seconds are: a character's worth of
+		// materials is a hundred-odd megabytes of texture to read and upload, and Invoke blocks its
+		// caller until the render thread has run the closure. A worker may block on the render thread
+		// -- only the reverse deadlocks (see Renderer) -- so the GUI thread stays free to paint.
+		auto loaded = Loaded();
 
-			auto out     = Loaded();
-			auto aabbMin = glm::vec3(std::numeric_limits<float>::max());
-			auto aabbMax = glm::vec3(std::numeric_limits<float>::lowest());
+		const background::TaskResult upload = background::RunWithLoadingScreen(
+			this,
+			QString("Loading %1").arg(name),
+			[&](background::Progress& progress) {
+				progress.Report(0, 0, "Uploading materials and geometry...");
+				loaded = GetRenderer()->Invoke([&] {
+					ClearGeometry();
 
-			const auto acquireStatic = [&](const bmesh::InstancePlacement& placement) {
-				const bgl::GeomHandle geom = m_Assets->AcquireMesh(rel, placement.meshIndex);
-				m_Geoms.push_back(geom);
-				m_Instances.push_back(
-					m_Assets->CreateInstance(GetPreviewViewRef(), geom, placement.world));
-				bmesh::GrowBoundsForMesh(
-					mesh,
-					placement.meshIndex,
-					placement.world,
-					aabbMin,
-					aabbMax);
-			};
+					auto out     = Loaded();
+					auto aabbMin = glm::vec3(std::numeric_limits<float>::max());
+					auto aabbMax = glm::vec3(std::numeric_limits<float>::lowest());
 
-			for (const bmesh::InstancePlacement& placement : plan.statics) acquireStatic(placement);
+					const auto acquireStatic = [&](const bmesh::InstancePlacement& placement) {
+						const bgl::GeomHandle geom =
+							m_Assets->AcquireMesh(rel, placement.meshIndex);
+						m_Geoms.push_back(geom);
+						m_Instances.push_back(
+							m_Assets->CreateInstance(GetPreviewViewRef(), geom, placement.world));
+						bmesh::GrowBoundsForMesh(
+							mesh,
+							placement.meshIndex,
+							placement.world,
+							aabbMin,
+							aabbMax);
+					};
 
-			for (const bmesh::InstancePlacement& placement : plan.animated)
-			{
-				// A rig with no clip file anywhere falls back to bind pose as static geometry --
-				// and so does one the VAT pipeline refuses (an unbaked or loose material): a
-				// mesh standing still beats a viewport cleared to nothing, and the refusal is
-				// surfaced once the load completes.
-				if (animations.empty())
-				{
-					acquireStatic(placement);
-					continue;
-				}
+					for (const bmesh::InstancePlacement& placement : plan.statics)
+						acquireStatic(placement);
 
-				// The box this placement poses in: measured above for the skinned tier, read off
-				// the bake for VAT. It is the geom's culling volume as well as the camera's frame,
-				// so it is resolved per mesh entry rather than shared across the file.
-				const std::optional<assetlib::Bounds> posed = [&] {
-					if (source != editor::AnimationSource::kSkinned)
-						return posedKnown ? std::optional(assetlib::Bounds{ posedMin, posedMax }) :
-						                    std::nullopt;
-
-					const auto it = skinnedBounds.find(placement.meshIndex);
-					return it != skinnedBounds.end() ? std::optional(it->second) : std::nullopt;
-				}();
-
-				try
-				{
-					// The two tiers differ only in which door the acquire takes: both hand back a
-					// geom and the same clip table, and both spawn on {clip 0, phase 0, rate 1}.
-					bgl::GeomHandle             geom;
-					std::vector<game::ClipInfo> clips;
-
-					if (source == editor::AnimationSource::kSkinned)
+					for (const bmesh::InstancePlacement& placement : plan.animated)
 					{
-						// Handed over rather than measured again: this runs on the render thread,
-						// and posedBounds is seconds on a dense rig. Absent only if the measurement
-						// was skipped, and then the acquire makes it -- a stall beats culling the
-						// mesh by a box of nothing.
-						const game::AssetManager::SkinnedMesh skinned =
-							m_Assets
-								->AcquireSkinnedMesh(rel, animations, placement.meshIndex, posed);
-						geom  = skinned.geom;
-						clips = std::move(skinned.clips);
+						// A rig with no clip file anywhere falls back to bind pose as static geometry --
+						// and so does one the VAT pipeline refuses (an unbaked or loose material): a
+						// mesh standing still beats a viewport cleared to nothing, and the refusal is
+						// surfaced once the load completes.
+						if (animations.empty())
+						{
+							acquireStatic(placement);
+							continue;
+						}
+
+						// The box this placement poses in: measured above for the skinned tier, read off
+						// the bake for VAT. It is the geom's culling volume as well as the camera's frame,
+						// so it is resolved per mesh entry rather than shared across the file.
+						const std::optional<assetlib::Bounds> posed = [&] {
+							if (source != editor::AnimationSource::kSkinned)
+								return posedKnown ?
+							               std::optional(assetlib::Bounds{ posedMin, posedMax }) :
+							               std::nullopt;
+
+							const auto it = skinnedBounds.find(placement.meshIndex);
+							return it != skinnedBounds.end() ? std::optional(it->second) :
+						                                       std::nullopt;
+						}();
+
+						try
+						{
+							// The two tiers differ only in which door the acquire takes: both hand back a
+							// geom and the same clip table, and both spawn on {clip 0, phase 0, rate 1}.
+							bgl::GeomHandle             geom;
+							std::vector<game::ClipInfo> clips;
+
+							if (source == editor::AnimationSource::kSkinned)
+							{
+								// Handed over rather than measured again: this runs on the render thread,
+								// and posedBounds is seconds on a dense rig. Absent only if the measurement
+								// was skipped, and then the acquire makes it -- a stall beats culling the
+								// mesh by a box of nothing.
+								const game::AssetManager::SkinnedMesh skinned =
+									m_Assets->AcquireSkinnedMesh(
+										rel,
+										animations,
+										placement.meshIndex,
+										posed);
+								geom  = skinned.geom;
+								clips = std::move(skinned.clips);
+							}
+							else
+							{
+								game::AssetManager::VatMesh vat =
+									m_Assets->AcquireVatMesh(rel, animations, placement.meshIndex);
+								geom  = vat.geom;
+								clips = std::move(vat.clips);
+							}
+
+							m_Geoms.push_back(geom);
+							m_AnimatedDraws.push_back(
+								{ geom,
+						          placement.world,
+						          SpawnAnimated(geom, placement.world, 0, source) });
+							out.clips    = std::move(clips);
+							m_ActiveClip = 0;
+						}
+						catch (const std::exception& e)
+						{
+							out.refusal = QString::fromUtf8(e.what());
+							out.refusedEntries.push_back(placement.meshIndex);
+							acquireStatic(placement);  // grows the bind-pose bounds itself
+							continue;
+						}
+
+						if (posed)
+							bmesh::GrowBounds(
+								placement.world,
+								posed->min,
+								posed->max,
+								aabbMin,
+								aabbMax);
+						else
+							bmesh::GrowBoundsForMesh(
+								mesh,
+								placement.meshIndex,
+								placement.world,
+								aabbMin,
+								aabbMax);
 					}
-					else
-					{
-						game::AssetManager::VatMesh vat =
-							m_Assets->AcquireVatMesh(rel, animations, placement.meshIndex);
-						geom  = vat.geom;
-						clips = std::move(vat.clips);
-					}
 
-					m_Geoms.push_back(geom);
-					m_AnimatedDraws.push_back(
-						{ geom, placement.world, SpawnAnimated(geom, placement.world, 0, source) });
-					out.clips    = std::move(clips);
-					m_ActiveClip = 0;
-				}
-				catch (const std::exception& e)
-				{
-					out.refusal = QString::fromUtf8(e.what());
-					acquireStatic(placement);  // grows the bind-pose bounds itself
-					continue;
-				}
+					out.center = (aabbMin + aabbMax) * 0.5f;
+					out.radius = std::max(0.001f, glm::length(aabbMax - aabbMin) * 0.5f);
+					return out;
+				});
+			},
+			background::Cancellable::kNo);
 
-				if (posed)
-					bmesh::GrowBounds(placement.world, posed->min, posed->max, aabbMin, aabbMax);
-				else
-					bmesh::GrowBoundsForMesh(
-						mesh,
-						placement.meshIndex,
-						placement.world,
-						aabbMin,
-						aabbMax);
-			}
-
-			out.center = (aabbMin + aabbMax) * 0.5f;
-			out.radius = std::max(0.001f, glm::length(aabbMax - aabbMin) * 0.5f);
-			return out;
-		});
+		if (!upload.Completed())
+		{
+			QMessageBox::warning(
+				window(),
+				QStringLiteral("Open Mesh"),
+				QStringLiteral("Could not load '%1':\n\n%2").arg(name, upload.error));
+			return;
+		}
 
 		// Straight on, slightly above -- and arbitrary, because nothing here knows which way a rig
 		// faces. Authoring conventions disagree on the forward axis, so any fixed yaw shows some rigs
@@ -460,7 +502,13 @@ AnimationPreviewWindow::LoadMeshAs(
 		m_Source = source;
 
 		if (!loaded.refusal.isEmpty())
-			OfferBakeForRefusal(mesh, absolutePath, animations, name, loaded.refusal);
+			OfferBakeForRefusal(
+				mesh,
+				absolutePath,
+				animations,
+				name,
+				loaded.refusal,
+				loaded.refusedEntries);
 	}
 	catch (const std::exception& e)
 	{
@@ -576,18 +624,66 @@ AnimationPreviewWindow::OfferBakeForTier(
 		LoadMeshAs(absolutePath, animations, editor::AnimationSource::kVat);
 }
 
+namespace
+{
+	/**
+	 * Which parts of the mesh took the bind-pose fallback, named by the materials they draw with.
+	 *
+	 * A refusal is per mesh entry, and a file may have many: on a character rig one submesh of
+	 * twenty-seven standing still while the rest animates reads as a rig bug until you know which
+	 * one it is, and its material is what a reader can act on.
+	 */
+	QString
+	RefusedEntriesLine(const assetlib::BMesh& mesh, std::span<const uint32_t> entries)
+	{
+		if (entries.empty())
+			return {};
+
+		auto named = QStringList();
+		for (const uint32_t entry : entries)
+		{
+			if (entry >= mesh.meshes.size())
+				continue;
+
+			const assetlib::Mesh& record = mesh.meshes[entry];
+			for (uint32_t i = 0; i < record.submeshCount; ++i)
+			{
+				const uint32_t material = mesh.submeshes[record.firstSubmesh + i].material;
+				if (material >= mesh.materials.size())
+					continue;
+
+				const QString stem = QString::fromStdString(
+					std::filesystem::path(mesh.materials[material]).stem().string());
+				if (!stem.isEmpty() && !named.contains(stem))
+					named << stem;
+			}
+		}
+
+		if (named.isEmpty())
+			return {};
+
+		return QStringLiteral(
+				   "\n\nStanding still in bind pose: %1 (%2). The rest of the mesh "
+				   "animates normally.")
+		    .arg(named.join(QStringLiteral(", ")))
+		    .arg(
+				entries.size() == 1 ? QStringLiteral("1 part") :
+									  QStringLiteral("%1 parts").arg(entries.size()));
+	}
+}
+
 void
 AnimationPreviewWindow::OfferBakeForRefusal(
-	const assetlib::BMesh&       mesh,
-	const std::filesystem::path& absolutePath,
-	const std::string&           animations,
-	const QString&               name,
-	const QString&               refusal)
+	const assetlib::BMesh&          mesh,
+	const std::filesystem::path&    absolutePath,
+	const std::string&              animations,
+	const QString&                  name,
+	const QString&                  refusal,
+	const std::span<const uint32_t> refusedEntries)
 {
-	// Every material of the file, not the refusing submesh's alone -- the refusal arrives as a
-	// message, not as the entry that raised it. So a file whose refusal is about a rig (no skin
-	// binding, a clip set cooked against another skeleton) can still offer a bake for some unrelated
-	// unbaked material of its own: that bake is worth doing and the text says only what is true, but
+	// Every material of the file, not the refusing submesh's alone. A refusal about the rig itself
+	// (no skin binding, a clip set cooked against another skeleton) can still offer a bake for some
+	// unrelated unbaked material: that bake is worth doing and the text says only what is true, but
 	// it will not lift this refusal.
 	const std::vector<std::string> loose =
 		editor::BakeableMaterials(assetlib::AssetStore(m_DataRoot), mesh.materials);
@@ -595,8 +691,8 @@ AnimationPreviewWindow::OfferBakeForRefusal(
 	auto box = QMessageBox(window());
 	box.setIcon(QMessageBox::Information);
 	box.setWindowTitle(QStringLiteral("Open Mesh"));
-	box.setText(QStringLiteral("'%1' is shown in bind pose -- its clips cannot play:\n\n%2")
-	                .arg(name, refusal));
+	box.setText(QStringLiteral("'%1' is shown in bind pose -- its clips cannot play:\n\n%2%3")
+	                .arg(name, refusal, RefusedEntriesLine(mesh, refusedEntries)));
 
 	QPushButton* bakeButton = nullptr;
 	if (!loose.empty())

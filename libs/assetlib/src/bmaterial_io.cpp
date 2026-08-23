@@ -453,9 +453,15 @@ namespace assetlib
 		if (!hasRoutes)
 			return false;
 
-		// Routed and every source matches -- but a bake that produced no base colour never ran, and a
-		// map deleted since leaves the triplet naming a file that is not there to sample.
-		return pbr.baseColorTexture.empty() || !tripletIsOnDisk(pbr, fileSystem);
+		// Routed and every source matches -- but a map deleted since leaves the triplet naming a file
+		// that is not there to sample, and a base colour missing where something routes into one is a
+		// bake that never ran.
+		//
+		// Only where something routes into one: a material tinted by its factors alone bakes no base
+		// colour and is complete without one. A glass eye is the standing example -- baseColorFactor
+		// carrying its alpha, a normal and an orm map, and nothing routed to base colour at all.
+		return (groupIsRouted(pbr, c_BaseColorChannels) && pbr.baseColorTexture.empty()) ||
+		       !tripletIsOnDisk(pbr, fileSystem);
 	}
 
 	bool

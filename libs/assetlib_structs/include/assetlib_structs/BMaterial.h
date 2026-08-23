@@ -102,6 +102,21 @@ namespace assetlib
 		std::array<SourceStamp, c_LooseChannelCount> routeStamps;
 	};
 
+	/**
+	 * Whether anything routes into `group`.
+	 *
+	 * A group with nothing routed bakes to no map at all, which is a complete bake rather than a
+	 * missing one: the runtime substitutes white, flat normal or the factors alone.
+	 */
+	[[nodiscard]] inline bool
+	groupIsRouted(const PbrParams& pbr, const ChannelGroup& group) noexcept
+	{
+		for (size_t i = 0; i < group.count; ++i)
+			if (!pbr.routes[channelIndex(group, i)].texture.empty())
+				return true;
+		return false;
+	}
+
 	struct BMaterial
 	{
 		std::string name;

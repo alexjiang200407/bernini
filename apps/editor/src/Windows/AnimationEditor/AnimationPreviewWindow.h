@@ -206,7 +206,8 @@ private:
 		const std::filesystem::path& absolutePath,
 		const std::string&           animations,
 		const QString&               name,
-		const QString&               refusal);
+		const QString&               refusal,
+		std::span<const uint32_t>    refusedEntries);
 
 	void
 	UpdateCamera();

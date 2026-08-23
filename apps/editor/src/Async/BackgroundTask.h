@@ -90,6 +90,12 @@ namespace background
 	 * carry no locks and the frame graph is documented single-threaded -- so a worker may decode and
 	 * parse, but every scene mutation has to happen after this returns.
 	 *
+	 * Or through `Renderer::Invoke`, which is the one way to mutate from inside `work`: it serializes
+	 * the closure onto the render thread whichever thread asks, and blocks only the asker. A worker
+	 * blocking there is safe -- it is the reverse, a render closure waiting on the GUI thread, that
+	 * deadlocks. Use it for work whose cost is the upload rather than the decode, which would
+	 * otherwise freeze the GUI with no screen up to say so.
+	 *
 	 * Cancelling is cooperative: the screen stays up, modal, showing "Cancelling...", until `work`
 	 * unwinds of its own accord, which for an assetlib cook is as long as the encode it is inside. It
 	 * is also not a rollback -- whatever the cook had already written to disk is still there, and the

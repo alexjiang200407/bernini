@@ -81,6 +81,59 @@ TEST_CASE(
 	CHECK(ch(0u, 3u) == 255);
 }
 
+// The glass-eye shape: a surface tinted by its factors, with a normal and an orm map and nothing
+// routed to base colour at all. Every route is current and the bake produced everything it could,
+// so calling it stale strands the material as loose -- and loose is not kPBR, which the skinned and
+// VAT pipelines refuse outright. Baking again cannot lift it: there is no base colour to bake.
+TEST_CASE("a material with no base-colour route bakes complete", "[bmaterial][bake]")
+{
+	const BakeDir dir("bernini_bake_no_basecolor");
+
+	WriteSource(dir.path / "normal.ktx2", 16, { { 128, 128, 255, 255 } });
+	WriteSource(dir.path / "packed.ktx2", 16, { { 10, 60, 90, 255 } });
+
+	BMaterial mat;
+	mat.pbr.baseColorFactor = glm::vec4(0.8f, 0.8f, 0.8f, 0.03f);
+	mat.pbr.alphaMode       = AlphaMode::kBlend;
+	mat.pbr.routes[4]       = { "packed.ktx2", 0 };  // ao
+	mat.pbr.routes[5]       = { "packed.ktx2", 1 };  // roughness
+	mat.pbr.routes[6]       = { "packed.ktx2", 2 };  // metallic
+	mat.pbr.routes[7]       = { "normal.ktx2", 0 };  // normal X
+	mat.pbr.routes[8]       = { "normal.ktx2", 1 };  // normal Y
+
+	REQUIRE_NOTHROW(bakeMaterial(mat, MaterialBakeDesc{ dir.path }));
+
+	REQUIRE(mat.pbr.baseColorTexture.empty());
+	REQUIRE_FALSE(mat.pbr.ormTexture.empty());
+	REQUIRE_FALSE(mat.pbr.normalTexture.empty());
+
+	SECTION("and is not stale, however many times it is baked")
+	{
+		CHECK_FALSE(bakeIsStale(mat, MountAt(dir.path)));
+
+		REQUIRE_NOTHROW(bakeMaterial(mat, MaterialBakeDesc{ dir.path }));
+		CHECK_FALSE(bakeIsStale(mat, MountAt(dir.path)));
+	}
+
+	SECTION("and so does not draw loose, which is what a skinned pipeline refuses")
+	{
+		CHECK_FALSE(drawsLoose(mat, MountAt(dir.path)));
+	}
+
+	SECTION("but one that does route a base colour and has no map is still stale")
+	{
+		// The case the old rule was written for, and the only one it was right about. Baked again so
+		// the route carries a current stamp: an unstamped one is caught by the per-channel check
+		// above and never reaches the verdict this section is about.
+		mat.pbr.routes[0] = { "normal.ktx2", 0 };
+		REQUIRE_NOTHROW(bakeMaterial(mat, MaterialBakeDesc{ dir.path }));
+		REQUIRE_FALSE(mat.pbr.baseColorTexture.empty());
+
+		mat.pbr.baseColorTexture.clear();
+		CHECK(bakeIsStale(mat, MountAt(dir.path)));
+	}
+}
+
 TEST_CASE("bakeMaterial composites routes into the optimized triplet", "[bmaterial][bake]")
 {
 	const BakeDir dir("bernini_bake_material");
