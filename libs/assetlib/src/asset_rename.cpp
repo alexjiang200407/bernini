@@ -134,6 +134,7 @@ namespace assetlib
 
 			case AssetType::kTexture:
 			case AssetType::kSkeleton:
+			case AssetType::kCount:
 				break;
 			}
 

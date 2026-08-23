@@ -184,6 +184,7 @@ namespace assetlib
 			case AssetType::kEnvLighting:
 			case AssetType::kEnvironment:
 			case AssetType::kImportDocument:
+			case AssetType::kCount:
 				break;
 			}
 			core::throw_runtime_error("assetlib::packProject: '{}' is not geometry", key);
@@ -327,6 +328,7 @@ namespace assetlib
 			case AssetType::kEnvLighting:
 			case AssetType::kEnvironment:
 			case AssetType::kImportDocument:
+			case AssetType::kCount:
 				break;
 			}
 

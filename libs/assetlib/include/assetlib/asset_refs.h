@@ -20,6 +20,10 @@ namespace assetlib
 		// its recorded inputs, or a moved mesh would leave every bake pointing at nothing.
 		kVat,
 		kImportDocument,  // .bimport -- the authored half of one imported source; text, never packed
+		// The number of asset kinds. Anchors the assertion that every one of them has a codec;
+		// anchoring that on whichever enumerator happens to be last instead means appending one
+		// silently satisfies it.
+		kCount,
 	};
 
 	/** Why one asset holds another alive. */
