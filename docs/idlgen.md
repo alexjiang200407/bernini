@@ -234,7 +234,7 @@ Consume it — shader side imports the copy, CPU side includes the mirror:
 auto n = bgl::idl::cFooCapacity;                  // same value the shader sees
 ```
 
-See [Constants.slang](libs/bgl/idl/src/Constants.slang) → [Constants.h](libs/bgl/src/idl/Constants.h) for a
+See [Constants.slang](libs/bgl/idl/src/Constants.slang) → `<build>/generated/idl/Constants.h` for a
 constants-only module, and [Geometry Layout](docs/geometry_layout.md) for how these structs form
 the GPU geometry model.
 

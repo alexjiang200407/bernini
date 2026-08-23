@@ -31,8 +31,10 @@ when this doc disagrees, trust the header, then fix this doc.
   `saveSky`, `saveEnvLighting`, `saveVat` — so a caller writes
   `save(mesh, store.ResolveWritePath(key))`, or hand-joins `dataRoot / relative`. The newer
   whole-project operations already take the store (`packProject`, `findUnusedBakedTextures`,
-  `bakeVat`, `AssetRefGraph::Scan`); the older per-file ones do not. The design that finishes it
-  is settled and waiting on a live feature — see
+  `bakeVat`, `AssetRefGraph::Scan`); the older per-file ones do not. The source+cache model widened
+  the gap rather than closing it — six `LoadRegen*` methods joined the read half and no write half
+  arrived — so the store now answers twenty loads and zero saves. The design that finishes it is
+  settled and no longer blocked: see
   [docs/specs/assetlib_store_codecs.md](docs/specs/assetlib_store_codecs.md).
 
 * **Two container regimes, and the split is authored-vs-derived.** `.bmaterial`, `.benv` and
@@ -83,6 +85,7 @@ path, load from a host path.
 | `.bskel` / `.banim` | [bskel_io.h](libs/assetlib/include/assetlib/bskel_io.h), [banim_io.h](libs/assetlib/include/assetlib/banim_io.h) | A rig; clip samples resampled against it. Split because a rig outlives its clips. |
 | `.bvat` | [bvat_io.h](libs/assetlib/include/assetlib/bvat_io.h) | A baked position/normal texture pair and its tables. Derived, never committed. |
 | `.bsky` / `.benvl` / `.benv` | [bsky_io.h](libs/assetlib/include/assetlib/bsky_io.h), [benvl_io.h](libs/assetlib/include/assetlib/benvl_io.h), [benv_io.h](libs/assetlib/include/assetlib/benv_io.h) | Backdrop; the lighting pair convolved from it; the few bytes naming both. [docs/envmaps.md](docs/envmaps.md) |
+| `.bimport` | [import_document.h](libs/assetlib/include/assetlib/import_document.h) | One per copied source under `meshes_src/`: the bindings and parameters an import was authored with, as text. What a stale cache entry re-cooks from. |
 | `.bpak` | [pak_io.h](libs/assetlib/include/assetlib/pak_io.h), [pak_pack.h](libs/assetlib/include/assetlib/pak_pack.h) | The archive the rest are packed into. [docs/archives.md](docs/archives.md) |
 
 ### Operations

@@ -49,7 +49,7 @@ path is the source of truth; when this doc disagrees, trust the struct, then fix
   `Meshlet`s of at most `idl::cMaxVerticesPerMeshlet` (64) unique vertices and
   `idl::cMaxPrimsPerMeshlet` (124) triangles. These are declared once in the IDL module
   [Constants.slang](libs/bgl/idl/src/Constants.slang) and consumed by both the CPU (generated
-  [Constants.h](libs/bgl/src/idl/Constants.h)) and the shaders (`import idl.Constants`). A meshlet
+  `<build>/generated/idl/Constants.h`) and the shaders (`import idl.Constants`). A meshlet
   carries a bounding sphere, written by the scene but read by nothing yet: culling today is
   per-instance, against the submesh's sphere
   ([CullInstances.slang](libs/bgl/shaders/src/CullInstances.slang)).
@@ -145,7 +145,7 @@ Generated shader structs (GPU source of truth). Each has a byte-identical `bgl::
 | `Clip` | [Clip.slang](libs/bgl/shaders/src/idl/Clip.slang) | One playable clip: where its frame 0 sits in the tier's own frame space, its frame count, authored rate and loop flag. Shared by every animated tier out of one clip buffer. |
 | `Submesh` | [Submesh.slang](libs/bgl/shaders/src/idl/Submesh.slang) | One drawable part, **geometry only**: its `VertexLayout`, meshlet range, vertexMap/vertexData/indices ranges, vertex count, local bounding sphere. No material, no PSO — those are per-instance. |
 | `Meshlet` | [Meshlet.slang](libs/bgl/shaders/src/idl/Meshlet.slang) | A mesh-shader work unit: offsets into the parent submesh's vertexMap/indices windows, vertex/triangle counts, bounding sphere. |
-| `Vertex` | [Vertex.slang](libs/bgl/shaders/src/idl/Vertex.slang) | Full authoring vertex (pos, normal, uv, tangent). The *decoded* form; on the GPU vertices live as raw bytes. |
+| `Vertex` | [Vertex.slang](libs/bgl/shaders/src/util/Vertex.slang) | Full authoring vertex (pos, normal, uv, tangent). The *decoded* form; on the GPU vertices live as raw bytes. |
 | `VertexLayout` | [VertexLayout.slang](libs/bgl/shaders/src/idl/VertexLayout.slang) | Up to 8 `VertexAttribute`s (semantic + format + byte offset) plus `stride`; describes how to decode a vertex from bytes. |
 
 One struct in the same buffers is **not** IDL-generated and is hand-mirrored instead, so the two
