@@ -20,8 +20,8 @@ the pose — and `exactPosedBounds` is the per-vertex walk it is proved against.
 
 Two container regimes (see docs/asset_containers.md):
 
-`.bmaterial` and `.benv` are **authored text documents**: canonical JSON (`src/bmaterial_io.cpp`,
-`src/benv_io.cpp`), named keys, unknown keys preserved on round-trip so a sibling branch's field
+`.bmaterial`, `.benv` and `.bimport` are **authored text documents**: canonical JSON
+(`src/bmaterial_io.cpp`, `src/benv_io.cpp`, `src/import_document.cpp`), named keys, unknown keys preserved on round-trip so a sibling branch's field
 survives a reader that has never heard of it. `.benv` carries the env family's authored state —
 the composition and the presentation knobs (`skyMipLevel`, `skyRotationY`, `exposureOverride`).
 
@@ -34,8 +34,8 @@ methods are the seam that acts on one: a stale entry regenerates in memory from 
 source at the parameters its `.bimport` records, with the document's bindings applied over the
 result, while a read-only store trusts its keys because `pack` made them true. For the env family
 and `.bvat` the re-bake is deliberate (`pack`, the editor) rather than at load. A change to what a
-container stores — layout or meaning — is one edit: bump `AssetCodec<T>::c_BakeToken`, beside the
-`Serialize` it has to move with, to a fresh random value. A forgotten bump on a layout change fails `TokenCanary_test`, which pins each
+container stores — layout or meaning — is one edit: bump `AssetCodec<T>::c_BakeToken`
+(`include/assetlib/codecs.h`) to a fresh random value, beside the writer it has to move with. A forgotten bump on a layout change fails `TokenCanary_test`, which pins each
 writer's output hash beside its token; a semantic change the fixture cannot see is still yours to
 remember.
 
@@ -61,8 +61,8 @@ Concretely, before adding to `include/assetlib/`:
 - **Do not re-carry a data root.** `MaterialBakeDesc` and `EnvBakeDesc` used to, and were the
   standing example of what not to copy; both are gone and a bake is `store.BakeMaterial(...)`.
   A new descriptor carrying a `dataRoot` beside a store is the same mistake again.
-- **A new container type is a new `AssetCodec` specialization**, declared beside its io and listed
-  in `Containers` in `src/container_table.cpp`. That is the whole registration: `containerKinds()`
+- **A new container type is a new `AssetCodec` specialization** in `include/assetlib/codecs.h`,
+  listed in `Containers` in `src/container_table.cpp`. That is the whole registration: `containerKinds()`
   is folded out of it, and a static assertion holds the list to `AssetType`, so a type added to the
   enum and forgotten in the tuple does not compile. The assertion anchors on `AssetType::kCount`
   rather than the last enumerator — anchoring it on the latter meant *appending* a type satisfied
@@ -71,15 +71,12 @@ Concretely, before adding to `include/assetlib/`:
   `pack` do different work per type, and each switch is exhaustive with no `default:` so
   `-Wall -Werror` turns a new `AssetType` into a compile error there. Do not add a `default:` to
   one; that is the guarantee.
-- **A project's asset is read and written by key, through the store**: `store.Load<T>(key)` and
-  `store.Save(value, key)`. The `save*`/`load*` functions taking a `std::filesystem::path` are the
-  older surface and are being removed; do not add a caller.
 
 ## Headers forward declare
 
 A header forward declares the types it names from its **own** namespace — `BMesh`, `BMaterial`,
 `SourceStamp`, `ImageData`, all of them `assetlib::` — instead of including `assetlib_structs`.
-Include the definition only where one is genuinely required: `benv_io.h` includes `ImageData.h`
+Include the definition only where one is genuinely required: `envmap_bake.h` includes `ImageData.h`
 because `EnvironmentMaps` holds three of them by value, and a reference or a by-value return does
 not.
 

@@ -93,21 +93,27 @@ when this doc disagrees, trust the header, then fix this doc.
 | `AssetRefGraph` | [asset_refs.h](libs/assetlib/include/assetlib/asset_refs.h) | One walk of the project: who references what. Backs deletion, rename and the prune. |
 | `DeletionPlan` / `RenamePlan` | [asset_refs.h](libs/assetlib/include/assetlib/asset_refs.h) | What an edit would destroy or rewrite, decided before anything is touched. |
 
-### Containers — one `*_io.h` each
+### Containers — one table
 
-Each declares `serialize`/`deserialize` over its POD and an `AssetCodec` specialization binding
-the two to the type. Reading and writing a project's copy is `store.Load<T>` / `store.Save`; these
-headers are where a container's *format* lives, not where a caller goes.
+Every container this build reads or writes is one `AssetCodec<T>` specialization in
+[codecs.h](libs/assetlib/include/assetlib/codecs.h), listed in `AssetType` order: the extension, the
+type, and for a cache entry the magic and the bake token. That header is the whole registration
+surface and the only place those four are written down; each `Serialize` / `Deserialize` is defined
+in the container's own `.cpp`, which is where the format lives.
 
-| Container | Header | Holds |
-|---|---|---|
-| `.bmesh` | [bmesh_io.h](libs/assetlib/include/assetlib/bmesh_io.h) | Geometry, meshlets, node hierarchy, material paths, skeleton path |
-| `.bmaterial` | [bmaterial_io.h](libs/assetlib/include/assetlib/bmaterial_io.h) | Factors, the baked triplet, the per-channel routing table |
-| `.bskel` / `.banim` | [bskel_io.h](libs/assetlib/include/assetlib/bskel_io.h), [banim_io.h](libs/assetlib/include/assetlib/banim_io.h) | A rig; clip samples resampled against it. Split because a rig outlives its clips. |
-| `.bvat` | [bvat_io.h](libs/assetlib/include/assetlib/bvat_io.h) | A baked position/normal texture pair and its tables. Derived, never committed. |
-| `.bsky` / `.benvl` / `.benv` | [bsky_io.h](libs/assetlib/include/assetlib/bsky_io.h), [benvl_io.h](libs/assetlib/include/assetlib/benvl_io.h), [benv_io.h](libs/assetlib/include/assetlib/benv_io.h) | Backdrop; the lighting pair convolved from it; the few bytes naming both. [docs/envmaps.md](docs/envmaps.md) |
-| `.bimport` | [import_document.h](libs/assetlib/include/assetlib/import_document.h) | One per copied source under `meshes_src/`: the bindings and parameters an import was authored with, as text. What a stale cache entry re-cooks from. |
-| `.bpak` | [pak_io.h](libs/assetlib/include/assetlib/pak_io.h), [pak_pack.h](libs/assetlib/include/assetlib/pak_pack.h) | The archive the rest are packed into. [docs/archives.md](docs/archives.md) |
+Reading and writing a project's copy is `store.Load<T>(key)` / `store.Save(value, key)` — the codec
+is what a caller reaches for only when it holds bytes no store addresses, which is
+`assetlib_cli strip --out` and the editor opening a mesh from outside any data root.
+
+| Container | Holds |
+|---|---|
+| `.bmesh` | Geometry, meshlets, node hierarchy, material paths, skeleton path. Editing one is [bmesh.h](libs/assetlib/include/assetlib/bmesh.h). |
+| `.bmaterial` | Factors, the baked triplet, the per-channel routing table |
+| `.bskel` / `.banim` | A rig; clip samples resampled against it. Split because a rig outlives its clips. |
+| `.bvat` | A baked position/normal texture pair and its tables. Derived, never committed. |
+| `.bsky` / `.benvl` / `.benv` | Backdrop; the lighting pair convolved from it; the few bytes naming both. [docs/envmaps.md](docs/envmaps.md) |
+| `.bimport` | One per copied source under `meshes_src/`: the bindings and parameters an import was authored with, as text. What a stale cache entry re-cooks from. Its struct is [import_document.h](libs/assetlib/include/assetlib/import_document.h). |
+| `.bpak` | The archive the rest are packed into — not a codec, since nothing references one. [pak_io.h](libs/assetlib/include/assetlib/pak_io.h), [pak_pack.h](libs/assetlib/include/assetlib/pak_pack.h). [docs/archives.md](docs/archives.md) |
 
 ### Operations
 

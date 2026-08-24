@@ -1,4 +1,5 @@
-#include <assetlib/bmesh_io.h>
+#include <assetlib/bmesh.h>
+#include <assetlib/codecs.h>
 #include <assetlib_structs/magic.h>
 
 #include <assetlib/image_io.h>
@@ -67,7 +68,7 @@ namespace assetlib
 	}
 
 	std::vector<std::byte>
-	serialize(const BMesh& mesh)
+	AssetCodec<BMesh>::Serialize(const BMesh& mesh)
 	{
 		requireSkeletonIfSkinned(mesh);
 
@@ -88,7 +89,7 @@ namespace assetlib
 	}
 
 	BMesh
-	deserialize(std::span<const std::byte> bytes)
+	AssetCodec<BMesh>::Deserialize(std::span<const std::byte> bytes)
 	{
 		const cache::Reader reader(bytes, magic::c_BMesh, AssetCodec<BMesh>::c_BakeToken, c_What);
 
@@ -387,15 +388,4 @@ namespace assetlib
 		}
 	}
 
-	std::vector<std::byte>
-	AssetCodec<BMesh>::Serialize(const BMesh& value)
-	{
-		return serialize(value);
-	}
-
-	BMesh
-	AssetCodec<BMesh>::Deserialize(std::span<const std::byte> bytes)
-	{
-		return deserialize(bytes);
-	}
 }

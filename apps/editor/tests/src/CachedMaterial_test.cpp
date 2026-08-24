@@ -2,8 +2,6 @@
 
 #include <QTemporaryDir>
 
-#include <assetlib/bmaterial_io.h>
-
 #include <assetlib/AssetStore.h>
 #include <catch2/catch_test_macros.hpp>
 

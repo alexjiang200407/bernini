@@ -1,4 +1,4 @@
-#include <assetlib/banim_io.h>
+#include <assetlib/codecs.h>
 #include <assetlib_structs/Animation.h>
 #include <assetlib_structs/Skeleton.h>
 
@@ -70,7 +70,7 @@ namespace assetlib
 	}
 
 	std::vector<std::byte>
-	serializeAnimations(const AnimationSet& animations)
+	AssetCodec<AnimationSet>::Serialize(const AnimationSet& animations)
 	{
 		cache::Writer writer;
 		writer.Add(ChunkId::kClips, animations.clips);
@@ -87,7 +87,7 @@ namespace assetlib
 	}
 
 	AnimationSet
-	deserializeAnimations(std::span<const std::byte> bytes)
+	AssetCodec<AnimationSet>::Deserialize(std::span<const std::byte> bytes)
 	{
 		const cache::Reader reader(
 			bytes,
@@ -155,15 +155,4 @@ namespace assetlib
 		       animations.skeletonSignature == skeletonSignature(skeleton);
 	}
 
-	std::vector<std::byte>
-	AssetCodec<AnimationSet>::Serialize(const AnimationSet& value)
-	{
-		return serializeAnimations(value);
-	}
-
-	AnimationSet
-	AssetCodec<AnimationSet>::Deserialize(std::span<const std::byte> bytes)
-	{
-		return deserializeAnimations(bytes);
-	}
 }

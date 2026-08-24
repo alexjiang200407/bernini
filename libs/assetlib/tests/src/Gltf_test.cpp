@@ -1,5 +1,6 @@
+#include <assetlib/bmesh.h>
 #include <assetlib/bmesh_gltf.h>
-#include <assetlib/bmesh_io.h>
+#include <assetlib/codecs.h>
 #include <assetlib_structs/BMesh.h>
 #include <assetlib_structs/BMeshImport.h>
 
@@ -131,7 +132,8 @@ TEST_CASE("an imported triangle survives a container round-trip", "[bmesh][gltf]
 	const auto mesh = loadFromGltf(path);
 	std::filesystem::remove(path);
 
-	const auto restored = deserialize(serialize(toBMesh(mesh)));
+	const auto restored =
+		AssetCodec<BMesh>::Deserialize(AssetCodec<BMesh>::Serialize(toBMesh(mesh)));
 	REQUIRE(restored.vertexData == mesh.vertexData);
 	REQUIRE(restored.submeshes.size() == mesh.submeshes.size());
 	REQUIRE(restored.meshlets.size() == mesh.meshlets.size());
@@ -172,7 +174,8 @@ TEST_CASE("loadFromGltf imports the Suzanne test model", "[bmesh][gltf]")
 	REQUIRE(first.aabbMax.y > first.aabbMin.y);
 
 	// And it survives a full container round-trip.
-	const auto restored = deserialize(serialize(toBMesh(mesh)));
+	const auto restored =
+		AssetCodec<BMesh>::Deserialize(AssetCodec<BMesh>::Serialize(toBMesh(mesh)));
 	REQUIRE(restored.vertexData == mesh.vertexData);
 	REQUIRE(restored.meshlets.size() == mesh.meshlets.size());
 }

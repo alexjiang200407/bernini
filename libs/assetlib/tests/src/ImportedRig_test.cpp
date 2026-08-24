@@ -1,14 +1,12 @@
 #include <assetlib/Project.h>
 #include <assetlib/asset_import.h>
+#include <assetlib/bmesh.h>
 #include <assetlib/import_document.h>
 #include <core/file/LooseFileSystem.h>
 
 #include <assetlib/asset_describe.h>
 #include <assetlib/asset_refs.h>
-#include <assetlib/banim_io.h>
 #include <assetlib/bmesh_gltf.h>
-#include <assetlib/bmesh_io.h>
-#include <assetlib/bskel_io.h>
 #include <assetlib/mesh_tangents.h>
 #include <assetlib/pak_pack.h>
 #include <assetlib/project_layout.h>

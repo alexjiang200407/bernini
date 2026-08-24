@@ -1,15 +1,9 @@
+#include <assetlib/codecs.h>
 #include <assetlib/migrate.h>
 
 #include <assetlib/AssetStore.h>
 #include <assetlib/RegenMesh.h>
 #include <assetlib/asset_refs.h>
-#include <assetlib/banim_io.h>
-#include <assetlib/benv_io.h>
-#include <assetlib/benvl_io.h>
-#include <assetlib/bmaterial_io.h>
-#include <assetlib/bmesh_io.h>
-#include <assetlib/bskel_io.h>
-#include <assetlib/bsky_io.h>
 #include <assetlib_structs/Animation.h>
 #include <assetlib_structs/BEnv.h>
 #include <assetlib_structs/BMaterial.h>
@@ -50,20 +44,21 @@ namespace assetlib
 					"its import document binds submesh '{}', which the mesh does not have; "
 					"rebind or re-export",
 					current.unboundBindings.front());
-				return serialize(current.mesh);
+				return AssetCodec<BMesh>::Serialize(current.mesh);
 			}
 			case AssetType::kSkeleton:
-				return serializeSkeleton(store.LoadRegenSkeleton(key));
+				return AssetCodec<Skeleton>::Serialize(store.LoadRegenSkeleton(key));
 			case AssetType::kAnimation:
-				return serializeAnimations(store.LoadRegenAnimations(key));
+				return AssetCodec<AnimationSet>::Serialize(store.LoadRegenAnimations(key));
 			case AssetType::kMaterial:
-				return serializeMaterial(deserializeMaterial(bytes));
+				return AssetCodec<BMaterial>::Serialize(AssetCodec<BMaterial>::Deserialize(bytes));
 			case AssetType::kSky:
-				return serializeSky(deserializeSky(bytes));
+				return AssetCodec<BSky>::Serialize(AssetCodec<BSky>::Deserialize(bytes));
 			case AssetType::kEnvLighting:
-				return serializeEnvLighting(deserializeEnvLighting(bytes));
+				return AssetCodec<BEnvLighting>::Serialize(
+					AssetCodec<BEnvLighting>::Deserialize(bytes));
 			case AssetType::kEnvironment:
-				return serializeEnv(deserializeEnv(bytes));
+				return AssetCodec<BEnv>::Serialize(AssetCodec<BEnv>::Deserialize(bytes));
 			case AssetType::kTexture:
 			case AssetType::kVat:
 			case AssetType::kImportDocument:

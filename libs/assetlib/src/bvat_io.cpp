@@ -1,4 +1,5 @@
-#include <assetlib/bvat_io.h>
+#include <assetlib/codecs.h>
+#include <assetlib/vat_bake.h>
 #include <assetlib_structs/BVat.h>
 
 #include "cache_io.h"
@@ -141,7 +142,7 @@ namespace assetlib
 	}
 
 	std::vector<std::byte>
-	serializeVat(const BVat& vat)
+	AssetCodec<BVat>::Serialize(const BVat& vat)
 	{
 		if (vat.positionsKtx2.empty() || vat.normalsKtx2.empty())
 			throw_runtime_error(
@@ -224,7 +225,7 @@ namespace assetlib
 	}
 
 	BVat
-	deserializeVat(std::span<const std::byte> bytes)
+	AssetCodec<BVat>::Deserialize(std::span<const std::byte> bytes)
 	{
 		// Wholly derived, so a bake from before the cache format has no carry -- re-baking it is
 		// cheaper than any reader for a file nobody authored.
@@ -320,15 +321,4 @@ namespace assetlib
 				c_What));
 	}
 
-	std::vector<std::byte>
-	AssetCodec<BVat>::Serialize(const BVat& value)
-	{
-		return serializeVat(value);
-	}
-
-	BVat
-	AssetCodec<BVat>::Deserialize(std::span<const std::byte> bytes)
-	{
-		return deserializeVat(bytes);
-	}
 }

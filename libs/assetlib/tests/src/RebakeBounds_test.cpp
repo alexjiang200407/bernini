@@ -1,6 +1,3 @@
-#include <assetlib/banim_io.h>
-#include <assetlib/bmesh_io.h>
-#include <assetlib/bskel_io.h>
 #include <assetlib/rebake_bounds.h>
 #include <assetlib/skeleton.h>
 #include <assetlib/skinning.h>

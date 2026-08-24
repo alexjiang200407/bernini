@@ -2,9 +2,6 @@
 
 #include <assetlib/AssetStore.h>
 
-#include <assetlib/benv_io.h>
-#include <assetlib/benvl_io.h>
-#include <assetlib/bsky_io.h>
 #include <assetlib/env_bake.h>
 #include <assetlib/envmap_bake.h>
 #include <assetlib/image_io.h>

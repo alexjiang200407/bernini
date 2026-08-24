@@ -102,9 +102,10 @@ truth; when this doc disagrees, trust the header, then fix this doc.
 |---|---|---|
 | `bakeVat` (in-memory + `VatBakeDesc` overloads) | [libs/assetlib/include/assetlib/vat_bake.h](libs/assetlib/include/assetlib/vat_bake.h) | CPU-skin every vertex at every frame; pack, pad and encode the texture pair |
 | `vatIsStale` / `normalizePath` | [libs/assetlib/include/assetlib/vat_bake.h](libs/assetlib/include/assetlib/vat_bake.h) | Compare the container's input stamps against the disk — the stamp half of the bake-on-demand trigger — and the path form the container records |
-| `saveVat` / `loadVat` / `loadVatTables` / `loadVatRefs` | [libs/assetlib/include/assetlib/bvat_io.h](libs/assetlib/include/assetlib/bvat_io.h) | Container round-trip; tables-only and refs-only seek reads for scans |
+| `AssetCodec<BVat>` | [libs/assetlib/include/assetlib/codecs.h](libs/assetlib/include/assetlib/codecs.h) | The container round-trip |
+| `loadVatTables` / `loadVatRefs` | [libs/assetlib/include/assetlib/vat_bake.h](libs/assetlib/include/assetlib/vat_bake.h) | Tables-only and refs-only seek reads, for a scan that must not pay for the texels |
 | `vatPathFor` | [libs/assetlib/include/assetlib/vat_bake.h](libs/assetlib/include/assetlib/vat_bake.h) | Where a (mesh, clip set) pair's bake lives — one file per pair, moved by renameAsset when a rename changes the derivation |
-| `assetlib_cli bakevat` | [libs/assetlib/cli](libs/assetlib/cli) | The CLI door over `bakeVat` + `saveVat` |
+| `assetlib_cli bakevat` | [libs/assetlib/cli](libs/assetlib/cli) | The CLI door over `bakeVat` + `store.Save` |
 
 ### bgl — draw path
 | Interface | File | Role |
@@ -182,7 +183,7 @@ flowchart TD
     end
 
     BMESH & BSKEL & BANIM -- "inputs, stamped" --> BAKE
-    BAKE -- "saveVat, beside the mesh" --> BVAT
+    BAKE -- "store.Save, beside the mesh" --> BVAT
     ACQ --> ENSURE
     ENSURE -- "stamp check" --> STALE
     ENSURE -- "stale or missing: re-bake" --> BAKE

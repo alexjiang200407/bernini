@@ -1,9 +1,5 @@
-#include <assetlib/benv_io.h>
-#include <assetlib/benvl_io.h>
-#include <assetlib/bmaterial_io.h>
+#include <assetlib/bmesh.h>
 #include <assetlib/bmesh_gltf.h>
-#include <assetlib/bmesh_io.h>
-#include <assetlib/bsky_io.h>
 #include <assetlib/cancel.h>
 #include <assetlib/image_io.h>
 #include <assetlib/material_bake.h>

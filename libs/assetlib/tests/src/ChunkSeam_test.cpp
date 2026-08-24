@@ -1,7 +1,7 @@
-#include <assetlib/banim_io.h>
-#include <assetlib/bmesh_io.h>
-#include <assetlib/bskel_io.h>
+#include <assetlib/bmesh.h>
+#include <assetlib/codecs.h>
 #include <assetlib/pak_io.h>
+#include <assetlib/skeleton.h>
 #include <assetlib_structs/Animation.h>
 #include <assetlib_structs/BMesh.h>
 #include <assetlib_structs/Skeleton.h>
@@ -155,7 +155,7 @@ TEST_CASE("a chunked container loads the same from a directory and from an archi
 			CHECK(mounted.submeshes.size() == direct.submeshes.size());
 
 			// The strongest form of "identical": re-serializing both gives the same bytes.
-			CHECK(serialize(mounted) == serialize(direct));
+			CHECK(AssetCodec<BMesh>::Serialize(mounted) == AssetCodec<BMesh>::Serialize(direct));
 		}
 	}
 
@@ -173,11 +173,11 @@ TEST_CASE("a chunked container loads the same from a directory and from an archi
 		const Skeleton direct = StoreAt(scratch.path).Load<Skeleton>("Skeletons/rig.bskel");
 
 		CHECK(
-			serializeSkeleton(load<Skeleton>(loose, "Skeletons/rig.bskel")) ==
-			serializeSkeleton(direct));
+			AssetCodec<Skeleton>::Serialize(load<Skeleton>(loose, "Skeletons/rig.bskel")) ==
+			AssetCodec<Skeleton>::Serialize(direct));
 		CHECK(
-			serializeSkeleton(load<Skeleton>(pak, "Skeletons/rig.bskel")) ==
-			serializeSkeleton(direct));
+			AssetCodec<Skeleton>::Serialize(load<Skeleton>(pak, "Skeletons/rig.bskel")) ==
+			AssetCodec<Skeleton>::Serialize(direct));
 	}
 
 	SECTION(".banim")
@@ -186,11 +186,12 @@ TEST_CASE("a chunked container loads the same from a directory and from an archi
 			StoreAt(scratch.path).Load<AnimationSet>("Animations/idle.banim");
 
 		CHECK(
-			serializeAnimations(load<AnimationSet>(loose, "Animations/idle.banim")) ==
-			serializeAnimations(direct));
+			AssetCodec<AnimationSet>::Serialize(
+				load<AnimationSet>(loose, "Animations/idle.banim")) ==
+			AssetCodec<AnimationSet>::Serialize(direct));
 		CHECK(
-			serializeAnimations(load<AnimationSet>(pak, "Animations/idle.banim")) ==
-			serializeAnimations(direct));
+			AssetCodec<AnimationSet>::Serialize(load<AnimationSet>(pak, "Animations/idle.banim")) ==
+			AssetCodec<AnimationSet>::Serialize(direct));
 
 		CHECK(loadAnimationSkeletonPath(loose, "Animations/idle.banim") == direct.skeleton);
 		CHECK(loadAnimationSkeletonPath(pak, "Animations/idle.banim") == direct.skeleton);

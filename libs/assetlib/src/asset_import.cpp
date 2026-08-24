@@ -1,12 +1,11 @@
 #include <assetlib/asset_import.h>
+#include <assetlib/bmesh.h>
+#include <assetlib/codecs.h>
 
 #include <assetlib/AssetStore.h>
 
 #include <assetlib/import_document.h>
 
-#include <assetlib/banim_io.h>
-#include <assetlib/bmesh_io.h>
-#include <assetlib/bskel_io.h>
 #include <assetlib/container_format.h>
 #include <assetlib/project_layout.h>
 #include <assetlib/skeleton.h>
@@ -139,7 +138,7 @@ namespace assetlib
 
 		core::file::write_atomic(
 			importDocumentPathFor(target.dataRoot, target.name),
-			serializeImportDocument(document));
+			AssetCodec<ImportDocument>::Serialize(document));
 	}
 
 	std::vector<std::string>
@@ -200,7 +199,7 @@ namespace assetlib
 		else
 			document.bindings.emplace_back(std::string(submesh), std::string(material));
 
-		core::file::write_atomic(documentPath, serializeImportDocument(document));
+		core::file::write_atomic(documentPath, AssetCodec<ImportDocument>::Serialize(document));
 	}
 
 	std::vector<ReauthoredDocument>
@@ -274,8 +273,7 @@ namespace assetlib
 
 				const std::vector<std::byte> bytes =
 					core::file::read_file_bytes(entry.path().string());
-				ImportDocument document = deserializeImportDocument(
-					std::string_view(reinterpret_cast<const char*>(bytes.data()), bytes.size()));
+				ImportDocument document = AssetCodec<ImportDocument>::Deserialize(bytes);
 
 				document.bindings =
 					claimants == 0 ?
@@ -284,9 +282,9 @@ namespace assetlib
 							AssetCodec<BMesh>::Deserialize(
 								core::file::read_file_bytes(claimed->second.front().string())));
 
-				const std::string serialized = serializeImportDocument(document);
-				if (std::string_view(reinterpret_cast<const char*>(bytes.data()), bytes.size()) !=
-				    serialized)
+				const std::vector<std::byte> serialized =
+					AssetCodec<ImportDocument>::Serialize(document);
+				if (bytes != serialized)
 				{
 					core::file::write_atomic(entry.path(), serialized);
 					result.outcome = ReauthoredDocument::Outcome::kRewritten;

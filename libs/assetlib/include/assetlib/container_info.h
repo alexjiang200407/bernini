@@ -25,4 +25,17 @@ namespace assetlib
 	 */
 	[[nodiscard]] std::optional<CacheEntryInfo>
 	inspectCacheEntry(std::span<const std::byte> bytes);
+
+	/**
+	 * The size + content hash of `path`, as the bake records it. A file that does not exist (or
+	 * cannot be read) yields a zeroed stamp, which never compares equal to a real one -- so a
+	 * deleted source reads as stale rather than as unchanged.
+	 *
+	 * Memoized for the life of the process against the file's size and mtime, so a source hashed
+	 * once is re-stamped for a stat. A file rewritten in place is re-hashed, because that moves its
+	 * mtime; one rewritten with its mtime forced back to the same value is not.
+	 */
+	[[nodiscard]] SourceStamp
+	stampOf(const std::filesystem::path& path);
+
 }

@@ -1,15 +1,10 @@
 #include <assetlib/AssetStore.h>
 #include <assetlib/asset_refs.h>
+#include <assetlib/bmesh.h>
+#include <assetlib/vat_bake.h>
 
 #include <assetlib/AssetCodec.h>
 
-#include <assetlib/banim_io.h>
-#include <assetlib/benv_io.h>
-#include <assetlib/benvl_io.h>
-#include <assetlib/bmaterial_io.h>
-#include <assetlib/bmesh_io.h>
-#include <assetlib/bsky_io.h>
-#include <assetlib/bvat_io.h>
 #include <assetlib/container_format.h>
 #include <assetlib/import_document.h>
 #include <assetlib_structs/BEnv.h>

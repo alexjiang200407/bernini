@@ -1,4 +1,4 @@
-#include <assetlib/bmaterial_io.h>
+#include <assetlib/codecs.h>
 #include <assetlib/image_io.h>
 #include <assetlib/material_bake.h>
 #include <assetlib_structs/BMaterial.h>
@@ -319,7 +319,7 @@ TEST_CASE("a stale .bmaterial is rejected, not silently misread", "[bmaterial][a
 	material.pbr.alphaMode   = AlphaMode::kMask;
 	material.pbr.alphaCutoff = 0.25f;
 
-	std::vector<std::byte> bytes = serializeMaterial(material);
+	std::vector<std::byte> bytes = AssetCodec<BMaterial>::Serialize(material);
 
 	// Rewrite the version word (major is the uint16 right after the 4-byte magic) to v4 and lop off the
 	// two fields v5 appended, producing exactly what a v4 writer would have emitted.
@@ -327,5 +327,5 @@ TEST_CASE("a stale .bmaterial is rejected, not silently misread", "[bmaterial][a
 	std::memcpy(bytes.data() + sizeof(uint32_t), &c_V4, sizeof(c_V4));
 	bytes.resize(bytes.size() - (sizeof(uint32_t) + sizeof(float)));
 
-	REQUIRE_THROWS_AS(deserializeMaterial(bytes), std::runtime_error);
+	REQUIRE_THROWS_AS(AssetCodec<BMaterial>::Deserialize(bytes), std::runtime_error);
 }

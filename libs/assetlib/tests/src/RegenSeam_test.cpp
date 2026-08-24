@@ -1,3 +1,5 @@
+#include <assetlib/bmesh.h>
+#include <assetlib/codecs.h>
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_string.hpp>
 
@@ -6,8 +8,6 @@
 #include <assetlib/RegenMesh.h>
 #include <assetlib/asset_import.h>
 #include <assetlib/bmesh_gltf.h>
-#include <assetlib/bmesh_io.h>
-#include <assetlib/bskel_io.h>
 #include <assetlib/import_document.h>
 #include <assetlib/mesh_tangents.h>
 #include <assetlib/project_layout.h>
@@ -314,7 +314,9 @@ TEST_CASE("a stale rig regenerates, and its clips follow the document's sample r
 			core::file::LooseFileSystem(sandbox.dataRoot),
 			"meshes_src/unit.bimport");
 		document.sampleRate = 60.0f;
-		core::file::write_atomic(sandbox.documentPath, serializeImportDocument(document));
+		core::file::write_atomic(
+			sandbox.documentPath,
+			AssetCodec<ImportDocument>::Serialize(document));
 
 		// The mesh goes stale too, so the disk walk cannot serve its box: the one under test is
 		// the box the seam measures from the regenerated form.

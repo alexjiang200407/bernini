@@ -1,8 +1,7 @@
 #include "animation_draws.h"
+#include <assetlib/bmesh.h>
 
 #include <QtGlobal>
-
-#include <assetlib/bmesh_io.h>
 
 namespace editor
 {

@@ -78,7 +78,7 @@ descriptor types, and the lifetime/threading rules that govern them. Start here 
 **[assetlib Public API](./docs/assetlib_api.md)**
 
 The offline half: `AssetStore` and the mount-key rule, `Project`, the reference graph behind every
-deletion and rename, one `*_io.h` per container, and the bakes. Start here to *use* assetlib.
+deletion and rename, one `AssetCodec` per container, and the bakes. Start here to *use* assetlib.
 
 **[Geometry Layout](./docs/geometry_layout.md)**
 

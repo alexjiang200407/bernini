@@ -1,4 +1,4 @@
-#include <assetlib/bskel_io.h>
+#include <assetlib/codecs.h>
 #include <assetlib_structs/Skeleton.h>
 
 #include <assetlib/skeleton.h>
@@ -27,7 +27,7 @@ namespace assetlib
 	}
 
 	std::vector<std::byte>
-	serializeSkeleton(const Skeleton& skeleton)
+	AssetCodec<Skeleton>::Serialize(const Skeleton& skeleton)
 	{
 		cache::Writer writer;
 		writer.Add(ChunkId::kBones, skeleton.bones);
@@ -36,7 +36,7 @@ namespace assetlib
 	}
 
 	Skeleton
-	deserializeSkeleton(std::span<const std::byte> bytes)
+	AssetCodec<Skeleton>::Deserialize(std::span<const std::byte> bytes)
 	{
 		const cache::Reader reader(
 			bytes,
@@ -53,15 +53,4 @@ namespace assetlib
 		return skeleton;
 	}
 
-	std::vector<std::byte>
-	AssetCodec<Skeleton>::Serialize(const Skeleton& value)
-	{
-		return serializeSkeleton(value);
-	}
-
-	Skeleton
-	AssetCodec<Skeleton>::Deserialize(std::span<const std::byte> bytes)
-	{
-		return deserializeSkeleton(bytes);
-	}
 }

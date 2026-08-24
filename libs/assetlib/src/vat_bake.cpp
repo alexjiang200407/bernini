@@ -1,11 +1,9 @@
+#include <assetlib/bmesh.h>
+#include <assetlib/container_info.h>
 #include <assetlib/vat_bake.h>
 #include <assetlib_structs/BVat.h>
 
 #include <assetlib/RegenMesh.h>
-#include <assetlib/banim_io.h>
-#include <assetlib/bmaterial_io.h>
-#include <assetlib/bmesh_io.h>
-#include <assetlib/bskel_io.h>
 #include <assetlib/image_io.h>
 #include <assetlib/skeleton.h>
 #include <assetlib/skinning.h>

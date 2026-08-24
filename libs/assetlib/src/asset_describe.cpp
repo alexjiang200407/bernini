@@ -1,8 +1,7 @@
 #include <assetlib/asset_describe.h>
+#include <assetlib/bmesh.h>
+#include <assetlib/container_info.h>
 
-#include <assetlib/banim_io.h>
-#include <assetlib/bmaterial_io.h>
-#include <assetlib/bmesh_io.h>
 #include <assetlib/env_bake.h>
 #include <assetlib/skeleton.h>
 #include <assetlib_structs/Animation.h>

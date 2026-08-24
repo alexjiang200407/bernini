@@ -1,6 +1,6 @@
 #include <assetlib/AssetStore.h>
-#include <assetlib/banim_io.h>
-#include <assetlib/bmesh_io.h>
+#include <assetlib/bmesh.h>
+#include <assetlib/codecs.h>
 #include <assetlib/container_format.h>
 #include <assetlib/rebake_bounds.h>
 #include <assetlib/skeleton.h>
@@ -180,7 +180,8 @@ namespace assetlib
 
 					// A skin the bake refuses stays boxless and would land here every run; only a
 					// rewrite that changes bytes is worth dirtying a version-controlled binary for.
-					if (serializeAnimations(animations) == store.GetFiles().Read(animPath))
+					if (AssetCodec<AnimationSet>::Serialize(animations) ==
+					    store.GetFiles().Read(animPath))
 					{
 						entry.outcome = RebakedFile::Outcome::kCurrent;
 						continue;

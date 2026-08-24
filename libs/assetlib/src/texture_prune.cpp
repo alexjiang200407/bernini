@@ -5,9 +5,6 @@
 
 #include "ref_paths.h"
 
-#include <assetlib/benvl_io.h>
-#include <assetlib/bmaterial_io.h>
-#include <assetlib/bsky_io.h>
 #include <assetlib/container_format.h>
 #include <assetlib/env_bake.h>
 #include <assetlib/material_bake.h>

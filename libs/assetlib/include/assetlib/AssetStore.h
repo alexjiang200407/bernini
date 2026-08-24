@@ -1,6 +1,6 @@
 #pragma once
-#include <assetlib/AssetCodec.h>
 #include <assetlib/cancel.h>
+#include <assetlib/codecs.h>
 #include <core/file/IFileSystem.h>
 
 namespace assetlib

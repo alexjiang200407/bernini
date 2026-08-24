@@ -1,5 +1,4 @@
-#include "assetlib/benv_io.h"
-
+#include <assetlib/codecs.h>
 #include <assetlib/container_info.h>
 #include <assetlib_structs/BEnv.h>
 #include <core/err/util.h>
@@ -44,7 +43,7 @@ namespace assetlib
 	}
 
 	std::vector<std::byte>
-	serializeEnv(const BEnv& env)
+	AssetCodec<BEnv>::Serialize(const BEnv& env)
 	{
 		auto json = doc::parseObject(env.extraJson, "benv: extraJson");
 
@@ -63,7 +62,7 @@ namespace assetlib
 	}
 
 	BEnv
-	deserializeEnv(std::span<const std::byte> bytes)
+	AssetCodec<BEnv>::Deserialize(std::span<const std::byte> bytes)
 	{
 		core::throw_runtime_error_if(
 			!isTextAssetDocument(bytes),
@@ -73,15 +72,4 @@ namespace assetlib
 			std::string_view(reinterpret_cast<const char*>(bytes.data()), bytes.size()));
 	}
 
-	std::vector<std::byte>
-	AssetCodec<BEnv>::Serialize(const BEnv& value)
-	{
-		return serializeEnv(value);
-	}
-
-	BEnv
-	AssetCodec<BEnv>::Deserialize(std::span<const std::byte> bytes)
-	{
-		return deserializeEnv(bytes);
-	}
 }

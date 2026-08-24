@@ -1,9 +1,6 @@
 #include <assetlib/asset_refs.h>
+#include <assetlib/bmesh.h>
 
-#include <assetlib/banim_io.h>
-#include <assetlib/bmaterial_io.h>
-#include <assetlib/bmesh_io.h>
-#include <assetlib/bskel_io.h>
 #include <assetlib/skeleton.h>
 #include <assetlib/texture_prune.h>
 #include <assetlib_structs/Animation.h>

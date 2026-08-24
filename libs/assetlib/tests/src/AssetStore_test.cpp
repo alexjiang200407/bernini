@@ -1,5 +1,5 @@
 #include <assetlib/AssetStore.h>
-#include <assetlib/bmaterial_io.h>
+#include <assetlib/container_info.h>
 #include <assetlib/env_bake.h>
 #include <assetlib/pak_io.h>
 #include <assetlib/pak_pack.h>

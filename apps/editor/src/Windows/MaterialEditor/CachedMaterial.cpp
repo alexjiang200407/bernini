@@ -2,8 +2,6 @@
 
 #include <QDebug>
 
-#include <assetlib/bmaterial_io.h>
-
 #include "util/asset_paths.h"
 #include <assetlib/AssetStore.h>
 

@@ -5,20 +5,6 @@
 namespace assetlib
 {
 	/**
-	 * How one container type becomes bytes and comes back, and what identifies it on disk.
-	 *
-	 * One specialization per container, declared beside that container's io -- `AssetCodec<BMesh>`
-	 * lives in `bmesh_io.h`, next to the `serialize` it calls. The primary template is deliberately
-	 * left undefined, so a type with no codec is a compile error naming the type rather than a
-	 * link error naming a mangled symbol.
-	 *
-	 * This is the compile-time counterpart of the runtime registry a shipping engine uses -- Godot's
-	 * `ResourceFormatLoader`, Unity's `ScriptedImporter`. Those can dispatch virtually because
-	 * everything they load shares a base; our containers are unrelated PODs, so a virtual codec
-	 * would have to return `std::any` and every caller would cast back. A deliberate deviation --
-	 * see docs/assetlib_api.md.
-	 */
-	/**
 	 * What a codec can be written for: a container struct this library serializes.
 	 *
 	 * Deliberately weaker than AssetCodecFor below, and it has to be -- that one asks whether
@@ -29,6 +15,20 @@ namespace assetlib
 	template <typename T>
 	concept AssetContainer = std::is_class_v<T>;
 
+	/**
+	 * How one container type becomes bytes and comes back, and what identifies it on disk.
+	 *
+	 * One specialization per container, all of them in codecs.h so the extensions, magics and bake
+	 * tokens read as one table; each `Serialize` is defined in that container's own `.cpp`. The
+	 * primary template is deliberately left undefined, so a type with no codec is a compile error
+	 * naming the type rather than a link error naming a mangled symbol.
+	 *
+	 * This is the compile-time counterpart of the runtime registry a shipping engine uses -- Godot's
+	 * `ResourceFormatLoader`, Unity's `ScriptedImporter`. Those can dispatch virtually because
+	 * everything they load shares a base; our containers are unrelated PODs, so a virtual codec
+	 * would have to return `std::any` and every caller would cast back. A deliberate deviation --
+	 * see docs/assetlib_api.md.
+	 */
 	template <AssetContainer T>
 	struct AssetCodec;
 

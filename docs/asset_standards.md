@@ -310,20 +310,20 @@ Three different spaces are in play and they are easy to conflate. The contract, 
 * **`.bmesh`** — the modular on-disk mesh: node hierarchy, meshes, submeshes, meshlets +
   meshopt vertex/triangle pools, interleaved `vertexData`, and **material references by file path**.
   Struct: [libs/assetlib_structs/include/assetlib_structs/BMesh.h](libs/assetlib_structs/include/assetlib_structs/BMesh.h);
-  container I/O: [libs/assetlib/include/assetlib/bmesh_io.h](libs/assetlib/include/assetlib/bmesh_io.h).
+  container I/O: [libs/assetlib/include/assetlib/codecs.h](libs/assetlib/include/assetlib/codecs.h).
 * **`.bvat`** — a rig's clips baked to a position/normal texture pair, embedded as KTX2 payload
   chunks (positions `R16G16B16A16_UNORM` unorm-packed in one all-clips AABB; normals
   `R8G8B8A8_UNORM`, `rgb` as `xyz * 0.5 + 0.5` and `a` the tangent's twist about it), plus the clip/column tables and the per-frame skinning
   palettes. **A derived build product, never committed**: it stamps its three inputs and is re-baked
   in place when any of them moves — see [VAT](docs/vat.md). Struct:
   [libs/assetlib_structs/include/assetlib_structs/BVat.h](libs/assetlib_structs/include/assetlib_structs/BVat.h);
-  I/O: [libs/assetlib/include/assetlib/bvat_io.h](libs/assetlib/include/assetlib/bvat_io.h);
+  I/O: [libs/assetlib/include/assetlib/codecs.h](libs/assetlib/include/assetlib/codecs.h);
   bake: [libs/assetlib/include/assetlib/vat_bake.h](libs/assetlib/include/assetlib/vat_bake.h).
 * **`.bmaterial`** — **a shading-model tag plus that model's parameters**, as an authored text
   document: canonical JSON, factors and routes as named keys, the editor graph carried as an
   opaque string, unknown keys preserved on round-trip. Struct:
   [libs/assetlib_structs/include/assetlib_structs/BMaterial.h](libs/assetlib_structs/include/assetlib_structs/BMaterial.h);
-  I/O: [libs/assetlib/include/assetlib/bmaterial_io.h](libs/assetlib/include/assetlib/bmaterial_io.h);
+  I/O: [libs/assetlib/include/assetlib/codecs.h](libs/assetlib/include/assetlib/codecs.h);
   bake: [libs/assetlib/include/assetlib/material_bake.h](libs/assetlib/include/assetlib/material_bake.h).
 
   * **Every texture path is relative to the project's Data root**, not to the material file: a material
@@ -373,7 +373,7 @@ Three different spaces are in play and they are easy to conflate. The contract, 
     untouched rather than half-stripped. Run it with `assetlib_cli strip` (below); it is irreversible,
     so it asks before rewriting a file in place.
 
-  **There is one shape in the reader, and older files read into it.** `deserializeMaterial` takes the
+  **There is one shape in the reader, and older files read into it.** `AssetCodec<BMaterial>::Deserialize` takes the
   keys it knows and defaults the rest — a material written before
   `transmissionFactor` existed reads with 0, one from before the specular factors reads them at 1
   and white — so the reader has one shape and no branch that can rot; keys it does not know ride
@@ -401,18 +401,17 @@ Three different spaces are in play and they are easy to conflate. The contract, 
   tier-branching `Forward_AnyMesh` — and a new layer adds no geometry code.
 * **`.bskel`** (v1) — a skeleton: bones, their bind pose and inverse bind matrices, and a name pool.
   Struct: [libs/assetlib_structs/include/assetlib_structs/Skeleton.h](libs/assetlib_structs/include/assetlib_structs/Skeleton.h);
-  I/O: [libs/assetlib/include/assetlib/bskel_io.h](libs/assetlib/include/assetlib/bskel_io.h).
+  I/O: [libs/assetlib/include/assetlib/codecs.h](libs/assetlib/include/assetlib/codecs.h).
 * **`.banim`** (v1) — a clip set: resampled poses, per-clip metadata, and the `.bskel` path they
   address. Struct: [libs/assetlib_structs/include/assetlib_structs/Animation.h](libs/assetlib_structs/include/assetlib_structs/Animation.h);
-  I/O: [libs/assetlib/include/assetlib/banim_io.h](libs/assetlib/include/assetlib/banim_io.h).
+  I/O: [libs/assetlib/include/assetlib/codecs.h](libs/assetlib/include/assetlib/codecs.h).
 * A baked model on disk is therefore `<name>.bmesh` + one `matN.bmaterial` per material + one texture
   file per texture + `<name>.bskel` and `<name>.banim` if it was rigged, all in one directory.
 * **`.bsky`** — the sky: one radiance cube map, purely derived.
   **`.benvl`** — the lighting derived from that sky: the GGX prefilter chain, the irradiance
   convolution, and the exposure they were measured at. Both structs:
   [libs/assetlib_structs/include/assetlib_structs/BEnv.h](libs/assetlib_structs/include/assetlib_structs/BEnv.h);
-  I/O: [libs/assetlib/include/assetlib/bsky_io.h](libs/assetlib/include/assetlib/bsky_io.h),
-  [libs/assetlib/include/assetlib/benvl_io.h](libs/assetlib/include/assetlib/benvl_io.h).
+  I/O: [libs/assetlib/include/assetlib/codecs.h](libs/assetlib/include/assetlib/codecs.h).
 
   * **Derived cache entries** (see [Asset Containers](asset_containers.md)): the sky's route is its cache
     key, the lighting joins its two sources into one. Every map is an `EnvMapRoute`: the `source`
@@ -444,7 +443,7 @@ Three different spaces are in play and they are easy to conflate. The contract, 
   as it does for `Materials/`. Composing by path lets a sky be re-authored
   without touching the lighting minutes of convolution produced, and lets two environments share one
   sky; weather joins later through the minor version. Struct in the same `BEnv.h`; I/O:
-  [libs/assetlib/include/assetlib/benv_io.h](libs/assetlib/include/assetlib/benv_io.h).
+  [libs/assetlib/include/assetlib/codecs.h](libs/assetlib/include/assetlib/codecs.h).
 
   * Either path may be empty — the import's checkboxes write whichever pieces were asked for; what a
     `.benv` must reference is its consumer's rule, not the container's.

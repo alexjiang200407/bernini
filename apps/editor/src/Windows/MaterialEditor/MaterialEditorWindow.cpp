@@ -1,5 +1,6 @@
 #include "MaterialEditorWindow.h"
 #include "Mesh/mesh_load.h"
+#include <assetlib/bmesh.h>
 
 #include <QComboBox>
 #include <QDebug>
@@ -22,8 +23,6 @@
 
 #include <assetlib/AssetStore.h>
 #include <assetlib/asset_import.h>
-#include <assetlib/bmaterial_io.h>
-#include <assetlib/bmesh_io.h>
 #include <assetlib/mesh_tangents.h>
 #include <assetlib_structs/BMaterial.h>
 #include <assetlib_structs/BMesh.h>

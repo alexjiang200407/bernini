@@ -6,13 +6,9 @@
 #include <assetlib/asset_import.h>
 #include <assetlib/asset_refs.h>
 #include <assetlib/assetlib.h>
-#include <assetlib/benv_io.h>
-#include <assetlib/benvl_io.h>
-#include <assetlib/bmaterial_io.h>
+#include <assetlib/bmesh.h>
 #include <assetlib/bmesh_gltf.h>
-#include <assetlib/bmesh_io.h>
-#include <assetlib/bskel_io.h>
-#include <assetlib/bvat_io.h>
+#include <assetlib/codecs.h>
 #include <assetlib/container_format.h>
 #include <assetlib/container_info.h>
 #include <assetlib/env_import.h>

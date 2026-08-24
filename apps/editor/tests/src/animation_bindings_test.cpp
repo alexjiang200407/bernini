@@ -2,8 +2,6 @@
 #include <assetlib/Project.h>
 
 #include "StoreAt.h"
-#include <assetlib/banim_io.h>
-#include <assetlib/bmesh_io.h>
 #include <assetlib_structs/Animation.h>
 #include <assetlib_structs/BMesh.h>
 
