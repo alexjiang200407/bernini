@@ -45,20 +45,27 @@ lives. `apps/editor` gets a looser bar; this does not — see
 
 Concretely, before adding to `include/assetlib/`:
 
-- **A project's asset is addressed by a mount key, through `AssetStore`.** A new function that
-  takes a `std::filesystem::path` to a file the project owns is adding the second way to do a
-  thing that already has one. `std::filesystem::path` is for files no project owns — see
-  [STYLE.md](../../STYLE.md) § Paths.
+- **A project's asset is addressed by a mount key, through `AssetStore`**: `store.Load<T>(key)`
+  and `store.Save(value, key)`. A new function taking a `std::filesystem::path` to a file the
+  project owns is the second way to do a thing that already has one, and the family that did that
+  was deleted rather than kept — see [STYLE.md](../../STYLE.md) § Paths.
+- **A caller that genuinely addresses the host encodes and moves bytes itself**, so it cannot be
+  mistaken for a project write: `AssetCodec<T>::Serialize` plus `core::file::write_atomic`. That
+  is `assetlib_cli strip --out` writing a shipping tree, and the editor opening a mesh from
+  outside any data root. Both are real; neither is a reason to bring the old family back.
 - **Do not re-carry a data root.** `MaterialBakeDesc` and `EnvBakeDesc` used to, and were the
   standing example of what not to copy; both are gone and a bake is `store.BakeMaterial(...)`.
   A new descriptor carrying a `dataRoot` beside a store is the same mistake again.
 - **A new container type is a new `AssetCodec` specialization**, declared beside its io and listed
-  in `Containers` in `src/container_table.cpp` — which is what `containerKinds()` is built from and
-  what a static assertion holds to `AssetType`. The extension, the type enum and the bake token
-  are still spelled out in several older places as well; collapsing those onto the table is the
-  rest of [docs/specs/assetlib_store_codecs.md](../../docs/specs/assetlib_store_codecs.md), which
-  is in progress. Until it lands, adding a container means editing both, and the table's assertion
-  is what stops you forgetting the half that has no compiler behind it.
+  in `Containers` in `src/container_table.cpp`. That is the whole registration: `containerKinds()`
+  is folded out of it, and a static assertion holds the list to `AssetType`, so a type added to the
+  enum and forgotten in the tuple does not compile. The assertion anchors on `AssetType::kCount`
+  rather than the last enumerator — anchoring it on the latter meant *appending* a type satisfied
+  it silently, which is the case it exists to catch.
+- **Behaviour per container is a `switch`, not a table entry.** `migrate`, `asset_rename` and
+  `pack` do different work per type, and each switch is exhaustive with no `default:` so
+  `-Wall -Werror` turns a new `AssetType` into a compile error there. Do not add a `default:` to
+  one; that is the guarantee.
 - **A project's asset is read and written by key, through the store**: `store.Load<T>(key)` and
   `store.Save(value, key)`. The `save*`/`load*` functions taking a `std::filesystem::path` are the
   older surface and are being removed; do not add a caller.

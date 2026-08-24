@@ -26,16 +26,36 @@ when this doc disagrees, trust the header, then fix this doc.
   `\`-separated and misses — but still resolves loose, because the OS accepts either separator.
   Loose works, packed does not, and nothing reports a problem. See [STYLE.md](STYLE.md) § Paths.
 
-* **The seam is half-built, and the halves are visible from the include list.** Reads go through
-  the store; the *write* half is still free functions taking a host path — `save`, `saveMaterial`,
-  `saveSky`, `saveEnvLighting`, `saveVat` — so a caller writes
-  `save(mesh, store.ResolveWritePath(key))`, or hand-joins `dataRoot / relative`. The newer
-  whole-project operations already take the store (`packProject`, `findUnusedBakedTextures`,
-  `bakeVat`, `AssetRefGraph::Scan`); the older per-file ones do not. The source+cache model widened
-  the gap rather than closing it — six `LoadRegen*` methods joined the read half and no write half
-  arrived — so the store now answers twenty loads and zero saves. The design that finishes it is
-  settled and no longer blocked: see
-  [docs/specs/assetlib_store_codecs.md](docs/specs/assetlib_store_codecs.md).
+* **One seam, both directions.** A project's asset is read and written by mount key through the
+  store: `store.Load<BMesh>(key)` and `store.Save(mesh, key)`. There is no second way — the
+  `save*`/`load*` functions that took a `std::filesystem::path` to a project's file are gone, and
+  the type is what selects the codec rather than the function name.
+
+  A caller that genuinely addresses the *host* still uses a path, and now looks different so it
+  cannot be mistaken for the other thing: it encodes with the codec and moves the bytes itself.
+  `assetlib_cli strip --out` writes a shipping tree, the editor opens a mesh from outside any data
+  root, and `findMatchingSkeleton` walks the disk with a directory iterator — each of those is
+  `AssetCodec<T>::Serialize` plus `core::file::write_atomic`, or the read equivalent.
+
+* **A codec per container, and the type picks it.** `AssetCodec<T>` declares a container's
+  extension, its magic, how it serializes, and — for a cache entry — the bake revision it is
+  written at. One specialization per container, beside that container's io
+  ([AssetCodec.h](libs/assetlib/include/assetlib/AssetCodec.h)).
+
+  This is the compile-time form of the registry a shipping engine uses — Godot's
+  `ResourceFormatLoader`, Unity's `ScriptedImporter`, Unreal's `UFactory`. Those dispatch virtually
+  because everything they load shares a base; our containers are unrelated PODs, so a virtual codec
+  would return `std::any` and every caller would cast back. The deviation is deliberate.
+
+* **The container list exists once.** `containerKinds()` is folded out of the codec
+  specializations, and a static assertion holds it to `AssetType` — every kind but `kTexture`,
+  which is an image this library encodes rather than a container it serializes a struct into. The
+  extension lookup, the CLI's magic sniff and the pack rules all read it.
+
+  Behaviour that differs *per* container is a different thing and stays a `switch`: `migrate`
+  regenerates geometry and re-saves the rest, `asset_rename` rewrites different fields per type,
+  `pack` re-bakes some and copies others. Each is exhaustive with no `default:`, so `-Wall -Werror`
+  makes a new `AssetType` a compile error there — which is the guarantee a table cannot give.
 
 * **Two container regimes, and the split is authored-vs-derived.** `.bmaterial`, `.benv` and
   `.bimport` are canonical-JSON text documents, unknown keys preserved on round-trip; `.bmesh`,
@@ -75,8 +95,9 @@ when this doc disagrees, trust the header, then fix this doc.
 
 ### Containers — one `*_io.h` each
 
-Each declares the same four operations over its POD: serialize, deserialize, save to a host
-path, load from a host path.
+Each declares `serialize`/`deserialize` over its POD and an `AssetCodec` specialization binding
+the two to the type. Reading and writing a project's copy is `store.Load<T>` / `store.Save`; these
+headers are where a container's *format* lives, not where a caller goes.
 
 | Container | Header | Holds |
 |---|---|---|
@@ -153,11 +174,15 @@ The dotted edge is the asymmetry: reads go through the store, writes go around i
   it reads a texel, and a whole-project survey must not pay for them.
 
 ### Containers
-* **`save(const BMesh&, path)`** — `@throws` if the mesh carries joint indices but names no
-  skeleton. Refused at write time because nothing reading the file afterwards can tell a joint
-  index that resolves to nothing from one that does not.
-* **`save` does not create directories**; `writeImportedMesh` does. An import aimed at a
-  subfolder needs the latter.
+* **`Save<BMesh>`** — `@throws` if the mesh carries joint indices but names no skeleton. Refused
+  at write time because nothing reading the file afterwards can tell a joint index that resolves
+  to nothing from one that does not.
+* **`Save` does not create directories**; `writeImportedMesh` does. An import aimed at a subfolder
+  needs the latter, and it needs the *data root* to exist already — `AssetStore`'s constructor
+  refuses one that does not, since an import into a missing directory is a mistyped root rather
+  than a new subfolder.
+* **`Save` refuses a key that escapes the data root**, which is `ResolveWritePath`'s boundary. A
+  key typed on a command line cannot climb out of the project.
 * **`deserialize*`** — `@throws` on a foreign bake token or a chunk-era file. Both are
   unreadable by design, not by omission: a cache miss regenerates from the authored side, and
   there is nothing to convert from. `AssetStore::LoadRegen*` is the seam that regenerates;
@@ -182,15 +207,15 @@ The dotted edge is the asymmetry: reads go through the store, writes go around i
 auto project = assetlib::Project::Open(projectFile);
 const auto& store = project.GetStore();
 
-auto material = store.LoadMaterial("Materials/brick.bmaterial");
+auto material = store.Load<assetlib::BMaterial>("Materials/brick.bmaterial");
 if (store.BakeIsStale(material))
 {
-	assetlib::bakeMaterial(material, { .dataRoot = store.GetDataRoot() });
-	assetlib::saveMaterial(material, store.ResolveWritePath("Materials/brick.bmaterial"));
+	store.BakeMaterial(material);
+	store.Save(material, "Materials/brick.bmaterial");
 }
 ```
 
-The two-step write is the asymmetry above, not a convention to copy into new code. `assetlib_cli`
+One key, read and written by the same store, and no path anywhere. `assetlib_cli`
 ([libs/assetlib/cli/main.cpp](libs/assetlib/cli/main.cpp)) is the fullest worked example — fourteen
 verbs over one `Project`, including `describe`, `migrate`, `pack` and every bake.
 

@@ -183,9 +183,6 @@ before building the thing it describes, and delete it when that thing lands.
 
 - [Skeleton append](./docs/specs/skeleton_append.md) — appending a bone strands every clip, and the
   remap that will fix it.
-- [assetlib store and codecs](./docs/specs/assetlib_store_codecs.md) — finishing `AssetStore` so it
-  owns writes as well as reads, one codec trait per container, and why it waits on
-  `feat/migration-system-v2`.
 
 **[Plans and Decision Records](./docs/plans/)**
 
