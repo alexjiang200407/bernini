@@ -13,7 +13,9 @@
 
 #include <catch2/catch_approx.hpp>
 
+#include "StoreAt.h"
 #include <QDir>
+#include <assetlib/AssetStore.h>
 
 namespace
 {
@@ -141,7 +143,7 @@ TEST_CASE("An imported PBR material is written and bound to its submesh", "[impo
 	CHECK(mesh.submeshes[0].material == 0);
 
 	// And what landed is a material the renderer can draw, routed at this import's own textures.
-	const assetlib::BMaterial material = assetlib::loadMaterial(file);
+	const assetlib::BMaterial material = LoadAt<assetlib::BMaterial>(file);
 	CHECK(material.name == "Rust");
 	CHECK(material.pbr.baseColorTexture.empty());  // no bake has run, so it draws from its routes
 	CHECK(
@@ -297,7 +299,9 @@ TEST_CASE("A material is written under the stem it was handed", "[importedmateri
 
 	CHECK(mesh.materials[0] == "Materials/hydrant/fur_brown.bmaterial");
 	CHECK(
-		assetlib::loadMaterial(project.MaterialDir() / "fur_brown.bmaterial").name == "fur_brown");
+		assetlib::AssetStore(project.MaterialDir())
+			.Load<assetlib::BMaterial>("fur_brown.bmaterial")
+			.name == "fur_brown");
 }
 
 TEST_CASE("A material with no stem is left behind", "[importedmaterials]")
@@ -412,7 +416,7 @@ TEST_CASE("A cutout import survives the round-trip to disk", "[importedmaterials
 		StemsFor(imported));
 
 	const assetlib::BMaterial material =
-		assetlib::loadMaterial(project.MaterialDir() / "Leaves.bmaterial");
+		assetlib::AssetStore(project.MaterialDir()).Load<assetlib::BMaterial>("Leaves.bmaterial");
 
 	// The alpha mode is stored, not re-derived at load -- and the alpha is routed, which for a cutout
 	// is the channel it cuts against.
@@ -448,7 +452,7 @@ TEST_CASE("An import's specular factors survive the round-trip to disk", "[impor
 		StemsFor(imported));
 
 	const assetlib::BMaterial material =
-		assetlib::loadMaterial(project.MaterialDir() / "Fur.bmaterial");
+		assetlib::AssetStore(project.MaterialDir()).Load<assetlib::BMaterial>("Fur.bmaterial");
 
 	CHECK(material.pbr.specularFactor == 0.0f);
 	CHECK(material.pbr.specularColorFactor.g == Catch::Approx(0.77f));
@@ -479,7 +483,7 @@ TEST_CASE("One texture used as two maps routes both at the same file", "[importe
 		StemsFor(imported));
 
 	const assetlib::BMaterial material =
-		assetlib::loadMaterial(project.MaterialDir() / "Shared.bmaterial");
+		assetlib::AssetStore(project.MaterialDir()).Load<assetlib::BMaterial>("Shared.bmaterial");
 
 	// Base colour and ORM both name tex3, each reading the channels its own role wants.
 	CHECK(

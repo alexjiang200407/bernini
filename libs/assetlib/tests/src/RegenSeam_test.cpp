@@ -22,6 +22,7 @@
 
 #include "CacheTamper.h"
 #include "ImportUnitGroup.h"
+#include "MountAt.h"
 #include "SkinnedGltf.h"
 
 using namespace assetlib;
@@ -64,7 +65,7 @@ namespace
 		[[nodiscard]] std::string
 		FirstSubmeshName() const
 		{
-			const BMesh mesh = load(meshPath);
+			const BMesh mesh = LoadAt<BMesh>(meshPath);
 			return std::string(mesh.stringPool.at(mesh.submeshes.at(0).nameOffset));
 		}
 
@@ -193,7 +194,7 @@ TEST_CASE("a binding-only document edit rebinds the loaded mesh without regenera
 TEST_CASE("a stale bake token regenerates the mesh from its source", "[regen]")
 {
 	const ImportedProject sandbox("bernini_regen_token", "assets/apples.glb");
-	const BMesh           fresh = load(sandbox.meshPath);
+	const BMesh           fresh = LoadAt<BMesh>(sandbox.meshPath);
 
 	sandbox.Tamper(sandbox.meshPath, test::c_TokenOffset);
 	const auto stale = BytesOf(sandbox.meshPath);
@@ -218,7 +219,7 @@ TEST_CASE(
 	"[regen]")
 {
 	const ImportedProject sandbox("bernini_regen_stamp", "assets/apples.glb");
-	const BMesh           fresh = load(sandbox.meshPath);
+	const BMesh           fresh = LoadAt<BMesh>(sandbox.meshPath);
 
 	// A sibling branch's binary swapped in by a merge: current token, foreign source stamp.
 	sandbox.Tamper(sandbox.meshPath, test::c_SourceHashOffset);
@@ -234,9 +235,9 @@ TEST_CASE("a stale entry that cannot regenerate refuses", "[regen]")
 	{
 		const ImportedProject sandbox("bernini_regen_norecord", "assets/apples.glb");
 
-		BMesh synthetic  = load(sandbox.meshPath);
+		BMesh synthetic  = LoadAt<BMesh>(sandbox.meshPath);
 		synthetic.source = SourceRef();
-		save(synthetic, sandbox.meshPath);
+		SaveAt(synthetic, sandbox.meshPath);
 		sandbox.Tamper(sandbox.meshPath, test::c_TokenOffset);
 
 		CHECK_THROWS_WITH(
@@ -295,7 +296,7 @@ TEST_CASE("a stale rig regenerates, and its clips follow the document's sample r
 	const ImportedProject   sandbox("bernini_regen_rig", source.PackGlb());
 
 	const fs::path bskelPath = sandbox.dataRoot / c_SkeletonsDirectoryName / "unit.bskel";
-	const Skeleton fresh     = loadSkeleton(bskelPath);
+	const Skeleton fresh     = LoadAt<Skeleton>(bskelPath);
 
 	SECTION("the skeleton")
 	{
@@ -377,9 +378,9 @@ TEST_CASE("reauthor rewrites a document from its mesh, once", "[regen][importdoc
 
 	// A rebind saved straight into the mesh, the way every save worked before documents: the
 	// document still records red, the mesh now says blue.
-	BMesh mesh = load(sandbox.meshPath);
+	BMesh mesh = LoadAt<BMesh>(sandbox.meshPath);
 	REQUIRE(attachMaterial(mesh, 0, "Materials/blue.bmaterial"));
-	save(mesh, sandbox.meshPath);
+	SaveAt(mesh, sandbox.meshPath);
 
 	const auto report = reauthorImportDocuments(sandbox.dataRoot);
 	REQUIRE(report.size() == 1);

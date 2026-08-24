@@ -3,6 +3,7 @@
 #include "Windows/MaterialEditor/MaterialGraphModel.h"
 #include "Windows/MaterialEditor/material_graph.h"
 
+#include <assetlib/AssetStore.h>
 #include <assetlib/bmaterial_io.h>
 #include <assetlib/bmesh_io.h>
 
@@ -63,7 +64,8 @@ namespace editor
 			                          texturePath(source.normalTexture),
 			                          texturePath(source.ormTexture) });
 
-			assetlib::saveMaterial(CompileMaterial(model, stem, dataRoot), file);
+			const assetlib::AssetStore store(dataRoot);
+			store.Save(CompileMaterial(model, stem, dataRoot), store.KeyFor(file));
 
 			relative[i] =
 				Rebase(QString::fromStdWString(file.wstring()), dataRoot, true).toStdString();

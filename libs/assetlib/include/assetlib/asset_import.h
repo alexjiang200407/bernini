@@ -3,20 +3,25 @@
 
 namespace assetlib
 {
+	class AssetStore;
+
 	struct BMesh;
 	struct MaterialBinding;
 	struct Skeleton;
 	struct SourceRef;
 
 	/**
-	 * Writes `mesh` to `bmeshPath`, creating the directory the path names first: an import aimed
-	 * at a subfolder lands at `Meshes/<folder>/`, which nothing else creates -- `save` opens the file
-	 * where it stands.
+	 * Writes `mesh` at `bmeshKey`, creating the directory the key names first: an import aimed
+	 * at a subfolder lands at `Meshes/<folder>/`, which nothing else creates -- a store's Save
+	 * opens the file where it stands.
 	 *
-	 * @throws std::runtime_error if the file cannot be written.
+	 * @throws std::runtime_error if the file cannot be written. The store's *data root* must
+	 *         already exist, which is AssetStore's own precondition rather than this one's: a
+	 *         project always has one, and an import into a directory that is not there is a
+	 *         mistyped root rather than a new subfolder.
 	 */
 	void
-	writeImportedMesh(const BMesh& mesh, const std::filesystem::path& bmeshPath);
+	writeImportedMesh(const AssetStore& store, const BMesh& mesh, std::string_view bmeshKey);
 
 	/**
 	 * Writes the rig a skinned import carries -- the `.bskel` always, the `.banim` only when asked --
@@ -32,13 +37,13 @@ namespace assetlib
 	 */
 	void
 	writeImportedRig(
-		const imp::BMeshImport&      imported,
-		BMesh&                       mesh,
-		const std::filesystem::path& dataRoot,
-		const std::filesystem::path& bskelPath,
-		const std::filesystem::path& banimPath,
-		bool                         writeClips,
-		const SourceRef&             source);
+		const AssetStore&       store,
+		const imp::BMeshImport& imported,
+		BMesh&                  mesh,
+		std::string_view        bskelKey,
+		std::string_view        banimKey,
+		bool                    writeClips,
+		const SourceRef&        source);
 
 	/**
 	 * The `.bskel` under `dataRoot` whose signature matches `skeleton`, or empty when none does.
@@ -61,10 +66,10 @@ namespace assetlib
 	 */
 	void
 	writeImportedClips(
-		const imp::BMeshImport&      imported,
-		const std::filesystem::path& dataRoot,
-		const std::filesystem::path& banimPath,
-		const SourceRef&             source);
+		const AssetStore&       store,
+		const imp::BMeshImport& imported,
+		std::string_view        banimKey,
+		const SourceRef&        source);
 
 	/**
 	 * @throws std::runtime_error unless `source` is a `.glb` -- a `.gltf`'s sidecar `.bin` and

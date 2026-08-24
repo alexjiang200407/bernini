@@ -6,6 +6,7 @@
 #include "util/TestEnvironment.h"
 #include "util/TestOptions.h"
 
+#include "StoreAt.h"
 #include <assetlib/AssetStore.h>
 #include <assetlib/banim_io.h>
 #include <assetlib/bmaterial_io.h>
@@ -265,9 +266,9 @@ TEST_CASE("A rig with no .bvat on disk is baked, loaded and drawn", "[vat][rende
 		// Re-author the clip set so its stamp no longer matches what the bake recorded. Longer, not
 		// merely rewritten: the stamp is size + whole seconds.
 		const auto banimPath = root.path / "Animations/rig.banim";
-		auto       drifted   = assetlib::loadAnimations(banimPath);
+		auto       drifted   = LoadAt<assetlib::AnimationSet>(banimPath);
 		drifted.stringPool.add("padding-so-the-size-moves");
-		assetlib::saveAnimations(drifted, banimPath);
+		SaveAt(drifted, banimPath);
 
 		{
 			const core::file::LooseFileSystem loose(root.path);
@@ -525,7 +526,7 @@ TEST_CASE("VatFreshness asks EnsureVatBaked's question without baking", "[vat]")
 	// clip-set check is what answers, not the file simply being absent.
 	WriteClips(root.path, "Animations/rig_march.banim", "march", 2.0f, 3);
 	const auto march = game::EnsureVatBaked(store, mesh, "Animations/rig_march.banim");
-	assetlib::saveVat(march, bvat);
+	SaveAt(march, bvat);
 	CHECK(game::VatFreshness(store, mesh, clips) == game::VatBakeState::kOtherClips);
 
 	// A moved input stamp: same clip set, different bytes behind it.

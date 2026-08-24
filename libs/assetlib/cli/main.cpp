@@ -546,15 +546,16 @@ main(int argc, char** argv)
 
 				const auto derived = assetlib::generateTangents(mesh);
 
+				const assetlib::AssetStore importStore(dataRoot);
 				assetlib::writeImportedRig(
+					importStore,
 					imported,
 					mesh,
-					dataRoot,
-					bskelPath,
-					banimPath,
+					importStore.KeyFor(bskelPath),
+					importStore.KeyFor(banimPath),
 					true,
 					source);
-				assetlib::writeImportedMesh(mesh, bmeshPath);
+				assetlib::writeImportedMesh(importStore, mesh, importStore.KeyFor(bmeshPath));
 				assetlib::writeImportedDocument(target, &mesh);
 
 				if (derived.skipped > 0)

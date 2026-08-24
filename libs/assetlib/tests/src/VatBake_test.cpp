@@ -380,7 +380,7 @@ TEST_CASE("A .bvat round-trips, and its tables read without the pixels", "[vat]"
 	SECTION("tables-only leaves the payloads behind")
 	{
 		const fs::path path = fs::temp_directory_path() / "bernini_vat_roundtrip.bvat";
-		saveVat(vat, path);
+		SaveAt(vat, path);
 
 		const BVat tables = loadVatTables(path);
 		CHECK(tables.positionsKtx2.empty());
@@ -438,9 +438,9 @@ TEST_CASE("A bake from files stamps its inputs and the refs scan reports them", 
 	fs::create_directories(root / "Skeletons");
 	fs::create_directories(root / "Animations");
 
-	save(fixture.mesh, root / "Meshes/rig.bmesh");
-	saveSkeleton(fixture.skeleton, root / "Skeletons/rig.bskel");
-	saveAnimations(fixture.animations, root / "Animations/rig.banim");
+	StoreAt(root).Save(fixture.mesh, "Meshes/rig.bmesh");
+	StoreAt(root).Save(fixture.skeleton, "Skeletons/rig.bskel");
+	StoreAt(root).Save(fixture.animations, "Animations/rig.banim");
 
 	auto desc       = VatBakeDesc();
 	desc.mesh       = "Meshes/rig.bmesh";
@@ -473,7 +473,7 @@ TEST_CASE("A bake from files stamps its inputs and the refs scan reports them", 
 	SECTION("a changed input reads as stale")
 	{
 		fixture.animations.stringPool.add("padding-so-the-size-moves");
-		saveAnimations(fixture.animations, root / "Animations/rig.banim");
+		StoreAt(root).Save(fixture.animations, "Animations/rig.banim");
 		CHECK(vatIsStale(vat, MountAt(root)));
 	}
 
@@ -485,7 +485,7 @@ TEST_CASE("A bake from files stamps its inputs and the refs scan reports them", 
 
 	SECTION("the refs scan reports the three edges")
 	{
-		saveVat(vat, root / "Meshes/rig.bvat");
+		StoreAt(root).Save(vat, "Meshes/rig.bvat");
 
 		const auto graph = AssetRefGraph::Scan(AssetStore(root));
 		CHECK(graph.vatsScanned == 1);
@@ -501,7 +501,7 @@ TEST_CASE("A bake from files stamps its inputs and the refs scan reports them", 
 
 	SECTION("a bake sweeps with its inputs rather than blocking them")
 	{
-		saveVat(vat, root / "Meshes/rig.bvat");
+		StoreAt(root).Save(vat, "Meshes/rig.bvat");
 
 		const auto graph = AssetRefGraph::Scan(AssetStore(root));
 
@@ -524,7 +524,7 @@ TEST_CASE("A bake from files stamps its inputs and the refs scan reports them", 
 
 	SECTION("a directory blocked only by a bake outside it is deletable")
 	{
-		saveVat(vat, root / "Meshes/rig.bvat");
+		StoreAt(root).Save(vat, "Meshes/rig.bvat");
 
 		const auto graph = AssetRefGraph::Scan(AssetStore(root));
 
@@ -536,9 +536,9 @@ TEST_CASE("A bake from files stamps its inputs and the refs scan reports them", 
 
 	SECTION("describe reads the tables alone and reports a stale input")
 	{
-		saveVat(vat, root / "Meshes/rig.bvat");
+		StoreAt(root).Save(vat, "Meshes/rig.bvat");
 		fixture.animations.stringPool.add("padding-so-the-size-moves");
-		saveAnimations(fixture.animations, root / "Animations/rig.banim");
+		StoreAt(root).Save(fixture.animations, "Animations/rig.banim");
 
 		const core::file::LooseFileSystem files(root);
 		const std::string text = describe(loadVatTables(root / "Meshes/rig.bvat"), &files);

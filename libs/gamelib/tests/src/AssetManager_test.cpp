@@ -1,3 +1,4 @@
+#include "StoreAt.h"
 #include <assetlib/benv_io.h>
 #include <assetlib/benvl_io.h>
 #include <assetlib/bmaterial_io.h>
@@ -85,7 +86,7 @@ namespace
 		material.pbr.alphaMode        = alphaMode;
 
 		std::filesystem::create_directories(path.parent_path());
-		assetlib::saveMaterial(material, path);
+		SaveAt(material, path);
 	}
 
 	// A minimal .bmesh: one mesh, one submesh per entry in `materialIndices`, each a single meshlet
@@ -152,7 +153,7 @@ namespace
 		mesh.roots.push_back(0);
 
 		std::filesystem::create_directories(path.parent_path());
-		assetlib::save(mesh, path);
+		SaveAt(mesh, path);
 	}
 
 	// A scene + view + manager over a scratch data root, which is what every case here needs.
@@ -792,7 +793,7 @@ namespace
 		sky.name      = name;
 		sky.sky.baked = "Textures/" + std::string(name) + "_sky.ktx2";
 		std::filesystem::create_directories(root / "Sky");
-		assetlib::saveSky(sky, root / "Sky" / (std::string(name) + ".bsky"));
+		SaveAt(sky, root / "Sky" / (std::string(name) + ".bsky"));
 
 		auto lighting             = assetlib::BEnvLighting();
 		lighting.name             = name;
@@ -800,7 +801,7 @@ namespace
 		lighting.irradiance.baked = "Textures/" + std::string(name) + "_irradiance.ktx2";
 		lighting.exposure         = 2.0f;
 		std::filesystem::create_directories(root / "EnvLighting");
-		assetlib::saveEnvLighting(lighting, root / "EnvLighting" / (std::string(name) + ".benvl"));
+		SaveAt(lighting, root / "EnvLighting" / (std::string(name) + ".benvl"));
 
 		auto env         = assetlib::BEnv();
 		env.name         = name;
@@ -809,7 +810,7 @@ namespace
 		env.skyMipLevel  = 1;
 		env.skyRotationY = 0.25f;
 		std::filesystem::create_directories(root / "Environments");
-		assetlib::saveEnv(env, root / "Environments" / (std::string(name) + ".benv"));
+		SaveAt(env, root / "Environments" / (std::string(name) + ".benv"));
 	}
 }
 
@@ -833,7 +834,7 @@ TEST_CASE("AssetManager acquires an environment through its own data root", "[ga
 		second.name     = "forest_night";
 		second.sky      = "Sky/forest.bsky";
 		second.lighting = "EnvLighting/forest.benvl";
-		assetlib::saveEnv(second, fx.root.path / "Environments" / "forest_night.benv");
+		SaveAt(second, fx.root.path / "Environments" / "forest_night.benv");
 
 		const auto other = (*fx).AcquireEnvironment("Environments/forest_night.benv");
 		CHECK(other.skybox.textureSlot.index == env.skybox.textureSlot.index);
@@ -850,7 +851,7 @@ TEST_CASE("AssetManager acquires an environment through its own data root", "[ga
 		second.sky              = "Sky/forest.bsky";
 		second.lighting         = "EnvLighting/forest.benvl";
 		second.exposureOverride = 0.5f;
-		assetlib::saveEnv(second, fx.root.path / "Environments" / "forest_graded.benv");
+		SaveAt(second, fx.root.path / "Environments" / "forest_graded.benv");
 
 		const auto graded = (*fx).AcquireEnvironment("Environments/forest_graded.benv");
 		CHECK(graded.exposure == 0.5f);
@@ -868,12 +869,12 @@ TEST_CASE("AssetManager acquires an environment through its own data root", "[ga
 		auto raw       = assetlib::BSky();
 		raw.name       = "raw";
 		raw.sky.source = "textures_src/raw.ktx2";
-		assetlib::saveSky(raw, fx.root.path / "Sky" / "raw.bsky");
+		SaveAt(raw, fx.root.path / "Sky" / "raw.bsky");
 
 		auto env2 = assetlib::BEnv();
 		env2.name = "raw";
 		env2.sky  = "Sky/raw.bsky";
-		assetlib::saveEnv(env2, fx.root.path / "Environments" / "raw.benv");
+		SaveAt(env2, fx.root.path / "Environments" / "raw.benv");
 
 		CHECK_THROWS_AS((*fx).AcquireEnvironment("Environments/raw.benv"), std::runtime_error);
 	}

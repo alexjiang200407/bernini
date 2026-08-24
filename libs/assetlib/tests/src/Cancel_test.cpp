@@ -214,7 +214,7 @@ TEST_CASE("a mesh that cannot be written reports why", "[io][fs]")
 
 	try
 	{
-		save(mesh, occupied);
+		SaveAt(mesh, occupied);
 		FAIL("expected save to throw");
 	}
 	catch (const std::runtime_error& e)
@@ -246,10 +246,10 @@ TEST_CASE("every container that cannot be written reports why", "[io][fs]")
 	};
 
 	const Container containers[] = {
-		{ "bmaterial", [](const std::filesystem::path& p) { saveMaterial(BMaterial(), p); } },
-		{ "benv", [](const std::filesystem::path& p) { saveEnv(BEnv(), p); } },
-		{ "bsky", [](const std::filesystem::path& p) { saveSky(BSky(), p); } },
-		{ "benvl", [](const std::filesystem::path& p) { saveEnvLighting(BEnvLighting(), p); } },
+		{ "bmaterial", [](const std::filesystem::path& p) { SaveAt(BMaterial(), p); } },
+		{ "benv", [](const std::filesystem::path& p) { SaveAt(BEnv(), p); } },
+		{ "bsky", [](const std::filesystem::path& p) { SaveAt(BSky(), p); } },
+		{ "benvl", [](const std::filesystem::path& p) { SaveAt(BEnvLighting(), p); } },
 	};
 
 	for (const Container& container : containers)

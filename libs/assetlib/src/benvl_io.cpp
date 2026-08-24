@@ -96,19 +96,6 @@ namespace assetlib
 		return lighting;
 	}
 
-	void
-	saveEnvLighting(const BEnvLighting& lighting, const std::filesystem::path& path)
-	{
-		writeFileBytes(path, serializeEnvLighting(lighting), "benvl");
-	}
-
-	BEnvLighting
-	loadEnvLighting(const std::filesystem::path& path)
-	{
-		const auto bytes = core::file::read_file_bytes(path.string());
-		return deserializeEnvLighting(bytes);
-	}
-
 	std::vector<std::byte>
 	AssetCodec<BEnvLighting>::Serialize(const BEnvLighting& value)
 	{

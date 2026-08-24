@@ -20,23 +20,6 @@ namespace assetlib
 	deserializeSky(std::span<const std::byte> bytes);
 
 	/**
-	 * Writes `sky` to `path` as a `.bsky` file. Its texture references are paths relative to the data
-	 * directory, not to this file.
-	 *
-	 * @throws std::runtime_error if the file cannot be written.
-	 */
-	void
-	saveSky(const BSky& sky, const std::filesystem::path& path);
-
-	/**
-	 * Loads a `.bsky` file previously written by saveSky.
-	 *
-	 * @throws std::runtime_error if the file cannot be read or is malformed.
-	 */
-	[[nodiscard]] BSky
-	loadSky(const std::filesystem::path& path);
-
-	/**
 	 * The codec for `c_SkyExtension` -- a cache entry. See AssetCodec.h.
 	 *
 	 * Declared here and defined in bsky_io.cpp, because `Deserialize` returns by value and this

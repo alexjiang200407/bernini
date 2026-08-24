@@ -5,9 +5,10 @@
 #include <assetlib/bmaterial_io.h>
 
 #include "util/asset_paths.h"
+#include <assetlib/AssetStore.h>
 
 const assetlib::BMaterial*
-CachedMaterial::Get(const QString& path)
+CachedMaterial::Get(const std::filesystem::path& dataRoot, const QString& path)
 {
 	if (path.isEmpty())
 	{
@@ -29,7 +30,9 @@ CachedMaterial::Get(const QString& path)
 
 	try
 	{
-		m_Material = assetlib::loadMaterial(std::filesystem::path(path.toStdWString()));
+		const assetlib::AssetStore store(dataRoot);
+		m_Material = store.Load<assetlib::BMaterial>(
+			store.KeyFor(std::filesystem::path(path.toStdWString())));
 	}
 	catch (const std::exception& e)
 	{

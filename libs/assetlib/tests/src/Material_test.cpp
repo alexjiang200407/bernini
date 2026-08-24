@@ -12,6 +12,7 @@
 #include "MountAt.h"
 #include "mounted_io.h"
 
+#include <assetlib/AssetStore.h>
 #include <catch2/matchers/catch_matchers_string.hpp>
 
 using namespace assetlib;
@@ -456,8 +457,8 @@ TEST_CASE("saveMaterial / loadMaterial round-trips through a file", "[bmaterial]
 	mat.pbr.roughnessFactor  = 0.9f;
 
 	const auto path = std::filesystem::temp_directory_path() / "bmaterial_roundtrip_test.bmaterial";
-	saveMaterial(mat, path);
-	const auto restored = loadMaterial(path);
+	SaveAt(mat, path);
+	const auto restored = LoadAt<BMaterial>(path);
 	std::filesystem::remove(path);
 
 	REQUIRE(restored.name == "leaf");
@@ -483,7 +484,7 @@ TEST_CASE("an import writes a loadable .bmesh and its textures, and no materials
 	writeTextures(import, outDir);
 	BMesh baked = toBMesh(import);
 	static_cast<void>(generateTangents(baked));
-	writeImportedMesh(baked, outDir / "suzanne.bmesh");
+	writeImportedMesh(AssetStore(outDir), baked, "suzanne.bmesh");
 
 	REQUIRE(std::filesystem::exists(outDir / "suzanne.bmesh"));
 
@@ -496,7 +497,7 @@ TEST_CASE("an import writes a loadable .bmesh and its textures, and no materials
 	// unassigned rather than pointing at a matN.bmaterial that does not exist.
 	REQUIRE_FALSE(std::filesystem::exists(outDir / "mat0.bmaterial"));
 
-	const auto mesh = load(outDir / "suzanne.bmesh");
+	const auto mesh = StoreAt(outDir).Load<BMesh>("suzanne.bmesh");
 	REQUIRE(mesh.materials.empty());
 	REQUIRE_FALSE(mesh.submeshes.empty());
 

@@ -22,16 +22,6 @@ namespace assetlib
 	deserializeSkeleton(std::span<const std::byte> bytes);
 
 	/**
-	 * @throws std::runtime_error if the file cannot be written, naming the OS's reason.
-	 */
-	void
-	saveSkeleton(const Skeleton& skeleton, const std::filesystem::path& path);
-
-	/** @throws std::runtime_error if the file cannot be read or is malformed. */
-	[[nodiscard]] Skeleton
-	loadSkeleton(const std::filesystem::path& path);
-
-	/**
 	 * The codec for `c_SkeletonExtension` -- a cache entry. See AssetCodec.h.
 	 *
 	 * Declared here and defined in bskel_io.cpp, because `Deserialize` returns by value and this

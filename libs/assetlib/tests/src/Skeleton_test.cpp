@@ -4,6 +4,7 @@
 #include <assetlib_structs/Animation.h>
 #include <assetlib_structs/Skeleton.h>
 
+#include "MountAt.h"
 #include "mounted_io.h"
 #include <catch2/catch_approx.hpp>
 
@@ -175,10 +176,10 @@ TEST_CASE("The skeleton path is readable without the samples", "[animation][io]"
 	const auto animations = MakeClipSet(skeleton, 31, 2.0f);
 
 	const auto path = std::filesystem::temp_directory_path() / "bernini_banim_refs.banim";
-	saveAnimations(animations, path);
+	SaveAt(animations, path);
 
 	CHECK(loadAnimationSkeletonPath(path) == animations.skeleton);
-	CHECK(loadAnimations(path).skeleton == animations.skeleton);
+	CHECK(LoadAt<AnimationSet>(path).skeleton == animations.skeleton);
 
 	std::filesystem::remove(path);
 }
