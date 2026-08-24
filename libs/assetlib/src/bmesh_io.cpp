@@ -113,19 +113,6 @@ namespace assetlib
 		return mesh;
 	}
 
-	void
-	save(const BMesh& mesh, const std::filesystem::path& path)
-	{
-		writeFileBytes(path, serialize(mesh), "bmesh");
-	}
-
-	BMesh
-	load(const std::filesystem::path& path)
-	{
-		const auto bytes = core::file::read_file_bytes(path.string());
-		return deserialize(bytes);
-	}
-
 	namespace
 	{
 		constexpr std::array<uint32_t, 2> c_WantedRefChunks = {

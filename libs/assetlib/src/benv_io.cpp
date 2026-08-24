@@ -73,19 +73,6 @@ namespace assetlib
 			std::string_view(reinterpret_cast<const char*>(bytes.data()), bytes.size()));
 	}
 
-	void
-	saveEnv(const BEnv& env, const std::filesystem::path& path)
-	{
-		writeFileBytes(path, serializeEnv(env), "benv");
-	}
-
-	BEnv
-	loadEnv(const std::filesystem::path& path)
-	{
-		const auto bytes = core::file::read_file_bytes(path.string());
-		return deserializeEnv(bytes);
-	}
-
 	std::vector<std::byte>
 	AssetCodec<BEnv>::Serialize(const BEnv& value)
 	{

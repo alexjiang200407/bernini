@@ -52,19 +52,6 @@ namespace assetlib
 		return sky;
 	}
 
-	void
-	saveSky(const BSky& sky, const std::filesystem::path& path)
-	{
-		writeFileBytes(path, serializeSky(sky), "bsky");
-	}
-
-	BSky
-	loadSky(const std::filesystem::path& path)
-	{
-		const auto bytes = core::file::read_file_bytes(path.string());
-		return deserializeSky(bytes);
-	}
-
 	std::vector<std::byte>
 	AssetCodec<BSky>::Serialize(const BSky& value)
 	{

@@ -53,18 +53,6 @@ namespace assetlib
 		return skeleton;
 	}
 
-	void
-	saveSkeleton(const Skeleton& skeleton, const std::filesystem::path& path)
-	{
-		writeFileBytes(path, serializeSkeleton(skeleton), "bskel");
-	}
-
-	Skeleton
-	loadSkeleton(const std::filesystem::path& path)
-	{
-		return deserializeSkeleton(core::file::read_file_bytes(path.string()));
-	}
-
 	std::vector<std::byte>
 	AssetCodec<Skeleton>::Serialize(const Skeleton& value)
 	{

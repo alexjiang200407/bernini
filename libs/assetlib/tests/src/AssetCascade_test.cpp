@@ -3,6 +3,7 @@
 #include <assetlib/bmaterial_io.h>
 #include <assetlib_structs/BMaterial.h>
 
+#include "MountAt.h"
 #include "RefsSandbox.h"
 
 using namespace assetlib;
@@ -146,10 +147,10 @@ TEST_CASE("A directory cascade counts every referrer under it as deleted", "[ass
 	BakeAndSave(root, "held.bmaterial", "textures_src/b.ktx2");
 
 	fs::create_directories(root.path / "Meshes" / "props");
-	save(MakeMesh({ "Materials/freed.bmaterial" }), root.path / "Meshes" / "props" / "a.bmesh");
-	save(
+	StoreAt(root.path).Save(MakeMesh({ "Materials/freed.bmaterial" }), "Meshes/props/a.bmesh");
+	StoreAt(root.path).Save(
 		MakeMesh({ "Materials/freed.bmaterial", "Materials/held.bmaterial" }),
-		root.path / "Meshes" / "props" / "b.bmesh");
+		"Meshes/props/b.bmesh");
 	SaveMesh(root, "outside.bmesh", { "Materials/held.bmaterial" });
 
 	const DeletionPlan plan = planCascadeDeletion(root.Scan(), "Meshes/props");

@@ -225,12 +225,13 @@ namespace editor
 						assetlib::copyImportedSource(source, target);
 					mesh->source = sourceRef;
 
+					const assetlib::AssetStore store(dataRoot);
 					assetlib::writeImportedRig(
+						store,
 						*imported,
 						*mesh,
-						dataRoot,
-						bskelPath,
-						banimPath,
+						store.KeyFor(bskelPath),
+						store.KeyFor(banimPath),
 						options.animations,
 						sourceRef);
 				}
@@ -243,7 +244,12 @@ namespace editor
 					                                     assetlib::c_DefaultSampleRate };
 					const assetlib::SourceRef    sourceRef =
 						assetlib::copyImportedSource(source, target);
-					assetlib::writeImportedClips(*imported, dataRoot, banimPath, sourceRef);
+					const assetlib::AssetStore store(dataRoot);
+					assetlib::writeImportedClips(
+						store,
+						*imported,
+						store.KeyFor(banimPath),
+						sourceRef);
 					assetlib::writeImportedDocument(target, nullptr);
 				}
 
@@ -278,7 +284,8 @@ namespace editor
 							textureDir,
 							options.outputs.materialStems);
 
-					assetlib::writeImportedMesh(*mesh, bmeshPath);
+					const assetlib::AssetStore meshStore(dataRoot);
+					assetlib::writeImportedMesh(meshStore, *mesh, meshStore.KeyFor(bmeshPath));
 
 					const assetlib::ImportTarget target{ dataRoot,
 						                                 sourceName,

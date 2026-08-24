@@ -4,6 +4,7 @@
 #include "cache_io.h"
 #include "mounted_io.h"
 
+#include "MountAt.h"
 #include <catch2/matchers/catch_matchers_string.hpp>
 
 using namespace assetlib;
@@ -202,8 +203,8 @@ TEST_CASE("save then load reproduces the mesh on disk", "[bmesh][io]")
 	const auto original = MakeSampleMesh();
 	const auto path     = std::filesystem::temp_directory_path() / "bmesh_container_test.bmesh";
 
-	save(original, path);
-	const auto restored = load(path);
+	SaveAt(original, path);
+	const auto restored = LoadAt<BMesh>(path);
 	std::filesystem::remove(path);
 
 	REQUIRE(restored.nodes.size() == original.nodes.size());

@@ -1,5 +1,7 @@
 #include <assetlib/asset_import.h>
 
+#include <assetlib/AssetStore.h>
+
 #include <assetlib/import_document.h>
 
 #include <assetlib/banim_io.h>
@@ -275,8 +277,12 @@ namespace assetlib
 				ImportDocument document = deserializeImportDocument(
 					std::string_view(reinterpret_cast<const char*>(bytes.data()), bytes.size()));
 
-				document.bindings = claimants == 0 ? std::vector<MaterialBinding>() :
-				                                     bindingsOf(load(claimed->second.front()));
+				document.bindings =
+					claimants == 0 ?
+						std::vector<MaterialBinding>() :
+						bindingsOf(
+							AssetCodec<BMesh>::Deserialize(
+								core::file::read_file_bytes(claimed->second.front().string())));
 
 				const std::string serialized = serializeImportDocument(document);
 				if (std::string_view(reinterpret_cast<const char*>(bytes.data()), bytes.size()) !=
@@ -313,45 +319,46 @@ namespace assetlib
 	}
 
 	void
-	writeImportedMesh(const BMesh& mesh, const std::filesystem::path& bmeshPath)
+	writeImportedMesh(const AssetStore& store, const BMesh& mesh, std::string_view bmeshKey)
 	{
-		std::filesystem::create_directories(bmeshPath.parent_path());
-		save(mesh, bmeshPath);
+		// An import aimed at a subfolder lands at `Meshes/<folder>/`, which nothing else creates.
+		std::filesystem::create_directories(store.ResolveWritePath(bmeshKey).parent_path());
+		store.Save(mesh, bmeshKey);
 	}
 
 	void
 	writeImportedRig(
-		const imp::BMeshImport&      imported,
-		BMesh&                       mesh,
-		const std::filesystem::path& dataRoot,
-		const std::filesystem::path& bskelPath,
-		const std::filesystem::path& banimPath,
-		bool                         writeClips,
-		const SourceRef&             source)
+		const AssetStore&       store,
+		const imp::BMeshImport& imported,
+		BMesh&                  mesh,
+		std::string_view        bskelKey,
+		std::string_view        banimKey,
+		bool                    writeClips,
+		const SourceRef&        source)
 	{
 		if (imported.skeleton.bones.empty())
 			return;
 
 		// A project scaffolded before these categories existed has neither directory.
-		std::filesystem::create_directories(bskelPath.parent_path());
+		std::filesystem::create_directories(store.ResolveWritePath(bskelKey).parent_path());
 
 		Skeleton skeleton = imported.skeleton;
 		skeleton.source   = source;
-		saveSkeleton(skeleton, bskelPath);
-		mesh.skeleton = mountKeyFor(dataRoot, bskelPath);
+		store.Save(skeleton, bskelKey);
+		mesh.skeleton = std::string(bskelKey);
 
 		if (!writeClips || imported.animations.clips.empty())
 			return;
 
 		// The clip set names the rig by the same path the mesh does, so all three agree on which file
 		// the joint indices are addressed against.
-		std::filesystem::create_directories(banimPath.parent_path());
+		std::filesystem::create_directories(store.ResolveWritePath(banimKey).parent_path());
 
 		AnimationSet clips = imported.animations;
 		clips.skeleton     = mesh.skeleton;
 		clips.source       = source;
 		bakePosedBounds(clips, mesh, imported.skeleton);
-		saveAnimations(clips, banimPath);
+		store.Save(clips, banimKey);
 	}
 
 	std::filesystem::path
@@ -377,7 +384,9 @@ namespace assetlib
 
 			try
 			{
-				if (skeletonSignature(loadSkeleton(entry.path())) == wanted)
+				if (skeletonSignature(
+						AssetCodec<Skeleton>::Deserialize(
+							core::file::read_file_bytes(entry.path().string()))) == wanted)
 					matches.push_back(entry.path());
 			}
 			catch (const std::exception&)
@@ -435,7 +444,11 @@ namespace assetlib
 				if (normalizePath(loadMeshRefs(entry.path()).skeleton) != rigRel)
 					continue;
 
-				bakePosedBounds(clips, load(entry.path()), skeleton);
+				bakePosedBounds(
+					clips,
+					AssetCodec<BMesh>::Deserialize(
+						core::file::read_file_bytes(entry.path().string())),
+					skeleton);
 			}
 			catch (const std::exception&)
 			{
@@ -447,10 +460,10 @@ namespace assetlib
 
 	void
 	writeImportedClips(
-		const imp::BMeshImport&      imported,
-		const std::filesystem::path& dataRoot,
-		const std::filesystem::path& banimPath,
-		const SourceRef&             source)
+		const AssetStore&       store,
+		const imp::BMeshImport& imported,
+		std::string_view        banimKey,
+		const SourceRef&        source)
 	{
 		if (imported.animations.clips.empty())
 			throw std::runtime_error("this file carries no animation to import");
@@ -460,7 +473,8 @@ namespace assetlib
 		if (imported.skeleton.bones.empty())
 			throw std::runtime_error("this file carries no rig, so its clips address nothing");
 
-		const std::filesystem::path rig = findMatchingSkeleton(dataRoot, imported.skeleton);
+		const std::filesystem::path rig =
+			findMatchingSkeleton(store.GetDataRoot(), imported.skeleton);
 		if (rig.empty())
 		{
 			throw std::runtime_error(
@@ -469,17 +483,21 @@ namespace assetlib
 				"attach to.");
 		}
 
-		std::filesystem::create_directories(banimPath.parent_path());
+		std::filesystem::create_directories(store.ResolveWritePath(banimKey).parent_path());
 
 		AnimationSet clips = imported.animations;
-		clips.skeleton     = mountKeyFor(dataRoot, rig);
+		clips.skeleton     = store.KeyFor(rig);
 		clips.source       = source;
 
 		// Measured against the rig the clips will resolve at load, not the imported copy: the two
 		// share a signature but a re-authored bind pose deliberately does not change one.
-		bakeBoundsForRig(clips, dataRoot, normalizePath(clips.skeleton), loadSkeleton(rig));
+		bakeBoundsForRig(
+			clips,
+			store.GetDataRoot(),
+			normalizePath(clips.skeleton),
+			store.Load<Skeleton>(clips.skeleton));
 
-		saveAnimations(clips, banimPath);
+		store.Save(clips, banimKey);
 	}
 
 	void

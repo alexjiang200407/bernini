@@ -52,7 +52,7 @@ namespace
 		material.pbr.routes[0] = { source, 0 };
 
 		StoreAt(root.path).BakeMaterial(material);
-		saveMaterial(material, root.path / "Materials" / name);
+		StoreAt(root.path).Save(material, std::string("Materials/") + name);
 		return material;
 	}
 
@@ -187,7 +187,7 @@ TEST_CASE("findUnusedBakedTextures keeps a stale material's baked triplet", "[te
 
 	// Rewind a stamp so the bake reads stale without touching the maps it wrote.
 	material.pbr.routeStamps[0] = SourceStamp{ 1, 1 };
-	saveMaterial(material, root.path / "Materials" / "loose.bmaterial");
+	StoreAt(root.path).Save(material, "Materials/loose.bmaterial");
 
 	const auto scan = findUnusedBakedTextures(AssetStore(root.path));
 
@@ -284,7 +284,7 @@ TEST_CASE("findUnusedBakedTextures honours a custom texture directory", "[textur
 
 	material.pbr.routes[0] = { "b.ktx2", 0 };
 	store.BakeMaterial(material, "cooked");
-	saveMaterial(material, root.path / "Materials" / "mat.bmaterial");
+	StoreAt(root.path).Save(material, "Materials/mat.bmaterial");
 
 	const auto scan = findUnusedBakedTextures(AssetStore(root.path), desc);
 

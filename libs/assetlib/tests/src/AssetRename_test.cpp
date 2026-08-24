@@ -106,13 +106,13 @@ TEST_CASE("A rewritten mesh still carries its geometry", "[assetrename]")
 	BakeAndSave(root, "old.bmaterial", "textures_src/a.ktx2");
 	SaveMesh(root, "mesh.bmesh", { "Materials/old.bmaterial", "Materials/keep.bmaterial" });
 
-	const BMesh before = load(root.path / "Meshes" / "mesh.bmesh");
+	const BMesh before = StoreAt(root.path).Load<BMesh>("Meshes/mesh.bmesh");
 
 	REQUIRE(
 		Rename(root, "Materials/old.bmaterial", "Materials/new.bmaterial").status ==
 		RenameStatus::kRenamed);
 
-	const BMesh after = load(root.path / "Meshes" / "mesh.bmesh");
+	const BMesh after = StoreAt(root.path).Load<BMesh>("Meshes/mesh.bmesh");
 
 	CHECK(
 		after.materials ==
@@ -137,7 +137,7 @@ TEST_CASE("Renaming a texture re-points the material that routes it", "[assetren
 			Rename(root, "textures_src/old.ktx2", "textures_src/new.ktx2").status ==
 			RenameStatus::kRenamed);
 
-		const BMaterial material = loadMaterial(root.path / "Materials" / "mat.bmaterial");
+		const BMaterial material = StoreAt(root.path).Load<BMaterial>("Materials/mat.bmaterial");
 
 		CHECK(material.pbr.routes[0].texture == "textures_src/new.ktx2");
 		CHECK(root.Scan().broken.empty());
@@ -149,7 +149,7 @@ TEST_CASE("Renaming a texture re-points the material that routes it", "[assetren
 
 		REQUIRE(Rename(root, baked.pbr.baseColorTexture, renamed).status == RenameStatus::kRenamed);
 
-		const BMaterial material = loadMaterial(root.path / "Materials" / "mat.bmaterial");
+		const BMaterial material = StoreAt(root.path).Load<BMaterial>("Materials/mat.bmaterial");
 
 		CHECK(material.pbr.baseColorTexture == renamed);
 		CHECK(root.Scan().broken.empty());
@@ -165,7 +165,7 @@ TEST_CASE("Renaming an environment part re-points its whole family", "[assetrena
 	{
 		REQUIRE(Rename(root, e.sky, "Sky/dawn.bsky").status == RenameStatus::kRenamed);
 
-		CHECK(loadEnv(root.path / e.env).sky == "Sky/dawn.bsky");
+		CHECK(StoreAt(root.path).Load<BEnv>(e.env).sky == "Sky/dawn.bsky");
 		CHECK(root.Scan().broken.empty());
 	}
 
@@ -174,9 +174,9 @@ TEST_CASE("Renaming an environment part re-points its whole family", "[assetrena
 		REQUIRE(
 			Rename(root, e.skySource, "textures_src/dawn.ktx2").status == RenameStatus::kRenamed);
 
-		CHECK(loadSky(root.path / e.sky).sky.source == "textures_src/dawn.ktx2");
+		CHECK(StoreAt(root.path).Load<BSky>(e.sky).sky.source == "textures_src/dawn.ktx2");
 
-		const BEnvLighting lighting = loadEnvLighting(root.path / e.lighting);
+		const BEnvLighting lighting = StoreAt(root.path).Load<BEnvLighting>(e.lighting);
 		CHECK(lighting.prefilter.source == "textures_src/dawn.ktx2");
 		CHECK(lighting.irradiance.source == "textures_src/dawn.ktx2");
 
@@ -197,7 +197,7 @@ TEST_CASE("Renaming a directory re-points every reference into it", "[assetrenam
 	BMaterial inside;
 	inside.pbr.routes[0] = { "textures_src/kirk/tex1.ktx2", 0 };
 	fs::create_directories(root.path / "textures_src" / "kirk");
-	saveMaterial(inside, root.path / "textures_src" / "kirk" / "inside.bmaterial");
+	StoreAt(root.path).Save(inside, "textures_src/kirk/inside.bmaterial");
 
 	const RenamePlan plan = planRename(root.Scan(), "textures_src/kirk", "textures_src/spock");
 
@@ -209,10 +209,11 @@ TEST_CASE("Renaming a directory re-points every reference into it", "[assetrenam
 	CHECK(fs::exists(root.path / "textures_src" / "spock" / "tex0.ktx2"));
 
 	CHECK(
-		loadMaterial(root.path / "Materials" / "outside.bmaterial").pbr.routes[0].texture ==
+		StoreAt(root.path).Load<BMaterial>("Materials/outside.bmaterial").pbr.routes[0].texture ==
 		"textures_src/spock/tex0.ktx2");
 	CHECK(
-		loadMaterial(root.path / "textures_src" / "spock" / "inside.bmaterial")
+		StoreAt(root.path)
+			.Load<BMaterial>("textures_src/spock/inside.bmaterial")
 			.pbr.routes[0]
 			.texture == "textures_src/spock/tex1.ktx2");
 
@@ -333,7 +334,7 @@ TEST_CASE("A rename whose file vanished fails without touching the referrers", "
 
 	// The material still says what it said.
 	CHECK(
-		loadMaterial(root.path / "Materials" / "mat.bmaterial").pbr.routes[0].texture ==
+		StoreAt(root.path).Load<BMaterial>("Materials/mat.bmaterial").pbr.routes[0].texture ==
 		"textures_src/a.ktx2");
 }
 
@@ -368,7 +369,7 @@ TEST_CASE("Renaming a skeleton re-points the whole rig that hangs off it", "[ass
 	skeleton.bones[0].inverseBind = glm::inverse(bindPoseModelTransforms(skeleton)[0]);
 
 	fs::create_directories(root.path / "Skeletons");
-	saveSkeleton(skeleton, root.path / "Skeletons/rig.bskel");
+	StoreAt(root.path).Save(skeleton, "Skeletons/rig.bskel");
 
 	auto animations              = AnimationSet();
 	animations.skeleton          = "Skeletons/rig.bskel";
@@ -384,7 +385,7 @@ TEST_CASE("Renaming a skeleton re-points the whole rig that hangs off it", "[ass
 	animations.samples.push_back(bone.bindPose);
 
 	fs::create_directories(root.path / "Animations");
-	saveAnimations(animations, root.path / "Animations/rig.banim");
+	StoreAt(root.path).Save(animations, "Animations/rig.banim");
 
 	auto mesh = BMesh();
 
@@ -407,10 +408,10 @@ TEST_CASE("Renaming a skeleton re-points the whole rig that hangs off it", "[ass
 
 	mesh.meshes   = { Mesh{ 0, 1, 0 } };
 	mesh.skeleton = "Skeletons/rig.bskel";
-	save(mesh, root.path / "Meshes/rig.bmesh");
+	StoreAt(root.path).Save(mesh, "Meshes/rig.bmesh");
 
 	const fs::path baked = root.path / vatPathFor("Meshes/rig.bmesh", "Animations/rig.banim");
-	saveVat(
+	SaveAt(
 		bakeVat(AssetStore(root.path), VatBakeDesc{ "Meshes/rig.bmesh", "Animations/rig.banim" }),
 		baked);
 

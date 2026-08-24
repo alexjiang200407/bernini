@@ -10,6 +10,7 @@
 #include <core/file/LayeredFileSystem.h>
 #include <core/file/LooseFileSystem.h>
 
+#include "MountAt.h"
 #include "bmesh_texture.h"
 #include "mounted_io.h"
 
@@ -128,10 +129,10 @@ namespace
 	void
 	Stage(const fs::path& root)
 	{
-		saveMaterial(MakeMaterial(), root / "Materials/metal.bmaterial");
-		saveSky(MakeSky(), root / "Env/forest.bsky");
-		saveEnvLighting(MakeLighting(), root / "Env/forest.benvl");
-		saveEnv(MakeEnv(), root / "Env/forest.benv");
+		SaveAt(MakeMaterial(), root / "Materials/metal.bmaterial");
+		SaveAt(MakeSky(), root / "Env/forest.bsky");
+		SaveAt(MakeLighting(), root / "Env/forest.benvl");
+		SaveAt(MakeEnv(), root / "Env/forest.benv");
 
 		// Basis: the transcoding path, which is where a decode is most likely to diverge.
 		writeKTX2(MakeTexture(64, 64), root / "Textures/albedo.ktx2", /*srgb*/ true);
@@ -162,7 +163,7 @@ TEST_CASE("a flat container loads the same from a directory and from an archive"
 
 	SECTION(".bmaterial")
 	{
-		const BMaterial direct = loadMaterial(scratch.path / "Materials/metal.bmaterial");
+		const BMaterial direct = StoreAt(scratch.path).Load<BMaterial>("Materials/metal.bmaterial");
 
 		for (const core::file::IFileSystem* mount : mounts)
 		{
@@ -177,7 +178,7 @@ TEST_CASE("a flat container loads the same from a directory and from an archive"
 
 	SECTION(".bsky")
 	{
-		const BSky direct = loadSky(scratch.path / "Env/forest.bsky");
+		const BSky direct = StoreAt(scratch.path).Load<BSky>("Env/forest.bsky");
 
 		for (const core::file::IFileSystem* mount : mounts)
 		{
@@ -191,7 +192,7 @@ TEST_CASE("a flat container loads the same from a directory and from an archive"
 
 	SECTION(".benvl")
 	{
-		const BEnvLighting direct = loadEnvLighting(scratch.path / "Env/forest.benvl");
+		const BEnvLighting direct = StoreAt(scratch.path).Load<BEnvLighting>("Env/forest.benvl");
 
 		for (const core::file::IFileSystem* mount : mounts)
 		{
@@ -205,7 +206,7 @@ TEST_CASE("a flat container loads the same from a directory and from an archive"
 
 	SECTION(".benv")
 	{
-		const BEnv direct = loadEnv(scratch.path / "Env/forest.benv");
+		const BEnv direct = StoreAt(scratch.path).Load<BEnv>("Env/forest.benv");
 
 		for (const core::file::IFileSystem* mount : mounts)
 		{
@@ -313,7 +314,7 @@ TEST_CASE("a loose entry shadows its packed twin", "[flatseam]")
 
 	BMaterial edited = MakeMaterial();
 	edited.name      = "edited_after_packing";
-	saveMaterial(edited, scratch.path / "Materials/metal.bmaterial");
+	StoreAt(scratch.path).Save(edited, "Materials/metal.bmaterial");
 
 	core::file::LayeredFileSystem mount;
 	mount.Mount(std::make_shared<core::file::LooseFileSystem>(scratch.path));

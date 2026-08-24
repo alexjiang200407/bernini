@@ -4,6 +4,7 @@
 #include <DemoWindow.h>
 #include <FlyCamera.h>
 #include <SDL3/SDL.h>
+#include <assetlib/AssetStore.h>
 #include <assetlib/bmaterial_io.h>
 #include <assetlib/bmesh_io.h>
 #include <assetlib/image_io.h>
@@ -107,7 +108,7 @@ main(int argc, char** argv)
 		// materials the mesh names, and the textures those materials name. `operator/` leaves an
 		// absolute --model alone.
 		const auto dataRoot = std::filesystem::path(dataRootPath);
-		const auto model    = assetlib::load(dataRoot / modelPath);
+		const auto model    = assetlib::AssetStore(dataRoot).Load<assetlib::BMesh>(modelPath);
 
 		// The manager holds the data root and the path -> handle identity: a texture shared by several
 		// routes, or a material shared by several submeshes, is loaded once. Acquiring a mesh acquires

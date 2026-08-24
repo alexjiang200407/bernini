@@ -488,7 +488,8 @@ MaterialEditorWindow::RefreshActions()
 	// both this and the baked-texture listing below.
 	bool    stale = true;
 	QString bakedSummary;
-	if (const assetlib::BMaterial* material = m_Graphs.At(graphIndex).onDisk.Get(materialPath))
+	if (const assetlib::BMaterial* material =
+	        m_Graphs.At(graphIndex).onDisk.Get(m_DataRoot, materialPath))
 	{
 		// This is a UI refresh, called from a dozen places and never from inside a handler, so a
 		// data root that has gone leaves the pessimistic default rather than throwing out of a slot.
@@ -565,9 +566,10 @@ MaterialEditorWindow::SaveCurrentMaterial(bool saveAs)
 
 	try
 	{
-		assetlib::saveMaterial(
+		const assetlib::AssetStore store(m_DataRoot);
+		store.Save(
 			editor::BuildMaterial(*entry.model, path, m_DataRoot),
-			std::filesystem::path(path.toStdWString()));
+			store.KeyFor(std::filesystem::path(path.toStdWString())));
 	}
 	catch (const std::exception& e)
 	{
@@ -617,9 +619,10 @@ MaterialEditorWindow::SaveAllMaterials()
 
 		try
 		{
-			assetlib::saveMaterial(
+			const assetlib::AssetStore store(m_DataRoot);
+			store.Save(
 				editor::BuildMaterial(*entry.model, entry.materialPath, m_DataRoot),
-				std::filesystem::path(entry.materialPath.toStdWString()));
+				store.KeyFor(std::filesystem::path(entry.materialPath.toStdWString())));
 		}
 		catch (const std::exception& e)
 		{
@@ -780,7 +783,10 @@ MaterialEditorWindow::AttachMaterialToMesh(int submeshIndex, const QString& mate
 			// outside the cache key, so the mesh file is neither rewritten nor staled, and the
 			// next load applies the document. Only a sourceless mesh still saves its own file.
 			if (mesh.source.key.empty())
-				assetlib::save(mesh, meshPath);
+			{
+				const assetlib::AssetStore meshStore(m_DataRoot);
+				meshStore.Save(mesh, meshStore.KeyFor(meshPath));
+			}
 			else
 				assetlib::rebindSubmeshInDocument(
 					m_DataRoot,
@@ -818,7 +824,9 @@ MaterialEditorWindow::OpenMaterialInto(int graphIndex, const QString& path, bool
 	auto material = assetlib::BMaterial();
 	try
 	{
-		material = assetlib::loadMaterial(std::filesystem::path(path.toStdWString()));
+		const assetlib::AssetStore store(m_DataRoot);
+		material = store.Load<assetlib::BMaterial>(
+			store.KeyFor(std::filesystem::path(path.toStdWString())));
 	}
 	catch (const std::exception& e)
 	{

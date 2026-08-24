@@ -56,23 +56,6 @@ namespace assetlib
 	deserializeEnv(std::span<const std::byte> bytes);
 
 	/**
-	 * Writes `env` to `path` as a `.benv`. The paths it stores are relative to the data directory,
-	 * not to this file.
-	 *
-	 * @throws std::runtime_error if the file cannot be written.
-	 */
-	void
-	saveEnv(const BEnv& env, const std::filesystem::path& path);
-
-	/**
-	 * Loads a `.benv` previously written by saveEnv.
-	 *
-	 * @throws std::runtime_error if the file cannot be read or is malformed.
-	 */
-	[[nodiscard]] BEnv
-	loadEnv(const std::filesystem::path& path);
-
-	/**
 	 * The codec for `c_EnvironmentExtension` -- a authored document. See AssetCodec.h.
 	 *
 	 * Declared here and defined in benv_io.cpp, because `Deserialize` returns by value and this

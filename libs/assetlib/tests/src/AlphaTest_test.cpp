@@ -280,9 +280,9 @@ TEST_CASE("alphaMode and alphaCutoff survive a .bmaterial round trip", "[bmateri
 	material.pbr.baseColorTexture = "Textures/basecolor_dead.ktx2";
 
 	const auto path = dir.path / "cutout.bmaterial";
-	REQUIRE_NOTHROW(saveMaterial(material, path));
+	REQUIRE_NOTHROW(SaveAt(material, path));
 
-	const BMaterial loaded = loadMaterial(path);
+	const BMaterial loaded = LoadAt<BMaterial>(path);
 	CHECK(loaded.pbr.alphaMode == AlphaMode::kBlend);
 	CHECK(loaded.pbr.alphaCutoff == 0.25f);
 }
@@ -299,9 +299,9 @@ TEST_CASE("kHashed survives a .bmaterial round trip", "[bmaterial][alphatest][ha
 	material.pbr.baseColorTexture = "Textures/basecolor_dead.ktx2";
 
 	const auto path = dir.path / "hashed.bmaterial";
-	REQUIRE_NOTHROW(saveMaterial(material, path));
+	REQUIRE_NOTHROW(SaveAt(material, path));
 
-	CHECK(loadMaterial(path).pbr.alphaMode == AlphaMode::kHashed);
+	CHECK(LoadAt<BMaterial>(path).pbr.alphaMode == AlphaMode::kHashed);
 
 	// The values the enum already had must not have moved, or every material baked before this
 	// reads as a different mode.

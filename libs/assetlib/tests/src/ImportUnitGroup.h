@@ -1,4 +1,5 @@
 #pragma once
+#include <assetlib/AssetStore.h>
 #include <assetlib/asset_import.h>
 #include <assetlib/bmesh_gltf.h>
 #include <assetlib/bmesh_io.h>
@@ -31,19 +32,21 @@ namespace assetlib::test
 		const SourceRef    source = copyImportedSource(glb, target);
 		mesh.source               = source;
 
+		const AssetStore store(dataRoot);
+
 		writeImportedRig(
+			store,
 			imported,
 			mesh,
-			dataRoot,
-			dataRoot / c_SkeletonsDirectoryName / "unit.bskel",
-			dataRoot / c_AnimationsDirectoryName / "unit.banim",
+			"Skeletons/unit.bskel",
+			"Animations/unit.banim",
 			true,
 			source);
 
 		if (!mesh.submeshes.empty())
 			static_cast<void>(attachMaterial(mesh, 0, material));
 
-		writeImportedMesh(mesh, dataRoot / c_MeshesDirectoryName / "unit.bmesh");
+		writeImportedMesh(store, mesh, "Meshes/unit.bmesh");
 		writeImportedDocument(target, &mesh);
 	}
 }

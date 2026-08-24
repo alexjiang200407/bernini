@@ -126,16 +126,16 @@ TEST_CASE("An import writes the environment family a project can load", "[envimp
 
 	// And it loads back as one environment: the .benv names the pair, each names its baked map, and
 	// nothing is stale the moment it was written.
-	const BEnv env = loadEnv(sandbox.DataRoot() / result.environment);
+	const BEnv env = StoreAt(sandbox.DataRoot()).Load<BEnv>(result.environment);
 	CHECK(env.sky == result.sky);
 	CHECK(env.lighting == result.lighting);
 
-	const BSky sky = loadSky(sandbox.DataRoot() / result.sky);
+	const BSky sky = StoreAt(sandbox.DataRoot()).Load<BSky>(result.sky);
 	CHECK_FALSE(sky.sky.baked.empty());
 	CHECK(sandbox.Has(sky.sky.baked));
 	CHECK_FALSE(isSkyBakeStale(sky, MountAt(sandbox.DataRoot())));
 
-	const BEnvLighting lighting = loadEnvLighting(sandbox.DataRoot() / result.lighting);
+	const BEnvLighting lighting = StoreAt(sandbox.DataRoot()).Load<BEnvLighting>(result.lighting);
 	CHECK_FALSE(isEnvLightingBakeStale(lighting, MountAt(sandbox.DataRoot())));
 
 	// A constant environment's exposure is 1 / (0.96 * radiance) -- the same value bakeEnvLighting
@@ -194,7 +194,7 @@ TEST_CASE("An import writes only what was selected", "[envimport]")
 
 		const EnvImportResult result = importEnvironment(desc);
 
-		const BEnv env = loadEnv(sandbox.DataRoot() / result.environment);
+		const BEnv env = StoreAt(sandbox.DataRoot()).Load<BEnv>(result.environment);
 		CHECK(env.sky == result.sky);
 		CHECK(env.lighting.empty());  // not a dangling reference to a file that was never written
 	}
