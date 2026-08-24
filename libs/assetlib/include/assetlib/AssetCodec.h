@@ -15,8 +15,8 @@ namespace assetlib
 	 * This is the compile-time counterpart of the runtime registry a shipping engine uses -- Godot's
 	 * `ResourceFormatLoader`, Unity's `ScriptedImporter`. Those can dispatch virtually because
 	 * everything they load shares a base; our containers are unrelated PODs, so a virtual codec
-	 * would have to return `std::any` and every caller would cast back. See
-	 * `docs/specs/assetlib_store_codecs.md`.
+	 * would have to return `std::any` and every caller would cast back. A deliberate deviation --
+	 * see docs/assetlib_api.md.
 	 */
 	/**
 	 * What a codec can be written for: a container struct this library serializes.
