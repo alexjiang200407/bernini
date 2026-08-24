@@ -101,7 +101,7 @@ TEST_CASE("a material with no base-colour route bakes complete", "[bmaterial][ba
 	mat.pbr.routes[7]       = { "normal.ktx2", 0 };  // normal X
 	mat.pbr.routes[8]       = { "normal.ktx2", 1 };  // normal Y
 
-	REQUIRE_NOTHROW(bakeMaterial(mat, MaterialBakeDesc{ dir.path }));
+	REQUIRE_NOTHROW(StoreAt(dir.path).BakeMaterial(mat));
 
 	REQUIRE(mat.pbr.baseColorTexture.empty());
 	REQUIRE_FALSE(mat.pbr.ormTexture.empty());
@@ -111,7 +111,7 @@ TEST_CASE("a material with no base-colour route bakes complete", "[bmaterial][ba
 	{
 		CHECK_FALSE(bakeIsStale(mat, MountAt(dir.path)));
 
-		REQUIRE_NOTHROW(bakeMaterial(mat, MaterialBakeDesc{ dir.path }));
+		REQUIRE_NOTHROW(StoreAt(dir.path).BakeMaterial(mat));
 		CHECK_FALSE(bakeIsStale(mat, MountAt(dir.path)));
 	}
 
@@ -126,7 +126,7 @@ TEST_CASE("a material with no base-colour route bakes complete", "[bmaterial][ba
 		// the route carries a current stamp: an unstamped one is caught by the per-channel check
 		// above and never reaches the verdict this section is about.
 		mat.pbr.routes[0] = { "normal.ktx2", 0 };
-		REQUIRE_NOTHROW(bakeMaterial(mat, MaterialBakeDesc{ dir.path }));
+		REQUIRE_NOTHROW(StoreAt(dir.path).BakeMaterial(mat));
 		REQUIRE_FALSE(mat.pbr.baseColorTexture.empty());
 
 		mat.pbr.baseColorTexture.clear();
