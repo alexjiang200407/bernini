@@ -1,10 +1,10 @@
 #include "import_writers.h"
+#include <assetlib/bmesh.h>
 
 #include "Windows/MaterialEditor/MaterialGraphModel.h"
 #include "Windows/MaterialEditor/material_graph.h"
 
-#include <assetlib/bmaterial_io.h>
-#include <assetlib/bmesh_io.h>
+#include <assetlib/AssetStore.h>
 
 namespace editor
 {
@@ -28,8 +28,6 @@ namespace editor
 			throw std::runtime_error(
 				"this file's materials changed while the import dialog was open; import it again");
 		}
-
-		fs::create_directories(materialDir);
 
 		// No device: the graph is authored, not drawn, and a TextureNode takes a null scene on purpose.
 		const auto registry = MakeMaterialNodeRegistry(nullptr, nullptr);
@@ -63,7 +61,8 @@ namespace editor
 			                          texturePath(source.normalTexture),
 			                          texturePath(source.ormTexture) });
 
-			assetlib::saveMaterial(CompileMaterial(model, stem, dataRoot), file);
+			const assetlib::AssetStore store(dataRoot);
+			store.Save(CompileMaterial(model, stem, dataRoot), store.KeyFor(file));
 
 			relative[i] =
 				Rebase(QString::fromStdWString(file.wstring()), dataRoot, true).toStdString();

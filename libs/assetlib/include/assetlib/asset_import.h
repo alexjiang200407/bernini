@@ -1,5 +1,4 @@
 #pragma once
-#include <assetlib_structs/BMeshImport.h>
 
 namespace assetlib
 {
@@ -7,64 +6,6 @@ namespace assetlib
 	struct MaterialBinding;
 	struct Skeleton;
 	struct SourceRef;
-
-	/**
-	 * Writes `mesh` to `bmeshPath`, creating the directory the path names first: an import aimed
-	 * at a subfolder lands at `Meshes/<folder>/`, which nothing else creates -- `save` opens the file
-	 * where it stands.
-	 *
-	 * @throws std::runtime_error if the file cannot be written.
-	 */
-	void
-	writeImportedMesh(const BMesh& mesh, const std::filesystem::path& bmeshPath);
-
-	/**
-	 * Writes the rig a skinned import carries -- the `.bskel` always, the `.banim` only when asked --
-	 * and points `mesh` at the skeleton by a data-root-relative path.
-	 *
-	 * The skeleton is not optional and is deliberately not behind the import dialog's checkbox. A joint
-	 * index is a bare number into a bone array, so a mesh carrying joints while naming no skeleton is
-	 * one `save` refuses outright; the clips are the half a user can decline.
-	 *
-	 * Does nothing when the import carried no skin, which is what a static mesh is.
-	 *
-	 * @throws std::runtime_error if either file cannot be written.
-	 */
-	void
-	writeImportedRig(
-		const imp::BMeshImport&      imported,
-		BMesh&                       mesh,
-		const std::filesystem::path& dataRoot,
-		const std::filesystem::path& bskelPath,
-		const std::filesystem::path& banimPath,
-		bool                         writeClips,
-		const SourceRef&             source);
-
-	/**
-	 * The `.bskel` under `dataRoot` whose signature matches `skeleton`, or empty when none does.
-	 *
-	 * What lets an import with the mesh turned off find the rig its clips belong to.
-	 *
-	 * @throws std::runtime_error if more than one rig matches, since which one the clips attach to
-	 *         would otherwise depend on directory order.
-	 */
-	[[nodiscard]] std::filesystem::path
-	findMatchingSkeleton(const std::filesystem::path& dataRoot, const Skeleton& skeleton);
-
-	/**
-	 * Writes only `imported`'s clips, attached to a rig already in the project -- what an import with
-	 * the mesh turned off does, and how a rig whose animations the artist exported one per file gets
-	 * all of them without a copy of the geometry each time.
-	 *
-	 * @throws std::runtime_error if the file carries no clips or no rig, or if no skeleton in
-	 *         `dataRoot` matches the one it was authored against.
-	 */
-	void
-	writeImportedClips(
-		const imp::BMeshImport&      imported,
-		const std::filesystem::path& dataRoot,
-		const std::filesystem::path& banimPath,
-		const SourceRef&             source);
 
 	/**
 	 * @throws std::runtime_error unless `source` is a `.glb` -- a `.gltf`'s sidecar `.bin` and
@@ -83,49 +24,14 @@ namespace assetlib
 	requireUniqueSubmeshNames(const BMesh& mesh);
 
 	/**
-	 * Where an import writes and the parameters it writes with -- the trio every import write
-	 * needs, carried as one value so a write cannot take half of it.
+	 * What an import is named and the parameter it writes with, carried as one value so a write
+	 * cannot take half of it. Where it lands is the store's, not this.
 	 */
 	struct ImportTarget
 	{
-		std::filesystem::path dataRoot;
-		std::string           name;  // the copied source's stem: `meshes_src/<name>.glb`
-		float                 sampleRate;
+		std::string name;  // the copied source's stem: `meshes_src/<name>.glb`
+		float       sampleRate;
 	};
-
-	/** `<dataRoot>/meshes_src/<name>.glb` -- where an import copies its source. */
-	[[nodiscard]] std::filesystem::path
-	importedSourcePathFor(const std::filesystem::path& dataRoot, std::string_view name);
-
-	/** The `.bimport` beside the copied source. */
-	[[nodiscard]] std::filesystem::path
-	importDocumentPathFor(const std::filesystem::path& dataRoot, std::string_view name);
-
-	/**
-	 * Copies the self-contained source into `meshes_src/` and stamps it: the returned reference --
-	 * key, content stamp, parameter hash -- is what the caller sets on every container derived
-	 * from it *before* saving them. The document itself is written afterwards by
-	 * writeImportedDocument, once the bindings exist; the split is safe because bindings are
-	 * deliberately outside the parameter hash.
-	 *
-	 * `target.sampleRate` -- the rate clips are resampled to at import, the import's one
-	 * parameter -- is what the returned reference's parameter hash covers.
-	 *
-	 * @throws what requireSelfContainedSource throws, and std::runtime_error on a copy failure.
-	 */
-	SourceRef
-	copyImportedSource(const std::filesystem::path& source, const ImportTarget& target);
-
-	/**
-	 * Writes the `.bimport` beside the copied source: the sample rate, and -- when `mesh` is
-	 * given -- the submesh-name -> material bindings the mesh carries at this moment, which is how
-	 * an import records what `attachMaterial` just chose and how an adoption records what an
-	 * existing file already held. Null `mesh` is a clips-only import: parameters, no bindings.
-	 *
-	 * @throws std::runtime_error on a write failure.
-	 */
-	void
-	writeImportedDocument(const ImportTarget& target, const BMesh* mesh);
 
 	/**
 	 * Rebuilds `mesh.materials` and every `Submesh::material` canonically from `bindings` -- a
@@ -139,26 +45,7 @@ namespace assetlib
 	[[nodiscard]] std::vector<std::string>
 	applyBindings(BMesh& mesh, std::span<const MaterialBinding> bindings);
 
-	/**
-	 * Sets `submesh`'s binding to `material` in the import document beside `sourceKey`'s copied
-	 * source, leaving everything else -- the parameters, unknown keys, every other binding --
-	 * exactly as it stands. What a rebind in the editor writes instead of the mesh file: the
-	 * binding is outside the cache key, so the mesh is neither rewritten nor staled.
-	 *
-	 * `sourceKey` is the mount key the mesh's header carries (`BMesh::source.key`); the document
-	 * path is derived here, so no caller composes it.
-	 *
-	 * @throws std::runtime_error if `sourceKey` is empty, the document is absent or malformed, or
-	 *         the write fails.
-	 */
-	void
-	rebindSubmeshInDocument(
-		const std::filesystem::path& dataRoot,
-		std::string_view             sourceKey,
-		std::string_view             submesh,
-		std::string_view             material);
-
-	/** What happened to one import document under reauthorImportDocuments. */
+	/** What happened to one import document under `AssetStore::ReauthorImportDocuments`. */
 	struct ReauthoredDocument
 	{
 		enum class Outcome
@@ -172,21 +59,6 @@ namespace assetlib
 		Outcome     outcome;
 		std::string message;
 	};
-
-	/**
-	 * Rewrites every import document's bindings under `dataRoot` from its mesh's current state,
-	 * parameters and unknown keys preserved -- the one-time adoption pass that makes the documents
-	 * authoritative. Until it runs, a rebind saved into a `.bmesh` before documents existed is
-	 * recorded nowhere else; after it, the document is what a load applies, so running this again
-	 * later would overwrite document-only rebinds with stale mesh state.
-	 *
-	 * A mesh that will not load, a source claimed by two meshes, or a recorded source whose
-	 * document is missing is reported per document and never guessed at.
-	 *
-	 * @throws std::runtime_error if `dataRoot` is not a directory.
-	 */
-	[[nodiscard]] std::vector<ReauthoredDocument>
-	reauthorImportDocuments(const std::filesystem::path& dataRoot);
 
 	/** A file an import writes, and whether the import is the one that made it. */
 	struct ImportedFile

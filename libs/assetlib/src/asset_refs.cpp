@@ -1,14 +1,10 @@
 #include <assetlib/AssetStore.h>
 #include <assetlib/asset_refs.h>
+#include <assetlib/bmesh.h>
+#include <assetlib/vat_bake.h>
 
-#include <assetlib/banim_io.h>
-#include <assetlib/benv_io.h>
-#include <assetlib/benvl_io.h>
-#include <assetlib/bmaterial_io.h>
-#include <assetlib/bmesh_io.h>
-#include <assetlib/bsky_io.h>
-#include <assetlib/bvat_io.h>
-#include <assetlib/container_format.h>
+#include <assetlib/AssetCodec.h>
+
 #include <assetlib/import_document.h>
 #include <assetlib_structs/BEnv.h>
 #include <assetlib_structs/BMaterial.h>
@@ -141,7 +137,7 @@ namespace assetlib
 			auto material = BMaterial();
 			try
 			{
-				material = loadMaterial(files, referrer);
+				material = load<BMaterial>(files, referrer);
 			}
 			catch (const std::exception& e)
 			{
@@ -191,7 +187,7 @@ namespace assetlib
 		{
 			try
 			{
-				addRouteEdges(edges, referrer, loadSky(files, referrer).sky);
+				addRouteEdges(edges, referrer, load<BSky>(files, referrer).sky);
 			}
 			catch (const std::exception& e)
 			{
@@ -210,7 +206,7 @@ namespace assetlib
 		{
 			try
 			{
-				const BEnvLighting lighting = loadEnvLighting(files, referrer);
+				const BEnvLighting lighting = load<BEnvLighting>(files, referrer);
 				addRouteEdges(edges, referrer, lighting.prefilter);
 				addRouteEdges(edges, referrer, lighting.irradiance);
 			}
@@ -231,7 +227,7 @@ namespace assetlib
 		{
 			try
 			{
-				const BEnv env = loadEnv(files, referrer);
+				const BEnv env = load<BEnv>(files, referrer);
 				addEdge(edges, referrer, env.sky, RefKind::kEnvironmentPart);
 				addEdge(edges, referrer, env.lighting, RefKind::kEnvironmentPart);
 			}
@@ -249,28 +245,16 @@ namespace assetlib
 	{
 		const std::string ext = lowerExtension(path);
 
-		if (ext == c_MeshExtension)
-			return AssetType::kMesh;
-		if (ext == c_MaterialExtension)
-			return AssetType::kMaterial;
+		// The one asset with no codec, so the one the table cannot answer for: a texture is an
+		// image this library encodes, not a container it serializes a struct into.
 		if (ext == c_TextureExtension)
 			return AssetType::kTexture;
-		if (ext == c_EnvironmentExtension)
-			return AssetType::kEnvironment;
-		if (ext == c_SkyExtension)
-			return AssetType::kSky;
-		if (ext == c_EnvLightingExtension)
-			return AssetType::kEnvLighting;
-		if (ext == c_SkeletonExtension)
-			return AssetType::kSkeleton;
-		if (ext == c_AnimationExtension)
-			return AssetType::kAnimation;
-		if (ext == c_VatExtension)
-			return AssetType::kVat;
-		if (ext == c_ImportDocumentExtension)
-			return AssetType::kImportDocument;
 
-		return std::nullopt;
+		const std::optional<ContainerKind> kind = containerKindForExtension(ext);
+		if (!kind.has_value())
+			return std::nullopt;
+
+		return kind->type;
 	}
 
 	bool
@@ -532,12 +516,12 @@ namespace assetlib
 	}
 
 	DeletionResult
-	deleteAsset(const DeletionPlan& plan, const AssetStore& store)
+	AssetStore::DeleteAsset(const DeletionPlan& plan) const
 	{
 		if (!plan.Allowed())
 			return DeletionResult{ DeletionStatus::kRefused, {} };
 
-		const std::filesystem::path path = store.GetDataRoot() / plan.target;
+		const std::filesystem::path path = GetDataRoot() / plan.target;
 
 		// A plan can name assets only the archive holds -- the target, a member of the directory it
 		// names, something its cascade frees, or a bake derived from it. `remove` reports no error
@@ -546,8 +530,8 @@ namespace assetlib
 		//
 		// Inert on a loose store, where the mount is the data root: what is not on disk is not in
 		// the mount either.
-		const auto onlyInMount = [&store](const std::string& key) {
-			return !std::filesystem::exists(store.GetDataRoot() / key) && store.Exists(key);
+		const auto onlyInMount = [this](const std::string& key) {
+			return !std::filesystem::exists(GetDataRoot() / key) && Exists(key);
 		};
 
 		auto unreachable = std::vector<std::string>();
@@ -570,7 +554,7 @@ namespace assetlib
 		std::error_code ec;
 		for (const std::string& bake : plan.derived)
 		{
-			std::filesystem::remove(store.GetDataRoot() / bake, ec);
+			std::filesystem::remove(GetDataRoot() / bake, ec);
 			if (ec)
 				return DeletionResult{ DeletionStatus::kFailed, ec.message() };
 		}
@@ -590,7 +574,7 @@ namespace assetlib
 		// a failure part-way never leaves a referenced asset missing.
 		for (const std::string& freed : plan.cascade)
 		{
-			std::filesystem::remove(store.GetDataRoot() / freed, ec);
+			std::filesystem::remove(GetDataRoot() / freed, ec);
 			if (ec)
 				return DeletionResult{ DeletionStatus::kFailed, ec.message() };
 		}

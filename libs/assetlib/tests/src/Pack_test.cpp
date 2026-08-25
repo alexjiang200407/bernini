@@ -1,12 +1,8 @@
 #include <assetlib/AssetStore.h>
 #include <assetlib/asset_import.h>
-#include <assetlib/banim_io.h>
-#include <assetlib/bmesh_io.h>
-#include <assetlib/bskel_io.h>
-#include <assetlib/bvat_io.h>
+#include <assetlib/codecs.h>
 #include <assetlib/import_document.h>
-#include <assetlib/pak_io.h>
-#include <assetlib/pak_pack.h>
+#include <assetlib/pak.h>
 #include <assetlib/vat_bake.h>
 #include <assetlib_structs/BMesh.h>
 #include <assetlib_structs/BVat.h>
@@ -45,7 +41,7 @@ namespace
 		bone.nameOffset  = skeleton.stringPool.add("root");
 		skeleton.bones   = { bone };
 		fs::create_directories(root.path / "Skeletons");
-		saveSkeleton(skeleton, root.path / "Skeletons/hero.bskel");
+		StoreAt(root.path).Save(skeleton, "Skeletons/hero.bskel");
 
 		const Environment environment = WriteEnvironment(root);
 
@@ -59,9 +55,12 @@ namespace
 
 			fs::create_directories(root.path / "meshes_src");
 			std::ofstream(root.path / "meshes_src/kirk.glb") << "the imported source";
-			std::ofstream(root.path / "meshes_src/kirk.bimport")
-				<< serializeImportDocument(ImportDocument{});
-			std::ofstream(root.path / "stray.bimport") << serializeImportDocument(ImportDocument{});
+			core::file::write_atomic(
+				root.path / "meshes_src/kirk.bimport",
+				AssetCodec<ImportDocument>::Serialize(ImportDocument{}));
+			core::file::write_atomic(
+				root.path / "stray.bimport",
+				AssetCodec<ImportDocument>::Serialize(ImportDocument{}));
 		}
 
 		return environment;
@@ -70,8 +69,7 @@ namespace
 	std::vector<std::string>
 	PackAndEnumerate(const DataRoot& root, PackReport* report = nullptr)
 	{
-		const PackReport packed =
-			packProject(AssetStore(root.path), PackDesc{ root.path / "Data.bpak" });
+		const PackReport packed = AssetStore(root.path).Pack(PackDesc{ root.path / "Data.bpak" });
 		if (report != nullptr)
 			*report = packed;
 
@@ -152,8 +150,7 @@ TEST_CASE("every packed entry reads back byte-for-byte", "[pack]")
 	const DataRoot root("pack_roundtrip");
 	StageProject(root);
 
-	const PackReport packed =
-		packProject(AssetStore(root.path), PackDesc{ root.path / "Data.bpak" });
+	const PackReport packed = AssetStore(root.path).Pack(PackDesc{ root.path / "Data.bpak" });
 
 	const core::file::LooseFileSystem loose(root.path);
 	const PakFile                     pak(root.path / "Data.bpak");
@@ -183,8 +180,8 @@ TEST_CASE("packing the same tree twice produces identical bytes", "[pack]")
 	const DataRoot root("pack_determinism");
 	StageProject(root);
 
-	static_cast<void>(packProject(AssetStore(root.path), PackDesc{ root.path / "a.bpak" }));
-	static_cast<void>(packProject(AssetStore(root.path), PackDesc{ root.path / "b.bpak" }));
+	static_cast<void>(AssetStore(root.path).Pack(PackDesc{ root.path / "a.bpak" }));
+	static_cast<void>(AssetStore(root.path).Pack(PackDesc{ root.path / "b.bpak" }));
 
 	CHECK(
 		core::file::read_file_bytes((root.path / "a.bpak").string()) ==
@@ -205,7 +202,7 @@ TEST_CASE("an interrupted pack leaves the previous archive intact", "[pack]")
 	StageProject(root);
 
 	const auto target = root.path / "Data.bpak";
-	static_cast<void>(packProject(AssetStore(root.path), PackDesc{ target }));
+	static_cast<void>(AssetStore(root.path).Pack(PackDesc{ target }));
 
 	const std::vector<std::byte>   before  = core::file::read_file_bytes(target.string());
 	const std::vector<std::string> entries = PakFile(target).Enumerate();
@@ -232,7 +229,7 @@ TEST_CASE("a material that draws loose is named, because the archive drops its s
 	// Routed, never baked: it draws from the authoring source that packing excludes.
 	BMaterial unbaked;
 	unbaked.pbr.routes[0] = { "textures_src/skin.ktx2", 0 };
-	saveMaterial(unbaked, root.path / "Materials/unbaked.bmaterial");
+	StoreAt(root.path).Save(unbaked, "Materials/unbaked.bmaterial");
 
 	// Baked: it draws the triplet, which packing carries.
 	BakeAndSave(root, "baked.bmaterial", "textures_src/skin.ktx2");
@@ -255,15 +252,14 @@ namespace
 		fs::create_directories(root.path / "Skeletons");
 		fs::create_directories(root.path / "Animations");
 
-		save(fixture.mesh, root.path / "Meshes/rig.bmesh");
-		saveSkeleton(fixture.skeleton, root.path / "Skeletons/rig.bskel");
-		saveAnimations(fixture.animations, root.path / "Animations/rig.banim");
+		StoreAt(root.path).Save(fixture.mesh, "Meshes/rig.bmesh");
+		StoreAt(root.path).Save(fixture.skeleton, "Skeletons/rig.bskel");
+		StoreAt(root.path).Save(fixture.animations, "Animations/rig.banim");
 
-		saveVat(
-			bakeVat(
-				AssetStore(root.path),
+		StoreAt(root.path).Save(
+			AssetStore(root.path).BakeVat(
 				VatBakeDesc{ "Meshes/rig.bmesh", "Animations/rig.banim" }),
-			root.path / "Meshes/rig.bvat");
+			"Meshes/rig.bvat");
 	}
 }
 
@@ -292,7 +288,7 @@ TEST_CASE("pack re-bakes a stale .bvat, and leaves a current one alone", "[pack]
 		// equal length would not move it.
 		VatFixture edited;
 		edited.animations.stringPool.add("padding-so-the-size-moves");
-		saveAnimations(edited.animations, root.path / "Animations/rig.banim");
+		StoreAt(root.path).Save(edited.animations, "Animations/rig.banim");
 
 		REQUIRE(vatIsStale(loadVatTables(root.path / "Meshes/rig.bvat"), MountAt(root.path)));
 
@@ -318,7 +314,7 @@ TEST_CASE("pack refuses a .bvat from another bake revision", "[pack][vat]")
 	test::TamperHeaderByte(root.path / "Meshes/rig.bvat", test::c_TokenOffset);
 
 	CHECK_THROWS_WITH(
-		packProject(AssetStore(root.path), PackDesc{ root.path / "Data.bpak" }),
+		AssetStore(root.path).Pack(PackDesc{ root.path / "Data.bpak" }),
 		Catch::Matchers::ContainsSubstring("another bake revision"));
 }
 
@@ -331,11 +327,11 @@ TEST_CASE("pack fails when a stale .bvat cannot be re-baked", "[pack][vat]")
 
 	VatFixture edited;
 	edited.animations.stringPool.add("padding-so-the-size-moves");
-	saveAnimations(edited.animations, root.path / "Animations/rig.banim");
+	StoreAt(root.path).Save(edited.animations, "Animations/rig.banim");
 	fs::remove(root.path / "Skeletons/rig.bskel");
 
 	CHECK_THROWS_AS(
-		packProject(AssetStore(root.path), PackDesc{ root.path / "Data.bpak" }),
+		AssetStore(root.path).Pack(PackDesc{ root.path / "Data.bpak" }),
 		std::runtime_error);
 }
 
@@ -349,17 +345,20 @@ TEST_CASE(
 
 	const auto meshPath = root.path / "Meshes/unit.bmesh";
 	test::TamperHeaderByte(meshPath, test::c_TokenOffset);
-	rebindSubmeshInDocument(root.path, "meshes_src/unit.glb", "body", "Materials/blue.bmaterial");
+	AssetStore(root.path).RebindSubmeshInDocument(
+		"meshes_src/unit.glb",
+		"body",
+		"Materials/blue.bmaterial");
 	const auto stale = core::file::read_file_bytes(meshPath.string());
 
 	const std::filesystem::path target = root.path / "Data.bpak";
-	const PackReport            report = packProject(AssetStore(root.path), PackDesc{ target });
+	const PackReport            report = AssetStore(root.path).Pack(PackDesc{ target });
 	CHECK(report.geometryRebaked >= 1);
 
 	// The archive carries the current cook with the document's binding baked in -- a read-only
 	// store trusts it, which is exactly what pack just made true.
 	const AssetStore packed(root.path, std::make_shared<PakFile>(target));
-	const BMesh      mesh = packed.LoadMesh("Meshes/unit.bmesh");
+	const BMesh      mesh = packed.Load<BMesh>("Meshes/unit.bmesh");
 	REQUIRE(mesh.materials.size() == 1);
 	CHECK(mesh.materials[0] == "Materials/blue.bmaterial");
 
@@ -376,7 +375,7 @@ TEST_CASE("a group the seam cannot serve fails the pack", "[pack][regen]")
 	test::TamperHeaderByte(root.path / "Meshes/unit.bmesh", test::c_TokenOffset);
 	std::filesystem::remove(root.path / "meshes_src/unit.glb");
 
-	CHECK_THROWS(packProject(AssetStore(root.path), PackDesc{ root.path / "Data.bpak" }));
+	CHECK_THROWS(AssetStore(root.path).Pack(PackDesc{ root.path / "Data.bpak" }));
 }
 
 TEST_CASE("a packed .bvat answers fresh inside the archive it shipped in", "[pack][regen][vat]")
@@ -388,8 +387,8 @@ TEST_CASE("a packed .bvat answers fresh inside the archive it shipped in", "[pac
 	const AssetStore  store(root.path);
 	const std::string vatKey =
 		vatPathFor("Meshes/unit.bmesh", "Animations/unit.banim").generic_string();
-	saveVat(
-		bakeVat(store, VatBakeDesc{ "Meshes/unit.bmesh", "Animations/unit.banim" }),
+	SaveAt(
+		store.BakeVat(VatBakeDesc{ "Meshes/unit.bmesh", "Animations/unit.banim" }),
 		root.path / vatKey);
 
 	// The group goes stale with every byte and stamp the bake recorded still holding: a
@@ -399,10 +398,10 @@ TEST_CASE("a packed .bvat answers fresh inside the archive it shipped in", "[pac
 	document.sampleRate = 60.0f;
 	core::file::write_atomic(
 		root.path / "meshes_src/unit.bimport",
-		serializeImportDocument(document));
+		AssetCodec<ImportDocument>::Serialize(document));
 
 	const std::filesystem::path target = root.path / "Data.bpak";
-	const PackReport            report = packProject(store, PackDesc{ target });
+	const PackReport            report = store.Pack(PackDesc{ target });
 	CHECK(report.vatsRebaked == 1);  // the group axis alone fired
 
 	// Judged inside the archive, which is where a shipped build asks: the vat's stamps must

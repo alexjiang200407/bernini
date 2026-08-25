@@ -1,6 +1,6 @@
 #include "gltf_skin.h"
 
-#include <assetlib/skeleton.h>
+#include <assetlib/skinning.h>
 
 #include "gltf_util.h"
 

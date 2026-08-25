@@ -1,5 +1,6 @@
 #include "Thumbnails/AssetThumbnailCache.h"
 #include "Mesh/mesh_load.h"
+#include <assetlib/bmesh.h>
 
 #include "Mesh/BMeshUtil.h"
 #include "Render/environment.h"
@@ -11,8 +12,6 @@
 #include <QRunnable>
 
 #include <assetlib/AssetStore.h>
-#include <assetlib/bmaterial_io.h>
-#include <assetlib/bmesh_io.h>
 #include <assetlib/image_io.h>
 #include <assetlib_structs/BMaterial.h>
 #include <assetlib_structs/BMesh.h>
@@ -72,7 +71,7 @@ namespace
 			return;
 
 		const assetlib::AssetStore store(dataRoot);
-		const assetlib::BMaterial  material = store.LoadMaterial(relPath);
+		const assetlib::BMaterial  material = store.Load<assetlib::BMaterial>(relPath);
 
 		for (const std::string& texture :
 		     game::MaterialTextures(material, store.DrawsLoose(material)))

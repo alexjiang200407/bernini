@@ -1,8 +1,8 @@
 #include <assetlib/asset_refs.h>
 
-#include <assetlib/bmaterial_io.h>
 #include <assetlib_structs/BMaterial.h>
 
+#include "MountAt.h"
 #include "RefsSandbox.h"
 
 using namespace assetlib;
@@ -33,7 +33,7 @@ TEST_CASE("Cascade deleting a mesh takes what it alone was holding alive", "[ass
 	std::ranges::sort(expected);
 	CHECK(plan.cascade == expected);
 
-	REQUIRE(deleteAsset(plan, root.Source()).status == DeletionStatus::kDeleted);
+	REQUIRE(root.Source().DeleteAsset(plan).status == DeletionStatus::kDeleted);
 
 	CHECK_FALSE(fs::exists(root.path / "Meshes" / "mesh.bmesh"));
 	CHECK_FALSE(fs::exists(root.path / "Materials" / "mat.bmaterial"));
@@ -57,7 +57,7 @@ TEST_CASE("What something outside the deletion still references survives it", "[
 
 		CHECK(plan.cascade.empty());
 
-		REQUIRE(deleteAsset(plan, root.Source()).status == DeletionStatus::kDeleted);
+		REQUIRE(root.Source().DeleteAsset(plan).status == DeletionStatus::kDeleted);
 		CHECK(fs::exists(root.path / "Materials" / "mat.bmaterial"));
 	}
 
@@ -74,7 +74,7 @@ TEST_CASE("What something outside the deletion still references survives it", "[
 
 		CHECK(plan.cascade == std::vector<std::string>{ "Materials/gone.bmaterial" });
 
-		REQUIRE(deleteAsset(plan, root.Source()).status == DeletionStatus::kDeleted);
+		REQUIRE(root.Source().DeleteAsset(plan).status == DeletionStatus::kDeleted);
 		CHECK(fs::exists(root.path / "textures_src" / "shared.ktx2"));
 		CHECK(fs::exists(root.path / stays.pbr.baseColorTexture));
 	}
@@ -93,7 +93,7 @@ TEST_CASE("An asset two cascading referrers share goes when both do", "[assetcas
 
 	const DeletionPlan plan = planCascadeDeletion(root.Scan(), "Meshes/mesh.bmesh");
 
-	REQUIRE(deleteAsset(plan, root.Source()).status == DeletionStatus::kDeleted);
+	REQUIRE(root.Source().DeleteAsset(plan).status == DeletionStatus::kDeleted);
 
 	CHECK_FALSE(fs::exists(root.path / "Materials" / "a.bmaterial"));
 	CHECK_FALSE(fs::exists(root.path / "Materials" / "b.bmaterial"));
@@ -114,7 +114,7 @@ TEST_CASE("A plain deletion still takes the target alone", "[assetcascade]")
 
 	CHECK(plan.cascade.empty());
 
-	REQUIRE(deleteAsset(plan, root.Source()).status == DeletionStatus::kDeleted);
+	REQUIRE(root.Source().DeleteAsset(plan).status == DeletionStatus::kDeleted);
 	CHECK(fs::exists(root.path / "Materials" / "mat.bmaterial"));
 }
 
@@ -131,7 +131,7 @@ TEST_CASE("A blocked deletion plans no cascade", "[assetcascade]")
 
 	CHECK_FALSE(plan.Allowed());
 	CHECK(plan.cascade.empty());
-	CHECK(deleteAsset(plan, root.Source()).status == DeletionStatus::kRefused);
+	CHECK(root.Source().DeleteAsset(plan).status == DeletionStatus::kRefused);
 }
 
 TEST_CASE("A directory cascade counts every referrer under it as deleted", "[assetcascade]")
@@ -146,10 +146,10 @@ TEST_CASE("A directory cascade counts every referrer under it as deleted", "[ass
 	BakeAndSave(root, "held.bmaterial", "textures_src/b.ktx2");
 
 	fs::create_directories(root.path / "Meshes" / "props");
-	save(MakeMesh({ "Materials/freed.bmaterial" }), root.path / "Meshes" / "props" / "a.bmesh");
-	save(
+	StoreAt(root.path).Save(MakeMesh({ "Materials/freed.bmaterial" }), "Meshes/props/a.bmesh");
+	StoreAt(root.path).Save(
 		MakeMesh({ "Materials/freed.bmaterial", "Materials/held.bmaterial" }),
-		root.path / "Meshes" / "props" / "b.bmesh");
+		"Meshes/props/b.bmesh");
 	SaveMesh(root, "outside.bmesh", { "Materials/held.bmaterial" });
 
 	const DeletionPlan plan = planCascadeDeletion(root.Scan(), "Meshes/props");
@@ -157,7 +157,7 @@ TEST_CASE("A directory cascade counts every referrer under it as deleted", "[ass
 	REQUIRE(plan.Allowed());
 	REQUIRE(plan.IsDirectory());
 
-	REQUIRE(deleteAsset(plan, root.Source()).status == DeletionStatus::kDeleted);
+	REQUIRE(root.Source().DeleteAsset(plan).status == DeletionStatus::kDeleted);
 
 	CHECK_FALSE(fs::exists(root.path / "Meshes" / "props"));
 	CHECK_FALSE(fs::exists(root.path / "Materials" / "freed.bmaterial"));
@@ -180,5 +180,5 @@ TEST_CASE("A cascade file already gone counts as deleted", "[assetcascade]")
 	REQUIRE_FALSE(plan.cascade.empty());
 	fs::remove(root.path / "Materials" / "mat.bmaterial");
 
-	CHECK(deleteAsset(plan, root.Source()).status == DeletionStatus::kDeleted);
+	CHECK(root.Source().DeleteAsset(plan).status == DeletionStatus::kDeleted);
 }

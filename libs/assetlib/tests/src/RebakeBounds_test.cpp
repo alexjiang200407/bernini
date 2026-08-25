@@ -1,8 +1,4 @@
-#include <assetlib/banim_io.h>
-#include <assetlib/bmesh_io.h>
-#include <assetlib/bskel_io.h>
 #include <assetlib/rebake_bounds.h>
-#include <assetlib/skeleton.h>
 #include <assetlib/skinning.h>
 #include <assetlib_structs/Animation.h>
 #include <assetlib_structs/BMesh.h>
@@ -11,6 +7,7 @@
 
 #include "RefsSandbox.h"
 
+#include "MountAt.h"
 #include <catch2/catch_approx.hpp>
 
 using namespace assetlib;
@@ -101,9 +98,9 @@ namespace
 		fs::create_directories(root.path / "Meshes");
 		fs::create_directories(root.path / "Skeletons");
 		fs::create_directories(root.path / "Animations");
-		save(MakeSkinnedMesh(glm::vec3(1.0f)), root.path / "Meshes/rig.bmesh");
-		saveSkeleton(skeleton, root.path / "Skeletons/rig.bskel");
-		saveAnimations(MakeClips(skeleton), root.path / "Animations/rig.banim");
+		StoreAt(root.path).Save(MakeSkinnedMesh(glm::vec3(1.0f)), "Meshes/rig.bmesh");
+		StoreAt(root.path).Save(skeleton, "Skeletons/rig.bskel");
+		SaveAt(MakeClips(skeleton), root.path / "Animations/rig.banim");
 	}
 }
 
@@ -114,37 +111,37 @@ TEST_CASE("The rebake writes the box a load then finds", "[rebake]")
 
 	SECTION("a dry run reports the work and touches nothing")
 	{
-		const RebakeBoundsReport preview = rebakePosedBounds(root.path, true);
+		const RebakeBoundsReport preview = AssetStore(root.path).RebakePosedBounds(true);
 		CHECK(preview.Count(RebakedFile::Outcome::kRebaked) == 1);
-		CHECK(loadAnimations(root.path / "Animations/rig.banim").posedBoxes.empty());
+		CHECK(StoreAt(root.path).Load<AnimationSet>("Animations/rig.banim").posedBoxes.empty());
 	}
 
 	SECTION("the real run bakes, and a second run rewrites nothing")
 	{
-		const RebakeBoundsReport report = rebakePosedBounds(root.path, false);
+		const RebakeBoundsReport report = AssetStore(root.path).RebakePosedBounds(false);
 		CHECK(report.Count(RebakedFile::Outcome::kRebaked) == 1);
 		CHECK(report.Count(RebakedFile::Outcome::kFailed) == 0);
 
 		const std::optional<Bounds> baked = findPosedBounds(
-			loadAnimations(root.path / "Animations/rig.banim"),
-			load(root.path / "Meshes/rig.bmesh"),
-			loadSkeleton(root.path / "Skeletons/rig.bskel"))[0];
+			StoreAt(root.path).Load<AnimationSet>("Animations/rig.banim"),
+			StoreAt(root.path).Load<BMesh>("Meshes/rig.bmesh"),
+			StoreAt(root.path).Load<Skeleton>("Skeletons/rig.bskel"))[0];
 
 		REQUIRE(baked.has_value());
 		CHECK(baked->min.x == Catch::Approx(-1.0f));
 		CHECK(baked->max.x == Catch::Approx(51.0f));
 
-		const RebakeBoundsReport again = rebakePosedBounds(root.path, false);
+		const RebakeBoundsReport again = AssetStore(root.path).RebakePosedBounds(false);
 		CHECK(again.Count(RebakedFile::Outcome::kCurrent) == 1);
 		CHECK(again.Count(RebakedFile::Outcome::kRebaked) == 0);
 	}
 
 	SECTION("a mesh re-authored since the bake makes its clip set stale again")
 	{
-		(void)rebakePosedBounds(root.path, false);
-		save(MakeSkinnedMesh(glm::vec3(3.0f)), root.path / "Meshes/rig.bmesh");
+		(void)AssetStore(root.path).RebakePosedBounds(false);
+		StoreAt(root.path).Save(MakeSkinnedMesh(glm::vec3(3.0f)), "Meshes/rig.bmesh");
 
-		const RebakeBoundsReport preview = rebakePosedBounds(root.path, true);
+		const RebakeBoundsReport preview = AssetStore(root.path).RebakePosedBounds(true);
 		CHECK(preview.Count(RebakedFile::Outcome::kRebaked) == 1);
 	}
 
@@ -152,8 +149,8 @@ TEST_CASE("The rebake writes the box a load then finds", "[rebake]")
 	{
 		fs::remove(root.path / "Meshes/rig.bmesh");
 
-		const RebakeBoundsReport report = rebakePosedBounds(root.path, false);
+		const RebakeBoundsReport report = AssetStore(root.path).RebakePosedBounds(false);
 		CHECK(report.Count(RebakedFile::Outcome::kOrphaned) == 1);
-		CHECK(loadAnimations(root.path / "Animations/rig.banim").posedBoxes.empty());
+		CHECK(StoreAt(root.path).Load<AnimationSet>("Animations/rig.banim").posedBoxes.empty());
 	}
 }

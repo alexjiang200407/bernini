@@ -1,15 +1,13 @@
-#include <assetlib/benv_io.h>
-#include <assetlib/benvl_io.h>
-#include <assetlib/bmaterial_io.h>
-#include <assetlib/bsky_io.h>
+#include <assetlib/codecs.h>
 #include <assetlib/image_io.h>
-#include <assetlib/pak_io.h>
+#include <assetlib/pak.h>
 #include <assetlib_structs/BEnv.h>
 #include <assetlib_structs/BMaterial.h>
 #include <assetlib_structs/ImageData.h>
 #include <core/file/LayeredFileSystem.h>
 #include <core/file/LooseFileSystem.h>
 
+#include "MountAt.h"
 #include "bmesh_texture.h"
 #include "mounted_io.h"
 
@@ -128,10 +126,10 @@ namespace
 	void
 	Stage(const fs::path& root)
 	{
-		saveMaterial(MakeMaterial(), root / "Materials/metal.bmaterial");
-		saveSky(MakeSky(), root / "Env/forest.bsky");
-		saveEnvLighting(MakeLighting(), root / "Env/forest.benvl");
-		saveEnv(MakeEnv(), root / "Env/forest.benv");
+		SaveAt(MakeMaterial(), root / "Materials/metal.bmaterial");
+		SaveAt(MakeSky(), root / "Env/forest.bsky");
+		SaveAt(MakeLighting(), root / "Env/forest.benvl");
+		SaveAt(MakeEnv(), root / "Env/forest.benv");
 
 		// Basis: the transcoding path, which is where a decode is most likely to diverge.
 		writeKTX2(MakeTexture(64, 64), root / "Textures/albedo.ktx2", /*srgb*/ true);
@@ -162,59 +160,63 @@ TEST_CASE("a flat container loads the same from a directory and from an archive"
 
 	SECTION(".bmaterial")
 	{
-		const BMaterial direct = loadMaterial(scratch.path / "Materials/metal.bmaterial");
+		const BMaterial direct = StoreAt(scratch.path).Load<BMaterial>("Materials/metal.bmaterial");
 
 		for (const core::file::IFileSystem* mount : mounts)
 		{
-			const BMaterial mounted = loadMaterial(*mount, "Materials/metal.bmaterial");
+			const BMaterial mounted = load<BMaterial>(*mount, "Materials/metal.bmaterial");
 
 			CHECK(mounted.name == direct.name);
 			CHECK(mounted.pbr.baseColorTexture == direct.pbr.baseColorTexture);
 			CHECK(mounted.pbr.routeStamps == direct.pbr.routeStamps);
-			CHECK(serializeMaterial(mounted) == serializeMaterial(direct));
+			CHECK(
+				AssetCodec<BMaterial>::Serialize(mounted) ==
+				AssetCodec<BMaterial>::Serialize(direct));
 		}
 	}
 
 	SECTION(".bsky")
 	{
-		const BSky direct = loadSky(scratch.path / "Env/forest.bsky");
+		const BSky direct = StoreAt(scratch.path).Load<BSky>("Env/forest.bsky");
 
 		for (const core::file::IFileSystem* mount : mounts)
 		{
-			const BSky mounted = loadSky(*mount, "Env/forest.bsky");
+			const BSky mounted = load<BSky>(*mount, "Env/forest.bsky");
 
 			CHECK(mounted.name == direct.name);
 			CHECK(mounted.sky == direct.sky);
-			CHECK(serializeSky(mounted) == serializeSky(direct));
+			CHECK(AssetCodec<BSky>::Serialize(mounted) == AssetCodec<BSky>::Serialize(direct));
 		}
 	}
 
 	SECTION(".benvl")
 	{
-		const BEnvLighting direct = loadEnvLighting(scratch.path / "Env/forest.benvl");
+		const BEnvLighting direct = StoreAt(scratch.path).Load<BEnvLighting>("Env/forest.benvl");
 
 		for (const core::file::IFileSystem* mount : mounts)
 		{
-			const BEnvLighting mounted = loadEnvLighting(*mount, "Env/forest.benvl");
+			const BEnvLighting mounted = load<BEnvLighting>(*mount, "Env/forest.benvl");
 
 			CHECK(mounted.prefilter == direct.prefilter);
 			CHECK(mounted.irradiance == direct.irradiance);
-			CHECK(serializeEnvLighting(mounted) == serializeEnvLighting(direct));
+			CHECK(
+				AssetCodec<BEnvLighting>::Serialize(mounted) ==
+				AssetCodec<BEnvLighting>::Serialize(direct));
 		}
 	}
 
 	SECTION(".benv")
 	{
-		const BEnv direct = loadEnv(scratch.path / "Env/forest.benv");
+		const BEnv direct = StoreAt(scratch.path).Load<BEnv>("Env/forest.benv");
 
 		for (const core::file::IFileSystem* mount : mounts)
 		{
-			const BEnv mounted = loadEnv(*mount, "Env/forest.benv");
+			const BEnv mounted = load<BEnv>(*mount, "Env/forest.benv");
 
 			CHECK(mounted.name == direct.name);
 			CHECK(mounted.sky == direct.sky);
 			CHECK(mounted.lighting == direct.lighting);
-			CHECK(serializeEnv(mounted) == serializeEnv(direct));
+			CHECK(AssetCodec<BEnv>::Serialize(mounted) == AssetCodec<BEnv>::Serialize(direct));
 		}
 	}
 }
@@ -295,10 +297,10 @@ TEST_CASE("a mounted load of an absent entry throws", "[flatseam]")
 	     { static_cast<const core::file::IFileSystem*>(&loose),
 	       static_cast<const core::file::IFileSystem*>(&pak) })
 	{
-		CHECK_THROWS_AS(loadMaterial(*mount, "Materials/gone.bmaterial"), std::runtime_error);
-		CHECK_THROWS_AS(loadSky(*mount, "Env/gone.bsky"), std::runtime_error);
-		CHECK_THROWS_AS(loadEnvLighting(*mount, "Env/gone.benvl"), std::runtime_error);
-		CHECK_THROWS_AS(loadEnv(*mount, "Env/gone.benv"), std::runtime_error);
+		CHECK_THROWS_AS(load<BMaterial>(*mount, "Materials/gone.bmaterial"), std::runtime_error);
+		CHECK_THROWS_AS(load<BSky>(*mount, "Env/gone.bsky"), std::runtime_error);
+		CHECK_THROWS_AS(load<BEnvLighting>(*mount, "Env/gone.benvl"), std::runtime_error);
+		CHECK_THROWS_AS(load<BEnv>(*mount, "Env/gone.benv"), std::runtime_error);
 		CHECK_THROWS_AS(loadKTX2(*mount, "Textures/gone.ktx2"), std::runtime_error);
 		CHECK_THROWS_AS(loadKTX2Preview(*mount, "Textures/gone.ktx2"), std::runtime_error);
 	}
@@ -313,11 +315,11 @@ TEST_CASE("a loose entry shadows its packed twin", "[flatseam]")
 
 	BMaterial edited = MakeMaterial();
 	edited.name      = "edited_after_packing";
-	saveMaterial(edited, scratch.path / "Materials/metal.bmaterial");
+	StoreAt(scratch.path).Save(edited, "Materials/metal.bmaterial");
 
 	core::file::LayeredFileSystem mount;
 	mount.Mount(std::make_shared<core::file::LooseFileSystem>(scratch.path));
 	mount.Mount(std::make_shared<PakFile>(scratch.path / "Data.bpak"));
 
-	CHECK(loadMaterial(mount, "Materials/metal.bmaterial").name == "edited_after_packing");
+	CHECK(load<BMaterial>(mount, "Materials/metal.bmaterial").name == "edited_after_packing");
 }

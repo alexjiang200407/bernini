@@ -25,7 +25,7 @@ files addressed by one normalized relative path. Six members, and no more:
 Three implementations:
 
 - **`LooseFileSystem`** ([header](../libs/core/include/core/file/LooseFileSystem.h)) — a directory.
-- **`assetlib::PakFile`** ([pak_io.h:95](../libs/assetlib/include/assetlib/pak_io.h)) — a mounted
+- **`assetlib::PakFile`** ([pak.h](../libs/assetlib/include/assetlib/pak.h)) — a mounted
   `.bpak`.
 - **`LayeredFileSystem`** ([header](../libs/core/include/core/file/LayeredFileSystem.h)) — an
   ordered list of the others; first hit wins, `Enumerate` returns the union with each path once.
@@ -70,10 +70,14 @@ assetlib::AssetStore store(dataRoot);                       // loose: both halve
 assetlib::AssetStore store(dataRoot, std::move(mount));     // reads through mount, writes to dataRoot
 ```
 
-The loaders are methods — `LoadMesh`, `LoadMaterial`, `LoadTexture`, `LoadVat`, … — as are the
-staleness predicates (`BakeIsStale`, `DrawsLoose`, `VatIsStale`) and `Describe`. The mount-taking
-free functions they forward to are internal to `assetlib/src`; a caller outside the library reaches
-them through a store or not at all.
+A container is loaded by its type — `store.Load<BMesh>(key)`, `store.Save(value, key)` — because
+the type is what names the codec; there is no method per container. The reads that are *not* a whole
+container keep their own names, since a type cannot say "the references only": `LoadMeshRefs`,
+`LoadVatTables`, `LoadVatRefs`, `LoadAnimationSkeletonPath`, the `LoadRegen*` seam, and
+`LoadTexture`, which decodes an image rather than deserializing a struct. The staleness predicates
+(`BakeIsStale`, `DrawsLoose`, `VatIsStale`) and `Describe` are methods too. The mount-taking free
+functions they forward to are internal to `assetlib/src`; a caller outside the library reaches them
+through a store or not at all.
 
 `IsReadOnly()` is **the whole mount's answer, not one path's.** The question a caller asks is *is
 there anywhere at all to put a rebuilt derived file*, and a loose layer over an archive answers yes
@@ -145,7 +149,7 @@ payloads, table at the end — different problem.
 
 ### Writing one
 
-[`PakWriter`](../libs/assetlib/include/assetlib/pak_io.h) **streams.** Each `Add` writes its payload
+[`PakWriter`](../libs/assetlib/include/assetlib/pak.h) **streams.** Each `Add` writes its payload
 to a temp file straight away; only the table and the pool are held. Building an archive in memory to
 write it would put a ceiling on how big a project can be packed, and the ceiling would be a machine's
 RAM rather than anything about the project.
@@ -155,7 +159,7 @@ pack leaves whatever was at the target untouched — never a shipped artifact mi
 
 `Finish` sorts the entry table by path, so a reader sees one order however the writer was driven.
 That alone is *not* byte-reproducibility: payloads were streamed as they arrived, so `Add` order is
-payload order. **Packing one tree twice produces identical bytes** because `packProject` sorts its
+payload order. **Packing one tree twice produces identical bytes** because `AssetStore::Pack` sorts its
 walk — `recursive_directory_iterator` order is not the same on two filesystems, and without the sort
 an archive would only be reproducible per machine, which is no use to anyone diffing or caching a
 shipped one.
@@ -166,7 +170,7 @@ shipped one.
 
 The rule is one line: *an archive carries what the runtime reads and nothing that produces it.*
 
-`packProject` ([pak_pack.h:75](../libs/assetlib/include/assetlib/pak_pack.h)) derives that from
+`AssetStore::Pack` ([AssetStore.h](../libs/assetlib/include/assetlib/AssetStore.h)) derives that from
 `assetTypeFromExtension` ([asset_refs.h](../libs/assetlib/include/assetlib/asset_refs.h)) rather than
 from a list kept beside it, so a new container type joins the archive by being registered once. On
 top of that sit the explicit exclusions: any path with a `textures_src` or `meshes_src` component,
@@ -223,7 +227,7 @@ Three things it does *not* relax:
   returned. Loading the wrong clips is worse than refusing.
 - **A missing one is an error, not a bake.** `pack` only re-bakes the `.bvat` files already present,
   so a rig nothing acquired before packing ships without one. That throws, naming the file, rather
-  than failing somewhere inside `saveVat` on a directory that was never there.
+  than failing somewhere inside the write on a directory that was never there.
 - **A `.bvat` from another bake revision refuses, it does not re-bake.** Its inputs are recorded in
   a layout `pack` no longer vouches for, so it cannot know what to re-bake from. The loose project
   heals it first: a load through `VatFreshness` reads the refusal as missing and re-bakes in place,
@@ -255,7 +259,7 @@ from one whose `.bvat` has deliberately drifted; `Pack_test` packs a staged proj
 entry back against the tree it came from. That runs on every test run.
 
 The CLI itself is the exception, and it is worth knowing: nothing invokes the `assetlib_cli` binary
-from a test. `pack` and `list` are thin wrappers over `packProject` and `PakFile::Enumerate`/`Stat`,
+from a test. `pack` and `list` are thin wrappers over `AssetStore::Pack` and `PakFile::Enumerate`/`Stat`,
 which are covered directly — the argument parsing and the printing are not covered at all.
 
 ### Loose still wins, permanently
@@ -282,13 +286,13 @@ assetlib_cli list <archive>                       # the entry table, as text
 beside the data root: an archive is what a project produces, not a member of it, and `PakFile` reads
 one standalone.
 
-The walk and the exclusion rule live in `assetlib` (`packProject`), not in the CLI, so the gate is an
+The walk and the exclusion rule live in `assetlib` (`AssetStore::Pack`), not in the CLI, so the gate is an
 `assetlib_tests` gate.
 
 The default target sits **beside** the data root rather than inside it: an archive of a tree is not a
 member of that tree, and one packed into the tree it came from would be a candidate for the next
 pack. `assetlib::c_DefaultArchiveName` names it once
-([pak_pack.h:44](../libs/assetlib/include/assetlib/pak_pack.h)).
+([pak.h](../libs/assetlib/include/assetlib/pak.h)).
 
 ---
 

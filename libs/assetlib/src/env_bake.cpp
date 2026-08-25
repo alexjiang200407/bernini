@@ -1,7 +1,10 @@
-#include <assetlib/env_bake.h>
+#include <assetlib/container_info.h>
+#include <assetlib/envmap.h>
 
-#include <assetlib/bmaterial_io.h>
-#include <assetlib/envmap_bake.h>
+#include <assetlib/AssetStore.h>
+#include <assetlib/cancel.h>
+#include <assetlib/project_layout.h>
+
 #include <assetlib/image_io.h>
 #include <assetlib_structs/BEnv.h>
 #include <assetlib_structs/ImageData.h>
@@ -14,6 +17,17 @@
 
 namespace assetlib
 {
+	namespace
+	{
+		// What a bake reads and writes: the store's data root, and the directory baked maps land in
+		// relative to it. Not public -- a caller names the store, which already holds the root.
+		struct BakeDesc
+		{
+			std::filesystem::path dataRoot;
+			std::filesystem::path textureDir;
+		};
+	}
+
 	namespace
 	{
 		constexpr std::string_view c_SkyGroup        = "sky";
@@ -48,7 +62,7 @@ namespace assetlib
 			const EnvMapRoute& route,
 			const ImageData&   source,
 			std::string_view   group,
-			const EnvBakeDesc& desc)
+			const BakeDesc&    desc)
 		{
 			const std::string name =
 				bakedMapFileName(group, std::string(group) + '|' + route.source);
@@ -93,8 +107,8 @@ namespace assetlib
 		}
 	}
 
-	void
-	bakeSky(BSky& sky, const EnvBakeDesc& desc, const CancelToken& cancel)
+	static void
+	bakeSky(BSky& sky, const BakeDesc& desc, const CancelToken& cancel)
 	{
 		if (sky.sky.source.empty())
 			throw std::runtime_error("assetlib::bakeSky: nothing is routed");
@@ -104,8 +118,8 @@ namespace assetlib
 			bakeRoute(sky.sky, loadFloatCube(desc.dataRoot, sky.sky.source), c_SkyGroup, desc);
 	}
 
-	void
-	bakeEnvLighting(BEnvLighting& lighting, const EnvBakeDesc& desc, const CancelToken& cancel)
+	static void
+	bakeEnvLighting(BEnvLighting& lighting, const BakeDesc& desc, const CancelToken& cancel)
 	{
 		if (lighting.prefilter.source.empty() || lighting.irradiance.source.empty())
 			throw std::runtime_error(
@@ -166,5 +180,32 @@ namespace assetlib
 	isBakedEnvMapName(std::string_view fileName) noexcept
 	{
 		return isBakedNameAmong(fileName, c_EnvGroups);
+	}
+
+	void
+	AssetStore::BakeSky(BSky& sky, const CancelToken& cancel) const
+	{
+		BakeSky(sky, c_TexturesDirectoryName, cancel);
+	}
+
+	void
+	AssetStore::BakeSky(BSky& sky, std::string_view textureDir, const CancelToken& cancel) const
+	{
+		bakeSky(sky, { .dataRoot = m_DataRoot, .textureDir = textureDir }, cancel);
+	}
+
+	void
+	AssetStore::BakeEnvLighting(BEnvLighting& lighting, const CancelToken& cancel) const
+	{
+		BakeEnvLighting(lighting, c_TexturesDirectoryName, cancel);
+	}
+
+	void
+	AssetStore::BakeEnvLighting(
+		BEnvLighting&      lighting,
+		std::string_view   textureDir,
+		const CancelToken& cancel) const
+	{
+		bakeEnvLighting(lighting, { .dataRoot = m_DataRoot, .textureDir = textureDir }, cancel);
 	}
 }

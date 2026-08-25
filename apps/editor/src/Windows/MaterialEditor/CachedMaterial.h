@@ -16,13 +16,14 @@ class CachedMaterial
 {
 public:
 	/**
-	 * The material at `path`, re-read only when the file has changed since the last call.
+	 * The material at `path`, re-read only when the file has changed since the last call. Read
+	 * through a store over `dataRoot`, which is the project the path names a file inside.
 	 *
 	 * @return Null when `path` is empty or the file cannot be read -- which includes the ordinary
 	 *         case of a graph given a path by Save As but not yet written.
 	 */
 	[[nodiscard]] const assetlib::BMaterial*
-	Get(const QString& path);
+	Get(const std::filesystem::path& dataRoot, const QString& path);
 
 	// Drops what was read, so the next Get re-reads. For a caller that has just rewritten the file
 	// within the same millisecond the stamp is measured in.

@@ -1,7 +1,6 @@
 #include <assetlib/AssetStore.h>
 #include <assetlib/Project.h>
-#include <assetlib/bmaterial_io.h>
-#include <assetlib/pak_pack.h>
+#include <assetlib/pak.h>
 #include <assetlib_structs/BMaterial.h>
 
 #include <nlohmann/json.hpp>
@@ -287,7 +286,7 @@ TEST_CASE("A project reads and writes the loose tree, archive or not", "[project
 	auto material                 = assetlib::BMaterial();
 	material.name                 = "skin";
 	material.pbr.baseColorTexture = "Textures/skin.ktx2";
-	assetlib::saveMaterial(material, created.GetDataDirectory() / "Materials/skin.bmaterial");
+	created.GetStore().Save(material, "Materials/skin.bmaterial");
 
 	created.ReloadStore();
 
@@ -300,9 +299,9 @@ TEST_CASE("A project reads and writes the loose tree, archive or not", "[project
 
 	SECTION("an archive beside the project changes nothing about what it reads")
 	{
-		static_cast<void>(assetlib::packProject(
-			assetlib::AssetStore(created.GetDataDirectory()),
-			assetlib::PackDesc{ file.parent_path() / assetlib::c_DefaultArchiveName }));
+		static_cast<void>(
+			assetlib::AssetStore(created.GetDataDirectory())
+				.Pack(assetlib::PackDesc{ file.parent_path() / assetlib::c_DefaultArchiveName }));
 
 		// Gone from the tree: the archive still holds it, and that is deliberately not consulted.
 		fs::remove(created.GetDataDirectory() / "Materials/skin.bmaterial");

@@ -1,3 +1,5 @@
+#include <assetlib/bmesh.h>
+#include <assetlib/codecs.h>
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_string.hpp>
 
@@ -6,12 +8,9 @@
 #include <assetlib/RegenMesh.h>
 #include <assetlib/asset_import.h>
 #include <assetlib/bmesh_gltf.h>
-#include <assetlib/bmesh_io.h>
-#include <assetlib/bskel_io.h>
 #include <assetlib/import_document.h>
 #include <assetlib/mesh_tangents.h>
 #include <assetlib/project_layout.h>
-#include <assetlib/skeleton.h>
 #include <assetlib/skinning.h>
 #include <assetlib_structs/Animation.h>
 #include <assetlib_structs/BMesh.h>
@@ -22,6 +21,7 @@
 
 #include "CacheTamper.h"
 #include "ImportUnitGroup.h"
+#include "MountAt.h"
 #include "SkinnedGltf.h"
 
 using namespace assetlib;
@@ -64,7 +64,7 @@ namespace
 		[[nodiscard]] std::string
 		FirstSubmeshName() const
 		{
-			const BMesh mesh = load(meshPath);
+			const BMesh mesh = LoadAt<BMesh>(meshPath);
 			return std::string(mesh.stringPool.at(mesh.submeshes.at(0).nameOffset));
 		}
 
@@ -161,11 +161,11 @@ TEST_CASE("a binding-only document edit rebinds the loaded mesh without regenera
 	const ImportedProject sandbox("bernini_regen_rebind", "assets/apples.glb");
 	const auto            before = BytesOf(sandbox.meshPath);
 
-	rebindSubmeshInDocument(
-		sandbox.dataRoot,
-		"meshes_src/unit.glb",
-		sandbox.FirstSubmeshName(),
-		"Materials/blue.bmaterial");
+	AssetStore(sandbox.dataRoot)
+		.RebindSubmeshInDocument(
+			"meshes_src/unit.glb",
+			sandbox.FirstSubmeshName(),
+			"Materials/blue.bmaterial");
 
 	const RegenMesh current = sandbox.Store().LoadRegenMesh("Meshes/unit.bmesh");
 	CHECK(
@@ -176,11 +176,11 @@ TEST_CASE("a binding-only document edit rebinds the loaded mesh without regenera
 	SECTION("and rebinds a group whose source file is gone, which regeneration could not serve")
 	{
 		fs::remove(sandbox.dataRoot / "meshes_src/unit.glb");
-		rebindSubmeshInDocument(
-			sandbox.dataRoot,
-			"meshes_src/unit.glb",
-			sandbox.FirstSubmeshName(),
-			"Materials/green.bmaterial");
+		AssetStore(sandbox.dataRoot)
+			.RebindSubmeshInDocument(
+				"meshes_src/unit.glb",
+				sandbox.FirstSubmeshName(),
+				"Materials/green.bmaterial");
 
 		const RegenMesh again = sandbox.Store().LoadRegenMesh("Meshes/unit.bmesh");
 		CHECK(
@@ -193,14 +193,14 @@ TEST_CASE("a binding-only document edit rebinds the loaded mesh without regenera
 TEST_CASE("a stale bake token regenerates the mesh from its source", "[regen]")
 {
 	const ImportedProject sandbox("bernini_regen_token", "assets/apples.glb");
-	const BMesh           fresh = load(sandbox.meshPath);
+	const BMesh           fresh = LoadAt<BMesh>(sandbox.meshPath);
 
 	sandbox.Tamper(sandbox.meshPath, test::c_TokenOffset);
 	const auto stale = BytesOf(sandbox.meshPath);
 
 	// The plain load refuses; the seam serves the source's current cook instead.
 	CHECK_THROWS_WITH(
-		sandbox.Store().LoadMesh("Meshes/unit.bmesh"),
+		sandbox.Store().Load<BMesh>("Meshes/unit.bmesh"),
 		Catch::Matchers::ContainsSubstring("another bake revision"));
 
 	const RegenMesh current = sandbox.Store().LoadRegenMesh("Meshes/unit.bmesh");
@@ -218,7 +218,7 @@ TEST_CASE(
 	"[regen]")
 {
 	const ImportedProject sandbox("bernini_regen_stamp", "assets/apples.glb");
-	const BMesh           fresh = load(sandbox.meshPath);
+	const BMesh           fresh = LoadAt<BMesh>(sandbox.meshPath);
 
 	// A sibling branch's binary swapped in by a merge: current token, foreign source stamp.
 	sandbox.Tamper(sandbox.meshPath, test::c_SourceHashOffset);
@@ -234,9 +234,9 @@ TEST_CASE("a stale entry that cannot regenerate refuses", "[regen]")
 	{
 		const ImportedProject sandbox("bernini_regen_norecord", "assets/apples.glb");
 
-		BMesh synthetic  = load(sandbox.meshPath);
+		BMesh synthetic  = LoadAt<BMesh>(sandbox.meshPath);
 		synthetic.source = SourceRef();
-		save(synthetic, sandbox.meshPath);
+		SaveAt(synthetic, sandbox.meshPath);
 		sandbox.Tamper(sandbox.meshPath, test::c_TokenOffset);
 
 		CHECK_THROWS_WITH(
@@ -275,11 +275,11 @@ TEST_CASE("a read-only store trusts its keys and its baked bindings", "[regen]")
 
 	// Stale by stamp, and rebound in the document: a writable store would act on both.
 	sandbox.Tamper(sandbox.meshPath, test::c_SourceHashOffset);
-	rebindSubmeshInDocument(
-		sandbox.dataRoot,
-		"meshes_src/unit.glb",
-		sandbox.FirstSubmeshName(),
-		"Materials/blue.bmaterial");
+	AssetStore(sandbox.dataRoot)
+		.RebindSubmeshInDocument(
+			"meshes_src/unit.glb",
+			sandbox.FirstSubmeshName(),
+			"Materials/blue.bmaterial");
 
 	const AssetStore readOnly(
 		sandbox.dataRoot,
@@ -295,7 +295,7 @@ TEST_CASE("a stale rig regenerates, and its clips follow the document's sample r
 	const ImportedProject   sandbox("bernini_regen_rig", source.PackGlb());
 
 	const fs::path bskelPath = sandbox.dataRoot / c_SkeletonsDirectoryName / "unit.bskel";
-	const Skeleton fresh     = loadSkeleton(bskelPath);
+	const Skeleton fresh     = LoadAt<Skeleton>(bskelPath);
 
 	SECTION("the skeleton")
 	{
@@ -313,7 +313,9 @@ TEST_CASE("a stale rig regenerates, and its clips follow the document's sample r
 			core::file::LooseFileSystem(sandbox.dataRoot),
 			"meshes_src/unit.bimport");
 		document.sampleRate = 60.0f;
-		core::file::write_atomic(sandbox.documentPath, serializeImportDocument(document));
+		core::file::write_atomic(
+			sandbox.documentPath,
+			AssetCodec<ImportDocument>::Serialize(document));
 
 		// The mesh goes stale too, so the disk walk cannot serve its box: the one under test is
 		// the box the seam measures from the regenerated form.
@@ -377,11 +379,11 @@ TEST_CASE("reauthor rewrites a document from its mesh, once", "[regen][importdoc
 
 	// A rebind saved straight into the mesh, the way every save worked before documents: the
 	// document still records red, the mesh now says blue.
-	BMesh mesh = load(sandbox.meshPath);
+	BMesh mesh = LoadAt<BMesh>(sandbox.meshPath);
 	REQUIRE(attachMaterial(mesh, 0, "Materials/blue.bmaterial"));
-	save(mesh, sandbox.meshPath);
+	SaveAt(mesh, sandbox.meshPath);
 
-	const auto report = reauthorImportDocuments(sandbox.dataRoot);
+	const auto report = AssetStore(sandbox.dataRoot).ReauthorImportDocuments();
 	REQUIRE(report.size() == 1);
 	CHECK(report[0].key == "meshes_src/unit.bimport");
 	CHECK(report[0].outcome == ReauthoredDocument::Outcome::kRewritten);
@@ -395,16 +397,17 @@ TEST_CASE("reauthor rewrites a document from its mesh, once", "[regen][importdoc
 
 	SECTION("a second run rewrites nothing")
 	{
-		const auto again = reauthorImportDocuments(sandbox.dataRoot);
+		const auto again = AssetStore(sandbox.dataRoot).ReauthorImportDocuments();
 		REQUIRE(again.size() == 1);
 		CHECK(again[0].outcome == ReauthoredDocument::Outcome::kUnchanged);
 	}
 
 	SECTION("a clips-only document keeps its empty bindings")
 	{
-		writeImportedDocument(ImportTarget{ sandbox.dataRoot, "clipsonly", 30.0f }, nullptr);
+		AssetStore(sandbox.dataRoot)
+			.WriteImportedDocument(ImportTarget{ "clipsonly", 30.0f }, nullptr);
 
-		const auto again = reauthorImportDocuments(sandbox.dataRoot);
+		const auto again = AssetStore(sandbox.dataRoot).ReauthorImportDocuments();
 		REQUIRE(again.size() == 2);
 		for (const ReauthoredDocument& entry : again)
 			CHECK(entry.outcome == ReauthoredDocument::Outcome::kUnchanged);
@@ -412,10 +415,11 @@ TEST_CASE("reauthor rewrites a document from its mesh, once", "[regen][importdoc
 
 	SECTION("an unreadable mesh header fails a claimless document rather than clearing it")
 	{
-		writeImportedDocument(ImportTarget{ sandbox.dataRoot, "clipsonly", 30.0f }, nullptr);
+		AssetStore(sandbox.dataRoot)
+			.WriteImportedDocument(ImportTarget{ "clipsonly", 30.0f }, nullptr);
 		core::file::write_atomic(sandbox.meshPath, std::string_view("not a mesh"));
 
-		const auto again = reauthorImportDocuments(sandbox.dataRoot);
+		const auto again = AssetStore(sandbox.dataRoot).ReauthorImportDocuments();
 		REQUIRE(again.size() == 2);
 		for (const ReauthoredDocument& entry : again)
 		{
@@ -434,11 +438,11 @@ TEST_CASE("a rebind with no document to land in is refused", "[regen][importdoc]
 	fs::remove(sandbox.documentPath);
 
 	CHECK_THROWS_WITH(
-		rebindSubmeshInDocument(
-			sandbox.dataRoot,
-			"meshes_src/unit.glb",
-			sandbox.FirstSubmeshName(),
-			"Materials/blue.bmaterial"),
+		AssetStore(sandbox.dataRoot)
+			.RebindSubmeshInDocument(
+				"meshes_src/unit.glb",
+				sandbox.FirstSubmeshName(),
+				"Materials/blue.bmaterial"),
 		Catch::Matchers::ContainsSubstring("no import document"));
 }
 

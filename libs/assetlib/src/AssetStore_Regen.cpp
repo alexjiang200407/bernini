@@ -1,10 +1,11 @@
 #include <assetlib/AssetStore.h>
 #include <assetlib/RegenMesh.h>
+#include <assetlib/bmesh.h>
+#include <assetlib/codecs.h>
+#include <assetlib/container_info.h>
 
 #include <assetlib/asset_import.h>
 #include <assetlib/bmesh_gltf.h>
-#include <assetlib/bmesh_io.h>
-#include <assetlib/container_format.h>
 #include <assetlib/import_document.h>
 #include <assetlib/mesh_tangents.h>
 #include <assetlib/project_layout.h>
@@ -17,7 +18,6 @@
 #include <core/err/util.h>
 
 #include "MountedFileReader.h"
-#include "bake_tokens.h"
 #include "cache_io.h"
 #include "import_bounds.h"
 #include "mounted_io.h"
@@ -158,10 +158,13 @@ namespace assetlib
 			return false;
 
 		if (extension == c_MeshExtension)
-			return checkKey(*this, path, magic::c_BMesh, c_BMeshBakeToken, "bmesh").stale;
+			return checkKey(*this, path, magic::c_BMesh, AssetCodec<BMesh>::c_BakeToken, "bmesh")
+			    .stale;
 		if (extension == c_SkeletonExtension)
-			return checkKey(*this, path, magic::c_BSkel, c_BSkelBakeToken, "bskel").stale;
-		return checkKey(*this, path, magic::c_BAnim, c_BAnimBakeToken, "banim").stale;
+			return checkKey(*this, path, magic::c_BSkel, AssetCodec<Skeleton>::c_BakeToken, "bskel")
+			    .stale;
+		return checkKey(*this, path, magic::c_BAnim, AssetCodec<AnimationSet>::c_BakeToken, "banim")
+		    .stale;
 	}
 
 	SourceRef
@@ -203,7 +206,7 @@ namespace assetlib
 		{
 			MountedFileReader      reader(GetFiles(), path, "bmesh");
 			const cache::PeekedKey key = cache::peekKey(reader, magic::c_BMesh, "bmesh");
-			if (key.bakeToken != c_BMeshBakeToken)
+			if (key.bakeToken != AssetCodec<BMesh>::c_BakeToken)
 			{
 				// From the frozen headers and the document alone -- what the refs would be after
 				// a regeneration, without paying one: a scan runs this over every mesh in the
@@ -241,7 +244,7 @@ namespace assetlib
 		{
 			MountedFileReader      reader(GetFiles(), path, "banim");
 			const cache::PeekedKey key = cache::peekKey(reader, magic::c_BAnim, "banim");
-			if (key.bakeToken != c_BAnimBakeToken)
+			if (key.bakeToken != AssetCodec<AnimationSet>::c_BakeToken)
 			{
 				const std::string rig = groupSkeletonKey(*this, key.source.key);
 				core::throw_runtime_error_if(
@@ -259,12 +262,13 @@ namespace assetlib
 	AssetStore::LoadRegenMesh(std::string_view path) const
 	{
 		if (IsReadOnly())
-			return { load(*m_Files, path), {} };
+			return { load<BMesh>(*m_Files, path), {} };
 
-		CheckedKey checked = checkKey(*this, path, magic::c_BMesh, c_BMeshBakeToken, "bmesh");
+		CheckedKey checked =
+			checkKey(*this, path, magic::c_BMesh, AssetCodec<BMesh>::c_BakeToken, "bmesh");
 		if (!checked.stale)
 		{
-			RegenMesh current{ load(*m_Files, path), {} };
+			RegenMesh current{ load<BMesh>(*m_Files, path), {} };
 			if (checked.document)
 				current.unboundBindings = applyBindings(current.mesh, checked.document->bindings);
 			return current;
@@ -298,11 +302,12 @@ namespace assetlib
 	AssetStore::LoadRegenSkeleton(std::string_view path) const
 	{
 		if (IsReadOnly())
-			return loadSkeleton(*m_Files, path);
+			return load<Skeleton>(*m_Files, path);
 
-		CheckedKey checked = checkKey(*this, path, magic::c_BSkel, c_BSkelBakeToken, "bskel");
+		CheckedKey checked =
+			checkKey(*this, path, magic::c_BSkel, AssetCodec<Skeleton>::c_BakeToken, "bskel");
 		if (!checked.stale)
-			return loadSkeleton(*m_Files, path);
+			return load<Skeleton>(*m_Files, path);
 
 		RegeneratedGroup group = regenerate(*this, std::move(checked), "bskel");
 		core::throw_runtime_error_if(
@@ -320,11 +325,12 @@ namespace assetlib
 	AssetStore::LoadRegenAnimations(std::string_view path) const
 	{
 		if (IsReadOnly())
-			return loadAnimations(*m_Files, path);
+			return load<AnimationSet>(*m_Files, path);
 
-		CheckedKey checked = checkKey(*this, path, magic::c_BAnim, c_BAnimBakeToken, "banim");
+		CheckedKey checked =
+			checkKey(*this, path, magic::c_BAnim, AssetCodec<AnimationSet>::c_BakeToken, "banim");
 		if (!checked.stale)
-			return loadAnimations(*m_Files, path);
+			return load<AnimationSet>(*m_Files, path);
 
 		RegeneratedGroup group = regenerate(*this, std::move(checked), "banim");
 		core::throw_runtime_error_if(
@@ -345,8 +351,7 @@ namespace assetlib
 		{
 			// A clips-only group: no output of this source is a rig, so re-resolve by signature,
 			// exactly as the import that wrote this file did.
-			const std::filesystem::path rig =
-				findMatchingSkeleton(GetDataRoot(), group.import.skeleton);
+			const std::filesystem::path rig = FindMatchingSkeleton(group.import.skeleton);
 			core::throw_runtime_error_if(
 				rig.empty(),
 				"'{}': no skeleton in this project matches its clips' rig any more; re-import "

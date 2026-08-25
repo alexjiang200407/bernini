@@ -1,17 +1,11 @@
 #include <assetlib/AssetStore.h>
 #include <assetlib/asset_refs.h>
+#include <assetlib/bmesh.h>
+#include <assetlib/codecs.h>
 #include <assetlib/import_document.h>
 #include <core/file/file.h>
 
-#include <assetlib/banim_io.h>
-#include <assetlib/benv_io.h>
-#include <assetlib/benvl_io.h>
-#include <assetlib/bmaterial_io.h>
-#include <assetlib/bmesh_io.h>
-#include <assetlib/bskel_io.h>
-#include <assetlib/bsky_io.h>
-#include <assetlib/bvat_io.h>
-#include <assetlib/skeleton.h>
+#include <assetlib/skinning.h>
 #include <assetlib/vat_bake.h>
 #include <assetlib_structs/Animation.h>
 #include <assetlib_structs/BEnv.h>
@@ -36,7 +30,7 @@ namespace
 	RenameResult
 	Rename(const DataRoot& root, std::string_view from, std::string_view to)
 	{
-		return renameAsset(planRename(root.Scan(), from, to), root.Source());
+		return root.Source().RenameAsset(planRename(root.Scan(), from, to));
 	}
 }
 
@@ -52,7 +46,7 @@ TEST_CASE("Renaming an unreferenced asset moves the file", "[assetrename]")
 	CHECK(plan.assetType == AssetType::kTexture);
 	CHECK(plan.referrers.empty());
 
-	REQUIRE(renameAsset(plan, root.Source()).status == RenameStatus::kRenamed);
+	REQUIRE(root.Source().RenameAsset(plan).status == RenameStatus::kRenamed);
 
 	CHECK_FALSE(fs::exists(root.path / "textures_src" / "old.ktx2"));
 	CHECK(fs::exists(root.path / "textures_src" / "new.ktx2"));
@@ -73,7 +67,7 @@ TEST_CASE("Renaming a material re-points every mesh that names it", "[assetrenam
 	const RenamePlan plan =
 		planRename(root.Scan(), "Materials/old.bmaterial", "Materials/new.bmaterial");
 
-	REQUIRE(renameAsset(plan, root.Source()).status == RenameStatus::kRenamed);
+	REQUIRE(root.Source().RenameAsset(plan).status == RenameStatus::kRenamed);
 
 	CHECK_FALSE(fs::exists(root.path / "Materials" / "old.bmaterial"));
 	CHECK(fs::exists(root.path / "Materials" / "new.bmaterial"));
@@ -106,13 +100,13 @@ TEST_CASE("A rewritten mesh still carries its geometry", "[assetrename]")
 	BakeAndSave(root, "old.bmaterial", "textures_src/a.ktx2");
 	SaveMesh(root, "mesh.bmesh", { "Materials/old.bmaterial", "Materials/keep.bmaterial" });
 
-	const BMesh before = load(root.path / "Meshes" / "mesh.bmesh");
+	const BMesh before = StoreAt(root.path).Load<BMesh>("Meshes/mesh.bmesh");
 
 	REQUIRE(
 		Rename(root, "Materials/old.bmaterial", "Materials/new.bmaterial").status ==
 		RenameStatus::kRenamed);
 
-	const BMesh after = load(root.path / "Meshes" / "mesh.bmesh");
+	const BMesh after = StoreAt(root.path).Load<BMesh>("Meshes/mesh.bmesh");
 
 	CHECK(
 		after.materials ==
@@ -137,7 +131,7 @@ TEST_CASE("Renaming a texture re-points the material that routes it", "[assetren
 			Rename(root, "textures_src/old.ktx2", "textures_src/new.ktx2").status ==
 			RenameStatus::kRenamed);
 
-		const BMaterial material = loadMaterial(root.path / "Materials" / "mat.bmaterial");
+		const BMaterial material = StoreAt(root.path).Load<BMaterial>("Materials/mat.bmaterial");
 
 		CHECK(material.pbr.routes[0].texture == "textures_src/new.ktx2");
 		CHECK(root.Scan().broken.empty());
@@ -149,7 +143,7 @@ TEST_CASE("Renaming a texture re-points the material that routes it", "[assetren
 
 		REQUIRE(Rename(root, baked.pbr.baseColorTexture, renamed).status == RenameStatus::kRenamed);
 
-		const BMaterial material = loadMaterial(root.path / "Materials" / "mat.bmaterial");
+		const BMaterial material = StoreAt(root.path).Load<BMaterial>("Materials/mat.bmaterial");
 
 		CHECK(material.pbr.baseColorTexture == renamed);
 		CHECK(root.Scan().broken.empty());
@@ -165,7 +159,7 @@ TEST_CASE("Renaming an environment part re-points its whole family", "[assetrena
 	{
 		REQUIRE(Rename(root, e.sky, "Sky/dawn.bsky").status == RenameStatus::kRenamed);
 
-		CHECK(loadEnv(root.path / e.env).sky == "Sky/dawn.bsky");
+		CHECK(StoreAt(root.path).Load<BEnv>(e.env).sky == "Sky/dawn.bsky");
 		CHECK(root.Scan().broken.empty());
 	}
 
@@ -174,9 +168,9 @@ TEST_CASE("Renaming an environment part re-points its whole family", "[assetrena
 		REQUIRE(
 			Rename(root, e.skySource, "textures_src/dawn.ktx2").status == RenameStatus::kRenamed);
 
-		CHECK(loadSky(root.path / e.sky).sky.source == "textures_src/dawn.ktx2");
+		CHECK(StoreAt(root.path).Load<BSky>(e.sky).sky.source == "textures_src/dawn.ktx2");
 
-		const BEnvLighting lighting = loadEnvLighting(root.path / e.lighting);
+		const BEnvLighting lighting = StoreAt(root.path).Load<BEnvLighting>(e.lighting);
 		CHECK(lighting.prefilter.source == "textures_src/dawn.ktx2");
 		CHECK(lighting.irradiance.source == "textures_src/dawn.ktx2");
 
@@ -197,22 +191,23 @@ TEST_CASE("Renaming a directory re-points every reference into it", "[assetrenam
 	BMaterial inside;
 	inside.pbr.routes[0] = { "textures_src/kirk/tex1.ktx2", 0 };
 	fs::create_directories(root.path / "textures_src" / "kirk");
-	saveMaterial(inside, root.path / "textures_src" / "kirk" / "inside.bmaterial");
+	StoreAt(root.path).Save(inside, "textures_src/kirk/inside.bmaterial");
 
 	const RenamePlan plan = planRename(root.Scan(), "textures_src/kirk", "textures_src/spock");
 
 	CHECK(plan.IsDirectory());
 
-	REQUIRE(renameAsset(plan, root.Source()).status == RenameStatus::kRenamed);
+	REQUIRE(root.Source().RenameAsset(plan).status == RenameStatus::kRenamed);
 
 	CHECK_FALSE(fs::exists(root.path / "textures_src" / "kirk"));
 	CHECK(fs::exists(root.path / "textures_src" / "spock" / "tex0.ktx2"));
 
 	CHECK(
-		loadMaterial(root.path / "Materials" / "outside.bmaterial").pbr.routes[0].texture ==
+		StoreAt(root.path).Load<BMaterial>("Materials/outside.bmaterial").pbr.routes[0].texture ==
 		"textures_src/spock/tex0.ktx2");
 	CHECK(
-		loadMaterial(root.path / "textures_src" / "spock" / "inside.bmaterial")
+		StoreAt(root.path)
+			.Load<BMaterial>("textures_src/spock/inside.bmaterial")
 			.pbr.routes[0]
 			.texture == "textures_src/spock/tex1.ktx2");
 
@@ -305,7 +300,7 @@ TEST_CASE("A referrer that stopped parsing fails the rename, and is not touched"
 
 	std::ofstream(root.path / "Materials" / "mat.bmaterial", std::ios::binary) << "not a material";
 
-	const RenameResult result = renameAsset(plan, root.Source());
+	const RenameResult result = root.Source().RenameAsset(plan);
 
 	CHECK(result.status == RenameStatus::kFailed);
 	CHECK_FALSE(result.error.empty());
@@ -326,14 +321,14 @@ TEST_CASE("A rename whose file vanished fails without touching the referrers", "
 
 	fs::remove(root.path / "textures_src" / "a.ktx2");
 
-	const RenameResult result = renameAsset(plan, root.Source());
+	const RenameResult result = root.Source().RenameAsset(plan);
 
 	CHECK(result.status == RenameStatus::kFailed);
 	CHECK_FALSE(result.error.empty());
 
 	// The material still says what it said.
 	CHECK(
-		loadMaterial(root.path / "Materials" / "mat.bmaterial").pbr.routes[0].texture ==
+		StoreAt(root.path).Load<BMaterial>("Materials/mat.bmaterial").pbr.routes[0].texture ==
 		"textures_src/a.ktx2");
 }
 
@@ -347,7 +342,7 @@ TEST_CASE("A destination taken since the plan fails the rename", "[assetrename]"
 
 	WriteSource(root.path / "textures_src" / "new.ktx2", { { 0, 200, 0, 255 } });
 
-	CHECK(renameAsset(plan, root.Source()).status == RenameStatus::kFailed);
+	CHECK(root.Source().RenameAsset(plan).status == RenameStatus::kFailed);
 	CHECK(fs::exists(root.path / "textures_src" / "a.ktx2"));
 }
 
@@ -368,7 +363,7 @@ TEST_CASE("Renaming a skeleton re-points the whole rig that hangs off it", "[ass
 	skeleton.bones[0].inverseBind = glm::inverse(bindPoseModelTransforms(skeleton)[0]);
 
 	fs::create_directories(root.path / "Skeletons");
-	saveSkeleton(skeleton, root.path / "Skeletons/rig.bskel");
+	StoreAt(root.path).Save(skeleton, "Skeletons/rig.bskel");
 
 	auto animations              = AnimationSet();
 	animations.skeleton          = "Skeletons/rig.bskel";
@@ -384,7 +379,7 @@ TEST_CASE("Renaming a skeleton re-points the whole rig that hangs off it", "[ass
 	animations.samples.push_back(bone.bindPose);
 
 	fs::create_directories(root.path / "Animations");
-	saveAnimations(animations, root.path / "Animations/rig.banim");
+	StoreAt(root.path).Save(animations, "Animations/rig.banim");
 
 	auto mesh = BMesh();
 
@@ -407,11 +402,11 @@ TEST_CASE("Renaming a skeleton re-points the whole rig that hangs off it", "[ass
 
 	mesh.meshes   = { Mesh{ 0, 1, 0 } };
 	mesh.skeleton = "Skeletons/rig.bskel";
-	save(mesh, root.path / "Meshes/rig.bmesh");
+	StoreAt(root.path).Save(mesh, "Meshes/rig.bmesh");
 
 	const fs::path baked = root.path / vatPathFor("Meshes/rig.bmesh", "Animations/rig.banim");
-	saveVat(
-		bakeVat(AssetStore(root.path), VatBakeDesc{ "Meshes/rig.bmesh", "Animations/rig.banim" }),
+	SaveAt(
+		AssetStore(root.path).BakeVat(VatBakeDesc{ "Meshes/rig.bmesh", "Animations/rig.banim" }),
 		baked);
 
 	REQUIRE(
@@ -452,22 +447,19 @@ TEST_CASE("Renaming a material re-points the import document that binds it", "[a
 	material.name = "skin";
 	core::file::write_atomic(
 		root.path / "Materials" / "old.bmaterial",
-		serializeMaterial(material));
+		AssetCodec<BMaterial>::Serialize(material));
 
 	ImportDocument document;
 	document.bindings = { { "kirk[0]", "Materials/old.bmaterial" } };
 	fs::create_directories(root.path / "meshes_src");
-	{
-		const std::string text = serializeImportDocument(document);
-		core::file::write_atomic(
-			root.path / "meshes_src" / "kirk.bimport",
-			std::as_bytes(std::span(text.data(), text.size())));
-	}
+	core::file::write_atomic(
+		root.path / "meshes_src" / "kirk.bimport",
+		AssetCodec<ImportDocument>::Serialize(document));
 	std::ofstream(root.path / "meshes_src" / "kirk.glb") << "source";
 
 	const RenamePlan plan =
 		planRename(root.Scan(), "Materials/old.bmaterial", "Materials/new.bmaterial");
-	REQUIRE(renameAsset(plan, root.Source()).status == RenameStatus::kRenamed);
+	REQUIRE(root.Source().RenameAsset(plan).status == RenameStatus::kRenamed);
 
 	const ImportDocument rewritten =
 		loadImportDocument(root.Source().GetFiles(), "meshes_src/kirk.bimport");
@@ -480,12 +472,9 @@ TEST_CASE("An import document cannot be renamed away from its source", "[assetre
 	const DataRoot root("bernini_rename_importdoc_refuse");
 
 	fs::create_directories(root.path / "meshes_src");
-	{
-		const std::string text = serializeImportDocument(ImportDocument{});
-		core::file::write_atomic(
-			root.path / "meshes_src" / "kirk.bimport",
-			std::as_bytes(std::span(text.data(), text.size())));
-	}
+	core::file::write_atomic(
+		root.path / "meshes_src" / "kirk.bimport",
+		AssetCodec<ImportDocument>::Serialize(ImportDocument{}));
 	std::ofstream(root.path / "meshes_src" / "kirk.glb") << "source";
 
 	// The source key is derived from the document's own path; a lone rename would orphan the

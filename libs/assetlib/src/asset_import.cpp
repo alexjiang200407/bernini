@@ -1,13 +1,12 @@
 #include <assetlib/asset_import.h>
+#include <assetlib/bmesh.h>
+#include <assetlib/codecs.h>
+
+#include <assetlib/AssetStore.h>
 
 #include <assetlib/import_document.h>
 
-#include <assetlib/banim_io.h>
-#include <assetlib/bmesh_io.h>
-#include <assetlib/bskel_io.h>
-#include <assetlib/container_format.h>
 #include <assetlib/project_layout.h>
-#include <assetlib/skeleton.h>
 #include <assetlib/skinning.h>
 #include <assetlib/vat_bake.h>
 #include <assetlib_structs/Animation.h>
@@ -51,15 +50,15 @@ namespace assetlib
 	}
 
 	std::filesystem::path
-	importedSourcePathFor(const std::filesystem::path& dataRoot, std::string_view name)
+	AssetStore::ImportedSourcePath(std::string_view name) const
 	{
-		return dataRoot / c_MeshesSrcDirectoryName / std::format("{}.glb", name);
+		return GetDataRoot() / c_MeshesSrcDirectoryName / std::format("{}.glb", name);
 	}
 
 	std::filesystem::path
-	importDocumentPathFor(const std::filesystem::path& dataRoot, std::string_view name)
+	AssetStore::ImportDocumentPath(std::string_view name) const
 	{
-		return dataRoot / c_MeshesSrcDirectoryName /
+		return GetDataRoot() / c_MeshesSrcDirectoryName /
 		       std::format("{}{}", name, c_ImportDocumentExtension);
 	}
 
@@ -94,11 +93,12 @@ namespace assetlib
 	}
 
 	SourceRef
-	copyImportedSource(const std::filesystem::path& source, const ImportTarget& target)
+	AssetStore::CopyImportedSource(const std::filesystem::path& source, const ImportTarget& target)
+		const
 	{
 		requireSelfContainedSource(source);
 
-		const std::filesystem::path copied = importedSourcePathFor(target.dataRoot, target.name);
+		const std::filesystem::path copied = ImportedSourcePath(target.name);
 		std::filesystem::create_directories(copied.parent_path());
 
 		std::error_code ec;
@@ -129,15 +129,15 @@ namespace assetlib
 	}
 
 	void
-	writeImportedDocument(const ImportTarget& target, const BMesh* mesh)
+	AssetStore::WriteImportedDocument(const ImportTarget& target, const BMesh* mesh) const
 	{
 		ImportDocument document = parametersOnly(target.sampleRate);
 		if (mesh != nullptr)
 			document.bindings = bindingsOf(*mesh);
 
 		core::file::write_atomic(
-			importDocumentPathFor(target.dataRoot, target.name),
-			serializeImportDocument(document));
+			ImportDocumentPath(target.name),
+			AssetCodec<ImportDocument>::Serialize(document));
 	}
 
 	std::vector<std::string>
@@ -174,18 +174,17 @@ namespace assetlib
 	}
 
 	void
-	rebindSubmeshInDocument(
-		const std::filesystem::path& dataRoot,
-		std::string_view             sourceKey,
-		std::string_view             submesh,
-		std::string_view             material)
+	AssetStore::RebindSubmeshInDocument(
+		std::string_view sourceKey,
+		std::string_view submesh,
+		std::string_view material) const
 	{
 		core::throw_runtime_error_if(
 			sourceKey.empty(),
 			"'{}': no source was ever recorded, so there is no import document to rebind in",
 			submesh);
 
-		const std::filesystem::path documentPath = dataRoot / importDocumentKeyFor(sourceKey);
+		const std::filesystem::path documentPath = GetDataRoot() / importDocumentKeyFor(sourceKey);
 		core::throw_runtime_error_if(
 			!std::filesystem::exists(documentPath),
 			"'{}': no import document to rebind in -- re-import the source",
@@ -198,18 +197,18 @@ namespace assetlib
 		else
 			document.bindings.emplace_back(std::string(submesh), std::string(material));
 
-		core::file::write_atomic(documentPath, serializeImportDocument(document));
+		core::file::write_atomic(documentPath, AssetCodec<ImportDocument>::Serialize(document));
 	}
 
 	std::vector<ReauthoredDocument>
-	reauthorImportDocuments(const std::filesystem::path& dataRoot)
+	AssetStore::ReauthorImportDocuments() const
 	{
 		namespace fs = std::filesystem;
 
 		core::throw_runtime_error_if(
-			!fs::is_directory(dataRoot),
+			!fs::is_directory(GetDataRoot()),
 			"'{}' is not a directory",
-			dataRoot.string());
+			GetDataRoot().string());
 
 		// Which mesh claims which source, by the frozen header alone -- readable whatever the
 		// file's bake revision, which is what lets a stale mesh still name its document.
@@ -219,7 +218,7 @@ namespace assetlib
 		std::error_code ec;
 		const auto      walk = fs::directory_options::skip_permission_denied;
 		for (const fs::directory_entry& entry :
-		     fs::recursive_directory_iterator(dataRoot, walk, ec))
+		     fs::recursive_directory_iterator(GetDataRoot(), walk, ec))
 		{
 			if (!entry.is_regular_file(ec) || entry.path().extension() != c_MeshExtension)
 				continue;
@@ -234,18 +233,18 @@ namespace assetlib
 			{
 				// Which source it claims is unknowable, so every claimless document below has to
 				// treat this mesh as possibly its own.
-				unreadable.push_back(mountKeyFor(dataRoot, entry.path()));
+				unreadable.push_back(mountKeyFor(GetDataRoot(), entry.path()));
 			}
 		}
 
 		auto report = std::vector<ReauthoredDocument>();
 		for (const fs::directory_entry& entry :
-		     fs::recursive_directory_iterator(dataRoot, walk, ec))
+		     fs::recursive_directory_iterator(GetDataRoot(), walk, ec))
 		{
 			if (!entry.is_regular_file(ec) || entry.path().extension() != c_ImportDocumentExtension)
 				continue;
 
-			const std::string key       = mountKeyFor(dataRoot, entry.path());
+			const std::string key       = mountKeyFor(GetDataRoot(), entry.path());
 			const std::string sourceKey = importedSourceKeyFor(key);
 
 			ReauthoredDocument result{ key, ReauthoredDocument::Outcome::kUnchanged, {} };
@@ -272,15 +271,18 @@ namespace assetlib
 
 				const std::vector<std::byte> bytes =
 					core::file::read_file_bytes(entry.path().string());
-				ImportDocument document = deserializeImportDocument(
-					std::string_view(reinterpret_cast<const char*>(bytes.data()), bytes.size()));
+				ImportDocument document = AssetCodec<ImportDocument>::Deserialize(bytes);
 
-				document.bindings = claimants == 0 ? std::vector<MaterialBinding>() :
-				                                     bindingsOf(load(claimed->second.front()));
+				document.bindings =
+					claimants == 0 ?
+						std::vector<MaterialBinding>() :
+						bindingsOf(
+							AssetCodec<BMesh>::Deserialize(
+								core::file::read_file_bytes(claimed->second.front().string())));
 
-				const std::string serialized = serializeImportDocument(document);
-				if (std::string_view(reinterpret_cast<const char*>(bytes.data()), bytes.size()) !=
-				    serialized)
+				const std::vector<std::byte> serialized =
+					AssetCodec<ImportDocument>::Serialize(document);
+				if (bytes != serialized)
 				{
 					core::file::write_atomic(entry.path(), serialized);
 					result.outcome = ReauthoredDocument::Outcome::kRewritten;
@@ -297,7 +299,7 @@ namespace assetlib
 		for (const auto& [sourceKey, meshes] : claims)
 		{
 			const std::string documentKey = importDocumentKeyFor(sourceKey);
-			if (fs::exists(dataRoot / documentKey))
+			if (fs::exists(GetDataRoot() / documentKey))
 				continue;
 			report.push_back(
 				{ documentKey,
@@ -305,7 +307,7 @@ namespace assetlib
 			      std::format(
 					  "'{}' records '{}' as its source but no document stands beside it; "
 					  "re-import the source",
-					  mountKeyFor(dataRoot, meshes.front()),
+					  mountKeyFor(GetDataRoot(), meshes.front()),
 					  sourceKey) });
 		}
 
@@ -313,53 +315,41 @@ namespace assetlib
 	}
 
 	void
-	writeImportedMesh(const BMesh& mesh, const std::filesystem::path& bmeshPath)
+	AssetStore::WriteImportedRig(
+		const Skeleton&     skeleton,
+		const AnimationSet& animations,
+		BMesh&              mesh,
+		std::string_view    bskelKey,
+		std::string_view    banimKey,
+		bool                writeClips,
+		const SourceRef&    source) const
 	{
-		std::filesystem::create_directories(bmeshPath.parent_path());
-		save(mesh, bmeshPath);
-	}
-
-	void
-	writeImportedRig(
-		const imp::BMeshImport&      imported,
-		BMesh&                       mesh,
-		const std::filesystem::path& dataRoot,
-		const std::filesystem::path& bskelPath,
-		const std::filesystem::path& banimPath,
-		bool                         writeClips,
-		const SourceRef&             source)
-	{
-		if (imported.skeleton.bones.empty())
+		if (skeleton.bones.empty())
 			return;
 
-		// A project scaffolded before these categories existed has neither directory.
-		std::filesystem::create_directories(bskelPath.parent_path());
+		Skeleton rig = skeleton;
+		rig.source   = source;
+		Save(rig, bskelKey);
+		mesh.skeleton = std::string(bskelKey);
 
-		Skeleton skeleton = imported.skeleton;
-		skeleton.source   = source;
-		saveSkeleton(skeleton, bskelPath);
-		mesh.skeleton = mountKeyFor(dataRoot, bskelPath);
-
-		if (!writeClips || imported.animations.clips.empty())
+		if (!writeClips || animations.clips.empty())
 			return;
 
 		// The clip set names the rig by the same path the mesh does, so all three agree on which file
 		// the joint indices are addressed against.
-		std::filesystem::create_directories(banimPath.parent_path());
-
-		AnimationSet clips = imported.animations;
+		AnimationSet clips = animations;
 		clips.skeleton     = mesh.skeleton;
 		clips.source       = source;
-		bakePosedBounds(clips, mesh, imported.skeleton);
-		saveAnimations(clips, banimPath);
+		bakePosedBounds(clips, mesh, skeleton);
+		Save(clips, banimKey);
 	}
 
 	std::filesystem::path
-	findMatchingSkeleton(const std::filesystem::path& dataRoot, const Skeleton& skeleton)
+	AssetStore::FindMatchingSkeleton(const Skeleton& skeleton) const
 	{
 		namespace fs = std::filesystem;
 
-		const fs::path root = dataRoot / c_SkeletonsDirectoryName;
+		const fs::path root = GetDataRoot() / c_SkeletonsDirectoryName;
 
 		std::error_code ec;
 		if (!fs::exists(root, ec))
@@ -377,7 +367,9 @@ namespace assetlib
 
 			try
 			{
-				if (skeletonSignature(loadSkeleton(entry.path())) == wanted)
+				if (skeletonSignature(
+						AssetCodec<Skeleton>::Deserialize(
+							core::file::read_file_bytes(entry.path().string()))) == wanted)
 					matches.push_back(entry.path());
 			}
 			catch (const std::exception&)
@@ -400,7 +392,7 @@ namespace assetlib
 			{
 				if (!named.empty())
 					named += ", ";
-				named += mountKeyFor(dataRoot, match);
+				named += mountKeyFor(GetDataRoot(), match);
 			}
 
 			core::throw_runtime_error(
@@ -435,7 +427,11 @@ namespace assetlib
 				if (normalizePath(loadMeshRefs(entry.path()).skeleton) != rigRel)
 					continue;
 
-				bakePosedBounds(clips, load(entry.path()), skeleton);
+				bakePosedBounds(
+					clips,
+					AssetCodec<BMesh>::Deserialize(
+						core::file::read_file_bytes(entry.path().string())),
+					skeleton);
 			}
 			catch (const std::exception&)
 			{
@@ -446,21 +442,21 @@ namespace assetlib
 	}
 
 	void
-	writeImportedClips(
-		const imp::BMeshImport&      imported,
-		const std::filesystem::path& dataRoot,
-		const std::filesystem::path& banimPath,
-		const SourceRef&             source)
+	AssetStore::WriteImportedClips(
+		const Skeleton&     skeleton,
+		const AnimationSet& animations,
+		std::string_view    banimKey,
+		const SourceRef&    source) const
 	{
-		if (imported.animations.clips.empty())
+		if (animations.clips.empty())
 			throw std::runtime_error("this file carries no animation to import");
 
 		// The clips are per-bone samples addressed by index, so without the rig they were authored
 		// against there is nothing to say which bone each one drives.
-		if (imported.skeleton.bones.empty())
+		if (skeleton.bones.empty())
 			throw std::runtime_error("this file carries no rig, so its clips address nothing");
 
-		const std::filesystem::path rig = findMatchingSkeleton(dataRoot, imported.skeleton);
+		const std::filesystem::path rig = FindMatchingSkeleton(skeleton);
 		if (rig.empty())
 		{
 			throw std::runtime_error(
@@ -469,17 +465,19 @@ namespace assetlib
 				"attach to.");
 		}
 
-		std::filesystem::create_directories(banimPath.parent_path());
-
-		AnimationSet clips = imported.animations;
-		clips.skeleton     = mountKeyFor(dataRoot, rig);
+		AnimationSet clips = animations;
+		clips.skeleton     = KeyFor(rig);
 		clips.source       = source;
 
 		// Measured against the rig the clips will resolve at load, not the imported copy: the two
 		// share a signature but a re-authored bind pose deliberately does not change one.
-		bakeBoundsForRig(clips, dataRoot, normalizePath(clips.skeleton), loadSkeleton(rig));
+		bakeBoundsForRig(
+			clips,
+			GetDataRoot(),
+			normalizePath(clips.skeleton),
+			Load<Skeleton>(clips.skeleton));
 
-		saveAnimations(clips, banimPath);
+		Save(clips, banimKey);
 	}
 
 	void

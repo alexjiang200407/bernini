@@ -3,7 +3,7 @@
 #include <assetlib_structs/BMesh.h>
 #include <assetlib_structs/Skeleton.h>
 
-#include <assetlib/skeleton.h>
+#include <assetlib/skinning.h>
 
 namespace assetlib::test
 {

@@ -19,8 +19,6 @@
 #include <QWheelEvent>
 
 #include <assetlib/AssetStore.h>
-#include <assetlib/bmesh_io.h>
-#include <assetlib/bskel_io.h>
 #include <assetlib/skinning.h>
 #include <assetlib_structs/BMesh.h>
 #include <assetlib_structs/Bounds.h>

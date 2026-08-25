@@ -20,6 +20,10 @@ namespace assetlib
 		// its recorded inputs, or a moved mesh would leave every bake pointing at nothing.
 		kVat,
 		kImportDocument,  // .bimport -- the authored half of one imported source; text, never packed
+		// The number of asset kinds. Anchors the assertion that every one of them has a codec;
+		// anchoring that on whichever enumerator happens to be last instead means appending one
+		// silently satisfies it.
+		kCount,
 	};
 
 	/** Why one asset holds another alive. */
@@ -188,7 +192,7 @@ namespace assetlib
 		 * Derived files swept with the target: the `.bvat` bakes whose `kVatSource` edges name it
 		 * (or reach into the directory). A bake never blocks its own inputs -- one that outlived
 		 * them is stale by definition -- so those edges land here instead of `blockers`, and
-		 * deleteAsset removes them *before* the target, so no step ever leaves a bake standing on
+		 * DeleteAsset removes them *before* the target, so no step ever leaves a bake standing on
 		 * inputs that are gone.
 		 */
 		std::vector<std::string> derived;
@@ -264,25 +268,6 @@ namespace assetlib
 		std::string    error;  // non-empty only when status == kFailed
 	};
 
-	/**
-	 * Deletes what `plan` names -- one file, or a directory and everything beneath it -- having re-checked
-	 * the plan itself, so the rule cannot be bypassed by a caller that forgot to look.
-	 *
-	 * Reports a failure rather than throwing, because a failure here is ordinary: a preview decode holds
-	 * the `.ktx2` open, and Windows refuses to unlink an open file. "Still referenced" and "the file is in
-	 * use" are different things to tell a user, which is why they are different statuses. A directory whose
-	 * removal fails part-way through is reported kFailed, with whatever came off already gone -- there is
-	 * no undo, and pretending otherwise would be worse than saying so.
-	 *
-	 * A plan carrying a `cascade` takes those files too, after the target. A plain planDeletion of a
-	 * material still leaves the baked maps it alone named on disk; they are what
-	 * findUnusedBakedTextures then sweeps.
-	 *
-	 * Pass the `desc` the plan's graph was scanned with -- the path is relative to its `dataRoot`.
-	 */
-	DeletionResult
-	deleteAsset(const DeletionPlan& plan, const AssetStore& store);
-
 	/** What a rename would move, and every stored reference that must follow it. */
 	struct RenamePlan
 	{
@@ -333,24 +318,4 @@ namespace assetlib
 		RenameStatus status = RenameStatus::kFailed;
 		std::string  error;  // non-empty only when status == kFailed
 	};
-
-	/**
-	 * Renames what `plan` names and rewrites every referrer it lists, so no reference is left pointing
-	 * at the old path.
-	 *
-	 * The referrers are all read and rewritten in memory before anything is written -- one that cannot
-	 * be read or parsed fails the rename while the project is still untouched -- the files are then
-	 * saved, and the rename itself comes last: it is the step most likely to be refused (Windows will
-	 * not move a file another process holds open), and by then it is the only step left to undo. A
-	 * failure anywhere writes the original bytes back over whatever had already been saved, so kFailed
-	 * means the project is as it was; that restore is best-effort, and a machine that fails the restore
-	 * too is reported with the first error rather than a pretense of atomicity.
-	 *
-	 * Pass the `desc` the plan's graph was scanned with -- the paths are relative to its `dataRoot`.
-	 *
-	 * @throws std::runtime_error if a referrer in `plan` is not a container that stores references --
-	 *         a plan built by planRename never holds one, so that is a caller error, not weather.
-	 */
-	RenameResult
-	renameAsset(const RenamePlan& plan, const AssetStore& store);
 }

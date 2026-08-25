@@ -1,9 +1,6 @@
-#include <assetlib/skeleton.h>
+#include <assetlib/skinning.h>
 #include <assetlib_structs/Animation.h>
 #include <assetlib_structs/Skeleton.h>
-
-#include <assetlib/banim_io.h>
-#include <assetlib/bmesh_io.h>
 
 #include <core/err/util.h>
 #include <core/hash.h>

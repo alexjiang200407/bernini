@@ -1,11 +1,8 @@
-#include <assetlib/benvl_io.h>
-#include <assetlib/bmaterial_io.h>
-#include <assetlib/bsky_io.h>
-#include <assetlib/env_bake.h>
+#include <assetlib/container_info.h>
+#include <assetlib/envmap.h>
 #include <assetlib/image_io.h>
 #include <assetlib/material_bake.h>
-#include <assetlib/pak_io.h>
-#include <assetlib/pak_pack.h>
+#include <assetlib/pak.h>
 #include <assetlib/texture_prune.h>
 #include <assetlib_structs/BEnv.h>
 #include <assetlib_structs/ImageData.h>
@@ -98,7 +95,7 @@ TEST_CASE("bakeSky compiles the routed source into a shipping RGB9E5 map", "[env
 	const DataRoot root("bernini_envbake_sky");
 
 	BSky sky = RoutedSky(root);
-	bakeSky(sky, { root.path });
+	StoreAt(root.path).BakeSky(sky);
 
 	REQUIRE(!sky.sky.baked.empty());
 	CHECK(sky.sky.stamp == stampOf(root.path / sky.sky.source));
@@ -115,7 +112,7 @@ TEST_CASE("bakeSky compiles the routed source into a shipping RGB9E5 map", "[env
 	SECTION("the bake is stable: a second run reuses the same file")
 	{
 		BSky again = RoutedSky(root);
-		bakeSky(again, { root.path });
+		StoreAt(root.path).BakeSky(again);
 		CHECK(again.sky.baked == sky.sky.baked);
 	}
 }
@@ -128,7 +125,7 @@ TEST_CASE("bakeEnvLighting bakes both maps and re-derives the exposure", "[envba
 	// card (reflectance 0.96 under this convention) reflects, mapped to middle grey. A constant 0.5
 	// environment therefore lands at 1 / 0.48.
 	BEnvLighting lighting = RoutedLighting(root, 0.5f);
-	bakeEnvLighting(lighting, { root.path });
+	StoreAt(root.path).BakeEnvLighting(lighting);
 
 	CHECK(!lighting.prefilter.baked.empty());
 	CHECK(!lighting.irradiance.baked.empty());
@@ -155,7 +152,7 @@ TEST_CASE("the environment staleness checks mirror the material's", "[envbake]")
 	SECTION("a bake settles it; editing the source unsettles it")
 	{
 		BSky sky = RoutedSky(root);
-		bakeSky(sky, { root.path });
+		StoreAt(root.path).BakeSky(sky);
 		CHECK_FALSE(isSkyBakeStale(sky, MountAt(root.path)));
 
 		// A different face size gives the source different bytes, which is all the stamp compares.
@@ -168,10 +165,10 @@ TEST_CASE("the environment staleness checks mirror the material's", "[envbake]")
 	SECTION("a source whose mtime moved but whose bytes did not is not stale")
 	{
 		BSky sky = RoutedSky(root);
-		bakeSky(sky, { root.path });
+		StoreAt(root.path).BakeSky(sky);
 
 		BEnvLighting lighting = RoutedLighting(root);
-		bakeEnvLighting(lighting, { root.path });
+		StoreAt(root.path).BakeEnvLighting(lighting);
 
 		for (const std::string& source :
 		     { sky.sky.source, lighting.prefilter.source, lighting.irradiance.source })
@@ -189,7 +186,7 @@ TEST_CASE("the environment staleness checks mirror the material's", "[envbake]")
 	SECTION("a deleted source reads as stale rather than as unchanged")
 	{
 		BSky sky = RoutedSky(root);
-		bakeSky(sky, { root.path });
+		StoreAt(root.path).BakeSky(sky);
 		std::filesystem::remove(root.path / sky.sky.source);
 		CHECK(isSkyBakeStale(sky, MountAt(root.path)));
 	}
@@ -199,7 +196,7 @@ TEST_CASE("the environment staleness checks mirror the material's", "[envbake]")
 	SECTION("a deleted baked map is stale, however fresh the source is")
 	{
 		BSky sky = RoutedSky(root);
-		bakeSky(sky, { root.path });
+		StoreAt(root.path).BakeSky(sky);
 		REQUIRE_FALSE(isSkyBakeStale(sky, MountAt(root.path)));
 
 		std::filesystem::remove(root.path / sky.sky.baked);
@@ -210,7 +207,7 @@ TEST_CASE("the environment staleness checks mirror the material's", "[envbake]")
 	SECTION("either half of the lighting losing its map makes the pair stale")
 	{
 		BEnvLighting lighting = RoutedLighting(root);
-		bakeEnvLighting(lighting, { root.path });
+		StoreAt(root.path).BakeEnvLighting(lighting);
 		REQUIRE_FALSE(isEnvLightingBakeStale(lighting, MountAt(root.path)));
 
 		std::filesystem::remove(root.path / lighting.irradiance.baked);
@@ -223,7 +220,7 @@ TEST_CASE("a route draws its baked map, and its source when it cannot", "[envbak
 	const DataRoot root("bernini_envbake_draw");
 
 	BSky sky = RoutedSky(root);
-	bakeSky(sky, { root.path });
+	StoreAt(root.path).BakeSky(sky);
 	const std::string source = sky.sky.source;
 	const std::string baked  = sky.sky.baked;
 
@@ -279,7 +276,7 @@ TEST_CASE("a cancelled or failed environment bake leaves the asset untouched", "
 		stop.request_stop();
 
 		BSky sky = RoutedSky(root);
-		CHECK_THROWS_AS(bakeSky(sky, { root.path }, stop.get_token()), Cancelled);
+		CHECK_THROWS_AS(StoreAt(root.path).BakeSky(sky, stop.get_token()), Cancelled);
 		CHECK(sky.sky.baked.empty());
 		CHECK(sky.sky.stamp == SourceStamp{});
 	}
@@ -287,13 +284,13 @@ TEST_CASE("a cancelled or failed environment bake leaves the asset untouched", "
 	SECTION("nothing routed")
 	{
 		BSky unrouted;
-		CHECK_THROWS_AS(bakeSky(unrouted, { root.path }), std::runtime_error);
+		CHECK_THROWS_AS(StoreAt(root.path).BakeSky(unrouted), std::runtime_error);
 
 		// Half-routed lighting is refused too: the maps are convolutions of one radiance, and
 		// baking one against a stale other is the drift the pair exists to prevent.
 		BEnvLighting half;
 		half.prefilter.source = root.AddSource("half.ktx2", 4, 1.0f);
-		CHECK_THROWS_AS(bakeEnvLighting(half, { root.path }), std::runtime_error);
+		CHECK_THROWS_AS(StoreAt(root.path).BakeEnvLighting(half), std::runtime_error);
 		CHECK(half.prefilter.baked.empty());
 	}
 
@@ -305,7 +302,7 @@ TEST_CASE("a cancelled or failed environment bake leaves the asset untouched", "
 
 		BSky sky;
 		sky.sky.source = "textures_src/flat.ktx2";
-		CHECK_THROWS_AS(bakeSky(sky, { root.path }), std::runtime_error);
+		CHECK_THROWS_AS(StoreAt(root.path).BakeSky(sky), std::runtime_error);
 		CHECK(sky.sky.baked.empty());
 	}
 
@@ -313,7 +310,7 @@ TEST_CASE("a cancelled or failed environment bake leaves the asset untouched", "
 	{
 		BSky sky;
 		sky.sky.source = "textures_src/nowhere.ktx2";
-		CHECK_THROWS_AS(bakeSky(sky, { root.path }), std::runtime_error);
+		CHECK_THROWS_AS(StoreAt(root.path).BakeSky(sky), std::runtime_error);
 	}
 }
 
@@ -324,25 +321,25 @@ TEST_CASE(
 	const DataRoot root("bernini_envbake_prune");
 
 	BSky sky = RoutedSky(root);
-	bakeSky(sky, { root.path });
-	saveSky(sky, root.path / "forest.bsky");
+	StoreAt(root.path).BakeSky(sky);
+	StoreAt(root.path).Save(sky, "forest.bsky");
 
 	BEnvLighting lighting = RoutedLighting(root);
-	bakeEnvLighting(lighting, { root.path });
-	saveEnvLighting(lighting, root.path / "forest.benvl");
+	StoreAt(root.path).BakeEnvLighting(lighting);
+	StoreAt(root.path).Save(lighting, "forest.benvl");
 
 	// An env-named map nothing references: the leftover of a re-bake whose route changed.
 	const auto orphan = root.path / "Textures" / "sky_00000000deadbeef.ktx2";
 	writeKTX2(ConstantCube(4, 1.0f), orphan, false, Ktx2Compression::kNone);
 
-	const auto scan = findUnusedBakedTextures(AssetStore(root.path));
+	const auto scan = AssetStore(root.path).FindUnusedBakedTextures();
 
 	CHECK(scan.environmentsScanned == 2);
 	CHECK(scan.liveMaps == 3);
 	REQUIRE(scan.unused.size() == 1);
 	CHECK(scan.unused.front().path == "Textures/sky_00000000deadbeef.ktx2");
 
-	deleteUnusedBakedTextures(scan, AssetStore(root.path));
+	AssetStore(root.path).DeleteUnusedBakedTextures(scan);
 	CHECK(!std::filesystem::exists(orphan));
 	CHECK(std::filesystem::exists(root.path / sky.sky.baked));
 	CHECK(std::filesystem::exists(root.path / lighting.prefilter.baked));
@@ -356,11 +353,11 @@ TEST_CASE("the prune refuses to scan past an unreadable environment asset", "[en
 	const DataRoot root("bernini_envbake_prune_bad");
 
 	std::ofstream(root.path / "broken.bsky") << "not a container";
-	CHECK_THROWS_AS(findUnusedBakedTextures(AssetStore(root.path)), std::runtime_error);
+	CHECK_THROWS_AS(AssetStore(root.path).FindUnusedBakedTextures(), std::runtime_error);
 
 	std::filesystem::remove(root.path / "broken.bsky");
 	std::ofstream(root.path / "broken.benvl") << "not a container";
-	CHECK_THROWS_AS(findUnusedBakedTextures(AssetStore(root.path)), std::runtime_error);
+	CHECK_THROWS_AS(AssetStore(root.path).FindUnusedBakedTextures(), std::runtime_error);
 }
 
 // The archive property, extended to the env family: judged inside the archive, a shipped bake is
@@ -371,23 +368,22 @@ TEST_CASE("pack re-bakes a sky whose routed source moved", "[envbake][pack]")
 	std::filesystem::create_directories(root.path / "Sky");
 
 	BSky sky = RoutedSky(root);
-	bakeSky(sky, { root.path });
-	saveSky(sky, root.path / "Sky/test.bsky");
+	StoreAt(root.path).BakeSky(sky);
+	StoreAt(root.path).Save(sky, "Sky/test.bsky");
 
 	root.AddSource("sky_src.ktx2", 8, 2.0f);
 
-	PackReport report = packProject(AssetStore(root.path), PackDesc{ root.path / "Data.bpak" });
+	PackReport report = AssetStore(root.path).Pack(PackDesc{ root.path / "Data.bpak" });
 	CHECK(report.envsRebaked == 1);
 
 	const PakFile pak(root.path / "Data.bpak");
-	const BSky    packed = loadSky(pak, "Sky/test.bsky");
+	const BSky    packed = load<BSky>(pak, "Sky/test.bsky");
 	CHECK(packed.sky.stamp == stampOf(MountAt(root.path), packed.sky.source));
 	CHECK(pak.Exists(packed.sky.baked));
 
 	SECTION("and a second pack re-bakes nothing")
 	{
-		const PackReport again =
-			packProject(AssetStore(root.path), PackDesc{ root.path / "Data2.bpak" });
+		const PackReport again = AssetStore(root.path).Pack(PackDesc{ root.path / "Data2.bpak" });
 		CHECK(again.envsRebaked == 0);
 	}
 }
@@ -398,12 +394,11 @@ TEST_CASE("a sky that never recorded its source packs verbatim", "[envbake][pack
 	std::filesystem::create_directories(root.path / "Sky");
 
 	BSky sky = RoutedSky(root);
-	bakeSky(sky, { root.path });
+	StoreAt(root.path).BakeSky(sky);
 	sky.sky.source.clear();
 	sky.sky.stamp = SourceStamp{};
-	saveSky(sky, root.path / "Sky/frozen.bsky");
+	StoreAt(root.path).Save(sky, "Sky/frozen.bsky");
 
-	const PackReport report =
-		packProject(AssetStore(root.path), PackDesc{ root.path / "Data.bpak" });
+	const PackReport report = AssetStore(root.path).Pack(PackDesc{ root.path / "Data.bpak" });
 	CHECK(report.envsRebaked == 0);
 }

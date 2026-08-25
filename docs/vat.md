@@ -100,11 +100,13 @@ truth; when this doc disagrees, trust the header, then fix this doc.
 ### assetlib — bake and container
 | Interface | File | Role |
 |---|---|---|
-| `bakeVat` (in-memory + `VatBakeDesc` overloads) | [libs/assetlib/include/assetlib/vat_bake.h](libs/assetlib/include/assetlib/vat_bake.h) | CPU-skin every vertex at every frame; pack, pad and encode the texture pair |
+| `bakeVat` (in memory) | [libs/assetlib/include/assetlib/vat_bake.h](libs/assetlib/include/assetlib/vat_bake.h) | CPU-skin every vertex at every frame; pack, pad and encode the texture pair |
+| `AssetStore::BakeVat` | [libs/assetlib/include/assetlib/AssetStore.h](libs/assetlib/include/assetlib/AssetStore.h) | The same bake over a project: loads the three inputs by key and records their stamps |
 | `vatIsStale` / `normalizePath` | [libs/assetlib/include/assetlib/vat_bake.h](libs/assetlib/include/assetlib/vat_bake.h) | Compare the container's input stamps against the disk — the stamp half of the bake-on-demand trigger — and the path form the container records |
-| `saveVat` / `loadVat` / `loadVatTables` / `loadVatRefs` | [libs/assetlib/include/assetlib/bvat_io.h](libs/assetlib/include/assetlib/bvat_io.h) | Container round-trip; tables-only and refs-only seek reads for scans |
-| `vatPathFor` | [libs/assetlib/include/assetlib/vat_bake.h](libs/assetlib/include/assetlib/vat_bake.h) | Where a (mesh, clip set) pair's bake lives — one file per pair, moved by renameAsset when a rename changes the derivation |
-| `assetlib_cli bakevat` | [libs/assetlib/cli](libs/assetlib/cli) | The CLI door over `bakeVat` + `saveVat` |
+| `AssetCodec<BVat>` | [libs/assetlib/include/assetlib/codecs.h](libs/assetlib/include/assetlib/codecs.h) | The container round-trip |
+| `loadVatTables` / `loadVatRefs` | [libs/assetlib/include/assetlib/vat_bake.h](libs/assetlib/include/assetlib/vat_bake.h) | Tables-only and refs-only seek reads, for a scan that must not pay for the texels |
+| `vatPathFor` | [libs/assetlib/include/assetlib/vat_bake.h](libs/assetlib/include/assetlib/vat_bake.h) | Where a (mesh, clip set) pair's bake lives — one file per pair, moved by AssetStore::RenameAsset when a rename changes the derivation |
+| `assetlib_cli bakevat` | [libs/assetlib/cli](libs/assetlib/cli) | The CLI door over `store.BakeVat` + `store.Save` |
 
 ### bgl — draw path
 | Interface | File | Role |
@@ -165,7 +167,7 @@ flowchart TD
     end
 
     subgraph assetlib
-        BAKE[bakeVat]
+        BAKE[AssetStore::BakeVat]
         STALE[vatIsStale]
     end
 
@@ -182,7 +184,7 @@ flowchart TD
     end
 
     BMESH & BSKEL & BANIM -- "inputs, stamped" --> BAKE
-    BAKE -- "saveVat, beside the mesh" --> BVAT
+    BAKE -- "store.Save, beside the mesh" --> BVAT
     ACQ --> ENSURE
     ENSURE -- "stamp check" --> STALE
     ENSURE -- "stale or missing: re-bake" --> BAKE
@@ -197,12 +199,12 @@ flowchart TD
 
 ## Risky / Non-obvious Method Contracts
 
-### `assetlib::bakeVat`
+### `assetlib::bakeVat` / `AssetStore::BakeVat`
 * **Refuses what cannot animate** — @pre at least one submesh carries joint indices, the clip set
   is non-empty and signature-matched to the skeleton; @post the texture dimensions are within
-  `c_MaxVatTextureDim` (16384) or it throws naming the count that broke it. The desc overload
-  records the three input paths and stamps; the in-memory one leaves them empty — a `BVat` that
-  was never stamped is *always* stale.
+  `c_MaxVatTextureDim` (16384) or it throws naming the count that broke it. `BakeVat` records the
+  three input keys and stamps; the in-memory `bakeVat` leaves them empty — a `BVat` that was never
+  stamped is *always* stale.
 
 ### `IScene::AddVatMeshGeom`
 * **Textures must be live assets of this scene** — @pre both handles came from `AddTextureAsset`

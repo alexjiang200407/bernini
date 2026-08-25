@@ -45,24 +45,7 @@ namespace assetlib
 	[[nodiscard]] std::string
 	importedSourceKeyFor(std::string_view documentKey);
 
-	/**
-	 * @throws std::runtime_error if `text` is not a JSON object, `bindings` is not an object of
-	 *         strings, or `sampleRate` is not a positive number.
-	 */
-	[[nodiscard]] ImportDocument
-	deserializeImportDocument(std::string_view text);
-
-	/**
-	 * Canonical text: the known keys written over the preserved ones, object keys sorted, one
-	 * document one byte sequence -- so identical documents on two checkouts serialize identically.
-	 *
-	 * @throws std::runtime_error if either preserved-key string is not a JSON object, or two
-	 *         bindings name one submesh.
-	 */
-	[[nodiscard]] std::string
-	serializeImportDocument(const ImportDocument& document);
-
-	/** @throws what `IFileSystem::Read` and `deserializeImportDocument` throw. */
+	/** @throws what `IFileSystem::Read` and `AssetCodec<ImportDocument>::Deserialize` throw. */
 	[[nodiscard]] ImportDocument
 	loadImportDocument(const core::file::IFileSystem& files, std::string_view key);
 
@@ -77,4 +60,5 @@ namespace assetlib
 	 */
 	[[nodiscard]] uint64_t
 	parametersHashOf(const ImportDocument& document);
+
 }

@@ -1,12 +1,8 @@
-#include <assetlib/asset_describe.h>
+#include "asset_describe.h"
 #include <assetlib/asset_refs.h>
-#include <assetlib/banim_io.h>
-#include <assetlib/bmaterial_io.h>
-#include <assetlib/bmesh_io.h>
-#include <assetlib/bskel_io.h>
-#include <assetlib/bvat_io.h>
+#include <assetlib/codecs.h>
+#include <assetlib/container_info.h>
 #include <assetlib/image_io.h>
-#include <assetlib/skeleton.h>
 #include <assetlib/skinning.h>
 #include <assetlib/vat_bake.h>
 #include <assetlib_structs/Animation.h>
@@ -356,7 +352,7 @@ TEST_CASE("A .bvat round-trips, and its tables read without the pixels", "[vat]"
 	vat.skeletonStamp   = { 7, 8 };
 	vat.animationsStamp = { 9, 10 };
 
-	const BVat read = deserializeVat(serializeVat(vat));
+	const BVat read = AssetCodec<BVat>::Deserialize(AssetCodec<BVat>::Serialize(vat));
 
 	CHECK(read.width == vat.width);
 	CHECK(read.height == vat.height);
@@ -380,7 +376,7 @@ TEST_CASE("A .bvat round-trips, and its tables read without the pixels", "[vat]"
 	SECTION("tables-only leaves the payloads behind")
 	{
 		const fs::path path = fs::temp_directory_path() / "bernini_vat_roundtrip.bvat";
-		saveVat(vat, path);
+		SaveAt(vat, path);
 
 		const BVat tables = loadVatTables(path);
 		CHECK(tables.positionsKtx2.empty());
@@ -391,7 +387,9 @@ TEST_CASE("A .bvat round-trips, and its tables read without the pixels", "[vat]"
 		CHECK(tables.stringPool.at(tables.clips[0].nameOffset) == "slide");
 
 		// And what a tables-only read holds cannot be written back as though it were the bake.
-		CHECK_THROWS_WITH(serializeVat(tables), Catch::Matchers::ContainsSubstring("tables-only"));
+		CHECK_THROWS_WITH(
+			AssetCodec<BVat>::Serialize(tables),
+			Catch::Matchers::ContainsSubstring("tables-only"));
 
 		const VatRefs refs = loadVatRefs(path);
 		CHECK(refs.mesh == "Meshes/rig.bmesh");
@@ -405,7 +403,7 @@ TEST_CASE("A .bvat round-trips, and its tables read without the pixels", "[vat]"
 	{
 		// The twist-era files and every other chunk-era bake are refused whole: derived, so the
 		// refusal is what sends them to a re-bake rather than to a reader.
-		auto bytes = serializeVat(vat);
+		auto bytes = AssetCodec<BVat>::Serialize(vat);
 
 		// A chunk-era header carried a version pair where the cache header's version field sits.
 		bytes[4] = std::byte{ 4 };
@@ -414,7 +412,7 @@ TEST_CASE("A .bvat round-trips, and its tables read without the pixels", "[vat]"
 		bytes[7] = std::byte{ 0 };
 
 		CHECK_THROWS_WITH(
-			deserializeVat(bytes),
+			AssetCodec<BVat>::Deserialize(bytes),
 			Catch::Matchers::ContainsSubstring("before the cache format"));
 	}
 
@@ -424,7 +422,9 @@ TEST_CASE("A .bvat round-trips, and its tables read without the pixels", "[vat]"
 		// guards a crafted or corrupted stream -- which consumers index frames from.
 		vat.clips[1].frameCount = 0;
 		vat.height -= 1;
-		CHECK_THROWS_WITH(serializeVat(vat), Catch::Matchers::ContainsSubstring("no frames"));
+		CHECK_THROWS_WITH(
+			AssetCodec<BVat>::Serialize(vat),
+			Catch::Matchers::ContainsSubstring("no frames"));
 	}
 }
 
@@ -438,15 +438,15 @@ TEST_CASE("A bake from files stamps its inputs and the refs scan reports them", 
 	fs::create_directories(root / "Skeletons");
 	fs::create_directories(root / "Animations");
 
-	save(fixture.mesh, root / "Meshes/rig.bmesh");
-	saveSkeleton(fixture.skeleton, root / "Skeletons/rig.bskel");
-	saveAnimations(fixture.animations, root / "Animations/rig.banim");
+	StoreAt(root).Save(fixture.mesh, "Meshes/rig.bmesh");
+	StoreAt(root).Save(fixture.skeleton, "Skeletons/rig.bskel");
+	StoreAt(root).Save(fixture.animations, "Animations/rig.banim");
 
 	auto desc       = VatBakeDesc();
 	desc.mesh       = "Meshes/rig.bmesh";
 	desc.animations = "Animations/rig.banim";
 
-	const BVat vat = bakeVat(AssetStore(root), desc);
+	const BVat vat = AssetStore(root).BakeVat(desc);
 	CHECK(vat.mesh == "Meshes/rig.bmesh");
 	CHECK(vat.skeleton == "Skeletons/rig.bskel");
 	CHECK(vat.animations == "Animations/rig.banim");
@@ -473,7 +473,7 @@ TEST_CASE("A bake from files stamps its inputs and the refs scan reports them", 
 	SECTION("a changed input reads as stale")
 	{
 		fixture.animations.stringPool.add("padding-so-the-size-moves");
-		saveAnimations(fixture.animations, root / "Animations/rig.banim");
+		StoreAt(root).Save(fixture.animations, "Animations/rig.banim");
 		CHECK(vatIsStale(vat, MountAt(root)));
 	}
 
@@ -485,7 +485,7 @@ TEST_CASE("A bake from files stamps its inputs and the refs scan reports them", 
 
 	SECTION("the refs scan reports the three edges")
 	{
-		saveVat(vat, root / "Meshes/rig.bvat");
+		StoreAt(root).Save(vat, "Meshes/rig.bvat");
 
 		const auto graph = AssetRefGraph::Scan(AssetStore(root));
 		CHECK(graph.vatsScanned == 1);
@@ -501,7 +501,7 @@ TEST_CASE("A bake from files stamps its inputs and the refs scan reports them", 
 
 	SECTION("a bake sweeps with its inputs rather than blocking them")
 	{
-		saveVat(vat, root / "Meshes/rig.bvat");
+		StoreAt(root).Save(vat, "Meshes/rig.bvat");
 
 		const auto graph = AssetRefGraph::Scan(AssetStore(root));
 
@@ -511,7 +511,7 @@ TEST_CASE("A bake from files stamps its inputs and the refs scan reports them", 
 		REQUIRE(plan.derived.size() == 1);
 		CHECK(plan.derived[0] == "Meshes/rig.bvat");
 
-		const DeletionResult result = deleteAsset(plan, AssetStore(root));
+		const DeletionResult result = AssetStore(root).DeleteAsset(plan);
 		CHECK(result.status == DeletionStatus::kDeleted);
 		CHECK_FALSE(fs::exists(root / "Animations/rig.banim"));
 		CHECK_FALSE(fs::exists(root / "Meshes/rig.bvat"));
@@ -524,7 +524,7 @@ TEST_CASE("A bake from files stamps its inputs and the refs scan reports them", 
 
 	SECTION("a directory blocked only by a bake outside it is deletable")
 	{
-		saveVat(vat, root / "Meshes/rig.bvat");
+		StoreAt(root).Save(vat, "Meshes/rig.bvat");
 
 		const auto graph = AssetRefGraph::Scan(AssetStore(root));
 
@@ -536,9 +536,9 @@ TEST_CASE("A bake from files stamps its inputs and the refs scan reports them", 
 
 	SECTION("describe reads the tables alone and reports a stale input")
 	{
-		saveVat(vat, root / "Meshes/rig.bvat");
+		StoreAt(root).Save(vat, "Meshes/rig.bvat");
 		fixture.animations.stringPool.add("padding-so-the-size-moves");
-		saveAnimations(fixture.animations, root / "Animations/rig.banim");
+		StoreAt(root).Save(fixture.animations, "Animations/rig.banim");
 
 		const core::file::LooseFileSystem files(root);
 		const std::string text = describe(loadVatTables(root / "Meshes/rig.bvat"), &files);

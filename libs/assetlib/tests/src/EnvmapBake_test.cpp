@@ -1,4 +1,4 @@
-#include <assetlib/envmap_bake.h>
+#include <assetlib/envmap.h>
 #include <assetlib_structs/ImageData.h>
 
 #include <catch2/catch_approx.hpp>

@@ -1,10 +1,7 @@
-#include <assetlib/env_import.h>
 
-#include <assetlib/benv_io.h>
-#include <assetlib/benvl_io.h>
-#include <assetlib/bsky_io.h>
-#include <assetlib/env_bake.h>
-#include <assetlib/envmap_bake.h>
+#include <assetlib/AssetStore.h>
+#include <assetlib/envmap.h>
+
 #include <assetlib/image_io.h>
 #include <assetlib_structs/BEnv.h>
 #include <assetlib_structs/ImageData.h>
@@ -108,7 +105,7 @@ namespace assetlib
 	}
 
 	std::vector<std::string>
-	environmentImportTargets(const EnvImportDesc& desc)
+	AssetStore::EnvironmentImportTargets(const EnvImportDesc& desc) const
 	{
 		auto out = std::vector<std::string>();
 
@@ -132,35 +129,33 @@ namespace assetlib
 	}
 
 	EnvImportResult
-	importEnvironment(const EnvImportDesc& desc, const CancelToken& cancel)
+	AssetStore::ImportEnvironment(const EnvImportDesc& desc, const CancelToken& cancel) const
 	{
 		if (!desc.sky && !desc.lighting && !desc.environment)
-			throw std::runtime_error("assetlib::importEnvironment: nothing was selected to write");
+			throw std::runtime_error(
+				"AssetStore::ImportEnvironment: nothing was selected to write");
 
 		// A `.benv` composes what the other two produce, so on its own it would name nothing.
 		if (desc.environment && !desc.sky && !desc.lighting)
 			throw std::runtime_error(
-				"assetlib::importEnvironment: an environment composes a sky or a lighting, so one "
+				"AssetStore::ImportEnvironment: an environment composes a sky or a lighting, so "
+				"one "
 				"of "
 				"them has to be written with it");
 
-		if (!std::filesystem::is_directory(desc.dataRoot))
+		if (!std::filesystem::is_directory(GetDataRoot()))
 			throw std::runtime_error(
-				"assetlib::importEnvironment: the data root '" + desc.dataRoot.string() +
+				"AssetStore::ImportEnvironment: the data root '" + GetDataRoot().string() +
 				"' is not a directory");
 
 		if (desc.name.empty())
-			throw std::runtime_error("assetlib::importEnvironment: the asset name is empty");
+			throw std::runtime_error("AssetStore::ImportEnvironment: the asset name is empty");
 
-		createDirectories(desc.dataRoot / desc.sourceDir);
-		if (desc.sky)
-			createDirectories(desc.dataRoot / desc.skyDir);
-		if (desc.lighting)
-			createDirectories(desc.dataRoot / desc.lightingDir);
-		if (desc.environment)
-			createDirectories(desc.dataRoot / desc.environmentDir);
+		// The float intermediates are written straight to the host by writeKTX2, which makes no
+		// directory; the three containers go through the store, which makes its own.
+		createDirectories(GetDataRoot() / desc.sourceDir);
 
-		auto created = CreatedFiles(desc.dataRoot);
+		auto created = CreatedFiles(GetDataRoot());
 		auto result  = EnvImportResult();
 
 		throwIfCancelled(cancel);
@@ -203,18 +198,18 @@ namespace assetlib
 			const ImageData chain = skyChain(source, desc.skyFaceSize, skyMips, 256, desc.threads);
 
 			const std::string ref = assetRef(desc.sourceDir, desc.name, "_sky.ktx2");
-			writeSource(desc.dataRoot, created, ref, chain);
+			writeSource(GetDataRoot(), created, ref, chain);
 
 			auto bsky       = BSky();
 			bsky.name       = desc.name;
 			bsky.sky.source = ref;
 
 			throwIfCancelled(cancel);
-			bakeSky(bsky, { desc.dataRoot });
+			BakeSky(bsky);
 
 			result.sky = assetRef(desc.skyDir, desc.name, ".bsky");
 			created.WillWrite(result.sky);
-			saveSky(bsky, desc.dataRoot / result.sky);
+			Save(bsky, result.sky);
 		}
 
 		if (desc.lighting)
@@ -234,8 +229,8 @@ namespace assetlib
 			const std::string prefilterRef = assetRef(desc.sourceDir, desc.name, "_prefilter.ktx2");
 			const std::string irradianceRef =
 				assetRef(desc.sourceDir, desc.name, "_irradiance.ktx2");
-			writeSource(desc.dataRoot, created, prefilterRef, prefilter);
-			writeSource(desc.dataRoot, created, irradianceRef, irradiance);
+			writeSource(GetDataRoot(), created, prefilterRef, prefilter);
+			writeSource(GetDataRoot(), created, irradianceRef, irradiance);
 
 			auto lighting              = BEnvLighting();
 			lighting.name              = desc.name;
@@ -243,11 +238,11 @@ namespace assetlib
 			lighting.irradiance.source = irradianceRef;
 
 			throwIfCancelled(cancel);
-			bakeEnvLighting(lighting, { desc.dataRoot });
+			BakeEnvLighting(lighting);
 
 			result.lighting = assetRef(desc.lightingDir, desc.name, ".benvl");
 			created.WillWrite(result.lighting);
-			saveEnvLighting(lighting, desc.dataRoot / result.lighting);
+			Save(lighting, result.lighting);
 
 			result.exposure = lighting.exposure;
 		}
@@ -266,7 +261,7 @@ namespace assetlib
 
 			result.environment = assetRef(desc.environmentDir, desc.name, ".benv");
 			created.WillWrite(result.environment);
-			saveEnv(env, desc.dataRoot / result.environment);
+			Save(env, result.environment);
 		}
 
 		result.written = created.Created();

@@ -1,3 +1,4 @@
+#include <assetlib/pak.h>
 #include <gamelib/AssetManager.h>
 #include <gamelib/vat_freshness.h>
 
@@ -6,16 +7,10 @@
 #include "util/TestEnvironment.h"
 #include "util/TestOptions.h"
 
+#include "StoreAt.h"
 #include <assetlib/AssetStore.h>
-#include <assetlib/banim_io.h>
-#include <assetlib/bmaterial_io.h>
-#include <assetlib/bmesh_io.h>
-#include <assetlib/bskel_io.h>
-#include <assetlib/bvat_io.h>
 #include <assetlib/image_io.h>
-#include <assetlib/pak_io.h>
-#include <assetlib/pak_pack.h>
-#include <assetlib/skeleton.h>
+#include <assetlib/skinning.h>
 #include <assetlib/vat_bake.h>
 #include <assetlib_structs/Animation.h>
 #include <assetlib_structs/BMaterial.h>
@@ -251,7 +246,7 @@ TEST_CASE("A rig with no .bvat on disk is baked, loaded and drawn", "[vat][rende
 	 * A shipped mount has nowhere to put a re-bake, so the staleness question is not asked and the
 	 * `.bvat` is used as it is.
 	 *
-	 * Proving that needs an archive whose `.bvat` reads *stale*, which `packProject` will not
+	 * Proving that needs an archive whose `.bvat` reads *stale*, which `AssetStore::Pack` will not
 	 * produce -- it re-bakes a stale one as it packs. So the entries are written by hand, with the
 	 * clip set re-authored after the bake: that is an archive assembled by something other than our
 	 * packer, and the rule is what makes it draw rather than die.
@@ -265,9 +260,9 @@ TEST_CASE("A rig with no .bvat on disk is baked, loaded and drawn", "[vat][rende
 		// Re-author the clip set so its stamp no longer matches what the bake recorded. Longer, not
 		// merely rewritten: the stamp is size + whole seconds.
 		const auto banimPath = root.path / "Animations/rig.banim";
-		auto       drifted   = assetlib::loadAnimations(banimPath);
+		auto       drifted   = LoadAt<assetlib::AnimationSet>(banimPath);
 		drifted.stringPool.add("padding-so-the-size-moves");
-		assetlib::saveAnimations(drifted, banimPath);
+		SaveAt(drifted, banimPath);
 
 		{
 			const core::file::LooseFileSystem loose(root.path);
@@ -340,7 +335,7 @@ TEST_CASE("A rig with no .bvat on disk is baked, loaded and drawn", "[vat][rende
 	}
 
 	// The other half of the same rule: what a read-only mount does not carry, it cannot be made to.
-	// Better a plain sentence than `saveVat` failing on a directory that was never there.
+	// Better a plain sentence than the write failing on a directory that was never there.
 	SECTION("a .bvat missing from a read-only mount is an error, not a bake")
 	{
 		fs::remove(root.path / assetlib::vatPathFor("Meshes/rig.bmesh", "Animations/rig.banim"));
@@ -525,7 +520,7 @@ TEST_CASE("VatFreshness asks EnsureVatBaked's question without baking", "[vat]")
 	// clip-set check is what answers, not the file simply being absent.
 	WriteClips(root.path, "Animations/rig_march.banim", "march", 2.0f, 3);
 	const auto march = game::EnsureVatBaked(store, mesh, "Animations/rig_march.banim");
-	assetlib::saveVat(march, bvat);
+	SaveAt(march, bvat);
 	CHECK(game::VatFreshness(store, mesh, clips) == game::VatBakeState::kOtherClips);
 
 	// A moved input stamp: same clip set, different bytes behind it.

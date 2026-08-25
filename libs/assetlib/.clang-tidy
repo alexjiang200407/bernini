@@ -1,5 +1,5 @@
 # assetlib's free functions are camelBack, not PascalCase: `loadKTX2`, `bake`, `serialize`,
-# `deleteUnusedBakedTextures`. That is what the codec surface has always spelled, and a caller reads
+# `DeleteUnusedBakedTextures`. That is what the codec surface has always spelled, and a caller reads
 # `loadKTX2(path)` beside `load(path)` in the same expression.
 #
 # The root config said PascalCase and nothing enforced it, because `just tidy --changed` only judges

@@ -1,8 +1,7 @@
-#include <assetlib/bsky_io.h>
+#include <assetlib/codecs.h>
 #include <assetlib_structs/BEnv.h>
 #include <assetlib_structs/magic.h>
 
-#include "bake_tokens.h"
 #include "cache_io.h"
 #include "fs_util.h"
 
@@ -25,7 +24,7 @@ namespace assetlib
 	}
 
 	std::vector<std::byte>
-	serializeSky(const BSky& sky)
+	AssetCodec<BSky>::Serialize(const BSky& sky)
 	{
 		cache::Writer writer;
 		writer.Add(ChunkId::kName, std::span<const char>(sky.name));
@@ -34,14 +33,14 @@ namespace assetlib
 		// The route *is* the cache key: the source's mount key and the stamp the bake measured.
 		return writer.Finish(
 			magic::c_BSky,
-			c_BSkyBakeToken,
+			AssetCodec<BSky>::c_BakeToken,
 			SourceRef{ sky.sky.source, sky.sky.stamp, 0 });
 	}
 
 	BSky
-	deserializeSky(std::span<const std::byte> bytes)
+	AssetCodec<BSky>::Deserialize(std::span<const std::byte> bytes)
 	{
-		const cache::Reader reader(bytes, magic::c_BSky, c_BSkyBakeToken, c_What);
+		const cache::Reader reader(bytes, magic::c_BSky, AssetCodec<BSky>::c_BakeToken, c_What);
 
 		BSky       sky;
 		const auto name  = reader.Read<char>(ChunkId::kName);
@@ -53,22 +52,4 @@ namespace assetlib
 		return sky;
 	}
 
-	void
-	saveSky(const BSky& sky, const std::filesystem::path& path)
-	{
-		writeFileBytes(path, serializeSky(sky), "bsky");
-	}
-
-	BSky
-	loadSky(const std::filesystem::path& path)
-	{
-		const auto bytes = core::file::read_file_bytes(path.string());
-		return deserializeSky(bytes);
-	}
-
-	BSky
-	loadSky(const core::file::IFileSystem& fileSystem, std::string_view path)
-	{
-		return deserializeSky(fileSystem.Read(path));
-	}
 }

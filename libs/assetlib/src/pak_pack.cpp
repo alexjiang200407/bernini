@@ -1,23 +1,17 @@
 #include <assetlib/AssetStore.h>
-#include <assetlib/pak_pack.h>
+#include <assetlib/codecs.h>
+#include <assetlib/envmap.h>
+#include <assetlib/pak.h>
 
 #include <assetlib/RegenMesh.h>
 #include <assetlib/asset_refs.h>
-#include <assetlib/banim_io.h>
-#include <assetlib/benvl_io.h>
-#include <assetlib/bmaterial_io.h>
-#include <assetlib/bmesh_io.h>
-#include <assetlib/bskel_io.h>
-#include <assetlib/bsky_io.h>
-#include <assetlib/bvat_io.h>
-#include <assetlib/container_format.h>
-#include <assetlib/env_bake.h>
-#include <assetlib/pak_io.h>
 #include <assetlib/project_layout.h>
 #include <assetlib/vat_bake.h>
+#include <assetlib_structs/Animation.h>
 #include <assetlib_structs/BEnv.h>
 #include <assetlib_structs/BMaterial.h>
 #include <assetlib_structs/BVat.h>
+#include <assetlib_structs/Skeleton.h>
 
 #include <core/err/util.h>
 #include <core/file/LooseFileSystem.h>
@@ -85,25 +79,25 @@ namespace assetlib
 				{
 					if (type == AssetType::kSky)
 					{
-						BSky sky = loadSky(file);
+						BSky sky = store.Load<BSky>(store.KeyFor(file));
 						if (!isSkyBakeStale(sky, loose))
 							continue;
-						bakeSky(sky, EnvBakeDesc{ store.GetDataRoot() });
-						saveSky(sky, file);
+						store.BakeSky(sky);
+						store.Save(sky, store.KeyFor(file));
 					}
 					else
 					{
-						BEnvLighting lighting = loadEnvLighting(file);
+						BEnvLighting lighting = store.Load<BEnvLighting>(store.KeyFor(file));
 						if (!isEnvLightingBakeStale(lighting, loose))
 							continue;
-						bakeEnvLighting(lighting, EnvBakeDesc{ store.GetDataRoot() });
-						saveEnvLighting(lighting, file);
+						store.BakeEnvLighting(lighting);
+						store.Save(lighting, store.KeyFor(file));
 					}
 				}
 				catch (const std::exception& error)
 				{
 					core::throw_runtime_error(
-						"assetlib::packProject: '{}': {}",
+						"AssetStore::Pack: '{}': {}",
 						relativeKey(file, store.GetDataRoot()),
 						error.what());
 				}
@@ -135,7 +129,7 @@ namespace assetlib
 				bool fresh = false;
 				try
 				{
-					const BVat vat = loadVat(file);
+					const BVat vat = store.Load<BVat>(store.KeyFor(file));
 					fresh          = !vatIsStale(vat, loose) && !store.GeometryIsStale(vat.mesh) &&
 					                 !store.GeometryIsStale(vat.skeleton) &&
 					                 !store.GeometryIsStale(vat.animations);
@@ -146,7 +140,9 @@ namespace assetlib
 					continue;
 
 				const VatRefs refs = loadVatRefs(file);
-				saveVat(bakeVat(store, VatBakeDesc{ refs.mesh, refs.animations }), file);
+				store.Save(
+					store.BakeVat(VatBakeDesc{ refs.mesh, refs.animations }),
+					store.KeyFor(file));
 				++rebaked;
 			}
 			return rebaked;
@@ -167,16 +163,16 @@ namespace assetlib
 				RegenMesh current = store.LoadRegenMesh(key);
 				core::throw_runtime_error_if(
 					!current.unboundBindings.empty(),
-					"assetlib::packProject: '{}' binds submesh '{}', which the mesh does not "
+					"AssetStore::Pack: '{}' binds submesh '{}', which the mesh does not "
 					"have; rebind or re-export",
 					key,
 					current.unboundBindings.front());
-				return serialize(current.mesh);
+				return AssetCodec<BMesh>::Serialize(current.mesh);
 			}
 			case AssetType::kSkeleton:
-				return serializeSkeleton(store.LoadRegenSkeleton(key));
+				return AssetCodec<Skeleton>::Serialize(store.LoadRegenSkeleton(key));
 			case AssetType::kAnimation:
-				return serializeAnimations(store.LoadRegenAnimations(key));
+				return AssetCodec<AnimationSet>::Serialize(store.LoadRegenAnimations(key));
 			case AssetType::kMaterial:
 			case AssetType::kTexture:
 			case AssetType::kVat:
@@ -184,9 +180,10 @@ namespace assetlib
 			case AssetType::kEnvLighting:
 			case AssetType::kEnvironment:
 			case AssetType::kImportDocument:
+			case AssetType::kCount:
 				break;
 			}
-			core::throw_runtime_error("assetlib::packProject: '{}' is not geometry", key);
+			core::throw_runtime_error("AssetStore::Pack: '{}' is not geometry", key);
 		}
 
 		/** Each geometry key's archived bytes, computed once per pack however often asked. */
@@ -235,28 +232,28 @@ namespace assetlib
 	}
 
 	PackReport
-	packProject(const AssetStore& store, const PackDesc& desc)
+	AssetStore::Pack(const PackDesc& desc) const
 	{
 		// The walk and the rebake address the writable layer: packing reads what is on disk under
 		// the data root, not what a wider mount would also answer for.
-		const std::filesystem::path& dataRoot = store.GetDataRoot();
+		const std::filesystem::path& dataRoot = GetDataRoot();
 
 		if (!std::filesystem::is_directory(dataRoot))
 			core::throw_runtime_error(
-				"assetlib::packProject: '{}' is not a directory",
+				"AssetStore::Pack: '{}' is not a directory",
 				dataRoot.string());
 
 		PackReport report;
-		report.envsRebaked = rebakeStaleEnvs(store, filesUnder(dataRoot));
+		report.envsRebaked = rebakeStaleEnvs(*this, filesUnder(dataRoot));
 
 		const std::vector<std::filesystem::path> files = filesUnder(dataRoot);
-		report.vatsRebaked                             = rebakeStaleVats(store, files);
+		report.vatsRebaked                             = rebakeStaleVats(*this, files);
 
 		const core::file::LooseFileSystem loose(dataRoot);
 
 		// The seam's answer per geometry key, computed once however many askers -- the entry's
 		// own pack, and any `.bvat` stamping against it.
-		ArchivedGeometry archived(store);
+		ArchivedGeometry archived(*this);
 
 		PakWriter writer(desc.target);
 		for (const std::filesystem::path& file : files)
@@ -278,7 +275,7 @@ namespace assetlib
 			const std::string                          key   = relativeKey(file, dataRoot);
 			const std::optional<core::file::FileStamp> stamp = loose.Stat(key);
 			if (!stamp.has_value())
-				core::throw_runtime_error("assetlib::packProject: cannot stat '{}'", key);
+				core::throw_runtime_error("AssetStore::Pack: cannot stat '{}'", key);
 
 			// Read once, whatever the entry becomes: the verbatim payload for most of the bytes
 			// (textures above all), and the rebaked-or-not comparison for geometry.
@@ -304,7 +301,7 @@ namespace assetlib
 				// rebakeStaleVats above. A vat whose stamps already describe the archived bytes
 				// -- the ordinary pack, nothing regenerated and nothing rebound -- copies
 				// verbatim rather than paying a decode and a re-encode.
-				BVat vat = loadVat(file);
+				BVat vat = Load<BVat>(KeyFor(file));
 
 				const SourceStamp meshStamp       = archived.StampFor(normalizeRef(vat.mesh));
 				const SourceStamp skeletonStamp   = archived.StampFor(normalizeRef(vat.skeleton));
@@ -316,7 +313,7 @@ namespace assetlib
 					vat.meshStamp       = meshStamp;
 					vat.skeletonStamp   = skeletonStamp;
 					vat.animationsStamp = animationsStamp;
-					regenerated         = serializeVat(vat);
+					regenerated         = AssetCodec<BVat>::Serialize(vat);
 				}
 				break;
 			}
@@ -327,6 +324,7 @@ namespace assetlib
 			case AssetType::kEnvLighting:
 			case AssetType::kEnvironment:
 			case AssetType::kImportDocument:
+			case AssetType::kCount:
 				break;
 			}
 
@@ -340,7 +338,8 @@ namespace assetlib
 
 			// Asked while the bytes are already in hand, which is the only moment packing reads a
 			// material at all.
-			if (type == AssetType::kMaterial && drawsLoose(deserializeMaterial(bytes), loose))
+			if (type == AssetType::kMaterial &&
+			    drawsLoose(AssetCodec<BMaterial>::Deserialize(bytes), loose))
 				report.materialsDrawingLoose.push_back(key);
 
 			// The stamp describes the stored bytes -- a size the payload does not match would

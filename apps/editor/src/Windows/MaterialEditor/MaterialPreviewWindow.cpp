@@ -18,7 +18,6 @@
 #include <QUrl>
 #include <QWheelEvent>
 
-#include <assetlib/bmesh_io.h>
 #include <assetlib/mesh_tangents.h>
 #include <assetlib_structs/BMesh.h>
 #include <bgl/Camera.h>

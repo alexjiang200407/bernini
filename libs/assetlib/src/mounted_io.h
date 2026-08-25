@@ -1,21 +1,18 @@
 #pragma once
+#include <assetlib/AssetCodec.h>
 #include <assetlib/image_io.h>
 #include <core/file/IFileSystem.h>
 
 namespace assetlib
 {
-	struct AnimationSet;
-	struct BEnv;
 	struct BEnvLighting;
 	struct BMaterial;
-	struct BMesh;
 	struct BSky;
 	struct BVat;
 	struct EnvMapRoute;
 	struct ImageData;
 	struct MeshRefs;
 	struct ResolvedEnvironment;
-	struct Skeleton;
 	struct SourceStamp;
 	struct VatRefs;
 
@@ -28,39 +25,35 @@ namespace assetlib
 	 * the primitive, not the API. A `.cpp` in this library uses them freely; nothing else can, and
 	 * that is the point.
 	 *
-	 * The path-taking overloads stay public: they address a file on the host that no project owns,
-	 * which is a different question and one an `AssetStore` cannot answer.
+	 * Whole containers go through `load<T>` below; what remains named is the partial reads, which
+	 * are not codecs -- each pulls a few chunks out of a file worth megabytes and stops.
 	 */
 
-	[[nodiscard]] BMesh
-	load(const core::file::IFileSystem& fileSystem, std::string_view path);
+	/**
+	 * Any whole container, read through a mount and decoded by its codec.
+	 *
+	 * Eight named functions stood here, each of them exactly this line. They collapse because
+	 * `AssetCodec<T>` now says which deserializer a type uses, so the type is the only thing that
+	 * differed between them.
+	 *
+	 * `AssetStore::Load` is the public form and the one anything outside this library uses; this
+	 * exists for the internals that hold a mount without the writable root beside it -- the
+	 * environment resolve, and the reads a bake makes of its own inputs.
+	 *
+	 * @throws whatever `IFileSystem::Read` and the codec's deserializer throw.
+	 */
+	template <AssetCodecFor T>
+	[[nodiscard]] T
+	load(const core::file::IFileSystem& fileSystem, std::string_view path)
+	{
+		return AssetCodec<T>::Deserialize(fileSystem.Read(path));
+	}
 
 	[[nodiscard]] MeshRefs
 	loadMeshRefs(const core::file::IFileSystem& fileSystem, std::string_view path);
 
-	[[nodiscard]] Skeleton
-	loadSkeleton(const core::file::IFileSystem& fileSystem, std::string_view path);
-
-	[[nodiscard]] AnimationSet
-	loadAnimations(const core::file::IFileSystem& fileSystem, std::string_view path);
-
 	[[nodiscard]] std::string
 	loadAnimationSkeletonPath(const core::file::IFileSystem& fileSystem, std::string_view path);
-
-	[[nodiscard]] BMaterial
-	loadMaterial(const core::file::IFileSystem& fileSystem, std::string_view path);
-
-	[[nodiscard]] BEnv
-	loadEnv(const core::file::IFileSystem& fileSystem, std::string_view path);
-
-	[[nodiscard]] BSky
-	loadSky(const core::file::IFileSystem& fileSystem, std::string_view path);
-
-	[[nodiscard]] BEnvLighting
-	loadEnvLighting(const core::file::IFileSystem& fileSystem, std::string_view path);
-
-	[[nodiscard]] BVat
-	loadVat(const core::file::IFileSystem& fileSystem, std::string_view path);
 
 	[[nodiscard]] BVat
 	loadVatTables(const core::file::IFileSystem& fileSystem, std::string_view path);
@@ -106,25 +99,4 @@ namespace assetlib
 	resolveEnvironment(
 		const std::filesystem::path&   benvPath,
 		const core::file::IFileSystem& fileSystem);
-
-	/**
-	 * The mounted form of describe: each routed source stamped, so a stale bake is visible.
-	 *
-	 * @param fileSystem Null to report what the container records and stop, which is what the public
-	 *        `describe` overloads are -- one body serves both rather than two that can drift.
-	 */
-	[[nodiscard]] std::string
-	describe(const BMaterial& material, const core::file::IFileSystem* fileSystem);
-
-	[[nodiscard]] std::string
-	describe(const BSky& sky, const core::file::IFileSystem* fileSystem);
-
-	[[nodiscard]] std::string
-	describe(const BEnvLighting& lighting, const core::file::IFileSystem* fileSystem);
-
-	[[nodiscard]] std::string
-	describe(const BEnv& env, const core::file::IFileSystem* fileSystem);
-
-	[[nodiscard]] std::string
-	describe(const BVat& vat, const core::file::IFileSystem* fileSystem);
 }

@@ -3,8 +3,8 @@
 #include "util/RigFixture.h"
 #include "util/TestOptions.h"
 
+#include "StoreAt.h"
 #include <assetlib/AssetStore.h>
-#include <assetlib/banim_io.h>
 #include <assetlib_structs/Animation.h>
 #include <bgl/IGraphics.h>
 #include <catch2/matchers/catch_matchers_string.hpp>
@@ -171,10 +171,10 @@ TEST_CASE("Acquiring a rig twice reads its containers once", "[skinned][acquire]
 	{
 		assets.ReleaseGeom(first.geom);
 
-		auto clips = assetlib::loadAnimations(root.path / "Animations/rig.banim");
+		auto clips = LoadAt<assetlib::AnimationSet>(root.path / "Animations/rig.banim");
 		REQUIRE(clips.clips.size() == 1);
 		clips.clips[0].nameOffset = clips.stringPool.add("renamed");
-		assetlib::saveAnimations(clips, root.path / "Animations/rig.banim");
+		SaveAt(clips, root.path / "Animations/rig.banim");
 
 		const auto second = assets.AcquireSkinnedMesh("Meshes/rig.bmesh", "Animations/rig.banim");
 		REQUIRE(second.clips.size() == 1);

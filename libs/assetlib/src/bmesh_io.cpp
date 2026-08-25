@@ -1,4 +1,5 @@
-#include <assetlib/bmesh_io.h>
+#include <assetlib/bmesh.h>
+#include <assetlib/codecs.h>
 #include <assetlib_structs/magic.h>
 
 #include <assetlib/image_io.h>
@@ -8,7 +9,6 @@
 #include <assetlib/mesh_tangents.h>
 #include <assetlib/skinning.h>
 
-#include "bake_tokens.h"
 #include "cache_io.h"
 #include "fs_util.h"
 
@@ -68,7 +68,7 @@ namespace assetlib
 	}
 
 	std::vector<std::byte>
-	serialize(const BMesh& mesh)
+	AssetCodec<BMesh>::Serialize(const BMesh& mesh)
 	{
 		requireSkeletonIfSkinned(mesh);
 
@@ -85,13 +85,13 @@ namespace assetlib
 		writer.Add(ChunkId::kStringPool, mesh.stringPool.bytes());
 		writer.Add(ChunkId::kMaterialPaths, cache::packStrings(mesh.materials));
 		writer.Add(ChunkId::kSkeletonPath, std::span<const char>(mesh.skeleton));
-		return writer.Finish(magic::c_BMesh, c_BMeshBakeToken, mesh.source);
+		return writer.Finish(magic::c_BMesh, AssetCodec<BMesh>::c_BakeToken, mesh.source);
 	}
 
 	BMesh
-	deserialize(std::span<const std::byte> bytes)
+	AssetCodec<BMesh>::Deserialize(std::span<const std::byte> bytes)
 	{
-		const cache::Reader reader(bytes, magic::c_BMesh, c_BMeshBakeToken, c_What);
+		const cache::Reader reader(bytes, magic::c_BMesh, AssetCodec<BMesh>::c_BakeToken, c_What);
 
 		BMesh mesh;
 		mesh.source           = reader.GetSource();
@@ -112,25 +112,6 @@ namespace assetlib
 
 		requireSkeletonIfSkinned(mesh);
 		return mesh;
-	}
-
-	void
-	save(const BMesh& mesh, const std::filesystem::path& path)
-	{
-		writeFileBytes(path, serialize(mesh), "bmesh");
-	}
-
-	BMesh
-	load(const std::filesystem::path& path)
-	{
-		const auto bytes = core::file::read_file_bytes(path.string());
-		return deserialize(bytes);
-	}
-
-	BMesh
-	load(const core::file::IFileSystem& fileSystem, std::string_view path)
-	{
-		return deserialize(fileSystem.Read(path));
 	}
 
 	namespace
@@ -164,7 +145,7 @@ namespace assetlib
 			cache::readCacheChunksFromFile(
 				path,
 				magic::c_BMesh,
-				c_BMeshBakeToken,
+				AssetCodec<BMesh>::c_BakeToken,
 				c_WantedRefChunks,
 				c_What));
 	}
@@ -177,7 +158,7 @@ namespace assetlib
 				fileSystem,
 				path,
 				magic::c_BMesh,
-				c_BMeshBakeToken,
+				AssetCodec<BMesh>::c_BakeToken,
 				c_WantedRefChunks,
 				c_What));
 	}
@@ -406,4 +387,5 @@ namespace assetlib
 			}
 		}
 	}
+
 }

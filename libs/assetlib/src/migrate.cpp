@@ -1,15 +1,9 @@
+#include <assetlib/codecs.h>
 #include <assetlib/migrate.h>
 
 #include <assetlib/AssetStore.h>
 #include <assetlib/RegenMesh.h>
 #include <assetlib/asset_refs.h>
-#include <assetlib/banim_io.h>
-#include <assetlib/benv_io.h>
-#include <assetlib/benvl_io.h>
-#include <assetlib/bmaterial_io.h>
-#include <assetlib/bmesh_io.h>
-#include <assetlib/bskel_io.h>
-#include <assetlib/bsky_io.h>
 #include <assetlib_structs/Animation.h>
 #include <assetlib_structs/BEnv.h>
 #include <assetlib_structs/BMaterial.h>
@@ -50,23 +44,25 @@ namespace assetlib
 					"its import document binds submesh '{}', which the mesh does not have; "
 					"rebind or re-export",
 					current.unboundBindings.front());
-				return serialize(current.mesh);
+				return AssetCodec<BMesh>::Serialize(current.mesh);
 			}
 			case AssetType::kSkeleton:
-				return serializeSkeleton(store.LoadRegenSkeleton(key));
+				return AssetCodec<Skeleton>::Serialize(store.LoadRegenSkeleton(key));
 			case AssetType::kAnimation:
-				return serializeAnimations(store.LoadRegenAnimations(key));
+				return AssetCodec<AnimationSet>::Serialize(store.LoadRegenAnimations(key));
 			case AssetType::kMaterial:
-				return serializeMaterial(deserializeMaterial(bytes));
+				return AssetCodec<BMaterial>::Serialize(AssetCodec<BMaterial>::Deserialize(bytes));
 			case AssetType::kSky:
-				return serializeSky(deserializeSky(bytes));
+				return AssetCodec<BSky>::Serialize(AssetCodec<BSky>::Deserialize(bytes));
 			case AssetType::kEnvLighting:
-				return serializeEnvLighting(deserializeEnvLighting(bytes));
+				return AssetCodec<BEnvLighting>::Serialize(
+					AssetCodec<BEnvLighting>::Deserialize(bytes));
 			case AssetType::kEnvironment:
-				return serializeEnv(deserializeEnv(bytes));
+				return AssetCodec<BEnv>::Serialize(AssetCodec<BEnv>::Deserialize(bytes));
 			case AssetType::kTexture:
 			case AssetType::kVat:
 			case AssetType::kImportDocument:
+			case AssetType::kCount:
 				return std::nullopt;
 			}
 			return std::nullopt;
@@ -80,15 +76,10 @@ namespace assetlib
 	}
 
 	MigrateReport
-	migrateProject(const std::filesystem::path& dataRoot, bool dryRun)
+	AssetStore::Migrate(bool dryRun) const
 	{
-		core::throw_runtime_error_if(
-			!std::filesystem::is_directory(dataRoot),
-			"migrate: {} is not a directory",
-			dataRoot.string());
-
 		std::vector<std::filesystem::path> paths;
-		for (const auto& entry : std::filesystem::recursive_directory_iterator(dataRoot))
+		for (const auto& entry : std::filesystem::recursive_directory_iterator(GetDataRoot()))
 			if (entry.is_regular_file())
 				paths.push_back(entry.path());
 
@@ -108,8 +99,6 @@ namespace assetlib
 			return std::pair(rank(a), std::ref(a)) < std::pair(rank(b), std::ref(b));
 		});
 
-		const AssetStore store(dataRoot);
-
 		MigrateReport report;
 		for (const std::filesystem::path& path : paths)
 		{
@@ -121,10 +110,10 @@ namespace assetlib
 			try
 			{
 				const std::string key =
-					normalizeRef(path.lexically_relative(dataRoot).generic_string());
+					normalizeRef(path.lexically_relative(GetDataRoot()).generic_string());
 
 				const auto bytes   = core::file::read_file_bytes(path.string());
-				const auto current = resave(store, *type, key, bytes);
+				const auto current = resave(*this, *type, key, bytes);
 				if (!current)
 					continue;
 				if (*current != bytes)

@@ -78,7 +78,7 @@ descriptor types, and the lifetime/threading rules that govern them. Start here 
 **[assetlib Public API](./docs/assetlib_api.md)**
 
 The offline half: `AssetStore` and the mount-key rule, `Project`, the reference graph behind every
-deletion and rename, one `*_io.h` per container, and the bakes. Start here to *use* assetlib.
+deletion and rename, one `AssetCodec` per container, and the bakes. Start here to *use* assetlib.
 
 **[Geometry Layout](./docs/geometry_layout.md)**
 
@@ -183,9 +183,6 @@ before building the thing it describes, and delete it when that thing lands.
 
 - [Skeleton append](./docs/specs/skeleton_append.md) — appending a bone strands every clip, and the
   remap that will fix it.
-- [assetlib store and codecs](./docs/specs/assetlib_store_codecs.md) — finishing `AssetStore` so it
-  owns writes as well as reads, one codec trait per container, and why it waits on
-  `feat/migration-system-v2`.
 - [Animation compression](./docs/specs/animation_compression.md) — a 663-bone rig's clips are 60 MB
   uncompressed; why collapsing constant tracks was measured and dropped, and what to build instead.
 

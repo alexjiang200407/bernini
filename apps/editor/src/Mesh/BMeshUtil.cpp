@@ -1,6 +1,5 @@
 #include "Mesh/BMeshUtil.h"
-
-#include <assetlib/bmesh_io.h>
+#include <assetlib/bmesh.h>
 
 namespace bmesh
 {

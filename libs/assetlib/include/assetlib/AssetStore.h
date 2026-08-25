@@ -1,22 +1,40 @@
 #pragma once
+#include <assetlib/cancel.h>
+#include <assetlib/codecs.h>
 #include <core/file/IFileSystem.h>
 
 namespace assetlib
 {
-	struct AnimationSet;
-	struct BEnv;
-	struct BEnvLighting;
-	struct BMaterial;
-	struct BMesh;
 	struct BSky;
 	struct BVat;
-	struct EnvMapRoute;
+	struct DeletionPlan;
+	struct DeletionResult;
+	struct EnvImportDesc;
+	struct EnvImportResult;
 	struct ImageData;
+	struct ImportTarget;
 	struct MeshRefs;
+	struct MigrateReport;
+	struct PackDesc;
+	struct PackReport;
+	struct ReauthoredDocument;
+	struct RebakeBoundsReport;
+	struct RenamePlan;
+	struct RenameResult;
 	struct ResolvedEnvironment;
 	struct Skeleton;
 	struct SourceStamp;
+	struct TexturePruneDesc;
+	struct TexturePruneResult;
+	struct TexturePruneScan;
+	struct VatBakeDesc;
 	struct VatRefs;
+	struct BMesh;
+	struct BMaterial;
+	struct BEnvLighting;
+	struct BEnv;
+	struct AnimationSet;
+	struct EnvMapRoute;
 
 	enum class Ktx2Decode : uint32_t;
 
@@ -104,6 +122,19 @@ namespace assetlib
 		[[nodiscard]] std::filesystem::path
 		ResolveWritePath(std::string_view path) const;
 
+		/**
+		 * The mount key for a host path inside the data root -- the inverse of ResolveWritePath.
+		 *
+		 * For the few callers that legitimately hold a host path and need a key back: the pack
+		 * walks the loose tree with a directory iterator, and a rename plan names files as they sit
+		 * on disk. Everything else should be holding the key already and never make the round trip.
+		 *
+		 * @throws std::runtime_error unless `path` is inside the data root, which is the same
+		 *         boundary ResolveWritePath enforces in the other direction.
+		 */
+		[[nodiscard]] std::string
+		KeyFor(const std::filesystem::path& path) const;
+
 		/** Whether the mount answers for `path` at all. */
 		[[nodiscard]] bool
 		Exists(std::string_view path) const
@@ -111,11 +142,132 @@ namespace assetlib
 			return m_Files->Exists(path);
 		}
 
-		// --- Containers ------------------------------------------------------------------------
+		// --- Containers, by codec ----------------------------------------------------------------
 
-		/** @throws std::runtime_error if the container is absent, unreadable or malformed. */
-		[[nodiscard]] BMesh
-		LoadMesh(std::string_view path) const;
+		/**
+		 * The container at `path`, decoded by `T`'s codec.
+		 *
+		 * One template rather than a method per container: the type says which codec to use, so a
+		 * container is registered once (in its `AssetCodec` specialization) instead of once here as
+		 * well. `store.Load<BMesh>("Meshes/a.bmesh")`.
+		 *
+		 * @throws std::runtime_error if the container is absent, unreadable or malformed -- the
+		 *         codec's own `deserialize` decides which.
+		 */
+		template <AssetCodecFor T>
+		[[nodiscard]] T
+		Load(std::string_view path) const
+		{
+			return AssetCodec<T>::Deserialize(ReadBytes(path));
+		}
+
+		/**
+		 * Writes `value` to `path`, encoded by `T`'s codec.
+		 *
+		 * The write lands on the data root, as every write does -- a caller passes the same mount
+		 * key it would read by and never resolves one itself, which is the asymmetry this closes.
+		 * Directories the key names are created; a caller never makes them.
+		 *
+		 * @throws std::runtime_error if `path` escapes the data root (see ResolveWritePath), or the
+		 *         file cannot be written. Atomic: a crash mid-write leaves the previous bytes.
+		 */
+		template <AssetCodecFor T>
+		void
+		Save(const T& value, std::string_view path) const
+		{
+			// The extension without its dot is the container's name, which is what every message
+			// this library throws is prefixed with -- "bmaterial: ...", not ".bmaterial: ...".
+			WriteBytes(path, AssetCodec<T>::Serialize(value), AssetCodec<T>::c_Extension.substr(1));
+		}
+
+		// --- Bakes ---------------------------------------------------------------------------
+
+		/**
+		 * Composites `material`'s routes down to its baked triplet, in place, writing the maps into
+		 * the project's texture directory.
+		 *
+		 * The store is the data root a bake reads and writes relative to, so it is not passed one.
+		 *
+		 * @throws std::runtime_error / Cancelled as bakeMaterial.
+		 */
+		void
+		BakeMaterial(BMaterial& material, const CancelToken& cancel = {}) const;
+
+		/** BakeMaterial, writing the maps into `textureDir` instead of the project's default. */
+		void
+		BakeMaterial(
+			BMaterial&         material,
+			std::string_view   textureDir,
+			const CancelToken& cancel = {}) const;
+
+		/** @throws std::runtime_error / Cancelled as bakeSky. */
+		void
+		BakeSky(BSky& sky, const CancelToken& cancel = {}) const;
+
+		/** BakeSky, writing the map into `textureDir` instead of the project's default. */
+		void
+		BakeSky(BSky& sky, std::string_view textureDir, const CancelToken& cancel = {}) const;
+
+		/** @throws std::runtime_error / Cancelled as bakeEnvLighting. */
+		void
+		BakeEnvLighting(BEnvLighting& lighting, const CancelToken& cancel = {}) const;
+
+		/** BakeEnvLighting, writing the maps into `textureDir` instead of the project's default. */
+		void
+		BakeEnvLighting(
+			BEnvLighting&      lighting,
+			std::string_view   textureDir,
+			const CancelToken& cancel = {}) const;
+
+		/**
+		 * bakeVat over this project: loads the mesh, the skeleton it names and the clip set, bakes,
+		 * and records the three keys and their SourceStamps -- what `VatIsStale` later compares.
+		 * Writing the result is the caller's (`Save`): a `.bvat` is a derived build product, and
+		 * where it lands is the caller's convention, not this one's.
+		 *
+		 * @throws std::runtime_error if an input cannot be read, if the mesh names no skeleton, or
+		 *         for anything the in-memory `bakeVat` refuses.
+		 */
+		[[nodiscard]] BVat
+		BakeVat(const VatBakeDesc& desc) const;
+
+		// --- Import writes -----------------------------------------------------------------------
+
+		/**
+		 * Writes an import's rig, and its clips when asked, and points `mesh` at the `.bskel`.
+		 *
+		 * A joint index is a bare number into a bone array, so a mesh carrying joints while naming
+		 * no skeleton is one `Save` refuses outright; the clips are the half a user can decline.
+		 * Does nothing when `skeleton` has no bones, which is what a static mesh is.
+		 *
+		 * @throws std::runtime_error if either container cannot be written.
+		 */
+		void
+		WriteImportedRig(
+			const Skeleton&     skeleton,
+			const AnimationSet& animations,
+			BMesh&              mesh,
+			std::string_view    bskelKey,
+			std::string_view    banimKey,
+			bool                writeClips,
+			const SourceRef&    source) const;
+
+		/**
+		 * Writes clips alone, attached to a rig already in this project -- what an import with the
+		 * mesh turned off does, and how a rig whose animations the artist exported one per file
+		 * gets all of them without a copy of the geometry each time.
+		 *
+		 * @throws std::runtime_error if there are no clips or no rig, or if no skeleton in the
+		 *         project matches the one they were authored against.
+		 */
+		void
+		WriteImportedClips(
+			const Skeleton&     skeleton,
+			const AnimationSet& animations,
+			std::string_view    banimKey,
+			const SourceRef&    source) const;
+
+		// --- Containers ------------------------------------------------------------------------
 
 		/** The materials and skeleton a `.bmesh` names, read seek-only. See loadMeshRefs. */
 		[[nodiscard]] MeshRefs
@@ -157,10 +309,10 @@ namespace assetlib
 		GeometryGroupSource(std::string_view path) const;
 
 		/**
-		 * @throws std::runtime_error on what LoadMesh throws for an unreadable container, and on a
-		 *         stale entry that cannot regenerate: no recorded source, the source or its import
-		 *         document gone from the project, a re-exported source whose submesh names now
-		 *         collide -- or one that no longer carries a mesh at all.
+		 * @throws std::runtime_error on what `Load<BMesh>` throws for an unreadable container, and
+		 *         on a stale entry that cannot regenerate: no recorded source, the source or its
+		 *         import document gone from the project, a re-exported source whose submesh names
+		 *         now collide -- or one that no longer carries a mesh at all.
 		 */
 		[[nodiscard]] RegenMesh
 		LoadRegenMesh(std::string_view path) const;
@@ -208,30 +360,9 @@ namespace assetlib
 		[[nodiscard]] std::string
 		LoadRegenAnimationSkeletonPath(std::string_view path) const;
 
-		[[nodiscard]] Skeleton
-		LoadSkeleton(std::string_view path) const;
-
-		[[nodiscard]] AnimationSet
-		LoadAnimations(std::string_view path) const;
-
 		/** The skeleton a `.banim` names, without its samples. */
 		[[nodiscard]] std::string
 		LoadAnimationSkeletonPath(std::string_view path) const;
-
-		[[nodiscard]] BMaterial
-		LoadMaterial(std::string_view path) const;
-
-		[[nodiscard]] BEnv
-		LoadEnv(std::string_view path) const;
-
-		[[nodiscard]] BSky
-		LoadSky(std::string_view path) const;
-
-		[[nodiscard]] BEnvLighting
-		LoadEnvLighting(std::string_view path) const;
-
-		[[nodiscard]] BVat
-		LoadVat(std::string_view path) const;
 
 		/** Everything but the pixels. See loadVatTables. */
 		[[nodiscard]] BVat
@@ -288,18 +419,236 @@ namespace assetlib
 		[[nodiscard]] ResolvedEnvironment
 		ResolveEnvironment(const std::filesystem::path& benvPath) const;
 
+		// --- Operations over the whole project ---------------------------------------------------
+
+		/**
+		 * Deletes what `plan` names, and whatever it cascades to, after the target.
+		 *
+		 * Reports a failure rather than throwing, because a failure here is ordinary: a preview
+		 * decode holds a `.ktx2` open, and Windows refuses to unlink an open file. "Still
+		 * referenced" and "the file is in use" are different things to tell a user, which is why
+		 * they are different statuses. A directory whose removal fails part-way is reported
+		 * kFailed, with whatever came off already gone -- there is no undo, and pretending
+		 * otherwise would be worse than saying so.
+		 *
+		 * Deleting a material still leaves the baked maps it alone named; those are what
+		 * FindUnusedBakedTextures then sweeps.
+		 */
+		DeletionResult
+		DeleteAsset(const DeletionPlan& plan) const;
+
+		/**
+		 * Rewrites every referrer in `plan` and then moves the file.
+		 *
+		 * The referrers are all read and rewritten in memory before anything is written -- one that
+		 * cannot be read or parsed fails the rename while the project is still untouched -- the
+		 * files are then saved, and the rename itself comes last: it is the step most likely to be
+		 * refused (Windows will not move a file another process holds open), and by then it is the
+		 * only step left to undo. A failure anywhere writes the original bytes back over whatever
+		 * had already been saved, so kFailed means the project is as it was; that restore is
+		 * best-effort, and a machine that fails the restore too is reported with the first error
+		 * rather than a pretense of atomicity.
+		 *
+		 * @throws std::runtime_error if a referrer in `plan` is not a container that stores
+		 *         references -- a plan built by planRename never holds one, so that is a caller
+		 *         error, not weather.
+		 */
+		RenameResult
+		RenameAsset(const RenamePlan& plan) const;
+
+		/**
+		 * Every baked map under this project that nothing references.
+		 *
+		 * @throws std::runtime_error if a referrer cannot be read. An unreadable asset is fatal on
+		 *         purpose: its references would silently go unmarked, and the maps it alone keeps
+		 *         alive would be swept as garbage.
+		 */
+		[[nodiscard]] TexturePruneScan
+		FindUnusedBakedTextures(const TexturePruneDesc& desc) const;
+
+		/** The same, over the project's own texture directories. */
+		[[nodiscard]] TexturePruneScan
+		FindUnusedBakedTextures() const;
+
+		/**
+		 * Removes what a scan found. A file that has vanished since counts as deleted, not as a
+		 * failure; one that cannot be removed is collected into `failed` rather than throwing, so
+		 * one locked map does not abandon the rest of the sweep.
+		 *
+		 * Re-baking or editing a material between the scan and this call invalidates the scan --
+		 * take a fresh one.
+		 */
+		TexturePruneResult
+		DeleteUnusedBakedTextures(const TexturePruneScan& scan) const;
+
+		/**
+		 * Packs this project into the `.bpak` `desc` names.
+		 *
+		 * `desc.target` is untouched until the archive is whole: `PakWriter` streams to a temp and
+		 * renames.
+		 *
+		 * @throws std::runtime_error if an asset cannot be read, if a stale `.bvat` cannot be
+		 *         re-baked, if a geometry group cannot be served (no source to regenerate a stale
+		 *         entry from, or a binding naming a submesh the mesh does not have), or if the
+		 *         archive cannot be written.
+		 */
+		[[nodiscard]] PackReport
+		Pack(const PackDesc& desc) const;
+
+		/**
+		 * Every container in this project re-saved at what its current state says it should be:
+		 * a stale cache entry regenerated from its source, an authored document rewritten
+		 * canonically.
+		 *
+		 * @param dryRun Report what would change without writing a byte.
+		 */
+		[[nodiscard]] MigrateReport
+		Migrate(bool dryRun) const;
+
+		/**
+		 * Every `.banim` in this project given the posed culling boxes an import writes, for clip
+		 * sets cooked before the bake existed.
+		 *
+		 * @param dryRun Report what would change without writing a byte.
+		 */
+		[[nodiscard]] RebakeBoundsReport
+		RebakePosedBounds(bool dryRun) const;
+
+		/**
+		 * The `.bskel` in this project whose signature matches `skeleton`, or empty when none does.
+		 * What lets an import with the mesh turned off find the rig its clips belong to.
+		 *
+		 * @throws std::runtime_error if more than one rig matches, since which one the clips attach
+		 *         to would otherwise depend on directory order.
+		 */
+		[[nodiscard]] std::filesystem::path
+		FindMatchingSkeleton(const Skeleton& skeleton) const;
+
+		/** `meshes_src/<name>.glb` -- where an import copies its source. */
+		[[nodiscard]] std::filesystem::path
+		ImportedSourcePath(std::string_view name) const;
+
+		/** The `.bimport` beside the copied source. */
+		[[nodiscard]] std::filesystem::path
+		ImportDocumentPath(std::string_view name) const;
+
+		/**
+		 * Copies the self-contained source into `meshes_src/` and stamps it: the returned reference
+		 * -- key, content stamp, parameter hash -- is what the caller sets on every container
+		 * derived from it *before* saving them. The document itself is written afterwards by
+		 * WriteImportedDocument, once the bindings exist; the split is safe because bindings are
+		 * deliberately outside the parameter hash.
+		 *
+		 * `target.sampleRate` -- the rate clips are resampled to at import, the import's one
+		 * parameter -- is what the returned reference's parameter hash covers.
+		 *
+		 * @throws what requireSelfContainedSource throws, and std::runtime_error on a copy failure.
+		 */
+		SourceRef
+		CopyImportedSource(const std::filesystem::path& source, const ImportTarget& target) const;
+
+		/**
+		 * Writes the `.bimport` beside the copied source: the sample rate, and -- when `mesh` is
+		 * given -- the submesh-name -> material bindings the mesh carries at this moment. Null
+		 * `mesh` is a clips-only import: parameters, no bindings.
+		 *
+		 * @throws std::runtime_error on a write failure.
+		 */
+		void
+		WriteImportedDocument(const ImportTarget& target, const BMesh* mesh) const;
+
+		/**
+		 * Sets `submesh`'s binding to `material` in the import document beside `sourceKey`'s copied
+		 * source, leaving the parameters, unknown keys and every other binding as they stand. What
+		 * a rebind writes instead of the mesh file: the binding is outside the cache key, so the
+		 * mesh is neither rewritten nor staled.
+		 *
+		 * `sourceKey` is the mount key the mesh's header carries (`BMesh::source.key`); the
+		 * document path is derived here, so no caller composes it.
+		 *
+		 * @throws std::runtime_error if `sourceKey` is empty, the document is absent or malformed,
+		 *         or the write fails.
+		 */
+		void
+		RebindSubmeshInDocument(
+			std::string_view sourceKey,
+			std::string_view submesh,
+			std::string_view material) const;
+
+		/**
+		 * Rewrites every import document's bindings from its mesh's current state, parameters and
+		 * unknown keys preserved -- the one-time adoption pass that makes the documents
+		 * authoritative. Until it runs, a rebind saved into a `.bmesh` before documents existed is
+		 * recorded nowhere else; after it, the document is what a load applies, so running this
+		 * again later would overwrite document-only rebinds with stale mesh state.
+		 *
+		 * A mesh that will not load, a source claimed by two meshes, or a recorded source whose
+		 * document is missing is reported per document and never guessed at.
+		 */
+		[[nodiscard]] std::vector<ReauthoredDocument>
+		ReauthorImportDocuments() const;
+
+		/**
+		 * Imports `desc.source` into this project as a `.bsky`, a `.benvl` and the `.benv` composing
+		 * them, writing the float intermediates into `textures_src/` as the routed sources and
+		 * baking each into `Textures/`.
+		 *
+		 * **Rolls back on failure.** A cancelled or failed import removes the files it created, so a
+		 * half-written environment is never left behind. It removes only what it *created*: a file
+		 * that was already there is one this import overwrote rather than made.
+		 *
+		 * **Baked maps are deliberately not rolled back.** They are content-addressed and shared, so
+		 * the map this import wrote may be the same file another environment already names. An
+		 * orphan left by a failed import is what FindUnusedBakedTextures sweeps.
+		 *
+		 * @param cancel Polled between the projection, each convolution and each bake.
+		 * @throws std::runtime_error if nothing is selected, or the source cannot be read.
+		 * @throws Cancelled if `cancel` is signalled.
+		 */
+		[[nodiscard]] EnvImportResult
+		ImportEnvironment(const EnvImportDesc& desc, const CancelToken& cancel = {}) const;
+
+		/**
+		 * Every file `desc` would write, data-root relative, without writing any of them -- for a
+		 * caller that must decide *before* importing whether it would land on something already
+		 * there. The baked maps are not included: they are content-addressed, so a collision with
+		 * one is two imports agreeing on content rather than one destroying the other.
+		 */
+		[[nodiscard]] std::vector<std::string>
+		EnvironmentImportTargets(const EnvImportDesc& desc) const;
+
 		// --- Describe --------------------------------------------------------------------------
 
 		/**
 		 * What a container holds, as text for a person, with every routed source stat'd through the
 		 * mount and compared against the stamp its bake recorded -- so a stale bake is visible.
 		 *
-		 * The free `assetlib::describe` reports what a container records and stops there. This is
-		 * the form that can also say whether what it records is still true, which needs a project
-		 * to check against.
+		 * One overload per container and no other door: rendering one is `src/asset_describe.h`,
+		 * which is internal, because the useful question about a container is whether what it
+		 * records is still true and only a project can answer that. The three that route nothing
+		 * to stat -- a mesh, a rig, a clip set -- still come through here, so a caller never has
+		 * to know which kind it is holding.
+		 *
+		 * The text is for a person, not a parser: it is not stable across versions and nothing
+		 * reads it back.
 		 */
 		[[nodiscard]] std::string
 		Describe(const BMaterial& material) const;
+
+		/** @param verbose False lists a summary and the material table rather than every submesh. */
+		[[nodiscard]] std::string
+		Describe(const BMesh& mesh, bool verbose = true) const;
+
+		[[nodiscard]] std::string
+		Describe(const Skeleton& skeleton) const;
+
+		/**
+		 * @param skeleton The rig the set names, to have its bone names printed and its signature
+		 *        checked -- a mismatch is the failure this format is hardest to see by eye. Null
+		 *        prints joint indices bare.
+		 */
+		[[nodiscard]] std::string
+		Describe(const AnimationSet& animations, const Skeleton* skeleton = nullptr) const;
 
 		[[nodiscard]] std::string
 		Describe(const BSky& sky) const;
@@ -316,6 +665,20 @@ namespace assetlib
 		Describe(const BVat& vat) const;
 
 	private:
+		/**
+		 * The bytes at `path`, and the bytes of `path` written atomically. What Load and Save are
+		 * built from -- the templates stay in the header and the mount, the write primitive and the
+		 * error messages stay out of it.
+		 *
+		 * @param what Names the container in any message thrown -- the codec passes its extension.
+		 */
+		[[nodiscard]] std::vector<std::byte>
+		ReadBytes(std::string_view path) const;
+
+		void
+		WriteBytes(std::string_view path, std::span<const std::byte> bytes, std::string_view what)
+			const;
+
 		std::filesystem::path                          m_DataRoot;
 		std::shared_ptr<const core::file::IFileSystem> m_Files;
 	};

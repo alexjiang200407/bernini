@@ -1,5 +1,5 @@
-#include <assetlib/bmaterial_io.h>
-#include <assetlib/pak_io.h>
+#include <assetlib/container_info.h>
+#include <assetlib/pak.h>
 #include <assetlib_structs/BMaterial.h>
 #include <core/file/LooseFileSystem.h>
 
@@ -106,12 +106,13 @@ TEST_CASE("a material's verdict is the same from a directory and from an archive
 	{
 		Write(scratch.path / "textures_src/skin.ktx2", "some source bytes");
 		Write(scratch.path / "Textures/skin_baked.ktx2", "baked bytes");
-		saveMaterial(MakeBakedMaterial(scratch.path), scratch.path / "Materials/skin.bmaterial");
+		SaveAt(MakeBakedMaterial(scratch.path), scratch.path / "Materials/skin.bmaterial");
 		Pack(scratch.path);
 
 		const core::file::LooseFileSystem loose(scratch.path);
 		const PakFile                     pak(scratch.path / "Data.bpak");
-		const BMaterial material = loadMaterial(scratch.path / "Materials/skin.bmaterial");
+		const BMaterial                   material =
+			StoreAt(scratch.path).Load<BMaterial>("Materials/skin.bmaterial");
 
 		CHECK_FALSE(bakeIsStale(material, loose));
 		CHECK_FALSE(bakeIsStale(material, pak));
@@ -126,7 +127,7 @@ TEST_CASE("a material's verdict is the same from a directory and from an archive
 		BMaterial material;
 		material.name          = "skin";
 		material.pbr.routes[0] = { "textures_src/skin.ktx2", 0 };  // stamp left zeroed
-		saveMaterial(material, scratch.path / "Materials/skin.bmaterial");
+		StoreAt(scratch.path).Save(material, "Materials/skin.bmaterial");
 		Pack(scratch.path);
 
 		const core::file::LooseFileSystem loose(scratch.path);
@@ -156,7 +157,7 @@ TEST_CASE("editing a source after packing moves the loose verdict alone", "[stal
 	Write(scratch.path / "Textures/skin_baked.ktx2", "baked bytes");
 
 	const BMaterial material = MakeBakedMaterial(scratch.path);
-	saveMaterial(material, scratch.path / "Materials/skin.bmaterial");
+	StoreAt(scratch.path).Save(material, "Materials/skin.bmaterial");
 	Pack(scratch.path);
 
 	const core::file::LooseFileSystem loose(scratch.path);

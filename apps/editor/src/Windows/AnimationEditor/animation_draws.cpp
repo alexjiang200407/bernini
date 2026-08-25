@@ -1,8 +1,7 @@
 #include "animation_draws.h"
+#include <assetlib/bmesh.h>
 
 #include <QtGlobal>
-
-#include <assetlib/bmesh_io.h>
 
 namespace editor
 {
@@ -45,7 +44,7 @@ namespace editor
 
 			try
 			{
-				if (store.DrawsLoose(store.LoadMaterial(relPath)))
+				if (store.DrawsLoose(store.Load<assetlib::BMaterial>(relPath)))
 					loose.push_back(relPath);
 			}
 			catch (const std::exception& e)

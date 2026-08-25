@@ -1,12 +1,12 @@
 #include <assetlib/AssetStore.h>
 #include <assetlib/asset_refs.h>
-#include <assetlib/pak_io.h>
-#include <assetlib/pak_pack.h>
+#include <assetlib/pak.h>
 #include <assetlib/texture_prune.h>
 #include <core/file/LayeredFileSystem.h>
 #include <core/file/LooseFileSystem.h>
 
 #include "CountingFileSystem.h"
+#include "MountAt.h"
 #include "RefsSandbox.h"
 #include "ref_paths.h"
 
@@ -30,7 +30,7 @@ namespace
 	void
 	Pack(const DataRoot& root)
 	{
-		static_cast<void>(packProject(AssetStore(root.path), PackDesc{ root.path / "Data.bpak" }));
+		static_cast<void>(AssetStore(root.path).Pack(PackDesc{ root.path / "Data.bpak" }));
 	}
 
 	bool
@@ -161,7 +161,7 @@ TEST_CASE("deleting an asset that only the archive holds is refused", "[refseam]
 	const DeletionPlan  plan  = planDeletion(graph, "Materials/skin.bmaterial");
 	REQUIRE(plan.Allowed());
 
-	const DeletionResult result = deleteAsset(plan, store);
+	const DeletionResult result = store.DeleteAsset(plan);
 	CHECK(result.status == DeletionStatus::kFailed);
 }
 
@@ -188,7 +188,7 @@ TEST_CASE("deleting a directory the archive alone holds is refused", "[refseam]"
 	REQUIRE(plan.IsDirectory());
 	REQUIRE(plan.contents == std::vector<std::string>{ "Materials/kirk/Body.bmaterial" });
 
-	CHECK(deleteAsset(plan, store).status == DeletionStatus::kFailed);
+	CHECK(store.DeleteAsset(plan).status == DeletionStatus::kFailed);
 }
 
 // The overlay the editor writes: a packed asset and an edited loose copy of it are one asset, not
@@ -237,7 +237,7 @@ TEST_CASE("a prune over a mount union proposes only what it could delete", "[ref
 		// The material is deleted from the loose tree; only the archive still names its triplet.
 		fs::remove(root.path / "Materials/packed.bmaterial");
 
-		const TexturePruneScan scan = findUnusedBakedTextures(Overlaid(root));
+		const TexturePruneScan scan = Overlaid(root).FindUnusedBakedTextures();
 
 		// The archive still names it, so it is live however the loose tree looks.
 		CHECK_FALSE(Proposes(scan, packedMaterial.pbr.baseColorTexture));
@@ -252,7 +252,7 @@ TEST_CASE("a prune over a mount union proposes only what it could delete", "[ref
 	{
 		fs::remove(root.path / "Materials/packed.bmaterial");
 
-		const TexturePruneScan scan = findUnusedBakedTextures(AssetStore(root.path));
+		const TexturePruneScan scan = AssetStore(root.path).FindUnusedBakedTextures();
 
 		CHECK(Proposes(scan, packedMaterial.pbr.baseColorTexture));
 	}
@@ -272,7 +272,7 @@ TEST_CASE("scanning a project reads references and not geometry", "[refseam]")
 	BMesh heavy = MakeMesh({ "Materials/skin.bmaterial" });
 	heavy.vertexData.resize(512u * 1024u, std::byte{ 0x7 });
 	heavy.indexData.resize(128u * 1024u, std::byte{ 0x3 });
-	save(heavy, root.path / "Meshes/heavy.bmesh");
+	StoreAt(root.path).Save(heavy, "Meshes/heavy.bmesh");
 
 	const uint64_t meshBytes = std::filesystem::file_size(root.path / "Meshes/heavy.bmesh");
 	REQUIRE(meshBytes > 512u * 1024u);

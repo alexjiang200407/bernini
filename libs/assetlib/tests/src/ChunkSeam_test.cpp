@@ -1,13 +1,14 @@
-#include <assetlib/banim_io.h>
-#include <assetlib/bmesh_io.h>
-#include <assetlib/bskel_io.h>
-#include <assetlib/pak_io.h>
+#include <assetlib/bmesh.h>
+#include <assetlib/codecs.h>
+#include <assetlib/pak.h>
+#include <assetlib/skinning.h>
 #include <assetlib_structs/Animation.h>
 #include <assetlib_structs/BMesh.h>
 #include <assetlib_structs/Skeleton.h>
 #include <core/file/LooseFileSystem.h>
 
 #include "CountingFileSystem.h"
+#include "MountAt.h"
 #include "mounted_io.h"
 
 using namespace assetlib;
@@ -113,9 +114,9 @@ namespace
 	void
 	Stage(const fs::path& root)
 	{
-		save(MakeMesh(), root / "Meshes/kirk.bmesh");
-		saveSkeleton(MakeSkeleton(), root / "Skeletons/rig.bskel");
-		saveAnimations(MakeAnimations(), root / "Animations/idle.banim");
+		SaveAt(MakeMesh(), root / "Meshes/kirk.bmesh");
+		SaveAt(MakeSkeleton(), root / "Skeletons/rig.bskel");
+		SaveAt(MakeAnimations(), root / "Animations/idle.banim");
 
 		const core::file::LooseFileSystem loose(root);
 
@@ -136,13 +137,13 @@ TEST_CASE("a chunked container loads the same from a directory and from an archi
 
 	SECTION(".bmesh")
 	{
-		const BMesh direct = load(scratch.path / "Meshes/kirk.bmesh");
+		const BMesh direct = StoreAt(scratch.path).Load<BMesh>("Meshes/kirk.bmesh");
 
 		for (const core::file::IFileSystem* mount :
 		     { static_cast<const core::file::IFileSystem*>(&loose),
 		       static_cast<const core::file::IFileSystem*>(&pak) })
 		{
-			const BMesh mounted = load(*mount, "Meshes/kirk.bmesh");
+			const BMesh mounted = load<BMesh>(*mount, "Meshes/kirk.bmesh");
 
 			CHECK(mounted.vertexData == direct.vertexData);
 			CHECK(mounted.indexData == direct.indexData);
@@ -154,7 +155,7 @@ TEST_CASE("a chunked container loads the same from a directory and from an archi
 			CHECK(mounted.submeshes.size() == direct.submeshes.size());
 
 			// The strongest form of "identical": re-serializing both gives the same bytes.
-			CHECK(serialize(mounted) == serialize(direct));
+			CHECK(AssetCodec<BMesh>::Serialize(mounted) == AssetCodec<BMesh>::Serialize(direct));
 		}
 	}
 
@@ -169,26 +170,28 @@ TEST_CASE("a chunked container loads the same from a directory and from an archi
 
 	SECTION(".bskel")
 	{
-		const Skeleton direct = loadSkeleton(scratch.path / "Skeletons/rig.bskel");
+		const Skeleton direct = StoreAt(scratch.path).Load<Skeleton>("Skeletons/rig.bskel");
 
 		CHECK(
-			serializeSkeleton(loadSkeleton(loose, "Skeletons/rig.bskel")) ==
-			serializeSkeleton(direct));
+			AssetCodec<Skeleton>::Serialize(load<Skeleton>(loose, "Skeletons/rig.bskel")) ==
+			AssetCodec<Skeleton>::Serialize(direct));
 		CHECK(
-			serializeSkeleton(loadSkeleton(pak, "Skeletons/rig.bskel")) ==
-			serializeSkeleton(direct));
+			AssetCodec<Skeleton>::Serialize(load<Skeleton>(pak, "Skeletons/rig.bskel")) ==
+			AssetCodec<Skeleton>::Serialize(direct));
 	}
 
 	SECTION(".banim")
 	{
-		const AnimationSet direct = loadAnimations(scratch.path / "Animations/idle.banim");
+		const AnimationSet direct =
+			StoreAt(scratch.path).Load<AnimationSet>("Animations/idle.banim");
 
 		CHECK(
-			serializeAnimations(loadAnimations(loose, "Animations/idle.banim")) ==
-			serializeAnimations(direct));
+			AssetCodec<AnimationSet>::Serialize(
+				load<AnimationSet>(loose, "Animations/idle.banim")) ==
+			AssetCodec<AnimationSet>::Serialize(direct));
 		CHECK(
-			serializeAnimations(loadAnimations(pak, "Animations/idle.banim")) ==
-			serializeAnimations(direct));
+			AssetCodec<AnimationSet>::Serialize(load<AnimationSet>(pak, "Animations/idle.banim")) ==
+			AssetCodec<AnimationSet>::Serialize(direct));
 
 		CHECK(loadAnimationSkeletonPath(loose, "Animations/idle.banim") == direct.skeleton);
 		CHECK(loadAnimationSkeletonPath(pak, "Animations/idle.banim") == direct.skeleton);
@@ -235,7 +238,7 @@ TEST_CASE("a reference read stays a ranged read through the seam", "[chunkseam]"
 	SECTION("a full load does read the whole container, which is the contrast")
 	{
 		CountingFileSystem counting(pak);
-		(void)load(counting, "Meshes/kirk.bmesh");
+		(void)load<BMesh>(counting, "Meshes/kirk.bmesh");
 
 		CHECK(counting.bytesRead == meshSize);
 		CHECK(counting.reads == 1u);

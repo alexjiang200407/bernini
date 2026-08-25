@@ -7,11 +7,10 @@
 #include "util/RigFixture.h"
 #include "util/TestOptions.h"
 
+#include "StoreAt.h"
 #include <assetlib/AssetStore.h>
 #include <assetlib/asset_import.h>
-#include <assetlib/banim_io.h>
 #include <assetlib/bmesh_gltf.h>
-#include <assetlib/bmesh_io.h>
 #include <assetlib/mesh_tangents.h>
 #include <assetlib/project_layout.h>
 #include <assetlib/vat_bake.h>
@@ -67,7 +66,7 @@ TEST_CASE("a stale clip set acquires regenerated, the disk untouched", "[regen][
 	const auto stale = core::file::read_file_bytes(banim.string());
 
 	// The plain load refuses the file, so the acquire succeeding below is the seam at work.
-	CHECK_THROWS(assetlib::loadAnimations(banim));
+	CHECK_THROWS(LoadAt<assetlib::AnimationSet>(banim));
 
 	auto gfx = bgl::CreateGraphics(HeadlessOptions());
 	REQUIRE(gfx != nullptr);

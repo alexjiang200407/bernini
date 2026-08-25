@@ -1,7 +1,4 @@
-#include <assetlib/benv_io.h>
-#include <assetlib/benvl_io.h>
-#include <assetlib/bsky_io.h>
-#include <assetlib/env_resolve.h>
+#include <assetlib/envmap.h>
 #include <assetlib/image_io.h>
 #include <assetlib_structs/BEnv.h>
 #include <assetlib_structs/ImageData.h>
@@ -78,17 +75,17 @@ namespace
 		BSky sky;
 		sky.name      = "set";
 		sky.sky.baked = "sky.ktx2";
-		saveSky(sky, root.path / "set.bsky");
+		StoreAt(root.path).Save(sky, "set.bsky");
 
 		BEnvLighting lighting;
 		lighting.name             = "set";
 		lighting.prefilter.baked  = "pre.ktx2";
 		lighting.irradiance.baked = "irr.ktx2";
 		lighting.exposure         = 1.375f;
-		saveEnvLighting(lighting, root.path / "set.benvl");
+		StoreAt(root.path).Save(lighting, "set.benvl");
 
 		const auto envPath = root.path / "set.benv";
-		saveEnv(
+		SaveAt(
 			BEnv{ .name         = "set",
 		          .sky          = "set.bsky",
 		          .lighting     = "set.benvl",
@@ -124,7 +121,7 @@ TEST_CASE("resolving follows only what the .benv references", "[benv][resolve]")
 
 	SECTION("an empty .benv resolves to an empty environment")
 	{
-		saveEnv(BEnv{ .name = "none" }, root.path / "none.benv");
+		StoreAt(root.path).Save(BEnv{ .name = "none" }, "none.benv");
 		const ResolvedEnvironment resolved =
 			resolveEnvironment(root.path / "none.benv", MountAt(root.path));
 		CHECK(resolved.maps.skybox.pixels.size() == 0);
@@ -145,8 +142,8 @@ TEST_CASE("resolving follows only what the .benv references", "[benv][resolve]")
 		BSky sky;
 		sky.name       = "raw";
 		sky.sky.source = "raw_src.ktx2";
-		saveSky(sky, root.path / "raw.bsky");
-		saveEnv(BEnv{ .name = "raw", .sky = "raw.bsky" }, root.path / "raw.benv");
+		StoreAt(root.path).Save(sky, "raw.bsky");
+		SaveAt(BEnv{ .name = "raw", .sky = "raw.bsky" }, root.path / "raw.benv");
 
 		const ResolvedEnvironment resolved =
 			resolveEnvironment(root.path / "raw.benv", MountAt(root.path));
@@ -158,8 +155,8 @@ TEST_CASE("resolving follows only what the .benv references", "[benv][resolve]")
 		BSky sky;
 		sky.name       = "raw";
 		sky.sky.source = "textures_src/raw.ktx2";
-		saveSky(sky, root.path / "raw.bsky");
-		saveEnv(BEnv{ .name = "raw", .sky = "raw.bsky" }, root.path / "raw.benv");
+		StoreAt(root.path).Save(sky, "raw.bsky");
+		SaveAt(BEnv{ .name = "raw", .sky = "raw.bsky" }, root.path / "raw.benv");
 
 		CHECK_THROWS_WITH(
 			resolveEnvironment(root.path / "raw.benv", MountAt(root.path)),
@@ -168,7 +165,7 @@ TEST_CASE("resolving follows only what the .benv references", "[benv][resolve]")
 
 	SECTION("a dangling reference throws")
 	{
-		saveEnv(BEnv{ .name = "gone", .sky = "nowhere.bsky" }, root.path / "gone.benv");
+		SaveAt(BEnv{ .name = "gone", .sky = "nowhere.bsky" }, root.path / "gone.benv");
 		CHECK_THROWS_AS(
 			resolveEnvironment(root.path / "gone.benv", MountAt(root.path)),
 			std::runtime_error);

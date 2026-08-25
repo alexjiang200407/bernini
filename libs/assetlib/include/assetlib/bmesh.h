@@ -6,45 +6,6 @@ namespace assetlib
 {
 	struct BMesh;
 
-	/**
-	 * Serializes the geometry, hierarchy, material paths and skeleton path of `mesh` into the versioned
-	 * container.
-	 *
-	 * @throws std::runtime_error if `mesh` carries joint indices but names no skeleton -- see isSkinned.
-	 *         Refused here rather than written, because nothing that reads the file afterwards can tell
-	 *         a joint index that resolves to nothing from one that does not.
-	 */
-	[[nodiscard]] std::vector<std::byte>
-	serialize(const BMesh& mesh);
-
-	/**
-	 * Reconstructs a BMesh from a container byte stream.
-	 *
-	 * @throws std::runtime_error on bad magic, a cache header this build does not read, a bake
-	 *         token this build did not write, or a truncated / malformed stream, or a
-	 *         mesh that carries joints and names no skeleton.
-	 */
-	[[nodiscard]] BMesh
-	deserialize(std::span<const std::byte> bytes);
-
-	/**
-	 * Writes `mesh` to `path` as a `.bmesh` container. Only the mesh itself is written; the textures
-	 * and materials it references are separate files (see writeTextures).
-	 *
-	 * @throws std::runtime_error if the file cannot be written, naming the OS's reason (an existing file
-	 *         that is read-only or held open by another process, a missing parent directory, ...).
-	 */
-	void
-	save(const BMesh& mesh, const std::filesystem::path& path);
-
-	/**
-	 * Loads a `.bmesh` container previously written by save.
-	 *
-	 * @throws std::runtime_error if the file cannot be read or is malformed.
-	 */
-	[[nodiscard]] BMesh
-	load(const std::filesystem::path& path);
-
 	/** Every asset a `.bmesh` names. See loadMeshRefs. */
 	struct MeshRefs
 	{
@@ -61,7 +22,7 @@ namespace assetlib
 	 * What `path` references, read without deserializing its geometry: the header, the chunk table and
 	 * the two reference chunks alone. Those are a few hundred bytes in a file of many megabytes, so a
 	 * caller surveying every mesh in a project -- which is what a reference scan does -- must come
-	 * through here rather than load().
+	 * through here rather than `store.Load<BMesh>`.
 	 *
 	 * @throws std::runtime_error if the file cannot be read or is malformed.
 	 */
@@ -176,4 +137,5 @@ namespace assetlib
 	 */
 	void
 	writeObj(const BMesh& mesh, const std::filesystem::path& path, bool fromMeshlets = true);
+
 }

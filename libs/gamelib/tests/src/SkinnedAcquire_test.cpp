@@ -4,9 +4,6 @@
 #include "util/TestOptions.h"
 
 #include <assetlib/AssetStore.h>
-#include <assetlib/banim_io.h>
-#include <assetlib/bskel_io.h>
-#include <assetlib/skeleton.h>
 #include <assetlib/skinning.h>
 #include <assetlib_structs/Animation.h>
 #include <assetlib_structs/Bounds.h>
@@ -36,12 +33,13 @@ namespace
 	void
 	StaleTheClips(const std::filesystem::path& dataRoot)
 	{
-		auto animations = assetlib::loadAnimations(dataRoot / "Animations/rig.banim");
+		auto animations =
+			assetlib::AssetStore(dataRoot).Load<assetlib::AnimationSet>("Animations/rig.banim");
 
 		// What a reordered rig looks like from the clips' side: same bone count, different identity.
 		animations.skeletonSignature ^= 0x9E3779B97F4A7C15ull;
 
-		assetlib::saveAnimations(animations, dataRoot / "Animations/rig.banim");
+		assetlib::AssetStore(dataRoot).Save(animations, "Animations/rig.banim");
 	}
 }
 
@@ -221,16 +219,16 @@ TEST_CASE(
 	// refuses. An acquire that throws on it can only have read the bake; one that measures gets
 	// the valid box the walk always produces, and stands.
 	const auto store    = assetlib::AssetStore(root.path);
-	const auto mesh     = store.LoadMesh("Meshes/rig.bmesh");
-	const auto skeleton = store.LoadSkeleton("Skeletons/rig.bskel");
+	const auto mesh     = store.Load<assetlib::BMesh>("Meshes/rig.bmesh");
+	const auto skeleton = store.Load<assetlib::Skeleton>("Skeletons/rig.bskel");
 
-	auto animations = store.LoadAnimations("Animations/rig.banim");
+	auto animations = store.Load<assetlib::AnimationSet>("Animations/rig.banim");
 	animations.posedBoxes.push_back(
 		assetlib::PosedBox{ assetlib::posedBoundsSignature(mesh, skeleton),
 	                        glm::vec3(1.0f, -1.0f, -1.0f),
 	                        glm::vec3(-1.0f, 1.0f, 1.0f),
 	                        0 });
-	assetlib::saveAnimations(animations, root.path / "Animations/rig.banim");
+	assetlib::AssetStore(root.path).Save(animations, "Animations/rig.banim");
 
 	auto gfx = bgl::CreateGraphics(HeadlessOptions());
 	REQUIRE(gfx != nullptr);

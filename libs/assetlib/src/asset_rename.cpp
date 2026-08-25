@@ -1,15 +1,10 @@
 #include <assetlib/AssetStore.h>
 #include <assetlib/asset_refs.h>
+#include <assetlib/codecs.h>
+#include <assetlib/container_info.h>
 #include <assetlib/import_document.h>
 #include <core/err/util.h>
 
-#include <assetlib/banim_io.h>
-#include <assetlib/benv_io.h>
-#include <assetlib/benvl_io.h>
-#include <assetlib/bmaterial_io.h>
-#include <assetlib/bmesh_io.h>
-#include <assetlib/bsky_io.h>
-#include <assetlib/bvat_io.h>
 #include <assetlib/vat_bake.h>
 #include <assetlib_structs/Animation.h>
 #include <assetlib_structs/BEnv.h>
@@ -56,17 +51,17 @@ namespace assetlib
 			{
 			case AssetType::kMesh:
 			{
-				BMesh mesh = deserialize(bytes);
+				BMesh mesh = AssetCodec<BMesh>::Deserialize(bytes);
 				for (std::string& material : mesh.materials) material = mapTarget(plan, material);
 				mesh.skeleton = mapTarget(plan, mesh.skeleton);
-				return serialize(mesh);
+				return AssetCodec<BMesh>::Serialize(mesh);
 			}
 
 			case AssetType::kAnimation:
 			{
-				AnimationSet clips = deserializeAnimations(bytes);
+				AnimationSet clips = AssetCodec<AnimationSet>::Deserialize(bytes);
 				clips.skeleton     = mapTarget(plan, clips.skeleton);
-				return serializeAnimations(clips);
+				return AssetCodec<AnimationSet>::Serialize(clips);
 			}
 
 			case AssetType::kVat:
@@ -76,64 +71,62 @@ namespace assetlib
 				// `.banim`, so their contents, and their stamps, do move. renameAsset then puts the
 				// file under the name vatPathFor derives from these rewritten inputs, or the runtime
 				// would never look for it.
-				BVat vat       = deserializeVat(bytes);
+				BVat vat       = AssetCodec<BVat>::Deserialize(bytes);
 				vat.mesh       = mapTarget(plan, vat.mesh);
 				vat.skeleton   = mapTarget(plan, vat.skeleton);
 				vat.animations = mapTarget(plan, vat.animations);
-				return serializeVat(vat);
+				return AssetCodec<BVat>::Serialize(vat);
 			}
 
 			case AssetType::kMaterial:
 			{
-				BMaterial material            = deserializeMaterial(bytes);
+				BMaterial material            = AssetCodec<BMaterial>::Deserialize(bytes);
 				material.pbr.baseColorTexture = mapTarget(plan, material.pbr.baseColorTexture);
 				material.pbr.normalTexture    = mapTarget(plan, material.pbr.normalTexture);
 				material.pbr.ormTexture       = mapTarget(plan, material.pbr.ormTexture);
 				for (ChannelRoute& route : material.pbr.routes)
 					route.texture = mapTarget(plan, route.texture);
-				return serializeMaterial(material);
+				return AssetCodec<BMaterial>::Serialize(material);
 			}
 
 			case AssetType::kSky:
 			{
-				BSky sky       = deserializeSky(bytes);
+				BSky sky       = AssetCodec<BSky>::Deserialize(bytes);
 				sky.sky.source = mapTarget(plan, sky.sky.source);
 				sky.sky.baked  = mapTarget(plan, sky.sky.baked);
-				return serializeSky(sky);
+				return AssetCodec<BSky>::Serialize(sky);
 			}
 
 			case AssetType::kEnvLighting:
 			{
-				BEnvLighting lighting = deserializeEnvLighting(bytes);
+				BEnvLighting lighting = AssetCodec<BEnvLighting>::Deserialize(bytes);
 				for (EnvMapRoute* route : { &lighting.prefilter, &lighting.irradiance })
 				{
 					route->source = mapTarget(plan, route->source);
 					route->baked  = mapTarget(plan, route->baked);
 				}
-				return serializeEnvLighting(lighting);
+				return AssetCodec<BEnvLighting>::Serialize(lighting);
 			}
 
 			case AssetType::kEnvironment:
 			{
-				BEnv env     = deserializeEnv(bytes);
+				BEnv env     = AssetCodec<BEnv>::Deserialize(bytes);
 				env.sky      = mapTarget(plan, env.sky);
 				env.lighting = mapTarget(plan, env.lighting);
-				return serializeEnv(env);
+				return AssetCodec<BEnv>::Serialize(env);
 			}
 
 			case AssetType::kImportDocument:
 			{
-				ImportDocument document = deserializeImportDocument(
-					std::string_view(reinterpret_cast<const char*>(bytes.data()), bytes.size()));
+				ImportDocument document = AssetCodec<ImportDocument>::Deserialize(bytes);
 				for (MaterialBinding& binding : document.bindings)
 					binding.material = mapTarget(plan, binding.material);
-				const std::string text = serializeImportDocument(document);
-				const auto*       data = reinterpret_cast<const std::byte*>(text.data());
-				return std::vector<std::byte>(data, data + text.size());
+				return AssetCodec<ImportDocument>::Serialize(document);
 			}
 
 			case AssetType::kTexture:
 			case AssetType::kSkeleton:
+			case AssetType::kCount:
 				break;
 			}
 
@@ -213,10 +206,10 @@ namespace assetlib
 	}
 
 	RenameResult
-	renameAsset(const RenamePlan& plan, const AssetStore& store)
+	AssetStore::RenameAsset(const RenamePlan& plan) const
 	{
-		const std::filesystem::path fromPath = store.GetDataRoot() / plan.from;
-		const std::filesystem::path toPath   = store.GetDataRoot() / plan.to;
+		const std::filesystem::path fromPath = GetDataRoot() / plan.from;
+		const std::filesystem::path toPath   = GetDataRoot() / plan.to;
 
 		// Unlike a deletion, a rename cannot shrug at a file that has vanished since the plan: there is
 		// nothing to move, and rewriting the referrers anyway would break every one of them.
@@ -245,7 +238,7 @@ namespace assetlib
 					"' is not a container that stores references");
 
 			auto file = PendingReferrer();
-			file.path = store.GetDataRoot() / referrer;
+			file.path = GetDataRoot() / referrer;
 			file.type = *type;
 
 			// Ordinary weather, not a caller error: the file may be locked, gone since the scan, or --
@@ -319,14 +312,14 @@ namespace assetlib
 				// and `.banim` this was baked from, which changes their contents and so their stamps.
 				// The baked tables did not change, so re-reading the inputs here is what keeps the
 				// rename a load. Only now are they all in their final place.
-				BVat vat            = loadVat(file.path);
-				vat.meshStamp       = stampOf(store.GetDataRoot() / vat.mesh);
-				vat.skeletonStamp   = stampOf(store.GetDataRoot() / vat.skeleton);
-				vat.animationsStamp = stampOf(store.GetDataRoot() / vat.animations);
-				saveVat(vat, file.path);
+				BVat vat            = Load<BVat>(KeyFor(file.path));
+				vat.meshStamp       = stampOf(GetDataRoot() / vat.mesh);
+				vat.skeletonStamp   = stampOf(GetDataRoot() / vat.skeleton);
+				vat.animationsStamp = stampOf(GetDataRoot() / vat.animations);
+				Save(vat, KeyFor(file.path));
 
 				const std::filesystem::path derived =
-					store.GetDataRoot() / vatPathFor(vat.mesh, vat.animations);
+					GetDataRoot() / vatPathFor(vat.mesh, vat.animations);
 				if (!std::filesystem::equivalent(file.path, derived, ec) &&
 				    !std::filesystem::exists(derived))
 					std::filesystem::rename(file.path, derived, ec);

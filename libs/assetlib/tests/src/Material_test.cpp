@@ -1,7 +1,7 @@
-#include <assetlib/asset_import.h>
-#include <assetlib/bmaterial_io.h>
+#include <assetlib/bmesh.h>
 #include <assetlib/bmesh_gltf.h>
-#include <assetlib/bmesh_io.h>
+#include <assetlib/codecs.h>
+#include <assetlib/container_info.h>
 #include <assetlib/mesh_tangents.h>
 #include <assetlib_structs/BMesh.h>
 #include <assetlib_structs/BMeshImport.h>
@@ -12,6 +12,7 @@
 #include "MountAt.h"
 #include "mounted_io.h"
 
+#include <assetlib/AssetStore.h>
 #include <catch2/matchers/catch_matchers_string.hpp>
 
 using namespace assetlib;
@@ -27,7 +28,7 @@ TEST_CASE("a BMaterial survives a serialize round-trip", "[bmaterial][io]")
 	mat.pbr.metallicFactor   = 0.75f;
 	mat.pbr.roughnessFactor  = 0.25f;
 
-	const auto restored = deserializeMaterial(serializeMaterial(mat));
+	const auto restored = AssetCodec<BMaterial>::Deserialize(AssetCodec<BMaterial>::Serialize(mat));
 
 	REQUIRE(restored.name == mat.name);
 	REQUIRE(restored.shadingModel == ShadingModel::kPbr);
@@ -50,7 +51,7 @@ TEST_CASE("a blend material's transmission survives a round trip", "[bmaterial][
 	mat.pbr.alphaMode          = AlphaMode::kBlend;
 	mat.pbr.transmissionFactor = 0.85f;
 
-	const auto restored = deserializeMaterial(serializeMaterial(mat));
+	const auto restored = AssetCodec<BMaterial>::Deserialize(AssetCodec<BMaterial>::Serialize(mat));
 
 	CHECK(restored.pbr.alphaMode == AlphaMode::kBlend);
 	CHECK(restored.pbr.transmissionFactor == Catch::Approx(0.85f));
@@ -59,7 +60,9 @@ TEST_CASE("a blend material's transmission survives a round trip", "[bmaterial][
 	// blend has always had.
 	BMaterial coverage;
 	coverage.pbr.alphaMode = AlphaMode::kBlend;
-	CHECK(deserializeMaterial(serializeMaterial(coverage)).pbr.transmissionFactor == 0.0f);
+	CHECK(
+		AssetCodec<BMaterial>::Deserialize(AssetCodec<BMaterial>::Serialize(coverage))
+			.pbr.transmissionFactor == 0.0f);
 }
 
 TEST_CASE("a material's specular factors survive a round trip", "[bmaterial][io]")
@@ -69,7 +72,7 @@ TEST_CASE("a material's specular factors survive a round trip", "[bmaterial][io]
 	mat.pbr.specularFactor      = 0.0f;
 	mat.pbr.specularColorFactor = glm::vec3(1.0f, 0.77f, 0.34f);
 
-	const auto restored = deserializeMaterial(serializeMaterial(mat));
+	const auto restored = AssetCodec<BMaterial>::Deserialize(AssetCodec<BMaterial>::Serialize(mat));
 
 	// 0 is the value the whole feature exists to carry, and it is also the value a zero-initialized
 	// read would produce by accident -- so the tint is what proves the field was really stored.
@@ -78,7 +81,8 @@ TEST_CASE("a material's specular factors survive a round trip", "[bmaterial][io]
 	CHECK(restored.pbr.specularColorFactor.b == Catch::Approx(0.34f));
 
 	BMaterial  plain;
-	const auto defaulted = deserializeMaterial(serializeMaterial(plain));
+	const auto defaulted =
+		AssetCodec<BMaterial>::Deserialize(AssetCodec<BMaterial>::Serialize(plain));
 	CHECK(defaulted.pbr.specularFactor == 1.0f);
 	CHECK(defaulted.pbr.specularColorFactor == glm::vec3(1.0f));
 }
@@ -94,7 +98,7 @@ TEST_CASE("a Loose BMaterial round-trips its routes", "[bmaterial][io]")
 	mat.pbr.routes[5]       = { "packed.ktx2", 2 };  // roughness from packed.B
 	mat.pbr.routes[7]       = { "normal.ktx2", 0 };  // normal X
 
-	const auto restored = deserializeMaterial(serializeMaterial(mat));
+	const auto restored = AssetCodec<BMaterial>::Deserialize(AssetCodec<BMaterial>::Serialize(mat));
 
 	REQUIRE(restored.pbr.routes.size() == c_LooseChannelCount);
 	REQUIRE(restored.pbr.routes[0].texture == "albedo.ktx2");
@@ -116,7 +120,7 @@ TEST_CASE("a BMaterial round-trips its editor graph", "[bmaterial][io]")
 	mat.editorGraph = R"({"nodes":[{"id":0,"internal-data":{"model-name":"Texture"}}],"c":[]})"
 					  "\n{\"trailing\":\"line\"}";
 
-	const auto restored = deserializeMaterial(serializeMaterial(mat));
+	const auto restored = AssetCodec<BMaterial>::Deserialize(AssetCodec<BMaterial>::Serialize(mat));
 
 	REQUIRE(restored.editorGraph == mat.editorGraph);
 	REQUIRE(restored.name == "graphed");
@@ -128,7 +132,7 @@ TEST_CASE("a BMaterial with no editor graph round-trips an empty one", "[bmateri
 	BMaterial mat;
 	mat.pbr.baseColorTexture = "baked_basecolor.ktx2";
 
-	const auto restored = deserializeMaterial(serializeMaterial(mat));
+	const auto restored = AssetCodec<BMaterial>::Deserialize(AssetCodec<BMaterial>::Serialize(mat));
 
 	REQUIRE(restored.editorGraph.empty());
 	REQUIRE(restored.pbr.baseColorTexture == "baked_basecolor.ktx2");
@@ -143,7 +147,7 @@ TEST_CASE("a BMaterial round-trips its bake provenance", "[bmaterial][io]")
 	// the way through, which is what the field being unsigned buys.
 	mat.pbr.routeStamps[8] = { 1, 0xffffffffffffffffull };
 
-	const auto restored = deserializeMaterial(serializeMaterial(mat));
+	const auto restored = AssetCodec<BMaterial>::Deserialize(AssetCodec<BMaterial>::Serialize(mat));
 
 	REQUIRE(restored.pbr.routeStamps[0].size == 4096);
 	REQUIRE(restored.pbr.routeStamps[0].hash == 0x0123456789abcdefull);
@@ -161,7 +165,7 @@ TEST_CASE("a BMaterial carries both its sources and its baked triplet", "[bmater
 	mat.pbr.routes[0]        = { "src/albedo.ktx2", 0 };
 	mat.pbr.routeStamps[0]   = { 64, 7 };
 
-	const auto restored = deserializeMaterial(serializeMaterial(mat));
+	const auto restored = AssetCodec<BMaterial>::Deserialize(AssetCodec<BMaterial>::Serialize(mat));
 
 	REQUIRE(restored.pbr.baseColorTexture == "mat_basecolor.ktx2");
 	REQUIRE(restored.pbr.routes[0].texture == "src/albedo.ktx2");
@@ -382,7 +386,7 @@ TEST_CASE("drawsLoose falls back to routes only when they are there", "[bmateria
 	std::filesystem::remove_all(dir);
 }
 
-TEST_CASE("deserializeMaterial rejects every version but the current one", "[bmaterial][io]")
+TEST_CASE("The bmaterial codec rejects every version but the current one", "[bmaterial][io]")
 {
 	// Exactly one version is readable, deliberately: nothing has shipped, so an out-of-date file is
 	// re-cooked rather than decoded by a second reader that would have to be kept correct forever. The
@@ -418,12 +422,12 @@ TEST_CASE("deserializeMaterial rejects every version but the current one", "[bma
 		return bytes;
 	};
 
-	REQUIRE_THROWS_AS(deserializeMaterial(streamOfVersion(1)), std::runtime_error);
-	REQUIRE_THROWS_AS(deserializeMaterial(streamOfVersion(5)), std::runtime_error);
-	REQUIRE_THROWS_AS(deserializeMaterial(streamOfVersion(7)), std::runtime_error);
+	REQUIRE_THROWS_AS(AssetCodec<BMaterial>::Deserialize(streamOfVersion(1)), std::runtime_error);
+	REQUIRE_THROWS_AS(AssetCodec<BMaterial>::Deserialize(streamOfVersion(5)), std::runtime_error);
+	REQUIRE_THROWS_AS(AssetCodec<BMaterial>::Deserialize(streamOfVersion(7)), std::runtime_error);
 }
 
-TEST_CASE("deserializeMaterial rejects an unknown shading model", "[bmaterial][io]")
+TEST_CASE("The bmaterial codec rejects an unknown shading model", "[bmaterial][io]")
 {
 	// A tag the reader does not know is a payload it cannot decode: rejected, never guessed at.
 	std::vector<std::byte> bytes;
@@ -437,13 +441,13 @@ TEST_CASE("deserializeMaterial rejects an unknown shading model", "[bmaterial][i
 	putPod(static_cast<uint16_t>(0));
 	putPod(static_cast<uint32_t>(999));  // ...but a shading model from the future
 
-	REQUIRE_THROWS_AS(deserializeMaterial(bytes), std::runtime_error);
+	REQUIRE_THROWS_AS(AssetCodec<BMaterial>::Deserialize(bytes), std::runtime_error);
 }
 
-TEST_CASE("deserializeMaterial rejects a stream with bad magic", "[bmaterial][io]")
+TEST_CASE("The bmaterial codec rejects a stream with bad magic", "[bmaterial][io]")
 {
 	const std::array<std::byte, 8> garbage{};
-	REQUIRE_THROWS_AS(deserializeMaterial(garbage), std::runtime_error);
+	REQUIRE_THROWS_AS(AssetCodec<BMaterial>::Deserialize(garbage), std::runtime_error);
 }
 
 TEST_CASE("saveMaterial / loadMaterial round-trips through a file", "[bmaterial][io]")
@@ -456,8 +460,8 @@ TEST_CASE("saveMaterial / loadMaterial round-trips through a file", "[bmaterial]
 	mat.pbr.roughnessFactor  = 0.9f;
 
 	const auto path = std::filesystem::temp_directory_path() / "bmaterial_roundtrip_test.bmaterial";
-	saveMaterial(mat, path);
-	const auto restored = loadMaterial(path);
+	SaveAt(mat, path);
+	const auto restored = LoadAt<BMaterial>(path);
 	std::filesystem::remove(path);
 
 	REQUIRE(restored.name == "leaf");
@@ -483,7 +487,7 @@ TEST_CASE("an import writes a loadable .bmesh and its textures, and no materials
 	writeTextures(import, outDir);
 	BMesh baked = toBMesh(import);
 	static_cast<void>(generateTangents(baked));
-	writeImportedMesh(baked, outDir / "suzanne.bmesh");
+	AssetStore(outDir).Save(baked, "suzanne.bmesh");
 
 	REQUIRE(std::filesystem::exists(outDir / "suzanne.bmesh"));
 
@@ -496,7 +500,7 @@ TEST_CASE("an import writes a loadable .bmesh and its textures, and no materials
 	// unassigned rather than pointing at a matN.bmaterial that does not exist.
 	REQUIRE_FALSE(std::filesystem::exists(outDir / "mat0.bmaterial"));
 
-	const auto mesh = load(outDir / "suzanne.bmesh");
+	const auto mesh = StoreAt(outDir).Load<BMesh>("suzanne.bmesh");
 	REQUIRE(mesh.materials.empty());
 	REQUIRE_FALSE(mesh.submeshes.empty());
 
@@ -538,8 +542,8 @@ TEST_CASE("a material document is canonical text", "[bmaterial][io]")
 	mat.name                 = "canon";
 	mat.pbr.baseColorTexture = "Textures/canon_basecolor.ktx2";
 
-	const auto once  = serializeMaterial(mat);
-	const auto again = serializeMaterial(deserializeMaterial(once));
+	const auto once  = AssetCodec<BMaterial>::Serialize(mat);
+	const auto again = AssetCodec<BMaterial>::Serialize(AssetCodec<BMaterial>::Deserialize(once));
 
 	// One document, one byte sequence: two checkouts that agree on the content agree on the
 	// file, which is what lets git merge it like code.
@@ -559,12 +563,12 @@ TEST_CASE("a material document preserves the keys this build does not know", "[b
 )";
 
 	const BMaterial material =
-		deserializeMaterial(std::as_bytes(std::span(text.data(), text.size())));
+		AssetCodec<BMaterial>::Deserialize(std::as_bytes(std::span(text.data(), text.size())));
 	CHECK(material.name == "future");
 
 	// The unknown key rides extraJson through the round-trip -- a sibling branch's field
 	// survives a reader that has never heard of it.
-	const auto        resaved = serializeMaterial(material);
+	const auto        resaved = AssetCodec<BMaterial>::Serialize(material);
 	const std::string out(reinterpret_cast<const char*>(resaved.data()), resaved.size());
 	CHECK(out.find("\"sheenFactor\"") != std::string::npos);
 }
@@ -574,7 +578,7 @@ TEST_CASE("a minimal hand-authored document defaults what it omits", "[bmaterial
 	const std::string_view text = "{\n\t\"shadingModel\": \"pbr\"\n}\n";
 
 	const BMaterial material =
-		deserializeMaterial(std::as_bytes(std::span(text.data(), text.size())));
+		AssetCodec<BMaterial>::Deserialize(std::as_bytes(std::span(text.data(), text.size())));
 	CHECK(material.pbr.baseColorFactor == glm::vec4(1.0f));
 	CHECK(material.pbr.metallicFactor == 1.0f);
 	CHECK(material.pbr.alphaMode == AlphaMode::kOpaque);
@@ -586,12 +590,12 @@ TEST_CASE("a document naming an unknown enum is refused, never defaulted", "[bma
 {
 	const std::string_view alpha = R"({"alphaMode": "translucent"})";
 	CHECK_THROWS_WITH(
-		deserializeMaterial(std::as_bytes(std::span(alpha.data(), alpha.size()))),
+		AssetCodec<BMaterial>::Deserialize(std::as_bytes(std::span(alpha.data(), alpha.size()))),
 		Catch::Matchers::ContainsSubstring("translucent"));
 
 	const std::string_view model = R"({"shadingModel": "toon"})";
 	CHECK_THROWS_WITH(
-		deserializeMaterial(std::as_bytes(std::span(model.data(), model.size()))),
+		AssetCodec<BMaterial>::Deserialize(std::as_bytes(std::span(model.data(), model.size()))),
 		Catch::Matchers::ContainsSubstring("toon"));
 }
 
@@ -607,26 +611,28 @@ TEST_CASE("unknown keys survive at every depth, the editor's save included", "[b
 )";
 
 	const BMaterial material =
-		deserializeMaterial(std::as_bytes(std::span(text.data(), text.size())));
+		AssetCodec<BMaterial>::Deserialize(std::as_bytes(std::span(text.data(), text.size())));
 	CHECK(material.pbr.baseColorTexture == "Textures/b.ktx2");
 	CHECK(material.pbr.routes[4].texture == "textures_src/ao.png");
 
-	const auto        resaved = serializeMaterial(material);
+	const auto        resaved = AssetCodec<BMaterial>::Serialize(material);
 	const std::string out(reinterpret_cast<const char*>(resaved.data()), resaved.size());
 	CHECK(out.find("\"sheenMap\"") != std::string::npos);
 	CHECK(out.find("\"blurRadius\"") != std::string::npos);
 
 	// And the round of the round-trip: the second read still holds both halves together.
-	const BMaterial again = deserializeMaterial(resaved);
+	const BMaterial again = AssetCodec<BMaterial>::Deserialize(resaved);
 	CHECK(again.pbr.routes[4].texture == "textures_src/ao.png");
-	CHECK(serializeMaterial(again) == resaved);
+	CHECK(AssetCodec<BMaterial>::Serialize(again) == resaved);
 }
 
 TEST_CASE("a corrupt extraJson refuses the save rather than writing half a file", "[bmaterial][io]")
 {
 	BMaterial material;
 	material.extraJson = "not json";
-	CHECK_THROWS_WITH(serializeMaterial(material), Catch::Matchers::ContainsSubstring("extraJson"));
+	CHECK_THROWS_WITH(
+		AssetCodec<BMaterial>::Serialize(material),
+		Catch::Matchers::ContainsSubstring("extraJson"));
 }
 
 TEST_CASE("a preserved route outlives the channel it decorated", "[bmaterial][io]")
@@ -640,11 +646,11 @@ TEST_CASE("a preserved route outlives the channel it decorated", "[bmaterial][io
 )";
 
 	const BMaterial material =
-		deserializeMaterial(std::as_bytes(std::span(text.data(), text.size())));
+		AssetCodec<BMaterial>::Deserialize(std::as_bytes(std::span(text.data(), text.size())));
 	CHECK(material.pbr.routes[4].texture.empty());
 
-	const auto        resaved = serializeMaterial(material);
+	const auto        resaved = AssetCodec<BMaterial>::Serialize(material);
 	const std::string out(reinterpret_cast<const char*>(resaved.data()), resaved.size());
 	CHECK(out.find("\"blurRadius\"") != std::string::npos);
-	CHECK(serializeMaterial(deserializeMaterial(resaved)) == resaved);
+	CHECK(AssetCodec<BMaterial>::Serialize(AssetCodec<BMaterial>::Deserialize(resaved)) == resaved);
 }

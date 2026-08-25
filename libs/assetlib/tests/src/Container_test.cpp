@@ -1,9 +1,11 @@
-#include <assetlib/bmesh_io.h>
+#include <assetlib/bmesh.h>
+#include <assetlib/codecs.h>
 #include <assetlib_structs/BMesh.h>
 
 #include "cache_io.h"
 #include "mounted_io.h"
 
+#include "MountAt.h"
 #include <catch2/matchers/catch_matchers_string.hpp>
 
 using namespace assetlib;
@@ -76,8 +78,8 @@ namespace
 TEST_CASE("serialize/deserialize round-trips every pool", "[bmesh][io]")
 {
 	const auto original = MakeSampleMesh();
-	const auto bytes    = serialize(original);
-	const auto restored = deserialize(bytes);
+	const auto bytes    = AssetCodec<BMesh>::Serialize(original);
+	const auto restored = AssetCodec<BMesh>::Deserialize(bytes);
 
 	REQUIRE(restored.nodes.size() == original.nodes.size());
 	REQUIRE(restored.meshes.size() == original.meshes.size());
@@ -94,21 +96,21 @@ TEST_CASE("serialize/deserialize round-trips every pool", "[bmesh][io]")
 	REQUIRE(restored.submeshes[0].vertexCount == 3);
 
 	// A re-serialize of the restored mesh must be byte-identical.
-	REQUIRE(serialize(restored) == bytes);
+	REQUIRE(AssetCodec<BMesh>::Serialize(restored) == bytes);
 }
 
 TEST_CASE("deserialize rejects a corrupt magic", "[bmesh][io]")
 {
-	auto bytes = serialize(MakeSampleMesh());
+	auto bytes = AssetCodec<BMesh>::Serialize(MakeSampleMesh());
 	bytes[0]   = std::byte{ 0xFF };
-	REQUIRE_THROWS_AS(deserialize(bytes), std::runtime_error);
+	REQUIRE_THROWS_AS(AssetCodec<BMesh>::Deserialize(bytes), std::runtime_error);
 }
 
 TEST_CASE("deserialize rejects a truncated stream", "[bmesh][io]")
 {
-	const auto                       bytes = serialize(MakeSampleMesh());
+	const auto                       bytes = AssetCodec<BMesh>::Serialize(MakeSampleMesh());
 	const std::span<const std::byte> truncated(bytes.data(), bytes.size() / 2);
-	REQUIRE_THROWS_AS(deserialize(truncated), std::runtime_error);
+	REQUIRE_THROWS_AS(AssetCodec<BMesh>::Deserialize(truncated), std::runtime_error);
 }
 
 // The cache container is shared by .bmesh, .bskel and .banim, so every one of these rejections is
@@ -116,7 +118,7 @@ TEST_CASE("deserialize rejects a truncated stream", "[bmesh][io]")
 TEST_CASE("the cache reader rejects a malformed container", "[bmesh][io][cache]")
 {
 	const auto patched = [](auto mutate) {
-		auto bytes  = serialize(MakeSampleMesh());
+		auto bytes  = AssetCodec<BMesh>::Serialize(MakeSampleMesh());
 		auto header = cache::Header{};
 		std::memcpy(&header, bytes.data(), sizeof(header));
 		mutate(header, bytes);
@@ -128,7 +130,7 @@ TEST_CASE("the cache reader rejects a malformed container", "[bmesh][io][cache]"
 	{
 		const auto bytes = patched([](cache::Header& h, auto&) { h.headerVersion += 1; });
 		REQUIRE_THROWS_WITH(
-			deserialize(bytes),
+			AssetCodec<BMesh>::Deserialize(bytes),
 			Catch::Matchers::ContainsSubstring("not the 1 this build reads"));
 	}
 
@@ -137,7 +139,7 @@ TEST_CASE("the cache reader rejects a malformed container", "[bmesh][io][cache]"
 		// Stale, a sibling branch's, or newer: one case, one refusal, one recovery -- regenerate.
 		const auto bytes = patched([](cache::Header& h, auto&) { h.bakeToken ^= 1; });
 		REQUIRE_THROWS_WITH(
-			deserialize(bytes),
+			AssetCodec<BMesh>::Deserialize(bytes),
 			Catch::Matchers::ContainsSubstring("another bake revision"));
 	}
 
@@ -145,18 +147,18 @@ TEST_CASE("the cache reader rejects a malformed container", "[bmesh][io][cache]"
 	{
 		const auto bytes =
 			patched([](cache::Header& h, auto&) { h.chunkTableOffset = 0xFFFF0000u; });
-		REQUIRE_THROWS_AS(deserialize(bytes), std::runtime_error);
+		REQUIRE_THROWS_AS(AssetCodec<BMesh>::Deserialize(bytes), std::runtime_error);
 	}
 
 	SECTION("a file size that disagrees with the stream")
 	{
 		const auto bytes = patched([](cache::Header& h, auto&) { h.fileSize -= 1; });
-		REQUIRE_THROWS_AS(deserialize(bytes), std::runtime_error);
+		REQUIRE_THROWS_AS(AssetCodec<BMesh>::Deserialize(bytes), std::runtime_error);
 	}
 
 	// The entry checks, which need the table itself doctored rather than the header.
 	const auto patchedEntry = [](auto mutate) {
-		auto          bytes = serialize(MakeSampleMesh());
+		auto          bytes = AssetCodec<BMesh>::Serialize(MakeSampleMesh());
 		cache::Header header{};
 		std::memcpy(&header, bytes.data(), sizeof(header));
 
@@ -175,25 +177,25 @@ TEST_CASE("the cache reader rejects a malformed container", "[bmesh][io][cache]"
 		// 30 divides the nodes payload, so the table check passes and the typed read is what
 		// refuses -- the guard between a size-compatible layout change and parsing it silently.
 		const auto bytes = patchedEntry([](cache::Entry& e) { e.elementSize = 30; });
-		REQUIRE_THROWS_AS(deserialize(bytes), std::runtime_error);
+		REQUIRE_THROWS_AS(AssetCodec<BMesh>::Deserialize(bytes), std::runtime_error);
 	}
 
 	SECTION("a chunk holding a partial element")
 	{
 		const auto bytes = patchedEntry([](cache::Entry& e) { e.byteSize -= 1; });
-		REQUIRE_THROWS_AS(deserialize(bytes), std::runtime_error);
+		REQUIRE_THROWS_AS(AssetCodec<BMesh>::Deserialize(bytes), std::runtime_error);
 	}
 
 	SECTION("a chunk that runs past the end of the stream")
 	{
 		const auto bytes = patchedEntry([](cache::Entry& e) { e.byteSize *= 1000; });
-		REQUIRE_THROWS_AS(deserialize(bytes), std::runtime_error);
+		REQUIRE_THROWS_AS(AssetCodec<BMesh>::Deserialize(bytes), std::runtime_error);
 	}
 
 	SECTION("an offset near the top of the range, which must not wrap past the sum")
 	{
 		const auto bytes = patchedEntry([](cache::Entry& e) { e.offset = UINT64_MAX - 8; });
-		REQUIRE_THROWS_AS(deserialize(bytes), std::runtime_error);
+		REQUIRE_THROWS_AS(AssetCodec<BMesh>::Deserialize(bytes), std::runtime_error);
 	}
 }
 
@@ -202,14 +204,14 @@ TEST_CASE("save then load reproduces the mesh on disk", "[bmesh][io]")
 	const auto original = MakeSampleMesh();
 	const auto path     = std::filesystem::temp_directory_path() / "bmesh_container_test.bmesh";
 
-	save(original, path);
-	const auto restored = load(path);
+	SaveAt(original, path);
+	const auto restored = LoadAt<BMesh>(path);
 	std::filesystem::remove(path);
 
 	REQUIRE(restored.nodes.size() == original.nodes.size());
 	REQUIRE(restored.vertexData == original.vertexData);
 	REQUIRE(restored.materials == original.materials);
-	REQUIRE(serialize(restored) == serialize(original));
+	REQUIRE(AssetCodec<BMesh>::Serialize(restored) == AssetCodec<BMesh>::Serialize(original));
 }
 
 namespace

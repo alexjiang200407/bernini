@@ -1,6 +1,5 @@
 #include <gamelib/vat_freshness.h>
 
-#include <assetlib/bvat_io.h>
 #include <assetlib/vat_bake.h>
 #include <assetlib_structs/SourceRef.h>
 
@@ -106,7 +105,7 @@ namespace game
 
 		try
 		{
-			assetlib::BVat vat = store.LoadVat(bvatRel);
+			assetlib::BVat vat = store.Load<assetlib::BVat>(bvatRel);
 
 			if (assetlib::normalizePath(vat.animations) !=
 			    assetlib::normalizePath(animationsRelPath))
@@ -163,24 +162,12 @@ namespace game
 			"vat: no usable bake of '{}' in a read-only store, and there is nowhere to make one",
 			bvatRel);
 
-		vat = assetlib::bakeVat(
-			store,
+		vat = store.BakeVat(
 			assetlib::VatBakeDesc{ std::string(meshRelPath), std::string(animationsRelPath) });
 
-		// The writable layer may hold nothing yet -- an overlay over an archive starts empty -- so
-		// the directory the bake lands in is made rather than assumed. Named here rather than left
-		// to saveVat, which would blame the file for a directory that was never made.
-		const std::filesystem::path bvatAbs = store.GetDataRoot() / bvatRel;
-
-		std::error_code ec;
-		std::filesystem::create_directories(bvatAbs.parent_path(), ec);
-		core::throw_runtime_error_if(
-			static_cast<bool>(ec),
-			"vat: cannot make '{}' to bake into: {}",
-			bvatAbs.parent_path().string(),
-			ec.message());
-
-		assetlib::saveVat(vat, bvatAbs);
+		// The writable layer may hold nothing yet -- an overlay over an archive starts empty -- and
+		// Save makes what the key names.
+		store.Save(vat, bvatRel);
 		RecordSeamBake(store, bvatRel, vat);
 		return vat;
 	}

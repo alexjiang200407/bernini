@@ -1,10 +1,8 @@
 #include <assetlib/asset_import.h>
-#include <assetlib/banim_io.h>
+#include <assetlib/bmesh.h>
 #include <assetlib/bmesh_gltf.h>
-#include <assetlib/bmesh_io.h>
-#include <assetlib/bskel_io.h>
+#include <assetlib/codecs.h>
 #include <assetlib/mesh_tangents.h>
-#include <assetlib/skeleton.h>
 #include <assetlib/skinning.h>
 #include <assetlib_structs/Animation.h>
 #include <assetlib_structs/BMesh.h>
@@ -15,7 +13,9 @@
 #include <catch2/catch_approx.hpp>
 #include <catch2/matchers/catch_matchers_string.hpp>
 
+#include "MountAt.h"
 #include "SkinnedGltf.h"
+#include <assetlib/AssetStore.h>
 
 using namespace assetlib;
 using assetlib::test::SkinnedGltf;
@@ -389,17 +389,18 @@ TEST_CASE("Importing a skinned mesh writes the rig it names", "[gltf][skeleton][
 
 	BMesh baked = toBMesh(import);
 	static_cast<void>(generateTangents(baked));
-	writeImportedRig(
-		import,
+	const AssetStore store(outDir);
+	store.WriteImportedRig(
+		import.skeleton,
+		import.animations,
 		baked,
-		outDir,
-		outDir / "rig.bskel",
-		outDir / "rig.banim",
+		"rig.bskel",
+		"rig.banim",
 		true,
 		SourceRef{});
-	writeImportedMesh(baked, outDir / "rig.bmesh");
+	store.Save(baked, "rig.bmesh");
 
-	const auto mesh = load(outDir / "rig.bmesh");
+	const auto mesh = StoreAt(outDir).Load<BMesh>("rig.bmesh");
 
 	// A mesh whose vertices carry joints and that names no skeleton has indices nothing can resolve,
 	// which is why the two are written together rather than the rig being an authoring choice.
@@ -407,10 +408,10 @@ TEST_CASE("Importing a skinned mesh writes the rig it names", "[gltf][skeleton][
 	CHECK(mesh.skeleton == "rig.bskel");
 	CHECK(loadMeshRefs(outDir / "rig.bmesh").skeleton == "rig.bskel");
 
-	const auto skeleton = loadSkeleton(outDir / mesh.skeleton);
+	const auto skeleton = StoreAt(outDir).Load<Skeleton>(mesh.skeleton);
 	REQUIRE(skeleton.bones.size() == 2);
 
-	const auto animations = loadAnimations(outDir / "rig.banim");
+	const auto animations = StoreAt(outDir).Load<AnimationSet>("rig.banim");
 	CHECK(animations.skeleton == "rig.bskel");
 	CHECK(animations.clips.size() == 2);
 	CHECK(animationsMatchSkeleton(animations, skeleton));
@@ -459,12 +460,14 @@ TEST_CASE("A mesh carrying joints must name a skeleton", "[bmesh][io][skeleton]"
 	REQUIRE(isSkinned(mesh));
 	REQUIRE(mesh.skeleton.empty());  // toBMesh assigns no paths; bake is what names the rig
 
-	CHECK_THROWS_AS(serialize(mesh), std::runtime_error);
+	CHECK_THROWS_AS(AssetCodec<BMesh>::Serialize(mesh), std::runtime_error);
 
 	SECTION("and naming one makes it writable again")
 	{
 		mesh.skeleton = "rig.bskel";
-		CHECK(deserialize(serialize(mesh)).skeleton == "rig.bskel");
+		CHECK(
+			AssetCodec<BMesh>::Deserialize(AssetCodec<BMesh>::Serialize(mesh)).skeleton ==
+			"rig.bskel");
 	}
 
 	SECTION(
@@ -475,7 +478,9 @@ TEST_CASE("A mesh carrying joints must name a skeleton", "[bmesh][io][skeleton]"
 		for (Submesh& submesh : attachment.submeshes) submesh.layout.attributeCount = 1;
 
 		REQUIRE_FALSE(isSkinned(attachment));
-		CHECK(deserialize(serialize(attachment)).skeleton == "rig.bskel");
+		CHECK(
+			AssetCodec<BMesh>::Deserialize(AssetCodec<BMesh>::Serialize(attachment)).skeleton ==
+			"rig.bskel");
 	}
 }
 
@@ -486,7 +491,7 @@ TEST_CASE("A mesh that names no skeleton loads as a static mesh", "[bmesh][io]")
 	const fs::path bmesh = "assets/Data/Meshes/apples.bmesh";
 	REQUIRE(fs::exists(bmesh));
 
-	const auto mesh = load(bmesh);
+	const auto mesh = LoadAt<BMesh>(bmesh);
 	CHECK_FALSE(mesh.materials.empty());
 	CHECK(mesh.skeleton.empty());
 	CHECK_FALSE(isSkinned(mesh));

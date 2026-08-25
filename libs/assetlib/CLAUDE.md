@@ -8,7 +8,7 @@ assetlib is a static library that contains a set of asset-related utilities. The
 
 Pose evaluation and CPU skinning live here, not in `bgl`: `poseModelTransforms` walks a clip frame
 from local into model space, `skinningMatrices` composes each with its inverse bind
-(`include/assetlib/skeleton.h`), and `skinSubmesh` blends four influences per vertex
+(`include/assetlib/skinning.h`), and `skinSubmesh` blends four influences per vertex
 (`include/assetlib/skinning.h`). The bake is offline and assetlib never links `bgl`, so this is
 plain CPU code — and it is the reference every later GPU path is diffed against, which is why it is
 deliberately the unoptimised form.
@@ -20,8 +20,8 @@ the pose — and `exactPosedBounds` is the per-vertex walk it is proved against.
 
 Two container regimes (see docs/asset_containers.md):
 
-`.bmaterial` and `.benv` are **authored text documents**: canonical JSON (`src/bmaterial_io.cpp`,
-`src/benv_io.cpp`), named keys, unknown keys preserved on round-trip so a sibling branch's field
+`.bmaterial`, `.benv` and `.bimport` are **authored text documents**: canonical JSON
+(`src/bmaterial_io.cpp`, `src/benv_io.cpp`, `src/import_document.cpp`), named keys, unknown keys preserved on round-trip so a sibling branch's field
 survives a reader that has never heard of it. `.benv` carries the env family's authored state —
 the composition and the presentation knobs (`skyMipLevel`, `skyRotationY`, `exposureOverride`).
 
@@ -34,8 +34,8 @@ methods are the seam that acts on one: a stale entry regenerates in memory from 
 source at the parameters its `.bimport` records, with the document's bindings applied over the
 result, while a read-only store trusts its keys because `pack` made them true. For the env family
 and `.bvat` the re-bake is deliberate (`pack`, the editor) rather than at load. A change to what a
-container stores — layout or meaning — is one edit: bump its token in `src/bake_tokens.h` to a
-fresh random value. A forgotten bump on a layout change fails `TokenCanary_test`, which pins each
+container stores — layout or meaning — is one edit: bump `AssetCodec<T>::c_BakeToken`
+(`include/assetlib/codecs.h`) to a fresh random value, beside the writer it has to move with. A forgotten bump on a layout change fails `TokenCanary_test`, which pins each
 writer's output hash beside its token; a semantic change the fixture cannot see is still yours to
 remember.
 
@@ -50,22 +50,44 @@ lives. `apps/editor` gets a looser bar; this does not — see
 
 Concretely, before adding to `include/assetlib/`:
 
-- **A project's asset is addressed by a mount key, through `AssetStore`.** A new function that
-  takes a `std::filesystem::path` to a file the project owns is adding the second way to do a
-  thing that already has one. `std::filesystem::path` is for files no project owns — see
-  [STYLE.md](../../STYLE.md) § Paths.
-- **Do not re-carry a data root.** `MaterialBakeDesc` and `EnvBakeDesc` do, and they are the
-  standing example of what not to copy; the store already holds it.
-- **A new container type is not a new switch.** The extension, the magic and the type enum are
-  already spelled out in several places, and
-  [docs/specs/assetlib_store_codecs.md](../../docs/specs/assetlib_store_codecs.md) is the design
-  that collapses them. Read it before adding the next one.
+- **A project's asset is addressed by a mount key, through `AssetStore`**: `store.Load<T>(key)`
+  and `store.Save(value, key)`. A new function taking a `std::filesystem::path` to a file the
+  project owns is the second way to do a thing that already has one, and the family that did that
+  was deleted rather than kept — see [STYLE.md](../../STYLE.md) § Paths.
+- **An operation on a project is a method on `AssetStore`; an operation with state that outlives
+  the call is a class.** A free function taking an `AssetStore&` is a method that has not been
+  written as one -- `bakeVat(store, desc)` sat beside `store.BakeMaterial` for exactly as long as
+  nobody noticed. The exception is real and narrow: `AssetRefGraph::Scan(store)` builds an object
+  holding an edge index across every later `ReferrersOf`, so it is a named constructor and stays
+  free. Stateless and about the project's contents means method.
+- **A caller never creates a directory for a store write.** `store.Save(value, key)` creates what
+  the key names; a key is a location in the data root, not one that already exists. A caller that
+  writes straight to the host is the exception and looks different — `writeKTX2` and `copy_file`
+  make no directory, so those callers still make their own.
+- **A caller that genuinely addresses the host encodes and moves bytes itself**, so it cannot be
+  mistaken for a project write: `AssetCodec<T>::Serialize` plus `core::file::write_atomic`. That
+  is `assetlib_cli strip --out` writing a shipping tree, and the editor opening a mesh from
+  outside any data root. Both are real; neither is a reason to bring the old family back.
+- **Do not re-carry a data root.** `AssetStore`'s two constructors are the only *declarations* in
+  `include/assetlib` that take one; the word appears elsewhere only in prose, saying what a path is
+  relative to. `MaterialBakeDesc`, `EnvBakeDesc`, `ImportTarget` and `EnvImportDesc` all carried one
+  as a member; a descriptor that names *what* to write does not also get to say *where*.
+- **A new container type is a new `AssetCodec` specialization** in `include/assetlib/codecs.h`,
+  listed in `Containers` in `src/container_table.cpp`. That is the whole registration: `containerKinds()`
+  is folded out of it, and a static assertion holds the list to `AssetType`, so a type added to the
+  enum and forgotten in the tuple does not compile. The assertion anchors on `AssetType::kCount`
+  rather than the last enumerator — anchoring it on the latter meant *appending* a type satisfied
+  it silently, which is the case it exists to catch.
+- **Behaviour per container is a `switch`, not a table entry.** `migrate`, `asset_rename` and
+  `pack` do different work per type, and each switch is exhaustive with no `default:` so
+  `-Wall -Werror` turns a new `AssetType` into a compile error there. Do not add a `default:` to
+  one; that is the guarantee.
 
 ## Headers forward declare
 
 A header forward declares the types it names from its **own** namespace — `BMesh`, `BMaterial`,
 `SourceStamp`, `ImageData`, all of them `assetlib::` — instead of including `assetlib_structs`.
-Include the definition only where one is genuinely required: `benv_io.h` includes `ImageData.h`
+Include the definition only where one is genuinely required: `envmap.h` includes `ImageData.h`
 because `EnvironmentMaps` holds three of them by value, and a reference or a by-value return does
 not.
 

@@ -1,16 +1,9 @@
-#include <assetlib/banim_io.h>
-#include <assetlib/benvl_io.h>
-#include <assetlib/bmesh_io.h>
-#include <assetlib/bskel_io.h>
-#include <assetlib/bsky_io.h>
-#include <assetlib/bvat_io.h>
+#include <assetlib/codecs.h>
 #include <assetlib_structs/Animation.h>
 #include <assetlib_structs/BEnv.h>
 #include <assetlib_structs/BMesh.h>
 #include <assetlib_structs/BVat.h>
 #include <assetlib_structs/Skeleton.h>
-
-#include "bake_tokens.h"
 
 #include <catch2/catch_test_macros.hpp>
 
@@ -26,7 +19,7 @@ using namespace assetlib;
  * On a failure, three causes, in order of likelihood:
  *   - a fixture changed: revert it. The fixtures are pinned, not maintained -- they exist to hold
  *     bytes still, and editing one is editing the measuring stick.
- *   - the output moved and the token did not: bump the container's token in src/bake_tokens.h to
+ *   - the output moved and the token did not: bump the container's AssetCodec<T>::c_BakeToken to
  *     a fresh random value, then re-pin both values here.
  *   - the token moved: re-pin both values here.
  *
@@ -80,7 +73,7 @@ namespace
 			"the serialized output moved but the bake token did not. If a fixture in this file "
 			"changed, revert it -- the fixtures are pinned, not maintained. Otherwise the writer "
 			"changed: every file on disk still carries the old token, reads as current, and "
-			"parses as garbage -- bump the token in src/bake_tokens.h to a fresh random value, "
+			"parses as garbage -- bump AssetCodec<T>::c_BakeToken to a fresh random value, "
 			"then re-pin both values here.");
 		CHECK(hash == pinned.hash);
 	}
@@ -307,48 +300,48 @@ TEST_CASE("a writer's output cannot change without its bake token", "[canary][io
 	SECTION(".bmesh")
 	{
 		CheckCanary(
-			c_BMeshBakeToken,
+			AssetCodec<BMesh>::c_BakeToken,
 			Pin{ .token = 0x6f1d3a58c2e94b07ull, .hash = 0x08f0b7bf5f59fb2cull },
-			serialize(CanaryMesh()));
+			AssetCodec<BMesh>::Serialize(CanaryMesh()));
 	}
 
 	SECTION(".bskel")
 	{
 		CheckCanary(
-			c_BSkelBakeToken,
+			AssetCodec<Skeleton>::c_BakeToken,
 			Pin{ .token = 0x9be47d02a15c68f3ull, .hash = 0x3dd4d201c9b7ea0bull },
-			serializeSkeleton(CanarySkeleton()));
+			AssetCodec<Skeleton>::Serialize(CanarySkeleton()));
 	}
 
 	SECTION(".banim")
 	{
 		CheckCanary(
-			c_BAnimBakeToken,
+			AssetCodec<AnimationSet>::c_BakeToken,
 			Pin{ .token = 0x41f8b6d95e07c2aaull, .hash = 0xffbf10e60751b032ull },
-			serializeAnimations(CanaryAnimations()));
+			AssetCodec<AnimationSet>::Serialize(CanaryAnimations()));
 	}
 
 	SECTION(".bvat")
 	{
 		CheckCanary(
-			c_BVatBakeToken,
+			AssetCodec<BVat>::c_BakeToken,
 			Pin{ .token = 0x25b90ce8f7143ad9ull, .hash = 0x6e93b48621d0aca0ull },
-			serializeVat(CanaryVat()));
+			AssetCodec<BVat>::Serialize(CanaryVat()));
 	}
 
 	SECTION(".bsky")
 	{
 		CheckCanary(
-			c_BSkyBakeToken,
+			AssetCodec<BSky>::c_BakeToken,
 			Pin{ .token = 0x7c25e8b1904dfa36ull, .hash = 0xc4ad4035fc805a1full },
-			serializeSky(CanarySky()));
+			AssetCodec<BSky>::Serialize(CanarySky()));
 	}
 
 	SECTION(".benvl")
 	{
 		CheckCanary(
-			c_BEnvLightingBakeToken,
+			AssetCodec<BEnvLighting>::c_BakeToken,
 			Pin{ .token = 0xd48f19c7a35b062eull, .hash = 0x20569dd2f51e76d8ull },
-			serializeEnvLighting(CanaryLighting()));
+			AssetCodec<BEnvLighting>::Serialize(CanaryLighting()));
 	}
 }

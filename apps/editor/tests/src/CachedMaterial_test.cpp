@@ -2,8 +2,7 @@
 
 #include <QTemporaryDir>
 
-#include <assetlib/bmaterial_io.h>
-
+#include <assetlib/AssetStore.h>
 #include <catch2/catch_test_macros.hpp>
 
 namespace
@@ -25,6 +24,13 @@ namespace
 			return temp.filePath("rust.bmaterial");
 		}
 
+		/** The temp dir as a data root, which is what a store over this sandbox addresses. */
+		[[nodiscard]] std::filesystem::path
+		Root() const
+		{
+			return std::filesystem::path(temp.path().toStdWString());
+		}
+
 		void
 		Write(const std::string& name) const
 		{
@@ -32,7 +38,7 @@ namespace
 			material.name         = name;
 			material.shadingModel = assetlib::ShadingModel::kPbr;
 
-			assetlib::saveMaterial(material, std::filesystem::path(Path().toStdWString()));
+			assetlib::AssetStore(Root()).Save(material, "rust.bmaterial");
 		}
 
 		[[nodiscard]] std::filesystem::file_time_type
@@ -59,14 +65,14 @@ TEST_CASE("An unchanged material is not read twice", "[materialeditor]")
 	sandbox.Write("first");
 	const std::filesystem::file_time_type stamp = sandbox.Stamp();
 
-	REQUIRE(cached.Get(sandbox.Path()) != nullptr);
-	REQUIRE(cached.Get(sandbox.Path())->name == "first");
+	REQUIRE(cached.Get(sandbox.Root(), sandbox.Path()) != nullptr);
+	REQUIRE(cached.Get(sandbox.Root(), sandbox.Path())->name == "first");
 
 	// Different contents, same stamp. A cache that went back to the file would see "second".
 	sandbox.Write("second");
 	sandbox.SetStamp(stamp);
 
-	REQUIRE(cached.Get(sandbox.Path())->name == "first");
+	REQUIRE(cached.Get(sandbox.Root(), sandbox.Path())->name == "first");
 }
 
 TEST_CASE("A material rewritten on disk is read again", "[materialeditor]")
@@ -77,12 +83,12 @@ TEST_CASE("A material rewritten on disk is read again", "[materialeditor]")
 	CachedMaterial cached;
 
 	sandbox.Write("first");
-	REQUIRE(cached.Get(sandbox.Path())->name == "first");
+	REQUIRE(cached.Get(sandbox.Root(), sandbox.Path())->name == "first");
 
 	sandbox.Write("second");
 	sandbox.SetStamp(sandbox.Stamp() + std::chrono::seconds(1));
 
-	REQUIRE(cached.Get(sandbox.Path())->name == "second");
+	REQUIRE(cached.Get(sandbox.Root(), sandbox.Path())->name == "second");
 }
 
 TEST_CASE("Forgetting forces the next read", "[materialeditor]")
@@ -94,14 +100,14 @@ TEST_CASE("Forgetting forces the next read", "[materialeditor]")
 
 	sandbox.Write("first");
 	const std::filesystem::file_time_type stamp = sandbox.Stamp();
-	REQUIRE(cached.Get(sandbox.Path())->name == "first");
+	REQUIRE(cached.Get(sandbox.Root(), sandbox.Path())->name == "first");
 
 	sandbox.Write("second");
 	sandbox.SetStamp(stamp);
 
 	cached.Forget();
 
-	REQUIRE(cached.Get(sandbox.Path())->name == "second");
+	REQUIRE(cached.Get(sandbox.Root(), sandbox.Path())->name == "second");
 }
 
 TEST_CASE("A different path is read even at the same stamp", "[materialeditor]")
@@ -112,15 +118,16 @@ TEST_CASE("A different path is read even at the same stamp", "[materialeditor]")
 	sandbox.Write("first");
 
 	CachedMaterial cached;
-	REQUIRE(cached.Get(sandbox.Path())->name == "first");
+	REQUIRE(cached.Get(sandbox.Root(), sandbox.Path())->name == "first");
 
 	auto other = assetlib::BMaterial();
 	other.name = "other";
 	const auto otherPath =
 		std::filesystem::path(sandbox.temp.filePath("other.bmaterial").toStdWString());
-	assetlib::saveMaterial(other, otherPath);
+	assetlib::AssetStore(sandbox.Root()).Save(other, "other.bmaterial");
 
-	REQUIRE(cached.Get(QString::fromStdWString(otherPath.wstring()))->name == "other");
+	REQUIRE(
+		cached.Get(sandbox.Root(), QString::fromStdWString(otherPath.wstring()))->name == "other");
 }
 
 TEST_CASE("A material that is not there yet reads as nothing", "[materialeditor]")
@@ -129,8 +136,8 @@ TEST_CASE("A material that is not there yet reads as nothing", "[materialeditor]
 	const Sandbox  sandbox;
 	CachedMaterial cached;
 
-	REQUIRE(cached.Get(sandbox.Path()) == nullptr);
-	REQUIRE(cached.Get("") == nullptr);
+	REQUIRE(cached.Get(sandbox.Root(), sandbox.Path()) == nullptr);
+	REQUIRE(cached.Get(sandbox.Root(), "") == nullptr);
 }
 
 TEST_CASE("A material that appears later is picked up", "[materialeditor]")
@@ -138,10 +145,10 @@ TEST_CASE("A material that appears later is picked up", "[materialeditor]")
 	const Sandbox  sandbox;
 	CachedMaterial cached;
 
-	REQUIRE(cached.Get(sandbox.Path()) == nullptr);
+	REQUIRE(cached.Get(sandbox.Root(), sandbox.Path()) == nullptr);
 
 	sandbox.Write("first");
 
-	REQUIRE(cached.Get(sandbox.Path()) != nullptr);
-	REQUIRE(cached.Get(sandbox.Path())->name == "first");
+	REQUIRE(cached.Get(sandbox.Root(), sandbox.Path()) != nullptr);
+	REQUIRE(cached.Get(sandbox.Root(), sandbox.Path())->name == "first");
 }

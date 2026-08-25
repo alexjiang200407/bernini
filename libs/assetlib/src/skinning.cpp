@@ -1,5 +1,4 @@
-#include <assetlib/bmesh_io.h>
-#include <assetlib/skeleton.h>
+#include <assetlib/bmesh.h>
 #include <assetlib/skinning.h>
 #include <assetlib_structs/Animation.h>
 #include <assetlib_structs/BMesh.h>

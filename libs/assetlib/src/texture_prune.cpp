@@ -1,3 +1,5 @@
+#include <assetlib/AssetStore.h>
+#include <assetlib/envmap.h>
 #include <assetlib/texture_prune.h>
 
 #include <core/err/util.h>
@@ -5,11 +7,7 @@
 
 #include "ref_paths.h"
 
-#include <assetlib/benvl_io.h>
-#include <assetlib/bmaterial_io.h>
-#include <assetlib/bsky_io.h>
-#include <assetlib/container_format.h>
-#include <assetlib/env_bake.h>
+#include <assetlib/codecs.h>
 #include <assetlib/material_bake.h>
 #include <assetlib_structs/BEnv.h>
 #include <assetlib_structs/BMaterial.h>
@@ -52,8 +50,8 @@ namespace assetlib
 			{
 				const auto unreadable = [&key](const char* what, const std::exception& e) {
 					return std::runtime_error(
-						"assetlib::findUnusedBakedTextures: cannot read the " + std::string(what) +
-						" '" + key +
+						"AssetStore::FindUnusedBakedTextures: cannot read the " +
+						std::string(what) + " '" + key +
 						"', so the baked maps it references cannot be known: " + e.what());
 				};
 
@@ -63,7 +61,7 @@ namespace assetlib
 					auto material = BMaterial();
 					try
 					{
-						material = loadMaterial(files, key);
+						material = load<BMaterial>(files, key);
 					}
 					catch (const std::exception& e)
 					{
@@ -82,7 +80,7 @@ namespace assetlib
 
 					case ShadingModel::kCount:
 						throw std::runtime_error(
-							"assetlib::findUnusedBakedTextures: the material '" + key +
+							"AssetStore::FindUnusedBakedTextures: the material '" + key +
 							"' names an unknown shading model, so its baked maps cannot be known");
 					}
 				}
@@ -90,7 +88,7 @@ namespace assetlib
 				{
 					try
 					{
-						markMap(live, loadSky(files, key).sky.baked);
+						markMap(live, load<BSky>(files, key).sky.baked);
 					}
 					catch (const std::exception& e)
 					{
@@ -102,7 +100,7 @@ namespace assetlib
 				{
 					try
 					{
-						const BEnvLighting lighting = loadEnvLighting(files, key);
+						const BEnvLighting lighting = load<BEnvLighting>(files, key);
 						markMap(live, lighting.prefilter.baked);
 						markMap(live, lighting.irradiance.baked);
 					}
@@ -119,18 +117,18 @@ namespace assetlib
 	}
 
 	TexturePruneScan
-	findUnusedBakedTextures(const AssetStore& store, const TexturePruneDesc& desc)
+	AssetStore::FindUnusedBakedTextures(const TexturePruneDesc& desc) const
 	{
 		// Checked even though a source built from a path already was: this one may have been built
 		// over a mount, whose constructor cannot check a writable layer that is allowed not to exist
 		// yet. The sweep unlinks files, and a data root that is not there would report a clean
 		// project instead of the caller error it is.
-		if (!std::filesystem::is_directory(store.GetDataRoot()))
+		if (!std::filesystem::is_directory(GetDataRoot()))
 			core::throw_runtime_error(
-				"assetlib::findUnusedBakedTextures: the data root '{}' is not a directory",
-				store.GetDataRoot().string());
+				"AssetStore::FindUnusedBakedTextures: the data root '{}' is not a directory",
+				GetDataRoot().string());
 
-		const core::file::IFileSystem& files = store.GetFiles();
+		const core::file::IFileSystem& files = GetFiles();
 
 		auto scan = TexturePruneScan();
 
@@ -141,7 +139,7 @@ namespace assetlib
 
 		// The sweep stays on the writable layer while the mark read the whole mount: a packed entry
 		// cannot be unlinked, so proposing one would be proposing a deletion nobody can carry out.
-		const std::filesystem::path textureDir = store.GetDataRoot() / desc.textureDir;
+		const std::filesystem::path textureDir = GetDataRoot() / desc.textureDir;
 		if (!std::filesystem::is_directory(textureDir))
 			return scan;
 
@@ -172,15 +170,21 @@ namespace assetlib
 		return scan;
 	}
 
+	TexturePruneScan
+	AssetStore::FindUnusedBakedTextures() const
+	{
+		return FindUnusedBakedTextures(TexturePruneDesc{});
+	}
+
 	TexturePruneResult
-	deleteUnusedBakedTextures(const TexturePruneScan& scan, const AssetStore& store)
+	AssetStore::DeleteUnusedBakedTextures(const TexturePruneScan& scan) const
 	{
 		auto result = TexturePruneResult();
 
 		for (const UnusedTexture& texture : scan.unused)
 		{
 			std::error_code ec;
-			const bool removed = std::filesystem::remove(store.GetDataRoot() / texture.path, ec);
+			const bool      removed = std::filesystem::remove(GetDataRoot() / texture.path, ec);
 
 			// One locked map must not abandon the rest of the sweep.
 			if (ec)

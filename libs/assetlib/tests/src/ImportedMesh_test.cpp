@@ -1,5 +1,5 @@
-#include <assetlib/asset_import.h>
 
+#include <assetlib/AssetStore.h>
 #include <assetlib_structs/BMesh.h>
 
 namespace
@@ -19,19 +19,25 @@ namespace
 	};
 }
 
-// The mesh is the one import output whose directory nothing else creates: the rig, material and
-// texture writes each make their own, so an import aimed at a fresh subfolder failed only at the
-// .bmesh -- "cannot open file for writing".
+// An import aimed at a fresh subfolder writes two levels of it that nothing scaffolded. What that
+// costs when the write does not make them is a failure inside write_atomic naming a temp file,
+// which reads as a permissions problem rather than a missing directory.
 TEST_CASE("A mesh import aimed at a new subfolder creates it", "[importedmesh]")
 {
 	int            tag = 0;
 	const TempTree root{ fs::temp_directory_path() /
 		                 ("bernini_mesh_test_" +
 		                  std::to_string(reinterpret_cast<uintptr_t>(&tag))) };
+
+	// The data root itself, which a real project always has -- Project::Create scaffolds it, and
+	// AssetStore refuses one that is not there. What this case is about is the *subfolder*.
+	fs::create_directories(root.path);
+
 	const fs::path bmeshPath = root.path / "Meshes" / "animals" / "unit.bmesh";
 
 	const assetlib::BMesh mesh;
-	assetlib::writeImportedMesh(mesh, bmeshPath);
+	// The store's own root, so the key is what the import writes and the path is what it lands at.
+	assetlib::AssetStore(root.path).Save(mesh, "Meshes/animals/unit.bmesh");
 
 	CHECK(fs::exists(bmeshPath));
 }

@@ -1,7 +1,7 @@
-#include <assetlib/bvat_io.h>
+#include <assetlib/codecs.h>
+#include <assetlib/vat_bake.h>
 #include <assetlib_structs/BVat.h>
 
-#include "bake_tokens.h"
 #include "cache_io.h"
 #include "fs_util.h"
 
@@ -142,7 +142,7 @@ namespace assetlib
 	}
 
 	std::vector<std::byte>
-	serializeVat(const BVat& vat)
+	AssetCodec<BVat>::Serialize(const BVat& vat)
 	{
 		if (vat.positionsKtx2.empty() || vat.normalsKtx2.empty())
 			throw_runtime_error(
@@ -173,7 +173,7 @@ namespace assetlib
 
 		// No source in the key: a `.bvat` records its three inputs and their stamps as chunks,
 		// and its freshness rule reads those -- the token covers the format alone.
-		return writer.Finish(magic::c_BVat, c_BVatBakeToken, SourceRef{});
+		return writer.Finish(magic::c_BVat, AssetCodec<BVat>::c_BakeToken, SourceRef{});
 	}
 
 	namespace
@@ -225,7 +225,7 @@ namespace assetlib
 	}
 
 	BVat
-	deserializeVat(std::span<const std::byte> bytes)
+	AssetCodec<BVat>::Deserialize(std::span<const std::byte> bytes)
 	{
 		// Wholly derived, so a bake from before the cache format has no carry -- re-baking it is
 		// cheaper than any reader for a file nobody authored.
@@ -233,30 +233,12 @@ namespace assetlib
 			!cache::isCacheEntry(bytes),
 			"bvat: written before the cache format; re-bake it");
 
-		const cache::Reader reader(bytes, magic::c_BVat, c_BVatBakeToken, c_What);
+		const cache::Reader reader(bytes, magic::c_BVat, AssetCodec<BVat>::c_BakeToken, c_What);
 
 		BVat vat          = readTables(TableSource{ &reader, nullptr });
 		vat.positionsKtx2 = reader.Require<std::byte>(ChunkId::kPositionsKtx2);
 		vat.normalsKtx2   = reader.Require<std::byte>(ChunkId::kNormalsKtx2);
 		return vat;
-	}
-
-	void
-	saveVat(const BVat& vat, const std::filesystem::path& path)
-	{
-		writeFileBytes(path, serializeVat(vat), "bvat");
-	}
-
-	BVat
-	loadVat(const std::filesystem::path& path)
-	{
-		return deserializeVat(core::file::read_file_bytes(path.string()));
-	}
-
-	BVat
-	loadVat(const core::file::IFileSystem& fileSystem, std::string_view path)
-	{
-		return deserializeVat(fileSystem.Read(path));
 	}
 
 	namespace
@@ -293,7 +275,7 @@ namespace assetlib
 		const auto chunks = cache::readCacheChunksFromFile(
 			path,
 			magic::c_BVat,
-			c_BVatBakeToken,
+			AssetCodec<BVat>::c_BakeToken,
 			c_WantedTableChunks,
 			c_What);
 
@@ -307,7 +289,7 @@ namespace assetlib
 			fileSystem,
 			path,
 			magic::c_BVat,
-			c_BVatBakeToken,
+			AssetCodec<BVat>::c_BakeToken,
 			c_WantedTableChunks,
 			c_What);
 
@@ -321,7 +303,7 @@ namespace assetlib
 			cache::readCacheChunksFromFile(
 				path,
 				magic::c_BVat,
-				c_BVatBakeToken,
+				AssetCodec<BVat>::c_BakeToken,
 				c_WantedRefChunks,
 				c_What));
 	}
@@ -334,8 +316,9 @@ namespace assetlib
 				fileSystem,
 				path,
 				magic::c_BVat,
-				c_BVatBakeToken,
+				AssetCodec<BVat>::c_BakeToken,
 				c_WantedRefChunks,
 				c_What));
 	}
+
 }

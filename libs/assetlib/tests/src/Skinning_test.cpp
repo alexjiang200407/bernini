@@ -1,6 +1,5 @@
-#include <assetlib/banim_io.h>
-#include <assetlib/bmesh_io.h>
-#include <assetlib/skeleton.h>
+#include <assetlib/bmesh.h>
+#include <assetlib/codecs.h>
 #include <assetlib/skinning.h>
 #include <assetlib_structs/Animation.h>
 #include <assetlib_structs/BMesh.h>
@@ -785,8 +784,8 @@ TEST_CASE("A baked posed box answers only for the pairing it measured", "[skinni
 
 	SECTION("the bake stores what the measure returns, through the .banim and back")
 	{
-		const assetlib::AnimationSet loaded =
-			assetlib::deserializeAnimations(assetlib::serializeAnimations(animations));
+		const assetlib::AnimationSet loaded = assetlib::AssetCodec<AnimationSet>::Deserialize(
+			assetlib::AssetCodec<AnimationSet>::Serialize(animations));
 
 		const std::optional<assetlib::Bounds> found =
 			assetlib::findPosedBounds(loaded, fixture.mesh, skeleton)[0];

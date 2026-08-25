@@ -310,20 +310,20 @@ Three different spaces are in play and they are easy to conflate. The contract, 
 * **`.bmesh`** — the modular on-disk mesh: node hierarchy, meshes, submeshes, meshlets +
   meshopt vertex/triangle pools, interleaved `vertexData`, and **material references by file path**.
   Struct: [libs/assetlib_structs/include/assetlib_structs/BMesh.h](libs/assetlib_structs/include/assetlib_structs/BMesh.h);
-  container I/O: [libs/assetlib/include/assetlib/bmesh_io.h](libs/assetlib/include/assetlib/bmesh_io.h).
+  container I/O: [libs/assetlib/include/assetlib/codecs.h](libs/assetlib/include/assetlib/codecs.h).
 * **`.bvat`** — a rig's clips baked to a position/normal texture pair, embedded as KTX2 payload
   chunks (positions `R16G16B16A16_UNORM` unorm-packed in one all-clips AABB; normals
   `R8G8B8A8_UNORM`, `rgb` as `xyz * 0.5 + 0.5` and `a` the tangent's twist about it), plus the clip/column tables and the per-frame skinning
   palettes. **A derived build product, never committed**: it stamps its three inputs and is re-baked
   in place when any of them moves — see [VAT](docs/vat.md). Struct:
   [libs/assetlib_structs/include/assetlib_structs/BVat.h](libs/assetlib_structs/include/assetlib_structs/BVat.h);
-  I/O: [libs/assetlib/include/assetlib/bvat_io.h](libs/assetlib/include/assetlib/bvat_io.h);
+  I/O: [libs/assetlib/include/assetlib/codecs.h](libs/assetlib/include/assetlib/codecs.h);
   bake: [libs/assetlib/include/assetlib/vat_bake.h](libs/assetlib/include/assetlib/vat_bake.h).
 * **`.bmaterial`** — **a shading-model tag plus that model's parameters**, as an authored text
   document: canonical JSON, factors and routes as named keys, the editor graph carried as an
   opaque string, unknown keys preserved on round-trip. Struct:
   [libs/assetlib_structs/include/assetlib_structs/BMaterial.h](libs/assetlib_structs/include/assetlib_structs/BMaterial.h);
-  I/O: [libs/assetlib/include/assetlib/bmaterial_io.h](libs/assetlib/include/assetlib/bmaterial_io.h);
+  I/O: [libs/assetlib/include/assetlib/codecs.h](libs/assetlib/include/assetlib/codecs.h);
   bake: [libs/assetlib/include/assetlib/material_bake.h](libs/assetlib/include/assetlib/material_bake.h).
 
   * **Every texture path is relative to the project's Data root**, not to the material file: a material
@@ -373,7 +373,7 @@ Three different spaces are in play and they are easy to conflate. The contract, 
     untouched rather than half-stripped. Run it with `assetlib_cli strip` (below); it is irreversible,
     so it asks before rewriting a file in place.
 
-  **There is one shape in the reader, and older files read into it.** `deserializeMaterial` takes the
+  **There is one shape in the reader, and older files read into it.** `AssetCodec<BMaterial>::Deserialize` takes the
   keys it knows and defaults the rest — a material written before
   `transmissionFactor` existed reads with 0, one from before the specular factors reads them at 1
   and white — so the reader has one shape and no branch that can rot; keys it does not know ride
@@ -401,18 +401,17 @@ Three different spaces are in play and they are easy to conflate. The contract, 
   tier-branching `Forward_AnyMesh` — and a new layer adds no geometry code.
 * **`.bskel`** (v1) — a skeleton: bones, their bind pose and inverse bind matrices, and a name pool.
   Struct: [libs/assetlib_structs/include/assetlib_structs/Skeleton.h](libs/assetlib_structs/include/assetlib_structs/Skeleton.h);
-  I/O: [libs/assetlib/include/assetlib/bskel_io.h](libs/assetlib/include/assetlib/bskel_io.h).
+  I/O: [libs/assetlib/include/assetlib/codecs.h](libs/assetlib/include/assetlib/codecs.h).
 * **`.banim`** (v1) — a clip set: resampled poses, per-clip metadata, and the `.bskel` path they
   address. Struct: [libs/assetlib_structs/include/assetlib_structs/Animation.h](libs/assetlib_structs/include/assetlib_structs/Animation.h);
-  I/O: [libs/assetlib/include/assetlib/banim_io.h](libs/assetlib/include/assetlib/banim_io.h).
+  I/O: [libs/assetlib/include/assetlib/codecs.h](libs/assetlib/include/assetlib/codecs.h).
 * A baked model on disk is therefore `<name>.bmesh` + one `matN.bmaterial` per material + one texture
   file per texture + `<name>.bskel` and `<name>.banim` if it was rigged, all in one directory.
 * **`.bsky`** — the sky: one radiance cube map, purely derived.
   **`.benvl`** — the lighting derived from that sky: the GGX prefilter chain, the irradiance
   convolution, and the exposure they were measured at. Both structs:
   [libs/assetlib_structs/include/assetlib_structs/BEnv.h](libs/assetlib_structs/include/assetlib_structs/BEnv.h);
-  I/O: [libs/assetlib/include/assetlib/bsky_io.h](libs/assetlib/include/assetlib/bsky_io.h),
-  [libs/assetlib/include/assetlib/benvl_io.h](libs/assetlib/include/assetlib/benvl_io.h).
+  I/O: [libs/assetlib/include/assetlib/codecs.h](libs/assetlib/include/assetlib/codecs.h).
 
   * **Derived cache entries** (see [Asset Containers](asset_containers.md)): the sky's route is its cache
     key, the lighting joins its two sources into one. Every map is an `EnvMapRoute`: the `source`
@@ -423,7 +422,7 @@ Three different spaces are in play and they are easy to conflate. The contract, 
     immediate; re-convolving the lighting it implies is minutes of work that the same edit need
     not trigger.
   * **The bake compiles, it does not convolve.** `bakeSky`/`bakeEnvLighting`
-    ([libs/assetlib/include/assetlib/env_bake.h](libs/assetlib/include/assetlib/env_bake.h)) take the
+    ([libs/assetlib/include/assetlib/envmap.h](libs/assetlib/include/assetlib/envmap.h)) take the
     routed float-cube intermediates and pack them RGB9E5 into content-addressed `.ktx2` under
     `Textures/` — the shipping format, for the reasons `packRgb9e5`'s doc gives. The convolutions
     themselves (`prefilterRadiance`, `irradianceSh`) run at import, when the sources are produced.
@@ -444,12 +443,12 @@ Three different spaces are in play and they are easy to conflate. The contract, 
   as it does for `Materials/`. Composing by path lets a sky be re-authored
   without touching the lighting minutes of convolution produced, and lets two environments share one
   sky; weather joins later through the minor version. Struct in the same `BEnv.h`; I/O:
-  [libs/assetlib/include/assetlib/benv_io.h](libs/assetlib/include/assetlib/benv_io.h).
+  [libs/assetlib/include/assetlib/codecs.h](libs/assetlib/include/assetlib/codecs.h).
 
   * Either path may be empty — the import's checkboxes write whichever pieces were asked for; what a
     `.benv` must reference is its consumer's rule, not the container's.
   * **Consumers resolve, they do not parse.** `resolveEnvironment(benvPath, dataRoot)`
-    ([libs/assetlib/include/assetlib/env_resolve.h](libs/assetlib/include/assetlib/env_resolve.h))
+    ([libs/assetlib/include/assetlib/envmap.h](libs/assetlib/include/assetlib/envmap.h))
     follows the chain and loads, per route, whatever `envMapToDraw` says is there to draw: the baked
     map while it is current, the float source it was compiled from otherwise. Same branch a material
     takes (`drawsLoose`), and for the same reason — `Textures/` is regenerated per platform, so a
@@ -736,7 +735,7 @@ someone bakes it.
 ## Pruning unused baked maps
 
 A re-bake orphans the map its old routing named (see [Texture standards](#texture-standards)), so
-`<Data>/Textures/` grows monotonically. `findUnusedBakedTextures` / `deleteUnusedBakedTextures`
+`<Data>/Textures/` grows monotonically. `AssetStore::FindUnusedBakedTextures` / `AssetStore::DeleteUnusedBakedTextures`
 ([libs/assetlib/include/assetlib/texture_prune.h](libs/assetlib/include/assetlib/texture_prune.h))
 reclaim them, exposed as `assetlib_cli prune` and as the editor's **File ▸ Clean Unused Textures…**.
 The scan is separate from the delete so both surfaces can show what they are about to destroy and take
@@ -806,7 +805,7 @@ per deletion: *what would nothing reference once this is gone?* `DeletionPlan::c
 asset the deleted set references whose **every** referrer is itself in the set, applied transitively —
 a material freed by its last mesh frees the baked maps and sources it alone named. It never reaches
 *up*: what references the target blocks the deletion either way, exactly as before. A blocked plan
-carries no cascade, and `deleteAsset` removes the cascade only after the target, so a failure part-way
+carries no cascade, and `AssetStore::DeleteAsset` removes the cascade only after the target, so a failure part-way
 never leaves a referenced asset missing.
 
 ### Deleting a directory
@@ -853,14 +852,14 @@ Three things the implementation must get right, each of which is a real failure 
   `tree_alpha_test.bmesh` does. Reporting that mesh twice would misstate how much is holding the
   material.
 
-`deleteAsset` reports a failure rather than throwing, because failure here is ordinary: the editor
+`AssetStore::DeleteAsset` reports a failure rather than throwing, because failure here is ordinary: the editor
 decodes `.ktx2` thumbnails on a thread pool, and Windows will not unlink a file that is open. "Still
 referenced" and "the file is in use" are different things to tell a user, and are different statuses.
 
 ## Renaming assets
 
 Identity is the data-root-relative path, so a rename is a reference rewrite or it is a break. `planRename`
-/ `renameAsset` (**Rename** on the same menu) move a file — or a directory, everything under it — and
+/ `AssetStore::RenameAsset` (**Rename** on the same menu) move a file — or a directory, everything under it — and
 rewrite every referrer to follow, so a rename is **never blocked by references** the way a deletion is.
 Three rules of its own:
 
@@ -976,8 +975,8 @@ everything else as text. Every container is opaque binary, so it is the intended
 in this file" — reach for it before hand-decoding a file against the serializer. The unrouted channels
 it lists are the usual cause of a material rendering wrong, since each one silently falls back to a
 default texture (see [Risky / Non-obvious contracts](#risky--non-obvious-contracts)). Rendered by
-[libs/assetlib/include/assetlib/asset_describe.h](libs/assetlib/include/assetlib/asset_describe.h),
-which the editor can also call for an asset inspector.
+`AssetStore::Describe` ([AssetStore.h](libs/assetlib/include/assetlib/AssetStore.h)), which the
+editor can also call for an asset inspector.
 
 Runtime load + render (load `.bmesh`, resolve each `.bmaterial` and its textures into PBR materials,
 upload geometry, draw): [examples/bgl_base/src/main.cpp](examples/bgl_base/src/main.cpp).

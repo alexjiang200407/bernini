@@ -523,7 +523,7 @@ MainWindow::CleanUnusedTextures()
 	auto scan = assetlib::TexturePruneScan();
 
 	// Scanning parses every .bmaterial in the project, so it runs off the UI thread. It reads assetlib
-	// only, never bgl, which is what the loading screen requires of its worker. findUnusedBakedTextures
+	// only, never bgl, which is what the loading screen requires of its worker. FindUnusedBakedTextures
 	// takes no cancel token, so the screen offers no button that would not work.
 	const background::TaskResult scanned = background::RunWithLoadingScreen(
 		this,
@@ -541,7 +541,7 @@ MainWindow::CleanUnusedTextures()
 				"the data directory '{}' is not there any more",
 				m_Project->GetDataDirectory().string());
 
-			scan = assetlib::findUnusedBakedTextures(m_Project->GetStore());
+			scan = m_Project->GetStore().FindUnusedBakedTextures();
 		});
 
 	if (!scanned.Completed())
@@ -597,7 +597,7 @@ MainWindow::CleanUnusedTextures()
 		return;
 
 	// Unlinking is fast, so it stays on the UI thread; the scan is what was slow.
-	const auto result = assetlib::deleteUnusedBakedTextures(scan, m_Project->GetStore());
+	const auto result = m_Project->GetStore().DeleteUnusedBakedTextures(scan);
 
 	if (!result.failed.empty())
 	{

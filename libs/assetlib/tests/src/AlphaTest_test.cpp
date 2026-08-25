@@ -1,4 +1,4 @@
-#include <assetlib/bmaterial_io.h>
+#include <assetlib/codecs.h>
 #include <assetlib/image_io.h>
 #include <assetlib/material_bake.h>
 #include <assetlib_structs/BMaterial.h>
@@ -6,6 +6,7 @@
 
 #include "bmesh_texture.h"
 
+#include "MountAt.h"
 #include "mounted_io.h"
 #include <catch2/catch_approx.hpp>
 
@@ -215,7 +216,7 @@ TEST_CASE("a cutout's base color bakes to a format that keeps its alpha", "[bmat
 	cutout.pbr.routes[2] = { "leaf.ktx2", 2 };  // base B
 	cutout.pbr.routes[3] = { "leaf.ktx2", 3 };  // base A
 
-	REQUIRE_NOTHROW(bakeMaterial(cutout, MaterialBakeDesc{ dir.path }));
+	REQUIRE_NOTHROW(StoreAt(dir.path).BakeMaterial(cutout));
 
 	SECTION("it bakes BC7, not BC1")
 	{
@@ -246,7 +247,7 @@ TEST_CASE("a cutout's base color bakes to a format that keeps its alpha", "[bmat
 		opaque.pbr.routes[2] = { "leaf.ktx2", 2 };
 		opaque.pbr.routes[3] = { "leaf.ktx2", 3 };  // routed, and deliberately ignored
 
-		REQUIRE_NOTHROW(bakeMaterial(opaque, MaterialBakeDesc{ dir.path }));
+		REQUIRE_NOTHROW(StoreAt(dir.path).BakeMaterial(opaque));
 
 		const ImageData baked = loadKTX2(dir.path / opaque.pbr.baseColorTexture);
 		CHECK(baked.vkFormat == VkFormat::BC1_RGB_SRGB_BLOCK);
@@ -261,7 +262,7 @@ TEST_CASE("a cutout's base color bakes to a format that keeps its alpha", "[bmat
 		BMaterial opaque;
 		opaque.pbr.routes = cutout.pbr.routes;
 
-		REQUIRE_NOTHROW(bakeMaterial(opaque, MaterialBakeDesc{ dir.path }));
+		REQUIRE_NOTHROW(StoreAt(dir.path).BakeMaterial(opaque));
 
 		REQUIRE(opaque.pbr.baseColorTexture != cutout.pbr.baseColorTexture);
 		CHECK(std::filesystem::exists(dir.path / opaque.pbr.baseColorTexture));
@@ -279,9 +280,9 @@ TEST_CASE("alphaMode and alphaCutoff survive a .bmaterial round trip", "[bmateri
 	material.pbr.baseColorTexture = "Textures/basecolor_dead.ktx2";
 
 	const auto path = dir.path / "cutout.bmaterial";
-	REQUIRE_NOTHROW(saveMaterial(material, path));
+	REQUIRE_NOTHROW(SaveAt(material, path));
 
-	const BMaterial loaded = loadMaterial(path);
+	const BMaterial loaded = LoadAt<BMaterial>(path);
 	CHECK(loaded.pbr.alphaMode == AlphaMode::kBlend);
 	CHECK(loaded.pbr.alphaCutoff == 0.25f);
 }
@@ -298,9 +299,9 @@ TEST_CASE("kHashed survives a .bmaterial round trip", "[bmaterial][alphatest][ha
 	material.pbr.baseColorTexture = "Textures/basecolor_dead.ktx2";
 
 	const auto path = dir.path / "hashed.bmaterial";
-	REQUIRE_NOTHROW(saveMaterial(material, path));
+	REQUIRE_NOTHROW(SaveAt(material, path));
 
-	CHECK(loadMaterial(path).pbr.alphaMode == AlphaMode::kHashed);
+	CHECK(LoadAt<BMaterial>(path).pbr.alphaMode == AlphaMode::kHashed);
 
 	// The values the enum already had must not have moved, or every material baked before this
 	// reads as a different mode.
@@ -318,7 +319,7 @@ TEST_CASE("a stale .bmaterial is rejected, not silently misread", "[bmaterial][a
 	material.pbr.alphaMode   = AlphaMode::kMask;
 	material.pbr.alphaCutoff = 0.25f;
 
-	std::vector<std::byte> bytes = serializeMaterial(material);
+	std::vector<std::byte> bytes = AssetCodec<BMaterial>::Serialize(material);
 
 	// Rewrite the version word (major is the uint16 right after the 4-byte magic) to v4 and lop off the
 	// two fields v5 appended, producing exactly what a v4 writer would have emitted.
@@ -326,5 +327,5 @@ TEST_CASE("a stale .bmaterial is rejected, not silently misread", "[bmaterial][a
 	std::memcpy(bytes.data() + sizeof(uint32_t), &c_V4, sizeof(c_V4));
 	bytes.resize(bytes.size() - (sizeof(uint32_t) + sizeof(float)));
 
-	REQUIRE_THROWS_AS(deserializeMaterial(bytes), std::runtime_error);
+	REQUIRE_THROWS_AS(AssetCodec<BMaterial>::Deserialize(bytes), std::runtime_error);
 }

@@ -1,7 +1,8 @@
 #pragma once
+#include <assetlib/AssetStore.h>
 #include <assetlib/asset_import.h>
+#include <assetlib/bmesh.h>
 #include <assetlib/bmesh_gltf.h>
-#include <assetlib/bmesh_io.h>
 #include <assetlib/mesh_tangents.h>
 #include <assetlib/project_layout.h>
 #include <assetlib_structs/BMesh.h>
@@ -27,23 +28,25 @@ namespace assetlib::test
 		generateTangents(mesh);
 		requireUniqueSubmeshNames(mesh);
 
-		const ImportTarget target{ dataRoot, "unit", sampleRate };
-		const SourceRef    source = copyImportedSource(glb, target);
+		const ImportTarget target{ "unit", sampleRate };
+		const SourceRef    source = AssetStore(dataRoot).CopyImportedSource(glb, target);
 		mesh.source               = source;
 
-		writeImportedRig(
-			imported,
+		const AssetStore store(dataRoot);
+
+		store.WriteImportedRig(
+			imported.skeleton,
+			imported.animations,
 			mesh,
-			dataRoot,
-			dataRoot / c_SkeletonsDirectoryName / "unit.bskel",
-			dataRoot / c_AnimationsDirectoryName / "unit.banim",
+			"Skeletons/unit.bskel",
+			"Animations/unit.banim",
 			true,
 			source);
 
 		if (!mesh.submeshes.empty())
 			static_cast<void>(attachMaterial(mesh, 0, material));
 
-		writeImportedMesh(mesh, dataRoot / c_MeshesDirectoryName / "unit.bmesh");
-		writeImportedDocument(target, &mesh);
+		store.Save(mesh, "Meshes/unit.bmesh");
+		store.WriteImportedDocument(target, &mesh);
 	}
 }

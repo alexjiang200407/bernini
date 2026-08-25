@@ -26,16 +26,36 @@ when this doc disagrees, trust the header, then fix this doc.
   `\`-separated and misses — but still resolves loose, because the OS accepts either separator.
   Loose works, packed does not, and nothing reports a problem. See [STYLE.md](STYLE.md) § Paths.
 
-* **The seam is half-built, and the halves are visible from the include list.** Reads go through
-  the store; the *write* half is still free functions taking a host path — `save`, `saveMaterial`,
-  `saveSky`, `saveEnvLighting`, `saveVat` — so a caller writes
-  `save(mesh, store.ResolveWritePath(key))`, or hand-joins `dataRoot / relative`. The newer
-  whole-project operations already take the store (`packProject`, `findUnusedBakedTextures`,
-  `bakeVat`, `AssetRefGraph::Scan`); the older per-file ones do not. The source+cache model widened
-  the gap rather than closing it — six `LoadRegen*` methods joined the read half and no write half
-  arrived — so the store now answers twenty loads and zero saves. The design that finishes it is
-  settled and no longer blocked: see
-  [docs/specs/assetlib_store_codecs.md](docs/specs/assetlib_store_codecs.md).
+* **One seam, both directions.** A project's asset is read and written by mount key through the
+  store: `store.Load<BMesh>(key)` and `store.Save(mesh, key)`. There is no second way — the
+  `save*`/`load*` functions that took a `std::filesystem::path` to a project's file are gone, and
+  the type is what selects the codec rather than the function name.
+
+  A caller that genuinely addresses the *host* still uses a path, and now looks different so it
+  cannot be mistaken for the other thing: it encodes with the codec and moves the bytes itself.
+  `assetlib_cli strip --out` writes a shipping tree and the editor opens a mesh from outside any
+  data root — both are `AssetCodec<T>::Serialize` plus `core::file::write_atomic`, or the read
+  equivalent.
+
+* **A codec per container, and the type picks it.** `AssetCodec<T>` declares a container's
+  extension, its magic, how it serializes, and — for a cache entry — the bake revision it is
+  written at. One specialization per container, beside that container's io
+  ([AssetCodec.h](libs/assetlib/include/assetlib/AssetCodec.h)).
+
+  This is the compile-time form of the registry a shipping engine uses — Godot's
+  `ResourceFormatLoader`, Unity's `ScriptedImporter`, Unreal's `UFactory`. Those dispatch virtually
+  because everything they load shares a base; our containers are unrelated PODs, so a virtual codec
+  would return `std::any` and every caller would cast back. The deviation is deliberate.
+
+* **The container list exists once.** `containerKinds()` is folded out of the codec
+  specializations, and a static assertion holds it to `AssetType` — every kind but `kTexture`,
+  which is an image this library encodes rather than a container it serializes a struct into. The
+  extension lookup, the CLI's magic sniff and the pack rules all read it.
+
+  Behaviour that differs *per* container is a different thing and stays a `switch`: `migrate`
+  regenerates geometry and re-saves the rest, `asset_rename` rewrites different fields per type,
+  `pack` re-bakes some and copies others. Each is exhaustive with no `default:`, so `-Wall -Werror`
+  makes a new `AssetType` a compile error there — which is the guarantee a table cannot give.
 
 * **Two container regimes, and the split is authored-vs-derived.** `.bmaterial`, `.benv` and
   `.bimport` are canonical-JSON text documents, unknown keys preserved on round-trip; `.bmesh`,
@@ -51,7 +71,7 @@ when this doc disagrees, trust the header, then fix this doc.
 
 * **Baked maps are shared, not owned.** A bake's output name is content-addressed from its
   route, so two materials routing the same source share one baked file — and deleting a material
-  therefore does not delete its maps. `findUnusedBakedTextures` is what collects them.
+  therefore does not delete its maps. `AssetStore::FindUnusedBakedTextures` is what collects them.
 
 * **The cook never carries a source format's shading model across.** `toBMesh` drops glTF's PBR
   materials on the floor: they are that format's model, not necessarily the engine's, and
@@ -73,20 +93,27 @@ when this doc disagrees, trust the header, then fix this doc.
 | `AssetRefGraph` | [asset_refs.h](libs/assetlib/include/assetlib/asset_refs.h) | One walk of the project: who references what. Backs deletion, rename and the prune. |
 | `DeletionPlan` / `RenamePlan` | [asset_refs.h](libs/assetlib/include/assetlib/asset_refs.h) | What an edit would destroy or rewrite, decided before anything is touched. |
 
-### Containers — one `*_io.h` each
+### Containers — one table
 
-Each declares the same four operations over its POD: serialize, deserialize, save to a host
-path, load from a host path.
+Every container this build reads or writes is one `AssetCodec<T>` specialization in
+[codecs.h](libs/assetlib/include/assetlib/codecs.h), listed in `AssetType` order: the extension, the
+type, and for a cache entry the magic and the bake token. That header is the whole registration
+surface and the only place those four are written down; each `Serialize` / `Deserialize` is defined
+in the container's own `.cpp`, which is where the format lives.
 
-| Container | Header | Holds |
-|---|---|---|
-| `.bmesh` | [bmesh_io.h](libs/assetlib/include/assetlib/bmesh_io.h) | Geometry, meshlets, node hierarchy, material paths, skeleton path |
-| `.bmaterial` | [bmaterial_io.h](libs/assetlib/include/assetlib/bmaterial_io.h) | Factors, the baked triplet, the per-channel routing table |
-| `.bskel` / `.banim` | [bskel_io.h](libs/assetlib/include/assetlib/bskel_io.h), [banim_io.h](libs/assetlib/include/assetlib/banim_io.h) | A rig; clip samples resampled against it. Split because a rig outlives its clips. |
-| `.bvat` | [bvat_io.h](libs/assetlib/include/assetlib/bvat_io.h) | A baked position/normal texture pair and its tables. Derived, never committed. |
-| `.bsky` / `.benvl` / `.benv` | [bsky_io.h](libs/assetlib/include/assetlib/bsky_io.h), [benvl_io.h](libs/assetlib/include/assetlib/benvl_io.h), [benv_io.h](libs/assetlib/include/assetlib/benv_io.h) | Backdrop; the lighting pair convolved from it; the few bytes naming both. [docs/envmaps.md](docs/envmaps.md) |
-| `.bimport` | [import_document.h](libs/assetlib/include/assetlib/import_document.h) | One per copied source under `meshes_src/`: the bindings and parameters an import was authored with, as text. What a stale cache entry re-cooks from. |
-| `.bpak` | [pak_io.h](libs/assetlib/include/assetlib/pak_io.h), [pak_pack.h](libs/assetlib/include/assetlib/pak_pack.h) | The archive the rest are packed into. [docs/archives.md](docs/archives.md) |
+Reading and writing a project's copy is `store.Load<T>(key)` / `store.Save(value, key)` — the codec
+is what a caller reaches for only when it holds bytes no store addresses, which is
+`assetlib_cli strip --out` and the editor opening a mesh from outside any data root.
+
+| Container | Holds |
+|---|---|
+| `.bmesh` | Geometry, meshlets, node hierarchy, material paths, skeleton path. Editing one is [bmesh.h](libs/assetlib/include/assetlib/bmesh.h). |
+| `.bmaterial` | Factors, the baked triplet, the per-channel routing table |
+| `.bskel` / `.banim` | A rig; clip samples resampled against it. Split because a rig outlives its clips. |
+| `.bvat` | A baked position/normal texture pair and its tables. Derived, never committed. |
+| `.bsky` / `.benvl` / `.benv` | Backdrop; the lighting pair convolved from it; the few bytes naming both. [docs/envmaps.md](docs/envmaps.md) |
+| `.bimport` | One per copied source under `meshes_src/`: the bindings and parameters an import was authored with, as text. What a stale cache entry re-cooks from. Its struct is [import_document.h](libs/assetlib/include/assetlib/import_document.h). |
+| `.bpak` | The archive the rest are packed into — not a codec, since nothing references one. [pak.h](libs/assetlib/include/assetlib/pak.h). [docs/archives.md](docs/archives.md) |
 
 ### Operations
 
@@ -94,18 +121,18 @@ path, load from a host path.
 |---|---|---|
 | Import from glTF | [bmesh_gltf.h](libs/assetlib/include/assetlib/bmesh_gltf.h), [asset_import.h](libs/assetlib/include/assetlib/asset_import.h) | Decode, then write the files an import produces — with a rollback for a cancelled one. |
 | Material bake | [material_bake.h](libs/assetlib/include/assetlib/material_bake.h) | Composites routes down to the baseColor/normal/orm triplet. |
-| Environment bake | [env_bake.h](libs/assetlib/include/assetlib/env_bake.h), [envmap_bake.h](libs/assetlib/include/assetlib/envmap_bake.h), [env_import.h](libs/assetlib/include/assetlib/env_import.h), [env_resolve.h](libs/assetlib/include/assetlib/env_resolve.h) | `.hdr` → the convolutions → the shipping RGB9E5 maps. |
+| Environment bake | [envmap.h](libs/assetlib/include/assetlib/envmap.h) | One header, in pipeline order: `.hdr` → the convolutions → the shipping RGB9E5 maps. |
 | VAT bake | [vat_bake.h](libs/assetlib/include/assetlib/vat_bake.h) | A rig's clips baked to textures. [docs/vat.md](docs/vat.md) |
-| Pose and CPU skinning | [skeleton.h](libs/assetlib/include/assetlib/skeleton.h), [skinning.h](libs/assetlib/include/assetlib/skinning.h) | Deliberately the unoptimised reference every GPU path is diffed against. [docs/skinning.md](docs/skinning.md) |
+| Pose and CPU skinning | [skinning.h](libs/assetlib/include/assetlib/skinning.h) | Deliberately the unoptimised reference every GPU path is diffed against. [docs/skinning.md](docs/skinning.md) |
 | Images | [image_io.h](libs/assetlib/include/assetlib/image_io.h) | KTX2 encode/decode, RGB9E5 pack. [docs/asset_standards.md](docs/asset_standards.md) |
-| Describe, migrate, prune | [asset_describe.h](libs/assetlib/include/assetlib/asset_describe.h), [migrate.h](libs/assetlib/include/assetlib/migrate.h), [texture_prune.h](libs/assetlib/include/assetlib/texture_prune.h) | Text for a person; re-save at the current form; collect unreferenced bakes. |
+| Describe, migrate, prune | `AssetStore::Describe` ([AssetStore.h](libs/assetlib/include/assetlib/AssetStore.h)), [migrate.h](libs/assetlib/include/assetlib/migrate.h), [texture_prune.h](libs/assetlib/include/assetlib/texture_prune.h) | Text for a person, one overload per container; re-save at the current form; collect unreferenced bakes. |
 | Cancellation | [cancel.h](libs/assetlib/include/assetlib/cancel.h) | `std::stop_token`, polled at the encode that dominates each bake. |
 
 ## Topology
 
 ```mermaid
 flowchart TD
-    GLTF[".glb / .gltf / .hdr"] -- "loadFromGltf, importEnvironment" --> IMP["BMeshImport (flattened)"]
+    GLTF[".glb / .gltf / .hdr"] -- "loadFromGltf, ImportEnvironment" --> IMP["BMeshImport (flattened)"]
     IMP -- "toBMesh" --> POD["BMesh, Skeleton, AnimationSet"]
     POD -- "serialize" --> C["cache entry (key in the header)"]
 
@@ -119,7 +146,7 @@ flowchart TD
 
     STORE --> GRAPH["AssetRefGraph::Scan"]
     GRAPH --> PLAN["DeletionPlan / RenamePlan"]
-    STORE --> BAKE["bakeVat, packProject, findUnusedBakedTextures"]
+    STORE --> BAKE["BakeVat, Pack, FindUnusedBakedTextures"]
 
     CLI["assetlib_cli"] --> STORE
     ED["apps/editor"] --> STORE
@@ -153,11 +180,15 @@ The dotted edge is the asymmetry: reads go through the store, writes go around i
   it reads a texel, and a whole-project survey must not pay for them.
 
 ### Containers
-* **`save(const BMesh&, path)`** — `@throws` if the mesh carries joint indices but names no
-  skeleton. Refused at write time because nothing reading the file afterwards can tell a joint
-  index that resolves to nothing from one that does not.
-* **`save` does not create directories**; `writeImportedMesh` does. An import aimed at a
-  subfolder needs the latter.
+* **`Save<BMesh>`** — `@throws` if the mesh carries joint indices but names no skeleton. Refused
+  at write time because nothing reading the file afterwards can tell a joint index that resolves
+  to nothing from one that does not.
+* **`Save` creates the directories its key names.** A key is a location in the data root, not one
+  that already exists, so an import aimed at a subfolder needs nothing from its caller. The *data
+  root* itself must exist — `AssetStore`'s constructor refuses one that does not, since a write
+  into a missing root is a mistyped root rather than a new subfolder.
+* **`Save` refuses a key that escapes the data root**, which is `ResolveWritePath`'s boundary. A
+  key typed on a command line cannot climb out of the project.
 * **`deserialize*`** — `@throws` on a foreign bake token or a chunk-era file. Both are
   unreadable by design, not by omission: a cache miss regenerates from the authored side, and
   there is nothing to convert from. `AssetStore::LoadRegen*` is the seam that regenerates;
@@ -170,7 +201,7 @@ The dotted edge is the asymmetry: reads go through the store, writes go around i
 * **`planDeletion` on a directory** — a directory is held only by an edge reaching *into* it
   from outside, and takes everything beneath it. Whether it is a directory the *project* needs is
   not a question this can answer; `Project::IsRequiredDirectory` is.
-* **`renameAsset`** — reads and rewrites every referrer in memory first, saves them, then moves
+* **`AssetStore::RenameAsset`** — reads and rewrites every referrer in memory first, saves them, then moves
   the file last, because the move is the step most likely to be refused. A failure writes the
   original bytes back — best-effort, and a machine that fails the restore too reports the first
   error rather than a pretense of atomicity.
@@ -182,15 +213,15 @@ The dotted edge is the asymmetry: reads go through the store, writes go around i
 auto project = assetlib::Project::Open(projectFile);
 const auto& store = project.GetStore();
 
-auto material = store.LoadMaterial("Materials/brick.bmaterial");
+auto material = store.Load<assetlib::BMaterial>("Materials/brick.bmaterial");
 if (store.BakeIsStale(material))
 {
-	assetlib::bakeMaterial(material, { .dataRoot = store.GetDataRoot() });
-	assetlib::saveMaterial(material, store.ResolveWritePath("Materials/brick.bmaterial"));
+	store.BakeMaterial(material);
+	store.Save(material, "Materials/brick.bmaterial");
 }
 ```
 
-The two-step write is the asymmetry above, not a convention to copy into new code. `assetlib_cli`
+One key, read and written by the same store, and no path anywhere. `assetlib_cli`
 ([libs/assetlib/cli/main.cpp](libs/assetlib/cli/main.cpp)) is the fullest worked example — fourteen
 verbs over one `Project`, including `describe`, `migrate`, `pack` and every bake.
 

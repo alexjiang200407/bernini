@@ -1,28 +1,22 @@
 #include <CLI/CLI.hpp>
+#include <assetlib/AssetCodec.h>
 #include <assetlib/AssetStore.h>
 #include <assetlib/Project.h>
-#include <assetlib/asset_describe.h>
 #include <assetlib/asset_import.h>
 #include <assetlib/asset_refs.h>
 #include <assetlib/assetlib.h>
-#include <assetlib/benv_io.h>
-#include <assetlib/benvl_io.h>
-#include <assetlib/bmaterial_io.h>
+#include <assetlib/bmesh.h>
 #include <assetlib/bmesh_gltf.h>
-#include <assetlib/bmesh_io.h>
-#include <assetlib/bskel_io.h>
-#include <assetlib/bvat_io.h>
-#include <assetlib/container_format.h>
+#include <assetlib/codecs.h>
 #include <assetlib/container_info.h>
-#include <assetlib/env_import.h>
+#include <assetlib/envmap.h>
 #include <assetlib/material_bake.h>
 #include <assetlib/mesh_tangents.h>
 #include <assetlib/migrate.h>
-#include <assetlib/pak_io.h>
-#include <assetlib/pak_pack.h>
+#include <assetlib/pak.h>
 #include <assetlib/project_layout.h>
 #include <assetlib/rebake_bounds.h>
-#include <assetlib/skeleton.h>
+#include <assetlib/skinning.h>
 #include <assetlib/texture_prune.h>
 #include <assetlib/vat_bake.h>
 #include <assetlib_structs/BEnv.h>
@@ -31,21 +25,25 @@
 #include <assetlib_structs/BVat.h>
 #include <assetlib_structs/magic.h>
 #include <core/err/util.h>
+#include <core/file/file.h>
 #include <spdlog/spdlog.h>
 
 namespace
 {
-	enum class ContainerType
+
+	// Every container the table knows, for a message that cannot drift from what sniff accepts.
+	std::string
+	knownContainers()
 	{
-		kMesh,
-		kMaterial,
-		kEnv,
-		kSky,
-		kEnvLighting,
-		kSkeleton,
-		kAnimation,
-		kVat,
-	};
+		std::string list;
+		for (const assetlib::ContainerKind& kind : assetlib::containerKinds())
+		{
+			if (!list.empty())
+				list += ", ";
+			list += kind.extension;
+		}
+		return list;
+	}
 
 	std::string
 	formatBytes(uint64_t bytes)
@@ -115,7 +113,7 @@ namespace
 	// opposite of assetlib::assetTypeFromExtension, which never opens the file. The exception is an
 	// authored text document, which has no magic to read: there the extension is the identity, as it
 	// is for the loaders.
-	ContainerType
+	assetlib::AssetType
 	sniff(const assetlib::AssetStore& store, std::string_view key)
 	{
 		const auto stamp = store.GetFiles().Stat(key);
@@ -132,11 +130,11 @@ namespace
 
 		if (assetlib::isTextAssetDocument(header))
 		{
+			// A document opens with its content, so only its name can say which it is.
 			const auto type = assetlib::assetTypeFromExtension(std::filesystem::path(key));
-			if (type == assetlib::AssetType::kMaterial)
-				return ContainerType::kMaterial;
-			if (type == assetlib::AssetType::kEnvironment)
-				return ContainerType::kEnv;
+			if (type == assetlib::AssetType::kMaterial || type == assetlib::AssetType::kEnvironment)
+				return *type;
+
 			core::throw_runtime_error(
 				"{} is a text document, and the only text containers this tool knows are "
 				".bmaterial and .benv",
@@ -146,30 +144,14 @@ namespace
 		uint32_t magic = 0;
 		std::memcpy(&magic, header.data(), sizeof(magic));
 
-		switch (magic)
-		{
-		case assetlib::magic::c_BMesh:
-			return ContainerType::kMesh;
-		case assetlib::magic::c_BMaterial:
-			return ContainerType::kMaterial;
-		case assetlib::magic::c_BEnv:
-			return ContainerType::kEnv;
-		case assetlib::magic::c_BSky:
-			return ContainerType::kSky;
-		case assetlib::magic::c_BEnvL:
-			return ContainerType::kEnvLighting;
-		case assetlib::magic::c_BSkel:
-			return ContainerType::kSkeleton;
-		case assetlib::magic::c_BAnim:
-			return ContainerType::kAnimation;
-		case assetlib::magic::c_BVat:
-			return ContainerType::kVat;
-		}
+		const auto kind = assetlib::containerKindForMagic(magic);
+		core::throw_runtime_error_if(
+			!kind.has_value(),
+			"{} is not a container this tool knows (expected one of: {})",
+			key,
+			knownContainers());
 
-		core::throw_runtime_error(
-			"{} is not a container this tool knows (expected .bmesh, .bmaterial, .benv, .bsky, "
-			".benvl, .bskel, .banim or .bvat)",
-			key);
+		return kind->type;
 	}
 
 	// A clip set's signature only means something next to the rig it names, so describe resolves it
@@ -180,7 +162,7 @@ namespace
 		if (skeleton.empty() || !store.Exists(skeleton))
 			return std::nullopt;
 
-		return store.LoadSkeleton(skeleton);
+		return store.Load<assetlib::Skeleton>(skeleton);
 	}
 }
 
@@ -487,7 +469,7 @@ main(int argc, char** argv)
 
 			const auto imported = assetlib::loadFromGltf(input, { .sampleRate = sampleRate });
 
-			// Only what this import will actually write. writeImportedRig no-ops on a source with no
+			// Only what this import will actually write. WriteImportedRig no-ops on a source with no
 			// skin, so a static mesh neither claims Skeletons/<name>.bskel nor may take one back
 			// down: refusing over a file it never touches is the mild failure, deleting someone
 			// else's on a rollback is not.
@@ -510,8 +492,8 @@ main(int argc, char** argv)
 					collisions.push_back(fs::relative(target, dataRoot, ec).generic_string());
 			};
 
-			const fs::path sourceCopy = assetlib::importedSourcePathFor(dataRoot, name);
-			const fs::path importDoc  = assetlib::importDocumentPathFor(dataRoot, name);
+			const fs::path sourceCopy = assetlib::AssetStore(dataRoot).ImportedSourcePath(name);
+			const fs::path importDoc  = assetlib::AssetStore(dataRoot).ImportDocumentPath(name);
 			files.push_back(sourceCopy);
 			files.push_back(importDoc);
 
@@ -549,24 +531,25 @@ main(int argc, char** argv)
 				assetlib::BMesh mesh = assetlib::toBMesh(imported);
 				assetlib::requireUniqueSubmeshNames(mesh);
 
-				const assetlib::ImportTarget target{ dataRoot, name, sampleRate };
-				const assetlib::SourceRef    source = assetlib::copyImportedSource(input, target);
+				const assetlib::AssetStore   importStore(dataRoot);
+				const assetlib::ImportTarget target{ name, sampleRate };
+				const assetlib::SourceRef    source = importStore.CopyImportedSource(input, target);
 				mesh.source                         = source;
 
 				assetlib::writeTextures(imported, textureDir);
 
 				const auto derived = assetlib::generateTangents(mesh);
 
-				assetlib::writeImportedRig(
-					imported,
+				importStore.WriteImportedRig(
+					imported.skeleton,
+					imported.animations,
 					mesh,
-					dataRoot,
-					bskelPath,
-					banimPath,
+					importStore.KeyFor(bskelPath),
+					importStore.KeyFor(banimPath),
 					true,
 					source);
-				assetlib::writeImportedMesh(mesh, bmeshPath);
-				assetlib::writeImportedDocument(target, &mesh);
+				importStore.Save(mesh, importStore.KeyFor(bmeshPath));
+				importStore.WriteImportedDocument(target, &mesh);
 
 				if (derived.skipped > 0)
 					spdlog::warn(
@@ -623,7 +606,7 @@ main(int argc, char** argv)
 			const assetlib::Project     project = assetlib::Project::Open(projectFile);
 			const assetlib::AssetStore& store   = project.GetStore();
 
-			const assetlib::BVat vat = assetlib::bakeVat(store, desc);
+			const assetlib::BVat vat = store.BakeVat(desc);
 
 			// generic_string, not string: vatPathFor hands back a path, and on Windows its native
 			// spelling is `\`-separated -- which a mount key never is.
@@ -631,14 +614,13 @@ main(int argc, char** argv)
 			if (key.empty())
 				key = assetlib::vatPathFor(vatMesh, vatAnimations).generic_string();
 
-			const std::filesystem::path out = store.ResolveWritePath(key);
-			assetlib::saveVat(vat, out);
+			store.Save(vat, key);
 
 			spdlog::info(
 				"Baked '{}' + '{}' -> '{}': {} x {} texels, {} clip(s), {} bones",
 				vatMesh,
 				vatAnimations,
-				out.string(),
+				key,
 				vat.width,
 				vat.height,
 				vat.clips.size(),
@@ -663,7 +645,6 @@ main(int argc, char** argv)
 			const assetlib::Project project = assetlib::Project::Open(projectFile);
 
 			auto importDesc               = assetlib::EnvImportDesc();
-			importDesc.dataRoot           = project.GetDataDirectory();
 			importDesc.source             = envInput;
 			importDesc.name               = envName;
 			importDesc.skyFaceSize        = envSkyboxSize;
@@ -675,7 +656,8 @@ main(int argc, char** argv)
 			importDesc.irradianceFaceSize = envIemSize;
 			importDesc.threads            = envThreads;
 
-			const assetlib::EnvImportResult imported = assetlib::importEnvironment(importDesc);
+			const assetlib::EnvImportResult imported =
+				project.GetStore().ImportEnvironment(importDesc);
 
 			spdlog::info(
 				"Imported '{}' into '{}': {} files, exposure {:.3f}",
@@ -700,7 +682,7 @@ main(int argc, char** argv)
 			const assetlib::Project     project = assetlib::Project::Open(projectFile);
 			const assetlib::AssetStore& store   = project.GetStore();
 
-			const auto mesh = store.LoadMesh(assetlib::normalizePath(objInput));
+			const auto mesh = store.Load<assetlib::BMesh>(assetlib::normalizePath(objInput));
 			assetlib::writeObj(mesh, objOut, !objRaw);
 			spdlog::info(
 				"Wrote '{}' from '{}' ({} submeshes, {} source)",
@@ -725,11 +707,11 @@ main(int argc, char** argv)
 
 			const std::string key = assetlib::normalizePath(tangentsInput);
 
-			assetlib::BMesh mesh   = store.LoadMesh(key);
+			assetlib::BMesh mesh   = store.Load<assetlib::BMesh>(key);
 			const auto      result = assetlib::generateTangents(mesh);
 
 			if (result.generated > 0)
-				assetlib::save(mesh, store.ResolveWritePath(key));
+				store.Save(mesh, key);
 
 			spdlog::info(
 				"'{}': {} submesh(es) gained a tangent, {} already had one, {} could not have one "
@@ -755,10 +737,11 @@ main(int argc, char** argv)
 
 			const std::string key = assetlib::normalizePath(describeInput);
 
-			// The store's overload, always: it stats each routed source against what is on disk, so
-			// a stale bake is reported rather than merely recorded.
-			const auto describeAsset = [&store](const auto& asset) {
-				return store.Describe(asset);
+			// Every container through the store: it stats each routed source against what is on
+			// disk, so a stale bake is reported rather than merely recorded. The three that route
+			// nothing answer here too, so this switch never has to know which kind it is holding.
+			const auto describeAsset = [&store](const auto&... asset) {
+				return store.Describe(asset...);
 			};
 
 			if (describeKey)
@@ -793,35 +776,43 @@ main(int argc, char** argv)
 
 			switch (sniff(store, key))
 			{
-			case ContainerType::kMesh:
-				std::cout << assetlib::describe(store.LoadMesh(key), !describeBrief);
+			case assetlib::AssetType::kMesh:
+				std::cout << describeAsset(store.Load<assetlib::BMesh>(key), !describeBrief);
 				break;
-			case ContainerType::kMaterial:
-				std::cout << describeAsset(store.LoadMaterial(key));
+			case assetlib::AssetType::kMaterial:
+				std::cout << describeAsset(store.Load<assetlib::BMaterial>(key));
 				break;
-			case ContainerType::kEnv:
-				std::cout << describeAsset(store.LoadEnv(key));
+			case assetlib::AssetType::kEnvironment:
+				std::cout << describeAsset(store.Load<assetlib::BEnv>(key));
 				break;
-			case ContainerType::kSky:
-				std::cout << describeAsset(store.LoadSky(key));
+			case assetlib::AssetType::kSky:
+				std::cout << describeAsset(store.Load<assetlib::BSky>(key));
 				break;
-			case ContainerType::kEnvLighting:
-				std::cout << describeAsset(store.LoadEnvLighting(key));
+			case assetlib::AssetType::kEnvLighting:
+				std::cout << describeAsset(store.Load<assetlib::BEnvLighting>(key));
 				break;
-			case ContainerType::kSkeleton:
-				std::cout << assetlib::describe(store.LoadSkeleton(key));
+			case assetlib::AssetType::kSkeleton:
+				std::cout << describeAsset(store.Load<assetlib::Skeleton>(key));
 				break;
-			case ContainerType::kAnimation:
+			case assetlib::AssetType::kAnimation:
 			{
-				const auto animations = store.LoadAnimations(key);
+				const auto animations = store.Load<assetlib::AnimationSet>(key);
 				const auto skeleton   = resolveSkeleton(store, animations.skeleton);
-				std::cout << assetlib::describe(animations, skeleton ? &*skeleton : nullptr);
+				std::cout << describeAsset(animations, skeleton ? &*skeleton : nullptr);
 				break;
 			}
-			case ContainerType::kVat:
+			case assetlib::AssetType::kVat:
 				// Tables only: the pixel chunks are tens of MB and describe never reads a texel.
 				std::cout << describeAsset(store.LoadVatTables(key));
 				break;
+
+			// sniff never answers either: a texture has no codec, and an import document is text
+			// whose extension the text branch does not accept. Listed so the switch stays
+			// exhaustive, which is what makes a new AssetType a compile error here.
+			case assetlib::AssetType::kTexture:
+			case assetlib::AssetType::kImportDocument:
+			case assetlib::AssetType::kCount:
+				core::throw_runtime_error("{} is not a container describe can read", key);
 			}
 		}
 		catch (const std::exception& e)
@@ -843,7 +834,7 @@ main(int argc, char** argv)
 			const std::filesystem::path out =
 				stripOut.empty() ? in : std::filesystem::path(stripOut);
 
-			assetlib::BMaterial material = store.LoadMaterial(key);
+			assetlib::BMaterial material = store.Load<assetlib::BMaterial>(key);
 
 			// Asked before the strip, not after: the routes and the graph are the only record of how
 			// the material was authored, and rewriting the input destroys them.
@@ -859,7 +850,11 @@ main(int argc, char** argv)
 			// Throws when the material has never been baked, leaving it untouched -- so the file is
 			// only written once there is a shippable form to write.
 			assetlib::stripAuthoringData(material);
-			assetlib::saveMaterial(material, out);
+			// Bytes to a host path, not a project write: --out names a shipping tree, which no store
+			// owns. The encode is the codec's; where it lands is the caller's.
+			core::file::write_atomic(
+				out,
+				assetlib::AssetCodec<assetlib::BMaterial>::Serialize(material));
 
 			spdlog::info("Stripped '{}' -> '{}'", in.string(), out.string());
 		}
@@ -910,7 +905,7 @@ main(int argc, char** argv)
 			// twice.
 			if (migrateDryRun || !migrateYes)
 			{
-				const auto preview = assetlib::migrateProject(root, true);
+				const auto preview = assetlib::AssetStore(root).Migrate(true);
 				print(preview, true);
 				if (migrateDryRun)
 					return preview.Count(assetlib::MigratedFile::Outcome::kFailed) == 0 ? 0 : 1;
@@ -925,7 +920,7 @@ main(int argc, char** argv)
 				}
 			}
 
-			const auto report = assetlib::migrateProject(root, false);
+			const auto report = assetlib::AssetStore(root).Migrate(false);
 			print(report, false);
 			return report.Count(assetlib::MigratedFile::Outcome::kFailed) == 0 ? 0 : 1;
 		}
@@ -951,7 +946,7 @@ main(int argc, char** argv)
 			}
 
 			const std::vector<assetlib::ReauthoredDocument> report =
-				assetlib::reauthorImportDocuments(root);
+				assetlib::AssetStore(root).ReauthorImportDocuments();
 
 			size_t rewritten = 0;
 			size_t failed    = 0;
@@ -1025,7 +1020,7 @@ main(int argc, char** argv)
 
 			// The preview costs a signature per mesh; only the real walk pays the measure, and a
 			// write that fails shows up only there -- so its report is the one printed last.
-			const auto preview = assetlib::rebakePosedBounds(root, true);
+			const auto preview = assetlib::AssetStore(root).RebakePosedBounds(true);
 			print(preview, true);
 			if (boundsDryRun)
 				return preview.Count(assetlib::RebakedFile::Outcome::kFailed) == 0 ? 0 : 1;
@@ -1043,7 +1038,7 @@ main(int argc, char** argv)
 				return 0;
 			}
 
-			const auto report = assetlib::rebakePosedBounds(root, false);
+			const auto report = assetlib::AssetStore(root).RebakePosedBounds(false);
 			print(report, false);
 			return report.Count(assetlib::RebakedFile::Outcome::kFailed) == 0 ? 0 : 1;
 		}
@@ -1137,7 +1132,7 @@ main(int argc, char** argv)
 			                                       assetlib::c_DefaultArchiveName :
 			                                   std::filesystem::path(packTarget);
 
-			const assetlib::PackReport report = assetlib::packProject(store, desc);
+			const assetlib::PackReport report = store.Pack(desc);
 
 			if (report.vatsRebaked != 0)
 				spdlog::info("Re-baked {} stale .bvat before packing", report.vatsRebaked);
@@ -1220,7 +1215,7 @@ main(int argc, char** argv)
 			auto desc       = assetlib::TexturePruneDesc();
 			desc.textureDir = pruneTextureDir;
 
-			const auto scan = assetlib::findUnusedBakedTextures(store, desc);
+			const auto scan = store.FindUnusedBakedTextures(desc);
 
 			spdlog::info(
 				"Scanned {} materials and {} environment assets: {} baked maps still referenced, "
@@ -1258,7 +1253,7 @@ main(int argc, char** argv)
 				return 0;
 			}
 
-			const auto result = assetlib::deleteUnusedBakedTextures(scan, store);
+			const auto result = store.DeleteUnusedBakedTextures(scan);
 
 			spdlog::info(
 				"Deleted {} textures, reclaiming {}",
@@ -1287,13 +1282,13 @@ main(int argc, char** argv)
 			const assetlib::AssetStore& store   = project.GetStore();
 
 			const std::string key = assetlib::normalizePath(expInput);
-			assetlib::BEnv    env = store.LoadEnv(key);
+			assetlib::BEnv    env = store.Load<assetlib::BEnv>(key);
 
 			// Read before the write, so a lighting that cannot be loaded refuses before the
 			// document changes rather than after.
-			const assetlib::BEnvLighting lighting = env.lighting.empty() ?
-			                                            assetlib::BEnvLighting() :
-			                                            store.LoadEnvLighting(env.lighting);
+			const assetlib::BEnvLighting lighting =
+				env.lighting.empty() ? assetlib::BEnvLighting() :
+									   store.Load<assetlib::BEnvLighting>(env.lighting);
 
 			if (*expSetOpt || expClear)
 			{
@@ -1302,7 +1297,7 @@ main(int argc, char** argv)
 				else
 					env.exposureOverride = expSet;
 
-				assetlib::saveEnv(env, store.ResolveWritePath(key));
+				store.Save(env, key);
 			}
 
 			spdlog::info(

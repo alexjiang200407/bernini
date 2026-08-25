@@ -245,7 +245,7 @@ AssetOperations::DeleteWithPlanner(
 	if (confirm.clickedButton() != remove)
 		return;
 
-	const assetlib::DeletionResult result = assetlib::deleteAsset(plan, *store);
+	const assetlib::DeletionResult result = store->DeleteAsset(plan);
 
 	switch (result.status)
 	{
@@ -425,7 +425,7 @@ AssetOperations::Rename(const QString& asset)
 		QString("Renaming %1").arg(QFileInfo(asset).fileName()),
 		[&](background::Progress& progress) {
 			progress.Report(0, 0, "Rewriting references...");
-			result = assetlib::renameAsset(plan, *store);
+			result = store->RenameAsset(plan);
 		});
 
 	if (!renamed.Completed())

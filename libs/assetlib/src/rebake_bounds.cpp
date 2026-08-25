@@ -1,9 +1,7 @@
 #include <assetlib/AssetStore.h>
-#include <assetlib/banim_io.h>
-#include <assetlib/bmesh_io.h>
-#include <assetlib/container_format.h>
+#include <assetlib/bmesh.h>
+#include <assetlib/codecs.h>
 #include <assetlib/rebake_bounds.h>
-#include <assetlib/skeleton.h>
 #include <assetlib/skinning.h>
 #include <assetlib/vat_bake.h>
 #include <assetlib_structs/Animation.h>
@@ -55,10 +53,8 @@ namespace assetlib
 	}
 
 	RebakeBoundsReport
-	rebakePosedBounds(const std::filesystem::path& dataRoot, const bool dryRun)
+	AssetStore::RebakePosedBounds(const bool dryRun) const
 	{
-		const AssetStore store(dataRoot);
-
 		auto report = RebakeBoundsReport();
 
 		// Loaded once and kept for the run: a rig's meshes are consulted by every one of its clip
@@ -75,12 +71,12 @@ namespace assetlib
 			const auto it = skeletons.find(path);
 			return it != skeletons.end() ?
 			           it->second :
-			           skeletons.emplace(path, store.LoadSkeleton(path)).first->second;
+			           skeletons.emplace(path, Load<Skeleton>(path)).first->second;
 		};
 		const auto meshAt = [&](const std::string& path) -> const BMesh& {
 			const auto it = meshes.find(path);
 			return it != meshes.end() ? it->second :
-			                            meshes.emplace(path, store.LoadMesh(path)).first->second;
+			                            meshes.emplace(path, Load<BMesh>(path)).first->second;
 		};
 
 		// posedBoundsSignature hashes a mesh's whole vertex blob, so it too is computed once per
@@ -103,11 +99,11 @@ namespace assetlib
 		// and one rig routinely exists under more than one path -- assetlib_cli bake names a
 		// `.bskel` after every mesh it cooks.
 		auto meshesBySkeleton = std::unordered_map<uint64_t, std::vector<std::string>>();
-		for (const std::string& meshPath : containersUnder(dataRoot, c_MeshExtension))
+		for (const std::string& meshPath : containersUnder(GetDataRoot(), c_MeshExtension))
 		{
 			try
 			{
-				const MeshRefs refs = store.LoadMeshRefs(meshPath);
+				const MeshRefs refs = LoadMeshRefs(meshPath);
 				if (refs.skeleton.empty())
 					continue;
 
@@ -119,18 +115,18 @@ namespace assetlib
 				// An unreadable mesh or rig would make every clip set of that rig look orphaned
 				// below, so it is a failure here rather than a skip.
 				report.files.push_back(
-					{ dataRoot / meshPath, RebakedFile::Outcome::kFailed, e.what() });
+					{ GetDataRoot() / meshPath, RebakedFile::Outcome::kFailed, e.what() });
 			}
 		}
 
-		for (const std::string& animPath : containersUnder(dataRoot, c_AnimationExtension))
+		for (const std::string& animPath : containersUnder(GetDataRoot(), c_AnimationExtension))
 		{
 			RebakedFile& entry = report.files.emplace_back(
-				RebakedFile{ dataRoot / animPath, RebakedFile::Outcome::kFailed, {} });
+				RebakedFile{ GetDataRoot() / animPath, RebakedFile::Outcome::kFailed, {} });
 
 			try
 			{
-				AnimationSet animations = store.LoadAnimations(animPath);
+				AnimationSet animations = Load<AnimationSet>(animPath);
 
 				const auto paired = meshesBySkeleton.find(animations.skeletonSignature);
 				if (paired == meshesBySkeleton.end())
@@ -180,13 +176,14 @@ namespace assetlib
 
 					// A skin the bake refuses stays boxless and would land here every run; only a
 					// rewrite that changes bytes is worth dirtying a version-controlled binary for.
-					if (serializeAnimations(animations) == store.GetFiles().Read(animPath))
+					if (AssetCodec<AnimationSet>::Serialize(animations) ==
+					    GetFiles().Read(animPath))
 					{
 						entry.outcome = RebakedFile::Outcome::kCurrent;
 						continue;
 					}
 
-					saveAnimations(animations, dataRoot / animPath);
+					Save(animations, animPath);
 				}
 				entry.outcome = RebakedFile::Outcome::kRebaked;
 			}

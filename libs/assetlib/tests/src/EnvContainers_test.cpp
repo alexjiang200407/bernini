@@ -1,11 +1,10 @@
-#include <assetlib/benv_io.h>
-#include <assetlib/benvl_io.h>
-#include <assetlib/bsky_io.h>
+#include <assetlib/codecs.h>
 #include <assetlib_structs/BEnv.h>
 #include <assetlib_structs/magic.h>
 
 #include <core/io/ByteWriter.h>
 
+#include "MountAt.h"
 #include "mounted_io.h"
 #include <catch2/catch_approx.hpp>
 #include <catch2/matchers/catch_matchers_string.hpp>
@@ -40,17 +39,24 @@ namespace
 		return lighting;
 	}
 
+	/** The scratch root these round trips write into -- per process since #470. */
 	std::filesystem::path
-	TempFile(const char* name)
+	TempRoot()
 	{
-		return std::filesystem::temp_directory_path() / (std::string("bernini_") + name);
+		return std::filesystem::temp_directory_path();
+	}
+
+	std::string
+	TempKey(const char* name)
+	{
+		return std::string("bernini_") + name;
 	}
 }
 
 TEST_CASE("a BSky survives a serialize round-trip", "[bsky][io]")
 {
 	const BSky sky      = SampleSky();
-	const BSky restored = deserializeSky(serializeSky(sky));
+	const BSky restored = AssetCodec<BSky>::Deserialize(AssetCodec<BSky>::Serialize(sky));
 
 	CHECK(restored.name == sky.name);
 	CHECK(restored.sky == sky.sky);
@@ -59,7 +65,8 @@ TEST_CASE("a BSky survives a serialize round-trip", "[bsky][io]")
 TEST_CASE("a BEnvLighting survives a serialize round-trip", "[benvl][io]")
 {
 	const BEnvLighting lighting = SampleLighting();
-	const BEnvLighting restored = deserializeEnvLighting(serializeEnvLighting(lighting));
+	const BEnvLighting restored =
+		AssetCodec<BEnvLighting>::Deserialize(AssetCodec<BEnvLighting>::Serialize(lighting));
 
 	CHECK(restored.name == lighting.name);
 	CHECK(restored.prefilter == lighting.prefilter);
@@ -71,13 +78,14 @@ TEST_CASE("a BEnvLighting survives a serialize round-trip", "[benvl][io]")
 // strings and zeroed stamps have to survive as themselves rather than collapsing into a short read.
 TEST_CASE("an unrouted, unbaked environment asset round-trips as empty", "[bsky][benvl][io]")
 {
-	const BSky sky = deserializeSky(serializeSky(BSky{}));
+	const BSky sky = AssetCodec<BSky>::Deserialize(AssetCodec<BSky>::Serialize(BSky{}));
 	CHECK(sky.name.empty());
 	CHECK(sky.sky.source.empty());
 	CHECK(sky.sky.baked.empty());
 	CHECK(sky.sky.stamp == SourceStamp{});
 
-	const BEnvLighting lighting = deserializeEnvLighting(serializeEnvLighting(BEnvLighting{}));
+	const BEnvLighting lighting =
+		AssetCodec<BEnvLighting>::Deserialize(AssetCodec<BEnvLighting>::Serialize(BEnvLighting{}));
 	CHECK(lighting.prefilter.source.empty());
 	CHECK(lighting.irradiance.stamp == SourceStamp{});
 	CHECK(lighting.exposure == Catch::Approx(1.0f));
@@ -85,14 +93,14 @@ TEST_CASE("an unrouted, unbaked environment asset round-trips as empty", "[bsky]
 
 TEST_CASE("the environment containers round-trip through a file", "[bsky][benvl][io]")
 {
-	const auto skyPath      = TempFile("env_container.bsky");
-	const auto lightingPath = TempFile("env_container.benvl");
+	const auto skyPath      = TempKey("env_container.bsky");
+	const auto lightingPath = TempKey("env_container.benvl");
 
-	saveSky(SampleSky(), skyPath);
-	saveEnvLighting(SampleLighting(), lightingPath);
+	StoreAt(TempRoot()).Save(SampleSky(), skyPath);
+	StoreAt(TempRoot()).Save(SampleLighting(), lightingPath);
 
-	CHECK(loadSky(skyPath).sky == SampleSky().sky);
-	CHECK(loadEnvLighting(lightingPath).exposure == Catch::Approx(0.375f));
+	CHECK(StoreAt(TempRoot()).Load<BSky>(skyPath).sky == SampleSky().sky);
+	CHECK(StoreAt(TempRoot()).Load<BEnvLighting>(lightingPath).exposure == Catch::Approx(0.375f));
 
 	std::filesystem::remove(skyPath);
 	std::filesystem::remove(lightingPath);
@@ -103,8 +111,12 @@ TEST_CASE("the environment containers round-trip through a file", "[bsky][benvl]
 // would actually be confused: they live in sibling directories and are written by the same import.
 TEST_CASE("neither environment container reads the other's file", "[bsky][benvl][io]")
 {
-	CHECK_THROWS_AS(deserializeSky(serializeEnvLighting(SampleLighting())), std::runtime_error);
-	CHECK_THROWS_AS(deserializeEnvLighting(serializeSky(SampleSky())), std::runtime_error);
+	CHECK_THROWS_AS(
+		AssetCodec<BSky>::Deserialize(AssetCodec<BEnvLighting>::Serialize(SampleLighting())),
+		std::runtime_error);
+	CHECK_THROWS_AS(
+		AssetCodec<BEnvLighting>::Deserialize(AssetCodec<BSky>::Serialize(SampleSky())),
+		std::runtime_error);
 
 	// ...nor a .benv's, which is the third file of the same import.
 	CHECK(magic::c_BSky != magic::c_BEnv);
@@ -116,15 +128,15 @@ TEST_CASE(
 	"a truncated environment container throws rather than reading past the end",
 	"[bsky][benvl][io]")
 {
-	auto bytes = serializeSky(SampleSky());
+	auto bytes = AssetCodec<BSky>::Serialize(SampleSky());
 	bytes.resize(bytes.size() / 2);
-	CHECK_THROWS_AS(deserializeSky(bytes), std::runtime_error);
+	CHECK_THROWS_AS(AssetCodec<BSky>::Deserialize(bytes), std::runtime_error);
 
-	auto lightingBytes = serializeEnvLighting(SampleLighting());
+	auto lightingBytes = AssetCodec<BEnvLighting>::Serialize(SampleLighting());
 	lightingBytes.resize(lightingBytes.size() / 2);
-	CHECK_THROWS_AS(deserializeEnvLighting(lightingBytes), std::runtime_error);
+	CHECK_THROWS_AS(AssetCodec<BEnvLighting>::Deserialize(lightingBytes), std::runtime_error);
 
-	CHECK_THROWS_AS(deserializeSky({}), std::runtime_error);
+	CHECK_THROWS_AS(AssetCodec<BSky>::Deserialize({}), std::runtime_error);
 }
 
 TEST_CASE("a BEnv survives a serialize round-trip", "[benv][io]")
@@ -137,7 +149,7 @@ TEST_CASE("a BEnv survives a serialize round-trip", "[benv][io]")
 	env.skyRotationY     = 1.25f;
 	env.exposureOverride = 0.5f;
 
-	const BEnv restored = deserializeEnv(serializeEnv(env));
+	const BEnv restored = AssetCodec<BEnv>::Deserialize(AssetCodec<BEnv>::Serialize(env));
 	CHECK(restored.name == env.name);
 	CHECK(restored.sky == env.sky);
 	CHECK(restored.lighting == env.lighting);
@@ -148,7 +160,7 @@ TEST_CASE("a BEnv survives a serialize round-trip", "[benv][io]")
 
 	// Half-composed is a legal file: the import's checkboxes write whichever pieces were asked for,
 	// and what a .benv must reference is its consumer's rule, not the container's.
-	const BEnv empty = deserializeEnv(serializeEnv(BEnv{}));
+	const BEnv empty = AssetCodec<BEnv>::Deserialize(AssetCodec<BEnv>::Serialize(BEnv{}));
 	CHECK(empty.name.empty());
 	CHECK(empty.sky.empty());
 	CHECK(empty.lighting.empty());
@@ -156,15 +168,15 @@ TEST_CASE("a BEnv survives a serialize round-trip", "[benv][io]")
 
 TEST_CASE("a BEnv round-trips through a file", "[benv][io]")
 {
-	const auto path = TempFile("env_container.benv");
+	const auto path = TempKey("env_container.benv");
 
 	BEnv env;
 	env.name     = "forest";
 	env.sky      = "Sky/forest.bsky";
 	env.lighting = "EnvLighting/forest.benvl";
-	saveEnv(env, path);
+	StoreAt(TempRoot()).Save(env, path);
 
-	const BEnv restored = loadEnv(path);
+	const BEnv restored = StoreAt(TempRoot()).Load<BEnv>(path);
 	CHECK(restored.sky == env.sky);
 	CHECK(restored.lighting == env.lighting);
 
@@ -183,15 +195,20 @@ TEST_CASE(
 	v1.WritePod<uint16_t>(0);
 	v1.WritePod<uint64_t>(0);  // the old header continues; the reader must not get that far
 	CHECK_THROWS_WITH(
-		deserializeEnv(v1.Take()),
+		AssetCodec<BEnv>::Deserialize(v1.Take()),
 		Catch::Matchers::ContainsSubstring("no longer convertible"));
 
-	CHECK_THROWS_AS(deserializeEnv(serializeSky(SampleSky())), std::runtime_error);
-	CHECK_THROWS_AS(deserializeEnv(serializeEnvLighting(SampleLighting())), std::runtime_error);
+	CHECK_THROWS_AS(
+		AssetCodec<BEnv>::Deserialize(AssetCodec<BSky>::Serialize(SampleSky())),
+		std::runtime_error);
+	CHECK_THROWS_AS(
+		AssetCodec<BEnv>::Deserialize(AssetCodec<BEnvLighting>::Serialize(SampleLighting())),
+		std::runtime_error);
 
-	auto truncated = serializeEnv(BEnv{ .name = "forest", .sky = "Sky/forest.bsky" });
+	auto truncated =
+		AssetCodec<BEnv>::Serialize(BEnv{ .name = "forest", .sky = "Sky/forest.bsky" });
 	truncated.resize(truncated.size() / 2);
-	CHECK_THROWS_AS(deserializeEnv(truncated), std::runtime_error);
+	CHECK_THROWS_AS(AssetCodec<BEnv>::Deserialize(truncated), std::runtime_error);
 }
 
 TEST_CASE(
@@ -204,15 +221,15 @@ TEST_CASE(
 		std::memcpy(bytes.data() + 4, &version, sizeof(version));
 	};
 
-	auto bytes = serializeSky(SampleSky());
+	auto bytes = AssetCodec<BSky>::Serialize(SampleSky());
 	patchVersion(bytes);
 	CHECK_THROWS_WITH(
-		deserializeSky(bytes),
+		AssetCodec<BSky>::Deserialize(bytes),
 		Catch::Matchers::ContainsSubstring("not the 1 this build reads"));
 
-	auto lightingBytes = serializeEnvLighting(SampleLighting());
+	auto lightingBytes = AssetCodec<BEnvLighting>::Serialize(SampleLighting());
 	patchVersion(lightingBytes);
-	CHECK_THROWS_AS(deserializeEnvLighting(lightingBytes), std::runtime_error);
+	CHECK_THROWS_AS(AssetCodec<BEnvLighting>::Deserialize(lightingBytes), std::runtime_error);
 }
 
 // The authored exposure lives on the environment document, not the derived lighting: a decision a
@@ -220,13 +237,14 @@ TEST_CASE(
 // lighting, refreshed by every bake.
 TEST_CASE("an unset override serializes as absent, not as a value", "[benv][io]")
 {
-	const BEnv restored = deserializeEnv(serializeEnv(BEnv{ .name = "plain" }));
+	const BEnv restored =
+		AssetCodec<BEnv>::Deserialize(AssetCodec<BEnv>::Serialize(BEnv{ .name = "plain" }));
 	CHECK_FALSE(restored.exposureOverride.has_value());
 	CHECK(restored.skyMipLevel == 0);
 	CHECK(restored.skyRotationY == 0.0f);
 
 	// Absent in the bytes too: an "exposureOverride": 0 that crept in would author a value.
-	const auto        bytes = serializeEnv(BEnv{ .name = "plain" });
+	const auto        bytes = AssetCodec<BEnv>::Serialize(BEnv{ .name = "plain" });
 	const std::string text(reinterpret_cast<const char*>(bytes.data()), bytes.size());
 	CHECK(text.find("exposureOverride") == std::string::npos);
 }
@@ -240,12 +258,13 @@ TEST_CASE("a benv document preserves the keys this build does not know", "[benv]
 }
 )";
 
-	const BEnv env = deserializeEnv(std::as_bytes(std::span(c_Text.data(), c_Text.size())));
+	const BEnv env =
+		AssetCodec<BEnv>::Deserialize(std::as_bytes(std::span(c_Text.data(), c_Text.size())));
 	CHECK(env.name == "future");
 	CHECK(env.sky == "Sky/forest.bsky");
 
-	const auto        resaved = serializeEnv(env);
+	const auto        resaved = AssetCodec<BEnv>::Serialize(env);
 	const std::string out(reinterpret_cast<const char*>(resaved.data()), resaved.size());
 	CHECK(out.find("\"weather\"") != std::string::npos);
-	CHECK(serializeEnv(deserializeEnv(resaved)) == resaved);
+	CHECK(AssetCodec<BEnv>::Serialize(AssetCodec<BEnv>::Deserialize(resaved)) == resaved);
 }

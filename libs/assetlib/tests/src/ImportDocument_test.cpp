@@ -1,8 +1,8 @@
+#include <assetlib/codecs.h>
 #include <assetlib/import_document.h>
 
 #include <assetlib/asset_import.h>
 #include <assetlib/asset_refs.h>
-#include <assetlib/bmaterial_io.h>
 #include <assetlib_structs/BMaterial.h>
 #include <assetlib_structs/BMesh.h>
 #include <assetlib_structs/Node.h>
@@ -21,6 +21,23 @@ namespace
 {
 	namespace fs = std::filesystem;
 
+	// The container a person edits by hand, so these cases are written against its text. Its bytes
+	// are that text verbatim -- see AssetCodec<ImportDocument> -- which is what makes the pair below
+	// a reinterpretation rather than a second encoding.
+	std::string
+	DocumentText(const ImportDocument& document)
+	{
+		const std::vector<std::byte> bytes = AssetCodec<ImportDocument>::Serialize(document);
+		return std::string(reinterpret_cast<const char*>(bytes.data()), bytes.size());
+	}
+
+	ImportDocument
+	DocumentFrom(std::string_view text)
+	{
+		return AssetCodec<ImportDocument>::Deserialize(
+			std::as_bytes(std::span(text.data(), text.size())));
+	}
+
 	void
 	WriteText(const fs::path& file, std::string_view text)
 	{
@@ -36,8 +53,8 @@ TEST_CASE("an import document round-trips, canonically", "[importdoc]")
 	document.bindings   = { { "kirk[1]", "Materials/kirk/teeth.bmaterial" },
 		                    { "kirk[0]", "Materials/kirk/skin.bmaterial" } };
 
-	const std::string text = serializeImportDocument(document);
-	ImportDocument    read = deserializeImportDocument(text);
+	const std::string text = DocumentText(document);
+	ImportDocument    read = DocumentFrom(text);
 
 	CHECK(read.sampleRate == 60.0f);
 	REQUIRE(read.bindings.size() == 2);
@@ -51,12 +68,12 @@ TEST_CASE("an import document round-trips, canonically", "[importdoc]")
 		reversed.sampleRate = 60.0f;
 		reversed.bindings   = { { "kirk[0]", "Materials/kirk/skin.bmaterial" },
 			                    { "kirk[1]", "Materials/kirk/teeth.bmaterial" } };
-		CHECK(serializeImportDocument(reversed) == text);
+		CHECK(DocumentText(reversed) == text);
 	}
 
 	SECTION("a serialize-deserialize-serialize cycle is byte-stable")
 	{
-		CHECK(serializeImportDocument(read) == text);
+		CHECK(DocumentText(read) == text);
 	}
 }
 
@@ -70,7 +87,7 @@ TEST_CASE(
 	"parameters": { "sampleRate": 24.0, "tangentMode": "mikkt" }
 })";
 
-	const ImportDocument document = deserializeImportDocument(text);
+	const ImportDocument document = DocumentFrom(text);
 	CHECK(document.sampleRate == 24.0f);
 	CHECK(document.extraJson.find("futureKnob") != std::string::npos);
 	// An unknown *parameter* stays in the parameter half -- the subtree the cache key hashes --
@@ -78,37 +95,37 @@ TEST_CASE(
 	CHECK(document.extraParametersJson.find("tangentMode") != std::string::npos);
 	CHECK(document.extraJson.find("tangentMode") == std::string::npos);
 
-	const std::string rewritten = serializeImportDocument(document);
+	const std::string rewritten = DocumentText(document);
 	CHECK(rewritten.find("futureKnob") != std::string::npos);
 	CHECK(rewritten.find("\"tangentMode\"") != std::string::npos);
 
 	// And the unknown keys still deserialize to the same document after the rewrite.
-	CHECK(deserializeImportDocument(rewritten) == document);
+	CHECK(DocumentFrom(rewritten) == document);
 }
 
 TEST_CASE("an empty or defaulted document reads back defaulted", "[importdoc]")
 {
-	const ImportDocument document = deserializeImportDocument("{}");
+	const ImportDocument document = DocumentFrom("{}");
 	CHECK(document.sampleRate == c_DefaultSampleRate);
 	CHECK(document.bindings.empty());
 }
 
 TEST_CASE("a malformed import document is refused with its reason", "[importdoc]")
 {
-	CHECK_THROWS(deserializeImportDocument("not json"));
-	CHECK_THROWS(deserializeImportDocument("[1, 2]"));
-	CHECK_THROWS(deserializeImportDocument(R"({ "parameters": [] })"));
-	CHECK_THROWS(deserializeImportDocument(R"({ "parameters": { "sampleRate": "fast" } })"));
-	CHECK_THROWS(deserializeImportDocument(R"({ "parameters": { "sampleRate": 0 } })"));
-	CHECK_THROWS(deserializeImportDocument(R"({ "bindings": [1] })"));
-	CHECK_THROWS(deserializeImportDocument(R"({ "bindings": { "cube[0]": 7 } })"));
+	CHECK_THROWS(DocumentFrom("not json"));
+	CHECK_THROWS(DocumentFrom("[1, 2]"));
+	CHECK_THROWS(DocumentFrom(R"({ "parameters": [] })"));
+	CHECK_THROWS(DocumentFrom(R"({ "parameters": { "sampleRate": "fast" } })"));
+	CHECK_THROWS(DocumentFrom(R"({ "parameters": { "sampleRate": 0 } })"));
+	CHECK_THROWS(DocumentFrom(R"({ "bindings": [1] })"));
+	CHECK_THROWS(DocumentFrom(R"({ "bindings": { "cube[0]": 7 } })"));
 
 	// Two bindings for one submesh cannot exist in the object form a document stores; the in-memory
 	// form can hold them, and serializing refuses rather than letting one silently win.
 	ImportDocument colliding;
 	colliding.bindings = { { "cube[0]", "Materials/a.bmaterial" },
 		                   { "cube[0]", "Materials/b.bmaterial" } };
-	CHECK_THROWS(serializeImportDocument(colliding));
+	CHECK_THROWS(DocumentText(colliding));
 }
 
 TEST_CASE("the document lives beside its source, one key from the other", "[importdoc]")
@@ -128,11 +145,11 @@ TEST_CASE(
 	material.name = "skin";
 	core::file::write_atomic(
 		root.path / "Materials" / "skin.bmaterial",
-		serializeMaterial(material));
+		AssetCodec<BMaterial>::Serialize(material));
 
 	ImportDocument document;
 	document.bindings = { { "kirk[0]", "Materials/skin.bmaterial" } };
-	WriteText(root.path / "meshes_src" / "kirk.bimport", serializeImportDocument(document));
+	WriteText(root.path / "meshes_src" / "kirk.bimport", DocumentText(document));
 	WriteText(root.path / "meshes_src" / "kirk.glb", "not really a glb");
 
 	const AssetRefGraph graph = root.Scan();
@@ -178,11 +195,12 @@ TEST_CASE("an import records the bindings the mesh carries", "[importdoc]")
 		{ { "kirk[0]", 0 }, { "kirk[1]", 1 }, { "props", c_InvalidIndex } },
 		{ "Materials/skin.bmaterial", "Materials/teeth.bmaterial" });
 
-	const ImportTarget target{ root.path, "kirk", 24.0f };
-	const SourceRef    ref = copyImportedSource(root.path / "kirk.glb", target);
+	const ImportTarget target{ "kirk", 24.0f };
+	const AssetStore   store(root.path);
+	const SourceRef    ref = store.CopyImportedSource(root.path / "kirk.glb", target);
 	CHECK(ref.key == "meshes_src/kirk.glb");
 	CHECK(ref.stamp.size > 0);
-	writeImportedDocument(target, &mesh);
+	store.WriteImportedDocument(target, &mesh);
 
 	CHECK(fs::exists(root.path / "meshes_src/kirk.glb"));
 	const ImportDocument document =
@@ -199,7 +217,9 @@ TEST_CASE("a source that is not self-contained is refused", "[importdoc]")
 	WriteText(root.path / "kirk.gltf", "{}");
 
 	CHECK_THROWS_WITH(
-		copyImportedSource(root.path / "kirk.gltf", ImportTarget{ root.path, "kirk", 30.0f }),
+		AssetStore(root.path).CopyImportedSource(
+			root.path / "kirk.gltf",
+			ImportTarget{ "kirk", 30.0f }),
 		Catch::Matchers::ContainsSubstring("export as .glb"));
 }
 

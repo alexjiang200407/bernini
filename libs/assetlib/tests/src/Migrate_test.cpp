@@ -1,9 +1,4 @@
-#include <assetlib/banim_io.h>
-#include <assetlib/benv_io.h>
-#include <assetlib/benvl_io.h>
-#include <assetlib/bmaterial_io.h>
-#include <assetlib/bmesh_io.h>
-#include <assetlib/bsky_io.h>
+#include <assetlib/codecs.h>
 #include <assetlib/container_info.h>
 #include <assetlib/migrate.h>
 #include <assetlib_structs/BEnv.h>
@@ -17,6 +12,7 @@
 
 #include <core/file/file.h>
 
+#include "MountAt.h"
 #include <catch2/matchers/catch_matchers_string.hpp>
 
 using namespace assetlib;
@@ -58,7 +54,7 @@ namespace
 	{
 		BMaterial material;
 		material.name = std::string(name);
-		return serializeMaterial(material);
+		return AssetCodec<BMaterial>::Serialize(material);
 	}
 
 	/** The same content spelled non-canonically: what a hand edit or a merge leaves behind. */
@@ -88,7 +84,7 @@ TEST_CASE(
 	SECTION("a dry run reports and writes nothing")
 	{
 		const auto before = project.Read("Materials/older.bmaterial");
-		const auto report = migrateProject(project.root, true);
+		const auto report = AssetStore(project.root).Migrate(true);
 		CHECK(report.Count(MigratedFile::Outcome::kUnchanged) == 1);
 		CHECK(report.Count(MigratedFile::Outcome::kRewritten) == 1);
 		CHECK(report.Count(MigratedFile::Outcome::kFailed) == 1);
@@ -98,15 +94,15 @@ TEST_CASE(
 
 	SECTION("a real run rewrites once, and the second run finds nothing to do")
 	{
-		const auto first = migrateProject(project.root, false);
+		const auto first = AssetStore(project.root).Migrate(false);
 		CHECK(first.Count(MigratedFile::Outcome::kRewritten) == 1);
 		CHECK(first.Count(MigratedFile::Outcome::kFailed) == 1);
 
 		const auto rewritten = project.Read("Materials/older.bmaterial");
 		CHECK(rewritten == MaterialBytes("older"));  // stamped current again
-		CHECK(deserializeMaterial(rewritten).name == "older");
+		CHECK(AssetCodec<BMaterial>::Deserialize(rewritten).name == "older");
 
-		const auto second = migrateProject(project.root, false);
+		const auto second = AssetStore(project.root).Migrate(false);
 		CHECK(second.Count(MigratedFile::Outcome::kRewritten) == 0);
 		CHECK(second.Count(MigratedFile::Outcome::kUnchanged) == 2);
 		CHECK(second.Count(MigratedFile::Outcome::kFailed) == 1);
@@ -115,7 +111,7 @@ TEST_CASE(
 
 	SECTION("the failure says which file, and why")
 	{
-		const auto report = migrateProject(project.root, true);
+		const auto report = AssetStore(project.root).Migrate(true);
 		const auto failed =
 			std::ranges::find(report.files, MigratedFile::Outcome::kFailed, &MigratedFile::outcome);
 		REQUIRE(failed != report.files.end());
@@ -127,7 +123,7 @@ TEST_CASE(
 TEST_CASE("migrate refuses a root that is not a directory", "[migrate]")
 {
 	REQUIRE_THROWS_WITH(
-		migrateProject(std::filesystem::temp_directory_path() / "no_such_project_dir", true),
+		AssetStore(std::filesystem::temp_directory_path() / "no_such_project_dir").Migrate(true),
 		ContainsSubstring("is not a directory"));
 }
 
@@ -147,15 +143,15 @@ TEST_CASE("migrate regenerates a stale group on disk, once", "[migrate][regen]")
 
 	SECTION("the replay: one run rewrites the group, the second finds nothing to do")
 	{
-		const auto first = migrateProject(project.root, false);
+		const auto first = AssetStore(project.root).Migrate(false);
 		CHECK(first.Count(MigratedFile::Outcome::kRewritten) == 3);
 		CHECK(first.Count(MigratedFile::Outcome::kFailed) == 0);
 
 		// Written current: the loads that refused the tampered files read them plainly now.
-		CHECK(load(meshPath).source.key == "meshes_src/unit.glb");
-		CHECK_FALSE(loadAnimations(banimPath).clips.empty());
+		CHECK(LoadAt<BMesh>(meshPath).source.key == "meshes_src/unit.glb");
+		CHECK_FALSE(LoadAt<AnimationSet>(banimPath).clips.empty());
 
-		const auto second = migrateProject(project.root, false);
+		const auto second = AssetStore(project.root).Migrate(false);
 		CHECK(second.Count(MigratedFile::Outcome::kRewritten) == 0);
 		CHECK(second.Count(MigratedFile::Outcome::kFailed) == 0);
 	}
@@ -164,7 +160,7 @@ TEST_CASE("migrate regenerates a stale group on disk, once", "[migrate][regen]")
 	{
 		std::filesystem::remove(project.root / "meshes_src/unit.glb");
 
-		const auto report = migrateProject(project.root, false);
+		const auto report = AssetStore(project.root).Migrate(false);
 		CHECK(report.Count(MigratedFile::Outcome::kRewritten) == 0);
 		CHECK(report.Count(MigratedFile::Outcome::kFailed) == 3);
 	}
@@ -179,17 +175,14 @@ TEST_CASE("a rebind reaches disk through migrate without a regeneration", "[migr
 	// The source is gone, so what follows cannot be a regeneration -- the document alone
 	// carries the rebind onto the disk bytes.
 	std::filesystem::remove(project.root / "meshes_src/unit.glb");
-	rebindSubmeshInDocument(
-		project.root,
-		"meshes_src/unit.glb",
-		"body",
-		"Materials/blue.bmaterial");
+	AssetStore(project.root)
+		.RebindSubmeshInDocument("meshes_src/unit.glb", "body", "Materials/blue.bmaterial");
 
-	const auto report = migrateProject(project.root, false);
+	const auto report = AssetStore(project.root).Migrate(false);
 	CHECK(report.Count(MigratedFile::Outcome::kRewritten) == 1);
 	CHECK(report.Count(MigratedFile::Outcome::kFailed) == 0);
 
-	const BMesh mesh = load(project.root / "Meshes/unit.bmesh");
+	const BMesh mesh = StoreAt(project.root).Load<BMesh>("Meshes/unit.bmesh");
 	REQUIRE(mesh.materials.size() == 1);
 	CHECK(mesh.materials[0] == "Materials/blue.bmaterial");
 }

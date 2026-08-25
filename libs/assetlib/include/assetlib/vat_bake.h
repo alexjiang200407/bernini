@@ -31,23 +31,6 @@ namespace assetlib
 	};
 
 	/**
-	 * bakeVat over a store: loads the mesh, the skeleton it names and the clip set, bakes, and
-	 * records the three paths and their SourceStamps -- what vatIsStale later compares. Writing the
-	 * result is the caller's (see saveVat): a `.bvat` is a derived build product, and where it
-	 * lands is the caller's convention, not this function's.
-	 *
-	 * Reads through the store and not off its data root: a rig the editor has not touched resolves
-	 * out of the archive, and a re-bake that read the writable layer alone would fail to open files
-	 * that are plainly there. The stamps recorded are the store's, so what `vatIsStale` compares
-	 * later is what this read.
-	 *
-	 * @throws std::runtime_error if an input cannot be read, if the mesh names no skeleton, or for
-	 *         anything the in-memory overload refuses.
-	 */
-	[[nodiscard]] BVat
-	bakeVat(const AssetStore& store, const VatBakeDesc& desc);
-
-	/**
 	 * The path form the bake records in the container: lexically normal, generic separators.
 	 * Compare a requested path against a `BVat`'s recorded one through this, never raw.
 	 */
@@ -64,4 +47,34 @@ namespace assetlib
 	 */
 	[[nodiscard]] std::filesystem::path
 	vatPathFor(std::string_view meshRelPath, std::string_view animationsRelPath);
+
+	/**
+	 * Everything but the pixels: the header, the chunk table and the table chunks alone, leaving
+	 * `positionsKtx2` / `normalsKtx2` empty. The pixel chunks are the overwhelming bulk of the
+	 * file and are never read, so `describe` and any whole-project survey must come through here
+	 * rather than `store.Load<BVat>`. (The palettes still load, and they are megabytes on a long clip set --
+	 * a scan that wants the references alone wants loadVatRefs.)
+	 *
+	 * @throws std::runtime_error if the file cannot be read or is malformed.
+	 */
+	[[nodiscard]] BVat
+	loadVatTables(const std::filesystem::path& path);
+
+	/** The three inputs a `.bvat` was baked from. See loadVatRefs. */
+	struct VatRefs
+	{
+		std::string mesh;
+		std::string skeleton;
+		std::string animations;
+	};
+
+	/**
+	 * What `path` was baked from, read seek-only like loadVatTables -- the reference scan's entry
+	 * point.
+	 *
+	 * @throws std::runtime_error if the file cannot be read or is malformed.
+	 */
+	[[nodiscard]] VatRefs
+	loadVatRefs(const std::filesystem::path& path);
+
 }
