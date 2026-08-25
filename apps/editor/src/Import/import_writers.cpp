@@ -1,11 +1,10 @@
 #include "import_writers.h"
+#include <assetlib/bmesh.h>
 
 #include "Windows/MaterialEditor/MaterialGraphModel.h"
 #include "Windows/MaterialEditor/material_graph.h"
 
 #include <assetlib/AssetStore.h>
-#include <assetlib/bmaterial_io.h>
-#include <assetlib/bmesh_io.h>
 
 namespace editor
 {

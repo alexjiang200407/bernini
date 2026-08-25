@@ -8,11 +8,6 @@
 
 #include "StoreAt.h"
 #include <assetlib/AssetStore.h>
-#include <assetlib/banim_io.h>
-#include <assetlib/bmaterial_io.h>
-#include <assetlib/bmesh_io.h>
-#include <assetlib/bskel_io.h>
-#include <assetlib/bvat_io.h>
 #include <assetlib/image_io.h>
 #include <assetlib/pak_io.h>
 #include <assetlib/pak_pack.h>
@@ -341,7 +336,7 @@ TEST_CASE("A rig with no .bvat on disk is baked, loaded and drawn", "[vat][rende
 	}
 
 	// The other half of the same rule: what a read-only mount does not carry, it cannot be made to.
-	// Better a plain sentence than `saveVat` failing on a directory that was never there.
+	// Better a plain sentence than the write failing on a directory that was never there.
 	SECTION("a .bvat missing from a read-only mount is an error, not a bake")
 	{
 		fs::remove(root.path / assetlib::vatPathFor("Meshes/rig.bmesh", "Animations/rig.banim"));

@@ -1,8 +1,7 @@
 #include <assetlib/asset_import.h>
-#include <assetlib/banim_io.h>
+#include <assetlib/bmesh.h>
 #include <assetlib/bmesh_gltf.h>
-#include <assetlib/bmesh_io.h>
-#include <assetlib/bskel_io.h>
+#include <assetlib/codecs.h>
 #include <assetlib/mesh_tangents.h>
 #include <assetlib/skeleton.h>
 #include <assetlib/skinning.h>
@@ -455,12 +454,14 @@ TEST_CASE("A mesh carrying joints must name a skeleton", "[bmesh][io][skeleton]"
 	REQUIRE(isSkinned(mesh));
 	REQUIRE(mesh.skeleton.empty());  // toBMesh assigns no paths; bake is what names the rig
 
-	CHECK_THROWS_AS(serialize(mesh), std::runtime_error);
+	CHECK_THROWS_AS(AssetCodec<BMesh>::Serialize(mesh), std::runtime_error);
 
 	SECTION("and naming one makes it writable again")
 	{
 		mesh.skeleton = "rig.bskel";
-		CHECK(deserialize(serialize(mesh)).skeleton == "rig.bskel");
+		CHECK(
+			AssetCodec<BMesh>::Deserialize(AssetCodec<BMesh>::Serialize(mesh)).skeleton ==
+			"rig.bskel");
 	}
 
 	SECTION(
@@ -471,7 +472,9 @@ TEST_CASE("A mesh carrying joints must name a skeleton", "[bmesh][io][skeleton]"
 		for (Submesh& submesh : attachment.submeshes) submesh.layout.attributeCount = 1;
 
 		REQUIRE_FALSE(isSkinned(attachment));
-		CHECK(deserialize(serialize(attachment)).skeleton == "rig.bskel");
+		CHECK(
+			AssetCodec<BMesh>::Deserialize(AssetCodec<BMesh>::Serialize(attachment)).skeleton ==
+			"rig.bskel");
 	}
 }
 

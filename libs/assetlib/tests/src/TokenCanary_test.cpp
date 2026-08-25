@@ -1,9 +1,4 @@
-#include <assetlib/banim_io.h>
-#include <assetlib/benvl_io.h>
-#include <assetlib/bmesh_io.h>
-#include <assetlib/bskel_io.h>
-#include <assetlib/bsky_io.h>
-#include <assetlib/bvat_io.h>
+#include <assetlib/codecs.h>
 #include <assetlib_structs/Animation.h>
 #include <assetlib_structs/BEnv.h>
 #include <assetlib_structs/BMesh.h>
@@ -307,7 +302,7 @@ TEST_CASE("a writer's output cannot change without its bake token", "[canary][io
 		CheckCanary(
 			AssetCodec<BMesh>::c_BakeToken,
 			Pin{ .token = 0x6f1d3a58c2e94b07ull, .hash = 0x08f0b7bf5f59fb2cull },
-			serialize(CanaryMesh()));
+			AssetCodec<BMesh>::Serialize(CanaryMesh()));
 	}
 
 	SECTION(".bskel")
@@ -315,7 +310,7 @@ TEST_CASE("a writer's output cannot change without its bake token", "[canary][io
 		CheckCanary(
 			AssetCodec<Skeleton>::c_BakeToken,
 			Pin{ .token = 0x9be47d02a15c68f3ull, .hash = 0x3dd4d201c9b7ea0bull },
-			serializeSkeleton(CanarySkeleton()));
+			AssetCodec<Skeleton>::Serialize(CanarySkeleton()));
 	}
 
 	SECTION(".banim")
@@ -323,7 +318,7 @@ TEST_CASE("a writer's output cannot change without its bake token", "[canary][io
 		CheckCanary(
 			AssetCodec<AnimationSet>::c_BakeToken,
 			Pin{ .token = 0x41f8b6d95e07c2aaull, .hash = 0xffbf10e60751b032ull },
-			serializeAnimations(CanaryAnimations()));
+			AssetCodec<AnimationSet>::Serialize(CanaryAnimations()));
 	}
 
 	SECTION(".bvat")
@@ -331,7 +326,7 @@ TEST_CASE("a writer's output cannot change without its bake token", "[canary][io
 		CheckCanary(
 			AssetCodec<BVat>::c_BakeToken,
 			Pin{ .token = 0x25b90ce8f7143ad9ull, .hash = 0x6e93b48621d0aca0ull },
-			serializeVat(CanaryVat()));
+			AssetCodec<BVat>::Serialize(CanaryVat()));
 	}
 
 	SECTION(".bsky")
@@ -339,7 +334,7 @@ TEST_CASE("a writer's output cannot change without its bake token", "[canary][io
 		CheckCanary(
 			AssetCodec<BSky>::c_BakeToken,
 			Pin{ .token = 0x7c25e8b1904dfa36ull, .hash = 0xc4ad4035fc805a1full },
-			serializeSky(CanarySky()));
+			AssetCodec<BSky>::Serialize(CanarySky()));
 	}
 
 	SECTION(".benvl")
@@ -347,6 +342,6 @@ TEST_CASE("a writer's output cannot change without its bake token", "[canary][io
 		CheckCanary(
 			AssetCodec<BEnvLighting>::c_BakeToken,
 			Pin{ .token = 0xd48f19c7a35b062eull, .hash = 0x20569dd2f51e76d8ull },
-			serializeEnvLighting(CanaryLighting()));
+			AssetCodec<BEnvLighting>::Serialize(CanaryLighting()));
 	}
 }

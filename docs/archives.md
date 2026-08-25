@@ -223,7 +223,7 @@ Three things it does *not* relax:
   returned. Loading the wrong clips is worse than refusing.
 - **A missing one is an error, not a bake.** `pack` only re-bakes the `.bvat` files already present,
   so a rig nothing acquired before packing ships without one. That throws, naming the file, rather
-  than failing somewhere inside `saveVat` on a directory that was never there.
+  than failing somewhere inside the write on a directory that was never there.
 - **A `.bvat` from another bake revision refuses, it does not re-bake.** Its inputs are recorded in
   a layout `pack` no longer vouches for, so it cannot know what to re-bake from. The loose project
   heals it first: a load through `VatFreshness` reads the refusal as missing and re-bakes in place,

@@ -1,9 +1,4 @@
 #include "StoreAt.h"
-#include <assetlib/benv_io.h>
-#include <assetlib/benvl_io.h>
-#include <assetlib/bmaterial_io.h>
-#include <assetlib/bmesh_io.h>
-#include <assetlib/bsky_io.h>
 #include <assetlib/image_io.h>
 #include <assetlib/pak_io.h>
 #include <assetlib/pak_pack.h>

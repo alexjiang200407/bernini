@@ -1,7 +1,4 @@
-#include <assetlib/benv_io.h>
-#include <assetlib/benvl_io.h>
-#include <assetlib/bmaterial_io.h>
-#include <assetlib/bsky_io.h>
+#include <assetlib/codecs.h>
 #include <assetlib/image_io.h>
 #include <assetlib/pak_io.h>
 #include <assetlib_structs/BEnv.h>
@@ -172,7 +169,9 @@ TEST_CASE("a flat container loads the same from a directory and from an archive"
 			CHECK(mounted.name == direct.name);
 			CHECK(mounted.pbr.baseColorTexture == direct.pbr.baseColorTexture);
 			CHECK(mounted.pbr.routeStamps == direct.pbr.routeStamps);
-			CHECK(serializeMaterial(mounted) == serializeMaterial(direct));
+			CHECK(
+				AssetCodec<BMaterial>::Serialize(mounted) ==
+				AssetCodec<BMaterial>::Serialize(direct));
 		}
 	}
 
@@ -186,7 +185,7 @@ TEST_CASE("a flat container loads the same from a directory and from an archive"
 
 			CHECK(mounted.name == direct.name);
 			CHECK(mounted.sky == direct.sky);
-			CHECK(serializeSky(mounted) == serializeSky(direct));
+			CHECK(AssetCodec<BSky>::Serialize(mounted) == AssetCodec<BSky>::Serialize(direct));
 		}
 	}
 
@@ -200,7 +199,9 @@ TEST_CASE("a flat container loads the same from a directory and from an archive"
 
 			CHECK(mounted.prefilter == direct.prefilter);
 			CHECK(mounted.irradiance == direct.irradiance);
-			CHECK(serializeEnvLighting(mounted) == serializeEnvLighting(direct));
+			CHECK(
+				AssetCodec<BEnvLighting>::Serialize(mounted) ==
+				AssetCodec<BEnvLighting>::Serialize(direct));
 		}
 	}
 
@@ -215,7 +216,7 @@ TEST_CASE("a flat container loads the same from a directory and from an archive"
 			CHECK(mounted.name == direct.name);
 			CHECK(mounted.sky == direct.sky);
 			CHECK(mounted.lighting == direct.lighting);
-			CHECK(serializeEnv(mounted) == serializeEnv(direct));
+			CHECK(AssetCodec<BEnv>::Serialize(mounted) == AssetCodec<BEnv>::Serialize(direct));
 		}
 	}
 }

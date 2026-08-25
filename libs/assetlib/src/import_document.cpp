@@ -1,3 +1,4 @@
+#include <assetlib/codecs.h>
 #include <assetlib/import_document.h>
 
 #include <assetlib/container_format.h>
@@ -43,8 +44,11 @@ namespace assetlib
 	}
 
 	ImportDocument
-	deserializeImportDocument(std::string_view text)
+	AssetCodec<ImportDocument>::Deserialize(std::span<const std::byte> bytes)
 	{
+		const auto text =
+			std::string_view(reinterpret_cast<const char*>(bytes.data()), bytes.size());
+
 		auto json = doc::parseObject(text, "import document: the document");
 
 		ImportDocument document;
@@ -89,8 +93,8 @@ namespace assetlib
 		return document;
 	}
 
-	std::string
-	serializeImportDocument(const ImportDocument& document)
+	std::vector<std::byte>
+	AssetCodec<ImportDocument>::Serialize(const ImportDocument& document)
 	{
 		auto json = doc::parseObject(document.extraJson, "import document: extraJson");
 
@@ -110,7 +114,11 @@ namespace assetlib
 		}
 		json[c_BindingsKey] = std::move(bindings);
 
-		return doc::canonicalDump(json);
+		const std::string text = doc::canonicalDump(json);
+
+		std::vector<std::byte> bytes(text.size());
+		std::memcpy(bytes.data(), text.data(), text.size());
+		return bytes;
 	}
 
 	uint64_t
@@ -126,32 +134,14 @@ namespace assetlib
 	loadImportDocument(const core::file::IFileSystem& files, std::string_view key)
 	{
 		const std::vector<std::byte> bytes = files.Read(key);
-		return deserializeImportDocument(
-			std::string_view(reinterpret_cast<const char*>(bytes.data()), bytes.size()));
+		return AssetCodec<ImportDocument>::Deserialize(bytes);
 	}
 
 	ImportDocument
 	loadImportDocument(const std::filesystem::path& path)
 	{
 		const std::vector<std::byte> bytes = core::file::read_file_bytes(path.string());
-		return deserializeImportDocument(
-			std::string_view(reinterpret_cast<const char*>(bytes.data()), bytes.size()));
+		return AssetCodec<ImportDocument>::Deserialize(bytes);
 	}
 
-	std::vector<std::byte>
-	AssetCodec<ImportDocument>::Serialize(const ImportDocument& value)
-	{
-		const std::string text = serializeImportDocument(value);
-
-		std::vector<std::byte> bytes(text.size());
-		std::memcpy(bytes.data(), text.data(), text.size());
-		return bytes;
-	}
-
-	ImportDocument
-	AssetCodec<ImportDocument>::Deserialize(std::span<const std::byte> bytes)
-	{
-		return deserializeImportDocument(
-			std::string_view(reinterpret_cast<const char*>(bytes.data()), bytes.size()));
-	}
 }

@@ -11,8 +11,6 @@
 #include <QPushButton>
 
 #include <assetlib/AssetStore.h>
-#include <assetlib/bmaterial_io.h>
-#include <assetlib/bmesh_io.h>
 #include <assetlib/material_bake.h>
 #include <assetlib/mesh_tangents.h>
 #include <assetlib_structs/BMesh.h>

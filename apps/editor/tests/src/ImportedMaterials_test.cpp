@@ -1,4 +1,5 @@
 #include "Import/import_writers.h"
+#include <assetlib/bmesh.h>
 
 #include <assetlib/asset_import.h>
 
@@ -6,8 +7,6 @@
 #include "util/QtSupport.h"
 #include "util/asset_paths.h"
 
-#include <assetlib/bmaterial_io.h>
-#include <assetlib/bmesh_io.h>
 #include <assetlib_structs/BMesh.h>
 #include <assetlib_structs/BMeshImport.h>
 

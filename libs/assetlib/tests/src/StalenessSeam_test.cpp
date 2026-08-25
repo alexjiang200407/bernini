@@ -1,4 +1,4 @@
-#include <assetlib/bmaterial_io.h>
+#include <assetlib/container_info.h>
 #include <assetlib/pak_io.h>
 #include <assetlib_structs/BMaterial.h>
 #include <core/file/LooseFileSystem.h>

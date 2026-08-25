@@ -1,13 +1,8 @@
 #include <assetlib/AssetStore.h>
+#include <assetlib/bmesh.h>
+#include <assetlib/skeleton.h>
+#include <assetlib/vat_bake.h>
 
-#include <assetlib/banim_io.h>
-#include <assetlib/benv_io.h>
-#include <assetlib/benvl_io.h>
-#include <assetlib/bmaterial_io.h>
-#include <assetlib/bmesh_io.h>
-#include <assetlib/bskel_io.h>
-#include <assetlib/bsky_io.h>
-#include <assetlib/bvat_io.h>
 #include <assetlib_structs/Animation.h>
 #include <assetlib_structs/BEnv.h>
 #include <assetlib_structs/BMaterial.h>

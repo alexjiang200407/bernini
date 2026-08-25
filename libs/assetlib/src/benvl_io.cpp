@@ -1,4 +1,4 @@
-#include <assetlib/benvl_io.h>
+#include <assetlib/codecs.h>
 #include <assetlib_structs/BEnv.h>
 #include <assetlib_structs/magic.h>
 
@@ -33,7 +33,7 @@ namespace assetlib
 	}
 
 	std::vector<std::byte>
-	serializeEnvLighting(const BEnvLighting& lighting)
+	AssetCodec<BEnvLighting>::Serialize(const BEnvLighting& lighting)
 	{
 		// Both sources, or neither: a one-sided pair written silently would drop the recorded
 		// half from the key, and the entry would then read as current-without-source forever.
@@ -61,7 +61,7 @@ namespace assetlib
 	}
 
 	BEnvLighting
-	deserializeEnvLighting(std::span<const std::byte> bytes)
+	AssetCodec<BEnvLighting>::Deserialize(std::span<const std::byte> bytes)
 	{
 		const cache::Reader reader(
 			bytes,
@@ -96,15 +96,4 @@ namespace assetlib
 		return lighting;
 	}
 
-	std::vector<std::byte>
-	AssetCodec<BEnvLighting>::Serialize(const BEnvLighting& value)
-	{
-		return serializeEnvLighting(value);
-	}
-
-	BEnvLighting
-	AssetCodec<BEnvLighting>::Deserialize(std::span<const std::byte> bytes)
-	{
-		return deserializeEnvLighting(bytes);
-	}
 }

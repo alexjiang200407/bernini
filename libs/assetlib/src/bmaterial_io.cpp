@@ -1,5 +1,4 @@
-#include <assetlib/bmaterial_io.h>
-
+#include <assetlib/codecs.h>
 #include <assetlib/container_info.h>
 #include <assetlib_structs/BMaterial.h>
 #include <core/file/LooseFileSystem.h>
@@ -205,7 +204,7 @@ namespace assetlib
 	}
 
 	std::vector<std::byte>
-	serializeMaterial(const BMaterial& material)
+	AssetCodec<BMaterial>::Serialize(const BMaterial& material)
 	{
 		auto json = doc::parseObject(material.extraJson, "bmaterial: extraJson");
 
@@ -283,7 +282,7 @@ namespace assetlib
 	}
 
 	BMaterial
-	deserializeMaterial(std::span<const std::byte> bytes)
+	AssetCodec<BMaterial>::Deserialize(std::span<const std::byte> bytes)
 	{
 		core::throw_runtime_error_if(
 			!isTextAssetDocument(bytes),
@@ -452,15 +451,4 @@ namespace assetlib
 		return bakeIsStale(material, fileSystem) && routesAreOnDisk(material.pbr, fileSystem);
 	}
 
-	std::vector<std::byte>
-	AssetCodec<BMaterial>::Serialize(const BMaterial& value)
-	{
-		return serializeMaterial(value);
-	}
-
-	BMaterial
-	AssetCodec<BMaterial>::Deserialize(std::span<const std::byte> bytes)
-	{
-		return deserializeMaterial(bytes);
-	}
 }

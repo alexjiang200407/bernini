@@ -1,6 +1,5 @@
 #include <assetlib/asset_refs.h>
 
-#include <assetlib/bmaterial_io.h>
 #include <assetlib_structs/BMaterial.h>
 
 #include "MountAt.h"

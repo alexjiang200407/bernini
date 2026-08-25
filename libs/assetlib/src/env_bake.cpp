@@ -1,10 +1,10 @@
+#include <assetlib/container_info.h>
 #include <assetlib/env_bake.h>
 
 #include <assetlib/AssetStore.h>
 #include <assetlib/cancel.h>
 #include <assetlib/project_layout.h>
 
-#include <assetlib/bmaterial_io.h>
 #include <assetlib/envmap_bake.h>
 #include <assetlib/image_io.h>
 #include <assetlib_structs/BEnv.h>

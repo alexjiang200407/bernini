@@ -1,9 +1,8 @@
 #pragma once
+#include <assetlib_structs/ImageData.h>
 
 namespace assetlib
 {
-	struct ImageData;
-
 	struct PrefilterDesc
 	{
 		// Base face size of the output. Every mip halves from here.
@@ -169,4 +168,41 @@ namespace assetlib
 		const ImageData&     source,
 		const PrefilterDesc& desc,
 		PrefilterStats*      stats = nullptr);
+
+	/**
+	 * The image-based-lighting set for one environment, decoded: the three maps plus the exposure
+	 * they were measured at. What resolveEnvironment returns and a renderer consumes.
+	 *
+	 * They travel together because they are halves of one thing. `prefilter` and `irradiance` are the
+	 * specular and diffuse convolutions of the *same* radiance, in the same units, and a pair from
+	 * different sources disagrees about how bright the world is -- quietly, because each looks
+	 * plausible alone.
+	 *
+	 * `brdf_lut` is deliberately absent. It is the split-sum BRDF integral, a property of the shading
+	 * model rather than of any environment, so embedding it would duplicate it per environment and
+	 * re-couple what is meant to be shared.
+	 */
+	struct EnvironmentMaps
+	{
+		ImageData prefilter;   // GGX split-sum chain, one mip per roughness
+		ImageData irradiance;  // clamped-cosine convolution, one mip
+		ImageData skybox;      // the environment itself, unfiltered
+
+		/**
+		 * The exposure this environment renders at. An HDR environment's absolute scale is arbitrary,
+		 * so this is a property of the maps and not of the scene, and it must change whenever they do
+		 * -- which is why it lives in the file rather than in config.
+		 */
+		float exposure = 1.0f;
+
+		// Move-only, following ImageData: the maps are megabytes each and nothing wants a silent copy.
+		EnvironmentMaps()                           = default;
+		EnvironmentMaps(EnvironmentMaps&&) noexcept = default;
+		EnvironmentMaps(const EnvironmentMaps&)     = delete;
+		EnvironmentMaps&
+		operator=(EnvironmentMaps&&) noexcept = default;
+		EnvironmentMaps&
+		operator=(const EnvironmentMaps&) = delete;
+	};
+
 }

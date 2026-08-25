@@ -1,8 +1,5 @@
 #include <assetlib/env_import.h>
 
-#include <assetlib/benv_io.h>
-#include <assetlib/benvl_io.h>
-#include <assetlib/bsky_io.h>
 #include <assetlib/env_bake.h>
 #include <assetlib/image_io.h>
 #include <assetlib_structs/BEnv.h>

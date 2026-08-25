@@ -1,6 +1,4 @@
-#include <assetlib/benvl_io.h>
-#include <assetlib/bmaterial_io.h>
-#include <assetlib/bsky_io.h>
+#include <assetlib/container_info.h>
 #include <assetlib/env_bake.h>
 #include <assetlib/image_io.h>
 #include <assetlib/material_bake.h>

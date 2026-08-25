@@ -4,8 +4,6 @@
 #include "util/TestOptions.h"
 
 #include <assetlib/AssetStore.h>
-#include <assetlib/banim_io.h>
-#include <assetlib/bskel_io.h>
 #include <assetlib/skeleton.h>
 #include <assetlib/skinning.h>
 #include <assetlib_structs/Animation.h>

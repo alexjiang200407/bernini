@@ -1,23 +1,19 @@
 #include <assetlib/AssetStore.h>
+#include <assetlib/codecs.h>
 #include <assetlib/pak_pack.h>
 
 #include <assetlib/RegenMesh.h>
 #include <assetlib/asset_refs.h>
-#include <assetlib/banim_io.h>
-#include <assetlib/benvl_io.h>
-#include <assetlib/bmaterial_io.h>
-#include <assetlib/bmesh_io.h>
-#include <assetlib/bskel_io.h>
-#include <assetlib/bsky_io.h>
-#include <assetlib/bvat_io.h>
 #include <assetlib/container_format.h>
 #include <assetlib/env_bake.h>
 #include <assetlib/pak_io.h>
 #include <assetlib/project_layout.h>
 #include <assetlib/vat_bake.h>
+#include <assetlib_structs/Animation.h>
 #include <assetlib_structs/BEnv.h>
 #include <assetlib_structs/BMaterial.h>
 #include <assetlib_structs/BVat.h>
+#include <assetlib_structs/Skeleton.h>
 
 #include <core/err/util.h>
 #include <core/file/LooseFileSystem.h>
@@ -173,12 +169,12 @@ namespace assetlib
 					"have; rebind or re-export",
 					key,
 					current.unboundBindings.front());
-				return serialize(current.mesh);
+				return AssetCodec<BMesh>::Serialize(current.mesh);
 			}
 			case AssetType::kSkeleton:
-				return serializeSkeleton(store.LoadRegenSkeleton(key));
+				return AssetCodec<Skeleton>::Serialize(store.LoadRegenSkeleton(key));
 			case AssetType::kAnimation:
-				return serializeAnimations(store.LoadRegenAnimations(key));
+				return AssetCodec<AnimationSet>::Serialize(store.LoadRegenAnimations(key));
 			case AssetType::kMaterial:
 			case AssetType::kTexture:
 			case AssetType::kVat:
@@ -319,7 +315,7 @@ namespace assetlib
 					vat.meshStamp       = meshStamp;
 					vat.skeletonStamp   = skeletonStamp;
 					vat.animationsStamp = animationsStamp;
-					regenerated         = serializeVat(vat);
+					regenerated         = AssetCodec<BVat>::Serialize(vat);
 				}
 				break;
 			}
@@ -344,7 +340,8 @@ namespace assetlib
 
 			// Asked while the bytes are already in hand, which is the only moment packing reads a
 			// material at all.
-			if (type == AssetType::kMaterial && drawsLoose(deserializeMaterial(bytes), loose))
+			if (type == AssetType::kMaterial &&
+			    drawsLoose(AssetCodec<BMaterial>::Deserialize(bytes), loose))
 				report.materialsDrawingLoose.push_back(key);
 
 			// The stamp describes the stored bytes -- a size the payload does not match would

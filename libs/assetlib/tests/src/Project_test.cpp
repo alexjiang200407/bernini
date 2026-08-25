@@ -1,6 +1,5 @@
 #include <assetlib/AssetStore.h>
 #include <assetlib/Project.h>
-#include <assetlib/bmaterial_io.h>
 #include <assetlib/pak_pack.h>
 #include <assetlib_structs/BMaterial.h>
 

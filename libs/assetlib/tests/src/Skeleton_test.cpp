@@ -1,5 +1,4 @@
-#include <assetlib/banim_io.h>
-#include <assetlib/bskel_io.h>
+#include <assetlib/codecs.h>
 #include <assetlib/skeleton.h>
 #include <assetlib_structs/Animation.h>
 #include <assetlib_structs/Skeleton.h>
@@ -78,7 +77,8 @@ namespace
 TEST_CASE("A skeleton survives a container round-trip", "[skeleton][io]")
 {
 	const auto skeleton = MakeChain();
-	const auto restored = deserializeSkeleton(serializeSkeleton(skeleton));
+	const auto restored =
+		AssetCodec<Skeleton>::Deserialize(AssetCodec<Skeleton>::Serialize(skeleton));
 
 	REQUIRE(restored.bones.size() == skeleton.bones.size());
 	CHECK(restored.stringPool == skeleton.stringPool);
@@ -102,8 +102,8 @@ TEST_CASE("A skeleton whose bones are not topologically sorted will not load", "
 	auto skeleton = MakeChain();
 	std::swap(skeleton.bones[0], skeleton.bones[1]);
 
-	const auto bytes = serializeSkeleton(skeleton);
-	CHECK_THROWS_AS(deserializeSkeleton(bytes), std::runtime_error);
+	const auto bytes = AssetCodec<Skeleton>::Serialize(skeleton);
+	CHECK_THROWS_AS(AssetCodec<Skeleton>::Deserialize(bytes), std::runtime_error);
 }
 
 TEST_CASE("A skeleton's signature covers its bones' names and parents", "[skeleton]")
@@ -150,7 +150,8 @@ TEST_CASE("A clip set survives a container round-trip", "[animation][io]")
 {
 	const auto skeleton   = MakeChain();
 	const auto animations = MakeClipSet(skeleton, 31, 2.0f);
-	const auto restored   = deserializeAnimations(serializeAnimations(animations));
+	const auto restored =
+		AssetCodec<AnimationSet>::Deserialize(AssetCodec<AnimationSet>::Serialize(animations));
 
 	CHECK(restored.skeleton == animations.skeleton);
 	CHECK(restored.skeletonSignature == animations.skeletonSignature);
@@ -214,8 +215,8 @@ TEST_CASE("A clip that samples past its pool will not load", "[animation][io]")
 	auto       animations          = MakeClipSet(skeleton, 31, 2.0f);
 	animations.clips[0].frameCount = 40;
 
-	const auto bytes = serializeAnimations(animations);
-	CHECK_THROWS_AS(deserializeAnimations(bytes), std::runtime_error);
+	const auto bytes = AssetCodec<AnimationSet>::Serialize(animations);
+	CHECK_THROWS_AS(AssetCodec<AnimationSet>::Deserialize(bytes), std::runtime_error);
 }
 
 TEST_CASE("A bind pose resolves to model space in one forward pass", "[skeleton]")

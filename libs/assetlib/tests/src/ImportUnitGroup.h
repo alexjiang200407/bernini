@@ -1,8 +1,8 @@
 #pragma once
 #include <assetlib/AssetStore.h>
 #include <assetlib/asset_import.h>
+#include <assetlib/bmesh.h>
 #include <assetlib/bmesh_gltf.h>
-#include <assetlib/bmesh_io.h>
 #include <assetlib/mesh_tangents.h>
 #include <assetlib/project_layout.h>
 #include <assetlib_structs/BMesh.h>

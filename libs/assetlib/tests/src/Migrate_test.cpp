@@ -1,9 +1,4 @@
-#include <assetlib/banim_io.h>
-#include <assetlib/benv_io.h>
-#include <assetlib/benvl_io.h>
-#include <assetlib/bmaterial_io.h>
-#include <assetlib/bmesh_io.h>
-#include <assetlib/bsky_io.h>
+#include <assetlib/codecs.h>
 #include <assetlib/container_info.h>
 #include <assetlib/migrate.h>
 #include <assetlib_structs/BEnv.h>
@@ -59,7 +54,7 @@ namespace
 	{
 		BMaterial material;
 		material.name = std::string(name);
-		return serializeMaterial(material);
+		return AssetCodec<BMaterial>::Serialize(material);
 	}
 
 	/** The same content spelled non-canonically: what a hand edit or a merge leaves behind. */
@@ -105,7 +100,7 @@ TEST_CASE(
 
 		const auto rewritten = project.Read("Materials/older.bmaterial");
 		CHECK(rewritten == MaterialBytes("older"));  // stamped current again
-		CHECK(deserializeMaterial(rewritten).name == "older");
+		CHECK(AssetCodec<BMaterial>::Deserialize(rewritten).name == "older");
 
 		const auto second = migrateProject(project.root, false);
 		CHECK(second.Count(MigratedFile::Outcome::kRewritten) == 0);

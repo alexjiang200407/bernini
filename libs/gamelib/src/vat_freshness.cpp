@@ -1,6 +1,5 @@
 #include <gamelib/vat_freshness.h>
 
-#include <assetlib/bvat_io.h>
 #include <assetlib/vat_bake.h>
 #include <assetlib_structs/SourceRef.h>
 
@@ -169,7 +168,7 @@ namespace game
 
 		// The writable layer may hold nothing yet -- an overlay over an archive starts empty -- so
 		// the directory the bake lands in is made rather than assumed. Named here rather than left
-		// to saveVat, which would blame the file for a directory that was never made.
+		// to the write, which would blame the file for a directory that was never made.
 		const std::filesystem::path bvatAbs = store.GetDataRoot() / bvatRel;
 
 		std::error_code ec;

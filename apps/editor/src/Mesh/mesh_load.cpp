@@ -1,11 +1,11 @@
 #include "mesh_load.h"
+#include <assetlib/codecs.h>
 
 #include <QDebug>
 
 #include <assetlib/AssetCodec.h>
 #include <assetlib/AssetStore.h>
 #include <assetlib/RegenMesh.h>
-#include <assetlib/bmesh_io.h>
 #include <assetlib_structs/BMesh.h>
 #include <core/file/file.h>
 

@@ -1,10 +1,7 @@
 #include <assetlib/asset_describe.h>
 #include <assetlib/asset_refs.h>
-#include <assetlib/banim_io.h>
-#include <assetlib/bmaterial_io.h>
-#include <assetlib/bmesh_io.h>
-#include <assetlib/bskel_io.h>
-#include <assetlib/bvat_io.h>
+#include <assetlib/codecs.h>
+#include <assetlib/container_info.h>
 #include <assetlib/image_io.h>
 #include <assetlib/skeleton.h>
 #include <assetlib/skinning.h>
@@ -356,7 +353,7 @@ TEST_CASE("A .bvat round-trips, and its tables read without the pixels", "[vat]"
 	vat.skeletonStamp   = { 7, 8 };
 	vat.animationsStamp = { 9, 10 };
 
-	const BVat read = deserializeVat(serializeVat(vat));
+	const BVat read = AssetCodec<BVat>::Deserialize(AssetCodec<BVat>::Serialize(vat));
 
 	CHECK(read.width == vat.width);
 	CHECK(read.height == vat.height);
@@ -391,7 +388,9 @@ TEST_CASE("A .bvat round-trips, and its tables read without the pixels", "[vat]"
 		CHECK(tables.stringPool.at(tables.clips[0].nameOffset) == "slide");
 
 		// And what a tables-only read holds cannot be written back as though it were the bake.
-		CHECK_THROWS_WITH(serializeVat(tables), Catch::Matchers::ContainsSubstring("tables-only"));
+		CHECK_THROWS_WITH(
+			AssetCodec<BVat>::Serialize(tables),
+			Catch::Matchers::ContainsSubstring("tables-only"));
 
 		const VatRefs refs = loadVatRefs(path);
 		CHECK(refs.mesh == "Meshes/rig.bmesh");
@@ -405,7 +404,7 @@ TEST_CASE("A .bvat round-trips, and its tables read without the pixels", "[vat]"
 	{
 		// The twist-era files and every other chunk-era bake are refused whole: derived, so the
 		// refusal is what sends them to a re-bake rather than to a reader.
-		auto bytes = serializeVat(vat);
+		auto bytes = AssetCodec<BVat>::Serialize(vat);
 
 		// A chunk-era header carried a version pair where the cache header's version field sits.
 		bytes[4] = std::byte{ 4 };
@@ -414,7 +413,7 @@ TEST_CASE("A .bvat round-trips, and its tables read without the pixels", "[vat]"
 		bytes[7] = std::byte{ 0 };
 
 		CHECK_THROWS_WITH(
-			deserializeVat(bytes),
+			AssetCodec<BVat>::Deserialize(bytes),
 			Catch::Matchers::ContainsSubstring("before the cache format"));
 	}
 
@@ -424,7 +423,9 @@ TEST_CASE("A .bvat round-trips, and its tables read without the pixels", "[vat]"
 		// guards a crafted or corrupted stream -- which consumers index frames from.
 		vat.clips[1].frameCount = 0;
 		vat.height -= 1;
-		CHECK_THROWS_WITH(serializeVat(vat), Catch::Matchers::ContainsSubstring("no frames"));
+		CHECK_THROWS_WITH(
+			AssetCodec<BVat>::Serialize(vat),
+			Catch::Matchers::ContainsSubstring("no frames"));
 	}
 }
 

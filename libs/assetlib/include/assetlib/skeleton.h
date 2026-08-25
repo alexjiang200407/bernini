@@ -74,4 +74,23 @@ namespace assetlib
 	 */
 	[[nodiscard]] std::vector<glm::mat4>
 	skinningMatrices(const Skeleton& skeleton, std::span<const glm::mat4> modelTransforms);
+
+	/**
+	 * The skeleton path `path` names, read without its samples: the header, the chunk table and the
+	 * reference chunk alone. A whole-project reference scan comes through here -- the samples are
+	 * megabytes and the path is a few dozen bytes.
+	 *
+	 * @throws std::runtime_error if the file cannot be read or is malformed.
+	 */
+	[[nodiscard]] std::string
+	loadAnimationSkeletonPath(const std::filesystem::path& path);
+
+	/**
+	 * Whether `animations` was resampled against `skeleton`, by signature. A mismatch means the rig
+	 * has had a bone inserted, removed or reordered since the clips were cooked, and their joint
+	 * indices now name different bones.
+	 */
+	[[nodiscard]] bool
+	animationsMatchSkeleton(const AnimationSet& animations, const Skeleton& skeleton) noexcept;
+
 }

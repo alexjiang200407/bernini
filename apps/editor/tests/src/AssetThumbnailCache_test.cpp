@@ -1,6 +1,5 @@
 #include "Render/Renderer.h"
 #include "Thumbnails/AssetThumbnailCache.h"
-#include <assetlib/bmesh_io.h>
 #include <assetlib_structs/BMesh.h>
 #include <assetlib_structs/Node.h>
 
@@ -9,7 +8,6 @@
 #include <QImage>
 #include <QSignalSpy>
 
-#include <assetlib/bmaterial_io.h>
 #include <assetlib_structs/BMaterial.h>
 #include <assetlib_structs/magic.h>
 #include <bgl/IGraphics.h>
@@ -464,7 +462,7 @@ TEST_CASE("An asset that cannot be read says why", "[thumbnails][render]")
 		mesh.nodes                                       = { root };
 		mesh.meshes                                      = { assetlib::Mesh{ 0, 0, 0 } };
 
-		auto bytes = assetlib::serialize(mesh);
+		auto bytes = assetlib::AssetCodec<assetlib::BMesh>::Serialize(mesh);
 		bytes[8] ^= std::byte{ 1 };  // the bake token: bytes 8..16 of the frozen header
 		std::ofstream out(path.toStdString(), std::ios::binary);
 		out.write(reinterpret_cast<const char*>(bytes.data()), bytes.size());

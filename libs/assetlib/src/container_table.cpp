@@ -1,13 +1,6 @@
 #include <assetlib/AssetCodec.h>
+#include <assetlib/codecs.h>
 
-#include <assetlib/banim_io.h>
-#include <assetlib/benv_io.h>
-#include <assetlib/benvl_io.h>
-#include <assetlib/bmaterial_io.h>
-#include <assetlib/bmesh_io.h>
-#include <assetlib/bskel_io.h>
-#include <assetlib/bsky_io.h>
-#include <assetlib/bvat_io.h>
 #include <assetlib/import_document.h>
 #include <assetlib_structs/Animation.h>
 #include <assetlib_structs/BEnv.h>

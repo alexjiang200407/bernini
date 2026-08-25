@@ -2,7 +2,6 @@
 
 #include <assetlib/AssetStore.h>
 #include <assetlib/asset_refs.h>
-#include <assetlib/bmesh_io.h>
 
 namespace editor
 {

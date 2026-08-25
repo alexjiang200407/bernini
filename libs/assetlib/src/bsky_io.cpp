@@ -1,4 +1,4 @@
-#include <assetlib/bsky_io.h>
+#include <assetlib/codecs.h>
 #include <assetlib_structs/BEnv.h>
 #include <assetlib_structs/magic.h>
 
@@ -24,7 +24,7 @@ namespace assetlib
 	}
 
 	std::vector<std::byte>
-	serializeSky(const BSky& sky)
+	AssetCodec<BSky>::Serialize(const BSky& sky)
 	{
 		cache::Writer writer;
 		writer.Add(ChunkId::kName, std::span<const char>(sky.name));
@@ -38,7 +38,7 @@ namespace assetlib
 	}
 
 	BSky
-	deserializeSky(std::span<const std::byte> bytes)
+	AssetCodec<BSky>::Deserialize(std::span<const std::byte> bytes)
 	{
 		const cache::Reader reader(bytes, magic::c_BSky, AssetCodec<BSky>::c_BakeToken, c_What);
 
@@ -52,15 +52,4 @@ namespace assetlib
 		return sky;
 	}
 
-	std::vector<std::byte>
-	AssetCodec<BSky>::Serialize(const BSky& value)
-	{
-		return serializeSky(value);
-	}
-
-	BSky
-	AssetCodec<BSky>::Deserialize(std::span<const std::byte> bytes)
-	{
-		return deserializeSky(bytes);
-	}
 }

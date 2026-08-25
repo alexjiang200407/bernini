@@ -5,7 +5,6 @@
 
 #include "StoreAt.h"
 #include <assetlib/AssetStore.h>
-#include <assetlib/banim_io.h>
 #include <assetlib_structs/Animation.h>
 #include <bgl/IGraphics.h>
 #include <catch2/matchers/catch_matchers_string.hpp>

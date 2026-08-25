@@ -1,9 +1,6 @@
 #include <assetlib/AssetStore.h>
 #include <assetlib/asset_import.h>
-#include <assetlib/banim_io.h>
-#include <assetlib/bmesh_io.h>
-#include <assetlib/bskel_io.h>
-#include <assetlib/bvat_io.h>
+#include <assetlib/codecs.h>
 #include <assetlib/import_document.h>
 #include <assetlib/pak_io.h>
 #include <assetlib/pak_pack.h>
@@ -59,9 +56,12 @@ namespace
 
 			fs::create_directories(root.path / "meshes_src");
 			std::ofstream(root.path / "meshes_src/kirk.glb") << "the imported source";
-			std::ofstream(root.path / "meshes_src/kirk.bimport")
-				<< serializeImportDocument(ImportDocument{});
-			std::ofstream(root.path / "stray.bimport") << serializeImportDocument(ImportDocument{});
+			core::file::write_atomic(
+				root.path / "meshes_src/kirk.bimport",
+				AssetCodec<ImportDocument>::Serialize(ImportDocument{}));
+			core::file::write_atomic(
+				root.path / "stray.bimport",
+				AssetCodec<ImportDocument>::Serialize(ImportDocument{}));
 		}
 
 		return environment;
@@ -399,7 +399,7 @@ TEST_CASE("a packed .bvat answers fresh inside the archive it shipped in", "[pac
 	document.sampleRate = 60.0f;
 	core::file::write_atomic(
 		root.path / "meshes_src/unit.bimport",
-		serializeImportDocument(document));
+		AssetCodec<ImportDocument>::Serialize(document));
 
 	const std::filesystem::path target = root.path / "Data.bpak";
 	const PackReport            report = packProject(store, PackDesc{ target });

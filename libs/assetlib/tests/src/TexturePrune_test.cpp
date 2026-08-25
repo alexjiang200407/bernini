@@ -1,5 +1,4 @@
 #include <assetlib/AssetStore.h>
-#include <assetlib/bmaterial_io.h>
 #include <assetlib/image_io.h>
 #include <assetlib/material_bake.h>
 #include <assetlib/texture_prune.h>

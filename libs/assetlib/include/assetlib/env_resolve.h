@@ -1,5 +1,5 @@
 #pragma once
-#include <assetlib/benv_io.h>
+#include <assetlib/envmap_bake.h>
 
 namespace assetlib
 {
