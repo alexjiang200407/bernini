@@ -384,7 +384,6 @@ TEST_CASE("A rig is found by signature, not by name", "[importedrig]")
 		assetlib::BMesh second;
 		const fs::path  twin =
 			root.Data() / assetlib::c_SkeletonsDirectoryName / "coyote_twin.bskel";
-		const assetlib::imp::BMeshImport imported = SkinnedImport();
 		root.Store().WriteImportedRig(
 			imported.skeleton,
 			imported.animations,
