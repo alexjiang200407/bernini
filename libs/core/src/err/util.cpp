@@ -127,13 +127,13 @@ namespace core
 		}
 #	endif
 #endif
-	}
 
-	void
-	crash_signal_handle(int signal)
-	{
-		write_crash_log(std::format("signal {}", signal));
-		std::exit(signal);
+		void
+		crash_signal_handle(int signal)
+		{
+			write_crash_log(std::format("signal {}", signal));
+			std::exit(signal);
+		}
 	}
 
 	void
