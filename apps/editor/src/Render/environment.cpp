@@ -1,9 +1,9 @@
 #include "Render/environment.h"
+#include <assetlib/envmap.h>
 
 #include <QLoggingCategory>
 
 #include <assetlib/AssetStore.h>
-#include <assetlib/env_resolve.h>
 #include <assetlib_structs/ImageData.h>
 #include <bgl/SkyboxDesc.h>
 

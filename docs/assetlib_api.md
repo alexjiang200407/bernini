@@ -121,7 +121,7 @@ is what a caller reaches for only when it holds bytes no store addresses, which 
 |---|---|---|
 | Import from glTF | [bmesh_gltf.h](libs/assetlib/include/assetlib/bmesh_gltf.h), [asset_import.h](libs/assetlib/include/assetlib/asset_import.h) | Decode, then write the files an import produces — with a rollback for a cancelled one. |
 | Material bake | [material_bake.h](libs/assetlib/include/assetlib/material_bake.h) | Composites routes down to the baseColor/normal/orm triplet. |
-| Environment bake | [env_bake.h](libs/assetlib/include/assetlib/env_bake.h), [envmap_bake.h](libs/assetlib/include/assetlib/envmap_bake.h), [env_import.h](libs/assetlib/include/assetlib/env_import.h), [env_resolve.h](libs/assetlib/include/assetlib/env_resolve.h) | `.hdr` → the convolutions → the shipping RGB9E5 maps. |
+| Environment bake | [envmap.h](libs/assetlib/include/assetlib/envmap.h) | One header, in pipeline order: `.hdr` → the convolutions → the shipping RGB9E5 maps. |
 | VAT bake | [vat_bake.h](libs/assetlib/include/assetlib/vat_bake.h) | A rig's clips baked to textures. [docs/vat.md](docs/vat.md) |
 | Pose and CPU skinning | [skeleton.h](libs/assetlib/include/assetlib/skeleton.h), [skinning.h](libs/assetlib/include/assetlib/skinning.h) | Deliberately the unoptimised reference every GPU path is diffed against. [docs/skinning.md](docs/skinning.md) |
 | Images | [image_io.h](libs/assetlib/include/assetlib/image_io.h) | KTX2 encode/decode, RGB9E5 pack. [docs/asset_standards.md](docs/asset_standards.md) |

@@ -1,4 +1,4 @@
-#include <assetlib/env_resolve.h>
+#include <assetlib/envmap.h>
 #include <assetlib/image_io.h>
 #include <assetlib_structs/BEnv.h>
 #include <assetlib_structs/ImageData.h>

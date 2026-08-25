@@ -422,7 +422,7 @@ Three different spaces are in play and they are easy to conflate. The contract, 
     immediate; re-convolving the lighting it implies is minutes of work that the same edit need
     not trigger.
   * **The bake compiles, it does not convolve.** `bakeSky`/`bakeEnvLighting`
-    ([libs/assetlib/include/assetlib/env_bake.h](libs/assetlib/include/assetlib/env_bake.h)) take the
+    ([libs/assetlib/include/assetlib/envmap.h](libs/assetlib/include/assetlib/envmap.h)) take the
     routed float-cube intermediates and pack them RGB9E5 into content-addressed `.ktx2` under
     `Textures/` — the shipping format, for the reasons `packRgb9e5`'s doc gives. The convolutions
     themselves (`prefilterRadiance`, `irradianceSh`) run at import, when the sources are produced.
@@ -448,7 +448,7 @@ Three different spaces are in play and they are easy to conflate. The contract, 
   * Either path may be empty — the import's checkboxes write whichever pieces were asked for; what a
     `.benv` must reference is its consumer's rule, not the container's.
   * **Consumers resolve, they do not parse.** `resolveEnvironment(benvPath, dataRoot)`
-    ([libs/assetlib/include/assetlib/env_resolve.h](libs/assetlib/include/assetlib/env_resolve.h))
+    ([libs/assetlib/include/assetlib/envmap.h](libs/assetlib/include/assetlib/envmap.h))
     follows the chain and loads, per route, whatever `envMapToDraw` says is there to draw: the baked
     map while it is current, the float source it was compiled from otherwise. Same branch a material
     takes (`drawsLoose`), and for the same reason — `Textures/` is regenerated per platform, so a

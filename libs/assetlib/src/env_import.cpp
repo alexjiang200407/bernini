@@ -1,9 +1,7 @@
-#include <assetlib/env_import.h>
 
 #include <assetlib/AssetStore.h>
+#include <assetlib/envmap.h>
 
-#include <assetlib/env_bake.h>
-#include <assetlib/envmap_bake.h>
 #include <assetlib/image_io.h>
 #include <assetlib_structs/BEnv.h>
 #include <assetlib_structs/ImageData.h>

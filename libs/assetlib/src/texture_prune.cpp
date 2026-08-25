@@ -1,3 +1,4 @@
+#include <assetlib/envmap.h>
 #include <assetlib/texture_prune.h>
 
 #include <core/err/util.h>
@@ -6,7 +7,6 @@
 #include "ref_paths.h"
 
 #include <assetlib/container_format.h>
-#include <assetlib/env_bake.h>
 #include <assetlib/material_bake.h>
 #include <assetlib_structs/BEnv.h>
 #include <assetlib_structs/BMaterial.h>

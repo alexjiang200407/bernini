@@ -1,6 +1,6 @@
 #include <assetlib/AssetStore.h>
 #include <assetlib/container_info.h>
-#include <assetlib/env_bake.h>
+#include <assetlib/envmap.h>
 #include <assetlib/pak_io.h>
 #include <assetlib/pak_pack.h>
 #include <assetlib/vat_bake.h>

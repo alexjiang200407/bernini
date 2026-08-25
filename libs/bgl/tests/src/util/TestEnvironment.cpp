@@ -1,7 +1,7 @@
 #include "util/TestEnvironment.h"
+#include <assetlib/envmap.h>
 
 #include <assetlib/AssetStore.h>
-#include <assetlib/env_resolve.h>
 #include <assetlib_structs/ImageData.h>
 
 namespace bgl::test

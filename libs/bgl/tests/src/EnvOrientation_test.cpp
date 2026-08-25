@@ -1,7 +1,7 @@
 #include "gfx/GraphicsBase.h"
 #include "util/GoldenImage.h"
 #include "util/TestOptions.h"
-#include <assetlib/envmap_bake.h>
+#include <assetlib/envmap.h>
 #include <assetlib_structs/ImageData.h>
 #include <bgl/Camera.h>
 #include <bgl/IGraphics.h>
