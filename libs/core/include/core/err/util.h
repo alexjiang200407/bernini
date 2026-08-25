@@ -2,9 +2,6 @@
 
 namespace core
 {
-	void
-	crash_signal_handle(int signal);
-
 	/**
 	 * Routes every abnormal exit into `<exe>_crash.log`, with a stack trace and -- where there is one
 	 * -- a reason.

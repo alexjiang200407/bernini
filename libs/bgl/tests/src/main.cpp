@@ -2,8 +2,6 @@
 #include "util/GpuValidation.h"
 #include <catch2/catch_all.hpp>
 #include <core/err/util.h>
-#include <cpptrace/cpptrace.hpp>
-#include <csignal>
 
 int
 main(int argc, char* argv[])
@@ -28,9 +26,7 @@ main(int argc, char* argv[])
 	// Set before the first test runs, so every CreateGraphics sees it.
 	bgl::test::SetGpuValidation(gpuValidation);
 
-	std::signal(SIGSEGV, core::crash_signal_handle);
-	std::signal(SIGABRT, core::crash_signal_handle);
-	std::signal(SIGFPE, core::crash_signal_handle);
+	core::install_crash_handlers();
 
 	return session.run();
 }

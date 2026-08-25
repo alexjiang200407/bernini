@@ -204,12 +204,19 @@ Defined in [libs/bgl/src/error/gassert.h](libs/bgl/src/error/gassert.h) (PCH-inc
 ## 4. Crash log — `{exe}_crash_YYYYMMDD_HHMMSS.log`
 
 A post-mortem stack trace, provided by **core** (not bgl):
-[libs/core/src/err/util.cpp](libs/core/src/err/util.cpp), `core::crash_signal_handle`. On a
-fatal signal it writes `./{exe_stem}_crash_YYYYMMDD_HHMMSS.log` — a `cpptrace` stack trace — then
-`std::exit`. The app/test entry point registers it for `SIGSEGV/SIGABRT/SIGFPE` (e.g.
-[libs/assetlib/tests/src/main.cpp](libs/assetlib/tests/src/main.cpp)). Because `gassert`/`gfatal`
-call `std::terminate` → `SIGABRT`, a CPU assert failure lands here. After any crash, look for
-the newest `{exe_stem}_crash_*.log` (and other `.log` files) in the failing executable's directory.
+[libs/core/src/err/util.cpp](libs/core/src/err/util.cpp), `core::install_crash_handlers`, which
+every app and test entry point calls first thing (e.g.
+[libs/assetlib/tests/src/main.cpp](libs/assetlib/tests/src/main.cpp)). On a fatal signal it writes
+`./{exe_stem}_crash_YYYYMMDD_HHMMSS.log` — a `cpptrace` stack trace — then leaves through `_Exit`.
+Because `gassert`/`gfatal` call `std::terminate` → `SIGABRT`, a CPU assert failure lands here.
+After any crash, look for the newest `{exe_stem}_crash_*.log` (and other `.log` files) in the
+failing executable's directory.
+
+**Read the header line before the trace.** It names the address that faulted and the instruction
+that faulted on it, and that instruction is in the one function the trace below cannot name: a
+trace is walked from the frame pointers, which hold *return* addresses, so the innermost frame —
+the function that has not returned — is absent from it and the trace reads as if the caller were
+to blame.
 
 The name is stamped, so a crash never overwrites the one before it and a reproduction attempt can
 be compared against the original. The ordinary logs are overwritten per run. Crashes within the
