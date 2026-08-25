@@ -360,12 +360,32 @@ namespace assetlib
 		 * What a container holds, as text for a person, with every routed source stat'd through the
 		 * mount and compared against the stamp its bake recorded -- so a stale bake is visible.
 		 *
-		 * The free `assetlib::describe` reports what a container records and stops there. This is
-		 * the form that can also say whether what it records is still true, which needs a project
-		 * to check against.
+		 * One overload per container and no other door: rendering one is `src/asset_describe.h`,
+		 * which is internal, because the useful question about a container is whether what it
+		 * records is still true and only a project can answer that. The three that route nothing
+		 * to stat -- a mesh, a rig, a clip set -- still come through here, so a caller never has
+		 * to know which kind it is holding.
+		 *
+		 * The text is for a person, not a parser: it is not stable across versions and nothing
+		 * reads it back.
 		 */
 		[[nodiscard]] std::string
 		Describe(const BMaterial& material) const;
+
+		/** @param verbose False lists a summary and the material table rather than every submesh. */
+		[[nodiscard]] std::string
+		Describe(const BMesh& mesh, bool verbose = true) const;
+
+		[[nodiscard]] std::string
+		Describe(const Skeleton& skeleton) const;
+
+		/**
+		 * @param skeleton The rig the set names, to have its bone names printed and its signature
+		 *        checked -- a mismatch is the failure this format is hardest to see by eye. Null
+		 *        prints joint indices bare.
+		 */
+		[[nodiscard]] std::string
+		Describe(const AnimationSet& animations, const Skeleton* skeleton = nullptr) const;
 
 		[[nodiscard]] std::string
 		Describe(const BSky& sky) const;

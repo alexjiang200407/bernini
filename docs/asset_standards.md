@@ -975,8 +975,8 @@ everything else as text. Every container is opaque binary, so it is the intended
 in this file" — reach for it before hand-decoding a file against the serializer. The unrouted channels
 it lists are the usual cause of a material rendering wrong, since each one silently falls back to a
 default texture (see [Risky / Non-obvious contracts](#risky--non-obvious-contracts)). Rendered by
-[libs/assetlib/include/assetlib/asset_describe.h](libs/assetlib/include/assetlib/asset_describe.h),
-which the editor can also call for an asset inspector.
+`AssetStore::Describe` ([AssetStore.h](libs/assetlib/include/assetlib/AssetStore.h)), which the
+editor can also call for an asset inspector.
 
 Runtime load + render (load `.bmesh`, resolve each `.bmaterial` and its textures into PBR materials,
 upload geometry, draw): [examples/bgl_base/src/main.cpp](examples/bgl_base/src/main.cpp).

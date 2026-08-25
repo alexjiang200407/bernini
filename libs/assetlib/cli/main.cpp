@@ -2,7 +2,6 @@
 #include <assetlib/AssetCodec.h>
 #include <assetlib/AssetStore.h>
 #include <assetlib/Project.h>
-#include <assetlib/asset_describe.h>
 #include <assetlib/asset_import.h>
 #include <assetlib/asset_refs.h>
 #include <assetlib/assetlib.h>
@@ -740,10 +739,11 @@ main(int argc, char** argv)
 
 			const std::string key = assetlib::normalizePath(describeInput);
 
-			// The store's overload, always: it stats each routed source against what is on disk, so
-			// a stale bake is reported rather than merely recorded.
-			const auto describeAsset = [&store](const auto& asset) {
-				return store.Describe(asset);
+			// Every container through the store: it stats each routed source against what is on
+			// disk, so a stale bake is reported rather than merely recorded. The three that route
+			// nothing answer here too, so this switch never has to know which kind it is holding.
+			const auto describeAsset = [&store](const auto&... asset) {
+				return store.Describe(asset...);
 			};
 
 			if (describeKey)
@@ -779,7 +779,7 @@ main(int argc, char** argv)
 			switch (sniff(store, key))
 			{
 			case assetlib::AssetType::kMesh:
-				std::cout << assetlib::describe(store.Load<assetlib::BMesh>(key), !describeBrief);
+				std::cout << describeAsset(store.Load<assetlib::BMesh>(key), !describeBrief);
 				break;
 			case assetlib::AssetType::kMaterial:
 				std::cout << describeAsset(store.Load<assetlib::BMaterial>(key));
@@ -794,13 +794,13 @@ main(int argc, char** argv)
 				std::cout << describeAsset(store.Load<assetlib::BEnvLighting>(key));
 				break;
 			case assetlib::AssetType::kSkeleton:
-				std::cout << assetlib::describe(store.Load<assetlib::Skeleton>(key));
+				std::cout << describeAsset(store.Load<assetlib::Skeleton>(key));
 				break;
 			case assetlib::AssetType::kAnimation:
 			{
 				const auto animations = store.Load<assetlib::AnimationSet>(key);
 				const auto skeleton   = resolveSkeleton(store, animations.skeleton);
-				std::cout << assetlib::describe(animations, skeleton ? &*skeleton : nullptr);
+				std::cout << describeAsset(animations, skeleton ? &*skeleton : nullptr);
 				break;
 			}
 			case assetlib::AssetType::kVat:

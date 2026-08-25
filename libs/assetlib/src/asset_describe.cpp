@@ -1,4 +1,4 @@
-#include <assetlib/asset_describe.h>
+#include "asset_describe.h"
 #include <assetlib/bmesh.h>
 #include <assetlib/container_info.h>
 #include <assetlib/envmap.h>
