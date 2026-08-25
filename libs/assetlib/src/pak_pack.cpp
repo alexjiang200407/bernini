@@ -234,11 +234,11 @@ namespace assetlib
 	}
 
 	PackReport
-	packProject(const AssetStore& store, const PackDesc& desc)
+	AssetStore::Pack(const PackDesc& desc) const
 	{
 		// The walk and the rebake address the writable layer: packing reads what is on disk under
 		// the data root, not what a wider mount would also answer for.
-		const std::filesystem::path& dataRoot = store.GetDataRoot();
+		const std::filesystem::path& dataRoot = GetDataRoot();
 
 		if (!std::filesystem::is_directory(dataRoot))
 			core::throw_runtime_error(
@@ -246,16 +246,16 @@ namespace assetlib
 				dataRoot.string());
 
 		PackReport report;
-		report.envsRebaked = rebakeStaleEnvs(store, filesUnder(dataRoot));
+		report.envsRebaked = rebakeStaleEnvs(*this, filesUnder(dataRoot));
 
 		const std::vector<std::filesystem::path> files = filesUnder(dataRoot);
-		report.vatsRebaked                             = rebakeStaleVats(store, files);
+		report.vatsRebaked                             = rebakeStaleVats(*this, files);
 
 		const core::file::LooseFileSystem loose(dataRoot);
 
 		// The seam's answer per geometry key, computed once however many askers -- the entry's
 		// own pack, and any `.bvat` stamping against it.
-		ArchivedGeometry archived(store);
+		ArchivedGeometry archived(*this);
 
 		PakWriter writer(desc.target);
 		for (const std::filesystem::path& file : files)
@@ -303,7 +303,7 @@ namespace assetlib
 				// rebakeStaleVats above. A vat whose stamps already describe the archived bytes
 				// -- the ordinary pack, nothing regenerated and nothing rebound -- copies
 				// verbatim rather than paying a decode and a re-encode.
-				BVat vat = store.Load<BVat>(store.KeyFor(file));
+				BVat vat = Load<BVat>(KeyFor(file));
 
 				const SourceStamp meshStamp       = archived.StampFor(normalizeRef(vat.mesh));
 				const SourceStamp skeletonStamp   = archived.StampFor(normalizeRef(vat.skeleton));

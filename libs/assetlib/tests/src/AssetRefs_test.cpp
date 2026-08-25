@@ -101,7 +101,7 @@ TEST_CASE("A material references both the maps it baked and the sources it route
 			const DeletionPlan plan = planDeletion(graph, texture);
 
 			CHECK_FALSE(plan.Allowed());
-			CHECK(deleteAsset(plan, root.Source()).status == DeletionStatus::kRefused);
+			CHECK(root.Source().DeleteAsset(plan).status == DeletionStatus::kRefused);
 			CHECK(fs::exists(root.path / texture));
 		}
 	}
@@ -121,7 +121,7 @@ TEST_CASE("A texture no material names can be deleted", "[assetrefs]")
 	REQUIRE(plan.Allowed());
 	REQUIRE(plan.assetType == AssetType::kTexture);
 
-	CHECK(deleteAsset(plan, root.Source()).status == DeletionStatus::kDeleted);
+	CHECK(root.Source().DeleteAsset(plan).status == DeletionStatus::kDeleted);
 	CHECK_FALSE(fs::exists(root.path / "textures_src" / "orphan.ktx2"));
 }
 
@@ -156,7 +156,7 @@ TEST_CASE("A material a mesh names cannot be deleted", "[assetrefs]")
 
 		REQUIRE(plan.Allowed());
 		REQUIRE(plan.assetType == AssetType::kMaterial);
-		CHECK(deleteAsset(plan, root.Source()).status == DeletionStatus::kDeleted);
+		CHECK(root.Source().DeleteAsset(plan).status == DeletionStatus::kDeleted);
 	}
 }
 
@@ -193,7 +193,7 @@ TEST_CASE("A skeleton cannot be deleted while a mesh skins to it", "[assetrefs][
 	CHECK(
 		ReferrerPaths(graph, "Animations/rig.bskel") ==
 		std::vector<std::string>{ "Animations/walk.banim", "Meshes/mesh.bmesh" });
-	CHECK(deleteAsset(plan, root.Source()).status == DeletionStatus::kRefused);
+	CHECK(root.Source().DeleteAsset(plan).status == DeletionStatus::kRefused);
 
 	SECTION("and a clip set is deletable, because nothing references one")
 	{
@@ -201,7 +201,7 @@ TEST_CASE("A skeleton cannot be deleted while a mesh skins to it", "[assetrefs][
 
 		REQUIRE(clips.Allowed());
 		REQUIRE(clips.assetType == AssetType::kAnimation);
-		CHECK(deleteAsset(clips, root.Source()).status == DeletionStatus::kDeleted);
+		CHECK(root.Source().DeleteAsset(clips).status == DeletionStatus::kDeleted);
 
 		// The skeleton it named outlives it, for the reason a mesh's materials do.
 		CHECK(fs::exists(root.path / "Animations" / "rig.bskel"));
@@ -225,7 +225,7 @@ TEST_CASE("A mesh is always deletable, and its materials outlive it", "[assetref
 
 	REQUIRE(plan.Allowed());
 	REQUIRE(plan.assetType == AssetType::kMesh);
-	REQUIRE(deleteAsset(plan, root.Source()).status == DeletionStatus::kDeleted);
+	REQUIRE(root.Source().DeleteAsset(plan).status == DeletionStatus::kDeleted);
 
 	CHECK_FALSE(fs::exists(root.path / "Meshes" / "mesh.bmesh"));
 
@@ -317,11 +317,11 @@ TEST_CASE("Deleting a material leaves its maps for the prune to sweep", "[assetr
 	const BMaterial material = BakeAndSave(root, "mat.bmaterial", "textures_src/a.ktx2");
 
 	const DeletionPlan plan = planDeletion(root.Scan(), "Materials/mat.bmaterial");
-	REQUIRE(deleteAsset(plan, root.Source()).status == DeletionStatus::kDeleted);
+	REQUIRE(root.Source().DeleteAsset(plan).status == DeletionStatus::kDeleted);
 
 	CHECK(fs::exists(root.path / material.pbr.baseColorTexture));
 
-	const auto swept = findUnusedBakedTextures(AssetStore(root.path));
+	const auto swept = AssetStore(root.path).FindUnusedBakedTextures();
 
 	REQUIRE(swept.unused.size() == 1);
 	CHECK(swept.unused.front().path == material.pbr.baseColorTexture);
@@ -484,7 +484,7 @@ TEST_CASE("An asset already gone counts as deleted", "[assetrefs]")
 
 	fs::remove(root.path / "textures_src" / "a.ktx2");
 
-	CHECK(deleteAsset(plan, root.Source()).status == DeletionStatus::kDeleted);
+	CHECK(root.Source().DeleteAsset(plan).status == DeletionStatus::kDeleted);
 }
 
 TEST_CASE("A directory is held only from outside it", "[assetrefs]")
@@ -508,7 +508,7 @@ TEST_CASE("A directory is held only from outside it", "[assetrefs]")
 		REQUIRE(plan.IsDirectory());
 		CHECK(plan.contents == std::vector<std::string>{ "Materials/kirk/Body.bmaterial" });
 
-		REQUIRE(deleteAsset(plan, root.Source()).status == DeletionStatus::kDeleted);
+		REQUIRE(root.Source().DeleteAsset(plan).status == DeletionStatus::kDeleted);
 
 		CHECK_FALSE(fs::exists(root.path / "Materials" / "kirk"));
 		CHECK(fs::exists(root.path / "textures_src" / "kirk" / "tex0.ktx2"));
@@ -523,7 +523,7 @@ TEST_CASE("A directory is held only from outside it", "[assetrefs]")
 		CHECK(plan.blockers.front().referrer == "Materials/kirk/Body.bmaterial");
 		CHECK(plan.blockers.front().kind == RefKind::kChannelRoute);
 
-		CHECK(deleteAsset(plan, root.Source()).status == DeletionStatus::kRefused);
+		CHECK(root.Source().DeleteAsset(plan).status == DeletionStatus::kRefused);
 		CHECK(fs::exists(root.path / "textures_src" / "kirk" / "tex0.ktx2"));
 	}
 
@@ -555,7 +555,7 @@ TEST_CASE("Deleting a directory takes every file under it, tracked or not", "[as
 	                                               "textures_src/props/notes.txt",
 	                                               "textures_src/props/tex0.ktx2" });
 
-	REQUIRE(deleteAsset(plan, root.Source()).status == DeletionStatus::kDeleted);
+	REQUIRE(root.Source().DeleteAsset(plan).status == DeletionStatus::kDeleted);
 	CHECK_FALSE(fs::exists(root.path / "textures_src" / "props"));
 }
 
@@ -609,7 +609,7 @@ TEST_CASE("An asset held open cannot be deleted, and says so", "[assetrefs]")
 		nullptr);
 	REQUIRE(handle != INVALID_HANDLE_VALUE);
 
-	const DeletionResult result = deleteAsset(plan, root.Source());
+	const DeletionResult result = root.Source().DeleteAsset(plan);
 
 	::CloseHandle(handle);
 
@@ -618,7 +618,7 @@ TEST_CASE("An asset held open cannot be deleted, and says so", "[assetrefs]")
 	CHECK(fs::exists(file));
 
 	// And once the reader lets go, the same plan goes through.
-	CHECK(deleteAsset(plan, root.Source()).status == DeletionStatus::kDeleted);
+	CHECK(root.Source().DeleteAsset(plan).status == DeletionStatus::kDeleted);
 }
 #endif
 

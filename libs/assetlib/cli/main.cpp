@@ -1134,7 +1134,7 @@ main(int argc, char** argv)
 			                                       assetlib::c_DefaultArchiveName :
 			                                   std::filesystem::path(packTarget);
 
-			const assetlib::PackReport report = assetlib::packProject(store, desc);
+			const assetlib::PackReport report = store.Pack(desc);
 
 			if (report.vatsRebaked != 0)
 				spdlog::info("Re-baked {} stale .bvat before packing", report.vatsRebaked);
@@ -1217,7 +1217,7 @@ main(int argc, char** argv)
 			auto desc       = assetlib::TexturePruneDesc();
 			desc.textureDir = pruneTextureDir;
 
-			const auto scan = assetlib::findUnusedBakedTextures(store, desc);
+			const auto scan = store.FindUnusedBakedTextures(desc);
 
 			spdlog::info(
 				"Scanned {} materials and {} environment assets: {} baked maps still referenced, "
@@ -1255,7 +1255,7 @@ main(int argc, char** argv)
 				return 0;
 			}
 
-			const auto result = assetlib::deleteUnusedBakedTextures(scan, store);
+			const auto result = store.DeleteUnusedBakedTextures(scan);
 
 			spdlog::info(
 				"Deleted {} textures, reclaiming {}",

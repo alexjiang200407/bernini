@@ -299,9 +299,9 @@ TEST_CASE("A project reads and writes the loose tree, archive or not", "[project
 
 	SECTION("an archive beside the project changes nothing about what it reads")
 	{
-		static_cast<void>(assetlib::packProject(
-			assetlib::AssetStore(created.GetDataDirectory()),
-			assetlib::PackDesc{ file.parent_path() / assetlib::c_DefaultArchiveName }));
+		static_cast<void>(
+			assetlib::AssetStore(created.GetDataDirectory())
+				.Pack(assetlib::PackDesc{ file.parent_path() / assetlib::c_DefaultArchiveName }));
 
 		// Gone from the tree: the archive still holds it, and that is deliberately not consulted.
 		fs::remove(created.GetDataDirectory() / "Materials/skin.bmaterial");

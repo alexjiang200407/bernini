@@ -30,7 +30,7 @@ namespace
 	RenameResult
 	Rename(const DataRoot& root, std::string_view from, std::string_view to)
 	{
-		return renameAsset(planRename(root.Scan(), from, to), root.Source());
+		return root.Source().RenameAsset(planRename(root.Scan(), from, to));
 	}
 }
 
@@ -46,7 +46,7 @@ TEST_CASE("Renaming an unreferenced asset moves the file", "[assetrename]")
 	CHECK(plan.assetType == AssetType::kTexture);
 	CHECK(plan.referrers.empty());
 
-	REQUIRE(renameAsset(plan, root.Source()).status == RenameStatus::kRenamed);
+	REQUIRE(root.Source().RenameAsset(plan).status == RenameStatus::kRenamed);
 
 	CHECK_FALSE(fs::exists(root.path / "textures_src" / "old.ktx2"));
 	CHECK(fs::exists(root.path / "textures_src" / "new.ktx2"));
@@ -67,7 +67,7 @@ TEST_CASE("Renaming a material re-points every mesh that names it", "[assetrenam
 	const RenamePlan plan =
 		planRename(root.Scan(), "Materials/old.bmaterial", "Materials/new.bmaterial");
 
-	REQUIRE(renameAsset(plan, root.Source()).status == RenameStatus::kRenamed);
+	REQUIRE(root.Source().RenameAsset(plan).status == RenameStatus::kRenamed);
 
 	CHECK_FALSE(fs::exists(root.path / "Materials" / "old.bmaterial"));
 	CHECK(fs::exists(root.path / "Materials" / "new.bmaterial"));
@@ -197,7 +197,7 @@ TEST_CASE("Renaming a directory re-points every reference into it", "[assetrenam
 
 	CHECK(plan.IsDirectory());
 
-	REQUIRE(renameAsset(plan, root.Source()).status == RenameStatus::kRenamed);
+	REQUIRE(root.Source().RenameAsset(plan).status == RenameStatus::kRenamed);
 
 	CHECK_FALSE(fs::exists(root.path / "textures_src" / "kirk"));
 	CHECK(fs::exists(root.path / "textures_src" / "spock" / "tex0.ktx2"));
@@ -300,7 +300,7 @@ TEST_CASE("A referrer that stopped parsing fails the rename, and is not touched"
 
 	std::ofstream(root.path / "Materials" / "mat.bmaterial", std::ios::binary) << "not a material";
 
-	const RenameResult result = renameAsset(plan, root.Source());
+	const RenameResult result = root.Source().RenameAsset(plan);
 
 	CHECK(result.status == RenameStatus::kFailed);
 	CHECK_FALSE(result.error.empty());
@@ -321,7 +321,7 @@ TEST_CASE("A rename whose file vanished fails without touching the referrers", "
 
 	fs::remove(root.path / "textures_src" / "a.ktx2");
 
-	const RenameResult result = renameAsset(plan, root.Source());
+	const RenameResult result = root.Source().RenameAsset(plan);
 
 	CHECK(result.status == RenameStatus::kFailed);
 	CHECK_FALSE(result.error.empty());
@@ -342,7 +342,7 @@ TEST_CASE("A destination taken since the plan fails the rename", "[assetrename]"
 
 	WriteSource(root.path / "textures_src" / "new.ktx2", { { 0, 200, 0, 255 } });
 
-	CHECK(renameAsset(plan, root.Source()).status == RenameStatus::kFailed);
+	CHECK(root.Source().RenameAsset(plan).status == RenameStatus::kFailed);
 	CHECK(fs::exists(root.path / "textures_src" / "a.ktx2"));
 }
 
@@ -459,7 +459,7 @@ TEST_CASE("Renaming a material re-points the import document that binds it", "[a
 
 	const RenamePlan plan =
 		planRename(root.Scan(), "Materials/old.bmaterial", "Materials/new.bmaterial");
-	REQUIRE(renameAsset(plan, root.Source()).status == RenameStatus::kRenamed);
+	REQUIRE(root.Source().RenameAsset(plan).status == RenameStatus::kRenamed);
 
 	const ImportDocument rewritten =
 		loadImportDocument(root.Source().GetFiles(), "meshes_src/kirk.bimport");

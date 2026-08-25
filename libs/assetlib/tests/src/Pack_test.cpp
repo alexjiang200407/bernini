@@ -70,8 +70,7 @@ namespace
 	std::vector<std::string>
 	PackAndEnumerate(const DataRoot& root, PackReport* report = nullptr)
 	{
-		const PackReport packed =
-			packProject(AssetStore(root.path), PackDesc{ root.path / "Data.bpak" });
+		const PackReport packed = AssetStore(root.path).Pack(PackDesc{ root.path / "Data.bpak" });
 		if (report != nullptr)
 			*report = packed;
 
@@ -152,8 +151,7 @@ TEST_CASE("every packed entry reads back byte-for-byte", "[pack]")
 	const DataRoot root("pack_roundtrip");
 	StageProject(root);
 
-	const PackReport packed =
-		packProject(AssetStore(root.path), PackDesc{ root.path / "Data.bpak" });
+	const PackReport packed = AssetStore(root.path).Pack(PackDesc{ root.path / "Data.bpak" });
 
 	const core::file::LooseFileSystem loose(root.path);
 	const PakFile                     pak(root.path / "Data.bpak");
@@ -183,8 +181,8 @@ TEST_CASE("packing the same tree twice produces identical bytes", "[pack]")
 	const DataRoot root("pack_determinism");
 	StageProject(root);
 
-	static_cast<void>(packProject(AssetStore(root.path), PackDesc{ root.path / "a.bpak" }));
-	static_cast<void>(packProject(AssetStore(root.path), PackDesc{ root.path / "b.bpak" }));
+	static_cast<void>(AssetStore(root.path).Pack(PackDesc{ root.path / "a.bpak" }));
+	static_cast<void>(AssetStore(root.path).Pack(PackDesc{ root.path / "b.bpak" }));
 
 	CHECK(
 		core::file::read_file_bytes((root.path / "a.bpak").string()) ==
@@ -205,7 +203,7 @@ TEST_CASE("an interrupted pack leaves the previous archive intact", "[pack]")
 	StageProject(root);
 
 	const auto target = root.path / "Data.bpak";
-	static_cast<void>(packProject(AssetStore(root.path), PackDesc{ target }));
+	static_cast<void>(AssetStore(root.path).Pack(PackDesc{ target }));
 
 	const std::vector<std::byte>   before  = core::file::read_file_bytes(target.string());
 	const std::vector<std::string> entries = PakFile(target).Enumerate();
@@ -317,7 +315,7 @@ TEST_CASE("pack refuses a .bvat from another bake revision", "[pack][vat]")
 	test::TamperHeaderByte(root.path / "Meshes/rig.bvat", test::c_TokenOffset);
 
 	CHECK_THROWS_WITH(
-		packProject(AssetStore(root.path), PackDesc{ root.path / "Data.bpak" }),
+		AssetStore(root.path).Pack(PackDesc{ root.path / "Data.bpak" }),
 		Catch::Matchers::ContainsSubstring("another bake revision"));
 }
 
@@ -334,7 +332,7 @@ TEST_CASE("pack fails when a stale .bvat cannot be re-baked", "[pack][vat]")
 	fs::remove(root.path / "Skeletons/rig.bskel");
 
 	CHECK_THROWS_AS(
-		packProject(AssetStore(root.path), PackDesc{ root.path / "Data.bpak" }),
+		AssetStore(root.path).Pack(PackDesc{ root.path / "Data.bpak" }),
 		std::runtime_error);
 }
 
@@ -352,7 +350,7 @@ TEST_CASE(
 	const auto stale = core::file::read_file_bytes(meshPath.string());
 
 	const std::filesystem::path target = root.path / "Data.bpak";
-	const PackReport            report = packProject(AssetStore(root.path), PackDesc{ target });
+	const PackReport            report = AssetStore(root.path).Pack(PackDesc{ target });
 	CHECK(report.geometryRebaked >= 1);
 
 	// The archive carries the current cook with the document's binding baked in -- a read-only
@@ -375,7 +373,7 @@ TEST_CASE("a group the seam cannot serve fails the pack", "[pack][regen]")
 	test::TamperHeaderByte(root.path / "Meshes/unit.bmesh", test::c_TokenOffset);
 	std::filesystem::remove(root.path / "meshes_src/unit.glb");
 
-	CHECK_THROWS(packProject(AssetStore(root.path), PackDesc{ root.path / "Data.bpak" }));
+	CHECK_THROWS(AssetStore(root.path).Pack(PackDesc{ root.path / "Data.bpak" }));
 }
 
 TEST_CASE("a packed .bvat answers fresh inside the archive it shipped in", "[pack][regen][vat]")
@@ -401,7 +399,7 @@ TEST_CASE("a packed .bvat answers fresh inside the archive it shipped in", "[pac
 		AssetCodec<ImportDocument>::Serialize(document));
 
 	const std::filesystem::path target = root.path / "Data.bpak";
-	const PackReport            report = packProject(store, PackDesc{ target });
+	const PackReport            report = store.Pack(PackDesc{ target });
 	CHECK(report.vatsRebaked == 1);  // the group axis alone fired
 
 	// Judged inside the archive, which is where a shipped build asks: the vat's stamps must

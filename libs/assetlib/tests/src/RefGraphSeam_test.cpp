@@ -31,7 +31,7 @@ namespace
 	void
 	Pack(const DataRoot& root)
 	{
-		static_cast<void>(packProject(AssetStore(root.path), PackDesc{ root.path / "Data.bpak" }));
+		static_cast<void>(AssetStore(root.path).Pack(PackDesc{ root.path / "Data.bpak" }));
 	}
 
 	bool
@@ -162,7 +162,7 @@ TEST_CASE("deleting an asset that only the archive holds is refused", "[refseam]
 	const DeletionPlan  plan  = planDeletion(graph, "Materials/skin.bmaterial");
 	REQUIRE(plan.Allowed());
 
-	const DeletionResult result = deleteAsset(plan, store);
+	const DeletionResult result = store.DeleteAsset(plan);
 	CHECK(result.status == DeletionStatus::kFailed);
 }
 
@@ -189,7 +189,7 @@ TEST_CASE("deleting a directory the archive alone holds is refused", "[refseam]"
 	REQUIRE(plan.IsDirectory());
 	REQUIRE(plan.contents == std::vector<std::string>{ "Materials/kirk/Body.bmaterial" });
 
-	CHECK(deleteAsset(plan, store).status == DeletionStatus::kFailed);
+	CHECK(store.DeleteAsset(plan).status == DeletionStatus::kFailed);
 }
 
 // The overlay the editor writes: a packed asset and an edited loose copy of it are one asset, not
@@ -238,7 +238,7 @@ TEST_CASE("a prune over a mount union proposes only what it could delete", "[ref
 		// The material is deleted from the loose tree; only the archive still names its triplet.
 		fs::remove(root.path / "Materials/packed.bmaterial");
 
-		const TexturePruneScan scan = findUnusedBakedTextures(Overlaid(root));
+		const TexturePruneScan scan = Overlaid(root).FindUnusedBakedTextures();
 
 		// The archive still names it, so it is live however the loose tree looks.
 		CHECK_FALSE(Proposes(scan, packedMaterial.pbr.baseColorTexture));
@@ -253,7 +253,7 @@ TEST_CASE("a prune over a mount union proposes only what it could delete", "[ref
 	{
 		fs::remove(root.path / "Materials/packed.bmaterial");
 
-		const TexturePruneScan scan = findUnusedBakedTextures(AssetStore(root.path));
+		const TexturePruneScan scan = AssetStore(root.path).FindUnusedBakedTextures();
 
 		CHECK(Proposes(scan, packedMaterial.pbr.baseColorTexture));
 	}

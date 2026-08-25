@@ -541,7 +541,7 @@ MainWindow::CleanUnusedTextures()
 				"the data directory '{}' is not there any more",
 				m_Project->GetDataDirectory().string());
 
-			scan = assetlib::findUnusedBakedTextures(m_Project->GetStore());
+			scan = m_Project->GetStore().FindUnusedBakedTextures();
 		});
 
 	if (!scanned.Completed())
@@ -597,7 +597,7 @@ MainWindow::CleanUnusedTextures()
 		return;
 
 	// Unlinking is fast, so it stays on the UI thread; the scan is what was slow.
-	const auto result = assetlib::deleteUnusedBakedTextures(scan, m_Project->GetStore());
+	const auto result = m_Project->GetStore().DeleteUnusedBakedTextures(scan);
 
 	if (!result.failed.empty())
 	{

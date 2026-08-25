@@ -4,13 +4,13 @@
 
 namespace assetlib
 {
-	/** What `packProject` put in the archive, and what it left out. */
+	/** What `AssetStore::Pack` put in the archive, and what it left out. */
 	struct PackReport
 	{
 		uint32_t entries      = 0;
 		uint64_t payloadBytes = 0;
 
-		/** `.bvat` files found stale and re-baked before packing. See packProject. */
+		/** `.bvat` files found stale and re-baked before packing. See `AssetStore::Pack`. */
 		uint32_t vatsRebaked = 0;
 
 		/** `.bsky` / `.benvl` files whose routed source moved, re-baked before packing. */
@@ -48,32 +48,4 @@ namespace assetlib
 		/** The `.bpak` to write. Replaced only once the whole archive is on disk. */
 		std::filesystem::path target;
 	};
-
-	/**
-	 * Walks a data root and writes one `.bpak` of everything the runtime reads.
-	 *
-	 * What goes in is `assetTypeFromExtension`, so a new container type joins the archive by being
-	 * registered once, plus two explicit exclusions: a `textures_src` or `meshes_src` component is
-	 * authoring source, and the import document is authored state a read-only store never reads.
-	 * Anything else unregistered is counted in `skippedByExtension` rather than dropped silently.
-	 *
-	 * Nothing stale enters the archive, which is the whole of a read-only store's trust:
-	 *
-	 * - Geometry (`.bmesh`, `.bskel`, `.banim`) carries what the regeneration seam answers -- a
-	 *   stale group re-bakes *into the archive* (the file on disk is `migrate`'s, and stays), and
-	 *   a binding-only document edit is baked in with no `migrate` run.
-	 * - A stale `.bvat` -- its own stamps, or a geometry group that is a cache miss -- is re-baked
-	 *   on disk first, from the seam's outputs. Every packed `.bvat` is then re-stamped against
-	 *   the geometry *as archived*, so a staleness question asked inside the archive answers
-	 *   fresh.
-	 *
-	 * `target` is untouched until the archive is whole: `PakWriter` streams to a temp and renames.
-	 *
-	 * @throws std::runtime_error if an asset cannot be read, if a stale `.bvat` cannot be re-baked,
-	 *         if a geometry group cannot be served (no source to regenerate a stale entry from, or
-	 *         a binding naming a submesh the mesh does not have), or if the archive cannot be
-	 *         written.
-	 */
-	[[nodiscard]] PackReport
-	packProject(const AssetStore& store, const PackDesc& desc);
 }

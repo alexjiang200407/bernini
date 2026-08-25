@@ -632,9 +632,8 @@ TEST_CASE("an import lands in the project's categories and reads back", "[import
 		CHECK(graph.broken.empty());
 
 		// And it packs: textures_src is authoring source and stays out, so the mesh is the payload.
-		const assetlib::PackReport report = assetlib::packProject(
-			store,
-			assetlib::PackDesc{ root / assetlib::c_DefaultArchiveName });
+		const assetlib::PackReport report =
+			store.Pack(assetlib::PackDesc{ root / assetlib::c_DefaultArchiveName });
 		CHECK(report.entries == 1);
 	}
 

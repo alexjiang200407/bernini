@@ -71,7 +71,7 @@ when this doc disagrees, trust the header, then fix this doc.
 
 * **Baked maps are shared, not owned.** A bake's output name is content-addressed from its
   route, so two materials routing the same source share one baked file — and deleting a material
-  therefore does not delete its maps. `findUnusedBakedTextures` is what collects them.
+  therefore does not delete its maps. `AssetStore::FindUnusedBakedTextures` is what collects them.
 
 * **The cook never carries a source format's shading model across.** `toBMesh` drops glTF's PBR
   materials on the floor: they are that format's model, not necessarily the engine's, and
@@ -146,7 +146,7 @@ flowchart TD
 
     STORE --> GRAPH["AssetRefGraph::Scan"]
     GRAPH --> PLAN["DeletionPlan / RenamePlan"]
-    STORE --> BAKE["BakeVat, packProject, findUnusedBakedTextures"]
+    STORE --> BAKE["BakeVat, Pack, FindUnusedBakedTextures"]
 
     CLI["assetlib_cli"] --> STORE
     ED["apps/editor"] --> STORE
@@ -201,7 +201,7 @@ The dotted edge is the asymmetry: reads go through the store, writes go around i
 * **`planDeletion` on a directory** — a directory is held only by an edge reaching *into* it
   from outside, and takes everything beneath it. Whether it is a directory the *project* needs is
   not a question this can answer; `Project::IsRequiredDirectory` is.
-* **`renameAsset`** — reads and rewrites every referrer in memory first, saves them, then moves
+* **`AssetStore::RenameAsset`** — reads and rewrites every referrer in memory first, saves them, then moves
   the file last, because the move is the step most likely to be refused. A failure writes the
   original bytes back — best-effort, and a machine that fails the restore too reports the first
   error rather than a pretense of atomicity.

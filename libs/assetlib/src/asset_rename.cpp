@@ -206,10 +206,10 @@ namespace assetlib
 	}
 
 	RenameResult
-	renameAsset(const RenamePlan& plan, const AssetStore& store)
+	AssetStore::RenameAsset(const RenamePlan& plan) const
 	{
-		const std::filesystem::path fromPath = store.GetDataRoot() / plan.from;
-		const std::filesystem::path toPath   = store.GetDataRoot() / plan.to;
+		const std::filesystem::path fromPath = GetDataRoot() / plan.from;
+		const std::filesystem::path toPath   = GetDataRoot() / plan.to;
 
 		// Unlike a deletion, a rename cannot shrug at a file that has vanished since the plan: there is
 		// nothing to move, and rewriting the referrers anyway would break every one of them.
@@ -238,7 +238,7 @@ namespace assetlib
 					"' is not a container that stores references");
 
 			auto file = PendingReferrer();
-			file.path = store.GetDataRoot() / referrer;
+			file.path = GetDataRoot() / referrer;
 			file.type = *type;
 
 			// Ordinary weather, not a caller error: the file may be locked, gone since the scan, or --
@@ -312,14 +312,14 @@ namespace assetlib
 				// and `.banim` this was baked from, which changes their contents and so their stamps.
 				// The baked tables did not change, so re-reading the inputs here is what keeps the
 				// rename a load. Only now are they all in their final place.
-				BVat vat            = store.Load<BVat>(store.KeyFor(file.path));
-				vat.meshStamp       = stampOf(store.GetDataRoot() / vat.mesh);
-				vat.skeletonStamp   = stampOf(store.GetDataRoot() / vat.skeleton);
-				vat.animationsStamp = stampOf(store.GetDataRoot() / vat.animations);
-				store.Save(vat, store.KeyFor(file.path));
+				BVat vat            = Load<BVat>(KeyFor(file.path));
+				vat.meshStamp       = stampOf(GetDataRoot() / vat.mesh);
+				vat.skeletonStamp   = stampOf(GetDataRoot() / vat.skeleton);
+				vat.animationsStamp = stampOf(GetDataRoot() / vat.animations);
+				Save(vat, KeyFor(file.path));
 
 				const std::filesystem::path derived =
-					store.GetDataRoot() / vatPathFor(vat.mesh, vat.animations);
+					GetDataRoot() / vatPathFor(vat.mesh, vat.animations);
 				if (!std::filesystem::equivalent(file.path, derived, ec) &&
 				    !std::filesystem::exists(derived))
 					std::filesystem::rename(file.path, derived, ec);

@@ -735,7 +735,7 @@ someone bakes it.
 ## Pruning unused baked maps
 
 A re-bake orphans the map its old routing named (see [Texture standards](#texture-standards)), so
-`<Data>/Textures/` grows monotonically. `findUnusedBakedTextures` / `deleteUnusedBakedTextures`
+`<Data>/Textures/` grows monotonically. `AssetStore::FindUnusedBakedTextures` / `AssetStore::DeleteUnusedBakedTextures`
 ([libs/assetlib/include/assetlib/texture_prune.h](libs/assetlib/include/assetlib/texture_prune.h))
 reclaim them, exposed as `assetlib_cli prune` and as the editor's **File ▸ Clean Unused Textures…**.
 The scan is separate from the delete so both surfaces can show what they are about to destroy and take
@@ -805,7 +805,7 @@ per deletion: *what would nothing reference once this is gone?* `DeletionPlan::c
 asset the deleted set references whose **every** referrer is itself in the set, applied transitively —
 a material freed by its last mesh frees the baked maps and sources it alone named. It never reaches
 *up*: what references the target blocks the deletion either way, exactly as before. A blocked plan
-carries no cascade, and `deleteAsset` removes the cascade only after the target, so a failure part-way
+carries no cascade, and `AssetStore::DeleteAsset` removes the cascade only after the target, so a failure part-way
 never leaves a referenced asset missing.
 
 ### Deleting a directory
@@ -852,14 +852,14 @@ Three things the implementation must get right, each of which is a real failure 
   `tree_alpha_test.bmesh` does. Reporting that mesh twice would misstate how much is holding the
   material.
 
-`deleteAsset` reports a failure rather than throwing, because failure here is ordinary: the editor
+`AssetStore::DeleteAsset` reports a failure rather than throwing, because failure here is ordinary: the editor
 decodes `.ktx2` thumbnails on a thread pool, and Windows will not unlink a file that is open. "Still
 referenced" and "the file is in use" are different things to tell a user, and are different statuses.
 
 ## Renaming assets
 
 Identity is the data-root-relative path, so a rename is a reference rewrite or it is a break. `planRename`
-/ `renameAsset` (**Rename** on the same menu) move a file — or a directory, everything under it — and
+/ `AssetStore::RenameAsset` (**Rename** on the same menu) move a file — or a directory, everything under it — and
 rewrite every referrer to follow, so a rename is **never blocked by references** the way a deletion is.
 Three rules of its own:
 

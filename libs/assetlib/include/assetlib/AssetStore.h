@@ -5,21 +5,30 @@
 
 namespace assetlib
 {
-	struct AnimationSet;
-	struct BEnv;
-	struct BEnvLighting;
-	struct BMaterial;
-	struct BMesh;
-	struct BSky;
-	struct BVat;
 	struct EnvMapRoute;
 	struct ImageData;
 	struct MeshRefs;
+	struct PackDesc;
+	struct PackReport;
+	struct RenamePlan;
+	struct RenameResult;
 	struct ResolvedEnvironment;
 	struct Skeleton;
 	struct SourceStamp;
+	struct TexturePruneDesc;
+	struct TexturePruneResult;
+	struct TexturePruneScan;
 	struct VatBakeDesc;
 	struct VatRefs;
+	struct DeletionResult;
+	struct DeletionPlan;
+	struct BVat;
+	struct BSky;
+	struct BMesh;
+	struct BMaterial;
+	struct BEnvLighting;
+	struct BEnv;
+	struct AnimationSet;
 
 	enum class Ktx2Decode : uint32_t;
 
@@ -403,6 +412,82 @@ namespace assetlib
 		/** A `.benv` followed to its pixels. `benvPath` is a host file; the chain below it is keyed. */
 		[[nodiscard]] ResolvedEnvironment
 		ResolveEnvironment(const std::filesystem::path& benvPath) const;
+
+		// --- Operations over the whole project ---------------------------------------------------
+
+		/**
+		 * Deletes what `plan` names, and whatever it cascades to, after the target.
+		 *
+		 * Reports a failure rather than throwing, because a failure here is ordinary: a preview
+		 * decode holds a `.ktx2` open, and Windows refuses to unlink an open file. "Still
+		 * referenced" and "the file is in use" are different things to tell a user, which is why
+		 * they are different statuses. A directory whose removal fails part-way is reported
+		 * kFailed, with whatever came off already gone -- there is no undo, and pretending
+		 * otherwise would be worse than saying so.
+		 *
+		 * Deleting a material still leaves the baked maps it alone named; those are what
+		 * FindUnusedBakedTextures then sweeps.
+		 */
+		DeletionResult
+		DeleteAsset(const DeletionPlan& plan) const;
+
+		/**
+		 * Rewrites every referrer in `plan` and then moves the file.
+		 *
+		 * The referrers are all read and rewritten in memory before anything is written -- one that
+		 * cannot be read or parsed fails the rename while the project is still untouched -- the
+		 * files are then saved, and the rename itself comes last: it is the step most likely to be
+		 * refused (Windows will not move a file another process holds open), and by then it is the
+		 * only step left to undo. A failure anywhere writes the original bytes back over whatever
+		 * had already been saved, so kFailed means the project is as it was; that restore is
+		 * best-effort, and a machine that fails the restore too is reported with the first error
+		 * rather than a pretense of atomicity.
+		 *
+		 * @throws std::runtime_error if a referrer in `plan` is not a container that stores
+		 *         references -- a plan built by planRename never holds one, so that is a caller
+		 *         error, not weather.
+		 */
+		RenameResult
+		RenameAsset(const RenamePlan& plan) const;
+
+		/**
+		 * Every baked map under this project that nothing references.
+		 *
+		 * @throws std::runtime_error if a referrer cannot be read. An unreadable asset is fatal on
+		 *         purpose: its references would silently go unmarked, and the maps it alone keeps
+		 *         alive would be swept as garbage.
+		 */
+		[[nodiscard]] TexturePruneScan
+		FindUnusedBakedTextures(const TexturePruneDesc& desc) const;
+
+		/** The same, over the project's own texture directories. */
+		[[nodiscard]] TexturePruneScan
+		FindUnusedBakedTextures() const;
+
+		/**
+		 * Removes what a scan found. A file that has vanished since counts as deleted, not as a
+		 * failure; one that cannot be removed is collected into `failed` rather than throwing, so
+		 * one locked map does not abandon the rest of the sweep.
+		 *
+		 * Re-baking or editing a material between the scan and this call invalidates the scan --
+		 * take a fresh one.
+		 */
+		TexturePruneResult
+		DeleteUnusedBakedTextures(const TexturePruneScan& scan) const;
+
+		/**
+		 * Packs this project into the `.bpak` `desc` names.
+		 *
+		 * `desc.target` is untouched until the archive is whole: `PakWriter` streams to a temp and
+		 * renames.
+		 *
+		 * @throws std::runtime_error if an asset cannot be read, if a stale `.bvat` cannot be
+		 *         re-baked, if a geometry group cannot be served (no source to regenerate a stale
+		 *         entry from, or a binding naming a submesh the mesh does not have), or if the
+		 *         archive cannot be written.
+		 */
+		[[nodiscard]] PackReport
+		Pack(const PackDesc& desc) const;
 
 		// --- Describe --------------------------------------------------------------------------
 

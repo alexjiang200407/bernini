@@ -159,7 +159,7 @@ pack leaves whatever was at the target untouched — never a shipped artifact mi
 
 `Finish` sorts the entry table by path, so a reader sees one order however the writer was driven.
 That alone is *not* byte-reproducibility: payloads were streamed as they arrived, so `Add` order is
-payload order. **Packing one tree twice produces identical bytes** because `packProject` sorts its
+payload order. **Packing one tree twice produces identical bytes** because `AssetStore::Pack` sorts its
 walk — `recursive_directory_iterator` order is not the same on two filesystems, and without the sort
 an archive would only be reproducible per machine, which is no use to anyone diffing or caching a
 shipped one.
@@ -170,7 +170,7 @@ shipped one.
 
 The rule is one line: *an archive carries what the runtime reads and nothing that produces it.*
 
-`packProject` ([pak_pack.h:75](../libs/assetlib/include/assetlib/pak_pack.h)) derives that from
+`AssetStore::Pack` ([AssetStore.h](../libs/assetlib/include/assetlib/AssetStore.h)) derives that from
 `assetTypeFromExtension` ([asset_refs.h](../libs/assetlib/include/assetlib/asset_refs.h)) rather than
 from a list kept beside it, so a new container type joins the archive by being registered once. On
 top of that sit the explicit exclusions: any path with a `textures_src` or `meshes_src` component,
@@ -259,7 +259,7 @@ from one whose `.bvat` has deliberately drifted; `Pack_test` packs a staged proj
 entry back against the tree it came from. That runs on every test run.
 
 The CLI itself is the exception, and it is worth knowing: nothing invokes the `assetlib_cli` binary
-from a test. `pack` and `list` are thin wrappers over `packProject` and `PakFile::Enumerate`/`Stat`,
+from a test. `pack` and `list` are thin wrappers over `AssetStore::Pack` and `PakFile::Enumerate`/`Stat`,
 which are covered directly — the argument parsing and the printing are not covered at all.
 
 ### Loose still wins, permanently
@@ -286,7 +286,7 @@ assetlib_cli list <archive>                       # the entry table, as text
 beside the data root: an archive is what a project produces, not a member of it, and `PakFile` reads
 one standalone.
 
-The walk and the exclusion rule live in `assetlib` (`packProject`), not in the CLI, so the gate is an
+The walk and the exclusion rule live in `assetlib` (`AssetStore::Pack`), not in the CLI, so the gate is an
 `assetlib_tests` gate.
 
 The default target sits **beside** the data root rather than inside it: an archive of a tree is not a

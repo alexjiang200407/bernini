@@ -333,14 +333,14 @@ TEST_CASE(
 	const auto orphan = root.path / "Textures" / "sky_00000000deadbeef.ktx2";
 	writeKTX2(ConstantCube(4, 1.0f), orphan, false, Ktx2Compression::kNone);
 
-	const auto scan = findUnusedBakedTextures(AssetStore(root.path));
+	const auto scan = AssetStore(root.path).FindUnusedBakedTextures();
 
 	CHECK(scan.environmentsScanned == 2);
 	CHECK(scan.liveMaps == 3);
 	REQUIRE(scan.unused.size() == 1);
 	CHECK(scan.unused.front().path == "Textures/sky_00000000deadbeef.ktx2");
 
-	deleteUnusedBakedTextures(scan, AssetStore(root.path));
+	AssetStore(root.path).DeleteUnusedBakedTextures(scan);
 	CHECK(!std::filesystem::exists(orphan));
 	CHECK(std::filesystem::exists(root.path / sky.sky.baked));
 	CHECK(std::filesystem::exists(root.path / lighting.prefilter.baked));
@@ -354,11 +354,11 @@ TEST_CASE("the prune refuses to scan past an unreadable environment asset", "[en
 	const DataRoot root("bernini_envbake_prune_bad");
 
 	std::ofstream(root.path / "broken.bsky") << "not a container";
-	CHECK_THROWS_AS(findUnusedBakedTextures(AssetStore(root.path)), std::runtime_error);
+	CHECK_THROWS_AS(AssetStore(root.path).FindUnusedBakedTextures(), std::runtime_error);
 
 	std::filesystem::remove(root.path / "broken.bsky");
 	std::ofstream(root.path / "broken.benvl") << "not a container";
-	CHECK_THROWS_AS(findUnusedBakedTextures(AssetStore(root.path)), std::runtime_error);
+	CHECK_THROWS_AS(AssetStore(root.path).FindUnusedBakedTextures(), std::runtime_error);
 }
 
 // The archive property, extended to the env family: judged inside the archive, a shipped bake is
@@ -374,7 +374,7 @@ TEST_CASE("pack re-bakes a sky whose routed source moved", "[envbake][pack]")
 
 	root.AddSource("sky_src.ktx2", 8, 2.0f);
 
-	PackReport report = packProject(AssetStore(root.path), PackDesc{ root.path / "Data.bpak" });
+	PackReport report = AssetStore(root.path).Pack(PackDesc{ root.path / "Data.bpak" });
 	CHECK(report.envsRebaked == 1);
 
 	const PakFile pak(root.path / "Data.bpak");
@@ -384,8 +384,7 @@ TEST_CASE("pack re-bakes a sky whose routed source moved", "[envbake][pack]")
 
 	SECTION("and a second pack re-bakes nothing")
 	{
-		const PackReport again =
-			packProject(AssetStore(root.path), PackDesc{ root.path / "Data2.bpak" });
+		const PackReport again = AssetStore(root.path).Pack(PackDesc{ root.path / "Data2.bpak" });
 		CHECK(again.envsRebaked == 0);
 	}
 }
@@ -401,7 +400,6 @@ TEST_CASE("a sky that never recorded its source packs verbatim", "[envbake][pack
 	sky.sky.stamp = SourceStamp{};
 	StoreAt(root.path).Save(sky, "Sky/frozen.bsky");
 
-	const PackReport report =
-		packProject(AssetStore(root.path), PackDesc{ root.path / "Data.bpak" });
+	const PackReport report = AssetStore(root.path).Pack(PackDesc{ root.path / "Data.bpak" });
 	CHECK(report.envsRebaked == 0);
 }
