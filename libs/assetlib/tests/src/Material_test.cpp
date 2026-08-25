@@ -1,4 +1,3 @@
-#include <assetlib/asset_import.h>
 #include <assetlib/bmesh.h>
 #include <assetlib/bmesh_gltf.h>
 #include <assetlib/codecs.h>
@@ -488,7 +487,7 @@ TEST_CASE("an import writes a loadable .bmesh and its textures, and no materials
 	writeTextures(import, outDir);
 	BMesh baked = toBMesh(import);
 	static_cast<void>(generateTangents(baked));
-	writeImportedMesh(AssetStore(outDir), baked, "suzanne.bmesh");
+	AssetStore(outDir).Save(baked, "suzanne.bmesh");
 
 	REQUIRE(std::filesystem::exists(outDir / "suzanne.bmesh"));
 

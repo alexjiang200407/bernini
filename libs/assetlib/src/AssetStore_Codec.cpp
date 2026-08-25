@@ -16,6 +16,12 @@ namespace assetlib
 		std::span<const std::byte> bytes,
 		std::string_view           what) const
 	{
-		writeFileBytes(ResolveWritePath(path), bytes, what);
+		const std::filesystem::path resolved = ResolveWritePath(path);
+
+		// A key names a location in the data root, not one that already exists: an import aimed at
+		// `Meshes/<folder>/` and a project scaffolded before a category existed both write where
+		// no directory is yet.
+		createDirectories(resolved.parent_path());
+		writeFileBytes(resolved, bytes, what);
 	}
 }

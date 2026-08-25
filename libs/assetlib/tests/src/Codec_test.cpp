@@ -163,3 +163,27 @@ TEST_CASE("Save refuses a key that escapes the data root", "[codec]")
 	CHECK_THROWS_AS(store.Save(material, "../escaped.bmaterial"), std::runtime_error);
 	CHECK_THROWS_AS(store.Save(material, "/etc/passwd"), std::runtime_error);
 }
+
+TEST_CASE("Save creates the directories its key names", "[codec]")
+{
+	assetlib::test::DataRoot root("assetlib_codec_mkdir_test");
+	const AssetStore         store(root.path);
+
+	BMaterial material;
+	material.name = "brick";
+
+	// A key is a location in the data root, not a location that exists: an import aimed at a
+	// subfolder writes two levels of it that nothing scaffolded. Without this the write fails
+	// inside write_atomic, naming a temp file, which reads as a permissions problem.
+	REQUIRE_FALSE(std::filesystem::exists(root.path / "Materials" / "walls"));
+	store.Save(material, "Materials/walls/brick.bmaterial");
+
+	CHECK(std::filesystem::exists(root.path / "Materials" / "walls" / "brick.bmaterial"));
+	CHECK(store.Load<BMaterial>("Materials/walls/brick.bmaterial").name == "brick");
+
+	SECTION("a key that escapes is still refused, before any directory is made")
+	{
+		CHECK_THROWS_AS(store.Save(material, "../up/escaped.bmaterial"), std::runtime_error);
+		CHECK_FALSE(std::filesystem::exists(root.path.parent_path() / "up"));
+	}
+}

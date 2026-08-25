@@ -166,19 +166,8 @@ namespace game
 			store,
 			assetlib::VatBakeDesc{ std::string(meshRelPath), std::string(animationsRelPath) });
 
-		// The writable layer may hold nothing yet -- an overlay over an archive starts empty -- so
-		// the directory the bake lands in is made rather than assumed. Named here rather than left
-		// to the write, which would blame the file for a directory that was never made.
-		const std::filesystem::path bvatAbs = store.GetDataRoot() / bvatRel;
-
-		std::error_code ec;
-		std::filesystem::create_directories(bvatAbs.parent_path(), ec);
-		core::throw_runtime_error_if(
-			static_cast<bool>(ec),
-			"vat: cannot make '{}' to bake into: {}",
-			bvatAbs.parent_path().string(),
-			ec.message());
-
+		// The writable layer may hold nothing yet -- an overlay over an archive starts empty -- and
+		// Save makes what the key names.
 		store.Save(vat, bvatRel);
 		RecordSeamBake(store, bvatRel, vat);
 		return vat;

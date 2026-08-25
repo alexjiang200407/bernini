@@ -183,10 +183,10 @@ The dotted edge is the asymmetry: reads go through the store, writes go around i
 * **`Save<BMesh>`** — `@throws` if the mesh carries joint indices but names no skeleton. Refused
   at write time because nothing reading the file afterwards can tell a joint index that resolves
   to nothing from one that does not.
-* **`Save` does not create directories**; `writeImportedMesh` does. An import aimed at a subfolder
-  needs the latter, and it needs the *data root* to exist already — `AssetStore`'s constructor
-  refuses one that does not, since an import into a missing directory is a mistyped root rather
-  than a new subfolder.
+* **`Save` creates the directories its key names.** A key is a location in the data root, not one
+  that already exists, so an import aimed at a subfolder needs nothing from its caller. The *data
+  root* itself must exist — `AssetStore`'s constructor refuses one that does not, since a write
+  into a missing root is a mistyped root rather than a new subfolder.
 * **`Save` refuses a key that escapes the data root**, which is `ResolveWritePath`'s boundary. A
   key typed on a command line cannot climb out of the project.
 * **`deserialize*`** — `@throws` on a foreign bake token or a chunk-era file. Both are

@@ -392,7 +392,7 @@ TEST_CASE("Importing a skinned mesh writes the rig it names", "[gltf][skeleton][
 	static_cast<void>(generateTangents(baked));
 	const AssetStore store(outDir);
 	writeImportedRig(store, import, baked, "rig.bskel", "rig.banim", true, SourceRef{});
-	writeImportedMesh(store, baked, "rig.bmesh");
+	store.Save(baked, "rig.bmesh");
 
 	const auto mesh = StoreAt(outDir).Load<BMesh>("rig.bmesh");
 

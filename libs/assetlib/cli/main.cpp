@@ -550,7 +550,7 @@ main(int argc, char** argv)
 					importStore.KeyFor(banimPath),
 					true,
 					source);
-				assetlib::writeImportedMesh(importStore, mesh, importStore.KeyFor(bmeshPath));
+				importStore.Save(mesh, importStore.KeyFor(bmeshPath));
 				assetlib::writeImportedDocument(target, &mesh);
 
 				if (derived.skipped > 0)
