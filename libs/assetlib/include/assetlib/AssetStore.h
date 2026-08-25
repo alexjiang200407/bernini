@@ -5,11 +5,20 @@
 
 namespace assetlib
 {
-	struct EnvMapRoute;
+	struct BSky;
+	struct BVat;
+	struct DeletionPlan;
+	struct DeletionResult;
+	struct EnvImportDesc;
+	struct EnvImportResult;
 	struct ImageData;
+	struct ImportTarget;
 	struct MeshRefs;
+	struct MigrateReport;
 	struct PackDesc;
 	struct PackReport;
+	struct ReauthoredDocument;
+	struct RebakeBoundsReport;
 	struct RenamePlan;
 	struct RenameResult;
 	struct ResolvedEnvironment;
@@ -20,15 +29,12 @@ namespace assetlib
 	struct TexturePruneScan;
 	struct VatBakeDesc;
 	struct VatRefs;
-	struct DeletionResult;
-	struct DeletionPlan;
-	struct BVat;
-	struct BSky;
 	struct BMesh;
 	struct BMaterial;
 	struct BEnvLighting;
 	struct BEnv;
 	struct AnimationSet;
+	struct EnvMapRoute;
 
 	enum class Ktx2Decode : uint32_t;
 
@@ -488,6 +494,128 @@ namespace assetlib
 		 */
 		[[nodiscard]] PackReport
 		Pack(const PackDesc& desc) const;
+
+		/**
+		 * Every container in this project re-saved at what its current state says it should be:
+		 * a stale cache entry regenerated from its source, an authored document rewritten
+		 * canonically.
+		 *
+		 * @param dryRun Report what would change without writing a byte.
+		 */
+		[[nodiscard]] MigrateReport
+		Migrate(bool dryRun) const;
+
+		/**
+		 * Every `.banim` in this project given the posed culling boxes an import writes, for clip
+		 * sets cooked before the bake existed.
+		 *
+		 * @param dryRun Report what would change without writing a byte.
+		 */
+		[[nodiscard]] RebakeBoundsReport
+		RebakePosedBounds(bool dryRun) const;
+
+		/**
+		 * The `.bskel` in this project whose signature matches `skeleton`, or empty when none does.
+		 * What lets an import with the mesh turned off find the rig its clips belong to.
+		 *
+		 * @throws std::runtime_error if more than one rig matches, since which one the clips attach
+		 *         to would otherwise depend on directory order.
+		 */
+		[[nodiscard]] std::filesystem::path
+		FindMatchingSkeleton(const Skeleton& skeleton) const;
+
+		/** `meshes_src/<name>.glb` -- where an import copies its source. */
+		[[nodiscard]] std::filesystem::path
+		ImportedSourcePath(std::string_view name) const;
+
+		/** The `.bimport` beside the copied source. */
+		[[nodiscard]] std::filesystem::path
+		ImportDocumentPath(std::string_view name) const;
+
+		/**
+		 * Copies the self-contained source into `meshes_src/` and stamps it: the returned reference
+		 * -- key, content stamp, parameter hash -- is what the caller sets on every container
+		 * derived from it *before* saving them. The document itself is written afterwards by
+		 * WriteImportedDocument, once the bindings exist; the split is safe because bindings are
+		 * deliberately outside the parameter hash.
+		 *
+		 * `target.sampleRate` -- the rate clips are resampled to at import, the import's one
+		 * parameter -- is what the returned reference's parameter hash covers.
+		 *
+		 * @throws what requireSelfContainedSource throws, and std::runtime_error on a copy failure.
+		 */
+		SourceRef
+		CopyImportedSource(const std::filesystem::path& source, const ImportTarget& target) const;
+
+		/**
+		 * Writes the `.bimport` beside the copied source: the sample rate, and -- when `mesh` is
+		 * given -- the submesh-name -> material bindings the mesh carries at this moment. Null
+		 * `mesh` is a clips-only import: parameters, no bindings.
+		 *
+		 * @throws std::runtime_error on a write failure.
+		 */
+		void
+		WriteImportedDocument(const ImportTarget& target, const BMesh* mesh) const;
+
+		/**
+		 * Sets `submesh`'s binding to `material` in the import document beside `sourceKey`'s copied
+		 * source, leaving the parameters, unknown keys and every other binding as they stand. What
+		 * a rebind writes instead of the mesh file: the binding is outside the cache key, so the
+		 * mesh is neither rewritten nor staled.
+		 *
+		 * `sourceKey` is the mount key the mesh's header carries (`BMesh::source.key`); the
+		 * document path is derived here, so no caller composes it.
+		 *
+		 * @throws std::runtime_error if `sourceKey` is empty, the document is absent or malformed,
+		 *         or the write fails.
+		 */
+		void
+		RebindSubmeshInDocument(
+			std::string_view sourceKey,
+			std::string_view submesh,
+			std::string_view material) const;
+
+		/**
+		 * Rewrites every import document's bindings from its mesh's current state, parameters and
+		 * unknown keys preserved -- the one-time adoption pass that makes the documents
+		 * authoritative. Until it runs, a rebind saved into a `.bmesh` before documents existed is
+		 * recorded nowhere else; after it, the document is what a load applies, so running this
+		 * again later would overwrite document-only rebinds with stale mesh state.
+		 *
+		 * A mesh that will not load, a source claimed by two meshes, or a recorded source whose
+		 * document is missing is reported per document and never guessed at.
+		 */
+		[[nodiscard]] std::vector<ReauthoredDocument>
+		ReauthorImportDocuments() const;
+
+		/**
+		 * Imports `desc.source` into this project as a `.bsky`, a `.benvl` and the `.benv` composing
+		 * them, writing the float intermediates into `textures_src/` as the routed sources and
+		 * baking each into `Textures/`.
+		 *
+		 * **Rolls back on failure.** A cancelled or failed import removes the files it created, so a
+		 * half-written environment is never left behind. It removes only what it *created*: a file
+		 * that was already there is one this import overwrote rather than made.
+		 *
+		 * **Baked maps are deliberately not rolled back.** They are content-addressed and shared, so
+		 * the map this import wrote may be the same file another environment already names. An
+		 * orphan left by a failed import is what FindUnusedBakedTextures sweeps.
+		 *
+		 * @param cancel Polled between the projection, each convolution and each bake.
+		 * @throws std::runtime_error if nothing is selected, or the source cannot be read.
+		 * @throws Cancelled if `cancel` is signalled.
+		 */
+		[[nodiscard]] EnvImportResult
+		ImportEnvironment(const EnvImportDesc& desc, const CancelToken& cancel = {}) const;
+
+		/**
+		 * Every file `desc` would write, data-root relative, without writing any of them -- for a
+		 * caller that must decide *before* importing whether it would land on something already
+		 * there. The baked maps are not included: they are content-addressed, so a collision with
+		 * one is two imports agreeing on content rather than one destroying the other.
+		 */
+		[[nodiscard]] std::vector<std::string>
+		EnvironmentImportTargets(const EnvImportDesc& desc) const;
 
 		// --- Describe --------------------------------------------------------------------------
 

@@ -346,7 +346,10 @@ TEST_CASE(
 
 	const auto meshPath = root.path / "Meshes/unit.bmesh";
 	test::TamperHeaderByte(meshPath, test::c_TokenOffset);
-	rebindSubmeshInDocument(root.path, "meshes_src/unit.glb", "body", "Materials/blue.bmaterial");
+	AssetStore(root.path).RebindSubmeshInDocument(
+		"meshes_src/unit.glb",
+		"body",
+		"Materials/blue.bmaterial");
 	const auto stale = core::file::read_file_bytes(meshPath.string());
 
 	const std::filesystem::path target = root.path / "Data.bpak";

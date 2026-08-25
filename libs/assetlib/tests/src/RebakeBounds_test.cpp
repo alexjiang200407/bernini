@@ -112,14 +112,14 @@ TEST_CASE("The rebake writes the box a load then finds", "[rebake]")
 
 	SECTION("a dry run reports the work and touches nothing")
 	{
-		const RebakeBoundsReport preview = rebakePosedBounds(root.path, true);
+		const RebakeBoundsReport preview = AssetStore(root.path).RebakePosedBounds(true);
 		CHECK(preview.Count(RebakedFile::Outcome::kRebaked) == 1);
 		CHECK(StoreAt(root.path).Load<AnimationSet>("Animations/rig.banim").posedBoxes.empty());
 	}
 
 	SECTION("the real run bakes, and a second run rewrites nothing")
 	{
-		const RebakeBoundsReport report = rebakePosedBounds(root.path, false);
+		const RebakeBoundsReport report = AssetStore(root.path).RebakePosedBounds(false);
 		CHECK(report.Count(RebakedFile::Outcome::kRebaked) == 1);
 		CHECK(report.Count(RebakedFile::Outcome::kFailed) == 0);
 
@@ -132,17 +132,17 @@ TEST_CASE("The rebake writes the box a load then finds", "[rebake]")
 		CHECK(baked->min.x == Catch::Approx(-1.0f));
 		CHECK(baked->max.x == Catch::Approx(51.0f));
 
-		const RebakeBoundsReport again = rebakePosedBounds(root.path, false);
+		const RebakeBoundsReport again = AssetStore(root.path).RebakePosedBounds(false);
 		CHECK(again.Count(RebakedFile::Outcome::kCurrent) == 1);
 		CHECK(again.Count(RebakedFile::Outcome::kRebaked) == 0);
 	}
 
 	SECTION("a mesh re-authored since the bake makes its clip set stale again")
 	{
-		(void)rebakePosedBounds(root.path, false);
+		(void)AssetStore(root.path).RebakePosedBounds(false);
 		StoreAt(root.path).Save(MakeSkinnedMesh(glm::vec3(3.0f)), "Meshes/rig.bmesh");
 
-		const RebakeBoundsReport preview = rebakePosedBounds(root.path, true);
+		const RebakeBoundsReport preview = AssetStore(root.path).RebakePosedBounds(true);
 		CHECK(preview.Count(RebakedFile::Outcome::kRebaked) == 1);
 	}
 
@@ -150,7 +150,7 @@ TEST_CASE("The rebake writes the box a load then finds", "[rebake]")
 	{
 		fs::remove(root.path / "Meshes/rig.bmesh");
 
-		const RebakeBoundsReport report = rebakePosedBounds(root.path, false);
+		const RebakeBoundsReport report = AssetStore(root.path).RebakePosedBounds(false);
 		CHECK(report.Count(RebakedFile::Outcome::kOrphaned) == 1);
 		CHECK(StoreAt(root.path).Load<AnimationSet>("Animations/rig.banim").posedBoxes.empty());
 	}

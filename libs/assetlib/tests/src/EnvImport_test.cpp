@@ -73,12 +73,17 @@ namespace
 			return path / "incoming" / "forest.ktx2";
 		}
 
+		AssetStore
+		Store() const
+		{
+			return AssetStore(DataRoot());
+		}
+
 		/** Small everywhere: this suite is about what lands on disk, not about convolution quality. */
 		EnvImportDesc
 		Desc() const
 		{
 			auto desc               = EnvImportDesc();
-			desc.dataRoot           = DataRoot();
 			desc.source             = Source();
 			desc.name               = "forest";
 			desc.skyFaceSize        = 8;
@@ -104,7 +109,7 @@ TEST_CASE("An import writes the environment family a project can load", "[envimp
 {
 	const Sandbox sandbox("bernini_envimport_full");
 
-	const EnvImportResult result = importEnvironment(sandbox.Desc());
+	const EnvImportResult result = sandbox.Store().ImportEnvironment(sandbox.Desc());
 
 	REQUIRE(result.sky == "Sky/forest.bsky");
 	REQUIRE(result.lighting == "EnvLighting/forest.benvl");
@@ -153,7 +158,7 @@ TEST_CASE("An import writes only what was selected", "[envimport]")
 		desc.lighting    = false;
 		desc.environment = false;
 
-		const EnvImportResult result = importEnvironment(desc);
+		const EnvImportResult result = sandbox.Store().ImportEnvironment(desc);
 
 		CHECK(result.lighting.empty());
 		CHECK(result.environment.empty());
@@ -173,7 +178,7 @@ TEST_CASE("An import writes only what was selected", "[envimport]")
 		desc.sky         = false;
 		desc.environment = false;
 
-		const EnvImportResult result = importEnvironment(desc);
+		const EnvImportResult result = sandbox.Store().ImportEnvironment(desc);
 
 		CHECK(result.sky.empty());
 		CHECK(sandbox.Has(result.lighting));
@@ -188,7 +193,7 @@ TEST_CASE("An import writes only what was selected", "[envimport]")
 		auto desc     = sandbox.Desc();
 		desc.lighting = false;
 
-		const EnvImportResult result = importEnvironment(desc);
+		const EnvImportResult result = sandbox.Store().ImportEnvironment(desc);
 
 		const BEnv env = StoreAt(sandbox.DataRoot()).Load<BEnv>(result.environment);
 		CHECK(env.sky == result.sky);
@@ -205,7 +210,7 @@ TEST_CASE("A cancelled import is refused before it writes anything", "[envimport
 	std::stop_source stop;
 	stop.request_stop();
 
-	CHECK_THROWS_AS(importEnvironment(sandbox.Desc(), stop.get_token()), Cancelled);
+	CHECK_THROWS_AS(sandbox.Store().ImportEnvironment(sandbox.Desc(), stop.get_token()), Cancelled);
 
 	CHECK_FALSE(sandbox.Has("Sky/forest.bsky"));
 	CHECK_FALSE(sandbox.Has("textures_src/forest_sky.ktx2"));
@@ -233,7 +238,7 @@ TEST_CASE("A failure part-way rolls back what it had written", "[envimport]")
 {
 	const Sandbox sandbox("bernini_envimport_rollback");
 
-	CHECK_THROWS_AS(importEnvironment(FailsAfterSky(sandbox)), std::runtime_error);
+	CHECK_THROWS_AS(sandbox.Store().ImportEnvironment(FailsAfterSky(sandbox)), std::runtime_error);
 
 	// The sky was fully written -- source, bake and `.bsky` -- before the lighting failed.
 	CHECK_FALSE(sandbox.Has("Sky/forest.bsky"));
@@ -255,7 +260,7 @@ TEST_CASE("A rollback spares the files the import did not create", "[envimport]"
 		false,
 		Ktx2Compression::kNone);
 
-	CHECK_THROWS_AS(importEnvironment(FailsAfterSky(sandbox)), std::runtime_error);
+	CHECK_THROWS_AS(sandbox.Store().ImportEnvironment(FailsAfterSky(sandbox)), std::runtime_error);
 
 	// The `.bsky` was this import's, and goes. The source was already there, and stays -- deleting it
 	// would destroy whatever wrote it first.
@@ -270,7 +275,7 @@ TEST_CASE("A rollback leaves the baked maps to the prune", "[envimport]")
 {
 	const Sandbox sandbox("bernini_envimport_bakedmaps");
 
-	CHECK_THROWS_AS(importEnvironment(FailsAfterSky(sandbox)), std::runtime_error);
+	CHECK_THROWS_AS(sandbox.Store().ImportEnvironment(FailsAfterSky(sandbox)), std::runtime_error);
 
 	// The `.bsky` naming it is gone, so the map is now an orphan -- but it is still on disk, which is
 	// the whole point: findUnusedBakedTextures is what decides an orphan's fate, not this call.
@@ -294,7 +299,7 @@ TEST_CASE("An import that cannot mean anything is refused", "[envimport]")
 		desc.lighting    = false;
 		desc.environment = false;
 
-		CHECK_THROWS_AS(importEnvironment(desc), std::runtime_error);
+		CHECK_THROWS_AS(sandbox.Store().ImportEnvironment(desc), std::runtime_error);
 	}
 
 	// It composes the other two, so alone it would name nothing -- an empty environment that loads and
@@ -305,15 +310,14 @@ TEST_CASE("An import that cannot mean anything is refused", "[envimport]")
 		desc.sky      = false;
 		desc.lighting = false;
 
-		CHECK_THROWS_AS(importEnvironment(desc), std::runtime_error);
+		CHECK_THROWS_AS(sandbox.Store().ImportEnvironment(desc), std::runtime_error);
 	}
 
 	SECTION("a data root that is not a directory")
 	{
-		auto desc     = sandbox.Desc();
-		desc.dataRoot = sandbox.Source();  // a file
-
-		CHECK_THROWS_AS(importEnvironment(desc), std::runtime_error);
+		// The store's constructor refuses it, which is earlier than the import could: before a
+		// desc has been built, let alone a file written.
+		CHECK_THROWS_AS(AssetStore(sandbox.Source()), std::runtime_error);
 	}
 
 	SECTION("no name to write under")
@@ -321,7 +325,7 @@ TEST_CASE("An import that cannot mean anything is refused", "[envimport]")
 		auto desc = sandbox.Desc();
 		desc.name.clear();
 
-		CHECK_THROWS_AS(importEnvironment(desc), std::runtime_error);
+		CHECK_THROWS_AS(sandbox.Store().ImportEnvironment(desc), std::runtime_error);
 	}
 
 	SECTION("a source that is not there")
@@ -329,7 +333,7 @@ TEST_CASE("An import that cannot mean anything is refused", "[envimport]")
 		auto desc   = sandbox.Desc();
 		desc.source = sandbox.path / "incoming" / "absent.ktx2";
 
-		CHECK_THROWS(importEnvironment(desc));
+		CHECK_THROWS(sandbox.Store().ImportEnvironment(desc));
 
 		// And the refusal is not a half-import: nothing was written before the source was read.
 		CHECK_FALSE(sandbox.Has("Sky/forest.bsky"));
@@ -348,7 +352,8 @@ TEST_CASE("An import can say what it would write before writing it", "[envimport
 
 	SECTION("everything selected names every file, and no baked maps")
 	{
-		const std::vector<std::string> targets = environmentImportTargets(sandbox.Desc());
+		const std::vector<std::string> targets =
+			sandbox.Store().EnvironmentImportTargets(sandbox.Desc());
 
 		CHECK(names(targets, "Sky/forest.bsky"));
 		CHECK(names(targets, "EnvLighting/forest.benvl"));
@@ -367,7 +372,7 @@ TEST_CASE("An import can say what it would write before writing it", "[envimport
 		auto desc     = sandbox.Desc();
 		desc.lighting = false;
 
-		const std::vector<std::string> targets = environmentImportTargets(desc);
+		const std::vector<std::string> targets = sandbox.Store().EnvironmentImportTargets(desc);
 
 		CHECK(std::ranges::none_of(targets, [](const std::string& t) {
 			return t.ends_with(".benvl") || t.ends_with("_prefilter.ktx2");
@@ -379,8 +384,8 @@ TEST_CASE("An import can say what it would write before writing it", "[envimport
 	{
 		const auto desc = sandbox.Desc();
 
-		const std::vector<std::string> predicted = environmentImportTargets(desc);
-		const EnvImportResult          actual    = importEnvironment(desc);
+		const std::vector<std::string> predicted = sandbox.Store().EnvironmentImportTargets(desc);
+		const EnvImportResult          actual    = sandbox.Store().ImportEnvironment(desc);
 
 		// `written` is what was created; into a fresh project that is every target.
 		auto created = actual.written;
@@ -403,7 +408,7 @@ TEST_CASE("An import can say what it would write before writing it", "[envimport
 		auto desc   = sandbox.Desc();
 		desc.skyDir = "Sky/outdoor";
 
-		const std::vector<std::string> targets = environmentImportTargets(desc);
+		const std::vector<std::string> targets = sandbox.Store().EnvironmentImportTargets(desc);
 		CHECK(names(targets, "Sky/outdoor/forest.bsky"));
 	}
 }

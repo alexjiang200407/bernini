@@ -68,9 +68,10 @@ Concretely, before adding to `include/assetlib/`:
   mistaken for a project write: `AssetCodec<T>::Serialize` plus `core::file::write_atomic`. That
   is `assetlib_cli strip --out` writing a shipping tree, and the editor opening a mesh from
   outside any data root. Both are real; neither is a reason to bring the old family back.
-- **Do not re-carry a data root.** `MaterialBakeDesc` and `EnvBakeDesc` used to, and were the
-  standing example of what not to copy; both are gone and a bake is `store.BakeMaterial(...)`.
-  A new descriptor carrying a `dataRoot` beside a store is the same mistake again.
+- **Do not re-carry a data root.** `AssetStore`'s two constructors are the only place in the public
+  headers where one appears, and that is checkable: `grep dataRoot include/assetlib` should name
+  nothing else. `MaterialBakeDesc`, `EnvBakeDesc`, `ImportTarget` and `EnvImportDesc` all carried
+  one; a descriptor that names *what* to write does not also get to say *where*.
 - **A new container type is a new `AssetCodec` specialization** in `include/assetlib/codecs.h`,
   listed in `Containers` in `src/container_table.cpp`. That is the whole registration: `containerKinds()`
   is folded out of it, and a static assertion holds the list to `AssetType`, so a type added to the

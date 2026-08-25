@@ -494,8 +494,8 @@ main(int argc, char** argv)
 					collisions.push_back(fs::relative(target, dataRoot, ec).generic_string());
 			};
 
-			const fs::path sourceCopy = assetlib::importedSourcePathFor(dataRoot, name);
-			const fs::path importDoc  = assetlib::importDocumentPathFor(dataRoot, name);
+			const fs::path sourceCopy = assetlib::AssetStore(dataRoot).ImportedSourcePath(name);
+			const fs::path importDoc  = assetlib::AssetStore(dataRoot).ImportDocumentPath(name);
 			files.push_back(sourceCopy);
 			files.push_back(importDoc);
 
@@ -533,15 +533,15 @@ main(int argc, char** argv)
 				assetlib::BMesh mesh = assetlib::toBMesh(imported);
 				assetlib::requireUniqueSubmeshNames(mesh);
 
-				const assetlib::ImportTarget target{ dataRoot, name, sampleRate };
-				const assetlib::SourceRef    source = assetlib::copyImportedSource(input, target);
+				const assetlib::AssetStore   importStore(dataRoot);
+				const assetlib::ImportTarget target{ name, sampleRate };
+				const assetlib::SourceRef    source = importStore.CopyImportedSource(input, target);
 				mesh.source                         = source;
 
 				assetlib::writeTextures(imported, textureDir);
 
 				const auto derived = assetlib::generateTangents(mesh);
 
-				const assetlib::AssetStore importStore(dataRoot);
 				importStore.WriteImportedRig(
 					imported.skeleton,
 					imported.animations,
@@ -551,7 +551,7 @@ main(int argc, char** argv)
 					true,
 					source);
 				importStore.Save(mesh, importStore.KeyFor(bmeshPath));
-				assetlib::writeImportedDocument(target, &mesh);
+				importStore.WriteImportedDocument(target, &mesh);
 
 				if (derived.skipped > 0)
 					spdlog::warn(
@@ -647,7 +647,6 @@ main(int argc, char** argv)
 			const assetlib::Project project = assetlib::Project::Open(projectFile);
 
 			auto importDesc               = assetlib::EnvImportDesc();
-			importDesc.dataRoot           = project.GetDataDirectory();
 			importDesc.source             = envInput;
 			importDesc.name               = envName;
 			importDesc.skyFaceSize        = envSkyboxSize;
@@ -659,7 +658,8 @@ main(int argc, char** argv)
 			importDesc.irradianceFaceSize = envIemSize;
 			importDesc.threads            = envThreads;
 
-			const assetlib::EnvImportResult imported = assetlib::importEnvironment(importDesc);
+			const assetlib::EnvImportResult imported =
+				project.GetStore().ImportEnvironment(importDesc);
 
 			spdlog::info(
 				"Imported '{}' into '{}': {} files, exposure {:.3f}",
@@ -907,7 +907,7 @@ main(int argc, char** argv)
 			// twice.
 			if (migrateDryRun || !migrateYes)
 			{
-				const auto preview = assetlib::migrateProject(root, true);
+				const auto preview = assetlib::AssetStore(root).Migrate(true);
 				print(preview, true);
 				if (migrateDryRun)
 					return preview.Count(assetlib::MigratedFile::Outcome::kFailed) == 0 ? 0 : 1;
@@ -922,7 +922,7 @@ main(int argc, char** argv)
 				}
 			}
 
-			const auto report = assetlib::migrateProject(root, false);
+			const auto report = assetlib::AssetStore(root).Migrate(false);
 			print(report, false);
 			return report.Count(assetlib::MigratedFile::Outcome::kFailed) == 0 ? 0 : 1;
 		}
@@ -948,7 +948,7 @@ main(int argc, char** argv)
 			}
 
 			const std::vector<assetlib::ReauthoredDocument> report =
-				assetlib::reauthorImportDocuments(root);
+				assetlib::AssetStore(root).ReauthorImportDocuments();
 
 			size_t rewritten = 0;
 			size_t failed    = 0;
@@ -1022,7 +1022,7 @@ main(int argc, char** argv)
 
 			// The preview costs a signature per mesh; only the real walk pays the measure, and a
 			// write that fails shows up only there -- so its report is the one printed last.
-			const auto preview = assetlib::rebakePosedBounds(root, true);
+			const auto preview = assetlib::AssetStore(root).RebakePosedBounds(true);
 			print(preview, true);
 			if (boundsDryRun)
 				return preview.Count(assetlib::RebakedFile::Outcome::kFailed) == 0 ? 0 : 1;
@@ -1040,7 +1040,7 @@ main(int argc, char** argv)
 				return 0;
 			}
 
-			const auto report = assetlib::rebakePosedBounds(root, false);
+			const auto report = assetlib::AssetStore(root).RebakePosedBounds(false);
 			print(report, false);
 			return report.Count(assetlib::RebakedFile::Outcome::kFailed) == 0 ? 0 : 1;
 		}

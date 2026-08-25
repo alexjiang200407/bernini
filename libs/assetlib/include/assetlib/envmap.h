@@ -258,8 +258,7 @@ namespace assetlib
 	 */
 	struct EnvImportDesc
 	{
-		std::filesystem::path dataRoot;  // the project's Data directory
-		std::filesystem::path source;    // an equirectangular `.hdr`, or a cube map `.ktx2`
+		std::filesystem::path source;  // an equirectangular `.hdr`, or a cube map `.ktx2`
 
 		// Names every file the import writes: `Sky/<name>.bsky`, `textures_src/<name>_sky.ktx2`, ...
 		std::string name = "env";
@@ -313,44 +312,6 @@ namespace assetlib
 
 		float exposure = 1.0f;  // what the lighting derived, or 1 when none was written
 	};
-
-	/**
-	 * Imports `desc.source` into `desc.dataRoot` as a `.bsky`, a `.benvl` and the `.benv` composing
-	 * them, writing the float intermediates into `textures_src/` as the routed sources and baking each
-	 * into `Textures/`.
-	 *
-	 * **Rolls back on failure.** A cancelled or failed import removes the files it created, so a
-	 * half-written environment is never left behind. It removes only what it *created*: a file that was
-	 * already there is one this import overwrote rather than made, and destroying it would take the
-	 * previous import's work with it.
-	 *
-	 * **Baked maps are deliberately not rolled back.** They are content-addressed and shared, so the
-	 * map this import wrote may be the same file another environment already names -- and deleting one
-	 * would take it out from under that. An orphan left by a failed import is exactly what
-	 * `findUnusedBakedTextures` sweeps, which is the mechanism that already owns this question.
-	 *
-	 * @param cancel Polled between the projection, each convolution and each bake -- the four steps
-	 *        worth interrupting. A cancelled import rolls back like a failed one.
-	 * @throws std::runtime_error if nothing is selected, if `dataRoot` is not a directory, or if the
-	 *         source cannot be read.
-	 * @throws Cancelled if `cancel` is signalled.
-	 */
-	[[nodiscard]] EnvImportResult
-	importEnvironment(const EnvImportDesc& desc, const CancelToken& cancel = {});
-
-	/**
-	 * Every file `desc` would write, data-root relative, without writing any of them.
-	 *
-	 * For a caller that must decide *before* importing whether it would land on something already
-	 * there -- the editor refuses rather than overwrites, and cannot ask that question by trying it.
-	 * Naming the files here rather than in the caller is what keeps the two from disagreeing about
-	 * where an import goes.
-	 *
-	 * The baked maps are not included: they are content-addressed, so a collision with one is two
-	 * imports agreeing on content rather than one destroying the other.
-	 */
-	[[nodiscard]] std::vector<std::string>
-	environmentImportTargets(const EnvImportDesc& desc);
 
 	// --- What the texture prune reads ----------------------------------------------------------
 

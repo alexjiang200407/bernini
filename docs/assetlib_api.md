@@ -34,7 +34,7 @@ when this doc disagrees, trust the header, then fix this doc.
   A caller that genuinely addresses the *host* still uses a path, and now looks different so it
   cannot be mistaken for the other thing: it encodes with the codec and moves the bytes itself.
   `assetlib_cli strip --out` writes a shipping tree, the editor opens a mesh from outside any data
-  root, and `findMatchingSkeleton` walks the disk with a directory iterator — each of those is
+  root, and `assetlib_cli` reading a file no project owns — each of those is
   `AssetCodec<T>::Serialize` plus `core::file::write_atomic`, or the read equivalent.
 
 * **A codec per container, and the type picks it.** `AssetCodec<T>` declares a container's
@@ -132,7 +132,7 @@ is what a caller reaches for only when it holds bytes no store addresses, which 
 
 ```mermaid
 flowchart TD
-    GLTF[".glb / .gltf / .hdr"] -- "loadFromGltf, importEnvironment" --> IMP["BMeshImport (flattened)"]
+    GLTF[".glb / .gltf / .hdr"] -- "loadFromGltf, ImportEnvironment" --> IMP["BMeshImport (flattened)"]
     IMP -- "toBMesh" --> POD["BMesh, Skeleton, AnimationSet"]
     POD -- "serialize" --> C["cache entry (key in the header)"]
 
