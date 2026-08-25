@@ -3,11 +3,9 @@
 #include <assetlib/bmesh.h>
 #include <assetlib/codecs.h>
 #include <assetlib/container_info.h>
-#include <assetlib/skeleton.h>
 
 #include <assetlib/asset_import.h>
 #include <assetlib/bmesh_gltf.h>
-#include <assetlib/container_format.h>
 #include <assetlib/import_document.h>
 #include <assetlib/mesh_tangents.h>
 #include <assetlib/project_layout.h>
@@ -353,8 +351,7 @@ namespace assetlib
 		{
 			// A clips-only group: no output of this source is a rig, so re-resolve by signature,
 			// exactly as the import that wrote this file did.
-			const std::filesystem::path rig =
-				findMatchingSkeleton(GetDataRoot(), group.import.skeleton);
+			const std::filesystem::path rig = FindMatchingSkeleton(group.import.skeleton);
 			core::throw_runtime_error_if(
 				rig.empty(),
 				"'{}': no skeleton in this project matches its clips' rig any more; re-import "

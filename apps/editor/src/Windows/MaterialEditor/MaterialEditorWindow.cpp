@@ -787,11 +787,11 @@ MaterialEditorWindow::AttachMaterialToMesh(int submeshIndex, const QString& mate
 				meshStore.Save(mesh, meshStore.KeyFor(meshPath));
 			}
 			else
-				assetlib::rebindSubmeshInDocument(
-					m_DataRoot,
-					mesh.source.key,
-					mesh.stringPool.at(mesh.submeshes[source].nameOffset),
-					relative);
+				assetlib::AssetStore(m_DataRoot)
+					.RebindSubmeshInDocument(
+						mesh.source.key,
+						mesh.stringPool.at(mesh.submeshes[source].nameOffset),
+						relative);
 		}
 
 		// The mesh names it now, so the preview's cached bindings must say so too -- otherwise the

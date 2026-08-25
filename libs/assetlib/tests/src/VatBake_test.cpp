@@ -3,7 +3,6 @@
 #include <assetlib/codecs.h>
 #include <assetlib/container_info.h>
 #include <assetlib/image_io.h>
-#include <assetlib/skeleton.h>
 #include <assetlib/skinning.h>
 #include <assetlib/vat_bake.h>
 #include <assetlib_structs/Animation.h>
@@ -512,7 +511,7 @@ TEST_CASE("A bake from files stamps its inputs and the refs scan reports them", 
 		REQUIRE(plan.derived.size() == 1);
 		CHECK(plan.derived[0] == "Meshes/rig.bvat");
 
-		const DeletionResult result = deleteAsset(plan, AssetStore(root));
+		const DeletionResult result = AssetStore(root).DeleteAsset(plan);
 		CHECK(result.status == DeletionStatus::kDeleted);
 		CHECK_FALSE(fs::exists(root / "Animations/rig.banim"));
 		CHECK_FALSE(fs::exists(root / "Meshes/rig.bvat"));

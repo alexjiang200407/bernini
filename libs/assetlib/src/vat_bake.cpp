@@ -5,7 +5,6 @@
 
 #include <assetlib/RegenMesh.h>
 #include <assetlib/image_io.h>
-#include <assetlib/skeleton.h>
 #include <assetlib/skinning.h>
 #include <assetlib_structs/Animation.h>
 #include <assetlib_structs/BMesh.h>

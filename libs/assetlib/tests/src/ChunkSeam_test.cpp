@@ -1,7 +1,7 @@
 #include <assetlib/bmesh.h>
 #include <assetlib/codecs.h>
-#include <assetlib/pak_io.h>
-#include <assetlib/skeleton.h>
+#include <assetlib/pak.h>
+#include <assetlib/skinning.h>
 #include <assetlib_structs/Animation.h>
 #include <assetlib_structs/BMesh.h>
 #include <assetlib_structs/Skeleton.h>

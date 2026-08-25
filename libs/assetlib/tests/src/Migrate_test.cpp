@@ -84,7 +84,7 @@ TEST_CASE(
 	SECTION("a dry run reports and writes nothing")
 	{
 		const auto before = project.Read("Materials/older.bmaterial");
-		const auto report = migrateProject(project.root, true);
+		const auto report = AssetStore(project.root).Migrate(true);
 		CHECK(report.Count(MigratedFile::Outcome::kUnchanged) == 1);
 		CHECK(report.Count(MigratedFile::Outcome::kRewritten) == 1);
 		CHECK(report.Count(MigratedFile::Outcome::kFailed) == 1);
@@ -94,7 +94,7 @@ TEST_CASE(
 
 	SECTION("a real run rewrites once, and the second run finds nothing to do")
 	{
-		const auto first = migrateProject(project.root, false);
+		const auto first = AssetStore(project.root).Migrate(false);
 		CHECK(first.Count(MigratedFile::Outcome::kRewritten) == 1);
 		CHECK(first.Count(MigratedFile::Outcome::kFailed) == 1);
 
@@ -102,7 +102,7 @@ TEST_CASE(
 		CHECK(rewritten == MaterialBytes("older"));  // stamped current again
 		CHECK(AssetCodec<BMaterial>::Deserialize(rewritten).name == "older");
 
-		const auto second = migrateProject(project.root, false);
+		const auto second = AssetStore(project.root).Migrate(false);
 		CHECK(second.Count(MigratedFile::Outcome::kRewritten) == 0);
 		CHECK(second.Count(MigratedFile::Outcome::kUnchanged) == 2);
 		CHECK(second.Count(MigratedFile::Outcome::kFailed) == 1);
@@ -111,7 +111,7 @@ TEST_CASE(
 
 	SECTION("the failure says which file, and why")
 	{
-		const auto report = migrateProject(project.root, true);
+		const auto report = AssetStore(project.root).Migrate(true);
 		const auto failed =
 			std::ranges::find(report.files, MigratedFile::Outcome::kFailed, &MigratedFile::outcome);
 		REQUIRE(failed != report.files.end());
@@ -123,7 +123,7 @@ TEST_CASE(
 TEST_CASE("migrate refuses a root that is not a directory", "[migrate]")
 {
 	REQUIRE_THROWS_WITH(
-		migrateProject(std::filesystem::temp_directory_path() / "no_such_project_dir", true),
+		AssetStore(std::filesystem::temp_directory_path() / "no_such_project_dir").Migrate(true),
 		ContainsSubstring("is not a directory"));
 }
 
@@ -143,7 +143,7 @@ TEST_CASE("migrate regenerates a stale group on disk, once", "[migrate][regen]")
 
 	SECTION("the replay: one run rewrites the group, the second finds nothing to do")
 	{
-		const auto first = migrateProject(project.root, false);
+		const auto first = AssetStore(project.root).Migrate(false);
 		CHECK(first.Count(MigratedFile::Outcome::kRewritten) == 3);
 		CHECK(first.Count(MigratedFile::Outcome::kFailed) == 0);
 
@@ -151,7 +151,7 @@ TEST_CASE("migrate regenerates a stale group on disk, once", "[migrate][regen]")
 		CHECK(LoadAt<BMesh>(meshPath).source.key == "meshes_src/unit.glb");
 		CHECK_FALSE(LoadAt<AnimationSet>(banimPath).clips.empty());
 
-		const auto second = migrateProject(project.root, false);
+		const auto second = AssetStore(project.root).Migrate(false);
 		CHECK(second.Count(MigratedFile::Outcome::kRewritten) == 0);
 		CHECK(second.Count(MigratedFile::Outcome::kFailed) == 0);
 	}
@@ -160,7 +160,7 @@ TEST_CASE("migrate regenerates a stale group on disk, once", "[migrate][regen]")
 	{
 		std::filesystem::remove(project.root / "meshes_src/unit.glb");
 
-		const auto report = migrateProject(project.root, false);
+		const auto report = AssetStore(project.root).Migrate(false);
 		CHECK(report.Count(MigratedFile::Outcome::kRewritten) == 0);
 		CHECK(report.Count(MigratedFile::Outcome::kFailed) == 3);
 	}
@@ -175,13 +175,10 @@ TEST_CASE("a rebind reaches disk through migrate without a regeneration", "[migr
 	// The source is gone, so what follows cannot be a regeneration -- the document alone
 	// carries the rebind onto the disk bytes.
 	std::filesystem::remove(project.root / "meshes_src/unit.glb");
-	rebindSubmeshInDocument(
-		project.root,
-		"meshes_src/unit.glb",
-		"body",
-		"Materials/blue.bmaterial");
+	AssetStore(project.root)
+		.RebindSubmeshInDocument("meshes_src/unit.glb", "body", "Materials/blue.bmaterial");
 
-	const auto report = migrateProject(project.root, false);
+	const auto report = AssetStore(project.root).Migrate(false);
 	CHECK(report.Count(MigratedFile::Outcome::kRewritten) == 1);
 	CHECK(report.Count(MigratedFile::Outcome::kFailed) == 0);
 

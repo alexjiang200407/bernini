@@ -11,7 +11,6 @@
 #include <assetlib/import_document.h>
 #include <assetlib/mesh_tangents.h>
 #include <assetlib/project_layout.h>
-#include <assetlib/skeleton.h>
 #include <assetlib/skinning.h>
 #include <assetlib_structs/Animation.h>
 #include <assetlib_structs/BMesh.h>
@@ -162,11 +161,11 @@ TEST_CASE("a binding-only document edit rebinds the loaded mesh without regenera
 	const ImportedProject sandbox("bernini_regen_rebind", "assets/apples.glb");
 	const auto            before = BytesOf(sandbox.meshPath);
 
-	rebindSubmeshInDocument(
-		sandbox.dataRoot,
-		"meshes_src/unit.glb",
-		sandbox.FirstSubmeshName(),
-		"Materials/blue.bmaterial");
+	AssetStore(sandbox.dataRoot)
+		.RebindSubmeshInDocument(
+			"meshes_src/unit.glb",
+			sandbox.FirstSubmeshName(),
+			"Materials/blue.bmaterial");
 
 	const RegenMesh current = sandbox.Store().LoadRegenMesh("Meshes/unit.bmesh");
 	CHECK(
@@ -177,11 +176,11 @@ TEST_CASE("a binding-only document edit rebinds the loaded mesh without regenera
 	SECTION("and rebinds a group whose source file is gone, which regeneration could not serve")
 	{
 		fs::remove(sandbox.dataRoot / "meshes_src/unit.glb");
-		rebindSubmeshInDocument(
-			sandbox.dataRoot,
-			"meshes_src/unit.glb",
-			sandbox.FirstSubmeshName(),
-			"Materials/green.bmaterial");
+		AssetStore(sandbox.dataRoot)
+			.RebindSubmeshInDocument(
+				"meshes_src/unit.glb",
+				sandbox.FirstSubmeshName(),
+				"Materials/green.bmaterial");
 
 		const RegenMesh again = sandbox.Store().LoadRegenMesh("Meshes/unit.bmesh");
 		CHECK(
@@ -276,11 +275,11 @@ TEST_CASE("a read-only store trusts its keys and its baked bindings", "[regen]")
 
 	// Stale by stamp, and rebound in the document: a writable store would act on both.
 	sandbox.Tamper(sandbox.meshPath, test::c_SourceHashOffset);
-	rebindSubmeshInDocument(
-		sandbox.dataRoot,
-		"meshes_src/unit.glb",
-		sandbox.FirstSubmeshName(),
-		"Materials/blue.bmaterial");
+	AssetStore(sandbox.dataRoot)
+		.RebindSubmeshInDocument(
+			"meshes_src/unit.glb",
+			sandbox.FirstSubmeshName(),
+			"Materials/blue.bmaterial");
 
 	const AssetStore readOnly(
 		sandbox.dataRoot,
@@ -384,7 +383,7 @@ TEST_CASE("reauthor rewrites a document from its mesh, once", "[regen][importdoc
 	REQUIRE(attachMaterial(mesh, 0, "Materials/blue.bmaterial"));
 	SaveAt(mesh, sandbox.meshPath);
 
-	const auto report = reauthorImportDocuments(sandbox.dataRoot);
+	const auto report = AssetStore(sandbox.dataRoot).ReauthorImportDocuments();
 	REQUIRE(report.size() == 1);
 	CHECK(report[0].key == "meshes_src/unit.bimport");
 	CHECK(report[0].outcome == ReauthoredDocument::Outcome::kRewritten);
@@ -398,16 +397,17 @@ TEST_CASE("reauthor rewrites a document from its mesh, once", "[regen][importdoc
 
 	SECTION("a second run rewrites nothing")
 	{
-		const auto again = reauthorImportDocuments(sandbox.dataRoot);
+		const auto again = AssetStore(sandbox.dataRoot).ReauthorImportDocuments();
 		REQUIRE(again.size() == 1);
 		CHECK(again[0].outcome == ReauthoredDocument::Outcome::kUnchanged);
 	}
 
 	SECTION("a clips-only document keeps its empty bindings")
 	{
-		writeImportedDocument(ImportTarget{ sandbox.dataRoot, "clipsonly", 30.0f }, nullptr);
+		AssetStore(sandbox.dataRoot)
+			.WriteImportedDocument(ImportTarget{ "clipsonly", 30.0f }, nullptr);
 
-		const auto again = reauthorImportDocuments(sandbox.dataRoot);
+		const auto again = AssetStore(sandbox.dataRoot).ReauthorImportDocuments();
 		REQUIRE(again.size() == 2);
 		for (const ReauthoredDocument& entry : again)
 			CHECK(entry.outcome == ReauthoredDocument::Outcome::kUnchanged);
@@ -415,10 +415,11 @@ TEST_CASE("reauthor rewrites a document from its mesh, once", "[regen][importdoc
 
 	SECTION("an unreadable mesh header fails a claimless document rather than clearing it")
 	{
-		writeImportedDocument(ImportTarget{ sandbox.dataRoot, "clipsonly", 30.0f }, nullptr);
+		AssetStore(sandbox.dataRoot)
+			.WriteImportedDocument(ImportTarget{ "clipsonly", 30.0f }, nullptr);
 		core::file::write_atomic(sandbox.meshPath, std::string_view("not a mesh"));
 
-		const auto again = reauthorImportDocuments(sandbox.dataRoot);
+		const auto again = AssetStore(sandbox.dataRoot).ReauthorImportDocuments();
 		REQUIRE(again.size() == 2);
 		for (const ReauthoredDocument& entry : again)
 		{
@@ -437,11 +438,11 @@ TEST_CASE("a rebind with no document to land in is refused", "[regen][importdoc]
 	fs::remove(sandbox.documentPath);
 
 	CHECK_THROWS_WITH(
-		rebindSubmeshInDocument(
-			sandbox.dataRoot,
-			"meshes_src/unit.glb",
-			sandbox.FirstSubmeshName(),
-			"Materials/blue.bmaterial"),
+		AssetStore(sandbox.dataRoot)
+			.RebindSubmeshInDocument(
+				"meshes_src/unit.glb",
+				sandbox.FirstSubmeshName(),
+				"Materials/blue.bmaterial"),
 		Catch::Matchers::ContainsSubstring("no import document"));
 }
 

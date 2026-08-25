@@ -2,7 +2,7 @@
 
 namespace assetlib
 {
-	/** What happened to one file under rebakePosedBounds. */
+	/** What happened to one file under RebakePosedBounds. */
 	struct RebakedFile
 	{
 		enum class Outcome
@@ -25,20 +25,4 @@ namespace assetlib
 		[[nodiscard]] size_t
 		Count(RebakedFile::Outcome outcome) const noexcept;
 	};
-
-	/**
-	 * Every `.banim` under `dataRoot` gets the posed culling boxes an import writes
-	 * (bakePosedBounds), measured against every `.bmesh` that names its skeleton -- the retrofit
-	 * for a project whose rigs were imported before the boxes existed.
-	 *
-	 * A clip set whose boxes already match its meshes' content is left untouched, so running this
-	 * twice rewrites nothing the second time. A file that cannot be read is reported and skipped,
-	 * never half-written; the others still go through.
-	 *
-	 * @param dryRun Report what would be rewritten and write nothing. Cheap: deciding costs a
-	 *        signature per mesh, and only a real rebake pays the walk.
-	 * @throws std::runtime_error if `dataRoot` is not a directory.
-	 */
-	[[nodiscard]] RebakeBoundsReport
-	rebakePosedBounds(const std::filesystem::path& dataRoot, bool dryRun);
 }

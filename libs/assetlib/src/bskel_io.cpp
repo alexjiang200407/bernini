@@ -1,7 +1,7 @@
 #include <assetlib/codecs.h>
 #include <assetlib_structs/Skeleton.h>
 
-#include <assetlib/skeleton.h>
+#include <assetlib/skinning.h>
 
 #include "cache_io.h"
 #include "fs_util.h"

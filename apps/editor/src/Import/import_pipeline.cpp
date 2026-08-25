@@ -126,8 +126,10 @@ namespace editor
 
 		if (options.mesh || options.animations)
 		{
-			const fs::path sourceCopy = assetlib::importedSourcePathFor(dataRoot, sourceName);
-			const fs::path importDoc  = assetlib::importDocumentPathFor(dataRoot, sourceName);
+			const fs::path sourceCopy =
+				assetlib::AssetStore(dataRoot).ImportedSourcePath(sourceName);
+			const fs::path importDoc =
+				assetlib::AssetStore(dataRoot).ImportDocumentPath(sourceName);
 			files.emplace_back(sourceCopy, fs::exists(sourceCopy, ec));
 			files.emplace_back(importDoc, fs::exists(importDoc, ec));
 		}
@@ -218,14 +220,12 @@ namespace editor
 					progress.Report(0, 0, QString("Baking the pose bounds..."));
 					assetlib::requireUniqueSubmeshNames(*mesh);
 
-					const assetlib::ImportTarget target{ dataRoot,
-					                                     sourceName,
+					const assetlib::AssetStore   store(dataRoot);
+					const assetlib::ImportTarget target{ sourceName,
 					                                     assetlib::c_DefaultSampleRate };
-					const assetlib::SourceRef    sourceRef =
-						assetlib::copyImportedSource(source, target);
-					mesh->source = sourceRef;
+					const assetlib::SourceRef sourceRef = store.CopyImportedSource(source, target);
+					mesh->source                        = sourceRef;
 
-					const assetlib::AssetStore store(dataRoot);
 					store.WriteImportedRig(
 						imported->skeleton,
 						imported->animations,
@@ -239,18 +239,16 @@ namespace editor
 				{
 					progress.Report(0, 0, QString("Baking the pose bounds..."));
 
-					const assetlib::ImportTarget target{ dataRoot,
-					                                     sourceName,
+					const assetlib::AssetStore   store(dataRoot);
+					const assetlib::ImportTarget target{ sourceName,
 					                                     assetlib::c_DefaultSampleRate };
-					const assetlib::SourceRef    sourceRef =
-						assetlib::copyImportedSource(source, target);
-					const assetlib::AssetStore store(dataRoot);
+					const assetlib::SourceRef sourceRef = store.CopyImportedSource(source, target);
 					store.WriteImportedClips(
 						imported->skeleton,
 						imported->animations,
 						store.KeyFor(banimPath),
 						sourceRef);
-					assetlib::writeImportedDocument(target, nullptr);
+					store.WriteImportedDocument(target, nullptr);
 				}
 
 				workerMs = std::chrono::duration<double, std::milli>(
@@ -287,10 +285,9 @@ namespace editor
 					const assetlib::AssetStore meshStore(dataRoot);
 					meshStore.Save(*mesh, meshStore.KeyFor(bmeshPath));
 
-					const assetlib::ImportTarget target{ dataRoot,
-						                                 sourceName,
+					const assetlib::ImportTarget target{ sourceName,
 						                                 assetlib::c_DefaultSampleRate };
-					assetlib::writeImportedDocument(target, &*mesh);
+					meshStore.WriteImportedDocument(target, &*mesh);
 				}
 
 				// The UI half is the half that freezes the editor, so it is the one worth naming.
@@ -336,8 +333,9 @@ namespace editor
 		if (dialog.exec() != QDialog::Accepted)
 			return ImportOutcome::kCancelled;
 
+		const assetlib::AssetStore store(std::filesystem::path(dataRoot.toStdWString()));
+
 		auto desc        = assetlib::EnvImportDesc();
-		desc.dataRoot    = std::filesystem::path(dataRoot.toStdWString());
 		desc.source      = std::filesystem::path(sourceFile.toStdWString());
 		desc.name        = dialog.GetAssetName().toStdString();
 		desc.sky         = dialog.ImportSky();
@@ -351,10 +349,10 @@ namespace editor
 		// Import never overwrites, here as for a mesh. The files are asked of assetlib rather than
 		// rebuilt here, so the check cannot come to name different ones than the import would write.
 		auto replaced = QStringList();
-		for (const std::string& target : assetlib::environmentImportTargets(desc))
+		for (const std::string& target : store.EnvironmentImportTargets(desc))
 		{
 			std::error_code ec;
-			if (std::filesystem::exists(desc.dataRoot / target, ec))
+			if (std::filesystem::exists(store.GetDataRoot() / target, ec))
 				replaced << QString::fromStdString(target);
 		}
 
@@ -370,14 +368,14 @@ namespace editor
 			QString("Importing %1").arg(name),
 			[&](background::Progress& progress) {
 				progress.Report(0, 0, QString("Convolving %1...").arg(name));
-				imported = assetlib::importEnvironment(desc, progress.Cancellation());
+				imported = store.ImportEnvironment(desc, progress.Cancellation());
 			},
 			background::Cancellable::kYes);
 
 		if (result.Completed())
 			return ImportOutcome::kImported;
 
-		// Nothing to undo: a failed or cancelled importEnvironment has already taken back what it wrote.
+		// Nothing to undo: a failed or cancelled ImportEnvironment has already taken back what it wrote.
 		if (result.Cancelled())
 			return ImportOutcome::kCancelled;
 

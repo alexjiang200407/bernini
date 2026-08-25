@@ -24,7 +24,7 @@ namespace
 	QCheckBox*
 	EnvironmentBox(const EnvironmentImporterDialog& dialog)
 	{
-		return dialog.findChild<QCheckBox*>("importEnvironment");
+		return dialog.findChild<QCheckBox*>("ImportEnvironment");
 	}
 
 	QLineEdit*

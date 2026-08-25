@@ -6,9 +6,7 @@
 
 #include <assetlib/import_document.h>
 
-#include <assetlib/container_format.h>
 #include <assetlib/project_layout.h>
-#include <assetlib/skeleton.h>
 #include <assetlib/skinning.h>
 #include <assetlib/vat_bake.h>
 #include <assetlib_structs/Animation.h>
@@ -52,15 +50,15 @@ namespace assetlib
 	}
 
 	std::filesystem::path
-	importedSourcePathFor(const std::filesystem::path& dataRoot, std::string_view name)
+	AssetStore::ImportedSourcePath(std::string_view name) const
 	{
-		return dataRoot / c_MeshesSrcDirectoryName / std::format("{}.glb", name);
+		return GetDataRoot() / c_MeshesSrcDirectoryName / std::format("{}.glb", name);
 	}
 
 	std::filesystem::path
-	importDocumentPathFor(const std::filesystem::path& dataRoot, std::string_view name)
+	AssetStore::ImportDocumentPath(std::string_view name) const
 	{
-		return dataRoot / c_MeshesSrcDirectoryName /
+		return GetDataRoot() / c_MeshesSrcDirectoryName /
 		       std::format("{}{}", name, c_ImportDocumentExtension);
 	}
 
@@ -95,11 +93,12 @@ namespace assetlib
 	}
 
 	SourceRef
-	copyImportedSource(const std::filesystem::path& source, const ImportTarget& target)
+	AssetStore::CopyImportedSource(const std::filesystem::path& source, const ImportTarget& target)
+		const
 	{
 		requireSelfContainedSource(source);
 
-		const std::filesystem::path copied = importedSourcePathFor(target.dataRoot, target.name);
+		const std::filesystem::path copied = ImportedSourcePath(target.name);
 		std::filesystem::create_directories(copied.parent_path());
 
 		std::error_code ec;
@@ -130,14 +129,14 @@ namespace assetlib
 	}
 
 	void
-	writeImportedDocument(const ImportTarget& target, const BMesh* mesh)
+	AssetStore::WriteImportedDocument(const ImportTarget& target, const BMesh* mesh) const
 	{
 		ImportDocument document = parametersOnly(target.sampleRate);
 		if (mesh != nullptr)
 			document.bindings = bindingsOf(*mesh);
 
 		core::file::write_atomic(
-			importDocumentPathFor(target.dataRoot, target.name),
+			ImportDocumentPath(target.name),
 			AssetCodec<ImportDocument>::Serialize(document));
 	}
 
@@ -175,18 +174,17 @@ namespace assetlib
 	}
 
 	void
-	rebindSubmeshInDocument(
-		const std::filesystem::path& dataRoot,
-		std::string_view             sourceKey,
-		std::string_view             submesh,
-		std::string_view             material)
+	AssetStore::RebindSubmeshInDocument(
+		std::string_view sourceKey,
+		std::string_view submesh,
+		std::string_view material) const
 	{
 		core::throw_runtime_error_if(
 			sourceKey.empty(),
 			"'{}': no source was ever recorded, so there is no import document to rebind in",
 			submesh);
 
-		const std::filesystem::path documentPath = dataRoot / importDocumentKeyFor(sourceKey);
+		const std::filesystem::path documentPath = GetDataRoot() / importDocumentKeyFor(sourceKey);
 		core::throw_runtime_error_if(
 			!std::filesystem::exists(documentPath),
 			"'{}': no import document to rebind in -- re-import the source",
@@ -203,14 +201,14 @@ namespace assetlib
 	}
 
 	std::vector<ReauthoredDocument>
-	reauthorImportDocuments(const std::filesystem::path& dataRoot)
+	AssetStore::ReauthorImportDocuments() const
 	{
 		namespace fs = std::filesystem;
 
 		core::throw_runtime_error_if(
-			!fs::is_directory(dataRoot),
+			!fs::is_directory(GetDataRoot()),
 			"'{}' is not a directory",
-			dataRoot.string());
+			GetDataRoot().string());
 
 		// Which mesh claims which source, by the frozen header alone -- readable whatever the
 		// file's bake revision, which is what lets a stale mesh still name its document.
@@ -220,7 +218,7 @@ namespace assetlib
 		std::error_code ec;
 		const auto      walk = fs::directory_options::skip_permission_denied;
 		for (const fs::directory_entry& entry :
-		     fs::recursive_directory_iterator(dataRoot, walk, ec))
+		     fs::recursive_directory_iterator(GetDataRoot(), walk, ec))
 		{
 			if (!entry.is_regular_file(ec) || entry.path().extension() != c_MeshExtension)
 				continue;
@@ -235,18 +233,18 @@ namespace assetlib
 			{
 				// Which source it claims is unknowable, so every claimless document below has to
 				// treat this mesh as possibly its own.
-				unreadable.push_back(mountKeyFor(dataRoot, entry.path()));
+				unreadable.push_back(mountKeyFor(GetDataRoot(), entry.path()));
 			}
 		}
 
 		auto report = std::vector<ReauthoredDocument>();
 		for (const fs::directory_entry& entry :
-		     fs::recursive_directory_iterator(dataRoot, walk, ec))
+		     fs::recursive_directory_iterator(GetDataRoot(), walk, ec))
 		{
 			if (!entry.is_regular_file(ec) || entry.path().extension() != c_ImportDocumentExtension)
 				continue;
 
-			const std::string key       = mountKeyFor(dataRoot, entry.path());
+			const std::string key       = mountKeyFor(GetDataRoot(), entry.path());
 			const std::string sourceKey = importedSourceKeyFor(key);
 
 			ReauthoredDocument result{ key, ReauthoredDocument::Outcome::kUnchanged, {} };
@@ -301,7 +299,7 @@ namespace assetlib
 		for (const auto& [sourceKey, meshes] : claims)
 		{
 			const std::string documentKey = importDocumentKeyFor(sourceKey);
-			if (fs::exists(dataRoot / documentKey))
+			if (fs::exists(GetDataRoot() / documentKey))
 				continue;
 			report.push_back(
 				{ documentKey,
@@ -309,7 +307,7 @@ namespace assetlib
 			      std::format(
 					  "'{}' records '{}' as its source but no document stands beside it; "
 					  "re-import the source",
-					  mountKeyFor(dataRoot, meshes.front()),
+					  mountKeyFor(GetDataRoot(), meshes.front()),
 					  sourceKey) });
 		}
 
@@ -347,11 +345,11 @@ namespace assetlib
 	}
 
 	std::filesystem::path
-	findMatchingSkeleton(const std::filesystem::path& dataRoot, const Skeleton& skeleton)
+	AssetStore::FindMatchingSkeleton(const Skeleton& skeleton) const
 	{
 		namespace fs = std::filesystem;
 
-		const fs::path root = dataRoot / c_SkeletonsDirectoryName;
+		const fs::path root = GetDataRoot() / c_SkeletonsDirectoryName;
 
 		std::error_code ec;
 		if (!fs::exists(root, ec))
@@ -394,7 +392,7 @@ namespace assetlib
 			{
 				if (!named.empty())
 					named += ", ";
-				named += mountKeyFor(dataRoot, match);
+				named += mountKeyFor(GetDataRoot(), match);
 			}
 
 			core::throw_runtime_error(
@@ -458,7 +456,7 @@ namespace assetlib
 		if (skeleton.bones.empty())
 			throw std::runtime_error("this file carries no rig, so its clips address nothing");
 
-		const std::filesystem::path rig = findMatchingSkeleton(GetDataRoot(), skeleton);
+		const std::filesystem::path rig = FindMatchingSkeleton(skeleton);
 		if (rig.empty())
 		{
 			throw std::runtime_error(

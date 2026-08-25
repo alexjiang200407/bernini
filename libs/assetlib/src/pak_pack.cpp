@@ -1,12 +1,10 @@
 #include <assetlib/AssetStore.h>
 #include <assetlib/codecs.h>
 #include <assetlib/envmap.h>
-#include <assetlib/pak_pack.h>
+#include <assetlib/pak.h>
 
 #include <assetlib/RegenMesh.h>
 #include <assetlib/asset_refs.h>
-#include <assetlib/container_format.h>
-#include <assetlib/pak_io.h>
 #include <assetlib/project_layout.h>
 #include <assetlib/vat_bake.h>
 #include <assetlib_structs/Animation.h>
@@ -99,7 +97,7 @@ namespace assetlib
 				catch (const std::exception& error)
 				{
 					core::throw_runtime_error(
-						"assetlib::packProject: '{}': {}",
+						"AssetStore::Pack: '{}': {}",
 						relativeKey(file, store.GetDataRoot()),
 						error.what());
 				}
@@ -165,7 +163,7 @@ namespace assetlib
 				RegenMesh current = store.LoadRegenMesh(key);
 				core::throw_runtime_error_if(
 					!current.unboundBindings.empty(),
-					"assetlib::packProject: '{}' binds submesh '{}', which the mesh does not "
+					"AssetStore::Pack: '{}' binds submesh '{}', which the mesh does not "
 					"have; rebind or re-export",
 					key,
 					current.unboundBindings.front());
@@ -185,7 +183,7 @@ namespace assetlib
 			case AssetType::kCount:
 				break;
 			}
-			core::throw_runtime_error("assetlib::packProject: '{}' is not geometry", key);
+			core::throw_runtime_error("AssetStore::Pack: '{}' is not geometry", key);
 		}
 
 		/** Each geometry key's archived bytes, computed once per pack however often asked. */
@@ -234,28 +232,28 @@ namespace assetlib
 	}
 
 	PackReport
-	packProject(const AssetStore& store, const PackDesc& desc)
+	AssetStore::Pack(const PackDesc& desc) const
 	{
 		// The walk and the rebake address the writable layer: packing reads what is on disk under
 		// the data root, not what a wider mount would also answer for.
-		const std::filesystem::path& dataRoot = store.GetDataRoot();
+		const std::filesystem::path& dataRoot = GetDataRoot();
 
 		if (!std::filesystem::is_directory(dataRoot))
 			core::throw_runtime_error(
-				"assetlib::packProject: '{}' is not a directory",
+				"AssetStore::Pack: '{}' is not a directory",
 				dataRoot.string());
 
 		PackReport report;
-		report.envsRebaked = rebakeStaleEnvs(store, filesUnder(dataRoot));
+		report.envsRebaked = rebakeStaleEnvs(*this, filesUnder(dataRoot));
 
 		const std::vector<std::filesystem::path> files = filesUnder(dataRoot);
-		report.vatsRebaked                             = rebakeStaleVats(store, files);
+		report.vatsRebaked                             = rebakeStaleVats(*this, files);
 
 		const core::file::LooseFileSystem loose(dataRoot);
 
 		// The seam's answer per geometry key, computed once however many askers -- the entry's
 		// own pack, and any `.bvat` stamping against it.
-		ArchivedGeometry archived(store);
+		ArchivedGeometry archived(*this);
 
 		PakWriter writer(desc.target);
 		for (const std::filesystem::path& file : files)
@@ -277,7 +275,7 @@ namespace assetlib
 			const std::string                          key   = relativeKey(file, dataRoot);
 			const std::optional<core::file::FileStamp> stamp = loose.Stat(key);
 			if (!stamp.has_value())
-				core::throw_runtime_error("assetlib::packProject: cannot stat '{}'", key);
+				core::throw_runtime_error("AssetStore::Pack: cannot stat '{}'", key);
 
 			// Read once, whatever the entry becomes: the verbatim payload for most of the bytes
 			// (textures above all), and the rebaked-or-not comparison for geometry.
@@ -303,7 +301,7 @@ namespace assetlib
 				// rebakeStaleVats above. A vat whose stamps already describe the archived bytes
 				// -- the ordinary pack, nothing regenerated and nothing rebound -- copies
 				// verbatim rather than paying a decode and a re-encode.
-				BVat vat = store.Load<BVat>(store.KeyFor(file));
+				BVat vat = Load<BVat>(KeyFor(file));
 
 				const SourceStamp meshStamp       = archived.StampFor(normalizeRef(vat.mesh));
 				const SourceStamp skeletonStamp   = archived.StampFor(normalizeRef(vat.skeleton));

@@ -3,7 +3,7 @@
 #include <assetlib/container_info.h>
 #include <assetlib/envmap.h>
 
-#include <assetlib/skeleton.h>
+#include <assetlib/skinning.h>
 #include <assetlib_structs/Animation.h>
 #include <assetlib_structs/BEnv.h>
 #include <assetlib_structs/BMaterial.h>

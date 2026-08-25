@@ -1,7 +1,6 @@
 #include "StoreAt.h"
 #include <assetlib/image_io.h>
-#include <assetlib/pak_io.h>
-#include <assetlib/pak_pack.h>
+#include <assetlib/pak.h>
 #include <assetlib_structs/BEnv.h>
 #include <assetlib_structs/BMaterial.h>
 #include <assetlib_structs/BMesh.h>
@@ -881,9 +880,8 @@ namespace
 	assetlib::AssetStore
 	Archived(const Fixture& fx)
 	{
-		static_cast<void>(assetlib::packProject(
-			assetlib::AssetStore(fx.root.path),
-			assetlib::PackDesc{ fx.root.path / "Data.bpak" }));
+		static_cast<void>(assetlib::AssetStore(fx.root.path)
+		                      .Pack(assetlib::PackDesc{ fx.root.path / "Data.bpak" }));
 
 		return assetlib::AssetStore(
 			fx.root.path,
@@ -944,9 +942,8 @@ TEST_CASE("AssetManager reads a loose material over its packed twin", "[gamelib]
 	const auto materialIndices = std::vector<uint32_t>{ 0 };
 	WriteMesh(fx.root.path / "Meshes" / "one.bmesh", materials, materialIndices);
 
-	static_cast<void>(assetlib::packProject(
-		assetlib::AssetStore(fx.root.path),
-		assetlib::PackDesc{ fx.root.path / "Data.bpak" }));
+	static_cast<void>(
+		assetlib::AssetStore(fx.root.path).Pack(assetlib::PackDesc{ fx.root.path / "Data.bpak" }));
 
 	// Edited after packing: the archive still names a.ktx2, the loose copy names b.ktx2.
 	WriteBakedMaterial(fx.root.path / "Materials" / "m0.bmaterial", "Textures/b.ktx2");

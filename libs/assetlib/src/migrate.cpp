@@ -76,15 +76,10 @@ namespace assetlib
 	}
 
 	MigrateReport
-	migrateProject(const std::filesystem::path& dataRoot, bool dryRun)
+	AssetStore::Migrate(bool dryRun) const
 	{
-		core::throw_runtime_error_if(
-			!std::filesystem::is_directory(dataRoot),
-			"migrate: {} is not a directory",
-			dataRoot.string());
-
 		std::vector<std::filesystem::path> paths;
-		for (const auto& entry : std::filesystem::recursive_directory_iterator(dataRoot))
+		for (const auto& entry : std::filesystem::recursive_directory_iterator(GetDataRoot()))
 			if (entry.is_regular_file())
 				paths.push_back(entry.path());
 
@@ -104,8 +99,6 @@ namespace assetlib
 			return std::pair(rank(a), std::ref(a)) < std::pair(rank(b), std::ref(b));
 		});
 
-		const AssetStore store(dataRoot);
-
 		MigrateReport report;
 		for (const std::filesystem::path& path : paths)
 		{
@@ -117,10 +110,10 @@ namespace assetlib
 			try
 			{
 				const std::string key =
-					normalizeRef(path.lexically_relative(dataRoot).generic_string());
+					normalizeRef(path.lexically_relative(GetDataRoot()).generic_string());
 
 				const auto bytes   = core::file::read_file_bytes(path.string());
-				const auto current = resave(store, *type, key, bytes);
+				const auto current = resave(*this, *type, key, bytes);
 				if (!current)
 					continue;
 				if (*current != bytes)

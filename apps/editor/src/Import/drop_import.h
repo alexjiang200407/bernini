@@ -14,7 +14,7 @@ namespace editor
 	/**
 	 * Whether `localFile` names an environment source the importer accepts.
 	 *
-	 * Radiance HDR only, though importEnvironment also reads a float cube `.ktx2`: a `.ktx2` dragged
+	 * Radiance HDR only, though ImportEnvironment also reads a float cube `.ktx2`: a `.ktx2` dragged
 	 * in is far more likely to be a texture, and guessing wrong would import one as a sky.
 	 */
 	[[nodiscard]] bool

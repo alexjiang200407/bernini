@@ -28,8 +28,8 @@ namespace assetlib::test
 		generateTangents(mesh);
 		requireUniqueSubmeshNames(mesh);
 
-		const ImportTarget target{ dataRoot, "unit", sampleRate };
-		const SourceRef    source = copyImportedSource(glb, target);
+		const ImportTarget target{ "unit", sampleRate };
+		const SourceRef    source = AssetStore(dataRoot).CopyImportedSource(glb, target);
 		mesh.source               = source;
 
 		const AssetStore store(dataRoot);
@@ -47,6 +47,6 @@ namespace assetlib::test
 			static_cast<void>(attachMaterial(mesh, 0, material));
 
 		store.Save(mesh, "Meshes/unit.bmesh");
-		writeImportedDocument(target, &mesh);
+		store.WriteImportedDocument(target, &mesh);
 	}
 }

@@ -1,5 +1,5 @@
-#include <assetlib/pak_io.h>
 
+#include <assetlib/pak.h>
 #include <core/file/LayeredFileSystem.h>
 #include <core/file/LooseFileSystem.h>
 #include <core/file/file.h>
@@ -137,7 +137,7 @@ TEST_CASE("a bpak enumerates exactly what went in", "[pak]")
  * It does *not* make the two files byte-identical, and this pins that too: payloads are streamed as
  * they arrive, so Add order is payload order and the offsets recorded for one path differ between
  * these two archives. Reproducible bytes are a property of a caller that adds in a fixed order --
- * see packProject and `Pack_test.cpp`.
+ * see AssetStore::Pack and `Pack_test.cpp`.
  */
 TEST_CASE("a bpak reads the same however its entries were added", "[pak]")
 {

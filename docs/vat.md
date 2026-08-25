@@ -105,7 +105,7 @@ truth; when this doc disagrees, trust the header, then fix this doc.
 | `vatIsStale` / `normalizePath` | [libs/assetlib/include/assetlib/vat_bake.h](libs/assetlib/include/assetlib/vat_bake.h) | Compare the container's input stamps against the disk — the stamp half of the bake-on-demand trigger — and the path form the container records |
 | `AssetCodec<BVat>` | [libs/assetlib/include/assetlib/codecs.h](libs/assetlib/include/assetlib/codecs.h) | The container round-trip |
 | `loadVatTables` / `loadVatRefs` | [libs/assetlib/include/assetlib/vat_bake.h](libs/assetlib/include/assetlib/vat_bake.h) | Tables-only and refs-only seek reads, for a scan that must not pay for the texels |
-| `vatPathFor` | [libs/assetlib/include/assetlib/vat_bake.h](libs/assetlib/include/assetlib/vat_bake.h) | Where a (mesh, clip set) pair's bake lives — one file per pair, moved by renameAsset when a rename changes the derivation |
+| `vatPathFor` | [libs/assetlib/include/assetlib/vat_bake.h](libs/assetlib/include/assetlib/vat_bake.h) | Where a (mesh, clip set) pair's bake lives — one file per pair, moved by AssetStore::RenameAsset when a rename changes the derivation |
 | `assetlib_cli bakevat` | [libs/assetlib/cli](libs/assetlib/cli) | The CLI door over `store.BakeVat` + `store.Save` |
 
 ### bgl — draw path

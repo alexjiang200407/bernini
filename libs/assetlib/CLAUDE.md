@@ -8,7 +8,7 @@ assetlib is a static library that contains a set of asset-related utilities. The
 
 Pose evaluation and CPU skinning live here, not in `bgl`: `poseModelTransforms` walks a clip frame
 from local into model space, `skinningMatrices` composes each with its inverse bind
-(`include/assetlib/skeleton.h`), and `skinSubmesh` blends four influences per vertex
+(`include/assetlib/skinning.h`), and `skinSubmesh` blends four influences per vertex
 (`include/assetlib/skinning.h`). The bake is offline and assetlib never links `bgl`, so this is
 plain CPU code — and it is the reference every later GPU path is diffed against, which is why it is
 deliberately the unoptimised form.
@@ -68,9 +68,10 @@ Concretely, before adding to `include/assetlib/`:
   mistaken for a project write: `AssetCodec<T>::Serialize` plus `core::file::write_atomic`. That
   is `assetlib_cli strip --out` writing a shipping tree, and the editor opening a mesh from
   outside any data root. Both are real; neither is a reason to bring the old family back.
-- **Do not re-carry a data root.** `MaterialBakeDesc` and `EnvBakeDesc` used to, and were the
-  standing example of what not to copy; both are gone and a bake is `store.BakeMaterial(...)`.
-  A new descriptor carrying a `dataRoot` beside a store is the same mistake again.
+- **Do not re-carry a data root.** `AssetStore`'s two constructors are the only *declarations* in
+  `include/assetlib` that take one; the word appears elsewhere only in prose, saying what a path is
+  relative to. `MaterialBakeDesc`, `EnvBakeDesc`, `ImportTarget` and `EnvImportDesc` all carried one
+  as a member; a descriptor that names *what* to write does not also get to say *where*.
 - **A new container type is a new `AssetCodec` specialization** in `include/assetlib/codecs.h`,
   listed in `Containers` in `src/container_table.cpp`. That is the whole registration: `containerKinds()`
   is folded out of it, and a static assertion holds the list to `AssetType`, so a type added to the

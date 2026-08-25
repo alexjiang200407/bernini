@@ -1,8 +1,7 @@
 #include <assetlib/AssetStore.h>
 #include <assetlib/container_info.h>
 #include <assetlib/envmap.h>
-#include <assetlib/pak_io.h>
-#include <assetlib/pak_pack.h>
+#include <assetlib/pak.h>
 #include <assetlib/vat_bake.h>
 #include <assetlib_structs/BEnv.h>
 #include <assetlib_structs/BMaterial.h>
@@ -94,7 +93,7 @@ TEST_CASE("reads widen to the mount while writes stay on the data root", "[asset
 	WriteSource(root.path / "textures_src/skin.ktx2", { { 200, 180, 160, 255 } });
 	BakeAndSave(root, "packed.bmaterial", "textures_src/skin.ktx2");
 
-	static_cast<void>(packProject(AssetStore(root.path), PackDesc{ root.path / "Data.bpak" }));
+	static_cast<void>(AssetStore(root.path).Pack(PackDesc{ root.path / "Data.bpak" }));
 
 	// Gone from the writable layer, still in the archive.
 	fs::remove(root.path / "Materials/packed.bmaterial");

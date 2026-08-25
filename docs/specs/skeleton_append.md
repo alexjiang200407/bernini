@@ -46,7 +46,7 @@ before a socket existed still plays after it is added, and a bone the clip does 
 the reference pose. Here, the same append is a full re-export event for every clip source of that
 rig.
 
-The signature's own doc comment ([libs/assetlib/include/assetlib/skeleton.h](../../libs/assetlib/include/assetlib/skeleton.h),
+The signature's own doc comment ([libs/assetlib/include/assetlib/skinning.h](../../libs/assetlib/include/assetlib/skinning.h),
 `:10-19`) already draws one such line deliberately — the bind pose is *excluded* so that
 re-authoring a rest pose does not re-cook every clip. This spec extends the same reasoning one
 step — an added bone should not re-cook them either — and closes the unguarded mesh side while

@@ -1,6 +1,5 @@
 #pragma once
 #include <assetlib/asset_refs.h>
-#include <assetlib/container_format.h>
 
 namespace assetlib
 {
@@ -63,7 +62,7 @@ namespace assetlib
 	struct ContainerKind
 	{
 		AssetType        type;
-		std::string_view extension;  // with the leading dot, as container_format.h spells it
+		std::string_view extension;  // with the leading dot, as codecs.h spells it
 
 		// Both 0 for an authored document: it carries no bake revision, and opens with its
 		// text rather than a magic. A cache entry has both or neither -- see CacheEntryCodecFor.

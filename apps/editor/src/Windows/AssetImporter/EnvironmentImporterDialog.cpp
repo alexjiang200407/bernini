@@ -84,7 +84,7 @@ EnvironmentImporterDialog::EnvironmentImporterDialog(
 	connect(m_ImportLighting, &QCheckBox::toggled, m_LightingDir, &QWidget::setEnabled);
 
 	m_ImportEnvironment = new QCheckBox("Environment (composes the two above)", this);
-	m_ImportEnvironment->setObjectName("importEnvironment");
+	m_ImportEnvironment->setObjectName("ImportEnvironment");
 	m_ImportEnvironment->setChecked(true);
 	m_ImportEnvironment->setToolTip(
 		"A .benv naming whichever of the two were written. It holds no pixels, so it needs at "

@@ -75,7 +75,7 @@ disagrees, trust the header, then fix this doc.
 
 | Header | Role |
 |---|---|
-| [libs/assetlib/include/assetlib/envmap.h](libs/assetlib/include/assetlib/envmap.h) | The pipeline, in one header and in the order it runs: `loadRadianceHdr` / `equirectToCube`, then the convolutions (`prefilterRadiance`, `irradianceSh`, `skyChain`, `blurCube`), then `EnvironmentMaps` and `ResolvedEnvironment`, then `importEnvironment` with its selectable parts, cancellation and rollback — `environmentImportTargets` names what it *would* write, and `isBakedEnvMapName` is what the prune reads |
+| [libs/assetlib/include/assetlib/envmap.h](libs/assetlib/include/assetlib/envmap.h) | The pipeline, in one header and in the order it runs: `loadRadianceHdr` / `equirectToCube`, then the convolutions (`prefilterRadiance`, `irradianceSh`, `skyChain`, `blurCube`), then `EnvironmentMaps` and `ResolvedEnvironment`, and `isBakedEnvMapName`, which is what the prune reads. The import itself is `AssetStore::ImportEnvironment` — selectable parts, cancellation and rollback — with `EnvironmentImportTargets` naming what it *would* write |
 | [AssetStore.h](../libs/assetlib/include/assetlib/AssetStore.h) | `BakeSky` / `BakeEnvLighting` and their staleness checks |
 | [libs/gamelib/include/gamelib/AssetManager.h](libs/gamelib/include/gamelib/AssetManager.h) | `AcquireEnvironment` — a `.benv` followed to uploaded texture handles. What the runtime consumes |
 | [libs/assetlib/include/assetlib/codecs.h](libs/assetlib/include/assetlib/codecs.h) | The codec for each of the three containers |
@@ -84,7 +84,7 @@ disagrees, trust the header, then fix this doc.
 
 ```mermaid
 flowchart TD
-    HDR[".hdr or float cube"] -- "importEnvironment" --> SRC["textures_src/*.ktx2 (float sources)"]
+    HDR[".hdr or float cube"] -- "ImportEnvironment" --> SRC["textures_src/*.ktx2 (float sources)"]
     SRC -- "bakeSky / bakeEnvLighting" --> BAKED["Textures/*.ktx2 (RGB9E5, content-addressed)"]
 
     SRC -- "routed by" --> BSKY[".bsky"]
@@ -123,7 +123,7 @@ flowchart TD
   project error, not a partial environment. Use `Environment::HasLighting()` and `HasSky()` before
   binding: they exist because the scene throws, not because it tolerates.
 
-### `assetlib::importEnvironment`
+### `AssetStore::ImportEnvironment`
 
 * **@post rolls back on failure and on cancel**, removing only files it *created* — one already on
   disk was overwritten rather than made, and taking it would destroy whatever wrote it first.
@@ -169,12 +169,12 @@ flowchart TD
 
 ```cpp
 // Import: one HDRI into the whole family, cancellable, rolled back on failure.
-auto desc     = assetlib::EnvImportDesc();
-desc.dataRoot = "Project/Data";
-desc.source   = "forest_4k.hdr";
-desc.name     = "forest";
+auto desc   = assetlib::EnvImportDesc();
+desc.source = "forest_4k.hdr";
+desc.name   = "forest";
 
-const assetlib::EnvImportResult imported = assetlib::importEnvironment(desc, cancel);
+const assetlib::AssetStore      store("Project/Data");
+const assetlib::EnvImportResult imported = store.ImportEnvironment(desc, cancel);
 
 // Consume: follow the .benv to uploaded handles, and bind only what it actually has.
 auto assets = game::AssetManager(scene, "Project/Data");

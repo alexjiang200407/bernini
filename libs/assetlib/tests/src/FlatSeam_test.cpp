@@ -1,6 +1,6 @@
 #include <assetlib/codecs.h>
 #include <assetlib/image_io.h>
-#include <assetlib/pak_io.h>
+#include <assetlib/pak.h>
 #include <assetlib_structs/BEnv.h>
 #include <assetlib_structs/BMaterial.h>
 #include <assetlib_structs/ImageData.h>

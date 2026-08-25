@@ -5,7 +5,6 @@
 
 #include <assetlib/AssetCodec.h>
 
-#include <assetlib/container_format.h>
 #include <assetlib/import_document.h>
 #include <assetlib_structs/BEnv.h>
 #include <assetlib_structs/BMaterial.h>
@@ -517,12 +516,12 @@ namespace assetlib
 	}
 
 	DeletionResult
-	deleteAsset(const DeletionPlan& plan, const AssetStore& store)
+	AssetStore::DeleteAsset(const DeletionPlan& plan) const
 	{
 		if (!plan.Allowed())
 			return DeletionResult{ DeletionStatus::kRefused, {} };
 
-		const std::filesystem::path path = store.GetDataRoot() / plan.target;
+		const std::filesystem::path path = GetDataRoot() / plan.target;
 
 		// A plan can name assets only the archive holds -- the target, a member of the directory it
 		// names, something its cascade frees, or a bake derived from it. `remove` reports no error
@@ -531,8 +530,8 @@ namespace assetlib
 		//
 		// Inert on a loose store, where the mount is the data root: what is not on disk is not in
 		// the mount either.
-		const auto onlyInMount = [&store](const std::string& key) {
-			return !std::filesystem::exists(store.GetDataRoot() / key) && store.Exists(key);
+		const auto onlyInMount = [this](const std::string& key) {
+			return !std::filesystem::exists(GetDataRoot() / key) && Exists(key);
 		};
 
 		auto unreachable = std::vector<std::string>();
@@ -555,7 +554,7 @@ namespace assetlib
 		std::error_code ec;
 		for (const std::string& bake : plan.derived)
 		{
-			std::filesystem::remove(store.GetDataRoot() / bake, ec);
+			std::filesystem::remove(GetDataRoot() / bake, ec);
 			if (ec)
 				return DeletionResult{ DeletionStatus::kFailed, ec.message() };
 		}
@@ -575,7 +574,7 @@ namespace assetlib
 		// a failure part-way never leaves a referenced asset missing.
 		for (const std::string& freed : plan.cascade)
 		{
-			std::filesystem::remove(store.GetDataRoot() / freed, ec);
+			std::filesystem::remove(GetDataRoot() / freed, ec);
 			if (ec)
 				return DeletionResult{ DeletionStatus::kFailed, ec.message() };
 		}
