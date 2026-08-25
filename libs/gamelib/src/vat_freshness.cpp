@@ -162,8 +162,7 @@ namespace game
 			"vat: no usable bake of '{}' in a read-only store, and there is nowhere to make one",
 			bvatRel);
 
-		vat = assetlib::bakeVat(
-			store,
+		vat = store.BakeVat(
 			assetlib::VatBakeDesc{ std::string(meshRelPath), std::string(animationsRelPath) });
 
 		// The writable layer may hold nothing yet -- an overlay over an archive starts empty -- and

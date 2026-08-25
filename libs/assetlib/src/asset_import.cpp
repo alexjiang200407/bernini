@@ -317,33 +317,33 @@ namespace assetlib
 	}
 
 	void
-	writeImportedRig(
-		const AssetStore&       store,
-		const imp::BMeshImport& imported,
-		BMesh&                  mesh,
-		std::string_view        bskelKey,
-		std::string_view        banimKey,
-		bool                    writeClips,
-		const SourceRef&        source)
+	AssetStore::WriteImportedRig(
+		const Skeleton&     skeleton,
+		const AnimationSet& animations,
+		BMesh&              mesh,
+		std::string_view    bskelKey,
+		std::string_view    banimKey,
+		bool                writeClips,
+		const SourceRef&    source) const
 	{
-		if (imported.skeleton.bones.empty())
+		if (skeleton.bones.empty())
 			return;
 
-		Skeleton skeleton = imported.skeleton;
-		skeleton.source   = source;
-		store.Save(skeleton, bskelKey);
+		Skeleton rig = skeleton;
+		rig.source   = source;
+		Save(rig, bskelKey);
 		mesh.skeleton = std::string(bskelKey);
 
-		if (!writeClips || imported.animations.clips.empty())
+		if (!writeClips || animations.clips.empty())
 			return;
 
 		// The clip set names the rig by the same path the mesh does, so all three agree on which file
 		// the joint indices are addressed against.
-		AnimationSet clips = imported.animations;
+		AnimationSet clips = animations;
 		clips.skeleton     = mesh.skeleton;
 		clips.source       = source;
-		bakePosedBounds(clips, mesh, imported.skeleton);
-		store.Save(clips, banimKey);
+		bakePosedBounds(clips, mesh, skeleton);
+		Save(clips, banimKey);
 	}
 
 	std::filesystem::path
@@ -444,22 +444,21 @@ namespace assetlib
 	}
 
 	void
-	writeImportedClips(
-		const AssetStore&       store,
-		const imp::BMeshImport& imported,
-		std::string_view        banimKey,
-		const SourceRef&        source)
+	AssetStore::WriteImportedClips(
+		const Skeleton&     skeleton,
+		const AnimationSet& animations,
+		std::string_view    banimKey,
+		const SourceRef&    source) const
 	{
-		if (imported.animations.clips.empty())
+		if (animations.clips.empty())
 			throw std::runtime_error("this file carries no animation to import");
 
 		// The clips are per-bone samples addressed by index, so without the rig they were authored
 		// against there is nothing to say which bone each one drives.
-		if (imported.skeleton.bones.empty())
+		if (skeleton.bones.empty())
 			throw std::runtime_error("this file carries no rig, so its clips address nothing");
 
-		const std::filesystem::path rig =
-			findMatchingSkeleton(store.GetDataRoot(), imported.skeleton);
+		const std::filesystem::path rig = findMatchingSkeleton(GetDataRoot(), skeleton);
 		if (rig.empty())
 		{
 			throw std::runtime_error(
@@ -468,19 +467,19 @@ namespace assetlib
 				"attach to.");
 		}
 
-		AnimationSet clips = imported.animations;
-		clips.skeleton     = store.KeyFor(rig);
+		AnimationSet clips = animations;
+		clips.skeleton     = KeyFor(rig);
 		clips.source       = source;
 
 		// Measured against the rig the clips will resolve at load, not the imported copy: the two
 		// share a signature but a re-authored bind pose deliberately does not change one.
 		bakeBoundsForRig(
 			clips,
-			store.GetDataRoot(),
+			GetDataRoot(),
 			normalizePath(clips.skeleton),
-			store.Load<Skeleton>(clips.skeleton));
+			Load<Skeleton>(clips.skeleton));
 
-		store.Save(clips, banimKey);
+		Save(clips, banimKey);
 	}
 
 	void

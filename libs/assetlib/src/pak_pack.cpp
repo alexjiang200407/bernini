@@ -143,7 +143,7 @@ namespace assetlib
 
 				const VatRefs refs = loadVatRefs(file);
 				store.Save(
-					bakeVat(store, VatBakeDesc{ refs.mesh, refs.animations }),
+					store.BakeVat(VatBakeDesc{ refs.mesh, refs.animations }),
 					store.KeyFor(file));
 				++rebaked;
 			}

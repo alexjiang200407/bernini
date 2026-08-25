@@ -139,9 +139,9 @@ TEST_CASE("A skinned import writes its skeleton and the mesh names it", "[import
 	const auto      imported = SkinnedImport();
 	assetlib::BMesh mesh;
 
-	assetlib::writeImportedRig(
-		root.Store(),
-		imported,
+	root.Store().WriteImportedRig(
+		imported.skeleton,
+		imported.animations,
 		mesh,
 		TempRoot::BskelKey(),
 		TempRoot::BanimKey(),
@@ -168,9 +168,9 @@ TEST_CASE("The clips are written only when the import asked for them", "[importe
 	const auto      imported = SkinnedImport();
 	assetlib::BMesh mesh;
 
-	assetlib::writeImportedRig(
-		root.Store(),
-		imported,
+	root.Store().WriteImportedRig(
+		imported.skeleton,
+		imported.animations,
 		mesh,
 		TempRoot::BskelKey(),
 		TempRoot::BanimKey(),
@@ -239,9 +239,9 @@ TEST_CASE("The import bakes the posed box beside the clips it writes", "[importe
 	// The rig tests above pass an empty mesh on purpose -- no skin, no box.
 	assetlib::BMesh mesh = SkinnedQuad();
 
-	assetlib::writeImportedRig(
-		root.Store(),
-		imported,
+	root.Store().WriteImportedRig(
+		imported.skeleton,
+		imported.animations,
 		mesh,
 		TempRoot::BskelKey(),
 		TempRoot::BanimKey(),
@@ -265,9 +265,10 @@ TEST_CASE("A static import writes no rig at all", "[importedrig]")
 	const TempRoot  root;
 	assetlib::BMesh mesh;
 
-	assetlib::writeImportedRig(
-		root.Store(),
-		assetlib::imp::BMeshImport(),
+	// No rig, which is what a static mesh imports as.
+	root.Store().WriteImportedRig(
+		assetlib::Skeleton{},
+		assetlib::AnimationSet{},
 		mesh,
 		TempRoot::BskelKey(),
 		TempRoot::BanimKey(),
@@ -295,9 +296,9 @@ TEST_CASE(
 
 	const auto      imported = SkinnedImport();
 	assetlib::BMesh mesh;
-	assetlib::writeImportedRig(
-		root.Store(),
-		imported,
+	root.Store().WriteImportedRig(
+		imported.skeleton,
+		imported.animations,
 		mesh,
 		TempRoot::BskelKey(),
 		TempRoot::BanimKey(),
@@ -341,9 +342,9 @@ TEST_CASE("A skinned mesh is only writable once the rig names it", "[importedrig
 	REQUIRE(assetlib::isSkinned(mesh));
 	REQUIRE_THROWS(SaveAt(mesh, bmeshPath));
 
-	assetlib::writeImportedRig(
-		root.Store(),
-		imported,
+	root.Store().WriteImportedRig(
+		imported.skeleton,
+		imported.animations,
 		mesh,
 		TempRoot::BskelKey(),
 		TempRoot::BanimKey(),
@@ -362,9 +363,9 @@ TEST_CASE("A rig is found by signature, not by name", "[importedrig]")
 	const auto     imported = SkinnedImport();
 
 	assetlib::BMesh mesh;
-	assetlib::writeImportedRig(
-		root.Store(),
-		imported,
+	root.Store().WriteImportedRig(
+		imported.skeleton,
+		imported.animations,
 		mesh,
 		TempRoot::BskelKey(),
 		TempRoot::BanimKey(),
@@ -383,9 +384,10 @@ TEST_CASE("A rig is found by signature, not by name", "[importedrig]")
 		assetlib::BMesh second;
 		const fs::path  twin =
 			root.Data() / assetlib::c_SkeletonsDirectoryName / "coyote_twin.bskel";
-		assetlib::writeImportedRig(
-			root.Store(),
-			SkinnedImport(),
+		const assetlib::imp::BMeshImport imported = SkinnedImport();
+		root.Store().WriteImportedRig(
+			imported.skeleton,
+			imported.animations,
 			second,
 			"Skeletons/coyote_twin.bskel",
 			TempRoot::BanimKey(),
@@ -441,9 +443,9 @@ TEST_CASE("Clips import on their own, attached to the rig already there", "[impo
 	const auto     imported = SkinnedImport();
 
 	assetlib::BMesh mesh = SkinnedQuad();
-	assetlib::writeImportedRig(
-		root.Store(),
-		imported,
+	root.Store().WriteImportedRig(
+		imported.skeleton,
+		imported.animations,
 		mesh,
 		TempRoot::BskelKey(),
 		TempRoot::BanimKey(),
@@ -457,9 +459,9 @@ TEST_CASE("Clips import on their own, attached to the rig already there", "[impo
 	SaveAt(mesh, meshPath);
 
 	const fs::path runPath = root.Data() / assetlib::c_AnimationsDirectoryName / "coyote_run.banim";
-	assetlib::writeImportedClips(
-		root.Store(),
-		imported,
+	root.Store().WriteImportedClips(
+		imported.skeleton,
+		imported.animations,
 		"Animations/coyote_run.banim",
 		assetlib::SourceRef{});
 
@@ -486,9 +488,9 @@ TEST_CASE("Clips with no rig to attach to are refused", "[importedrig]")
 	// Nothing has been imported yet, so there is no skeleton these clips could address. Writing them
 	// anyway would leave a .banim naming a file that does not exist.
 	CHECK_THROWS_AS(
-		assetlib::writeImportedClips(
-			root.Store(),
-			imported,
+		root.Store().WriteImportedClips(
+			imported.skeleton,
+			imported.animations,
 			TempRoot::BanimKey(),
 			assetlib::SourceRef{}),
 		std::runtime_error);
@@ -496,9 +498,9 @@ TEST_CASE("Clips with no rig to attach to are refused", "[importedrig]")
 	SECTION("and so is a file carrying no clips")
 	{
 		assetlib::BMesh mesh;
-		assetlib::writeImportedRig(
-			root.Store(),
-			imported,
+		root.Store().WriteImportedRig(
+			imported.skeleton,
+			imported.animations,
 			mesh,
 			TempRoot::BskelKey(),
 			TempRoot::BanimKey(),
@@ -509,9 +511,9 @@ TEST_CASE("Clips with no rig to attach to are refused", "[importedrig]")
 		clipless.animations.clips.clear();
 
 		CHECK_THROWS_AS(
-			assetlib::writeImportedClips(
-				root.Store(),
-				clipless,
+			root.Store().WriteImportedClips(
+				clipless.skeleton,
+				clipless.animations,
 				TempRoot::BanimKey(),
 				assetlib::SourceRef{}),
 			std::runtime_error);
@@ -558,9 +560,9 @@ TEST_CASE("an import lands in the project's categories and reads back", "[import
 	mesh.source                            = sourceRef;
 
 	const assetlib::AssetStore importStore(dataRoot);
-	assetlib::writeImportedRig(
-		importStore,
-		imported,
+	importStore.WriteImportedRig(
+		imported.skeleton,
+		imported.animations,
 		mesh,
 		"Skeletons/apples.bskel",
 		"Animations/apples.banim",
@@ -606,7 +608,7 @@ TEST_CASE("an import lands in the project's categories and reads back", "[import
 
 		// Exactly this: no Materials/, because the board that decides what a glTF material routes
 		// where is the editor's and nothing in assetlib may guess at it. Not a rig either --
-		// apples.glb carries no skin, and writeImportedRig writes nothing for one that does not.
+		// apples.glb carries no skin, and WriteImportedRig writes nothing for one that does not.
 		CHECK(written == expected);
 	}
 

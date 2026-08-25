@@ -226,9 +226,9 @@ namespace editor
 					mesh->source = sourceRef;
 
 					const assetlib::AssetStore store(dataRoot);
-					assetlib::writeImportedRig(
-						store,
-						*imported,
+					store.WriteImportedRig(
+						imported->skeleton,
+						imported->animations,
 						*mesh,
 						store.KeyFor(bskelPath),
 						store.KeyFor(banimPath),
@@ -245,9 +245,9 @@ namespace editor
 					const assetlib::SourceRef    sourceRef =
 						assetlib::copyImportedSource(source, target);
 					const assetlib::AssetStore store(dataRoot);
-					assetlib::writeImportedClips(
-						store,
-						*imported,
+					store.WriteImportedClips(
+						imported->skeleton,
+						imported->animations,
 						store.KeyFor(banimPath),
 						sourceRef);
 					assetlib::writeImportedDocument(target, nullptr);

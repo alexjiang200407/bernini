@@ -34,9 +34,9 @@ namespace assetlib::test
 
 		const AssetStore store(dataRoot);
 
-		writeImportedRig(
-			store,
-			imported,
+		store.WriteImportedRig(
+			imported.skeleton,
+			imported.animations,
 			mesh,
 			"Skeletons/unit.bskel",
 			"Animations/unit.banim",

@@ -313,11 +313,11 @@ namespace assetlib
 	}
 
 	BVat
-	bakeVat(const AssetStore& store, const VatBakeDesc& desc)
+	AssetStore::BakeVat(const VatBakeDesc& desc) const
 	{
 		// The regeneration seam, not the plain loads: a bake over a stale group would otherwise
 		// freeze the stale geometry into a texture the freshness rule then calls current.
-		const BMesh mesh = store.LoadRegenMesh(desc.mesh).mesh;
+		const BMesh mesh = LoadRegenMesh(desc.mesh).mesh;
 
 		// A static mesh fails the in-memory bake anyway; refusing here names the actual gap --
 		// there is no rig to load -- instead of failing to open a file with no name.
@@ -326,17 +326,15 @@ namespace assetlib
 				"vat: '{}' names no skeleton, so there is no rig to bake",
 				desc.mesh);
 
-		BVat vat = bakeVat(
-			mesh,
-			store.LoadRegenSkeleton(mesh.skeleton),
-			store.LoadRegenAnimations(desc.animations));
+		BVat vat =
+			bakeVat(mesh, LoadRegenSkeleton(mesh.skeleton), LoadRegenAnimations(desc.animations));
 
 		vat.mesh            = normalizePath(desc.mesh);
 		vat.skeleton        = normalizePath(mesh.skeleton);
 		vat.animations      = normalizePath(desc.animations);
-		vat.meshStamp       = store.StampOf(vat.mesh);
-		vat.skeletonStamp   = store.StampOf(vat.skeleton);
-		vat.animationsStamp = store.StampOf(vat.animations);
+		vat.meshStamp       = StampOf(vat.mesh);
+		vat.skeletonStamp   = StampOf(vat.skeleton);
+		vat.animationsStamp = StampOf(vat.animations);
 		return vat;
 	}
 
