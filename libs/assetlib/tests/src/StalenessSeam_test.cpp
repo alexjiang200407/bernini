@@ -1,5 +1,5 @@
 #include <assetlib/container_info.h>
-#include <assetlib/pak_io.h>
+#include <assetlib/pak.h>
 #include <assetlib_structs/BMaterial.h>
 #include <core/file/LooseFileSystem.h>
 

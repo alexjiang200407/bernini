@@ -3,11 +3,9 @@
 #include <assetlib/bmesh.h>
 #include <assetlib/codecs.h>
 #include <assetlib/container_info.h>
-#include <assetlib/skeleton.h>
 
 #include <assetlib/asset_import.h>
 #include <assetlib/bmesh_gltf.h>
-#include <assetlib/container_format.h>
 #include <assetlib/import_document.h>
 #include <assetlib/mesh_tangents.h>
 #include <assetlib/project_layout.h>

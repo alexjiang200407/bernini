@@ -1,3 +1,4 @@
+#include <assetlib/pak.h>
 #include <gamelib/AssetManager.h>
 #include <gamelib/vat_freshness.h>
 
@@ -9,9 +10,7 @@
 #include "StoreAt.h"
 #include <assetlib/AssetStore.h>
 #include <assetlib/image_io.h>
-#include <assetlib/pak_io.h>
-#include <assetlib/pak_pack.h>
-#include <assetlib/skeleton.h>
+#include <assetlib/skinning.h>
 #include <assetlib/vat_bake.h>
 #include <assetlib_structs/Animation.h>
 #include <assetlib_structs/BMaterial.h>
@@ -247,7 +246,7 @@ TEST_CASE("A rig with no .bvat on disk is baked, loaded and drawn", "[vat][rende
 	 * A shipped mount has nowhere to put a re-bake, so the staleness question is not asked and the
 	 * `.bvat` is used as it is.
 	 *
-	 * Proving that needs an archive whose `.bvat` reads *stale*, which `packProject` will not
+	 * Proving that needs an archive whose `.bvat` reads *stale*, which `AssetStore::Pack` will not
 	 * produce -- it re-bakes a stale one as it packs. So the entries are written by hand, with the
 	 * clip set re-authored after the bake: that is an archive assembled by something other than our
 	 * packer, and the rule is what makes it draw rather than die.

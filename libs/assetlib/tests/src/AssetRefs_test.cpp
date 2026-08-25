@@ -1,7 +1,7 @@
 #include <assetlib/asset_refs.h>
 #include <assetlib/bmesh.h>
 
-#include <assetlib/skeleton.h>
+#include <assetlib/skinning.h>
 #include <assetlib/texture_prune.h>
 #include <assetlib_structs/Animation.h>
 #include <assetlib_structs/BMaterial.h>
@@ -309,7 +309,7 @@ TEST_CASE("A baked map two materials share is blocked by both", "[assetrefs]")
 TEST_CASE("Deleting a material leaves its maps for the prune to sweep", "[assetrefs]")
 {
 	// Deletion is not cascading, and does not need to be: the maps a deleted material alone named are
-	// exactly what findUnusedBakedTextures already collects. The two features compose rather than
+	// exactly what FindUnusedBakedTextures already collects. The two features compose rather than
 	// duplicate.
 	const DataRoot root("bernini_refs_compose");
 

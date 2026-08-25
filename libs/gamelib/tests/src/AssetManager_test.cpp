@@ -1,7 +1,6 @@
 #include "StoreAt.h"
 #include <assetlib/image_io.h>
-#include <assetlib/pak_io.h>
-#include <assetlib/pak_pack.h>
+#include <assetlib/pak.h>
 #include <assetlib_structs/BEnv.h>
 #include <assetlib_structs/BMaterial.h>
 #include <assetlib_structs/BMesh.h>

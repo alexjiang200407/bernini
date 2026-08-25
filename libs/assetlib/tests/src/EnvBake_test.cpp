@@ -2,8 +2,7 @@
 #include <assetlib/envmap.h>
 #include <assetlib/image_io.h>
 #include <assetlib/material_bake.h>
-#include <assetlib/pak_io.h>
-#include <assetlib/pak_pack.h>
+#include <assetlib/pak.h>
 #include <assetlib/texture_prune.h>
 #include <assetlib_structs/BEnv.h>
 #include <assetlib_structs/ImageData.h>

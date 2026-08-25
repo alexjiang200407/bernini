@@ -278,7 +278,7 @@ TEST_CASE("A rollback leaves the baked maps to the prune", "[envimport]")
 	CHECK_THROWS_AS(sandbox.Store().ImportEnvironment(FailsAfterSky(sandbox)), std::runtime_error);
 
 	// The `.bsky` naming it is gone, so the map is now an orphan -- but it is still on disk, which is
-	// the whole point: findUnusedBakedTextures is what decides an orphan's fate, not this call.
+	// the whole point: FindUnusedBakedTextures is what decides an orphan's fate, not this call.
 	CHECK_FALSE(sandbox.Has("Sky/forest.bsky"));
 
 	bool anyBakedMap = false;
@@ -341,7 +341,7 @@ TEST_CASE("An import that cannot mean anything is refused", "[envimport]")
 }
 
 // The editor refuses rather than overwrites, and cannot ask "would this land on something?" by
-// trying it. These are the same names importEnvironment writes, which is the point of asking here.
+// trying it. These are the same names ImportEnvironment writes, which is the point of asking here.
 TEST_CASE("An import can say what it would write before writing it", "[envimport]")
 {
 	const Sandbox sandbox("bernini_envimport_targets");

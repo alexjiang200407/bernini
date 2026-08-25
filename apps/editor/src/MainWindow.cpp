@@ -523,7 +523,7 @@ MainWindow::CleanUnusedTextures()
 	auto scan = assetlib::TexturePruneScan();
 
 	// Scanning parses every .bmaterial in the project, so it runs off the UI thread. It reads assetlib
-	// only, never bgl, which is what the loading screen requires of its worker. findUnusedBakedTextures
+	// only, never bgl, which is what the loading screen requires of its worker. FindUnusedBakedTextures
 	// takes no cancel token, so the screen offers no button that would not work.
 	const background::TaskResult scanned = background::RunWithLoadingScreen(
 		this,

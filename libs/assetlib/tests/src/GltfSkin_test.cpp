@@ -3,7 +3,6 @@
 #include <assetlib/bmesh_gltf.h>
 #include <assetlib/codecs.h>
 #include <assetlib/mesh_tangents.h>
-#include <assetlib/skeleton.h>
 #include <assetlib/skinning.h>
 #include <assetlib_structs/Animation.h>
 #include <assetlib_structs/BMesh.h>

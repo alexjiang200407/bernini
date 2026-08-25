@@ -1,7 +1,6 @@
 #include <assetlib/AssetStore.h>
 #include <assetlib/asset_refs.h>
-#include <assetlib/pak_io.h>
-#include <assetlib/pak_pack.h>
+#include <assetlib/pak.h>
 #include <assetlib/texture_prune.h>
 #include <core/file/LayeredFileSystem.h>
 #include <core/file/LooseFileSystem.h>

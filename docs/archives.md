@@ -25,7 +25,7 @@ files addressed by one normalized relative path. Six members, and no more:
 Three implementations:
 
 - **`LooseFileSystem`** ([header](../libs/core/include/core/file/LooseFileSystem.h)) — a directory.
-- **`assetlib::PakFile`** ([pak_io.h:95](../libs/assetlib/include/assetlib/pak_io.h)) — a mounted
+- **`assetlib::PakFile`** ([pak.h](../libs/assetlib/include/assetlib/pak.h)) — a mounted
   `.bpak`.
 - **`LayeredFileSystem`** ([header](../libs/core/include/core/file/LayeredFileSystem.h)) — an
   ordered list of the others; first hit wins, `Enumerate` returns the union with each path once.
@@ -149,7 +149,7 @@ payloads, table at the end — different problem.
 
 ### Writing one
 
-[`PakWriter`](../libs/assetlib/include/assetlib/pak_io.h) **streams.** Each `Add` writes its payload
+[`PakWriter`](../libs/assetlib/include/assetlib/pak.h) **streams.** Each `Add` writes its payload
 to a temp file straight away; only the table and the pool are held. Building an archive in memory to
 write it would put a ceiling on how big a project can be packed, and the ceiling would be a machine's
 RAM rather than anything about the project.
@@ -292,7 +292,7 @@ The walk and the exclusion rule live in `assetlib` (`AssetStore::Pack`), not in 
 The default target sits **beside** the data root rather than inside it: an archive of a tree is not a
 member of that tree, and one packed into the tree it came from would be a candidate for the next
 pack. `assetlib::c_DefaultArchiveName` names it once
-([pak_pack.h:44](../libs/assetlib/include/assetlib/pak_pack.h)).
+([pak.h](../libs/assetlib/include/assetlib/pak.h)).
 
 ---
 

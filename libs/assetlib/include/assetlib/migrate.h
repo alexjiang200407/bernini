@@ -2,7 +2,7 @@
 
 namespace assetlib
 {
-	/** What happened to one file under migrateProject. */
+	/** What happened to one file under Migrate. */
 	struct MigratedFile
 	{
 		enum class Outcome

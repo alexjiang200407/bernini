@@ -2,8 +2,7 @@
 #include <assetlib/asset_import.h>
 #include <assetlib/codecs.h>
 #include <assetlib/import_document.h>
-#include <assetlib/pak_io.h>
-#include <assetlib/pak_pack.h>
+#include <assetlib/pak.h>
 #include <assetlib/vat_bake.h>
 #include <assetlib_structs/BMesh.h>
 #include <assetlib_structs/BVat.h>

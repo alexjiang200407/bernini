@@ -375,7 +375,7 @@ namespace editor
 		if (result.Completed())
 			return ImportOutcome::kImported;
 
-		// Nothing to undo: a failed or cancelled importEnvironment has already taken back what it wrote.
+		// Nothing to undo: a failed or cancelled ImportEnvironment has already taken back what it wrote.
 		if (result.Cancelled())
 			return ImportOutcome::kCancelled;
 

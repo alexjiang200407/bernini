@@ -132,22 +132,24 @@ namespace assetlib
 	AssetStore::ImportEnvironment(const EnvImportDesc& desc, const CancelToken& cancel) const
 	{
 		if (!desc.sky && !desc.lighting && !desc.environment)
-			throw std::runtime_error("assetlib::importEnvironment: nothing was selected to write");
+			throw std::runtime_error(
+				"AssetStore::ImportEnvironment: nothing was selected to write");
 
 		// A `.benv` composes what the other two produce, so on its own it would name nothing.
 		if (desc.environment && !desc.sky && !desc.lighting)
 			throw std::runtime_error(
-				"assetlib::importEnvironment: an environment composes a sky or a lighting, so one "
+				"AssetStore::ImportEnvironment: an environment composes a sky or a lighting, so "
+				"one "
 				"of "
 				"them has to be written with it");
 
 		if (!std::filesystem::is_directory(GetDataRoot()))
 			throw std::runtime_error(
-				"assetlib::importEnvironment: the data root '" + GetDataRoot().string() +
+				"AssetStore::ImportEnvironment: the data root '" + GetDataRoot().string() +
 				"' is not a directory");
 
 		if (desc.name.empty())
-			throw std::runtime_error("assetlib::importEnvironment: the asset name is empty");
+			throw std::runtime_error("AssetStore::ImportEnvironment: the asset name is empty");
 
 		// The float intermediates are written straight to the host by writeKTX2, which makes no
 		// directory; the three containers go through the store, which makes its own.

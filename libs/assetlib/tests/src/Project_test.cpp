@@ -1,6 +1,6 @@
 #include <assetlib/AssetStore.h>
 #include <assetlib/Project.h>
-#include <assetlib/pak_pack.h>
+#include <assetlib/pak.h>
 #include <assetlib_structs/BMaterial.h>
 
 #include <nlohmann/json.hpp>

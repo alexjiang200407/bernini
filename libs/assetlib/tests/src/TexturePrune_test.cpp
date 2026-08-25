@@ -90,7 +90,7 @@ TEST_CASE("isBakedMapName recognizes only what the bake writes", "[texture_prune
 	}
 }
 
-TEST_CASE("findUnusedBakedTextures finds the map a re-bake orphaned", "[texture_prune]")
+TEST_CASE("FindUnusedBakedTextures finds the map a re-bake orphaned", "[texture_prune]")
 {
 	// The whole reason these accumulate: the file name is a hash of the routing, so re-routing a
 	// material writes a *new* file and simply stops naming the old one.
@@ -145,7 +145,7 @@ TEST_CASE("findUnusedBakedTextures finds the map a re-bake orphaned", "[texture_
 	}
 }
 
-TEST_CASE("findUnusedBakedTextures keeps a map another material still shares", "[texture_prune]")
+TEST_CASE("FindUnusedBakedTextures keeps a map another material still shares", "[texture_prune]")
 {
 	// Baked maps are shared, not owned: two materials routing a group identically converge on one file.
 	// Pruning "the maps this material no longer names" would delete it out from under the other one.
@@ -173,7 +173,7 @@ TEST_CASE("findUnusedBakedTextures keeps a map another material still shares", "
 	CHECK(std::filesystem::exists(root.path / keeper.pbr.baseColorTexture));
 }
 
-TEST_CASE("findUnusedBakedTextures keeps a stale material's baked triplet", "[texture_prune]")
+TEST_CASE("FindUnusedBakedTextures keeps a stale material's baked triplet", "[texture_prune]")
 {
 	// A material whose bake has gone stale renders from its routes, but it still carries the triplet
 	// that bake wrote, and re-stamping must not find the maps gone. Drawing from the routes today is
@@ -194,7 +194,7 @@ TEST_CASE("findUnusedBakedTextures keeps a stale material's baked triplet", "[te
 	CHECK(scan.unused.empty());
 }
 
-TEST_CASE("findUnusedBakedTextures never sweeps a hand-placed map", "[texture_prune]")
+TEST_CASE("FindUnusedBakedTextures never sweeps a hand-placed map", "[texture_prune]")
 {
 	// A texture that shares the directory but that no material names. Nothing marks it, so only its
 	// name keeps it alive.
@@ -217,7 +217,7 @@ TEST_CASE("findUnusedBakedTextures never sweeps a hand-placed map", "[texture_pr
 	CHECK(std::filesystem::exists(root.Textures() / "logo.ktx2"));
 }
 
-TEST_CASE("findUnusedBakedTextures refuses to run on an unreadable material", "[texture_prune]")
+TEST_CASE("FindUnusedBakedTextures refuses to run on an unreadable material", "[texture_prune]")
 {
 	// The fail-safe. A material we cannot parse is a material whose maps we cannot mark -- proceeding
 	// would sweep them as garbage, so the scan aborts instead and nothing is deleted.
@@ -233,7 +233,7 @@ TEST_CASE("findUnusedBakedTextures refuses to run on an unreadable material", "[
 	CHECK(std::filesystem::exists(root.path / material.pbr.baseColorTexture));
 }
 
-TEST_CASE("findUnusedBakedTextures handles a project with nothing baked", "[texture_prune]")
+TEST_CASE("FindUnusedBakedTextures handles a project with nothing baked", "[texture_prune]")
 {
 	const DataRoot root("bernini_prune_empty");
 
@@ -264,7 +264,7 @@ TEST_CASE("findUnusedBakedTextures handles a project with nothing baked", "[text
 	}
 }
 
-TEST_CASE("findUnusedBakedTextures honours a custom texture directory", "[texture_prune]")
+TEST_CASE("FindUnusedBakedTextures honours a custom texture directory", "[texture_prune]")
 {
 	const DataRoot root("bernini_prune_texdir");
 

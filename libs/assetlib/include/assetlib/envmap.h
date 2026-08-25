@@ -306,7 +306,7 @@ namespace assetlib
 
 		/**
 		 * Every file this call brought into being, data-root relative -- not the ones it overwrote,
-		 * and not the baked maps (see importEnvironment).
+		 * and not the baked maps (see ImportEnvironment).
 		 */
 		std::vector<std::string> written;
 

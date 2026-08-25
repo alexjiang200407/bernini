@@ -1,5 +1,4 @@
 #pragma once
-#include <assetlib/AssetStore.h>
 #include <assetlib/project_layout.h>
 
 namespace assetlib

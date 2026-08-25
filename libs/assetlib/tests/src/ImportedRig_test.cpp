@@ -2,15 +2,14 @@
 #include <assetlib/asset_import.h>
 #include <assetlib/bmesh.h>
 #include <assetlib/import_document.h>
+#include <assetlib/pak.h>
 #include <core/file/LooseFileSystem.h>
 
 #include "asset_describe.h"
 #include <assetlib/asset_refs.h>
 #include <assetlib/bmesh_gltf.h>
 #include <assetlib/mesh_tangents.h>
-#include <assetlib/pak_pack.h>
 #include <assetlib/project_layout.h>
-#include <assetlib/skeleton.h>
 #include <assetlib/skinning.h>
 #include <assetlib_structs/Animation.h>
 #include <assetlib_structs/BMesh.h>
@@ -405,7 +404,7 @@ TEST_CASE("A rig is found by signature, not by name", "[importedrig]")
 		{
 			static_cast<void>(
 				assetlib::AssetStore(root.Data()).FindMatchingSkeleton(imported.skeleton));
-			FAIL("findMatchingSkeleton did not throw on two matching rigs");
+			FAIL("FindMatchingSkeleton did not throw on two matching rigs");
 		}
 		catch (const std::runtime_error& e)
 		{

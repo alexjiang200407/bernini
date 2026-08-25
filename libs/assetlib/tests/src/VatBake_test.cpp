@@ -3,7 +3,6 @@
 #include <assetlib/codecs.h>
 #include <assetlib/container_info.h>
 #include <assetlib/image_io.h>
-#include <assetlib/skeleton.h>
 #include <assetlib/skinning.h>
 #include <assetlib/vat_bake.h>
 #include <assetlib_structs/Animation.h>

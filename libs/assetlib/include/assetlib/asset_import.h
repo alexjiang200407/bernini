@@ -2,8 +2,6 @@
 
 namespace assetlib
 {
-	class AssetStore;
-
 	struct BMesh;
 	struct MaterialBinding;
 	struct Skeleton;

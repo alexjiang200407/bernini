@@ -1,8 +1,7 @@
 #include <assetlib/AssetStore.h>
 #include <assetlib/container_info.h>
 #include <assetlib/envmap.h>
-#include <assetlib/pak_io.h>
-#include <assetlib/pak_pack.h>
+#include <assetlib/pak.h>
 #include <assetlib/vat_bake.h>
 #include <assetlib_structs/BEnv.h>
 #include <assetlib_structs/BMaterial.h>

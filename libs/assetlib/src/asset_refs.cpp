@@ -5,7 +5,6 @@
 
 #include <assetlib/AssetCodec.h>
 
-#include <assetlib/container_format.h>
 #include <assetlib/import_document.h>
 #include <assetlib_structs/BEnv.h>
 #include <assetlib_structs/BMaterial.h>

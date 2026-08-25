@@ -1,7 +1,6 @@
 #include <assetlib/codecs.h>
 #include <assetlib/import_document.h>
 
-#include <assetlib/container_format.h>
 #include <core/err/util.h>
 #include <core/file/file.h>
 #include <core/hash.h>

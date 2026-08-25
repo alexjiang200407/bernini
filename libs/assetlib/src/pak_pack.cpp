@@ -1,12 +1,10 @@
 #include <assetlib/AssetStore.h>
 #include <assetlib/codecs.h>
 #include <assetlib/envmap.h>
-#include <assetlib/pak_pack.h>
+#include <assetlib/pak.h>
 
 #include <assetlib/RegenMesh.h>
 #include <assetlib/asset_refs.h>
-#include <assetlib/container_format.h>
-#include <assetlib/pak_io.h>
 #include <assetlib/project_layout.h>
 #include <assetlib/vat_bake.h>
 #include <assetlib_structs/Animation.h>
@@ -99,7 +97,7 @@ namespace assetlib
 				catch (const std::exception& error)
 				{
 					core::throw_runtime_error(
-						"assetlib::packProject: '{}': {}",
+						"AssetStore::Pack: '{}': {}",
 						relativeKey(file, store.GetDataRoot()),
 						error.what());
 				}
@@ -165,7 +163,7 @@ namespace assetlib
 				RegenMesh current = store.LoadRegenMesh(key);
 				core::throw_runtime_error_if(
 					!current.unboundBindings.empty(),
-					"assetlib::packProject: '{}' binds submesh '{}', which the mesh does not "
+					"AssetStore::Pack: '{}' binds submesh '{}', which the mesh does not "
 					"have; rebind or re-export",
 					key,
 					current.unboundBindings.front());
@@ -185,7 +183,7 @@ namespace assetlib
 			case AssetType::kCount:
 				break;
 			}
-			core::throw_runtime_error("assetlib::packProject: '{}' is not geometry", key);
+			core::throw_runtime_error("AssetStore::Pack: '{}' is not geometry", key);
 		}
 
 		/** Each geometry key's archived bytes, computed once per pack however often asked. */
@@ -242,7 +240,7 @@ namespace assetlib
 
 		if (!std::filesystem::is_directory(dataRoot))
 			core::throw_runtime_error(
-				"assetlib::packProject: '{}' is not a directory",
+				"AssetStore::Pack: '{}' is not a directory",
 				dataRoot.string());
 
 		PackReport report;
@@ -277,7 +275,7 @@ namespace assetlib
 			const std::string                          key   = relativeKey(file, dataRoot);
 			const std::optional<core::file::FileStamp> stamp = loose.Stat(key);
 			if (!stamp.has_value())
-				core::throw_runtime_error("assetlib::packProject: cannot stat '{}'", key);
+				core::throw_runtime_error("AssetStore::Pack: cannot stat '{}'", key);
 
 			// Read once, whatever the entry becomes: the verbatim payload for most of the bytes
 			// (textures above all), and the rebaked-or-not comparison for geometry.

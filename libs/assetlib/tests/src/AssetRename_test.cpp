@@ -5,7 +5,7 @@
 #include <assetlib/import_document.h>
 #include <core/file/file.h>
 
-#include <assetlib/skeleton.h>
+#include <assetlib/skinning.h>
 #include <assetlib/vat_bake.h>
 #include <assetlib_structs/Animation.h>
 #include <assetlib_structs/BEnv.h>

@@ -11,7 +11,6 @@
 #include <assetlib/import_document.h>
 #include <assetlib/mesh_tangents.h>
 #include <assetlib/project_layout.h>
-#include <assetlib/skeleton.h>
 #include <assetlib/skinning.h>
 #include <assetlib_structs/Animation.h>
 #include <assetlib_structs/BMesh.h>

@@ -1,8 +1,8 @@
-#include <assetlib/pak_io.h>
 
 #include "CheckedFileReader.h"
 #include "fs_util.h"
 #include "ref_paths.h"
+#include <assetlib/pak.h>
 #include <assetlib_structs/magic.h>
 #include <core/err/util.h>
 #include <core/io/ByteWriter.h>
@@ -131,7 +131,7 @@ namespace assetlib
 
 		// Sorted by path, so the entry table and the string pool do not depend on the order Add was
 		// called in. Payloads do -- they were streamed as they arrived -- so byte-for-byte identical
-		// archives are packProject's guarantee (it walks sorted), not this writer's. Lookup is the
+		// archives are AssetStore::Pack's guarantee (it walks sorted), not this writer's. Lookup is the
 		// map a reader builds at mount, so the order is for determinism and for `list`, not speed.
 		std::ranges::sort(m_Entries, {}, &PendingEntry::path);
 

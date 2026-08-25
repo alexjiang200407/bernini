@@ -1,5 +1,4 @@
 #include <assetlib/envmap.h>
-#include <assetlib/skeleton.h>
 #include <gamelib/AssetManager.h>
 
 #include <gamelib/vat_freshness.h>

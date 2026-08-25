@@ -6,9 +6,7 @@
 
 #include <assetlib/import_document.h>
 
-#include <assetlib/container_format.h>
 #include <assetlib/project_layout.h>
-#include <assetlib/skeleton.h>
 #include <assetlib/skinning.h>
 #include <assetlib/vat_bake.h>
 #include <assetlib_structs/Animation.h>

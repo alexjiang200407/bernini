@@ -2,7 +2,7 @@
 
 namespace assetlib
 {
-	/** What happened to one file under rebakePosedBounds. */
+	/** What happened to one file under RebakePosedBounds. */
 	struct RebakedFile
 	{
 		enum class Outcome

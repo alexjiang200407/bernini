@@ -1,9 +1,7 @@
 #include <assetlib/AssetStore.h>
 #include <assetlib/bmesh.h>
 #include <assetlib/codecs.h>
-#include <assetlib/container_format.h>
 #include <assetlib/rebake_bounds.h>
-#include <assetlib/skeleton.h>
 #include <assetlib/skinning.h>
 #include <assetlib/vat_bake.h>
 #include <assetlib_structs/Animation.h>
@@ -185,7 +183,7 @@ namespace assetlib
 						continue;
 					}
 
-					AssetStore(GetDataRoot()).Save(animations, animPath);
+					Save(animations, animPath);
 				}
 				entry.outcome = RebakedFile::Outcome::kRebaked;
 			}

@@ -33,9 +33,9 @@ when this doc disagrees, trust the header, then fix this doc.
 
   A caller that genuinely addresses the *host* still uses a path, and now looks different so it
   cannot be mistaken for the other thing: it encodes with the codec and moves the bytes itself.
-  `assetlib_cli strip --out` writes a shipping tree, the editor opens a mesh from outside any data
-  root, and `assetlib_cli` reading a file no project owns — each of those is
-  `AssetCodec<T>::Serialize` plus `core::file::write_atomic`, or the read equivalent.
+  `assetlib_cli strip --out` writes a shipping tree and the editor opens a mesh from outside any
+  data root — both are `AssetCodec<T>::Serialize` plus `core::file::write_atomic`, or the read
+  equivalent.
 
 * **A codec per container, and the type picks it.** `AssetCodec<T>` declares a container's
   extension, its magic, how it serializes, and — for a cache entry — the bake revision it is
@@ -113,7 +113,7 @@ is what a caller reaches for only when it holds bytes no store addresses, which 
 | `.bvat` | A baked position/normal texture pair and its tables. Derived, never committed. |
 | `.bsky` / `.benvl` / `.benv` | Backdrop; the lighting pair convolved from it; the few bytes naming both. [docs/envmaps.md](docs/envmaps.md) |
 | `.bimport` | One per copied source under `meshes_src/`: the bindings and parameters an import was authored with, as text. What a stale cache entry re-cooks from. Its struct is [import_document.h](libs/assetlib/include/assetlib/import_document.h). |
-| `.bpak` | The archive the rest are packed into — not a codec, since nothing references one. [pak_io.h](libs/assetlib/include/assetlib/pak_io.h), [pak_pack.h](libs/assetlib/include/assetlib/pak_pack.h). [docs/archives.md](docs/archives.md) |
+| `.bpak` | The archive the rest are packed into — not a codec, since nothing references one. [pak.h](libs/assetlib/include/assetlib/pak.h). [docs/archives.md](docs/archives.md) |
 
 ### Operations
 
@@ -123,7 +123,7 @@ is what a caller reaches for only when it holds bytes no store addresses, which 
 | Material bake | [material_bake.h](libs/assetlib/include/assetlib/material_bake.h) | Composites routes down to the baseColor/normal/orm triplet. |
 | Environment bake | [envmap.h](libs/assetlib/include/assetlib/envmap.h) | One header, in pipeline order: `.hdr` → the convolutions → the shipping RGB9E5 maps. |
 | VAT bake | [vat_bake.h](libs/assetlib/include/assetlib/vat_bake.h) | A rig's clips baked to textures. [docs/vat.md](docs/vat.md) |
-| Pose and CPU skinning | [skeleton.h](libs/assetlib/include/assetlib/skeleton.h), [skinning.h](libs/assetlib/include/assetlib/skinning.h) | Deliberately the unoptimised reference every GPU path is diffed against. [docs/skinning.md](docs/skinning.md) |
+| Pose and CPU skinning | [skinning.h](libs/assetlib/include/assetlib/skinning.h) | Deliberately the unoptimised reference every GPU path is diffed against. [docs/skinning.md](docs/skinning.md) |
 | Images | [image_io.h](libs/assetlib/include/assetlib/image_io.h) | KTX2 encode/decode, RGB9E5 pack. [docs/asset_standards.md](docs/asset_standards.md) |
 | Describe, migrate, prune | `AssetStore::Describe` ([AssetStore.h](libs/assetlib/include/assetlib/AssetStore.h)), [migrate.h](libs/assetlib/include/assetlib/migrate.h), [texture_prune.h](libs/assetlib/include/assetlib/texture_prune.h) | Text for a person, one overload per container; re-save at the current form; collect unreferenced bakes. |
 | Cancellation | [cancel.h](libs/assetlib/include/assetlib/cancel.h) | `std::stop_token`, polled at the encode that dominates each bake. |

@@ -1,3 +1,4 @@
+#include <assetlib/AssetStore.h>
 #include <assetlib/envmap.h>
 #include <assetlib/texture_prune.h>
 
@@ -6,7 +7,7 @@
 
 #include "ref_paths.h"
 
-#include <assetlib/container_format.h>
+#include <assetlib/codecs.h>
 #include <assetlib/material_bake.h>
 #include <assetlib_structs/BEnv.h>
 #include <assetlib_structs/BMaterial.h>
@@ -49,8 +50,8 @@ namespace assetlib
 			{
 				const auto unreadable = [&key](const char* what, const std::exception& e) {
 					return std::runtime_error(
-						"assetlib::findUnusedBakedTextures: cannot read the " + std::string(what) +
-						" '" + key +
+						"AssetStore::FindUnusedBakedTextures: cannot read the " +
+						std::string(what) + " '" + key +
 						"', so the baked maps it references cannot be known: " + e.what());
 				};
 
@@ -79,7 +80,7 @@ namespace assetlib
 
 					case ShadingModel::kCount:
 						throw std::runtime_error(
-							"assetlib::findUnusedBakedTextures: the material '" + key +
+							"AssetStore::FindUnusedBakedTextures: the material '" + key +
 							"' names an unknown shading model, so its baked maps cannot be known");
 					}
 				}
@@ -124,7 +125,7 @@ namespace assetlib
 		// project instead of the caller error it is.
 		if (!std::filesystem::is_directory(GetDataRoot()))
 			core::throw_runtime_error(
-				"assetlib::findUnusedBakedTextures: the data root '{}' is not a directory",
+				"AssetStore::FindUnusedBakedTextures: the data root '{}' is not a directory",
 				GetDataRoot().string());
 
 		const core::file::IFileSystem& files = GetFiles();
