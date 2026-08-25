@@ -4,7 +4,7 @@
 #include "util/GoldenImage.h"
 #include "util/TestEnvironment.h"
 #include "util/TestOptions.h"
-#include <assetlib/skeleton.h>
+#include <assetlib/skinning.h>
 #include <assetlib_structs/Bounds.h>
 #include <bgl/Camera.h>
 #include <bgl/IGraphics.h>
