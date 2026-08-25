@@ -1,4 +1,5 @@
 #pragma once
+#include <core/file/IFileSystem.h>
 
 namespace assetlib
 {
@@ -16,11 +17,12 @@ namespace assetlib
 	 * way to answer "what is actually in this file" is to hand-decode it against the serializer.
 	 *
 	 * The text is for a person, not a parser: it is not stable across versions, and nothing reads it
-	 * back. `assetlib_cli describe` prints it; the editor can surface it in an asset inspector.
+	 * back.
 	 *
-	 * These report what a container records and nothing more. To have each routed source stat'd and
-	 * compared against the stamp its bake wrote -- so a stale bake is visible -- describe through a
-	 * project instead: `AssetStore::Describe`.
+	 * **Internal.** `AssetStore::Describe` is the public door, because the useful question about a
+	 * container is whether what it records is still true, and only a project can answer that. The
+	 * overloads taking an `IFileSystem*` below are what it calls; a null mount reports what the
+	 * container records and stops, so one body serves both rather than two that can drift.
 	 */
 
 	/**
@@ -95,4 +97,24 @@ namespace assetlib
 	 */
 	[[nodiscard]] std::string
 	describe(const BVat& vat);
+	/**
+	 * The mounted form of describe: each routed source stamped, so a stale bake is visible.
+	 *
+	 * @param fileSystem Null to report what the container records and stop, which is what the public
+	 *        `describe` overloads are -- one body serves both rather than two that can drift.
+	 */
+	[[nodiscard]] std::string
+	describe(const BMaterial& material, const core::file::IFileSystem* fileSystem);
+
+	[[nodiscard]] std::string
+	describe(const BSky& sky, const core::file::IFileSystem* fileSystem);
+
+	[[nodiscard]] std::string
+	describe(const BEnvLighting& lighting, const core::file::IFileSystem* fileSystem);
+
+	[[nodiscard]] std::string
+	describe(const BEnv& env, const core::file::IFileSystem* fileSystem);
+
+	[[nodiscard]] std::string
+	describe(const BVat& vat, const core::file::IFileSystem* fileSystem);
 }
