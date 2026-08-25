@@ -149,13 +149,9 @@ namespace assetlib
 		if (desc.name.empty())
 			throw std::runtime_error("assetlib::importEnvironment: the asset name is empty");
 
+		// The float intermediates are written straight to the host by writeKTX2, which makes no
+		// directory; the three containers go through the store, which makes its own.
 		createDirectories(desc.dataRoot / desc.sourceDir);
-		if (desc.sky)
-			createDirectories(desc.dataRoot / desc.skyDir);
-		if (desc.lighting)
-			createDirectories(desc.dataRoot / desc.lightingDir);
-		if (desc.environment)
-			createDirectories(desc.dataRoot / desc.environmentDir);
 
 		auto created = CreatedFiles(desc.dataRoot);
 		auto result  = EnvImportResult();

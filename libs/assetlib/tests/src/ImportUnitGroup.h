@@ -46,7 +46,7 @@ namespace assetlib::test
 		if (!mesh.submeshes.empty())
 			static_cast<void>(attachMaterial(mesh, 0, material));
 
-		writeImportedMesh(store, mesh, "Meshes/unit.bmesh");
+		store.Save(mesh, "Meshes/unit.bmesh");
 		writeImportedDocument(target, &mesh);
 	}
 }

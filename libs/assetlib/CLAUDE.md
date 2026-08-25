@@ -54,6 +54,10 @@ Concretely, before adding to `include/assetlib/`:
   and `store.Save(value, key)`. A new function taking a `std::filesystem::path` to a file the
   project owns is the second way to do a thing that already has one, and the family that did that
   was deleted rather than kept — see [STYLE.md](../../STYLE.md) § Paths.
+- **A caller never creates a directory for a store write.** `store.Save(value, key)` creates what
+  the key names; a key is a location in the data root, not one that already exists. A caller that
+  writes straight to the host is the exception and looks different — `writeKTX2` and `copy_file`
+  make no directory, so those callers still make their own.
 - **A caller that genuinely addresses the host encodes and moves bytes itself**, so it cannot be
   mistaken for a project write: `AssetCodec<T>::Serialize` plus `core::file::write_atomic`. That
   is `assetlib_cli strip --out` writing a shipping tree, and the editor opening a mesh from

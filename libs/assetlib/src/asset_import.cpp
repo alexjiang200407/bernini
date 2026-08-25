@@ -317,14 +317,6 @@ namespace assetlib
 	}
 
 	void
-	writeImportedMesh(const AssetStore& store, const BMesh& mesh, std::string_view bmeshKey)
-	{
-		// An import aimed at a subfolder lands at `Meshes/<folder>/`, which nothing else creates.
-		std::filesystem::create_directories(store.ResolveWritePath(bmeshKey).parent_path());
-		store.Save(mesh, bmeshKey);
-	}
-
-	void
 	writeImportedRig(
 		const AssetStore&       store,
 		const imp::BMeshImport& imported,
@@ -337,9 +329,6 @@ namespace assetlib
 		if (imported.skeleton.bones.empty())
 			return;
 
-		// A project scaffolded before these categories existed has neither directory.
-		std::filesystem::create_directories(store.ResolveWritePath(bskelKey).parent_path());
-
 		Skeleton skeleton = imported.skeleton;
 		skeleton.source   = source;
 		store.Save(skeleton, bskelKey);
@@ -350,8 +339,6 @@ namespace assetlib
 
 		// The clip set names the rig by the same path the mesh does, so all three agree on which file
 		// the joint indices are addressed against.
-		std::filesystem::create_directories(store.ResolveWritePath(banimKey).parent_path());
-
 		AnimationSet clips = imported.animations;
 		clips.skeleton     = mesh.skeleton;
 		clips.source       = source;
@@ -480,8 +467,6 @@ namespace assetlib
 				"files with the mesh turned on first, which writes the rig these clips "
 				"attach to.");
 		}
-
-		std::filesystem::create_directories(store.ResolveWritePath(banimKey).parent_path());
 
 		AnimationSet clips = imported.animations;
 		clips.skeleton     = store.KeyFor(rig);

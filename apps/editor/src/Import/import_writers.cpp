@@ -29,8 +29,6 @@ namespace editor
 				"this file's materials changed while the import dialog was open; import it again");
 		}
 
-		fs::create_directories(materialDir);
-
 		// No device: the graph is authored, not drawn, and a TextureNode takes a null scene on purpose.
 		const auto registry = MakeMaterialNodeRegistry(nullptr, nullptr);
 

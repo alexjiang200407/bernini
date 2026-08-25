@@ -150,6 +150,7 @@ namespace assetlib
 		 *
 		 * The write lands on the data root, as every write does -- a caller passes the same mount
 		 * key it would read by and never resolves one itself, which is the asymmetry this closes.
+		 * Directories the key names are created; a caller never makes them.
 		 *
 		 * @throws std::runtime_error if `path` escapes the data root (see ResolveWritePath), or the
 		 *         file cannot be written. Atomic: a crash mid-write leaves the previous bytes.

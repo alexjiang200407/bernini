@@ -285,7 +285,7 @@ namespace editor
 							options.outputs.materialStems);
 
 					const assetlib::AssetStore meshStore(dataRoot);
-					assetlib::writeImportedMesh(meshStore, *mesh, meshStore.KeyFor(bmeshPath));
+					meshStore.Save(*mesh, meshStore.KeyFor(bmeshPath));
 
 					const assetlib::ImportTarget target{ dataRoot,
 						                                 sourceName,

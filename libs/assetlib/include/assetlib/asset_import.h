@@ -11,19 +11,6 @@ namespace assetlib
 	struct SourceRef;
 
 	/**
-	 * Writes `mesh` at `bmeshKey`, creating the directory the key names first: an import aimed
-	 * at a subfolder lands at `Meshes/<folder>/`, which nothing else creates -- a store's Save
-	 * opens the file where it stands.
-	 *
-	 * @throws std::runtime_error if the file cannot be written. The store's *data root* must
-	 *         already exist, which is AssetStore's own precondition rather than this one's: a
-	 *         project always has one, and an import into a directory that is not there is a
-	 *         mistyped root rather than a new subfolder.
-	 */
-	void
-	writeImportedMesh(const AssetStore& store, const BMesh& mesh, std::string_view bmeshKey);
-
-	/**
 	 * Writes the rig a skinned import carries -- the `.bskel` always, the `.banim` only when asked --
 	 * and points `mesh` at the skeleton by a data-root-relative path.
 	 *
