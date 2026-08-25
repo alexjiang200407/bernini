@@ -55,6 +55,28 @@ namespace core
 			logFile.close();
 		}
 
+		/**
+		 * Names the instruction at `pc`, as `symbol at file:line`.
+		 *
+		 * The frame no trace below can carry. A trace is walked from the frame pointers, which hold
+		 * *return* addresses -- so the innermost function, the one that has not returned, is absent
+		 * from every one of them, and that is the function a fault is in. `pc` comes from the state
+		 * the fault interrupted, the only place it survives.
+		 */
+		std::string
+		faulting_frame(const void* pc)
+		{
+			const cpptrace::frame_ptr address = reinterpret_cast<cpptrace::frame_ptr>(pc);
+
+			// Used as-is. The -1 that turns a return address into the call site is applied by
+			// cpptrace's unwinder, which a hand-built trace never goes through -- and `pc` is already
+			// an instruction pointer, so there is nothing to step back off.
+			const cpptrace::stacktrace trace = cpptrace::raw_trace{ { address } }.resolve();
+
+			return trace.frames.empty() ? std::format("0x{:016x}", address) :
+			                              trace.frames.front().to_string();
+		}
+
 #if defined(_WIN32)
 		/**
 		 * An uncaught exception. abort() would raise SIGABRT and the signal handler would write a
@@ -92,9 +114,29 @@ namespace core
 		LONG WINAPI
 		unhandled_exception_filter(EXCEPTION_POINTERS* info)
 		{
-			const DWORD code = info != nullptr ? info->ExceptionRecord->ExceptionCode : DWORD{ 0 };
+			if (info == nullptr)
+			{
+				write_crash_log("structured exception");
+				std::_Exit(3);
+			}
 
-			write_crash_log(std::format("structured exception 0x{:08X}", code));
+			const EXCEPTION_RECORD& record = *info->ExceptionRecord;
+
+			// ExceptionInformation[1] is the address that was accessed, and it is defined for these
+			// two codes alone; for any other it holds whatever that exception happens to carry.
+			const bool addressed = record.ExceptionCode == EXCEPTION_ACCESS_VIOLATION ||
+			                       record.ExceptionCode == EXCEPTION_IN_PAGE_ERROR;
+
+			write_crash_log(
+				addressed ? std::format(
+								"structured exception 0x{:08X}, faulting address 0x{:016x}, {}",
+								record.ExceptionCode,
+								record.ExceptionInformation[1],
+								faulting_frame(record.ExceptionAddress)) :
+							std::format(
+								"structured exception 0x{:08X}, {}",
+								record.ExceptionCode,
+								faulting_frame(record.ExceptionAddress)));
 
 			// Not EXECUTE_HANDLER: the default handler it would run can end just the faulting
 			// thread, leaving a zombie process whose UI is up but whose worker is gone -- observed
@@ -126,23 +168,84 @@ namespace core
 			std::_Exit(3);
 		}
 #	endif
-#endif
 
 		void
 		crash_signal_handle(int signal)
 		{
 			write_crash_log(std::format("signal {}", signal));
-			std::exit(signal);
+			std::_Exit(signal);
 		}
+#endif
+
+#if !defined(_WIN32)
+		/**
+		 * The program counter the signal interrupted, or null where this platform does not carry one.
+		 */
+		const void*
+		interrupted_pc(const void* context)
+		{
+			const auto* uc = static_cast<const ucontext_t*>(context);
+			if (uc == nullptr || uc->uc_mcontext == nullptr)
+			{
+				return nullptr;
+			}
+
+#	if defined(__aarch64__) || defined(__arm64__)
+			return reinterpret_cast<const void*>(uc->uc_mcontext->__ss.__pc);
+#	elif defined(__x86_64__)
+			return reinterpret_cast<const void*>(uc->uc_mcontext->__ss.__rip);
+#	else
+			return nullptr;
+#	endif
+		}
+
+		void
+		crash_signal_action(int signal, siginfo_t* info, void* context)
+		{
+			// si_addr shares a union with the sender's pid, and only a hardware fault fills it in. A
+			// raised signal -- SIGABRT out of gassert, which is the common way in here -- would
+			// otherwise report those bits as an address.
+			const bool addressed = info != nullptr && (signal == SIGSEGV || signal == SIGBUS ||
+			                                           signal == SIGILL || signal == SIGFPE);
+
+			const std::string frame = faulting_frame(interrupted_pc(context));
+
+			write_crash_log(
+				addressed ? std::format(
+								"signal {}, faulting address 0x{:016x}, {}",
+								signal,
+								reinterpret_cast<uintptr_t>(info->si_addr),
+								frame) :
+							std::format("signal {}, {}", signal, frame));
+
+			// Not exit: a process that has already faulted must not be asked to run its static
+			// destructors, whose second crash would overwrite this log with a less informative one.
+			std::_Exit(signal);
+		}
+#endif
 	}
 
 	void
 	install_crash_handlers()
 	{
+#if defined(_WIN32)
 		std::signal(SIGSEGV, crash_signal_handle);
 		std::signal(SIGABRT, crash_signal_handle);
 		std::signal(SIGFPE, crash_signal_handle);
 		std::signal(SIGILL, crash_signal_handle);
+#else
+		// sigaction rather than signal: only this form is handed the siginfo_t and the interrupted
+		// register state, which carry the address that faulted and the instruction that faulted on it.
+		struct sigaction action = {};
+		action.sa_sigaction     = crash_signal_action;
+		action.sa_flags         = SA_SIGINFO;
+		sigemptyset(&action.sa_mask);
+
+		for (const int signal : { SIGSEGV, SIGABRT, SIGFPE, SIGILL, SIGBUS })
+		{
+			sigaction(signal, &action, nullptr);
+		}
+#endif
 
 #if defined(_WIN32)
 		std::set_terminate(terminate_handler);
