@@ -34,6 +34,9 @@ namespace assetlib
 
 		std::string skeleton;  // .bskel the joint indices address; empty for a static mesh
 
+		/** The rig the joint indices were cooked against -- see assetlib::skeletonSignature. */
+		uint64_t skeletonSignature = 0;
+
 		SourceRef source;  // the copied .glb this was derived from; empty key when never recorded
 	};
 }

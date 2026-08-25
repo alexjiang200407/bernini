@@ -109,6 +109,16 @@ namespace assetlib
 	animationsMatchSkeleton(const AnimationSet& animations, const Skeleton& skeleton) noexcept;
 
 	/**
+	 * Whether `mesh` was cooked against `skeleton`, by signature. A mismatch means the rig has had a
+	 * bone inserted, removed or reordered since -- or that the two were never a pair -- and the
+	 * mesh's joint indices now name different bones.
+	 *
+	 * A static mesh matches any rig: it carries no joint indices, so there is nothing to misname.
+	 */
+	[[nodiscard]] bool
+	meshMatchesSkeleton(const BMesh& mesh, const Skeleton& skeleton) noexcept;
+
+	/**
 	 * A box holding mesh `meshIndex` in every pose of every clip, bounded one bone at a time: each
 	 * bone carries a box over the vertices it has weight on, in its own frame, and a pose sweeps
 	 * that box rather than the vertices inside it.

@@ -146,9 +146,17 @@ the transport, the clip list and the scrubber are the same code either way — w
 
 * **The skeleton signature is checked in `gamelib`, not `bgl`.** Computing one needs `assetlib`, which
   `bgl` does not link. `bgl` can only check that the bone *counts* agree — and a reordered rig has the
-  same count, so a stale clip set would reach the shader and animate the wrong joints silently.
-  `AcquireSkinnedMesh` is the only door that catches it; anything constructing a geom another way
-  inherits the gap, which is why `AddSkinnedMeshGeom` documents it.
+  same count, so a stale clip set or mesh would reach the shader and animate the wrong joints
+  silently. `AcquireSkinnedMesh` is the only door that catches it; anything constructing a geom
+  another way inherits the gap, which is why `AddSkinnedMeshGeom` documents it.
+
+* **Both halves of a skinned draw record their rig, and both are checked.** A clip set carries
+  `AnimationSet::skeletonSignature` and a mesh carries `BMesh::skeletonSignature`; the pair is
+  refused by `animationsMatchSkeleton` and `meshMatchesSkeleton`
+  ([skinning.h](libs/assetlib/include/assetlib/skinning.h)) wherever a mesh and a rig are first
+  brought together. Each container's cache key holds only its *own* bake token, so re-cooking a
+  `.bskel` leaves a `.bmesh` current by design — the signature is what turns that from a mesh
+  posed by the wrong bones into a refusal naming it.
 
 * **Culling bounds are the caller's posed box, and `bgl` cannot measure it.** `AddSkinnedMeshGeom`
   takes one and derives every submesh's sphere from it, the same rule VAT follows. The bind pose is

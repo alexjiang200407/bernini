@@ -324,9 +324,12 @@ namespace assetlib
 		// A mesh whose layout carries joints but names no skeleton has joint indices nothing can
 		// resolve, which is invisible until it renders as a heap.
 		if (isSkinned(mesh))
+		{
 			out += std::format(
 				"  skeleton     {}\n",
 				mesh.skeleton.empty() ? "(SKINNED, but names none)" : mesh.skeleton);
+			out += std::format("  signature    {:016x}\n", mesh.skeletonSignature);
+		}
 		else if (!mesh.skeleton.empty())
 			out += std::format(
 				"  skeleton     {} (unused: no submesh carries joints)\n",

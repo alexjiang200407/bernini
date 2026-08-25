@@ -287,7 +287,8 @@ namespace assetlib
 		current.mesh.source = group.ref;
 		if (isSkinned(current.mesh))
 		{
-			current.mesh.skeleton = groupSkeletonKey(*this, group.ref.key);
+			current.mesh.skeleton          = groupSkeletonKey(*this, group.ref.key);
+			current.mesh.skeletonSignature = skeletonSignature(group.import.skeleton);
 			core::throw_runtime_error_if(
 				current.mesh.skeleton.empty(),
 				"'{}': its regenerated source carries a rig but the project holds no .bskel of "

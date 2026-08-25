@@ -138,9 +138,10 @@ namespace
 		mesh.indexData = { std::byte{ 1 }, std::byte{ 2 }, std::byte{ 3 },
 			               std::byte{ 4 }, std::byte{ 5 }, std::byte{ 6 } };
 
-		mesh.materials = { "Materials/unit.bmaterial" };
-		mesh.skeleton  = "Skeletons/unit.bskel";
-		mesh.source    = FixedSource();
+		mesh.materials         = { "Materials/unit.bmaterial" };
+		mesh.skeleton          = "Skeletons/unit.bskel";
+		mesh.skeletonSignature = 0x55;
+		mesh.source            = FixedSource();
 		return mesh;
 	}
 
@@ -301,7 +302,7 @@ TEST_CASE("a writer's output cannot change without its bake token", "[canary][io
 	{
 		CheckCanary(
 			AssetCodec<BMesh>::c_BakeToken,
-			Pin{ .token = 0x6f1d3a58c2e94b07ull, .hash = 0x08f0b7bf5f59fb2cull },
+			Pin{ .token = 0xb3407e9d1c58a2f6ull, .hash = 0x9733a718b0ec0eaeull },
 			AssetCodec<BMesh>::Serialize(CanaryMesh()));
 	}
 

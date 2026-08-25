@@ -99,6 +99,18 @@ TEST_CASE("serialize/deserialize round-trips every pool", "[bmesh][io]")
 	REQUIRE(AssetCodec<BMesh>::Serialize(restored) == bytes);
 }
 
+TEST_CASE("a mesh's rig signature survives the round trip", "[bmesh][io][skeleton]")
+{
+	auto mesh              = MakeSampleMesh();
+	mesh.skeleton          = "Skeletons/unit.bskel";
+	mesh.skeletonSignature = 0xfeedfacecafebeefull;
+
+	const auto restored = AssetCodec<BMesh>::Deserialize(AssetCodec<BMesh>::Serialize(mesh));
+
+	CHECK(restored.skeleton == mesh.skeleton);
+	CHECK(restored.skeletonSignature == mesh.skeletonSignature);
+}
+
 TEST_CASE("deserialize rejects a corrupt magic", "[bmesh][io]")
 {
 	auto bytes = AssetCodec<BMesh>::Serialize(MakeSampleMesh());
