@@ -359,7 +359,7 @@ TEST_CASE(
 	// The archive carries the current cook with the document's binding baked in -- a read-only
 	// store trusts it, which is exactly what pack just made true.
 	const AssetStore packed(root.path, std::make_shared<PakFile>(target));
-	const BMesh      mesh = packed.LoadMesh("Meshes/unit.bmesh");
+	const BMesh      mesh = packed.Load<BMesh>("Meshes/unit.bmesh");
 	REQUIRE(mesh.materials.size() == 1);
 	CHECK(mesh.materials[0] == "Materials/blue.bmaterial");
 

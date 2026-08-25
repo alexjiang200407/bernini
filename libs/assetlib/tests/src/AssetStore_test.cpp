@@ -27,7 +27,7 @@ TEST_CASE("a loose source reads and writes the same directory", "[assetsource]")
 	CHECK(store.GetDataRoot() == root.path);
 	CHECK(store.Exists("Materials/skin.bmaterial"));
 	CHECK(
-		store.LoadMaterial("Materials/skin.bmaterial").pbr.routes[0].texture ==
+		store.Load<BMaterial>("Materials/skin.bmaterial").pbr.routes[0].texture ==
 		"textures_src/skin.ktx2");
 }
 
@@ -111,7 +111,7 @@ TEST_CASE("reads widen to the mount while writes stay on the data root", "[asset
 
 	// And the read goes through: the archive answers what the directory no longer can.
 	CHECK(
-		store.LoadMaterial("Materials/packed.bmaterial").pbr.routes[0].texture ==
+		store.Load<BMaterial>("Materials/packed.bmaterial").pbr.routes[0].texture ==
 		"textures_src/skin.ktx2");
 }
 

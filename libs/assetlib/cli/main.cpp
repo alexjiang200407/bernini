@@ -165,7 +165,7 @@ namespace
 		if (skeleton.empty() || !store.Exists(skeleton))
 			return std::nullopt;
 
-		return store.LoadSkeleton(skeleton);
+		return store.Load<assetlib::Skeleton>(skeleton);
 	}
 }
 
@@ -685,7 +685,7 @@ main(int argc, char** argv)
 			const assetlib::Project     project = assetlib::Project::Open(projectFile);
 			const assetlib::AssetStore& store   = project.GetStore();
 
-			const auto mesh = store.LoadMesh(assetlib::normalizePath(objInput));
+			const auto mesh = store.Load<assetlib::BMesh>(assetlib::normalizePath(objInput));
 			assetlib::writeObj(mesh, objOut, !objRaw);
 			spdlog::info(
 				"Wrote '{}' from '{}' ({} submeshes, {} source)",
@@ -710,7 +710,7 @@ main(int argc, char** argv)
 
 			const std::string key = assetlib::normalizePath(tangentsInput);
 
-			assetlib::BMesh mesh   = store.LoadMesh(key);
+			assetlib::BMesh mesh   = store.Load<assetlib::BMesh>(key);
 			const auto      result = assetlib::generateTangents(mesh);
 
 			if (result.generated > 0)
@@ -779,26 +779,26 @@ main(int argc, char** argv)
 			switch (sniff(store, key))
 			{
 			case assetlib::AssetType::kMesh:
-				std::cout << assetlib::describe(store.LoadMesh(key), !describeBrief);
+				std::cout << assetlib::describe(store.Load<assetlib::BMesh>(key), !describeBrief);
 				break;
 			case assetlib::AssetType::kMaterial:
-				std::cout << describeAsset(store.LoadMaterial(key));
+				std::cout << describeAsset(store.Load<assetlib::BMaterial>(key));
 				break;
 			case assetlib::AssetType::kEnvironment:
-				std::cout << describeAsset(store.LoadEnv(key));
+				std::cout << describeAsset(store.Load<assetlib::BEnv>(key));
 				break;
 			case assetlib::AssetType::kSky:
-				std::cout << describeAsset(store.LoadSky(key));
+				std::cout << describeAsset(store.Load<assetlib::BSky>(key));
 				break;
 			case assetlib::AssetType::kEnvLighting:
-				std::cout << describeAsset(store.LoadEnvLighting(key));
+				std::cout << describeAsset(store.Load<assetlib::BEnvLighting>(key));
 				break;
 			case assetlib::AssetType::kSkeleton:
-				std::cout << assetlib::describe(store.LoadSkeleton(key));
+				std::cout << assetlib::describe(store.Load<assetlib::Skeleton>(key));
 				break;
 			case assetlib::AssetType::kAnimation:
 			{
-				const auto animations = store.LoadAnimations(key);
+				const auto animations = store.Load<assetlib::AnimationSet>(key);
 				const auto skeleton   = resolveSkeleton(store, animations.skeleton);
 				std::cout << assetlib::describe(animations, skeleton ? &*skeleton : nullptr);
 				break;
@@ -836,7 +836,7 @@ main(int argc, char** argv)
 			const std::filesystem::path out =
 				stripOut.empty() ? in : std::filesystem::path(stripOut);
 
-			assetlib::BMaterial material = store.LoadMaterial(key);
+			assetlib::BMaterial material = store.Load<assetlib::BMaterial>(key);
 
 			// Asked before the strip, not after: the routes and the graph are the only record of how
 			// the material was authored, and rewriting the input destroys them.
@@ -1284,13 +1284,13 @@ main(int argc, char** argv)
 			const assetlib::AssetStore& store   = project.GetStore();
 
 			const std::string key = assetlib::normalizePath(expInput);
-			assetlib::BEnv    env = store.LoadEnv(key);
+			assetlib::BEnv    env = store.Load<assetlib::BEnv>(key);
 
 			// Read before the write, so a lighting that cannot be loaded refuses before the
 			// document changes rather than after.
-			const assetlib::BEnvLighting lighting = env.lighting.empty() ?
-			                                            assetlib::BEnvLighting() :
-			                                            store.LoadEnvLighting(env.lighting);
+			const assetlib::BEnvLighting lighting =
+				env.lighting.empty() ? assetlib::BEnvLighting() :
+									   store.Load<assetlib::BEnvLighting>(env.lighting);
 
 			if (*expSetOpt || expClear)
 			{

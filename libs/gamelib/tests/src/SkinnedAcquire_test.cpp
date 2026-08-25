@@ -220,10 +220,10 @@ TEST_CASE(
 	// refuses. An acquire that throws on it can only have read the bake; one that measures gets
 	// the valid box the walk always produces, and stands.
 	const auto store    = assetlib::AssetStore(root.path);
-	const auto mesh     = store.LoadMesh("Meshes/rig.bmesh");
-	const auto skeleton = store.LoadSkeleton("Skeletons/rig.bskel");
+	const auto mesh     = store.Load<assetlib::BMesh>("Meshes/rig.bmesh");
+	const auto skeleton = store.Load<assetlib::Skeleton>("Skeletons/rig.bskel");
 
-	auto animations = store.LoadAnimations("Animations/rig.banim");
+	auto animations = store.Load<assetlib::AnimationSet>("Animations/rig.banim");
 	animations.posedBoxes.push_back(
 		assetlib::PosedBox{ assetlib::posedBoundsSignature(mesh, skeleton),
 	                        glm::vec3(1.0f, -1.0f, -1.0f),

@@ -201,7 +201,7 @@ TEST_CASE("a stale bake token regenerates the mesh from its source", "[regen]")
 
 	// The plain load refuses; the seam serves the source's current cook instead.
 	CHECK_THROWS_WITH(
-		sandbox.Store().LoadMesh("Meshes/unit.bmesh"),
+		sandbox.Store().Load<BMesh>("Meshes/unit.bmesh"),
 		Catch::Matchers::ContainsSubstring("another bake revision"));
 
 	const RegenMesh current = sandbox.Store().LoadRegenMesh("Meshes/unit.bmesh");

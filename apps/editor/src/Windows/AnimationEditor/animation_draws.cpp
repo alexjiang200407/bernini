@@ -44,7 +44,7 @@ namespace editor
 
 			try
 			{
-				if (store.DrawsLoose(store.LoadMaterial(relPath)))
+				if (store.DrawsLoose(store.Load<assetlib::BMaterial>(relPath)))
 					loose.push_back(relPath);
 			}
 			catch (const std::exception& e)

@@ -615,7 +615,7 @@ TEST_CASE("an import lands in the project's categories and reads back", "[import
 		project.ReloadStore();
 		const assetlib::AssetStore& store = project.GetStore();
 
-		const assetlib::BMesh loaded = store.LoadMesh("Meshes/apples.bmesh");
+		const assetlib::BMesh loaded = store.Load<assetlib::BMesh>("Meshes/apples.bmesh");
 		CHECK_FALSE(loaded.submeshes.empty());
 		CHECK(loaded.materials.empty());
 		for (const assetlib::Submesh& submesh : loaded.submeshes)

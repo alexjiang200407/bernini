@@ -75,12 +75,12 @@ namespace assetlib
 			const auto it = skeletons.find(path);
 			return it != skeletons.end() ?
 			           it->second :
-			           skeletons.emplace(path, store.LoadSkeleton(path)).first->second;
+			           skeletons.emplace(path, store.Load<Skeleton>(path)).first->second;
 		};
 		const auto meshAt = [&](const std::string& path) -> const BMesh& {
 			const auto it = meshes.find(path);
 			return it != meshes.end() ? it->second :
-			                            meshes.emplace(path, store.LoadMesh(path)).first->second;
+			                            meshes.emplace(path, store.Load<BMesh>(path)).first->second;
 		};
 
 		// posedBoundsSignature hashes a mesh's whole vertex blob, so it too is computed once per
@@ -130,7 +130,7 @@ namespace assetlib
 
 			try
 			{
-				AnimationSet animations = store.LoadAnimations(animPath);
+				AnimationSet animations = store.Load<AnimationSet>(animPath);
 
 				const auto paired = meshesBySkeleton.find(animations.skeletonSignature);
 				if (paired == meshesBySkeleton.end())

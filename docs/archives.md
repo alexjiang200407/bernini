@@ -70,10 +70,14 @@ assetlib::AssetStore store(dataRoot);                       // loose: both halve
 assetlib::AssetStore store(dataRoot, std::move(mount));     // reads through mount, writes to dataRoot
 ```
 
-The loaders are methods — `LoadMesh`, `LoadMaterial`, `LoadTexture`, `LoadVat`, … — as are the
-staleness predicates (`BakeIsStale`, `DrawsLoose`, `VatIsStale`) and `Describe`. The mount-taking
-free functions they forward to are internal to `assetlib/src`; a caller outside the library reaches
-them through a store or not at all.
+A container is loaded by its type — `store.Load<BMesh>(key)`, `store.Save(value, key)` — because
+the type is what names the codec; there is no method per container. The reads that are *not* a whole
+container keep their own names, since a type cannot say "the references only": `LoadMeshRefs`,
+`LoadVatTables`, `LoadVatRefs`, `LoadAnimationSkeletonPath`, the `LoadRegen*` seam, and
+`LoadTexture`, which decodes an image rather than deserializing a struct. The staleness predicates
+(`BakeIsStale`, `DrawsLoose`, `VatIsStale`) and `Describe` are methods too. The mount-taking free
+functions they forward to are internal to `assetlib/src`; a caller outside the library reaches them
+through a store or not at all.
 
 `IsReadOnly()` is **the whole mount's answer, not one path's.** The question a caller asks is *is
 there anywhere at all to put a rebuilt derived file*, and a loose layer over an archive answers yes

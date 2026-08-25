@@ -105,7 +105,7 @@ namespace game
 
 		try
 		{
-			assetlib::BVat vat = store.LoadVat(bvatRel);
+			assetlib::BVat vat = store.Load<assetlib::BVat>(bvatRel);
 
 			if (assetlib::normalizePath(vat.animations) !=
 			    assetlib::normalizePath(animationsRelPath))

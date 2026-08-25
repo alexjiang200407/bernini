@@ -204,10 +204,6 @@ namespace assetlib
 
 		// --- Containers ------------------------------------------------------------------------
 
-		/** @throws std::runtime_error if the container is absent, unreadable or malformed. */
-		[[nodiscard]] BMesh
-		LoadMesh(std::string_view path) const;
-
 		/** The materials and skeleton a `.bmesh` names, read seek-only. See loadMeshRefs. */
 		[[nodiscard]] MeshRefs
 		LoadMeshRefs(std::string_view path) const;
@@ -248,10 +244,10 @@ namespace assetlib
 		GeometryGroupSource(std::string_view path) const;
 
 		/**
-		 * @throws std::runtime_error on what LoadMesh throws for an unreadable container, and on a
-		 *         stale entry that cannot regenerate: no recorded source, the source or its import
-		 *         document gone from the project, a re-exported source whose submesh names now
-		 *         collide -- or one that no longer carries a mesh at all.
+		 * @throws std::runtime_error on what `Load<BMesh>` throws for an unreadable container, and
+		 *         on a stale entry that cannot regenerate: no recorded source, the source or its
+		 *         import document gone from the project, a re-exported source whose submesh names
+		 *         now collide -- or one that no longer carries a mesh at all.
 		 */
 		[[nodiscard]] RegenMesh
 		LoadRegenMesh(std::string_view path) const;
@@ -299,30 +295,9 @@ namespace assetlib
 		[[nodiscard]] std::string
 		LoadRegenAnimationSkeletonPath(std::string_view path) const;
 
-		[[nodiscard]] Skeleton
-		LoadSkeleton(std::string_view path) const;
-
-		[[nodiscard]] AnimationSet
-		LoadAnimations(std::string_view path) const;
-
 		/** The skeleton a `.banim` names, without its samples. */
 		[[nodiscard]] std::string
 		LoadAnimationSkeletonPath(std::string_view path) const;
-
-		[[nodiscard]] BMaterial
-		LoadMaterial(std::string_view path) const;
-
-		[[nodiscard]] BEnv
-		LoadEnv(std::string_view path) const;
-
-		[[nodiscard]] BSky
-		LoadSky(std::string_view path) const;
-
-		[[nodiscard]] BEnvLighting
-		LoadEnvLighting(std::string_view path) const;
-
-		[[nodiscard]] BVat
-		LoadVat(std::string_view path) const;
 
 		/** Everything but the pixels. See loadVatTables. */
 		[[nodiscard]] BVat

@@ -245,7 +245,7 @@ namespace game
 	AssetManager::Environment
 	AssetManager::AcquireEnvironment(std::string_view relPath)
 	{
-		const assetlib::BEnv env = m_Store.LoadEnv(relPath);
+		const assetlib::BEnv env = m_Store.Load<assetlib::BEnv>(relPath);
 
 		const auto acquireRoute = [this](const assetlib::EnvMapRoute& route) {
 			return AcquireTexture(m_Store.EnvMapToDraw(route));
@@ -257,15 +257,16 @@ namespace game
 
 		if (!env.sky.empty())
 		{
-			const assetlib::BSky sky = m_Store.LoadSky(env.sky);
+			const assetlib::BSky sky = m_Store.Load<assetlib::BSky>(env.sky);
 			out.skybox               = acquireRoute(sky.sky);
 		}
 
 		if (!env.lighting.empty())
 		{
-			const assetlib::BEnvLighting lighting = m_Store.LoadEnvLighting(env.lighting);
-			out.prefilter                         = acquireRoute(lighting.prefilter);
-			out.irradiance                        = acquireRoute(lighting.irradiance);
+			const assetlib::BEnvLighting lighting =
+				m_Store.Load<assetlib::BEnvLighting>(env.lighting);
+			out.prefilter  = acquireRoute(lighting.prefilter);
+			out.irradiance = acquireRoute(lighting.irradiance);
 
 			out.exposure = assetlib::effectiveExposure(env, lighting);
 		}
@@ -297,9 +298,10 @@ namespace game
 		auto key = std::string(relPath);
 
 		// Load first, in its own statement: the order in which a call's arguments are evaluated is
-		// unspecified, so passing `m_Store.LoadMaterial(key)` alongside `std::move(key)` lets the
-		// compiler move `key` out from under the path it is supposed to build.
-		const assetlib::BMaterial material = m_Store.LoadMaterial(key);
+		// unspecified, so passing `m_Store.Load<assetlib::BMaterial>(key)` alongside
+		// `std::move(key)` lets the compiler move `key` out from under the path it is supposed
+		// to build.
+		const assetlib::BMaterial material = m_Store.Load<assetlib::BMaterial>(key);
 
 		return CreateMaterial(material, std::move(key), prefetch);
 	}
