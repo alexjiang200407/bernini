@@ -18,6 +18,7 @@ namespace assetlib
 	struct ResolvedEnvironment;
 	struct Skeleton;
 	struct SourceStamp;
+	struct VatBakeDesc;
 	struct VatRefs;
 
 	enum class Ktx2Decode : uint32_t;
@@ -202,6 +203,54 @@ namespace assetlib
 			BEnvLighting&      lighting,
 			std::string_view   textureDir,
 			const CancelToken& cancel = {}) const;
+
+		/**
+		 * bakeVat over this project: loads the mesh, the skeleton it names and the clip set, bakes,
+		 * and records the three keys and their SourceStamps -- what `VatIsStale` later compares.
+		 * Writing the result is the caller's (`Save`): a `.bvat` is a derived build product, and
+		 * where it lands is the caller's convention, not this one's.
+		 *
+		 * @throws std::runtime_error if an input cannot be read, if the mesh names no skeleton, or
+		 *         for anything the in-memory `bakeVat` refuses.
+		 */
+		[[nodiscard]] BVat
+		BakeVat(const VatBakeDesc& desc) const;
+
+		// --- Import writes -----------------------------------------------------------------------
+
+		/**
+		 * Writes an import's rig, and its clips when asked, and points `mesh` at the `.bskel`.
+		 *
+		 * A joint index is a bare number into a bone array, so a mesh carrying joints while naming
+		 * no skeleton is one `Save` refuses outright; the clips are the half a user can decline.
+		 * Does nothing when `skeleton` has no bones, which is what a static mesh is.
+		 *
+		 * @throws std::runtime_error if either container cannot be written.
+		 */
+		void
+		WriteImportedRig(
+			const Skeleton&     skeleton,
+			const AnimationSet& animations,
+			BMesh&              mesh,
+			std::string_view    bskelKey,
+			std::string_view    banimKey,
+			bool                writeClips,
+			const SourceRef&    source) const;
+
+		/**
+		 * Writes clips alone, attached to a rig already in this project -- what an import with the
+		 * mesh turned off does, and how a rig whose animations the artist exported one per file
+		 * gets all of them without a copy of the geometry each time.
+		 *
+		 * @throws std::runtime_error if there are no clips or no rig, or if no skeleton in the
+		 *         project matches the one they were authored against.
+		 */
+		void
+		WriteImportedClips(
+			const Skeleton&     skeleton,
+			const AnimationSet& animations,
+			std::string_view    banimKey,
+			const SourceRef&    source) const;
 
 		// --- Containers ------------------------------------------------------------------------
 

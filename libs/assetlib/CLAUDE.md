@@ -54,6 +54,12 @@ Concretely, before adding to `include/assetlib/`:
   and `store.Save(value, key)`. A new function taking a `std::filesystem::path` to a file the
   project owns is the second way to do a thing that already has one, and the family that did that
   was deleted rather than kept — see [STYLE.md](../../STYLE.md) § Paths.
+- **An operation on a project is a method on `AssetStore`; an operation with state that outlives
+  the call is a class.** A free function taking an `AssetStore&` is a method that has not been
+  written as one -- `bakeVat(store, desc)` sat beside `store.BakeMaterial` for exactly as long as
+  nobody noticed. The exception is real and narrow: `AssetRefGraph::Scan(store)` builds an object
+  holding an edge index across every later `ReferrersOf`, so it is a named constructor and stays
+  free. Stateless and about the project's contents means method.
 - **A caller never creates a directory for a store write.** `store.Save(value, key)` creates what
   the key names; a key is a location in the data root, not one that already exists. A caller that
   writes straight to the host is the exception and looks different — `writeKTX2` and `copy_file`

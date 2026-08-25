@@ -31,23 +31,6 @@ namespace assetlib
 	};
 
 	/**
-	 * bakeVat over a store: loads the mesh, the skeleton it names and the clip set, bakes, and
-	 * records the three paths and their SourceStamps -- what vatIsStale later compares. Writing the
-	 * result is the caller's (`store.Save`): a `.bvat` is a derived build product, and where it
-	 * lands is the caller's convention, not this function's.
-	 *
-	 * Reads through the store and not off its data root: a rig the editor has not touched resolves
-	 * out of the archive, and a re-bake that read the writable layer alone would fail to open files
-	 * that are plainly there. The stamps recorded are the store's, so what `vatIsStale` compares
-	 * later is what this read.
-	 *
-	 * @throws std::runtime_error if an input cannot be read, if the mesh names no skeleton, or for
-	 *         anything the in-memory overload refuses.
-	 */
-	[[nodiscard]] BVat
-	bakeVat(const AssetStore& store, const VatBakeDesc& desc);
-
-	/**
 	 * The path form the bake records in the container: lexically normal, generic separators.
 	 * Compare a requested path against a `BVat`'s recorded one through this, never raw.
 	 */

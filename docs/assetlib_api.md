@@ -146,7 +146,7 @@ flowchart TD
 
     STORE --> GRAPH["AssetRefGraph::Scan"]
     GRAPH --> PLAN["DeletionPlan / RenamePlan"]
-    STORE --> BAKE["bakeVat, packProject, findUnusedBakedTextures"]
+    STORE --> BAKE["BakeVat, packProject, findUnusedBakedTextures"]
 
     CLI["assetlib_cli"] --> STORE
     ED["apps/editor"] --> STORE

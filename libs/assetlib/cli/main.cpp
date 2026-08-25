@@ -471,7 +471,7 @@ main(int argc, char** argv)
 
 			const auto imported = assetlib::loadFromGltf(input, { .sampleRate = sampleRate });
 
-			// Only what this import will actually write. writeImportedRig no-ops on a source with no
+			// Only what this import will actually write. WriteImportedRig no-ops on a source with no
 			// skin, so a static mesh neither claims Skeletons/<name>.bskel nor may take one back
 			// down: refusing over a file it never touches is the mild failure, deleting someone
 			// else's on a rollback is not.
@@ -542,9 +542,9 @@ main(int argc, char** argv)
 				const auto derived = assetlib::generateTangents(mesh);
 
 				const assetlib::AssetStore importStore(dataRoot);
-				assetlib::writeImportedRig(
-					importStore,
-					imported,
+				importStore.WriteImportedRig(
+					imported.skeleton,
+					imported.animations,
 					mesh,
 					importStore.KeyFor(bskelPath),
 					importStore.KeyFor(banimPath),
@@ -608,7 +608,7 @@ main(int argc, char** argv)
 			const assetlib::Project     project = assetlib::Project::Open(projectFile);
 			const assetlib::AssetStore& store   = project.GetStore();
 
-			const assetlib::BVat vat = assetlib::bakeVat(store, desc);
+			const assetlib::BVat vat = store.BakeVat(desc);
 
 			// generic_string, not string: vatPathFor hands back a path, and on Windows its native
 			// spelling is `\`-separated -- which a mount key never is.

@@ -447,7 +447,7 @@ TEST_CASE("A bake from files stamps its inputs and the refs scan reports them", 
 	desc.mesh       = "Meshes/rig.bmesh";
 	desc.animations = "Animations/rig.banim";
 
-	const BVat vat = bakeVat(AssetStore(root), desc);
+	const BVat vat = AssetStore(root).BakeVat(desc);
 	CHECK(vat.mesh == "Meshes/rig.bmesh");
 	CHECK(vat.skeleton == "Skeletons/rig.bskel");
 	CHECK(vat.animations == "Animations/rig.banim");

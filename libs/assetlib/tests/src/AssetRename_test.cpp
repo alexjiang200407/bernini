@@ -406,7 +406,7 @@ TEST_CASE("Renaming a skeleton re-points the whole rig that hangs off it", "[ass
 
 	const fs::path baked = root.path / vatPathFor("Meshes/rig.bmesh", "Animations/rig.banim");
 	SaveAt(
-		bakeVat(AssetStore(root.path), VatBakeDesc{ "Meshes/rig.bmesh", "Animations/rig.banim" }),
+		AssetStore(root.path).BakeVat(VatBakeDesc{ "Meshes/rig.bmesh", "Animations/rig.banim" }),
 		baked);
 
 	REQUIRE(

@@ -260,8 +260,7 @@ namespace
 		StoreAt(root.path).Save(fixture.animations, "Animations/rig.banim");
 
 		StoreAt(root.path).Save(
-			bakeVat(
-				AssetStore(root.path),
+			AssetStore(root.path).BakeVat(
 				VatBakeDesc{ "Meshes/rig.bmesh", "Animations/rig.banim" }),
 			"Meshes/rig.bvat");
 	}
@@ -389,7 +388,7 @@ TEST_CASE("a packed .bvat answers fresh inside the archive it shipped in", "[pac
 	const std::string vatKey =
 		vatPathFor("Meshes/unit.bmesh", "Animations/unit.banim").generic_string();
 	SaveAt(
-		bakeVat(store, VatBakeDesc{ "Meshes/unit.bmesh", "Animations/unit.banim" }),
+		store.BakeVat(VatBakeDesc{ "Meshes/unit.bmesh", "Animations/unit.banim" }),
 		root.path / vatKey);
 
 	// The group goes stale with every byte and stamp the bake recorded still holding: a

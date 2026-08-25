@@ -1,5 +1,4 @@
 #pragma once
-#include <assetlib_structs/BMeshImport.h>
 
 namespace assetlib
 {
@@ -11,28 +10,6 @@ namespace assetlib
 	struct SourceRef;
 
 	/**
-	 * Writes the rig a skinned import carries -- the `.bskel` always, the `.banim` only when asked --
-	 * and points `mesh` at the skeleton by a data-root-relative path.
-	 *
-	 * The skeleton is not optional and is deliberately not behind the import dialog's checkbox. A joint
-	 * index is a bare number into a bone array, so a mesh carrying joints while naming no skeleton is
-	 * one `save` refuses outright; the clips are the half a user can decline.
-	 *
-	 * Does nothing when the import carried no skin, which is what a static mesh is.
-	 *
-	 * @throws std::runtime_error if either file cannot be written.
-	 */
-	void
-	writeImportedRig(
-		const AssetStore&       store,
-		const imp::BMeshImport& imported,
-		BMesh&                  mesh,
-		std::string_view        bskelKey,
-		std::string_view        banimKey,
-		bool                    writeClips,
-		const SourceRef&        source);
-
-	/**
 	 * The `.bskel` under `dataRoot` whose signature matches `skeleton`, or empty when none does.
 	 *
 	 * What lets an import with the mesh turned off find the rig its clips belong to.
@@ -42,21 +19,6 @@ namespace assetlib
 	 */
 	[[nodiscard]] std::filesystem::path
 	findMatchingSkeleton(const std::filesystem::path& dataRoot, const Skeleton& skeleton);
-
-	/**
-	 * Writes only `imported`'s clips, attached to a rig already in the project -- what an import with
-	 * the mesh turned off does, and how a rig whose animations the artist exported one per file gets
-	 * all of them without a copy of the geometry each time.
-	 *
-	 * @throws std::runtime_error if the file carries no clips or no rig, or if no skeleton in
-	 *         `dataRoot` matches the one it was authored against.
-	 */
-	void
-	writeImportedClips(
-		const AssetStore&       store,
-		const imp::BMeshImport& imported,
-		std::string_view        banimKey,
-		const SourceRef&        source);
 
 	/**
 	 * @throws std::runtime_error unless `source` is a `.glb` -- a `.gltf`'s sidecar `.bin` and

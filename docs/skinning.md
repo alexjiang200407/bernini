@@ -157,7 +157,7 @@ the transport, the clip list and the scrubber are the same code either way — w
   box means reading a vertex's influences, which means
   decoding a vertex layout — `assetlib`, which `bgl` does not link. `assetlib::posedBounds` is that
   walk, and it is paid at **import**:
-  `bakePosedBounds` stores the result in the `.banim`, the way `bakeVat` writes
+  `bakePosedBounds` stores the result in the `.banim`, the way the VAT bake writes
   `boundsMin`/`boundsMax` into a `.bvat` — one box per rigged mesh entry, because it is that geom's
   culling volume and a `.bmesh` may hold two rigged meshes. Each box is keyed by a signature over
   the vertex data and the inverse binds (`posedBoundsSignature`), so a source re-authored since the
