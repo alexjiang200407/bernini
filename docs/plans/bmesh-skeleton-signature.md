@@ -33,15 +33,19 @@ by a caller"*, and the mesh was simply not in that sentence.
   agrees with itself by construction and can never witness the drift. The value has to be what the
   joint indices were cooked against, which only the cook knows.*
 - **ADR-2 — One predicate, `meshMatchesSkeleton`, beside `animationsMatchSkeleton` in
-  `skinning.h`.** *Rejected: comparing the two integers inline at each pairing site — three sites
-  today, and it is how two of them start disagreeing about what "matches" means. The rule lives
-  where its sibling already lives.*
-- **ADR-3 — A zero signature is a mismatch, not an exemption.** This is the rule
-  `animationsMatchSkeleton` already applies: `AnimationSet::skeletonSignature` defaults to 0 and
-  compares unequal like any other value. *Rejected: reading 0 as "never recorded, therefore fine",
-  which reinstates the exact silent hole for any file this build did not write. It is unreachable in
-  practice anyway — ADR-4's token bump makes every pre-change `.bmesh` a cache miss that regenerates
-  with a signature.*
+  `skinning.h`.** *Rejected: comparing the two integers inline at each pairing site — it is how two
+  of them start disagreeing about what "matches" means. The rule lives where its sibling already
+  lives.*
+- **ADR-3 — A zero signature on a skinned mesh is a mismatch, not an exemption; a mesh carrying no
+  joints matches any rig.** The first half is the rule `animationsMatchSkeleton` already applies —
+  `AnimationSet::skeletonSignature` defaults to 0 and compares unequal like any other value.
+  *Rejected: reading 0 as "never recorded, therefore fine", which reinstates the exact silent hole
+  for any file this build did not write; it is unreachable in practice anyway, since ADR-4's token
+  bump makes every pre-change `.bmesh` a cache miss that regenerates with a signature.* The second
+  half is not a softening of it: a static attachment may legitimately name the rig it hangs off
+  without addressing its bones, so it has no indices to misname and refusing it would refuse a
+  legal pairing. `isSkinned` is what separates the two, and it is the same predicate `Serialize`
+  already uses to refuse joints that name no skeleton.
 - **ADR-4 — Bump `AssetCodec<BMesh>::c_BakeToken` and re-pin `TokenCanary_test`.** A chunk is a
   layout change, and the canary exists to fail one made without the bump.
 - **ADR-5 — The check goes at the pairing sites, not inside `Deserialize`.** A `.bmesh` is a valid
@@ -94,7 +98,13 @@ by a caller"*, and the mesh was simply not in that sentence.
    (`LoadRegenMesh`), and `meshMatchesSkeleton` beside its sibling. Docs in the same commit.
    Gate: `just test assetlib`, including the re-pinned `TokenCanary_test` and a round-trip that the
    signature survives serialize→deserialize.
-3. `fix(gamelib,assetlib,editor): refuse a mesh posed by a rig it was not cooked against` — the
-   check at the three sites that first bring a mesh and a rig together: `AcquireSkinnedGeom`,
-   `bakeVat`, and the editor's animation preview.
-   Gate: `just test gamelib editor` and the two acceptance tests above.
+3. `fix(gamelib,assetlib): refuse a mesh posed by a rig it was not cooked against` — the check at
+   the two sites that first bring a mesh and a rig together: `AcquireSkinnedMesh` and `bakeVat`.
+   Gate: `just test gamelib` and the two acceptance tests above.
+
+   *Written as three sites; the survey during implementation found two.* The editor's animation
+   preview reaches a skinned draw through `AcquireSkinnedMesh`, so it inherits the check rather
+   than needing its own; and its other pairing, `findPosedBounds`, is already keyed by
+   `posedBoundsSignature` — a content signature over the mesh's vertex data and the rig's inverse
+   binds — so a mismatched pair falls back to measuring instead of returning a wrong box. A throw
+   there would refuse a case that already recovers.

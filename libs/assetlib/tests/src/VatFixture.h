@@ -107,7 +107,8 @@ namespace assetlib::test
 			fixture.vertexCount = 1;
 			mesh.submeshes.push_back(fixture);
 
-			mesh.skeleton = "Skeletons/rig.bskel";
+			mesh.skeleton          = "Skeletons/rig.bskel";
+			mesh.skeletonSignature = skeletonSignature(skeleton);
 		}
 
 		void

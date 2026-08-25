@@ -184,7 +184,8 @@ namespace game::test
 		mesh.meshes.push_back(entry);
 
 		mesh.materials.push_back("Materials/skin.bmaterial");
-		mesh.skeleton = "Skeletons/rig.bskel";
+		mesh.skeleton          = "Skeletons/rig.bskel";
+		mesh.skeletonSignature = assetlib::skeletonSignature(skeleton);
 
 		fs::create_directories(dataRoot / "Meshes");
 		fs::create_directories(dataRoot / "Skeletons");
