@@ -11,7 +11,7 @@
 #include <assetlib/codecs.h>
 #include <assetlib/container_format.h>
 #include <assetlib/container_info.h>
-#include <assetlib/env_import.h>
+#include <assetlib/envmap.h>
 #include <assetlib/material_bake.h>
 #include <assetlib/mesh_tangents.h>
 #include <assetlib/migrate.h>

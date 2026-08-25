@@ -1,6 +1,6 @@
 #include <assetlib/AssetStore.h>
+#include <assetlib/envmap.h>
 
-#include <assetlib/env_resolve.h>
 #include <assetlib_structs/BEnv.h>
 #include <assetlib_structs/BMaterial.h>
 #include <assetlib_structs/BVat.h>

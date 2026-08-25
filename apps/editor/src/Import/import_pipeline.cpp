@@ -1,5 +1,6 @@
 #include "import_pipeline.h"
 #include <assetlib/bmesh.h>
+#include <assetlib/envmap.h>
 
 #include "Async/BackgroundTask.h"
 #include "Import/import_writers.h"
@@ -13,7 +14,6 @@
 #include <QStringList>
 
 #include <assetlib/bmesh_gltf.h>
-#include <assetlib/env_import.h>
 #include <assetlib/mesh_tangents.h>
 #include <assetlib_structs/BMesh.h>
 #include <assetlib_structs/BMeshImport.h>

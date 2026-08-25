@@ -1,8 +1,8 @@
 #include <assetlib/asset_describe.h>
 #include <assetlib/bmesh.h>
 #include <assetlib/container_info.h>
+#include <assetlib/envmap.h>
 
-#include <assetlib/env_bake.h>
 #include <assetlib/skeleton.h>
 #include <assetlib_structs/Animation.h>
 #include <assetlib_structs/BEnv.h>

@@ -76,7 +76,7 @@ Concretely, before adding to `include/assetlib/`:
 
 A header forward declares the types it names from its **own** namespace — `BMesh`, `BMaterial`,
 `SourceStamp`, `ImageData`, all of them `assetlib::` — instead of including `assetlib_structs`.
-Include the definition only where one is genuinely required: `envmap_bake.h` includes `ImageData.h`
+Include the definition only where one is genuinely required: `envmap.h` includes `ImageData.h`
 because `EnvironmentMaps` holds three of them by value, and a reference or a by-value return does
 not.
 

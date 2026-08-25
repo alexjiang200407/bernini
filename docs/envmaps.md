@@ -75,10 +75,8 @@ disagrees, trust the header, then fix this doc.
 
 | Header | Role |
 |---|---|
-| [libs/assetlib/include/assetlib/env_import.h](libs/assetlib/include/assetlib/env_import.h) | `importEnvironment` — one `.hdr` or float cube into the whole family, with selectable parts, cancellation and rollback. `environmentImportTargets` names what it *would* write |
-| [libs/assetlib/include/assetlib/env_bake.h](libs/assetlib/include/assetlib/env_bake.h) | `bakeSky` / `bakeEnvLighting`, the staleness checks, and `isBakedEnvMapName` for the prune |
-| [libs/assetlib/include/assetlib/envmap_bake.h](libs/assetlib/include/assetlib/envmap_bake.h) | The convolutions themselves: `equirectToCube`, `prefilterRadiance`, `irradianceSh`, `skyChain`, `blurCube` |
-| [libs/assetlib/include/assetlib/env_resolve.h](libs/assetlib/include/assetlib/env_resolve.h) | `resolveEnvironment` — a `.benv` followed to decoded pixels. What the editor consumes |
+| [libs/assetlib/include/assetlib/envmap.h](libs/assetlib/include/assetlib/envmap.h) | The pipeline, in one header and in the order it runs: `loadRadianceHdr` / `equirectToCube`, then the convolutions (`prefilterRadiance`, `irradianceSh`, `skyChain`, `blurCube`), then `EnvironmentMaps` and `ResolvedEnvironment`, then `importEnvironment` with its selectable parts, cancellation and rollback — `environmentImportTargets` names what it *would* write, and `isBakedEnvMapName` is what the prune reads |
+| [AssetStore.h](../libs/assetlib/include/assetlib/AssetStore.h) | `BakeSky` / `BakeEnvLighting` and their staleness checks |
 | [libs/gamelib/include/gamelib/AssetManager.h](libs/gamelib/include/gamelib/AssetManager.h) | `AcquireEnvironment` — a `.benv` followed to uploaded texture handles. What the runtime consumes |
 | [libs/assetlib/include/assetlib/codecs.h](libs/assetlib/include/assetlib/codecs.h) | The codec for each of the three containers |
 

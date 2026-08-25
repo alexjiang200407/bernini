@@ -1,11 +1,11 @@
 #include <assetlib/AssetStore.h>
 #include <assetlib/codecs.h>
+#include <assetlib/envmap.h>
 #include <assetlib/pak_pack.h>
 
 #include <assetlib/RegenMesh.h>
 #include <assetlib/asset_refs.h>
 #include <assetlib/container_format.h>
-#include <assetlib/env_bake.h>
 #include <assetlib/pak_io.h>
 #include <assetlib/project_layout.h>
 #include <assetlib/vat_bake.h>

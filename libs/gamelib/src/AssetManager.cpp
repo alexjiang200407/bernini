@@ -1,10 +1,10 @@
+#include <assetlib/envmap.h>
 #include <assetlib/skeleton.h>
 #include <gamelib/AssetManager.h>
 
 #include <gamelib/vat_freshness.h>
 
 #include <assetlib/RegenMesh.h>
-#include <assetlib/env_bake.h>
 #include <assetlib/image_io.h>
 #include <assetlib/skinning.h>
 #include <assetlib/vat_bake.h>
