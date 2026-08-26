@@ -8,6 +8,7 @@
 #include <assetlib/bmesh.h>
 #include <assetlib/import_document.h>
 #include <assetlib/project_layout.h>
+#include <assetlib/reimport.h>
 #include <assetlib/skinning.h>
 #include <assetlib_structs/Animation.h>
 #include <assetlib_structs/BEnv.h>
@@ -202,6 +203,23 @@ namespace assetlib
 
 			if (file.outcome != MigratedFile::Outcome::kUnchanged)
 				report.files.push_back(std::move(file));
+		}
+
+		// Then, before the walk: what the sources say should stand but does not. The walk below
+		// re-saves files it finds; only this puts an absent one back.
+		for (const ReimportedSource& source : Reimport(dryRun).sources)
+		{
+			if (!source.message.empty())
+			{
+				report.files.push_back(
+					{ GetDataRoot() / source.source,
+				      MigratedFile::Outcome::kFailed,
+				      source.message });
+				continue;
+			}
+			for (const std::string& output : source.written)
+				report.files.push_back(
+					{ GetDataRoot() / output, MigratedFile::Outcome::kRewritten, {} });
 		}
 
 		// Before the walk: a refresh stamps the `.bimport` the walk then reads.

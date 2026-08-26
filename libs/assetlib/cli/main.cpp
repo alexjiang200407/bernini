@@ -386,11 +386,12 @@ main(int argc, char** argv)
 
 	auto* migrate = app.add_subcommand(
 		"migrate",
-		"Re-save every container at what the project's current state says it should hold: stale "
-		"geometry regenerates from its copied source, and a rebind reaches its mesh. A file "
-		"that is already current is left untouched, so "
-		"running it twice rewrites nothing the second time; a file that cannot be read -- or a "
-		"stale group with no source -- is reported and skipped");
+		"Put every container the project's sources say should exist on disk, at what its current "
+		"state says it should hold: an absent one is produced from the source that names it, "
+		"stale geometry regenerates from its copied source, and a rebind reaches its mesh. A "
+		"file that is already current is left untouched, so running it twice rewrites nothing "
+		"the second time; a file that cannot be read -- or a stale group with no source -- is "
+		"reported and skipped");
 	addProject(migrate);
 	migrate->add_flag(
 		"-n,--dry-run",

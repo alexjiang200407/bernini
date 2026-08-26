@@ -341,7 +341,6 @@ namespace assetlib
 		// so a second source skinned to a rig already here has nothing to add by forking it.
 		const std::filesystem::path existing = FindMatchingSkeleton(skeleton);
 
-		Skeleton bound = skeleton;
 		if (existing.empty())
 		{
 			Skeleton rig = skeleton;
@@ -352,7 +351,6 @@ namespace assetlib
 		else
 		{
 			mesh.skeleton = KeyFor(existing);
-			bound         = Load<Skeleton>(mesh.skeleton);
 		}
 		mesh.skeletonSignature = skeletonSignature(skeleton);
 
@@ -365,9 +363,10 @@ namespace assetlib
 		clips.skeleton     = mesh.skeleton;
 		clips.source       = source;
 
-		// Against the rig that will be resolved at load, not the imported copy: the two share a
-		// signature, which deliberately does not cover the bind pose the boxes are swept from.
-		bakePosedBounds(clips, mesh, bound);
+		// Read back rather than swept from the copy in hand, and the same rule WriteImportedClips
+		// follows: a box measured against a bind pose the loader will not see is a box the loader
+		// cannot match. A reused rig makes that visible -- its pose is its own, not this source's.
+		bakePosedBounds(clips, mesh, Load<Skeleton>(mesh.skeleton));
 		Save(clips, banimKey);
 	}
 

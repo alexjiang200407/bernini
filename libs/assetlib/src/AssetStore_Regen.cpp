@@ -22,6 +22,7 @@
 #include "import_bounds.h"
 #include "mounted_io.h"
 #include "ref_paths.h"
+#include "regen_group.h"
 
 namespace assetlib
 {
@@ -66,14 +67,6 @@ namespace assetlib
 			return checked;
 		}
 
-		/** A stale entry's source, re-imported in memory, with the reference that now keys it. */
-		struct RegeneratedGroup
-		{
-			imp::BMeshImport              import;
-			SourceRef                     ref;
-			std::optional<ImportDocument> document;
-		};
-
 		RegeneratedGroup
 		regenerate(const AssetStore& store, CheckedKey&& checked, std::string_view what)
 		{
@@ -98,24 +91,29 @@ namespace assetlib
 				what,
 				source.key);
 
-			// The copied source lives only on the loose layer -- pack excludes it -- and the glTF
-			// parser reads a file, so this is a read that must address the host. Textures are
-			// skipped: a regeneration never re-extracts, so decoding them would spend an
-			// import's whole cost on pixels nothing reads.
-			RegeneratedGroup group{
-				loadFromGltf(
-					store.ResolveWritePath(source.key),
-					{ .sampleRate = checked.document->sampleRate,
-				      .textures   = GltfTextures::kSkip }),
-				SourceRef(),
-				std::move(checked.document),
-			};
-			group.ref.key            = source.key;
-			group.ref.stamp          = stampOf(store.GetFiles(), source.key);
-			group.ref.parametersHash = parametersHashOf(*group.document);
-			return group;
+			return importGroup(store, source.key, std::move(*checked.document));
 		}
 
+	}
+
+	RegeneratedGroup
+	importGroup(const AssetStore& store, std::string_view sourceKey, ImportDocument&& document)
+	{
+		// The copied source lives only on the loose layer -- pack excludes it -- and the glTF
+		// parser reads a file, so this is a read that must address the host. Textures are skipped:
+		// a regeneration never re-extracts, so decoding them would spend an import's whole cost on
+		// pixels nothing reads.
+		RegeneratedGroup group{
+			loadFromGltf(
+				store.ResolveWritePath(sourceKey),
+				{ .sampleRate = document.sampleRate, .textures = GltfTextures::kSkip }),
+			SourceRef(),
+			std::move(document),
+		};
+		group.ref.key            = std::string(sourceKey);
+		group.ref.stamp          = stampOf(store.GetFiles(), sourceKey);
+		group.ref.parametersHash = parametersHashOf(*group.document);
+		return group;
 	}
 
 	bool

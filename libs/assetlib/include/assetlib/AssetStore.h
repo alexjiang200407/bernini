@@ -16,6 +16,7 @@ namespace assetlib
 	struct ImportTarget;
 	struct MeshRefs;
 	struct MigrateReport;
+	struct ReimportReport;
 	struct PackDesc;
 	struct PackReport;
 	struct ReauthoredDocument;
@@ -562,6 +563,29 @@ namespace assetlib
 		 */
 		[[nodiscard]] MigrateReport
 		Migrate(bool dryRun) const;
+
+		/**
+		 * Every container this project's sources say should exist but does not, produced onto
+		 * disk. Driven from the `.bimport` documents and the `outputs` each one names, because the
+		 * regeneration seam and `Migrate` are both keyed on the derived file already being there
+		 * and so can never produce one that is not.
+		 *
+		 * Absent only. A container that is on disk but stale is `Migrate`'s: it re-saves what it
+		 * can read, which is cheaper than a re-import, and one problem then has one report.
+		 *
+		 * What is written is what a fresh import would have written, byte for byte -- including
+		 * sweeping a clip set's boxes exactly as the writer that produced it did. Re-measuring
+		 * them across the project is `RebakePosedBounds`.
+		 *
+		 * Rigs, then meshes, then clips -- a clip set's posed boxes are measured against the
+		 * meshes on disk, and a mesh names the rig it binds.
+		 *
+		 * A source that cannot be re-imported is reported and skipped; the rest still run.
+		 *
+		 * @param dryRun Report what would be written without writing a byte.
+		 */
+		[[nodiscard]] ReimportReport
+		Reimport(bool dryRun) const;
 
 		/**
 		 * Every `.banim` in this project given the posed culling boxes an import writes, for clip

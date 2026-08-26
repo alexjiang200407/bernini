@@ -46,9 +46,24 @@ source.
   is empty — two ways to answer one question, and the scan's answer is wrong for precisely the
   shared-rig case the field exists to allow.*
 - **ADR-5 — `AssetStore::Reimport` produces a source's outputs, and `migrate` runs it before its
-  walk.** Source-driven: enumerate `meshes_src/*.bimport`, and write the outputs the document names
-  that are missing or stale. *Rejected: teaching `Migrate`'s walk to notice absences — a walk over
-  derived files has nothing to enumerate on a project that has none.*
+  walk.** Source-driven: enumerate `meshes_src/*.bimport` and write the outputs the document names.
+  *Rejected: teaching `Migrate`'s walk to notice absences — a walk over derived files has nothing to
+  enumerate on a project that has none.*
+
+  *Written as "missing or stale"; narrowed to **absent only** during implementation.* A stale
+  container on disk is `Migrate`'s: it can read and re-save one, which is cheaper than a re-import
+  and is the operation that already existed. Overlapping them made `Migrate` report one problem
+  twice — a group whose source had gone came back as four failures where three were expected, one
+  per file plus one for the source — which is what surfaced it.
+- **ADR-8 — a re-import reproduces the writer that produced the outputs, and `outputs` says which
+  one that was.** A source that produced a `.bmesh` swept that mesh for its clip set's posed boxes,
+  because `WriteImportedRig` had it in hand and not yet on disk; a clips-only source had no mesh and
+  swept the project's, through `bakeBoundsForRig`. Following the same split makes a re-imported
+  container byte-identical to an imported one, which is the only definition of correct that can be
+  tested. *Rejected: always sweeping project-wide, which is the more general measurement and
+  produced a `.banim` that differed from the import's while agreeing on every box a loader looks
+  up — an unexplainable diff in a container that is supposed to be reproducible. Re-measuring across
+  the project is `RebakePosedBounds`, which is already its own operation.*
 - **ADR-6 — `LoadRegen*` stays as the seam `pack`, `migrate` and `vat_bake` use; gamelib's load
   path stops calling it.** A stale container at load becomes a loud refusal naming `migrate` rather
   than a silent in-memory re-cook whose cost recurs on every load and whose result is never
@@ -92,7 +107,7 @@ source.
 2. `feat(assetlib): an import document records the rig it binds and the outputs it produced` —
    the two fields, the codec, `migrate`'s backfill, `groupSkeletonKey` deleted.
    Gate: `just test assetlib`.
-3. `fix(assetlib): an import reuses a rig it matches instead of forking a duplicate` — ADR-3, and
+3. `fix(assetlib): an import binds a rig it matches instead of forking a duplicate` — ADR-3, and
    the clips-only import that follows it. Gate: the first acceptance test.
 4. `feat(assetlib): produce a project's derived containers from its sources` — `Reimport`, and
    `migrate` running it first. Gate: the second acceptance test.

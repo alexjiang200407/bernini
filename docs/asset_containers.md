@@ -111,10 +111,28 @@ holds, and an inserted one takes a new name rather than displacing its neighbour
 extract no longer produces is reported and left alone -- a material may still draw it, and both
 re-routing and deleting it are the user's.
 
+## Producing a whole project
+
+`AssetStore::Reimport` ([AssetStore.h](libs/assetlib/include/assetlib/AssetStore.h)) is the one
+operation that runs from the authored side: it walks the `.bimport` documents and writes the outputs
+they name that are **not on disk at all**. Everything else here is keyed on the derived file already
+existing — `LoadRegen*` peeks the header of the file it was handed, `migrate` walks the data root —
+so nothing else can put back a container that was deleted or never checked out.
+
+What it writes is what a fresh import would have written, byte for byte, which includes sweeping a
+clip set's posed boxes exactly as the writer that produced it did: a source that produced a `.bmesh`
+swept that mesh, a clips-only source swept the project's. Re-measuring those across the project is
+`bakebounds`, deliberately its own operation.
+
+Absent only. A container that is on disk but stale is `migrate`'s below — it can read and re-save
+one, which is cheaper than a re-import, and splitting them that way is what keeps one problem from
+being reported twice when `migrate` runs both.
+
 ## Rewriting a whole project
 
-`assetlib_cli migrate -p <project>` re-extracts the textures of every source that has moved since
-its import, then reads every container and re-saves whatever is not byte-identical to the current
+`assetlib_cli migrate -p <project>` backfills any import document written before it recorded its
+rig and outputs, produces whatever those documents name that is absent, re-extracts the textures of
+every source that has moved since its import, then reads every container and re-saves whatever is not byte-identical to the current
 form — geometry through the regeneration seam
 (meshes before rigs before clips, so a regenerated `.banim` measures its posed boxes against
 current meshes), everything else as read. A second run rewrites nothing; a file it cannot read is
