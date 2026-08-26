@@ -274,6 +274,48 @@ TEST_CASE("A renamed output is followed, not reproduced under its old name", "[r
 	}
 }
 
+// `outputs` is a claim about what a source produced, not a need, so it must not turn every imported
+// container into one the project refuses to delete -- and the claim has to go with the file, or the
+// next migrate reads it as absent and puts it back.
+TEST_CASE("Deleting a produced container is allowed, and drops the claim", "[reimport]")
+{
+	const test::SkinnedGltf source("bernini_reimport_del_gltf");
+	const ImportedProject   project("bernini_reimport_del", source.PackGlb());
+
+	const AssetStore& store = project.Store();
+
+	const DeletionPlan plan = planDeletion(AssetRefGraph::Scan(store), "Meshes/unit.bmesh");
+	CHECK(plan.Allowed());
+	CHECK(plan.blockers.empty());
+	REQUIRE(plan.producers == std::vector<std::string>{ "meshes_src/unit.bimport" });
+
+	REQUIRE(store.DeleteAsset(plan).status == DeletionStatus::kDeleted);
+	CHECK_FALSE(fs::exists(project.dataRoot / "Meshes/unit.bmesh"));
+
+	const ImportDocument document = loadImportDocument(store.GetFiles(), "meshes_src/unit.bimport");
+	CHECK(std::ranges::find(document.outputs, "Meshes/unit.bmesh") == document.outputs.end());
+
+	// The point of dropping it: without that, this call would reproduce what was just deleted.
+	const ReimportReport report = store.Reimport(/*dryRun*/ false);
+	CHECK(report.WrittenCount() == 0);
+	CHECK_FALSE(fs::exists(project.dataRoot / "Meshes/unit.bmesh"));
+}
+
+TEST_CASE("Deleting an import document leaves what it produced", "[reimport]")
+{
+	const test::SkinnedGltf source("bernini_reimport_deldoc_gltf");
+	const ImportedProject   project("bernini_reimport_deldoc", source.PackGlb());
+
+	const AssetStore& store = project.Store();
+
+	// A produced-by claim is not a reference, so it cannot be the thing that frees a container into
+	// the cascade either: deleting the document must not take the rig and mesh with it.
+	const DeletionPlan plan =
+		planCascadeDeletion(AssetRefGraph::Scan(store), "meshes_src/unit.bimport");
+	CHECK(std::ranges::find(plan.cascade, "Meshes/unit.bmesh") == plan.cascade.end());
+	CHECK(std::ranges::find(plan.cascade, "Skeletons/unit.bskel") == plan.cascade.end());
+}
+
 TEST_CASE("A source that has gone is reported, not thrown", "[reimport]")
 {
 	const test::SkinnedGltf source("bernini_reimport_gone_gltf");

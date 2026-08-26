@@ -200,6 +200,17 @@ namespace assetlib
 		std::vector<std::string> derived;
 
 		/**
+		 * The `.bimport` documents naming what is being deleted among their `outputs`, which
+		 * DeleteAsset rewrites to drop those entries.
+		 *
+		 * Neither a blocker nor derived, because the edge points the other way from every edge that
+		 * is: a document does not *need* what it produced. But an `outputs` entry naming a file that
+		 * is gone reads as **absent** to Reimport, which would put it straight back -- so the
+		 * deletion has to reach the claim as well as the file.
+		 */
+		std::vector<std::string> producers;
+
+		/**
 		 * For a directory: every file beneath it, which all go with it -- including files of no kind this
 		 * project stores anything about, because removing a directory removes what is in it. Empty for a
 		 * single asset, which takes nothing with it.
@@ -230,9 +241,11 @@ namespace assetlib
 	 * Whether `asset` -- a file, or a whole directory -- can be deleted, and if not, every edge that says
 	 * otherwise.
 	 *
-	 * A mesh always comes back allowed, with no special case for it: nothing in the project produces an
-	 * edge into a `.bmesh`. Deleting one therefore leaves the materials it named behind, which is the
-	 * point -- a material is a shareable asset, not a part of the mesh that happened to name it first.
+	 * A mesh always comes back allowed. The one edge into a `.bmesh` -- the `kDocumentOutput` its own
+	 * `.bimport` carries -- is a claim about what produced it, not a need, so it lands in `producers`
+	 * rather than blocking. Deleting a mesh therefore leaves the materials it named behind, which is
+	 * the point -- a material is a shareable asset, not a part of the mesh that happened to name it
+	 * first.
 	 *
 	 * A **directory** is held only by an edge reaching into it from outside (see ReferrersInto), and takes
 	 * everything beneath it. So `Meshes/` deletes and leaves every material, while a folder of textures a

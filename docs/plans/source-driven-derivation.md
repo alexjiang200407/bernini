@@ -88,6 +88,14 @@ source.
   cost argument does not reach them either — they read one asset on demand, not a scene's worth per
   load. *Rejected: refusing everywhere, which makes a stale project one that cannot even render a
   thumbnail of what is wrong with it.*
+- **ADR-14 — a `kDocumentOutput` edge is invisible to deletion, in both directions.** It is the one
+  edge in the graph that points from producer to product, where every other means "the referrer
+  needs this" — so it must not block (an imported `.bmesh` would become undeletable), and it must
+  not free (deleting a `.bimport` would sweep the containers it made). Deleting an output instead
+  **rewrites** the document to drop the claim, because an `outputs` entry naming a file that is gone
+  reads as *absent* to `Reimport`, which would put it straight back. *Rejected: putting it in
+  `derived` beside `kVatSource` — that sweeps the referrer, and the referrer here is a document
+  holding the source and every other output.*
 - **ADR-13 — the two new document fields are edges in the reference graph.** `skeleton` and
   `outputs` are references like any other, and the document is now the only thing that records
   them. *Rejected: leaving them out as "just bookkeeping" — an `outputs` entry naming a key a
