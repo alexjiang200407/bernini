@@ -318,7 +318,7 @@ TEST_CASE("a writer's output cannot change without its bake token", "[canary][io
 	{
 		CheckCanary(
 			AssetCodec<AnimationSet>::c_BakeToken,
-			Pin{ .token = 0x41f8b6d95e07c2aaull, .hash = 0xffbf10e60751b032ull },
+			Pin{ .token = 0x107bc43fdbd09c69ull, .hash = 0xe1f67cedf62d4c5full },
 			AssetCodec<AnimationSet>::Serialize(CanaryAnimations()));
 	}
 

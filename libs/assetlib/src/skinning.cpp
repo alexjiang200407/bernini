@@ -354,6 +354,70 @@ namespace assetlib
 			return out;
 		}
 
+		/** Every skinned entry of `mesh` reduced to bone boxes, in entry order. */
+		std::vector<BoneBoxes>
+		skinnedBoneBoxes(const BMesh& mesh, const Skeleton& skeleton)
+		{
+			auto out = std::vector<BoneBoxes>();
+			for (uint32_t meshIndex = 0; meshIndex < mesh.meshes.size(); ++meshIndex)
+				if (isSkinned(mesh, meshIndex))
+					out.emplace_back(boneBoxesFor(mesh, meshIndex, skeleton));
+			return out;
+		}
+
+		/** Every skinned entry's vertices decoded once, one vector per submesh across all entries. */
+		std::vector<std::vector<SkinInfluences>>
+		skinnedInfluences(const BMesh& mesh, const Skeleton& skeleton)
+		{
+			auto out = std::vector<std::vector<SkinInfluences>>();
+			for (uint32_t meshIndex = 0; meshIndex < mesh.meshes.size(); ++meshIndex)
+			{
+				if (!isSkinned(mesh, meshIndex))
+					continue;
+
+				const Mesh& entry = mesh.meshes[meshIndex];
+				for (uint32_t i = 0; i < entry.submeshCount; ++i)
+				{
+					const Submesh& submesh = mesh.submeshes[entry.firstSubmesh + i];
+					out.emplace_back(decodeInfluences(
+						mesh,
+						submesh,
+						resolveSkinLayout(mesh, submesh),
+						skeleton.bones.size()));
+				}
+			}
+			return out;
+		}
+
+		/**
+		 * The lowest `y` any bone box reaches under `model` -- a lower bound on the lowest vertex,
+		 * because a skinned position is a convex combination of its bones' products and so lies in
+		 * the hull of the boxes those products sweep.
+		 */
+		float
+		boundedFloor(std::span<const BoneBoxes> entries, std::span<const glm::mat4> model) noexcept
+		{
+			auto lowest = std::numeric_limits<float>::max();
+			for (const BoneBoxes& entry : entries)
+				for (size_t i = 0; i < entry.bones.size(); ++i)
+					lowest =
+						std::min(lowest, transformed(model[entry.bones[i]], entry.boxes[i]).min.y);
+			return lowest;
+		}
+
+		/** The lowest `y` any decoded vertex actually reaches under `skinning`. */
+		float
+		exactFloor(
+			std::span<const std::vector<SkinInfluences>> submeshes,
+			std::span<const glm::mat4>                   skinning) noexcept
+		{
+			auto lowest = std::numeric_limits<float>::max();
+			for (const std::vector<SkinInfluences>& vertices : submeshes)
+				for (const SkinInfluences& vertex : vertices)
+					lowest = std::min(lowest, skinnedPosition(vertex, skinning).y);
+			return lowest;
+		}
+
 		/** The union of the entry's submesh boxes -- all a rig with no clips has to be bounded by. */
 		Bounds
 		bindPoseBounds(const BMesh& mesh, const Mesh& entry) noexcept
@@ -647,5 +711,121 @@ namespace assetlib
 				out[box.meshIndex] = Bounds{ box.min, box.max };
 
 		return out;
+	}
+
+	std::vector<float>
+	measureClipFloors(
+		const AnimationSet&    animations,
+		std::span<const BMesh> meshes,
+		const Skeleton&        skeleton)
+	{
+		auto out = std::vector<float>(animations.clips.size(), 0.0f);
+
+		auto entries   = std::vector<BoneBoxes>();
+		auto submeshes = std::vector<std::vector<SkinInfluences>>();
+		for (const BMesh& mesh : meshes)
+		{
+			const std::vector<BoneBoxes> boxes = skinnedBoneBoxes(mesh, skeleton);
+			entries.insert(entries.end(), boxes.begin(), boxes.end());
+
+			std::vector<std::vector<SkinInfluences>> vertices = skinnedInfluences(mesh, skeleton);
+			std::ranges::move(vertices, std::back_inserter(submeshes));
+		}
+
+		if (entries.empty())
+			return out;
+
+		// Whatever the pose, these sit where they were authored, so they floor every clip alike.
+		auto unskinned = std::numeric_limits<float>::max();
+		for (const BoneBoxes& entry : entries)
+			if (!isEmpty(entry.unskinned))
+				unskinned = std::min(unskinned, entry.unskinned.min.y);
+
+		for (uint32_t clip = 0; clip < animations.clips.size(); ++clip)
+		{
+			const uint32_t frames = animations.clips[clip].frameCount;
+
+			// The poses themselves are deliberately not kept: a dense rig's clip would be tens of
+			// megabytes of them, and re-evaluating the handful that survive the prune is a forward
+			// pass over the bones against skinning every vertex.
+			auto bound = std::vector<float>(frames);
+			auto order = std::vector<uint32_t>(frames);
+			for (uint32_t frame = 0; frame < frames; ++frame)
+			{
+				bound[frame] =
+					boundedFloor(entries, poseModelTransforms(skeleton, animations, clip, frame));
+				order[frame] = frame;
+			}
+
+			std::ranges::sort(order, [&](uint32_t a, uint32_t b) { return bound[a] < bound[b]; });
+
+			auto lowest = std::numeric_limits<float>::max();
+			for (const uint32_t frame : order)
+			{
+				// Every frame after this one is bounded at or above what has already been found.
+				if (bound[frame] >= lowest)
+					break;
+
+				lowest = std::min(
+					lowest,
+					exactFloor(
+						submeshes,
+						skinningMatrices(
+							skeleton,
+							poseModelTransforms(skeleton, animations, clip, frame))));
+			}
+
+			lowest = std::min(lowest, unskinned);
+			if (lowest != std::numeric_limits<float>::max())
+				out[clip] = lowest;
+		}
+
+		return out;
+	}
+
+	void
+	groundClips(
+		AnimationSet&              animations,
+		std::span<const BMesh>     meshes,
+		const Skeleton&            skeleton,
+		std::span<const ClipFloor> authored)
+	{
+		auto floors = std::vector<float>(animations.clips.size(), 0.0f);
+		try
+		{
+			floors = measureClipFloors(animations, meshes, skeleton);
+		}
+		catch (const std::exception&)
+		{
+			// See skinning.h: a refused measurement leaves every clip where it was authored, but
+			// an authored floor needs no pose to apply and is not lost with it.
+		}
+
+		for (const ClipFloor& authoredFloor : authored)
+			for (uint32_t clip = 0; clip < animations.clips.size(); ++clip)
+				if (animations.stringPool.at(animations.clips[clip].nameOffset) ==
+				    authoredFloor.clip)
+					floors[clip] = authoredFloor.floor - animations.clips[clip].groundOffset;
+
+		auto roots = std::vector<uint32_t>();
+		for (uint32_t bone = 0; bone < skeleton.bones.size(); ++bone)
+			if (skeleton.bones[bone].parent == c_InvalidIndex)
+				roots.push_back(bone);
+
+		for (uint32_t clip = 0; clip < animations.clips.size(); ++clip)
+		{
+			if (floors[clip] == 0.0f)
+				continue;
+
+			for (uint32_t frame = 0; frame < animations.clips[clip].frameCount; ++frame)
+			{
+				const size_t pose = animations.clips[clip].firstSample +
+				                    static_cast<size_t>(frame) * animations.boneCount;
+				for (const uint32_t bone : roots)
+					animations.samples[pose + bone].translation.y -= floors[clip];
+			}
+
+			animations.clips[clip].groundOffset += floors[clip];
+		}
 	}
 }

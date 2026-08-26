@@ -32,9 +32,22 @@ namespace assetlib
 		float locomotionSpeed;
 
 		uint32_t loop;  // 1 when the last pose matches the first
+
+		/** How far the cook moved this clip down to rest it on the floor; see assetlib::groundClips. */
+		float groundOffset;
 	};
 
-	static_assert(sizeof(AnimationClip) == 40);
+	static_assert(sizeof(AnimationClip) == 44);
+
+	/** A floor authored for one clip, overruling what the cook measures; see assetlib::groundClips. */
+	struct ClipFloor
+	{
+		std::string clip;   // the clip's name, as its source gave it
+		float       floor;  // the height to rest on y = 0
+
+		bool
+		operator==(const ClipFloor&) const = default;
+	};
 
 	/**
 	 * The box one mesh entry sweeps through every pose of every clip, measured at cook so a load

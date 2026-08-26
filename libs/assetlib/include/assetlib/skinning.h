@@ -18,6 +18,7 @@ namespace assetlib
 	struct AnimationSet;
 	struct BMesh;
 	struct Bounds;
+	struct ClipFloor;
 	struct Skeleton;
 	struct Submesh;
 
@@ -202,6 +203,64 @@ namespace assetlib
 	 */
 	[[nodiscard]] std::vector<std::optional<Bounds>>
 	findPosedBounds(const AnimationSet& animations, const BMesh& mesh, const Skeleton& skeleton);
+
+	/**
+	 * The height each clip of `animations` was authored above `y = 0`: the lowest `y` any skinned
+	 * vertex of any of `meshes` reaches over the clip, one entry per clip in clip order. A clip
+	 * authored on the floor measures 0; the animal rigs measure anywhere from -0.57 to +0.92.
+	 *
+	 * Several meshes because a clip set is not the property of one: a rig drawn as a body and a
+	 * separately imported cloak stands on whichever hangs lower, and a clips-only import has no mesh
+	 * of its own at all -- it is grounded against the ones already in the project that skin to its
+	 * rig.
+	 *
+	 * A clip no mesh here has weight on measures 0 -- there is no pose to place it against, and
+	 * leaving it where it was authored is the only answer that does not invent one.
+	 *
+	 * Exact, and paid for by the boxes posedBounds already builds. A bone's box holds every vertex
+	 * weighted to it, and a skinned position is a convex combination of its bones' products, so the
+	 * lowest box corner at a frame is a lower bound on that frame's lowest vertex. The cheap sweep
+	 * therefore orders the frames, the most promising is skinned exactly, and every frame whose
+	 * bound is already at or above that result is dropped without being touched -- which on the
+	 * rigs measured leaves a handful of frames per clip actually skinned, where the whole walk is
+	 * minutes on a dense one.
+	 *
+	 * @throws std::runtime_error for anything posedBounds refuses (a clip set cooked against
+	 *         another rig, a malformed vertex layout, a bad joint index).
+	 */
+	[[nodiscard]] std::vector<float>
+	measureClipFloors(
+		const AnimationSet&    animations,
+		std::span<const BMesh> meshes,
+		const Skeleton&        skeleton);
+
+	/**
+	 * Move each clip of `animations` down by the floor measureClipFloors reports, so the lowest `y`
+	 * `meshes` reach over it rests on 0, recording the move in `AnimationClip::groundOffset`.
+	 *
+	 * A clip named by `authored` is moved by that floor instead of the measured one -- the escape
+	 * hatch for a clip whose lowest frame is not the one standing on the ground. The Coyote's `Land`
+	 * is the worked example: its lowest frame is the impact compression, so measuring alone leaves
+	 * its settled stance 0.10 above the floor. A name matching no clip is ignored.
+	 *
+	 * Every root bone is moved, not just bone 0: a root's local translation is already in model
+	 * space, so subtracting from it shifts that whole subtree by exactly the amount asked for.
+	 * `rootMotion` is a delta and `locomotionSpeed` is horizontal, so neither changes.
+	 *
+	 * Idempotent -- a grounded clip measures a floor of 0 and is left alone -- so a cook that runs
+	 * over an already-grounded `.banim` does not sink it further.
+	 *
+	 * A clip set the measurement refuses is left ungrounded rather than failing the cook -- whatever
+	 * refused it has already been reported where it was read. `authored` still applies: an explicit
+	 * floor needs no pose to measure, so one clip the measurement cannot reach does not cost the
+	 * rest of the file its overrides.
+	 */
+	void
+	groundClips(
+		AnimationSet&              animations,
+		std::span<const BMesh>     meshes,
+		const Skeleton&            skeleton,
+		std::span<const ClipFloor> authored = {});
 
 	/** One vertex after skinning, in model space. */
 	struct SkinnedVertex
