@@ -5,6 +5,7 @@
 #include <assetlib_structs/ImageData.h>
 #include <bgl/IScene.h>
 #include <bgl/ISceneView.h>
+#include <bgl/RimLightDesc.h>
 #include <core/str/str.h>
 #include <gamelib/ClipInfo.h>
 
@@ -259,6 +260,10 @@ namespace game
 			uint32_t skyMipLevel  = 0;
 			float    skyRotationY = 0.0f;
 
+			// Bind it unconditionally: an environment that authored none carries intensity 0, which
+			// is a rim light that is off rather than an absent one.
+			bgl::RimLightDesc rim;
+
 			/**
 			 * Both or neither: the two are the diffuse and specular convolutions of one radiance, so a
 			 * view holding one of them would light the scene from half an environment.
@@ -491,6 +496,10 @@ namespace game
 			// path it came from. No textures -- a skinned pose is computed, not fetched.
 			std::vector<ClipInfo> skinnedClips;
 			std::string           skinnedAnimations;
+
+			// The mesh's authored share of an environment's rim light, put on every instance
+			// placed from it.
+			float rimIntensity = 0.0f;
 
 			uint32_t refCount = 0;
 		};

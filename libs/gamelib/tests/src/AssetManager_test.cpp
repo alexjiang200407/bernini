@@ -89,7 +89,8 @@ namespace
 	WriteMesh(
 		const std::filesystem::path& path,
 		std::span<const std::string> materials,
-		std::span<const uint32_t>    materialIndices)
+		std::span<const uint32_t>    materialIndices,
+		float                        rimIntensity = 0.0f)
 	{
 		constexpr uint16_t kStride = 12;  // one float32x3 position
 
@@ -138,6 +139,7 @@ namespace
 		entry.firstSubmesh = 0;
 		entry.submeshCount = static_cast<uint32_t>(materialIndices.size());
 		entry.nameOffset   = 0;
+		entry.rimIntensity = rimIntensity;
 		mesh.meshes.push_back(entry);
 
 		auto node   = assetlib::Node();
@@ -833,6 +835,7 @@ TEST_CASE("AssetManager acquires an environment through its own data root", "[ga
 	CHECK(env.exposure == 2.0f);
 	CHECK(env.skyMipLevel == 1);
 	CHECK(env.skyRotationY == 0.25f);
+	CHECK(env.rim.intensity == 0.0f);  // authored none, so a rim light that is off
 
 	SECTION("two environments composing the same sky share its upload")
 	{
@@ -977,4 +980,48 @@ TEST_CASE("AssetManager reads a loose material over its packed twin", "[gamelib]
 
 	CHECK((*fx).TextureRefCount(edited) == 2);
 	CHECK((*fx).TextureRefCount(packed) == 1);
+}
+
+// The .bimport's per-mesh default reaching the placement, which is the whole chain: authored in the
+// document, stamped onto the .bmesh by applyDocument, carried here onto every instance.
+TEST_CASE("AssetManager places a mesh's rim intensity on its instances", "[gamelib][assets]")
+{
+	Fixture fx("bernini_am_rim");
+	WriteTexture(fx.root.path / "Textures" / "a.ktx2");
+	WriteBakedMaterial(fx.root.path / "Authored/Materials" / "m0.bmaterial", "Textures/a.ktx2");
+
+	const auto materials       = std::vector<std::string>{ "Authored/Materials/m0.bmaterial" };
+	const auto materialIndices = std::vector<uint32_t>{ 0 };
+	WriteMesh(fx.root.path / "Derived/Meshes" / "rimmed.bmesh", materials, materialIndices, 0.75f);
+	WriteMesh(fx.root.path / "Derived/Meshes" / "plain.bmesh", materials, materialIndices);
+
+	const bgl::GeomHandle rimmed = (*fx).AcquireMesh("Derived/Meshes/rimmed.bmesh");
+	const bgl::GeomHandle plain  = (*fx).AcquireMesh("Derived/Meshes/plain.bmesh");
+
+	const bgl::MeshInstanceHandle a = (*fx).CreateInstance(fx.view, rimmed, glm::mat4(1.0f));
+	const bgl::MeshInstanceHandle b = (*fx).CreateInstance(fx.view, plain, glm::mat4(1.0f));
+
+	// The authored value, not a rounding of it to on: what the mesh asked to catch is what the
+	// placement catches.
+	CHECK(fx.view->GetInstanceRimIntensity(a) == 0.75f);
+	CHECK(fx.view->GetInstanceRimIntensity(b) == 0.0f);
+
+	SECTION("a second placement of the same mesh gets it too")
+	{
+		const bgl::MeshInstanceHandle second =
+			(*fx).CreateInstance(fx.view, rimmed, glm::mat4(1.0f));
+		CHECK(fx.view->GetInstanceRimIntensity(second) == 0.75f);
+		(*fx).DestroyInstance(fx.view, second);
+	}
+
+	SECTION("the default is applied, not enforced -- an instance may differ from its mesh")
+	{
+		fx.view->SetInstanceRimIntensity(a, 0.0f);
+		CHECK(fx.view->GetInstanceRimIntensity(a) == 0.0f);
+	}
+
+	(*fx).DestroyInstance(fx.view, a);
+	(*fx).DestroyInstance(fx.view, b);
+	(*fx).ReleaseGeom(rimmed);
+	(*fx).ReleaseGeom(plain);
 }

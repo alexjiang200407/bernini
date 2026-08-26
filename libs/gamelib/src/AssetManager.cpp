@@ -275,6 +275,7 @@ namespace game
 		Environment out;
 		out.skyMipLevel  = env.skyMipLevel;
 		out.skyRotationY = env.skyRotationY;
+		out.rim = { .tint = env.rim.tint, .intensity = env.rim.intensity, .power = env.rim.power };
 
 		if (!env.sky.empty())
 		{
@@ -422,6 +423,7 @@ namespace game
 		record.handle           = m_Scene->AddStaticMeshGeom(mesh, meshIndex, materials);
 		record.key              = key;
 		record.submeshMaterials = std::move(submeshMaterials);
+		record.rimIntensity     = entry.rimIntensity;
 		record.refCount         = 1;
 
 		const uint32_t slot = record.handle.handle.index;
@@ -539,6 +541,7 @@ namespace game
 			record.vatTextures      = acquiredTextures;
 			record.vatClips         = clipInfo;
 			record.vatAnimations    = vat.animations;
+			record.rimIntensity     = entry.rimIntensity;
 			record.refCount         = 1;
 
 			const uint32_t slot = record.handle.handle.index;
@@ -706,6 +709,7 @@ namespace game
 			record.submeshMaterials  = std::move(submeshMaterials);
 			record.skinnedClips      = clipInfo;
 			record.skinnedAnimations = animationsNorm;
+			record.rimIntensity      = mesh.meshes[meshIndex].rimIntensity;
 			record.refCount          = 1;
 
 			const uint32_t slot = record.handle.handle.index;
@@ -868,6 +872,11 @@ namespace game
 
 		// The instance's reference is what keeps the geometry alive while it is being drawn.
 		++geom.refCount;
+
+		// The mesh's authored default. Only ever set here: an instance that should differ from its
+		// mesh is the caller's to change, through ISceneView.
+		if (geom.rimIntensity != 0.0f)
+			view->SetInstanceRimIntensity(instance, geom.rimIntensity);
 
 		const InstanceKey key{ view.Get(), instance.handle.index };
 
