@@ -3,6 +3,9 @@
 		"Apple1.001": "Materials/apples/Apple1.bmaterial",
 		"Apple2.001": "Materials/apples/Apple2.bmaterial"
 	},
+	"outputs": [
+		"Meshes/apples.bmesh"
+	],
 	"parameters": {
 		"sampleRate": 30.0
 	}
