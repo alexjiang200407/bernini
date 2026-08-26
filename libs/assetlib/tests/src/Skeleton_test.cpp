@@ -1,6 +1,8 @@
+#include <assetlib/bmesh.h>
 #include <assetlib/codecs.h>
 #include <assetlib/skinning.h>
 #include <assetlib_structs/Animation.h>
+#include <assetlib_structs/BMesh.h>
 #include <assetlib_structs/Skeleton.h>
 
 #include "MountAt.h"
@@ -37,6 +39,22 @@ namespace
 		}
 
 		return skeleton;
+	}
+
+	/** A mesh whose one submesh carries joint indices, cooked against `skeleton`. */
+	BMesh
+	MakeSkinnedMesh(const Skeleton& skeleton)
+	{
+		BMesh mesh;
+
+		Submesh submesh{};
+		submesh.layout.attributeCount = 1;
+		submesh.layout.attributes[0]  = { VertexSemantic::kJoints0, VertexFormat::kUint16x4, 0 };
+		mesh.submeshes                = { submesh };
+
+		mesh.skeleton          = "Skeletons/chain.bskel";
+		mesh.skeletonSignature = skeletonSignature(skeleton);
+		return mesh;
 	}
 
 	/** One clip of `frames` poses over the chain, translating bone 0 along +Z by `distance`. */
@@ -206,6 +224,44 @@ TEST_CASE("A clip set cooked against another rig is detected", "[animation]")
 		auto shorter = skeleton;
 		shorter.bones.pop_back();
 		CHECK_FALSE(animationsMatchSkeleton(animations, shorter));
+	}
+}
+
+TEST_CASE("A skinned mesh cooked against another rig is detected", "[skeleton][bmesh]")
+{
+	const auto skeleton = MakeChain();
+	const auto mesh     = MakeSkinnedMesh(skeleton);
+
+	CHECK(meshMatchesSkeleton(mesh, skeleton));
+
+	SECTION("a reordered rig no longer matches")
+	{
+		// The mesh's joint indices now name different bones. Each container's cache key holds only
+		// its own bake token, so re-cooking the rig leaves this mesh current -- this comparison is
+		// the only thing standing between that and a silently mis-skinned draw.
+		auto reordered                = skeleton;
+		reordered.bones[1].nameOffset = reordered.stringPool.add("chest");
+		CHECK_FALSE(meshMatchesSkeleton(mesh, reordered));
+	}
+
+	SECTION("nor does a rig it was never paired with")
+	{
+		auto other = skeleton;
+		other.bones.pop_back();
+		CHECK_FALSE(meshMatchesSkeleton(mesh, other));
+	}
+
+	SECTION("a mesh that carries no joints matches any rig")
+	{
+		// Nothing to misname: a static attachment may name a rig it hangs off without addressing
+		// its bones, so refusing it would refuse a legal pairing.
+		auto attachment                                       = mesh;
+		attachment.submeshes[0].layout.attributes[0].semantic = VertexSemantic::kPosition;
+		attachment.skeletonSignature                          = 0;
+
+		auto reordered                = skeleton;
+		reordered.bones[1].nameOffset = reordered.stringPool.add("chest");
+		CHECK(meshMatchesSkeleton(attachment, reordered));
 	}
 }
 

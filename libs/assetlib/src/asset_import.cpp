@@ -337,7 +337,8 @@ namespace assetlib
 		Skeleton rig = skeleton;
 		rig.source   = source;
 		Save(rig, bskelKey);
-		mesh.skeleton = std::string(bskelKey);
+		mesh.skeleton          = std::string(bskelKey);
+		mesh.skeletonSignature = skeletonSignature(skeleton);
 
 		if (!writeClips || animations.clips.empty())
 			return;

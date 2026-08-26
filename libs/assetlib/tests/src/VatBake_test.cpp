@@ -123,7 +123,8 @@ namespace
 			AddVertex(quad, glm::vec3(-1.0f, 1.0f, 0.0f), glm::vec4(1.0f, 0.0f, 0.0f, 1.0f));
 			AddVertex(quad, glm::vec3(1.0f, 1.0f, 0.0f), glm::vec4(1.0f, 0.0f, 0.0f, -1.0f));
 			mesh.submeshes.push_back(quad);
-			mesh.skeleton = "Skeletons/one.bskel";
+			mesh.skeleton          = "Skeletons/one.bskel";
+			mesh.skeletonSignature = skeletonSignature(skeleton);
 		}
 
 		void

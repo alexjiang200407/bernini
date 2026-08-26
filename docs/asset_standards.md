@@ -507,10 +507,12 @@ Five rules, each of which is a way to get this wrong:
   neither ever authoritative for a unit's position. glTF has **no loop flag**, so the only evidence is
   the data: `loop` is set when the last pose matches the first, which is how a looping clip is authored.
   It is a seed for an author to override, not a fact about the file.
-* **A clip set records the signature of the rig it was cooked against.** `skeletonSignature` hashes every
-  bone's name and parent — everything a joint index means. Nothing about a wrong index is visible in the
-  pose it produces, so `animationsMatchSkeleton` is the only thing that can catch a rig that has had a
-  bone inserted or reordered since. It deliberately does **not** hash the bind pose: re-authoring a rest
+* **A clip set and a skinned mesh each record the signature of the rig they were cooked against.**
+  `skeletonSignature` hashes every bone's name and parent — everything a joint index means. Nothing
+  about a wrong index is visible in the pose it produces, so `animationsMatchSkeleton` and
+  `meshMatchesSkeleton` are the only things that can catch a rig that has had a bone inserted or
+  reordered since. Both halves need it: a container's cache key holds only its own bake token, so
+  re-cooking a `.bskel` leaves the `.bmesh` and `.banim` beside it current. It deliberately does **not** hash the bind pose: re-authoring a rest
   pose does not invalidate a clip, and treating it as though it did would make every rig tweak a re-cook
   of every clip set.
 * **The rig is not an authoring choice, unlike a material.** `bake` writes `<name>.bskel` and

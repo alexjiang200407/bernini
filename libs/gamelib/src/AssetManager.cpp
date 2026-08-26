@@ -599,8 +599,10 @@ namespace game
 		// ships inside a .bpak is only reachable that way.
 		const assetlib::AnimationSet& animations = ReadAnimations(animationsNorm);
 
-		// The clip set names its own rig, so the pair cannot be mismatched by a caller -- only by a
-		// rig that changed after the clips were cooked, which is what the signature catches.
+		// Both halves address the rig by bare bone index, so both are checked against it: the clips
+		// below, the mesh once it is read. A rig re-cooked since either was written leaves them
+		// current -- a cache key holds only its own bake token -- and nothing about a wrong index
+		// shows in the pose it produces.
 		const assetlib::Skeleton& skeleton = ReadSkeleton(animations.skeleton);
 
 		core::throw_runtime_error_if(
@@ -611,6 +613,13 @@ namespace game
 			animations.skeleton);
 
 		const assetlib::BMesh& mesh = ReadMesh(relPath);
+
+		core::throw_runtime_error_if(
+			!assetlib::meshMatchesSkeleton(mesh, skeleton),
+			"AssetManager: '{}' was cooked against a different rig than '{}'; its joint indices "
+			"name different bones now, so it would be posed by the wrong bones",
+			relPath,
+			animations.skeleton);
 
 		core::throw_runtime_error_if(
 			meshIndex >= mesh.meshes.size(),

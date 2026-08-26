@@ -6,6 +6,7 @@
 #include <assetlib/AssetStore.h>
 #include <assetlib/skinning.h>
 #include <assetlib_structs/Animation.h>
+#include <assetlib_structs/BMesh.h>
 #include <assetlib_structs/Bounds.h>
 #include <assetlib_structs/Skeleton.h>
 #include <bgl/IGraphics.h>
@@ -40,6 +41,38 @@ namespace
 		animations.skeletonSignature ^= 0x9E3779B97F4A7C15ull;
 
 		assetlib::AssetStore(dataRoot).Save(animations, "Animations/rig.banim");
+	}
+
+	/** Rewrites the .bmesh with a signature that no longer matches the rig it names. */
+	void
+	StaleTheMesh(const std::filesystem::path& dataRoot)
+	{
+		auto mesh = assetlib::AssetStore(dataRoot).Load<assetlib::BMesh>("Meshes/rig.bmesh");
+
+		mesh.skeletonSignature ^= 0x9E3779B97F4A7C15ull;
+
+		assetlib::AssetStore(dataRoot).Save(mesh, "Meshes/rig.bmesh");
+	}
+
+	/** Repoints the mesh at a second rig, so it and the clips were never cooked as a pair. */
+	void
+	CookTheMeshAgainstAnotherRig(const std::filesystem::path& dataRoot)
+	{
+		auto other      = assetlib::Skeleton();
+		auto bone       = assetlib::Bone();
+		bone.bindPose   = { glm::vec3(0.0f), glm::quat(1.0f, 0.0f, 0.0f, 0.0f), glm::vec3(1.0f) };
+		bone.parent     = assetlib::c_InvalidIndex;
+		bone.nameOffset = other.stringPool.add("pelvis");
+		other.bones.push_back(bone);
+		other.bones[0].inverseBind = glm::inverse(assetlib::bindPoseModelTransforms(other)[0]);
+
+		const auto store = assetlib::AssetStore(dataRoot);
+		store.Save(other, "Skeletons/other.bskel");
+
+		auto mesh              = store.Load<assetlib::BMesh>("Meshes/rig.bmesh");
+		mesh.skeleton          = "Skeletons/other.bskel";
+		mesh.skeletonSignature = assetlib::skeletonSignature(other);
+		store.Save(mesh, "Meshes/rig.bmesh");
 	}
 }
 
@@ -142,6 +175,46 @@ TEST_CASE("a clip set cooked against a since-changed rig is refused", "[skinned]
 	// bgl cannot make this check -- computing a skeleton's signature needs assetlib, which it does
 	// not link -- and its own bone-count check passes here, because a reordered rig has the same
 	// number of bones. Caught, the clips animate the wrong joints; uncaught, they animate silently.
+	CHECK_THROWS_AS(
+		assets.AcquireSkinnedMesh("Meshes/rig.bmesh", "Animations/rig.banim"),
+		std::runtime_error);
+}
+
+TEST_CASE("a mesh cooked against a since-changed rig is refused", "[skinned][acquire]")
+{
+	DataRoot root("bernini_skinned_stale_mesh");
+	WriteRig(root.path);
+	StaleTheMesh(root.path);
+
+	auto gfx = bgl::CreateGraphics(HeadlessOptions());
+	REQUIRE(gfx != nullptr);
+
+	auto scene  = gfx->CreateScene(bgl::SceneDesc());
+	auto assets = game::AssetManager(scene, root.path);
+
+	// The other half of the same hazard, and the one nothing checked: a cache key holds only its
+	// own bake token, so re-cooking the rig leaves this mesh current. Uncaught, its joint indices
+	// address the wrong bones and the rig draws as a heap with no error anywhere.
+	CHECK_THROWS_AS(
+		assets.AcquireSkinnedMesh("Meshes/rig.bmesh", "Animations/rig.banim"),
+		std::runtime_error);
+}
+
+TEST_CASE("a mesh and a clip set that were never a pair are refused", "[skinned][acquire]")
+{
+	DataRoot root("bernini_skinned_unpaired");
+	WriteRig(root.path);
+	CookTheMeshAgainstAnotherRig(root.path);
+
+	auto gfx = bgl::CreateGraphics(HeadlessOptions());
+	REQUIRE(gfx != nullptr);
+
+	auto scene  = gfx->CreateScene(bgl::SceneDesc());
+	auto assets = game::AssetManager(scene, root.path);
+
+	// The acquire poses the mesh with the palette the *clips* name, so a mesh cooked against some
+	// other rig is skinned by bones it never addressed -- with the same bone count, and so with
+	// nothing else to notice it.
 	CHECK_THROWS_AS(
 		assets.AcquireSkinnedMesh("Meshes/rig.bmesh", "Animations/rig.banim"),
 		std::runtime_error);

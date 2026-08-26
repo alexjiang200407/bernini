@@ -179,6 +179,13 @@ namespace assetlib
 			throw_runtime_error(
 				"vat: no submesh carries joint indices, so there is nothing to animate");
 
+		if (!meshMatchesSkeleton(mesh, skeleton))
+			throw_runtime_error(
+				"vat: the mesh was cooked against a different rig (mesh signature {:016x}, "
+				"skeleton {:016x})",
+				mesh.skeletonSignature,
+				skeletonSignature(skeleton));
+
 		if (!animationsMatchSkeleton(animations, skeleton))
 			throw_runtime_error(
 				"vat: the clips were resampled against a different rig (clip signature {:016x}, "

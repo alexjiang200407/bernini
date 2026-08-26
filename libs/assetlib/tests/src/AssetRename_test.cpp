@@ -400,8 +400,9 @@ TEST_CASE("Renaming a skeleton re-points the whole rig that hangs off it", "[ass
 	submesh.vertexCount = 1;
 	mesh.submeshes.push_back(submesh);
 
-	mesh.meshes   = { Mesh{ 0, 1, 0 } };
-	mesh.skeleton = "Skeletons/rig.bskel";
+	mesh.meshes            = { Mesh{ 0, 1, 0 } };
+	mesh.skeleton          = "Skeletons/rig.bskel";
+	mesh.skeletonSignature = skeletonSignature(skeleton);
 	StoreAt(root.path).Save(mesh, "Meshes/rig.bmesh");
 
 	const fs::path baked = root.path / vatPathFor("Meshes/rig.bmesh", "Animations/rig.banim");

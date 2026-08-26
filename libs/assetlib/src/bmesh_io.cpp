@@ -6,6 +6,7 @@
 #include <assetlib/image_io.h>
 #include <assetlib_structs/BMesh.h>
 #include <assetlib_structs/BMeshImport.h>
+#include <assetlib_structs/Skeleton.h>
 
 #include <assetlib/mesh_tangents.h>
 #include <assetlib/skinning.h>
@@ -83,7 +84,8 @@ namespace assetlib
 			kIndexData,
 			kStringPool,
 			kMaterialPaths,
-			kSkeletonPath
+			kSkeletonPath,
+			kSkeletonSignature
 		};
 
 		bool
@@ -133,6 +135,9 @@ namespace assetlib
 		writer.Add(ChunkId::kStringPool, mesh.stringPool.bytes());
 		writer.Add(ChunkId::kMaterialPaths, cache::packStrings(mesh.materials));
 		writer.Add(ChunkId::kSkeletonPath, std::span<const char>(mesh.skeleton));
+		writer.Add(
+			ChunkId::kSkeletonSignature,
+			std::span<const uint64_t>(&mesh.skeletonSignature, 1));
 		return writer.Finish(magic::c_BMesh, AssetCodec<BMesh>::c_BakeToken, mesh.source);
 	}
 
@@ -157,6 +162,9 @@ namespace assetlib
 
 		const auto skeleton = reader.Read<char>(ChunkId::kSkeletonPath);
 		mesh.skeleton.assign(skeleton.begin(), skeleton.end());
+
+		const auto signature   = reader.Read<uint64_t>(ChunkId::kSkeletonSignature);
+		mesh.skeletonSignature = signature.empty() ? 0 : signature.front();
 
 		requireSkeletonIfSkinned(mesh);
 		return mesh;
@@ -461,6 +469,12 @@ namespace assetlib
 				vertexBase += submesh.vertexCount;
 			}
 		}
+	}
+
+	bool
+	meshMatchesSkeleton(const BMesh& mesh, const Skeleton& skeleton) noexcept
+	{
+		return !isSkinned(mesh) || mesh.skeletonSignature == skeletonSignature(skeleton);
 	}
 
 }
