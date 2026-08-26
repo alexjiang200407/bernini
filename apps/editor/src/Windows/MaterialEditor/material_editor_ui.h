@@ -4,6 +4,7 @@
 
 class MaterialGraphView;
 class QComboBox;
+class QDoubleSpinBox;
 class QLabel;
 class QPushButton;
 class QWidget;
@@ -43,6 +44,7 @@ namespace editor
 		QPushButton*       bakeAll          = nullptr;
 		QPushButton*       setDefault       = nullptr;
 		QPushButton*       generateTangents = nullptr;
+		QDoubleSpinBox*    rimIntensity     = nullptr;
 		QComboBox*         submeshSelector  = nullptr;
 		QComboBox*         outputSelector   = nullptr;
 		QLabel*            materialLabel    = nullptr;

@@ -104,7 +104,8 @@ disagrees, trust the header, then fix this doc.
 |---|---|
 | [libs/assetlib/include/assetlib/envmap.h](libs/assetlib/include/assetlib/envmap.h) | The pipeline, in one header and in the order it runs: `loadRadianceHdr` / `equirectToCube`, then the convolutions (`prefilterRadiance`, `irradianceSh`, `skyChain`, `blurCube`), then `EnvironmentMaps` and `ResolvedEnvironment`, and `isBakedEnvMapName`, which is what the prune reads. The import itself is `AssetStore::ImportEnvironment` — selectable parts, cancellation and rollback — with `EnvironmentImportTargets` naming what it *would* write |
 | [AssetStore.h](../libs/assetlib/include/assetlib/AssetStore.h) | `BakeSky` / `BakeEnvLighting` and their staleness checks |
-| [libs/gamelib/include/gamelib/AssetManager.h](libs/gamelib/include/gamelib/AssetManager.h) | `AcquireEnvironment` — a `.benv` followed to uploaded texture handles. What the runtime consumes |
+| [libs/gamelib/include/gamelib/AssetManager.h](libs/gamelib/include/gamelib/AssetManager.h) | `AcquireEnvironment` — a `.benv` followed to uploaded texture handles and its rim. What the runtime consumes |
+| [apps/editor/src/Windows/EnvironmentEditor/EnvironmentEditorWindow.h](apps/editor/src/Windows/EnvironmentEditor/EnvironmentEditorWindow.h) | The panel a person authors one in: the presentation knobs, the exposure override and the rim, over a lit preview. What it composes is read-only — that is what an import wrote |
 | [libs/assetlib/include/assetlib/codecs.h](libs/assetlib/include/assetlib/codecs.h) | The codec for each of the three containers |
 
 ## Topology

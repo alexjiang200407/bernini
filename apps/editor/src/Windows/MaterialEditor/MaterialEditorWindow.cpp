@@ -1,9 +1,11 @@
 #include "MaterialEditorWindow.h"
+#include "Mesh/BMeshUtil.h"
 #include "Mesh/mesh_load.h"
 #include <assetlib/bmesh.h>
 
 #include <QComboBox>
 #include <QDebug>
+#include <QDoubleSpinBox>
 #include <QFileDialog>
 #include <QFileInfo>
 #include <QHBoxLayout>
@@ -76,6 +78,7 @@ MaterialEditorWindow::MaterialEditorWindow(QWidget* parent, MaterialEditorWindow
 	m_BakeAllButton      = ui.bakeAll;
 	m_SetDefaultButton   = ui.setDefault;
 	m_GenerateTangents   = ui.generateTangents;
+	m_RimIntensity       = ui.rimIntensity;
 	m_SubmeshSelector    = ui.submeshSelector;
 	m_OutputSelector     = ui.outputSelector;
 	m_MaterialLabel      = ui.materialLabel;
@@ -116,6 +119,13 @@ MaterialEditorWindow::MaterialEditorWindow(QWidget* parent, MaterialEditorWindow
 		&QComboBox::currentIndexChanged,
 		this,
 		&MaterialEditorWindow::SelectSubmesh);
+
+	// editingFinished, not valueChanged: RefreshRimIntensity sets the box from the mesh, and a
+	// value change would read that back as a user's edit and write the file again -- once per
+	// keystroke.
+	connect(m_RimIntensity, &QDoubleSpinBox::editingFinished, this, [this] {
+		SetRimIntensity(m_RimIntensity->value());
+	});
 
 	connect(
 		m_OutputSelector,
@@ -437,6 +447,79 @@ MaterialEditorWindow::RefreshTangentWarning()
 }
 
 void
+MaterialEditorWindow::RefreshRimIntensity()
+{
+	const QSignalBlocker blocker(m_RimIntensity);
+	m_RimIntensity->setEnabled(false);
+	m_RimIntensity->setValue(0.0);
+
+	if (m_Preview == nullptr || m_Preview->MeshPath().empty() || m_Graphs.CurrentSubmesh() < 0)
+		return;
+
+	const uint32_t source =
+		m_Preview->SourceSubmesh(static_cast<uint32_t>(m_Graphs.CurrentSubmesh()));
+	if (source == assetlib::c_InvalidIndex)
+		return;
+
+	try
+	{
+		const assetlib::BMesh mesh = editor::LoadMeshThroughSeam(m_DataRoot, m_Preview->MeshPath());
+
+		const uint32_t meshIndex = bmesh::GetMeshOfSubmesh(mesh, source);
+		if (meshIndex == assetlib::c_InvalidIndex)
+			return;
+
+		// A mesh that never recorded its source has no document to author in, and writing the
+		// `.bmesh` instead would be undone by the next re-import.
+		m_RimIntensity->setEnabled(!mesh.source.key.empty());
+		m_RimIntensity->setValue(mesh.meshes[meshIndex].rimIntensity);
+	}
+	catch (const std::exception& e)
+	{
+		qWarning("MaterialEditor: cannot read the rim-intensity option: %s", e.what());
+	}
+}
+
+void
+MaterialEditorWindow::SetRimIntensity(double rimIntensity)
+{
+	if (m_Preview == nullptr || m_Graphs.CurrentSubmesh() < 0)
+		return;
+
+	const uint32_t source =
+		m_Preview->SourceSubmesh(static_cast<uint32_t>(m_Graphs.CurrentSubmesh()));
+	if (source == assetlib::c_InvalidIndex)
+		return;
+
+	try
+	{
+		const assetlib::BMesh mesh = editor::LoadMeshThroughSeam(m_DataRoot, m_Preview->MeshPath());
+
+		const uint32_t meshIndex = bmesh::GetMeshOfSubmesh(mesh, source);
+		if (meshIndex == assetlib::c_InvalidIndex)
+			return;
+
+		assetlib::AssetStore(m_DataRoot)
+			.SetMeshRimIntensityInDocument(
+				mesh.source.key,
+				mesh.stringPool.at(mesh.meshes[meshIndex].nameOffset),
+				static_cast<float>(rimIntensity));
+	}
+	catch (const std::exception& e)
+	{
+		QMessageBox::warning(
+			window(),
+			QStringLiteral("Rim Lighting"),
+			QStringLiteral("The option could not be written to the mesh's import document:\n%1")
+				.arg(QString::fromLatin1(e.what())));
+	}
+
+	// From the file either way, so a failed write shows as the box going back rather than as a
+	// dialog over a value that stayed.
+	RefreshRimIntensity();
+}
+
+void
 MaterialEditorWindow::RefreshActions()
 {
 	const int  graphIndex = m_Graphs.Current();
@@ -467,6 +550,7 @@ MaterialEditorWindow::RefreshActions()
 	const bool isDefault = editor::IsSameMaterialFile(boundPath, materialPath);
 
 	RefreshTangentWarning();
+	RefreshRimIntensity();
 
 	m_SetDefaultButton->setEnabled(!materialPath.isEmpty() && hasMesh && !isDefault);
 	m_SetDefaultButton->setToolTip(

@@ -56,4 +56,13 @@ namespace bmesh
 	// One entry per node of `mesh` that references a mesh entry, via GetInstanceTransform.
 	[[nodiscard]] std::vector<InstancePlacement>
 	PlanInstances(const assetlib::BMesh& mesh);
+
+	/**
+	 * The mesh entry whose submesh range covers `submeshIndex`, or c_InvalidIndex when none does.
+	 *
+	 * A submesh is what the editor selects and a mesh is what per-mesh state is authored against,
+	 * so anything acting on the second from the first goes through here.
+	 */
+	[[nodiscard]] uint32_t
+	GetMeshOfSubmesh(const assetlib::BMesh& mesh, uint32_t submeshIndex) noexcept;
 }

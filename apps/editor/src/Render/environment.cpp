@@ -5,6 +5,7 @@
 
 #include <assetlib/AssetStore.h>
 #include <assetlib_structs/ImageData.h>
+#include <bgl/RimLightDesc.h>
 #include <bgl/SkyboxDesc.h>
 
 namespace editor
@@ -39,6 +40,11 @@ namespace editor
 		// The lighting's own exposure is the value derived from these maps, so it is the right
 		// default; config only overrules it deliberately.
 		view->SetExposure(exposureOverride.value_or(env.maps.exposure));
+
+		// Before the maps, and outside their try: a rim takes no texture slot, so it cannot fail
+		// the way a map can, and an environment that resolves to no maps at all still has one.
+		view->SetRimLight(
+			{ .tint = env.rim.tint, .intensity = env.rim.intensity, .power = env.rim.power });
 
 		try
 		{

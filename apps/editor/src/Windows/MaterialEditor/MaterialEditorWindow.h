@@ -13,6 +13,7 @@
 class TexturePreviewCache;
 
 class QComboBox;
+class QDoubleSpinBox;
 class QJsonObject;
 class QLabel;
 class QPointF;
@@ -105,6 +106,18 @@ private:
 	FrameOnOutput();
 
 	/**
+	 * Rereads the rim-intensity box from the mesh the selected submesh belongs to, and enables it
+	 * only where it can be written: a mesh on disk that records the source its `.bimport` sits
+	 * beside.
+	 */
+	void
+	RefreshRimIntensity();
+
+	/** Writes the box's value into the mesh's `.bimport`, and reports a failure to the user. */
+	void
+	SetRimIntensity(double rimIntensity);
+
+	/**
 	 * Shows or hides the "no tangents" warning for the current submesh: a normal map is authored in a
 	 * tangent frame, so one routed onto a submesh without a tangent renders as nothing at all.
 	 */
@@ -195,4 +208,5 @@ private:
 	QLabel*            m_BakedTexturesLabel = nullptr;
 	QLabel*            m_TangentWarning     = nullptr;
 	QPushButton*       m_GenerateTangents   = nullptr;
+	QDoubleSpinBox*    m_RimIntensity       = nullptr;
 };

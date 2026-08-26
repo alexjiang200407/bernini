@@ -85,4 +85,19 @@ namespace bmesh
 
 		return placements;
 	}
+
+	uint32_t
+	GetMeshOfSubmesh(const assetlib::BMesh& mesh, uint32_t submeshIndex) noexcept
+	{
+		for (uint32_t i = 0; i < mesh.meshes.size(); ++i)
+		{
+			const assetlib::Mesh& entry = mesh.meshes[i];
+			if (submeshIndex >= entry.firstSubmesh &&
+			    submeshIndex < entry.firstSubmesh + entry.submeshCount)
+			{
+				return i;
+			}
+		}
+		return assetlib::c_InvalidIndex;
+	}
 }

@@ -3,6 +3,7 @@
 #include "Windows/MaterialEditor/MaterialGraphView.h"
 
 #include <QComboBox>
+#include <QDoubleSpinBox>
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QPushButton>
@@ -133,6 +134,28 @@ namespace editor
 			".bmesh."));
 		widgets.generateTangents->hide();
 		propertiesLayout->addWidget(widgets.generateTangents);
+
+		// A property of the mesh, not of the material: how much of the environment's rim a surface
+		// catches is a decision about the object, and a material shared by a unit and a wall would
+		// have to answer for both. Zero by default -- see docs/envmaps.md.
+		auto* rimRow    = new QWidget(propertiesPanel);
+		auto* rimLayout = new QHBoxLayout(rimRow);
+		rimLayout->setContentsMargins(0, 0, 0, 0);
+		rimLayout->addWidget(new QLabel(QStringLiteral("Rim lighting (whole mesh)"), rimRow));
+
+		widgets.rimIntensity = new QDoubleSpinBox(rimRow);
+		widgets.rimIntensity->setObjectName(QStringLiteral("MeshRimIntensity"));
+		widgets.rimIntensity->setRange(0.0, 16.0);
+		widgets.rimIntensity->setSingleStep(0.1);
+		widgets.rimIntensity->setDecimals(2);
+		widgets.rimIntensity->setEnabled(false);
+		widgets.rimIntensity->setToolTip(QStringLiteral(
+			"How much of the environment's rim light the mesh this submesh belongs to catches, in "
+			"every scene it is placed in. Zero catches none.\nAuthored in the mesh's .bimport, so "
+			"a re-import keeps it. The environment decides the rim's colour and strength; an "
+			"environment with none shows nothing here."));
+		rimLayout->addWidget(widgets.rimIntensity);
+		propertiesLayout->addWidget(rimRow);
 
 		propertiesLayout->addStretch(1);
 

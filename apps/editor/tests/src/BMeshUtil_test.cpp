@@ -134,3 +134,21 @@ TEST_CASE("PlanInstances places one instance per node that references a mesh", "
 	CHECK(placements[1].world[3].x == 1.0f);
 	CHECK(placements[1].world[3].y == 2.0f);
 }
+
+// The panel selects a submesh and authors against a mesh, so this is the only thing standing
+// between "the user clicked this submesh" and "this is the mesh whose option changes".
+TEST_CASE("A submesh names the mesh whose range covers it", "[bmeshutil]")
+{
+	assetlib::BMesh mesh;
+	mesh.meshes = { assetlib::Mesh{ 0, 2, 0, 0 }, assetlib::Mesh{ 2, 3, 0, 0 } };
+
+	CHECK(bmesh::GetMeshOfSubmesh(mesh, 0) == 0);
+	CHECK(bmesh::GetMeshOfSubmesh(mesh, 1) == 0);
+	CHECK(bmesh::GetMeshOfSubmesh(mesh, 2) == 1);
+	CHECK(bmesh::GetMeshOfSubmesh(mesh, 4) == 1);
+
+	// Past the last range, and past no range at all: neither is a mesh index, and neither may come
+	// back as 0 -- which would author against the wrong mesh rather than none.
+	CHECK(bmesh::GetMeshOfSubmesh(mesh, 5) == assetlib::c_InvalidIndex);
+	CHECK(bmesh::GetMeshOfSubmesh(assetlib::BMesh(), 0) == assetlib::c_InvalidIndex);
+}

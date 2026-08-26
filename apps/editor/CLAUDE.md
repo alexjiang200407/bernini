@@ -89,8 +89,10 @@ lives beside it, and the split is by responsibility rather than by line count:
   `.benv`. Never add a panel to a list of holders: the guard walks MainWindow's object tree, and
   the list that came before it was short by four.
 - **Widget assembly** built in code rather than Designer goes to its own `*_ui` file
-  (`material_editor_ui`), which builds and connects nothing. The `connect` calls stay in the window,
-  because what a widget *does* is behaviour.
+  (`material_editor_ui`, `environment_editor_ui`), which builds and connects nothing. The `connect`
+  calls stay in the window, because what a widget *does* is behaviour. Give such a control an
+  `objectName` where a test has to reach it: the window's widget pointers are private, and
+  `findChild` is what makes a panel's rules pinnable without one.
 
 ## Rules
 
@@ -137,6 +139,11 @@ for anything Qt does off-thread, like `QFileSystemModel` scanning a directory) a
 `QString` printers, without which Catch2 renders a failed comparison as `{?}`.
 
 ## What is testable, and what is not
+
+The panels themselves are covered where they stand without a device. `EnvironmentEditorWindow` is
+the worked example: with a null `Renderer` it puts a placeholder where its preview would be, so
+`EnvironmentEditorWindow_test` opens a real `.benv`, drives the spin boxes through `findChild`, and
+reads the file back — the panel's whole read-edit-write loop, on the CPU, in milliseconds.
 
 What blocks coverage is the **window**, not the device. `RenderTargetWindow`'s constructor
 calls `CreateRenderTarget` with `winId()` and `headless = false`, and does not guard a null

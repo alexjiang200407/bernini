@@ -17,6 +17,7 @@
 #include "Windows/AnimationEditor/AnimationEditorWindow.h"
 #include "Windows/AnimationEditor/AnimationPreviewWindow.h"
 #include "Windows/ContentExplorer/ContentExplorerWindow.h"
+#include "Windows/EnvironmentEditor/EnvironmentEditorWindow.h"
 #include "Windows/LevelEditor/LevelEditorWindow.h"
 #include "Windows/MaterialEditor/MaterialEditorWindow.h"
 #include "Windows/RenderTarget/RenderTargetWindow.h"
@@ -197,8 +198,20 @@ MainWindow::Build()
 		if (auto exposure = animSettings["exposure"])
 			animDesc.previewEnv.exposureOverride = exposure.GetOrDefault(1.0f);
 
-		m_MaterialEditor  = new MaterialEditorWindow(this, std::move(matDesc));
-		m_AnimationEditor = new AnimationEditorWindow(this, std::move(animDesc));
+		// Opens the level's environment, not the material preview's: this panel authors the `.benv`
+		// the world is lit by, and the level viewport is what an edit to it is judged in.
+		auto levelSettings  = settings["levelEditor"];
+		auto envDesc        = EnvironmentEditorWindowDesc();
+		envDesc.renderer    = m_Renderer.get();
+		envDesc.taaEnabled  = levelSettings["temporalAA"].GetOrDefault(true);
+		envDesc.renderScale = levelSettings["renderScale"].GetOrDefault(1.0f);
+		envDesc.startupEnv.environmentMap =
+			levelSettings["environmentMap"].GetOrDefault(std::string());
+		envDesc.startupEnv.dataRoot = levelSettings["dataRoot"].GetOrDefault(std::string());
+
+		m_MaterialEditor    = new MaterialEditorWindow(this, std::move(matDesc));
+		m_AnimationEditor   = new AnimationEditorWindow(this, std::move(animDesc));
+		m_EnvironmentEditor = new EnvironmentEditorWindow(this, std::move(envDesc));
 		// Parented so the held-open walk reaches it: it is lit by a `.benv` like the viewports are.
 		m_Thumbnails = std::make_unique<AssetThumbnailCache>(std::move(thumbDesc), this);
 	}
@@ -231,13 +244,26 @@ MainWindow::Build()
 
 	tabifyDockWidget(m_MaterialEditorDock, m_AnimationEditorDock);
 
+	m_EnvironmentEditorDock = new QDockWidget("Environment Editor", this);
+	m_EnvironmentEditorDock->setObjectName("EnvironmentEditorDock");
+	m_EnvironmentEditorDock->setWidget(m_EnvironmentEditor);
+	m_EnvironmentEditorDock->setTitleBarWidget(new QWidget(m_EnvironmentEditorDock));
+	addDockWidget(Qt::TopDockWidgetArea, m_EnvironmentEditorDock);
+
+	tabifyDockWidget(m_AnimationEditorDock, m_EnvironmentEditorDock);
+
 	// Neither movable nor floatable, so the three stay one tab group and exactly one viewport is
 	// ever in the frame loop. Tabifying alone only arranges them that way to begin with: a tab
 	// dragged to another area, or out into a window of its own, would put a second viewport into the
 	// loop -- which costs a vsync-locked present per frame and leaves the status bar's frame-time
 	// readout describing one of two viewports with nothing to say which.
-	for (QDockWidget* dock : { m_LevelEditorDock, m_MaterialEditorDock, m_AnimationEditorDock })
+	for (QDockWidget* dock : { m_LevelEditorDock,
+	                           m_MaterialEditorDock,
+	                           m_AnimationEditorDock,
+	                           m_EnvironmentEditorDock })
+	{
 		dock->setFeatures(QDockWidget::DockWidgetClosable);
+	}
 
 	m_ContentExplorerDock = new QDockWidget("Content Explorer", this);
 	m_ContentExplorerDock->setObjectName("ContentExplorerDock");
@@ -277,6 +303,7 @@ MainWindow::Build()
 	DriveViewportsFromTab(m_LevelEditorDock);
 	DriveViewportsFromTab(m_MaterialEditorDock);
 	DriveViewportsFromTab(m_AnimationEditorDock);
+	DriveViewportsFromTab(m_EnvironmentEditorDock);
 
 	// Leaving the Animation tab closes what it was showing, releasing its acquisitions and every
 	// held-open path. visibilityChanged, not hideEvent: a tabified dock's widget gets no hideEvent
@@ -298,6 +325,7 @@ MainWindow::Build()
 	m_Ui.menuWindow->addAction(m_LevelEditorDock->toggleViewAction());
 	m_Ui.menuWindow->addAction(m_MaterialEditorDock->toggleViewAction());
 	m_Ui.menuWindow->addAction(m_AnimationEditorDock->toggleViewAction());
+	m_Ui.menuWindow->addAction(m_EnvironmentEditorDock->toggleViewAction());
 	m_Ui.menuWindow->addAction(m_ContentExplorerDock->toggleViewAction());
 
 	SetUpRenderMenu();
@@ -467,6 +495,9 @@ MainWindow::ReleaseRenderResources() noexcept
 
 	delete m_AnimationEditor;
 	m_AnimationEditor = nullptr;
+
+	delete m_EnvironmentEditor;
+	m_EnvironmentEditor = nullptr;
 }
 
 void
@@ -947,7 +978,10 @@ MainWindow::SetUpFrameStats()
 	// unambiguously about that one. A hidden viewport stops reporting rather than reporting zero, so
 	// the label has to be cleared on the way out: left alone, the tab you just left keeps its last
 	// figures on screen and they read as the tab you are now looking at.
-	for (QDockWidget* dock : { m_LevelEditorDock, m_MaterialEditorDock, m_AnimationEditorDock })
+	for (QDockWidget* dock : { m_LevelEditorDock,
+	                           m_MaterialEditorDock,
+	                           m_AnimationEditorDock,
+	                           m_EnvironmentEditorDock })
 	{
 		for (RenderTargetWindow* view : dock->findChildren<RenderTargetWindow*>())
 		{
@@ -1003,6 +1037,7 @@ MainWindow::ShowEmptyState()
 	m_LevelEditorDock->hide();
 	m_MaterialEditorDock->hide();
 	m_AnimationEditorDock->hide();
+	m_EnvironmentEditorDock->hide();
 	m_ContentExplorerDock->hide();
 
 	m_Ui.actionSave->setEnabled(false);
@@ -1028,6 +1063,7 @@ MainWindow::ShowProjectState()
 	m_LevelEditorDock->show();
 	m_MaterialEditorDock->show();
 	m_AnimationEditorDock->show();
+	m_EnvironmentEditorDock->show();
 	m_ContentExplorerDock->show();
 	m_LevelEditorDock->raise();
 

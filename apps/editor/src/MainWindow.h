@@ -13,6 +13,7 @@ class QMenu;
 class ContentExplorerWindow;
 class AssetThumbnailCache;
 class AnimationEditorWindow;
+class EnvironmentEditorWindow;
 class LevelEditorWindow;
 class MaterialEditorWindow;
 class RenderTargetWindow;
@@ -113,15 +114,17 @@ private:
 	QString m_InstanceName;
 
 	std::unique_ptr<assetlib::Project> m_Project;
-	ContentExplorerWindow*             m_ContentExplorer     = nullptr;
-	LevelEditorWindow*                 m_LevelEditor         = nullptr;
-	MaterialEditorWindow*              m_MaterialEditor      = nullptr;
-	AnimationEditorWindow*             m_AnimationEditor     = nullptr;
-	QDockWidget*                       m_LevelEditorDock     = nullptr;
-	QDockWidget*                       m_MaterialEditorDock  = nullptr;
-	QDockWidget*                       m_AnimationEditorDock = nullptr;
-	QDockWidget*                       m_ContentExplorerDock = nullptr;
-	QLabel*                            m_FrameStats          = nullptr;
+	ContentExplorerWindow*             m_ContentExplorer       = nullptr;
+	LevelEditorWindow*                 m_LevelEditor           = nullptr;
+	MaterialEditorWindow*              m_MaterialEditor        = nullptr;
+	AnimationEditorWindow*             m_AnimationEditor       = nullptr;
+	EnvironmentEditorWindow*           m_EnvironmentEditor     = nullptr;
+	QDockWidget*                       m_LevelEditorDock       = nullptr;
+	QDockWidget*                       m_MaterialEditorDock    = nullptr;
+	QDockWidget*                       m_AnimationEditorDock   = nullptr;
+	QDockWidget*                       m_EnvironmentEditorDock = nullptr;
+	QDockWidget*                       m_ContentExplorerDock   = nullptr;
+	QLabel*                            m_FrameStats            = nullptr;
 
 	// The viewport the readout is currently about, or null when none is visible. A viewport that
 	// leaves the frame loop stops reporting, so without this its last figures would stay on the
