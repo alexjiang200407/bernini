@@ -98,8 +98,8 @@ namespace
 	{
 		auto gotKeys  = std::vector<std::string>();
 		auto wantKeys = std::vector<std::string>();
-		for (const auto& [key, bytes] : got) gotKeys.push_back(key);
-		for (const auto& [key, bytes] : want) wantKeys.push_back(key);
+		for (const auto& entry : got) gotKeys.push_back(entry.first);
+		for (const auto& entry : want) wantKeys.push_back(entry.first);
 		CHECK(gotKeys == wantKeys);
 
 		for (const auto& [key, bytes] : want)
@@ -128,7 +128,7 @@ TEST_CASE("A project with no derived containers is rebuilt from its sources", "[
 	REQUIRE(before.contains("Skeletons/unit.bskel"));
 	REQUIRE(before.contains("Animations/unit.banim"));
 
-	for (const auto& [key, bytes] : before) fs::remove(project.dataRoot / key);
+	for (const auto& entry : before) fs::remove(project.dataRoot / entry.first);
 
 	const ReimportReport report = project.Store().Reimport(/*dryRun*/ false);
 	REQUIRE(report.FailedCount() == 0);
@@ -374,7 +374,7 @@ TEST_CASE("Migrate produces what the sources name before it re-saves", "[reimpor
 	const ImportedProject   project("bernini_reimport_migrate", source.PackGlb());
 
 	const auto before = DerivedFiles(project.dataRoot);
-	for (const auto& [key, bytes] : before) fs::remove(project.dataRoot / key);
+	for (const auto& entry : before) fs::remove(project.dataRoot / entry.first);
 
 	const MigrateReport report = project.Store().Migrate(/*dryRun*/ false);
 	CHECK(report.Count(MigratedFile::Outcome::kFailed) == 0);

@@ -122,7 +122,7 @@ namespace assetlib
 				}
 			}
 
-			for (auto& [source, entry] : facts) std::ranges::sort(entry.outputs);
+			for (auto& entry : facts) std::ranges::sort(entry.second.outputs);
 			return facts;
 		}
 	}

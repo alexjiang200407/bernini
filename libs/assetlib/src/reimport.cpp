@@ -35,9 +35,9 @@ namespace assetlib
 		 * Rigs before meshes before clips: a mesh names the rig it binds, and a clip set sweeps its
 		 * boxes through the meshes standing on disk.
 		 */
-		constexpr std::array<AssetType, 3> c_Order = { AssetType::kSkeleton,
-			                                           AssetType::kMesh,
-			                                           AssetType::kAnimation };
+		constexpr std::array<AssetType, 3> c_Order = {
+			{ AssetType::kSkeleton, AssetType::kMesh, AssetType::kAnimation }
+		};
 
 		/** The `.bmesh` among a document's outputs, or empty for a clips-only source. */
 		std::string
@@ -126,9 +126,17 @@ namespace assetlib
 				store.Save(clips, key);
 				return;
 			}
-			default:
-				core::throw_runtime_error("'{}' is not a container an import produces", key);
+			case AssetType::kMaterial:
+			case AssetType::kTexture:
+			case AssetType::kEnvironment:
+			case AssetType::kSky:
+			case AssetType::kEnvLighting:
+			case AssetType::kVat:
+			case AssetType::kImportDocument:
+			case AssetType::kCount:
+				break;
 			}
+			core::throw_runtime_error("'{}' is not a container an import produces", key);
 		}
 
 		/**
