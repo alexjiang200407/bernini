@@ -32,19 +32,19 @@ entry**, in `src/cache_io.h`: a frozen header carrying the cache key (bake token
 parameter hash, source mount key), raw current-layout chunks with no self-description, and a chunk
 table. A chunk is addressed by id and an absent one is not an error. There is no conversion and no
 old shape to parse — a token mismatch is a cache miss. For geometry, `AssetStore`'s `LoadRegen*`
-methods are the seam that acts on one: a stale entry regenerates in memory from its `Authored/Meshes/`
-source at the parameters its `.bimport` records, with the document's bindings applied over the
-result, while a read-only store trusts its keys because `pack` made them true. For the env family
-and `.bvat` the re-bake is deliberate (`pack`, the editor) rather than at load. The textures an
-import extracted are the third case: keyed by the `textureDir` and `textureStamp` their `.bimport`
-carries, because a `.ktx2` has no header of its own, and refreshed by
-`AssetStore::RefreshImportedTextures` rather than at load — `LoadRegen*` runs on every mesh load and
-every deletion's reference scan, and an import's worth of Basis encoding cannot go there. A change
-to what a container stores — layout or meaning — is one edit: bump `AssetCodec<T>::c_BakeToken`
-(`include/assetlib/codecs.h`) to a fresh random value, beside the writer it has to move with. A
-forgotten bump on a layout change fails `TokenCanary_test`, which pins each
-writer's output hash beside its token; a semantic change the fixture cannot see is still yours to
-remember.
+methods are the seam that acts on one: a stale entry regenerates in memory from its
+`Authored/Meshes/` source at the parameters its `.bimport` records, with the document's bindings and
+mesh options applied over the result, while a read-only store trusts its keys because `pack` made
+them true. For the env family and `.bvat` the re-bake is deliberate (`pack`, the editor) rather than
+at load. The textures an import extracted are the third case: keyed by the `textureDir` and
+`textureStamp` their `.bimport` carries, because a `.ktx2` has no header of its own, and refreshed
+by `AssetStore::RefreshImportedTextures` rather than at load — `LoadRegen*` runs on every mesh load
+and every deletion's reference scan, and an import's worth of Basis encoding cannot go there. A
+change to what a container stores — layout or meaning — is one edit: bump
+`AssetCodec<T>::c_BakeToken` (`include/assetlib/codecs.h`) to a fresh random value, beside the
+writer it has to move with. A forgotten bump on a layout change fails `TokenCanary_test`, which pins
+each writer's output hash beside its token; a semantic change the fixture cannot see is still yours
+to remember.
 
 The public surface is documented as a map in [docs/assetlib_api.md](../../docs/assetlib_api.md).
 

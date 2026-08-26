@@ -17,6 +17,8 @@ namespace assetlib
 		constexpr std::string_view c_SampleRateKey       = "sampleRate";
 		constexpr std::string_view c_ClipFloorKey        = "clipFloor";
 		constexpr std::string_view c_BindingsKey         = "bindings";
+		constexpr std::string_view c_MeshOptionsKey      = "meshOptions";
+		constexpr std::string_view c_RimIntensityKey     = "rimIntensity";
 		constexpr std::string_view c_TextureDirKey       = "textureDir";
 		constexpr std::string_view c_TextureStampSizeKey = "textureStampSize";
 		constexpr std::string_view c_TextureStampHashKey = "textureStampHash";
@@ -196,6 +198,51 @@ namespace assetlib
 			json.erase(it);
 		}
 
+		if (auto it = json.find(c_MeshOptionsKey); it != json.end())
+		{
+			core::throw_runtime_error_if(
+				!it->is_object(),
+				"import document: '{}' is not an object",
+				c_MeshOptionsKey);
+			for (auto& [mesh, options] : it->items())
+			{
+				core::throw_runtime_error_if(
+					!options.is_object(),
+					"import document: mesh options for '{}' is not an object",
+					mesh);
+
+				// A block holding nothing this build knows leaves no entry at all. Taking one
+				// would put this mesh in `meshOptions`, and the writer states every entry's
+				// option -- so a document nobody touched would come back with a `rimIntensity`
+				// somebody has to read as a decision.
+				const auto rim = options.find(c_RimIntensityKey);
+				if (rim == options.end())
+					continue;
+
+				core::throw_runtime_error_if(
+					!rim->is_number(),
+					"import document: '{}' of mesh '{}' is not a number",
+					c_RimIntensityKey,
+					mesh);
+
+				const auto rimIntensity = rim->get<float>();
+				core::throw_runtime_error_if(
+					!std::isfinite(rimIntensity) || rimIntensity < 0.0f,
+					"import document: '{}' of mesh '{}' must be finite and non-negative, got {}",
+					c_RimIntensityKey,
+					mesh,
+					rimIntensity);
+
+				document.meshOptions.push_back({ mesh, rimIntensity });
+				options.erase(rim);
+			}
+
+			// Known keys come out; a sibling branch's option on the same mesh stays behind and rides
+			// extraJson, so what remains is written back beside the ones this build knows.
+			if (std::ranges::all_of(*it, [](const auto& options) { return options.empty(); }))
+				json.erase(it);
+		}
+
 		document.extraJson = json.dump();
 		return document;
 	}
@@ -240,6 +287,21 @@ namespace assetlib
 			bindings[binding.submesh] = binding.material;
 		}
 		json[c_BindingsKey] = std::move(bindings);
+
+		// Merged into what extraJson preserved rather than rebuilt, and omitted entirely when
+		// nothing opted in -- so a document written before this key existed round-trips unchanged.
+		for (const MeshOptions& options : document.meshOptions)
+		{
+			core::throw_runtime_error_if(
+				json[std::string(c_MeshOptionsKey)].contains(options.mesh) &&
+					json[std::string(c_MeshOptionsKey)][options.mesh].contains(c_RimIntensityKey),
+				"import document: two option sets for mesh '{}'",
+				options.mesh);
+			json[std::string(c_MeshOptionsKey)][options.mesh][std::string(c_RimIntensityKey)] =
+				doc::plainFloat(options.rimIntensity);
+		}
+		if (const auto it = json.find(c_MeshOptionsKey); it != json.end() && it->empty())
+			json.erase(it);
 
 		const std::string text = doc::canonicalDump(json);
 

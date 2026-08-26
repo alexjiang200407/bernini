@@ -1,4 +1,5 @@
 #pragma once
+#include <assetlib/import_document.h>
 
 namespace assetlib
 {
@@ -42,16 +43,21 @@ namespace assetlib
 	};
 
 	/**
-	 * Rebuilds `mesh.materials` and every `Submesh::material` canonically from `bindings` -- a
-	 * pure function of the document, never a mutation of what was loaded, so two checkouts with
-	 * one document hold one array. A submesh the document does not name is unbound.
+	 * Stamps `document`'s authored half onto a freshly loaded mesh: `mesh.materials` and every
+	 * `Submesh::material` rebuilt canonically from its bindings, and every `Mesh::flags` from its
+	 * mesh options.
+	 *
+	 * A pure function of the document, never a mutation of what was loaded, so two checkouts with
+	 * one document hold one array. A submesh the document does not name is unbound; a mesh it does
+	 * not name keeps every option at its default.
 	 *
 	 * @return The submeshes named by bindings this mesh does not have -- the source changed shape
 	 *         under the document. Never guessed at: the editor warns, `migrate` fails the file,
-	 *         `pack` fails the pack.
+	 *         `pack` fails the pack. A mesh option naming a mesh that is gone is not reported the
+	 *         same way: an opt-in that reaches nothing costs nothing, where a lost material shows.
 	 */
 	[[nodiscard]] std::vector<std::string>
-	applyBindings(BMesh& mesh, std::span<const MaterialBinding> bindings);
+	applyDocument(BMesh& mesh, const ImportDocument& document);
 
 	/** What happened to one import document under `AssetStore::ReauthorImportDocuments`. */
 	struct ReauthoredDocument

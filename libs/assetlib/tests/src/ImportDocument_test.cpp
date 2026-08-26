@@ -362,3 +362,117 @@ TEST_CASE("an authored clip floor round-trips as a parameter", "[importdoc][grou
 		CHECK_THROWS(DocumentText(twice));
 	}
 }
+
+// The option is authored here rather than on the mesh, so that a re-import -- which rewrites the
+// mesh entirely -- cannot lose it.
+TEST_CASE("an import document round-trips each mesh's rim intensity", "[importdoc]")
+{
+	ImportDocument document;
+	document.meshOptions = { { .mesh = "cape", .rimIntensity = 0.75f },
+		                     { .mesh = "body", .rimIntensity = 0.0f } };
+
+	const std::string    text = DocumentText(document);
+	const ImportDocument read = DocumentFrom(text);
+
+	REQUIRE(read.meshOptions.size() == 2);
+	CHECK(read.meshOptions[0] == MeshOptions{ .mesh = "body", .rimIntensity = 0.0f });
+	CHECK(read.meshOptions[1] == MeshOptions{ .mesh = "cape", .rimIntensity = 0.75f });
+	CHECK(DocumentText(read) == text);
+
+	SECTION("a document that authored nothing carries no key at all")
+	{
+		// So adding this option cannot rewrite every document in a project on the next migrate.
+		CHECK(DocumentText(ImportDocument()).find("meshOptions") == std::string::npos);
+	}
+
+	SECTION("a mesh known only by an option this build lacks gains no option of ours")
+	{
+		// The trap the entry-per-key rule exists for: taking an entry here would put the mesh in
+		// `meshOptions`, and the writer states every entry's option -- so re-saving a document
+		// nobody touched would author a `rimIntensity: 0` somebody has to read as a decision.
+		const std::string_view foreign = R"({
+	"meshOptions": { "cape": { "outline": true } }
+})";
+		const ImportDocument   read2   = DocumentFrom(foreign);
+		CHECK(read2.meshOptions.empty());
+
+		const std::string rewritten = DocumentText(read2);
+		CHECK(rewritten.find("\"outline\"") != std::string::npos);
+		CHECK(rewritten.find("rimIntensity") == std::string::npos);
+	}
+
+	SECTION("an option this build does not know survives beside one it does")
+	{
+		const std::string_view future = R"({
+	"meshOptions": { "cape": { "outline": true, "rimIntensity": 0.5 } }
+})";
+		const ImportDocument   read2  = DocumentFrom(future);
+		REQUIRE(read2.meshOptions.size() == 1);
+		CHECK(read2.meshOptions[0].rimIntensity == 0.5f);
+
+		const std::string rewritten = DocumentText(read2);
+		CHECK(rewritten.find("\"outline\"") != std::string::npos);
+		CHECK(rewritten.find("\"rimIntensity\"") != std::string::npos);
+		CHECK(DocumentFrom(rewritten) == read2);
+	}
+
+	SECTION("an intensity that would blank or blow out the frame is refused")
+	{
+		CHECK_THROWS_WITH(
+			DocumentFrom(R"({"meshOptions": { "cape": { "rimIntensity": -1.0 } }})"),
+			Catch::Matchers::ContainsSubstring("finite and non-negative"));
+		CHECK_THROWS_WITH(
+			DocumentFrom(R"({"meshOptions": { "cape": { "rimIntensity": true } }})"),
+			Catch::Matchers::ContainsSubstring("is not a number"));
+	}
+}
+
+// What the editor's rim box calls. The document rather than the mesh, so that a re-import -- which
+// rewrites the mesh entirely -- cannot lose the decision.
+TEST_CASE("a rim intensity is authored into the document", "[importdoc]")
+{
+	const DataRoot root("bernini_importdoc_rim");
+	WriteText(root.path / "kirk.glb", "the source");
+
+	const BMesh mesh = NamedMesh({ { "kirk[0]", 0 } }, { "Authored/Materials/skin.bmaterial" });
+
+	const ImportTarget target{ "kirk", 24.0f, "Derived/SourceTextures/kirk" };
+	const AssetStore   store(root.path);
+	const SourceRef    ref = store.CopyImportedSource(root.path / "kirk.glb", target);
+	store.WriteImportedDocument(target, &mesh);
+
+	store.SetMeshRimIntensityInDocument(ref.key, "kirk", 0.75f);
+
+	ImportDocument read =
+		loadImportDocument(core::file::LooseFileSystem(root.path), "Authored/Meshes/kirk.bimport");
+	REQUIRE(read.meshOptions.size() == 1);
+	CHECK(read.meshOptions[0] == MeshOptions{ .mesh = "kirk", .rimIntensity = 0.75f });
+
+	// The bindings written beside it are untouched: this authors one key of the document.
+	REQUIRE(read.bindings.size() == 1);
+	CHECK(read.bindings[0] == MaterialBinding{ "kirk[0]", "Authored/Materials/skin.bmaterial" });
+
+	SECTION("setting it again rewrites the entry rather than adding a second")
+	{
+		store.SetMeshRimIntensityInDocument(ref.key, "kirk", 0.0f);
+		read = loadImportDocument(
+			core::file::LooseFileSystem(root.path),
+			"Authored/Meshes/kirk.bimport");
+		REQUIRE(read.meshOptions.size() == 1);
+		CHECK(read.meshOptions[0].rimIntensity == 0.0f);
+	}
+
+	SECTION("a mesh whose source was never recorded says so")
+	{
+		CHECK_THROWS_WITH(
+			store.SetMeshRimIntensityInDocument("", "kirk", 1.0f),
+			Catch::Matchers::ContainsSubstring("no source was ever recorded"));
+	}
+
+	SECTION("a negative intensity is refused before anything is written")
+	{
+		CHECK_THROWS_WITH(
+			store.SetMeshRimIntensityInDocument(ref.key, "kirk", -1.0f),
+			Catch::Matchers::ContainsSubstring("finite and non-negative"));
+	}
+}

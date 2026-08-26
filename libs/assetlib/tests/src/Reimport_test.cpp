@@ -454,3 +454,35 @@ TEST_CASE("A re-import rests a clip on the floor its document authors", "[reimpo
 	// Named clips only: the one the document says nothing about is still measured.
 	CHECK(again.clips[1].groundOffset == Catch::Approx(cooked.clips[1].groundOffset));
 }
+
+/**
+ * A re-import rebuilds the mesh from the glTF, which carries no rim of its own -- so what puts the
+ * authored one back is the import document, exactly as it puts the material bindings back.
+ *
+ * The whole reason the option is authored there rather than on the `.bmesh` is that this path
+ * cannot lose it. Nothing else in this suite would notice if it did: the mesh would still be
+ * rebuilt, still be byte-stable, and still pass every comparison above.
+ */
+TEST_CASE("A re-import puts back the rim intensity the document authored", "[reimport]")
+{
+	const test::SkinnedGltf source("bernini_reimport_rim_gltf");
+	const ImportedProject   project("bernini_reimport_rim", source.PackGlb());
+
+	const AssetStore& store = project.Store();
+
+	const BMesh built = store.Load<BMesh>("Derived/Meshes/unit.bmesh");
+	REQUIRE(built.meshes.size() == 1);
+	REQUIRE(built.meshes[0].rimIntensity == 0.0f);  // nothing has asked for one yet
+
+	const std::string name = std::string(built.stringPool.at(built.meshes[0].nameOffset));
+	store.SetMeshRimIntensityInDocument(built.source.key, name, 1.5f);
+
+	fs::remove(project.dataRoot / "Derived/Meshes/unit.bmesh");
+
+	const ReimportReport report = store.Reimport(/*dryRun*/ false);
+	REQUIRE(report.GetFailedCount() == 0);
+
+	const BMesh again = store.Load<BMesh>("Derived/Meshes/unit.bmesh");
+	REQUIRE(again.meshes.size() == 1);
+	CHECK(again.meshes[0].rimIntensity == 1.5f);
+}

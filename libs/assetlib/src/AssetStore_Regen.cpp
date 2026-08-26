@@ -250,7 +250,7 @@ namespace assetlib
 		{
 			RegenMesh current{ load<BMesh>(*m_Files, path), {} };
 			if (checked.document)
-				current.unboundBindings = applyBindings(current.mesh, checked.document->bindings);
+				current.unboundBindings = applyDocument(current.mesh, *checked.document);
 			return current;
 		}
 
@@ -275,7 +275,7 @@ namespace assetlib
 				"skeleton; run `assetlib_cli migrate` to record the one it already uses",
 				path);
 		}
-		current.unboundBindings = applyBindings(current.mesh, group.document->bindings);
+		current.unboundBindings = applyDocument(current.mesh, *group.document);
 		return current;
 	}
 

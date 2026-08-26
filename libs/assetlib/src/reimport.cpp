@@ -84,7 +84,7 @@ namespace assetlib
 					mesh.skeletonSignature = skeletonSignature(group.import.skeleton);
 				}
 
-				static_cast<void>(applyBindings(mesh, document.bindings));
+				static_cast<void>(applyDocument(mesh, document));
 				store.Save(mesh, key);
 				return;
 			}

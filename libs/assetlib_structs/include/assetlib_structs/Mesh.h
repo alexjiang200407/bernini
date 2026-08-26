@@ -48,7 +48,13 @@ namespace assetlib
 		uint32_t firstSubmesh;  // range into BMeshImport::submeshes
 		uint32_t submeshCount;
 		uint32_t nameOffset;  // into BMeshImport::stringPool
+
+		// How much of the environment's rim light this mesh catches, scaling it; zero, the
+		// default, catches none. Baked in from the `.bimport`'s `meshOptions` on every load, the
+		// way a submesh's material is: the document is what a person edits, and a shipped archive
+		// has none to read.
+		float rimIntensity;
 	};
 
-	static_assert(sizeof(Mesh) == 12);
+	static_assert(sizeof(Mesh) == 16);
 }

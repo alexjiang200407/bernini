@@ -356,6 +356,10 @@ namespace assetlib
 				entry.firstSubmesh,
 				entry.firstSubmesh + entry.submeshCount);
 
+			// Only when it catches one: a zero on every mesh of every dump would be noise.
+			if (entry.rimIntensity != 0.0f)
+				out += std::format("    rim      {} of the environment's\n", entry.rimIntensity);
+
 			for (uint32_t s = 0; s < entry.submeshCount; ++s)
 			{
 				const uint32_t index   = entry.firstSubmesh + s;

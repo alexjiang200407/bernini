@@ -191,6 +191,27 @@ TEST_CASE("describe(BMesh) resolves each submesh's material path", "[describe]")
 	CHECK(brief.find("'head'") == std::string::npos);
 }
 
+/**
+ * A mesh's rim intensity is authored in the `.bimport` and stamped onto the mesh, so the dump is the
+ * only way to see which of the two a mesh on disk actually carries.
+ */
+TEST_CASE("describe(BMesh) reports a mesh's rim intensity, and only when it has one", "[describe]")
+{
+	BMesh mesh;
+	mesh.meshes.push_back(Mesh{ .nameOffset = mesh.stringPool.add("cape"), .rimIntensity = 1.5f });
+	mesh.meshes.push_back(Mesh{ .nameOffset = mesh.stringPool.add("body") });
+
+	const std::string text = describe(mesh);
+
+	CHECK(text.find("rim      1.5") != std::string::npos);
+
+	// The mesh that catches none says nothing rather than saying zero: every mesh of every dump
+	// carrying a line about a feature it does not use is how a dump stops being read.
+	const auto body = text.find("'body'");
+	REQUIRE(body != std::string::npos);
+	CHECK(text.find("rim", body) == std::string::npos);
+}
+
 // A .benv holds no pixels at all, so the only thing worth reading out of it is what it names -- and
 // whether those names resolve. A dangling reference renders as an environment that silently loses its
 // sky or its lighting, which is exactly the case a dump has to make visible.

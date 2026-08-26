@@ -710,6 +710,24 @@ namespace assetlib
 			std::string_view material) const;
 
 		/**
+		 * Sets how much of an environment's rim light `mesh` catches, in the import document beside
+		 * `sourceKey`'s copied source, leaving every other option, binding and unknown key as it
+		 * stands. Zero catches none.
+		 *
+		 * The document rather than the mesh file, for the same reason a rebind writes there: the
+		 * option is outside the cache key, so the mesh is neither rewritten nor staled, and a
+		 * re-import cannot lose the decision. `applyDocument` is what puts it back on the mesh.
+		 *
+		 * @throws std::runtime_error if `rimIntensity` is not finite or is negative, if `sourceKey`
+		 *         is empty, if the document is absent or malformed, or if the write fails.
+		 */
+		void
+		SetMeshRimIntensityInDocument(
+			std::string_view sourceKey,
+			std::string_view mesh,
+			float            rimIntensity) const;
+
+		/**
 		 * Rewrites every import document's bindings from its mesh's current state, parameters and
 		 * unknown keys preserved -- the one-time adoption pass that makes the documents
 		 * authoritative. Until it runs, a rebind saved into a `.bmesh` before documents existed is

@@ -128,7 +128,7 @@ is what a caller reaches for only when it holds bytes no store addresses, which 
 | `.bskel` / `.banim` | A rig; clip samples resampled against it. Split because a rig outlives its clips. |
 | `.bvat` | A baked position/normal texture pair and its tables. Derived, never committed. |
 | `.bsky` / `.benvl` / `.benv` | Backdrop; the lighting pair convolved from it; the few bytes naming both. [docs/envmaps.md](docs/envmaps.md) |
-| `.bimport` | One per copied source under `Authored/Meshes/`: the bindings and parameters an import was authored with, as text. What a stale cache entry re-cooks from. Its struct is [import_document.h](libs/assetlib/include/assetlib/import_document.h). |
+| `.bimport` | One per copied source under `Authored/Meshes/`: the bindings, per-mesh options and parameters an import was authored with, as text. What a stale cache entry re-cooks from. Its struct is [import_document.h](libs/assetlib/include/assetlib/import_document.h). |
 | `.bpak` | The archive the rest are packed into — not a codec, since nothing references one. [pak.h](libs/assetlib/include/assetlib/pak.h). [docs/archives.md](docs/archives.md) |
 
 ### Operations

@@ -61,7 +61,7 @@ namespace
 		submesh.aabbMax      = glm::vec3(1.0f);
 		mesh.submeshes       = { submesh };
 
-		mesh.meshes = { Mesh{ 0, 1, 0 } };
+		mesh.meshes = { Mesh{ 0, 1, 0, 0 } };
 
 		Meshlet meshlet{};
 		meshlet.vertexCount    = 3;

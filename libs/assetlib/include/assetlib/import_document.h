@@ -16,6 +16,16 @@ namespace assetlib
 		operator==(const MaterialBinding&) const = default;
 	};
 
+	/** One mesh's authored shading options, keyed by the name the mesh stores. */
+	struct MeshOptions
+	{
+		std::string mesh;
+		float       rimIntensity = 0.0f;
+
+		bool
+		operator==(const MeshOptions&) const = default;
+	};
+
 	/**
 	 * The authored half of one imported source: what a person chose at import and after it. Text,
 	 * beside the source it describes (`Authored/Meshes/kirk.glb` ->
@@ -50,8 +60,13 @@ namespace assetlib
 		std::vector<std::string> outputs;
 
 		std::vector<MaterialBinding> bindings;
-		std::string                  extraParametersJson = "{}";
-		std::string                  extraJson           = "{}";
+
+		// Only the meshes that opted into something; a mesh with every option at its default has no
+		// entry, so adding an option cannot change a document nobody has touched.
+		std::vector<MeshOptions> meshOptions;
+
+		std::string extraParametersJson = "{}";
+		std::string extraJson           = "{}";
 
 		bool
 		operator==(const ImportDocument&) const = default;

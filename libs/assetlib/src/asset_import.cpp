@@ -205,8 +205,20 @@ namespace assetlib
 	}
 
 	std::vector<std::string>
-	applyBindings(BMesh& mesh, std::span<const MaterialBinding> bindings)
+	applyDocument(BMesh& mesh, const ImportDocument& document)
 	{
+		auto rimByMesh = std::unordered_map<std::string_view, float>();
+		for (const MeshOptions& options : document.meshOptions)
+			rimByMesh.emplace(options.mesh, options.rimIntensity);
+
+		for (Mesh& entry : mesh.meshes)
+		{
+			const auto found   = rimByMesh.find(mesh.stringPool.at(entry.nameOffset));
+			entry.rimIntensity = found == rimByMesh.end() ? 0.0f : found->second;
+		}
+
+		const std::span<const MaterialBinding> bindings = document.bindings;
+
 		auto bySubmesh = std::unordered_map<std::string_view, std::string_view>();
 		for (const MaterialBinding& binding : bindings)
 			bySubmesh.emplace(binding.submesh, binding.material);
@@ -260,6 +272,39 @@ namespace assetlib
 			found->material = std::string(material);
 		else
 			document.bindings.emplace_back(std::string(submesh), std::string(material));
+
+		core::file::write_atomic(documentPath, AssetCodec<ImportDocument>::Serialize(document));
+	}
+
+	void
+	AssetStore::SetMeshRimIntensityInDocument(
+		std::string_view sourceKey,
+		std::string_view mesh,
+		float            rimIntensity) const
+	{
+		core::throw_runtime_error_if(
+			!std::isfinite(rimIntensity) || rimIntensity < 0.0f,
+			"'{}': rim intensity must be finite and non-negative, got {}",
+			mesh,
+			rimIntensity);
+
+		core::throw_runtime_error_if(
+			sourceKey.empty(),
+			"'{}': no source was ever recorded, so there is no import document to author in",
+			mesh);
+
+		const std::filesystem::path documentPath = GetDataRoot() / importDocumentKeyFor(sourceKey);
+		core::throw_runtime_error_if(
+			!std::filesystem::exists(documentPath),
+			"'{}': no import document to author in -- re-import the source",
+			documentPath.string());
+		ImportDocument document = loadImportDocument(documentPath);
+
+		const auto found = std::ranges::find(document.meshOptions, mesh, &MeshOptions::mesh);
+		if (found != document.meshOptions.end())
+			found->rimIntensity = rimIntensity;
+		else
+			document.meshOptions.emplace_back(std::string(mesh), rimIntensity);
 
 		core::file::write_atomic(documentPath, AssetCodec<ImportDocument>::Serialize(document));
 	}

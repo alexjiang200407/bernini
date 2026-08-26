@@ -104,7 +104,7 @@ namespace assetlib::test
 			mesh.submeshes.push_back(submesh);
 		}
 
-		mesh.meshes    = { Mesh{ 0, static_cast<uint32_t>(materials.size()), 0 } };
+		mesh.meshes    = { Mesh{ 0, static_cast<uint32_t>(materials.size()), 0, 0 } };
 		mesh.materials = materials;
 		mesh.skeleton  = skeleton;
 		return mesh;

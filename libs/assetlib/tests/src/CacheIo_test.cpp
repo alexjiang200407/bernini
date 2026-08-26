@@ -94,7 +94,7 @@ TEST_CASE("a ranged read fetches the asked-for chunks and the key alone", "[cach
 	fs::remove(at);
 }
 
-TEST_CASE("applyBindings is a pure function of the document", "[cacheio][importdoc]")
+TEST_CASE("applyDocument is a pure function of the document", "[cacheio][importdoc]")
 {
 	BMesh mesh;
 	for (const char* name : { "hull", "sail", "flag" })
@@ -106,12 +106,13 @@ TEST_CASE("applyBindings is a pure function of the document", "[cacheio][importd
 	}
 	mesh.materials = { "Authored/Materials/stale.bmaterial" };
 
-	const std::vector<MaterialBinding> bindings = {
+	ImportDocument document;
+	document.bindings = {
 		{ "flag", "Authored/Materials/cloth.bmaterial" },
 		{ "hull", "Authored/Materials/wood.bmaterial" },
 		{ "sail", "Authored/Materials/cloth.bmaterial" },
 	};
-	CHECK(applyBindings(mesh, bindings).empty());
+	CHECK(applyDocument(mesh, document).empty());
 
 	// First-appearance order over the submeshes, stale entries gone, shared materials shared.
 	CHECK(
@@ -124,27 +125,56 @@ TEST_CASE("applyBindings is a pure function of the document", "[cacheio][importd
 	SECTION("a second application of the same document is a no-op")
 	{
 		BMesh again = mesh;
-		CHECK(applyBindings(again, bindings).empty());
+		CHECK(applyDocument(again, document).empty());
 		CHECK(again.materials == mesh.materials);
 	}
 
 	SECTION("an unbound submesh is unbound, not defaulted")
 	{
-		CHECK(applyBindings(
-				  mesh,
-				  std::vector<MaterialBinding>{ { "hull", "Authored/Materials/wood.bmaterial" } })
-		          .empty());
+		ImportDocument hullOnly;
+		hullOnly.bindings = { { "hull", "Authored/Materials/wood.bmaterial" } };
+		CHECK(applyDocument(mesh, hullOnly).empty());
 		CHECK(mesh.submeshes[1].material == c_InvalidIndex);
 	}
 
 	SECTION("a binding whose submesh vanished is reported, never guessed at")
 	{
-		const std::vector<std::string> unbound = applyBindings(
-			mesh,
-			std::vector<MaterialBinding>{ { "anchor", "Authored/Materials/iron.bmaterial" },
-		                                  { "hull", "Authored/Materials/wood.bmaterial" } });
+		ImportDocument shifted;
+		shifted.bindings = { { "anchor", "Authored/Materials/iron.bmaterial" },
+			                 { "hull", "Authored/Materials/wood.bmaterial" } };
+		const std::vector<std::string> unbound = applyDocument(mesh, shifted);
 		CHECK(unbound == std::vector<std::string>{ "anchor" });
 		// The bindings that do match still land; the report is the caller's to escalate.
 		CHECK(mesh.materials == std::vector<std::string>{ "Authored/Materials/wood.bmaterial" });
+	}
+}
+
+// The rim intensity travels the same road a material binding does: authored in the document,
+// stamped onto the mesh at load, because a shipped archive has no document to read.
+TEST_CASE("applyDocument stamps each mesh's rim intensity", "[cacheio][importdoc]")
+{
+	BMesh mesh;
+	for (const char* name : { "body", "cape" })
+	{
+		Mesh entry{};
+		entry.nameOffset = mesh.stringPool.add(name);
+		// Deliberately dirty: what a previous document said must not survive this one.
+		entry.rimIntensity = 9.0f;
+		mesh.meshes.push_back(entry);
+	}
+
+	ImportDocument document;
+	document.meshOptions = { { .mesh = "cape", .rimIntensity = 0.75f } };
+
+	CHECK(applyDocument(mesh, document).empty());
+	CHECK(mesh.meshes[0].rimIntensity == 0.0f);
+	CHECK(mesh.meshes[1].rimIntensity == 0.75f);
+
+	SECTION("an option naming a mesh that is gone is not an error")
+	{
+		ImportDocument shifted;
+		shifted.meshOptions = { { .mesh = "helmet", .rimIntensity = 1.0f } };
+		CHECK(applyDocument(mesh, shifted).empty());
+		CHECK(mesh.meshes[1].rimIntensity == 0.0f);
 	}
 }
