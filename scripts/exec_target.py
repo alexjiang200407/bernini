@@ -15,6 +15,10 @@ Usage:
     python scripts/exec_target.py bgl_tests --no-build        # run whatever is there
     python scripts/exec_target.py bgl_tests --dry-run
 
+A test suite runs under the machine-wide lock in util/lock.py, so `just run bgl_tests` waits
+for a suite another checkout is already running instead of competing with it for the CPU.
+Every other target runs unlocked. --no-lock opts out.
+
 The target path is resolved from the File API codemodel (generator-agnostic). Which
 build dir and configuration to look in default to the preset recorded in
 scripts/config.json (see `just init`).
@@ -28,6 +32,7 @@ import sys
 import util.cmake_tools as ct
 import util.config as cfg
 import util.lfs as lfs
+import util.lock as lock
 
 
 def main():
@@ -38,6 +43,8 @@ def main():
     parser.add_argument("--no-build", action="store_true",
                         help="Don't build first; run the binary that is already there.")
     parser.add_argument("--dry-run", action="store_true", help="Print the command and cwd without running.")
+    parser.add_argument("--no-lock", action="store_true",
+                        help="For a test suite: don't wait for the machine-wide suite lock.")
     parser.epilog = "Arguments for the executable itself go after a literal `--`."
 
     # Split our own options from the program's args on the first `--` so that
@@ -116,7 +123,8 @@ def main():
         print("cmd:   " + " ".join([exe] + passthrough))
         return 0
 
-    return subprocess.run([exe] + passthrough, cwd=cwd).returncode
+    with lock.suite_lock(enabled=lock.is_suite(args.target) and not args.no_lock):
+        return subprocess.run([exe] + passthrough, cwd=cwd).returncode
 
 
 if __name__ == "__main__":

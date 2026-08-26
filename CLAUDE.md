@@ -214,8 +214,8 @@ Everything is driven by `just` from the repo root, via the `justfile`. Each reci
 just                              # list the recipes
 just init                         # set this machine up and write scripts/config.json (see below)
 just build [target]               # build (default: all targets); configures first only if needed. --preset, --config, --dry-run
-just run <target> [-- args...]    # build a target, then run it with cwd set to its output dir (--no-build to skip)
-just test [names...]              # build and run every test suite (or only the matching ones); --list, --no-build
+just run <target> [-- args...]    # build a target, then run it with cwd set to its output dir; --no-build, --no-lock
+just test [names...]              # build and run every test suite (or only the matching ones); --list, --no-build, --no-lock
 just coverage [names...]          # macOS: build the coverage preset, run the suites instrumented, report; --diff [ref] names the added lines no test executed (--json for agents)
 just format <files...>            # clang-format in place (--check to verify only)
 just tidy [paths...]              # clang-tidy the naming rules (--changed for a diff, --fix to apply)
@@ -246,15 +246,20 @@ suite does not stop the others; the summary at the end says which failed. To pas
 suite, use `just run`, which forwards it — `just run bgl_tests -- --gpu-validation`, or
 `just run editor_tests -- "[materialgraph]"` to run one tag.
 
-Each suite process `just test` starts gets a temp directory of its own (`TMPDIR`/`TMP`/`TEMP`), so
-two checkouts of this workspace can run their suites at once. A fixture is free to name its scratch
-directory `temp_directory_path() / "bernini_thing"` and wipe it on the way in — which is what they
-all do — because no two of those processes share that root.
+**Only one suite runs on the machine at a time.** A suite is expensive — each one is split
+across several processes, each holding a graphics device — so several checkouts testing at once
+oversubscribe the CPU and every one of them slows down. Both `just test` and `just run <suite>`
+take a machine-wide lock (`~/.bernini/suite.lock`, `scripts/util/lock.py`) around running the
+binaries, and a second one waits, naming who holds it and for how long. `just test` takes it once
+for its whole run rather than per suite. `--no-lock` opts out on either command.
 
-**`just run` does not, and that is the remaining hole**: `just run assetlib_tests -- "[importdoc]"`
-in two checkouts at the same time still collides, because both land on the per-user temp directory
-and one wipes the fixture the other is writing. It surfaces as `remove_all: Directory not empty`
-and reads like a flake. Use `just test <suite> -- "<tag>"` when another checkout may be testing.
+It is an advisory lock on an open file, so a killed agent releases it with nothing to clean up.
+It is *not* what stops two runs deleting each other's fixtures — that is the temp directory below,
+and it still matters, because one `just test` shards a suite across processes that run together.
+
+Each suite process gets a temp directory of its own (`TMPDIR`/`TMP`/`TEMP`). A fixture is free to
+name its scratch directory `temp_directory_path() / "bernini_thing"` and wipe it on the way in —
+which is what they all do — because no two of those processes share that root.
 
 ## Configuration
 
