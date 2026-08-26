@@ -582,12 +582,18 @@ namespace assetlib
 		/**
 		 * Every container in this project re-saved at what its current state says it should be:
 		 * a stale cache entry regenerated from its source, an authored document rewritten
-		 * canonically.
+		 * canonically, a material's triplet re-baked where its sources no longer produce the maps
+		 * it names.
 		 *
 		 * A moved source's textures are re-extracted first, so the `.bimport` that stamps is on
 		 * disk before the walk reads any document.
 		 *
-		 * @param dryRun Report what would change without writing a byte.
+		 * A material with none of its routed sources on disk is left alone rather than failed: a
+		 * delivered project ships its triplet and none of its sources, and has nothing to re-bake
+		 * from. One with only some of them is a reference that has broken, and is reported.
+		 *
+		 * @param dryRun Report what would change without writing a byte -- a map included, so a
+		 *        material's re-bake is resolved rather than encoded.
 		 */
 		[[nodiscard]] MigrateReport
 		Migrate(bool dryRun) const;
