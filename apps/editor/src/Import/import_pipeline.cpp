@@ -179,6 +179,10 @@ namespace editor
 		auto mesh     = std::optional<assetlib::BMesh>();
 		auto tangents = assetlib::TangentGenResult();
 
+		// Filled in on the worker, read on the GUI thread below where the document is written: only
+		// the writer knows whether it produced the rig or bound one already here.
+		auto rigOutputs = std::vector<std::string>();
+
 		const auto importStart = std::chrono::steady_clock::now();
 		double     workerMs    = 0.0;
 
@@ -232,7 +236,7 @@ namespace editor
 					const assetlib::SourceRef sourceRef = store.CopyImportedSource(source, target);
 					mesh->source                        = sourceRef;
 
-					store.WriteImportedRig(
+					rigOutputs = store.WriteImportedRig(
 						imported->skeleton,
 						imported->animations,
 						*mesh,
@@ -296,15 +300,9 @@ namespace editor
 					assetlib::ImportTarget target{ sourceName,
 						                           assetlib::c_DefaultSampleRate,
 						                           textureDirKey };
+					rigOutputs.push_back(meshStore.KeyFor(bmeshPath));
 					target.skeleton = mesh->skeleton;
-					target.outputs  = { meshStore.KeyFor(bmeshPath) };
-
-					// The rig only when this import is what wrote it: a reused one is bound, not
-					// produced, and deleting this source must not take another source's rig with it.
-					if (!mesh->skeleton.empty() && mesh->skeleton == meshStore.KeyFor(bskelPath))
-						target.outputs.push_back(mesh->skeleton);
-					if (std::filesystem::exists(banimPath))
-						target.outputs.push_back(meshStore.KeyFor(banimPath));
+					target.outputs  = std::move(rigOutputs);
 
 					meshStore.WriteImportedDocument(target, &*mesh);
 				}

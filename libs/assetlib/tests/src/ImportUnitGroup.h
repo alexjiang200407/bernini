@@ -40,7 +40,7 @@ namespace assetlib::test
 		if (!textureDir.empty())
 			store.WriteTextures(imported, textureDir);
 
-		store.WriteImportedRig(
+		auto outputs = store.WriteImportedRig(
 			imported.skeleton,
 			imported.animations,
 			mesh,
@@ -54,12 +54,9 @@ namespace assetlib::test
 
 		store.Save(mesh, "Meshes/unit.bmesh");
 
+		outputs.emplace_back("Meshes/unit.bmesh");
 		target.skeleton = mesh.skeleton;
-		target.outputs  = { "Meshes/unit.bmesh" };
-		if (mesh.skeleton == "Skeletons/unit.bskel")
-			target.outputs.push_back("Skeletons/unit.bskel");
-		if (std::filesystem::exists(dataRoot / "Animations/unit.banim"))
-			target.outputs.push_back("Animations/unit.banim");
+		target.outputs  = std::move(outputs);
 
 		store.WriteImportedDocument(target, &mesh);
 	}

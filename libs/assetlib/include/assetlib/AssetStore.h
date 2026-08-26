@@ -243,9 +243,14 @@ namespace assetlib
 		 * no skeleton is one `Save` refuses outright; the clips are the half a user can decline.
 		 * Does nothing when `skeleton` has no bones, which is what a static mesh is.
 		 *
+		 * @return The containers it put on disk -- the `.bskel` only when this import is what wrote
+		 *         it, and the `.banim` when it wrote clips. A rig it bound rather than produced is
+		 *         named by `mesh.skeleton` and is deliberately not here: deleting this source must
+		 *         not take another source's rig with it.
+		 *
 		 * @throws std::runtime_error if either container cannot be written.
 		 */
-		void
+		std::vector<std::string>
 		WriteImportedRig(
 			const Skeleton&     skeleton,
 			const AnimationSet& animations,

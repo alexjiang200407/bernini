@@ -97,6 +97,10 @@ namespace
 			return "bakes its radiance from";
 		case assetlib::RefKind::kMeshSkeleton:
 			return "skins to";
+		case assetlib::RefKind::kDocumentSkeleton:
+			return "binds its source's joints to";
+		case assetlib::RefKind::kDocumentOutput:
+			return "produced";
 		case assetlib::RefKind::kClipSkeleton:
 			return "was resampled against";
 		case assetlib::RefKind::kVatSource:
@@ -540,7 +544,7 @@ main(int argc, char** argv)
 
 				const auto derived = assetlib::generateTangents(mesh);
 
-				importStore.WriteImportedRig(
+				auto outputs = importStore.WriteImportedRig(
 					imported.skeleton,
 					imported.animations,
 					mesh,
@@ -550,12 +554,9 @@ main(int argc, char** argv)
 					source);
 				importStore.Save(mesh, importStore.KeyFor(bmeshPath));
 
+				outputs.push_back(importStore.KeyFor(bmeshPath));
 				target.skeleton = mesh.skeleton;
-				target.outputs  = { importStore.KeyFor(bmeshPath) };
-				if (!mesh.skeleton.empty() && mesh.skeleton == importStore.KeyFor(bskelPath))
-					target.outputs.push_back(mesh.skeleton);
-				if (fs::exists(banimPath))
-					target.outputs.push_back(importStore.KeyFor(banimPath));
+				target.outputs  = std::move(outputs);
 				importStore.WriteImportedDocument(target, &mesh);
 
 				if (derived.skipped > 0)

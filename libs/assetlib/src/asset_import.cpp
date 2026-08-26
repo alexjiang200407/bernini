@@ -323,7 +323,7 @@ namespace assetlib
 		return report;
 	}
 
-	void
+	std::vector<std::string>
 	AssetStore::WriteImportedRig(
 		const Skeleton&     skeleton,
 		const AnimationSet& animations,
@@ -334,7 +334,9 @@ namespace assetlib
 		const SourceRef&    source) const
 	{
 		if (skeleton.bones.empty())
-			return;
+			return {};
+
+		auto outputs = std::vector<std::string>();
 
 		// A rig this project already holds is bound, not copied. Two `.bskel` of one signature make
 		// every later clips-only import ambiguous, and a joint index means the same bone in both --
@@ -347,6 +349,7 @@ namespace assetlib
 			rig.source   = source;
 			Save(rig, bskelKey);
 			mesh.skeleton = std::string(bskelKey);
+			outputs.push_back(mesh.skeleton);
 		}
 		else
 		{
@@ -355,7 +358,7 @@ namespace assetlib
 		mesh.skeletonSignature = skeletonSignature(skeleton);
 
 		if (!writeClips || animations.clips.empty())
-			return;
+			return outputs;
 
 		// The clip set names the rig by the same path the mesh does, so all three agree on which file
 		// the joint indices are addressed against.
@@ -368,6 +371,9 @@ namespace assetlib
 		// cannot match. A reused rig makes that visible -- its pose is its own, not this source's.
 		bakePosedBounds(clips, mesh, Load<Skeleton>(mesh.skeleton));
 		Save(clips, banimKey);
+
+		outputs.emplace_back(banimKey);
+		return outputs;
 	}
 
 	std::filesystem::path
