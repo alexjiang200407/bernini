@@ -1,6 +1,7 @@
 #pragma once
 #include <assetlib/cancel.h>
 #include <assetlib/codecs.h>
+#include <assetlib_structs/BMeshImport.h>
 #include <core/file/IFileSystem.h>
 
 namespace assetlib
@@ -27,6 +28,7 @@ namespace assetlib
 	struct TexturePruneDesc;
 	struct TexturePruneResult;
 	struct TexturePruneScan;
+	struct TextureRefresh;
 	struct VatBakeDesc;
 	struct VatRefs;
 	struct BMesh;
@@ -374,6 +376,56 @@ namespace assetlib
 
 		// --- Textures --------------------------------------------------------------------------
 
+		/** Called before each texture, so the first call is (0, total). */
+		using TextureProgressFn = std::function<void(size_t done, size_t total)>;
+
+		/**
+		 * Writes `mesh`'s detached textures into `textureDir`, named by importedTextureFileNames --
+		 * the files a material routes at. `mesh.materials` says which are sRGB and is not written.
+		 *
+		 * Basis-UASTC supercompression dominates the cost of an import; `onProgress` runs on the
+		 * calling thread, and `cancel` is polled between encodes, never inside one.
+		 *
+		 * @throws std::runtime_error if `textureDir` escapes the data root, or a write fails.
+		 * @throws Cancelled if `cancel` is signalled. What was written stays.
+		 */
+		void
+		WriteTextures(
+			const imp::BMeshImport&  mesh,
+			std::string_view         textureDir,
+			const TextureProgressFn& onProgress = {},
+			const CancelToken&       cancel     = {}) const;
+
+		/**
+		 * The copied sources re-exported since the import that extracted their textures. Sorted,
+		 * and empty on a read-only store. A source with no recorded folder, or no longer in the
+		 * project, is not stale -- see docs/asset_containers.md.
+		 *
+		 * @throws std::runtime_error if an import document cannot be read: it may be the stale one,
+		 *         and "nothing to do" would be a silent wrong answer.
+		 */
+		[[nodiscard]] std::vector<std::string>
+		StaleImportedTextureSources() const;
+
+		/**
+		 * Re-extracts `sourceKey`'s textures into the folder its import document records, so an
+		 * edited source reaches the materials routed at it. Safe over those routes because the
+		 * names are the images' -- see importedTextureFileNames and docs/asset_containers.md.
+		 *
+		 * Deliberately not on a load path: the cost is an import's, and `LoadRegen*` runs on every
+		 * mesh load and every deletion's reference scan.
+		 *
+		 * @throws std::runtime_error on a read-only store, a `sourceKey` not in the project, or a
+		 *         document that is absent, unreadable, or records no folder (re-import instead).
+		 * @throws Cancelled if `cancel` is signalled; the stamp is advanced last, so a cancelled
+		 *         refresh is still reported stale.
+		 */
+		TextureRefresh
+		RefreshImportedTextures(
+			std::string_view         sourceKey,
+			const TextureProgressFn& onProgress = {},
+			const CancelToken&       cancel     = {}) const;
+
 		[[nodiscard]] ImageData
 		LoadTexture(std::string_view path, Ktx2Decode decode, uint32_t maxDim = 0) const;
 
@@ -500,6 +552,9 @@ namespace assetlib
 		 * a stale cache entry regenerated from its source, an authored document rewritten
 		 * canonically.
 		 *
+		 * A moved source's textures are re-extracted first, so the `.bimport` that stamps is on
+		 * disk before the walk reads any document.
+		 *
 		 * @param dryRun Report what would change without writing a byte.
 		 */
 		[[nodiscard]] MigrateReport
@@ -548,9 +603,9 @@ namespace assetlib
 		CopyImportedSource(const std::filesystem::path& source, const ImportTarget& target) const;
 
 		/**
-		 * Writes the `.bimport` beside the copied source: the sample rate, and -- when `mesh` is
-		 * given -- the submesh-name -> material bindings the mesh carries at this moment. Null
-		 * `mesh` is a clips-only import: parameters, no bindings.
+		 * Writes the `.bimport` beside the copied source: the sample rate, where the textures went
+		 * and the source as it stood when they did, and -- when `mesh` is given -- the
+		 * submesh-name -> material bindings it carries. Null `mesh` is a clips-only import.
 		 *
 		 * @throws std::runtime_error on a write failure.
 		 */

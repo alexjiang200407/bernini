@@ -21,6 +21,10 @@ namespace assetlib
 	{
 		std::vector<MigratedFile> files;
 
+		// The `.ktx2` files a re-extract left behind, sorted. Reported, never removed -- see
+		// TextureRefresh.
+		std::vector<std::string> supersededTextures;
+
 		[[nodiscard]] size_t
 		Count(MigratedFile::Outcome outcome) const noexcept;
 	};

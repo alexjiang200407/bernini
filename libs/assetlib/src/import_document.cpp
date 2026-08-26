@@ -13,9 +13,12 @@ namespace assetlib
 {
 	namespace
 	{
-		constexpr std::string_view c_ParametersKey = "parameters";
-		constexpr std::string_view c_SampleRateKey = "sampleRate";
-		constexpr std::string_view c_BindingsKey   = "bindings";
+		constexpr std::string_view c_ParametersKey       = "parameters";
+		constexpr std::string_view c_SampleRateKey       = "sampleRate";
+		constexpr std::string_view c_BindingsKey         = "bindings";
+		constexpr std::string_view c_TextureDirKey       = "textureDir";
+		constexpr std::string_view c_TextureStampSizeKey = "textureStampSize";
+		constexpr std::string_view c_TextureStampHashKey = "textureStampHash";
 
 		std::string
 		swapExtension(std::string_view key, std::string_view extension)
@@ -71,6 +74,32 @@ namespace assetlib
 			json.erase(it);
 		}
 
+		if (auto it = json.find(c_TextureDirKey); it != json.end())
+		{
+			core::throw_runtime_error_if(
+				!it->is_string(),
+				"import document: '{}' is not a string",
+				c_TextureDirKey);
+			document.textureDir = it->get<std::string>();
+			json.erase(it);
+		}
+
+		for (const auto& [stampKey, field] :
+		     { std::pair<std::string_view, uint64_t*>{ c_TextureStampSizeKey,
+		                                               &document.textureStamp.size },
+		       { c_TextureStampHashKey, &document.textureStamp.hash } })
+		{
+			if (const auto it = json.find(stampKey); it != json.end())
+			{
+				core::throw_runtime_error_if(
+					!it->is_number_unsigned(),
+					"import document: '{}' is not an unsigned number",
+					stampKey);
+				*field = it->get<uint64_t>();
+				json.erase(it);
+			}
+		}
+
 		if (auto it = json.find(c_BindingsKey); it != json.end())
 		{
 			core::throw_runtime_error_if(
@@ -101,6 +130,17 @@ namespace assetlib
 			doc::parseObject(document.extraParametersJson, "import document: extraParametersJson");
 		parameters[c_SampleRateKey] = doc::plainFloat(document.sampleRate);
 		json[c_ParametersKey]       = std::move(parameters);
+
+		// Omitted rather than written empty, so a document for an import that extracted no textures
+		// is byte-identical to one written before this key existed.
+		if (!document.textureDir.empty())
+			json[c_TextureDirKey] = document.textureDir;
+
+		if (document.textureStamp != SourceStamp())
+		{
+			json[std::string(c_TextureStampSizeKey)] = document.textureStamp.size;
+			json[std::string(c_TextureStampHashKey)] = document.textureStamp.hash;
+		}
 
 		auto bindings = nlohmann::json::object();
 		for (const MaterialBinding& binding : document.bindings)

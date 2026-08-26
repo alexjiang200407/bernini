@@ -13,7 +13,7 @@ namespace assetlib::imp
 	 * The flattened result of importing a source asset (e.g. glTF): every resource is present inline,
 	 * with materials indexing directly into `textures`. This is the counterpart of the modular BMesh,
 	 * which the importer bakes this into -- replacing the inline textures and materials with file-path
-	 * references. See toBMesh / writeTextures in bmesh_io.
+	 * references. See toBMesh and AssetStore::WriteTextures.
 	 */
 	struct BMeshImport
 	{
@@ -32,6 +32,10 @@ namespace assetlib::imp
 		core::string_pool      stringPool;
 
 		std::vector<ImageData> textures;
+
+		// Parallel to `textures`: the name the source gave each image, empty where it named none.
+		// What the extracted file is named after -- see importedTextureFileNames.
+		std::vector<std::string> textureNames;
 
 		// Empty unless the source carries a skin -- `skeleton.bones.empty()` is the "no rig" test,
 		// and `animations.clips.empty()` the "no clips" one; neither is ever half-filled. The

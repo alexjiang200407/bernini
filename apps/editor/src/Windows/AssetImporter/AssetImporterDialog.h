@@ -31,8 +31,9 @@ struct ImportOutputs
 	QString materialDir;
 
 	/**
-	 * Where the extracted textures go, as a folder rather than files: `writeTextures` names its output
-	 * `tex0.ktx2` by index, so an import can neither name them nor share the folder with another.
+	 * Where the extracted textures go, as a folder rather than files: `AssetStore::WriteTextures`
+	 * names its output after the images they came from, so an import can neither name them nor --
+	 * since two sources may name an image alike -- share the folder with another.
 	 */
 	QString textureDir;
 

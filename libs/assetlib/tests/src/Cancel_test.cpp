@@ -29,7 +29,7 @@ namespace
 		~ScratchDir() { std::filesystem::remove_all(path); }
 	};
 
-	// An import carrying `count` tiny textures and nothing else -- enough for writeTextures, and small
+	// An import carrying `count` tiny textures and nothing else -- enough for WriteTextures, and small
 	// enough that the Basis encode of each is quick.
 	imp::BMeshImport
 	ImportWithTextures(size_t count)
@@ -96,7 +96,7 @@ TEST_CASE("Cancelled is not a runtime_error", "[cancel]")
 	}
 }
 
-TEST_CASE("writeTextures honours the cancel token", "[cancel][bmesh][io]")
+TEST_CASE("WriteTextures honours the cancel token", "[cancel][bmesh][io]")
 {
 	const ScratchDir dir("bernini_cancel_textures");
 	const auto       mesh = ImportWithTextures(3);
@@ -104,10 +104,10 @@ TEST_CASE("writeTextures honours the cancel token", "[cancel][bmesh][io]")
 	SECTION("a token signalled up front writes nothing at all")
 	{
 		REQUIRE_THROWS_AS(
-			writeTextures(mesh, dir.path, {}, SignalledSource().get_token()),
+			StoreAt(dir.path).WriteTextures(mesh, "textures", {}, SignalledSource().get_token()),
 			Cancelled);
 
-		REQUIRE_FALSE(std::filesystem::exists(dir.path / "tex0.ktx2"));
+		REQUIRE_FALSE(std::filesystem::exists(dir.path / "textures" / "tex0.ktx2"));
 	}
 
 	SECTION("cancelling part-way stops before the next encode, keeping what was already written")
@@ -123,21 +123,23 @@ TEST_CASE("writeTextures honours the cancel token", "[cancel][bmesh][io]")
 				source.request_stop();
 		};
 
-		REQUIRE_THROWS_AS(writeTextures(mesh, dir.path, onProgress, source.get_token()), Cancelled);
+		REQUIRE_THROWS_AS(
+			StoreAt(dir.path).WriteTextures(mesh, "textures", onProgress, source.get_token()),
+			Cancelled);
 
 		REQUIRE(calls == 1);
-		REQUIRE(std::filesystem::exists(dir.path / "tex0.ktx2"));
-		REQUIRE_FALSE(std::filesystem::exists(dir.path / "tex1.ktx2"));
-		REQUIRE_FALSE(std::filesystem::exists(dir.path / "tex2.ktx2"));
+		REQUIRE(std::filesystem::exists(dir.path / "textures" / "tex0.ktx2"));
+		REQUIRE_FALSE(std::filesystem::exists(dir.path / "textures" / "tex1.ktx2"));
+		REQUIRE_FALSE(std::filesystem::exists(dir.path / "textures" / "tex2.ktx2"));
 	}
 
 	SECTION("an unsignalled token writes every texture")
 	{
-		REQUIRE_NOTHROW(writeTextures(mesh, dir.path));
+		REQUIRE_NOTHROW(StoreAt(dir.path).WriteTextures(mesh, "textures"));
 
-		REQUIRE(std::filesystem::exists(dir.path / "tex0.ktx2"));
-		REQUIRE(std::filesystem::exists(dir.path / "tex1.ktx2"));
-		REQUIRE(std::filesystem::exists(dir.path / "tex2.ktx2"));
+		REQUIRE(std::filesystem::exists(dir.path / "textures" / "tex0.ktx2"));
+		REQUIRE(std::filesystem::exists(dir.path / "textures" / "tex1.ktx2"));
+		REQUIRE(std::filesystem::exists(dir.path / "textures" / "tex2.ktx2"));
 	}
 }
 

@@ -403,9 +403,11 @@ MaterialEditorWindow::SelectSubmesh(int index)
 }
 
 QStringList
-MaterialEditorWindow::OpenMaterialPaths() const
+MaterialEditorWindow::HeldOpenPaths() const
 {
-	return m_Graphs.OpenPaths();
+	return editor::HeldOpenByMaterialEditor(
+		m_Graphs.OpenPaths(),
+		m_Preview != nullptr ? m_Preview->MeshPath() : std::filesystem::path());
 }
 
 void

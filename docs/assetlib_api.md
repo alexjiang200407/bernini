@@ -64,6 +64,15 @@ when this doc disagrees, trust the header, then fix this doc.
   chunks. A key mismatch is a cache miss that regenerates, never a conversion.
   [docs/asset_containers.md](docs/asset_containers.md)
 
+* **A `.ktx2` cannot hold a key, so its source's document holds one for it.** The textures a mesh
+  import extracts are derived from the `.glb` like the rest of its group, but a KTX2 has nowhere
+  to carry a header -- so the `.bimport` records `textureDir` and `textureStamp`, and
+  `AssetStore::RefreshImportedTextures` is what takes the miss. Not `LoadRegen*`: that runs on
+  every mesh load and every deletion's reference scan, where an import's worth of Basis encoding
+  cannot go. An extracted texture is named after the image it came from, which is what lets a
+  re-extract land back on the files materials already route at.
+  [AssetStore.h](libs/assetlib/include/assetlib/AssetStore.h)
+
 * **Every reference is data-root-relative, and layout is a table.** A `.bmesh` in
   `Meshes/props/` names `Textures/skin.ktx2`, not a path relative to itself, so a bake writing
   that file and a mesh naming it agree without either knowing where the other lives.
@@ -125,6 +134,7 @@ is what a caller reaches for only when it holds bytes no store addresses, which 
 | VAT bake | [vat_bake.h](libs/assetlib/include/assetlib/vat_bake.h) | A rig's clips baked to textures. [docs/vat.md](docs/vat.md) |
 | Pose and CPU skinning | [skinning.h](libs/assetlib/include/assetlib/skinning.h) | Deliberately the unoptimised reference every GPU path is diffed against. [docs/skinning.md](docs/skinning.md) |
 | Images | [image_io.h](libs/assetlib/include/assetlib/image_io.h) | KTX2 encode/decode, RGB9E5 pack. [docs/asset_standards.md](docs/asset_standards.md) |
+| Texture refresh | `AssetStore::WriteTextures` / `StaleImportedTextureSources` / `RefreshImportedTextures` ([AssetStore.h](libs/assetlib/include/assetlib/AssetStore.h)) | Extract an import's textures, and re-extract them when the source has moved -- the one part of a group the load-time seam skips. |
 | Describe, migrate, prune | `AssetStore::Describe` ([AssetStore.h](libs/assetlib/include/assetlib/AssetStore.h)), [migrate.h](libs/assetlib/include/assetlib/migrate.h), [texture_prune.h](libs/assetlib/include/assetlib/texture_prune.h) | Text for a person, one overload per container; re-save at the current form; collect unreferenced bakes. |
 | Cancellation | [cancel.h](libs/assetlib/include/assetlib/cancel.h) | `std::stop_token`, polled at the encode that dominates each bake. |
 
@@ -161,7 +171,7 @@ The dotted edge is the asymmetry: reads go through the store, writes go around i
   concurrent reads through one store are as safe as the mount beneath it, and nothing here
   serializes writes. The editor drives bakes on a worker and owns that discipline itself.
 * **Every progress and cancel callback runs on the calling thread.** `TextureProgressFn` is
-  invoked before each texture, from whichever thread called `writeTextures`.
+  invoked before each texture, from whichever thread called `AssetStore::WriteTextures`.
 * **A cancel is honoured between encodes, not inside one.** A signalled token waits out the
   texture in flight — seconds at 4K. Whatever was already written stays on disk.
 

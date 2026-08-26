@@ -16,7 +16,7 @@ when this page disagrees, trust the header, then fix this page.
 |---|---|---|
 | Authored text | `.bmaterial`, `.benv`, `.bimport` | the editor, `migrate`, deliberate saves |
 | Derived cache entry | `.bmesh`, `.bskel`, `.banim`, `.bvat`, `.bsky`, `.benvl` | the import, the bakes, `migrate`, `pack` |
-| Foreign | `.ktx2` (Basis/RGB9E5 textures) | the bakes; stamp-governed via the routes that name them |
+| Foreign | `.ktx2` (Basis/RGB9E5 textures) | the bakes and the mesh import; stamp-governed by whatever names them |
 
 ## Text documents
 
@@ -48,7 +48,7 @@ The header carries the **cache key**, and the key is the whole design:
 
 | Component | Meaning |
 |---|---|
-| `bakeToken` | the engine's bake revision for this container kind — `src/bake_tokens.h` |
+| `bakeToken` | the engine's bake revision for this container kind — `AssetCodec<T>::c_BakeToken` |
 | `sourceSize` / `sourceHash` | the copied source as it measured when this was written |
 | `parametersHash` | the import document's parameter subtree, hashed |
 | source mount key | which source; empty when none was ever recorded |
@@ -72,10 +72,33 @@ payload, which is what keeps a whole-project staleness survey off the disk's thr
   token, so a layout change without a bump fails in the PR that made it; a semantic change the
   fixture cannot see is still the author's bump to remember.
 
+### The textures a mesh import extracts
+
+A `.ktx2` is Foreign: it has nowhere to carry a header, so it cannot hold a key of its own. The
+extracted textures of a mesh import are keyed by the two fields their `.bimport` carries instead --
+`textureDir`, the folder they went into, and `textureStamp`, the source as it stood when they were
+written. Together those are the pair `AssetStore::StaleImportedTextureSources` compares, and they
+sit outside the document's `parameters`, so neither keys the geometry beside them.
+
+The miss is **not** taken at load. `LoadRegen*` passes `GltfTextures::kSkip`, deliberately: it is
+called on every mesh load, on every deletion's reference scan, and by `vat_bake` and `pack`, and
+Basis-supercompressing a source's maps there would freeze a level load.
+`AssetStore::RefreshImportedTextures`
+([libs/assetlib/include/assetlib/AssetStore.h](libs/assetlib/include/assetlib/AssetStore.h))
+is the explicit operation that takes it, reached from `migrate` and from the editor's offer when a
+project opens.
+
+What makes a re-extract safe over a folder materials route into is the *name*: an extracted texture
+is named after the image it came from, so an edited image lands back on the file every route already
+holds, and an inserted one takes a new name rather than displacing its neighbours. A file the
+extract no longer produces is reported and left alone -- a material may still draw it, and both
+re-routing and deleting it are the user's.
+
 ## Rewriting a whole project
 
-`assetlib_cli migrate -p <project>` reads every container and re-saves whatever is not
-byte-identical to the current form — geometry through the regeneration seam
+`assetlib_cli migrate -p <project>` re-extracts the textures of every source that has moved since
+its import, then reads every container and re-saves whatever is not byte-identical to the current
+form — geometry through the regeneration seam
 (meshes before rigs before clips, so a regenerated `.banim` measures its posed boxes against
 current meshes), everything else as read. A second run rewrites nothing; a file it cannot read is
 reported per-file, and the CLI exits non-zero. `assetlib_cli describe -p <project> <key> --key`

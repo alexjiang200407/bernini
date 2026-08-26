@@ -1,6 +1,7 @@
 #include <assetlib/asset_import.h>
 #include <assetlib/bmesh.h>
 #include <assetlib/codecs.h>
+#include <assetlib/container_info.h>
 
 #include <assetlib/AssetStore.h>
 
@@ -132,6 +133,12 @@ namespace assetlib
 	AssetStore::WriteImportedDocument(const ImportTarget& target, const BMesh* mesh) const
 	{
 		ImportDocument document = parametersOnly(target.sampleRate);
+		document.textureDir     = target.textureDir;
+
+		// From the copy, not the caller's reference: the document cannot then disagree with the
+		// source standing beside it.
+		if (!document.textureDir.empty())
+			document.textureStamp = stampOf(ImportedSourcePath(target.name));
 		if (mesh != nullptr)
 			document.bindings = bindingsOf(*mesh);
 

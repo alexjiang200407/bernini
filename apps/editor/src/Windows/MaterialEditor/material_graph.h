@@ -18,7 +18,7 @@ class Renderer;
  * Rewrites `path` relative to `dir`, or resolves it against `dir` when `toRelative` is false.
  *
  * A `.bmaterial`'s texture references are relative to the project's Data root -- not to the material
- * file -- so a material names `textures_src/tex1.ktx2` and `Textures/orm_ab12.ktx2` whatever directory
+ * file -- so a material names `textures_src/albedo.ktx2` and `Textures/orm_ab12.ktx2` whatever directory
  * it lives in. Texture nodes hold absolute paths while the graph is live, so the saved graph is
  * rewritten on the way out and back in. An empty `dir` (no project open) leaves the path alone, as do
  * paths that cannot be expressed relative to it -- a different drive, say. Both stay absolute: still

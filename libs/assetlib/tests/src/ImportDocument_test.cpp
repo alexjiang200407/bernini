@@ -46,6 +46,50 @@ namespace
 	}
 }
 
+TEST_CASE("an import document records where its textures went", "[importdoc]")
+{
+	ImportDocument document;
+	document.textureDir = "textures_src/kirk";
+
+	document.textureStamp = { 4096, 0xfeedfacecafebeefull };
+
+	const ImportDocument read = DocumentFrom(DocumentText(document));
+	CHECK(read.textureDir == "textures_src/kirk");
+	CHECK(read.textureStamp == document.textureStamp);
+
+	SECTION("an import that extracted no textures writes no key at all")
+	{
+		// So a document for such an import stays byte-identical to one written before the key
+		// existed, which is what keeps migrate's byte-compare from reporting every project once.
+		const std::string none = DocumentText(ImportDocument());
+		CHECK(none.find("texture") == std::string::npos);
+		CHECK(DocumentFrom(none).textureDir.empty());
+		CHECK(DocumentFrom(none).textureStamp == SourceStamp());
+	}
+
+	SECTION("a document written before the key existed reads as no folder")
+	{
+		const auto old = DocumentFrom(R"({"parameters":{"sampleRate":30.0}})");
+		CHECK(old.textureDir.empty());
+		CHECK(old.textureStamp == SourceStamp());
+	}
+
+	SECTION("it is outside the parameters, so it does not key the cache")
+	{
+		// Where the textures went does not change what the importer computes, and a cache key that
+		// moved with it would stale every mesh in the project over a folder.
+		ImportDocument elsewhere = document;
+		elsewhere.textureDir     = "textures_src/somewhere_else";
+		CHECK(parametersHashOf(elsewhere) == parametersHashOf(document));
+	}
+
+	SECTION("a non-string folder is refused rather than defaulted")
+	{
+		CHECK_THROWS(DocumentFrom(R"({"textureDir":7})"));
+		CHECK_THROWS(DocumentFrom(R"({"textureStampHash":"beef"})"));
+	}
+}
+
 TEST_CASE("an import document round-trips, canonically", "[importdoc]")
 {
 	ImportDocument document;
@@ -195,7 +239,7 @@ TEST_CASE("an import records the bindings the mesh carries", "[importdoc]")
 		{ { "kirk[0]", 0 }, { "kirk[1]", 1 }, { "props", c_InvalidIndex } },
 		{ "Materials/skin.bmaterial", "Materials/teeth.bmaterial" });
 
-	const ImportTarget target{ "kirk", 24.0f };
+	const ImportTarget target{ "kirk", 24.0f, "textures_src/kirk" };
 	const AssetStore   store(root.path);
 	const SourceRef    ref = store.CopyImportedSource(root.path / "kirk.glb", target);
 	CHECK(ref.key == "meshes_src/kirk.glb");
@@ -219,7 +263,7 @@ TEST_CASE("a source that is not self-contained is refused", "[importdoc]")
 	CHECK_THROWS_WITH(
 		AssetStore(root.path).CopyImportedSource(
 			root.path / "kirk.gltf",
-			ImportTarget{ "kirk", 30.0f }),
+			ImportTarget{ "kirk", 30.0f, {} }),
 		Catch::Matchers::ContainsSubstring("export as .glb"));
 }
 

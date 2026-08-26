@@ -767,6 +767,12 @@ namespace assetlib
 					rgba,
 					static_cast<uint32_t>(width),
 					static_cast<uint32_t>(height)));
+
+				// The URI stands in for an absent name: a glTF referencing image files names them
+				// there and nowhere else.
+				mesh.textureNames.push_back(
+					!image.name.empty() ? image.name :
+										  std::filesystem::path(image.uri).stem().string());
 			}
 		}
 

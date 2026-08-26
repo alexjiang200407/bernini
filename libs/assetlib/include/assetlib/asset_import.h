@@ -24,13 +24,15 @@ namespace assetlib
 	requireUniqueSubmeshNames(const BMesh& mesh);
 
 	/**
-	 * What an import is named and the parameter it writes with, carried as one value so a write
-	 * cannot take half of it. Where it lands is the store's, not this.
+	 * What an import is named and what it writes with, carried as one value so a write cannot take
+	 * half of it. The data root is still the store's; `textureDir` is not one, and a person picks
+	 * it in the importer.
 	 */
 	struct ImportTarget
 	{
 		std::string name;  // the copied source's stem: `meshes_src/<name>.glb`
 		float       sampleRate;
+		std::string textureDir;  // where the textures went; empty when none were extracted
 	};
 
 	/**
@@ -58,6 +60,17 @@ namespace assetlib
 		std::string key;  // the document's mount key
 		Outcome     outcome;
 		std::string message;
+	};
+
+	/** What AssetStore::RefreshImportedTextures wrote, and what it left in the folder. */
+	struct TextureRefresh
+	{
+		std::string              textureDir;
+		std::vector<std::string> written;  // mount keys, sorted
+
+		// Files the folder held that this extract did not produce. Reported, never removed or
+		// re-routed -- see docs/asset_containers.md.
+		std::vector<std::string> superseded;
 	};
 
 	/** A file an import writes, and whether the import is the one that made it. */

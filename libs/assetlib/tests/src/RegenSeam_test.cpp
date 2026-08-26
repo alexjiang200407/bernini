@@ -405,7 +405,7 @@ TEST_CASE("reauthor rewrites a document from its mesh, once", "[regen][importdoc
 	SECTION("a clips-only document keeps its empty bindings")
 	{
 		AssetStore(sandbox.dataRoot)
-			.WriteImportedDocument(ImportTarget{ "clipsonly", 30.0f }, nullptr);
+			.WriteImportedDocument(ImportTarget{ "clipsonly", 30.0f, {} }, nullptr);
 
 		const auto again = AssetStore(sandbox.dataRoot).ReauthorImportDocuments();
 		REQUIRE(again.size() == 2);
@@ -416,7 +416,7 @@ TEST_CASE("reauthor rewrites a document from its mesh, once", "[regen][importdoc
 	SECTION("an unreadable mesh header fails a claimless document rather than clearing it")
 	{
 		AssetStore(sandbox.dataRoot)
-			.WriteImportedDocument(ImportTarget{ "clipsonly", 30.0f }, nullptr);
+			.WriteImportedDocument(ImportTarget{ "clipsonly", 30.0f, {} }, nullptr);
 		core::file::write_atomic(sandbox.meshPath, std::string_view("not a mesh"));
 
 		const auto again = AssetStore(sandbox.dataRoot).ReauthorImportDocuments();

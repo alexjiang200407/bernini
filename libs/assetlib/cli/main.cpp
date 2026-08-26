@@ -461,8 +461,7 @@ main(int argc, char** argv)
 			const fs::path banimPath =
 				dataRoot / assetlib::c_AnimationsDirectoryName / assetlib::animationFileName(name);
 
-			// Its own folder, because writeTextures names its output tex0.ktx2 by index -- two
-			// imports sharing one would overwrite each other's files.
+			// Its own folder: two sources naming an image alike would collide in a shared one.
 			const fs::path textureDir = dataRoot / assetlib::c_TexturesSrcDirectoryName / name;
 
 			assetlib::requireSelfContainedSource(input);
@@ -532,11 +531,13 @@ main(int argc, char** argv)
 				assetlib::requireUniqueSubmeshNames(mesh);
 
 				const assetlib::AssetStore   importStore(dataRoot);
-				const assetlib::ImportTarget target{ name, sampleRate };
+				const assetlib::ImportTarget target{ name,
+					                                 sampleRate,
+					                                 importStore.KeyFor(textureDir) };
 				const assetlib::SourceRef    source = importStore.CopyImportedSource(input, target);
 				mesh.source                         = source;
 
-				assetlib::writeTextures(imported, textureDir);
+				importStore.WriteTextures(imported, target.textureDir);
 
 				const auto derived = assetlib::generateTangents(mesh);
 
@@ -890,6 +891,10 @@ main(int argc, char** argv)
 						break;
 					}
 				}
+				// Named and left where they are -- see docs/asset_containers.md.
+				for (const std::string& superseded : report.supersededTextures)
+					std::cout << "no longer extracted, still on disk: " << superseded << '\n';
+
 				std::cout << std::format(
 					"{} unchanged, {} {}, {} cannot be converted\n",
 					report.Count(assetlib::MigratedFile::Outcome::kUnchanged),

@@ -14,13 +14,17 @@ namespace assetlib::test
 	 * the editor call: the copied source and its document in `meshes_src/`, the mesh in
 	 * `Meshes/`, and -- when the source carries a skin -- the rig in `Skeletons/` and
 	 * `Animations/`. Submesh 0 is bound to `material`, recorded in the document.
+	 *
+	 * `textureDir` extracts the source's textures into that folder as an import with textures
+	 * turned on does, and records it in the document; empty extracts none.
 	 */
 	inline void
 	ImportUnitGroup(
 		const std::filesystem::path& dataRoot,
 		const std::filesystem::path& glb,
 		std::string_view             material   = "Materials/red.bmaterial",
-		float                        sampleRate = c_DefaultSampleRate)
+		float                        sampleRate = c_DefaultSampleRate,
+		std::string_view             textureDir = {})
 	{
 		const auto imported = loadFromGltf(glb, { .sampleRate = sampleRate });
 
@@ -28,11 +32,13 @@ namespace assetlib::test
 		generateTangents(mesh);
 		requireUniqueSubmeshNames(mesh);
 
-		const ImportTarget target{ "unit", sampleRate };
-		const SourceRef    source = AssetStore(dataRoot).CopyImportedSource(glb, target);
+		const ImportTarget target{ "unit", sampleRate, std::string(textureDir) };
+		const AssetStore   store(dataRoot);
+		const SourceRef    source = store.CopyImportedSource(glb, target);
 		mesh.source               = source;
 
-		const AssetStore store(dataRoot);
+		if (!textureDir.empty())
+			store.WriteTextures(imported, textureDir);
 
 		store.WriteImportedRig(
 			imported.skeleton,

@@ -1,4 +1,5 @@
 #include "import_pipeline.h"
+#include <assetlib/AssetStore.h>
 #include <assetlib/bmesh.h>
 #include <assetlib/envmap.h>
 
@@ -70,10 +71,14 @@ namespace editor
 			return dataRoot / fs::path(output.toStdWString());
 		};
 
-		// writeTextures names its output tex0.ktx2, tex1.ktx2 ... by index, so every import needs its
-		// own folder or the next one silently overwrites it.
+		// Its own folder: two sources naming an image alike would collide in a shared one.
 		const fs::path textureDir =
 			options.textures ? under(options.outputs.textureDir) : fs::path();
+
+		// The same folder every ImportTarget below records, so the document cannot disagree with
+		// where the textures went.
+		const std::string textureDirKey =
+			options.textures ? options.outputs.textureDir.toStdString() : std::string();
 
 		// A derived material routes at the extracted textures, so it cannot come across without them.
 		const bool     importMaterials = options.pbrMaterials && options.textures && options.mesh;
@@ -159,9 +164,9 @@ namespace editor
 			if (file.existed)
 				replaced << QString::fromStdWString(file.path.wstring());
 
-		// Only the texture folder: it is named tex0.ktx2 by index, so one already there belongs to another
-		// import and sharing it would overwrite that import's files. A materials folder is shareable, and
-		// its files are checked above.
+		// Only the texture folder: an import cannot name the files it writes there, so one already
+		// there belongs to another import and sharing it would overwrite that import's files. A
+		// materials folder is shareable, and its files are checked above.
 		if (textureDirExisted)
 			replaced << QString::fromStdWString(textureDir.wstring());
 
@@ -188,9 +193,9 @@ namespace editor
 
 				if (options.textures)
 				{
-					assetlib::writeTextures(
+					assetlib::AssetStore(dataRoot).WriteTextures(
 						*imported,
-						textureDir,
+						textureDirKey,
 						[&](size_t done, size_t total) {
 							progress.Report(
 								static_cast<int>(done),
@@ -222,7 +227,8 @@ namespace editor
 
 					const assetlib::AssetStore   store(dataRoot);
 					const assetlib::ImportTarget target{ sourceName,
-					                                     assetlib::c_DefaultSampleRate };
+					                                     assetlib::c_DefaultSampleRate,
+					                                     textureDirKey };
 					const assetlib::SourceRef sourceRef = store.CopyImportedSource(source, target);
 					mesh->source                        = sourceRef;
 
@@ -241,7 +247,8 @@ namespace editor
 
 					const assetlib::AssetStore   store(dataRoot);
 					const assetlib::ImportTarget target{ sourceName,
-					                                     assetlib::c_DefaultSampleRate };
+					                                     assetlib::c_DefaultSampleRate,
+					                                     textureDirKey };
 					const assetlib::SourceRef sourceRef = store.CopyImportedSource(source, target);
 					store.WriteImportedClips(
 						imported->skeleton,
@@ -286,7 +293,8 @@ namespace editor
 					meshStore.Save(*mesh, meshStore.KeyFor(bmeshPath));
 
 					const assetlib::ImportTarget target{ sourceName,
-						                                 assetlib::c_DefaultSampleRate };
+						                                 assetlib::c_DefaultSampleRate,
+						                                 textureDirKey };
 					meshStore.WriteImportedDocument(target, &*mesh);
 				}
 
