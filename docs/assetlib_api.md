@@ -81,9 +81,13 @@ when this doc disagrees, trust the header, then fix this doc.
   of extensions.
   [libs/assetlib/include/assetlib/project_layout.h](libs/assetlib/include/assetlib/project_layout.h)
 
-* **Baked maps are shared, not owned.** A bake's output name is content-addressed from its
-  route, so two materials routing the same source share one baked file — and deleting a material
-  therefore does not delete its maps. `AssetStore::FindUnusedBakedTextures` is what collects them.
+* **Baked maps are shared, not owned, and named by what they hold.** A bake's output name hashes
+  everything that determines its bytes — the group, the target format, and the channel *and content*
+  of each source feeding it — so two materials composing the same map share one file, and finding
+  that file is the whole up-to-date test. Nothing is compared against a timestamp, and a source
+  edited in place names a different map rather than overwriting one someone else may still hold.
+  Deleting a material therefore does not delete its maps; `AssetStore::FindUnusedBakedTextures`
+  is what collects them.
 
 * **The cook never carries a source format's shading model across.** `toBMesh` drops glTF's PBR
   materials on the floor: they are that format's model, not necessarily the engine's, and

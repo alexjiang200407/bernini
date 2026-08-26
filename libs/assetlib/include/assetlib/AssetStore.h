@@ -204,6 +204,20 @@ namespace assetlib
 		void
 		BakeMaterial(BMaterial& material, const CancelToken& cancel = {}) const;
 
+		/**
+		 * Writes `material`'s triplet the way BakeMaterial would, and encodes nothing.
+		 *
+		 * A map is named for everything that determines its bytes, so what a bake *would* produce
+		 * costs a stamp of each source and no decode -- which is what tells a dry run whether a bake
+		 * has anything to do. Unlike the other Resolve methods this mutates its argument, and the
+		 * names it writes may be of maps that are not on disk: that is the answer, not a failure.
+		 *
+		 * @throws std::runtime_error as bakeMaterial. Not cancellable -- there is nothing long
+		 *         enough to interrupt.
+		 */
+		void
+		ResolveMaterialBake(BMaterial& material) const;
+
 		/** @throws std::runtime_error / Cancelled as bakeSky. */
 		void
 		BakeSky(BSky& sky, const CancelToken& cancel = {}) const;
