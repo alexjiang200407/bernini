@@ -79,6 +79,21 @@ source.
   scan behind the offer -- header peeks and one document hash apiece. *Rejected: `Migrate(dryRun)`
   as the scan, which re-cooks every stale group in memory to answer a yes/no question a project
   open cannot afford to ask.*
+- **ADR-12 — only the scene load refuses; the editor's inspection surfaces keep regenerating.**
+  `RequireCurrent` sits in `game::AssetManager`, so the main viewport refuses. The editor's other
+  readers — `LoadMeshThroughSeam` behind thumbnails, the material preview and the material editor,
+  and the animation preview's direct `LoadRegen*` calls — go to `AssetStore` and still re-cook in
+  memory. Deliberate: those exist to *show you the project*, and a user who declined the update
+  offer needs to see their assets in order to decide, where a scene load has no such excuse. The
+  cost argument does not reach them either — they read one asset on demand, not a scene's worth per
+  load. *Rejected: refusing everywhere, which makes a stale project one that cannot even render a
+  thumbnail of what is wrong with it.*
+- **ADR-13 — the two new document fields are edges in the reference graph.** `skeleton` and
+  `outputs` are references like any other, and the document is now the only thing that records
+  them. *Rejected: leaving them out as "just bookkeeping" — an `outputs` entry naming a key a
+  rename moved reads as **absent** to the producing side, so the next `migrate` would put the old
+  file back under its old name. On a project that gitignores its derived tree that is silent data
+  corruption from a routine rename.*
 - **ADR-11 — a source's extracted textures are produced from the texture folder being absent or
   empty**, not from `outputs`. A `.ktx2` has nowhere to carry a header, so nothing can key one;
   `StaleImportedTextureSources` compares the *source's* stamp, which is unmoved on a fresh checkout

@@ -91,7 +91,13 @@ namespace assetlib
 			addEdge(edges, referrer, skeleton, RefKind::kClipSkeleton);
 		}
 
-		/** The document holds its source and every material its bindings name. */
+		/**
+		 * The document holds its source, every material its bindings name, the rig it binds and
+		 * every container it produced. The last two are references like any other: nothing else
+		 * records them, so a rename that missed one would leave the document naming a file that is
+		 * gone -- and an `outputs` entry naming a key that no longer exists reads as *absent* to
+		 * the producing side, which would put the old file back.
+		 */
 		void
 		collectImportDocumentEdges(
 			std::vector<AssetRef>&         edges,
@@ -102,6 +108,11 @@ namespace assetlib
 			addEdge(edges, referrer, importedSourceKeyFor(referrer), RefKind::kImportedSource);
 			for (const MaterialBinding& binding : document.bindings)
 				addEdge(edges, referrer, binding.material, RefKind::kSubmeshMaterial);
+
+			if (!document.skeleton.empty())
+				addEdge(edges, referrer, document.skeleton, RefKind::kDocumentSkeleton);
+			for (const std::string& output : document.outputs)
+				addEdge(edges, referrer, output, RefKind::kDocumentOutput);
 		}
 
 		/** The three inputs a `.bvat` was baked from -- what a re-bake reads. */

@@ -58,10 +58,12 @@ conversion and no old shape to parse: the recovery is always regeneration from t
 through `AssetStore`'s `LoadRegen*` seam, and it is taken **deliberately** rather than at load:
 `migrate`, `pack`, the VAT bake. A read-only store never takes it, because `pack` made its keys true.
 
-A **load refuses** a stale container instead, naming `migrate` — re-cooking one there costs an
+A **scene load refuses** a stale container instead, naming `migrate` — re-cooking one there costs an
 import, writes none of it back, and pays that again on the next load. The editor offers to rebuild
 as a project opens (`AssetStore::StaleGeometry`), which is where that refusal is meant to be
-answered.
+answered. Its *inspection* surfaces — thumbnails, the material preview, the animation preview — do
+still regenerate: they exist to show you the project, including the project you have not updated
+yet.
 
 Chunks are addressed by id and **an absent chunk is not an error** — a mesh with no roots chunk is
 a mesh with no roots. Ranged reads (`readCacheChunks*`) fetch named chunks and the key without the

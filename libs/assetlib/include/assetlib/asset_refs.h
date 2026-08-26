@@ -29,15 +29,17 @@ namespace assetlib
 	/** Why one asset holds another alive. */
 	enum class RefKind : uint32_t
 	{
-		kSubmeshMaterial,  // a .bmesh, or a .bimport's binding, names a .bmaterial
-		kBakedMap,         // a .bmaterial, .bsky or .benvl names a map its bake wrote
-		kChannelRoute,     // a .bmaterial routes a channel from a source texture
-		kEnvironmentPart,  // a .benv names the .bsky or .benvl it composes
-		kEnvSource,        // a .bsky or .benvl names the radiance its bake read
-		kMeshSkeleton,     // a .bmesh's joint indices address a .bskel
-		kClipSkeleton,     // a .banim's clips were resampled against a .bskel
-		kVatSource,        // a .bvat names the mesh, skeleton or clip set its bake read
-		kImportedSource,   // a .bimport names the .glb it was imported from
+		kSubmeshMaterial,   // a .bmesh, or a .bimport's binding, names a .bmaterial
+		kBakedMap,          // a .bmaterial, .bsky or .benvl names a map its bake wrote
+		kChannelRoute,      // a .bmaterial routes a channel from a source texture
+		kEnvironmentPart,   // a .benv names the .bsky or .benvl it composes
+		kEnvSource,         // a .bsky or .benvl names the radiance its bake read
+		kMeshSkeleton,      // a .bmesh's joint indices address a .bskel
+		kClipSkeleton,      // a .banim's clips were resampled against a .bskel
+		kVatSource,         // a .bvat names the mesh, skeleton or clip set its bake read
+		kImportedSource,    // a .bimport names the .glb it was imported from
+		kDocumentSkeleton,  // a .bimport names the .bskel its source's joint indices address
+		kDocumentOutput,    // a .bimport names a container its source produced
 	};
 
 	/** `referrer` names `target`. Both relative to the data root, in generic form. */

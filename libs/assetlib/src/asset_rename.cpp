@@ -121,6 +121,9 @@ namespace assetlib
 				ImportDocument document = AssetCodec<ImportDocument>::Deserialize(bytes);
 				for (MaterialBinding& binding : document.bindings)
 					binding.material = mapTarget(plan, binding.material);
+
+				document.skeleton = mapTarget(plan, document.skeleton);
+				for (std::string& output : document.outputs) output = mapTarget(plan, output);
 				return AssetCodec<ImportDocument>::Serialize(document);
 			}
 

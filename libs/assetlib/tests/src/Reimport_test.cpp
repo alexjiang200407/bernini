@@ -3,6 +3,8 @@
 
 #include <assetlib/AssetStore.h>
 #include <assetlib/Project.h>
+#include <assetlib/asset_refs.h>
+#include <assetlib/import_document.h>
 #include <assetlib/migrate.h>
 #include <assetlib/project_layout.h>
 #include <assetlib/skinning.h>
@@ -228,6 +230,48 @@ TEST_CASE("An emptied texture folder is re-extracted", "[reimport]")
 
 	// The geometry is untouched by this: it was never absent.
 	CheckSameFiles(DerivedFiles(dataRoot), before);
+}
+
+// The document is now the only record of what a source produced, which puts it in the reference
+// graph: an `outputs` entry naming a key that no longer exists reads as *absent* to the producing
+// side, so a rename the document did not follow would put the old file back under its old name --
+// silently, on the next machine to run migrate, on exactly the gitignored-derived-tree project this
+// work exists to enable.
+TEST_CASE("A renamed output is followed, not reproduced under its old name", "[reimport]")
+{
+	const test::SkinnedGltf source("bernini_reimport_rename_gltf");
+	const ImportedProject   project("bernini_reimport_rename", source.PackGlb());
+
+	const AssetStore& store = project.Store();
+
+	SECTION("a renamed mesh")
+	{
+		store.RenameAsset(
+			planRename(AssetRefGraph::Scan(store), "Meshes/unit.bmesh", "Meshes/hero.bmesh"));
+
+		const ImportDocument document =
+			loadImportDocument(store.GetFiles(), "meshes_src/unit.bimport");
+		CHECK(std::ranges::find(document.outputs, "Meshes/hero.bmesh") != document.outputs.end());
+		CHECK(std::ranges::find(document.outputs, "Meshes/unit.bmesh") == document.outputs.end());
+
+		const ReimportReport report = store.Reimport(/*dryRun*/ false);
+		CHECK(report.WrittenCount() == 0);
+		CHECK_FALSE(fs::exists(project.dataRoot / "Meshes/unit.bmesh"));
+	}
+
+	SECTION("a renamed rig")
+	{
+		store.RenameAsset(
+			planRename(AssetRefGraph::Scan(store), "Skeletons/unit.bskel", "Skeletons/hero.bskel"));
+
+		const ImportDocument document =
+			loadImportDocument(store.GetFiles(), "meshes_src/unit.bimport");
+		CHECK(document.skeleton == "Skeletons/hero.bskel");
+
+		const ReimportReport report = store.Reimport(/*dryRun*/ false);
+		CHECK(report.WrittenCount() == 0);
+		CHECK_FALSE(fs::exists(project.dataRoot / "Skeletons/unit.bskel"));
+	}
 }
 
 TEST_CASE("A source that has gone is reported, not thrown", "[reimport]")
