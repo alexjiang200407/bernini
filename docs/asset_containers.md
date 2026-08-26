@@ -115,6 +115,26 @@ holds, and an inserted one takes a new name rather than displacing its neighbour
 extract no longer produces is reported and left alone -- a material may still draw it, and both
 re-routing and deleting it are the user's.
 
+## Which of these a project commits
+
+Now that a project can be *produced* from its sources rather than only re-cooked, the rule the two
+regimes were always pointing at is available:
+
+| | |
+|---|---|
+| **Committed** | the copied sources, and every authored document — `.glb`, the images, `.bimport`, `.bmaterial`, `.benv`, `.berniniproject`. Losing one loses work. |
+| **Ignorable** | every derived container — `.bmesh`, `.bskel`, `.banim`, `.bvat`, `.bsky`, `.benvl`, and the `.ktx2` under `Textures/`. `Reimport` puts them back. |
+
+It is a rule about **projects**. This repository's own `assets/` tree is not one: it is a fixture
+tree that `bgl_tests`, `assetlib_tests` and `editor_tests` read directly — `assets/Data` is opened
+as a store, a baked `.ktx2` is loaded by its content-hashed name, `assets/Data/Meshes/apples.bmesh`
+is read as a file — so those files are test inputs no import here produces, and they stay committed.
+
+A project that takes the second half up must run `assetlib_cli migrate` **before** it does: the
+producing side reads each source's `outputs`, and a document written before that field existed
+records none. `migrate` backfills them by reading the derived files, which have to be there to be
+read.
+
 ## Producing a whole project
 
 `AssetStore::Reimport` ([AssetStore.h](libs/assetlib/include/assetlib/AssetStore.h)) is the one

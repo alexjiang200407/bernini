@@ -79,6 +79,12 @@ source.
   scan behind the offer -- header peeks and one document hash apiece. *Rejected: `Migrate(dryRun)`
   as the scan, which re-cooks every stale group in memory to answer a yes/no question a project
   open cannot afford to ask.*
+- **ADR-10 — the commit rule is written down here, and applied in `bernini-test-project` by hand.**
+  Sources and authored documents committed, derived containers ignorable. The test project is a
+  different repository, so this change cannot carry its `.gitignore`; what it carries is the
+  ability to regenerate, which is what that `.gitignore` was waiting on. *Rejected: landing the two
+  together — they cannot be one commit, and a `.gitignore` pushed before this merged would leave
+  that project unopenable.*
 - **ADR-7 — the in-repo `assets/` tree is not gitignored.** It is a fixture tree, not a project:
   `bgl_tests` opens `assets/Data` as a store
   ([TestEnvironment.cpp:12](../../libs/bgl/tests/src/util/TestEnvironment.cpp)),
