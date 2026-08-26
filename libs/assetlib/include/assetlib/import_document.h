@@ -39,6 +39,10 @@ namespace assetlib
 		std::string textureDir;
 		SourceStamp textureStamp;
 
+		// Overrules what the cook measures for a named clip; see assetlib::groundClips. A parameter
+		// rather than a binding: it changes the samples the importer writes, so it has to key.
+		std::vector<ClipFloor> clipFloors;
+
 		/** The `.bskel` this source's joint indices address; empty for a source with no rig. */
 		std::string skeleton;
 

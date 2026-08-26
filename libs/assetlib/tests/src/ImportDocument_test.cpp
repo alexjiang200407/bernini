@@ -329,3 +329,36 @@ TEST_CASE("a document refuses a skeleton or outputs of the wrong shape", "[impor
 		DocumentFrom(R"({"outputs": [7]})"),
 		Catch::Matchers::ContainsSubstring("'outputs' holds a non-string entry"));
 }
+TEST_CASE("an authored clip floor round-trips as a parameter", "[importdoc][grounding]")
+{
+	ImportDocument document;
+	document.clipFloors = { { "Run", 0.151f }, { "Land", -0.02f } };
+
+	const std::string    text = DocumentText(document);
+	const ImportDocument read = DocumentFrom(text);
+
+	REQUIRE(read.clipFloors.size() == 2);
+	CHECK(read.clipFloors[0] == ClipFloor{ "Land", -0.02f });
+	CHECK(read.clipFloors[1] == ClipFloor{ "Run", 0.151f });
+
+	// A parameter, not a binding: it changes the samples the cook writes, so the entry it wrote must
+	// go stale when it is edited. That is what makes an override take effect at all.
+	ImportDocument edited      = read;
+	edited.clipFloors[0].floor = -0.03f;
+	CHECK(parametersHashOf(edited) != parametersHashOf(read));
+
+	SECTION("a document authoring none hashes as it did before the key existed")
+	{
+		// Writing an empty object would stale every container in every project on this change alone.
+		const ImportDocument none;
+		CHECK(DocumentText(none).find("clipFloor") == std::string::npos);
+		CHECK(parametersHashOf(none) == parametersHashOf(DocumentFrom("{}")));
+	}
+
+	SECTION("two grounds for one clip are refused")
+	{
+		ImportDocument twice;
+		twice.clipFloors = { { "Run", 0.0f }, { "Run", 1.0f } };
+		CHECK_THROWS(DocumentText(twice));
+	}
+}
