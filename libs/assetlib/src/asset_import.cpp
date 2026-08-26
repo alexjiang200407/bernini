@@ -134,6 +134,8 @@ namespace assetlib
 	{
 		ImportDocument document = parametersOnly(target.sampleRate);
 		document.textureDir     = target.textureDir;
+		document.skeleton       = target.skeleton;
+		document.outputs        = target.outputs;
 
 		// From the copy, not the caller's reference: the document cannot then disagree with the
 		// source standing beside it.
@@ -449,7 +451,7 @@ namespace assetlib
 		}
 	}
 
-	void
+	std::string
 	AssetStore::WriteImportedClips(
 		const Skeleton&     skeleton,
 		const AnimationSet& animations,
@@ -486,6 +488,7 @@ namespace assetlib
 			Load<Skeleton>(clips.skeleton));
 
 		Save(clips, banimKey);
+		return clips.skeleton;
 	}
 
 	void

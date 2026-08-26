@@ -530,12 +530,10 @@ main(int argc, char** argv)
 				assetlib::BMesh mesh = assetlib::toBMesh(imported);
 				assetlib::requireUniqueSubmeshNames(mesh);
 
-				const assetlib::AssetStore   importStore(dataRoot);
-				const assetlib::ImportTarget target{ name,
-					                                 sampleRate,
-					                                 importStore.KeyFor(textureDir) };
-				const assetlib::SourceRef    source = importStore.CopyImportedSource(input, target);
-				mesh.source                         = source;
+				const assetlib::AssetStore importStore(dataRoot);
+				assetlib::ImportTarget target{ name, sampleRate, importStore.KeyFor(textureDir) };
+				const assetlib::SourceRef source = importStore.CopyImportedSource(input, target);
+				mesh.source                      = source;
 
 				importStore.WriteTextures(imported, target.textureDir);
 
@@ -550,6 +548,13 @@ main(int argc, char** argv)
 					true,
 					source);
 				importStore.Save(mesh, importStore.KeyFor(bmeshPath));
+
+				target.skeleton = mesh.skeleton;
+				target.outputs  = { importStore.KeyFor(bmeshPath) };
+				if (!mesh.skeleton.empty() && mesh.skeleton == importStore.KeyFor(bskelPath))
+					target.outputs.push_back(mesh.skeleton);
+				if (fs::exists(banimPath))
+					target.outputs.push_back(importStore.KeyFor(banimPath));
 				importStore.WriteImportedDocument(target, &mesh);
 
 				if (derived.skipped > 0)

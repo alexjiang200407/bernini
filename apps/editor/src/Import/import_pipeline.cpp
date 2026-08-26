@@ -245,16 +245,17 @@ namespace editor
 				{
 					progress.Report(0, 0, QString("Baking the pose bounds..."));
 
-					const assetlib::AssetStore   store(dataRoot);
-					const assetlib::ImportTarget target{ sourceName,
-					                                     assetlib::c_DefaultSampleRate,
-					                                     textureDirKey };
-					const assetlib::SourceRef sourceRef = store.CopyImportedSource(source, target);
-					store.WriteImportedClips(
+					const assetlib::AssetStore store(dataRoot);
+					assetlib::ImportTarget     target{ sourceName,
+					                                   assetlib::c_DefaultSampleRate,
+					                                   textureDirKey };
+					const assetlib::SourceRef  sourceRef = store.CopyImportedSource(source, target);
+					target.skeleton                      = store.WriteImportedClips(
 						imported->skeleton,
 						imported->animations,
 						store.KeyFor(banimPath),
 						sourceRef);
+					target.outputs = { store.KeyFor(banimPath) };
 					store.WriteImportedDocument(target, nullptr);
 				}
 
@@ -292,9 +293,19 @@ namespace editor
 					const assetlib::AssetStore meshStore(dataRoot);
 					meshStore.Save(*mesh, meshStore.KeyFor(bmeshPath));
 
-					const assetlib::ImportTarget target{ sourceName,
-						                                 assetlib::c_DefaultSampleRate,
-						                                 textureDirKey };
+					assetlib::ImportTarget target{ sourceName,
+						                           assetlib::c_DefaultSampleRate,
+						                           textureDirKey };
+					target.skeleton = mesh->skeleton;
+					target.outputs  = { meshStore.KeyFor(bmeshPath) };
+
+					// The rig only when this import is what wrote it: a reused one is bound, not
+					// produced, and deleting this source must not take another source's rig with it.
+					if (!mesh->skeleton.empty() && mesh->skeleton == meshStore.KeyFor(bskelPath))
+						target.outputs.push_back(mesh->skeleton);
+					if (std::filesystem::exists(banimPath))
+						target.outputs.push_back(meshStore.KeyFor(banimPath));
+
 					meshStore.WriteImportedDocument(target, &*mesh);
 				}
 

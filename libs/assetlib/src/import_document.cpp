@@ -19,6 +19,8 @@ namespace assetlib
 		constexpr std::string_view c_TextureDirKey       = "textureDir";
 		constexpr std::string_view c_TextureStampSizeKey = "textureStampSize";
 		constexpr std::string_view c_TextureStampHashKey = "textureStampHash";
+		constexpr std::string_view c_SkeletonKey         = "skeleton";
+		constexpr std::string_view c_OutputsKey          = "outputs";
 
 		std::string
 		swapExtension(std::string_view key, std::string_view extension)
@@ -100,6 +102,33 @@ namespace assetlib
 			}
 		}
 
+		if (auto it = json.find(c_SkeletonKey); it != json.end())
+		{
+			core::throw_runtime_error_if(
+				!it->is_string(),
+				"import document: '{}' is not a string",
+				c_SkeletonKey);
+			document.skeleton = it->get<std::string>();
+			json.erase(it);
+		}
+
+		if (auto it = json.find(c_OutputsKey); it != json.end())
+		{
+			core::throw_runtime_error_if(
+				!it->is_array(),
+				"import document: '{}' is not an array",
+				c_OutputsKey);
+			for (const auto& output : *it)
+			{
+				core::throw_runtime_error_if(
+					!output.is_string(),
+					"import document: '{}' holds a non-string entry",
+					c_OutputsKey);
+				document.outputs.push_back(output.get<std::string>());
+			}
+			json.erase(it);
+		}
+
 		if (auto it = json.find(c_BindingsKey); it != json.end())
 		{
 			core::throw_runtime_error_if(
@@ -140,6 +169,18 @@ namespace assetlib
 		{
 			json[std::string(c_TextureStampSizeKey)] = document.textureStamp.size;
 			json[std::string(c_TextureStampHashKey)] = document.textureStamp.hash;
+		}
+
+		// Omitted rather than written empty, for the same reason textureDir is: a document for a
+		// source that produced neither stays byte-identical to one written before these existed.
+		if (!document.skeleton.empty())
+			json[std::string(c_SkeletonKey)] = document.skeleton;
+
+		if (!document.outputs.empty())
+		{
+			auto outputs = std::vector<std::string>(document.outputs);
+			std::ranges::sort(outputs);
+			json[std::string(c_OutputsKey)] = std::move(outputs);
 		}
 
 		auto bindings = nlohmann::json::object();

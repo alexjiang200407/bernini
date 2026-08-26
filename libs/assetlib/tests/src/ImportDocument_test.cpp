@@ -279,3 +279,44 @@ TEST_CASE("colliding submesh names are refused before anything is written", "[im
 		{ "Materials/a.bmaterial", "Materials/b.bmaterial" });
 	CHECK_NOTHROW(requireUniqueSubmeshNames(unique));
 }
+
+TEST_CASE("a document records the rig it binds and the outputs it produced", "[importdoc]")
+{
+	ImportDocument document;
+	document.skeleton = "Skeletons/kirk.bskel";
+	document.outputs  = { "Meshes/kirk.bmesh", "Animations/kirk.banim" };
+
+	const ImportDocument read = DocumentFrom(DocumentText(document));
+	CHECK(read.skeleton == "Skeletons/kirk.bskel");
+
+	// Sorted on write, so two imports that wrote the same set in different orders are one byte
+	// sequence -- the same rule every other key in this document follows.
+	CHECK(read.outputs == std::vector<std::string>{ "Animations/kirk.banim", "Meshes/kirk.bmesh" });
+
+	SECTION("neither is written when empty, so a document from before them is byte-identical")
+	{
+		const std::string text = DocumentText(ImportDocument());
+		CHECK_THAT(text, !Catch::Matchers::ContainsSubstring("skeleton"));
+		CHECK_THAT(text, !Catch::Matchers::ContainsSubstring("outputs"));
+	}
+
+	SECTION("neither keys the cache, so recording them cannot stale a container")
+	{
+		CHECK(parametersHashOf(document) == parametersHashOf(ImportDocument()));
+	}
+}
+
+TEST_CASE("a document refuses a skeleton or outputs of the wrong shape", "[importdoc]")
+{
+	CHECK_THROWS_WITH(
+		DocumentFrom(R"({"skeleton": 7})"),
+		Catch::Matchers::ContainsSubstring("'skeleton' is not a string"));
+
+	CHECK_THROWS_WITH(
+		DocumentFrom(R"({"outputs": "Meshes/kirk.bmesh"})"),
+		Catch::Matchers::ContainsSubstring("'outputs' is not an array"));
+
+	CHECK_THROWS_WITH(
+		DocumentFrom(R"({"outputs": [7]})"),
+		Catch::Matchers::ContainsSubstring("'outputs' holds a non-string entry"));
+}

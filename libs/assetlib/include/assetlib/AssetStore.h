@@ -259,10 +259,13 @@ namespace assetlib
 		 * mesh turned off does, and how a rig whose animations the artist exported one per file
 		 * gets all of them without a copy of the geometry each time.
 		 *
+		 * @return The mount key of the rig the clips were attached to -- what the import document
+		 *         then records, since nothing else can derive it.
+		 *
 		 * @throws std::runtime_error if there are no clips or no rig, or if no skeleton in the
 		 *         project matches the one they were authored against.
 		 */
-		void
+		std::string
 		WriteImportedClips(
 			const Skeleton&     skeleton,
 			const AnimationSet& animations,

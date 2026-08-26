@@ -5,7 +5,10 @@
 #include <assetlib/RegenMesh.h>
 #include <assetlib/asset_import.h>
 #include <assetlib/asset_refs.h>
+#include <assetlib/bmesh.h>
 #include <assetlib/import_document.h>
+#include <assetlib/project_layout.h>
+#include <assetlib/skinning.h>
 #include <assetlib_structs/Animation.h>
 #include <assetlib_structs/BEnv.h>
 #include <assetlib_structs/BMaterial.h>
@@ -69,6 +72,58 @@ namespace assetlib
 			}
 			return std::nullopt;
 		}
+
+		/** What one source produced, and the rig its containers name. */
+		struct SourceFacts
+		{
+			std::string              skeleton;
+			std::vector<std::string> outputs;
+		};
+
+		/**
+		 * The two document fields read back out of the derived files, for a project whose documents
+		 * predate them: a container's header names the source it came from, and a `.bmesh` or
+		 * `.banim` already stores the rig its indices address.
+		 */
+		std::unordered_map<std::string, SourceFacts>
+		factsFromDerived(const AssetStore& store, std::span<const std::filesystem::path> paths)
+		{
+			auto facts = std::unordered_map<std::string, SourceFacts>();
+
+			for (const std::filesystem::path& path : paths)
+			{
+				const auto type = assetTypeFromExtension(path);
+				if (type != AssetType::kMesh && type != AssetType::kSkeleton &&
+				    type != AssetType::kAnimation)
+					continue;
+
+				try
+				{
+					const std::string key =
+						normalizeRef(path.lexically_relative(store.GetDataRoot()).generic_string());
+
+					const std::string source = store.GeometryGroupSource(key).key;
+					if (source.empty())
+						continue;
+
+					SourceFacts& entry = facts[source];
+					entry.outputs.push_back(key);
+
+					if (type == AssetType::kMesh)
+						entry.skeleton = loadMeshRefs(path).skeleton;
+					else if (type == AssetType::kAnimation)
+						entry.skeleton = loadAnimationSkeletonPath(path);
+				}
+				catch (const std::exception&)
+				{
+					// A container that will not read tells the backfill nothing; the walk below
+					// reports it per-file.
+				}
+			}
+
+			for (auto& [source, entry] : facts) std::ranges::sort(entry.outputs);
+			return facts;
+		}
 	}
 
 	size_t
@@ -102,6 +157,52 @@ namespace assetlib
 		});
 
 		MigrateReport report;
+
+		// Before everything: the walk below regenerates through documents that must already name
+		// their rig, and a project written before that field existed has none.
+		const auto facts = factsFromDerived(*this, paths);
+		for (const std::string& documentKey : GetFiles().Enumerate(c_MeshesSrcDirectoryName))
+		{
+			if (extensionOf(documentKey) != c_ImportDocumentExtension)
+				continue;
+
+			const std::filesystem::path documentPath = GetDataRoot() / documentKey;
+			MigratedFile                file{ documentPath, MigratedFile::Outcome::kUnchanged, {} };
+			try
+			{
+				const auto found = facts.find(importedSourceKeyFor(documentKey));
+				if (found == facts.end())
+					continue;
+
+				ImportDocument       document = loadImportDocument(GetFiles(), documentKey);
+				const ImportDocument before   = document;
+
+				if (document.skeleton.empty())
+					document.skeleton = found->second.skeleton;
+				if (document.outputs.empty())
+					document.outputs = found->second.outputs;
+
+				// A source with no rig has no skeleton to record, so "still empty" is settled
+				// rather than pending; only a real change may report one.
+				if (document == before)
+					continue;
+
+				if (!dryRun)
+					writeFileBytes(
+						documentPath,
+						AssetCodec<ImportDocument>::Serialize(document),
+						"migrate");
+				file.outcome = MigratedFile::Outcome::kRewritten;
+			}
+			catch (const std::exception& error)
+			{
+				file.outcome = MigratedFile::Outcome::kFailed;
+				file.message = error.what();
+			}
+
+			if (file.outcome != MigratedFile::Outcome::kUnchanged)
+				report.files.push_back(std::move(file));
+		}
 
 		// Before the walk: a refresh stamps the `.bimport` the walk then reads.
 		for (const std::string& source : StaleImportedTextureSources())

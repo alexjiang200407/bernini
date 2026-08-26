@@ -72,6 +72,23 @@ payload, which is what keeps a whole-project staleness survey off the disk's thr
   token, so a layout change without a bump fails in the PR that made it; a semantic change the
   fixture cannot see is still the author's bump to remember.
 
+### What an import document records about its outputs
+
+A `.bimport` names two things nothing else can derive
+([import_document.h](libs/assetlib/include/assetlib/import_document.h)):
+
+* **`skeleton`** -- the `.bskel` this source's joint indices address. Authored rather than inferred,
+  which is what lets one rig serve several sources: a second `.glb` skinned to a rig already in the
+  project binds it instead of forking a signature-matching duplicate. A skinned source whose
+  document names none refuses at regeneration and says to run `migrate`.
+* **`outputs`** -- every container this source produced, as mount keys, sorted. A *produced* rig is
+  listed; a *bound* one is not, so deleting a source never takes another source's rig with it.
+
+Both sit outside `parameters`, with `bindings`: neither changes what the importer computes.
+`outputs` is what makes the derived set answerable from the authored side, which is the only way to
+produce a container that is not on disk at all -- a walk over derived files has nothing to
+enumerate.
+
 ### The textures a mesh import extracts
 
 A `.ktx2` is Foreign: it has nowhere to carry a header, so it cannot hold a key of its own. The
