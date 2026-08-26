@@ -812,6 +812,11 @@ def detect(preset, arch, install=True, with_vcpkg=True):
     if clang_tidy:
         tools["clang-tidy"] = clang_tidy
 
+    # pytest runs `just test`'s scripts_tests suite. It is a library rather than a located
+    # tool, so it is only offered here -- nothing about it reaches config.json.
+    if install and interactive() and not find_installed("pytest"):
+        offer_wheel("pytest", "`just test` runs the scripts/tests suite with it.")
+
     if tools:
         data["tools"] = tools
         notes.extend(tools.items())

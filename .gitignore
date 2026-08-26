@@ -16,6 +16,9 @@ build*/
 __pycache__
 *.pyc
 
+# pytest drops this at the root the moment `just test` runs the scripts_tests suite.
+.pytest_cache/
+
 # Local, developer-specific editor config (like .env); seeded from config.example.json
 apps/editor/config.json
 

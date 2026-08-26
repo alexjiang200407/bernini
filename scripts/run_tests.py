@@ -2,7 +2,9 @@
 """Build and run every test suite, and report which of them passed.
 
 The suites are discovered, not listed: any executable target whose name ends in `_tests`
-is one, so a new suite is picked up by adding the target, with nothing to update here.
+is one, so a new suite is picked up by adding the target, with nothing to update here. The
+scripts here have a suite of their own -- `scripts_tests`, the pytest cases under
+scripts/tests -- which runs alongside them and reports in the same summary.
 
 Usage:
     python scripts/run_tests.py                    # every suite
@@ -44,6 +46,7 @@ To pass arguments to a single suite, use `just run` instead, which also forwards
 """
 
 import argparse
+import importlib.util
 import os
 import random
 import re
@@ -57,6 +60,12 @@ import util.cmake_tools as ct
 import util.config as cfg
 import util.lfs as lfs
 import util.lock as lock
+
+
+# The scripts' own suite. It is not a CMake target, so it is not discovered like the others,
+# but it is one more thing `just test` has to report green.
+SCRIPTS_SUITE = "scripts_tests"
+SCRIPTS_DIR = os.path.join(ct.REPO_ROOT, "scripts", "tests")
 
 
 # Shards per suite. Each one is a process holding a graphics device of its own, so this trades
@@ -163,6 +172,21 @@ def run_sharded(exe, forward, jobs, root, name):
     return worst
 
 
+def run_pytest(directory):
+    """Run the Python suite in `directory` through this interpreter; return its exit code.
+
+    pytest is a library rather than one of the tools config.json records a path to, so it is
+    run as a module of the interpreter already running this script.
+    """
+    if importlib.util.find_spec("pytest") is None:
+        print("error: pytest is not installed, so the Python suite cannot run. Install it with:\n"
+              "    pip install -r scripts/requirements.txt", file=sys.stderr)
+        return 1
+
+    return subprocess.run([sys.executable, "-m", "pytest", directory, "-q"],
+                          cwd=ct.REPO_ROOT).returncode
+
+
 def find_suites(build_dirs, config):
     """Every test executable, as {name: path}, preferring an artifact that exists on disk."""
     suites = {}
@@ -247,10 +271,21 @@ def main():
               "    just build --configure", file=sys.stderr)
         return 2
 
-    suites = find_suites(build_dirs, cfg.artifact_config(args.config))
+    binaries = find_suites(build_dirs, cfg.artifact_config(args.config))
+    if not binaries:
+        print("warning: no test suite executables were found. They are built only when\n"
+              "BUILD_TESTS is on, which the debug presets set and the release ones do not.",
+              file=sys.stderr)
+
+    # The Python suite is neither a CMake target nor built, so it is added past that warning
+    # rather than gated behind it: a release preset can still run it.
+    suites = dict(binaries)
+    if os.path.isdir(SCRIPTS_DIR):
+        suites[SCRIPTS_SUITE] = SCRIPTS_DIR
+        suites = dict(sorted(suites.items()))
+
     if not suites:
-        print("No test suites found. They are built only when BUILD_TESTS is on, which the\n"
-              "debug presets set and the release ones do not.", file=sys.stderr)
+        print("error: no test suite executables, and no scripts/tests directory.", file=sys.stderr)
         return 1
 
     chosen = select(suites, args.filters)
@@ -264,6 +299,18 @@ def main():
             print(name)
         return 0
 
+    results = []
+
+    # The Python suite is not a Catch2 binary: it takes none of the forwarded filters, and none
+    # of the lock either, since it holds no graphics device and is over in seconds.
+    scripts_dir = chosen.pop(SCRIPTS_SUITE, None)
+    if scripts_dir and forward:
+        print(f"\n=== {SCRIPTS_SUITE} (skipped: it takes no Catch2 filter) ===", flush=True)
+    elif scripts_dir:
+        print(f"\n=== {SCRIPTS_SUITE} ===", flush=True)
+        started = time.monotonic()
+        results.append((SCRIPTS_SUITE, run_pytest(scripts_dir), time.monotonic() - started))
+
     # One root for the whole invocation, handed out one directory per suite process below. A
     # second `just test` on the machine gets a different one.
     temp_root = tempfile.mkdtemp(prefix="bernini-tests-")
@@ -271,9 +318,8 @@ def main():
     # One hold for the whole run phase rather than one per suite: releasing between suites
     # would let another checkout in halfway through, so both runs finish later than either
     # would have alone.
-    results = []
     try:
-        with lock.suite_lock(enabled=not args.no_lock):
+        with lock.suite_lock(enabled=bool(chosen) and not args.no_lock):
             for name, exe in chosen.items():
                 if not os.path.isfile(exe):
                     hint = f"Build it with: just build {name}" if args.no_build \
@@ -314,6 +360,10 @@ def main():
     finally:
         # Best effort: a suite that left a file open on Windows must not turn a green run red.
         shutil.rmtree(temp_root, ignore_errors=True)
+
+    if not results:
+        print("\nnothing to run: the only suite selected takes no Catch2 filter.")
+        return 0
 
     # A failing suite does not stop the others: one full report beats finding out about the
     # next failure only after fixing this one.

@@ -240,6 +240,12 @@ is the path, and a turn that opens a PR cannot end until `just watch-pr` runs on
 `*_tests` is one, so adding a target is all it takes for it to be run. They exist only when
 `BUILD_TESTS` is on, which the debug presets set and the release ones do not.
 
+One more suite is not a CMake target: `scripts_tests` is the pytest cases under `scripts/tests`,
+covering the Python in `scripts/` itself. It runs from `just test` like any other and reports in
+the same summary — but it takes no Catch2 filter, so `just test -- "[tag]"` skips it and says so.
+It needs `pytest` (pinned in `scripts/requirements.txt`, offered by `just init`). Nothing in CI
+runs it: `.github/workflows/ci.yml` compiles and runs no suite at all.
+
 Every suite is Catch2, so they all take the same flags. A full run is minutes, nearly all of it
 `bgl_tests` (device creation per test). Name a suite to skip that: `just test editor`. A failing
 suite does not stop the others; the summary at the end says which failed. To pass a flag to one

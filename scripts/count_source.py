@@ -35,14 +35,22 @@ def is_ignored(path, base_dir, gitignore_patterns):
     return False
 
 def is_test(path, base_dir):
-    """Whether a file is test code: anything under a 'tests' directory.
+    """Whether a file is test code: anything under a 'tests' directory, or a pytest file.
 
     Keyed on the directory rather than a *_test.cpp suffix so the harness files that sit beside the
     cases -- main.cpp, the golden-image helpers, the test pch -- count as tests too, instead of
     inflating the production tally.
+
+    Python adds the file-name half, because pytest collects `test_*.py` and `conftest.py`
+    wherever they sit: one written beside the script it covers is still a test, and counting it
+    as production would inflate the tally the directory rule exists to protect.
     """
     rel_path = os.path.relpath(path, base_dir)
-    return 'tests' in rel_path.split(os.sep)
+    if 'tests' in rel_path.split(os.sep):
+        return True
+
+    name = os.path.basename(path)
+    return name == 'conftest.py' or (name.startswith('test_') and name.endswith('.py'))
 
 def count_lines_and_files():
     extension_map = {
