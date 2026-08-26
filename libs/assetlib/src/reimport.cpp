@@ -113,13 +113,19 @@ namespace assetlib
 				// its own operation.
 				if (const std::string mesh = meshOutputOf(document); mesh.empty())
 				{
-					bakeBoundsForRig(clips, store.GetDataRoot(), normalizeRef(clips.skeleton), rig);
+					bakeBoundsForRig(
+						store,
+						clips,
+						normalizeRef(clips.skeleton),
+						rig,
+						document.clipFloors);
 				}
 				else
 				{
 					BMesh swept = toBMesh(group.import);
 					generateTangents(swept);
 					swept.skeleton = document.skeleton;
+					groundClips(clips, std::span<const BMesh>(&swept, 1), rig, document.clipFloors);
 					bakePosedBounds(clips, swept, rig);
 				}
 

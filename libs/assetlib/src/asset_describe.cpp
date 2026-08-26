@@ -561,6 +561,8 @@ namespace assetlib
 				"    rootMotion {} ({:.4g} u/s)\n",
 				vec3(clip.rootMotion),
 				clip.locomotionSpeed);
+			out +=
+				std::format("    ground     moved down {:.4g} to rest on y 0\n", clip.groundOffset);
 		}
 
 		return out;

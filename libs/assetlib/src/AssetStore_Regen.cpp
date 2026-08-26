@@ -336,14 +336,21 @@ namespace assetlib
 		clips.skeleton = rigKey;
 
 		const Skeleton skeleton = LoadRegenSkeleton(rigKey);
-		bakeBoundsForRig(clips, GetDataRoot(), normalizeRef(rigKey), skeleton);
 
-		// The group's own mesh may itself be stale on disk, where the walk above cannot read it;
+		// The group's own mesh may itself be stale on disk, where the walk below cannot read it;
 		// measured from the regenerated form, its box is never the one missing. Tangents first:
 		// the box's signature hashes the vertex layout, and every consumer holds the mesh with
 		// them generated -- a box keyed to the raw import would never be found.
 		BMesh mesh = toBMesh(group.import);
 		generateTangents(mesh);
+
+		// Ahead of every box: a box measured before the clips are grounded describes a rig standing
+		// somewhere the runtime will never draw it.
+		const std::span<const ClipFloor> authored = group.document->clipFloors;
+
+		groundClips(clips, std::span<const BMesh>(&mesh, 1), skeleton, authored);
+
+		bakeBoundsForRig(*this, clips, normalizeRef(rigKey), skeleton, authored);
 		bakePosedBounds(clips, mesh, skeleton);
 
 		return clips;

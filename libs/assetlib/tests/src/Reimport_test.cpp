@@ -14,6 +14,7 @@
 #include <assetlib_structs/BVat.h>
 #include <assetlib_structs/Bounds.h>
 #include <assetlib_structs/Skeleton.h>
+#include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_string.hpp>
 #include <core/file/file.h>
@@ -417,4 +418,39 @@ TEST_CASE("Migrate produces what the sources name before it re-saves", "[reimpor
 	const MigrateReport report = project.Store().Migrate(/*dryRun*/ false);
 	CHECK(report.Count(MigratedFile::Outcome::kFailed) == 0);
 	CheckSameFiles(DerivedFiles(project.dataRoot), before);
+}
+
+// The re-import reproduces what the writers produced, so it has to ground as they do -- and the
+// case above already pins that byte-for-byte against a plain import. What it cannot see is the
+// authored floor, which only reaches the writers through the document.
+TEST_CASE("A re-import rests a clip on the floor its document authors", "[reimport][grounding]")
+{
+	const test::SkinnedGltf source("bernini_reimport_ground_gltf");
+	const ImportedProject   project("bernini_reimport_ground", source.PackGlb());
+
+	const fs::path     banim = project.dataRoot / "Derived/Animations/unit.banim";
+	const AnimationSet cooked =
+		AssetCodec<AnimationSet>::Deserialize(core::file::read_file_bytes(banim.string()));
+	REQUIRE(cooked.clips.size() >= 2);
+
+	const fs::path documentPath = project.dataRoot / "Authored/Meshes/unit.bimport";
+	ImportDocument document     = loadImportDocument(documentPath);
+	document.clipFloors         = { { std::string(cooked.stringPool.at(cooked.clips[0].nameOffset)),
+		                              0.25f } };
+	core::file::write_atomic(documentPath, AssetCodec<ImportDocument>::Serialize(document));
+
+	fs::remove(banim);
+	const ReimportReport report = project.Store().Reimport(/*dryRun*/ false);
+	REQUIRE(report.GetFailedCount() == 0);
+
+	const AnimationSet again =
+		AssetCodec<AnimationSet>::Deserialize(core::file::read_file_bytes(banim.string()));
+	REQUIRE(again.clips.size() == cooked.clips.size());
+
+	// The authored floor, not the one the cook measured for itself.
+	CHECK(again.clips[0].groundOffset == Catch::Approx(0.25f));
+	CHECK(again.clips[0].groundOffset != Catch::Approx(cooked.clips[0].groundOffset));
+
+	// Named clips only: the one the document says nothing about is still measured.
+	CHECK(again.clips[1].groundOffset == Catch::Approx(cooked.clips[1].groundOffset));
 }

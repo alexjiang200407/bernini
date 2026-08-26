@@ -257,6 +257,18 @@ TEST_CASE("describe(AnimationSet) reports each clip's timing and motion", "[desc
 
 		CHECK(describe(once).find("looping") == std::string::npos);
 	}
+
+	// A clip carries how far the cook moved it, not where the floor came from -- so the line may
+	// not claim one was authored when a measured floor reads identically.
+	SECTION("a grounded clip reports the shift, not where the floor came from")
+	{
+		AnimationSet dropped          = animations;
+		dropped.clips[0].groundOffset = 0.25f;
+
+		const std::string text = describe(dropped);
+		CHECK(text.find("moved down 0.25") != std::string::npos);
+		CHECK(text.find("authored") == std::string::npos);
+	}
 }
 
 // A joint index resolves against a bone array or against nothing, and which one is invisible in the

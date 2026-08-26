@@ -4,6 +4,7 @@
 #include <assetlib/import_document.h>
 #include <assetlib/pak.h>
 #include <core/file/LooseFileSystem.h>
+#include <core/file/file.h>
 
 #include "asset_describe.h"
 #include <assetlib/asset_refs.h>
@@ -761,4 +762,139 @@ TEST_CASE("a rollback removes the folder an import made, never the category", "[
 
 		CHECK(fs::is_directory(category));
 	}
+}
+
+namespace
+{
+	/** One vertex welded to the root at `height` -- a rig authored against someone else's floor. */
+	assetlib::BMesh
+	MeshAt(float height)
+	{
+		using namespace assetlib;
+
+		BMesh      mesh;
+		const auto write = [&](const auto& value) {
+			const auto* bytes = reinterpret_cast<const std::byte*>(&value);
+			mesh.vertexData.insert(mesh.vertexData.end(), bytes, bytes + sizeof(value));
+		};
+		write(glm::vec3(0.0f, height, 0.0f));
+		write(std::array<uint16_t, 4>{ { 0, 0, 0, 0 } });
+		write(std::array<uint16_t, 4>{ { 65535, 0, 0, 0 } });
+
+		Submesh submesh{};
+		submesh.layout.attributeCount = 3;
+		submesh.layout.attributes[0]  = { VertexSemantic::kPosition, VertexFormat::kFloat32x3, 0 };
+		submesh.layout.attributes[1]  = { VertexSemantic::kJoints0, VertexFormat::kUint16x4, 12 };
+		submesh.layout.attributes[2]  = { VertexSemantic::kWeights0, VertexFormat::kUnorm16x4, 20 };
+		submesh.layout.stride         = 28;
+		submesh.vertexCount           = 1;
+		mesh.submeshes.push_back(submesh);
+		mesh.meshes.push_back({ .firstSubmesh = 0, .submeshCount = 1, .nameOffset = 0 });
+		return mesh;
+	}
+
+	/** An import document beside `name`'s copied source, authoring one clip's floor. */
+	void
+	WriteAuthoredGround(const TempRoot& root, std::string_view clip, float floor)
+	{
+		assetlib::ImportDocument document;
+		document.clipFloors = { { std::string(clip), floor } };
+		core::file::write_atomic(
+			root.Data() / assetlib::c_MeshSourcesDirectoryName / "unit.bimport",
+			assetlib::AssetCodec<assetlib::ImportDocument>::Serialize(document));
+	}
+}
+
+// The whole feature, through the writer that ships it: the animal pack is authored anywhere from
+// 0.57 below the floor to 0.92 above it, and nothing at runtime reconciles that -- so the cook does.
+TEST_CASE("An import grounds the clips it writes", "[importedrig][grounding]")
+{
+	using namespace assetlib;
+
+	const TempRoot root;
+	auto           imported = SkinnedImport();
+	BMesh          mesh     = MeshAt(2.0f);
+
+	root.Store().WriteImportedRig(
+		imported.skeleton,
+		imported.animations,
+		mesh,
+		TempRoot::BskelKey(),
+		TempRoot::BanimKey(),
+		/*writeClips*/ true,
+		SourceRef{});
+
+	const AnimationSet stored = LoadAt<AnimationSet>(root.Banim());
+	REQUIRE(stored.clips.size() == 1);
+	CHECK(stored.clips[0].groundOffset == Catch::Approx(2.0f));
+
+	// And the box baked beside them describes the grounded rig, not where it was authored: the same
+	// box frames the editor's camera and culls the geom, so measuring it first would aim both at a
+	// position nothing is ever drawn in.
+	const Skeleton                           skeleton = LoadAt<Skeleton>(root.Bskel());
+	const std::vector<std::optional<Bounds>> boxes    = findPosedBounds(stored, mesh, skeleton);
+	REQUIRE(boxes[0].has_value());
+	CHECK(boxes[0]->min.y == Catch::Approx(0.0f).margin(1e-5));
+}
+
+// The escape hatch has to reach the door every import goes through, not only the staleness-triggered
+// reload: the whole point of authoring a floor is that the next cook uses it.
+TEST_CASE("An import honours a floor its document authors", "[importedrig][grounding]")
+{
+	using namespace assetlib;
+
+	const TempRoot root;
+	auto           imported = SkinnedImport();
+	BMesh          mesh     = MeshAt(2.0f);
+
+	// The clip's own lowest point is 2.0; the author says it stands at 0.5.
+	imported.animations.clips[0].nameOffset = imported.animations.stringPool.add("walk");
+	WriteAuthoredGround(root, "walk", 0.5f);
+
+	SourceRef source;
+	source.key = std::format("{}/unit.glb", c_MeshSourcesDirectoryName);
+
+	root.Store().WriteImportedRig(
+		imported.skeleton,
+		imported.animations,
+		mesh,
+		TempRoot::BskelKey(),
+		TempRoot::BanimKey(),
+		/*writeClips*/ true,
+		source);
+
+	const AnimationSet stored = LoadAt<AnimationSet>(root.Banim());
+	REQUIRE(stored.clips.size() == 1);
+	CHECK(stored.clips[0].groundOffset == Catch::Approx(0.5f));
+}
+
+// A .bimport is the one container a person edits by hand, so a re-import must not throw their edit
+// away -- and if the cache key kept hashing it while the cook stopped applying it, the entry would
+// read as fresh while standing in the wrong place.
+TEST_CASE("Re-importing a source keeps the floors its document authors", "[importedrig][grounding]")
+{
+	using namespace assetlib;
+
+	const TempRoot     root;
+	const AssetStore   store = root.Store();
+	const ImportTarget target{ "unit", c_DefaultSampleRate, {} };
+
+	// The source the import copies in, standing outside the data root as a real one does.
+	const fs::path source = root.Data() / "unit_source.glb";
+	core::file::write_atomic(source, std::span<const std::byte>());
+	WriteAuthoredGround(root, "walk", 0.5f);
+
+	// The second import of the same source: it copies, re-keys and rewrites the document.
+	const SourceRef ref = store.CopyImportedSource(source, target);
+	store.WriteImportedDocument(target, nullptr);
+
+	const ImportDocument rewritten =
+		loadImportDocument(root.Data() / c_MeshSourcesDirectoryName / "unit.bimport");
+	REQUIRE(rewritten.clipFloors.size() == 1);
+	CHECK(rewritten.clipFloors[0] == ClipFloor{ "walk", 0.5f });
+
+	// And the key that import recorded agrees with the file, so the entry it wrote does not read
+	// stale the moment it is written -- which is what would happen if only one of the two carried
+	// the authored floor.
+	CHECK(ref.parametersHash == parametersHashOf(rewritten));
 }

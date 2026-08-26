@@ -1,3 +1,4 @@
+#include <assetlib/RegenMesh.h>
 #include <assetlib/asset_import.h>
 #include <assetlib/bmesh.h>
 #include <assetlib/codecs.h>
@@ -65,14 +66,66 @@ namespace assetlib
 
 	namespace
 	{
-		/** The one construction the key and the document share -- a parameter added in only one
-		    place cannot silently split the hash from the file. */
+		/**
+		 * What an import computes, over whatever the document beside its source already authored.
+		 * The one construction the cache key and the file share, so a parameter added in only one
+		 * place cannot silently split the two.
+		 *
+		 * Only the parameter half is carried across. Bindings and the texture stamp describe what
+		 * *this* import wrote, and a previous one's would be a lie -- but an authored `clipFloor`
+		 * is the reason a person edits this file by hand, and a re-import that discarded it would
+		 * take a rig back to the floor the cook measured.
+		 */
 		ImportDocument
-		parametersOnly(float sampleRate)
+		importParameters(const std::filesystem::path& existing, float sampleRate)
 		{
 			ImportDocument document;
 			document.sampleRate = sampleRate;
+
+			try
+			{
+				if (std::filesystem::exists(existing))
+				{
+					const ImportDocument authored = loadImportDocument(existing);
+					document.clipFloors           = authored.clipFloors;
+					document.extraParametersJson  = authored.extraParametersJson;
+				}
+			}
+			catch (const std::exception&)
+			{
+				// One that will not parse authors nothing; the import writes a fresh document
+				// rather than refusing over a file it is about to replace.
+			}
+
 			return document;
+		}
+
+		/** What `importParameters` reduces to in a `SourceRef`: the key an import is fresh against. */
+		uint64_t
+		importParametersHash(const std::filesystem::path& existing, float sampleRate)
+		{
+			return parametersHashOf(importParameters(existing, sampleRate));
+		}
+
+		/** What the document beside `source` authors for its clips, or nothing. */
+		std::vector<ClipFloor>
+		authoredFloors(const core::file::IFileSystem& files, const SourceRef& source)
+		{
+			if (source.key.empty())
+				return {};
+
+			const std::string key = importDocumentKeyFor(source.key);
+			if (!files.Exists(key))
+				return {};
+
+			try
+			{
+				return loadImportDocument(files, key).clipFloors;
+			}
+			catch (const std::exception&)
+			{
+				return {};
+			}
 		}
 
 		/** The bindings `mesh` carries, in first-appearance order -- what a document records. */
@@ -124,18 +177,20 @@ namespace assetlib
 			!hash.has_value(),
 			"cannot hash '{}' after copying it",
 			copied.string());
-		ref.stamp.hash     = *hash;
-		ref.parametersHash = parametersHashOf(parametersOnly(target.sampleRate));
+		ref.stamp.hash = *hash;
+		ref.parametersHash =
+			importParametersHash(ImportDocumentPath(target.name), target.sampleRate);
 		return ref;
 	}
 
 	void
 	AssetStore::WriteImportedDocument(const ImportTarget& target, const BMesh* mesh) const
 	{
-		ImportDocument document = parametersOnly(target.sampleRate);
-		document.textureDir     = target.textureDir;
-		document.skeleton       = target.skeleton;
-		document.outputs        = target.outputs;
+		ImportDocument document =
+			importParameters(ImportDocumentPath(target.name), target.sampleRate);
+		document.textureDir = target.textureDir;
+		document.skeleton   = target.skeleton;
+		document.outputs    = target.outputs;
 
 		// From the copy, not the caller's reference: the document cannot then disagree with the
 		// source standing beside it.
@@ -367,9 +422,19 @@ namespace assetlib
 		clips.source       = source;
 
 		// Read back rather than swept from the copy in hand, and the same rule WriteImportedClips
-		// follows: a box measured against a bind pose the loader will not see is a box the loader
-		// cannot match. A reused rig makes that visible -- its pose is its own, not this source's.
-		bakePosedBounds(clips, mesh, Load<Skeleton>(mesh.skeleton));
+		// follows: a floor or a box measured against a bind pose the loader will not see is one the
+		// loader cannot match. A reused rig makes that visible -- its pose is its own, not this
+		// source's.
+		const Skeleton bound = Load<Skeleton>(mesh.skeleton);
+
+		// Ahead of the boxes: a box measured before the clips are grounded describes a rig standing
+		// somewhere the runtime will never draw it.
+		groundClips(
+			clips,
+			std::span<const BMesh>(&mesh, 1),
+			bound,
+			authoredFloors(GetFiles(), source));
+		bakePosedBounds(clips, mesh, bound);
 		Save(clips, banimKey);
 
 		outputs.emplace_back(banimKey);
@@ -440,17 +505,22 @@ namespace assetlib
 
 	void
 	bakeBoundsForRig(
-		AnimationSet&                clips,
-		const std::filesystem::path& dataRoot,
-		const std::string&           rigRel,
-		const Skeleton&              skeleton)
+		const AssetStore&          store,
+		AnimationSet&              clips,
+		const std::string&         rigRel,
+		const Skeleton&            skeleton,
+		std::span<const ClipFloor> authored)
 	{
 		namespace fs = std::filesystem;
+
+		// Read whole rather than streamed one at a time: the clips are grounded against the lowest
+		// point *any* of these reaches, so the floor is not known until every one has been seen.
+		auto meshes = std::vector<BMesh>();
 
 		std::error_code ec;
 		const auto      walk = fs::directory_options::skip_permission_denied;
 		for (const fs::directory_entry& entry :
-		     fs::recursive_directory_iterator(dataRoot, walk, ec))
+		     fs::recursive_directory_iterator(store.GetDataRoot(), walk, ec))
 		{
 			if (!entry.is_regular_file(ec) || entry.path().extension() != c_MeshExtension)
 				continue;
@@ -460,11 +530,11 @@ namespace assetlib
 				if (normalizePath(loadMeshRefs(entry.path()).skeleton) != rigRel)
 					continue;
 
-				bakePosedBounds(
-					clips,
-					AssetCodec<BMesh>::Deserialize(
-						core::file::read_file_bytes(entry.path().string())),
-					skeleton);
+				// Through the regeneration seam rather than the bytes on disk: the re-export
+				// that stales these clips stales that mesh with them, and a floor measured off
+				// the stale one would move the rig to where its geometry used to be.
+				meshes.emplace_back(
+					std::move(store.LoadRegenMesh(store.KeyFor(entry.path())).mesh));
 			}
 			catch (const std::exception&)
 			{
@@ -472,6 +542,13 @@ namespace assetlib
 				// broken one gets reported.
 			}
 		}
+
+		// Ahead of every box: a box measured before the clips are grounded describes a rig standing
+		// somewhere the runtime will never draw it. This is also the only door a clips-only import
+		// is grounded through -- it brings no mesh of its own.
+		groundClips(clips, meshes, skeleton, authored);
+
+		for (const BMesh& mesh : meshes) bakePosedBounds(clips, mesh, skeleton);
 	}
 
 	std::string
@@ -505,10 +582,11 @@ namespace assetlib
 		// Measured against the rig the clips will resolve at load, not the imported copy: the two
 		// share a signature but a re-authored bind pose deliberately does not change one.
 		bakeBoundsForRig(
+			*this,
 			clips,
-			GetDataRoot(),
 			normalizePath(clips.skeleton),
-			Load<Skeleton>(clips.skeleton));
+			Load<Skeleton>(clips.skeleton),
+			authoredFloors(GetFiles(), source));
 
 		Save(clips, banimKey);
 		return clips.skeleton;
