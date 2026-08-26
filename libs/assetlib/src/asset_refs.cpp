@@ -238,7 +238,7 @@ namespace assetlib
 			{
 				const BEnv env = load<BEnv>(files, referrer);
 				addEdge(edges, referrer, env.sky, RefKind::kEnvironmentPart);
-				addEdge(edges, referrer, env.lighting, RefKind::kEnvironmentPart);
+				addEdge(edges, referrer, env.pbr.lighting, RefKind::kEnvironmentPart);
 			}
 			catch (const std::exception& e)
 			{

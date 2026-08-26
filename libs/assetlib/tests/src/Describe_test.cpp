@@ -324,9 +324,9 @@ TEST_CASE("describe(BEnv) reports whether the files it names are there", "[descr
 	}
 
 	BEnv env;
-	env.name     = "forest";
-	env.sky      = "Derived/Sky/forest.bsky";
-	env.lighting = "Derived/EnvLighting/forest.benvl";  // never written
+	env.name         = "forest";
+	env.sky          = "Derived/Sky/forest.bsky";
+	env.pbr.lighting = "Derived/EnvLighting/forest.benvl";  // never written
 
 	// Without a root there is nothing to resolve against, so neither is judged.
 	const std::string bare = describe(env);
@@ -340,7 +340,7 @@ TEST_CASE("describe(BEnv) reports whether the files it names are there", "[descr
 
 	// An unset half is not the same as a missing one, and must not read as a broken reference.
 	BEnv skyless;
-	skyless.lighting            = "Derived/EnvLighting/forest.benvl";
+	skyless.pbr.lighting        = "Derived/EnvLighting/forest.benvl";
 	const std::string unsetText = describe(skyless, &files);
 	CHECK(unsetText.find("sky               (unset)") != std::string::npos);
 

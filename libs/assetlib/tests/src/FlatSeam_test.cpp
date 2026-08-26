@@ -75,9 +75,9 @@ namespace
 	MakeEnv()
 	{
 		BEnv env;
-		env.name     = "forest";
-		env.sky      = "Env/forest.bsky";
-		env.lighting = "Env/forest.benvl";
+		env.name         = "forest";
+		env.sky          = "Env/forest.bsky";
+		env.pbr.lighting = "Env/forest.benvl";
 		return env;
 	}
 
@@ -216,7 +216,7 @@ TEST_CASE("a flat container loads the same from a directory and from an archive"
 
 			CHECK(mounted.name == direct.name);
 			CHECK(mounted.sky == direct.sky);
-			CHECK(mounted.lighting == direct.lighting);
+			CHECK(mounted.pbr.lighting == direct.pbr.lighting);
 			CHECK(AssetCodec<BEnv>::Serialize(mounted) == AssetCodec<BEnv>::Serialize(direct));
 		}
 	}

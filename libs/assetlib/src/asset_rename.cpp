@@ -109,9 +109,9 @@ namespace assetlib
 
 			case AssetType::kEnvironment:
 			{
-				BEnv env     = AssetCodec<BEnv>::Deserialize(bytes);
-				env.sky      = mapTarget(plan, env.sky);
-				env.lighting = mapTarget(plan, env.lighting);
+				BEnv env         = AssetCodec<BEnv>::Deserialize(bytes);
+				env.sky          = mapTarget(plan, env.sky);
+				env.pbr.lighting = mapTarget(plan, env.pbr.lighting);
 				return AssetCodec<BEnv>::Serialize(env);
 			}
 

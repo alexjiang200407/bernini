@@ -183,9 +183,9 @@ namespace assetlib::test
 		StoreAt(root.path).Save(lighting, e.lighting);
 
 		BEnv env;
-		env.name     = "forest";
-		env.sky      = e.sky;
-		env.lighting = e.lighting;
+		env.name         = "forest";
+		env.sky          = e.sky;
+		env.pbr.lighting = e.lighting;
 		StoreAt(root.path).Save(env, e.env);
 
 		return e;

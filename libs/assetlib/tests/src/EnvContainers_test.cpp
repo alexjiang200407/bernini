@@ -147,28 +147,33 @@ TEST_CASE(
 TEST_CASE("a BEnv survives a serialize round-trip", "[benv][io]")
 {
 	BEnv env;
-	env.name             = "forest";
-	env.sky              = "Derived/Sky/forest.bsky";
-	env.lighting         = "Derived/EnvLighting/forest.benvl";
-	env.skyMipLevel      = 3;
-	env.skyRotationY     = 1.25f;
-	env.exposureOverride = 0.5f;
+	env.name                 = "forest";
+	env.sky                  = "Derived/Sky/forest.bsky";
+	env.skyMipLevel          = 3;
+	env.skyRotationY         = 1.25f;
+	env.rim.tint             = glm::vec3(0.25f, 0.5f, 1.0f);
+	env.rim.intensity        = 2.0f;
+	env.rim.power            = 3.5f;
+	env.pbr.lighting         = "Derived/EnvLighting/forest.benvl";
+	env.pbr.exposureOverride = 0.5f;
 
 	const BEnv restored = AssetCodec<BEnv>::Deserialize(AssetCodec<BEnv>::Serialize(env));
 	CHECK(restored.name == env.name);
+	CHECK(restored.shadingModel == ShadingModel::kPbr);
 	CHECK(restored.sky == env.sky);
-	CHECK(restored.lighting == env.lighting);
 	CHECK(restored.skyMipLevel == 3);
 	CHECK(restored.skyRotationY == Catch::Approx(1.25f));
-	REQUIRE(restored.exposureOverride.has_value());
-	CHECK(*restored.exposureOverride == Catch::Approx(0.5f));
+	CHECK(restored.rim == env.rim);
+	CHECK(restored.pbr.lighting == env.pbr.lighting);
+	REQUIRE(restored.pbr.exposureOverride.has_value());
+	CHECK(*restored.pbr.exposureOverride == Catch::Approx(0.5f));
 
 	// Half-composed is a legal file: the import's checkboxes write whichever pieces were asked for,
 	// and what a .benv must reference is its consumer's rule, not the container's.
 	const BEnv empty = AssetCodec<BEnv>::Deserialize(AssetCodec<BEnv>::Serialize(BEnv{}));
 	CHECK(empty.name.empty());
 	CHECK(empty.sky.empty());
-	CHECK(empty.lighting.empty());
+	CHECK(empty.pbr.lighting.empty());
 }
 
 TEST_CASE("a BEnv round-trips through a file", "[benv][io]")
@@ -176,14 +181,14 @@ TEST_CASE("a BEnv round-trips through a file", "[benv][io]")
 	const auto path = TempKey<BEnv>("env_container.benv");
 
 	BEnv env;
-	env.name     = "forest";
-	env.sky      = "Derived/Sky/forest.bsky";
-	env.lighting = "Derived/EnvLighting/forest.benvl";
+	env.name         = "forest";
+	env.sky          = "Derived/Sky/forest.bsky";
+	env.pbr.lighting = "Derived/EnvLighting/forest.benvl";
 	StoreAt(TempRoot()).Save(env, path);
 
 	const BEnv restored = StoreAt(TempRoot()).Load<BEnv>(path);
 	CHECK(restored.sky == env.sky);
-	CHECK(restored.lighting == env.lighting);
+	CHECK(restored.pbr.lighting == env.pbr.lighting);
 
 	std::filesystem::remove(TempRoot() / path);
 }
@@ -244,7 +249,7 @@ TEST_CASE("an unset override serializes as absent, not as a value", "[benv][io]"
 {
 	const BEnv restored =
 		AssetCodec<BEnv>::Deserialize(AssetCodec<BEnv>::Serialize(BEnv{ .name = "plain" }));
-	CHECK_FALSE(restored.exposureOverride.has_value());
+	CHECK_FALSE(restored.pbr.exposureOverride.has_value());
 	CHECK(restored.skyMipLevel == 0);
 	CHECK(restored.skyRotationY == 0.0f);
 
@@ -272,4 +277,87 @@ TEST_CASE("a benv document preserves the keys this build does not know", "[benv]
 	const std::string out(reinterpret_cast<const char*>(resaved.data()), resaved.size());
 	CHECK(out.find("\"weather\"") != std::string::npos);
 	CHECK(AssetCodec<BEnv>::Serialize(AssetCodec<BEnv>::Deserialize(resaved)) == resaved);
+}
+
+// Sky and rim are the environment's, whatever shades under it; the prefilter/irradiance pair is the
+// one part only a PBR surface reads, so it sits behind the model the document names.
+TEST_CASE("a benv keeps its image-based lighting behind its shading model", "[benv][io]")
+{
+	const auto bytes = AssetCodec<BEnv>::Serialize(
+		BEnv{ .name = "forest",
+	          .sky  = "Derived/Sky/forest.bsky",
+	          .pbr  = { .lighting = "f.benvl" } });
+	const std::string text(reinterpret_cast<const char*>(bytes.data()), bytes.size());
+
+	CHECK(text.find("\"shadingModel\": \"pbr\"") != std::string::npos);
+	CHECK(text.find("\"lighting\": \"f.benvl\"") != std::string::npos);
+
+	// Under `pbr`, not beside `sky`: the tab depth is what says so, and a flat key would read the
+	// same to a `contains` check.
+	CHECK(text.find("\t\t\"lighting\"") != std::string::npos);
+}
+
+// A model this build does not have is refused rather than lit as PBR, exactly as a .bmaterial's is.
+// The alternative is a toon environment rendering as a wrong-looking PBR one with nothing said.
+TEST_CASE("a benv naming an unknown shading model is refused", "[benv][io]")
+{
+	constexpr std::string_view c_Text = R"({"name": "ink", "shadingModel": "toon"})";
+	CHECK_THROWS_WITH(
+		AssetCodec<BEnv>::Deserialize(std::as_bytes(std::span(c_Text.data(), c_Text.size()))),
+		Catch::Matchers::ContainsSubstring("unknown shading model 'toon'"));
+}
+
+// The trap this refusal exists for: unknown keys are *preserved*, so a reader that simply did not
+// know `lighting` would carry it in extraJson, resolve the environment unlit, and write that back.
+TEST_CASE("a benv in the pre-shading-model shape is refused, not silently unlit", "[benv][io]")
+{
+	constexpr std::string_view c_Text = R"({
+	"lighting": "Derived/EnvLighting/forest.benvl",
+	"name": "forest",
+	"sky": "Derived/Sky/forest.bsky"
+}
+)";
+	CHECK_THROWS_WITH(
+		AssetCodec<BEnv>::Deserialize(std::as_bytes(std::span(c_Text.data(), c_Text.size()))),
+		Catch::Matchers::ContainsSubstring("belong under 'pbr'"));
+}
+
+// What makes the structure agnostic rather than merely tidy: a block a sibling branch authored for a
+// shading model this build has never heard of round-trips byte-for-byte instead of being dropped.
+TEST_CASE("a benv preserves a shading model's block this build does not know", "[benv][io]")
+{
+	constexpr std::string_view c_Text = R"({
+	"name": "ink",
+	"rim": {
+		"intensity": 2.0,
+		"power": 4.0,
+		"tint": [1.0, 0.5, 0.25]
+	},
+	"shadingModel": "pbr",
+	"sky": "Derived/Sky/forest.bsky",
+	"toon": {
+		"ramp": "Textures/ink_ramp.ktx2"
+	}
+}
+)";
+	const BEnv                 env =
+		AssetCodec<BEnv>::Deserialize(std::as_bytes(std::span(c_Text.data(), c_Text.size())));
+	CHECK(env.rim.tint == glm::vec3(1.0f, 0.5f, 0.25f));
+	CHECK(env.rim.intensity == Catch::Approx(2.0f));
+
+	const auto        resaved = AssetCodec<BEnv>::Serialize(env);
+	const std::string out(reinterpret_cast<const char*>(resaved.data()), resaved.size());
+	CHECK(out.find("\"ramp\"") != std::string::npos);
+	CHECK(AssetCodec<BEnv>::Serialize(AssetCodec<BEnv>::Deserialize(resaved)) == resaved);
+}
+
+// A rim block that was never authored is a rim light that is off, so adding the feature cannot
+// change how an environment written before it looked.
+TEST_CASE("a benv with no rim block resolves to no rim", "[benv][io]")
+{
+	constexpr std::string_view c_Text = R"({"name": "plain", "sky": "Derived/Sky/forest.bsky"})";
+	const BEnv                 env =
+		AssetCodec<BEnv>::Deserialize(std::as_bytes(std::span(c_Text.data(), c_Text.size())));
+
+	CHECK(env.rim.intensity == 0.0f);
 }

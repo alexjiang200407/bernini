@@ -1416,15 +1416,15 @@ main(int argc, char** argv)
 			// Read before the write, so a lighting that cannot be loaded refuses before the
 			// document changes rather than after.
 			const assetlib::BEnvLighting lighting =
-				env.lighting.empty() ? assetlib::BEnvLighting() :
-									   store.Load<assetlib::BEnvLighting>(env.lighting);
+				env.pbr.lighting.empty() ? assetlib::BEnvLighting() :
+										   store.Load<assetlib::BEnvLighting>(env.pbr.lighting);
 
 			if (*expSetOpt || expClear)
 			{
 				if (expClear)
-					env.exposureOverride.reset();
+					env.pbr.exposureOverride.reset();
 				else
-					env.exposureOverride = expSet;
+					env.pbr.exposureOverride = expSet;
 
 				store.Save(env, key);
 			}
@@ -1433,8 +1433,8 @@ main(int argc, char** argv)
 				"'{}': derived {:.6g}, authored {}, rendering at {:.6g}",
 				expInput,
 				lighting.exposure,
-				env.exposureOverride ? std::format("{:.6g}", *env.exposureOverride) :
-									   std::string("(none)"),
+				env.pbr.exposureOverride ? std::format("{:.6g}", *env.pbr.exposureOverride) :
+										   std::string("(none)"),
 				assetlib::effectiveExposure(env, lighting));
 		}
 		catch (const std::exception& e)

@@ -262,10 +262,10 @@ namespace assetlib
 
 		if (desc.environment)
 		{
-			auto env     = BEnv();
-			env.name     = desc.name;
-			env.sky      = result.sky;
-			env.lighting = result.lighting;
+			auto env         = BEnv();
+			env.name         = desc.name;
+			env.sky          = result.sky;
+			env.pbr.lighting = result.lighting;
 
 			// As requested, not clamped: the document records the person's ask, and resolution
 			// clamps it against the mips the baked map actually has -- so a later, larger re-bake

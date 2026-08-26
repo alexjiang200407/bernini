@@ -88,9 +88,9 @@ namespace
 		SaveAt(
 			BEnv{ .name         = "set",
 		          .sky          = "Derived/Sky/set.bsky",
-		          .lighting     = "Derived/EnvLighting/set.benvl",
 		          .skyMipLevel  = 2,
-		          .skyRotationY = 0.5f },
+		          .skyRotationY = 0.5f,
+		          .pbr          = { .lighting = "Derived/EnvLighting/set.benvl" } },
 			envPath);
 		return envPath;
 	}

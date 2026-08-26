@@ -282,10 +282,10 @@ namespace game
 			out.skybox               = acquireRoute(sky.sky);
 		}
 
-		if (!env.lighting.empty())
+		if (!env.pbr.lighting.empty())
 		{
 			const assetlib::BEnvLighting lighting =
-				m_Store.Load<assetlib::BEnvLighting>(env.lighting);
+				m_Store.Load<assetlib::BEnvLighting>(env.pbr.lighting);
 			out.prefilter  = acquireRoute(lighting.prefilter);
 			out.irradiance = acquireRoute(lighting.irradiance);
 

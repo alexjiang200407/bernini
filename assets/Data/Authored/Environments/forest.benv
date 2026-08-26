@@ -1,6 +1,18 @@
 {
-	"lighting": "Derived/EnvLighting/forest.benvl",
 	"name": "forest",
+	"pbr": {
+		"lighting": "Derived/EnvLighting/forest.benvl"
+	},
+	"rim": {
+		"intensity": 0.0,
+		"power": 4.0,
+		"tint": [
+			1.0,
+			1.0,
+			1.0
+		]
+	},
+	"shadingModel": "pbr",
 	"sky": "Derived/Sky/forest.bsky",
 	"skyMipLevel": 0,
 	"skyRotationY": 0.0

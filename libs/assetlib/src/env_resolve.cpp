@@ -41,9 +41,9 @@ namespace assetlib
 			resolved.skyMipLevel = std::min(env.skyMipLevel, resolved.maps.skybox.mipLevels - 1);
 		}
 
-		if (!env.lighting.empty())
+		if (!env.pbr.lighting.empty())
 		{
-			const BEnvLighting lighting = load<BEnvLighting>(fileSystem, env.lighting);
+			const BEnvLighting lighting = load<BEnvLighting>(fileSystem, env.pbr.lighting);
 			resolved.maps.prefilter     = loadRoute(fileSystem, lighting.prefilter);
 			resolved.maps.irradiance    = loadRoute(fileSystem, lighting.irradiance);
 

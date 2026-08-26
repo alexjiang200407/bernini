@@ -129,7 +129,7 @@ TEST_CASE("An import writes the environment family a project can load", "[envimp
 	// nothing is stale the moment it was written.
 	const BEnv env = StoreAt(sandbox.DataRoot()).Load<BEnv>(result.environment);
 	CHECK(env.sky == result.sky);
-	CHECK(env.lighting == result.lighting);
+	CHECK(env.pbr.lighting == result.lighting);
 
 	const BSky sky = StoreAt(sandbox.DataRoot()).Load<BSky>(result.sky);
 	CHECK_FALSE(sky.sky.baked.empty());
@@ -197,7 +197,8 @@ TEST_CASE("An import writes only what was selected", "[envimport]")
 
 		const BEnv env = StoreAt(sandbox.DataRoot()).Load<BEnv>(result.environment);
 		CHECK(env.sky == result.sky);
-		CHECK(env.lighting.empty());  // not a dangling reference to a file that was never written
+		CHECK(
+			env.pbr.lighting.empty());  // not a dangling reference to a file that was never written
 	}
 }
 

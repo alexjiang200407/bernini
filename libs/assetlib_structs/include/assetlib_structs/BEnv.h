@@ -1,5 +1,7 @@
 #pragma once
+#include <assetlib_structs/ShadingModel.h>
 #include <assetlib_structs/SourceStamp.h>
+#include <core/glm.h>
 
 namespace assetlib
 {
@@ -38,8 +40,51 @@ namespace assetlib
 	};
 
 	/**
-	 * One environment, authored: the sky it draws, the lighting derived from that sky, and how a
-	 * person presents the pair.
+	 * A rim light: the environment sampled in the direction away from the camera, weighted towards
+	 * a surface's silhouette.
+	 *
+	 * A readability device rather than a reflectance term -- it ignores albedo, so the dark armour
+	 * that needs separating from the sky most still gets it. Which surfaces catch it is the mesh's
+	 * decision, not this one's.
+	 */
+	struct RimLight
+	{
+		glm::vec3 tint = glm::vec3(1.0f);
+
+		// Zero is a rim light that is off, which is what an environment with no rim block resolves to.
+		float intensity = 0.0f;
+
+		// Falloff towards the silhouette; higher is a narrower band.
+		float power = 4.0f;
+
+		friend bool
+		operator==(const RimLight&, const RimLight&) = default;
+	};
+
+	/**
+	 * The half of an environment that only a PBR surface reads.
+	 *
+	 * The prefilter/irradiance pair is the one thing a `.benv` names that another shading model
+	 * would have no use for -- a toon environment has a sky and a rim and no split-sum anything --
+	 * so it sits behind the document's `shadingModel` rather than beside the sky.
+	 */
+	struct PbrEnvParams
+	{
+		std::string lighting;  // path to a `.benvl`, relative to the data root; empty when unset
+
+		/**
+		 * What a person decided this environment renders at, overruling the exposure the lighting
+		 * bake derived. Unset until somebody authors it, and untouched by every re-bake.
+		 */
+		std::optional<float> exposureOverride;
+
+		friend bool
+		operator==(const PbrEnvParams&, const PbrEnvParams&) = default;
+	};
+
+	/**
+	 * One environment, authored: the sky it draws, the rim it casts, and the lighting its shading
+	 * model derives from that sky.
 	 *
 	 * A `.benv` holds no pixels. Composing by path is what lets a sky be re-authored without
 	 * touching the lighting minutes of convolution produced, and what lets two environments share
@@ -49,8 +94,12 @@ namespace assetlib
 	struct BEnv
 	{
 		std::string name;
-		std::string sky;       // path to a `.bsky`, relative to the data root; empty when unset
-		std::string lighting;  // path to a `.benvl`, relative to the data root; empty when unset
+
+		// Which shading model the `pbr` block below belongs to. Refused rather than defaulted when
+		// the document names one this build does not have.
+		ShadingModel shadingModel = ShadingModel::kPbr;
+
+		std::string sky;  // path to a `.bsky`, relative to the data root; empty when unset
 
 		/**
 		 * Which mip of the sky the backdrop samples, as requested -- resolution clamps it to the
@@ -60,11 +109,9 @@ namespace assetlib
 
 		float skyRotationY = 0.0f;  // radians, about the up axis
 
-		/**
-		 * What a person decided this environment renders at, overruling the exposure the lighting
-		 * bake derived. Unset until somebody authors it, and untouched by every re-bake.
-		 */
-		std::optional<float> exposureOverride;
+		RimLight rim;
+
+		PbrEnvParams pbr;
 
 		// Document keys this build does not know, written back on save -- a sibling branch's new
 		// field survives a round-trip through a reader that has never heard of it.
@@ -102,6 +149,6 @@ namespace assetlib
 	[[nodiscard]] inline float
 	effectiveExposure(const BEnv& env, const BEnvLighting& lighting) noexcept
 	{
-		return env.exposureOverride.value_or(lighting.exposure);
+		return env.pbr.exposureOverride.value_or(lighting.exposure);
 	}
 }

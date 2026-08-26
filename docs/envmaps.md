@@ -19,12 +19,37 @@ disagrees, trust the header, then fix this doc.
   and the same prune. See [Asset Standards](docs/asset_standards.md) for the material side.
 * **A `.benv` holds no pixels, and it is the family's only authored file.** It is a text document —
   canonical JSON, like `.bmaterial` — naming a `.bsky` and a `.benvl` by path and carrying the
-  presentation knobs (`skyMipLevel`, `skyRotationY`, `exposureOverride`). Composing by reference is
+  presentation knobs (`skyMipLevel`, `skyRotationY`, `exposureOverride`) and the rim light.
+  Composing by reference is
   what lets a sky be re-authored without touching the lighting that minutes of convolution produced,
   and what lets two environments share one sky. Either half may be empty. `.bsky` and `.benvl` are
   purely derived cache entries (see [Asset Containers](asset_containers.md)): the sky's route is its cache
   key, the lighting's key joins its two sources; `pack` re-bakes a stale one into the archive and
   fails loudly on one it cannot.
+* **The document names its shading model, and the image-based lighting sits behind it.** `.benv`
+  mirrors `.bmaterial`: a `shadingModel` key, generic state beside it, and one block per model. The
+  sky, its presentation and the rim light are the environment whatever shades under it; the
+  `.benvl` reference and `exposureOverride` are the only things a non-PBR surface would have no use
+  for, so they live under `pbr`. A toon environment is then a sky, a rim and a `toon` block with no
+  `.benvl` at all — which is the whole point of the split, since there is no split-sum anything to
+  convolve for an ink shader. An unknown *model* is refused rather than lit as PBR, exactly as a
+  material's is; an unknown *block* rides `extraJson` and round-trips, so a sibling branch authoring
+  for a model this build lacks does not lose work.
+* **A rim light is the environment, not a material parameter.** It samples the irradiance cube away
+  from the camera and tints the result, so a dusk rims every unit in dusk colour with nothing
+  re-authored per material — which is what earns it a place on this document rather than on a
+  `.bmaterial`. Every engine with a rim term puts it on the material (Unreal's Fresnel node, Unity
+  Toon Shader's Rim Color/Power); this is a deliberate deviation, and the cost of it is that two
+  meshes cannot rim in different *colours* under one environment. How much of it each catches is its
+  own — a scale on the environment's intensity, zero by default
+  (`bgl::ISceneView::SetInstanceRimIntensity`, defaulted per mesh by the `.bimport`'s
+  `meshOptions`). The rim deliberately ignores albedo: it is there to
+  separate a silhouette from the sky, and weighted by albedo it disappears on exactly the dark
+  armour that needs it.
+* **A `.benv` written before the shading model is refused, not read.** Its `lighting` sat at the top
+  level, and unknown keys are *preserved* rather than rejected — so a reader that simply did not
+  know the key would carry it in `extraJson`, resolve the environment unlit, and let the next save
+  write that back. The reader names the file and asks for it to be re-authored instead.
 * **The three are separate files because they have different lifetimes.** Re-authoring a sky is a
   change a person looks at immediately; re-convolving the lighting is minutes of work that the same
   change need not trigger.
@@ -44,7 +69,7 @@ disagrees, trust the header, then fix this doc.
   the `.benvl`. It has to be re-derived whenever the maps change, which is why it lives in the file.
 * **The derivation proposes; the document decides.** `exposureFor` normalizes every environment
   to middle grey, which means that used alone, no environment can be dimmer or brighter than another —
-  a dusk and a noon are forced to the same average. `BEnv::exposureOverride` is the authored
+  a dusk and a noon are forced to the same average. `BEnv::pbr.exposureOverride` is the authored
   answer, kept on the document rather than in the derived file so a re-bake refreshes the proposal
   without touching a tuned value. `resolveEnvironment` folds the two; the resolved
   `maps.exposure` is what a renderer reads. Author it with
@@ -68,7 +93,9 @@ disagrees, trust the header, then fix this doc.
 |---|---|---|
 | `BSky` | [libs/assetlib_structs/include/assetlib_structs/BEnv.h](libs/assetlib_structs/include/assetlib_structs/BEnv.h) | One radiance route; purely derived |
 | `BEnvLighting` | [libs/assetlib_structs/include/assetlib_structs/BEnv.h](libs/assetlib_structs/include/assetlib_structs/BEnv.h) | The prefilter/irradiance pair and the exposure they were measured at; purely derived |
-| `BEnv` | [libs/assetlib_structs/include/assetlib_structs/BEnv.h](libs/assetlib_structs/include/assetlib_structs/BEnv.h) | The authored document: paths to a `.bsky` and a `.benvl`, `skyMipLevel`, `skyRotationY`, `exposureOverride` |
+| `BEnv` | [libs/assetlib_structs/include/assetlib_structs/BEnv.h](libs/assetlib_structs/include/assetlib_structs/BEnv.h) | The authored document: its `ShadingModel`, a path to a `.bsky`, `skyMipLevel`, `skyRotationY`, a `RimLight`, and the model's own block |
+| `RimLight` | [libs/assetlib_structs/include/assetlib_structs/BEnv.h](libs/assetlib_structs/include/assetlib_structs/BEnv.h) | tint, intensity and falloff of the environment's rim; intensity 0 is off |
+| `PbrEnvParams` | [libs/assetlib_structs/include/assetlib_structs/BEnv.h](libs/assetlib_structs/include/assetlib_structs/BEnv.h) | What only a PBR surface reads: the `.benvl` path and `exposureOverride` |
 | `EnvMapRoute` | [libs/assetlib_structs/include/assetlib_structs/BEnv.h](libs/assetlib_structs/include/assetlib_structs/BEnv.h) | source + baked + stamp, the same shape as a material's channel route |
 
 ### Operations

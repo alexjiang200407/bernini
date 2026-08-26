@@ -812,7 +812,7 @@ namespace
 		auto env         = assetlib::BEnv();
 		env.name         = name;
 		env.sky          = "Derived/Sky/" + std::string(name) + ".bsky";
-		env.lighting     = "Derived/EnvLighting/" + std::string(name) + ".benvl";
+		env.pbr.lighting = "Derived/EnvLighting/" + std::string(name) + ".benvl";
 		env.skyMipLevel  = 1;
 		env.skyRotationY = 0.25f;
 		std::filesystem::create_directories(root / "Environments");
@@ -836,10 +836,10 @@ TEST_CASE("AssetManager acquires an environment through its own data root", "[ga
 
 	SECTION("two environments composing the same sky share its upload")
 	{
-		auto second     = assetlib::BEnv();
-		second.name     = "forest_night";
-		second.sky      = "Derived/Sky/forest.bsky";
-		second.lighting = "Derived/EnvLighting/forest.benvl";
+		auto second         = assetlib::BEnv();
+		second.name         = "forest_night";
+		second.sky          = "Derived/Sky/forest.bsky";
+		second.pbr.lighting = "Derived/EnvLighting/forest.benvl";
 		SaveAt(second, fx.root.path / "Authored/Environments" / "forest_night.benv");
 
 		const auto other = (*fx).AcquireEnvironment("Authored/Environments/forest_night.benv");
@@ -852,11 +852,11 @@ TEST_CASE("AssetManager acquires an environment through its own data root", "[ga
 
 	SECTION("an authored exposure overrules the lighting's derivation")
 	{
-		auto second             = assetlib::BEnv();
-		second.name             = "forest_graded";
-		second.sky              = "Derived/Sky/forest.bsky";
-		second.lighting         = "Derived/EnvLighting/forest.benvl";
-		second.exposureOverride = 0.5f;
+		auto second                 = assetlib::BEnv();
+		second.name                 = "forest_graded";
+		second.sky                  = "Derived/Sky/forest.bsky";
+		second.pbr.lighting         = "Derived/EnvLighting/forest.benvl";
+		second.pbr.exposureOverride = 0.5f;
 		SaveAt(second, fx.root.path / "Authored/Environments" / "forest_graded.benv");
 
 		const auto graded = (*fx).AcquireEnvironment("Authored/Environments/forest_graded.benv");

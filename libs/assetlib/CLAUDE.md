@@ -23,7 +23,9 @@ Two container regimes (see docs/asset_containers.md):
 `.bmaterial`, `.benv` and `.bimport` are **authored text documents**: canonical JSON
 (`src/bmaterial_io.cpp`, `src/benv_io.cpp`, `src/import_document.cpp`), named keys, unknown keys preserved on round-trip so a sibling branch's field
 survives a reader that has never heard of it. `.benv` carries the env family's authored state —
-the composition and the presentation knobs (`skyMipLevel`, `skyRotationY`, `exposureOverride`).
+the composition, the presentation knobs (`skyMipLevel`, `skyRotationY`, `exposureOverride`) and the
+rim light — behind a `shadingModel`, the way `.bmaterial` does, so what only a PBR surface reads
+sits in a block of its own.
 
 Everything else derived — `.bmesh`, `.bskel`, `.banim`, `.bvat`, `.bsky`, `.benvl` — is a **cache
 entry**, in `src/cache_io.h`: a frozen header carrying the cache key (bake token, source stamp,
