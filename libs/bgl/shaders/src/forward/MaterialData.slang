@@ -29,6 +29,11 @@ struct MaterialData
     // puts on its ray. See PbrShading::ToEnvSpace.
     float2 envRotation;
 
+    // The view's rim light. Intensity 0 is off, and only an instance that opted in reads it at all.
+    float3 rimTint;
+    float rimIntensity;
+    float rimPower;
+
     SamplerState.Handle anisoLinearWrapSampler;
     SamplerState.Handle linearClampSampler;
 };
@@ -173,6 +178,13 @@ SurfaceLobes EvaluateWithBaseColor<M : IPbrMaterial>(ForwardVSOut input, M mater
 {
     let wrapSampler = materialData.anisoLinearWrapSampler;
 
+    RimLight rim;
+    rim.tint = materialData.rimTint;
+    // The view sets the rim's strength and the placement its share of it, so an instance that
+    // asked for none is one whose rim light has no intensity.
+    rim.intensity = materialData.rimIntensity * input.rimIntensity;
+    rim.power = materialData.rimPower;
+
     return EvaluateSurface(
         input,
         baseColor,
@@ -186,7 +198,8 @@ SurfaceLobes EvaluateWithBaseColor<M : IPbrMaterial>(ForwardVSOut input, M mater
         materialData.brdfLUT,
         materialData.linearClampSampler,
         materialData.exposure,
-        materialData.envRotation
+        materialData.envRotation,
+        rim
     );
 }
 
@@ -194,7 +207,7 @@ float4 ShadeWithBaseColor<M : IPbrMaterial>(ForwardVSOut input, M material, floa
 {
     let lobes = EvaluateWithBaseColor(input, material, baseColor, isFrontFace);
 
-    return float4(lobes.diffuse + lobes.specular, baseColor.a);
+    return float4(lobes.diffuse + lobes.specular + lobes.rim, baseColor.a);
 }
 
 public float4 Shade<M : IPbrMaterial>(ForwardVSOut input, bool isFrontFace)
@@ -231,7 +244,9 @@ public float4 ShadeBlended<M : IPbrMaterial>(ForwardVSOut input, bool isFrontFac
     let specularWeight = lerp(alpha, 1.0, transmission);
     let coverage = lerp(alpha, alpha + (1.0 - alpha) * reflected, transmission);
 
-    return float4(lobes.diffuse * alpha + lobes.specular * specularWeight, saturate(coverage));
+    // The rim rides with the diffuse: it is light leaving the surface, so what covers less of the
+    // pixel contributes less of it.
+    return float4((lobes.diffuse + lobes.rim) * alpha + lobes.specular * specularWeight, saturate(coverage));
 }
 
 public float4 ShadeAlphaTested<M : IPbrMaterial & IAlphaTestMaterial>(ForwardVSOut input, bool isFrontFace)

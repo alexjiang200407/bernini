@@ -561,8 +561,8 @@ namespace bgl
 		m_SelectionDirty = false;
 	}
 
-	MeshMeta&
-	SceneView::MetaFor(MeshInstanceHandle instance, uint32_t submeshIndex, const char* what)
+	uint32_t
+	SceneView::MeshIndexFor(MeshInstanceHandle instance, const char* what) const
 	{
 		if (!instance.IsValid() || !m_MeshBuffer.IsValid(instance.handle))
 		{
@@ -570,7 +570,13 @@ namespace bgl
 				std::format("MeshInstanceHandle passed to {} is invalid or already removed", what));
 		}
 
-		MeshMeta& meta = m_MeshBuffer.MetaAt(instance.handle.index);
+		return instance.handle.index;
+	}
+
+	MeshMeta&
+	SceneView::MetaFor(MeshInstanceHandle instance, uint32_t submeshIndex, const char* what)
+	{
+		MeshMeta& meta = m_MeshBuffer.MetaAt(MeshIndexFor(instance, what));
 
 		if (submeshIndex >= meta.submeshInstances.size())
 		{
@@ -654,6 +660,52 @@ namespace bgl
 		}
 
 		m_Exposure = exposure;
+	}
+
+	void
+	SceneView::SetRimLight(const RimLightDesc& desc)
+	{
+		if (!std::isfinite(desc.intensity) || desc.intensity < 0.0f || !std::isfinite(desc.power) ||
+		    desc.power < 0.0f)
+		{
+			throw SceneError(
+				std::format(
+					"SetRimLight: intensity and power must be finite and non-negative, got {} and "
+					"{}",
+					desc.intensity,
+					desc.power));
+		}
+
+		m_RimLight = desc;
+		++m_TemporalEpoch;
+	}
+
+	void
+	SceneView::SetInstanceRimIntensity(MeshInstanceHandle instance, float rimIntensity)
+	{
+		if (!std::isfinite(rimIntensity) || rimIntensity < 0.0f)
+		{
+			throw SceneError(
+				std::format(
+					"SetInstanceRimIntensity: intensity must be finite and non-negative, got {}",
+					rimIntensity));
+		}
+
+		const uint32_t index = MeshIndexFor(instance, "SetInstanceRimIntensity");
+
+		idl::Mesh mesh    = m_MeshBuffer.AtIndex(index);
+		mesh.rimIntensity = rimIntensity;
+		m_MeshBuffer.Set(instance.handle, mesh);
+
+		// A surface that changes what it looks like without moving has no motion vector saying so,
+		// and the resolve would blend the old shading into the new over the frames after it.
+		++m_TemporalEpoch;
+	}
+
+	float
+	SceneView::GetInstanceRimIntensity(MeshInstanceHandle instance) const
+	{
+		return m_MeshBuffer.AtIndex(MeshIndexFor(instance, "GetInstanceRimIntensity")).rimIntensity;
 	}
 
 	void

@@ -110,6 +110,7 @@ public ForwardVSOut SkinnedVertex(MeshletContext ctx, SubmeshInstance instance, 
 
     vertexOut.materialIndex = instance.material.GetOffset();
     vertexOut.materialIsLoose = 0u;
+    vertexOut.rimIntensity = ctx.mesh.rimIntensity;
 
     return vertexOut;
 }

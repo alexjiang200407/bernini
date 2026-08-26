@@ -4,6 +4,7 @@
 
 namespace bgl
 {
+	struct RimLightDesc;
 	struct SkyboxDesc;
 
 	/**
@@ -153,6 +154,43 @@ namespace bgl
 		 */
 		virtual void
 		SetSkyBox(SkyboxDesc desc) = 0;
+
+		/**
+		 * Sets this view's rim light, replacing any previously set one. Like the environment it is
+		 * sampled from, a rim is per view.
+		 *
+		 * Nothing rims until an instance asks for a share of it -- see SetInstanceRimIntensity --
+		 * and an intensity of 0, which is what an untouched view has, is a rim light that is off.
+		 *
+		 * @throws SceneError if `intensity` or `power` is not finite, or either is negative.
+		 */
+		virtual void
+		SetRimLight(const RimLightDesc& desc) = 0;
+
+		/**
+		 * Sets how much of this view's rim light one instance catches, scaling it. Zero -- which is
+		 * what a fresh instance has -- catches none: a rim is a readability device for units, and a
+		 * wall or a floor that caught one would read as lit from nowhere.
+		 *
+		 * The view owns the rim's colour and shape; this is only the share of it, so one number
+		 * changes a dusk and every instance still differs by what it was authored to catch.
+		 *
+		 * Per instance and not per geom, so two placements of one mesh can differ. What sets it is
+		 * the mesh's authored default, which gamelib reads from the `.bimport`.
+		 *
+		 * @throws SceneError if the instance handle is invalid, or `rimIntensity` is not finite or
+		 *         is negative.
+		 */
+		virtual void
+		SetInstanceRimIntensity(MeshInstanceHandle instance, float rimIntensity) = 0;
+
+		/**
+		 * The share of this view's rim light that instance catches.
+		 *
+		 * @throws SceneError if the instance handle is invalid.
+		 */
+		[[nodiscard]] virtual float
+		GetInstanceRimIntensity(MeshInstanceHandle instance) const = 0;
 
 		/**
 		 * Sets this view's photographic exposure: a linear scale applied to the shaded radiance just

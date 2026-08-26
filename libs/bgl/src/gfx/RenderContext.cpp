@@ -550,6 +550,7 @@ namespace bgl
 
 		draw.lighting.env         = view->GetEnvironmentMap();
 		draw.lighting.env.brdfLut = m_BrdfLut.GetSrv();
+		draw.lighting.rim         = view->GetRimLight();
 		draw.lighting.exposure    = view->GetExposure();
 
 		// Still without temporal AA: a coverage pattern nothing accumulates is flicker. Its period is

@@ -16,6 +16,9 @@ namespace bgl::test
 			{ scene->AddTextureAsset(std::move(env.maps.irradiance)),
 		      scene->AddTextureAsset(std::move(env.maps.prefilter)) });
 
+		view->SetRimLight(
+			{ .tint = env.rim.tint, .intensity = env.rim.intensity, .power = env.rim.power });
+
 		view->SetExposure(env.maps.exposure);
 	}
 

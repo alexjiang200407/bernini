@@ -123,6 +123,7 @@ disagrees, trust the header, then fix this doc.
 | `SceneDesc` | [libs/bgl/include/bgl/IScene.h](libs/bgl/include/bgl/IScene.h) | Fixed pool capacities for a scene. |
 | `PbrMaterialDesc` / `LoosePbrMaterialDesc` | [libs/bgl/include/bgl/IScene.h](libs/bgl/include/bgl/IScene.h) | Baked (three-map) vs. loose (per-channel routed) material parameters. `ChannelRouteDesc` feeds the latter. |
 | `EnvironmentMapDesc` | [libs/bgl/include/bgl/IScene.h](libs/bgl/include/bgl/IScene.h) | The IBL triplet (irradiance cube, prefilter cube, BRDF LUT). **Move-only** — copy is deleted. |
+| `RimLightDesc` | [libs/bgl/include/bgl/RimLightDesc.h](libs/bgl/include/bgl/RimLightDesc.h) | The view's rim light: tint, intensity, falloff. Intensity 0 is off, which is the default. |
 | `RenderTargetDesc` | [libs/bgl/include/bgl/IRenderTarget.h](libs/bgl/include/bgl/IRenderTarget.h) | The output size, `renderScale` (how dense the geometry passes' grid is relative to it), `taaReconstructionWidth` (how wide a kernel the resolve rebuilds an output pixel with, in output pixels), `headless`, and `wnd` — an `HWND` on D3D12, a `CAMetalLayer*` on Metal; ignored when headless. |
 | `RenderJob` | [libs/bgl/include/bgl/RenderJob.h](libs/bgl/include/bgl/RenderJob.h) | One draw: `{view, camera, viewport}`. Holds a **copy** of the camera. |
 | `Camera` | [libs/bgl/include/bgl/Camera.h](libs/bgl/include/bgl/Camera.h) | Chained-builder view/projection. Concrete, header-only, copyable. |
@@ -258,6 +259,14 @@ flowchart TD
   call site. Replaces any previous environment wholesale.
 * **`SetExposure(e)`** — @pre finite and non-negative. Scales *total* radiance before tone mapping, not
   the environment's contribution — it is camera sensitivity, not an IBL property.
+* **`SetRimLight(desc)` / `SetInstanceRimIntensity(instance, share)`** — a rim is per view like the
+  environment it is sampled from, and per *placement* like a material override. The two multiply, so
+  both halves are needed: an intensity of 0 rims nothing however much a placement asked for, and a
+  placement that asked for none catches nothing however bright the rim. Zero at both ends by
+  default, so adding a rim to a scene is two deliberate calls — and one number on the view then
+  moves every placement while each keeps its own share. The colour is not authored — the irradiance
+  cube is sampled away from the camera, so the rim is whatever the environment behind the surface
+  is; `desc.tint` scales that. See [Environment Maps](envmaps.md) for why it lives on the `.benv`.
 
 ---
 
@@ -295,10 +304,14 @@ view->SetEnvironmentMap(
       scene->AddTextureAsset(std::move(env.prefilter)) });
 view->SetExposure(env.exposure);
 
+// Nothing rims until both ends say so: a rim on the view, and each placement's share of it.
+view->SetRimLight({ .tint = env.rim.tint, .intensity = env.rim.intensity, .power = env.rim.power });
+
 auto material = scene->CreatePbrMaterial(
     { .baseColorFactor = glm::vec4(1.0f), .metallicFactor = 0.5f, .roughnessFactor = 0.5f });
-auto sphere = scene->AddSphereGeom(32, 32, 2.0f, material);
-view->CreateStaticMeshInstance(sphere, glm::mat4(1.0f));
+auto sphere   = scene->AddSphereGeom(32, 32, 2.0f, material);
+auto instance = view->CreateStaticMeshInstance(sphere, glm::mat4(1.0f));
+view->SetInstanceRimIntensity(instance, 1.0f);  // its share of the rim above; 0 is the default
 
 auto camera = bgl::Camera();
 camera.LookAt({ 0.0f, 0.0f, 20.0f }, { 0.0f, 0.0f, 19.0f }, { 0.0f, 1.0f, 0.0f })

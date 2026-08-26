@@ -1,6 +1,7 @@
 #pragma once
 #include <assetlib/cancel.h>
 #include <assetlib/project_layout.h>
+#include <assetlib_structs/BEnv.h>
 #include <assetlib_structs/ImageData.h>
 
 namespace assetlib
@@ -236,6 +237,10 @@ namespace assetlib
 
 		uint32_t skyMipLevel  = 0;
 		float    skyRotationY = 0.0f;
+
+		// Carried by value: it is three floats and a vector, and a renderer binding an environment
+		// wants its rim in the same hand as its maps.
+		RimLight rim;
 
 		// Move-only, following EnvironmentMaps: the maps are megabytes each.
 		ResolvedEnvironment()                               = default;

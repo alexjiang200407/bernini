@@ -14,6 +14,7 @@ import idl.Clip;
 import idl.VatGeom;
 import idl.VatState;
 import clip_playback;
+import idl.Constants;
 
 public ConstantBuffer<VatData> vatData;
 
@@ -133,6 +134,7 @@ public ForwardVSOut VatVertex(MeshletContext ctx, SubmeshInstance instance, uint
 
     vertexOut.materialIndex = instance.material.GetOffset();
     vertexOut.materialIsLoose = 0u;
+    vertexOut.rimIntensity = ctx.mesh.rimIntensity;
 
     return vertexOut;
 }

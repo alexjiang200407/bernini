@@ -9,6 +9,7 @@ import forward.common;
 import forward.mesh_stage;
 import forward.vertexdecode;
 import idl.PsoType;
+import idl.Constants;
 
 public ForwardVSOut StaticVertex(MeshletContext ctx, SubmeshInstance instance, uint v)
 {
@@ -29,6 +30,7 @@ public ForwardVSOut StaticVertex(MeshletContext ctx, SubmeshInstance instance, u
 
     vertexOut.materialIndex = instance.material.GetOffset();
     vertexOut.materialIsLoose = IsLoosePso(PsoType(instance.pso)) ? 1u : 0u;
+    vertexOut.rimIntensity = ctx.mesh.rimIntensity;
 
     return vertexOut;
 }

@@ -13,6 +13,7 @@
 #include "types/SubmeshInstance.h"
 #include "types/ViewMatrices.h"
 #include <bgl/ISceneView.h>
+#include <bgl/RimLightDesc.h>
 #include <bgl/SkyboxDesc.h>
 #include <core/ref/RefCounter.h>
 
@@ -113,6 +114,15 @@ namespace bgl
 		void
 		SetExposure(float exposure) override;
 
+		void
+		SetRimLight(const RimLightDesc& desc) override;
+
+		void
+		SetInstanceRimIntensity(MeshInstanceHandle instance, float rimIntensity) override;
+
+		[[nodiscard]] float
+		GetInstanceRimIntensity(MeshInstanceHandle instance) const override;
+
 		[[nodiscard]] const EnvironmentMap&
 		GetEnvironmentMap() const noexcept
 		{
@@ -129,6 +139,12 @@ namespace bgl
 		GetSkybox() const noexcept
 		{
 			return m_Skybox;
+		}
+
+		[[nodiscard]] const RimLightDesc&
+		GetRimLight() const noexcept
+		{
+			return m_RimLight;
 		}
 
 		/**
@@ -310,6 +326,10 @@ namespace bgl
 		void
 		ReresolveInstances();
 
+		/** The buffer index `instance` names, checked. `what` names the caller in the error. */
+		[[nodiscard]] uint32_t
+		MeshIndexFor(MeshInstanceHandle instance, const char* what) const;
+
 		/** The mesh record `instance` names, with `submeshIndex` bounds-checked against it. */
 		[[nodiscard]] MeshMeta&
 		MetaFor(MeshInstanceHandle instance, uint32_t submeshIndex, const char* what);
@@ -384,6 +404,7 @@ namespace bgl
 
 		EnvironmentMap            m_EnvironmentMap;
 		std::optional<SkyboxDesc> m_Skybox;
+		RimLightDesc              m_RimLight;
 		float                     m_Exposure = 1.0f;
 
 		// This view's camera now and on the frame before, plus the frame m_PrevCamera last rolled

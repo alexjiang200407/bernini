@@ -15,4 +15,8 @@ public struct Mesh
     // Null for anything but a skinned mesh, and never set together with vatState -- a placement
     // draws through one pipeline family. The skinned mesh shader and the pose pass are the readers.
     public Entry<SkinnedState> skinnedState;
+
+    // How much of the view's rim light this placement catches, scaling it. Zero -- which is what
+    // a fresh placement has -- catches none.
+    public float rimIntensity;
 };

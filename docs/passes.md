@@ -131,9 +131,19 @@ blend cannot. `MaterialData::transmissionFactor` says which:
   environment would be added to a backdrop still showing through in full.
 
 The two lobes are kept apart for this: `PbrShading::EvaluateSurface` returns a `SurfaceLobes`
-(diffuse, specular, and the reflectance the specular lobe returns) instead of a summed colour, and
-the callers weight it. `ShadeWithBaseColor` sums the pair, which is the opaque answer;
-`ShadeBlended` is the only thing that weights them apart.
+(diffuse, specular, the reflectance the specular lobe returns, and the rim) instead of a summed
+colour, and the callers weight it. `ShadeWithBaseColor` sums them, which is the opaque answer;
+`ShadeBlended` is the only thing that weights them apart, and it rides the rim with the diffuse
+because a rim is light leaving the surface and thins with what covers the pixel.
+
+The rim itself is `PbrShading::RimLobe`: the irradiance cube sampled along `normalize(N - V)` —
+away from the camera, where a backlight would be — banded onto the silhouette by
+`pow(1 - dot(N, V), power)` and scaled by the view's tint and intensity. It carries no albedo on
+purpose; it exists to separate a unit's shape from the sky behind it, and weighted by albedo it
+would disappear on the dark armour that needs it most. `MaterialData` multiplies the view's
+intensity by the instance's share (`idl::Mesh::rimIntensity`, interpolated flat as
+`ForwardVSOut::rimIntensity`) rather than branching, so an instance that asked for none simply has a
+rim light of no brightness.
 
 **Only the blend bucket is premultiplied.** The opaque, cutout and hashed buckets write with no blend
 at all, so their pixel shaders keep returning the plain sum and the material's own alpha — a cutout

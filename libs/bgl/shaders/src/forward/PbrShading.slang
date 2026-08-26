@@ -72,7 +72,42 @@ public struct SurfaceLobes
     /// The fraction of the environment the specular lobe returns, per channel. Exposure is not in it
     /// -- it is a ratio, not radiance.
     public float3 reflectance;
+
+    /// The rim light this surface caught; zero on an instance that did not opt in.
+    public float3 rim;
 };
+
+/// The view's rim light, with the instance's opt-in already folded into `intensity`.
+public struct RimLight
+{
+    public float3 tint;
+    public float intensity;
+    public float power;
+};
+
+/**
+ * The environment behind a surface, banded onto its silhouette.
+ *
+ * The colour is sampled rather than authored, so an environment rims what it lights in its own
+ * colour -- `normalize(N - V)` leans the lookup away from the camera, which is where a backlight
+ * would be. Albedo is deliberately absent: this separates a shape from the sky behind it, and
+ * weighted by albedo it would vanish on exactly the dark surfaces that need it.
+ */
+float3 RimLobe(RimLight rim, float3 N, float3 V, float2 envRotation, TextureCubeHandle irradianceMap, SamplerState.Handle clampSampler)
+{
+    // The degenerate case is the pixel facing the camera dead on, where the lookup direction is the
+    // zero vector: its band is zero, but normalizing it first would make that zero a NaN.
+    let toward = N - V;
+    if (rim.intensity <= 0.0 || dot(toward, toward) < 1e-8)
+    {
+        return float3(0.0, 0.0, 0.0);
+    }
+
+    let band = pow(saturate(1.0 - saturate(dot(N, V))), rim.power);
+    let behind = irradianceMap.SampleCube(clampSampler, ToEnvSpace(normalize(toward), envRotation)).rgb;
+
+    return behind * rim.tint * (rim.intensity * band);
+}
 
 public SurfaceLobes EvaluateSurface(
     ForwardVSOut input,
@@ -87,7 +122,8 @@ public SurfaceLobes EvaluateSurface(
     TextureHandle brdfLUT,
     SamplerState.Handle clampSampler,
     float exposure,
-    float2 envRotation
+    float2 envRotation,
+    RimLight rim
 )
 {
     float3 albedo = baseColor.rgb;
@@ -167,6 +203,7 @@ public SurfaceLobes EvaluateSurface(
     lobes.reflectance = (F * envBRDF.x + envBRDF.y * specularWeight) * ao;
     lobes.diffuse = kD * diffuse * ao * exposure;
     lobes.specular = prefilteredColor * lobes.reflectance * exposure;
+    lobes.rim = RimLobe(rim, N, V, envRotation, irradianceMap, clampSampler) * exposure;
 
     return lobes;
 }

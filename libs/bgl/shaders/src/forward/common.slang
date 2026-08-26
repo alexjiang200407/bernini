@@ -19,6 +19,9 @@ public struct ForwardVSOut
     // material types, so their pixel shader cannot know it from the PSO the way the others do.
     public nointerpolation uint materialIsLoose : MATERIALTYPE;
 
+    // How much of the view's rim light this placement catches: idl::Mesh's rimIntensity.
+    public nointerpolation float rimIntensity : RIMINTENSITY;
+
     // Undivided clip position under this frame's and last frame's camera, with each frame's jitter
     // already removed -- SV_Position keeps its offset, these do not, because a velocity is about the
     // surface and the sample pattern is not part of it. Carried as a pair rather than reusing

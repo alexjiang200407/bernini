@@ -31,6 +31,7 @@ namespace assetlib
 
 		ResolvedEnvironment resolved;
 		resolved.skyRotationY = env.skyRotationY;
+		resolved.rim          = env.rim;
 
 		if (!env.sky.empty())
 		{

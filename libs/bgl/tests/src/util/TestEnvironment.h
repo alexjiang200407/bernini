@@ -2,6 +2,7 @@
 
 #include <bgl/IScene.h>
 #include <bgl/ISceneView.h>
+#include <bgl/RimLightDesc.h>
 
 namespace bgl::test
 {

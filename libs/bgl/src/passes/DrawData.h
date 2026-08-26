@@ -4,6 +4,7 @@
 #include "resource/Sampler.h"
 #include "types/EnvironmentMap.h"
 #include "types/Viewport.h"
+#include <bgl/RimLightDesc.h>
 #include <bgl/SkyboxDesc.h>
 
 namespace bgl
@@ -61,10 +62,11 @@ namespace bgl
 		RtvHandle outlineMask;
 	};
 
-	/** What a draw shades against: the image-based environment, and the sky behind it. */
+	/** What a draw shades against: the image-based environment, the sky behind it, and the rim. */
 	struct DrawLighting
 	{
 		EnvironmentMap env;
+		RimLightDesc   rim;
 		float          exposure = 1.0f;
 
 		// (sin, cos) of the sky's rotation about the up axis. The IBL cubes carry it too, or a

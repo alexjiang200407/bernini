@@ -55,7 +55,7 @@ namespace bgl
 			"viewProj"sv, "prevViewProj"sv, "jitter"sv, "prevJitter"sv, "time"sv, "prevTime"sv,
 		};
 
-		constexpr std::array<std::string_view, 9> c_MaterialDataFields = {
+		constexpr std::array<std::string_view, 12> c_MaterialDataFields = {
 			"anisoLinearWrapSampler"sv,
 			"linearClampSampler"sv,
 			"irradianceMap"sv,
@@ -65,6 +65,9 @@ namespace bgl
 			"exposure"sv,
 			"envRotation"sv,
 			"alphaHashSeed"sv,
+			"rimTint"sv,
+			"rimIntensity"sv,
+			"rimPower"sv,
 		};
 
 		constexpr std::array<std::string_view, 3> c_ExpansionDataFields = {
@@ -477,6 +480,18 @@ namespace bgl
 			if (auto u = matData["alphaHashSeed"]; u.IsValid())
 			{
 				u = draw.viewState.alphaHashSeed;
+			}
+			if (auto u = matData["rimTint"]; u.IsValid())
+			{
+				u = draw.lighting.rim.tint;
+			}
+			if (auto u = matData["rimIntensity"]; u.IsValid())
+			{
+				u = draw.lighting.rim.intensity;
+			}
+			if (auto u = matData["rimPower"]; u.IsValid())
+			{
+				u = draw.lighting.rim.power;
 			}
 		}
 	}
