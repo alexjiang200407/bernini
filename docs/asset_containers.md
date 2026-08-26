@@ -54,10 +54,14 @@ The header carries the **cache key**, and the key is the whole design:
 | source mount key | which source; empty when none was ever recorded |
 
 A mismatch in any component — in either direction — is a **cache miss, not an error**. There is no
-conversion and no old shape to parse: the recovery is always regeneration from the authored side.
-For geometry that happens in memory at load through `AssetStore`'s `LoadRegen*` seam (a read-only
-store trusts its keys, because `pack` made them true); for `.bvat` and the env family the re-bake
-is deliberate — `pack`, the editor, gamelib's bake-on-demand — rather than at load.
+conversion and no old shape to parse: the recovery is always regeneration from the authored side,
+through `AssetStore`'s `LoadRegen*` seam, and it is taken **deliberately** rather than at load:
+`migrate`, `pack`, the VAT bake. A read-only store never takes it, because `pack` made its keys true.
+
+A **load refuses** a stale container instead, naming `migrate` — re-cooking one there costs an
+import, writes none of it back, and pays that again on the next load. The editor offers to rebuild
+as a project opens (`AssetStore::StaleGeometry`), which is where that refusal is meant to be
+answered.
 
 Chunks are addressed by id and **an absent chunk is not an error** — a mesh with no roots chunk is
 a mesh with no roots. Ranged reads (`readCacheChunks*`) fetch named chunks and the key without the

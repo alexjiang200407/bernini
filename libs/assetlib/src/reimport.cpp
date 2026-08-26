@@ -161,6 +161,41 @@ namespace assetlib
 			}));
 	}
 
+	std::vector<std::string>
+	AssetStore::StaleGeometry() const
+	{
+		if (IsReadOnly())
+			return {};
+
+		auto stale = std::vector<std::string>();
+		for (const auto& entry : std::filesystem::recursive_directory_iterator(GetDataRoot()))
+		{
+			if (!entry.is_regular_file())
+				continue;
+
+			const auto type = assetTypeFromExtension(entry.path());
+			if (type != AssetType::kMesh && type != AssetType::kSkeleton &&
+			    type != AssetType::kAnimation)
+				continue;
+
+			const std::string key =
+				normalizeRef(entry.path().lexically_relative(GetDataRoot()).generic_string());
+			try
+			{
+				if (GeometryIsStale(key))
+					stale.push_back(key);
+			}
+			catch (const std::exception&)
+			{
+				// A header that will not read is the asset scan's to report, not this scan's --
+				// which exists to say whether the project needs updating, not what is broken.
+			}
+		}
+
+		std::ranges::sort(stale);
+		return stale;
+	}
+
 	ReimportReport
 	AssetStore::Reimport(bool dryRun) const
 	{

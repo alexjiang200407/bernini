@@ -815,9 +815,21 @@ TEST_CASE("A baked posed box answers only for the pairing it measured", "[skinni
 		CHECK_FALSE(assetlib::findPosedBounds(animations, fixture.mesh, skeleton)[0].has_value());
 	}
 
-	SECTION("a mesh entry the bake never saw finds nothing")
+	SECTION("a box naming a mesh entry this mesh does not have is ignored")
 	{
-		CHECK_FALSE(assetlib::findPosedBounds(animations, fixture.mesh, skeleton)[1].has_value());
+		// One optional per entry the mesh actually has, so there is no index 1 to ask about --
+		// reading one would be past the end of the vector, not a nullopt.
+		REQUIRE(assetlib::findPosedBounds(animations, fixture.mesh, skeleton).size() == 1);
+
+		// The guard that makes a box out of step with its mesh harmless: a re-export that dropped
+		// an entry leaves boxes behind naming it.
+		auto stray      = animations.posedBoxes.front();
+		stray.meshIndex = 7;
+		animations.posedBoxes.push_back(stray);
+
+		const auto boxes = assetlib::findPosedBounds(animations, fixture.mesh, skeleton);
+		REQUIRE(boxes.size() == 1);
+		CHECK(boxes[0].has_value());
 	}
 
 	SECTION("rebaking the same source replaces its entries rather than stacking them")

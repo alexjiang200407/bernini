@@ -132,8 +132,9 @@ TEST_CASE("Acquiring a rig twice reads its containers once", "[skinned][acquire]
 	const auto first = assets.AcquireSkinnedMesh("Meshes/rig.bmesh", "Animations/rig.banim");
 	REQUIRE(first.geom.IsValid());
 
-	// Three apiece: the stamp, the cache key LoadRegen* peeks at, and the deserialize.
-	for (const std::string& path : c_Containers) REQUIRE(files->ReadsOf(path) == 3);
+	// Four apiece: the stamp, the key the load's staleness refusal peeks at, the key the seam
+	// peeks at behind it, and the deserialize.
+	for (const std::string& path : c_Containers) REQUIRE(files->ReadsOf(path) == 4);
 
 	SECTION("a re-acquire after a full release reads nothing back off the disk")
 	{

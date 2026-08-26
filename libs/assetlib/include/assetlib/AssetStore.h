@@ -588,6 +588,17 @@ namespace assetlib
 		Reimport(bool dryRun) const;
 
 		/**
+		 * Every geometry container in this project whose source has moved out from under it, as
+		 * mount keys, sorted. Header peeks and one document hash apiece -- no regeneration -- so
+		 * this is the question a project can afford to ask as it opens, where `Migrate(dryRun)`
+		 * re-cooks each one to answer.
+		 *
+		 * Always empty on a read-only store, which trusts its keys.
+		 */
+		[[nodiscard]] std::vector<std::string>
+		StaleGeometry() const;
+
+		/**
 		 * Every `.banim` in this project given the posed culling boxes an import writes, for clip
 		 * sets cooked before the bake existed.
 		 *

@@ -64,11 +64,21 @@ source.
   produced a `.banim` that differed from the import's while agreeing on every box a loader looks
   up — an unexplainable diff in a container that is supposed to be reproducible. Re-measuring across
   the project is `RebakePosedBounds`, which is already its own operation.*
-- **ADR-6 — `LoadRegen*` stays as the seam `pack`, `migrate` and `vat_bake` use; gamelib's load
-  path stops calling it.** A stale container at load becomes a loud refusal naming `migrate` rather
-  than a silent in-memory re-cook whose cost recurs on every load and whose result is never
-  written. *Rejected: removing the seam outright — `pack` has to make an archive current with no
-  disk to write to, and that is a legitimate regeneration.*
+- **ADR-6 — `LoadRegen*` stays as the seam `pack`, `migrate` and `vat_bake` use; a load refuses a
+  stale container instead of re-cooking it.** The cost of that re-cook recurs on every load and is
+  never written back. *Rejected: removing the seam outright — `pack` has to make an archive current
+  with no disk to write to, and that is a legitimate regeneration.*
+
+  *The refusal sits at the gamelib call site, not inside the seam*, which the survey forced:
+  `LoadRegen*` does two jobs at load, regenerating stale geometry **and** applying the import
+  document's bindings over the result. Only the first is being given up — a rebind must still reach
+  a mesh without a re-cook — so the guard goes in front of the call and the seam is unchanged.
+- **ADR-9 — the editor offers to rebuild as a project opens.** The editor renders through
+  `game::AssetManager`, so the refusal reaches its viewport: without a recovery path this would
+  trade a silent re-cook for a project that cannot be opened. `AssetStore::StaleGeometry` is the
+  scan behind the offer -- header peeks and one document hash apiece. *Rejected: `Migrate(dryRun)`
+  as the scan, which re-cooks every stale group in memory to answer a yes/no question a project
+  open cannot afford to ask.*
 - **ADR-7 — the in-repo `assets/` tree is not gitignored.** It is a fixture tree, not a project:
   `bgl_tests` opens `assets/Data` as a store
   ([TestEnvironment.cpp:12](../../libs/bgl/tests/src/util/TestEnvironment.cpp)),
@@ -111,5 +121,5 @@ source.
    the clips-only import that follows it. Gate: the first acceptance test.
 4. `feat(assetlib): produce a project's derived containers from its sources` — `Reimport`, and
    `migrate` running it first. Gate: the second acceptance test.
-5. `refactor(gamelib): a stale container at load refuses instead of re-cooking in memory` — ADR-6.
-   Gate: `just test gamelib`.
+5. `refactor(gamelib,editor): a stale container refuses at load, and the editor offers to rebuild`
+   — ADR-6 and ADR-9. Gate: `just test gamelib editor`.
