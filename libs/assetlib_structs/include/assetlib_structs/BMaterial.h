@@ -1,15 +1,10 @@
 #pragma once
+#include <assetlib_structs/ShadingModel.h>
 #include <assetlib_structs/SourceStamp.h>
 #include <core/glm.h>
 
 namespace assetlib
 {
-	enum class ShadingModel : uint32_t
-	{
-		kPbr = 0,
-		kCount,
-	};
-
 	enum class AlphaMode : uint32_t
 	{
 		kOpaque = 0,
