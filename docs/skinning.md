@@ -158,6 +158,13 @@ the transport, the clip list and the scrubber are the same code either way — w
   `.bskel` leaves a `.bmesh` current by design — the signature is what turns that from a mesh
   posed by the wrong bones into a refusal naming it.
 
+* **One rig serves any number of sources.** An import binds a `.bskel` whose signature matches
+  rather than writing its own, and the `.bimport` records which one
+  ([import_document.h](libs/assetlib/include/assetlib/import_document.h)) — nothing derives it, so a
+  second `.glb` skinned to a humanoid already in the project reaches the same file its clips do. Two
+  rigs of one signature are refused as ambiguous rather than picked between, because directory order
+  would otherwise decide which one a clip set names.
+
 * **Culling bounds are the caller's posed box, and `bgl` cannot measure it.** `AddSkinnedMeshGeom`
   takes one and derives every submesh's sphere from it, the same rule VAT follows. The bind pose is
   not a substitute: it stops holding the moment a limb moves, and a clip carrying root motion walks

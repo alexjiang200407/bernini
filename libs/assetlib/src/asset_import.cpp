@@ -336,10 +336,24 @@ namespace assetlib
 		if (skeleton.bones.empty())
 			return;
 
-		Skeleton rig = skeleton;
-		rig.source   = source;
-		Save(rig, bskelKey);
-		mesh.skeleton          = std::string(bskelKey);
+		// A rig this project already holds is bound, not copied. Two `.bskel` of one signature make
+		// every later clips-only import ambiguous, and a joint index means the same bone in both --
+		// so a second source skinned to a rig already here has nothing to add by forking it.
+		const std::filesystem::path existing = FindMatchingSkeleton(skeleton);
+
+		Skeleton bound = skeleton;
+		if (existing.empty())
+		{
+			Skeleton rig = skeleton;
+			rig.source   = source;
+			Save(rig, bskelKey);
+			mesh.skeleton = std::string(bskelKey);
+		}
+		else
+		{
+			mesh.skeleton = KeyFor(existing);
+			bound         = Load<Skeleton>(mesh.skeleton);
+		}
 		mesh.skeletonSignature = skeletonSignature(skeleton);
 
 		if (!writeClips || animations.clips.empty())
@@ -350,7 +364,10 @@ namespace assetlib
 		AnimationSet clips = animations;
 		clips.skeleton     = mesh.skeleton;
 		clips.source       = source;
-		bakePosedBounds(clips, mesh, skeleton);
+
+		// Against the rig that will be resolved at load, not the imported copy: the two share a
+		// signature, which deliberately does not cover the bind pose the boxes are swept from.
+		bakePosedBounds(clips, mesh, bound);
 		Save(clips, banimKey);
 	}
 
@@ -406,8 +423,9 @@ namespace assetlib
 			}
 
 			core::throw_runtime_error(
-				"this project holds {} skeletons with the same signature, so which one these clips "
-				"belong to is ambiguous: {}",
+				"this project holds {} skeletons with the same signature, so which one this "
+				"import binds to is ambiguous: {}. Delete the duplicates, keeping one, and "
+				"re-import what named the others",
 				matches.size(),
 				named);
 		}
