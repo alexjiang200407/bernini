@@ -207,6 +207,9 @@ namespace assetlib
 		 * is: a document does not *need* what it produced. But an `outputs` entry naming a file that
 		 * is gone reads as **absent** to Reimport, which would put it straight back -- so the
 		 * deletion has to reach the claim as well as the file.
+		 *
+		 * Covers what the cascade frees as well as what the caller named, which is not the same set:
+		 * deleting a `.bvat` frees the mesh and clips only it still held.
 		 */
 		std::vector<std::string> producers;
 
@@ -274,7 +277,10 @@ namespace assetlib
 	{
 		kDeleted,  // gone; a file that had already vanished counts, as it does for the prune
 		kRefused,  // still referenced, and nothing was touched
-		kFailed,   // could not be removed: held open by another process, or an I/O error
+		// Could not be removed: held open by another process, or an I/O error. Also reported when
+		// the files went but a `producers` document could not be rewritten -- there is no rollback,
+		// so the claim is stale until the next deletion or migrate settles it.
+		kFailed,
 	};
 
 	struct DeletionResult

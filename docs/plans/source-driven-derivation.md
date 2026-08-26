@@ -95,7 +95,11 @@ source.
   **rewrites** the document to drop the claim, because an `outputs` entry naming a file that is gone
   reads as *absent* to `Reimport`, which would put it straight back. *Rejected: putting it in
   `derived` beside `kVatSource` — that sweeps the referrer, and the referrer here is a document
-  holding the source and every other output.*
+  holding the source and every other output.* The claims dropped are those of everything the
+  deletion removes, **including what its cascade frees** — deleting a `.bvat` frees the mesh and
+  clips only it still held, and those are not the keys `planDeletion` collected. Deleting through
+  the project is therefore permanent; a file removed behind its back is merely absent, and
+  reproducing that one is the point of the feature.
 - **ADR-13 — the two new document fields are edges in the reference graph.** `skeleton` and
   `outputs` are references like any other, and the document is now the only thing that records
   them. *Rejected: leaving them out as "just bookkeeping" — an `outputs` entry naming a key a

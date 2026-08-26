@@ -535,8 +535,21 @@ namespace assetlib
 		DeletionPlan plan = planDeletion(graph, target);
 
 		// A blocked deletion frees nothing, so there is no cascade to compute for one.
-		if (plan.Allowed())
-			plan.cascade = cascadeOf(graph, plan);
+		if (!plan.Allowed())
+			return plan;
+
+		plan.cascade = cascadeOf(graph, plan);
+
+		// The documents claiming what the cascade frees, not only what the caller named: a claim
+		// that outlives its file reads as *absent* to Reimport, which puts the file straight back,
+		// and a cascade removes files the caller never named.
+		for (const std::string& freed : plan.cascade)
+			for (const AssetRef& ref : graph.ReferrersOf(freed))
+				if (ref.kind == RefKind::kDocumentOutput)
+					plan.producers.push_back(ref.referrer);
+
+		std::ranges::sort(plan.producers);
+		plan.producers.erase(std::ranges::unique(plan.producers).begin(), plan.producers.end());
 
 		return plan;
 	}

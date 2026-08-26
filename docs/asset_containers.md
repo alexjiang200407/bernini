@@ -156,6 +156,11 @@ or empty. That is exactly the fresh-checkout case, and it is why `Textures/` can
 `StaleImportedTextureSources` compares the source's *stamp*, which says nothing about whether the
 files are there.
 
+Deleting a derived container **through the project** -- `DeleteAsset`, whether the caller named it
+or a cascade freed it -- drops the claim from the `.bimport` that produced it, so it stays deleted.
+A file removed behind the project's back is a different thing: nothing dropped the claim, so it is
+simply absent, and producing it again is the right answer.
+
 Absent only. A container that is on disk but stale is `migrate`'s below — it can read and re-save
 one, which is cheaper than a re-import, and splitting them that way is what keeps one problem from
 being reported twice when `migrate` runs both.
