@@ -78,6 +78,14 @@ namespace
 		return files;
 	}
 
+	Project
+	MakeTexProject()
+	{
+		const fs::path root = fs::temp_directory_path() / "bernini_reimport_tex";
+		fs::remove_all(root);
+		return Project::Create(root / "Reimport.berniniproject", "Reimport");
+	}
+
 	/** Per key, so a failure names the container that drifted rather than "three maps differ". */
 	void
 	CheckSameFiles(
@@ -187,6 +195,39 @@ TEST_CASE("Reimport puts back only what is missing", "[reimport]")
 		CHECK(report.sources[0].written == std::vector<std::string>{ "Meshes/unit.bmesh" });
 		CheckSameFiles(DerivedFiles(project.dataRoot), before);
 	}
+}
+
+TEST_CASE("An emptied texture folder is re-extracted", "[reimport]")
+{
+	// apples.glb, not the synthetic rig: it is the only fixture carrying real images, and an
+	// extract with nothing to extract would pass this test without proving anything.
+	const Project  project  = MakeTexProject();
+	const fs::path dataRoot = project.GetDataDirectory();
+
+	test::ImportUnitGroup(
+		dataRoot,
+		"assets/apples.glb",
+		"Materials/red.bmaterial",
+		30.0f,
+		"Textures/unit");
+
+	const fs::path folder = dataRoot / "Textures/unit";
+	REQUIRE(fs::exists(folder));
+	const auto before = DerivedFiles(dataRoot);
+
+	// A fresh checkout of a project that gitignores its derived tree: the folder is not there, and
+	// the source has not moved -- so the stamp the texture key compares still matches, and nothing
+	// else in the library would notice.
+	fs::remove_all(folder);
+	REQUIRE(AssetStore(dataRoot).StaleImportedTextureSources().empty());
+
+	const ReimportReport report = AssetStore(dataRoot).Reimport(/*dryRun*/ false);
+	CHECK(report.FailedCount() == 0);
+	CHECK(fs::exists(folder));
+	CHECK_FALSE(fs::is_empty(folder));
+
+	// The geometry is untouched by this: it was never absent.
+	CheckSameFiles(DerivedFiles(dataRoot), before);
 }
 
 TEST_CASE("A source that has gone is reported, not thrown", "[reimport]")

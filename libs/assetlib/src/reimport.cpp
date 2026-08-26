@@ -261,6 +261,37 @@ namespace assetlib
 			}
 		}
 
+		// The extracted textures are the one output no `outputs` entry names -- a `.ktx2` carries
+		// no header, so the document's textureDir and textureStamp are their whole key, and that
+		// key says nothing about whether the files are on disk. An empty or absent folder is the
+		// only signal there is, and it is exactly the fresh-checkout case.
+		for (const PendingSource& source : pending)
+		{
+			if (failed.contains(source.key) || source.document.textureDir.empty())
+				continue;
+
+			const std::filesystem::path folder = GetDataRoot() / source.document.textureDir;
+			if (std::filesystem::exists(folder) && !std::filesystem::is_empty(folder))
+				continue;
+
+			if (dryRun)
+			{
+				written[source.key].push_back(source.document.textureDir);
+				continue;
+			}
+
+			try
+			{
+				for (const std::string& file : RefreshImportedTextures(source.key).written)
+					written[source.key].push_back(file);
+			}
+			catch (const std::exception& error)
+			{
+				failed.emplace(source.key, error.what());
+				written.erase(source.key);
+			}
+		}
+
 		ReimportReport report;
 		for (const PendingSource& source : pending)
 		{

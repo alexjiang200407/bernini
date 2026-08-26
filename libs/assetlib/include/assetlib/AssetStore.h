@@ -577,6 +577,10 @@ namespace assetlib
 		 * sweeping a clip set's boxes exactly as the writer that produced it did. Re-measuring
 		 * them across the project is `RebakePosedBounds`.
 		 *
+		 * A source's extracted textures are covered too, but by a different question: a `.ktx2`
+		 * carries no header, so `outputs` cannot name one and the only signal available is the
+		 * texture folder being absent or empty.
+		 *
 		 * Rigs, then meshes, then clips -- a clip set's posed boxes are measured against the
 		 * meshes on disk, and a mesh names the rig it binds.
 		 *

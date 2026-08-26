@@ -79,6 +79,13 @@ source.
   scan behind the offer -- header peeks and one document hash apiece. *Rejected: `Migrate(dryRun)`
   as the scan, which re-cooks every stale group in memory to answer a yes/no question a project
   open cannot afford to ask.*
+- **ADR-11 — a source's extracted textures are produced from the texture folder being absent or
+  empty**, not from `outputs`. A `.ktx2` has nowhere to carry a header, so nothing can key one;
+  `StaleImportedTextureSources` compares the *source's* stamp, which is unmoved on a fresh checkout
+  and so reports nothing. Without this the commit rule below would be false for `Textures/`.
+  *Rejected: listing extracted textures in `outputs` — the extract names its files after the source
+  images it finds, so the list would be a second claim about what it produced, able to disagree with
+  the extract itself.*
 - **ADR-10 — the commit rule is written down here, and applied in `bernini-test-project` by hand.**
   Sources and authored documents committed, derived containers ignorable. The test project is a
   different repository, so this change cannot carry its `.gitignore`; what it carries is the
