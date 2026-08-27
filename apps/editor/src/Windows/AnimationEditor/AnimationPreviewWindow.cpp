@@ -11,6 +11,7 @@
 
 #include <QDragEnterEvent>
 #include <QDropEvent>
+#include <QLocale>
 #include <QMessageBox>
 #include <QMimeData>
 #include <QMouseEvent>
@@ -20,6 +21,7 @@
 
 #include <assetlib/AssetStore.h>
 #include <assetlib/skinning.h>
+#include <assetlib/vat_bake.h>
 #include <assetlib_structs/BMesh.h>
 #include <assetlib_structs/Bounds.h>
 #include <gamelib/AssetManager.h>
@@ -543,6 +545,51 @@ namespace
 		}
 		return QStringLiteral("it has not been baked yet");
 	}
+
+	/** What a bake would write, or why it will not run -- `size` is meaningless when it will not. */
+	struct VatCost
+	{
+		assetlib::VatSize size{};
+		QString           refusal;
+	};
+
+	/**
+	 * The bake's size without the bake. Loading the three inputs is all it costs, and the panel has
+	 * just loaded them to draw what is on screen, so the read is warm.
+	 */
+	VatCost
+	MeasureVatBake(
+		const std::filesystem::path& dataRoot,
+		const std::filesystem::path& absolutePath,
+		const std::string&           animations)
+	{
+		try
+		{
+			const auto rel =
+				absolutePath.lexically_relative(dataRoot).lexically_normal().generic_string();
+
+			return { assetlib::AssetStore(dataRoot).VatBakeSize(
+						 assetlib::VatBakeDesc{ rel, animations }),
+				     {} };
+		}
+		catch (const std::exception& e)
+		{
+			return { {}, QString::fromUtf8(e.what()) };
+		}
+	}
+
+	/** "about 412.5 MB (18,204 vertex columns x 1,841 frame rows, 3 clips)" */
+	QString
+	VatCostLine(const assetlib::VatSize& size)
+	{
+		return QStringLiteral("about %1 (%2 vertex columns x %3 frame rows, %4)")
+		    .arg(QLocale().formattedDataSize(static_cast<qint64>(size.bytes)))
+		    .arg(QLocale().toString(size.width))
+		    .arg(QLocale().toString(size.height))
+		    .arg(
+				size.clipCount == 1 ? QStringLiteral("1 clip") :
+									  QStringLiteral("%1 clips").arg(size.clipCount));
+	}
 }
 
 bool
@@ -586,6 +633,36 @@ AnimationPreviewWindow::BakeShownVat()
 	if (!CanBakeVat())
 		return;
 
+	const QString name = QString::fromStdString(m_MeshPath.filename().string());
+	const VatCost cost = MeasureVatBake(m_DataRoot, m_MeshPath, m_Animations);
+
+	if (!cost.refusal.isEmpty())
+	{
+		QMessageBox::warning(
+			window(),
+			QStringLiteral("Bake VAT"),
+			QStringLiteral("Could not bake '%1':\n\n%2").arg(name, cost.refusal));
+		return;
+	}
+
+	auto ask = QMessageBox(window());
+	ask.setIcon(QMessageBox::Question);
+	ask.setWindowTitle(QStringLiteral("Bake VAT"));
+	ask.setText(QStringLiteral("Bake VAT for '%1'?").arg(name));
+	ask.setInformativeText(
+		QStringLiteral(
+			"This writes %1 beside the mesh, and takes a few seconds. The bake is a build "
+			"product: deleting it later costs only the time to make it again.")
+			.arg(VatCostLine(cost.size)));
+
+	QPushButton* bakeButton = ask.addButton(QStringLiteral("Bake"), QMessageBox::AcceptRole);
+	ask.addButton(QMessageBox::Cancel);
+	ask.setDefaultButton(QMessageBox::Cancel);
+	ask.exec();
+
+	if (ask.clickedButton() != bakeButton)
+		return;
+
 	if (!BakeVat(m_MeshPath, m_Animations))
 		return;
 
@@ -602,17 +679,33 @@ AnimationPreviewWindow::OfferBakeForTier(
 	const QString&               name,
 	const game::VatBakeState     state)
 {
+	const VatCost cost = MeasureVatBake(m_DataRoot, absolutePath, animations);
+
 	auto box = QMessageBox(window());
 	box.setIcon(QMessageBox::Information);
 	box.setWindowTitle(QStringLiteral("Preview as VAT"));
 	box.setText(
 		QStringLiteral("'%1' cannot be previewed as VAT: %2.").arg(name, BakeStateReason(state)));
-	box.setInformativeText(QStringLiteral(
-		"Baking skins every vertex of every frame into a texture pair, which takes a few "
-		"seconds. The Skinned tier needs no bake."));
+
+	// Nothing to offer: the bake this dialog's button would start is one already refused, and
+	// hearing that now beats hearing it after agreeing to pay for it.
+	if (!cost.refusal.isEmpty())
+	{
+		box.setInformativeText(
+			QStringLiteral("It cannot be baked either:\n\n%1").arg(cost.refusal));
+		box.exec();
+		return;
+	}
+
+	box.setInformativeText(
+		QStringLiteral(
+			"Baking skins every vertex of every frame into a texture pair: %1, written "
+			"beside the mesh, a few seconds' work. The Skinned tier needs no bake.")
+			.arg(VatCostLine(cost.size)));
 
 	QPushButton* bakeButton = box.addButton(QStringLiteral("Bake Now"), QMessageBox::AcceptRole);
 	box.addButton(QMessageBox::Cancel);
+	box.setDefaultButton(QMessageBox::Cancel);
 	box.exec();
 
 	if (box.clickedButton() != bakeButton)

@@ -107,6 +107,9 @@ public:
 	 * reloads if VAT is what is on screen. A bake is seconds of CPU skinning, which is why nothing
 	 * does it implicitly -- see AnimationLoadSteps::needsFreshBake.
 	 *
+	 * Asks first, every press, naming the size the bake would write: the pair is hundreds of
+	 * megabytes on a dense rig, and this is a button one click away from Close.
+	 *
 	 * Does nothing when no mesh is shown or it has no clips: there is no pair to bake.
 	 */
 	void
@@ -181,8 +184,9 @@ protected:
 private:
 	/**
 	 * The "not baked / out of date" dialog with its Bake Now button, shown when the VAT tier is
-	 * asked for and no usable bake exists. Taking the offer bakes and re-enters the load; declining
-	 * leaves the panel showing what it already had, the tier included.
+	 * asked for and no usable bake exists. It names what the bake would write. Taking the offer
+	 * bakes and re-enters the load; declining leaves the panel showing what it already had, the
+	 * tier included.
 	 */
 	void
 	OfferBakeForTier(

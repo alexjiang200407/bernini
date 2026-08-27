@@ -104,8 +104,9 @@ the transport, the clip list and the scrubber are the same code either way — w
   unprompted — seconds of the user's time is a decision, not a load step. `game::VatFreshness` asks
   whether a usable bake exists; anything but `kFresh` stops the load and offers **Bake Now**, and
   declining leaves the panel on the tier it was already showing. A **Bake VAT** button makes the same
-  bake deliberately. See [vat.md](docs/vat.md); note this is the *editor's* rule — `AcquireVatMesh`
-  still bakes on demand, which is what loading a level wants.
+  bake deliberately, and asks the same question. Both name the size the bake would write before it is
+  written. See [vat.md](docs/vat.md); note this is the *editor's* rule — `AcquireVatMesh` still bakes
+  on demand, which is what loading a level wants.
 
 * **The tier decides two things, and they live together.** `PlanAnimationLoad` returns them as one
   `AnimationLoadSteps` so they cannot drift apart: whether the load needs a `.bvat` already baked

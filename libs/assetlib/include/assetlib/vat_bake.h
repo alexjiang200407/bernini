@@ -23,6 +23,30 @@ namespace assetlib
 	[[nodiscard]] BVat
 	bakeVat(const BMesh& mesh, const Skeleton& skeleton, const AnimationSet& animations);
 
+	/** What a bake would produce, without producing it. See vatBakeSize. */
+	struct VatSize
+	{
+		uint32_t width;   // vertex columns, across every submesh
+		uint32_t height;  // frame rows, per-clip padding included
+		uint32_t clipCount;
+		uint32_t frameCount;  // real frames, padding rows excluded
+		uint32_t boneCount;
+		uint64_t bytes;  // the texture pair plus the palettes
+	};
+
+	/**
+	 * The size `bakeVat` would produce from these inputs, laid out but never filled -- for a caller
+	 * that has to offer the bake before paying for it.
+	 *
+	 * `bytes` is within a few KB of the container: the pair is encoded uncompressed
+	 * (`Ktx2Compression::kNone`), so the texels and the palettes are all of it that scales.
+	 *
+	 * @throws everything `bakeVat` throws about the shape of its inputs, and nothing else -- a size
+	 *         that comes back is a bake that will start.
+	 */
+	[[nodiscard]] VatSize
+	vatBakeSize(const BMesh& mesh, const Skeleton& skeleton, const AnimationSet& animations);
+
 	/** A bake addressed the way every reference in a project is: as keys into a store. */
 	struct VatBakeDesc
 	{
