@@ -137,7 +137,8 @@ regimes were always pointing at is available:
 | | |
 |---|---|
 | **Committed** | the copied sources, and every authored document — `.glb`, the images, `.bimport`, `.bmaterial`, `.benv`, `.berniniproject`. Losing one loses work. |
-| **Ignorable** | the containers something puts back — `.bmesh`, `.bskel` and `.banim` from `Reimport`, `.bvat` from the load-time bake, and the `.ktx2` under `Textures/` from the material bakes and the texture re-extract. |
+| **Ignorable** | the containers something puts back — `.bmesh`, `.bskel` and `.banim` from `Reimport`, `.bvat` from the load-time bake, and a source's extracted `.ktx2` from the texture re-extract. |
+| **Ignorable, but by hand** | the baked maps under `Textures/`. Nothing outside the editor writes one: `migrate` re-saves a material, it does not bake it, and there is no CLI that does. So a fresh checkout opens with every material stale and drawing untextured until someone runs **Bake All**. |
 | **Committed, though derived** | `.bsky` and `.benvl`. Their bake runs from a `.hdr`, and a project copies in no `.hdr` — so an absent one is unrecoverable, and only a *stale* one is `migrate`'s. Ignorable once an env source lives in the project beside the meshes'. |
 
 It is a rule about **projects**. This repository's own `assets/` tree is not one: it is a fixture

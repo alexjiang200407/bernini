@@ -31,6 +31,16 @@ namespace assetlib
 		// the materials routing at them came along. See TextureRefresh::moved.
 		std::vector<MovedTexture> movedTextures;
 
+		/**
+		 * `<material>: <texture>` for every texture a material names that is not on disk, sorted.
+		 *
+		 * Nothing here can put one back -- a material's routes are authored, and which file the
+		 * author meant is not derivable once it is gone. Reported because the alternative is a
+		 * material that silently draws untextured, which is indistinguishable from one authored
+		 * that way.
+		 */
+		std::vector<std::string> danglingTextures;
+
 		[[nodiscard]] size_t
 		Count(MigratedFile::Outcome outcome) const noexcept;
 	};
