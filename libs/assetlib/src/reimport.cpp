@@ -153,7 +153,7 @@ namespace assetlib
 	}
 
 	size_t
-	ReimportReport::WrittenCount() const noexcept
+	ReimportReport::GetWrittenCount() const noexcept
 	{
 		size_t total = 0;
 		for (const ReimportedSource& source : sources) total += source.written.size();
@@ -161,7 +161,7 @@ namespace assetlib
 	}
 
 	size_t
-	ReimportReport::FailedCount() const noexcept
+	ReimportReport::GetFailedCount() const noexcept
 	{
 		return static_cast<size_t>(
 			std::ranges::count_if(sources, [](const ReimportedSource& source) {
@@ -170,7 +170,7 @@ namespace assetlib
 	}
 
 	std::vector<std::string>
-	AssetStore::StaleGeometry() const
+	AssetStore::GetStaleGeometry() const
 	{
 		if (IsReadOnly())
 			return {};

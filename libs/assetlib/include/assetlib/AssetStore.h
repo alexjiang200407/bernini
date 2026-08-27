@@ -414,7 +414,7 @@ namespace assetlib
 		 *         and "nothing to do" would be a silent wrong answer.
 		 */
 		[[nodiscard]] std::vector<std::string>
-		StaleImportedTextureSources() const;
+		GetStaleImportedTextureSources() const;
 
 		/**
 		 * Re-extracts `sourceKey`'s textures into the folder its import document records, so an
@@ -605,7 +605,7 @@ namespace assetlib
 		 * Always empty on a read-only store, which trusts its keys.
 		 */
 		[[nodiscard]] std::vector<std::string>
-		StaleGeometry() const;
+		GetStaleGeometry() const;
 
 		/**
 		 * Every `.banim` in this project given the posed culling boxes an import writes, for clip

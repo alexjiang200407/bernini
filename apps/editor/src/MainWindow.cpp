@@ -528,7 +528,7 @@ MainWindow::OfferTextureRefresh()
 	const background::TaskResult scanned =
 		background::RunWithLoadingScreen(this, "Open Project", [&](background::Progress& progress) {
 			progress.Report(0, 0, "Checking imported sources...");
-			stale = m_Project->GetStore().StaleImportedTextureSources();
+			stale = m_Project->GetStore().GetStaleImportedTextureSources();
 		});
 
 	if (!scanned.Completed())
@@ -650,7 +650,7 @@ MainWindow::OfferProjectUpdate()
 	const background::TaskResult scanned =
 		background::RunWithLoadingScreen(this, "Open Project", [&](background::Progress& progress) {
 			progress.Report(0, 0, "Checking derived assets...");
-			stale = m_Project->GetStore().StaleGeometry();
+			stale = m_Project->GetStore().GetStaleGeometry();
 			for (const assetlib::ReimportedSource& source :
 		         m_Project->GetStore().Reimport(/*dryRun*/ true).sources)
 				absent.insert(absent.end(), source.written.begin(), source.written.end());

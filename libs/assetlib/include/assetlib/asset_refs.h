@@ -200,16 +200,12 @@ namespace assetlib
 		std::vector<std::string> derived;
 
 		/**
-		 * The `.bimport` documents naming what is being deleted among their `outputs`, which
-		 * DeleteAsset rewrites to drop those entries.
+		 * The `.bimport` documents naming anything this plan deletes -- the cascade included --
+		 * among their `outputs`, which DeleteAsset rewrites to drop those entries.
 		 *
-		 * Neither a blocker nor derived, because the edge points the other way from every edge that
-		 * is: a document does not *need* what it produced. But an `outputs` entry naming a file that
-		 * is gone reads as **absent** to Reimport, which would put it straight back -- so the
-		 * deletion has to reach the claim as well as the file.
-		 *
-		 * Covers what the cascade frees as well as what the caller named, which is not the same set:
-		 * deleting a `.bvat` frees the mesh and clips only it still held.
+		 * Neither a blocker nor derived: a document does not *need* what it produced. But an
+		 * `outputs` entry naming a file that is gone reads as **absent** to Reimport, which would
+		 * put it straight back.
 		 */
 		std::vector<std::string> producers;
 
@@ -278,8 +274,8 @@ namespace assetlib
 		kDeleted,  // gone; a file that had already vanished counts, as it does for the prune
 		kRefused,  // still referenced, and nothing was touched
 		// Could not be removed: held open by another process, or an I/O error. Also reported when
-		// the files went but a `producers` document could not be rewritten -- there is no rollback,
-		// so the claim is stale until the next deletion or migrate settles it.
+		// the files went but a `producers` document could not be rewritten -- the claim is stale
+		// until the next deletion or migrate settles it.
 		kFailed,
 	};
 

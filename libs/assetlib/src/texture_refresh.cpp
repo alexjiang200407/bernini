@@ -36,7 +36,7 @@ namespace assetlib
 	}
 
 	std::vector<std::string>
-	AssetStore::StaleImportedTextureSources() const
+	AssetStore::GetStaleImportedTextureSources() const
 	{
 		if (IsReadOnly())
 			return {};

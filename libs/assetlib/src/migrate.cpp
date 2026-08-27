@@ -223,7 +223,7 @@ namespace assetlib
 		}
 
 		// Before the walk: a refresh stamps the `.bimport` the walk then reads.
-		for (const std::string& source : StaleImportedTextureSources())
+		for (const std::string& source : GetStaleImportedTextureSources())
 		{
 			const std::filesystem::path documentPath = GetDataRoot() / importDocumentKeyFor(source);
 

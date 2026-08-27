@@ -60,7 +60,7 @@ through `AssetStore`'s `LoadRegen*` seam, and it is taken **deliberately** rathe
 
 A **scene load refuses** a stale container instead, naming `migrate` — re-cooking one there costs an
 import, writes none of it back, and pays that again on the next load. The editor offers to rebuild
-as a project opens (`AssetStore::StaleGeometry`), which is where that refusal is meant to be
+as a project opens (`AssetStore::GetStaleGeometry`), which is where that refusal is meant to be
 answered. Its *inspection* surfaces — thumbnails, the material preview, the animation preview — do
 still regenerate: they exist to show you the project, including the project you have not updated
 yet.
@@ -100,7 +100,7 @@ enumerate.
 A `.ktx2` is Foreign: it has nowhere to carry a header, so it cannot hold a key of its own. The
 extracted textures of a mesh import are keyed by the two fields their `.bimport` carries instead --
 `textureDir`, the folder they went into, and `textureStamp`, the source as it stood when they were
-written. Together those are the pair `AssetStore::StaleImportedTextureSources` compares, and they
+written. Together those are the pair `AssetStore::GetStaleImportedTextureSources` compares, and they
 sit outside the document's `parameters`, so neither keys the geometry beside them.
 
 The miss is **not** taken at load. `LoadRegen*` passes `GltfTextures::kSkip`, deliberately: it is
@@ -153,7 +153,7 @@ swept that mesh, a clips-only source swept the project's. Re-measuring those acr
 A source's extracted textures are covered too, but asked differently: a `.ktx2` carries no header,
 so no `outputs` entry can name one and the only signal available is the texture folder being absent
 or empty. That is exactly the fresh-checkout case, and it is why `Textures/` can be ignored at all —
-`StaleImportedTextureSources` compares the source's *stamp*, which says nothing about whether the
+`GetStaleImportedTextureSources` compares the source's *stamp*, which says nothing about whether the
 files are there.
 
 Deleting a derived container **through the project** -- `DeleteAsset`, whether the caller named it

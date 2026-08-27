@@ -131,8 +131,8 @@ TEST_CASE("A project with no derived containers is rebuilt from its sources", "[
 	for (const auto& entry : before) fs::remove(project.dataRoot / entry.first);
 
 	const ReimportReport report = project.Store().Reimport(/*dryRun*/ false);
-	REQUIRE(report.FailedCount() == 0);
-	CHECK(report.WrittenCount() == 3);
+	REQUIRE(report.GetFailedCount() == 0);
+	CHECK(report.GetWrittenCount() == 3);
 
 	CheckSameFiles(DerivedFiles(project.dataRoot), before);
 
@@ -171,8 +171,8 @@ TEST_CASE("A project with no derived containers is rebuilt from its sources", "[
 	SECTION("and a second run writes nothing, since none of them is absent or stale any more")
 	{
 		const ReimportReport again = project.Store().Reimport(/*dryRun*/ false);
-		CHECK(again.WrittenCount() == 0);
-		CHECK(again.FailedCount() == 0);
+		CHECK(again.GetWrittenCount() == 0);
+		CHECK(again.GetFailedCount() == 0);
 	}
 }
 
@@ -223,10 +223,10 @@ TEST_CASE("An emptied texture folder is re-extracted", "[reimport]")
 	// the source has not moved -- so the stamp the texture key compares still matches, and nothing
 	// else in the library would notice.
 	fs::remove_all(folder);
-	REQUIRE(AssetStore(dataRoot).StaleImportedTextureSources().empty());
+	REQUIRE(AssetStore(dataRoot).GetStaleImportedTextureSources().empty());
 
 	const ReimportReport report = AssetStore(dataRoot).Reimport(/*dryRun*/ false);
-	CHECK(report.FailedCount() == 0);
+	CHECK(report.GetFailedCount() == 0);
 	CHECK(fs::exists(folder));
 	CHECK_FALSE(fs::is_empty(folder));
 
@@ -257,7 +257,7 @@ TEST_CASE("A renamed output is followed, not reproduced under its old name", "[r
 		CHECK(std::ranges::find(document.outputs, "Meshes/unit.bmesh") == document.outputs.end());
 
 		const ReimportReport report = store.Reimport(/*dryRun*/ false);
-		CHECK(report.WrittenCount() == 0);
+		CHECK(report.GetWrittenCount() == 0);
 		CHECK_FALSE(fs::exists(project.dataRoot / "Meshes/unit.bmesh"));
 	}
 
@@ -271,7 +271,7 @@ TEST_CASE("A renamed output is followed, not reproduced under its old name", "[r
 		CHECK(document.skeleton == "Skeletons/hero.bskel");
 
 		const ReimportReport report = store.Reimport(/*dryRun*/ false);
-		CHECK(report.WrittenCount() == 0);
+		CHECK(report.GetWrittenCount() == 0);
 		CHECK_FALSE(fs::exists(project.dataRoot / "Skeletons/unit.bskel"));
 	}
 }
@@ -299,7 +299,7 @@ TEST_CASE("Deleting a produced container is allowed, and drops the claim", "[rei
 
 	// The point of dropping it: without that, this call would reproduce what was just deleted.
 	const ReimportReport report = store.Reimport(/*dryRun*/ false);
-	CHECK(report.WrittenCount() == 0);
+	CHECK(report.GetWrittenCount() == 0);
 	CHECK_FALSE(fs::exists(project.dataRoot / "Meshes/unit.bmesh"));
 }
 
@@ -348,7 +348,7 @@ TEST_CASE("A cascade drops the claims on what it frees", "[reimport]")
 	}
 
 	// Without the claims dropped, this call would rebuild everything the cascade just removed.
-	CHECK(store.Reimport(/*dryRun*/ false).WrittenCount() == 0);
+	CHECK(store.Reimport(/*dryRun*/ false).GetWrittenCount() == 0);
 	CHECK_FALSE(fs::exists(project.dataRoot / "Meshes/unit.bmesh"));
 }
 

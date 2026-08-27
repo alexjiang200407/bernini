@@ -75,7 +75,7 @@ source.
   a mesh without a re-cook — so the guard goes in front of the call and the seam is unchanged.
 - **ADR-9 — the editor offers to rebuild as a project opens.** The editor renders through
   `game::AssetManager`, so the refusal reaches its viewport: without a recovery path this would
-  trade a silent re-cook for a project that cannot be opened. `AssetStore::StaleGeometry` is the
+  trade a silent re-cook for a project that cannot be opened. `AssetStore::GetStaleGeometry` is the
   scan behind the offer -- header peeks and one document hash apiece. *Rejected: `Migrate(dryRun)`
   as the scan, which re-cooks every stale group in memory to answer a yes/no question a project
   open cannot afford to ask.*
@@ -108,7 +108,7 @@ source.
   corruption from a routine rename.*
 - **ADR-11 — a source's extracted textures are produced from the texture folder being absent or
   empty**, not from `outputs`. A `.ktx2` has nowhere to carry a header, so nothing can key one;
-  `StaleImportedTextureSources` compares the *source's* stamp, which is unmoved on a fresh checkout
+  `GetStaleImportedTextureSources` compares the *source's* stamp, which is unmoved on a fresh checkout
   and so reports nothing. Without this the commit rule below would be false for `Textures/`.
   *Rejected: listing extracted textures in `outputs` — the extract names its files after the source
   images it finds, so the list would be a second claim about what it produced, able to disagree with

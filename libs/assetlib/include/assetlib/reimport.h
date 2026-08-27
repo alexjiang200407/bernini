@@ -5,10 +5,11 @@ namespace assetlib
 	/** What Reimport did for one copied source. */
 	struct ReimportedSource
 	{
-		std::string source;  // the copied source's mount key
+		// The copied source itself -- `meshes_src/<name>.glb`, not the `.bimport` beside it.
+		std::string source;
 
-		// The outputs produced, sorted. Empty when every one of them was already current -- which
-		// is what a second run of a settled project reports for every source.
+		// The entries of the document's `outputs` this run put back, sorted. Empty when every one of
+		// them was already on disk -- which is what a settled project reports for every source.
 		std::vector<std::string> written;
 
 		std::string
@@ -21,9 +22,9 @@ namespace assetlib
 
 		/** Outputs written across every source. */
 		[[nodiscard]] size_t
-		WrittenCount() const noexcept;
+		GetWrittenCount() const noexcept;
 
 		[[nodiscard]] size_t
-		FailedCount() const noexcept;
+		GetFailedCount() const noexcept;
 	};
 }
