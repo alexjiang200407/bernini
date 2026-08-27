@@ -26,6 +26,17 @@ namespace assetlib
 		kCount,
 	};
 
+	/**
+	 * Whether `type` is one of the three containers a mesh import produces together. They travel as a
+	 * group everywhere: regenerated as one, produced as one, counted as one.
+	 */
+	[[nodiscard]] constexpr bool
+	isGeometryContainer(const AssetType type) noexcept
+	{
+		return type == AssetType::kMesh || type == AssetType::kSkeleton ||
+		       type == AssetType::kAnimation;
+	}
+
 	/** Why one asset holds another alive. */
 	enum class RefKind : uint32_t
 	{

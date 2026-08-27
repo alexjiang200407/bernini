@@ -328,9 +328,7 @@ namespace assetlib
 				break;
 			}
 
-			const bool isGeometry = *type == AssetType::kMesh || *type == AssetType::kSkeleton ||
-			                        *type == AssetType::kAnimation;
-			if (isGeometry && regenerated.has_value() && *regenerated != diskBytes)
+			if (isGeometryContainer(*type) && regenerated.has_value() && *regenerated != diskBytes)
 				++report.geometryRebaked;
 
 			const std::vector<std::byte> bytes =

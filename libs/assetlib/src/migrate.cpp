@@ -94,8 +94,7 @@ namespace assetlib
 			for (const std::filesystem::path& path : paths)
 			{
 				const auto type = assetTypeFromExtension(path);
-				if (type != AssetType::kMesh && type != AssetType::kSkeleton &&
-				    type != AssetType::kAnimation)
+				if (!type.has_value() || !isGeometryContainer(*type))
 					continue;
 
 				try

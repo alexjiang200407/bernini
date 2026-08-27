@@ -182,8 +182,7 @@ namespace assetlib
 				continue;
 
 			const auto type = assetTypeFromExtension(entry.path());
-			if (type != AssetType::kMesh && type != AssetType::kSkeleton &&
-			    type != AssetType::kAnimation)
+			if (!type.has_value() || !isGeometryContainer(*type))
 				continue;
 
 			const std::string key =

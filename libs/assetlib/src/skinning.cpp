@@ -621,8 +621,15 @@ namespace assetlib
 			if (isEmpty(bounds[i]))
 				continue;
 
-			animations.posedBoxes.push_back(
-				PosedBox{ signature, bounds[i].min, bounds[i].max, indices[i] });
+			// Value-initialised, not aggregate-initialised: PosedBox carries four bytes of
+			// tail padding that are written to the file verbatim, and aggregate init leaves
+			// them indeterminate -- two runs then produce .banim files that differ by junk.
+			PosedBox box{};
+			box.sourceSignature = signature;
+			box.min             = bounds[i].min;
+			box.max             = bounds[i].max;
+			box.meshIndex       = indices[i];
+			animations.posedBoxes.push_back(box);
 		}
 	}
 
