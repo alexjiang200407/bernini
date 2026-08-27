@@ -97,6 +97,10 @@ namespace
 			return "bakes its radiance from";
 		case assetlib::RefKind::kMeshSkeleton:
 			return "skins to";
+		case assetlib::RefKind::kDocumentSkeleton:
+			return "binds its source's joints to";
+		case assetlib::RefKind::kDocumentOutput:
+			return "produced";
 		case assetlib::RefKind::kClipSkeleton:
 			return "was resampled against";
 		case assetlib::RefKind::kVatSource:
@@ -386,11 +390,12 @@ main(int argc, char** argv)
 
 	auto* migrate = app.add_subcommand(
 		"migrate",
-		"Re-save every container at what the project's current state says it should hold: stale "
-		"geometry regenerates from its copied source, and a rebind reaches its mesh. A file "
-		"that is already current is left untouched, so "
-		"running it twice rewrites nothing the second time; a file that cannot be read -- or a "
-		"stale group with no source -- is reported and skipped");
+		"Put every container the project's sources say should exist on disk, at what its current "
+		"state says it should hold: an absent one is produced from the source that names it, "
+		"stale geometry regenerates from its copied source, and a rebind reaches its mesh. A "
+		"file that is already current is left untouched, so running it twice rewrites nothing "
+		"the second time; a file that cannot be read -- or a stale group with no source -- is "
+		"reported and skipped");
 	addProject(migrate);
 	migrate->add_flag(
 		"-n,--dry-run",
@@ -530,18 +535,16 @@ main(int argc, char** argv)
 				assetlib::BMesh mesh = assetlib::toBMesh(imported);
 				assetlib::requireUniqueSubmeshNames(mesh);
 
-				const assetlib::AssetStore   importStore(dataRoot);
-				const assetlib::ImportTarget target{ name,
-					                                 sampleRate,
-					                                 importStore.KeyFor(textureDir) };
-				const assetlib::SourceRef    source = importStore.CopyImportedSource(input, target);
-				mesh.source                         = source;
+				const assetlib::AssetStore importStore(dataRoot);
+				assetlib::ImportTarget target{ name, sampleRate, importStore.KeyFor(textureDir) };
+				const assetlib::SourceRef source = importStore.CopyImportedSource(input, target);
+				mesh.source                      = source;
 
 				importStore.WriteTextures(imported, target.textureDir);
 
 				const auto derived = assetlib::generateTangents(mesh);
 
-				importStore.WriteImportedRig(
+				auto outputs = importStore.WriteImportedRig(
 					imported.skeleton,
 					imported.animations,
 					mesh,
@@ -550,6 +553,10 @@ main(int argc, char** argv)
 					true,
 					source);
 				importStore.Save(mesh, importStore.KeyFor(bmeshPath));
+
+				outputs.push_back(importStore.KeyFor(bmeshPath));
+				target.skeleton = mesh.skeleton;
+				target.outputs  = std::move(outputs);
 				importStore.WriteImportedDocument(target, &mesh);
 
 				if (derived.skipped > 0)

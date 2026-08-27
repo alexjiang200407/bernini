@@ -10,6 +10,7 @@
 #include <assetlib_structs/BMaterial.h>
 
 #include <core/file/LooseFileSystem.h>
+#include <core/file/file.h>
 
 #include "ref_paths.h"
 
@@ -91,7 +92,13 @@ namespace assetlib
 			addEdge(edges, referrer, skeleton, RefKind::kClipSkeleton);
 		}
 
-		/** The document holds its source and every material its bindings name. */
+		/**
+		 * The document holds its source, every material its bindings name, the rig it binds and
+		 * every container it produced. The last two are references like any other: nothing else
+		 * records them, so a rename that missed one would leave the document naming a file that is
+		 * gone -- and an `outputs` entry naming a key that no longer exists reads as *absent* to
+		 * the producing side, which would put the old file back.
+		 */
 		void
 		collectImportDocumentEdges(
 			std::vector<AssetRef>&         edges,
@@ -102,6 +109,11 @@ namespace assetlib
 			addEdge(edges, referrer, importedSourceKeyFor(referrer), RefKind::kImportedSource);
 			for (const MaterialBinding& binding : document.bindings)
 				addEdge(edges, referrer, binding.material, RefKind::kSubmeshMaterial);
+
+			if (!document.skeleton.empty())
+				addEdge(edges, referrer, document.skeleton, RefKind::kDocumentSkeleton);
+			for (const std::string& output : document.outputs)
+				addEdge(edges, referrer, output, RefKind::kDocumentOutput);
 		}
 
 		/** The three inputs a `.bvat` was baked from -- what a re-bake reads. */
@@ -432,12 +444,19 @@ namespace assetlib
 				grew = false;
 				for (const AssetRef& edge : graph.Edges())
 				{
+					// A document's claim on what it produced is not a reference in either
+					// direction: deleting the document must not sweep the containers it made, and
+					// its claim must not be what keeps one of them alive.
+					if (edge.kind == RefKind::kDocumentOutput)
+						continue;
+
 					if (!deleted.contains(edge.referrer) || deleted.contains(edge.target))
 						continue;
 
 					const std::span<const AssetRef> holders = graph.ReferrersOf(edge.target);
 					if (!std::ranges::all_of(holders, [&](const AssetRef& holder) {
-							return deleted.contains(holder.referrer);
+							return holder.kind == RefKind::kDocumentOutput ||
+						           deleted.contains(holder.referrer);
 						}))
 						continue;
 
@@ -489,16 +508,23 @@ namespace assetlib
 			referrers.assign(held.begin(), held.end());
 		}
 
-		// A bake's edges sweep the bake rather than block: see DeletionPlan::derived.
+		// A bake's edges sweep the bake rather than block (DeletionPlan::derived); a document's
+		// claim on what it produced rewrites that document instead (DeletionPlan::producers). Only
+		// an edge meaning "the referrer needs this" is a blocker.
 		for (const AssetRef& ref : referrers)
 		{
 			if (ref.kind == RefKind::kVatSource)
 				plan.derived.push_back(ref.referrer);
+			else if (ref.kind == RefKind::kDocumentOutput)
+				plan.producers.push_back(ref.referrer);
 			else
 				plan.blockers.push_back(ref);
 		}
-		std::ranges::sort(plan.derived);
-		plan.derived.erase(std::ranges::unique(plan.derived).begin(), plan.derived.end());
+		for (std::vector<std::string>* list : { &plan.derived, &plan.producers })
+		{
+			std::ranges::sort(*list);
+			list->erase(std::ranges::unique(*list).begin(), list->end());
+		}
 
 		return plan;
 	}
@@ -509,8 +535,21 @@ namespace assetlib
 		DeletionPlan plan = planDeletion(graph, target);
 
 		// A blocked deletion frees nothing, so there is no cascade to compute for one.
-		if (plan.Allowed())
-			plan.cascade = cascadeOf(graph, plan);
+		if (!plan.Allowed())
+			return plan;
+
+		plan.cascade = cascadeOf(graph, plan);
+
+		// The documents claiming what the cascade frees, not only what the caller named: a claim
+		// that outlives its file reads as *absent* to Reimport, which puts the file straight back,
+		// and a cascade removes files the caller never named.
+		for (const std::string& freed : plan.cascade)
+			for (const AssetRef& ref : graph.ReferrersOf(freed))
+				if (ref.kind == RefKind::kDocumentOutput)
+					plan.producers.push_back(ref.referrer);
+
+		std::ranges::sort(plan.producers);
+		plan.producers.erase(std::ranges::unique(plan.producers).begin(), plan.producers.end());
 
 		return plan;
 	}
@@ -577,6 +616,39 @@ namespace assetlib
 			std::filesystem::remove(GetDataRoot() / freed, ec);
 			if (ec)
 				return DeletionResult{ DeletionStatus::kFailed, ec.message() };
+		}
+
+		// Last, because it is the only step that survives a partial failure usefully: a document
+		// still claiming a file that is gone would have Reimport put it back, so the claim outlives
+		// the file only until here.
+		auto gone = std::unordered_set<std::string>();
+		if (plan.IsDirectory())
+			gone.insert(plan.contents.begin(), plan.contents.end());
+		else
+			gone.insert(plan.target);
+		gone.insert(plan.cascade.begin(), plan.cascade.end());
+		gone.insert(plan.derived.begin(), plan.derived.end());
+
+		for (const std::string& documentKey : plan.producers)
+		{
+			try
+			{
+				ImportDocument document = loadImportDocument(GetFiles(), documentKey);
+				const size_t   before   = document.outputs.size();
+				std::erase_if(document.outputs, [&gone](const std::string& output) {
+					return gone.contains(output);
+				});
+				if (document.outputs.size() == before)
+					continue;
+
+				core::file::write_atomic(
+					GetDataRoot() / documentKey,
+					AssetCodec<ImportDocument>::Serialize(document));
+			}
+			catch (const std::exception& error)
+			{
+				return DeletionResult{ DeletionStatus::kFailed, error.what() };
+			}
 		}
 
 		return DeletionResult{ DeletionStatus::kDeleted, {} };

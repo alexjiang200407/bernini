@@ -87,7 +87,7 @@ TEST_CASE("A source that has not changed has nothing to refresh", "[refresh][tex
 		30.0f,
 		c_TextureDir);
 
-	CHECK(project.Store().StaleImportedTextureSources().empty());
+	CHECK(project.Store().GetStaleImportedTextureSources().empty());
 }
 
 TEST_CASE("An edited source's textures are re-extracted over the routes", "[refresh][textures]")
@@ -113,7 +113,7 @@ TEST_CASE("An edited source's textures are re-extracted over the routes", "[refr
 		"Apple9_u1_v1_diffuse");
 
 	REQUIRE(
-		project.Store().StaleImportedTextureSources() ==
+		project.Store().GetStaleImportedTextureSources() ==
 		std::vector<std::string>{ "meshes_src/unit.glb" });
 
 	const TextureRefresh refresh = project.Store().RefreshImportedTextures("meshes_src/unit.glb");
@@ -135,7 +135,7 @@ TEST_CASE("An edited source's textures are re-extracted over the routes", "[refr
 
 	SECTION("and the source is no longer reported stale")
 	{
-		CHECK(project.Store().StaleImportedTextureSources().empty());
+		CHECK(project.Store().GetStaleImportedTextureSources().empty());
 		CHECK(project.Document().textureStamp != SourceStamp());
 	}
 
@@ -152,7 +152,7 @@ TEST_CASE("An import that recorded no texture folder refuses the refresh", "[ref
 	Project project("assetlib_texture_refresh_nofolder_test");
 	test::ImportUnitGroup(project.root, "assets/apples.glb");
 
-	CHECK(project.Store().StaleImportedTextureSources().empty());
+	CHECK(project.Store().GetStaleImportedTextureSources().empty());
 	CHECK_THROWS_WITH(
 		project.Store().RefreshImportedTextures("meshes_src/unit.glb"),
 		ContainsSubstring("records no texture folder"));
@@ -171,7 +171,7 @@ TEST_CASE("A source that is gone refuses the refresh rather than staling", "[ref
 
 	// What cannot be compared is not evidence of a change: a project whose sources were not
 	// checked out must not report every asset stale.
-	CHECK(project.Store().StaleImportedTextureSources().empty());
+	CHECK(project.Store().GetStaleImportedTextureSources().empty());
 	CHECK_THROWS_WITH(
 		project.Store().RefreshImportedTextures("meshes_src/unit.glb"),
 		ContainsSubstring("is not in this project"));

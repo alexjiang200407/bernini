@@ -22,6 +22,7 @@
 #include "import_bounds.h"
 #include "mounted_io.h"
 #include "ref_paths.h"
+#include "regen_group.h"
 
 namespace assetlib
 {
@@ -66,14 +67,6 @@ namespace assetlib
 			return checked;
 		}
 
-		/** A stale entry's source, re-imported in memory, with the reference that now keys it. */
-		struct RegeneratedGroup
-		{
-			imp::BMeshImport              import;
-			SourceRef                     ref;
-			std::optional<ImportDocument> document;
-		};
-
 		RegeneratedGroup
 		regenerate(const AssetStore& store, CheckedKey&& checked, std::string_view what)
 		{
@@ -98,50 +91,29 @@ namespace assetlib
 				what,
 				source.key);
 
-			// The copied source lives only on the loose layer -- pack excludes it -- and the glTF
-			// parser reads a file, so this is a read that must address the host. Textures are
-			// skipped: a regeneration never re-extracts, so decoding them would spend an
-			// import's whole cost on pixels nothing reads.
-			RegeneratedGroup group{
-				loadFromGltf(
-					store.ResolveWritePath(source.key),
-					{ .sampleRate = checked.document->sampleRate,
-				      .textures   = GltfTextures::kSkip }),
-				SourceRef(),
-				std::move(checked.document),
-			};
-			group.ref.key            = source.key;
-			group.ref.stamp          = stampOf(store.GetFiles(), source.key);
-			group.ref.parametersHash = parametersHashOf(*group.document);
-			return group;
+			return importGroup(store, source.key, std::move(*checked.document));
 		}
 
-		/** The `.bskel` whose header names `sourceKey` as its own source, or empty. */
-		std::string
-		groupSkeletonKey(const AssetStore& store, std::string_view sourceKey)
-		{
-			// A sourceless rig's key is empty too, so an empty ask would match the first one.
-			if (sourceKey.empty())
-				return {};
+	}
 
-			for (const std::string& path : store.GetFiles().Enumerate(c_SkeletonsDirectoryName))
-			{
-				if (extensionOf(path) != c_SkeletonExtension)
-					continue;
-				try
-				{
-					MountedFileReader reader(store.GetFiles(), path, "bskel");
-					if (cache::peekKey(reader, magic::c_BSkel, "bskel").source.key == sourceKey)
-						return path;
-				}
-				catch (const std::exception&)
-				{
-					// A rig whose header will not read is not this group's; the asset scan is
-					// where a broken one gets reported.
-				}
-			}
-			return {};
-		}
+	RegeneratedGroup
+	importGroup(const AssetStore& store, std::string_view sourceKey, ImportDocument&& document)
+	{
+		// The copied source lives only on the loose layer -- pack excludes it -- and the glTF
+		// parser reads a file, so this is a read that must address the host. Textures are skipped:
+		// a regeneration never re-extracts, so decoding them would spend an import's whole cost on
+		// pixels nothing reads.
+		RegeneratedGroup group{
+			loadFromGltf(
+				store.ResolveWritePath(sourceKey),
+				{ .sampleRate = document.sampleRate, .textures = GltfTextures::kSkip }),
+			SourceRef(),
+			std::move(document),
+		};
+		group.ref.key            = std::string(sourceKey);
+		group.ref.stamp          = stampOf(store.GetFiles(), sourceKey);
+		group.ref.parametersHash = parametersHashOf(*group.document);
+		return group;
 	}
 
 	bool
@@ -210,8 +182,7 @@ namespace assetlib
 			{
 				// From the frozen headers and the document alone -- what the refs would be after
 				// a regeneration, without paying one: a scan runs this over every mesh in the
-				// project after a token bump. The document is authoritative for the materials
-				// anyway, and the group's rig answers by source key.
+				// project after a token bump. The document is authoritative for both halves.
 				core::throw_runtime_error_if(
 					key.source.key.empty(),
 					"bmesh '{}': written at another bake revision and no source was ever "
@@ -226,10 +197,11 @@ namespace assetlib
 					path,
 					key.source.key);
 
+				const ImportDocument document = loadImportDocument(GetFiles(), documentKey);
+
 				MeshRefs refs;
-				refs.skeleton = groupSkeletonKey(*this, key.source.key);
-				for (const MaterialBinding& binding :
-				     loadImportDocument(GetFiles(), documentKey).bindings)
+				refs.skeleton = document.skeleton;
+				for (const MaterialBinding& binding : document.bindings)
 					refs.materials.push_back(binding.material);
 				return refs;
 			}
@@ -246,11 +218,19 @@ namespace assetlib
 			const cache::PeekedKey key = cache::peekKey(reader, magic::c_BAnim, "banim");
 			if (key.bakeToken != AssetCodec<AnimationSet>::c_BakeToken)
 			{
-				const std::string rig = groupSkeletonKey(*this, key.source.key);
+				const std::string documentKey = importDocumentKeyFor(key.source.key);
+				core::throw_runtime_error_if(
+					!GetFiles().Exists(documentKey),
+					"'{}': written at another bake revision and the import document beside '{}' "
+					"is gone, so the rig it names cannot be known",
+					path,
+					key.source.key);
+
+				const std::string rig = loadImportDocument(GetFiles(), documentKey).skeleton;
 				core::throw_runtime_error_if(
 					rig.empty(),
-					"'{}': written at another bake revision, and no rig of its source is in the "
-					"project to name; regenerate it from its source",
+					"'{}': written at another bake revision and its import document names no "
+					"skeleton; run `assetlib_cli migrate` to record the one it already uses",
 					path);
 				return rig;
 			}
@@ -287,12 +267,12 @@ namespace assetlib
 		current.mesh.source = group.ref;
 		if (isSkinned(current.mesh))
 		{
-			current.mesh.skeleton          = groupSkeletonKey(*this, group.ref.key);
+			current.mesh.skeleton          = group.document->skeleton;
 			current.mesh.skeletonSignature = skeletonSignature(group.import.skeleton);
 			core::throw_runtime_error_if(
 				current.mesh.skeleton.empty(),
-				"'{}': its regenerated source carries a rig but the project holds no .bskel of "
-				"that source; re-import the source",
+				"'{}': its source carries a rig but the import document beside it names no "
+				"skeleton; run `assetlib_cli migrate` to record the one it already uses",
 				path);
 		}
 		current.unboundBindings = applyBindings(current.mesh, group.document->bindings);
@@ -347,19 +327,12 @@ namespace assetlib
 		AnimationSet clips = group.import.animations;
 		clips.source       = group.ref;
 
-		std::string rigKey = groupSkeletonKey(*this, group.ref.key);
-		if (rigKey.empty())
-		{
-			// A clips-only group: no output of this source is a rig, so re-resolve by signature,
-			// exactly as the import that wrote this file did.
-			const std::filesystem::path rig = FindMatchingSkeleton(group.import.skeleton);
-			core::throw_runtime_error_if(
-				rig.empty(),
-				"'{}': no skeleton in this project matches its clips' rig any more; re-import "
-				"the rig first",
-				path);
-			rigKey = mountKeyFor(GetDataRoot(), rig);
-		}
+		const std::string rigKey = group.document->skeleton;
+		core::throw_runtime_error_if(
+			rigKey.empty(),
+			"'{}': its import document names no skeleton, so which rig its clips address cannot "
+			"be known; run `assetlib_cli migrate` to record the one it already uses",
+			path);
 		clips.skeleton = rigKey;
 
 		const Skeleton skeleton = LoadRegenSkeleton(rigKey);

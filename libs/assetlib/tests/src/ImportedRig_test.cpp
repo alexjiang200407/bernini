@@ -380,17 +380,12 @@ TEST_CASE("A rig is found by signature, not by name", "[importedrig]")
 	// what a VAT bake cannot fit a single bounding box around.
 	SECTION("two rigs with the same signature are ambiguous, not a coin toss")
 	{
-		assetlib::BMesh second;
-		const fs::path  twin =
+		// Written directly, because no importer makes one any more: an import binds a rig it
+		// matches rather than copying it. A project can still hold two from before that, or from
+		// a hand-placed file, and this is what it is told.
+		const fs::path twin =
 			root.Data() / assetlib::c_SkeletonsDirectoryName / "coyote_twin.bskel";
-		root.Store().WriteImportedRig(
-			imported.skeleton,
-			imported.animations,
-			second,
-			"Skeletons/coyote_twin.bskel",
-			TempRoot::BanimKey(),
-			/*writeClips*/ false,
-			assetlib::SourceRef{});
+		SaveAt(imported.skeleton, twin);
 
 		REQUIRE(fs::exists(twin));
 		CHECK_THROWS_AS(
@@ -477,6 +472,66 @@ TEST_CASE("Clips import on their own, attached to the rig already there", "[impo
 
 	// The point of the exercise: one rig, one mesh, many clip sets.
 	CHECK_FALSE(fs::exists(root.Data() / assetlib::c_MeshesDirectoryName / "coyote_run.bmesh"));
+}
+
+// The shared-humanoid case, and the bug it used to be: two sources skinned to one rig. The second
+// import used to fork a signature-matching duplicate, which then made every later clips-only import
+// ambiguous -- so the workflow above could not be reached at all once a second mesh existed.
+TEST_CASE("A second source skinned to a rig already here binds it", "[importedrig]")
+{
+	const TempRoot root;
+	const auto     imported = SkinnedImport();
+
+	assetlib::BMesh first = SkinnedQuad();
+	root.Store().WriteImportedRig(
+		imported.skeleton,
+		imported.animations,
+		first,
+		TempRoot::BskelKey(),
+		TempRoot::BanimKey(),
+		/*writeClips*/ false,
+		assetlib::SourceRef{});
+	REQUIRE(first.skeleton == TempRoot::BskelKey());
+
+	// A second source, offered a `.bskel` key of its own -- which it must decline.
+	assetlib::BMesh second = SkinnedQuad();
+	root.Store().WriteImportedRig(
+		imported.skeleton,
+		imported.animations,
+		second,
+		"Skeletons/second.bskel",
+		"Animations/second.banim",
+		/*writeClips*/ false,
+		assetlib::SourceRef{});
+
+	CHECK(second.skeleton == TempRoot::BskelKey());
+	CHECK_FALSE(fs::exists(root.Data() / "Skeletons/second.bskel"));
+	CHECK(second.skeletonSignature == first.skeletonSignature);
+
+	SECTION("so exactly one rig stands, and a clips-only import still resolves")
+	{
+		auto rigs = 0;
+		for (const auto& entry :
+		     fs::recursive_directory_iterator(root.Data() / assetlib::c_SkeletonsDirectoryName))
+			rigs += entry.path().extension() == assetlib::c_SkeletonExtension ? 1 : 0;
+		CHECK(rigs == 1);
+
+		const fs::path meshPath = root.Data() / assetlib::c_MeshesDirectoryName / "second.bmesh";
+		fs::create_directories(meshPath.parent_path());
+		SaveAt(second, meshPath);
+
+		// This is the throw the duplicate used to cause: two rigs matched, so which one the clips
+		// belonged to depended on directory order.
+		CHECK_NOTHROW(root.Store().WriteImportedClips(
+			imported.skeleton,
+			imported.animations,
+			"Animations/walk.banim",
+			assetlib::SourceRef{}));
+
+		const assetlib::AnimationSet clips =
+			LoadAt<assetlib::AnimationSet>(root.Data() / "Animations/walk.banim");
+		CHECK(clips.skeleton == TempRoot::BskelKey());
+	}
 }
 
 TEST_CASE("Clips with no rig to attach to are refused", "[importedrig]")

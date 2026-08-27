@@ -134,6 +134,8 @@ namespace assetlib
 	{
 		ImportDocument document = parametersOnly(target.sampleRate);
 		document.textureDir     = target.textureDir;
+		document.skeleton       = target.skeleton;
+		document.outputs        = target.outputs;
 
 		// From the copy, not the caller's reference: the document cannot then disagree with the
 		// source standing beside it.
@@ -321,7 +323,7 @@ namespace assetlib
 		return report;
 	}
 
-	void
+	std::vector<std::string>
 	AssetStore::WriteImportedRig(
 		const Skeleton&     skeleton,
 		const AnimationSet& animations,
@@ -332,24 +334,46 @@ namespace assetlib
 		const SourceRef&    source) const
 	{
 		if (skeleton.bones.empty())
-			return;
+			return {};
 
-		Skeleton rig = skeleton;
-		rig.source   = source;
-		Save(rig, bskelKey);
-		mesh.skeleton          = std::string(bskelKey);
+		auto outputs = std::vector<std::string>();
+
+		// A rig this project already holds is bound, not copied. Two `.bskel` of one signature make
+		// every later clips-only import ambiguous, and a joint index means the same bone in both --
+		// so a second source skinned to a rig already here has nothing to add by forking it.
+		const std::filesystem::path existing = FindMatchingSkeleton(skeleton);
+
+		if (existing.empty())
+		{
+			Skeleton rig = skeleton;
+			rig.source   = source;
+			Save(rig, bskelKey);
+			mesh.skeleton = std::string(bskelKey);
+			outputs.push_back(mesh.skeleton);
+		}
+		else
+		{
+			mesh.skeleton = KeyFor(existing);
+		}
 		mesh.skeletonSignature = skeletonSignature(skeleton);
 
 		if (!writeClips || animations.clips.empty())
-			return;
+			return outputs;
 
 		// The clip set names the rig by the same path the mesh does, so all three agree on which file
 		// the joint indices are addressed against.
 		AnimationSet clips = animations;
 		clips.skeleton     = mesh.skeleton;
 		clips.source       = source;
-		bakePosedBounds(clips, mesh, skeleton);
+
+		// Read back rather than swept from the copy in hand, and the same rule WriteImportedClips
+		// follows: a box measured against a bind pose the loader will not see is a box the loader
+		// cannot match. A reused rig makes that visible -- its pose is its own, not this source's.
+		bakePosedBounds(clips, mesh, Load<Skeleton>(mesh.skeleton));
 		Save(clips, banimKey);
+
+		outputs.emplace_back(banimKey);
+		return outputs;
 	}
 
 	std::filesystem::path
@@ -404,8 +428,9 @@ namespace assetlib
 			}
 
 			core::throw_runtime_error(
-				"this project holds {} skeletons with the same signature, so which one these clips "
-				"belong to is ambiguous: {}",
+				"this project holds {} skeletons with the same signature, so which one this "
+				"import binds to is ambiguous: {}. Delete the duplicates, keeping one, and "
+				"re-import what named the others",
 				matches.size(),
 				named);
 		}
@@ -449,7 +474,7 @@ namespace assetlib
 		}
 	}
 
-	void
+	std::string
 	AssetStore::WriteImportedClips(
 		const Skeleton&     skeleton,
 		const AnimationSet& animations,
@@ -486,6 +511,7 @@ namespace assetlib
 			Load<Skeleton>(clips.skeleton));
 
 		Save(clips, banimKey);
+		return clips.skeleton;
 	}
 
 	void

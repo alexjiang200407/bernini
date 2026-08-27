@@ -56,6 +56,10 @@ private:
 	void
 	OfferTextureRefresh();
 
+	/** Offers to rebuild the derived assets that are missing or out of date, as a project opens. */
+	void
+	OfferProjectUpdate();
+
 	void
 	SetActiveProject(assetlib::Project project);
 

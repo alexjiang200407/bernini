@@ -28,6 +28,8 @@
 #include <QMenuBar>
 #include <assetlib/AssetStore.h>
 #include <assetlib/asset_import.h>
+#include <assetlib/migrate.h>
+#include <assetlib/reimport.h>
 #include <assetlib/texture_prune.h>
 #include <bgl/IGraphics.h>
 #include <core/err/util.h>
@@ -526,7 +528,7 @@ MainWindow::OfferTextureRefresh()
 	const background::TaskResult scanned =
 		background::RunWithLoadingScreen(this, "Open Project", [&](background::Progress& progress) {
 			progress.Report(0, 0, "Checking imported sources...");
-			stale = m_Project->GetStore().StaleImportedTextureSources();
+			stale = m_Project->GetStore().GetStaleImportedTextureSources();
 		});
 
 	if (!scanned.Completed())
@@ -552,8 +554,8 @@ MainWindow::OfferTextureRefresh()
 							QString("%1 imported sources have changed since they were imported.")
 								.arg(stale.size()));
 	ask.setInformativeText(
-		"Re-extract their textures? The meshes and rigs already rebuild themselves; the textures "
-		"do not, so materials are drawing what the sources held at import.");
+		"Re-extract their textures? Materials are drawing what the sources held at import until "
+		"they are.");
 	ask.setDetailedText(sources.join('\n'));
 	ask.setStandardButtons(QMessageBox::Yes | QMessageBox::No);
 	ask.setDefaultButton(QMessageBox::Yes);
@@ -631,6 +633,92 @@ MainWindow::OfferTextureRefresh()
 			"delete it once nothing does.");
 		left.setDetailedText(superseded.join('\n'));
 		left.exec();
+	}
+}
+
+void
+MainWindow::OfferProjectUpdate()
+{
+	if (!m_Project)
+		return;
+
+	auto stale  = std::vector<std::string>();
+	auto absent = std::vector<std::string>();
+
+	// Header peeks and a dry run, so this is affordable as a project opens -- Migrate's own dry run
+	// would re-cook every stale group to answer the same question.
+	const background::TaskResult scanned =
+		background::RunWithLoadingScreen(this, "Open Project", [&](background::Progress& progress) {
+			progress.Report(0, 0, "Checking derived assets...");
+			stale = m_Project->GetStore().GetStaleGeometry();
+			for (const assetlib::ReimportedSource& source :
+		         m_Project->GetStore().Reimport(/*dryRun*/ true).sources)
+				absent.insert(absent.end(), source.written.begin(), source.written.end());
+		});
+
+	if (!scanned.Completed())
+	{
+		qWarning("Open Project: could not check the derived assets: %s", qPrintable(scanned.error));
+		return;
+	}
+
+	if (stale.empty() && absent.empty())
+		return;
+
+	auto listed = QStringList();
+	for (const std::string& key : absent) listed << QString("missing: %1").arg(key.c_str());
+	for (const std::string& key : stale) listed << QString("out of date: %1").arg(key.c_str());
+
+	auto ask = QMessageBox(this);
+	ask.setWindowTitle("Update Project");
+	ask.setIcon(QMessageBox::Question);
+	ask.setText(QString("%1 derived asset(s) are missing or out of date with their sources.")
+	                .arg(stale.size() + absent.size()));
+
+	// Loads refuse a stale container rather than re-cooking one per load, so this is not cosmetic:
+	// without it the viewport cannot open the assets below.
+	ask.setInformativeText(
+		"Rebuild them from their sources? Until they are rebuilt, anything that draws them will "
+		"report that the project needs updating.");
+	ask.setDetailedText(listed.join('\n'));
+	ask.setStandardButtons(QMessageBox::Yes | QMessageBox::No);
+	ask.setDefaultButton(QMessageBox::Yes);
+	if (ask.exec() != QMessageBox::Yes)
+		return;
+
+	auto failed = QStringList();
+
+	const background::TaskResult migrated = background::RunWithLoadingScreen(
+		this,
+		"Update Project",
+		[&](background::Progress& progress) {
+			progress.Report(0, 0, "Rebuilding derived assets...");
+
+			for (const assetlib::MigratedFile& file :
+		         m_Project->GetStore().Migrate(/*dryRun*/ false).files)
+				if (file.outcome == assetlib::MigratedFile::Outcome::kFailed)
+					failed << QString("%1: %2").arg(
+						QString::fromStdString(file.path.filename().string()),
+						QString::fromStdString(file.message));
+		});
+
+	if (!migrated.Completed())
+	{
+		qWarning("Update Project: could not rebuild: %s", qPrintable(migrated.error));
+		return;
+	}
+
+	if (!failed.isEmpty())
+	{
+		auto problem = QMessageBox(this);
+		problem.setWindowTitle("Update Project");
+		problem.setIcon(QMessageBox::Warning);
+		problem.setText("Some assets could not be rebuilt.");
+		problem.setInformativeText(
+			"Anything that draws one will report that the project needs updating until its "
+			"source is back.");
+		problem.setDetailedText(failed.join('\n'));
+		problem.exec();
 	}
 }
 
@@ -763,6 +851,7 @@ MainWindow::SetActiveProject(assetlib::Project project)
 
 	// Before the explorer roots and the thumbnails paint, so they paint the refreshed textures.
 	OfferTextureRefresh();
+	OfferProjectUpdate();
 
 	// Hand it over before the explorer is rooted: rooting it paints tiles, and each one that misses
 	// asks for a render straight away -- a material cannot be resolved without a manager.

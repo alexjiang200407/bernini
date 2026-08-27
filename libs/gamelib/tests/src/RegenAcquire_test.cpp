@@ -18,6 +18,7 @@
 #include <assetlib_structs/BMesh.h>
 #include <assetlib_structs/BVat.h>
 #include <bgl/IGraphics.h>
+#include <catch2/matchers/catch_matchers_string.hpp>
 #include <core/file/file.h>
 
 // The loads behind an acquire go through the regeneration seam: a stale container is served from
@@ -56,17 +57,12 @@ namespace
 	}
 }
 
-TEST_CASE("a stale clip set acquires regenerated, the disk untouched", "[regen][acquire]")
+TEST_CASE("a stale clip set is refused at acquire, and names the way out", "[regen][acquire]")
 {
 	DataRoot root("bernini_regen_acquire");
 	ImportRig(root.path);
 
 	const std::filesystem::path banim = root.path / "Animations/unit.banim";
-	FlipTokenByte(banim);
-	const auto stale = core::file::read_file_bytes(banim.string());
-
-	// The plain load refuses the file, so the acquire succeeding below is the seam at work.
-	CHECK_THROWS(LoadAt<assetlib::AnimationSet>(banim));
 
 	auto gfx = bgl::CreateGraphics(HeadlessOptions());
 	REQUIRE(gfx != nullptr);
@@ -74,16 +70,30 @@ TEST_CASE("a stale clip set acquires regenerated, the disk untouched", "[regen][
 	auto scene = gfx->CreateScene(bgl::SceneDesc());
 	auto view  = gfx->CreateSceneView(scene, 8);
 
-	auto assets = game::AssetManager(scene, root.path);
+	SECTION("current, it acquires")
+	{
+		auto       assets = game::AssetManager(scene, root.path);
+		const auto skinned =
+			assets.AcquireSkinnedMesh("Meshes/unit.bmesh", "Animations/unit.banim");
+		CHECK(skinned.geom.IsValid());
+		REQUIRE(skinned.clips.size() == 2);
+		CHECK(skinned.clips[0].name == "walk");
+	}
 
-	const auto skinned = assets.AcquireSkinnedMesh("Meshes/unit.bmesh", "Animations/unit.banim");
-	CHECK(skinned.geom.IsValid());
-	REQUIRE(skinned.clips.size() == 2);
-	CHECK(skinned.clips[0].name == "walk");
-	CHECK(skinned.clips[1].name == "spin");
+	SECTION("stale, it refuses rather than paying an import on every load")
+	{
+		FlipTokenByte(banim);
+		const auto stale = core::file::read_file_bytes(banim.string());
 
-	// In memory only: the stale file is migrate's to rewrite, never a load's.
-	CHECK(core::file::read_file_bytes(banim.string()) == stale);
+		auto assets = game::AssetManager(scene, root.path);
+		CHECK_THROWS_WITH(
+			assets.AcquireSkinnedMesh("Meshes/unit.bmesh", "Animations/unit.banim"),
+			Catch::Matchers::ContainsSubstring("assetlib_cli migrate"));
+
+		// Refused, not repaired: making the file current is migrate's, and a load that wrote one
+		// would be a load that writes.
+		CHECK(core::file::read_file_bytes(banim.string()) == stale);
+	}
 }
 
 TEST_CASE(

@@ -179,6 +179,10 @@ namespace editor
 		auto mesh     = std::optional<assetlib::BMesh>();
 		auto tangents = assetlib::TangentGenResult();
 
+		// Filled in on the worker, read on the GUI thread below where the document is written: only
+		// the writer knows whether it produced the rig or bound one already here.
+		auto rigOutputs = std::vector<std::string>();
+
 		const auto importStart = std::chrono::steady_clock::now();
 		double     workerMs    = 0.0;
 
@@ -232,7 +236,7 @@ namespace editor
 					const assetlib::SourceRef sourceRef = store.CopyImportedSource(source, target);
 					mesh->source                        = sourceRef;
 
-					store.WriteImportedRig(
+					rigOutputs = store.WriteImportedRig(
 						imported->skeleton,
 						imported->animations,
 						*mesh,
@@ -245,16 +249,17 @@ namespace editor
 				{
 					progress.Report(0, 0, QString("Baking the pose bounds..."));
 
-					const assetlib::AssetStore   store(dataRoot);
-					const assetlib::ImportTarget target{ sourceName,
-					                                     assetlib::c_DefaultSampleRate,
-					                                     textureDirKey };
-					const assetlib::SourceRef sourceRef = store.CopyImportedSource(source, target);
-					store.WriteImportedClips(
+					const assetlib::AssetStore store(dataRoot);
+					assetlib::ImportTarget     target{ sourceName,
+					                                   assetlib::c_DefaultSampleRate,
+					                                   textureDirKey };
+					const assetlib::SourceRef  sourceRef = store.CopyImportedSource(source, target);
+					target.skeleton                      = store.WriteImportedClips(
 						imported->skeleton,
 						imported->animations,
 						store.KeyFor(banimPath),
 						sourceRef);
+					target.outputs = { store.KeyFor(banimPath) };
 					store.WriteImportedDocument(target, nullptr);
 				}
 
@@ -292,9 +297,13 @@ namespace editor
 					const assetlib::AssetStore meshStore(dataRoot);
 					meshStore.Save(*mesh, meshStore.KeyFor(bmeshPath));
 
-					const assetlib::ImportTarget target{ sourceName,
-						                                 assetlib::c_DefaultSampleRate,
-						                                 textureDirKey };
+					assetlib::ImportTarget target{ sourceName,
+						                           assetlib::c_DefaultSampleRate,
+						                           textureDirKey };
+					rigOutputs.push_back(meshStore.KeyFor(bmeshPath));
+					target.skeleton = mesh->skeleton;
+					target.outputs  = std::move(rigOutputs);
+
 					meshStore.WriteImportedDocument(target, &*mesh);
 				}
 

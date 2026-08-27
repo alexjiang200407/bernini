@@ -22,8 +22,9 @@ namespace assetlib
 	 * branches merge it like code.
 	 *
 	 * Two halves with different duties: the `parameters` object changes what the importer computes,
-	 * so its serialized subtree is what the cache key hashes; `bindings`, `textureDir` and
-	 * `textureStamp` never key -- none of them changes what the importer computes. Keys a reader
+	 * so its serialized subtree is what the cache key hashes; `bindings`, `skeleton`, `outputs`,
+	 * `textureDir` and `textureStamp` never key -- none of them changes what the importer
+	 * computes. Keys a reader
 	 * does not know stay in the half they arrived in
 	 * (`extraParametersJson` / `extraJson`) and are written back on serialize, so a newer branch's
 	 * parameter still reaches the key through a reader that has never heard of it.
@@ -36,6 +37,12 @@ namespace assetlib
 		// they went (empty when none), and the source as it stood when they were written.
 		std::string textureDir;
 		SourceStamp textureStamp;
+
+		/** The `.bskel` this source's joint indices address; empty for a source with no rig. */
+		std::string skeleton;
+
+		/** Every container this source produced, as mount keys, sorted. See docs/asset_containers.md. */
+		std::vector<std::string> outputs;
 
 		std::vector<MaterialBinding> bindings;
 		std::string                  extraParametersJson = "{}";

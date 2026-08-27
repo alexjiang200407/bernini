@@ -33,6 +33,12 @@ namespace assetlib
 		std::string name;  // the copied source's stem: `meshes_src/<name>.glb`
 		float       sampleRate;
 		std::string textureDir;  // where the textures went; empty when none were extracted
+
+		// Filled in after the containers are written, since WriteImportedRig chooses the rig and an
+		// output is not a key until it is one: the `.bskel` the joints address, and every container
+		// this import wrote.
+		std::string              skeleton{};
+		std::vector<std::string> outputs{};
 	};
 
 	/**

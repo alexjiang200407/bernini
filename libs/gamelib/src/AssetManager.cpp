@@ -22,6 +22,22 @@ namespace game
 	namespace
 	{
 		/**
+		 * Refuses a geometry entry the project's sources have moved out from under, before anything
+		 * reads it. A load is a read: re-cooking one here costs an import, writes none of it back,
+		 * and pays that again on the next load. A read-only mount never refuses -- `pack` made its
+		 * keys true.
+		 */
+		void
+		RequireCurrent(const assetlib::AssetStore& store, std::string_view relPath)
+		{
+			core::throw_runtime_error_if(
+				store.GeometryIsStale(relPath),
+				"AssetManager: '{}' was cooked from a source that has changed since; run "
+				"`assetlib_cli migrate` on this project to bring it up to date",
+				relPath);
+		}
+
+		/**
 		 * The seam's mesh, its unbound bindings warned about: a scene load draws those submeshes
 		 * unlit, and warning is the strictest a load may be -- `migrate` failing the file is where
 		 * the report escalates.
@@ -29,6 +45,11 @@ namespace game
 		assetlib::BMesh
 		LoadRegenMeshWarned(const assetlib::AssetStore& store, std::string_view relPath)
 		{
+			RequireCurrent(store, relPath);
+
+			// Not stale, so this is the plain read -- taken through the seam because the import
+			// document's bindings still apply over it, and a rebind is a document edit no mesh
+			// file has to follow.
 			assetlib::RegenMesh current = store.LoadRegenMesh(relPath);
 			for (const std::string& submesh : current.unboundBindings)
 				logger::warn(
@@ -62,9 +83,10 @@ namespace game
 		 *
 		 * Two questions, because a geometry cache entry has two ways to go out of date. Its own
 		 * bytes moving is one, and its stamp catches that. Its *source* being re-exported is the
-		 * other, and nothing about the file changes then -- LoadRegen* regenerates in memory and
-		 * leaves it alone -- so a stamp alone would pin the pre-regeneration value forever.
-		 * GeometryIsStale is the store's own question about exactly that.
+		 * other, and nothing about the file changes then, so a stamp alone would hand back the
+		 * cached value forever. GeometryIsStale is the store's own question about exactly that,
+		 * and asking it here is what sends a since-staled entry back through `load` -- which
+		 * refuses it.
 		 */
 		template <std::movable T, ContainerLoader<T> Load>
 		const T&
@@ -556,6 +578,7 @@ namespace game
 	AssetManager::ReadSkeleton(const std::string_view path)
 	{
 		return ReadCached(m_Reads->skeletons, m_Store, path, [this](const std::string_view p) {
+			RequireCurrent(m_Store, p);
 			return m_Store.LoadRegenSkeleton(p);
 		});
 	}
@@ -564,6 +587,7 @@ namespace game
 	AssetManager::ReadAnimations(const std::string_view path)
 	{
 		return ReadCached(m_Reads->animations, m_Store, path, [this](const std::string_view p) {
+			RequireCurrent(m_Store, p);
 			return m_Store.LoadRegenAnimations(p);
 		});
 	}

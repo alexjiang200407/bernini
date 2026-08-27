@@ -32,15 +32,15 @@ namespace assetlib::test
 		generateTangents(mesh);
 		requireUniqueSubmeshNames(mesh);
 
-		const ImportTarget target{ "unit", sampleRate, std::string(textureDir) };
-		const AssetStore   store(dataRoot);
-		const SourceRef    source = store.CopyImportedSource(glb, target);
-		mesh.source               = source;
+		ImportTarget     target{ "unit", sampleRate, std::string(textureDir) };
+		const AssetStore store(dataRoot);
+		const SourceRef  source = store.CopyImportedSource(glb, target);
+		mesh.source             = source;
 
 		if (!textureDir.empty())
 			store.WriteTextures(imported, textureDir);
 
-		store.WriteImportedRig(
+		auto outputs = store.WriteImportedRig(
 			imported.skeleton,
 			imported.animations,
 			mesh,
@@ -53,6 +53,11 @@ namespace assetlib::test
 			static_cast<void>(attachMaterial(mesh, 0, material));
 
 		store.Save(mesh, "Meshes/unit.bmesh");
+
+		outputs.emplace_back("Meshes/unit.bmesh");
+		target.skeleton = mesh.skeleton;
+		target.outputs  = std::move(outputs);
+
 		store.WriteImportedDocument(target, &mesh);
 	}
 }

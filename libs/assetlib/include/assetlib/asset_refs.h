@@ -26,18 +26,31 @@ namespace assetlib
 		kCount,
 	};
 
+	/**
+	 * Whether `type` is one of the three containers a mesh import produces together. They travel as a
+	 * group everywhere: regenerated as one, produced as one, counted as one.
+	 */
+	[[nodiscard]] constexpr bool
+	isGeometryContainer(const AssetType type) noexcept
+	{
+		return type == AssetType::kMesh || type == AssetType::kSkeleton ||
+		       type == AssetType::kAnimation;
+	}
+
 	/** Why one asset holds another alive. */
 	enum class RefKind : uint32_t
 	{
-		kSubmeshMaterial,  // a .bmesh, or a .bimport's binding, names a .bmaterial
-		kBakedMap,         // a .bmaterial, .bsky or .benvl names a map its bake wrote
-		kChannelRoute,     // a .bmaterial routes a channel from a source texture
-		kEnvironmentPart,  // a .benv names the .bsky or .benvl it composes
-		kEnvSource,        // a .bsky or .benvl names the radiance its bake read
-		kMeshSkeleton,     // a .bmesh's joint indices address a .bskel
-		kClipSkeleton,     // a .banim's clips were resampled against a .bskel
-		kVatSource,        // a .bvat names the mesh, skeleton or clip set its bake read
-		kImportedSource,   // a .bimport names the .glb it was imported from
+		kSubmeshMaterial,   // a .bmesh, or a .bimport's binding, names a .bmaterial
+		kBakedMap,          // a .bmaterial, .bsky or .benvl names a map its bake wrote
+		kChannelRoute,      // a .bmaterial routes a channel from a source texture
+		kEnvironmentPart,   // a .benv names the .bsky or .benvl it composes
+		kEnvSource,         // a .bsky or .benvl names the radiance its bake read
+		kMeshSkeleton,      // a .bmesh's joint indices address a .bskel
+		kClipSkeleton,      // a .banim's clips were resampled against a .bskel
+		kVatSource,         // a .bvat names the mesh, skeleton or clip set its bake read
+		kImportedSource,    // a .bimport names the .glb it was imported from
+		kDocumentSkeleton,  // a .bimport names the .bskel its source's joint indices address
+		kDocumentOutput,    // a .bimport names a container its source produced
 	};
 
 	/** `referrer` names `target`. Both relative to the data root, in generic form. */
@@ -198,6 +211,16 @@ namespace assetlib
 		std::vector<std::string> derived;
 
 		/**
+		 * The `.bimport` documents naming anything this plan deletes -- the cascade included --
+		 * among their `outputs`, which DeleteAsset rewrites to drop those entries.
+		 *
+		 * Neither a blocker nor derived: a document does not *need* what it produced. But an
+		 * `outputs` entry naming a file that is gone reads as **absent** to Reimport, which would
+		 * put it straight back.
+		 */
+		std::vector<std::string> producers;
+
+		/**
 		 * For a directory: every file beneath it, which all go with it -- including files of no kind this
 		 * project stores anything about, because removing a directory removes what is in it. Empty for a
 		 * single asset, which takes nothing with it.
@@ -228,9 +251,11 @@ namespace assetlib
 	 * Whether `asset` -- a file, or a whole directory -- can be deleted, and if not, every edge that says
 	 * otherwise.
 	 *
-	 * A mesh always comes back allowed, with no special case for it: nothing in the project produces an
-	 * edge into a `.bmesh`. Deleting one therefore leaves the materials it named behind, which is the
-	 * point -- a material is a shareable asset, not a part of the mesh that happened to name it first.
+	 * A mesh always comes back allowed. The one edge into a `.bmesh` -- the `kDocumentOutput` its own
+	 * `.bimport` carries -- is a claim about what produced it, not a need, so it lands in `producers`
+	 * rather than blocking. Deleting a mesh therefore leaves the materials it named behind, which is
+	 * the point -- a material is a shareable asset, not a part of the mesh that happened to name it
+	 * first.
 	 *
 	 * A **directory** is held only by an edge reaching into it from outside (see ReferrersInto), and takes
 	 * everything beneath it. So `Meshes/` deletes and leaves every material, while a folder of textures a
@@ -259,7 +284,10 @@ namespace assetlib
 	{
 		kDeleted,  // gone; a file that had already vanished counts, as it does for the prune
 		kRefused,  // still referenced, and nothing was touched
-		kFailed,   // could not be removed: held open by another process, or an I/O error
+		// Could not be removed: held open by another process, or an I/O error. Also reported when
+		// the files went but a `producers` document could not be rewritten -- the claim is stale
+		// until the next deletion or migrate settles it.
+		kFailed,
 	};
 
 	struct DeletionResult

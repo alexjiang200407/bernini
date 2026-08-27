@@ -737,6 +737,63 @@ TEST_CASE(
 	}
 }
 
+// PosedBox is 36 bytes of members in a 40-byte struct, and the whole 40 go into the .banim
+// verbatim. Aggregate-initialising one leaves that tail indeterminate, so two runs write files
+// that differ by junk no reader looks at -- which breaks byte-comparison, and byte-comparison is
+// how `migrate` decides a file is current and how a produced project is checked against an
+// imported one. The poison below is what a real allocation supplies for free.
+TEST_CASE("A baked posed box carries no indeterminate padding", "[skinning][bounds]")
+{
+	SkinnedMesh fixture;
+	fixture.Add(
+		glm::vec3(-1.0f),
+		glm::vec3(0.0f, 0.0f, 1.0f),
+		{ { 0, 0, 0, 0 } },
+		{ { 65535, 0, 0, 0 } });
+
+	fixture.submesh.aabbMin = glm::vec3(-1.0f);
+	fixture.submesh.aabbMax = glm::vec3(1.0f);
+	fixture.mesh.submeshes.push_back(fixture.submesh);
+	fixture.mesh.meshes.push_back({ .firstSubmesh = 0, .submeshCount = 1, .nameOffset = 0 });
+
+	auto skeleton    = assetlib::Skeleton();
+	auto bone        = assetlib::Bone();
+	bone.bindPose    = { glm::vec3(0.0f), glm::quat(1.0f, 0.0f, 0.0f, 0.0f), glm::vec3(1.0f) };
+	bone.inverseBind = glm::mat4(1.0f);
+	bone.parent      = assetlib::c_InvalidIndex;
+	bone.nameOffset  = 0;
+	skeleton.bones.push_back(bone);
+
+	auto animations              = assetlib::AnimationSet();
+	animations.boneCount         = 1;
+	animations.skeletonSignature = assetlib::skeletonSignature(skeleton);
+
+	auto clip       = assetlib::AnimationClip();
+	clip.frameCount = 1;
+	clip.sampleRate = 30.0f;
+	animations.clips.push_back(clip);
+	animations.samples.push_back(
+		{ glm::vec3(0.0f), glm::quat(1.0f, 0.0f, 0.0f, 0.0f), glm::vec3(1.0f) });
+
+	// Reserved and poisoned, so the bake's push_back lands on storage that is anything but zero.
+	animations.posedBoxes.reserve(4);
+	std::memset(animations.posedBoxes.data(), 0xAB, 4 * sizeof(assetlib::PosedBox));
+
+	assetlib::bakePosedBounds(animations, fixture.mesh, skeleton);
+	REQUIRE(animations.posedBoxes.size() == 1);
+
+	constexpr size_t c_MembersEnd =
+		offsetof(assetlib::PosedBox, meshIndex) + sizeof(assetlib::PosedBox::meshIndex);
+	STATIC_REQUIRE(c_MembersEnd < sizeof(assetlib::PosedBox));
+
+	const auto* bytes = reinterpret_cast<const unsigned char*>(animations.posedBoxes.data());
+	for (size_t i = c_MembersEnd; i < sizeof(assetlib::PosedBox); ++i)
+	{
+		INFO("padding byte " << i);
+		CHECK(bytes[i] == 0);
+	}
+}
+
 TEST_CASE("A baked posed box answers only for the pairing it measured", "[skinning][bounds]")
 {
 	SkinnedMesh fixture;
@@ -815,9 +872,21 @@ TEST_CASE("A baked posed box answers only for the pairing it measured", "[skinni
 		CHECK_FALSE(assetlib::findPosedBounds(animations, fixture.mesh, skeleton)[0].has_value());
 	}
 
-	SECTION("a mesh entry the bake never saw finds nothing")
+	SECTION("a box naming a mesh entry this mesh does not have is ignored")
 	{
-		CHECK_FALSE(assetlib::findPosedBounds(animations, fixture.mesh, skeleton)[1].has_value());
+		// One optional per entry the mesh actually has, so there is no index 1 to ask about --
+		// reading one would be past the end of the vector, not a nullopt.
+		REQUIRE(assetlib::findPosedBounds(animations, fixture.mesh, skeleton).size() == 1);
+
+		// The guard that makes a box out of step with its mesh harmless: a re-export that dropped
+		// an entry leaves boxes behind naming it.
+		auto stray      = animations.posedBoxes.front();
+		stray.meshIndex = 7;
+		animations.posedBoxes.push_back(stray);
+
+		const auto boxes = assetlib::findPosedBounds(animations, fixture.mesh, skeleton);
+		REQUIRE(boxes.size() == 1);
+		CHECK(boxes[0].has_value());
 	}
 
 	SECTION("rebaking the same source replaces its entries rather than stacking them")

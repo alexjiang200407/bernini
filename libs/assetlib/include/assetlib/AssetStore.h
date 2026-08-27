@@ -16,6 +16,7 @@ namespace assetlib
 	struct ImportTarget;
 	struct MeshRefs;
 	struct MigrateReport;
+	struct ReimportReport;
 	struct PackDesc;
 	struct PackReport;
 	struct ReauthoredDocument;
@@ -242,9 +243,14 @@ namespace assetlib
 		 * no skeleton is one `Save` refuses outright; the clips are the half a user can decline.
 		 * Does nothing when `skeleton` has no bones, which is what a static mesh is.
 		 *
+		 * @return The containers it put on disk -- the `.bskel` only when this import is what wrote
+		 *         it, and the `.banim` when it wrote clips. A rig it bound rather than produced is
+		 *         named by `mesh.skeleton` and is deliberately not here: deleting this source must
+		 *         not take another source's rig with it.
+		 *
 		 * @throws std::runtime_error if either container cannot be written.
 		 */
-		void
+		std::vector<std::string>
 		WriteImportedRig(
 			const Skeleton&     skeleton,
 			const AnimationSet& animations,
@@ -259,10 +265,13 @@ namespace assetlib
 		 * mesh turned off does, and how a rig whose animations the artist exported one per file
 		 * gets all of them without a copy of the geometry each time.
 		 *
+		 * @return The mount key of the rig the clips were attached to -- what the import document
+		 *         then records, since nothing else can derive it.
+		 *
 		 * @throws std::runtime_error if there are no clips or no rig, or if no skeleton in the
 		 *         project matches the one they were authored against.
 		 */
-		void
+		std::string
 		WriteImportedClips(
 			const Skeleton&     skeleton,
 			const AnimationSet& animations,
@@ -405,7 +414,7 @@ namespace assetlib
 		 *         and "nothing to do" would be a silent wrong answer.
 		 */
 		[[nodiscard]] std::vector<std::string>
-		StaleImportedTextureSources() const;
+		GetStaleImportedTextureSources() const;
 
 		/**
 		 * Re-extracts `sourceKey`'s textures into the folder its import document records, so an
@@ -559,6 +568,44 @@ namespace assetlib
 		 */
 		[[nodiscard]] MigrateReport
 		Migrate(bool dryRun) const;
+
+		/**
+		 * Every container this project's sources say should exist but does not, produced onto
+		 * disk. Driven from the `.bimport` documents and the `outputs` each one names, because the
+		 * regeneration seam and `Migrate` are both keyed on the derived file already being there
+		 * and so can never produce one that is not.
+		 *
+		 * Absent only. A container that is on disk but stale is `Migrate`'s: it re-saves what it
+		 * can read, which is cheaper than a re-import, and one problem then has one report.
+		 *
+		 * What is written is what a fresh import would have written, byte for byte -- including
+		 * sweeping a clip set's boxes exactly as the writer that produced it did. Re-measuring
+		 * them across the project is `RebakePosedBounds`.
+		 *
+		 * A source's extracted textures are covered too, but by a different question: a `.ktx2`
+		 * carries no header, so `outputs` cannot name one and the only signal available is the
+		 * texture folder being absent or empty.
+		 *
+		 * Rigs, then meshes, then clips -- a clip set's posed boxes are measured against the
+		 * meshes on disk, and a mesh names the rig it binds.
+		 *
+		 * A source that cannot be re-imported is reported and skipped; the rest still run.
+		 *
+		 * @param dryRun Report what would be written without writing a byte.
+		 */
+		[[nodiscard]] ReimportReport
+		Reimport(bool dryRun) const;
+
+		/**
+		 * Every geometry container in this project whose source has moved out from under it, as
+		 * mount keys, sorted. Header peeks and one document hash apiece -- no regeneration -- so
+		 * this is the question a project can afford to ask as it opens, where `Migrate(dryRun)`
+		 * re-cooks each one to answer.
+		 *
+		 * Always empty on a read-only store, which trusts its keys.
+		 */
+		[[nodiscard]] std::vector<std::string>
+		GetStaleGeometry() const;
 
 		/**
 		 * Every `.banim` in this project given the posed culling boxes an import writes, for clip
