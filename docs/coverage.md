@@ -26,7 +26,9 @@ profiles, and report — a per-file summary on stdout and an HTML report under
 `build/macos-metal-coverage/coverage/html/`. Every executable and shared library from the codemodel
 is passed to `llvm-cov` as an `-object`, and the report is filtered to `libs/`, `apps/` and
 `examples/`. Stale profiles are deleted before the suites start — a merge across runs would mix
-them silently. A failing suite does not stop the report; the exit code carries the failure.
+them silently. A failing suite does not stop the report; the exit code carries the failure. Sharing
+the runner means `scripts_tests` runs here too — it can fail the command, but it is Python and
+contributes no coverage, so it never appears in the report.
 
 ## Diff coverage
 

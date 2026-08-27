@@ -29,3 +29,7 @@ clang-format==22.1.8
 
 # `just tidy` -- the naming rules in the .clang-tidy files.
 clang-tidy==22.1.8
+
+# The runner behind `just test`'s scripts_tests suite -- the cases under scripts/tests. Pure
+# Python, so this one is a library rather than a tool with a path in config.json.
+pytest==8.3.5

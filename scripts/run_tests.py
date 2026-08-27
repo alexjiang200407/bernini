@@ -2,7 +2,9 @@
 """Build and run every test suite, and report which of them passed.
 
 The suites are discovered, not listed: any executable target whose name ends in `_tests`
-is one, so a new suite is picked up by adding the target, with nothing to update here.
+is one, so a new suite is picked up by adding the target, with nothing to update here. The
+scripts here have a suite of their own -- `scripts_tests`, the pytest cases under
+scripts/tests -- which runs alongside them and reports in the same summary.
 
 Usage:
     python scripts/run_tests.py                    # every suite
@@ -26,8 +28,11 @@ Each suite is split across several processes by default (`--jobs`), using Catch2
 those flags falls back to a single process however many jobs are asked for.
 
 Each suite process is handed a temp directory of its own, so two checkouts -- or two `just test`
-runs on one machine -- do not delete each other's fixtures. See suite_env. `just run` does not do
-this, so two concurrent `just run` of one suite still collide.
+runs on one machine -- do not delete each other's fixtures. See suite_env.
+
+Only one suite runs on the machine at a time: the run phase holds the lock in util/lock.py, and
+a second `just test` -- or a `just run` of a suite -- waits for it rather than competing for the
+CPU. --no-lock opts out.
 
 Output from a *sharded* run is captured and printed one shard at a time, because N processes
 interleaved on one console shred the failure reports. A single-process run is not captured: it
@@ -41,6 +46,7 @@ To pass arguments to a single suite, use `just run` instead, which also forwards
 """
 
 import argparse
+import importlib.util
 import os
 import random
 import re
@@ -53,9 +59,13 @@ import time
 import util.cmake_tools as ct
 import util.config as cfg
 import util.lfs as lfs
+import util.lock as lock
 
-# What makes a target a test suite.
-SUITE_SUFFIX = "_tests"
+
+# The scripts' own suite. It is not a CMake target, so it is not discovered like the others,
+# but it is one more thing `just test` has to report green.
+SCRIPTS_SUITE = "scripts_tests"
+SCRIPTS_DIR = os.path.join(ct.REPO_ROOT, "scripts", "tests")
 
 
 # Shards per suite. Each one is a process holding a graphics device of its own, so this trades
@@ -162,12 +172,27 @@ def run_sharded(exe, forward, jobs, root, name):
     return worst
 
 
+def run_pytest(directory):
+    """Run the Python suite in `directory` through this interpreter; return its exit code.
+
+    pytest is a library rather than one of the tools config.json records a path to, so it is
+    run as a module of the interpreter already running this script.
+    """
+    if importlib.util.find_spec("pytest") is None:
+        print("error: pytest is not installed, so the Python suite cannot run. Install it with:\n"
+              "    pip install -r scripts/requirements.txt", file=sys.stderr)
+        return 1
+
+    return subprocess.run([sys.executable, "-m", "pytest", directory, "-q"],
+                          cwd=ct.REPO_ROOT).returncode
+
+
 def find_suites(build_dirs, config):
     """Every test executable, as {name: path}, preferring an artifact that exists on disk."""
     suites = {}
     for build_dir in build_dirs:
         for target in ct.load_targets(build_dir):
-            if target["type"] != "EXECUTABLE" or not target["name"].endswith(SUITE_SUFFIX):
+            if target["type"] != "EXECUTABLE" or not lock.is_suite(target["name"]):
                 continue
             if config and target["config"].lower() != config.lower():
                 continue
@@ -203,6 +228,9 @@ def main():
     parser.add_argument("--no-build", action="store_true",
                         help="Don't build first; run the binaries that are already there.")
     parser.add_argument("--list", action="store_true", help="Name the suites without running them.")
+    parser.add_argument("--no-lock", action="store_true",
+                        help="Don't wait for the machine-wide suite lock; run alongside whatever "
+                             "another checkout is already running.")
     parser.add_argument("-j", "--jobs", type=int, default=DEFAULT_JOBS,
                         help="Split each suite across this many concurrent processes "
                              f"(default: {DEFAULT_JOBS}). 1 runs a single process and streams "
@@ -243,10 +271,21 @@ def main():
               "    just build --configure", file=sys.stderr)
         return 2
 
-    suites = find_suites(build_dirs, cfg.artifact_config(args.config))
+    binaries = find_suites(build_dirs, cfg.artifact_config(args.config))
+    if not binaries:
+        print("warning: no test suite executables were found. They are built only when\n"
+              "BUILD_TESTS is on, which the debug presets set and the release ones do not.",
+              file=sys.stderr)
+
+    # The Python suite is neither a CMake target nor built, so it is added past that warning
+    # rather than gated behind it: a release preset can still run it.
+    suites = dict(binaries)
+    if os.path.isdir(SCRIPTS_DIR):
+        suites[SCRIPTS_SUITE] = SCRIPTS_DIR
+        suites = dict(sorted(suites.items()))
+
     if not suites:
-        print("No test suites found. They are built only when BUILD_TESTS is on, which the\n"
-              "debug presets set and the release ones do not.", file=sys.stderr)
+        print("error: no test suite executables, and no scripts/tests directory.", file=sys.stderr)
         return 1
 
     chosen = select(suites, args.filters)
@@ -260,52 +299,71 @@ def main():
             print(name)
         return 0
 
+    results = []
+
+    # The Python suite is not a Catch2 binary: it takes none of the forwarded filters, and none
+    # of the lock either, since it holds no graphics device and is over in seconds.
+    scripts_dir = chosen.pop(SCRIPTS_SUITE, None)
+    if scripts_dir and forward:
+        print(f"\n=== {SCRIPTS_SUITE} (skipped: it takes no Catch2 filter) ===", flush=True)
+    elif scripts_dir:
+        print(f"\n=== {SCRIPTS_SUITE} ===", flush=True)
+        started = time.monotonic()
+        results.append((SCRIPTS_SUITE, run_pytest(scripts_dir), time.monotonic() - started))
+
     # One root for the whole invocation, handed out one directory per suite process below. A
     # second `just test` on the machine gets a different one.
     temp_root = tempfile.mkdtemp(prefix="bernini-tests-")
 
-    results = []
+    # One hold for the whole run phase rather than one per suite: releasing between suites
+    # would let another checkout in halfway through, so both runs finish later than either
+    # would have alone.
     try:
-        for name, exe in chosen.items():
-            if not os.path.isfile(exe):
-                hint = f"Build it with: just build {name}" if args.no_build \
-                    else "The build reported success but wrote no binary there."
-                print(f"error: '{exe}' is not built. {hint}", file=sys.stderr)
-                results.append((name, 1, 0.0))
-                continue
+        with lock.suite_lock(enabled=bool(chosen) and not args.no_lock):
+            for name, exe in chosen.items():
+                if not os.path.isfile(exe):
+                    hint = f"Build it with: just build {name}" if args.no_build \
+                        else "The build reported success but wrote no binary there."
+                    print(f"error: '{exe}' is not built. {hint}", file=sys.stderr)
+                    results.append((name, 1, 0.0))
+                    continue
 
-            suite_forward = forward
+                suite_forward = forward
 
-            jobs = max(1, args.jobs)
-            if jobs > 1 and not supports_sharding(exe):
-                jobs = 1
+                jobs = max(1, args.jobs)
+                if jobs > 1 and not supports_sharding(exe):
+                    jobs = 1
 
-            # Never make more shards than there are tests to run: Catch2 fails a shard that draws
-            # zero ("No tests ran"), so a small suite -- or any forwarded tag filter that matches
-            # few tests -- would report a spurious failure. Clamping keeps sharding transparent to
-            # the exit code: the suite exits as its single-process run would, only faster. A count
-            # we cannot read (None) leaves jobs alone rather than serialising a large suite.
-            if jobs > 1:
-                matching = count_tests(exe, suite_forward)
-                if matching is not None:
-                    jobs = max(1, min(jobs, matching))
+                # Never make more shards than there are tests to run: Catch2 fails a shard that draws
+                # zero ("No tests ran"), so a small suite -- or any forwarded tag filter that matches
+                # few tests -- would report a spurious failure. Clamping keeps sharding transparent to
+                # the exit code: the suite exits as its single-process run would, only faster. A count
+                # we cannot read (None) leaves jobs alone rather than serialising a large suite.
+                if jobs > 1:
+                    matching = count_tests(exe, suite_forward)
+                    if matching is not None:
+                        jobs = max(1, min(jobs, matching))
 
-            label = f" (x{jobs})" if jobs > 1 else ""
-            print(f"\n=== {name}{label} ===", flush=True)
+                label = f" (x{jobs})" if jobs > 1 else ""
+                print(f"\n=== {name}{label} ===", flush=True)
 
-            started = time.monotonic()
-            if jobs > 1:
-                rc = run_sharded(exe, suite_forward, jobs, temp_root, name)
-            else:
-                rc = subprocess.run(
-                    [exe, *suite_forward],
-                    cwd=os.path.dirname(exe),
-                    env=suite_env(temp_root, name)).returncode
-            results.append((name, rc, time.monotonic() - started))
+                started = time.monotonic()
+                if jobs > 1:
+                    rc = run_sharded(exe, suite_forward, jobs, temp_root, name)
+                else:
+                    rc = subprocess.run(
+                        [exe, *suite_forward],
+                        cwd=os.path.dirname(exe),
+                        env=suite_env(temp_root, name)).returncode
+                results.append((name, rc, time.monotonic() - started))
 
     finally:
         # Best effort: a suite that left a file open on Windows must not turn a green run red.
         shutil.rmtree(temp_root, ignore_errors=True)
+
+    if not results:
+        print("\nnothing to run: the only suite selected takes no Catch2 filter.")
+        return 0
 
     # A failing suite does not stop the others: one full report beats finding out about the
     # next failure only after fixing this one.
