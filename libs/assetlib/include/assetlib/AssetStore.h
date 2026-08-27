@@ -199,6 +199,9 @@ namespace assetlib
 		 * reference the split does not cover. The store is the data root it reads and writes
 		 * relative to, so it is not passed one either.
 		 *
+		 * A material that routes nothing comes back untouched rather than failing: its factors are
+		 * the whole description, which is the same verdict BakeIsStale reaches about one.
+		 *
 		 * @throws std::runtime_error / Cancelled as bakeMaterial.
 		 */
 		void

@@ -160,7 +160,8 @@ namespace assetlib
 		 * Read up front because both halves of the bake need it: the key each map is named by, and the
 		 * `routeStamps` written back once the maps are current.
 		 *
-		 * @throws std::runtime_error if the material routes nothing, or a source cannot be read.
+		 * @throws std::runtime_error if a routed source cannot be read. Routing nothing is not an
+		 *         error: see bakeMaterial.
 		 */
 		std::unordered_map<std::string, SourceStamp>
 		stampRoutes(const PbrParams& pbr, const std::filesystem::path& dataRoot)
@@ -179,10 +180,6 @@ namespace assetlib
 
 				stamps.emplace(route.texture, stamp);
 			}
-
-			if (stamps.empty())
-				throw std::runtime_error(
-					"assetlib::bakeMaterial: the material routes no source textures");
 
 			return stamps;
 		}
@@ -385,6 +382,13 @@ namespace assetlib
 		PbrParams& pbr = material.pbr;
 
 		const std::unordered_map<std::string, SourceStamp> stamps = stampRoutes(pbr, desc.dataRoot);
+
+		// Routing nothing is a complete material, not a failed one: its factors are the whole
+		// description, and the triplet it may already carry is what draws it. Nothing to composite is
+		// nothing to do -- the same verdict bakeIsStale reaches -- so it must not fail a batch that a
+		// hundred other materials are in.
+		if (stamps.empty())
+			return;
 
 		SourceCache sources(desc.dataRoot);
 

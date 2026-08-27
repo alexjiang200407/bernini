@@ -540,7 +540,7 @@ TEST_CASE("bakeMaterial never decodes a source whose map is already there", "[bm
 	REQUIRE_FALSE(resolved.pbr.baseColorTexture.empty());
 	REQUIRE_FALSE(std::filesystem::exists(dir.path / resolved.pbr.baseColorTexture));
 
-	std::filesystem::create_directories(dir.path / "Textures");
+	std::filesystem::create_directories((dir.path / resolved.pbr.baseColorTexture).parent_path());
 	{
 		std::ofstream out(dir.path / resolved.pbr.baseColorTexture, std::ios::binary);
 		out << "ALREADY BAKED";
@@ -550,12 +550,43 @@ TEST_CASE("bakeMaterial never decodes a source whose map is already there", "[bm
 	REQUIRE(mat.pbr.baseColorTexture == resolved.pbr.baseColorTexture);
 }
 
-TEST_CASE("bakeMaterial rejects a material with nothing routed", "[bmaterial][bake]")
+TEST_CASE("bakeMaterial leaves a material that routes nothing alone", "[bmaterial][bake]")
 {
+	// groupIsRouted already says an unrouted *group* is a complete bake rather than a missing one.
+	// All three unrouted is the same verdict, so it must not fail -- a batch of a hundred materials
+	// would otherwise die on the one whose graph wires nothing, and never reach the rest.
 	const BakeDir dir("bernini_bake_empty");
 
-	BMaterial mat;
-	REQUIRE_THROWS_AS(StoreAt(dir.path).BakeMaterial(mat), std::runtime_error);
+	SECTION("nothing routed and nothing baked: the factors are the whole material")
+	{
+		BMaterial mat;
+		REQUIRE_NOTHROW(StoreAt(dir.path).BakeMaterial(mat));
+
+		CHECK(mat.pbr.baseColorTexture.empty());
+		CHECK(mat.pbr.ormTexture.empty());
+		CHECK(mat.pbr.normalTexture.empty());
+
+		// Not even a directory: there was nothing to put in one.
+		CHECK_FALSE(std::filesystem::exists(dir.path / "Derived/BakedTextures"));
+	}
+
+	SECTION("routes cleared after a bake: the triplet it draws from survives")
+	{
+		WriteSource(dir.path / "a.ktx2", 16, { { 200, 100, 50, 255 } });
+
+		BMaterial mat;
+		mat.pbr.routes[0] = { "a.ktx2", 0 };
+		REQUIRE_NOTHROW(StoreAt(dir.path).BakeMaterial(mat));
+
+		const std::string baked = mat.pbr.baseColorTexture;
+		REQUIRE_FALSE(baked.empty());
+
+		mat.pbr.routes = {};
+		REQUIRE_NOTHROW(StoreAt(dir.path).BakeMaterial(mat));
+
+		CHECK(mat.pbr.baseColorTexture == baked);
+		CHECK(std::filesystem::exists(dir.path / baked));
+	}
 }
 
 TEST_CASE("bakeMaterial accepts a Basis-supercompressed source", "[bmaterial][bake]")
