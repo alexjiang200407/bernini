@@ -5,6 +5,7 @@
 #include <assetlib/import_document.h>
 #include <core/err/util.h>
 
+#include "material_texture_refs.h"
 #include <assetlib/vat_bake.h>
 #include <assetlib_structs/Animation.h>
 #include <assetlib_structs/BEnv.h>
@@ -80,12 +81,10 @@ namespace assetlib
 
 			case AssetType::kMaterial:
 			{
-				BMaterial material            = AssetCodec<BMaterial>::Deserialize(bytes);
-				material.pbr.baseColorTexture = mapTarget(plan, material.pbr.baseColorTexture);
-				material.pbr.normalTexture    = mapTarget(plan, material.pbr.normalTexture);
-				material.pbr.ormTexture       = mapTarget(plan, material.pbr.ormTexture);
-				for (ChannelRoute& route : material.pbr.routes)
-					route.texture = mapTarget(plan, route.texture);
+				BMaterial material = AssetCodec<BMaterial>::Deserialize(bytes);
+				mapMaterialTextures(material, [&](const std::string& key) {
+					return mapTarget(plan, key);
+				});
 				return AssetCodec<BMaterial>::Serialize(material);
 			}
 
