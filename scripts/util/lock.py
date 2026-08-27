@@ -93,8 +93,10 @@ def read_holder(path=LOCK_PATH):
     Best effort by design: the record is written just after the lock is taken, so a waiter
     that reads in between sees a stale or empty one and must say nothing rather than lie.
     """
+    # Unbuffered: a buffered read asks for more than RECORD bytes in one call, which reaches
+    # the locked byte past the record, and a Windows lock is mandatory rather than advisory.
     try:
-        with open(path, "rb") as handle:
+        with open(path, "rb", buffering=0) as handle:
             record = handle.read(RECORD)
     except OSError:
         return None
