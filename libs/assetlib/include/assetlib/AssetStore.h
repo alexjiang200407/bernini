@@ -408,8 +408,12 @@ namespace assetlib
 		 *
 		 * @throws std::runtime_error if `textureDir` escapes the data root, or a write fails.
 		 * @throws Cancelled if `cancel` is signalled. What was written stays.
+		 *
+		 * @return The mount keys written, in image order -- what the naming rule decided, so a
+		 *         caller that needs them does not run it a second time. Naming an unnamed image
+		 *         hashes its pixels, and that is not free on a source carrying hundreds of MiB.
 		 */
-		void
+		std::vector<std::string>
 		WriteTextures(
 			const imp::BMeshImport&  mesh,
 			std::string_view         textureDir,

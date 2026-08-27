@@ -221,10 +221,7 @@ namespace assetlib
 			ResolveWritePath(sourceKey),
 			{ .cancel = cancel, .sampleRate = document.sampleRate });
 
-		WriteTextures(imported, document.textureDir, onProgress, cancel);
-
-		for (const std::string& name : importedTextureFileNames(imported))
-			refresh.written.push_back(document.textureDir + "/" + name);
+		refresh.written = WriteTextures(imported, document.textureDir, onProgress, cancel);
 		std::ranges::sort(refresh.written);
 
 		auto orphaned = std::vector<std::string>();

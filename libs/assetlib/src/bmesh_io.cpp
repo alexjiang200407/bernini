@@ -352,7 +352,7 @@ namespace assetlib
 		return names;
 	}
 
-	void
+	std::vector<std::string>
 	AssetStore::WriteTextures(
 		const imp::BMeshImport&  mesh,
 		std::string_view         textureDir,
@@ -383,6 +383,11 @@ namespace assetlib
 				outDir / names[i],
 				srgbTextures.contains(static_cast<uint32_t>(i)));
 		}
+
+		auto keys = std::vector<std::string>();
+		keys.reserve(names.size());
+		for (const std::string& name : names) keys.push_back(std::string(textureDir) + "/" + name);
+		return keys;
 	}
 
 	std::string
