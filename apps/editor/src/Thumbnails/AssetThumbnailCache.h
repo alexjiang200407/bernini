@@ -4,6 +4,7 @@
 #include <QThreadPool>
 
 #include "Render/Renderer.h"
+#include "Render/environment.h"
 #include "Thumbnails/StampedPixmapCache.h"
 
 #include <bgl/GeomHandle.h>
@@ -25,16 +26,9 @@ struct AssetThumbnailDesc
 	uint32_t dimension        = 256;
 	uint32_t initialInstances = 256;
 
-	std::string environmentMap;
-
-	// What the paths inside that `.benv` resolve against; see MaterialPreviewEnv::dataRoot.
-	std::filesystem::path dataRoot;
-
-	std::optional<float> exposureOverride;
-
-	// Matches the material preview's default, so a thumbnail and the preview it was generated from
-	// stand against the same backdrop. See MaterialPreviewEnv::skyMipLevelOverride.
-	std::optional<uint32_t> skyMipLevelOverride = 3;
+	// The same block the material preview takes, defaults included, so a thumbnail and the preview
+	// it was generated from cannot stand against different backdrops.
+	editor::EnvironmentApplyDesc env;
 };
 
 /**
@@ -254,7 +248,11 @@ private:
 	// detached.
 	Renderer::ViewportId m_FrameLoopId = 0;
 
-	AssetThumbnailDesc   m_Desc;
+	AssetThumbnailDesc m_Desc;
+
+	// The `.benv` bound and the slots it took, so nothing releases one the view still names.
+	editor::EnvironmentBinding m_Environment;
+
 	bgl::RenderTargetRef m_RenderTarget;
 	bgl::SceneViewRef    m_SceneView;
 	bgl::MaterialHandle  m_DefaultMaterial;

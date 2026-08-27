@@ -89,16 +89,16 @@ namespace
 		[[nodiscard]] AssetThumbnailDesc
 		Desc()
 		{
-			auto thumbSettings  = EditorConfig()["thumbnails"];
-			auto desc           = AssetThumbnailDesc();
-			desc.renderer       = &*renderer;
-			desc.environmentMap = thumbSettings["environmentMap"].GetOrDefault(std::string());
-			REQUIRE_FALSE(desc.environmentMap.empty());
+			auto thumbSettings      = EditorConfig()["thumbnails"];
+			auto desc               = AssetThumbnailDesc();
+			desc.renderer           = &*renderer;
+			desc.env.environmentMap = thumbSettings["environmentMap"].GetOrDefault(std::string());
+			REQUIRE_FALSE(desc.env.environmentMap.empty());
 
 			// Read from the same config the editor uses. It is no longer derived from the `.benv`'s
 			// path, so a caller that does not say goes unlit -- which is what this asserts against.
-			desc.dataRoot = thumbSettings["dataRoot"].GetOrDefault(std::string());
-			REQUIRE_FALSE(desc.dataRoot.empty());
+			desc.env.dataRoot = thumbSettings["dataRoot"].GetOrDefault(std::string());
+			REQUIRE_FALSE(desc.env.dataRoot.empty());
 
 			return desc;
 		}

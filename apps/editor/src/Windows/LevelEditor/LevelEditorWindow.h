@@ -11,16 +11,7 @@
  * questions. A level is judged on the world it is in, so its backdrop is drawn sharp and its
  * lighting is whatever the level's own environment says.
  */
-struct LevelEditorEnv
-{
-	std::string environmentMap;
-
-	// What the paths inside that `.benv` resolve against; see MaterialPreviewEnv::dataRoot.
-	std::filesystem::path dataRoot;
-
-	// Absent means the exposure the `.benv` carries, which is the value derived from its maps.
-	std::optional<float> exposureOverride;
-};
+using LevelEditorEnv = editor::EnvironmentApplyDesc;
 
 class LevelEditorWindow : public RenderTargetWindow
 {
@@ -33,6 +24,6 @@ public:
 		LevelEditorEnv         env    = {});
 
 private:
-	// What the environment bound, so nothing releases a slot the view still names.
-	editor::AppliedEnvironment m_Environment;
+	// The `.benv` bound and the slots it took, so nothing releases one the view still names.
+	editor::EnvironmentBinding m_Environment;
 };
