@@ -521,6 +521,10 @@ namespace assetlib
 		 * best-effort, and a machine that fails the restore too is reported with the first error
 		 * rather than a pretense of atomicity.
 		 *
+		 * `plan.to` may already exist when it holds the same bytes as `plan.from`: that is the file
+		 * having already moved, not a collision, and the rename collapses the pair and rewrites the
+		 * referrers onto the survivor. Any other existing `to` fails.
+		 *
 		 * @throws std::runtime_error if a referrer in `plan` is not a container that stores
 		 *         references -- a plan built by planRename never holds one, so that is a caller
 		 *         error, not weather.

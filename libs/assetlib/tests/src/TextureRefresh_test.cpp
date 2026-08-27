@@ -90,6 +90,46 @@ TEST_CASE("A source that has not changed has nothing to refresh", "[refresh][tex
 	CHECK(project.Store().GetStaleImportedTextureSources().empty());
 }
 
+TEST_CASE("A folder still holding a numbered texture is stale", "[refresh][textures]")
+{
+	// The one staleness a stamp cannot see. `textureStamp` answers whether the *source* moved; an
+	// unnamed image used to be named after its position and is now named after its content, and a
+	// folder holding one of the old names is a folder the current extract would not write. Without
+	// this the rule would change and no project would ever re-extract under it.
+	Project project("assetlib_texture_refresh_numbered_test");
+	test::ImportUnitGroup(
+		project.root,
+		"assets/apples.glb",
+		"Materials/red.bmaterial",
+		30.0f,
+		c_TextureDir);
+
+	const fs::path folder = project.root / c_TextureDir;
+	REQUIRE(project.Store().GetStaleImportedTextureSources().empty());
+
+	// A file the old rule would have written, and the same bytes as one the current rule did.
+	fs::copy_file(folder / "Apple1_u1_v1_diffuse.ktx2", folder / "tex0.ktx2");
+
+	CHECK(
+		project.Store().GetStaleImportedTextureSources() ==
+		std::vector<std::string>{ "meshes_src/unit.glb" });
+
+	SECTION("and the refresh follows it onto the file holding those bytes")
+	{
+		const TextureRefresh refresh =
+			project.Store().RefreshImportedTextures("meshes_src/unit.glb");
+
+		REQUIRE(refresh.moved.size() == 1);
+		CHECK(refresh.moved[0].from == std::string(c_TextureDir) + "/tex0.ktx2");
+		CHECK(refresh.moved[0].to == std::string(c_TextureDir) + "/Apple1_u1_v1_diffuse.ktx2");
+		CHECK(refresh.superseded.empty());
+		CHECK_FALSE(fs::exists(folder / "tex0.ktx2"));
+
+		// And having followed it, the folder is what the rule says it is.
+		CHECK(project.Store().GetStaleImportedTextureSources().empty());
+	}
+}
+
 TEST_CASE("An edited source's textures are re-extracted over the routes", "[refresh][textures]")
 {
 	Project project("assetlib_texture_refresh_edited_test");
@@ -125,13 +165,14 @@ TEST_CASE("An edited source's textures are re-extracted over the routes", "[refr
 	                              "textures_src/unit/Apple9_u1_v1_diffuse.ktx2" });
 
 	// Apple2 kept its file, so every material routed at it is now drawing the re-exported pixels
-	// with no route edit -- which is the whole point of naming by image. The renamed one left its
-	// old file behind, reported and not removed: a material may still route at it, and re-routing
-	// is the user's decision.
-	CHECK(
-		refresh.superseded ==
-		std::vector<std::string>{ "textures_src/unit/Apple1_u1_v1_diffuse.ktx2" });
-	CHECK(fs::exists(project.root / c_TextureDir / "Apple1_u1_v1_diffuse.ktx2"));
+	// with no route edit -- which is the whole point of naming by image. Apple1's old file held the
+	// same bytes as exactly one file this extract wrote, which is the image having been renamed
+	// rather than removed, so it is followed: the file moves and the routes move with it.
+	CHECK(refresh.superseded.empty());
+	CHECK(refresh.moved.size() == 1);
+	CHECK(refresh.moved[0].from == "textures_src/unit/Apple1_u1_v1_diffuse.ktx2");
+	CHECK(refresh.moved[0].to == "textures_src/unit/Apple9_u1_v1_diffuse.ktx2");
+	CHECK_FALSE(fs::exists(project.root / c_TextureDir / "Apple1_u1_v1_diffuse.ktx2"));
 
 	SECTION("and the source is no longer reported stale")
 	{
@@ -211,17 +252,19 @@ TEST_CASE("migrate re-extracts a moved source's textures", "[refresh][textures][
 		const MigrateReport report = project.Store().Migrate(false);
 
 		CHECK(report.Count(MigratedFile::Outcome::kFailed) == 0);
+
+		// The renamed image is followed rather than left beside its replacement, so the folder holds
+		// what the source holds and no material is left routed at a file the extract stopped writing.
+		CHECK(report.supersededTextures.empty());
+		CHECK(report.movedTextures.size() == 1);
 		CHECK(
-			report.supersededTextures ==
-			std::vector<std::string>{ "textures_src/unit/Apple1_u1_v1_diffuse.ktx2" });
-		CHECK(
-			project.Textures() == std::vector<std::string>{ "Apple1_u1_v1_diffuse.ktx2",
-		                                                    "Apple2_u1_v1_diffuse.ktx2",
-		                                                    "Apple9_u1_v1_diffuse.ktx2" });
+			project.Textures() ==
+			std::vector<std::string>{ "Apple2_u1_v1_diffuse.ktx2", "Apple9_u1_v1_diffuse.ktx2" });
 
 		// Running it twice rewrites nothing the second time, which is migrate's whole contract.
 		const MigrateReport again = project.Store().Migrate(false);
 		CHECK(again.Count(MigratedFile::Outcome::kRewritten) == 0);
 		CHECK(again.supersededTextures.empty());
+		CHECK(again.movedTextures.empty());
 	}
 }

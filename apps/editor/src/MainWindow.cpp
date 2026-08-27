@@ -563,6 +563,7 @@ MainWindow::OfferTextureRefresh()
 		return;
 
 	auto superseded = QStringList();
+	auto moved      = QStringList();
 	auto failed     = QStringList();
 
 	// The same cost an import pays, and the same reason it runs off the UI thread.
@@ -593,6 +594,11 @@ MainWindow::OfferTextureRefresh()
 
 					for (const std::string& left : result.superseded)
 						superseded << QString::fromStdString(left);
+
+					for (const assetlib::MovedTexture& move : result.moved)
+						moved << QString("%1 -> %2")
+									 .arg(QString::fromStdString(move.from))
+									 .arg(QString::fromStdString(move.to));
 				}
 				catch (const assetlib::Cancelled&)
 				{
@@ -618,6 +624,19 @@ MainWindow::OfferTextureRefresh()
 		problem.setText("Some sources could not be re-extracted.");
 		problem.setDetailedText(failed.join('\n'));
 		problem.exec();
+	}
+
+	if (!moved.isEmpty())
+	{
+		auto followed = QMessageBox(this);
+		followed.setWindowTitle("Refresh Textures");
+		followed.setIcon(QMessageBox::Information);
+		followed.setText("Some textures moved to the name the current rule gives them.");
+		followed.setInformativeText(
+			"Each held the same bytes as a file the extract wrote, so the materials routing at it "
+			"were re-routed and the old file removed. Nothing is drawing anything new.");
+		followed.setDetailedText(moved.join('\n'));
+		followed.exec();
 	}
 
 	if (!superseded.isEmpty())

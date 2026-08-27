@@ -243,6 +243,10 @@ namespace assetlib
 					report.supersededTextures.end(),
 					refresh.superseded.begin(),
 					refresh.superseded.end());
+				report.movedTextures.insert(
+					report.movedTextures.end(),
+					refresh.moved.begin(),
+					refresh.moved.end());
 			}
 			catch (const std::exception& error)
 			{
@@ -253,6 +257,17 @@ namespace assetlib
 		}
 
 		std::ranges::sort(report.supersededTextures);
+		std::ranges::sort(report.movedTextures, {}, &MovedTexture::from);
+
+		// The walk below was listed before the refresh ran, and a followed texture is no longer at
+		// the path it was listed under. Reading it would report a file this call itself moved.
+		std::erase_if(paths, [&](const std::filesystem::path& path) {
+			const std::string key =
+				normalizeRef(path.lexically_relative(GetDataRoot()).generic_string());
+			return std::ranges::any_of(report.movedTextures, [&](const MovedTexture& moved) {
+				return moved.from == key;
+			});
+		});
 
 		for (const std::filesystem::path& path : paths)
 		{

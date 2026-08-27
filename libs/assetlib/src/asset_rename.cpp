@@ -208,6 +208,25 @@ namespace assetlib
 		return plan;
 	}
 
+	namespace
+	{
+		/** Whether two files hold the same bytes. False when either cannot be read. */
+		bool
+		sameContents(const std::filesystem::path& a, const std::filesystem::path& b)
+		{
+			try
+			{
+				return std::filesystem::file_size(a) == std::filesystem::file_size(b) &&
+				       core::file::read_file_bytes(a.string()) ==
+				           core::file::read_file_bytes(b.string());
+			}
+			catch (const std::exception&)
+			{
+				return false;
+			}
+		}
+	}
+
 	RenameResult
 	AssetStore::RenameAsset(const RenamePlan& plan) const
 	{
@@ -220,7 +239,8 @@ namespace assetlib
 			return { RenameStatus::kFailed, "'" + plan.from + "' no longer exists" };
 
 		std::error_code ec;
-		if (std::filesystem::exists(toPath) && !std::filesystem::equivalent(fromPath, toPath, ec))
+		if (std::filesystem::exists(toPath) && !std::filesystem::equivalent(fromPath, toPath, ec) &&
+		    !sameContents(fromPath, toPath))
 			return { RenameStatus::kFailed, "'" + plan.to + "' already exists" };
 
 		// Read and rewrite every referrer before writing anything: a file that will not parse fails the

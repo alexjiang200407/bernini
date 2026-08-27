@@ -113,9 +113,21 @@ project opens.
 
 What makes a re-extract safe over a folder materials route into is the *name*: an extracted texture
 is named after the image it came from, so an edited image lands back on the file every route already
-holds, and an inserted one takes a new name rather than displacing its neighbours. A file the
-extract no longer produces is reported and left alone -- a material may still draw it, and both
-re-routing and deleting it are the user's.
+holds, and an inserted one takes a new name rather than displacing its neighbours. An image the
+source names nothing is named `tex_<content hash>` instead -- there is no name to keep stable, and
+the position it used to be numbered by is exactly what an insertion moves.
+
+A file the extract no longer produces is reported and left alone -- a material may still draw it,
+and both re-routing and deleting it are the user's. The one exception is a file that holds the same
+bytes as **exactly one** file the extract wrote: that is the same image under a different name, so
+the file is moved onto it and every material routed there is rewritten. Exactly one, because two
+identical files leave nothing to say which the routes meant, and guessing is the failure the naming
+rule exists to prevent.
+
+`textureStamp` answers whether the *source* moved and nothing answers whether the naming rule did,
+so a folder still holding a `tex<N>.ktx2` -- the name an unnamed image had before it was named after
+its content -- is stale on that alone. That is what makes the change reach a project at all, and it
+is a migration: once no folder holds one, the check has nothing left to find.
 
 ## Which of these a project commits
 

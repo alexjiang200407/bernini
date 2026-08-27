@@ -898,6 +898,10 @@ main(int argc, char** argv)
 						break;
 					}
 				}
+				for (const assetlib::MovedTexture& moved : report.movedTextures)
+					std::cout << "followed: " << moved.from << " -> " << moved.to
+							  << " (same bytes; the materials routing at it were rewritten)\n";
+
 				// Named and left where they are -- see docs/asset_containers.md.
 				for (const std::string& superseded : report.supersededTextures)
 					std::cout << "no longer extracted, still on disk: " << superseded << '\n';
