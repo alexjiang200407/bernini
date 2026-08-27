@@ -3,6 +3,7 @@
 #include <assetlib/Project.h>
 
 #include <QDir>
+#include <QFileInfo>
 #include <QFileSystemModel>
 #include <QRegularExpression>
 
@@ -38,6 +39,24 @@ namespace editor
 		const std::optional<assetlib::AssetType> type =
 			assetlib::assetTypeFromExtension(asset.toStdWString());
 		return type && *type == assetlib::AssetType::kMaterial;
+	}
+
+	bool
+	IsHeldOpen(const QStringList& heldOpen, const QString& absolute, bool isDirectory)
+	{
+		const auto holds = [&](const QString& open) {
+			if (open.isEmpty())
+				return false;
+
+			const QString resolved = QFileInfo(open).absoluteFilePath();
+
+			if (!isDirectory)
+				return QFileInfo(resolved) == QFileInfo(absolute);
+
+			return !QDir(absolute).relativeFilePath(resolved).startsWith("..");
+		};
+
+		return std::ranges::any_of(heldOpen, holds);
 	}
 
 	bool

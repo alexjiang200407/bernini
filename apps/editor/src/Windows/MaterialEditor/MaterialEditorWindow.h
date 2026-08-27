@@ -2,6 +2,8 @@
 
 #include <QWidget>
 
+#include "util/held_open_assets.h"
+
 #include <bgl/IGraphics.h>
 #include <bgl/IScene.h>
 
@@ -39,7 +41,7 @@ struct MaterialEditorWindowDesc
 	MaterialPreviewEnv previewEnv;
 };
 
-class MaterialEditorWindow : public QWidget
+class MaterialEditorWindow : public QWidget, public editor::IHoldsAssets
 {
 	Q_OBJECT
 
@@ -70,7 +72,7 @@ public:
 	 * preview shows them on. Deleting one behind the panel would not stick.
 	 */
 	[[nodiscard]] QStringList
-	HeldOpenPaths() const;
+	GetHeldOpenPaths() const override;
 
 	/**
 	 * Re-reads the open material from disk, for a caller that has just rewritten one -- a bake, from

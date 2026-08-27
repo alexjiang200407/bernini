@@ -62,14 +62,7 @@ AssetOperations::Bake(const QString& asset)
 bool
 AssetOperations::IsHeldOpen(const QString& absolute, bool isDirectory) const
 {
-	const auto holds = [&](const QString& open) {
-		if (!isDirectory)
-			return QFileInfo(open) == QFileInfo(absolute);
-
-		return !QDir(absolute).relativeFilePath(open).startsWith("..");
-	};
-
-	return std::ranges::any_of(m_AssetsHeldOpen(), holds);
+	return editor::IsHeldOpen(m_AssetsHeldOpen(), absolute, isDirectory);
 }
 
 void
@@ -99,7 +92,9 @@ AssetOperations::DeleteWithPlanner(
 			"Delete",
 			QString(
 				"%1 is open in an editor panel.\n\nClose it there first: the Material Editor's "
-				"next Save would write it back, and the Animation panel would go on offering it.")
+				"next Save would write it back, the Animation panel would go on offering it, and a "
+				"viewport lit by an environment is still drawing it -- which config.json's "
+				"environmentMap names unless a drop replaced it.")
 				.arg(
 					isDirectory ? QString("'%1' holds an asset that").arg(asset) :
 								  QString("'%1'").arg(asset)));

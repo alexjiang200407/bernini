@@ -21,6 +21,7 @@
 #include "Windows/MaterialEditor/MaterialEditorWindow.h"
 #include "Windows/RenderTarget/RenderTargetWindow.h"
 #include "util/frame_stats_text.h"
+#include "util/held_open_assets.h"
 #include "util/window_title.h"
 #include <assetlib/Project.h>
 
@@ -198,7 +199,8 @@ MainWindow::Build()
 
 		m_MaterialEditor  = new MaterialEditorWindow(this, std::move(matDesc));
 		m_AnimationEditor = new AnimationEditorWindow(this, std::move(animDesc));
-		m_Thumbnails      = std::make_unique<AssetThumbnailCache>(std::move(thumbDesc));
+		// Parented so the held-open walk reaches it: it is lit by a `.benv` like the viewports are.
+		m_Thumbnails = std::make_unique<AssetThumbnailCache>(std::move(thumbDesc), this);
 	}
 
 	setDockNestingEnabled(true);
@@ -246,11 +248,10 @@ MainWindow::Build()
 	m_ContentExplorerDock->setFeatures(
 		QDockWidget::DockWidgetMovable | QDockWidget::DockWidgetClosable);
 
-	// Asked at each deletion, so there is no copy of the answer to go stale.
+	// Asked at each deletion, so there is no copy of the answer to go stale, and walked rather than
+	// listed so a panel added later is covered without anyone remembering it.
 	m_ContentExplorer = new ContentExplorerWindow(m_ContentExplorerDock, [this] {
-		auto held = m_MaterialEditor->HeldOpenPaths();
-		held += m_AnimationEditor->HeldOpenPaths();
-		return held;
+		return editor::GetAssetsHeldOpen(this);
 	});
 	m_ContentExplorer->SetThumbnails(m_Thumbnails.get());
 

@@ -104,7 +104,7 @@ private:
 	/**
 	 * Whether an editor panel holds `absolute` -- or, when it is a directory, anything beneath it --
 	 * open. What every on-disk operation here is gated on, because an open graph's next Save would
-	 * write the old state straight back.
+	 * write the old state straight back, and a viewport lit by a `.benv` is still drawing it.
 	 */
 	[[nodiscard]] bool
 	IsHeldOpen(const QString& absolute, bool isDirectory) const;

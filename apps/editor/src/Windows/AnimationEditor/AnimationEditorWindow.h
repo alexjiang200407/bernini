@@ -3,6 +3,8 @@
 #include <QElapsedTimer>
 #include <QWidget>
 
+#include "util/held_open_assets.h"
+
 #include "Windows/AnimationEditor/AnimationPreviewWindow.h"
 
 class QDragEnterEvent;
@@ -37,7 +39,7 @@ struct AnimationEditorWindowDesc
  * playing, and every change of the clock lands in the preview via SetTime. The preview's
  * instances are always {clip, phase 0, rate 1}, so the transport's seconds are the whole story.
  */
-class AnimationEditorWindow : public QWidget
+class AnimationEditorWindow : public QWidget, public editor::IHoldsAssets
 {
 	Q_OBJECT
 
@@ -68,7 +70,7 @@ public:
 	 * disk records that the panel has it.
 	 */
 	[[nodiscard]] QStringList
-	HeldOpenPaths() const;
+	GetHeldOpenPaths() const override;
 
 	/**
 	 * The timeline slider position for a clock reading, and back: the slider is `tickCount`
