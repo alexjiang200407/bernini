@@ -40,7 +40,7 @@ TEST_CASE("Renaming a texture rewrites the graph that compiles into its routes",
 	// quietly undoes the rename the next time anyone opens the material -- routes and graph
 	// disagree, the graph wins, and the material ends up pointing at a file that is gone.
 	const DataRoot root("bernini_rename_material_graph");
-	WriteSource(root.path / "textures_src" / "a.ktx2", { 255, 0, 0, 255 });
+	WriteSource(root.path / "textures_src" / "a.ktx2", { { 255, 0, 0, 255 } });
 
 	BMaterial material   = BakeAndSave(root, "m.bmaterial", "textures_src/a.ktx2");
 	material.editorGraph = R"({"nodes":[{"id":1,"internal-data":{"model-name":"Texture",)"
@@ -64,7 +64,7 @@ TEST_CASE("Scanning a material with a real board terminates", "[assetrename]")
 	// blew the stack, and every caller of it went down with it, the editor opening a project
 	// included. There is no assertion to make beyond arriving here.
 	const DataRoot root("bernini_refs_material_graph_scalars");
-	WriteSource(root.path / "textures_src" / "a.ktx2", { 255, 255, 0, 255 });
+	WriteSource(root.path / "textures_src" / "a.ktx2", { { 255, 255, 0, 255 } });
 
 	BMaterial material   = BakeAndSave(root, "m.bmaterial", "textures_src/a.ktx2");
 	material.editorGraph = R"({"connections":[{"inNodeId":0,"inPortIndex":2,"outNodeId":2}],)"
@@ -84,8 +84,8 @@ TEST_CASE("A texture only the graph names is still referenced", "[assetrename]")
 	// user can see and re-wire. Seeing only `routes` would let the file be deleted out from under a
 	// board nobody is looking at.
 	const DataRoot root("bernini_rename_material_graph_only");
-	WriteSource(root.path / "textures_src" / "wired.ktx2", { 255, 0, 0, 255 });
-	WriteSource(root.path / "textures_src" / "loose.ktx2", { 0, 0, 255, 255 });
+	WriteSource(root.path / "textures_src" / "wired.ktx2", { { 255, 0, 0, 255 } });
+	WriteSource(root.path / "textures_src" / "loose.ktx2", { { 0, 0, 255, 255 } });
 
 	BMaterial material   = BakeAndSave(root, "m.bmaterial", "textures_src/wired.ktx2");
 	material.editorGraph = R"({"nodes":[{"id":1,"internal-data":{"model-name":"Texture",)"
@@ -116,7 +116,7 @@ TEST_CASE("A rename changes only the key it moves in the board", "[assetrename]"
 	// two would then take turns rewriting the file on every rename and every save. Only the key
 	// moves.
 	const DataRoot root("bernini_rename_material_graph_bytes");
-	WriteSource(root.path / "textures_src" / "a.ktx2", { 12, 34, 56, 255 });
+	WriteSource(root.path / "textures_src" / "a.ktx2", { { 12, 34, 56, 255 } });
 
 	const std::string graph =
 		R"({"nodes":[{"id":1, "zz":1.5, "aa":[false,null],)"
@@ -145,7 +145,7 @@ TEST_CASE("A graph that will not parse survives a rename unchanged", "[assetrena
 	// Its schema is the editor's and this knows none of it. Text that is not JSON at all is left
 	// exactly as it stands rather than dropped, which would lose the node layout.
 	const DataRoot root("bernini_rename_material_graph_bad");
-	WriteSource(root.path / "textures_src" / "a.ktx2", { 0, 255, 0, 255 });
+	WriteSource(root.path / "textures_src" / "a.ktx2", { { 0, 255, 0, 255 } });
 
 	BMaterial material   = BakeAndSave(root, "m.bmaterial", "textures_src/a.ktx2");
 	material.editorGraph = "not json at all";

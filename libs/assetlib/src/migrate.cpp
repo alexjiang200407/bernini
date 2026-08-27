@@ -272,10 +272,10 @@ namespace assetlib
 			try
 			{
 				BMaterial material = Load<BMaterial>(key);
-				for (const auto& [texture, kind] :
+				for (const auto& reference :
 				     mapMaterialTextures(material, [](const std::string& k) { return k; }))
-					if (!Exists(texture))
-						report.danglingTextures.push_back(key + ": " + texture);
+					if (!Exists(reference.first))
+						report.danglingTextures.push_back(key + ": " + reference.first);
 			}
 			catch (const std::exception&)
 			{
