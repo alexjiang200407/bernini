@@ -143,6 +143,98 @@ namespace assetlib
 				pitch);
 		}
 
+		struct VatHeader
+		{
+			BVat     vat;
+			uint32_t frames;  // real frames, padding rows excluded -- one palette each, per bone
+		};
+
+		/**
+		 * Everything about a bake that does not depend on a texel: the inputs validated, the
+		 * dimensions, and the tables addressing them. Both the bake and `vatBakeSize` come through
+		 * here, so the padding row, the texture cap and every refusal are stated once.
+		 *
+		 * @throws std::runtime_error on what bakeVat documents.
+		 */
+		VatHeader
+		layOutVat(const BMesh& mesh, const Skeleton& skeleton, const AnimationSet& animations)
+		{
+			validateSkeleton(skeleton);
+			validateAnimationSet(animations);
+
+			if (!isSkinned(mesh))
+				throw_runtime_error(
+					"vat: no submesh carries joint indices, so there is nothing to animate");
+
+			if (!meshMatchesSkeleton(mesh, skeleton))
+				throw_runtime_error(
+					"vat: the mesh was cooked against a different rig (mesh signature {:016x}, "
+					"skeleton {:016x})",
+					mesh.skeletonSignature,
+					skeletonSignature(skeleton));
+
+			if (!animationsMatchSkeleton(animations, skeleton))
+				throw_runtime_error(
+					"vat: the clips were resampled against a different rig (clip signature "
+					"{:016x}, skeleton {:016x})",
+					animations.skeletonSignature,
+					skeletonSignature(skeleton));
+
+			if (animations.clips.empty())
+				throw_runtime_error(
+					"vat: the clip set holds no clips, so there is nothing to bake");
+
+			VatHeader header{};
+			BVat&     vat         = header.vat;
+			vat.boneCount         = static_cast<uint32_t>(skeleton.bones.size());
+			vat.skeletonSignature = animations.skeletonSignature;
+
+			uint64_t columns = 0;
+			for (const Submesh& submesh : mesh.submeshes)
+			{
+				vat.columns.push_back({ static_cast<uint32_t>(columns), submesh.vertexCount });
+				columns += submesh.vertexCount;
+			}
+
+			uint64_t rows   = 0;
+			uint64_t frames = 0;
+			for (const AnimationClip& clip : animations.clips)
+			{
+				VatClip baked{};
+				baked.nameOffset   = vat.stringPool.add(animations.stringPool.at(clip.nameOffset));
+				baked.firstRow     = static_cast<uint32_t>(rows);
+				baked.frameCount   = clip.frameCount;
+				baked.firstPalette = static_cast<uint32_t>(frames * vat.boneCount);
+				baked.sampleRate   = clip.sampleRate;
+				baked.duration     = clip.duration;
+				baked.loop         = clip.loop;
+				vat.clips.push_back(baked);
+
+				rows += clip.frameCount + 1;
+				frames += clip.frameCount;
+			}
+
+			if (columns > c_MaxVatTextureDim)
+				throw_runtime_error(
+					"vat: {} vertex columns exceed the {} a texture can hold -- bake from a mesh "
+					"with fewer vertices",
+					columns,
+					c_MaxVatTextureDim);
+
+			if (rows > c_MaxVatTextureDim)
+				throw_runtime_error(
+					"vat: {} padded frame rows across {} clip(s) exceed the {} a texture can hold "
+					"-- bake fewer or shorter clips",
+					rows,
+					animations.clips.size(),
+					c_MaxVatTextureDim);
+
+			vat.width     = static_cast<uint32_t>(columns);
+			vat.height    = static_cast<uint32_t>(rows);
+			header.frames = static_cast<uint32_t>(frames);
+			return header;
+		}
+
 	}
 
 	std::string
@@ -169,79 +261,31 @@ namespace assetlib
 		return path;
 	}
 
+	VatSize
+	vatBakeSize(const BMesh& mesh, const Skeleton& skeleton, const AnimationSet& animations)
+	{
+		const VatHeader header = layOutVat(mesh, skeleton, animations);
+		const BVat&     vat    = header.vat;
+
+		const uint64_t texels = uint64_t(vat.width) * vat.height;
+
+		return VatSize{
+			.width      = vat.width,
+			.height     = vat.height,
+			.clipCount  = static_cast<uint32_t>(vat.clips.size()),
+			.frameCount = header.frames,
+			.boneCount  = vat.boneCount,
+			.bytes      = texels * (c_PositionTexelBytes + c_NormalTexelBytes) +
+			              uint64_t(header.frames) * vat.boneCount * sizeof(glm::mat4),
+		};
+	}
+
 	BVat
 	bakeVat(const BMesh& mesh, const Skeleton& skeleton, const AnimationSet& animations)
 	{
-		validateSkeleton(skeleton);
-		validateAnimationSet(animations);
-
-		if (!isSkinned(mesh))
-			throw_runtime_error(
-				"vat: no submesh carries joint indices, so there is nothing to animate");
-
-		if (!meshMatchesSkeleton(mesh, skeleton))
-			throw_runtime_error(
-				"vat: the mesh was cooked against a different rig (mesh signature {:016x}, "
-				"skeleton {:016x})",
-				mesh.skeletonSignature,
-				skeletonSignature(skeleton));
-
-		if (!animationsMatchSkeleton(animations, skeleton))
-			throw_runtime_error(
-				"vat: the clips were resampled against a different rig (clip signature {:016x}, "
-				"skeleton {:016x})",
-				animations.skeletonSignature,
-				skeletonSignature(skeleton));
-
-		if (animations.clips.empty())
-			throw_runtime_error("vat: the clip set holds no clips, so there is nothing to bake");
-
-		BVat vat;
-		vat.boneCount         = static_cast<uint32_t>(skeleton.bones.size());
-		vat.skeletonSignature = animations.skeletonSignature;
-
-		uint64_t columns = 0;
-		for (const Submesh& submesh : mesh.submeshes)
-		{
-			vat.columns.push_back({ static_cast<uint32_t>(columns), submesh.vertexCount });
-			columns += submesh.vertexCount;
-		}
-
-		uint64_t rows   = 0;
-		uint64_t frames = 0;
-		for (const AnimationClip& clip : animations.clips)
-		{
-			VatClip baked{};
-			baked.nameOffset   = vat.stringPool.add(animations.stringPool.at(clip.nameOffset));
-			baked.firstRow     = static_cast<uint32_t>(rows);
-			baked.frameCount   = clip.frameCount;
-			baked.firstPalette = static_cast<uint32_t>(frames * vat.boneCount);
-			baked.sampleRate   = clip.sampleRate;
-			baked.duration     = clip.duration;
-			baked.loop         = clip.loop;
-			vat.clips.push_back(baked);
-
-			rows += clip.frameCount + 1;
-			frames += clip.frameCount;
-		}
-
-		if (columns > c_MaxVatTextureDim)
-			throw_runtime_error(
-				"vat: {} vertex columns exceed the {} a texture can hold -- bake from a mesh with "
-				"fewer vertices",
-				columns,
-				c_MaxVatTextureDim);
-
-		if (rows > c_MaxVatTextureDim)
-			throw_runtime_error(
-				"vat: {} padded frame rows across {} clip(s) exceed the {} a texture can hold -- "
-				"bake fewer or shorter clips",
-				rows,
-				animations.clips.size(),
-				c_MaxVatTextureDim);
-
-		vat.width  = static_cast<uint32_t>(columns);
-		vat.height = static_cast<uint32_t>(rows);
+		VatHeader      header = layOutVat(mesh, skeleton, animations);
+		BVat&          vat    = header.vat;
+		const uint64_t frames = header.frames;
 
 		// The bind pose is the identity skin: the frame every baked tangent's twist is measured from.
 		auto bindRow = std::vector<SkinnedVertex>();
@@ -315,28 +359,61 @@ namespace assetlib
 
 		vat.positionsKtx2 = encodeKTX2(positions);
 		vat.normalsKtx2   = encodeKTX2(normals);
-		return vat;
+		return std::move(vat);
+	}
+
+	namespace
+	{
+		struct VatInputs
+		{
+			BMesh        mesh;
+			Skeleton     skeleton;
+			AnimationSet animations;
+		};
+
+		/**
+		 * The three files a bake reads, through the regeneration seam rather than the plain loads: a
+		 * bake over a stale group would otherwise freeze the stale geometry into a texture the
+		 * freshness rule then calls current.
+		 *
+		 * @throws std::runtime_error if an input cannot be read, or if the mesh names no skeleton --
+		 *         a static mesh fails the in-memory bake anyway, and refusing here names the actual
+		 *         gap instead of failing to open a file with no name.
+		 */
+		VatInputs
+		loadVatInputs(const AssetStore& store, const VatBakeDesc& desc)
+		{
+			BMesh mesh = store.LoadRegenMesh(desc.mesh).mesh;
+
+			if (mesh.skeleton.empty())
+				throw_runtime_error(
+					"vat: '{}' names no skeleton, so there is no rig to bake",
+					desc.mesh);
+
+			Skeleton skeleton = store.LoadRegenSkeleton(mesh.skeleton);
+
+			return { std::move(mesh),
+				     std::move(skeleton),
+				     store.LoadRegenAnimations(desc.animations) };
+		}
+	}
+
+	VatSize
+	AssetStore::VatBakeSize(const VatBakeDesc& desc) const
+	{
+		const VatInputs inputs = loadVatInputs(*this, desc);
+		return vatBakeSize(inputs.mesh, inputs.skeleton, inputs.animations);
 	}
 
 	BVat
 	AssetStore::BakeVat(const VatBakeDesc& desc) const
 	{
-		// The regeneration seam, not the plain loads: a bake over a stale group would otherwise
-		// freeze the stale geometry into a texture the freshness rule then calls current.
-		const BMesh mesh = LoadRegenMesh(desc.mesh).mesh;
+		const VatInputs inputs = loadVatInputs(*this, desc);
 
-		// A static mesh fails the in-memory bake anyway; refusing here names the actual gap --
-		// there is no rig to load -- instead of failing to open a file with no name.
-		if (mesh.skeleton.empty())
-			throw_runtime_error(
-				"vat: '{}' names no skeleton, so there is no rig to bake",
-				desc.mesh);
-
-		BVat vat =
-			bakeVat(mesh, LoadRegenSkeleton(mesh.skeleton), LoadRegenAnimations(desc.animations));
+		BVat vat = bakeVat(inputs.mesh, inputs.skeleton, inputs.animations);
 
 		vat.mesh            = normalizePath(desc.mesh);
-		vat.skeleton        = normalizePath(mesh.skeleton);
+		vat.skeleton        = normalizePath(inputs.mesh.skeleton);
 		vat.animations      = normalizePath(desc.animations);
 		vat.meshStamp       = StampOf(vat.mesh);
 		vat.skeletonStamp   = StampOf(vat.skeleton);

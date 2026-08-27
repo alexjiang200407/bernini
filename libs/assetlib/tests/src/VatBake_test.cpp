@@ -622,3 +622,106 @@ TEST_CASE("The bake refuses what it cannot represent, naming the count", "[vat]"
 			std::runtime_error);
 	}
 }
+
+TEST_CASE("A bake can be sized before it is baked", "[vat]")
+{
+	VatFixture fixture;
+
+	const VatSize size = vatBakeSize(fixture.mesh, fixture.skeleton, fixture.animations);
+	const BVat    vat  = bakeVat(fixture.mesh, fixture.skeleton, fixture.animations);
+
+	// Not "the numbers are plausible" but "they are the bake's own": a second derivation of the
+	// padding row or the column walk would pass an arithmetic check and fail this one.
+	CHECK(size.width == vat.width);
+	CHECK(size.height == vat.height);
+	CHECK(size.boneCount == vat.boneCount);
+	CHECK(size.clipCount == vat.clips.size());
+	CHECK(uint64_t(size.frameCount) * size.boneCount == vat.palettes.size());
+
+	// What the offer dialog says out loud: `bytes` is the container, give or take its tables. The
+	// pair is encoded uncompressed, so the payload is all of it that scales with the rig.
+	const uint64_t encoded =
+		vat.positionsKtx2.size() + vat.normalsKtx2.size() + vat.palettes.size() * sizeof(glm::mat4);
+	CHECK(size.bytes <= encoded);
+	CHECK(encoded - size.bytes < 4096);
+
+	SECTION("over a project, the store sizes what the store would bake")
+	{
+		const fs::path root = fs::temp_directory_path() / "bernini_vat_size_root";
+		fs::remove_all(root);
+		fs::create_directories(root / "Meshes");
+		fs::create_directories(root / "Skeletons");
+		fs::create_directories(root / "Animations");
+
+		StoreAt(root).Save(fixture.mesh, "Meshes/rig.bmesh");
+		StoreAt(root).Save(fixture.skeleton, "Skeletons/rig.bskel");
+		StoreAt(root).Save(fixture.animations, "Animations/rig.banim");
+
+		const VatSize stored =
+			AssetStore(root).VatBakeSize(VatBakeDesc{ "Meshes/rig.bmesh", "Animations/rig.banim" });
+
+		CHECK(stored.width == size.width);
+		CHECK(stored.height == size.height);
+		CHECK(stored.bytes == size.bytes);
+
+		// Sizing writes nothing: the offer must be declinable.
+		CHECK_FALSE(fs::exists(root / "Meshes/rig@rig-00000000.bvat"));
+		CHECK(
+			std::distance(fs::directory_iterator(root / "Meshes"), fs::directory_iterator()) == 1);
+
+		fs::remove_all(root);
+	}
+}
+
+TEST_CASE("Sizing refuses exactly what the bake refuses", "[vat]")
+{
+	// The contract the offer rests on: a size that comes back is a bake that will start, so every
+	// refusal has to arrive before the user has agreed to pay rather than after.
+	VatFixture fixture;
+
+	SECTION("a mesh with no joints has nothing to animate")
+	{
+		BMesh flat;
+		flat.submeshes.push_back(fixture.mesh.submeshes[1]);
+		flat.vertexData = fixture.mesh.vertexData;
+
+		CHECK_THROWS_WITH(
+			vatBakeSize(flat, fixture.skeleton, fixture.animations),
+			Catch::Matchers::ContainsSubstring("nothing to animate"));
+	}
+
+	SECTION("clips cooked against another rig are refused by signature")
+	{
+		fixture.animations.skeletonSignature ^= 1;
+		CHECK_THROWS_WITH(
+			vatBakeSize(fixture.mesh, fixture.skeleton, fixture.animations),
+			Catch::Matchers::ContainsSubstring("different rig"));
+	}
+
+	SECTION("an empty clip set has nothing to bake")
+	{
+		fixture.animations.clips.clear();
+		fixture.animations.samples.clear();
+		CHECK_THROWS_AS(
+			vatBakeSize(fixture.mesh, fixture.skeleton, fixture.animations),
+			std::runtime_error);
+	}
+
+	SECTION("more padded frame rows than a texture can hold")
+	{
+		AnimationClip& slide = fixture.animations.clips[0];
+		slide.frameCount     = 20000;
+		fixture.animations.samples.clear();
+		fixture.animations.clips.resize(1);
+		for (uint32_t frame = 0; frame < 20000; ++frame)
+		{
+			fixture.animations.samples.push_back(fixture.skeleton.bones[0].bindPose);
+			fixture.animations.samples.push_back(fixture.skeleton.bones[1].bindPose);
+		}
+
+		CHECK_THROWS_WITH(
+			vatBakeSize(fixture.mesh, fixture.skeleton, fixture.animations),
+			Catch::Matchers::ContainsSubstring("20001") &&
+				Catch::Matchers::ContainsSubstring("16384"));
+	}
+}

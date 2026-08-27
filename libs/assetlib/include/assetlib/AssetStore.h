@@ -32,6 +32,7 @@ namespace assetlib
 	struct TextureRefresh;
 	struct VatBakeDesc;
 	struct VatRefs;
+	struct VatSize;
 	struct BMesh;
 	struct BMaterial;
 	struct BEnvLighting;
@@ -233,6 +234,16 @@ namespace assetlib
 		 */
 		[[nodiscard]] BVat
 		BakeVat(const VatBakeDesc& desc) const;
+
+		/**
+		 * What BakeVat would write, over the same three inputs loaded the same way -- for a caller
+		 * that must offer the bake before paying for it. Loading is all it costs; nothing is
+		 * skinned.
+		 *
+		 * @throws what BakeVat throws.
+		 */
+		[[nodiscard]] VatSize
+		VatBakeSize(const VatBakeDesc& desc) const;
 
 		// --- Import writes -----------------------------------------------------------------------
 

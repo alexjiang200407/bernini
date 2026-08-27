@@ -102,6 +102,7 @@ truth; when this doc disagrees, trust the header, then fix this doc.
 |---|---|---|
 | `bakeVat` (in memory) | [libs/assetlib/include/assetlib/vat_bake.h](libs/assetlib/include/assetlib/vat_bake.h) | CPU-skin every vertex at every frame; pack, pad and encode the texture pair |
 | `AssetStore::BakeVat` | [libs/assetlib/include/assetlib/AssetStore.h](libs/assetlib/include/assetlib/AssetStore.h) | The same bake over a project: loads the three inputs by key and records their stamps |
+| `vatBakeSize` / `AssetStore::VatBakeSize` | [libs/assetlib/include/assetlib/vat_bake.h](libs/assetlib/include/assetlib/vat_bake.h) | What a bake would write, laid out but not filled — for an offer made before the cost is paid |
 | `vatIsStale` / `normalizePath` | [libs/assetlib/include/assetlib/vat_bake.h](libs/assetlib/include/assetlib/vat_bake.h) | Compare the container's input stamps against the disk — the stamp half of the bake-on-demand trigger — and the path form the container records |
 | `AssetCodec<BVat>` | [libs/assetlib/include/assetlib/codecs.h](libs/assetlib/include/assetlib/codecs.h) | The container round-trip |
 | `loadVatTables` / `loadVatRefs` | [libs/assetlib/include/assetlib/vat_bake.h](libs/assetlib/include/assetlib/vat_bake.h) | Tables-only and refs-only seek reads, for a scan that must not pay for the texels |
@@ -205,6 +206,11 @@ flowchart TD
   `c_MaxVatTextureDim` (16384) or it throws naming the count that broke it. `BakeVat` records the
   three input keys and stamps; the in-memory `bakeVat` leaves them empty — a `BVat` that was never
   stamped is *always* stale.
+* **`vatBakeSize` refuses on exactly the same terms** — @post a size that comes back is a bake that
+  will start, which is what lets an offer be made from it. Both come through one internal layout, so
+  the padding row, the dimension cap and every refusal are stated once. `bytes` is the container
+  within a few KB of its tables: the pair is encoded `Ktx2Compression::kNone`, so texels and palettes
+  are all of it that scales with the rig.
 
 ### `IScene::AddVatMeshGeom`
 * **Textures must be live assets of this scene** — @pre both handles came from `AddTextureAsset`
