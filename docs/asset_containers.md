@@ -125,7 +125,8 @@ regimes were always pointing at is available:
 | | |
 |---|---|
 | **Committed** | the copied sources, and every authored document — `.glb`, the images, `.bimport`, `.bmaterial`, `.benv`, `.berniniproject`. Losing one loses work. |
-| **Ignorable** | every derived container — `.bmesh`, `.bskel`, `.banim`, `.bvat`, `.bsky`, `.benvl`, and the `.ktx2` under `Textures/`. `Reimport` puts them back. |
+| **Ignorable** | the containers something puts back — `.bmesh`, `.bskel` and `.banim` from `Reimport`, `.bvat` from the load-time bake, and the `.ktx2` under `Textures/` from the material bakes and the texture re-extract. |
+| **Committed, though derived** | `.bsky` and `.benvl`. Their bake runs from a `.hdr`, and a project copies in no `.hdr` — so an absent one is unrecoverable, and only a *stale* one is `migrate`'s. Ignorable once an env source lives in the project beside the meshes'. |
 
 It is a rule about **projects**. This repository's own `assets/` tree is not one: it is a fixture
 tree that `bgl_tests`, `assetlib_tests` and `editor_tests` read directly — `assets/Data` is opened
