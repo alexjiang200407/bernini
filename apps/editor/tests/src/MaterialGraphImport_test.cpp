@@ -41,6 +41,80 @@ namespace
 	}
 }
 
+TEST_CASE("Opening a material does not round its factors", "[materialimport]")
+{
+	// The factor spin boxes show three decimals and round what they are given to them. Unblocked,
+	// setValue reported the rounded number straight back through valueChanged, so merely opening a
+	// material and saving it turned a roughness of 0.8585786 into 0.859 -- permanently, and for
+	// every factor a glTF import wrote at full precision.
+	constexpr float c_Roughness = 0.8585786f;
+	constexpr float c_Metallic  = 0.1234567f;
+
+	MaterialOutputNode node;
+
+	QJsonObject saved;
+	saved[QStringLiteral("roughness")] = c_Roughness;
+	saved[QStringLiteral("metallic")]  = c_Metallic;
+
+	// The widgets exist only once the node has been shown, and it is their sync that rounded.
+	REQUIRE(node.embeddedWidget() != nullptr);
+	node.load(saved);
+
+	CHECK(node.RoughnessFactor() == c_Roughness);
+	CHECK(node.MetallicFactor() == c_Metallic);
+}
+
+TEST_CASE("Two orderings of one board serialise the same", "[materialimport]")
+{
+	// QtNodes keeps connections in an unordered set, so what `save()` emits follows insertion --
+	// and a board built by an import, one loaded from a file and one a person edited all insert
+	// differently. Same board, different bytes, so the .bmaterial rewrote itself on every save with
+	// no change in it: a diff on every open, and a byte-compare `migrate` can no longer trust.
+	const auto board = [](const char* connections, const char* nodes) {
+		return QJsonDocument::fromJson(
+				   QByteArray("{\"connections\":") + connections + ",\"nodes\":" + nodes + "}")
+		    .object();
+	};
+
+	const char* forward  = R"([{"inNodeId":0,"inPortIndex":0,"outNodeId":1,"outPortIndex":1},)"
+						   R"({"inNodeId":0,"inPortIndex":2,"outNodeId":2,"outPortIndex":2}])";
+	const char* reversed = R"([{"inNodeId":0,"inPortIndex":2,"outNodeId":2,"outPortIndex":2},)"
+						   R"({"inNodeId":0,"inPortIndex":0,"outNodeId":1,"outPortIndex":1}])";
+	const char* inOrder  = R"([{"id":2},{"id":0},{"id":1}])";
+	const char* shuffled = R"([{"id":1},{"id":2},{"id":0}])";
+
+	QJsonObject one = board(forward, inOrder);
+	QJsonObject two = board(reversed, shuffled);
+	REQUIRE(
+		QJsonDocument(one).toJson(QJsonDocument::Compact) !=
+		QJsonDocument(two).toJson(QJsonDocument::Compact));
+
+	SortGraph(one);
+	SortGraph(two);
+
+	CHECK(
+		QJsonDocument(one).toJson(QJsonDocument::Compact) ==
+		QJsonDocument(two).toJson(QJsonDocument::Compact));
+}
+
+TEST_CASE("A compiled board comes out ordered", "[materialimport]")
+{
+	assetlib::imp::BMaterialImport imported;
+	imported.baseColorTexture = 0;
+	imported.normalTexture    = 1;
+	imported.ormTexture       = 2;
+
+	const QJsonObject graph =
+		QJsonDocument::fromJson(QByteArray::fromStdString(Import(imported, AllMaps()).editorGraph))
+			.object();
+
+	QJsonObject sorted = graph;
+	SortGraph(sorted);
+	CHECK(
+		QJsonDocument(graph).toJson(QJsonDocument::Compact) ==
+		QJsonDocument(sorted).toJson(QJsonDocument::Compact));
+}
+
 TEST_CASE("An imported glTF material routes each map into its own channels", "[materialimport]")
 {
 	auto imported            = assetlib::imp::BMaterialImport();

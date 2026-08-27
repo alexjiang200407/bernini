@@ -41,6 +41,52 @@ Rebase(const QString& path, const std::filesystem::path& dir, bool toRelative)
 	return QString::fromStdWString(result.generic_wstring());
 }
 
+/**
+ * Puts a saved board in a fixed order: nodes by id, connections by the endpoints they join.
+ *
+ * QtNodes keeps its connections in an unordered set, so two saves of an untouched graph emit them
+ * in different orders and the `.bmaterial` rewrites itself with no change in it. That costs a git
+ * diff on every open-and-save, and it costs `migrate` its byte-compare -- a file that differs is
+ * how it decides a file is not current.
+ */
+void
+SortGraph(QJsonObject& graph)
+{
+	const auto keyOf = [](const QJsonObject& c) {
+		return std::tuple(
+			c["outNodeId"].toInt(),
+			c["outPortIndex"].toInt(),
+			c["inNodeId"].toInt(),
+			c["inPortIndex"].toInt());
+	};
+
+	QJsonArray connections = graph["connections"].toArray();
+	auto       sorted      = std::vector<QJsonObject>();
+	sorted.reserve(static_cast<size_t>(connections.size()));
+	for (const QJsonValue& value : connections) sorted.push_back(value.toObject());
+
+	std::ranges::sort(sorted, [&](const QJsonObject& a, const QJsonObject& b) {
+		return keyOf(a) < keyOf(b);
+	});
+
+	QJsonArray ordered;
+	for (const QJsonObject& c : sorted) ordered.append(c);
+	graph["connections"] = ordered;
+
+	QJsonArray nodes = graph["nodes"].toArray();
+	auto       byId  = std::vector<QJsonObject>();
+	byId.reserve(static_cast<size_t>(nodes.size()));
+	for (const QJsonValue& value : nodes) byId.push_back(value.toObject());
+
+	std::ranges::sort(byId, [](const QJsonObject& a, const QJsonObject& b) {
+		return a["id"].toInt() < b["id"].toInt();
+	});
+
+	QJsonArray orderedNodes;
+	for (const QJsonObject& n : byId) orderedNodes.append(n);
+	graph["nodes"] = orderedNodes;
+}
+
 void
 RebaseGraphTextures(QJsonObject& graph, const std::filesystem::path& dir, bool toRelative)
 {
@@ -125,6 +171,7 @@ CompileMaterial(
 
 	QJsonObject graph = model.save();
 	RebaseGraphTextures(graph, dataRoot, true);
+	SortGraph(graph);
 	material.editorGraph = QJsonDocument(graph).toJson(QJsonDocument::Compact).toStdString();
 
 	return material;
