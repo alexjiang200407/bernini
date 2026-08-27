@@ -22,11 +22,6 @@ namespace game
 	namespace
 	{
 		/**
-		 * The seam's mesh, its unbound bindings warned about: a scene load draws those submeshes
-		 * unlit, and warning is the strictest a load may be -- `migrate` failing the file is where
-		 * the report escalates.
-		 */
-		/**
 		 * Refuses a geometry entry the project's sources have moved out from under, before anything
 		 * reads it. A load is a read: re-cooking one here costs an import, writes none of it back,
 		 * and pays that again on the next load. A read-only mount never refuses -- `pack` made its
@@ -42,6 +37,11 @@ namespace game
 				relPath);
 		}
 
+		/**
+		 * The seam's mesh, its unbound bindings warned about: a scene load draws those submeshes
+		 * unlit, and warning is the strictest a load may be -- `migrate` failing the file is where
+		 * the report escalates.
+		 */
 		assetlib::BMesh
 		LoadRegenMeshWarned(const assetlib::AssetStore& store, std::string_view relPath)
 		{

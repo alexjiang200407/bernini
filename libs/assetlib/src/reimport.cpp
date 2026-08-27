@@ -264,7 +264,6 @@ namespace assetlib
 				catch (const std::exception& error)
 				{
 					failed.emplace(source.key, error.what());
-					written.erase(source.key);
 				}
 			}
 		}
@@ -296,7 +295,6 @@ namespace assetlib
 			catch (const std::exception& error)
 			{
 				failed.emplace(source.key, error.what());
-				written.erase(source.key);
 			}
 		}
 
@@ -309,10 +307,10 @@ namespace assetlib
 				continue;
 
 			ReimportedSource entry{ source.key, {}, {} };
+			if (wrote != written.end())
+				entry.written = wrote->second;
 			if (broke != failed.end())
 				entry.message = broke->second;
-			else
-				entry.written = wrote->second;
 
 			std::ranges::sort(entry.written);
 			report.sources.push_back(std::move(entry));

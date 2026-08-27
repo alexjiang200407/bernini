@@ -352,6 +352,28 @@ TEST_CASE("A cascade drops the claims on what it frees", "[reimport]")
 	CHECK_FALSE(fs::exists(project.dataRoot / "Meshes/unit.bmesh"));
 }
 
+TEST_CASE("What a failed source wrote before it threw is still reported", "[reimport]")
+{
+	const test::SkinnedGltf source("bernini_reimport_partial_gltf");
+	const ImportedProject   project("bernini_reimport_partial", source.PackGlb());
+
+	fs::remove(project.dataRoot / "Meshes/unit.bmesh");
+	fs::remove(project.dataRoot / "Animations/unit.banim");
+
+	// The mesh is written before the clips are, and a directory standing where the `.banim` goes
+	// is the cheapest way to fail only the second of them.
+	fs::create_directories(project.dataRoot / "Animations/unit.banim");
+
+	const ReimportReport report = project.Store().Reimport(/*dryRun*/ false);
+	REQUIRE(report.sources.size() == 1);
+	CHECK_FALSE(report.sources[0].message.empty());
+
+	// The mesh really is on disk, so a report claiming nothing was written would be wrong.
+	CHECK(report.sources[0].written == std::vector<std::string>{ "Meshes/unit.bmesh" });
+	CHECK(fs::exists(project.dataRoot / "Meshes/unit.bmesh"));
+	CHECK(report.GetFailedCount() == 1);
+}
+
 TEST_CASE("A source that has gone is reported, not thrown", "[reimport]")
 {
 	const test::SkinnedGltf source("bernini_reimport_gone_gltf");

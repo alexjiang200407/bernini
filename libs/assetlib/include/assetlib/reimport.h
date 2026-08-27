@@ -12,8 +12,9 @@ namespace assetlib
 		// them was already on disk -- which is what a settled project reports for every source.
 		std::vector<std::string> written;
 
-		std::string
-			message;  // set when the source could not be re-imported; `written` is then empty
+		// Set when the source could not be re-imported. `written` still holds whatever landed
+		// before it threw -- there is no rollback, and those files are on disk.
+		std::string message;
 	};
 
 	struct ReimportReport
