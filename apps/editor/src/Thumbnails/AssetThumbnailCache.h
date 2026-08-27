@@ -6,6 +6,7 @@
 #include "Render/Renderer.h"
 #include "Render/environment.h"
 #include "Thumbnails/StampedPixmapCache.h"
+#include "util/held_open_assets.h"
 
 #include <bgl/GeomHandle.h>
 #include <bgl/IGraphics.h>
@@ -47,7 +48,7 @@ struct AssetThumbnailDesc
  * Geometry is added to the shared scene and torn down again after each shot, so a thumbnail leaves
  * nothing behind for the Level Editor's view to draw.
  */
-class AssetThumbnailCache : public StampedPixmapCache
+class AssetThumbnailCache : public StampedPixmapCache, public editor::IHoldsAssets
 {
 	Q_OBJECT
 
@@ -56,6 +57,10 @@ public:
 
 	explicit AssetThumbnailCache(AssetThumbnailDesc desc, QObject* parent = nullptr);
 	~AssetThumbnailCache() override;
+
+	/** The `.benv` this view is lit by, which must not be deleted while it is still drawing it. */
+	[[nodiscard]] QStringList
+	GetHeldOpenPaths() const override;
 
 	/**
 	 * Points the cache at the editor's asset manager, which owns the project's Data root. Null (the

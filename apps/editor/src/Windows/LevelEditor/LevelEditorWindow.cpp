@@ -20,3 +20,9 @@ LevelEditorWindow::LevelEditorWindow(
 			"LevelEditor");
 	});
 }
+
+QStringList
+LevelEditorWindow::GetHeldOpenPaths() const
+{
+	return editor::GetHeldOpenEnvironment(m_Environment);
+}

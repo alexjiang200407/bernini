@@ -5,6 +5,7 @@
 #include "Windows/AnimationEditor/PlaybackTransport.h"
 #include "Windows/AnimationEditor/animation_source.h"
 #include "Windows/RenderTarget/RenderTargetWindow.h"
+#include "util/held_open_assets.h"
 
 #include <bgl/GeomHandle.h>
 #include <bgl/MeshInstanceHandle.h>
@@ -39,7 +40,7 @@ class QWheelEvent;
  *
  * The window has no clock of its own: the panel owns the transport and feeds SetTime.
  */
-class AnimationPreviewWindow : public RenderTargetWindow
+class AnimationPreviewWindow : public RenderTargetWindow, public editor::IHoldsAssets
 {
 	Q_OBJECT
 
@@ -49,6 +50,10 @@ public:
 		RenderTargetWindowDesc       rt,
 		editor::EnvironmentApplyDesc env);
 	~AnimationPreviewWindow() override;
+
+	/** The `.benv` this view is lit by, which must not be deleted while it is still drawing it. */
+	[[nodiscard]] QStringList
+	GetHeldOpenPaths() const override;
 
 	/**
 	 * The manager this preview acquires through, or nullptr to release everything held. The

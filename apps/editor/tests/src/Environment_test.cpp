@@ -173,3 +173,43 @@ TEST_CASE("A preview configured with no environment keeps the drop", "[environme
 
 	CHECK_FALSE(editor::GetEnvironmentToRestore(binding).has_value());
 }
+
+// What a viewport has to answer when the Content Explorer asks whether a file may be deleted. A
+// `.benv` is the one end of the environment chain nothing on disk references -- assetlib's graph
+// refuses a `.bsky` or a `.benvl` a `.benv` names, but nothing names the `.benv` -- so a panel
+// saying it is lit by one is the only thing standing between a live environment and its deletion.
+
+TEST_CASE("A viewport holds the environment it is lit by", "[environment]")
+{
+	auto binding                      = editor::EnvironmentBinding();
+	binding.configured.environmentMap = "Authored/Environments/studio.benv";
+	binding.boundPath                 = "Authored/Environments/studio.benv";
+
+	CHECK(
+		editor::GetHeldOpenEnvironment(binding) ==
+		QStringList{ "Authored/Environments/studio.benv" });
+}
+
+TEST_CASE("A dropped environment is what is held, not the configured one", "[environment]")
+{
+	// The drop is what is on screen. Naming the configured one instead would refuse a deletion of a
+	// file nothing is drawing, and allow one of the file every view is.
+	auto binding                      = editor::EnvironmentBinding();
+	binding.configured.environmentMap = "Authored/Environments/studio.benv";
+	binding.boundPath                 = "Authored/Environments/sunset.benv";
+
+	CHECK(
+		editor::GetHeldOpenEnvironment(binding) ==
+		QStringList{ "Authored/Environments/sunset.benv" });
+}
+
+TEST_CASE("A view that bound nothing holds nothing", "[environment]")
+{
+	// Configured is not bound: a viewport built without a renderer, or one whose `.benv` would not
+	// load, is lit by nothing and must not refuse a deletion on the strength of a config entry.
+	auto binding                      = editor::EnvironmentBinding();
+	binding.configured.environmentMap = "Authored/Environments/studio.benv";
+
+	CHECK(editor::GetHeldOpenEnvironment(binding).isEmpty());
+	CHECK(editor::GetHeldOpenEnvironment(editor::EnvironmentBinding()).isEmpty());
+}

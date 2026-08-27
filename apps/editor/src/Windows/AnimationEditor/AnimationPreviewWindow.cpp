@@ -1034,3 +1034,9 @@ AnimationPreviewWindow::UpdateCamera()
 		height() > 0 ? static_cast<float>(width()) / static_cast<float>(height()) : 1.0f;
 	SetCamera(m_Orbit.GetCamera(aspect));
 }
+
+QStringList
+AnimationPreviewWindow::GetHeldOpenPaths() const
+{
+	return editor::GetHeldOpenEnvironment(m_Environment);
+}

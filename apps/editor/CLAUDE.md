@@ -82,6 +82,12 @@ lives beside it, and the split is by responsibility rather than by line count:
 - **A rule that takes what it needs** becomes a free function in a `lower_case` file:
   `asset_rules`, `material_io`, `graph_compiler`, `material_graph`. This is also the *only* way most
   editor behaviour becomes testable — see § What is testable below.
+- **A panel holding an asset file open** implements `editor::IHoldsAssets`
+  (`src/util/held_open_assets.h`) and names what it has. That is what refuses a Delete or a Rename
+  of a file a panel is still using, and it covers a file the panel only *displays* — a viewport
+  lit by a `.benv` is the one thing that can hold one, because nothing on disk references a
+  `.benv`. Never add a panel to a list of holders: the guard walks MainWindow's object tree, and
+  the list that came before it was short by four.
 - **Widget assembly** built in code rather than Designer goes to its own `*_ui` file
   (`material_editor_ui`), which builds and connects nothing. The `connect` calls stay in the window,
   because what a widget *does* is behaviour.

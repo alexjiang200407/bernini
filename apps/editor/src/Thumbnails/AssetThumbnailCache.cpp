@@ -841,3 +841,9 @@ AssetThumbnailCache::ReleaseMaterials()
 		m_Materials.clear();
 	});
 }
+
+QStringList
+AssetThumbnailCache::GetHeldOpenPaths() const
+{
+	return editor::GetHeldOpenEnvironment(m_Environment);
+}
