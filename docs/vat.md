@@ -246,12 +246,15 @@ flowchart TD
   name the clip set it was first acquired with, or it throws: the fast path returns the cached
   clip table without reading the container. Switching clip sets means releasing the geom to zero
   first — the eviction is what lets the freshness check see the new request.
-* **The editor does not bake on demand; it asks.** A bake is seconds, so the Animation panel calls
+* **The editor does not bake on demand; it asks, and it says what the bake costs.** A bake is
+  seconds of CPU and hundreds of megabytes on a dense rig, so the Animation panel calls
   `VatFreshness` and, when the answer is not `kFresh`, refuses the load and offers **Bake Now**
-  instead of spending that time unasked. Declining leaves the panel on the tier it was already
-  showing. The panel also carries a **Bake VAT** button, so the bake can be made deliberately rather
-  than only in answer to a refusal. Nothing else in the tree works this way — `AcquireVatMesh` still
-  bakes on demand, which is what a game loading a level wants.
+  instead of spending that unasked. Declining leaves the panel on the tier it was already showing.
+  The panel's **Bake VAT** button asks the same question, every press: it is one click from Close, so
+  the accident is cheap to make and expensive to have made. Both dialogs name the size first
+  (`AssetStore::VatBakeSize`), which is the half a "takes a few seconds" cannot say. Nothing else in
+  the tree works this way — `AcquireVatMesh` still bakes on demand, which is what a game loading a
+  level wants.
 * **A mesh with loose materials cannot be acquired as VAT** — the per-submesh `kPBR` rule surfaces
   here as a throw *after* the bake and material acquires; the unwind releases everything taken, so a
   failed acquire owns nothing.

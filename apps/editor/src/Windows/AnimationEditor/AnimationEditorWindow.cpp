@@ -186,7 +186,7 @@ AnimationEditorWindow::BuildPropertiesColumn()
 	m_BakeVatButton->setEnabled(false);
 	m_BakeVatButton->setToolTip(QStringLiteral(
 		"Skins every vertex of every frame into the texture pair the VAT tier draws from. "
-		"Takes a few seconds, so nothing does it for you."));
+		"Asks first, naming what it would write."));
 	connect(m_BakeVatButton, &QPushButton::clicked, this, [this] { m_Preview->BakeShownVat(); });
 	layout->addWidget(m_BakeVatButton);
 
