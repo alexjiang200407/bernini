@@ -5,6 +5,7 @@
 #include <assetlib/import_document.h>
 #include <core/err/util.h>
 
+#include "material_texture_refs.h"
 #include <assetlib/vat_bake.h>
 #include <assetlib_structs/Animation.h>
 #include <assetlib_structs/BEnv.h>
@@ -80,12 +81,10 @@ namespace assetlib
 
 			case AssetType::kMaterial:
 			{
-				BMaterial material            = AssetCodec<BMaterial>::Deserialize(bytes);
-				material.pbr.baseColorTexture = mapTarget(plan, material.pbr.baseColorTexture);
-				material.pbr.normalTexture    = mapTarget(plan, material.pbr.normalTexture);
-				material.pbr.ormTexture       = mapTarget(plan, material.pbr.ormTexture);
-				for (ChannelRoute& route : material.pbr.routes)
-					route.texture = mapTarget(plan, route.texture);
+				BMaterial material = AssetCodec<BMaterial>::Deserialize(bytes);
+				mapMaterialTextures(material, [&](const std::string& key) {
+					return mapTarget(plan, key);
+				});
 				return AssetCodec<BMaterial>::Serialize(material);
 			}
 
@@ -208,6 +207,25 @@ namespace assetlib
 		return plan;
 	}
 
+	namespace
+	{
+		/** Whether two files hold the same bytes. False when either cannot be read. */
+		bool
+		sameContents(const std::filesystem::path& a, const std::filesystem::path& b)
+		{
+			try
+			{
+				return std::filesystem::file_size(a) == std::filesystem::file_size(b) &&
+				       core::file::read_file_bytes(a.string()) ==
+				           core::file::read_file_bytes(b.string());
+			}
+			catch (const std::exception&)
+			{
+				return false;
+			}
+		}
+	}
+
 	RenameResult
 	AssetStore::RenameAsset(const RenamePlan& plan) const
 	{
@@ -220,7 +238,8 @@ namespace assetlib
 			return { RenameStatus::kFailed, "'" + plan.from + "' no longer exists" };
 
 		std::error_code ec;
-		if (std::filesystem::exists(toPath) && !std::filesystem::equivalent(fromPath, toPath, ec))
+		if (std::filesystem::exists(toPath) && !std::filesystem::equivalent(fromPath, toPath, ec) &&
+		    !sameContents(fromPath, toPath))
 			return { RenameStatus::kFailed, "'" + plan.to + "' already exists" };
 
 		// Read and rewrite every referrer before writing anything: a file that will not parse fails the

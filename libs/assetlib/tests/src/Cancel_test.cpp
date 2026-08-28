@@ -101,13 +101,18 @@ TEST_CASE("WriteTextures honours the cancel token", "[cancel][bmesh][io]")
 	const ScratchDir dir("bernini_cancel_textures");
 	const auto       mesh = ImportWithTextures(3);
 
+	// Asked rather than spelled out: these images are unnamed, so what they are called is a hash of
+	// their content and this test is about the cancel, not the naming.
+	const std::vector<std::string> names = assetlib::importedTextureFileNames(mesh);
+	REQUIRE(names.size() == 3);
+
 	SECTION("a token signalled up front writes nothing at all")
 	{
 		REQUIRE_THROWS_AS(
 			StoreAt(dir.path).WriteTextures(mesh, "textures", {}, SignalledSource().get_token()),
 			Cancelled);
 
-		REQUIRE_FALSE(std::filesystem::exists(dir.path / "textures" / "tex0.ktx2"));
+		REQUIRE_FALSE(std::filesystem::exists(dir.path / "textures" / names[0]));
 	}
 
 	SECTION("cancelling part-way stops before the next encode, keeping what was already written")
@@ -128,18 +133,18 @@ TEST_CASE("WriteTextures honours the cancel token", "[cancel][bmesh][io]")
 			Cancelled);
 
 		REQUIRE(calls == 1);
-		REQUIRE(std::filesystem::exists(dir.path / "textures" / "tex0.ktx2"));
-		REQUIRE_FALSE(std::filesystem::exists(dir.path / "textures" / "tex1.ktx2"));
-		REQUIRE_FALSE(std::filesystem::exists(dir.path / "textures" / "tex2.ktx2"));
+		REQUIRE(std::filesystem::exists(dir.path / "textures" / names[0]));
+		REQUIRE_FALSE(std::filesystem::exists(dir.path / "textures" / names[1]));
+		REQUIRE_FALSE(std::filesystem::exists(dir.path / "textures" / names[2]));
 	}
 
 	SECTION("an unsignalled token writes every texture")
 	{
 		REQUIRE_NOTHROW(StoreAt(dir.path).WriteTextures(mesh, "textures"));
 
-		REQUIRE(std::filesystem::exists(dir.path / "textures" / "tex0.ktx2"));
-		REQUIRE(std::filesystem::exists(dir.path / "textures" / "tex1.ktx2"));
-		REQUIRE(std::filesystem::exists(dir.path / "textures" / "tex2.ktx2"));
+		REQUIRE(std::filesystem::exists(dir.path / "textures" / names[0]));
+		REQUIRE(std::filesystem::exists(dir.path / "textures" / names[1]));
+		REQUIRE(std::filesystem::exists(dir.path / "textures" / names[2]));
 	}
 }
 

@@ -34,6 +34,132 @@ namespace
 	}
 }
 
+TEST_CASE("Renaming a texture rewrites the graph that compiles into its routes", "[assetrename]")
+{
+	// The editor compiles `editorGraph` back into `routes`, so a graph left naming the old file
+	// quietly undoes the rename the next time anyone opens the material -- routes and graph
+	// disagree, the graph wins, and the material ends up pointing at a file that is gone.
+	const DataRoot root("bernini_rename_material_graph");
+	WriteSource(root.path / "textures_src" / "a.ktx2", { { 255, 0, 0, 255 } });
+
+	BMaterial material   = BakeAndSave(root, "m.bmaterial", "textures_src/a.ktx2");
+	material.editorGraph = R"({"nodes":[{"id":1,"internal-data":{"model-name":"Texture",)"
+						   R"("texture":"textures_src/a.ktx2"}}]})";
+	StoreAt(root.path).Save(material, "Materials/m.bmaterial");
+
+	REQUIRE(
+		Rename(root, "textures_src/a.ktx2", "textures_src/b.ktx2").status ==
+		RenameStatus::kRenamed);
+
+	const BMaterial after = StoreAt(root.path).Load<BMaterial>("Materials/m.bmaterial");
+	CHECK(after.pbr.routes[0].texture == "textures_src/b.ktx2");
+	CHECK(after.editorGraph.find("textures_src/b.ktx2") != std::string::npos);
+	CHECK(after.editorGraph.find("textures_src/a.ktx2") == std::string::npos);
+}
+
+TEST_CASE("Scanning a material with a real board terminates", "[assetrename]")
+{
+	// A board is mostly numbers -- node ids, port indices, positions. Iterating a primitive in
+	// nlohmann yields the value itself, so a walk that recurses into one never returns: the scan
+	// blew the stack, and every caller of it went down with it, the editor opening a project
+	// included. There is no assertion to make beyond arriving here.
+	const DataRoot root("bernini_refs_material_graph_scalars");
+	WriteSource(root.path / "textures_src" / "a.ktx2", { { 255, 255, 0, 255 } });
+
+	BMaterial material   = BakeAndSave(root, "m.bmaterial", "textures_src/a.ktx2");
+	material.editorGraph = R"({"connections":[{"inNodeId":0,"inPortIndex":2,"outNodeId":2}],)"
+						   R"("nodes":[{"id":0,"internal-data":{"baseColorA":1,"split":)"
+						   R"([false,false,false],"model-name":"MaterialOutput"},)"
+						   R"("position":{"x":220,"y":40}},{"id":1,"internal-data":)"
+						   R"({"model-name":"Texture","texture":"textures_src/a.ktx2"},)"
+						   R"("position":{"x":-160,"y":0}}],"nulls":[null]})";
+	StoreAt(root.path).Save(material, "Materials/m.bmaterial");
+
+	CHECK(root.Scan().IsReferenced("textures_src/a.ktx2"));
+}
+
+TEST_CASE("A texture only the graph names is still referenced", "[assetrename]")
+{
+	// An unconnected texture node holds a file alive as surely as a wired one: it is authoring the
+	// user can see and re-wire. Seeing only `routes` would let the file be deleted out from under a
+	// board nobody is looking at.
+	const DataRoot root("bernini_rename_material_graph_only");
+	WriteSource(root.path / "textures_src" / "wired.ktx2", { { 255, 0, 0, 255 } });
+	WriteSource(root.path / "textures_src" / "loose.ktx2", { { 0, 0, 255, 255 } });
+
+	BMaterial material   = BakeAndSave(root, "m.bmaterial", "textures_src/wired.ktx2");
+	material.editorGraph = R"({"nodes":[{"id":1,"internal-data":{"model-name":"Texture",)"
+						   R"("texture":"textures_src/loose.ktx2"}}]})";
+	StoreAt(root.path).Save(material, "Materials/m.bmaterial");
+
+	const AssetRefGraph graph = root.Scan();
+	CHECK(graph.IsReferenced("textures_src/wired.ktx2"));
+	CHECK(graph.IsReferenced("textures_src/loose.ktx2"));
+
+	SECTION("and moves with it")
+	{
+		REQUIRE(
+			Rename(root, "textures_src/loose.ktx2", "textures_src/moved.ktx2").status ==
+			RenameStatus::kRenamed);
+
+		const std::string after =
+			StoreAt(root.path).Load<BMaterial>("Materials/m.bmaterial").editorGraph;
+		CHECK(after.find("textures_src/moved.ktx2") != std::string::npos);
+		CHECK(after.find("textures_src/loose.ktx2") == std::string::npos);
+	}
+}
+
+TEST_CASE("A rename changes only the key it moves in the board", "[assetrename]")
+{
+	// The board's formatting is the editor's -- key order, spacing, how it spells a double. Parsing
+	// it and writing it back out here would impose a second JSON writer's spelling on it, and the
+	// two would then take turns rewriting the file on every rename and every save. Only the key
+	// moves.
+	const DataRoot root("bernini_rename_material_graph_bytes");
+	WriteSource(root.path / "textures_src" / "a.ktx2", { { 12, 34, 56, 255 } });
+
+	const std::string graph =
+		R"({"nodes":[{"id":1, "zz":1.5, "aa":[false,null],)"
+		R"("internal-data":{"model-name":"Texture","texture":"textures_src/a.ktx2"}}]})";
+
+	BMaterial material   = BakeAndSave(root, "m.bmaterial", "textures_src/a.ktx2");
+	material.editorGraph = graph;
+	StoreAt(root.path).Save(material, "Materials/m.bmaterial");
+
+	REQUIRE(
+		Rename(root, "textures_src/a.ktx2", "textures_src/b.ktx2").status ==
+		RenameStatus::kRenamed);
+
+	std::string expected = graph;
+	expected.replace(
+		expected.find("textures_src/a.ktx2"),
+		std::string_view("textures_src/a.ktx2").size(),
+		"textures_src/b.ktx2");
+
+	// Byte for byte: the odd key order, the trailing `.5`, the spaces and the null all survive.
+	CHECK(StoreAt(root.path).Load<BMaterial>("Materials/m.bmaterial").editorGraph == expected);
+}
+
+TEST_CASE("A graph that will not parse survives a rename unchanged", "[assetrename]")
+{
+	// Its schema is the editor's and this knows none of it. Text that is not JSON at all is left
+	// exactly as it stands rather than dropped, which would lose the node layout.
+	const DataRoot root("bernini_rename_material_graph_bad");
+	WriteSource(root.path / "textures_src" / "a.ktx2", { { 0, 255, 0, 255 } });
+
+	BMaterial material   = BakeAndSave(root, "m.bmaterial", "textures_src/a.ktx2");
+	material.editorGraph = "not json at all";
+	StoreAt(root.path).Save(material, "Materials/m.bmaterial");
+
+	REQUIRE(
+		Rename(root, "textures_src/a.ktx2", "textures_src/b.ktx2").status ==
+		RenameStatus::kRenamed);
+
+	CHECK(
+		StoreAt(root.path).Load<BMaterial>("Materials/m.bmaterial").editorGraph ==
+		"not json at all");
+}
+
 TEST_CASE("Renaming an unreferenced asset moves the file", "[assetrename]")
 {
 	const DataRoot root("bernini_rename_loose");

@@ -35,6 +35,18 @@ void
 RebaseGraphTextures(QJsonObject& graph, const std::filesystem::path& dir, bool toRelative);
 
 /**
+ * Puts a saved board in a fixed order: nodes by id, connections by the endpoints they join.
+ *
+ * QtNodes keeps its connections in an unordered set, so the order they come out of `save()` in
+ * follows insertion -- and a board built by an import, one loaded from a file, and one a person
+ * has edited all insert differently. Without this a material rewrites itself on every save with
+ * no change in it, which costs a diff on every open and costs `migrate` the byte-compare it
+ * decides staleness with.
+ */
+void
+SortGraph(QJsonObject& graph);
+
+/**
  * The node types a material graph can hold.
  *
  * `renderer` and `previews` may be null: a TextureNode then shows no image, which is what lets a graph

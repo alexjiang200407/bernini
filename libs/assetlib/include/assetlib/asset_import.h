@@ -68,15 +68,29 @@ namespace assetlib
 		std::string message;
 	};
 
+	/** One extracted texture that turned out to have moved rather than gone. */
+	struct MovedTexture
+	{
+		std::string from;  // the key the materials were routed at
+		std::string to;    // the key holding those same bytes now
+	};
+
 	/** What AssetStore::RefreshImportedTextures wrote, and what it left in the folder. */
 	struct TextureRefresh
 	{
 		std::string              textureDir;
 		std::vector<std::string> written;  // mount keys, sorted
 
-		// Files the folder held that this extract did not produce. Reported, never removed or
-		// re-routed -- see docs/asset_containers.md.
+		// Files the folder held that this extract did not produce and could not account for.
+		// Reported, never removed or re-routed -- see docs/asset_containers.md.
 		std::vector<std::string> superseded;
+
+		/**
+		 * The superseded files that were the same bytes as exactly one file this extract wrote --
+		 * the same image under the name the current rule gives it. Those are moves, not losses, so
+		 * the materials routing at them were rewritten and the old file is gone.
+		 */
+		std::vector<MovedTexture> moved;
 	};
 
 	/** A file an import writes, and whether the import is the one that made it. */

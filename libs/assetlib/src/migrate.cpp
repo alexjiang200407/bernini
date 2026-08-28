@@ -17,6 +17,7 @@
 #include <assetlib_structs/Skeleton.h>
 
 #include "fs_util.h"
+#include "material_texture_refs.h"
 #include "ref_paths.h"
 
 #include <core/err/util.h>
@@ -243,6 +244,10 @@ namespace assetlib
 					report.supersededTextures.end(),
 					refresh.superseded.begin(),
 					refresh.superseded.end());
+				report.movedTextures.insert(
+					report.movedTextures.end(),
+					refresh.moved.begin(),
+					refresh.moved.end());
 			}
 			catch (const std::exception& error)
 			{
@@ -253,6 +258,43 @@ namespace assetlib
 		}
 
 		std::ranges::sort(report.supersededTextures);
+		std::ranges::sort(report.movedTextures, {}, &MovedTexture::from);
+
+		// Last word on the textures: a material naming one that is not there draws untextured and
+		// says nothing about it, which is the failure that is hardest to see and easiest to ship.
+		for (const std::filesystem::path& path : paths)
+		{
+			if (assetTypeFromExtension(path) != AssetType::kMaterial)
+				continue;
+
+			const std::string key =
+				normalizeRef(path.lexically_relative(GetDataRoot()).generic_string());
+			try
+			{
+				BMaterial material = Load<BMaterial>(key);
+				for (const auto& reference :
+				     mapMaterialTextures(material, [](const std::string& k) { return k; }))
+					if (!Exists(reference.first))
+						report.danglingTextures.push_back(key + ": " + reference.first);
+			}
+			catch (const std::exception&)
+			{
+				// Unreadable is the walk below's to report, with the reason.
+			}
+		}
+		std::ranges::sort(report.danglingTextures);
+		const auto repeats = std::ranges::unique(report.danglingTextures);
+		report.danglingTextures.erase(repeats.begin(), repeats.end());
+
+		// The walk below was listed before the refresh ran, and a followed texture is no longer at
+		// the path it was listed under. Reading it would report a file this call itself moved.
+		std::erase_if(paths, [&](const std::filesystem::path& path) {
+			const std::string key =
+				normalizeRef(path.lexically_relative(GetDataRoot()).generic_string());
+			return std::ranges::any_of(report.movedTextures, [&](const MovedTexture& moved) {
+				return moved.from == key;
+			});
+		});
 
 		for (const std::filesystem::path& path : paths)
 		{

@@ -113,9 +113,21 @@ project opens.
 
 What makes a re-extract safe over a folder materials route into is the *name*: an extracted texture
 is named after the image it came from, so an edited image lands back on the file every route already
-holds, and an inserted one takes a new name rather than displacing its neighbours. A file the
-extract no longer produces is reported and left alone -- a material may still draw it, and both
-re-routing and deleting it are the user's.
+holds, and an inserted one takes a new name rather than displacing its neighbours. An image the
+source names nothing is named `tex_<content hash>` instead -- there is no name to keep stable, and
+the position it used to be numbered by is exactly what an insertion moves.
+
+A file the extract no longer produces is reported and left alone -- a material may still draw it,
+and both re-routing and deleting it are the user's. The one exception is a file that holds the same
+bytes as **exactly one** file the extract wrote: that is the same image under a different name, so
+the file is moved onto it and every material routed there is rewritten. Exactly one, because two
+identical files leave nothing to say which the routes meant, and guessing is the failure the naming
+rule exists to prevent.
+
+`textureStamp` answers whether the *source* moved and nothing answers whether the naming rule did,
+so a folder still holding a `tex<N>.ktx2` -- the name an unnamed image had before it was named after
+its content -- is stale on that alone. That is what makes the change reach a project at all, and it
+is a migration: once no folder holds one, the check has nothing left to find.
 
 ## Which of these a project commits
 
@@ -125,7 +137,8 @@ regimes were always pointing at is available:
 | | |
 |---|---|
 | **Committed** | the copied sources, and every authored document — `.glb`, the images, `.bimport`, `.bmaterial`, `.benv`, `.berniniproject`. Losing one loses work. |
-| **Ignorable** | the containers something puts back — `.bmesh`, `.bskel` and `.banim` from `Reimport`, `.bvat` from the load-time bake, and the `.ktx2` under `Textures/` from the material bakes and the texture re-extract. |
+| **Ignorable** | the containers something puts back — `.bmesh`, `.bskel` and `.banim` from `Reimport`, `.bvat` from the load-time bake, and a source's extracted `.ktx2` from the texture re-extract. |
+| **Ignorable, but by hand** | the baked maps under `Textures/`. Nothing outside the editor writes one: `migrate` re-saves a material, it does not bake it, and there is no CLI that does. So a fresh checkout opens with every material stale and drawing untextured until someone runs **Bake All**. |
 | **Committed, though derived** | `.bsky` and `.benvl`. Their bake runs from a `.hdr`, and a project copies in no `.hdr` — so an absent one is unrecoverable, and only a *stale* one is `migrate`'s. Ignorable once an env source lives in the project beside the meshes'. |
 
 It is a rule about **projects**. This repository's own `assets/` tree is not one: it is a fixture

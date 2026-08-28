@@ -1,6 +1,7 @@
 #include <assetlib/AssetStore.h>
 
 #include <assetlib/asset_import.h>
+#include <assetlib/asset_refs.h>
 #include <assetlib/bmesh.h>
 #include <assetlib/bmesh_gltf.h>
 #include <assetlib/container_info.h>
@@ -32,6 +33,101 @@ namespace assetlib
 			}
 			std::ranges::sort(found);
 			return found;
+		}
+	}
+
+	namespace
+	{
+		/**
+		 * Whether `key` ends in the name the extract gave an unnamed image before it named them
+		 * after their content: `tex<digits>.ktx2`, the image's position in the source.
+		 *
+		 * A migration sniff, and the only thing that can see a naming-rule change from outside --
+		 * `textureStamp` answers for the source, not for the rule. Delete it once no project holds
+		 * one; nothing else depends on it.
+		 */
+		bool
+		isNumberedTextureName(std::string_view key)
+		{
+			const size_t     slash = key.rfind('/');
+			std::string_view name  = slash == std::string_view::npos ? key : key.substr(slash + 1);
+
+			if (!name.starts_with("tex") || !name.ends_with(c_TextureExtension))
+				return false;
+
+			name.remove_prefix(3);
+			name.remove_suffix(c_TextureExtension.size());
+			return !name.empty() &&
+			       std::ranges::all_of(name, [](char c) { return c >= '0' && c <= '9'; });
+		}
+
+		/**
+		 * Sorts `orphaned` into the files that merely moved -- byte-identical to exactly one of
+		 * `written`, which is the same image under the name the current rule gives it -- and the
+		 * ones nothing accounts for, which are returned. A move is followed through RenameAsset, so
+		 * every material routed at the old key is rewritten onto the new one.
+		 *
+		 * Exactly one, deliberately: two identical files leave no way to say which the routes meant,
+		 * and guessing is the failure the naming rule exists to prevent. Those are reported instead.
+		 */
+		std::vector<std::string>
+		followMovedTextures(
+			const AssetStore&            store,
+			std::span<const std::string> written,
+			std::span<const std::string> orphaned,
+			std::vector<MovedTexture>&   moved)
+		{
+			auto unaccounted = std::vector<std::string>();
+			if (orphaned.empty())
+				return unaccounted;
+
+			const auto bytesOf = [&](std::string_view key) {
+				return core::file::read_file_bytes(store.ResolveWritePath(key).string());
+			};
+
+			// One walk answers every rename below, and a folder with nothing orphaned never pays it.
+			const AssetRefGraph graph = AssetRefGraph::Scan(store);
+
+			for (const std::string& stale : orphaned)
+			{
+				auto match = std::string();
+				auto count = 0;
+				try
+				{
+					const auto staleBytes = bytesOf(stale);
+					for (const std::string& candidate : written)
+						if (bytesOf(candidate) == staleBytes)
+						{
+							match = candidate;
+							++count;
+						}
+				}
+				catch (const std::exception&)
+				{
+					count = 0;
+				}
+
+				if (count != 1)
+				{
+					unaccounted.push_back(stale);
+					continue;
+				}
+
+				RenamePlan plan;
+				plan.from                                 = stale;
+				plan.to                                   = match;
+				plan.assetType                            = AssetType::kTexture;
+				const std::span<const AssetRef> referrers = graph.ReferrersOf(stale);
+				plan.referrers.assign(referrers.begin(), referrers.end());
+
+				if (store.RenameAsset(plan).status == RenameStatus::kRenamed)
+					moved.push_back({ stale, match });
+				else
+					unaccounted.push_back(stale);
+			}
+
+			std::ranges::sort(moved, {}, &MovedTexture::from);
+			return unaccounted;
 		}
 	}
 
@@ -67,6 +163,18 @@ namespace assetlib
 			// cache keys follow, which keeps a project missing its sources usable.
 			const SourceStamp stamp = StampOf(importedSourceKeyFor(key));
 			if (stamp != SourceStamp() && stamp != document.textureStamp)
+			{
+				stale.push_back(importedSourceKeyFor(key));
+				continue;
+			}
+
+			// The stamp answers whether the *source* moved, and nothing answers whether the naming
+			// rule did. One rule has moved: an unnamed image used to be numbered. A folder still
+			// holding one of those names is a folder the current extract would not write, so it is
+			// stale whatever the stamp says.
+			if (std::ranges::any_of(
+					texturesDirectlyIn(GetFiles(), document.textureDir),
+					[](std::string_view name) { return isNumberedTextureName(name); }))
 				stale.push_back(importedSourceKeyFor(key));
 		}
 
@@ -104,7 +212,7 @@ namespace assetlib
 			"re-extract into; re-import the source",
 			sourceKey);
 
-		TextureRefresh refresh{ document.textureDir, {}, {} };
+		TextureRefresh refresh{ document.textureDir, {}, {}, {} };
 
 		const std::vector<std::string> before = texturesDirectlyIn(GetFiles(), document.textureDir);
 
@@ -113,16 +221,12 @@ namespace assetlib
 			ResolveWritePath(sourceKey),
 			{ .cancel = cancel, .sampleRate = document.sampleRate });
 
-		WriteTextures(imported, document.textureDir, onProgress, cancel);
-
-		for (const std::string& name : importedTextureFileNames(imported))
-			refresh.written.push_back(document.textureDir + "/" + name);
+		refresh.written = WriteTextures(imported, document.textureDir, onProgress, cancel);
 		std::ranges::sort(refresh.written);
 
-		std::ranges::set_difference(
-			before,
-			refresh.written,
-			std::back_inserter(refresh.superseded));
+		auto orphaned = std::vector<std::string>();
+		std::ranges::set_difference(before, refresh.written, std::back_inserter(orphaned));
+		refresh.superseded = followMovedTextures(*this, refresh.written, orphaned, refresh.moved);
 
 		// Last, so a refresh that threw or was cancelled is still reported stale.
 		ImportDocument advanced = document;

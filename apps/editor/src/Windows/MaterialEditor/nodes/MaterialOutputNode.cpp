@@ -429,12 +429,22 @@ MaterialOutputNode::load(const QJsonObject& json)
 	// The widgets only exist once the node has been shown; keep them in step when they do.
 	RefreshColorSwatch();
 	RefreshSpecularSwatch();
-	if (m_Metallic != nullptr)
-		m_Metallic->setValue(m_MetallicFactor);
-	if (m_Roughness != nullptr)
-		m_Roughness->setValue(m_RoughnessFactor);
-	if (m_Specular != nullptr)
-		m_Specular->setValue(m_SpecularFactor);
+	// Blocked, like the checkboxes below: a spin box shows three decimals and rounds what it is
+	// given to them, so an unblocked setValue reports 0.859 back for a factor of 0.8585786 and the
+	// next save writes the rounded one. Showing fewer digits than a float holds is fine; storing
+	// them is not.
+	const auto show = [](QDoubleSpinBox* spin, float factor) {
+		if (spin == nullptr)
+			return;
+
+		const QSignalBlocker blocker(spin);
+		spin->setValue(factor);
+	};
+
+	show(m_Metallic, m_MetallicFactor);
+	show(m_Roughness, m_RoughnessFactor);
+	show(m_Specular, m_SpecularFactor);
+
 	for (unsigned int group = 0; group < c_GroupCount; ++group)
 	{
 		if (m_ExpandBoxes[group] != nullptr)

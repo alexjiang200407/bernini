@@ -16,6 +16,7 @@
 #include "ref_paths.h"
 
 #include <core/file/file.h>
+#include <core/hash.h>
 
 #include "mounted_io.h"
 
@@ -301,6 +302,26 @@ namespace assetlib
 		return true;
 	}
 
+	namespace
+	{
+		/**
+		 * The stem for an image the source named nothing: `tex_` and its content, hashed. Positional
+		 * (`tex0`, `tex1`) is what this replaces -- inserting an image renumbered every later one, so
+		 * a material's route silently resolved to a different picture. An unnamed image has no
+		 * identity to keep stable, so naming it after its bytes costs nothing a name would have held.
+		 */
+		std::string
+		unnamedTextureStem(const ImageData& image)
+		{
+			uint64_t hash =
+				core::hash_bytes(image.pixels.data(), image.pixels.size(), core::hash_seed());
+			hash = core::hash_pod(image.width, hash);
+			hash = core::hash_pod(image.height, hash);
+			hash = core::hash_pod(image.vkFormat, hash);
+			return std::format("tex_{:016x}", hash);
+		}
+	}
+
 	std::vector<std::string>
 	importedTextureFileNames(const imp::BMeshImport& mesh)
 	{
@@ -314,7 +335,7 @@ namespace assetlib
 
 			std::string stem = sanitizeTextureStem(given);
 			if (stem.empty())
-				stem = "tex" + std::to_string(i);
+				stem = unnamedTextureStem(mesh.textures[i]);
 			names.push_back(std::move(stem));
 		}
 
@@ -331,7 +352,7 @@ namespace assetlib
 		return names;
 	}
 
-	void
+	std::vector<std::string>
 	AssetStore::WriteTextures(
 		const imp::BMeshImport&  mesh,
 		std::string_view         textureDir,
@@ -362,6 +383,11 @@ namespace assetlib
 				outDir / names[i],
 				srgbTextures.contains(static_cast<uint32_t>(i)));
 		}
+
+		auto keys = std::vector<std::string>();
+		keys.reserve(names.size());
+		for (const std::string& name : names) keys.push_back(std::string(textureDir) + "/" + name);
+		return keys;
 	}
 
 	std::string

@@ -349,6 +349,19 @@ main(int argc, char** argv)
 	prune->add_flag("--dry-run", pruneDryRun, "List what would be deleted and delete nothing");
 	prune->add_flag("-y,--yes", pruneYes, "Delete without asking for confirmation");
 
+	bool bakeMaterialsDryRun = false;
+
+	auto* bakeMaterials = app.add_subcommand(
+		"bakematerials",
+		"Composite every material in the project whose baked triplet is missing or stale down to "
+		"the baseColor/normal/orm maps it draws from. The one derived output nothing else "
+		"produces, so a checkout that ignores Textures/ opens untextured until this has run");
+	addProject(bakeMaterials);
+	bakeMaterials->add_flag(
+		"--dry-run",
+		bakeMaterialsDryRun,
+		"List the materials that would be baked and write nothing");
+
 	std::string packTarget;
 
 	auto* pack = app.add_subcommand(
@@ -898,6 +911,13 @@ main(int argc, char** argv)
 						break;
 					}
 				}
+				for (const assetlib::MovedTexture& moved : report.movedTextures)
+					std::cout << "followed: " << moved.from << " -> " << moved.to
+							  << " (same bytes; the materials routing at it were rewritten)\n";
+
+				for (const std::string& dangling : report.danglingTextures)
+					std::cout << "material names a texture that is not there: " << dangling << '\n';
+
 				// Named and left where they are -- see docs/asset_containers.md.
 				for (const std::string& superseded : report.supersededTextures)
 					std::cout << "no longer extracted, still on disk: " << superseded << '\n';
@@ -1213,6 +1233,61 @@ main(int argc, char** argv)
 		catch (const std::exception& e)
 		{
 			spdlog::error("list failed: {}", e.what());
+			return 1;
+		}
+	}
+
+	if (*bakeMaterials)
+	{
+		try
+		{
+			const assetlib::Project     project = assetlib::Project::Open(projectFile);
+			const assetlib::AssetStore& store   = project.GetStore();
+
+			size_t baked   = 0;
+			size_t current = 0;
+			size_t failed  = 0;
+
+			for (const std::string& key : store.GetFiles().Enumerate(""))
+			{
+				if (!key.ends_with(assetlib::c_MaterialExtension))
+					continue;
+
+				try
+				{
+					assetlib::BMaterial material = store.Load<assetlib::BMaterial>(key);
+					if (!store.BakeIsStale(material))
+					{
+						++current;
+						continue;
+					}
+
+					std::cout << (bakeMaterialsDryRun ? "would bake " : "baked ") << key << '\n';
+					if (!bakeMaterialsDryRun)
+					{
+						store.BakeMaterial(material);
+						store.Save(material, key);
+					}
+					++baked;
+				}
+				catch (const std::exception& e)
+				{
+					std::cout << "cannot bake " << key << ": " << e.what() << '\n';
+					++failed;
+				}
+			}
+
+			std::cout << std::format(
+				"{} current, {} {}, {} failed\n",
+				current,
+				baked,
+				bakeMaterialsDryRun ? "to bake" : "baked",
+				failed);
+			return failed == 0 ? 0 : 1;
+		}
+		catch (const std::exception& e)
+		{
+			spdlog::error("{}", e.what());
 			return 1;
 		}
 	}

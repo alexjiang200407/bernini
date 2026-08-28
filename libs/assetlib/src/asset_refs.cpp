@@ -12,6 +12,7 @@
 #include <core/file/LooseFileSystem.h>
 #include <core/file/file.h>
 
+#include "material_texture_refs.h"
 #include "ref_paths.h"
 
 #include "mounted_io.h"
@@ -158,23 +159,19 @@ namespace assetlib
 					"', so the textures it references cannot be known: " + e.what());
 			}
 
-			switch (material.shadingModel)
+			// Where a material's texture references live is mapMaterialTextures' to know, so this
+			// and the rename cannot disagree about the set. Nothing is rewritten here: the map is
+			// the identity.
+			try
 			{
-			case ShadingModel::kPbr:
-				addEdge(edges, referrer, material.pbr.baseColorTexture, RefKind::kBakedMap);
-				addEdge(edges, referrer, material.pbr.normalTexture, RefKind::kBakedMap);
-				addEdge(edges, referrer, material.pbr.ormTexture, RefKind::kBakedMap);
-
-				// A material names its textures twice: the triplet its last bake wrote, and the sources it
-				// routes each channel from. Both hold a file alive -- the sources are what a re-bake reads.
-				for (const ChannelRoute& route : material.pbr.routes)
-					addEdge(edges, referrer, route.texture, RefKind::kChannelRoute);
-				break;
-
-			case ShadingModel::kCount:
+				for (const auto& [key, kind] :
+				     mapMaterialTextures(material, [](const std::string& k) { return k; }))
+					addEdge(edges, referrer, key, kind);
+			}
+			catch (const std::exception& e)
+			{
 				throw std::runtime_error(
-					"assetlib::AssetRefGraph: the material '" + referrer +
-					"' names an unknown shading model, so its textures cannot be known");
+					"assetlib::AssetRefGraph: the material '" + referrer + "': " + e.what());
 			}
 		}
 
