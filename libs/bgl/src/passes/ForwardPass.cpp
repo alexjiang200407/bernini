@@ -7,9 +7,9 @@
 #include "fg/FrameGraph.h"
 #include "fg/PassDesc.h"
 #include "idl/BaseTable.h"
+#include "passes/BinderNames.h"
 #include "passes/DrawData.h"
 #include "passes/SceneBindings.h"
-#include "passes/binder_names.h"
 #include "pipeline/MeshletPipeline.h"
 #include "resource/FrameBuffer.h"
 #include "resource/ResourceManager.h"
@@ -50,7 +50,7 @@ namespace bgl
 		} };
 
 		// Every member BindKernel and its callers name, beyond the buffer tables above. Kept beside
-		// the code that writes them so ValidateBinderNames catches a shader rename at startup: a
+		// the code that writes them so BinderNames catches a shader rename at startup: a
 		// stale name is indistinguishable from an absent one once binding reaches IsValid().
 		constexpr std::array<std::string_view, 6> c_ViewDataFields = {
 			"viewProj"sv, "prevViewProj"sv, "jitter"sv, "prevJitter"sv, "time"sv, "prevTime"sv,
@@ -266,30 +266,15 @@ namespace bgl
 			m_Kernels[pso] = BuildForwardKernel(device, c_Psos[pso]);
 		}
 
-		ValidateBinderNames(
-			"ForwardPass"sv,
-			m_Kernels,
-			"forwardData"sv,
-			UniformKeys(c_ForwardDataBuffers));
-		ValidateBinderNames(
-			"ForwardPass"sv,
-			m_Kernels,
-			"expansionData"sv,
-			UniformKeys(c_ExpansionBuffers));
-		ValidateBinderNames("ForwardPass"sv, m_Kernels, "expansionData"sv, c_ExpansionDataFields);
-		ValidateBinderNames("ForwardPass"sv, m_Kernels, "viewData"sv, c_ViewDataFields);
-		ValidateBinderNames(
-			"ForwardPass"sv,
-			m_Kernels,
-			"materialData"sv,
-			UniformKeys(c_MaterialBuffers));
-		ValidateBinderNames("ForwardPass"sv, m_Kernels, "materialData"sv, c_MaterialDataFields);
-		ValidateBinderNames("ForwardPass"sv, m_Kernels, "vatData"sv, UniformKeys(c_VatBuffers));
-		ValidateBinderNames(
-			"ForwardPass"sv,
-			m_Kernels,
-			"skinnedData"sv,
-			UniformKeys(c_SkinnedBuffers));
+		BinderNames("ForwardPass"sv, m_Kernels)
+			.Check("forwardData"sv, GetUniformKeys(c_ForwardDataBuffers))
+			.Check("expansionData"sv, GetUniformKeys(c_ExpansionBuffers))
+			.Check("expansionData"sv, c_ExpansionDataFields)
+			.Check("viewData"sv, c_ViewDataFields)
+			.Check("materialData"sv, GetUniformKeys(c_MaterialBuffers))
+			.Check("materialData"sv, c_MaterialDataFields)
+			.Check("vatData"sv, GetUniformKeys(c_VatBuffers))
+			.Check("skinnedData"sv, GetUniformKeys(c_SkinnedBuffers));
 	}
 
 	void

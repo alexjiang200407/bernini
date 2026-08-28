@@ -392,3 +392,22 @@ TEST_CASE("An optional uniform write skips a member the shader does not declare"
 		CHECK_THROWS(kernel["gUniforms"]["noSuchBuffer"] = handle);
 	}
 }
+
+TEST_CASE("Only a type the mirror can store is assignable to an accessor", "[uniforms]")
+{
+	STATIC_REQUIRE(bgl::UniformAssignable<float>);
+	STATIC_REQUIRE(bgl::UniformAssignable<glm::mat4>);
+	STATIC_REQUIRE(bgl::UniformAssignable<bgl::DescriptorHandle>);
+
+	// The four handle types reach their own assignment operators rather than the value one.
+	STATIC_REQUIRE(bgl::UniformAssignable<bgl::BufferHandle>);
+	STATIC_REQUIRE(bgl::UniformAssignable<bgl::SrvHandle>);
+	STATIC_REQUIRE(bgl::UniformAssignable<bgl::SamplerHandle>);
+	STATIC_REQUIRE(bgl::UniformAssignable<bgl::TextureAssetHandle>);
+
+	// A double is the near miss that matters: writing 1.0 where the cbuffer declares a float is a
+	// compile error, not a silent kNone that would throw only once the pass ran.
+	STATIC_REQUIRE_FALSE(bgl::UniformAssignable<double>);
+	STATIC_REQUIRE_FALSE(bgl::UniformAssignable<int64_t>);
+	STATIC_REQUIRE_FALSE(bgl::UniformAssignable<std::string>);
+}

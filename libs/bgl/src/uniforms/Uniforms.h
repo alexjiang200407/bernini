@@ -88,11 +88,8 @@ namespace bgl
 			GetSize() const = 0;
 		};
 
-		template <typename...>
-		inline constexpr bool always_false = false;
-
 		template <typename T>
-		UniformValueType
+		constexpr UniformValueType
 		ValueMap()
 		{
 			if constexpr (std::is_same_v<T, float>)
@@ -126,9 +123,19 @@ namespace bgl
 			else if constexpr (std::is_enum_v<T>)
 				return ValueMap<std::underlying_type_t<T>>();
 			else
-				static_assert(always_false<T>, "Unsupported uniform type T");
+				return UniformValueType::kNone;
 		}
+
+		/** A type the mirror stores as a value: a scalar, a glm vector or matrix, an enum, a handle. */
+		template <typename T>
+		concept UniformValue = ValueMap<T>() != UniformValueType::kNone;
 	}
+
+	/** A type one of `Uniforms::AccessorBase`'s assignment operators accepts. */
+	template <typename T>
+	concept UniformAssignable = detail::UniformValue<T> || std::same_as<T, BufferHandle> ||
+	                            std::same_as<T, SamplerHandle> || std::same_as<T, SrvHandle> ||
+	                            std::same_as<T, TextureAssetHandle>;
 
 	class Uniforms final
 	{
@@ -163,7 +170,7 @@ namespace bgl
 				return m_Node != nullptr && m_Node->GetType() != UniformType::kNull;
 			}
 
-			template <typename T>
+			template <detail::UniformValue T>
 			explicit
 			operator T() const
 			{
@@ -175,7 +182,7 @@ namespace bgl
 				return value;
 			}
 
-			template <typename T>
+			template <detail::UniformValue T>
 			bool
 			operator==(const T& val) const
 			{
@@ -265,7 +272,7 @@ namespace bgl
 			 * hazard: a name no variant declares reads the same as a field this one omits, so a
 			 * binder using this must resolve its names once through `FindUnknownMembers`.
 			 */
-			template <typename T>
+			template <UniformAssignable T>
 			void
 			SetIfValid(const T& value)
 			{
@@ -293,7 +300,7 @@ namespace bgl
 				return m_Offset;
 			}
 
-			template <typename T>
+			template <detail::UniformValue T>
 			void
 			operator=(T value) const
 			{
@@ -315,7 +322,7 @@ namespace bgl
 					core::throw_runtime_error("Uniforms::Accessor: node is not a value type");
 			}
 
-			template <typename T>
+			template <detail::UniformValue T>
 			void
 			AssertType() const
 			{

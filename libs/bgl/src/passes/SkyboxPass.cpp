@@ -4,8 +4,8 @@
 #include "device/Device.h"
 #include "fg/FrameGraph.h"
 #include "fg/PassDesc.h"
+#include "passes/BinderNames.h"
 #include "passes/DrawData.h"
-#include "passes/binder_names.h"
 #include "pipeline/MeshletPipeline.h"
 #include "resource/FrameBuffer.h"
 #include "resource/Shader.h"
@@ -23,7 +23,7 @@ namespace bgl
 		constexpr auto c_Cbuffer = "gSkyboxData"sv;
 
 		// Every member Execute writes. Kept beside the code that writes them so
-		// ValidateBinderNames catches a shader rename at startup: an optional write is silent, so
+		// BinderNames catches a shader rename at startup: an optional write is silent, so
 		// a stale name would otherwise resolve to nothing every frame and say nothing.
 		constexpr std::array<std::string_view, 8> c_Fields = {
 			"clipToWorld"sv, "prevWorldToClip"sv, "cubeTex"sv, "sampler"sv,
@@ -61,7 +61,7 @@ namespace bgl
 
 		m_Kernel = device->CreateMeshletKernel(pipelineDesc);
 
-		ValidateBinderNames("SkyboxPass"sv, { &m_Kernel, 1 }, c_Cbuffer, c_Fields);
+		BinderNames("SkyboxPass"sv, { &m_Kernel, 1 }).Check(c_Cbuffer, c_Fields);
 	}
 
 	void
