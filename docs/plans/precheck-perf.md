@@ -141,6 +141,13 @@ so a slow load cannot be attributed from a log at all.
   a CLI, and a decision rather than an accident.
 - **Two editor log files, two clocks.** `editor.log` (Qt handler, `main.cpp:19`) and `bgl.log`
   (spdlog). See ADR-3.
+- **The default logger's level is the renderer's, and it is `kError`.** `init_file_logger` applies
+  `GraphicsOptions::logLevel` (`libs/core/src/log.cpp:23`), which defaults to `LogLevel::kError`
+  (`libs/bgl/include/bgl/IGraphics.h:55`) and which no config in the tree overrides. An `info` line
+  logged *through* that logger is dropped in the editor — the one place a slow cook most needs
+  explaining. Found by review on #502, and why `ScopedStage` writes through the default logger's
+  **sinks** rather than through the logger: a cook diagnostic is not renderer chatter, and the two
+  must not share a knob. Every later stage must go the same way.
 - **No benchmark infrastructure exists.** Zero Catch2 `BENCHMARK` in the tree; three ad-hoc
   `steady_clock` sites, tabulated in ADR-2.
 - **`CountingFileSystem` already exists** (`libs/assetlib/tests/src/CountingFileSystem.h`) and counts
