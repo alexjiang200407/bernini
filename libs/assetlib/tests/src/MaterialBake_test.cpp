@@ -427,11 +427,12 @@ TEST_CASE("materials that route a group identically share one baked map", "[bmat
 	}
 }
 
-TEST_CASE("bakeMaterial re-encodes a map only when a source is newer", "[bmaterial][bake]")
+TEST_CASE("bakeMaterial reuses a map unless what it names changed", "[bmaterial][bake]")
 {
 	const BakeDir dir("bernini_bake_cache");
 
-	WriteSource(dir.path / "a.ktx2", 16, { { 200, 100, 50, 255 } });
+	const auto source = dir.path / "a.ktx2";
+	WriteSource(source, 16, { { 200, 100, 50, 255 } });
 
 	BMaterial mat;
 	mat.pbr.routes[0] = { "a.ktx2", 0 };
@@ -440,7 +441,7 @@ TEST_CASE("bakeMaterial re-encodes a map only when a source is newer", "[bmateri
 	const auto baked = dir.path / mat.pbr.baseColorTexture;
 
 	// Overwrite the baked map with a sentinel. Whether the next bake rewrites it is then observable
-	// directly, rather than inferred from the timestamps isUpToDate itself compares.
+	// directly, rather than inferred from the state the bake itself consults.
 	const auto writeSentinel = [&]() {
 		std::ofstream out(baked, std::ios::binary | std::ios::trunc);
 		out << "SENTINEL";
@@ -450,6 +451,14 @@ TEST_CASE("bakeMaterial re-encodes a map only when a source is newer", "[bmateri
 		std::string   text;
 		in >> text;
 		return text == "SENTINEL";
+	};
+
+	// Moves `source` on in time without changing a byte of it, which is what a checkout does to
+	// every file it touches.
+	const auto touchSource = [&]() {
+		std::filesystem::last_write_time(
+			source,
+			std::filesystem::last_write_time(baked) + std::chrono::seconds(5));
 	};
 
 	BMaterial again;
@@ -465,26 +474,119 @@ TEST_CASE("bakeMaterial re-encodes a map only when a source is newer", "[bmateri
 		REQUIRE(again.pbr.baseColorTexture == mat.pbr.baseColorTexture);
 	}
 
-	SECTION("a source touched after the map was written forces a re-encode")
+	SECTION("a source touched but not edited is still the source the map was baked from")
 	{
+		// A `git pull` or `checkout` moves every mtime without changing a byte. The map's name says
+		// what it holds, so nothing here is stale and a whole project does not re-encode.
 		writeSentinel();
-		std::filesystem::last_write_time(
-			dir.path / "a.ktx2",
-			std::filesystem::last_write_time(baked) + std::chrono::seconds(5));
+		touchSource();
 
 		REQUIRE_NOTHROW(StoreAt(dir.path).BakeMaterial(again));
 
-		REQUIRE_FALSE(sentinelSurvives());
-		REQUIRE(loadKTX2(baked).vkFormat == VkFormat::BC1_RGB_SRGB_BLOCK);
+		REQUIRE(sentinelSurvives());
+		REQUIRE(again.pbr.baseColorTexture == mat.pbr.baseColorTexture);
+	}
+
+	SECTION("an edited source names a different map, leaving the old one alone")
+	{
+		writeSentinel();
+		WriteSource(source, 16, { { 20, 30, 40, 255 } });
+		touchSource();
+
+		REQUIRE_NOTHROW(StoreAt(dir.path).BakeMaterial(again));
+
+		REQUIRE(again.pbr.baseColorTexture != mat.pbr.baseColorTexture);
+		REQUIRE(
+			loadKTX2(dir.path / again.pbr.baseColorTexture).vkFormat ==
+			VkFormat::BC1_RGB_SRGB_BLOCK);
+
+		// The old map is one the prune reclaims, not one this bake may overwrite: another material
+		// may still name it.
+		REQUIRE(sentinelSurvives());
+	}
+
+	SECTION("a parameter change names a different map")
+	{
+		// Nothing about the sources moved, so only the key's other half can carry this: cutout base
+		// colour keeps its alpha and bakes BC7 with coverage-preserving mips.
+		writeSentinel();
+		again.pbr.alphaMode = AlphaMode::kMask;
+
+		REQUIRE_NOTHROW(StoreAt(dir.path).BakeMaterial(again));
+
+		REQUIRE(again.pbr.baseColorTexture != mat.pbr.baseColorTexture);
+		REQUIRE(sentinelSurvives());
 	}
 }
 
-TEST_CASE("bakeMaterial rejects a material with nothing routed", "[bmaterial][bake]")
+TEST_CASE("bakeMaterial never decodes a source whose map is already there", "[bmaterial][bake]")
 {
-	const BakeDir dir("bernini_bake_empty");
+	const BakeDir dir("bernini_bake_nodecode");
+
+	// Not an image at all. A bake that had to composite this would throw out of loadKTX2, so a bake
+	// that succeeds is one that read the file's bytes and never asked what they meant -- which is the
+	// whole saving, since decoding is what a re-bake costs.
+	{
+		std::ofstream out(dir.path / "a.ktx2", std::ios::binary | std::ios::trunc);
+		out << "not a ktx2";
+	}
 
 	BMaterial mat;
-	REQUIRE_THROWS_AS(StoreAt(dir.path).BakeMaterial(mat), std::runtime_error);
+	mat.pbr.routes[0] = { "a.ktx2", 0 };
+
+	// Resolving names the map without writing one, which is how the map can be put there first.
+	BMaterial resolved = mat;
+	REQUIRE_NOTHROW(StoreAt(dir.path).ResolveMaterialBake(resolved));
+	REQUIRE_FALSE(resolved.pbr.baseColorTexture.empty());
+	REQUIRE_FALSE(std::filesystem::exists(dir.path / resolved.pbr.baseColorTexture));
+
+	std::filesystem::create_directories((dir.path / resolved.pbr.baseColorTexture).parent_path());
+	{
+		std::ofstream out(dir.path / resolved.pbr.baseColorTexture, std::ios::binary);
+		out << "ALREADY BAKED";
+	}
+
+	REQUIRE_NOTHROW(StoreAt(dir.path).BakeMaterial(mat));
+	REQUIRE(mat.pbr.baseColorTexture == resolved.pbr.baseColorTexture);
+}
+
+TEST_CASE("bakeMaterial leaves a material that routes nothing alone", "[bmaterial][bake]")
+{
+	// groupIsRouted already says an unrouted *group* is a complete bake rather than a missing one.
+	// All three unrouted is the same verdict, so it must not fail -- a batch of a hundred materials
+	// would otherwise die on the one whose graph wires nothing, and never reach the rest.
+	const BakeDir dir("bernini_bake_empty");
+
+	SECTION("nothing routed and nothing baked: the factors are the whole material")
+	{
+		BMaterial mat;
+		REQUIRE_NOTHROW(StoreAt(dir.path).BakeMaterial(mat));
+
+		CHECK(mat.pbr.baseColorTexture.empty());
+		CHECK(mat.pbr.ormTexture.empty());
+		CHECK(mat.pbr.normalTexture.empty());
+
+		// Not even a directory: there was nothing to put in one.
+		CHECK_FALSE(std::filesystem::exists(dir.path / "Derived/BakedTextures"));
+	}
+
+	SECTION("routes cleared after a bake: the triplet it draws from survives")
+	{
+		WriteSource(dir.path / "a.ktx2", 16, { { 200, 100, 50, 255 } });
+
+		BMaterial mat;
+		mat.pbr.routes[0] = { "a.ktx2", 0 };
+		REQUIRE_NOTHROW(StoreAt(dir.path).BakeMaterial(mat));
+
+		const std::string baked = mat.pbr.baseColorTexture;
+		REQUIRE_FALSE(baked.empty());
+
+		mat.pbr.routes = {};
+		REQUIRE_NOTHROW(StoreAt(dir.path).BakeMaterial(mat));
+
+		CHECK(mat.pbr.baseColorTexture == baked);
+		CHECK(std::filesystem::exists(dir.path / baked));
+	}
 }
 
 TEST_CASE("bakeMaterial accepts a Basis-supercompressed source", "[bmaterial][bake]")

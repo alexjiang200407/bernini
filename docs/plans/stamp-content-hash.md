@@ -58,6 +58,14 @@ output, so a re-bake can never be reproducible.
   cost is a needless re-encode after a checkout, which produces a byte-identical file and so dirties
   nothing.
 
+  **Reversed for the material bake**, in the PR that did it. The residual cost was not residual: the
+  mtime test also forced every source to be *decoded* before it could run, because the key carried
+  the target resolution and only a decode supplied it. Folding each source's stamp into the key gives
+  the target the record of what produced it that this ADR said it lacked, so the question is *what*
+  after all -- and reuse across materials survives, because the key is composed from the sources
+  rather than from any one material's `routeStamps`. `env_bake.cpp`'s `bakeRoute` is untouched and
+  still orders by mtime.
+
 - **ADR-7 — This repo's own committed bakes are migrated with zeroed stamps, not re-baked.**
   `assets/Sky/forest.bsky`, `assets/EnvLighting/forest.benvl` and the two
   `assets/Materials/apples/*.bmaterial` are fixtures the suites load, so ADR-5's break would take CI

@@ -25,6 +25,10 @@ namespace assetlib
 		{
 			std::filesystem::path dataRoot;
 			std::filesystem::path textureDir;
+
+			// False resolves the triplet and encodes nothing, which is what naming a bake's output
+			// without paying for one takes.
+			bool write = true;
 		};
 	}
 
@@ -116,32 +120,68 @@ namespace assetlib
 			return out;
 		}
 
-		// Decodes every distinct source the material routes, each at its own resolution.
-		std::unordered_map<std::string, Source>
-		loadSources(const PbrParams& pbr, const std::filesystem::path& dataRoot)
+		/**
+		 * The material's routed sources, each decoded at most once and only when something asks for it.
+		 *
+		 * Decoding is the expensive half of a bake and a map already on disk needs none of it, so a
+		 * material whose every group is current transcodes nothing.
+		 */
+		class SourceCache
 		{
-			auto sources = std::unordered_map<std::string, Source>();
+		public:
+			explicit SourceCache(std::filesystem::path dataRoot) noexcept :
+				m_DataRoot(std::move(dataRoot))
+			{}
+
+			const Source&
+			Get(const std::string& texture)
+			{
+				if (const auto decoded = m_Decoded.find(texture); decoded != m_Decoded.end())
+					return decoded->second;
+
+				// Sources are read, not drawn: decode Basis to texels rather than to BC7 blocks.
+				const ImageData image = loadKTX2(m_DataRoot / texture, Ktx2Decode::kRgba8);
+
+				Source source;
+				source.pixels = topMipRgba8(image, texture);
+				source.width  = image.width;
+				source.height = image.height;
+				return m_Decoded.emplace(texture, std::move(source)).first->second;
+			}
+
+		private:
+			std::filesystem::path                   m_DataRoot;
+			std::unordered_map<std::string, Source> m_Decoded;
+		};
+
+		/**
+		 * The size + content hash of every distinct source the material routes.
+		 *
+		 * Read up front because both halves of the bake need it: the key each map is named by, and the
+		 * `routeStamps` written back once the maps are current.
+		 *
+		 * @throws std::runtime_error if a routed source cannot be read. Routing nothing is not an
+		 *         error: see bakeMaterial.
+		 */
+		std::unordered_map<std::string, SourceStamp>
+		stampRoutes(const PbrParams& pbr, const std::filesystem::path& dataRoot)
+		{
+			auto stamps = std::unordered_map<std::string, SourceStamp>();
 
 			for (const ChannelRoute& route : pbr.routes)
 			{
-				if (route.texture.empty() || sources.contains(route.texture))
+				if (route.texture.empty() || stamps.contains(route.texture))
 					continue;
 
-				// Sources are read, not drawn: decode Basis to texels rather than to BC7 blocks.
-				const ImageData image = loadKTX2(dataRoot / route.texture, Ktx2Decode::kRgba8);
+				const SourceStamp stamp = stampOf(dataRoot / route.texture);
+				if (stamp.size == 0)
+					throw std::runtime_error(
+						"assetlib::bakeMaterial: source '" + route.texture + "' cannot be read");
 
-				Source source;
-				source.pixels = topMipRgba8(image, route.texture);
-				source.width  = image.width;
-				source.height = image.height;
-				sources.emplace(route.texture, std::move(source));
+				stamps.emplace(route.texture, stamp);
 			}
 
-			if (sources.empty())
-				throw std::runtime_error(
-					"assetlib::bakeMaterial: the material routes no source textures");
-
-			return sources;
+			return stamps;
 		}
 
 		/**
@@ -199,10 +239,7 @@ namespace assetlib
 		// A group is sized to the largest source routed into *it*, so its output does not depend on any
 		// texture outside the group -- which is what lets two materials share the baked file.
 		std::pair<uint32_t, uint32_t>
-		groupExtent(
-			const PbrParams&                               pbr,
-			const Group&                                   group,
-			const std::unordered_map<std::string, Source>& sources)
+		groupExtent(const PbrParams& pbr, const Group& group, SourceCache& sources)
 		{
 			uint32_t width  = 0;
 			uint32_t height = 0;
@@ -214,7 +251,7 @@ namespace assetlib
 				if (route.texture.empty())
 					continue;
 
-				const Source& source = sources.at(route.texture);
+				const Source& source = sources.Get(route.texture);
 				width                = (std::max)(width, source.width);
 				height               = (std::max)(height, source.height);
 			}
@@ -223,9 +260,13 @@ namespace assetlib
 
 		/**
 		 * Everything that determines a baked map's bytes, as a canonical string: the group, the target
-		 * resolution and format, and the ordered (source, channel) pair feeding each of its components.
-		 * Two materials that agree on all of this produce byte-identical output, so they should -- and
-		 * do -- name the same file.
+		 * format, and the ordered (source, channel, source content) triple feeding each of its
+		 * components. Two materials that agree on all of this produce byte-identical output, so they
+		 * should -- and do -- name the same file.
+		 *
+		 * The target resolution is deliberately absent: a group is sized to the largest source routed
+		 * into it, so identical source content already implies it -- and leaving it out is what lets a
+		 * bake decide without decoding an image. See docs/asset_standards.md.
 		 *
 		 * `compression` is the *resolved* format, not `group.compression`: base color bakes to BC1 or
 		 * BC7 depending on whether the material routes alpha, and the two must not converge on one file
@@ -234,16 +275,14 @@ namespace assetlib
 		 */
 		std::string
 		bakeKey(
-			const PbrParams&     pbr,
-			const Group&         group,
-			uint32_t             width,
-			uint32_t             height,
-			Ktx2Compression      compression,
-			std::optional<float> mipCutoff)
+			const PbrParams&                                    pbr,
+			const Group&                                        group,
+			const std::unordered_map<std::string, SourceStamp>& stamps,
+			Ktx2Compression                                     compression,
+			std::optional<float>                                mipCutoff)
 		{
-			std::string key = std::string(group.name) + '|' + std::to_string(width) + 'x' +
-			                  std::to_string(height) + '|' +
-			                  std::to_string(static_cast<uint32_t>(compression));
+			std::string key =
+				std::string(group.name) + '|' + std::to_string(static_cast<uint32_t>(compression));
 
 			if (group.channels.count == c_BaseColorChannels.count)
 			{
@@ -256,10 +295,17 @@ namespace assetlib
 			{
 				const ChannelRoute& route = pbr.routes[i];
 				key += '|';
-				key += route.texture;  // empty for an unrouted channel: the fallback is implied
-				key += ':';
-				key += route.texture.empty() ? std::to_string(group.fallback) :
-				                               std::to_string(route.channel);
+
+				if (route.texture.empty())
+				{
+					key += ':' + std::to_string(group.fallback);
+					continue;
+				}
+
+				const SourceStamp& stamp = stamps.at(route.texture);
+				key += route.texture;
+				key += ':' + std::to_string(route.channel);
+				key += '@' + std::to_string(stamp.size) + ':' + std::to_string(stamp.hash);
 			}
 			return key;
 		}
@@ -272,11 +318,11 @@ namespace assetlib
 		 */
 		Rgba8
 		compose(
-			const PbrParams&                               pbr,
-			const Group&                                   group,
-			const std::unordered_map<std::string, Source>& sources,
-			uint32_t                                       width,
-			uint32_t                                       height)
+			const PbrParams& pbr,
+			const Group&     group,
+			SourceCache&     sources,
+			uint32_t         width,
+			uint32_t         height)
 		{
 			const size_t texels = static_cast<size_t>(width) * height;
 
@@ -298,7 +344,7 @@ namespace assetlib
 
 				if (!scaled.contains(route.texture))
 				{
-					const Source& source = sources.at(route.texture);
+					const Source& source = sources.Get(route.texture);
 					scaled.emplace(
 						route.texture,
 						resample(source.pixels, source.width, source.height, width, height));
@@ -311,46 +357,17 @@ namespace assetlib
 			return out;
 		}
 
-		// Whether `target` already holds this map's output: it exists and no source has been touched
-		// since it was written. Re-encoding a 4K map costs seconds, and a shared map is asked for once
-		// per material that references it.
+		// Whether a map is already on disk under the name bakeKey resolved to, which is the whole
+		// up-to-date test: that name covers everything determining the bytes, sources included.
 		//
-		// Mtime ordering, and deliberately not a SourceStamp comparison: the target records nothing
-		// about what produced it, and `pbr.routeStamps` is empty for a bake composed from a graph --
-		// so a stamp test would re-encode a map another material had just written. What it costs is a
-		// needless re-encode after a checkout moves every mtime; the output is byte-identical, so
-		// nothing downstream is dirtied by it.
+		// A stat, not a stamp: this only has to find the file, and hashing a 4K map to learn it exists
+		// costs more than the question is worth.
 		bool
-		isUpToDate(
-			const std::filesystem::path& target,
-			const PbrParams&             pbr,
-			const Group&                 group,
-			const std::filesystem::path& dataRoot)
+		hasBytes(const std::filesystem::path& target)
 		{
-			if (stampOf(target).size == 0)
-				return false;  // missing, or empty and so not a real map
-
-			const std::optional<std::filesystem::file_time_type> written = mtimeOf(target);
-			if (!written)
-				return false;
-
-			for (size_t i = channelIndex(group.channels, 0);
-			     i < channelIndex(group.channels, group.channels.count);
-			     ++i)
-			{
-				const ChannelRoute& route = pbr.routes[i];
-				if (route.texture.empty())
-					continue;
-
-				const std::filesystem::path source = dataRoot / route.texture;
-				if (stampOf(source).size == 0)
-					return false;
-
-				const std::optional<std::filesystem::file_time_type> touched = mtimeOf(source);
-				if (!touched || *touched > *written)
-					return false;
-			}
-			return true;
+			std::error_code ec;
+			const auto      size = std::filesystem::file_size(target, ec);
+			return !ec && size > 0;
 		}
 	}
 
@@ -364,10 +381,20 @@ namespace assetlib
 
 		PbrParams& pbr = material.pbr;
 
-		const std::unordered_map<std::string, Source> sources = loadSources(pbr, desc.dataRoot);
+		const std::unordered_map<std::string, SourceStamp> stamps = stampRoutes(pbr, desc.dataRoot);
+
+		// Routing nothing is a complete material, not a failed one: its factors are the whole
+		// description, and the triplet it may already carry is what draws it. Nothing to composite is
+		// nothing to do -- the same verdict bakeIsStale reaches -- so it must not fail a batch that a
+		// hundred other materials are in.
+		if (stamps.empty())
+			return;
+
+		SourceCache sources(desc.dataRoot);
 
 		const std::filesystem::path outDir = desc.dataRoot / desc.textureDir;
-		createDirectories(outDir);
+		if (desc.write)
+			createDirectories(outDir);
 
 		// Which triplet field each group fills, in c_Groups order.
 		std::string* const outputs[] = {
@@ -389,8 +416,6 @@ namespace assetlib
 
 			throwIfCancelled(cancel);
 
-			const auto [width, height] = groupExtent(pbr, group, sources);
-
 			const Ktx2Compression compression = groupCompression(pbr, group);
 
 			// Cutout and hashed mips are keyed against the cutoff; blend keeps its alpha but bakes
@@ -398,13 +423,14 @@ namespace assetlib
 			const std::optional<float> mipCutoff =
 				groupPreservesCoverage(pbr, group) ? std::optional(pbr.alphaCutoff) : std::nullopt;
 
-			const std::string name = bakedMapFileName(
-				group.name,
-				bakeKey(pbr, group, width, height, compression, mipCutoff));
+			const std::string name =
+				bakedMapFileName(group.name, bakeKey(pbr, group, stamps, compression, mipCutoff));
 			const auto target = outDir / name;
 
-			if (!isUpToDate(target, pbr, group, desc.dataRoot))
+			if (desc.write && !hasBytes(target))
 			{
+				const auto [width, height] = groupExtent(pbr, group, sources);
+
 				Rgba8 composed = compose(pbr, group, sources, width, height);
 
 				// A cutout/blend base colour keeps its alpha channel, so bleed opaque colour under the
@@ -431,9 +457,8 @@ namespace assetlib
 		// Record what each source measured, so a later edit to one of them shows up as a stale bake.
 		for (size_t i = 0; i < c_LooseChannelCount; ++i)
 		{
-			pbr.routeStamps[i] = pbr.routes[i].texture.empty() ?
-			                         SourceStamp{} :
-			                         stampOf(desc.dataRoot / pbr.routes[i].texture);
+			const std::string& texture = pbr.routes[i].texture;
+			pbr.routeStamps[i]         = texture.empty() ? SourceStamp{} : stamps.at(texture);
 		}
 
 		// The routes stay: they are how it gets re-baked, and what it draws from until then.
@@ -497,5 +522,14 @@ namespace assetlib
 			material,
 			{ .dataRoot = m_DataRoot, .textureDir = c_BakedTexturesDirectoryName },
 			cancel);
+	}
+
+	void
+	AssetStore::ResolveMaterialBake(BMaterial& material) const
+	{
+		bakeMaterial(
+			material,
+			{ .dataRoot = m_DataRoot, .textureDir = c_BakedTexturesDirectoryName, .write = false },
+			{});
 	}
 }

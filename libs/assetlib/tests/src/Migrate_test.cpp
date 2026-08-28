@@ -1,5 +1,6 @@
 #include <assetlib/codecs.h>
 #include <assetlib/container_info.h>
+#include <assetlib/image_io.h>
 #include <assetlib/migrate.h>
 #include <assetlib_structs/BEnv.h>
 #include <assetlib_structs/BMaterial.h>
@@ -9,6 +10,7 @@
 #include "CacheTamper.h"
 #include "ImportUnitGroup.h"
 #include "SkinnedGltf.h"
+#include "bmesh_texture.h"
 
 #include <core/file/file.h>
 
@@ -188,4 +190,110 @@ TEST_CASE("a rebind reaches disk through migrate without a regeneration", "[migr
 	const BMesh mesh = StoreAt(project.root).Load<BMesh>("Derived/Meshes/unit.bmesh");
 	REQUIRE(mesh.materials.size() == 1);
 	CHECK(mesh.materials[0] == "Authored/Materials/blue.bmaterial");
+}
+
+TEST_CASE("migrate brings a material's bake current", "[migrate][bake]")
+{
+	const Project project;
+	std::filesystem::create_directories(project.root / "Derived/SourceTextures");
+
+	const auto source      = project.root / "Derived/SourceTextures/a.ktx2";
+	const auto writeSource = [&source](std::array<uint8_t, 4> rgba) {
+		std::vector<std::byte> pixels(16u * 16u * 4u);
+		for (size_t t = 0; t < 16u * 16u; ++t)
+			for (size_t c = 0; c < 4; ++c) pixels[t * 4 + c] = static_cast<std::byte>(rgba[c]);
+
+		writeKTX2(rgba8ToImage(pixels, 16, 16), source, false, Ktx2Compression::kNone);
+	};
+
+	writeSource({ { 200, 100, 50, 255 } });
+
+	BMaterial material;
+	material.pbr.routes[0] = { "Derived/SourceTextures/a.ktx2", 0 };
+	StoreAt(project.root).BakeMaterial(material);
+	project.Write("Authored/Materials/m.bmaterial", AssetCodec<BMaterial>::Serialize(material));
+
+	const std::string wasBaked = material.pbr.baseColorTexture;
+	REQUIRE_FALSE(wasBaked.empty());
+
+	// Edit the source, leaving the material naming a map its routes no longer produce. That is the
+	// drift migrate exists to close, and it is what a project carries the first time a bake's naming
+	// rule moves under it.
+	writeSource({ { 20, 30, 40, 255 } });
+	std::filesystem::last_write_time(
+		source,
+		std::filesystem::last_write_time(source) + std::chrono::seconds(5));
+
+	SECTION("a dry run names the drift and encodes nothing")
+	{
+		const auto before = project.Read("Authored/Materials/m.bmaterial");
+		const auto report = AssetStore(project.root).Migrate(true);
+
+		CHECK(report.Count(MigratedFile::Outcome::kRewritten) == 1);
+		CHECK(project.Read("Authored/Materials/m.bmaterial") == before);
+
+		// Exactly the one map the first bake wrote: a dry run that had composited would have left a
+		// second beside it.
+		const auto textures =
+			std::filesystem::directory_iterator(project.root / "Derived/BakedTextures");
+		CHECK(std::ranges::distance(textures) == 1);
+	}
+
+	SECTION("a real run re-bakes once, and the second run finds nothing to do")
+	{
+		CHECK(
+			AssetStore(project.root).Migrate(false).Count(MigratedFile::Outcome::kRewritten) == 1);
+
+		const BMaterial rebaked =
+			StoreAt(project.root).Load<BMaterial>("Authored/Materials/m.bmaterial");
+		CHECK(rebaked.pbr.baseColorTexture != wasBaked);
+		CHECK(std::filesystem::exists(project.root / rebaked.pbr.baseColorTexture));
+
+		// The map the material used to name is left for the prune, not deleted here: another
+		// material may still hold it.
+		CHECK(std::filesystem::exists(project.root / wasBaked));
+
+		CHECK(
+			AssetStore(project.root).Migrate(false).Count(MigratedFile::Outcome::kRewritten) == 0);
+	}
+}
+
+TEST_CASE("migrate tells a delivered material from a broken one", "[migrate][bake]")
+{
+	// A delivered project: the triplet shipped, the sources it was baked from did not. There is
+	// nothing to re-bake from, and reporting every material in it as a failure would bury the ones
+	// that are real.
+	const Project project;
+
+	BMaterial material;
+	material.pbr.routes[0]        = { "Derived/SourceTextures/gone.ktx2", 0 };
+	material.pbr.baseColorTexture = "Derived/BakedTextures/basecolor_0123456789abcdef.ktx2";
+	project.Write("Authored/Materials/m.bmaterial", AssetCodec<BMaterial>::Serialize(material));
+
+	const auto report = AssetStore(project.root).Migrate(false);
+	CHECK(report.Count(MigratedFile::Outcome::kFailed) == 0);
+	CHECK(report.Count(MigratedFile::Outcome::kRewritten) == 0);
+	CHECK(report.Count(MigratedFile::Outcome::kUnchanged) == 1);
+
+	SECTION("but one routing a source that is there and one that is not has actually broken")
+	{
+		std::filesystem::create_directories(project.root / "Derived/SourceTextures");
+		std::vector<std::byte> pixels(16u * 16u * 4u, std::byte{ 0x80 });
+		writeKTX2(
+			rgba8ToImage(pixels, 16, 16),
+			project.root / "Derived/SourceTextures/here.ktx2",
+			false,
+			Ktx2Compression::kNone);
+
+		material.pbr.routes[1] = { "Derived/SourceTextures/here.ktx2", 1 };
+		project.Write("Authored/Materials/m.bmaterial", AssetCodec<BMaterial>::Serialize(material));
+
+		const auto broken = AssetStore(project.root).Migrate(false);
+		CHECK(broken.Count(MigratedFile::Outcome::kFailed) == 1);
+
+		const auto failed =
+			std::ranges::find(broken.files, MigratedFile::Outcome::kFailed, &MigratedFile::outcome);
+		REQUIRE(failed != broken.files.end());
+		CHECK_THAT(failed->message, ContainsSubstring("Derived/SourceTextures/gone.ktx2"));
+	}
 }

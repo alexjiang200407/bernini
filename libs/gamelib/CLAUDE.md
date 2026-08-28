@@ -54,12 +54,15 @@ no file, so they are not shared — but they are refcounted like anything else. 
 would make the shared material depend on who asked first.
 
 **The containers behind that identity are cached too**, separately: the `.bmesh`, `.bskel` and
-`.banim` a skinned acquire reads. Deserializing one is most of a second on a dense rig and a rig
-drawn as many meshes acquires once per mesh entry, so each is held beside the stamp it was read at.
-The cache never trusts itself -- the editor authors through `assetlib`, not through this -- so a read
-re-stamps *and* asks `AssetStore::GeometryIsStale`, because a re-exported source regenerates a cache
-entry in memory without its bytes changing. Only what `AcquireSkinnedMesh` reads is cached; the
-static and VAT doors still read every time.
+`.banim` an acquire reads, through every door. Deserializing one is most of a second on a dense rig
+and a rig drawn as many meshes acquires once per mesh entry -- twenty-seven on the test project's
+character -- so each is held beside the stamp it was read at. The cache never trusts itself -- the
+editor authors through `assetlib`, not through this -- so a read re-stamps *and* asks
+`AssetStore::GeometryIsStale`, because a re-exported source regenerates a cache entry in memory
+without its bytes changing.
+
+The blind spot it carries is **bindings**: `parametersHashOf` excludes them deliberately, so a
+rebind is served from the cache until something else invalidates the entry.
 
 **Lifetime.** References run along the edges the assets themselves have:
 

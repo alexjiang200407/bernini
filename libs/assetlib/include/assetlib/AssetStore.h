@@ -199,10 +199,27 @@ namespace assetlib
 		 * reference the split does not cover. The store is the data root it reads and writes
 		 * relative to, so it is not passed one either.
 		 *
+		 * A material that routes nothing comes back untouched rather than failing: its factors are
+		 * the whole description, which is the same verdict BakeIsStale reaches about one.
+		 *
 		 * @throws std::runtime_error / Cancelled as bakeMaterial.
 		 */
 		void
 		BakeMaterial(BMaterial& material, const CancelToken& cancel = {}) const;
+
+		/**
+		 * Writes `material`'s triplet the way BakeMaterial would, and encodes nothing.
+		 *
+		 * A map is named for everything that determines its bytes, so what a bake *would* produce
+		 * costs a stamp of each source and no decode -- which is what tells a dry run whether a bake
+		 * has anything to do. Unlike the other Resolve methods this mutates its argument, and the
+		 * names it writes may be of maps that are not on disk: that is the answer, not a failure.
+		 *
+		 * @throws std::runtime_error as bakeMaterial. Not cancellable -- there is nothing long
+		 *         enough to interrupt.
+		 */
+		void
+		ResolveMaterialBake(BMaterial& material) const;
 
 		/** @throws std::runtime_error / Cancelled as bakeSky. */
 		void
@@ -568,12 +585,18 @@ namespace assetlib
 		/**
 		 * Every container in this project re-saved at what its current state says it should be:
 		 * a stale cache entry regenerated from its source, an authored document rewritten
-		 * canonically.
+		 * canonically, a material's triplet re-baked where its sources no longer produce the maps
+		 * it names.
 		 *
 		 * A moved source's textures are re-extracted first, so the `.bimport` that stamps is on
 		 * disk before the walk reads any document.
 		 *
-		 * @param dryRun Report what would change without writing a byte.
+		 * A material with none of its routed sources on disk is left alone rather than failed: a
+		 * delivered project ships its triplet and none of its sources, and has nothing to re-bake
+		 * from. One with only some of them is a reference that has broken, and is reported.
+		 *
+		 * @param dryRun Report what would change without writing a byte -- a map included, so a
+		 *        material's re-bake is resolved rather than encoded.
 		 */
 		[[nodiscard]] MigrateReport
 		Migrate(bool dryRun) const;

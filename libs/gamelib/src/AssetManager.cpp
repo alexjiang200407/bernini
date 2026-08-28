@@ -383,7 +383,7 @@ namespace game
 			return record.handle;
 		}
 
-		const assetlib::BMesh mesh = LoadRegenMeshWarned(m_Store, relPath);
+		const assetlib::BMesh& mesh = ReadMesh(relPath);
 
 		if (meshIndex >= mesh.meshes.size())
 		{
@@ -461,7 +461,7 @@ namespace game
 		const auto bvatRel = assetlib::vatPathFor(relPath, animationsRelPath);
 		const auto vat     = EnsureVatBaked(m_Store, relPath, animationsRelPath);
 
-		const assetlib::BMesh mesh = LoadRegenMeshWarned(m_Store, relPath);
+		const assetlib::BMesh& mesh = ReadMesh(relPath);
 
 		core::throw_runtime_error_if(
 			meshIndex >= mesh.meshes.size(),

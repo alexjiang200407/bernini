@@ -71,9 +71,11 @@ namespace assetlib
 			createDirectories(outDir);
 			const std::filesystem::path target = outDir / name;
 
-			// Mtime ordering rather than a stamp comparison, for the reason material_bake's isUpToDate
-			// gives: the target records nothing about what produced it, and two environments sharing a
-			// source share the target, so a stamp test would re-encode what the other just wrote.
+			// Mtime ordering rather than a stamp comparison: this name covers the group and the
+			// source's path but not its content, so the target records nothing about what produced it
+			// -- and two environments sharing a source share the target, so a stamp test would
+			// re-encode what the other just wrote. (A material's maps are named for their content and
+			// so need no ordering at all; this one is not, yet.)
 			const std::filesystem::path sourcePath  = desc.dataRoot / route.source;
 			const SourceStamp           sourceStamp = stampOf(sourcePath);
 

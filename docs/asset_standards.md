@@ -100,11 +100,23 @@ There are **two producers of textures**, and they compress differently:
   `ktxTexture2_TranscodeBasis`es to the target (`Ktx2Compression::kBC1_RGB` / `kBC5_RG` / `kBC7_RGBA`).
 
   **Baked maps are shared, not owned by a material.** A map is named for the content that defines it --
-  `orm_<hash>.ktx2`, where the hash covers the group, its resolution, its target format and the ordered
-  (source, channel) pairs feeding it. Two materials whose ORM channels route identically therefore name
-  the same file and write it once, instead of emitting byte-identical copies under each material's name.
-  (The Apples model is exactly this: two submeshes, two materials, one shared ORM source.) A map that
-  already exists and is newer than every source feeding it is not re-encoded.
+  `orm_<hash>.ktx2`, where the hash covers the group, its target format and, per channel, the source
+  routed into it *and that source's own size and content hash*. Two materials whose ORM channels route
+  identically therefore name the same file and write it once, instead of emitting byte-identical copies
+  under each material's name. (The Apples model is exactly this: two submeshes, two materials, one
+  shared ORM source.)
+
+  **The name is the whole up-to-date test.** A map found under it was composed from exactly these
+  inputs, so a bake that finds one decodes nothing and re-encodes nothing -- which is what makes baking
+  a whole project cheap when little of it moved. Nothing is compared against a timestamp: a `git pull`
+  moves every mtime without changing a byte, and a bake that read mtimes re-encoded the project for it.
+  The target resolution is deliberately *not* in the hash, because a group is sized to the largest
+  source routed into it and identical source content already implies that -- leaving it out is what
+  lets the test run without decoding an image.
+
+  Editing a source therefore names a *different* map and leaves the old one for the prune, exactly as
+  repointing a route does. Overwriting in place was the alternative, and it is unsound: two materials
+  can share a map, and the second one's bake would silently change what the first is drawing.
 
   **Nothing owns a map, so nothing deletes one implicitly.** Because the name is a hash of the routing,
   re-baking a material whose routes changed writes a *new* file and simply stops naming the old one,

@@ -115,6 +115,39 @@ namespace
 		                                                    "Derived/Animations/rig.banim" } };
 }
 
+TEST_CASE("The static and VAT doors read their mesh once too", "[static][acquire][cache]")
+{
+	// A rig drawn as many meshes acquires once per mesh entry -- twenty-seven on the test project's
+	// character -- and these two doors used to deserialize the whole `.bmesh` on every one of them,
+	// where the skinned door has always gone through the cache.
+	DataRoot root("bernini_container_cache_static");
+	WriteRig(root.path);
+
+	auto gfx = bgl::CreateGraphics(HeadlessOptions());
+	REQUIRE(gfx != nullptr);
+
+	auto scene = gfx->CreateScene(bgl::SceneDesc());
+	auto view  = gfx->CreateSceneView(scene, 8);
+
+	auto files  = std::make_shared<CountingFiles>(root.path);
+	auto assets = game::AssetManager(scene, assetlib::AssetStore(root.path, files));
+
+	const bgl::GeomHandle first = assets.AcquireMesh("Derived/Meshes/rig.bmesh");
+	REQUIRE(first.IsValid());
+
+	// Released to zero, so the geom cache cannot be what answers the second acquire.
+	assets.ReleaseGeom(first);
+
+	const int before = files->ReadsOf("Derived/Meshes/rig.bmesh");
+
+	const bgl::GeomHandle second = assets.AcquireMesh("Derived/Meshes/rig.bmesh");
+	REQUIRE(second.IsValid());
+
+	// Two, not three: both staleness questions are asked again and the deserialize is what is
+	// skipped, exactly as it is for the skinned door below.
+	CHECK(files->ReadsOf("Derived/Meshes/rig.bmesh") == before + 2);
+}
+
 TEST_CASE("Acquiring a rig twice reads its containers once", "[skinned][acquire][cache]")
 {
 	DataRoot root("bernini_container_cache");

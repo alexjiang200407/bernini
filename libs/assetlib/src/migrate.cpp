@@ -28,6 +28,49 @@ namespace assetlib
 	namespace
 	{
 		/**
+		 * Whether a re-bake has anything to read: a PBR material routing sources that are on disk.
+		 *
+		 * Nothing readable is nothing to do, and covers two materials that are both fine as they are:
+		 * one routing nothing, whose factors are the whole description, and a delivered project's,
+		 * whose triplet shipped without the sources under `Derived/SourceTextures`. Some readable and
+		 * some not is a reference that has actually broken, and is reported as one.
+		 *
+		 * @throws std::runtime_error naming a missing source, where others are on disk.
+		 */
+		bool
+		canRebake(const AssetStore& store, const BMaterial& material)
+		{
+			if (material.shadingModel != ShadingModel::kPbr)
+				return false;
+
+			size_t             routed  = 0;
+			size_t             present = 0;
+			const std::string* missing = nullptr;
+
+			for (const ChannelRoute& route : material.pbr.routes)
+			{
+				if (route.texture.empty())
+					continue;
+
+				++routed;
+				if (store.StampOf(route.texture).size != 0)
+					++present;
+				else if (missing == nullptr)
+					missing = &route.texture;
+			}
+
+			if (present == 0)
+				return false;
+
+			core::throw_runtime_error_if(
+				present < routed,
+				"it routes '{}', which is not on disk",
+				*missing);
+
+			return true;
+		}
+
+		/**
 		 * The bytes the project's current state says `key` should hold, or nullopt for a type
 		 * this does not migrate. Geometry goes through the regeneration seam, so a stale group
 		 * re-cooks from its copied source and a binding-only document edit reaches disk without
@@ -39,7 +82,8 @@ namespace assetlib
 			const AssetStore&          store,
 			AssetType                  type,
 			std::string_view           key,
-			std::span<const std::byte> bytes)
+			std::span<const std::byte> bytes,
+			bool                       dryRun)
 		{
 			switch (type)
 			{
@@ -58,7 +102,21 @@ namespace assetlib
 			case AssetType::kAnimation:
 				return AssetCodec<AnimationSet>::Serialize(store.LoadRegenAnimations(key));
 			case AssetType::kMaterial:
-				return AssetCodec<BMaterial>::Serialize(AssetCodec<BMaterial>::Deserialize(bytes));
+			{
+				BMaterial material = AssetCodec<BMaterial>::Deserialize(bytes);
+
+				// A triplet naming maps its sources no longer produce is the same drift as a stale
+				// mesh, and the bake writes nothing where the maps it resolves are already there.
+				if (canRebake(store, material))
+				{
+					if (dryRun)
+						store.ResolveMaterialBake(material);
+					else
+						store.BakeMaterial(material);
+				}
+
+				return AssetCodec<BMaterial>::Serialize(material);
+			}
 			case AssetType::kSky:
 				return AssetCodec<BSky>::Serialize(AssetCodec<BSky>::Deserialize(bytes));
 			case AssetType::kEnvLighting:
@@ -309,7 +367,7 @@ namespace assetlib
 					normalizeRef(path.lexically_relative(GetDataRoot()).generic_string());
 
 				const auto bytes   = core::file::read_file_bytes(path.string());
-				const auto current = resave(*this, *type, key, bytes);
+				const auto current = resave(*this, *type, key, bytes, dryRun);
 				if (!current)
 					continue;
 				if (*current != bytes)
