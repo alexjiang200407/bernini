@@ -182,7 +182,7 @@ main(int argc, char** argv)
 	// was not a project be passed and silently accepted.
 	std::string projectFile;
 	const auto  addProject = [&projectFile](CLI::App* command) {
-		command->add_option("-p,--project", projectFile, "The .berniniproject to work in")
+		command->add_option("-p,--project", projectFile, "The .bproj to work in")
 			->required()
 			->check(CLI::ExistingFile);
 	};
@@ -193,9 +193,9 @@ main(int argc, char** argv)
 
 	auto* bake = app.add_subcommand(
 		"bake",
-		"Import a .glb into a project: the mesh into Meshes/, its textures into textures_src/, "
-		"the source copy and its import document into meshes_src/, and the rig into Skeletons/ "
-		"and Animations/ when it carries a skin");
+		"Import a .glb into a project: the mesh into Derived/Meshes/, its textures into "
+		"Derived/SourceTextures/, the source copy and its import document into Authored/Meshes/, "
+		"and the rig into Derived/Skeletons/ and Derived/Animations/ when it carries a skin");
 	addProject(bake);
 	bake->add_option("input", input, "Source .glb file, a path on disk")
 		->required()
@@ -333,7 +333,17 @@ main(int argc, char** argv)
 		"Asset to report on, relative to the data root. Omitted, the whole project is summarised, "
 		"and every dangling reference listed");
 
-	std::string pruneTextureDir = assetlib::c_TexturesDirectoryName;
+	std::string renameFrom;
+	std::string renameTo;
+
+	auto* rename = app.add_subcommand(
+		"rename",
+		"Move an asset within a project and rewrite every reference that followed it");
+	addProject(rename);
+	rename->add_option("from", renameFrom, "Asset to move, relative to the data root")->required();
+	rename->add_option("to", renameTo, "Where it lands, relative to the data root")->required();
+
+	std::string pruneTextureDir = assetlib::c_BakedTexturesDirectoryName;
 	bool        pruneDryRun     = false;
 	bool        pruneYes        = false;
 
@@ -480,7 +490,7 @@ main(int argc, char** argv)
 				dataRoot / assetlib::c_AnimationsDirectoryName / assetlib::animationFileName(name);
 
 			// Its own folder: two sources naming an image alike would collide in a shared one.
-			const fs::path textureDir = dataRoot / assetlib::c_TexturesSrcDirectoryName / name;
+			const fs::path textureDir = dataRoot / assetlib::c_SourceTexturesDirectoryName / name;
 
 			assetlib::requireSelfContainedSource(input);
 
@@ -540,7 +550,7 @@ main(int argc, char** argv)
 			for (const fs::path& file : files) written.push_back({ file, false });
 
 			const std::array<assetlib::ImportedDir, 1> dirs = { {
-				{ textureDir, false, dataRoot / assetlib::c_TexturesSrcDirectoryName },
+				{ textureDir, false, dataRoot / assetlib::c_SourceTexturesDirectoryName },
 			} };
 
 			try
@@ -1077,6 +1087,37 @@ main(int argc, char** argv)
 		catch (const std::exception& e)
 		{
 			spdlog::error("bakebounds failed: {}", e.what());
+			return 1;
+		}
+	}
+
+	if (*rename)
+	{
+		try
+		{
+			const assetlib::Project     project = assetlib::Project::Open(projectFile);
+			const assetlib::AssetStore& store   = project.GetStore();
+
+			const auto plan =
+				assetlib::planRename(assetlib::AssetRefGraph::Scan(store), renameFrom, renameTo);
+
+			const assetlib::RenameResult result = store.RenameAsset(plan);
+			if (result.status != assetlib::RenameStatus::kRenamed)
+			{
+				spdlog::error("rename failed: {}", result.error);
+				return 1;
+			}
+
+			spdlog::info(
+				"Renamed {} -> {}, rewriting {} reference(s)",
+				plan.from,
+				plan.to,
+				plan.referrers.size());
+			return 0;
+		}
+		catch (const std::exception& e)
+		{
+			spdlog::error("rename failed: {}", e.what());
 			return 1;
 		}
 	}

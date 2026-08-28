@@ -29,7 +29,7 @@
         "temporalAA": true,
         "renderScale": 1.0,
         "taaReconstructionWidth": 0.4,
-        "environmentMap": "assets/Data/Environments/forest.benv",
+        "environmentMap": "assets/Data/Authored/Environments/forest.benv",
         "dataRoot": "assets/Data"
     },
     "materialEditor": {
@@ -37,7 +37,7 @@
         "temporalAA": true,
         "renderScale": 1.0,
         "taaReconstructionWidth": 0.4,
-        "environmentMap": "assets/Data/Environments/forest.benv",
+        "environmentMap": "assets/Data/Authored/Environments/forest.benv",
         "dataRoot": "assets/Data"
     },
     "animationEditor": {
@@ -45,13 +45,13 @@
         "temporalAA": true,
         "renderScale": 1.0,
         "taaReconstructionWidth": 0.4,
-        "environmentMap": "assets/Data/Environments/forest.benv",
+        "environmentMap": "assets/Data/Authored/Environments/forest.benv",
         "dataRoot": "assets/Data"
     },
     "thumbnails": {
         "dimension": 256,
         "initialInstances": 256,
-        "environmentMap": "assets/Data/Environments/forest.benv",
+        "environmentMap": "assets/Data/Authored/Environments/forest.benv",
         "dataRoot": "assets/Data"
     }
 }

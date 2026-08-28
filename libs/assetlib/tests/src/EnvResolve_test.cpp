@@ -154,7 +154,7 @@ TEST_CASE("resolving follows only what the .benv references", "[benv][resolve]")
 	{
 		BSky sky;
 		sky.name       = "raw";
-		sky.sky.source = "textures_src/raw.ktx2";
+		sky.sky.source = "Derived/SourceTextures/raw.ktx2";
 		StoreAt(root.path).Save(sky, "raw.bsky");
 		SaveAt(BEnv{ .name = "raw", .sky = "raw.bsky" }, root.path / "raw.benv");
 

@@ -37,7 +37,8 @@ namespace assetlib
 
 		/**
 		 * Packed materials drawing from their routes rather than a baked triplet. An archive carries
-		 * no `textures_src`, so these ship with nothing to sample -- a valid archive whose failure
+		 * no `Derived/SourceTextures`, so these ship with nothing to sample -- a valid archive
+		 * whose failure
 		 * shows only as an untextured surface. Sorted, so two packs of one tree report alike.
 		 */
 		std::vector<std::string> materialsDrawingLoose;

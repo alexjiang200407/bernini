@@ -74,8 +74,11 @@ when this doc disagrees, trust the header, then fix this doc.
   [AssetStore.h](libs/assetlib/include/assetlib/AssetStore.h)
 
 * **Every reference is data-root-relative, and layout is a table.** A `.bmesh` in
-  `Meshes/props/` names `Textures/skin.ktx2`, not a path relative to itself, so a bake writing
-  that file and a mesh naming it agree without either knowing where the other lives.
+  `Derived/Meshes/props/` names `Derived/BakedTextures/skin.ktx2`, not a path relative to itself, so a bake writing
+  that file and a mesh naming it agree without either knowing where the other lives. The data root's
+  first level is the authored/derived split — `Authored/` holds what a person decided, `Derived/`
+  what a bake or an import computed — so a project's commit rule is a directory rather than a list
+  of extensions.
   [libs/assetlib/include/assetlib/project_layout.h](libs/assetlib/include/assetlib/project_layout.h)
 
 * **Baked maps are shared, not owned.** A bake's output name is content-addressed from its
@@ -98,7 +101,7 @@ when this doc disagrees, trust the header, then fix this doc.
 | Type | File | Role |
 |---|---|---|
 | `AssetStore` | [AssetStore.h](libs/assetlib/include/assetlib/AssetStore.h) | The project: the read mount and the writable root as one. Loads every container by key, answers staleness, describes against disk. |
-| `Project` | [Project.h](libs/assetlib/include/assetlib/Project.h) | A `.berniniproject` on disk: the metadata file, the scaffolded `Data/` tree, and the `AssetStore` over it. |
+| `Project` | [Project.h](libs/assetlib/include/assetlib/Project.h) | A `.bproj` on disk: the metadata file, the scaffolded `Data/` tree, and the `AssetStore` over it. |
 | `AssetRefGraph` | [asset_refs.h](libs/assetlib/include/assetlib/asset_refs.h) | One walk of the project: who references what. Backs deletion, rename and the prune. |
 | `DeletionPlan` / `RenamePlan` | [asset_refs.h](libs/assetlib/include/assetlib/asset_refs.h) | What an edit would destroy or rewrite, decided before anything is touched. |
 
@@ -121,7 +124,7 @@ is what a caller reaches for only when it holds bytes no store addresses, which 
 | `.bskel` / `.banim` | A rig; clip samples resampled against it. Split because a rig outlives its clips. |
 | `.bvat` | A baked position/normal texture pair and its tables. Derived, never committed. |
 | `.bsky` / `.benvl` / `.benv` | Backdrop; the lighting pair convolved from it; the few bytes naming both. [docs/envmaps.md](docs/envmaps.md) |
-| `.bimport` | One per copied source under `meshes_src/`: the bindings and parameters an import was authored with, as text. What a stale cache entry re-cooks from. Its struct is [import_document.h](libs/assetlib/include/assetlib/import_document.h). |
+| `.bimport` | One per copied source under `Authored/Meshes/`: the bindings and parameters an import was authored with, as text. What a stale cache entry re-cooks from. Its struct is [import_document.h](libs/assetlib/include/assetlib/import_document.h). |
 | `.bpak` | The archive the rest are packed into — not a codec, since nothing references one. [pak.h](libs/assetlib/include/assetlib/pak.h). [docs/archives.md](docs/archives.md) |
 
 ### Operations
@@ -224,11 +227,11 @@ The dotted edge is the asymmetry: reads go through the store, writes go around i
 auto project = assetlib::Project::Open(projectFile);
 const auto& store = project.GetStore();
 
-auto material = store.Load<assetlib::BMaterial>("Materials/brick.bmaterial");
+auto material = store.Load<assetlib::BMaterial>("Authored/Materials/brick.bmaterial");
 if (store.BakeIsStale(material))
 {
 	store.BakeMaterial(material);
-	store.Save(material, "Materials/brick.bmaterial");
+	store.Save(material, "Authored/Materials/brick.bmaterial");
 }
 ```
 

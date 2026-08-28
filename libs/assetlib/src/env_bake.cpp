@@ -48,7 +48,7 @@ namespace assetlib
 				throw std::runtime_error(
 					"assetlib::bakeSky/bakeEnvLighting: source '" + source +
 					"' is not a float cube map; environment sources are the R32G32B32A32_SFLOAT "
-					"intermediates the import writes into textures_src/");
+					"intermediates the import writes into Derived/SourceTextures/");
 			return image;
 		}
 
@@ -185,7 +185,7 @@ namespace assetlib
 	void
 	AssetStore::BakeSky(BSky& sky, const CancelToken& cancel) const
 	{
-		BakeSky(sky, c_TexturesDirectoryName, cancel);
+		BakeSky(sky, c_BakedTexturesDirectoryName, cancel);
 	}
 
 	void
@@ -197,7 +197,7 @@ namespace assetlib
 	void
 	AssetStore::BakeEnvLighting(BEnvLighting& lighting, const CancelToken& cancel) const
 	{
-		BakeEnvLighting(lighting, c_TexturesDirectoryName, cancel);
+		BakeEnvLighting(lighting, c_BakedTexturesDirectoryName, cancel);
 	}
 
 	void

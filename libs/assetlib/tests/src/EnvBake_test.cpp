@@ -55,16 +55,19 @@ namespace
 		explicit DataRoot(const char* name) : path(std::filesystem::temp_directory_path() / name)
 		{
 			std::filesystem::remove_all(path);
-			std::filesystem::create_directories(path / "textures_src");
+			std::filesystem::create_directories(path / "Derived/SourceTextures");
 		}
 
 		~DataRoot() { std::filesystem::remove_all(path); }
 
-		/** Writes a float cube of `radiance` under textures_src/ and returns its data-root path. */
+		/**
+		 * Writes a float cube of `radiance` under Derived/SourceTextures/ and returns its
+		 * data-root path.
+		 */
 		std::string
 		AddSource(const char* name, uint32_t size, float radiance) const
 		{
-			const auto relative = std::filesystem::path("textures_src") / name;
+			const auto relative = std::filesystem::path("Derived/SourceTextures") / name;
 			writeKTX2(ConstantCube(size, radiance), path / relative, false, Ktx2Compression::kNone);
 			return relative.generic_string();
 		}
@@ -298,10 +301,14 @@ TEST_CASE("a cancelled or failed environment bake leaves the asset untouched", "
 	{
 		auto flat      = ConstantCube(4, 1.0f);
 		flat.isCubemap = false;
-		writeKTX2(flat, root.path / "textures_src" / "flat.ktx2", false, Ktx2Compression::kNone);
+		writeKTX2(
+			flat,
+			root.path / "Derived/SourceTextures" / "flat.ktx2",
+			false,
+			Ktx2Compression::kNone);
 
 		BSky sky;
-		sky.sky.source = "textures_src/flat.ktx2";
+		sky.sky.source = "Derived/SourceTextures/flat.ktx2";
 		CHECK_THROWS_AS(StoreAt(root.path).BakeSky(sky), std::runtime_error);
 		CHECK(sky.sky.baked.empty());
 	}
@@ -309,7 +316,7 @@ TEST_CASE("a cancelled or failed environment bake leaves the asset untouched", "
 	SECTION("a missing source")
 	{
 		BSky sky;
-		sky.sky.source = "textures_src/nowhere.ktx2";
+		sky.sky.source = "Derived/SourceTextures/nowhere.ktx2";
 		CHECK_THROWS_AS(StoreAt(root.path).BakeSky(sky), std::runtime_error);
 	}
 }
@@ -329,7 +336,7 @@ TEST_CASE(
 	StoreAt(root.path).Save(lighting, "forest.benvl");
 
 	// An env-named map nothing references: the leftover of a re-bake whose route changed.
-	const auto orphan = root.path / "Textures" / "sky_00000000deadbeef.ktx2";
+	const auto orphan = root.path / "Derived/BakedTextures" / "sky_00000000deadbeef.ktx2";
 	writeKTX2(ConstantCube(4, 1.0f), orphan, false, Ktx2Compression::kNone);
 
 	const auto scan = AssetStore(root.path).FindUnusedBakedTextures();
@@ -337,7 +344,7 @@ TEST_CASE(
 	CHECK(scan.environmentsScanned == 2);
 	CHECK(scan.liveMaps == 3);
 	REQUIRE(scan.unused.size() == 1);
-	CHECK(scan.unused.front().path == "Textures/sky_00000000deadbeef.ktx2");
+	CHECK(scan.unused.front().path == "Derived/BakedTextures/sky_00000000deadbeef.ktx2");
 
 	AssetStore(root.path).DeleteUnusedBakedTextures(scan);
 	CHECK(!std::filesystem::exists(orphan));
@@ -365,11 +372,11 @@ TEST_CASE("the prune refuses to scan past an unreadable environment asset", "[en
 TEST_CASE("pack re-bakes a sky whose routed source moved", "[envbake][pack]")
 {
 	const DataRoot root("bernini_pack_env");
-	std::filesystem::create_directories(root.path / "Sky");
+	std::filesystem::create_directories(root.path / "Derived/Sky");
 
 	BSky sky = RoutedSky(root);
 	StoreAt(root.path).BakeSky(sky);
-	StoreAt(root.path).Save(sky, "Sky/test.bsky");
+	StoreAt(root.path).Save(sky, "Derived/Sky/test.bsky");
 
 	root.AddSource("sky_src.ktx2", 8, 2.0f);
 
@@ -377,7 +384,7 @@ TEST_CASE("pack re-bakes a sky whose routed source moved", "[envbake][pack]")
 	CHECK(report.envsRebaked == 1);
 
 	const PakFile pak(root.path / "Data.bpak");
-	const BSky    packed = load<BSky>(pak, "Sky/test.bsky");
+	const BSky    packed = load<BSky>(pak, "Derived/Sky/test.bsky");
 	CHECK(packed.sky.stamp == stampOf(MountAt(root.path), packed.sky.source));
 	CHECK(pak.Exists(packed.sky.baked));
 
@@ -391,13 +398,13 @@ TEST_CASE("pack re-bakes a sky whose routed source moved", "[envbake][pack]")
 TEST_CASE("a sky that never recorded its source packs verbatim", "[envbake][pack]")
 {
 	const DataRoot root("bernini_pack_env_norec");
-	std::filesystem::create_directories(root.path / "Sky");
+	std::filesystem::create_directories(root.path / "Derived/Sky");
 
 	BSky sky = RoutedSky(root);
 	StoreAt(root.path).BakeSky(sky);
 	sky.sky.source.clear();
 	sky.sky.stamp = SourceStamp{};
-	StoreAt(root.path).Save(sky, "Sky/frozen.bsky");
+	StoreAt(root.path).Save(sky, "Derived/Sky/frozen.bsky");
 
 	const PackReport report = AssetStore(root.path).Pack(PackDesc{ root.path / "Data.bpak" });
 	CHECK(report.envsRebaked == 0);

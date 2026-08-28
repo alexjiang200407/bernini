@@ -21,14 +21,14 @@ namespace
 		explicit DataRoot(const char* name) : path(std::filesystem::temp_directory_path() / name)
 		{
 			std::filesystem::remove_all(path);
-			std::filesystem::create_directories(path / "Materials");
+			std::filesystem::create_directories(path / "Authored/Materials");
 		}
 		~DataRoot() { std::filesystem::remove_all(path); }
 
 		std::filesystem::path
 		Textures() const
 		{
-			return path / "Textures";
+			return path / "Derived/BakedTextures";
 		}
 	};
 
@@ -51,7 +51,7 @@ namespace
 		material.pbr.routes[0] = { source, 0 };
 
 		StoreAt(root.path).BakeMaterial(material);
-		StoreAt(root.path).Save(material, std::string("Materials/") + name);
+		StoreAt(root.path).Save(material, std::string("Authored/Materials/") + name);
 		return material;
 	}
 
@@ -186,7 +186,7 @@ TEST_CASE("FindUnusedBakedTextures keeps a stale material's baked triplet", "[te
 
 	// Rewind a stamp so the bake reads stale without touching the maps it wrote.
 	material.pbr.routeStamps[0] = SourceStamp{ 1, 1 };
-	StoreAt(root.path).Save(material, "Materials/loose.bmaterial");
+	StoreAt(root.path).Save(material, "Authored/Materials/loose.bmaterial");
 
 	const auto scan = AssetStore(root.path).FindUnusedBakedTextures();
 
@@ -226,7 +226,7 @@ TEST_CASE("FindUnusedBakedTextures refuses to run on an unreadable material", "[
 	WriteSource(root.path / "a.ktx2", 16, { { 200, 0, 0, 255 } });
 	const BMaterial material = BakeAndSave(root, "good.bmaterial", "a.ktx2");
 
-	std::ofstream(root.path / "Materials" / "broken.bmaterial", std::ios::binary)
+	std::ofstream(root.path / "Authored/Materials" / "broken.bmaterial", std::ios::binary)
 		<< "not a material";
 
 	REQUIRE_THROWS_AS(AssetStore(root.path).FindUnusedBakedTextures(), std::runtime_error);
@@ -283,7 +283,7 @@ TEST_CASE("FindUnusedBakedTextures honours a custom texture directory", "[textur
 
 	material.pbr.routes[0] = { "b.ktx2", 0 };
 	store.BakeMaterial(material, "cooked");
-	StoreAt(root.path).Save(material, "Materials/mat.bmaterial");
+	StoreAt(root.path).Save(material, "Authored/Materials/mat.bmaterial");
 
 	const auto scan = AssetStore(root.path).FindUnusedBakedTextures(desc);
 

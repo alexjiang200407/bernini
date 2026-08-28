@@ -111,9 +111,9 @@ TEST_CASE("An import writes the environment family a project can load", "[envimp
 
 	const EnvImportResult result = sandbox.Store().ImportEnvironment(sandbox.Desc());
 
-	REQUIRE(result.sky == "Sky/forest.bsky");
-	REQUIRE(result.lighting == "EnvLighting/forest.benvl");
-	REQUIRE(result.environment == "Environments/forest.benv");
+	REQUIRE(result.sky == "Derived/Sky/forest.bsky");
+	REQUIRE(result.lighting == "Derived/EnvLighting/forest.benvl");
+	REQUIRE(result.environment == "Authored/Environments/forest.benv");
 
 	CHECK(sandbox.Has(result.sky));
 	CHECK(sandbox.Has(result.lighting));
@@ -121,9 +121,9 @@ TEST_CASE("An import writes the environment family a project can load", "[envimp
 
 	// The float intermediates are the routed sources a re-bake reads, so they are part of the import
 	// rather than scratch.
-	CHECK(sandbox.Has("textures_src/forest_sky.ktx2"));
-	CHECK(sandbox.Has("textures_src/forest_prefilter.ktx2"));
-	CHECK(sandbox.Has("textures_src/forest_irradiance.ktx2"));
+	CHECK(sandbox.Has("Derived/SourceTextures/forest_sky.ktx2"));
+	CHECK(sandbox.Has("Derived/SourceTextures/forest_prefilter.ktx2"));
+	CHECK(sandbox.Has("Derived/SourceTextures/forest_irradiance.ktx2"));
 
 	// And it loads back as one environment: the .benv names the pair, each names its baked map, and
 	// nothing is stale the moment it was written.
@@ -163,8 +163,8 @@ TEST_CASE("An import writes only what was selected", "[envimport]")
 		CHECK(result.lighting.empty());
 		CHECK(result.environment.empty());
 		CHECK(sandbox.Has(result.sky));
-		CHECK_FALSE(sandbox.Has("EnvLighting/forest.benvl"));
-		CHECK_FALSE(sandbox.Has("textures_src/forest_prefilter.ktx2"));
+		CHECK_FALSE(sandbox.Has("Derived/EnvLighting/forest.benvl"));
+		CHECK_FALSE(sandbox.Has("Derived/SourceTextures/forest_prefilter.ktx2"));
 
 		// No lighting means nothing derived an exposure, and reporting one would be inventing it.
 		CHECK(result.exposure == Catch::Approx(1.0f));
@@ -182,8 +182,8 @@ TEST_CASE("An import writes only what was selected", "[envimport]")
 
 		CHECK(result.sky.empty());
 		CHECK(sandbox.Has(result.lighting));
-		CHECK_FALSE(sandbox.Has("Sky/forest.bsky"));
-		CHECK_FALSE(sandbox.Has("textures_src/forest_sky.ktx2"));
+		CHECK_FALSE(sandbox.Has("Derived/Sky/forest.bsky"));
+		CHECK_FALSE(sandbox.Has("Derived/SourceTextures/forest_sky.ktx2"));
 	}
 
 	SECTION("an environment composes only the half that was written")
@@ -212,8 +212,8 @@ TEST_CASE("A cancelled import is refused before it writes anything", "[envimport
 
 	CHECK_THROWS_AS(sandbox.Store().ImportEnvironment(sandbox.Desc(), stop.get_token()), Cancelled);
 
-	CHECK_FALSE(sandbox.Has("Sky/forest.bsky"));
-	CHECK_FALSE(sandbox.Has("textures_src/forest_sky.ktx2"));
+	CHECK_FALSE(sandbox.Has("Derived/Sky/forest.bsky"));
+	CHECK_FALSE(sandbox.Has("Derived/SourceTextures/forest_sky.ktx2"));
 }
 
 namespace
@@ -241,9 +241,9 @@ TEST_CASE("A failure part-way rolls back what it had written", "[envimport]")
 	CHECK_THROWS_AS(sandbox.Store().ImportEnvironment(FailsAfterSky(sandbox)), std::runtime_error);
 
 	// The sky was fully written -- source, bake and `.bsky` -- before the lighting failed.
-	CHECK_FALSE(sandbox.Has("Sky/forest.bsky"));
-	CHECK_FALSE(sandbox.Has("textures_src/forest_sky.ktx2"));
-	CHECK_FALSE(sandbox.Has("Environments/forest.benv"));
+	CHECK_FALSE(sandbox.Has("Derived/Sky/forest.bsky"));
+	CHECK_FALSE(sandbox.Has("Derived/SourceTextures/forest_sky.ktx2"));
+	CHECK_FALSE(sandbox.Has("Authored/Environments/forest.benv"));
 }
 
 // The rollback removes what the import *made*, not what it found. Re-importing over a name and failing
@@ -253,10 +253,10 @@ TEST_CASE("A rollback spares the files the import did not create", "[envimport]"
 	const Sandbox sandbox("bernini_envimport_spares");
 
 	// Put the sky's source there first, so the failing import overwrites it rather than creating it.
-	fs::create_directories(sandbox.DataRoot() / "textures_src");
+	fs::create_directories(sandbox.DataRoot() / "Derived/SourceTextures");
 	writeKTX2(
 		ConstantCube(8, 0.25f),
-		sandbox.DataRoot() / "textures_src" / "forest_sky.ktx2",
+		sandbox.DataRoot() / "Derived/SourceTextures" / "forest_sky.ktx2",
 		false,
 		Ktx2Compression::kNone);
 
@@ -264,8 +264,8 @@ TEST_CASE("A rollback spares the files the import did not create", "[envimport]"
 
 	// The `.bsky` was this import's, and goes. The source was already there, and stays -- deleting it
 	// would destroy whatever wrote it first.
-	CHECK_FALSE(sandbox.Has("Sky/forest.bsky"));
-	CHECK(sandbox.Has("textures_src/forest_sky.ktx2"));
+	CHECK_FALSE(sandbox.Has("Derived/Sky/forest.bsky"));
+	CHECK(sandbox.Has("Derived/SourceTextures/forest_sky.ktx2"));
 }
 
 // Baked maps are content-addressed and shared, so the map an import wrote may be one another
@@ -279,10 +279,10 @@ TEST_CASE("A rollback leaves the baked maps to the prune", "[envimport]")
 
 	// The `.bsky` naming it is gone, so the map is now an orphan -- but it is still on disk, which is
 	// the whole point: FindUnusedBakedTextures is what decides an orphan's fate, not this call.
-	CHECK_FALSE(sandbox.Has("Sky/forest.bsky"));
+	CHECK_FALSE(sandbox.Has("Derived/Sky/forest.bsky"));
 
 	bool anyBakedMap = false;
-	for (const auto& entry : fs::directory_iterator(sandbox.DataRoot() / "Textures"))
+	for (const auto& entry : fs::directory_iterator(sandbox.DataRoot() / "Derived/BakedTextures"))
 		anyBakedMap = anyBakedMap || isBakedEnvMapName(entry.path().filename().string());
 
 	CHECK(anyBakedMap);
@@ -336,7 +336,7 @@ TEST_CASE("An import that cannot mean anything is refused", "[envimport]")
 		CHECK_THROWS(sandbox.Store().ImportEnvironment(desc));
 
 		// And the refusal is not a half-import: nothing was written before the source was read.
-		CHECK_FALSE(sandbox.Has("Sky/forest.bsky"));
+		CHECK_FALSE(sandbox.Has("Derived/Sky/forest.bsky"));
 	}
 }
 
@@ -355,15 +355,15 @@ TEST_CASE("An import can say what it would write before writing it", "[envimport
 		const std::vector<std::string> targets =
 			sandbox.Store().EnvironmentImportTargets(sandbox.Desc());
 
-		CHECK(names(targets, "Sky/forest.bsky"));
-		CHECK(names(targets, "EnvLighting/forest.benvl"));
-		CHECK(names(targets, "Environments/forest.benv"));
-		CHECK(names(targets, "textures_src/forest_sky.ktx2"));
+		CHECK(names(targets, "Derived/Sky/forest.bsky"));
+		CHECK(names(targets, "Derived/EnvLighting/forest.benvl"));
+		CHECK(names(targets, "Authored/Environments/forest.benv"));
+		CHECK(names(targets, "Derived/SourceTextures/forest_sky.ktx2"));
 
 		// Content-addressed, so a collision with one is two imports agreeing rather than one
 		// destroying the other -- naming them here would refuse an import that is not in conflict.
 		CHECK(std::ranges::none_of(targets, [](const std::string& t) {
-			return t.starts_with("Textures/");
+			return t.starts_with("Derived/BakedTextures/");
 		}));
 	}
 
@@ -406,9 +406,9 @@ TEST_CASE("An import can say what it would write before writing it", "[envimport
 	SECTION("a subfolder moves what it would write")
 	{
 		auto desc   = sandbox.Desc();
-		desc.skyDir = "Sky/outdoor";
+		desc.skyDir = "Derived/Sky/outdoor";
 
 		const std::vector<std::string> targets = sandbox.Store().EnvironmentImportTargets(desc);
-		CHECK(names(targets, "Sky/outdoor/forest.bsky"));
+		CHECK(names(targets, "Derived/Sky/outdoor/forest.bsky"));
 	}
 }

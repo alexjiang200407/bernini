@@ -266,7 +266,7 @@ auto assets = game::AssetManager(scene, dataRoot);
 
 // Loads the pair's bake beside the mesh, or bakes it from the mesh + clips if missing/stale --
 // unless the store is read-only, where what is there is trusted as packed.
-const auto vat = assets.AcquireVatMesh("Meshes/coyote.bmesh", "Animations/coyote.banim");
+const auto vat = assets.AcquireVatMesh("Derived/Meshes/coyote.bmesh", "Derived/Animations/coyote.banim");
 
 for (uint32_t i = 0; i < c_CrowdSize; ++i)
 {

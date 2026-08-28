@@ -2,6 +2,7 @@
 
 #include "Windows/AssetImporter/folder_row.h"
 #include "util/asset_paths.h"
+#include <assetlib/Project.h>
 
 #include <QCheckBox>
 #include <QDialogButtonBox>
@@ -40,8 +41,8 @@ EnvironmentImporterDialog::EnvironmentImporterDialog(
 	m_Name->setObjectName("environmentName");
 	m_Name->setPlaceholderText(m_DefaultName);
 	m_Name->setToolTip(
-		"Names every file this import writes: Sky/<name>.bsky, EnvLighting/<name>.benvl, "
-		"Environments/<name>.benv and their sources.");
+		"Names every file this import writes: Derived/Sky/<name>.bsky, "
+		"Derived/EnvLighting/<name>.benvl, Authored/Environments/<name>.benv and their sources.");
 
 	auto* nameForm = new QFormLayout();
 	nameForm->addRow("Name:", m_Name);
@@ -57,11 +58,11 @@ EnvironmentImporterDialog::EnvironmentImporterDialog(
 		layout,
 		this,
 		{ .label       = "Sky folder:",
-	      .category    = "Sky",
+	      .category    = assetlib::c_SkyDirectoryName,
 	      .objectName  = "skyDirectory",
 	      .placeholder = c_OptionalPlaceholder,
-	      .tip = "Subfolder of Sky/ to write the .bsky into. The category itself is fixed: every "
-	             "reference in the project is written against it." });
+	      .tip = "Subfolder of Derived/Sky/ to write the .bsky into. The category itself is fixed: "
+	             "every reference in the project is written against it." });
 	connect(m_ImportSky, &QCheckBox::toggled, m_SkyDir, &QWidget::setEnabled);
 
 	m_ImportLighting = new QCheckBox("Environment lighting", this);
@@ -77,10 +78,10 @@ EnvironmentImporterDialog::EnvironmentImporterDialog(
 		layout,
 		this,
 		{ .label       = "Lighting folder:",
-	      .category    = "EnvLighting",
+	      .category    = assetlib::c_EnvLightingDirectoryName,
 	      .objectName  = "lightingDirectory",
 	      .placeholder = c_OptionalPlaceholder,
-	      .tip         = "Subfolder of EnvLighting/ to write the .benvl into." });
+	      .tip         = "Subfolder of Derived/EnvLighting/ to write the .benvl into." });
 	connect(m_ImportLighting, &QCheckBox::toggled, m_LightingDir, &QWidget::setEnabled);
 
 	m_ImportEnvironment = new QCheckBox("Environment (composes the two above)", this);
@@ -96,10 +97,11 @@ EnvironmentImporterDialog::EnvironmentImporterDialog(
 		layout,
 		this,
 		{ .label       = "Sources folder:",
-	      .category    = "textures_src",
+	      .category    = assetlib::c_SourceTexturesDirectoryName,
 	      .objectName  = "sourceDirectory",
 	      .placeholder = c_OptionalPlaceholder,
-	      .tip = "Subfolder of textures_src/ for the float intermediates each part is baked from. "
+	      .tip = "Subfolder of Derived/SourceTextures/ for the float intermediates each part is "
+	             "baked from. "
 	             "They are what a re-bake reads, so they are kept rather than being scratch." });
 
 	// It composes the other two, so with neither there is nothing for it to name. Disabled rather
@@ -150,19 +152,23 @@ EnvironmentImporterDialog::ImportEnvironment() const
 QString
 EnvironmentImporterDialog::GetSkyDirectory() const
 {
-	return editor::JoinCategory("Sky", m_SkyDir->text().trimmed());
+	return editor::JoinCategory(assetlib::c_SkyDirectoryName, m_SkyDir->text().trimmed());
 }
 
 QString
 EnvironmentImporterDialog::GetLightingDirectory() const
 {
-	return editor::JoinCategory("EnvLighting", m_LightingDir->text().trimmed());
+	return editor::JoinCategory(
+		assetlib::c_EnvLightingDirectoryName,
+		m_LightingDir->text().trimmed());
 }
 
 QString
 EnvironmentImporterDialog::GetSourceDirectory() const
 {
-	return editor::JoinCategory("textures_src", m_SourceDir->text().trimmed());
+	return editor::JoinCategory(
+		assetlib::c_SourceTexturesDirectoryName,
+		m_SourceDir->text().trimmed());
 }
 
 QString

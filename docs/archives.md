@@ -106,7 +106,7 @@ Two consequences worth knowing:
 - The hash memo only applies when the mount is a directory, where a key resolves to a host path that
   can be cached against. Nothing on `IFileSystem` identifies a mount well enough to key a cache on,
   so an archive re-hashes. That is affordable because an archive is read once at load rather than
-  swept per material, and because a shipped archive carries no `textures_src` — the routed sources a
+  swept per material, and because a shipped archive carries no `Derived/SourceTextures` — the routed sources a
   staleness sweep would hash are the very files the exclusion rule leaves out, so they are absent
   and answer without a read.
 
@@ -173,19 +173,20 @@ The rule is one line: *an archive carries what the runtime reads and nothing tha
 `AssetStore::Pack` ([AssetStore.h](../libs/assetlib/include/assetlib/AssetStore.h)) derives that from
 `assetTypeFromExtension` ([asset_refs.h](../libs/assetlib/include/assetlib/asset_refs.h)) rather than
 from a list kept beside it, so a new container type joins the archive by being registered once. On
-top of that sit the explicit exclusions: any path with a `textures_src` or `meshes_src` component,
+top of that sit the explicit exclusions: any key under `Authored/Meshes/` or
+`Derived/SourceTextures/` — matched as a prefix, since `Meshes` names a directory in each half —
 and the `.bimport` import document by its *type* — it is a registered extension, so without its own
 rule it would ride into the archive it must never reach.
 
 | | |
 |---|---|
-| `textures_src/` | excluded — authoring source; the bake reads it, the runtime never does |
-| `meshes_src/` | excluded — the imported `.glb` sources and their `.bimport` documents |
+| `Derived/SourceTextures/` | excluded — authoring source; the bake reads it, the runtime never does |
+| `Authored/Meshes/` | excluded — the imported `.glb` sources and their `.bimport` documents |
 | `.bimport` | excluded by type, wherever it sits — authored; a read-only store uses the baked-in bindings. Deliberate, so silent (never in `skippedByExtension`) |
 | `.glb` / `.hdr` awaiting import | excluded, by the same rule |
-| the `.berniniproject` file | excluded — editor metadata |
+| the `.bproj` file | excluded — editor metadata |
 | the shader cache (`.bsc`, `pipelines.psolib`) | excluded — per-machine, write-back, disposable |
-| `Textures/` (baked) | **included**, and it is most of the bytes |
+| `Derived/BakedTextures/` (baked) | **included**, and it is most of the bytes |
 | `.bmesh` / `.bskel` / `.banim` | **included as the seam answers**, not as the file lies on disk — a stale group re-bakes into the archive, a rebind is baked in, and a group the seam cannot serve fails the pack. `PackReport::geometryRebaked` counts the entries that differ |
 | `.bvat` | **included**, packed fresh and re-stamped against the geometry *as archived* — see below |
 | `.bsky` / `.benvl` | **included**, re-baked first when a routed source moved — the re-bake runs before the pack walk because it writes new content-addressed maps the walk must still see. `PackReport::envsRebaked` counts them; a `.benv` packs verbatim (authored) |
@@ -193,14 +194,14 @@ rule it would ride into the archive it must never reach.
 Everything without a registered extension falls out of the same rule and is **counted**, not dropped
 in silence: `PackReport::skippedByExtension` reports each unclaimed extension and how many of it were
 found. A runtime container nobody registered would otherwise be absent from every archive with
-nothing said about it, and this is what makes that visible. `Levels/` is the live example — no
-`.blevel` type is registered yet, so today they are skipped and the count says so.
+nothing said about it, and this is what makes that visible. `Authored/Levels/` is the live example —
+no `.blevel` type is registered yet, so today they are skipped and the count says so.
 
 `PackReport::materialsDrawingLoose` is the other report worth reading. An archive carries no
-`textures_src`, so a material still drawing from its authoring routes has nothing to sample once it
-ships. The archive is otherwise perfectly valid — every entry reads back — and the failure appears
-only as an untextured surface on whoever opens it. The list is sorted, because the walk itself is in
-directory-iteration order and that is not the same on two filesystems.
+`Derived/SourceTextures`, so a material still drawing from its authoring routes has nothing to
+sample once it ships. The archive is otherwise perfectly valid — every entry reads back — and the
+failure appears only as an untextured surface on whoever opens it. The list is sorted, because the
+walk itself is in directory-iteration order and that is not the same on two filesystems.
 
 ---
 

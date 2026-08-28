@@ -528,14 +528,14 @@ TEST_CASE("attachMaterial binds a material to an imported submesh", "[bmesh][bma
 	REQUIRE(mesh.materials.empty());
 	REQUIRE_FALSE(mesh.submeshes.empty());
 
-	REQUIRE(attachMaterial(mesh, 0, "Materials/suzanne.bmaterial"));
+	REQUIRE(attachMaterial(mesh, 0, "Authored/Materials/suzanne.bmaterial"));
 
 	REQUIRE(mesh.materials.size() == 1);
-	REQUIRE(mesh.materials[0] == "Materials/suzanne.bmaterial");
+	REQUIRE(mesh.materials[0] == "Authored/Materials/suzanne.bmaterial");
 	REQUIRE(mesh.submeshes[0].material == 0);
 
 	// Attaching the same material again is a no-op, not a duplicate slot.
-	REQUIRE_FALSE(attachMaterial(mesh, 0, "Materials/suzanne.bmaterial"));
+	REQUIRE_FALSE(attachMaterial(mesh, 0, "Authored/Materials/suzanne.bmaterial"));
 	REQUIRE(mesh.materials.size() == 1);
 }
 
@@ -543,7 +543,7 @@ TEST_CASE("a material document is canonical text", "[bmaterial][io]")
 {
 	BMaterial mat;
 	mat.name                 = "canon";
-	mat.pbr.baseColorTexture = "Textures/canon_basecolor.ktx2";
+	mat.pbr.baseColorTexture = "Derived/BakedTextures/canon_basecolor.ktx2";
 
 	const auto once  = AssetCodec<BMaterial>::Serialize(mat);
 	const auto again = AssetCodec<BMaterial>::Serialize(AssetCodec<BMaterial>::Deserialize(once));
@@ -607,16 +607,16 @@ TEST_CASE("unknown keys survive at every depth, the editor's save included", "[b
 	// A sibling branch's field inside a route or the baked triplet, not just at the top level --
 	// dropping it on merge is the loss the document format exists to prevent.
 	const std::string_view text = R"({
-	"baked": { "baseColor": "Textures/b.ktx2", "sheenMap": "Textures/s.ktx2" },
-	"routes": { "ao": { "texture": "textures_src/ao.png", "blurRadius": 2 } },
+	"baked": { "baseColor": "Derived/BakedTextures/b.ktx2", "sheenMap": "Derived/BakedTextures/s.ktx2" },
+	"routes": { "ao": { "texture": "Derived/SourceTextures/ao.png", "blurRadius": 2 } },
 	"shadingModel": "pbr"
 }
 )";
 
 	const BMaterial material =
 		AssetCodec<BMaterial>::Deserialize(std::as_bytes(std::span(text.data(), text.size())));
-	CHECK(material.pbr.baseColorTexture == "Textures/b.ktx2");
-	CHECK(material.pbr.routes[4].texture == "textures_src/ao.png");
+	CHECK(material.pbr.baseColorTexture == "Derived/BakedTextures/b.ktx2");
+	CHECK(material.pbr.routes[4].texture == "Derived/SourceTextures/ao.png");
 
 	const auto        resaved = AssetCodec<BMaterial>::Serialize(material);
 	const std::string out(reinterpret_cast<const char*>(resaved.data()), resaved.size());
@@ -625,7 +625,7 @@ TEST_CASE("unknown keys survive at every depth, the editor's save included", "[b
 
 	// And the round of the round-trip: the second read still holds both halves together.
 	const BMaterial again = AssetCodec<BMaterial>::Deserialize(resaved);
-	CHECK(again.pbr.routes[4].texture == "textures_src/ao.png");
+	CHECK(again.pbr.routes[4].texture == "Derived/SourceTextures/ao.png");
 	CHECK(AssetCodec<BMaterial>::Serialize(again) == resaved);
 }
 

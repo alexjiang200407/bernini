@@ -40,21 +40,21 @@ TEST_CASE("Renaming a texture rewrites the graph that compiles into its routes",
 	// quietly undoes the rename the next time anyone opens the material -- routes and graph
 	// disagree, the graph wins, and the material ends up pointing at a file that is gone.
 	const DataRoot root("bernini_rename_material_graph");
-	WriteSource(root.path / "textures_src" / "a.ktx2", { { 255, 0, 0, 255 } });
+	WriteSource(root.path / "Derived/SourceTextures" / "a.ktx2", { { 255, 0, 0, 255 } });
 
-	BMaterial material   = BakeAndSave(root, "m.bmaterial", "textures_src/a.ktx2");
+	BMaterial material   = BakeAndSave(root, "m.bmaterial", "Derived/SourceTextures/a.ktx2");
 	material.editorGraph = R"({"nodes":[{"id":1,"internal-data":{"model-name":"Texture",)"
-						   R"("texture":"textures_src/a.ktx2"}}]})";
-	StoreAt(root.path).Save(material, "Materials/m.bmaterial");
+						   R"("texture":"Derived/SourceTextures/a.ktx2"}}]})";
+	StoreAt(root.path).Save(material, "Authored/Materials/m.bmaterial");
 
 	REQUIRE(
-		Rename(root, "textures_src/a.ktx2", "textures_src/b.ktx2").status ==
+		Rename(root, "Derived/SourceTextures/a.ktx2", "Derived/SourceTextures/b.ktx2").status ==
 		RenameStatus::kRenamed);
 
-	const BMaterial after = StoreAt(root.path).Load<BMaterial>("Materials/m.bmaterial");
-	CHECK(after.pbr.routes[0].texture == "textures_src/b.ktx2");
-	CHECK(after.editorGraph.find("textures_src/b.ktx2") != std::string::npos);
-	CHECK(after.editorGraph.find("textures_src/a.ktx2") == std::string::npos);
+	const BMaterial after = StoreAt(root.path).Load<BMaterial>("Authored/Materials/m.bmaterial");
+	CHECK(after.pbr.routes[0].texture == "Derived/SourceTextures/b.ktx2");
+	CHECK(after.editorGraph.find("Derived/SourceTextures/b.ktx2") != std::string::npos);
+	CHECK(after.editorGraph.find("Derived/SourceTextures/a.ktx2") == std::string::npos);
 }
 
 TEST_CASE("Scanning a material with a real board terminates", "[assetrename]")
@@ -64,18 +64,18 @@ TEST_CASE("Scanning a material with a real board terminates", "[assetrename]")
 	// blew the stack, and every caller of it went down with it, the editor opening a project
 	// included. There is no assertion to make beyond arriving here.
 	const DataRoot root("bernini_refs_material_graph_scalars");
-	WriteSource(root.path / "textures_src" / "a.ktx2", { { 255, 255, 0, 255 } });
+	WriteSource(root.path / "Derived/SourceTextures" / "a.ktx2", { { 255, 255, 0, 255 } });
 
-	BMaterial material   = BakeAndSave(root, "m.bmaterial", "textures_src/a.ktx2");
+	BMaterial material   = BakeAndSave(root, "m.bmaterial", "Derived/SourceTextures/a.ktx2");
 	material.editorGraph = R"({"connections":[{"inNodeId":0,"inPortIndex":2,"outNodeId":2}],)"
 						   R"("nodes":[{"id":0,"internal-data":{"baseColorA":1,"split":)"
 						   R"([false,false,false],"model-name":"MaterialOutput"},)"
 						   R"("position":{"x":220,"y":40}},{"id":1,"internal-data":)"
-						   R"({"model-name":"Texture","texture":"textures_src/a.ktx2"},)"
+						   R"({"model-name":"Texture","texture":"Derived/SourceTextures/a.ktx2"},)"
 						   R"("position":{"x":-160,"y":0}}],"nulls":[null]})";
-	StoreAt(root.path).Save(material, "Materials/m.bmaterial");
+	StoreAt(root.path).Save(material, "Authored/Materials/m.bmaterial");
 
-	CHECK(root.Scan().IsReferenced("textures_src/a.ktx2"));
+	CHECK(root.Scan().IsReferenced("Derived/SourceTextures/a.ktx2"));
 }
 
 TEST_CASE("A texture only the graph names is still referenced", "[assetrename]")
@@ -84,28 +84,28 @@ TEST_CASE("A texture only the graph names is still referenced", "[assetrename]")
 	// user can see and re-wire. Seeing only `routes` would let the file be deleted out from under a
 	// board nobody is looking at.
 	const DataRoot root("bernini_rename_material_graph_only");
-	WriteSource(root.path / "textures_src" / "wired.ktx2", { { 255, 0, 0, 255 } });
-	WriteSource(root.path / "textures_src" / "loose.ktx2", { { 0, 0, 255, 255 } });
+	WriteSource(root.path / "Derived/SourceTextures" / "wired.ktx2", { { 255, 0, 0, 255 } });
+	WriteSource(root.path / "Derived/SourceTextures" / "loose.ktx2", { { 0, 0, 255, 255 } });
 
-	BMaterial material   = BakeAndSave(root, "m.bmaterial", "textures_src/wired.ktx2");
+	BMaterial material   = BakeAndSave(root, "m.bmaterial", "Derived/SourceTextures/wired.ktx2");
 	material.editorGraph = R"({"nodes":[{"id":1,"internal-data":{"model-name":"Texture",)"
-						   R"("texture":"textures_src/loose.ktx2"}}]})";
-	StoreAt(root.path).Save(material, "Materials/m.bmaterial");
+						   R"("texture":"Derived/SourceTextures/loose.ktx2"}}]})";
+	StoreAt(root.path).Save(material, "Authored/Materials/m.bmaterial");
 
 	const AssetRefGraph graph = root.Scan();
-	CHECK(graph.IsReferenced("textures_src/wired.ktx2"));
-	CHECK(graph.IsReferenced("textures_src/loose.ktx2"));
+	CHECK(graph.IsReferenced("Derived/SourceTextures/wired.ktx2"));
+	CHECK(graph.IsReferenced("Derived/SourceTextures/loose.ktx2"));
 
 	SECTION("and moves with it")
 	{
 		REQUIRE(
-			Rename(root, "textures_src/loose.ktx2", "textures_src/moved.ktx2").status ==
-			RenameStatus::kRenamed);
+			Rename(root, "Derived/SourceTextures/loose.ktx2", "Derived/SourceTextures/moved.ktx2")
+				.status == RenameStatus::kRenamed);
 
 		const std::string after =
-			StoreAt(root.path).Load<BMaterial>("Materials/m.bmaterial").editorGraph;
-		CHECK(after.find("textures_src/moved.ktx2") != std::string::npos);
-		CHECK(after.find("textures_src/loose.ktx2") == std::string::npos);
+			StoreAt(root.path).Load<BMaterial>("Authored/Materials/m.bmaterial").editorGraph;
+		CHECK(after.find("Derived/SourceTextures/moved.ktx2") != std::string::npos);
+		CHECK(after.find("Derived/SourceTextures/loose.ktx2") == std::string::npos);
 	}
 }
 
@@ -116,28 +116,30 @@ TEST_CASE("A rename changes only the key it moves in the board", "[assetrename]"
 	// two would then take turns rewriting the file on every rename and every save. Only the key
 	// moves.
 	const DataRoot root("bernini_rename_material_graph_bytes");
-	WriteSource(root.path / "textures_src" / "a.ktx2", { { 12, 34, 56, 255 } });
+	WriteSource(root.path / "Derived/SourceTextures" / "a.ktx2", { { 12, 34, 56, 255 } });
 
 	const std::string graph =
 		R"({"nodes":[{"id":1, "zz":1.5, "aa":[false,null],)"
-		R"("internal-data":{"model-name":"Texture","texture":"textures_src/a.ktx2"}}]})";
+		R"("internal-data":{"model-name":"Texture","texture":"Derived/SourceTextures/a.ktx2"}}]})";
 
-	BMaterial material   = BakeAndSave(root, "m.bmaterial", "textures_src/a.ktx2");
+	BMaterial material   = BakeAndSave(root, "m.bmaterial", "Derived/SourceTextures/a.ktx2");
 	material.editorGraph = graph;
-	StoreAt(root.path).Save(material, "Materials/m.bmaterial");
+	StoreAt(root.path).Save(material, "Authored/Materials/m.bmaterial");
 
 	REQUIRE(
-		Rename(root, "textures_src/a.ktx2", "textures_src/b.ktx2").status ==
+		Rename(root, "Derived/SourceTextures/a.ktx2", "Derived/SourceTextures/b.ktx2").status ==
 		RenameStatus::kRenamed);
 
 	std::string expected = graph;
 	expected.replace(
-		expected.find("textures_src/a.ktx2"),
-		std::string_view("textures_src/a.ktx2").size(),
-		"textures_src/b.ktx2");
+		expected.find("Derived/SourceTextures/a.ktx2"),
+		std::string_view("Derived/SourceTextures/a.ktx2").size(),
+		"Derived/SourceTextures/b.ktx2");
 
 	// Byte for byte: the odd key order, the trailing `.5`, the spaces and the null all survive.
-	CHECK(StoreAt(root.path).Load<BMaterial>("Materials/m.bmaterial").editorGraph == expected);
+	CHECK(
+		StoreAt(root.path).Load<BMaterial>("Authored/Materials/m.bmaterial").editorGraph ==
+		expected);
 }
 
 TEST_CASE("A graph that will not parse survives a rename unchanged", "[assetrename]")
@@ -145,18 +147,18 @@ TEST_CASE("A graph that will not parse survives a rename unchanged", "[assetrena
 	// Its schema is the editor's and this knows none of it. Text that is not JSON at all is left
 	// exactly as it stands rather than dropped, which would lose the node layout.
 	const DataRoot root("bernini_rename_material_graph_bad");
-	WriteSource(root.path / "textures_src" / "a.ktx2", { { 0, 255, 0, 255 } });
+	WriteSource(root.path / "Derived/SourceTextures" / "a.ktx2", { { 0, 255, 0, 255 } });
 
-	BMaterial material   = BakeAndSave(root, "m.bmaterial", "textures_src/a.ktx2");
+	BMaterial material   = BakeAndSave(root, "m.bmaterial", "Derived/SourceTextures/a.ktx2");
 	material.editorGraph = "not json at all";
-	StoreAt(root.path).Save(material, "Materials/m.bmaterial");
+	StoreAt(root.path).Save(material, "Authored/Materials/m.bmaterial");
 
 	REQUIRE(
-		Rename(root, "textures_src/a.ktx2", "textures_src/b.ktx2").status ==
+		Rename(root, "Derived/SourceTextures/a.ktx2", "Derived/SourceTextures/b.ktx2").status ==
 		RenameStatus::kRenamed);
 
 	CHECK(
-		StoreAt(root.path).Load<BMaterial>("Materials/m.bmaterial").editorGraph ==
+		StoreAt(root.path).Load<BMaterial>("Authored/Materials/m.bmaterial").editorGraph ==
 		"not json at all");
 }
 
@@ -164,18 +166,20 @@ TEST_CASE("Renaming an unreferenced asset moves the file", "[assetrename]")
 {
 	const DataRoot root("bernini_rename_loose");
 
-	WriteSource(root.path / "textures_src" / "old.ktx2", { { 200, 0, 0, 255 } });
+	WriteSource(root.path / "Derived/SourceTextures" / "old.ktx2", { { 200, 0, 0, 255 } });
 
-	const RenamePlan plan =
-		planRename(root.Scan(), "textures_src/old.ktx2", "textures_src/new.ktx2");
+	const RenamePlan plan = planRename(
+		root.Scan(),
+		"Derived/SourceTextures/old.ktx2",
+		"Derived/SourceTextures/new.ktx2");
 
 	CHECK(plan.assetType == AssetType::kTexture);
 	CHECK(plan.referrers.empty());
 
 	REQUIRE(root.Source().RenameAsset(plan).status == RenameStatus::kRenamed);
 
-	CHECK_FALSE(fs::exists(root.path / "textures_src" / "old.ktx2"));
-	CHECK(fs::exists(root.path / "textures_src" / "new.ktx2"));
+	CHECK_FALSE(fs::exists(root.path / "Derived/SourceTextures" / "old.ktx2"));
+	CHECK(fs::exists(root.path / "Derived/SourceTextures" / "new.ktx2"));
 }
 
 TEST_CASE("Renaming a material re-points every mesh that names it", "[assetrename]")
@@ -184,35 +188,41 @@ TEST_CASE("Renaming a material re-points every mesh that names it", "[assetrenam
 	// follow. A mesh left naming the old path would be exactly the broken edge deletion works to prevent.
 	const DataRoot root("bernini_rename_material");
 
-	WriteSource(root.path / "textures_src" / "a.ktx2", { { 200, 0, 0, 255 } });
-	BakeAndSave(root, "old.bmaterial", "textures_src/a.ktx2");
+	WriteSource(root.path / "Derived/SourceTextures" / "a.ktx2", { { 200, 0, 0, 255 } });
+	BakeAndSave(root, "old.bmaterial", "Derived/SourceTextures/a.ktx2");
 
-	SaveMesh(root, "one.bmesh", { "Materials/old.bmaterial" });
-	SaveMesh(root, "two.bmesh", { "Materials/other.bmaterial", "Materials/old.bmaterial" });
+	SaveMesh(root, "one.bmesh", { "Authored/Materials/old.bmaterial" });
+	SaveMesh(
+		root,
+		"two.bmesh",
+		{ "Authored/Materials/other.bmaterial", "Authored/Materials/old.bmaterial" });
 
-	const RenamePlan plan =
-		planRename(root.Scan(), "Materials/old.bmaterial", "Materials/new.bmaterial");
+	const RenamePlan plan = planRename(
+		root.Scan(),
+		"Authored/Materials/old.bmaterial",
+		"Authored/Materials/new.bmaterial");
 
 	REQUIRE(root.Source().RenameAsset(plan).status == RenameStatus::kRenamed);
 
-	CHECK_FALSE(fs::exists(root.path / "Materials" / "old.bmaterial"));
-	CHECK(fs::exists(root.path / "Materials" / "new.bmaterial"));
+	CHECK_FALSE(fs::exists(root.path / "Authored/Materials" / "old.bmaterial"));
+	CHECK(fs::exists(root.path / "Authored/Materials" / "new.bmaterial"));
 
 	CHECK(
-		loadMeshRefs(root.path / "Meshes" / "one.bmesh").materials ==
-		std::vector<std::string>{ "Materials/new.bmaterial" });
+		loadMeshRefs(root.path / "Derived/Meshes" / "one.bmesh").materials ==
+		std::vector<std::string>{ "Authored/Materials/new.bmaterial" });
 
 	// Only the slot that named it moves; the sibling is untouched.
 	CHECK(
-		loadMeshRefs(root.path / "Meshes" / "two.bmesh").materials ==
-		std::vector<std::string>{ "Materials/other.bmaterial", "Materials/new.bmaterial" });
+		loadMeshRefs(root.path / "Derived/Meshes" / "two.bmesh").materials ==
+		std::vector<std::string>{ "Authored/Materials/other.bmaterial",
+	                              "Authored/Materials/new.bmaterial" });
 
 	SECTION("and the rewritten project has no reference to the old name")
 	{
 		const AssetRefGraph after = root.Scan();
 
-		CHECK_FALSE(after.IsReferenced("Materials/old.bmaterial"));
-		CHECK(ReferrerPaths(after, "Materials/new.bmaterial").size() == 2);
+		CHECK_FALSE(after.IsReferenced("Authored/Materials/old.bmaterial"));
+		CHECK(ReferrerPaths(after, "Authored/Materials/new.bmaterial").size() == 2);
 	}
 }
 
@@ -222,21 +232,24 @@ TEST_CASE("A rewritten mesh still carries its geometry", "[assetrename]")
 	// round-trips the whole container -- so what must not change is everything else.
 	const DataRoot root("bernini_rename_roundtrip");
 
-	WriteSource(root.path / "textures_src" / "a.ktx2", { { 200, 0, 0, 255 } });
-	BakeAndSave(root, "old.bmaterial", "textures_src/a.ktx2");
-	SaveMesh(root, "mesh.bmesh", { "Materials/old.bmaterial", "Materials/keep.bmaterial" });
+	WriteSource(root.path / "Derived/SourceTextures" / "a.ktx2", { { 200, 0, 0, 255 } });
+	BakeAndSave(root, "old.bmaterial", "Derived/SourceTextures/a.ktx2");
+	SaveMesh(
+		root,
+		"mesh.bmesh",
+		{ "Authored/Materials/old.bmaterial", "Authored/Materials/keep.bmaterial" });
 
-	const BMesh before = StoreAt(root.path).Load<BMesh>("Meshes/mesh.bmesh");
+	const BMesh before = StoreAt(root.path).Load<BMesh>("Derived/Meshes/mesh.bmesh");
 
 	REQUIRE(
-		Rename(root, "Materials/old.bmaterial", "Materials/new.bmaterial").status ==
-		RenameStatus::kRenamed);
+		Rename(root, "Authored/Materials/old.bmaterial", "Authored/Materials/new.bmaterial")
+			.status == RenameStatus::kRenamed);
 
-	const BMesh after = StoreAt(root.path).Load<BMesh>("Meshes/mesh.bmesh");
+	const BMesh after = StoreAt(root.path).Load<BMesh>("Derived/Meshes/mesh.bmesh");
 
 	CHECK(
-		after.materials ==
-		std::vector<std::string>{ "Materials/new.bmaterial", "Materials/keep.bmaterial" });
+		after.materials == std::vector<std::string>{ "Authored/Materials/new.bmaterial",
+	                                                 "Authored/Materials/keep.bmaterial" });
 	CHECK(after.nodes.size() == before.nodes.size());
 	CHECK(after.submeshes.size() == before.submeshes.size());
 	CHECK(after.stringPool == before.stringPool);
@@ -248,28 +261,30 @@ TEST_CASE("Renaming a texture re-points the material that routes it", "[assetren
 	// wrote -- and the rename must catch whichever of them names the file.
 	const DataRoot root("bernini_rename_texture");
 
-	WriteSource(root.path / "textures_src" / "old.ktx2", { { 200, 0, 0, 255 } });
-	const BMaterial baked = BakeAndSave(root, "mat.bmaterial", "textures_src/old.ktx2");
+	WriteSource(root.path / "Derived/SourceTextures" / "old.ktx2", { { 200, 0, 0, 255 } });
+	const BMaterial baked = BakeAndSave(root, "mat.bmaterial", "Derived/SourceTextures/old.ktx2");
 
 	SECTION("a routed source")
 	{
 		REQUIRE(
-			Rename(root, "textures_src/old.ktx2", "textures_src/new.ktx2").status ==
-			RenameStatus::kRenamed);
+			Rename(root, "Derived/SourceTextures/old.ktx2", "Derived/SourceTextures/new.ktx2")
+				.status == RenameStatus::kRenamed);
 
-		const BMaterial material = StoreAt(root.path).Load<BMaterial>("Materials/mat.bmaterial");
+		const BMaterial material =
+			StoreAt(root.path).Load<BMaterial>("Authored/Materials/mat.bmaterial");
 
-		CHECK(material.pbr.routes[0].texture == "textures_src/new.ktx2");
+		CHECK(material.pbr.routes[0].texture == "Derived/SourceTextures/new.ktx2");
 		CHECK(root.Scan().broken.empty());
 	}
 
 	SECTION("a baked map")
 	{
-		const std::string renamed = "Textures/renamed_basecolor.ktx2";
+		const std::string renamed = "Derived/BakedTextures/renamed_basecolor.ktx2";
 
 		REQUIRE(Rename(root, baked.pbr.baseColorTexture, renamed).status == RenameStatus::kRenamed);
 
-		const BMaterial material = StoreAt(root.path).Load<BMaterial>("Materials/mat.bmaterial");
+		const BMaterial material =
+			StoreAt(root.path).Load<BMaterial>("Authored/Materials/mat.bmaterial");
 
 		CHECK(material.pbr.baseColorTexture == renamed);
 		CHECK(root.Scan().broken.empty());
@@ -283,22 +298,24 @@ TEST_CASE("Renaming an environment part re-points its whole family", "[assetrena
 
 	SECTION("the .bsky a .benv composes")
 	{
-		REQUIRE(Rename(root, e.sky, "Sky/dawn.bsky").status == RenameStatus::kRenamed);
+		REQUIRE(Rename(root, e.sky, "Derived/Sky/dawn.bsky").status == RenameStatus::kRenamed);
 
-		CHECK(StoreAt(root.path).Load<BEnv>(e.env).sky == "Sky/dawn.bsky");
+		CHECK(StoreAt(root.path).Load<BEnv>(e.env).sky == "Derived/Sky/dawn.bsky");
 		CHECK(root.Scan().broken.empty());
 	}
 
 	SECTION("the radiance three routes across two containers read")
 	{
 		REQUIRE(
-			Rename(root, e.skySource, "textures_src/dawn.ktx2").status == RenameStatus::kRenamed);
+			Rename(root, e.skySource, "Derived/SourceTextures/dawn.ktx2").status ==
+			RenameStatus::kRenamed);
 
-		CHECK(StoreAt(root.path).Load<BSky>(e.sky).sky.source == "textures_src/dawn.ktx2");
+		CHECK(
+			StoreAt(root.path).Load<BSky>(e.sky).sky.source == "Derived/SourceTextures/dawn.ktx2");
 
 		const BEnvLighting lighting = StoreAt(root.path).Load<BEnvLighting>(e.lighting);
-		CHECK(lighting.prefilter.source == "textures_src/dawn.ktx2");
-		CHECK(lighting.irradiance.source == "textures_src/dawn.ktx2");
+		CHECK(lighting.prefilter.source == "Derived/SourceTextures/dawn.ktx2");
+		CHECK(lighting.irradiance.source == "Derived/SourceTextures/dawn.ktx2");
 
 		CHECK(root.Scan().broken.empty());
 	}
@@ -310,32 +327,39 @@ TEST_CASE("Renaming a directory re-points every reference into it", "[assetrenam
 
 	// One reference in from outside, one wholly inside: the outside one is rewritten where it stands,
 	// the inside one is rewritten and then moves with the directory.
-	WriteSource(root.path / "textures_src" / "kirk" / "tex0.ktx2", { { 200, 0, 0, 255 } });
-	WriteSource(root.path / "textures_src" / "kirk" / "tex1.ktx2", { { 0, 200, 0, 255 } });
-	BakeAndSave(root, "outside.bmaterial", "textures_src/kirk/tex0.ktx2");
+	WriteSource(
+		root.path / "Derived/SourceTextures" / "kirk" / "tex0.ktx2",
+		{ { 200, 0, 0, 255 } });
+	WriteSource(
+		root.path / "Derived/SourceTextures" / "kirk" / "tex1.ktx2",
+		{ { 0, 200, 0, 255 } });
+	BakeAndSave(root, "outside.bmaterial", "Derived/SourceTextures/kirk/tex0.ktx2");
 
 	BMaterial inside;
-	inside.pbr.routes[0] = { "textures_src/kirk/tex1.ktx2", 0 };
-	fs::create_directories(root.path / "textures_src" / "kirk");
-	StoreAt(root.path).Save(inside, "textures_src/kirk/inside.bmaterial");
+	inside.pbr.routes[0] = { "Derived/SourceTextures/kirk/tex1.ktx2", 0 };
+	fs::create_directories(root.path / "Derived/SourceTextures" / "kirk");
+	StoreAt(root.path).Save(inside, "Derived/SourceTextures/kirk/inside.bmaterial");
 
-	const RenamePlan plan = planRename(root.Scan(), "textures_src/kirk", "textures_src/spock");
+	const RenamePlan plan =
+		planRename(root.Scan(), "Derived/SourceTextures/kirk", "Derived/SourceTextures/spock");
 
 	CHECK(plan.IsDirectory());
 
 	REQUIRE(root.Source().RenameAsset(plan).status == RenameStatus::kRenamed);
 
-	CHECK_FALSE(fs::exists(root.path / "textures_src" / "kirk"));
-	CHECK(fs::exists(root.path / "textures_src" / "spock" / "tex0.ktx2"));
+	CHECK_FALSE(fs::exists(root.path / "Derived/SourceTextures" / "kirk"));
+	CHECK(fs::exists(root.path / "Derived/SourceTextures" / "spock" / "tex0.ktx2"));
 
 	CHECK(
-		StoreAt(root.path).Load<BMaterial>("Materials/outside.bmaterial").pbr.routes[0].texture ==
-		"textures_src/spock/tex0.ktx2");
+		StoreAt(root.path)
+			.Load<BMaterial>("Authored/Materials/outside.bmaterial")
+			.pbr.routes[0]
+			.texture == "Derived/SourceTextures/spock/tex0.ktx2");
 	CHECK(
 		StoreAt(root.path)
-			.Load<BMaterial>("textures_src/spock/inside.bmaterial")
+			.Load<BMaterial>("Derived/SourceTextures/spock/inside.bmaterial")
 			.pbr.routes[0]
-			.texture == "textures_src/spock/tex1.ktx2");
+			.texture == "Derived/SourceTextures/spock/tex1.ktx2");
 
 	CHECK(root.Scan().broken.empty());
 }
@@ -344,36 +368,42 @@ TEST_CASE("planRename refuses what a rename must never do", "[assetrename]")
 {
 	const DataRoot root("bernini_rename_refuse");
 
-	WriteSource(root.path / "textures_src" / "a.ktx2", { { 200, 0, 0, 255 } });
-	WriteSource(root.path / "textures_src" / "b.ktx2", { { 0, 200, 0, 255 } });
+	WriteSource(root.path / "Derived/SourceTextures" / "a.ktx2", { { 200, 0, 0, 255 } });
+	WriteSource(root.path / "Derived/SourceTextures" / "b.ktx2", { { 0, 200, 0, 255 } });
 
 	const AssetRefGraph graph = root.Scan();
 
 	SECTION("changing what kind of asset a file is")
 	{
 		CHECK_THROWS_AS(
-			planRename(graph, "textures_src/a.ktx2", "textures_src/a.bmaterial"),
+			planRename(
+				graph,
+				"Derived/SourceTextures/a.ktx2",
+				"Derived/SourceTextures/a.bmaterial"),
 			std::runtime_error);
 	}
 
 	SECTION("overwriting a file that already exists")
 	{
 		CHECK_THROWS_AS(
-			planRename(graph, "textures_src/a.ktx2", "textures_src/b.ktx2"),
+			planRename(graph, "Derived/SourceTextures/a.ktx2", "Derived/SourceTextures/b.ktx2"),
 			std::runtime_error);
 	}
 
 	SECTION("renaming to the name it already has")
 	{
 		CHECK_THROWS_AS(
-			planRename(graph, "textures_src/a.ktx2", "textures_src/a.ktx2"),
+			planRename(graph, "Derived/SourceTextures/a.ktx2", "Derived/SourceTextures/a.ktx2"),
 			std::runtime_error);
 	}
 
 	SECTION("renaming something that does not exist")
 	{
 		CHECK_THROWS_AS(
-			planRename(graph, "textures_src/ghost.ktx2", "textures_src/new.ktx2"),
+			planRename(
+				graph,
+				"Derived/SourceTextures/ghost.ktx2",
+				"Derived/SourceTextures/new.ktx2"),
 			std::runtime_error);
 	}
 
@@ -386,28 +416,35 @@ TEST_CASE("planRename refuses what a rename must never do", "[assetrename]")
 	SECTION("renaming into a directory that does not exist")
 	{
 		CHECK_THROWS_AS(
-			planRename(graph, "textures_src/a.ktx2", "textures_src/ghost/a.ktx2"),
+			planRename(
+				graph,
+				"Derived/SourceTextures/a.ktx2",
+				"Derived/SourceTextures/ghost/a.ktx2"),
 			std::runtime_error);
 	}
 
 	SECTION("moving a directory inside itself")
 	{
 		CHECK_THROWS_AS(
-			planRename(graph, "textures_src", "textures_src/inner"),
+			planRename(graph, "Derived/SourceTextures", "Derived/SourceTextures/inner"),
 			std::runtime_error);
 	}
 
 	SECTION("reaching outside the data root, from either end")
 	{
-		CHECK_THROWS_AS(planRename(graph, "../a.ktx2", "textures_src/a.ktx2"), std::runtime_error);
-		CHECK_THROWS_AS(planRename(graph, "textures_src/a.ktx2", "../a.ktx2"), std::runtime_error);
+		CHECK_THROWS_AS(
+			planRename(graph, "../a.ktx2", "Derived/SourceTextures/a.ktx2"),
+			std::runtime_error);
+		CHECK_THROWS_AS(
+			planRename(graph, "Derived/SourceTextures/a.ktx2", "../a.ktx2"),
+			std::runtime_error);
 
 		// An absolute path is not "inside" anything: operator/ would let it replace the root outright.
 		CHECK_THROWS_AS(
-			planRename(graph, "textures_src/a.ktx2", "/outside/a.ktx2"),
+			planRename(graph, "Derived/SourceTextures/a.ktx2", "/outside/a.ktx2"),
 			std::runtime_error);
 		CHECK_THROWS_AS(
-			planRename(graph, "/outside/a.ktx2", "textures_src/a.ktx2"),
+			planRename(graph, "/outside/a.ktx2", "Derived/SourceTextures/a.ktx2"),
 			std::runtime_error);
 	}
 }
@@ -419,19 +456,21 @@ TEST_CASE("A referrer that stopped parsing fails the rename, and is not touched"
 	// moved and nothing rewritten.
 	const DataRoot root("bernini_rename_badreferrer");
 
-	WriteSource(root.path / "textures_src" / "a.ktx2", { { 200, 0, 0, 255 } });
-	BakeAndSave(root, "mat.bmaterial", "textures_src/a.ktx2");
+	WriteSource(root.path / "Derived/SourceTextures" / "a.ktx2", { { 200, 0, 0, 255 } });
+	BakeAndSave(root, "mat.bmaterial", "Derived/SourceTextures/a.ktx2");
 
-	const RenamePlan plan = planRename(root.Scan(), "textures_src/a.ktx2", "textures_src/new.ktx2");
+	const RenamePlan plan =
+		planRename(root.Scan(), "Derived/SourceTextures/a.ktx2", "Derived/SourceTextures/new.ktx2");
 
-	std::ofstream(root.path / "Materials" / "mat.bmaterial", std::ios::binary) << "not a material";
+	std::ofstream(root.path / "Authored/Materials" / "mat.bmaterial", std::ios::binary)
+		<< "not a material";
 
 	const RenameResult result = root.Source().RenameAsset(plan);
 
 	CHECK(result.status == RenameStatus::kFailed);
 	CHECK_FALSE(result.error.empty());
-	CHECK(fs::exists(root.path / "textures_src" / "a.ktx2"));
-	CHECK_FALSE(fs::exists(root.path / "textures_src" / "new.ktx2"));
+	CHECK(fs::exists(root.path / "Derived/SourceTextures" / "a.ktx2"));
+	CHECK_FALSE(fs::exists(root.path / "Derived/SourceTextures" / "new.ktx2"));
 }
 
 TEST_CASE("A rename whose file vanished fails without touching the referrers", "[assetrename]")
@@ -440,12 +479,13 @@ TEST_CASE("A rename whose file vanished fails without touching the referrers", "
 	// gone -- but a rename cannot: rewriting the referrers with nothing to move would break every one.
 	const DataRoot root("bernini_rename_vanished");
 
-	WriteSource(root.path / "textures_src" / "a.ktx2", { { 200, 0, 0, 255 } });
-	BakeAndSave(root, "mat.bmaterial", "textures_src/a.ktx2");
+	WriteSource(root.path / "Derived/SourceTextures" / "a.ktx2", { { 200, 0, 0, 255 } });
+	BakeAndSave(root, "mat.bmaterial", "Derived/SourceTextures/a.ktx2");
 
-	const RenamePlan plan = planRename(root.Scan(), "textures_src/a.ktx2", "textures_src/new.ktx2");
+	const RenamePlan plan =
+		planRename(root.Scan(), "Derived/SourceTextures/a.ktx2", "Derived/SourceTextures/new.ktx2");
 
-	fs::remove(root.path / "textures_src" / "a.ktx2");
+	fs::remove(root.path / "Derived/SourceTextures" / "a.ktx2");
 
 	const RenameResult result = root.Source().RenameAsset(plan);
 
@@ -454,22 +494,25 @@ TEST_CASE("A rename whose file vanished fails without touching the referrers", "
 
 	// The material still says what it said.
 	CHECK(
-		StoreAt(root.path).Load<BMaterial>("Materials/mat.bmaterial").pbr.routes[0].texture ==
-		"textures_src/a.ktx2");
+		StoreAt(root.path)
+			.Load<BMaterial>("Authored/Materials/mat.bmaterial")
+			.pbr.routes[0]
+			.texture == "Derived/SourceTextures/a.ktx2");
 }
 
 TEST_CASE("A destination taken since the plan fails the rename", "[assetrename]")
 {
 	const DataRoot root("bernini_rename_taken");
 
-	WriteSource(root.path / "textures_src" / "a.ktx2", { { 200, 0, 0, 255 } });
+	WriteSource(root.path / "Derived/SourceTextures" / "a.ktx2", { { 200, 0, 0, 255 } });
 
-	const RenamePlan plan = planRename(root.Scan(), "textures_src/a.ktx2", "textures_src/new.ktx2");
+	const RenamePlan plan =
+		planRename(root.Scan(), "Derived/SourceTextures/a.ktx2", "Derived/SourceTextures/new.ktx2");
 
-	WriteSource(root.path / "textures_src" / "new.ktx2", { { 0, 200, 0, 255 } });
+	WriteSource(root.path / "Derived/SourceTextures" / "new.ktx2", { { 0, 200, 0, 255 } });
 
 	CHECK(root.Source().RenameAsset(plan).status == RenameStatus::kFailed);
-	CHECK(fs::exists(root.path / "textures_src" / "a.ktx2"));
+	CHECK(fs::exists(root.path / "Derived/SourceTextures" / "a.ktx2"));
 }
 
 TEST_CASE("Renaming a skeleton re-points the whole rig that hangs off it", "[assetrename]")
@@ -488,11 +531,11 @@ TEST_CASE("Renaming a skeleton re-points the whole rig that hangs off it", "[ass
 	skeleton.bones.push_back(bone);
 	skeleton.bones[0].inverseBind = glm::inverse(bindPoseModelTransforms(skeleton)[0]);
 
-	fs::create_directories(root.path / "Skeletons");
-	StoreAt(root.path).Save(skeleton, "Skeletons/rig.bskel");
+	fs::create_directories(root.path / "Derived/Skeletons");
+	StoreAt(root.path).Save(skeleton, "Derived/Skeletons/rig.bskel");
 
 	auto animations              = AnimationSet();
-	animations.skeleton          = "Skeletons/rig.bskel";
+	animations.skeleton          = "Derived/Skeletons/rig.bskel";
 	animations.skeletonSignature = skeletonSignature(skeleton);
 	animations.boneCount         = 1;
 
@@ -504,8 +547,8 @@ TEST_CASE("Renaming a skeleton re-points the whole rig that hangs off it", "[ass
 	animations.clips.push_back(clip);
 	animations.samples.push_back(bone.bindPose);
 
-	fs::create_directories(root.path / "Animations");
-	StoreAt(root.path).Save(animations, "Animations/rig.banim");
+	fs::create_directories(root.path / "Derived/Animations");
+	StoreAt(root.path).Save(animations, "Derived/Animations/rig.banim");
 
 	auto mesh = BMesh();
 
@@ -527,26 +570,32 @@ TEST_CASE("Renaming a skeleton re-points the whole rig that hangs off it", "[ass
 	mesh.submeshes.push_back(submesh);
 
 	mesh.meshes            = { Mesh{ 0, 1, 0 } };
-	mesh.skeleton          = "Skeletons/rig.bskel";
+	mesh.skeleton          = "Derived/Skeletons/rig.bskel";
 	mesh.skeletonSignature = skeletonSignature(skeleton);
-	StoreAt(root.path).Save(mesh, "Meshes/rig.bmesh");
+	StoreAt(root.path).Save(mesh, "Derived/Meshes/rig.bmesh");
 
-	const fs::path baked = root.path / vatPathFor("Meshes/rig.bmesh", "Animations/rig.banim");
+	const fs::path baked =
+		root.path / vatPathFor("Derived/Meshes/rig.bmesh", "Derived/Animations/rig.banim");
 	SaveAt(
-		AssetStore(root.path).BakeVat(VatBakeDesc{ "Meshes/rig.bmesh", "Animations/rig.banim" }),
+		AssetStore(root.path).BakeVat(
+			VatBakeDesc{ "Derived/Meshes/rig.bmesh", "Derived/Animations/rig.banim" }),
 		baked);
 
 	REQUIRE(
-		Rename(root, "Skeletons/rig.bskel", "Skeletons/hero.bskel").status ==
+		Rename(root, "Derived/Skeletons/rig.bskel", "Derived/Skeletons/hero.bskel").status ==
 		RenameStatus::kRenamed);
 
-	CHECK(loadMeshRefs(root.path / "Meshes/rig.bmesh").skeleton == "Skeletons/hero.bskel");
-	CHECK(loadAnimationSkeletonPath(root.path / "Animations/rig.banim") == "Skeletons/hero.bskel");
+	CHECK(
+		loadMeshRefs(root.path / "Derived/Meshes/rig.bmesh").skeleton ==
+		"Derived/Skeletons/hero.bskel");
+	CHECK(
+		loadAnimationSkeletonPath(root.path / "Derived/Animations/rig.banim") ==
+		"Derived/Skeletons/hero.bskel");
 
 	// A skeleton rename does not change the bake's derived name, so the file stays put.
 	const VatRefs refs = loadVatRefs(baked);
-	CHECK(refs.skeleton == "Skeletons/hero.bskel");
-	CHECK(refs.mesh == "Meshes/rig.bmesh");
+	CHECK(refs.skeleton == "Derived/Skeletons/hero.bskel");
+	CHECK(refs.mesh == "Derived/Meshes/rig.bmesh");
 
 	// A rename rewrites the path references inside the .bmesh and .banim, so their stamps do move --
 	// renameAsset re-stamps the .bvat from them afterwards, and the rewritten bake is still fresh
@@ -556,13 +605,14 @@ TEST_CASE("Renaming a skeleton re-points the whole rig that hangs off it", "[ass
 	// An input only the .bvat references follows too -- and this one is part of the derived name,
 	// so the bake moves to where the runtime will now look, still fresh.
 	REQUIRE(
-		Rename(root, "Animations/rig.banim", "Animations/hero.banim").status ==
+		Rename(root, "Derived/Animations/rig.banim", "Derived/Animations/hero.banim").status ==
 		RenameStatus::kRenamed);
 
-	const fs::path moved = root.path / vatPathFor("Meshes/rig.bmesh", "Animations/hero.banim");
+	const fs::path moved =
+		root.path / vatPathFor("Derived/Meshes/rig.bmesh", "Derived/Animations/hero.banim");
 	CHECK_FALSE(fs::exists(baked));
 	REQUIRE(fs::exists(moved));
-	CHECK(loadVatRefs(moved).animations == "Animations/hero.banim");
+	CHECK(loadVatRefs(moved).animations == "Derived/Animations/hero.banim");
 	CHECK_FALSE(vatIsStale(loadVatTables(moved), MountAt(root.path)));
 }
 
@@ -573,38 +623,41 @@ TEST_CASE("Renaming a material re-points the import document that binds it", "[a
 	BMaterial material;
 	material.name = "skin";
 	core::file::write_atomic(
-		root.path / "Materials" / "old.bmaterial",
+		root.path / "Authored/Materials" / "old.bmaterial",
 		AssetCodec<BMaterial>::Serialize(material));
 
 	ImportDocument document;
-	document.bindings = { { "kirk[0]", "Materials/old.bmaterial" } };
-	fs::create_directories(root.path / "meshes_src");
+	document.bindings = { { "kirk[0]", "Authored/Materials/old.bmaterial" } };
+	fs::create_directories(root.path / "Authored/Meshes");
 	core::file::write_atomic(
-		root.path / "meshes_src" / "kirk.bimport",
+		root.path / "Authored/Meshes" / "kirk.bimport",
 		AssetCodec<ImportDocument>::Serialize(document));
-	std::ofstream(root.path / "meshes_src" / "kirk.glb") << "source";
+	std::ofstream(root.path / "Authored/Meshes" / "kirk.glb") << "source";
 
-	const RenamePlan plan =
-		planRename(root.Scan(), "Materials/old.bmaterial", "Materials/new.bmaterial");
+	const RenamePlan plan = planRename(
+		root.Scan(),
+		"Authored/Materials/old.bmaterial",
+		"Authored/Materials/new.bmaterial");
 	REQUIRE(root.Source().RenameAsset(plan).status == RenameStatus::kRenamed);
 
 	const ImportDocument rewritten =
-		loadImportDocument(root.Source().GetFiles(), "meshes_src/kirk.bimport");
+		loadImportDocument(root.Source().GetFiles(), "Authored/Meshes/kirk.bimport");
 	REQUIRE(rewritten.bindings.size() == 1);
-	CHECK(rewritten.bindings[0].material == "Materials/new.bmaterial");
+	CHECK(rewritten.bindings[0].material == "Authored/Materials/new.bmaterial");
 }
 
 TEST_CASE("An import document cannot be renamed away from its source", "[assetrename]")
 {
 	const DataRoot root("bernini_rename_importdoc_refuse");
 
-	fs::create_directories(root.path / "meshes_src");
+	fs::create_directories(root.path / "Authored/Meshes");
 	core::file::write_atomic(
-		root.path / "meshes_src" / "kirk.bimport",
+		root.path / "Authored/Meshes" / "kirk.bimport",
 		AssetCodec<ImportDocument>::Serialize(ImportDocument{}));
-	std::ofstream(root.path / "meshes_src" / "kirk.glb") << "source";
+	std::ofstream(root.path / "Authored/Meshes" / "kirk.glb") << "source";
 
 	// The source key is derived from the document's own path; a lone rename would orphan the
 	// pair. Renaming the directory moves them together and stays allowed.
-	CHECK_THROWS(planRename(root.Scan(), "meshes_src/kirk.bimport", "meshes_src/hero.bimport"));
+	CHECK_THROWS(
+		planRename(root.Scan(), "Authored/Meshes/kirk.bimport", "Authored/Meshes/hero.bimport"));
 }

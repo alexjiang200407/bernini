@@ -19,9 +19,9 @@ namespace
 		explicit Scratch(const char* name) : path(fs::temp_directory_path() / name)
 		{
 			fs::remove_all(path);
-			fs::create_directories(path / "Materials");
-			fs::create_directories(path / "Textures");
-			fs::create_directories(path / "textures_src");
+			fs::create_directories(path / "Authored/Materials");
+			fs::create_directories(path / "Derived/BakedTextures");
+			fs::create_directories(path / "Derived/SourceTextures");
 		}
 		~Scratch() { fs::remove_all(path); }
 	};
@@ -40,9 +40,9 @@ namespace
 	{
 		BMaterial material;
 		material.name                 = "skin";
-		material.pbr.routes[0]        = { "textures_src/skin.ktx2", 0 };
-		material.pbr.routeStamps[0]   = stampOf(root / "textures_src/skin.ktx2");
-		material.pbr.baseColorTexture = "Textures/skin_baked.ktx2";
+		material.pbr.routes[0]        = { "Derived/SourceTextures/skin.ktx2", 0 };
+		material.pbr.routeStamps[0]   = stampOf(root / "Derived/SourceTextures/skin.ktx2");
+		material.pbr.baseColorTexture = "Derived/BakedTextures/skin_baked.ktx2";
 		return material;
 	}
 
@@ -61,26 +61,26 @@ namespace
 TEST_CASE("stampOf reads the same numbers through a mount as by path", "[staleseam]")
 {
 	const Scratch scratch("stale_seam_stamp");
-	Write(scratch.path / "textures_src/skin.ktx2", "some source bytes");
+	Write(scratch.path / "Derived/SourceTextures/skin.ktx2", "some source bytes");
 	Pack(scratch.path);
 
 	const core::file::LooseFileSystem loose(scratch.path);
 	const PakFile                     pak(scratch.path / "Data.bpak");
 
-	const SourceStamp direct = stampOf(scratch.path / "textures_src/skin.ktx2");
+	const SourceStamp direct = stampOf(scratch.path / "Derived/SourceTextures/skin.ktx2");
 	REQUIRE(direct.size != 0);
 
 	// The bytes are what is hashed, so the mount that served them cannot change the answer.
-	CHECK(stampOf(loose, "textures_src/skin.ktx2") == direct);
-	CHECK(stampOf(pak, "textures_src/skin.ktx2") == direct);
+	CHECK(stampOf(loose, "Derived/SourceTextures/skin.ktx2") == direct);
+	CHECK(stampOf(pak, "Derived/SourceTextures/skin.ktx2") == direct);
 
 	// A missing path is an answer, not a failure: the zeroed stamp never equals a live one, so the
 	// caller reads it as stale. Propagating Stat's empty optional would make every predicate handle
 	// it separately.
 	SECTION("an absent path yields the zeroed stamp rather than throwing")
 	{
-		CHECK(stampOf(loose, "textures_src/gone.ktx2") == SourceStamp{});
-		CHECK(stampOf(pak, "textures_src/gone.ktx2") == SourceStamp{});
+		CHECK(stampOf(loose, "Derived/SourceTextures/gone.ktx2") == SourceStamp{});
+		CHECK(stampOf(pak, "Derived/SourceTextures/gone.ktx2") == SourceStamp{});
 	}
 
 	// A route can name a file outside the project -- picking one from the file dialog is all it
@@ -104,15 +104,15 @@ TEST_CASE("a material's verdict is the same from a directory and from an archive
 
 	SECTION("a current bake reads baked through both")
 	{
-		Write(scratch.path / "textures_src/skin.ktx2", "some source bytes");
-		Write(scratch.path / "Textures/skin_baked.ktx2", "baked bytes");
-		SaveAt(MakeBakedMaterial(scratch.path), scratch.path / "Materials/skin.bmaterial");
+		Write(scratch.path / "Derived/SourceTextures/skin.ktx2", "some source bytes");
+		Write(scratch.path / "Derived/BakedTextures/skin_baked.ktx2", "baked bytes");
+		SaveAt(MakeBakedMaterial(scratch.path), scratch.path / "Authored/Materials/skin.bmaterial");
 		Pack(scratch.path);
 
 		const core::file::LooseFileSystem loose(scratch.path);
 		const PakFile                     pak(scratch.path / "Data.bpak");
 		const BMaterial                   material =
-			StoreAt(scratch.path).Load<BMaterial>("Materials/skin.bmaterial");
+			StoreAt(scratch.path).Load<BMaterial>("Authored/Materials/skin.bmaterial");
 
 		CHECK_FALSE(bakeIsStale(material, loose));
 		CHECK_FALSE(bakeIsStale(material, pak));
@@ -122,12 +122,12 @@ TEST_CASE("a material's verdict is the same from a directory and from an archive
 
 	SECTION("a never-baked material reads loose through both")
 	{
-		Write(scratch.path / "textures_src/skin.ktx2", "some source bytes");
+		Write(scratch.path / "Derived/SourceTextures/skin.ktx2", "some source bytes");
 
 		BMaterial material;
 		material.name          = "skin";
-		material.pbr.routes[0] = { "textures_src/skin.ktx2", 0 };  // stamp left zeroed
-		StoreAt(scratch.path).Save(material, "Materials/skin.bmaterial");
+		material.pbr.routes[0] = { "Derived/SourceTextures/skin.ktx2", 0 };  // stamp left zeroed
+		StoreAt(scratch.path).Save(material, "Authored/Materials/skin.bmaterial");
 		Pack(scratch.path);
 
 		const core::file::LooseFileSystem loose(scratch.path);
@@ -153,11 +153,11 @@ TEST_CASE("editing a source after packing moves the loose verdict alone", "[stal
 {
 	const Scratch scratch("stale_seam_frozen");
 
-	Write(scratch.path / "textures_src/skin.ktx2", "some source bytes");
-	Write(scratch.path / "Textures/skin_baked.ktx2", "baked bytes");
+	Write(scratch.path / "Derived/SourceTextures/skin.ktx2", "some source bytes");
+	Write(scratch.path / "Derived/BakedTextures/skin_baked.ktx2", "baked bytes");
 
 	const BMaterial material = MakeBakedMaterial(scratch.path);
-	StoreAt(scratch.path).Save(material, "Materials/skin.bmaterial");
+	StoreAt(scratch.path).Save(material, "Authored/Materials/skin.bmaterial");
 	Pack(scratch.path);
 
 	const core::file::LooseFileSystem loose(scratch.path);
@@ -169,7 +169,7 @@ TEST_CASE("editing a source after packing moves the loose verdict alone", "[stal
 	// Longer, not merely rewritten: mtime is seconds, and a same-second touch of equal length would
 	// not move the stamp at all.
 	Write(
-		scratch.path / "textures_src/skin.ktx2",
+		scratch.path / "Derived/SourceTextures/skin.ktx2",
 		"some source bytes, edited and longer than before");
 
 	CHECK(bakeIsStale(material, loose));
@@ -186,13 +186,13 @@ TEST_CASE("a source deleted from the tree survives inside the archive", "[stales
 {
 	const Scratch scratch("stale_seam_deleted");
 
-	Write(scratch.path / "textures_src/skin.ktx2", "some source bytes");
-	Write(scratch.path / "Textures/skin_baked.ktx2", "baked bytes");
+	Write(scratch.path / "Derived/SourceTextures/skin.ktx2", "some source bytes");
+	Write(scratch.path / "Derived/BakedTextures/skin_baked.ktx2", "baked bytes");
 
 	const BMaterial material = MakeBakedMaterial(scratch.path);
 	Pack(scratch.path);
 
-	fs::remove(scratch.path / "textures_src/skin.ktx2");
+	fs::remove(scratch.path / "Derived/SourceTextures/skin.ktx2");
 
 	const core::file::LooseFileSystem loose(scratch.path);
 	const PakFile                     pak(scratch.path / "Data.bpak");

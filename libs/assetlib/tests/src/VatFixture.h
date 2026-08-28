@@ -40,7 +40,7 @@ namespace assetlib::test
 			for (size_t i = 0; i < skeleton.bones.size(); ++i)
 				skeleton.bones[i].inverseBind = glm::inverse(binds[i]);
 
-			animations.skeleton          = "Skeletons/rig.bskel";
+			animations.skeleton          = "Derived/Skeletons/rig.bskel";
 			animations.skeletonSignature = skeletonSignature(skeleton);
 			animations.boneCount         = 2;
 
@@ -107,7 +107,7 @@ namespace assetlib::test
 			fixture.vertexCount = 1;
 			mesh.submeshes.push_back(fixture);
 
-			mesh.skeleton          = "Skeletons/rig.bskel";
+			mesh.skeleton          = "Derived/Skeletons/rig.bskel";
 			mesh.skeletonSignature = skeletonSignature(skeleton);
 		}
 

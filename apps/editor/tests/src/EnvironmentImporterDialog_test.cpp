@@ -158,9 +158,9 @@ TEST_CASE("Each part defaults to its own category", "[envimportdialog]")
 {
 	const EnvironmentImporterDialog dialog(c_SourceFile, c_Project);
 
-	CHECK(dialog.GetSkyDirectory() == "Sky");
-	CHECK(dialog.GetLightingDirectory() == "EnvLighting");
-	CHECK(dialog.GetSourceDirectory() == "textures_src");
+	CHECK(dialog.GetSkyDirectory() == "Derived/Sky");
+	CHECK(dialog.GetLightingDirectory() == "Derived/EnvLighting");
+	CHECK(dialog.GetSourceDirectory() == "Derived/SourceTextures");
 }
 
 TEST_CASE("A typed folder organises inside its category", "[envimportdialog]")
@@ -170,11 +170,11 @@ TEST_CASE("A typed folder organises inside its category", "[envimportdialog]")
 	SkyDirField(dialog)->setText("outdoor/dusk");
 	SourceDirField(dialog)->setText("hdri");
 
-	CHECK(dialog.GetSkyDirectory() == "Sky/outdoor/dusk");
-	CHECK(dialog.GetSourceDirectory() == "textures_src/hdri");
+	CHECK(dialog.GetSkyDirectory() == "Derived/Sky/outdoor/dusk");
+	CHECK(dialog.GetSourceDirectory() == "Derived/SourceTextures/hdri");
 
 	// The others are untouched by it.
-	CHECK(dialog.GetLightingDirectory() == "EnvLighting");
+	CHECK(dialog.GetLightingDirectory() == "Derived/EnvLighting");
 }
 
 // The category is the fixed part. A folder that could re-root the join would put a `.bsky` somewhere
@@ -184,7 +184,7 @@ TEST_CASE("A folder that could leave its category is ignored", "[envimportdialog
 	const EnvironmentImporterDialog dialog(c_SourceFile, c_Project);
 
 	const QString rejected = GENERATE(
-		QString("../Meshes"),
+		QString("../Derived/Meshes"),
 		QString("/absolute"),
 		QString("C:/elsewhere"),
 		QString("D:"),
@@ -197,7 +197,7 @@ TEST_CASE("A folder that could leave its category is ignored", "[envimportdialog
 	SkyDirField(dialog)->setText(rejected);
 
 	// Falls back to the bare category rather than refusing: the import still lands somewhere correct.
-	CHECK(dialog.GetSkyDirectory() == "Sky");
+	CHECK(dialog.GetSkyDirectory() == "Derived/Sky");
 }
 
 // A destination is meaningless when that part is not being written, and leaving it live invites the

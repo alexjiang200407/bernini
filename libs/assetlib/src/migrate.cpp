@@ -162,7 +162,7 @@ namespace assetlib
 		// Before everything: the walk below regenerates through documents that must already name
 		// their rig, and a project written before that field existed has none.
 		const auto facts = factsFromDerived(*this, paths);
-		for (const std::string& documentKey : GetFiles().Enumerate(c_MeshesSrcDirectoryName))
+		for (const std::string& documentKey : GetFiles().Enumerate(c_MeshSourcesDirectoryName))
 		{
 			if (extensionOf(documentKey) != c_ImportDocumentExtension)
 				continue;

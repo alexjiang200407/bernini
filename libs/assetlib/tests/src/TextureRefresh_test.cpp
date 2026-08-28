@@ -17,7 +17,7 @@ namespace
 {
 	namespace fs = std::filesystem;
 
-	constexpr std::string_view c_TextureDir = "textures_src/unit";
+	constexpr std::string_view c_TextureDir = "Derived/SourceTextures/unit";
 
 	struct Project
 	{
@@ -42,7 +42,7 @@ namespace
 		[[nodiscard]] ImportDocument
 		Document() const
 		{
-			return loadImportDocument(root / "meshes_src" / "unit.bimport");
+			return loadImportDocument(root / "Authored/Meshes" / "unit.bimport");
 		}
 
 		[[nodiscard]] std::vector<std::string>
@@ -83,7 +83,7 @@ TEST_CASE("A source that has not changed has nothing to refresh", "[refresh][tex
 	test::ImportUnitGroup(
 		project.root,
 		"assets/apples.glb",
-		"Materials/red.bmaterial",
+		"Authored/Materials/red.bmaterial",
 		30.0f,
 		c_TextureDir);
 
@@ -100,7 +100,7 @@ TEST_CASE("A folder still holding a numbered texture is stale", "[refresh][textu
 	test::ImportUnitGroup(
 		project.root,
 		"assets/apples.glb",
-		"Materials/red.bmaterial",
+		"Authored/Materials/red.bmaterial",
 		30.0f,
 		c_TextureDir);
 
@@ -112,12 +112,12 @@ TEST_CASE("A folder still holding a numbered texture is stale", "[refresh][textu
 
 	CHECK(
 		project.Store().GetStaleImportedTextureSources() ==
-		std::vector<std::string>{ "meshes_src/unit.glb" });
+		std::vector<std::string>{ "Authored/Meshes/unit.glb" });
 
 	SECTION("and the refresh follows it onto the file holding those bytes")
 	{
 		const TextureRefresh refresh =
-			project.Store().RefreshImportedTextures("meshes_src/unit.glb");
+			project.Store().RefreshImportedTextures("Authored/Meshes/unit.glb");
 
 		REQUIRE(refresh.moved.size() == 1);
 		CHECK(refresh.moved[0].from == std::string(c_TextureDir) + "/tex0.ktx2");
@@ -136,7 +136,7 @@ TEST_CASE("An edited source's textures are re-extracted over the routes", "[refr
 	test::ImportUnitGroup(
 		project.root,
 		"assets/apples.glb",
-		"Materials/red.bmaterial",
+		"Authored/Materials/red.bmaterial",
 		30.0f,
 		c_TextureDir);
 
@@ -148,21 +148,22 @@ TEST_CASE("An edited source's textures are re-extracted over the routes", "[refr
 	// Apple1's image is renamed and Apple2's is not, so one texture moves to a new file and the
 	// other must land back on the file a material already routes at.
 	RenameImageInSource(
-		project.root / "meshes_src" / "unit.glb",
+		project.root / "Authored/Meshes" / "unit.glb",
 		"Apple1_u1_v1_diffuse",
 		"Apple9_u1_v1_diffuse");
 
 	REQUIRE(
 		project.Store().GetStaleImportedTextureSources() ==
-		std::vector<std::string>{ "meshes_src/unit.glb" });
+		std::vector<std::string>{ "Authored/Meshes/unit.glb" });
 
-	const TextureRefresh refresh = project.Store().RefreshImportedTextures("meshes_src/unit.glb");
+	const TextureRefresh refresh =
+		project.Store().RefreshImportedTextures("Authored/Meshes/unit.glb");
 
 	CHECK(refresh.textureDir == c_TextureDir);
 	CHECK(
 		refresh.written ==
-		std::vector<std::string>{ "textures_src/unit/Apple2_u1_v1_diffuse.ktx2",
-	                              "textures_src/unit/Apple9_u1_v1_diffuse.ktx2" });
+		std::vector<std::string>{ "Derived/SourceTextures/unit/Apple2_u1_v1_diffuse.ktx2",
+	                              "Derived/SourceTextures/unit/Apple9_u1_v1_diffuse.ktx2" });
 
 	// Apple2 kept its file, so every material routed at it is now drawing the re-exported pixels
 	// with no route edit -- which is the whole point of naming by image. Apple1's old file held the
@@ -170,8 +171,8 @@ TEST_CASE("An edited source's textures are re-extracted over the routes", "[refr
 	// rather than removed, so it is followed: the file moves and the routes move with it.
 	CHECK(refresh.superseded.empty());
 	CHECK(refresh.moved.size() == 1);
-	CHECK(refresh.moved[0].from == "textures_src/unit/Apple1_u1_v1_diffuse.ktx2");
-	CHECK(refresh.moved[0].to == "textures_src/unit/Apple9_u1_v1_diffuse.ktx2");
+	CHECK(refresh.moved[0].from == "Derived/SourceTextures/unit/Apple1_u1_v1_diffuse.ktx2");
+	CHECK(refresh.moved[0].to == "Derived/SourceTextures/unit/Apple9_u1_v1_diffuse.ktx2");
 	CHECK_FALSE(fs::exists(project.root / c_TextureDir / "Apple1_u1_v1_diffuse.ktx2"));
 
 	SECTION("and the source is no longer reported stale")
@@ -195,7 +196,7 @@ TEST_CASE("An import that recorded no texture folder refuses the refresh", "[ref
 
 	CHECK(project.Store().GetStaleImportedTextureSources().empty());
 	CHECK_THROWS_WITH(
-		project.Store().RefreshImportedTextures("meshes_src/unit.glb"),
+		project.Store().RefreshImportedTextures("Authored/Meshes/unit.glb"),
 		ContainsSubstring("records no texture folder"));
 }
 
@@ -205,16 +206,16 @@ TEST_CASE("A source that is gone refuses the refresh rather than staling", "[ref
 	test::ImportUnitGroup(
 		project.root,
 		"assets/apples.glb",
-		"Materials/red.bmaterial",
+		"Authored/Materials/red.bmaterial",
 		30.0f,
 		c_TextureDir);
-	fs::remove(project.root / "meshes_src" / "unit.glb");
+	fs::remove(project.root / "Authored/Meshes" / "unit.glb");
 
 	// What cannot be compared is not evidence of a change: a project whose sources were not
 	// checked out must not report every asset stale.
 	CHECK(project.Store().GetStaleImportedTextureSources().empty());
 	CHECK_THROWS_WITH(
-		project.Store().RefreshImportedTextures("meshes_src/unit.glb"),
+		project.Store().RefreshImportedTextures("Authored/Meshes/unit.glb"),
 		ContainsSubstring("is not in this project"));
 }
 
@@ -224,12 +225,12 @@ TEST_CASE("migrate re-extracts a moved source's textures", "[refresh][textures][
 	test::ImportUnitGroup(
 		project.root,
 		"assets/apples.glb",
-		"Materials/red.bmaterial",
+		"Authored/Materials/red.bmaterial",
 		30.0f,
 		c_TextureDir);
 
 	RenameImageInSource(
-		project.root / "meshes_src" / "unit.glb",
+		project.root / "Authored/Meshes" / "unit.glb",
 		"Apple1_u1_v1_diffuse",
 		"Apple9_u1_v1_diffuse");
 

@@ -153,7 +153,7 @@ namespace assetlib
 		 *
 		 * One template rather than a method per container: the type says which codec to use, so a
 		 * container is registered once (in its `AssetCodec` specialization) instead of once here as
-		 * well. `store.Load<BMesh>("Meshes/a.bmesh")`.
+		 * well. `store.Load<BMesh>("Derived/Meshes/a.bmesh")`.
 		 *
 		 * @throws std::runtime_error if the container is absent, unreadable or malformed -- the
 		 *         codec's own `deserialize` decides which.
@@ -645,7 +645,7 @@ namespace assetlib
 		[[nodiscard]] std::filesystem::path
 		FindMatchingSkeleton(const Skeleton& skeleton) const;
 
-		/** `meshes_src/<name>.glb` -- where an import copies its source. */
+		/** `Authored/Meshes/<name>.glb` -- where an import copies its source. */
 		[[nodiscard]] std::filesystem::path
 		ImportedSourcePath(std::string_view name) const;
 
@@ -654,7 +654,7 @@ namespace assetlib
 		ImportDocumentPath(std::string_view name) const;
 
 		/**
-		 * Copies the self-contained source into `meshes_src/` and stamps it: the returned reference
+		 * Copies the self-contained source into `Authored/Meshes/` and stamps it: the returned reference
 		 * -- key, content stamp, parameter hash -- is what the caller sets on every container
 		 * derived from it *before* saving them. The document itself is written afterwards by
 		 * WriteImportedDocument, once the bindings exist; the split is safe because bindings are
@@ -711,8 +711,8 @@ namespace assetlib
 
 		/**
 		 * Imports `desc.source` into this project as a `.bsky`, a `.benvl` and the `.benv` composing
-		 * them, writing the float intermediates into `textures_src/` as the routed sources and
-		 * baking each into `Textures/`.
+		 * them, writing the float intermediates into `Derived/SourceTextures/` as the routed
+		 * sources and baking each into `Derived/BakedTextures/`.
 		 *
 		 * **Rolls back on failure.** A cancelled or failed import removes the files it created, so a
 		 * half-written environment is never left behind. It removes only what it *created*: a file

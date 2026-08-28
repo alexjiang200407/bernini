@@ -18,8 +18,8 @@ namespace editor
  * Every file an import will write, and the one folder it cannot name file by file.
  *
  * Each path is relative to the project's data root and already inside its category --
- * `Meshes/animals/coyote.bmesh` -- because every reference in a project is written against that
- * layout: an import organises *within* a category and can never move an asset out of one.
+ * `Derived/Meshes/animals/coyote.bmesh` -- because every reference in a project is written against
+ * that layout: an import organises *within* a category and can never move an asset out of one.
  */
 struct ImportOutputs
 {

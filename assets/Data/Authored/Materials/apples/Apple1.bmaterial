@@ -1,0 +1,71 @@
+{
+	"alphaCutoff": 0.5,
+	"alphaMode": "opaque",
+	"baked": {
+		"baseColor": "Derived/BakedTextures/basecolor_700a22db7b7ef785.ktx2",
+		"normal": "Derived/BakedTextures/normal_3fd6ecf5f0d1476c.ktx2",
+		"orm": "Derived/BakedTextures/orm_fdc537ad982f59e7.ktx2"
+	},
+	"baseColorFactor": [
+		1.0,
+		1.0,
+		1.0,
+		1.0
+	],
+	"editorGraph": "{\"connections\":[{\"inNodeId\":0,\"inPortIndex\":0,\"outNodeId\":2,\"outPortIndex\":0},{\"inNodeId\":0,\"inPortIndex\":4,\"outNodeId\":1,\"outPortIndex\":2},{\"inNodeId\":0,\"inPortIndex\":3,\"outNodeId\":3,\"outPortIndex\":5}],\"nodes\":[{\"id\":0,\"internal-data\":{\"baseColorA\":1,\"baseColorB\":1,\"baseColorG\":1,\"baseColorR\":1,\"metallic\":1,\"model-name\":\"MaterialOutput\",\"roughness\":0.6000000238418579,\"split\":[false,true,false]},\"position\":{\"x\":220,\"y\":40}},{\"id\":1,\"internal-data\":{\"model-name\":\"Texture\",\"texture\":\"Derived/SourceTextures/apples/tex0.ktx2\"},\"position\":{\"x\":-306.5767973856209,\"y\":187.56808278867103}},{\"id\":2,\"internal-data\":{\"model-name\":\"Texture\",\"texture\":\"Derived/SourceTextures/apples/tex1.ktx2\"},\"position\":{\"x\":-312.6134713144518,\"y\":-83.00426652142339}},{\"id\":3,\"internal-data\":{\"model-name\":\"Texture\",\"texture\":\"Derived/SourceTextures/apples/tex2.ktx2\"},\"position\":{\"x\":-107.79774872912134,\"y\":44.19707697893974}}]}",
+	"metallicFactor": 1.0,
+	"name": "Apple1",
+	"roughnessFactor": 0.6,
+	"routes": {
+		"baseColorA": {
+			"channel": 3,
+			"stampHash": 0,
+			"stampSize": 0,
+			"texture": "Derived/SourceTextures/apples/tex1.ktx2"
+		},
+		"baseColorB": {
+			"channel": 2,
+			"stampHash": 0,
+			"stampSize": 0,
+			"texture": "Derived/SourceTextures/apples/tex1.ktx2"
+		},
+		"baseColorG": {
+			"channel": 1,
+			"stampHash": 0,
+			"stampSize": 0,
+			"texture": "Derived/SourceTextures/apples/tex1.ktx2"
+		},
+		"baseColorR": {
+			"channel": 0,
+			"stampHash": 0,
+			"stampSize": 0,
+			"texture": "Derived/SourceTextures/apples/tex1.ktx2"
+		},
+		"metallic": {
+			"channel": 2,
+			"stampHash": 0,
+			"stampSize": 0,
+			"texture": "Derived/SourceTextures/apples/tex2.ktx2"
+		},
+		"normalX": {
+			"channel": 0,
+			"stampHash": 0,
+			"stampSize": 0,
+			"texture": "Derived/SourceTextures/apples/tex0.ktx2"
+		},
+		"normalY": {
+			"channel": 1,
+			"stampHash": 0,
+			"stampSize": 0,
+			"texture": "Derived/SourceTextures/apples/tex0.ktx2"
+		}
+	},
+	"shadingModel": "pbr",
+	"specularColorFactor": [
+		1.0,
+		1.0,
+		1.0
+	],
+	"specularFactor": 1.0,
+	"transmissionFactor": 0.0
+}

@@ -18,7 +18,8 @@ namespace assetlib
 
 	/**
 	 * The authored half of one imported source: what a person chose at import and after it. Text,
-	 * beside the source it describes (`meshes_src/kirk.glb` -> `meshes_src/kirk.bimport`), so two
+	 * beside the source it describes (`Authored/Meshes/kirk.glb` ->
+	 * `Authored/Meshes/kirk.bimport`), so two
 	 * branches merge it like code.
 	 *
 	 * Two halves with different duties: the `parameters` object changes what the importer computes,
@@ -52,11 +53,14 @@ namespace assetlib
 		operator==(const ImportDocument&) const = default;
 	};
 
-	/** `meshes_src/kirk.glb` -> `meshes_src/kirk.bimport`. */
+	/** `Authored/Meshes/kirk.glb` -> `Authored/Meshes/kirk.bimport`. */
 	[[nodiscard]] std::string
 	importDocumentKeyFor(std::string_view sourceKey);
 
-	/** `meshes_src/kirk.bimport` -> `meshes_src/kirk.glb` -- the only source kind is a `.glb`. */
+	/**
+	 * `Authored/Meshes/kirk.bimport` -> `Authored/Meshes/kirk.glb` -- the only source kind is a
+	 * `.glb`.
+	 */
 	[[nodiscard]] std::string
 	importedSourceKeyFor(std::string_view documentKey);
 

@@ -53,13 +53,13 @@ namespace assetlib
 	std::filesystem::path
 	AssetStore::ImportedSourcePath(std::string_view name) const
 	{
-		return GetDataRoot() / c_MeshesSrcDirectoryName / std::format("{}.glb", name);
+		return GetDataRoot() / c_MeshSourcesDirectoryName / std::format("{}.glb", name);
 	}
 
 	std::filesystem::path
 	AssetStore::ImportDocumentPath(std::string_view name) const
 	{
-		return GetDataRoot() / c_MeshesSrcDirectoryName /
+		return GetDataRoot() / c_MeshSourcesDirectoryName /
 		       std::format("{}{}", name, c_ImportDocumentExtension);
 	}
 
@@ -117,7 +117,7 @@ namespace assetlib
 
 		SourceRef ref;
 		ref.key =
-			std::format("{}/{}", c_MeshesSrcDirectoryName, copied.filename().generic_string());
+			std::format("{}/{}", c_MeshSourcesDirectoryName, copied.filename().generic_string());
 		ref.stamp.size                     = std::filesystem::file_size(copied);
 		const std::optional<uint64_t> hash = core::file::hash_file(copied);
 		core::throw_runtime_error_if(

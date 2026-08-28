@@ -46,8 +46,11 @@ namespace
 		const assetlib::test::SkinnedGltf source("bernini_regen_acquire_gltf");
 
 		game::test::WriteTexture(dataRoot / "Textures/white.ktx2");
-		game::test::WriteMaterial(dataRoot / "Materials/unit.bmaterial", false);
-		assetlib::test::ImportUnitGroup(dataRoot, source.PackGlb(), "Materials/unit.bmaterial");
+		game::test::WriteMaterial(dataRoot / "Authored/Materials/unit.bmaterial", false);
+		assetlib::test::ImportUnitGroup(
+			dataRoot,
+			source.PackGlb(),
+			"Authored/Materials/unit.bmaterial");
 	}
 
 	void
@@ -62,7 +65,7 @@ TEST_CASE("a stale clip set is refused at acquire, and names the way out", "[reg
 	DataRoot root("bernini_regen_acquire");
 	ImportRig(root.path);
 
-	const std::filesystem::path banim = root.path / "Animations/unit.banim";
+	const std::filesystem::path banim = root.path / "Derived/Animations/unit.banim";
 
 	auto gfx = bgl::CreateGraphics(HeadlessOptions());
 	REQUIRE(gfx != nullptr);
@@ -74,7 +77,7 @@ TEST_CASE("a stale clip set is refused at acquire, and names the way out", "[reg
 	{
 		auto       assets = game::AssetManager(scene, root.path);
 		const auto skinned =
-			assets.AcquireSkinnedMesh("Meshes/unit.bmesh", "Animations/unit.banim");
+			assets.AcquireSkinnedMesh("Derived/Meshes/unit.bmesh", "Derived/Animations/unit.banim");
 		CHECK(skinned.geom.IsValid());
 		REQUIRE(skinned.clips.size() == 2);
 		CHECK(skinned.clips[0].name == "walk");
@@ -87,7 +90,7 @@ TEST_CASE("a stale clip set is refused at acquire, and names the way out", "[reg
 
 		auto assets = game::AssetManager(scene, root.path);
 		CHECK_THROWS_WITH(
-			assets.AcquireSkinnedMesh("Meshes/unit.bmesh", "Animations/unit.banim"),
+			assets.AcquireSkinnedMesh("Derived/Meshes/unit.bmesh", "Derived/Animations/unit.banim"),
 			Catch::Matchers::ContainsSubstring("assetlib_cli migrate"));
 
 		// Refused, not repaired: making the file current is migrate's, and a load that wrote one
@@ -104,14 +107,14 @@ TEST_CASE(
 	ImportRig(root.path);
 
 	const assetlib::AssetStore store(root.path);
-	const std::string_view     mesh  = "Meshes/unit.bmesh";
-	const std::string_view     clips = "Animations/unit.banim";
+	const std::string_view     mesh  = "Derived/Meshes/unit.bmesh";
+	const std::string_view     clips = "Derived/Animations/unit.banim";
 
 	static_cast<void>(game::EnsureVatBaked(store, mesh, clips));
 	REQUIRE(game::VatFreshness(store, mesh, clips) == game::VatBakeState::kFresh);
 
 	// The bake's own three stamps still hold -- the staleness is the group's cache key alone.
-	FlipTokenByte(root.path / "Meshes/unit.bmesh");
+	FlipTokenByte(root.path / "Derived/Meshes/unit.bmesh");
 	CHECK(game::VatFreshness(store, mesh, clips) == game::VatBakeState::kStale);
 
 	// Re-baked from the seam's outputs, not refused -- and the answer the bake just made true
@@ -128,7 +131,7 @@ TEST_CASE(
 		{ { "\"translation\": [ 0, 2, 0 ]", "\"translation\": [ 0, 3, 0 ]" } });
 	std::filesystem::copy_file(
 		reexport.PackGlb(),
-		root.path / "meshes_src/unit.glb",
+		root.path / "Authored/Meshes/unit.glb",
 		std::filesystem::copy_options::overwrite_existing);
 	CHECK(game::VatFreshness(store, mesh, clips) == game::VatBakeState::kStale);
 
@@ -140,7 +143,8 @@ TEST_CASE(
 	// write time -- how a sibling's bake actually arrives, stamped by the checkout that wrote
 	// it -- since rewriting identical bytes can land inside the same stamp second.
 	const std::filesystem::path bvatAbs =
-		root.path / assetlib::vatPathFor("Meshes/unit.bmesh", "Animations/unit.banim");
+		root.path /
+		assetlib::vatPathFor("Derived/Meshes/unit.bmesh", "Derived/Animations/unit.banim");
 	std::filesystem::last_write_time(
 		bvatAbs,
 		std::filesystem::last_write_time(bvatAbs) + std::chrono::seconds(2));

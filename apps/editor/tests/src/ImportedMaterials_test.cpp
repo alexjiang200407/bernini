@@ -54,7 +54,7 @@ namespace
 		[[nodiscard]] std::filesystem::path
 		TextureDir() const
 		{
-			return m_Root / "textures_src" / "hydrant";
+			return m_Root / "Derived/SourceTextures" / "hydrant";
 		}
 
 	private:
@@ -156,13 +156,13 @@ TEST_CASE("An imported PBR material is written and bound to its submesh", "[impo
 	CHECK(material.pbr.baseColorTexture.empty());  // no bake has run, so it draws from its routes
 	CHECK(
 		material.pbr.routes[assetlib::channelIndex(PbrChannel::kBaseColorR)].texture ==
-		"textures_src/hydrant/albedo.ktx2");
+		"Derived/SourceTextures/hydrant/albedo.ktx2");
 	CHECK(
 		material.pbr.routes[assetlib::channelIndex(PbrChannel::kMetallic)].texture ==
-		"textures_src/hydrant/orm.ktx2");
+		"Derived/SourceTextures/hydrant/orm.ktx2");
 	CHECK(
 		material.pbr.routes[assetlib::channelIndex(PbrChannel::kNormalY)].texture ==
-		"textures_src/hydrant/normal.ktx2");
+		"Derived/SourceTextures/hydrant/normal.ktx2");
 	CHECK_FALSE(material.editorGraph.empty());
 }
 
@@ -432,7 +432,7 @@ TEST_CASE("A cutout import survives the round-trip to disk", "[importedmaterials
 	CHECK(material.pbr.alphaCutoff == Catch::Approx(0.25f));
 	CHECK(
 		material.pbr.routes[assetlib::channelIndex(PbrChannel::kBaseColorA)].texture ==
-		"textures_src/hydrant/albedo.ktx2");
+		"Derived/SourceTextures/hydrant/albedo.ktx2");
 	CHECK(material.pbr.routes[assetlib::channelIndex(PbrChannel::kBaseColorA)].channel == 3);
 }
 
@@ -496,10 +496,10 @@ TEST_CASE("One texture used as two maps routes both at the same file", "[importe
 	// Base colour and ORM both name the same file, each reading the channels its own role wants.
 	CHECK(
 		material.pbr.routes[assetlib::channelIndex(PbrChannel::kBaseColorR)].texture ==
-		"textures_src/hydrant/combined.ktx2");
+		"Derived/SourceTextures/hydrant/combined.ktx2");
 	CHECK(
 		material.pbr.routes[assetlib::channelIndex(PbrChannel::kAo)].texture ==
-		"textures_src/hydrant/combined.ktx2");
+		"Derived/SourceTextures/hydrant/combined.ktx2");
 	CHECK(material.pbr.routes[assetlib::channelIndex(PbrChannel::kAo)].channel == 0);
 	CHECK(material.pbr.routes[assetlib::channelIndex(PbrChannel::kRoughness)].channel == 1);
 	CHECK(material.pbr.routes[assetlib::channelIndex(PbrChannel::kNormalX)].texture.empty());

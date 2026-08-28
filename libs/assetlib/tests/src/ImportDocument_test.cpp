@@ -49,12 +49,12 @@ namespace
 TEST_CASE("an import document records where its textures went", "[importdoc]")
 {
 	ImportDocument document;
-	document.textureDir = "textures_src/kirk";
+	document.textureDir = "Derived/SourceTextures/kirk";
 
 	document.textureStamp = { 4096, 0xfeedfacecafebeefull };
 
 	const ImportDocument read = DocumentFrom(DocumentText(document));
-	CHECK(read.textureDir == "textures_src/kirk");
+	CHECK(read.textureDir == "Derived/SourceTextures/kirk");
 	CHECK(read.textureStamp == document.textureStamp);
 
 	SECTION("an import that extracted no textures writes no key at all")
@@ -79,7 +79,7 @@ TEST_CASE("an import document records where its textures went", "[importdoc]")
 		// Where the textures went does not change what the importer computes, and a cache key that
 		// moved with it would stale every mesh in the project over a folder.
 		ImportDocument elsewhere = document;
-		elsewhere.textureDir     = "textures_src/somewhere_else";
+		elsewhere.textureDir     = "Derived/SourceTextures/somewhere_else";
 		CHECK(parametersHashOf(elsewhere) == parametersHashOf(document));
 	}
 
@@ -94,8 +94,8 @@ TEST_CASE("an import document round-trips, canonically", "[importdoc]")
 {
 	ImportDocument document;
 	document.sampleRate = 60.0f;
-	document.bindings   = { { "kirk[1]", "Materials/kirk/teeth.bmaterial" },
-		                    { "kirk[0]", "Materials/kirk/skin.bmaterial" } };
+	document.bindings   = { { "kirk[1]", "Authored/Materials/kirk/teeth.bmaterial" },
+		                    { "kirk[0]", "Authored/Materials/kirk/skin.bmaterial" } };
 
 	const std::string text = DocumentText(document);
 	ImportDocument    read = DocumentFrom(text);
@@ -103,15 +103,18 @@ TEST_CASE("an import document round-trips, canonically", "[importdoc]")
 	CHECK(read.sampleRate == 60.0f);
 	REQUIRE(read.bindings.size() == 2);
 	// An object's keys come back sorted; the order a caller pushed them in is not part of the document.
-	CHECK(read.bindings[0] == MaterialBinding{ "kirk[0]", "Materials/kirk/skin.bmaterial" });
-	CHECK(read.bindings[1] == MaterialBinding{ "kirk[1]", "Materials/kirk/teeth.bmaterial" });
+	CHECK(
+		read.bindings[0] == MaterialBinding{ "kirk[0]", "Authored/Materials/kirk/skin.bmaterial" });
+	CHECK(
+		read.bindings[1] ==
+		MaterialBinding{ "kirk[1]", "Authored/Materials/kirk/teeth.bmaterial" });
 
 	SECTION("identical documents serialize to identical bytes, whatever the construction order")
 	{
 		ImportDocument reversed;
 		reversed.sampleRate = 60.0f;
-		reversed.bindings   = { { "kirk[0]", "Materials/kirk/skin.bmaterial" },
-			                    { "kirk[1]", "Materials/kirk/teeth.bmaterial" } };
+		reversed.bindings   = { { "kirk[0]", "Authored/Materials/kirk/skin.bmaterial" },
+			                    { "kirk[1]", "Authored/Materials/kirk/teeth.bmaterial" } };
 		CHECK(DocumentText(reversed) == text);
 	}
 
@@ -126,7 +129,7 @@ TEST_CASE(
 	"[importdoc]")
 {
 	const std::string_view text = R"({
-	"bindings": { "cube[0]": "Materials/a.bmaterial" },
+	"bindings": { "cube[0]": "Authored/Materials/a.bmaterial" },
 	"futureKnob": { "nested": [1, 2, 3] },
 	"parameters": { "sampleRate": 24.0, "tangentMode": "mikkt" }
 })";
@@ -167,16 +170,16 @@ TEST_CASE("a malformed import document is refused with its reason", "[importdoc]
 	// Two bindings for one submesh cannot exist in the object form a document stores; the in-memory
 	// form can hold them, and serializing refuses rather than letting one silently win.
 	ImportDocument colliding;
-	colliding.bindings = { { "cube[0]", "Materials/a.bmaterial" },
-		                   { "cube[0]", "Materials/b.bmaterial" } };
+	colliding.bindings = { { "cube[0]", "Authored/Materials/a.bmaterial" },
+		                   { "cube[0]", "Authored/Materials/b.bmaterial" } };
 	CHECK_THROWS(DocumentText(colliding));
 }
 
 TEST_CASE("the document lives beside its source, one key from the other", "[importdoc]")
 {
-	CHECK(importDocumentKeyFor("meshes_src/kirk.glb") == "meshes_src/kirk.bimport");
-	CHECK(importedSourceKeyFor("meshes_src/kirk.bimport") == "meshes_src/kirk.glb");
-	CHECK_THROWS(importDocumentKeyFor("meshes_src/no_extension"));
+	CHECK(importDocumentKeyFor("Authored/Meshes/kirk.glb") == "Authored/Meshes/kirk.bimport");
+	CHECK(importedSourceKeyFor("Authored/Meshes/kirk.bimport") == "Authored/Meshes/kirk.glb");
+	CHECK_THROWS(importDocumentKeyFor("Authored/Meshes/no_extension"));
 }
 
 TEST_CASE(
@@ -188,25 +191,27 @@ TEST_CASE(
 	BMaterial material;
 	material.name = "skin";
 	core::file::write_atomic(
-		root.path / "Materials" / "skin.bmaterial",
+		root.path / "Authored/Materials" / "skin.bmaterial",
 		AssetCodec<BMaterial>::Serialize(material));
 
 	ImportDocument document;
-	document.bindings = { { "kirk[0]", "Materials/skin.bmaterial" } };
-	WriteText(root.path / "meshes_src" / "kirk.bimport", DocumentText(document));
-	WriteText(root.path / "meshes_src" / "kirk.glb", "not really a glb");
+	document.bindings = { { "kirk[0]", "Authored/Materials/skin.bmaterial" } };
+	WriteText(root.path / "Authored/Meshes" / "kirk.bimport", DocumentText(document));
+	WriteText(root.path / "Authored/Meshes" / "kirk.glb", "not really a glb");
 
 	const AssetRefGraph graph = root.Scan();
 
-	REQUIRE(graph.ReferrersOf("meshes_src/kirk.glb").size() == 1);
+	REQUIRE(graph.ReferrersOf("Authored/Meshes/kirk.glb").size() == 1);
 	CHECK(
-		graph.ReferrersOf("meshes_src/kirk.glb")[0] ==
-		AssetRef{ "meshes_src/kirk.bimport", "meshes_src/kirk.glb", RefKind::kImportedSource });
+		graph.ReferrersOf("Authored/Meshes/kirk.glb")[0] ==
+		AssetRef{ "Authored/Meshes/kirk.bimport",
+	              "Authored/Meshes/kirk.glb",
+	              RefKind::kImportedSource });
 
 	bool documentHoldsMaterial = false;
-	for (const AssetRef& ref : graph.ReferrersOf("Materials/skin.bmaterial"))
+	for (const AssetRef& ref : graph.ReferrersOf("Authored/Materials/skin.bmaterial"))
 		documentHoldsMaterial |=
-			ref.referrer == "meshes_src/kirk.bimport" && ref.kind == RefKind::kSubmeshMaterial;
+			ref.referrer == "Authored/Meshes/kirk.bimport" && ref.kind == RefKind::kSubmeshMaterial;
 	CHECK(documentHoldsMaterial);
 }
 
@@ -237,22 +242,24 @@ TEST_CASE("an import records the bindings the mesh carries", "[importdoc]")
 
 	const BMesh mesh = NamedMesh(
 		{ { "kirk[0]", 0 }, { "kirk[1]", 1 }, { "props", c_InvalidIndex } },
-		{ "Materials/skin.bmaterial", "Materials/teeth.bmaterial" });
+		{ "Authored/Materials/skin.bmaterial", "Authored/Materials/teeth.bmaterial" });
 
-	const ImportTarget target{ "kirk", 24.0f, "textures_src/kirk" };
+	const ImportTarget target{ "kirk", 24.0f, "Derived/SourceTextures/kirk" };
 	const AssetStore   store(root.path);
 	const SourceRef    ref = store.CopyImportedSource(root.path / "kirk.glb", target);
-	CHECK(ref.key == "meshes_src/kirk.glb");
+	CHECK(ref.key == "Authored/Meshes/kirk.glb");
 	CHECK(ref.stamp.size > 0);
 	store.WriteImportedDocument(target, &mesh);
 
-	CHECK(fs::exists(root.path / "meshes_src/kirk.glb"));
+	CHECK(fs::exists(root.path / "Authored/Meshes/kirk.glb"));
 	const ImportDocument document =
-		loadImportDocument(core::file::LooseFileSystem(root.path), "meshes_src/kirk.bimport");
+		loadImportDocument(core::file::LooseFileSystem(root.path), "Authored/Meshes/kirk.bimport");
 	CHECK(document.sampleRate == 24.0f);
 	REQUIRE(document.bindings.size() == 2);  // the unbound submesh records nothing
-	CHECK(document.bindings[0] == MaterialBinding{ "kirk[0]", "Materials/skin.bmaterial" });
-	CHECK(document.bindings[1] == MaterialBinding{ "kirk[1]", "Materials/teeth.bmaterial" });
+	CHECK(
+		document.bindings[0] == MaterialBinding{ "kirk[0]", "Authored/Materials/skin.bmaterial" });
+	CHECK(
+		document.bindings[1] == MaterialBinding{ "kirk[1]", "Authored/Materials/teeth.bmaterial" });
 }
 
 TEST_CASE("a source that is not self-contained is refused", "[importdoc]")
@@ -271,27 +278,29 @@ TEST_CASE("colliding submesh names are refused before anything is written", "[im
 {
 	const BMesh colliding = NamedMesh(
 		{ { "cube", 0 }, { "cube", 1 } },
-		{ "Materials/a.bmaterial", "Materials/b.bmaterial" });
+		{ "Authored/Materials/a.bmaterial", "Authored/Materials/b.bmaterial" });
 	CHECK_THROWS(requireUniqueSubmeshNames(colliding));
 
 	const BMesh unique = NamedMesh(
 		{ { "cube", 0 }, { "sphere", 1 } },
-		{ "Materials/a.bmaterial", "Materials/b.bmaterial" });
+		{ "Authored/Materials/a.bmaterial", "Authored/Materials/b.bmaterial" });
 	CHECK_NOTHROW(requireUniqueSubmeshNames(unique));
 }
 
 TEST_CASE("a document records the rig it binds and the outputs it produced", "[importdoc]")
 {
 	ImportDocument document;
-	document.skeleton = "Skeletons/kirk.bskel";
-	document.outputs  = { "Meshes/kirk.bmesh", "Animations/kirk.banim" };
+	document.skeleton = "Derived/Skeletons/kirk.bskel";
+	document.outputs  = { "Derived/Meshes/kirk.bmesh", "Derived/Animations/kirk.banim" };
 
 	const ImportDocument read = DocumentFrom(DocumentText(document));
-	CHECK(read.skeleton == "Skeletons/kirk.bskel");
+	CHECK(read.skeleton == "Derived/Skeletons/kirk.bskel");
 
 	// Sorted on write, so two imports that wrote the same set in different orders are one byte
 	// sequence -- the same rule every other key in this document follows.
-	CHECK(read.outputs == std::vector<std::string>{ "Animations/kirk.banim", "Meshes/kirk.bmesh" });
+	CHECK(
+		read.outputs ==
+		std::vector<std::string>{ "Derived/Animations/kirk.banim", "Derived/Meshes/kirk.bmesh" });
 
 	SECTION("neither is written when empty, so a document from before them is byte-identical")
 	{
@@ -313,7 +322,7 @@ TEST_CASE("a document refuses a skeleton or outputs of the wrong shape", "[impor
 		Catch::Matchers::ContainsSubstring("'skeleton' is not a string"));
 
 	CHECK_THROWS_WITH(
-		DocumentFrom(R"({"outputs": "Meshes/kirk.bmesh"})"),
+		DocumentFrom(R"({"outputs": "Derived/Meshes/kirk.bmesh"})"),
 		Catch::Matchers::ContainsSubstring("'outputs' is not an array"));
 
 	CHECK_THROWS_WITH(

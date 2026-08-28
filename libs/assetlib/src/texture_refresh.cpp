@@ -138,7 +138,7 @@ namespace assetlib
 			return {};
 
 		auto stale = std::vector<std::string>();
-		for (const std::string& key : GetFiles().Enumerate(c_MeshesSrcDirectoryName))
+		for (const std::string& key : GetFiles().Enumerate(c_MeshSourcesDirectoryName))
 		{
 			if (extensionOf(key) != c_ImportDocumentExtension)
 				continue;

@@ -1,0 +1,12 @@
+{
+	"bindings": {
+		"Apple1.001": "Authored/Materials/apples/Apple1.bmaterial",
+		"Apple2.001": "Authored/Materials/apples/Apple2.bmaterial"
+	},
+	"outputs": [
+		"Derived/Meshes/apples.bmesh"
+	],
+	"parameters": {
+		"sampleRate": 30.0
+	}
+}

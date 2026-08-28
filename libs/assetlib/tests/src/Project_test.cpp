@@ -240,8 +240,8 @@ TEST_CASE("The scaffolded categories are not the user's to delete", "[project]")
 	// Every asset path in the project is written against this layout, and Open puts a missing category
 	// straight back -- so deleting one would not even stick.
 	CHECK(Project::IsRequiredDirectory(c_MeshesDirectoryName));
-	CHECK(Project::IsRequiredDirectory(c_TexturesDirectoryName));
-	CHECK(Project::IsRequiredDirectory(c_TexturesSrcDirectoryName));
+	CHECK(Project::IsRequiredDirectory(c_BakedTexturesDirectoryName));
+	CHECK(Project::IsRequiredDirectory(c_SourceTexturesDirectoryName));
 	CHECK(Project::IsRequiredDirectory(c_MaterialsDirectoryName));
 	CHECK(Project::IsRequiredDirectory(c_LevelsDirectoryName));
 
@@ -255,16 +255,25 @@ TEST_CASE("The scaffolded categories are not the user's to delete", "[project]")
 	{
 		CHECK(Project::IsRequiredDirectory(""));
 		CHECK(Project::IsRequiredDirectory("."));
-		CHECK(Project::IsRequiredDirectory("Meshes/.."));
+		CHECK(Project::IsRequiredDirectory("Derived/Meshes/../.."));
+	}
+
+	SECTION("nor is either half, which holds every category under it")
+	{
+		CHECK(Project::IsRequiredDirectory(c_AuthoredDirectoryName));
+		CHECK(Project::IsRequiredDirectory(c_DerivedDirectoryName));
+
+		// `a/b/..` normalizes with a trailing slash, which is not how the halves are spelled.
+		CHECK(Project::IsRequiredDirectory("Derived/Meshes/.."));
 	}
 
 	SECTION("but a folder made inside one is")
 	{
-		CHECK_FALSE(Project::IsRequiredDirectory("textures_src/kirk"));
-		CHECK_FALSE(Project::IsRequiredDirectory("Materials/kirk"));
+		CHECK_FALSE(Project::IsRequiredDirectory("Derived/SourceTextures/kirk"));
+		CHECK_FALSE(Project::IsRequiredDirectory("Authored/Materials/kirk"));
 
 		// Only the categories themselves, at the top. A folder that merely shares the name is the user's.
-		CHECK_FALSE(Project::IsRequiredDirectory("Meshes/Meshes"));
+		CHECK_FALSE(Project::IsRequiredDirectory("Derived/Meshes/Meshes"));
 		CHECK_FALSE(Project::IsRequiredDirectory("Props"));
 	}
 }
@@ -285,13 +294,13 @@ TEST_CASE("A project reads and writes the loose tree, archive or not", "[project
 
 	auto material                 = assetlib::BMaterial();
 	material.name                 = "skin";
-	material.pbr.baseColorTexture = "Textures/skin.ktx2";
-	created.GetStore().Save(material, "Materials/skin.bmaterial");
+	material.pbr.baseColorTexture = "Derived/BakedTextures/skin.ktx2";
+	created.GetStore().Save(material, "Authored/Materials/skin.bmaterial");
 
 	created.ReloadStore();
 
 	CHECK(created.GetStore().GetDataRoot() == created.GetDataDirectory());
-	CHECK(created.GetStore().Exists("Materials/skin.bmaterial"));
+	CHECK(created.GetStore().Exists("Authored/Materials/skin.bmaterial"));
 
 	// Everything the store answers for is writable, which is the property that lets the editor act
 	// on anything it lists.
@@ -304,10 +313,10 @@ TEST_CASE("A project reads and writes the loose tree, archive or not", "[project
 				.Pack(assetlib::PackDesc{ file.parent_path() / assetlib::c_DefaultArchiveName }));
 
 		// Gone from the tree: the archive still holds it, and that is deliberately not consulted.
-		fs::remove(created.GetDataDirectory() / "Materials/skin.bmaterial");
+		fs::remove(created.GetDataDirectory() / "Authored/Materials/skin.bmaterial");
 
 		Project reopened = Project::Open(file);
 
-		CHECK_FALSE(reopened.GetStore().Exists("Materials/skin.bmaterial"));
+		CHECK_FALSE(reopened.GetStore().Exists("Authored/Materials/skin.bmaterial"));
 	}
 }

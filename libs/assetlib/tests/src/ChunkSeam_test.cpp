@@ -25,9 +25,9 @@ namespace
 		explicit Scratch(const char* name) : path(fs::temp_directory_path() / name)
 		{
 			fs::remove_all(path);
-			fs::create_directories(path / "Meshes");
-			fs::create_directories(path / "Skeletons");
-			fs::create_directories(path / "Animations");
+			fs::create_directories(path / "Derived/Meshes");
+			fs::create_directories(path / "Derived/Skeletons");
+			fs::create_directories(path / "Derived/Animations");
 		}
 		~Scratch() { fs::remove_all(path); }
 	};
@@ -75,8 +75,8 @@ namespace
 		mesh.vertexData.resize(256u * 1024u, std::byte{ 0x7 });
 		mesh.indexData.resize(64u * 1024u, std::byte{ 0x3 });
 
-		mesh.materials = { "Materials/a.bmaterial", "Materials/b.bmaterial" };
-		mesh.skeleton  = "Skeletons/rig.bskel";
+		mesh.materials = { "Authored/Materials/a.bmaterial", "Authored/Materials/b.bmaterial" };
+		mesh.skeleton  = "Derived/Skeletons/rig.bskel";
 		return mesh;
 	}
 
@@ -97,7 +97,7 @@ namespace
 	MakeAnimations()
 	{
 		AnimationSet animations;
-		animations.skeleton  = "Skeletons/rig.bskel";
+		animations.skeleton  = "Derived/Skeletons/rig.bskel";
 		animations.boneCount = 1;
 
 		AnimationClip clip{};
@@ -114,9 +114,9 @@ namespace
 	void
 	Stage(const fs::path& root)
 	{
-		SaveAt(MakeMesh(), root / "Meshes/kirk.bmesh");
-		SaveAt(MakeSkeleton(), root / "Skeletons/rig.bskel");
-		SaveAt(MakeAnimations(), root / "Animations/idle.banim");
+		SaveAt(MakeMesh(), root / "Derived/Meshes/kirk.bmesh");
+		SaveAt(MakeSkeleton(), root / "Derived/Skeletons/rig.bskel");
+		SaveAt(MakeAnimations(), root / "Derived/Animations/idle.banim");
 
 		const core::file::LooseFileSystem loose(root);
 
@@ -137,13 +137,13 @@ TEST_CASE("a chunked container loads the same from a directory and from an archi
 
 	SECTION(".bmesh")
 	{
-		const BMesh direct = StoreAt(scratch.path).Load<BMesh>("Meshes/kirk.bmesh");
+		const BMesh direct = StoreAt(scratch.path).Load<BMesh>("Derived/Meshes/kirk.bmesh");
 
 		for (const core::file::IFileSystem* mount :
 		     { static_cast<const core::file::IFileSystem*>(&loose),
 		       static_cast<const core::file::IFileSystem*>(&pak) })
 		{
-			const BMesh mounted = load<BMesh>(*mount, "Meshes/kirk.bmesh");
+			const BMesh mounted = load<BMesh>(*mount, "Derived/Meshes/kirk.bmesh");
 
 			CHECK(mounted.vertexData == direct.vertexData);
 			CHECK(mounted.indexData == direct.indexData);
@@ -161,40 +161,41 @@ TEST_CASE("a chunked container loads the same from a directory and from an archi
 
 	SECTION(".bmesh references, without its geometry")
 	{
-		const MeshRefs direct = loadMeshRefs(scratch.path / "Meshes/kirk.bmesh");
+		const MeshRefs direct = loadMeshRefs(scratch.path / "Derived/Meshes/kirk.bmesh");
 
-		CHECK(loadMeshRefs(loose, "Meshes/kirk.bmesh").materials == direct.materials);
-		CHECK(loadMeshRefs(pak, "Meshes/kirk.bmesh").materials == direct.materials);
-		CHECK(loadMeshRefs(pak, "Meshes/kirk.bmesh").skeleton == direct.skeleton);
+		CHECK(loadMeshRefs(loose, "Derived/Meshes/kirk.bmesh").materials == direct.materials);
+		CHECK(loadMeshRefs(pak, "Derived/Meshes/kirk.bmesh").materials == direct.materials);
+		CHECK(loadMeshRefs(pak, "Derived/Meshes/kirk.bmesh").skeleton == direct.skeleton);
 	}
 
 	SECTION(".bskel")
 	{
-		const Skeleton direct = StoreAt(scratch.path).Load<Skeleton>("Skeletons/rig.bskel");
+		const Skeleton direct = StoreAt(scratch.path).Load<Skeleton>("Derived/Skeletons/rig.bskel");
 
 		CHECK(
-			AssetCodec<Skeleton>::Serialize(load<Skeleton>(loose, "Skeletons/rig.bskel")) ==
+			AssetCodec<Skeleton>::Serialize(load<Skeleton>(loose, "Derived/Skeletons/rig.bskel")) ==
 			AssetCodec<Skeleton>::Serialize(direct));
 		CHECK(
-			AssetCodec<Skeleton>::Serialize(load<Skeleton>(pak, "Skeletons/rig.bskel")) ==
+			AssetCodec<Skeleton>::Serialize(load<Skeleton>(pak, "Derived/Skeletons/rig.bskel")) ==
 			AssetCodec<Skeleton>::Serialize(direct));
 	}
 
 	SECTION(".banim")
 	{
 		const AnimationSet direct =
-			StoreAt(scratch.path).Load<AnimationSet>("Animations/idle.banim");
+			StoreAt(scratch.path).Load<AnimationSet>("Derived/Animations/idle.banim");
 
 		CHECK(
 			AssetCodec<AnimationSet>::Serialize(
-				load<AnimationSet>(loose, "Animations/idle.banim")) ==
+				load<AnimationSet>(loose, "Derived/Animations/idle.banim")) ==
 			AssetCodec<AnimationSet>::Serialize(direct));
 		CHECK(
-			AssetCodec<AnimationSet>::Serialize(load<AnimationSet>(pak, "Animations/idle.banim")) ==
+			AssetCodec<AnimationSet>::Serialize(
+				load<AnimationSet>(pak, "Derived/Animations/idle.banim")) ==
 			AssetCodec<AnimationSet>::Serialize(direct));
 
-		CHECK(loadAnimationSkeletonPath(loose, "Animations/idle.banim") == direct.skeleton);
-		CHECK(loadAnimationSkeletonPath(pak, "Animations/idle.banim") == direct.skeleton);
+		CHECK(loadAnimationSkeletonPath(loose, "Derived/Animations/idle.banim") == direct.skeleton);
+		CHECK(loadAnimationSkeletonPath(pak, "Derived/Animations/idle.banim") == direct.skeleton);
 	}
 }
 
@@ -206,7 +207,7 @@ TEST_CASE("a reference read stays a ranged read through the seam", "[chunkseam]"
 	const core::file::LooseFileSystem loose(scratch.path);
 	const PakFile                     pak(scratch.path / "Data.bpak");
 
-	const uint64_t meshSize = loose.Stat("Meshes/kirk.bmesh").value().size;
+	const uint64_t meshSize = loose.Stat("Derived/Meshes/kirk.bmesh").value().size;
 
 	// The container has to be big enough for the distinction to exist at all.
 	REQUIRE(meshSize > 256u * 1024u);
@@ -218,7 +219,7 @@ TEST_CASE("a reference read stays a ranged read through the seam", "[chunkseam]"
 		       static_cast<const core::file::IFileSystem*>(&pak) })
 		{
 			CountingFileSystem counting(*mount);
-			(void)loadMeshRefs(counting, "Meshes/kirk.bmesh");
+			(void)loadMeshRefs(counting, "Derived/Meshes/kirk.bmesh");
 
 			// Header + chunk table + the two reference chunks. The bound is generous on purpose:
 			// what it rules out is a whole-file read, which is the regression that matters.
@@ -230,7 +231,7 @@ TEST_CASE("a reference read stays a ranged read through the seam", "[chunkseam]"
 	SECTION("loadAnimationSkeletonPath is ranged too")
 	{
 		CountingFileSystem counting(pak);
-		(void)loadAnimationSkeletonPath(counting, "Animations/idle.banim");
+		(void)loadAnimationSkeletonPath(counting, "Derived/Animations/idle.banim");
 
 		CHECK(counting.bytesRead < 4096u);
 	}
@@ -238,7 +239,7 @@ TEST_CASE("a reference read stays a ranged read through the seam", "[chunkseam]"
 	SECTION("a full load does read the whole container, which is the contrast")
 	{
 		CountingFileSystem counting(pak);
-		(void)load<BMesh>(counting, "Meshes/kirk.bmesh");
+		(void)load<BMesh>(counting, "Derived/Meshes/kirk.bmesh");
 
 		CHECK(counting.bytesRead == meshSize);
 		CHECK(counting.reads == 1u);
