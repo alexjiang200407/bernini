@@ -30,9 +30,9 @@ namespace assetlib::test
 		explicit DataRoot(const char* name) : path(fs::temp_directory_path() / name)
 		{
 			fs::remove_all(path);
-			fs::create_directories(path / "Materials");
-			fs::create_directories(path / "Meshes");
-			fs::create_directories(path / "textures_src");
+			fs::create_directories(path / "Authored/Materials");
+			fs::create_directories(path / "Derived/Meshes");
+			fs::create_directories(path / "Derived/SourceTextures");
 		}
 		~DataRoot() { fs::remove_all(path); }
 
@@ -65,7 +65,7 @@ namespace assetlib::test
 
 	/**
 	 * Bakes a material whose base colour reads `source` (relative to the root), saves it as
-	 * `Materials/<name>`, and returns it -- so a test can name the maps the bake wrote.
+	 * `Authored/Materials/<name>`, and returns it -- so a test can name the maps the bake wrote.
 	 */
 	inline BMaterial
 	BakeAndSave(const DataRoot& root, const char* name, const char* source)
@@ -74,7 +74,7 @@ namespace assetlib::test
 		material.pbr.routes[0] = { source, 0 };
 
 		StoreAt(root.path).BakeMaterial(material);
-		StoreAt(root.path).Save(material, std::string("Materials/") + name);
+		StoreAt(root.path).Save(material, std::string("Authored/Materials/") + name);
 		return material;
 	}
 
@@ -117,7 +117,7 @@ namespace assetlib::test
 		const std::vector<std::string>& materials,
 		const std::string&              skeleton = {})
 	{
-		SaveAt(MakeMesh(materials, skeleton), root.path / "Meshes" / name);
+		SaveAt(MakeMesh(materials, skeleton), root.path / "Derived/Meshes" / name);
 	}
 
 	/** The referrers of `asset`, as plain paths, so a test can compare against what it wrote. */
@@ -136,14 +136,14 @@ namespace assetlib::test
 	 */
 	struct Environment
 	{
-		std::string env      = "Environments/forest.benv";
-		std::string sky      = "Sky/forest.bsky";
-		std::string lighting = "EnvLighting/forest.benvl";
+		std::string env      = "Authored/Environments/forest.benv";
+		std::string sky      = "Derived/Sky/forest.bsky";
+		std::string lighting = "Derived/EnvLighting/forest.benvl";
 
-		std::string skySource  = "textures_src/forest.ktx2";
-		std::string skyBaked   = "Textures/forest_sky.ktx2";
-		std::string prefilter  = "Textures/forest_prefilter.ktx2";
-		std::string irradiance = "Textures/forest_irradiance.ktx2";
+		std::string skySource  = "Derived/SourceTextures/forest.ktx2";
+		std::string skyBaked   = "Derived/BakedTextures/forest_sky.ktx2";
+		std::string prefilter  = "Derived/BakedTextures/forest_prefilter.ktx2";
+		std::string irradiance = "Derived/BakedTextures/forest_irradiance.ktx2";
 	};
 
 	inline Environment
@@ -153,7 +153,7 @@ namespace assetlib::test
 
 		for (const std::string* dir : { &e.env, &e.sky, &e.lighting })
 			fs::create_directories((root.path / *dir).parent_path());
-		fs::create_directories(root.path / "Textures");
+		fs::create_directories(root.path / "Derived/BakedTextures");
 
 		for (const std::string* map : { &e.skySource, &e.skyBaked, &e.prefilter, &e.irradiance })
 			WriteSource(root.path / *map, { { 10, 20, 30, 255 } });

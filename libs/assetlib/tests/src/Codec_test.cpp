@@ -175,11 +175,11 @@ TEST_CASE("Save creates the directories its key names", "[codec]")
 	// A key is a location in the data root, not a location that exists: an import aimed at a
 	// subfolder writes two levels of it that nothing scaffolded. Without this the write fails
 	// inside write_atomic, naming a temp file, which reads as a permissions problem.
-	REQUIRE_FALSE(std::filesystem::exists(root.path / "Materials" / "walls"));
-	store.Save(material, "Materials/walls/brick.bmaterial");
+	REQUIRE_FALSE(std::filesystem::exists(root.path / "Authored/Materials" / "walls"));
+	store.Save(material, "Authored/Materials/walls/brick.bmaterial");
 
-	CHECK(std::filesystem::exists(root.path / "Materials" / "walls" / "brick.bmaterial"));
-	CHECK(store.Load<BMaterial>("Materials/walls/brick.bmaterial").name == "brick");
+	CHECK(std::filesystem::exists(root.path / "Authored/Materials" / "walls" / "brick.bmaterial"));
+	CHECK(store.Load<BMaterial>("Authored/Materials/walls/brick.bmaterial").name == "brick");
 
 	SECTION("a key that escapes is still refused, before any directory is made")
 	{

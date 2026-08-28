@@ -80,7 +80,7 @@ namespace
 			skeleton.bones.push_back(root);
 			skeleton.bones[0].inverseBind = glm::mat4(1.0f);
 
-			animations.skeleton          = "Skeletons/one.bskel";
+			animations.skeleton          = "Derived/Skeletons/one.bskel";
 			animations.skeletonSignature = skeletonSignature(skeleton);
 			animations.boneCount         = 1;
 
@@ -123,7 +123,7 @@ namespace
 			AddVertex(quad, glm::vec3(-1.0f, 1.0f, 0.0f), glm::vec4(1.0f, 0.0f, 0.0f, 1.0f));
 			AddVertex(quad, glm::vec3(1.0f, 1.0f, 0.0f), glm::vec4(1.0f, 0.0f, 0.0f, -1.0f));
 			mesh.submeshes.push_back(quad);
-			mesh.skeleton          = "Skeletons/one.bskel";
+			mesh.skeleton          = "Derived/Skeletons/one.bskel";
 			mesh.skeletonSignature = skeletonSignature(skeleton);
 		}
 
@@ -346,9 +346,9 @@ TEST_CASE("A .bvat round-trips, and its tables read without the pixels", "[vat]"
 	VatFixture fixture;
 	BVat       vat = bakeVat(fixture.mesh, fixture.skeleton, fixture.animations);
 
-	vat.mesh            = "Meshes/rig.bmesh";
-	vat.skeleton        = "Skeletons/rig.bskel";
-	vat.animations      = "Animations/rig.banim";
+	vat.mesh            = "Derived/Meshes/rig.bmesh";
+	vat.skeleton        = "Derived/Skeletons/rig.bskel";
+	vat.animations      = "Derived/Animations/rig.banim";
 	vat.meshStamp       = { 123, 456 };
 	vat.skeletonStamp   = { 7, 8 };
 	vat.animationsStamp = { 9, 10 };
@@ -393,9 +393,9 @@ TEST_CASE("A .bvat round-trips, and its tables read without the pixels", "[vat]"
 			Catch::Matchers::ContainsSubstring("tables-only"));
 
 		const VatRefs refs = loadVatRefs(path);
-		CHECK(refs.mesh == "Meshes/rig.bmesh");
-		CHECK(refs.skeleton == "Skeletons/rig.bskel");
-		CHECK(refs.animations == "Animations/rig.banim");
+		CHECK(refs.mesh == "Derived/Meshes/rig.bmesh");
+		CHECK(refs.skeleton == "Derived/Skeletons/rig.bskel");
+		CHECK(refs.animations == "Derived/Animations/rig.banim");
 
 		fs::remove(path);
 	}
@@ -435,114 +435,115 @@ TEST_CASE("A bake from files stamps its inputs and the refs scan reports them", 
 
 	const fs::path root = fs::temp_directory_path() / "bernini_vat_bake_root";
 	fs::remove_all(root);
-	fs::create_directories(root / "Meshes");
-	fs::create_directories(root / "Skeletons");
-	fs::create_directories(root / "Animations");
+	fs::create_directories(root / "Derived/Meshes");
+	fs::create_directories(root / "Derived/Skeletons");
+	fs::create_directories(root / "Derived/Animations");
 
-	StoreAt(root).Save(fixture.mesh, "Meshes/rig.bmesh");
-	StoreAt(root).Save(fixture.skeleton, "Skeletons/rig.bskel");
-	StoreAt(root).Save(fixture.animations, "Animations/rig.banim");
+	StoreAt(root).Save(fixture.mesh, "Derived/Meshes/rig.bmesh");
+	StoreAt(root).Save(fixture.skeleton, "Derived/Skeletons/rig.bskel");
+	StoreAt(root).Save(fixture.animations, "Derived/Animations/rig.banim");
 
 	auto desc       = VatBakeDesc();
-	desc.mesh       = "Meshes/rig.bmesh";
-	desc.animations = "Animations/rig.banim";
+	desc.mesh       = "Derived/Meshes/rig.bmesh";
+	desc.animations = "Derived/Animations/rig.banim";
 
 	const BVat vat = AssetStore(root).BakeVat(desc);
-	CHECK(vat.mesh == "Meshes/rig.bmesh");
-	CHECK(vat.skeleton == "Skeletons/rig.bskel");
-	CHECK(vat.animations == "Animations/rig.banim");
-	CHECK(vat.meshStamp == stampOf(root / "Meshes/rig.bmesh"));
-	CHECK(vat.skeletonStamp == stampOf(root / "Skeletons/rig.bskel"));
-	CHECK(vat.animationsStamp == stampOf(root / "Animations/rig.banim"));
+	CHECK(vat.mesh == "Derived/Meshes/rig.bmesh");
+	CHECK(vat.skeleton == "Derived/Skeletons/rig.bskel");
+	CHECK(vat.animations == "Derived/Animations/rig.banim");
+	CHECK(vat.meshStamp == stampOf(root / "Derived/Meshes/rig.bmesh"));
+	CHECK(vat.skeletonStamp == stampOf(root / "Derived/Skeletons/rig.bskel"));
+	CHECK(vat.animationsStamp == stampOf(root / "Derived/Animations/rig.banim"));
 	CHECK_FALSE(vatIsStale(vat, MountAt(root)));
 
 	// The bug the content stamp exists for, on the VAT path: a checkout rewrites the inputs' mtimes
 	// without changing a byte, and a `.bvat` that noticed would be re-baked on every acquire.
 	SECTION("an input whose mtime moved but whose bytes did not is not stale")
 	{
-		for (const char* input :
-		     { "Meshes/rig.bmesh", "Skeletons/rig.bskel", "Animations/rig.banim" })
+		for (const char* input : { "Derived/Meshes/rig.bmesh",
+		                           "Derived/Skeletons/rig.bskel",
+		                           "Derived/Animations/rig.banim" })
 		{
 			const fs::path path = root / input;
 			fs::last_write_time(path, fs::last_write_time(path) + std::chrono::seconds(5));
 		}
 
-		CHECK(vat.meshStamp == stampOf(root / "Meshes/rig.bmesh"));
+		CHECK(vat.meshStamp == stampOf(root / "Derived/Meshes/rig.bmesh"));
 		CHECK_FALSE(vatIsStale(vat, MountAt(root)));
 	}
 
 	SECTION("a changed input reads as stale")
 	{
 		fixture.animations.stringPool.add("padding-so-the-size-moves");
-		StoreAt(root).Save(fixture.animations, "Animations/rig.banim");
+		StoreAt(root).Save(fixture.animations, "Derived/Animations/rig.banim");
 		CHECK(vatIsStale(vat, MountAt(root)));
 	}
 
 	SECTION("a deleted input reads as stale, not as unchanged")
 	{
-		fs::remove(root / "Animations/rig.banim");
+		fs::remove(root / "Derived/Animations/rig.banim");
 		CHECK(vatIsStale(vat, MountAt(root)));
 	}
 
 	SECTION("the refs scan reports the three edges")
 	{
-		StoreAt(root).Save(vat, "Meshes/rig.bvat");
+		StoreAt(root).Save(vat, "Derived/Meshes/rig.bvat");
 
 		const auto graph = AssetRefGraph::Scan(AssetStore(root));
 		CHECK(graph.vatsScanned == 1);
 
-		const auto edges = graph.ReferencesOf("Meshes/rig.bvat");
+		const auto edges = graph.ReferencesOf("Derived/Meshes/rig.bvat");
 		REQUIRE(edges.size() == 3);
 		for (const AssetRef& edge : edges) CHECK(edge.kind == RefKind::kVatSource);
 
-		CHECK(graph.IsReferenced("Meshes/rig.bmesh"));
-		CHECK(graph.IsReferenced("Animations/rig.banim"));
+		CHECK(graph.IsReferenced("Derived/Meshes/rig.bmesh"));
+		CHECK(graph.IsReferenced("Derived/Animations/rig.banim"));
 		CHECK(graph.broken.empty());
 	}
 
 	SECTION("a bake sweeps with its inputs rather than blocking them")
 	{
-		StoreAt(root).Save(vat, "Meshes/rig.bvat");
+		StoreAt(root).Save(vat, "Derived/Meshes/rig.bvat");
 
 		const auto graph = AssetRefGraph::Scan(AssetStore(root));
 
 		// The clip set: referenced only by the bake, so deletable, and the bake goes with it.
-		const DeletionPlan plan = planDeletion(graph, "Animations/rig.banim");
+		const DeletionPlan plan = planDeletion(graph, "Derived/Animations/rig.banim");
 		CHECK(plan.Allowed());
 		REQUIRE(plan.derived.size() == 1);
-		CHECK(plan.derived[0] == "Meshes/rig.bvat");
+		CHECK(plan.derived[0] == "Derived/Meshes/rig.bvat");
 
 		const DeletionResult result = AssetStore(root).DeleteAsset(plan);
 		CHECK(result.status == DeletionStatus::kDeleted);
-		CHECK_FALSE(fs::exists(root / "Animations/rig.banim"));
-		CHECK_FALSE(fs::exists(root / "Meshes/rig.bvat"));
+		CHECK_FALSE(fs::exists(root / "Derived/Animations/rig.banim"));
+		CHECK_FALSE(fs::exists(root / "Derived/Meshes/rig.bvat"));
 
 		// A real referrer still blocks: the mesh is held by nothing now (the bake is gone), but
 		// the skeleton is held by the mesh, whose kMeshSkeleton edge is not a bake's.
 		const auto after = AssetRefGraph::Scan(AssetStore(root));
-		CHECK_FALSE(planDeletion(after, "Skeletons/rig.bskel").Allowed());
+		CHECK_FALSE(planDeletion(after, "Derived/Skeletons/rig.bskel").Allowed());
 	}
 
 	SECTION("a directory blocked only by a bake outside it is deletable")
 	{
-		StoreAt(root).Save(vat, "Meshes/rig.bvat");
+		StoreAt(root).Save(vat, "Derived/Meshes/rig.bvat");
 
 		const auto graph = AssetRefGraph::Scan(AssetStore(root));
 
-		const DeletionPlan plan = planDeletion(graph, "Animations");
+		const DeletionPlan plan = planDeletion(graph, "Derived/Animations");
 		CHECK(plan.Allowed());
 		REQUIRE(plan.derived.size() == 1);
-		CHECK(plan.derived[0] == "Meshes/rig.bvat");
+		CHECK(plan.derived[0] == "Derived/Meshes/rig.bvat");
 	}
 
 	SECTION("describe reads the tables alone and reports a stale input")
 	{
-		StoreAt(root).Save(vat, "Meshes/rig.bvat");
+		StoreAt(root).Save(vat, "Derived/Meshes/rig.bvat");
 		fixture.animations.stringPool.add("padding-so-the-size-moves");
-		StoreAt(root).Save(fixture.animations, "Animations/rig.banim");
+		StoreAt(root).Save(fixture.animations, "Derived/Animations/rig.banim");
 
 		const core::file::LooseFileSystem files(root);
-		const std::string text = describe(loadVatTables(root / "Meshes/rig.bvat"), &files);
+		const std::string text = describe(loadVatTables(root / "Derived/Meshes/rig.bvat"), &files);
 		CHECK(text.find("bvat") != std::string::npos);
 		CHECK(text.find("slide") != std::string::npos);
 		CHECK(text.find("(not read)") != std::string::npos);
@@ -649,25 +650,27 @@ TEST_CASE("A bake can be sized before it is baked", "[vat]")
 	{
 		const fs::path root = fs::temp_directory_path() / "bernini_vat_size_root";
 		fs::remove_all(root);
-		fs::create_directories(root / "Meshes");
-		fs::create_directories(root / "Skeletons");
-		fs::create_directories(root / "Animations");
+		fs::create_directories(root / "Derived/Meshes");
+		fs::create_directories(root / "Derived/Skeletons");
+		fs::create_directories(root / "Derived/Animations");
 
-		StoreAt(root).Save(fixture.mesh, "Meshes/rig.bmesh");
-		StoreAt(root).Save(fixture.skeleton, "Skeletons/rig.bskel");
-		StoreAt(root).Save(fixture.animations, "Animations/rig.banim");
+		StoreAt(root).Save(fixture.mesh, "Derived/Meshes/rig.bmesh");
+		StoreAt(root).Save(fixture.skeleton, "Derived/Skeletons/rig.bskel");
+		StoreAt(root).Save(fixture.animations, "Derived/Animations/rig.banim");
 
-		const VatSize stored =
-			AssetStore(root).VatBakeSize(VatBakeDesc{ "Meshes/rig.bmesh", "Animations/rig.banim" });
+		const VatSize stored = AssetStore(root).VatBakeSize(
+			VatBakeDesc{ "Derived/Meshes/rig.bmesh", "Derived/Animations/rig.banim" });
 
 		CHECK(stored.width == size.width);
 		CHECK(stored.height == size.height);
 		CHECK(stored.bytes == size.bytes);
 
 		// Sizing writes nothing: the offer must be declinable.
-		CHECK_FALSE(fs::exists(root / "Meshes/rig@rig-00000000.bvat"));
+		CHECK_FALSE(fs::exists(root / "Derived/Meshes/rig@rig-00000000.bvat"));
 		CHECK(
-			std::distance(fs::directory_iterator(root / "Meshes"), fs::directory_iterator()) == 1);
+			std::distance(
+				fs::directory_iterator(root / "Derived/Meshes"),
+				fs::directory_iterator()) == 1);
 
 		fs::remove_all(root);
 	}

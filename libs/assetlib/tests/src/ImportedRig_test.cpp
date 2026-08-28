@@ -75,13 +75,13 @@ namespace
 		[[nodiscard]] static std::string_view
 		BskelKey()
 		{
-			return "Skeletons/unit.bskel";
+			return "Derived/Skeletons/unit.bskel";
 		}
 
 		[[nodiscard]] static std::string_view
 		BanimKey()
 		{
-			return "Animations/unit.banim";
+			return "Derived/Animations/unit.banim";
 		}
 
 	private:
@@ -151,7 +151,7 @@ TEST_CASE("A skinned import writes its skeleton and the mesh names it", "[import
 
 	// Relative to the data root, like every other path a .bmesh holds -- an absolute one would name
 	// this machine's temp directory and resolve nowhere else.
-	CHECK(mesh.skeleton == "Skeletons/unit.bskel");
+	CHECK(mesh.skeleton == "Derived/Skeletons/unit.bskel");
 
 	const assetlib::Skeleton restored = LoadAt<assetlib::Skeleton>(root.Bskel());
 	REQUIRE(restored.bones.size() == 2);
@@ -326,7 +326,7 @@ TEST_CASE("A skinned mesh is only writable once the rig names it", "[importedrig
 {
 	const TempRoot root;
 	const auto     imported  = SkinnedImport();
-	const fs::path bmeshPath = root.Data() / "Meshes" / "unit.bmesh";
+	const fs::path bmeshPath = root.Data() / "Derived/Meshes" / "unit.bmesh";
 
 	assetlib::BMesh mesh;
 	mesh.meshes.push_back(assetlib::Mesh{ .firstSubmesh = 0, .submeshCount = 1, .nameOffset = 0 });
@@ -351,7 +351,7 @@ TEST_CASE("A skinned mesh is only writable once the rig names it", "[importedrig
 		assetlib::SourceRef{});
 
 	REQUIRE_NOTHROW(SaveAt(mesh, bmeshPath));
-	CHECK(LoadAt<assetlib::BMesh>(bmeshPath).skeleton == "Skeletons/unit.bskel");
+	CHECK(LoadAt<assetlib::BMesh>(bmeshPath).skeleton == "Derived/Skeletons/unit.bskel");
 }
 
 // The mechanism a clips-only import runs on: a second export of the same rig hashes to the same
@@ -404,8 +404,8 @@ TEST_CASE("A rig is found by signature, not by name", "[importedrig]")
 		catch (const std::runtime_error& e)
 		{
 			const std::string message = e.what();
-			CHECK(message.find("Skeletons/unit.bskel") != std::string::npos);
-			CHECK(message.find("Skeletons/coyote_twin.bskel") != std::string::npos);
+			CHECK(message.find("Derived/Skeletons/unit.bskel") != std::string::npos);
+			CHECK(message.find("Derived/Skeletons/coyote_twin.bskel") != std::string::npos);
 			CHECK(message.find(root.Data().generic_string()) == std::string::npos);
 		}
 	}
@@ -456,7 +456,7 @@ TEST_CASE("Clips import on their own, attached to the rig already there", "[impo
 	root.Store().WriteImportedClips(
 		imported.skeleton,
 		imported.animations,
-		"Animations/coyote_run.banim",
+		"Derived/Animations/coyote_run.banim",
 		assetlib::SourceRef{});
 
 	REQUIRE(fs::exists(runPath));
@@ -499,13 +499,13 @@ TEST_CASE("A second source skinned to a rig already here binds it", "[importedri
 		imported.skeleton,
 		imported.animations,
 		second,
-		"Skeletons/second.bskel",
-		"Animations/second.banim",
+		"Derived/Skeletons/second.bskel",
+		"Derived/Animations/second.banim",
 		/*writeClips*/ false,
 		assetlib::SourceRef{});
 
 	CHECK(second.skeleton == TempRoot::BskelKey());
-	CHECK_FALSE(fs::exists(root.Data() / "Skeletons/second.bskel"));
+	CHECK_FALSE(fs::exists(root.Data() / "Derived/Skeletons/second.bskel"));
 	CHECK(second.skeletonSignature == first.skeletonSignature);
 
 	SECTION("so exactly one rig stands, and a clips-only import still resolves")
@@ -525,11 +525,11 @@ TEST_CASE("A second source skinned to a rig already here binds it", "[importedri
 		CHECK_NOTHROW(root.Store().WriteImportedClips(
 			imported.skeleton,
 			imported.animations,
-			"Animations/walk.banim",
+			"Derived/Animations/walk.banim",
 			assetlib::SourceRef{}));
 
 		const assetlib::AnimationSet clips =
-			LoadAt<assetlib::AnimationSet>(root.Data() / "Animations/walk.banim");
+			LoadAt<assetlib::AnimationSet>(root.Data() / "Derived/Animations/walk.banim");
 		CHECK(clips.skeleton == TempRoot::BskelKey());
 	}
 }
@@ -579,7 +579,8 @@ TEST_CASE("Clips with no rig to attach to are refused", "[importedrig]")
  * both call, and then read back through the library the runtime reads with.
  *
  * apples.glb rather than suzanne.glb, which the plan named: suzanne carries no textures, so it
- * cannot pin the half of the file set that lands in textures_src/. Neither is skinned -- the rig
+ * cannot pin the half of the file set that lands in Derived/SourceTextures/. Neither is skinned --
+ * the rig
  * path is what every other case in this file covers.
  */
 TEST_CASE("an import lands in the project's categories and reads back", "[importedmesh][project]")
@@ -592,8 +593,7 @@ TEST_CASE("an import lands in the project's categories and reads back", "[import
 	const fs::path root = fs::temp_directory_path() / "bernini_import_roundtrip";
 	fs::remove_all(root);
 
-	assetlib::Project project =
-		assetlib::Project::Create(root / "Round.berniniproject", "Round Trip");
+	assetlib::Project project = assetlib::Project::Create(root / "Round.bproj", "Round Trip");
 
 	const fs::path dataRoot = project.GetDataDirectory();
 
@@ -601,10 +601,10 @@ TEST_CASE("an import lands in the project's categories and reads back", "[import
 	REQUIRE_FALSE(imported.textures.empty());
 	REQUIRE_FALSE(imported.materials.empty());  // the glTF has them; the import must not carry them
 
-	const fs::path textureDir = dataRoot / assetlib::c_TexturesSrcDirectoryName / "apples";
+	const fs::path textureDir = dataRoot / assetlib::c_SourceTexturesDirectoryName / "apples";
 
 	const assetlib::AssetStore store(dataRoot);
-	store.WriteTextures(imported, "textures_src/apples");
+	store.WriteTextures(imported, "Derived/SourceTextures/apples");
 
 	assetlib::BMesh mesh = assetlib::toBMesh(imported);
 	static_cast<void>(assetlib::generateTangents(mesh));
@@ -612,7 +612,7 @@ TEST_CASE("an import lands in the project's categories and reads back", "[import
 
 	const assetlib::ImportTarget target{ "apples",
 		                                 assetlib::c_DefaultSampleRate,
-		                                 "textures_src/apples" };
+		                                 "Derived/SourceTextures/apples" };
 	const assetlib::SourceRef    sourceRef = store.CopyImportedSource(glb, target);
 	mesh.source                            = sourceRef;
 
@@ -620,12 +620,12 @@ TEST_CASE("an import lands in the project's categories and reads back", "[import
 		imported.skeleton,
 		imported.animations,
 		mesh,
-		"Skeletons/apples.bskel",
-		"Animations/apples.banim",
+		"Derived/Skeletons/apples.bskel",
+		"Derived/Animations/apples.banim",
 		true,
 		sourceRef);
 
-	store.Save(mesh, "Meshes/apples.bmesh");
+	store.Save(mesh, "Derived/Meshes/apples.bmesh");
 	store.WriteImportedDocument(target, &mesh);
 
 	// The saved mesh carries the reference it will one day be regenerated by.
@@ -635,11 +635,11 @@ TEST_CASE("an import lands in the project's categories and reads back", "[import
 
 	SECTION("the source travels with the project, its document beside it")
 	{
-		CHECK(fs::exists(dataRoot / "meshes_src/apples.glb"));
+		CHECK(fs::exists(dataRoot / "Authored/Meshes/apples.glb"));
 
 		const assetlib::ImportDocument document = assetlib::loadImportDocument(
 			core::file::LooseFileSystem(dataRoot),
-			"meshes_src/apples.bimport");
+			"Authored/Meshes/apples.bimport");
 		CHECK(document.sampleRate == assetlib::c_DefaultSampleRate);
 		// No materials were attached, so the import records no bindings -- assetlib authors no
 		// material documents (the editor is their sole author), so the document says so.
@@ -655,11 +655,11 @@ TEST_CASE("an import lands in the project's categories and reads back", "[import
 
 		std::ranges::sort(written);
 
-		auto expected = std::vector<std::string>{ "Meshes/apples.bmesh",
-			                                      "meshes_src/apples.bimport",
-			                                      "meshes_src/apples.glb" };
+		auto expected = std::vector<std::string>{ "Derived/Meshes/apples.bmesh",
+			                                      "Authored/Meshes/apples.bimport",
+			                                      "Authored/Meshes/apples.glb" };
 		for (const std::string& name : assetlib::importedTextureFileNames(imported))
-			expected.push_back("textures_src/apples/" + name);
+			expected.push_back("Derived/SourceTextures/apples/" + name);
 		std::ranges::sort(expected);
 
 		// Exactly this: no Materials/, because the board that decides what a glTF material routes
@@ -673,7 +673,8 @@ TEST_CASE("an import lands in the project's categories and reads back", "[import
 		project.ReloadStore();
 		const assetlib::AssetStore& reloaded = project.GetStore();
 
-		const assetlib::BMesh loaded = reloaded.Load<assetlib::BMesh>("Meshes/apples.bmesh");
+		const assetlib::BMesh loaded =
+			reloaded.Load<assetlib::BMesh>("Derived/Meshes/apples.bmesh");
 		CHECK_FALSE(loaded.submeshes.empty());
 		CHECK(loaded.materials.empty());
 		for (const assetlib::Submesh& submesh : loaded.submeshes)
@@ -688,7 +689,8 @@ TEST_CASE("an import lands in the project's categories and reads back", "[import
 		CHECK(graph.meshesScanned == 1);
 		CHECK(graph.broken.empty());
 
-		// And it packs: textures_src is authoring source and stays out, so the mesh is the payload.
+		// And it packs: Derived/SourceTextures is authoring source and stays out, so the mesh is
+		// the payload.
 		const assetlib::PackReport report =
 			store.Pack(assetlib::PackDesc{ root / assetlib::c_DefaultArchiveName });
 		CHECK(report.entries == 1);
@@ -698,14 +700,15 @@ TEST_CASE("an import lands in the project's categories and reads back", "[import
 }
 
 // The directory half of a rollback, which nothing covered: an import writes its textures into a
-// folder of its own under textures_src/, and a failed one has to take that folder back down without
+// folder of its own under Derived/SourceTextures/, and a failed one has to take that folder back
+// down without
 // ever taking the category down with it.
 TEST_CASE("a rollback removes the folder an import made, never the category", "[importedrig]")
 {
 	namespace fs = std::filesystem;
 
 	const TempRoot root;
-	const fs::path category = root.Data() / assetlib::c_TexturesSrcDirectoryName;
+	const fs::path category = root.Data() / assetlib::c_SourceTexturesDirectoryName;
 
 	SECTION("a folder this import made goes")
 	{
@@ -737,7 +740,7 @@ TEST_CASE("a rollback removes the folder an import made, never the category", "[
 	// other import's textures with it.
 	SECTION("an import named after its own category is still only its own folder")
 	{
-		const fs::path twin  = category / assetlib::c_TexturesSrcDirectoryName;
+		const fs::path twin  = category / assetlib::c_SourceTexturesDirectoryName;
 		const fs::path other = category / "unrelated";
 		fs::create_directories(twin);
 		fs::create_directories(other);

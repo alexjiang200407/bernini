@@ -75,6 +75,7 @@
 # Authored text documents: diffing and merging them is the point. LF pinned, because the writers
 # emit LF and `migrate` byte-compares -- an autocrlf checkout would otherwise re-report every file
 # on every run.
+*.bproj text eol=lf
 *.bmaterial text eol=lf
 *.bimport text eol=lf
 *.benv text eol=lf

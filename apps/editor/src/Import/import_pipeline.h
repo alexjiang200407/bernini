@@ -33,7 +33,8 @@ namespace editor
 	 * Converts a glTF/glb into the engine's on-disk form under `dataRoot`.
 	 *
 	 * Which category each piece lands in is decided by what it is, not by where a drop happened: the
-	 * mesh under `Meshes/`, the rig under `Skeletons/`, the clips under `Animations/`.
+	 * mesh under `Derived/Meshes/`, the rig under `Derived/Skeletons/`, the clips under
+	 * `Derived/Animations/`.
 	 * `options.outputs` says where inside each -- a project's references are written against that
 	 * layout, so an import may organise within a category and never across one.
 	 *

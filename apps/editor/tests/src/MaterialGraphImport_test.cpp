@@ -12,12 +12,15 @@ namespace
 {
 	using assetlib::PbrChannel;
 
-	// Where an import puts things: the maps under textures_src/<model>/, the material in Materials/.
+	// Where an import puts things: the maps under Derived/SourceTextures/<model>/, the material in
+	// Authored/Materials/.
 	// Nothing is written, so these need not exist -- Rebase is lexical.
-	const auto    c_DataRoot  = std::filesystem::path("C:/proj/Data");
-	const QString c_BaseColor = QStringLiteral("C:/proj/Data/textures_src/hydrant/tex0.ktx2");
-	const QString c_Orm       = QStringLiteral("C:/proj/Data/textures_src/hydrant/tex1.ktx2");
-	const QString c_Normal    = QStringLiteral("C:/proj/Data/textures_src/hydrant/tex2.ktx2");
+	const auto    c_DataRoot = std::filesystem::path("C:/proj/Data");
+	const QString c_BaseColor =
+		QStringLiteral("C:/proj/Data/Derived/SourceTextures/hydrant/tex0.ktx2");
+	const QString c_Orm = QStringLiteral("C:/proj/Data/Derived/SourceTextures/hydrant/tex1.ktx2");
+	const QString c_Normal =
+		QStringLiteral("C:/proj/Data/Derived/SourceTextures/hydrant/tex2.ktx2");
 
 	ImportedMaterialMaps
 	AllMaps()
@@ -130,18 +133,22 @@ TEST_CASE("An imported glTF material routes each map into its own channels", "[m
 	CHECK(material.pbr.baseColorTexture.empty());
 
 	// Relative to the data root, like every asset reference -- not to the material file.
-	CHECK(Route(material, PbrChannel::kBaseColorR).texture == "textures_src/hydrant/tex0.ktx2");
+	CHECK(
+		Route(material, PbrChannel::kBaseColorR).texture ==
+		"Derived/SourceTextures/hydrant/tex0.ktx2");
 	CHECK(Route(material, PbrChannel::kBaseColorR).channel == 0);
 	CHECK(Route(material, PbrChannel::kBaseColorG).channel == 1);
 	CHECK(Route(material, PbrChannel::kBaseColorB).channel == 2);
 
 	// glTF packs occlusion/roughness/metallic into RGB, which is the ORM order.
-	CHECK(Route(material, PbrChannel::kAo).texture == "textures_src/hydrant/tex1.ktx2");
+	CHECK(Route(material, PbrChannel::kAo).texture == "Derived/SourceTextures/hydrant/tex1.ktx2");
 	CHECK(Route(material, PbrChannel::kAo).channel == 0);
 	CHECK(Route(material, PbrChannel::kRoughness).channel == 1);
 	CHECK(Route(material, PbrChannel::kMetallic).channel == 2);
 
-	CHECK(Route(material, PbrChannel::kNormalX).texture == "textures_src/hydrant/tex2.ktx2");
+	CHECK(
+		Route(material, PbrChannel::kNormalX).texture ==
+		"Derived/SourceTextures/hydrant/tex2.ktx2");
 	CHECK(Route(material, PbrChannel::kNormalX).channel == 0);
 	CHECK(Route(material, PbrChannel::kNormalY).channel == 1);
 
@@ -174,7 +181,9 @@ TEST_CASE("A cutout import routes the alpha it cuts against", "[materialimport]"
 
 	CHECK(material.pbr.alphaMode == assetlib::AlphaMode::kMask);
 	CHECK(material.pbr.alphaCutoff == Catch::Approx(0.25f));
-	CHECK(Route(material, PbrChannel::kBaseColorA).texture == "textures_src/hydrant/tex0.ktx2");
+	CHECK(
+		Route(material, PbrChannel::kBaseColorA).texture ==
+		"Derived/SourceTextures/hydrant/tex0.ktx2");
 	CHECK(Route(material, PbrChannel::kBaseColorA).channel == 3);
 }
 
@@ -199,7 +208,9 @@ TEST_CASE("A blend import routes its alpha into a blend sink", "[materialimport]
 	CHECK(material.pbr.alphaMode == assetlib::AlphaMode::kBlend);
 
 	// Blend reads the base-color alpha, like a cutout, so its 4-wide port routes channel 3.
-	CHECK(Route(material, PbrChannel::kBaseColorA).texture == "textures_src/hydrant/tex0.ktx2");
+	CHECK(
+		Route(material, PbrChannel::kBaseColorA).texture ==
+		"Derived/SourceTextures/hydrant/tex0.ktx2");
 	CHECK(Route(material, PbrChannel::kBaseColorA).channel == 3);
 }
 
@@ -320,7 +331,9 @@ TEST_CASE("A map a glTF material does not name is left unrouted", "[materialimpo
 	const assetlib::BMaterial material =
 		Import(imported, ImportedMaterialMaps{ c_BaseColor, {}, {} });
 
-	CHECK(Route(material, PbrChannel::kBaseColorR).texture == "textures_src/hydrant/tex0.ktx2");
+	CHECK(
+		Route(material, PbrChannel::kBaseColorR).texture ==
+		"Derived/SourceTextures/hydrant/tex0.ktx2");
 	CHECK(Route(material, PbrChannel::kNormalX).texture.empty());
 	CHECK(Route(material, PbrChannel::kAo).texture.empty());
 }

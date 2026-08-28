@@ -9,6 +9,12 @@ about how it is read, written, merged and recovered:
   entries: binary, committed for speed, and disposable — a stale or unreadable one is regenerated
   from its source, never repaired.
 
+**The data root's first level is that split.** `Data/Authored/` holds what a person decided —
+the copied sources and every text document — and `Data/Derived/` what a bake or an import computed.
+The categories sit under one half or the other, and `project_layout.h` is where each is named, so a
+project's commit rule is a directory rather than a list of extensions. The one thing a half cannot
+say is whether *git* keeps a file: see the table below.
+
 **This document is a map, not a mirror.** The headers at the linked paths are the source of truth;
 when this page disagrees, trust the header, then fix this page.
 
@@ -136,14 +142,14 @@ regimes were always pointing at is available:
 
 | | |
 |---|---|
-| **Committed** | the copied sources, and every authored document — `.glb`, the images, `.bimport`, `.bmaterial`, `.benv`, `.berniniproject`. Losing one loses work. |
-| **Ignorable** | the containers something puts back — `.bmesh`, `.bskel` and `.banim` from `Reimport`, `.bvat` from the load-time bake, and a source's extracted `.ktx2` from the texture re-extract. |
-| **Ignorable, but by hand** | the baked maps under `Textures/`. Nothing outside the editor writes one: `migrate` re-saves a material, it does not bake it, and there is no CLI that does. So a fresh checkout opens with every material stale and drawing untextured until someone runs **Bake All**. |
-| **Committed, though derived** | `.bsky` and `.benvl`. Their bake runs from a `.hdr`, and a project copies in no `.hdr` — so an absent one is unrecoverable, and only a *stale* one is `migrate`'s. Ignorable once an env source lives in the project beside the meshes'. |
+| **Committed** | everything under `Data/Authored/`, plus the `.bproj` beside it. Losing one loses work. |
+| **Ignorable** | `Data/Derived/`, less the two rows below — `.bmesh`, `.bskel` and `.banim` come back from `Reimport`, `.bvat` from the load-time bake, and a source's extracted `.ktx2` from the texture re-extract. |
+| **Ignorable, but by hand** | the baked maps under `Derived/BakedTextures/`. Nothing outside the editor writes one: `migrate` re-saves a material, it does not bake it, and there is no CLI that does. So a fresh checkout opens with every material stale and drawing untextured until someone runs **Bake All**. |
+| **Derived, and committed anyway** | `Derived/Sky/` and `Derived/EnvLighting/`, and the maps under `Derived/SourceTextures/` an environment import wrote. Their bake runs from a `.hdr`, and a project copies in no `.hdr` — so an absent one is unrecoverable, and only a *stale* one is `migrate`'s. The carve-out goes the day an env source lives in the project beside the meshes'. |
 
 It is a rule about **projects**. This repository's own `assets/` tree is not one: it is a fixture
 tree that `bgl_tests`, `assetlib_tests` and `editor_tests` read directly — `assets/Data` is opened
-as a store, a baked `.ktx2` is loaded by its content-hashed name, `assets/Data/Meshes/apples.bmesh`
+as a store, a baked `.ktx2` is loaded by its content-hashed name, `assets/Data/Derived/Meshes/apples.bmesh`
 is read as a file — so those files are test inputs no import here produces, and they stay committed.
 
 A project that takes the second half up must run `assetlib_cli migrate` **before** it does: the
@@ -166,7 +172,7 @@ swept that mesh, a clips-only source swept the project's. Re-measuring those acr
 
 A source's extracted textures are covered too, but asked differently: a `.ktx2` carries no header,
 so no `outputs` entry can name one and the only signal available is the texture folder being absent
-or empty. That is exactly the fresh-checkout case, and it is why `Textures/` can be ignored at all —
+or empty. That is exactly the fresh-checkout case, and it is why `Derived/BakedTextures/` can be ignored at all —
 `GetStaleImportedTextureSources` compares the source's *stamp*, which says nothing about whether the
 files are there.
 

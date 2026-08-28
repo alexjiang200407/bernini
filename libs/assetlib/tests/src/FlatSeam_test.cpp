@@ -24,9 +24,9 @@ namespace
 		explicit Scratch(const char* name) : path(fs::temp_directory_path() / name)
 		{
 			fs::remove_all(path);
-			fs::create_directories(path / "Materials");
+			fs::create_directories(path / "Authored/Materials");
 			fs::create_directories(path / "Env");
-			fs::create_directories(path / "Textures");
+			fs::create_directories(path / "Derived/BakedTextures");
 		}
 		~Scratch() { fs::remove_all(path); }
 	};
@@ -36,8 +36,8 @@ namespace
 	{
 		BMaterial material;
 		material.name                 = "brushed_metal";
-		material.pbr.baseColorTexture = "Textures/albedo.ktx2";
-		material.pbr.ormTexture       = "Textures/orm.ktx2";
+		material.pbr.baseColorTexture = "Derived/BakedTextures/albedo.ktx2";
+		material.pbr.ormTexture       = "Derived/BakedTextures/orm.ktx2";
 		material.pbr.baseColorFactor  = glm::vec4(0.1f, 0.2f, 0.3f, 1.0f);
 		material.pbr.metallicFactor   = 0.75f;
 		material.pbr.roughnessFactor  = 0.25f;
@@ -50,8 +50,8 @@ namespace
 	{
 		BSky sky;
 		sky.name       = "forest";
-		sky.sky.source = "textures_src/forest_sky.ktx2";
-		sky.sky.baked  = "Textures/sky_0123456789abcdef.ktx2";
+		sky.sky.source = "Derived/SourceTextures/forest_sky.ktx2";
+		sky.sky.baked  = "Derived/BakedTextures/sky_0123456789abcdef.ktx2";
 		sky.sky.stamp  = SourceStamp{ 4096, 1700000000 };
 		return sky;
 	}
@@ -61,11 +61,11 @@ namespace
 	{
 		BEnvLighting lighting;
 		lighting.name              = "forest";
-		lighting.prefilter.source  = "textures_src/forest_prefilter.ktx2";
-		lighting.prefilter.baked   = "Textures/prefilter_fedcba9876543210.ktx2";
+		lighting.prefilter.source  = "Derived/SourceTextures/forest_prefilter.ktx2";
+		lighting.prefilter.baked   = "Derived/BakedTextures/prefilter_fedcba9876543210.ktx2";
 		lighting.prefilter.stamp   = SourceStamp{ 8192, 1700000001 };
-		lighting.irradiance.source = "textures_src/forest_irradiance.ktx2";
-		lighting.irradiance.baked  = "Textures/irradiance_00ff00ff00ff00ff.ktx2";
+		lighting.irradiance.source = "Derived/SourceTextures/forest_irradiance.ktx2";
+		lighting.irradiance.baked  = "Derived/BakedTextures/irradiance_00ff00ff00ff00ff.ktx2";
 		lighting.irradiance.stamp  = SourceStamp{ 1024, 1700000002 };
 		lighting.exposure          = 0.375f;
 		return lighting;
@@ -126,16 +126,16 @@ namespace
 	void
 	Stage(const fs::path& root)
 	{
-		SaveAt(MakeMaterial(), root / "Materials/metal.bmaterial");
+		SaveAt(MakeMaterial(), root / "Authored/Materials/metal.bmaterial");
 		SaveAt(MakeSky(), root / "Env/forest.bsky");
 		SaveAt(MakeLighting(), root / "Env/forest.benvl");
 		SaveAt(MakeEnv(), root / "Env/forest.benv");
 
 		// Basis: the transcoding path, which is where a decode is most likely to diverge.
-		writeKTX2(MakeTexture(64, 64), root / "Textures/albedo.ktx2", /*srgb*/ true);
+		writeKTX2(MakeTexture(64, 64), root / "Derived/BakedTextures/albedo.ktx2", /*srgb*/ true);
 		writeKTX2(
 			MakeTexture(64, 64),
-			root / "Textures/orm.ktx2",
+			root / "Derived/BakedTextures/orm.ktx2",
 			/*srgb*/ false,
 			Ktx2Compression::kNone);
 
@@ -160,11 +160,12 @@ TEST_CASE("a flat container loads the same from a directory and from an archive"
 
 	SECTION(".bmaterial")
 	{
-		const BMaterial direct = StoreAt(scratch.path).Load<BMaterial>("Materials/metal.bmaterial");
+		const BMaterial direct =
+			StoreAt(scratch.path).Load<BMaterial>("Authored/Materials/metal.bmaterial");
 
 		for (const core::file::IFileSystem* mount : mounts)
 		{
-			const BMaterial mounted = load<BMaterial>(*mount, "Materials/metal.bmaterial");
+			const BMaterial mounted = load<BMaterial>(*mount, "Authored/Materials/metal.bmaterial");
 
 			CHECK(mounted.name == direct.name);
 			CHECK(mounted.pbr.baseColorTexture == direct.pbr.baseColorTexture);
@@ -236,31 +237,33 @@ TEST_CASE("a .ktx2 decodes the same from a directory and from an archive", "[fla
 
 	SECTION("a Basis payload transcodes identically")
 	{
-		const ImageData direct = loadKTX2(scratch.path / "Textures/albedo.ktx2");
+		const ImageData direct = loadKTX2(scratch.path / "Derived/BakedTextures/albedo.ktx2");
 		REQUIRE(direct.vkFormat == VkFormat::BC7_SRGB_BLOCK);
 		REQUIRE(direct.mipLevels == 7);
 
 		for (const core::file::IFileSystem* mount : mounts)
-			CheckSameImage(loadKTX2(*mount, "Textures/albedo.ktx2"), direct);
+			CheckSameImage(loadKTX2(*mount, "Derived/BakedTextures/albedo.ktx2"), direct);
 	}
 
 	SECTION("an uncompressed texture is stored verbatim either way")
 	{
-		const ImageData direct = loadKTX2(scratch.path / "Textures/orm.ktx2");
+		const ImageData direct = loadKTX2(scratch.path / "Derived/BakedTextures/orm.ktx2");
 		REQUIRE(direct.vkFormat == VkFormat::R8G8B8A8_UNORM);
 
 		for (const core::file::IFileSystem* mount : mounts)
-			CheckSameImage(loadKTX2(*mount, "Textures/orm.ktx2"), direct);
+			CheckSameImage(loadKTX2(*mount, "Derived/BakedTextures/orm.ktx2"), direct);
 	}
 
 	SECTION("the RGBA8 decode a material bake asks for")
 	{
 		const ImageData direct =
-			loadKTX2(scratch.path / "Textures/albedo.ktx2", Ktx2Decode::kRgba8);
+			loadKTX2(scratch.path / "Derived/BakedTextures/albedo.ktx2", Ktx2Decode::kRgba8);
 		REQUIRE(direct.vkFormat == VkFormat::R8G8B8A8_SRGB);
 
 		for (const core::file::IFileSystem* mount : mounts)
-			CheckSameImage(loadKTX2(*mount, "Textures/albedo.ktx2", Ktx2Decode::kRgba8), direct);
+			CheckSameImage(
+				loadKTX2(*mount, "Derived/BakedTextures/albedo.ktx2", Ktx2Decode::kRgba8),
+				direct);
 	}
 
 	// maxDim selects among stored mips, so a mounted load that lost a level would return a smaller
@@ -268,20 +271,25 @@ TEST_CASE("a .ktx2 decodes the same from a directory and from an archive", "[fla
 	SECTION("maxDim selects the same mip tail")
 	{
 		const ImageData direct =
-			loadKTX2(scratch.path / "Textures/albedo.ktx2", Ktx2Decode::kGpu, 16);
+			loadKTX2(scratch.path / "Derived/BakedTextures/albedo.ktx2", Ktx2Decode::kGpu, 16);
 		REQUIRE(direct.width < 64);
 
 		for (const core::file::IFileSystem* mount : mounts)
-			CheckSameImage(loadKTX2(*mount, "Textures/albedo.ktx2", Ktx2Decode::kGpu, 16), direct);
+			CheckSameImage(
+				loadKTX2(*mount, "Derived/BakedTextures/albedo.ktx2", Ktx2Decode::kGpu, 16),
+				direct);
 	}
 
 	SECTION("the preview decode")
 	{
-		const ImageData direct = loadKTX2Preview(scratch.path / "Textures/albedo.ktx2", 32);
+		const ImageData direct =
+			loadKTX2Preview(scratch.path / "Derived/BakedTextures/albedo.ktx2", 32);
 		REQUIRE(direct.mipLevels == 1);
 
 		for (const core::file::IFileSystem* mount : mounts)
-			CheckSameImage(loadKTX2Preview(*mount, "Textures/albedo.ktx2", 32), direct);
+			CheckSameImage(
+				loadKTX2Preview(*mount, "Derived/BakedTextures/albedo.ktx2", 32),
+				direct);
 	}
 }
 
@@ -297,12 +305,16 @@ TEST_CASE("a mounted load of an absent entry throws", "[flatseam]")
 	     { static_cast<const core::file::IFileSystem*>(&loose),
 	       static_cast<const core::file::IFileSystem*>(&pak) })
 	{
-		CHECK_THROWS_AS(load<BMaterial>(*mount, "Materials/gone.bmaterial"), std::runtime_error);
+		CHECK_THROWS_AS(
+			load<BMaterial>(*mount, "Authored/Materials/gone.bmaterial"),
+			std::runtime_error);
 		CHECK_THROWS_AS(load<BSky>(*mount, "Env/gone.bsky"), std::runtime_error);
 		CHECK_THROWS_AS(load<BEnvLighting>(*mount, "Env/gone.benvl"), std::runtime_error);
 		CHECK_THROWS_AS(load<BEnv>(*mount, "Env/gone.benv"), std::runtime_error);
-		CHECK_THROWS_AS(loadKTX2(*mount, "Textures/gone.ktx2"), std::runtime_error);
-		CHECK_THROWS_AS(loadKTX2Preview(*mount, "Textures/gone.ktx2"), std::runtime_error);
+		CHECK_THROWS_AS(loadKTX2(*mount, "Derived/BakedTextures/gone.ktx2"), std::runtime_error);
+		CHECK_THROWS_AS(
+			loadKTX2Preview(*mount, "Derived/BakedTextures/gone.ktx2"),
+			std::runtime_error);
 	}
 }
 
@@ -315,11 +327,13 @@ TEST_CASE("a loose entry shadows its packed twin", "[flatseam]")
 
 	BMaterial edited = MakeMaterial();
 	edited.name      = "edited_after_packing";
-	StoreAt(scratch.path).Save(edited, "Materials/metal.bmaterial");
+	StoreAt(scratch.path).Save(edited, "Authored/Materials/metal.bmaterial");
 
 	core::file::LayeredFileSystem mount;
 	mount.Mount(std::make_shared<core::file::LooseFileSystem>(scratch.path));
 	mount.Mount(std::make_shared<PakFile>(scratch.path / "Data.bpak"));
 
-	CHECK(load<BMaterial>(mount, "Materials/metal.bmaterial").name == "edited_after_packing");
+	CHECK(
+		load<BMaterial>(mount, "Authored/Materials/metal.bmaterial").name ==
+		"edited_after_packing");
 }

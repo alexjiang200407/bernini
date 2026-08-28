@@ -30,7 +30,7 @@ entry**, in `src/cache_io.h`: a frozen header carrying the cache key (bake token
 parameter hash, source mount key), raw current-layout chunks with no self-description, and a chunk
 table. A chunk is addressed by id and an absent one is not an error. There is no conversion and no
 old shape to parse — a token mismatch is a cache miss. For geometry, `AssetStore`'s `LoadRegen*`
-methods are the seam that acts on one: a stale entry regenerates in memory from its `meshes_src/`
+methods are the seam that acts on one: a stale entry regenerates in memory from its `Authored/Meshes/`
 source at the parameters its `.bimport` records, with the document's bindings applied over the
 result, while a read-only store trusts its keys because `pack` made them true. For the env family
 and `.bvat` the re-bake is deliberate (`pack`, the editor) rather than at load. The textures an

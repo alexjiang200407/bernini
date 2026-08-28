@@ -258,9 +258,9 @@ namespace assetlib
 	 * first.
 	 *
 	 * A **directory** is held only by an edge reaching into it from outside (see ReferrersInto), and takes
-	 * everything beneath it. So `Meshes/` deletes and leaves every material, while a folder of textures a
-	 * material routes from does not. Whether a directory is one the *project* needs is not a question this
-	 * can answer -- the caller owns its own layout.
+	 * everything beneath it. So `Derived/Meshes/` deletes and leaves every material, while a folder
+	 * of textures a material routes from does not. Whether a directory is one the *project* needs
+	 * is not a question this can answer -- the caller owns its own layout.
 	 *
 	 * @throws std::runtime_error if `target` is a file of no kind this project stores anything about, or
 	 *         does not resolve to somewhere inside the data root.

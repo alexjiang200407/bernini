@@ -11,9 +11,9 @@ namespace assetlib::test
 {
 	/**
 	 * Imports `glb` into `dataRoot` as the group named "unit", by the same writers the CLI and
-	 * the editor call: the copied source and its document in `meshes_src/`, the mesh in
-	 * `Meshes/`, and -- when the source carries a skin -- the rig in `Skeletons/` and
-	 * `Animations/`. Submesh 0 is bound to `material`, recorded in the document.
+	 * the editor call: the copied source and its document in `Authored/Meshes/`, the mesh in
+	 * `Derived/Meshes/`, and -- when the source carries a skin -- the rig in `Derived/Skeletons/`
+	 * and `Derived/Animations/`. Submesh 0 is bound to `material`, recorded in the document.
 	 *
 	 * `textureDir` extracts the source's textures into that folder as an import with textures
 	 * turned on does, and records it in the document; empty extracts none.
@@ -22,7 +22,7 @@ namespace assetlib::test
 	ImportUnitGroup(
 		const std::filesystem::path& dataRoot,
 		const std::filesystem::path& glb,
-		std::string_view             material   = "Materials/red.bmaterial",
+		std::string_view             material   = "Authored/Materials/red.bmaterial",
 		float                        sampleRate = c_DefaultSampleRate,
 		std::string_view             textureDir = {})
 	{
@@ -44,17 +44,17 @@ namespace assetlib::test
 			imported.skeleton,
 			imported.animations,
 			mesh,
-			"Skeletons/unit.bskel",
-			"Animations/unit.banim",
+			"Derived/Skeletons/unit.bskel",
+			"Derived/Animations/unit.banim",
 			true,
 			source);
 
 		if (!mesh.submeshes.empty())
 			static_cast<void>(attachMaterial(mesh, 0, material));
 
-		store.Save(mesh, "Meshes/unit.bmesh");
+		store.Save(mesh, "Derived/Meshes/unit.bmesh");
 
-		outputs.emplace_back("Meshes/unit.bmesh");
+		outputs.emplace_back("Derived/Meshes/unit.bmesh");
 		target.skeleton = mesh.skeleton;
 		target.outputs  = std::move(outputs);
 

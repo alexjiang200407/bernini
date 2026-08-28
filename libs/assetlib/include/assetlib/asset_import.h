@@ -30,7 +30,7 @@ namespace assetlib
 	 */
 	struct ImportTarget
 	{
-		std::string name;  // the copied source's stem: `meshes_src/<name>.glb`
+		std::string name;  // the copied source's stem: `Authored/Meshes/<name>.glb`
 		float       sampleRate;
 		std::string textureDir;  // where the textures went; empty when none were extracted
 
@@ -106,8 +106,9 @@ namespace assetlib
 		std::filesystem::path path;             // empty when the import writes no such directory
 		bool                  existed = false;  // whether it was there before the import started
 
-		// The category directory `path` sits under, whole -- `<dataRoot>/textures_src`, not
-		// `textures_src`. Compared as a path rather than a name because an import named after its
+		// The category directory `path` sits under, whole -- `<dataRoot>/Derived/SourceTextures`, not
+		// `Derived/SourceTextures`. Compared as a path rather than a name because an import named
+		// after its
 		// own category would otherwise look like the category itself and be left behind.
 		std::filesystem::path categoryRoot;
 	};

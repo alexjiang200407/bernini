@@ -260,7 +260,8 @@ namespace assetlib
 	{
 		std::filesystem::path source;  // an equirectangular `.hdr`, or a cube map `.ktx2`
 
-		// Names every file the import writes: `Sky/<name>.bsky`, `textures_src/<name>_sky.ktx2`, ...
+		// Names every file the import writes: `Derived/Sky/<name>.bsky`,
+		// `Derived/SourceTextures/<name>_sky.ktx2`, ...
 		std::string name = "env";
 
 		/**
@@ -274,7 +275,7 @@ namespace assetlib
 		std::filesystem::path skyDir         = c_SkyDirectoryName;
 		std::filesystem::path lightingDir    = c_EnvLightingDirectoryName;
 		std::filesystem::path environmentDir = c_EnvironmentsDirectoryName;
-		std::filesystem::path sourceDir      = c_TexturesSrcDirectoryName;
+		std::filesystem::path sourceDir      = c_SourceTexturesDirectoryName;
 
 		bool sky         = true;  // write the `.bsky`
 		bool lighting    = true;  // write the `.benvl` -- the prefilter/irradiance pair

@@ -1,0 +1,7 @@
+{
+	"lighting": "Derived/EnvLighting/forest.benvl",
+	"name": "forest",
+	"sky": "Derived/Sky/forest.bsky",
+	"skyMipLevel": 0,
+	"skyRotationY": 0.0
+}

@@ -8,10 +8,18 @@ namespace assetlib
 	bool
 	Project::IsRequiredDirectory(const std::filesystem::path& relativeToData)
 	{
-		const std::string path = relativeToData.lexically_normal().generic_string();
+		std::string path = relativeToData.lexically_normal().generic_string();
+
+		// `a/b/..` normalizes to `a/`, and every name below is spelled without the slash.
+		if (path.size() > 1 && path.back() == '/')
+			path.pop_back();
 
 		// The data root itself, however it was spelled to get here.
 		if (path.empty() || path == "." || path == "/")
+			return true;
+
+		// Either half: deleting one would take every category under it.
+		if (path == c_AuthoredDirectoryName || path == c_DerivedDirectoryName)
 			return true;
 
 		return std::ranges::find(c_RequiredDirectories, path) != c_RequiredDirectories.end();

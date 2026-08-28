@@ -18,8 +18,8 @@ namespace
 	{
 		BSky sky;
 		sky.name       = "forest";
-		sky.sky.source = "textures_src/forest_sky.ktx2";
-		sky.sky.baked  = "Textures/sky_0123456789abcdef.ktx2";
+		sky.sky.source = "Derived/SourceTextures/forest_sky.ktx2";
+		sky.sky.baked  = "Derived/BakedTextures/sky_0123456789abcdef.ktx2";
 		sky.sky.stamp  = SourceStamp{ 4096, 1700000000 };
 		return sky;
 	}
@@ -29,11 +29,11 @@ namespace
 	{
 		BEnvLighting lighting;
 		lighting.name              = "forest";
-		lighting.prefilter.source  = "textures_src/forest_prefilter.ktx2";
-		lighting.prefilter.baked   = "Textures/prefilter_fedcba9876543210.ktx2";
+		lighting.prefilter.source  = "Derived/SourceTextures/forest_prefilter.ktx2";
+		lighting.prefilter.baked   = "Derived/BakedTextures/prefilter_fedcba9876543210.ktx2";
 		lighting.prefilter.stamp   = SourceStamp{ 8192, 1700000001 };
-		lighting.irradiance.source = "textures_src/forest_irradiance.ktx2";
-		lighting.irradiance.baked  = "Textures/irradiance_00ff00ff00ff00ff.ktx2";
+		lighting.irradiance.source = "Derived/SourceTextures/forest_irradiance.ktx2";
+		lighting.irradiance.baked  = "Derived/BakedTextures/irradiance_00ff00ff00ff00ff.ktx2";
 		lighting.irradiance.stamp  = SourceStamp{ 1024, 1700000002 };
 		lighting.exposure          = 0.375f;
 		return lighting;
@@ -143,8 +143,8 @@ TEST_CASE("a BEnv survives a serialize round-trip", "[benv][io]")
 {
 	BEnv env;
 	env.name             = "forest";
-	env.sky              = "Sky/forest.bsky";
-	env.lighting         = "EnvLighting/forest.benvl";
+	env.sky              = "Derived/Sky/forest.bsky";
+	env.lighting         = "Derived/EnvLighting/forest.benvl";
 	env.skyMipLevel      = 3;
 	env.skyRotationY     = 1.25f;
 	env.exposureOverride = 0.5f;
@@ -172,8 +172,8 @@ TEST_CASE("a BEnv round-trips through a file", "[benv][io]")
 
 	BEnv env;
 	env.name     = "forest";
-	env.sky      = "Sky/forest.bsky";
-	env.lighting = "EnvLighting/forest.benvl";
+	env.sky      = "Derived/Sky/forest.bsky";
+	env.lighting = "Derived/EnvLighting/forest.benvl";
 	StoreAt(TempRoot()).Save(env, path);
 
 	const BEnv restored = StoreAt(TempRoot()).Load<BEnv>(path);
@@ -206,7 +206,7 @@ TEST_CASE(
 		std::runtime_error);
 
 	auto truncated =
-		AssetCodec<BEnv>::Serialize(BEnv{ .name = "forest", .sky = "Sky/forest.bsky" });
+		AssetCodec<BEnv>::Serialize(BEnv{ .name = "forest", .sky = "Derived/Sky/forest.bsky" });
 	truncated.resize(truncated.size() / 2);
 	CHECK_THROWS_AS(AssetCodec<BEnv>::Deserialize(truncated), std::runtime_error);
 }
@@ -254,14 +254,14 @@ TEST_CASE("a benv document preserves the keys this build does not know", "[benv]
 	constexpr std::string_view c_Text = R"({
 	"name": "future",
 	"weather": { "rain": 0.5 },
-	"sky": "Sky/forest.bsky"
+	"sky": "Derived/Sky/forest.bsky"
 }
 )";
 
 	const BEnv env =
 		AssetCodec<BEnv>::Deserialize(std::as_bytes(std::span(c_Text.data(), c_Text.size())));
 	CHECK(env.name == "future");
-	CHECK(env.sky == "Sky/forest.bsky");
+	CHECK(env.sky == "Derived/Sky/forest.bsky");
 
 	const auto        resaved = AssetCodec<BEnv>::Serialize(env);
 	const std::string out(reinterpret_cast<const char*>(resaved.data()), resaved.size());

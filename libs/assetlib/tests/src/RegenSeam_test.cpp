@@ -46,10 +46,10 @@ namespace
 		{
 			dataRoot = project.GetDataDirectory();
 
-			test::ImportUnitGroup(dataRoot, glb, "Materials/red.bmaterial", sampleRate);
+			test::ImportUnitGroup(dataRoot, glb, "Authored/Materials/red.bmaterial", sampleRate);
 
 			meshPath     = dataRoot / c_MeshesDirectoryName / "unit.bmesh";
-			documentPath = dataRoot / "meshes_src/unit.bimport";
+			documentPath = dataRoot / "Authored/Meshes/unit.bimport";
 
 			project.ReloadStore();
 		}
@@ -80,7 +80,7 @@ namespace
 		{
 			const fs::path root = fs::temp_directory_path() / name;
 			fs::remove_all(root);
-			return Project::Create(root / "Regen.berniniproject", "Regen");
+			return Project::Create(root / "Regen.bproj", "Regen");
 		}
 	};
 
@@ -149,9 +149,9 @@ TEST_CASE("a fresh entry loads untouched, its document applied", "[regen]")
 	const ImportedProject sandbox("bernini_regen_fresh", "assets/apples.glb");
 	const auto            before = BytesOf(sandbox.meshPath);
 
-	const RegenMesh current = sandbox.Store().LoadRegenMesh("Meshes/unit.bmesh");
+	const RegenMesh current = sandbox.Store().LoadRegenMesh("Derived/Meshes/unit.bmesh");
 	CHECK(current.unboundBindings.empty());
-	CHECK(current.mesh.materials == std::vector<std::string>{ "Materials/red.bmaterial" });
+	CHECK(current.mesh.materials == std::vector<std::string>{ "Authored/Materials/red.bmaterial" });
 
 	CHECK(BytesOf(sandbox.meshPath) == before);
 }
@@ -163,29 +163,29 @@ TEST_CASE("a binding-only document edit rebinds the loaded mesh without regenera
 
 	AssetStore(sandbox.dataRoot)
 		.RebindSubmeshInDocument(
-			"meshes_src/unit.glb",
+			"Authored/Meshes/unit.glb",
 			sandbox.FirstSubmeshName(),
-			"Materials/blue.bmaterial");
+			"Authored/Materials/blue.bmaterial");
 
-	const RegenMesh current = sandbox.Store().LoadRegenMesh("Meshes/unit.bmesh");
+	const RegenMesh current = sandbox.Store().LoadRegenMesh("Derived/Meshes/unit.bmesh");
 	CHECK(
 		current.mesh.materials.at(current.mesh.submeshes.at(0).material) ==
-		"Materials/blue.bmaterial");
+		"Authored/Materials/blue.bmaterial");
 	CHECK(BytesOf(sandbox.meshPath) == before);
 
 	SECTION("and rebinds a group whose source file is gone, which regeneration could not serve")
 	{
-		fs::remove(sandbox.dataRoot / "meshes_src/unit.glb");
+		fs::remove(sandbox.dataRoot / "Authored/Meshes/unit.glb");
 		AssetStore(sandbox.dataRoot)
 			.RebindSubmeshInDocument(
-				"meshes_src/unit.glb",
+				"Authored/Meshes/unit.glb",
 				sandbox.FirstSubmeshName(),
-				"Materials/green.bmaterial");
+				"Authored/Materials/green.bmaterial");
 
-		const RegenMesh again = sandbox.Store().LoadRegenMesh("Meshes/unit.bmesh");
+		const RegenMesh again = sandbox.Store().LoadRegenMesh("Derived/Meshes/unit.bmesh");
 		CHECK(
 			again.mesh.materials.at(again.mesh.submeshes.at(0).material) ==
-			"Materials/green.bmaterial");
+			"Authored/Materials/green.bmaterial");
 		CHECK(BytesOf(sandbox.meshPath) == before);
 	}
 }
@@ -200,10 +200,10 @@ TEST_CASE("a stale bake token regenerates the mesh from its source", "[regen]")
 
 	// The plain load refuses; the seam serves the source's current cook instead.
 	CHECK_THROWS_WITH(
-		sandbox.Store().Load<BMesh>("Meshes/unit.bmesh"),
+		sandbox.Store().Load<BMesh>("Derived/Meshes/unit.bmesh"),
 		Catch::Matchers::ContainsSubstring("another bake revision"));
 
-	const RegenMesh current = sandbox.Store().LoadRegenMesh("Meshes/unit.bmesh");
+	const RegenMesh current = sandbox.Store().LoadRegenMesh("Derived/Meshes/unit.bmesh");
 	CHECK(current.mesh.submeshes.size() == fresh.submeshes.size());
 	CHECK(current.mesh.vertexData == fresh.vertexData);
 	CHECK(current.mesh.materials == fresh.materials);  // the document's bindings, applied
@@ -223,7 +223,7 @@ TEST_CASE(
 	// A sibling branch's binary swapped in by a merge: current token, foreign source stamp.
 	sandbox.Tamper(sandbox.meshPath, test::c_SourceHashOffset);
 
-	const RegenMesh current = sandbox.Store().LoadRegenMesh("Meshes/unit.bmesh");
+	const RegenMesh current = sandbox.Store().LoadRegenMesh("Derived/Meshes/unit.bmesh");
 	CHECK(current.mesh.vertexData == fresh.vertexData);
 	CHECK(current.mesh.source.stamp == fresh.source.stamp);
 }
@@ -240,7 +240,7 @@ TEST_CASE("a stale entry that cannot regenerate refuses", "[regen]")
 		sandbox.Tamper(sandbox.meshPath, test::c_TokenOffset);
 
 		CHECK_THROWS_WITH(
-			sandbox.Store().LoadRegenMesh("Meshes/unit.bmesh"),
+			sandbox.Store().LoadRegenMesh("Derived/Meshes/unit.bmesh"),
 			Catch::Matchers::ContainsSubstring("no source was ever recorded"));
 	}
 
@@ -248,11 +248,11 @@ TEST_CASE("a stale entry that cannot regenerate refuses", "[regen]")
 	{
 		const ImportedProject sandbox("bernini_regen_nosource", "assets/apples.glb");
 
-		fs::remove(sandbox.dataRoot / "meshes_src/unit.glb");
+		fs::remove(sandbox.dataRoot / "Authored/Meshes/unit.glb");
 		sandbox.Tamper(sandbox.meshPath, test::c_TokenOffset);
 
 		CHECK_THROWS_WITH(
-			sandbox.Store().LoadRegenMesh("Meshes/unit.bmesh"),
+			sandbox.Store().LoadRegenMesh("Derived/Meshes/unit.bmesh"),
 			Catch::Matchers::ContainsSubstring("not in the project"));
 	}
 
@@ -264,7 +264,7 @@ TEST_CASE("a stale entry that cannot regenerate refuses", "[regen]")
 		sandbox.Tamper(sandbox.meshPath, test::c_TokenOffset);
 
 		CHECK_THROWS_WITH(
-			sandbox.Store().LoadRegenMesh("Meshes/unit.bmesh"),
+			sandbox.Store().LoadRegenMesh("Derived/Meshes/unit.bmesh"),
 			Catch::Matchers::ContainsSubstring("import document"));
 	}
 }
@@ -277,15 +277,15 @@ TEST_CASE("a read-only store trusts its keys and its baked bindings", "[regen]")
 	sandbox.Tamper(sandbox.meshPath, test::c_SourceHashOffset);
 	AssetStore(sandbox.dataRoot)
 		.RebindSubmeshInDocument(
-			"meshes_src/unit.glb",
+			"Authored/Meshes/unit.glb",
 			sandbox.FirstSubmeshName(),
-			"Materials/blue.bmaterial");
+			"Authored/Materials/blue.bmaterial");
 
 	const AssetStore readOnly(
 		sandbox.dataRoot,
 		std::make_shared<ReadOnlyFileSystem>(sandbox.dataRoot));
-	const RegenMesh current = readOnly.LoadRegenMesh("Meshes/unit.bmesh");
-	CHECK(current.mesh.materials == std::vector<std::string>{ "Materials/red.bmaterial" });
+	const RegenMesh current = readOnly.LoadRegenMesh("Derived/Meshes/unit.bmesh");
+	CHECK(current.mesh.materials == std::vector<std::string>{ "Authored/Materials/red.bmaterial" });
 	CHECK(current.unboundBindings.empty());
 }
 
@@ -301,17 +301,17 @@ TEST_CASE("a stale rig regenerates, and its clips follow the document's sample r
 	{
 		sandbox.Tamper(bskelPath, test::c_TokenOffset);
 
-		const Skeleton skeleton = sandbox.Store().LoadRegenSkeleton("Skeletons/unit.bskel");
+		const Skeleton skeleton = sandbox.Store().LoadRegenSkeleton("Derived/Skeletons/unit.bskel");
 		REQUIRE(skeleton.bones.size() == fresh.bones.size());
 		CHECK(skeletonSignature(skeleton) == skeletonSignature(fresh));
-		CHECK(skeleton.source.key == "meshes_src/unit.glb");
+		CHECK(skeleton.source.key == "Authored/Meshes/unit.glb");
 	}
 
 	SECTION("the clips, at the rate the document says")
 	{
 		auto document = loadImportDocument(
 			core::file::LooseFileSystem(sandbox.dataRoot),
-			"meshes_src/unit.bimport");
+			"Authored/Meshes/unit.bimport");
 		document.sampleRate = 60.0f;
 		core::file::write_atomic(
 			sandbox.documentPath,
@@ -322,17 +322,18 @@ TEST_CASE("a stale rig regenerates, and its clips follow the document's sample r
 		sandbox.Tamper(sandbox.meshPath, test::c_TokenOffset);
 
 		// The parameter edit alone is the staleness: the token and the source still match.
-		const AnimationSet clips = sandbox.Store().LoadRegenAnimations("Animations/unit.banim");
+		const AnimationSet clips =
+			sandbox.Store().LoadRegenAnimations("Derived/Animations/unit.banim");
 		REQUIRE(clips.clips.size() == 2);
 		CHECK(clips.clips[0].sampleRate == 60.0f);
-		CHECK(clips.skeleton == "Skeletons/unit.bskel");
+		CHECK(clips.skeleton == "Derived/Skeletons/unit.bskel");
 		CHECK(clips.skeletonSignature == skeletonSignature(fresh));
 
 		// The posed boxes were re-measured, not lost -- #413's shape is a box baked from the
 		// wrong data -- and under the signature a consumer computes: the mesh as it loads,
 		// tangents and all. A box nobody can find is a load measuring at draw time instead.
 		REQUIRE_FALSE(clips.posedBoxes.empty());
-		const RegenMesh held = sandbox.Store().LoadRegenMesh("Meshes/unit.bmesh");
+		const RegenMesh held = sandbox.Store().LoadRegenMesh("Derived/Meshes/unit.bmesh");
 		CHECK(findPosedBounds(clips, held.mesh, fresh)[0].has_value());
 	}
 
@@ -347,11 +348,11 @@ TEST_CASE("a stale rig regenerates, and its clips follow the document's sample r
 		        "\"meshes\": []," } });
 		fs::copy_file(
 			meshless.PackGlb(),
-			sandbox.dataRoot / "meshes_src/unit.glb",
+			sandbox.dataRoot / "Authored/Meshes/unit.glb",
 			fs::copy_options::overwrite_existing);
 
 		CHECK_THROWS_WITH(
-			sandbox.Store().LoadRegenMesh("Meshes/unit.bmesh"),
+			sandbox.Store().LoadRegenMesh("Derived/Meshes/unit.bmesh"),
 			Catch::Matchers::ContainsSubstring("no longer carries a mesh"));
 	}
 
@@ -364,11 +365,11 @@ TEST_CASE("a stale rig regenerates, and its clips follow the document's sample r
 		        "\"mesh\": 0, \"name\": \"body\"" } });
 		fs::copy_file(
 			boneless.PackGlb(),
-			sandbox.dataRoot / "meshes_src/unit.glb",
+			sandbox.dataRoot / "Authored/Meshes/unit.glb",
 			fs::copy_options::overwrite_existing);
 
 		CHECK_THROWS_WITH(
-			sandbox.Store().LoadRegenSkeleton("Skeletons/unit.bskel"),
+			sandbox.Store().LoadRegenSkeleton("Derived/Skeletons/unit.bskel"),
 			Catch::Matchers::ContainsSubstring("no longer carries a rig"));
 	}
 }
@@ -380,20 +381,20 @@ TEST_CASE("reauthor rewrites a document from its mesh, once", "[regen][importdoc
 	// A rebind saved straight into the mesh, the way every save worked before documents: the
 	// document still records red, the mesh now says blue.
 	BMesh mesh = LoadAt<BMesh>(sandbox.meshPath);
-	REQUIRE(attachMaterial(mesh, 0, "Materials/blue.bmaterial"));
+	REQUIRE(attachMaterial(mesh, 0, "Authored/Materials/blue.bmaterial"));
 	SaveAt(mesh, sandbox.meshPath);
 
 	const auto report = AssetStore(sandbox.dataRoot).ReauthorImportDocuments();
 	REQUIRE(report.size() == 1);
-	CHECK(report[0].key == "meshes_src/unit.bimport");
+	CHECK(report[0].key == "Authored/Meshes/unit.bimport");
 	CHECK(report[0].outcome == ReauthoredDocument::Outcome::kRewritten);
 
 	const ImportDocument document = loadImportDocument(
 		core::file::LooseFileSystem(sandbox.dataRoot),
-		"meshes_src/unit.bimport");
+		"Authored/Meshes/unit.bimport");
 	CHECK(document.sampleRate == 30.0f);
 	REQUIRE_FALSE(document.bindings.empty());
-	CHECK(document.bindings[0].material == "Materials/blue.bmaterial");
+	CHECK(document.bindings[0].material == "Authored/Materials/blue.bmaterial");
 
 	SECTION("a second run rewrites nothing")
 	{
@@ -440,9 +441,9 @@ TEST_CASE("a rebind with no document to land in is refused", "[regen][importdoc]
 	CHECK_THROWS_WITH(
 		AssetStore(sandbox.dataRoot)
 			.RebindSubmeshInDocument(
-				"meshes_src/unit.glb",
+				"Authored/Meshes/unit.glb",
 				sandbox.FirstSubmeshName(),
-				"Materials/blue.bmaterial"),
+				"Authored/Materials/blue.bmaterial"),
 		Catch::Matchers::ContainsSubstring("no import document"));
 }
 
@@ -450,23 +451,23 @@ TEST_CASE("GeometryIsStale answers the key without loading a payload", "[regen]"
 {
 	const ImportedProject sandbox("bernini_regen_isstale", "assets/apples.glb");
 
-	CHECK_FALSE(sandbox.Store().GeometryIsStale("Meshes/unit.bmesh"));
+	CHECK_FALSE(sandbox.Store().GeometryIsStale("Derived/Meshes/unit.bmesh"));
 
 	sandbox.Tamper(sandbox.meshPath, test::c_TokenOffset);
-	CHECK(sandbox.Store().GeometryIsStale("Meshes/unit.bmesh"));
+	CHECK(sandbox.Store().GeometryIsStale("Derived/Meshes/unit.bmesh"));
 
 	SECTION("a read-only store trusts its keys")
 	{
 		const AssetStore readOnly(
 			sandbox.dataRoot,
 			std::make_shared<ReadOnlyFileSystem>(sandbox.dataRoot));
-		CHECK_FALSE(readOnly.GeometryIsStale("Meshes/unit.bmesh"));
+		CHECK_FALSE(readOnly.GeometryIsStale("Derived/Meshes/unit.bmesh"));
 	}
 
 	SECTION("a container without a cache key is refused, not guessed at")
 	{
 		CHECK_THROWS_WITH(
-			sandbox.Store().GeometryIsStale("meshes_src/unit.bimport"),
+			sandbox.Store().GeometryIsStale("Authored/Meshes/unit.bimport"),
 			Catch::Matchers::ContainsSubstring("no cache key"));
 	}
 }
@@ -489,7 +490,7 @@ TEST_CASE("a foreign-token mesh still answers a reference scan from its headers"
 
 	// No regeneration behind this: the materials are the document's and the rig answers by
 	// source key, so a post-token-bump scan stays a header read per file.
-	const MeshRefs refs = sandbox.Store().LoadRegenMeshRefs("Meshes/unit.bmesh");
-	CHECK(refs.materials == std::vector<std::string>{ "Materials/red.bmaterial" });
+	const MeshRefs refs = sandbox.Store().LoadRegenMeshRefs("Derived/Meshes/unit.bmesh");
+	CHECK(refs.materials == std::vector<std::string>{ "Authored/Materials/red.bmaterial" });
 	CHECK(refs.skeleton.empty());  // apples carries no rig
 }

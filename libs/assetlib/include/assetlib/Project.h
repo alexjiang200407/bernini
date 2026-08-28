@@ -7,7 +7,7 @@ namespace assetlib
 	class Project
 	{
 	public:
-		static constexpr auto c_FileExtension = ".berniniproject";
+		static constexpr auto c_FileExtension = ".bproj";
 
 		/**
 		 * Creates a new project on disk: scaffolds the Data directory tree
@@ -47,8 +47,8 @@ namespace assetlib
 		 * itself, or one of the categories beneath it -- and so is not the user's to delete. Open() puts a
 		 * missing one straight back, so deleting one would not even stick.
 		 *
-		 * Only the categories themselves. A folder the user made inside one, like `Materials/kirk`, is
-		 * theirs.
+		 * Only the categories themselves. A folder the user made inside one, like
+		 * `Authored/Materials/kirk`, is theirs.
 		 */
 		[[nodiscard]] static bool
 		IsRequiredDirectory(const std::filesystem::path& relativeToData);

@@ -28,7 +28,7 @@ namespace
 		{
 			root = std::filesystem::temp_directory_path() / "assetlib_migrate_test";
 			std::filesystem::remove_all(root);
-			std::filesystem::create_directories(root / "Materials");
+			std::filesystem::create_directories(root / "Authored/Materials");
 		}
 
 		~Project() { std::filesystem::remove_all(root); }
@@ -72,23 +72,23 @@ TEST_CASE(
 	"[migrate]")
 {
 	const Project project;
-	project.Write("Materials/current.bmaterial", MaterialBytes("current"));
-	project.Write("Materials/older.bmaterial", Older());
+	project.Write("Authored/Materials/current.bmaterial", MaterialBytes("current"));
+	project.Write("Authored/Materials/older.bmaterial", Older());
 	const std::vector<std::byte> flat = { std::byte{ 'B' },
 		                                  std::byte{ 'M' },
 		                                  std::byte{ 'A' },
 		                                  std::byte{ 'T' } };
-	project.Write("Materials/flat.bmaterial", flat);  // a chunk-era stream, unreadable now
-	project.Write("notes.txt", flat);                 // not a container at all
+	project.Write("Authored/Materials/flat.bmaterial", flat);  // a chunk-era stream, unreadable now
+	project.Write("notes.txt", flat);                          // not a container at all
 
 	SECTION("a dry run reports and writes nothing")
 	{
-		const auto before = project.Read("Materials/older.bmaterial");
+		const auto before = project.Read("Authored/Materials/older.bmaterial");
 		const auto report = AssetStore(project.root).Migrate(true);
 		CHECK(report.Count(MigratedFile::Outcome::kUnchanged) == 1);
 		CHECK(report.Count(MigratedFile::Outcome::kRewritten) == 1);
 		CHECK(report.Count(MigratedFile::Outcome::kFailed) == 1);
-		CHECK(project.Read("Materials/older.bmaterial") == before);
+		CHECK(project.Read("Authored/Materials/older.bmaterial") == before);
 		CHECK(report.files.size() == 3);  // notes.txt was never a candidate
 	}
 
@@ -98,7 +98,7 @@ TEST_CASE(
 		CHECK(first.Count(MigratedFile::Outcome::kRewritten) == 1);
 		CHECK(first.Count(MigratedFile::Outcome::kFailed) == 1);
 
-		const auto rewritten = project.Read("Materials/older.bmaterial");
+		const auto rewritten = project.Read("Authored/Materials/older.bmaterial");
 		CHECK(rewritten == MaterialBytes("older"));  // stamped current again
 		CHECK(AssetCodec<BMaterial>::Deserialize(rewritten).name == "older");
 
@@ -106,7 +106,7 @@ TEST_CASE(
 		CHECK(second.Count(MigratedFile::Outcome::kRewritten) == 0);
 		CHECK(second.Count(MigratedFile::Outcome::kUnchanged) == 2);
 		CHECK(second.Count(MigratedFile::Outcome::kFailed) == 1);
-		CHECK(project.Read("Materials/flat.bmaterial") == flat);  // never half-written
+		CHECK(project.Read("Authored/Materials/flat.bmaterial") == flat);  // never half-written
 	}
 
 	SECTION("the failure says which file, and why")
@@ -133,9 +133,9 @@ TEST_CASE("migrate regenerates a stale group on disk, once", "[migrate][regen]")
 	const test::SkinnedGltf source("bernini_migrate_regen_gltf");
 	test::ImportUnitGroup(project.root, source.PackGlb());
 
-	const auto meshPath  = project.root / "Meshes/unit.bmesh";
-	const auto bskelPath = project.root / "Skeletons/unit.bskel";
-	const auto banimPath = project.root / "Animations/unit.banim";
+	const auto meshPath  = project.root / "Derived/Meshes/unit.bmesh";
+	const auto bskelPath = project.root / "Derived/Skeletons/unit.bskel";
+	const auto banimPath = project.root / "Derived/Animations/unit.banim";
 
 	test::TamperHeaderByte(meshPath, test::c_TokenOffset);
 	test::TamperHeaderByte(bskelPath, test::c_TokenOffset);
@@ -148,7 +148,7 @@ TEST_CASE("migrate regenerates a stale group on disk, once", "[migrate][regen]")
 		CHECK(first.Count(MigratedFile::Outcome::kFailed) == 0);
 
 		// Written current: the loads that refused the tampered files read them plainly now.
-		CHECK(LoadAt<BMesh>(meshPath).source.key == "meshes_src/unit.glb");
+		CHECK(LoadAt<BMesh>(meshPath).source.key == "Authored/Meshes/unit.glb");
 		CHECK_FALSE(LoadAt<AnimationSet>(banimPath).clips.empty());
 
 		const auto second = AssetStore(project.root).Migrate(false);
@@ -158,7 +158,7 @@ TEST_CASE("migrate regenerates a stale group on disk, once", "[migrate][regen]")
 
 	SECTION("a stale group whose source is gone is a per-file failure, never a guess")
 	{
-		std::filesystem::remove(project.root / "meshes_src/unit.glb");
+		std::filesystem::remove(project.root / "Authored/Meshes/unit.glb");
 
 		const auto report = AssetStore(project.root).Migrate(false);
 		CHECK(report.Count(MigratedFile::Outcome::kRewritten) == 0);
@@ -174,15 +174,18 @@ TEST_CASE("a rebind reaches disk through migrate without a regeneration", "[migr
 
 	// The source is gone, so what follows cannot be a regeneration -- the document alone
 	// carries the rebind onto the disk bytes.
-	std::filesystem::remove(project.root / "meshes_src/unit.glb");
+	std::filesystem::remove(project.root / "Authored/Meshes/unit.glb");
 	AssetStore(project.root)
-		.RebindSubmeshInDocument("meshes_src/unit.glb", "body", "Materials/blue.bmaterial");
+		.RebindSubmeshInDocument(
+			"Authored/Meshes/unit.glb",
+			"body",
+			"Authored/Materials/blue.bmaterial");
 
 	const auto report = AssetStore(project.root).Migrate(false);
 	CHECK(report.Count(MigratedFile::Outcome::kRewritten) == 1);
 	CHECK(report.Count(MigratedFile::Outcome::kFailed) == 0);
 
-	const BMesh mesh = StoreAt(project.root).Load<BMesh>("Meshes/unit.bmesh");
+	const BMesh mesh = StoreAt(project.root).Load<BMesh>("Derived/Meshes/unit.bmesh");
 	REQUIRE(mesh.materials.size() == 1);
-	CHECK(mesh.materials[0] == "Materials/blue.bmaterial");
+	CHECK(mesh.materials[0] == "Authored/Materials/blue.bmaterial");
 }

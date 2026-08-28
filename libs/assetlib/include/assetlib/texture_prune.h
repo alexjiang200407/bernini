@@ -11,12 +11,12 @@ namespace assetlib
 	 */
 	struct TexturePruneDesc
 	{
-		std::filesystem::path textureDir = c_TexturesDirectoryName;
+		std::filesystem::path textureDir = c_BakedTexturesDirectoryName;
 	};
 
 	struct UnusedTexture
 	{
-		std::string path;  // relative to dataRoot, e.g. "Textures/orm_fdc537ad982f59e7.ktx2"
+		std::string path;  // relative to dataRoot, e.g. "Derived/BakedTextures/orm_fdc537ad9.ktx2"
 		uint64_t    bytes = 0;
 	};
 

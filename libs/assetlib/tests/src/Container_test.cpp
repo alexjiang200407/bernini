@@ -102,7 +102,7 @@ TEST_CASE("serialize/deserialize round-trips every pool", "[bmesh][io]")
 TEST_CASE("a mesh's rig signature survives the round trip", "[bmesh][io][skeleton]")
 {
 	auto mesh              = MakeSampleMesh();
-	mesh.skeleton          = "Skeletons/unit.bskel";
+	mesh.skeleton          = "Derived/Skeletons/unit.bskel";
 	mesh.skeletonSignature = 0xfeedfacecafebeefull;
 
 	const auto restored = AssetCodec<BMesh>::Deserialize(AssetCodec<BMesh>::Serialize(mesh));

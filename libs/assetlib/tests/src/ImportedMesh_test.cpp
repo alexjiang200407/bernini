@@ -33,11 +33,11 @@ TEST_CASE("A mesh import aimed at a new subfolder creates it", "[importedmesh]")
 	// AssetStore refuses one that is not there. What this case is about is the *subfolder*.
 	fs::create_directories(root.path);
 
-	const fs::path bmeshPath = root.path / "Meshes" / "animals" / "unit.bmesh";
+	const fs::path bmeshPath = root.path / "Derived/Meshes" / "animals" / "unit.bmesh";
 
 	const assetlib::BMesh mesh;
 	// The store's own root, so the key is what the import writes and the path is what it lands at.
-	assetlib::AssetStore(root.path).Save(mesh, "Meshes/animals/unit.bmesh");
+	assetlib::AssetStore(root.path).Save(mesh, "Derived/Meshes/animals/unit.bmesh");
 
 	CHECK(fs::exists(bmeshPath));
 }

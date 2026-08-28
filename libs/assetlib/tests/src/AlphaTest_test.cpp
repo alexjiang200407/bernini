@@ -277,7 +277,7 @@ TEST_CASE("alphaMode and alphaCutoff survive a .bmaterial round trip", "[bmateri
 	BMaterial material;
 	material.pbr.alphaMode        = AlphaMode::kBlend;
 	material.pbr.alphaCutoff      = 0.25f;
-	material.pbr.baseColorTexture = "Textures/basecolor_dead.ktx2";
+	material.pbr.baseColorTexture = "Derived/BakedTextures/basecolor_dead.ktx2";
 
 	const auto path = dir.path / "cutout.bmaterial";
 	REQUIRE_NOTHROW(SaveAt(material, path));
@@ -296,7 +296,7 @@ TEST_CASE("kHashed survives a .bmaterial round trip", "[bmaterial][alphatest][ha
 
 	BMaterial material;
 	material.pbr.alphaMode        = AlphaMode::kHashed;
-	material.pbr.baseColorTexture = "Textures/basecolor_dead.ktx2";
+	material.pbr.baseColorTexture = "Derived/BakedTextures/basecolor_dead.ktx2";
 
 	const auto path = dir.path / "hashed.bmaterial";
 	REQUIRE_NOTHROW(SaveAt(material, path));

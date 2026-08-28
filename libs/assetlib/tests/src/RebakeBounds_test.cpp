@@ -37,7 +37,7 @@ namespace
 	MakeClips(const Skeleton& skeleton)
 	{
 		auto animations              = AnimationSet();
-		animations.skeleton          = "Skeletons/rig.bskel";
+		animations.skeleton          = "Derived/Skeletons/rig.bskel";
 		animations.skeletonSignature = skeletonSignature(skeleton);
 		animations.boneCount         = 1;
 
@@ -86,7 +86,7 @@ namespace
 		submesh.aabbMax = corner;
 		mesh.submeshes.push_back(submesh);
 		mesh.meshes.push_back({ .firstSubmesh = 0, .submeshCount = 1, .nameOffset = 0 });
-		mesh.skeleton = "Skeletons/rig.bskel";
+		mesh.skeleton = "Derived/Skeletons/rig.bskel";
 		return mesh;
 	}
 
@@ -95,12 +95,12 @@ namespace
 	{
 		const Skeleton skeleton = MakeRig();
 
-		fs::create_directories(root.path / "Meshes");
-		fs::create_directories(root.path / "Skeletons");
-		fs::create_directories(root.path / "Animations");
-		StoreAt(root.path).Save(MakeSkinnedMesh(glm::vec3(1.0f)), "Meshes/rig.bmesh");
-		StoreAt(root.path).Save(skeleton, "Skeletons/rig.bskel");
-		SaveAt(MakeClips(skeleton), root.path / "Animations/rig.banim");
+		fs::create_directories(root.path / "Derived/Meshes");
+		fs::create_directories(root.path / "Derived/Skeletons");
+		fs::create_directories(root.path / "Derived/Animations");
+		StoreAt(root.path).Save(MakeSkinnedMesh(glm::vec3(1.0f)), "Derived/Meshes/rig.bmesh");
+		StoreAt(root.path).Save(skeleton, "Derived/Skeletons/rig.bskel");
+		SaveAt(MakeClips(skeleton), root.path / "Derived/Animations/rig.banim");
 	}
 }
 
@@ -113,7 +113,9 @@ TEST_CASE("The rebake writes the box a load then finds", "[rebake]")
 	{
 		const RebakeBoundsReport preview = AssetStore(root.path).RebakePosedBounds(true);
 		CHECK(preview.Count(RebakedFile::Outcome::kRebaked) == 1);
-		CHECK(StoreAt(root.path).Load<AnimationSet>("Animations/rig.banim").posedBoxes.empty());
+		CHECK(StoreAt(root.path)
+		          .Load<AnimationSet>("Derived/Animations/rig.banim")
+		          .posedBoxes.empty());
 	}
 
 	SECTION("the real run bakes, and a second run rewrites nothing")
@@ -123,9 +125,9 @@ TEST_CASE("The rebake writes the box a load then finds", "[rebake]")
 		CHECK(report.Count(RebakedFile::Outcome::kFailed) == 0);
 
 		const std::optional<Bounds> baked = findPosedBounds(
-			StoreAt(root.path).Load<AnimationSet>("Animations/rig.banim"),
-			StoreAt(root.path).Load<BMesh>("Meshes/rig.bmesh"),
-			StoreAt(root.path).Load<Skeleton>("Skeletons/rig.bskel"))[0];
+			StoreAt(root.path).Load<AnimationSet>("Derived/Animations/rig.banim"),
+			StoreAt(root.path).Load<BMesh>("Derived/Meshes/rig.bmesh"),
+			StoreAt(root.path).Load<Skeleton>("Derived/Skeletons/rig.bskel"))[0];
 
 		REQUIRE(baked.has_value());
 		CHECK(baked->min.x == Catch::Approx(-1.0f));
@@ -139,7 +141,7 @@ TEST_CASE("The rebake writes the box a load then finds", "[rebake]")
 	SECTION("a mesh re-authored since the bake makes its clip set stale again")
 	{
 		(void)AssetStore(root.path).RebakePosedBounds(false);
-		StoreAt(root.path).Save(MakeSkinnedMesh(glm::vec3(3.0f)), "Meshes/rig.bmesh");
+		StoreAt(root.path).Save(MakeSkinnedMesh(glm::vec3(3.0f)), "Derived/Meshes/rig.bmesh");
 
 		const RebakeBoundsReport preview = AssetStore(root.path).RebakePosedBounds(true);
 		CHECK(preview.Count(RebakedFile::Outcome::kRebaked) == 1);
@@ -147,10 +149,12 @@ TEST_CASE("The rebake writes the box a load then finds", "[rebake]")
 
 	SECTION("a clip set no mesh skins to is reported, not guessed at")
 	{
-		fs::remove(root.path / "Meshes/rig.bmesh");
+		fs::remove(root.path / "Derived/Meshes/rig.bmesh");
 
 		const RebakeBoundsReport report = AssetStore(root.path).RebakePosedBounds(false);
 		CHECK(report.Count(RebakedFile::Outcome::kOrphaned) == 1);
-		CHECK(StoreAt(root.path).Load<AnimationSet>("Animations/rig.banim").posedBoxes.empty());
+		CHECK(StoreAt(root.path)
+		          .Load<AnimationSet>("Derived/Animations/rig.banim")
+		          .posedBoxes.empty());
 	}
 }

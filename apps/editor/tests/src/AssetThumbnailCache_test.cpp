@@ -24,10 +24,10 @@ using editor::test::WaitFor;
 namespace
 {
 	// The shared asset directory doubles as a data root: apples.bmesh names its materials by paths
-	// relative to it ("Materials/apples/Apple1.bmaterial"), and they are there.
+	// relative to it ("Authored/Materials/apples/Apple1.bmaterial"), and they are there.
 	constexpr auto c_DataRoot     = "assets/Data";
-	constexpr auto c_MeshPath     = "assets/Data/Meshes/apples.bmesh";
-	constexpr auto c_MaterialPath = "assets/Data/Materials/apples/Apple1.bmaterial";
+	constexpr auto c_MeshPath     = "assets/Data/Derived/Meshes/apples.bmesh";
+	constexpr auto c_MaterialPath = "assets/Data/Authored/Materials/apples/Apple1.bmaterial";
 
 	// Where the renders are left for a human to look at, following bgl_tests' convention of writing a
 	// `.got.png` beside the goldens.
@@ -146,7 +146,7 @@ namespace
 		material.pbr.roughnessFactor = 0.6f;
 		material.pbr.alphaMode       = alphaMode;
 
-		const std::string relative = "Materials/" + name + ".bmaterial";
+		const std::string relative = "Authored/Materials/" + name + ".bmaterial";
 		SaveAt(material, std::filesystem::path(c_DataRoot) / relative);
 		return relative;
 	}
@@ -168,11 +168,11 @@ namespace
 
 TEST_CASE("Only the assets the editor can draw are thumbnailed", "[thumbnails]")
 {
-	REQUIRE(AssetThumbnailCache::CanThumbnail("Meshes/tree.bmesh"));
-	REQUIRE(AssetThumbnailCache::CanThumbnail("Materials/bark.bmaterial"));
+	REQUIRE(AssetThumbnailCache::CanThumbnail("Derived/Meshes/tree.bmesh"));
+	REQUIRE(AssetThumbnailCache::CanThumbnail("Authored/Materials/bark.bmaterial"));
 
 	// The suffix decides, case-insensitively -- a file's name has nothing to do with what it is.
-	REQUIRE(AssetThumbnailCache::CanThumbnail("Meshes/TREE.BMESH"));
+	REQUIRE(AssetThumbnailCache::CanThumbnail("Derived/Meshes/TREE.BMESH"));
 
 	// A texture already has TexturePreviewCache, and nothing else is drawable at all.
 	REQUIRE(!AssetThumbnailCache::CanThumbnail("Textures/bark.ktx2"));
@@ -437,10 +437,10 @@ TEST_CASE("An asset that cannot be read yields no thumbnail", "[thumbnails][rend
 
 	QSignalSpy ready(&cache, &StampedPixmapCache::Ready);
 
-	cache.Request("assets/Data/Meshes/does_not_exist.bmesh");
+	cache.Request("assets/Data/Derived/Meshes/does_not_exist.bmesh");
 
 	REQUIRE(!WaitFor([&] { return ready.count() > 0; }, 2000));
-	REQUIRE(cache.Lookup("assets/Data/Meshes/does_not_exist.bmesh").isNull());
+	REQUIRE(cache.Lookup("assets/Data/Derived/Meshes/does_not_exist.bmesh").isNull());
 }
 
 TEST_CASE("An asset that cannot be read says why", "[thumbnails][render]")
@@ -453,7 +453,7 @@ TEST_CASE("An asset that cannot be read says why", "[thumbnails][render]")
 	REQUIRE(cache.IsReady());
 	cache.SetAssets(&*fixture.assets);
 
-	const QString path = "assets/Data/Meshes/foreign_token_test.bmesh";
+	const QString path = "assets/Data/Derived/Meshes/foreign_token_test.bmesh";
 	{
 		assetlib::BMesh mesh;
 		assetlib::Node  root{};

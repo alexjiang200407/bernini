@@ -43,7 +43,8 @@ public:
 	ImportEnvironment() const;
 
 	/**
-	 * The asset name every written file is named from: `Sky/<name>.bsky`, `textures_src/<name>_sky.ktx2`
+	 * The asset name every written file is named from: `Derived/Sky/<name>.bsky`,
+	 * `Derived/SourceTextures/<name>_sky.ktx2`
 	 * and so on.
 	 *
 	 * Falls back to the source's base name when what was typed could name a file outside the
@@ -57,13 +58,13 @@ public:
 	 * whatever subfolder was typed.
 	 *
 	 * The category is a fixed prefix rather than something typed, because every reference in the
-	 * project is written against that layout -- a `.benv` names `Sky/...`, and the content explorer
-	 * protects the categories from deletion. A typed folder organises *inside* one; it cannot move a
-	 * part out of it, and anything that could is ignored.
+	 * project is written against that layout -- a `.benv` names `Derived/Sky/...`, and the content
+	 * explorer protects the categories from deletion. A typed folder organises *inside* one; it
+	 * cannot move a part out of it, and anything that could is ignored.
 	 *
-	 * There is deliberately no field for the `.benv` itself: `editor::ApplyEnvironment` finds a
-	 * project's data root by taking the file's parent's parent, so an environment anywhere but
-	 * directly inside `Environments/` would resolve its references against the wrong root.
+	 * There is deliberately no field for the `.benv` itself: it composes the other two by naming
+	 * them, so it belongs directly inside `Authored/Environments/` where every reference to it is
+	 * written.
 	 */
 	QString
 	GetSkyDirectory() const;

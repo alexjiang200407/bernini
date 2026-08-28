@@ -161,8 +161,8 @@ TEST_CASE("bakeMaterial composites routes into the optimized triplet", "[bmateri
 	SECTION("baked maps land under the data root's texture directory, not beside the material")
 	{
 		// The recorded path is relative to the data root, whatever directory the material lives in.
-		REQUIRE(mat.pbr.baseColorTexture.starts_with("Textures/basecolor_"));
-		REQUIRE(mat.pbr.ormTexture.starts_with("Textures/orm_"));
+		REQUIRE(mat.pbr.baseColorTexture.starts_with("Derived/BakedTextures/basecolor_"));
+		REQUIRE(mat.pbr.ormTexture.starts_with("Derived/BakedTextures/orm_"));
 		REQUIRE(mat.pbr.baseColorTexture.ends_with(".ktx2"));
 	}
 
@@ -172,7 +172,7 @@ TEST_CASE("bakeMaterial composites routes into the optimized triplet", "[bmateri
 		REQUIRE(mat.pbr.normalTexture.empty());
 		REQUIRE(
 			std::ranges::none_of(
-				std::filesystem::directory_iterator(dir.path / "Textures"),
+				std::filesystem::directory_iterator(dir.path / "Derived/BakedTextures"),
 				[](const auto& entry) {
 					return entry.path().filename().string().starts_with("normal_");
 				}));
@@ -397,7 +397,7 @@ TEST_CASE("materials that route a group identically share one baked map", "[bmat
 	REQUIRE_NOTHROW(StoreAt(dir.path).BakeMaterial(apple1));
 	REQUIRE_NOTHROW(StoreAt(dir.path).BakeMaterial(apple2));
 
-	const auto textures = dir.path / "Textures";
+	const auto textures = dir.path / "Derived/BakedTextures";
 
 	SECTION("the shared group converges on one file")
 	{
@@ -507,7 +507,8 @@ TEST_CASE("bakeMaterial accepts a Basis-supercompressed source", "[bmaterial][ba
 {
 	const BakeDir dir("bernini_bake_uastc");
 
-	// This is what mesh import writes into textures_src, so it is the common case, not an edge one.
+	// This is what mesh import writes into Derived/SourceTextures, so it is the common case, not an
+	// edge one.
 	// It is not RGBA8 on disk; the bake decodes it to texels rather than to the BC7 the GPU wants.
 	std::vector<std::byte> pixels(16 * 16 * 4, std::byte{ 200 });
 	writeKTX2(rgba8ToImage(pixels, 16, 16), dir.path / "uastc.ktx2", false);

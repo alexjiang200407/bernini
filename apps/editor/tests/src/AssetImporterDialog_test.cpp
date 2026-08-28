@@ -125,11 +125,11 @@ TEST_CASE("An untouched dialog writes where it always did", "[assetimporter]")
 	// source's own, so an import nobody touched lands exactly where the folder-only dialog put it.
 	const ImportOutputs outputs = dialog.GetOutputs();
 
-	REQUIRE(outputs.mesh == QString("Meshes/stone_wall/stone_wall.bmesh"));
-	REQUIRE(outputs.skeleton == QString("Skeletons/stone_wall/stone_wall.bskel"));
-	REQUIRE(outputs.animations == QString("Animations/stone_wall/stone_wall.banim"));
-	REQUIRE(outputs.materialDir == QString("Materials/stone_wall"));
-	REQUIRE(outputs.textureDir == QString("textures_src/stone_wall"));
+	REQUIRE(outputs.mesh == QString("Derived/Meshes/stone_wall/stone_wall.bmesh"));
+	REQUIRE(outputs.skeleton == QString("Derived/Skeletons/stone_wall/stone_wall.bskel"));
+	REQUIRE(outputs.animations == QString("Derived/Animations/stone_wall/stone_wall.banim"));
+	REQUIRE(outputs.materialDir == QString("Authored/Materials/stone_wall"));
+	REQUIRE(outputs.textureDir == QString("Derived/SourceTextures/stone_wall"));
 
 	// Index-aligned with the source's material table, which is what the writer iterates.
 	REQUIRE(outputs.materialStems == QStringList{ "material0", "material1" });
@@ -179,11 +179,11 @@ TEST_CASE("A category's folder moves on its own", "[assetimporter]")
 
 	const ImportOutputs outputs = dialog.GetOutputs();
 
-	REQUIRE(outputs.animations == QString("Animations/shared/locomotion/stone_wall.banim"));
-	REQUIRE(outputs.mesh == QString("Meshes/stone_wall/stone_wall.bmesh"));
-	REQUIRE(outputs.skeleton == QString("Skeletons/stone_wall/stone_wall.bskel"));
-	REQUIRE(outputs.materialDir == QString("Materials/stone_wall"));
-	REQUIRE(outputs.textureDir == QString("textures_src/stone_wall"));
+	REQUIRE(outputs.animations == QString("Derived/Animations/shared/locomotion/stone_wall.banim"));
+	REQUIRE(outputs.mesh == QString("Derived/Meshes/stone_wall/stone_wall.bmesh"));
+	REQUIRE(outputs.skeleton == QString("Derived/Skeletons/stone_wall/stone_wall.bskel"));
+	REQUIRE(outputs.materialDir == QString("Authored/Materials/stone_wall"));
+	REQUIRE(outputs.textureDir == QString("Derived/SourceTextures/stone_wall"));
 }
 
 // What the whole change is for: two imports that belong in one folder, told apart by their names
@@ -202,8 +202,9 @@ TEST_CASE("Two imports can share a folder by naming their files apart", "[asseti
 	Field(second, "materialFolder")->setText("animals/coyote");
 	Field(second, "materialName0")->setText("fur_grey");
 
-	REQUIRE(first.GetOutputs().mesh == QString("Meshes/animals/coyote/coyote_skin1.bmesh"));
-	REQUIRE(second.GetOutputs().mesh == QString("Meshes/animals/coyote/coyote_skin2.bmesh"));
+	REQUIRE(first.GetOutputs().mesh == QString("Derived/Meshes/animals/coyote/coyote_skin1.bmesh"));
+	REQUIRE(
+		second.GetOutputs().mesh == QString("Derived/Meshes/animals/coyote/coyote_skin2.bmesh"));
 
 	REQUIRE(first.GetOutputs().materialDir == second.GetOutputs().materialDir);
 	REQUIRE(first.GetOutputs().materialStems == QStringList{ "fur_brown" });
@@ -275,21 +276,22 @@ TEST_CASE("A typed destination folder is used", "[assetimporter]")
 	{
 		Field(dialog, "meshFolder")->setText("bricks");
 
-		REQUIRE(dialog.GetOutputs().mesh == QString("Meshes/bricks/stone_wall.bmesh"));
+		REQUIRE(dialog.GetOutputs().mesh == QString("Derived/Meshes/bricks/stone_wall.bmesh"));
 	}
 
 	SECTION("trimmed")
 	{
 		Field(dialog, "meshFolder")->setText("  bricks  ");
 
-		REQUIRE(dialog.GetOutputs().mesh == QString("Meshes/bricks/stone_wall.bmesh"));
+		REQUIRE(dialog.GetOutputs().mesh == QString("Derived/Meshes/bricks/stone_wall.bmesh"));
 	}
 
 	SECTION("nested, because going deeper is fine -- it is going out that is not")
 	{
 		Field(dialog, "meshFolder")->setText("exterior/walls");
 
-		REQUIRE(dialog.GetOutputs().mesh == QString("Meshes/exterior/walls/stone_wall.bmesh"));
+		REQUIRE(
+			dialog.GetOutputs().mesh == QString("Derived/Meshes/exterior/walls/stone_wall.bmesh"));
 	}
 }
 
@@ -317,7 +319,7 @@ TEST_CASE("A destination folder that escapes its category is refused", "[assetim
 	const AssetImporterDialog dialog(c_SourceFile);
 	Field(dialog, "textureFolder")->setText(typed);
 
-	REQUIRE(dialog.GetOutputs().textureDir == QString("textures_src/stone_wall"));
+	REQUIRE(dialog.GetOutputs().textureDir == QString("Derived/SourceTextures/stone_wall"));
 }
 
 // A folder falls back to the source's name, but a name does not: silently discarding what was
@@ -399,9 +401,9 @@ TEST_CASE("A name already in the project stops the import as it is typed", "[ass
 
 	// Exactly the case the change exists for: importing a second skin into a folder the first already
 	// occupies. The clash is one file, not the folder, so it must be reported against that file.
-	REQUIRE(QDir(root.path()).mkpath("Meshes/animals/coyote"));
+	REQUIRE(QDir(root.path()).mkpath("Derived/Meshes/animals/coyote"));
 
-	QFile taken(root.path() + "/Meshes/animals/coyote/coyote_skin1.bmesh");
+	QFile taken(root.path() + "/Derived/Meshes/animals/coyote/coyote_skin1.bmesh");
 	REQUIRE(taken.open(QIODevice::WriteOnly));
 	taken.close();
 

@@ -21,11 +21,11 @@ namespace
 		material.name                 = "skin";
 		material.pbr.metallicFactor   = 0.0f;
 		material.pbr.roughnessFactor  = 0.75f;
-		material.pbr.baseColorTexture = "Textures/basecolor_dead.ktx2";
+		material.pbr.baseColorTexture = "Derived/BakedTextures/basecolor_dead.ktx2";
 
-		material.pbr.routes[0] = { "textures_src/skin.ktx2", 0 };
-		material.pbr.routes[1] = { "textures_src/skin.ktx2", 1 };
-		material.pbr.routes[5] = { "textures_src/mask.ktx2", 3 };  // roughness <- mask.a
+		material.pbr.routes[0] = { "Derived/SourceTextures/skin.ktx2", 0 };
+		material.pbr.routes[1] = { "Derived/SourceTextures/skin.ktx2", 1 };
+		material.pbr.routes[5] = { "Derived/SourceTextures/mask.ktx2", 3 };  // roughness <- mask.a
 		return material;
 	}
 
@@ -59,7 +59,7 @@ namespace
 	WalkClip(const Skeleton& skeleton)
 	{
 		AnimationSet animations;
-		animations.skeleton          = "Animations/rig.bskel";
+		animations.skeleton          = "Derived/Animations/rig.bskel";
 		animations.boneCount         = static_cast<uint32_t>(skeleton.bones.size());
 		animations.skeletonSignature = skeletonSignature(skeleton);
 
@@ -93,16 +93,16 @@ TEST_CASE("describe(BMaterial) reports the routing table", "[describe]")
 	// A route names its source and the channel it draws from -- routes[5] is roughness <- mask.a, and
 	// a swizzle that silently printed the wrong letter would make the dump worse than useless.
 	CHECK(text.find("baseColor.r") != std::string::npos);
-	CHECK(text.find("textures_src/skin.ktx2 [r]") != std::string::npos);
-	CHECK(text.find("textures_src/skin.ktx2 [g]") != std::string::npos);
-	CHECK(text.find("textures_src/mask.ktx2 [a]") != std::string::npos);
+	CHECK(text.find("Derived/SourceTextures/skin.ktx2 [r]") != std::string::npos);
+	CHECK(text.find("Derived/SourceTextures/skin.ktx2 [g]") != std::string::npos);
+	CHECK(text.find("Derived/SourceTextures/mask.ktx2 [a]") != std::string::npos);
 
 	// The channels left unrouted are exactly the ones that fall back to a default texture at render
 	// time, which is the single most common cause of a material looking wrong. They must be visible.
 	CHECK(text.find("metallic        (unrouted)") != std::string::npos);
 	CHECK(text.find("normal.x        (unrouted)") != std::string::npos);
 
-	CHECK(text.find("Textures/basecolor_dead.ktx2") != std::string::npos);
+	CHECK(text.find("Derived/BakedTextures/basecolor_dead.ktx2") != std::string::npos);
 	CHECK(text.find("orm             (none)") != std::string::npos);
 }
 
@@ -110,18 +110,18 @@ TEST_CASE("describe(BMaterial) reports the routing table", "[describe]")
 TEST_CASE("describe(BMaterial) reports bake staleness against the data root", "[describe]")
 {
 	const auto root = std::filesystem::temp_directory_path() / "bernini_describe";
-	std::filesystem::create_directories(root / "textures_src");
+	std::filesystem::create_directories(root / "Derived/SourceTextures");
 
 	const core::file::LooseFileSystem files(root);
 
-	const auto source = root / "textures_src" / "skin.ktx2";
+	const auto source = root / "Derived/SourceTextures" / "skin.ktx2";
 	{
 		std::ofstream out(source, std::ios::binary);
 		out << "some source bytes";
 	}
 
 	BMaterial material;
-	material.pbr.routes[0] = { "textures_src/skin.ktx2", 0 };
+	material.pbr.routes[0] = { "Derived/SourceTextures/skin.ktx2", 0 };
 
 	SECTION("a source that has drifted from its stamp is STALE")
 	{
@@ -133,12 +133,12 @@ TEST_CASE("describe(BMaterial) reports bake staleness against the data root", "[
 	SECTION("a source matching its stamp is up to date")
 	{
 		material.pbr.routeStamps[0]   = stampOf(source);
-		material.pbr.baseColorTexture = "Textures/baked.ktx2";
+		material.pbr.baseColorTexture = "Derived/BakedTextures/baked.ktx2";
 
 		// The map has to be there as well as named: a triplet entry pointing at nothing is stale.
-		std::filesystem::create_directories(root / "Textures");
+		std::filesystem::create_directories(root / "Derived/BakedTextures");
 		{
-			std::ofstream out(root / "Textures" / "baked.ktx2", std::ios::binary);
+			std::ofstream out(root / "Derived/BakedTextures" / "baked.ktx2", std::ios::binary);
 			out << "baked bytes";
 		}
 
@@ -149,7 +149,7 @@ TEST_CASE("describe(BMaterial) reports bake staleness against the data root", "[
 
 	SECTION("a missing source is called out rather than reported as a mismatch")
 	{
-		material.pbr.routes[0] = { "textures_src/gone.ktx2", 0 };
+		material.pbr.routes[0] = { "Derived/SourceTextures/gone.ktx2", 0 };
 
 		const std::string text = describe(material, &files);
 		CHECK(text.find("source is missing") != std::string::npos);
@@ -164,7 +164,7 @@ TEST_CASE("describe(BMesh) resolves each submesh's material path", "[describe]")
 {
 	BMesh mesh;
 	REQUIRE(mesh.stringPool.add("head") == 1);
-	mesh.materials = { "Materials/head.bmaterial" };
+	mesh.materials = { "Authored/Materials/head.bmaterial" };
 	mesh.meshes.push_back(Mesh{ .firstSubmesh = 0, .submeshCount = 2, .nameOffset = 0 });
 
 	Submesh named{};
@@ -182,12 +182,12 @@ TEST_CASE("describe(BMesh) resolves each submesh's material path", "[describe]")
 	const std::string text = describe(mesh);
 
 	CHECK(text.find("'head'") != std::string::npos);
-	CHECK(text.find("[0] Materials/head.bmaterial") != std::string::npos);
+	CHECK(text.find("[0] Authored/Materials/head.bmaterial") != std::string::npos);
 	CHECK(text.find("[7] (out of range -- no material)") != std::string::npos);
 
 	// Brief mode keeps the material table but drops the per-submesh listing.
 	const std::string brief = describe(mesh, /*verbose*/ false);
-	CHECK(brief.find("Materials/head.bmaterial") != std::string::npos);
+	CHECK(brief.find("Authored/Materials/head.bmaterial") != std::string::npos);
 	CHECK(brief.find("'head'") == std::string::npos);
 }
 
@@ -222,7 +222,7 @@ TEST_CASE("describe(AnimationSet) reports each clip's timing and motion", "[desc
 	{
 		const std::string text = describe(animations);
 
-		CHECK(text.find("Animations/rig.bskel") != std::string::npos);
+		CHECK(text.find("Derived/Animations/rig.bskel") != std::string::npos);
 		CHECK(text.find("clips        1") != std::string::npos);
 		CHECK(text.find("'walk'") != std::string::npos);
 		CHECK(text.find("2 frames at 30 Hz") != std::string::npos);
@@ -277,8 +277,8 @@ TEST_CASE("describe(BMesh) reports the skeleton a skinned mesh names", "[describ
 
 	SECTION("named")
 	{
-		mesh.skeleton = "Meshes/rig.bskel";
-		CHECK(describe(mesh).find("skeleton     Meshes/rig.bskel") != std::string::npos);
+		mesh.skeleton = "Derived/Meshes/rig.bskel";
+		CHECK(describe(mesh).find("skeleton     Derived/Meshes/rig.bskel") != std::string::npos);
 	}
 
 	SECTION("carrying joints but naming none")
@@ -291,7 +291,7 @@ TEST_CASE("describe(BMesh) reports the skeleton a skinned mesh names", "[describ
 		BMesh attachment;
 		attachment.meshes.push_back(Mesh{ .firstSubmesh = 0, .submeshCount = 1, .nameOffset = 0 });
 		attachment.submeshes.push_back(Submesh{});
-		attachment.skeleton = "Meshes/rig.bskel";
+		attachment.skeleton = "Derived/Meshes/rig.bskel";
 
 		REQUIRE_FALSE(isSkinned(attachment));
 		CHECK(describe(attachment).find("unused: no submesh carries joints") != std::string::npos);
@@ -302,33 +302,33 @@ TEST_CASE("describe(BEnv) reports whether the files it names are there", "[descr
 {
 	const auto root = std::filesystem::temp_directory_path() / "bernini_describe_benv";
 	std::filesystem::remove_all(root);
-	std::filesystem::create_directories(root / "Sky");
+	std::filesystem::create_directories(root / "Derived/Sky");
 
 	const core::file::LooseFileSystem files(root);
 
 	{
-		std::ofstream out(root / "Sky" / "forest.bsky", std::ios::binary);
+		std::ofstream out(root / "Derived/Sky" / "forest.bsky", std::ios::binary);
 		out << "x";
 	}
 
 	BEnv env;
 	env.name     = "forest";
-	env.sky      = "Sky/forest.bsky";
-	env.lighting = "EnvLighting/forest.benvl";  // never written
+	env.sky      = "Derived/Sky/forest.bsky";
+	env.lighting = "Derived/EnvLighting/forest.benvl";  // never written
 
 	// Without a root there is nothing to resolve against, so neither is judged.
 	const std::string bare = describe(env);
 	CHECK(bare.find("forest") != std::string::npos);
-	CHECK(bare.find("Sky/forest.bsky") != std::string::npos);
+	CHECK(bare.find("Derived/Sky/forest.bsky") != std::string::npos);
 	CHECK(bare.find("(missing)") == std::string::npos);
 
 	const std::string text = describe(env, &files);
-	CHECK(text.find("Sky/forest.bsky\n") != std::string::npos);  // present: unannotated
-	CHECK(text.find("EnvLighting/forest.benvl (missing)") != std::string::npos);
+	CHECK(text.find("Derived/Sky/forest.bsky\n") != std::string::npos);  // present: unannotated
+	CHECK(text.find("Derived/EnvLighting/forest.benvl (missing)") != std::string::npos);
 
 	// An unset half is not the same as a missing one, and must not read as a broken reference.
 	BEnv skyless;
-	skyless.lighting            = "EnvLighting/forest.benvl";
+	skyless.lighting            = "Derived/EnvLighting/forest.benvl";
 	const std::string unsetText = describe(skyless, &files);
 	CHECK(unsetText.find("sky               (unset)") != std::string::npos);
 
@@ -342,14 +342,14 @@ TEST_CASE("describe(BSky) and describe(BEnvLighting) report bake staleness", "[d
 {
 	const auto root = std::filesystem::temp_directory_path() / "bernini_describe_env";
 	std::filesystem::remove_all(root);
-	std::filesystem::create_directories(root / "textures_src");
+	std::filesystem::create_directories(root / "Derived/SourceTextures");
 
 	const core::file::LooseFileSystem files(root);
 
-	std::filesystem::create_directories(root / "Textures");
+	std::filesystem::create_directories(root / "Derived/BakedTextures");
 
-	const auto source = root / "textures_src" / "forest.ktx2";
-	const auto baked  = root / "Textures" / "forest_sky_ab12.ktx2";
+	const auto source = root / "Derived/SourceTextures" / "forest.ktx2";
+	const auto baked  = root / "Derived/BakedTextures" / "forest_sky_ab12.ktx2";
 	const auto write  = [](const std::filesystem::path& path, std::string_view bytes) {
 		std::ofstream out(path, std::ios::binary);
 		out << bytes;
@@ -362,8 +362,8 @@ TEST_CASE("describe(BSky) and describe(BEnvLighting) report bake staleness", "[d
 
 	BSky sky;
 	sky.name       = "forest";
-	sky.sky.source = "textures_src/forest.ktx2";
-	sky.sky.baked  = "Textures/forest_sky_ab12.ktx2";
+	sky.sky.source = "Derived/SourceTextures/forest.ktx2";
+	sky.sky.baked  = "Derived/BakedTextures/forest_sky_ab12.ktx2";
 	sky.sky.stamp  = stampOf(source);
 
 	SECTION("a sky reports its route and a current bake")
@@ -371,8 +371,8 @@ TEST_CASE("describe(BSky) and describe(BEnvLighting) report bake staleness", "[d
 		const std::string text = describe(sky, &files);
 
 		CHECK(text.find("bsky 'forest'") != std::string::npos);
-		CHECK(text.find("textures_src/forest.ktx2") != std::string::npos);
-		CHECK(text.find("Textures/forest_sky_ab12.ktx2") != std::string::npos);
+		CHECK(text.find("Derived/SourceTextures/forest.ktx2") != std::string::npos);
+		CHECK(text.find("Derived/BakedTextures/forest_sky_ab12.ktx2") != std::string::npos);
 		CHECK(text.find("source up to date") != std::string::npos);
 		CHECK(text.find("STALE") == std::string::npos);
 	}
@@ -407,11 +407,11 @@ TEST_CASE("describe(BSky) and describe(BEnvLighting) report bake staleness", "[d
 	BEnvLighting lighting;
 	lighting.name              = "forest";
 	lighting.exposure          = 1.25f;
-	lighting.prefilter.source  = "textures_src/forest.ktx2";
-	lighting.prefilter.baked   = "Textures/forest_prefilter.ktx2";
+	lighting.prefilter.source  = "Derived/SourceTextures/forest.ktx2";
+	lighting.prefilter.baked   = "Derived/BakedTextures/forest_prefilter.ktx2";
 	lighting.prefilter.stamp   = stampOf(source);
-	lighting.irradiance.source = "textures_src/forest.ktx2";
-	lighting.irradiance.baked  = "Textures/forest_irradiance.ktx2";
+	lighting.irradiance.source = "Derived/SourceTextures/forest.ktx2";
+	lighting.irradiance.baked  = "Derived/BakedTextures/forest_irradiance.ktx2";
 	lighting.irradiance.stamp  = stampOf(source);
 
 	SECTION("a lighting names both halves and its exposure")
@@ -422,8 +422,8 @@ TEST_CASE("describe(BSky) and describe(BEnvLighting) report bake staleness", "[d
 		CHECK(text.find("exposure          1.25") != std::string::npos);
 		CHECK(text.find("prefilter") != std::string::npos);
 		CHECK(text.find("irradiance") != std::string::npos);
-		CHECK(text.find("Textures/forest_prefilter.ktx2") != std::string::npos);
-		CHECK(text.find("Textures/forest_irradiance.ktx2") != std::string::npos);
+		CHECK(text.find("Derived/BakedTextures/forest_prefilter.ktx2") != std::string::npos);
+		CHECK(text.find("Derived/BakedTextures/forest_irradiance.ktx2") != std::string::npos);
 	}
 
 	// The pair is one verdict: they convolve the same radiance, so one drifting makes both suspect.

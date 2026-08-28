@@ -98,7 +98,7 @@ AssetImporterDialog::AssetImporterDialog(
 		"Mesh folder:",
 		assetlib::c_MeshesDirectoryName,
 		"meshFolder",
-		"Folder under Meshes/ to write the .bmesh into. Nested folders are allowed "
+		"Folder under Derived/Meshes/ to write the .bmesh into. Nested folders are allowed "
 		"(animals/coyote); the category itself is fixed, because every reference in the project is "
 		"written against it.");
 	m_MeshName = m_MeshSection->AddFile(
@@ -115,8 +115,8 @@ AssetImporterDialog::AssetImporterDialog(
 		"Skeleton folder:",
 		assetlib::c_SkeletonsDirectoryName,
 		"skeletonFolder",
-		"Folder under Skeletons/ to write the .bskel into. Only written when the source carries a "
-		"skin.");
+		"Folder under Derived/Skeletons/ to write the .bskel into. Only written when the source "
+		"carries a skin.");
 	m_SkeletonName = m_SkeletonSection->AddFile(
 		{ .label      = "Skeleton file:",
 	      .stem       = m_DefaultName,
@@ -135,11 +135,11 @@ AssetImporterDialog::AssetImporterDialog(
 	// here to name.
 	m_TextureSection = addSection(
 		"Texture folder:",
-		assetlib::c_TexturesSrcDirectoryName,
+		assetlib::c_SourceTexturesDirectoryName,
 		"textureFolder",
-		"Folder under textures_src/ for the extracted textures. Each import wants its own: they "
-		"are named tex0.ktx2, tex1.ktx2 by index, so two imports sharing a folder would overwrite "
-		"one another.");
+		"Folder under Derived/SourceTextures/ for the extracted textures. Each import wants "
+		"its own: they are named after the images they came from, so two imports sharing a "
+		"folder would overwrite one another.");
 
 	m_ImportPbrMaterials = new QCheckBox("Import PBR materials", content);
 	m_ImportPbrMaterials->setObjectName("importPbrMaterials");
@@ -155,8 +155,9 @@ AssetImporterDialog::AssetImporterDialog(
 		"Material folder:",
 		assetlib::c_MaterialsDirectoryName,
 		"materialFolder",
-		"Folder under Materials/ to write the derived .bmaterial files into. Materials may share "
-		"one with another import, since each names its own files.");
+		"Folder under Authored/Materials/ to write the derived .bmaterial files into. Materials "
+		"may "
+		"share one with another import, since each names its own files.");
 
 	// Only the PBR ones: a material the writer skips would otherwise be offered a name for a file
 	// that never appears.
@@ -189,7 +190,7 @@ AssetImporterDialog::AssetImporterDialog(
 		"Animation folder:",
 		assetlib::c_AnimationsDirectoryName,
 		"animationFolder",
-		"Folder under Animations/ to write the .banim into.");
+		"Folder under Derived/Animations/ to write the .banim into.");
 	m_AnimationName = m_AnimationSection->AddFile(
 		{ .label      = "Animation file:",
 	      .stem       = m_DefaultName,
@@ -413,7 +414,7 @@ AssetImporterDialog::GetOutputs() const
 	outputs.materialDir =
 		Folder(m_MaterialSection->GetFolder(), assetlib::c_MaterialsDirectoryName);
 	outputs.textureDir =
-		Folder(m_TextureSection->GetFolder(), assetlib::c_TexturesSrcDirectoryName);
+		Folder(m_TextureSection->GetFolder(), assetlib::c_SourceTexturesDirectoryName);
 
 	for (QLineEdit* name : m_MaterialNames)
 		outputs.materialStems << (name == nullptr ? QString() : name->text().trimmed());

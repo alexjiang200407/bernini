@@ -126,9 +126,10 @@ TEST_CASE("A material with no baked triplet lists nothing", "[materialeditor]")
 {
 	// A material authored but never baked carries only routes, no triplet -- there is nothing baked to
 	// show, and the empty string is what keeps the label hidden.
-	auto material                  = assetlib::BMaterial();
-	material.shadingModel          = assetlib::ShadingModel::kPbr;
-	material.pbr.routes[0].texture = "textures_src/albedo.ktx2";  // a source route, not a baked map
+	auto material         = assetlib::BMaterial();
+	material.shadingModel = assetlib::ShadingModel::kPbr;
+	material.pbr.routes[0].texture =
+		"Derived/SourceTextures/albedo.ktx2";  // a source route, not a baked map
 
 	CHECK(editor::BakedTexturesSummary(material).isEmpty());
 }

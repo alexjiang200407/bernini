@@ -37,7 +37,7 @@ namespace
 	SampleSource()
 	{
 		SourceRef source;
-		source.key            = "meshes_src/kirk.glb";
+		source.key            = "Authored/Meshes/kirk.glb";
 		source.stamp          = { 128, 0xFEED };
 		source.parametersHash = 7;
 		return source;
@@ -104,19 +104,19 @@ TEST_CASE("applyBindings is a pure function of the document", "[cacheio][importd
 		submesh.material   = 0;  // deliberately dirty: stale state must not leak through
 		mesh.submeshes.push_back(submesh);
 	}
-	mesh.materials = { "Materials/stale.bmaterial" };
+	mesh.materials = { "Authored/Materials/stale.bmaterial" };
 
 	const std::vector<MaterialBinding> bindings = {
-		{ "flag", "Materials/cloth.bmaterial" },
-		{ "hull", "Materials/wood.bmaterial" },
-		{ "sail", "Materials/cloth.bmaterial" },
+		{ "flag", "Authored/Materials/cloth.bmaterial" },
+		{ "hull", "Authored/Materials/wood.bmaterial" },
+		{ "sail", "Authored/Materials/cloth.bmaterial" },
 	};
 	CHECK(applyBindings(mesh, bindings).empty());
 
 	// First-appearance order over the submeshes, stale entries gone, shared materials shared.
 	CHECK(
-		mesh.materials ==
-		std::vector<std::string>{ "Materials/wood.bmaterial", "Materials/cloth.bmaterial" });
+		mesh.materials == std::vector<std::string>{ "Authored/Materials/wood.bmaterial",
+	                                                "Authored/Materials/cloth.bmaterial" });
 	CHECK(mesh.submeshes[0].material == 0);
 	CHECK(mesh.submeshes[1].material == 1);
 	CHECK(mesh.submeshes[2].material == 1);
@@ -132,7 +132,7 @@ TEST_CASE("applyBindings is a pure function of the document", "[cacheio][importd
 	{
 		CHECK(applyBindings(
 				  mesh,
-				  std::vector<MaterialBinding>{ { "hull", "Materials/wood.bmaterial" } })
+				  std::vector<MaterialBinding>{ { "hull", "Authored/Materials/wood.bmaterial" } })
 		          .empty());
 		CHECK(mesh.submeshes[1].material == c_InvalidIndex);
 	}
@@ -141,10 +141,10 @@ TEST_CASE("applyBindings is a pure function of the document", "[cacheio][importd
 	{
 		const std::vector<std::string> unbound = applyBindings(
 			mesh,
-			std::vector<MaterialBinding>{ { "anchor", "Materials/iron.bmaterial" },
-		                                  { "hull", "Materials/wood.bmaterial" } });
+			std::vector<MaterialBinding>{ { "anchor", "Authored/Materials/iron.bmaterial" },
+		                                  { "hull", "Authored/Materials/wood.bmaterial" } });
 		CHECK(unbound == std::vector<std::string>{ "anchor" });
 		// The bindings that do match still land; the report is the caller's to escalate.
-		CHECK(mesh.materials == std::vector<std::string>{ "Materials/wood.bmaterial" });
+		CHECK(mesh.materials == std::vector<std::string>{ "Authored/Materials/wood.bmaterial" });
 	}
 }

@@ -85,7 +85,7 @@ There are **two producers of textures**, and they compress differently:
   per image, named after that image (`importedTextureFileNames`), which `loadKTX2` transcodes to BC7
   on every load. Small on disk, uniform, and no per-map role
   needed — only the sRGB / linear split, which it takes from the glTF's materials. These are the
-  *source* textures a material routes at; they land under `textures_src/` in an editor project.
+  *source* textures a material routes at; they land under `Derived/SourceTextures/` in an editor project.
   Naming them after the image rather than by index is what lets a re-export of the source be
   re-extracted over them without changing what any route means —
   `AssetStore::RefreshImportedTextures`, reached from `assetlib_cli migrate` and from the editor
@@ -94,7 +94,7 @@ There are **two producers of textures**, and they compress differently:
   [Asset Containers](asset_containers.md) § The textures a mesh import extracts.
 * **Material bake** (`bakeMaterial` in
   [libs/assetlib/src/material_bake.cpp](libs/assetlib/src/material_bake.cpp)) composites the material
-  editor's routed source textures into the triplet and writes each map into `<Data>/Textures/`
+  editor's routed source textures into the triplet and writes each map into `<Data>/Derived/BakedTextures/`
   **already in its block format**, so `loadKTX2` sees a non-Basis texture and uploads it with **no
   transcode**. libktx has no direct BC encoder, so `writeKTX2` UASTC-encodes and then
   `ktxTexture2_TranscodeBasis`es to the target (`Ktx2Compression::kBC1_RGB` / `kBC5_RG` / `kBC7_RGBA`).
@@ -334,9 +334,9 @@ Three different spaces are in play and they are easy to conflate. The contract, 
   bake: [libs/assetlib/include/assetlib/material_bake.h](libs/assetlib/include/assetlib/material_bake.h).
 
   * **Every texture path is relative to the project's Data root**, not to the material file: a material
-    in `Data/Materials/` names `textures_src/albedo.ktx2` and `Textures/orm_a1b2c3d4.ktx2` wherever it
-    lives. A standalone baked model directory is its own data root, which is how a `matN.bmaterial`
-    beside its extracted maps still resolves.
+    in `Data/Authored/Materials/` names `Derived/SourceTextures/albedo.ktx2` and
+    `Derived/BakedTextures/orm_a1b2c3d4.ktx2` wherever it lives. A standalone baked model directory
+    is its own data root, which is how a `matN.bmaterial` beside its extracted maps still resolves.
   * **Which representation the renderer draws from is derived, never stored.** `drawsLoose` measures the
     material against the disk: a triplet that is present and still matches the sources its routes name is
     sampled as the optimized triplet, and anything else falls back to the routes. A stored flag could
@@ -345,7 +345,7 @@ Three different spaces are in play and they are easy to conflate. The contract, 
     error.
 
     Falling back needs somewhere to fall back *to*. A material whose sources are no longer on disk —
-    a baked asset shipped without its `textures_src/`, which is the normal shape of a delivered
+    a baked asset shipped without its `Derived/SourceTextures/`, which is the normal shape of a delivered
     project — keeps its triplet, because loose would name files that are not there. That is why the
     draw question is `drawsLoose` and the rebake question is `bakeIsStale`: the same material is both
     stale and drawn from its triplet, and only the editor's stale marker should care.
@@ -360,7 +360,7 @@ Three different spaces are in play and they are easy to conflate. The contract, 
     This is what the material editor authors, and what `LoosePbrMaterial` samples directly with no bake.
   * **Optimized** — the baseColor / normal / orm triplet, plus the factors and the alpha mode/cutoff. The
     output of `bakeMaterial` (or of a glTF import), and what `PbrMaterial` consumes. A bake writes the
-    maps into `<Data>/Textures/`.
+    maps into `<Data>/Derived/BakedTextures/`.
   * Both may be populated simultaneously, and normally are: a baked material keeps its routes so it can
     be reopened, re-authored and re-baked.
   * `routeStamps` — parallel to `routes`: the size + content hash each source measured when the bake
@@ -422,7 +422,7 @@ Three different spaces are in play and they are easy to conflate. The contract, 
 
   * **Derived cache entries** (see [Asset Containers](asset_containers.md)): the sky's route is its cache
     key, the lighting joins its two sources into one. Every map is an `EnvMapRoute`: the `source`
-    under `textures_src/`, the machine-ready `baked` `.ktx2` under `Textures/`, and the `SourceStamp`
+    under `Derived/SourceTextures/`, the machine-ready `baked` `.ktx2` under `Derived/BakedTextures/`, and the `SourceStamp`
     the source measured when that bake ran. Paths are relative to the data root, as everywhere else.
     The authored presentation lives on the `.benv` document, not here.
   * **Sky and lighting are separate files because their lifetimes are.** Re-authoring a sky is
@@ -431,7 +431,7 @@ Three different spaces are in play and they are easy to conflate. The contract, 
   * **The bake compiles, it does not convolve.** `bakeSky`/`bakeEnvLighting`
     ([libs/assetlib/include/assetlib/envmap.h](libs/assetlib/include/assetlib/envmap.h)) take the
     routed float-cube intermediates and pack them RGB9E5 into content-addressed `.ktx2` under
-    `Textures/` — the shipping format, for the reasons `packRgb9e5`'s doc gives. The convolutions
+    `Derived/BakedTextures/` — the shipping format, for the reasons `packRgb9e5`'s doc gives. The convolutions
     themselves (`prefilterRadiance`, `irradianceSh`) run at import, when the sources are produced.
   * `bakeEnvLighting` also re-derives `exposure` from the irradiance source: it is a property of the
     maps, so it must move whenever they do.
@@ -445,9 +445,9 @@ Three different spaces are in play and they are easy to conflate. The contract, 
   text document naming a `.bsky` and a `.benvl` by data-root relative path, no pixels, carrying the
   presentation knobs (`skyMipLevel`, `skyRotationY`, `exposureOverride`), unknown keys preserved on
   round-trip as `.bmaterial` does. On disk the family follows the same
-  per-kind directories materials use: the `.benv` in `Environments/`, the `.bsky` in `Sky/`, the
-  `.benvl` in `EnvLighting/`, and every baked map in `Textures/` — `assets/Data/` mirrors this exactly
-  as it does for `Materials/`. Composing by path lets a sky be re-authored
+  per-kind directories materials use: the `.benv` in `Authored/Environments/`, the `.bsky` in `Derived/Sky/`, the
+  `.benvl` in `Derived/EnvLighting/`, and every baked map in `Derived/BakedTextures/` — `assets/Data/` mirrors this exactly
+  as it does for `Authored/Materials/`. Composing by path lets a sky be re-authored
   without touching the lighting minutes of convolution produced, and lets two environments share one
   sky; weather joins later through the minor version. Struct in the same `BEnv.h`; I/O:
   [libs/assetlib/include/assetlib/codecs.h](libs/assetlib/include/assetlib/codecs.h).
@@ -458,7 +458,7 @@ Three different spaces are in play and they are easy to conflate. The contract, 
     ([libs/assetlib/include/assetlib/envmap.h](libs/assetlib/include/assetlib/envmap.h))
     follows the chain and loads, per route, whatever `envMapToDraw` says is there to draw: the baked
     map while it is current, the float source it was compiled from otherwise. Same branch a material
-    takes (`drawsLoose`), and for the same reason — `Textures/` is regenerated per platform, so a
+    takes (`drawsLoose`), and for the same reason — `Derived/BakedTextures/` is regenerated per platform, so a
     fresh checkout has sources and no bakes. Only a route with neither throws.
 
 **`.bmesh`, `.bskel`, `.banim`, `.bvat`, `.bsky` and `.benvl` are the same cache-entry container**,
@@ -526,9 +526,11 @@ Five rules, each of which is a way to get this wrong:
   Only one direction is enforced. **Naming a skeleton while carrying no joints stays legal**, because
   that is how a static attachment — a scabbard, a saddle — hangs off a bone.
 
-**Where an import's output lands is decided by what it is, never by where the file was dropped.** A
-`.bmesh` goes under `Meshes/`, a rig under `Skeletons/`, its clips under `Animations/`, textures
-under `textures_src/` and materials under `Materials/`. Each category has its own folder field, which
+**Where an import's output lands is decided by what it is, never by where the file was dropped.** The
+data root splits first into `Authored/` — what a person decided — and `Derived/` — what a bake or an
+import computed; the categories sit under one or the other. A
+`.bmesh` goes under `Derived/Meshes/`, a rig under `Derived/Skeletons/`, its clips under `Derived/Animations/`, textures
+under `Derived/SourceTextures/`, the copied `.glb` and its `.bimport` under `Authored/Meshes/`, and materials under `Authored/Materials/`. Each category has its own folder field, which
 organises *inside* its category — it may name nested folders (`animals/coyote`) and can never name a
 way out of one, which `editor::JoinCategory` enforces. Every reference in a project is written against
 that layout, so an asset that could move across categories is an asset whose references stop
@@ -567,8 +569,8 @@ whose rest pose drifted still matches, because a clip replaces the pose wholesal
 hierarchy has to agree. An import with no matching rig is refused rather than left naming a file
 that does not exist.
 
-They land in `Skeletons/` and `Animations/`, one category directory each, the way the environment
-family splits across `Environments/` / `Sky/` / `EnvLighting/` — and for the same reason, sharpened:
+They land in `Derived/Skeletons/` and `Derived/Animations/`, one category directory each, the way the environment
+family splits across `Authored/Environments/` / `Derived/Sky/` / `Derived/EnvLighting/` — and for the same reason, sharpened:
 a rig outlives its clips. Re-cooking a clip set leaves the skeleton alone, and re-authoring a rest
 pose does not invalidate a clip, which is exactly what `skeletonSignature` is there to check and only
 means anything if the two can move apart. Both importers write them into those categories, because
@@ -678,7 +680,7 @@ both file and VRAM.
 ## Importing a glTF's materials
 
 An editor import offers **Import PBR materials**, and when it is taken, each of the glTF's PBR
-materials becomes one `.bmaterial` under `Materials/<subdir>/`, bound to the submeshes cut from it.
+materials becomes one `.bmaterial` under `Authored/Materials/<subdir>/`, bound to the submeshes cut from it.
 The box is disabled when the file has nothing to derive one from — `probeGltfMaterials`
 ([libs/assetlib/include/assetlib/bmesh_gltf.h](libs/assetlib/include/assetlib/bmesh_gltf.h)) reads the
 material table with a **stubbed image loader**, so the dialog can ask the question without paying for
@@ -744,7 +746,7 @@ someone bakes it.
 ## Pruning unused baked maps
 
 A re-bake orphans the map its old routing named (see [Texture standards](#texture-standards)), so
-`<Data>/Textures/` grows monotonically. `AssetStore::FindUnusedBakedTextures` / `AssetStore::DeleteUnusedBakedTextures`
+`<Data>/Derived/BakedTextures/` grows monotonically. `AssetStore::FindUnusedBakedTextures` / `AssetStore::DeleteUnusedBakedTextures`
 ([libs/assetlib/include/assetlib/texture_prune.h](libs/assetlib/include/assetlib/texture_prune.h))
 reclaim them, exposed as `assetlib_cli prune` and as the editor's **File ▸ Clean Unused Textures…**.
 The scan is separate from the delete so both surfaces can show what they are about to destroy and take
@@ -827,9 +829,9 @@ the whole rule:
 * An edge **pointing out of** it is fine, for exactly the reason deleting a mesh does not take its
   materials — what the deleted thing referenced was never the deleted thing's to take.
 
-So `Meshes/` always deletes and leaves every material, while `textures_src/kirk/` does not, because the
-materials in `Materials/kirk/` route from it. A reference into *any depth* of the directory holds it, so
-`textures_src/` is held by a material naming `textures_src/kirk/albedo.ktx2`.
+So `Derived/Meshes/` always deletes and leaves every material, while `Derived/SourceTextures/kirk/` does not, because the
+materials in `Authored/Materials/kirk/` route from it. A reference into *any depth* of the directory holds it, so
+`Derived/SourceTextures/` is held by a material naming `Derived/SourceTextures/kirk/albedo.ktx2`.
 
 `DeletionPlan::contents` lists **every file** beneath the directory, not just the ones the project
 tracks: `remove_all` does not ask what a file is for, so a `notes.txt` the user dropped in the folder
@@ -838,10 +840,10 @@ goes with it, and the count they are warned with has to say so.
 Which directories the *project* cannot spare is not a question the reference graph answers — it plans
 a deletion from what points at what, and a category with nothing in it points at nothing. That rule is
 `assetlib::Project::IsRequiredDirectory`: the data root, and the categories `Project::Create` scaffolds
-— the eleven rows of `project_layout.h`'s `c_RequiredDirectories`, `meshes_src` (the imported `.glb`
+— the eleven rows of `project_layout.h`'s `c_RequiredDirectories`, `Authored/Meshes` (the imported `.glb`
 sources and their `.bimport` documents) among them. `Project::Open` puts a missing one
 straight back, so deleting one would not even stick. A folder made *inside* a
-category, like `textures_src/kirk`, is the user's.
+category, like `Derived/SourceTextures/kirk`, is the user's.
 
 Three things the implementation must get right, each of which is a real failure and not a hypothetical:
 
@@ -923,12 +925,12 @@ lets `assetlib_cli` sit on `PATH` and read nothing relative to where it was invo
 *produces* rather than something inside one.
 
 ```bash
-# `<project>` below is a .berniniproject file; every asset argument is a key relative to its data
+# `<project>` below is a .bproj file; every asset argument is a key relative to its data
 # root, never a path on disk.
 
-# Import a source model into the project: Meshes/model.bmesh, its textures into
-# textures_src/model/, the source copy and its .bimport into meshes_src/, and -- when the
-# source carries a skin -- Skeletons/ and Animations/. Only a self-contained .glb: a .gltf's
+# Import a source model into the project: Derived/Meshes/model.bmesh, its textures into
+# Derived/SourceTextures/model/, the source copy and its .bimport into Authored/Meshes/, and -- when the
+# source carries a skin -- Derived/Skeletons/ and Derived/Animations/. Only a self-contained .glb: a .gltf's
 # sidecars cannot be one copied source, so it is refused ("export as .glb").
 # The .glb is a path on disk; everything written is a key. Import never overwrites
 assetlib_cli bake -p <project> model.glb -n model
@@ -938,35 +940,35 @@ assetlib_cli bake -p <project> soldier.glb -n soldier -r 60
 
 # Inspect the baked geometry in a viewer (meshlet-reconstructed, or --raw for the source indices).
 # The .obj is not a project asset, so -o is a path on disk
-assetlib_cli obj -p <project> Meshes/model.bmesh -o model.obj
+assetlib_cli obj -p <project> Derived/Meshes/model.bmesh -o model.obj
 
 # Derive a tangent basis in place, for a mesh imported before the importers did it themselves
-assetlib_cli tangents -p <project> Meshes/model.bmesh
+assetlib_cli tangents -p <project> Derived/Meshes/model.bmesh
 
-# Convolve an HDRI into the project's split environment set: float sources into textures_src/, a
-# baked Sky/forest.bsky + EnvLighting/forest.benvl, and an Environments/forest.benv naming the pair
+# Convolve an HDRI into the project's split environment set: float sources into Derived/SourceTextures/, a
+# baked Derived/Sky/forest.bsky + Derived/EnvLighting/forest.benvl, and an Authored/Environments/forest.benv naming the pair
 assetlib_cli envmap -p <project> forest.hdr --name forest
 
 # Print what is actually inside a container (the kind is read from the file's magic, not its name).
 # Every routed source is stat'd against the project, so a stale bake is always reported; a clip set
 # resolves its skeleton, and a .benv says whether the files it names are there
-assetlib_cli describe -p <project> Meshes/model.bmesh          # hierarchy, submeshes, layouts, materials
-assetlib_cli describe -p <project> Meshes/model.bmesh --brief  # summary + material table only
-assetlib_cli describe -p <project> Materials/skin.bmaterial    # factors, triplet, routes, bake state
-assetlib_cli describe -p <project> Sky/forest.bsky             # the radiance route and its bake state
-assetlib_cli describe -p <project> EnvLighting/forest.benvl    # exposure + the prefilter/irradiance pair
-assetlib_cli describe -p <project> Environments/forest.benv    # the .bsky and .benvl it composes
-assetlib_cli describe -p <project> Skeletons/soldier.bskel     # bones, parents, bind pose, signature
-assetlib_cli describe -p <project> Animations/soldier.banim    # clips, and the rig they bind to
+assetlib_cli describe -p <project> Derived/Meshes/model.bmesh          # hierarchy, submeshes, layouts, materials
+assetlib_cli describe -p <project> Derived/Meshes/model.bmesh --brief  # summary + material table only
+assetlib_cli describe -p <project> Authored/Materials/skin.bmaterial    # factors, triplet, routes, bake state
+assetlib_cli describe -p <project> Derived/Sky/forest.bsky             # the radiance route and its bake state
+assetlib_cli describe -p <project> Derived/EnvLighting/forest.benvl    # exposure + the prefilter/irradiance pair
+assetlib_cli describe -p <project> Authored/Environments/forest.benv    # the .bsky and .benvl it composes
+assetlib_cli describe -p <project> Derived/Skeletons/soldier.bskel     # bones, parents, bind pose, signature
+assetlib_cli describe -p <project> Derived/Animations/soldier.banim    # clips, and the rig they bind to
 
 # Cut a material down to its shippable form: the triplet, the factors and the name. The routes and
 # the node graph do not survive it, so -o is the safe way to keep the authoring copy -- and a
 # shipping tree is not a project, so that one is a path on disk
-assetlib_cli strip -p <project> Materials/skin.bmaterial -o Ship/Materials/skin.bmaterial
-assetlib_cli strip -p <project> Materials/skin.bmaterial   # rewrites in place; asks first, -y skips
+assetlib_cli strip -p <project> Authored/Materials/skin.bmaterial -o Ship/Materials/skin.bmaterial
+assetlib_cli strip -p <project> Authored/Materials/skin.bmaterial   # rewrites in place; asks first, -y skips
 
 # Show or author the exposure an environment renders at
-assetlib_cli exposure -p <project> Environments/forest.benv --set 1.0
+assetlib_cli exposure -p <project> Authored/Environments/forest.benv --set 1.0
 
 # List the baked maps no material references any more, and delete nothing
 assetlib_cli prune -p <project> --dry-run
@@ -974,8 +976,12 @@ assetlib_cli prune -p <project> --dry-run
 # Delete them. Asks first; -y skips the prompt, and a closed stdin answers no
 assetlib_cli prune -p <project>
 
+# Move an asset and rewrite every reference that followed it. A file or a directory, and the
+# hand-migration path for a project written against an older layout
+assetlib_cli rename -p <project> Derived/BakedTextures/old.ktx2 Derived/BakedTextures/new.ktx2
+
 # Why will the editor not let me delete this? -- who references it, and how
-assetlib_cli refs -p <project> Textures/basecolor_700a22db7b7ef785.ktx2
+assetlib_cli refs -p <project> Derived/BakedTextures/basecolor_700a22db7b7ef785.ktx2
 assetlib_cli refs -p <project>              # summary, and every dangling reference in the project
 ```
 

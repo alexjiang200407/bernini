@@ -8,7 +8,8 @@ namespace assetlib
 	 * tying the two together.
 	 *
 	 * The same shape as a material's channel route, and for the same reason. `source` is the artist's
-	 * file under `textures_src/`, `baked` is the machine-ready `.ktx2` under `Textures/`, and `stamp`
+	 * file under `Derived/SourceTextures/`, `baked` is the machine-ready `.ktx2` under
+	 * `Derived/BakedTextures/`, and `stamp`
 	 * is `source` as it measured when `baked` was written -- so a bake that has fallen behind is
 	 * detectable without decoding either image.
 	 */

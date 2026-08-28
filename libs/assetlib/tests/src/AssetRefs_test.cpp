@@ -35,28 +35,31 @@ TEST_CASE("loadMeshRefs reads what a full load would, without the geometry", "[a
 	// references.
 	const DataRoot root("bernini_refs_matpaths");
 
-	const std::vector<std::string> materials = { "Materials/a.bmaterial",
-		                                         "Materials/nested/b.bmaterial",
-		                                         "Materials/a.bmaterial" };
-	SaveMesh(root, "mesh.bmesh", materials, "Meshes/rig.bskel");
+	const std::vector<std::string> materials = { "Authored/Materials/a.bmaterial",
+		                                         "Authored/Materials/nested/b.bmaterial",
+		                                         "Authored/Materials/a.bmaterial" };
+	SaveMesh(root, "mesh.bmesh", materials, "Derived/Meshes/rig.bskel");
 
-	const fs::path file = root.path / "Meshes" / "mesh.bmesh";
+	const fs::path file = root.path / "Derived/Meshes" / "mesh.bmesh";
 
 	CHECK(loadMeshRefs(file).materials == LoadAt<BMesh>(file).materials);
 	CHECK(loadMeshRefs(file).materials == materials);
-	CHECK(loadMeshRefs(file).skeleton == "Meshes/rig.bskel");
+	CHECK(loadMeshRefs(file).skeleton == "Derived/Meshes/rig.bskel");
 
 	SECTION("a mesh that names neither yields none, and is not an error")
 	{
 		SaveMesh(root, "bare.bmesh", {});
-		CHECK(loadMeshRefs(root.path / "Meshes" / "bare.bmesh").materials.empty());
-		CHECK(loadMeshRefs(root.path / "Meshes" / "bare.bmesh").skeleton.empty());
+		CHECK(loadMeshRefs(root.path / "Derived/Meshes" / "bare.bmesh").materials.empty());
+		CHECK(loadMeshRefs(root.path / "Derived/Meshes" / "bare.bmesh").skeleton.empty());
 	}
 
 	SECTION("a file that is not a mesh is an error, not an empty list")
 	{
-		std::ofstream(root.path / "Meshes" / "junk.bmesh", std::ios::binary) << "not a mesh";
-		CHECK_THROWS_AS(loadMeshRefs(root.path / "Meshes" / "junk.bmesh"), std::runtime_error);
+		std::ofstream(root.path / "Derived/Meshes" / "junk.bmesh", std::ios::binary)
+			<< "not a mesh";
+		CHECK_THROWS_AS(
+			loadMeshRefs(root.path / "Derived/Meshes" / "junk.bmesh"),
+			std::runtime_error);
 	}
 }
 
@@ -66,8 +69,9 @@ TEST_CASE("A material references both the maps it baked and the sources it route
 	// what a re-bake reads. Deleting either breaks the material, so both are edges.
 	const DataRoot root("bernini_refs_material");
 
-	WriteSource(root.path / "textures_src" / "albedo.ktx2", { { 200, 0, 0, 255 } });
-	const BMaterial material = BakeAndSave(root, "mat.bmaterial", "textures_src/albedo.ktx2");
+	WriteSource(root.path / "Derived/SourceTextures" / "albedo.ktx2", { { 200, 0, 0, 255 } });
+	const BMaterial material =
+		BakeAndSave(root, "mat.bmaterial", "Derived/SourceTextures/albedo.ktx2");
 
 	const AssetRefGraph graph = root.Scan();
 
@@ -78,23 +82,23 @@ TEST_CASE("A material references both the maps it baked and the sources it route
 		const auto referrers = graph.ReferrersOf(material.pbr.baseColorTexture);
 
 		REQUIRE(referrers.size() == 1);
-		CHECK(referrers[0].referrer == "Materials/mat.bmaterial");
+		CHECK(referrers[0].referrer == "Authored/Materials/mat.bmaterial");
 		CHECK(referrers[0].kind == RefKind::kBakedMap);
 	}
 
 	SECTION("so is the source the channel routes from")
 	{
-		const auto referrers = graph.ReferrersOf("textures_src/albedo.ktx2");
+		const auto referrers = graph.ReferrersOf("Derived/SourceTextures/albedo.ktx2");
 
 		REQUIRE(referrers.size() == 1);
-		CHECK(referrers[0].referrer == "Materials/mat.bmaterial");
+		CHECK(referrers[0].referrer == "Authored/Materials/mat.bmaterial");
 		CHECK(referrers[0].kind == RefKind::kChannelRoute);
 	}
 
 	SECTION("neither can be deleted while the material names it")
 	{
 		for (const std::string& texture :
-		     { material.pbr.baseColorTexture, std::string("textures_src/albedo.ktx2") })
+		     { material.pbr.baseColorTexture, std::string("Derived/SourceTextures/albedo.ktx2") })
 		{
 			INFO("texture: " << texture);
 
@@ -111,29 +115,29 @@ TEST_CASE("A texture no material names can be deleted", "[assetrefs]")
 {
 	const DataRoot root("bernini_refs_unused");
 
-	WriteSource(root.path / "textures_src" / "orphan.ktx2", { { 0, 200, 0, 255 } });
+	WriteSource(root.path / "Derived/SourceTextures" / "orphan.ktx2", { { 0, 200, 0, 255 } });
 
 	const AssetRefGraph graph = root.Scan();
 
-	CHECK(graph.ReferrersOf("textures_src/orphan.ktx2").empty());
+	CHECK(graph.ReferrersOf("Derived/SourceTextures/orphan.ktx2").empty());
 
-	const DeletionPlan plan = planDeletion(graph, "textures_src/orphan.ktx2");
+	const DeletionPlan plan = planDeletion(graph, "Derived/SourceTextures/orphan.ktx2");
 	REQUIRE(plan.Allowed());
 	REQUIRE(plan.assetType == AssetType::kTexture);
 
 	CHECK(root.Source().DeleteAsset(plan).status == DeletionStatus::kDeleted);
-	CHECK_FALSE(fs::exists(root.path / "textures_src" / "orphan.ktx2"));
+	CHECK_FALSE(fs::exists(root.path / "Derived/SourceTextures" / "orphan.ktx2"));
 }
 
 TEST_CASE("A material a mesh names cannot be deleted", "[assetrefs]")
 {
 	const DataRoot root("bernini_refs_meshmaterial");
 
-	WriteSource(root.path / "textures_src" / "a.ktx2", { { 200, 0, 0, 255 } });
-	BakeAndSave(root, "used.bmaterial", "textures_src/a.ktx2");
-	BakeAndSave(root, "loose.bmaterial", "textures_src/a.ktx2");
+	WriteSource(root.path / "Derived/SourceTextures" / "a.ktx2", { { 200, 0, 0, 255 } });
+	BakeAndSave(root, "used.bmaterial", "Derived/SourceTextures/a.ktx2");
+	BakeAndSave(root, "loose.bmaterial", "Derived/SourceTextures/a.ktx2");
 
-	SaveMesh(root, "mesh.bmesh", { "Materials/used.bmaterial" });
+	SaveMesh(root, "mesh.bmesh", { "Authored/Materials/used.bmaterial" });
 
 	const AssetRefGraph graph = root.Scan();
 
@@ -141,18 +145,18 @@ TEST_CASE("A material a mesh names cannot be deleted", "[assetrefs]")
 
 	SECTION("the one it names is held")
 	{
-		const auto referrers = graph.ReferrersOf("Materials/used.bmaterial");
+		const auto referrers = graph.ReferrersOf("Authored/Materials/used.bmaterial");
 
 		REQUIRE(referrers.size() == 1);
-		CHECK(referrers[0].referrer == "Meshes/mesh.bmesh");
+		CHECK(referrers[0].referrer == "Derived/Meshes/mesh.bmesh");
 		CHECK(referrers[0].kind == RefKind::kSubmeshMaterial);
 
-		CHECK_FALSE(planDeletion(graph, "Materials/used.bmaterial").Allowed());
+		CHECK_FALSE(planDeletion(graph, "Authored/Materials/used.bmaterial").Allowed());
 	}
 
 	SECTION("the one no mesh names is not")
 	{
-		const DeletionPlan plan = planDeletion(graph, "Materials/loose.bmaterial");
+		const DeletionPlan plan = planDeletion(graph, "Authored/Materials/loose.bmaterial");
 
 		REQUIRE(plan.Allowed());
 		REQUIRE(plan.assetType == AssetType::kMaterial);
@@ -165,7 +169,7 @@ TEST_CASE("A skeleton cannot be deleted while a mesh skins to it", "[assetrefs][
 	// A skeleton is held by two different kinds of asset, and by neither of the edges the graph had
 	// before. Deleting one out from under a mesh leaves joint indices that resolve to nothing.
 	const DataRoot root("bernini_refs_skeleton");
-	fs::create_directories(root.path / "Animations");
+	fs::create_directories(root.path / "Derived/Animations");
 
 	Skeleton skeleton;
 	skeleton.bones.push_back(
@@ -173,38 +177,38 @@ TEST_CASE("A skeleton cannot be deleted while a mesh skins to it", "[assetrefs][
 	          glm::mat4(1.0f),
 	          c_InvalidIndex,
 	          0 });
-	StoreAt(root.path).Save(skeleton, "Animations/rig.bskel");
+	StoreAt(root.path).Save(skeleton, "Derived/Animations/rig.bskel");
 
 	AnimationSet animations;
 	animations.boneCount         = 1;
-	animations.skeleton          = "Animations/rig.bskel";
+	animations.skeleton          = "Derived/Animations/rig.bskel";
 	animations.skeletonSignature = skeletonSignature(skeleton);
-	StoreAt(root.path).Save(animations, "Animations/walk.banim");
+	StoreAt(root.path).Save(animations, "Derived/Animations/walk.banim");
 
-	SaveMesh(root, "mesh.bmesh", {}, "Animations/rig.bskel");
+	SaveMesh(root, "mesh.bmesh", {}, "Derived/Animations/rig.bskel");
 
 	const AssetRefGraph graph = root.Scan();
 	CHECK(graph.clipSetsScanned == 1);
 
-	const DeletionPlan plan = planDeletion(graph, "Animations/rig.bskel");
+	const DeletionPlan plan = planDeletion(graph, "Derived/Animations/rig.bskel");
 
 	REQUIRE_FALSE(plan.Allowed());
 	REQUIRE(plan.assetType == AssetType::kSkeleton);
 	CHECK(
-		ReferrerPaths(graph, "Animations/rig.bskel") ==
-		std::vector<std::string>{ "Animations/walk.banim", "Meshes/mesh.bmesh" });
+		ReferrerPaths(graph, "Derived/Animations/rig.bskel") ==
+		std::vector<std::string>{ "Derived/Animations/walk.banim", "Derived/Meshes/mesh.bmesh" });
 	CHECK(root.Source().DeleteAsset(plan).status == DeletionStatus::kRefused);
 
 	SECTION("and a clip set is deletable, because nothing references one")
 	{
-		const DeletionPlan clips = planDeletion(graph, "Animations/walk.banim");
+		const DeletionPlan clips = planDeletion(graph, "Derived/Animations/walk.banim");
 
 		REQUIRE(clips.Allowed());
 		REQUIRE(clips.assetType == AssetType::kAnimation);
 		CHECK(root.Source().DeleteAsset(clips).status == DeletionStatus::kDeleted);
 
 		// The skeleton it named outlives it, for the reason a mesh's materials do.
-		CHECK(fs::exists(root.path / "Animations" / "rig.bskel"));
+		CHECK(fs::exists(root.path / "Derived/Animations" / "rig.bskel"));
 	}
 }
 
@@ -215,31 +219,31 @@ TEST_CASE("A mesh is always deletable, and its materials outlive it", "[assetref
 	// for it to be blocked by.
 	const DataRoot root("bernini_refs_meshdelete");
 
-	WriteSource(root.path / "textures_src" / "a.ktx2", { { 200, 0, 0, 255 } });
-	const BMaterial material = BakeAndSave(root, "mat.bmaterial", "textures_src/a.ktx2");
+	WriteSource(root.path / "Derived/SourceTextures" / "a.ktx2", { { 200, 0, 0, 255 } });
+	const BMaterial material = BakeAndSave(root, "mat.bmaterial", "Derived/SourceTextures/a.ktx2");
 
-	SaveMesh(root, "mesh.bmesh", { "Materials/mat.bmaterial" });
+	SaveMesh(root, "mesh.bmesh", { "Authored/Materials/mat.bmaterial" });
 
 	const AssetRefGraph graph = root.Scan();
-	const DeletionPlan  plan  = planDeletion(graph, "Meshes/mesh.bmesh");
+	const DeletionPlan  plan  = planDeletion(graph, "Derived/Meshes/mesh.bmesh");
 
 	REQUIRE(plan.Allowed());
 	REQUIRE(plan.assetType == AssetType::kMesh);
 	REQUIRE(root.Source().DeleteAsset(plan).status == DeletionStatus::kDeleted);
 
-	CHECK_FALSE(fs::exists(root.path / "Meshes" / "mesh.bmesh"));
+	CHECK_FALSE(fs::exists(root.path / "Derived/Meshes" / "mesh.bmesh"));
 
 	// Nothing else was touched: not the material, and not the maps it baked.
-	CHECK(fs::exists(root.path / "Materials" / "mat.bmaterial"));
+	CHECK(fs::exists(root.path / "Authored/Materials" / "mat.bmaterial"));
 	CHECK(fs::exists(root.path / material.pbr.baseColorTexture));
-	CHECK(fs::exists(root.path / "textures_src" / "a.ktx2"));
+	CHECK(fs::exists(root.path / "Derived/SourceTextures" / "a.ktx2"));
 
 	SECTION("and the material it freed can then be deleted in its own right")
 	{
 		const AssetRefGraph after = root.Scan();
 
-		CHECK(after.ReferrersOf("Materials/mat.bmaterial").empty());
-		CHECK(planDeletion(after, "Materials/mat.bmaterial").Allowed());
+		CHECK(after.ReferrersOf("Authored/Materials/mat.bmaterial").empty());
+		CHECK(planDeletion(after, "Authored/Materials/mat.bmaterial").Allowed());
 	}
 }
 
@@ -250,20 +254,22 @@ TEST_CASE("A mesh naming one material twice is one blocker, not two", "[assetref
 	// mesh twice would be a lie about how much is holding the material.
 	const DataRoot root("bernini_refs_dedup");
 
-	WriteSource(root.path / "textures_src" / "a.ktx2", { { 200, 0, 0, 255 } });
-	BakeAndSave(root, "leaf.bmaterial", "textures_src/a.ktx2");
+	WriteSource(root.path / "Derived/SourceTextures" / "a.ktx2", { { 200, 0, 0, 255 } });
+	BakeAndSave(root, "leaf.bmaterial", "Derived/SourceTextures/a.ktx2");
 
 	SaveMesh(
 		root,
 		"tree.bmesh",
-		{ "Materials/leaf.bmaterial", "Materials/wood.bmaterial", "Materials/leaf.bmaterial" });
+		{ "Authored/Materials/leaf.bmaterial",
+	      "Authored/Materials/wood.bmaterial",
+	      "Authored/Materials/leaf.bmaterial" });
 
 	const AssetRefGraph graph = root.Scan();
 
 	CHECK(
-		ReferrerPaths(graph, "Materials/leaf.bmaterial") ==
-		std::vector<std::string>{ "Meshes/tree.bmesh" });
-	CHECK(planDeletion(graph, "Materials/leaf.bmaterial").blockers.size() == 1);
+		ReferrerPaths(graph, "Authored/Materials/leaf.bmaterial") ==
+		std::vector<std::string>{ "Derived/Meshes/tree.bmesh" });
+	CHECK(planDeletion(graph, "Authored/Materials/leaf.bmaterial").blockers.size() == 1);
 }
 
 TEST_CASE("A material routing one texture into two channels is one blocker", "[assetrefs]")
@@ -271,18 +277,20 @@ TEST_CASE("A material routing one texture into two channels is one blocker", "[a
 	// The same collapse on the other edge: an ORM map feeds roughness and metallic from one file.
 	const DataRoot root("bernini_refs_dedup_routes");
 
-	WriteSource(root.path / "textures_src" / "orm.ktx2", { { 10, 60, 90, 255 } });
+	WriteSource(root.path / "Derived/SourceTextures" / "orm.ktx2", { { 10, 60, 90, 255 } });
 
 	BMaterial material;
-	material.pbr.routes[channelIndex(PbrChannel::kRoughness)] = { "textures_src/orm.ktx2", 1 };
-	material.pbr.routes[channelIndex(PbrChannel::kMetallic)]  = { "textures_src/orm.ktx2", 2 };
-	StoreAt(root.path).Save(material, "Materials/mat.bmaterial");
+	material.pbr.routes[channelIndex(PbrChannel::kRoughness)] = { "Derived/SourceTextures/orm.ktx2",
+		                                                          1 };
+	material.pbr.routes[channelIndex(PbrChannel::kMetallic)]  = { "Derived/SourceTextures/orm.ktx2",
+		                                                          2 };
+	StoreAt(root.path).Save(material, "Authored/Materials/mat.bmaterial");
 
 	const AssetRefGraph graph = root.Scan();
 
 	CHECK(
-		ReferrerPaths(graph, "textures_src/orm.ktx2") ==
-		std::vector<std::string>{ "Materials/mat.bmaterial" });
+		ReferrerPaths(graph, "Derived/SourceTextures/orm.ktx2") ==
+		std::vector<std::string>{ "Authored/Materials/mat.bmaterial" });
 }
 
 TEST_CASE("A baked map two materials share is blocked by both", "[assetrefs]")
@@ -291,10 +299,12 @@ TEST_CASE("A baked map two materials share is blocked by both", "[assetrefs]")
 	// A user told only one of them is holding it would delete the other's map and not know.
 	const DataRoot root("bernini_refs_shared");
 
-	WriteSource(root.path / "textures_src" / "shared.ktx2", { { 10, 60, 90, 255 } });
+	WriteSource(root.path / "Derived/SourceTextures" / "shared.ktx2", { { 10, 60, 90, 255 } });
 
-	const BMaterial first  = BakeAndSave(root, "first.bmaterial", "textures_src/shared.ktx2");
-	const BMaterial second = BakeAndSave(root, "second.bmaterial", "textures_src/shared.ktx2");
+	const BMaterial first =
+		BakeAndSave(root, "first.bmaterial", "Derived/SourceTextures/shared.ktx2");
+	const BMaterial second =
+		BakeAndSave(root, "second.bmaterial", "Derived/SourceTextures/shared.ktx2");
 
 	REQUIRE(first.pbr.baseColorTexture == second.pbr.baseColorTexture);
 
@@ -302,7 +312,8 @@ TEST_CASE("A baked map two materials share is blocked by both", "[assetrefs]")
 
 	CHECK(
 		ReferrerPaths(graph, first.pbr.baseColorTexture) ==
-		std::vector<std::string>{ "Materials/first.bmaterial", "Materials/second.bmaterial" });
+		std::vector<std::string>{ "Authored/Materials/first.bmaterial",
+	                              "Authored/Materials/second.bmaterial" });
 	CHECK(planDeletion(graph, first.pbr.baseColorTexture).blockers.size() == 2);
 }
 
@@ -313,10 +324,10 @@ TEST_CASE("Deleting a material leaves its maps for the prune to sweep", "[assetr
 	// duplicate.
 	const DataRoot root("bernini_refs_compose");
 
-	WriteSource(root.path / "textures_src" / "a.ktx2", { { 200, 0, 0, 255 } });
-	const BMaterial material = BakeAndSave(root, "mat.bmaterial", "textures_src/a.ktx2");
+	WriteSource(root.path / "Derived/SourceTextures" / "a.ktx2", { { 200, 0, 0, 255 } });
+	const BMaterial material = BakeAndSave(root, "mat.bmaterial", "Derived/SourceTextures/a.ktx2");
 
-	const DeletionPlan plan = planDeletion(root.Scan(), "Materials/mat.bmaterial");
+	const DeletionPlan plan = planDeletion(root.Scan(), "Authored/Materials/mat.bmaterial");
 	REQUIRE(root.Source().DeleteAsset(plan).status == DeletionStatus::kDeleted);
 
 	CHECK(fs::exists(root.path / material.pbr.baseColorTexture));
@@ -333,12 +344,12 @@ TEST_CASE("A referrer that cannot be read stops the scan", "[assetrefs]")
 	// then let the user delete straight through them. Refusing to answer is the only safe answer.
 	const DataRoot root("bernini_refs_corrupt");
 
-	WriteSource(root.path / "textures_src" / "a.ktx2", { { 200, 0, 0, 255 } });
-	BakeAndSave(root, "good.bmaterial", "textures_src/a.ktx2");
+	WriteSource(root.path / "Derived/SourceTextures" / "a.ktx2", { { 200, 0, 0, 255 } });
+	BakeAndSave(root, "good.bmaterial", "Derived/SourceTextures/a.ktx2");
 
 	SECTION("an unreadable material")
 	{
-		std::ofstream(root.path / "Materials" / "broken.bmaterial", std::ios::binary)
+		std::ofstream(root.path / "Authored/Materials" / "broken.bmaterial", std::ios::binary)
 			<< "not a material";
 
 		CHECK_THROWS_AS(root.Scan(), std::runtime_error);
@@ -346,7 +357,8 @@ TEST_CASE("A referrer that cannot be read stops the scan", "[assetrefs]")
 
 	SECTION("an unreadable mesh")
 	{
-		std::ofstream(root.path / "Meshes" / "broken.bmesh", std::ios::binary) << "not a mesh";
+		std::ofstream(root.path / "Derived/Meshes" / "broken.bmesh", std::ios::binary)
+			<< "not a mesh";
 
 		CHECK_THROWS_AS(root.Scan(), std::runtime_error);
 	}
@@ -357,12 +369,14 @@ TEST_CASE("A referrer that cannot be read stops the scan", "[assetrefs]")
 	// what once made a whole project unopenable over one stale bake.
 	SECTION("an unreadable VAT bake is skipped, and the rest of the graph still scans")
 	{
-		std::ofstream(root.path / "Meshes" / "stale.bvat", std::ios::binary) << "not a bvat";
+		std::ofstream(root.path / "Derived/Meshes" / "stale.bvat", std::ios::binary)
+			<< "not a bvat";
 
 		AssetRefGraph graph = root.Scan();
 
-		CHECK(graph.ReferencesOf("Meshes/stale.bvat").empty());
-		CHECK(graph.IsReferenced("textures_src/a.ktx2"));  // the readable half is still there
+		CHECK(graph.ReferencesOf("Derived/Meshes/stale.bvat").empty());
+		CHECK(graph.IsReferenced(
+			"Derived/SourceTextures/a.ktx2"));  // the readable half is still there
 	}
 }
 
@@ -371,9 +385,9 @@ TEST_CASE("A referrer that cannot be read stops the scan", "[assetrefs]")
 TEST_CASE("an empty directory is still a deletable target", "[assetrefs]")
 {
 	const DataRoot root("bernini_refs_empty_dir");
-	std::filesystem::create_directories(root.path / "Materials/empty");
+	std::filesystem::create_directories(root.path / "Authored/Materials/empty");
 
-	const DeletionPlan plan = planDeletion(root.Scan(), "Materials/empty");
+	const DeletionPlan plan = planDeletion(root.Scan(), "Authored/Materials/empty");
 
 	CHECK(plan.IsDirectory());
 	CHECK(plan.contents.empty());
@@ -389,14 +403,16 @@ TEST_CASE("planDeletion refuses a file that is not an asset", "[assetrefs]")
 
 	SECTION("and assetTypeFromExtension knows the three that are, whatever their case")
 	{
-		CHECK(assetTypeFromExtension("Meshes/a.bmesh") == AssetType::kMesh);
-		CHECK(assetTypeFromExtension("Materials/a.bmaterial") == AssetType::kMaterial);
-		CHECK(assetTypeFromExtension("Textures/a.ktx2") == AssetType::kTexture);
-		CHECK(assetTypeFromExtension("Textures/A.KTX2") == AssetType::kTexture);
+		CHECK(assetTypeFromExtension("Derived/Meshes/a.bmesh") == AssetType::kMesh);
+		CHECK(assetTypeFromExtension("Authored/Materials/a.bmaterial") == AssetType::kMaterial);
+		CHECK(assetTypeFromExtension("Derived/BakedTextures/a.ktx2") == AssetType::kTexture);
+		CHECK(assetTypeFromExtension("Derived/BakedTextures/A.KTX2") == AssetType::kTexture);
 
-		CHECK(assetTypeFromExtension("game.berniniproject") == std::nullopt);
+		CHECK(assetTypeFromExtension("game.bproj") == std::nullopt);
 		CHECK(assetTypeFromExtension("notes.txt") == std::nullopt);
-		CHECK(assetTypeFromExtension("Meshes") == std::nullopt);  // a directory is not an asset
+		CHECK(
+			assetTypeFromExtension("Derived/Meshes") ==
+			std::nullopt);  // a directory is not an asset
 	}
 }
 
@@ -404,15 +420,15 @@ TEST_CASE("One asset is one key, however its path is spelled", "[assetrefs]")
 {
 	const DataRoot root("bernini_refs_normalize");
 
-	WriteSource(root.path / "textures_src" / "a.ktx2", { { 200, 0, 0, 255 } });
-	BakeAndSave(root, "mat.bmaterial", "textures_src/a.ktx2");
+	WriteSource(root.path / "Derived/SourceTextures" / "a.ktx2", { { 200, 0, 0, 255 } });
+	BakeAndSave(root, "mat.bmaterial", "Derived/SourceTextures/a.ktx2");
 
 	const AssetRefGraph graph = root.Scan();
 
 	// The path a file browser hands over need not be spelled the way the bake wrote it.
-	CHECK(graph.IsReferenced("textures_src/a.ktx2"));
-	CHECK(graph.IsReferenced("./textures_src/a.ktx2"));
-	CHECK(graph.IsReferenced("Meshes/../textures_src/a.ktx2"));
+	CHECK(graph.IsReferenced("Derived/SourceTextures/a.ktx2"));
+	CHECK(graph.IsReferenced("./Derived/SourceTextures/a.ktx2"));
+	CHECK(graph.IsReferenced("Derived/Meshes/../SourceTextures/a.ktx2"));
 }
 
 TEST_CASE("An asset deleted behind the editor's back is not fatal", "[assetrefs]")
@@ -422,19 +438,19 @@ TEST_CASE("An asset deleted behind the editor's back is not fatal", "[assetrefs]
 	// deletion in the project impossible.
 	const DataRoot root("bernini_refs_external_texture");
 
-	WriteSource(root.path / "textures_src" / "a.ktx2", { { 200, 0, 0, 255 } });
-	WriteSource(root.path / "textures_src" / "b.ktx2", { { 0, 200, 0, 255 } });
-	BakeAndSave(root, "mat.bmaterial", "textures_src/a.ktx2");
+	WriteSource(root.path / "Derived/SourceTextures" / "a.ktx2", { { 200, 0, 0, 255 } });
+	WriteSource(root.path / "Derived/SourceTextures" / "b.ktx2", { { 0, 200, 0, 255 } });
+	BakeAndSave(root, "mat.bmaterial", "Derived/SourceTextures/a.ktx2");
 
-	fs::remove(root.path / "textures_src" / "a.ktx2");
+	fs::remove(root.path / "Derived/SourceTextures" / "a.ktx2");
 
 	const AssetRefGraph graph = root.Scan();
 
 	SECTION("the dangling reference is reported")
 	{
 		REQUIRE(graph.broken.size() == 1);
-		CHECK(graph.broken.front().target == "textures_src/a.ktx2");
-		CHECK(graph.broken.front().referrer == "Materials/mat.bmaterial");
+		CHECK(graph.broken.front().target == "Derived/SourceTextures/a.ktx2");
+		CHECK(graph.broken.front().referrer == "Authored/Materials/mat.bmaterial");
 	}
 
 	SECTION("and the material's other edges are still known")
@@ -442,15 +458,15 @@ TEST_CASE("An asset deleted behind the editor's back is not fatal", "[assetrefs]
 		// The referrer parsed; only its target was missing. Its baked map is still held.
 		CHECK(graph.materialsScanned == 1);
 		CHECK_FALSE(graph.broken.empty());
-		CHECK(planDeletion(graph, "textures_src/b.ktx2").Allowed());
+		CHECK(planDeletion(graph, "Derived/SourceTextures/b.ktx2").Allowed());
 	}
 
 	SECTION("restoring the texture does not un-reference it")
 	{
 		// Blocking is keyed on the edge, not on whether the file happened to exist when we looked.
-		WriteSource(root.path / "textures_src" / "a.ktx2", { { 200, 0, 0, 255 } });
+		WriteSource(root.path / "Derived/SourceTextures" / "a.ktx2", { { 200, 0, 0, 255 } });
 
-		CHECK_FALSE(planDeletion(root.Scan(), "textures_src/a.ktx2").Allowed());
+		CHECK_FALSE(planDeletion(root.Scan(), "Derived/SourceTextures/a.ktx2").Allowed());
 	}
 }
 
@@ -460,15 +476,15 @@ TEST_CASE("A mesh deleted behind the editor's back stops blocking its materials"
 	// no longer there. Rebuilding from disk is what makes the answer true rather than merely fresh.
 	const DataRoot root("bernini_refs_external_mesh");
 
-	WriteSource(root.path / "textures_src" / "a.ktx2", { { 200, 0, 0, 255 } });
-	BakeAndSave(root, "mat.bmaterial", "textures_src/a.ktx2");
-	SaveMesh(root, "mesh.bmesh", { "Materials/mat.bmaterial" });
+	WriteSource(root.path / "Derived/SourceTextures" / "a.ktx2", { { 200, 0, 0, 255 } });
+	BakeAndSave(root, "mat.bmaterial", "Derived/SourceTextures/a.ktx2");
+	SaveMesh(root, "mesh.bmesh", { "Authored/Materials/mat.bmaterial" });
 
-	REQUIRE_FALSE(planDeletion(root.Scan(), "Materials/mat.bmaterial").Allowed());
+	REQUIRE_FALSE(planDeletion(root.Scan(), "Authored/Materials/mat.bmaterial").Allowed());
 
-	fs::remove(root.path / "Meshes" / "mesh.bmesh");
+	fs::remove(root.path / "Derived/Meshes" / "mesh.bmesh");
 
-	CHECK(planDeletion(root.Scan(), "Materials/mat.bmaterial").Allowed());
+	CHECK(planDeletion(root.Scan(), "Authored/Materials/mat.bmaterial").Allowed());
 }
 
 TEST_CASE("An asset already gone counts as deleted", "[assetrefs]")
@@ -477,12 +493,12 @@ TEST_CASE("An asset already gone counts as deleted", "[assetrefs]")
 	// asked for, not a failure to report.
 	const DataRoot root("bernini_refs_vanished");
 
-	WriteSource(root.path / "textures_src" / "a.ktx2", { { 200, 0, 0, 255 } });
+	WriteSource(root.path / "Derived/SourceTextures" / "a.ktx2", { { 200, 0, 0, 255 } });
 
-	const DeletionPlan plan = planDeletion(root.Scan(), "textures_src/a.ktx2");
+	const DeletionPlan plan = planDeletion(root.Scan(), "Derived/SourceTextures/a.ktx2");
 	REQUIRE(plan.Allowed());
 
-	fs::remove(root.path / "textures_src" / "a.ktx2");
+	fs::remove(root.path / "Derived/SourceTextures" / "a.ktx2");
 
 	CHECK(root.Source().DeleteAsset(plan).status == DeletionStatus::kDeleted);
 }
@@ -494,44 +510,47 @@ TEST_CASE("A directory is held only from outside it", "[assetrefs]")
 	const DataRoot root("bernini_refs_dir");
 
 	// A self-contained folder: its material routes from its own texture, and nothing else names either.
-	WriteSource(root.path / "textures_src" / "kirk" / "tex0.ktx2", { { 200, 0, 0, 255 } });
-	fs::create_directories(root.path / "Materials" / "kirk");
-	BakeAndSave(root, "kirk/Body.bmaterial", "textures_src/kirk/tex0.ktx2");
+	WriteSource(
+		root.path / "Derived/SourceTextures" / "kirk" / "tex0.ktx2",
+		{ { 200, 0, 0, 255 } });
+	fs::create_directories(root.path / "Authored/Materials" / "kirk");
+	BakeAndSave(root, "kirk/Body.bmaterial", "Derived/SourceTextures/kirk/tex0.ktx2");
 
 	SECTION("a folder whose references are all internal deletes, and takes them with it")
 	{
 		// Materials/kirk names a texture *outside* itself, which is an edge pointing out, not in. That
 		// texture stays -- the same rule that keeps a deleted mesh's materials.
-		const DeletionPlan plan = planDeletion(root.Scan(), "Materials/kirk");
+		const DeletionPlan plan = planDeletion(root.Scan(), "Authored/Materials/kirk");
 
 		REQUIRE(plan.Allowed());
 		REQUIRE(plan.IsDirectory());
-		CHECK(plan.contents == std::vector<std::string>{ "Materials/kirk/Body.bmaterial" });
+		CHECK(
+			plan.contents == std::vector<std::string>{ "Authored/Materials/kirk/Body.bmaterial" });
 
 		REQUIRE(root.Source().DeleteAsset(plan).status == DeletionStatus::kDeleted);
 
-		CHECK_FALSE(fs::exists(root.path / "Materials" / "kirk"));
-		CHECK(fs::exists(root.path / "textures_src" / "kirk" / "tex0.ktx2"));
+		CHECK_FALSE(fs::exists(root.path / "Authored/Materials" / "kirk"));
+		CHECK(fs::exists(root.path / "Derived/SourceTextures" / "kirk" / "tex0.ktx2"));
 	}
 
 	SECTION("a folder something outside routes from does not")
 	{
-		const DeletionPlan plan = planDeletion(root.Scan(), "textures_src/kirk");
+		const DeletionPlan plan = planDeletion(root.Scan(), "Derived/SourceTextures/kirk");
 
 		REQUIRE_FALSE(plan.Allowed());
 		REQUIRE(plan.blockers.size() == 1);
-		CHECK(plan.blockers.front().referrer == "Materials/kirk/Body.bmaterial");
+		CHECK(plan.blockers.front().referrer == "Authored/Materials/kirk/Body.bmaterial");
 		CHECK(plan.blockers.front().kind == RefKind::kChannelRoute);
 
 		CHECK(root.Source().DeleteAsset(plan).status == DeletionStatus::kRefused);
-		CHECK(fs::exists(root.path / "textures_src" / "kirk" / "tex0.ktx2"));
+		CHECK(fs::exists(root.path / "Derived/SourceTextures" / "kirk" / "tex0.ktx2"));
 	}
 
 	SECTION("and a folder holding the mesh is never held, because nothing names a mesh")
 	{
-		SaveMesh(root, "kirk.bmesh", { "Materials/kirk/Body.bmaterial" });
+		SaveMesh(root, "kirk.bmesh", { "Authored/Materials/kirk/Body.bmaterial" });
 
-		CHECK(planDeletion(root.Scan(), "Meshes").Allowed());
+		CHECK(planDeletion(root.Scan(), "Derived/Meshes").Allowed());
 	}
 }
 
@@ -541,37 +560,43 @@ TEST_CASE("Deleting a directory takes every file under it, tracked or not", "[as
 	// in the folder goes with it, and the count it is warned with has to include that.
 	const DataRoot root("bernini_refs_dir_contents");
 
-	WriteSource(root.path / "textures_src" / "props" / "tex0.ktx2", { { 200, 0, 0, 255 } });
 	WriteSource(
-		root.path / "textures_src" / "props" / "nested" / "tex1.ktx2",
+		root.path / "Derived/SourceTextures" / "props" / "tex0.ktx2",
+		{ { 200, 0, 0, 255 } });
+	WriteSource(
+		root.path / "Derived/SourceTextures" / "props" / "nested" / "tex1.ktx2",
 		{ { 0, 9, 0, 255 } });
-	std::ofstream(root.path / "textures_src" / "props" / "notes.txt") << "source: some_dcc_tool";
+	std::ofstream(root.path / "Derived/SourceTextures" / "props" / "notes.txt")
+		<< "source: some_dcc_tool";
 
-	const DeletionPlan plan = planDeletion(root.Scan(), "textures_src/props");
+	const DeletionPlan plan = planDeletion(root.Scan(), "Derived/SourceTextures/props");
 
 	REQUIRE(plan.Allowed());
 	CHECK(
-		plan.contents == std::vector<std::string>{ "textures_src/props/nested/tex1.ktx2",
-	                                               "textures_src/props/notes.txt",
-	                                               "textures_src/props/tex0.ktx2" });
+		plan.contents == std::vector<std::string>{ "Derived/SourceTextures/props/nested/tex1.ktx2",
+	                                               "Derived/SourceTextures/props/notes.txt",
+	                                               "Derived/SourceTextures/props/tex0.ktx2" });
 
 	REQUIRE(root.Source().DeleteAsset(plan).status == DeletionStatus::kDeleted);
-	CHECK_FALSE(fs::exists(root.path / "textures_src" / "props"));
+	CHECK_FALSE(fs::exists(root.path / "Derived/SourceTextures" / "props"));
 }
 
 TEST_CASE("A directory is held by a reference into any depth of it", "[assetrefs]")
 {
-	// Deleting textures_src would take kirk/tex0.ktx2 with it, so the material two levels down still
+	// Deleting Derived/SourceTextures would take kirk/tex0.ktx2 with it, so the material two levels
+	// down still
 	// holds the whole tree. A check that only looked at the folder's immediate children would miss it.
 	const DataRoot root("bernini_refs_dir_deep");
 
-	WriteSource(root.path / "textures_src" / "kirk" / "tex0.ktx2", { { 200, 0, 0, 255 } });
-	BakeAndSave(root, "mat.bmaterial", "textures_src/kirk/tex0.ktx2");
+	WriteSource(
+		root.path / "Derived/SourceTextures" / "kirk" / "tex0.ktx2",
+		{ { 200, 0, 0, 255 } });
+	BakeAndSave(root, "mat.bmaterial", "Derived/SourceTextures/kirk/tex0.ktx2");
 
-	const DeletionPlan plan = planDeletion(root.Scan(), "textures_src");
+	const DeletionPlan plan = planDeletion(root.Scan(), "Derived/SourceTextures");
 
 	REQUIRE_FALSE(plan.Allowed());
-	CHECK(plan.blockers.front().target == "textures_src/kirk/tex0.ktx2");
+	CHECK(plan.blockers.front().target == "Derived/SourceTextures/kirk/tex0.ktx2");
 }
 
 TEST_CASE("The data root itself is not something inside the data root", "[assetrefs]")
@@ -593,12 +618,12 @@ TEST_CASE("An asset held open cannot be deleted, and says so", "[assetrefs]")
 	// at a file they were told was gone.
 	const DataRoot root("bernini_refs_locked");
 
-	WriteSource(root.path / "textures_src" / "a.ktx2", { { 200, 0, 0, 255 } });
+	WriteSource(root.path / "Derived/SourceTextures" / "a.ktx2", { { 200, 0, 0, 255 } });
 
-	const DeletionPlan plan = planDeletion(root.Scan(), "textures_src/a.ktx2");
+	const DeletionPlan plan = planDeletion(root.Scan(), "Derived/SourceTextures/a.ktx2");
 	REQUIRE(plan.Allowed());
 
-	const fs::path file   = root.path / "textures_src" / "a.ktx2";
+	const fs::path file   = root.path / "Derived/SourceTextures" / "a.ktx2";
 	const HANDLE   handle = ::CreateFileW(
 		file.wstring().c_str(),
 		GENERIC_READ,
@@ -699,12 +724,12 @@ TEST_CASE("A .benv holds the sky and the lighting it composes", "[assetrefs]")
 // about", so the editor could not even ask the question.
 TEST_CASE("The environment containers are assets the project knows", "[assetrefs]")
 {
-	CHECK(assetTypeFromExtension("Environments/forest.benv") == AssetType::kEnvironment);
-	CHECK(assetTypeFromExtension("Sky/forest.bsky") == AssetType::kSky);
-	CHECK(assetTypeFromExtension("EnvLighting/forest.benvl") == AssetType::kEnvLighting);
+	CHECK(assetTypeFromExtension("Authored/Environments/forest.benv") == AssetType::kEnvironment);
+	CHECK(assetTypeFromExtension("Derived/Sky/forest.bsky") == AssetType::kSky);
+	CHECK(assetTypeFromExtension("Derived/EnvLighting/forest.benvl") == AssetType::kEnvLighting);
 
 	// The suffix decides, case-insensitively, as it does for every other kind.
-	CHECK(assetTypeFromExtension("Sky/FOREST.BSKY") == AssetType::kSky);
+	CHECK(assetTypeFromExtension("Derived/Sky/FOREST.BSKY") == AssetType::kSky);
 
 	// .benvl must not be read as a .benv with something after it.
 	CHECK(assetTypeFromExtension("a.benvl") != AssetType::kEnvironment);
@@ -717,7 +742,7 @@ TEST_CASE("An unreadable environment stops the scan rather than being skipped", 
 	const DataRoot root("bernini_refs_env_unreadable");
 	WriteEnvironment(root);
 
-	std::ofstream(root.path / "Sky" / "broken.bsky", std::ios::binary) << "not a sky";
+	std::ofstream(root.path / "Derived/Sky" / "broken.bsky", std::ios::binary) << "not a sky";
 
 	REQUIRE_THROWS_AS(root.Scan(), std::runtime_error);
 }

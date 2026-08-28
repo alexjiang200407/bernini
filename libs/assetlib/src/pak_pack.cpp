@@ -25,15 +25,15 @@ namespace assetlib
 {
 	namespace
 	{
+		// Beneath, not a component match: `Meshes` names a directory in each half, and only the
+		// authored one is a source.
 		bool
 		isAuthoringSource(const std::filesystem::path& relative)
 		{
-			for (const std::filesystem::path& part : relative)
-			{
-				if (part == c_TexturesSrcDirectoryName || part == c_MeshesSrcDirectoryName)
-					return true;
-			}
-			return false;
+			const std::string key = relative.generic_string();
+
+			return isUnder(key, c_MeshSourcesDirectoryName) ||
+			       isUnder(key, c_SourceTexturesDirectoryName);
 		}
 
 		std::string

@@ -20,9 +20,9 @@ namespace
 	Environment
 	StageProject(const DataRoot& root)
 	{
-		WriteSource(root.path / "textures_src/skin.ktx2", { { 200, 180, 160, 255 } });
-		BakeAndSave(root, "skin.bmaterial", "textures_src/skin.ktx2");
-		SaveMesh(root, "hero.bmesh", { "Materials/skin.bmaterial" });
+		WriteSource(root.path / "Derived/SourceTextures/skin.ktx2", { { 200, 180, 160, 255 } });
+		BakeAndSave(root, "skin.bmaterial", "Derived/SourceTextures/skin.ktx2");
+		SaveMesh(root, "hero.bmesh", { "Authored/Materials/skin.bmaterial" });
 
 		return WriteEnvironment(root);
 	}
@@ -92,22 +92,24 @@ TEST_CASE(
 	CHECK(packed.environmentsScanned == direct.environmentsScanned);
 
 	// The edges match, but what resolves does not, and that is the mount answering rather than the
-	// disk: `textures_src` is never packed, so inside the archive those sources are simply absent.
+	// disk: `Derived/SourceTextures` is never packed, so inside the archive those sources are
+	// simply absent.
 	// A `broken` set still read off the data root would call them present and disagree with the
 	// graph it is part of.
 	CHECK(direct.broken.empty());
 	CHECK_FALSE(packed.broken.empty());
 
-	for (const AssetRef& edge : packed.broken) CHECK(edge.target.starts_with("textures_src/"));
+	for (const AssetRef& edge : packed.broken)
+		CHECK(edge.target.starts_with("Derived/SourceTextures/"));
 }
 
 // The extension of a mount key, read off the key rather than through std::filesystem::path -- the
 // conversion STYLE.md's Paths section warns turns a key into one an archive lookup misses.
 TEST_CASE("extensionOf answers what a path would, without becoming one", "[refseam]")
 {
-	CHECK(extensionOf("Materials/skin.bmaterial") == ".bmaterial");
-	CHECK(extensionOf("Textures/SKIN.KTX2") == ".ktx2");
-	CHECK(extensionOf("Meshes/hero") == "");
+	CHECK(extensionOf("Authored/Materials/skin.bmaterial") == ".bmaterial");
+	CHECK(extensionOf("Derived/BakedTextures/SKIN.KTX2") == ".ktx2");
+	CHECK(extensionOf("Derived/Meshes/hero") == "");
 
 	// A dot in a directory name does not extend the file inside it.
 	CHECK(extensionOf("a.b/c") == "");
@@ -121,26 +123,26 @@ TEST_CASE("extensionOf answers what a path would, without becoming one", "[refse
 TEST_CASE("GetFilesUnder names a directory's contents and nothing beside it", "[refseam]")
 {
 	const DataRoot root("refseam_filesunder");
-	WriteSource(root.path / "textures_src/kirk/a.ktx2", { { 1, 2, 3, 255 } });
-	WriteSource(root.path / "textures_src/kirk2/b.ktx2", { { 4, 5, 6, 255 } });
+	WriteSource(root.path / "Derived/SourceTextures/kirk/a.ktx2", { { 1, 2, 3, 255 } });
+	WriteSource(root.path / "Derived/SourceTextures/kirk2/b.ktx2", { { 4, 5, 6, 255 } });
 
 	const AssetRefGraph graph = AssetRefGraph::Scan(AssetStore(root.path));
 
-	const std::vector<std::string> kirk = { "textures_src/kirk/a.ktx2" };
+	const std::vector<std::string> kirk = { "Derived/SourceTextures/kirk/a.ktx2" };
 
-	CHECK(graph.GetFilesUnder("textures_src/kirk") == kirk);
+	CHECK(graph.GetFilesUnder("Derived/SourceTextures/kirk") == kirk);
 
 	// A sibling whose name this one is a prefix of must not be swept in with it.
 	CHECK(
-		graph.GetFilesUnder("textures_src/kirk2") ==
-		std::vector<std::string>{ "textures_src/kirk2/b.ktx2" });
+		graph.GetFilesUnder("Derived/SourceTextures/kirk2") ==
+		std::vector<std::string>{ "Derived/SourceTextures/kirk2/b.ktx2" });
 
 	// Normalized like every other query on the graph, so a trailing separator is not a different
 	// directory -- it would otherwise build a `//` prefix and match nothing.
-	CHECK(graph.GetFilesUnder("textures_src/kirk/") == kirk);
-	CHECK(graph.GetFilesUnder("./textures_src/kirk") == kirk);
+	CHECK(graph.GetFilesUnder("Derived/SourceTextures/kirk/") == kirk);
+	CHECK(graph.GetFilesUnder("./Derived/SourceTextures/kirk") == kirk);
 
-	CHECK(graph.GetFilesUnder("textures_src/nothing").empty());
+	CHECK(graph.GetFilesUnder("Derived/SourceTextures/nothing").empty());
 }
 
 // A plan can name an asset the archive holds and the loose tree never had. Unlinking it is what
@@ -149,16 +151,16 @@ TEST_CASE("GetFilesUnder names a directory's contents and nothing beside it", "[
 TEST_CASE("deleting an asset that only the archive holds is refused", "[refseam]")
 {
 	const DataRoot root("refseam_delete_packed");
-	WriteSource(root.path / "textures_src/skin.ktx2", { { 200, 180, 160, 255 } });
-	BakeAndSave(root, "skin.bmaterial", "textures_src/skin.ktx2");
+	WriteSource(root.path / "Derived/SourceTextures/skin.ktx2", { { 200, 180, 160, 255 } });
+	BakeAndSave(root, "skin.bmaterial", "Derived/SourceTextures/skin.ktx2");
 	Pack(root);
 
-	fs::remove(root.path / "Materials/skin.bmaterial");
+	fs::remove(root.path / "Authored/Materials/skin.bmaterial");
 
 	const AssetStore store = Overlaid(root);
 
 	const AssetRefGraph graph = AssetRefGraph::Scan(store);
-	const DeletionPlan  plan  = planDeletion(graph, "Materials/skin.bmaterial");
+	const DeletionPlan  plan  = planDeletion(graph, "Authored/Materials/skin.bmaterial");
 	REQUIRE(plan.Allowed());
 
 	const DeletionResult result = store.DeleteAsset(plan);
@@ -170,23 +172,24 @@ TEST_CASE("deleting an asset that only the archive holds is refused", "[refseam]
 TEST_CASE("deleting a directory the archive alone holds is refused", "[refseam]")
 {
 	const DataRoot root("refseam_delete_packed_dir");
-	WriteSource(root.path / "textures_src/skin.ktx2", { { 1, 2, 3, 255 } });
+	WriteSource(root.path / "Derived/SourceTextures/skin.ktx2", { { 1, 2, 3, 255 } });
 
-	// Under Materials/, which packing carries -- textures_src is excluded by the exclusion rule, so
+	// Under Materials/, which packing carries -- Derived/SourceTextures is excluded by the
+	// exclusion rule, so
 	// a directory there would be absent from the archive too and prove nothing.
-	fs::create_directories(root.path / "Materials/kirk");
-	BakeAndSave(root, "kirk/Body.bmaterial", "textures_src/skin.ktx2");
+	fs::create_directories(root.path / "Authored/Materials/kirk");
+	BakeAndSave(root, "kirk/Body.bmaterial", "Derived/SourceTextures/skin.ktx2");
 	Pack(root);
 
-	fs::remove_all(root.path / "Materials/kirk");
+	fs::remove_all(root.path / "Authored/Materials/kirk");
 
 	const AssetStore store = Overlaid(root);
 
 	const AssetRefGraph graph = AssetRefGraph::Scan(store);
-	const DeletionPlan  plan  = planDeletion(graph, "Materials/kirk");
+	const DeletionPlan  plan  = planDeletion(graph, "Authored/Materials/kirk");
 
 	REQUIRE(plan.IsDirectory());
-	REQUIRE(plan.contents == std::vector<std::string>{ "Materials/kirk/Body.bmaterial" });
+	REQUIRE(plan.contents == std::vector<std::string>{ "Authored/Materials/kirk/Body.bmaterial" });
 
 	CHECK(store.DeleteAsset(plan).status == DeletionStatus::kFailed);
 }
@@ -200,7 +203,7 @@ TEST_CASE("a loose copy shadows its packed twin, and is scanned once", "[refseam
 	Pack(root);
 
 	// Re-point the mesh at a different material, loose only.
-	SaveMesh(root, "hero.bmesh", { "Materials/edited.bmaterial" });
+	SaveMesh(root, "hero.bmesh", { "Authored/Materials/edited.bmaterial" });
 
 	core::file::LayeredFileSystem mount;
 	mount.Mount(std::make_shared<core::file::LooseFileSystem>(root.path));
@@ -210,11 +213,12 @@ TEST_CASE("a loose copy shadows its packed twin, and is scanned once", "[refseam
 
 	CHECK(graph.meshesScanned == 1);
 
-	const std::vector<std::string> referrers = ReferrerPaths(graph, "Materials/edited.bmaterial");
-	CHECK(referrers == std::vector<std::string>{ "Meshes/hero.bmesh" });
+	const std::vector<std::string> referrers =
+		ReferrerPaths(graph, "Authored/Materials/edited.bmaterial");
+	CHECK(referrers == std::vector<std::string>{ "Derived/Meshes/hero.bmesh" });
 
 	// The packed edge is gone, not merely outvoted: one mesh was scanned, and it named one material.
-	CHECK(graph.ReferrersOf("Materials/skin.bmaterial").empty());
+	CHECK(graph.ReferrersOf("Authored/Materials/skin.bmaterial").empty());
 }
 
 /**
@@ -227,15 +231,15 @@ TEST_CASE("a loose copy shadows its packed twin, and is scanned once", "[refseam
 TEST_CASE("a prune over a mount union proposes only what it could delete", "[refseam][prune]")
 {
 	const DataRoot root("refseam_prune");
-	WriteSource(root.path / "textures_src/skin.ktx2", { { 200, 180, 160, 255 } });
+	WriteSource(root.path / "Derived/SourceTextures/skin.ktx2", { { 200, 180, 160, 255 } });
 	const BMaterial packedMaterial =
-		BakeAndSave(root, "packed.bmaterial", "textures_src/skin.ktx2");
+		BakeAndSave(root, "packed.bmaterial", "Derived/SourceTextures/skin.ktx2");
 	Pack(root);
 
 	SECTION("a map held alive only by a packed material is not swept")
 	{
 		// The material is deleted from the loose tree; only the archive still names its triplet.
-		fs::remove(root.path / "Materials/packed.bmaterial");
+		fs::remove(root.path / "Authored/Materials/packed.bmaterial");
 
 		const TexturePruneScan scan = Overlaid(root).FindUnusedBakedTextures();
 
@@ -250,7 +254,7 @@ TEST_CASE("a prune over a mount union proposes only what it could delete", "[ref
 	// This is what the section above would report if the mark phase read the writable layer alone.
 	SECTION("without the archive in the mount, the same map is swept")
 	{
-		fs::remove(root.path / "Materials/packed.bmaterial");
+		fs::remove(root.path / "Authored/Materials/packed.bmaterial");
 
 		const TexturePruneScan scan = AssetStore(root.path).FindUnusedBakedTextures();
 
@@ -269,12 +273,12 @@ TEST_CASE("scanning a project reads references and not geometry", "[refseam]")
 	StageProject(root);
 
 	// Bulky enough that reading it whole would be unmistakable beside the reference chunks.
-	BMesh heavy = MakeMesh({ "Materials/skin.bmaterial" });
+	BMesh heavy = MakeMesh({ "Authored/Materials/skin.bmaterial" });
 	heavy.vertexData.resize(512u * 1024u, std::byte{ 0x7 });
 	heavy.indexData.resize(128u * 1024u, std::byte{ 0x3 });
-	StoreAt(root.path).Save(heavy, "Meshes/heavy.bmesh");
+	StoreAt(root.path).Save(heavy, "Derived/Meshes/heavy.bmesh");
 
-	const uint64_t meshBytes = std::filesystem::file_size(root.path / "Meshes/heavy.bmesh");
+	const uint64_t meshBytes = std::filesystem::file_size(root.path / "Derived/Meshes/heavy.bmesh");
 	REQUIRE(meshBytes > 512u * 1024u);
 
 	const auto loose    = std::make_shared<core::file::LooseFileSystem>(root.path);

@@ -14,7 +14,7 @@ disagrees, trust the header, then fix this doc.
 ## Design Choices
 
 * **The environment family mirrors `.bmaterial`'s authoring/baked split.** A `.bsky` and a `.benvl`
-  hold `EnvMapRoute`s — a *source* under `textures_src/`, a *baked* map under `Textures/`, and the
+  hold `EnvMapRoute`s — a *source* under `Derived/SourceTextures/`, a *baked* map under `Derived/BakedTextures/`, and the
   source's size + content-hash stamp as it measured at bake time. The same shape, the same staleness question,
   and the same prune. See [Asset Standards](docs/asset_standards.md) for the material side.
 * **A `.benv` holds no pixels, and it is the family's only authored file.** It is a text document —
@@ -29,8 +29,8 @@ disagrees, trust the header, then fix this doc.
   change a person looks at immediately; re-convolving the lighting is minutes of work that the same
   change need not trigger.
 * **Sources are float, shipped maps are `RGB9E5`.** The import writes `R32G32B32A32_SFLOAT` cubes into
-  `textures_src/` as the routed sources, and the bake packs each into `E5B9G9R9_UFLOAT_PACK32` under
-  `Textures/`. 4 bytes a texel, filterable everywhere without an optional feature — WebGPU core
+  `Derived/SourceTextures/` as the routed sources, and the bake packs each into `E5B9G9R9_UFLOAT_PACK32` under
+  `Derived/BakedTextures/`. 4 bytes a texel, filterable everywhere without an optional feature — WebGPU core
   `rgb9e5ufloat`, D3D12 `R9G9B9E5_SHAREDEXP`, Metal `RGB9E5Float`. Preferred over BC6H, whose 1 byte a
   texel is unreachable on Apple GPUs; `R11G11B10` is the same size but bands in sky gradients, its blue
   channel carrying only 5 mantissa bits.
@@ -84,8 +84,8 @@ disagrees, trust the header, then fix this doc.
 
 ```mermaid
 flowchart TD
-    HDR[".hdr or float cube"] -- "ImportEnvironment" --> SRC["textures_src/*.ktx2 (float sources)"]
-    SRC -- "bakeSky / bakeEnvLighting" --> BAKED["Textures/*.ktx2 (RGB9E5, content-addressed)"]
+    HDR[".hdr or float cube"] -- "ImportEnvironment" --> SRC["Derived/SourceTextures/*.ktx2 (float sources)"]
+    SRC -- "bakeSky / bakeEnvLighting" --> BAKED["Derived/BakedTextures/*.ktx2 (RGB9E5, content-addressed)"]
 
     SRC -- "routed by" --> BSKY[".bsky"]
     SRC -- "routed by" --> BENVL[".benvl"]
@@ -144,10 +144,10 @@ flowchart TD
   copy of a material's `drawsLoose`, and follows the same rule — the baked RGB9E5 while it is on disk
   and current, the float source it was compiled from while it is not, and the baked map anyway when
   the source has gone, because a route with neither cannot be drawn at all.
-* **This is what makes a fresh checkout work.** `Data/Textures/` is git-ignored by design — baked
-  output is regenerated per platform — so a clone has every `textures_src/` source and no bake. Before
-  this branch existed, every environment in such a project failed to load while its materials drew
-  fine, because materials already had the fallback.
+* **This is what makes a fresh checkout work.** `Data/Derived/BakedTextures/` is git-ignored by
+  design — baked output is regenerated per platform — so a clone has every `Derived/SourceTextures/`
+  source and no bake. Before this branch existed, every environment in such a project failed to load
+  while its materials drew fine, because materials already had the fallback.
 * The fallback costs memory (`R32G32B32A32_SFLOAT` against RGB9E5, four times the bytes) and is not
   what ships. It is not a different *image*: the source is exactly what the bake compiled, blur and
   all.
@@ -195,7 +195,7 @@ See [examples/bgl_base/src/main.cpp](examples/bgl_base/src/main.cpp).
 From a command line, `--project` does the import and both bakes:
 
 ```bash
-assetlib_cli envmap -p Project.berniniproject forest.hdr --name forest \
+assetlib_cli envmap -p Project.bproj forest.hdr --name forest \
     --size 256 --skybox-size 512 --skybox-mips 6 --irradiance-size 128 \
     --mips 7 --samples 2048
 ```
@@ -264,9 +264,9 @@ baked map each names, and whether the bake is stale against its source; a `.benv
 composes and whether those files are there.
 
 ```bash
-assetlib_cli describe -p <project> Environments/forest.benv
-assetlib_cli describe -p <project> Sky/forest.bsky
-assetlib_cli refs -p <project> Textures/forest_sky.ktx2   # what holds a baked map alive
+assetlib_cli describe -p <project> Authored/Environments/forest.benv
+assetlib_cli describe -p <project> Derived/Sky/forest.bsky
+assetlib_cli refs -p <project> Derived/BakedTextures/forest_sky.ktx2   # what holds a baked map alive
 ```
 
 **Maintenance note.** The tables above are this document's load-bearing part, and their file links rot

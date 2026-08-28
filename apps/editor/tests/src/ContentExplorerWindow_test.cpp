@@ -202,12 +202,9 @@ TEST_CASE("The content explorer is rooted at the project's data directory", "[co
 	// project's business.
 	REQUIRE(QDir(model->filePath(Hierarchy(window)->rootIndex())) == QDir(sandbox.DataRootPath()));
 
-	// And it fills in, on a worker thread -- one row per category assetlib::Project::Create scaffolds, counted
-	// from that list rather than restated, so adding a category does not fail this on arithmetic.
-	REQUIRE(WaitFor([&] {
-		return model->rowCount(Hierarchy(window)->rootIndex()) ==
-		       static_cast<int>(assetlib::c_RequiredDirectories.size());
-	}));
+	// And it fills in, on a worker thread. Two rows: the data root holds the authored half and the
+	// derived one, and every category Project::Create scaffolds sits under one of them.
+	REQUIRE(WaitFor([&] { return model->rowCount(Hierarchy(window)->rootIndex()) == 2; }));
 }
 
 TEST_CASE("Files are dragged out of the explorer rather than moved", "[contentexplorer]")
@@ -303,7 +300,7 @@ TEST_CASE("A right-clicked asset resolves to its path under the data root", "[co
 		Case{ "Materials/kirk/Body.bmaterial", "Materials/kirk/Body.bmaterial" },
 		Case{ "Textures/basecolor_700a22db7b7ef785.ktx2",
 	          "Textures/basecolor_700a22db7b7ef785.ktx2" },
-		Case{ "textures_src/kirk/tex0.ktx2", "textures_src/kirk/tex0.ktx2" },
+		Case{ "Derived/SourceTextures/kirk/tex0.ktx2", "Derived/SourceTextures/kirk/tex0.ktx2" },
 
 		// Deleting these is not this window's business, whatever their suffix suggests.
 		Case{ "Meshes/notes.txt", "" },
@@ -332,7 +329,7 @@ TEST_CASE("Only a material is offered a Bake action", "[contentexplorer]")
 
 	CHECK_FALSE(editor::IsMaterialAsset("Meshes/tree.bmesh"));
 	CHECK_FALSE(editor::IsMaterialAsset("Textures/base.ktx2"));
-	CHECK_FALSE(editor::IsMaterialAsset("textures_src/kirk"));  // a directory
+	CHECK_FALSE(editor::IsMaterialAsset("Derived/SourceTextures/kirk"));  // a directory
 	CHECK_FALSE(editor::IsMaterialAsset(""));
 }
 
@@ -367,11 +364,13 @@ TEST_CASE("The directories the project is scaffolded with cannot be deleted", "[
 	// Every asset path in the project is written against this layout, and assetlib::Project::Open puts a missing
 	// category straight back -- so deleting one would not even stick.
 	const QString category = GENERATE(
-		QString("Meshes"),
-		QString("Textures"),
-		QString("textures_src"),
-		QString("Materials"),
-		QString("Levels"));
+		QString("Authored"),
+		QString("Authored/Materials"),
+		QString("Authored/Levels"),
+		QString("Derived"),
+		QString("Derived/Meshes"),
+		QString("Derived/BakedTextures"),
+		QString("Derived/SourceTextures"));
 
 	INFO("category: " << category);
 
@@ -391,15 +390,18 @@ TEST_CASE("A folder the user made is theirs to delete", "[contentexplorer]")
 	const Sandbox sandbox;
 
 	// The folder an import extracts a mesh's textures into, which is where a project's sources live.
-	Touch(sandbox, "textures_src/kirk/tex0.ktx2");
+	Touch(sandbox, "Derived/SourceTextures/kirk/tex0.ktx2");
 
 	QFileSystemModel model;
 	model.setRootPath(sandbox.DataRootPath());
 
-	const QModelIndex index = IndexFor(model, sandbox.DataRootPath() + "/textures_src/kirk");
+	const QModelIndex index =
+		IndexFor(model, sandbox.DataRootPath() + "/Derived/SourceTextures/kirk");
 
 	REQUIRE(model.isDir(index));
-	CHECK(editor::AssetAt(model, index, sandbox.DataRootPath()) == QString("textures_src/kirk"));
+	CHECK(
+		editor::AssetAt(model, index, sandbox.DataRootPath()) ==
+		QString("Derived/SourceTextures/kirk"));
 
 	SECTION("but a click that landed on no row at all is not")
 	{
@@ -438,7 +440,7 @@ TEST_CASE("Back has nowhere to go until the explorer has been somewhere", "[cont
 TEST_CASE("Back returns the grid to the folder shown before", "[contentexplorer]")
 {
 	const Sandbox sandbox;
-	Touch(sandbox, "textures_src/kirk/tex0.ktx2");
+	Touch(sandbox, "Derived/SourceTextures/kirk/tex0.ktx2");
 
 	ContentExplorerWindow window(nullptr, NothingOpen());
 	window.SetRootPath(sandbox.DataRootPath());
@@ -447,7 +449,7 @@ TEST_CASE("Back returns the grid to the folder shown before", "[contentexplorer]
 	auto* model = qobject_cast<QFileSystemModel*>(tree->model());
 	REQUIRE(model != nullptr);
 
-	const QString folder = sandbox.DataRootPath() + "/textures_src/kirk";
+	const QString folder = sandbox.DataRootPath() + "/Derived/SourceTextures/kirk";
 	tree->setCurrentIndex(IndexFor(*model, folder));
 
 	REQUIRE(QDir(Shown(window)) == QDir(folder));
@@ -464,8 +466,8 @@ TEST_CASE("Back returns the grid to the folder shown before", "[contentexplorer]
 TEST_CASE("Back skips a folder that has been deleted since it was shown", "[contentexplorer]")
 {
 	const Sandbox sandbox;
-	Touch(sandbox, "textures_src/kirk/tex0.ktx2");
-	Touch(sandbox, "textures_src/spock/tex0.ktx2");
+	Touch(sandbox, "Derived/SourceTextures/kirk/tex0.ktx2");
+	Touch(sandbox, "Derived/SourceTextures/spock/tex0.ktx2");
 
 	ContentExplorerWindow window(nullptr, NothingOpen());
 	window.SetRootPath(sandbox.DataRootPath());
@@ -474,13 +476,15 @@ TEST_CASE("Back skips a folder that has been deleted since it was shown", "[cont
 	auto* model = qobject_cast<QFileSystemModel*>(tree->model());
 	REQUIRE(model != nullptr);
 
-	tree->setCurrentIndex(IndexFor(*model, sandbox.DataRootPath() + "/textures_src/kirk"));
-	tree->setCurrentIndex(IndexFor(*model, sandbox.DataRootPath() + "/textures_src/spock"));
+	tree->setCurrentIndex(
+		IndexFor(*model, sandbox.DataRootPath() + "/Derived/SourceTextures/kirk"));
+	tree->setCurrentIndex(
+		IndexFor(*model, sandbox.DataRootPath() + "/Derived/SourceTextures/spock"));
 
 	// Removed from underneath the editor, as deleting it in Finder would. Nothing pumps the event
 	// loop between here and the click, so the model has not been told either -- which is the case
 	// this pins: the history is checked against the disk, not against what the model still lists.
-	fs::remove_all(sandbox.DataRoot() / "textures_src" / "kirk");
+	fs::remove_all(sandbox.DataRoot() / "Derived/SourceTextures" / "kirk");
 
 	Back(window)->click();
 
@@ -490,7 +494,7 @@ TEST_CASE("Back skips a folder that has been deleted since it was shown", "[cont
 TEST_CASE("Back moves the tree's selection with the grid", "[contentexplorer]")
 {
 	const Sandbox sandbox;
-	Touch(sandbox, "textures_src/kirk/tex0.ktx2");
+	Touch(sandbox, "Derived/SourceTextures/kirk/tex0.ktx2");
 
 	ContentExplorerWindow window(nullptr, NothingOpen());
 	window.SetRootPath(sandbox.DataRootPath());
@@ -499,7 +503,7 @@ TEST_CASE("Back moves the tree's selection with the grid", "[contentexplorer]")
 	auto* model = qobject_cast<QFileSystemModel*>(tree->model());
 	REQUIRE(model != nullptr);
 
-	const QString parent = sandbox.DataRootPath() + "/textures_src";
+	const QString parent = sandbox.DataRootPath() + "/Derived/SourceTextures";
 	tree->setCurrentIndex(IndexFor(*model, parent));
 	tree->setCurrentIndex(IndexFor(*model, parent + "/kirk"));
 

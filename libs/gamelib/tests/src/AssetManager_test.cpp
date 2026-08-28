@@ -862,7 +862,7 @@ TEST_CASE("AssetManager acquires an environment through its own data root", "[ga
 	{
 		auto raw       = assetlib::BSky();
 		raw.name       = "raw";
-		raw.sky.source = "textures_src/raw.ktx2";
+		raw.sky.source = "Derived/SourceTextures/raw.ktx2";
 		SaveAt(raw, fx.root.path / "Sky" / "raw.bsky");
 
 		auto env2 = assetlib::BEnv();

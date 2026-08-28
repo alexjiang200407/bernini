@@ -493,7 +493,7 @@ namespace assetlib
 	void
 	AssetStore::BakeMaterial(BMaterial& material, const CancelToken& cancel) const
 	{
-		BakeMaterial(material, c_TexturesDirectoryName, cancel);
+		BakeMaterial(material, c_BakedTexturesDirectoryName, cancel);
 	}
 
 	void

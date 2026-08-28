@@ -155,7 +155,7 @@ namespace editor
 		}
 
 		const std::array<assetlib::ImportedDir, 2> dirs = { {
-			{ textureDir, textureDirExisted, dataRoot / assetlib::c_TexturesSrcDirectoryName },
+			{ textureDir, textureDirExisted, dataRoot / assetlib::c_SourceTexturesDirectoryName },
 			{ materialDir, materialDirExisted, dataRoot / assetlib::c_MaterialsDirectoryName },
 		} };
 

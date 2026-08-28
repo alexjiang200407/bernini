@@ -18,16 +18,16 @@ using namespace assetlib::test;
 TEST_CASE("a loose source reads and writes the same directory", "[assetsource]")
 {
 	const DataRoot root("assetsource_loose");
-	WriteSource(root.path / "textures_src/skin.ktx2", { { 200, 180, 160, 255 } });
-	BakeAndSave(root, "skin.bmaterial", "textures_src/skin.ktx2");
+	WriteSource(root.path / "Derived/SourceTextures/skin.ktx2", { { 200, 180, 160, 255 } });
+	BakeAndSave(root, "skin.bmaterial", "Derived/SourceTextures/skin.ktx2");
 
 	const AssetStore store(root.path);
 
 	CHECK(store.GetDataRoot() == root.path);
-	CHECK(store.Exists("Materials/skin.bmaterial"));
+	CHECK(store.Exists("Authored/Materials/skin.bmaterial"));
 	CHECK(
-		store.Load<BMaterial>("Materials/skin.bmaterial").pbr.routes[0].texture ==
-		"textures_src/skin.ktx2");
+		store.Load<BMaterial>("Authored/Materials/skin.bmaterial").pbr.routes[0].texture ==
+		"Derived/SourceTextures/skin.ktx2");
 }
 
 /**
@@ -44,21 +44,24 @@ TEST_CASE("a write resolves to the data root, and cannot climb out of it", "[ass
 	const DataRoot   root("assetsource_writepath");
 	const AssetStore store(root.path);
 
-	CHECK(store.ResolveWritePath("Meshes/a.bmesh") == root.path / "Meshes/a.bmesh");
+	CHECK(store.ResolveWritePath("Derived/Meshes/a.bmesh") == root.path / "Derived/Meshes/a.bmesh");
 
 	SECTION("a key is normalized on the way, so two spellings of one asset write to one file")
 	{
 		CHECK(
-			store.ResolveWritePath("Meshes/../Meshes/a.bmesh") ==
-			store.ResolveWritePath("Meshes/a.bmesh"));
+			store.ResolveWritePath("Derived/Meshes/../Meshes/a.bmesh") ==
+			store.ResolveWritePath("Derived/Meshes/a.bmesh"));
 		CHECK(
-			store.ResolveWritePath("./Meshes/a.bmesh") == store.ResolveWritePath("Meshes/a.bmesh"));
+			store.ResolveWritePath("./Derived/Meshes/a.bmesh") ==
+			store.ResolveWritePath("Derived/Meshes/a.bmesh"));
 	}
 
 	SECTION("anything that names something outside the project is refused")
 	{
 		CHECK_THROWS_AS(store.ResolveWritePath("../escaped.bmesh"), std::runtime_error);
-		CHECK_THROWS_AS(store.ResolveWritePath("Meshes/../../escaped.bmesh"), std::runtime_error);
+		CHECK_THROWS_AS(
+			store.ResolveWritePath("Derived/Meshes/../../../escaped.bmesh"),
+			std::runtime_error);
 		CHECK_THROWS_AS(store.ResolveWritePath(".."), std::runtime_error);
 		CHECK_THROWS_AS(store.ResolveWritePath(""), std::runtime_error);
 
@@ -90,13 +93,13 @@ TEST_CASE("a source must have somewhere to read", "[assetsource]")
 TEST_CASE("reads widen to the mount while writes stay on the data root", "[assetsource]")
 {
 	const DataRoot root("assetsource_overlay");
-	WriteSource(root.path / "textures_src/skin.ktx2", { { 200, 180, 160, 255 } });
-	BakeAndSave(root, "packed.bmaterial", "textures_src/skin.ktx2");
+	WriteSource(root.path / "Derived/SourceTextures/skin.ktx2", { { 200, 180, 160, 255 } });
+	BakeAndSave(root, "packed.bmaterial", "Derived/SourceTextures/skin.ktx2");
 
 	static_cast<void>(AssetStore(root.path).Pack(PackDesc{ root.path / "Data.bpak" }));
 
 	// Gone from the writable layer, still in the archive.
-	fs::remove(root.path / "Materials/packed.bmaterial");
+	fs::remove(root.path / "Authored/Materials/packed.bmaterial");
 
 	auto mount = std::make_shared<core::file::LayeredFileSystem>();
 	mount->Mount(std::make_shared<core::file::LooseFileSystem>(root.path));
@@ -104,14 +107,14 @@ TEST_CASE("reads widen to the mount while writes stay on the data root", "[asset
 
 	const AssetStore store(root.path, mount);
 
-	CHECK(store.Exists("Materials/packed.bmaterial"));
+	CHECK(store.Exists("Authored/Materials/packed.bmaterial"));
 	CHECK(store.GetDataRoot() == root.path);
-	CHECK_FALSE(fs::exists(store.GetDataRoot() / "Materials/packed.bmaterial"));
+	CHECK_FALSE(fs::exists(store.GetDataRoot() / "Authored/Materials/packed.bmaterial"));
 
 	// And the read goes through: the archive answers what the directory no longer can.
 	CHECK(
-		store.Load<BMaterial>("Materials/packed.bmaterial").pbr.routes[0].texture ==
-		"textures_src/skin.ktx2");
+		store.Load<BMaterial>("Authored/Materials/packed.bmaterial").pbr.routes[0].texture ==
+		"Derived/SourceTextures/skin.ktx2");
 }
 
 // The methods are the same answers the free functions give, addressed through the source rather
@@ -119,33 +122,36 @@ TEST_CASE("reads widen to the mount while writes stay on the data root", "[asset
 TEST_CASE("the staleness methods answer as the free functions do", "[assetsource]")
 {
 	const DataRoot root("assetsource_staleness");
-	WriteSource(root.path / "textures_src/skin.ktx2", { { 200, 180, 160, 255 } });
-	const BMaterial material = BakeAndSave(root, "skin.bmaterial", "textures_src/skin.ktx2");
+	WriteSource(root.path / "Derived/SourceTextures/skin.ktx2", { { 200, 180, 160, 255 } });
+	const BMaterial material =
+		BakeAndSave(root, "skin.bmaterial", "Derived/SourceTextures/skin.ktx2");
 
 	const AssetStore                  store(root.path);
 	const core::file::LooseFileSystem loose(root.path);
 
 	CHECK(store.BakeIsStale(material) == bakeIsStale(material, loose));
 	CHECK(store.DrawsLoose(material) == drawsLoose(material, loose));
-	CHECK(store.StampOf("textures_src/skin.ktx2") == stampOf(loose, "textures_src/skin.ktx2"));
+	CHECK(
+		store.StampOf("Derived/SourceTextures/skin.ktx2") ==
+		stampOf(loose, "Derived/SourceTextures/skin.ktx2"));
 
 	// The env predicates forward too, and the gate says "the staleness methods" rather than three of
 	// them.
 	BSky sky;
-	sky.sky.source = "textures_src/skin.ktx2";
+	sky.sky.source = "Derived/SourceTextures/skin.ktx2";
 	CHECK(store.IsSkyBakeStale(sky) == isSkyBakeStale(sky, loose));
 	CHECK(store.EnvMapToDraw(sky.sky) == envMapToDraw(sky.sky, loose));
 
 	BEnvLighting lighting;
-	lighting.prefilter.source  = "textures_src/skin.ktx2";
-	lighting.irradiance.source = "textures_src/skin.ktx2";
+	lighting.prefilter.source  = "Derived/SourceTextures/skin.ktx2";
+	lighting.irradiance.source = "Derived/SourceTextures/skin.ktx2";
 	CHECK(store.IsEnvLightingBakeStale(lighting) == isEnvLightingBakeStale(lighting, loose));
 
 	BVat vat;
-	vat.mesh = "Meshes/gone.bmesh";
+	vat.mesh = "Derived/Meshes/gone.bmesh";
 	CHECK(store.VatIsStale(vat) == vatIsStale(vat, loose));
 
 	// An absent path is an answer, not a failure.
-	CHECK(store.StampOf("textures_src/gone.ktx2") == SourceStamp{});
-	CHECK_FALSE(store.Exists("textures_src/gone.ktx2"));
+	CHECK(store.StampOf("Derived/SourceTextures/gone.ktx2") == SourceStamp{});
+	CHECK_FALSE(store.Exists("Derived/SourceTextures/gone.ktx2"));
 }

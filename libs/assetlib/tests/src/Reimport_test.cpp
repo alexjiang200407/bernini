@@ -41,7 +41,7 @@ namespace
 		explicit ImportedProject(const char* name, const fs::path& glb) : project(MakeProject(name))
 		{
 			dataRoot = project.GetDataDirectory();
-			test::ImportUnitGroup(dataRoot, glb, "Materials/red.bmaterial", 30.0f);
+			test::ImportUnitGroup(dataRoot, glb, "Authored/Materials/red.bmaterial", 30.0f);
 			project.ReloadStore();
 		}
 
@@ -57,7 +57,7 @@ namespace
 		{
 			const fs::path root = fs::temp_directory_path() / name;
 			fs::remove_all(root);
-			return Project::Create(root / "Reimport.berniniproject", "Reimport");
+			return Project::Create(root / "Reimport.bproj", "Reimport");
 		}
 	};
 
@@ -87,7 +87,7 @@ namespace
 	{
 		const fs::path root = fs::temp_directory_path() / "bernini_reimport_tex";
 		fs::remove_all(root);
-		return Project::Create(root / "Reimport.berniniproject", "Reimport");
+		return Project::Create(root / "Reimport.bproj", "Reimport");
 	}
 
 	/** Per key, so a failure names the container that drifted rather than "three maps differ". */
@@ -124,9 +124,9 @@ TEST_CASE("A project with no derived containers is rebuilt from its sources", "[
 	// The rig, the mesh and the clips: everything the import wrote, and everything a gitignore of
 	// the derived tree would leave a fresh checkout without.
 	REQUIRE(before.size() == 3);
-	REQUIRE(before.contains("Meshes/unit.bmesh"));
-	REQUIRE(before.contains("Skeletons/unit.bskel"));
-	REQUIRE(before.contains("Animations/unit.banim"));
+	REQUIRE(before.contains("Derived/Meshes/unit.bmesh"));
+	REQUIRE(before.contains("Derived/Skeletons/unit.bskel"));
+	REQUIRE(before.contains("Derived/Animations/unit.banim"));
 
 	for (const auto& entry : before) fs::remove(project.dataRoot / entry.first);
 
@@ -140,16 +140,18 @@ TEST_CASE("A project with no derived containers is rebuilt from its sources", "[
 	// measuring one, which is the cost the bake exists to remove.
 	{
 		const AnimationSet clips = AssetCodec<AnimationSet>::Deserialize(
-			core::file::read_file_bytes((project.dataRoot / "Animations/unit.banim").string()));
+			core::file::read_file_bytes(
+				(project.dataRoot / "Derived/Animations/unit.banim").string()));
 		const BMesh mesh = AssetCodec<BMesh>::Deserialize(
-			core::file::read_file_bytes((project.dataRoot / "Meshes/unit.bmesh").string()));
+			core::file::read_file_bytes((project.dataRoot / "Derived/Meshes/unit.bmesh").string()));
 		const Skeleton rig = AssetCodec<Skeleton>::Deserialize(
-			core::file::read_file_bytes((project.dataRoot / "Skeletons/unit.bskel").string()));
+			core::file::read_file_bytes(
+				(project.dataRoot / "Derived/Skeletons/unit.bskel").string()));
 		const auto boxes = findPosedBounds(clips, mesh, rig);
 		CHECK(boxes[0].has_value());
 
 		const AnimationSet was =
-			AssetCodec<AnimationSet>::Deserialize(before.at("Animations/unit.banim"));
+			AssetCodec<AnimationSet>::Deserialize(before.at("Derived/Animations/unit.banim"));
 		CHECK(clips.posedBoxes.size() == was.posedBoxes.size());
 		CHECK(clips.clips.size() == was.clips.size());
 		CHECK(clips.skeleton == was.skeleton);
@@ -182,21 +184,21 @@ TEST_CASE("Reimport puts back only what is missing", "[reimport]")
 	const ImportedProject   project("bernini_reimport_one", source.PackGlb());
 
 	const auto before = DerivedFiles(project.dataRoot);
-	fs::remove(project.dataRoot / "Meshes/unit.bmesh");
+	fs::remove(project.dataRoot / "Derived/Meshes/unit.bmesh");
 
 	SECTION("a dry run reports it and writes nothing")
 	{
 		const ReimportReport report = project.Store().Reimport(/*dryRun*/ true);
 		REQUIRE(report.sources.size() == 1);
-		CHECK(report.sources[0].written == std::vector<std::string>{ "Meshes/unit.bmesh" });
-		CHECK_FALSE(fs::exists(project.dataRoot / "Meshes/unit.bmesh"));
+		CHECK(report.sources[0].written == std::vector<std::string>{ "Derived/Meshes/unit.bmesh" });
+		CHECK_FALSE(fs::exists(project.dataRoot / "Derived/Meshes/unit.bmesh"));
 	}
 
 	SECTION("a real run writes exactly it")
 	{
 		const ReimportReport report = project.Store().Reimport(/*dryRun*/ false);
 		REQUIRE(report.sources.size() == 1);
-		CHECK(report.sources[0].written == std::vector<std::string>{ "Meshes/unit.bmesh" });
+		CHECK(report.sources[0].written == std::vector<std::string>{ "Derived/Meshes/unit.bmesh" });
 		CheckSameFiles(DerivedFiles(project.dataRoot), before);
 	}
 }
@@ -211,11 +213,11 @@ TEST_CASE("An emptied texture folder is re-extracted", "[reimport]")
 	test::ImportUnitGroup(
 		dataRoot,
 		"assets/apples.glb",
-		"Materials/red.bmaterial",
+		"Authored/Materials/red.bmaterial",
 		30.0f,
-		"Textures/unit");
+		"Derived/BakedTextures/unit");
 
-	const fs::path folder = dataRoot / "Textures/unit";
+	const fs::path folder = dataRoot / "Derived/BakedTextures/unit";
 	REQUIRE(fs::exists(folder));
 	const auto before = DerivedFiles(dataRoot);
 
@@ -248,31 +250,39 @@ TEST_CASE("A renamed output is followed, not reproduced under its old name", "[r
 
 	SECTION("a renamed mesh")
 	{
-		store.RenameAsset(
-			planRename(AssetRefGraph::Scan(store), "Meshes/unit.bmesh", "Meshes/hero.bmesh"));
+		store.RenameAsset(planRename(
+			AssetRefGraph::Scan(store),
+			"Derived/Meshes/unit.bmesh",
+			"Derived/Meshes/hero.bmesh"));
 
 		const ImportDocument document =
-			loadImportDocument(store.GetFiles(), "meshes_src/unit.bimport");
-		CHECK(std::ranges::find(document.outputs, "Meshes/hero.bmesh") != document.outputs.end());
-		CHECK(std::ranges::find(document.outputs, "Meshes/unit.bmesh") == document.outputs.end());
+			loadImportDocument(store.GetFiles(), "Authored/Meshes/unit.bimport");
+		CHECK(
+			std::ranges::find(document.outputs, "Derived/Meshes/hero.bmesh") !=
+			document.outputs.end());
+		CHECK(
+			std::ranges::find(document.outputs, "Derived/Meshes/unit.bmesh") ==
+			document.outputs.end());
 
 		const ReimportReport report = store.Reimport(/*dryRun*/ false);
 		CHECK(report.GetWrittenCount() == 0);
-		CHECK_FALSE(fs::exists(project.dataRoot / "Meshes/unit.bmesh"));
+		CHECK_FALSE(fs::exists(project.dataRoot / "Derived/Meshes/unit.bmesh"));
 	}
 
 	SECTION("a renamed rig")
 	{
-		store.RenameAsset(
-			planRename(AssetRefGraph::Scan(store), "Skeletons/unit.bskel", "Skeletons/hero.bskel"));
+		store.RenameAsset(planRename(
+			AssetRefGraph::Scan(store),
+			"Derived/Skeletons/unit.bskel",
+			"Derived/Skeletons/hero.bskel"));
 
 		const ImportDocument document =
-			loadImportDocument(store.GetFiles(), "meshes_src/unit.bimport");
-		CHECK(document.skeleton == "Skeletons/hero.bskel");
+			loadImportDocument(store.GetFiles(), "Authored/Meshes/unit.bimport");
+		CHECK(document.skeleton == "Derived/Skeletons/hero.bskel");
 
 		const ReimportReport report = store.Reimport(/*dryRun*/ false);
 		CHECK(report.GetWrittenCount() == 0);
-		CHECK_FALSE(fs::exists(project.dataRoot / "Skeletons/unit.bskel"));
+		CHECK_FALSE(fs::exists(project.dataRoot / "Derived/Skeletons/unit.bskel"));
 	}
 }
 
@@ -286,21 +296,23 @@ TEST_CASE("Deleting a produced container is allowed, and drops the claim", "[rei
 
 	const AssetStore& store = project.Store();
 
-	const DeletionPlan plan = planDeletion(AssetRefGraph::Scan(store), "Meshes/unit.bmesh");
+	const DeletionPlan plan = planDeletion(AssetRefGraph::Scan(store), "Derived/Meshes/unit.bmesh");
 	CHECK(plan.Allowed());
 	CHECK(plan.blockers.empty());
-	REQUIRE(plan.producers == std::vector<std::string>{ "meshes_src/unit.bimport" });
+	REQUIRE(plan.producers == std::vector<std::string>{ "Authored/Meshes/unit.bimport" });
 
 	REQUIRE(store.DeleteAsset(plan).status == DeletionStatus::kDeleted);
-	CHECK_FALSE(fs::exists(project.dataRoot / "Meshes/unit.bmesh"));
+	CHECK_FALSE(fs::exists(project.dataRoot / "Derived/Meshes/unit.bmesh"));
 
-	const ImportDocument document = loadImportDocument(store.GetFiles(), "meshes_src/unit.bimport");
-	CHECK(std::ranges::find(document.outputs, "Meshes/unit.bmesh") == document.outputs.end());
+	const ImportDocument document =
+		loadImportDocument(store.GetFiles(), "Authored/Meshes/unit.bimport");
+	CHECK(
+		std::ranges::find(document.outputs, "Derived/Meshes/unit.bmesh") == document.outputs.end());
 
 	// The point of dropping it: without that, this call would reproduce what was just deleted.
 	const ReimportReport report = store.Reimport(/*dryRun*/ false);
 	CHECK(report.GetWrittenCount() == 0);
-	CHECK_FALSE(fs::exists(project.dataRoot / "Meshes/unit.bmesh"));
+	CHECK_FALSE(fs::exists(project.dataRoot / "Derived/Meshes/unit.bmesh"));
 }
 
 TEST_CASE("Deleting an import document leaves what it produced", "[reimport]")
@@ -313,9 +325,9 @@ TEST_CASE("Deleting an import document leaves what it produced", "[reimport]")
 	// A produced-by claim is not a reference, so it cannot be the thing that frees a container into
 	// the cascade either: deleting the document must not take the rig and mesh with it.
 	const DeletionPlan plan =
-		planCascadeDeletion(AssetRefGraph::Scan(store), "meshes_src/unit.bimport");
-	CHECK(std::ranges::find(plan.cascade, "Meshes/unit.bmesh") == plan.cascade.end());
-	CHECK(std::ranges::find(plan.cascade, "Skeletons/unit.bskel") == plan.cascade.end());
+		planCascadeDeletion(AssetRefGraph::Scan(store), "Authored/Meshes/unit.bimport");
+	CHECK(std::ranges::find(plan.cascade, "Derived/Meshes/unit.bmesh") == plan.cascade.end());
+	CHECK(std::ranges::find(plan.cascade, "Derived/Skeletons/unit.bskel") == plan.cascade.end());
 }
 
 // The cascade removes files the caller never named -- deleting a `.bvat` frees the mesh and clips
@@ -327,20 +339,24 @@ TEST_CASE("A cascade drops the claims on what it frees", "[reimport]")
 
 	const AssetStore& store = project.Store();
 
-	const BVat bake = store.BakeVat({ "Meshes/unit.bmesh", "Animations/unit.banim" });
-	store.Save(bake, "Meshes/unit.bvat");
-	REQUIRE(fs::exists(project.dataRoot / "Meshes/unit.bvat"));
+	const BVat bake =
+		store.BakeVat({ "Derived/Meshes/unit.bmesh", "Derived/Animations/unit.banim" });
+	store.Save(bake, "Derived/Meshes/unit.bvat");
+	REQUIRE(fs::exists(project.dataRoot / "Derived/Meshes/unit.bvat"));
 
-	const DeletionPlan plan = planCascadeDeletion(AssetRefGraph::Scan(store), "Meshes/unit.bvat");
+	const DeletionPlan plan =
+		planCascadeDeletion(AssetRefGraph::Scan(store), "Derived/Meshes/unit.bvat");
 	REQUIRE(plan.Allowed());
 
 	// The bake was the last thing holding them, so they come free with it.
-	REQUIRE(std::ranges::find(plan.cascade, "Meshes/unit.bmesh") != plan.cascade.end());
-	CHECK(std::ranges::find(plan.producers, "meshes_src/unit.bimport") != plan.producers.end());
+	REQUIRE(std::ranges::find(plan.cascade, "Derived/Meshes/unit.bmesh") != plan.cascade.end());
+	CHECK(
+		std::ranges::find(plan.producers, "Authored/Meshes/unit.bimport") != plan.producers.end());
 
 	REQUIRE(store.DeleteAsset(plan).status == DeletionStatus::kDeleted);
 
-	const ImportDocument document = loadImportDocument(store.GetFiles(), "meshes_src/unit.bimport");
+	const ImportDocument document =
+		loadImportDocument(store.GetFiles(), "Authored/Meshes/unit.bimport");
 	for (const std::string& freed : plan.cascade)
 	{
 		INFO("freed: " << freed);
@@ -349,7 +365,7 @@ TEST_CASE("A cascade drops the claims on what it frees", "[reimport]")
 
 	// Without the claims dropped, this call would rebuild everything the cascade just removed.
 	CHECK(store.Reimport(/*dryRun*/ false).GetWrittenCount() == 0);
-	CHECK_FALSE(fs::exists(project.dataRoot / "Meshes/unit.bmesh"));
+	CHECK_FALSE(fs::exists(project.dataRoot / "Derived/Meshes/unit.bmesh"));
 }
 
 TEST_CASE("What a failed source wrote before it threw is still reported", "[reimport]")
@@ -357,20 +373,20 @@ TEST_CASE("What a failed source wrote before it threw is still reported", "[reim
 	const test::SkinnedGltf source("bernini_reimport_partial_gltf");
 	const ImportedProject   project("bernini_reimport_partial", source.PackGlb());
 
-	fs::remove(project.dataRoot / "Meshes/unit.bmesh");
-	fs::remove(project.dataRoot / "Animations/unit.banim");
+	fs::remove(project.dataRoot / "Derived/Meshes/unit.bmesh");
+	fs::remove(project.dataRoot / "Derived/Animations/unit.banim");
 
 	// The mesh is written before the clips are, and a directory standing where the `.banim` goes
 	// is the cheapest way to fail only the second of them.
-	fs::create_directories(project.dataRoot / "Animations/unit.banim");
+	fs::create_directories(project.dataRoot / "Derived/Animations/unit.banim");
 
 	const ReimportReport report = project.Store().Reimport(/*dryRun*/ false);
 	REQUIRE(report.sources.size() == 1);
 	CHECK_FALSE(report.sources[0].message.empty());
 
 	// The mesh really is on disk, so a report claiming nothing was written would be wrong.
-	CHECK(report.sources[0].written == std::vector<std::string>{ "Meshes/unit.bmesh" });
-	CHECK(fs::exists(project.dataRoot / "Meshes/unit.bmesh"));
+	CHECK(report.sources[0].written == std::vector<std::string>{ "Derived/Meshes/unit.bmesh" });
+	CHECK(fs::exists(project.dataRoot / "Derived/Meshes/unit.bmesh"));
 	CHECK(report.GetFailedCount() == 1);
 }
 
@@ -379,8 +395,8 @@ TEST_CASE("A source that has gone is reported, not thrown", "[reimport]")
 	const test::SkinnedGltf source("bernini_reimport_gone_gltf");
 	const ImportedProject   project("bernini_reimport_gone", source.PackGlb());
 
-	fs::remove(project.dataRoot / "Meshes/unit.bmesh");
-	fs::remove(project.dataRoot / "meshes_src/unit.glb");
+	fs::remove(project.dataRoot / "Derived/Meshes/unit.bmesh");
+	fs::remove(project.dataRoot / "Authored/Meshes/unit.glb");
 
 	const ReimportReport report = project.Store().Reimport(/*dryRun*/ false);
 	REQUIRE(report.sources.size() == 1);

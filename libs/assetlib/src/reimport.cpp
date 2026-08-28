@@ -207,7 +207,7 @@ namespace assetlib
 	AssetStore::Reimport(bool dryRun) const
 	{
 		auto pending = std::vector<PendingSource>();
-		for (const std::string& documentKey : GetFiles().Enumerate(c_MeshesSrcDirectoryName))
+		for (const std::string& documentKey : GetFiles().Enumerate(c_MeshSourcesDirectoryName))
 		{
 			if (extensionOf(documentKey) != c_ImportDocumentExtension)
 				continue;
