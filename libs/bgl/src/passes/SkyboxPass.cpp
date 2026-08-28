@@ -4,6 +4,7 @@
 #include "device/Device.h"
 #include "fg/FrameGraph.h"
 #include "fg/PassDesc.h"
+#include "passes/BinderNames.h"
 #include "passes/DrawData.h"
 #include "pipeline/MeshletPipeline.h"
 #include "resource/FrameBuffer.h"
@@ -16,6 +17,18 @@ namespace bgl
 	namespace
 	{
 		constexpr auto c_Src = "Skybox"sv;
+
+		// Keyed on the Slang global's name as reflection reports it, so this must track the
+		// ConstantBuffer declaration in Skybox.slang.
+		constexpr auto c_Cbuffer = "gSkyboxData"sv;
+
+		// Every member Execute writes. Kept beside the code that writes them so
+		// BinderNames catches a shader rename at startup: an optional write is silent, so
+		// a stale name would otherwise resolve to nothing every frame and say nothing.
+		constexpr std::array<std::string_view, 8> c_Fields = {
+			"clipToWorld"sv, "prevWorldToClip"sv, "cubeTex"sv, "sampler"sv,
+			"exposure"sv,    "mipLevel"sv,        "jitter"sv,  "prevJitter"sv,
+		};
 	}
 
 	void
@@ -47,6 +60,8 @@ namespace bgl
 		pipelineDesc.renderState = RenderState().SetRasterState(raster).SetDepthStencilState(depth);
 
 		m_Kernel = device->CreateMeshletKernel(pipelineDesc);
+
+		BinderNames("SkyboxPass"sv, { &m_Kernel, 1 }).Check(c_Cbuffer, c_Fields);
 	}
 
 	void
@@ -90,43 +105,23 @@ namespace bgl
 		gassert(m_Kernel.pipeline.IsInitialized(), "Skybox pipeline must be initialized");
 		gassert(draw.lighting.skybox.has_value(), "SkyboxPass executed without a valid skybox");
 
-		// Keyed on the Slang global's name as reflection reports it, so this string must track
-		// the ConstantBuffer declaration in Skybox.slang.
-		if (auto found = m_Kernel.FindUniforms("gSkyboxData"))
+		if (auto found = m_Kernel.FindUniforms(c_Cbuffer))
 		{
 			auto& skybox = *found;
 
 			skybox["clipToWorld"]     = draw.lighting.skyboxClipToWorld;
 			skybox["prevWorldToClip"] = draw.lighting.skyboxPrevWorldToClip;
 
-			if (auto u = skybox["cubeTex"]; u.IsValid())
-			{
-				u = draw.lighting.skybox->skyboxCubeTex;
-			}
-			if (auto u = skybox["sampler"]; u.IsValid())
-			{
-				u = draw.samplers.linearClamp;
-			}
-			if (auto u = skybox["exposure"]; u.IsValid())
-			{
-				u = draw.lighting.SkyExposure();
-			}
-			if (auto u = skybox["mipLevel"]; u.IsValid())
-			{
-				u = static_cast<float>(draw.lighting.skybox->mipLevel);
-			}
-			if (auto u = skybox["jitter"]; u.IsValid())
-			{
-				u = draw.viewState.jitter;
-			}
-			if (auto u = skybox["prevJitter"]; u.IsValid())
-			{
-				u = draw.viewState.prevJitter;
-			}
+			skybox["cubeTex"].SetIfValid(draw.lighting.skybox->skyboxCubeTex);
+			skybox["sampler"].SetIfValid(draw.samplers.linearClamp);
+			skybox["exposure"].SetIfValid(draw.lighting.SkyExposure());
+			skybox["mipLevel"].SetIfValid(static_cast<float>(draw.lighting.skybox->mipLevel));
+			skybox["jitter"].SetIfValid(draw.viewState.jitter);
+			skybox["prevJitter"].SetIfValid(draw.viewState.prevJitter);
 		}
 		else
 		{
-			gfatal("Skybox shader is missing its 'gSkyboxData' constant buffer");
+			gfatal("Skybox shader is missing its '{}' constant buffer", c_Cbuffer);
 		}
 
 		auto gfxState   = MeshletState();

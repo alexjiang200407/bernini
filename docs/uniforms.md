@@ -67,7 +67,7 @@ doc disagrees, trust the header, then fix this doc.
 | Type | File | Role |
 |---|---|---|
 | `Uniforms` | [Uniforms.h](libs/bgl/src/uniforms/Uniforms.h) | One cbuffer's CPU mirror: byte buffer + reflected tree, `operator[]` by name or index, `HasMember` / `GetLayout` to introspect. Move-only. |
-| `Uniforms::Accessor` / `ConstAccessor` | [Uniforms.h](libs/bgl/src/uniforms/Uniforms.h) | Cursor into the mirror: chainable `operator[]`, typed read/assign, `IsValid()`. Non-owning. |
+| `Uniforms::Accessor` / `ConstAccessor` | [Uniforms.h](libs/bgl/src/uniforms/Uniforms.h) | Cursor into the mirror: chainable `operator[]`, typed read/assign, `SetIfValid` for an optional write, `IsValid()`. Non-owning. |
 | `FindUnknownMembers` | [Uniforms.h](libs/bgl/src/uniforms/Uniforms.h) | Resolves a binder's names against a whole PSO family, returning those no variant declares. Call once at family construction. |
 | `ComputeKernel` / `MeshletKernel` | [ComputeKernel.h](libs/bgl/src/pipeline/ComputeKernel.h), [MeshletKernel.h](libs/bgl/src/pipeline/MeshletKernel.h) | Pipeline + per-cbuffer `Uniforms` map. `MeshletKernel` also offers `FindUniforms` / `ContainsUniforms`. |
 
@@ -136,8 +136,14 @@ time, so it is the suballocation the GPU reads and the mirror may be rewritten i
   *either* "this variant does not declare the field" (routine, the reason the design exists) *or*
   "the name is wrong" (a bug). `FindUnknownMembers` separates them: absent from *every* variant is a
   typo, absent from some is a per-variant field. @pre resolve a binder's names once when the family
-  is built — `ForwardPass::Init` is the worked example — and keep `IsValid()` for the per-draw guard.
-  A binder never validated this way has no protection against a shader rename.
+  is built — `BinderNames` ([BinderNames.h](libs/bgl/src/passes/BinderNames.h)) is what every pass
+  checks its cbuffers through from `Init`, and `SetIfValid` is the per-draw guard it licenses. A
+  binder never validated this way has no protection against a shader rename.
+
+* **Which of the two write spellings a member uses is the statement of whether it is optional.**
+  `accessor.SetIfValid(v)` writes a member a variant may not declare and does nothing when it is
+  absent; a bare `accessor = v` writes one that must exist and throws when it does not. There is no
+  third form, so a member with no guard is a claim that every variant declares it.
 
 * **`Uniforms::operator[]` on an empty or `Reset()` instance dereferences a null root.** @pre
   `IsEmpty()` is false; the accessor's null checks run after the first `Traverse`.

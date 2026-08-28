@@ -7,6 +7,7 @@
 #include "fg/FrameGraph.h"
 #include "fg/PassDesc.h"
 #include "idl/BaseTable.h"
+#include "passes/BinderNames.h"
 #include "passes/DrawData.h"
 #include "passes/SceneBindings.h"
 #include "pipeline/MeshletPipeline.h"
@@ -49,7 +50,7 @@ namespace bgl
 		} };
 
 		// Every member BindKernel and its callers name, beyond the buffer tables above. Kept beside
-		// the code that writes them so ValidateBinderNames catches a shader rename at startup: a
+		// the code that writes them so BinderNames catches a shader rename at startup: a
 		// stale name is indistinguishable from an absent one once binding reaches IsValid().
 		constexpr std::array<std::string_view, 6> c_ViewDataFields = {
 			"viewProj"sv, "prevViewProj"sv, "jitter"sv, "prevJitter"sv, "time"sv, "prevTime"sv,
@@ -255,56 +256,6 @@ namespace bgl
 		}
 	}
 
-	namespace
-	{
-		template <typename Bindings>
-		std::vector<std::string_view>
-		UniformKeys(const Bindings& bindings)
-		{
-			std::vector<std::string_view> keys;
-			keys.reserve(bindings.size());
-			for (const auto& binding : bindings)
-			{
-				keys.push_back(binding.uniformKey);
-			}
-			return keys;
-		}
-
-		// Resolves the names the binder uses against the whole PSO family at once. A variant that
-		// omits a member is ordinary and stays silent; a name *no* variant declares is a typo or a
-		// shader rename, which binding cannot report because IsValid() reads the same either way.
-		void
-		ValidateBinderNames(
-			std::span<const MeshletKernel>    kernels,
-			std::string_view                  cbuffer,
-			std::span<const std::string_view> names)
-		{
-			std::vector<const Uniforms*> variants;
-			variants.reserve(kernels.size());
-
-			for (const MeshletKernel& kernel : kernels)
-			{
-				const auto found = kernel.uniforms.find(cbuffer);
-				variants.push_back(found != kernel.uniforms.end() ? &found->second : nullptr);
-			}
-
-			const std::vector<std::string_view> unknown = FindUnknownMembers(variants, names);
-			if (unknown.empty())
-			{
-				return;
-			}
-
-			std::string joined;
-			for (const std::string_view name : unknown)
-			{
-				joined += joined.empty() ? "" : ", ";
-				joined += name;
-			}
-
-			gfatal("ForwardPass binds '{}' members no forward PSO declares: {}", cbuffer, joined);
-		}
-	}
-
 	void
 	ForwardPass::Init(IDevice* device)
 	{
@@ -315,14 +266,15 @@ namespace bgl
 			m_Kernels[pso] = BuildForwardKernel(device, c_Psos[pso]);
 		}
 
-		ValidateBinderNames(m_Kernels, "forwardData"sv, UniformKeys(c_ForwardDataBuffers));
-		ValidateBinderNames(m_Kernels, "expansionData"sv, UniformKeys(c_ExpansionBuffers));
-		ValidateBinderNames(m_Kernels, "expansionData"sv, c_ExpansionDataFields);
-		ValidateBinderNames(m_Kernels, "viewData"sv, c_ViewDataFields);
-		ValidateBinderNames(m_Kernels, "materialData"sv, UniformKeys(c_MaterialBuffers));
-		ValidateBinderNames(m_Kernels, "materialData"sv, c_MaterialDataFields);
-		ValidateBinderNames(m_Kernels, "vatData"sv, UniformKeys(c_VatBuffers));
-		ValidateBinderNames(m_Kernels, "skinnedData"sv, UniformKeys(c_SkinnedBuffers));
+		BinderNames("ForwardPass"sv, m_Kernels)
+			.Check("forwardData"sv, GetUniformKeys(c_ForwardDataBuffers))
+			.Check("expansionData"sv, GetUniformKeys(c_ExpansionBuffers))
+			.Check("expansionData"sv, c_ExpansionDataFields)
+			.Check("viewData"sv, c_ViewDataFields)
+			.Check("materialData"sv, GetUniformKeys(c_MaterialBuffers))
+			.Check("materialData"sv, c_MaterialDataFields)
+			.Check("vatData"sv, GetUniformKeys(c_VatBuffers))
+			.Check("skinnedData"sv, GetUniformKeys(c_SkinnedBuffers));
 	}
 
 	void
@@ -431,53 +383,21 @@ namespace bgl
 			auto& matData = *foundMatData;
 			for (const auto& binding : c_MaterialBuffers)
 			{
-				const auto handle  = resources.GetBuffer(binding.graphName);
-				auto       uniform = matData[binding.uniformKey];
-				if (uniform.IsValid())
-				{
-					uniform = handle;
-				}
+				matData[binding.uniformKey].SetIfValid(resources.GetBuffer(binding.graphName));
 			}
 
-			if (auto anisoUniform = matData["anisoLinearWrapSampler"]; anisoUniform.IsValid())
-			{
-				anisoUniform = draw.samplers.anisoLinearWrap;
-			}
-			if (auto clampUniform = matData["linearClampSampler"]; clampUniform.IsValid())
-			{
-				clampUniform = draw.samplers.linearClamp;
-			}
+			matData["anisoLinearWrapSampler"].SetIfValid(draw.samplers.anisoLinearWrap);
+			matData["linearClampSampler"].SetIfValid(draw.samplers.linearClamp);
 
 			// IBL maps: assigning the RHI TextureHandle writes a descriptor handle into the
 			// shader-side handle's sole member.
-			if (auto u = matData["irradianceMap"]; u.IsValid())
-			{
-				u = draw.lighting.env.irradiance;
-			}
-			if (auto u = matData["prefilterMap"]; u.IsValid())
-			{
-				u = draw.lighting.env.prefilter;
-			}
-			if (auto u = matData["brdfLUT"]; u.IsValid())
-			{
-				u = draw.lighting.env.brdfLut;
-			}
-			if (auto u = matData["cameraPos"]; u.IsValid())
-			{
-				u = draw.viewState.cameraPos;
-			}
-			if (auto u = matData["exposure"]; u.IsValid())
-			{
-				u = draw.lighting.exposure;
-			}
-			if (auto u = matData["envRotation"]; u.IsValid())
-			{
-				u = draw.lighting.envRotation;
-			}
-			if (auto u = matData["alphaHashSeed"]; u.IsValid())
-			{
-				u = draw.viewState.alphaHashSeed;
-			}
+			matData["irradianceMap"].SetIfValid(draw.lighting.env.irradiance);
+			matData["prefilterMap"].SetIfValid(draw.lighting.env.prefilter);
+			matData["brdfLUT"].SetIfValid(draw.lighting.env.brdfLut);
+			matData["cameraPos"].SetIfValid(draw.viewState.cameraPos);
+			matData["exposure"].SetIfValid(draw.lighting.exposure);
+			matData["envRotation"].SetIfValid(draw.lighting.envRotation);
+			matData["alphaHashSeed"].SetIfValid(draw.viewState.alphaHashSeed);
 		}
 	}
 

@@ -4,6 +4,7 @@
 #include "device/Device.h"
 #include "fg/FrameGraph.h"
 #include "fg/PassDesc.h"
+#include "passes/BinderNames.h"
 #include "pipeline/MeshletPipeline.h"
 #include "resource/FrameBuffer.h"
 #include "resource/Shader.h"
@@ -14,6 +15,21 @@ namespace bgl
 	namespace
 	{
 		constexpr auto c_Src = "TaaResolve"sv;
+
+		// Keyed on the Slang global's name as reflection reports it, so this must track the
+		// ConstantBuffer declaration in TaaResolve.slang.
+		constexpr auto c_Cbuffer = "gTaaResolveData"sv;
+
+		// Every member Execute writes. Kept beside the code that writes them so
+		// BinderNames catches a shader rename at startup: an optional write is silent, so
+		// a stale name would otherwise resolve to nothing every frame and say nothing.
+		constexpr std::array<std::string_view, 19> c_Fields = {
+			"sceneColor"sv,      "history"sv,        "motionVectors"sv, "depth"sv,
+			"clipToView"sv,      "viewToPrevClip"sv, "jitter"sv,        "cameraPairValid"sv,
+			"pointSampler"sv,    "linearSampler"sv,  "renderSize"sv,    "renderTexelSize"sv,
+			"outputTexelSize"sv, "jitterTexels"sv,   "subPixels"sv,     "resampling"sv,
+			"sampleWeightK"sv,   "blendWeight"sv,    "historyValid"sv,
+		};
 
 		// How much of the resolved pixel is this frame. The trade is flicker against how fast the
 		// antialiasing converges, *not* against ghosting -- the neighbourhood clamp is what bounds a
@@ -49,6 +65,8 @@ namespace bgl
 		pipelineDesc.renderState = RenderState().SetRasterState(raster).SetDepthStencilState(depth);
 
 		m_Kernel = device->CreateMeshletKernel(pipelineDesc);
+
+		BinderNames("TaaResolvePass"sv, { &m_Kernel, 1 }).Check(c_Cbuffer, c_Fields);
 	}
 
 	void
@@ -118,92 +136,34 @@ namespace bgl
 			std::max(1.0f, std::ceil(outputSize.x / args.renderSize.x)),
 			std::max(1.0f, std::ceil(outputSize.y / args.renderSize.y)));
 
-		// Keyed on the Slang global's name as reflection reports it, so this string must track the
-		// ConstantBuffer declaration in TaaResolve.slang.
-		if (auto found = m_Kernel.FindUniforms("gTaaResolveData"))
+		if (auto found = m_Kernel.FindUniforms(c_Cbuffer))
 		{
 			auto& taa = *found;
 
-			if (auto u = taa["sceneColor"]; u.IsValid())
-			{
-				u = args.sceneColor;
-			}
-			if (auto u = taa["history"]; u.IsValid())
-			{
-				u = args.prevHistory;
-			}
-			if (auto u = taa["motionVectors"]; u.IsValid())
-			{
-				u = args.motionVectors;
-			}
-			if (auto u = taa["depth"]; u.IsValid())
-			{
-				u = args.depth;
-			}
-			if (auto u = taa["clipToView"]; u.IsValid())
-			{
-				u = args.clipToView;
-			}
-			if (auto u = taa["viewToPrevClip"]; u.IsValid())
-			{
-				u = args.viewToPrevClip;
-			}
-			if (auto u = taa["jitter"]; u.IsValid())
-			{
-				u = args.jitter;
-			}
-			if (auto u = taa["cameraPairValid"]; u.IsValid())
-			{
-				u = args.cameraPairValid ? 1.0f : 0.0f;
-			}
-			if (auto u = taa["pointSampler"]; u.IsValid())
-			{
-				u = args.pointSampler;
-			}
-			if (auto u = taa["linearSampler"]; u.IsValid())
-			{
-				u = args.linearSampler;
-			}
-			if (auto u = taa["renderSize"]; u.IsValid())
-			{
-				u = args.renderSize;
-			}
-			if (auto u = taa["renderTexelSize"]; u.IsValid())
-			{
-				u = 1.0f / args.renderSize;
-			}
-			if (auto u = taa["outputTexelSize"]; u.IsValid())
-			{
-				u = 1.0f / outputSize;
-			}
-			if (auto u = taa["jitterTexels"]; u.IsValid())
-			{
-				u = jitterTexels;
-			}
-			if (auto u = taa["subPixels"]; u.IsValid())
-			{
-				u = subPixels;
-			}
-			if (auto u = taa["resampling"]; u.IsValid())
-			{
-				u = args.renderSize == outputSize ? 0.0f : 1.0f;
-			}
-			if (auto u = taa["sampleWeightK"]; u.IsValid())
-			{
-				u = 1.0f / (2.0f * args.reconstructionWidth * args.reconstructionWidth);
-			}
-			if (auto u = taa["blendWeight"]; u.IsValid())
-			{
-				u = c_BlendWeight;
-			}
-			if (auto u = taa["historyValid"]; u.IsValid())
-			{
-				u = args.historyValid ? 1.0f : 0.0f;
-			}
+			taa["sceneColor"].SetIfValid(args.sceneColor);
+			taa["history"].SetIfValid(args.prevHistory);
+			taa["motionVectors"].SetIfValid(args.motionVectors);
+			taa["depth"].SetIfValid(args.depth);
+			taa["clipToView"].SetIfValid(args.clipToView);
+			taa["viewToPrevClip"].SetIfValid(args.viewToPrevClip);
+			taa["jitter"].SetIfValid(args.jitter);
+			taa["cameraPairValid"].SetIfValid(args.cameraPairValid ? 1.0f : 0.0f);
+			taa["pointSampler"].SetIfValid(args.pointSampler);
+			taa["linearSampler"].SetIfValid(args.linearSampler);
+			taa["renderSize"].SetIfValid(args.renderSize);
+			taa["renderTexelSize"].SetIfValid(1.0f / args.renderSize);
+			taa["outputTexelSize"].SetIfValid(1.0f / outputSize);
+			taa["jitterTexels"].SetIfValid(jitterTexels);
+			taa["subPixels"].SetIfValid(subPixels);
+			taa["resampling"].SetIfValid(args.renderSize == outputSize ? 0.0f : 1.0f);
+			taa["sampleWeightK"].SetIfValid(
+				1.0f / (2.0f * args.reconstructionWidth * args.reconstructionWidth));
+			taa["blendWeight"].SetIfValid(c_BlendWeight);
+			taa["historyValid"].SetIfValid(args.historyValid ? 1.0f : 0.0f);
 		}
 		else
 		{
-			gfatal("TaaResolve shader is missing its 'gTaaResolveData' constant buffer");
+			gfatal("TaaResolve shader is missing its '{}' constant buffer", c_Cbuffer);
 		}
 
 		auto gfxState   = MeshletState();

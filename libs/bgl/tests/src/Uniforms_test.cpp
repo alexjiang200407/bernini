@@ -331,3 +331,83 @@ TEST_CASE("A member no PSO variant declares is reported", "[uniforms]")
 		CHECK(bgl::FindUnknownMembers(withAbsent, c_Names).empty());
 	}
 }
+
+TEST_CASE("An optional uniform write skips a member the shader does not declare", "[uniforms]")
+{
+	auto opts                     = bgl::GraphicsOptions();
+	opts.shaderCacheDir           = bgl::test::ShaderCacheDir();
+	opts.enableDebugLayer         = true;
+	opts.enableGPUValidationLayer = bgl::test::GpuValidationEnabled();
+
+	auto gfx = bgl::CreateGraphics(opts);
+	REQUIRE(gfx != nullptr);
+
+	auto device = gfx->As<bgl::GraphicsBase>()->GetDevice();
+	REQUIRE(device != nullptr);
+
+	SECTION("a value")
+	{
+		auto pipelineDesc = bgl::MeshletPipelineDesc();
+		pipelineDesc.SetMeshShader(device->CreateShader("MSUniformReflectionScalar"));
+
+		auto pipeline = device->CreateMeshletPipeline(pipelineDesc);
+		auto uniforms = device->CreateUniforms(pipeline, "gUniforms");
+
+		uniforms["f1"].SetIfValid(1.5f);
+		CHECK(static_cast<float>(uniforms["f1"]) == 1.5f);
+
+		// The whole mirror, so a stray write anywhere in it is caught and not just one at f1's
+		// offset -- an absent member resolves to offset 0, which is where f1 lives.
+		const auto before = std::vector<std::byte>(
+			static_cast<const std::byte*>(uniforms.Data()),
+			static_cast<const std::byte*>(uniforms.Data()) + uniforms.GetSize());
+
+		CHECK_NOTHROW(uniforms["noSuchMember"].SetIfValid(2.5f));
+
+		const auto after = std::vector<std::byte>(
+			static_cast<const std::byte*>(uniforms.Data()),
+			static_cast<const std::byte*>(uniforms.Data()) + uniforms.GetSize());
+
+		CHECK(before == after);
+
+		// The unguarded form is what a required member uses, and the same name still throws
+		// there -- SetIfValid opts out of that, it does not replace it.
+		CHECK_THROWS(uniforms["noSuchMember"] = 2.5f);
+	}
+
+	SECTION("a resource handle")
+	{
+		auto kernel = device->CreateComputeKernel(
+			bgl::ComputePipelineDesc()
+				.SetShader(device->CreateShader("CSComputeBufferTest"))
+				.SetDebugName("CSComputeBufferTest"));
+
+		auto handle          = bgl::BufferHandle();
+		handle.bindlessIndex = 7u;
+
+		kernel["gUniforms"]["outBuffer"].SetIfValid(handle);
+		CHECK(static_cast<glm::uvec2>(kernel["gUniforms"]["outBuffer"]).x == 7u);
+
+		CHECK_NOTHROW(kernel["gUniforms"]["noSuchBuffer"].SetIfValid(handle));
+		CHECK_THROWS(kernel["gUniforms"]["noSuchBuffer"] = handle);
+	}
+}
+
+TEST_CASE("Only a type the mirror can store is assignable to an accessor", "[uniforms]")
+{
+	STATIC_REQUIRE(bgl::UniformAssignable<float>);
+	STATIC_REQUIRE(bgl::UniformAssignable<glm::mat4>);
+	STATIC_REQUIRE(bgl::UniformAssignable<bgl::DescriptorHandle>);
+
+	// The four handle types reach their own assignment operators rather than the value one.
+	STATIC_REQUIRE(bgl::UniformAssignable<bgl::BufferHandle>);
+	STATIC_REQUIRE(bgl::UniformAssignable<bgl::SrvHandle>);
+	STATIC_REQUIRE(bgl::UniformAssignable<bgl::SamplerHandle>);
+	STATIC_REQUIRE(bgl::UniformAssignable<bgl::TextureAssetHandle>);
+
+	// A double is the near miss that matters: writing 1.0 where the cbuffer declares a float is a
+	// compile error, not a silent kNone that would throw only once the pass ran.
+	STATIC_REQUIRE_FALSE(bgl::UniformAssignable<double>);
+	STATIC_REQUIRE_FALSE(bgl::UniformAssignable<int64_t>);
+	STATIC_REQUIRE_FALSE(bgl::UniformAssignable<std::string>);
+}
