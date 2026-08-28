@@ -60,6 +60,45 @@ not obvious from a signature. The headers linked below are the source of truth.
   the CPU reference this path is measured against. Weights are otherwise used as authored: the
   importer already normalises anything summing to nonzero.
 
+* **A clip is grounded at cook, not planted at runtime.** Clips arrive authored against whatever
+  ground plane their author worked on, and the two are not the same plane: of the 29 rigs measured,
+  28 float or sink — the test Coyote's `Run` cycle never comes within 0.151 of `y = 0` and peaks at
+  0.536 (a third of its own height), `Sleep` sits 0.073 under it, `Walk` crosses it by ±0.06 each
+  step. So `groundClips` moves each clip's root track down by the lowest point its mesh reaches over
+  that clip, and records the move in `AnimationClip::groundOffset`.
+
+  **Foot IK is not this, and would not fix it.** The standard solve — Unreal's Foot Placement node —
+  preserves a foot's *animated* height relative to the character root and adds the ground height
+  beneath it, so on a flat plane at the root's own height it corrects by exactly zero. Grounding the
+  clip is the prior fix, and it is the one every rig needs; planting feet on uneven ground is the
+  separate feature above it, and the roadmap's line for it still stands.
+
+  **The reference is the lowest frame, not the first.** Unity's clip importer offers *Root Transform
+  Position (Y) → Based Upon (at Start)*, which references the feet at frame 0; the Coyote's `Run`
+  opens at 0.494, near the top of its gait, so that rule would drive its planted phase 0.343
+  underground. The whole-clip minimum is right on 13 of its 15 clips. Where it is wrong it is wrong
+  because the lowest frame is not the standing one — `Land`'s is its impact compression — and the
+  `.bimport`'s `clipFloor` names the height that clip actually stands at instead. Every cook honours
+  it — the import writers read the document standing beside the source, and a re-import carries it
+  forward rather than overwriting it with what the cook measured. It is a *parameter*, so editing one
+  also stales the `.banim` and the next load re-cooks it; `assetlib_cli describe` prints the floor
+  each clip was authored at, which is where the number to author comes from.
+
+  **The measurement is exact but does not walk every frame.** A bone's box from `posedBounds` holds
+  every vertex weighted to it, and a skinned position is a convex combination of its bones' products,
+  so the lowest box corner at a frame is a lower bound on that frame's lowest vertex. The cheap sweep
+  orders the frames, the most promising is skinned exactly, and every frame bounded at or above that
+  result is dropped unvisited — which leaves a handful of frames per clip actually skinned, where the
+  whole walk is `exactPosedBounds`' six minutes on `cha800_00`.
+
+  **Grounding runs before every box**, because a box measured first describes a rig standing
+  somewhere the runtime never draws it — and that box culls the geom as well as framing the editor's
+  camera. It runs against *every* mesh in the project that skins to the rig, not one: a body and a
+  separately imported cloak are drawn as one character and stand on whichever hangs lower, and a
+  clips-only import brings no mesh of its own at all. Each of those is read through `LoadRegenMesh`
+  rather than off disk, because the re-export that stales a clip set stales its geometry with it, and
+  a floor measured off the stale copy moves the rig to where that geometry used to be.
+
 * **A rigid mesh parented to a joint is bound to that bone at import, not attached at runtime.**
   Eyes, teeth and props are modelled as unskinned meshes parented to a bone, which in every DCC means
   "follow it" — and full weight on that bone is exactly what that means in skinning terms. So the
@@ -82,6 +121,7 @@ not obvious from a signature. The headers linked below are the source of truth.
 | Stage | Where | What it does |
 |---|---|---|
 | Import | `assetlib` | A glTF skin becomes `.bskel` (bones, topologically sorted, with inverse binds, each composed from its whole node chain) + `.banim` (clips resampled to a fixed rate, frame-major local TRS, composed the same way) + `joints0`/`weights0` on the `.bmesh` |
+| Ground | [`assetlib::groundClips`](libs/assetlib/include/assetlib/skinning.h) | At cook, before the boxes: each clip is moved so the lowest point its mesh reaches over it rests on `y = 0` |
 | Bound | [`assetlib::bakePosedBounds`](libs/assetlib/include/assetlib/skinning.h) | At import: sweeps a box per bone through every frame (`posedBounds`) and stores the result in the `.banim`, keyed by a content signature so a re-authored source falls back to measuring |
 | Acquire | [`AssetManager::AcquireSkinnedMesh`](libs/gamelib/include/gamelib/AssetManager.h) | Reads the three containers, checks the clip set still matches its rig, culls by the baked box (`findPosedBounds`) — measuring only a pairing the cook never saw — uploads |
 | Upload | [`IScene::AddSkinnedMeshGeom`](libs/bgl/include/bgl/IScene.h) | Bones, clip table and sample pool become scene buffers; per-bone depth is derived here |

@@ -15,12 +15,46 @@ namespace assetlib
 	{
 		constexpr std::string_view c_ParametersKey       = "parameters";
 		constexpr std::string_view c_SampleRateKey       = "sampleRate";
+		constexpr std::string_view c_ClipFloorKey        = "clipFloor";
 		constexpr std::string_view c_BindingsKey         = "bindings";
 		constexpr std::string_view c_TextureDirKey       = "textureDir";
 		constexpr std::string_view c_TextureStampSizeKey = "textureStampSize";
 		constexpr std::string_view c_TextureStampHashKey = "textureStampHash";
 		constexpr std::string_view c_SkeletonKey         = "skeleton";
 		constexpr std::string_view c_OutputsKey          = "outputs";
+
+		/**
+		 * The document's parameter subtree, built once: this is both what Serialize writes and what
+		 * parametersHashOf hashes, so a parameter cannot reach the file without reaching the key.
+		 *
+		 * An empty `clipFloor` is omitted rather than written, so a document that authors none
+		 * hashes exactly as it did before the key existed -- writing `{}` would stale every
+		 * container in every project.
+		 */
+		nlohmann::json
+		parametersObject(const ImportDocument& document)
+		{
+			auto parameters = doc::parseObject(
+				document.extraParametersJson,
+				"import document: extraParametersJson");
+			parameters[c_SampleRateKey] = doc::plainFloat(document.sampleRate);
+
+			if (!document.clipFloors.empty())
+			{
+				auto grounds = nlohmann::json::object();
+				for (const ClipFloor& ground : document.clipFloors)
+				{
+					core::throw_runtime_error_if(
+						grounds.contains(ground.clip),
+						"import document: two authored grounds for clip '{}'",
+						ground.clip);
+					grounds[ground.clip] = doc::plainFloat(ground.floor);
+				}
+				parameters[std::string(c_ClipFloorKey)] = std::move(grounds);
+			}
+
+			return parameters;
+		}
 
 		std::string
 		swapExtension(std::string_view key, std::string_view extension)
@@ -71,6 +105,22 @@ namespace assetlib
 					c_SampleRateKey);
 				document.sampleRate = rate->get<float>();
 				it->erase(rate);
+			}
+			if (auto grounds = it->find(c_ClipFloorKey); grounds != it->end())
+			{
+				core::throw_runtime_error_if(
+					!grounds->is_object(),
+					"import document: '{}' is not an object",
+					c_ClipFloorKey);
+				for (const auto& [clip, floor] : grounds->items())
+				{
+					core::throw_runtime_error_if(
+						!floor.is_number(),
+						"import document: the authored ground for clip '{}' is not a number",
+						clip);
+					document.clipFloors.push_back({ clip, floor.get<float>() });
+				}
+				it->erase(grounds);
 			}
 			document.extraParametersJson = it->dump();
 			json.erase(it);
@@ -155,10 +205,7 @@ namespace assetlib
 	{
 		auto json = doc::parseObject(document.extraJson, "import document: extraJson");
 
-		auto parameters =
-			doc::parseObject(document.extraParametersJson, "import document: extraParametersJson");
-		parameters[c_SampleRateKey] = doc::plainFloat(document.sampleRate);
-		json[c_ParametersKey]       = std::move(parameters);
+		json[c_ParametersKey] = parametersObject(document);
 
 		// Omitted rather than written empty, so a document for an import that extracted no textures
 		// is byte-identical to one written before this key existed.
@@ -204,10 +251,7 @@ namespace assetlib
 	uint64_t
 	parametersHashOf(const ImportDocument& document)
 	{
-		auto parameters =
-			doc::parseObject(document.extraParametersJson, "import document: extraParametersJson");
-		parameters[c_SampleRateKey] = doc::plainFloat(document.sampleRate);
-		return core::hash_string(parameters.dump(), core::hash_seed());
+		return core::hash_string(parametersObject(document).dump(), core::hash_seed());
 	}
 
 	ImportDocument

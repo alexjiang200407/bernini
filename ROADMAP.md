@@ -95,6 +95,10 @@ and portability.
     - [x] Resample all clips to a fixed rate (30/60 Hz) — no runtime keyframe search.
     - [x] Topological bone sort (`parent(i) < i`), validated at import.
     - [x] Per-clip metadata: authored locomotion speed, root motion delta, duration, loop flag.
+    - [x] Ground each clip at cook — 28 of the 29 source rigs are authored against their own ground
+      plane rather than ours, so `groundClips` moves each clip's root track to rest its mesh on
+      `y = 0` and the `.bimport`'s `clipFloor` overrules it where the lowest frame is not the
+      standing one. See [docs/skinning.md](docs/skinning.md).
     - [x] Skeleton signature, so a clip set cooked against a since-reordered rig is caught.
     - [ ] Rotation compression (quat+translation, 16 B/bone) — matters most for permanent corpse palettes.
     - [ ] Per-LOD bone sets as index-compatible subsets, with weight-collapse validation.
@@ -129,7 +133,8 @@ and portability.
       into the textures (the coyote's box spans ~130 units), but ground contact and locomotion are
       the game's: decide whether `bakeVat` subtracts root translation and hands it to gameplay as
       metadata (`AnimationClip::rootMotion` / `locomotionSpeed` already exist), or authoring simply
-      requires in-place, ground-relative clips.
+      requires in-place, ground-relative clips. The *vertical* half of this is settled — clips are
+      grounded at cook, above — and what remains is the horizontal travel.
     - [ ] **Bake transitions instead of blending them** — explicit idle→run, run→attack clips as
       ordinary states with exit-time transitions; better motion than a crossfade and memory is cheap.
     - [ ] Per-vertex masked layering for upper/lower split — a baked vertex mask, near-free, and the
@@ -166,6 +171,8 @@ and portability.
   - [ ] Skinned-tier only
     - [ ] Look-at (head + torso, angle clamp) — best liveliness cue per instruction, unavailable on VAT.
     - [ ] Heightfield foot planting — analytic two-bone IK; breaks on stairs and siege structures.
+      Note it is not what grounds a clip: the standard solve preserves a foot's animated height
+      relative to the root, so on flat ground it corrects by zero. That is cook-side, and done.
   - [ ] Hit reaction
     - [ ] Directional reaction clips (4–8 variants) — works on both tiers, so build this first.
     - [ ] Additive flinch over locomotion (skinned tier) — one fixed slot, upper-body mask, ~0.3 s envelope.
