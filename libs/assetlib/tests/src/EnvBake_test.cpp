@@ -329,11 +329,11 @@ TEST_CASE(
 
 	BSky sky = RoutedSky(root);
 	StoreAt(root.path).BakeSky(sky);
-	StoreAt(root.path).Save(sky, "forest.bsky");
+	StoreAt(root.path).Save(sky, KeyIn(c_SkyDirectoryName, "forest.bsky"));
 
 	BEnvLighting lighting = RoutedLighting(root);
 	StoreAt(root.path).BakeEnvLighting(lighting);
-	StoreAt(root.path).Save(lighting, "forest.benvl");
+	StoreAt(root.path).Save(lighting, KeyIn(c_EnvLightingDirectoryName, "forest.benvl"));
 
 	// An env-named map nothing references: the leftover of a re-bake whose route changed.
 	const auto orphan = root.path / "Derived/BakedTextures" / "sky_00000000deadbeef.ktx2";

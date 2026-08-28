@@ -110,9 +110,9 @@ namespace
 	};
 
 	// The three an acquire reads, and the only three this task caches.
-	const auto c_Containers = std::array<std::string, 3>{
-		{ "Meshes/rig.bmesh", "Skeletons/rig.bskel", "Animations/rig.banim" }
-	};
+	const auto c_Containers = std::array<std::string, 3>{ { "Derived/Meshes/rig.bmesh",
+		                                                    "Derived/Skeletons/rig.bskel",
+		                                                    "Derived/Animations/rig.banim" } };
 }
 
 TEST_CASE("Acquiring a rig twice reads its containers once", "[skinned][acquire][cache]")
@@ -129,7 +129,8 @@ TEST_CASE("Acquiring a rig twice reads its containers once", "[skinned][acquire]
 	auto files  = std::make_shared<CountingFiles>(root.path);
 	auto assets = game::AssetManager(scene, assetlib::AssetStore(root.path, files));
 
-	const auto first = assets.AcquireSkinnedMesh("Meshes/rig.bmesh", "Animations/rig.banim");
+	const auto first =
+		assets.AcquireSkinnedMesh("Derived/Meshes/rig.bmesh", "Derived/Animations/rig.banim");
 	REQUIRE(first.geom.IsValid());
 
 	// Four apiece: the stamp, the key the load's staleness refusal peeks at, the key the seam
@@ -150,7 +151,8 @@ TEST_CASE("Acquiring a rig twice reads its containers once", "[skinned][acquire]
 			statsBefore[path] = files->StatsOf(path);
 		}
 
-		const auto second = assets.AcquireSkinnedMesh("Meshes/rig.bmesh", "Animations/rig.banim");
+		const auto second =
+			assets.AcquireSkinnedMesh("Derived/Meshes/rig.bmesh", "Derived/Animations/rig.banim");
 		REQUIRE(second.geom.IsValid());
 
 		// Two apiece, not three: both staleness questions are asked again -- the stamp, and whether
@@ -172,12 +174,13 @@ TEST_CASE("Acquiring a rig twice reads its containers once", "[skinned][acquire]
 	{
 		assets.ReleaseGeom(first.geom);
 
-		auto clips = LoadAt<assetlib::AnimationSet>(root.path / "Animations/rig.banim");
+		auto clips = LoadAt<assetlib::AnimationSet>(root.path / "Derived/Animations/rig.banim");
 		REQUIRE(clips.clips.size() == 1);
 		clips.clips[0].nameOffset = clips.stringPool.add("renamed");
-		SaveAt(clips, root.path / "Animations/rig.banim");
+		SaveAt(clips, root.path / "Derived/Animations/rig.banim");
 
-		const auto second = assets.AcquireSkinnedMesh("Meshes/rig.bmesh", "Animations/rig.banim");
+		const auto second =
+			assets.AcquireSkinnedMesh("Derived/Meshes/rig.bmesh", "Derived/Animations/rig.banim");
 		REQUIRE(second.clips.size() == 1);
 		CHECK(second.clips[0].name == "renamed");
 	}
@@ -194,7 +197,9 @@ TEST_CASE("Acquiring a rig twice reads its containers once", "[skinned][acquire]
 		const auto failureOf = [&] {
 			try
 			{
-				(void)other.AcquireSkinnedMesh("Meshes/rig.bmesh", "Animations/rig.banim");
+				(void)other.AcquireSkinnedMesh(
+					"Derived/Meshes/rig.bmesh",
+					"Derived/Animations/rig.banim");
 			}
 			catch (const std::exception& e)
 			{
@@ -211,7 +216,9 @@ TEST_CASE("Acquiring a rig twice reads its containers once", "[skinned][acquire]
 		const std::string firstFailure  = failureOf();
 		const std::string secondFailure = failureOf();
 
-		CHECK_THAT(firstFailure, Catch::Matchers::ContainsSubstring("Animations/rig.banim"));
+		CHECK_THAT(
+			firstFailure,
+			Catch::Matchers::ContainsSubstring("Derived/Animations/rig.banim"));
 		CHECK(secondFailure == firstFailure);
 	}
 }

@@ -50,7 +50,7 @@ namespace
 TEST_CASE("A skinned entry plays as VAT; a static one stands beside it", "[animation]")
 {
 	auto mesh     = assetlib::BMesh();
-	mesh.skeleton = "Skeletons/rig.bskel";
+	mesh.skeleton = "Derived/Skeletons/rig.bskel";
 
 	const uint32_t skinned = AddEntry(mesh, true);
 	const uint32_t prop    = AddEntry(mesh, false);
@@ -122,19 +122,19 @@ TEST_CASE("Only a material a bake would change is offered for baking", "[animati
 	REQUIRE(dir.isValid());
 
 	const auto root = std::filesystem::path(dir.path().toStdWString());
-	std::filesystem::create_directories(root / "Materials");
+	std::filesystem::create_directories(root / "Authored/Materials");
 
 	const auto write = [&root](const char* name, const assetlib::BMaterial& material) {
-		SaveAt(material, root / "Materials" / name);
-		return std::string("Materials/") + name;
+		SaveAt(material, root / "Authored/Materials" / name);
+		return std::string("Authored/Materials/") + name;
 	};
 
 	// Routed at a texture that exists, never baked -- what a fresh import leaves behind, and the
 	// state that refuses a skinned preview.
-	std::ofstream(root / "Materials" / "albedo.ktx2", std::ios::binary).put('\0');
+	std::ofstream(root / "Authored/Materials" / "albedo.ktx2", std::ios::binary).put('\0');
 
 	auto unbaked                  = assetlib::BMaterial();
-	unbaked.pbr.routes[0].texture = "Materials/albedo.ktx2";
+	unbaked.pbr.routes[0].texture = "Authored/Materials/albedo.ktx2";
 	const std::string unbakedPath = write("unbaked.bmaterial", unbaked);
 
 	// Nothing routed: a bake has nothing to composite, so offering one would be a dead end.
@@ -150,7 +150,9 @@ TEST_CASE("Only a material a bake would change is offered for baking", "[animati
 	// A material that will not load is skipped rather than thrown on: a refusal is already being
 	// reported, and a second failure on top of it helps nobody.
 	CHECK(
-		editor::BakeableMaterials(store, std::vector<std::string>{ "Materials/gone.bmaterial" })
+		editor::BakeableMaterials(
+			store,
+			std::vector<std::string>{ "Authored/Materials/gone.bmaterial" })
 			.empty());
 }
 

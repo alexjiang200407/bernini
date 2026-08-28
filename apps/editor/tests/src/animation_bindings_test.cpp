@@ -83,29 +83,34 @@ namespace
 TEST_CASE("Bindings collect every .banim naming the mesh's rig, sorted", "[animation]")
 {
 	const TempRoot root;
-	WriteMesh(root.Data(), "Meshes/unit.bmesh", "Skeletons/rig.bskel");
-	WriteBanim(root.Data(), "Animations/walk.banim", "Skeletons/rig.bskel");
-	WriteBanim(root.Data(), "Animations/locomotion/run.banim", "Skeletons/rig.bskel");
-	WriteBanim(root.Data(), "Animations/other.banim", "Skeletons/other.bskel");
+	WriteMesh(root.Data(), "Derived/Meshes/unit.bmesh", "Derived/Skeletons/rig.bskel");
+	WriteBanim(root.Data(), "Derived/Animations/walk.banim", "Derived/Skeletons/rig.bskel");
+	WriteBanim(
+		root.Data(),
+		"Derived/Animations/locomotion/run.banim",
+		"Derived/Skeletons/rig.bskel");
+	WriteBanim(root.Data(), "Derived/Animations/other.banim", "Derived/Skeletons/other.bskel");
 
-	const auto bindings = editor::ResolveAnimationBindings(root.Data(), "Skeletons/rig.bskel");
+	const auto bindings =
+		editor::ResolveAnimationBindings(root.Data(), "Derived/Skeletons/rig.bskel");
 
-	CHECK(bindings.skeleton == "Skeletons/rig.bskel");
+	CHECK(bindings.skeleton == "Derived/Skeletons/rig.bskel");
 	REQUIRE(bindings.animations.size() == 2);
-	CHECK(bindings.animations[0] == "Animations/locomotion/run.banim");
-	CHECK(bindings.animations[1] == "Animations/walk.banim");
+	CHECK(bindings.animations[0] == "Derived/Animations/locomotion/run.banim");
+	CHECK(bindings.animations[1] == "Derived/Animations/walk.banim");
 }
 
 TEST_CASE("A recorded path matches in normalized form, not by bytes", "[animation]")
 {
 	const TempRoot root;
-	WriteMesh(root.Data(), "Meshes/unit.bmesh", "Skeletons/rig.bskel");
-	WriteBanim(root.Data(), "Animations/walk.banim", "./Skeletons//rig.bskel");
+	WriteMesh(root.Data(), "Derived/Meshes/unit.bmesh", "Derived/Skeletons/rig.bskel");
+	WriteBanim(root.Data(), "Derived/Animations/walk.banim", "./Derived/Skeletons//rig.bskel");
 
-	const auto bindings = editor::ResolveAnimationBindings(root.Data(), "Skeletons/rig.bskel");
+	const auto bindings =
+		editor::ResolveAnimationBindings(root.Data(), "Derived/Skeletons/rig.bskel");
 
 	REQUIRE(bindings.animations.size() == 1);
-	CHECK(bindings.animations[0] == "Animations/walk.banim");
+	CHECK(bindings.animations[0] == "Derived/Animations/walk.banim");
 }
 
 TEST_CASE(
@@ -113,35 +118,36 @@ TEST_CASE(
 	"[animation]")
 {
 	const TempRoot root;
-	WriteMesh(root.Data(), "Meshes/unit.bmesh", "Skeletons/rig.bskel");
-	WriteBanim(root.Data(), "Animations/other.banim", "Skeletons/other.bskel");
+	WriteMesh(root.Data(), "Derived/Meshes/unit.bmesh", "Derived/Skeletons/rig.bskel");
+	WriteBanim(root.Data(), "Derived/Animations/other.banim", "Derived/Skeletons/other.bskel");
 
-	const auto bindings = editor::ResolveAnimationBindings(root.Data(), "Skeletons/rig.bskel");
+	const auto bindings =
+		editor::ResolveAnimationBindings(root.Data(), "Derived/Skeletons/rig.bskel");
 
-	CHECK(bindings.skeleton == "Skeletons/rig.bskel");
+	CHECK(bindings.skeleton == "Derived/Skeletons/rig.bskel");
 	CHECK(bindings.animations.empty());
 }
 
 TEST_CASE("An unreadable .banim fails resolution, as it fails the reference scan", "[animation]")
 {
 	const TempRoot root;
-	WriteMesh(root.Data(), "Meshes/unit.bmesh", "Skeletons/rig.bskel");
-	WriteBanim(root.Data(), "Animations/walk.banim", "Skeletons/rig.bskel");
+	WriteMesh(root.Data(), "Derived/Meshes/unit.bmesh", "Derived/Skeletons/rig.bskel");
+	WriteBanim(root.Data(), "Derived/Animations/walk.banim", "Derived/Skeletons/rig.bskel");
 	{
-		std::ofstream out(root.Data() / "Animations/corrupt.banim", std::ios::binary);
+		std::ofstream out(root.Data() / "Derived/Animations/corrupt.banim", std::ios::binary);
 		out << "not a clip set";
 	}
 
 	CHECK_THROWS_AS(
-		editor::ResolveAnimationBindings(root.Data(), "Skeletons/rig.bskel"),
+		editor::ResolveAnimationBindings(root.Data(), "Derived/Skeletons/rig.bskel"),
 		std::runtime_error);
 }
 
 TEST_CASE("A static mesh resolves to nothing", "[animation]")
 {
 	const TempRoot root;
-	WriteMesh(root.Data(), "Meshes/rock.bmesh", "");
-	WriteBanim(root.Data(), "Animations/walk.banim", "Skeletons/rig.bskel");
+	WriteMesh(root.Data(), "Derived/Meshes/rock.bmesh", "");
+	WriteBanim(root.Data(), "Derived/Animations/walk.banim", "Derived/Skeletons/rig.bskel");
 
 	const auto bindings = editor::ResolveAnimationBindings(root.Data(), "");
 
@@ -152,11 +158,12 @@ TEST_CASE("A static mesh resolves to nothing", "[animation]")
 TEST_CASE("A project with no Animations directory has no candidates, not an error", "[animation]")
 {
 	const TempRoot root;
-	WriteMesh(root.Data(), "Meshes/unit.bmesh", "Skeletons/rig.bskel");
+	WriteMesh(root.Data(), "Derived/Meshes/unit.bmesh", "Derived/Skeletons/rig.bskel");
 	fs::remove_all(root.Data() / assetlib::c_AnimationsDirectoryName);
 
-	const auto bindings = editor::ResolveAnimationBindings(root.Data(), "Skeletons/rig.bskel");
+	const auto bindings =
+		editor::ResolveAnimationBindings(root.Data(), "Derived/Skeletons/rig.bskel");
 
-	CHECK(bindings.skeleton == "Skeletons/rig.bskel");
+	CHECK(bindings.skeleton == "Derived/Skeletons/rig.bskel");
 	CHECK(bindings.animations.empty());
 }

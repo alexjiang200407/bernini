@@ -486,12 +486,12 @@ TEST_CASE("an import writes a loadable .bmesh and its textures, and no materials
 
 	// The import sequence an importer runs, minus the materials step neither runtime writes here.
 	const AssetStore store(outDir);
-	store.WriteTextures(import, "textures");
+	store.WriteTextures(import, c_SourceTexturesDirectoryName);
 	BMesh baked = toBMesh(import);
 	static_cast<void>(generateTangents(baked));
-	store.Save(baked, "suzanne.bmesh");
+	store.Save(baked, KeyIn(c_MeshesDirectoryName, "suzanne.bmesh"));
 
-	REQUIRE(std::filesystem::exists(outDir / "suzanne.bmesh"));
+	REQUIRE(std::filesystem::exists(outDir / KeyIn(c_MeshesDirectoryName, "suzanne.bmesh")));
 
 	// The textures do come across: they are what a material, once authored, routes at.
 	for (size_t i = 0; i < import.textures.size(); ++i)
@@ -503,7 +503,7 @@ TEST_CASE("an import writes a loadable .bmesh and its textures, and no materials
 	// unassigned rather than pointing at a matN.bmaterial that does not exist.
 	REQUIRE_FALSE(std::filesystem::exists(outDir / "mat0.bmaterial"));
 
-	const auto mesh = StoreAt(outDir).Load<BMesh>("suzanne.bmesh");
+	const auto mesh = StoreAt(outDir).Load<BMesh>(KeyIn(c_MeshesDirectoryName, "suzanne.bmesh"));
 	REQUIRE(mesh.materials.empty());
 	REQUIRE_FALSE(mesh.submeshes.empty());
 

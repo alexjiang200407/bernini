@@ -46,10 +46,15 @@ namespace
 		return std::filesystem::temp_directory_path();
 	}
 
+	/** A key in the half the container belongs to -- Save refuses one that names neither. */
+	template <AssetCodecFor T>
 	std::string
 	TempKey(const char* name)
 	{
-		return std::string("bernini_") + name;
+		return KeyIn(
+			originFor<T>() == AssetOrigin::kDerived ? c_DerivedDirectoryName :
+													  c_AuthoredDirectoryName,
+			std::string("bernini_") + name);
 	}
 }
 
@@ -93,8 +98,8 @@ TEST_CASE("an unrouted, unbaked environment asset round-trips as empty", "[bsky]
 
 TEST_CASE("the environment containers round-trip through a file", "[bsky][benvl][io]")
 {
-	const auto skyPath      = TempKey("env_container.bsky");
-	const auto lightingPath = TempKey("env_container.benvl");
+	const auto skyPath      = TempKey<BSky>("env_container.bsky");
+	const auto lightingPath = TempKey<BEnvLighting>("env_container.benvl");
 
 	StoreAt(TempRoot()).Save(SampleSky(), skyPath);
 	StoreAt(TempRoot()).Save(SampleLighting(), lightingPath);
@@ -102,8 +107,8 @@ TEST_CASE("the environment containers round-trip through a file", "[bsky][benvl]
 	CHECK(StoreAt(TempRoot()).Load<BSky>(skyPath).sky == SampleSky().sky);
 	CHECK(StoreAt(TempRoot()).Load<BEnvLighting>(lightingPath).exposure == Catch::Approx(0.375f));
 
-	std::filesystem::remove(skyPath);
-	std::filesystem::remove(lightingPath);
+	std::filesystem::remove(TempRoot() / skyPath);
+	std::filesystem::remove(TempRoot() / lightingPath);
 }
 
 // The two carry the same route shape, so a reader that only checked the length would accept the
@@ -168,7 +173,7 @@ TEST_CASE("a BEnv survives a serialize round-trip", "[benv][io]")
 
 TEST_CASE("a BEnv round-trips through a file", "[benv][io]")
 {
-	const auto path = TempKey("env_container.benv");
+	const auto path = TempKey<BEnv>("env_container.benv");
 
 	BEnv env;
 	env.name     = "forest";
@@ -180,7 +185,7 @@ TEST_CASE("a BEnv round-trips through a file", "[benv][io]")
 	CHECK(restored.sky == env.sky);
 	CHECK(restored.lighting == env.lighting);
 
-	std::filesystem::remove(path);
+	std::filesystem::remove(TempRoot() / path);
 }
 
 // A chunk-era .benv -- any of its binary forms -- is not a text document, so the reader refuses

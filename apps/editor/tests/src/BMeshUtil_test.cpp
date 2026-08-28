@@ -60,7 +60,7 @@ namespace
 		mesh.meshes.push_back({ .firstSubmesh = 1, .submeshCount = 1, .nameOffset = 0 });
 		mesh.submeshes.push_back(MakeSubmesh(true));
 		mesh.submeshes.push_back(MakeSubmesh(false));
-		mesh.skeleton = "Skeletons/rig.bskel";
+		mesh.skeleton = "Derived/Skeletons/rig.bskel";
 
 		return mesh;
 	}

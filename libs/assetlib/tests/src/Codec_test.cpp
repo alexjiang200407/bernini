@@ -29,10 +29,17 @@ namespace
 	 */
 	template <AssetCodecFor T>
 	void
-	CheckStoreWritesCodecBytes(const T& value, std::string_view key)
+	CheckStoreWritesCodecBytes(const T& value, const std::string_view leaf)
 	{
 		assetlib::test::DataRoot root("assetlib_codec_test");
 		const AssetStore         store(root.path);
+
+		// The half rather than a category: these cases pin the codec's bytes, and the origin is the
+		// whole of what Save asks about.
+		const std::string key = KeyIn(
+			originFor<T>() == AssetOrigin::kDerived ? c_DerivedDirectoryName :
+													  c_AuthoredDirectoryName,
+			leaf);
 
 		store.Save(value, key);
 

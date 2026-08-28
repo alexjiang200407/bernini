@@ -110,14 +110,17 @@ namespace assetlib::test
 		return mesh;
 	}
 
-	inline void
+	/** Writes the mesh and returns the key it went to, so no caller re-spells the category. */
+	inline std::string
 	SaveMesh(
 		const DataRoot&                 root,
 		const char*                     name,
 		const std::vector<std::string>& materials,
 		const std::string&              skeleton = {})
 	{
-		SaveAt(MakeMesh(materials, skeleton), root.path / "Derived/Meshes" / name);
+		const std::string key = KeyIn(c_MeshesDirectoryName, name);
+		SaveAt(MakeMesh(materials, skeleton), root.path / key);
+		return key;
 	}
 
 	/** The referrers of `asset`, as plain paths, so a test can compare against what it wrote. */

@@ -207,29 +207,35 @@ TEST_CASE("AssetManager carries a material's alpha mode into its layer type", "[
 	// has to reach bgl as the matching LayerType, which is what decides the PSO the submesh draws.
 	Fixture fx("bernini_am_alphamode");
 	WriteTexture(fx.root.path / "Textures" / "a.ktx2");
-	WriteBakedMaterial(fx.root.path / "Materials" / "opaque.bmaterial", "Textures/a.ktx2");
+	WriteBakedMaterial(fx.root.path / "Authored/Materials" / "opaque.bmaterial", "Textures/a.ktx2");
 	WriteBakedMaterial(
-		fx.root.path / "Materials" / "cutout.bmaterial",
+		fx.root.path / "Authored/Materials" / "cutout.bmaterial",
 		"Textures/a.ktx2",
 		assetlib::AlphaMode::kMask);
 	WriteBakedMaterial(
-		fx.root.path / "Materials" / "blend.bmaterial",
+		fx.root.path / "Authored/Materials" / "blend.bmaterial",
 		"Textures/a.ktx2",
 		assetlib::AlphaMode::kBlend);
-	CHECK((*fx).AcquireMaterial("Materials/opaque.bmaterial").layerType == bgl::LayerType::kOpaque);
-	CHECK((*fx).AcquireMaterial("Materials/cutout.bmaterial").layerType == bgl::LayerType::kMask);
+	CHECK(
+		(*fx).AcquireMaterial("Authored/Materials/opaque.bmaterial").layerType ==
+		bgl::LayerType::kOpaque);
+	CHECK(
+		(*fx).AcquireMaterial("Authored/Materials/cutout.bmaterial").layerType ==
+		bgl::LayerType::kMask);
 
-	const bgl::MaterialHandle blend = (*fx).AcquireMaterial("Materials/blend.bmaterial");
+	const bgl::MaterialHandle blend = (*fx).AcquireMaterial("Authored/Materials/blend.bmaterial");
 	CHECK(blend.layerType == bgl::LayerType::kBlend);
 
 	// kHashed is the mode nothing imports -- glTF cannot express it -- so this mapping is the only
 	// way a baked material reaches the stochastic-coverage PSO.
 	WriteBakedMaterial(
-		fx.root.path / "Materials" / "hashed.bmaterial",
+		fx.root.path / "Authored/Materials" / "hashed.bmaterial",
 		"Textures/a.ktx2",
 		assetlib::AlphaMode::kHashed);
 
-	CHECK((*fx).AcquireMaterial("Materials/hashed.bmaterial").layerType == bgl::LayerType::kHashed);
+	CHECK(
+		(*fx).AcquireMaterial("Authored/Materials/hashed.bmaterial").layerType ==
+		bgl::LayerType::kHashed);
 }
 
 TEST_CASE("AssetManager can load hashed alpha as the blend it converges to", "[gamelib][assets]")
@@ -240,13 +246,17 @@ TEST_CASE("AssetManager can load hashed alpha as the blend it converges to", "[g
 	Fixture fx("bernini_am_hashed_blend", game::AssetManagerOptions{ .hashedAsBlend = true });
 	WriteTexture(fx.root.path / "Textures" / "a.ktx2");
 	WriteBakedMaterial(
-		fx.root.path / "Materials" / "hashed.bmaterial",
+		fx.root.path / "Authored/Materials" / "hashed.bmaterial",
 		"Textures/a.ktx2",
 		assetlib::AlphaMode::kHashed);
-	WriteBakedMaterial(fx.root.path / "Materials" / "opaque.bmaterial", "Textures/a.ktx2");
+	WriteBakedMaterial(fx.root.path / "Authored/Materials" / "opaque.bmaterial", "Textures/a.ktx2");
 
-	CHECK((*fx).AcquireMaterial("Materials/hashed.bmaterial").layerType == bgl::LayerType::kBlend);
-	CHECK((*fx).AcquireMaterial("Materials/opaque.bmaterial").layerType == bgl::LayerType::kOpaque);
+	CHECK(
+		(*fx).AcquireMaterial("Authored/Materials/hashed.bmaterial").layerType ==
+		bgl::LayerType::kBlend);
+	CHECK(
+		(*fx).AcquireMaterial("Authored/Materials/opaque.bmaterial").layerType ==
+		bgl::LayerType::kOpaque);
 }
 
 TEST_CASE("AssetManager shares an asset by path and counts its references", "[gamelib][assets]")
@@ -289,12 +299,12 @@ TEST_CASE("AssetManager acquires a material's textures with it", "[gamelib][asse
 {
 	Fixture fx("bernini_am_material");
 	WriteTexture(fx.root.path / "Textures" / "a.ktx2");
-	WriteBakedMaterial(fx.root.path / "Materials" / "m0.bmaterial", "Textures/a.ktx2");
-	WriteBakedMaterial(fx.root.path / "Materials" / "m1.bmaterial", "Textures/a.ktx2");
+	WriteBakedMaterial(fx.root.path / "Authored/Materials" / "m0.bmaterial", "Textures/a.ktx2");
+	WriteBakedMaterial(fx.root.path / "Authored/Materials" / "m1.bmaterial", "Textures/a.ktx2");
 
 	SECTION("loading a material uploads the textures it names")
 	{
-		const bgl::MaterialHandle mat = (*fx).AcquireMaterial("Materials/m0.bmaterial");
+		const bgl::MaterialHandle mat = (*fx).AcquireMaterial("Authored/Materials/m0.bmaterial");
 
 		REQUIRE(mat.IsValid());
 		CHECK(mat.materialType == bgl::MaterialType::kPBR);
@@ -307,7 +317,7 @@ TEST_CASE("AssetManager acquires a material's textures with it", "[gamelib][asse
 
 	SECTION("releasing a material releases the textures it held")
 	{
-		const bgl::MaterialHandle mat = (*fx).AcquireMaterial("Materials/m0.bmaterial");
+		const bgl::MaterialHandle mat = (*fx).AcquireMaterial("Authored/Materials/m0.bmaterial");
 
 		const auto tex = (*fx).AcquireTexture("Textures/a.ktx2");
 		(*fx).ReleaseTexture(tex);
@@ -322,8 +332,8 @@ TEST_CASE("AssetManager acquires a material's textures with it", "[gamelib][asse
 	{
 		// This is the case a naive teardown gets wrong: deleting m0 must not pull the texture out from
 		// under m1, which is still sampling it.
-		const bgl::MaterialHandle m0 = (*fx).AcquireMaterial("Materials/m0.bmaterial");
-		const bgl::MaterialHandle m1 = (*fx).AcquireMaterial("Materials/m1.bmaterial");
+		const bgl::MaterialHandle m0 = (*fx).AcquireMaterial("Authored/Materials/m0.bmaterial");
+		const bgl::MaterialHandle m1 = (*fx).AcquireMaterial("Authored/Materials/m1.bmaterial");
 
 		const auto tex = (*fx).AcquireTexture("Textures/a.ktx2");
 		(*fx).ReleaseTexture(tex);
@@ -342,19 +352,19 @@ TEST_CASE("AssetManager acquires a mesh's whole tree", "[gamelib][assets]")
 {
 	Fixture fx("bernini_am_mesh");
 	WriteTexture(fx.root.path / "Textures" / "a.ktx2");
-	WriteBakedMaterial(fx.root.path / "Materials" / "m0.bmaterial", "Textures/a.ktx2");
+	WriteBakedMaterial(fx.root.path / "Authored/Materials" / "m0.bmaterial", "Textures/a.ktx2");
 
-	const auto materials       = std::vector<std::string>{ "Materials/m0.bmaterial" };
+	const auto materials       = std::vector<std::string>{ "Authored/Materials/m0.bmaterial" };
 	const auto materialIndices = std::vector<uint32_t>{ 0 };
-	WriteMesh(fx.root.path / "Meshes" / "one.bmesh", materials, materialIndices);
+	WriteMesh(fx.root.path / "Derived/Meshes" / "one.bmesh", materials, materialIndices);
 
 	SECTION("mesh -> materials -> textures, acquired and released transitively")
 	{
-		const bgl::GeomHandle geom = (*fx).AcquireMesh("Meshes/one.bmesh");
+		const bgl::GeomHandle geom = (*fx).AcquireMesh("Derived/Meshes/one.bmesh");
 		REQUIRE(geom.IsValid());
 		CHECK((*fx).GeomRefCount(geom) == 1);
 
-		const bgl::MaterialHandle mat = (*fx).AcquireMaterial("Materials/m0.bmaterial");
+		const bgl::MaterialHandle mat = (*fx).AcquireMaterial("Authored/Materials/m0.bmaterial");
 		const auto                tex = (*fx).AcquireTexture("Textures/a.ktx2");
 
 		// The mesh's submesh holds a reference to the material, which holds one to the texture -- so
@@ -374,8 +384,8 @@ TEST_CASE("AssetManager acquires a mesh's whole tree", "[gamelib][assets]")
 
 	SECTION("the same mesh asked for twice is uploaded once")
 	{
-		const bgl::GeomHandle first  = (*fx).AcquireMesh("Meshes/one.bmesh");
-		const bgl::GeomHandle second = (*fx).AcquireMesh("Meshes/one.bmesh");
+		const bgl::GeomHandle first  = (*fx).AcquireMesh("Derived/Meshes/one.bmesh");
+		const bgl::GeomHandle second = (*fx).AcquireMesh("Derived/Meshes/one.bmesh");
 
 		CHECK(first.handle.index == second.handle.index);
 		CHECK((*fx).GeomRefCount(first) == 2);
@@ -394,13 +404,13 @@ TEST_CASE("AssetManager: an instance keeps its geometry alive", "[gamelib][asset
 	// reference is gone" mean "nothing is drawing it".
 	Fixture fx("bernini_am_instance");
 	WriteTexture(fx.root.path / "Textures" / "a.ktx2");
-	WriteBakedMaterial(fx.root.path / "Materials" / "m0.bmaterial", "Textures/a.ktx2");
+	WriteBakedMaterial(fx.root.path / "Authored/Materials" / "m0.bmaterial", "Textures/a.ktx2");
 
-	const auto materials       = std::vector<std::string>{ "Materials/m0.bmaterial" };
+	const auto materials       = std::vector<std::string>{ "Authored/Materials/m0.bmaterial" };
 	const auto materialIndices = std::vector<uint32_t>{ 0 };
-	WriteMesh(fx.root.path / "Meshes" / "one.bmesh", materials, materialIndices);
+	WriteMesh(fx.root.path / "Derived/Meshes" / "one.bmesh", materials, materialIndices);
 
-	const bgl::GeomHandle geom = (*fx).AcquireMesh("Meshes/one.bmesh");
+	const bgl::GeomHandle geom = (*fx).AcquireMesh("Derived/Meshes/one.bmesh");
 
 	const bgl::MeshInstanceHandle inst = (*fx).CreateInstance(fx.view, geom, glm::mat4(1.0f));
 	REQUIRE(inst.IsValid());
@@ -424,15 +434,15 @@ TEST_CASE("AssetManager places instances into more than one view", "[gamelib][as
 	// counted once however many views instance it, and each instance names the view it lives in.
 	Fixture fx("bernini_am_multiview");
 	WriteTexture(fx.root.path / "Textures" / "a.ktx2");
-	WriteBakedMaterial(fx.root.path / "Materials" / "m0.bmaterial", "Textures/a.ktx2");
+	WriteBakedMaterial(fx.root.path / "Authored/Materials" / "m0.bmaterial", "Textures/a.ktx2");
 
-	const auto materials       = std::vector<std::string>{ "Materials/m0.bmaterial" };
+	const auto materials       = std::vector<std::string>{ "Authored/Materials/m0.bmaterial" };
 	const auto materialIndices = std::vector<uint32_t>{ 0 };
-	WriteMesh(fx.root.path / "Meshes" / "one.bmesh", materials, materialIndices);
+	WriteMesh(fx.root.path / "Derived/Meshes" / "one.bmesh", materials, materialIndices);
 
 	const bgl::SceneViewRef second = fx.gfx->CreateSceneView(fx.scene, 16);
 
-	const bgl::GeomHandle geom = (*fx).AcquireMesh("Meshes/one.bmesh");
+	const bgl::GeomHandle geom = (*fx).AcquireMesh("Derived/Meshes/one.bmesh");
 
 	// A null view is refused here, not left to crash inside bgl.
 	REQUIRE_THROWS_AS(
@@ -465,9 +475,9 @@ TEST_CASE("AssetManager swaps a material's texture in place", "[gamelib][assets]
 	Fixture fx("bernini_am_swap_texture");
 	WriteTexture(fx.root.path / "Textures" / "old.ktx2");
 	WriteTexture(fx.root.path / "Textures" / "new.ktx2");
-	WriteBakedMaterial(fx.root.path / "Materials" / "m0.bmaterial", "Textures/old.ktx2");
+	WriteBakedMaterial(fx.root.path / "Authored/Materials" / "m0.bmaterial", "Textures/old.ktx2");
 
-	const bgl::MaterialHandle mat = (*fx).AcquireMaterial("Materials/m0.bmaterial");
+	const bgl::MaterialHandle mat = (*fx).AcquireMaterial("Authored/Materials/m0.bmaterial");
 
 	const auto oldTex = (*fx).AcquireTexture("Textures/old.ktx2");
 	(*fx).ReleaseTexture(oldTex);
@@ -483,7 +493,8 @@ TEST_CASE("AssetManager swaps a material's texture in place", "[gamelib][assets]
 	CHECK((*fx).TextureRefCount(oldTex) == 0);
 	CHECK((*fx).TextureRefCount(newTex) == 1);
 	CHECK((*fx).MaterialRefCount(mat) == 1);
-	CHECK(mat.handle.index == (*fx).AcquireMaterial("Materials/m0.bmaterial").handle.index);
+	CHECK(
+		mat.handle.index == (*fx).AcquireMaterial("Authored/Materials/m0.bmaterial").handle.index);
 }
 
 TEST_CASE("AssetManager swaps a submesh's material", "[gamelib][assets]")
@@ -491,21 +502,21 @@ TEST_CASE("AssetManager swaps a submesh's material", "[gamelib][assets]")
 	Fixture fx("bernini_am_swap_material");
 	WriteTexture(fx.root.path / "Textures" / "a.ktx2");
 	WriteTexture(fx.root.path / "Textures" / "b.ktx2");
-	WriteBakedMaterial(fx.root.path / "Materials" / "m0.bmaterial", "Textures/a.ktx2");
-	WriteBakedMaterial(fx.root.path / "Materials" / "m1.bmaterial", "Textures/b.ktx2");
+	WriteBakedMaterial(fx.root.path / "Authored/Materials" / "m0.bmaterial", "Textures/a.ktx2");
+	WriteBakedMaterial(fx.root.path / "Authored/Materials" / "m1.bmaterial", "Textures/b.ktx2");
 
-	const auto materials       = std::vector<std::string>{ "Materials/m0.bmaterial" };
+	const auto materials       = std::vector<std::string>{ "Authored/Materials/m0.bmaterial" };
 	const auto materialIndices = std::vector<uint32_t>{ 0 };
-	WriteMesh(fx.root.path / "Meshes" / "one.bmesh", materials, materialIndices);
+	WriteMesh(fx.root.path / "Derived/Meshes" / "one.bmesh", materials, materialIndices);
 
-	const bgl::GeomHandle     geom = (*fx).AcquireMesh("Meshes/one.bmesh");
-	const bgl::MaterialHandle m0   = (*fx).AcquireMaterial("Materials/m0.bmaterial");
+	const bgl::GeomHandle     geom = (*fx).AcquireMesh("Derived/Meshes/one.bmesh");
+	const bgl::MaterialHandle m0   = (*fx).AcquireMaterial("Authored/Materials/m0.bmaterial");
 	(*fx).ReleaseMaterial(m0);
 	REQUIRE((*fx).MaterialRefCount(m0) == 1);  // held by the geom's one submesh
 
-	(*fx).SetSubmeshMaterial(geom, 0, "Materials/m1.bmaterial");
+	(*fx).SetSubmeshMaterial(geom, 0, "Authored/Materials/m1.bmaterial");
 
-	const bgl::MaterialHandle m1 = (*fx).AcquireMaterial("Materials/m1.bmaterial");
+	const bgl::MaterialHandle m1 = (*fx).AcquireMaterial("Authored/Materials/m1.bmaterial");
 	(*fx).ReleaseMaterial(m1);
 
 	// The old material was released (and, at zero, took its texture with it); the new one is held by
@@ -523,26 +534,26 @@ TEST_CASE("AssetManager overrides one instance's material", "[gamelib][assets]")
 	Fixture fx("bernini_am_override_material");
 	WriteTexture(fx.root.path / "Textures" / "a.ktx2");
 	WriteTexture(fx.root.path / "Textures" / "b.ktx2");
-	WriteBakedMaterial(fx.root.path / "Materials" / "m0.bmaterial", "Textures/a.ktx2");
-	WriteBakedMaterial(fx.root.path / "Materials" / "skin.bmaterial", "Textures/b.ktx2");
+	WriteBakedMaterial(fx.root.path / "Authored/Materials" / "m0.bmaterial", "Textures/a.ktx2");
+	WriteBakedMaterial(fx.root.path / "Authored/Materials" / "skin.bmaterial", "Textures/b.ktx2");
 
-	const auto materials       = std::vector<std::string>{ "Materials/m0.bmaterial" };
+	const auto materials       = std::vector<std::string>{ "Authored/Materials/m0.bmaterial" };
 	const auto materialIndices = std::vector<uint32_t>{ 0 };
-	WriteMesh(fx.root.path / "Meshes" / "one.bmesh", materials, materialIndices);
+	WriteMesh(fx.root.path / "Derived/Meshes" / "one.bmesh", materials, materialIndices);
 
-	const bgl::GeomHandle geom = (*fx).AcquireMesh("Meshes/one.bmesh");
+	const bgl::GeomHandle geom = (*fx).AcquireMesh("Derived/Meshes/one.bmesh");
 
 	// Two units, same mesh. One will wear a skin.
 	const bgl::MeshInstanceHandle worn  = (*fx).CreateInstance(fx.view, geom, glm::mat4(1.0f));
 	const bgl::MeshInstanceHandle plain = (*fx).CreateInstance(fx.view, geom, glm::mat4(1.0f));
 
-	const bgl::MaterialHandle m0 = (*fx).AcquireMaterial("Materials/m0.bmaterial");
+	const bgl::MaterialHandle m0 = (*fx).AcquireMaterial("Authored/Materials/m0.bmaterial");
 	(*fx).ReleaseMaterial(m0);
 	REQUIRE((*fx).MaterialRefCount(m0) == 1);  // held by the geom's submesh, once
 
-	(*fx).SetInstanceSubmeshMaterial(fx.view, worn, 0, "Materials/skin.bmaterial");
+	(*fx).SetInstanceSubmeshMaterial(fx.view, worn, 0, "Authored/Materials/skin.bmaterial");
 
-	const bgl::MaterialHandle skin = (*fx).AcquireMaterial("Materials/skin.bmaterial");
+	const bgl::MaterialHandle skin = (*fx).AcquireMaterial("Authored/Materials/skin.bmaterial");
 	(*fx).ReleaseMaterial(skin);
 
 	SECTION("the override holds a reference, and the default is untouched")
@@ -573,26 +584,26 @@ TEST_CASE("AssetManager overrides one instance's material", "[gamelib][assets]")
 
 	SECTION("overriding twice releases the first, and re-overriding with the same is not a leak")
 	{
-		(*fx).SetInstanceSubmeshMaterial(fx.view, worn, 0, "Materials/m0.bmaterial");
+		(*fx).SetInstanceSubmeshMaterial(fx.view, worn, 0, "Authored/Materials/m0.bmaterial");
 		CHECK((*fx).MaterialRefCount(skin) == 0);
 		CHECK((*fx).MaterialRefCount(m0) == 2);  // the geom's submesh, and this instance's override
 
 		// Acquire-before-release: re-overriding with the material already worn must not delete it.
-		(*fx).SetInstanceSubmeshMaterial(fx.view, worn, 0, "Materials/m0.bmaterial");
+		(*fx).SetInstanceSubmeshMaterial(fx.view, worn, 0, "Authored/Materials/m0.bmaterial");
 		CHECK((*fx).MaterialRefCount(m0) == 2);
 	}
 
 	SECTION("a foreign instance or an out-of-range submesh throws")
 	{
 		REQUIRE_THROWS_AS(
-			(*fx).SetInstanceSubmeshMaterial(fx.view, worn, 1, "Materials/skin.bmaterial"),
+			(*fx).SetInstanceSubmeshMaterial(fx.view, worn, 1, "Authored/Materials/skin.bmaterial"),
 			bgl::SceneError);
 		REQUIRE_THROWS_AS(
 			(*fx).SetInstanceSubmeshMaterial(
 				fx.view,
 				bgl::MeshInstanceHandle{},
 				0,
-				"Materials/skin.bmaterial"),
+				"Authored/Materials/skin.bmaterial"),
 			bgl::SceneError);
 	}
 
@@ -605,9 +616,9 @@ TEST_CASE("AssetManager refcounts procedural geometry", "[gamelib][assets]")
 	// deleted at zero, and drop their material's reference on the way out.
 	Fixture fx("bernini_am_procedural");
 	WriteTexture(fx.root.path / "Textures" / "a.ktx2");
-	WriteBakedMaterial(fx.root.path / "Materials" / "m0.bmaterial", "Textures/a.ktx2");
+	WriteBakedMaterial(fx.root.path / "Authored/Materials" / "m0.bmaterial", "Textures/a.ktx2");
 
-	const bgl::MaterialHandle mat = (*fx).AcquireMaterial("Materials/m0.bmaterial");
+	const bgl::MaterialHandle mat = (*fx).AcquireMaterial("Authored/Materials/m0.bmaterial");
 
 	const bgl::GeomHandle cube   = (*fx).CreateCube(mat);
 	const bgl::GeomHandle sphere = (*fx).CreateSphere(8, 8, 1.0f, mat);
@@ -753,7 +764,7 @@ TEST_CASE("A material's textures come from the prefetch when it carries them", "
 
 	// The material file exists; the texture it names never does.
 	constexpr auto c_Texture = "Textures/only_prefetched.ktx2";
-	WriteBakedMaterial(fx.root.path / "Materials" / "m.bmaterial", c_Texture);
+	WriteBakedMaterial(fx.root.path / "Authored/Materials" / "m.bmaterial", c_Texture);
 
 	auto image     = assetlib::ImageData();
 	image.width    = 1;
@@ -766,7 +777,8 @@ TEST_CASE("A material's textures come from the prefetch when it carries them", "
 	auto prefetch = game::TexturePrefetch();
 	prefetch.emplace(c_Texture, std::move(image));
 
-	const bgl::MaterialHandle mat = (*fx).AcquireMaterial("Materials/m.bmaterial", &prefetch);
+	const bgl::MaterialHandle mat =
+		(*fx).AcquireMaterial("Authored/Materials/m.bmaterial", &prefetch);
 
 	REQUIRE(mat.IsValid());
 	CHECK(prefetch.empty());
@@ -787,7 +799,7 @@ namespace
 		sky.name      = name;
 		sky.sky.baked = "Textures/" + std::string(name) + "_sky.ktx2";
 		std::filesystem::create_directories(root / "Sky");
-		SaveAt(sky, root / "Sky" / (std::string(name) + ".bsky"));
+		SaveAt(sky, root / "Derived/Sky" / (std::string(name) + ".bsky"));
 
 		auto lighting             = assetlib::BEnvLighting();
 		lighting.name             = name;
@@ -795,16 +807,16 @@ namespace
 		lighting.irradiance.baked = "Textures/" + std::string(name) + "_irradiance.ktx2";
 		lighting.exposure         = 2.0f;
 		std::filesystem::create_directories(root / "EnvLighting");
-		SaveAt(lighting, root / "EnvLighting" / (std::string(name) + ".benvl"));
+		SaveAt(lighting, root / "Derived/EnvLighting" / (std::string(name) + ".benvl"));
 
 		auto env         = assetlib::BEnv();
 		env.name         = name;
-		env.sky          = "Sky/" + std::string(name) + ".bsky";
-		env.lighting     = "EnvLighting/" + std::string(name) + ".benvl";
+		env.sky          = "Derived/Sky/" + std::string(name) + ".bsky";
+		env.lighting     = "Derived/EnvLighting/" + std::string(name) + ".benvl";
 		env.skyMipLevel  = 1;
 		env.skyRotationY = 0.25f;
 		std::filesystem::create_directories(root / "Environments");
-		SaveAt(env, root / "Environments" / (std::string(name) + ".benv"));
+		SaveAt(env, root / "Authored/Environments" / (std::string(name) + ".benv"));
 	}
 }
 
@@ -813,7 +825,7 @@ TEST_CASE("AssetManager acquires an environment through its own data root", "[ga
 	Fixture fx("bernini_am_environment");
 	WriteEnvironment(fx.root.path, "forest");
 
-	const auto env = (*fx).AcquireEnvironment("Environments/forest.benv");
+	const auto env = (*fx).AcquireEnvironment("Authored/Environments/forest.benv");
 
 	REQUIRE(env.irradiance.textureSlot);
 	REQUIRE(env.prefilter.textureSlot);
@@ -826,11 +838,11 @@ TEST_CASE("AssetManager acquires an environment through its own data root", "[ga
 	{
 		auto second     = assetlib::BEnv();
 		second.name     = "forest_night";
-		second.sky      = "Sky/forest.bsky";
-		second.lighting = "EnvLighting/forest.benvl";
-		SaveAt(second, fx.root.path / "Environments" / "forest_night.benv");
+		second.sky      = "Derived/Sky/forest.bsky";
+		second.lighting = "Derived/EnvLighting/forest.benvl";
+		SaveAt(second, fx.root.path / "Authored/Environments" / "forest_night.benv");
 
-		const auto other = (*fx).AcquireEnvironment("Environments/forest_night.benv");
+		const auto other = (*fx).AcquireEnvironment("Authored/Environments/forest_night.benv");
 		CHECK(other.skybox.textureSlot.index == env.skybox.textureSlot.index);
 		CHECK((*fx).TextureRefCount(env.skybox) == 2);
 
@@ -842,12 +854,12 @@ TEST_CASE("AssetManager acquires an environment through its own data root", "[ga
 	{
 		auto second             = assetlib::BEnv();
 		second.name             = "forest_graded";
-		second.sky              = "Sky/forest.bsky";
-		second.lighting         = "EnvLighting/forest.benvl";
+		second.sky              = "Derived/Sky/forest.bsky";
+		second.lighting         = "Derived/EnvLighting/forest.benvl";
 		second.exposureOverride = 0.5f;
-		SaveAt(second, fx.root.path / "Environments" / "forest_graded.benv");
+		SaveAt(second, fx.root.path / "Authored/Environments" / "forest_graded.benv");
 
-		const auto graded = (*fx).AcquireEnvironment("Environments/forest_graded.benv");
+		const auto graded = (*fx).AcquireEnvironment("Authored/Environments/forest_graded.benv");
 		CHECK(graded.exposure == 0.5f);
 		(*fx).ReleaseEnvironment(graded);
 	}
@@ -863,14 +875,16 @@ TEST_CASE("AssetManager acquires an environment through its own data root", "[ga
 		auto raw       = assetlib::BSky();
 		raw.name       = "raw";
 		raw.sky.source = "Derived/SourceTextures/raw.ktx2";
-		SaveAt(raw, fx.root.path / "Sky" / "raw.bsky");
+		SaveAt(raw, fx.root.path / "Derived/Sky" / "raw.bsky");
 
 		auto env2 = assetlib::BEnv();
 		env2.name = "raw";
-		env2.sky  = "Sky/raw.bsky";
-		SaveAt(env2, fx.root.path / "Environments" / "raw.benv");
+		env2.sky  = "Derived/Sky/raw.bsky";
+		SaveAt(env2, fx.root.path / "Authored/Environments" / "raw.benv");
 
-		CHECK_THROWS_AS((*fx).AcquireEnvironment("Environments/raw.benv"), std::runtime_error);
+		CHECK_THROWS_AS(
+			(*fx).AcquireEnvironment("Authored/Environments/raw.benv"),
+			std::runtime_error);
 	}
 }
 
@@ -898,19 +912,19 @@ TEST_CASE("AssetManager acquires a mesh's tree out of an archive", "[gamelib][as
 {
 	Fixture fx("bernini_am_archive");
 	WriteTexture(fx.root.path / "Textures" / "a.ktx2");
-	WriteBakedMaterial(fx.root.path / "Materials" / "m0.bmaterial", "Textures/a.ktx2");
+	WriteBakedMaterial(fx.root.path / "Authored/Materials" / "m0.bmaterial", "Textures/a.ktx2");
 
-	const auto materials       = std::vector<std::string>{ "Materials/m0.bmaterial" };
+	const auto materials       = std::vector<std::string>{ "Authored/Materials/m0.bmaterial" };
 	const auto materialIndices = std::vector<uint32_t>{ 0 };
-	WriteMesh(fx.root.path / "Meshes" / "one.bmesh", materials, materialIndices);
+	WriteMesh(fx.root.path / "Derived/Meshes" / "one.bmesh", materials, materialIndices);
 
 	fx.Remount(Archived(fx));
 
-	const bgl::GeomHandle geom = (*fx).AcquireMesh("Meshes/one.bmesh");
+	const bgl::GeomHandle geom = (*fx).AcquireMesh("Derived/Meshes/one.bmesh");
 	REQUIRE(geom.IsValid());
 	CHECK((*fx).GeomRefCount(geom) == 1);
 
-	const bgl::MaterialHandle mat = (*fx).AcquireMaterial("Materials/m0.bmaterial");
+	const bgl::MaterialHandle mat = (*fx).AcquireMaterial("Authored/Materials/m0.bmaterial");
 	const auto                tex = (*fx).AcquireTexture("Textures/a.ktx2");
 
 	// The same tree the loose acquire builds: the mesh holds the material, which holds the texture.
@@ -936,17 +950,17 @@ TEST_CASE("AssetManager reads a loose material over its packed twin", "[gamelib]
 	Fixture fx("bernini_am_overlay");
 	WriteTexture(fx.root.path / "Textures" / "a.ktx2");
 	WriteTexture(fx.root.path / "Textures" / "b.ktx2");
-	WriteBakedMaterial(fx.root.path / "Materials" / "m0.bmaterial", "Textures/a.ktx2");
+	WriteBakedMaterial(fx.root.path / "Authored/Materials" / "m0.bmaterial", "Textures/a.ktx2");
 
-	const auto materials       = std::vector<std::string>{ "Materials/m0.bmaterial" };
+	const auto materials       = std::vector<std::string>{ "Authored/Materials/m0.bmaterial" };
 	const auto materialIndices = std::vector<uint32_t>{ 0 };
-	WriteMesh(fx.root.path / "Meshes" / "one.bmesh", materials, materialIndices);
+	WriteMesh(fx.root.path / "Derived/Meshes" / "one.bmesh", materials, materialIndices);
 
 	static_cast<void>(
 		assetlib::AssetStore(fx.root.path).Pack(assetlib::PackDesc{ fx.root.path / "Data.bpak" }));
 
 	// Edited after packing: the archive still names a.ktx2, the loose copy names b.ktx2.
-	WriteBakedMaterial(fx.root.path / "Materials" / "m0.bmaterial", "Textures/b.ktx2");
+	WriteBakedMaterial(fx.root.path / "Authored/Materials" / "m0.bmaterial", "Textures/b.ktx2");
 
 	auto mount = std::make_shared<core::file::LayeredFileSystem>();
 	mount->Mount(std::make_shared<core::file::LooseFileSystem>(fx.root.path));
@@ -954,7 +968,7 @@ TEST_CASE("AssetManager reads a loose material over its packed twin", "[gamelib]
 
 	fx.Remount(assetlib::AssetStore(fx.root.path, std::move(mount)));
 
-	const bgl::MaterialHandle mat = (*fx).AcquireMaterial("Materials/m0.bmaterial");
+	const bgl::MaterialHandle mat = (*fx).AcquireMaterial("Authored/Materials/m0.bmaterial");
 	REQUIRE(mat.IsValid());
 
 	// The edited material's texture is the one held, and the packed material's is untouched.

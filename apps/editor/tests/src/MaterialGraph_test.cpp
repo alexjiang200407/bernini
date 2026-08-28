@@ -325,7 +325,7 @@ TEST_CASE("Anything else dragged onto the graph is ignored", "[materialgraph]")
 	MaterialGraphView view;
 
 	// A mesh is not a texture. The graph has no port to hang it on.
-	REQUIRE(!AcceptsDrag(view, *UrlDrop(DataPath("Meshes/tree.bmesh"))));
+	REQUIRE(!AcceptsDrag(view, *UrlDrop(DataPath("Derived/Meshes/tree.bmesh"))));
 }
 
 TEST_CASE("A dropped texture is announced with its path", "[materialgraph]")
@@ -352,7 +352,7 @@ TEST_CASE("The first texture in a drop wins", "[materialgraph]")
 
 	QMimeData mime;
 	mime.setUrls(
-		{ QUrl::fromLocalFile(DataPath("Meshes/tree.bmesh")),
+		{ QUrl::fromLocalFile(DataPath("Derived/Meshes/tree.bmesh")),
 	      QUrl::fromLocalFile(DataPath("Textures/bark.ktx2")),
 	      QUrl::fromLocalFile(DataPath("Textures/leaf.ktx2")) });
 
