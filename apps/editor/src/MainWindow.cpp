@@ -21,6 +21,7 @@
 #include "Windows/MaterialEditor/MaterialEditorWindow.h"
 #include "Windows/RenderTarget/RenderTargetWindow.h"
 #include "util/frame_stats_text.h"
+#include "util/held_open_assets.h"
 #include "util/window_title.h"
 #include <assetlib/Project.h>
 
@@ -140,6 +141,10 @@ MainWindow::Build()
 			settings["levelEditor"]["environmentMap"].GetOrDefault(std::string());
 		levelEnv.dataRoot = settings["levelEditor"]["dataRoot"].GetOrDefault(std::string());
 
+		// A level viewport shows the world sharp, where the previews defocus their backdrop on
+		// purpose -- so it takes the `.bsky`'s own presentation rather than overruling it.
+		levelEnv.skyMipLevelOverride = std::nullopt;
+
 		// Absent, and the .benv's own exposure stands -- which is the correct one for its maps.
 		if (auto exposure = settings["levelEditor"]["exposure"])
 			levelEnv.exposureOverride = exposure.GetOrDefault(1.0f);
@@ -161,16 +166,16 @@ MainWindow::Build()
 		if (auto exposure = matSettings["exposure"])
 			matDesc.previewEnv.exposureOverride = exposure.GetOrDefault(1.0f);
 
-		auto thumbSettings         = settings["thumbnails"];
-		auto thumbDesc             = AssetThumbnailDesc();
-		thumbDesc.renderer         = m_Renderer.get();
-		thumbDesc.dimension        = thumbSettings["dimension"].GetOrDefault(256u);
-		thumbDesc.initialInstances = thumbSettings["initialInstances"].GetOrDefault(256u);
-		thumbDesc.environmentMap   = thumbSettings["environmentMap"].GetOrDefault(std::string());
-		thumbDesc.dataRoot         = thumbSettings["dataRoot"].GetOrDefault(std::string());
+		auto thumbSettings           = settings["thumbnails"];
+		auto thumbDesc               = AssetThumbnailDesc();
+		thumbDesc.renderer           = m_Renderer.get();
+		thumbDesc.dimension          = thumbSettings["dimension"].GetOrDefault(256u);
+		thumbDesc.initialInstances   = thumbSettings["initialInstances"].GetOrDefault(256u);
+		thumbDesc.env.environmentMap = thumbSettings["environmentMap"].GetOrDefault(std::string());
+		thumbDesc.env.dataRoot       = thumbSettings["dataRoot"].GetOrDefault(std::string());
 
 		if (auto exposure = thumbSettings["exposure"])
-			thumbDesc.exposureOverride = exposure.GetOrDefault(1.0f);
+			thumbDesc.env.exposureOverride = exposure.GetOrDefault(1.0f);
 
 		auto animSettings = settings["animationEditor"];
 		auto animDesc     = AnimationEditorWindowDesc();
@@ -194,7 +199,8 @@ MainWindow::Build()
 
 		m_MaterialEditor  = new MaterialEditorWindow(this, std::move(matDesc));
 		m_AnimationEditor = new AnimationEditorWindow(this, std::move(animDesc));
-		m_Thumbnails      = std::make_unique<AssetThumbnailCache>(std::move(thumbDesc));
+		// Parented so the held-open walk reaches it: it is lit by a `.benv` like the viewports are.
+		m_Thumbnails = std::make_unique<AssetThumbnailCache>(std::move(thumbDesc), this);
 	}
 
 	setDockNestingEnabled(true);
@@ -242,11 +248,10 @@ MainWindow::Build()
 	m_ContentExplorerDock->setFeatures(
 		QDockWidget::DockWidgetMovable | QDockWidget::DockWidgetClosable);
 
-	// Asked at each deletion, so there is no copy of the answer to go stale.
+	// Asked at each deletion, so there is no copy of the answer to go stale, and walked rather than
+	// listed so a panel added later is covered without anyone remembering it.
 	m_ContentExplorer = new ContentExplorerWindow(m_ContentExplorerDock, [this] {
-		auto held = m_MaterialEditor->HeldOpenPaths();
-		held += m_AnimationEditor->HeldOpenPaths();
-		return held;
+		return editor::GetAssetsHeldOpen(this);
 	});
 	m_ContentExplorer->SetThumbnails(m_Thumbnails.get());
 

@@ -334,6 +334,56 @@ TEST_CASE("Only a material is offered a Bake action", "[contentexplorer]")
 	CHECK_FALSE(editor::IsMaterialAsset(""));
 }
 
+TEST_CASE("A file a panel has open is held, and its neighbours are not", "[contentexplorer]")
+{
+	// The rule every on-disk operation is gated on, lifted out because the dialogs around it are
+	// modal. An empty entry is a holder with nothing bound, and must not read as a match.
+	const Sandbox sandbox;
+	const QString benv = Touch(sandbox, "Authored/Environments/studio.benv");
+	const QString sky  = Touch(sandbox, "Derived/Sky/studio.bsky");
+
+	CHECK(editor::IsHeldOpen({ benv }, benv, false));
+	CHECK_FALSE(editor::IsHeldOpen({ benv }, sky, false));
+	CHECK_FALSE(editor::IsHeldOpen({}, benv, false));
+	CHECK_FALSE(editor::IsHeldOpen({ QString() }, benv, false));
+}
+
+TEST_CASE("A directory is held by anything open beneath it", "[contentexplorer]")
+{
+	const Sandbox sandbox;
+	const QString benv = Touch(sandbox, "Authored/Environments/studio.benv");
+	const QString root = sandbox.DataRootPath();
+
+	CHECK(editor::IsHeldOpen({ benv }, QDir(root).absoluteFilePath("Authored/Environments"), true));
+
+	// Containment, not a prefix match: a sibling whose name starts with the same characters is a
+	// different folder and takes nothing with it.
+	CHECK_FALSE(
+		editor::IsHeldOpen({ benv }, QDir(root).absoluteFilePath("Authored/Environ"), true));
+	CHECK_FALSE(editor::IsHeldOpen({ benv }, QDir(root).absoluteFilePath("Derived/Sky"), true));
+}
+
+TEST_CASE(
+	"A viewport's configured environment is resolved before it is compared",
+	"[contentexplorer]")
+{
+	// config.json names a `.benv` relative to the working directory, so that is how a viewport hands
+	// it back. Left unresolved, such a path is inside *every* directory it is tested against:
+	// QDir::relativeFilePath hands a relative argument straight back, and nothing in it starts with
+	// `..`, so every folder in the project would read as held and none could be deleted.
+	const Sandbox sandbox;
+	const QString relative = "Authored/Environments/studio.benv";
+
+	CHECK(editor::IsHeldOpen({ relative }, QDir::current().absoluteFilePath(relative), false));
+	CHECK(
+		editor::IsHeldOpen(
+			{ relative },
+			QDir::current().absoluteFilePath("Authored/Environments"),
+			true));
+
+	CHECK_FALSE(editor::IsHeldOpen({ relative }, sandbox.DataRootPath(), true));
+}
+
 TEST_CASE("A rename accepts only names every platform can round-trip", "[contentexplorer]")
 {
 	// The rule behind the Rename dialog, lifted out because the dialog is modal and cannot be driven

@@ -101,6 +101,15 @@ namespace editor
 		return bound;
 	}
 
+	QStringList
+	GetHeldOpenEnvironment(const EnvironmentBinding& binding)
+	{
+		if (binding.boundPath.empty())
+			return {};
+
+		return { QString::fromStdString(binding.boundPath) };
+	}
+
 	std::optional<std::string>
 	GetEnvironmentToRestore(const EnvironmentBinding& binding)
 	{

@@ -1,6 +1,7 @@
 #pragma once
 
 #include <QString>
+#include <QStringList>
 
 class QFileSystemModel;
 class QModelIndex;
@@ -24,6 +25,17 @@ namespace editor
 	 */
 	[[nodiscard]] bool
 	IsMaterialAsset(const QString& asset);
+
+	/**
+	 * Whether any of `heldOpen` is `absolute`, or -- when that names a directory -- something
+	 * beneath it. `heldOpen` is what the panels have open, absolute or relative to the working
+	 * directory: a viewport's environment comes out of config.json relative, and a path compared
+	 * as a location without being resolved first silently matches nothing.
+	 *
+	 * Free of the operation for the reason AssetAt is: every dialog around it is modal.
+	 */
+	[[nodiscard]] bool
+	IsHeldOpen(const QStringList& heldOpen, const QString& absolute, bool isDirectory);
 
 	/**
 	 * Whether `name` can be the name of an asset or folder: one path component, usable on every

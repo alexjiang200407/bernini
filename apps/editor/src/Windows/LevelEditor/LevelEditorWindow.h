@@ -3,6 +3,7 @@
 #include "Render/environment.h"
 #include "Windows/RenderTarget/RenderTargetWindow.h"
 #include "ui_LevelEditorWindow.h"
+#include "util/held_open_assets.h"
 
 /**
  * The environment the level viewport is lit and backed by.
@@ -11,18 +12,9 @@
  * questions. A level is judged on the world it is in, so its backdrop is drawn sharp and its
  * lighting is whatever the level's own environment says.
  */
-struct LevelEditorEnv
-{
-	std::string environmentMap;
+using LevelEditorEnv = editor::EnvironmentApplyDesc;
 
-	// What the paths inside that `.benv` resolve against; see MaterialPreviewEnv::dataRoot.
-	std::filesystem::path dataRoot;
-
-	// Absent means the exposure the `.benv` carries, which is the value derived from its maps.
-	std::optional<float> exposureOverride;
-};
-
-class LevelEditorWindow : public RenderTargetWindow
+class LevelEditorWindow : public RenderTargetWindow, public editor::IHoldsAssets
 {
 	Q_OBJECT
 
@@ -32,7 +24,11 @@ public:
 		RenderTargetWindowDesc desc   = {},
 		LevelEditorEnv         env    = {});
 
+	/** The `.benv` this view is lit by, which must not be deleted while it is still drawing it. */
+	[[nodiscard]] QStringList
+	GetHeldOpenPaths() const override;
+
 private:
-	// What the environment bound, so nothing releases a slot the view still names.
-	editor::AppliedEnvironment m_Environment;
+	// The `.benv` bound and the slots it took, so nothing releases one the view still names.
+	editor::EnvironmentBinding m_Environment;
 };

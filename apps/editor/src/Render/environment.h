@@ -1,5 +1,7 @@
 #pragma once
 
+#include <QStringList>
+
 #include <bgl/IScene.h>
 #include <bgl/ISceneView.h>
 
@@ -110,6 +112,17 @@ namespace editor
 		std::string        boundPath;
 		AppliedEnvironment bound;
 	};
+
+	/**
+	 * What a view lit through `binding` holds open: the `.benv` bound to it, and nothing at all when
+	 * it is lit by nothing.
+	 *
+	 * The `.bsky`, the `.benvl` and the maps beneath them are not named here. Those are held by
+	 * assetlib's reference graph, which is where that rule lives -- a `.benv` is the one end of the
+	 * chain nothing on disk references, so it is the one end a panel has to answer for.
+	 */
+	[[nodiscard]] QStringList
+	GetHeldOpenEnvironment(const EnvironmentBinding& binding);
 
 	/**
 	 * The `.benv` a reset has to bind to undo a drop; nothing when there is nothing to undo.

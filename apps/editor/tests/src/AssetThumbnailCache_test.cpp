@@ -1,5 +1,6 @@
 #include "Render/Renderer.h"
 #include "Thumbnails/AssetThumbnailCache.h"
+#include "util/held_open_assets.h"
 #include <assetlib_structs/BMesh.h>
 #include <assetlib_structs/Node.h>
 
@@ -89,16 +90,16 @@ namespace
 		[[nodiscard]] AssetThumbnailDesc
 		Desc()
 		{
-			auto thumbSettings  = EditorConfig()["thumbnails"];
-			auto desc           = AssetThumbnailDesc();
-			desc.renderer       = &*renderer;
-			desc.environmentMap = thumbSettings["environmentMap"].GetOrDefault(std::string());
-			REQUIRE_FALSE(desc.environmentMap.empty());
+			auto thumbSettings      = EditorConfig()["thumbnails"];
+			auto desc               = AssetThumbnailDesc();
+			desc.renderer           = &*renderer;
+			desc.env.environmentMap = thumbSettings["environmentMap"].GetOrDefault(std::string());
+			REQUIRE_FALSE(desc.env.environmentMap.empty());
 
 			// Read from the same config the editor uses. It is no longer derived from the `.benv`'s
 			// path, so a caller that does not say goes unlit -- which is what this asserts against.
-			desc.dataRoot = thumbSettings["dataRoot"].GetOrDefault(std::string());
-			REQUIRE_FALSE(desc.dataRoot.empty());
+			desc.env.dataRoot = thumbSettings["dataRoot"].GetOrDefault(std::string());
+			REQUIRE_FALSE(desc.env.dataRoot.empty());
 
 			return desc;
 		}
@@ -164,6 +165,22 @@ namespace
 		}
 		return static_cast<int>(seen.size());
 	}
+}
+
+// The end of the wiring the Content Explorer's deletion guard depends on: a real holder, parented
+// into a tree nobody registered it in, answering with the `.benv` it is actually lit by. Nothing on
+// disk references a `.benv`, so this answer is the only thing that refuses its deletion.
+TEST_CASE("A live environment is held by the cache lit from it", "[thumbnails][render]")
+{
+	Fixture       fixture;
+	const QString environment = QString::fromStdString(fixture.Desc().env.environmentMap);
+
+	QObject root;
+	auto*   cache = new AssetThumbnailCache(fixture.Desc(), &root);
+
+	REQUIRE(cache->IsReady());
+	CHECK(cache->GetHeldOpenPaths() == QStringList{ environment });
+	CHECK(editor::GetAssetsHeldOpen(&root) == QStringList{ environment });
 }
 
 TEST_CASE("Only the assets the editor can draw are thumbnailed", "[thumbnails]")

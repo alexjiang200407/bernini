@@ -318,7 +318,7 @@ AnimationEditorWindow::SetDataRoot(const QString& dataRoot)
 }
 
 QStringList
-AnimationEditorWindow::HeldOpenPaths() const
+AnimationEditorWindow::GetHeldOpenPaths() const
 {
 	if (m_DataRoot.isEmpty() || m_MeshRelPath.isEmpty())
 		return {};

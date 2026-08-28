@@ -2,6 +2,7 @@
 
 #include "Render/OrbitCamera.h"
 #include "Render/environment.h"
+#include "util/held_open_assets.h"
 
 #include <QStringList>
 
@@ -23,12 +24,16 @@ using MaterialPreviewEnv = editor::EnvironmentApplyDesc;
 
 // The right-hand model preview: a lit sphere by default, or a `.bmesh` dropped onto it, shown
 // against the configured skybox + IBL with the material being authored applied to it.
-class MaterialPreviewWindow : public RenderTargetWindow
+class MaterialPreviewWindow : public RenderTargetWindow, public editor::IHoldsAssets
 {
 	Q_OBJECT
 
 public:
 	MaterialPreviewWindow(QWidget* parent, RenderTargetWindowDesc rt, MaterialPreviewEnv env);
+
+	/** The `.benv` this view is lit by, which must not be deleted while it is still drawing it. */
+	[[nodiscard]] QStringList
+	GetHeldOpenPaths() const override;
 
 	// Display names of the current preview geometry's submeshes -- one synthetic entry ("Sphere") for
 	// the default sphere, or the submesh names of a dropped mesh. Drives the editor's submesh selector.

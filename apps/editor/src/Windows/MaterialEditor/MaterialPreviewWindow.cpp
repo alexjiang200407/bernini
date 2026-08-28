@@ -588,3 +588,9 @@ MaterialPreviewWindow::SelectorIndexOf(
 	}
 	return -1;
 }
+
+QStringList
+MaterialPreviewWindow::GetHeldOpenPaths() const
+{
+	return editor::GetHeldOpenEnvironment(m_Environment);
+}

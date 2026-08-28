@@ -5,19 +5,24 @@ LevelEditorWindow::LevelEditorWindow(
 	RenderTargetWindowDesc desc,
 	LevelEditorEnv         env) : RenderTargetWindow(parent, std::move(desc))
 {
-	if (env.environmentMap.empty() || GetRenderer() == nullptr)
+	m_Environment.configured = std::move(env);
+
+	if (m_Environment.configured.environmentMap.empty() || GetRenderer() == nullptr)
 		return;
 
 	GetRenderer()->Invoke([&] {
-		// No mip override: a level viewport shows the world sharp, where the material preview
-		// defocuses its backdrop on purpose.
-		m_Environment = editor::ApplyEnvironment(
+		editor::BindEnvironment(
 			GetPreviewScene(),
 			GetPreviewView(),
-			env.environmentMap,
-			env.dataRoot,
-			env.exposureOverride,
-			std::nullopt,
+			m_Environment,
+			m_Environment.configured.environmentMap,
+			m_Environment.configured.dataRoot,
 			"LevelEditor");
 	});
+}
+
+QStringList
+LevelEditorWindow::GetHeldOpenPaths() const
+{
+	return editor::GetHeldOpenEnvironment(m_Environment);
 }

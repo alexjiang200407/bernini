@@ -403,7 +403,7 @@ MaterialEditorWindow::SelectSubmesh(int index)
 }
 
 QStringList
-MaterialEditorWindow::HeldOpenPaths() const
+MaterialEditorWindow::GetHeldOpenPaths() const
 {
 	return editor::HeldOpenByMaterialEditor(
 		m_Graphs.OpenPaths(),
