@@ -208,10 +208,7 @@ namespace bgl
 
 		// The stats writes are gated to BERNINI_GPU_DEBUG, so a release build drops the handle from
 		// the kernel's reflection; bind it only when it survived.
-		if (auto stats = uniforms["stats"]; stats.IsValid())
-		{
-			stats = ctx.GetBuffer(c_CullStatsName);
-		}
+		uniforms["stats"].SetIfValid(ctx.GetBuffer(c_CullStatsName));
 
 		auto cmdList = ctx.GetCommandList();
 

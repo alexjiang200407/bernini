@@ -124,82 +124,26 @@ namespace bgl
 		{
 			auto& taa = *found;
 
-			if (auto u = taa["sceneColor"]; u.IsValid())
-			{
-				u = args.sceneColor;
-			}
-			if (auto u = taa["history"]; u.IsValid())
-			{
-				u = args.prevHistory;
-			}
-			if (auto u = taa["motionVectors"]; u.IsValid())
-			{
-				u = args.motionVectors;
-			}
-			if (auto u = taa["depth"]; u.IsValid())
-			{
-				u = args.depth;
-			}
-			if (auto u = taa["clipToView"]; u.IsValid())
-			{
-				u = args.clipToView;
-			}
-			if (auto u = taa["viewToPrevClip"]; u.IsValid())
-			{
-				u = args.viewToPrevClip;
-			}
-			if (auto u = taa["jitter"]; u.IsValid())
-			{
-				u = args.jitter;
-			}
-			if (auto u = taa["cameraPairValid"]; u.IsValid())
-			{
-				u = args.cameraPairValid ? 1.0f : 0.0f;
-			}
-			if (auto u = taa["pointSampler"]; u.IsValid())
-			{
-				u = args.pointSampler;
-			}
-			if (auto u = taa["linearSampler"]; u.IsValid())
-			{
-				u = args.linearSampler;
-			}
-			if (auto u = taa["renderSize"]; u.IsValid())
-			{
-				u = args.renderSize;
-			}
-			if (auto u = taa["renderTexelSize"]; u.IsValid())
-			{
-				u = 1.0f / args.renderSize;
-			}
-			if (auto u = taa["outputTexelSize"]; u.IsValid())
-			{
-				u = 1.0f / outputSize;
-			}
-			if (auto u = taa["jitterTexels"]; u.IsValid())
-			{
-				u = jitterTexels;
-			}
-			if (auto u = taa["subPixels"]; u.IsValid())
-			{
-				u = subPixels;
-			}
-			if (auto u = taa["resampling"]; u.IsValid())
-			{
-				u = args.renderSize == outputSize ? 0.0f : 1.0f;
-			}
-			if (auto u = taa["sampleWeightK"]; u.IsValid())
-			{
-				u = 1.0f / (2.0f * args.reconstructionWidth * args.reconstructionWidth);
-			}
-			if (auto u = taa["blendWeight"]; u.IsValid())
-			{
-				u = c_BlendWeight;
-			}
-			if (auto u = taa["historyValid"]; u.IsValid())
-			{
-				u = args.historyValid ? 1.0f : 0.0f;
-			}
+			taa["sceneColor"].SetIfValid(args.sceneColor);
+			taa["history"].SetIfValid(args.prevHistory);
+			taa["motionVectors"].SetIfValid(args.motionVectors);
+			taa["depth"].SetIfValid(args.depth);
+			taa["clipToView"].SetIfValid(args.clipToView);
+			taa["viewToPrevClip"].SetIfValid(args.viewToPrevClip);
+			taa["jitter"].SetIfValid(args.jitter);
+			taa["cameraPairValid"].SetIfValid(args.cameraPairValid ? 1.0f : 0.0f);
+			taa["pointSampler"].SetIfValid(args.pointSampler);
+			taa["linearSampler"].SetIfValid(args.linearSampler);
+			taa["renderSize"].SetIfValid(args.renderSize);
+			taa["renderTexelSize"].SetIfValid(1.0f / args.renderSize);
+			taa["outputTexelSize"].SetIfValid(1.0f / outputSize);
+			taa["jitterTexels"].SetIfValid(jitterTexels);
+			taa["subPixels"].SetIfValid(subPixels);
+			taa["resampling"].SetIfValid(args.renderSize == outputSize ? 0.0f : 1.0f);
+			taa["sampleWeightK"].SetIfValid(
+				1.0f / (2.0f * args.reconstructionWidth * args.reconstructionWidth));
+			taa["blendWeight"].SetIfValid(c_BlendWeight);
+			taa["historyValid"].SetIfValid(args.historyValid ? 1.0f : 0.0f);
 		}
 		else
 		{

@@ -87,32 +87,14 @@ namespace bgl
 		{
 			auto& tonemap = *found;
 
-			if (auto u = tonemap["sceneColor"]; u.IsValid())
-			{
-				u = args.source;
-			}
-			if (auto u = tonemap["sampler"]; u.IsValid())
-			{
-				u = args.sampler;
-			}
-			if (auto u = tonemap["maskSampler"]; u.IsValid())
-			{
-				u = args.maskSampler;
-			}
-			if (auto u = tonemap["outlineEnabled"]; u.IsValid())
-			{
-				u = args.outlineEnabled ? 1u : 0u;
-			}
+			tonemap["sceneColor"].SetIfValid(args.source);
+			tonemap["sampler"].SetIfValid(args.sampler);
+			tonemap["maskSampler"].SetIfValid(args.maskSampler);
+			tonemap["outlineEnabled"].SetIfValid(args.outlineEnabled ? 1u : 0u);
 			if (args.outlineEnabled)
 			{
-				if (auto u = tonemap["outlineMask"]; u.IsValid())
-				{
-					u = args.outlineMask;
-				}
-				if (auto u = tonemap["maskSize"]; u.IsValid())
-				{
-					u = args.maskSize;
-				}
+				tonemap["outlineMask"].SetIfValid(args.outlineMask);
+				tonemap["maskSize"].SetIfValid(args.maskSize);
 			}
 		}
 		else

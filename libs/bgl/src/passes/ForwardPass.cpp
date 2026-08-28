@@ -431,53 +431,21 @@ namespace bgl
 			auto& matData = *foundMatData;
 			for (const auto& binding : c_MaterialBuffers)
 			{
-				const auto handle  = resources.GetBuffer(binding.graphName);
-				auto       uniform = matData[binding.uniformKey];
-				if (uniform.IsValid())
-				{
-					uniform = handle;
-				}
+				matData[binding.uniformKey].SetIfValid(resources.GetBuffer(binding.graphName));
 			}
 
-			if (auto anisoUniform = matData["anisoLinearWrapSampler"]; anisoUniform.IsValid())
-			{
-				anisoUniform = draw.samplers.anisoLinearWrap;
-			}
-			if (auto clampUniform = matData["linearClampSampler"]; clampUniform.IsValid())
-			{
-				clampUniform = draw.samplers.linearClamp;
-			}
+			matData["anisoLinearWrapSampler"].SetIfValid(draw.samplers.anisoLinearWrap);
+			matData["linearClampSampler"].SetIfValid(draw.samplers.linearClamp);
 
 			// IBL maps: assigning the RHI TextureHandle writes a descriptor handle into the
 			// shader-side handle's sole member.
-			if (auto u = matData["irradianceMap"]; u.IsValid())
-			{
-				u = draw.lighting.env.irradiance;
-			}
-			if (auto u = matData["prefilterMap"]; u.IsValid())
-			{
-				u = draw.lighting.env.prefilter;
-			}
-			if (auto u = matData["brdfLUT"]; u.IsValid())
-			{
-				u = draw.lighting.env.brdfLut;
-			}
-			if (auto u = matData["cameraPos"]; u.IsValid())
-			{
-				u = draw.viewState.cameraPos;
-			}
-			if (auto u = matData["exposure"]; u.IsValid())
-			{
-				u = draw.lighting.exposure;
-			}
-			if (auto u = matData["envRotation"]; u.IsValid())
-			{
-				u = draw.lighting.envRotation;
-			}
-			if (auto u = matData["alphaHashSeed"]; u.IsValid())
-			{
-				u = draw.viewState.alphaHashSeed;
-			}
+			matData["irradianceMap"].SetIfValid(draw.lighting.env.irradiance);
+			matData["prefilterMap"].SetIfValid(draw.lighting.env.prefilter);
+			matData["brdfLUT"].SetIfValid(draw.lighting.env.brdfLut);
+			matData["cameraPos"].SetIfValid(draw.viewState.cameraPos);
+			matData["exposure"].SetIfValid(draw.lighting.exposure);
+			matData["envRotation"].SetIfValid(draw.lighting.envRotation);
+			matData["alphaHashSeed"].SetIfValid(draw.viewState.alphaHashSeed);
 		}
 	}
 

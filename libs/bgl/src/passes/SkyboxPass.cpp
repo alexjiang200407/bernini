@@ -99,30 +99,12 @@ namespace bgl
 			skybox["clipToWorld"]     = draw.lighting.skyboxClipToWorld;
 			skybox["prevWorldToClip"] = draw.lighting.skyboxPrevWorldToClip;
 
-			if (auto u = skybox["cubeTex"]; u.IsValid())
-			{
-				u = draw.lighting.skybox->skyboxCubeTex;
-			}
-			if (auto u = skybox["sampler"]; u.IsValid())
-			{
-				u = draw.samplers.linearClamp;
-			}
-			if (auto u = skybox["exposure"]; u.IsValid())
-			{
-				u = draw.lighting.SkyExposure();
-			}
-			if (auto u = skybox["mipLevel"]; u.IsValid())
-			{
-				u = static_cast<float>(draw.lighting.skybox->mipLevel);
-			}
-			if (auto u = skybox["jitter"]; u.IsValid())
-			{
-				u = draw.viewState.jitter;
-			}
-			if (auto u = skybox["prevJitter"]; u.IsValid())
-			{
-				u = draw.viewState.prevJitter;
-			}
+			skybox["cubeTex"].SetIfValid(draw.lighting.skybox->skyboxCubeTex);
+			skybox["sampler"].SetIfValid(draw.samplers.linearClamp);
+			skybox["exposure"].SetIfValid(draw.lighting.SkyExposure());
+			skybox["mipLevel"].SetIfValid(static_cast<float>(draw.lighting.skybox->mipLevel));
+			skybox["jitter"].SetIfValid(draw.viewState.jitter);
+			skybox["prevJitter"].SetIfValid(draw.viewState.prevJitter);
 		}
 		else
 		{
