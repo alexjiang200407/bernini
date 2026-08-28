@@ -137,7 +137,8 @@ The `Co-authored-by` trailer is what credits the bot instead, and it costs the d
 GitHub's contributor statistics count a co-author's additions in full, alongside the author's, rather
 than splitting them.
 
-Two Claude Code hooks in [`.claude/settings.json`](../.claude/settings.json) close the gaps around it:
+Two of the Claude Code hooks in [`.claude/settings.json`](../.claude/settings.json) close the gaps
+around it:
 
 - [`gh_guard.py`](../.claude/hooks/gh_guard.py) (`PreToolUse`) rejects `gh pr create`, `gh pr comment`,
   `gh pr review`, `gh pr merge`, a `gh api` write to a comment endpoint, and `git commit --no-verify`,
@@ -175,6 +176,13 @@ The list lives in the worktree's git dir as `bernini-pr-watch.json` (`.git/`, or
 session never inherits a block for a PR it knows nothing about, and `watching`, keyed by pid and
 deliberately not by session — a watcher started by one session still counts for another, because the
 PR is being watched either way.
+
+A third hook in the same file, [`ask_guard.py`](../.claude/hooks/ask_guard.py) (`PreToolUse`), is
+not about identity at all: it holds a `ws ask` session to reading, and is inert unless `WS_ASK` is
+set. Two rules — one allowlist of paths that may be written, and no shell at all, Bash being refused
+outright rather than inspected. [`bcp-ask`](../.claude/skills/bcp-ask/SKILL.md) is where it is
+described; `scripts/tests/test_ask_guard.py` pins what it refuses, and carries the record of why
+inspecting a command line was abandoned.
 
 ## Coding agent: commit attribution
 
