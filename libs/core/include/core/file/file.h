@@ -10,6 +10,10 @@ namespace core::file
 	std::vector<std::byte>
 	read_file_bytes(std::string_view filePath);
 
+	/** The host-path form, so a caller holding one does not spell the conversion at every call. */
+	std::vector<std::byte>
+	read_file_bytes(const std::filesystem::path& filePath);
+
 	/**
 	 * FNV-1a over a file's contents, read in fixed-size chunks so a file larger than memory still
 	 * hashes. Equal to hash_bytes over the whole file read at once.

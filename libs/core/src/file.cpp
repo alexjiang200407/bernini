@@ -36,6 +36,12 @@ namespace core::file
 		return read_file_bytes(std::string{ filePath });
 	}
 
+	std::vector<std::byte>
+	read_file_bytes(const std::filesystem::path& filePath)
+	{
+		return read_file_bytes(filePath.string());
+	}
+
 	std::optional<uint64_t>
 	hash_file(const std::filesystem::path& filePath)
 	{
