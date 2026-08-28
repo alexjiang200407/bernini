@@ -11,6 +11,16 @@
             "statusMessage": "Checking the PR rules"
           }
         ]
+      },
+      {
+        "matcher": "Write|Edit|MultiEdit|NotebookEdit|Bash|PowerShell",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "PY=$(command -v python3 || command -v python); exec \"$PY\" \"${CLAUDE_PROJECT_DIR:-.}\"/.claude/hooks/ask_guard.py",
+            "statusMessage": "Checking the ask session is reading"
+          }
+        ]
       }
     ],
     "Stop": [
