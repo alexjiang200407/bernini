@@ -479,22 +479,6 @@ TEST_CASE("bakeMaterial re-encodes a map only when a source is newer", "[bmateri
 	}
 }
 
-TEST_CASE("bakeMaterial honours a custom texture directory", "[bmaterial][bake]")
-{
-	const BakeDir dir("bernini_bake_texdir");
-
-	WriteSource(dir.path / "a.ktx2", 16, { { 200, 100, 50, 255 } });
-
-	BMaterial mat;
-	mat.pbr.routes[0] = { "a.ktx2", 0 };
-
-	// The textureDir overload -- the one caller that does not write into the project's default.
-	REQUIRE_NOTHROW(StoreAt(dir.path).BakeMaterial(mat, "cooked"));
-
-	REQUIRE(mat.pbr.baseColorTexture.starts_with("cooked/basecolor_"));
-	REQUIRE(std::filesystem::exists(dir.path / mat.pbr.baseColorTexture));
-}
-
 TEST_CASE("bakeMaterial rejects a material with nothing routed", "[bmaterial][bake]")
 {
 	const BakeDir dir("bernini_bake_empty");

@@ -493,15 +493,9 @@ namespace assetlib
 	void
 	AssetStore::BakeMaterial(BMaterial& material, const CancelToken& cancel) const
 	{
-		BakeMaterial(material, c_BakedTexturesDirectoryName, cancel);
-	}
-
-	void
-	AssetStore::BakeMaterial(
-		BMaterial&         material,
-		std::string_view   textureDir,
-		const CancelToken& cancel) const
-	{
-		bakeMaterial(material, { .dataRoot = m_DataRoot, .textureDir = textureDir }, cancel);
+		bakeMaterial(
+			material,
+			{ .dataRoot = m_DataRoot, .textureDir = c_BakedTexturesDirectoryName },
+			cancel);
 	}
 }

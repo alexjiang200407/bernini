@@ -1,9 +1,15 @@
 #include <assetlib/AssetStore.h>
 #include <assetlib/Project.h>
 #include <assetlib/pak.h>
+#include <assetlib_structs/BEnv.h>
 #include <assetlib_structs/BMaterial.h>
+#include <assetlib_structs/BMesh.h>
 
 #include <nlohmann/json.hpp>
+
+#include "RefsSandbox.h"
+
+#include <catch2/matchers/catch_matchers_string.hpp>
 
 using namespace assetlib;
 
@@ -319,4 +325,70 @@ TEST_CASE("A project reads and writes the loose tree, archive or not", "[project
 
 		CHECK_FALSE(reopened.GetStore().Exists("Authored/Materials/skin.bmaterial"));
 	}
+}
+
+// The layout is an invariant rather than a convention: the codec decides a container's origin,
+// and Save refuses a key naming the half the other origin owns. Without this the split holds only for
+// as long as every caller remembers it, which is what let the environment importer write a `.bsky`
+// outside `Derived/` for a whole release.
+TEST_CASE(
+	"A container cannot be written outside the half its codec belongs to",
+	"[project][origin]")
+{
+	const test::DataRoot root("bernini_origin_rule");
+	const AssetStore     store(root.path);
+
+	SECTION("a derived container is refused under the authored half")
+	{
+		CHECK_THROWS_WITH(
+			store.Save(BMesh(), "Authored/Meshes/a.bmesh"),
+			Catch::Matchers::ContainsSubstring("belongs under Derived/"));
+	}
+
+	SECTION("an authored document is refused under the derived half")
+	{
+		CHECK_THROWS_WITH(
+			store.Save(BMaterial(), "Derived/Materials/a.bmaterial"),
+			Catch::Matchers::ContainsSubstring("belongs under Authored/"));
+	}
+
+	SECTION("a key in neither half is refused, not silently treated as one of them")
+	{
+		CHECK_THROWS_AS(store.Save(BMesh(), "a.bmesh"), std::runtime_error);
+		CHECK_THROWS_AS(store.Save(BMaterial(), "Materials/a.bmaterial"), std::runtime_error);
+	}
+
+	SECTION("the origin is read through a normalized key, so a detour cannot smuggle one past")
+	{
+		CHECK_THROWS_AS(
+			store.Save(BMesh(), "Derived/../Authored/Meshes/a.bmesh"),
+			std::runtime_error);
+		CHECK_NOTHROW(store.Save(BMesh(), "Authored/../Derived/Meshes/a.bmesh"));
+	}
+
+	SECTION("the message names the container, as every other message this library throws does")
+	{
+		CHECK_THROWS_WITH(
+			store.Save(BSky(), "Authored/Sky/a.bsky"),
+			Catch::Matchers::StartsWith("bsky: "));
+	}
+}
+
+// originOf is the predicate the rule is built on, and the cases that decide nothing are the ones a
+// caller is most likely to get wrong.
+TEST_CASE("originOf answers only for a key inside a half", "[project][origin]")
+{
+	CHECK(originOf("Authored/Materials/a.bmaterial") == AssetOrigin::kAuthored);
+	CHECK(originOf("Derived/Meshes/a.bmesh") == AssetOrigin::kDerived);
+
+	// A half names itself, not something in it.
+	CHECK_FALSE(originOf("Authored").has_value());
+	CHECK_FALSE(originOf("Derived").has_value());
+
+	CHECK_FALSE(originOf("").has_value());
+	CHECK_FALSE(originOf("a.bmesh").has_value());
+	CHECK_FALSE(originOf("Meshes/a.bmesh").has_value());
+
+	// Not a prefix match: `DerivedThings` is not `Derived`.
+	CHECK_FALSE(originOf("DerivedThings/a.bmesh").has_value());
 }

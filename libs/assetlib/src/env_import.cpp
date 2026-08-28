@@ -151,6 +151,19 @@ namespace assetlib
 		if (desc.name.empty())
 			throw std::runtime_error("AssetStore::ImportEnvironment: the asset name is empty");
 
+		// Up front, because the convolutions take minutes and Save would not refuse a misplaced
+		// `.benvl` until they were spent. The float intermediates never reach Save at all.
+		requireOrigin(
+			desc.sourceDir.generic_string(),
+			AssetOrigin::kDerived,
+			"environment sources");
+		if (desc.sky)
+			requireOrigin(desc.skyDir.generic_string(), AssetOrigin::kDerived, "bsky");
+		if (desc.lighting)
+			requireOrigin(desc.lightingDir.generic_string(), AssetOrigin::kDerived, "benvl");
+		if (desc.environment)
+			requireOrigin(desc.environmentDir.generic_string(), AssetOrigin::kAuthored, "benv");
+
 		// The float intermediates are written straight to the host by writeKTX2, which makes no
 		// directory; the three containers go through the store, which makes its own.
 		createDirectories(GetDataRoot() / desc.sourceDir);

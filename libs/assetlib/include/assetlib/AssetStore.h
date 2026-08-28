@@ -172,8 +172,9 @@ namespace assetlib
 		 * key it would read by and never resolves one itself, which is the asymmetry this closes.
 		 * Directories the key names are created; a caller never makes them.
 		 *
-		 * @throws std::runtime_error if `path` escapes the data root (see ResolveWritePath), or the
-		 *         file cannot be written. Atomic: a crash mid-write leaves the previous bytes.
+		 * @throws std::runtime_error if `path` names the wrong half of the data root for `T` (see
+		 *         requireOrigin), escapes the data root (see ResolveWritePath), or cannot be written.
+		 *         Atomic: a crash mid-write leaves the previous bytes.
 		 */
 		template <AssetCodecFor T>
 		void
@@ -181,47 +182,35 @@ namespace assetlib
 		{
 			// The extension without its dot is the container's name, which is what every message
 			// this library throws is prefixed with -- "bmaterial: ...", not ".bmaterial: ...".
-			WriteBytes(path, AssetCodec<T>::Serialize(value), AssetCodec<T>::c_Extension.substr(1));
+			const std::string_view what = AssetCodec<T>::c_Extension.substr(1);
+
+			requireOrigin(path, originFor<T>(), what);
+			WriteBytes(path, AssetCodec<T>::Serialize(value), what);
 		}
 
 		// --- Bakes ---------------------------------------------------------------------------
 
 		/**
 		 * Composites `material`'s routes down to its baked triplet, in place, writing the maps into
-		 * the project's texture directory.
+		 * `c_BakedTexturesDirectoryName`.
 		 *
-		 * The store is the data root a bake reads and writes relative to, so it is not passed one.
+		 * Where the maps land is the layout's to decide, not a caller's: the routes this writes into
+		 * `material` are references, and one naming a directory outside `Derived/` would be a
+		 * reference the split does not cover. The store is the data root it reads and writes
+		 * relative to, so it is not passed one either.
 		 *
 		 * @throws std::runtime_error / Cancelled as bakeMaterial.
 		 */
 		void
 		BakeMaterial(BMaterial& material, const CancelToken& cancel = {}) const;
 
-		/** BakeMaterial, writing the maps into `textureDir` instead of the project's default. */
-		void
-		BakeMaterial(
-			BMaterial&         material,
-			std::string_view   textureDir,
-			const CancelToken& cancel = {}) const;
-
 		/** @throws std::runtime_error / Cancelled as bakeSky. */
 		void
 		BakeSky(BSky& sky, const CancelToken& cancel = {}) const;
 
-		/** BakeSky, writing the map into `textureDir` instead of the project's default. */
-		void
-		BakeSky(BSky& sky, std::string_view textureDir, const CancelToken& cancel = {}) const;
-
 		/** @throws std::runtime_error / Cancelled as bakeEnvLighting. */
 		void
 		BakeEnvLighting(BEnvLighting& lighting, const CancelToken& cancel = {}) const;
-
-		/** BakeEnvLighting, writing the maps into `textureDir` instead of the project's default. */
-		void
-		BakeEnvLighting(
-			BEnvLighting&      lighting,
-			std::string_view   textureDir,
-			const CancelToken& cancel = {}) const;
 
 		/**
 		 * bakeVat over this project: loads the mesh, the skeleton it names and the clip set, bakes,
@@ -406,7 +395,8 @@ namespace assetlib
 		 * Basis-UASTC supercompression dominates the cost of an import; `onProgress` runs on the
 		 * calling thread, and `cancel` is polled between encodes, never inside one.
 		 *
-		 * @throws std::runtime_error if `textureDir` escapes the data root, or a write fails.
+		 * @throws std::runtime_error if `textureDir` is not under `Derived/` (see requireOrigin),
+		 *         escapes the data root, or a write fails.
 		 * @throws Cancelled if `cancel` is signalled. What was written stays.
 		 *
 		 * @return The mount keys written, in image order -- what the naming rule decided, so a
@@ -723,7 +713,9 @@ namespace assetlib
 		 * orphan left by a failed import is what FindUnusedBakedTextures sweeps.
 		 *
 		 * @param cancel Polled between the projection, each convolution and each bake.
-		 * @throws std::runtime_error if nothing is selected, or the source cannot be read.
+		 * @throws std::runtime_error if nothing is selected, if the source cannot be read, or if any
+		 *         directory `desc` names is the wrong half for what would land in it -- checked
+		 *         before the projection, so a misplaced one costs no bake.
 		 * @throws Cancelled if `cancel` is signalled.
 		 */
 		[[nodiscard]] EnvImportResult

@@ -185,27 +185,18 @@ namespace assetlib
 	void
 	AssetStore::BakeSky(BSky& sky, const CancelToken& cancel) const
 	{
-		BakeSky(sky, c_BakedTexturesDirectoryName, cancel);
-	}
-
-	void
-	AssetStore::BakeSky(BSky& sky, std::string_view textureDir, const CancelToken& cancel) const
-	{
-		bakeSky(sky, { .dataRoot = m_DataRoot, .textureDir = textureDir }, cancel);
+		bakeSky(
+			sky,
+			{ .dataRoot = m_DataRoot, .textureDir = c_BakedTexturesDirectoryName },
+			cancel);
 	}
 
 	void
 	AssetStore::BakeEnvLighting(BEnvLighting& lighting, const CancelToken& cancel) const
 	{
-		BakeEnvLighting(lighting, c_BakedTexturesDirectoryName, cancel);
-	}
-
-	void
-	AssetStore::BakeEnvLighting(
-		BEnvLighting&      lighting,
-		std::string_view   textureDir,
-		const CancelToken& cancel) const
-	{
-		bakeEnvLighting(lighting, { .dataRoot = m_DataRoot, .textureDir = textureDir }, cancel);
+		bakeEnvLighting(
+			lighting,
+			{ .dataRoot = m_DataRoot, .textureDir = c_BakedTexturesDirectoryName },
+			cancel);
 	}
 }
