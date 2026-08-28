@@ -65,6 +65,13 @@ Concretely, before adding to `include/assetlib/`:
   nobody noticed. The exception is real and narrow: `AssetRefGraph::Scan(store)` builds an object
   holding an edge index across every later `ReferrersOf`, so it is a named constructor and stays
   free. Stateless and about the project's contents means method.
+- **A container is written into the half its codec belongs to, and `Save` refuses anything else.**
+  `CacheEntryCodecFor<T>` decides which half; `requireOrigin` (`include/assetlib/project_layout.h`)
+  is where the refusal lives, and the untyped destinations that reach the host directly --
+  `WriteTextures`' `textureDir`, `EnvImportDesc`'s directories -- call it themselves. Do not add a
+  parameter letting a caller name a directory a bake writes into: the routes a bake stores are
+  references, and one outside `Derived/` is a reference the split does not cover. That is why the
+  bakes take no `textureDir` any more.
 - **A caller never creates a directory for a store write.** `store.Save(value, key)` creates what
   the key names; a key is a location in the data root, not one that already exists. A caller that
   writes straight to the host is the exception and looks different — `writeKTX2` and `copy_file`

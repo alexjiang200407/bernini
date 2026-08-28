@@ -296,16 +296,17 @@ TEST_CASE("A right-clicked asset resolves to its path under the data root", "[co
 	};
 
 	const auto sample = GENERATE(
-		Case{ "Meshes/tree.bmesh", "Meshes/tree.bmesh" },
-		Case{ "Materials/kirk/Body.bmaterial", "Materials/kirk/Body.bmaterial" },
+		Case{ "Derived/Meshes/tree.bmesh", "Derived/Meshes/tree.bmesh" },
+		Case{ "Authored/Materials/kirk/Body.bmaterial", "Authored/Materials/kirk/Body.bmaterial" },
 		Case{ "Textures/basecolor_700a22db7b7ef785.ktx2",
 	          "Textures/basecolor_700a22db7b7ef785.ktx2" },
 		Case{ "Derived/SourceTextures/kirk/tex0.ktx2", "Derived/SourceTextures/kirk/tex0.ktx2" },
 
 		// Deleting these is not this window's business, whatever their suffix suggests.
-		Case{ "Meshes/notes.txt", "" },
-		Case{ "Meshes/tree.glb", "" },  // importable, but not yet an asset of the project
-		Case{ "Meshes/tree.BMESH", "Meshes/tree.BMESH" });  // the suffix decides, case and all
+		Case{ "Derived/Meshes/notes.txt", "" },
+		Case{ "Derived/Meshes/tree.glb", "" },  // importable, but not yet an asset of the project
+		Case{ "Derived/Meshes/tree.BMESH",
+	          "Derived/Meshes/tree.BMESH" });  // the suffix decides, case and all
 
 	INFO("file: " << sample.file);
 
@@ -324,10 +325,10 @@ TEST_CASE("Only a material is offered a Bake action", "[contentexplorer]")
 {
 	// Baking composites a material's routes into its triplet, so it means nothing for a mesh, a texture
 	// or a directory -- the menu offers it for a `.bmaterial` alone. By the extension, case and all.
-	CHECK(editor::IsMaterialAsset("Materials/skin.bmaterial"));
-	CHECK(editor::IsMaterialAsset("Materials/skin.BMATERIAL"));
+	CHECK(editor::IsMaterialAsset("Authored/Materials/skin.bmaterial"));
+	CHECK(editor::IsMaterialAsset("Authored/Materials/skin.BMATERIAL"));
 
-	CHECK_FALSE(editor::IsMaterialAsset("Meshes/tree.bmesh"));
+	CHECK_FALSE(editor::IsMaterialAsset("Derived/Meshes/tree.bmesh"));
 	CHECK_FALSE(editor::IsMaterialAsset("Textures/base.ktx2"));
 	CHECK_FALSE(editor::IsMaterialAsset("Derived/SourceTextures/kirk"));  // a directory
 	CHECK_FALSE(editor::IsMaterialAsset(""));
@@ -517,9 +518,9 @@ TEST_CASE("Back moves the tree's selection with the grid", "[contentexplorer]")
 TEST_CASE("A .bvat is a build product the explorer does not list", "[contentexplorer]")
 {
 	const Sandbox sandbox;
-	Touch(sandbox, "Meshes/unit.bmesh");
-	Touch(sandbox, "Meshes/unit.bvat");
-	Touch(sandbox, "Meshes/UNIT2.BVAT");
+	Touch(sandbox, "Derived/Meshes/unit.bmesh");
+	Touch(sandbox, "Derived/Meshes/unit.bvat");
+	Touch(sandbox, "Derived/Meshes/UNIT2.BVAT");
 
 	ContentExplorerWindow window(nullptr, NothingOpen());
 	window.SetRootPath(sandbox.DataRootPath());
@@ -528,17 +529,17 @@ TEST_CASE("A .bvat is a build product the explorer does not list", "[contentexpl
 	auto* grid  = qobject_cast<QFileSystemModel*>(files->model());
 	REQUIRE(grid != nullptr);
 
-	// Root the grid at Meshes/ the way the user does: through the tree.
+	// Root the grid at Derived/Meshes/ the way the user does: through the tree.
 	auto* tree      = Hierarchy(window);
 	auto* hierarchy = qobject_cast<QFileSystemModel*>(tree->model());
 	REQUIRE(hierarchy != nullptr);
-	const QString meshes = QString::fromStdString((sandbox.DataRoot() / "Meshes").string());
+	const QString meshes = QString::fromStdString((sandbox.DataRoot() / "Derived/Meshes").string());
 	tree->setCurrentIndex(IndexFor(*hierarchy, meshes));
 	REQUIRE(WaitFor([&] { return Shown(window) == meshes; }));
 
-	const QModelIndex bmesh = IndexFor(*grid, Touch(sandbox, "Meshes/unit.bmesh"));
-	const QModelIndex bvat  = IndexFor(*grid, Touch(sandbox, "Meshes/unit.bvat"));
-	const QModelIndex upper = IndexFor(*grid, Touch(sandbox, "Meshes/UNIT2.BVAT"));
+	const QModelIndex bmesh = IndexFor(*grid, Touch(sandbox, "Derived/Meshes/unit.bmesh"));
+	const QModelIndex bvat  = IndexFor(*grid, Touch(sandbox, "Derived/Meshes/unit.bvat"));
+	const QModelIndex upper = IndexFor(*grid, Touch(sandbox, "Derived/Meshes/UNIT2.BVAT"));
 
 	// Rows arrive asynchronously; the hider runs off rowsInserted, so wait for its verdicts.
 	CHECK(WaitFor([&] { return files->isRowHidden(bvat.row()); }));

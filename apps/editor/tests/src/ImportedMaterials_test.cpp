@@ -49,7 +49,7 @@ namespace
 		[[nodiscard]] std::filesystem::path
 		MaterialDir() const
 		{
-			return m_Root / "Materials" / "hydrant";
+			return m_Root / "Authored/Materials" / "hydrant";
 		}
 		[[nodiscard]] std::filesystem::path
 		TextureDir() const
@@ -147,7 +147,7 @@ TEST_CASE("An imported PBR material is written and bound to its submesh", "[impo
 
 	// The mesh names it relative to the data root -- that is what makes a project relocatable.
 	REQUIRE(mesh.materials.size() == 1);
-	CHECK(mesh.materials[0] == "Materials/hydrant/Rust.bmaterial");
+	CHECK(mesh.materials[0] == "Authored/Materials/hydrant/Rust.bmaterial");
 	CHECK(mesh.submeshes[0].material == 0);
 
 	// And what landed is a material the renderer can draw, routed at this import's own textures.
@@ -305,7 +305,7 @@ TEST_CASE("A material is written under the stem it was handed", "[importedmateri
 	CHECK(std::filesystem::exists(project.MaterialDir() / "fur_brown.bmaterial"));
 	CHECK_FALSE(std::filesystem::exists(project.MaterialDir() / "Rust.bmaterial"));
 
-	CHECK(mesh.materials[0] == "Materials/hydrant/fur_brown.bmaterial");
+	CHECK(mesh.materials[0] == "Authored/Materials/hydrant/fur_brown.bmaterial");
 	CHECK(
 		assetlib::AssetStore(project.MaterialDir())
 			.Load<assetlib::BMaterial>("fur_brown.bmaterial")

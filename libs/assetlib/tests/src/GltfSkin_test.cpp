@@ -394,25 +394,28 @@ TEST_CASE("Importing a skinned mesh writes the rig it names", "[gltf][skeleton][
 		import.skeleton,
 		import.animations,
 		baked,
-		"rig.bskel",
-		"rig.banim",
+		KeyIn(c_SkeletonsDirectoryName, "rig.bskel"),
+		KeyIn(c_AnimationsDirectoryName, "rig.banim"),
 		true,
 		SourceRef{});
-	store.Save(baked, "rig.bmesh");
+	store.Save(baked, KeyIn(c_MeshesDirectoryName, "rig.bmesh"));
 
-	const auto mesh = StoreAt(outDir).Load<BMesh>("rig.bmesh");
+	const auto mesh = StoreAt(outDir).Load<BMesh>(KeyIn(c_MeshesDirectoryName, "rig.bmesh"));
 
 	// A mesh whose vertices carry joints and that names no skeleton has indices nothing can resolve,
 	// which is why the two are written together rather than the rig being an authoring choice.
 	REQUIRE(isSkinned(mesh));
-	CHECK(mesh.skeleton == "rig.bskel");
-	CHECK(loadMeshRefs(outDir / "rig.bmesh").skeleton == "rig.bskel");
+	CHECK(mesh.skeleton == KeyIn(c_SkeletonsDirectoryName, "rig.bskel"));
+	CHECK(
+		loadMeshRefs(outDir / KeyIn(c_MeshesDirectoryName, "rig.bmesh")).skeleton ==
+		KeyIn(c_SkeletonsDirectoryName, "rig.bskel"));
 
 	const auto skeleton = StoreAt(outDir).Load<Skeleton>(mesh.skeleton);
 	REQUIRE(skeleton.bones.size() == 2);
 
-	const auto animations = StoreAt(outDir).Load<AnimationSet>("rig.banim");
-	CHECK(animations.skeleton == "rig.bskel");
+	const auto animations =
+		StoreAt(outDir).Load<AnimationSet>(KeyIn(c_AnimationsDirectoryName, "rig.banim"));
+	CHECK(animations.skeleton == KeyIn(c_SkeletonsDirectoryName, "rig.bskel"));
 	CHECK(animations.clips.size() == 2);
 	CHECK(animationsMatchSkeleton(animations, skeleton));
 }

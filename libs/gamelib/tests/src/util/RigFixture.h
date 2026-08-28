@@ -1,4 +1,6 @@
 #pragma once
+#include "StoreAt.h"
+
 #include <assetlib/AssetStore.h>
 #include <assetlib/image_io.h>
 #include <assetlib/skinning.h>
@@ -64,16 +66,14 @@ namespace game::test
 		else
 			material.pbr.baseColorTexture = "Textures/white.ktx2";
 
-		fs::create_directories(path.parent_path());
-		assetlib::AssetStore(path.parent_path()).Save(material, path.filename().generic_string());
+		SaveAt(material, path);
 	}
 
 	/**
 	 * The rig on disk: one bone, a 4-vertex quad welded to it (one meshlet), and a 2-frame "slide"
 	 * clip translating the bone +1 X per frame -- so the pose at frame f is the quad on
-	 * [f - 1, f + 1], readable off the screen. Writes Meshes/rig.bmesh, Skeletons/rig.bskel,
-	 * Animations/rig.banim and the material; deliberately NO .bvat -- producing one is the
-	 * manager's job.
+	 * [f - 1, f + 1], readable off the screen. Writes the mesh, its rig, one clip set and the
+	 * material; deliberately NO .bvat -- producing one is the manager's job.
 	 */
 	inline void
 	WriteRig(const fs::path& dataRoot, bool looseMaterial = false)
@@ -90,7 +90,7 @@ namespace game::test
 		skeleton.bones[0].inverseBind = glm::inverse(binds[0]);
 
 		auto animations              = assetlib::AnimationSet();
-		animations.skeleton          = "Skeletons/rig.bskel";
+		animations.skeleton          = "Derived/Skeletons/rig.bskel";
 		animations.skeletonSignature = assetlib::skeletonSignature(skeleton);
 		animations.boneCount         = 1;
 
@@ -183,20 +183,17 @@ namespace game::test
 		entry.submeshCount = 1;
 		mesh.meshes.push_back(entry);
 
-		mesh.materials.push_back("Materials/skin.bmaterial");
-		mesh.skeleton          = "Skeletons/rig.bskel";
+		mesh.materials.push_back("Authored/Materials/skin.bmaterial");
+		mesh.skeleton          = "Derived/Skeletons/rig.bskel";
 		mesh.skeletonSignature = assetlib::skeletonSignature(skeleton);
 
-		fs::create_directories(dataRoot / "Meshes");
-		fs::create_directories(dataRoot / "Skeletons");
-		fs::create_directories(dataRoot / "Animations");
 		const assetlib::AssetStore store(dataRoot);
-		store.Save(mesh, "Meshes/rig.bmesh");
-		store.Save(skeleton, "Skeletons/rig.bskel");
-		store.Save(animations, "Animations/rig.banim");
+		store.Save(mesh, "Derived/Meshes/rig.bmesh");
+		store.Save(skeleton, "Derived/Skeletons/rig.bskel");
+		store.Save(animations, "Derived/Animations/rig.banim");
 
 		WriteTexture(dataRoot / "Textures/white.ktx2");
-		WriteMaterial(dataRoot / "Materials/skin.bmaterial", looseMaterial);
+		WriteMaterial(dataRoot / "Authored/Materials/skin.bmaterial", looseMaterial);
 	}
 
 	/**
@@ -212,10 +209,10 @@ namespace game::test
 		uint32_t         frameCount)
 	{
 		const auto skeleton =
-			assetlib::AssetStore(dataRoot).Load<assetlib::Skeleton>("Skeletons/rig.bskel");
+			assetlib::AssetStore(dataRoot).Load<assetlib::Skeleton>("Derived/Skeletons/rig.bskel");
 
 		auto animations              = assetlib::AnimationSet();
-		animations.skeleton          = "Skeletons/rig.bskel";
+		animations.skeleton          = "Derived/Skeletons/rig.bskel";
 		animations.skeletonSignature = assetlib::skeletonSignature(skeleton);
 		animations.boneCount         = 1;
 

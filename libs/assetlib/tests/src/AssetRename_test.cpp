@@ -325,8 +325,10 @@ TEST_CASE("Renaming a directory re-points every reference into it", "[assetrenam
 {
 	const DataRoot root("bernini_rename_dir");
 
-	// One reference in from outside, one wholly inside: the outside one is rewritten where it stands,
-	// the inside one is rewritten and then moves with the directory.
+	// Two referrers of different kinds, both outside: the plan collects an edge by where its
+	// *target* sits, so one directory rename has to re-point every kind that reached into it.
+	// Nothing can referred from inside -- every reference crosses a category, so a referrer and its
+	// target never share a directory a user can rename.
 	WriteSource(
 		root.path / "Derived/SourceTextures" / "kirk" / "tex0.ktx2",
 		{ { 200, 0, 0, 255 } });
@@ -335,10 +337,10 @@ TEST_CASE("Renaming a directory re-points every reference into it", "[assetrenam
 		{ { 0, 200, 0, 255 } });
 	BakeAndSave(root, "outside.bmaterial", "Derived/SourceTextures/kirk/tex0.ktx2");
 
-	BMaterial inside;
-	inside.pbr.routes[0] = { "Derived/SourceTextures/kirk/tex1.ktx2", 0 };
-	fs::create_directories(root.path / "Derived/SourceTextures" / "kirk");
-	StoreAt(root.path).Save(inside, "Derived/SourceTextures/kirk/inside.bmaterial");
+	BSky sky;
+	sky.name       = "dusk";
+	sky.sky.source = "Derived/SourceTextures/kirk/tex1.ktx2";
+	StoreAt(root.path).Save(sky, KeyIn(c_SkyDirectoryName, "dusk.bsky"));
 
 	const RenamePlan plan =
 		planRename(root.Scan(), "Derived/SourceTextures/kirk", "Derived/SourceTextures/spock");
@@ -356,10 +358,8 @@ TEST_CASE("Renaming a directory re-points every reference into it", "[assetrenam
 			.pbr.routes[0]
 			.texture == "Derived/SourceTextures/spock/tex0.ktx2");
 	CHECK(
-		StoreAt(root.path)
-			.Load<BMaterial>("Derived/SourceTextures/spock/inside.bmaterial")
-			.pbr.routes[0]
-			.texture == "Derived/SourceTextures/spock/tex1.ktx2");
+		StoreAt(root.path).Load<BSky>(KeyIn(c_SkyDirectoryName, "dusk.bsky")).sky.source ==
+		"Derived/SourceTextures/spock/tex1.ktx2");
 
 	CHECK(root.Scan().broken.empty());
 }

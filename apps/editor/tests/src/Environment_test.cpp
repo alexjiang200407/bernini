@@ -146,8 +146,8 @@ TEST_CASE("Only the maps an environment replaced are released", "[environment][r
 TEST_CASE("A preview nobody dropped on has nothing to restore", "[environment]")
 {
 	auto binding                      = editor::EnvironmentBinding();
-	binding.configured.environmentMap = "Environments/studio.benv";
-	binding.boundPath                 = "Environments/studio.benv";
+	binding.configured.environmentMap = "Authored/Environments/studio.benv";
+	binding.boundPath                 = "Authored/Environments/studio.benv";
 
 	CHECK_FALSE(editor::GetEnvironmentToRestore(binding).has_value());
 }
@@ -155,12 +155,12 @@ TEST_CASE("A preview nobody dropped on has nothing to restore", "[environment]")
 TEST_CASE("A dropped environment is restored to the configured one", "[environment]")
 {
 	auto binding                      = editor::EnvironmentBinding();
-	binding.configured.environmentMap = "Environments/studio.benv";
-	binding.boundPath                 = "Environments/sunset.benv";
+	binding.configured.environmentMap = "Authored/Environments/studio.benv";
+	binding.boundPath                 = "Authored/Environments/sunset.benv";
 
 	const std::optional<std::string> restore = editor::GetEnvironmentToRestore(binding);
 	REQUIRE(restore.has_value());
-	CHECK(*restore == "Environments/studio.benv");
+	CHECK(*restore == "Authored/Environments/studio.benv");
 }
 
 TEST_CASE("A preview configured with no environment keeps the drop", "[environment]")
@@ -169,7 +169,7 @@ TEST_CASE("A preview configured with no environment keeps the drop", "[environme
 	// would stay lit anyway -- and the only other reading of it is an unlit preview, which is worse
 	// than somebody else's backdrop.
 	auto binding      = editor::EnvironmentBinding();
-	binding.boundPath = "Environments/sunset.benv";
+	binding.boundPath = "Authored/Environments/sunset.benv";
 
 	CHECK_FALSE(editor::GetEnvironmentToRestore(binding).has_value());
 }

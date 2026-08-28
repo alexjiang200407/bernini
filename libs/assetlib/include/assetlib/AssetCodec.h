@@ -1,5 +1,6 @@
 #pragma once
 #include <assetlib/asset_refs.h>
+#include <assetlib/project_layout.h>
 
 namespace assetlib
 {
@@ -57,6 +58,21 @@ namespace assetlib
 		{ AssetCodec<T>::c_BakeToken } -> std::convertible_to<uint64_t>;
 		{ AssetCodec<T>::c_Magic } -> std::convertible_to<uint32_t>;
 	};
+
+	/**
+	 * `T`'s origin, and so which half of the data root it is written into -- the counterpart of
+	 * originOf, which reads the same answer off a key.
+	 *
+	 * Read off the codec rather than restated as a directory list that could disagree with it, and
+	 * derived here rather than declared per specialization: a cache entry is exactly a codec
+	 * carrying a bake revision, so a codec cannot state an origin contradicting its own shape.
+	 */
+	template <AssetCodecFor T>
+	[[nodiscard]] consteval AssetOrigin
+	originFor() noexcept
+	{
+		return CacheEntryCodecFor<T> ? AssetOrigin::kDerived : AssetOrigin::kAuthored;
+	}
 
 	/** What the registry knows about one container, without naming its C++ type. */
 	struct ContainerKind

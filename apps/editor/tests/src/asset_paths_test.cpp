@@ -8,7 +8,7 @@ TEST_CASE("A texture is named by its suffix alone, whatever the case", "[thumbna
 	REQUIRE(editor::IsTextureFile("Textures/albedo.ktx2"));
 	REQUIRE(editor::IsTextureFile("Textures/ALBEDO.KTX2"));
 
-	REQUIRE_FALSE(editor::IsTextureFile("Meshes/apples.bmesh"));
+	REQUIRE_FALSE(editor::IsTextureFile("Derived/Meshes/apples.bmesh"));
 	REQUIRE_FALSE(editor::IsTextureFile("Textures/albedo.png"));
 	REQUIRE_FALSE(editor::IsTextureFile(""));
 }

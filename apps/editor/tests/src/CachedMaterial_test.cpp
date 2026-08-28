@@ -21,7 +21,7 @@ namespace
 		[[nodiscard]] QString
 		Path() const
 		{
-			return temp.filePath("rust.bmaterial");
+			return temp.filePath("Authored/Materials/rust.bmaterial");
 		}
 
 		/** The temp dir as a data root, which is what a store over this sandbox addresses. */
@@ -38,7 +38,7 @@ namespace
 			material.name         = name;
 			material.shadingModel = assetlib::ShadingModel::kPbr;
 
-			assetlib::AssetStore(Root()).Save(material, "rust.bmaterial");
+			assetlib::AssetStore(Root()).Save(material, "Authored/Materials/rust.bmaterial");
 		}
 
 		[[nodiscard]] std::filesystem::file_time_type
@@ -120,11 +120,11 @@ TEST_CASE("A different path is read even at the same stamp", "[materialeditor]")
 	CachedMaterial cached;
 	REQUIRE(cached.Get(sandbox.Root(), sandbox.Path())->name == "first");
 
-	auto other = assetlib::BMaterial();
-	other.name = "other";
-	const auto otherPath =
-		std::filesystem::path(sandbox.temp.filePath("other.bmaterial").toStdWString());
-	assetlib::AssetStore(sandbox.Root()).Save(other, "other.bmaterial");
+	auto other           = assetlib::BMaterial();
+	other.name           = "other";
+	const auto otherPath = std::filesystem::path(
+		sandbox.temp.filePath("Authored/Materials/other.bmaterial").toStdWString());
+	assetlib::AssetStore(sandbox.Root()).Save(other, "Authored/Materials/other.bmaterial");
 
 	REQUIRE(
 		cached.Get(sandbox.Root(), QString::fromStdWString(otherPath.wstring()))->name == "other");

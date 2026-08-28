@@ -15,6 +15,15 @@ The categories sit under one half or the other, and `project_layout.h` is where 
 project's commit rule is a directory rather than a list of extensions. The one thing a half cannot
 say is whether *git* keeps a file: see the table below.
 
+**The split is enforced, not trusted.** `AssetStore::Save` throws when a key names the wrong half
+for the container being written, and the half a container belongs to is read off its codec —
+`CacheEntryCodecFor<T>`, the same predicate that already tells a cache entry from a document, so
+there is no second list to drift. `originOf` and `requireOrigin` (`project_layout.h`) are the rule;
+`WriteTextures` and every directory an environment import names are checked against it too, up
+front, because a `.benvl` misplaced after its convolutions would have cost minutes to find out.
+Reads are deliberately *not* checked: a read that refuses is how a project becomes unopenable, and
+the rule exists to stop a bad file being written rather than to relitigate one already there.
+
 **This document is a map, not a mirror.** The headers at the linked paths are the source of truth;
 when this page disagrees, trust the header, then fix this page.
 

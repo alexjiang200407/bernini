@@ -109,10 +109,14 @@ TEST_CASE("WriteTextures honours the cancel token", "[cancel][bmesh][io]")
 	SECTION("a token signalled up front writes nothing at all")
 	{
 		REQUIRE_THROWS_AS(
-			StoreAt(dir.path).WriteTextures(mesh, "textures", {}, SignalledSource().get_token()),
+			StoreAt(dir.path).WriteTextures(
+				mesh,
+				c_SourceTexturesDirectoryName,
+				{},
+				SignalledSource().get_token()),
 			Cancelled);
 
-		REQUIRE_FALSE(std::filesystem::exists(dir.path / "textures" / names[0]));
+		REQUIRE_FALSE(std::filesystem::exists(dir.path / c_SourceTexturesDirectoryName / names[0]));
 	}
 
 	SECTION("cancelling part-way stops before the next encode, keeping what was already written")
@@ -129,22 +133,23 @@ TEST_CASE("WriteTextures honours the cancel token", "[cancel][bmesh][io]")
 		};
 
 		REQUIRE_THROWS_AS(
-			StoreAt(dir.path).WriteTextures(mesh, "textures", onProgress, source.get_token()),
+			StoreAt(dir.path)
+				.WriteTextures(mesh, c_SourceTexturesDirectoryName, onProgress, source.get_token()),
 			Cancelled);
 
 		REQUIRE(calls == 1);
-		REQUIRE(std::filesystem::exists(dir.path / "textures" / names[0]));
-		REQUIRE_FALSE(std::filesystem::exists(dir.path / "textures" / names[1]));
-		REQUIRE_FALSE(std::filesystem::exists(dir.path / "textures" / names[2]));
+		REQUIRE(std::filesystem::exists(dir.path / c_SourceTexturesDirectoryName / names[0]));
+		REQUIRE_FALSE(std::filesystem::exists(dir.path / c_SourceTexturesDirectoryName / names[1]));
+		REQUIRE_FALSE(std::filesystem::exists(dir.path / c_SourceTexturesDirectoryName / names[2]));
 	}
 
 	SECTION("an unsignalled token writes every texture")
 	{
-		REQUIRE_NOTHROW(StoreAt(dir.path).WriteTextures(mesh, "textures"));
+		REQUIRE_NOTHROW(StoreAt(dir.path).WriteTextures(mesh, c_SourceTexturesDirectoryName));
 
-		REQUIRE(std::filesystem::exists(dir.path / "textures" / names[0]));
-		REQUIRE(std::filesystem::exists(dir.path / "textures" / names[1]));
-		REQUIRE(std::filesystem::exists(dir.path / "textures" / names[2]));
+		REQUIRE(std::filesystem::exists(dir.path / c_SourceTexturesDirectoryName / names[0]));
+		REQUIRE(std::filesystem::exists(dir.path / c_SourceTexturesDirectoryName / names[1]));
+		REQUIRE(std::filesystem::exists(dir.path / c_SourceTexturesDirectoryName / names[2]));
 	}
 }
 
@@ -190,12 +195,14 @@ TEST_CASE("an OS error naming a directory is reported, not swallowed", "[io][fs]
 		out << "not a directory";
 	}
 
-	REQUIRE_THROWS_AS(createDirectories(blocker / "textures"), std::runtime_error);
+	REQUIRE_THROWS_AS(
+		createDirectories(blocker / c_SourceTexturesDirectoryName),
+		std::runtime_error);
 
 	// The message has to name the directory, or it tells the user nothing they can act on.
 	try
 	{
-		createDirectories(blocker / "textures");
+		createDirectories(blocker / c_SourceTexturesDirectoryName);
 	}
 	catch (const std::runtime_error& e)
 	{
@@ -238,21 +245,31 @@ TEST_CASE("a mesh that cannot be written reports why", "[io][fs]")
 TEST_CASE("every container that cannot be written reports why", "[io][fs]")
 {
 	const ScratchDir dir("bernini_save_error_all");
+	const AssetStore store(dir.path);
 
-	const auto occupied = dir.path / "taken";
-	std::filesystem::create_directories(occupied);
+	// A directory where the file has to go, one per half: the key has to name the half its
+	// container belongs to before the write is even attempted.
+	const std::string authored = KeyIn(c_AuthoredDirectoryName, "taken");
+	const std::string derived  = KeyIn(c_DerivedDirectoryName, "taken");
+	std::filesystem::create_directories(dir.path / authored);
+	std::filesystem::create_directories(dir.path / derived);
 
 	struct Container
 	{
-		const char*                                       name;
-		std::function<void(const std::filesystem::path&)> write;
+		const char*                                              name;
+		std::string_view                                         key;
+		std::function<void(const AssetStore&, std::string_view)> write;
 	};
 
 	const Container containers[] = {
-		{ "bmaterial", [](const std::filesystem::path& p) { SaveAt(BMaterial(), p); } },
-		{ "benv", [](const std::filesystem::path& p) { SaveAt(BEnv(), p); } },
-		{ "bsky", [](const std::filesystem::path& p) { SaveAt(BSky(), p); } },
-		{ "benvl", [](const std::filesystem::path& p) { SaveAt(BEnvLighting(), p); } },
+		{ "bmaterial",
+		  authored,
+		  [](const AssetStore& s, std::string_view k) { s.Save(BMaterial(), k); } },
+		{ "benv", authored, [](const AssetStore& s, std::string_view k) { s.Save(BEnv(), k); } },
+		{ "bsky", derived, [](const AssetStore& s, std::string_view k) { s.Save(BSky(), k); } },
+		{ "benvl",
+		  derived,
+		  [](const AssetStore& s, std::string_view k) { s.Save(BEnvLighting(), k); } },
 	};
 
 	for (const Container& container : containers)
@@ -260,7 +277,7 @@ TEST_CASE("every container that cannot be written reports why", "[io][fs]")
 		INFO("container: " << container.name);
 		try
 		{
-			container.write(occupied);
+			container.write(store, container.key);
 			FAIL("expected the save to throw");
 		}
 		catch (const std::runtime_error& e)

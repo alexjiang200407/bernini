@@ -272,24 +272,31 @@ TEST_CASE("FindUnusedBakedTextures honours a custom texture directory", "[textur
 	WriteSource(root.path / "b.ktx2", 16, { { 0, 200, 0, 255 } });
 
 	auto desc       = TexturePruneDesc();
-	desc.textureDir = "cooked";
+	desc.textureDir = "Derived/cooked";
 
 	const AssetStore store(root.path);
 
+	// A bake always writes the layout's directory now, so the map the scan is meant to find is
+	// copied into the custom one: what a project carries after its prune directory moved.
 	BMaterial material;
 	material.pbr.routes[0] = { "a.ktx2", 0 };
-	store.BakeMaterial(material, "cooked");
-	const std::string orphan = material.pbr.baseColorTexture;
+	store.BakeMaterial(material);
+
+	const std::string orphan =
+		"Derived/cooked/" +
+		std::filesystem::path(material.pbr.baseColorTexture).filename().generic_string();
+	std::filesystem::create_directories(root.path / "Derived/cooked");
+	std::filesystem::copy_file(root.path / material.pbr.baseColorTexture, root.path / orphan);
 
 	material.pbr.routes[0] = { "b.ktx2", 0 };
-	store.BakeMaterial(material, "cooked");
+	store.BakeMaterial(material);
 	StoreAt(root.path).Save(material, "Authored/Materials/mat.bmaterial");
 
 	const auto scan = AssetStore(root.path).FindUnusedBakedTextures(desc);
 
 	REQUIRE(scan.unused.size() == 1);
 	CHECK(scan.unused.front().path == orphan);
-	CHECK(orphan.starts_with("cooked/"));
+	CHECK(orphan.starts_with("Derived/cooked/"));
 
 	CHECK(AssetStore(root.path).DeleteUnusedBakedTextures(scan).deleted == 1);
 	CHECK_FALSE(std::filesystem::exists(root.path / orphan));

@@ -70,4 +70,29 @@ namespace assetlib
 		c_EnvLightingDirectoryName,
 		c_SkyDirectoryName,
 	} };
+
+	/** Whether a file is one a person decided or one a bake computed -- and so which half of the
+	 * data root holds it. */
+	enum class AssetOrigin
+	{
+		kAuthored,
+		kDerived
+	};
+
+	/**
+	 * The origin `key`'s location says it has, or nullopt when it says neither -- a key at the data
+	 * root, or one naming a half itself rather than something inside it.
+	 *
+	 * `key` is normalized first, so `Derived/../Authored/Materials/x.bmaterial` is authored.
+	 */
+	[[nodiscard]] std::optional<AssetOrigin>
+	originOf(std::string_view key) noexcept;
+
+	/**
+	 * @throws std::runtime_error unless `key` is in the half `origin` belongs in, which is what
+	 *         makes the layout an invariant rather than a convention. `what` names the container in
+	 *         the message.
+	 */
+	void
+	requireOrigin(std::string_view key, AssetOrigin origin, std::string_view what);
 }

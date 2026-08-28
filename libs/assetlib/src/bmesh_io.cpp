@@ -359,6 +359,8 @@ namespace assetlib
 		const TextureProgressFn& onProgress,
 		const CancelToken&       cancel) const
 	{
+		requireOrigin(textureDir, AssetOrigin::kDerived, "textures");
+
 		const std::filesystem::path outDir = ResolveWritePath(textureDir);
 		createDirectories(outDir);
 
