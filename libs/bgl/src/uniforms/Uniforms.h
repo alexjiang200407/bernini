@@ -257,6 +257,24 @@ namespace bgl
 					m_Offset);
 			}
 
+			/**
+			 * Assigns `value` when this accessor resolves to a declared member, and does nothing
+			 * when it does not.
+			 *
+			 * The spelling for a member a PSO variant may not declare. Silence is the point and the
+			 * hazard: a name no variant declares reads the same as a field this one omits, so a
+			 * binder using this must resolve its names once through `FindUnknownMembers`.
+			 */
+			template <typename T>
+			void
+			SetIfValid(const T& value)
+			{
+				if (IsValid())
+				{
+					*this = value;
+				}
+			}
+
 			UniformType
 			GetType() const
 			{
