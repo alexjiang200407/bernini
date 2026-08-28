@@ -4,6 +4,7 @@
 #include "device/Device.h"
 #include "fg/FrameGraph.h"
 #include "fg/PassDesc.h"
+#include "passes/binder_names.h"
 #include "pipeline/MeshletPipeline.h"
 #include "resource/FrameBuffer.h"
 #include "resource/Shader.h"
@@ -14,6 +15,21 @@ namespace bgl
 	namespace
 	{
 		constexpr auto c_Src = "TaaResolve"sv;
+
+		// Keyed on the Slang global's name as reflection reports it, so this must track the
+		// ConstantBuffer declaration in TaaResolve.slang.
+		constexpr auto c_Cbuffer = "gTaaResolveData"sv;
+
+		// Every member Execute writes. Kept beside the code that writes them so
+		// ValidateBinderNames catches a shader rename at startup: an optional write is silent, so
+		// a stale name would otherwise resolve to nothing every frame and say nothing.
+		constexpr std::array<std::string_view, 19> c_Fields = {
+			"sceneColor"sv,      "history"sv,        "motionVectors"sv, "depth"sv,
+			"clipToView"sv,      "viewToPrevClip"sv, "jitter"sv,        "cameraPairValid"sv,
+			"pointSampler"sv,    "linearSampler"sv,  "renderSize"sv,    "renderTexelSize"sv,
+			"outputTexelSize"sv, "jitterTexels"sv,   "subPixels"sv,     "resampling"sv,
+			"sampleWeightK"sv,   "blendWeight"sv,    "historyValid"sv,
+		};
 
 		// How much of the resolved pixel is this frame. The trade is flicker against how fast the
 		// antialiasing converges, *not* against ghosting -- the neighbourhood clamp is what bounds a
@@ -49,6 +65,8 @@ namespace bgl
 		pipelineDesc.renderState = RenderState().SetRasterState(raster).SetDepthStencilState(depth);
 
 		m_Kernel = device->CreateMeshletKernel(pipelineDesc);
+
+		ValidateBinderNames("TaaResolvePass"sv, { &m_Kernel, 1 }, c_Cbuffer, c_Fields);
 	}
 
 	void
@@ -118,9 +136,7 @@ namespace bgl
 			std::max(1.0f, std::ceil(outputSize.x / args.renderSize.x)),
 			std::max(1.0f, std::ceil(outputSize.y / args.renderSize.y)));
 
-		// Keyed on the Slang global's name as reflection reports it, so this string must track the
-		// ConstantBuffer declaration in TaaResolve.slang.
-		if (auto found = m_Kernel.FindUniforms("gTaaResolveData"))
+		if (auto found = m_Kernel.FindUniforms(c_Cbuffer))
 		{
 			auto& taa = *found;
 
@@ -147,7 +163,7 @@ namespace bgl
 		}
 		else
 		{
-			gfatal("TaaResolve shader is missing its 'gTaaResolveData' constant buffer");
+			gfatal("TaaResolve shader is missing its '{}' constant buffer", c_Cbuffer);
 		}
 
 		auto gfxState   = MeshletState();

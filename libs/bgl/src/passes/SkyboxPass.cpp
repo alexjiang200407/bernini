@@ -5,6 +5,7 @@
 #include "fg/FrameGraph.h"
 #include "fg/PassDesc.h"
 #include "passes/DrawData.h"
+#include "passes/binder_names.h"
 #include "pipeline/MeshletPipeline.h"
 #include "resource/FrameBuffer.h"
 #include "resource/Shader.h"
@@ -16,6 +17,18 @@ namespace bgl
 	namespace
 	{
 		constexpr auto c_Src = "Skybox"sv;
+
+		// Keyed on the Slang global's name as reflection reports it, so this must track the
+		// ConstantBuffer declaration in Skybox.slang.
+		constexpr auto c_Cbuffer = "gSkyboxData"sv;
+
+		// Every member Execute writes. Kept beside the code that writes them so
+		// ValidateBinderNames catches a shader rename at startup: an optional write is silent, so
+		// a stale name would otherwise resolve to nothing every frame and say nothing.
+		constexpr std::array<std::string_view, 8> c_Fields = {
+			"clipToWorld"sv, "prevWorldToClip"sv, "cubeTex"sv, "sampler"sv,
+			"exposure"sv,    "mipLevel"sv,        "jitter"sv,  "prevJitter"sv,
+		};
 	}
 
 	void
@@ -47,6 +60,8 @@ namespace bgl
 		pipelineDesc.renderState = RenderState().SetRasterState(raster).SetDepthStencilState(depth);
 
 		m_Kernel = device->CreateMeshletKernel(pipelineDesc);
+
+		ValidateBinderNames("SkyboxPass"sv, { &m_Kernel, 1 }, c_Cbuffer, c_Fields);
 	}
 
 	void
@@ -90,9 +105,7 @@ namespace bgl
 		gassert(m_Kernel.pipeline.IsInitialized(), "Skybox pipeline must be initialized");
 		gassert(draw.lighting.skybox.has_value(), "SkyboxPass executed without a valid skybox");
 
-		// Keyed on the Slang global's name as reflection reports it, so this string must track
-		// the ConstantBuffer declaration in Skybox.slang.
-		if (auto found = m_Kernel.FindUniforms("gSkyboxData"))
+		if (auto found = m_Kernel.FindUniforms(c_Cbuffer))
 		{
 			auto& skybox = *found;
 
@@ -108,7 +121,7 @@ namespace bgl
 		}
 		else
 		{
-			gfatal("Skybox shader is missing its 'gSkyboxData' constant buffer");
+			gfatal("Skybox shader is missing its '{}' constant buffer", c_Cbuffer);
 		}
 
 		auto gfxState   = MeshletState();

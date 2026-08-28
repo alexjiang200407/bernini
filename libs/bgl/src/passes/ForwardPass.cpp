@@ -9,6 +9,7 @@
 #include "idl/BaseTable.h"
 #include "passes/DrawData.h"
 #include "passes/SceneBindings.h"
+#include "passes/binder_names.h"
 #include "pipeline/MeshletPipeline.h"
 #include "resource/FrameBuffer.h"
 #include "resource/ResourceManager.h"
@@ -255,56 +256,6 @@ namespace bgl
 		}
 	}
 
-	namespace
-	{
-		template <typename Bindings>
-		std::vector<std::string_view>
-		UniformKeys(const Bindings& bindings)
-		{
-			std::vector<std::string_view> keys;
-			keys.reserve(bindings.size());
-			for (const auto& binding : bindings)
-			{
-				keys.push_back(binding.uniformKey);
-			}
-			return keys;
-		}
-
-		// Resolves the names the binder uses against the whole PSO family at once. A variant that
-		// omits a member is ordinary and stays silent; a name *no* variant declares is a typo or a
-		// shader rename, which binding cannot report because IsValid() reads the same either way.
-		void
-		ValidateBinderNames(
-			std::span<const MeshletKernel>    kernels,
-			std::string_view                  cbuffer,
-			std::span<const std::string_view> names)
-		{
-			std::vector<const Uniforms*> variants;
-			variants.reserve(kernels.size());
-
-			for (const MeshletKernel& kernel : kernels)
-			{
-				const auto found = kernel.uniforms.find(cbuffer);
-				variants.push_back(found != kernel.uniforms.end() ? &found->second : nullptr);
-			}
-
-			const std::vector<std::string_view> unknown = FindUnknownMembers(variants, names);
-			if (unknown.empty())
-			{
-				return;
-			}
-
-			std::string joined;
-			for (const std::string_view name : unknown)
-			{
-				joined += joined.empty() ? "" : ", ";
-				joined += name;
-			}
-
-			gfatal("ForwardPass binds '{}' members no forward PSO declares: {}", cbuffer, joined);
-		}
-	}
-
 	void
 	ForwardPass::Init(IDevice* device)
 	{
@@ -315,14 +266,30 @@ namespace bgl
 			m_Kernels[pso] = BuildForwardKernel(device, c_Psos[pso]);
 		}
 
-		ValidateBinderNames(m_Kernels, "forwardData"sv, UniformKeys(c_ForwardDataBuffers));
-		ValidateBinderNames(m_Kernels, "expansionData"sv, UniformKeys(c_ExpansionBuffers));
-		ValidateBinderNames(m_Kernels, "expansionData"sv, c_ExpansionDataFields);
-		ValidateBinderNames(m_Kernels, "viewData"sv, c_ViewDataFields);
-		ValidateBinderNames(m_Kernels, "materialData"sv, UniformKeys(c_MaterialBuffers));
-		ValidateBinderNames(m_Kernels, "materialData"sv, c_MaterialDataFields);
-		ValidateBinderNames(m_Kernels, "vatData"sv, UniformKeys(c_VatBuffers));
-		ValidateBinderNames(m_Kernels, "skinnedData"sv, UniformKeys(c_SkinnedBuffers));
+		ValidateBinderNames(
+			"ForwardPass"sv,
+			m_Kernels,
+			"forwardData"sv,
+			UniformKeys(c_ForwardDataBuffers));
+		ValidateBinderNames(
+			"ForwardPass"sv,
+			m_Kernels,
+			"expansionData"sv,
+			UniformKeys(c_ExpansionBuffers));
+		ValidateBinderNames("ForwardPass"sv, m_Kernels, "expansionData"sv, c_ExpansionDataFields);
+		ValidateBinderNames("ForwardPass"sv, m_Kernels, "viewData"sv, c_ViewDataFields);
+		ValidateBinderNames(
+			"ForwardPass"sv,
+			m_Kernels,
+			"materialData"sv,
+			UniformKeys(c_MaterialBuffers));
+		ValidateBinderNames("ForwardPass"sv, m_Kernels, "materialData"sv, c_MaterialDataFields);
+		ValidateBinderNames("ForwardPass"sv, m_Kernels, "vatData"sv, UniformKeys(c_VatBuffers));
+		ValidateBinderNames(
+			"ForwardPass"sv,
+			m_Kernels,
+			"skinnedData"sv,
+			UniformKeys(c_SkinnedBuffers));
 	}
 
 	void

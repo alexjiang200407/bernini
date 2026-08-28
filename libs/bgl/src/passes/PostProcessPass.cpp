@@ -4,6 +4,7 @@
 #include "device/Device.h"
 #include "fg/FrameGraph.h"
 #include "fg/PassDesc.h"
+#include "passes/binder_names.h"
 #include "pipeline/MeshletPipeline.h"
 #include "resource/FrameBuffer.h"
 #include "resource/Shader.h"
@@ -14,6 +15,18 @@ namespace bgl
 	namespace
 	{
 		constexpr auto c_Src = "PostProcess"sv;
+
+		// Keyed on the Slang global's name as reflection reports it, so this must track the
+		// ConstantBuffer declaration in PostProcess.slang.
+		constexpr auto c_Cbuffer = "gPostProcessData"sv;
+
+		// Every member Execute writes. Kept beside the code that writes them so
+		// ValidateBinderNames catches a shader rename at startup: an optional write is silent, so
+		// a stale name would otherwise resolve to nothing every frame and say nothing.
+		constexpr std::array<std::string_view, 6> c_Fields = {
+			"sceneColor"sv,     "sampler"sv,     "maskSampler"sv,
+			"outlineEnabled"sv, "outlineMask"sv, "maskSize"sv,
+		};
 	}
 
 	void
@@ -40,6 +53,8 @@ namespace bgl
 		pipelineDesc.renderState = RenderState().SetRasterState(raster).SetDepthStencilState(depth);
 
 		m_Kernel = device->CreateMeshletKernel(pipelineDesc);
+
+		ValidateBinderNames("PostProcessPass"sv, { &m_Kernel, 1 }, c_Cbuffer, c_Fields);
 	}
 
 	void
@@ -81,9 +96,7 @@ namespace bgl
 		gassert(cmd != nullptr, "Pass commandlist must be initialized");
 		gassert(m_Kernel.pipeline.IsInitialized(), "PostProcess pipeline must be initialized");
 
-		// Keyed on the Slang global's name as reflection reports it, so this string must track the
-		// ConstantBuffer declaration in PostProcess.slang.
-		if (auto found = m_Kernel.FindUniforms("gPostProcessData"))
+		if (auto found = m_Kernel.FindUniforms(c_Cbuffer))
 		{
 			auto& tonemap = *found;
 
@@ -99,7 +112,7 @@ namespace bgl
 		}
 		else
 		{
-			gfatal("PostProcess shader is missing its 'gPostProcessData' constant buffer");
+			gfatal("PostProcess shader is missing its '{}' constant buffer", c_Cbuffer);
 		}
 
 		auto gfxState   = MeshletState();

@@ -136,8 +136,10 @@ time, so it is the suballocation the GPU reads and the mirror may be rewritten i
   *either* "this variant does not declare the field" (routine, the reason the design exists) *or*
   "the name is wrong" (a bug). `FindUnknownMembers` separates them: absent from *every* variant is a
   typo, absent from some is a per-variant field. @pre resolve a binder's names once when the family
-  is built — `ForwardPass::Init` is the worked example — and `SetIfValid` is the per-draw guard it
-  licenses. A binder never validated this way has no protection against a shader rename.
+  is built — `ValidateBinderNames`
+  ([binder_names.h](libs/bgl/src/passes/binder_names.h)) is the call every pass makes from `Init`,
+  and `SetIfValid` is the per-draw guard it licenses. A binder never validated this way has no
+  protection against a shader rename.
 
 * **Which of the two write spellings a member uses is the statement of whether it is optional.**
   `accessor.SetIfValid(v)` writes a member a variant may not declare and does nothing when it is
