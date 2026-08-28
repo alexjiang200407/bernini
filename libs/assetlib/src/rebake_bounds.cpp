@@ -8,6 +8,8 @@
 #include <assetlib_structs/BMesh.h>
 #include <assetlib_structs/Skeleton.h>
 
+#include <core/log/ScopedStage.h>
+
 namespace assetlib
 {
 	namespace
@@ -55,6 +57,18 @@ namespace assetlib
 	RebakeBoundsReport
 	AssetStore::RebakePosedBounds(const bool dryRun) const
 	{
+		// Walked before the stage opens, so the line can say what the run is over: this is the one
+		// stage whose cost scales with the whole project rather than with one rig.
+		const std::vector<std::string> meshPaths = containersUnder(GetDataRoot(), c_MeshExtension);
+		const std::vector<std::string> animPaths =
+			containersUnder(GetDataRoot(), c_AnimationExtension);
+
+		const auto stage = core::logging::ScopedStage(
+			"assetlib rebake posed bounds: {} meshes, {} clip sets{}",
+			meshPaths.size(),
+			animPaths.size(),
+			dryRun ? " (dry run)" : "");
+
 		auto report = RebakeBoundsReport();
 
 		// Loaded once and kept for the run: a rig's meshes are consulted by every one of its clip
@@ -99,7 +113,7 @@ namespace assetlib
 		// and one rig routinely exists under more than one path -- assetlib_cli bake names a
 		// `.bskel` after every mesh it cooks.
 		auto meshesBySkeleton = std::unordered_map<uint64_t, std::vector<std::string>>();
-		for (const std::string& meshPath : containersUnder(GetDataRoot(), c_MeshExtension))
+		for (const std::string& meshPath : meshPaths)
 		{
 			try
 			{
@@ -119,7 +133,7 @@ namespace assetlib
 			}
 		}
 
-		for (const std::string& animPath : containersUnder(GetDataRoot(), c_AnimationExtension))
+		for (const std::string& animPath : animPaths)
 		{
 			RebakedFile& entry = report.files.emplace_back(
 				RebakedFile{ GetDataRoot() / animPath, RebakedFile::Outcome::kFailed, {} });

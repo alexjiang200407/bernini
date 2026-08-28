@@ -9,6 +9,7 @@
 
 #include <core/err/util.h>
 #include <core/hash.h>
+#include <core/log/ScopedStage.h>
 #include <core/type_traits.h>
 
 namespace assetlib
@@ -635,6 +636,12 @@ namespace assetlib
 	void
 	bakePosedBounds(AnimationSet& animations, const BMesh& mesh, const Skeleton& skeleton)
 	{
+		const auto stage = core::logging::ScopedStage(
+			"assetlib posed bounds: {} bones, {} entries, {} frames",
+			skeleton.bones.size(),
+			mesh.meshes.size(),
+			animations.boneCount > 0 ? animations.samples.size() / animations.boneCount : 0);
+
 		const uint64_t signature = posedBoundsSignature(mesh, skeleton);
 
 		std::erase_if(animations.posedBoxes, [&](const PosedBox& box) {

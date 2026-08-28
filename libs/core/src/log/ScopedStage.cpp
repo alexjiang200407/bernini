@@ -29,12 +29,10 @@ namespace core::logging
 		}
 	}
 
-	ScopedStage::ScopedStage(std::string name) noexcept :
-		ScopedStage(std::move(name), std::chrono::milliseconds(0))
-	{}
-
-	ScopedStage::ScopedStage(std::string name, const std::chrono::milliseconds quietBelow) noexcept
-		:
+	ScopedStage::ScopedStage(
+		Formatted,
+		const std::chrono::milliseconds quietBelow,
+		std::string                     name) noexcept :
 		m_Name(std::move(name)), m_Start(std::chrono::steady_clock::now()), m_QuietBelow(quietBelow)
 	{}
 

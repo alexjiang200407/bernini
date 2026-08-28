@@ -15,18 +15,36 @@ namespace core::logging
 	 * `GraphicsOptions::logLevel`, which is `kError` unless a config says otherwise. So a stage
 	 * lands in whichever file the process logs to without being silenced by a knob that is not
 	 * about cooking.
+	 *
+	 * The name is a format string, because a stage is worth timing only when the line also says
+	 * what the cost was a product of:
+	 *
+	 *     const auto stage = ScopedStage("posed bounds: {} bones, {} frames", bones, frames);
+	 *     const auto tick  = ScopedStage(50ms, "thumbnail tick: {}", path);
 	 */
 	class ScopedStage
 	{
 	public:
-		/** @param name Written verbatim; format the dimensions that explain the cost into it. */
-		explicit ScopedStage(std::string name) noexcept;
+		template <typename... Args>
+		explicit ScopedStage(std::format_string<Args...> name, Args&&... args) :
+			ScopedStage(
+				Formatted(),
+				std::chrono::milliseconds(0),
+				std::format(name, std::forward<Args>(args)...))
+		{}
 
 		/**
 		 * Stays silent when the stage finishes faster than `quietBelow`, which is what makes the
-		 * timer usable on a path that runs every frame.
+		 * timer usable on a path that runs every frame. Leading, so it cannot be mistaken for a
+		 * format argument.
 		 */
-		ScopedStage(std::string name, std::chrono::milliseconds quietBelow) noexcept;
+		template <typename... Args>
+		ScopedStage(
+			const std::chrono::milliseconds quietBelow,
+			std::format_string<Args...>     name,
+			Args&&... args) :
+			ScopedStage(Formatted(), quietBelow, std::format(name, std::forward<Args>(args)...))
+		{}
 
 		~ScopedStage();
 
@@ -42,6 +60,13 @@ namespace core::logging
 		Elapsed() const noexcept;
 
 	private:
+		// A literal binds to `std::string` better than it deduces a format string, so the delegating
+		// target has to be unreachable by overload resolution rather than merely private.
+		struct Formatted
+		{};
+
+		ScopedStage(Formatted, std::chrono::milliseconds quietBelow, std::string name) noexcept;
+
 		std::string                           m_Name;
 		std::chrono::steady_clock::time_point m_Start;
 		std::chrono::milliseconds             m_QuietBelow;
