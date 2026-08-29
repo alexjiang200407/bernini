@@ -1,6 +1,6 @@
 #pragma once
 #include "idl/Entry.h"
-#include <bgl/PsoType.h>
+#include "idl/PsoType.h"
 
 namespace bgl
 {
@@ -17,6 +17,6 @@ namespace bgl
 
 		// kInvalid, not 0: the sort skips a pso >= kCount, which is what keeps tail padding out of a
 		// real bucket.
-		uint32_t pso = static_cast<uint32_t>(PsoType::kInvalid);
+		uint32_t pso = static_cast<uint32_t>(idl::PsoType::kInvalid);
 	};
 }

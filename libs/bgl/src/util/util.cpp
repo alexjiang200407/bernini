@@ -95,7 +95,7 @@ namespace bgl
 		return info;
 	}
 
-	PsoType
+	idl::PsoType
 	GetPsoFromGeomAndMaterial(GeomType geom, MaterialType material, LayerType layer)
 	{
 		const bool cutout = layer == LayerType::kMask;
@@ -109,24 +109,24 @@ namespace bgl
 			{
 			case MaterialType::kPBR:
 				if (blend)
-					return PsoType::kTransparent_StaticMesh_PBR;
+					return idl::PsoType::kTransparent_StaticMesh_PBR;
 				if (hashed)
-					return PsoType::kHashedAlpha_StaticMesh_PBR;
-				return cutout ? PsoType::kAlphaTest_StaticMesh_PBR :
-				                PsoType::kOpaque_StaticMesh_PBR;
+					return idl::PsoType::kHashedAlpha_StaticMesh_PBR;
+				return cutout ? idl::PsoType::kAlphaTest_StaticMesh_PBR :
+				                idl::PsoType::kOpaque_StaticMesh_PBR;
 			case MaterialType::kLoosePbr:
 				if (blend)
-					return PsoType::kTransparent_StaticMesh_LoosePbr;
+					return idl::PsoType::kTransparent_StaticMesh_LoosePbr;
 				if (hashed)
-					return PsoType::kHashedAlpha_StaticMesh_LoosePbr;
-				return cutout ? PsoType::kAlphaTest_StaticMesh_LoosePbr :
-				                PsoType::kOpaque_StaticMesh_LoosePbr;
+					return idl::PsoType::kHashedAlpha_StaticMesh_LoosePbr;
+				return cutout ? idl::PsoType::kAlphaTest_StaticMesh_LoosePbr :
+				                idl::PsoType::kOpaque_StaticMesh_LoosePbr;
 
 			// Neither shades a base color, so there is no alpha to cut or blend against.
 			case MaterialType::kNull:
-				return PsoType::kOpaque_StaticMesh_Null;
+				return idl::PsoType::kOpaque_StaticMesh_Null;
 			case MaterialType::kAssert:
-				return PsoType::kAssert_StaticMesh;
+				return idl::PsoType::kAssert_StaticMesh;
 
 			case MaterialType::kInvalid:
 			case MaterialType::kCount:
@@ -140,12 +140,12 @@ namespace bgl
 			if (material != MaterialType::kPBR)
 				gfatal("VAT geometry is only drawable with a kPBR material");
 			if (blend)
-				return PsoType::kTransparent_VatMesh_PBR;
+				return idl::PsoType::kTransparent_VatMesh_PBR;
 			if (cutout)
-				return PsoType::kAlphaTest_VatMesh_PBR;
+				return idl::PsoType::kAlphaTest_VatMesh_PBR;
 			if (hashed)
-				return PsoType::kHashedAlpha_VatMesh_PBR;
-			return PsoType::kOpaque_VatMesh_PBR;
+				return idl::PsoType::kHashedAlpha_VatMesh_PBR;
+			return idl::PsoType::kOpaque_VatMesh_PBR;
 
 		// Constrained at every door that binds a material to skinned geometry, exactly as VAT is
 		// above.
@@ -153,12 +153,12 @@ namespace bgl
 			if (material != MaterialType::kPBR)
 				gfatal("Skinned geometry is only drawable with a kPBR material");
 			if (blend)
-				return PsoType::kTransparent_SkinnedMesh_PBR;
+				return idl::PsoType::kTransparent_SkinnedMesh_PBR;
 			if (cutout)
-				return PsoType::kAlphaTest_SkinnedMesh_PBR;
+				return idl::PsoType::kAlphaTest_SkinnedMesh_PBR;
 			if (hashed)
-				return PsoType::kHashedAlpha_SkinnedMesh_PBR;
-			return PsoType::kOpaque_SkinnedMesh_PBR;
+				return idl::PsoType::kHashedAlpha_SkinnedMesh_PBR;
+			return idl::PsoType::kOpaque_SkinnedMesh_PBR;
 
 		case GeomType::kInvalid:
 		case GeomType::kCount:
@@ -179,10 +179,10 @@ namespace bgl
 	bool
 	IsTransparentPso(uint32_t pso) noexcept
 	{
-		return pso == static_cast<uint32_t>(PsoType::kTransparent_StaticMesh_PBR) ||
-		       pso == static_cast<uint32_t>(PsoType::kTransparent_StaticMesh_LoosePbr) ||
-		       pso == static_cast<uint32_t>(PsoType::kTransparent_VatMesh_PBR) ||
-		       pso == static_cast<uint32_t>(PsoType::kTransparent_SkinnedMesh_PBR);
+		return pso == static_cast<uint32_t>(idl::PsoType::kTransparent_StaticMesh_PBR) ||
+		       pso == static_cast<uint32_t>(idl::PsoType::kTransparent_StaticMesh_LoosePbr) ||
+		       pso == static_cast<uint32_t>(idl::PsoType::kTransparent_VatMesh_PBR) ||
+		       pso == static_cast<uint32_t>(idl::PsoType::kTransparent_SkinnedMesh_PBR);
 	}
 
 	uint32_t

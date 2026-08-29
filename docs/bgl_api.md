@@ -88,9 +88,9 @@ disagrees, trust the header, then fix this doc.
 * **A material's PSO bucket comes from the `(layer, type)` pair, not the type alone.** `MaterialHandle`
   carries `layerType` (`kOpaque`/`kMask`/`kBlend`/`kHashed`) alongside `materialType`, because a
   submesh cannot know which pipeline it belongs in from the material's storage alone. `layerType` is
-  therefore part of the handle, not just the desc. See
-  [PsoType.h](libs/bgl/include/bgl/PsoType.h) for the resulting buckets — it is IDL-generated; do not
-  edit it.
+  therefore part of the handle, not just the desc. Which bucket a pair resolves to is bgl's own
+  business: the enum lives at [libs/bgl/idl/src/PsoType.slang](libs/bgl/idl/src/PsoType.slang) and is
+  generated into `bgl::idl`, not onto this surface.
 
 * **Failures are exceptions, not return codes.** Everything derives from
   [ApiError](libs/bgl/include/bgl/error.h): `GraphicsError` for device/frame misuse, `SceneError` for
@@ -133,7 +133,7 @@ disagrees, trust the header, then fix this doc.
 | `Viewport` | [libs/bgl/include/bgl/Viewport.h](libs/bgl/include/bgl/Viewport.h) | Min/max XYZ; the `(width, height)` constructor is the usual one. |
 | `SkyboxDesc` | [libs/bgl/include/bgl/SkyboxDesc.h](libs/bgl/include/bgl/SkyboxDesc.h) | Cube texture plus `mipLevel`, `exposure`, `rotationY`. |
 | `GeomHandle`, `MaterialHandle`, `MeshInstanceHandle`, `TextureAssetHandle` | [GeomHandle.h](libs/bgl/include/bgl/GeomHandle.h), [MaterialHandle.h](libs/bgl/include/bgl/MaterialHandle.h), [MeshInstanceHandle.h](libs/bgl/include/bgl/MeshInstanceHandle.h), [TextureAssetHandle.h](libs/bgl/include/bgl/TextureAssetHandle.h) | Value handles into scene/view storage. See the shape caveat above. |
-| `GeomType`, `LayerType`, `MaterialType`, `PsoType` | [GeomType.h](libs/bgl/include/bgl/GeomType.h), [LayerType.h](libs/bgl/include/bgl/LayerType.h), [MaterialType.h](libs/bgl/include/bgl/MaterialType.h), [PsoType.h](libs/bgl/include/bgl/PsoType.h) | Classification enums. `MaterialType` and `PsoType` are **IDL-generated** from Slang — see [IDL Codegen](docs/idlgen.md). |
+| `GeomType`, `LayerType`, `MaterialType` | [GeomType.h](libs/bgl/include/bgl/GeomType.h), [LayerType.h](libs/bgl/include/bgl/LayerType.h), [MaterialType.h](libs/bgl/include/bgl/MaterialType.h) | Classification enums. `MaterialType` is **IDL-generated** from Slang — see [IDL Codegen](docs/idlgen.md). |
 | `ApiError` | [libs/bgl/include/bgl/error.h](libs/bgl/include/bgl/error.h) | Base of `GraphicsError` and `SceneError`. |
 | `BGL_API` | [libs/bgl/include/bgl/api.h](libs/bgl/include/bgl/api.h) | Export/import macro for the DLL boundary. |
 

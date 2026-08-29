@@ -2,13 +2,13 @@
 #include "cmd/CommandList.h"
 #include "cmd/CommandQueue.h"
 #include "gfx/GraphicsBase.h"
+#include "idl/PsoType.h"
 #include "idl/idl.h"
 #include "scene/Scene.h"
 #include "scene/SceneView.h"
 #include "util/TestOptions.h"
 #include "util/util.h"
 #include <bgl/IGraphics.h>
-#include <bgl/PsoType.h>
 
 namespace
 {
@@ -295,15 +295,16 @@ TEST_CASE("SetSubmeshMaterial addresses submeshes by source index", "[material][
 	// The submesh's *default* material -- the PSO is no longer cached on the GPU submesh, it is
 	// resolved from this onto each SubmeshInstance. Checking the default is checking what every
 	// non-overridden instance of this geom will bucket into.
-	const auto checkPso = [&](bgl::GeomHandle geom, uint32_t sourceIndex, bgl::PsoType expected) {
-		const bgl::idl::RangeWithCount& submeshes = scene->GetGeomSubmeshes(geom.handle.index);
-		INFO("source submesh " << sourceIndex);
-		CHECK(
-			bgl::SubmeshPso(
-				bgl::GeomType::kStaticMesh,
-				scene->GetSubmeshDefaultMaterial(submeshes.range.offsetStart, sourceIndex)) ==
-			static_cast<uint32_t>(expected));
-	};
+	const auto checkPso =
+		[&](bgl::GeomHandle geom, uint32_t sourceIndex, bgl::idl::PsoType expected) {
+			const bgl::idl::RangeWithCount& submeshes = scene->GetGeomSubmeshes(geom.handle.index);
+			INFO("source submesh " << sourceIndex);
+			CHECK(
+				bgl::SubmeshPso(
+					bgl::GeomType::kStaticMesh,
+					scene->GetSubmeshDefaultMaterial(submeshes.range.offsetStart, sourceIndex)) ==
+				static_cast<uint32_t>(expected));
+		};
 
 	// Source submesh 0 has 65 meshlets, which chunking would have expanded into two GPU submeshes,
 	// pushing source submesh 1 to GPU index 2.
@@ -317,9 +318,9 @@ TEST_CASE("SetSubmeshMaterial addresses submeshes by source index", "[material][
 
 		REQUIRE_NOTHROW(scene->SetSubmeshMaterial(geom, 1, pbr));
 
-		checkPso(geom, 1, bgl::PsoType::kOpaque_StaticMesh_PBR);
+		checkPso(geom, 1, bgl::idl::PsoType::kOpaque_StaticMesh_PBR);
 		// Submesh 0 was never assigned a material, so it stays on the Null PSO.
-		checkPso(geom, 0, bgl::PsoType::kOpaque_StaticMesh_Null);
+		checkPso(geom, 0, bgl::idl::PsoType::kOpaque_StaticMesh_Null);
 	}
 
 	SECTION("One past the last source submesh throws")
@@ -357,7 +358,7 @@ TEST_CASE("SetSubmeshMaterial re-selects a submesh's PSO", "[material][pso][scen
 			scene->GetSubmeshDefaultMaterial(root, 0));
 	};
 
-	CHECK(psoOfDefault() == static_cast<uint32_t>(bgl::PsoType::kOpaque_StaticMesh_Null));
+	CHECK(psoOfDefault() == static_cast<uint32_t>(bgl::idl::PsoType::kOpaque_StaticMesh_Null));
 
 	SECTION("A valid material re-selects the submesh's PSO, and bumps the epoch")
 	{
@@ -368,7 +369,7 @@ TEST_CASE("SetSubmeshMaterial re-selects a submesh's PSO", "[material][pso][scen
 
 		REQUIRE_NOTHROW(scene->SetSubmeshMaterial(geom, 0, pbr));
 
-		CHECK(psoOfDefault() == static_cast<uint32_t>(bgl::PsoType::kOpaque_StaticMesh_PBR));
+		CHECK(psoOfDefault() == static_cast<uint32_t>(bgl::idl::PsoType::kOpaque_StaticMesh_PBR));
 
 		// The epoch is what carries the change to instances placed before it: a SceneView polls it in
 		// Update and re-resolves. Without the bump, a live instance would keep its stale PSO forever.
@@ -439,7 +440,7 @@ TEST_CASE("A live instance re-resolves its PSO after SetSubmeshMaterial", "[mate
 	const auto instancePso = [&]() { return instanceBuffer[submeshInstance].pso; };
 
 	// It resolved off the geom's default at placement time.
-	CHECK(instancePso() == static_cast<uint32_t>(bgl::PsoType::kOpaque_StaticMesh_Null));
+	CHECK(instancePso() == static_cast<uint32_t>(bgl::idl::PsoType::kOpaque_StaticMesh_Null));
 
 	// SceneView::Update is where the pull happens, and it flushes dirty blocks, so it needs a real
 	// command list to record the upload into.
@@ -465,7 +466,7 @@ TEST_CASE("A live instance re-resolves its PSO after SetSubmeshMaterial", "[mate
 
 	// An Update with nothing changed must not disturb it.
 	pumpUpdate();
-	CHECK(instancePso() == static_cast<uint32_t>(bgl::PsoType::kOpaque_StaticMesh_Null));
+	CHECK(instancePso() == static_cast<uint32_t>(bgl::idl::PsoType::kOpaque_StaticMesh_Null));
 
 	auto pbr         = bgl::MaterialHandle();
 	pbr.materialType = bgl::MaterialType::kPBR;
@@ -479,10 +480,10 @@ TEST_CASE("A live instance re-resolves its PSO after SetSubmeshMaterial", "[mate
 		scene->SetSubmeshMaterial(geom, 0, pbr);
 
 		// Not until the view runs: the Scene cannot reach into a view it does not know exists.
-		CHECK(instancePso() == static_cast<uint32_t>(bgl::PsoType::kOpaque_StaticMesh_Null));
+		CHECK(instancePso() == static_cast<uint32_t>(bgl::idl::PsoType::kOpaque_StaticMesh_Null));
 
 		pumpUpdate();
-		CHECK(instancePso() == static_cast<uint32_t>(bgl::PsoType::kOpaque_StaticMesh_PBR));
+		CHECK(instancePso() == static_cast<uint32_t>(bgl::idl::PsoType::kOpaque_StaticMesh_PBR));
 	}
 
 	SECTION("the layer type moves the instance to a different PSO bucket")
@@ -492,7 +493,7 @@ TEST_CASE("A live instance re-resolves its PSO after SetSubmeshMaterial", "[mate
 		scene->SetSubmeshMaterial(geom, 0, cutout);
 		pumpUpdate();
 
-		CHECK(instancePso() == static_cast<uint32_t>(bgl::PsoType::kAlphaTest_StaticMesh_PBR));
+		CHECK(instancePso() == static_cast<uint32_t>(bgl::idl::PsoType::kAlphaTest_StaticMesh_PBR));
 	}
 
 	SECTION("an instance placed after the change is already current")
@@ -507,12 +508,12 @@ TEST_CASE("A live instance re-resolves its PSO after SetSubmeshMaterial", "[mate
 
 		CHECK(
 			instanceBuffer[laterMeta.submeshInstances[0]].pso ==
-			static_cast<uint32_t>(bgl::PsoType::kOpaque_StaticMesh_PBR));
+			static_cast<uint32_t>(bgl::idl::PsoType::kOpaque_StaticMesh_PBR));
 
 		// ...and the older one still catches up on the next Update, rather than being stranded by the
 		// newer placement having already advanced the view's epoch.
 		pumpUpdate();
-		CHECK(instancePso() == static_cast<uint32_t>(bgl::PsoType::kOpaque_StaticMesh_PBR));
+		CHECK(instancePso() == static_cast<uint32_t>(bgl::idl::PsoType::kOpaque_StaticMesh_PBR));
 	}
 }
 
@@ -576,15 +577,15 @@ TEST_CASE("A material override changes one instance and not its siblings", "[mat
 	};
 
 	// Both start on the geom's default.
-	CHECK(psoOf(worn) == static_cast<uint32_t>(bgl::PsoType::kOpaque_StaticMesh_PBR));
-	CHECK(psoOf(plain) == static_cast<uint32_t>(bgl::PsoType::kOpaque_StaticMesh_PBR));
+	CHECK(psoOf(worn) == static_cast<uint32_t>(bgl::idl::PsoType::kOpaque_StaticMesh_PBR));
+	CHECK(psoOf(plain) == static_cast<uint32_t>(bgl::idl::PsoType::kOpaque_StaticMesh_PBR));
 
 	SECTION("the override takes effect immediately, on that instance alone")
 	{
 		view->SetSubmeshMaterialOverride(worn, 0, cutout);
 
-		CHECK(psoOf(worn) == static_cast<uint32_t>(bgl::PsoType::kAlphaTest_StaticMesh_PBR));
-		CHECK(psoOf(plain) == static_cast<uint32_t>(bgl::PsoType::kOpaque_StaticMesh_PBR));
+		CHECK(psoOf(worn) == static_cast<uint32_t>(bgl::idl::PsoType::kAlphaTest_StaticMesh_PBR));
+		CHECK(psoOf(plain) == static_cast<uint32_t>(bgl::idl::PsoType::kOpaque_StaticMesh_PBR));
 	}
 
 	SECTION("clearing it returns that instance to the default")
@@ -592,7 +593,7 @@ TEST_CASE("A material override changes one instance and not its siblings", "[mat
 		view->SetSubmeshMaterialOverride(worn, 0, cutout);
 		view->ClearSubmeshMaterialOverride(worn, 0);
 
-		CHECK(psoOf(worn) == static_cast<uint32_t>(bgl::PsoType::kOpaque_StaticMesh_PBR));
+		CHECK(psoOf(worn) == static_cast<uint32_t>(bgl::idl::PsoType::kOpaque_StaticMesh_PBR));
 	}
 
 	SECTION("an override outranks a later change to the geom's default")
@@ -606,8 +607,8 @@ TEST_CASE("A material override changes one instance and not its siblings", "[mat
 		// The epoch re-resolve must skip the overridden instance and rewrite only its sibling.
 		pumpUpdate();
 
-		CHECK(psoOf(worn) == static_cast<uint32_t>(bgl::PsoType::kAlphaTest_StaticMesh_PBR));
-		CHECK(psoOf(plain) == static_cast<uint32_t>(bgl::PsoType::kOpaque_StaticMesh_Null));
+		CHECK(psoOf(worn) == static_cast<uint32_t>(bgl::idl::PsoType::kAlphaTest_StaticMesh_PBR));
+		CHECK(psoOf(plain) == static_cast<uint32_t>(bgl::idl::PsoType::kOpaque_StaticMesh_Null));
 	}
 
 	SECTION("a bad handle or index throws")

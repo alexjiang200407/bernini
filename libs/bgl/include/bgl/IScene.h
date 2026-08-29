@@ -11,7 +11,6 @@
 #include <bgl/MaterialType.h>
 #include <bgl/MeshInstanceHandle.h>
 #include <bgl/PreparedStaticMesh.h>
-#include <bgl/PsoType.h>
 #include <bgl/TextureAssetHandle.h>
 #include <bgl/api.h>
 #include <bgl/error.h>

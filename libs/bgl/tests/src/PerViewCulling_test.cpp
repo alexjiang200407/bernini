@@ -4,6 +4,7 @@
 #include "culling/Frustum.h"
 #include "fg/FrameGraph.h"
 #include "gfx/GraphicsBase.h"
+#include "idl/PsoType.h"
 #include "idl/idl.h"
 #include "passes/CompactInstancesPass.h"
 #include "passes/DrawData.h"
@@ -17,7 +18,6 @@
 #include "util/TestOptions.h"
 #include <bgl/Camera.h>
 #include <bgl/IGraphics.h>
-#include <bgl/PsoType.h>
 #include <core/math.h>
 
 // One SceneView culled against two different frustums in a single frame -- a cascade set in
@@ -181,7 +181,7 @@ TEST_CASE("One view culled against two frustums keeps both results", "[culling][
 		rbDesc.debugName     = "Compacted Readback";
 		rbCompacted[cullIdx] = resourceManager->CreateReadbackBuffer(rbDesc);
 
-		rbDesc.byteSize      = static_cast<uint64_t>(bgl::c_PsoCount) * sizeof(uint32_t);
+		rbDesc.byteSize      = static_cast<uint64_t>(bgl::idl::c_PsoCount) * sizeof(uint32_t);
 		rbDesc.debugName     = "Prefix-Sum Readback";
 		rbPrefixSum[cullIdx] = resourceManager->CreateReadbackBuffer(rbDesc);
 	}
@@ -261,7 +261,7 @@ TEST_CASE("One view culled against two frustums keeps both results", "[culling][
 		REQUIRE(prefixSum != nullptr);
 
 		// Inclusive scan over the PSO buckets, so the last entry is everything that survived.
-		const uint32_t visible = prefixSum[bgl::c_PsoCount - 1];
+		const uint32_t visible = prefixSum[bgl::idl::c_PsoCount - 1];
 		resourceManager->UnmapReadback(rbPrefixSum[cullIdx]);
 
 		CHECK(visible == expected[cullIdx].size());
