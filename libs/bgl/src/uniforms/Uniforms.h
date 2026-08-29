@@ -255,7 +255,7 @@ namespace bgl
 			{
 				if (GetType() == UniformType::kStruct && (*this)[c_HandleUniformMember].IsValid())
 				{
-					(*this)[c_HandleUniformMember] = DescriptorHandle(handle.srvBindlessIndex);
+					(*this)[c_HandleUniformMember] = DescriptorHandle(handle.shaderIndex);
 					return *this;
 				}
 

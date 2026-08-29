@@ -65,7 +65,11 @@ namespace bgl
 		// the process must set it before it creates its device, so bgl cannot set it for you.
 		std::string gpuCapturePath;
 
-		// Capacities for the graphics-owned descriptor heaps / resource pools.
+		// Capacities for the graphics-owned resource pools. Unlike SceneDesc's arenas these do not
+		// grow, and exhausting one is a hard failure.
+		//
+		// The names below are the shipped renderer's vocabulary, and each is advisory: a renderer
+		// with no equivalent of a given capacity ignores that field rather than failing on it.
 		//
 		// maxCbvSrvUavs sizes the shader-visible heap -- how many *descriptors* exist. maxBuffers and
 		// maxSrvs size the resource pools that draw from it, and must together fit inside it.
