@@ -374,7 +374,7 @@ namespace bgl
 				// past the bucket count, and the sort would skip it regardless. A null slot is still
 				// pushed, because overrides, selection marks and the epoch re-resolve all address a
 				// submesh by its index in this vector.
-				if (instance.pso < c_PsoCount)
+				if (instance.pso < idl::c_PsoCount)
 				{
 					meta.submeshInstances.emplace_back(m_InstanceBuffer.Add(std::move(instance)));
 				}

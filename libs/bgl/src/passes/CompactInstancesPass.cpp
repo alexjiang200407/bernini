@@ -3,6 +3,7 @@
 #include "idl/Constants.h"
 #include "idl/CullView.h"
 #include "idl/DispatchArgs.h"
+#include "idl/PsoType.h"
 #include "passes/DrawData.h"
 #include "pipeline/ComputePipeline.h"
 #include "resource/ResourceManager.h"
@@ -11,7 +12,6 @@
 #include "scene/Scene.h"
 #include "scene/scene_buffer_names.h"
 #include <bgl/ISceneView.h>
-#include <bgl/PsoType.h>
 #include <core/math.h>
 
 namespace bgl
@@ -176,8 +176,8 @@ namespace bgl
 		draw.cullState->GetCullView().Assign(std::span(&draw.viewState.cullView, 1));
 		draw.cullState->GetCullView().Update(cmd);
 
-		static constexpr std::array<idl::DispatchArgs, c_PsoCount> c_Seed = [] {
-			std::array<idl::DispatchArgs, c_PsoCount> seed{};
+		static constexpr std::array<idl::DispatchArgs, idl::c_PsoCount> c_Seed = [] {
+			std::array<idl::DispatchArgs, idl::c_PsoCount> seed{};
 			for (idl::DispatchArgs& args : seed)
 			{
 				args = { 0u, 1u, 1u };

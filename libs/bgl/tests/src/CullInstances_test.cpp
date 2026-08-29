@@ -4,6 +4,7 @@
 #include "culling/Frustum.h"
 #include "fg/FrameGraph.h"
 #include "gfx/GraphicsBase.h"
+#include "idl/PsoType.h"
 #include "idl/idl.h"
 #include "pipeline/ComputeKernel.h"
 #include "pipeline/ComputePipeline.h"
@@ -20,7 +21,6 @@
 #include "util/TestOptions.h"
 #include <bgl/Camera.h>
 #include <bgl/IGraphics.h>
-#include <bgl/PsoType.h>
 #include <core/math.h>
 
 // Drives the CullInstances kernel against a crafted scene: unit-radius spheres placed at known
@@ -129,7 +129,7 @@ TEST_CASE("Instances outside the frustum are culled, those inside survive", "[cu
 		auto instance         = bgl::SubmeshInstance();
 		instance.meshInstance = meshHandle;
 		instance.submeshIndex = 0u;
-		instance.pso          = static_cast<uint32_t>(bgl::PsoType::kOpaque_StaticMesh_PBR);
+		instance.pso          = static_cast<uint32_t>(bgl::idl::PsoType::kOpaque_StaticMesh_PBR);
 		instanceBuffer.Add(instance);
 	}
 	for (uint32_t i = c_LiveCount; i < padded; ++i)

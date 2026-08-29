@@ -1,7 +1,7 @@
 #pragma once
+#include "idl/PsoType.h"
 #include "pipeline/MeshletKernel.h"
 #include "types/MeshletState.h"
-#include <bgl/PsoType.h>
 
 namespace bgl
 {
@@ -61,6 +61,6 @@ namespace bgl
 		void
 		DrawTransparent(const DrawData& draw, const PassContext& resources);
 
-		std::array<MeshletKernel, c_PsoCount> m_Kernels;
+		std::array<MeshletKernel, idl::c_PsoCount> m_Kernels;
 	};
 }
