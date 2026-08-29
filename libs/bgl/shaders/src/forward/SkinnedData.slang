@@ -1,4 +1,4 @@
-import idl.SkinnedGeom;
+import idl.Rig;
 import idl.SkinnedState;
 import types.ComputeBuffer;
 import types.EntryBuffer;
@@ -8,7 +8,7 @@ import types.EntryBuffer;
 // bonePalettes -- re-deriving it per vertex is the work that pass exists to avoid.
 public struct SkinnedData
 {
-    public EntryBuffer<SkinnedGeom> skinnedGeomBuffer;
+    public EntryBuffer<Rig> rigBuffer;
     public EntryBuffer<SkinnedState> skinnedStateBuffer;
 
     // Written by SkinnedPosePass this frame; read-only here.

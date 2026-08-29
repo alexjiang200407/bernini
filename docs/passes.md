@@ -332,7 +332,7 @@ frames would reproject through the wrong clip.
   the graph decides a pass is a root by whether it writes an *imported* resource, and a name resolved
   inside a cull namespace matches no import, which would cull the pass entirely.
 * **In:** `scene.posedInstances` (the dense list of `SkinnedState` indices to pose — a sweep of the
-  state buffer would pose freed slots), `scene.skinnedStateBuffer`, `scene.skinnedGeomBuffer`,
+  state buffer would pose freed slots), `scene.skinnedStateBuffer`, `scene.rigBuffer`,
   `scene.skinnedBoneBuffer`, `scene.clipBuffer`, `scene.boneSampleBuffer`.
 * **Out:** `scene.bonePalettes`, the view's `BonePaletteBuffer` — GPU-only storage with a CPU-side offset
   allocator, because a `RangeBuffer` would re-upload its stale CPU mirror over what this wrote.

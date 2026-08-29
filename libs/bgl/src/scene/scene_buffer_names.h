@@ -21,7 +21,9 @@ namespace bgl
 	// Not vat-prefixed: both animated tiers play from one clip table (see docs/skinning.md).
 	constexpr std::string_view c_ClipBufferName = "scene.clipBuffer"sv;
 
-	constexpr std::string_view c_SkinnedGeomBufferName = "scene.skinnedGeomBuffer"sv;
+	// Not skinned-prefixed: a rig is a skeleton and its clips, which no geom owns.
+	constexpr std::string_view c_RigBufferName = "scene.rigBuffer"sv;
+
 	constexpr std::string_view c_SkinnedBoneBufferName = "scene.skinnedBoneBuffer"sv;
 	constexpr std::string_view c_BoneSampleBufferName  = "scene.boneSampleBuffer"sv;
 
