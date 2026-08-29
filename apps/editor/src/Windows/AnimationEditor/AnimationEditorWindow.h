@@ -59,6 +59,13 @@ public:
 	void
 	SetDataRoot(const QString& dataRoot) override;
 
+	// The project Data root this panel resolves against, empty until a project opens.
+	[[nodiscard]] const QString&
+	GetDataRoot() const noexcept
+	{
+		return m_DataRoot;
+	}
+
 	/** Forwarded to the preview -- nullptr releases everything it holds. */
 	void
 	SetAssets(game::AssetManager* assets);

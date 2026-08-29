@@ -61,6 +61,13 @@ public:
 	void
 	SetDataRoot(const QString& dataRoot) override;
 
+	// The project Data root this panel resolves against, empty until a project opens.
+	[[nodiscard]] const std::filesystem::path&
+	GetDataRoot() const noexcept
+	{
+		return m_DataRoot;
+	}
+
 	/** Back to the default sphere and a blank graph, dropping whatever was open. */
 	void
 	Reset();
