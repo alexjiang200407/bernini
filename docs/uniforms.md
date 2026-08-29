@@ -153,7 +153,8 @@ time, so it is the suballocation the GPU reads and the mirror may be rewritten i
 Each handle type finds its destination differently, and the rules are not symmetric:
 
 * **`BufferHandle` into a struct** — @pre the struct is exactly 8 bytes; members are then searched
-  **by name** against `c_SmartBufferUniformIndices` (`entryBuffer` / `packedBuffer` / `rangeBuffer`).
+  **by name** against `c_SmartBufferUniformIndices` (`entryBuffer` / `packedBuffer` / `rangeBuffer` /
+  `rawBuffer`).
   @post throws if 8 bytes but carrying none of those names, so a new smart-buffer wrapper in Slang
   needs its member name added to that array.
 * **`BufferHandle` into a value** — written directly when the leaf is `kDescriptorHandle`. The path a

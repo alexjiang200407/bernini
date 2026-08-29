@@ -88,6 +88,14 @@ namespace bgl
 		CreateComputeBuffer(const ComputeBufferDesc& desc) noexcept override;
 
 		/**
+		 * Creates the buffer with a raw (R32_TYPELESS + FLAG_RAW) SRV or UAV, which is what a
+		 * ByteAddressBuffer resolves to.
+		 */
+		[[nodiscard]]
+		BufferHandle
+		CreateRawBuffer(const RawBufferDesc& desc) noexcept override;
+
+		/**
 		 * Automatically creates SRV/UAV for the texture.
 		 */
 		[[nodiscard]]
@@ -256,6 +264,33 @@ namespace bgl
 			override;
 
 	private:
+		// The resource half of a buffer: a pool slot, a descriptor and the allocation, with no view
+		// yet written. The view goes into `buffer`'s CPU handle before `slot` receives it.
+		struct BufferAllocation
+		{
+			// Move-only, following the Buffer it carries. Declared rather than left implicit: MSVC
+			// warns on an implicitly deleted copy (C4625/C4626), and warnings are errors.
+			BufferAllocation()                            = default;
+			BufferAllocation(const BufferAllocation&)     = delete;
+			BufferAllocation(BufferAllocation&&) noexcept = default;
+			BufferAllocation&
+			operator=(const BufferAllocation&) = delete;
+			BufferAllocation&
+			operator=(BufferAllocation&&) noexcept = default;
+
+			core::slot_handle slot;
+			uint32_t          descriptorIndex = 0xFFFFFFFF;
+			Buffer            buffer;
+		};
+
+		/**
+		 * @pre m_PoolMutex is held.
+		 * @post a null `slot` on pool exhaustion or a failed allocation, with everything it did
+		 * take released; the error is already logged.
+		 */
+		[[nodiscard]] BufferAllocation
+		AllocateBuffer(const BufferDesc& desc) noexcept;
+
 		// Snapshots every registered queue's next fence value -- the gate a deferred destroy recorded
 		// now must clear before its slot is reclaimed.
 		[[nodiscard]] DeletionGate
