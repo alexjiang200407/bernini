@@ -159,12 +159,23 @@ no `<slang...>`, and nothing under `libs/bgl/src`. So `bgl_intfc`'s link list is
 drags `spdlog::spdlog_header_only` in PUBLIC, so `bgl_intfc` is not the zero-cost header target its
 name suggests — acceptable, since every client links `core` regardless.
 
-**No *consumer* names `libs/bgl/include`.** The only target that declares it is `libs/bgl` itself,
-at `:31` (`bgl_objects`) and `:106` (`bgl`); `gamelib`, `apps/editor` and the four examples all pick
-the directory up transitively through `bgl_objects`' PUBLIC include, and no source file anywhere
-spells the path. That is what makes the hoist contained. Two *generators* hardcode it as well —
-see the next paragraph, which is the part that is easy to miss precisely because it is not a
-consumer.
+**No *consumer* names `libs/bgl/include`, but four things inside `libs/bgl` do.** `gamelib`,
+`apps/editor` and the four examples all pick the directory up transitively through `bgl_objects`'
+PUBLIC include, and no source file anywhere spells the path — that is what makes the hoist
+contained. What declares it:
+
+| Site | Spelling |
+|---|---|
+| `libs/bgl/CMakeLists.txt:31` (`bgl_objects`) | `${CMAKE_CURRENT_SOURCE_DIR}/include` |
+| `libs/bgl/CMakeLists.txt:107` (`bgl`) | `${CMAKE_CURRENT_SOURCE_DIR}/include` |
+| `libs/bgl/src/d3d12/CMakeLists.txt:29` | `${CMAKE_CURRENT_SOURCE_DIR}/../../include` |
+| `libs/bgl/src/metal/CMakeLists.txt:27` | `${CMAKE_CURRENT_SOURCE_DIR}/../../include` |
+
+*Corrected during task 1.* The plan originally claimed only the first two. **The backend pair is
+spelled relatively, so `grep -rn "libs/bgl/include"` does not find them** — which is how they were
+missed, and how they would have been missed again. Both become
+`target_link_libraries(<backend> PUBLIC bgl_intfc)` in task 5, like `bgl_objects`. Two *generators*
+hardcode the path as well — the next paragraph.
 
 **Two places hardcode the IDL public output directory, and the source spec missed both.**
 `libs/bgl/idl/src/CMakelists.txt:7` sets `IDL_PUBLIC_CPP_OUT_DIR` to
@@ -321,7 +332,10 @@ target linking `core` and `assetlib_structs`, plus `bgl_intfc_selfcheck`, a STAT
 TU that includes `<bgl/bgl.h>`. `add_subdirectory(libs/bgl_intfc)` before `libs/bgl` in the root
 `CMakeLists.txt:63-66`. In `libs/bgl/CMakeLists.txt`: the `BGL_SHARED_HEADERS` glob (`:9-12`) and its
 `source_group` (`:22`) repointed, `bgl_objects` linking `bgl_intfc` PUBLIC instead of declaring the
-include directory itself (`:31`), and `bgl`'s own include directory (`:106`) likewise. `gamelib`
+include directory itself (`:31`), and `bgl`'s own include directory (`:107`) likewise. **Both
+backends too** — `libs/bgl/src/d3d12/CMakeLists.txt:29` and `libs/bgl/src/metal/CMakeLists.txt:27`
+each declare the same directory by relative path, and only one of the two is built on any given
+machine, so the other's breakage surfaces in CI rather than locally. `gamelib`
 links `bgl_intfc` for the headers and `bgl` for the symbols, naming the contract rather than one
 renderer. `IDL_PUBLIC_CPP_OUT_DIR` (`libs/bgl/idl/src/CMakelists.txt:7`) and `PUBLIC_CPP_OUT_DIR`
 (`scripts/gen_idl.py:64`) move together, as does `scripts/gen_idl.py:7`'s docstring. `.gitattributes:105`

@@ -4,7 +4,7 @@ bgl or Bernini Graphics Library is the graphics library for the game engine. It 
 
 - CMake target: bgl
 - It is compiled to a Dynamic Linked Library.
-- bgl has its custom Render Hardware Interface (RHI). The interfaces are located `./libs/bgl/src` but we define the polymorphic implementation elsewhere. Do not #include d3d12 headers for any of the sources here.
+- bgl has its custom Render Hardware Interface (RHI). The interfaces are located `./libs/bgl/src` but we define the polymorphic implementation elsewhere — `bgl_d3d12` or `bgl_metal`, one per binary. Do not #include a backend's headers (d3d12 or metal-cpp) for any of the sources here.
 - Put all plain old data inside `./libs/bgl/src/types`
 - PCH is `./libs/bgl/src/pch.h`. Don't `#include` the headers in here.
 - Error Handling: For internal problems, use gassert. For caller (code that links to bgl) problems, throw an exception so the caller can handle them
@@ -29,6 +29,33 @@ bgl or Bernini Graphics Library is the graphics library for the game engine. It 
   and vcpkg's applocal deployment does not stage them. `bgl` copies them from the `directx-dxc` port
   (`./CMakeLists.txt`), so a target that brings up a device must depend on `bgl` even when it links
   only the backend's objects — `bgl_tests` does.
+
+## bgl_metal
+
+- Static RHI implementation library linked against Metal. All code that uses the Metal API must be
+  located in this subsystem. Selected by `RENDERER_BACKEND=METAL`, and exactly one backend is built
+  per binary.
+- PCH is `./libs/bgl/src/metal/pch.h`. Don't `#include` the headers in here.
+- Implementation files (.h and .cpp) take a `_metal` suffix, as the d3d12 ones take `_d3d12`.
+- Doesn't have an include directory; all headers are included.
+- Metal is reached through **metal-cpp**, Apple's header-only C++ interface. It is not on vcpkg, so
+  `./src/metal/CMakeLists.txt` pulls it with `FetchContent` at a pinned commit.
+- `MetalImpl.cpp` is the one TU that defines metal-cpp's `*_PRIVATE_IMPLEMENTATION` macros, and so
+  compiles with `SKIP_PRECOMPILE_HEADERS` — a PCH would include the headers first and the symbol
+  definitions would be skipped.
+- Error handling: Metal signals failure by returning nil and fills its `NSError` only *sometimes*,
+  so a call can fail with no diagnosis. `MetalErrorChecker` (in the PCH, don't `#include` it) holds
+  the error so a call site reads like its D3D12 counterpart:
+  `library.get() >> errChecker;`. Where a call takes no error out-param — most of them — a `gassert`
+  on the returned pointer is the whole check.
+- **Shaders are compiled at runtime** from the staged Slang sources, to MSL via
+  `newLibraryWithSource`. There is no build-time shader step on this backend: `./CMakeLists.txt`
+  adds the `shaders` subdirectory only under `DX12`, so a shader error surfaces when the pass that
+  needs it is first built rather than at compile time. See
+  [Slang Shaders](../../docs/slang_shaders.md).
+- GPU validation comes from the environment, not a flag — see `bgl_tests` below.
+- CMake: `./src/metal/CMakeLists.txt`
+- Verification: Check logs, bgl_tests
 
 ## bgl_tests
 
