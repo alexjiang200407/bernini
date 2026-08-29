@@ -3,8 +3,12 @@
 Everything under [libs/bgl/include/bgl](libs/bgl/include/bgl) is bgl's public surface: the interfaces
 an application (the editor, the examples, `gamelib`) uses to put a scene on screen. It is a strict
 subset of what bgl contains — the RHI (`IDevice`, `IResourceManager`, command lists) is internal and
-documented separately in [Render Hardware Interface](docs/rhi.md); the `bgl_d3d12` backend is never
-visible here.
+documented separately in [Render Hardware Interface](docs/rhi.md); neither shipped backend,
+`bgl_d3d12` or `bgl_metal`, is ever visible here.
+
+The two are seams at different heights. The RHI abstracts a *graphics API*, and is drawn at the bar
+D3D12 and Metal share — bindless resource access and mesh shaders. This surface sits above it and
+abstracts the *renderer*, in the vocabulary of geometry, materials, textures, instances and cameras.
 
 **This document is a map, not a mirror.** It captures design choices, topology, and the *non-obvious*
 contracts — not full signatures. The header at each linked path is the source of truth; when this doc
