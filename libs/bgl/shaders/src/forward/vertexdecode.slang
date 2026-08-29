@@ -1,5 +1,5 @@
 import idl.VertexLayout;
-import types.ByteBuffer;
+import types.RawBuffer;
 import debug.dbg;
 import util.Vertex;
 
@@ -17,7 +17,7 @@ public struct DecodedVertex
     public float4 weights;
 };
 
-public DecodedVertex DecodeVertex(ByteBuffer data, VertexLayout layout, uint vertexByteBase)
+public DecodedVertex DecodeVertex(RawBuffer data, VertexLayout layout, uint vertexByteBase)
 {
     DecodedVertex v;
     v.position = float3(0.0, 0.0, 0.0);

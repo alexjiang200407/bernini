@@ -10,6 +10,7 @@
 #include "util/util.h"
 #include <assetlib_structs/BMaterial.h>  // the channel layout the static_asserts below pin us to
 #include <assetlib_structs/Bounds.h>
+#include <bgl/PsoType.h>
 #include <core/math.h>
 #include <numbers>
 
@@ -38,8 +39,8 @@ namespace bgl
 		// normal, uv, tangent, tightly packed at a 48-byte stride. This is exactly
 		// the full VertexGen, and is decoded on the GPU via each submesh's
 		// VertexLayout descriptor.
-		constexpr uint32_t c_ProceduralStride   = 48;
-		constexpr uint32_t c_ProceduralVtxWords = c_ProceduralStride / 4;
+		constexpr uint32_t c_ProceduralStride = 48;
+		static_assert(sizeof(VertexGen) == c_ProceduralStride);
 
 		idl::VertexLayout
 		MakeProceduralLayout()
@@ -60,19 +61,6 @@ namespace bgl
 				                      idl::VertexFormat::kFloat32x4,
 				                      32 };
 			return layout;
-		}
-
-		// Interleave each vertex's position/normal/uv into the raw byte layout
-		// above, returned as uint words for the StructuredBuffer<uint> data buffer.
-		std::vector<uint32_t>
-		PackVertices(std::span<const VertexGen> verts)
-		{
-			auto words = std::vector<uint32_t>(verts.size() * c_ProceduralVtxWords);
-			for (size_t i = 0; i < verts.size(); ++i)
-			{
-				std::memcpy(&words[i * c_ProceduralVtxWords], &verts[i], c_ProceduralStride);
-			}
-			return words;
 		}
 
 		// A meshletized primitive: the meshlets, and the two pools they index into.
@@ -178,6 +166,15 @@ namespace bgl
 		idl::VertexLayout
 		ConvertLayout(const assetlib::VertexLayout& src)
 		{
+			// A vertex is loaded as typed values off this grid, and an offset that misses it reads
+			// neighbouring bytes rather than failing.
+			if (src.stride % 4 != 0)
+			{
+				core::throw_runtime_error(
+					"A vertex layout's stride ({}) must be a multiple of 4 bytes",
+					src.stride);
+			}
+
 			auto dst           = idl::VertexLayout();
 			dst.attributeCount = src.attributeCount;
 			dst.stride         = src.stride;
@@ -186,6 +183,13 @@ namespace bgl
 				dst.attributes[i].semantic =
 					static_cast<idl::VertexSemantic>(src.attributes[i].semantic);
 				dst.attributes[i].format = static_cast<idl::VertexFormat>(src.attributes[i].format);
+
+				if (src.attributes[i].offset % 4 != 0)
+				{
+					core::throw_runtime_error(
+						"A vertex attribute's offset ({}) must be a multiple of 4 bytes",
+						src.attributes[i].offset);
+				}
 				dst.attributes[i].byteOffset = src.attributes[i].offset;
 			}
 			return dst;
@@ -213,6 +217,16 @@ namespace bgl
 			{
 				m_Undo.emplace_back([&buffer, handle]() { buffer.Erase(handle); });
 				return handle;
+			}
+
+			// The raw arena's counterpart: it hands back a byte offset rather than a slot handle,
+			// and frees by the same.
+			template <typename Buffer>
+			idl::RawRange
+			Track(Buffer& buffer, idl::RawRange range)
+			{
+				m_Undo.emplace_back([&buffer, range]() { buffer.Erase(range.byteStart); });
+				return range;
 			}
 
 			void
@@ -275,10 +289,6 @@ namespace bgl
 		const uint32_t initialSubmeshes =
 			m_Desc.initialSubmeshes != 0 ? m_Desc.initialSubmeshes : m_Desc.initialMeshlets;
 
-		// The vertex data buffer is a StructuredBuffer<uint>, so the byte budget is
-		// rounded up to whole 4-byte words.
-		const uint32_t initialVertexWords = (m_Desc.initialVertexBufferByteSize + 3u) / 4u;
-
 		m_Geoms.reset(atLeastOne(m_Desc.initialGeom));
 
 		{
@@ -306,8 +316,10 @@ namespace bgl
 		}
 
 		{
-			auto vertexDataBufferDesc         = RangeBufferDesc();
-			vertexDataBufferDesc.initialCount = atLeastOne(initialVertexWords);
+			// Ranges alone: a vertex stream's kind is its submesh's VertexLayout, recorded once per
+			// submesh rather than once per vertex, so no record here carries a header.
+			auto vertexDataBufferDesc         = RawBufferDesc();
+			vertexDataBufferDesc.initialBytes = atLeastOne(m_Desc.initialVertexBufferByteSize);
 			vertexDataBufferDesc.debugName    = "Vertex Data Buffer";
 
 			m_VertexDataBuffer.Init(std::move(vertexDataBufferDesc), m_ResourceManager);
@@ -473,15 +485,14 @@ namespace bgl
 
 		try
 		{
-			const auto vertexWords = PackVertices(verts);
-
 			// Nothing below is the scene's until Commit(); see GeomRollback. The fallback sphere the
 			// editor shows after a failed load goes through here, so a leak here is what would take
 			// the fallback down too.
 			auto rollback = GeomRollback();
 
-			const auto baseVertexGlobal =
-				rollback.Track(m_VertexDataBuffer, m_VertexDataBuffer.Add(vertexWords));
+			const auto baseVertexGlobal = rollback.Track(
+				m_VertexDataBuffer,
+				m_VertexDataBuffer.AddBytes(std::as_bytes(verts)));
 			const auto baseMapGlobal =
 				rollback.Track(m_VertexMapBuffer, m_VertexMapBuffer.Add(build.vertexMap));
 			const auto baseIndexGlobal =
@@ -1089,7 +1100,7 @@ namespace bgl
 	{
 		struct Submesh
 		{
-			std::vector<uint32_t>     vertexWords;
+			std::vector<std::byte>    vertexBytes;
 			std::vector<uint32_t>     vertexMap;
 			std::vector<uint32_t>     localIndices;
 			std::vector<idl::Meshlet> meshlets;
@@ -1141,19 +1152,20 @@ namespace bgl
 						c_MaxDispatchMeshGroups));
 			}
 
-			const uint64_t vertexBytes = static_cast<uint64_t>(src.vertexCount) * src.layout.stride;
+			const uint64_t vertexByteCount =
+				static_cast<uint64_t>(src.vertexCount) * src.layout.stride;
 
 			// The offsets and counts come from the file, so they are the caller's claim about the
 			// buffers, not a fact about them. Trusting them would read off the end of a truncated
 			// or malformed .bmesh.
-			if (src.vertexByteOffset + vertexBytes > mesh.vertexData.size())
+			if (src.vertexByteOffset + vertexByteCount > mesh.vertexData.size())
 			{
 				throw SceneError(
 					std::format(
 						"CookStaticMesh: submesh {} claims {} bytes of vertex data at offset {}, "
 						"past the end of the mesh's {}-byte vertex buffer",
 						s,
-						vertexBytes,
+						vertexByteCount,
 						src.vertexByteOffset,
 						mesh.vertexData.size()));
 			}
@@ -1164,11 +1176,11 @@ namespace bgl
 			out.material                           = src.material;
 			out.boundingSphere                     = BoundingSphereOf(src.aabbMin, src.aabbMax);
 
-			out.vertexWords.resize(core::div_ceil(vertexBytes, 4u), 0u);
+			out.vertexBytes.resize(vertexByteCount);
 			std::memcpy(
-				out.vertexWords.data(),
+				out.vertexBytes.data(),
 				mesh.vertexData.data() + src.vertexByteOffset,
-				vertexBytes);
+				vertexByteCount);
 
 			uint32_t mapCount   = 0;
 			uint32_t indexCount = 0;
@@ -1281,8 +1293,9 @@ namespace bgl
 					rollback.Track(m_MeshletBuffer, m_MeshletBuffer.Add(src.meshlets));
 				submesh.vertexMap =
 					rollback.Track(m_VertexMapBuffer, m_VertexMapBuffer.Add(src.vertexMap));
-				submesh.vertexData =
-					rollback.Track(m_VertexDataBuffer, m_VertexDataBuffer.Add(src.vertexWords));
+				submesh.vertexData = rollback.Track(
+					m_VertexDataBuffer,
+					m_VertexDataBuffer.AddBytes(src.vertexBytes));
 				submesh.indices =
 					rollback.Track(m_IndexBuffer, m_IndexBuffer.Add(src.localIndices));
 				submesh.vertexCount    = src.vertexCount;
@@ -1594,7 +1607,7 @@ namespace bgl
 		{
 			const auto& submesh = m_SubmeshBuffer.AtIndex(submeshRoot + i);
 
-			m_VertexDataBuffer.EraseByIndex(submesh.vertexData.offsetStart);
+			m_VertexDataBuffer.Erase(submesh.vertexData.byteStart);
 			m_VertexMapBuffer.EraseByIndex(submesh.vertexMap.offsetStart);
 			m_IndexBuffer.EraseByIndex(submesh.indices.offsetStart);
 			m_MeshletBuffer.EraseByIndex(submesh.meshlets.range.offsetStart);

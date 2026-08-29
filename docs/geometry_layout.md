@@ -111,8 +111,10 @@ path is the source of truth; when this doc disagrees, trust the struct, then fix
   `ClearInstanceSubmeshMaterial` or by `DestroyInstance`.
 
 * **Vertex data is type-erased bytes, decoded by a `VertexLayout` descriptor.** The vertex buffer
-  is a raw `ByteBuffer` (a `StructuredBuffer<uint>` of packed words), not a
-  `StructuredBuffer<Vertex>`. Each submesh's `VertexLayout` (attribute semantics/formats/offsets +
+  is a `RawBuffer` — a byte arena over a real `ByteAddressBuffer` — not a
+  `StructuredBuffer<Vertex>`. A submesh's `vertexData` is a `RawRange`, a byte offset with no
+  header: the kind is the `VertexLayout` beside it, recorded once per submesh rather than once per
+  vertex. Each submesh's `VertexLayout` (attribute semantics/formats/offsets +
   `stride`) tells the shader how to decode a vertex at a byte offset. `Vertex` is the *full-fat*
   authoring layout (pos/normal/uv/tangent); a producer may emit only a tightly-packed subset (e.g. a
   mesh import whose source primitive carries no UVs emits a 24-byte position/normal vertex, there
@@ -153,7 +155,7 @@ Generated shader structs (GPU source of truth). Each has a byte-identical `bgl::
 |---|---|---|
 | `Mesh` | [Mesh.slang](libs/bgl/shaders/src/idl/Mesh.slang) | Root descriptor of a renderable: world `transform` + `RangeWithCount<Submesh>`, plus one playback entry — `vatState` or `skinnedState`, never both, null on a static mesh. |
 | `Clip` | [Clip.slang](libs/bgl/shaders/src/idl/Clip.slang) | One playable clip: where its frame 0 sits in the tier's own frame space, its frame count, authored rate and loop flag. Shared by every animated tier out of one clip buffer. |
-| `Submesh` | [Submesh.slang](libs/bgl/shaders/src/idl/Submesh.slang) | One drawable part, **geometry only**: its `VertexLayout`, meshlet range, vertexMap/vertexData/indices ranges, vertex count, local bounding sphere. No material, no PSO — those are per-instance. |
+| `Submesh` | [Submesh.slang](libs/bgl/shaders/src/idl/Submesh.slang) | One drawable part, **geometry only**: its `VertexLayout`, meshlet range, vertexMap/indices ranges, a `RawRange` of vertex bytes, vertex count, local bounding sphere. No material, no PSO — those are per-instance. |
 | `Meshlet` | [Meshlet.slang](libs/bgl/shaders/src/idl/Meshlet.slang) | A mesh-shader work unit: offsets into the parent submesh's vertexMap/indices windows, vertex/triangle counts, bounding sphere. |
 | `DecodedVertex` | [vertexdecode.slang](libs/bgl/shaders/src/forward/vertexdecode.slang) | What a vertex decodes *to* — position, normal, uv, tangent, joints and weights. Not IDL and not stored anywhere: on the GPU vertices live as raw bytes. |
 | `VertexLayout` | [VertexLayout.slang](libs/bgl/shaders/src/idl/VertexLayout.slang) | Up to 8 `VertexAttribute`s (semantic + format + byte offset) plus `stride`; describes how to decode a vertex from bytes. |
@@ -185,7 +187,7 @@ store. All dirty-track writes and flush via `Update(cmdList)`.
 
 | Type | File | Role |
 |---|---|---|
-| `RangeBuffer<T,Meta>` | [RangeBuffer.h](libs/bgl/src/scene/RangeBuffer.h) | Variable-length-range allocator; `Add(span)` returns a `multi_slot_handle` assignable into a `Range`/`RangeWithCount`. Backs the vertex/index/meshlet/submesh buffers. |
+| `RangeBuffer<T,Meta>` | [RangeBuffer.h](libs/bgl/src/scene/RangeBuffer.h) | Variable-length-range allocator; `Add(span)` returns a `multi_slot_handle` assignable into a `Range`/`RangeWithCount`. Backs the index, meshlet and submesh buffers; the vertex arena reaches it through `RawBuffer`. |
 | `EntryBuffer<T,Meta>` | [EntryBuffer.h](libs/bgl/src/scene/EntryBuffer.h) | Slot buffer with stable, generation-checked handles; `Add`/`EmplaceBack` return a `slot_handle` assignable into an `Entry`. |
 | `PackedBuffer<T>` | [PackedBuffer.h](libs/bgl/src/scene/PackedBuffer.h) | Densely-packed buffer with stable handles (handle→dense indirection); erase swaps the tail in and re-uploads it. |
 | `RawBuffer<Tag>` | [RawBuffer.h](libs/bgl/src/scene/RawBuffer.h) | A byte arena over `RangeBuffer<RawBlock>`, read through a `RawBuffer` in Slang. `AddRecord(tag, payload)` returns a `RawEntry` and writes a `RecordHeader` ahead of the payload; `AddBytes` returns a `RawRange` and writes no header. Capped at what a raw view addresses. |
@@ -226,8 +228,9 @@ For lane `gtid` of a meshlet (see [forward/mesh_stage.slang](libs/bgl/shaders/sr
 1. **vertexMap lookup** — `vertexMapBuffer[submesh.vertexMap, meshlet.relativeVertexOffset + gtid]`
    yields a **geometry-local vertex index**. The meshlet's vertices are a compacted window inside
    the submesh's shared `vertexMap` span, so several meshlets can reuse the same underlying vertex.
-2. **byte address** — `vertexData.GetStart()*4 + vertexIdx * layout.stride` gives the byte offset
-   of that vertex inside the global vertex byte buffer.
+2. **byte address** — `vertexData.GetStart() + vertexIdx * layout.stride` gives the byte offset
+   of that vertex inside the global vertex arena. The range start is already bytes; nothing scales
+   it, and nothing can wrap a `uint` doing so.
 3. **decode** — `DecodeVertex(vertexDataBuffer, submesh.layout, byteBase)` reads the attributes
    per the layout.
 4. **triangles** — `indexBuffer.Get<3>(submesh.indices, meshlet.relativeIndexOffset + gtid*3)`
@@ -329,14 +332,14 @@ green channel.
 ```cpp
 // Each geometry buffer is a CPU-mirrored container; Add(span) stages an upload and
 // returns a handle whose index/count assign straight into a Range / RangeWithCount.
-RangeBuffer<uint32_t>     vertexDataBuffer(desc, resourceManager);  // ByteBuffer of packed words
+RawBuffer<>               vertexDataBuffer(rawDesc, resourceManager);  // bytes, decoded by layout
 RangeBuffer<uint32_t>     vertexMapBuffer(desc, resourceManager);
 RangeBuffer<uint32_t>     indexBuffer(desc, resourceManager);
 RangeBuffer<idl::Meshlet> meshletBuffer(desc, resourceManager);
 
 idl::Submesh submesh;
 submesh.layout     = layout;                             // decode rule for the packed bytes
-submesh.vertexData = vertexDataBuffer.Add(vertexWords);  // handle -> Range offset
+submesh.vertexData = vertexDataBuffer.AddBytes(vertexBytes);  // a RawRange, by value
 submesh.vertexMap  = vertexMapBuffer.Add(vertexMap);
 submesh.indices    = indexBuffer.Add(localIndices);
 submesh.meshlets   = meshletBuffer.Add(meshlets);        // handle -> RangeWithCount (offset + count)

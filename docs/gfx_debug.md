@@ -76,7 +76,7 @@ registered handler.
   vertex, so a bare errcode arrives a thousand times over and still names nothing.
 * Error codes are the generated enum
   [idl/ErrorCode.slang](libs/bgl/idl/src/ErrorCode.slang) / C++ mirror
-  `<build>/generated/idl/ErrorCode.h` (`kUnknown=1 … kNullRangeDeref=11`). Add
+  `<build>/generated/idl/ErrorCode.h` (`kUnknown=1 … kNullRawDeref=12`). Add
   new codes there, not inline — and give the new code a name in `ErrorCodeName`
   ([DebugReadback.h](libs/bgl/src/debug/DebugReadback.h)), which the build enforces. See
   [IDL Codegen](docs/idlgen.md).

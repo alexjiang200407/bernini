@@ -6,6 +6,7 @@
 #include "scene/NamedBuffer.h"
 #include "scene/PackedBuffer.h"
 #include "scene/RangeBuffer.h"
+#include "scene/RawBuffer.h"
 #include "scene/TextureAssetStore.h"
 #include "scene/scene_buffer_names.h"
 #include "types/SubmeshInstance.h"
@@ -443,7 +444,7 @@ namespace bgl
 		RangeBuffer<idl::Submesh, SubmeshDefaults> m_SubmeshBuffer;
 		RangeBuffer<idl::Meshlet>                  m_MeshletBuffer;
 		RangeBuffer<uint32_t>                      m_VertexMapBuffer;
-		RangeBuffer<uint32_t>                      m_VertexDataBuffer;
+		RawBuffer<>                                m_VertexDataBuffer;
 		RangeBuffer<uint32_t>                      m_IndexBuffer;
 
 		EntryBuffer<idl::PbrMaterial>      m_Pbr;
