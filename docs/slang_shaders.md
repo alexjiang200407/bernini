@@ -7,7 +7,7 @@ On a D3D12 build only, there is a build-time pass over the same sources: the `co
 entries in [`libs/bgl/shaders/CMakeLists.txt`](../libs/bgl/shaders/CMakeLists.txt) invoke `slangc`
 per entry point, so a construct the target rejects is a build failure rather than a runtime
 surprise. The `.dxil` it produces is validation output only, and nothing loads it. A Metal build
-does not run this step at all — `libs/bgl/CMakeLists.txt:127-128` adds the `shaders` subdirectory
+does not run this step at all — `libs/bgl/CMakeLists.txt:128-129` adds the `shaders` subdirectory
 under `RENDERER_BACKEND STREQUAL "DX12"` and nowhere else — so on macOS a bad shader surfaces when
 the pass that needs it is first built, not at compile time.
 
