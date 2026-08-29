@@ -688,7 +688,7 @@ namespace bgl
 		// An invalid handle leaves the entry alone; the kNull PSO's pixel shader never reads it.
 		if (material.IsValid())
 		{
-			instance.material = material.handle;
+			instance.material = idl::RawEntry{ material.byteOffset };
 		}
 
 		instance.pso = SubmeshPso(geomType, material);
@@ -708,8 +708,8 @@ namespace bgl
 
 		SubmeshInstance instance = m_InstanceBuffer[handle];
 
-		const idl::Entry material = instance.material;
-		const uint32_t   pso      = instance.pso;
+		const idl::RawEntry material = instance.material;
+		const uint32_t      pso      = instance.pso;
 
 		ResolveShading(
 			instance,
@@ -719,7 +719,7 @@ namespace bgl
 
 		// Set marks the element's block dirty, so writing back an unchanged instance would re-upload
 		// a whole block to change nothing.
-		if (instance.material.offset != material.offset || instance.pso != pso)
+		if (instance.material.byteOffset != material.byteOffset || instance.pso != pso)
 		{
 			m_InstanceBuffer.Set(handle, instance);
 		}

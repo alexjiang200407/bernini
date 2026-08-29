@@ -7,7 +7,7 @@ import idl.PbrMaterial;
 ForwardPSOut PSMain(ForwardVSOut input, bool isFrontFace: SV_IsFrontFace)
 {
     ForwardPSOut output;
-    output.color = ShadeAlphaTested<PbrMaterial>(input, isFrontFace);
+    output.color = ShadeAlphaTested<PbrMaterialRecord>(input, isFrontFace);
     output.motion = ComputeMotionVector(input);
     return output;
 }

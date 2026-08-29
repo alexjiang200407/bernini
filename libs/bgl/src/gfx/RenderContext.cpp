@@ -543,6 +543,7 @@ namespace bgl
 		draw.targets.motionVector         = m_ActiveTarget->GetMotionVectorRtv();
 		draw.targets.outlineMask          = m_ActiveTarget->GetOutlineMaskRtv();
 
+		draw.materialHandleView       = scene->GetMaterialHandleView();
 		draw.samplers.anisoLinearWrap = scene->GetSampler(Scene::StandardSampler::kAnisoLinearWrap);
 		draw.samplers.linearClamp     = scene->GetSampler(Scene::StandardSampler::kLinearClamp);
 

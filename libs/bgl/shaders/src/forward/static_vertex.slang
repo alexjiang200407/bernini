@@ -8,7 +8,6 @@ import types.SubmeshInstance;
 import forward.common;
 import forward.mesh_stage;
 import forward.vertexdecode;
-import idl.PsoType;
 
 public ForwardVSOut StaticVertex(MeshletContext ctx, SubmeshInstance instance, uint v)
 {
@@ -27,8 +26,7 @@ public ForwardVSOut StaticVertex(MeshletContext ctx, SubmeshInstance instance, u
     vertexOut.uv = vertex.uv;
     vertexOut.tangent = float4(mul((float3x3)ctx.mesh.transform, vertex.tangent.xyz), vertex.tangent.w);
 
-    vertexOut.materialIndex = instance.material.GetOffset();
-    vertexOut.materialIsLoose = IsLoosePso(PsoType(instance.pso)) ? 1u : 0u;
+    vertexOut.materialOffset = instance.material.GetByteOffset();
 
     return vertexOut;
 }

@@ -38,7 +38,7 @@ doc disagrees, trust the header, then fix this doc.
 
 * **The two regimes meet inside one shader struct.**
   [MaterialData.slang](libs/bgl/shaders/src/forward/MaterialData.slang) holds an
-  `EntryBuffer<PbrMaterial>` alongside ordinary `float3`/`float2` members: the outer struct is
+  `RawBuffer` of material records alongside ordinary `float3`/`float2` members: the outer struct is
   reflected and addressed by name, the elements the handle points at are compile-time-proven. Expect
   the guarantees to change at that boundary.
 
@@ -244,7 +244,7 @@ kernel["viewData"]["viewProj"] = draw.viewState.viewProj;
 if (auto found = kernel.FindUniforms("materialData"))
 {
     auto& matData = *found;
-    matData["pbrMaterials"] = resources.GetBuffer("scene.pbrMaterialBuffer");  // writes an index
+    matData["materials"] = resources.GetBuffer("scene.materialArenaBuffer");  // writes an index
 
     if (auto u = matData["irradianceMap"]; u.IsValid())
     {

@@ -493,8 +493,7 @@ TEST_CASE("AssetManager swaps a material's texture in place", "[gamelib][assets]
 	CHECK((*fx).TextureRefCount(oldTex) == 0);
 	CHECK((*fx).TextureRefCount(newTex) == 1);
 	CHECK((*fx).MaterialRefCount(mat) == 1);
-	CHECK(
-		mat.handle.index == (*fx).AcquireMaterial("Authored/Materials/m0.bmaterial").handle.index);
+	CHECK(mat.byteOffset == (*fx).AcquireMaterial("Authored/Materials/m0.bmaterial").byteOffset);
 }
 
 TEST_CASE("AssetManager swaps a submesh's material", "[gamelib][assets]")

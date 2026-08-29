@@ -57,38 +57,47 @@ TEST_CASE("DeleteMaterial frees a material slot for reuse", "[material][delete][
 	auto* scene       = sceneHandle->As<bgl::Scene>();
 	REQUIRE(scene != nullptr);
 
-	auto& pbrBuffer   = scene->GetPbrMaterialBuffer();
-	auto& looseBuffer = scene->GetLooseMaterialBuffer();
+	auto& arena = scene->GetMaterialArena();
 
-	SECTION("A PBR material's slot is released and recycled")
+	SECTION("A PBR material's record is released and its bytes recycled")
 	{
 		const bgl::MaterialHandle material = scene->CreatePbrMaterial(bgl::PbrMaterialDesc());
 		REQUIRE(material.IsValid());
-		REQUIRE(pbrBuffer.IsValid(material.handle));
+		REQUIRE(arena.IsOffsetValid(material.byteOffset));
+		REQUIRE(arena.GetTagAt(material.byteOffset) == bgl::MaterialType::kPBR);
 
 		REQUIRE_NOTHROW(scene->DeleteMaterial(material));
-		CHECK_FALSE(pbrBuffer.IsValid(material.handle));
+		CHECK_FALSE(arena.IsOffsetValid(material.byteOffset));
 
-		// The freed slot is handed to the next material, which is the point of freeing it.
+		// The freed bytes are handed to the next material, which is the point of freeing them.
 		const bgl::MaterialHandle next = scene->CreatePbrMaterial(bgl::PbrMaterialDesc());
-		CHECK(next.handle.index == material.handle.index);
-		CHECK(pbrBuffer.IsValid(next.handle));
-
-		// ...but the stale handle does not resurrect: its generation is behind the slot's.
-		CHECK_FALSE(pbrBuffer.IsValid(material.handle));
+		CHECK(next.byteOffset == material.byteOffset);
+		CHECK(arena.IsOffsetValid(next.byteOffset));
 	}
 
-	SECTION("A loose PBR material's slot is released and recycled")
+	SECTION("A loose PBR material's record is released and its bytes recycled")
 	{
 		const bgl::MaterialHandle material =
 			scene->CreateLoosePbrMaterial(bgl::LoosePbrMaterialDesc());
-		REQUIRE(looseBuffer.IsValid(material.handle));
+		REQUIRE(arena.IsOffsetValid(material.byteOffset));
+		REQUIRE(arena.GetTagAt(material.byteOffset) == bgl::MaterialType::kLoosePbr);
 
 		REQUIRE_NOTHROW(scene->DeleteMaterial(material));
-		CHECK_FALSE(looseBuffer.IsValid(material.handle));
+		CHECK_FALSE(arena.IsOffsetValid(material.byteOffset));
 
 		const bgl::MaterialHandle next = scene->CreateLoosePbrMaterial(bgl::LoosePbrMaterialDesc());
-		CHECK(next.handle.index == material.handle.index);
+		CHECK(next.byteOffset == material.byteOffset);
+	}
+
+	SECTION("The two kinds share one arena, so their records never overlap")
+	{
+		const bgl::MaterialHandle pbr = scene->CreatePbrMaterial(bgl::PbrMaterialDesc());
+		const bgl::MaterialHandle loose =
+			scene->CreateLoosePbrMaterial(bgl::LoosePbrMaterialDesc());
+
+		CHECK(pbr.byteOffset != loose.byteOffset);
+		CHECK(arena.GetTagAt(pbr.byteOffset) == bgl::MaterialType::kPBR);
+		CHECK(arena.GetTagAt(loose.byteOffset) == bgl::MaterialType::kLoosePbr);
 	}
 
 	SECTION("Deleting the same material twice throws")
@@ -98,9 +107,28 @@ TEST_CASE("DeleteMaterial frees a material slot for reuse", "[material][delete][
 		REQUIRE_THROWS_AS(scene->DeleteMaterial(material), bgl::SceneError);
 	}
 
+	SECTION("A handle whose type disagrees with the record it names throws")
+	{
+		// The one stale handle the offset check cannot see: the bytes are live, they just hold a
+		// record of the other kind now. Only the tag in the header separates the two.
+		const bgl::MaterialHandle loose =
+			scene->CreateLoosePbrMaterial(bgl::LoosePbrMaterialDesc());
+
+		const auto mislabelled = bgl::MaterialHandle{ .materialType = bgl::MaterialType::kPBR,
+			                                          .byteOffset   = loose.byteOffset };
+
+		REQUIRE_THROWS_AS(
+			scene->UpdatePbrMaterial(mislabelled, bgl::PbrMaterialDesc()),
+			bgl::SceneError);
+		REQUIRE_THROWS_AS(scene->DeleteMaterial(mislabelled), bgl::SceneError);
+
+		// ...and the record it named is untouched by the refusal.
+		REQUIRE_NOTHROW(scene->DeleteMaterial(loose));
+	}
+
 	SECTION("A material type with no storage throws rather than freeing someone else's slot")
 	{
-		// kNull and kAssert name shading behaviour; they own no entry in either material buffer.
+		// kNull and kAssert name shading behaviour; they own no record in the arena.
 		REQUIRE_THROWS_AS(
 			scene->DeleteMaterial(bgl::MaterialHandle{ .materialType = bgl::MaterialType::kNull }),
 			bgl::SceneError);

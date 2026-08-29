@@ -396,6 +396,16 @@ namespace bgl
 			return m_Data[physicalIndex];
 		}
 
+		// The live handle whose range starts at `rootIndex`, for a caller holding only the GPU-side
+		// index -- the counterpart of EraseByIndex, without the erase.
+		[[nodiscard]] core::multi_slot_handle
+		HandleAt(uint32_t rootIndex) const
+		{
+			gassert(IsInitialized(), "RangeBuffer is uninitialized; call Init() first");
+			gassert(IsIndexValid(rootIndex), "HandleAt on an index with no live range");
+			return m_Data.handle_at(rootIndex);
+		}
+
 		/**
 		 * The mirror's own bytes for one live range, for a caller that writes at a finer
 		 * granularity than T -- a byte arena over fixed-size blocks is the case, and staging

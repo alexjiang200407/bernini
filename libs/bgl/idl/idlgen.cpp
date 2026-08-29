@@ -270,7 +270,7 @@ namespace
 
 	// What MSL makes of a type. Computed rather than reflected: Slang's Metal reflection reports a
 	// resource handle as zero ordinary-data bytes -- its categories count bindings, not bytes -- so
-	// TextureHandle comes back as 0 and ChannelSource as 4 instead of 16. Asking would under-report
+	// TextureHandle comes back as 0 instead of 8. Asking would under-report
 	// every struct carrying a handle, which is every material. The backend recomputes constant-buffer
 	// layouts for the same reason (see MetalizeLayout); these are MSL's rules for buffer elements.
 	struct MslLayout

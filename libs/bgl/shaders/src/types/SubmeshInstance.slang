@@ -1,4 +1,5 @@
 import idl.Entry;
+import idl.RawEntry;
 import idl.Mesh;
 import idl.IMaterial;
 
@@ -7,6 +8,6 @@ public struct SubmeshInstance
 {
     public Entry<Mesh> meshInstance;
     public uint submeshIndex;
-    public Entry<IMaterial> material;
+    public RawEntry<IMaterial> material;
     public uint pso;
 };

@@ -1,4 +1,4 @@
-import ChannelSource;
+import RawTextureHandle;
 
 public enum PbrChannel
 {
@@ -18,10 +18,20 @@ public static const uint cLooseChannelCount = 9;
 
 public struct LoosePbrMaterial
 {
+    // Handles first and contiguous, as in PbrMaterial: a raw-loaded payload samples a texture
+    // through the arena's typed view, indexed by its position rather than by an offset the shader
+    // would have to be told. `channels` is parallel: channel i selects a component of texture i.
+    public RawTextureHandle textures[9];
+
+    public uint channels[9];
+
+    // 108 bytes of handles and channels leave the next float4 at 108, where MSL wants 112. idlgen
+    // refuses that mismatch rather than laying the struct out two ways, so the gap is spelled out.
+    public uint channelPad;
+
     public float4 baseColorFactor;
 
     public float4 specular;
-    public ChannelSource sources[9];
     public float metallicFactor;
     public float roughnessFactor;
 

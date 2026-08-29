@@ -399,8 +399,8 @@ The depth-sorted path starts at zero; the opaque path reads `psoPrefixSum` index
 * **In:** the scene-colour and velocity buffers as render targets; `compactDispatchArgs` and
   `transparentSort.dispatchArgs` as indirect args; the seven `c_ForwardDataBuffers` scene
   buffers, the three `c_SkinnedBuffers` and four `c_VatBuffers`, the two `c_ExpansionBuffers`,
-  `sortedTransparentInstances`, and the two
-  `c_MaterialBuffers` (PBR + loose). A cbuffer the shader does not declare is skipped, but a
+  `sortedTransparentInstances`, and the one `c_MaterialBuffers` (the material arena; its typed view
+  is bound off the draw rather than the graph, being a second descriptor onto the same bytes). A cbuffer the shader does not declare is skipped, but a
   scene-buffer key missing from a cbuffer that *is* declared is fatal (`gfatal`); a missing
   `materialData` key is skipped silently.
 * **Out:** scene colour (rendered), the velocity buffer (opaque and alpha-test only), depth.
