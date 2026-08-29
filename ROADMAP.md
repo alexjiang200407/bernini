@@ -31,6 +31,44 @@ and portability.
 - **IDL is the single source of truth** for structs shared by C++ and Slang (`libs/bgl/idl`). New
   GPU-visible data (materials, lights, bones, LOD info) goes through the IDL, not hand-mirrored.
 - **Data-Oriented Design (DOD)** traditional Object-Oriented Programming (OOP) will decimate your CPU cache at scale update unit gameplay states (health, status effects) in tight memory arrays.
+- **An asset path stays feasible at the content scale below.** Import, bake, load and reimport are
+  measured against the dimensions in [Content scale](#content-scale) — bones, frames, mesh entries,
+  vertices — not against the toy assets a test happens to use. Cost that grows *superlinearly* in one
+  of those dimensions is a design defect rather than a tuning problem, and the shape to fix rather
+  than the constant. This one is a rule; the numbers it points at are a reference, and a dimension the
+  table does not yet name is not permission to ignore the rule.
+
+
+## Content scale
+
+What an offline or load-time path is sized against. Every figure here is measured and lives in a doc
+that owns it — nothing in this table is a target invented for the table's sake, and a new asset type
+gets a row when it gets a measurement, not before.
+
+`cha800_00.glb` is the reference character: a real AAA rig, and the largest thing the project cooks.
+
+| Asset | Dimensions | Measured cost | Owner |
+|---|---|---|---|
+| Skinned character | 663 bones, 27 mesh entries, 170k vertices, 2254 frames | posed-bounds bake 3.5 s, of which 2.4 s is the pose walk; the per-vertex `exactPosedBounds` reference is ~6 min (both debug) | [docs/skinning.md](docs/skinning.md) |
+| Clip set (`.banim`) | `boneCount * frameCount` 40-byte `Transform`s | 59.7 MB, ~780 ms to deserialize in a debug build | [docs/specs/animation_compression.md](docs/specs/animation_compression.md) |
+| Posed-bounds read-back | one signature over the whole mesh, all entries at once | 29 ms; asked once per entry instead, 740 ms | [docs/skinning.md](docs/skinning.md) |
+| Mesh container (`.bmesh`) | vertex data is nearly all of it | 16.8 MB, of which the reference chunks a survey reads are ~3 KB | [docs/asset_standards.md](docs/asset_standards.md) |
+| Environment bake | prefilter 256 px / 7 mips / 2048 samples; skybox 512 px / 6 mips; irradiance 128 px | — | [docs/envmaps.md](docs/envmaps.md) |
+| VAT | one bake per (rig, clip set) | seconds of CPU and hundreds of MB on a dense rig | [docs/vat.md](docs/vat.md) |
+
+Two dimensions are missing on purpose, and their absence is the honest state rather than an
+oversight: **terrain**, which has no container yet and is world-sized rather than character-sized,
+and the **LOD and atlas multipliers**, which do not add a type but multiply the rows above by
+(mesh x LOD) and (kit x variant). Both get a row when they get a measurement.
+
+**A target is not a measurement, and does not belong in the table.** Module 1's Capacity policy
+carries an unchecked one — VAT texture memory under 50 MB at one humanoid and one equine rig — which
+is what we intend to fit in, not what anything has been observed to cost. Read it as the budget a
+design is aiming at; read the table as what the code does today.
+
+Every cook stage logs its own dimensions and duration (`core::logging::ScopedStage`), so the way to
+add a row is to run the thing and read `bgl.log` — see
+[docs/gfx_debug.md](docs/gfx_debug.md) § 2.
 
 
 ## Module 1: Graphics Pipeline
