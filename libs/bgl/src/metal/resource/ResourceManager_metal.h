@@ -79,6 +79,16 @@ namespace bgl
 		BufferHandle
 		CreateRawBuffer(const RawViewDesc& desc) noexcept override;
 
+		[[nodiscard]]
+		BufferSrvHandle
+		CreateBufferSrv(BufferHandle buffer, const BufferSrvDesc& desc) noexcept override;
+
+		void
+		DestroyBufferSrv(BufferSrvHandle handle, bool deferred = true) noexcept override;
+
+		[[nodiscard]] bool
+		ValidBufferSrvHandle(const BufferSrvHandle& handle) const noexcept override;
+
 		ReadbackBufferHandle
 		CreateReadbackBuffer(const ReadbackBufferDesc& desc) noexcept override;
 
@@ -216,6 +226,7 @@ namespace bgl
 			kReadback,
 			kTexture,
 			kSrv,
+			kBufferSrv,
 			kRtv,
 			kDsv,
 			kSampler,
@@ -251,9 +262,15 @@ namespace bgl
 		std::vector<MTL::Resource*>       m_LiveTextures;
 		bool                              m_LiveTexturesDirty = true;
 		core::slot_vector<Srv>            m_Srvs;
-		core::slot_vector<Rtv>            m_Rtvs;
-		core::slot_vector<Dsv>            m_Dsvs;
-		core::slot_vector<Sampler>        m_Samplers;
+
+		// A structured view of a buffer. Its element is a placeholder -- a Metal buffer is an
+		// address and the shader reads the index the handle carries, not this. What the slot is for
+		// is the lifetime: a view outlives the buffer it views, which is the contract
+		// IResourceManager states and what m_Srvs exists for here for the same reason.
+		core::slot_vector<uint32_t> m_BufferSrvs;
+		core::slot_vector<Rtv>      m_Rtvs;
+		core::slot_vector<Dsv>      m_Dsvs;
+		core::slot_vector<Sampler>  m_Samplers;
 
 		core::static_vector<ICommandQueue*, c_MaxRegisteredQueues> m_RegisteredQueues;
 		std::vector<PendingDeletionBatch>                          m_PendingBatches;

@@ -40,7 +40,8 @@ namespace
  *
  * What this deliberately does not cover is a record holding a bindless resource handle. Slang
  * lowers that load to `as_type<texture2d<...>>(ulong)`, which MSL rejects outright, so a
- * handle-bearing payload cannot be raw-loaded on Metal at all. See docs/plans/byte-address-buffer.md.
+ * handle-bearing payload cannot be raw-loaded on Metal at all. See
+ * docs/plans/byte-address-buffer.md.
  */
 TEST_CASE("A raw buffer loads records and loose attributes as written", "[raw][compute][bindless]")
 {
@@ -205,9 +206,8 @@ TEST_CASE("A raw buffer loads records and loose attributes as written", "[raw][c
  * A compute shader stores typed values into a raw UAV, and the bytes are there.
  *
  * Nothing in bgl writes a raw buffer yet; GPU skinning to a transient vertex buffer will, and by
- * then the vertex path is raw and has no structured view to fall back on. A buffer carries exactly
- * one view, so whether a bindless RWByteAddressBuffer resolves at all is answered here rather than
- * discovered there.
+ * then the vertex path is raw and has no structured view to fall back on. Whether a bindless
+ * RWByteAddressBuffer resolves at all is answered here rather than discovered there.
  */
 TEST_CASE("A compute shader stores into a raw buffer", "[raw][compute][bindless]")
 {

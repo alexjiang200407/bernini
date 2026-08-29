@@ -31,8 +31,9 @@ namespace bgl
 		uint64_t byteSize = 0;
 		bool     isUav    = false;
 
-		// The one view the buffer has: a shader reads a raw buffer as a ByteAddressBuffer and a
-		// structured one as a StructuredBuffer<T>, and the wrong wrapper on either is undefined.
+		// The view the buffer was created with: a shader reads a raw buffer as a ByteAddressBuffer
+		// and a structured one as a StructuredBuffer<T>, and the wrong wrapper on either is
+		// undefined. A second, structured view may be added with CreateBufferSrv.
 		bool        isRaw     = false;
 		std::string debugName = "Unnamed Buffer";
 	};
@@ -40,6 +41,43 @@ namespace bgl
 	// A raw view addresses bytes with a uint, so one buffer cannot reach past this however large the
 	// resource behind it is. A mirror buffer refuses to grow past it rather than wrap.
 	constexpr uint64_t c_MaxRawBufferBytes = uint64_t(1) << 32;
+
+	// A second, structured view of a buffer that already has one, and what a shader binds to reach
+	// it. Separate from BufferHandle because a view is not the resource: destroying the buffer does
+	// not destroy this, exactly as with an Srv onto a texture.
+	struct BufferSrvHandle
+	{
+		core::slot_handle slot;
+		uint32_t          bindlessIndex = core::slot_handle::invalid_index;
+
+		[[nodiscard]] bool
+		IsNull() const
+		{
+			return slot.index == core::slot_handle::invalid_index;
+		}
+	};
+
+	struct BufferSrvDesc
+	{
+		// Element size of the view, not of the buffer: the same bytes are read as elements of this.
+		uint32_t    stride    = 0;
+		std::string debugName = "Unnamed Buffer View";
+
+		template <core::type_traits::trivially_copyable T>
+		BufferSrvDesc&
+		SetElement() noexcept
+		{
+			stride = sizeof(T);
+			return *this;
+		}
+
+		BufferSrvDesc&
+		SetDebugName(std::string debugName_) noexcept
+		{
+			debugName = std::move(debugName_);
+			return *this;
+		}
+	};
 
 	struct BufferBarrierDesc
 	{

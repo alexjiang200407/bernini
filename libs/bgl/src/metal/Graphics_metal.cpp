@@ -134,6 +134,7 @@ namespace bgl
 			rmDesc.maxDsvs            = opts.maxDsvs;
 			rmDesc.maxTextures        = opts.maxTextures;
 			rmDesc.maxSamplers        = opts.maxSamplers;
+			rmDesc.maxBufferSrvs      = opts.maxBufferSrvs;
 			rmDesc.maxReadbackBuffers = opts.maxReadbackBuffers;
 			m_ResourceManager         = m_Device->CreateResourceManager(rmDesc);
 

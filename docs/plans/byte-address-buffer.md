@@ -95,19 +95,27 @@ not have one.
   arena. Rejected: a header on a vertex range — there is no kind to record and the non-goals forbid
   inventing one.*
 
-- **ADR-8 — A texture in a raw payload is an `Entry<TextureHandle>` into one
-  `EntryBuffer<TextureHandle>` table, not a `TextureHandle` inline.** Task 1 established that a
-  bindless resource handle cannot be read out of a raw buffer on Metal at all (see the survey
-  below), so a payload that is to be raw-loaded must be handle-free. The indirection is the
-  existing offset primitive rather than a new type: a null entry reads the table's reserved
-  element 0, which holds the unbound descriptor, so an unset texture samples nothing — the rule
-  already in force everywhere else. The cost is one dependent load per texture, uniform across a
-  draw. *Rejected: a second view on the same arena, binding it both raw and as
-  `StructuredBuffer<TextureHandle>` so handles stay inline — it works, and needs a second view per
-  buffer the RHI does not have; the table costs one buffer instead and leaves each handle stored
-  once rather than once per material that routes it. Rejected: a bare `uint` handle cast to a
-  texture in the shader — MSL cannot construct a texture from an integer, which is the very thing
-  that failed.*
+- **ADR-8 — A raw arena holding resource handles is bound twice: raw for the payload, typed for
+  the handles.** Task 1 established that a bindless resource handle cannot be read out of a raw
+  buffer on Metal at all — the element type of a bindless buffer is fixed at its declaration, and a
+  raw one declares bytes. The handle's *bytes* still live inside the record; what materialises them
+  is a second, typed view of the same allocation, read at `(recordOffset + fieldOffset) / 8`. So a
+  payload declares its handle fields as `RawTextureHandle` — the same eight bytes with no resource
+  type — and the record stays raw-loadable.
+
+  Proven before it was built: one buffer bound to a `RawBuffer` and an `EntryBuffer<TextureHandle>`
+  uniform at the same time raw-loads the record and samples the texture correctly, clean under Metal
+  GPU validation. Metal needs no *descriptor* for the second view — a buffer there is an address and
+  the shader's declared type is the view — where D3D12's descriptors are typed and it needs a real
+  one. `CreateBufferSrv` is the seam, and it hands back a handle with a lifetime on both.
+
+  *Rejected: an `Entry<TextureHandle>` into a separate table. It works on both backends and was
+  built (#526), but it puts every handle behind a serial dependency — record, then index, then
+  handle — where a second view computes the handle's address from the record's own offset and issues
+  both loads in parallel; and it costs a second allocation with a lifetime of its own. Rejected: a
+  per-backend macro giving D3D12 the inline handle it can already raw-load — one cache-resident load
+  saved on one backend, paid for with a permanent fork in the hottest shader path, which no CI run
+  exercises on either backend.*
 
 ## Non-goals
 
@@ -277,8 +285,9 @@ weights). The same stale "emitted into src/idl" claim sits in
   `RawBuffer`, `Submesh.vertexData` a `RawRange`, the decoder loads `float2/3/4` and `uint` directly.
   Could break: every golden, the overflow and delete tests — which is why they are the gate.
 - **Materials** (`Scene`, `SceneView`, `MaterialHandle`, `ForwardPass`, `MaterialData.slang`,
-  `Forward_Transparent`, `common.slang`, the three vertex modules): one arena, one binding for
-  material data plus the texture table ADR-8 routes handles through, headers typed by
+  `Forward_Transparent`, `common.slang`, the three vertex modules): one arena bound twice per
+  ADR-8 — raw for the payload, typed for the handle fields, which the payload declares as
+  `RawTextureHandle` — headers typed by
   `MaterialType`; `SubmeshInstance.material` a `RawEntry<IMaterial>`; the transparent pixel
   shader reads the header and the `materialIsLoose` varying and `IsLoosePso` go. `MaterialHandle`'s
   handle becomes the arena's, so the slot-index bargain `IScene::DeleteMaterial` and
@@ -330,22 +339,34 @@ weights). The same stale "emitted into src/idl" claim sits in
    invariant), `ByteBuffer.slang` deleted, `geometry_layout.md` corrected. *Gate:* every golden and
    A/B capture under Acceptance, `SceneOverflow_test`, `MeshDelete_test`, `--gpu-validation`.
 
-4. **`feat(bgl): materials in one raw arena behind a header`** — ADR-2, ADR-3, ADR-7 and ADR-8 for
-   materials: the arena on `Scene`, the `EntryBuffer<TextureHandle>` table its payloads route
-   through, `MaterialHandle`, the single binding for material data, `RawEntry<IMaterial>`,
-   the transparent pass reading the tag, the varying removed, the offset bargain restated in
-   `IScene.h` and `docs/bgl_api.md`, the shading-model recipe in `docs/asset_standards.md`
-   rewritten for one arena. *Gate:* every geometry golden (they all draw PBR),
-   `alpha_test_*`, `pbr_ibl`, `HashedAlpha_test`, the transparent loose-vs-baked pair,
-   `PsoSelection_test`, `TemporalEpoch_test`, `MaterialTextureDelete_test`,
+4. **`feat(bgl): a second, typed view of a buffer`** — ADR-8's mechanism, with no user yet:
+   `CreateBufferSrv` beside `CreateSrv`, a `BufferSrvHandle`, the D3D12 structured descriptor, the
+   Metal side — which resolves to the buffer's own bindless index, a buffer there being an address,
+   but still takes a view slot so the lifetime contract is the same on both — and
+   `RawTextureHandle` in the IDL. *Gate:* a `[twoview]` device test — one allocation bound as a
+   `RawBuffer` and an `EntryBuffer<TextureHandle>` at once, raw-loading a record and sampling the
+   texture whose bytes sit inside that record — clean under GPU validation. The D3D12 descriptor is
+   the half this machine cannot run, and the PR says so.
+
+5. **`feat(bgl): materials in one raw arena behind a header`** — ADR-2, ADR-3, ADR-7 and ADR-8 for
+   materials: the arena on `Scene` bound raw and typed, payload handle fields as
+   `RawTextureHandle`, `MaterialHandle`, `RawEntry<IMaterial>`, the transparent pass reading the
+   tag, the varying removed, the offset bargain restated in `IScene.h` and `docs/bgl_api.md`, the
+   shading-model recipe in `docs/asset_standards.md` rewritten for one arena. *Gate:* every geometry
+   golden (they all draw PBR), `alpha_test_*`, `pbr_ibl`, `HashedAlpha_test`, the transparent
+   loose-vs-baked pair, `PsoSelection_test`, `TemporalEpoch_test`, `MaterialTextureDelete_test`,
    `MaterialOverrideRender_test`, `MeshDelete_test`, `--gpu-validation`.
 
-5. **`feat(bgl): the mesh playback tier behind a header`** — the same for `Mesh.playback`: the arena
+   The arena grows, and a growth replaces the resource its typed view describes, so the arena
+   re-creates the view whenever the buffer handle it last viewed changes — nothing announces a
+   growth, and `CreateBufferSrv`'s `@post` says so.
+
+6. **`feat(bgl): the mesh playback tier behind a header`** — the same for `Mesh.playback`: the arena
    on the view, `Forward_AnyMesh` dispatching on the tag, the pose pass reading through it, the
    tier rule and the pose pass's inputs in `docs/passes.md` rewritten. *Gate:*
    `vat_frozen_frames`, `vat_normal_map`, `SkinnedRender_test` in full, `MotionVectors_test`, the
    outline selection case, `--gpu-validation`.
 
-6. **`docs: the raw arena outlives its plan`** — what the tasks left in this file that describes the
+7. **`docs: the raw arena outlives its plan`** — what the tasks left in this file that describes the
    code as it now is moves into the subsystem pages named above; this file is deleted. The landing PR
    carries the deletion.

@@ -116,6 +116,21 @@ namespace bgl::test
 		{
 			std::abort();
 		}
+		BufferSrvHandle
+		CreateBufferSrv(BufferHandle, const BufferSrvDesc&) noexcept override
+		{
+			std::abort();
+		}
+		void
+		DestroyBufferSrv(BufferSrvHandle, bool) noexcept override
+		{
+			std::abort();
+		}
+		bool
+		ValidBufferSrvHandle(const BufferSrvHandle&) const noexcept override
+		{
+			return false;
+		}
 		SamplerHandle
 		CreateSampler(const SamplerDesc&) noexcept override
 		{
