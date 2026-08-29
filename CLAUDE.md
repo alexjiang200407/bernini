@@ -253,6 +253,12 @@ suite does not stop the others; the summary at the end says which failed. To pas
 suite, use `just run`, which forwards it — `just run bgl_tests -- --gpu-validation`, or
 `just run editor_tests -- "[materialgraph]"` to run one tag.
 
+One tag is not about behaviour: **`[perf]`** pins what a cook costs as its inputs grow — a read count
+that must not scale with an input, a ratio between two problem sizes that must stay far below the
+ratio of the sizes. Never a wall-clock ceiling, so the cases hold in a debug build and under load.
+[`bcp-precheck`](.claude/agents/bcp-precheck.md) § 5 runs them when a diff touches a path they cover:
+`just run assetlib_tests -- "[perf]" --no-lock`.
+
 **Only one suite runs on the machine at a time.** A suite is expensive — each one is split
 across several processes, each holding a graphics device — so several checkouts testing at once
 oversubscribe the CPU and every one of them slows down. Both `just test` and `just run <suite>`
