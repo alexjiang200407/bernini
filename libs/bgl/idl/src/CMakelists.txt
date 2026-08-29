@@ -43,7 +43,7 @@ set(IDL_CPP_SOURCES
     VatState.slang
     BoneSample.slang
     SkinnedBone.slang
-    SkinnedGeom.slang
+    Rig.slang
     SkinnedState.slang
 )
 

@@ -68,8 +68,8 @@ disagrees, trust the header, then fix this doc.
   the superseded resource stays alive on the resource manager's fence until every in-flight frame
   that referenced it has retired.
 
-* **Handles are trivially copyable values, but their shapes differ.** `GeomHandle`, `MaterialHandle`
-  and `MeshInstanceHandle` each wrap a `core::slot_handle` reached as `.handle` and expose
+* **Handles are trivially copyable values, but their shapes differ.** `GeomHandle`, `MaterialHandle`,
+  `MeshInstanceHandle` and `RigHandle` each wrap a `core::slot_handle` reached as `.handle` and expose
   `IsValid()`. `TextureAssetHandle` wraps one reached as `.textureSlot` and has **no** `IsValid()` —
   test it via the `slot_handle`'s `operator bool` (`if (tex.textureSlot)`). Do not assume one spelling
   across handle families.
@@ -80,6 +80,10 @@ disagrees, trust the header, then fix this doc.
   at whatever material next takes that slot. Geometry deletion has the mirror-image problem: an
   instance holds a plain copy of its geom's submesh range. Ordering these teardowns is the caller's
   job — or `gamelib`'s `AssetManager`, which refcounts them.
+
+  **A rig is the exception, and it throws rather than corrupting.** `DeleteRig` refuses while any geom
+  added against it is still alive, so the order — geoms, then the rig they were skinned to — is
+  enforced instead of merely documented. It is the one deletion here whose misuse is an error you see.
 
 * **A material's PSO bucket comes from the `(layer, type)` pair, not the type alone.** `MaterialHandle`
   carries `layerType` (`kOpaque`/`kMask`/`kBlend`/`kHashed`) alongside `materialType`, because a
@@ -128,7 +132,7 @@ disagrees, trust the header, then fix this doc.
 | `Camera` | [libs/bgl/include/bgl/Camera.h](libs/bgl/include/bgl/Camera.h) | Chained-builder view/projection. Concrete, header-only, copyable. |
 | `Viewport` | [libs/bgl/include/bgl/Viewport.h](libs/bgl/include/bgl/Viewport.h) | Min/max XYZ; the `(width, height)` constructor is the usual one. |
 | `SkyboxDesc` | [libs/bgl/include/bgl/SkyboxDesc.h](libs/bgl/include/bgl/SkyboxDesc.h) | Cube texture plus `mipLevel`, `exposure`, `rotationY`. |
-| `GeomHandle`, `MaterialHandle`, `MeshInstanceHandle`, `TextureAssetHandle` | [GeomHandle.h](libs/bgl/include/bgl/GeomHandle.h), [MaterialHandle.h](libs/bgl/include/bgl/MaterialHandle.h), [MeshInstanceHandle.h](libs/bgl/include/bgl/MeshInstanceHandle.h), [TextureAssetHandle.h](libs/bgl/include/bgl/TextureAssetHandle.h) | Value handles into scene/view storage. See the shape caveat above. |
+| `GeomHandle`, `MaterialHandle`, `MeshInstanceHandle`, `TextureAssetHandle`, `RigHandle` | [GeomHandle.h](libs/bgl/include/bgl/GeomHandle.h), [MaterialHandle.h](libs/bgl/include/bgl/MaterialHandle.h), [MeshInstanceHandle.h](libs/bgl/include/bgl/MeshInstanceHandle.h), [TextureAssetHandle.h](libs/bgl/include/bgl/TextureAssetHandle.h), [RigHandle.h](libs/bgl/include/bgl/RigHandle.h) | Value handles into scene/view storage. See the shape caveat above. |
 | `GeomType`, `LayerType`, `MaterialType`, `PsoType` | [GeomType.h](libs/bgl/include/bgl/GeomType.h), [LayerType.h](libs/bgl/include/bgl/LayerType.h), [MaterialType.h](libs/bgl/include/bgl/MaterialType.h), [PsoType.h](libs/bgl/include/bgl/PsoType.h) | Classification enums. `MaterialType` and `PsoType` are **IDL-generated** from Slang — see [IDL Codegen](docs/idlgen.md). |
 | `ApiError` | [libs/bgl/include/bgl/error.h](libs/bgl/include/bgl/error.h) | Base of `GraphicsError` and `SceneError`. |
 | `BGL_API` | [libs/bgl/include/bgl/api.h](libs/bgl/include/bgl/api.h) | Export/import macro for the DLL boundary. |

@@ -318,8 +318,7 @@ TEST_CASE("a rig far past the old ceiling poses every bone", "[skinned][pose][re
 		MakeSkinnedTriangle(),
 		0,
 		materials,
-		MakeChain(c_DeepBones),
-		MakeSwingClip(c_DeepBones),
+		scene->AddRig(MakeChain(c_DeepBones), MakeSwingClip(c_DeepBones)),
 		assetlib::Bounds{ glm::vec3(-400.0f), glm::vec3(400.0f) });
 	REQUIRE(geom.IsValid());
 
@@ -414,8 +413,7 @@ TEST_CASE("the pose pass writes the palette a rig's hierarchy implies", "[skinne
 		MakeSkinnedTriangle(),
 		0,
 		materials,
-		MakeChain(),
-		MakeSwingClip(),
+		scene->AddRig(MakeChain(), MakeSwingClip()),
 		assetlib::Bounds{ glm::vec3(-4.0f), glm::vec3(4.0f) });
 	REQUIRE(geom.IsValid());
 
@@ -553,8 +551,7 @@ TEST_CASE("the pose pass writes the palette a rig's hierarchy implies", "[skinne
 			MakeSkinnedTriangle(),
 			0,
 			materials,
-			MakeChain(),
-			MakeSwingLoop(),
+			scene->AddRig(MakeChain(), MakeSwingLoop()),
 			assetlib::Bounds{ glm::vec3(-4.0f), glm::vec3(4.0f) });
 		REQUIRE(looping.IsValid());
 
@@ -579,8 +576,7 @@ TEST_CASE("the pose pass writes the palette a rig's hierarchy implies", "[skinne
 			MakeSkinnedTriangle(),
 			0,
 			materials,
-			MakeChain(),
-			MakeSwingLoop(),
+			scene->AddRig(MakeChain(), MakeSwingLoop()),
 			assetlib::Bounds{ glm::vec3(-4.0f), glm::vec3(4.0f) });
 		REQUIRE(looping.IsValid());
 

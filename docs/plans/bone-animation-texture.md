@@ -212,7 +212,7 @@ The VAT tier, to be removed:
 |---|---|---|
 | `libs/bgl/idl` | `SkinnedGeom` becomes `Rig` and gains `Range<float4> boneAnimTable` (null until filled); `SkinnedState.geom` becomes `rig`, its `palette` documented null on the bone-anim-table source; `VatGeom`, `VatState`, `Mesh.vatState`, four `PsoType`s go | Nothing in the layout: `gen_idl.py` emits the C++ and Slang sides from one module, so a removed field moves both together |
 | `libs/bgl/include` | `RigHandle`, `IScene::AddRig`/`DeleteRig`, `AddSkinnedMeshGeom` takes a rig; `PoseSource` on `SkinnedInstanceDesc`, whose header comment is rewritten — the playback record stays the same three fields and a unit still moves between tiers without rewriting it; the source says where the pose comes from, not what plays; VAT declarations go | Every skinned golden — the refactor must be pixel-identical |
-| `libs/bgl/src/scene` | Rig records; a second `BonePaletteBuffer` at scene level for the tables (the same GPU-only storage and offset allocator the per-view palette uses — not a new type; its header comment, which says "one view's" and "rewritten every frame", is rewritten to state the real precondition: whatever it holds is re-derivable after a growth); the geom validates its joints against the rig's `boneCount`; the pose pass's dense instance list excludes bone-anim-table instances | `BonePaletteBuffer`'s growth **discards** its contents, safe per view only because every instance is re-posed every frame. A table is written once, so a growth must re-queue every rig holding one — the sample pool it fills from is resident, which is why this is a re-dispatch and not a loss. Also: a bone-anim-table instance reaching the pose pass writes through a null slice |
+| `libs/bgl/src/scene` | Rig records; a second `BonePaletteBuffer` at scene level for the tables (the same GPU-only storage and offset allocator the per-view palette uses — not a new type; its header comment, which says "one view's" and "rewritten every frame", is rewritten to state the real precondition: whatever it holds is re-derivable after a growth); the pose pass's dense instance list excludes bone-anim-table instances | `BonePaletteBuffer`'s growth **discards** its contents, safe per view only because every instance is re-posed every frame. A table is written once, so a growth must re-queue every rig holding one — the sample pool it fills from is resident, which is why this is a re-dispatch and not a loss. Also: a bone-anim-table instance reaching the pose pass writes through a null slice |
 | `libs/bgl/src/passes` | `PoseRigFrames`: one workgroup per frame, run for each rig whose table is wanted and unfilled (ADR-9) or discarded by a growth, ordered before every reader by the frame graph | Metal: a GPU-written scene buffer read by a mesh stage — the per-view palette already does this; the pass must not be culled as dead on the frame that fills a table before any instance on it is drawn |
 | `libs/bgl/shaders` | `pose_walk.slang` shared by `PoseSkinned` and `PoseRigFrames`; `skinned_vertex.slang` branches on the source and lerps rows across two frames at `time` and two at `prevTime`; VAT shaders go | 48 buffer loads a vertex on the crowd path, from a table shared by every instance on the frame |
 | `libs/gamelib` | `AssetManager` holds one rig per `.banim`, refcounted, shared by every `AcquireSkinnedMesh` on it; `CreateSkinnedInstance` carries the pose source; VAT acquire and freshness go | Release order: geoms before the rig, on the unwind too |
@@ -232,9 +232,24 @@ per rig is this plan's cost to carry.
 1. **`refactor(bgl,gamelib): a rig is a scene object shared by the geoms skinned to it`** — ADR-3,
    ADR-11, ADR-12. `Rig` in the IDL, `AddRig`/`DeleteRig`, `AddSkinnedMeshGeom` by handle;
    `AssetManager` acquires one rig per clip set. No behaviour change.
+
+   *Correction, from building it:* this row previously said the geom would validate its joint
+   indices against the rig's bone count. It cannot. `bgl` links `assetlib_structs`, not `assetlib`,
+   so it can read a submesh's vertex *layout* but has no decoder for the packed vertex bytes — the
+   same reason `IScene::AddSkinnedMeshGeom` already documents for not measuring the posed box
+   itself. Joint range stays where it was: a `dbg_assert` in the mesh shader under
+   `BERNINI_GPU_DEBUG`. What the door does check is that the rig handle is live.
    *Gate:* every skinned suite and golden unchanged (`bgl_tests "[skinned]"`, `gamelib_tests`,
    `editor_tests`); a new case that two geoms on one rig upload one sample pool; a rig deleted
-   under a live geom is refused; the unwind releases the rig.
+   under a live geom is refused; a refused add counts no use.
+
+   *Correction, from building it:* this gate also asked that "the unwind releases the rig", and
+   `gamelib` cannot assert it. A rig the acquire's unwind or `~AssetManager` forgot is invisible
+   through `IScene` — nothing reports a rig, and `gamelib_tests` does not reach `bgl::Scene`. What
+   is covered instead: the *ordering* (rigs after geoms, or `bgl` refuses and the destructor
+   swallows the throw), and on the `bgl` side that a refused add leaves the rig deletable. Making
+   the freeing itself assertable means putting bgl's private root on a gamelib test target, which
+   is a change worth its own argument rather than a line in this one.
 2. **`feat(bgl): a rig's every frame is posed once, on demand`** — ADR-7, ADR-9. `pose_walk.slang`
    extracted from `PoseSkinned`; the `PoseRigFrames` kernel and pass; `Rig.boneAnimTable` and a
    scene-level `BonePaletteBuffer` whose growth re-queues every filled rig; a test-facing door to
