@@ -594,11 +594,18 @@ namespace assetlib
 		 * delivered project ships its triplet and none of its sources, and has nothing to re-bake
 		 * from. One with only some of them is a reference that has broken, and is reported.
 		 *
+		 * Runs in phases -- the documents, then what the sources say is absent, then the changed
+		 * textures, then the re-save walk -- and each reports its own count, so `onProgress` must
+		 * take the total from the event rather than the first one it sees. Within a phase the
+		 * files are independent and are cooked across threads; a `.banim` still never re-measures
+		 * against a mesh a later phase would rewrite.
+		 *
 		 * @param dryRun Report what would change without writing a byte -- a map included, so a
 		 *        material's re-bake is resolved rather than encoded.
+		 * @param onProgress Told each file before it is read.
 		 */
 		[[nodiscard]] MigrateReport
-		Migrate(bool dryRun) const;
+		Migrate(bool dryRun, const ProgressSink& onProgress = {}) const;
 
 		/**
 		 * Every container this project's sources say should exist but does not, produced onto
@@ -622,10 +629,16 @@ namespace assetlib
 		 *
 		 * A source that cannot be re-imported is reported and skipped; the rest still run.
 		 *
-		 * @param dryRun Report what would be written without writing a byte.
+		 * Within a stage the sources are independent and are cooked across threads; the stages
+		 * themselves are ordered, so nothing sees a container a later stage will produce.
+		 *
+		 * @param dryRun Report what would be written without writing a byte. Reports no progress:
+		 *        a dry run does none of the work `onProgress` would be naming.
+		 * @param onProgress Told each output before it is produced, counted against every output
+		 *        this run decided on before it began.
 		 */
 		[[nodiscard]] ReimportReport
-		Reimport(bool dryRun) const;
+		Reimport(bool dryRun, const ProgressSink& onProgress = {}) const;
 
 		/**
 		 * Every geometry container in this project whose source has moved out from under it, as

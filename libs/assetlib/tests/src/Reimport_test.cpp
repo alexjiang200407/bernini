@@ -21,6 +21,7 @@
 
 #include "ImportUnitGroup.h"
 #include "MountAt.h"
+#include "RecordedProgress.h"
 #include "SkinnedGltf.h"
 
 // Every other path that makes a container current is keyed on the file already being there --
@@ -453,4 +454,104 @@ TEST_CASE("A re-import rests a clip on the floor its document authors", "[reimpo
 
 	// Named clips only: the one the document says nothing about is still measured.
 	CHECK(again.clips[1].groundOffset == Catch::Approx(cooked.clips[1].groundOffset));
+}
+
+// The two rules a threaded rebuild has to keep, and neither is visible in the report it returns:
+// what it says it is doing while it does it, and that a stage is finished before the next begins.
+
+TEST_CASE("A rebuild names every container it produces, exactly once", "[reimport]")
+{
+	const test::SkinnedGltf source("bernini_reimport_progress_gltf");
+	const ImportedProject   project("bernini_reimport_progress", source.PackGlb());
+
+	const auto before = DerivedFiles(project.dataRoot);
+	REQUIRE(before.size() == 3);
+	for (const auto& entry : before) fs::remove(project.dataRoot / entry.first);
+
+	test::RecordedProgress recorded;
+	const ReimportReport   report = project.Store().Reimport(/*dryRun*/ false, recorded.Sink());
+	REQUIRE(report.GetFailedCount() == 0);
+
+	// Every container the run wrote was announced before it was written, and nothing else was.
+	auto announced = std::vector<std::string>();
+	for (const test::RecordedStep& event : recorded.events)
+	{
+		CHECK(event.phase == ProgressPhase::kRegenerating);
+		announced.emplace_back(event.subject);
+	}
+	std::ranges::sort(announced);
+
+	auto wrote = std::vector<std::string>();
+	for (const ReimportedSource& entry : report.sources)
+		wrote.insert(wrote.end(), entry.written.begin(), entry.written.end());
+	std::ranges::sort(wrote);
+
+	CHECK(announced == wrote);
+
+	// The count the sink was handed up front is the count it was then stepped through: a total
+	// that drifts from the work is a bar that never fills or fills early.
+	REQUIRE_FALSE(recorded.events.empty());
+	const size_t total = recorded.events.front().total;
+	CHECK(total == wrote.size());
+
+	auto steps = std::vector<size_t>();
+	for (const test::RecordedStep& event : recorded.events)
+	{
+		CHECK(event.total == total);
+		steps.push_back(event.done);
+	}
+	std::ranges::sort(steps);
+	CHECK(std::ranges::adjacent_find(steps) == steps.end());  // no step reported twice
+	CHECK(steps.front() == 0);
+	CHECK(steps.back() == total - 1);
+}
+
+TEST_CASE("Two sources rebuild together, but a stage finishes before the next starts", "[reimport]")
+{
+	const test::SkinnedGltf source("bernini_reimport_two_gltf");
+
+	// Two independent groups, so a stage has something to fan out across.
+	const fs::path root = fs::temp_directory_path() / "bernini_reimport_two";
+	fs::remove_all(root);
+	Project project = Project::Create(root / "Reimport.bproj", "Reimport");
+
+	const fs::path glb      = source.PackGlb();
+	const fs::path dataRoot = project.GetDataDirectory();
+	test::ImportUnitGroup(dataRoot, glb, "Authored/Materials/red.bmaterial", 30.0f, {}, "one");
+	test::ImportUnitGroup(dataRoot, glb, "Authored/Materials/red.bmaterial", 30.0f, {}, "two");
+	project.ReloadStore();
+
+	// Five, not six: the second group binds the rig the first wrote rather than forking it, so
+	// `two.banim` addresses `one.bskel` -- which is exactly the cross-source dependency the stage
+	// barrier exists for.
+	const auto before = DerivedFiles(dataRoot);
+	REQUIRE(before.size() == 5);
+	REQUIRE(before.contains("Derived/Skeletons/one.bskel"));
+	REQUIRE_FALSE(before.contains("Derived/Skeletons/two.bskel"));
+	for (const auto& entry : before) fs::remove(dataRoot / entry.first);
+
+	test::RecordedProgress recorded;
+	const ReimportReport   report = project.GetStore().Reimport(/*dryRun*/ false, recorded.Sink());
+	REQUIRE(report.GetFailedCount() == 0);
+	CHECK(report.GetWrittenCount() == 5);
+
+	// Threaded or not, what lands is what the import wrote.
+	CheckSameFiles(DerivedFiles(dataRoot), before);
+
+	// The barrier: a mesh names the rig it binds, and a clip set sweeps its boxes through the
+	// meshes standing on disk. So no `.bmesh` may be announced before the last `.bskel`, and no
+	// `.banim` before the last `.bmesh` -- which is exactly what a fully parallel run would break.
+	REQUIRE(recorded.events.size() == 5);
+
+	const std::span<const test::RecordedStep> steps = recorded.events;
+	REQUIRE(test::RecordedProgress::CountOf(steps, ".bskel") == 1);
+	REQUIRE(test::RecordedProgress::CountOf(steps, ".bmesh") == 2);
+	REQUIRE(test::RecordedProgress::CountOf(steps, ".banim") == 2);
+
+	CHECK(
+		test::RecordedProgress::LastOf(steps, ".bskel") <
+		test::RecordedProgress::FirstOf(steps, ".bmesh"));
+	CHECK(
+		test::RecordedProgress::LastOf(steps, ".bmesh") <
+		test::RecordedProgress::FirstOf(steps, ".banim"));
 }

@@ -6,6 +6,12 @@
 #define TINYGLTF_IMPLEMENTATION
 #define STB_IMAGE_IMPLEMENTATION
 #define TINYGLTF_NO_STB_IMAGE_WRITE
+
+// stb_image keeps its last error in one global `stbi__g_failure_reason`, and Reimport now parses
+// several sources at once -- so without this a failed decode can report the message another
+// thread's failure left behind. The decode itself is re-entrant; only the diagnostic is shared.
+#define STBI_THREAD_LOCAL thread_local
+
 #include <tiny_gltf.h>
 
 // tiny_gltf.h and stb_image.h both put their implementation *outside* their include guard, so any

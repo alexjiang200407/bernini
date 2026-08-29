@@ -377,7 +377,7 @@ namespace assetlib
 		{
 			throwIfCancelled(cancel);
 
-			report(
+			reportStep(
 				onProgress,
 				ProgressPhase::kExtractingTextures,
 				names[i],

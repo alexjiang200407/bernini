@@ -1,6 +1,7 @@
 #include <assetlib/image_io.h>
 #include <assetlib_structs/ImageData.h>
 #include <core/math.h>
+#include <core/platform/util.h>
 
 #include <ktx.h>
 
@@ -620,14 +621,68 @@ namespace assetlib
 	{
 		ktxTexture* base = ktxTexture(buildKtx(image, path, srgb, compression));
 
+		// Written beside the target and renamed over it, like core::file::write_atomic, because a
+		// baked map's name is content-addressed: two materials routing the same sources at the same
+		// settings resolve to one path, and a threaded bake can have both find it absent and write
+		// it at once. Identical bytes, so whichever rename lands last is right -- but two writers
+		// in one open file are not. The name carries the process and a counter so the temps
+		// themselves cannot collide.
+		static std::atomic<uint32_t> g_Counter = 0;
+
+		const std::filesystem::path tmp = std::filesystem::path(
+			std::format(
+				"{}.{}.{}.tmp",
+				path.string(),
+				core::process_id(),
+				g_Counter.fetch_add(1, std::memory_order_relaxed)));
+
 		errno                         = 0;
-		const ktx_error_code_e wc     = ktxTexture_WriteToNamedFile(base, path.string().c_str());
+		const ktx_error_code_e wc     = ktxTexture_WriteToNamedFile(base, tmp.string().c_str());
 		const int              reason = errno;
 
 		ktxTexture_Destroy(base);
 
-		errno = reason;
-		check(wc, "assetlib::writeKTX2: failed to write", path);
+		if (wc != KTX_SUCCESS)
+		{
+			std::error_code ec;
+			std::filesystem::remove(tmp, ec);
+
+			// Restored after the removal, not before it: a remove that fails too would leave its
+			// own errno for check() to blame the write's failure on.
+			errno = reason;
+			check(wc, "assetlib::writeKTX2: failed to write", tmp);
+		}
+
+		// The rename below is what stops a *reader* ever seeing a partial file. This is what stops
+		// a crash leaving one: a rename can be durable before the data pages behind it are, and
+		// what that leaves is a complete-looking file that reads back as garbage. It matters more
+		// here than for a cache that can shrug it off, because the up-to-date test is
+		// `hasBytes` -- a stat -- so such a file is taken for a finished bake and never rebuilt.
+		if (!core::sync_file(tmp))
+		{
+			std::error_code ec;
+			std::filesystem::remove(tmp, ec);
+			throw std::runtime_error(
+				std::format("assetlib::writeKTX2: cannot flush '{}'", tmp.string()));
+		}
+
+		std::error_code ec;
+		std::filesystem::rename(tmp, path, ec);
+		if (ec)
+		{
+			std::error_code removeEc;
+			std::filesystem::remove(tmp, removeEc);
+			throw std::runtime_error(
+				std::format(
+					"assetlib::writeKTX2: cannot commit '{}': {}",
+					path.string(),
+					ec.message()));
+		}
+
+		// Durable bytes under a directory entry that is not durable is still a lost write, which
+		// here reads as a map that vanished. Not fatal: the rename has happened, and what is at
+		// risk is only its ordering against an unrelated crash. Same pairing as write_atomic.
+		(void)core::sync_directory(path.parent_path());
 	}
 
 	ImageData

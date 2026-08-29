@@ -15,6 +15,7 @@
 #include <assetlib_structs/Skeleton.h>
 
 #include "import_bounds.h"
+#include "parallel_for.h"
 #include "ref_paths.h"
 #include "regen_group.h"
 
@@ -37,6 +38,17 @@ namespace assetlib
 		 */
 		constexpr std::array<AssetType, 3> c_Order = {
 			{ AssetType::kSkeleton, AssetType::kMesh, AssetType::kAnimation }
+		};
+
+		/**
+		 * A source's outputs of one type that this run has to produce, and where in `pending` the
+		 * source is. Decided before any of it runs, so the count the sink reports against is fixed
+		 * and a stage's items can be handed out in any order.
+		 */
+		struct StageItem
+		{
+			size_t                   source = 0;
+			std::vector<std::string> outputs;
 		};
 
 		/** The `.bmesh` among a document's outputs, or empty for a clips-only source. */
@@ -210,8 +222,10 @@ namespace assetlib
 	}
 
 	ReimportReport
-	AssetStore::Reimport(bool dryRun) const
+	AssetStore::Reimport(bool dryRun, const ProgressSink& onProgress) const
 	{
+		const ProgressSink sink = serialized(onProgress);
+
 		auto pending = std::vector<PendingSource>();
 		for (const std::string& documentKey : GetFiles().Enumerate(c_MeshSourcesDirectoryName))
 		{
@@ -222,85 +236,159 @@ namespace assetlib
 		}
 		std::ranges::sort(pending, {}, &PendingSource::key);
 
-		auto written = std::unordered_map<std::string, std::vector<std::string>>();
-		auto failed  = std::unordered_map<std::string, std::string>();
-
-		for (const AssetType type : c_Order)
-		{
-			for (const PendingSource& source : pending)
-			{
-				if (failed.contains(source.key))
-					continue;
-
-				auto todo = std::vector<std::string>();
-				for (const std::string& output : source.document.outputs)
-					if (assetTypeFromExtension(output) == type && wanted(*this, output))
-						todo.push_back(output);
-
-				if (todo.empty())
-					continue;
-
-				if (dryRun)
-				{
-					auto& list = written[source.key];
-					list.insert(list.end(), todo.begin(), todo.end());
-					continue;
-				}
-
-				try
-				{
-					core::throw_runtime_error_if(
-						!Exists(source.key),
-						"'{}' is not in the project, so nothing can be produced from it",
-						source.key);
-
-					// Parsed once per kind rather than held across all three: a source's meshes are
-					// the largest thing in this library, and every one of them would otherwise stay
-					// resident until the last clip set was baked.
-					const RegeneratedGroup group =
-						importGroup(*this, source.key, ImportDocument(source.document));
-
-					for (const std::string& output : todo)
-					{
-						writeOutput(*this, group, source.document, type, output);
-						written[source.key].push_back(output);
-					}
-				}
-				catch (const std::exception& error)
-				{
-					failed.emplace(source.key, error.what());
-				}
-			}
-		}
-
 		// The extracted textures are the one output no `outputs` entry names -- a `.ktx2` carries
 		// no header, so the document's textureDir and textureStamp are their whole key, and that
 		// key says nothing about whether the files are on disk. An empty or absent folder is the
 		// only signal there is, and it is exactly the fresh-checkout case.
-		for (const PendingSource& source : pending)
-		{
-			if (failed.contains(source.key) || source.document.textureDir.empty())
-				continue;
+		const auto textureWanted = [this](const PendingSource& source) {
+			if (source.document.textureDir.empty())
+				return false;
 
 			const std::filesystem::path folder = GetDataRoot() / source.document.textureDir;
-			if (std::filesystem::exists(folder) && !std::filesystem::is_empty(folder))
-				continue;
+			return !std::filesystem::exists(folder) || std::filesystem::is_empty(folder);
+		};
 
-			if (dryRun)
+		auto   stages   = std::array<std::vector<StageItem>, c_Order.size()>();
+		auto   textures = std::vector<size_t>();
+		size_t total    = 0;
+
+		// Deciding the work up front is what fixes the count, but it also means `wanted` is asked
+		// before any of it runs -- where the walk it replaced re-asked per source and so could
+		// never hand the same output to two of them. A rig reused by a second source is normally
+		// left out of that source's `outputs` for exactly this reason; a project where it was not
+		// would otherwise have two threads writing one file with two different `source` fields.
+		auto claimed = std::unordered_set<std::string>();
+
+		for (size_t stage = 0; stage < c_Order.size(); ++stage)
+			for (size_t i = 0; i < pending.size(); ++i)
 			{
-				written[source.key].push_back(source.document.textureDir);
-				continue;
+				auto outputs = std::vector<std::string>();
+				for (const std::string& output : pending[i].document.outputs)
+					if (assetTypeFromExtension(output) == c_Order[stage] && wanted(*this, output) &&
+					    claimed.insert(output).second)
+						outputs.push_back(output);
+
+				if (outputs.empty())
+					continue;
+
+				total += outputs.size();
+				stages[stage].push_back({ i, std::move(outputs) });
 			}
 
-			try
+		for (size_t i = 0; i < pending.size(); ++i)
+			if (textureWanted(pending[i]))
 			{
-				for (const std::string& file : RefreshImportedTextures(source.key).written)
-					written[source.key].push_back(file);
+				++total;
+				textures.push_back(i);
 			}
-			catch (const std::exception& error)
+
+		auto written = std::unordered_map<std::string, std::vector<std::string>>();
+		auto failed  = std::unordered_map<std::string, std::string>();
+		auto guard   = std::mutex();
+		auto done    = std::atomic<size_t>(0);
+
+		if (dryRun)
+		{
+			for (const std::vector<StageItem>& stage : stages)
+				for (const StageItem& item : stage)
+				{
+					std::vector<std::string>& list = written[pending[item.source].key];
+					list.insert(list.end(), item.outputs.begin(), item.outputs.end());
+				}
+
+			for (const size_t i : textures)
+				written[pending[i].key].push_back(pending[i].document.textureDir);
+		}
+		else
+		{
+			// A stage at a time, because a mesh names the rig it binds and a clip set sweeps its
+			// boxes through the meshes standing on disk. Within one, the sources are independent.
+			for (size_t stage = 0; stage < c_Order.size(); ++stage)
 			{
-				failed.emplace(source.key, error.what());
+				const AssetType type = c_Order[stage];
+
+				parallelFor(stages[stage].size(), c_MaxCookThreads, [&](size_t index) {
+					const StageItem&     item   = stages[stage][index];
+					const PendingSource& source = pending[item.source];
+
+					{
+						const auto held = std::lock_guard(guard);
+						if (failed.contains(source.key))
+							return;
+					}
+
+					try
+					{
+						core::throw_runtime_error_if(
+							!Exists(source.key),
+							"'{}' is not in the project, so nothing can be produced from it",
+							source.key);
+
+						// Parsed once per kind rather than held across all three: a source's
+						// meshes are the largest thing in this library, and every one of them
+						// would otherwise stay resident until the last clip set was baked.
+						const RegeneratedGroup group =
+							importGroup(*this, source.key, ImportDocument(source.document));
+
+						for (const std::string& output : item.outputs)
+						{
+							reportStep(
+								sink,
+								ProgressPhase::kRegenerating,
+								output,
+								done.fetch_add(1),
+								total);
+
+							writeOutput(*this, group, source.document, type, output);
+
+							const auto held = std::lock_guard(guard);
+							written[source.key].push_back(output);
+						}
+					}
+					catch (const std::exception& error)
+					{
+						const auto held = std::lock_guard(guard);
+						failed.emplace(source.key, error.what());
+					}
+				});
 			}
+
+			parallelFor(textures.size(), c_MaxCookThreads, [&](size_t index) {
+				const PendingSource& source = pending[textures[index]];
+
+				{
+					const auto held = std::lock_guard(guard);
+					if (failed.contains(source.key))
+						return;
+				}
+
+				const size_t at = done.fetch_add(1);
+				reportStep(sink, ProgressPhase::kExtractingTextures, source.key, at, total);
+
+				try
+				{
+					// The inner sink names the image being encoded without moving the bar: this
+					// whole extract is one of `total`, however many files it turns out to write.
+					const TextureRefresh refresh =
+						RefreshImportedTextures(source.key, [&](const ProgressEvent& event) {
+							reportStep(
+								sink,
+								ProgressPhase::kExtractingTextures,
+								event.subject,
+								at,
+								total);
+						});
+
+					const auto held = std::lock_guard(guard);
+					for (const std::string& file : refresh.written)
+						written[source.key].push_back(file);
+				}
+				catch (const std::exception& error)
+				{
+					const auto held = std::lock_guard(guard);
+					failed.emplace(source.key, error.what());
+				}
+			});
 		}
 
 		ReimportReport report;

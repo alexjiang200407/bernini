@@ -20,8 +20,11 @@ namespace assetlib
 		// The mount key being worked on, or empty where the step is not about one file.
 		std::string_view subject;
 
-		// Steps finished before this one, out of the steps this operation will take. A zero
-		// `total` means the operation cannot say, and reports only the phase and the subject.
+		// Steps finished before this one, out of the steps expected. Both belong to whichever
+		// operation is reporting: one that runs another inside itself lets the inner one report in
+		// its own frame, so `total` changes as a run moves between them and a reader must take the
+		// one each event carries. A zero `total` means it cannot say, and reports only the phase
+		// and the subject.
 		size_t done  = 0;
 		size_t total = 0;
 	};
@@ -38,9 +41,28 @@ namespace assetlib
 	 */
 	using ProgressSink = std::function<void(const ProgressEvent&)>;
 
+	/**
+	 * `sink` behind a lock of its own, for a cook that reports from several threads. The one place
+	 * the serialization rule above is kept, so no sink and no threaded cook has to keep it twice.
+	 *
+	 * An empty sink stays empty: there is nothing to serialize, and a lock per step is not free.
+	 */
+	inline ProgressSink
+	serialized(ProgressSink sink)
+	{
+		if (!sink)
+			return {};
+
+		auto guard = std::make_shared<std::mutex>();
+		return [sink = std::move(sink), guard](const ProgressEvent& event) {
+			const auto held = std::lock_guard(*guard);
+			sink(event);
+		};
+	}
+
 	/** Reports one step to `sink` if there is one. */
 	inline void
-	report(
+	reportStep(
 		const ProgressSink& sink,
 		ProgressPhase       phase,
 		std::string_view    subject,

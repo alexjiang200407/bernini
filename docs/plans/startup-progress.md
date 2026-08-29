@@ -81,14 +81,30 @@ and texture extracts that is.
   documented orderings; and staying serial, which is the one part of startup that can be made faster
   without touching bgl's invariants.*
 
-- **ADR-7 — Neither rebuild is offered any more; both just run.** `OfferProjectUpdate` and
+- **ADR-7 — `writeKTX2` commits through a temp file and a rename.** `Migrate`'s resave walk now
+  bakes materials across threads, and a baked map's name is *content-addressed* — two materials
+  routing one group identically resolve to a single path, so each can find it absent and write it
+  at once. The bytes are identical, which makes a rename-wins race benign and an interleaved write
+  inside one file corrupt anyway. *Rejected: a mutex keyed on the target path, which fixes this
+  caller and leaves the next one — the editor already bakes on a worker — to find the same hazard;
+  and a claimed-set in `Migrate`, which would not cover a bake reached any other way.*
+
+- **ADR-8 — stb_image's failure reason becomes thread-local.** `Reimport` parses several sources at
+  once, and `stbi__g_failure_reason` is one global — a failed decode could report the message
+  another thread's failure left behind. The decode is re-entrant; only the diagnostic is shared, so
+  this is a wrong error message rather than a wrong asset, which is why it is a `#define` and not a
+  lock. libktx's Basis encode/decode init needed nothing: `image_io.cpp` already serializes both
+  behind one mutex. *Rejected: leaving it, on the grounds that a misattributed error during a
+  threaded rebuild is precisely the diagnostic somebody loses an afternoon to.*
+
+- **ADR-9 — Neither rebuild is offered any more; both just run.** `OfferProjectUpdate` and
   `OfferTextureRefresh` stop asking and become steps behind the progress screen. Declining left the
   project unable to draw its own assets, so the question had one correct answer and cost a modal to
   give it. *Rejected: dropping only the derived-asset prompt and keeping the texture one on the
   grounds that a re-extract costs an import's worth of supercompression — the same argument applies
   to a re-cook, and one silent step is easier to reason about than one silent and one asked.*
 
-- **ADR-8 — The same sink drives both screens.** At launch it drives the splash; on a later
+- **ADR-10 — The same sink drives both screens.** At launch it drives the splash; on a later
   `File → Open Project` it drives the existing modal `background::RunWithLoadingScreen`. One rule
   about what a rebuild reports, two things that display it. *Rejected: detailed reporting at startup
   only, which makes one operation report two different amounts depending on how it was reached.*
@@ -110,8 +126,25 @@ and texture extracts that is.
 
 - `just run assetlib_tests -- "[reimport]"` — a parallel rebuild reports every source and every
   phase exactly once, and produces byte-identical output to the serial one over the same project.
-- `just run assetlib_tests -- "[migrate]"` — the stage barriers still hold under concurrency: a
-  clip is never produced before the meshes it sweeps are on disk.
+- `just run assetlib_tests -- "[migrate]"` — the threaded walk over a two-group project leaves a
+  settled one byte-identical and reports every file unchanged, which a race in it would not.
+
+  **Migrate's rank barrier itself is not pinned by a test.** The obvious one — assert the ranks
+  come out of the sink in order — passes with the barrier removed, because `parallelFor` claims
+  indices in order from a single counter and a report is emitted at claim time, not at completion.
+  What the barrier governs is when an item *finishes*, which nothing observable here can see.
+  The same is true of the shared-map bake race ADR-7 fixes: run against the unguarded direct write
+  at eight writers on a 256x256 map, the `[threading]` case passes every time, because the window is
+  one small write and a small write rarely tears. That is the worst kind of bug to leave in — rare
+  enough to ship — so it is made impossible rather than detected, and the case pins what it can:
+  concurrent bakes converge on one file that still parses, with no `.tmp` left behind.
+
+  `Reimport`'s barrier **is** pinned, for a reason its own code supplies rather than
+  `parallelFor`'s: it reports each output *after* the glTF parse, so two sources finishing at
+  different times interleave their reports and the order is a real observation. Verified by
+  removing the barrier — flattening the three stages into one `parallelFor` fails four `[reimport]`
+  cases, reproducibly. `Migrate`'s rank barrier rests on review and on `parallelFor` joining its
+  pool before the next rank is handed out.
 - `just run bgl_tests -- "[shadercache]"` — the progress sink is called once per pipeline, and the
   total it was told up front equals the number of calls.
 - `just run editor_tests -- "[startup]"` — the sink-to-label rule, lifted into a free function, turns
