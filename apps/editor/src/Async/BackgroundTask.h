@@ -10,6 +10,12 @@ namespace background
 {
 	class ProgressRelay;
 
+	/**
+	 * Where a task's reports go. Called on the GUI thread, so it may touch widgets freely; a total
+	 * of 0 is the busy indicator, as it is for QProgressDialog.
+	 */
+	using ProgressSink = std::function<void(int done, int total, const QString& label)>;
+
 	enum class Cancellable
 	{
 		kNo,   // no cancel button, and Esc / the title-bar X will not dismiss the screen either
@@ -75,6 +81,9 @@ namespace background
 			const std::function<void(Progress&)>&,
 			Cancellable);
 
+		friend TaskResult
+		RunReporting(const ProgressSink&, const std::function<void(Progress&)>&);
+
 		Progress(ProgressRelay* relay, assetlib::CancelToken cancel) :
 			m_Relay(relay), m_Cancel(std::move(cancel))
 		{}
@@ -111,4 +120,17 @@ namespace background
 		const QString&                        title,
 		const std::function<void(Progress&)>& work,
 		Cancellable                           cancellable = Cancellable::kNo);
+
+	/**
+	 * The same worker and the same spinning wait, reporting into `sink` instead of standing a
+	 * screen up -- for work whose screen the caller owns and holds across several tasks. The
+	 * startup screen is the one: it is up before there is a window for a modal to be modal over,
+	 * and it spans the renderer, the project and the rebuild.
+	 *
+	 * `work` is under the same rule as above: thread-safe state only, `Renderer::Invoke` for
+	 * anything in bgl. There is no cancel, because there is nothing sensible to do with a
+	 * half-built editor.
+	 */
+	TaskResult
+	RunReporting(const ProgressSink& sink, const std::function<void(Progress&)>& work);
 }

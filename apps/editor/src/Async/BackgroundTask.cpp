@@ -12,11 +12,11 @@
 
 namespace background
 {
-	// Lives on the UI thread and is the only handle a worker has to the dialog.
+	// Lives on the UI thread and is the only handle a worker has to whatever is on screen.
 	class ProgressRelay : public QObject
 	{
 	public:
-		explicit ProgressRelay(QProgressDialog* dialog) : m_Dialog(dialog) {}
+		explicit ProgressRelay(ProgressSink sink) : m_Sink(std::move(sink)) {}
 
 		void
 		Apply(int done, int total, const QString& label)
@@ -24,34 +24,22 @@ namespace background
 			// Once the user has asked to stop, the worker's remaining reports describe work that is
 			// about to be thrown away. Letting them through would overwrite "Cancelling..." with a
 			// label and a bar that both suggest the import is still going somewhere.
-			if (m_Cancelling)
+			if (m_Silenced)
 				return;
 
-			if (!label.isEmpty())
-				m_Dialog->setLabelText(label);
-
-			// A zero range is QProgressDialog's busy indicator.
-			m_Dialog->setRange(0, total);
-			m_Dialog->setValue(done);
+			if (m_Sink)
+				m_Sink(done, total, label);
 		}
 
 		void
-		ShowCancelling()
+		Silence()
 		{
-			m_Cancelling = true;
-
-			m_Dialog->setLabelText("Cancelling...");
-			m_Dialog->setRange(0, 0);
-			m_Dialog->setValue(0);
-
-			// The work is going to be discarded, so there is nothing left to cancel a second time.
-			if (auto* button = m_Dialog->findChild<QPushButton*>())
-				button->setEnabled(false);
+			m_Silenced = true;
 		}
 
 	private:
-		QProgressDialog* m_Dialog     = nullptr;
-		bool             m_Cancelling = false;
+		ProgressSink m_Sink;
+		bool         m_Silenced = false;
 	};
 
 	void
@@ -154,6 +142,49 @@ namespace background
 			TaskResult*                    m_Result   = nullptr;
 			std::atomic<bool>*             m_Finished = nullptr;
 		};
+		/**
+		 * `work` on a private pool thread, with the calling thread's event loop spinning until it
+		 * finishes. Everything about a *screen* is the caller's; what is here is the wait.
+		 *
+		 * A private pool, so an import never queues behind a texture-preview decode.
+		 */
+		TaskResult
+		RunPumped(
+			const std::function<void(Progress&)>& work,
+			Progress                              progress,
+			ProgressRelay&                        relay)
+		{
+			QEventLoop loop;
+			TaskResult result;
+
+			// A nested loop entered from a platform callback -- a drop, which is the one that bites --
+			// need not service Qt's posted-event source, so the worker's quit() may never arrive.
+			// Timers are serviced there, so poll for completion as well; whichever lands first ends
+			// the loop.
+			auto finished = std::atomic<bool>(false);
+
+			QTimer poll;
+			poll.setInterval(30);
+			QObject::connect(&poll, &QTimer::timeout, &relay, [&loop, &finished]() {
+				if (finished.load(std::memory_order_acquire))
+					loop.quit();
+			});
+			poll.start();
+
+			// Declared last, so it is destroyed first: its destructor waits for the task, and `loop`,
+			// `result` and `finished` must outlive that wait. Normally the task is long finished by
+			// then, but QCoreApplication::exit() -- a session logoff -- exits every event loop on this
+			// thread, including the nested one below, while the worker is still running. The wait is
+			// what keeps it from writing into a dead stack frame.
+			QThreadPool pool;
+			pool.setMaxThreadCount(1);
+			pool.start(new WorkTask(work, std::move(progress), &loop, &result, &finished));
+
+			// Spins rather than blocks, so the viewports keep painting behind the screen.
+			loop.exec();
+
+			return result;
+		}
 	}
 
 	TaskResult
@@ -172,9 +203,14 @@ namespace background
 		dialog.setAutoReset(false);
 		dialog.setMinimumDuration(0);
 
-		ProgressRelay relay(&dialog);
-		QEventLoop    loop;
-		TaskResult    result;
+		ProgressRelay relay([&dialog](int done, int total, const QString& label) {
+			if (!label.isEmpty())
+				dialog.setLabelText(label);
+
+			// A zero range is QProgressDialog's busy indicator.
+			dialog.setRange(0, total);
+			dialog.setValue(done);
+		});
 
 		auto source = std::stop_source();
 
@@ -198,7 +234,19 @@ namespace background
 
 			QObject::connect(&dialog, &QProgressDialog::canceled, &dialog, [&]() {
 				source.request_stop();
-				relay.ShowCancelling();
+
+				// Silenced first: the worker's remaining reports describe work about to be thrown
+				// away, and would overwrite this with a label and a bar that both suggest the task
+				// is still going somewhere.
+				relay.Silence();
+
+				dialog.setLabelText("Cancelling...");
+				dialog.setRange(0, 0);
+				dialog.setValue(0);
+
+				// The work is going to be discarded, so there is nothing left to cancel a second time.
+				if (auto* button = dialog.findChild<QPushButton*>())
+					button->setEnabled(false);
 			});
 		}
 		else
@@ -208,34 +256,13 @@ namespace background
 
 		dialog.setValue(0);
 
-		// A nested loop entered from a platform callback -- a drop, which is the one that bites -- need
-		// not service Qt's posted-event source, so the worker's quit() may never arrive. Timers are
-		// serviced there, so poll for completion as well; whichever lands first ends the loop.
-		auto finished = std::atomic<bool>(false);
+		return RunPumped(work, Progress(&relay, source.get_token()), relay);
+	}
 
-		QTimer poll;
-		poll.setInterval(30);
-		QObject::connect(&poll, &QTimer::timeout, &dialog, [&loop, &finished]() {
-			if (finished.load(std::memory_order_acquire))
-				loop.quit();
-		});
-		poll.start();
-
-		// A private pool, so an import never queues behind a texture-preview decode.
-		//
-		// Declared last, so it is destroyed first: its destructor waits for the task, and `loop`,
-		// `result` and `finished` must outlive that wait. Normally the task is long finished by then, but
-		// QCoreApplication::exit() -- a session logoff -- exits every event loop on this thread,
-		// including the nested one below, while the worker is still running. The wait is what keeps it
-		// from writing into a dead stack frame.
-		QThreadPool pool;
-		pool.setMaxThreadCount(1);
-		pool.start(
-			new WorkTask(work, Progress(&relay, source.get_token()), &loop, &result, &finished));
-
-		// Spins rather than blocks, so the DX12 viewports keep painting behind the dialog.
-		loop.exec();
-
-		return result;
+	TaskResult
+	RunReporting(const ProgressSink& sink, const std::function<void(Progress&)>& work)
+	{
+		ProgressRelay relay(sink);
+		return RunPumped(work, Progress(&relay, {}), relay);
 	}
 }
