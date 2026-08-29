@@ -5,6 +5,7 @@
 
 #include "EditorStyle.h"
 #include "MainWindow.h"
+#include "Startup/StartupScreen.h"
 #include "util/FileLog.h"
 
 int
@@ -18,6 +19,12 @@ main(int argc, char* argv[])
 	const QString directory = QCoreApplication::applicationDirPath();
 	editor::InstallFileLogger(directory + "/editor.log");
 
+	// Up before the window, because building the window is what takes the time: the renderer
+	// compiles every pipeline it will ever use, which on a cold shader cache is tens of seconds
+	// with nothing on screen at all. Hidden explicitly on both ways out below.
+	editor::StartupScreen startup(QStringLiteral("Bernini Editor"));
+	startup.show();
+
 	// Building the window reads config.json and creates the device, and both fail on a machine rather
 	// than in the code -- an unusable config, a driver that will not create a device, a budget too
 	// large to allocate. Reported rather than left to terminate: a crash log is what a bug leaves,
@@ -25,11 +32,13 @@ main(int argc, char* argv[])
 	auto window = std::optional<MainWindow>();
 	try
 	{
-		window.emplace();
+		window.emplace(nullptr, std::filesystem::path(), startup.Sink());
 	}
 	catch (const std::exception& e)
 	{
 		qCritical("Editor: could not start: %s", e.what());
+
+		startup.hide();
 
 		QMessageBox::critical(
 			nullptr,
@@ -40,6 +49,9 @@ main(int argc, char* argv[])
 		return 1;
 	}
 
+	// Hidden only once the window is up, so the desktop is never showing neither of them.
 	window->show();
+	startup.hide();
+
 	return app.exec();
 }

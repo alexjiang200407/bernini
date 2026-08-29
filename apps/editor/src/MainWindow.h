@@ -5,6 +5,7 @@
 #include <assetlib/Project.h>
 #include <gamelib/AssetManager.h>
 
+#include "Async/BackgroundTask.h"
 #include "ui_MainWindow.h"
 
 class QDockWidget;
@@ -27,8 +28,14 @@ public:
 	 * @param configPath The config.json to build from. Empty takes the one deployed next to the
 	 *                   executable, which is what ships; a test names one of its own, because
 	 *                   editor_tests runs from the directory that file is deployed into.
+	 * @param startup Where building the window reports -- the pipelines bgl compiles, then the
+	 *                project's rebuild. Empty and startup is silent, which is what it was before
+	 *                there was a screen to report to and what the tests still do.
 	 */
-	explicit MainWindow(QWidget* parent = nullptr, std::filesystem::path configPath = {});
+	explicit MainWindow(
+		QWidget*                 parent     = nullptr,
+		std::filesystem::path    configPath = {},
+		background::ProgressSink startup    = {});
 	~MainWindow();
 
 protected:
@@ -54,16 +61,33 @@ private:
 	CleanUnusedTextures();
 
 	/**
-	 * Offers to re-extract the textures of every source changed since it was imported, and does
-	 * it. On project open, because that is when a re-export first reaches the editor. An offer
-	 * rather than a step: it costs an import's worth of supercompression.
+	 * Re-extracts the textures of every source changed since it was imported. On project open,
+	 * because that is when a re-export first reaches the editor.
+	 *
+	 * Not offered: until it runs, every material routed at one of those sources draws what the
+	 * source held at import, and the only correct answer to the question was yes.
 	 */
 	void
-	OfferTextureRefresh();
+	RefreshTextures();
 
-	/** Offers to rebuild the derived assets that are missing or out of date, as a project opens. */
+	/**
+	 * Rebuilds the derived assets that are missing or out of date, as a project opens. Not offered
+	 * either, and for a stronger reason: loads refuse a stale container rather than re-cooking one,
+	 * so declining left the viewport unable to open the project's own assets.
+	 */
 	void
-	OfferProjectUpdate();
+	UpdateProject();
+
+	/**
+	 * Runs `work` behind whichever screen is up: the startup screen while the editor is starting,
+	 * a modal loading screen once it is running. Startup offers no cancel, so `cancellable` is what
+	 * the modal screen alone honours.
+	 */
+	background::TaskResult
+	RunBehindScreen(
+		const QString&                                    title,
+		const std::function<void(background::Progress&)>& work,
+		background::Cancellable cancellable = background::Cancellable::kNo);
 
 	void
 	SetActiveProject(assetlib::Project project);
@@ -114,6 +138,10 @@ private:
 	SetUpReconstructionWidthMenu(QMenu* render);
 
 	Ui::MainWindow m_Ui;
+
+	// Set only while Build() is running: what startup reports into, and how RunBehindScreen tells
+	// which screen is up. Cleared once the window is ready, so a later Open Project gets the modal.
+	background::ProgressSink m_StartupProgress;
 
 	QString m_InstanceName;
 

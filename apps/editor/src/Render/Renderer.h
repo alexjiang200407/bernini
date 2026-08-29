@@ -9,6 +9,18 @@
 
 class QTimer;
 
+/** How the thread constructing a Renderer waits for the render thread to build it. */
+enum class RendererWait
+{
+	// The caller blocks. What everything but startup wants.
+	kBlock,
+
+	// The caller runs its event loop meanwhile, so a screen already on it keeps painting while the
+	// render thread compiles the pipelines. Re-entrant by construction, so only for a caller that
+	// has nothing on screen yet but the screen doing the reporting.
+	kPumpEventLoop,
+};
+
 /**
  * Owns every bgl object the editor renders through -- the one Graphics and the one Scene -- and runs
  * the thread that is the only one ever to touch them. Work reaches the renderer as closures: Post()
@@ -34,7 +46,17 @@ public:
 	// Identifies a registered viewport. Never 0, which stands for "not registered".
 	using ViewportId = uint64_t;
 
-	Renderer(const bgl::GraphicsOptions& gfxOpts, const bgl::SceneDesc& sceneDesc);
+	/**
+	 * Builds the Graphics and the Scene on the render thread. `gfxOpts.onPipelineProgress` is
+	 * called from *that* thread, so a sink that touches widgets has to marshal.
+	 *
+	 * @throws whatever bgl::CreateGraphics throws, on the calling thread, with the render thread
+	 *         already stopped.
+	 */
+	Renderer(
+		const bgl::GraphicsOptions& gfxOpts,
+		const bgl::SceneDesc&       sceneDesc,
+		RendererWait                wait = RendererWait::kBlock);
 	~Renderer() override;
 
 	// Runs `fn` on the render thread. Returns immediately when cross-thread; runs inline when the
