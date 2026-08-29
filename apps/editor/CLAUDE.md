@@ -222,10 +222,13 @@ Two things a test cannot drive, and why:
   posted, so drop *routing* is covered that way and the drop *rules* are driven straight
   through the handler.
 
-The **startup screen** is in the same family as the viewports: `StartupScreen` is a widget and
-`main.cpp` is not in `editor_lib`, so neither is covered. What is lifted clear of both is
-`editor::startup::PipelineLabel` and `RebuildLabel` (`src/Startup/startup_labels.h`) — what each
-report *reads* — and `StartupLabels_test.cpp` drives those directly. The screen itself needs eyes.
+**Startup** is covered in two halves, because a headless `MainWindow` takes the same
+`background::ProgressSink` `main.cpp` hands the real one. `MainWindow_test.cpp` pins that the
+reports actually arrive — they cross a queued connection from the render thread, and landing none
+of them would look exactly like a working build with a screen stuck on "Starting..." — and
+`StartupLabels_test.cpp` pins what each one *reads*, through the free functions in
+`src/Startup/startup_labels.h`. `StartupScreen` itself is a widget with no seam and `main.cpp` is
+outside `editor_lib`, so what the screen looks like still needs eyes.
 
 `background::RunWithLoadingScreen` is testable despite its nested event loop and modal
 screen: arm `editor::test::OnLoadingScreen` (`tests/src/util/Modal.h`) **before** the
