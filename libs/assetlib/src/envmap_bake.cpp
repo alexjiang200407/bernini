@@ -4,6 +4,7 @@
 #include <stb_image.h>
 
 #include <core/glm.h>
+#include <core/log/ScopedStage.h>
 #include <core/math.h>
 
 namespace assetlib
@@ -824,7 +825,11 @@ namespace assetlib
 			throw std::runtime_error(
 				"assetlib::prefilterRadiance: faceSize is too small for that many mips");
 
-		const auto start = std::chrono::steady_clock::now();
+		const auto stage = core::logging::ScopedStage(
+			"assetlib prefilter: {} faces, {} mips, {} samples",
+			desc.faceSize,
+			desc.mipLevels,
+			desc.samples);
 
 		const CubePyramid pyramid(source);
 
@@ -886,8 +891,6 @@ namespace assetlib
 
 		if (stats != nullptr)
 		{
-			stats->seconds =
-				std::chrono::duration<double>(std::chrono::steady_clock::now() - start).count();
 			stats->texelsWritten = total;
 			stats->samplesTaken  = samplesTaken.load();
 		}
