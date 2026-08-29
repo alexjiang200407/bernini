@@ -13,6 +13,7 @@
 #include "passes/OutlineMaskPass.h"
 #include "passes/PostProcessPass.h"
 #include "passes/PreparePresentPass.h"
+#include "passes/RigFramesPass.h"
 #include "passes/SkinnedPosePass.h"
 #include "passes/SkyboxPass.h"
 #include "passes/TaaResolvePass.h"
@@ -184,6 +185,7 @@ namespace bgl
 		OutlineMaskPass      m_OutlineMask;
 		TaaResolvePass       m_TaaResolve;
 		CompactInstancesPass m_CompactInstances;
+		RigFramesPass        m_RigFrames;
 		SkinnedPosePass      m_SkinnedPose;
 		TransparentSortPass  m_TransparentSort;
 

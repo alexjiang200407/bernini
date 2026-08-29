@@ -23,6 +23,10 @@ namespace bgl
 	// Not skinned-prefixed: a rig is a skeleton and its clips, which no geom owns.
 	constexpr std::string_view c_RigBufferName = "scene.rigBuffer"sv;
 
+	// GPU-written like the per-view palette, and imported the same way -- RigFramesPass fills it,
+	// nothing uploads it.
+	constexpr std::string_view c_BoneAnimTableName = "scene.boneAnimTables"sv;
+
 	constexpr std::string_view c_SkinnedBoneBufferName = "scene.skinnedBoneBuffer"sv;
 	constexpr std::string_view c_BoneSampleBufferName  = "scene.boneSampleBuffer"sv;
 
