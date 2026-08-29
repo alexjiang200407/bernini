@@ -24,7 +24,6 @@ add_library(bgl_metal OBJECT
 find_package(slang CONFIG REQUIRED)
 
 target_include_directories(bgl_metal
-    PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/../../include
     PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}
         ${CMAKE_CURRENT_SOURCE_DIR}/..
@@ -49,6 +48,6 @@ set_source_files_properties(MetalImpl.cpp PROPERTIES SKIP_PRECOMPILE_HEADERS ON)
 target_compile_definitions(bgl_metal PRIVATE RENDERER_BACKEND_METAL)
 
 target_link_libraries(bgl_metal
-    PUBLIC core assetlib_structs glm::glm slang::slang
+    PUBLIC bgl_intfc core assetlib_structs glm::glm slang::slang
     PRIVATE "-framework Metal" "-framework Foundation" "-framework QuartzCore"
 )

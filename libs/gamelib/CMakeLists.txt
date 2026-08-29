@@ -29,9 +29,12 @@ target_precompile_headers(gamelib
 	PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src/pch.h
 )
 
+# bgl_intfc for the contract, bgl for the symbols behind it -- gamelib names the interface it
+# compiles against rather than assuming one renderer provides it.
 target_link_libraries(gamelib
 	PUBLIC
 		core
+		bgl_intfc
 		bgl
 		assetlib
 )
