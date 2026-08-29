@@ -1,5 +1,7 @@
 #pragma once
+#include "idl/idl.h"
 #include "resource/ResourceManager.h"
+#include "scene/EntryBuffer.h"
 #include <bgl/TextureAssetHandle.h>
 
 namespace bgl
@@ -75,6 +77,23 @@ namespace bgl
 		[[nodiscard]] DescriptorHandle
 		GetDescriptor(core::slot_handle textureSlot) const noexcept;
 
+		/**
+		 * How a material names this texture: an entry in the table below, rather than the
+		 * descriptor inline. One entry per texture, not per material that routes it.
+		 *
+		 * @post a null entry for a texture this store never created or has since deleted.
+		 * Dereferencing one in a shader raises kNullEntryDeref, so a caller resolves it to
+		 * something live rather than storing it.
+		 */
+		[[nodiscard]] idl::Entry
+		GetEntry(core::slot_handle textureSlot) const noexcept;
+
+		[[nodiscard]] BufferHandle
+		GetTableBufferHandle() const noexcept
+		{
+			return m_Table.GetBufferHandle();
+		}
+
 		[[nodiscard]] core::slot_handle
 		GetDefaultSlot(DefaultTexture kind) const noexcept;
 
@@ -109,9 +128,20 @@ namespace bgl
 
 		core::SharedRef<IResourceManager> m_ResourceManager;
 
+		// The view that reaches a texture, and the table entry a material names it by.
+		struct TextureRecord
+		{
+			SrvHandle         srv;
+			core::slot_handle entry;
+		};
+
 		// Keyed by the texture's slot index. A texture carries no descriptor of its own, and
-		// destroying one does not cascade to its views, so whoever created both releases both.
-		std::unordered_map<uint32_t, SrvHandle> m_Srvs;
+		// destroying one does not cascade to its views, so whoever created both releases both --
+		// the table entry with them.
+		std::unordered_map<uint32_t, TextureRecord> m_Records;
+
+		// One handle per live texture, for the material payloads that cannot hold one themselves.
+		EntryBuffer<idl::TextureHandle> m_Table;
 
 		std::vector<PendingUpload> m_PendingUploads;
 

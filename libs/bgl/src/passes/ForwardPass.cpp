@@ -34,7 +34,7 @@ namespace bgl
 			BarrierSync      sync;
 		};
 
-		static constexpr std::array<MaterialBuffer, 2> c_MaterialBuffers = { {
+		static constexpr std::array<MaterialBuffer, 3> c_MaterialBuffers = { {
 			{
 				c_PbrMaterialBufferName,
 				"pbrMaterials",
@@ -46,6 +46,12 @@ namespace bgl
 				"looseMaterials",
 				BarrierAccessFlag::kShaderResource,
 				BarrierSyncFlag::kVertexShader,
+			},
+			{
+				c_TextureTableBufferName,
+				"textureTable",
+				BarrierAccessFlag::kShaderResource,
+				BarrierSyncFlag::kPixelShader,
 			},
 		} };
 

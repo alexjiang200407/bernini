@@ -1,5 +1,6 @@
 // THIS IS A FILE GENERATED FROM PbrMaterial.slang. DO NOT EDIT MANUALLY
 
+import Entry;
 import TextureHandle;
 
 public struct PbrMaterial
@@ -8,9 +9,12 @@ public struct PbrMaterial
 
     public float4 specular;
 
-    public TextureHandle baseColorTexture; // SRGB
-    public TextureHandle normalTexture;    // BC5_UNORM
-    public TextureHandle ormTexture;       // UNORM
+    // Into the scene's texture table, not handles inline: a payload holding a resource handle
+    // cannot be read out of a raw buffer at all on Metal, and this one is going into one. See
+    // docs/slang_shaders.md.
+    public Entry<TextureHandle> baseColorTexture; // SRGB
+    public Entry<TextureHandle> normalTexture;    // BC5_UNORM
+    public Entry<TextureHandle> ormTexture;       // UNORM
 
     public float metallicFactor;
     public float roughnessFactor;

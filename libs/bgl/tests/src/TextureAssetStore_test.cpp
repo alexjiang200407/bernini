@@ -71,6 +71,40 @@ TEST_CASE("The store builds its default textures up front", "[textures]")
 	// would silently sample nothing.
 	CHECK_FALSE(fixture.store.GetSrv(white).IsNull());
 	CHECK_FALSE(fixture.store.GetSrv(normal).IsNull());
+
+	// And through an entry, which is what a material actually stores. A null one is fatal to
+	// dereference, so an unrouted channel falling back to a default with no entry would abort a
+	// frame rather than sample white.
+	CHECK_FALSE(fixture.store.GetEntry(white).Null());
+	CHECK_FALSE(fixture.store.GetEntry(normal).Null());
+	CHECK(fixture.store.GetEntry(white).offset != fixture.store.GetEntry(normal).offset);
+}
+
+/**
+ * A texture's table entry lives exactly as long as the texture does.
+ *
+ * A material names a texture by its entry, so the entry is what dangles when the texture goes --
+ * and an entry handed back out is a stale material sampling a live texture that is not its own.
+ * ADR-8 rests on that being the whole of the bargain.
+ */
+TEST_CASE("A texture's table entry is minted with it and freed with it", "[textures]")
+{
+	auto fixture = Fixture();
+
+	const TextureAssetHandle texture = fixture.store.Add(MakeImage(), "Entry");
+	REQUIRE_FALSE(texture.textureSlot.is_null());
+
+	const idl::Entry entry = fixture.store.GetEntry(texture.textureSlot);
+	CHECK_FALSE(entry.Null());
+
+	fixture.store.Delete(texture);
+
+	// Nothing answers for the slot afterwards -- which is why a material resolving one has to fall
+	// back rather than store what it gets.
+	CHECK(fixture.store.GetEntry(texture.textureSlot).Null());
+
+	// A texture this store never created has no entry either.
+	CHECK(fixture.store.GetEntry(core::slot_handle{ 4242, 1 }).Null());
 }
 
 TEST_CASE("An added texture is uploaded once, on the first flush", "[textures]")

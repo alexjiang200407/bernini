@@ -8,8 +8,10 @@ namespace bgl::test
 	 * it: it mints slots, answers ValidTextureHandle from the live set, and records every create and
 	 * destroy so a test can assert what a subject released.
 	 *
-	 * Only the texture and view half is implemented -- everything else aborts if called, so a
-	 * subject that strays outside that half fails loudly rather than reading a zeroed handle.
+	 * Textures, views and structured buffers are implemented -- everything else aborts if called, so
+	 * a subject that strays outside them fails loudly rather than reading a zeroed handle. Buffers
+	 * are here because a store that owns one (the texture table) is still worth testing without a
+	 * device; nothing reads their contents, so they are slots and nothing more.
 	 */
 	class FakeResourceManager : public core::RefCounter<IResourceManager>
 	{
@@ -30,6 +32,9 @@ namespace bgl::test
 		// Fails the next CreateSrv, then clears itself: the descriptor-exhausted path, which is the
 		// one that must take its already-created texture back down with it.
 		bool failNextSrv = false;
+
+		std::vector<StructBufferDesc> createdBuffers;
+		std::vector<BufferHandle>     destroyedBuffers;
 
 		std::vector<TextureDesc>   createdTextures;
 		std::vector<TextureHandle> destroyedTextures;
@@ -102,9 +107,13 @@ namespace bgl::test
 		}
 
 		BufferHandle
-		CreateStructBuffer(const StructBufferDesc&) noexcept override
+		CreateStructBuffer(const StructBufferDesc& desc) noexcept override
 		{
-			std::abort();
+			createdBuffers.push_back(desc);
+
+			const uint32_t index = m_NextBufferIndex++;
+			m_LiveBuffers.insert(index);
+			return BufferHandle{ core::slot_handle{ index, 1 }, index };
 		}
 		BufferHandle
 		CreateComputeBuffer(const ComputeBufferDesc&) noexcept override
@@ -133,9 +142,10 @@ namespace bgl::test
 		UnregisterQueue(ICommandQueue*) noexcept override
 		{}
 		void
-		DestroyBuffer(BufferHandle, bool) noexcept override
+		DestroyBuffer(BufferHandle handle, bool) noexcept override
 		{
-			std::abort();
+			destroyedBuffers.push_back(handle);
+			m_LiveBuffers.erase(handle.slot.index);
 		}
 		void
 		DestroySampler(SamplerHandle, bool) noexcept override
@@ -236,9 +246,9 @@ namespace bgl::test
 			std::abort();
 		}
 		bool
-		ValidBufferHandle(const BufferHandle&) const noexcept override
+		ValidBufferHandle(const BufferHandle& handle) const noexcept override
 		{
-			return false;
+			return m_LiveBuffers.contains(handle.slot.index);
 		}
 		bool
 		IsTextureCube(const TextureHandle&) const noexcept override
@@ -285,6 +295,8 @@ namespace bgl::test
 		// Starts at 1 so a default-constructed handle's slot never collides with a live one.
 		uint32_t                     m_NextTextureIndex = 1;
 		uint32_t                     m_NextSrvIndex     = 1;
+		uint32_t                     m_NextBufferIndex  = 1;
 		std::unordered_set<uint32_t> m_LiveTextures;
+		std::unordered_set<uint32_t> m_LiveBuffers;
 	};
 }

@@ -63,12 +63,13 @@ data whose kind whatever names it already records.
 Each asserts its reference is non-null in a debug build (`kNullRawDeref`); a null one reads the
 arena's reserved head, which is zeros rather than a live record.
 
-`Load<T>` is for **handle-free** `T`. The element type of a bindless buffer is fixed at its
+`Load<T>` is for **handle-free** `T`, which is why a material payload holds an
+`Entry<TextureHandle>` rather than the handle: one entry per texture, minted with its view by
+`TextureAssetStore` and freed with it. The element type of a bindless buffer is fixed at its
 declaration, and a raw one declares bytes: on Metal a `ByteAddressBuffer.Handle` lowers to
 `uint32_t device*`, so Slang reconstructs `T` from loaded scalars and a `Texture2D.Handle` field
 becomes `as_type<texture2d<...>>(ulong)`, which MSL rejects — as does the core module's
-`__getEquivalentStructuredBuffer<T>`, which re-types nothing. A payload needing a texture holds an
-`Entry<TextureHandle>` into an `EntryBuffer<TextureHandle>` and reads the handle from there.
+`__getEquivalentStructuredBuffer<T>`, which re-types nothing.
 
 `GetDimensions` is deliberately not exposed: the core module marks it HLSL-only, so a wrapper
 carrying it would compile on D3D12 and fail on Metal.

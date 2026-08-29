@@ -5,6 +5,7 @@ import idl.ChannelSource;
 import idl.IPbrMaterial;
 import idl.IAlphaTestMaterial;
 import idl.TextureHandle;
+import idl.Entry;
 import forward.common;
 import forward.PbrShading;
 import util.HashedAlpha;
@@ -20,6 +21,9 @@ struct MaterialData
 
     EntryBuffer<PbrMaterial> pbrMaterials;
     EntryBuffer<LoosePbrMaterial> looseMaterials;
+
+    // Every texture a material samples, one entry per texture.
+    EntryBuffer<TextureHandle> textureTable;
 
     TextureCubeHandle irradianceMap;
     TextureCubeHandle prefilterMap;
@@ -44,17 +48,17 @@ extension PbrMaterial : IPbrMaterial, IAlphaTestMaterial
 
     float4 GetBaseColor(SamplerState.Handle s, float2 uv)
     {
-        return baseColorTexture.Sample(s, uv) * baseColorFactor;
+        return materialData.textureTable[baseColorTexture].Sample(s, uv) * baseColorFactor;
     }
 
     float3 GetORM(SamplerState.Handle s, float2 uv)
     {
-        return ormTexture.Sample(s, uv).rgb * float3(1.0, roughnessFactor, metallicFactor);
+        return materialData.textureTable[ormTexture].Sample(s, uv).rgb * float3(1.0, roughnessFactor, metallicFactor);
     }
 
     float2 GetNormalXY(SamplerState.Handle s, float2 uv)
     {
-        return normalTexture.Sample(s, uv).xy;
+        return materialData.textureTable[normalTexture].Sample(s, uv).xy;
     }
 
     float GetAlphaCutoff()
@@ -74,12 +78,12 @@ extension PbrMaterial : IPbrMaterial, IAlphaTestMaterial
 
     float2 GetBaseColorDimensions()
     {
-        return baseColorTexture.GetDimensions();
+        return materialData.textureTable[baseColorTexture].GetDimensions();
     }
 
     float GetBaseColorAlphaBiased(SamplerState.Handle s, float2 uv, float bias)
     {
-        return baseColorTexture.SampleBias(s, uv, bias).a * baseColorFactor.a;
+        return materialData.textureTable[baseColorTexture].SampleBias(s, uv, bias).a * baseColorFactor.a;
     }
 }
 
@@ -102,7 +106,7 @@ float SelectComponent(float4 v, uint c)
 
 float SampleLooseChannel(ChannelSource cs, SamplerState.Handle s, float2 uv)
 {
-    return SelectComponent(cs.texture.Sample(s, uv), cs.channel);
+    return SelectComponent(materialData.textureTable[cs.texture].Sample(s, uv), cs.channel);
 }
 
 extension LoosePbrMaterial : IPbrMaterial, IAlphaTestMaterial
@@ -158,12 +162,13 @@ extension LoosePbrMaterial : IPbrMaterial, IAlphaTestMaterial
     // and the loose colour channels may come from other maps at other sizes.
     float2 GetBaseColorDimensions()
     {
-        return sources[3].texture.GetDimensions();
+        return materialData.textureTable[sources[3].texture].GetDimensions();
     }
 
     float GetBaseColorAlphaBiased(SamplerState.Handle s, float2 uv, float bias)
     {
-        return SelectComponent(sources[3].texture.SampleBias(s, uv, bias), sources[3].channel) * baseColorFactor.a;
+        return SelectComponent(materialData.textureTable[sources[3].texture].SampleBias(s, uv, bias), sources[3].channel) *
+               baseColorFactor.a;
     }
 }
 

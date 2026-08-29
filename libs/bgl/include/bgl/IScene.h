@@ -355,6 +355,10 @@ namespace bgl
 		 * to: rebind the view before releasing what it named. The retired slot is not benign on
 		 * every backend -- Metal resolves the handle at dispatch and aborts on the next frame.
 		 *
+		 * A material names a texture by an entry in the scene's texture table rather than by the
+		 * descriptor, and the entry dies here with the view. A material still naming it therefore
+		 * reads whichever texture takes the entry next -- the same bargain, one level up.
+		 *
 		 * @param texture A handle returned by AddTextureAsset.
 		 * @throws SceneError if the handle is null, or already deleted.
 		 */

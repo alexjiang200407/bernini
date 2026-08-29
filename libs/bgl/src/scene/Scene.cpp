@@ -460,6 +460,11 @@ namespace bgl
 			fg.ImportBuffer(name, buffer.GetBufferHandle());
 			resourceNames.emplace_back(name);
 		});
+
+		// Not in the table above: it belongs to the texture store, which owns the lifetime of every
+		// entry in it, and c_Buffers names members of the Scene.
+		fg.ImportBuffer(c_TextureTableBufferName, m_Textures.GetTableBufferHandle());
+		resourceNames.emplace_back(c_TextureTableBufferName);
 	}
 
 	GeomHandle
@@ -1337,13 +1342,15 @@ namespace bgl
 		const auto flatNormal =
 			m_Textures.GetDefaultSlot(TextureAssetStore::DefaultTexture::kFlatNormal);
 
-		// A caller-supplied texture resolves to its bindless descriptor; an invalid
-		// (default-constructed) handle falls back to the given default texture. The descriptor comes
-		// from the resource manager, not the slot: this one is read straight out of GPU memory, so it
-		// has to be whatever the backend's shader can dereference.
+		// A caller-supplied texture resolves to its table entry; an invalid (default-constructed)
+		// handle falls back to the given default texture -- and so does a handle whose texture has
+		// since been deleted, which has a slot but no entry. Without that second fallback a stale
+		// handle would reach the shader as a null entry, whose dereference is fatal rather than the
+		// unbound sample it used to be.
 		const auto resolve = [this](TextureAssetHandle tex, core::slot_handle fallback) {
-			const core::slot_handle slot = tex.textureSlot ? tex.textureSlot : fallback;
-			return idl::TextureHandle{ m_Textures.GetDescriptor(slot) };
+			const core::slot_handle slot  = tex.textureSlot ? tex.textureSlot : fallback;
+			const idl::Entry        entry = m_Textures.GetEntry(slot);
+			return entry.Null() ? m_Textures.GetEntry(fallback) : entry;
 		};
 
 		idl::PbrMaterial material{};
@@ -1409,8 +1416,10 @@ namespace bgl
 			const bool              routed = !route.texture.textureSlot.is_null();
 			const core::slot_handle slot   = routed ? route.texture.textureSlot : fallbackTex;
 
+			const idl::Entry entry = m_Textures.GetEntry(slot);
+
 			idl::ChannelSource cs{};
-			cs.texture = idl::TextureHandle{ m_Textures.GetDescriptor(slot) };
+			cs.texture = entry.Null() ? m_Textures.GetEntry(fallbackTex) : entry;
 			cs.channel = routed ? route.channel : fallbackChannel;
 			return cs;
 		};

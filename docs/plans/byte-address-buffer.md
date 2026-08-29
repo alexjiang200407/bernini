@@ -96,7 +96,9 @@ not have one.
   inventing one.*
 
 - **ADR-8 — A texture in a raw payload is an `Entry<TextureHandle>` into one
-  `EntryBuffer<TextureHandle>` table, not a `TextureHandle` inline.** Task 1 established that a
+  `EntryBuffer<TextureHandle>` table, not a `TextureHandle` inline.** The table belongs to the
+  texture store, which mints an entry with a texture's view and frees it with them, so a handle is
+  stored once however many materials route it. Task 1 established that a
   bindless resource handle cannot be read out of a raw buffer on Metal at all (see the survey
   below), so a payload that is to be raw-loaded must be handle-free. The indirection is the
   existing offset primitive rather than a new type: a null entry reads the table's reserved
@@ -330,22 +332,26 @@ weights). The same stale "emitted into src/idl" claim sits in
    invariant), `ByteBuffer.slang` deleted, `geometry_layout.md` corrected. *Gate:* every golden and
    A/B capture under Acceptance, `SceneOverflow_test`, `MeshDelete_test`, `--gpu-validation`.
 
-4. **`feat(bgl): materials in one raw arena behind a header`** — ADR-2, ADR-3, ADR-7 and ADR-8 for
-   materials: the arena on `Scene`, the `EntryBuffer<TextureHandle>` table its payloads route
-   through, `MaterialHandle`, the single binding for material data, `RawEntry<IMaterial>`,
-   the transparent pass reading the tag, the varying removed, the offset bargain restated in
-   `IScene.h` and `docs/bgl_api.md`, the shading-model recipe in `docs/asset_standards.md`
-   rewritten for one arena. *Gate:* every geometry golden (they all draw PBR),
-   `alpha_test_*`, `pbr_ibl`, `HashedAlpha_test`, the transparent loose-vs-baked pair,
-   `PsoSelection_test`, `TemporalEpoch_test`, `MaterialTextureDelete_test`,
+4. **`feat(bgl): materials name their textures through a table`** — ADR-8 alone: the table on the
+   texture store, `Entry<TextureHandle>` in both material payloads, the entry minted and freed with
+   the texture. Materials stay in their two typed buffers. *Gate:* every golden (they all sample a
+   material), `MaterialTextureDelete_test`, GPU validation.
+
+5. **`feat(bgl): materials in one raw arena behind a header`** — ADR-2, ADR-3 and ADR-7 for
+   materials, now that the payloads are handle-free: the arena on `Scene`, `MaterialHandle`, the
+   single binding for material data, `RawEntry<IMaterial>`, the transparent pass reading the tag,
+   the varying removed, the offset bargain restated in `IScene.h` and `docs/bgl_api.md`, the
+   shading-model recipe in `docs/asset_standards.md` rewritten. *Gate:* every geometry golden (they
+   all draw PBR), `alpha_test_*`, `pbr_ibl`, `HashedAlpha_test`, the transparent loose-vs-baked
+   pair, `PsoSelection_test`, `TemporalEpoch_test`, `MaterialTextureDelete_test`,
    `MaterialOverrideRender_test`, `MeshDelete_test`, `--gpu-validation`.
 
-5. **`feat(bgl): the mesh playback tier behind a header`** — the same for `Mesh.playback`: the arena
+6. **`feat(bgl): the mesh playback tier behind a header`** — the same for `Mesh.playback`: the arena
    on the view, `Forward_AnyMesh` dispatching on the tag, the pose pass reading through it, the
    tier rule and the pose pass's inputs in `docs/passes.md` rewritten. *Gate:*
    `vat_frozen_frames`, `vat_normal_map`, `SkinnedRender_test` in full, `MotionVectors_test`, the
    outline selection case, `--gpu-validation`.
 
-6. **`docs: the raw arena outlives its plan`** — what the tasks left in this file that describes the
+7. **`docs: the raw arena outlives its plan`** — what the tasks left in this file that describes the
    code as it now is moves into the subsystem pages named above; this file is deleted. The landing PR
    carries the deletion.

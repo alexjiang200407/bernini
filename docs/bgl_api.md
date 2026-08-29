@@ -234,7 +234,10 @@ flowchart TD
   for `kNull` / `kAssert`, which have no storage to free.
 * **`DeleteTextureAsset(texture)`** — @pre no live material routes it. The scene does not know which
   materials sample which textures. The GPU release itself *is* safely deferred behind the frames that
-  could still be reading it; the dangling *binding* is what is unsafe.
+  could still be reading it; the dangling *binding* is what is unsafe. A material names a texture by
+  an entry in the scene's texture table, and that entry is freed here rather than deferred, so the
+  next `AddTextureAsset` may re-mint it: a material still routing the deleted texture then samples
+  whichever one took the entry, in the same frame.
 * **`UpdatePbrMaterial` / `UpdateLoosePbrMaterial`** — rewrites in place, keeping the handle and slot,
   so every submesh already bound picks the change up with no rebinding. The material's *type* cannot
   change, so the PSO bucket is unaffected. @throws `SceneError` on a type mismatch.

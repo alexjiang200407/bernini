@@ -5,9 +5,20 @@
 
 namespace bgl
 {
+	namespace
+	{
+		// Where the texture table starts; it grows like any other scene buffer.
+		constexpr uint32_t c_InitialTableEntries = 16;
+	}
+
 	TextureAssetStore::TextureAssetStore(core::SharedRef<IResourceManager> resourceManager) :
 		m_ResourceManager(std::move(resourceManager))
 	{
+		auto tableDesc         = EntryBufferDesc();
+		tableDesc.initialCount = c_InitialTableEntries;
+		tableDesc.debugName    = "Texture Table";
+		m_Table.Init(std::move(tableDesc), m_ResourceManager);
+
 		m_Defaults[static_cast<size_t>(DefaultTexture::kWhite)] = CreateSolid(255, 255, 255, 255);
 		m_Defaults[static_cast<size_t>(DefaultTexture::kFlatNormal)] =
 			CreateSolid(128, 128, 255, 255);
@@ -23,7 +34,7 @@ namespace bgl
 		}
 
 		// Create made the view, so this lookup always hits.
-		return TextureAssetHandle{ handle.slot, m_Srvs.at(handle.slot.index).bindlessIndex };
+		return TextureAssetHandle{ handle.slot, m_Records.at(handle.slot.index).srv.bindlessIndex };
 	}
 
 	TextureHandle
@@ -60,7 +71,11 @@ namespace bgl
 			m_ResourceManager->DestroyTexture(handle, /*deferred*/ false);
 			return TextureHandle{};
 		}
-		m_Srvs.emplace(handle.slot.index, srv);
+		// The entry is minted with the view, so a material can name the texture the moment it
+		// exists -- and dies with it below.
+		const core::slot_handle entry = m_Table.Add(idl::TextureHandle{ srv.descriptor });
+
+		m_Records.emplace(handle.slot.index, TextureRecord{ srv, entry });
 
 		m_PendingUploads.push_back({ handle, std::move(img) });
 		return handle;
@@ -104,10 +119,15 @@ namespace bgl
 		// Frames already submitted may still sample this texture, so only the *release* is deferred:
 		// the resource manager recycles the bindless slot no earlier than the last frame that could
 		// read it. The view is not cascaded to by DestroyTexture, so it goes on the same gate.
-		if (const auto it = m_Srvs.find(handle.slot.index); it != m_Srvs.end())
+		if (const auto it = m_Records.find(handle.slot.index); it != m_Records.end())
 		{
-			m_ResourceManager->DestroySrv(it->second);
-			m_Srvs.erase(it);
+			m_ResourceManager->DestroySrv(it->second.srv);
+
+			// The entry goes now rather than on the same gate: it is CPU-side bookkeeping, and a
+			// material still naming it reads whichever texture takes the slot next -- the bargain
+			// IScene::DeleteTextureAsset already documents for the descriptor it held before.
+			m_Table.Erase(it->second.entry);
+			m_Records.erase(it);
 		}
 
 		m_ResourceManager->DestroyTexture(handle);
@@ -116,6 +136,11 @@ namespace bgl
 	void
 	TextureAssetStore::Flush(ICommandList* cmdList)
 	{
+		// Ahead of the early-out: a texture added and deleted in one frame leaves nothing to upload
+		// but may have grown the table, and a growth whose forward copy never runs leaves the pass
+		// reading a buffer nothing was copied into.
+		m_Table.Update(cmdList);
+
 		if (m_PendingUploads.empty())
 		{
 			return;
@@ -161,8 +186,20 @@ namespace bgl
 	SrvHandle
 	TextureAssetStore::GetSrv(core::slot_handle textureSlot) const noexcept
 	{
-		const auto it = m_Srvs.find(textureSlot.index);
-		return it == m_Srvs.end() ? SrvHandle{} : it->second;
+		const auto it = m_Records.find(textureSlot.index);
+		return it == m_Records.end() ? SrvHandle{} : it->second.srv;
+	}
+
+	idl::Entry
+	TextureAssetStore::GetEntry(core::slot_handle textureSlot) const noexcept
+	{
+		auto       entry = idl::Entry();
+		const auto it    = m_Records.find(textureSlot.index);
+		if (it != m_Records.end())
+		{
+			entry = it->second.entry;
+		}
+		return entry;
 	}
 
 	DescriptorHandle
