@@ -3,6 +3,32 @@ import os
 from collections import defaultdict
 import fnmatch
 
+EXTENSION_MAP = {
+    '.cpp': 'C++',
+    '.h': 'C++',
+    '.slang': 'Slang Shading Language',
+    '.py': 'Python'
+}
+
+# Longest match wins, so `libs/assetlib/cli` beats the `libs/assetlib` it sits inside. Matched on
+# path components rather than characters, which is what keeps `libs/assetlib` off
+# `libs/assetlib_structs`.
+MODULE_PREFIXES = (
+    ('libs/bgl', 'bgl'),
+    ('libs/core', 'core'),
+    ('libs/assetlib', 'assetlib'),
+    ('libs/assetlib/cli', 'assetlib_cli'),
+    ('libs/assetlib_structs', 'assetlib_structs'),
+    ('libs/gamelib', 'gamelib'),
+    ('apps/editor', 'editor'),
+    ('examples', 'examples'),
+    ('scripts', 'scripts'),
+    ('.claude/hooks', 'claude-hooks'),
+    ('PCH', 'pch'),
+)
+
+UNCLASSIFIED = '(unclassified)'
+
 def parse_gitignore(gitignore_path):
     """Simple parser to read .gitignore rules and turn them into matchable patterns."""
     patterns = []
@@ -52,63 +78,98 @@ def is_test(path, base_dir):
     name = os.path.basename(path)
     return name == 'conftest.py' or (name.startswith('test_') and name.endswith('.py'))
 
-def count_lines_and_files():
-    extension_map = {
-        '.cpp': 'C++',
-        '.h': 'C++',
-        '.slang': 'Slang Shading Language',
-        '.py': 'Python'
-    }
+def module_of(rel_path):
+    """The module a repo-relative path belongs to, or UNCLASSIFIED when the table does not cover it.
 
-    stats = defaultdict(lambda: {'src': {'files': 0, 'lines': 0}, 'test': {'files': 0, 'lines': 0}})
-    totals = {'src': {'files': 0, 'lines': 0}, 'test': {'files': 0, 'lines': 0}}
+    A hand-maintained table drifts as directories move, so an unmatched path is given a row of its
+    own rather than folded into a neighbour, where the drift would be invisible.
 
-    cwd = os.getcwd()
-    gitignore_patterns = parse_gitignore(os.path.join(cwd, '.gitignore'))
+    Both separators are accepted: `os.path.relpath` yields `\\` on Windows, the table is written
+    with `/`.
+    """
+    parts = rel_path.replace('\\', '/').split('/')
 
-    for root, dirs, files in os.walk(cwd):
+    depth = 0
+    module = UNCLASSIFIED
+    for prefix, name in MODULE_PREFIXES:
+        expected = prefix.split('/')
+        if len(expected) > depth and parts[:len(expected)] == expected:
+            depth, module = len(expected), name
+    return module
+
+def new_tally():
+    return {'src': {'files': 0, 'lines': 0}, 'test': {'files': 0, 'lines': 0}}
+
+def collect(base_dir):
+    """Walk `base_dir` and tally every source file by language, by module, and in total.
+
+    The two breakdowns partition the same files, so their totals are equal by construction -- an
+    inequality means a file was dropped or counted twice.
+
+    @param base_dir Directory to walk; its `.gitignore` is what decides the exclusions.
+    @return `(by_language, by_module, totals)`, each a src/test tally of files and lines.
+    """
+    by_language = defaultdict(new_tally)
+    by_module = defaultdict(new_tally)
+    totals = new_tally()
+
+    gitignore_patterns = parse_gitignore(os.path.join(base_dir, '.gitignore'))
+
+    for root, dirs, files in os.walk(base_dir):
         # Prevent os.walk from entering ignored or 'extern' directories
-        dirs[:] = [d for d in dirs if not is_ignored(os.path.join(root, d), cwd, gitignore_patterns)]
+        dirs[:] = [d for d in dirs if not is_ignored(os.path.join(root, d), base_dir, gitignore_patterns)]
 
         for file in files:
             file_path = os.path.join(root, file)
 
-            if is_ignored(file_path, cwd, gitignore_patterns):
+            if is_ignored(file_path, base_dir, gitignore_patterns):
                 continue
 
             ext = os.path.splitext(file)[1].lower()
-            if ext in extension_map:
-                language = extension_map[ext]
-                kind = 'test' if is_test(file_path, cwd) else 'src'
+            if ext not in EXTENSION_MAP:
+                continue
 
-                try:
-                    with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
-                        line_count = sum(1 for _ in f)
+            language = EXTENSION_MAP[ext]
+            module = module_of(os.path.relpath(file_path, base_dir))
+            kind = 'test' if is_test(file_path, base_dir) else 'src'
 
-                    stats[language][kind]['files'] += 1
-                    stats[language][kind]['lines'] += line_count
-                    totals[kind]['files'] += 1
-                    totals[kind]['lines'] += line_count
-                except Exception as e:
-                    print(f"Could not read file {file_path}: {e}")
+            try:
+                with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
+                    line_count = sum(1 for _ in f)
+            except Exception as e:
+                print(f"Could not read file {file_path}: {e}")
+                continue
 
-    # Print the breakdown results
-    print(f"\n{'='*66}")
-    print(f" SOURCE CODE METRICS")
-    print(f"{'='*66}\n")
+            for tally in (by_language[language], by_module[module], totals):
+                tally[kind]['files'] += 1
+                tally[kind]['lines'] += line_count
 
+    return by_language, by_module, totals
+
+def print_table(heading, stats, totals):
     print(f"{'':<25} | {'Source':^21} | {'Tests':^21}")
-    print(f"{'Language':<25} | {'Files':<8} | {'Lines':<10} | {'Files':<8} | {'Lines':<10}")
+    print(f"{heading:<25} | {'Files':<8} | {'Lines':<10} | {'Files':<8} | {'Lines':<10}")
     print(f"{'-'*25}-|-{'-'*8}-|-{'-'*10}-|-{'-'*8}-|-{'-'*10}")
 
     ranked = sorted(stats.items(), key=lambda x: x[1]['src']['lines'] + x[1]['test']['lines'], reverse=True)
-    for lang, data in ranked:
-        print(f"{lang:<25} | {data['src']['files']:<8} | {data['src']['lines']:<10,} | "
+    for name, data in ranked:
+        print(f"{name:<25} | {data['src']['files']:<8} | {data['src']['lines']:<10,} | "
               f"{data['test']['files']:<8} | {data['test']['lines']:<10,}")
 
     print(f"{'-'*25}-|-{'-'*8}-|-{'-'*10}-|-{'-'*8}-|-{'-'*10}")
     print(f"{'TOTAL':<25} | {totals['src']['files']:<8} | {totals['src']['lines']:<10,} | "
           f"{totals['test']['files']:<8} | {totals['test']['lines']:<10,}")
+
+def count_lines_and_files():
+    by_language, by_module, totals = collect(os.getcwd())
+
+    print(f"\n{'='*66}")
+    print(f" SOURCE CODE METRICS")
+    print(f"{'='*66}\n")
+
+    print_table('Language', by_language, totals)
+    print()
+    print_table('Module', by_module, totals)
 
     all_files = totals['src']['files'] + totals['test']['files']
     all_lines = totals['src']['lines'] + totals['test']['lines']
