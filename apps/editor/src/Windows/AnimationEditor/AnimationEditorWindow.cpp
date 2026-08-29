@@ -40,6 +40,9 @@ AnimationEditorWindow::AnimationEditorWindow(QWidget* parent, AnimationEditorWin
 	rt.taaEnabled             = desc.taaEnabled;
 	rt.renderScale            = desc.renderScale;
 	rt.taaReconstructionWidth = desc.taaReconstructionWidth;
+	rt.headless               = desc.headless;
+	rt.headlessWidth          = desc.headlessWidth;
+	rt.headlessHeight         = desc.headlessHeight;
 
 	m_Preview = new AnimationPreviewWindow(this, std::move(rt), std::move(desc.previewEnv));
 	m_Preview->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);

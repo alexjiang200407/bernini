@@ -79,6 +79,10 @@ MainWindow::Build()
 		m_InstanceName =
 			QString::fromStdString(settings["instanceName"].GetOrDefault(std::string()));
 
+		// Builds every viewport offscreen. For editor_tests, which cannot realise a native window;
+		// a headless editor still creates the device and renders, it just presents nothing.
+		const bool headless = settings["headless"].GetOrDefault(false);
+
 		const auto gfxSettings = settings["graphics"];
 
 		auto gfxOpts             = bgl::GraphicsOptions();
@@ -136,6 +140,10 @@ MainWindow::Build()
 		levelDesc.taaReconstructionWidth =
 			settings["levelEditor"]["taaReconstructionWidth"].GetOrDefault(0.4f);
 
+		// Every viewport together, not one at a time: a headless editor is a whole editor built
+		// without windows, which is the only shape a test can construct.
+		levelDesc.headless = headless;
+
 		auto levelEnv = LevelEditorEnv();
 		levelEnv.environmentMap =
 			settings["levelEditor"]["environmentMap"].GetOrDefault(std::string());
@@ -158,6 +166,7 @@ MainWindow::Build()
 		matDesc.taaEnabled              = matSettings["temporalAA"].GetOrDefault(true);
 		matDesc.renderScale             = matSettings["renderScale"].GetOrDefault(1.0f);
 		matDesc.taaReconstructionWidth  = matSettings["taaReconstructionWidth"].GetOrDefault(0.4f);
+		matDesc.headless                = headless;
 		matDesc.previewEnv.environmentMap =
 			matSettings["environmentMap"].GetOrDefault(std::string());
 		matDesc.previewEnv.dataRoot = matSettings["dataRoot"].GetOrDefault(std::string());
@@ -185,6 +194,7 @@ MainWindow::Build()
 		animDesc.taaEnabled             = animSettings["temporalAA"].GetOrDefault(true);
 		animDesc.renderScale            = animSettings["renderScale"].GetOrDefault(1.0f);
 		animDesc.taaReconstructionWidth = animSettings["taaReconstructionWidth"].GetOrDefault(0.4f);
+		animDesc.headless               = headless;
 		// Falls back to the material editor's environment: both are asset previews wanting the
 		// same neutral look, and a config predating this panel would otherwise light it with
 		// nothing -- which draws black and says nothing.

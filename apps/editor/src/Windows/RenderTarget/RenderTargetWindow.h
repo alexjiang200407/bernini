@@ -32,6 +32,17 @@ struct RenderTargetWindowDesc
 	// with. Narrower is sharper and slower to settle, and it does nothing at a render scale of 1,
 	// where each output pixel has a sample of its own. Clamped to [0.1, 2].
 	float taaReconstructionWidth = 0.4f;
+
+	// Renders to offscreen backbuffers at headlessWidth x headlessHeight, presenting nothing, and
+	// never asks the widget for a native window. A widget that is never shown has no winId() to
+	// give, and realising one is what a test cannot do.
+	bool headless = false;
+
+	// The output size a headless viewport takes, in physical pixels. Explicit because an unshown
+	// widget's size is its layout default, so a target sized from that is not the one a person sees.
+	// Ignored unless headless.
+	uint32_t headlessWidth  = 256;
+	uint32_t headlessHeight = 256;
 };
 
 class RenderTargetWindow : public QWidget
@@ -67,6 +78,13 @@ public:
 	IsTaaAvailable() const noexcept
 	{
 		return m_Desc.taaEnabled;
+	}
+
+	// Whether this viewport renders offscreen rather than into a window of its own.
+	[[nodiscard]] bool
+	IsHeadless() const noexcept
+	{
+		return m_Desc.headless;
 	}
 
 	// Rescales the grid the geometry passes draw on against the window the target fills, so one
@@ -115,11 +133,12 @@ protected:
 	hideEvent(QHideEvent* event) override;
 
 	// This widget hosts an external DX12 swapchain and presents itself every frame, so
-	// Qt must not paint the surface; returning nullptr disables Qt's own painting.
+	// Qt must not paint the surface; returning nullptr disables Qt's own painting. A headless
+	// viewport hosts no surface and presents nothing, so Qt keeps its own engine.
 	QPaintEngine*
 	paintEngine() const override
 	{
-		return nullptr;
+		return m_Desc.headless ? QWidget::paintEngine() : nullptr;
 	}
 
 	// The shared Scene. Only valid to touch on the render thread, i.e. inside a Post/Invoke closure.

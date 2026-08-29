@@ -74,6 +74,11 @@ namespace
 RenderTargetWindow::RenderTargetWindow(QWidget* parent, RenderTargetWindowDesc desc) :
 	QWidget(parent), m_Desc(std::move(desc))
 {
+	// Every method here reaches the bgl objects through it, and MainWindow fills the desc in
+	// immediately after constructing the Renderer -- so a null one is a wiring mistake, not a state
+	// to degrade into.
+	assert(m_Desc.renderer != nullptr && "a viewport cannot stand without a Renderer");
+
 	m_ResizeTimer = new QTimer(this);
 	m_ResizeTimer->setSingleShot(true);
 	connect(m_ResizeTimer, &QTimer::timeout, this, [this]() { SyncSize(width(), height()); });
@@ -81,23 +86,36 @@ RenderTargetWindow::RenderTargetWindow(QWidget* parent, RenderTargetWindowDesc d
 	m_RenderScale            = ClampRenderScale(m_Desc.renderScale);
 	m_TaaReconstructionWidth = ClampReconstructionWidth(m_Desc.taaReconstructionWidth);
 
-	m_Width  = GetPhysicalExtent(width(), devicePixelRatio());
-	m_Height = GetPhysicalExtent(height(), devicePixelRatio());
+	if (m_Desc.headless)
+	{
+		m_Width  = std::max<uint32_t>(1, m_Desc.headlessWidth);
+		m_Height = std::max<uint32_t>(1, m_Desc.headlessHeight);
+	}
+	else
+	{
+		m_Width  = GetPhysicalExtent(width(), devicePixelRatio());
+		m_Height = GetPhysicalExtent(height(), devicePixelRatio());
+	}
 
 	auto rtvDesc                   = bgl::RenderTargetDesc();
 	rtvDesc.width                  = m_Width;
 	rtvDesc.height                 = m_Height;
 	rtvDesc.renderScale            = m_RenderScale;
 	rtvDesc.taaReconstructionWidth = m_TaaReconstructionWidth;
+	rtvDesc.headless               = m_Desc.headless;
+
 	// Resolved here on the GUI thread; the render target is created from the value on the render
 	// thread. macOS takes the widget's CAMetalLayer rather than its native view -- see
-	// platform::MetalLayerForView.
+	// platform::MetalLayerForView. winId() realises a native window, which is exactly what a
+	// headless viewport must not ask for.
+	if (!m_Desc.headless)
+	{
 #if defined(__APPLE__)
-	rtvDesc.wnd = platform::MetalLayerForView(winId());
+		rtvDesc.wnd = platform::MetalLayerForView(winId());
 #else
-	rtvDesc.wnd = reinterpret_cast<void*>(winId());
+		rtvDesc.wnd = reinterpret_cast<void*>(winId());
 #endif
-	rtvDesc.headless = false;
+	}
 
 	// A viewport redraws continuously, so convergence is free. The thumbnail cache cannot redraw
 	// its way there, so it draws hashed alpha as the blend it converges to instead.
@@ -114,9 +132,15 @@ RenderTargetWindow::RenderTargetWindow(QWidget* parent, RenderTargetWindowDesc d
 	m_DrawWidth  = m_Width;
 	m_DrawHeight = m_Height;
 
-	setAttribute(Qt::WA_PaintOnScreen);
-	setAttribute(Qt::WA_NoSystemBackground);
-	setAttribute(Qt::WA_OpaquePaintEvent);
+	// WA_PaintOnScreen implies WA_NativeWindow, so a headless viewport must not take it: the
+	// attribute alone would realise the window the desc asked to do without. Nothing is presented
+	// into this widget, so Qt is left to paint it as an ordinary one.
+	if (!m_Desc.headless)
+	{
+		setAttribute(Qt::WA_PaintOnScreen);
+		setAttribute(Qt::WA_NoSystemBackground);
+		setAttribute(Qt::WA_OpaquePaintEvent);
+	}
 
 	// The density every temporal artifact is judged at, and the one thing about a viewport that a
 	// screenshot cannot be read back from -- a capture is the output size whatever the scale.
@@ -359,6 +383,13 @@ void
 RenderTargetWindow::SyncSize(int w, int h)
 {
 	if (m_RenderTarget == nullptr || m_Desc.renderer == nullptr)
+	{
+		return;
+	}
+
+	// A headless target's extent is the desc's, not the layout's: chasing the widget would resize it
+	// to whatever a dock happened to give an unshown window.
+	if (m_Desc.headless)
 	{
 		return;
 	}

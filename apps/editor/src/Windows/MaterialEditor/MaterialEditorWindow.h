@@ -39,6 +39,11 @@ struct MaterialEditorWindowDesc
 	float              renderScale             = 1.0f;
 	float              taaReconstructionWidth  = 0.4f;
 	MaterialPreviewEnv previewEnv;
+
+	// Builds the preview viewport without a native window. See RenderTargetWindowDesc.
+	bool     headless       = false;
+	uint32_t headlessWidth  = 256;
+	uint32_t headlessHeight = 256;
 };
 
 class MaterialEditorWindow : public QWidget, public editor::IHoldsAssets
