@@ -2,9 +2,10 @@ import clip_playback;
 import idl.BoneSample;
 import idl.Clip;
 import idl.Constants;
-import idl.SkinnedBone;
 import idl.Rig;
+import idl.SkinnedBone;
 import idl.SkinnedState;
+import pose_walk;
 import types.ComputeBuffer;
 import types.EntryBuffer;
 import types.RangeBuffer;
@@ -13,6 +14,9 @@ import types.UploadBuffer;
 // One workgroup poses one skinned instance: sample its clip, walk the hierarchy, multiply through the
 // inverse bind, write the palette. Twice over -- once at `time` and once at `prevTime` -- so the mesh
 // shader can skin both and derive a motion vector without a history buffer.
+//
+// The walk itself is pose_walk's, shared with PoseRigFrames. What is this kernel's own is where a
+// pose comes from: an instance's clip, phase and rate against the frame's clock.
 
 struct Uniforms
 {
@@ -36,127 +40,6 @@ struct Uniforms
 
 ConstantBuffer<Uniforms> gUniforms;
 
-// One bone's transform, read back out of the three rows a palette slot holds. Affine, so the fourth
-// row is (0,0,0,1) and was never stored -- the same convention the mesh shader reads.
-float4x4 PaletteMatrix(uint slot)
-{
-    return float4x4(
-        gUniforms.bonePalettes[slot + 0], gUniforms.bonePalettes[slot + 1], gUniforms.bonePalettes[slot + 2], float4(0.0, 0.0, 0.0, 1.0)
-    );
-}
-
-void WritePalette(uint slot, float4x4 transform)
-{
-    gUniforms.bonePalettes[slot + 0] = transform[0];
-    gUniforms.bonePalettes[slot + 1] = transform[1];
-    gUniforms.bonePalettes[slot + 2] = transform[2];
-}
-
-// A local TRS as the matrix mul() expects: rows of the rotation scaled per axis, translation in .w.
-float4x4 LocalTransform(BoneSample sample)
-{
-    float4 q = normalize(sample.rotation);
-    float3 s = sample.scale.xyz;
-
-    float xx = q.x * q.x;
-    float yy = q.y * q.y;
-    float zz = q.z * q.z;
-    float xy = q.x * q.y;
-    float xz = q.x * q.z;
-    float yz = q.y * q.z;
-    float wx = q.w * q.x;
-    float wy = q.w * q.y;
-    float wz = q.w * q.z;
-
-    float3 r0 = float3(1.0 - 2.0 * (yy + zz), 2.0 * (xy - wz), 2.0 * (xz + wy));
-    float3 r1 = float3(2.0 * (xy + wz), 1.0 - 2.0 * (xx + zz), 2.0 * (yz - wx));
-    float3 r2 = float3(2.0 * (xz - wy), 2.0 * (yz + wx), 1.0 - 2.0 * (xx + yy));
-
-    return float4x4(
-        float4(r0 * s, sample.translation.x),
-        float4(r1 * s, sample.translation.y),
-        float4(r2 * s, sample.translation.z),
-        float4(0.0, 0.0, 0.0, 1.0)
-    );
-}
-
-// Blended local pose of bone `bone` at a fractional frame. Rotation is nlerp'd with a hemisphere
-// flip, not slerp: clips are resampled to a fixed rate, so the angle between adjacent frames is small
-// enough that the error is invisible and the transcendentals are not worth paying per bone.
-BoneSample SampleBone(Rig rig, Clip clip, uint bone, float frames)
-{
-    uint f0;
-    uint f1;
-    float weight;
-    ClipFrameIndices(clip, frames, f0, f1, weight);
-
-    let base = clip.firstFrame * rig.boneCount + bone;
-    BoneSample a = gUniforms.sampleBuffer.Get(rig.samples, base + f0 * rig.boneCount);
-    BoneSample b = gUniforms.sampleBuffer.Get(rig.samples, base + f1 * rig.boneCount);
-
-    // Without the flip a pair straddling the hemisphere boundary interpolates the long way round,
-    // which reads as the bone snapping through its own axis.
-    float4 rotB = (dot(a.rotation, b.rotation) < 0.0) ? -b.rotation : b.rotation;
-
-    BoneSample blended;
-    blended.translation = lerp(a.translation, b.translation, weight);
-    blended.rotation = normalize(lerp(a.rotation, rotB, weight));
-    blended.scale = lerp(a.scale, b.scale, weight);
-    return blended;
-}
-
-// Poses one instance into the palette starting at `paletteBase`.
-//
-// Every barrier below must be reached by every thread of the group the same number of times. It is:
-// the only loop carrying one is bounded by `rig.maxDepth`, which is group-uniform (the whole group
-// poses one instance, so it reads one rig), and the strided per-bone loops that *are* thread-varying
-// contain no barrier. Nothing returns early inside here either.
-void PoseInto(Rig rig, Clip clip, SkinnedState state, float time, uint paletteBase, uint localIdx)
-{
-    let frames = ClipFrames(clip, state.phase, state.rate, time);
-
-    // Composed in the palette rather than in groupshared: a model transform is affine, so it fits the
-    // three rows the slot already reserves for the skin matrix it ends up holding. Nothing bounds the
-    // bone count then -- the palette is sized per rig, and 12 KiB of groupshared was what stopped a
-    // character rig at 192.
-    for (uint bone = localIdx; bone < rig.boneCount; bone += cPoseGroupSize)
-    {
-        WritePalette(paletteBase + bone * cFloat4sPerBone, LocalTransform(SampleBone(rig, clip, bone, frames)));
-    }
-    DeviceMemoryBarrierWithGroupSync();
-
-    // One level at a time: a bone's parent is always a lower index, but a lower index is not
-    // necessarily a shallower one, so composing in index order would read a parent this pass has not
-    // composed yet. The bound is group-uniform, so every thread runs every level -- including a
-    // thread holding no bone at that depth, which still has to arrive at the barrier.
-    //
-    // The barrier orders device memory, not groupshared: what one thread writes here another reads
-    // at the next level, through the palette.
-    for (uint level = 1; level <= rig.maxDepth; ++level)
-    {
-        for (uint bone = localIdx; bone < rig.boneCount; bone += cPoseGroupSize)
-        {
-            SkinnedBone record = gUniforms.boneBuffer.Get(rig.bones, bone);
-            if (record.depth == level)
-            {
-                let slot = paletteBase + bone * cFloat4sPerBone;
-                WritePalette(slot, mul(PaletteMatrix(paletteBase + record.parent * cFloat4sPerBone), PaletteMatrix(slot)));
-            }
-        }
-        DeviceMemoryBarrierWithGroupSync();
-    }
-
-    // In place, and safe without a barrier between the two: the strided loops assign a bone to the
-    // same thread every time, so the slot read here is the one this thread composed above.
-    for (uint bone = localIdx; bone < rig.boneCount; bone += cPoseGroupSize)
-    {
-        SkinnedBone record = gUniforms.boneBuffer.Get(rig.bones, bone);
-        let slot = paletteBase + bone * cFloat4sPerBone;
-        WritePalette(slot, mul(PaletteMatrix(slot), record.inverseBind));
-    }
-    DeviceMemoryBarrierWithGroupSync();
-}
-
 [shader("compute")]
 [numthreads(cPoseGroupSize, 1, 1)]
 void main(uint groupIdx: SV_GroupID, uint localIdx: SV_GroupIndex)
@@ -173,10 +56,15 @@ void main(uint groupIdx: SV_GroupID, uint localIdx: SV_GroupIndex)
     Rig rig = gUniforms.rigs.Get(state.rig);
     Clip clip = gUniforms.clipBuffer.Get(rig.clips, state.clip);
 
+    PoseTables tables;
+    tables.bones = gUniforms.boneBuffer;
+    tables.samples = gUniforms.sampleBuffer;
+    tables.palettes = gUniforms.bonePalettes;
+
     let stride = rig.boneCount * cFloat4sPerBone;
 
     let base = state.palette.GetStart();
 
-    PoseInto(rig, clip, state, gUniforms.time, base, localIdx);
-    PoseInto(rig, clip, state, gUniforms.prevTime, base + stride, localIdx);
+    PoseInto(tables, rig, clip, ClipFrames(clip, state.phase, state.rate, gUniforms.time), base, localIdx);
+    PoseInto(tables, rig, clip, ClipFrames(clip, state.phase, state.rate, gUniforms.prevTime), base + stride, localIdx);
 }

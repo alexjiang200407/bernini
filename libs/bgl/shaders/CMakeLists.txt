@@ -201,6 +201,14 @@ compile_shader(
 )
 
 compile_shader(
+    FILE         "${CMAKE_CURRENT_SOURCE_DIR}/src/PoseRigFrames.slang"
+    OUT_DIR      "${SHADER_OUT_DIR}"
+    TARGET       "dxil"
+    STAGE        "cs_6_6"
+    INCLUDES     ${SLANG_SOURCE_ROOT}
+)
+
+compile_shader(
     FILE         "${CMAKE_CURRENT_SOURCE_DIR}/src/CompactInstances.slang"
     OUT_DIR      "${SHADER_OUT_DIR}"
     TARGET       "dxil"

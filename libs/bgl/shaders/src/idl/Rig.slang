@@ -24,4 +24,15 @@ public struct Rig
 
     // The deepest bone's `depth`. A walk needs the level count up front rather than discovering it.
     public uint maxDepth;
+
+    /**
+     * Every frame of every clip, posed into skinning matrices once and read by every instance that
+     * draws from the table instead of computing its own. Frame-major like `samples`, and addressed
+     * with the same arithmetic: bone `b` of global frame `f` starts at
+     * `GetStart() + (f * boneCount + b) * cFloat4sPerBone`.
+     *
+     * Null until something asks for it -- a rig no crowd instance is ever spawned on never pays for
+     * one. PoseRigFrames fills it; nothing else writes it.
+     */
+    public Range<float4> boneAnimTable;
 };

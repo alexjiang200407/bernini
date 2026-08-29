@@ -256,11 +256,19 @@ per rig is this plan's cost to carry.
    request a rig's table ahead of task 3's instances; the fill's stage line, and
    `docs/gfx_debug.md`'s stage list gaining it.
    *Gate:* readback of a synthesized rig's table equals `assetlib::skinningMatrices` at every frame
-   of every clip within float tolerance, and equals the per-instance pose pass at integer time; a
+   of every clip within float tolerance; a
    growth of the arena leaves every table intact (asserted by readback after a forced growth);
    `--gpu-validation` clean; the pose pass's existing readback cases unchanged; the fill's
    CPU-side cost on the test project's largest rig in the PR body, with the `cha800_00`
    extrapolation beside it.
+
+   *Correction, from building it:* the gate also asked that the table equal *the per-instance pose
+   pass* at integer time. Dropped as redundant rather than skipped: both producers now run the same
+   extracted walk, and both are pinned against `assetlib::skinningMatrices` — the table by this
+   task's cases, the pose pass by `SkinnedPose_test`'s — so a divergence between them is a failure of
+   one of those. The addressing risk a direct A/B would have caught, a global frame read as a
+   clip-local one, is covered instead by the table's fixture carrying *two* clips. The cost is a mesh
+   fixture duplicated to place an instance, which buys nothing the two references do not.
 3. **`feat(bgl,gamelib): a skinned instance may draw from the rig's bone anim table`** — ADR-1, ADR-5,
    ADR-8, ADR-10, ADR-4. `PoseSource`, the shader branch, the pose pass skipping table instances,
    `CreateSkinnedInstance` passing the source through; `docs/skinning.md` gains the crowd tier.

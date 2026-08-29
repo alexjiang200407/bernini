@@ -155,6 +155,7 @@ namespace bgl
 			m_Device->CreateCommandList(cmdListDesc, m_BootstrapAllocator, m_ResourceManager);
 
 		m_CompactInstances.Init(m_Device, m_ResourceManager);
+		m_RigFrames.Init(m_Device);
 		m_SkinnedPose.Init(m_Device);
 		m_TransparentSort.Init(m_Device);
 		m_Forward.Init(m_Device);
@@ -224,6 +225,7 @@ namespace bgl
 		}
 		m_BrdfLut.Release();
 		m_CompactInstances.Release(false);
+		m_RigFrames.Release();
 		m_SkinnedPose.Release();
 		m_TransparentSort.Release();
 
@@ -594,6 +596,8 @@ namespace bgl
 		// per cull -- and it must be attached under the view's namespace, where its output buffer was
 		// imported. Under a cull namespace the write would resolve to a name nothing imported, which
 		// makes the pass no longer a root and culls it.
+		// Before the pose pass and the forward pass, both of which may read a table filled here.
+		m_RigFrames.AttachToFrameGraph(m_FrameGraph, draw);
 		m_SkinnedPose.AttachToFrameGraph(m_FrameGraph, draw);
 
 		// The skybox above names only globals; everything below reads cull outputs.
