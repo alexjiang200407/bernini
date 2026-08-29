@@ -54,14 +54,14 @@ namespace bgl
 	/**
 	 * The bytes to upload for dirty blocks `[startBlk, endBlk)`.
 	 *
-	 * A free function for the same reason as DirtyBlocksFor, and it is the arithmetic that was
+	 * A free function for the same reason as FindDirtyBlocks, and it is the arithmetic that was
 	 * actually 32-bit: a fully dirty arena at its byte ceiling is 65536 blocks of 65536 bytes,
 	 * whose product is 2^32 -- zero in 32 bits, so the copy was skipped and nothing uploaded.
 	 *
 	 * @post a slice of zero size where the run starts past the end of the mirror.
 	 */
 	[[nodiscard]] constexpr CopySlice
-	CopySliceFor(
+	MakeCopySlice(
 		uint32_t startBlk,
 		uint32_t endBlk,
 		uint32_t blockSize,
@@ -87,7 +87,7 @@ namespace bgl
 	 * to report it with.
 	 */
 	[[nodiscard]] inline uint32_t
-	GrownCapacityFor(
+	GrowCapacityFor(
 		uint32_t current,
 		uint32_t count,
 		uint64_t elementSize,
@@ -118,7 +118,7 @@ namespace bgl
 	 * @pre count is non-zero and blockSize is non-zero.
 	 */
 	[[nodiscard]] constexpr DirtyBlockSpan
-	DirtyBlocksFor(
+	FindDirtyBlocks(
 		uint32_t startIdx,
 		uint32_t count,
 		uint64_t elementSize,
@@ -531,7 +531,7 @@ namespace bgl
 		void
 		Grow(uint32_t count)
 		{
-			const uint32_t grown = GrownCapacityFor(Capacity(), count, sizeof(T), m_Desc.maxBytes);
+			const uint32_t grown = GrowCapacityFor(Capacity(), count, sizeof(T), m_Desc.maxBytes);
 
 			if (grown == 0)
 			{
@@ -576,7 +576,7 @@ namespace bgl
 				return;
 
 			const auto [startBlock, endBlock] =
-				DirtyBlocksFor(startIdx, count, sizeof(T), m_Desc.blockSize);
+				FindDirtyBlocks(startIdx, count, sizeof(T), m_Desc.blockSize);
 
 			gassert(
 				endBlock < m_DirtyBlocks.size(),
@@ -593,7 +593,7 @@ namespace bgl
 		IssueCopy(ICommandList* cmdList, uint32_t startBlk, uint32_t endBlk, uint64_t totalBytes)
 		{
 			const auto [offset, size] =
-				CopySliceFor(startBlk, endBlk, m_Desc.blockSize, totalBytes);
+				MakeCopySlice(startBlk, endBlk, m_Desc.blockSize, totalBytes);
 
 			if (size > 0)
 			{

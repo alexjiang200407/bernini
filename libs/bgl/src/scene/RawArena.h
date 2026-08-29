@@ -73,10 +73,10 @@ namespace bgl
 				desc.nullRecordBytes >= idl::cRawPayloadOffset,
 				"The null record must cover at least a header");
 
-			m_NullRecordBlocks = BlocksFor(desc.nullRecordBytes);
+			m_NullRecordBlocks = ToBlockCount(desc.nullRecordBytes);
 
 			RangeBufferDesc blockDesc;
-			blockDesc.initialCount = BlocksFor(desc.initialBytes) + m_NullRecordBlocks;
+			blockDesc.initialCount = ToBlockCount(desc.initialBytes) + m_NullRecordBlocks;
 			blockDesc.blockSize    = desc.uploadBlockBytes;
 			blockDesc.maxBytes     = c_MaxRawBufferBytes;
 			blockDesc.isRaw        = true;
@@ -94,7 +94,7 @@ namespace bgl
 		}
 
 		[[nodiscard]] uint64_t
-		ByteCapacity() const noexcept
+		GetByteCapacity() const noexcept
 		{
 			return static_cast<uint64_t>(m_Blocks.Capacity()) * idl::cRawBlockBytes;
 		}
@@ -115,10 +115,10 @@ namespace bgl
 			// ADR-6's invariant, and the one place the payload and the head's size meet: a record
 			// bigger than the null record makes a null dereference read the first live one.
 			gassert(
-				idl::cRawPayloadOffset + payload.size() <= ReservedBytes(),
+				idl::cRawPayloadOffset + payload.size() <= GetReservedBytes(),
 				"A record payload larger than the null record this arena reserved");
 
-			const auto handle = Allocate(RecordBytes(payload));
+			const auto handle = Allocate(MeasureRecord(payload));
 			const auto record = m_Blocks.MutableRangeBytes(handle);
 
 			auto header = idl::RecordHeader();
@@ -134,7 +134,7 @@ namespace bgl
 				std::memcpy(record.data() + idl::cRawPayloadOffset, payload.data(), payload.size());
 			}
 
-			return idl::RawEntry{ ByteOffsetOf(handle) };
+			return idl::RawEntry{ ToByteOffset(handle) };
 		}
 
 		/**
@@ -149,23 +149,23 @@ namespace bgl
 			gassert(IsInitialized(), "RawArena is uninitialized; call Init() first");
 			gassert(!bytes.empty(), "AddBytes requires a non-empty range");
 
-			const auto handle = Allocate(RangeBytes(bytes));
+			const auto handle = Allocate(MeasureRange(bytes));
 			const auto range  = m_Blocks.MutableRangeBytes(handle);
 
 			std::memcpy(range.data(), bytes.data(), bytes.size());
 
-			return idl::RawRange{ ByteOffsetOf(handle) };
+			return idl::RawRange{ ToByteOffset(handle) };
 		}
 
 		// The tag a record was written with. For a reader that has only the offset -- the CPU has no
 		// business decoding a payload it wrote, but it does have to know which kind it is freeing.
 		[[nodiscard]] Tag
-		TagAt(uint32_t byteOffset) const
+		GetTagAt(uint32_t byteOffset) const
 		{
-			gassert(IsOffsetValid(byteOffset), "TagAt on an offset with no live record");
+			gassert(IsOffsetValid(byteOffset), "GetTagAt on an offset with no live record");
 
 			auto header = idl::RecordHeader();
-			std::memcpy(&header, &m_Blocks.AtIndex(BlockIndexOf(byteOffset)), sizeof(header));
+			std::memcpy(&header, &m_Blocks.AtIndex(ToBlockIndex(byteOffset)), sizeof(header));
 			return static_cast<Tag>(header.type);
 		}
 
@@ -176,17 +176,17 @@ namespace bgl
 		[[nodiscard]] bool
 		IsOffsetValid(uint32_t byteOffset) const noexcept
 		{
-			if (byteOffset < ReservedBytes() || byteOffset % idl::cRawBlockBytes != 0)
+			if (byteOffset < GetReservedBytes() || byteOffset % idl::cRawBlockBytes != 0)
 			{
 				return false;
 			}
-			return m_Blocks.IsIndexValid(BlockIndexOf(byteOffset));
+			return m_Blocks.IsIndexValid(ToBlockIndex(byteOffset));
 		}
 
 		// The largest an arena can grow to, which is what its view can address rather than what the
 		// device could allocate.
 		[[nodiscard]] static constexpr uint64_t
-		ByteCeiling() noexcept
+		GetByteCeiling() noexcept
 		{
 			return c_MaxRawBufferBytes;
 		}
@@ -195,7 +195,7 @@ namespace bgl
 		Erase(uint32_t byteOffset)
 		{
 			gassert(IsOffsetValid(byteOffset), "Erase on an offset with no live allocation");
-			m_Blocks.EraseByIndex(BlockIndexOf(byteOffset));
+			m_Blocks.EraseByIndex(ToBlockIndex(byteOffset));
 		}
 
 		void
@@ -225,19 +225,19 @@ namespace bgl
 
 	private:
 		[[nodiscard]] static uint32_t
-		BlocksFor(uint64_t bytes) noexcept
+		ToBlockCount(uint64_t bytes) noexcept
 		{
 			return static_cast<uint32_t>((bytes + idl::cRawBlockBytes - 1) / idl::cRawBlockBytes);
 		}
 
 		[[nodiscard]] static uint32_t
-		ByteOffsetOf(core::multi_slot_handle handle) noexcept
+		ToByteOffset(core::multi_slot_handle handle) noexcept
 		{
 			return handle.index * idl::cRawBlockBytes;
 		}
 
 		[[nodiscard]] static uint32_t
-		BlockIndexOf(uint32_t byteOffset) noexcept
+		ToBlockIndex(uint32_t byteOffset) noexcept
 		{
 			return byteOffset / idl::cRawBlockBytes;
 		}
@@ -245,7 +245,7 @@ namespace bgl
 		[[nodiscard]] core::multi_slot_handle
 		Allocate(uint32_t bytes)
 		{
-			return m_Blocks.AllocateRange(BlocksFor(bytes));
+			return m_Blocks.AllocateRange(ToBlockCount(bytes));
 		}
 
 		// Held for the arena's lifetime and handed to nobody, so byte offset 0 stays null. The
@@ -266,24 +266,24 @@ namespace bgl
 		// 64-bit throughout, and checked rather than asserted: the size is a caller's, and the wrap
 		// it would otherwise take is exactly the one this arena exists to make loud.
 		[[nodiscard]] uint32_t
-		RecordBytes(std::span<const std::byte> payload) const
+		MeasureRecord(std::span<const std::byte> payload) const
 		{
-			return CheckedBytes(static_cast<uint64_t>(idl::cRawPayloadOffset) + payload.size());
+			return CheckByteSize(static_cast<uint64_t>(idl::cRawPayloadOffset) + payload.size());
 		}
 
 		[[nodiscard]] uint32_t
-		RangeBytes(std::span<const std::byte> bytes) const
+		MeasureRange(std::span<const std::byte> bytes) const
 		{
-			return CheckedBytes(bytes.size());
+			return CheckByteSize(bytes.size());
 		}
 
 		// The bound is what one allocation can reach, not what the buffer can hold: the reserved
 		// head already owns the first blocks, so an allocation of the whole address space never
 		// fits -- and it is the size that would truncate to nothing on the way to a block count.
 		[[nodiscard]] uint32_t
-		CheckedBytes(uint64_t bytes) const
+		CheckByteSize(uint64_t bytes) const
 		{
-			const uint64_t allocatable = c_MaxRawBufferBytes - ReservedBytes();
+			const uint64_t allocatable = c_MaxRawBufferBytes - GetReservedBytes();
 
 			if (bytes > allocatable)
 			{
@@ -296,7 +296,7 @@ namespace bgl
 		}
 
 		[[nodiscard]] uint32_t
-		ReservedBytes() const noexcept
+		GetReservedBytes() const noexcept
 		{
 			return m_NullRecordBlocks * idl::cRawBlockBytes;
 		}

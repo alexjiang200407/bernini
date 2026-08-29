@@ -75,7 +75,7 @@ TEST_CASE("A raw arena allocates records and ranges", "[raw][scene]")
 	REQUIRE(arena.IsInitialized());
 
 	// ADR-4: an arena is capped at what its view addresses, not at what the device could allocate.
-	CHECK(arena.ByteCeiling() == bgl::c_MaxRawBufferBytes);
+	CHECK(arena.GetByteCeiling() == bgl::c_MaxRawBufferBytes);
 
 	SECTION("the null record owns the head, and nothing else is handed it")
 	{
@@ -110,8 +110,8 @@ TEST_CASE("A raw arena allocates records and ranges", "[raw][scene]")
 		const auto small = arena.AddRecord(TestTag::kSmall, BytesOf(SmallPayload{ 7, 8 }));
 		const auto large = arena.AddRecord(TestTag::kLarge, BytesOf(LargePayload{}));
 
-		CHECK(arena.TagAt(small.byteOffset) == TestTag::kSmall);
-		CHECK(arena.TagAt(large.byteOffset) == TestTag::kLarge);
+		CHECK(arena.GetTagAt(small.byteOffset) == TestTag::kSmall);
+		CHECK(arena.GetTagAt(large.byteOffset) == TestTag::kLarge);
 	}
 
 	SECTION("a range carries no header, so its bytes start where it says")
@@ -121,8 +121,8 @@ TEST_CASE("A raw arena allocates records and ranges", "[raw][scene]")
 
 		CHECK(arena.IsOffsetValid(range.byteStart));
 
-		// No header: the first four bytes are the caller's, not a tag. TagAt reads exactly those.
-		CHECK(static_cast<uint32_t>(arena.TagAt(range.byteStart)) == payload.a);
+		// No header: the first four bytes are the caller's, not a tag. GetTagAt reads exactly those.
+		CHECK(static_cast<uint32_t>(arena.GetTagAt(range.byteStart)) == payload.a);
 	}
 
 	SECTION("an erased offset stops being valid")
@@ -142,7 +142,7 @@ TEST_CASE("A raw arena allocates records and ranges", "[raw][scene]")
 
 	SECTION("growth preserves the offsets already handed out")
 	{
-		const auto before = arena.ByteCapacity();
+		const auto before = arena.GetByteCapacity();
 
 		std::vector<bgl::idl::RawEntry> records;
 		for (uint32_t i = 0; i < 64; ++i)
@@ -150,12 +150,12 @@ TEST_CASE("A raw arena allocates records and ranges", "[raw][scene]")
 			records.push_back(arena.AddRecord(TestTag::kLarge, BytesOf(LargePayload{})));
 		}
 
-		CHECK(arena.ByteCapacity() > before);
+		CHECK(arena.GetByteCapacity() > before);
 
 		for (const auto record : records)
 		{
 			CHECK(arena.IsOffsetValid(record.byteOffset));
-			CHECK(arena.TagAt(record.byteOffset) == TestTag::kLarge);
+			CHECK(arena.GetTagAt(record.byteOffset) == TestTag::kLarge);
 		}
 	}
 
@@ -221,23 +221,23 @@ TEST_CASE("The copy slice at the top of the address space does not wrap", "[raw]
 	constexpr uint32_t c_BlockSize = 65536;
 	constexpr uint32_t c_Blocks    = 65536;
 
-	const auto whole = bgl::CopySliceFor(0, c_Blocks, c_BlockSize, bgl::c_MaxRawBufferBytes);
+	const auto whole = bgl::MakeCopySlice(0, c_Blocks, c_BlockSize, bgl::c_MaxRawBufferBytes);
 
 	CHECK(whole.offset == 0);
 	CHECK(whole.size == bgl::c_MaxRawBufferBytes);
 
 	// The last block of that arena, which a 32-bit offset also cannot express.
 	const auto tail =
-		bgl::CopySliceFor(c_Blocks - 1, c_Blocks, c_BlockSize, bgl::c_MaxRawBufferBytes);
+		bgl::MakeCopySlice(c_Blocks - 1, c_Blocks, c_BlockSize, bgl::c_MaxRawBufferBytes);
 
 	CHECK(tail.offset == bgl::c_MaxRawBufferBytes - c_BlockSize);
 	CHECK(tail.size == c_BlockSize);
 
 	// A run past the end of the mirror uploads nothing rather than a negative length.
-	CHECK(bgl::CopySliceFor(4, 8, c_BlockSize, 2 * c_BlockSize) == bgl::CopySlice{});
+	CHECK(bgl::MakeCopySlice(4, 8, c_BlockSize, 2 * c_BlockSize) == bgl::CopySlice{});
 
 	// And a partial tail is clamped to what the mirror holds.
-	CHECK(bgl::CopySliceFor(1, 4, 16, 40) == bgl::CopySlice{ 16, 24 });
+	CHECK(bgl::MakeCopySlice(1, 4, 16, 40) == bgl::CopySlice{ 16, 24 });
 
 	// The blocks a range lands in are computed in the same width, so the last elements of a full
 	// arena mark the last block rather than one below the first.
@@ -245,9 +245,9 @@ TEST_CASE("The copy slice at the top of the address space does not wrap", "[raw]
 		static_cast<uint32_t>((bgl::c_MaxRawBufferBytes / bgl::idl::cRawBlockBytes) - 2);
 
 	CHECK(
-		bgl::DirtyBlocksFor(c_LastPair, 2, bgl::idl::cRawBlockBytes, c_BlockSize) ==
+		bgl::FindDirtyBlocks(c_LastPair, 2, bgl::idl::cRawBlockBytes, c_BlockSize) ==
 		bgl::DirtyBlockSpan{ c_Blocks - 1, c_Blocks - 1 });
-	CHECK(bgl::DirtyBlocksFor(4, 3, 16, 16) == bgl::DirtyBlockSpan{ 4, 6 });
+	CHECK(bgl::FindDirtyBlocks(4, 3, 16, 16) == bgl::DirtyBlockSpan{ 4, 6 });
 }
 
 /**
@@ -263,18 +263,17 @@ TEST_CASE("Growth stops at what a raw view can address", "[raw][scene]")
 
 	// Exactly at the ceiling is allowed: a uint addresses 0 .. 2^32-1, so the last byte is reachable.
 	CHECK(
-		bgl::GrownCapacityFor(c_LastBlock - 1, 1, c_Block, bgl::c_MaxRawBufferBytes) ==
-		c_LastBlock);
+		bgl::GrowCapacityFor(c_LastBlock - 1, 1, c_Block, bgl::c_MaxRawBufferBytes) == c_LastBlock);
 
 	// One block past it is refused rather than wrapped.
-	CHECK(bgl::GrownCapacityFor(c_LastBlock, 1, c_Block, bgl::c_MaxRawBufferBytes) == 0);
+	CHECK(bgl::GrowCapacityFor(c_LastBlock, 1, c_Block, bgl::c_MaxRawBufferBytes) == 0);
 
 	// Under a ceiling the growth curve is clamped to it rather than overshooting.
-	CHECK(bgl::GrownCapacityFor(17, 1, 4, 72) == 18);
-	CHECK(bgl::GrownCapacityFor(18, 1, 4, 72) == 0);
+	CHECK(bgl::GrowCapacityFor(17, 1, 4, 72) == 18);
+	CHECK(bgl::GrowCapacityFor(18, 1, 4, 72) == 0);
 
 	// With no ceiling the curve is untouched.
-	CHECK(bgl::GrownCapacityFor(17, 1, 4, 0) == bgl::NextGpuBufferCapacity(17, 18, 4));
+	CHECK(bgl::GrowCapacityFor(17, 1, 4, 0) == bgl::NextGpuBufferCapacity(17, 18, 4));
 }
 
 /**
