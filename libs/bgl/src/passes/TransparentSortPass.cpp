@@ -11,15 +11,17 @@
 namespace bgl
 {
 	void
-	TransparentSortPass::Init(IDevice* device)
+	TransparentSortPass::Init(IDevice* device, PipelineBuild& build)
 	{
 		gassert(device != nullptr, "Device pointer is null");
 
+		build.Step("TransparentDepthKeys"sv);
 		m_DepthKeys = device->CreateComputeKernel(
 			ComputePipelineDesc()
 				.SetShader(device->CreateShader("TransparentDepthKeys"))
 				.SetDebugName("Transparent Depth Keys"));
 
+		build.Step("TransparentSort"sv);
 		m_Sort = device->CreateComputeKernel(
 			ComputePipelineDesc()
 				.SetShader(device->CreateShader("TransparentSort"))

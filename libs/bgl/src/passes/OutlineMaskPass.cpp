@@ -29,9 +29,11 @@ namespace bgl
 	}
 
 	void
-	OutlineMaskPass::Init(IDevice* device)
+	OutlineMaskPass::Init(IDevice* device, PipelineBuild& build)
 	{
 		gassert(device != nullptr, "Device must be initialized");
+
+		build.Step("OutlineMask"sv);
 
 		auto pipelineDesc = MeshletPipelineDesc();
 

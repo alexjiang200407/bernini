@@ -42,9 +42,11 @@ namespace bgl
 	}
 
 	void
-	TaaResolvePass::Init(IDevice* device)
+	TaaResolvePass::Init(IDevice* device, PipelineBuild& build)
 	{
 		gassert(device != nullptr, "Device must be initialized");
+
+		build.Step("TaaResolve"sv);
 
 		auto pipelineDesc = MeshletPipelineDesc();
 

@@ -8,9 +8,11 @@
 namespace bgl
 {
 	void
-	SkinnedPosePass::Init(IDevice* device)
+	SkinnedPosePass::Init(IDevice* device, PipelineBuild& build)
 	{
 		gassert(device != nullptr, "Device must be initialized");
+
+		build.Step("PoseSkinned"sv);
 
 		m_PoseSkinned = device->CreateComputeKernel(
 			ComputePipelineDesc()

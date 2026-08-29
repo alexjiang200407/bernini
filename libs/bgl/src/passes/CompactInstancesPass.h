@@ -1,4 +1,5 @@
 #pragma once
+#include "gfx/PipelineBuild.h"
 #include "pipeline/ComputeKernel.h"
 #include "pipeline/ComputePipeline.h"
 #include "scene/ComputeBuffer.h"
@@ -17,10 +18,6 @@ namespace bgl
 	public:
 		CompactInstancesPass() = default;
 		~CompactInstancesPass() noexcept { logger::trace("~CompactInstancesPass"); }
-		CompactInstancesPass(IDevice* device, core::SharedRef<IResourceManager> resourceManager)
-		{
-			Init(device, resourceManager);
-		}
 
 		CompactInstancesPass(const CompactInstancesPass&) noexcept = delete;
 		CompactInstancesPass(CompactInstancesPass&&) noexcept      = delete;
@@ -31,8 +28,14 @@ namespace bgl
 		CompactInstancesPass&
 		operator=(CompactInstancesPass&&) noexcept = delete;
 
+		// Cull, histogram, prefix-sum, compact.
+		static constexpr uint32_t c_Pipelines = 4;
+
 		void
-		Init(IDevice* device, core::SharedRef<IResourceManager> resourceManager);
+		Init(
+			IDevice*                          device,
+			core::SharedRef<IResourceManager> resourceManager,
+			PipelineBuild&                    build);
 
 		void
 		Release(bool deferred = true);

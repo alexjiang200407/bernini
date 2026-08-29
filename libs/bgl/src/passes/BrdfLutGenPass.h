@@ -1,4 +1,5 @@
 #pragma once
+#include "gfx/PipelineBuild.h"
 #include "pipeline/MeshletKernel.h"
 #include "resource/ResourceManager.h"
 
@@ -32,8 +33,10 @@ namespace bgl
 		 * Creates the texture, its RTV and the pipeline. Compiles a shader, so it must run before the
 		 * Slang session is released.
 		 */
+		static constexpr uint32_t c_Pipelines = 1;
+
 		void
-		Init(IDevice* device, ResourceManagerRef resourceManager);
+		Init(IDevice* device, ResourceManagerRef resourceManager, PipelineBuild& build);
 
 		/**
 		 * Records the integration into `cmdList`, leaving the texture readable by a pixel shader. The

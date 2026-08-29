@@ -44,8 +44,9 @@ namespace
 
 		// This suite's own table, not the RenderContext's: the point is to exercise the generation,
 		// and a second one costs a single 256x256 draw.
-		auto lut = bgl::BrdfLutGenPass();
-		lut.Init(device, resourceManager);
+		auto lut   = bgl::BrdfLutGenPass();
+		auto build = bgl::PipelineBuild({}, bgl::BrdfLutGenPass::c_Pipelines);
+		lut.Init(device, resourceManager, build);
 
 		const auto layout = resourceManager->GetTextureReadbackLayout(lut.GetTexture());
 

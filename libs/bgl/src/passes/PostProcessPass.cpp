@@ -30,9 +30,11 @@ namespace bgl
 	}
 
 	void
-	PostProcessPass::Init(IDevice* device)
+	PostProcessPass::Init(IDevice* device, PipelineBuild& build)
 	{
 		gassert(device != nullptr, "Device must be initialized");
+
+		build.Step("PostProcess"sv);
 
 		auto pipelineDesc = MeshletPipelineDesc();
 

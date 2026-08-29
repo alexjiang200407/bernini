@@ -1,4 +1,5 @@
 #pragma once
+#include "gfx/PipelineBuild.h"
 #include "pipeline/ComputeKernel.h"
 #include "pipeline/ComputePipeline.h"
 
@@ -33,8 +34,10 @@ namespace bgl
 		SkinnedPosePass&
 		operator=(SkinnedPosePass&&) noexcept = delete;
 
+		static constexpr uint32_t c_Pipelines = 1;
+
 		void
-		Init(IDevice* device);
+		Init(IDevice* device, PipelineBuild& build);
 
 		void
 		Release();

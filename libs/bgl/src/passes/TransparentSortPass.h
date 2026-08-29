@@ -1,4 +1,5 @@
 #pragma once
+#include "gfx/PipelineBuild.h"
 #include "pipeline/ComputeKernel.h"
 #include "pipeline/ComputePipeline.h"
 #include "uniforms/Uniforms.h"
@@ -23,7 +24,6 @@ namespace bgl
 	public:
 		TransparentSortPass() = default;
 		~TransparentSortPass() noexcept { logger::trace("~TransparentSortPass"); }
-		explicit TransparentSortPass(IDevice* device) { Init(device); }
 
 		TransparentSortPass(const TransparentSortPass&) noexcept = delete;
 		TransparentSortPass(TransparentSortPass&&) noexcept      = delete;
@@ -34,8 +34,11 @@ namespace bgl
 		TransparentSortPass&
 		operator=(TransparentSortPass&&) noexcept = delete;
 
+		// The key build and the bitonic sort.
+		static constexpr uint32_t c_Pipelines = 2;
+
 		void
-		Init(IDevice* device);
+		Init(IDevice* device, PipelineBuild& build);
 
 		// Owns no GPU storage -- the sort buffers live on the view's TransparentSortState, one set
 		// per view rather than per frustum -- so this only drops the kernels.

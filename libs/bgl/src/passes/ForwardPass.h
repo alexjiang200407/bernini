@@ -1,4 +1,5 @@
 #pragma once
+#include "gfx/PipelineBuild.h"
 #include "pipeline/MeshletKernel.h"
 #include "types/MeshletState.h"
 #include <bgl/PsoType.h>
@@ -16,7 +17,6 @@ namespace bgl
 	public:
 		ForwardPass() = default;
 		~ForwardPass() noexcept { logger::trace("~ForwardPass"); }
-		ForwardPass(IDevice* device) { Init(device); }
 
 		ForwardPass(const ForwardPass&) noexcept = delete;
 		ForwardPass(ForwardPass&&) noexcept      = delete;
@@ -36,8 +36,11 @@ namespace bgl
 			}
 		}
 
+		// One meshlet kernel per PsoType.
+		static constexpr uint32_t c_Pipelines = c_PsoCount;
+
 		void
-		Init(IDevice* device);
+		Init(IDevice* device, PipelineBuild& build);
 
 		void
 		AttachToFrameGraph(FrameGraph& fg, const DrawData& draw);
