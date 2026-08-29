@@ -10,6 +10,12 @@ The two are seams at different heights. The RHI abstracts a *graphics API*, and 
 D3D12 and Metal share — bindless resource access and mesh shaders. This surface sits above it and
 abstracts the *renderer*, in the vocabulary of geometry, materials, textures, instances and cameras.
 
+**Keep it that way.** No descriptor, meshlet, heap or pipeline-object vocabulary in a name, a field
+or a throw contract here — state what a caller is guaranteed, not the machinery that currently
+provides it. `bgl_intfc_selfcheck` enforces the dependency half (a public header that reaches into a
+renderer's internals fails the build); the wording half is review's.
+See [renderer portability](docs/plans/renderer-portability.md) for why the line is here.
+
 **This document is a map, not a mirror.** It captures design choices, topology, and the *non-obvious*
 contracts — not full signatures. The header at each linked path is the source of truth; when this doc
 disagrees, trust the header, then fix this doc.

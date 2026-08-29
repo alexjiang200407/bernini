@@ -14,7 +14,7 @@ the fix: *"Covering them needs a seam first: a `headless` flag on `RenderTargetW
 The device is not the obstacle. `editor_tests` links `bgl_d3d12_agility` and may call
 `CreateGraphics`; `AssetThumbnailCache` is covered end to end because it owns a *headless* target
 and never asks for a `winId()`. `headless` is already a first-class bgl concept — `wnd` is
-documented "Ignored when headless" ([IRenderTarget.h](../../libs/bgl/include/bgl/IRenderTarget.h)
+documented "Ignored when headless" ([IRenderTarget.h](../../libs/bgl_intfc/include/bgl/IRenderTarget.h)
 `:30`) and a headless target "presents nothing and advances round-robin"
 ([RenderTargetBase.h](../../libs/bgl/src/gfx/RenderTargetBase.h) `:238`). The only thing missing is
 a way to ask a viewport for it.
