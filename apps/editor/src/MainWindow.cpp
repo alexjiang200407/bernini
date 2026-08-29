@@ -40,11 +40,13 @@
 #include <core/settings/Settings.h>
 #include <gamelib/AssetManager.h>
 
-MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent)
+MainWindow::MainWindow(QWidget* parent, std::filesystem::path configPath) : QMainWindow(parent)
 {
 	try
 	{
-		Build();
+		Build(
+			configPath.empty() ? core::file::get_executable_path().parent_path() / "config.json" :
+								 configPath);
 	}
 	catch (...)
 	{
@@ -58,7 +60,7 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent)
 }
 
 void
-MainWindow::Build()
+MainWindow::Build(const std::filesystem::path& configPath)
 {
 	m_Ui.setupUi(this);
 
@@ -73,7 +75,6 @@ MainWindow::Build()
 
 	std::string startupProject;
 	{
-		const auto     configPath = core::file::get_executable_path().parent_path() / "config.json";
 		core::Settings settings(configPath);
 
 		startupProject = settings["startupProject"].GetOrDefault(std::string());
