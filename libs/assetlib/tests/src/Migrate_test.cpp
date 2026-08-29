@@ -9,6 +9,7 @@
 
 #include "CacheTamper.h"
 #include "ImportUnitGroup.h"
+#include "RecordedProgress.h"
 #include "SkinnedGltf.h"
 #include "bmesh_texture.h"
 
@@ -296,4 +297,64 @@ TEST_CASE("migrate tells a delivered material from a broken one", "[migrate][bak
 		REQUIRE(failed != broken.files.end());
 		CHECK_THAT(failed->message, ContainsSubstring("Derived/SourceTextures/gone.ktx2"));
 	}
+}
+
+// Migrate's resave walk fans out across the files already on disk, so two things have to survive
+// the threads: what it writes, and what it reports. Every other case here imports one group, which
+// gives each rank one file -- parallelFor then collapses to a single thread and none of this runs.
+//
+// Deliberately *not* asserting the rank order through the sink. Reports are emitted when an item is
+// claimed, and parallelFor claims indices in order from one counter, so they come out in path order
+// whether the ranks are batched or not -- an assertion on it passes with the barrier removed. The
+// barrier is about when an item *finishes*, which the sink cannot see.
+TEST_CASE("Migrate's threaded walk leaves a settled project untouched", "[migrate]")
+{
+	const test::SkinnedGltf source("assetlib_migrate_threads_gltf");
+
+	const std::filesystem::path root =
+		std::filesystem::temp_directory_path() / "assetlib_migrate_threads";
+	std::filesystem::remove_all(root);
+	std::filesystem::create_directories(root);
+
+	// Two independent groups, so a rank holds more than one file and the threads interleave.
+	const std::filesystem::path glb = source.PackGlb();
+	test::ImportUnitGroup(root, glb, "Authored/Materials/red.bmaterial", 30.0f, {}, "one");
+	test::ImportUnitGroup(root, glb, "Authored/Materials/red.bmaterial", 30.0f, {}, "two");
+
+	auto before = std::map<std::string, std::vector<std::byte>>();
+	for (const auto& entry : std::filesystem::recursive_directory_iterator(root))
+		if (entry.is_regular_file())
+			before.emplace(
+				entry.path().lexically_relative(root).generic_string(),
+				core::file::read_file_bytes(entry.path().string()));
+
+	test::RecordedProgress recorded;
+	const MigrateReport    report = AssetStore(root).Migrate(/*dryRun*/ false, recorded.Sink());
+
+	// The strongest thing available without a second, serial implementation to diff against: these
+	// files are already what the current serializer writes, so a walk that raced -- two threads in
+	// one buffer, a half-written file read back by the next rank -- reports a rewrite or a failure
+	// where a correct one reports neither.
+	for (const MigratedFile& file : report.files)
+	{
+		INFO("file: " << file.path.filename().string() << " -- " << file.message);
+		CHECK(file.outcome == MigratedFile::Outcome::kUnchanged);
+	}
+
+	auto after = std::map<std::string, std::vector<std::byte>>();
+	for (const auto& entry : std::filesystem::recursive_directory_iterator(root))
+		if (entry.is_regular_file())
+			after.emplace(
+				entry.path().lexically_relative(root).generic_string(),
+				core::file::read_file_bytes(entry.path().string()));
+
+	CHECK(after == before);
+
+	// And the walk really did have two files in a rank to hand out, or the above proves nothing
+	// about threading at all.
+	const std::vector<test::RecordedStep> resaved = recorded.Of(ProgressPhase::kResaving);
+	CHECK(test::RecordedProgress::CountOf(resaved, ".bmesh") == 2);
+	CHECK(test::RecordedProgress::CountOf(resaved, ".banim") == 2);
+
+	std::filesystem::remove_all(root);
 }

@@ -191,3 +191,27 @@ TEST_CASE("Rooting a tree with no followers in it does nothing", "[project]")
 	CHECK_NOTHROW(editor::SetProjectDataRoot(&root, "/projects/MyGame/Data"));
 	CHECK_NOTHROW(editor::SetProjectDataRoot(nullptr, "/projects/MyGame/Data"));
 }
+
+TEST_CASE("Building the editor reports what it is doing", "[mainwindow][startup][render]")
+{
+	const HeadlessEditor editor;
+
+	// What main.cpp hands the window, and the only thing that can report a cold start: by the time
+	// there is a window to say "compiling", the compiling is over.
+	auto labels = std::vector<QString>();
+
+	{
+		const MainWindow window(nullptr, editor.ConfigFile(), [&](int, int, const QString& label) {
+			labels.push_back(label);
+		});
+	}
+
+	// Landing nothing is the failure this pins, and it is invisible: the window builds exactly as
+	// it does now and the screen sits on "Starting..." for the whole cold start.
+	REQUIRE_FALSE(labels.empty());
+	CHECK(labels.front() == QStringLiteral("Compiling shaders..."));
+
+	// The shaders are one step because bgl builds every pipeline inside CreateGraphics; what
+	// follows is the project, which reports per file.
+	CHECK(std::ranges::count(labels, QStringLiteral("Compiling shaders...")) == 1);
+}

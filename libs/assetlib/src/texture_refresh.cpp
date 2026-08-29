@@ -184,9 +184,9 @@ namespace assetlib
 
 	TextureRefresh
 	AssetStore::RefreshImportedTextures(
-		std::string_view         sourceKey,
-		const TextureProgressFn& onProgress,
-		const CancelToken&       cancel) const
+		std::string_view    sourceKey,
+		const ProgressSink& onProgress,
+		const CancelToken&  cancel) const
 	{
 		core::throw_runtime_error_if(
 			IsReadOnly(),

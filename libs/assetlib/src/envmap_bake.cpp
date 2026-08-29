@@ -3,6 +3,8 @@
 
 #include <stb_image.h>
 
+#include "parallel_for.h"
+
 #include <core/glm.h>
 #include <core/log/ScopedStage.h>
 #include <core/math.h>
@@ -12,6 +14,24 @@ namespace assetlib
 	namespace
 	{
 		constexpr float c_Pi = static_cast<float>(core::c_Pi);
+
+		/** One convolved subresource: a cube face at a mip. */
+		struct Job
+		{
+			uint32_t face = 0;
+			uint32_t mip  = 0;
+		};
+
+		/** Every (face, mip) pair, mip-major -- the coarser mips are cheaper and finish last. */
+		std::vector<Job>
+		faceMipJobs(uint32_t mipLevels)
+		{
+			auto jobs = std::vector<Job>();
+			jobs.reserve(static_cast<size_t>(mipLevels) * 6);
+			for (uint32_t mip = 0; mip < mipLevels; ++mip)
+				for (uint32_t face = 0; face < 6; ++face) jobs.emplace_back(face, mip);
+			return jobs;
+		}
 
 		/**
 		 * Direction for the centre of texel (col, row) on `face`, in the D3D cube convention: u runs
@@ -663,28 +683,17 @@ namespace assetlib
 		const auto  srcSize = static_cast<float>(pyramid.BaseSize());
 		const float saTexel = 4.0f * c_Pi / (6.0f * srcSize * srcSize);
 
-		const uint32_t threadCount =
-			threads != 0 ? threads : std::max(1u, std::thread::hardware_concurrency());
-
-		std::atomic<uint32_t> nextFace{ 0 };
-
-		auto worker = [&]() {
-			for (;;)
-			{
-				const uint32_t face = nextFace.fetch_add(1);
-				if (face >= 6)
-					return;
-
-				auto* dst =
-					reinterpret_cast<float*>(out.pixels.data() + out.subresources[face].offset);
-				convolveFace(pyramid, face, faceSize, roughness, samples, saTexel, dst);
-			}
-		};
-
-		std::vector<std::thread> pool;
-		pool.reserve(threadCount);
-		for (uint32_t i = 0; i < threadCount; ++i) pool.emplace_back(worker);
-		for (std::thread& t : pool) t.join();
+		parallelFor(6, threads, [&](size_t face) {
+			auto* dst = reinterpret_cast<float*>(out.pixels.data() + out.subresources[face].offset);
+			convolveFace(
+				pyramid,
+				static_cast<uint32_t>(face),
+				faceSize,
+				roughness,
+				samples,
+				saTexel,
+				dst);
+		});
 
 		return out;
 	}
@@ -711,50 +720,25 @@ namespace assetlib
 		const float srcSize = static_cast<float>(pyramid.BaseSize());
 		const float saTexel = 4.0f * c_Pi / (6.0f * srcSize * srcSize);
 
-		const uint32_t threadCount =
-			threads != 0 ? threads : std::max(1u, std::thread::hardware_concurrency());
+		const std::vector<Job> jobs = faceMipJobs(mipLevels);
 
-		struct Job
-		{
-			uint32_t face = 0;
-			uint32_t mip  = 0;
-		};
+		parallelFor(jobs.size(), threads, [&](size_t jobIndex) {
+			const Job      job  = jobs[jobIndex];
+			const uint32_t size = std::max(1u, faceSize >> job.mip);
 
-		std::vector<Job> jobs;
-		for (uint32_t mip = 0; mip < mipLevels; ++mip)
-			for (uint32_t face = 0; face < 6; ++face) jobs.push_back({ face, mip });
+			const size_t subIndex = static_cast<size_t>(job.face) * mipLevels + job.mip;
+			auto*        dst =
+				reinterpret_cast<float*>(out.pixels.data() + out.subresources[subIndex].offset);
 
-		std::atomic<uint32_t> nextJob{ 0 };
-
-		auto worker = [&]() {
-			for (;;)
-			{
-				const uint32_t jobIndex = nextJob.fetch_add(1);
-				if (jobIndex >= jobs.size())
-					return;
-
-				const Job      job  = jobs[jobIndex];
-				const uint32_t size = std::max(1u, faceSize >> job.mip);
-
-				const size_t subIndex = static_cast<size_t>(job.face) * mipLevels + job.mip;
-				auto*        dst =
-					reinterpret_cast<float*>(out.pixels.data() + out.subresources[subIndex].offset);
-
-				convolveFace(
-					pyramid,
-					job.face,
-					size,
-					skyMipRoughness(faceSize, job.mip),
-					samples,
-					saTexel,
-					dst);
-			}
-		};
-
-		std::vector<std::thread> pool;
-		pool.reserve(threadCount);
-		for (uint32_t i = 0; i < threadCount; ++i) pool.emplace_back(worker);
-		for (std::thread& t : pool) t.join();
+			convolveFace(
+				pyramid,
+				job.face,
+				size,
+				skyMipRoughness(faceSize, job.mip),
+				samples,
+				saTexel,
+				dst);
+		});
 
 		return out;
 	}
@@ -842,52 +826,28 @@ namespace assetlib
 			total += static_cast<size_t>(size) * size * 6;
 		}
 
-		const uint32_t threadCount =
-			desc.threads != 0 ? desc.threads : std::max(1u, std::thread::hardware_concurrency());
+		auto samplesTaken = std::atomic<uint64_t>(0);
 
-		std::atomic<uint64_t> samplesTaken{ 0 };
-		std::atomic<uint32_t> nextJob{ 0 };
-
-		struct Job
-		{
-			uint32_t face = 0;
-			uint32_t mip  = 0;
-		};
-
-		std::vector<Job> jobs;
-		for (uint32_t mip = 0; mip < desc.mipLevels; ++mip)
-			for (uint32_t face = 0; face < 6; ++face) jobs.push_back({ face, mip });
+		const std::vector<Job> jobs = faceMipJobs(desc.mipLevels);
 
 		const float srcSize = static_cast<float>(pyramid.BaseSize());
 		const float saTexel = 4.0f * c_Pi / (6.0f * srcSize * srcSize);
 
-		auto worker = [&]() {
-			for (;;)
-			{
-				const uint32_t jobIndex = nextJob.fetch_add(1);
-				if (jobIndex >= jobs.size())
-					return;
+		parallelFor(jobs.size(), desc.threads, [&](size_t jobIndex) {
+			const Job      job  = jobs[jobIndex];
+			const uint32_t size = std::max(1u, desc.faceSize >> job.mip);
+			const float    roughness =
+				desc.mipLevels > 1 ?
+					static_cast<float>(job.mip) / static_cast<float>(desc.mipLevels - 1) :
+					0.0f;
 
-				const Job      job  = jobs[jobIndex];
-				const uint32_t size = std::max(1u, desc.faceSize >> job.mip);
-				const float    roughness =
-					desc.mipLevels > 1 ?
-						static_cast<float>(job.mip) / static_cast<float>(desc.mipLevels - 1) :
-						0.0f;
+			const size_t subIndex = static_cast<size_t>(job.face) * desc.mipLevels + job.mip;
+			auto*        dst =
+				reinterpret_cast<float*>(out.pixels.data() + out.subresources[subIndex].offset);
 
-				const size_t subIndex = static_cast<size_t>(job.face) * desc.mipLevels + job.mip;
-				auto*        dst =
-					reinterpret_cast<float*>(out.pixels.data() + out.subresources[subIndex].offset);
-
-				samplesTaken.fetch_add(
-					convolveFace(pyramid, job.face, size, roughness, desc.samples, saTexel, dst));
-			}
-		};
-
-		std::vector<std::thread> pool;
-		pool.reserve(threadCount);
-		for (uint32_t i = 0; i < threadCount; ++i) pool.emplace_back(worker);
-		for (std::thread& t : pool) t.join();
+			samplesTaken.fetch_add(
+				convolveFace(pyramid, job.face, size, roughness, desc.samples, saTexel, dst));
+		});
 
 		if (stats != nullptr)
 		{

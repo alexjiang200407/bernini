@@ -175,11 +175,23 @@ The dotted edge is the asymmetry: reads go through the store, writes go around i
 
 ## Threading & Synchronization
 
-* **`AssetStore` is not synchronized.** It holds a `shared_ptr<const IFileSystem>` and a path;
-  concurrent reads through one store are as safe as the mount beneath it, and nothing here
-  serializes writes. The editor drives bakes on a worker and owns that discipline itself.
-* **Every progress and cancel callback runs on the calling thread.** `TextureProgressFn` is
-  invoked before each texture, from whichever thread called `AssetStore::WriteTextures`.
+* **`AssetStore` is not synchronized, and does not need to be.** It holds a
+  `shared_ptr<const IFileSystem>` and a path; `IFileSystem` promises every method is safe to call
+  concurrently on one instance, and `core::file::write_atomic` names its temp file per process and
+  per call — so several threads may cook through one store as long as no two write the same key.
+  That is what `Reimport` and `Migrate` rely on; the editor drives bakes on a worker and owns that
+  discipline itself.
+* **One progress seam:** [`ProgressSink`](../libs/assetlib/include/assetlib/progress.h), a
+  `ProgressEvent` carrying the phase, the subject and a `done`/`total`. Both belong to whichever
+  operation is reporting — an operation that runs another inside itself lets the inner one report
+  in its own frame — so a reader takes the total from each event rather than the first.
+* **A sink is called from whichever thread is doing the work, but never two at once.** A cook that
+  fans out wraps its sink with `serialized()`, so a sink needs no lock; it must not assume the
+  calling thread and must not block, because every worker waits behind it.
+* **A threaded cook runs a stage at a time.** `Reimport` fans out within an `AssetType` — rigs,
+  then meshes, then clips — and `Migrate` within a rank, because a clip set sweeps its boxes
+  through the meshes standing on disk. Capped at four threads: one cook holds a whole glTF parse,
+  so what bounds it is memory rather than cores.
 * **A cancel is honoured between encodes, not inside one.** A signalled token waits out the
   texture in flight — seconds at 4K. Whatever was already written stays on disk.
 

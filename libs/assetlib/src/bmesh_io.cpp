@@ -13,6 +13,7 @@
 
 #include "cache_io.h"
 #include "fs_util.h"
+#include "progress_report.h"
 #include "ref_paths.h"
 
 #include <core/file/file.h>
@@ -354,10 +355,10 @@ namespace assetlib
 
 	std::vector<std::string>
 	AssetStore::WriteTextures(
-		const imp::BMeshImport&  mesh,
-		std::string_view         textureDir,
-		const TextureProgressFn& onProgress,
-		const CancelToken&       cancel) const
+		const imp::BMeshImport& mesh,
+		std::string_view        textureDir,
+		const ProgressSink&     onProgress,
+		const CancelToken&      cancel) const
 	{
 		requireOrigin(textureDir, AssetOrigin::kDerived, "textures");
 
@@ -377,8 +378,12 @@ namespace assetlib
 		{
 			throwIfCancelled(cancel);
 
-			if (onProgress)
-				onProgress(i, mesh.textures.size());
+			reportStep(
+				onProgress,
+				ProgressPhase::kExtractingTextures,
+				names[i],
+				i,
+				mesh.textures.size());
 
 			writeKTX2(
 				mesh.textures[i],

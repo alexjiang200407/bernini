@@ -18,6 +18,8 @@
 
 #include "fs_util.h"
 #include "material_texture_refs.h"
+#include "parallel_for.h"
+#include "progress_report.h"
 #include "ref_paths.h"
 
 #include <core/err/util.h>
@@ -192,8 +194,10 @@ namespace assetlib
 	}
 
 	MigrateReport
-	AssetStore::Migrate(bool dryRun) const
+	AssetStore::Migrate(bool dryRun, const ProgressSink& onProgress) const
 	{
+		const ProgressSink sink = serialized(onProgress);
+
 		std::vector<std::filesystem::path> paths;
 		for (const auto& entry : std::filesystem::recursive_directory_iterator(GetDataRoot()))
 			if (entry.is_regular_file())
@@ -220,13 +224,19 @@ namespace assetlib
 		// Before everything: the walk below regenerates through documents that must already name
 		// their rig, and a project written before that field existed has none.
 		const auto facts = factsFromDerived(*this, paths);
-		for (const std::string& documentKey : GetFiles().Enumerate(c_MeshSourcesDirectoryName))
-		{
-			if (extensionOf(documentKey) != c_ImportDocumentExtension)
-				continue;
 
+		auto documentKeys = std::vector<std::string>();
+		for (const std::string& documentKey : GetFiles().Enumerate(c_MeshSourcesDirectoryName))
+			if (extensionOf(documentKey) == c_ImportDocumentExtension)
+				documentKeys.push_back(documentKey);
+
+		for (size_t i = 0; i < documentKeys.size(); ++i)
+		{
+			const std::string&          documentKey  = documentKeys[i];
 			const std::filesystem::path documentPath = GetDataRoot() / documentKey;
-			MigratedFile                file{ documentPath, MigratedFile::Outcome::kUnchanged, {} };
+
+			reportStep(sink, ProgressPhase::kScanning, documentKey, i, documentKeys.size());
+			MigratedFile file{ documentPath, MigratedFile::Outcome::kUnchanged, {} };
 			try
 			{
 				const auto found = facts.find(importedSourceKeyFor(documentKey));
@@ -265,7 +275,7 @@ namespace assetlib
 
 		// Then, before the walk: what the sources say should stand but does not. The walk below
 		// re-saves files it finds; only this puts an absent one back.
-		for (const ReimportedSource& source : Reimport(dryRun).sources)
+		for (const ReimportedSource& source : Reimport(dryRun, onProgress).sources)
 		{
 			if (!source.message.empty())
 			{
@@ -281,9 +291,13 @@ namespace assetlib
 		}
 
 		// Before the walk: a refresh stamps the `.bimport` the walk then reads.
-		for (const std::string& source : GetStaleImportedTextureSources())
+		const std::vector<std::string> staleTextures = GetStaleImportedTextureSources();
+		for (size_t i = 0; i < staleTextures.size(); ++i)
 		{
+			const std::string&          source       = staleTextures[i];
 			const std::filesystem::path documentPath = GetDataRoot() / importDocumentKeyFor(source);
+
+			reportStep(sink, ProgressPhase::kExtractingTextures, source, i, staleTextures.size());
 
 			MigratedFile file{ documentPath, MigratedFile::Outcome::kRewritten, {} };
 			if (dryRun)
@@ -354,22 +368,43 @@ namespace assetlib
 			});
 		});
 
-		for (const std::filesystem::path& path : paths)
-		{
+		// Indexed rather than appended, so what the walk reports is in the order the paths were
+		// sorted into however many threads ran it.
+		auto walked = std::vector<std::optional<MigratedFile>>(paths.size());
+		auto done   = std::atomic<size_t>(0);
+
+		// The copied sources are in `paths` too and are not containers, so counting every path
+		// would leave the bar short of its own total by however many a project has.
+		const size_t resavable =
+			static_cast<size_t>(std::ranges::count_if(paths, [](const std::filesystem::path& path) {
+				return assetTypeFromExtension(path).has_value();
+			}));
+
+		const auto resaveOne = [&](size_t index) {
+			const std::filesystem::path& path = paths[index];
+
 			const auto type = assetTypeFromExtension(path);
 			if (!type)
-				continue;
+				return;
+
+			const std::string key =
+				normalizeRef(path.lexically_relative(GetDataRoot()).generic_string());
+
+			reportStep(
+				sink,
+				*type == AssetType::kMaterial ? ProgressPhase::kBakingMaterials :
+												ProgressPhase::kResaving,
+				key,
+				done.fetch_add(1),
+				resavable);
 
 			MigratedFile file{ path, MigratedFile::Outcome::kUnchanged, {} };
 			try
 			{
-				const std::string key =
-					normalizeRef(path.lexically_relative(GetDataRoot()).generic_string());
-
 				const auto bytes   = core::file::read_file_bytes(path.string());
 				const auto current = resave(*this, *type, key, bytes, dryRun);
 				if (!current)
-					continue;
+					return;
 				if (*current != bytes)
 				{
 					if (!dryRun)
@@ -382,8 +417,27 @@ namespace assetlib
 				file.outcome = MigratedFile::Outcome::kFailed;
 				file.message = error.what();
 			}
-			report.files.push_back(std::move(file));
+			walked[index] = std::move(file);
+		};
+
+		// One rank at a time, for the reason the sort above exists: a regenerated `.banim`
+		// re-measures its posed boxes against the meshes on disk. Equal ranks are contiguous after
+		// the sort, so a run of them is one stage and its files are independent.
+		for (size_t begin = 0; begin < paths.size();)
+		{
+			size_t end = begin;
+			while (end < paths.size() && rank(paths[end]) == rank(paths[begin])) ++end;
+
+			parallelFor(end - begin, c_MaxCookThreads, [&](size_t offset) {
+				resaveOne(begin + offset);
+			});
+			begin = end;
 		}
+
+		for (std::optional<MigratedFile>& file : walked)
+			if (file)
+				report.files.push_back(std::move(*file));
+
 		return report;
 	}
 }

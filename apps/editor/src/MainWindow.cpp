@@ -40,7 +40,12 @@
 #include <core/settings/Settings.h>
 #include <gamelib/AssetManager.h>
 
-MainWindow::MainWindow(QWidget* parent, std::filesystem::path configPath) : QMainWindow(parent)
+#include "Startup/startup_labels.h"
+
+MainWindow::MainWindow(
+	QWidget*                 parent,
+	std::filesystem::path    configPath,
+	background::ProgressSink startup) : QMainWindow(parent), m_StartupProgress(std::move(startup))
 {
 	try
 	{
@@ -120,9 +125,22 @@ MainWindow::Build(const std::filesystem::path& configPath)
 		sceneDesc.initialLoosePbrMaterials =
 			sceneSettings["initialLoosePbrMaterials"].GetOrDefault(256);
 
+		// One step, not one per pipeline: bgl builds them all inside CreateGraphics and a warm
+		// shader cache turns the whole stretch into milliseconds. Cold it is seconds, which is why
+		// the bar below has to keep moving even though nothing here can say how far along it is.
+		if (m_StartupProgress)
+			m_StartupProgress(0, 0, "Compiling shaders...");
+
 		// The renderer owns the Graphics and the Scene and, once threaded, is the only thing that
 		// touches them. Every viewport and the thumbnail cache render through it.
-		m_Renderer = std::make_unique<Renderer>(gfxOpts, sceneDesc);
+		//
+		// Pumping while it builds, because compiling the pipelines is most of a cold start and the
+		// screen saying so is on this thread. Nothing of this window is shown yet, so the events
+		// that run are the screen's own.
+		m_Renderer = std::make_unique<Renderer>(
+			gfxOpts,
+			sceneDesc,
+			m_StartupProgress ? RendererWait::kPumpEventLoop : RendererWait::kBlock);
 
 		auto levelDesc             = RenderTargetWindowDesc();
 		levelDesc.renderer         = m_Renderer.get();
@@ -321,6 +339,22 @@ MainWindow::Build(const std::filesystem::path& configPath)
 	// absolute path in it reasonable.
 	if (startupProject.empty() || !OpenProjectAt(core::expand_home(startupProject)))
 		ShowEmptyState();
+
+	// Startup is over: a project opened from the menu from here on gets the modal screen, not the
+	// one main() is about to close.
+	m_StartupProgress = {};
+}
+
+background::TaskResult
+MainWindow::RunBehindScreen(
+	const QString&                                    title,
+	const std::function<void(background::Progress&)>& work,
+	background::Cancellable                           cancellable)
+{
+	if (m_StartupProgress)
+		return background::RunReporting(m_StartupProgress, work);
+
+	return background::RunWithLoadingScreen(this, title, work, cancellable);
 }
 
 void
@@ -533,7 +567,7 @@ MainWindow::OpenProjectAt(const std::filesystem::path& path)
 }
 
 void
-MainWindow::OfferTextureRefresh()
+MainWindow::RefreshTextures()
 {
 	if (!m_Project)
 		return;
@@ -543,7 +577,7 @@ MainWindow::OfferTextureRefresh()
 	// File I/O, so it belongs on the worker like the prune's scan. No cancel token, so the screen
 	// offers no button that would not work.
 	const background::TaskResult scanned =
-		background::RunWithLoadingScreen(this, "Open Project", [&](background::Progress& progress) {
+		RunBehindScreen("Open Project", [&](background::Progress& progress) {
 			progress.Report(0, 0, "Checking imported sources...");
 			stale = m_Project->GetStore().GetStaleImportedTextureSources();
 		});
@@ -560,32 +594,12 @@ MainWindow::OfferTextureRefresh()
 	if (stale.empty())
 		return;
 
-	auto sources = QStringList();
-	for (const std::string& source : stale) sources << QString::fromStdString(source);
-
-	auto ask = QMessageBox(this);
-	ask.setWindowTitle("Refresh Textures");
-	ask.setIcon(QMessageBox::Question);
-	ask.setText(
-		stale.size() == 1 ? QString("One imported source has changed since it was imported.") :
-							QString("%1 imported sources have changed since they were imported.")
-								.arg(stale.size()));
-	ask.setInformativeText(
-		"Re-extract their textures? Materials are drawing what the sources held at import until "
-		"they are.");
-	ask.setDetailedText(sources.join('\n'));
-	ask.setStandardButtons(QMessageBox::Yes | QMessageBox::No);
-	ask.setDefaultButton(QMessageBox::Yes);
-	if (ask.exec() != QMessageBox::Yes)
-		return;
-
 	auto superseded = QStringList();
 	auto moved      = QStringList();
 	auto failed     = QStringList();
 
 	// The same cost an import pays, and the same reason it runs off the UI thread.
-	const background::TaskResult refreshed = background::RunWithLoadingScreen(
-		this,
+	const background::TaskResult refreshed = RunBehindScreen(
 		"Refresh Textures",
 		[&](background::Progress& progress) {
 			const assetlib::CancelToken cancel = progress.Cancellation();
@@ -598,14 +612,14 @@ MainWindow::OfferTextureRefresh()
 					const assetlib::TextureRefresh result =
 						m_Project->GetStore().RefreshImportedTextures(
 							stale[i],
-							[&](size_t done, size_t total) {
+							[&](const assetlib::ProgressEvent& event) {
 								progress.Report(
-									static_cast<int>(done),
-									static_cast<int>(total),
+									static_cast<int>(event.done),
+									static_cast<int>(event.total),
 									QString("Compressing %1 (%2 of %3)...")
 										.arg(name)
-										.arg(done + 1)
-										.arg(total));
+										.arg(event.done + 1)
+										.arg(event.total));
 							},
 							cancel);
 
@@ -673,7 +687,7 @@ MainWindow::OfferTextureRefresh()
 }
 
 void
-MainWindow::OfferProjectUpdate()
+MainWindow::UpdateProject()
 {
 	if (!m_Project)
 		return;
@@ -682,9 +696,11 @@ MainWindow::OfferProjectUpdate()
 	auto absent = std::vector<std::string>();
 
 	// Header peeks and a dry run, so this is affordable as a project opens -- Migrate's own dry run
-	// would re-cook every stale group to answer the same question.
+	// would re-cook every stale group to answer the same question. Kept as a gate even though the
+	// rebuild is no longer offered: Migrate walks and re-saves the whole data root, which a settled
+	// project should not pay for on every launch.
 	const background::TaskResult scanned =
-		background::RunWithLoadingScreen(this, "Open Project", [&](background::Progress& progress) {
+		RunBehindScreen("Open Project", [&](background::Progress& progress) {
 			progress.Report(0, 0, "Checking derived assets...");
 			stale = m_Project->GetStore().GetStaleGeometry();
 			for (const assetlib::ReimportedSource& source :
@@ -701,37 +717,23 @@ MainWindow::OfferProjectUpdate()
 	if (stale.empty() && absent.empty())
 		return;
 
-	auto listed = QStringList();
-	for (const std::string& key : absent) listed << QString("missing: %1").arg(key.c_str());
-	for (const std::string& key : stale) listed << QString("out of date: %1").arg(key.c_str());
-
-	auto ask = QMessageBox(this);
-	ask.setWindowTitle("Update Project");
-	ask.setIcon(QMessageBox::Question);
-	ask.setText(QString("%1 derived asset(s) are missing or out of date with their sources.")
-	                .arg(stale.size() + absent.size()));
-
-	// Loads refuse a stale container rather than re-cooking one per load, so this is not cosmetic:
-	// without it the viewport cannot open the assets below.
-	ask.setInformativeText(
-		"Rebuild them from their sources? Until they are rebuilt, anything that draws them will "
-		"report that the project needs updating.");
-	ask.setDetailedText(listed.join('\n'));
-	ask.setStandardButtons(QMessageBox::Yes | QMessageBox::No);
-	ask.setDefaultButton(QMessageBox::Yes);
-	if (ask.exec() != QMessageBox::Yes)
-		return;
-
 	auto failed = QStringList();
 
-	const background::TaskResult migrated = background::RunWithLoadingScreen(
-		this,
-		"Update Project",
-		[&](background::Progress& progress) {
+	const background::TaskResult migrated =
+		RunBehindScreen("Update Project", [&](background::Progress& progress) {
 			progress.Report(0, 0, "Rebuilding derived assets...");
 
+			// Migrate reports in phases, each with its own count, so the label and the range are
+			// taken from the event rather than remembered across them.
+			const auto onProgress = [&progress](const assetlib::ProgressEvent& event) {
+				progress.Report(
+					static_cast<int>(event.done),
+					static_cast<int>(event.total),
+					editor::startup::RebuildLabel(event));
+			};
+
 			for (const assetlib::MigratedFile& file :
-		         m_Project->GetStore().Migrate(/*dryRun*/ false).files)
+		         m_Project->GetStore().Migrate(/*dryRun*/ false, onProgress).files)
 				if (file.outcome == assetlib::MigratedFile::Outcome::kFailed)
 					failed << QString("%1: %2").arg(
 						QString::fromStdString(file.path.filename().string()),
@@ -886,8 +888,8 @@ MainWindow::SetActiveProject(assetlib::Project project)
 	m_Assets = std::make_unique<game::AssetManager>(m_Renderer->GetScene(), m_Project->GetStore());
 
 	// Before the explorer roots and the thumbnails paint, so they paint the refreshed textures.
-	OfferTextureRefresh();
-	OfferProjectUpdate();
+	RefreshTextures();
+	UpdateProject();
 
 	// Hand it over before the explorer is rooted: rooting it paints tiles, and each one that misses
 	// asks for a render straight away -- a material cannot be resolved without a manager.

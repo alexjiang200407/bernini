@@ -10,7 +10,7 @@
 namespace assetlib::test
 {
 	/**
-	 * Imports `glb` into `dataRoot` as the group named "unit", by the same writers the CLI and
+	 * Imports `glb` into `dataRoot` as the group `name`, by the same writers the CLI and
 	 * the editor call: the copied source and its document in `Authored/Meshes/`, the mesh in
 	 * `Derived/Meshes/`, and -- when the source carries a skin -- the rig in `Derived/Skeletons/`
 	 * and `Derived/Animations/`. Submesh 0 is bound to `material`, recorded in the document.
@@ -24,7 +24,8 @@ namespace assetlib::test
 		const std::filesystem::path& glb,
 		std::string_view             material   = "Authored/Materials/red.bmaterial",
 		float                        sampleRate = c_DefaultSampleRate,
-		std::string_view             textureDir = {})
+		std::string_view             textureDir = {},
+		std::string_view             name       = "unit")
 	{
 		const auto imported = loadFromGltf(glb, { .sampleRate = sampleRate });
 
@@ -32,7 +33,7 @@ namespace assetlib::test
 		generateTangents(mesh);
 		requireUniqueSubmeshNames(mesh);
 
-		ImportTarget     target{ "unit", sampleRate, std::string(textureDir) };
+		ImportTarget     target{ std::string(name), sampleRate, std::string(textureDir) };
 		const AssetStore store(dataRoot);
 		const SourceRef  source = store.CopyImportedSource(glb, target);
 		mesh.source             = source;
@@ -44,17 +45,18 @@ namespace assetlib::test
 			imported.skeleton,
 			imported.animations,
 			mesh,
-			"Derived/Skeletons/unit.bskel",
-			"Derived/Animations/unit.banim",
+			std::format("Derived/Skeletons/{}.bskel", name),
+			std::format("Derived/Animations/{}.banim", name),
 			true,
 			source);
 
 		if (!mesh.submeshes.empty())
 			static_cast<void>(attachMaterial(mesh, 0, material));
 
-		store.Save(mesh, "Derived/Meshes/unit.bmesh");
+		const std::string meshKey = std::format("Derived/Meshes/{}.bmesh", name);
+		store.Save(mesh, meshKey);
 
-		outputs.emplace_back("Derived/Meshes/unit.bmesh");
+		outputs.emplace_back(meshKey);
 		target.skeleton = mesh.skeleton;
 		target.outputs  = std::move(outputs);
 

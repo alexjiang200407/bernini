@@ -1,6 +1,7 @@
 #pragma once
 #include <assetlib/cancel.h>
 #include <assetlib/codecs.h>
+#include <assetlib/progress.h>
 #include <assetlib_structs/BMeshImport.h>
 #include <core/file/IFileSystem.h>
 
@@ -402,15 +403,13 @@ namespace assetlib
 
 		// --- Textures --------------------------------------------------------------------------
 
-		/** Called before each texture, so the first call is (0, total). */
-		using TextureProgressFn = std::function<void(size_t done, size_t total)>;
-
 		/**
 		 * Writes `mesh`'s detached textures into `textureDir`, named by importedTextureFileNames --
 		 * the files a material routes at. `mesh.materials` says which are sRGB and is not written.
 		 *
-		 * Basis-UASTC supercompression dominates the cost of an import; `onProgress` runs on the
-		 * calling thread, and `cancel` is polled between encodes, never inside one.
+		 * Basis-UASTC supercompression dominates the cost of an import; `onProgress` is reported
+		 * before each encode, so the first call is (0, total), and `cancel` is polled between
+		 * encodes, never inside one.
 		 *
 		 * @throws std::runtime_error if `textureDir` is not under `Derived/` (see requireOrigin),
 		 *         escapes the data root, or a write fails.
@@ -422,10 +421,10 @@ namespace assetlib
 		 */
 		std::vector<std::string>
 		WriteTextures(
-			const imp::BMeshImport&  mesh,
-			std::string_view         textureDir,
-			const TextureProgressFn& onProgress = {},
-			const CancelToken&       cancel     = {}) const;
+			const imp::BMeshImport& mesh,
+			std::string_view        textureDir,
+			const ProgressSink&     onProgress = {},
+			const CancelToken&      cancel     = {}) const;
 
 		/**
 		 * The copied sources re-exported since the import that extracted their textures. Sorted,
@@ -453,9 +452,9 @@ namespace assetlib
 		 */
 		TextureRefresh
 		RefreshImportedTextures(
-			std::string_view         sourceKey,
-			const TextureProgressFn& onProgress = {},
-			const CancelToken&       cancel     = {}) const;
+			std::string_view    sourceKey,
+			const ProgressSink& onProgress = {},
+			const CancelToken&  cancel     = {}) const;
 
 		[[nodiscard]] ImageData
 		LoadTexture(std::string_view path, Ktx2Decode decode, uint32_t maxDim = 0) const;
@@ -595,11 +594,18 @@ namespace assetlib
 		 * delivered project ships its triplet and none of its sources, and has nothing to re-bake
 		 * from. One with only some of them is a reference that has broken, and is reported.
 		 *
+		 * Runs in phases -- the documents, then what the sources say is absent, then the changed
+		 * textures, then the re-save walk -- and each reports its own count, so `onProgress` must
+		 * take the total from the event rather than the first one it sees. Within a phase the
+		 * files are independent and are cooked across threads; a `.banim` still never re-measures
+		 * against a mesh a later phase would rewrite.
+		 *
 		 * @param dryRun Report what would change without writing a byte -- a map included, so a
 		 *        material's re-bake is resolved rather than encoded.
+		 * @param onProgress Told each file before it is read.
 		 */
 		[[nodiscard]] MigrateReport
-		Migrate(bool dryRun) const;
+		Migrate(bool dryRun, const ProgressSink& onProgress = {}) const;
 
 		/**
 		 * Every container this project's sources say should exist but does not, produced onto
@@ -623,10 +629,16 @@ namespace assetlib
 		 *
 		 * A source that cannot be re-imported is reported and skipped; the rest still run.
 		 *
-		 * @param dryRun Report what would be written without writing a byte.
+		 * Within a stage the sources are independent and are cooked across threads; the stages
+		 * themselves are ordered, so nothing sees a container a later stage will produce.
+		 *
+		 * @param dryRun Report what would be written without writing a byte. Reports no progress:
+		 *        a dry run does none of the work `onProgress` would be naming.
+		 * @param onProgress Told each output before it is produced, counted against every output
+		 *        this run decided on before it began.
 		 */
 		[[nodiscard]] ReimportReport
-		Reimport(bool dryRun) const;
+		Reimport(bool dryRun, const ProgressSink& onProgress = {}) const;
 
 		/**
 		 * Every geometry container in this project whose source has moved out from under it, as

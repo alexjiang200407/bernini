@@ -658,3 +658,86 @@ TEST_CASE("stripAuthoringData refuses to strip an unbaked material", "[bmaterial
 
 	REQUIRE_THROWS_AS(stripAuthoringData(mat), std::runtime_error);
 }
+
+// The Apple case again, but with the bakes racing -- which is what Migrate's resave walk does now
+// that its ranks fan out. A baked map's name is content-addressed, so materials routing one group
+// identically resolve to *one* path; each finds it absent and each writes it. That is one file with
+// several writers in it, and the composed bytes being identical does not make an interleaved write
+// valid.
+//
+// **This is not a regression test for that race.** It was run against the unguarded direct write
+// that preceded writeKTX2's temp-and-rename, at eight writers on a 256x256 map, and passed every
+// time: the window is one small write, and a small write rarely tears. What it does pin is that
+// concurrent bakes of a shared map all succeed, converge on one file that still parses at the
+// right extent, and leave no `.tmp` behind for the next run's stat to mistake for a map. The race
+// itself is made impossible rather than detected.
+TEST_CASE(
+	"Materials baking one shared map at once do not corrupt it",
+	"[bmaterial][bake][threading]")
+{
+	constexpr int      c_Writers = 8;
+	constexpr uint32_t c_Size    = 256;
+
+	const BakeDir dir("bernini_bake_race");
+
+	WriteSource(dir.path / "orm.ktx2", c_Size, { { 10, 60, 90, 255 } });
+	for (int i = 0; i < c_Writers; ++i)
+		WriteSource(
+			dir.path / std::format("albedo{}.ktx2", i),
+			c_Size,
+			{ { static_cast<uint8_t>(10 * i), 0, 0, 255 } });
+
+	auto materials = std::vector<BMaterial>(c_Writers);
+	for (int i = 0; i < c_Writers; ++i)
+	{
+		materials[static_cast<size_t>(i)].pbr.routes[0] = { std::format("albedo{}.ktx2", i), 0 };
+
+		// The one group they share, and so the one path they collide on.
+		materials[static_cast<size_t>(i)].pbr.routes[4] = { "orm.ktx2", 0 };
+		materials[static_cast<size_t>(i)].pbr.routes[5] = { "orm.ktx2", 1 };
+		materials[static_cast<size_t>(i)].pbr.routes[6] = { "orm.ktx2", 2 };
+	}
+
+	// Released together, so every one of them is inside bakeMaterial's "is it on disk yet" window
+	// at the same time.
+	auto ready  = std::atomic<int>(0);
+	auto failed = std::atomic<int>(0);
+
+	const auto bake = [&](int index) {
+		ready.fetch_add(1);
+		while (ready.load() < c_Writers) std::this_thread::yield();
+
+		try
+		{
+			StoreAt(dir.path).BakeMaterial(materials[static_cast<size_t>(index)]);
+		}
+		catch (const std::exception&)
+		{
+			failed.fetch_add(1);
+		}
+	};
+
+	auto writers = std::vector<std::thread>();
+	for (int i = 0; i < c_Writers; ++i) writers.emplace_back(bake, i);
+	for (std::thread& writer : writers) writer.join();
+
+	CHECK(failed.load() == 0);
+
+	const auto textures = dir.path / "Derived/BakedTextures";
+
+	// One file, as the serial case produces -- and it must still parse. An interleaved write leaves
+	// a KTX2 that either will not load or has the wrong extent, which no amount of "the bytes were
+	// identical anyway" prevents.
+	for (int i = 1; i < c_Writers; ++i)
+		REQUIRE(materials[static_cast<size_t>(i)].pbr.ormTexture == materials[0].pbr.ormTexture);
+	REQUIRE(CountMaps(textures, "orm_") == 1);
+
+	ImageData orm;
+	REQUIRE_NOTHROW(orm = loadKTX2(dir.path / materials[0].pbr.ormTexture));
+	CHECK(orm.width == c_Size);
+	CHECK(orm.height == c_Size);
+
+	// And nothing half-written was left under a name the next run's stat would take for a map.
+	for (const auto& entry : std::filesystem::recursive_directory_iterator(textures))
+		CHECK(entry.path().extension() != ".tmp");
+}
