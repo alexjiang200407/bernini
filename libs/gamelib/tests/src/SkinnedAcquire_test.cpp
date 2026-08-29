@@ -335,3 +335,78 @@ TEST_CASE(
 	REQUIRE(own.geom.IsValid());
 	assets.ReleaseGeom(own.geom);
 }
+
+TEST_CASE("two meshes on one clip set share a single uploaded rig", "[skinned][acquire]")
+{
+	DataRoot root("bernini_skinned_acquire_shared_rig");
+	WriteRig(root.path);
+
+	// A second slot mesh against the same rig -- what a modular unit is: one skeleton, one clip
+	// set, several meshes.
+	{
+		const auto source =
+			assetlib::AssetStore(root.path).Load<assetlib::BMesh>("Derived/Meshes/rig.bmesh");
+		assetlib::AssetStore(root.path).Save(source, "Derived/Meshes/slot.bmesh");
+	}
+
+	auto gfx = bgl::CreateGraphics(HeadlessOptions());
+	REQUIRE(gfx != nullptr);
+
+	auto scene  = gfx->CreateScene(bgl::SceneDesc());
+	auto assets = game::AssetManager(scene, root.path);
+
+	const auto body =
+		assets.AcquireSkinnedMesh("Derived/Meshes/rig.bmesh", "Derived/Animations/rig.banim");
+	const auto piece =
+		assets.AcquireSkinnedMesh("Derived/Meshes/slot.bmesh", "Derived/Animations/rig.banim");
+
+	REQUIRE(body.geom.IsValid());
+	REQUIRE(piece.geom.IsValid());
+
+	// Two geoms, because they are two meshes -- the sharing is of the rig, not of the geometry.
+	CHECK(body.geom.handle.index != piece.geom.handle.index);
+
+	// One rig beneath them. Had each geom uploaded its own, releasing the first would delete a rig
+	// the second is still skinned to, which bgl refuses -- so this release would throw.
+	CHECK_NOTHROW(assets.ReleaseGeom(body.geom));
+	CHECK_NOTHROW(assets.ReleaseGeom(piece.geom));
+
+	// And the rig went with the last geom holding it: acquiring again stands a fresh one up.
+	const auto again =
+		assets.AcquireSkinnedMesh("Derived/Meshes/rig.bmesh", "Derived/Animations/rig.banim");
+	CHECK(again.geom.IsValid());
+	assets.ReleaseGeom(again.geom);
+}
+
+TEST_CASE("a manager torn down over a surviving scene leaves it usable", "[skinned][acquire]")
+{
+	DataRoot root("bernini_skinned_acquire_teardown");
+	WriteRig(root.path);
+
+	auto gfx = bgl::CreateGraphics(HeadlessOptions());
+	REQUIRE(gfx != nullptr);
+
+	auto scene = gfx->CreateScene(bgl::SceneDesc());
+
+	// The editor's shape: one scene outliving the manager over it, which is rebuilt on every project
+	// switch. The geom is left held on purpose, so the destructor is what hands it and its rig back
+	// -- and it must do so in that order, since bgl refuses a rig a geom is still skinned to. Were
+	// the order wrong, DeleteRig would throw, the destructor would swallow it, and both would be
+	// stranded.
+	//
+	// It does not pin the freeing itself: a rig the destructor forgot is invisible from here, since
+	// nothing on IScene reports one and gamelib_tests cannot reach bgl::Scene. That half is held by
+	// reading, not by this case.
+	{
+		auto       assets = game::AssetManager(scene, root.path);
+		const auto mesh =
+			assets.AcquireSkinnedMesh("Derived/Meshes/rig.bmesh", "Derived/Animations/rig.banim");
+		REQUIRE(mesh.geom.IsValid());
+	}
+
+	auto       second = game::AssetManager(scene, root.path);
+	const auto again =
+		second.AcquireSkinnedMesh("Derived/Meshes/rig.bmesh", "Derived/Animations/rig.banim");
+	CHECK(again.geom.IsValid());
+	second.ReleaseGeom(again.geom);
+}

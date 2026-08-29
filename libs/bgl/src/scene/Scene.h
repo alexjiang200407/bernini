@@ -21,9 +21,9 @@ namespace bgl
 
 	/**
 	 * One live geom. Every geom has a submesh range; a kVatMesh one additionally owns its VatGeom
-	 * entry (whose Range fields name the clip and column ranges DeleteGeom frees) and a kSkinnedMesh
-	 * one its SkinnedGeom entry (naming the bone, sample and clip ranges). Both record their clip
-	 * count for instance-creation validation.
+	 * entry (whose Range fields name the clip and column ranges DeleteGeom frees), while a
+	 * kSkinnedMesh one only *names* a rig it shares with every other geom skinned to it. Both record
+	 * their clip count for instance-creation validation.
 	 *
 	 * Namespace-scope rather than nested in Scene: a nested class's default member initializers
 	 * only resolve once the enclosing class is complete, which would leave this
@@ -33,9 +33,30 @@ namespace bgl
 	{
 		idl::RangeWithCount submeshes;
 		core::slot_handle   vatGeom;
-		core::slot_handle   skinnedGeom;
-		uint32_t            clipCount = 0;
-		uint32_t            boneCount = 0;  // kSkinnedMesh only
+
+		// kSkinnedMesh only: the rig this geom poses from, shared rather than owned -- deleting the
+		// geom releases its use of the rig, never the rig's ranges.
+		core::slot_handle rig;
+
+		uint32_t clipCount = 0;
+		uint32_t boneCount = 0;  // kSkinnedMesh only
+	};
+
+	/**
+	 * The CPU half of a rig: what creating an instance needs without reading back the GPU record,
+	 * and the count that decides whether the rig may be deleted.
+	 *
+	 * Namespace-scope for the same reason as GeomRecord above.
+	 */
+	struct RigMeta
+	{
+		uint32_t boneCount = 0;
+		uint32_t clipCount = 0;
+
+		// Geoms added against this rig. DeleteRig refuses while it is nonzero: a geom outliving its
+		// rig would pose from freed ranges, which is a read of whatever lands there next rather
+		// than a misrender.
+		uint32_t useCount = 0;
 	};
 
 	class Scene : public core::RefCounter<IScene>
@@ -117,9 +138,9 @@ namespace bgl
 		}
 
 		[[nodiscard]] auto&
-		GetSkinnedGeomBuffer() noexcept
+		GetRigBuffer() noexcept
 		{
-			return m_SkinnedGeoms;
+			return m_Rigs;
 		}
 
 		[[nodiscard]] auto&
@@ -180,7 +201,7 @@ namespace bgl
 		GetGeomSkinnedInfo(uint32_t index) const noexcept
 		{
 			const GeomRecord& geom = m_Geoms[index];
-			return { geom.skinnedGeom, geom.clipCount, geom.boneCount };
+			return { geom.rig, geom.clipCount, geom.boneCount };
 		}
 
 		/**
@@ -295,13 +316,19 @@ namespace bgl
 			std::span<const MaterialHandle> materials,
 			const VatGeomDesc&              desc) override;
 
+		RigHandle
+		AddRig(const assetlib::Skeleton& skeleton, const assetlib::AnimationSet& animations)
+			override;
+
+		void
+		DeleteRig(RigHandle rig) override;
+
 		GeomHandle
 		AddSkinnedMeshGeom(
 			const assetlib::BMesh&          mesh,
 			uint32_t                        meshIndex,
 			std::span<const MaterialHandle> materials,
-			const assetlib::Skeleton&       skeleton,
-			const assetlib::AnimationSet&   animations,
+			RigHandle                       rig,
 			const assetlib::Bounds&         posedBounds) override;
 
 		TextureAssetHandle
@@ -383,15 +410,11 @@ namespace bgl
 			const assetlib::AnimationSet& animations);
 
 		/**
-		 * AttachVatRecords' counterpart: allocates the bone, sample and clip ranges plus the
-		 * SkinnedGeom record onto `base` and flips it to kSkinnedMesh. On any failure the geometry
-		 * half is taken back down (DeleteGeom) so a failed skinned add leaks nothing.
+		 * The live rig `rig` names, or nullptr if the handle is null or already deleted. The
+		 * pointer is into the entry buffer's metadata and is invalidated by the next AddRig.
 		 */
-		GeomHandle
-		AttachSkinnedRecords(
-			GeomHandle                    base,
-			const assetlib::Skeleton&     skeleton,
-			const assetlib::AnimationSet& animations);
+		[[nodiscard]] RigMeta*
+		FindRig(RigHandle rig) noexcept;
 
 		/**
 		 * The tail AddVatMeshGeom and AddVatMeshGeom share: allocates the clip and column ranges plus the
@@ -462,9 +485,9 @@ namespace bgl
 		EntryBuffer<idl::VatGeom> m_VatGeoms;
 		RangeBuffer<uint32_t>     m_VatColumns;
 
-		EntryBuffer<idl::SkinnedGeom> m_SkinnedGeoms;
-		RangeBuffer<idl::SkinnedBone> m_SkinnedBones;
-		RangeBuffer<idl::BoneSample>  m_BoneSamples;
+		EntryBuffer<idl::Rig, RigMeta> m_Rigs;
+		RangeBuffer<idl::SkinnedBone>  m_SkinnedBones;
+		RangeBuffer<idl::BoneSample>   m_BoneSamples;
 
 		std::array<SamplerHandle, static_cast<size_t>(StandardSampler::kCount)> m_Samplers;
 
@@ -487,7 +510,7 @@ namespace bgl
 			NamedBuffer{ c_VatGeomBufferName, &Scene::m_VatGeoms },
 			NamedBuffer{ c_ClipBufferName, &Scene::m_Clips },
 			NamedBuffer{ c_VatColumnBufferName, &Scene::m_VatColumns },
-			NamedBuffer{ c_SkinnedGeomBufferName, &Scene::m_SkinnedGeoms },
+			NamedBuffer{ c_RigBufferName, &Scene::m_Rigs },
 			NamedBuffer{ c_SkinnedBoneBufferName, &Scene::m_SkinnedBones },
 			NamedBuffer{ c_BoneSampleBufferName, &Scene::m_BoneSamples },
 		};

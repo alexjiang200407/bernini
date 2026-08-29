@@ -470,6 +470,18 @@ namespace game
 			uint32_t refCount = 0;
 		};
 
+		/**
+		 * One uploaded rig, shared by every skinned geom cooked against the same clip set.
+		 *
+		 * Keyed on the normalized `.banim` path rather than the `.bskel`'s: a clip set names its own
+		 * rig, so the two are one choice, and it is the path a skinned acquire already carries.
+		 */
+		struct RigRecord
+		{
+			bgl::RigHandle handle;
+			uint32_t       refCount = 0;
+		};
+
 		struct GeomRecord
 		{
 			std::string     key;  // empty for procedural geometry
@@ -611,6 +623,26 @@ namespace game
 		void
 		DestroyGeom(GeomRecord& record);
 
+		/**
+		 * The rig for `animationsNorm`, uploaded on the first acquire and shared afterwards. One
+		 * reference per skinned *geom*, not per geom reference: a geom takes one when it is built
+		 * and gives it back in DestroyGeom.
+		 */
+		[[nodiscard]] bgl::RigHandle
+		AcquireRig(
+			std::string_view              animationsNorm,
+			const assetlib::Skeleton&     skeleton,
+			const assetlib::AnimationSet& animations);
+
+		/**
+		 * Drops one reference, deleting the rig at zero.
+		 *
+		 * @pre Every geom skinned to it is already deleted -- bgl refuses otherwise, which is why
+		 *      this runs after DeleteGeom.
+		 */
+		void
+		ReleaseRig(std::string_view animationsNorm);
+
 		bgl::SceneRef        m_Scene;
 		assetlib::AssetStore m_Store;
 		AssetManagerOptions  m_Options;
@@ -622,6 +654,8 @@ namespace game
 		std::unordered_map<uint32_t, TextureRecord>  m_Textures;
 		std::unordered_map<uint64_t, MaterialRecord> m_Materials;
 		std::unordered_map<uint32_t, GeomRecord>     m_Geoms;
+
+		core::str::unordered_str_map<RigRecord> m_Rigs;
 
 		std::unique_ptr<ContainerReads> m_Reads;
 

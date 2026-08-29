@@ -11,6 +11,7 @@
 #include <bgl/MaterialType.h>
 #include <bgl/MeshInstanceHandle.h>
 #include <bgl/PreparedStaticMesh.h>
+#include <bgl/RigHandle.h>
 #include <bgl/TextureAssetHandle.h>
 #include <bgl/api.h>
 #include <bgl/error.h>
@@ -294,13 +295,48 @@ namespace bgl
 			const VatGeomDesc&              desc) = 0;
 
 		/**
-		 * Adds one mesh of a loaded BMesh as skinned geometry: the bind-pose submeshes upload exactly
-		 * as AddStaticMeshGeom does, and every instance's pose is computed each frame from `skeleton`
-		 * and `animations` instead of being fetched from a bake. The rig's bones, clip table and
-		 * sample pool upload with the geometry and are shared by every instance of it.
+		 * Uploads a rig -- a skeleton and the clips cooked against it -- as a scene object of its
+		 * own: the bone table, the clip table and the frame-major sample pool, shared by every geom
+		 * skinned to it. A modular unit is several meshes on one rig, and each of those meshes
+		 * addresses the same bones by the same indices, so the rig is uploaded once and named by
+		 * handle rather than re-uploaded per mesh.
 		 *
-		 * Unlike VAT this takes the containers as they are: `Skeleton` and `AnimationSet` are
-		 * `assetlib_structs` PODs with nothing to decode, so there is no desc to mirror them into.
+		 * Takes the containers as they are: `Skeleton` and `AnimationSet` are `assetlib_structs`
+		 * PODs with nothing to decode, so there is no desc to mirror them into.
+		 *
+		 * @param skeleton   The bones the clips and every skinned mesh address by bare index.
+		 * @param animations Clips cooked against `skeleton`.
+		 * @throws SceneError for a skeleton with no bones, bones that are not topologically sorted,
+		 *         an `animations` whose bone count disagrees with `skeleton`, an empty or
+		 *         zero-frame clip table, or a clip whose frames fall outside the sample pool.
+		 *
+		 * `AnimationSet::skeletonSignature` is deliberately **not** checked here: computing a
+		 * skeleton's signature needs assetlib, which bgl does not link. A clip set cooked against a
+		 * since-reordered rig of the same bone count therefore passes this door and animates
+		 * wrongly. Whoever loaded the two containers owns that check -- gamelib's acquire makes it.
+		 */
+		virtual RigHandle
+		AddRig(const assetlib::Skeleton& skeleton, const assetlib::AnimationSet& animations) = 0;
+
+		/**
+		 * Destroys a rig, releasing its bone, clip and sample ranges.
+		 *
+		 * @pre No geom added against this rig is still alive. Unlike a texture asset, whose
+		 *      dangling use only misrenders, a geom outliving its rig would pose from freed ranges
+		 *      -- so this is refused rather than permitted, and the caller deletes its geoms first.
+		 * @param rig A handle returned by AddRig.
+		 * @throws SceneError if the handle is null, already deleted, or still has a live geom.
+		 */
+		virtual void
+		DeleteRig(RigHandle rig) = 0;
+
+		/**
+		 * Adds one mesh of a loaded BMesh as skinned geometry against `rig`: the bind-pose submeshes
+		 * upload exactly as AddStaticMeshGeom does, and every instance's pose is computed each frame
+		 * from the rig instead of being fetched from a bake.
+		 *
+		 * The rig is shared, not consumed: several meshes may be added against one, which is what a
+		 * unit assembled from slot meshes draws as. The rig must outlive every geom added to it.
 		 *
 		 * Each submesh must carry `joints0` and `weights0` -- a submesh with no skin binding has no
 		 * bones to follow and would draw its bind pose while the rest of the mesh moved.
@@ -318,28 +354,18 @@ namespace bgl
 		 * @param mesh        A BMesh loaded from disk, carrying skin binding on every submesh.
 		 * @param meshIndex   Index into `mesh.meshes`.
 		 * @param materials   Materials parallel to `mesh.materials`, resolved by the caller.
-		 * @param skeleton    The rig the mesh's joint indices address.
-		 * @param animations  Clips cooked against `skeleton`.
+		 * @param rig         The rig the mesh's joint indices address, from AddRig.
 		 * @param posedBounds A box holding the mesh in every pose of every clip, in model space.
-		 * @throws SceneError for anything AddStaticMeshGeom refuses, a skeleton with no bones,
-		 *         bones that are not topologically sorted, an `animations`
-		 *         whose bone count disagrees with `skeleton`, an empty or zero-frame clip table, a
-		 *         clip whose samples fall outside the pool, a submesh without skin binding, a submesh
-		 *         whose material does not resolve to kPBR, or a `posedBounds` whose min exceeds its
-		 *         max on any axis.
-		 *
-		 * `AnimationSet::skeletonSignature` is deliberately **not** checked here: computing a
-		 * skeleton's signature needs assetlib, which bgl does not link. A clip set cooked against a
-		 * since-reordered rig of the same bone count therefore passes this door and animates wrongly.
-		 * Whoever loaded the two containers owns that check -- gamelib's acquire makes it.
+		 * @throws SceneError for anything AddStaticMeshGeom refuses, a null or deleted `rig`, a
+		 *         submesh without skin binding, a submesh whose material does not resolve to kPBR,
+		 *         or a `posedBounds` whose min exceeds its max on any axis.
 		 */
 		virtual GeomHandle
 		AddSkinnedMeshGeom(
 			const assetlib::BMesh&          mesh,
 			uint32_t                        meshIndex,
 			std::span<const MaterialHandle> materials,
-			const assetlib::Skeleton&       skeleton,
-			const assetlib::AnimationSet&   animations,
+			RigHandle                       rig,
 			const assetlib::Bounds&         posedBounds) = 0;
 
 		virtual TextureAssetHandle

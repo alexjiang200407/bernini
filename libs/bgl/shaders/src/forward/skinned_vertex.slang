@@ -11,7 +11,7 @@ import forward.common;
 import forward.mesh_stage;
 import forward.vertexdecode;
 import idl.Constants;
-import idl.SkinnedGeom;
+import idl.Rig;
 import idl.SkinnedState;
 import debug.dbg;
 
@@ -67,16 +67,16 @@ public ForwardVSOut SkinnedVertex(MeshletContext ctx, SubmeshInstance instance, 
     DecodedVertex vertex = DecodeMeshletVertex(ctx, instance, v, vertexIdx);
 
     let state = forwardData.playbackBuffer.LoadRecordAs<SkinnedState>(ctx.mesh.playback);
-    let geom = skinnedData.skinnedGeomBuffer.Get(state.geom);
+    let rig = skinnedData.rigBuffer.Get(state.rig);
 
 #if defined(BERNINI_GPU_DEBUG)
     // Gated, not just dbg_assert'd: only dbg_raise's *body* is compiled out, so the reduction below
     // would otherwise cost three max()s per vertex in a release build.
     dbg_assert(
-        uint(max(max(vertex.joints.x, vertex.joints.y), max(vertex.joints.z, vertex.joints.w))) < geom.boneCount,
+        uint(max(max(vertex.joints.x, vertex.joints.y), max(vertex.joints.z, vertex.joints.w))) < rig.boneCount,
         ErrorCode.kInvalidBoneIndex,
         uint(vertex.joints.x),
-        geom.boneCount,
+        rig.boneCount,
         instance.submeshIndex
     );
 #endif
@@ -90,7 +90,7 @@ public ForwardVSOut SkinnedVertex(MeshletContext ctx, SubmeshInstance instance, 
     // instance's slice, so the reprojection is one more blend rather than a history buffer. That
     // holds only while time is the sole input to a pose: a clip switched between frames would
     // reproject through the wrong clip.
-    let prevBase = base + geom.boneCount * cFloat4sPerBone;
+    let prevBase = base + rig.boneCount * cFloat4sPerBone;
     float4x4 prevSkin = SkinMatrix(prevBase, vertex.joints, vertex.weights);
     float4 prevWorldPos = mul(ctx.mesh.transform, mul(prevSkin, float4(vertex.position, 1.0)));
 

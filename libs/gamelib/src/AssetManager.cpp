@@ -186,8 +186,8 @@ namespace game
 	{
 		// Tear down top-down, ignoring the counts: whatever is still held is being abandoned, and the
 		// order is what matters. Each level's deletion precondition is that nothing above it survives
-		// -- an instance drawing a geom, a submesh bound to a material, a material routing a texture --
-		// so instances go first and textures last.
+		// -- an instance drawing a geom, a geom skinned to a rig, a submesh bound to a material, a
+		// material routing a texture -- so instances go first and textures last.
 		try
 		{
 			for (const auto& [slot, instance] : m_Instances)
@@ -196,6 +196,13 @@ namespace game
 
 			for (const auto& [slot, geom] : m_Geoms) m_Scene->DeleteGeom(geom.handle);
 			m_Geoms.clear();
+
+			// Its own level, because nothing else frees a rig: DeleteGeom only releases the geom's
+			// use of one. A scene outliving this manager -- the editor rebuilds one over the same
+			// scene on every project switch -- would otherwise keep a bone table and sample pool per
+			// clip set that nothing can reach.
+			for (const auto& [key, rig] : m_Rigs) m_Scene->DeleteRig(rig.handle);
+			m_Rigs.clear();
 
 			for (const auto& [key, material] : m_Materials)
 				m_Scene->DeleteMaterial(material.handle);
@@ -655,6 +662,7 @@ namespace game
 
 		// Given back if any later step throws: a failed acquire owns nothing.
 		auto acquiredMaterials = std::vector<bgl::MaterialHandle>();
+		bool rigAcquired       = false;
 		try
 		{
 			auto materials        = std::vector<bgl::MaterialHandle>(mesh.materials.size());
@@ -698,11 +706,14 @@ namespace game
 				return assetlib::posedBounds(mesh, meshIndex, skeleton, animations);
 			}();
 
-			auto record = GeomRecord();
-			record.handle =
-				m_Scene
-					->AddSkinnedMeshGeom(mesh, meshIndex, materials, skeleton, animations, bounds);
-			record.key               = key;
+			// One upload per clip set, however many meshes are skinned to it: a unit assembled from
+			// slot meshes is several geoms on one rig.
+			const bgl::RigHandle rig = AcquireRig(animationsNorm, skeleton, animations);
+			rigAcquired              = true;
+
+			auto record   = GeomRecord();
+			record.handle = m_Scene->AddSkinnedMeshGeom(mesh, meshIndex, materials, rig, bounds);
+			record.key    = key;
 			record.submeshMaterials  = std::move(submeshMaterials);
 			record.skinnedClips      = clipInfo;
 			record.skinnedAnimations = animationsNorm;
@@ -718,9 +729,51 @@ namespace game
 		}
 		catch (...)
 		{
+			// The rig before the materials: it is the later acquire, and unwinding newest-first is
+			// what keeps a half-built geom from outliving what it was posed by.
+			if (rigAcquired)
+				ReleaseRig(animationsNorm);
+
 			for (const bgl::MaterialHandle material : acquiredMaterials) ReleaseMaterial(material);
 			throw;
 		}
+	}
+
+	bgl::RigHandle
+	AssetManager::AcquireRig(
+		std::string_view              animationsNorm,
+		const assetlib::Skeleton&     skeleton,
+		const assetlib::AnimationSet& animations)
+	{
+		if (const auto it = m_Rigs.find(animationsNorm); it != m_Rigs.end())
+		{
+			++it->second.refCount;
+			return it->second.handle;
+		}
+
+		auto record     = RigRecord();
+		record.handle   = m_Scene->AddRig(skeleton, animations);
+		record.refCount = 1;
+
+		m_Rigs.emplace(std::string(animationsNorm), record);
+		return record.handle;
+	}
+
+	void
+	AssetManager::ReleaseRig(std::string_view animationsNorm)
+	{
+		const auto it = m_Rigs.find(animationsNorm);
+		if (it == m_Rigs.end())
+			return;
+
+		RigRecord& record = it->second;
+
+		assert(record.refCount > 0 && "AssetManager: rig reference count underflow");
+		if (--record.refCount > 0)
+			return;
+
+		m_Scene->DeleteRig(record.handle);
+		m_Rigs.erase(it);
 	}
 
 	bgl::TextureAssetHandle
@@ -945,6 +998,11 @@ namespace game
 		// After the geom, like the materials: a VAT record holds the pair's descriptors until
 		// DeleteGeom retires it.
 		for (const bgl::TextureAssetHandle texture : record.vatTextures) ReleaseTexture(texture);
+
+		// After the geom for a stricter reason than the textures: DeleteRig refuses outright while a
+		// geom is still skinned to the rig, and DeleteGeom is what releases that use.
+		if (!record.skinnedAnimations.empty())
+			ReleaseRig(record.skinnedAnimations);
 	}
 
 	void
