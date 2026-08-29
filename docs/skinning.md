@@ -84,12 +84,21 @@ not obvious from a signature. The headers linked below are the source of truth.
   also stales the `.banim` and the next load re-cooks it; `assetlib_cli describe` prints the floor
   each clip was authored at, which is where the number to author comes from.
 
-  **The measurement is exact but does not walk every frame.** A bone's box from `posedBounds` holds
-  every vertex weighted to it, and a skinned position is a convex combination of its bones' products,
-  so the lowest box corner at a frame is a lower bound on that frame's lowest vertex. The cheap sweep
-  orders the frames, the most promising is skinned exactly, and every frame bounded at or above that
-  result is dropped unvisited — which leaves a handful of frames per clip actually skinned, where the
-  whole walk is `exactPosedBounds`' six minutes on `cha800_00`.
+  **The measurement is exact but walks neither every frame nor every vertex.** A bone's box from
+  `posedBounds` holds every vertex weighted to it, and a skinned position is a convex combination of
+  its bones' products, so the lowest box corner is a lower bound on the lowest vertex. That one
+  inequality is applied at two granularities. Per frame: the cheap sweep orders them, the most
+  promising is skinned, and every frame bounded at or above that result is dropped unvisited. Per
+  vertex: a frame that survives skins only the vertices whose own bones reach below the best floor so
+  far — on a rig standing still, the feet.
+
+  The second is not an optimisation of the first, it is what makes it hold. A box is 1.09–1.51×
+  loose, so on `cha800_00`'s 2254 frames — three of its five clips are a character standing still —
+  the frame prune leaves roughly a **quarter** of them, not a handful. Skinning all 170k vertices of
+  each was 95% of a 79 s grounding pass in a debug build, and gating by bone brings that pass to
+  14 s — the same floors, to the last digit. What remains is the pose walk, which grounding and the
+  posed-bounds bake below still make separately. `exactPosedBounds`' six minutes is what neither
+  prune buys you.
 
   **Grounding runs before every box**, because a box measured first describes a rig standing
   somewhere the runtime never draws it — and that box culls the geom as well as framing the editor's
@@ -235,6 +244,11 @@ the transport, the clip list and the scrubber are the same code either way — w
   unusable; the difference is that a bone here is credited only with the vertices it moves. All
   entries share one walk of the clip set, so a rig drawn as 27 meshes evaluates each pose once —
   what now dominates the bake is that pose walk (2.4 s of the 3.5 s), not the boxes.
+
+  **Every figure here is a debug build, and the gap to a release one is wide enough to mislead**:
+  the same bake is 131 ms optimised, 27x cheaper. Read them against each other, never against a
+  release stage line. They are also not the cook's largest number — grounding the clips is, and it
+  is measured against them above.
 
   Reading the bake back answers for every mesh entry in one call, for the same reason: the signature
   a box is matched on (`posedBoundsSignature`) describes the whole mesh, so asking per entry hashes
