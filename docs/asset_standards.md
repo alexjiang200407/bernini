@@ -324,10 +324,28 @@ Three different spaces are in play and they are easy to conflate. The contract, 
 * The mesh shader runs `cMeshGroupSize` (64) threads and strides over both the up-to-64 vertices and
   the up-to-124 primitives — do not assume one thread per vertex or per primitive
   ([libs/bgl/shaders/src/Forward_StaticMesh.slang](libs/bgl/shaders/src/Forward_StaticMesh.slang)).
+* **A cooked submesh stores its triangles twice, and the plain index range is load-bearing.** Beside
+  `firstMeshlet`/`meshletCount`, every `assetlib::Submesh` carries a plain
+  `indexByteOffset`/`indexCount`/`indexType` range into `BMesh::indexData`
+  ([libs/assetlib_structs/include/assetlib_structs/Mesh.h](libs/assetlib_structs/include/assetlib_structs/Mesh.h)).
+  **No renderer reads it** — `bgl` uploads `meshletVertices`/`meshletTriangles` instead — so it
+  profiles as pure cook-size overhead and is the obvious thing to drop. Three shipped paths read it
+  today: cook-time tangent generation
+  ([mesh_tangents.cpp](libs/assetlib/src/mesh_tangents.cpp), `readIndices`), `assetlib_cli describe`
+  ([asset_describe.cpp](libs/assetlib/src/asset_describe.cpp)), and the CLI's raw-OBJ export
+  ([bmesh_io.cpp](libs/assetlib/src/bmesh_io.cpp), `rawIndexAt`, the `--obj-raw` branch). It is also
+  what a renderer with no mesh-shader stage would draw. Removing it breaks those three *and* costs
+  an `AssetCodec<BMesh>::c_BakeToken` bump plus a re-cook of every asset in every project.
+* **`vertexByteOffset`/`vertexCount` is not the duplicated half, and is not a candidate.** There is
+  one `vertexData` pool; `meshletVertices` holds remap *indices* into it, not a second vertex blob.
+  So that range is the only addressing into the pool and is read directly by `bgl`
+  ([Scene.cpp](libs/bgl/src/scene/Scene.cpp), `CookStaticMesh`) and by `gamelib`
+  ([Raycaster.cpp](libs/gamelib/src/Raycaster.cpp)).
 
 ### Containers
 * **`.bmesh`** — the modular on-disk mesh: node hierarchy, meshes, submeshes, meshlets +
-  meshopt vertex/triangle pools, interleaved `vertexData`, and **material references by file path**.
+  meshopt vertex/triangle pools, interleaved `vertexData`, the plain `indexData` pool (above), and
+  **material references by file path**.
   Struct: [libs/assetlib_structs/include/assetlib_structs/BMesh.h](libs/assetlib_structs/include/assetlib_structs/BMesh.h);
   container I/O: [libs/assetlib/include/assetlib/codecs.h](libs/assetlib/include/assetlib/codecs.h).
 * **`.bvat`** — a rig's clips baked to a position/normal texture pair, embedded as KTX2 payload
