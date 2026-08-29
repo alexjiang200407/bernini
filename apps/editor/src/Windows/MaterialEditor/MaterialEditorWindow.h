@@ -2,6 +2,7 @@
 
 #include <QWidget>
 
+#include "util/follows_project.h"
 #include "util/held_open_assets.h"
 
 #include <bgl/IGraphics.h>
@@ -46,7 +47,10 @@ struct MaterialEditorWindowDesc
 	uint32_t headlessHeight = 256;
 };
 
-class MaterialEditorWindow : public QWidget, public editor::IHoldsAssets
+class MaterialEditorWindow :
+	public QWidget,
+	public editor::IHoldsAssets,
+	public editor::IFollowsProject
 {
 	Q_OBJECT
 
@@ -55,7 +59,7 @@ public:
 	~MaterialEditorWindow() override;
 
 	void
-	SetDataRoot(const QString& dataRoot);
+	SetDataRoot(const QString& dataRoot) override;
 
 	/** Back to the default sphere and a blank graph, dropping whatever was open. */
 	void

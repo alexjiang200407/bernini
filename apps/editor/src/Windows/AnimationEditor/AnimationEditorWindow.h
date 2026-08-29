@@ -3,6 +3,7 @@
 #include <QElapsedTimer>
 #include <QWidget>
 
+#include "util/follows_project.h"
 #include "util/held_open_assets.h"
 
 #include "Windows/AnimationEditor/AnimationPreviewWindow.h"
@@ -44,7 +45,10 @@ struct AnimationEditorWindowDesc
  * playing, and every change of the clock lands in the preview via SetTime. The preview's
  * instances are always {clip, phase 0, rate 1}, so the transport's seconds are the whole story.
  */
-class AnimationEditorWindow : public QWidget, public editor::IHoldsAssets
+class AnimationEditorWindow :
+	public QWidget,
+	public editor::IHoldsAssets,
+	public editor::IFollowsProject
 {
 	Q_OBJECT
 
@@ -53,7 +57,7 @@ public:
 
 	/** The open project's Data directory; clears the preview, since its mesh belonged to the last one. */
 	void
-	SetDataRoot(const QString& dataRoot);
+	SetDataRoot(const QString& dataRoot) override;
 
 	/** Forwarded to the preview -- nullptr releases everything it holds. */
 	void

@@ -20,6 +20,7 @@
 #include "Windows/LevelEditor/LevelEditorWindow.h"
 #include "Windows/MaterialEditor/MaterialEditorWindow.h"
 #include "Windows/RenderTarget/RenderTargetWindow.h"
+#include "util/follows_project.h"
 #include "util/frame_stats_text.h"
 #include "util/held_open_assets.h"
 #include "util/window_title.h"
@@ -894,19 +895,15 @@ MainWindow::SetActiveProject(assetlib::Project project)
 
 	m_ContentExplorer->SetRootPath(dataDir);
 
+	// Before the two below, which each act on the root just handed over: the material reset
+	// repopulates the preview, which resolves the material paths it finds against it.
+	editor::SetProjectDataRoot(this, dataDir);
+
 	if (m_MaterialEditor)
-	{
-		// Root first, then reset: the reset repopulates the preview, which resolves the material
-		// paths it finds against the data root.
-		m_MaterialEditor->SetDataRoot(dataDir);
 		m_MaterialEditor->Reset();
-	}
 
 	if (m_AnimationEditor)
-	{
-		m_AnimationEditor->SetDataRoot(dataDir);
 		m_AnimationEditor->SetAssets(m_Assets.get());
-	}
 
 	ShowProjectState();
 
