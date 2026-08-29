@@ -46,6 +46,23 @@ points into one program, so bytecode and reflection come from the same link and 
 element matches the CPU mirror `bgl_idlgen` emits — the default structured-buffer layout
 16-byte-aligns nested handle structs, which the mirror does not.
 
+## A raw buffer holds bytes, and never a resource handle
+
+`RawBuffer` ([types/RawBuffer.slang](../libs/bgl/shaders/src/types/RawBuffer.slang)) wraps
+`ByteAddressBuffer.Handle` and reads a value of any type at a byte offset; `RawComputeBuffer` is its
+writable counterpart. The buffer must have been created by `CreateRawBuffer` — a view is chosen once,
+so binding a structured buffer here reads undefined bytes rather than failing.
+
+`Load<T>` is for **handle-free** `T`. The element type of a bindless buffer is fixed at its
+declaration, and a raw one declares bytes: on Metal a `ByteAddressBuffer.Handle` lowers to
+`uint32_t device*`, so Slang reconstructs `T` from loaded scalars and a `Texture2D.Handle` field
+becomes `as_type<texture2d<...>>(ulong)`, which MSL rejects — as does the core module's
+`__getEquivalentStructuredBuffer<T>`, which re-types nothing. A payload needing a texture holds an
+`Entry<TextureHandle>` into an `EntryBuffer<TextureHandle>` and reads the handle from there.
+
+`GetDimensions` is deliberately not exposed: the core module marks it HLSL-only, so a wrapper
+carrying it would compile on D3D12 and fail on Metal.
+
 ## A constant buffer may not mix data and resources below the top level
 
 `Uniforms` sums a member's offset on the way down the reflected tree, so a nested struct that holds

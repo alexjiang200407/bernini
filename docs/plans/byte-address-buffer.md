@@ -19,7 +19,8 @@ picks a tier by null-checking them in a fixed order
 
 Vertex bytes are a `StructuredBuffer<uint>` read one word at a time
 ([libs/bgl/shaders/src/types/ByteBuffer.slang](../../libs/bgl/shaders/src/types/ByteBuffer.slang)),
-every attribute reassembled by hand ([libs/bgl/shaders/src/util/Vertex.slang](../../libs/bgl/shaders/src/util/Vertex.slang)),
+every attribute reassembled by hand
+([libs/bgl/shaders/src/util/Vertex.slang](../../libs/bgl/shaders/src/util/Vertex.slang)),
 and the word index is turned into a byte address at the point of use — `vertexData.GetStart() * 4`
 in [mesh_stage.slang](../../libs/bgl/shaders/src/forward/mesh_stage.slang) — which wraps a `uint`
 past 4 GB without a word said anywhere.
@@ -37,9 +38,10 @@ not have one.
 
 - **ADR-2 — Materials, and the mesh playback state, each live in one raw arena where every record
   starts with a fixed header.** The header carries the record's type tag; a reference names the
-  header. *Rejected: the tag in the reference's low bits (Unity DOTS' shape) — the arena shrinks by
-  the tag width, and every reader has to mask before it can load. Rejected: no tag, the type known
-  only from the PSO — that is today, and it leaves `Entry<IMaterial>` a lie.*
+  header. A payload must be handle-free to be raw-loaded at all, which is ADR-8. *Rejected: the tag
+  in the reference's low bits (Unity DOTS' shape) — the arena shrinks by the tag width, and every
+  reader has to mask before it can load. Rejected: no tag, the type known only from the PSO — that
+  is today, and it leaves `Entry<IMaterial>` a lie.*
 
 - **ADR-3 — Static per-PSO specialisation stays; only a pass shared across kinds reads the
   header.** Opaque, alpha-test and hashed PSOs are compiled for one material kind and read the payload
@@ -50,10 +52,11 @@ not have one.
   the tag in every pixel module — one PSO family fewer, a divergent switch in every pixel, and a named
   deviation from every shipping engine.*
 
-- **ADR-4 — One raw arena is smaller than 2³² bytes, and growth past that is refused, not
-  wrapped.** `ByteAddressBuffer::Load` takes a `uint` byte address on every API, so the ceiling is the
-  view's, not ours; the mirror buffer throws before it allocates, the way a `DispatchMesh` past 65535
-  meshlets is rejected today. *Rejected: paging an arena across buffers with a `(buffer, offset)`
+- **ADR-4 — One raw arena is at most 2³² bytes, and growth past that is refused, not wrapped.**
+  The bound is inclusive: a `uint` byte offset addresses 0 … 2³²−1, so a buffer of exactly 2³² bytes
+  is entirely reachable and the arena's check is `> c_MaxRawBufferBytes`. The ceiling is the view's
+  rather than ours; the mirror buffer throws before it allocates, the way a `DispatchMesh` past
+  65535 meshlets is rejected today. *Rejected: paging an arena across buffers with a `(buffer, offset)`
   pair — every reference doubles for a size no asset here approaches. Rejected: leaving the silent
   overflow — it is the one thing the request asked about.*
 
@@ -89,6 +92,20 @@ not have one.
   arena. Rejected: a header on a vertex range — there is no kind to record and the non-goals forbid
   inventing one.*
 
+- **ADR-8 — A texture in a raw payload is an `Entry<TextureHandle>` into one
+  `EntryBuffer<TextureHandle>` table, not a `TextureHandle` inline.** Task 1 established that a
+  bindless resource handle cannot be read out of a raw buffer on Metal at all (see the survey
+  below), so a payload that is to be raw-loaded must be handle-free. The indirection is the
+  existing offset primitive rather than a new type: a null entry reads the table's reserved
+  element 0, which holds the unbound descriptor, so an unset texture samples nothing — the rule
+  already in force everywhere else. The cost is one dependent load per texture, uniform across a
+  draw. *Rejected: a second view on the same arena, binding it both raw and as
+  `StructuredBuffer<TextureHandle>` so handles stay inline — it works, and needs a second view per
+  buffer the RHI does not have; the table costs one buffer instead and leaves each handle stored
+  once rather than once per material that routes it. Rejected: a bare `uint` handle cast to a
+  texture in the shader — MSL cannot construct a texture from an integer, which is the very thing
+  that failed.*
+
 ## Non-goals
 
 - Every other buffer stays structured: meshlets, submeshes, vertexMap, indices, bones, samples,
@@ -111,9 +128,9 @@ not have one.
 - `just run bgl_tests -- --gpu-validation` is clean on the machine's backend after every task.
 - A unit test proves the arena refuses growth past 2³² bytes without allocating it.
 - A device test proves a record written from C++ by `memcpy` is read back field-for-field by
-  `Load<T>` on the machine's backend, and that a `float3` and a `float4` each load correctly from a
-  4-byte-aligned address that is not 16-byte-aligned — and that a compute shader can write the same
-  arena through a bindless writable raw view.
+  `Load<T>` on the machine's backend, that a `float3` and a `float4` each load correctly from a
+  4-byte-aligned address that is not 16-byte-aligned, and that a compute shader can store into a
+  raw buffer through a bindless writable view.
 
 ## What the survey found
 
@@ -134,15 +151,24 @@ and the reflection already maps `SLANG_BYTE_ADDRESS_BUFFER` to `HandleKind::kBuf
 **Slang 2026.7.1 has what the shader side needs.** The core module declares `ByteAddressBuffer` with
 `metal` in its capability list, lists it among the types given a bindless `.Handle`, and gives it
 `Load<T>(uint)` with unspecified alignment and `LoadAligned<T>` for scalar/vector/matrix `T`.
-`GetDimensions` on it is *not* Metal-capable, so the wrapper must not expose one. Whether
-`RWByteAddressBuffer.Handle` exists was not determinable from the embedded module. No pass here
+`GetDimensions` on it is *not* Metal-capable, so the wrapper must not expose one. No pass here
 writes a raw buffer, but `ROADMAP.md`'s GPU skinning to a transient vertex buffer will, and a buffer
 gets exactly one view — so once vertex bytes are raw, a compute-written vertex buffer needs the
-writable raw view to exist on both backends. Task 1 proves it while it is proving the readable one.
-What DXIL and MSL enforce for a struct `T` at a 4-aligned address is the other open question the
-acceptance's device test closes. The runtime compiles per PSO to `SLANG_DXIL` / `sm_6_6` on D3D12 and
-to `SLANG_METAL` (MSL source) on Metal ([Device_metal.cpp](../../libs/bgl/src/metal/device/Device_metal.cpp)
-line 73); the build's `compile_shader` validates against DXIL only, so a Metal-only break is caught by
+writable raw view to exist on both backends.
+
+**A resource handle cannot be read out of a raw buffer on Metal**, which task 1 established and
+ADR-8 is the answer to. The type has to be on the *binding*: a `ByteAddressBuffer.Handle` lowers to
+`uint32_t device*`, and nothing recovers a struct type from that pointer, where
+`StructuredBuffer<T, ScalarDataLayout>.Handle` lowers to `T device*` and is why materials render
+today. `Load<PbrMaterial>` fails at the Metal compile with *"as_type cast from 'unsigned long' to
+'texture2d<float, access::sample>' is not allowed"*, and `__getEquivalentStructuredBuffer<T>` — the
+core module's own escape — fails with *"member reference base type 'device uint32_t' is not a
+structure or union"*, because it re-types nothing. Both were run, not reasoned about. Handle-free
+records load correctly, as does a bindless `RWByteAddressBuffer` store.
+
+The runtime compiles per PSO to `SLANG_DXIL` / `sm_6_6` on D3D12 and to `SLANG_METAL` (MSL
+source) on Metal ([Device_metal.cpp](../../libs/bgl/src/metal/device/Device_metal.cpp) line 73); the
+build's `compile_shader` validates against DXIL only, so a Metal-only break is caught by
 running, never by building.
 
 **A wrapper reaches the shader by member name.** `Uniforms::operator=(BufferHandle)` on an 8-byte
@@ -246,8 +272,9 @@ weights). The same stale "emitted into src/idl" claim sits in
   `RawBuffer`, `Submesh.vertexData` a `RawRange`, the decoder loads `float2/3/4` and `uint` directly.
   Could break: every golden, the overflow and delete tests — which is why they are the gate.
 - **Materials** (`Scene`, `SceneView`, `MaterialHandle`, `ForwardPass`, `MaterialData.slang`,
-  `Forward_Transparent`, `common.slang`, the three vertex modules): one arena, one binding, headers
-  typed by `MaterialType`; `SubmeshInstance.material` a `RawEntry<IMaterial>`; the transparent pixel
+  `Forward_Transparent`, `common.slang`, the three vertex modules): one arena, one binding for
+  material data plus the texture table ADR-8 routes handles through, headers typed by
+  `MaterialType`; `SubmeshInstance.material` a `RawEntry<IMaterial>`; the transparent pixel
   shader reads the header and the `materialIsLoose` varying and `IsLoosePso` go. `MaterialHandle`'s
   handle becomes the arena's, so the slot-index bargain `IScene::DeleteMaterial` and
   `docs/bgl_api.md` state is restated for byte offsets — and it is a worse bargain, since a stale
@@ -273,16 +300,14 @@ weights). The same stale "emitted into src/idl" claim sits in
 1. **`feat(bgl): a raw buffer view on both backends`** — `CreateRawBuffer`, the D3D12 raw SRV/UAV,
    the Metal pass-through, `rawBuffer` in the uniform names, `types/RawBuffer.slang` with `Load<T>`.
    Unused by any pass; the tests are its only caller, and the PR says so. *Gate:* a new `[raw]` device
-   test, `--gpu-validation` clean, with three cases on the machine's backend. The *record* case: an
-   IDL test struct `{uint tag @0; float3 v3 @4; float4 v4 @16; TextureHandle tex @32}`, 40 bytes,
-   written by `memcpy` at a 16-aligned base and read back through one `Load<T>`, every field checked
-   — this settles whether the raw load's layout is the `ScalarDataLayout` the IDL mirror is asserted
-   against. The *vertex* case: `Load<float3>` and `Load<float4>` one at a time from a base that is
-   4-aligned and not 16-aligned, so the `float4` itself sits at a 4-aligned address — what a
-   20-byte-offset tangent in a stride the importer can produce looks like. The *writable* case: a
-   compute shader stores the record through a `RawComputeBuffer` and the readable view reads it back,
-   which proves the raw UAV on D3D12 and that `RWByteAddressBuffer.Handle` lowers on Metal. All three
-   run before anything is built on the answers.
+   test, GPU validation clean, with three cases on the machine's backend. The *record* case:
+   `Load<VatState>` and `Load<CullView>` over bytes `memcpy`'d from their C++ mirrors — the matrix
+   and the fixed array are where a target's packing would diverge from the `ScalarDataLayout` the
+   mirror asserts. The *vertex* case: `Load<float3>` and `Load<float4>` from a base that is
+   4-aligned and not 16-aligned, which is what a 20-byte-offset tangent in a stride the importer
+   can produce looks like. The *writable* case: a compute shader stores through a
+   `RawComputeBuffer`, proving the raw UAV on D3D12 and that `RWByteAddressBuffer.Handle` lowers on
+   Metal. All three run before anything is built on the answers — which is how ADR-8 was found.
 
 2. **`feat(bgl): a byte arena the scene can allocate records in`** — `scene/RawBuffer.h` over
    `RangeBuffer<RawBlock>`, `RawEntry<T>` in the IDL with its hand-written mirror, `RawRange` and
@@ -300,8 +325,9 @@ weights). The same stale "emitted into src/idl" claim sits in
    invariant), `ByteBuffer.slang` deleted, `geometry_layout.md` corrected. *Gate:* every golden and
    A/B capture under Acceptance, `SceneOverflow_test`, `MeshDelete_test`, `--gpu-validation`.
 
-4. **`feat(bgl): materials in one raw arena behind a header`** — ADR-2, ADR-3 and ADR-7 for
-   materials: the arena on `Scene`, `MaterialHandle`, the single binding, `RawEntry<IMaterial>`,
+4. **`feat(bgl): materials in one raw arena behind a header`** — ADR-2, ADR-3, ADR-7 and ADR-8 for
+   materials: the arena on `Scene`, the `EntryBuffer<TextureHandle>` table its payloads route
+   through, `MaterialHandle`, the single binding for material data, `RawEntry<IMaterial>`,
    the transparent pass reading the tag, the varying removed, the offset bargain restated in
    `IScene.h` and `docs/bgl_api.md`, the shading-model recipe in `docs/asset_standards.md`
    rewritten for one arena. *Gate:* every geometry golden (they all draw PBR),

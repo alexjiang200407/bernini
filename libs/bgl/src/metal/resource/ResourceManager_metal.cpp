@@ -54,6 +54,20 @@ namespace bgl
 	}
 
 	BufferHandle
+	ResourceManager::EmplaceBuffer(const BufferDesc& desc) noexcept
+	{
+		std::lock_guard<std::mutex> lock(m_PoolMutex);
+
+		const auto slot = m_Buffers.try_allocate_and_emplace(m_Device, desc);
+		if (slot.is_null())
+		{
+			logger::error("Creating buffer '{}': buffer pool exhausted", desc.debugName);
+			return BufferHandle{};
+		}
+		return BufferHandle{ slot, slot.index };
+	}
+
+	BufferHandle
 	ResourceManager::CreateStructBuffer(const StructBufferDesc& desc) noexcept
 	{
 		gassert(desc.stride > 0, "StructuredBuffer requires a valid stride");
@@ -64,15 +78,23 @@ namespace bgl
 		bufferDesc.isUav     = desc.isUav;
 		bufferDesc.debugName = desc.debugName;
 
-		std::lock_guard<std::mutex> lock(m_PoolMutex);
+		return EmplaceBuffer(bufferDesc);
+	}
 
-		const auto slot = m_Buffers.try_allocate_and_emplace(m_Device, bufferDesc);
-		if (slot.is_null())
-		{
-			logger::error("CreateStructBuffer '{}': buffer pool exhausted", desc.debugName);
-			return BufferHandle{};
-		}
-		return BufferHandle{ slot, slot.index };
+	BufferHandle
+	ResourceManager::CreateRawBuffer(const RawBufferDesc& desc) noexcept
+	{
+		gassert(desc.byteSize > 0, "A raw buffer requires a byte size");
+		gassert(desc.byteSize % 4 == 0, "A raw view addresses whole 32-bit words");
+		gassert(desc.byteSize <= c_MaxRawBufferBytes, "A raw view cannot address past 4 GiB");
+
+		BufferDesc bufferDesc;
+		bufferDesc.byteSize  = desc.byteSize;
+		bufferDesc.isUav     = desc.isUav;
+		bufferDesc.isRaw     = true;
+		bufferDesc.debugName = desc.debugName;
+
+		return EmplaceBuffer(bufferDesc);
 	}
 
 	BufferHandle

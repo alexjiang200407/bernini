@@ -111,6 +111,11 @@ namespace bgl::test
 		{
 			std::abort();
 		}
+		BufferHandle
+		CreateRawBuffer(const RawBufferDesc&) noexcept override
+		{
+			std::abort();
+		}
 		SamplerHandle
 		CreateSampler(const SamplerDesc&) noexcept override
 		{

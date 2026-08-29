@@ -247,6 +247,11 @@ namespace
 		{
 			return {};
 		}
+		BufferHandle
+		CreateRawBuffer(const RawBufferDesc&) noexcept override
+		{
+			return {};
+		}
 		TextureHandle
 		CreateTexture(const TextureDesc&) noexcept override
 		{
@@ -332,7 +337,7 @@ namespace
 		GetBufferDesc(BufferHandle) const noexcept override
 		{
 			// One pattern chunk over, so a poisoned buffer takes two copies.
-			return BufferDesc{ 96 * 1024, true, "Mock Buffer" };
+			return BufferDesc{ .byteSize = 96 * 1024, .isUav = true, .debugName = "Mock Buffer" };
 		}
 
 		TextureDesc
