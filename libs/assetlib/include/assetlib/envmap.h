@@ -60,7 +60,6 @@ namespace assetlib
 
 	struct PrefilterStats
 	{
-		double   seconds       = 0.0;
 		uint64_t texelsWritten = 0;
 		uint64_t samplesTaken  = 0;
 	};
@@ -82,7 +81,7 @@ namespace assetlib
 	 *        carries is ignored, because a prefilter mip is a convolution and not a box reduction of
 	 *        the level above it.
 	 * @param desc Output geometry and sample budget.
-	 * @param stats Optional timing and work counters.
+	 * @param stats Optional work counters. Not timing: the bake logs its own duration.
 	 * @return A cube map in `R32G32B32A32_SFLOAT` with `desc.mipLevels` levels.
 	 * @throws std::runtime_error if `source` is not a float cube map, or `desc` is degenerate.
 	 */

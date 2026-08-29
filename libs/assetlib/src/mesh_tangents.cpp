@@ -2,6 +2,8 @@
 
 #include <assetlib_structs/BMesh.h>
 
+#include <core/log/ScopedStage.h>
+
 #include <glm/glm.hpp>
 
 namespace assetlib
@@ -179,6 +181,11 @@ namespace assetlib
 	TangentGenResult
 	generateTangents(BMesh& mesh)
 	{
+		const auto stage = core::logging::ScopedStage(
+			"assetlib tangents: {} submeshes, {} vertex bytes",
+			mesh.submeshes.size(),
+			mesh.vertexData.size());
+
 		auto result = TangentGenResult();
 
 		// What each submesh will carry, decided before anything is written: a submesh that gains an
