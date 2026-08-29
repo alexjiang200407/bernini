@@ -31,6 +31,23 @@ Two things the licence does **not** cover, because both leak out of the app:
   not a helper to add up here. The editor is the biggest client of both, so a workaround written
   here is the reason the library's shape never gets fixed.
 
+## Startup
+
+`main.cpp` shows an `editor::StartupScreen` **before** it constructs `MainWindow`, because
+constructing the window is what takes the time: `Renderer` builds every pipeline the renderer will
+ever use, which on a cold shader cache is tens of seconds. The screen takes a
+`background::ProgressSink`; `MainWindow` drives it with `bgl`'s `onPipelineProgress` and then with
+the project's rebuild, and drops it once `Build()` returns.
+
+The GUI thread is freed by `RendererWait::kPumpEventLoop`, which runs the caller's event loop while
+the render thread builds — safe only there, because nothing of the window is shown yet. Everything
+after startup uses the modal `RunWithLoadingScreen` as before, and `MainWindow::RunBehindScreen` is
+what picks between the two.
+
+Neither rebuild is offered any more. `RefreshTextures` and `UpdateProject` just run: a stale
+container is refused by every load rather than re-cooked, so declining left the viewport unable to
+open the project's own assets.
+
 ## config.json
 
 `config.json` (git-ignored, one per checkout, deployed next to the binary and read once by
@@ -204,6 +221,11 @@ Two things a test cannot drive, and why:
   mid-drag, and that state belongs to the platform's drag session. `DragEnter` *can* be
   posted, so drop *routing* is covered that way and the drop *rules* are driven straight
   through the handler.
+
+The **startup screen** is in the same family as the viewports: `StartupScreen` is a widget and
+`main.cpp` is not in `editor_lib`, so neither is covered. What is lifted clear of both is
+`editor::startup::PipelineLabel` and `RebuildLabel` (`src/Startup/startup_labels.h`) — what each
+report *reads* — and `StartupLabels_test.cpp` drives those directly. The screen itself needs eyes.
 
 `background::RunWithLoadingScreen` is testable despite its nested event loop and modal
 screen: arm `editor::test::OnLoadingScreen` (`tests/src/util/Modal.h`) **before** the

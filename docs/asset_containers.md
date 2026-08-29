@@ -179,6 +179,13 @@ clip set's posed boxes exactly as the writer that produced it did: a source that
 swept that mesh, a clips-only source swept the project's. Re-measuring those across the project is
 `bakebounds`, deliberately its own operation.
 
+It runs its sources **across threads within a stage** — rigs, then meshes, then clips — and takes an
+optional [`ProgressSink`](libs/assetlib/include/assetlib/progress.h) that names each container
+before it is produced. The stage boundary is not an implementation detail: a mesh names the rig it
+binds, and a clip set sweeps its boxes through the meshes standing *on disk*, so a fully parallel
+run would measure a clip against a mesh that is not written yet. The whole work list is decided
+before any of it runs, which is what makes the count the sink is stepped through fixed.
+
 A source's extracted textures are covered too, but asked differently: a `.ktx2` carries no header,
 so no `outputs` entry can name one and the only signal available is the texture folder being absent
 or empty. That is exactly the fresh-checkout case, and it is why `Derived/BakedTextures/` can be ignored at all —
