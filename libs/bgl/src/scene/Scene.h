@@ -165,16 +165,20 @@ namespace bgl
 		};
 
 		/**
-		 * The rigs RigFramesPass must fill this frame: those asked for since the last fill, plus
-		 * every filled one when a growth discarded the arena. Empty on almost every frame.
+		 * Sweeps the rigs RigFramesPass must fill this frame: those asked for since the last fill,
+		 * plus every filled one when a growth discarded the arena. Empty on almost every frame.
 		 *
-		 * Swept rather than maintained: a scene holds a handful of rigs, and a list kept incrementally
-		 * would have to be right about every path that allocates, grows or deletes one.
+		 * Swept rather than maintained because a scene holds a handful of rigs, and a list kept
+		 * incrementally would have to be right about every path that allocates, grows or deletes one.
 		 */
 		[[nodiscard]] std::span<const RigFill>
 		PendingRigFills();
 
-		/** @pre the dispatches PendingRigFills named have been recorded. */
+		/**
+		 * Marks every rig the last PendingRigFills named as holding a pose.
+		 *
+		 * @pre the dispatches it named have been recorded.
+		 */
 		void
 		MarkRigFillsRecorded() noexcept;
 
