@@ -257,27 +257,42 @@ namespace assetlib
 		};
 
 		/**
+		 * One mesh entry's vertices, decoded submesh by submesh.
+		 *
 		 * @throws std::runtime_error for anything decodeInfluences refuses: a malformed vertex
 		 *         layout, or a vertex naming a bone the skeleton does not hold.
 		 */
-		BoneBoxes
-		boneBoxesFor(const BMesh& mesh, const uint32_t meshIndex, const Skeleton& skeleton)
+		std::vector<std::vector<SkinInfluences>>
+		entryInfluences(const BMesh& mesh, const uint32_t meshIndex, const Skeleton& skeleton)
 		{
 			const Mesh& entry = mesh.meshes[meshIndex];
 
-			auto perBone = std::vector<Bounds>(skeleton.bones.size(), unboundedBox());
-			auto out     = BoneBoxes();
+			auto out = std::vector<std::vector<SkinInfluences>>();
+			out.reserve(entry.submeshCount);
 
 			for (uint32_t i = 0; i < entry.submeshCount; ++i)
 			{
 				const Submesh& submesh = mesh.submeshes[entry.firstSubmesh + i];
-
-				const std::vector<SkinInfluences> vertices = decodeInfluences(
+				out.emplace_back(decodeInfluences(
 					mesh,
 					submesh,
 					resolveSkinLayout(mesh, submesh),
-					skeleton.bones.size());
+					skeleton.bones.size()));
+			}
 
+			return out;
+		}
+
+		/** Every bone `submeshes` has weight on, boxed over the vertices it moves, in its own frame. */
+		BoneBoxes
+		boneBoxesFrom(
+			std::span<const std::vector<SkinInfluences>> submeshes,
+			const Skeleton&                              skeleton)
+		{
+			auto perBone = std::vector<Bounds>(skeleton.bones.size(), unboundedBox());
+			auto out     = BoneBoxes();
+
+			for (const std::vector<SkinInfluences>& vertices : submeshes)
 				for (const SkinInfluences& vertex : vertices)
 				{
 					// An exporter writes four zero weights for a vertex it never assigned, and
@@ -301,7 +316,6 @@ namespace assetlib
 								glm::vec4(vertex.position, 1.0f)));
 					}
 				}
-			}
 
 			for (uint32_t bone = 0; bone < perBone.size(); ++bone)
 			{
@@ -313,6 +327,16 @@ namespace assetlib
 			}
 
 			return out;
+		}
+
+		/**
+		 * @throws std::runtime_error for anything decodeInfluences refuses: a malformed vertex
+		 *         layout, or a vertex naming a bone the skeleton does not hold.
+		 */
+		BoneBoxes
+		boneBoxesFor(const BMesh& mesh, const uint32_t meshIndex, const Skeleton& skeleton)
+		{
+			return boneBoxesFrom(entryInfluences(mesh, meshIndex, skeleton), skeleton);
 		}
 
 		/**
@@ -355,37 +379,25 @@ namespace assetlib
 			return out;
 		}
 
-		/** Every skinned entry of `mesh` reduced to bone boxes, in entry order. */
-		std::vector<BoneBoxes>
-		skinnedBoneBoxes(const BMesh& mesh, const Skeleton& skeleton)
+		/** One skinned entry: the boxes a pose sweeps, and the vertices those boxes hold. */
+		struct SkinnedEntry
 		{
-			auto out = std::vector<BoneBoxes>();
-			for (uint32_t meshIndex = 0; meshIndex < mesh.meshes.size(); ++meshIndex)
-				if (isSkinned(mesh, meshIndex))
-					out.emplace_back(boneBoxesFor(mesh, meshIndex, skeleton));
-			return out;
-		}
+			BoneBoxes                                boxes;
+			std::vector<std::vector<SkinInfluences>> submeshes;
+		};
 
-		/** Every skinned entry's vertices decoded once, one vector per submesh across all entries. */
-		std::vector<std::vector<SkinInfluences>>
-		skinnedInfluences(const BMesh& mesh, const Skeleton& skeleton)
+		/** Every skinned entry of `mesh`, its vertices decoded once and its boxes built from them. */
+		std::vector<SkinnedEntry>
+		skinnedEntries(const BMesh& mesh, const Skeleton& skeleton)
 		{
-			auto out = std::vector<std::vector<SkinInfluences>>();
+			auto out = std::vector<SkinnedEntry>();
 			for (uint32_t meshIndex = 0; meshIndex < mesh.meshes.size(); ++meshIndex)
 			{
 				if (!isSkinned(mesh, meshIndex))
 					continue;
 
-				const Mesh& entry = mesh.meshes[meshIndex];
-				for (uint32_t i = 0; i < entry.submeshCount; ++i)
-				{
-					const Submesh& submesh = mesh.submeshes[entry.firstSubmesh + i];
-					out.emplace_back(decodeInfluences(
-						mesh,
-						submesh,
-						resolveSkinLayout(mesh, submesh),
-						skeleton.bones.size()));
-				}
+				auto submeshes = entryInfluences(mesh, meshIndex, skeleton);
+				out.emplace_back(boneBoxesFrom(submeshes, skeleton), std::move(submeshes));
 			}
 			return out;
 		}
@@ -396,27 +408,60 @@ namespace assetlib
 		 * the hull of the boxes those products sweep.
 		 */
 		float
-		boundedFloor(std::span<const BoneBoxes> entries, std::span<const glm::mat4> model) noexcept
+		boundedFloor(
+			std::span<const SkinnedEntry> entries,
+			std::span<const glm::mat4>    model) noexcept
 		{
 			auto lowest = std::numeric_limits<float>::max();
-			for (const BoneBoxes& entry : entries)
-				for (size_t i = 0; i < entry.bones.size(); ++i)
-					lowest =
-						std::min(lowest, transformed(model[entry.bones[i]], entry.boxes[i]).min.y);
+			for (const SkinnedEntry& entry : entries)
+				for (size_t i = 0; i < entry.boxes.bones.size(); ++i)
+					lowest = std::min(
+						lowest,
+						transformed(model[entry.boxes.bones[i]], entry.boxes.boxes[i]).min.y);
 			return lowest;
 		}
 
-		/** The lowest `y` any decoded vertex actually reaches under `skinning`. */
+		/**
+		 * `best`, lowered to any `y` a vertex of `entry` actually reaches under `skinning`.
+		 *
+		 * A vertex whose every bone is already at or above `best` is skipped rather than skinned --
+		 * boundedFloor's bound, taken per vertex. See measureClipFloors in skinning.h.
+		 *
+		 * `boneLow` is scratch across calls: it is written for exactly the bones `entry` has weight
+		 * on, which is the only set its vertices read.
+		 */
 		float
-		exactFloor(
-			std::span<const std::vector<SkinInfluences>> submeshes,
-			std::span<const glm::mat4>                   skinning) noexcept
+		entryFloor(
+			const SkinnedEntry&        entry,
+			std::span<const glm::mat4> model,
+			std::span<const glm::mat4> skinning,
+			std::span<float>           boneLow,
+			float                      best) noexcept
 		{
-			auto lowest = std::numeric_limits<float>::max();
-			for (const std::vector<SkinInfluences>& vertices : submeshes)
+			for (size_t i = 0; i < entry.boxes.bones.size(); ++i)
+				boneLow[entry.boxes.bones[i]] =
+					transformed(model[entry.boxes.bones[i]], entry.boxes.boxes[i]).min.y;
+
+			for (const std::vector<SkinInfluences>& vertices : entry.submeshes)
 				for (const SkinInfluences& vertex : vertices)
-					lowest = std::min(lowest, skinnedPosition(vertex, skinning).y);
-			return lowest;
+				{
+					// Whatever the pose these sit where they were authored, and measureClipFloors
+					// already floors every clip by BoneBoxes::unskinned.
+					if (!vertex.skinned)
+						continue;
+
+					auto bound = std::numeric_limits<float>::max();
+					for (size_t i = 0; i < c_InfluencesPerVertex; ++i)
+						if (vertex.weights[i] != 0.0f)
+							bound = std::min(bound, boneLow[vertex.joints[i]]);
+
+					if (bound >= best)
+						continue;
+
+					best = std::min(best, skinnedPosition(vertex, skinning).y);
+				}
+
+			return best;
 		}
 
 		/** The union of the entry's submesh boxes -- all a rig with no clips has to be bounded by. */
@@ -728,15 +773,11 @@ namespace assetlib
 	{
 		auto out = std::vector<float>(animations.clips.size(), 0.0f);
 
-		auto entries   = std::vector<BoneBoxes>();
-		auto submeshes = std::vector<std::vector<SkinInfluences>>();
+		auto entries = std::vector<SkinnedEntry>();
 		for (const BMesh& mesh : meshes)
 		{
-			const std::vector<BoneBoxes> boxes = skinnedBoneBoxes(mesh, skeleton);
-			entries.insert(entries.end(), boxes.begin(), boxes.end());
-
-			std::vector<std::vector<SkinInfluences>> vertices = skinnedInfluences(mesh, skeleton);
-			std::ranges::move(vertices, std::back_inserter(submeshes));
+			std::vector<SkinnedEntry> mine = skinnedEntries(mesh, skeleton);
+			std::ranges::move(mine, std::back_inserter(entries));
 		}
 
 		if (entries.empty())
@@ -744,9 +785,11 @@ namespace assetlib
 
 		// Whatever the pose, these sit where they were authored, so they floor every clip alike.
 		auto unskinned = std::numeric_limits<float>::max();
-		for (const BoneBoxes& entry : entries)
-			if (!isEmpty(entry.unskinned))
-				unskinned = std::min(unskinned, entry.unskinned.min.y);
+		for (const SkinnedEntry& entry : entries)
+			if (!isEmpty(entry.boxes.unskinned))
+				unskinned = std::min(unskinned, entry.boxes.unskinned.min.y);
+
+		auto boneLow = std::vector<float>(skeleton.bones.size(), std::numeric_limits<float>::max());
 
 		for (uint32_t clip = 0; clip < animations.clips.size(); ++clip)
 		{
@@ -773,13 +816,12 @@ namespace assetlib
 				if (bound[frame] >= lowest)
 					break;
 
-				lowest = std::min(
-					lowest,
-					exactFloor(
-						submeshes,
-						skinningMatrices(
-							skeleton,
-							poseModelTransforms(skeleton, animations, clip, frame))));
+				const std::vector<glm::mat4> model =
+					poseModelTransforms(skeleton, animations, clip, frame);
+				const std::vector<glm::mat4> skinning = skinningMatrices(skeleton, model);
+
+				for (const SkinnedEntry& entry : entries)
+					lowest = entryFloor(entry, model, skinning, boneLow, lowest);
 			}
 
 			lowest = std::min(lowest, unskinned);
@@ -797,6 +839,13 @@ namespace assetlib
 		const Skeleton&            skeleton,
 		std::span<const ClipFloor> authored)
 	{
+		const auto stage = core::logging::ScopedStage(
+			"assetlib clip floors: {} bones, {} meshes, {} clips, {} frames",
+			skeleton.bones.size(),
+			meshes.size(),
+			animations.clips.size(),
+			animations.boneCount > 0 ? animations.samples.size() / animations.boneCount : 0);
+
 		auto floors = std::vector<float>(animations.clips.size(), 0.0f);
 		try
 		{

@@ -9,6 +9,8 @@
 #include <assetlib_structs/Bounds.h>
 #include <assetlib_structs/Skeleton.h>
 
+#include <catch2/catch_approx.hpp>
+
 #include "CountingFileSystem.h"
 #include "MountAt.h"
 
@@ -167,6 +169,119 @@ namespace
 		return mesh;
 	}
 
+	/**
+	 * A rig of two bones a vertex can hang from: a foot on the floor, and a second one `padHeight`
+	 * above it. Both are rotated by the clip below, so a pose sweeps their boxes wider than the
+	 * vertices inside them -- which is what stops the frame prune from cutting, and so what makes a
+	 * clip floor expensive in the first place.
+	 */
+	Skeleton
+	MakeFloorRig(const float padHeight)
+	{
+		auto skeleton = Skeleton();
+
+		const auto bone = [&](const char* name, const float y) {
+			auto out        = Bone();
+			out.bindPose    = { glm::vec3(0.0f, y, 0.0f),
+				                glm::quat(1.0f, 0.0f, 0.0f, 0.0f),
+				                glm::vec3(1.0f) };
+			out.parent      = skeleton.bones.empty() ? c_InvalidIndex : 0;
+			out.nameOffset  = skeleton.stringPool.add(name);
+			out.inverseBind = glm::translate(glm::mat4(1.0f), glm::vec3(0.0f, -y, 0.0f));
+			skeleton.bones.push_back(out);
+		};
+
+		bone("root", 0.0f);
+		bone("foot", 0.0f);
+		bone("pad", padHeight);
+		return skeleton;
+	}
+
+	/**
+	 * One clip that rotates every bone about z and holds that rotation, so each frame's bound ties
+	 * with the last and none of them is pruned -- the shape a character standing still has.
+	 */
+	AnimationSet
+	MakeStandingClip(const Skeleton& skeleton, const uint32_t frames)
+	{
+		auto animations              = AnimationSet();
+		animations.skeleton          = "Derived/Skeletons/rig.bskel";
+		animations.skeletonSignature = skeletonSignature(skeleton);
+		animations.boneCount         = static_cast<uint32_t>(skeleton.bones.size());
+
+		auto clip        = AnimationClip();
+		clip.firstSample = 0;
+		clip.frameCount  = frames;
+		clip.sampleRate  = 30.0f;
+		animations.clips.push_back(clip);
+
+		for (uint32_t frame = 0; frame < frames; ++frame)
+			for (const Bone& bone : skeleton.bones)
+			{
+				Transform sample = bone.bindPose;
+				sample.rotation  = glm::angleAxis(
+					glm::radians(45.0f),
+					glm::normalize(glm::vec3(0.0f, 0.0f, 1.0f)));
+				animations.samples.push_back(sample);
+			}
+		return animations;
+	}
+
+	/**
+	 * One submesh of `count` vertices welded to `bone`, laid on a circle so the box holding them is
+	 * wider than they are and its swept corner sits below every one of them.
+	 */
+	void
+	AppendRing(BMesh& mesh, const uint32_t bone, const uint32_t count, const float height)
+	{
+		auto submesh                  = Submesh();
+		submesh.layout.attributeCount = 3;
+		submesh.layout.attributes[0]  = { VertexSemantic::kPosition, VertexFormat::kFloat32x3, 0 };
+		submesh.layout.attributes[1]  = { VertexSemantic::kJoints0, VertexFormat::kUint16x4, 12 };
+		submesh.layout.attributes[2]  = { VertexSemantic::kWeights0, VertexFormat::kUnorm16x4, 20 };
+		submesh.layout.stride         = 28;
+		submesh.vertexByteOffset      = static_cast<uint32_t>(mesh.vertexData.size());
+
+		for (uint32_t i = 0; i < count; ++i)
+		{
+			const auto angle =
+				glm::two_pi<float>() * static_cast<float>(i) / static_cast<float>(count);
+
+			const auto position = glm::vec3(std::cos(angle), height + 0.5f * std::sin(angle), 0.0f);
+
+			const std::array<uint16_t, 4> joints{ { static_cast<uint16_t>(bone), 0, 0, 0 } };
+			const std::array<uint16_t, 4> weights{ { 65535, 0, 0, 0 } };
+
+			const size_t base = mesh.vertexData.size();
+			mesh.vertexData.resize(base + submesh.layout.stride);
+
+			std::byte* at = mesh.vertexData.data() + base;
+			std::memcpy(at, &position, sizeof(position));
+			std::memcpy(at + 12, joints.data(), sizeof(joints));
+			std::memcpy(at + 20, weights.data(), sizeof(weights));
+			++submesh.vertexCount;
+		}
+
+		submesh.aabbMin = glm::vec3(-1.0f, height - 0.5f, 0.0f);
+		submesh.aabbMax = glm::vec3(1.0f, height + 0.5f, 0.0f);
+		mesh.submeshes.push_back(submesh);
+	}
+
+	/** One entry: a small ring on the foot, then `pad` vertices on the bone `padHeight` above it. */
+	BMesh
+	MakeFloorMesh(const Skeleton& skeleton, const uint32_t pad, const float padHeight)
+	{
+		auto mesh              = BMesh();
+		mesh.skeleton          = "Derived/Skeletons/rig.bskel";
+		mesh.skeletonSignature = skeletonSignature(skeleton);
+
+		AppendRing(mesh, 1, 64, 0.0f);
+		AppendRing(mesh, 2, pad, padHeight);
+
+		mesh.meshes.push_back({ .firstSubmesh = 0, .submeshCount = 2, .nameOffset = 0 });
+		return mesh;
+	}
+
 	/** A scratch data root holding one rig, one mesh, and `clipSets` clip sets against that rig. */
 	struct RigProject
 	{
@@ -248,6 +363,45 @@ TEST_CASE("Every mesh entry shares one walk of the clip set", "[perf][bounds]")
 	// Generous by design: the shape being caught is a walk repeated 12 times, so anything near
 	// parity is already the defect. A machine slow enough to blur 3x would blur any ceiling too.
 	CHECK(perEntry > shared * 3.0);
+}
+
+// skinning.h: a clip floor skins "only the vertices whose own bones reach below the best floor so
+// far". Both meshes here carry the same vertices over the same frames; only the height of the bone
+// most of them hang from differs. Raising it out of contention must therefore cost less, and before
+// the per-vertex gate existed the two were the same walk and measured alike.
+TEST_CASE("A clip floor does not skin the vertices that cannot be lowest", "[perf][grounding]")
+{
+	constexpr uint32_t c_PadVertices    = 4096;
+	constexpr uint32_t c_StandingFrames = 64;
+
+	const auto millisFor = [](const float padHeight) {
+		const Skeleton     skeleton   = MakeFloorRig(padHeight);
+		const AnimationSet animations = MakeStandingClip(skeleton, c_StandingFrames);
+		const BMesh        mesh       = MakeFloorMesh(skeleton, c_PadVertices, padHeight);
+
+		return FastestMillis(3, [&] {
+			(void)measureClipFloors(animations, std::span<const BMesh>(&mesh, 1), skeleton);
+		});
+	};
+
+	// The floor itself must not move: the gate skips a vertex only where the same convexity bound
+	// the frame prune rests on proves it cannot lower the answer.
+	const Skeleton     high     = MakeFloorRig(10.0f);
+	const AnimationSet standing = MakeStandingClip(high, c_StandingFrames);
+	const BMesh        padded   = MakeFloorMesh(high, c_PadVertices, 10.0f);
+	const BMesh        unpadded = MakeFloorMesh(high, 0, 10.0f);
+	const float        withPad  = measureClipFloors(standing, std::span(&padded, 1), high).front();
+	const float withNone = measureClipFloors(standing, std::span(&unpadded, 1), high).front();
+	CHECK(withPad == Catch::Approx(withNone));
+
+	const double contending = millisFor(0.0f);
+	const double raised     = millisFor(10.0f);
+
+	INFO("padding at the floor " << contending << " ms, padding overhead " << raised << " ms");
+
+	// Generous by design: the shape being caught is a gate that stopped gating, which reads as
+	// parity. A machine slow enough to blur 2x would blur any ceiling too.
+	CHECK(contending > raised * 2.0);
 }
 
 // vat_bake.h: vatBakeSize is "what a bake would produce, without producing it" -- the guarantee that

@@ -219,11 +219,12 @@ namespace assetlib
 	 *
 	 * Exact, and paid for by the boxes posedBounds already builds. A bone's box holds every vertex
 	 * weighted to it, and a skinned position is a convex combination of its bones' products, so the
-	 * lowest box corner at a frame is a lower bound on that frame's lowest vertex. The cheap sweep
-	 * therefore orders the frames, the most promising is skinned exactly, and every frame whose
-	 * bound is already at or above that result is dropped without being touched -- which on the
-	 * rigs measured leaves a handful of frames per clip actually skinned, where the whole walk is
-	 * minutes on a dense one.
+	 * lowest box corner is a lower bound on the lowest vertex. That bound is applied twice: once per
+	 * frame, to order them and drop every frame already bounded at or above the best floor found,
+	 * and once per vertex, so a frame that survives skins only the vertices whose own bones reach
+	 * below it. The second is what makes the first affordable on a dense rig -- a box is 1.09-1.51x
+	 * loose, so a character standing still leaves roughly a quarter of its frames unpruned, and
+	 * skinning all 170k vertices of each is where the walk used to go.
 	 *
 	 * @throws std::runtime_error for anything posedBounds refuses (a clip set cooked against
 	 *         another rig, a malformed vertex layout, a bad joint index).

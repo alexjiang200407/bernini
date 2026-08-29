@@ -84,12 +84,19 @@ not obvious from a signature. The headers linked below are the source of truth.
   also stales the `.banim` and the next load re-cooks it; `assetlib_cli describe` prints the floor
   each clip was authored at, which is where the number to author comes from.
 
-  **The measurement is exact but does not walk every frame.** A bone's box from `posedBounds` holds
-  every vertex weighted to it, and a skinned position is a convex combination of its bones' products,
-  so the lowest box corner at a frame is a lower bound on that frame's lowest vertex. The cheap sweep
-  orders the frames, the most promising is skinned exactly, and every frame bounded at or above that
-  result is dropped unvisited — which leaves a handful of frames per clip actually skinned, where the
-  whole walk is `exactPosedBounds`' six minutes on `cha800_00`.
+  **The measurement is exact but walks neither every frame nor every vertex.** A bone's box from
+  `posedBounds` holds every vertex weighted to it, and a skinned position is a convex combination of
+  its bones' products, so the lowest box corner is a lower bound on the lowest vertex. That one
+  inequality is applied at two granularities. Per frame: the cheap sweep orders them, the most
+  promising is skinned, and every frame bounded at or above that result is dropped unvisited. Per
+  vertex: a frame that survives skins only the vertices whose own bones reach below the best floor so
+  far — on a rig standing still, the feet.
+
+  The second is not an optimisation of the first, it is what makes it hold. A box is 1.09–1.51×
+  loose, so on `cha800_00`'s 2254 frames — three of its five clips are a character standing still —
+  the frame prune leaves roughly a **quarter** of them, not a handful. Skinning all 170k vertices of
+  each is 82 s of a 87 s grounding pass in a debug build; gating by bone brings the whole pass to
+  seconds. `exactPosedBounds`' six minutes is what neither prune buys you.
 
   **Grounding runs before every box**, because a box measured first describes a rig standing
   somewhere the runtime never draws it — and that box culls the geom as well as framing the editor's
