@@ -16,7 +16,7 @@ source of truth; when this doc disagrees, trust the header, then fix this doc.
 
 `RenderContext` ([gfx/RenderContext.cpp](libs/bgl/src/gfx/RenderContext.cpp)) drives the frame and
 owns the long-lived pass objects (`m_Forward`, `m_Skybox`, `m_TransparentSort`,
-`m_CompactInstances`, `m_SkinnedPose`, `m_OutlineMask`, `m_PreparePresentPass`); `Graphics` owns one context and
+`m_CompactInstances`, `m_RigFrames`, `m_SkinnedPose`, `m_OutlineMask`, `m_PreparePresentPass`); `Graphics` owns one context and
 forwards the frame methods to it. A frame is built between `BeginFrame` and `EndFrame`, with one `Draw` per
 view in between; the passes are added in this order and, because the graph never reorders, execute
 in it:
@@ -27,7 +27,8 @@ flowchart TD
     CLR --> D["per Draw(view)"]
     subgraph D["per Draw(view) — resources imported under the view's namespace"]
         IMP["Scene / SceneView import their buffers"] --> SKY["Skybox (only if the view has one)"]
-        SKY --> POSE["Pose Skinned (one workgroup per skinned instance)"]
+        SKY --> RIG["Pose Rig Frames (only when a rig wants its bone anim table)"]
+        RIG --> POSE["Pose Skinned (one workgroup per skinned instance)"]
         POSE --> TS["Transparent Sort (3 sub-passes)"]
         TS --> CI["Compact Instances (3 sub-passes)"]
         CI --> FWD["Forward (indirect dispatch per PSO bucket, then one for the sorted list)"]
@@ -338,6 +339,22 @@ frames would reproject through the wrong clip.
 * **Out:** `scene.bonePalettes`, the view's `BonePaletteBuffer` — GPU-only storage with a CPU-side offset
   allocator, because a `RangeBuffer` would re-upload its stale CPU mirror over what this wrote.
 * **Skipped** when the view places no skinned instance.
+
+### Pose Rig Frames
+
+* **What it is:** the bone anim table's producer. One dispatch per rig that has been given a table
+  and not yet posed into it, one workgroup per frame of that rig's clip set, running the same walk
+  `Pose Skinned` runs ([pose_walk.slang](libs/bgl/shaders/src/pose_walk.slang) is shared by both).
+  A crowd instance then reads a pose rather than computing one.
+* **In:** `scene.rigBuffer`, `scene.skinnedBoneBuffer`, `scene.clipBuffer`, `scene.boneSampleBuffer`.
+* **Out:** `scene.boneAnimTables`, the scene's table arena — a `BonePaletteBuffer` like the view's
+  palette, and GPU-only for the same reason.
+* **Ordered before `Pose Skinned` and the forward pass**, either of which may read a table this
+  frame filled.
+* **Skipped on almost every frame.** A rig is filled when the first instance drawing from its table
+  is spawned, and again only when the arena grows — a growth discards what it held, so every rig
+  holding a table is re-queued. Unlike the per-view palette, which is rewritten every frame anyway,
+  a table is written once and a discarded one would otherwise stay discarded.
 
 ### Forward — [passes/ForwardPass.{h,cpp}](libs/bgl/src/passes/ForwardPass.cpp)
 

@@ -175,7 +175,10 @@ call `logger::…` with no extra include.
   is the renderer's and would otherwise silence a bake's timing at `kError`. So a glTF parse, a
   tangent pass, a posed-bounds bake, a VAT bake, a prefilter and a whole-project bounds rebake each
   leave one line stating its dimensions and how long it took — which is how a slow import is
-  attributed without a profiler.
+  attributed without a profiler. `bgl` writes one too, and it is the only one: reserving a rig's
+  bone anim table, whose cost is a device allocation of tens of megabytes rather than any work the
+  renderer does. What fills the table is a GPU dispatch, which no stage line can time — the RHI has
+  no timestamp query.
   Under `assetlib_cli` there is no `Graphics`, so no file sink is installed and the same lines go to
   the console.
 
