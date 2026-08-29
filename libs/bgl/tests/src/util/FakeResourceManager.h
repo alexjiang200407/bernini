@@ -112,7 +112,7 @@ namespace bgl::test
 			std::abort();
 		}
 		BufferHandle
-		CreateRawBuffer(const RawBufferDesc&) noexcept override
+		CreateRawBuffer(const RawViewDesc&) noexcept override
 		{
 			std::abort();
 		}

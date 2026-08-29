@@ -49,9 +49,24 @@ element matches the CPU mirror `bgl_idlgen` emits — the default structured-buf
 ## A raw buffer holds bytes, and never a resource handle
 
 `RawBuffer` ([types/RawBuffer.slang](../libs/bgl/shaders/src/types/RawBuffer.slang)) wraps
-`ByteAddressBuffer.Handle` and reads a value of any type at a byte offset; `RawComputeBuffer` is its
-writable counterpart. The buffer must have been created by `CreateRawBuffer` — a view is chosen once,
-so binding a structured buffer here reads undefined bytes rather than failing.
+`ByteAddressBuffer.Handle`; `RawComputeBuffer` is its writable counterpart. The buffer must have been
+created by `CreateRawBuffer` — a view is chosen once, so binding a structured buffer here reads
+undefined bytes rather than failing.
+
+What the arena behind it holds is two things, and the accessors follow: a **record**, which a
+`RawEntry<T>` names and which starts with a `RecordHeader` naming its kind, its payload
+`cRawPayloadOffset` bytes later; and a **range** of bytes with no header, named by a `RawRange`, for
+data whose kind whatever names it already records.
+
+| | |
+|---|---|
+| `Load<T>(byteOffset)` | a value at an absolute offset — what a decoder with its own layout rule uses |
+| `LoadRecordAs<P>(entry)` | a record's payload. The payload type is named separately from the entry's, because an entry is typed by the interface a record satisfies and a load must name the concrete payload behind it |
+| `LoadTag(entry)` | the kind in a record's header, for the one pass that draws more than one |
+| `LoadInRange<T>(range, byteOffset)` | a value inside a headerless range |
+
+Each asserts its reference is non-null in a debug build (`kNullRawDeref`); a null one reads the
+arena's reserved head, which is zeros rather than a live record.
 
 `Load<T>` is for **handle-free** `T`. The element type of a bindless buffer is fixed at its
 declaration, and a raw one declares bytes: on Metal a `ByteAddressBuffer.Handle` lowers to

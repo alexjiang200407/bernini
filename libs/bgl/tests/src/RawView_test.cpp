@@ -102,7 +102,7 @@ TEST_CASE("A raw buffer loads records and loose attributes as written", "[raw][c
 	std::memcpy(bytes.data() + c_VertexOffset + 16, &vertexVec3, sizeof(vertexVec3));
 
 	const bgl::BufferHandle records = resourceManager->CreateRawBuffer(
-		bgl::RawBufferDesc().SetByteSize(c_BufferBytes).SetDebugName("Raw Record Arena"));
+		bgl::RawViewDesc().SetByteSize(c_BufferBytes).SetDebugName("Raw Record Arena"));
 	REQUIRE(resourceManager->ValidBufferHandle(records));
 
 	auto outDesc         = bgl::ComputeBufferDesc();
@@ -234,7 +234,7 @@ TEST_CASE("A compute shader stores into a raw buffer", "[raw][compute][bindless]
 	constexpr uint32_t c_TargetBytes = 32;
 
 	const bgl::BufferHandle target = resourceManager->CreateRawBuffer(
-		bgl::RawBufferDesc().SetByteSize(c_TargetBytes).SetIsUav().SetDebugName("Raw Store"));
+		bgl::RawViewDesc().SetByteSize(c_TargetBytes).SetIsUav().SetDebugName("Raw Store"));
 	REQUIRE(resourceManager->ValidBufferHandle(target));
 	CHECK(resourceManager->GetBufferDesc(target).isRaw);
 

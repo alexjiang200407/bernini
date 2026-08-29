@@ -93,7 +93,7 @@ namespace bgl
 		 */
 		[[nodiscard]]
 		BufferHandle
-		CreateRawBuffer(const RawBufferDesc& desc) noexcept override;
+		CreateRawBuffer(const RawViewDesc& desc) noexcept override;
 
 		/**
 		 * Automatically creates SRV/UAV for the texture.
