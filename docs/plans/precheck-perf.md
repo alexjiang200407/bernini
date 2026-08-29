@@ -84,6 +84,15 @@ so a slow load cannot be attributed from a log at all.
   licence. Where the table is silent, precheck says so and reasons from the nearest named type
   rather than treating the silence as a pass — the same discipline as ADR-10.
 
+  **Reversed by the user, 2026-08-29.** PR #505 put the rule in Guiding Constraints and the table in
+  its own `## Content scale` section, and was closed unmerged: *"Dont modify roadmap this is a minor
+  change."* `ROADMAP.md` is not touched. The dimensions instead go into
+  [`.claude/agents/bcp-precheck.md`](../../.claude/agents/bcp-precheck.md) itself, each figure naming
+  the doc that measured it, and the prompt tells precheck to verify against that doc rather than
+  trust the prompt's copy — so the prompt is an index, not a second source of truth, which is what
+  the rot objection above was really about. *Rejected again with it: `docs/asset_budgets.md`, a new
+  top-level doc for a change the user has called minor.*
+
 - **ADR-5 — the cost lens covers any per-asset-element path** — import, bake, load, reimport — in
   whatever layer it sits. Steady-state GPU/render work is explicitly out: the roadmap's
   GPU-driven-by-default constraint already forces that path. *Rejected: an `assetlib`-only lens,
@@ -212,9 +221,8 @@ path.
 
 **Slice 2 — gate the next one.**
 
-4. `docs(roadmap): the content scale every asset path is held to` — the Guiding Constraint and its
-   table. Gate: the dimensions match `docs/skinning.md` and
-   `docs/specs/animation_compression.md`; no number is invented here.
+4. ~~`docs(roadmap): the content scale every asset path is held to`~~ — **dropped**: #505 closed
+   unmerged, see ADR-4. The dimensions move into task 6's prompt.
 5. `test(assetlib): pin the work a cook does as its inputs grow` — the `[perf]` cases:
    - a rig's mesh is read once per run, not once per clip set (`CountingFileSystem`);
    - all mesh entries share one walk of the clip set (cost ratio, 1 entry vs many);
