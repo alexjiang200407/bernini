@@ -208,8 +208,8 @@ Spawn it with the Agent tool, `subagent_type: bcp-precheck`, one tier below your
 
 It answers the questions the author is worst placed to answer about their own diff: has this code
 already been written in `core`, does the design fight `ROADMAP.md` or depart from the standard with
-no ADR saying so, does it cross a non-goal or contradict an ADR agreed in § 0's grill, and does it
-break `STYLE.md`. It reports back; it posts nothing and edits nothing.
+no ADR saying so, does it cross a non-goal or contradict an ADR agreed in § 0's grill, is it feasible
+at AAA asset scale, and does it break `STYLE.md`. It reports back; it posts nothing and edits nothing.
 
 Act on its verdict before pushing:
 
