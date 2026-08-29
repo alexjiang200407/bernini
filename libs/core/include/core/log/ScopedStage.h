@@ -21,29 +21,18 @@ namespace core::logging
 	 *
 	 *     const auto stage = ScopedStage("posed bounds: {} bones, {} frames", bones, frames);
 	 *     const auto tick  = ScopedStage(50ms, "thumbnail tick: {}", path);
+	 *
+	 * The name is formatted **eagerly**, in the constructor. That is free on a cook stage and is not
+	 * on a path that runs every frame, which wants a warning that formats only once it has decided to
+	 * complain -- `AssetThumbnailCache::Advance` is that case, and the reason this carries no
+	 * "log only above N ms" threshold.
 	 */
 	class ScopedStage
 	{
 	public:
 		template <typename... Args>
 		explicit ScopedStage(std::format_string<Args...> name, Args&&... args) :
-			ScopedStage(
-				Formatted(),
-				std::chrono::milliseconds(0),
-				std::format(name, std::forward<Args>(args)...))
-		{}
-
-		/**
-		 * Stays silent when the stage finishes faster than `quietBelow`, which is what makes the
-		 * timer usable on a path that runs every frame. Leading, so it cannot be mistaken for a
-		 * format argument.
-		 */
-		template <typename... Args>
-		ScopedStage(
-			const std::chrono::milliseconds quietBelow,
-			std::format_string<Args...>     name,
-			Args&&... args) :
-			ScopedStage(Formatted(), quietBelow, std::format(name, std::forward<Args>(args)...))
+			ScopedStage(Formatted(), std::format(name, std::forward<Args>(args)...))
 		{}
 
 		~ScopedStage();
@@ -65,10 +54,9 @@ namespace core::logging
 		struct Formatted
 		{};
 
-		ScopedStage(Formatted, std::chrono::milliseconds quietBelow, std::string name) noexcept;
+		ScopedStage(Formatted, std::string name) noexcept;
 
 		std::string                           m_Name;
 		std::chrono::steady_clock::time_point m_Start;
-		std::chrono::milliseconds             m_QuietBelow;
 	};
 }
