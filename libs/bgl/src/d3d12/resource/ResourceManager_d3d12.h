@@ -268,6 +268,16 @@ namespace bgl
 		// yet written. The view goes into `buffer`'s CPU handle before `slot` receives it.
 		struct BufferAllocation
 		{
+			// Move-only, following the Buffer it carries. Declared rather than left implicit: MSVC
+			// warns on an implicitly deleted copy (C4625/C4626), and warnings are errors.
+			BufferAllocation()                            = default;
+			BufferAllocation(const BufferAllocation&)     = delete;
+			BufferAllocation(BufferAllocation&&) noexcept = default;
+			BufferAllocation&
+			operator=(const BufferAllocation&) = delete;
+			BufferAllocation&
+			operator=(BufferAllocation&&) noexcept = default;
+
 			core::slot_handle slot;
 			uint32_t          descriptorIndex = 0xFFFFFFFF;
 			Buffer            buffer;

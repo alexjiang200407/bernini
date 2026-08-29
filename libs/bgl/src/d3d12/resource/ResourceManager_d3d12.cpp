@@ -99,7 +99,11 @@ namespace bgl
 			return BufferAllocation{};
 		}
 
-		return BufferAllocation{ slot, descriptorIndex, std::move(buffer) };
+		BufferAllocation allocation;
+		allocation.slot            = slot;
+		allocation.descriptorIndex = descriptorIndex;
+		allocation.buffer          = std::move(buffer);
+		return allocation;
 	}
 
 	BufferHandle
