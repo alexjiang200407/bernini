@@ -598,14 +598,14 @@ MainWindow::OfferTextureRefresh()
 					const assetlib::TextureRefresh result =
 						m_Project->GetStore().RefreshImportedTextures(
 							stale[i],
-							[&](size_t done, size_t total) {
+							[&](const assetlib::ProgressEvent& event) {
 								progress.Report(
-									static_cast<int>(done),
-									static_cast<int>(total),
+									static_cast<int>(event.done),
+									static_cast<int>(event.total),
 									QString("Compressing %1 (%2 of %3)...")
 										.arg(name)
-										.arg(done + 1)
-										.arg(total));
+										.arg(event.done + 1)
+										.arg(event.total));
 							},
 							cancel);
 

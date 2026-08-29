@@ -126,9 +126,9 @@ TEST_CASE("WriteTextures honours the cancel token", "[cancel][bmesh][io]")
 		auto   source = std::stop_source();
 		size_t calls  = 0;
 
-		const auto onProgress = [&](size_t done, size_t) {
+		const auto onProgress = [&](const ProgressEvent& event) {
 			++calls;
-			if (done == 0)
+			if (event.done == 0)
 				source.request_stop();
 		};
 

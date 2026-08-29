@@ -1,6 +1,7 @@
 #pragma once
 #include <assetlib/cancel.h>
 #include <assetlib/codecs.h>
+#include <assetlib/progress.h>
 #include <assetlib_structs/BMeshImport.h>
 #include <core/file/IFileSystem.h>
 
@@ -402,15 +403,13 @@ namespace assetlib
 
 		// --- Textures --------------------------------------------------------------------------
 
-		/** Called before each texture, so the first call is (0, total). */
-		using TextureProgressFn = std::function<void(size_t done, size_t total)>;
-
 		/**
 		 * Writes `mesh`'s detached textures into `textureDir`, named by importedTextureFileNames --
 		 * the files a material routes at. `mesh.materials` says which are sRGB and is not written.
 		 *
-		 * Basis-UASTC supercompression dominates the cost of an import; `onProgress` runs on the
-		 * calling thread, and `cancel` is polled between encodes, never inside one.
+		 * Basis-UASTC supercompression dominates the cost of an import; `onProgress` is reported
+		 * before each encode, so the first call is (0, total), and `cancel` is polled between
+		 * encodes, never inside one.
 		 *
 		 * @throws std::runtime_error if `textureDir` is not under `Derived/` (see requireOrigin),
 		 *         escapes the data root, or a write fails.
@@ -422,10 +421,10 @@ namespace assetlib
 		 */
 		std::vector<std::string>
 		WriteTextures(
-			const imp::BMeshImport&  mesh,
-			std::string_view         textureDir,
-			const TextureProgressFn& onProgress = {},
-			const CancelToken&       cancel     = {}) const;
+			const imp::BMeshImport& mesh,
+			std::string_view        textureDir,
+			const ProgressSink&     onProgress = {},
+			const CancelToken&      cancel     = {}) const;
 
 		/**
 		 * The copied sources re-exported since the import that extracted their textures. Sorted,
@@ -453,9 +452,9 @@ namespace assetlib
 		 */
 		TextureRefresh
 		RefreshImportedTextures(
-			std::string_view         sourceKey,
-			const TextureProgressFn& onProgress = {},
-			const CancelToken&       cancel     = {}) const;
+			std::string_view    sourceKey,
+			const ProgressSink& onProgress = {},
+			const CancelToken&  cancel     = {}) const;
 
 		[[nodiscard]] ImageData
 		LoadTexture(std::string_view path, Ktx2Decode decode, uint32_t maxDim = 0) const;
