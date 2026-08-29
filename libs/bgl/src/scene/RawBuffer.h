@@ -13,7 +13,7 @@ namespace bgl
 
 	static_assert(sizeof(RawBlock) == idl::cRawBlockBytes);
 
-	struct RawArenaDesc
+	struct RawBufferDesc
 	{
 		// Where the arena starts, in bytes, rounded up to whole blocks. It grows on demand; the
 		// reserved null record is carried on top of it, so a caller's budget is its own.
@@ -47,28 +47,28 @@ namespace bgl
 	 */
 	template <typename Tag>
 		requires std::is_enum_v<Tag>
-	class RawArena
+	class RawBuffer
 	{
 	public:
-		RawArena() noexcept = default;
-		RawArena(RawArenaDesc desc, ResourceManagerRef resourceManager)
+		RawBuffer() noexcept = default;
+		RawBuffer(RawBufferDesc desc, ResourceManagerRef resourceManager)
 		{
 			Init(std::move(desc), std::move(resourceManager));
 		}
 
-		RawArena(const RawArena&)     = delete;
-		RawArena(RawArena&&) noexcept = default;
+		RawBuffer(const RawBuffer&)     = delete;
+		RawBuffer(RawBuffer&&) noexcept = default;
 
-		RawArena&
-		operator=(const RawArena&) = delete;
+		RawBuffer&
+		operator=(const RawBuffer&) = delete;
 
-		RawArena&
-		operator=(RawArena&&) noexcept = default;
+		RawBuffer&
+		operator=(RawBuffer&&) noexcept = default;
 
 		void
-		Init(RawArenaDesc desc, ResourceManagerRef resourceManager)
+		Init(RawBufferDesc desc, ResourceManagerRef resourceManager)
 		{
-			gassert(desc.initialBytes > 0, "RawArena must have a positive initial size");
+			gassert(desc.initialBytes > 0, "RawBuffer must have a positive initial size");
 			gassert(
 				desc.nullRecordBytes >= idl::cRawPayloadOffset,
 				"The null record must cover at least a header");
@@ -110,7 +110,7 @@ namespace bgl
 		[[nodiscard]] idl::RawEntry
 		AddRecord(Tag tag, std::span<const std::byte> payload)
 		{
-			gassert(IsInitialized(), "RawArena is uninitialized; call Init() first");
+			gassert(IsInitialized(), "RawBuffer is uninitialized; call Init() first");
 
 			// ADR-6's invariant, and the one place the payload and the head's size meet: a record
 			// bigger than the null record makes a null dereference read the first live one.
@@ -146,7 +146,7 @@ namespace bgl
 		[[nodiscard]] idl::RawRange
 		AddBytes(std::span<const std::byte> bytes)
 		{
-			gassert(IsInitialized(), "RawArena is uninitialized; call Init() first");
+			gassert(IsInitialized(), "RawBuffer is uninitialized; call Init() first");
 			gassert(!bytes.empty(), "AddBytes requires a non-empty range");
 
 			const auto handle = Allocate(MeasureRange(bytes));

@@ -77,7 +77,7 @@ namespace bgl
 		CreateComputeBuffer(const ComputeBufferDesc& desc) noexcept override;
 
 		BufferHandle
-		CreateRawBuffer(const RawBufferDesc& desc) noexcept override;
+		CreateRawBuffer(const RawViewDesc& desc) noexcept override;
 
 		ReadbackBufferHandle
 		CreateReadbackBuffer(const ReadbackBufferDesc& desc) noexcept override;

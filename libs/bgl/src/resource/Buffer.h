@@ -116,27 +116,30 @@ namespace bgl
 
 	// A buffer of bytes rather than of elements: the shader reads it as a ByteAddressBuffer and
 	// decides the type at each load, which is what a payload whose layout varies per record needs.
-	struct RawBufferDesc
+	//
+	// Named for the view rather than the buffer, unlike its siblings, because RawBuffer is the
+	// CPU-mirrored arena over one (scene/RawBuffer.h) and the Slang wrapper that reads it.
+	struct RawViewDesc
 	{
 		uint64_t    byteSize  = 0;
 		std::string debugName = "Unnamed Raw Buffer";
 		bool        isUav     = false;
 
-		RawBufferDesc&
+		RawViewDesc&
 		SetByteSize(uint64_t byteSize_) noexcept
 		{
 			byteSize = byteSize_;
 			return *this;
 		}
 
-		RawBufferDesc&
+		RawViewDesc&
 		SetIsUav(bool isUav_ = true) noexcept
 		{
 			isUav = isUav_;
 			return *this;
 		}
 
-		RawBufferDesc&
+		RawViewDesc&
 		SetDebugName(std::string debugName_) noexcept
 		{
 			debugName = std::move(debugName_);

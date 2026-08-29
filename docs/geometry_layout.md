@@ -180,7 +180,7 @@ store. All dirty-track writes and flush via `Update(cmdList)`.
 | `RangeBuffer<T,Meta>` | [RangeBuffer.h](libs/bgl/src/scene/RangeBuffer.h) | Variable-length-range allocator; `Add(span)` returns a `multi_slot_handle` assignable into a `Range`/`RangeWithCount`. Backs the vertex/index/meshlet/submesh buffers. |
 | `EntryBuffer<T,Meta>` | [EntryBuffer.h](libs/bgl/src/scene/EntryBuffer.h) | Slot buffer with stable, generation-checked handles; `Add`/`EmplaceBack` return a `slot_handle` assignable into an `Entry`. |
 | `PackedBuffer<T>` | [PackedBuffer.h](libs/bgl/src/scene/PackedBuffer.h) | Densely-packed buffer with stable handles (handle→dense indirection); erase swaps the tail in and re-uploads it. |
-| `RawArena<Tag>` | [RawArena.h](libs/bgl/src/scene/RawArena.h) | A byte arena over `RangeBuffer<RawBlock>`, read through a `RawBuffer` in Slang. `AddRecord(tag, payload)` returns a `RawEntry` and writes a `RecordHeader` ahead of the payload; `AddBytes` returns a `RawRange` and writes no header. Capped at what a raw view addresses. |
+| `RawBuffer<Tag>` | [RawBuffer.h](libs/bgl/src/scene/RawBuffer.h) | A byte arena over `RangeBuffer<RawBlock>`, read through a `RawBuffer` in Slang. `AddRecord(tag, payload)` returns a `RawEntry` and writes a `RecordHeader` ahead of the payload; `AddBytes` returns a `RawRange` and writes no header. Capped at what a raw view addresses. |
 | `GrowableGpuBuffer` | [GrowableGpuBuffer.h](libs/bgl/src/scene/GrowableGpuBuffer.h) | The GPU storage the three share: allocates the replacement resource, records the forward copy in `FlushGrowth`, and retires the old one on the manager's fence. |
 
 ---

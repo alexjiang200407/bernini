@@ -22,7 +22,7 @@ namespace bgl
 		{
 			if (isRaw)
 			{
-				RawBufferDesc rawDesc;
+				RawViewDesc rawDesc;
 				rawDesc.debugName = debugName;
 				rawDesc.byteSize  = static_cast<uint64_t>(stride) * capacity;
 				rawDesc.isUav     = isUav;

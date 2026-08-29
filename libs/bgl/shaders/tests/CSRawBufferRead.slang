@@ -3,7 +3,7 @@ import types.ComputeBuffer;
 import idl.RawEntry;
 import idl.RawRange;
 
-// Reads back what a RawArena wrote: two records of different kinds and one headerless range. What
+// Reads back what a RawBuffer wrote: two records of different kinds and one headerless range. What
 // this pins is the seam -- the CPU's idea of where a header ends and a payload begins against the
 // shader's, which is ADR-7's layout and nothing else checks it.
 struct Uniforms

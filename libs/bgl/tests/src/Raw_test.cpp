@@ -6,7 +6,7 @@
 #include "pipeline/ComputePipeline.h"
 #include "resource/Readback.h"
 #include "resource/ResourceManager.h"
-#include "scene/RawArena.h"
+#include "scene/RawBuffer.h"
 #include "types/ComputeState.h"
 #include "types/QueueType.h"
 #include "util/GpuValidation.h"
@@ -16,7 +16,7 @@
 
 namespace
 {
-	// The arena's own kind enum. RawArena is templated on it so no caller writes a bare integer
+	// The arena's own kind enum. RawBuffer is templated on it so no caller writes a bare integer
 	// into a header.
 	enum class TestTag : uint32_t
 	{
@@ -65,13 +65,13 @@ TEST_CASE("A raw arena allocates records and ranges", "[raw][scene]")
 	auto resourceManager = gfxBase->GetResourceManagerCpy();
 	REQUIRE(resourceManager != nullptr);
 
-	auto desc             = bgl::RawArenaDesc();
+	auto desc             = bgl::RawBufferDesc();
 	desc.initialBytes     = 256;
 	desc.nullRecordBytes  = bgl::idl::cRawPayloadOffset + sizeof(LargePayload);
 	desc.uploadBlockBytes = sizeof(bgl::RawBlock);
 	desc.debugName        = "Raw Arena Test";
 
-	auto arena = bgl::RawArena<TestTag>(desc, resourceManager);
+	auto arena = bgl::RawBuffer<TestTag>(desc, resourceManager);
 	REQUIRE(arena.IsInitialized());
 
 	// ADR-4: an arena is capped at what its view addresses, not at what the device could allocate.
@@ -306,12 +306,12 @@ TEST_CASE("A shader reads the records a raw arena wrote", "[raw][compute][scene]
 	auto cmdList      = device->CreateCommandList(cmdListDesc, cmdAllocator, resourceManager);
 	auto cmdQueue     = device->CreateCommandQueue(bgl::QueueType::kGraphics);
 
-	auto desc            = bgl::RawArenaDesc();
+	auto desc            = bgl::RawBufferDesc();
 	desc.initialBytes    = 256;
 	desc.nullRecordBytes = bgl::idl::cRawPayloadOffset + sizeof(glm::vec4);
 	desc.debugName       = "Raw Arena Read";
 
-	auto arena = bgl::RawArena<TestTag>(desc, resourceManager);
+	auto arena = bgl::RawBuffer<TestTag>(desc, resourceManager);
 
 	const auto payloadA = glm::vec4(1.0f, 2.0f, 3.0f, 4.0f);
 	const auto payloadB = glm::vec4(5.0f, 6.0f, 7.0f, 8.0f);
@@ -336,7 +336,7 @@ TEST_CASE("A shader reads the records a raw arena wrote", "[raw][compute][scene]
 
 	auto kernel = device->CreateComputeKernel(
 		bgl::ComputePipelineDesc()
-			.SetShader(device->CreateShader("CSRawArenaRead"))
+			.SetShader(device->CreateShader("CSRawBufferRead"))
 			.SetDebugName("Raw Arena Read"));
 	REQUIRE(kernel.pipeline != nullptr);
 

@@ -261,8 +261,9 @@ weights). The same stale "emitted into src/idl" claim sits in
   beside `ComputeBuffer`; `RawEntry<T>` (generic, so a Slang copy and a hand-written mirror like
   `Entry`), `RawRange` and `RecordHeader` (concrete, so generated into C++ like every other IDL
   struct); `ByteBuffer` deleted.
-- **Mirror buffer** (`libs/bgl/src/scene`): `RawArena<Tag>` — `RawBuffer` is the Slang wrapper's
-  name and the RHI descriptor's — composed over a
+- **Mirror buffer** (`libs/bgl/src/scene`): `RawBuffer<Tag>`, named for the Slang wrapper it is read
+  through as `RangeBuffer` is — the RHI's descriptor is `RawViewDesc`, for the view rather than the
+  buffer, so this name stays where the symmetry wants it. Composed over a
   `RangeBuffer<RawBlock>` whose element is a 16-byte block — so allocation, the reserved element 0,
   dirty tracking and growth are `RangeBuffer`'s, not a fourth allocator's. What it adds is the unit
   conversion (a block index in, a byte offset out), the reserved null record, `AddRecord(Tag, bytes)`
@@ -311,7 +312,7 @@ weights). The same stale "emitted into src/idl" claim sits in
    `RawComputeBuffer`, proving the raw UAV on D3D12 and that `RWByteAddressBuffer.Handle` lowers on
    Metal. All three run before anything is built on the answers — which is how ADR-8 was found.
 
-2. **`feat(bgl): a byte arena the scene can allocate records in`** — `scene/RawArena.h` over
+2. **`feat(bgl): a byte arena the scene can allocate records in`** — `scene/RawBuffer.h` over
    `RangeBuffer<RawBlock>`, `RawEntry<T>` in the IDL with its hand-written mirror, `RawRange` and
    `RecordHeader` generated, the reserved null record sized by the owner, the tag write, the growth
    refusal, `RangeBuffer`'s byte arithmetic widened to 64 bits, and the three stale "emitted into

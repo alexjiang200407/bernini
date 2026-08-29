@@ -165,7 +165,7 @@ namespace bgl
 	}
 
 	BufferHandle
-	ResourceManager::CreateRawBuffer(const RawBufferDesc& desc) noexcept
+	ResourceManager::CreateRawBuffer(const RawViewDesc& desc) noexcept
 	{
 		std::lock_guard<std::mutex> lock(m_PoolMutex);
 		gassert(desc.byteSize > 0, "A raw buffer requires a byte size");
