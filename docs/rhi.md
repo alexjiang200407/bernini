@@ -1,8 +1,15 @@
 # Bernini Render Hardware Interface
 
 The Render Hardware Interface (RHI) is `bgl`'s API-agnostic graphics abstraction: a set of
-pure-virtual interfaces (`bgl::I*`) plus plain-old-data descriptors and state structs. The
-concrete backend (`bgl_d3d12`) is linked at runtime and is never visible to callers.
+pure-virtual interfaces (`bgl::I*`) plus plain-old-data descriptors and state structs. Two backends
+implement it — `bgl_d3d12` and `bgl_metal` — chosen at configure time by `RENDERER_BACKEND`
+([libs/bgl/CMakeLists.txt](libs/bgl/CMakeLists.txt)) and linked into `bgl` itself. Neither is ever
+visible to a caller.
+
+**API-agnostic means among APIs with bindless resource access and mesh shaders.** That is the bar
+this interface is drawn at, not a general one: the only graphics pipeline object is
+`IMeshletPipeline`, and the draw verbs are `Dispatch`, `DispatchMesh` and `DispatchMeshIndirect`.
+An API without those cannot implement this interface.
 
 This is the layer bgl is built *on*. For the surface an application links against — `IGraphics`,
 `IScene`, `ISceneView` and the handle types in `libs/bgl/include/bgl` — see
