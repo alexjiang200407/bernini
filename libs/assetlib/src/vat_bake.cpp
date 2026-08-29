@@ -13,6 +13,7 @@
 
 #include <core/err/util.h>
 #include <core/hash.h>
+#include <core/log/ScopedStage.h>
 
 #include "ref_paths.h"
 #include "vat_tangent.h"
@@ -286,6 +287,13 @@ namespace assetlib
 		VatHeader      header = layOutVat(mesh, skeleton, animations);
 		BVat&          vat    = header.vat;
 		const uint64_t frames = header.frames;
+
+		const auto stage = core::logging::ScopedStage(
+			"assetlib VAT bake: {} clips, {} frames, {} columns, {} bones",
+			animations.clips.size(),
+			frames,
+			vat.width,
+			vat.boneCount);
 
 		// The bind pose is the identity skin: the frame every baked tangent's twist is measured from.
 		auto bindRow = std::vector<SkinnedVertex>();

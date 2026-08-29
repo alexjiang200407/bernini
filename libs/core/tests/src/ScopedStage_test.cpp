@@ -69,6 +69,21 @@ TEST_CASE("A stage says how long it took", "[log][scopedstage]")
 	CHECK(lines[0].find(" ms") != std::string::npos);
 }
 
+TEST_CASE("A stage formats its dimensions into the line", "[log][scopedstage]")
+{
+	// The dimensions are the whole point of naming a stage: a duration alone says a cook was slow
+	// and never what its cost was a product of.
+	const auto captured = CapturedLog();
+
+	{
+		const auto stage = ScopedStage("posed bounds: {} bones, {} frames", 663, 2254);
+	}
+
+	const std::vector<std::string> lines = captured.Lines();
+	REQUIRE(lines.size() == 1);
+	CHECK(lines[0].find("posed bounds: 663 bones, 2254 frames") != std::string::npos);
+}
+
 TEST_CASE("A stage logs nothing until it ends", "[log][scopedstage]")
 {
 	const auto captured = CapturedLog();
@@ -86,7 +101,7 @@ TEST_CASE("A stage under its threshold stays silent", "[log][scopedstage]")
 	const auto captured = CapturedLog();
 
 	{
-		const auto stage = ScopedStage("thumbnail tick", std::chrono::milliseconds(10'000));
+		const auto stage = ScopedStage(std::chrono::milliseconds(10'000), "thumbnail tick");
 	}
 
 	CHECK(captured.Lines().empty());
@@ -97,7 +112,7 @@ TEST_CASE("A stage over its threshold is logged", "[log][scopedstage]")
 	const auto captured = CapturedLog();
 
 	{
-		const auto stage = ScopedStage("slow thumbnail tick", std::chrono::milliseconds(1));
+		const auto stage = ScopedStage(std::chrono::milliseconds(1), "slow thumbnail tick");
 		BurnMilliseconds(3.0);
 	}
 
