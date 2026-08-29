@@ -222,7 +222,7 @@ just tidy [paths...]              # clang-tidy the naming rules (--changed for a
 just idl                          # regenerate the IDL C++ headers and Slang copies
 just targets                      # list all CMake targets (+ --type EXECUTABLE, --json)
 just exes                         # resolve executable paths (--target NAME prints one, --json)
-just count                        # count source files and lines by language, tests counted separately
+just count                        # count source files and lines by language and by module (bgl, assetlib_cli, editor...), tests counted separately
 just cleanup [--delete]           # list the local branches whose PR merged; --delete cuts them, nothing else
 just pr <cmd> ...                 # the only way to write to a PR: create/comments/reply/comment/edit/check. Opens PRs as you, comments as the bot, routes replies into their thread, and tabulates the diff by category into the body
 just watch-pr <pr>                # block until the PR fails CI, gets a submitted review or new comments, or merges; prints one JSON event. --interval, --timeout, --once, --since
