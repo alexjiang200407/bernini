@@ -20,7 +20,6 @@ namespace core::logging
 	 * what the cost was a product of:
 	 *
 	 *     const auto stage = ScopedStage("posed bounds: {} bones, {} frames", bones, frames);
-	 *     const auto tick  = ScopedStage(50ms, "thumbnail tick: {}", path);
 	 *
 	 * The name is formatted **eagerly**, in the constructor. That is free on a cook stage and is not
 	 * on a path that runs every frame, which wants a warning that formats only once it has decided to
