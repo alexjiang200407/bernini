@@ -18,12 +18,17 @@ namespace bgl
 {
 	struct ResourceManagerDesc
 	{
-		// Descriptors in the shader-visible heap. Every buffer and every SRV takes one, so it must be
-		// at least maxBuffers + maxSrvs.
-		uint32_t maxCbvSrvUavs = 1024;
+		// Descriptors in the shader-visible heap. Every buffer, every SRV and every second view of a
+		// buffer takes one, and index 0 is burned as the unbound sentinel, so it must be at least
+		// maxBuffers + maxSrvs + maxBufferSrvs + 1.
+		uint32_t maxCbvSrvUavs = 1089;
 
-		uint32_t maxBuffers         = 512;
-		uint32_t maxSrvs            = 512;
+		uint32_t maxBuffers = 512;
+		uint32_t maxSrvs    = 512;
+
+		// Second, structured views of buffers (CreateBufferSrv). Far fewer than buffers: only an
+		// arena whose records hold resource handles needs one.
+		uint32_t maxBufferSrvs      = 64;
 		uint32_t maxRtvs            = 128;
 		uint32_t maxDsvs            = 128;
 		uint32_t maxTextures        = 1024;
@@ -57,11 +62,37 @@ namespace bgl
 		 * @pre byteSize is a non-zero multiple of 4 and at most c_MaxRawBufferBytes -- a raw view
 		 * addresses bytes with a uint, so nothing beyond that is reachable however big the
 		 * allocation is.
-		 * @post the buffer has exactly one view, so a raw buffer bound to a StructuredBuffer
-		 * uniform (or the reverse) reads undefined bytes rather than failing.
+		 * @post the buffer's own view is raw, so one bound to a StructuredBuffer uniform (or the
+		 * reverse) reads undefined bytes rather than failing. A second, structured view of the same
+		 * bytes may be added with CreateBufferSrv.
 		 */
 		virtual BufferHandle
 		CreateRawBuffer(const RawViewDesc& desc) noexcept = 0;
+
+		/**
+		 * A second, structured view of a buffer that already has one, for data its first view
+		 * cannot type.
+		 *
+		 * A raw view reads bytes, and a bindless resource handle cannot be made from bytes on every
+		 * backend (see docs/rhi.md): a record holding one stores it as plain bytes and reads it
+		 * back through a view of this kind, over the same allocation.
+		 *
+		 * @pre the buffer is valid and its byte size is a multiple of `stride`.
+		 * @post destroying the buffer does not destroy the view, as with an Srv onto a texture.
+		 * @post the view describes the resource the buffer holds *now*. Growing a buffer replaces
+		 * that resource (see GrowableGpuBuffer), so a view over one must be re-created after every
+		 * growth; the old view then describes a resource already handed to the deferred destroy.
+		 * Nothing announces a growth -- a holder compares the BufferHandle it last viewed.
+		 */
+		[[nodiscard]]
+		virtual BufferSrvHandle
+		CreateBufferSrv(BufferHandle buffer, const BufferSrvDesc& desc) noexcept = 0;
+
+		virtual void
+		DestroyBufferSrv(BufferSrvHandle handle, bool deferred = true) noexcept = 0;
+
+		[[nodiscard]] virtual bool
+		ValidBufferSrvHandle(const BufferSrvHandle& handle) const noexcept = 0;
 
 		// Creation is upload-free: the manager makes resources and descriptors, never issues
 		// copies. A caller with pixel data creates the texture, keeps the bytes, and writes them

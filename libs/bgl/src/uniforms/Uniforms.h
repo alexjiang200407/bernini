@@ -222,6 +222,14 @@ namespace bgl
 			}
 
 			AccessorBase&
+			operator=(BufferSrvHandle handle)
+			{
+				// Only the descriptor travels: this handle's slot indexes the view pool, not the
+				// buffer pool, and naming it as a buffer's would be a lie waiting to be believed.
+				return *this = BufferHandle{ {}, handle.bindlessIndex };
+			}
+
+			AccessorBase&
 			operator=(SamplerHandle handle)
 			{
 				if (GetType() == UniformType::kValue &&

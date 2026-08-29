@@ -48,7 +48,7 @@ doc and a header disagree, trust the header, then fix this doc.
   `{ index, generation }` and both null-test through `IsNull()`, but the accessor spelling differs —
   do not assume one field name across handle families.
 
-* **A buffer has exactly one view, chosen when it is created.** `CreateStructBuffer` gives it a
+* **A buffer's view is chosen when it is created.** `CreateStructBuffer` gives it a
   structured view of a stride; `CreateRawBuffer` gives it a raw one (`R32_TYPELESS` + `FLAG_RAW` on
   D3D12; on Metal a buffer carries no view at all and the shader's declared type is the whole
   story), and `isUav` picks SRV or UAV either way. So the Slang wrapper a buffer is bound to must
@@ -61,12 +61,18 @@ doc and a header disagree, trust the header, then fix this doc.
   same ceiling, and growth that would cross it throws rather than handing back an offset no shader
   can reach.
 
+  **A buffer may have a *second* view.** `CreateBufferSrv(BufferHandle, BufferSrvDesc)` adds a
+  structured view over a buffer that already has one, so the same bytes are read as elements of a
+  stride — the counterpart of `CreateSrv` onto a texture, and released the same way, since
+  destroying the buffer does not destroy it. On D3D12 that is a second descriptor; on Metal it is
+  the buffer's own slot, a Metal buffer being an address whose type is whatever the shader declares.
+
   **A resource handle cannot be loaded out of a raw buffer on Metal.** The element type must be on
   the binding: `StructuredBuffer<T, ScalarDataLayout>.Handle` lowers to `T device*`, so a
   `TextureHandle` inside `T` is a real `texture2d`, while `ByteAddressBuffer.Handle` lowers to
   `uint32_t device*` and MSL will not construct a texture from an integer. A payload that is to be
-  raw-loaded must therefore be handle-free, reaching its textures through an
-  `Entry<TextureHandle>` into a typed table.
+  raw-loaded must therefore declare no resource type: it stores a `RawTextureHandle` — the same
+  eight bytes with no texture in the type — and the second view above is what samples them.
 
 * **Views are explicit, and a texture is not one.** `CreateTexture` allocates storage; it writes no
   descriptor and returns a handle a shader cannot reach. `CreateSrv(TextureHandle, SrvDesc)` is what

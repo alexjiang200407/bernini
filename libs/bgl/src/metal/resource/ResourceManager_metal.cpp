@@ -32,8 +32,8 @@ namespace bgl
 
 	ResourceManager::ResourceManager(MTL::Device* device, const ResourceManagerDesc& desc) :
 		m_Device(device), m_Buffers(desc.maxBuffers), m_Readbacks(desc.maxReadbackBuffers),
-		m_Textures(desc.maxTextures), m_Srvs(desc.maxSrvs), m_Rtvs(desc.maxRtvs),
-		m_Dsvs(desc.maxDsvs), m_Samplers(desc.maxSamplers)
+		m_Textures(desc.maxTextures), m_Srvs(desc.maxSrvs), m_BufferSrvs(desc.maxBufferSrvs),
+		m_Rtvs(desc.maxRtvs), m_Dsvs(desc.maxDsvs), m_Samplers(desc.maxSamplers)
 	{
 		// Sizing the pools here is what makes the lock-free Get*/Valid* reads sound: a slot_vector
 		// built with no capacity grows by emplace_back, which moves its storage out from under a
@@ -95,6 +95,56 @@ namespace bgl
 		bufferDesc.debugName = desc.debugName;
 
 		return EmplaceBuffer(bufferDesc);
+	}
+
+	BufferSrvHandle
+	ResourceManager::CreateBufferSrv(BufferHandle buffer, const BufferSrvDesc& desc) noexcept
+	{
+		gassert(ValidBufferHandle(buffer), "CreateBufferSrv on an invalid buffer");
+		gassert(desc.stride > 0, "A structured view requires a stride");
+		gassert(
+			m_Buffers[buffer.slot].GetDesc().byteSize % desc.stride == 0,
+			"A structured view must divide the buffer it views");
+
+		std::lock_guard<std::mutex> lock(m_PoolMutex);
+
+		// A Metal buffer is an address, and what reads it as elements of a stride is the type the
+		// shader declares -- so the view resolves to the buffer's own bindless index and describes
+		// nothing else. It still takes a slot: a view outlives the buffer it views, which is the
+		// contract the interface states and which CreateSrv keeps here for the same reason.
+		const auto slot = m_BufferSrvs.try_allocate_and_emplace(buffer.bindlessIndex);
+		if (slot.is_null())
+		{
+			logger::error("CreateBufferSrv '{}': buffer view pool exhausted", desc.debugName);
+			return BufferSrvHandle{};
+		}
+
+		return BufferSrvHandle{ slot, buffer.bindlessIndex };
+	}
+
+	void
+	ResourceManager::DestroyBufferSrv(BufferSrvHandle handle, bool deferred) noexcept
+	{
+		std::lock_guard<std::mutex> lock(m_PoolMutex);
+		gassert(ValidBufferSrvHandle(handle), "Cannot destroy invalid buffer view handle");
+
+		// The view owns no allocation -- it names bytes the buffer owns -- so only its slot is
+		// gated, exactly as an SRV onto a texture is.
+		if (deferred)
+		{
+			m_BufferSrvs.retire_slot(handle.slot.index);
+			RetireDeferred(PendingType::kBufferSrv, handle.slot.index);
+		}
+		else
+		{
+			m_BufferSrvs.release_slot(handle.slot.index);
+		}
+	}
+
+	bool
+	ResourceManager::ValidBufferSrvHandle(const BufferSrvHandle& handle) const noexcept
+	{
+		return m_BufferSrvs.valid(handle.slot);
 	}
 
 	BufferHandle
@@ -257,6 +307,9 @@ namespace bgl
 				break;
 			case PendingType::kSrv:
 				m_Srvs.reclaim_slot(pending.slotIndex);
+				break;
+			case PendingType::kBufferSrv:
+				m_BufferSrvs.reclaim_slot(pending.slotIndex);
 				break;
 			case PendingType::kRtv:
 				m_Rtvs.reclaim_slot(pending.slotIndex);

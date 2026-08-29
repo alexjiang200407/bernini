@@ -34,6 +34,7 @@ namespace bgl
 	{
 		kInvalid,
 		kBuffer,
+		kBufferSrv,
 		kSrv,
 		kRtv,
 		kDsv,
@@ -47,9 +48,9 @@ namespace bgl
 		PendingType type      = PendingType::kInvalid;
 		uint32_t    slotIndex = 0xFFFFFFFF;
 
-		// Set only for kBuffer and kSrv, the two that occupy the shader-visible heap; null for every
-		// other type. A descriptor must outlive in-flight work exactly as the resource does, so it is
-		// handed back when the gate clears rather than at destroy time.
+		// Set only for the types that occupy the shader-visible heap -- kBuffer, kBufferSrv and
+		// kSrv; null for every other. A descriptor must outlive in-flight work exactly as the
+		// resource does, so it is handed back when the gate clears rather than at destroy time.
 		uint32_t descriptorIndex = 0xFFFFFFFF;
 	};
 
@@ -94,6 +95,20 @@ namespace bgl
 		[[nodiscard]]
 		BufferHandle
 		CreateRawBuffer(const RawViewDesc& desc) noexcept override;
+
+		/**
+		 * Creates a structured SRV over a buffer that already has a view of its own, so the same
+		 * bytes can be read as elements of `desc.stride`.
+		 */
+		[[nodiscard]]
+		BufferSrvHandle
+		CreateBufferSrv(BufferHandle buffer, const BufferSrvDesc& desc) noexcept override;
+
+		void
+		DestroyBufferSrv(BufferSrvHandle handle, bool deferred = true) noexcept override;
+
+		[[nodiscard]] bool
+		ValidBufferSrvHandle(const BufferSrvHandle& handle) const noexcept override;
 
 		/**
 		 * Automatically creates SRV/UAV for the texture.
@@ -310,6 +325,10 @@ namespace bgl
 		// shader-visible heap the allocator owns. A texture is in neither -- only a view onto it is.
 		core::slot_vector<Buffer> m_Buffers;
 		core::slot_vector<Srv>    m_Srvs;
+
+		// A structured view onto a buffer is a descriptor and nothing else: the buffer it views owns
+		// the allocation, so unlike an Srv there is no object here to describe.
+		core::slot_vector<uint32_t> m_BufferSrvs;
 
 		wrl::ComPtr<ID3D12DescriptorHeap> m_RtvHeap;
 		wrl::ComPtr<ID3D12DescriptorHeap> m_DsvHeap;
