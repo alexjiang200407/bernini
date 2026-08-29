@@ -16,5 +16,6 @@ public enum ErrorCode : uint
     // but never what the caller meant -- the check is what keeps that from shading silently.
     kNullEntryDeref,
     kNullRangeDeref,
+    kNullRawDeref,
 }
 ;

@@ -41,7 +41,8 @@ namespace bgl
 			std::string        debugName,
 			uint32_t           stride,
 			uint32_t           capacity,
-			bool               isUav);
+			bool               isUav,
+			bool               isRaw = false);
 
 		/**
 		 * Replaces the storage with one holding `newCapacity` elements, preserving the contents of
@@ -100,6 +101,10 @@ namespace bgl
 		uint32_t m_Capacity = 0;
 		uint32_t m_Stride   = 0;
 		bool     m_IsUav    = false;
+
+		// The view every replacement resource is created with: a buffer carries exactly one, so a
+		// growth that changed it would leave the shader's wrapper addressing the wrong thing.
+		bool m_IsRaw = false;
 	};
 
 	/**

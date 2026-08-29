@@ -50,7 +50,9 @@ doc and a header disagree, trust the header, then fix this doc.
 
   **A raw buffer is at most `c_MaxRawBufferBytes` (4 GiB)**, because a raw view is addressed by a
   `uint` byte offset on every API; `CreateRawBuffer` asserts it, along with a size that is a whole
-  number of 32-bit words.
+  number of 32-bit words. A CPU-mirrored buffer over one sets `RangeBufferDesc::maxBytes` to the
+  same ceiling, and growth that would cross it throws rather than handing back an offset no shader
+  can reach.
 
   **A resource handle cannot be loaded out of a raw buffer on Metal.** The element type must be on
   the binding: `StructuredBuffer<T, ScalarDataLayout>.Handle` lowers to `T device*`, so a

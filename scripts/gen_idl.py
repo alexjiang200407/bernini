@@ -5,7 +5,7 @@ Drives the built `bgl_idlgen` tool over every module in `bgl/idl/src`, writing:
   - a banner-stamped Slang copy to   bgl/shaders/src/idl/<rel>.slang   (every module)
   - a generated C++ header, to one of two roots depending on the module:
       * bgl/include/bgl/<rel>.h  in namespace `bgl`      (IDL_PUBLIC_CPP_SOURCES)
-      * bgl/src/idl/<rel>.h      in namespace `bgl::idl` (IDL_CPP_SOURCES)
+      * <build>/generated/idl/<rel>.h  in namespace `bgl::idl` (IDL_CPP_SOURCES)
     A module in neither list gets no C++ header at all -- correct for the
     interface/generic-only modules, which carry no concrete layout to mirror.
 

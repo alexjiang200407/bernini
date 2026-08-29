@@ -17,8 +17,19 @@ namespace bgl
 			const std::string&        debugName,
 			uint32_t                  stride,
 			uint32_t                  capacity,
-			bool                      isUav)
+			bool                      isUav,
+			bool                      isRaw)
 		{
+			if (isRaw)
+			{
+				RawBufferDesc rawDesc;
+				rawDesc.debugName = debugName;
+				rawDesc.byteSize  = static_cast<uint64_t>(stride) * capacity;
+				rawDesc.isUav     = isUav;
+
+				return resourceManager->CreateRawBuffer(rawDesc);
+			}
+
 			StructBufferDesc desc;
 			desc.debugName    = debugName;
 			desc.elementCount = capacity;
@@ -53,7 +64,8 @@ namespace bgl
 		std::string        debugName,
 		uint32_t           stride,
 		uint32_t           capacity,
-		bool               isUav)
+		bool               isUav,
+		bool               isRaw)
 	{
 		gassert(resourceManager != nullptr, "GrowableGpuBuffer requires a valid ResourceManager");
 		gassert(stride > 0, "GrowableGpuBuffer requires a positive stride");
@@ -63,8 +75,10 @@ namespace bgl
 		m_DebugName       = std::move(debugName);
 		m_Stride          = stride;
 		m_IsUav           = isUav;
+		m_IsRaw           = isRaw;
 
-		m_Handle = CreateStorage(m_ResourceManager, m_DebugName, m_Stride, capacity, m_IsUav);
+		m_Handle =
+			CreateStorage(m_ResourceManager, m_DebugName, m_Stride, capacity, m_IsUav, m_IsRaw);
 		if (m_Handle.IsNull())
 		{
 			core::throw_runtime_error(
@@ -86,7 +100,8 @@ namespace bgl
 		if (newCapacity <= m_Capacity)
 			return;
 
-		auto grown = CreateStorage(m_ResourceManager, m_DebugName, m_Stride, newCapacity, m_IsUav);
+		auto grown =
+			CreateStorage(m_ResourceManager, m_DebugName, m_Stride, newCapacity, m_IsUav, m_IsRaw);
 		if (grown.IsNull())
 		{
 			core::throw_runtime_error(
