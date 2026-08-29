@@ -401,11 +401,11 @@ namespace bgl
 
 		// One entry each for the same reason as the VAT arenas above.
 		{
-			auto skinnedGeomBufferDesc         = EntryBufferDesc();
-			skinnedGeomBufferDesc.initialCount = 1;
-			skinnedGeomBufferDesc.debugName    = "Skinned Geom Buffer";
+			auto rigBufferDesc         = EntryBufferDesc();
+			rigBufferDesc.initialCount = 1;
+			rigBufferDesc.debugName    = "Rig Buffer";
 
-			m_SkinnedGeoms.Init(std::move(skinnedGeomBufferDesc), m_ResourceManager);
+			m_Rigs.Init(std::move(rigBufferDesc), m_ResourceManager);
 		}
 
 		{
@@ -808,88 +808,111 @@ namespace bgl
 		}
 	}
 
-	GeomHandle
-	Scene::AttachSkinnedRecords(
-		GeomHandle                    base,
-		const assetlib::Skeleton&     skeleton,
-		const assetlib::AnimationSet& animations)
+	RigMeta*
+	Scene::FindRig(RigHandle rig) noexcept
 	{
+		if (!rig.IsValid() || !m_Rigs.IsValid(rig.handle))
+		{
+			return nullptr;
+		}
+
+		return &m_Rigs.MetaAt(rig.handle.index);
+	}
+
+	RigHandle
+	Scene::AddRig(const assetlib::Skeleton& skeleton, const assetlib::AnimationSet& animations)
+	{
+		ValidateSkinnedRig(skeleton, animations);
+
+		const uint32_t boneCount = static_cast<uint32_t>(skeleton.bones.size());
+
+		// Depth is derived rather than read: no container carries it, and one forward pass is
+		// enough because a parent always precedes its child.
+		auto     bones    = std::vector<idl::SkinnedBone>();
+		uint32_t maxDepth = 0;
+		bones.reserve(boneCount);
+		for (const assetlib::Bone& bone : skeleton.bones)
+		{
+			const uint32_t depth =
+				bone.parent == idl::cInvalidBone ? 0 : bones[bone.parent].depth + 1;
+			maxDepth = std::max(maxDepth, depth);
+			bones.push_back({ bone.inverseBind, bone.parent, depth });
+		}
+
+		auto samples = std::vector<idl::BoneSample>();
+		samples.reserve(animations.samples.size());
+		for (const assetlib::Transform& sample : animations.samples)
+		{
+			samples.push_back(
+				{ glm::vec4(sample.translation, 0.0f),
+			      glm::vec4(
+					  sample.rotation.x,
+					  sample.rotation.y,
+					  sample.rotation.z,
+					  sample.rotation.w),
+			      glm::vec4(sample.scale, 0.0f) });
+		}
+
+		auto clips = std::vector<idl::Clip>();
+		clips.reserve(animations.clips.size());
+		for (const assetlib::AnimationClip& clip : animations.clips)
+		{
+			clips.push_back(
+				{ clip.firstSample / boneCount,
+			      clip.frameCount,
+			      clip.sampleRate,
+			      clip.loop ? 1u : 0u });
+		}
+
+		auto rollback = GeomRollback();
+
 		try
 		{
-			const uint32_t boneCount = static_cast<uint32_t>(skeleton.bones.size());
-
-			// Depth is derived rather than read: no container carries it, and one forward pass is
-			// enough because a parent always precedes its child.
-			auto     bones    = std::vector<idl::SkinnedBone>();
-			uint32_t maxDepth = 0;
-			bones.reserve(boneCount);
-			for (const assetlib::Bone& bone : skeleton.bones)
-			{
-				const uint32_t depth =
-					bone.parent == idl::cInvalidBone ? 0 : bones[bone.parent].depth + 1;
-				maxDepth = std::max(maxDepth, depth);
-				bones.push_back({ bone.inverseBind, bone.parent, depth });
-			}
-
-			auto samples = std::vector<idl::BoneSample>();
-			samples.reserve(animations.samples.size());
-			for (const assetlib::Transform& sample : animations.samples)
-			{
-				samples.push_back(
-					{ glm::vec4(sample.translation, 0.0f),
-				      glm::vec4(
-						  sample.rotation.x,
-						  sample.rotation.y,
-						  sample.rotation.z,
-						  sample.rotation.w),
-				      glm::vec4(sample.scale, 0.0f) });
-			}
-
-			auto clips = std::vector<idl::Clip>();
-			clips.reserve(animations.clips.size());
-			for (const assetlib::AnimationClip& clip : animations.clips)
-			{
-				clips.push_back(
-					{ clip.firstSample / boneCount,
-				      clip.frameCount,
-				      clip.sampleRate,
-				      clip.loop ? 1u : 0u });
-			}
-
-			auto rollback = GeomRollback();
-
-			auto record      = idl::SkinnedGeom();
+			auto record      = idl::Rig();
 			record.bones     = rollback.Track(m_SkinnedBones, m_SkinnedBones.Add(std::span(bones)));
 			record.samples   = rollback.Track(m_BoneSamples, m_BoneSamples.Add(std::span(samples)));
 			record.clips     = rollback.Track(m_Clips, m_Clips.Add(std::span(clips)));
 			record.boneCount = boneCount;
 			record.maxDepth  = maxDepth;
 
-			GeomRecord& geom = m_Geoms[base.handle.index];
-			geom.skinnedGeom = m_SkinnedGeoms.Add(record);
-			geom.clipCount   = static_cast<uint32_t>(clips.size());
-			geom.boneCount   = boneCount;
+			const core::slot_handle entry = m_Rigs.Add(record);
+
+			RigMeta& meta  = m_Rigs.MetaAt(entry.index);
+			meta.boneCount = boneCount;
+			meta.clipCount = static_cast<uint32_t>(clips.size());
+			meta.useCount  = 0;
 
 			rollback.Commit();
-
-			base.geomType = GeomType::kSkinnedMesh;
-			return base;
+			return RigHandle{ entry };
 		}
 		catch (const std::runtime_error& e)
 		{
-			// The geometry half committed above; take it back down so a failed skinned add leaks
-			// nothing. The handle is still the kStaticMesh one here, which is what DeleteGeom
-			// accepts.
-			DeleteGeom(base);
 			throw SceneError(e.what());
 		}
-		catch (...)
+	}
+
+	void
+	Scene::DeleteRig(RigHandle rig)
+	{
+		const RigMeta* meta = FindRig(rig);
+		if (meta == nullptr)
 		{
-			// Not everything the block can raise is a runtime_error -- an allocation failure is
-			// not -- and the cleanup must run on every path.
-			DeleteGeom(base);
-			throw;
+			throw SceneError("RigHandle passed to DeleteRig refers to a deleted or unknown rig");
 		}
+
+		// Refused rather than permitted, unlike a texture asset: a geom left naming freed bone and
+		// sample ranges poses from whatever lands in them next.
+		if (meta->useCount > 0)
+		{
+			throw SceneError(
+				"RigHandle passed to DeleteRig still has geoms skinned to it; delete them first");
+		}
+
+		const idl::Rig record = m_Rigs[rig.handle];
+		m_SkinnedBones.EraseByIndex(record.bones.offsetStart);
+		m_BoneSamples.EraseByIndex(record.samples.offsetStart);
+		m_Clips.EraseByIndex(record.clips.range.offsetStart);
+		m_Rigs.Erase(rig.handle);
 	}
 
 	GeomHandle
@@ -897,11 +920,19 @@ namespace bgl
 		const assetlib::BMesh&          mesh,
 		uint32_t                        meshIndex,
 		std::span<const MaterialHandle> materials,
-		const assetlib::Skeleton&       skeleton,
-		const assetlib::AnimationSet&   animations,
+		RigHandle                       rig,
 		const assetlib::Bounds&         posedBounds)
 	{
-		ValidateSkinnedRig(skeleton, animations);
+		const RigMeta* meta = FindRig(rig);
+		if (meta == nullptr)
+		{
+			throw SceneError("AddSkinnedMeshGeom: rig is null, or names a rig already deleted");
+		}
+
+		// Read out before the geometry is built: the metadata lives in a vector another Add may
+		// reallocate, and nothing below needs the pointer again.
+		const uint32_t rigBoneCount = meta->boneCount;
+		const uint32_t rigClipCount = meta->clipCount;
 
 		if (glm::any(glm::greaterThan(posedBounds.min, posedBounds.max)))
 		{
@@ -941,7 +972,18 @@ namespace bgl
 			materials,
 			BoundingSphereOf(posedBounds.min, posedBounds.max));
 
-		return AttachSkinnedRecords(base, skeleton, animations);
+		GeomRecord& geom = m_Geoms[base.handle.index];
+		geom.rig         = rig.handle;
+		geom.clipCount   = rigClipCount;
+		geom.boneCount   = rigBoneCount;
+
+		// Last, so nothing above can throw with the use already counted.
+		RigMeta* counted = FindRig(rig);
+		gassert(counted != nullptr, "the rig validated above went away mid-add");
+		++counted->useCount;
+
+		base.geomType = GeomType::kSkinnedMesh;
+		return base;
 	}
 
 	GeomHandle
@@ -1650,13 +1692,17 @@ namespace bgl
 			m_VatGeoms.Erase(record.vatGeom);
 		}
 
-		if (record.skinnedGeom)
+		// A rig is shared, so this releases the geom's use of it and frees nothing. DeleteRig frees
+		// the ranges, and refuses until every geom on the rig has been through here.
+		if (record.rig)
 		{
-			const idl::SkinnedGeom skinned = m_SkinnedGeoms[record.skinnedGeom];
-			m_SkinnedBones.EraseByIndex(skinned.bones.offsetStart);
-			m_BoneSamples.EraseByIndex(skinned.samples.offsetStart);
-			m_Clips.EraseByIndex(skinned.clips.range.offsetStart);
-			m_SkinnedGeoms.Erase(record.skinnedGeom);
+			RigMeta* rig = FindRig(RigHandle{ record.rig });
+			gassert(rig != nullptr, "a live skinned geom names a rig that is already gone");
+
+			if (rig != nullptr && rig->useCount > 0)
+			{
+				--rig->useCount;
+			}
 		}
 
 		const auto& submeshes = record.submeshes;

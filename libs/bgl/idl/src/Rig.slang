@@ -1,5 +1,3 @@
-// THIS IS A FILE GENERATED FROM SkinnedGeom.slang. DO NOT EDIT MANUALLY
-
 import BoneSample;
 import Clip;
 import Range;
@@ -7,9 +5,12 @@ import RangeWithCount;
 import SkinnedBone;
 
 // One rig as the GPU sees it: the bone table a hierarchy walk reads, the clip table an instance
-// indexes, and the sample pool both address. Unlike VatGeom this carries no textures -- a skinned
-// pose is computed, not fetched.
-public struct SkinnedGeom
+// indexes, and the sample pool both address.
+//
+// A rig belongs to no mesh. Every geom skinned to the same skeleton and clip set shares one of
+// these, which is what lets a modular unit draw as several meshes on one pose. Unlike VatGeom it
+// carries no textures -- a skinned pose is computed, not fetched.
+public struct Rig
 {
     public Range<SkinnedBone> bones;
     public Range<BoneSample> samples;
