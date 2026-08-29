@@ -36,10 +36,10 @@ not have one.
   when the backend has no raw view, and it hides the byte arithmetic in the caller.*
 
 - **ADR-2 — Materials, and the mesh playback state, each live in one raw arena where every record
-  starts with a fixed header.** The header carries the record's type tag and byte size; a reference
-  names the header. *Rejected: the tag in the reference's low bits (Unity DOTS' shape) — no room for
-  a size later, and the arena shrinks by the tag width. Rejected: no tag, the type known only from the
-  PSO — that is today, and it leaves `Entry<IMaterial>` a lie.*
+  starts with a fixed header.** The header carries the record's type tag; a reference names the
+  header. *Rejected: the tag in the reference's low bits (Unity DOTS' shape) — the arena shrinks by
+  the tag width, and every reader has to mask before it can load. Rejected: no tag, the type known
+  only from the PSO — that is today, and it leaves `Entry<IMaterial>` a lie.*
 
 - **ADR-3 — Static per-PSO specialisation stays; only a pass shared across kinds reads the
   header.** Opaque, alpha-test and hashed PSOs are compiled for one material kind and read the payload
@@ -71,18 +71,23 @@ not have one.
   16-byte block index — reaches 64 GB on paper, but the view cannot, and `Load` wants bytes.
   Rejected: reserving only the header — a null payload read would land in the first real record.*
 
-- **ADR-7 — A record is a `{uint type; uint byteSize}` header at a 16-byte-aligned offset with its
-  payload 16 bytes after; an untyped range is 16-byte-aligned bytes with no header.** `RawEntry<T>`
-  names a record, `RawRange` names a range, and the arena allocates both. The alignment the decoder
-  and every payload load actually rely on is 4 bytes — Slang lowers a raw load to what the target can
-  do at that alignment, and task 1 proves it on the machine's backend before anything rests on it.
-  Records are on a 16-byte grid anyway so that a payload sits at its own natural alignment (a
-  `float4` at 16) and a whole-struct `Load<T>` can never be emitted wider than the address allows.
-  `byteSize` is there so a debug build can assert a `Load<T>` does not overrun its record and so an
-  arena can be walked. *Rejected: a 4-byte tag with the payload at +4 — every vector field then sits
-  off its natural alignment. Rejected: a header on a vertex range — there is no kind to record and the
-  non-goals forbid inventing one. Rejected: no size — cheaper by four bytes and nothing can check a
-  read.*
+- **ADR-7 — A record is a `{uint type}` header at a 16-byte-aligned offset with its payload 16
+  bytes after; an untyped range is 16-byte-aligned bytes with no header.** `RawEntry<T>` names a
+  record, `RawRange` names a range, and the arena allocates both. The tag is a `uint` lane in the IDL
+  struct because one header serves every arena and the enums differ per arena (`MaterialType` is one
+  byte on the CPU; the header wants a 4-byte lane on every target); the enum lives at the edges — the
+  CPU arena is templated on its tag enum so no caller writes a bare integer, and a shader reads the
+  tag through the arena's enum at the one branch that looks at it. There is no size in the header:
+  a record's size is a function of its type, so a debug build asserts the tag matches the `T` being
+  loaded, which is the stronger check. The alignment the decoder and every payload load actually
+  rely on is 4 bytes — Slang lowers a raw load to what the target can do at that alignment, and task
+  1 proves it on the machine's backend before anything rests on it. Records are on a 16-byte grid
+  anyway so that a payload sits at its own natural alignment (a `float4` at 16) and a whole-struct
+  `Load<T>` can never be emitted wider than the address allows. *Rejected: a 4-byte tag with the
+  payload at +4 — every vector field then sits off its natural alignment. Rejected: a `byteSize` in
+  the header — redundant with the tag for every reader that knows the enum, and nothing walks an
+  arena. Rejected: a header on a vertex range — there is no kind to record and the non-goals forbid
+  inventing one.*
 
 ## Non-goals
 
@@ -229,11 +234,14 @@ weights). The same stale "emitted into src/idl" claim sits in
   beside `ComputeBuffer`; `RawEntry<T>` (generic, so a Slang copy and a hand-written mirror like
   `Entry`), `RawRange` and `RecordHeader` (concrete, so generated into C++ like every other IDL
   struct); `ByteBuffer` deleted.
-- **Mirror buffer** (`libs/bgl/src/scene`): `RawBuffer`, the byte-arena counterpart of `RangeBuffer`:
-  16-byte-aligned ranges and records, the reserved null record, a header written with every record,
-  growth that refuses past 2³² bytes, and dirty-block and copy arithmetic in 64 bits so an arena at
-  the cap does not wrap the way `RangeBuffer`'s `uint32_t` offsets would. `GrowableGpuBuffer` learns
-  the raw view.
+- **Mirror buffer** (`libs/bgl/src/scene`): `RawBuffer<Tag>`, composed over a
+  `RangeBuffer<RawBlock>` whose element is a 16-byte block — so allocation, the reserved element 0,
+  dirty tracking and growth are `RangeBuffer`'s, not a fourth allocator's. What it adds is the unit
+  conversion (a block index in, a byte offset out), the reserved null record, `AddRecord(Tag, bytes)`
+  which writes the tag ahead of the payload, `AddBytes` for a headerless range, and the refusal past
+  2³² bytes. `RangeBuffer`'s dirty-block and copy arithmetic is widened to 64 bits, since a 16-byte
+  element at the cap wraps its `uint32_t` byte offsets. `GrowableGpuBuffer` learns the raw view, which
+  `RangeBufferDesc` asks for.
 - **Vertex data** (`Scene`, `Submesh`, `mesh_stage`, `vertexdecode`, `util/Vertex`): the arena is a
   `RawBuffer`, `Submesh.vertexData` a `RawRange`, the decoder loads `float2/3/4` and `uint` directly.
   Could break: every golden, the overflow and delete tests — which is why they are the gate.
@@ -276,13 +284,13 @@ weights). The same stale "emitted into src/idl" claim sits in
    which proves the raw UAV on D3D12 and that `RWByteAddressBuffer.Handle` lowers on Metal. All three
    run before anything is built on the answers.
 
-2. **`feat(bgl): a byte arena the scene can allocate records in`** — `scene/RawBuffer.h`,
-   `RawEntry<T>` in the IDL with its hand-written mirror, `RawRange` and `RecordHeader` generated,
-   the reserved null record sized by the owner, 16-byte-aligned ranges and records, the header write,
-   the growth refusal, 64-bit offset arithmetic, and the three stale "emitted into src/idl" lines
-   corrected. Still unused by a pass. *Gate:* `Raw_test.cpp` in `Range_test.cpp`'s shape — the
-   reservation and its size, alignment of every handle, the header at each record, no header on a
-   range, dirty blocks, growth preserving offsets; and the device-free cap test in
+2. **`feat(bgl): a byte arena the scene can allocate records in`** — `scene/RawBuffer.h` over
+   `RangeBuffer<RawBlock>`, `RawEntry<T>` in the IDL with its hand-written mirror, `RawRange` and
+   `RecordHeader` generated, the reserved null record sized by the owner, the tag write, the growth
+   refusal, `RangeBuffer`'s byte arithmetic widened to 64 bits, and the three stale "emitted into
+   src/idl" lines corrected. Still unused by a pass. *Gate:* `Raw_test.cpp` in `Range_test.cpp`'s
+   shape — the reservation and its size, every offset a multiple of 16, the tag at each record, no
+   header on a range, dirty blocks, growth preserving offsets; and the device-free cap test in
    `GrowableCapacity_test.cpp`'s shape — the growth arithmetic throws past 2³² bytes, and a dirty
    block at the top of the address space computes its byte range without wrapping.
 
