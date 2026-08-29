@@ -101,7 +101,7 @@
 ###############################################################################
 libs/bgl/src/idl/**         text eol=lf
 libs/bgl/shaders/src/idl/**  text eol=lf
-libs/bgl/include/bgl/MaterialType.h  text eol=lf
+libs/bgl_intfc/include/bgl/MaterialType.h  text eol=lf
 
 ###############################################################################
 # Git hooks are executed as shell scripts, including by Linux/macOS checkouts.

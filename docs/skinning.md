@@ -124,8 +124,8 @@ not obvious from a signature. The headers linked below are the source of truth.
 | Ground | [`assetlib::groundClips`](libs/assetlib/include/assetlib/skinning.h) | At cook, before the boxes: each clip is moved so the lowest point its mesh reaches over it rests on `y = 0` |
 | Bound | [`assetlib::bakePosedBounds`](libs/assetlib/include/assetlib/skinning.h) | At import: sweeps a box per bone through every frame (`posedBounds`) and stores the result in the `.banim`, keyed by a content signature so a re-authored source falls back to measuring |
 | Acquire | [`AssetManager::AcquireSkinnedMesh`](libs/gamelib/include/gamelib/AssetManager.h) | Reads the three containers, checks the clip set still matches its rig, culls by the baked box (`findPosedBounds`) — measuring only a pairing the cook never saw — uploads |
-| Upload | [`IScene::AddSkinnedMeshGeom`](libs/bgl/include/bgl/IScene.h) | Bones, clip table and sample pool become scene buffers; per-bone depth is derived here |
-| Place | [`ISceneView::CreateSkinnedMeshInstance`](libs/bgl/include/bgl/ISceneView.h) | Writes the playback record and reserves the instance's palette slice |
+| Upload | [`IScene::AddSkinnedMeshGeom`](libs/bgl_intfc/include/bgl/IScene.h) | Bones, clip table and sample pool become scene buffers; per-bone depth is derived here |
+| Place | [`ISceneView::CreateSkinnedMeshInstance`](libs/bgl_intfc/include/bgl/ISceneView.h) | Writes the playback record and reserves the instance's palette slice |
 | Pose | [`SkinnedPosePass`](libs/bgl/src/passes/SkinnedPosePass.h) | One workgroup per instance: sample, blend, walk the hierarchy, multiply by inverse bind |
 | Draw | `forward/skinned_vertex.slang` | Blends the bind-pose vertex bytes by the palette; position, normal and tangent through one matrix. Entered from `Forward_SkinnedMesh.slang`, or from `Forward_AnyMesh.slang` where a draw mixes tiers |
 

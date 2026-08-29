@@ -112,10 +112,10 @@ truth; when this doc disagrees, trust the header, then fix this doc.
 ### bgl — draw path
 | Interface | File | Role |
 |---|---|---|
-| `IScene::AddVatMeshGeom` (BMesh overload) | [libs/bgl/include/bgl/IScene.h](libs/bgl/include/bgl/IScene.h) | One cooked mesh as VAT geometry: per-submesh column bases, all-clips culling spheres |
-| `IScene::AddVatMeshGeom` (array overload) | [libs/bgl/include/bgl/IScene.h](libs/bgl/include/bgl/IScene.h) | The procedural door: raw bind-pose vertices, single submesh — what tests synthesize through |
-| `ISceneView::CreateVatMeshInstance` | [libs/bgl/include/bgl/ISceneView.h](libs/bgl/include/bgl/ISceneView.h) | Place an instance spawned on a clip/phase/rate |
-| `RenderJob::time` | [libs/bgl/include/bgl/RenderJob.h](libs/bgl/include/bgl/RenderJob.h) | The animation clock, in seconds |
+| `IScene::AddVatMeshGeom` (BMesh overload) | [libs/bgl_intfc/include/bgl/IScene.h](libs/bgl_intfc/include/bgl/IScene.h) | One cooked mesh as VAT geometry: per-submesh column bases, all-clips culling spheres |
+| `IScene::AddVatMeshGeom` (array overload) | [libs/bgl_intfc/include/bgl/IScene.h](libs/bgl_intfc/include/bgl/IScene.h) | The procedural door: raw bind-pose vertices, single submesh — what tests synthesize through |
+| `ISceneView::CreateVatMeshInstance` | [libs/bgl_intfc/include/bgl/ISceneView.h](libs/bgl_intfc/include/bgl/ISceneView.h) | Place an instance spawned on a clip/phase/rate |
+| `RenderJob::time` | [libs/bgl_intfc/include/bgl/RenderJob.h](libs/bgl_intfc/include/bgl/RenderJob.h) | The animation clock, in seconds |
 
 ### gamelib — the seam
 | Interface | File | Role |
@@ -150,8 +150,8 @@ until placement playback gives it a clock of its own.
 | Type | File | Role |
 |---|---|---|
 | `BVat`, `VatClip`, `VatColumns` | [libs/assetlib_structs/include/assetlib_structs/BVat.h](libs/assetlib_structs/include/assetlib_structs/BVat.h) | The container: bounds, tables, palettes, embedded KTX2 payloads |
-| `VatGeomDesc`, `VatClipDesc`, `VatVertex` | [libs/bgl/include/bgl/IScene.h](libs/bgl/include/bgl/IScene.h) | What a decoded `.bvat` (or a test) hands the scene — bgl never reads the container itself |
-| `ISceneView::VatInstanceDesc` | [libs/bgl/include/bgl/ISceneView.h](libs/bgl/include/bgl/ISceneView.h) | The spawn record: clip, phase (fractional frames), rate (0 freezes) |
+| `VatGeomDesc`, `VatClipDesc`, `VatVertex` | [libs/bgl_intfc/include/bgl/IScene.h](libs/bgl_intfc/include/bgl/IScene.h) | What a decoded `.bvat` (or a test) hands the scene — bgl never reads the container itself |
+| `ISceneView::VatInstanceDesc` | [libs/bgl_intfc/include/bgl/ISceneView.h](libs/bgl_intfc/include/bgl/ISceneView.h) | The spawn record: clip, phase (fractional frames), rate (0 freezes) |
 | `AssetManager::VatMesh`, `ClipInfo` | [libs/gamelib/include/gamelib/AssetManager.h](libs/gamelib/include/gamelib/AssetManager.h) | An acquire's result: the geom plus the clip table to pick from. `ClipInfo` is shared with the skinned tier, which describes a clip identically. |
 | `idl::VatGeom`, `idl::VatState` | [libs/bgl/idl/src](libs/bgl/idl/src) | The GPU records (IDL-generated; regenerate with `just idl`) |
 | `idl::Clip` | [libs/bgl/idl/src/Clip.slang](libs/bgl/idl/src/Clip.slang) | One clip's frame span and rate, **shared with the skinned tier** — `firstFrame` is a texture row here. Both tiers allocate out of one `scene.clipBuffer`. |

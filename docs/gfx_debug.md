@@ -81,8 +81,8 @@ registered handler.
   ([DebugReadback.h](libs/bgl/src/debug/DebugReadback.h)), which the build enforces. See
   [IDL Codegen](docs/idlgen.md).
 
-**Consumer API** — [libs/bgl/include/bgl/IGraphics.h](libs/bgl/include/bgl/IGraphics.h),
-[libs/bgl/include/bgl/IGpuAssertionHandler.h](libs/bgl/include/bgl/IGpuAssertionHandler.h):
+**Consumer API** — [libs/bgl_intfc/include/bgl/IGraphics.h](libs/bgl_intfc/include/bgl/IGraphics.h),
+[libs/bgl_intfc/include/bgl/IGpuAssertionHandler.h](libs/bgl_intfc/include/bgl/IGpuAssertionHandler.h):
 * `IGraphics::SetGpuAssertionHandler(IGpuAssertionHandler*)` — install a handler to intercept
   reports instead of crashing; `nullptr` (default) restores the crash.
 * `IGraphics::DiscardPendingGpuAssertions()` — drop in-flight reports without crashing/handling.
@@ -164,7 +164,7 @@ call `logger::…` with no extra include.
   ([Graphics_d3d12.cpp](libs/bgl/src/d3d12/Graphics_d3d12.cpp)). It is truncated **once per
   process**, so multiple `Graphics` instances share one run's log rather than clobbering it.
 * **Level & flush level** come from `GraphicsOptions::logLevel`
-  ([IGraphics.h](libs/bgl/include/bgl/IGraphics.h), enum `kTrace … kOff`). **Default is `kError`**
+  ([IGraphics.h](libs/bgl_intfc/include/bgl/IGraphics.h), enum `kTrace … kOff`). **Default is `kError`**
   — to see the timeline of a run, pass `logLevel = kTrace` when calling `CreateGraphics`.
 * **D3D12 debug-layer messages are forwarded into this same log** (see §5), so validation errors
   and your own `logger::` output interleave in one file.
@@ -209,7 +209,7 @@ Defined in [libs/bgl/src/error/gassert.h](libs/bgl/src/error/gassert.h) (PCH-inc
 **Contracts / gotchas:**
 * **Blame split:** `gassert` is for bgl's *own* broken invariants. For bad input from the caller
   (code that links bgl), throw `GraphicsError`/`ApiError`
-  ([IGraphics.h](libs/bgl/include/bgl/IGraphics.h)) so the caller can catch it.
+  ([IGraphics.h](libs/bgl_intfc/include/bgl/IGraphics.h)) so the caller can catch it.
 * **Not compiled out in Release.** These are function templates with no `NDEBUG` guard —
   `gassert`/`gfatal` still `terminate` on failure in every config. Don't put
   side-effecting expressions in the condition expecting them to vanish.
@@ -246,7 +246,7 @@ same second do still collide.
 ## 5. D3D12 debug layer & GPU validation
 
 Runtime-toggled via `GraphicsOptions` flags
-([IGraphics.h](libs/bgl/include/bgl/IGraphics.h)), applied in the `Graphics` constructor
+([IGraphics.h](libs/bgl_intfc/include/bgl/IGraphics.h)), applied in the `Graphics` constructor
 ([Graphics_d3d12.cpp](libs/bgl/src/d3d12/Graphics_d3d12.cpp)):
 
 * `enableDebugLayer` → `ID3D12Debug::EnableDebugLayer()`. Turns on D3D12 API validation and sets
