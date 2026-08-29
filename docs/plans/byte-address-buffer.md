@@ -32,7 +32,9 @@ not have one.
 ## Decisions
 
 - **ADR-1 — Vertex data lives in a bindless `ByteAddressBuffer` read with typed `Load<T>`.**
-  The RHI gains a raw buffer view; the shader-side `ByteBuffer` emulation and the hand unpacking go.
+  The RHI gains a raw buffer view, and the shader-side `ByteBuffer` emulation goes. The *float*
+  formats become one typed load each; the normalized and integer ones keep their unpacking, because
+  a raw buffer does no format conversion — that is what a typed view is for.
   *Rejected: keeping `StructuredBuffer<uint>` with word loads and bit shifts — it is what you write
   when the backend has no raw view, and it hides the byte arithmetic in the caller.*
 

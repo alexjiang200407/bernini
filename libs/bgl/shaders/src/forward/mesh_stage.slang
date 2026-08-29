@@ -64,6 +64,11 @@ public MeshletContext PrepareMeshlet(SubmeshInstance instance, uint gid)
     );
     dbg_assert(ctx.submesh.layout.stride > 0, ErrorCode.kInvalidVertexLayout, ctx.submesh.layout.stride, 0, instance.submeshIndex);
 
+    // A submesh with meshlets has vertices. Only the arena's first 16 bytes are the reserved null
+    // record, so a null range decodes a position of zero and reads the first live allocation for
+    // everything past it.
+    dbg_assert(!ctx.submesh.vertexData.Null(), ErrorCode.kNullRawDeref, 0, 0, instance.submeshIndex);
+
     ctx.meshlet = forwardData.meshletBuffer.Get(ctx.submesh.meshlets, gid);
 
     dbg_assert(
@@ -100,7 +105,7 @@ public DecodedVertex DecodeMeshletVertex(MeshletContext ctx, SubmeshInstance ins
         vertexIdx < ctx.submesh.vertexCount, ErrorCode.kInvalidVertexIndex, vertexIdx, ctx.submesh.vertexCount, instance.submeshIndex
     );
 
-    uint vertexByteBase = ctx.submesh.vertexData.GetStart() * 4 + vertexIdx * ctx.submesh.layout.stride;
+    uint vertexByteBase = ctx.submesh.vertexData.GetStart() + vertexIdx * ctx.submesh.layout.stride;
 
     return DecodeVertex(forwardData.vertexDataBuffer, ctx.submesh.layout, vertexByteBase);
 }
