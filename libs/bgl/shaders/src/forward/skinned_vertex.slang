@@ -1,10 +1,16 @@
-// The skinned tier's vertex evaluation: the bind-pose vertex bytes blended by the instance's bone
-// palette, which SkinnedPosePass wrote this frame.
+// The skinned tier's vertex evaluation: the bind-pose vertex bytes blended by a pose.
+//
+// Where the pose comes from is the instance's, not the geom's. An instance posed per frame reads the
+// palette slice SkinnedPosePass wrote for it; one drawing from its rig's bone anim table reads a pose
+// posed once and shared by every instance on that rig. A null palette is what says which -- a table
+// instance is allocated none, because it needs none.
 //
 // One of three; forward/mesh_stage.slang holds what they share and says why the split exists. Two
 // entry points call this one: Forward_SkinnedMesh, which draws the PSO-bucketed phase, and
 // Forward_AnyMesh, which draws lists that mix tiers.
 
+import clip_playback;
+import idl.Clip;
 import types.SubmeshInstance;
 import forward.SkinnedData;
 import forward.common;
@@ -35,19 +41,10 @@ float4x4 BoneMatrix(uint paletteBase, uint bone)
 //
 // No renormalising divide: the importer already normalises a vertex whose weights sum to anything
 // other than zero (assetlib's readSkinAttributes), so paying for it per vertex here would only paper
-// over a bad cook.
-//
-// Zero is the exception, and it is ordinary rather than broken input: an exporter writes four zero
-// weights for a vertex it never assigned to a bone. Summing those gives a zero matrix, which would
-// collapse the vertex onto the origin, so it falls back to identity -- the bind-pose vertex, which is
-// exactly what assetlib::skinSubmesh (the CPU reference this path is measured against) returns for it.
+// over a bad cook. A vertex bound to no bone never reaches here -- SkinnedVertex answers that one
+// for both pose sources.
 float4x4 SkinMatrix(uint paletteBase, float4 joints, float4 weights)
 {
-    if (dot(weights, float4(1.0, 1.0, 1.0, 1.0)) <= 0.0)
-    {
-        return float4x4(float4(1.0, 0.0, 0.0, 0.0), float4(0.0, 1.0, 0.0, 0.0), float4(0.0, 0.0, 1.0, 0.0), float4(0.0, 0.0, 0.0, 1.0));
-    }
-
     float4x4 skin = weights.x * BoneMatrix(paletteBase, uint(joints.x));
 
     [unroll]
@@ -59,6 +56,49 @@ float4x4 SkinMatrix(uint paletteBase, float4 joints, float4 weights)
     }
 
     return skin;
+}
+
+// One bone's matrix out of the rig's table, at an absolute frame of the rig's clip set. The table is
+// frame-major, addressed exactly as the sample pool it was posed from.
+float4x4 TableMatrix(Rig rig, uint frame, uint bone)
+{
+    let slot = rig.boneAnimTable.GetStart() + (frame * rig.boneCount + bone) * cFloat4sPerBone;
+    return float4x4(
+        skinnedData.boneAnimTables[slot + 0],
+        skinnedData.boneAnimTables[slot + 1],
+        skinnedData.boneAnimTables[slot + 2],
+        float4(0.0, 0.0, 0.0, 1.0)
+    );
+}
+
+// The palette read's twin, against the table at one frame: same blend, different fetch.
+float4x4 TableSkinMatrix(Rig rig, uint frame, float4 joints, float4 weights)
+{
+    float4x4 skin = weights.x * TableMatrix(rig, frame, uint(joints.x));
+
+    [unroll]
+    for (uint i = 1; i < cInfluencesPerVertex; ++i)
+    {
+        skin += weights[i] * TableMatrix(rig, frame, uint(joints[i]));
+    }
+
+    return skin;
+}
+
+// A fractional frame is the blend of the two frames' *skin matrices*, not of two skinned positions:
+// skinning is linear in the matrices, so the two agree, and this pays one blend per vertex instead
+// of one per attribute. The frame indices are clip-local and the table is addressed globally, so the
+// clip's own base is added to each.
+float4x4 SkinFromTable(Rig rig, Clip clip, float frames, float4 joints, float4 weights)
+{
+    uint f0;
+    uint f1;
+    float weight;
+    ClipFrameIndices(clip, frames, f0, f1, weight);
+
+    return lerp(
+        TableSkinMatrix(rig, clip.firstFrame + f0, joints, weights), TableSkinMatrix(rig, clip.firstFrame + f1, joints, weights), weight
+    );
 }
 
 public ForwardVSOut SkinnedVertex(MeshletContext ctx, SubmeshInstance instance, uint v)
@@ -81,17 +121,40 @@ public ForwardVSOut SkinnedVertex(MeshletContext ctx, SubmeshInstance instance, 
     );
 #endif
 
-    let base = state.palette.GetStart();
-    float4x4 skin = SkinMatrix(base, vertex.joints, vertex.weights);
+    // Both branches produce this frame's matrix and the one the previous frame drew, because the
+    // motion vector needs both -- and neither remembers anything, so an instance spawned mid-frame
+    // is correct on its first. That holds only while time is the sole input to a pose: a clip
+    // switched between frames would reproject through the wrong clip.
+    float4x4 skin;
+    float4x4 prevSkin;
+
+    // Zero weights are ordinary rather than broken input: an exporter writes four of them for a
+    // vertex it never assigned to a bone, and summing those gives a zero matrix that would collapse
+    // the vertex onto the origin. The bind pose is what assetlib::skinSubmesh -- the CPU reference
+    // both sources are measured against -- returns for it. Answered here, once, because neither
+    // source can answer it differently.
+    if (dot(vertex.weights, float4(1.0, 1.0, 1.0, 1.0)) <= 0.0)
+    {
+        skin = float4x4(float4(1.0, 0.0, 0.0, 0.0), float4(0.0, 1.0, 0.0, 0.0), float4(0.0, 0.0, 1.0, 0.0), float4(0.0, 0.0, 0.0, 1.0));
+        prevSkin = skin;
+    }
+    else if (state.palette.Null())
+    {
+        Clip clip = skinnedData.clipBuffer.Get(rig.clips, state.clip);
+
+        skin = SkinFromTable(rig, clip, ClipFrames(clip, state.phase, state.rate, viewData.time), vertex.joints, vertex.weights);
+        prevSkin = SkinFromTable(rig, clip, ClipFrames(clip, state.phase, state.rate, viewData.prevTime), vertex.joints, vertex.weights);
+    }
+    else
+    {
+        // The pose pass wrote the previous frame's into the second half of this instance's slice, so
+        // the reprojection is one more blend rather than a history buffer.
+        let base = state.palette.GetStart();
+        skin = SkinMatrix(base, vertex.joints, vertex.weights);
+        prevSkin = SkinMatrix(base + rig.boneCount * cFloat4sPerBone, vertex.joints, vertex.weights);
+    }
 
     float4 worldPos = mul(ctx.mesh.transform, mul(skin, float4(vertex.position, 1.0)));
-
-    // The pose the previous frame drew. The pose pass wrote it into the second half of this
-    // instance's slice, so the reprojection is one more blend rather than a history buffer. That
-    // holds only while time is the sole input to a pose: a clip switched between frames would
-    // reproject through the wrong clip.
-    let prevBase = base + rig.boneCount * cFloat4sPerBone;
-    float4x4 prevSkin = SkinMatrix(prevBase, vertex.joints, vertex.weights);
     float4 prevWorldPos = mul(ctx.mesh.transform, mul(prevSkin, float4(vertex.position, 1.0)));
 
     ForwardVSOut vertexOut;

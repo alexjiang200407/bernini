@@ -21,6 +21,8 @@ public struct SkinnedState
     // This instance's slice of the view's bone-palette buffer, in float4s. Two palettes live in it
     // back to back -- the pose at ViewData::time first, then the pose at ViewData::prevTime
     // cFloat4sPerBone * boneCount later -- so the mesh shader can skin both and derive a motion
-    // vector without a history buffer. Allocated at spawn and freed with the instance.
+    // vector without a history buffer. Allocated at spawn and freed with the instance -- but only on
+    // a kPerInstance one. Null on an instance reading its rig's boneAnimTable, and the mesh shader
+    // branches on exactly that.
     public Range<float4> palette;
 };

@@ -338,7 +338,9 @@ frames would reproject through the wrong clip.
   `scene.skinnedBoneBuffer`, `scene.clipBuffer`, `scene.boneSampleBuffer`.
 * **Out:** `scene.bonePalettes`, the view's `BonePaletteBuffer` — GPU-only storage with a CPU-side offset
   allocator, because a `RangeBuffer` would re-upload its stale CPU mirror over what this wrote.
-* **Skipped** when the view places no skinned instance.
+* **Skipped** when the view places no skinned instance — and an instance drawing from its rig's bone
+  anim table is not one of them. The dense list is built from instances that own a palette, which is
+  what this pass writes into; a table instance owns none and is posed by `Pose Rig Frames` once.
 
 ### Pose Rig Frames
 

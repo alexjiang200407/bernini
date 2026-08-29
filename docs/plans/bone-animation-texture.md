@@ -38,6 +38,13 @@ frame.
   chosen, and two paths for one thing is what the library bar forbids; a follow-up — never
   scheduled. Our VAT reads a rig, not a point cache, so no sim use is lost: a Houdini-style VAT is a
   new importer either way, and git history keeps this draw path.*
+
+  **Frame time is not the case, and task 5 should not argue as though it were.** VAT skips both the
+  pose walk and the table's per-vertex fetches for a texture read, so a fair measurement may well
+  put it ahead of the table on a single static unit. What VAT cannot do is share one pose across a
+  modular unit's slots, and its memory scales `verts × frames` per mesh against the table's
+  `bones × frames` per rig. The retirement rests on that, on the library bar, and on there being no
+  rule that says when VAT would be chosen. Task 5's timing is recorded, not relied on.
 - **ADR-3 — The palette belongs to the rig: keyed on (skeleton, clip set), never on a mesh.**
   *Rejected: per-mesh, which `.bvat` and `AddSkinnedMeshGeom` both do today — a five-slot kit
   uploads five identical rigs.*
@@ -274,8 +281,25 @@ per rig is this plan's cost to carry.
    `CreateSkinnedInstance` passing the source through; `docs/skinning.md` gains the crowd tier.
    *Gate:* the parity case (both sources, one rig, pixel-equal at integer frames, tolerance
    between, motion vectors); the gamelib end-to-end two-slot unit; `--gpu-validation`; a hidden
-   `[.timing]` case spawning N instances on VAT, the table and the per-instance tier, run by hand —
+   `[.posetiming]` case spawning N instances on the table and the per-instance tier, run by hand —
    its numbers go in this PR's body and ADR-2's.
+
+   *Correction, from building it:* the gate named VAT as a third leg of that measurement. It is not
+   one here. VAT geometry comes through a different door — a baked texture pair over a procedural
+   quad — so timing it beside a skinned strip would compare two meshes and read like a comparison of
+   two tiers. The leg moves to task 5, where a gamelib fixture can bake a `.bvat` from the very mesh
+   the table is posed from and make it fair. What task 3 measures is the pair that *can* share a
+   mesh: 2,000 instances of a 64-bone rig six levels deep, 1.22 ms/frame per-instance against 1.06
+   on the table — the median of three runs.
+
+   *A second correction, from measuring it three times:* the first number recorded here was 2.75
+   against 1.83 and it was wrong twice over — taken while another suite had the machine, and on the
+   two-bone fixture rig, which gives the pose pass almost nothing to remove. Re-measured on a
+   64-bone rig it read ≈1.48 against ≈0.99; but that rig was a 64-deep *chain*, and the walk costs a
+   barrier-synced level per depth, so it was the most expensive rig of its size that exists. As a
+   binary tree — six levels, which is what a rig looks like — the honest figure is the pair above,
+   about 13%, and it is an upper bound rather than a floor: the fixture's reads are as cache-hot as
+   they get. Each correction made the tier look worse and the number more usable.
 4. **`feat(editor): the Animation panel previews the crowd tier`** — the selector, the load plan
    without bake steps, the dialogs removed.
    *Gate:* `editor_tests` `AnimationDraws` re-pinned to a plan with no bake decision; an **Eyes**

@@ -292,11 +292,22 @@ namespace bgl
 				"range for the geom's clip table");
 		}
 
-		// Two palettes, back to back: the pose at `time` and the pose at `prevTime`, which is what
-		// lets the mesh shader write a motion vector without a history buffer.
-		const uint32_t float4s = idl::cFloat4sPerBone * rig.boneCount * 2;
+		// A palette only for an instance the pose pass writes. One reading its rig's table needs no
+		// storage of its own, and its null palette is what the mesh shader branches on.
+		auto palette = core::multi_slot_handle();
 
-		const core::multi_slot_handle palette = m_Palettes.Allocate(float4s);
+		if (desc.source == PoseSource::kPerInstance)
+		{
+			// Two palettes, back to back: the pose at `time` and the pose at `prevTime`, which is
+			// what lets the mesh shader write a motion vector without a history buffer.
+			palette = m_Palettes.Allocate(idl::cFloat4sPerBone * rig.boneCount * 2);
+		}
+		else
+		{
+			// Asked for here rather than at AddRig, so a rig no crowd instance is spawned on never
+			// pays for a table. RigFramesPass fills it before anything reads it this frame.
+			m_SceneRaw->RequestBoneAnimTable(RigHandle{ rig.record });
+		}
 
 		auto state    = idl::SkinnedState();
 		state.rig     = rig.record;
@@ -318,7 +329,11 @@ namespace bgl
 		catch (...)
 		{
 			m_Playback.Erase(record.byteOffset);
-			m_Palettes.Free(palette);
+
+			if (palette)
+			{
+				m_Palettes.Free(palette);
+			}
 			throw;
 		}
 	}
@@ -426,7 +441,11 @@ namespace bgl
 			// The palette and the pose list are the skinned tier's alone; a VAT record owns neither.
 			if (meta.geomType == GeomType::kSkinnedMesh)
 			{
-				m_Palettes.Free(meta.palette);
+				// Null on an instance that read its rig's table, which owns nothing of its own.
+				if (meta.palette)
+				{
+					m_Palettes.Free(meta.palette);
+				}
 				m_PosedDirty = true;
 			}
 		}
@@ -510,7 +529,7 @@ namespace bgl
 			}
 
 			const MeshMeta& meta = m_MeshBuffer.MetaAt(meshIndex);
-			if (meta.geomType == GeomType::kSkinnedMesh && meta.animState != 0)
+			if (meta.geomType == GeomType::kSkinnedMesh && meta.animState != 0 && meta.palette)
 			{
 				list.push_back(meta.animState);
 			}
