@@ -9,8 +9,8 @@ namespace bgl
 	{
 		MaterialType materialType = MaterialType::kInvalid;
 
-		// Orthogonal to the type: it is the (layer, type) pair that picks the PSO bucket, so a
-		// submesh cannot know which bucket it belongs in from the material's storage alone.
+		// Orthogonal to the type: it is the (layer, type) pair that decides how a submesh is drawn,
+		// which a submesh cannot know from the material's storage alone.
 		LayerType layerType = LayerType::kOpaque;
 
 		core::slot_handle handle;

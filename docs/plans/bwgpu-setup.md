@@ -121,6 +121,10 @@ Read literally by [bcp-precheck](../../.claude/agents/bcp-precheck.md) § 4 agai
 - **No change to `RenderTargetDesc::wnd`** ([IRenderTarget.h](../../libs/bgl/include/bgl/IRenderTarget.h)
   `:31`). It is already an opaque `void*`; only its comment enumerates HWND and CAMetalLayer, and a
   third case gets added when there is a third renderer.
+- **No change to `GraphicsOptions::gpuCapturePath`** ([IGraphics.h](../../libs/bgl/include/bgl/IGraphics.h)
+  `:63-64`). It is openly per-backend and says so — "Metal only" — which is the honest shape for a
+  field only one renderer can serve. A renderer that cannot capture ignores it, exactly as the
+  capacities note says.
 - **No mechanical gate on comment wording** (ADR-7).
 - **No Vulkan work.** Vulkan fits *under* the RHI as a third backend and reuses all of
   `bgl_objects`; it is a different change at a different seam, and the two cost an order of
@@ -140,14 +144,22 @@ Read literally by [bcp-precheck](../../.claude/agents/bcp-precheck.md) § 4 agai
 - On the hoist task, `git diff --stat` shows **no client source file changed**: CMake, `.gitattributes`,
   `scripts/gen_idl.py` and the moved headers only. That is the claim ADR-2 rests on, and it is
   checkable.
-- `grep -rn -iE "meshlet|bindless|descriptor|heap|dispatch|\bsrv\b|\bpso\b|\bd3d|\bmetal\b|vulkan"`
-  over the public headers returns **only the four sites the non-goals leave standing**:
-  `IRenderTarget.h:29-30` (`wnd`'s HWND/CAMetalLayer comment), `IGraphics.h:63-64`
-  (`gpuCapturePath`, "Metal only"), `IGraphics.h:68-79` (the capacities under their new advisory
-  note) and `IScene.h:40` (`initialMeshlets`, same note). Anything else is a missed site. It matches
-  26 lines today and should match 7 after task 4, all inside those four sites. `\bmetal\b` and not
-  `metal`: the loose form also matches `metallicFactor` at `IScene.h:79,154,170`, so the sloppy
-  version of this gate can never come back clean and would have been quietly ignored.
+- This grep over the public headers returns **only the three sites the non-goals leave standing** —
+  `IRenderTarget.h:29-30` (`wnd`'s HWND/CAMetalLayer comment), `IGraphics.h:63-64` (`gpuCapturePath`,
+  "Metal only") and the `maxCbvSrvUavs` explanation under `IGraphics.h`'s advisory note — for five
+  lines in total. Anything else is a missed site. `SceneDesc::initialMeshlets` is a non-goal too but
+  never appears here: `\bmeshlets?\b` finds no boundary inside `initialMeshlets`, so the identifier
+  is invisible to this gate and has to be watched by eye.
+
+  ```
+  grep -rn -iE "\bmeshlets?\b|\bbindless\b|\bdescriptors?\b|\bheaps?\b|\bdispatch\b|\bsrv\b|\bpso\b|\bd3d|\bmetal\b|\bvulkan\b" libs/bgl/include/bgl/
+  ```
+
+  **24 lines before task 4, 5 after.** *Corrected during task 4: this was first written with bare
+  alternatives and the wrong counts.* Every term needs its word boundaries, and two of them prove
+  why — unbounded, `metal` matches `metallicFactor` (`IScene.h:79,154,170`) and `heap` matches
+  **`cheaply`** (`ISceneView.h:14`). A gate that can never come back clean is a gate the next person
+  reads as noise and stops running.
 
 ## What the survey found
 
@@ -322,7 +334,7 @@ Before task 5 for the same reason as task 3: edit in place, then move.
 
 **Gate.** `just build && just test` — the rename does not compile if a site is missed, and nothing
 else in the task can change behaviour. `just format` on every touched header. Then the grep from
-Acceptance, which must come back to exactly the four non-goal sites named there and nothing else.
+Acceptance, which must come back to exactly the three non-goal sites named there and nothing else.
 That grep is the gate this task is measured by, so it is run and its output pasted into the PR.
 
 ### 5. Hoist the contract into `libs/bgl_intfc`, with its self-check

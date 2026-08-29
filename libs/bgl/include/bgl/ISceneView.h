@@ -11,7 +11,7 @@ namespace bgl
 	 *
 	 * The SceneView owns the per-view instance buffer and references the Scene whose
 	 * geometry it instances. Many SceneViews can share a single Scene, so geometry
-	 * (meshlets/vertices/indices) is stored once and instanced cheaply per view.
+	 * is stored once and instanced cheaply per view.
 	 * Rendering takes a SceneView (see RenderJob), not a Scene.
 	 */
 	class BGL_API ISceneView : public core::Ref
@@ -76,8 +76,8 @@ namespace bgl
 		/**
 		 * Overrides the material of one submesh of ONE instance, leaving the geom's default -- and
 		 * every other instance of it -- alone. This is what a cosmetic skin is: one mesh, a different
-		 * material per unit. The PSO follows the override, so an opaque instance and a cutout instance
-		 * of the same geom draw from different pipelines.
+		 * material per unit. The renderer groups draws by the *resolved* material, so an opaque
+		 * instance and a cutout instance of the same geom are drawn independently.
 		 *
 		 * The override outranks the default: a later Scene::SetSubmeshMaterial does not disturb it.
 		 *
