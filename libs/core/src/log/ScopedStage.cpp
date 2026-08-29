@@ -29,18 +29,13 @@ namespace core::logging
 		}
 	}
 
-	ScopedStage::ScopedStage(
-		Formatted,
-		const std::chrono::milliseconds quietBelow,
-		std::string                     name) noexcept :
-		m_Name(std::move(name)), m_Start(std::chrono::steady_clock::now()), m_QuietBelow(quietBelow)
+	ScopedStage::ScopedStage(Formatted, std::string name) noexcept :
+		m_Name(std::move(name)), m_Start(std::chrono::steady_clock::now())
 	{}
 
 	ScopedStage::~ScopedStage()
 	{
 		const std::chrono::duration<double, std::milli> elapsed = Elapsed();
-		if (elapsed < m_QuietBelow)
-			return;
 
 		// A sink that throws must not take the stage's caller down with it: a bake that finished
 		// has finished, and this line is a diagnostic.
