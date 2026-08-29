@@ -96,31 +96,6 @@ TEST_CASE("A stage logs nothing until it ends", "[log][scopedstage]")
 	CHECK(captured.Lines().empty());
 }
 
-TEST_CASE("A stage under its threshold stays silent", "[log][scopedstage]")
-{
-	const auto captured = CapturedLog();
-
-	{
-		const auto stage = ScopedStage(std::chrono::milliseconds(10'000), "thumbnail tick");
-	}
-
-	CHECK(captured.Lines().empty());
-}
-
-TEST_CASE("A stage over its threshold is logged", "[log][scopedstage]")
-{
-	const auto captured = CapturedLog();
-
-	{
-		const auto stage = ScopedStage(std::chrono::milliseconds(1), "slow thumbnail tick");
-		BurnMilliseconds(3.0);
-	}
-
-	const std::vector<std::string> lines = captured.Lines();
-	REQUIRE(lines.size() == 1);
-	CHECK(lines[0].find("slow thumbnail tick") != std::string::npos);
-}
-
 TEST_CASE("A stage survives a logger that only wants errors", "[log][scopedstage]")
 {
 	// The default logger's level is the renderer's -- init_file_logger sets it from

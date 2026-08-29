@@ -18,6 +18,7 @@
 #include <assetlib/mesh_tangents.h>
 #include <assetlib_structs/BMesh.h>
 #include <assetlib_structs/BMeshImport.h>
+#include <core/log/ScopedStage.h>
 
 namespace
 {
@@ -183,8 +184,11 @@ namespace editor
 		// the writer knows whether it produced the rig or bound one already here.
 		auto rigOutputs = std::vector<std::string>();
 
-		const auto importStart = std::chrono::steady_clock::now();
-		double     workerMs    = 0.0;
+		// The stage's line lands in the same log as the assetlib stages it brackets, so a slow
+		// import's parts add up to a total. The worker/UI split below is what it cannot say.
+		const auto importStage =
+			core::logging::ScopedStage("editor import: {}", name.toStdString());
+		double workerMs = 0.0;
 
 		background::TaskResult result = background::RunWithLoadingScreen(
 			parent,
@@ -263,9 +267,7 @@ namespace editor
 					store.WriteImportedDocument(target, nullptr);
 				}
 
-				workerMs = std::chrono::duration<double, std::milli>(
-							   std::chrono::steady_clock::now() - importStart)
-			                   .count();
+				workerMs = importStage.Elapsed().count();
 			},
 			background::Cancellable::kYes);
 
@@ -312,10 +314,7 @@ namespace editor
 					"Import: '%s' -- %.0f ms on the worker, %.0f ms on the UI thread",
 					qPrintable(name),
 					workerMs,
-					std::chrono::duration<double, std::milli>(
-						std::chrono::steady_clock::now() - importStart)
-							.count() -
-						workerMs);
+					importStage.Elapsed().count() - workerMs);
 
 				return ImportOutcome::kImported;
 			}

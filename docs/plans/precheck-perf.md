@@ -40,8 +40,20 @@ so a slow load cannot be attributed from a log at all.
   | Site | What it actually is | Disposition |
   |---|---|---|
   | `libs/assetlib/src/envmap_bake.cpp:827` | fills `PrefilterStats::seconds`, an out-param **read by nothing**, passed non-null only by `EnvmapBake_test.cpp:331` | converts; the dead field goes |
-  | `apps/editor/src/Thumbnails/AssetThumbnailCache.cpp:478` | warns only above `c_SlowTickMs`, over three hand-measured sub-durations | converts only the outer tick, which is why `ScopedStage` takes a threshold |
+  | `apps/editor/src/Thumbnails/AssetThumbnailCache.cpp:478` | warns only above `c_SlowTickMs`, over three sub-durations measured *during* the tick and reported at two exit points | **stays** — see below |
   | `apps/editor/src/Import/import_pipeline.cpp:186` | splits worker ms from UI ms across a loading screen | outer bracket converts; the worker/UI split stays — it names *which thread froze*, which no stage timer knows |
+
+  **Amended again by task 4.** The thumbnail tick is not converted, and the reason is a property of
+  `ScopedStage` rather than a matter of taste: the stage name is **formatted eagerly**, at
+  construction, so a per-frame path pays a `std::format` and its allocation on every tick even when
+  the threshold keeps the line silent. `AssetThumbnailCache`'s existing warning formats only after it
+  has decided the tick was slow. Converting it would put an allocation on a UI path to tidy up a
+  diagnostic — which is the exact defect this feature exists to catch. It would also lose
+  `build`/`draw`/`submitted`, which are measured during the tick and so cannot appear in a name fixed
+  at construction. `ScopedStage`'s `quietBelow` threshold goes with it — it existed for this one call
+  site, which is now ruled out by name, and speculative surface is what the strict `libs/` bar
+  forbids. The hazard is stated on `ScopedStage` itself instead, so the next reader does not retry
+  this.
 
 - **ADR-3 — every stage line carries its own elapsed ms.** *Rejected: relying on timestamp diffs,
   and rejected: unifying the editor's two log sinks.*
@@ -171,7 +183,7 @@ so a slow load cannot be attributed from a log at all.
 | `libs/core/tests/src/ScopedStage_test.cpp` | new: the stage logs once, states a duration, and honours the threshold |
 | `libs/assetlib/src/skinning.cpp`, `vat_bake.cpp`, `asset_import.cpp`, `rebake_bounds.cpp` | bracket the posed-bounds bake, the VAT bake and the import walk |
 | `libs/assetlib/src/envmap_bake.cpp`, `libs/assetlib/include/assetlib/envmap.h` | drop the dead `PrefilterStats::seconds`; the stage logs instead |
-| `apps/editor/src/Import/import_pipeline.cpp`, `Thumbnails/AssetThumbnailCache.cpp` | outer brackets converted; the worker/UI split and the three sub-durations stay |
+| `apps/editor/src/Import/import_pipeline.cpp` | the outer bracket converts; the worker/UI split stays, now reading the stage's own clock. `Thumbnails/AssetThumbnailCache.cpp` is deliberately untouched — see ADR-2 |
 | `ROADMAP.md` | a **Content scale** Guiding Constraint and its per-asset-type dimension table |
 | `libs/assetlib/tests/src/Perf_test.cpp` | new: the `[perf]` cases |
 | `.claude/agents/bcp-precheck.md` | the cost lens, as a new section |
@@ -194,9 +206,9 @@ path.
    bake and the import walk; drop the dead `PrefilterStats::seconds`.
    Gate: `just test assetlib`, and a case that captures the stage lines through an spdlog sink and
    asserts the bake emits one.
-3. `refactor(editor): the import and the thumbnail tick time themselves through core` — the two
-   outer brackets. Small, and last in the slice so it can be dropped if it reads as churn.
-   Gate: `just test editor`.
+3. `refactor(editor): the import times itself through core` — one outer bracket, and the first
+   caller of `ScopedStage::Elapsed`. The thumbnail tick keeps its own timer; ADR-2 says why.
+   Gate: `just test editor core`.
 
 **Slice 2 — gate the next one.**
 
