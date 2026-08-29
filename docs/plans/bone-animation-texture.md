@@ -122,9 +122,9 @@ frame.
   same-sized sample pool. Nothing clamps it: a table is as large as its clip set, and the levers
   are authoring and, later, quantization. So the roadmap's "VAT texture memory under 50 MB"
   ceiling ([ROADMAP.md](ROADMAP.md) `:366`) is replaced by a *report and an authoring rule*: the
-  fill logs the table's size, one `ScopedStage` line per rig — `bgl`'s first stage line; today
-  every caller is an `assetlib` cook or the editor's import, and
-  [docs/gfx_debug.md](docs/gfx_debug.md) `:172-180` says so and gains this one — and a crowd rig is authored under 100 bones and 3,000
+  reservation opens a Tracy zone carrying the table's size — `bgl`'s only one, since everything
+  else instrumented is an `assetlib` cook or the editor's start-up, and
+  [docs/profiling.md](docs/profiling.md)'s inventory gains the row — and a crowd rig is authored under 100 bones and 3,000
   frames, which is under 15 MB. The one rig the project holds today, `cha800_00` at 663 bones and
   2,254 frames, would hold 72 MB — a hero rig, which ADR-9 keeps table-less unless a crowd
   instance spawns on it, and the report is what says so when one does. Task 2's PR body carries
@@ -253,14 +253,22 @@ per rig is this plan's cost to carry.
 2. **`feat(bgl): a rig's every frame is posed once, on demand`** — ADR-7, ADR-9. `pose_walk.slang`
    extracted from `PoseSkinned`; the `PoseRigFrames` kernel and pass; `Rig.boneAnimTable` and a
    scene-level `BonePaletteBuffer` whose growth re-queues every filled rig; a test-facing door to
-   request a rig's table ahead of task 3's instances; the fill's stage line, and
-   `docs/gfx_debug.md`'s stage list gaining it.
+   request a rig's table ahead of task 3's instances; the reservation's Tracy zone, and
+   `docs/profiling.md`'s inventory gaining it.
    *Gate:* readback of a synthesized rig's table equals `assetlib::skinningMatrices` at every frame
-   of every clip within float tolerance, and equals the per-instance pose pass at integer time; a
+   of every clip within float tolerance; a
    growth of the arena leaves every table intact (asserted by readback after a forced growth);
    `--gpu-validation` clean; the pose pass's existing readback cases unchanged; the fill's
    CPU-side cost on the test project's largest rig in the PR body, with the `cha800_00`
    extrapolation beside it.
+
+   *Correction, from building it:* the gate also asked that the table equal *the per-instance pose
+   pass* at integer time. Dropped as redundant rather than skipped: both producers now run the same
+   extracted walk, and both are pinned against `assetlib::skinningMatrices` — the table by this
+   task's cases, the pose pass by `SkinnedPose_test`'s — so a divergence between them is a failure of
+   one of those. The addressing risk a direct A/B would have caught, a global frame read as a
+   clip-local one, is covered instead by the table's fixture carrying *two* clips. The cost is a mesh
+   fixture duplicated to place an instance, which buys nothing the two references do not.
 3. **`feat(bgl,gamelib): a skinned instance may draw from the rig's bone anim table`** — ADR-1, ADR-5,
    ADR-8, ADR-10, ADR-4. `PoseSource`, the shader branch, the pose pass skipping table instances,
    `CreateSkinnedInstance` passing the source through; `docs/skinning.md` gains the crowd tier.

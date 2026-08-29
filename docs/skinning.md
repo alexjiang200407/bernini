@@ -50,6 +50,25 @@ not obvious from a signature. The headers linked below are the source of truth.
   does not misrender, it poses from whatever lands in them next. So the caller deletes geoms first —
   `AssetManager` does it in that order, and reference-counts the rig so the last geom takes it down.
 
+* **A rig's every frame can be posed once instead of per instance, into a bone anim table.**
+  `RigFramesPass` runs the same walk over every frame of a rig's clip set and writes the result to
+  `Rig.boneAnimTable`; an instance drawing from it then reads a pose rather than computing one, which
+  is what takes the crowd tier's per-unit cost to nothing. The walk itself is shared rather than
+  reimplemented — [pose_walk.slang](libs/bgl/shaders/src/lib/anim/pose_walk.slang) is what both kernels call,
+  so the two producers cannot drift.
+
+  **It is filled on demand, not at upload.** A rig no crowd instance is ever spawned on never pays
+  for one, which matters because the table is the size of the sample pool it is derived from: 68 MiB
+  for a 663-bone rig with 2,254 frames, against ~9 MiB for a 60-bone crowd rig with 3,000. Reserving
+  it is the cost — a device allocation, ~67 ms at that size, which is the one thing `bgl` opens a
+  Tracy zone for ([docs/profiling.md](profiling.md)). The posing is a dispatch of one workgroup per
+  frame and does not register against a frame at that scale.
+
+  **A growth of the arena re-queues every rig holding a table.** The storage is a
+  `BonePaletteBuffer`, which discards on growth — safe for the per-view palette, which is rewritten
+  every frame, and not for a table written once. Offsets survive a growth, so what a re-queue costs
+  is the posing, not a re-allocation.
+
 * **Skinning happens in the mesh shader, not a compute pre-pass.** There is no transient skinned
   vertex buffer: nothing yet needs to *read back* skinned positions (physics, attachments), and until
   something does, a per-instance per-frame allocation buys nothing.

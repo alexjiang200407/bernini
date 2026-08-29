@@ -11,6 +11,8 @@
 #include <assetlib_structs/BMaterial.h>  // the channel layout the static_asserts below pin us to
 #include <assetlib_structs/Bounds.h>
 #include <core/math.h>
+#include <tracy/Tracy.hpp>
+
 #include <numbers>
 
 namespace bgl
@@ -408,6 +410,8 @@ namespace bgl
 			m_Rigs.Init(std::move(rigBufferDesc), m_ResourceManager);
 		}
 
+		m_BoneAnimTables.Init(m_ResourceManager);
+
 		{
 			auto skinnedBoneBufferDesc         = RangeBufferDesc();
 			skinnedBoneBufferDesc.initialCount = 1;
@@ -448,6 +452,10 @@ namespace bgl
 			}
 		});
 
+		// Outside the tuple, so it needs saying here. No copy is recorded -- the arena discards on
+		// growth -- but a growth still supersedes a device buffer, and this is what retires it.
+		m_BoneAnimTables.Update(cmdList);
+
 		// Textures loaded since the last frame (materials, environment maps) go up on this list, so
 		// the upload rides the same timeline as the frames that sample it -- another context's list
 		// flushing it would leave the two unordered on the GPU.
@@ -486,6 +494,12 @@ namespace bgl
 			fg.ImportBuffer(name, buffer.GetBufferHandle());
 			resourceNames.emplace_back(name);
 		});
+
+		// Outside the tuple because it is not a NamedBuffer: the arena's storage is GPU-only, and a
+		// growth mints a new handle, so this is re-read every frame like the view's palette.
+		auto tables = std::string(c_BoneAnimTableName);
+		fg.ImportBuffer(tables, m_BoneAnimTables.GetBufferHandle());
+		resourceNames.push_back(std::move(tables));
 	}
 
 	GeomHandle
@@ -877,10 +891,11 @@ namespace bgl
 
 			const core::slot_handle entry = m_Rigs.Add(record);
 
-			RigMeta& meta  = m_Rigs.MetaAt(entry.index);
-			meta.boneCount = boneCount;
-			meta.clipCount = static_cast<uint32_t>(clips.size());
-			meta.useCount  = 0;
+			RigMeta& meta   = m_Rigs.MetaAt(entry.index);
+			meta.boneCount  = boneCount;
+			meta.clipCount  = static_cast<uint32_t>(clips.size());
+			meta.frameCount = static_cast<uint32_t>(animations.samples.size() / boneCount);
+			meta.useCount   = 0;
 
 			rollback.Commit();
 			return RigHandle{ entry };
@@ -889,6 +904,111 @@ namespace bgl
 		{
 			throw SceneError(e.what());
 		}
+	}
+
+	void
+	Scene::RequestBoneAnimTable(RigHandle rig)
+	{
+		RigMeta* meta = FindRig(rig);
+		if (meta == nullptr)
+		{
+			throw SceneError(
+				"RigHandle passed to RequestBoneAnimTable is null, or already deleted");
+		}
+
+		if (meta->boneAnimTable)
+		{
+			// Allocated already. Either it holds a pose, or it is waiting for one -- and the sweep in
+			// PendingRigFills is what finds the second case, so there is nothing to record here.
+			return;
+		}
+
+		const uint32_t float4s = meta->frameCount * meta->boneCount * idl::cFloat4sPerBone;
+
+		// Reserving it is what can cost -- a growth reallocates the whole arena on the device. The
+		// posing itself is the GPU's, and no timestamp query exists to measure it from here.
+		ZoneScopedN("bgl reserve bone anim table");
+		ZoneTextF(
+			"%u bones x %u frames, %llu KiB",
+			meta->boneCount,
+			meta->frameCount,
+			(unsigned long long)((uint64_t(float4s) * sizeof(glm::vec4)) / 1024));
+
+		// Read before the allocation, because a growth is what discards every other rig's table and
+		// the capacity is the only thing that reports one.
+		const uint32_t capacityBefore = m_BoneAnimTables.Capacity();
+
+		// The arena discards on growth, and a table is written once rather than every frame, so every
+		// rig holding one has to be posed again. The offsets survive; the contents do not. Run on the
+		// throwing path too: a growth that then fails to hand out the slice has already discarded.
+		const auto requeueIfGrown = [&] {
+			if (m_BoneAnimTables.Capacity() == capacityBefore)
+			{
+				return;
+			}
+
+			for (uint32_t i = 0; i < m_Rigs.Capacity(); ++i)
+			{
+				if (m_Rigs.IsIndexValid(i) && m_Rigs.MetaAt(i).boneAnimTable)
+				{
+					m_Rigs.MetaAt(i).tableFilled = false;
+				}
+			}
+		};
+
+		try
+		{
+			meta->boneAnimTable = m_BoneAnimTables.Allocate(float4s);
+		}
+		catch (const std::runtime_error& e)
+		{
+			requeueIfGrown();
+			throw SceneError(e.what());
+		}
+
+		m_Rigs.MetaAt(rig.handle.index).tableFilled = false;
+
+		auto record          = m_Rigs[rig.handle];
+		record.boneAnimTable = m_Rigs.MetaAt(rig.handle.index).boneAnimTable;
+		m_Rigs.Set(rig.handle, record);
+
+		requeueIfGrown();
+	}
+
+	std::span<const Scene::RigFill>
+	Scene::PendingRigFills()
+	{
+		m_PendingRigFills.clear();
+
+		for (uint32_t i = 0; i < m_Rigs.Capacity(); ++i)
+		{
+			if (!m_Rigs.IsIndexValid(i))
+			{
+				continue;
+			}
+
+			const RigMeta& meta = m_Rigs.MetaAt(i);
+			if (meta.boneAnimTable && !meta.tableFilled)
+			{
+				m_PendingRigFills.push_back(RigFill{ i, meta.frameCount });
+			}
+		}
+
+		return m_PendingRigFills;
+	}
+
+	void
+	Scene::MarkRigFillsRecorded() noexcept
+	{
+		for (const RigFill& fill : m_PendingRigFills)
+		{
+			if (m_Rigs.IsIndexValid(fill.rigIndex))
+			{
+				m_Rigs.MetaAt(fill.rigIndex).tableFilled = true;
+			}
+		}
+
+		m_PendingRigFills.clear();
 	}
 
 	void
@@ -906,6 +1026,11 @@ namespace bgl
 		{
 			throw SceneError(
 				"RigHandle passed to DeleteRig still has geoms skinned to it; delete them first");
+		}
+
+		if (meta->boneAnimTable)
+		{
+			m_BoneAnimTables.Free(meta->boneAnimTable);
 		}
 
 		const idl::Rig record = m_Rigs[rig.handle];
