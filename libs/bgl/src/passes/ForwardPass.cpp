@@ -198,33 +198,6 @@ namespace bgl
 			"every PsoType needs a row in c_Psos; a missing one silently value-initializes to an "
 			"empty pixel shader");
 
-		// The PsoType each row above is, for the startup report. Order MUST match PsoType, like
-		// c_Psos -- these are the names a client shows while the pipeline is being compiled.
-		static constexpr std::array<std::string_view, c_PsoCount> c_PsoNames = { {
-			"kOpaque_StaticMesh_Null"sv,
-			"kOpaque_StaticMesh_PBR"sv,
-			"kOpaque_StaticMesh_LoosePbr"sv,
-			"kAlphaTest_StaticMesh_PBR"sv,
-			"kAlphaTest_StaticMesh_LoosePbr"sv,
-			"kTransparent_StaticMesh_PBR"sv,
-			"kTransparent_StaticMesh_LoosePbr"sv,
-			"kHashedAlpha_StaticMesh_PBR"sv,
-			"kHashedAlpha_StaticMesh_LoosePbr"sv,
-			"kAssert_StaticMesh"sv,
-			"kOpaque_VatMesh_PBR"sv,
-			"kAlphaTest_VatMesh_PBR"sv,
-			"kHashedAlpha_VatMesh_PBR"sv,
-			"kTransparent_VatMesh_PBR"sv,
-			"kOpaque_SkinnedMesh_PBR"sv,
-			"kAlphaTest_SkinnedMesh_PBR"sv,
-			"kHashedAlpha_SkinnedMesh_PBR"sv,
-			"kTransparent_SkinnedMesh_PBR"sv,
-		} };
-
-		static_assert(
-			std::ranges::none_of(c_PsoNames, &std::string_view::empty),
-			"every PsoType needs a name; a missing row value-initializes to an empty one");
-
 		MeshletKernel
 		BuildForwardKernel(IDevice* device, const PsoConfig& cfg)
 		{
@@ -284,13 +257,12 @@ namespace bgl
 	}
 
 	void
-	ForwardPass::Init(IDevice* device, PipelineBuild& build)
+	ForwardPass::Init(IDevice* device)
 	{
 		gassert(device != nullptr, "Device must be initialized");
 
 		for (uint16_t pso = 0; pso < c_PsoCount; ++pso)
 		{
-			build.Step(c_PsoNames[pso]);
 			m_Kernels[pso] = BuildForwardKernel(device, c_Psos[pso]);
 		}
 

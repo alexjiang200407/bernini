@@ -1,5 +1,4 @@
 #pragma once
-#include "gfx/PipelineBuild.h"
 #include "pipeline/MeshletKernel.h"
 #include "resource/Rtv.h"
 #include "resource/Sampler.h"
@@ -90,10 +89,8 @@ namespace bgl
 			m_Kernel.Reset();
 		}
 
-		static constexpr uint32_t c_Pipelines = 1;
-
 		void
-		Init(IDevice* device, PipelineBuild& build);
+		Init(IDevice* device);
 
 		void
 		AttachToFrameGraph(FrameGraph& fg, const Args& args);

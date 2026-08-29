@@ -137,11 +137,8 @@ namespace bgl
 			rmDesc.maxReadbackBuffers = opts.maxReadbackBuffers;
 			m_ResourceManager         = m_Device->CreateResourceManager(rmDesc);
 
-			m_Context = std::make_unique<RenderContext>(
-				m_Device,
-				m_ResourceManager,
-				opts.enableDebugLayer,
-				opts.onPipelineProgress);
+			m_Context =
+				std::make_unique<RenderContext>(m_Device, m_ResourceManager, opts.enableDebugLayer);
 
 			// Every PSO the renderer will ever use is built by the RenderContext above, so nothing
 			// past this point compiles a shader and the Slang core module can stop occupying a few

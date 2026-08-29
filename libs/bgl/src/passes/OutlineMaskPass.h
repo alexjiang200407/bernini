@@ -1,5 +1,4 @@
 #pragma once
-#include "gfx/PipelineBuild.h"
 #include "pipeline/MeshletKernel.h"
 
 namespace bgl
@@ -33,10 +32,8 @@ namespace bgl
 		OutlineMaskPass&
 		operator=(OutlineMaskPass&&) noexcept = delete;
 
-		static constexpr uint32_t c_Pipelines = 1;
-
 		void
-		Init(IDevice* device, PipelineBuild& build);
+		Init(IDevice* device);
 
 		void
 		Release()

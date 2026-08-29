@@ -17,32 +17,25 @@
 namespace bgl
 {
 	void
-	CompactInstancesPass::Init(
-		IDevice*                          device,
-		core::SharedRef<IResourceManager> resourceManager,
-		PipelineBuild&                    build)
+	CompactInstancesPass::Init(IDevice* device, core::SharedRef<IResourceManager> resourceManager)
 	{
 		gassert(device != nullptr, "Device pointer is null");
 
-		build.Step("CullInstances"sv);
 		m_CullInstances = device->CreateComputeKernel(
 			ComputePipelineDesc()
 				.SetShader(device->CreateShader("CullInstances"))
 				.SetDebugName("Cull Instances"));
 
-		build.Step("HistogramInstances"sv);
 		m_Histogram = device->CreateComputeKernel(
 			ComputePipelineDesc()
 				.SetShader(device->CreateShader("HistogramInstances"))
 				.SetDebugName("Histogram Instances"));
 
-		build.Step("PrefixSumInstances"sv);
 		m_PrefixSum = device->CreateComputeKernel(
 			ComputePipelineDesc()
 				.SetShader(device->CreateShader("PrefixSumInstances"))
 				.SetDebugName("Prefix-Sum Instances"));
 
-		build.Step("CompactInstances"sv);
 		m_CompactInstances = device->CreateComputeKernel(
 			ComputePipelineDesc()
 				.SetShader(device->CreateShader("CompactInstances"))

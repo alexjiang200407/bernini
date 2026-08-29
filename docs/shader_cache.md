@@ -15,9 +15,9 @@ when this doc disagrees, trust the source, then fix this doc.
 ## Design Choices
 
 * **The cache is configuration, not an RHI object.** It is an internal optimization, so it is
-  **not** a `bgl::I*` interface — see [Render Hardware Interface](docs/rhi.md). The only things
-  that cross the RHI boundary are `GraphicsOptions::shaderCacheDir` and the
-  `onPipelineProgress` below, like the descriptor-heap capacities. The `Device` owns the cache and threads it through pipeline creation. A future Vulkan
+  **not** a `bgl::I*` interface — see [Render Hardware Interface](docs/rhi.md). The only thing that
+  crosses the RHI boundary is `GraphicsOptions::shaderCacheDir`, like the descriptor-heap
+  capacities. The `Device` owns the cache and threads it through pipeline creation. A future Vulkan
   backend reads the same directory and backs it with `VkPipelineCache`; the on-disk formats are the
   backend's private business.
 
@@ -76,18 +76,6 @@ when this doc disagrees, trust the source, then fix this doc.
   self-invalidates against the driver and adapter — D3D12 rejects a foreign blob and Metal refuses
   an archive from another GPU, and both fall back to an empty library.
 
-* **A miss is reported, because a cold start otherwise looks like a hang.**
-  `GraphicsOptions::onPipelineProgress` is told each pipeline before it is built, and the total
-  before the first — the sum of a `c_Pipelines` each pass declares, which the `RenderContext`
-  constructor asserts its passes stepped exactly. A client cannot report this for itself: it is
-  still inside `CreateGraphics`, which for the editor is inside the call that would build its
-  window. Warm, the same thirty reports go by in a few milliseconds and nothing is on screen long
-  enough to read, which is the point.
-
-  Pipelines are still built **one at a time**. Compiling them across threads would need locks in
-  `ShaderCache`, in the `ID3D12PipelineLibrary` / `MTL::BinaryArchive`, and in `ResourceManager`,
-  none of which have any — and Slang's global session is per-thread. Nothing here forecloses it.
-
 * **Precompiled Slang IR modules (`.slang-module`) are deliberately not used.** They were the
   obvious tool for the reflection half but do not survive contact with this shader layer: Slang
   2026.7.x cannot resolve cross-module generic specializations from separately serialized modules,
@@ -111,9 +99,7 @@ when this doc disagrees, trust the source, then fix this doc.
 | `ReflectedLayout` | [libs/bgl/src/uniforms/ReflectedLayout.h](libs/bgl/src/uniforms/ReflectedLayout.h) | Serializable, API-agnostic constant-buffer layout tree. |
 | `ReflectLayoutFromSlang` | [libs/bgl/src/uniforms/SlangReflection.h](libs/bgl/src/uniforms/SlangReflection.h) | The one place Slang reflection is read; emits `ReflectedLayout`. |
 | `ByteReader` / `ByteWriter` | [libs/core/include/core/io/ByteReader.h](libs/core/include/core/io/ByteReader.h) | Shared binary IO for the `.bsc` serialization (also used by assetlib). |
-| `shaderCacheDir` knob | [libs/bgl/include/bgl/IGraphics.h](libs/bgl/include/bgl/IGraphics.h) | One of the two RHI-visible surfaces. |
-| `onPipelineProgress` | [libs/bgl/include/bgl/IGraphics.h](libs/bgl/include/bgl/IGraphics.h) | The other: each pipeline named before it is built, against a total fixed up front. |
-| `PipelineBuild` | [libs/bgl/src/gfx/PipelineBuild.h](libs/bgl/src/gfx/PipelineBuild.h) | The counter the passes step, and the check that their declared counts still add up. |
+| `shaderCacheDir` knob | [libs/bgl/include/bgl/IGraphics.h](libs/bgl/include/bgl/IGraphics.h) | The sole RHI-visible surface. |
 
 ---
 

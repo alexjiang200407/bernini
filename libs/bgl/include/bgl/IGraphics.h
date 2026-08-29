@@ -34,20 +34,6 @@ namespace bgl
 		}
 	};
 
-	/** One pipeline the renderer is about to build, as `GraphicsOptions::onPipelineProgress` sees it. */
-	struct PipelineProgress
-	{
-		// Pipelines built before this one, out of every pipeline the renderer builds at startup.
-		// The total is fixed before the first report, so a client may size a bar from it.
-		uint32_t done  = 0;
-		uint32_t total = 0;
-
-		// What is about to be built: the PsoType for a forward kernel, the kernel's name otherwise.
-		std::string_view name;
-	};
-
-	using PipelineProgressFn = std::function<void(const PipelineProgress&)>;
-
 	struct GraphicsOptions
 	{
 		enum class LogLevel
@@ -73,13 +59,6 @@ namespace bgl
 		// Under GPU validation only the driver-pipeline layer is dropped -- the generated code and
 		// reflection are identical either way, so they stay cached. See docs/shader_cache.md.
 		std::string shaderCacheDir;
-
-		// Told before each pipeline `CreateGraphics` builds, on the thread that calls it.
-		//
-		// Compiling them dominates a cold start (docs/shader_cache.md) and there is nothing on
-		// screen to say so, because the client is still inside the call that would build its
-		// window. A client with a startup screen drives it from here. Empty reports nothing.
-		PipelineProgressFn onPipelineProgress;
 
 		// Writes the first frame to a .gputrace bundle at this path. Metal only; empty disables it.
 		// Needs MTL_CAPTURE_ENABLED=1 in the environment -- Metal refuses to capture without it, and

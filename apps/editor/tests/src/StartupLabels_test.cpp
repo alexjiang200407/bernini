@@ -9,25 +9,6 @@
 
 using namespace editor;
 
-TEST_CASE("A pipeline report names the shader and counts from one", "[startup]")
-{
-	auto progress  = bgl::PipelineProgress();
-	progress.done  = 0;
-	progress.total = 30;
-	progress.name  = "kOpaque_StaticMesh_PBR";
-
-	// `done` is how many are finished, so the one being compiled is the next: a bar that opened at
-	// "0 of 30" while a shader was already compiling would be off by one all the way through.
-	CHECK(
-		startup::PipelineLabel(progress) ==
-		QStringLiteral("Compiling shaders -- kOpaque_StaticMesh_PBR (1 of 30)"));
-
-	progress.done = 29;
-	CHECK(
-		startup::PipelineLabel(progress) ==
-		QStringLiteral("Compiling shaders -- kOpaque_StaticMesh_PBR (30 of 30)"));
-}
-
 TEST_CASE("A rebuild report names the phase and the file, not the whole key", "[startup]")
 {
 	auto event = assetlib::ProgressEvent();

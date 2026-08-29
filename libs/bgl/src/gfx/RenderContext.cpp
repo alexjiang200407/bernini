@@ -139,13 +139,10 @@ namespace bgl
 	RenderContext::RenderContext(
 		DeviceRef          device,
 		ResourceManagerRef resourceManager,
-		bool               enableDebug,
-		PipelineProgressFn onPipelineProgress) :
+		bool               enableDebug) :
 		m_Device(std::move(device)), m_ResourceManager(std::move(resourceManager)),
 		m_EnableDebug(enableDebug)
 	{
-		auto build = PipelineBuild(std::move(onPipelineProgress), c_Pipelines);
-
 		// Registered so a deferred destroy cannot reclaim a slot this queue may still be reading.
 		m_CommandQueue = m_Device->CreateGraphicsCommandQueue();
 		m_ResourceManager->RegisterQueue(m_CommandQueue.Get());
@@ -157,28 +154,20 @@ namespace bgl
 		m_CommandList =
 			m_Device->CreateCommandList(cmdListDesc, m_BootstrapAllocator, m_ResourceManager);
 
-		m_CompactInstances.Init(m_Device, m_ResourceManager, build);
-		m_SkinnedPose.Init(m_Device, build);
-		m_TransparentSort.Init(m_Device, build);
-		m_Forward.Init(m_Device, build);
-		m_Skybox.Init(m_Device, build);
-		m_PostProcess.Init(m_Device, build);
-		m_OutlineMask.Init(m_Device, build);
-		m_TaaResolve.Init(m_Device, build);
+		m_CompactInstances.Init(m_Device, m_ResourceManager);
+		m_SkinnedPose.Init(m_Device);
+		m_TransparentSort.Init(m_Device);
+		m_Forward.Init(m_Device);
+		m_Skybox.Init(m_Device);
+		m_PostProcess.Init(m_Device);
+		m_OutlineMask.Init(m_Device);
+		m_TaaResolve.Init(m_Device);
 
 		m_PointClampSampler = m_ResourceManager->CreateSampler(
 			SamplerDesc().SetAllFilters(false).SetAllAddressModes(SamplerAddressMode::kClamp));
 		m_LinearClampSampler = m_ResourceManager->CreateSampler(
 			SamplerDesc().SetAllFilters(true).SetAllAddressModes(SamplerAddressMode::kClamp));
-		m_BrdfLut.Init(m_Device.Get(), m_ResourceManager, build);
-
-		// A pass whose c_Pipelines has drifted from what it builds is a startup bar that fills
-		// early or never fills, and nothing else would report it.
-		gassert(
-			build.Complete(),
-			"RenderContext built {} pipelines but declared {}",
-			build.GetStepped(),
-			c_Pipelines);
+		m_BrdfLut.Init(m_Device.Get(), m_ResourceManager);
 
 		m_CommandList->Open(m_CommandQueue.Get(), m_BootstrapAllocator.Get());
 		m_BrdfLut.Generate(m_CommandList.Get());

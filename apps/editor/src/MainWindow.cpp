@@ -125,30 +125,17 @@ MainWindow::Build(const std::filesystem::path& configPath)
 		sceneDesc.initialLoosePbrMaterials =
 			sceneSettings["initialLoosePbrMaterials"].GetOrDefault(256);
 
-		// Called on the render thread, so the label is built there and only the QString crosses:
-		// bgl's `name` is a view into its own static storage and this must not outlive the call.
+		// One step, not one per pipeline: bgl builds them all inside CreateGraphics and a warm
+		// shader cache turns the whole stretch into milliseconds. Cold it is seconds, which is why
+		// the bar below has to keep moving even though nothing here can say how far along it is.
 		if (m_StartupProgress)
-			gfxOpts.onPipelineProgress = [this](const bgl::PipelineProgress& progress) {
-				const QString label = editor::startup::PipelineLabel(progress);
-				const int     done  = static_cast<int>(progress.done);
-				const int     total = static_cast<int>(progress.total);
-
-				// Queued, so a report posted during the last pipeline can arrive after Build() has
-				// dropped the sink. Re-checked there rather than here for that reason.
-				QMetaObject::invokeMethod(
-					this,
-					[this, done, total, label]() {
-						if (m_StartupProgress)
-							m_StartupProgress(done, total, label);
-					},
-					Qt::QueuedConnection);
-			};
+			m_StartupProgress(0, 0, "Compiling shaders...");
 
 		// The renderer owns the Graphics and the Scene and, once threaded, is the only thing that
 		// touches them. Every viewport and the thumbnail cache render through it.
 		//
-		// Pumping while it builds, because compiling the pipelines is most of startup and the
-		// screen reporting it is on this thread. Nothing of this window is shown yet, so the events
+		// Pumping while it builds, because compiling the pipelines is most of a cold start and the
+		// screen saying so is on this thread. Nothing of this window is shown yet, so the events
 		// that run are the screen's own.
 		m_Renderer = std::make_unique<Renderer>(
 			gfxOpts,

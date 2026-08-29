@@ -165,9 +165,7 @@ TEST_CASE("One view culled against two frustums keeps both results", "[culling][
 	auto cmdList      = device->CreateCommandList(cmdListDesc, cmdAllocator, resourceManager);
 	auto cmdQueue     = device->CreateCommandQueue(bgl::QueueType::kGraphics);
 
-	auto compactPass  = bgl::CompactInstancesPass();
-	auto compactBuild = bgl::PipelineBuild({}, bgl::CompactInstancesPass::c_Pipelines);
-	compactPass.Init(device, resourceManager, compactBuild);
+	auto compactPass = bgl::CompactInstancesPass(device, resourceManager);
 
 	// Off the instance buffer's capacity, which is what CullState sizes against -- a readback
 	// smaller than its source overruns, since the copy is bounded by the source's byte size.

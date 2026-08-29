@@ -192,44 +192,26 @@ TEST_CASE("Rooting a tree with no followers in it does nothing", "[project]")
 	CHECK_NOTHROW(editor::SetProjectDataRoot(nullptr, "/projects/MyGame/Data"));
 }
 
-TEST_CASE("Building the editor reports every pipeline it compiles", "[mainwindow][startup][render]")
+TEST_CASE("Building the editor reports what it is doing", "[mainwindow][startup][render]")
 {
 	const HeadlessEditor editor;
 
 	// What main.cpp hands the window, and the only thing that can report a cold start: by the time
 	// there is a window to say "compiling", the compiling is over.
-	auto steps  = std::vector<std::pair<int, int>>();
 	auto labels = std::vector<QString>();
 
 	{
-		const MainWindow window(
-			nullptr,
-			editor.ConfigFile(),
-			[&](int done, int total, const QString& label) {
-				steps.emplace_back(done, total);
-				labels.push_back(label);
-			});
+		const MainWindow window(nullptr, editor.ConfigFile(), [&](int, int, const QString& label) {
+			labels.push_back(label);
+		});
 	}
 
-	// bgl reports from the render thread and the sink runs on this one, so every report crossed a
-	// queued connection. Landing none of them is the failure this pins: the window would build
-	// exactly as it does now and the screen would sit on "Starting..." for the whole cold start.
-	REQUIRE_FALSE(steps.empty());
+	// Landing nothing is the failure this pins, and it is invisible: the window builds exactly as
+	// it does now and the screen sits on "Starting..." for the whole cold start.
+	REQUIRE_FALSE(labels.empty());
+	CHECK(labels.front() == QStringLiteral("Compiling shaders..."));
 
-	// The shader phase is determinate and counts from zero against a total that does not move,
-	// which is what lets the screen size a bar instead of spinning one.
-	const int total = steps.front().second;
-	REQUIRE(total > 0);
-	CHECK(steps.front().first == 0);
-
-	const auto pipelines = std::ranges::find_if(labels, [](const QString& label) {
-		return !label.startsWith(QStringLiteral("Compiling shaders"));
-	});
-	CHECK(pipelines - labels.begin() == total);
-
-	for (int i = 0; i < total; ++i)
-	{
-		INFO("report " << i << ": " << labels[static_cast<size_t>(i)].toStdString());
-		CHECK(steps[static_cast<size_t>(i)] == std::pair(i, total));
-	}
+	// The shaders are one step because bgl builds every pipeline inside CreateGraphics; what
+	// follows is the project, which reports per file.
+	CHECK(std::ranges::count(labels, QStringLiteral("Compiling shaders...")) == 1);
 }

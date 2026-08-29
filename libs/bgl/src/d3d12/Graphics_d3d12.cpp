@@ -246,11 +246,8 @@ namespace bgl
 			m_ResourceManager = m_Device->CreateResourceManager(resourceManagerDesc);
 		}
 
-		m_Context = std::make_unique<RenderContext>(
-			m_Device,
-			m_ResourceManager,
-			m_Opts.enableDebugLayer,
-			m_Opts.onPipelineProgress);
+		m_Context =
+			std::make_unique<RenderContext>(m_Device, m_ResourceManager, m_Opts.enableDebugLayer);
 
 		// Every PSO the renderer will ever use is built by the RenderContext above, so nothing
 		// past this point compiles a shader and the Slang core module can stop occupying a few

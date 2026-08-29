@@ -20,7 +20,7 @@ namespace bgl
 	}
 
 	void
-	BrdfLutGenPass::Init(IDevice* device, ResourceManagerRef resourceManager, PipelineBuild& build)
+	BrdfLutGenPass::Init(IDevice* device, ResourceManagerRef resourceManager)
 	{
 		gassert(device != nullptr, "Device must be initialized");
 
@@ -54,8 +54,6 @@ namespace bgl
 		rtvDesc.debugName = "BRDF LUT RTV";
 
 		m_Rtv = m_ResourceManager->CreateRtv(m_Texture, rtvDesc);
-
-		build.Step("BrdfLut"sv);
 
 		auto pipelineDesc        = MeshletPipelineDesc();
 		pipelineDesc.meshShader  = device->CreateShader(std::string(c_Src), "MSMain");

@@ -36,8 +36,9 @@ Two things the licence does **not** cover, because both leak out of the app:
 `main.cpp` shows an `editor::StartupScreen` **before** it constructs `MainWindow`, because
 constructing the window is what takes the time: `Renderer` builds every pipeline the renderer will
 ever use, which on a cold shader cache is tens of seconds. The screen takes a
-`background::ProgressSink`; `MainWindow` drives it with `bgl`'s `onPipelineProgress` and then with
-the project's rebuild, and drops it once `Build()` returns.
+`background::ProgressSink`; `MainWindow` reports one step for the shaders — bgl builds them all
+inside `CreateGraphics`, and a warm cache makes the whole stretch milliseconds — then one per file
+for the project's rebuild, and drops the sink once `Build()` returns.
 
 The GUI thread is freed by `RendererWait::kPumpEventLoop`, which runs the caller's event loop while
 the render thread builds — safe only there, because nothing of the window is shown yet. Everything
@@ -224,10 +225,9 @@ Two things a test cannot drive, and why:
 
 **Startup** is covered in two halves, because a headless `MainWindow` takes the same
 `background::ProgressSink` `main.cpp` hands the real one. `MainWindow_test.cpp` pins that the
-reports actually arrive — they cross a queued connection from the render thread, and landing none
-of them would look exactly like a working build with a screen stuck on "Starting..." — and
-`StartupLabels_test.cpp` pins what each one *reads*, through the free functions in
-`src/Startup/startup_labels.h`. `StartupScreen` itself is a widget with no seam and `main.cpp` is
+reports actually arrive — landing none of them would look exactly like a working build with a
+screen stuck on "Starting..." — and `StartupLabels_test.cpp` pins what a rebuild step *reads*,
+through the free function in `src/Startup/startup_labels.h`. `StartupScreen` itself is a widget with no seam and `main.cpp` is
 outside `editor_lib`, so what the screen looks like still needs eyes.
 
 `background::RunWithLoadingScreen` is testable despite its nested event loop and modal

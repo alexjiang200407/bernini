@@ -32,11 +32,9 @@ namespace bgl
 	}
 
 	void
-	SkyboxPass::Init(IDevice* device, PipelineBuild& build)
+	SkyboxPass::Init(IDevice* device)
 	{
 		gassert(device != nullptr, "Device must be initialized");
-
-		build.Step("Skybox"sv);
 
 		auto pipelineDesc = MeshletPipelineDesc();
 

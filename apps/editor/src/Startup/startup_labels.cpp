@@ -34,18 +34,6 @@ namespace editor::startup
 	}
 
 	QString
-	PipelineLabel(const bgl::PipelineProgress& progress)
-	{
-		return QStringLiteral("Compiling shaders -- %1 (%2 of %3)")
-		    .arg(
-				QString::fromUtf8(
-					progress.name.data(),
-					static_cast<qsizetype>(progress.name.size())))
-		    .arg(progress.done + 1)
-		    .arg(progress.total);
-	}
-
-	QString
 	RebuildLabel(const assetlib::ProgressEvent& event)
 	{
 		const QString verb = PhaseVerb(event.phase);

@@ -1,5 +1,4 @@
 #pragma once
-#include "gfx/PipelineBuild.h"
 #include "pipeline/MeshletKernel.h"
 
 namespace bgl
@@ -14,6 +13,7 @@ namespace bgl
 	public:
 		SkyboxPass() = default;
 		~SkyboxPass() noexcept { logger::trace("~SkyboxPass"); }
+		SkyboxPass(IDevice* device) { Init(device); }
 
 		SkyboxPass(const SkyboxPass&) noexcept = delete;
 		SkyboxPass(SkyboxPass&&) noexcept      = delete;
@@ -30,10 +30,8 @@ namespace bgl
 			m_Kernel.Reset();
 		}
 
-		static constexpr uint32_t c_Pipelines = 1;
-
 		void
-		Init(IDevice* device, PipelineBuild& build);
+		Init(IDevice* device);
 
 		void
 		AttachToFrameGraph(FrameGraph& fg, const DrawData& draw);

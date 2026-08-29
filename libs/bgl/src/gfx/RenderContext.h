@@ -32,19 +32,7 @@ namespace bgl
 	class RenderContext final
 	{
 	public:
-		RenderContext(
-			DeviceRef          device,
-			ResourceManagerRef resourceManager,
-			bool               enableDebug,
-			PipelineProgressFn onPipelineProgress);
-
-		// Every pipeline the constructor builds. What a client's startup bar is sized from, and
-		// what the constructor checks its passes against once they have all run.
-		static constexpr uint32_t c_Pipelines =
-			BrdfLutGenPass::c_Pipelines + ForwardPass::c_Pipelines + SkyboxPass::c_Pipelines +
-			PostProcessPass::c_Pipelines + OutlineMaskPass::c_Pipelines +
-			TaaResolvePass::c_Pipelines + CompactInstancesPass::c_Pipelines +
-			SkinnedPosePass::c_Pipelines + TransparentSortPass::c_Pipelines;
+		RenderContext(DeviceRef device, ResourceManagerRef resourceManager, bool enableDebug);
 
 		~RenderContext() noexcept;
 
