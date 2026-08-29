@@ -171,7 +171,7 @@ no `<slang...>`, and nothing under `libs/bgl/src`. So `bgl_intfc`'s link list is
 drags `spdlog::spdlog_header_only` in PUBLIC, so `bgl_intfc` is not the zero-cost header target its
 name suggests — acceptable, since every client links `core` regardless.
 
-**No *consumer* names `libs/bgl/include`, but four things inside `libs/bgl` do.** `gamelib`,
+**No *consumer* names `libs/bgl/include`, but six things inside `libs/bgl` do.** `gamelib`,
 `apps/editor` and the four examples all pick the directory up transitively through `bgl_objects`'
 PUBLIC include, and no source file anywhere spells the path — that is what makes the hoist
 contained. What declares it:
@@ -182,12 +182,20 @@ contained. What declares it:
 | `libs/bgl/CMakeLists.txt:107` (`bgl`) | `${CMAKE_CURRENT_SOURCE_DIR}/include` |
 | `libs/bgl/src/d3d12/CMakeLists.txt:29` | `${CMAKE_CURRENT_SOURCE_DIR}/../../include` |
 | `libs/bgl/src/metal/CMakeLists.txt:27` | `${CMAKE_CURRENT_SOURCE_DIR}/../../include` |
+| `libs/bgl/CMakeLists.txt:216` (`bgl_tests`, DX12) | `${CMAKE_CURRENT_SOURCE_DIR}/include` |
+| `libs/bgl/CMakeLists.txt:297` (`bgl_tests`, Metal) | `${CMAKE_CURRENT_SOURCE_DIR}/include` |
 
-*Corrected during task 1.* The plan originally claimed only the first two. **The backend pair is
-spelled relatively, so `grep -rn "libs/bgl/include"` does not find them** — which is how they were
-missed, and how they would have been missed again. Both become
-`target_link_libraries(<backend> PUBLIC bgl_intfc)` in task 5, like `bgl_objects`. Two *generators*
-hardcode the path as well — the next paragraph.
+*Corrected twice.* Task 1 added the backend pair; task 6 added the `bgl_tests` pair. The original
+claim was two. **The backends spell the path relatively, so `grep -rn "libs/bgl/include"` does not
+find them**, and the `bgl_tests` entries are duplicated across the two variants a hundred lines
+apart. The backends become `target_link_libraries(<backend> PUBLIC bgl_intfc)` like `bgl_objects`;
+the `bgl_tests` lines are simply deleted, since the headers arrive transitively through
+`bgl_objects` → `bgl_intfc`.
+
+**None of the six would have failed the build.** CMake and clang both accept a `-I` naming a
+directory that does not exist, so a missed site is silent — which is why the site list, not the
+compiler, is what this task rests on. Two *generators* hardcode the path as well — the next
+paragraph.
 
 **Two places hardcode the IDL public output directory, and the source spec missed both.**
 `libs/bgl/idl/src/CMakelists.txt:7` sets `IDL_PUBLIC_CPP_OUT_DIR` to
@@ -247,8 +255,8 @@ justified by per-backend layout divergence, which is the same reason one layer u
 
 | Area | Change | Risk |
 |---|---|---|
-| `libs/bgl/include/bgl/` → `libs/bgl_intfc/include/bgl/` | 22 headers moved (23 less `PsoType.h`, deleted by then) | Low: no source file names the old path. A missed CMake site fails the configure loudly. |
-| `libs/bgl/CMakeLists.txt` `:9-12,22,31,106` | glob, `source_group`, two include directories | Low, and immediate — a wrong path is a build failure, not a silent one. |
+| `libs/bgl/include/bgl/` → `libs/bgl_intfc/include/bgl/` | 22 headers moved (23 less `PsoType.h`, deleted by then) | **Silent when wrong.** No source file names the old path, but CMake and clang both accept a `-I` onto a directory that does not exist, so a missed site neither fails the configure nor the build. The site list above is the check. |
+| `libs/bgl/CMakeLists.txt` `:9-12,22,31,107,216,297` | glob, `source_group`, four include directories | Silent, as above. The glob is the exception: pointed wrong it yields no headers, which an IDE shows and a build does not. |
 | `libs/bgl/idl/src/CMakelists.txt:7`, `scripts/gen_idl.py:64` | IDL public output directory | **The one real hazard.** Move one and not the other and the two generation paths disagree; the build still succeeds because the stale committed header is still on the include path. Caught by the `just idl`-then-`git status` gate. |
 | `.gitattributes:104-105` | `PsoType.h` line deleted (task 3), `MaterialType.h` repathed (task 5) | Low; those two lines are the only `libs/bgl/include` entries, and a wrong line ending on a generated header shows as a spurious diff. |
 | `libs/bgl/src` + `libs/bgl/tests/src` | `PsoType` → `bgl::idl::PsoType`, 47 + n sites | Low but wide. Does not compile if wrong. |
@@ -351,8 +359,16 @@ machine, so the other's breakage surfaces in CI rather than locally. `gamelib`
 links `bgl_intfc` for the headers and `bgl` for the symbols, naming the contract rather than one
 renderer. `IDL_PUBLIC_CPP_OUT_DIR` (`libs/bgl/idl/src/CMakelists.txt:7`) and `PUBLIC_CPP_OUT_DIR`
 (`scripts/gen_idl.py:64`) move together, as does `scripts/gen_idl.py:7`'s docstring. `.gitattributes:105`
-repathed — after task 3 it is the only `libs/bgl/include` entry left. `docs/idlgen.md:81-82` links
-`libs/bgl/include/bgl/` by path and is repointed here rather than in task 6.
+repathed — after task 3 it is the only `libs/bgl/include` entry left.
+
+*Corrected during task 6:* the plan named `docs/idlgen.md` as the one doc linking the old path. It
+is **eleven files** — `bgl_api.md`, `rhi.md`, `gfx_debug.md`, `taa.md`, `vat.md`, `skinning.md`,
+`passes.md`, `shader_cache.md`, `asset_standards.md`, `idlgen.md` and
+`.claude/agents/bcp-docmap.md` — carrying roughly fifty markdown links between them, every one of
+which a `git mv` silently breaks because nothing resolves a markdown link at build time. The two
+files under `docs/plans/` are deliberately **not** repathed: [CLAUDE.md](../../CLAUDE.md) files an
+ADR as a record of a conversation on a date, so it keeps the path that was true when it was
+written.
 
 The single largest task, and the one that must not be split: a half-moved header set does not build.
 
