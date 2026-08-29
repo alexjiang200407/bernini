@@ -252,6 +252,19 @@ namespace
 		{
 			return {};
 		}
+		BufferSrvHandle
+		CreateBufferSrv(BufferHandle, const BufferSrvDesc&) noexcept override
+		{
+			return {};
+		}
+		void
+		DestroyBufferSrv(BufferSrvHandle, bool) noexcept override
+		{}
+		bool
+		ValidBufferSrvHandle(const BufferSrvHandle&) const noexcept override
+		{
+			return false;
+		}
 		TextureHandle
 		CreateTexture(const TextureDesc&) noexcept override
 		{

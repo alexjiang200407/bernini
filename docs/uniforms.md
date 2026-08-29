@@ -163,6 +163,9 @@ Each handle type finds its destination differently, and the rules are not symmet
   (`c_HandleUniformMember`), by position because the member is spelled differently across handle
   structs. @post **no type discrimination**: an `SrvHandle` assigned to an `EntryBuffer<T>` uniform
   writes the SRV index into `entryBuffer` and succeeds.
+* **`BufferSrvHandle`** — a second, structured view of a buffer, written by the same rule as a
+  `BufferHandle`: only its `bindlessIndex` travels, so it lands in whichever smart-buffer member the
+  target names.
 * **`SamplerHandle`** — bare-value case only; a struct wrapping a sampler throws.
 
 `ReflectedLayout::handleKind` carries what would make these checkable, but is **populated on Metal

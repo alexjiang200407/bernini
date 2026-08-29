@@ -241,6 +241,7 @@ namespace bgl
 			resourceManagerDesc.maxRtvs            = m_Opts.maxRtvs;
 			resourceManagerDesc.maxTextures        = m_Opts.maxTextures;
 			resourceManagerDesc.maxSamplers        = m_Opts.maxSamplers;
+			resourceManagerDesc.maxBufferSrvs      = m_Opts.maxBufferSrvs;
 			resourceManagerDesc.maxReadbackBuffers = m_Opts.maxReadbackBuffers;
 
 			m_ResourceManager = m_Device->CreateResourceManager(resourceManagerDesc);
