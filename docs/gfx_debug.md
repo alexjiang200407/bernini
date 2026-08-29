@@ -179,6 +179,15 @@ call `logger::…` with no extra include.
   Under `assetlib_cli` there is no `Graphics`, so no file sink is installed and the same lines go to
   the console.
 
+* **The editor writes a second log, and it is not this one.** `editor.log`
+  ([main.cpp](apps/editor/src/main.cpp), [util/FileLog.cpp](apps/editor/src/util/FileLog.cpp)) takes
+  everything that goes through Qt's `qInfo`/`qWarning`/`qCritical`, stamped ISO-8601 with
+  milliseconds; `bgl.log` takes spdlog, stamped `[%H:%M:%S:%e]`. Two files, two clocks, two formats,
+  so an import's timeline straddles both — the editor's own worker/UI split is in `editor.log` while
+  the cook stages that explain it are here. That is why a stage line carries its **own** duration
+  rather than only a timestamp: attributing a slow cook must never require subtracting one file's
+  clock from another's. Timestamps still answer what happened *between* stages.
+
 Per [libs/bgl/CLAUDE.md](libs/bgl/CLAUDE.md): after running `bgl_tests`, always read `bgl.log`
 for the warnings/errors/info the run emitted.
 
