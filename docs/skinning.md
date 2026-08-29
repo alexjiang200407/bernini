@@ -37,6 +37,19 @@ not obvious from a signature. The headers linked below are the source of truth.
   ghost. A *blend* between clips has no such edge to hang off, and whoever adds a state machine
   owns it.
 
+* **A rig is a scene object, not part of a geom.** A skeleton and its clips upload once through
+  `IScene::AddRig` and every geom skinned to them names the handle. A modular unit — a body cut into
+  slots with swappable armour, each slot its own mesh on one skeleton — is several geoms sharing one
+  bone table and one sample pool, where a per-geom upload would hold as many copies of the rig as the
+  unit has parts. `gamelib` keys the share on the normalized `.banim` path
+  (`AssetManager::AcquireRig`), because a clip set names its own skeleton and so the two are one
+  choice.
+
+  **The rig outlives its geoms, and `bgl` enforces that rather than trusting it.** `DeleteRig`
+  refuses while any geom still names the rig: a geom left pointing at freed bone and sample ranges
+  does not misrender, it poses from whatever lands in them next. So the caller deletes geoms first —
+  `AssetManager` does it in that order, and reference-counts the rig so the last geom takes it down.
+
 * **Skinning happens in the mesh shader, not a compute pre-pass.** There is no transient skinned
   vertex buffer: nothing yet needs to *read back* skinned positions (physics, attachments), and until
   something does, a per-instance per-frame allocation buys nothing.
@@ -133,7 +146,8 @@ not obvious from a signature. The headers linked below are the source of truth.
 | Ground | [`assetlib::groundClips`](libs/assetlib/include/assetlib/skinning.h) | At cook, before the boxes: each clip is moved so the lowest point its mesh reaches over it rests on `y = 0` |
 | Bound | [`assetlib::bakePosedBounds`](libs/assetlib/include/assetlib/skinning.h) | At import: sweeps a box per bone through every frame (`posedBounds`) and stores the result in the `.banim`, keyed by a content signature so a re-authored source falls back to measuring |
 | Acquire | [`AssetManager::AcquireSkinnedMesh`](libs/gamelib/include/gamelib/AssetManager.h) | Reads the three containers, checks the clip set still matches its rig, culls by the baked box (`findPosedBounds`) — measuring only a pairing the cook never saw — uploads |
-| Upload | [`IScene::AddSkinnedMeshGeom`](libs/bgl_intfc/include/bgl/IScene.h) | Bones, clip table and sample pool become scene buffers; per-bone depth is derived here |
+| Upload the rig | [`IScene::AddRig`](libs/bgl_intfc/include/bgl/IScene.h) | Bones, clip table and sample pool become scene buffers; per-bone depth is derived here. Once per clip set, not once per mesh |
+| Upload the mesh | [`IScene::AddSkinnedMeshGeom`](libs/bgl_intfc/include/bgl/IScene.h) | The bind-pose submeshes, exactly as the static path uploads them, against a rig handle |
 | Place | [`ISceneView::CreateSkinnedMeshInstance`](libs/bgl_intfc/include/bgl/ISceneView.h) | Writes the playback record and reserves the instance's palette slice |
 | Pose | [`SkinnedPosePass`](libs/bgl/src/passes/SkinnedPosePass.h) | One workgroup per instance: sample, blend, walk the hierarchy, multiply by inverse bind |
 | Draw | `lib/forward/skinned_vertex.slang` | Blends the bind-pose vertex bytes by the palette; position, normal and tangent through one matrix. Entered from `programs/forward/SkinnedMesh.slang`, or from `programs/forward/AnyMesh.slang` where a draw mixes tiers |
@@ -266,6 +280,8 @@ the transport, the clip list and the scrubber are the same code either way — w
 
 * **One mesh may be live as static, VAT and skinned at once.** Three keyspaces in the `AssetManager`
   (`path#index`, `#vat`, `#skinned`), three uploads — which is what lets the editor compare tiers.
+  The rig is keyed separately again, on the `.banim` alone, so those three uploads of one mesh still
+  share a single skeleton with every *other* mesh cooked against it.
 
 * **`kPBR`, any layer.** Opaque, cutout and hashed all draw an *opaque shape* — they discard rather
   than blend, so their depth is real and nothing has to be sorted — and each is one row of

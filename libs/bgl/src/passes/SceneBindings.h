@@ -57,8 +57,8 @@ namespace bgl
 	// Both live here beside the geometry tables because every pass built on the tier-branching
 	// geometry stage declares and binds all three sets.
 	constexpr std::array<SceneBuffer, 2> c_SkinnedBuffers = {
-		{ { c_SkinnedGeomBufferName,
-		    "skinnedGeomBuffer",
+		{ { c_RigBufferName,
+		    "rigBuffer",
 		    BarrierAccessFlag::kShaderResource,
 		    BarrierSyncFlag::kVertexShader },
 		  { c_BonePaletteName,

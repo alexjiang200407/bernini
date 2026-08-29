@@ -274,8 +274,7 @@ TEST_CASE(
 		MakeSkinnedStrip(),
 		0,
 		materials,
-		MakeTwoBoneRig(),
-		MakeSwingClip(),
+		scene->AddRig(MakeTwoBoneRig(), MakeSwingClip()),
 		c_StripPosedBounds);
 	REQUIRE(staticGeom.IsValid());
 	REQUIRE(skinnedGeom.IsValid());
@@ -360,8 +359,7 @@ TEST_CASE("a rig past the old groupshared ceiling poses correctly", "[skinned][r
 		MakeSkinnedStrip(),
 		0,
 		materials,
-		MakeTwoBoneRig(c_DeepBones),
-		MakeSwingClip(c_DeepBones),
+		scene->AddRig(MakeTwoBoneRig(c_DeepBones), MakeSwingClip(c_DeepBones)),
 		c_StripPosedBounds);
 
 	// The refusal this used to hit is gone, and that is half of what the test is for.
@@ -375,8 +373,7 @@ TEST_CASE("a rig past the old groupshared ceiling poses correctly", "[skinned][r
 		MakeSkinnedStrip(),
 		0,
 		materials,
-		MakeTwoBoneRig(),
-		MakeSwingClip(),
+		scene->AddRig(MakeTwoBoneRig(), MakeSwingClip()),
 		c_StripPosedBounds);
 	REQUIRE(shallowGeom.IsValid());
 
@@ -469,8 +466,7 @@ TEST_CASE("a posed skinned mesh moves the bones' vertices and nothing else", "[s
 		MakeSkinnedStrip(),
 		0,
 		materials,
-		MakeTwoBoneRig(),
-		MakeSwingClip(),
+		scene->AddRig(MakeTwoBoneRig(), MakeSwingClip()),
 		c_StripPosedBounds);
 	REQUIRE(geom.IsValid());
 
@@ -534,8 +530,7 @@ TEST_CASE("a vertex bound to no bone keeps its bind pose", "[skinned][render]")
 		MakeSkinnedStrip(true),
 		0,
 		materials,
-		MakeTwoBoneRig(),
-		MakeSwingClip(),
+		scene->AddRig(MakeTwoBoneRig(), MakeSwingClip()),
 		c_StripPosedBounds);
 	REQUIRE(geom.IsValid());
 
@@ -600,8 +595,7 @@ TEST_CASE(
 		MakeSkinnedStrip(),
 		0,
 		materials,
-		MakeTwoBoneRig(),
-		MakeSwingClip(),
+		scene->AddRig(MakeTwoBoneRig(), MakeSwingClip()),
 		c_StripPosedBounds);
 
 	auto job     = bgl::RenderJob();
@@ -703,8 +697,7 @@ TEST_CASE("a blended skinned mesh sorts among blended static geometry", "[skinne
 			MakeSkinnedStrip(),
 			0,
 			materials,
-			MakeTwoBoneRig(),
-			MakeSwingClip(),
+			scene->AddRig(MakeTwoBoneRig(), MakeSwingClip()),
 			c_StripPosedBounds);
 	};
 
@@ -817,8 +810,7 @@ TEST_CASE("a selected skinned instance contours its pose", "[skinned][selection]
 		MakeSkinnedStrip(),
 		0,
 		materials,
-		MakeTwoBoneRig(),
-		MakeSwingClip(),
+		scene->AddRig(MakeTwoBoneRig(), MakeSwingClip()),
 		c_StripPosedBounds);
 	REQUIRE(geom.IsValid());
 

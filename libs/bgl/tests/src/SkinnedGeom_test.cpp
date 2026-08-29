@@ -195,21 +195,25 @@ TEST_CASE("AddSkinnedMeshGeom uploads a rig's bones, clips and samples", "[skinn
 	const auto                               animations = MakeClips();
 	const std::array<bgl::MaterialHandle, 1> materials  = { { material } };
 
-	const auto geom =
-		scene->AddSkinnedMeshGeom(MakeSkinnedMesh(), 0, materials, skeleton, animations, c_AnyPose);
+	const auto geom = scene->AddSkinnedMeshGeom(
+		MakeSkinnedMesh(),
+		0,
+		materials,
+		scene->AddRig(skeleton, animations),
+		c_AnyPose);
 	REQUIRE(geom.IsValid());
 	REQUIRE(geom.geomType == bgl::GeomType::kSkinnedMesh);
 
-	auto& clips        = scene->GetClipBuffer();
-	auto& skinnedGeoms = scene->GetSkinnedGeomBuffer();
-	auto& bones        = scene->GetSkinnedBoneBuffer();
-	auto& samples      = scene->GetBoneSampleBuffer();
+	auto& clips   = scene->GetClipBuffer();
+	auto& rigs    = scene->GetRigBuffer();
+	auto& bones   = scene->GetSkinnedBoneBuffer();
+	auto& samples = scene->GetBoneSampleBuffer();
 
 	const bgl::Scene::AnimGeomInfo info = scene->GetGeomSkinnedInfo(geom.handle.index);
 	REQUIRE(info.record);
 	REQUIRE(info.clipCount == 2);
 
-	const bgl::idl::SkinnedGeom& record = skinnedGeoms[info.record];
+	const bgl::idl::Rig& record = rigs[info.record];
 	CHECK(record.boneCount == c_BoneCount);
 	CHECK(record.clips.count == 2);
 
@@ -317,8 +321,7 @@ TEST_CASE("CreateSkinnedMeshInstance writes the playback record once", "[skinned
 		MakeSkinnedMesh(),
 		0,
 		materials,
-		MakeRig(),
-		MakeClips(),
+		scene->AddRig(MakeRig(), MakeClips()),
 		c_AnyPose);
 	REQUIRE(geom.IsValid());
 
@@ -344,7 +347,7 @@ TEST_CASE("CreateSkinnedMeshInstance writes the playback record once", "[skinned
 	CHECK(state.clip == 1);
 	CHECK(state.phase == Catch::Approx(4.5f));
 	CHECK(state.rate == Catch::Approx(2.0f));
-	CHECK(state.geom.offset == scene->GetGeomSkinnedInfo(geom.handle.index).record.index);
+	CHECK(state.rig.offset == scene->GetGeomSkinnedInfo(geom.handle.index).record.index);
 
 	SECTION("a clip past the geom's table is refused")
 	{
@@ -374,7 +377,61 @@ TEST_CASE("CreateSkinnedMeshInstance writes the playback record once", "[skinned
 	}
 }
 
-TEST_CASE("AddSkinnedMeshGeom refuses a rig the pose pass could not walk", "[skinned]")
+TEST_CASE("AddRig refuses a rig the pose pass could not walk", "[skinned]")
+{
+	auto gfx = bgl::CreateGraphics(HeadlessOptions());
+	REQUIRE(gfx != nullptr);
+
+	auto  sceneHandle = gfx->CreateScene(TestSceneDesc());
+	auto* scene       = sceneHandle->As<bgl::Scene>();
+	REQUIRE(scene != nullptr);
+
+	SECTION("a skeleton with no bones")
+	{
+		CHECK_THROWS_AS(scene->AddRig(assetlib::Skeleton(), MakeClips(0)), bgl::SceneError);
+	}
+
+	SECTION("a parent that is not a lower index than its own bone")
+	{
+		auto skeleton            = MakeRig();
+		skeleton.bones[1].parent = 2;  // forward reference: the walk would read it unwritten
+		CHECK_THROWS_AS(scene->AddRig(skeleton, MakeClips()), bgl::SceneError);
+	}
+
+	SECTION("a clip set cooked against a different bone count")
+	{
+		auto animations      = MakeClips();
+		animations.boneCount = c_BoneCount + 1;
+		CHECK_THROWS_AS(scene->AddRig(MakeRig(), animations), bgl::SceneError);
+	}
+
+	SECTION("an empty clip table")
+	{
+		auto animations = MakeClips();
+		animations.clips.clear();
+		CHECK_THROWS_AS(scene->AddRig(MakeRig(), animations), bgl::SceneError);
+	}
+
+	SECTION("a clip with no frames")
+	{
+		auto animations                = MakeClips();
+		animations.clips[0].frameCount = 0;
+		CHECK_THROWS_AS(scene->AddRig(MakeRig(), animations), bgl::SceneError);
+	}
+
+	SECTION("a clip whose frames run past the sample pool")
+	{
+		auto animations                = MakeClips();
+		animations.clips[1].frameCount = 4;
+		CHECK_THROWS_AS(scene->AddRig(MakeRig(), animations), bgl::SceneError);
+	}
+
+	// Every refusal above must leave the scene addable: one that leaked a range would show up here
+	// as a rig that no longer lands where a first rig lands.
+	CHECK(scene->AddRig(MakeRig(), MakeClips()).IsValid());
+}
+
+TEST_CASE("AddSkinnedMeshGeom refuses a mesh the skinned path could not draw", "[skinned]")
 {
 	auto gfx = bgl::CreateGraphics(HeadlessOptions());
 	REQUIRE(gfx != nullptr);
@@ -385,61 +442,14 @@ TEST_CASE("AddSkinnedMeshGeom refuses a rig the pose pass could not walk", "[ski
 
 	const std::array<bgl::MaterialHandle, 1> materials = { { OpaquePbr(scene) } };
 
-	const auto add = [&](const assetlib::Skeleton&     skeleton,
-	                     const assetlib::AnimationSet& animations,
-	                     bool                          withSkin = true) {
-		return scene->AddSkinnedMeshGeom(
-			MakeSkinnedMesh(withSkin),
-			0,
-			materials,
-			skeleton,
-			animations,
-			c_AnyPose);
-	};
-
-	SECTION("a skeleton with no bones")
-	{
-		CHECK_THROWS_AS(add(assetlib::Skeleton(), MakeClips(0)), bgl::SceneError);
-	}
-
-	SECTION("a parent that is not a lower index than its own bone")
-	{
-		auto skeleton            = MakeRig();
-		skeleton.bones[1].parent = 2;  // forward reference: the walk would read it unwritten
-		CHECK_THROWS_AS(add(skeleton, MakeClips()), bgl::SceneError);
-	}
-
-	SECTION("a clip set cooked against a different bone count")
-	{
-		auto animations      = MakeClips();
-		animations.boneCount = c_BoneCount + 1;
-		CHECK_THROWS_AS(add(MakeRig(), animations), bgl::SceneError);
-	}
-
-	SECTION("an empty clip table")
-	{
-		auto animations = MakeClips();
-		animations.clips.clear();
-		CHECK_THROWS_AS(add(MakeRig(), animations), bgl::SceneError);
-	}
-
-	SECTION("a clip with no frames")
-	{
-		auto animations                = MakeClips();
-		animations.clips[0].frameCount = 0;
-		CHECK_THROWS_AS(add(MakeRig(), animations), bgl::SceneError);
-	}
-
-	SECTION("a clip whose frames run past the sample pool")
-	{
-		auto animations                = MakeClips();
-		animations.clips[1].frameCount = 4;
-		CHECK_THROWS_AS(add(MakeRig(), animations), bgl::SceneError);
-	}
+	const bgl::RigHandle rig = scene->AddRig(MakeRig(), MakeClips());
+	REQUIRE(rig.IsValid());
 
 	SECTION("a submesh with no skin binding")
 	{
-		CHECK_THROWS_AS(add(MakeRig(), MakeClips(), false), bgl::SceneError);
+		CHECK_THROWS_AS(
+			scene->AddSkinnedMeshGeom(MakeSkinnedMesh(false), 0, materials, rig, c_AnyPose),
+			bgl::SceneError);
 	}
 
 	SECTION("a submesh whose material is loose, which the skinned pipeline has no variant for")
@@ -448,13 +458,7 @@ TEST_CASE("AddSkinnedMeshGeom refuses a rig the pose pass could not walk", "[ski
 			bgl::LoosePbrMaterialDesc()) } };
 
 		CHECK_THROWS_AS(
-			scene->AddSkinnedMeshGeom(
-				MakeSkinnedMesh(),
-				0,
-				loose,
-				MakeRig(),
-				MakeClips(),
-				c_AnyPose),
+			scene->AddSkinnedMeshGeom(MakeSkinnedMesh(), 0, loose, rig, c_AnyPose),
 			bgl::SceneError);
 	}
 
@@ -469,13 +473,8 @@ TEST_CASE("AddSkinnedMeshGeom refuses a rig the pose pass could not walk", "[ski
 			const std::array<bgl::MaterialHandle, 1> layered = { { scene->CreatePbrMaterial(
 				layerDesc) } };
 
-			const bgl::GeomHandle uploaded = scene->AddSkinnedMeshGeom(
-				MakeSkinnedMesh(),
-				0,
-				layered,
-				MakeRig(),
-				MakeClips(),
-				c_AnyPose);
+			const bgl::GeomHandle uploaded =
+				scene->AddSkinnedMeshGeom(MakeSkinnedMesh(), 0, layered, rig, c_AnyPose);
 
 			CHECK(uploaded.IsValid());
 		}
@@ -484,13 +483,7 @@ TEST_CASE("AddSkinnedMeshGeom refuses a rig the pose pass could not walk", "[ski
 	SECTION("a meshIndex past the mesh table")
 	{
 		CHECK_THROWS_AS(
-			scene->AddSkinnedMeshGeom(
-				MakeSkinnedMesh(),
-				1,
-				materials,
-				MakeRig(),
-				MakeClips(),
-				c_AnyPose),
+			scene->AddSkinnedMeshGeom(MakeSkinnedMesh(), 1, materials, rig, c_AnyPose),
 			bgl::SceneError);
 	}
 
@@ -500,19 +493,26 @@ TEST_CASE("AddSkinnedMeshGeom refuses a rig the pose pass could not walk", "[ski
 			assetlib::Bounds{ glm::vec3(1.0f, -1.0f, -1.0f), glm::vec3(-1.0f, 1.0f, 1.0f) };
 
 		CHECK_THROWS_AS(
-			scene->AddSkinnedMeshGeom(
-				MakeSkinnedMesh(),
-				0,
-				materials,
-				MakeRig(),
-				MakeClips(),
-				inverted),
+			scene->AddSkinnedMeshGeom(MakeSkinnedMesh(), 0, materials, rig, inverted),
+			bgl::SceneError);
+	}
+
+	SECTION("a rig that was never added, or was deleted")
+	{
+		CHECK_THROWS_AS(
+			scene->AddSkinnedMeshGeom(MakeSkinnedMesh(), 0, materials, bgl::RigHandle(), c_AnyPose),
+			bgl::SceneError);
+
+		const bgl::RigHandle retired = scene->AddRig(MakeRig(), MakeClips());
+		scene->DeleteRig(retired);
+		CHECK_THROWS_AS(
+			scene->AddSkinnedMeshGeom(MakeSkinnedMesh(), 0, materials, retired, c_AnyPose),
 			bgl::SceneError);
 	}
 
 	// Every refusal above must leave the scene addable: a failed add that leaked its geometry half
 	// would show up here as a geom slot or a submesh range that never came back.
-	const auto good = add(MakeRig(), MakeClips());
+	const auto good = scene->AddSkinnedMeshGeom(MakeSkinnedMesh(), 0, materials, rig, c_AnyPose);
 	CHECK(good.IsValid());
 }
 
@@ -527,66 +527,103 @@ TEST_CASE("a refused skinned add leaves the scene's arenas untouched", "[skinned
 
 	const std::array<bgl::MaterialHandle, 1> materials = { { OpaquePbr(scene) } };
 
-	// The offsets a clean add takes. Every range allocator hands back the lowest free block, so if a
-	// failed add left anything behind, the *next* add lands somewhere else -- which is the only
-	// evidence of a leak that does not need an occupancy accessor the buffers do not expose.
-	const auto offsetsOfAFreshAdd = [&] {
-		const auto geom = scene->AddSkinnedMeshGeom(
-			MakeSkinnedMesh(),
-			0,
-			materials,
-			MakeRig(),
-			MakeClips(),
-			c_AnyPose);
+	// Every range allocator hands back the lowest free block, so if a failed add left anything
+	// behind, the *next* add lands somewhere else -- which is the only evidence of a leak that does
+	// not need an occupancy accessor the buffers do not expose.
+	const auto offsetsOfAFreshRig = [&] {
+		const bgl::RigHandle rig = scene->AddRig(MakeRig(), MakeClips());
+		REQUIRE(rig.IsValid());
+
+		const auto& record = scene->GetRigBuffer()[rig.handle];
+		const auto  taken  = std::array<uint32_t, 3>{
+			{ record.bones.offsetStart, record.samples.offsetStart, record.clips.range.offsetStart }
+		};
+		scene->DeleteRig(rig);
+		return taken;
+	};
+
+	const std::array<uint32_t, 3> beforeRig = offsetsOfAFreshRig();
+
+	// A rig-shaped refusal is AddRig's, and it takes its bone and sample ranges before it can find
+	// the fault -- so its rollback is what has to hold.
+	auto badRig            = MakeRig();
+	badRig.bones[1].parent = 2;
+	CHECK_THROWS(scene->AddRig(badRig, MakeClips()));
+
+	auto shortPool                = MakeClips();
+	shortPool.clips[1].frameCount = 4;
+	CHECK_THROWS(scene->AddRig(MakeRig(), shortPool));
+
+	CHECK(offsetsOfAFreshRig() == beforeRig);
+
+	// The mesh-shaped half, against a rig that stands throughout: those checks run after the mesh
+	// has been cooked, so AddSkinnedMeshGeom's own rollback is what has to hold.
+	const bgl::RigHandle rig = scene->AddRig(MakeRig(), MakeClips());
+	REQUIRE(rig.IsValid());
+
+	const auto offsetsOfAFreshGeom = [&] {
+		const auto geom =
+			scene->AddSkinnedMeshGeom(MakeSkinnedMesh(), 0, materials, rig, c_AnyPose);
 		REQUIRE(geom.IsValid());
 
-		const auto& record =
-			scene->GetSkinnedGeomBuffer()[scene->GetGeomSkinnedInfo(geom.handle.index).record];
-		const auto taken = std::array<uint32_t, 4>{
-			{ record.bones.offsetStart,
-			  record.samples.offsetStart,
-			  record.clips.range.offsetStart,
-			  scene->GetGeomSubmeshes(geom.handle.index).range.offsetStart }
-		};
+		const uint32_t taken = scene->GetGeomSubmeshes(geom.handle.index).range.offsetStart;
 		scene->DeleteGeom(geom);
 		return taken;
 	};
 
-	const std::array<uint32_t, 4> before = offsetsOfAFreshAdd();
+	const uint32_t beforeGeom = offsetsOfAFreshGeom();
 
-	// One refusal from each side of AddPreparedMesh: the rig checks run before any geometry is
-	// committed, the skin-binding and material checks run after the mesh has been cooked, and
-	// AttachSkinnedRecords' own rollback is what has to hold for the second kind.
-	auto badRig            = MakeRig();
-	badRig.bones[1].parent = 2;
-	CHECK_THROWS(
-		scene->AddSkinnedMeshGeom(MakeSkinnedMesh(), 0, materials, badRig, MakeClips(), c_AnyPose));
-
-	auto shortPool                = MakeClips();
-	shortPool.clips[1].frameCount = 4;
-	CHECK_THROWS(
-		scene
-			->AddSkinnedMeshGeom(MakeSkinnedMesh(), 0, materials, MakeRig(), shortPool, c_AnyPose));
-
-	CHECK_THROWS(scene->AddSkinnedMeshGeom(
-		MakeSkinnedMesh(false),
-		0,
-		materials,
-		MakeRig(),
-		MakeClips(),
-		c_AnyPose));
+	CHECK_THROWS(scene->AddSkinnedMeshGeom(MakeSkinnedMesh(false), 0, materials, rig, c_AnyPose));
 
 	const std::array<bgl::MaterialHandle, 1> looseMaterials = { { scene->CreateLoosePbrMaterial(
 		bgl::LoosePbrMaterialDesc()) } };
-	CHECK_THROWS(scene->AddSkinnedMeshGeom(
-		MakeSkinnedMesh(),
-		0,
-		looseMaterials,
-		MakeRig(),
-		MakeClips(),
-		c_AnyPose));
+	CHECK_THROWS(scene->AddSkinnedMeshGeom(MakeSkinnedMesh(), 0, looseMaterials, rig, c_AnyPose));
 
-	CHECK(offsetsOfAFreshAdd() == before);
+	CHECK(offsetsOfAFreshGeom() == beforeGeom);
+
+	// A refused add must not have counted a use either, or the rig could never be deleted.
+	CHECK_NOTHROW(scene->DeleteRig(rig));
+}
+
+TEST_CASE("skinned geoms share one rig, and it outlives them", "[skinned]")
+{
+	auto gfx = bgl::CreateGraphics(HeadlessOptions());
+	REQUIRE(gfx != nullptr);
+
+	auto  sceneHandle = gfx->CreateScene(TestSceneDesc());
+	auto* scene       = sceneHandle->As<bgl::Scene>();
+	REQUIRE(scene != nullptr);
+
+	const std::array<bgl::MaterialHandle, 1> materials = { { OpaquePbr(scene) } };
+
+	const bgl::RigHandle rig = scene->AddRig(MakeRig(), MakeClips());
+	REQUIRE(rig.IsValid());
+
+	const auto first  = scene->AddSkinnedMeshGeom(MakeSkinnedMesh(), 0, materials, rig, c_AnyPose);
+	const auto second = scene->AddSkinnedMeshGeom(MakeSkinnedMesh(), 0, materials, rig, c_AnyPose);
+	REQUIRE(first.IsValid());
+	REQUIRE(second.IsValid());
+
+	// The point of a rig being an object of its own: a unit assembled from slot meshes uploads one
+	// bone table and one sample pool, not one per mesh.
+	const auto firstInfo  = scene->GetGeomSkinnedInfo(first.handle.index);
+	const auto secondInfo = scene->GetGeomSkinnedInfo(second.handle.index);
+	CHECK(firstInfo.record == secondInfo.record);
+	CHECK(firstInfo.boneCount == secondInfo.boneCount);
+	CHECK(firstInfo.clipCount == secondInfo.clipCount);
+
+	// Refused rather than permitted: a geom left naming freed bone and sample ranges would pose from
+	// whatever lands in them next.
+	CHECK_THROWS_AS(scene->DeleteRig(rig), bgl::SceneError);
+
+	scene->DeleteGeom(first);
+	CHECK_THROWS_AS(scene->DeleteRig(rig), bgl::SceneError);
+
+	scene->DeleteGeom(second);
+	CHECK_NOTHROW(scene->DeleteRig(rig));
+
+	// And it is gone: a second delete has nothing to free.
+	CHECK_THROWS_AS(scene->DeleteRig(rig), bgl::SceneError);
 }
 
 TEST_CASE("a skinned submesh culls by its posed box, not its bind pose", "[skinned][culling]")
@@ -605,8 +642,12 @@ TEST_CASE("a skinned submesh culls by its posed box, not its bind pose", "[skinn
 	const auto posed =
 		assetlib::Bounds{ glm::vec3(-100.0f, 0.0f, -100.0f), glm::vec3(100.0f, 300.0f, 100.0f) };
 
-	const auto skinned =
-		scene->AddSkinnedMeshGeom(MakeSkinnedMesh(), 0, materials, MakeRig(), MakeClips(), posed);
+	const auto skinned = scene->AddSkinnedMeshGeom(
+		MakeSkinnedMesh(),
+		0,
+		materials,
+		scene->AddRig(MakeRig(), MakeClips()),
+		posed);
 	REQUIRE(skinned.IsValid());
 
 	// The same bytes as static geometry: its sphere is the cooked bind pose, so the two spheres
