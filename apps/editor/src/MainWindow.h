@@ -23,7 +23,12 @@ class MainWindow : public QMainWindow
 	Q_OBJECT
 
 public:
-	explicit MainWindow(QWidget* parent = nullptr);
+	/**
+	 * @param configPath The config.json to build from. Empty takes the one deployed next to the
+	 *                   executable, which is what ships; a test names one of its own, because
+	 *                   editor_tests runs from the directory that file is deployed into.
+	 */
+	explicit MainWindow(QWidget* parent = nullptr, std::filesystem::path configPath = {});
 	~MainWindow();
 
 protected:
@@ -81,7 +86,7 @@ private:
 
 	/** Everything the constructor does once its base is built, so a failure can be caught around it. */
 	void
-	Build();
+	Build(const std::filesystem::path& configPath);
 
 	/**
 	 * Hands back everything that renders, in the order it has to go: the thumbnails and the assets

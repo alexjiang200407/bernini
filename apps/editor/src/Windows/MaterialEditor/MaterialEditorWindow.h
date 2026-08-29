@@ -2,6 +2,7 @@
 
 #include <QWidget>
 
+#include "util/follows_project.h"
 #include "util/held_open_assets.h"
 
 #include <bgl/IGraphics.h>
@@ -39,9 +40,17 @@ struct MaterialEditorWindowDesc
 	float              renderScale             = 1.0f;
 	float              taaReconstructionWidth  = 0.4f;
 	MaterialPreviewEnv previewEnv;
+
+	// Builds the preview viewport without a native window. See RenderTargetWindowDesc.
+	bool     headless       = false;
+	uint32_t headlessWidth  = 256;
+	uint32_t headlessHeight = 256;
 };
 
-class MaterialEditorWindow : public QWidget, public editor::IHoldsAssets
+class MaterialEditorWindow :
+	public QWidget,
+	public editor::IHoldsAssets,
+	public editor::IFollowsProject
 {
 	Q_OBJECT
 
@@ -50,7 +59,14 @@ public:
 	~MaterialEditorWindow() override;
 
 	void
-	SetDataRoot(const QString& dataRoot);
+	SetDataRoot(const QString& dataRoot) override;
+
+	// The project Data root this panel resolves against, empty until a project opens.
+	[[nodiscard]] const std::filesystem::path&
+	GetDataRoot() const noexcept
+	{
+		return m_DataRoot;
+	}
 
 	/** Back to the default sphere and a blank graph, dropping whatever was open. */
 	void

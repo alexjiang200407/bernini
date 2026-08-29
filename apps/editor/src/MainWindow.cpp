@@ -20,6 +20,7 @@
 #include "Windows/LevelEditor/LevelEditorWindow.h"
 #include "Windows/MaterialEditor/MaterialEditorWindow.h"
 #include "Windows/RenderTarget/RenderTargetWindow.h"
+#include "util/follows_project.h"
 #include "util/frame_stats_text.h"
 #include "util/held_open_assets.h"
 #include "util/window_title.h"
@@ -39,11 +40,13 @@
 #include <core/settings/Settings.h>
 #include <gamelib/AssetManager.h>
 
-MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent)
+MainWindow::MainWindow(QWidget* parent, std::filesystem::path configPath) : QMainWindow(parent)
 {
 	try
 	{
-		Build();
+		Build(
+			configPath.empty() ? core::file::get_executable_path().parent_path() / "config.json" :
+								 configPath);
 	}
 	catch (...)
 	{
@@ -57,7 +60,7 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent)
 }
 
 void
-MainWindow::Build()
+MainWindow::Build(const std::filesystem::path& configPath)
 {
 	m_Ui.setupUi(this);
 
@@ -72,12 +75,15 @@ MainWindow::Build()
 
 	std::string startupProject;
 	{
-		const auto     configPath = core::file::get_executable_path().parent_path() / "config.json";
 		core::Settings settings(configPath);
 
 		startupProject = settings["startupProject"].GetOrDefault(std::string());
 		m_InstanceName =
 			QString::fromStdString(settings["instanceName"].GetOrDefault(std::string()));
+
+		// Builds every viewport offscreen. For editor_tests, which cannot realise a native window;
+		// a headless editor still creates the device and renders, it just presents nothing.
+		const bool headless = settings["headless"].GetOrDefault(false);
 
 		const auto gfxSettings = settings["graphics"];
 
@@ -136,6 +142,10 @@ MainWindow::Build()
 		levelDesc.taaReconstructionWidth =
 			settings["levelEditor"]["taaReconstructionWidth"].GetOrDefault(0.4f);
 
+		// Every viewport together, not one at a time: a headless editor is a whole editor built
+		// without windows, which is the only shape a test can construct.
+		levelDesc.headless = headless;
+
 		auto levelEnv = LevelEditorEnv();
 		levelEnv.environmentMap =
 			settings["levelEditor"]["environmentMap"].GetOrDefault(std::string());
@@ -158,6 +168,7 @@ MainWindow::Build()
 		matDesc.taaEnabled              = matSettings["temporalAA"].GetOrDefault(true);
 		matDesc.renderScale             = matSettings["renderScale"].GetOrDefault(1.0f);
 		matDesc.taaReconstructionWidth  = matSettings["taaReconstructionWidth"].GetOrDefault(0.4f);
+		matDesc.headless                = headless;
 		matDesc.previewEnv.environmentMap =
 			matSettings["environmentMap"].GetOrDefault(std::string());
 		matDesc.previewEnv.dataRoot = matSettings["dataRoot"].GetOrDefault(std::string());
@@ -185,6 +196,7 @@ MainWindow::Build()
 		animDesc.taaEnabled             = animSettings["temporalAA"].GetOrDefault(true);
 		animDesc.renderScale            = animSettings["renderScale"].GetOrDefault(1.0f);
 		animDesc.taaReconstructionWidth = animSettings["taaReconstructionWidth"].GetOrDefault(0.4f);
+		animDesc.headless               = headless;
 		// Falls back to the material editor's environment: both are asset previews wanting the
 		// same neutral look, and a config predating this panel would otherwise light it with
 		// nothing -- which draws black and says nothing.
@@ -884,19 +896,15 @@ MainWindow::SetActiveProject(assetlib::Project project)
 
 	m_ContentExplorer->SetRootPath(dataDir);
 
+	// Before the two below, which each act on the root just handed over: the material reset
+	// repopulates the preview, which resolves the material paths it finds against it.
+	editor::SetProjectDataRoot(this, dataDir);
+
 	if (m_MaterialEditor)
-	{
-		// Root first, then reset: the reset repopulates the preview, which resolves the material
-		// paths it finds against the data root.
-		m_MaterialEditor->SetDataRoot(dataDir);
 		m_MaterialEditor->Reset();
-	}
 
 	if (m_AnimationEditor)
-	{
-		m_AnimationEditor->SetDataRoot(dataDir);
 		m_AnimationEditor->SetAssets(m_Assets.get());
-	}
 
 	ShowProjectState();
 

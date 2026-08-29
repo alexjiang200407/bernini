@@ -34,11 +34,17 @@ Two things the licence does **not** cover, because both leak out of the app:
 ## config.json
 
 `config.json` (git-ignored, one per checkout, deployed next to the binary and read once by
-`MainWindow::Build`) is machine-local: `startupProject` names the project to open on launch, and
-`instanceName` names *this* editor. An `instanceName` leads the window title —
-`A — Bernini Editor — Test Project` — so two editors run side by side for an A/B comparison can be
-told apart where every other part of the title is identical. Empty, and the title is what it always
-was. `config.example.json` carries both keys blank.
+`MainWindow::Build`) is machine-local: `startupProject` names the project to open on launch,
+`instanceName` names *this* editor, and `headless` builds every viewport offscreen. An
+`instanceName` leads the window title — `A — Bernini Editor — Test Project` — so two editors run
+side by side for an A/B comparison can be told apart where every other part of the title is
+identical. Empty, and the title is what it always was. `config.example.json` carries the keys blank.
+
+**`MainWindow` reads the config it is given**, defaulting to the deployed one when handed nothing —
+which is what `main.cpp` does. `editor_tests` runs from the directory that file is deployed into, so
+a test that wrote `headless` into it would be writing the shipping editor's config; instead each
+case writes one in a temp directory and names it. That is also how a test opens a project at all:
+`startupProject` is the only route into `SetActiveProject` that raises no dialog.
 
 ## editor_lib
 
@@ -88,6 +94,11 @@ lives beside it, and the split is by responsibility rather than by line count:
   lit by a `.benv` is the one thing that can hold one, because nothing on disk references a
   `.benv`. Never add a panel to a list of holders: the guard walks MainWindow's object tree, and
   the list that came before it was short by four.
+- **A panel that resolves against the project's Data root** implements `editor::IFollowsProject`
+  (`src/util/follows_project.h`). `SetActiveProject` walks the object tree and tells every one of
+  them, so a panel added later is rooted without anyone remembering it -- the same reason
+  `IHoldsAssets` is a walk. A panel that only forwards the root to a child it owns implements it;
+  the child does not, or it is told twice and the owner loses its say in the order.
 - **Widget assembly** built in code rather than Designer goes to its own `*_ui` file
   (`material_editor_ui`), which builds and connects nothing. The `connect` calls stay in the window,
   because what a widget *does* is behaviour.
@@ -112,13 +123,13 @@ why `just test` cannot forward arguments to a suite. The only thing genuinely lo
 `QTRY_*`, replaced by `editor::test::WaitFor` in `tests/src/util/QtSupport.h`.
 
 ```bash
-just test editor                        # the suite; about fifteen seconds
+just test editor                        # the suite; about half a minute
 just run editor_tests -- "[assetimporter]"  # one tag
 just run editor_tests -- "~[render]"    # skip the GPU cases; back to about a second
 just run editor_tests -- --list-tests
 ```
 
-Nearly all of that fifteen seconds is `CreateGraphics`, which every `[render]` case pays
+Nearly all of that half-minute is `CreateGraphics`, which every `[render]` case pays
 (Catch2 re-runs a `TEST_CASE` body per `SECTION`, so a multi-section one pays it again each
 time). Everything else still runs on the CPU in about a second.
 
@@ -138,17 +149,20 @@ for anything Qt does off-thread, like `QFileSystemModel` scanning a directory) a
 
 ## What is testable, and what is not
 
-What blocks coverage is the **window**, not the device. `RenderTargetWindow`'s constructor
-calls `CreateRenderTarget` with `winId()` and `headless = false`, and does not guard a null
-device — so `RenderTargetWindow`, `LevelEditorWindow`, `MaterialPreviewWindow`,
-`AnimationPreviewWindow` and `MainWindow` (whose constructor creates the device) are **not
-covered**. Covering them needs a seam first: a `headless` flag on `RenderTargetWindowDesc`.
+A viewport no longer needs a window. `RenderTargetWindowDesc::headless` builds the target
+offscreen at an explicit extent, asking the widget for no `winId()` and taking neither
+`WA_PaintOnScreen` (which implies `WA_NativeWindow`) nor the null `paintEngine()` that goes with it.
+So `RenderTargetWindow`, `LevelEditorWindow`, `MaterialPreviewWindow`, `AnimationPreviewWindow` and
+`MainWindow` all stand in a test — see `MainWindow_test.cpp`, which builds a whole headless editor
+and pins its teardown order, its data-root propagation, and that every viewport it built is
+headless. A null `Renderer` **asserts**: no shipping path produces one, and four methods here
+dereference it unconditionally.
 
-A fake `IGraphics` is **not** that seam. `MaterialEditorWindow`, `AssetThumbnailCache` and
-`TextureNode` each degrade when their `Renderer` is null, and no shipping path produces one —
-a fake would buy coverage of three branches no user reaches, and nothing else. What a failing
-device does instead is leave through `main`, which reports it and exits; only the viewports
-still have no way to stand without one.
+What is still out of reach is the **modal dialog**, not the window. A fake `IGraphics` is **not**
+a seam worth having either: `MaterialEditorWindow`, `AssetThumbnailCache` and `TextureNode` each
+degrade when their `Renderer` is null, and no shipping path produces one — a fake would buy coverage
+of three branches no user reaches, and nothing else. What a failing device does instead is leave
+through `main`, which reports it and exits.
 
 What *is* testable is a rule lifted clear of the window: `CachedMaterial` and
 `StampedPixmapCache` hold the ones the caches are built on. Reach for that shape before
