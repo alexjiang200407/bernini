@@ -7,6 +7,7 @@
 #include "fg/FrameGraph.h"
 #include "fg/PassDesc.h"
 #include "idl/BaseTable.h"
+#include "idl/PsoType.h"
 #include "passes/BinderNames.h"
 #include "passes/DrawData.h"
 #include "passes/SceneBindings.h"
@@ -20,7 +21,6 @@
 #include "uniforms/Uniforms.h"
 #include "util/util.h"
 #include <bgl/ISceneView.h>
-#include <bgl/PsoType.h>
 
 namespace bgl
 {
@@ -101,8 +101,8 @@ namespace bgl
 			std::string_view geomSrc   = c_GeomSrc;
 		};
 
-		// Order MUST match PsoType (bgl/PsoType.h, generated from idl/src/PsoType.slang).
-		static constexpr std::array<PsoConfig, c_PsoCount> c_Psos = { {
+		// Order MUST match idl::PsoType (idl/PsoType.h, generated from idl/src/PsoType.slang).
+		static constexpr std::array<PsoConfig, idl::c_PsoCount> c_Psos = { {
 			// kOpaque_StaticMesh_Null
 			{ c_NullPixelSrc, RasterCullMode::kBack, true, false },
 			// kOpaque_StaticMesh_PBR
@@ -261,7 +261,7 @@ namespace bgl
 	{
 		gassert(device != nullptr, "Device must be initialized");
 
-		for (uint16_t pso = 0; pso < c_PsoCount; ++pso)
+		for (uint16_t pso = 0; pso < idl::c_PsoCount; ++pso)
 		{
 			m_Kernels[pso] = BuildForwardKernel(device, c_Psos[pso]);
 		}
@@ -425,7 +425,7 @@ namespace bgl
 
 		// Opaque and alpha-test: PSO-bucketed, drawn indirect over the counting-sort output. The
 		// transparent buckets are skipped here -- their order is depth, not PSO, so they draw below.
-		for (uint16_t pso = 0; pso < c_PsoCount; ++pso)
+		for (uint16_t pso = 0; pso < idl::c_PsoCount; ++pso)
 		{
 			if (IsTransparentPso(pso))
 			{
@@ -470,7 +470,7 @@ namespace bgl
 		                             .SetDepthAttachment(draw.targets.depth);
 
 		MeshletKernel& kernel =
-			m_Kernels[static_cast<size_t>(PsoType::kTransparent_StaticMesh_PBR)];
+			m_Kernels[static_cast<size_t>(idl::PsoType::kTransparent_StaticMesh_PBR)];
 		gassert(kernel.pipeline.IsInitialized(), "Pass pipeline must be initialized");
 
 		BindKernel(kernel, draw, resources);
