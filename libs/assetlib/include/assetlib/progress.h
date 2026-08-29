@@ -40,36 +40,4 @@ namespace assetlib
 	 * An empty sink is the default everywhere and costs a branch per step.
 	 */
 	using ProgressSink = std::function<void(const ProgressEvent&)>;
-
-	/**
-	 * `sink` behind a lock of its own, for a cook that reports from several threads. The one place
-	 * the serialization rule above is kept, so no sink and no threaded cook has to keep it twice.
-	 *
-	 * An empty sink stays empty: there is nothing to serialize, and a lock per step is not free.
-	 */
-	inline ProgressSink
-	serialized(ProgressSink sink)
-	{
-		if (!sink)
-			return {};
-
-		auto guard = std::make_shared<std::mutex>();
-		return [sink = std::move(sink), guard](const ProgressEvent& event) {
-			const auto held = std::lock_guard(*guard);
-			sink(event);
-		};
-	}
-
-	/** Reports one step to `sink` if there is one. */
-	inline void
-	reportStep(
-		const ProgressSink& sink,
-		ProgressPhase       phase,
-		std::string_view    subject,
-		size_t              done  = 0,
-		size_t              total = 0)
-	{
-		if (sink)
-			sink(ProgressEvent{ phase, subject, done, total });
-	}
 }

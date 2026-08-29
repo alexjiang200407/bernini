@@ -16,10 +16,12 @@
 
 #include "import_bounds.h"
 #include "parallel_for.h"
+#include "progress_report.h"
 #include "ref_paths.h"
 #include "regen_group.h"
 
 #include <core/err/util.h>
+#include <core/str/str.h>
 
 namespace assetlib
 {
@@ -282,8 +284,8 @@ namespace assetlib
 				textures.push_back(i);
 			}
 
-		auto written = std::unordered_map<std::string, std::vector<std::string>>();
-		auto failed  = std::unordered_map<std::string, std::string>();
+		auto written = core::str::unordered_str_map<std::vector<std::string>>();
+		auto failed  = core::str::unordered_str_map<std::string>();
 		auto guard   = std::mutex();
 		auto done    = std::atomic<size_t>(0);
 

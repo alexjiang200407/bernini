@@ -13,6 +13,7 @@
 
 #include "cache_io.h"
 #include "fs_util.h"
+#include "progress_report.h"
 #include "ref_paths.h"
 
 #include <core/file/file.h>

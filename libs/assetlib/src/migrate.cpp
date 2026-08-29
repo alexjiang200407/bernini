@@ -19,6 +19,7 @@
 #include "fs_util.h"
 #include "material_texture_refs.h"
 #include "parallel_for.h"
+#include "progress_report.h"
 #include "ref_paths.h"
 
 #include <core/err/util.h>

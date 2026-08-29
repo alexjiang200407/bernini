@@ -29,7 +29,7 @@ namespace assetlib
 			auto jobs = std::vector<Job>();
 			jobs.reserve(static_cast<size_t>(mipLevels) * 6);
 			for (uint32_t mip = 0; mip < mipLevels; ++mip)
-				for (uint32_t face = 0; face < 6; ++face) jobs.push_back({ face, mip });
+				for (uint32_t face = 0; face < 6; ++face) jobs.emplace_back(face, mip);
 			return jobs;
 		}
 
