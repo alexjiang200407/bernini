@@ -82,7 +82,7 @@ namespace bgl
 	}
 
 	BufferHandle
-	ResourceManager::CreateRawBuffer(const RawBufferDesc& desc) noexcept
+	ResourceManager::CreateRawBuffer(const RawViewDesc& desc) noexcept
 	{
 		gassert(desc.byteSize > 0, "A raw buffer requires a byte size");
 		gassert(desc.byteSize % 4 == 0, "A raw view addresses whole 32-bit words");

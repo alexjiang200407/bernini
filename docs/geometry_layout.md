@@ -4,7 +4,9 @@ The structs that describe renderable geometry — `Mesh`, `Submesh`, `Meshlet`, 
 `VertexLayout`, and the `Range` / `RangeWithCount` / `Entry` offset primitives — plus the CPU-side
 buffers that mirror them onto the GPU. The structs are laid out once and shared between CPU and
 GPU: a single IDL source (`libs/bgl/idl/src/*.slang`) generates a shader copy under
-[libs/bgl/shaders/src/idl/](libs/bgl/shaders/src/idl/) and a byte-identical C++ mirror under `libs/bgl/src/idl/`.
+[libs/bgl/shaders/src/idl/](libs/bgl/shaders/src/idl/) and a byte-identical C++ mirror into the
+build tree at `<build>/generated/idl/`. Only the offset primitives are hand-written, in
+`libs/bgl/src/idl/`: they are generic, and a generic has no concrete layout to mirror.
 This document links the **generated shader slang** — the GPU-facing view is the one that drives
 rendering, and the C++ mirror pins the same offsets with `static_assert`s.
 
@@ -145,7 +147,7 @@ Generated shader structs (GPU source of truth). Each has a byte-identical `bgl::
 | `Clip` | [Clip.slang](libs/bgl/shaders/src/idl/Clip.slang) | One playable clip: where its frame 0 sits in the tier's own frame space, its frame count, authored rate and loop flag. Shared by every animated tier out of one clip buffer. |
 | `Submesh` | [Submesh.slang](libs/bgl/shaders/src/idl/Submesh.slang) | One drawable part, **geometry only**: its `VertexLayout`, meshlet range, vertexMap/vertexData/indices ranges, vertex count, local bounding sphere. No material, no PSO — those are per-instance. |
 | `Meshlet` | [Meshlet.slang](libs/bgl/shaders/src/idl/Meshlet.slang) | A mesh-shader work unit: offsets into the parent submesh's vertexMap/indices windows, vertex/triangle counts, bounding sphere. |
-| `Vertex` | [Vertex.slang](libs/bgl/shaders/src/util/Vertex.slang) | Full authoring vertex (pos, normal, uv, tangent). The *decoded* form; on the GPU vertices live as raw bytes. |
+| `DecodedVertex` | [vertexdecode.slang](libs/bgl/shaders/src/forward/vertexdecode.slang) | What a vertex decodes *to* — position, normal, uv, tangent, joints and weights. Not IDL and not stored anywhere: on the GPU vertices live as raw bytes. |
 | `VertexLayout` | [VertexLayout.slang](libs/bgl/shaders/src/idl/VertexLayout.slang) | Up to 8 `VertexAttribute`s (semantic + format + byte offset) plus `stride`; describes how to decode a vertex from bytes. |
 
 One struct in the same buffers is **not** IDL-generated and is hand-mirrored instead, so the two
@@ -162,17 +164,23 @@ copies must be kept in step by hand:
 | `Range<T>` | [Range.slang](libs/bgl/shaders/src/idl/Range.slang) | A `uint offsetStart` into a `StructuredBuffer<T>`; the element count is known from context. `Null()` at `0`. |
 | `RangeWithCount<T>` | [RangeWithCount.slang](libs/bgl/shaders/src/idl/RangeWithCount.slang) | A `Range<T>` plus an explicit `count` (a self-describing span). |
 | `Entry<T>` | [Entry.slang](libs/bgl/shaders/src/idl/Entry.slang) | A single-element `uint offset` into a `StructuredBuffer<T>` (e.g. a material record). |
+| `RawEntry<T>` | [RawEntry.slang](libs/bgl/shaders/src/idl/RawEntry.slang) | A `uint` **byte** offset into a raw arena, naming a record's `RecordHeader`; its payload begins `cRawPayloadOffset` later. |
+| `RawRange` | [RawRange.slang](libs/bgl/shaders/src/idl/RawRange.slang) | A `uint` byte offset to a headerless window of bytes, for data whose kind whatever names it already records. |
+
+`RawEntry<T>` is generic, so its C++ mirror is hand-written and carries `Null()`; `RawRange` and
+`RecordHeader` are concrete, so idlgen emits them and the C++ side is fields only.
 
 ### CPU-side mirror buffers
 
 GPU-mirrored containers that back the geometry buffers and hand out the offsets the structs above
-store. All three dirty-track writes and flush via `Update(cmdList)`.
+store. All dirty-track writes and flush via `Update(cmdList)`.
 
 | Type | File | Role |
 |---|---|---|
 | `RangeBuffer<T,Meta>` | [RangeBuffer.h](libs/bgl/src/scene/RangeBuffer.h) | Variable-length-range allocator; `Add(span)` returns a `multi_slot_handle` assignable into a `Range`/`RangeWithCount`. Backs the vertex/index/meshlet/submesh buffers. |
 | `EntryBuffer<T,Meta>` | [EntryBuffer.h](libs/bgl/src/scene/EntryBuffer.h) | Slot buffer with stable, generation-checked handles; `Add`/`EmplaceBack` return a `slot_handle` assignable into an `Entry`. |
 | `PackedBuffer<T>` | [PackedBuffer.h](libs/bgl/src/scene/PackedBuffer.h) | Densely-packed buffer with stable handles (handle→dense indirection); erase swaps the tail in and re-uploads it. |
+| `RawBuffer<Tag>` | [RawBuffer.h](libs/bgl/src/scene/RawBuffer.h) | A byte arena over `RangeBuffer<RawBlock>`, read through a `RawBuffer` in Slang. `AddRecord(tag, payload)` returns a `RawEntry` and writes a `RecordHeader` ahead of the payload; `AddBytes` returns a `RawRange` and writes no header. Capped at what a raw view addresses. |
 | `GrowableGpuBuffer` | [GrowableGpuBuffer.h](libs/bgl/src/scene/GrowableGpuBuffer.h) | The GPU storage the three share: allocates the replacement resource, records the forward copy in `FlushGrowth`, and retires the old one on the manager's fence. |
 
 ---

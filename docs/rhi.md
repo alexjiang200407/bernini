@@ -50,7 +50,9 @@ doc and a header disagree, trust the header, then fix this doc.
 
   **A raw buffer is at most `c_MaxRawBufferBytes` (4 GiB)**, because a raw view is addressed by a
   `uint` byte offset on every API; `CreateRawBuffer` asserts it, along with a size that is a whole
-  number of 32-bit words.
+  number of 32-bit words. A CPU-mirrored buffer over one sets `RangeBufferDesc::maxBytes` to the
+  same ceiling, and growth that would cross it throws rather than handing back an offset no shader
+  can reach.
 
   **A resource handle cannot be loaded out of a raw buffer on Metal.** The element type must be on
   the binding: `StructuredBuffer<T, ScalarDataLayout>.Handle` lowers to `T device*`, so a
@@ -164,7 +166,7 @@ doc and a header disagree, trust the header, then fix this doc.
 | `Uniforms` | [libs/bgl/src/uniforms/Uniforms.h](libs/bgl/src/uniforms/Uniforms.h) | Reflection-driven CPU constant-buffer mirror; name/index `operator[]` access. |
 | `ComputeKernel` / `MeshletKernel` | [libs/bgl/src/pipeline/ComputeKernel.h](libs/bgl/src/pipeline/ComputeKernel.h), [MeshletKernel.h](libs/bgl/src/pipeline/MeshletKernel.h) | Move-only pipeline + per-cbuffer `Uniforms` map. |
 | `ComputeState` / `MeshletState` | [libs/bgl/src/types/ComputeState.h](libs/bgl/src/types/ComputeState.h), [MeshletState.h](libs/bgl/src/types/MeshletState.h) | Per-dispatch/draw binding; holds a **non-owning** kernel pointer. |
-| Buffer descriptors & `BufferHandle` | [libs/bgl/src/resource/Buffer.h](libs/bgl/src/resource/Buffer.h) | `StructBufferDesc`, `RawBufferDesc`, `ConstantBufferDesc`, `ComputeBufferDesc`, `BufferBarrierDesc`. |
+| Buffer descriptors & `BufferHandle` | [libs/bgl/src/resource/Buffer.h](libs/bgl/src/resource/Buffer.h) | `StructBufferDesc`, `RawViewDesc`, `ConstantBufferDesc`, `ComputeBufferDesc`, `BufferBarrierDesc`. |
 | Texture descriptors & `TextureHandle` | [libs/bgl/src/resource/Texture.h](libs/bgl/src/resource/Texture.h) | `TextureDesc`, `TextureUsage`, `TextureBarrierDesc`. |
 | Views | [libs/bgl/src/resource/Rtv.h](libs/bgl/src/resource/Rtv.h), [Dsv.h](libs/bgl/src/resource/Dsv.h) | `RtvDesc`/`RtvHandle`, `DsvDesc`/`DsvHandle`. |
 | Sampler descriptors & `SamplerHandle` | [libs/bgl/src/resource/Sampler.h](libs/bgl/src/resource/Sampler.h) | `SamplerDesc` (chained builder), `SamplerAddressMode` (D3D + Vulkan aliases), `SamplerReductionType`; descriptor-heap-only. |

@@ -9,16 +9,128 @@ namespace bgl
 	struct RangeBufferDesc
 	{
 		// Where the arena starts, not where it ends: it grows on demand and is bounded only by
-		// device memory. The reserved null element is carried on top of this, so a caller's budget
-		// is entirely its own.
-		uint32_t    initialCount = 0;
-		uint32_t    blockSize    = 65536;  // Default to the sweet spot 64KB
+		// device memory, or by maxBytes. The reserved null element is carried on top of this, so a
+		// caller's budget is entirely its own.
+		uint32_t initialCount = 0;
+		uint32_t blockSize    = 65536;  // Default to the sweet spot 64KB
+
+		// 0 leaves growth bounded only by device memory. A buffer read through a raw view sets it
+		// to c_MaxRawBufferBytes, since a byte past that is unaddressable however much of it the
+		// device allocated -- growth that would cross it throws rather than handing out an offset
+		// no shader can reach.
+		uint64_t maxBytes = 0;
+
+		// Creates the storage with a raw (ByteAddressBuffer) view rather than a structured one. The
+		// shader wrapper must match: see docs/rhi.md.
+		bool isRaw = false;
+
 		std::string debugName;
 	};
 
 	template <typename T>
 	concept RangeBufferConcept =
 		core::MultiSlotElementConcept<T> && core::type_traits::trivially_copyable<T>;
+
+	// The first and last dirty block a range of elements touches, both inclusive.
+	struct DirtyBlockSpan
+	{
+		uint32_t first = 0;
+		uint32_t last  = 0;
+
+		bool
+		operator==(const DirtyBlockSpan&) const noexcept = default;
+	};
+
+	// The byte window one run of dirty blocks uploads, clamped to what the mirror actually holds.
+	struct CopySlice
+	{
+		uint64_t offset = 0;
+		uint64_t size   = 0;
+
+		bool
+		operator==(const CopySlice&) const noexcept = default;
+	};
+
+	/**
+	 * The bytes to upload for dirty blocks `[startBlk, endBlk)`.
+	 *
+	 * A free function for the same reason as FindDirtyBlocks, and it is the arithmetic that was
+	 * actually 32-bit: a fully dirty arena at its byte ceiling is 65536 blocks of 65536 bytes,
+	 * whose product is 2^32 -- zero in 32 bits, so the copy was skipped and nothing uploaded.
+	 *
+	 * @post a slice of zero size where the run starts past the end of the mirror.
+	 */
+	[[nodiscard]] constexpr CopySlice
+	MakeCopySlice(
+		uint32_t startBlk,
+		uint32_t endBlk,
+		uint32_t blockSize,
+		uint64_t totalBytes) noexcept
+	{
+		const uint64_t offset = static_cast<uint64_t>(startBlk) * blockSize;
+		if (offset >= totalBytes)
+		{
+			return {};
+		}
+
+		const uint64_t size = static_cast<uint64_t>(endBlk - startBlk) * blockSize;
+		return { offset, std::min(size, totalBytes - offset) };
+	}
+
+	/**
+	 * The capacity a growth of `count` more elements should take a buffer to, clamped to a byte
+	 * ceiling (`maxBytes` of 0 leaves it bounded only by device memory).
+	 *
+	 * A free function so the ceiling can be tested at the real 2^32 without allocating it.
+	 *
+	 * @post 0 when the request itself crosses the ceiling -- the caller has the name and the numbers
+	 * to report it with.
+	 */
+	[[nodiscard]] inline uint32_t
+	GrowCapacityFor(
+		uint32_t current,
+		uint32_t count,
+		uint64_t elementSize,
+		uint64_t maxBytes) noexcept
+	{
+		const uint64_t requiredBytes = (static_cast<uint64_t>(current) + count) * elementSize;
+
+		if (maxBytes != 0 && requiredBytes > maxBytes)
+		{
+			return 0;
+		}
+
+		const uint32_t grown =
+			NextGpuBufferCapacity(current, current + count, static_cast<uint32_t>(elementSize));
+
+		// The growth curve overshoots on purpose; the ceiling is not a budget to overshoot past.
+		return maxBytes == 0 ?
+		           grown :
+		           static_cast<uint32_t>(std::min<uint64_t>(grown, maxBytes / elementSize));
+	}
+
+	/**
+	 * Which blocks a range of `count` elements starting at `startIdx` lands in.
+	 *
+	 * A free function beside the two above it, so an arena at its byte ceiling can be reasoned
+	 * about without allocating one.
+	 *
+	 * @pre count is non-zero and blockSize is non-zero.
+	 */
+	[[nodiscard]] constexpr DirtyBlockSpan
+	FindDirtyBlocks(
+		uint32_t startIdx,
+		uint32_t count,
+		uint64_t elementSize,
+		uint32_t blockSize) noexcept
+	{
+		const uint64_t startOffsetBytes = static_cast<uint64_t>(startIdx) * elementSize;
+		const uint64_t endOffsetBytes =
+			((static_cast<uint64_t>(startIdx) + count) * elementSize) - 1;
+
+		return { static_cast<uint32_t>(startOffsetBytes / blockSize),
+			     static_cast<uint32_t>(endOffsetBytes / blockSize) };
+	}
 
 	/**
 	 * A GPU-mirrored buffer of variable-length ranges of trivially-copyable
@@ -63,8 +175,24 @@ namespace bgl
 
 			const uint32_t capacity = m_Desc.initialCount + 1;
 
-			m_Storage
-				.Init(std::move(resourceManager), m_Desc.debugName, sizeof(T), capacity, false);
+			if (m_Desc.maxBytes != 0 &&
+			    static_cast<uint64_t>(capacity) * sizeof(T) > m_Desc.maxBytes)
+			{
+				core::throw_runtime_error(
+					"RangeBuffer '{}': an initial {} elements is already past the {} bytes its "
+					"view can address",
+					m_Desc.debugName,
+					m_Desc.initialCount,
+					m_Desc.maxBytes);
+			}
+
+			m_Storage.Init(
+				std::move(resourceManager),
+				m_Desc.debugName,
+				sizeof(T),
+				capacity,
+				false,
+				m_Desc.isRaw);
 
 			m_Data.reset(capacity);
 
@@ -268,6 +396,28 @@ namespace bgl
 			return m_Data[physicalIndex];
 		}
 
+		/**
+		 * The mirror's own bytes for one live range, for a caller that writes at a finer
+		 * granularity than T -- a byte arena over fixed-size blocks is the case, and staging
+		 * through a scratch copy would double the cost of every vertex stream.
+		 *
+		 * @pre the handle is live. @post the whole range is marked dirty, so the caller may write
+		 * any part of it and flush once; the span is invalidated by the next allocation on this
+		 * buffer, which may reallocate the mirror.
+		 */
+		[[nodiscard]] std::span<std::byte>
+		MutableRangeBytes(core::multi_slot_handle handle)
+		{
+			gassert(IsInitialized(), "RangeBuffer is uninitialized; call Init() first");
+			gassert(IsValid(handle), "MutableRangeBytes on a range that is not live");
+
+			MarkRangeDirty(handle.index, handle.count);
+
+			auto* base =
+				reinterpret_cast<std::byte*>(static_cast<T*>(m_Data.data()) + handle.index);
+			return { base, static_cast<size_t>(handle.count) * sizeof(T) };
+		}
+
 		[[nodiscard]] const T&
 		AtIndex(uint32_t index) const
 		{
@@ -289,7 +439,7 @@ namespace bgl
 			if (!m_HasAnyDirtyBlocks)
 				return;
 
-			const uint32_t totalBytes = static_cast<uint32_t>(m_Data.size() * sizeof(T));
+			const uint64_t totalBytes = static_cast<uint64_t>(m_Data.size()) * sizeof(T);
 
 			bool     inRange    = false;
 			uint32_t startBlock = 0;
@@ -375,10 +525,24 @@ namespace bgl
 
 		// Raises the ceiling far enough that `count` contiguous slots fit above the live set even
 		// if every existing free segment is too fragmented to serve them.
+		//
+		// @throws std::runtime_error if the arena has a byte ceiling and even the requested slots
+		// would cross it.
 		void
 		Grow(uint32_t count)
 		{
-			const uint32_t grown = NextGpuBufferCapacity(Capacity(), Capacity() + count, sizeof(T));
+			const uint32_t grown = GrowCapacityFor(Capacity(), count, sizeof(T), m_Desc.maxBytes);
+
+			if (grown == 0)
+			{
+				core::throw_runtime_error(
+					"RangeBuffer '{}': {} more elements would take it to {} bytes, past the {} its "
+					"view can address",
+					m_Desc.debugName,
+					count,
+					(static_cast<uint64_t>(Capacity()) + count) * sizeof(T),
+					m_Desc.maxBytes);
+			}
 
 			// GPU side first: it is the one that can fail, and it leaves nothing behind when it
 			// does, so the mirror and the buffer cannot end up disagreeing on capacity.
@@ -403,17 +567,16 @@ namespace bgl
 			m_DirtyBlocks.resize(numBlocks, false);
 		}
 
+		// 64-bit throughout: an arena at its byte ceiling addresses 2^32 bytes, and the products
+		// below would wrap in 32 bits well before the assert on endBlock could notice.
 		void
 		MarkRangeDirty(uint32_t startIdx, uint32_t count)
 		{
 			if (count == 0)
 				return;
 
-			const uint32_t startOffsetBytes = startIdx * sizeof(T);
-			const uint32_t endOffsetBytes   = ((startIdx + count) * sizeof(T)) - 1;
-
-			const uint32_t startBlock = startOffsetBytes / m_Desc.blockSize;
-			const uint32_t endBlock   = endOffsetBytes / m_Desc.blockSize;
+			const auto [startBlock, endBlock] =
+				FindDirtyBlocks(startIdx, count, sizeof(T), m_Desc.blockSize);
 
 			gassert(
 				endBlock < m_DirtyBlocks.size(),
@@ -427,20 +590,10 @@ namespace bgl
 		}
 
 		void
-		IssueCopy(ICommandList* cmdList, uint32_t startBlk, uint32_t endBlk, uint32_t totalBytes)
+		IssueCopy(ICommandList* cmdList, uint32_t startBlk, uint32_t endBlk, uint64_t totalBytes)
 		{
-			const uint32_t offset = startBlk * m_Desc.blockSize;
-			uint32_t       size   = (endBlk - startBlk) * m_Desc.blockSize;
-
-			if (offset >= totalBytes)
-			{
-				return;
-			}
-
-			if (offset + size > totalBytes)
-			{
-				size = totalBytes - offset;
-			}
+			const auto [offset, size] =
+				MakeCopySlice(startBlk, endBlk, m_Desc.blockSize, totalBytes);
 
 			if (size > 0)
 			{

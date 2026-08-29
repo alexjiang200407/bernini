@@ -61,7 +61,7 @@ namespace bgl
 		 * uniform (or the reverse) reads undefined bytes rather than failing.
 		 */
 		virtual BufferHandle
-		CreateRawBuffer(const RawBufferDesc& desc) noexcept = 0;
+		CreateRawBuffer(const RawViewDesc& desc) noexcept = 0;
 
 		// Creation is upload-free: the manager makes resources and descriptors, never issues
 		// copies. A caller with pixel data creates the texture, keeps the bytes, and writes them

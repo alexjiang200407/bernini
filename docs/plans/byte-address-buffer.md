@@ -81,8 +81,9 @@ not have one.
   byte on the CPU; the header wants a 4-byte lane on every target); the enum lives at the edges — the
   CPU arena is templated on its tag enum so no caller writes a bare integer, and a shader reads the
   tag through the arena's enum at the one branch that looks at it. There is no size in the header:
-  a record's size is a function of its type, so a debug build asserts the tag matches the `T` being
-  loaded, which is the stronger check. The alignment the decoder and every payload load actually
+  a record's size is a function of its type, so the tag is what a debug build checks a load
+  against -- in the task that has a caller naming both, since a generic load cannot derive the tag
+  its payload type belongs to. The alignment the decoder and every payload load actually
   rely on is 4 bytes — Slang lowers a raw load to what the target can do at that alignment, and task
   1 proves it on the machine's backend before anything rests on it. Records are on a 16-byte grid
   anyway so that a payload sits at its own natural alignment (a `float4` at 16) and a whole-struct
@@ -260,7 +261,9 @@ weights). The same stale "emitted into src/idl" claim sits in
   beside `ComputeBuffer`; `RawEntry<T>` (generic, so a Slang copy and a hand-written mirror like
   `Entry`), `RawRange` and `RecordHeader` (concrete, so generated into C++ like every other IDL
   struct); `ByteBuffer` deleted.
-- **Mirror buffer** (`libs/bgl/src/scene`): `RawBuffer<Tag>`, composed over a
+- **Mirror buffer** (`libs/bgl/src/scene`): `RawBuffer<Tag>`, named for the Slang wrapper it is read
+  through as `RangeBuffer` is — the RHI's descriptor is `RawViewDesc`, for the view rather than the
+  buffer, so this name stays where the symmetry wants it. Composed over a
   `RangeBuffer<RawBlock>` whose element is a 16-byte block — so allocation, the reserved element 0,
   dirty tracking and growth are `RangeBuffer`'s, not a fourth allocator's. What it adds is the unit
   conversion (a block index in, a byte offset out), the reserved null record, `AddRecord(Tag, bytes)`

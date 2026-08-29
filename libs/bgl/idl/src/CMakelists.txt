@@ -16,11 +16,12 @@ file(GLOB_RECURSE IDL_SOURCES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/*.s
 #
 # A module in NEITHER list gets its Slang copy only, and no C++ header. That is correct for the
 # interface- and generic-only modules -- IMaterial, IPbrMaterial, IAlphaTestMaterial, and the
-# `Entry<T>` / `Range<T>` / `RangeWithCount<T>` offset primitives. A generic has no concrete layout
-# to mirror, so idlgen skips it (and says so); their C++ counterparts in src/idl are **hand-written**
-# and carry no generated banner. Listing one here would declare a CMake OUTPUT nothing produces.
+# `Entry<T>` / `Range<T>` / `RangeWithCount<T>` / `RawEntry<T>` offset primitives. A generic has no
+# concrete layout to mirror, so idlgen skips it (and says so); their C++ counterparts in src/idl are
+# **hand-written** and carry no generated banner. Listing one here would declare a CMake OUTPUT
+# nothing produces.
 
-# Internal: namespace `bgl::idl`, emitted into src/idl.
+# Internal: namespace `bgl::idl`, emitted into IDL_CPP_OUT_DIR (the build tree, not src/idl).
 set(IDL_CPP_SOURCES
     Meshlet.slang
     VertexLayout.slang
@@ -45,6 +46,8 @@ set(IDL_CPP_SOURCES
     SkinnedBone.slang
     SkinnedGeom.slang
     SkinnedState.slang
+    RawRange.slang
+    RecordHeader.slang
 )
 
 # Public engine API: namespace `bgl`, emitted into include/bgl. These are named in bgl's public

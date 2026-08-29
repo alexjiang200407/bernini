@@ -248,7 +248,7 @@ namespace
 			return {};
 		}
 		BufferHandle
-		CreateRawBuffer(const RawBufferDesc&) noexcept override
+		CreateRawBuffer(const RawViewDesc&) noexcept override
 		{
 			return {};
 		}
