@@ -25,6 +25,14 @@ namespace assetlib::test
 		mutable uint64_t bytesRead = 0;
 		mutable uint32_t reads     = 0;
 
+		/** How many reads landed on `path` -- for a cache whose whole job is to read a file once. */
+		[[nodiscard]] uint32_t
+		ReadsOf(const std::string_view path) const
+		{
+			const auto it = m_ReadsByPath.find(std::string(path));
+			return it != m_ReadsByPath.end() ? it->second : 0;
+		}
+
 		[[nodiscard]] bool
 		Exists(std::string_view path) const noexcept override
 		{
@@ -43,6 +51,7 @@ namespace assetlib::test
 			std::vector<std::byte> out = m_Inner->Read(path);
 			bytesRead += out.size();
 			++reads;
+			++m_ReadsByPath[std::string(path)];
 			return out;
 		}
 
@@ -51,6 +60,7 @@ namespace assetlib::test
 		{
 			bytesRead += size;
 			++reads;
+			++m_ReadsByPath[std::string(path)];
 			return m_Inner->ReadRange(path, offset, size);
 		}
 
@@ -67,6 +77,7 @@ namespace assetlib::test
 		}
 
 	private:
-		const core::file::IFileSystem* m_Inner;
+		const core::file::IFileSystem*                    m_Inner;
+		mutable std::unordered_map<std::string, uint32_t> m_ReadsByPath;
 	};
 }
