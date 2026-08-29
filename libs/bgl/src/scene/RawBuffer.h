@@ -43,10 +43,12 @@ namespace bgl
 	 * Byte offset 0 is null for both, and the arena's head is reserved so a null dereference reads
 	 * zeros rather than a live record.
 	 *
-	 * `Tag` is the arena's own kind enum, so a caller never writes a bare integer into a header.
+	 * `Tag` is the arena's own kind enum, and `AddRecord` takes that enum and nothing else, so a
+	 * caller cannot write a bare integer into a header. `void` is an arena of ranges alone, which
+	 * has no kinds to name and no `AddRecord` to call.
 	 */
-	template <typename Tag>
-		requires std::is_enum_v<Tag>
+	template <typename Tag = void>
+		requires(std::is_void_v<Tag> || std::is_enum_v<Tag>)
 	class RawBuffer
 	{
 	public:
@@ -107,8 +109,10 @@ namespace bgl
 		 * @throws std::runtime_error if the record would take the arena past what a raw view can
 		 * address.
 		 */
+		template <typename T = Tag>
 		[[nodiscard]] idl::RawEntry
-		AddRecord(Tag tag, std::span<const std::byte> payload)
+		AddRecord(T tag, std::span<const std::byte> payload)
+			requires(!std::is_void_v<T> && std::same_as<T, Tag>)
 		{
 			gassert(IsInitialized(), "RawBuffer is uninitialized; call Init() first");
 
@@ -159,14 +163,16 @@ namespace bgl
 
 		// The tag a record was written with. For a reader that has only the offset -- the CPU has no
 		// business decoding a payload it wrote, but it does have to know which kind it is freeing.
-		[[nodiscard]] Tag
+		template <typename T = Tag>
+		[[nodiscard]] T
 		GetTagAt(uint32_t byteOffset) const
+			requires(!std::is_void_v<T> && std::same_as<T, Tag>)
 		{
 			gassert(IsOffsetValid(byteOffset), "GetTagAt on an offset with no live record");
 
 			auto header = idl::RecordHeader();
 			std::memcpy(&header, &m_Blocks.AtIndex(ToBlockIndex(byteOffset)), sizeof(header));
-			return static_cast<Tag>(header.type);
+			return static_cast<T>(header.type);
 		}
 
 		// False for anything inside the reserved head, an offset off the block grid, one the arena

@@ -160,8 +160,9 @@ TEST_CASE("Buffer contents around mesh deletion", "[delete][buffers][scene]")
 	// The per-placement Mesh (owned by the view) carries the submeshes descriptor.
 	const uint32_t submeshRoot = meshBuffer.AtIndex(meshIndex).submeshes.range.offsetStart;
 
-	const auto&    submesh       = submeshBuffer.AtIndex(submeshRoot);
-	const uint32_t vertexRoot    = submesh.vertexData.offsetStart;
+	const auto& submesh = submeshBuffer.AtIndex(submeshRoot);
+	// A byte offset, not an element index: the vertex arena is byte-addressed.
+	const uint32_t vertexRoot    = submesh.vertexData.byteStart;
 	const uint32_t indexRoot     = submesh.indices.offsetStart;
 	const uint32_t meshletRoot   = submesh.meshlets.range.offsetStart;
 	const uint32_t vertexMapRoot = submesh.vertexMap.offsetStart;
@@ -183,7 +184,7 @@ TEST_CASE("Buffer contents around mesh deletion", "[delete][buffers][scene]")
 
 		// RangeBuffers: the cube's geometry data is live.
 		CHECK(submeshBuffer.IsIndexValid(submeshRoot));
-		CHECK(vertexDataBuffer.IsIndexValid(vertexRoot));
+		CHECK(vertexDataBuffer.IsOffsetValid(vertexRoot));
 		CHECK(indexBuffer.IsIndexValid(indexRoot));
 		CHECK(meshletBuffer.IsIndexValid(meshletRoot));
 		CHECK(vertexMapBuffer.IsIndexValid(vertexMapRoot));
@@ -206,7 +207,7 @@ TEST_CASE("Buffer contents around mesh deletion", "[delete][buffers][scene]")
 
 		// RangeBuffers: untouched - deleting a mesh does not free geometry.
 		CHECK(submeshBuffer.IsIndexValid(submeshRoot));
-		CHECK(vertexDataBuffer.IsIndexValid(vertexRoot));
+		CHECK(vertexDataBuffer.IsOffsetValid(vertexRoot));
 		CHECK(indexBuffer.IsIndexValid(indexRoot));
 		CHECK(meshletBuffer.IsIndexValid(meshletRoot));
 		CHECK(vertexMapBuffer.IsIndexValid(vertexMapRoot));
@@ -222,7 +223,7 @@ TEST_CASE("Buffer contents around mesh deletion", "[delete][buffers][scene]")
 
 		// RangeBuffers: every owned range is now freed.
 		CHECK_FALSE(submeshBuffer.IsIndexValid(submeshRoot));
-		CHECK_FALSE(vertexDataBuffer.IsIndexValid(vertexRoot));
+		CHECK_FALSE(vertexDataBuffer.IsOffsetValid(vertexRoot));
 		CHECK_FALSE(indexBuffer.IsIndexValid(indexRoot));
 		CHECK_FALSE(meshletBuffer.IsIndexValid(meshletRoot));
 		CHECK_FALSE(vertexMapBuffer.IsIndexValid(vertexMapRoot));
@@ -263,8 +264,8 @@ TEST_CASE("A submesh maps 1:1 to a GPU submesh whatever its meshlet count", "[sc
 
 	// Each submesh owns its own vertexData range; nothing is shared, so nothing is double-freed.
 	CHECK(
-		submeshBuffer.AtIndex(root).vertexData.offsetStart !=
-		submeshBuffer.AtIndex(root + 1).vertexData.offsetStart);
+		submeshBuffer.AtIndex(root).vertexData.byteStart !=
+		submeshBuffer.AtIndex(root + 1).vertexData.byteStart);
 
 	auto inst = view->CreateStaticMeshInstance(geom, glm::mat4(1.0f));
 	REQUIRE(inst.IsValid());
