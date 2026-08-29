@@ -76,6 +76,9 @@ namespace bgl
 		BufferHandle
 		CreateComputeBuffer(const ComputeBufferDesc& desc) noexcept override;
 
+		BufferHandle
+		CreateRawBuffer(const RawBufferDesc& desc) noexcept override;
+
 		ReadbackBufferHandle
 		CreateReadbackBuffer(const ReadbackBufferDesc& desc) noexcept override;
 
@@ -202,6 +205,11 @@ namespace bgl
 		GetLiveTextureResources() noexcept;
 
 	private:
+		// Allocates the pool slot and the MTL::Buffer behind a lowered descriptor. Every
+		// Create*Buffer ends here: a Metal buffer has no view to differ in.
+		[[nodiscard]] BufferHandle
+		EmplaceBuffer(const BufferDesc& desc) noexcept;
+
 		enum class PendingType
 		{
 			kBuffer,

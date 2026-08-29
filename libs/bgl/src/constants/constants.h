@@ -36,9 +36,10 @@ namespace bgl
 	/**
 	 * The struct member name for the key for the smart buffers
 	 */
-	constexpr std::array<std::string_view, 3> c_SmartBufferUniformIndices = { "entryBuffer"sv,
+	constexpr std::array<std::string_view, 4> c_SmartBufferUniformIndices = { "entryBuffer"sv,
 		                                                                      "packedBuffer"sv,
-		                                                                      "rangeBuffer"sv };
+		                                                                      "rangeBuffer"sv,
+		                                                                      "rawBuffer"sv };
 
 	/**
 	 * Index of the sole member holding the descriptor inside an idl resource handle -- the

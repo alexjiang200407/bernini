@@ -61,24 +61,15 @@ namespace bgl
 		}
 	}
 
-	BufferHandle
-	ResourceManager::CreateStructBuffer(const StructBufferDesc& desc) noexcept
+	ResourceManager::BufferAllocation
+	ResourceManager::AllocateBuffer(const BufferDesc& desc) noexcept
 	{
-		std::lock_guard<std::mutex> lock(m_PoolMutex);
-		gassert(desc.stride > 0, "StructuredBuffer requires a valid structural stride");
-		gassert(desc.elementCount > 0, "StructuredBuffer requires a valid element count");
-
-		auto bufferSlotHandle = m_Buffers.try_allocate_slot();
-		if (bufferSlotHandle.is_null())
+		auto slot = m_Buffers.try_allocate_slot();
+		if (slot.is_null())
 		{
-			logger::error("CreateStructBuffer '{}': buffer pool exhausted", desc.debugName);
-			return BufferHandle{};
+			logger::error("Creating buffer '{}': buffer pool exhausted", desc.debugName);
+			return BufferAllocation{};
 		}
-
-		BufferDesc bufferDesc;
-		bufferDesc.byteSize  = static_cast<uint64_t>(desc.stride) * desc.elementCount;
-		bufferDesc.isUav     = desc.isUav;
-		bufferDesc.debugName = desc.debugName;
 
 		// Out of VRAM throws out of the Buffer ctor and a full heap throws out of Allocate, and this
 		// is noexcept: catch here or a recoverable failure becomes a terminate.
@@ -91,22 +82,45 @@ namespace bgl
 				m_Device.Get(),
 				m_CbvSrvUavDescriptors.GetD3D12Heap(),
 				descriptorIndex,
-				bufferDesc);
+				desc);
 		}
 		catch (const std::exception& e)
 		{
 			logger::error(
-				"CreateStructBuffer '{}': allocating {} bytes of device memory failed: {}",
+				"Creating buffer '{}': allocating {} bytes of device memory failed: {}",
 				desc.debugName,
-				bufferDesc.byteSize,
+				desc.byteSize,
 				e.what());
 			if (descriptorIndex != 0xFFFFFFFF)
 			{
 				m_CbvSrvUavDescriptors.Free(descriptorIndex);
 			}
-			m_Buffers.release_slot(bufferSlotHandle.index);
+			m_Buffers.release_slot(slot.index);
+			return BufferAllocation{};
+		}
+
+		return BufferAllocation{ slot, descriptorIndex, std::move(buffer) };
+	}
+
+	BufferHandle
+	ResourceManager::CreateStructBuffer(const StructBufferDesc& desc) noexcept
+	{
+		std::lock_guard<std::mutex> lock(m_PoolMutex);
+		gassert(desc.stride > 0, "StructuredBuffer requires a valid structural stride");
+		gassert(desc.elementCount > 0, "StructuredBuffer requires a valid element count");
+
+		BufferDesc bufferDesc;
+		bufferDesc.byteSize  = static_cast<uint64_t>(desc.stride) * desc.elementCount;
+		bufferDesc.isUav     = desc.isUav;
+		bufferDesc.debugName = desc.debugName;
+
+		auto allocation = AllocateBuffer(bufferDesc);
+		if (allocation.slot.is_null())
+		{
 			return BufferHandle{};
 		}
+
+		auto& buffer = allocation.buffer;
 
 		if (desc.isUav)
 		{
@@ -141,9 +155,72 @@ namespace bgl
 				buffer.GetCpuHandle());
 		}
 
-		m_Buffers[bufferSlotHandle] = std::move(buffer);
+		m_Buffers[allocation.slot] = std::move(buffer);
 
-		return BufferHandle{ bufferSlotHandle, descriptorIndex };
+		return BufferHandle{ allocation.slot, allocation.descriptorIndex };
+	}
+
+	BufferHandle
+	ResourceManager::CreateRawBuffer(const RawBufferDesc& desc) noexcept
+	{
+		std::lock_guard<std::mutex> lock(m_PoolMutex);
+		gassert(desc.byteSize > 0, "A raw buffer requires a byte size");
+		gassert(desc.byteSize % 4 == 0, "A raw view addresses whole 32-bit words");
+		gassert(desc.byteSize <= c_MaxRawBufferBytes, "A raw view cannot address past 4 GiB");
+
+		BufferDesc bufferDesc;
+		bufferDesc.byteSize  = desc.byteSize;
+		bufferDesc.isUav     = desc.isUav;
+		bufferDesc.isRaw     = true;
+		bufferDesc.debugName = desc.debugName;
+
+		auto allocation = AllocateBuffer(bufferDesc);
+		if (allocation.slot.is_null())
+		{
+			return BufferHandle{};
+		}
+
+		auto& buffer = allocation.buffer;
+
+		// A raw view counts 32-bit words, where a structured one counts elements of its stride.
+		const auto wordCount = static_cast<uint32_t>(desc.byteSize / 4);
+
+		if (desc.isUav)
+		{
+			D3D12_UNORDERED_ACCESS_VIEW_DESC uavDesc = {};
+			uavDesc.ViewDimension                    = D3D12_UAV_DIMENSION_BUFFER;
+			uavDesc.Format                           = DXGI_FORMAT_R32_TYPELESS;
+			uavDesc.Buffer.FirstElement              = 0;
+			uavDesc.Buffer.NumElements               = wordCount;
+			uavDesc.Buffer.StructureByteStride       = 0;
+			uavDesc.Buffer.Flags                     = D3D12_BUFFER_UAV_FLAG_RAW;
+
+			m_Device->CreateUnorderedAccessView(
+				buffer.GetD3D12Resource(),
+				nullptr,
+				&uavDesc,
+				buffer.GetCpuHandle());
+		}
+		else
+		{
+			D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
+			srvDesc.ViewDimension                   = D3D12_SRV_DIMENSION_BUFFER;
+			srvDesc.Shader4ComponentMapping         = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+			srvDesc.Format                          = DXGI_FORMAT_R32_TYPELESS;
+			srvDesc.Buffer.FirstElement             = 0;
+			srvDesc.Buffer.NumElements              = wordCount;
+			srvDesc.Buffer.StructureByteStride      = 0;
+			srvDesc.Buffer.Flags                    = D3D12_BUFFER_SRV_FLAG_RAW;
+
+			m_Device->CreateShaderResourceView(
+				buffer.GetD3D12Resource(),
+				&srvDesc,
+				buffer.GetCpuHandle());
+		}
+
+		m_Buffers[allocation.slot] = std::move(buffer);
+
+		return BufferHandle{ allocation.slot, allocation.descriptorIndex };
 	}
 
 	BufferHandle
