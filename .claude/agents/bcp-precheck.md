@@ -1,6 +1,6 @@
 ---
 name: bcp-precheck
-description: The critical read of a change before its pull request is opened. Reviews the working diff against the base for code that already exists in core, design that fights the roadmap or deviates from the standard without an ADR saying so, work that crosses a non-goal agreed in the grill, and STYLE.md breaks, then reports back. Posts nothing and edits nothing. Spawn it as the last step before `just pr create`.
+description: The critical read of a change before its pull request is opened. Reviews the working diff against the base for code that already exists in core, design that fights the roadmap or deviates from the standard without an ADR saying so, work that crosses a non-goal agreed in the grill, cost that is infeasible at AAA asset scale, and STYLE.md breaks, then reports back. Posts nothing and edits nothing. Spawn it as the last step before `just pr create`.
 tools: Read, Grep, Glob, Bash
 model: sonnet
 ---
@@ -143,7 +143,116 @@ is not acceptable is the boundary quietly ceasing to hold.
 and move on. Do not infer the boundaries yourself: invented non-goals are the noise that teaches an
 author to skim this gate.
 
-## 5. Style
+## 5. Is it feasible at AAA scale?
+
+The bottleneck in this engine is not the renderer. Bindless and GPU-driven force that path, and the
+roadmap's own constraints keep it there. What actually costs is **asset structure** — the offline and
+load-time work over one asset element at a time — and it is always found after landing: `2e22adf5`
+(#401) introduced a posed-bounds walk that `0cb8003b` (#421) and `96b9419a` (#457) then had to fix,
+~6 min to 3.5 s and 740 ms to 29 ms.
+
+**What this covers.** Any path that touches one asset element at a time — import, bake, load,
+reimport — in whatever layer it sits: `assetlib`'s cook, `gamelib`'s load seam, the editor's import.
+Steady-state GPU and render work is **out**; the GPU-driven constraint already forces that path.
+
+**The question.** For every new or changed loop on such a path, name the dimensions it multiplies —
+bones, frames, mesh entries, vertices, clips, submeshes — and put the numbers below into that
+product. A loop that is fine on a two-bone fixture and infeasible on a 663-bone rig looks identical
+in a diff; the dimensions are what tell them apart.
+
+### The reference dimensions
+
+**This is an index, not the source of truth.** Every row names the doc that measured it. Where a
+finding turns on a figure, open that doc and check it there — this list is a copy and copies go
+stale. A dimension it does not name is **not** permission to skip the question: say the reference is
+silent on it and reason from the nearest row.
+
+The rows measure *particular operations*, not a per-element price list. Do not carry one row's cost
+onto a different operation that happens to share a dimension — a 12-byte copy per vertex and a full
+skin per vertex are both "per vertex" and are orders of magnitude apart. Where no row measures the
+operation in front of you, say so and give the shape without a number: a figure cited to the wrong
+operation is grounded and still wrong, which is the one way this lens manufactures a plausible false
+positive.
+
+`cha800_00.glb` is the reference character — a real AAA rig, and the largest thing the project cooks.
+
+| Asset | Dimensions | Measured cost | Measured in |
+|---|---|---|---|
+| Skinned character | 663 bones, 27 mesh entries, 170k vertices, 2254 frames | posed-bounds bake 3.5 s, of which 2.4 s is the pose walk; the per-vertex `exactPosedBounds` reference is ~6 min (both debug) | `docs/skinning.md` |
+| Clip set (`.banim`) | `boneCount * frameCount` 40-byte `Transform`s | 59.7 MB, ~780 ms to deserialize in a debug build | `docs/specs/animation_compression.md` |
+| Posed-bounds read-back | one signature over the whole mesh, every entry at once | 29 ms; asked once per entry instead, 740 ms | `docs/skinning.md` |
+| Mesh container (`.bmesh`) | vertex data is nearly all of it | 16.8 MB, of which a reference scan reads ~3 KB | `docs/asset_standards.md` |
+| Environment bake | prefilter 256 px / 7 mips / 2048 samples; skybox 512 px / 6 mips; irradiance 128 px | — | `docs/envmaps.md` |
+| VAT | one bake per (rig, clip set) | seconds of CPU and hundreds of MB on a dense rig | `docs/vat.md` |
+
+Terrain and the LOD/atlas multipliers are deliberately absent — terrain has no container yet, and
+LODs and atlasing multiply the rows above rather than adding one. Neither has a measurement to quote.
+
+### Run the cases, where the diff touches a path they cover
+
+```bash
+just run assetlib_tests -- "[perf]" --no-lock
+```
+
+They assert scaling *shapes* — a read count that must not grow with an input, a ratio between two
+problem sizes — never a wall-clock ceiling, so they hold in debug and under load. `--no-lock` because
+`scripts/util/lock.py` takes the machine-wide suite lock on any `*_tests` target, and `assetlib`
+holds no graphics device: the reason the lock exists does not apply, and an unbounded wait behind
+another checkout's `just test` does not belong in a gate that runs before every PR.
+
+**Never report a number you did not observe.** No build directory, a target that will not build, a
+run you did not make: say so in one line and reason statically instead. Silence reads as a pass.
+
+### A new cook stage that does not log is a finding
+
+`core::logging::ScopedStage` brackets a stage and logs its own dimensions and duration, which is what
+makes a slow load attributable without a profiler (`docs/gfx_debug.md` § 2). A diff that adds real
+per-asset work and no stage line has added cost nobody can find afterwards. `revise`: name the call
+and the dimensions its line should carry.
+
+The threshold case is worth knowing so you do not ask for the wrong thing: the name is formatted
+eagerly, so a path that runs every frame wants a hand-rolled warning that formats only once it has
+decided to complain — not a stage.
+
+### Linear, and still infeasible
+
+Superlinear growth is the shape that is *wrong*. It is not the only shape that is *unaffordable*, and
+the second one is harder to see because the code is correct. A bake that is honestly
+`O(frames * vertices)` is still minutes on a 2254-frame, 170k-vertex rig, and the diff that
+introduces it looks exactly like a diff that should be approved.
+
+So ask the second question: **at the scale in the table, roughly what does this cost — and does the
+caller find out before paying it?** A cook that a person starts and then waits on, with no way to
+know whether it is thirty seconds or forty minutes, is a defect independent of its loop shape.
+
+`vatBakeSize` is this repo's answer to it (`libs/assetlib/include/assetlib/vat_bake.h`): the layout
+without the pixels, so a caller can be offered the cost before it is paid. It was added in #494 —
+long after the bake it prices landed in #340, which is exactly how long the VAT bake was something
+you started and then simply waited on.
+
+`revise`, not `block`: the cost may be inherent, and accepted. What is not acceptable is that nobody
+can find out in advance. Name the entry point and ask for the pre-flight, or for the number in the
+PR body.
+
+### Severity
+
+`block` only when the diff makes such a path **superlinear in a dimension the table names** — a
+per-vertex walk inside a per-frame loop, a whole-mesh hash per entry, a re-read per clip set. Those
+are the shapes that actually shipped and had to be fixed. Everything else is `revise`, including the
+linear-but-unaffordable case above: it may be the right cost, and that is the author's call to state
+rather than yours to refuse.
+
+**Not findings here**, and flagging them trains the author to skim:
+
+- A constant factor on work paid once, offline, that nobody waits on.
+- An allocation or a copy on a path that runs once per asset rather than once per element.
+- Cost in a test, a tool, or a path the table shows is small.
+- A loop that already existed, touched without changing its per-element cost. A rename or an
+  adjacent fix inside a hot loop is not a cost change; the shape is what this asks about.
+- A number you cannot ground — *"this feels slow"* is not a finding. Name the loop and the
+  dimensions, or drop it.
+
+## 6. Style
 
 `STYLE.md` is in context. The two that recur, in the author's own words:
 
@@ -164,7 +273,7 @@ What no tool owns: whether every function is marked `noexcept` or deliberately i
 
 Do not flag formatting. `just format` owns it, and the same hook has already run it.
 
-## 6. Verify, then report
+## 7. Verify, then report
 
 Every finding, before it goes in: name the line that makes it true, then try to refute it — ask what
 would have to hold for the code to be right as written, and check whether it does. Most first-pass
@@ -199,5 +308,8 @@ stop.
 - **Ground every finding in a line you read.** If you cannot cite it, drop it.
 - **Never flag anything in `bcp-review` § 4.** Those are this repo's conventions; flagging them tells
   the author to break their own guide.
-- **Never claim a test result you did not observe.** You have no GPU and you do not run the suites.
+- **Never claim a test result you did not observe.** You have no GPU, and the only thing you run is
+  § 5's `[perf]` tag — one tag of one suite, never a whole suite, and never a build you were not
+  given. A run you did not make is a
+  sentence saying so, never a number.
 - **Never edit, commit, push or post.** You report; the caller acts.

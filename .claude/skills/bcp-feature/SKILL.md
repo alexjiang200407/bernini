@@ -238,7 +238,8 @@ plan's and § 5's included. Spawn it with the Agent tool, `subagent_type: bcp-pr
 your own model, after the last verification step and before the push — § 2 has no rebase to hang it
 on, § 5 needs its base named explicitly. It reads the diff against the base for code that already
 exists in `core`, a design that fights `ROADMAP.md` or departs from the standard with no ADR saying
-so, work that crosses a non-goal or contradicts an ADR in the plan, and `STYLE.md` breaks. A `block` verdict means fix and re-run; the PR does not open
+so, work that crosses a non-goal or contradicts an ADR in the plan, cost that is infeasible at AAA
+asset scale, and `STYLE.md` breaks. A `block` verdict means fix and re-run; the PR does not open
 on one. See [bcp-implement § 8](.claude/skills/bcp-implement/SKILL.md) for the full loop.
 
 `bernini.feature` is what tells the precheck its base, so a slice reviewed while that config is unset

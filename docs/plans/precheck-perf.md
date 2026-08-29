@@ -103,6 +103,17 @@ so a slow load cannot be attributed from a log at all.
   dimension the table names**; everything else is `revise`. *Rejected: blocking on any stated budget
   exceeded, which fires on cost paid once offline that nobody minds.*
 
+  **Amended by task 7's own acceptance.** The replay against `7863479f` (#340, the VAT bake) returned
+  *no cost finding*, and it was right to: `bakeVat` is honestly `O(frames * vertices)`, linear in each
+  dimension the table names, so nothing about it is superlinear. But it is also the change that made
+  a AAA rig's bake unfeasible — the motivating complaint this whole feature started from. A lens that
+  only catches *wrong* shapes cannot see a *correct* shape that costs forty minutes.
+  So § 5 gains a second, non-blocking finding class: **linear and still unaffordable at table scale,
+  with no way for the caller to learn the cost before paying it.** `vatBakeSize` is the remedy
+  pattern and dates it — added in #494, long after the bake it prices landed in #340. Severity stays
+  `revise`, because the cost may be inherent and accepted; what is not acceptable is that nobody can
+  find out in advance.
+
 - **ADR-7 — the instrument is a committed `[perf]` case set in `assetlib_tests`, not a test precheck
   writes.** The cases synthesize their rigs in memory — `assetlib_tests` already assembles
   `Skeleton`, `BMesh` and `AnimationSet` as PODs by hand
@@ -147,9 +158,15 @@ so a slow load cannot be attributed from a log at all.
 
 - **Slice 1** — an AAA-class import writes one line per cook stage, each stating its own elapsed ms,
   and those lines account for the import total. `just test core assetlib editor` green.
-- **Slice 2** — the new precheck run against `2e22adf5` (#401, introduced the posed-bounds walk) and
-  `7863479f` (#340, introduced the VAT bake) raises the cost finding on both, and stays silent on a
-  diff with no per-asset cost content. `just run assetlib_tests -- "[perf]" --no-lock` green, and
+- **Slice 2** — the new precheck run against `2e22adf5` (#401, introduced the posed-bounds walk)
+  raises the cost finding, and stays silent on a diff with no per-asset cost content. `7863479f`
+  (#340, the VAT bake) was expected to fire too and did not: it is linear, not superlinear, which is
+  what ADR-6's amendment above exists to cover. The criterion was wrong, not the result.
+- **Open, and the feature ships without it.** The finding class added to catch #340 has **not** been
+  replayed against #340. The motivating case — a bake that is correct and unaffordable — is covered
+  by construction (the class names a bake with no caller-side pre-flight; #340 shipped `bakeVat` with
+  no `vatBakeSize`, which arrived in #494) and not by an independent read. Whoever next touches this
+  lens should run that replay before trusting the class. `just run assetlib_tests -- "[perf]" --no-lock` green, and
   each `[perf]` case proven to fail when its invariant is temporarily broken.
 
 ## What the survey found
