@@ -16,7 +16,7 @@ truth; when this doc disagrees, trust the header, then fix this doc.
 ## Design Choices
 
 * **Playback state is GPU-resident; time is the only per-frame input.** An instance's record
-  (clip, phase, rate) is written once at spawn into a `VatState` entry; the shader derives the
+  (clip, phase, rate) is written once at spawn as a `VatState` record in the view's playback arena; the shader derives the
   frame as `phase + time * rate * sampleRate` from the clock in `RenderJob::time`. Nothing touches
   instances per frame — crowd variation (stagger, rate jitter) falls out of the spawn fields. The
   clock is caller input by design: pause, slow-motion, scrubbing and replay are the application's
@@ -58,7 +58,7 @@ truth; when this doc disagrees, trust the header, then fix this doc.
   cbuffer creates a Mixed-category parameter Metal's stage-binding path mis-indexes. Fractional
   frames are two Loads and a lerp.
 * **The linkage rides `idl::Mesh`, not the sort key.** Each placement's GPU record carries an
-  `Entry<VatState>` (null for static meshes — it occupies alignment padding, so `sizeof` is
+  `RawEntry<IPlayback>` (null for static meshes — it occupies alignment padding, so `sizeof` is
   unchanged); `SubmeshInstance` keeps its 16 bytes, and its `pso` remains the one derived sort key
   (`SubmeshPso(geomType, material)`). The geometry family is `GeomType::kVatMesh`, one PSO bucket per
   layer (`kOpaque_VatMesh_PBR`, `kAlphaTest_`, `kHashedAlpha_`, `kTransparent_`) sharing the PBR pixel
@@ -194,7 +194,7 @@ flowchart TD
     ACQ -- "AddTextureAsset x2 + AddVatMeshGeom" --> SCENE
     INST --> VIEW
     SCENE -- "VatGeom / clip / column buffers" --> MS
-    VIEW -- "Entry<VatState> on idl::Mesh" --> MS
+    VIEW -- "RawEntry&lt;IPlayback&gt; on idl::Mesh" --> MS
     CLOCK["RenderJob::time"] -- "ViewData time/prevTime" --> MS
 ```
 

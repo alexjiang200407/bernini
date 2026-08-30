@@ -1,20 +1,17 @@
 // THIS IS A FILE GENERATED FROM Mesh.slang. DO NOT EDIT MANUALLY
 
-import Entry;
+import IPlayback;
 import RangeWithCount;
-import SkinnedState;
+import RawEntry;
 import Submesh;
-import VatState;
 
 public struct Mesh
 {
     public float4x4 transform;
     public RangeWithCount<Submesh> submeshes;
 
-    // Null for a static mesh; the VAT mesh shader is the only reader.
-    public Entry<VatState> vatState;
-
-    // Null for anything but a skinned mesh, and never set together with vatState -- a placement
-    // draws through one pipeline family. The skinned mesh shader and the pose pass are the readers.
-    public Entry<SkinnedState> skinnedState;
+    // Null for a static mesh. Otherwise a record in the view's playback arena whose header says
+    // which tier it is, so the one stage that draws more than one tier can ask rather than mirror
+    // the PSO table.
+    public RawEntry<IPlayback> playback;
 };

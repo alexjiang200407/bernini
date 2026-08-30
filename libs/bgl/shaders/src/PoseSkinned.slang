@@ -5,8 +5,11 @@ import idl.Constants;
 import idl.SkinnedBone;
 import idl.SkinnedGeom;
 import idl.SkinnedState;
+import idl.IPlayback;
+import idl.RawEntry;
 import types.ComputeBuffer;
 import types.EntryBuffer;
+import types.RawBuffer;
 import types.RangeBuffer;
 import types.UploadBuffer;
 
@@ -16,11 +19,12 @@ import types.UploadBuffer;
 
 struct Uniforms
 {
-    // The SkinnedState indices to pose, one per workgroup. Dense: erasing a state slot only releases
-    // it, so a sweep of the state buffer would pose freed instances.
+    // The byte offsets of the playback records to pose, one per workgroup. Dense: erasing a record
+    // only releases its bytes, so a sweep of the arena would pose freed instances -- and would meet
+    // the VAT records sharing it, which this pass has nothing to do with.
     UploadBuffer<uint> posedInstances;
 
-    EntryBuffer<SkinnedState> skinnedStates;
+    RawBuffer playbackBuffer;
     EntryBuffer<SkinnedGeom> skinnedGeoms;
 
     RangeBuffer<SkinnedBone> boneBuffer;
@@ -168,8 +172,8 @@ void main(uint groupIdx: SV_GroupID, uint localIdx: SV_GroupIndex)
 
     // Group-uniform, so the early-out above and every barrier below are reached by the whole group
     // or by none of it.
-    let stateIdx = gUniforms.posedInstances[groupIdx];
-    SkinnedState state = gUniforms.skinnedStates.Get(stateIdx);
+    let byteOffset = gUniforms.posedInstances[groupIdx];
+    SkinnedState state = gUniforms.playbackBuffer.LoadRecordAs<SkinnedState>(RawEntry<IPlayback>.At(byteOffset));
     SkinnedGeom geom = gUniforms.skinnedGeoms.Get(state.geom);
     Clip clip = gUniforms.clipBuffer.Get(geom.clips, state.clip);
 

@@ -199,6 +199,37 @@ namespace bgl
 			return static_cast<T>(header.type);
 		}
 
+		// A record's payload, copied back out -- the CPU mirror of RawBuffer::LoadRecordAs in Slang.
+		// The caller names the payload type, for the same reason the shader does: an entry is typed
+		// by what a record satisfies, and only the caller knows the concrete type behind it.
+		//
+		// @pre `byteOffset` names a live record whose payload really is a T; nothing here can check
+		//      the second half, so a caller that has not just checked GetTagAt is guessing.
+		template <typename T>
+		[[nodiscard]] T
+		GetPayloadAt(uint32_t byteOffset) const
+		{
+			gassert(IsOffsetValid(byteOffset), "GetPayloadAt on an offset with no live record");
+
+			auto  payload = T();
+			auto* dst     = reinterpret_cast<std::byte*>(&payload);
+
+			// The payload starts a whole block in, so it is block-aligned and the copy can walk
+			// blocks rather than bytes.
+			const uint32_t first = ToBlockIndex(byteOffset + idl::cRawPayloadOffset);
+
+			for (uint32_t block = 0; block < ToBlockCount(sizeof(T)); ++block)
+			{
+				const size_t done = static_cast<size_t>(block) * sizeof(RawBlock);
+				std::memcpy(
+					dst + done,
+					&m_Blocks.AtIndex(first + block),
+					std::min(sizeof(RawBlock), sizeof(T) - done));
+			}
+
+			return payload;
+		}
+
 		// False for anything inside the reserved head, an offset off the block grid, one the arena
 		// never handed out, and one whose allocation has been freed. The head is a range like any
 		// other to the buffer beneath, so guarding only offset 0 would leave the rest of the null
