@@ -131,9 +131,13 @@ there is none — so this needs nothing done by hand. If yours lives somewhere u
 
 ### slangd (Slang LSP)
 
-Gives Claude Code go-to-definition, find-references and hover across the `.slang` sources under
+Gives Claude Code go-to-definition, hover and document symbols across the `.slang` sources under
 `libs/bgl`, which grep answers badly because every cross-file reference is a module import. Nothing
 depends on it: skip this and the build, the tests and the editor are unchanged.
+
+Those three are the whole of it. slangd advertises no `referencesProvider` and no
+`workspaceSymbolProvider`, so find-references and workspace-symbol are errors rather than empty
+results, and grep remains the way to ask who uses a thing.
 
 There is nothing to install. `slangd` is the language server behind the official Slang editor
 extensions, and the vcpkg `shader-slang` port already puts it beside `slangc`:
