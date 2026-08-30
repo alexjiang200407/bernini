@@ -1,0 +1,8 @@
+{
+  "slang": {
+    "command": "slangd",
+    "extensionToLanguage": {
+      ".slang": "slang"
+    }
+  }
+}

@@ -1,0 +1,15 @@
+{
+  "name": "bernini",
+  "description": "Editor and agent tooling that ships with this repo rather than being re-derived per machine",
+  "owner": {
+    "name": "Bernini"
+  },
+  "plugins": [
+    {
+      "name": "slang-lsp",
+      "description": "Slang language server (slangd) for the shaders under libs/bgl",
+      "version": "1.0.0",
+      "source": "./.claude/plugins/slang-lsp"
+    }
+  ]
+}
