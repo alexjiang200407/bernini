@@ -1594,10 +1594,7 @@ namespace bgl
 	void
 	Scene::SetGround(const GroundPlaneDesc& ground)
 	{
-		const auto finite = [](const glm::vec3& v) {
-			return std::isfinite(v.x) && std::isfinite(v.y) && std::isfinite(v.z);
-		};
-		if (!finite(ground.point))
+		if (!core::is_finite(ground.point))
 		{
 			throw SceneError("SetGround: the point must be finite");
 		}
@@ -1605,7 +1602,7 @@ namespace bgl
 		// Judged after normalising, not before: a zero normal divides to NaN, and a finite one
 		// large enough to overflow the length divides to zero -- both unit-length by no reading.
 		const glm::vec3 normal = ground.normal / glm::length(ground.normal);
-		if (!finite(normal) || glm::length(normal) == 0.0f)
+		if (!core::is_finite(normal) || glm::length(normal) == 0.0f)
 		{
 			throw SceneError("SetGround: the normal must be finite and not zero");
 		}
