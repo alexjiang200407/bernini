@@ -264,22 +264,31 @@ so it fails safe, but it should not be offered.
    refusing a `kDerived` target. Gate: `just run editor_tests -- "[contentexplorer][assetrules]"`,
    plus eyes.
 
-   This task also converges the editor's spellings of *is this path inside that root*. There are
-   three besides `IsContainedRelativePath`: `AssetAt` and `IsHeldOpen`
-   (`Windows/ContentExplorer/asset_rules.cpp:21-25, 56`) and the directory bookkeeping in
-   `ContentExplorerWindow.cpp:472, 485-487`. They disagree — `AssetAt` rejects on a bare
-   `startsWith("..")`, so a folder legitimately named `..hidden` is unactionable — and this task
-   rewrites the rooting all three sit on, so it is where they become one call.
+5. **`refactor(editor): one place answers whether a path is inside a root`** — converge the four
+   spellings of that question: `IsContainedRelativePath` (`util/asset_paths.cpp:64-77`), `AssetAt`
+   and `IsHeldOpen` (`Windows/ContentExplorer/asset_rules.cpp:21-25, 56`), and the directory
+   bookkeeping in `ContentExplorerWindow.cpp:472, 485-487`. Gate: `just run editor_tests --
+   "[assetrules][assetpaths]"`.
 
-5. **`feat(editor): a viewport takes the source, not the container it produced`** — the three drop
+   *Its own task rather than a ride-along on task 4, which is where this plan first put it. Two
+   reasons found while writing task 4. The spellings do not ask one question — three want a
+   boolean, one wants the relative part, and `.` has to count as contained for some and not
+   others. And `IsHeldOpen` is not a display rule: it gates every Delete and Delete Cascade
+   (`AssetOperations.cpp:88, 169, 312, 381`), and `IsContainedRelativePath` rejects a path
+   containing `:`, so converging naively would make a held file with `:` in its name read as not
+   held and let a deletion through. A change that can weaken a deletion guard earns its own review
+   and its own test rather than riding under a UI change. `AssetAt`'s bare `startsWith("..")` — which
+   makes a folder named `..hidden` unactionable — is the bug that motivates it.*
+
+6. **`feat(editor): a viewport takes the source, not the container it produced`** — the three drop
    handlers accept a `.glb` and resolve it. Gate: `just run editor_tests -- "[drop]"` — the drop
    *rules* are driven straight through the handlers, since a `Drop` event cannot be synthesized.
 
-6. **`feat(editor): a source dropped on the graph canvas offers its textures`** — `MaterialGraphView`
+7. **`feat(editor): a source dropped on the graph canvas offers its textures`** — `MaterialGraphView`
    accepts a `.glb`, `MaterialEditorWindow` presents that source's textures and makes the node.
    Gate: `just run editor_tests -- "[materialgraph]"`, plus eyes.
 
-7. **`feat(editor): the source row renames what it produced`** — `AssetAt` returns an imported
+8. **`feat(editor): the source row renames what it produced`** — `AssetAt` returns an imported
    source, and the context menu's Rename is wired onto task 1. **Both, or neither**: `AssetAt`
    returning a `.glb` is what puts a menu on that row at all, and the same menu offers Delete, which
    `planDeletion` refuses for a source under ADR-8 — so returning it before the menu knows that

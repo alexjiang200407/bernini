@@ -27,6 +27,21 @@ namespace editor
 	IsMaterialAsset(const QString& asset);
 
 	/**
+	 * Whether `asset` (a data-root-relative path) is one a person may rename or delete.
+	 *
+	 * False for anything under `Derived/`: a bake's to write and to regenerate, never anyone's to
+	 * name. The views no longer reach those files at all, which is what makes this unreachable in
+	 * practice -- and exactly why it is written down. A rule that holds only because of where a
+	 * view happens to be rooted is one the next panel breaks without noticing, and this one is the
+	 * difference between a stale container and lost work.
+	 *
+	 * By the location, through `assetlib::originOf`, rather than by extension: the half a file
+	 * lives in is what the library's own invariant is stated on.
+	 */
+	[[nodiscard]] bool
+	IsActionableAsset(const QString& asset);
+
+	/**
 	 * Whether any of `heldOpen` is `absolute`, or -- when that names a directory -- something
 	 * beneath it. `heldOpen` is what the panels have open, absolute or relative to the working
 	 * directory: a viewport's environment comes out of config.json relative, and a path compared

@@ -82,6 +82,9 @@ AssetOperations::DeleteWithPlanner(
 	const QString& asset,
 	assetlib::DeletionPlan (*planner)(const assetlib::AssetRefGraph&, std::string_view))
 {
+	if (!editor::IsActionableAsset(asset))
+		return;
+
 	const QString absolute    = QDir(m_DataRoot).absoluteFilePath(asset);
 	const bool    isDirectory = QFileInfo(absolute).isDir();
 
@@ -272,6 +275,9 @@ AssetOperations::DeleteWithPlanner(
 void
 AssetOperations::Rename(const QString& asset)
 {
+	if (!editor::IsActionableAsset(asset))
+		return;
+
 	const QString   absolute = QDir(m_DataRoot).absoluteFilePath(asset);
 	const QFileInfo info(absolute);
 	const bool      isDirectory = info.isDir();

@@ -22,13 +22,22 @@ namespace editor
 	IsTextureFile(const QString& path);
 
 	/**
-	 * Whether `path` names a derived build product (`.bvat`, case-insensitively) -- a file the
-	 * editor's views hide: it is wholly re-bakeable from its inputs, never committed, and offering
-	 * it for rename or delete implies an authorship it does not have. The reference graph still
-	 * reads it from the filesystem directly, so rename/delete cascades of its *inputs* see it.
+	 * Whether `path` names a file the Content Explorer's views do not list. Two kinds, for two
+	 * different reasons:
+	 *
+	 * - a **`.bvat`**: a derived build product, wholly re-bakeable from its inputs, never
+	 *   committed, and offering it for rename or delete implies an authorship it does not have.
+	 *   Unreachable now that the views root inside `Authored/`, and kept because where they root is
+	 *   a choice while this is a rule.
+	 * - a **`.bimport`**: the sidecar carrying one source's import settings. The `.glb` beside it is
+	 *   the row that stands for the model -- Unity hides a `.meta` and Godot a `.import` for the
+	 *   same reason -- and listing both is two rows for one thing.
+	 *
+	 * The reference graph still reads both from the filesystem directly, so rename and delete
+	 * cascades of their *inputs* see them.
 	 */
 	[[nodiscard]] bool
-	IsHiddenBuildProductFile(const QString& path);
+	IsHiddenInExplorer(const QString& path);
 
 	/**
 	 * Whether `name` is a plain file stem -- letters, digits, `_`, `.` and `-`, and not `.` or `..`.

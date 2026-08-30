@@ -117,6 +117,14 @@ lives beside it, and the split is by responsibility rather than by line count:
   them, so a panel added later is rooted without anyone remembering it -- the same reason
   `IHoldsAssets` is a walk. A panel that only forwards the root to a child it owns implements it;
   the child does not, or it is told twice and the owner loses its say in the order.
+- **A view rooted at a project shows the authored half, and resolves against the whole root.** The
+  Content Explorer's views root at `Data/Authored`; `AssetAt`, `AssetOperations` and every stored
+  reference still resolve against `Data`. The two are different strings on purpose — moving where a
+  view *points* must never move what a path *means*, because a key is data-root-relative and every
+  reference in a project is written against that. `Derived/` is not hidden row by row: it is simply
+  not somewhere the views can navigate, which holds without a sweep that has to be reapplied on
+  every insertion. What genuinely must not be listed inside the authored half — a source's
+  `.bimport` sidecar — is `editor::IsHiddenInExplorer`.
 - **Widget assembly** built in code rather than Designer goes to its own `*_ui` file
   (`material_editor_ui`), which builds and connects nothing. The `connect` calls stay in the window,
   because what a widget *does* is behaviour.

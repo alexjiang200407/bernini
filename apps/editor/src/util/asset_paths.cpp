@@ -32,9 +32,10 @@ namespace editor
 	}
 
 	bool
-	IsHiddenBuildProductFile(const QString& path)
+	IsHiddenInExplorer(const QString& path)
 	{
-		return path.endsWith(QStringLiteral(".bvat"), Qt::CaseInsensitive);
+		return path.endsWith(QStringLiteral(".bvat"), Qt::CaseInsensitive) ||
+		       path.endsWith(QStringLiteral(".bimport"), Qt::CaseInsensitive);
 	}
 
 	bool
