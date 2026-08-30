@@ -14,6 +14,8 @@
 #include "mounted_io.h"
 #include "ref_paths.h"
 
+#include <tracy/Tracy.hpp>
+
 namespace assetlib
 {
 	namespace
@@ -134,6 +136,8 @@ namespace assetlib
 	std::vector<std::string>
 	AssetStore::GetStaleImportedTextureSources() const
 	{
+		ZoneScopedN("assetlib scan stale textures");
+
 		if (IsReadOnly())
 			return {};
 
@@ -188,6 +192,9 @@ namespace assetlib
 		const ProgressSink& onProgress,
 		const CancelToken&  cancel) const
 	{
+		ZoneScopedN("assetlib refresh textures");
+		ZoneTextF("%.*s", static_cast<int>(sourceKey.size()), sourceKey.data());
+
 		core::throw_runtime_error_if(
 			IsReadOnly(),
 			"'{}': this project has nowhere to write, so its textures cannot be re-extracted",

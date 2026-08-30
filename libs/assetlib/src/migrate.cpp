@@ -25,6 +25,8 @@
 #include <core/err/util.h>
 #include <core/file/file.h>
 
+#include <tracy/Tracy.hpp>
+
 namespace assetlib
 {
 	namespace
@@ -196,6 +198,8 @@ namespace assetlib
 	MigrateReport
 	AssetStore::Migrate(bool dryRun, const ProgressSink& onProgress) const
 	{
+		ZoneScopedN("assetlib migrate");
+
 		const ProgressSink sink = serialized(onProgress);
 
 		std::vector<std::filesystem::path> paths;

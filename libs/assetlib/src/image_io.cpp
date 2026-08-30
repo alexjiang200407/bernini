@@ -7,6 +7,8 @@
 
 #include "mounted_io.h"
 
+#include <tracy/Tracy.hpp>
+
 namespace assetlib
 {
 	namespace
@@ -235,6 +237,14 @@ namespace assetlib
 		uint32_t                     maxDim,
 		const std::filesystem::path& path)
 	{
+		ZoneScopedN("assetlib ktx2 decode");
+		ZoneTextF(
+			"%s, %ux%u, %u levels",
+			path.filename().string().c_str(),
+			texture->baseWidth,
+			texture->baseHeight,
+			texture->numLevels);
+
 		// Basis-supercompressed textures (LDR material maps) transcode on the way in. The GPU wants a
 		// block format; the material bake wants texels it can composite, so it asks for RGBA32 instead.
 		// HDR / IBL maps are stored uncompressed and skip this entirely.

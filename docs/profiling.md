@@ -58,8 +58,16 @@ thread has to be passed anywhere.
 
 | Layer | What is bracketed |
 |---|---|
-| `assetlib` | the glTF parse, tangents, posed bounds, clip floors, the VAT bake, the prefilter, the whole-project bounds rebake |
+| `assetlib` cooks | the glTF parse, tangents, posed bounds, clip floors, the VAT bake, the prefilter, the whole-project bounds rebake |
+| `assetlib` reads | a whole container through a mount, a selective chunk read, a KTX2 decode/transcode |
+| `assetlib` doors | `Migrate`, `Reimport`, `RefreshImportedTextures`, `BakeVat`, and the two staleness scans a project pays on every open |
 | `apps/editor` | an import, split into its worker and UI halves |
+
+**A cache hit and a cache miss share one zone name on purpose.** `LoadRegenMesh` and its two
+siblings are the door where a container is either read or regenerated, and which of those happened
+is legible from what nests *inside* — a hit contains a container load, a miss contains a glTF parse
+and a tangent pass. Splitting the name would put the same door in two rows of the statistics view
+and lose the total.
 
 ## Not zones
 

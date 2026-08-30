@@ -417,6 +417,8 @@ namespace assetlib
 	BVat
 	AssetStore::BakeVat(const VatBakeDesc& desc) const
 	{
+		ZoneScopedN("assetlib bake vat");
+
 		const VatInputs inputs = loadVatInputs(*this, desc);
 
 		BVat vat = bakeVat(inputs.mesh, inputs.skeleton, inputs.animations);
