@@ -9,6 +9,11 @@ import SkinnedGeom;
 // tier that computes its pose instead of fetching one.
 public struct SkinnedState
 {
+    // The instance's world transform, the same one its Mesh record holds. Fixed for the instance's
+    // lifetime, so a spawn-time constant like the fields below; first, because the widest member
+    // has to be for the MSL and C++ layouts to agree.
+    public float4x4 transform;
+
     public Entry<SkinnedGeom> geom;
 
     public uint clip; // index into the geom's clip table

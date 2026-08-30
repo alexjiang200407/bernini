@@ -2,6 +2,7 @@
 #include "cmd/CommandList.h"
 #include "fg/FrameGraph.h"
 #include "passes/DrawData.h"
+#include "scene/Scene.h"
 #include "scene/SceneView.h"
 #include "uniforms/Uniforms.h"
 
@@ -85,6 +86,10 @@ namespace bgl
 		uniforms["time"]           = draw.clock.time;
 		uniforms["prevTime"]       = draw.clock.prevTime;
 		uniforms["posedCount"]     = posed;
+
+		const GroundPlaneDesc& ground = view->GetScene()->As<Scene>()->GetGround();
+		uniforms["groundPoint"]       = ground.point;
+		uniforms["groundNormal"]      = ground.normal;
 
 		auto computeState   = ComputeState();
 		computeState.kernel = &m_PoseSkinned;

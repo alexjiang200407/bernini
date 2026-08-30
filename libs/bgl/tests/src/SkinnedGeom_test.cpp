@@ -327,7 +327,9 @@ TEST_CASE("CreateSkinnedMeshInstance writes the playback record once", "[skinned
 	desc.phase = 4.5f;
 	desc.rate  = 2.0f;
 
-	const auto instance = view->CreateSkinnedMeshInstance(geom, glm::mat4(1.0f), desc);
+	const auto placed = glm::translate(glm::mat4(1.0f), glm::vec3(1.0f, 2.0f, 3.0f));
+
+	const auto instance = view->CreateSkinnedMeshInstance(geom, placed, desc);
 	REQUIRE(instance.IsValid());
 
 	auto& meshBuffer = view->GetMeshBuffer();
@@ -345,6 +347,10 @@ TEST_CASE("CreateSkinnedMeshInstance writes the playback record once", "[skinned
 	CHECK(state.phase == Catch::Approx(4.5f));
 	CHECK(state.rate == Catch::Approx(2.0f));
 	CHECK(state.geom.offset == scene->GetGeomSkinnedInfo(geom.handle.index).record.index);
+
+	// The same transform the Mesh record holds, so the pose pass sees where the instance stands.
+	CHECK(state.transform == placed);
+	CHECK(mesh.transform == placed);
 
 	SECTION("a clip past the geom's table is refused")
 	{

@@ -36,6 +36,11 @@ struct Uniforms
     float time;
     float prevTime;
     uint posedCount;
+
+    // The scene's ground plane, world space, normal unit length: what a planted foot is solved
+    // against.
+    float3 groundPoint;
+    float3 groundNormal;
 };
 
 ConstantBuffer<Uniforms> gUniforms;

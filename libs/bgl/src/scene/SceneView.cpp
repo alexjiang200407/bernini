@@ -298,12 +298,13 @@ namespace bgl
 
 		const core::multi_slot_handle palette = m_Palettes.Allocate(float4s);
 
-		auto state    = idl::SkinnedState();
-		state.geom    = rig.record;
-		state.clip    = desc.clip;
-		state.phase   = desc.phase;
-		state.rate    = desc.rate;
-		state.palette = palette;
+		auto state      = idl::SkinnedState();
+		state.geom      = rig.record;
+		state.clip      = desc.clip;
+		state.phase     = desc.phase;
+		state.rate      = desc.rate;
+		state.palette   = palette;
+		state.transform = transform;
 
 		const idl::RawEntry record =
 			m_Playback.AddRecord(idl::PlaybackType::kSkinned, std::as_bytes(std::span(&state, 1)));

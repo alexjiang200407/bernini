@@ -305,7 +305,11 @@ TEST_CASE("a rig far past the old ceiling poses every bone", "[skinned][pose][re
 	sceneDesc.initialPbrMaterials         = 4;
 
 	auto scene = gfx->CreateScene(sceneDesc);
-	auto view  = gfx->CreateSceneView(scene, 4);
+
+	// Tilted and lowered: a rig with no legs must pose identically on any ground.
+	scene->SetGround({ glm::vec3(0.0f, -0.3f, 0.0f), glm::vec3(0.2f, 1.0f, 0.1f) });
+
+	auto view = gfx->CreateSceneView(scene, 4);
 
 	bgl::test::ApplyEnvironment(scene.Get(), view.Get());
 
@@ -400,7 +404,11 @@ TEST_CASE("the pose pass writes the palette a rig's hierarchy implies", "[skinne
 	sceneDesc.initialPbrMaterials         = 4;
 
 	auto scene = gfx->CreateScene(sceneDesc);
-	auto view  = gfx->CreateSceneView(scene, 4);
+
+	// Tilted and lowered: a rig with no legs must pose identically on any ground.
+	scene->SetGround({ glm::vec3(0.0f, -0.3f, 0.0f), glm::vec3(0.2f, 1.0f, 0.1f) });
+
+	auto view = gfx->CreateSceneView(scene, 4);
 
 	bgl::test::ApplyEnvironment(scene.Get(), view.Get());
 
