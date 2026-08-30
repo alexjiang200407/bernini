@@ -296,6 +296,16 @@ namespace assetlib
 		std::string    error;  // non-empty only when status == kFailed
 	};
 
+	/** One file that travels with a rename rather than being its subject. Both data-root-relative. */
+	struct RenameMove
+	{
+		std::string from;
+		std::string to;
+
+		friend bool
+		operator==(const RenameMove&, const RenameMove&) = default;
+	};
+
 	/** What a rename would move, and every stored reference that must follow it. */
 	struct RenamePlan
 	{
@@ -304,6 +314,28 @@ namespace assetlib
 
 		/** What `from` is, or nullopt when it is a directory -- which is not an asset. */
 		std::optional<AssetType> assetType;
+
+		/**
+		 * The `.glb` that moves with `from`, set only when `from` is an import document -- its key
+		 * is derived from the document's own path, so it cannot stay behind.
+		 *
+		 * Separate from `outputs` because it is **authored** where they are cache. `Reimport` reads
+		 * from this file to write them, so nothing can put it back: a rename that cannot move it
+		 * fails, where a missing output is skipped.
+		 */
+		std::optional<RenameMove> source;
+
+		/**
+		 * The containers `from`'s document produced that are still named after its stem, set only
+		 * when `from` is an import document. Cache: one that is not on disk is skipped rather than
+		 * failing the rename, since the document names the new path either way and `Reimport`
+		 * writes it there.
+		 *
+		 * Every entry is a rename target like `from` is, so `referrers` covers the edges naming any
+		 * of them: a `.bskel` this source produced but a *second* source's document binds is moved
+		 * here and rewritten there, rather than orphaned.
+		 */
+		std::vector<RenameMove> outputs;
 
 		/**
 		 * The edges whose stored path must be rewritten: every reference to `from`, or -- for a
@@ -325,12 +357,21 @@ namespace assetlib
 	 * blocked by references the way a deletion is -- they are rewritten to follow -- so the plan's
 	 * `referrers` are work, not blockers.
 	 *
+	 * An **imported source** may be named on either side, and plans the whole import: a `.glb` and
+	 * its `.bimport` are one asset under two names, so both spellings resolve to the document and
+	 * the rest of the group lands in `source` and `outputs`. `from` and `to` therefore read back as
+	 * `.bimport`
+	 * keys even when a `.glb` was asked for -- the document is the half that is an asset.
+	 *
 	 * @throws std::runtime_error if either path does not resolve to somewhere inside the data root, if
 	 *         they name the same thing, if `from` does not exist or is a file of no kind this project
 	 *         stores anything about, if the rename would change what kind of asset the file is, if a
 	 *         directory would move into itself, if `to` already exists (a rename never overwrites --
 	 *         except for the same file spelled in a different case, which is how a case-insensitive
 	 *         filesystem answers a case-only rename), or if `to`'s parent directory does not exist.
+	 *         For an imported source, also if its `.bimport` is absent or will not parse: the
+	 *         document is what says which containers move, and moving a source without them would
+	 *         strand every one.
 	 */
 	[[nodiscard]] RenamePlan
 	planRename(const AssetRefGraph& graph, std::string_view from, std::string_view to);

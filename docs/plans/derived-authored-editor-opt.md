@@ -205,7 +205,7 @@ guard rather than deleted code.
 
 | Where | What |
 |---|---|
-| `libs/assetlib/include/assetlib/asset_refs.h`, `src/asset_rename.cpp` | `planRename` accepts an imported source; `RenamePlan` gains a `moves` bucket |
+| `libs/assetlib/include/assetlib/asset_refs.h`, `src/asset_rename.cpp` | `planRename` accepts an imported source; `RenamePlan` gains `source` and `outputs` |
 | `apps/editor/src/util/import_outputs.{h,cpp}` (new) | source → `.bmesh` and source → its texture directory, cached against the document's mtime |
 | `apps/editor/src/util/asset_paths.{h,cpp}` | the hide rule grows the `.bimport` sidecar |
 | `apps/editor/src/Windows/ContentExplorer/ContentExplorerWindow.{h,cpp}` | browse root split from data root |
@@ -229,11 +229,15 @@ so it fails safe, but it should not be offered.
 ## Tasks
 
 1. **`feat(assetlib): a rename moves an imported source with everything it produced`** — `planRename`
-   accepts a `.glb`; `RenamePlan` gains a `moves` bucket of `{from, to}` pairs carrying the
-   `.bimport` and each `outputs` entry re-stemmed, with every referrer of any of them rewritten. The
-   field is named and documented in the same PR that grows the struct — `RenamePlan` is public
-   surface in a `libs` target, and `DeletionPlan`'s `derived`/`producers`/`contents`/`cascade` set
-   the precedent that each bucket says what it is for. Gate: new cases in
+   accepts a `.glb`; `RenamePlan` gains **two** buckets of `{from, to}` pairs, not one — `source`
+   for the authored `.glb` and `outputs` for the containers the document names, re-stemmed, with
+   every referrer of any of them rewritten. They are separate because their contracts differ: a
+   rename that cannot move the source **fails** (nothing regenerates a `.glb`; `Reimport` reads
+   *from* it), where a missing output is **skipped** (it is cache, and the document names the new
+   path either way). One undifferentiated bucket was written first and rejected in review — the
+   executing code then has to choose uniform treatment for a non-uniform list, and chose the cache
+   rule for the one entry that is not cache. `DeletionPlan`'s `derived`/`producers`/`contents`/
+   `cascade` set the precedent that each bucket says what it is for. Gate: new cases in
    `libs/assetlib/tests/src/AssetRename_test.cpp` pinning that the source, the document and every
    output move together; that a `.bskel` bound by a *second* source's document is rewritten there
    rather than orphaned; that a source with no rig (only a `.bmesh` in `outputs`) moves cleanly; and
