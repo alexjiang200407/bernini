@@ -64,9 +64,29 @@ $TRACY/tracy-csvexport -u start.tracy > events.csv   # name, ns_since_start, exe
 ```
 
 Both tools come from the `tracy` port's `cli-tools` feature, so vcpkg has already put them in
-`build/<preset>/vcpkg_installed/<triplet>/tools/tracy/`. The **GUI** profiler is not vendored —
-install it once per machine from the Tracy releases and point it at the running process for a
-timeline instead of a table.
+`build/<preset>/vcpkg_installed/<triplet>/tools/tracy/`.
+
+## Looking at one
+
+The **GUI** profiler is deliberately not vendored (it drags glfw, freetype, curl and imgui in for a
+tool nobody builds from this tree), so it is installed once per machine:
+
+```bash
+brew install tracy          # macOS: 0.13.1, the version vcpkg vendors
+```
+
+On Windows, take the binary from the Tracy releases page. **Match the version.** Tracy version-locks
+the client and the viewer, and a mismatch refuses to connect rather than degrading — the vendored
+client is pinned by `vcpkg.json`, so read it before installing a viewer.
+
+Two ways in, and only one of them works for a start-up:
+
+* **Open a file.** `tracy` → *Open*, and pick a `.tracy` that `tracy-capture` wrote. This is the one
+  to use for a cold start: the interesting window is over before anything could have connected, and
+  a captured file has it.
+* **Connect live.** The client announces itself over UDP, so a running editor appears in the
+  discovery list and one click attaches. Good for a session already under way — a slow import, a
+  panel that hangs — and no use for the thing that happened during launch.
 
 There is no on-demand mode. The client buffers from process start, which is what makes a cold start
 capturable; the cost is that a process left running for hours accumulates events, so a capture
