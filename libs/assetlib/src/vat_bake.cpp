@@ -288,7 +288,7 @@ namespace assetlib
 		BVat&          vat    = header.vat;
 		const uint64_t frames = header.frames;
 
-		ZoneScopedN("assetlib VAT bake");
+		ZoneScopedN("assetlib vat sample");
 		ZoneTextF(
 			"%zu clips, %llu frames, %llu columns, %llu bones",
 			animations.clips.size(),
