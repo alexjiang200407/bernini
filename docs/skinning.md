@@ -1,9 +1,11 @@
-# Skinned Meshes — a rig posed on the GPU and drawn from its palette
+# Skinned Meshes — a rig posed on the GPU, and drawn from a palette or a table
 
-The runtime half of animation: a rig's bones and clips upload with its mesh, a compute pass poses
-every instance into a bone palette each frame, and the mesh shader blends the bind-pose vertices by
-it. The other tier, [VAT](docs/vat.md), fetches a *baked* pose from a texture pair instead; the two
-share a clip table and a clock and differ only in where a pose comes from.
+The runtime half of animation: a rig's bones and clips upload once, a pose is computed on the GPU,
+and the mesh shader blends the bind-pose vertices by it. Where that pose comes from is the
+instance's choice — a palette a compute pass fills for it every frame, or its rig's bone anim table,
+posed once and shared by every instance on that rig. The other tier, [VAT](docs/vat.md), fetches a
+*baked* pose from a texture pair instead; the two share a clip table and a clock and differ only in
+where a pose comes from.
 
 **This document is a map, not a mirror.** It records the design choices and the contracts that are
 not obvious from a signature. The headers linked below are the source of truth.
@@ -68,6 +70,47 @@ not obvious from a signature. The headers linked below are the source of truth.
   `BonePaletteBuffer`, which discards on growth — safe for the per-view palette, which is rewritten
   every frame, and not for a table written once. Offsets survive a growth, so what a re-queue costs
   is the posing, not a re-allocation.
+
+* **The pose source is a property of the instance, not of the geom.** `SkinnedInstanceDesc::source`
+  chooses: `kPerInstance` gets a palette slice `SkinnedPosePass` fills every frame — the hero tier,
+  and the only source a per-unit blend, mask or IK can ever vary — while `kBoneAnimTable` reads the
+  rig's table and allocates nothing. One geom serves both, so two instances of one mesh may draw
+  from different sources in the same frame, and a unit changes tier by respawning rather than by
+  being re-uploaded.
+
+  **The source is the kind of playback record the placement holds**, and nowhere else. A hero
+  instance gets an `idl::SkinnedState`, a crowd one an `idl::SkinnedTableState` — the same
+  `{rig, clip, phase, rate}` and no palette, because the pose it draws is the rig's and belongs to no
+  instance. The mesh shader reads the arena's `RecordHeader` to know which, which is what that header
+  is for: the alternative, one record kind with the palette left null and the branch reading the
+  hole, is a second way of saying what the arena already says. What still turns on the palette itself
+  is `SkinnedPosePass`'s dense list, and only because a palette is what that pass writes into.
+
+  **Between two frames the two sources differ, by design.** The pose pass nlerps local rotations and
+  then walks; the table lerps the two frames' finished skin matrices, because skinning is linear in
+  the matrices and one blend per vertex replaces one per attribute. On a whole frame they agree
+  exactly, and on a rotation between frames they do not — the same trade VAT makes.
+
+  **What the table buys is the pose pass, and the number depends on the rig.** 2,000 instances of a
+  64-bone rig six levels deep drew in 1.06 ms/frame against 1.22 posed per instance — about 13%,
+  debug Metal. Three dimensions move that, and two of the three are the rig rather than the mesh:
+  the walk the table removes costs one barrier-synced level per *depth* (the same 64 bones as a
+  chain rather than a tree costs ten times the levels, and measured ≈33% instead of 13%), it costs
+  `instances × bones`, and the per-vertex fetches the table adds cost whatever is drawn. A two-bone
+  rig shows no win at all.
+
+  **Read the 13% as an upper bound.** The fixture's four-vertex strip fetches the same two bones at
+  the same two frames on every instance, so the table's reads are as cache-hot as they ever get; a
+  real crowd — colder reads, heavier units — pays more for them than this measures.
+  `[.posetiming]` in `SkinnedRender_test` is what measures it, and it reports the depth for this
+  reason.
+
+  **The structural argument is the stronger one, and it is not in that number.** The pose pass is
+  dispatched over every skinned instance the view holds, with no visibility or LOD test between —
+  `RebuildPosedList` walks the mesh buffer, and one workgroup runs per entry — so the hero tier pays
+  `instances × bones` for a unit that is off screen, behind the camera or one pixel wide. The
+  table's cost is per vertex *drawn*. A crowd at LOD distance is where the two diverge hardest, and
+  the fixture, with every instance on screen and four vertices each, is where they diverge least.
 
 * **Skinning happens in the mesh shader, not a compute pre-pass.** There is no transient skinned
   vertex buffer: nothing yet needs to *read back* skinned positions (physics, attachments), and until

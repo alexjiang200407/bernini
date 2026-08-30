@@ -335,8 +335,11 @@ namespace game
 
 		/**
 		 * The skinned counterpart of CreateInstance: places a geom AcquireSkinnedMesh returned, spawned
-		 * on `desc`'s clip, phase and rate. The same references are taken and the same DestroyInstance
-		 * releases them.
+		 * on `desc`'s clip, phase and rate and posed from its `source`. The same references are taken
+		 * and the same DestroyInstance releases them.
+		 *
+		 * `PoseSource::kBoneAnimTable` reserves the rig's table on the first such instance -- see
+		 * ISceneView::CreateSkinnedMeshInstance for what that costs.
 		 *
 		 * @throws bgl::SceneError if `view` is null, the geom is not this manager's or has expired, or
 		 *         `desc.clip` is out of the geom's clip table.

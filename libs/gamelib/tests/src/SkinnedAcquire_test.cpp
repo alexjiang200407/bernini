@@ -1,6 +1,8 @@
 #include <gamelib/AssetManager.h>
 
+#include "util/GoldenImage.h"
 #include "util/RigFixture.h"
+#include "util/TestEnvironment.h"
 #include "util/TestOptions.h"
 
 #include <assetlib/AssetStore.h>
@@ -409,4 +411,118 @@ TEST_CASE("a manager torn down over a surviving scene leaves it usable", "[skinn
 		second.AcquireSkinnedMesh("Derived/Meshes/rig.bmesh", "Derived/Animations/rig.banim");
 	CHECK(again.geom.IsValid());
 	second.ReleaseGeom(again.geom);
+}
+
+TEST_CASE("a two-slot unit draws off one rig's bone anim table", "[skinned][acquire][render]")
+{
+	DataRoot root("bernini_skinned_acquire_crowd");
+	WriteRig(root.path);
+
+	// The second slot of a modular unit: same skeleton, same clips, its own mesh.
+	{
+		const auto source =
+			assetlib::AssetStore(root.path).Load<assetlib::BMesh>("Derived/Meshes/rig.bmesh");
+		assetlib::AssetStore(root.path).Save(source, "Derived/Meshes/slot.bmesh");
+	}
+
+	auto gfx = bgl::CreateGraphics(HeadlessOptions());
+	REQUIRE(gfx != nullptr);
+
+	auto targetDesc     = bgl::RenderTargetDesc();
+	targetDesc.width    = 256;
+	targetDesc.height   = 256;
+	targetDesc.headless = true;
+	auto target         = gfx->CreateRenderTarget(targetDesc);
+
+	auto sceneDesc                        = bgl::SceneDesc();
+	sceneDesc.initialGeom                 = 8;
+	sceneDesc.initialSubmeshes            = 8;
+	sceneDesc.initialMeshlets             = 64;
+	sceneDesc.initialVertexBufferByteSize = 65536;
+	sceneDesc.initialIndices              = 1024;
+	sceneDesc.initialPbrMaterials         = 8;
+
+	auto scene = gfx->CreateScene(sceneDesc);
+	auto view  = gfx->CreateSceneView(scene, 8);
+	bgl::test::ApplyEnvironment(scene.Get(), view.Get());
+
+	auto assets = game::AssetManager(scene, root.path);
+
+	const auto body =
+		assets.AcquireSkinnedMesh("Derived/Meshes/rig.bmesh", "Derived/Animations/rig.banim");
+	const auto piece =
+		assets.AcquireSkinnedMesh("Derived/Meshes/slot.bmesh", "Derived/Animations/rig.banim");
+	REQUIRE(body.geom.IsValid());
+	REQUIRE(piece.geom.IsValid());
+
+	auto camera = bgl::Camera();
+	camera
+		.LookAt(
+			glm::vec3(0.0f, 0.0f, 10.0f),
+			glm::vec3(0.0f, 0.0f, 9.0f),
+			glm::vec3(0.0f, 1.0f, 0.0f))
+		.Perspective(glm::radians(60.0f), 1.0f, 0.5f, 100.0f);
+
+	auto job     = bgl::RenderJob();
+	job.view     = view;
+	job.camera   = camera;
+	job.viewport = bgl::Viewport(256.0f, 256.0f);
+
+	// Both slots on one clock and one pose, which is what a unit assembled from several meshes is.
+	// Frame 1 of the fixture's clip slides the rig to x = 1, and the two sources must put it in the
+	// same place -- the bone anim table is a different route to the same pose, not a different pose.
+	const auto drawUnit = [&](bgl::PoseSource source, const char* png) {
+		auto desc   = bgl::SkinnedInstanceDesc();
+		desc.clip   = 0;
+		desc.phase  = 1.0f;
+		desc.rate   = 0.0f;
+		desc.source = source;
+
+		// Offset, so the second slot occupies pixels the first does not. Placed coincident they
+		// would be one silhouette, and a slot that drew nothing at all would pass every check below.
+		const auto a = assets.CreateSkinnedInstance(view, body.geom, glm::mat4(1.0f), desc);
+		const auto b = assets.CreateSkinnedInstance(
+			view,
+			piece.geom,
+			glm::translate(glm::mat4(1.0f), glm::vec3(0.0f, -2.0f, 0.0f)),
+			desc);
+
+		gfx->DrawFrame(target, job);
+		gfx->ScreenshotPng(target, png);
+
+		assets.DestroyInstance(view, b);
+		assets.DestroyInstance(view, a);
+	};
+
+	const auto* palettePng = "assets/golden/crowd_unit_palette.got.png";
+	const auto* tablePng   = "assets/golden/crowd_unit_table.got.png";
+
+	drawUnit(bgl::PoseSource::kPerInstance, palettePng);
+	drawUnit(bgl::PoseSource::kBoneAnimTable, tablePng);
+
+	// The same pose by a different route, over the whole frame: a slot in the wrong place, a lost
+	// normal or a mis-addressed frame all have to show up.
+	CHECK(bgl::test::FrameDelta(palettePng, tablePng, 0, 0, 256, 256) < 1e-6f);
+
+	// And both slots are on screen, so the comparison above is not of two empty frames -- nor of two
+	// frames missing the same slot. The body alone must differ from the pair.
+	const auto* emptyPng = "assets/golden/crowd_unit_empty.got.png";
+	gfx->DrawFrame(target, job);
+	gfx->ScreenshotPng(target, emptyPng);
+	CHECK(bgl::test::FrameDelta(emptyPng, tablePng, 0, 0, 256, 256) > 1e-3f);
+
+	const auto* bodyOnlyPng = "assets/golden/crowd_unit_body_only.got.png";
+	{
+		auto desc   = bgl::SkinnedInstanceDesc();
+		desc.phase  = 1.0f;
+		desc.rate   = 0.0f;
+		desc.source = bgl::PoseSource::kBoneAnimTable;
+
+		const auto only = assets.CreateSkinnedInstance(view, body.geom, glm::mat4(1.0f), desc);
+		gfx->DrawFrame(target, job);
+		gfx->ScreenshotPng(target, bodyOnlyPng);
+		assets.DestroyInstance(view, only);
+	}
+
+	CHECK(bgl::test::FrameDelta(bodyOnlyPng, tablePng, 0, 0, 256, 256) > 1e-3f);
 }
