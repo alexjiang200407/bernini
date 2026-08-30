@@ -67,6 +67,16 @@ doc and a header disagree, trust the header, then fix this doc.
   destroying the buffer does not destroy it. On D3D12 that is a second descriptor; on Metal it is
   the buffer's own slot, a Metal buffer being an address whose type is whatever the shader declares.
 
+  A growth replaces the resource a view describes and announces nothing, so **whoever owns the
+  buffer owns the view**: `scene::RawBuffer` re-issues its own inside its `Allocate`, where the two
+  change together. Re-issuing anywhere else — at a frame boundary, say — leaves an instant where a
+  grown buffer is paired with a released view.
+
+  A growth replaces the resource a view describes and announces nothing, so **whoever owns the
+  buffer owns the view**: `scene::RawBuffer` re-issues its own inside its `Allocate`, where the two
+  change together. Re-issuing anywhere else -- at a frame boundary, say -- leaves an instant where a
+  grown buffer is paired with a released view.
+
   **A resource handle cannot be loaded out of a raw buffer on Metal.** The element type must be on
   the binding: `StructuredBuffer<T, ScalarDataLayout>.Handle` lowers to `T device*`, so a
   `TextureHandle` inside `T` is a real `texture2d`, while `ByteAddressBuffer.Handle` lowers to
