@@ -222,6 +222,16 @@ namespace bgl
 					m_Offset);
 			}
 
+			// A raw arena's two descriptors from one assignment: the members below are each a
+			// struct of one handle, so each lands through the path above.
+			AccessorBase&
+			operator=(const RawArenaBinding& arena)
+			{
+				(*this)["raw"]     = arena.buffer;
+				(*this)["handles"] = arena.handles;
+				return *this;
+			}
+
 			AccessorBase&
 			operator=(BufferSrvHandle handle)
 			{

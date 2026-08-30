@@ -293,28 +293,6 @@ namespace bgl
 	}
 
 	void
-	Scene::RefreshMaterialHandleView()
-	{
-		const BufferHandle arena = m_Materials.GetBufferHandle();
-		if (arena.slot == m_ViewedMaterialBuffer.slot &&
-		    arena.bindlessIndex == m_ViewedMaterialBuffer.bindlessIndex)
-		{
-			return;
-		}
-
-		if (!m_MaterialHandleView.IsNull())
-		{
-			m_ResourceManager->DestroyBufferSrv(m_MaterialHandleView);
-		}
-
-		m_MaterialHandleView = m_ResourceManager->CreateBufferSrv(
-			arena,
-			BufferSrvDesc().SetElement<idl::TextureHandle>().SetDebugName("Material Handle View"));
-
-		m_ViewedMaterialBuffer = arena;
-	}
-
-	void
 	Scene::InitBuffers()
 	{
 		const auto atLeastOne = [](uint32_t n) -> uint32_t { return n != 0 ? n : 1; };
@@ -382,6 +360,10 @@ namespace bgl
 				static_cast<uint32_t>(std::min<uint64_t>(materialBytes, c_MaxRawBufferBytes - 1)));
 			materialDesc.debugName = "Material Arena";
 
+			// A material payload keeps its texture handles inline, so the arena carries the typed
+			// view that makes textures of them -- and re-issues it inside its own growth.
+			materialDesc.handleStride = sizeof(idl::TextureHandle);
+
 			// The null record must cover the largest payload as well as its header: a null
 			// reference reads zeros for a whole record rather than the first live one.
 			materialDesc.nullRecordBytes =
@@ -390,8 +372,6 @@ namespace bgl
 					std::max(sizeof(idl::PbrMaterial), sizeof(idl::LoosePbrMaterial)));
 
 			m_Materials.Init(std::move(materialDesc), m_ResourceManager);
-
-			RefreshMaterialHandleView();
 		}
 
 		// The VAT buffers start at one entry each rather than from a SceneDesc knob: most scenes
@@ -499,12 +479,6 @@ namespace bgl
 	Scene::ImportResources(FrameGraph& fg, std::vector<std::string>& resourceNames)
 	{
 		resourceNames.reserve(resourceNames.size() + std::tuple_size_v<decltype(c_Buffers)>);
-
-		// Before the import, and in the same breath as it: a growth replaces the resource the typed
-		// view describes, and nothing announces one -- the buffer handle changing is the signal.
-		// Taking the two at different instants is what would hand a frame the new bytes and the old
-		// view. See IResourceManager::CreateBufferSrv.
-		RefreshMaterialHandleView();
 
 		// Import every buffer (including the GPU-only compute buffer): the Update pass declares
 		// them as copy-dest so the graph transitions them, and the FrameGraph tracks the state

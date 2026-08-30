@@ -51,8 +51,7 @@ namespace bgl
 		};
 
 		// clang-format off
-		constexpr std::array<std::string_view, 10> c_MaterialDataFields = {
-			"handleView"sv,
+		constexpr std::array<std::string_view, 9> c_MaterialDataFields = {
 			"anisoLinearWrapSampler"sv,
 			"linearClampSampler"sv,
 			"irradianceMap"sv,
@@ -378,14 +377,10 @@ namespace bgl
 		if (auto foundMatData = kernel.FindUniforms("materialData"))
 		{
 			auto& matData = *foundMatData;
-			for (const auto& binding : c_MaterialBuffers)
-			{
-				matData[binding.uniformKey].SetIfValid(resources.GetBuffer(binding.graphName));
-			}
-
-			// The arena's second view. Bound from the draw rather than the graph: the graph tracks
-			// the arena's bytes, and this is another descriptor onto them.
-			matData["handleView"].SetIfValid(draw.materialHandleView);
+			// Bound from the draw rather than the graph: the pair is one allocation and two
+			// descriptors, and the graph tracks resource state -- a view is not a resource. It is
+			// still declared to the graph (c_MaterialBuffers) so the arena's barriers are placed.
+			matData["materials"] = draw.materialArena;
 
 			matData["anisoLinearWrapSampler"].SetIfValid(draw.samplers.anisoLinearWrap);
 			matData["linearClampSampler"].SetIfValid(draw.samplers.linearClamp);

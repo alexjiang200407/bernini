@@ -128,6 +128,13 @@ not have one.
   descriptor change together and nothing can observe them apart. The instant stops being a thing a
   reader has to know.
 
+  Amended by the task that built it, on one point. The fold was written here as `RawBuffer` becoming
+  generic; that would have made the vertex and playback arenas name a handle type they have no use
+  for and bind a descriptor they never read. `RawHandleArena<T>` composes the two views instead, so
+  only an arena that holds handles carries them and the other two are untouched. The `Uniforms`
+  change was smaller than feared for the same reason: each half is a struct of one handle, so both
+  land through the path that already existed.
+
   The view is dead weight on D3D12, where a raw-loaded handle *can* become a texture through
   `ResourceDescriptorHeap` — it is Metal that cannot. Carrying it on both backends anyway is
   ADR-8's rejected macro restated one layer up, and it is rejected here for the same reason: the
@@ -402,17 +409,18 @@ weights). The same stale "emitted into src/idl" claim sits in
    outline selection case, `--gpu-validation`.
 
 7. **`refactor(bgl): a raw arena owns its own handle view`** — ADR-9. The two views become one
-   member: `RawBuffer` gains the typed handle view beside its raw one, the CPU-side `RawBuffer<Tag>`
-   owns the `BufferSrvHandle` and re-issues it *inside* its own growth, and `Uniforms` gains the
-   overload that writes both descriptors from one assignment. `Scene::RefreshMaterialHandleView`,
+   member: `RawHandleArena<T>` composes the raw view and the typed one, the CPU-side
+   `RawBuffer<Tag>` owns the `BufferSrvHandle` and re-issues it *inside* its own growth, and
+   `Uniforms` gains the overload that writes both descriptors from one assignment. `Scene::RefreshMaterialHandleView`,
    `m_ViewedMaterialBuffer` and the instant-sensitivity in `ImportResources` all delete.
    `ForwardPass` binds the pair from the draw and keeps declaring the buffer to the frame graph for
    barriers alone — `ImportBuffer` only stores the handle, so `resources.GetBuffer` returns the same
-   value either way. An arena with no handles (the vertex arena) names a placeholder element type
-   and leaves the view unbound, which `c_UnboundDescriptorIndex` already reserves index 0 for.
+   value either way. An arena with no handles stays a plain `RawBuffer` and declares no
+   `handleStride`, so it names no handle type and issues no view.
    *Gate:* `MaterialArenaGrowth_test` unchanged and still passing — it pins the behaviour this task
-   makes structural — plus `Uniforms_test` for the new overload, `BindlessIndex_test`, and the
-   geometry goldens under `--gpu-validation`.
+   makes structural — plus `Uniforms_test`'s `CSRawArenaBinding` case, which fails if the
+   overload writes only one half of the pair, `BindlessIndex_test`, and the geometry goldens under
+   `--gpu-validation`.
 
    Ordered before the docs task on purpose: task 8 writes the arena's design into `docs/`, and the
    hazard this removes is one of the longer things that page would otherwise have to explain.
