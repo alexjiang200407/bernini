@@ -163,11 +163,7 @@ ContentExplorerWindow::IsInsideBrowseRoot(const QString& path) const
 	if (m_BrowseRoot.isEmpty() || path.isEmpty())
 		return false;
 
-	// The root itself is inside itself; `IsContainedRelativePath` answers for everything below it.
-	// One of the editor's four spellings of this question -- converged in its own task, because
-	// another of them gates a deletion and cannot take this one's answer unexamined.
-	const QString key = QDir(m_BrowseRoot).relativeFilePath(path);
-	return key == "." || editor::IsContainedRelativePath(key);
+	return !editor::KeyUnder(m_BrowseRoot, path).isEmpty();
 }
 
 void
@@ -499,7 +495,7 @@ ContentExplorerWindow::OnDirectoryDeleted(const QString& absolute)
 
 	// The trail led into a folder that is gone, so it is dropped rather than walked back into --
 	// and going home is not a step Back should offer to undo.
-	if (QDir(absolute).relativeFilePath(shown).startsWith(".."))
+	if (editor::KeyUnder(absolute, shown).isEmpty())
 		return;
 
 	m_History.clear();
@@ -512,9 +508,9 @@ ContentExplorerWindow::OnDirectoryRenamed(const QString& fromAbsolute, const QSt
 	// Follow the rename rather than dumping the user at the root. The history is left alone -- Back
 	// already skips a folder that is gone.
 	const QString shown  = m_FileModel->filePath(m_Ui.CurrentDirectoryExplorer->rootIndex());
-	const QString inside = QDir(fromAbsolute).relativeFilePath(shown);
+	const QString inside = editor::KeyUnder(fromAbsolute, shown);
 
-	if (inside.startsWith(".."))
+	if (inside.isEmpty())
 		return;
 
 	ShowDirectory(inside == "." ? toAbsolute : toAbsolute + "/" + inside);

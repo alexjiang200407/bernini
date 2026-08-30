@@ -697,3 +697,53 @@ TEST_CASE("The derived half is not somewhere the views can be sent", "[contentex
 		CHECK(Back(window)->isEnabled());
 	}
 }
+
+TEST_CASE("A folder whose name begins with dots is still the project's", "[contentexplorer]")
+{
+	// The bug the one containment answer fixes. AssetAt rejected on a bare `startsWith("..")`,
+	// which is a test on the *key*, not on its first component -- so a folder at the data root
+	// named `..hidden` read as a climb out of the project and was unactionable: no rename, no
+	// delete, for a folder the user made and can see.
+	const Sandbox sandbox;
+	Touch(sandbox, "..hidden/Body.bmaterial");
+
+	QFileSystemModel model;
+	model.setRootPath(sandbox.DataRootPath());
+
+	const QModelIndex folder = IndexFor(model, sandbox.DataRootPath() + "/..hidden");
+	REQUIRE(model.isDir(folder));
+
+	CHECK(editor::AssetAt(model, folder, sandbox.DataRootPath()) == QString("..hidden"));
+
+	// The climb itself is still refused: a folder named `..` is not a folder at all.
+	CHECK(
+		editor::AssetAt(model, IndexFor(model, sandbox.DataRootPath()), sandbox.DataRootPath())
+			.isEmpty());
+}
+
+TEST_CASE("A held file is held whatever its name contains", "[contentexplorer]")
+{
+	// The regression the naive convergence would have caused, and the reason KeyUnder is not
+	// IsContainedRelativePath: this gate is what stops a Delete going through while a panel still
+	// has the file open. A name it read as "outside its own folder" would open that gate.
+	const Sandbox sandbox;
+	const QString root = sandbox.DataRootPath();
+
+	const QString awkward = Touch(sandbox, "Authored/Materials/a:b.bmaterial");
+	const QString dotted  = Touch(sandbox, "Authored/Materials/..hidden/Body.bmaterial");
+
+	const QString materials = QDir(root).absoluteFilePath("Authored/Materials");
+
+	CHECK(editor::IsHeldOpen({ awkward }, materials, true));
+	CHECK(editor::IsHeldOpen({ dotted }, materials, true));
+
+	// The folder still holds itself, so deleting it takes what is open inside it.
+	CHECK(editor::IsHeldOpen({ materials }, materials, true));
+
+	// And something genuinely elsewhere is still not held.
+	CHECK_FALSE(
+		editor::IsHeldOpen(
+			{ QDir(root).absoluteFilePath("Authored/Environments/studio.benv") },
+			materials,
+			true));
+}

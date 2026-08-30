@@ -29,3 +29,46 @@ TEST_CASE("The explorer lists neither a build product nor a source's sidecar", "
 	CHECK_FALSE(editor::IsHiddenInExplorer("Authored/Materials/skin.bmaterial"));
 	CHECK_FALSE(editor::IsHiddenInExplorer({}));
 }
+
+TEST_CASE("A key under a root is the one answer to is this inside that", "[assetpaths]")
+{
+	const QString root = QStringLiteral("/projects/MyGame/Data");
+
+	CHECK(
+		editor::KeyUnder(root, root + "/Authored/Meshes/kirk.glb") ==
+		QString("Authored/Meshes/kirk.glb"));
+
+	// A directory contains itself, and a caller that cares can tell "." from empty.
+	CHECK(editor::KeyUnder(root, root) == QString("."));
+
+	// Cleaned first, so a key is judged on where it lands rather than how it is spelt.
+	CHECK(
+		editor::KeyUnder(root, root + "/Authored/../Derived/Meshes/kirk.bmesh") ==
+		QString("Derived/Meshes/kirk.bmesh"));
+
+	SECTION("outside is empty, however it is spelt")
+	{
+		CHECK(editor::KeyUnder(root, "/projects/MyGame/Other/kirk.glb").isEmpty());
+		CHECK(editor::KeyUnder(root, "/projects/MyGame").isEmpty());
+		CHECK(editor::KeyUnder(root, "/elsewhere/kirk.glb").isEmpty());
+		CHECK(editor::KeyUnder(root, root + "/../sneaky.glb").isEmpty());
+		CHECK(editor::KeyUnder(root, {}).isEmpty());
+		CHECK(editor::KeyUnder({}, root + "/Authored").isEmpty());
+	}
+
+	SECTION("a name that only a typed path would be refused for is still inside")
+	{
+		// Why this is not IsContainedRelativePath: that one refuses `:` because a *typed* relative
+		// path spelling a drive would re-root the join it is about to go into. relativeFilePath
+		// cannot return such a thing, and one caller here gates every deletion -- reading a held
+		// file as outside its own folder is how a deletion goes through while a panel has it open.
+		CHECK(
+			editor::KeyUnder(root, root + "/Authored/Materials/a:b.bmaterial") ==
+			QString("Authored/Materials/a:b.bmaterial"));
+
+		// And a folder whose name merely begins with dots is a folder, not a climb.
+		CHECK(
+			editor::KeyUnder(root, root + "/Authored/..hidden/x.bmaterial") ==
+			QString("Authored/..hidden/x.bmaterial"));
+	}
+}

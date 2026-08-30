@@ -33,15 +33,10 @@ namespace editor
 
 			const QDir root(dataRoot);
 
-			// Containment is what makes this string a key rather than a guess. relativeFilePath
-			// answers for a path anywhere on the host by climbing out with `../`, and filePath
-			// reattaches that without cleaning it -- so a source belonging to another project
-			// resolves straight back into it, failing only when a directory along the climb happens
-			// not to exist. IsContainedRelativePath is the editor's existing statement of the rule,
-			// and it also covers what relativeFilePath returns when there is no relative answer at
-			// all: an absolute, drive-qualified path, which is what Windows gives for another drive.
-			const QString key = root.relativeFilePath(source);
-			if (!IsContainedRelativePath(key))
+			// A source belonging to another project would otherwise resolve straight back into it;
+			// KeyUnder is where that is refused, and where the reason is written down.
+			const QString key = KeyUnder(dataRoot, source);
+			if (key.isEmpty() || key == ".")
 				return {};
 
 			const QByteArray utf8 = key.toUtf8();
