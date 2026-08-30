@@ -359,7 +359,16 @@ weights). The same stale "emitted into src/idl" claim sits in
 
    The arena grows, and a growth replaces the resource its typed view describes, so the arena
    re-creates the view whenever the buffer handle it last viewed changes — nothing announces a
-   growth, and `CreateBufferSrv`'s `@post` says so.
+   growth, and `CreateBufferSrv`'s `@post` says so. The refresh has to happen in `ImportResources`,
+   beside the import: the graph takes the buffer and the draw takes the view, and a frame that takes
+   them at two instants pairs a grown buffer with a released view. `MaterialArenaGrowth_test` is
+   what holds that instant — a draw on either side of a growth, which nothing else in the suite does.
+
+   One correction to the header paragraph above: the tag is checked on *both* sides, but not the
+   same way. The shader's `LoadRecordAs` keeps a `dbg_assert`, since a mismatch there is bgl's own
+   bug. The CPU-side check is a caller passing a handle whose type disagrees with the record it
+   names, which `IScene.h` already documents as throwing — so it throws in every build, like the
+   offset check beside it.
 
 6. **`feat(bgl): the mesh playback tier behind a header`** — the same for `Mesh.playback`: the arena
    on the view, `Forward_AnyMesh` dispatching on the tag, the pose pass reading through it, the

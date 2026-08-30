@@ -108,8 +108,7 @@ public ForwardVSOut SkinnedVertex(MeshletContext ctx, SubmeshInstance instance, 
     // transform untouched.
     vertexOut.tangent = float4(mul((float3x3)ctx.mesh.transform, mul(skinRotation, vertex.tangent.xyz)), vertex.tangent.w);
 
-    vertexOut.materialIndex = instance.material.GetOffset();
-    vertexOut.materialIsLoose = 0u;
+    vertexOut.materialOffset = instance.material.GetByteOffset();
 
     return vertexOut;
 }

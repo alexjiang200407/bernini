@@ -36,7 +36,8 @@ namespace bgl
 	/**
 	 * The struct member name for the key for the smart buffers
 	 */
-	constexpr std::array<std::string_view, 4> c_SmartBufferUniformIndices = { "entryBuffer"sv,
+	constexpr std::array<std::string_view, 5> c_SmartBufferUniformIndices = { "entryBuffer"sv,
+		                                                                      "handleBuffer"sv,
 		                                                                      "packedBuffer"sv,
 		                                                                      "rangeBuffer"sv,
 		                                                                      "rawBuffer"sv };

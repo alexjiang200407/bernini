@@ -133,9 +133,10 @@ namespace bgl
 
 	/** A type one of `Uniforms::AccessorBase`'s assignment operators accepts. */
 	template <typename T>
-	concept UniformAssignable = detail::UniformValue<T> || std::same_as<T, BufferHandle> ||
-	                            std::same_as<T, SamplerHandle> || std::same_as<T, SrvHandle> ||
-	                            std::same_as<T, TextureAssetHandle>;
+	concept UniformAssignable =
+		detail::UniformValue<T> || std::same_as<T, BufferHandle> ||
+		std::same_as<T, BufferSrvHandle> || std::same_as<T, SamplerHandle> ||
+		std::same_as<T, SrvHandle> || std::same_as<T, TextureAssetHandle>;
 
 	class Uniforms final
 	{

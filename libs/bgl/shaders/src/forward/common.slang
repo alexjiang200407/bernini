@@ -1,5 +1,4 @@
 import types.SubmeshInstance;
-import idl.PsoType;
 
 public struct InstancedPayload
 {
@@ -13,11 +12,10 @@ public struct ForwardVSOut
     public float3 normal : NORMAL;
     public float2 uv : TEXCOORD;
     public float4 tangent : TANGENT;
-    public nointerpolation uint materialIndex : MATERIAL;
-
-    // Which material buffer materialIndex addresses. The transparent pipelines are shared by both
-    // material types, so their pixel shader cannot know it from the PSO the way the others do.
-    public nointerpolation uint materialIsLoose : MATERIALTYPE;
+    // A byte offset into the material arena, naming the record's header. The record says which
+    // kind it is, which is what the transparent pipeline reads: it is shared by both, so it cannot
+    // know from the PSO the way the others do.
+    public nointerpolation uint materialOffset : MATERIAL;
 
     // Undivided clip position under this frame's and last frame's camera, with each frame's jitter
     // already removed -- SV_Position keeps its offset, these do not, because a velocity is about the
@@ -44,15 +42,4 @@ public float2 ComputeMotionVector(ForwardVSOut input)
     float2 prevNdc = input.prevClip.xy / input.prevClip.w;
 
     return (ndc - prevNdc) * float2(0.5, -0.5);
-}
-
-// A loose material stores its channels as routes rather than a baked triplet, so it reads from a
-// different buffer. The PSO the instance resolved to is what says which.
-//
-// Written as comparisons, not a switch over the enum: the switch form silently misclassifies here
-// in the mesh-shader stage, which the loose-vs-baked render test catches.
-public bool IsLoosePso(PsoType pso)
-{
-    return pso == PsoType::kOpaque_StaticMesh_LoosePbr || pso == PsoType::kAlphaTest_StaticMesh_LoosePbr ||
-           pso == PsoType::kTransparent_StaticMesh_LoosePbr || pso == PsoType::kHashedAlpha_StaticMesh_LoosePbr;
 }

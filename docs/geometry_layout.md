@@ -105,8 +105,9 @@ path is the source of truth; when this doc disagrees, trust the struct, then fix
   the default**: the epoch re-resolve skips an overridden submesh, so a later `SetSubmeshMaterial` on
   the geom does not tear a skin off the unit wearing it.
 
-  Lifetime is the usual bargain: an override is a raw slot index like every other material binding, so
-  deleting a material an instance still wears re-points it at whatever takes the slot next.
+  Lifetime is the usual bargain: an override is a raw byte offset like every other material binding,
+  so deleting a material an instance still wears re-points it at whatever record next takes those
+  bytes.
   `gamelib`'s `AssetManager` is what makes it safe — an override holds a reference, released by
   `ClearInstanceSubmeshMaterial` or by `DestroyInstance`.
 
@@ -173,7 +174,7 @@ copies must be kept in step by hand:
 |---|---|---|
 | `Range<T>` | [Range.slang](libs/bgl/shaders/src/idl/Range.slang) | A `uint offsetStart` into a `StructuredBuffer<T>`; the element count is known from context. `Null()` at `0`. |
 | `RangeWithCount<T>` | [RangeWithCount.slang](libs/bgl/shaders/src/idl/RangeWithCount.slang) | A `Range<T>` plus an explicit `count` (a self-describing span). |
-| `Entry<T>` | [Entry.slang](libs/bgl/shaders/src/idl/Entry.slang) | A single-element `uint offset` into a `StructuredBuffer<T>` (e.g. a material record). |
+| `Entry<T>` | [Entry.slang](libs/bgl/shaders/src/idl/Entry.slang) | A single-element `uint offset` into a `StructuredBuffer<T>` (e.g. a `SubmeshInstance`'s `Entry<Mesh>`). |
 | `RawEntry<T>` | [RawEntry.slang](libs/bgl/shaders/src/idl/RawEntry.slang) | A `uint` **byte** offset into a raw arena, naming a record's `RecordHeader`; its payload begins `cRawPayloadOffset` later. |
 | `RawRange` | [RawRange.slang](libs/bgl/shaders/src/idl/RawRange.slang) | A `uint` byte offset to a headerless window of bytes, for data whose kind whatever names it already records. |
 
@@ -207,11 +208,11 @@ flowchart TD
     VData["vertexData buffer (bytes)"]
     IdxBuf["index buffer&lt;uint&gt;"]
     Layout["VertexLayout"]
-    Mat["material Entry&lt;IMaterial&gt;"]
+    Mat["material RawEntry&lt;IMaterial&gt;"]
 
     Inst -- "Entry&lt;Mesh&gt;" --> Mesh
     Inst -- "submeshIndex → one of" --> Submesh
-    Inst -- "Entry&lt;IMaterial&gt; (override, else the geom default)" --> Mat
+    Inst -- "RawEntry&lt;IMaterial&gt; (override, else the geom default)" --> Mat
     Mesh -- "RangeWithCount&lt;Submesh&gt;" --> Submesh
     Submesh -- "RangeWithCount&lt;Meshlet&gt;" --> Meshlet
     Submesh -- "layout (decode rule)" --> Layout

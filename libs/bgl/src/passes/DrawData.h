@@ -1,5 +1,6 @@
 #pragma once
 #include "idl/CullView.h"
+#include "resource/Buffer.h"
 #include "resource/FrameBuffer.h"
 #include "resource/Sampler.h"
 #include "types/EnvironmentMap.h"
@@ -116,5 +117,10 @@ namespace bgl
 		DrawLighting lighting;
 		DrawSamplers samplers;
 		TimeData     clock;
+
+		// The material arena read as texture handles. Not a frame-graph resource: the graph tracks
+		// the arena itself, and this is a second descriptor onto the same bytes. Re-issued by the
+		// scene whenever the arena grows, so it is read per draw rather than cached.
+		BufferSrvHandle materialHandleView;
 	};
 }
