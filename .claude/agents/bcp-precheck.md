@@ -205,16 +205,18 @@ another checkout's `just test` does not belong in a gate that runs before every 
 **Never report a number you did not observe.** No build directory, a target that will not build, a
 run you did not make: say so in one line and reason statically instead. Silence reads as a pass.
 
-### A new cook stage that does not log is a finding
+### A new cook stage with no zone is a finding
 
-`core::logging::ScopedStage` brackets a stage and logs its own dimensions and duration, which is what
-makes a slow load attributable without a profiler (`docs/gfx_debug.md` § 2). A diff that adds real
-per-asset work and no stage line has added cost nobody can find afterwards. `revise`: name the call
-and the dimensions its line should carry.
+A `ZoneScopedN` brackets a stage and a `ZoneTextF` carries its dimensions, which is what makes a slow
+load attributable ([docs/profiling.md](docs/profiling.md)). A diff that adds real per-asset work and
+no zone has added cost nobody can find afterwards. `revise`: name the call and the dimensions its
+zone should carry.
 
-The threshold case is worth knowing so you do not ask for the wrong thing: the name is formatted
-eagerly, so a path that runs every frame wants a hand-rolled warning that formats only once it has
-decided to complain — not a stage.
+Two shapes to check rather than merely asking for a zone. A zone whose **name** is interpolated is a
+finding of its own — Tracy aggregates by name, so one row per asset is a statistics view with no
+totals in it; the dimensions belong in the text. And a path that runs **every frame** wants no zone
+at all: nothing here samples per frame, and a report that costs nothing until it decides to complain
+is the right shape there.
 
 ### Linear, and still infeasible
 

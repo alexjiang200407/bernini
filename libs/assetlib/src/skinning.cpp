@@ -9,8 +9,8 @@
 
 #include <core/err/util.h>
 #include <core/hash.h>
-#include <core/log/ScopedStage.h>
 #include <core/type_traits.h>
+#include <tracy/Tracy.hpp>
 
 namespace assetlib
 {
@@ -681,8 +681,9 @@ namespace assetlib
 	void
 	bakePosedBounds(AnimationSet& animations, const BMesh& mesh, const Skeleton& skeleton)
 	{
-		const auto stage = core::logging::ScopedStage(
-			"assetlib posed bounds: {} bones, {} entries, {} frames",
+		ZoneScopedN("assetlib posed bounds");
+		ZoneTextF(
+			"%zu bones, %zu entries, %zu frames",
 			skeleton.bones.size(),
 			mesh.meshes.size(),
 			animations.boneCount > 0 ? animations.samples.size() / animations.boneCount : 0);
@@ -839,8 +840,9 @@ namespace assetlib
 		const Skeleton&            skeleton,
 		std::span<const ClipFloor> authored)
 	{
-		const auto stage = core::logging::ScopedStage(
-			"assetlib clip floors: {} bones, {} meshes, {} clips, {} frames",
+		ZoneScopedN("assetlib clip floors");
+		ZoneTextF(
+			"%zu bones, %zu meshes, %zu clips, %zu frames",
 			skeleton.bones.size(),
 			meshes.size(),
 			animations.clips.size(),

@@ -2,7 +2,7 @@
 
 #include <assetlib_structs/BMesh.h>
 
-#include <core/log/ScopedStage.h>
+#include <tracy/Tracy.hpp>
 
 #include <glm/glm.hpp>
 
@@ -181,10 +181,8 @@ namespace assetlib
 	TangentGenResult
 	generateTangents(BMesh& mesh)
 	{
-		const auto stage = core::logging::ScopedStage(
-			"assetlib tangents: {} submeshes, {} vertex bytes",
-			mesh.submeshes.size(),
-			mesh.vertexData.size());
+		ZoneScopedN("assetlib tangents");
+		ZoneTextF("%zu submeshes, %zu vertex bytes", mesh.submeshes.size(), mesh.vertexData.size());
 
 		auto result = TangentGenResult();
 

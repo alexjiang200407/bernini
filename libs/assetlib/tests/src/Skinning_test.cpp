@@ -6,8 +6,6 @@
 #include <assetlib_structs/Bounds.h>
 #include <assetlib_structs/Skeleton.h>
 
-#include "CapturedLog.h"
-
 #include <catch2/catch_approx.hpp>
 
 using namespace assetlib;
@@ -794,55 +792,6 @@ TEST_CASE("A baked posed box carries no indeterminate padding", "[skinning][boun
 		INFO("padding byte " << i);
 		CHECK(bytes[i] == 0);
 	}
-}
-
-TEST_CASE("The posed-bounds bake says what it cost, and on what", "[skinning][bounds]")
-{
-	// The bake's cost is a product of bones, mesh entries and frames, and none of it shows up in
-	// the container it writes. The stage line is the only place those dimensions are stated, which
-	// is what makes a bake that grew superlinear visible before a profiler is reached for.
-	const auto captured = assetlib::test::CapturedLog();
-
-	SkinnedMesh fixture;
-	fixture.Add(
-		glm::vec3(-1.0f),
-		glm::vec3(0.0f, 0.0f, 1.0f),
-		{ { 0, 0, 0, 0 } },
-		{ { 65535, 0, 0, 0 } });
-
-	fixture.submesh.aabbMin = glm::vec3(-1.0f);
-	fixture.submesh.aabbMax = glm::vec3(1.0f);
-	fixture.mesh.submeshes.push_back(fixture.submesh);
-	fixture.mesh.meshes.push_back({ .firstSubmesh = 0, .submeshCount = 1, .nameOffset = 0 });
-
-	auto skeleton    = assetlib::Skeleton();
-	auto bone        = assetlib::Bone();
-	bone.bindPose    = { glm::vec3(0.0f), glm::quat(1.0f, 0.0f, 0.0f, 0.0f), glm::vec3(1.0f) };
-	bone.inverseBind = glm::mat4(1.0f);
-	bone.parent      = assetlib::c_InvalidIndex;
-	bone.nameOffset  = 0;
-	skeleton.bones.push_back(bone);
-
-	auto animations              = assetlib::AnimationSet();
-	animations.boneCount         = 1;
-	animations.skeletonSignature = assetlib::skeletonSignature(skeleton);
-
-	auto clip       = assetlib::AnimationClip();
-	clip.frameCount = 3;
-	clip.sampleRate = 30.0f;
-	animations.clips.push_back(clip);
-	for (int frame = 0; frame < 3; ++frame)
-		animations.samples.push_back(
-			{ glm::vec3(0.0f), glm::quat(1.0f, 0.0f, 0.0f, 0.0f), glm::vec3(1.0f) });
-
-	assetlib::bakePosedBounds(animations, fixture.mesh, skeleton);
-
-	const std::optional<std::string> line = captured.LineContaining("posed bounds");
-	REQUIRE(line.has_value());
-	CHECK(line->find("1 bones") != std::string::npos);
-	CHECK(line->find("1 entries") != std::string::npos);
-	CHECK(line->find("3 frames") != std::string::npos);
-	CHECK(line->find(" ms") != std::string::npos);
 }
 
 TEST_CASE("A baked posed box answers only for the pairing it measured", "[skinning][bounds]")

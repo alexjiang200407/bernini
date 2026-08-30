@@ -65,10 +65,15 @@ formats, so a start-up timeline straddles both.
 - **ADR-4 — `ScopedStage` is retired, not kept beside Tracy.** Its 8 call sites become Tracy zones
   and the class, its test and its header go. Two ways to mark "this is a stage" is exactly the second
   path into a library the root `CLAUDE.md` forbids, and the one that would rot is the one without a
-  viewer behind it. *Rejected: keeping it as a log-only channel. The stated cost of retiring it: in
-  any build with Tracy compiled out, and for an `assetlib_cli` run read from its console output with
-  no viewer attached, the per-stage timing lines `docs/gfx_debug.md` advertises are gone. ADR-2 is
-  what makes that acceptable — there is no developer preset in which Tracy is off.*
+  viewer behind it. *Rejected: keeping it as a log-only channel. Two costs, both stated rather than
+  waved at. First, in any build with Tracy compiled out, and for an `assetlib_cli` run read from its
+  console with no viewer attached, the per-stage timing lines `docs/gfx_debug.md` advertised are
+  gone; ADR-2 is what makes that acceptable, since there is no developer preset in which Tracy is
+  off. Second, and less comfortably: a stage line was **assertable** and a Tracy zone is not. Tracy's
+  client streams to a server and exposes no in-process query, so `assetlib_tests`' "The posed-bounds
+  bake says what it cost, and on what" — which caught a bake going superlinear by reading its own
+  dimensions back — has no equivalent and is deleted with `CapturedLog.h`. Nothing in this change
+  replaces it.*
 
 - **ADR-5 — One log file, with Qt teed into spdlog.** The editor calls `init_file_logger` itself,
   before constructing the `Renderer`, and installs a Qt message handler that writes into the same

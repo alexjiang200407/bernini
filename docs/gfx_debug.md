@@ -169,15 +169,12 @@ call `logger::…` with no extra include.
 * **D3D12 debug-layer messages are forwarded into this same log** (see §5), so validation errors
   and your own `logger::` output interleave in one file.
 
-* **`assetlib`'s cook stages appear here too, and are not subject to `logLevel`.** A
-  `core::logging::ScopedStage` ([ScopedStage.h](libs/core/include/core/log/ScopedStage.h)) writes at
-  info through the default logger's *sinks* rather than through the logger, because the level above
-  is the renderer's and would otherwise silence a bake's timing at `kError`. So a glTF parse, a
+* **Cook and load timings are not in this log at all — they are Tracy zones.** A glTF parse, a
   tangent pass, a posed-bounds bake, a VAT bake, a prefilter and a whole-project bounds rebake each
-  leave one line stating its dimensions and how long it took — which is how a slow import is
-  attributed without a profiler.
-  Under `assetlib_cli` there is no `Graphics`, so no file sink is installed and the same lines go to
-  the console.
+  open a zone carrying its own dimensions, and so does every stage of an editor start-up. They are
+  read in the Tracy profiler, not here, because a duration on a line cannot say what it ran *inside*
+  and a log interleaved from six threads cannot say which one it ran *on*. See
+  [docs/profiling.md](docs/profiling.md).
 
 * **The editor writes a second log, and it is not this one.** `editor.log`
   ([main.cpp](apps/editor/src/main.cpp), [util/FileLog.cpp](apps/editor/src/util/FileLog.cpp)) takes
