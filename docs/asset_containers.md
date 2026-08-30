@@ -110,6 +110,13 @@ Both sit outside `parameters`, with `bindings`: neither changes what the importe
 produce a container that is not on disk at all -- a walk over derived files has nothing to
 enumerate.
 
+It is also what makes an import **renameable as one thing**. Every file here is named from the
+source, so `planRename` on a `.glb` (or on its `.bimport` -- one asset, two names) moves the source,
+the document and each output that still carries the source's stem, and rewrites every reference to
+any of them. A *bound* rig is not in `outputs` and so is never moved by the source that borrowed it;
+a *produced* one is moved, and the borrowing document is rewritten to follow. See
+[assetlib API](assetlib_api.md).
+
 ### The textures a mesh import extracts
 
 A `.ktx2` is Foreign: it has nowhere to carry a header, so it cannot hold a key of its own. The
