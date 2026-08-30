@@ -55,16 +55,6 @@ namespace assetlib
 			std::vector<std::string> outputs;
 		};
 
-		/** The `.bmesh` among a document's outputs, or empty for a clips-only source. */
-		std::string
-		meshOutputOf(const ImportDocument& document)
-		{
-			for (const std::string& output : document.outputs)
-				if (assetTypeFromExtension(output) == AssetType::kMesh)
-					return output;
-			return {};
-		}
-
 		void
 		writeOutput(
 			const AssetStore&       store,
