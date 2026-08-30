@@ -391,6 +391,30 @@ TEST_CASE("An optional uniform write skips a member the shader does not declare"
 		CHECK_NOTHROW(kernel["gUniforms"]["noSuchBuffer"].SetIfValid(handle));
 		CHECK_THROWS(kernel["gUniforms"]["noSuchBuffer"] = handle);
 	}
+
+	SECTION("a raw arena writes both of its descriptors from one assignment")
+	{
+		// The pair exists so the two cannot be handed different buffers (ADR-9). What makes that
+		// hold is that one write lands in both halves -- if it reached only the raw one, every
+		// material would sample whatever descriptor the view member was left holding.
+		auto kernel = device->CreateComputeKernel(
+			bgl::ComputePipelineDesc()
+				.SetShader(device->CreateShader("CSRawArenaBinding"))
+				.SetDebugName("CSRawArenaBinding"));
+
+		auto binding                  = bgl::RawArenaBinding();
+		binding.buffer.bindlessIndex  = 11u;
+		binding.handles.bindlessIndex = 12u;
+
+		kernel["gUniforms"]["arena"] = binding;
+
+		// Read at the leaves: the two halves are structs, and only the handle inside each is a
+		// value the mirror can hand back.
+		CHECK(static_cast<glm::uvec2>(kernel["gUniforms"]["arena"]["raw"]["rawBuffer"]).x == 11u);
+		CHECK(
+			static_cast<glm::uvec2>(kernel["gUniforms"]["arena"]["handles"]["handleBuffer"]).x ==
+			12u);
+	}
 }
 
 TEST_CASE("Only a type the mirror can store is assignable to an accessor", "[uniforms]")

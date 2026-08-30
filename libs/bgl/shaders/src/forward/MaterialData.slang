@@ -1,5 +1,4 @@
-import types.RawBuffer;
-import types.RawHandleView;
+import types.RawHandleArena;
 import idl.RawEntry;
 import idl.IMaterial;
 import idl.Constants;
@@ -22,11 +21,10 @@ struct MaterialData
     // target without temporal AA, where a changing pattern would be flicker rather than coverage.
     float alphaHashSeed;
 
-    RawBuffer materials;
-
-    // The same allocation read as texture handles: a payload keeps a handle's bytes inline, and
-    // this is the only thing that can make a texture of them. See docs/slang_shaders.md.
-    RawHandleView<TextureHandle> handleView;
+    // The arena and the typed view of the same allocation, as one member: a payload keeps a
+    // handle's bytes inline, and the view is the only thing that can make a texture of them.
+    // See docs/slang_shaders.md.
+    RawHandleArena<TextureHandle> materials;
 
     TextureCubeHandle irradianceMap;
     TextureCubeHandle prefilterMap;
@@ -41,7 +39,7 @@ struct MaterialData
 
     // Handle `index` of the record at `byteOffset`, found by position: a payload's handle fields
     // lead it and are contiguous. PbrMaterial.slang and LoosePbrMaterial.slang fix that order.
-    TextureHandle GetTextureAt(uint byteOffset, uint index) { return handleView.GetAt(byteOffset + cRawPayloadOffset, index); }
+    TextureHandle GetTextureAt(uint byteOffset, uint index) { return materials.GetHandleAt(byteOffset + cRawPayloadOffset, index); }
 };
 
 ConstantBuffer<MaterialData> materialData;

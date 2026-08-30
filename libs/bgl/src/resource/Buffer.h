@@ -57,6 +57,14 @@ namespace bgl
 		}
 	};
 
+	// A raw arena and the typed view of the same allocation, bound as a unit. Separate members can
+	// be handed different buffers; this cannot, which is the whole of ADR-9's shader half.
+	struct RawArenaBinding
+	{
+		BufferHandle    buffer;
+		BufferSrvHandle handles;
+	};
+
 	struct BufferSrvDesc
 	{
 		// Element size of the view, not of the buffer: the same bytes are read as elements of this.
