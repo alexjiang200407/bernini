@@ -154,7 +154,7 @@ Each handle type finds its destination differently, and the rules are not symmet
 
 * **`BufferHandle` into a struct** — @pre the struct is exactly 8 bytes; members are then searched
   **by name** against `c_SmartBufferUniformIndices` (`entryBuffer` / `packedBuffer` / `rangeBuffer` /
-  `rawBuffer`).
+  `rawBuffer` / `handleBuffer`).
   @post throws if 8 bytes but carrying none of those names, so a new smart-buffer wrapper in Slang
   needs its member name added to that array.
 * **`BufferHandle` into a value** — written directly when the leaf is `kDescriptorHandle`. The path a
@@ -167,6 +167,11 @@ Each handle type finds its destination differently, and the rules are not symmet
   `BufferHandle`: only its `bindlessIndex` travels, so it lands in whichever smart-buffer member the
   target names.
 * **`SamplerHandle`** — bare-value case only; a struct wrapping a sampler throws.
+* **`RawArenaBinding`** — a raw arena and the typed view of the *same* allocation, written as a
+  pair: it assigns `["raw"]` and `["handles"]`, each of which is a struct of one handle and so lands
+  through the `BufferHandle` rule above. One write rather than two because the two descriptors
+  describe one buffer, and separate members can be handed different ones. `constants.h` gained
+  `handleBuffer` for the second half.
 
 `ReflectedLayout::handleKind` carries what would make these checkable, but is **populated on Metal
 only** — on D3D12 a handle reflects as a bare `uint2` and the declared type is lost.

@@ -169,6 +169,8 @@ copies must be kept in step by hand:
 | `Entry<T>` | [Entry.slang](libs/bgl/shaders/src/idl/Entry.slang) | A single-element `uint offset` into a `StructuredBuffer<T>` (e.g. a `SubmeshInstance`'s `Entry<Mesh>`). |
 | `RawEntry<T>` | [RawEntry.slang](libs/bgl/shaders/src/idl/RawEntry.slang) | A `uint` **byte** offset into a raw arena, naming a record's `RecordHeader`; its payload begins `cRawPayloadOffset` later. |
 | `RawRange` | [RawRange.slang](libs/bgl/shaders/src/idl/RawRange.slang) | A `uint` byte offset to a headerless window of bytes, for data whose kind whatever names it already records. |
+| `RawHandleView<T>` | [RawHandleView.slang](libs/bgl/shaders/src/types/RawHandleView.slang) | The same allocation read as handles of `T`, addressed by byte offset — what makes a resource of handle bytes a record holds. Not an `EntryBuffer`: nothing in it is an allocated element. |
+| `RawHandleArena<T>` | [RawHandleArena.slang](libs/bgl/shaders/src/types/RawHandleArena.slang) | The two views of one arena as a single member, so they cannot be bound to different buffers. |
 
 `RawEntry<T>` is generic, so its C++ mirror is hand-written and carries `Null()`; `RawRange` and
 `RecordHeader` are concrete, so idlgen emits them and the C++ side is fields only.
@@ -183,7 +185,7 @@ store. All dirty-track writes and flush via `Update(cmdList)`.
 | `RangeBuffer<T,Meta>` | [RangeBuffer.h](libs/bgl/src/scene/RangeBuffer.h) | Variable-length-range allocator; `Add(span)` returns a `multi_slot_handle` assignable into a `Range`/`RangeWithCount`. Backs the index, meshlet and submesh buffers; the vertex arena reaches it through `RawBuffer`. |
 | `EntryBuffer<T,Meta>` | [EntryBuffer.h](libs/bgl/src/scene/EntryBuffer.h) | Slot buffer with stable, generation-checked handles; `Add`/`EmplaceBack` return a `slot_handle` assignable into an `Entry`. |
 | `PackedBuffer<T>` | [PackedBuffer.h](libs/bgl/src/scene/PackedBuffer.h) | Densely-packed buffer with stable handles (handle→dense indirection); erase swaps the tail in and re-uploads it. |
-| `RawBuffer<Tag>` | [RawBuffer.h](libs/bgl/src/scene/RawBuffer.h) | A byte arena over `RangeBuffer<RawBlock>`, read through a `RawBuffer` in Slang. `AddRecord(tag, payload)` returns a `RawEntry` and writes a `RecordHeader` ahead of the payload; `AddBytes` returns a `RawRange` and writes no header. Capped at what a raw view addresses. |
+| `RawBuffer<Tag>` | [RawBuffer.h](libs/bgl/src/scene/RawBuffer.h) | A byte arena over `RangeBuffer<RawBlock>`, read through a `RawBuffer` in Slang. `AddRecord(tag, payload)` returns a `RawEntry` and writes a `RecordHeader` ahead of the payload; `AddBytes` returns a `RawRange` and writes no header. Capped at what a raw view addresses. Declaring a `handleStride` gives it the typed view above, which it re-issues inside its own growth. |
 | `GrowableGpuBuffer` | [GrowableGpuBuffer.h](libs/bgl/src/scene/GrowableGpuBuffer.h) | The GPU storage the three share: allocates the replacement resource, records the forward copy in `FlushGrowth`, and retires the old one on the manager's fence. |
 
 ---

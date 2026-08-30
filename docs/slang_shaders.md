@@ -71,8 +71,35 @@ becomes `as_type<texture2d<...>>(ulong)`, which MSL rejects — as does the core
 
 A record needing a texture keeps the handle's bytes anyway, as a `RawTextureHandle` — the same eight
 bytes with no texture in the type — and samples them through a **second, typed view of the same
-allocation** (`IResourceManager::CreateBufferSrv`), read at `(recordOffset + fieldOffset) / 8`. The
-raw view reads the record; the typed view is what makes a texture of the bytes inside it.
+allocation**. The raw view reads the record; the typed view is what makes a texture of the bytes
+inside it.
+
+`RawHandleView<T>` ([types/RawHandleView.slang](../libs/bgl/shaders/src/types/RawHandleView.slang))
+is that view, and it is addressed in the arena's own coordinates — `GetAt(byteOffset, index)`, the
+stride divide inside the type. Deliberately **not** an `EntryBuffer<T>`: nothing in it is an
+allocated element, there is no reserved null slot, and most offsets are not a `T` at all. What makes
+one a `T` is the payload layout rule — handles lead a payload and are contiguous — which the
+record's own struct owns and `Scene.cpp` pins with `static_assert`s.
+
+`RawHandleArena<T>` pairs it with the raw view, because they are one allocation: bound separately
+they can be handed different buffers. The CPU arena owns both and re-issues the view *inside* its
+own growth, so there is no instant at which they disagree, and `Uniforms` writes both descriptors
+from one assignment. One view reads one element type, so a payload holding two kinds of handle needs
+a second view, not a wider one.
+
+## A tag enum a shader returns must be one the target can express
+
+An enum a shader only *compares against* is folded to a literal and never appears in the generated
+code. An enum a function **returns** is emitted as a type — and HLSL has no `uint8_t`, so a tag
+declared `: uint8_t` compiles here, passes every Metal test, and fails DXC with
+`unknown type name 'uint8_t'`. Tag enums are therefore `uint32_t`, as `PsoType` always was.
+
+This is worth knowing because the check that catches it is narrow. The `compile_shader` entries in
+[libs/bgl/shaders/CMakeLists.txt](../libs/bgl/shaders/CMakeLists.txt) validate to DXIL at build
+time, and there is no `dxcompiler` on macOS at all — so on a Metal machine that validation does not
+run. A shader missing from that list is checked by nothing until it reaches a Windows runtime, which
+is how `MaterialType : uint8_t` reached master: every forward shader imports `MaterialData`, but only
+`Forward_Transparent` calls `LoadMaterialKind`, and it was the one shader not in the list.
 
 `GetDimensions` is deliberately not exposed: the core module marks it HLSL-only, so a wrapper
 carrying it would compile on D3D12 and fail on Metal.
