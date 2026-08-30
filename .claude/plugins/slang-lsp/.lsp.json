@@ -3,6 +3,13 @@
     "command": "slangd",
     "extensionToLanguage": {
       ".slang": "slang"
+    },
+    "settings": {
+      "slang": {
+        "additionalSearchPaths": [
+          "libs/bgl/shaders/src"
+        ]
+      }
     }
   }
 }

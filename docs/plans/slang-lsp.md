@@ -52,10 +52,33 @@ scoped as one.
   `just check-shaders` recipe running `slangc` over the tree, because it answers a question the
   build already answers and no measured latency complaint asked for it.*
 
+- **ADR-5 — Amends ADR-4: diagnostics do reach you, and that is kept.** ADR-4's decision stands
+  — nothing was built to produce them — but its premise was wrong. "No diagnostics operation" is
+  true
+  of the `LSP` tool's callable operations and says nothing about `publishDiagnostics`, which slangd
+  pushes unasked and Claude Code surfaces; the plugin's `diagnostics` toggle defaults to on. So a
+  shader mistake can reach a session before a build does, which the Non-goal below denied. Observed,
+  not designed: these diagnostics are what exposed the missing search path that ADR-6 fixes.
+  *Rejected: setting `diagnostics: false` to make the Non-goal true again, because the Non-goal was
+  refusing to build a checker, not refusing to be told.*
+
+- **ADR-6 — Name the source root the build names.** slangd takes no include flags and honours only
+  what it pulls over `workspace/configuration`, which Claude Code answers from the plugin's
+  `settings`; declaring none left every section null, and a null
+  `searchInAllWorkspaceDirectories` reads as false. `compile_shader` passes `SLANG_SOURCE_ROOT`, so
+  that one path is what the compiler resolves against and what slangd gets. It stays relative to
+  remain machine-independent, which is safe because slangd resolves it against its cwd and Claude
+  Code launches the server in the same directory it passes as `rootUri`. *Rejected:
+  `searchInAllWorkspaceDirectories`, which also fixes it but walks `build/` — gigabytes of
+  regenerated output holding vcpkg's own copy of the Slang core module. Also rejected: a second root
+  for `libs/bgl/idl/src`, measured and found to be a no-op, since those imports are same-directory
+  siblings that Slang resolves beside the importing file.*
+
 ## Non-goals
 
 - No MCP server, no `.mcp.json`, no third-party bridge.
-- No diagnostics, and no new `just` recipe or `scripts/` entry.
+- No diagnostics *built* — no new `just` recipe or `scripts/` entry. Diagnostics nonetheless
+  surface, which ADR-5 records.
 - No second language in the plugin — `clangd` for the C++ is a separate decision, and Anthropic
   already ships that one.
 - No change to the build, to CI, to `vcpkg.json`, or to the committed `.claude/settings.json`.
@@ -69,6 +92,10 @@ scoped as one.
   `libs/bgl/shaders/src/forward/common.slang:1` resolves into
   `libs/bgl/shaders/src/types/SubmeshInstance.slang` — a cross-file module import, which is the thing
   grep does worst and the only reason to do this at all.
+- **Insufficient, as it turned out.** slangd answers that query from its file search rather than the
+  compiler, so it passes whether or not the module resolves — and it did pass while nothing else
+  worked (ADR-6). The check that bites is `hover` on `SubmeshInstance` at `common.slang:6`, which
+  has to resolve the import to answer at all.
 
 ## Commits
 
