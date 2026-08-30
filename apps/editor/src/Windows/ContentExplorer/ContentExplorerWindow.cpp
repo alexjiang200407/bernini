@@ -19,6 +19,7 @@
 #include <QLabel>
 #include <QListView>
 #include <QMenu>
+
 #include <QMessageBox>
 #include <QPushButton>
 #include <QSplitter>
@@ -26,6 +27,7 @@
 #include <QStyle>
 #include <QToolButton>
 #include <QTreeView>
+#include <assetlib/project_layout.h>
 
 #include <tracy/Tracy.hpp>
 
@@ -74,14 +76,14 @@ ContentExplorerWindow::ContentExplorerWindow(QWidget* parent, AssetsHeldOpenFn a
 		&QAbstractItemModel::rowsInserted,
 		this,
 		[this](const QModelIndex& parent, int first, int last) {
-			HideBuildProductRows(m_Ui.FileExplorer, *m_HierarchyModel, parent, first, last);
+			HideUnlistedRows(m_Ui.FileExplorer, *m_HierarchyModel, parent, first, last);
 		});
 	connect(
 		m_FileModel,
 		&QAbstractItemModel::rowsInserted,
 		this,
 		[this](const QModelIndex& parent, int first, int last) {
-			HideBuildProductRows(m_Ui.CurrentDirectoryExplorer, *m_FileModel, parent, first, last);
+			HideUnlistedRows(m_Ui.CurrentDirectoryExplorer, *m_FileModel, parent, first, last);
 		});
 
 	m_Ui.FileExplorer->setContextMenuPolicy(Qt::CustomContextMenu);
@@ -150,15 +152,37 @@ ContentExplorerWindow::SetRootPath(const QString& path)
 	m_FileModel->SetDataRoot(path);
 	m_History.clear();
 
-	m_Ui.FileExplorer->setRootIndex(m_HierarchyModel->setRootPath(path));
-	ShowDirectory(path);
+	// The views root one level in, at the authored half. Everything else here keeps resolving
+	// against `m_RootPath`: a key is data-root-relative, so moving where the *views* point must not
+	// move what a path means -- see ADR-3 in docs/plans/derived-authored-editor-opt.md.
+	m_BrowseRoot = QDir(path).filePath(QString::fromUtf8(assetlib::c_AuthoredDirectoryName));
+
+	m_Ui.FileExplorer->setRootIndex(m_HierarchyModel->setRootPath(m_BrowseRoot));
+	ShowDirectory(m_BrowseRoot);
+}
+
+bool
+ContentExplorerWindow::IsInsideBrowseRoot(const QString& path) const
+{
+	if (m_BrowseRoot.isEmpty() || path.isEmpty())
+		return false;
+
+	// The root itself is inside itself; `IsContainedRelativePath` answers for everything below it.
+	// One of the editor's four spellings of this question -- converged in its own task, because
+	// another of them gates a deletion and cannot take this one's answer unexamined.
+	const QString key = QDir(m_BrowseRoot).relativeFilePath(path);
+	return key == "." || editor::IsContainedRelativePath(key);
 }
 
 void
 ContentExplorerWindow::ShowDirectory(const QString& path)
 {
+	// The last word on where a view may point, whoever asked. Every caller below reaches here.
+	if (!IsInsideBrowseRoot(path))
+		return;
+
 	m_Ui.CurrentDirectoryExplorer->setRootIndex(m_FileModel->setRootPath(path));
-	HideBuildProductRows(
+	HideUnlistedRows(
 		m_Ui.CurrentDirectoryExplorer,
 		*m_FileModel,
 		m_Ui.CurrentDirectoryExplorer->rootIndex());
@@ -184,6 +208,11 @@ ContentExplorerWindow::ShowDirectory(const QString& path)
 void
 ContentExplorerWindow::NavigateTo(const QString& path)
 {
+	// Before the history, not just before the move: recording a step Back can never return to
+	// would make the button lie about where it goes.
+	if (!IsInsideBrowseRoot(path))
+		return;
+
 	const QString shown = m_FileModel->filePath(m_Ui.CurrentDirectoryExplorer->rootIndex());
 
 	if (!shown.isEmpty())
@@ -217,7 +246,7 @@ ContentExplorerWindow::NavigateBack()
 }
 
 void
-ContentExplorerWindow::HideBuildProductRows(
+ContentExplorerWindow::HideUnlistedRows(
 	QAbstractItemView*      view,
 	const QFileSystemModel& model,
 	const QModelIndex&      parent,
@@ -235,7 +264,7 @@ ContentExplorerWindow::HideBuildProductRows(
 		last < 0 ? model.rowCount(parent) - 1 : std::min(last, model.rowCount(parent) - 1);
 	for (int row = first; row <= end; ++row)
 	{
-		if (!editor::IsHiddenBuildProductFile(model.filePath(model.index(row, 0, parent))))
+		if (!editor::IsHiddenInExplorer(model.filePath(model.index(row, 0, parent))))
 			continue;
 
 		if (tree != nullptr)
@@ -254,7 +283,7 @@ ContentExplorerWindow::AttachModels()
 	m_Ui.FileExplorer->setModel(m_HierarchyModel);
 	m_Ui.FileExplorer->setHeaderHidden(true);
 	connect(m_Ui.FileExplorer, &QTreeView::expanded, this, [this](const QModelIndex& parent) {
-		HideBuildProductRows(m_Ui.FileExplorer, *m_HierarchyModel, parent);
+		HideUnlistedRows(m_Ui.FileExplorer, *m_HierarchyModel, parent);
 	});
 	for (auto column = 1; column < m_HierarchyModel->columnCount(); ++column)
 		m_Ui.FileExplorer->hideColumn(column);
@@ -478,7 +507,7 @@ ContentExplorerWindow::OnDirectoryDeleted(const QString& absolute)
 		return;
 
 	m_History.clear();
-	ShowDirectory(m_RootPath);
+	ShowDirectory(m_BrowseRoot);
 }
 
 void

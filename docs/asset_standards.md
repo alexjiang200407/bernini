@@ -809,7 +809,10 @@ direction a prune is allowed to err in.
 The prune reclaims what nothing names any more. Deleting an asset is the opposite question — *the user
 has named this file; may it go?* — and it is answered by the reference graph in
 [libs/assetlib/include/assetlib/asset_refs.h](libs/assetlib/include/assetlib/asset_refs.h), exposed as
-`assetlib_cli refs` and as **Delete** on the Content Explorer's right-click menu.
+`assetlib_cli refs` and as **Delete** on the Content Explorer's right-click menu — for an *authored*
+file only. The explorer roots at `Data/Authored`, so a derived container is not a row there, and
+`editor::IsActionableAsset` refuses one that reaches the operation by any other route: it is a bake's
+to write back, and `assetlib_cli` is where a person deletes one deliberately.
 
 Assets reference each other **by path relative to the data root**, and there is no manifest, no GUID and
 no back-index: identity *is* the path. So "what references this?" is answered by walking the project.

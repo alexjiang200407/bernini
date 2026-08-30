@@ -8,6 +8,7 @@
 #include <QRegularExpression>
 
 #include <assetlib/asset_refs.h>
+#include <assetlib/project_layout.h>
 
 namespace editor
 {
@@ -39,6 +40,17 @@ namespace editor
 		const std::optional<assetlib::AssetType> type =
 			assetlib::assetTypeFromExtension(asset.toStdWString());
 		return type && *type == assetlib::AssetType::kMaterial;
+	}
+
+	bool
+	IsActionableAsset(const QString& asset)
+	{
+		if (asset.isEmpty())
+			return false;
+
+		// A directory answers nullopt for either half itself, and for anything at the data root.
+		// Only a location that says `Derived/` is refused; everything else is a person's.
+		return assetlib::originOf(asset.toStdString()) != assetlib::AssetOrigin::kDerived;
 	}
 
 	bool
