@@ -1,9 +1,8 @@
 // The skinned tier's vertex evaluation: the bind-pose vertex bytes blended by a pose.
 //
-// Where the pose comes from is the instance's, not the geom's. An instance posed per frame reads the
-// palette slice SkinnedPosePass wrote for it; one drawing from its rig's bone anim table reads a pose
-// posed once and shared by every instance on that rig. A null palette is what says which -- a table
-// instance is allocated none, because it needs none.
+// Where the pose comes from is the instance's, not the geom's, and it is the kind of playback record
+// the placement holds: a SkinnedState owns a palette slice SkinnedPosePass wrote for it, a
+// SkinnedTableState owns nothing and reads its rig's shared table.
 //
 // One of three; forward/mesh_stage.slang holds what they share and says why the split exists. Two
 // entry points call this one: Forward_SkinnedMesh, which draws the PSO-bucketed phase, and
@@ -17,8 +16,10 @@ import forward.common;
 import forward.mesh_stage;
 import forward.vertexdecode;
 import idl.Constants;
+import idl.PlaybackType;
 import idl.Rig;
 import idl.SkinnedState;
+import idl.SkinnedTableState;
 import debug.dbg;
 
 public ConstantBuffer<SkinnedData> skinnedData;
@@ -101,45 +102,52 @@ float4x4 SkinFromTable(Rig rig, Clip clip, float frames, float4 joints, float4 w
     );
 }
 
+// Called from each branch below rather than once above them, because each reads its rig out of a
+// record of its own kind. Gated, not just dbg_assert'd: only dbg_raise's *body* is compiled out, so
+// the reduction would otherwise cost three max()s per vertex in a release build.
+void AssertBoneIndices(Rig rig, float4 joints, uint submeshIndex)
+{
+#if defined(BERNINI_GPU_DEBUG)
+    dbg_assert(
+        uint(max(max(joints.x, joints.y), max(joints.z, joints.w))) < rig.boneCount,
+        ErrorCode.kInvalidBoneIndex,
+        uint(joints.x),
+        rig.boneCount,
+        submeshIndex
+    );
+#endif
+}
+
 public ForwardVSOut SkinnedVertex(MeshletContext ctx, SubmeshInstance instance, uint v)
 {
     uint vertexIdx;
     DecodedVertex vertex = DecodeMeshletVertex(ctx, instance, v, vertexIdx);
 
-    let state = forwardData.playbackBuffer.LoadRecordAs<SkinnedState>(ctx.mesh.playback);
-    let rig = skinnedData.rigBuffer.Get(state.rig);
-
-#if defined(BERNINI_GPU_DEBUG)
-    // Gated, not just dbg_assert'd: only dbg_raise's *body* is compiled out, so the reduction below
-    // would otherwise cost three max()s per vertex in a release build.
-    dbg_assert(
-        uint(max(max(vertex.joints.x, vertex.joints.y), max(vertex.joints.z, vertex.joints.w))) < rig.boneCount,
-        ErrorCode.kInvalidBoneIndex,
-        uint(vertex.joints.x),
-        rig.boneCount,
-        instance.submeshIndex
-    );
-#endif
-
-    // Both branches produce this frame's matrix and the one the previous frame drew, because the
-    // motion vector needs both -- and neither remembers anything, so an instance spawned mid-frame
-    // is correct on its first. That holds only while time is the sole input to a pose: a clip
-    // switched between frames would reproject through the wrong clip.
+    // Every branch produces this frame's matrix and the one the previous frame drew, because the
+    // motion vector needs both -- and none of them remembers anything, so an instance spawned
+    // mid-frame is correct on its first. That holds only while time is the sole input to a pose: a
+    // clip switched between frames would reproject through the wrong clip.
     float4x4 skin;
     float4x4 prevSkin;
 
     // Zero weights are ordinary rather than broken input: an exporter writes four of them for a
     // vertex it never assigned to a bone, and summing those gives a zero matrix that would collapse
     // the vertex onto the origin. The bind pose is what assetlib::skinSubmesh -- the CPU reference
-    // both sources are measured against -- returns for it. Answered here, once, because neither
-    // source can answer it differently.
+    // both sources are measured against -- returns for it. Answered ahead of the pose source because
+    // neither can answer it differently, and it needs no record to answer.
     if (dot(vertex.weights, float4(1.0, 1.0, 1.0, 1.0)) <= 0.0)
     {
         skin = float4x4(float4(1.0, 0.0, 0.0, 0.0), float4(0.0, 1.0, 0.0, 0.0), float4(0.0, 0.0, 1.0, 0.0), float4(0.0, 0.0, 0.0, 1.0));
         prevSkin = skin;
     }
-    else if (state.palette.Null())
+    // The record's kind is the pose source. Read from the arena header rather than from a field,
+    // because the two kinds are different records and not one record with a hole in it.
+    else if (forwardData.GetPlaybackKind(ctx.mesh.playback) == PlaybackType.kSkinnedTable)
     {
+        let state = forwardData.playbackBuffer.LoadRecordAs<SkinnedTableState>(ctx.mesh.playback);
+        let rig = skinnedData.rigBuffer.Get(state.rig);
+        AssertBoneIndices(rig, vertex.joints, instance.submeshIndex);
+
         Clip clip = skinnedData.clipBuffer.Get(rig.clips, state.clip);
 
         skin = SkinFromTable(rig, clip, ClipFrames(clip, state.phase, state.rate, viewData.time), vertex.joints, vertex.weights);
@@ -147,6 +155,10 @@ public ForwardVSOut SkinnedVertex(MeshletContext ctx, SubmeshInstance instance, 
     }
     else
     {
+        let state = forwardData.playbackBuffer.LoadRecordAs<SkinnedState>(ctx.mesh.playback);
+        let rig = skinnedData.rigBuffer.Get(state.rig);
+        AssertBoneIndices(rig, vertex.joints, instance.submeshIndex);
+
         // The pose pass wrote the previous frame's into the second half of this instance's slice, so
         // the reprojection is one more blend rather than a history buffer.
         let base = state.palette.GetStart();

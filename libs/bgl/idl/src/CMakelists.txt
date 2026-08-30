@@ -47,6 +47,7 @@ set(IDL_CPP_SOURCES
     SkinnedBone.slang
     Rig.slang
     SkinnedState.slang
+    SkinnedTableState.slang
     RawRange.slang
     RecordHeader.slang
     PlaybackType.slang

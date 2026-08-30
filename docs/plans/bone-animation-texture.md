@@ -92,6 +92,16 @@ frame.
   keyed on the normalized `.banim` path.** *Rejected: a public `AcquireRig` the caller threads
   through every skinned load — a second thing to hold and release for a share the manager can make
   itself. When attachments need the rig by handle, that door is added then.*
+- **ADR-13 — The pose source is the *kind* of playback record a placement holds, not a field inside
+  one.** A hero instance gets an `idl::SkinnedState`, a crowd one an `idl::SkinnedTableState` — the
+  same `{rig, clip, phase, rate}` and no palette — and the mesh shader reads the arena's
+  `RecordHeader` to know which, which is what that header exists for. Decided in review of task 3,
+  and only available at all because `#543` landed the byte-addressed playback arena on `master`
+  mid-feature. *Rejected: one record kind whose `palette` is left null on a crowd instance, with the
+  shader branching on the absence — how task 3 was first built. The arena already answers "which
+  kind of record is this", so reading the hole is a second convention for a fact it already carries,
+  which is the two-ways-to-do-one-thing the library bar forbids; it also makes every crowd record
+  carry a `Range<float4>` it never reads.*
 
 ## Non-goals
 
@@ -226,11 +236,11 @@ the VAT declarations now are. Neither changes what the tier costs or what retiri
 
 | Where | What | What could break |
 |---|---|---|
-| `libs/bgl/idl` | `SkinnedGeom` becomes `Rig` and gains `Range<float4> boneAnimTable` (null until filled); `SkinnedState.geom` becomes `rig`, its `palette` documented null on the bone-anim-table source; `VatGeom`, `VatState`, `Mesh.vatState`, four `PsoType`s go | Nothing in the layout: `gen_idl.py` emits the C++ and Slang sides from one module, so a removed field moves both together |
+| `libs/bgl/idl` | `SkinnedGeom` becomes `Rig` and gains `Range<float4> boneAnimTable` (null until filled); `SkinnedState.geom` becomes `rig`, and `SkinnedTableState` joins it as the crowd record kind (ADR-13) with `PlaybackType::kSkinnedTable`; `VatGeom`, `VatState`, `Mesh.vatState`, four `PsoType`s go | Nothing in the layout: `gen_idl.py` emits the C++ and Slang sides from one module, so a removed field moves both together |
 | `libs/bgl_intfc/include` | `RigHandle`, `IScene::AddRig`/`DeleteRig`, `AddSkinnedMeshGeom` takes a rig; `PoseSource` on `SkinnedInstanceDesc`, whose header comment is rewritten — the playback record stays the same three fields and a unit still moves between tiers without rewriting it; the source says where the pose comes from, not what plays; VAT declarations go | Every skinned golden — the refactor must be pixel-identical |
-| `libs/bgl/src/scene` | Rig records; a second `BonePaletteBuffer` at scene level for the tables (the same GPU-only storage and offset allocator the per-view palette uses — not a new type; its header comment, which says "one view's" and "rewritten every frame", is rewritten to state the real precondition: whatever it holds is re-derivable after a growth); the pose pass's dense instance list excludes bone-anim-table instances | `BonePaletteBuffer`'s growth **discards** its contents, safe per view only because every instance is re-posed every frame. A table is written once, so a growth must re-queue every rig holding one — the sample pool it fills from is resident, which is why this is a re-dispatch and not a loss. Also: a bone-anim-table instance reaching the pose pass writes through a null slice |
+| `libs/bgl/src/scene` | Rig records; a second `BonePaletteBuffer` at scene level for the tables (the same GPU-only storage and offset allocator the per-view palette uses — not a new type; its header comment, which says "one view's" and "rewritten every frame", is rewritten to state the real precondition: whatever it holds is re-derivable after a growth); the pose pass's dense instance list excludes crowd instances, which own no palette to write into | `BonePaletteBuffer`'s growth **discards** its contents, safe per view only because every instance is re-posed every frame. A table is written once, so a growth must re-queue every rig holding one — the sample pool it fills from is resident, which is why this is a re-dispatch and not a loss. Also: a crowd instance reaching the pose pass would write through a slice it does not own |
 | `libs/bgl/src/passes` | `PoseRigFrames`: one workgroup per frame, run for each rig whose table is wanted and unfilled (ADR-9) or discarded by a growth, ordered before every reader by the frame graph | Metal: a GPU-written scene buffer read by a mesh stage — the per-view palette already does this; the pass must not be culled as dead on the frame that fills a table before any instance on it is drawn |
-| `libs/bgl/shaders` | `pose_walk.slang` shared by `PoseSkinned` and `PoseRigFrames`; `skinned_vertex.slang` branches on the source and lerps rows across two frames at `time` and two at `prevTime`; VAT shaders go | 48 buffer loads a vertex on the crowd path, from a table shared by every instance on the frame |
+| `libs/bgl/shaders` | `pose_walk.slang` shared by `PoseSkinned` and `PoseRigFrames`; `skinned_vertex.slang` branches on the record's kind and lerps rows across two frames at `time` and two at `prevTime`; VAT shaders go | 48 buffer loads a vertex on the crowd path, from a table shared by every instance on the frame |
 | `libs/gamelib` | `AssetManager` holds one rig per `.banim`, refcounted, shared by every `AcquireSkinnedMesh` on it; `CreateSkinnedInstance` carries the pose source; VAT acquire and freshness go | Release order: geoms before the rig, on the unwind too |
 | `libs/assetlib` | Deletions only (the inventory above); `TokenCanary` loses its `.bvat` row | A stale `.bvat` in a checkout is an unknown extension to the scan — must be skipped, not fatal |
 | `apps/editor` | The selector offers "Skinned" and "Crowd"; both load alike, so `AnimationLoadSteps` loses its bake fields; bake dialogs go | The panel is untested; `PlanAnimationLoad` is what `editor_tests` pins |
@@ -300,6 +310,11 @@ per rig is this plan's cost to carry.
    the table is posed from and make it fair. What task 3 measures is the pair that *can* share a
    mesh: 2,000 instances of a 64-bone rig six levels deep, 1.22 ms/frame per-instance against 1.06
    on the table — the median of three runs.
+
+   *A third correction, from review:* the pose source was first stored as a null `palette` on one
+   record kind. It is now the record kind itself — ADR-13, which this task adds. Nothing above is
+   reversed: no ADR had decided the representation, so this is a decision the plan was missing
+   rather than one it got wrong.
 
    *A second correction, from measuring it three times:* the first number recorded here was 2.75
    against 1.83 and it was wrong twice over — taken while another suite had the machine, and on the

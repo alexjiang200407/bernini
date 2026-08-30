@@ -78,10 +78,13 @@ not obvious from a signature. The headers linked below are the source of truth.
   from different sources in the same frame, and a unit changes tier by respawning rather than by
   being re-uploaded.
 
-  **A null palette is what the mesh shader branches on**, rather than a second field: a table
-  instance is allocated none because it needs none, so the branch reads the absence instead of a
-  flag that could disagree with it. It is also what keeps the instance out of `SkinnedPosePass`'s
-  dense list — a palette is what that pass writes into.
+  **The source is the kind of playback record the placement holds**, and nowhere else. A hero
+  instance gets an `idl::SkinnedState`, a crowd one an `idl::SkinnedTableState` — the same
+  `{rig, clip, phase, rate}` and no palette, because the pose it draws is the rig's and belongs to no
+  instance. The mesh shader reads the arena's `RecordHeader` to know which, which is what that header
+  is for: the alternative, one record kind with the palette left null and the branch reading the
+  hole, is a second way of saying what the arena already says. What still turns on the palette itself
+  is `SkinnedPosePass`'s dense list, and only because a palette is what that pass writes into.
 
   **Between two frames the two sources differ, by design.** The pose pass nlerps local rotations and
   then walks; the table lerps the two frames' finished skin matrices, because skinning is linear in

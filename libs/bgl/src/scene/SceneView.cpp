@@ -292,32 +292,44 @@ namespace bgl
 				"range for the geom's clip table");
 		}
 
-		// A palette only for an instance the pose pass writes. One reading its rig's table needs no
-		// storage of its own, and its null palette is what the mesh shader branches on.
+		// The pose source is which record this placement gets, and nothing else records it: a hero
+		// instance owns a palette the pose pass writes, a crowd one owns no storage at all.
 		auto palette = core::multi_slot_handle();
+		auto record  = idl::RawEntry();
 
 		if (desc.source == PoseSource::kPerInstance)
 		{
 			// Two palettes, back to back: the pose at `time` and the pose at `prevTime`, which is
 			// what lets the mesh shader write a motion vector without a history buffer.
 			palette = m_Palettes.Allocate(idl::cFloat4sPerBone * rig.boneCount * 2);
+
+			auto state    = idl::SkinnedState();
+			state.rig     = rig.record;
+			state.clip    = desc.clip;
+			state.phase   = desc.phase;
+			state.rate    = desc.rate;
+			state.palette = palette;
+
+			record = m_Playback.AddRecord(
+				idl::PlaybackType::kSkinned,
+				std::as_bytes(std::span(&state, 1)));
 		}
 		else
 		{
 			// Asked for here rather than at AddRig, so a rig no crowd instance is spawned on never
 			// pays for a table. RigFramesPass fills it before anything reads it this frame.
 			m_SceneRaw->RequestBoneAnimTable(RigHandle{ rig.record });
+
+			auto state  = idl::SkinnedTableState();
+			state.rig   = rig.record;
+			state.clip  = desc.clip;
+			state.phase = desc.phase;
+			state.rate  = desc.rate;
+
+			record = m_Playback.AddRecord(
+				idl::PlaybackType::kSkinnedTable,
+				std::as_bytes(std::span(&state, 1)));
 		}
-
-		auto state    = idl::SkinnedState();
-		state.rig     = rig.record;
-		state.clip    = desc.clip;
-		state.phase   = desc.phase;
-		state.rate    = desc.rate;
-		state.palette = palette;
-
-		const idl::RawEntry record =
-			m_Playback.AddRecord(idl::PlaybackType::kSkinned, std::as_bytes(std::span(&state, 1)));
 		try
 		{
 			const MeshInstanceHandle instance = WritePlacement(geom, transform, record.byteOffset);
@@ -441,7 +453,7 @@ namespace bgl
 			// The palette and the pose list are the skinned tier's alone; a VAT record owns neither.
 			if (meta.geomType == GeomType::kSkinnedMesh)
 			{
-				// Null on an instance that read its rig's table, which owns nothing of its own.
+				// Null on a crowd instance, whose record owns nothing of its own.
 				if (meta.palette)
 				{
 					m_Palettes.Free(meta.palette);
@@ -528,6 +540,8 @@ namespace bgl
 				continue;
 			}
 
+			// Owning a palette is the predicate, not the record's kind: this list is what the pose
+			// pass writes into, so it is exactly the instances that have somewhere for it to write.
 			const MeshMeta& meta = m_MeshBuffer.MetaAt(meshIndex);
 			if (meta.geomType == GeomType::kSkinnedMesh && meta.animState != 0 && meta.palette)
 			{
