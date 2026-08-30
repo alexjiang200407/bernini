@@ -117,6 +117,24 @@ not have one.
   saved on one backend, paid for with a permanent fork in the hottest shader path, which no CI run
   exercises on either backend.*
 
+- **ADR-9 — The two views are one member, and the arena owns both.** Added after task 5. ADR-8 left
+  them as two independent uniforms bound from two places: the raw one from the frame graph, the
+  typed one from the draw. Nothing then states that they name the same allocation, and a growth
+  replaces the resource without announcing it — so correctness rests on `Scene` re-issuing the view
+  at one particular instant. That is not a hypothetical: taking the two at different instants is
+  the bug that blocked task 5's precheck, and the fix was a call moved between two functions.
+
+  So the arena owns its view and re-issues it *inside* its own growth, where the buffer and the
+  descriptor change together and nothing can observe them apart. The instant stops being a thing a
+  reader has to know.
+
+  *Rejected: leaving the two members independent and defending the instant with a test. That is
+  what task 5 shipped, and `MaterialArenaGrowth_test` does hold it — but it pins one call site in
+  one subsystem, and the next arena that grows a handle field has to rediscover the rule. A hazard a
+  comment has to explain is worse than one the types make unreachable. Rejected: teaching the frame
+  graph about the typed view, so both come from `resources.GetBuffer`. The graph tracks resource
+  state and a view is not a resource; it would be given a second concept to carry for one caller.*
+
 ## Non-goals
 
 - Every other buffer stays structured: meshlets, submeshes, vertexMap, indices, bones, samples,
@@ -376,6 +394,22 @@ weights). The same stale "emitted into src/idl" claim sits in
    `vat_frozen_frames`, `vat_normal_map`, `SkinnedRender_test` in full, `MotionVectors_test`, the
    outline selection case, `--gpu-validation`.
 
-7. **`docs: the raw arena outlives its plan`** — what the tasks left in this file that describes the
+7. **`refactor(bgl): a raw arena owns its own handle view`** — ADR-9. The two views become one
+   member: `RawBuffer` gains the typed handle view beside its raw one, the CPU-side `RawBuffer<Tag>`
+   owns the `BufferSrvHandle` and re-issues it *inside* its own growth, and `Uniforms` gains the
+   overload that writes both descriptors from one assignment. `Scene::RefreshMaterialHandleView`,
+   `m_ViewedMaterialBuffer` and the instant-sensitivity in `ImportResources` all delete.
+   `ForwardPass` binds the pair from the draw and keeps declaring the buffer to the frame graph for
+   barriers alone — `ImportBuffer` only stores the handle, so `resources.GetBuffer` returns the same
+   value either way. An arena with no handles (the vertex arena) names a placeholder element type
+   and leaves the view unbound, which `c_UnboundDescriptorIndex` already reserves index 0 for.
+   *Gate:* `MaterialArenaGrowth_test` unchanged and still passing — it pins the behaviour this task
+   makes structural — plus `Uniforms_test` for the new overload, `BindlessIndex_test`, and the
+   geometry goldens under `--gpu-validation`.
+
+   Ordered before the docs task on purpose: task 8 writes the arena's design into `docs/`, and the
+   hazard this removes is one of the longer things that page would otherwise have to explain.
+
+8. **`docs: the raw arena outlives its plan`** — what the tasks left in this file that describes the
    code as it now is moves into the subsystem pages named above; this file is deleted. The landing PR
    carries the deletion.
