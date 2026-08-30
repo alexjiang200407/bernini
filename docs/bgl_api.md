@@ -14,7 +14,6 @@ abstracts the *renderer*, in the vocabulary of geometry, materials, textures, in
 or a throw contract here — state what a caller is guaranteed, not the machinery that currently
 provides it. `bgl_intfc_selfcheck` enforces the dependency half (a public header that reaches into a
 renderer's internals fails the build); the wording half is review's.
-See [renderer portability](docs/plans/renderer-portability.md) for why the line is here.
 
 **This document is a map, not a mirror.** It captures design choices, topology, and the *non-obvious*
 contracts — not full signatures. The header at each linked path is the source of truth; when this doc

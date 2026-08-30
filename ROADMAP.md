@@ -29,8 +29,7 @@ and portability.
 - **RHI stays API-agnostic — among APIs with bindless resource access and mesh shaders.** All D3D12
   lives in `bgl_d3d12`, all Metal in `bgl_metal`. Every feature added to `bgl` must be expressible
   without leaking backend types, so Vulkan stays viable. An API that clears that bar is a backend;
-  one that does not is a second renderer above `bgl`'s public interface, not under the RHI — see
-  [renderer portability](docs/plans/renderer-portability.md).
+  one that does not is a second renderer above `bgl`'s public interface, not under the RHI.
 - **IDL is the single source of truth** for structs shared by C++ and Slang (`libs/bgl/idl`). New
   GPU-visible data (materials, lights, bones, LOD info) goes through the IDL, not hand-mirrored.
 - **Data-Oriented Design (DOD)** traditional Object-Oriented Programming (OOP) will decimate your CPU cache at scale update unit gameplay states (health, status effects) in tight memory arrays.
@@ -382,9 +381,7 @@ and portability.
 - [ ] Browser target — **not** an RHI backend. Tried once as one and abandoned: WebGPU has no bindless
   heap, no descriptor indexing and no mesh stage, so the whole port went on emulating what the renderer
   already had. Anything here sits above the RHI, where the engine's binding model is not the thing being
-  translated. The seam and its reasoning are an ADR
-  ([renderer portability](docs/plans/renderer-portability.md)); the renderer itself is specced but
-  unscheduled ([webgpu_renderer](docs/specs/webgpu_renderer.md)).
+  translated.
 - [ ] Texture-space decals - Render decals into the mesh's UV/texture space, not screen space for heroes
 - [ ] Analytic heightfield occlusion — march the height texture from camera to unit, useful only if
   occlusion is needed before the depth prepass or on a separate timeline.

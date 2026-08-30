@@ -87,7 +87,6 @@ are the source of truth; when this doc disagrees, trust them, then fix this doc.
   of the rule: a GPU struct laid out per backend cannot go here, and neither can an enum that
   describes *this* renderer's pipelines. `PsoType` was in this list and is no longer — it names
   mesh-shader pipeline permutations, so it belongs in `bgl::idl` with the rest of bgl's internals.
-  See [renderer portability](plans/renderer-portability.md).
 
 * **Generated files are write-only build artifacts.** Both the `.slang` copy and the `.h` carry a
   `// THIS IS A FILE GENERATED FROM ... DO NOT EDIT MANUALLY` banner. Edit the IDL source and
