@@ -12,6 +12,7 @@
 #include "idl/Mesh.h"
 #include "idl/Meshlet.h"
 #include "idl/PbrMaterial.h"
+#include "idl/PlaybackType.h"
 #include "idl/PsoType.h"
 #include "idl/Range.h"
 #include "idl/RangeWithCount.h"

@@ -331,8 +331,9 @@ frames would reproject through the wrong clip.
   frustum, so it is posed once however many frustums the view is culled against. It also has to be:
   the graph decides a pass is a root by whether it writes an *imported* resource, and a name resolved
   inside a cull namespace matches no import, which would cull the pass entirely.
-* **In:** `scene.posedInstances` (the dense list of `SkinnedState` indices to pose — a sweep of the
-  state buffer would pose freed slots), `scene.skinnedStateBuffer`, `scene.skinnedGeomBuffer`,
+* **In:** `scene.posedInstances` (the dense list of byte offsets to pose — a sweep of the arena
+  would pose freed records, and would meet the VAT records sharing it), `scene.playbackBuffer`,
+  `scene.skinnedGeomBuffer`,
   `scene.skinnedBoneBuffer`, `scene.clipBuffer`, `scene.boneSampleBuffer`.
 * **Out:** `scene.bonePalettes`, the view's `BonePaletteBuffer` — GPU-only storage with a CPU-side offset
   allocator, because a `RangeBuffer` would re-upload its stale CPU mirror over what this wrote.
@@ -367,7 +368,7 @@ empty row but not a misordering.
 view-proj, plus the animation clock `time`/`prevTime` that VAT playback and its motion vectors
 derive the pose from), `expansionData` (`psoIndex` and the instance-list tables), `materialData`
 (samplers, IBL maps, camera position, exposure), and — where the kernel declares it — `vatData`
-(the VAT geom/state/clip/column buffers) — binds the meshlet state (viewport +
+(the VAT geom/clip/column buffers) — binds the meshlet state (viewport +
 colour/velocity/depth framebuffer), and calls
 `DispatchMeshIndirect(pso)`, whose grid comes from the `compactDispatchArgs` entry that
 `Compact Instances` produced.
@@ -381,8 +382,8 @@ premultiplied and their pixel shader returns premultiplied colour to match — s
 [Blended surfaces](#blended-surfaces).
 
 That one list holds **every tier at once**, which is why the transparent pipeline's geometry module is
-`Forward_AnyMesh` rather than a tier's own: it reads the tier off the instance's `Mesh` — `vatState`
-and `skinnedState` are null for anything but their own tier and are never both set — and calls that
+`Forward_AnyMesh` rather than a tier's own: it reads the tier off the header of the record the
+instance's `Mesh.playback` names — a null entry being the static tier, which owns no record — and calls that
 tier's vertex evaluation. So a blended rig standing behind a blended window composites in depth order
 and not in tier order, which one dispatch per tier could not do. The branch is uniform across a
 mesh-shader group, one instance being one group's work, so it costs register pressure rather than

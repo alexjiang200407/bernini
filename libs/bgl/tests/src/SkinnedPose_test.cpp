@@ -253,13 +253,14 @@ namespace
 	uint32_t
 	PaletteBaseOf(bgl::SceneView* view, bgl::MeshInstanceHandle instance)
 	{
-		auto& meshBuffer   = view->GetMeshBuffer();
-		auto& skinnedState = view->GetSkinnedStateBuffer();
+		auto& meshBuffer = view->GetMeshBuffer();
+		auto& playback   = view->GetPlaybackArena();
 
 		const bgl::idl::Mesh& mesh = meshBuffer.AtIndex(instance.handle.index);
-		REQUIRE_FALSE(mesh.skinnedState.Null());
+		REQUIRE_FALSE(mesh.playback.Null());
 
-		return skinnedState.AtIndex(mesh.skinnedState.offset).palette.offsetStart;
+		return playback.GetPayloadAt<bgl::idl::SkinnedState>(mesh.playback.byteOffset)
+		    .palette.offsetStart;
 	}
 
 	void

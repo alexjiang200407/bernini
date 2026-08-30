@@ -86,6 +86,18 @@ compile_shader(
     ENTRY_POINTS "MSMain"
 )
 
+# The only shader that reaches LoadMaterialKind, and so the only one whose emission carries the
+# material tag's type. It was absent here, which is how an enum a shader cannot express reached
+# master: every other forward shader imports MaterialData but dead-strips that function.
+compile_shader(
+    FILE         "${CMAKE_CURRENT_SOURCE_DIR}/src/Forward_Transparent.slang"
+    OUT_DIR      "${SHADER_OUT_DIR}"
+    TARGET       "dxil"
+    STAGE        "ps_6_6"
+    INCLUDES     ${SLANG_SOURCE_ROOT}
+    ENTRY_POINTS "PSMain"
+)
+
 compile_shader(
     FILE         "${CMAKE_CURRENT_SOURCE_DIR}/src/Forward_PBR.slang"
     OUT_DIR      "${SHADER_OUT_DIR}"

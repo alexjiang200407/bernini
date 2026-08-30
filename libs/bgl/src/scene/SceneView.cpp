@@ -71,20 +71,23 @@ namespace bgl
 		{
 			// One entry, not m_InitialInstances: most views place no VAT instances at all, and the
 			// arena grows on the first that does.
-			auto vatStateBufferDesc         = EntryBufferDesc();
-			vatStateBufferDesc.initialCount = 1;
-			vatStateBufferDesc.debugName    = "Vat State Buffer";
+			auto playbackDesc = RawBufferDesc();
 
-			m_VatStates.Init(std::move(vatStateBufferDesc), m_ResourceManager);
-		}
+			// One record of each tier: most views hold no animated placement at all, and the arena
+			// grows on the first that does.
+			playbackDesc.initialBytes =
+				2 * idl::cRawPayloadOffset +
+				static_cast<uint32_t>(sizeof(idl::VatState) + sizeof(idl::SkinnedState));
 
-		{
-			// One entry, for the same reason as the VAT states above.
-			auto skinnedStateBufferDesc         = EntryBufferDesc();
-			skinnedStateBufferDesc.initialCount = 1;
-			skinnedStateBufferDesc.debugName    = "Skinned State Buffer";
+			// The null record must cover the largest payload as well as its header, so a null
+			// reference reads zeros for a whole record rather than the first live one.
+			playbackDesc.nullRecordBytes =
+				idl::cRawPayloadOffset +
+				static_cast<uint32_t>(std::max(sizeof(idl::VatState), sizeof(idl::SkinnedState)));
 
-			m_SkinnedStates.Init(std::move(skinnedStateBufferDesc), m_ResourceManager);
+			playbackDesc.debugName = "Playback Arena";
+
+			m_Playback.Init(std::move(playbackDesc), m_ResourceManager);
 		}
 
 		m_Palettes.Init(m_ResourceManager);
@@ -157,8 +160,7 @@ namespace bgl
 		// Deferred: frames recorded against this view may still be in flight.
 		m_InstanceBuffer.Release();
 		m_MeshBuffer.Release();
-		m_VatStates.Release();
-		m_SkinnedStates.Release();
+		m_Playback.Release();
 		m_Palettes.Release();
 		m_PosedInstances.Release();
 
@@ -216,7 +218,8 @@ namespace bgl
 				"GeomHandle passed to CreateStaticMeshInstance has expired or is invalid");
 		}
 
-		return WritePlacement(geom, transform, core::slot_handle{});
+		// No playback record: a static placement's Mesh.playback stays null.
+		return WritePlacement(geom, transform, 0);
 	}
 
 	MeshInstanceHandle
@@ -250,14 +253,15 @@ namespace bgl
 		state.phase = desc.phase;
 		state.rate  = desc.rate;
 
-		const core::slot_handle stateHandle = m_VatStates.Add(state);
+		const idl::RawEntry record =
+			m_Playback.AddRecord(idl::PlaybackType::kVat, std::as_bytes(std::span(&state, 1)));
 		try
 		{
-			return WritePlacement(geom, transform, stateHandle);
+			return WritePlacement(geom, transform, record.byteOffset);
 		}
 		catch (...)
 		{
-			m_VatStates.Erase(stateHandle);
+			m_Playback.Erase(record.byteOffset);
 			throw;
 		}
 	}
@@ -301,10 +305,11 @@ namespace bgl
 		state.rate    = desc.rate;
 		state.palette = palette;
 
-		const core::slot_handle stateHandle = m_SkinnedStates.Add(state);
+		const idl::RawEntry record =
+			m_Playback.AddRecord(idl::PlaybackType::kSkinned, std::as_bytes(std::span(&state, 1)));
 		try
 		{
-			const MeshInstanceHandle instance = WritePlacement(geom, transform, stateHandle);
+			const MeshInstanceHandle instance = WritePlacement(geom, transform, record.byteOffset);
 
 			m_MeshBuffer.MetaAt(instance.handle.index).palette = palette;
 			m_PosedDirty                                       = true;
@@ -312,14 +317,14 @@ namespace bgl
 		}
 		catch (...)
 		{
-			m_SkinnedStates.Erase(stateHandle);
+			m_Playback.Erase(record.byteOffset);
 			m_Palettes.Free(palette);
 			throw;
 		}
 	}
 
 	MeshInstanceHandle
-	SceneView::WritePlacement(GeomHandle geom, glm::mat4 transform, core::slot_handle animState)
+	SceneView::WritePlacement(GeomHandle geom, glm::mat4 transform, uint32_t animState)
 	{
 		try
 		{
@@ -332,20 +337,9 @@ namespace bgl
 			mesh.transform = transform;
 			mesh.submeshes = submeshes;
 
-			// Only a real handle: assigning a null one would write its index over the null
-			// sentinel the Entry defaults to. Which field it lands in follows the geom's type --
-			// the two are never both set.
-			if (animState)
-			{
-				if (geom.geomType == GeomType::kSkinnedMesh)
-				{
-					mesh.skinnedState = animState;
-				}
-				else
-				{
-					mesh.vatState = animState;
-				}
-			}
+			// One field for either tier: the record's own header says which, so nothing here
+			// decides it. Zero stays zero, which is the null a static placement wants.
+			mesh.playback = idl::RawEntry{ animState };
 
 			auto meshHandle = m_MeshBuffer.Add(mesh);
 
@@ -425,17 +419,15 @@ namespace bgl
 			}
 		}
 
-		if (meta.animState)
+		if (meta.animState != 0)
 		{
+			m_Playback.Erase(meta.animState);
+
+			// The palette and the pose list are the skinned tier's alone; a VAT record owns neither.
 			if (meta.geomType == GeomType::kSkinnedMesh)
 			{
-				m_SkinnedStates.Erase(meta.animState);
 				m_Palettes.Free(meta.palette);
 				m_PosedDirty = true;
-			}
-			else
-			{
-				m_VatStates.Erase(meta.animState);
 			}
 		}
 
@@ -518,9 +510,9 @@ namespace bgl
 			}
 
 			const MeshMeta& meta = m_MeshBuffer.MetaAt(meshIndex);
-			if (meta.geomType == GeomType::kSkinnedMesh && meta.animState)
+			if (meta.geomType == GeomType::kSkinnedMesh && meta.animState != 0)
 			{
-				list.push_back(meta.animState.index);
+				list.push_back(meta.animState);
 			}
 		}
 
