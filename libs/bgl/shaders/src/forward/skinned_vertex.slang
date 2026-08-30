@@ -66,7 +66,7 @@ public ForwardVSOut SkinnedVertex(MeshletContext ctx, SubmeshInstance instance, 
     uint vertexIdx;
     DecodedVertex vertex = DecodeMeshletVertex(ctx, instance, v, vertexIdx);
 
-    let state = skinnedData.skinnedStateBuffer.Get(ctx.mesh.skinnedState);
+    let state = forwardData.playbackBuffer.LoadRecordAs<SkinnedState>(ctx.mesh.playback);
     let geom = skinnedData.skinnedGeomBuffer.Get(state.geom);
 
 #if defined(BERNINI_GPU_DEBUG)
@@ -108,8 +108,7 @@ public ForwardVSOut SkinnedVertex(MeshletContext ctx, SubmeshInstance instance, 
     // transform untouched.
     vertexOut.tangent = float4(mul((float3x3)ctx.mesh.transform, mul(skinRotation, vertex.tangent.xyz)), vertex.tangent.w);
 
-    vertexOut.materialIndex = instance.material.GetOffset();
-    vertexOut.materialIsLoose = 0u;
+    vertexOut.materialOffset = instance.material.GetByteOffset();
 
     return vertexOut;
 }

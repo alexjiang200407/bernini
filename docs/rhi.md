@@ -48,6 +48,37 @@ doc and a header disagree, trust the header, then fix this doc.
   `{ index, generation }` and both null-test through `IsNull()`, but the accessor spelling differs —
   do not assume one field name across handle families.
 
+* **A buffer's view is chosen when it is created.** `CreateStructBuffer` gives it a
+  structured view of a stride; `CreateRawBuffer` gives it a raw one (`R32_TYPELESS` + `FLAG_RAW` on
+  D3D12; on Metal a buffer carries no view at all and the shader's declared type is the whole
+  story), and `isUav` picks SRV or UAV either way. So the Slang wrapper a buffer is bound to must
+  match how it was created — a `RawBuffer` bound to a `StructuredBuffer<T>` uniform, or the reverse,
+  reads undefined bytes rather than failing. `BufferDesc::isRaw` records which it is.
+
+  **A raw buffer is at most `c_MaxRawBufferBytes` (4 GiB)**, because a raw view is addressed by a
+  `uint` byte offset on every API; `CreateRawBuffer` asserts it, along with a size that is a whole
+  number of 32-bit words. A CPU-mirrored buffer over one sets `RangeBufferDesc::maxBytes` to the
+  same ceiling, and growth that would cross it throws rather than handing back an offset no shader
+  can reach.
+
+  **A buffer may have a *second* view.** `CreateBufferSrv(BufferHandle, BufferSrvDesc)` adds a
+  structured view over a buffer that already has one, so the same bytes are read as elements of a
+  stride — the counterpart of `CreateSrv` onto a texture, and released the same way, since
+  destroying the buffer does not destroy it. On D3D12 that is a second descriptor; on Metal it is
+  the buffer's own slot, a Metal buffer being an address whose type is whatever the shader declares.
+
+  A growth replaces the resource a view describes and announces nothing, so **whoever owns the
+  buffer owns the view**: `scene::RawBuffer` re-issues its own inside its `Allocate`, where the two
+  change together. Re-issuing anywhere else — at a frame boundary, say — leaves an instant where a
+  grown buffer is paired with a released view.
+
+  **A resource handle cannot be loaded out of a raw buffer on Metal.** The element type must be on
+  the binding: `StructuredBuffer<T, ScalarDataLayout>.Handle` lowers to `T device*`, so a
+  `TextureHandle` inside `T` is a real `texture2d`, while `ByteAddressBuffer.Handle` lowers to
+  `uint32_t device*` and MSL will not construct a texture from an integer. A payload that is to be
+  raw-loaded must therefore declare no resource type: it stores a `RawTextureHandle` — the same
+  eight bytes with no texture in the type — and the second view above is what samples them.
+
 * **Views are explicit, and a texture is not one.** `CreateTexture` allocates storage; it writes no
   descriptor and returns a handle a shader cannot reach. `CreateSrv(TextureHandle, SrvDesc)` is what
   makes a texture readable, exactly as `CreateRtv` makes one drawable, and the `SrvHandle` it returns
@@ -153,7 +184,7 @@ doc and a header disagree, trust the header, then fix this doc.
 | `Uniforms` | [libs/bgl/src/uniforms/Uniforms.h](libs/bgl/src/uniforms/Uniforms.h) | Reflection-driven CPU constant-buffer mirror; name/index `operator[]` access. |
 | `ComputeKernel` / `MeshletKernel` | [libs/bgl/src/pipeline/ComputeKernel.h](libs/bgl/src/pipeline/ComputeKernel.h), [MeshletKernel.h](libs/bgl/src/pipeline/MeshletKernel.h) | Move-only pipeline + per-cbuffer `Uniforms` map. |
 | `ComputeState` / `MeshletState` | [libs/bgl/src/types/ComputeState.h](libs/bgl/src/types/ComputeState.h), [MeshletState.h](libs/bgl/src/types/MeshletState.h) | Per-dispatch/draw binding; holds a **non-owning** kernel pointer. |
-| Buffer descriptors & `BufferHandle` | [libs/bgl/src/resource/Buffer.h](libs/bgl/src/resource/Buffer.h) | `StructBufferDesc`, `ConstantBufferDesc`, `ComputeBufferDesc`, `BufferBarrierDesc`. |
+| Buffer descriptors & `BufferHandle` | [libs/bgl/src/resource/Buffer.h](libs/bgl/src/resource/Buffer.h) | `StructBufferDesc`, `RawViewDesc`, `ConstantBufferDesc`, `ComputeBufferDesc`, `BufferBarrierDesc`. |
 | Texture descriptors & `TextureHandle` | [libs/bgl/src/resource/Texture.h](libs/bgl/src/resource/Texture.h) | `TextureDesc`, `TextureUsage`, `TextureBarrierDesc`. |
 | Views | [libs/bgl/src/resource/Rtv.h](libs/bgl/src/resource/Rtv.h), [Dsv.h](libs/bgl/src/resource/Dsv.h) | `RtvDesc`/`RtvHandle`, `DsvDesc`/`DsvHandle`. |
 | Sampler descriptors & `SamplerHandle` | [libs/bgl/src/resource/Sampler.h](libs/bgl/src/resource/Sampler.h) | `SamplerDesc` (chained builder), `SamplerAddressMode` (D3D + Vulkan aliases), `SamplerReductionType`; descriptor-heap-only. |
@@ -330,8 +361,8 @@ Everything else is self-explanatory from the header.
   `std::out_of_range` for a cbuffer the shader doesn't declare; `MeshletKernel::FindUniforms` is
   the non-throwing form. See [Uniforms](docs/uniforms.md).
 * **Assigning a `BufferHandle`** writes a descriptor index, not data: for a "smart buffer"
-  struct the index lands in whichever of `entryBuffer` / `packedBuffer` / `rangeBuffer` exists;
-  for a `kDescriptorHandle` value it is written directly; otherwise it throws.
+  struct the index lands in whichever of `entryBuffer` / `packedBuffer` / `rangeBuffer` /
+  `rawBuffer` exists; for a `kDescriptorHandle` value it is written directly; otherwise it throws.
 * **Assigning a `SamplerHandle` / `TextureHandle`** likewise writes a `DescriptorHandle` (bindless).
   The shader-side `TextureHandle` / `TextureCubeHandle` are IDL structs holding a single `.Handle`, so
   the write lands in that sole member; `SamplerHandle` is a bare `SamplerState.Handle`, so it is

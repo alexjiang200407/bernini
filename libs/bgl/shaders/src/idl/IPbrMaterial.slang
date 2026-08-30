@@ -2,7 +2,7 @@
 
 public interface IPbrMaterial
 {
-    static This Load(uint index);
+    static This Load(uint byteOffset);
 
     float4 GetBaseColor(SamplerState.Handle s, float2 uv);
     float3 GetORM(SamplerState.Handle s, float2 uv);

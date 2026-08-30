@@ -42,8 +42,8 @@ TEST_CASE("animated geometry takes no material but kPBR", "[pso]")
 	CHECK_FALSE(bgl::AcceptsMaterial(bgl::GeomType::kVatMesh, bgl::MaterialHandle{}));
 	CHECK_FALSE(bgl::AcceptsMaterial(bgl::GeomType::kSkinnedMesh, bgl::MaterialHandle{}));
 
-	// A loose material routes its channels rather than sampling a baked triplet, and both animated
-	// geometry stages hardcode materialIsLoose = 0 -- so one would index the wrong buffer.
+	// A loose material routes its channels rather than sampling a baked triplet, and neither
+	// animated geometry stage has a pixel shader that does the routing.
 	for (const bgl::LayerType layer : c_Layers)
 	{
 		const auto loose = Handle(bgl::MaterialType::kLoosePbr, layer);

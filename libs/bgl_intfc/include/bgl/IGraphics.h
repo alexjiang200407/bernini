@@ -71,11 +71,16 @@ namespace bgl
 		// The names below are the shipped renderer's vocabulary, and each is advisory: a renderer
 		// with no equivalent of a given capacity ignores that field rather than failing on it.
 		//
-		// maxCbvSrvUavs sizes the shader-visible heap -- how many *descriptors* exist. maxBuffers and
-		// maxSrvs size the resource pools that draw from it, and must together fit inside it.
-		uint32_t maxCbvSrvUavs      = 1000;
-		uint32_t maxBuffers         = 500;
-		uint32_t maxSrvs            = 500;
+		// maxCbvSrvUavs sizes the shader-visible heap -- how many *descriptors* exist. maxBuffers,
+		// maxSrvs and maxBufferSrvs size the resource pools that draw from it, and must together fit
+		// inside it alongside the unbound sentinel index 0 is reserved for.
+		uint32_t maxCbvSrvUavs = 1065;
+		uint32_t maxBuffers    = 500;
+		uint32_t maxSrvs       = 500;
+
+		// Second, structured views of buffers. Only an arena whose records hold resource handles
+		// needs one, so far fewer than there are buffers.
+		uint32_t maxBufferSrvs      = 64;
 		uint32_t maxRtvs            = 16;
 		uint32_t maxDsvs            = 5;
 		uint32_t maxTextures        = 1000;

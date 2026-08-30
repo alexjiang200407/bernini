@@ -36,7 +36,7 @@ namespace bgl
 					BarrierSyncFlag::kComputeShader,
 					BarrierAccessFlag::kShaderResource)
 				.AddBufferArg(
-					"scene.skinnedStateBuffer",
+					"scene.playbackBuffer",
 					BarrierSyncFlag::kComputeShader,
 					BarrierAccessFlag::kShaderResource)
 				.AddBufferArg(
@@ -76,7 +76,7 @@ namespace bgl
 
 		Uniforms& uniforms         = m_PoseSkinned["gUniforms"];
 		uniforms["posedInstances"] = ctx.GetBuffer("scene.posedInstances");
-		uniforms["skinnedStates"]  = ctx.GetBuffer("scene.skinnedStateBuffer");
+		uniforms["playbackBuffer"] = ctx.GetBuffer("scene.playbackBuffer");
 		uniforms["skinnedGeoms"]   = ctx.GetBuffer("scene.skinnedGeomBuffer");
 		uniforms["boneBuffer"]     = ctx.GetBuffer("scene.skinnedBoneBuffer");
 		uniforms["clipBuffer"]     = ctx.GetBuffer("scene.clipBuffer");

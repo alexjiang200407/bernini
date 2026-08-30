@@ -364,14 +364,14 @@ namespace bgl
 		DeleteTextureAsset(TextureAssetHandle texture) = 0;
 
 		/**
-		 * Creates a PBR material in this scene's material buffer and returns a handle
+		 * Creates a PBR material in this scene's material arena and returns a handle
 		 * referencing it. Pass the handle to a geometry-creating method to bind it.
 		 */
 		virtual MaterialHandle
 		CreatePbrMaterial(const PbrMaterialDesc& desc) = 0;
 
 		/**
-		 * Creates a loose (unbaked, per-channel) PBR material in this scene's loose-material buffer
+		 * Creates a loose (unbaked, per-channel) PBR material in the same arena as CreatePbrMaterial
 		 * and returns a handle referencing it. Bind it like any material; it renders through the same
 		 * lighting path as a PbrMaterial. See LoosePbrMaterialDesc.
 		 */
@@ -379,9 +379,9 @@ namespace bgl
 		CreateLoosePbrMaterial(const LoosePbrMaterialDesc& desc) = 0;
 
 		/**
-		 * Rewrites a material's contents in place, keeping its handle and its slot.
+		 * Rewrites a material's contents in place, keeping its handle and its bytes in the arena.
 		 *
-		 * A submesh stores the material's entry *index*, so every submesh bound to `material` picks
+		 * A submesh stores the material's *byte offset*, so every submesh bound to `material` picks
 		 * the new textures and factors up with no rebinding -- this is how a texture is swapped on a
 		 * live material. How a submesh is drawn derives from the material's *type*, which an update
 		 * cannot change, so that is unaffected too.
@@ -397,15 +397,17 @@ namespace bgl
 
 		/**
 		 * Destroys a material created by CreatePbrMaterial or CreateLoosePbrMaterial, freeing its
-		 * slot in the corresponding material buffer.
+		 * record in the scene's material arena.
 		 *
-		 * A submesh stores the material's slot index, not a generation-checked handle, so a submesh
-		 * still bound to a deleted material silently picks up whichever material next takes that
-		 * slot. Rebind every submesh using it (SetSubmeshMaterial) before deleting.
+		 * A submesh stores the material's byte offset, not a generation-checked handle, so a submesh
+		 * still bound to a deleted material silently picks up whichever record next takes those
+		 * bytes -- of any kind, and possibly the middle of one, the arena holding records of
+		 * different sizes. Rebind every submesh using it (SetSubmeshMaterial) before deleting.
 		 *
 		 * @param material A handle returned by a material-creating method.
-		 * @throws SceneError if the handle is invalid, already deleted, or names a material type
-		 *         that has no storage to free (kNull, kAssert).
+		 * @throws SceneError if the handle is invalid, already deleted, disagrees with the type of
+		 *         the record it names, or names a material type that has no storage to free (kNull,
+		 *         kAssert).
 		 */
 		virtual void
 		DeleteMaterial(MaterialHandle material) = 0;

@@ -185,6 +185,9 @@ before building the thing it describes, and delete it when that thing lands.
   remap that will fix it.
 - [Animation compression](./docs/specs/animation_compression.md) — a 663-bone rig's clips are 60 MB
   uncompressed; why collapsing constant tracks was measured and dropped, and what to build instead.
+- [The TextureHandle wrapper](./docs/specs/texture_handle_wrapper.md) — a struct that existed to pack
+  a `uint` the handle no longer is; what still rests on it, and the trigger that makes removing it
+  worth the churn.
 
 **[Plans and Decision Records](./docs/plans/)**
 

@@ -1,5 +1,6 @@
 #pragma once
 #include "idl/CullView.h"
+#include "resource/Buffer.h"
 #include "resource/FrameBuffer.h"
 #include "resource/Sampler.h"
 #include "types/EnvironmentMap.h"
@@ -116,5 +117,10 @@ namespace bgl
 		DrawLighting lighting;
 		DrawSamplers samplers;
 		TimeData     clock;
+
+		// The material arena and the typed view of the same allocation, as one pair. Bound from
+		// here rather than from the graph, which tracks resource state -- a view is not a resource.
+		// The arena re-issues the view inside its own growth, so this is read per draw, never cached.
+		RawArenaBinding materialArena;
 	};
 }

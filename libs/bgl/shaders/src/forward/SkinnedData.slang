@@ -1,5 +1,4 @@
 import idl.SkinnedGeom;
-import idl.SkinnedState;
 import types.ComputeBuffer;
 import types.EntryBuffer;
 
@@ -9,7 +8,6 @@ import types.EntryBuffer;
 public struct SkinnedData
 {
     public EntryBuffer<SkinnedGeom> skinnedGeomBuffer;
-    public EntryBuffer<SkinnedState> skinnedStateBuffer;
 
     // Written by SkinnedPosePass this frame; read-only here.
     public ComputeBuffer<float4> bonePaletteBuffer;

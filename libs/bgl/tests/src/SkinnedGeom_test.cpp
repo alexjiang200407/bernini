@@ -292,8 +292,8 @@ TEST_CASE("AddSkinnedMeshGeom uploads a rig's bones, clips and samples", "[skinn
 			CHECK_NOTHROW(scene->SetSubmeshMaterial(geom, 0, scene->CreatePbrMaterial(layerDesc)));
 		}
 
-		// The skinned geometry stage writes materialIsLoose = 0: there is no loose variant of it,
-		// and a loose handle would index the wrong material buffer rather than fail.
+		// There is no loose variant of the skinned geometry stage, so AcceptsMaterial refuses the
+		// handle here rather than letting a draw reach a pixel shader that cannot route channels.
 		const auto loose = scene->CreateLoosePbrMaterial(bgl::LoosePbrMaterialDesc());
 		CHECK_THROWS_AS(scene->SetSubmeshMaterial(geom, 0, loose), bgl::SceneError);
 	}
@@ -330,17 +330,17 @@ TEST_CASE("CreateSkinnedMeshInstance writes the playback record once", "[skinned
 	const auto instance = view->CreateSkinnedMeshInstance(geom, glm::mat4(1.0f), desc);
 	REQUIRE(instance.IsValid());
 
-	auto& meshBuffer    = view->GetMeshBuffer();
-	auto& skinnedStates = view->GetSkinnedStateBuffer();
+	auto& meshBuffer = view->GetMeshBuffer();
+	auto& playback   = view->GetPlaybackArena();
 
 	const bgl::idl::Mesh& mesh = meshBuffer.AtIndex(instance.handle.index);
 
-	// The two animation fields are mutually exclusive: a placement draws through one family, and a
-	// skinned one that also set vatState would be read by both mesh shaders.
-	REQUIRE_FALSE(mesh.skinnedState.Null());
-	CHECK(mesh.vatState.Null());
+	// One field for either tier now, so what says which is the record's own header rather than
+	// which of two fields was left null.
+	REQUIRE_FALSE(mesh.playback.Null());
+	CHECK(playback.GetTagAt(mesh.playback.byteOffset) == bgl::idl::PlaybackType::kSkinned);
 
-	const bgl::idl::SkinnedState& state = skinnedStates.AtIndex(mesh.skinnedState.offset);
+	const auto state = playback.GetPayloadAt<bgl::idl::SkinnedState>(mesh.playback.byteOffset);
 	CHECK(state.clip == 1);
 	CHECK(state.phase == Catch::Approx(4.5f));
 	CHECK(state.rate == Catch::Approx(2.0f));

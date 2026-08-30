@@ -133,9 +133,10 @@ namespace bgl
 
 	/** A type one of `Uniforms::AccessorBase`'s assignment operators accepts. */
 	template <typename T>
-	concept UniformAssignable = detail::UniformValue<T> || std::same_as<T, BufferHandle> ||
-	                            std::same_as<T, SamplerHandle> || std::same_as<T, SrvHandle> ||
-	                            std::same_as<T, TextureAssetHandle>;
+	concept UniformAssignable =
+		detail::UniformValue<T> || std::same_as<T, BufferHandle> ||
+		std::same_as<T, BufferSrvHandle> || std::same_as<T, SamplerHandle> ||
+		std::same_as<T, SrvHandle> || std::same_as<T, TextureAssetHandle>;
 
 	class Uniforms final
 	{
@@ -219,6 +220,24 @@ namespace bgl
 				core::throw_runtime_error(
 					"Accessor at offset {} cannot be assigned with buffer handle",
 					m_Offset);
+			}
+
+			// A raw arena's two descriptors from one assignment: the members below are each a
+			// struct of one handle, so each lands through the path above.
+			AccessorBase&
+			operator=(const RawArenaBinding& arena)
+			{
+				(*this)["raw"]     = arena.buffer;
+				(*this)["handles"] = arena.handles;
+				return *this;
+			}
+
+			AccessorBase&
+			operator=(BufferSrvHandle handle)
+			{
+				// Only the descriptor travels: this handle's slot indexes the view pool, not the
+				// buffer pool, and naming it as a buffer's would be a lie waiting to be believed.
+				return *this = BufferHandle{ {}, handle.bindlessIndex };
 			}
 
 			AccessorBase&

@@ -57,15 +57,15 @@ disagrees, trust the header, then fix this doc.
   them near the steady state only avoids the growth events. `SceneError` on a load now means the
   device could not allocate, not that a budget was hit.
 
-  `GraphicsOptions` is the opposite: `maxCbvSrvUavs`, `maxBuffers`, `maxSrvs`, `maxRtvs`, `maxDsvs`,
-  `maxTextures`, `maxSamplers` and `maxReadbackBuffers` size fixed pools that never grow, and
-  exhausting one is a hard failure.
+  `GraphicsOptions` is the opposite: `maxCbvSrvUavs`, `maxBuffers`, `maxSrvs`, `maxBufferSrvs`,
+  `maxRtvs`, `maxDsvs`, `maxTextures`, `maxSamplers` and `maxReadbackBuffers` size fixed pools that
+  never grow, and exhausting one is a hard failure.
 
-  **`maxCbvSrvUavs` counts descriptors; `maxBuffers` and `maxSrvs` count resources.** Every buffer and
-  every SRV takes one descriptor from the shader-visible heap, so the heap must be at least as large
-  as the two pools together — the resource manager asserts it. They are separate knobs because they
-  run out for different reasons: the heap is a hardware-shaped limit, the pools are how many live
-  objects a scene keeps. A texture is in neither pool; only an SRV onto it is.
+  **`maxCbvSrvUavs` counts descriptors; the pool sizes count resources.** Every buffer, every SRV and
+  every second view of a buffer takes one descriptor from the shader-visible heap, so the heap must
+  be at least as large as those three pools together — the resource manager asserts it. They are
+  separate knobs because they run out for different reasons: the heap is a hardware-shaped limit,
+  the pools are how many live objects a scene keeps. A texture is in neither pool; only an SRV onto it is.
 
   Note that growth *consumes* buffer slots and descriptors — a grown buffer takes a new one of each
   and gives the old ones back only once the deferred destroy clears — so a scene that grows a lot
@@ -77,16 +77,19 @@ disagrees, trust the header, then fix this doc.
   the superseded resource stays alive on the resource manager's fence until every in-flight frame
   that referenced it has retired.
 
-* **Handles are trivially copyable values, but their shapes differ.** `GeomHandle`, `MaterialHandle`
-  and `MeshInstanceHandle` each wrap a `core::slot_handle` reached as `.handle` and expose
-  `IsValid()`. `TextureAssetHandle` wraps one reached as `.textureSlot` and has **no** `IsValid()` —
+* **Handles are trivially copyable values, but their shapes differ.** `GeomHandle` and
+  `MeshInstanceHandle` each wrap a `core::slot_handle` reached as `.handle` and expose `IsValid()`;
+  `MaterialHandle` carries a `.byteOffset` into the scene's material arena instead, materials
+  living in one arena rather than a slot buffer. `TextureAssetHandle` wraps one reached as `.textureSlot` and has **no** `IsValid()` —
   test it via the `slot_handle`'s `operator bool` (`if (tex.textureSlot)`). Do not assume one spelling
   across handle families.
 
-* **Material bindings are raw slot indices with no generation check.** This is the sharpest hazard in
-  the API. A submesh (and an instance override) stores a material's *slot index*, not a
-  generation-guarded handle, so deleting a material that something still binds silently re-points it
-  at whatever material next takes that slot. Geometry deletion has the mirror-image problem: an
+* **Material bindings are raw byte offsets with no generation check.** This is the sharpest hazard in
+  the API. A submesh (and an instance override) stores a material's *byte offset* into the scene's
+  material arena, not a generation-guarded handle, so deleting a material that something still binds
+  silently re-points it at whatever record next takes those bytes — and, the arena holding records of
+  different sizes, at a record of another kind or at the middle of one. The header a record carries
+  is what a debug build checks that against. Geometry deletion has the mirror-image problem: an
   instance holds a plain copy of its geom's submesh range. Ordering these teardowns is the caller's
   job — or `gamelib`'s `AssetManager`, which refcounts them.
 
@@ -238,14 +241,15 @@ flowchart TD
   instance holds an ungenerationed copy of the geom's submesh range, so one that outlives its geometry
   draws whatever is allocated into that range next.
 * **`DeleteMaterial(material)`** — @pre no live submesh or instance override still binds it. A submesh
-  stores the material's slot index, not a generation-checked handle, so a stale binding silently picks
-  up the next material to take that slot. Rebind with `SetSubmeshMaterial` first. @throws `SceneError`
+  stores the material's byte offset, not a generation-checked handle, so a stale binding silently
+  picks up whatever record next takes those bytes. Rebind with `SetSubmeshMaterial` first. @throws `SceneError`
   for `kNull` / `kAssert`, which have no storage to free.
 * **`DeleteTextureAsset(texture)`** — @pre no live material routes it. The scene does not know which
   materials sample which textures. The GPU release itself *is* safely deferred behind the frames that
   could still be reading it; the dangling *binding* is what is unsafe.
-* **`UpdatePbrMaterial` / `UpdateLoosePbrMaterial`** — rewrites in place, keeping the handle and slot,
-  so every submesh already bound picks the change up with no rebinding. The material's *type* cannot
+* **`UpdatePbrMaterial` / `UpdateLoosePbrMaterial`** — rewrites the payload in place, keeping the
+  record's offset and its header, so every submesh already bound picks the change up with no
+  rebinding. The material's *type* cannot
   change, so the PSO bucket is unaffected. @throws `SceneError` on a type mismatch.
 * **`AddStaticMeshGeom(mesh, meshIndex, materials)`** — `materials` is parallel to `mesh.materials`, and a
   submesh whose material index is out of range is left unlit rather than rejected. Resolving those

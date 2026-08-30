@@ -6,6 +6,7 @@
 #include "scene/NamedBuffer.h"
 #include "scene/PackedBuffer.h"
 #include "scene/RangeBuffer.h"
+#include "scene/RawBuffer.h"
 #include "scene/TextureAssetStore.h"
 #include "scene/scene_buffer_names.h"
 #include "types/SubmeshInstance.h"
@@ -95,15 +96,18 @@ namespace bgl
 		}
 
 		[[nodiscard]] auto&
-		GetPbrMaterialBuffer() noexcept
+		GetMaterialArena() noexcept
 		{
-			return m_Pbr;
+			return m_Materials;
 		}
 
-		[[nodiscard]] auto&
-		GetLooseMaterialBuffer() noexcept
+		// The material arena and the typed view of the same allocation, as one binding. A payload
+		// keeps a texture handle's bytes inline and the view is what makes a texture of them; the
+		// arena owns both and re-issues the view inside its own growth, so they cannot disagree.
+		[[nodiscard]] RawArenaBinding
+		GetMaterialBinding() const noexcept
 		{
-			return m_Loose;
+			return RawArenaBinding{ m_Materials.GetBufferHandle(), m_Materials.GetHandleView() };
 		}
 
 		[[nodiscard]] auto&
@@ -443,11 +447,13 @@ namespace bgl
 		RangeBuffer<idl::Submesh, SubmeshDefaults> m_SubmeshBuffer;
 		RangeBuffer<idl::Meshlet>                  m_MeshletBuffer;
 		RangeBuffer<uint32_t>                      m_VertexMapBuffer;
-		RangeBuffer<uint32_t>                      m_VertexDataBuffer;
+		RawBuffer<>                                m_VertexDataBuffer;
 		RangeBuffer<uint32_t>                      m_IndexBuffer;
 
-		EntryBuffer<idl::PbrMaterial>      m_Pbr;
-		EntryBuffer<idl::LoosePbrMaterial> m_Loose;
+		// Every material of every kind, each behind a header naming its MaterialType. One arena
+		// rather than a buffer per kind: a new shading model is a payload and a tag, not a buffer,
+		// a binding and a uniform key.
+		RawBuffer<MaterialType> m_Materials;
 
 		// One clip table for every animated tier: a Clip means the same thing to both, so a second
 		// buffer of the same element type would only be two things to grow.
@@ -477,8 +483,7 @@ namespace bgl
 			NamedBuffer{ c_VertexMapBufferName, &Scene::m_VertexMapBuffer },
 			NamedBuffer{ c_VertexDataBufferName, &Scene::m_VertexDataBuffer },
 			NamedBuffer{ c_IndexBufferName, &Scene::m_IndexBuffer },
-			NamedBuffer{ c_PbrMaterialBufferName, &Scene::m_Pbr },
-			NamedBuffer{ c_LooseMaterialBufferName, &Scene::m_Loose },
+			NamedBuffer{ c_MaterialArenaBufferName, &Scene::m_Materials },
 			NamedBuffer{ c_VatGeomBufferName, &Scene::m_VatGeoms },
 			NamedBuffer{ c_ClipBufferName, &Scene::m_Clips },
 			NamedBuffer{ c_VatColumnBufferName, &Scene::m_VatColumns },

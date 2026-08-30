@@ -16,9 +16,9 @@ namespace bgl
 	};
 
 	// The geometry tables every forward expansion and vertex decode reads. Every pass built on
-	// those shaders declares and binds all seven, so the set lives here rather than in any one
+	// those shaders declares and binds all eight, so the set lives here rather than in any one
 	// pass.
-	constexpr std::array<SceneBuffer, 7> c_ForwardDataBuffers = {
+	constexpr std::array<SceneBuffer, 8> c_ForwardDataBuffers = {
 		{ { c_InstanceBufferName,
 		    "instanceBuffer",
 		    BarrierAccessFlag::kShaderResource,
@@ -46,19 +46,19 @@ namespace bgl
 		  { c_IndexBufferName,
 		    "indexBuffer",
 		    BarrierAccessFlag::kShaderResource,
+		    BarrierSyncFlag::kVertexShader },
+		  { c_PlaybackArenaBufferName,
+		    "playbackBuffer",
+		    BarrierAccessFlag::kShaderResource,
 		    BarrierSyncFlag::kVertexShader } }
 	};
 
 	// The rig tables the skinned vertex evaluation reads, and the bake tables the VAT one reads.
 	// Both live here beside the geometry tables because every pass built on the tier-branching
 	// geometry stage declares and binds all three sets.
-	constexpr std::array<SceneBuffer, 3> c_SkinnedBuffers = {
+	constexpr std::array<SceneBuffer, 2> c_SkinnedBuffers = {
 		{ { c_SkinnedGeomBufferName,
 		    "skinnedGeomBuffer",
-		    BarrierAccessFlag::kShaderResource,
-		    BarrierSyncFlag::kVertexShader },
-		  { c_SkinnedStateBufferName,
-		    "skinnedStateBuffer",
 		    BarrierAccessFlag::kShaderResource,
 		    BarrierSyncFlag::kVertexShader },
 		  { c_BonePaletteName,
@@ -67,12 +67,8 @@ namespace bgl
 		    BarrierSyncFlag::kVertexShader } }
 	};
 
-	constexpr std::array<SceneBuffer, 4> c_VatBuffers = { { { c_VatGeomBufferName,
+	constexpr std::array<SceneBuffer, 3> c_VatBuffers = { { { c_VatGeomBufferName,
 		                                                      "vatGeomBuffer",
-		                                                      BarrierAccessFlag::kShaderResource,
-		                                                      BarrierSyncFlag::kVertexShader },
-		                                                    { c_VatStateBufferName,
-		                                                      "vatStateBuffer",
 		                                                      BarrierAccessFlag::kShaderResource,
 		                                                      BarrierSyncFlag::kVertexShader },
 		                                                    { c_ClipBufferName,

@@ -1,5 +1,6 @@
 import Range;
 import RangeWithCount;
+import RawRange;
 import Meshlet;
 import VertexLayout;
 
@@ -8,7 +9,7 @@ public struct Submesh
     public VertexLayout layout;
     public RangeWithCount<Meshlet> meshlets;
     public Range<uint> vertexMap;
-    public Range<uint> vertexData;
+    public RawRange vertexData;
     public Range<uint> indices;
     public uint vertexCount;
 

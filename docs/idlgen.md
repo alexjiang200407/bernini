@@ -53,8 +53,8 @@ are the source of truth; when this doc disagrees, trust them, then fix this doc.
   `EntryBuffer<T>`, so `sizeof`/`offsetof` on the CPU and the buffer stride on the GPU agree by
   construction.
 
-  A struct's size still depends on the final size of everything it embeds — shrink `ChannelSource`
-  and every member after `LoosePbrMaterial::sources` moves — so idlgen resolves imports against the
+  A struct's size still depends on the final size of everything it embeds — shrink `TextureHandle`
+  and every member after `VatGeom::positions` moves — so idlgen resolves imports against the
   *generated* copies and reports the module under its output path, since Slang looks beside the
   importing file before consulting the search paths. The CMake rules carry an edge per `import` so a
   module is generated after its dependencies.
@@ -75,8 +75,8 @@ are the source of truth; when this doc disagrees, trust them, then fix this doc.
   rules give it 4, and rounds a struct up to its alignment — so one committed copy would be right for
   one backend and silently wrong for the other. Each build directory carries its own, and switching
   backend needs no regeneration. Both `<build>/generated` and [libs/bgl/src/idl/](libs/bgl/src/idl/)
-  are on the include path, because a generated header includes its imports as siblings and three of
-  those (`Entry`, `Range`, `RangeWithCount`) are hand-written.
+  are on the include path, because a generated header includes its imports as siblings and four of
+  those (`Entry`, `Range`, `RangeWithCount`, `RawEntry`) are hand-written.
 
   **One public module is the exception and stays committed**, under
   [libs/bgl_intfc/include/bgl/](libs/bgl_intfc/include/bgl/): a consumer includes `<bgl/...>` without building
@@ -124,7 +124,7 @@ are the source of truth; when this doc disagrees, trust them, then fix this doc.
 | [scripts/gen_idl.py](scripts/gen_idl.py) | Standalone driver to regenerate on demand, via `just idl` (mirrors the CMake target; resolves the built tool via the CMake File API). |
 | [libs/bgl/shaders/src/idl/](libs/bgl/shaders/src/idl/) | Generated Slang copies (`import idl.<Name>`). |
 | `<build>/generated/idl/` | Generated C++ headers (`bgl::idl::<Name>`). A build artifact, not committed — see below. |
-| [libs/bgl/src/idl/](libs/bgl/src/idl/) | The **hand-written** headers only: `idl.h` (the aggregate), `Entry.h`, `Range.h`, `RangeWithCount.h`. |
+| [libs/bgl/src/idl/](libs/bgl/src/idl/) | The **hand-written** headers only: `idl.h` (the aggregate), `Entry.h`, `Range.h`, `RangeWithCount.h`, `RawEntry.h` — the offset primitives, which are generic and so have no concrete layout to generate. |
 
 **Generated files are never clang-formatted.** `scripts/format.py` skips any file whose first line
 carries the generator's `DO NOT EDIT MANUALLY` banner, so what is committed is byte-for-byte what

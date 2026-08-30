@@ -38,7 +38,7 @@ doc disagrees, trust the header, then fix this doc.
 
 * **The two regimes meet inside one shader struct.**
   [MaterialData.slang](libs/bgl/shaders/src/forward/MaterialData.slang) holds an
-  `EntryBuffer<PbrMaterial>` alongside ordinary `float3`/`float2` members: the outer struct is
+  `RawBuffer` of material records alongside ordinary `float3`/`float2` members: the outer struct is
   reflected and addressed by name, the elements the handle points at are compile-time-proven. Expect
   the guarantees to change at that boundary.
 
@@ -153,7 +153,8 @@ time, so it is the suballocation the GPU reads and the mirror may be rewritten i
 Each handle type finds its destination differently, and the rules are not symmetric:
 
 * **`BufferHandle` into a struct** — @pre the struct is exactly 8 bytes; members are then searched
-  **by name** against `c_SmartBufferUniformIndices` (`entryBuffer` / `packedBuffer` / `rangeBuffer`).
+  **by name** against `c_SmartBufferUniformIndices` (`entryBuffer` / `packedBuffer` / `rangeBuffer` /
+  `rawBuffer` / `handleBuffer`).
   @post throws if 8 bytes but carrying none of those names, so a new smart-buffer wrapper in Slang
   needs its member name added to that array.
 * **`BufferHandle` into a value** — written directly when the leaf is `kDescriptorHandle`. The path a
@@ -162,7 +163,15 @@ Each handle type finds its destination differently, and the rules are not symmet
   (`c_HandleUniformMember`), by position because the member is spelled differently across handle
   structs. @post **no type discrimination**: an `SrvHandle` assigned to an `EntryBuffer<T>` uniform
   writes the SRV index into `entryBuffer` and succeeds.
+* **`BufferSrvHandle`** — a second, structured view of a buffer, written by the same rule as a
+  `BufferHandle`: only its `bindlessIndex` travels, so it lands in whichever smart-buffer member the
+  target names.
 * **`SamplerHandle`** — bare-value case only; a struct wrapping a sampler throws.
+* **`RawArenaBinding`** — a raw arena and the typed view of the *same* allocation, written as a
+  pair: it assigns `["raw"]` and `["handles"]`, each of which is a struct of one handle and so lands
+  through the `BufferHandle` rule above. One write rather than two because the two descriptors
+  describe one buffer, and separate members can be handed different ones. `constants.h` gained
+  `handleBuffer` for the second half.
 
 `ReflectedLayout::handleKind` carries what would make these checkable, but is **populated on Metal
 only** — on D3D12 a handle reflects as a bare `uint2` and the declared type is lost.
@@ -240,7 +249,7 @@ kernel["viewData"]["viewProj"] = draw.viewState.viewProj;
 if (auto found = kernel.FindUniforms("materialData"))
 {
     auto& matData = *found;
-    matData["pbrMaterials"] = resources.GetBuffer("scene.pbrMaterialBuffer");  // writes an index
+    matData["materials"] = resources.GetBuffer("scene.materialArenaBuffer");  // writes an index
 
     if (auto u = matData["irradianceMap"]; u.IsValid())
     {

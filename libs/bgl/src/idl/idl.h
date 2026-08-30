@@ -1,7 +1,6 @@
 #pragma once
 
 #include "idl/BoneSample.h"
-#include "idl/ChannelSource.h"
 #include "idl/Clip.h"
 #include "idl/Constants.h"
 #include "idl/CullStats.h"
@@ -13,9 +12,14 @@
 #include "idl/Mesh.h"
 #include "idl/Meshlet.h"
 #include "idl/PbrMaterial.h"
+#include "idl/PlaybackType.h"
 #include "idl/PsoType.h"
 #include "idl/Range.h"
 #include "idl/RangeWithCount.h"
+#include "idl/RawEntry.h"
+#include "idl/RawRange.h"
+#include "idl/RawTextureHandle.h"
+#include "idl/RecordHeader.h"
 #include "idl/SkinnedBone.h"
 #include "idl/SkinnedGeom.h"
 #include "idl/SkinnedState.h"

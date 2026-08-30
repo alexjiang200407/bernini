@@ -46,6 +46,69 @@ points into one program, so bytecode and reflection come from the same link and 
 element matches the CPU mirror `bgl_idlgen` emits — the default structured-buffer layout
 16-byte-aligns nested handle structs, which the mirror does not.
 
+## A raw buffer holds bytes, and never a resource handle
+
+`RawBuffer` ([types/RawBuffer.slang](../libs/bgl/shaders/src/types/RawBuffer.slang)) wraps
+`ByteAddressBuffer.Handle`; `RawComputeBuffer` is its writable counterpart. The buffer must have been
+created by `CreateRawBuffer` — a view is chosen once, so binding a structured buffer here reads
+undefined bytes rather than failing.
+
+What the arena behind it holds is two things, and the accessors follow: a **record**, which a
+`RawEntry<T>` names and which starts with a `RecordHeader` naming its kind, its payload
+`cRawPayloadOffset` bytes later; and a **range** of bytes with no header, named by a `RawRange`, for
+data whose kind whatever names it already records.
+
+| | |
+|---|---|
+| `Load<T>(byteOffset)` | a value at an absolute offset — what a decoder with its own layout rule uses |
+| `LoadRecordAs<P>(entry)` | a record's payload. The payload type is named separately from the entry's, because an entry is typed by the interface a record satisfies and a load must name the concrete payload behind it |
+| `LoadTag(entry)` | the kind in a record's header, for the one pass that draws more than one |
+| `LoadInRange<T>(range, byteOffset)` | a value inside a headerless range |
+
+Each asserts its reference is non-null in a debug build (`kNullRawDeref`); a null one reads the
+arena's reserved head, which is zeros rather than a live record.
+
+`Load<T>` is for a `T` that **declares no resource type**. The element type of a bindless buffer is
+fixed at its declaration, and a raw one declares bytes: on Metal a `ByteAddressBuffer.Handle` lowers
+to `uint32_t device*`, so Slang reconstructs `T` from loaded scalars and a `Texture2D.Handle` field
+becomes `as_type<texture2d<...>>(ulong)`, which MSL rejects — as does the core module's
+`__getEquivalentStructuredBuffer<T>`, which re-types nothing.
+
+A record needing a texture keeps the handle's bytes anyway, as a `RawTextureHandle` — the same eight
+bytes with no texture in the type — and samples them through a **second, typed view of the same
+allocation**. The raw view reads the record; the typed view is what makes a texture of the bytes
+inside it.
+
+`RawHandleView<T>` ([types/RawHandleView.slang](../libs/bgl/shaders/src/types/RawHandleView.slang))
+is that view, and it is addressed in the arena's own coordinates — `GetAt(byteOffset, index)`, the
+stride divide inside the type. Deliberately **not** an `EntryBuffer<T>`: nothing in it is an
+allocated element, there is no reserved null slot, and most offsets are not a `T` at all. What makes
+one a `T` is the payload layout rule — handles lead a payload and are contiguous — which the
+record's own struct owns and `Scene.cpp` pins with `static_assert`s.
+
+`RawHandleArena<T>` pairs it with the raw view, because they are one allocation: bound separately
+they can be handed different buffers. The CPU arena owns both and re-issues the view *inside* its
+own growth, so there is no instant at which they disagree, and `Uniforms` writes both descriptors
+from one assignment. One view reads one element type, so a payload holding two kinds of handle needs
+a second view, not a wider one.
+
+## A tag enum a shader returns must be one the target can express
+
+An enum a shader only *compares against* is folded to a literal and never appears in the generated
+code. An enum a function **returns** is emitted as a type — and HLSL has no `uint8_t`, so a tag
+declared `: uint8_t` compiles here, passes every Metal test, and fails DXC with
+`unknown type name 'uint8_t'`. Tag enums are therefore `uint32_t`, as `PsoType` always was.
+
+This is worth knowing because the check that catches it is narrow. The `compile_shader` entries in
+[libs/bgl/shaders/CMakeLists.txt](../libs/bgl/shaders/CMakeLists.txt) validate to DXIL at build
+time, and there is no `dxcompiler` on macOS at all — so on a Metal machine that validation does not
+run. A shader missing from that list is checked by nothing until it reaches a Windows runtime, which
+is how `MaterialType : uint8_t` reached master: every forward shader imports `MaterialData`, but only
+`Forward_Transparent` calls `LoadMaterialKind`, and it was the one shader not in the list.
+
+`GetDimensions` is deliberately not exposed: the core module marks it HLSL-only, so a wrapper
+carrying it would compile on D3D12 and fail on Metal.
+
 ## A constant buffer may not mix data and resources below the top level
 
 `Uniforms` sums a member's offset on the way down the reflected tree, so a nested struct that holds

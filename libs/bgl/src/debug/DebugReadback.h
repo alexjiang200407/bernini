@@ -44,6 +44,8 @@ namespace bgl
 			return "NullEntryDeref";
 		case idl::ErrorCode::kNullRangeDeref:
 			return "NullRangeDeref";
+		case idl::ErrorCode::kNullRawDeref:
+			return "NullRawDeref";
 		}
 
 		return std::to_string(errcode);

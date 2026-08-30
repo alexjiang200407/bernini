@@ -273,6 +273,7 @@ the transport, the clip list and the scrubber are the same code either way — w
   the depth-sorted list, which holds every tier at once and draws them through `Forward_AnyMesh`
   (see [Passes](docs/passes.md)), so a blended rig sorts against blended static geometry rather than
   after it. What is refused is a *material type*: no unlit and no loose variant of the skinned
-  pipeline exists, and the geometry stage writes `materialIsLoose = 0`. `AcceptsMaterial`
+  pipeline exists, and a material's kind is read from its own record rather than stamped by the
+  geometry stage. `AcceptsMaterial`
   (`src/util/util.h`) is the rule, and every door that binds a material to animated geometry asks
   it.

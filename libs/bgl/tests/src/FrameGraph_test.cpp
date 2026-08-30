@@ -247,6 +247,24 @@ namespace
 		{
 			return {};
 		}
+		BufferHandle
+		CreateRawBuffer(const RawViewDesc&) noexcept override
+		{
+			return {};
+		}
+		BufferSrvHandle
+		CreateBufferSrv(BufferHandle, const BufferSrvDesc&) noexcept override
+		{
+			return {};
+		}
+		void
+		DestroyBufferSrv(BufferSrvHandle, bool) noexcept override
+		{}
+		bool
+		ValidBufferSrvHandle(const BufferSrvHandle&) const noexcept override
+		{
+			return false;
+		}
 		TextureHandle
 		CreateTexture(const TextureDesc&) noexcept override
 		{
@@ -332,7 +350,7 @@ namespace
 		GetBufferDesc(BufferHandle) const noexcept override
 		{
 			// One pattern chunk over, so a poisoned buffer takes two copies.
-			return BufferDesc{ 96 * 1024, true, "Mock Buffer" };
+			return BufferDesc{ .byteSize = 96 * 1024, .isUav = true, .debugName = "Mock Buffer" };
 		}
 
 		TextureDesc

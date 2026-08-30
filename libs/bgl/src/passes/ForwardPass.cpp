@@ -34,18 +34,12 @@ namespace bgl
 			BarrierSync      sync;
 		};
 
-		static constexpr std::array<MaterialBuffer, 2> c_MaterialBuffers = { {
+		static constexpr std::array<MaterialBuffer, 1> c_MaterialBuffers = { {
 			{
-				c_PbrMaterialBufferName,
-				"pbrMaterials",
+				c_MaterialArenaBufferName,
+				"materials",
 				BarrierAccessFlag::kShaderResource,
-				BarrierSyncFlag::kVertexShader,
-			},
-			{
-				c_LooseMaterialBufferName,
-				"looseMaterials",
-				BarrierAccessFlag::kShaderResource,
-				BarrierSyncFlag::kVertexShader,
+				BarrierSyncFlag::kPixelShader,
 			},
 		} };
 
@@ -56,6 +50,7 @@ namespace bgl
 			"viewProj"sv, "prevViewProj"sv, "jitter"sv, "prevJitter"sv, "time"sv, "prevTime"sv,
 		};
 
+		// clang-format off
 		constexpr std::array<std::string_view, 9> c_MaterialDataFields = {
 			"anisoLinearWrapSampler"sv,
 			"linearClampSampler"sv,
@@ -67,6 +62,7 @@ namespace bgl
 			"envRotation"sv,
 			"alphaHashSeed"sv,
 		};
+		// clang-format on
 
 		constexpr std::array<std::string_view, 3> c_ExpansionDataFields = {
 			"psoIndex"sv,
@@ -381,10 +377,10 @@ namespace bgl
 		if (auto foundMatData = kernel.FindUniforms("materialData"))
 		{
 			auto& matData = *foundMatData;
-			for (const auto& binding : c_MaterialBuffers)
-			{
-				matData[binding.uniformKey].SetIfValid(resources.GetBuffer(binding.graphName));
-			}
+			// Bound from the draw rather than the graph: the pair is one allocation and two
+			// descriptors, and the graph tracks resource state -- a view is not a resource. It is
+			// still declared to the graph (c_MaterialBuffers) so the arena's barriers are placed.
+			matData["materials"] = draw.materialArena;
 
 			matData["anisoLinearWrapSampler"].SetIfValid(draw.samplers.anisoLinearWrap);
 			matData["linearClampSampler"].SetIfValid(draw.samplers.linearClamp);
