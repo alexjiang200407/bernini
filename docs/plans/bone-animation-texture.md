@@ -142,7 +142,7 @@ frame.
 The skinned tier, per [docs/skinning.md](docs/skinning.md) and the code:
 
 - `IScene::AddSkinnedMeshGeom(mesh, meshIndex, materials, skeleton, animations, posedBounds)`
-  ([libs/bgl/include/bgl/IScene.h](libs/bgl/include/bgl/IScene.h)) uploads the rig **per geom**:
+  ([libs/bgl_intfc/include/bgl/IScene.h](libs/bgl_intfc/include/bgl/IScene.h)) uploads the rig **per geom**:
   bones, clips and the sample pool land in scene buffers at
   [libs/bgl/src/scene/Scene.cpp](libs/bgl/src/scene/Scene.cpp) `:801-833`, one `idl::SkinnedGeom`
   per geom. Two meshes on one rig upload it twice.
@@ -160,7 +160,7 @@ The skinned tier, per [docs/skinning.md](docs/skinning.md) and the code:
   `joints0`/`weights0` (8 + 8 bytes; `bmesh_gltf.cpp:551-566`) and the decode is shared, so the
   crowd tier needs no re-cook.
 - `SkinnedInstanceDesc` and `VatInstanceDesc` are already the same three fields by design
-  ([libs/bgl/include/bgl/InstanceDesc.h](libs/bgl/include/bgl/InstanceDesc.h)).
+  ([libs/bgl_intfc/include/bgl/InstanceDesc.h](libs/bgl_intfc/include/bgl/InstanceDesc.h)).
 - Motion vectors are the pose re-evaluated at `prevTime`; placement and deletion bump the view's
   temporal epoch ([docs/taa.md](docs/taa.md)), so a tier switch by respawn takes one unaccumulated
   frame rather than a ghost.
@@ -213,12 +213,21 @@ The VAT tier, to be removed:
   [libs/core/include/core/file/LayeredFileSystem.h](libs/core/include/core/file/LayeredFileSystem.h)
   `:66` state the read-only `.bvat` rule that `archives.md` is written from; they go together.
 
+*Correction, from rebasing onto master.* Two changes landed on `master` while this feature was
+being built, and both move parts of the inventory above. `#543` put every animated placement's
+record in one byte-addressed arena, so `Mesh.vatState` no longer exists: a placement carries a
+single `RawEntry<IPlayback>` and the tier is read from the record's `RecordHeader`. What task 5
+removes there is `PlaybackType::kVat` and the `VatState` record, not a field and a state buffer —
+and it should say whether a tag over one remaining kind still earns its place, rather than leaving
+a constant behind. `#534` moved the public headers to `libs/bgl_intfc/include/bgl/`, which is where
+the VAT declarations now are. Neither changes what the tier costs or what retiring it buys.
+
 ## What changes
 
 | Where | What | What could break |
 |---|---|---|
 | `libs/bgl/idl` | `SkinnedGeom` becomes `Rig` and gains `Range<float4> boneAnimTable` (null until filled); `SkinnedState.geom` becomes `rig`, its `palette` documented null on the bone-anim-table source; `VatGeom`, `VatState`, `Mesh.vatState`, four `PsoType`s go | Nothing in the layout: `gen_idl.py` emits the C++ and Slang sides from one module, so a removed field moves both together |
-| `libs/bgl/include` | `RigHandle`, `IScene::AddRig`/`DeleteRig`, `AddSkinnedMeshGeom` takes a rig; `PoseSource` on `SkinnedInstanceDesc`, whose header comment is rewritten — the playback record stays the same three fields and a unit still moves between tiers without rewriting it; the source says where the pose comes from, not what plays; VAT declarations go | Every skinned golden — the refactor must be pixel-identical |
+| `libs/bgl_intfc/include` | `RigHandle`, `IScene::AddRig`/`DeleteRig`, `AddSkinnedMeshGeom` takes a rig; `PoseSource` on `SkinnedInstanceDesc`, whose header comment is rewritten — the playback record stays the same three fields and a unit still moves between tiers without rewriting it; the source says where the pose comes from, not what plays; VAT declarations go | Every skinned golden — the refactor must be pixel-identical |
 | `libs/bgl/src/scene` | Rig records; a second `BonePaletteBuffer` at scene level for the tables (the same GPU-only storage and offset allocator the per-view palette uses — not a new type; its header comment, which says "one view's" and "rewritten every frame", is rewritten to state the real precondition: whatever it holds is re-derivable after a growth); the pose pass's dense instance list excludes bone-anim-table instances | `BonePaletteBuffer`'s growth **discards** its contents, safe per view only because every instance is re-posed every frame. A table is written once, so a growth must re-queue every rig holding one — the sample pool it fills from is resident, which is why this is a re-dispatch and not a loss. Also: a bone-anim-table instance reaching the pose pass writes through a null slice |
 | `libs/bgl/src/passes` | `PoseRigFrames`: one workgroup per frame, run for each rig whose table is wanted and unfilled (ADR-9) or discarded by a growth, ordered before every reader by the frame graph | Metal: a GPU-written scene buffer read by a mesh stage — the per-view palette already does this; the pass must not be culled as dead on the frame that fills a table before any instance on it is drawn |
 | `libs/bgl/shaders` | `pose_walk.slang` shared by `PoseSkinned` and `PoseRigFrames`; `skinned_vertex.slang` branches on the source and lerps rows across two frames at `time` and two at `prevTime`; VAT shaders go | 48 buffer loads a vertex on the crowd path, from a table shared by every instance on the frame |
