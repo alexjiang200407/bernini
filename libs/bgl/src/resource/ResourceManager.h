@@ -79,10 +79,8 @@ namespace bgl
 		 *
 		 * @pre the buffer is valid and its byte size is a multiple of `stride`.
 		 * @post destroying the buffer does not destroy the view, as with an Srv onto a texture.
-		 * @post the view describes the resource the buffer holds *now*. Growing a buffer replaces
-		 * that resource (see GrowableGpuBuffer), so a view over one must be re-created after every
-		 * growth; the old view then describes a resource already handed to the deferred destroy.
-		 * Nothing announces a growth -- a holder compares the BufferHandle it last viewed.
+		 * @post the view describes the resource the buffer holds *now*, and a growth replaces that
+		 * resource without announcing it, so whoever owns the buffer re-issues the view with it.
 		 */
 		[[nodiscard]]
 		virtual BufferSrvHandle

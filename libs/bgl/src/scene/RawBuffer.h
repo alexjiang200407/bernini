@@ -37,6 +37,11 @@ namespace bgl
 		std::string debugName;
 	};
 
+	// What an arena names its record kinds by: its own enum, or void for an arena of ranges alone,
+	// which has no kinds. Nothing else, so a caller cannot pass the bare integer a header stores.
+	template <typename T>
+	concept RawArenaTag = std::is_void_v<T> || std::is_enum_v<T>;
+
 	/**
 	 * A GPU-mirrored arena of bytes, read through a `RawBuffer` in Slang (types/RawBuffer.slang).
 	 *
@@ -52,8 +57,7 @@ namespace bgl
 	 * caller cannot write a bare integer into a header. `void` is an arena of ranges alone, which
 	 * has no kinds to name and no `AddRecord` to call.
 	 */
-	template <typename Tag = void>
-		requires(std::is_void_v<Tag> || std::is_enum_v<Tag>)
+	template <RawArenaTag Tag = void>
 	class RawBuffer
 	{
 	public:
@@ -80,10 +84,10 @@ namespace bgl
 				desc.nullRecordBytes >= idl::cRawPayloadOffset,
 				"The null record must cover at least a header");
 
-			m_NullRecordBlocks = ToBlockCount(desc.nullRecordBytes);
-			m_HandleStride     = desc.handleStride;
-			m_ViewDebugName    = desc.debugName + " Handles";
-			m_ResourceManager  = resourceManager;
+			m_NullRecordBlocks   = ToBlockCount(desc.nullRecordBytes);
+			m_ViewDesc.stride    = desc.handleStride;
+			m_ViewDesc.debugName = desc.debugName + " Handles";
+			m_ResourceManager    = resourceManager;
 
 			RangeBufferDesc blockDesc;
 			blockDesc.initialCount = ToBlockCount(desc.initialBytes) + m_NullRecordBlocks;
@@ -346,7 +350,7 @@ namespace bgl
 		void
 		RefreshHandleView()
 		{
-			if (m_HandleStride == 0 || m_ResourceManager == nullptr)
+			if (m_ViewDesc.stride == 0 || m_ResourceManager == nullptr)
 			{
 				return;
 			}
@@ -363,11 +367,7 @@ namespace bgl
 				m_ResourceManager->DestroyBufferSrv(m_HandleView);
 			}
 
-			auto viewDesc      = BufferSrvDesc();
-			viewDesc.stride    = m_HandleStride;
-			viewDesc.debugName = m_ViewDebugName;
-
-			m_HandleView   = m_ResourceManager->CreateBufferSrv(arena, viewDesc);
+			m_HandleView   = m_ResourceManager->CreateBufferSrv(arena, m_ViewDesc);
 			m_ViewedBuffer = arena;
 		}
 
@@ -431,8 +431,10 @@ namespace bgl
 		ResourceManagerRef m_ResourceManager;
 		BufferSrvHandle    m_HandleView;
 		BufferHandle       m_ViewedBuffer;
-		uint32_t           m_HandleStride = 0;
-		std::string        m_ViewDebugName;
-		uint32_t           m_NullRecordBlocks = 1;
+
+		// Held rather than rebuilt: it is what every re-issue passes, and a stride of 0 is what
+		// says this arena has no view to re-issue.
+		BufferSrvDesc m_ViewDesc;
+		uint32_t      m_NullRecordBlocks = 1;
 	};
 }
