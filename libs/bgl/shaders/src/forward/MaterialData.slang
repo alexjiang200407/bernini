@@ -1,5 +1,5 @@
-import types.EntryBuffer;
 import types.RawBuffer;
+import types.RawHandleView;
 import idl.RawEntry;
 import idl.IMaterial;
 import idl.Constants;
@@ -9,7 +9,6 @@ import idl.IPbrMaterial;
 import idl.IAlphaTestMaterial;
 import idl.TextureHandle;
 import idl.MaterialType;
-import idl.Entry;
 import forward.common;
 import forward.PbrShading;
 import util.HashedAlpha;
@@ -27,7 +26,7 @@ struct MaterialData
 
     // The same allocation read as texture handles: a payload keeps a handle's bytes inline, and
     // this is the only thing that can make a texture of them. See docs/slang_shaders.md.
-    EntryBuffer<TextureHandle> handleView;
+    RawHandleView<TextureHandle> handleView;
 
     TextureCubeHandle irradianceMap;
     TextureCubeHandle prefilterMap;
@@ -41,13 +40,8 @@ struct MaterialData
     SamplerState.Handle linearClampSampler;
 
     // Handle `index` of the record at `byteOffset`, found by position: a payload's handle fields
-    // lead it and are contiguous, so handle i is element (payloadOffset + i * 8) / 8 of the typed
-    // view. PbrMaterial.slang and LoosePbrMaterial.slang are where that order is fixed.
-    TextureHandle GetTextureAt(uint byteOffset, uint index)
-    {
-        let element = (byteOffset + cRawPayloadOffset) / 8u + index;
-        return handleView[Entry<TextureHandle>.At(element)];
-    }
+    // lead it and are contiguous. PbrMaterial.slang and LoosePbrMaterial.slang fix that order.
+    TextureHandle GetTextureAt(uint byteOffset, uint index) { return handleView.GetAt(byteOffset + cRawPayloadOffset, index); }
 };
 
 ConstantBuffer<MaterialData> materialData;
