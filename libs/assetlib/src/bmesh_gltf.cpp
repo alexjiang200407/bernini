@@ -1143,8 +1143,10 @@ namespace assetlib
 	BMeshImport
 	loadFromGltf(const std::filesystem::path& path, const GltfLoadOptions& options)
 	{
-		std::error_code sizeError;
-		const auto      sourceBytes = std::filesystem::file_size(path, sizeError);
+		// Read for the zone alone, so both are [[maybe_unused]]: with profiling off ZoneTextF
+		// expands to nothing and -Werror would call them dead.
+		[[maybe_unused]] std::error_code sizeError;
+		[[maybe_unused]] const auto      sourceBytes = std::filesystem::file_size(path, sizeError);
 
 		ZoneScopedN("assetlib glTF parse");
 		ZoneTextF(

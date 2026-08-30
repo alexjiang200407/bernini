@@ -4,6 +4,23 @@ CPU timing here is [Tracy](https://github.com/wolfpld/tracy). It is compiled int
 debug and release — not gated the way `BUILD_COVERAGE` is, because a zone costs a few nanoseconds
 where coverage changes the performance of everything it instruments.
 
+It is still an option, and the reason is not cost. Tracy's client opens a TCP socket and announces
+itself over UDP from process start, so a profiler can find it — which is the whole mechanism, and is
+not something a shipping binary should carry. `core` links it, and everything links `core`, so the
+switch has to exist before the tree grows more consumers rather than after:
+
+```bash
+cmake -S . -B build/<preset> -DBERNINI_PROFILING=OFF
+```
+
+Off is headers-only: without `TRACY_ENABLE` every zone macro expands to nothing, the client is not
+linked, and no call site changes. The one thing that does not degrade on its own is naming a thread
+— `tracy::SetThreadName` is an ordinary function, not a macro — which is why that goes through
+`core::profiling::name_this_thread`
+([thread_name.h](libs/core/include/core/profiling/thread_name.h)) and never through Tracy directly.
+**A variable read only to feed a `ZoneTextF` needs `[[maybe_unused]]`**, or `-Werror` calls it dead
+in that build; `bmesh_gltf.cpp`'s source size is the worked example.
+
 This page is about **load and cook time**: what a bake cost, where a start-up went. GPU per-pass
 timing is a separate, unbuilt thing (`ROADMAP.md` § Profiling), and `docs/gfx_debug.md` is where a
 *wrong* frame is diagnosed rather than a slow one.
@@ -61,8 +78,13 @@ thread has to be passed anywhere. A thread that does load work is worth naming o
 its body, so its track is legible rather than a number:
 
 ```cpp
-tracy::SetThreadName("bgl-render");
+core::profiling::name_this_thread("bgl-render");
 ```
+
+The first name a thread is given is the one it keeps, so a pooled worker can call that at the top of
+every task rather than needing a thread body to put it in. Three are named: `bgl-render`,
+`assetlib cook` (every fanned-out cook, so `Reimport`'s stages and `Migrate`'s resave walk both) and
+`editor thumbnails`.
 
 ## Where they are
 

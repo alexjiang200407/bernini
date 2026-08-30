@@ -50,6 +50,13 @@ formats, so a start-up timeline straddles both.
   `*-profiling` preset per platform, which doubles the preset matrix to buy back a cost that was
   never paid.*
 
+  **It is still an option — `BERNINI_PROFILING`, default ON — and the reason is not CPU cost.**
+  Tracy's client opens a TCP socket and announces itself over UDP from process start; that is the
+  mechanism, not a side effect, and it is not something a shipping binary should carry. `core` links
+  it and everything links `core`, so the escape hatch is cheaper to add now than once the tree has
+  more consumers — `ROADMAP.md` ships the game cross-platform, Xbox included. Off is headers-only and
+  no call site changes.*
+
 - **ADR-3 — Refuse both of Tracy's tempting features: no `crash-handler`, and no `on-demand`.** The
   crash handler contends with `core::install_crash_handlers()` and cpptrace, which already own that
   seam and write the `<exe>_crash_<stamp>.log` the repo documents. `on-demand` is the subtler one and

@@ -4,6 +4,8 @@
 #include <QThread>
 #include <QTimer>
 
+#include <core/profiling/thread_name.h>
+
 #include <tracy/Tracy.hpp>
 
 Renderer::Renderer(
@@ -27,7 +29,7 @@ Renderer::Renderer(
 	const auto build = [&]() {
 		try
 		{
-			tracy::SetThreadName("bgl-render");
+			core::profiling::name_this_thread("bgl-render");
 			ZoneScopedN("editor create graphics");
 
 			m_Graphics = bgl::CreateGraphics(gfxOpts);

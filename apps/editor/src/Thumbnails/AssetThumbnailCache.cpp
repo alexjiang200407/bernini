@@ -19,6 +19,7 @@
 #include <bgl/Camera.h>
 #include <bgl/Viewport.h>
 
+#include <core/profiling/thread_name.h>
 #include <tracy/Tracy.hpp>
 
 namespace
@@ -130,6 +131,8 @@ namespace
 		void
 		run() override
 		{
+			core::profiling::name_this_thread("editor thumbnails");
+
 			ZoneScopedN("editor thumbnail load");
 			ZoneTextF("%s", m_RelPath.c_str());
 
