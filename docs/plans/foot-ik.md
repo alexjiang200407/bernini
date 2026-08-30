@@ -51,8 +51,14 @@ task that lands the solve.
   `Authored/Skeletons/<x>.bavatar`, `importDocumentKeyFor`'s rule for a source and its
   `.bimport` plus the swap of halves that rule never makes, since a `.bimport` sits beside its
   source — so a packed project reaches it and the reference scan derives the edge the way it
-  derives `kImportedSource`. Chains resolve to indices **at load** (`findBone` already exists; the
-  `.bskel` keeps its names), so the `.bskel` is untouched and the avatar enters no cache key.
+  derives `kImportedSource`. Nothing *attaches* it: the path is the attachment, and the editor's
+  part is a **Create avatar** action on a `.bskel` that writes the empty document at that path
+  (task 8), so nobody has to know the rule. Chains resolve to indices **at load** (`findBone`
+  already exists; the `.bskel` keeps its names), so the `.bskel` is untouched and the avatar enters
+  no cache key. It is text because it is authored — `docs/asset_containers.md` splits every file by
+  who decided it, and authored means canonical JSON so two branches merge it like code — not because
+  it is small, though it is: four legs × four names is a few hundred bytes for the Dog, and a bone
+  mask on the 663-bone Ada would be ~15 KB of names.
   *Rejected:* a `legChains` parameter on the producing `.bimport` — unambiguous, since one import
   writes each `.bskel`, but rig metadata in a slot that means "how this source is cooked", and it
   cannot move to another source on re-export; cooking indices into the `.bskel` — a second copy of
@@ -130,7 +136,8 @@ task that lands the solve.
 - A heightfield. The plane is the seam; terrain replaces the sampler.
 - Hand IK, prop attachment, look-at. Same solver, different targets and authoring; the chain format
   is not generalised for them.
-- An editor panel for authoring chains. The `.bavatar` is hand-edited, as `clipFloor` is.
+- An editor panel for authoring chains. The editor creates the `.bavatar` at its path (task 8); its
+  contents are hand-edited, as `clipFloor` is.
 - Authored plant windows. If ADR-5's derivation is wrong on a clip, the fix is a per-clip override
   in the avatar, and that override is not built until a clip needs it.
 - Instance movement and the previous transform it needs (ADR-6).
@@ -251,7 +258,7 @@ cha800_00 are); `Dog.glb` is at `../../resources/glb-specular/Dog.glb`.
 | the four `groundClips` call sites | `bakePlantWeights` after grounding, when the rig has an avatar | a cook without an avatar is unchanged |
 | `assetlib_cli describe` | prints the legs a rig authors and how many frames each plants | |
 | `gamelib/AssetManager.cpp` | acquire reads the avatar by convention, resolves, fits soles, finds or measures windows, fills `FootPlantDesc` | an unresolvable name refuses the acquire naming it |
-| `apps/editor` `AnimationPreviewWindow` | a ground-slope control that sets the scene ground and tilts a plane geom under the rig | the panel is untestable (`docs/skinning.md`); `PlanAnimationLoad` is untouched |
+| `apps/editor` `AnimationPreviewWindow`, `ContentExplorer` | a ground-slope control that sets the scene ground and tilts a plane geom under the rig; a *Create avatar* action on a `.bskel` that writes an empty `.bavatar` at the convention path and reveals it | the panel is untestable (`docs/skinning.md`); `PlanAnimationLoad` is untouched; the action refuses when the document already exists |
 | `docs/skinning.md`, `docs/taa.md`, `ROADMAP.md:175-177` | a Foot IK section; the ground listed among the rebinds the epoch counts; the roadmap line says position *and* orientation | |
 | `./test-project` | `Dog.glb` imported; `Dog.bavatar` and `Coyote.bavatar` authored | a re-bake of every `.banim` in the project, discarded by `ws done` |
 
@@ -308,10 +315,13 @@ and the project. Each task is one PR into `feat/foot-ik`; each names its gate.
    convention, resolve, fit, find-or-measure, `FootPlantDesc`. *Gate:* the `[skinnedacquire]` cases
    in Acceptance.
 
-8. **`feat(editor): a ground slope in the animation preview`** — the control and the plane; the
-   Dog imported into `./test-project` with `Dog.bavatar` and `Coyote.bavatar` authored on the
-   project branch; the table re-measured on both rigs with the plane-fit probe and recorded in the
-   PR body. *Gate:* the Acceptance table; `editor_tests` unchanged.
+8. **`feat(editor): a ground slope in the animation preview, and an avatar created from a rig`** —
+   the control and the plane; the *Create avatar* action on a `.bskel` in the content explorer,
+   writing `{ "legs": [] }` at the convention path through the store and revealing it; the Dog
+   imported into `./test-project` with `Dog.bavatar` and `Coyote.bavatar` authored on the project
+   branch; the table re-measured on both rigs with the plane-fit probe and recorded in the PR body.
+   *Gate:* the Acceptance table; an `editor_tests` case that the action writes the document at the
+   path `avatarKeyFor` names and refuses an existing one; the rest of `editor_tests` unchanged.
 
 9. **`docs(skinning): move what outlives foot IK into the doc and drop the plan`** — whatever of
    this file describes how the code now behaves goes to `docs/skinning.md` (bcp-docs shape); the
