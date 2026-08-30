@@ -150,12 +150,15 @@ claude plugin install slang-lsp@bernini
 ```
 
 The marketplace is recorded in your user settings as an absolute path, so re-add it if you move the
-clone. Restart Claude Code, then check it took by asking for the definition of `SubmeshInstance` on
-line 1 of `libs/bgl/shaders/src/forward/common.slang`; it should land in
-`types/SubmeshInstance.slang`.
+clone. Restart Claude Code, then check it took by asking what `SubmeshInstance` is on line 6 of
+`libs/bgl/shaders/src/forward/common.slang` — hover has to resolve the imported module to answer, so
+it fails where go-to-definition on the import line above it still succeeds.
 
-It is navigation only — Claude Code's LSP tool has no diagnostics operation, so a shader that does
-not compile is still caught by `just build`, exactly as it is today.
+slangd is given the same source roots the build compiles with, because it resolves an `import` the
+way the compiler does and a path the build has is a path it needs. There is no diagnostics
+*operation* to call, but slangd publishes diagnostics as it goes and Claude Code surfaces them, so a
+mistake in a shader can reach you before a build does. `just build` stays the authority: it compiles
+every entry point for a real target, which a language server never does.
 
 ## Features
 - GPU Driven Instance Rendering
