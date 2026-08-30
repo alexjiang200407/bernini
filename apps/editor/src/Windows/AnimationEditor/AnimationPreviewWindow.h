@@ -7,6 +7,7 @@
 #include "util/held_open_assets.h"
 
 #include <bgl/GeomHandle.h>
+#include <bgl/InstanceDesc.h>
 #include <bgl/MeshInstanceHandle.h>
 
 namespace assetlib
@@ -124,9 +125,9 @@ Q_SIGNALS:
 	AnimationSourcesChanged(const QStringList& candidates, int activeIndex);
 
 	/**
-	 * The tier the panel is *actually* previewing through. Emitted after every SetPoseSource,
-	 * including one whose load failed -- the caller's control has already moved by then, and this is
-	 * what snaps it back to what is on screen.
+	 * The pose source the panel is now on, emitted after every SetPoseSource. The caller's control
+	 * has already moved by then, so this is what a selector reads to agree with the panel rather
+	 * than with the click.
 	 */
 	void
 	PoseSourceChanged(bgl::PoseSource source);
@@ -208,11 +209,6 @@ private:
 	std::vector<bgl::GeomHandle>         m_Geoms;      // one entry per acquire, repeats included
 	std::vector<AnimatedDraw>            m_AnimatedDraws;
 	std::filesystem::path                m_DataRoot;
-
-	// What LoadMesh was last called with, so a source switch can re-load without the caller
-	// re-supplying them.
-	std::filesystem::path m_MeshPath;
-	std::string           m_Animations;
 
 	// The configured environment is kept whole because a drop carries only a path and Clear has to
 	// be able to get back to it. Its root stands in until a project opens and m_DataRoot names its

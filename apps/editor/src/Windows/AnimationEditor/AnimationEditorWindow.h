@@ -89,10 +89,6 @@ public:
 	GetHeldOpenPaths() const override;
 
 	/**
-	 * The timeline slider position for a clock reading, and back: the slider is `tickCount`
-	 * integer ticks over the clip's period. Static so the mapping is pinnable without a window.
-	 */
-	/**
 	 * The tier selector's entry for a pose source, and back.
 	 *
 	 * A mapping and not a cast: the combo's order is a layout decision and the enum's is bgl's. It
@@ -105,6 +101,10 @@ public:
 	[[nodiscard]] static bgl::PoseSource
 	TierSourceAt(int index) noexcept;
 
+	/**
+	 * The timeline slider position for a clock reading, and back: the slider is `tickCount`
+	 * integer ticks over the clip's period. Static so the mapping is pinnable without a window.
+	 */
 	[[nodiscard]] static int
 	TimelineTicks(float seconds, float periodSeconds, int tickCount) noexcept;
 
@@ -163,7 +163,8 @@ private:
 	QLabel*    m_MeshLabel      = nullptr;
 	QComboBox* m_SourceSelector = nullptr;  // which .banim is played
 
-	// Which tier it is played through: the rig posed live, or the bake made of it.
+	// Where its instances read their pose: posed per instance every frame, or off the rig's
+	// shared table.
 	QComboBox* m_TierSelector = nullptr;
 
 	QListWidget* m_ClipList     = nullptr;
