@@ -586,6 +586,14 @@ namespace assetlib
 		const bool wantsCompression = compression != Ktx2Compression::kNone;
 		if (wantsCompression && isBasisCompressible(image.vkFormat))
 		{
+			ZoneScopedN("assetlib ktx2 encode");
+			ZoneTextF(
+				"%ux%u, %u levels, %s",
+				image.width,
+				image.height,
+				image.mipLevels,
+				isBakeTarget(compression) ? "uastc then block" : "uastc");
+
 			// UASTC block encoding is deterministic regardless of thread count, so parallelise it --
 			// single-threaded encoding of large (e.g. 4K) mip chains is prohibitively slow.
 			const uint32_t hc = std::thread::hardware_concurrency();

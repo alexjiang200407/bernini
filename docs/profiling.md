@@ -119,7 +119,28 @@ daily:
 | Everything warm | **0.90 s** | `assetlib scan stale textures` 0.39 s (43%), `editor create graphics` 0.29 s (32%) |
 | Cold shader cache | **5.14 s** | `editor create graphics` 4.43 s (86%) |
 | Derived containers absent | **24.2 s** | `assetlib reimport` 22.6 s (94%), of which `assetlib glTF parse` ×7 = 10.1 s |
-| …and materials stale too | **133.9 s** | the resave walk's material re-bake, ~110 s |
+| Materials stale | **26.5 s** | `assetlib migrate resave walk` 22.0 s (83%) |
+
+A project can be worse than any of these — a full cold rebuild with everything stale at once measured
+**133.9 s** — but that run predates the phase zones, so the split above is measured and that number
+is only a total.
+
+### Where the resave walk goes
+
+`Migrate`'s resave walk is the largest single phase there is, and it is nearly half texture encoding:
+
+| | CPU across 4 threads | share |
+|---|---:|---|
+| `assetlib resave`, 73 files | 78.5 s | — |
+| ⤷ `assetlib ktx2 encode`, 37 images | **36.1 s** | **46%** |
+| ⤷ `assetlib ktx2 decode`, 49 images | 1.2 s | 2% |
+| ⤷ everything else (mips, compositing, serialize, write) | 41.2 s | 52% |
+
+Every one of those 37 encodes is a **UASTC** encode, and for a bake target it is immediately
+transcoded to BC1/BC5/BC7 and the UASTC thrown away — `image_io.cpp` does it that way because libktx
+exposes no direct BC encoder, not because anything wants UASTC. A direct BC encoder would attack 46%
+of the dominant phase; changing what *source* textures are stored as would not, because the decode
+side is 2%.
 
 A **warm** start is nearly half staleness scanning: `GetStaleImportedTextureSources` walks every
 import document on every launch of a project where nothing changed.
