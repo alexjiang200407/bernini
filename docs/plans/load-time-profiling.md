@@ -176,23 +176,20 @@ formats, so a start-up timeline straddles both.
 ## Commits
 
 1. `docs(plans): plan a profiler that can see a cold start` — this file.
-2. `build: vendor Tracy, enabled in every preset` — the manifest entry with `default-features`
-   off and `crash-handler`/`on-demand` refused (ADR-2, ADR-3), and `core` linking
-   `Tracy::TracyClient` publicly so every target downstream of it can open a zone.
-   Gate: `just build` configures and links on `macos-clang-metal-debug`.
-3. `refactor(core): retire ScopedStage for Tracy zones` — the 8 call sites convert, the class, its
-   header and `ScopedStage_test.cpp` go, and `docs/gfx_debug.md` stops advertising a channel that no
-   longer exists (ADR-4). Gate: `just test core assetlib`.
-4. `feat(editor): one log, not two` — `init_file_logger` before the `Renderer`, and Qt's message
-   handler into the same sinks (ADR-5). Gate: the new `editor_tests` case in Acceptance.
-5. `feat(assetlib): the container decode says what it cost` — zones through `cache_io`'s `load<T>`
-   and the regen path, so a cache hit is distinguishable from a miss in the capture.
-   Gate: a capture of `assetlib_cli` shows both.
-6. `feat(gamelib): the acquire path says what it cost` — `AssetManager::Acquire*` and
-   `EnsureVatBaked`, the work that runs inline on the render thread (ADR-6).
-   Gate: a capture shows an acquire nested under the render thread's track.
-7. `feat(editor): the start-up spine says what it cost` — mount, the three scans, the shader
-   compile, `Migrate`, the explorer root and the thumbnail pool.
-   Gate: a capture of a cold start shows the tree across all five threads.
-8. **Measure**, and report the cold and warm split before writing anything further (ADR-7).
-9. `perf(<layer>): …` — chosen by 8, with the `[perf]` case that pins it where it has that shape.
+2. `build: vendor Tracy, enabled in every preset` — ADR-1, ADR-2, ADR-3, ADR-8.
+   Gate: configures and links on `macos-clang-metal-debug`.
+3. `refactor(core): retire ScopedStage for Tracy zones` — ADR-4. Gate: `just test core assetlib`.
+4. `feat(editor): one log, not two` — ADR-5. Gate: the four `[log]` cases in `editor_tests`.
+5. `feat(assetlib): the container reads say what they cost` — ADR-6, the read funnels and the
+   `AssetStore` doors a start-up knocks on.
+6. `feat(gamelib): the acquire path says what it cost` — ADR-6, the render thread's half.
+7. `feat(editor): the start-up spine says what it cost` — ADR-6, the rest.
+8. `feat(assetlib): the rebuild's own phases, and what they measured` — the first capture left 110 s
+   of a 133.9 s cold start in no zone at all; this closes that and records the four scenarios.
+9. `docs(plans): the re-parse is not where the win is` — ADR-9, and ADR-7 discharged.
+10. `refactor(assetlib): tell the two VAT zones apart`.
+11. `build: give profiling an off switch, and name the pools` — the network hatch ADR-2 now argues
+    for, plus the two defects a `BERNINI_PROFILING=OFF` build turned up.
+12. `docs(plans): say what actually landed` — this list, reconciled against the log.
+
+Gate for the whole: `just test` green under **both** `BERNINI_PROFILING=ON` and `OFF`.
