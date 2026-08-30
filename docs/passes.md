@@ -141,7 +141,7 @@ fragment that survives is fully opaque, and scaling its diffuse by a texture alp
 
 ## Hashed alpha
 
-`LayerType::kHashed` ([bgl/LayerType.h](libs/bgl/include/bgl/LayerType.h)) is stochastic coverage:
+`LayerType::kHashed` ([bgl/LayerType.h](libs/bgl_intfc/include/bgl/LayerType.h)) is stochastic coverage:
 alpha becomes a per-pixel hashed threshold rather than a cutoff, so every layer of a self-occluding
 surface writes depth and participates, and the correct blend is what the ensemble averages to.
 

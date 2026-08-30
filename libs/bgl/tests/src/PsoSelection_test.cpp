@@ -63,7 +63,7 @@ TEST_CASE("a layer resolves to its own tier's bucket", "[pso]")
 	using bgl::GetPsoFromGeomAndMaterial;
 	using bgl::LayerType;
 	using bgl::MaterialType;
-	using bgl::PsoType;
+	using bgl::idl::PsoType;
 
 	const auto pso = [](GeomType geom, LayerType layer) {
 		return GetPsoFromGeomAndMaterial(geom, MaterialType::kPBR, layer);

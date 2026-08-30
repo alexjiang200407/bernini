@@ -54,6 +54,14 @@ path is the source of truth; when this doc disagrees, trust the struct, then fix
   per-instance, against the submesh's sphere
   ([CullInstances.slang](libs/bgl/shaders/src/CullInstances.slang)).
 
+  This model draws from the meshopt pools — `meshletVertices` and `meshletTriangles` — and **never
+  from the cooked plain index range.** The cooked `assetlib::Submesh` carries that range too
+  ([Mesh.h](libs/assetlib_structs/include/assetlib_structs/Mesh.h)), and it is read by three
+  `assetlib` paths and by nothing in `bgl`, which is what makes it look spare from here. See
+  [Asset Standards](docs/asset_standards.md) § Meshlets before deleting it. Note the vertex pool is
+  *not* duplicated the same way: `meshletVertices` are remap indices into the one `vertexData`
+  buffer, so a submesh's `vertexByteOffset`/`vertexCount` is read on this path too.
+
 * **A `Submesh` is pure geometry, and is 1:1 with a source submesh.** It carries one vertex layout,
   its meshlet/vertex/index ranges, and a local-space bounding sphere — and *nothing about shading*.
   The sphere circumscribes the submesh's AABB: the cooked `assetlib::Submesh` AABB for an asset, a

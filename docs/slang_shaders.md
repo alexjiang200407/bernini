@@ -1,10 +1,15 @@
 # Slang Shaders
 
-Every shader in `libs/bgl/shaders/src` is one Slang source compiled to DXIL. The `compile_shader`
-entries in [`libs/bgl/shaders/CMakeLists.txt`](../libs/bgl/shaders/CMakeLists.txt) invoke `slangc` per
-entry point at build time, so a construct the target rejects is a build failure rather than a runtime
-surprise. The `.dxil` they produce is validation output only — the runtime compiles from the staged
-Slang sources.
+Every shader in `libs/bgl/shaders/src` is one Slang source, and **both backends compile it at
+runtime** from the staged Slang — to DXIL on D3D12, to MSL via `newLibraryWithSource` on Metal.
+
+On a D3D12 build only, there is a build-time pass over the same sources: the `compile_shader`
+entries in [`libs/bgl/shaders/CMakeLists.txt`](../libs/bgl/shaders/CMakeLists.txt) invoke `slangc`
+per entry point, so a construct the target rejects is a build failure rather than a runtime
+surprise. The `.dxil` it produces is validation output only, and nothing loads it. A Metal build
+does not run this step at all — `libs/bgl/CMakeLists.txt:128-129` adds the `shaders` subdirectory
+under `RENDERER_BACKEND STREQUAL "DX12"` and nowhere else — so on macOS a bad shader surfaces when
+the pass that needs it is first built, not at compile time.
 
 ## Atomics: `Atomic<T>`, never a plain field + `InterlockedAdd`
 

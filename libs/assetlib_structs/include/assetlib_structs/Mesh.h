@@ -24,7 +24,17 @@ namespace assetlib
 
 	static_assert(sizeof(Meshlet) == 32);
 
-	/** One drawable primitive. Vertex/index bytes live in the document pools; ranges reference them. */
+	/**
+	 * One drawable primitive. Vertex/index bytes live in the document pools; ranges reference them.
+	 *
+	 * The triangles are stored twice. `firstMeshlet`/`meshletCount` is what bgl draws; the plain
+	 * `indexByteOffset`/`indexCount` range is read by cook-time tangent generation and by
+	 * `assetlib_cli`'s `describe` and raw-OBJ export, and is what a renderer with no mesh-shader
+	 * stage would draw. No renderer reads it, so it profiles as cook-size overhead -- deleting it
+	 * breaks those three and costs an `AssetCodec<BMesh>::c_BakeToken` bump plus a re-cook of every
+	 * asset. `vertexByteOffset`/`vertexCount` is not duplicated: the meshlet arrays index into the
+	 * same `vertexData`, so bgl and gamelib both read it.
+	 */
 	struct Submesh
 	{
 		VertexLayout layout;

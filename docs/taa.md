@@ -64,7 +64,7 @@ alpha-tested, read dimmer — judged acceptable by eye against keeping the machi
 
 * **The client's `Camera` never carries the jitter.** `RenderContext::Draw` left-multiplies a
   clip-space translation onto the projection it builds, so the public
-  [Camera](libs/bgl/include/bgl/Camera.h) a caller reads back for picking or gizmo placement is the
+  [Camera](libs/bgl_intfc/include/bgl/Camera.h) a caller reads back for picking or gizmo placement is the
   one they set. A translation rather than a poke at the projection's own terms: it adds
   `jitter * clip.w` to `clip.xy`, which lands as a constant NDC offset after the divide and is
   correct for an orthographic camera too.
@@ -250,8 +250,8 @@ alpha-tested, read dimmer — judged acceptable by eye against keeping the machi
 
 | Type | File | Role |
 |---|---|---|
-| `RenderTargetDesc::taaEnabled` | [bgl/IRenderTarget.h](libs/bgl/include/bgl/IRenderTarget.h) | The opt-in, and what allocates. Off by default. |
-| `IRenderTarget::SetTaaEnabled` | [bgl/IRenderTarget.h](libs/bgl/include/bgl/IRenderTarget.h) | Runs or stops it at runtime, on a target that allocated. |
+| `RenderTargetDesc::taaEnabled` | [bgl/IRenderTarget.h](libs/bgl_intfc/include/bgl/IRenderTarget.h) | The opt-in, and what allocates. Off by default. |
+| `IRenderTarget::SetTaaEnabled` | [bgl/IRenderTarget.h](libs/bgl_intfc/include/bgl/IRenderTarget.h) | Runs or stops it at runtime, on a target that allocated. |
 | `HaltonJitter` | [util/jitter.h](libs/bgl/src/util/jitter.h) | The sub-pixel offset for a frame, in NDC. |
 | `TaaResolvePass` | [passes/TaaResolvePass.h](libs/bgl/src/passes/TaaResolvePass.h) | Reprojects, clamps, blends into the new history. |
 | `Scene::GetTemporalEpoch` | [scene/Scene.h](libs/bgl/src/scene/Scene.h) | Counts the changes to the scene that no motion vector can carry. |

@@ -11,7 +11,6 @@
 #include <bgl/MaterialType.h>
 #include <bgl/MeshInstanceHandle.h>
 #include <bgl/PreparedStaticMesh.h>
-#include <bgl/PsoType.h>
 #include <bgl/TextureAssetHandle.h>
 #include <bgl/api.h>
 #include <bgl/error.h>
@@ -33,6 +32,9 @@ namespace bgl
 	 * How big the scene's GPU arenas start, not how big they may get. Each one grows on demand,
 	 * bounded only by device memory, so these are a hint that trades startup residency against the
 	 * number of growth events during a load. Sizing them near the steady state avoids both.
+	 *
+	 * Every field is advisory. A renderer that keeps no arena of a given kind ignores that field
+	 * rather than failing on it.
 	 */
 	struct SceneDesc
 	{
@@ -205,8 +207,8 @@ namespace bgl
 		/**
 		 * Adds a procedurally generated plane as static-mesh geometry: a flat `width` x `height` quad
 		 * centred on the origin, subdivided into an `xSegments` x `ySegments` grid.
-		 * @throws SceneError if either segment count is 0, if the grid needs more meshlets than one
-		 *         dispatch can launch, or if a buffer allocation fails.
+		 * @throws SceneError if either segment count is 0, if the grid is larger than one draw can
+		 *         launch, or if a buffer allocation fails.
 		 */
 		virtual GeomHandle
 		AddPlaneGeom(
@@ -218,7 +220,7 @@ namespace bgl
 
 		/**
 		 * Adds one mesh of a loaded BMesh as static-mesh geometry, uploading its submeshes'
-		 * vertex / index / meshlet data into this scene's buffers. Each submesh is bound to
+		 * geometry into this scene's buffers. Each submesh is bound to
 		 * `materials[submesh.material]`; a submesh whose material index is out of range (e.g. the
 		 * source had none) is left unlit.
 		 *
@@ -247,7 +249,7 @@ namespace bgl
 		AddStaticMeshGeom(PreparedStaticMesh mesh, std::span<const MaterialHandle> materials) = 0;
 
 		/**
-		 * Adds VAT geometry: the bind-pose mesh whose meshlets and UVs every instance draws, bound
+		 * Adds VAT geometry: the bind-pose mesh whose topology and UVs every instance draws, bound
 		 * to the baked texture pair its vertices are fetched from (see VatGeomDesc). The submesh's
 		 * culling bounds come from the desc's box, not the bind pose -- they must hold under every
 		 * frame of every clip.
@@ -257,8 +259,8 @@ namespace bgl
 		 * SetSubmeshMaterial on this geom.
 		 *
 		 * @throws SceneError if a texture handle or the material is invalid or of the wrong kind,
-		 *         `clips` is empty, the primitive needs more meshlets than one dispatch can launch,
-		 *         or a buffer allocation fails.
+		 *         `clips` is empty, the primitive is larger than one draw can launch, or a buffer
+		 *         allocation fails.
 		 */
 		virtual GeomHandle
 		AddVatMeshGeom(
@@ -269,7 +271,7 @@ namespace bgl
 
 		/**
 		 * Adds one mesh of a loaded BMesh as VAT geometry: the bind-pose submeshes upload exactly
-		 * as AddStaticMeshGeom does -- cooked meshlets, one GPU submesh per source submesh, materials
+		 * as AddStaticMeshGeom does -- cooked geometry, one GPU submesh per source submesh, materials
 		 * resolved by each submesh's material index -- and every instance fetches position and
 		 * normal from the desc's texture pair instead of the vertex bytes. Every submesh's culling
 		 * sphere comes from the desc's all-clips box, not its bind pose: the bind pose's bounds do
@@ -344,7 +346,7 @@ namespace bgl
 		AddTextureAsset(assetlib::ImageData img, std::string debugName = "") = 0;
 
 		/**
-		 * Destroys a texture asset, releasing its GPU resource and its bindless descriptor slot.
+		 * Destroys a texture asset, releasing its GPU resource and the slot a shader reached it by.
 		 * The release is deferred until the frames that could still be sampling it have completed.
 		 *
 		 * The scene does not know which materials sample a texture. Deleting one that a live
@@ -353,7 +355,7 @@ namespace bgl
 		 *
 		 * A view's SetEnvironmentMap / SetSkyBox bindings are the same hazard and are not cascaded
 		 * to: rebind the view before releasing what it named. The retired slot is not benign on
-		 * every backend -- Metal resolves the handle at dispatch and aborts on the next frame.
+		 * every renderer -- one may resolve the handle as it draws, and abort on the next frame.
 		 *
 		 * @param texture A handle returned by AddTextureAsset.
 		 * @throws SceneError if the handle is null, or already deleted.
@@ -381,8 +383,8 @@ namespace bgl
 		 *
 		 * A submesh stores the material's entry *index*, so every submesh bound to `material` picks
 		 * the new textures and factors up with no rebinding -- this is how a texture is swapped on a
-		 * live material. The PSO bucket derives from the material's *type*, which an update cannot
-		 * change, so pipeline state is unaffected too.
+		 * live material. How a submesh is drawn derives from the material's *type*, which an update
+		 * cannot change, so that is unaffected too.
 		 *
 		 * @throws SceneError if the handle is invalid, expired, or not of the matching type.
 		 */
@@ -425,7 +427,7 @@ namespace bgl
 		IsGeomAlive(GeomHandle geom) const noexcept = 0;
 
 		/**
-		 * Removes geometry and frees its underlying vertex/index/meshlet data.
+		 * Removes geometry and frees the buffers behind it.
 		 *
 		 * @pre Every mesh instance placed from this geom has been destroyed
 		 *      (ISceneView::DeleteMeshInstance). The scene does not track instances and cannot

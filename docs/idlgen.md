@@ -78,11 +78,15 @@ are the source of truth; when this doc disagrees, trust them, then fix this doc.
   are on the include path, because a generated header includes its imports as siblings and three of
   those (`Entry`, `Range`, `RangeWithCount`) are hand-written.
 
-  **The two public modules are the exception and stay committed**, under
-  [libs/bgl/include/bgl/](libs/bgl/include/bgl/): a consumer includes `<bgl/...>` without building
+  **One public module is the exception and stays committed**, under
+  [libs/bgl_intfc/include/bgl/](libs/bgl_intfc/include/bgl/): a consumer includes `<bgl/...>` without building
   bgl. That is safe only while `IDL_PUBLIC_CPP_SOURCES` holds no structs — today it is `MaterialType`
-  and `PsoType`, both enums with an explicit underlying type plus one constant, which every backend
-  lays out identically.
+  alone, an enum with an explicit underlying type, which every backend lays out identically.
+
+  The list is also what keeps renderer-shaped data off the public surface, which is the other half
+  of the rule: a GPU struct laid out per backend cannot go here, and neither can an enum that
+  describes *this* renderer's pipelines. `PsoType` was in this list and is no longer — it names
+  mesh-shader pipeline permutations, so it belongs in `bgl::idl` with the rest of bgl's internals.
 
 * **Generated files are write-only build artifacts.** Both the `.slang` copy and the `.h` carry a
   `// THIS IS A FILE GENERATED FROM ... DO NOT EDIT MANUALLY` banner. Edit the IDL source and

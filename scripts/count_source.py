@@ -15,6 +15,7 @@ EXTENSION_MAP = {
 # `libs/assetlib_structs`.
 MODULE_PREFIXES = (
     ('libs/bgl', 'bgl'),
+    ('libs/bgl_intfc', 'bgl_intfc'),
     ('libs/core', 'core'),
     ('libs/assetlib', 'assetlib'),
     ('libs/assetlib/cli', 'assetlib_cli'),

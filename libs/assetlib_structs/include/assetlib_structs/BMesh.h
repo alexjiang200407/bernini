@@ -27,7 +27,7 @@ namespace assetlib
 		std::vector<uint8_t>  meshletTriangles;  // meshopt local indices, 3 per triangle
 
 		std::vector<std::byte> vertexData;  // all interleaved vertex blobs
-		std::vector<std::byte> indexData;   // all index buffers
+		std::vector<std::byte> indexData;   // all index buffers; unread by bgl, see Submesh
 		core::string_pool      stringPool;
 
 		std::vector<std::string> materials;

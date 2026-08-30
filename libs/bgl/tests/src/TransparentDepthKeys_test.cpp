@@ -2,6 +2,7 @@
 #include "cmd/CommandList.h"
 #include "cmd/CommandQueue.h"
 #include "gfx/GraphicsBase.h"
+#include "idl/PsoType.h"
 #include "idl/idl.h"
 #include "pipeline/ComputeKernel.h"
 #include "pipeline/ComputePipeline.h"
@@ -17,7 +18,6 @@
 #include "util/TestOptions.h"
 #include "util/util.h"
 #include <bgl/IGraphics.h>
-#include <bgl/PsoType.h>
 
 namespace
 {
@@ -66,20 +66,20 @@ TEST_CASE(
 	// order would fail the ordering check below.
 	struct Placement
 	{
-		float        z;
-		bgl::PsoType pso;
+		float             z;
+		bgl::idl::PsoType pso;
 	};
 	const std::array<Placement, 7> placements = { {
-		{ 10.0f, bgl::PsoType::kTransparent_StaticMesh_PBR },
-		{ 5.0f, bgl::PsoType::kOpaque_StaticMesh_PBR },
-		{ 30.0f, bgl::PsoType::kTransparent_StaticMesh_LoosePbr },
-		{ 20.0f, bgl::PsoType::kTransparent_StaticMesh_LoosePbr },
-		{ 7.0f, bgl::PsoType::kAlphaTest_StaticMesh_PBR },
-		{ 50.0f, bgl::PsoType::kTransparent_StaticMesh_PBR },
+		{ 10.0f, bgl::idl::PsoType::kTransparent_StaticMesh_PBR },
+		{ 5.0f, bgl::idl::PsoType::kOpaque_StaticMesh_PBR },
+		{ 30.0f, bgl::idl::PsoType::kTransparent_StaticMesh_LoosePbr },
+		{ 20.0f, bgl::idl::PsoType::kTransparent_StaticMesh_LoosePbr },
+		{ 7.0f, bgl::idl::PsoType::kAlphaTest_StaticMesh_PBR },
+		{ 50.0f, bgl::idl::PsoType::kTransparent_StaticMesh_PBR },
 		// Exactly at the camera: distSq is 0, which inverts to all-ones and would key to the sort's
 		// padding value if the key were not capped below it. Padding could then outrank a real entry
 		// and put 0xFFFFFFFF into the drawn range, which ASBase dereferences unchecked.
-		{ 0.0f, bgl::PsoType::kTransparent_StaticMesh_PBR },
+		{ 0.0f, bgl::idl::PsoType::kTransparent_StaticMesh_PBR },
 	} };
 
 	constexpr uint32_t c_PaddedCount = c_ThreadsPerGroup;

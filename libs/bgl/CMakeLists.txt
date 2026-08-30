@@ -6,9 +6,11 @@ file(GLOB_RECURSE BGL_COMMON_SOURCES CONFIGURE_DEPENDS
 )
 list(FILTER BGL_COMMON_SOURCES EXCLUDE REGEX ".*/src/(d3d12|metal)/.*")
 
+# The public surface lives in bgl_intfc; these are listed here only so an IDE shows them under the
+# renderer that implements them.
 file(GLOB_RECURSE BGL_SHARED_HEADERS CONFIGURE_DEPENDS
-	${CMAKE_CURRENT_SOURCE_DIR}/include/bgl/*.h
-	${CMAKE_CURRENT_SOURCE_DIR}/include/bgl/*.hpp
+	${CMAKE_SOURCE_DIR}/libs/bgl_intfc/include/bgl/*.h
+	${CMAKE_SOURCE_DIR}/libs/bgl_intfc/include/bgl/*.hpp
 )
 
 file(GLOB_RECURSE BGL_COMMON_HEADERS CONFIGURE_DEPENDS
@@ -19,7 +21,7 @@ list(FILTER BGL_COMMON_HEADERS EXCLUDE REGEX ".*/src/(d3d12|metal)/.*")
 
 
 source_group(TREE "${CMAKE_CURRENT_SOURCE_DIR}/src" PREFIX "Source Files" FILES ${BGL_COMMON_SOURCES} ${BGL_COMMON_HEADERS})
-source_group(TREE "${CMAKE_CURRENT_SOURCE_DIR}/include/bgl" PREFIX "Shared Header Files" FILES ${BGL_SHARED_HEADERS})
+source_group(TREE "${CMAKE_SOURCE_DIR}/libs/bgl_intfc/include/bgl" PREFIX "Shared Header Files" FILES ${BGL_SHARED_HEADERS})
 
 
 add_library(bgl_objects OBJECT
@@ -28,7 +30,6 @@ add_library(bgl_objects OBJECT
 )
 
 target_include_directories(bgl_objects
-	PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include
 	PRIVATE
 		${CMAKE_CURRENT_SOURCE_DIR}/src
 		${CMAKE_BINARY_DIR}/generated
@@ -55,6 +56,7 @@ target_include_directories(bgl_objects PRIVATE ${Stb_INCLUDE_DIR})
 
 target_link_libraries(bgl_objects
 	PUBLIC
+		bgl_intfc
 		core
 		assetlib_structs
 		slang::slang
@@ -104,13 +106,12 @@ else()
 endif()
 
 target_include_directories(bgl
-	PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include
 	PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src
 )
 
 add_dependencies(bgl bgl_idl_generate)
 
-target_link_libraries(bgl PUBLIC bgl_objects glm::glm)
+target_link_libraries(bgl PUBLIC bgl_intfc bgl_objects glm::glm)
 
 enable_strict_compiler(bgl)
 
@@ -212,7 +213,6 @@ if (BUILD_TESTS AND RENDERER_BACKEND STREQUAL "DX12")
     target_include_directories(bgl_tests
         PUBLIC  ${CMAKE_CURRENT_SOURCE_DIR}/tests
         PRIVATE
-            ${CMAKE_CURRENT_SOURCE_DIR}/include
             ${CMAKE_CURRENT_SOURCE_DIR}/src
             ${CMAKE_CURRENT_SOURCE_DIR}/tests/src
             ${CMAKE_BINARY_DIR}/generated
@@ -293,7 +293,6 @@ if (BUILD_TESTS AND RENDERER_BACKEND STREQUAL "METAL")
 	target_include_directories(bgl_tests
 		PUBLIC  ${CMAKE_CURRENT_SOURCE_DIR}/tests
 		PRIVATE
-			${CMAKE_CURRENT_SOURCE_DIR}/include
 			${CMAKE_CURRENT_SOURCE_DIR}/src
 			${CMAKE_CURRENT_SOURCE_DIR}/tests/src
 			${CMAKE_BINARY_DIR}/generated

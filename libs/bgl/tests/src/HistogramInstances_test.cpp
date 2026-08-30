@@ -2,6 +2,7 @@
 #include "cmd/CommandList.h"
 #include "cmd/CommandQueue.h"
 #include "gfx/GraphicsBase.h"
+#include "idl/PsoType.h"
 #include "idl/idl.h"
 #include "pipeline/ComputeKernel.h"
 #include "pipeline/ComputePipeline.h"
@@ -18,7 +19,6 @@
 #include "util/GpuValidation.h"
 #include "util/TestOptions.h"
 #include <bgl/IGraphics.h>
-#include <bgl/PsoType.h>
 
 // Exercises the counting-sort front end on the GPU: HistogramInstances counts instances
 // per PSO type, PrefixSumInstances turns that histogram into an inclusive prefix sum.
@@ -57,9 +57,9 @@ TEST_CASE("Bucket instances: histogram then prefix sum", "[compute][histogram][p
 	constexpr uint32_t c_ActiveCount = 1000;
 	constexpr uint32_t c_GroupCount  = (c_ActiveCount + c_ThreadsPerGroup - 1) / c_ThreadsPerGroup;
 	constexpr uint32_t c_PaddedCount = c_GroupCount * c_ThreadsPerGroup;
-	constexpr bgl::PsoType c_Buckets[] = { bgl::PsoType::kOpaque_StaticMesh_PBR,
-		                                   bgl::PsoType::kAlphaTest_StaticMesh_PBR,
-		                                   bgl::PsoType::kTransparent_StaticMesh_PBR };
+	constexpr bgl::idl::PsoType c_Buckets[] = { bgl::idl::PsoType::kOpaque_StaticMesh_PBR,
+		                                        bgl::idl::PsoType::kAlphaTest_StaticMesh_PBR,
+		                                        bgl::idl::PsoType::kTransparent_StaticMesh_PBR };
 
 	// The PSO bucket is resolved onto the instance, so the histogram reads nothing else -- no mesh,
 	// no submesh, no indirection to build. Two instances of one submesh are free to bucket
@@ -86,7 +86,7 @@ TEST_CASE("Bucket instances: histogram then prefix sum", "[compute][histogram][p
 		instanceBuffer.Add(instance);
 	};
 
-	std::array<uint32_t, bgl::c_PsoCount> expectedHistogram{};
+	std::array<uint32_t, bgl::idl::c_PsoCount> expectedHistogram{};
 	for (uint32_t i = 0; i < c_ActiveCount; ++i)
 	{
 		const uint32_t b = i % c_BucketCount;
@@ -99,9 +99,9 @@ TEST_CASE("Bucket instances: histogram then prefix sum", "[compute][histogram][p
 		instanceBuffer.Add(bgl::SubmeshInstance());
 	}
 
-	std::array<uint32_t, bgl::c_PsoCount> expectedPrefixSum{};
-	uint32_t                              running = 0;
-	for (uint32_t i = 0; i < bgl::c_PsoCount; ++i)
+	std::array<uint32_t, bgl::idl::c_PsoCount> expectedPrefixSum{};
+	uint32_t                                   running = 0;
+	for (uint32_t i = 0; i < bgl::idl::c_PsoCount; ++i)
 	{
 		running += expectedHistogram[i];
 		expectedPrefixSum[i] = running;  // inclusive scan
@@ -111,7 +111,7 @@ TEST_CASE("Bucket instances: histogram then prefix sum", "[compute][histogram][p
 	{
 		auto desc = bgl::ComputeBufferDesc();
 		desc.SetElement<uint32_t>();
-		desc.initialCount = bgl::c_PsoCount;
+		desc.initialCount = bgl::idl::c_PsoCount;
 		desc.debugName    = "Histogram Output";
 		outBuffer.Init(desc, resourceManager);
 	}
@@ -150,7 +150,7 @@ TEST_CASE("Bucket instances: histogram then prefix sum", "[compute][histogram][p
 
 	const auto makeReadback = [&](const char* name) {
 		auto desc      = bgl::ReadbackBufferDesc();
-		desc.byteSize  = static_cast<uint64_t>(bgl::c_PsoCount) * sizeof(uint32_t);
+		desc.byteSize  = static_cast<uint64_t>(bgl::idl::c_PsoCount) * sizeof(uint32_t);
 		desc.debugName = name;
 		return resourceManager->CreateReadbackBuffer(desc);
 	};
@@ -247,7 +247,7 @@ TEST_CASE("Bucket instances: histogram then prefix sum", "[compute][histogram][p
 
 	const auto* histogram = static_cast<const uint32_t*>(resourceManager->MapReadback(rbHistogram));
 	REQUIRE(histogram != nullptr);
-	for (uint32_t i = 0; i < bgl::c_PsoCount; ++i)
+	for (uint32_t i = 0; i < bgl::idl::c_PsoCount; ++i)
 	{
 		CHECK(histogram[i] == expectedHistogram[i]);
 	}
@@ -255,7 +255,7 @@ TEST_CASE("Bucket instances: histogram then prefix sum", "[compute][histogram][p
 
 	const auto* prefixSum = static_cast<const uint32_t*>(resourceManager->MapReadback(rbPrefixSum));
 	REQUIRE(prefixSum != nullptr);
-	for (uint32_t i = 0; i < bgl::c_PsoCount; ++i)
+	for (uint32_t i = 0; i < bgl::idl::c_PsoCount; ++i)
 	{
 		CHECK(prefixSum[i] == expectedPrefixSum[i]);
 	}

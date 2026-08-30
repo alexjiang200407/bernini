@@ -45,15 +45,15 @@ namespace bgl
 	};
 
 	/**
-	 * Flattens mesh `meshIndex` of a loaded BMesh into what AddStaticMeshGeom uploads: per submesh, the
-	 * meshlet table and the remapped vertex and index streams.
+	 * Flattens mesh `meshIndex` of a loaded BMesh into what AddStaticMeshGeom uploads: per submesh,
+	 * the remapped vertex and index streams and the tables the renderer draws them from.
 	 *
 	 * Pure CPU over the BMesh alone, so it may run on any thread -- the one bgl entry point that
 	 * may. That is its reason to exist: this is the dominant cost of adding a large mesh, and fused
 	 * into AddStaticMeshGeom it rode the render thread.
 	 *
-	 * @throws SceneError if `meshIndex` is out of range, a submesh has no geometry or more meshlets
-	 *         than one dispatch can launch, or a submesh's data lies outside the mesh's buffers.
+	 * @throws SceneError if `meshIndex` is out of range, a submesh has no geometry or is larger than
+	 *         one draw can launch, or a submesh's data lies outside the mesh's buffers.
 	 */
 	[[nodiscard]] BGL_API PreparedStaticMesh
 	CookStaticMesh(const assetlib::BMesh& mesh, uint32_t meshIndex);

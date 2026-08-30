@@ -1,11 +1,18 @@
 # Bernini Render Hardware Interface
 
 The Render Hardware Interface (RHI) is `bgl`'s API-agnostic graphics abstraction: a set of
-pure-virtual interfaces (`bgl::I*`) plus plain-old-data descriptors and state structs. The
-concrete backend (`bgl_d3d12`) is linked at runtime and is never visible to callers.
+pure-virtual interfaces (`bgl::I*`) plus plain-old-data descriptors and state structs. Two backends
+implement it — `bgl_d3d12` and `bgl_metal` — chosen at configure time by `RENDERER_BACKEND`
+([libs/bgl/CMakeLists.txt](libs/bgl/CMakeLists.txt)) and linked into `bgl` itself. Neither is ever
+visible to a caller.
+
+**API-agnostic means among APIs with bindless resource access and mesh shaders.** That is the bar
+this interface is drawn at, not a general one: the only graphics pipeline object is
+`IMeshletPipeline`, and the draw verbs are `Dispatch`, `DispatchMesh` and `DispatchMeshIndirect`.
+An API without those cannot implement this interface.
 
 This is the layer bgl is built *on*. For the surface an application links against — `IGraphics`,
-`IScene`, `ISceneView` and the handle types in `libs/bgl/include/bgl` — see
+`IScene`, `ISceneView` and the handle types in `libs/bgl_intfc/include/bgl` — see
 [bgl Public API](docs/bgl_api.md).
 
 **This document is a map, not a mirror.** It captures the design choices, the object topology,
@@ -129,7 +136,7 @@ doc and a header disagree, trust the header, then fix this doc.
 
 | Interface | File | Role |
 |---|---|---|
-| `IGraphics` | [libs/bgl/include/bgl/IGraphics.h](libs/bgl/include/bgl/IGraphics.h) | Public façade above the RHI; owns the device and its one submission context, and mints render targets, scenes and scene views. Frames, resizes and captures are driven here. `GetDevice()` returns the RHI root. Fully documented in [bgl Public API](docs/bgl_api.md). |
+| `IGraphics` | [libs/bgl_intfc/include/bgl/IGraphics.h](libs/bgl_intfc/include/bgl/IGraphics.h) | Public façade above the RHI; owns the device and its one submission context, and mints render targets, scenes and scene views. Frames, resizes and captures are driven here. `GetDevice()` returns the RHI root. Fully documented in [bgl Public API](docs/bgl_api.md). |
 | `IDevice` | [libs/bgl/src/device/Device.h](libs/bgl/src/device/Device.h) | Root factory for every RHI object. |
 | `IResourceManager` | [libs/bgl/src/resource/ResourceManager.h](libs/bgl/src/resource/ResourceManager.h) | Owns all GPU buffers/textures/views behind index handles; creation, deferred destruction, lookup, readback, clears. |
 | `ICommandQueue` | [libs/bgl/src/cmd/CommandQueue.h](libs/bgl/src/cmd/CommandQueue.h) | Submits command lists; owns the fence; all CPU/GPU and cross-queue sync. |
