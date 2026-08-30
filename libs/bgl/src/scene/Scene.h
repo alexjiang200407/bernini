@@ -101,13 +101,13 @@ namespace bgl
 			return m_Materials;
 		}
 
-		// The arena read as texture handles. A material payload keeps a handle's bytes inline and
-		// this is what makes a texture of them; re-issued whenever the arena grows, since a growth
-		// replaces the resource a view describes.
-		[[nodiscard]] BufferSrvHandle
-		GetMaterialHandleView() const noexcept
+		// The material arena and the typed view of the same allocation, as one binding. A payload
+		// keeps a texture handle's bytes inline and the view is what makes a texture of them; the
+		// arena owns both and re-issues the view inside its own growth, so they cannot disagree.
+		[[nodiscard]] RawArenaBinding
+		GetMaterialBinding() const noexcept
 		{
-			return m_MaterialHandleView;
+			return RawArenaBinding{ m_Materials.GetBufferHandle(), m_Materials.GetHandleView() };
 		}
 
 		[[nodiscard]] auto&
@@ -413,11 +413,6 @@ namespace bgl
 		void
 		InitBuffers();
 
-		// Re-issues the arena's typed view when the arena's own buffer has changed, which is what a
-		// growth looks like from here.
-		void
-		RefreshMaterialHandleView();
-
 		// Claims a geom slot, growing the table when it is full. Unlike the GPU arenas this is a
 		// pure CPU side table, so it cannot fail on device memory.
 		[[nodiscard]] core::slot_handle
@@ -459,10 +454,6 @@ namespace bgl
 		// rather than a buffer per kind: a new shading model is a payload and a tag, not a buffer,
 		// a binding and a uniform key.
 		RawBuffer<MaterialType> m_Materials;
-
-		// The same allocation, read as texture handles. Held so a growth can re-issue it.
-		BufferSrvHandle m_MaterialHandleView;
-		BufferHandle    m_ViewedMaterialBuffer;
 
 		// One clip table for every animated tier: a Clip means the same thing to both, so a second
 		// buffer of the same element type would only be two things to grow.

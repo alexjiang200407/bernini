@@ -29,6 +29,11 @@ namespace bgl
 		// grid -- that is cRawBlockBytes and is not a caller's to choose.
 		uint32_t uploadBlockBytes = 65536;
 
+		// Element size of the arena's second, typed view -- what makes a resource of the handle
+		// bytes a record holds, since a raw view declares bytes and Metal cannot make a resource of
+		// those. Zero for an arena whose records hold no handle, which then has no view at all.
+		uint32_t handleStride = 0;
+
 		std::string debugName;
 	};
 
@@ -76,6 +81,9 @@ namespace bgl
 				"The null record must cover at least a header");
 
 			m_NullRecordBlocks = ToBlockCount(desc.nullRecordBytes);
+			m_HandleStride     = desc.handleStride;
+			m_ViewDebugName    = desc.debugName + " Handles";
+			m_ResourceManager  = resourceManager;
 
 			RangeBufferDesc blockDesc;
 			blockDesc.initialCount = ToBlockCount(desc.initialBytes) + m_NullRecordBlocks;
@@ -87,6 +95,7 @@ namespace bgl
 			m_Blocks.Init(std::move(blockDesc), std::move(resourceManager));
 
 			ReserveNullRecord();
+			RefreshHandleView();
 		}
 
 		[[nodiscard]] bool
@@ -278,9 +287,25 @@ namespace bgl
 			return m_Blocks.GetBufferHandle();
 		}
 
+		// The arena's second view, for a caller binding the same allocation as handles. Null when
+		// the arena declared no handle stride. Re-issued with the buffer, so it is never a
+		// generation behind the bytes it describes.
+		[[nodiscard]] BufferSrvHandle
+		GetHandleView() const noexcept
+		{
+			return m_HandleView;
+		}
+
 		void
 		Release(bool deferred = true) noexcept
 		{
+			// A moved-from arena keeps the view's bits -- a defaulted move copies POD members -- but
+			// loses the manager that would retire it. GrowableGpuBuffer guards the same way.
+			if (m_ResourceManager != nullptr && !m_HandleView.IsNull())
+			{
+				m_ResourceManager->DestroyBufferSrv(m_HandleView, deferred);
+				m_HandleView = BufferSrvHandle{};
+			}
 			m_Blocks.Release(deferred);
 		}
 
@@ -306,7 +331,44 @@ namespace bgl
 		[[nodiscard]] core::multi_slot_handle
 		Allocate(uint32_t bytes)
 		{
-			return m_Blocks.AllocateRange(ToBlockCount(bytes));
+			const core::multi_slot_handle handle = m_Blocks.AllocateRange(ToBlockCount(bytes));
+
+			// The only place the arena can grow, and a growth replaces the resource the view
+			// describes without announcing it. Re-issued here rather than at a frame boundary so
+			// the buffer and its view are never observable apart -- see docs/plans ADR-9.
+			RefreshHandleView();
+
+			return handle;
+		}
+
+		// A no-op for an arena with no handle stride, and for one whose buffer has not been
+		// replaced. The buffer handle changing is the only signal a growth happened.
+		void
+		RefreshHandleView()
+		{
+			if (m_HandleStride == 0 || m_ResourceManager == nullptr)
+			{
+				return;
+			}
+
+			const BufferHandle arena = m_Blocks.GetBufferHandle();
+			if (arena.slot == m_ViewedBuffer.slot &&
+			    arena.bindlessIndex == m_ViewedBuffer.bindlessIndex)
+			{
+				return;
+			}
+
+			if (!m_HandleView.IsNull())
+			{
+				m_ResourceManager->DestroyBufferSrv(m_HandleView);
+			}
+
+			auto viewDesc      = BufferSrvDesc();
+			viewDesc.stride    = m_HandleStride;
+			viewDesc.debugName = m_ViewDebugName;
+
+			m_HandleView   = m_ResourceManager->CreateBufferSrv(arena, viewDesc);
+			m_ViewedBuffer = arena;
 		}
 
 		// Held for the arena's lifetime and handed to nobody, so byte offset 0 stays null. The
@@ -363,6 +425,14 @@ namespace bgl
 		}
 
 		RangeBuffer<RawBlock> m_Blocks;
-		uint32_t              m_NullRecordBlocks = 1;
+
+		// Kept beside the blocks rather than handed on: the view is the arena's to issue and to
+		// retire, which is what stops it drifting a generation behind the bytes.
+		ResourceManagerRef m_ResourceManager;
+		BufferSrvHandle    m_HandleView;
+		BufferHandle       m_ViewedBuffer;
+		uint32_t           m_HandleStride = 0;
+		std::string        m_ViewDebugName;
+		uint32_t           m_NullRecordBlocks = 1;
 	};
 }

@@ -118,9 +118,9 @@ namespace bgl
 		DrawSamplers samplers;
 		TimeData     clock;
 
-		// The material arena read as texture handles. Not a frame-graph resource: the graph tracks
-		// the arena itself, and this is a second descriptor onto the same bytes. Re-issued by the
-		// scene whenever the arena grows, so it is read per draw rather than cached.
-		BufferSrvHandle materialHandleView;
+		// The material arena and the typed view of the same allocation, as one pair. Bound from
+		// here rather than from the graph, which tracks resource state -- a view is not a resource.
+		// The arena re-issues the view inside its own growth, so this is read per draw, never cached.
+		RawArenaBinding materialArena;
 	};
 }
