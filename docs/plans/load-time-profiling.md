@@ -105,6 +105,39 @@ formats, so a start-up timeline straddles both.
   this change exists to build has said anything. *Rejected: committing to the scans up front, which
   risks spending the change on 400 ms of a 47 s start.*
 
+- **ADR-9 — The re-parse `Reimport` pays is real, was fixed, was measured, and is not shipped.**
+  ADR-7's measurement indicted it: `Reimport` cooks a stage at a time and re-parses each source per
+  output kind, so three sources parse **seven** times — 10.1 s of a 24.2 s project rebuild. A bounded
+  cache holding each parsed source across the stages that need it was built and did exactly what it
+  was designed to do: 7 parses became 3, and parse time fell from 10.2 s to 4.7 s.
+
+  It is not kept, because the saving does not survive the stages after it. Measured against a
+  same-session control on the same binary and machine state (n=2 against n=1):
+
+  | | cache off | cache on | |
+  |---|---:|---:|---|
+  | `assetlib glTF parse` | 10.2 s / 7 | 4.7 s / 3 | −5.5 s |
+  | `assetlib clip floors` | 9.3 s | 10.4 s | +1.1 s |
+  | `assetlib posed bounds` | 3.7 s | 5.4 s | +1.7 s |
+  | `assetlib reimport` | 23.2 s | 21.4 s | −1.8 s |
+  | `editor startup` | 24.6 s | 24.4 s | **−0.2 s** |
+
+  Holding three parsed sources resident makes the memory-heavy skinning sweeps that follow slower,
+  and 2.8 s of the 5.5 s comes straight back. That is precisely the cost `reimport.cpp`'s own comment
+  predicts, and at the whole-start-up level the change is indistinguishable from run-to-run spread —
+  so it would be added complexity and resident memory bought with nothing a user can feel.
+  *Rejected therefore: shipping it on the strength of its −7.7% on the rebuild sub-phase alone; and
+  tuning the cap until the regression shrinks, which is fitting a constant to one project.*
+
+  What this does settle is the question `pose-bounds-perf.md`'s ADR-2 left open. Its withdrawal asked
+  for a fresh design and a fresh measurement against #515's parallel stages; both now exist, and the
+  answer is that **the re-parse is not where the win is**. Two further things that measurement
+  ruled out, for whoever looks next: the source-major restructure ADR-2 originally proposed cannot
+  work at all — `Reimport_test.cpp`'s "Two sources rebuild together" pins a clip set reading *another*
+  source's `.bskel` from disk, so the stage barriers must stand — and the real target is elsewhere:
+  `clip floors` plus `posed bounds` is 13 s of a 23 s rebuild, larger than the parse ever was, which
+  is the sweep fusion `pose-bounds-perf` already names as the next thing.
+
 ## Non-goals
 
 - **GPU per-pass timestamps and the on-screen frame breakdown.** `ROADMAP.md` § Profiling holds
@@ -129,8 +162,9 @@ formats, so a start-up timeline straddles both.
   pins (ADR-4).
 - A new `editor_tests` case: a message written through Qt and one written through spdlog both land in
   the single log file (ADR-5). It fails on today's two-file split.
-- Whatever ADR-7's measurement indicts is pinned in the shape the repo already uses — a `[perf]` case
-  asserting a read count or a ratio, never a wall-clock ceiling — where the fix has that shape.
+- ADR-9's optimisation is measured against a same-session control, not against numbers taken before
+  the build changed. It ships only if the whole start-up moves; it did not, so no `[perf]` case for it
+  lands either — a case pinning a shape nothing ships would pin a behaviour that is not there.
 
 ## Commits
 

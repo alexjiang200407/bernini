@@ -68,7 +68,7 @@ tracy::SetThreadName("bgl-render");
 
 | Layer | What is bracketed |
 |---|---|
-| `assetlib` cooks | the glTF parse, tangents, posed bounds, clip floors, the VAT bake, the prefilter, the whole-project bounds rebake |
+| `assetlib` cooks | the glTF parse, tangents, posed bounds, clip floors, the VAT sample, the prefilter, the whole-project bounds rebake |
 | `assetlib` reads | a whole container through a mount, a selective chunk read, a KTX2 decode/transcode |
 | `assetlib` doors | `Migrate`, `Reimport`, `RefreshImportedTextures`, `BakeVat`, and the two staleness scans a project pays on every open |
 | `gamelib` | every `AssetManager::Acquire*`, and the bake-on-demand `EnsureVatBaked` behind the VAT one |
@@ -96,9 +96,15 @@ daily:
 Two things in that table are worth carrying in your head. The **glTF parse count is one per output,
 not one per source** — 3 sources with 3 `.bmesh`, 2 `.bskel` and 2 `.banim` between them parse seven
 times, because `Reimport` cooks a stage at a time and re-parses rather than holding a source's meshes
-resident across all three (`reimport.cpp`). And a **warm** start is nearly half staleness scanning:
-`GetStaleImportedTextureSources` walks every import document on every launch of a project where
-nothing changed.
+resident across all three (`reimport.cpp`). That looks like free money and is not: holding the parses
+instead was built and measured, and the 5.5 s it saves is 2.8 s given back by the skinning sweeps
+that follow, which run slower with three parsed sources resident. See
+[docs/plans/load-time-profiling.md](plans/load-time-profiling.md) ADR-9 before spending time on it
+again. The bigger target in that row is the sweeps themselves: `clip floors` plus `posed bounds` is
+13 s of the 23 s.
+
+And a **warm** start is nearly half staleness scanning: `GetStaleImportedTextureSources` walks every
+import document on every launch of a project where nothing changed.
 
 `apps/editor/CLAUDE.md` describes a cold pipeline build as "tens of seconds". On macOS/Metal it is
 **4.4 s**. That figure was never measured on this backend; it may still hold for DXIL on Windows,
