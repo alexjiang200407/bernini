@@ -23,6 +23,8 @@
 #include <core/err/util.h>
 #include <core/str/str.h>
 
+#include <tracy/Tracy.hpp>
+
 namespace assetlib
 {
 	namespace
@@ -192,6 +194,8 @@ namespace assetlib
 	std::vector<std::string>
 	AssetStore::GetStaleGeometry() const
 	{
+		ZoneScopedN("assetlib scan stale geometry");
+
 		if (IsReadOnly())
 			return {};
 
@@ -226,6 +230,9 @@ namespace assetlib
 	ReimportReport
 	AssetStore::Reimport(bool dryRun, const ProgressSink& onProgress) const
 	{
+		ZoneScopedN("assetlib reimport");
+		ZoneTextF("%s", dryRun ? "dry run" : "writing");
+
 		const ProgressSink sink = serialized(onProgress);
 
 		auto pending = std::vector<PendingSource>();

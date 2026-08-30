@@ -24,6 +24,8 @@
 #include "ref_paths.h"
 #include "regen_group.h"
 
+#include <tracy/Tracy.hpp>
+
 namespace assetlib
 {
 	namespace
@@ -241,6 +243,9 @@ namespace assetlib
 	RegenMesh
 	AssetStore::LoadRegenMesh(std::string_view path) const
 	{
+		ZoneScopedN("assetlib load bmesh");
+		ZoneTextF("%.*s", static_cast<int>(path.size()), path.data());
+
 		if (IsReadOnly())
 			return { load<BMesh>(*m_Files, path), {} };
 
@@ -282,6 +287,9 @@ namespace assetlib
 	Skeleton
 	AssetStore::LoadRegenSkeleton(std::string_view path) const
 	{
+		ZoneScopedN("assetlib load bskel");
+		ZoneTextF("%.*s", static_cast<int>(path.size()), path.data());
+
 		if (IsReadOnly())
 			return load<Skeleton>(*m_Files, path);
 
@@ -305,6 +313,9 @@ namespace assetlib
 	AnimationSet
 	AssetStore::LoadRegenAnimations(std::string_view path) const
 	{
+		ZoneScopedN("assetlib load banim");
+		ZoneTextF("%.*s", static_cast<int>(path.size()), path.data());
+
 		if (IsReadOnly())
 			return load<AnimationSet>(*m_Files, path);
 

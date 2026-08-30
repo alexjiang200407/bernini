@@ -23,6 +23,7 @@ strip_msvc_only_interface_flags(spdlog::spdlog spdlog::spdlog_header_only)
 find_package(cpptrace CONFIG REQUIRED)
 find_package(nlohmann_json CONFIG REQUIRED)   # Settings (JSON config) parsing
 find_package(glm CONFIG REQUIRED)             # core/glm.h: shared glm config for all libs
+find_package(Tracy CONFIG REQUIRED)
 
 target_link_libraries(
     core
@@ -33,6 +34,15 @@ target_link_libraries(
         cpptrace::cpptrace
         nlohmann_json::nlohmann_json
 )
+
+# Off is headers-only: TRACY_ENABLE rides on the link interface, so without it every zone macro
+# expands to nothing and no call site changes. Declared at the root, set per preset.
+if (BERNINI_PROFILING)
+    target_link_libraries(core PUBLIC Tracy::TracyClient)
+else()
+    target_include_directories(core SYSTEM PUBLIC
+        $<TARGET_PROPERTY:Tracy::TracyClient,INTERFACE_INCLUDE_DIRECTORIES>)
+endif()
 
 enable_strict_compiler(core)
 enable_coverage(core)

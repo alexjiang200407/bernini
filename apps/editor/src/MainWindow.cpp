@@ -42,6 +42,8 @@
 
 #include "Startup/startup_labels.h"
 
+#include <tracy/Tracy.hpp>
+
 MainWindow::MainWindow(
 	QWidget*                 parent,
 	std::filesystem::path    configPath,
@@ -67,6 +69,8 @@ MainWindow::MainWindow(
 void
 MainWindow::Build(const std::filesystem::path& configPath)
 {
+	ZoneScopedN("editor build window");
+
 	m_Ui.setupUi(this);
 
 	connect(m_Ui.actionNewProject, &QAction::triggered, this, &MainWindow::NewProject);
@@ -556,6 +560,8 @@ MainWindow::OpenProjectAt(const std::filesystem::path& path)
 {
 	try
 	{
+		ZoneScopedN("editor open project");
+
 		SetActiveProject(assetlib::Project::Open(path));
 		return true;
 	}
@@ -569,6 +575,8 @@ MainWindow::OpenProjectAt(const std::filesystem::path& path)
 void
 MainWindow::RefreshTextures()
 {
+	ZoneScopedN("editor refresh textures");
+
 	if (!m_Project)
 		return;
 
@@ -689,6 +697,8 @@ MainWindow::RefreshTextures()
 void
 MainWindow::UpdateProject()
 {
+	ZoneScopedN("editor update project");
+
 	if (!m_Project)
 		return;
 
@@ -867,6 +877,8 @@ MainWindow::CleanUnusedTextures()
 void
 MainWindow::SetActiveProject(assetlib::Project project)
 {
+	ZoneScopedN("editor set active project");
+
 	m_Project = std::make_unique<assetlib::Project>(std::move(project));
 
 	const auto dataDir = QString::fromStdWString(m_Project->GetDataDirectory().wstring());

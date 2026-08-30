@@ -7,6 +7,8 @@
 
 #include "mounted_io.h"
 
+#include <tracy/Tracy.hpp>
+
 namespace assetlib
 {
 	namespace
@@ -235,6 +237,14 @@ namespace assetlib
 		uint32_t                     maxDim,
 		const std::filesystem::path& path)
 	{
+		ZoneScopedN("assetlib ktx2 decode");
+		ZoneTextF(
+			"%s, %ux%u, %u levels",
+			path.filename().string().c_str(),
+			texture->baseWidth,
+			texture->baseHeight,
+			texture->numLevels);
+
 		// Basis-supercompressed textures (LDR material maps) transcode on the way in. The GPU wants a
 		// block format; the material bake wants texels it can composite, so it asks for RGBA32 instead.
 		// HDR / IBL maps are stored uncompressed and skip this entirely.
@@ -576,6 +586,14 @@ namespace assetlib
 		const bool wantsCompression = compression != Ktx2Compression::kNone;
 		if (wantsCompression && isBasisCompressible(image.vkFormat))
 		{
+			ZoneScopedN("assetlib ktx2 encode");
+			ZoneTextF(
+				"%ux%u, %u levels, %s",
+				image.width,
+				image.height,
+				image.mipLevels,
+				isBakeTarget(compression) ? "uastc then block" : "uastc");
+
 			// UASTC block encoding is deterministic regardless of thread count, so parallelise it --
 			// single-threaded encoding of large (e.g. 4K) mip chains is prohibitively slow.
 			const uint32_t hc = std::thread::hardware_concurrency();

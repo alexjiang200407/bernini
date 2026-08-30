@@ -6,8 +6,8 @@
 #include "parallel_for.h"
 
 #include <core/glm.h>
-#include <core/log/ScopedStage.h>
 #include <core/math.h>
+#include <tracy/Tracy.hpp>
 
 namespace assetlib
 {
@@ -809,11 +809,12 @@ namespace assetlib
 			throw std::runtime_error(
 				"assetlib::prefilterRadiance: faceSize is too small for that many mips");
 
-		const auto stage = core::logging::ScopedStage(
-			"assetlib prefilter: {} faces, {} mips, {} samples",
-			desc.faceSize,
-			desc.mipLevels,
-			desc.samples);
+		ZoneScopedN("assetlib prefilter");
+		ZoneTextF(
+			"%llu faces, %llu mips, %llu samples",
+			static_cast<unsigned long long>(desc.faceSize),
+			static_cast<unsigned long long>(desc.mipLevels),
+			static_cast<unsigned long long>(desc.samples));
 
 		const CubePyramid pyramid(source);
 

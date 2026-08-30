@@ -98,6 +98,11 @@ handle actually writes, and why a name that resolves to nothing is silent.
 
 Graphics debugging practices.
 
+**[Profiling](./docs/profiling.md)**
+
+Where load and cook time is measured: taking a Tracy capture, the one rule for naming a zone, and
+why the frame loop deliberately has none.
+
 **[Frame Graph](./docs/framegraph.md)**
 
 FrameGraph usage.

@@ -2,11 +2,15 @@
 #include <QMessageBox>
 
 #include <core/err/util.h>
+#include <core/log/log.h>
+
+#include <spdlog/spdlog.h>
+#include <tracy/Tracy.hpp>
 
 #include "EditorStyle.h"
 #include "MainWindow.h"
 #include "Startup/StartupScreen.h"
-#include "util/FileLog.h"
+#include "util/qt_logging.h"
 
 int
 main(int argc, char* argv[])
@@ -17,7 +21,21 @@ main(int argc, char* argv[])
 	QApplication::setStyle(new EditorStyle);
 
 	const QString directory = QCoreApplication::applicationDirPath();
-	editor::InstallFileLogger(directory + "/editor.log");
+
+	// Before the window, so a diagnostic from the renderer's construction has somewhere to go: bgl
+	// opens the log from its Graphics constructor, and everything before that would otherwise write
+	// to a stdout a GUI launch does not have. bgl's own call then only applies its level.
+	//
+	// A log that will not open is inert rather than fatal -- there is nowhere to report a broken log
+	// to, since this is what reporting is.
+	try
+	{
+		core::logging::init_file_logger("editor.log", spdlog::level::info);
+	}
+	catch (const std::exception&)
+	{}
+
+	editor::InstallQtLogRouting();
 
 	// Up before the window, because building the window is what takes the time: the renderer
 	// compiles every pipeline it will ever use, which on a cold shader cache is tens of seconds
@@ -32,6 +50,11 @@ main(int argc, char* argv[])
 	auto window = std::optional<MainWindow>();
 	try
 	{
+		// Everything between the splash and a usable editor, as one zone: the device and its
+		// pipelines, the project's mount, its staleness scans and whatever they rebuild. What the
+		// wall clock of a cold start is made of nests under this.
+		ZoneScopedN("editor startup");
+
 		window.emplace(nullptr, std::filesystem::path(), startup.Sink());
 	}
 	catch (const std::exception& e)

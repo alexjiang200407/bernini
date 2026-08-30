@@ -1,4 +1,5 @@
 #include "parallel_for.h"
+#include <core/profiling/thread_name.h>
 
 namespace assetlib
 {
@@ -20,6 +21,10 @@ namespace assetlib
 		auto failure = std::exception_ptr();
 
 		auto worker = [&]() {
+			// Every cook that fans out runs through here, so one name covers Reimport's stages and
+			// Migrate's resave walk both -- a capture of a rebuild is otherwise a row of thread ids.
+			core::profiling::name_this_thread("assetlib cook");
+
 			for (;;)
 			{
 				const size_t index = next.fetch_add(1);

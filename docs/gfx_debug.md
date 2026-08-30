@@ -159,34 +159,38 @@ public API is therefore the spdlog free functions:
 `logger::trace/debug/info/warn/error/critical(fmt, args...)`. It is PCH-included, so bgl sources
 call `logger::…` with no extra include.
 
-* **Log file:** `bgl.log`, written next to the bgl binary
-  (`getLibraryPath().parent_path() / "bgl.log"`), set up in the `Graphics` constructor
-  ([Graphics_d3d12.cpp](libs/bgl/src/d3d12/Graphics_d3d12.cpp)). It is truncated **once per
-  process**, so multiple `Graphics` instances share one run's log rather than clobbering it.
+* **Log file:** one per process, named by whoever opens it first. The `Graphics` constructor
+  ([Graphics_d3d12.cpp](libs/bgl/src/d3d12/Graphics_d3d12.cpp)) asks for `bgl.log` next to the
+  binary, which is what `bgl_tests` and the examples get; under the editor `main.cpp` has already
+  asked for `editor.log`, so bgl's call only applies its level. `core::logging::init_file_logger`
+  ([log.h](libs/core/include/core/log/log.h)) is where that rule lives: **the first call wins the
+  file, every call applies its level**. Several `Graphics` instances therefore share one run's log
+  rather than clobbering it.
 * **Level & flush level** come from `GraphicsOptions::logLevel`
   ([IGraphics.h](libs/bgl_intfc/include/bgl/IGraphics.h), enum `kTrace … kOff`). **Default is `kError`**
   — to see the timeline of a run, pass `logLevel = kTrace` when calling `CreateGraphics`.
 * **D3D12 debug-layer messages are forwarded into this same log** (see §5), so validation errors
   and your own `logger::` output interleave in one file.
 
-* **`assetlib`'s cook stages appear here too, and are not subject to `logLevel`.** A
-  `core::logging::ScopedStage` ([ScopedStage.h](libs/core/include/core/log/ScopedStage.h)) writes at
-  info through the default logger's *sinks* rather than through the logger, because the level above
-  is the renderer's and would otherwise silence a bake's timing at `kError`. So a glTF parse, a
+* **Cook and load timings are not in this log at all — they are Tracy zones.** A glTF parse, a
   tangent pass, a posed-bounds bake, a VAT bake, a prefilter and a whole-project bounds rebake each
-  leave one line stating its dimensions and how long it took — which is how a slow import is
-  attributed without a profiler.
-  Under `assetlib_cli` there is no `Graphics`, so no file sink is installed and the same lines go to
-  the console.
+  open a zone carrying its own dimensions, and so does every stage of an editor start-up. They are
+  read in the Tracy profiler, not here, because a duration on a line cannot say what it ran *inside*
+  and a log interleaved from six threads cannot say which one it ran *on*. See
+  [docs/profiling.md](docs/profiling.md).
 
-* **The editor writes a second log, and it is not this one.** `editor.log`
-  ([main.cpp](apps/editor/src/main.cpp), [util/FileLog.cpp](apps/editor/src/util/FileLog.cpp)) takes
-  everything that goes through Qt's `qInfo`/`qWarning`/`qCritical`, stamped ISO-8601 with
-  milliseconds; `bgl.log` takes spdlog, stamped `[%H:%M:%S:%e]`. Two files, two clocks, two formats,
-  so an import's timeline straddles both — the editor's own worker/UI split is in `editor.log` while
-  the cook stages that explain it are here. That is why a stage line carries its **own** duration
-  rather than only a timestamp: attributing a slow cook must never require subtracting one file's
-  clock from another's. Timestamps still answer what happened *between* stages.
+* **The editor's Qt messages are in this same file too.** `InstallQtLogRouting`
+  ([util/qt_logging.cpp](apps/editor/src/util/qt_logging.cpp)) hands everything that goes through
+  `qInfo`/`qWarning`/`qCritical` to the default logger's *sinks*, so `editor.log` carries the
+  renderer's lines, assetlib's and the editor's own, in one order on one clock. It writes through
+  the sinks rather than the logger for the same reason the cook stages once did: the level above is
+  the renderer's, and at `kError` routing through the logger would drop every editor diagnostic
+  there is. Each message is flushed on the way out, because `flush_on` is set from that same
+  renderer level.
+
+  There used to be a second file. Two clocks meant an import's timeline straddled both, which is
+  why a duration was once written onto the line that reported it — that is now a Tracy zone, and the
+  two logs are one.
 
 Per [libs/bgl/CLAUDE.md](libs/bgl/CLAUDE.md): after running `bgl_tests`, always read `bgl.log`
 for the warnings/errors/info the run emitted.

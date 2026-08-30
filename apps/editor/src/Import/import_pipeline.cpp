@@ -18,7 +18,7 @@
 #include <assetlib/mesh_tangents.h>
 #include <assetlib_structs/BMesh.h>
 #include <assetlib_structs/BMeshImport.h>
-#include <core/log/ScopedStage.h>
+#include <tracy/Tracy.hpp>
 
 namespace
 {
@@ -184,16 +184,15 @@ namespace editor
 		// the writer knows whether it produced the rig or bound one already here.
 		auto rigOutputs = std::vector<std::string>();
 
-		// The stage's line lands in the same log as the assetlib stages it brackets, so a slow
-		// import's parts add up to a total. The worker/UI split below is what it cannot say.
-		const auto importStage =
-			core::logging::ScopedStage("editor import: {}", name.toStdString());
-		double workerMs = 0.0;
+		ZoneScopedN("editor import");
+		ZoneTextF("%s", qPrintable(name));
 
 		background::TaskResult result = background::RunWithLoadingScreen(
 			parent,
 			QString("Importing %1").arg(name),
 			[&](background::Progress& progress) {
+				ZoneScopedN("editor import (worker)");
+
 				const assetlib::CancelToken cancel = progress.Cancellation();
 
 				progress.Report(0, 0, QString("Parsing %1...").arg(name));
@@ -266,8 +265,6 @@ namespace editor
 					target.outputs = { store.KeyFor(banimPath) };
 					store.WriteImportedDocument(target, nullptr);
 				}
-
-				workerMs = importStage.Elapsed().count();
 			},
 			background::Cancellable::kYes);
 
@@ -275,6 +272,10 @@ namespace editor
 		// `.bmesh` -- which follows them, since it names the files they write.
 		if (result.Completed())
 		{
+			// Named apart from the worker's zone because this half is the half that freezes the
+			// editor, and the capture separates them by thread.
+			ZoneScopedN("editor import (UI)");
+
 			try
 			{
 				if (options.mesh)
@@ -308,13 +309,6 @@ namespace editor
 
 					meshStore.WriteImportedDocument(target, &*mesh);
 				}
-
-				// The UI half is the half that freezes the editor, so it is the one worth naming.
-				qInfo(
-					"Import: '%s' -- %.0f ms on the worker, %.0f ms on the UI thread",
-					qPrintable(name),
-					workerMs,
-					importStage.Elapsed().count() - workerMs);
 
 				return ImportOutcome::kImported;
 			}

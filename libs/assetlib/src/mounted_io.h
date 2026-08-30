@@ -2,6 +2,7 @@
 #include <assetlib/AssetCodec.h>
 #include <assetlib/image_io.h>
 #include <core/file/IFileSystem.h>
+#include <tracy/Tracy.hpp>
 
 namespace assetlib
 {
@@ -46,6 +47,9 @@ namespace assetlib
 	[[nodiscard]] T
 	load(const core::file::IFileSystem& fileSystem, std::string_view path)
 	{
+		ZoneScopedN("assetlib container load");
+		ZoneTextF("%.*s", static_cast<int>(path.size()), path.data());
+
 		return AssetCodec<T>::Deserialize(fileSystem.Read(path));
 	}
 

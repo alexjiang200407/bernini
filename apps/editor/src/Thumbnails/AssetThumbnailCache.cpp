@@ -19,6 +19,9 @@
 #include <bgl/Camera.h>
 #include <bgl/Viewport.h>
 
+#include <core/profiling/thread_name.h>
+#include <tracy/Tracy.hpp>
+
 namespace
 {
 	// The render target is this many times the output edge, and the capture is box-filtered back
@@ -128,6 +131,11 @@ namespace
 		void
 		run() override
 		{
+			core::profiling::name_this_thread("editor thumbnails");
+
+			ZoneScopedN("editor thumbnail load");
+			ZoneTextF("%s", m_RelPath.c_str());
+
 			std::shared_ptr<assetlib::BMesh>       mesh;
 			std::shared_ptr<CookedMeshes>          cooked;
 			std::shared_ptr<game::TexturePrefetch> prefetch;

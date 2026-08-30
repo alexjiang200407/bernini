@@ -8,7 +8,7 @@
 #include <assetlib_structs/BMesh.h>
 #include <assetlib_structs/Skeleton.h>
 
-#include <core/log/ScopedStage.h>
+#include <tracy/Tracy.hpp>
 
 namespace assetlib
 {
@@ -63,8 +63,9 @@ namespace assetlib
 		const std::vector<std::string> animPaths =
 			containersUnder(GetDataRoot(), c_AnimationExtension);
 
-		const auto stage = core::logging::ScopedStage(
-			"assetlib rebake posed bounds: {} meshes, {} clip sets{}",
+		ZoneScopedN("assetlib rebake posed bounds");
+		ZoneTextF(
+			"%zu meshes, %zu clip sets%s",
 			meshPaths.size(),
 			animPaths.size(),
 			dryRun ? " (dry run)" : "");

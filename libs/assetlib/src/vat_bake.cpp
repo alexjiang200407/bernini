@@ -13,7 +13,7 @@
 
 #include <core/err/util.h>
 #include <core/hash.h>
-#include <core/log/ScopedStage.h>
+#include <tracy/Tracy.hpp>
 
 #include "ref_paths.h"
 #include "vat_tangent.h"
@@ -288,12 +288,13 @@ namespace assetlib
 		BVat&          vat    = header.vat;
 		const uint64_t frames = header.frames;
 
-		const auto stage = core::logging::ScopedStage(
-			"assetlib VAT bake: {} clips, {} frames, {} columns, {} bones",
+		ZoneScopedN("assetlib vat sample");
+		ZoneTextF(
+			"%zu clips, %llu frames, %llu columns, %llu bones",
 			animations.clips.size(),
-			frames,
-			vat.width,
-			vat.boneCount);
+			static_cast<unsigned long long>(frames),
+			static_cast<unsigned long long>(vat.width),
+			static_cast<unsigned long long>(vat.boneCount));
 
 		// The bind pose is the identity skin: the frame every baked tangent's twist is measured from.
 		auto bindRow = std::vector<SkinnedVertex>();
@@ -416,6 +417,8 @@ namespace assetlib
 	BVat
 	AssetStore::BakeVat(const VatBakeDesc& desc) const
 	{
+		ZoneScopedN("assetlib bake vat");
+
 		const VatInputs inputs = loadVatInputs(*this, desc);
 
 		BVat vat = bakeVat(inputs.mesh, inputs.skeleton, inputs.animations);

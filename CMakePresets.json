@@ -101,6 +101,7 @@
       "cacheVariables": {
         "BUILD_TESTS": "ON",
         "BERNINI_BUILD_EXAMPLES": "ON",
+        "BERNINI_PROFILING": "ON",
         "IS_DEBUG": "ON"
       }
     },
@@ -109,7 +110,8 @@
       "hidden": true,
       "cacheVariables": {
         "BUILD_TESTS": "OFF",
-        "BERNINI_BUILD_EXAMPLES": "OFF"
+        "BERNINI_BUILD_EXAMPLES": "OFF",
+        "BERNINI_PROFILING": "ON"
       }
     },
     {

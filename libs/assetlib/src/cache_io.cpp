@@ -3,6 +3,8 @@
 #include "CheckedFileReader.h"
 #include "MountedFileReader.h"
 
+#include <tracy/Tracy.hpp>
+
 namespace assetlib::cache
 {
 	namespace
@@ -224,6 +226,9 @@ namespace assetlib::cache
 		std::span<const uint32_t> ids,
 		std::string_view          what)
 	{
+		ZoneScopedN("assetlib cache chunks");
+		ZoneTextF("%.*s, %zu chunks", static_cast<int>(what.size()), what.data(), ids.size());
+
 		const Header header = readHeader(source, magic, what);
 		core::throw_runtime_error_if(
 			header.bakeToken != bakeToken,

@@ -4,6 +4,10 @@
 #include <QThread>
 #include <QTimer>
 
+#include <core/profiling/thread_name.h>
+
+#include <tracy/Tracy.hpp>
+
 Renderer::Renderer(
 	const bgl::GraphicsOptions& gfxOpts,
 	const bgl::SceneDesc&       sceneDesc,
@@ -25,6 +29,9 @@ Renderer::Renderer(
 	const auto build = [&]() {
 		try
 		{
+			core::profiling::name_this_thread("bgl-render");
+			ZoneScopedN("editor create graphics");
+
 			m_Graphics = bgl::CreateGraphics(gfxOpts);
 			m_Scene    = m_Graphics->CreateScene(sceneDesc);
 

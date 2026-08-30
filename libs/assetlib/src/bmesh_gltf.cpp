@@ -19,7 +19,7 @@
 #undef TINYGLTF_IMPLEMENTATION
 #undef STB_IMAGE_IMPLEMENTATION
 
-#include <core/log/ScopedStage.h>
+#include <tracy/Tracy.hpp>
 
 #include "gltf_skin.h"
 #include "gltf_util.h"
@@ -1143,13 +1143,16 @@ namespace assetlib
 	BMeshImport
 	loadFromGltf(const std::filesystem::path& path, const GltfLoadOptions& options)
 	{
-		std::error_code sizeError;
-		const auto      sourceBytes = std::filesystem::file_size(path, sizeError);
+		// Read for the zone alone, so both are [[maybe_unused]]: with profiling off ZoneTextF
+		// expands to nothing and -Werror would call them dead.
+		[[maybe_unused]] std::error_code sizeError;
+		[[maybe_unused]] const auto      sourceBytes = std::filesystem::file_size(path, sizeError);
 
-		const auto stage = core::logging::ScopedStage(
-			"assetlib glTF parse: {}, {} bytes",
-			path.filename().string(),
-			sizeError ? 0 : sourceBytes);
+		ZoneScopedN("assetlib glTF parse");
+		ZoneTextF(
+			"%s, %llu bytes",
+			path.filename().string().c_str(),
+			static_cast<unsigned long long>(sizeError ? 0 : sourceBytes));
 
 		tinygltf::TinyGLTF loader;
 		tinygltf::Model    model;

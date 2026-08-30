@@ -12,6 +12,12 @@ include(${CMAKE_SOURCE_DIR}/cmake/enable_coverage.cmake)
 include(${CMAKE_SOURCE_DIR}/cmake/assign_folder.cmake)
 include(${CMAKE_SOURCE_DIR}/cmake/strip_msvc_only_flags.cmake)
 
+# Tracy compiles the zones in, and with them a client that opens a socket and announces itself so a
+# profiler can find it -- the mechanism, not a side effect, and not something a shipping binary
+# should carry. Every developer preset turns it on (CMakePresets.json); the default is off so a
+# build that asked for no preset carries none of it. See docs/profiling.md.
+option(BERNINI_PROFILING "Compile Tracy zones and its client into the build" OFF)
+
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
