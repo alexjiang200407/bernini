@@ -348,8 +348,8 @@ TEST_CASE("CreateSkinnedMeshInstance writes the playback record once", "[skinned
 	CHECK(state.rate == Catch::Approx(2.0f));
 	CHECK(state.geom.offset == scene->GetGeomSkinnedInfo(geom.handle.index).record.index);
 
-	// The same transform the Mesh record holds, so the pose pass sees where the instance stands.
-	CHECK(state.transform == placed);
+	// Where the instance stands is the placement's, and only the placement's: the pose pass reads
+	// it from here rather than from a copy of its own.
 	CHECK(mesh.transform == placed);
 
 	SECTION("a clip past the geom's table is refused")

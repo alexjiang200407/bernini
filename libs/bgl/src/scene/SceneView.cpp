@@ -298,13 +298,12 @@ namespace bgl
 
 		const core::multi_slot_handle palette = m_Palettes.Allocate(float4s);
 
-		auto state      = idl::SkinnedState();
-		state.geom      = rig.record;
-		state.clip      = desc.clip;
-		state.phase     = desc.phase;
-		state.rate      = desc.rate;
-		state.palette   = palette;
-		state.transform = transform;
+		auto state    = idl::SkinnedState();
+		state.geom    = rig.record;
+		state.clip    = desc.clip;
+		state.phase   = desc.phase;
+		state.rate    = desc.rate;
+		state.palette = palette;
 
 		const idl::RawEntry record =
 			m_Playback.AddRecord(idl::PlaybackType::kSkinned, std::as_bytes(std::span(&state, 1)));
@@ -510,10 +509,12 @@ namespace bgl
 				continue;
 			}
 
+			// The placement, not its playback record: the pose pass reads the instance's transform
+			// from the one and reaches the other through it.
 			const MeshMeta& meta = m_MeshBuffer.MetaAt(meshIndex);
 			if (meta.geomType == GeomType::kSkinnedMesh && meta.animState != 0)
 			{
-				list.push_back(meta.animState);
+				list.push_back(meshIndex);
 			}
 		}
 

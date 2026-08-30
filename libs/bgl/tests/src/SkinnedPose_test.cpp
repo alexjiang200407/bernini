@@ -499,6 +499,41 @@ TEST_CASE("the pose pass writes the palette a rig's hierarchy implies", "[skinne
 		CheckNear(palette.Apply(2, glm::vec3(0.0f, 3.0f, 0.0f)), glm::vec3(-2.0f, 1.0f, 0.0f));
 	}
 
+	SECTION("two placements of one geom pose from their own records")
+	{
+		// The pass's work list names mesh instances, so each workgroup reaches its playback record
+		// through the placement it was given. A list naming the wrong one, or a lookup that lost
+		// the pairing, poses both instances from whichever record it landed on -- and the two here
+		// are asked for different frames of the same clip, so that swap is visible.
+		//
+		// They stand in different places, which must not reach the palette at all: a bone matrix is
+		// model space, and where the instance stands is applied downstream in the mesh shader.
+		const auto held = view->CreateSkinnedMeshInstance(
+			geom,
+			glm::translate(glm::mat4(1.0f), glm::vec3(-3.0f, 0.0f, 0.0f)),
+			{ 0, 0.0f, 0.0f });
+		const auto swung = view->CreateSkinnedMeshInstance(
+			geom,
+			glm::translate(glm::mat4(1.0f), glm::vec3(3.0f, 0.0f, 0.0f)),
+			{ 0, 1.0f, 0.0f });
+
+		gfx->DrawFrame(target, job);
+
+		const Palette heldPalette =
+			ReadPalette(gfxBase, viewRaw, PaletteBaseOf(viewRaw, held), float4sPerPose);
+		const Palette swungPalette =
+			ReadPalette(gfxBase, viewRaw, PaletteBaseOf(viewRaw, swung), float4sPerPose);
+
+		for (uint32_t bone = 0; bone < c_BoneCount; ++bone)
+		{
+			CheckNear(
+				heldPalette.Apply(bone, glm::vec3(1.0f, 2.0f, 3.0f)),
+				glm::vec3(1.0f, 2.0f, 3.0f));
+		}
+
+		CheckNear(swungPalette.Apply(2, glm::vec3(0.0f, 3.0f, 0.0f)), glm::vec3(-2.0f, 1.0f, 0.0f));
+	}
+
 	SECTION("a fractional frame blends the two it falls between")
 	{
 		// Half of a 90-degree swing is 45, and nlerp of the two endpoint quaternions is exactly the

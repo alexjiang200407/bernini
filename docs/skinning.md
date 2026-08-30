@@ -21,12 +21,16 @@ not obvious from a signature. The headers linked below are the source of truth.
 * **`RenderJob::time` is the only per-frame input.** An instance is spawned with `{clip, phase, rate}`
   and never touched again — the same bargain VAT makes, and deliberately the same three fields
   (`bgl::SkinnedInstanceDesc` beside `bgl::VatInstanceDesc`), so a unit can move between tiers without
-  its playback record being rewritten. `rate = 0` holds a pose under any clock. The record also
-  carries the instance's world transform — the same one its `Mesh` record holds — because the pose
-  pass binds no mesh buffer and a foot is planted against the ground under it in the world; a
-  transform is fixed for an instance's lifetime, so it is as much a spawn-time constant as the other
-  three. The ground itself is the scene's (`IScene::SetGround`), one plane until a heightfield
-  exists.
+  its playback record being rewritten. `rate = 0` holds a pose under any clock.
+
+* **A posed instance is addressed by its placement, not by its playback record.** A foot planted on
+  the ground needs to know where in the world the instance stands, and that is the `Mesh` record's
+  `transform` — so the pose pass's work list holds *mesh instance indices*, reads the transform
+  there, and reaches the playback record through the `playback` entry the placement already carries.
+  Copying the transform into `SkinnedState` instead was tried and rejected: it is one fact in two
+  records, and nothing would catch the two disagreeing the day a transform becomes mutable. It is
+  also the indirection `CullInstances` and `TransparentDepthKeys` already make. The ground itself is
+  the scene's (`IScene::SetGround`), one plane until a heightfield exists.
 
 * **The previous pose is re-evaluated, not remembered.** Motion vectors need last frame's pose. Rather
   than double-buffering the palette, the pose pass writes *two* palettes per instance in one dispatch
