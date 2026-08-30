@@ -254,6 +254,13 @@ so it fails safe, but it should not be offered.
    mesh thumbnail through task 2, `AssetAt` returning an imported source, `AssetOperations` refusing
    a `kDerived` target. Gate: `just run editor_tests -- "[contentexplorer][assetrules]"`, plus eyes.
 
+   This task also converges the editor's spellings of *is this path inside that root*. There are
+   three besides `IsContainedRelativePath`: `AssetAt` and `IsHeldOpen`
+   (`Windows/ContentExplorer/asset_rules.cpp:21-25, 56`) and the directory bookkeeping in
+   `ContentExplorerWindow.cpp:472, 485-487`. They disagree — `AssetAt` rejects on a bare
+   `startsWith("..")`, so a folder legitimately named `..hidden` is unactionable — and this task
+   rewrites the rooting all three sit on, so it is where they become one call.
+
 4. **`feat(editor): a viewport takes the source, not the container it produced`** — the three drop
    handlers accept a `.glb` and resolve it. Gate: `just run editor_tests -- "[drop]"` — the drop
    *rules* are driven straight through the handlers, since a `Drop` event cannot be synthesized.
