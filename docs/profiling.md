@@ -45,6 +45,15 @@ just run editor
 tracy-csvexport start.tracy > start.csv
 ```
 
+`tracy-csvexport` defaults to per-zone totals, which say nothing about what ran inside what. Add
+`-u` and it emits one row per zone event with its thread, start and duration — enough to rebuild the
+tree by interval containment on each thread, and the only way to check the shape of the
+instrumentation without the GUI:
+
+```bash
+tracy-csvexport -u start.tracy > events.csv   # name, ns_since_start, exec_time_ns, thread, value
+```
+
 Both tools come from the `tracy` port's `cli-tools` feature, so vcpkg has already put them in
 `build/<preset>/vcpkg_installed/<triplet>/tools/tracy/`. The **GUI** profiler is not vendored —
 install it once per machine from the Tracy releases and point it at the running process for a
