@@ -1,9 +1,8 @@
-import idl.TextureHandle;
 import types.ComputeBuffer;
 
 struct Uniforms
 {
-    TextureHandle texture;
+    Texture2D.Handle texture;
     SamplerState.Handle sampler;
     ComputeBuffer<float4> outColor;
 };
