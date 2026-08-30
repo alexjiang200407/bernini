@@ -121,18 +121,38 @@ daily:
 | Derived containers absent | **24.2 s** | `assetlib reimport` 22.6 s (94%), of which `assetlib glTF parse` ×7 = 10.1 s |
 | …and materials stale too | **133.9 s** | the resave walk's material re-bake, ~110 s |
 
-Two things in that table are worth carrying in your head. The **glTF parse count is one per output,
-not one per source** — 3 sources with 3 `.bmesh`, 2 `.bskel` and 2 `.banim` between them parse seven
-times, because `Reimport` cooks a stage at a time and re-parses rather than holding a source's meshes
-resident across all three (`reimport.cpp`). That looks like free money and is not: holding the parses
-instead was built and measured, and the 5.5 s it saves is 2.8 s given back by the skinning sweeps
-that follow, which run slower with three parsed sources resident. See
-[docs/plans/load-time-profiling.md](plans/load-time-profiling.md) ADR-9 before spending time on it
-again. The bigger target in that row is the sweeps themselves: `clip floors` plus `posed bounds` is
-13 s of the 23 s.
-
-And a **warm** start is nearly half staleness scanning: `GetStaleImportedTextureSources` walks every
+A **warm** start is nearly half staleness scanning: `GetStaleImportedTextureSources` walks every
 import document on every launch of a project where nothing changed.
+
+### The glTF re-parse is not the win it looks like
+
+Read this before optimising the rebuild row, because the obvious target has already been tried.
+
+The **parse count is one per output, not one per source**: 3 sources with 3 `.bmesh`, 2 `.bskel` and
+2 `.banim` between them parse **seven** times, because `Reimport` cooks a stage at a time and
+re-parses rather than holding a source's meshes resident across all three (`reimport.cpp`, whose
+comment states that trade deliberately). Holding them instead was built — a bounded cache keyed on
+the source, released as its last stage finished — and measured against a same-session control on the
+same binary and machine:
+
+| | cache off | cache on | |
+|---|---:|---:|---|
+| `assetlib glTF parse` | 10.2 s / 7 | 4.7 s / 3 | −5.5 s |
+| `assetlib clip floors` | 9.3 s | 10.4 s | +1.1 s |
+| `assetlib posed bounds` | 3.7 s | 5.4 s | +1.7 s |
+| `assetlib reimport` | 23.2 s | 21.4 s | −1.8 s |
+| `editor startup` | 24.6 s | 24.4 s | **−0.2 s** |
+
+The mechanism works and the saving is real; it just does not survive the stages after it. Three
+parsed sources resident make the memory-heavy skinning sweeps slower, 2.8 s of the 5.5 s comes
+straight back, and at the whole-start-up level the result is inside the run-to-run spread. It was
+not kept.
+
+Two things that measurement also settled. A **source-major restructure cannot work at all** —
+`Reimport_test.cpp`'s "Two sources rebuild together" pins a clip set reading *another* source's
+`.bskel` from disk, so the stage barriers must stand and only a parse may cross them. And the real
+target in that row is the sweeps rather than the parse: `clip floors` plus `posed bounds` is 13 s of
+the 23 s, which `docs/plans/pose-bounds-perf.md` already names as the next thing.
 
 `apps/editor/CLAUDE.md` describes a cold pipeline build as "tens of seconds". On macOS/Metal it is
 **4.4 s**. That figure was never measured on this backend; it may still hold for DXIL on Windows,
