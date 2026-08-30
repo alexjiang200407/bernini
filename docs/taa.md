@@ -349,7 +349,7 @@ Two couplings worth knowing:
   self-occluding coverage is the point of hashed, alone.
 
   The centre it steepens about is the content's own local mean, read one octave coarser through
-  `TextureHandle::SampleBias` so it inherits the hardware's LOD choice and its anisotropy. A constant
+  `Texture2D.Handle::SampleBias` so it inherits the hardware's LOD choice and its anisotropy. A constant
   centre was tried first and is what the cutoff-based version used: it cannot be right at every
   level, because a chain whose levels average above it saturates to opaque while one that averages
   below collapses to nothing, and which of the two happens is a property of the asset rather than of

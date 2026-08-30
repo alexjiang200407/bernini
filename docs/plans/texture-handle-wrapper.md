@@ -20,9 +20,10 @@ out and deletes the spec.
 
 ## Decisions
 
-- **ADR-1 — the wrapper structs go, and nothing is aliased in their place.** Every declaration site
-  spells `Texture2D.Handle` / `TextureCube.Handle`, which is what `SamplerState.Handle` beside it
-  already does. *Rejected: `typealias TextureHandle = Texture2D.Handle`, the spec's design point 1,
+- **ADR-1 — the wrapper structs go, and nothing is aliased in their place.** Every constant-buffer
+  member spells `Texture2D.Handle` / `TextureCube.Handle`, which is what `SamplerState.Handle`
+  beside it already does. A *buffer element* is the exception, and ADR-7 is why.
+  *Rejected: `typealias TextureHandle = Texture2D.Handle`, the spec's design point 1,
   because an alias whose only content is "this is a texture handle" is a second name for a type that
   already says so, and it would leave the wrapped/bare asymmetry the spec complains about visible in
   the spelling. It would also need a new `bgl_idlgen` feature — parsing `public typealias` into a
@@ -63,6 +64,17 @@ out and deletes the spec.
   `bgl_idlgen` to emit `using TextureHandle = DescriptorHandle;` from a Slang `typealias`, because
   that is codegen machinery bought for one alias that ADR-1 does not want.*
 
+- **ADR-7 — a bindless buffer's element type is boxed, in one generic, inside the view.** MSL
+  refuses a pointer to a resource anywhere inside what a constant buffer points at, so
+  `StructuredBuffer<Texture2D.Handle>.Handle` — which lowers to `device texture2d*` — cannot be
+  declared at all; the same buffer of a one-field struct is accepted and lays out identically. This
+  was **not** foreseen: the spec recorded a `slangc` check, and `slangc` emits MSL rather than
+  compiling it, so the construct only failed when `newLibraryWithSource` reached it at runtime.
+  `types/HandleElement.slang` holds the box and `RawHandleView<T>` applies it, so no call site
+  names it and no declaration site outside a buffer of handles sees it. *Rejected: bringing back a
+  `TextureHandle` struct, because it would be one wrapper per handle kind again — which is the cost
+  the spec's own trigger was about — and would put the sampling methods back on a wrapper.*
+
 ## Non-goals
 
 - **`RawTextureHandle` stays exactly as it is.** A payload read out of a `ByteAddressBuffer` cannot
@@ -80,8 +92,9 @@ out and deletes the spec.
   engine binds through what this change deletes and a mistake is a picture rather than a crash.
 - `just run bgl_tests -- "[texture]"`, `"[twoview]"`, `"[taa]"` — the bindless-sample, typed-view
   and TAA-resolve readbacks, which read a sampled texel back rather than comparing an image.
-- `just run bgl_tests -- --gpu-validation` — the change moves descriptors, which is one of the two
-  things that suite exists to catch.
+- `METAL_DEVICE_WRAPPER_TYPE=1 MTL_SHADER_VALIDATION=1 just run bgl_tests` — the change moves
+  descriptors, which is one of the two things that validation exists to catch. (`--gpu-validation`
+  is the D3D12 spelling and does nothing on this backend.)
 - `just test` — the whole set, since `Uniforms` is shared.
 
 ## Commits
@@ -92,6 +105,7 @@ out and deletes the spec.
    `CSTextureSampleReadback.slang` switched to a bare `Texture2D.Handle` as the case that proves it.
    Gate: `just run bgl_tests -- "[texture]"`.
 3. `refactor(bgl): sample a bindless texture through its handle, not a wrapper` — delete
-   `TextureHandle.slang`, add `types/Texture.slang`, sweep every shader, IDL module and C++ site,
-   drop the struct path and `c_HandleUniformMember`, update `docs/` and delete the spec.
-   Gate: `just test`, plus `just run bgl_tests -- --gpu-validation`.
+   `TextureHandle.slang`, add `types/Texture.slang` and `types/HandleElement.slang`, sweep every
+   shader, IDL module and C++ site, drop the struct path and `c_HandleUniformMember`, update
+   `docs/` and delete the spec.
+   Gate: `just test`, plus `MTL_SHADER_VALIDATION=1` over `bgl_tests`.

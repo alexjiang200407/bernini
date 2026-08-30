@@ -2,12 +2,12 @@
 #include "cmd/CommandList.h"
 #include "cmd/CommandQueue.h"
 #include "gfx/GraphicsBase.h"
-#include "idl/TextureHandle.h"
 #include "pipeline/ComputeKernel.h"
 #include "pipeline/ComputePipeline.h"
 #include "resource/Readback.h"
 #include "resource/ResourceManager.h"
 #include "types/ComputeState.h"
+#include "uniforms/DescriptorHandle.h"
 #include "util/GpuValidation.h"
 #include "util/TestOptions.h"
 #include <bgl/IGraphics.h>
@@ -84,11 +84,11 @@ TEST_CASE(
 	auto materialDesc         = bgl::ComputeBufferDesc();
 	materialDesc.initialCount = 1;
 	materialDesc.debugName    = "Struct-Resident Texture Handle";
-	materialDesc.SetElement<bgl::idl::TextureHandle>();
+	materialDesc.SetElement<bgl::DescriptorHandle>();
 	const bgl::BufferHandle materials = resourceManager->CreateComputeBuffer(materialDesc);
 	REQUIRE(resourceManager->ValidBufferHandle(materials));
 
-	const bgl::idl::TextureHandle stored{ srv.descriptor };
+	const bgl::DescriptorHandle stored = srv.descriptor;
 
 	auto outDesc         = bgl::ComputeBufferDesc();
 	outDesc.initialCount = 1;

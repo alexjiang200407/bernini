@@ -81,7 +81,8 @@ inside it.
 
 `RawHandleView<T>` ([types/RawHandleView.slang](../libs/bgl/shaders/src/types/RawHandleView.slang))
 is that view, and it is addressed in the arena's own coordinates — `GetAt(byteOffset, index)`, the
-stride divide inside the type. Deliberately **not** an `EntryBuffer<T>`: nothing in it is an
+stride divide inside the type. Its elements are `HandleElement<T>` rather than `T`, for the reason
+below. Deliberately **not** an `EntryBuffer<T>`: nothing in it is an
 allocated element, there is no reserved null slot, and most offsets are not a `T` at all. What makes
 one a `T` is the payload layout rule — handles lead a payload and are contiguous — which the
 record's own struct owns and `Scene.cpp` pins with `static_assert`s.
@@ -106,8 +107,30 @@ run. A shader missing from that list is checked by nothing until it reaches a Wi
 is how `MaterialType : uint8_t` reached master: every forward shader imports `MaterialData`, but only
 `Forward_Transparent` calls `LoadMaterialKind`, and it was the one shader not in the list.
 
-`GetDimensions` is deliberately not exposed: the core module marks it HLSL-only, so a wrapper
-carrying it would compile on D3D12 and fail on Metal.
+## A texture is its handle, and the extra accessors extend the resource type
+
+A shader declares `Texture2D.Handle` / `TextureCube.Handle` exactly as it declares
+`SamplerState.Handle`, and samples through the built-in `Sample` / `SampleLevel` / `SampleBias`. The
+CPU writes the descriptor into that member directly (see [Uniforms](uniforms.md)); nothing wraps it.
+
+Three accessors the built-ins do not give live in
+[types/Texture.slang](../libs/bgl/shaders/src/types/Texture.slang) — `Load(uint2, uint)`,
+`GetDimensions() -> float2` and `CubeFaceTexels()`. They extend **`Texture2D` / `TextureCube`, not
+the handle**: member lookup on a `DescriptorHandle<T>` resolves against `T`, so an
+`extension Texture2D.Handle` compiles and is never found.
+
+`GetDimensions()` is one of them because Slang's no-argument form is HLSL-only in the core module —
+calling it directly compiles on D3D12 and fails on Metal. The overload here is written through the
+out-parameter form, which both backends accept.
+
+**A buffer's element type is the one place the handle may not stand bare.**
+`StructuredBuffer<Texture2D.Handle>.Handle` lowers to `device texture2d*`, and MSL refuses a pointer
+to a resource anywhere inside what a constant buffer points at — which is where every such view is
+bound. `HandleElement<T>`
+([types/HandleElement.slang](../libs/bgl/shaders/src/types/HandleElement.slang)) is the one-field
+struct that makes it declarable, laid out identically; `RawHandleView<T>` applies it internally, so
+only a buffer of handles declared by hand names it. `slangc` will not catch this — it emits MSL
+rather than compiling it, so the error arrives from `newLibraryWithSource` at runtime.
 
 ## A constant buffer may not mix data and resources below the top level
 

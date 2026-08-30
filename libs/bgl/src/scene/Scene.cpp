@@ -361,7 +361,7 @@ namespace bgl
 
 			// A material payload keeps its texture handles inline, so the arena carries the typed
 			// view that makes textures of them -- and re-issues it inside its own growth.
-			materialDesc.handleStride = sizeof(idl::TextureHandle);
+			materialDesc.handleStride = sizeof(DescriptorHandle);
 
 			// The null record must cover the largest payload as well as its header: a null
 			// reference reads zeros for a whole record rather than the first live one.
@@ -621,11 +621,9 @@ namespace bgl
 
 			auto rollback = GeomRollback();
 
-			auto record = idl::VatGeom();
-			record.positions =
-				idl::TextureHandle{ m_Textures.GetDescriptor(desc.positions.textureSlot) };
-			record.normals =
-				idl::TextureHandle{ m_Textures.GetDescriptor(desc.normals.textureSlot) };
+			auto record         = idl::VatGeom();
+			record.positions    = m_Textures.GetDescriptor(desc.positions.textureSlot);
+			record.normals      = m_Textures.GetDescriptor(desc.normals.textureSlot);
 			record.boundsMin    = glm::vec4(desc.boundsMin, 0.0f);
 			record.boundsExtent = glm::vec4(desc.boundsMax - desc.boundsMin, 0.0f);
 			record.clips        = rollback.Track(m_Clips, m_Clips.Add(std::span(clips)));
@@ -1470,9 +1468,9 @@ namespace bgl
 			idl::cLooseChannelCount * sizeof(idl::RawTextureHandle));
 
 		// The other half of that arithmetic: the payload stores RawTextureHandle while the view is
-		// strided by TextureHandle, and a payload offset that is not a whole number of handles
+		// strided by the handle itself, and a payload offset that is not a whole number of handles
 		// truncates the division into the middle of a neighbouring one.
-		static_assert(sizeof(idl::TextureHandle) == sizeof(idl::RawTextureHandle));
+		static_assert(sizeof(DescriptorHandle) == sizeof(idl::RawTextureHandle));
 		static_assert(idl::cRawPayloadOffset % sizeof(idl::RawTextureHandle) == 0);
 
 		// The GPU's channel order is generated from the IDL; the file's is declared in BMaterial.h. They

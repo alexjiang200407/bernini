@@ -264,12 +264,6 @@ namespace bgl
 					*this = DescriptorHandle(handle.bindlessIndex);
 					return *this;
 				}
-				else if (
-					GetType() == UniformType::kStruct && (*this)[c_HandleUniformMember].IsValid())
-				{
-					(*this)[c_HandleUniformMember] = DescriptorHandle(handle.bindlessIndex);
-					return *this;
-				}
 
 				core::throw_runtime_error(
 					"Accessor at offset {} cannot be assigned with SRV handle",
@@ -283,12 +277,6 @@ namespace bgl
 				    m_Node->GetValueType() == UniformValueType::kDescriptorHandle)
 				{
 					*this = DescriptorHandle(handle.shaderIndex);
-					return *this;
-				}
-				else if (
-					GetType() == UniformType::kStruct && (*this)[c_HandleUniformMember].IsValid())
-				{
-					(*this)[c_HandleUniformMember] = DescriptorHandle(handle.shaderIndex);
 					return *this;
 				}
 

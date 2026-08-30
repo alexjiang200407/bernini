@@ -385,8 +385,6 @@ namespace bgl
 			matData["anisoLinearWrapSampler"].SetIfValid(draw.samplers.anisoLinearWrap);
 			matData["linearClampSampler"].SetIfValid(draw.samplers.linearClamp);
 
-			// IBL maps: assigning the RHI TextureHandle writes a descriptor handle into the
-			// shader-side handle's sole member.
 			matData["irradianceMap"].SetIfValid(draw.lighting.env.irradiance);
 			matData["prefilterMap"].SetIfValid(draw.lighting.env.prefilter);
 			matData["brdfLUT"].SetIfValid(draw.lighting.env.brdfLut);

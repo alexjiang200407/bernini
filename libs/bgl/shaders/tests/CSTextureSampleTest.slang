@@ -1,9 +1,8 @@
 import debug.dbg;
 import idl.ErrorCode;
-import idl.TextureHandle;
 struct Uniforms
 {
-    TextureHandle texture;
+    Texture2D.Handle texture;
     SamplerState.Handle sampler;
 };
 

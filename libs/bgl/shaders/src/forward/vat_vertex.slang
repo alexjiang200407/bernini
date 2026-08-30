@@ -6,6 +6,7 @@
 // Forward_AnyMesh, which draws lists that mix tiers.
 
 import types.SubmeshInstance;
+import types.Texture;
 import forward.VatData;
 import forward.common;
 import forward.mesh_stage;

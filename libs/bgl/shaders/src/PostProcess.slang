@@ -1,15 +1,14 @@
-import idl.TextureHandle;
 import util.Tonemap;
 
 struct PostProcessData
 {
-    TextureHandle sceneColor;
+    Texture2D.Handle sceneColor;
 
     // Point when the source is already on the backbuffer's grid, linear when a render-resolution
     // scene colour has to be carried across -- which is only a frame the TAA resolve did not run.
     SamplerState.Handle sampler;
 
-    TextureHandle outlineMask;
+    Texture2D.Handle outlineMask;
 
     // The mask is on the render grid and the dilate below is a coverage test, so this one is always
     // a point sampler however the scene colour is filtered.

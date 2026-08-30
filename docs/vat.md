@@ -53,7 +53,7 @@ truth; when this doc disagrees, trust the header, then fix this doc.
   `1/(frameCount - 1)`, which on a 30-frame walk cycle is a hitch once per stride. A hand-authored
   fixture must therefore repeat its first frame at the end to be a loop at all — see
   `bgl::test::vat_synth`.
-* **Fetch is `TextureHandle::Load` by exact texel, not a sampler.** A vertex's column is always
+* **Fetch is `Texture2D.Handle::Load` by exact texel, not a sampler.** A vertex's column is always
   exact, so filtering buys nothing along U — and a `SamplerState.Handle` inside a mesh-stage
   cbuffer creates a Mixed-category parameter Metal's stage-binding path mis-indexes. Fractional
   frames are two Loads and a lerp.

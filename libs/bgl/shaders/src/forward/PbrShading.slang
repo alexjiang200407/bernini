@@ -1,5 +1,5 @@
 import forward.common;
-import idl.TextureHandle;
+import types.Texture;
 
 // Fresnel Schlick approximation adjusted for IBL Roughness
 public float3 FresnelSchlickRoughness(float cosTheta, float3 F0, float roughness)
@@ -82,9 +82,9 @@ public SurfaceLobes EvaluateSurface(
     float4 specularFactors,
     bool isFrontFace,
     float3 cameraPos,
-    TextureCubeHandle irradianceMap,
-    TextureCubeHandle prefilterMap,
-    TextureHandle brdfLUT,
+    TextureCube.Handle irradianceMap,
+    TextureCube.Handle prefilterMap,
+    Texture2D.Handle brdfLUT,
     SamplerState.Handle clampSampler,
     float exposure,
     float2 envRotation
@@ -115,7 +115,7 @@ public SurfaceLobes EvaluateSurface(
     float3 kD = 1.0 - kS;
     kD *= 1.0 - metallic;
 
-    let irradiance = irradianceMap.SampleCube(clampSampler, ToEnvSpace(N, envRotation)).rgb;
+    let irradiance = irradianceMap.Sample(clampSampler, ToEnvSpace(N, envRotation)).rgb;
     let diffuse = irradiance * albedo;
 
     const float MAX_REFLECTION_LOD = 6.0f; // Highest mip index of the 7-level prefilter cube
@@ -158,7 +158,7 @@ public SurfaceLobes EvaluateSurface(
     const float areaLod = min(sqrt(excess) * MAX_REFLECTION_LOD, c_AreaLodCap);
 
     const float lod = min(max(roughness * MAX_REFLECTION_LOD, areaLod), MAX_REFLECTION_LOD);
-    let prefilteredColor = prefilterMap.SampleCubeLevel(clampSampler, ToEnvSpace(R, envRotation), lod).rgb;
+    let prefilteredColor = prefilterMap.SampleLevel(clampSampler, ToEnvSpace(R, envRotation), lod).rgb;
     float2 envBRDF = brdfLUT.Sample(clampSampler, float2(cosTheta, roughness)).rg;
 
     SurfaceLobes lobes;

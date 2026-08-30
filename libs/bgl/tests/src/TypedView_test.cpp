@@ -3,13 +3,13 @@
 #include "cmd/CommandQueue.h"
 #include "gfx/GraphicsBase.h"
 #include "idl/RawTextureHandle.h"
-#include "idl/TextureHandle.h"
 #include "pipeline/ComputeKernel.h"
 #include "pipeline/ComputePipeline.h"
 #include "resource/Readback.h"
 #include "resource/ResourceManager.h"
 #include "types/ComputeState.h"
 #include "types/QueueType.h"
+#include "uniforms/DescriptorHandle.h"
 #include "util/GpuValidation.h"
 #include "util/TestOptions.h"
 #include <bgl/IGraphics.h>
@@ -86,10 +86,10 @@ TEST_CASE("One buffer reads as bytes and as handles at once", "[twoview][compute
 
 	const bgl::SamplerHandle sampler = resourceManager->CreateSampler(bgl::SamplerDesc());
 
-	const auto tint   = glm::vec4(0.25f, 0.5f, 0.75f, 1.0f);
-	const auto stored = bgl::idl::TextureHandle{ srv.descriptor };
+	const auto                  tint   = glm::vec4(0.25f, 0.5f, 0.75f, 1.0f);
+	const bgl::DescriptorHandle stored = srv.descriptor;
 
-	static_assert(sizeof(bgl::idl::RawTextureHandle) == sizeof(bgl::idl::TextureHandle));
+	static_assert(sizeof(bgl::idl::RawTextureHandle) == sizeof(bgl::DescriptorHandle));
 
 	std::array<std::byte, c_ArenaBytes> bytes{};
 	std::memcpy(bytes.data() + c_RecordOffset, &tint, sizeof(tint));
@@ -102,7 +102,7 @@ TEST_CASE("One buffer reads as bytes and as handles at once", "[twoview][compute
 	// The second view: the same allocation, read as handles.
 	const bgl::BufferSrvHandle handles = resourceManager->CreateBufferSrv(
 		arena,
-		bgl::BufferSrvDesc().SetElement<bgl::idl::TextureHandle>().SetDebugName("Typed View"));
+		bgl::BufferSrvDesc().SetElement<bgl::DescriptorHandle>().SetDebugName("Typed View"));
 	REQUIRE(resourceManager->ValidBufferSrvHandle(handles));
 
 	auto outDesc         = bgl::ComputeBufferDesc();
