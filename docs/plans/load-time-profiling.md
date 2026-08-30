@@ -76,11 +76,14 @@ formats, so a start-up timeline straddles both.
   waved at. First, in any build with Tracy compiled out, and for an `assetlib_cli` run read from its
   console with no viewer attached, the per-stage timing lines `docs/gfx_debug.md` advertised are
   gone; ADR-2 is what makes that acceptable, since there is no developer preset in which Tracy is
-  off. Second, and less comfortably: a stage line was **assertable** and a Tracy zone is not. Tracy's
-  client streams to a server and exposes no in-process query, so `assetlib_tests`' "The posed-bounds
-  bake says what it cost, and on what" — which caught a bake going superlinear by reading its own
-  dimensions back — has no equivalent and is deleted with `CapturedLog.h`. Nothing in this change
-  replaces it.*
+  off. Second: a stage line was **assertable** and a Tracy zone is not — Tracy's client
+  streams to a server and exposes no in-process query — so `assetlib_tests`' "The posed-bounds bake
+  says what it cost, and on what" is deleted with `CapturedLog.h`, and nothing here replaces it.
+  What that case actually pinned is worth stating exactly, because it is smaller than it sounds: on
+  a two-vertex, one-bone, three-frame fixture it asserted the line read "1 bones", "1 entries",
+  "3 frames" and " ms". It was a smoke test that a stage names its dimensions at all — not a scaling
+  guard, and it could not have caught a bake going superlinear by itself. The cases that do guard
+  that shape are `Perf_test.cpp`'s `[perf][bounds]` pair, and this change does not touch them.*
 
 - **ADR-5 — One log file, with Qt teed into spdlog.** The editor calls `init_file_logger` itself,
   before constructing the `Renderer`, and installs a Qt message handler that writes into the same
