@@ -25,9 +25,12 @@ public struct LoosePbrMaterial
 
     public uint channels[9];
 
-    // 108 bytes of handles and channels leave the next float4 at 108, where MSL wants 112. idlgen
-    // refuses that mismatch rather than laying the struct out two ways, so the gap is spelled out.
-    public uint channelPad;
+    // Cutout threshold. Only read by the alpha-test PSOs; an opaque material never samples it.
+    //
+    // Sits here because 108 bytes of handles and channels leave the next float4 at 108 where MSL
+    // wants 112: this fills that gap, and moving it below baseColorFactor reopens it and idlgen
+    // refuses the struct.
+    public float alphaCutoff;
 
     public float4 baseColorFactor;
 
@@ -38,7 +41,4 @@ public struct LoosePbrMaterial
     // What baseColorFactor.a means on a blended surface: 0 for coverage, 1 for transmission. Only
     // read by the transparent PSO. See MaterialData::ShadeBlended.
     public float transmissionFactor;
-
-    // Cutout threshold. Only read by the alpha-test PSOs; an opaque material never samples it.
-    public float alphaCutoff;
 };

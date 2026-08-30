@@ -8,6 +8,8 @@ import idl.LoosePbrMaterial;
 import idl.IPbrMaterial;
 import idl.IAlphaTestMaterial;
 import idl.TextureHandle;
+import idl.MaterialType;
+import idl.Entry;
 import forward.common;
 import forward.PbrShading;
 import util.HashedAlpha;
@@ -21,7 +23,6 @@ struct MaterialData
     // target without temporal AA, where a changing pattern would be flicker rather than coverage.
     float alphaHashSeed;
 
-    // Every material of every kind, each behind a header naming its MaterialType.
     RawBuffer materials;
 
     // The same allocation read as texture handles: a payload keeps a handle's bytes inline, and
@@ -47,14 +48,15 @@ ConstantBuffer<MaterialData> materialData;
 // the typed view. PbrMaterial.slang and LoosePbrMaterial.slang are where that order is fixed.
 TextureHandle RecordTexture(uint byteOffset, uint index)
 {
-    return materialData.handleView[(byteOffset + cRawPayloadOffset) / 8u + index];
+    let element = (byteOffset + cRawPayloadOffset) / 8u + index;
+    return materialData.handleView[Entry<TextureHandle>.At(element)];
 }
 
 // Which kind of material a reference names, read from the record's own header. For the one pass
 // that draws more than one kind; every other is compiled for a single kind and never asks.
-public uint LoadMaterialKind(uint byteOffset)
+public MaterialType LoadMaterialKind(uint byteOffset)
 {
-    return materialData.materials.LoadTag(RawEntry<IMaterial>.At(byteOffset));
+    return MaterialType(materialData.materials.LoadTag(RawEntry<IMaterial>.At(byteOffset)));
 }
 
 // A payload and where it lives. The interfaces hang off this rather than off the payload, because a

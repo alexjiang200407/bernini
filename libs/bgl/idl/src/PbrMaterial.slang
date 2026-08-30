@@ -9,16 +9,14 @@ public struct PbrMaterial
     public RawTextureHandle normalTexture;    // BC5_UNORM
     public RawTextureHandle ormTexture;       // UNORM
 
-    // Three eight-byte handles leave the next float4 at 24, where MSL wants it at 32. idlgen
-    // refuses that mismatch rather than laying the struct out two ways, so the gap is spelled out.
-    public uint2 handlePad;
+    // Three eight-byte handles leave the next float4 at 24, where MSL wants it at 32. These two fill
+    // that gap, so moving either below baseColorFactor reopens it and idlgen refuses the struct.
+    public float metallicFactor;
+    public float roughnessFactor;
 
     public float4 baseColorFactor;
 
     public float4 specular;
-
-    public float metallicFactor;
-    public float roughnessFactor;
 
     // What baseColorFactor.a means on a blended surface: 0 for coverage, 1 for transmission. Only
     // read by the transparent PSO. See MaterialData::ShadeBlended.

@@ -12,7 +12,7 @@ import idl.MaterialType;
 [shader("pixel")]
 float4 PSMain(ForwardVSOut input, bool isFrontFace: SV_IsFrontFace) : SV_Target
 {
-    if (LoadMaterialKind(input.materialOffset) == uint(MaterialType.kLoosePbr))
+    if (LoadMaterialKind(input.materialOffset) == MaterialType.kLoosePbr)
     {
         return ShadeBlended<LoosePbrMaterialRecord>(input, isFrontFace);
     }
