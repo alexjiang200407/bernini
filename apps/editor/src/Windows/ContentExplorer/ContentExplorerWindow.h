@@ -82,14 +82,26 @@ private:
 	AttachModels();
 
 	/**
-	 * Hides every build product (.bvat) among `parent`'s rows [`first`, `last`] of `model` in
-	 * `view` -- the whole parent when `last` is -1. Row-hiding is per view and resets with the
+	 * Whether `path` is the browse root or something beneath it.
+	 *
+	 * `setRootIndex` limits what a view *draws*, not what `setCurrentIndex` may select, and
+	 * `currentChanged` navigates -- so a programmatic selection would otherwise re-root the grid
+	 * anywhere the model reaches, the derived half included. This is what makes "the views cannot
+	 * navigate above the authored half" a rule rather than a property of what a mouse can hit.
+	 */
+	[[nodiscard]] bool
+	IsInsideBrowseRoot(const QString& path) const;
+
+	/**
+	 * Hides every row of `model` in `view` that `editor::IsHiddenInExplorer` names -- a build
+	 * product or a source's import document -- among `parent`'s rows [`first`, `last`], or the
+	 * whole parent when `last` is -1. Row-hiding is per view and resets with the
 	 * model attachment, so this runs from rowsInserted (the lazy scan's arrivals, which pass their
 	 * batch), from the tree's expanded signal and after each grid re-root (rows already cached in
 	 * the model fire neither, and scan whole).
 	 */
 	static void
-	HideBuildProductRows(
+	HideUnlistedRows(
 		QAbstractItemView*      view,
 		const QFileSystemModel& model,
 		const QModelIndex&      parent,
@@ -147,9 +159,16 @@ private:
 	QFileSystemModel*         m_HierarchyModel;
 	AssetFileModel*           m_FileModel;
 	QLabel*                   m_EmptyPlaceholder = nullptr;
-	QString                   m_RootPath;
-	QStringList               m_History;
-	AssetOperations*          m_Operations = nullptr;
+	// The project's Data directory: what every key here is relative to, and what AssetAt and
+	// AssetOperations resolve against. Not where the views are rooted -- see m_BrowseRoot.
+	QString m_RootPath;
+
+	// Where the views are rooted: `Data/Authored`, the half a person authored. The derived half is
+	// not hidden row by row but simply never reachable, which is a property of where the views
+	// point rather than of a sweep that has to be reapplied on every insertion.
+	QString          m_BrowseRoot;
+	QStringList      m_History;
+	AssetOperations* m_Operations = nullptr;
 
 	// A pure-CPU decode with no renderer behind it, so the explorer stands its own cache instead of
 	// being handed one the way the GPU-backed AssetThumbnailCache is.
