@@ -1,3 +1,4 @@
+#include <assetlib/asset_refs.h>
 #include <assetlib/codecs.h>
 #include <assetlib/import_document.h>
 
@@ -67,6 +68,16 @@ namespace assetlib
 			return std::string(key.substr(0, key.size() - ext.size())).append(extension);
 		}
 
+	}
+
+	std::string
+	meshOutputOf(const ImportDocument& document)
+	{
+		for (const std::string& output : document.outputs)
+			if (assetTypeFromExtension(output) == AssetType::kMesh)
+				return output;
+
+		return {};
 	}
 
 	std::string
