@@ -50,12 +50,15 @@ formats, so a start-up timeline straddles both.
   `*-profiling` preset per platform, which doubles the preset matrix to buy back a cost that was
   never paid.*
 
-  **It is still an option — `BERNINI_PROFILING`, default ON — and the reason is not CPU cost.**
+  **It is still a switch — `BERNINI_PROFILING` — and the reason is not CPU cost.**
   Tracy's client opens a TCP socket and announces itself over UDP from process start; that is the
   mechanism, not a side effect, and it is not something a shipping binary should carry. `core` links
   it and everything links `core`, so the escape hatch is cheaper to add now than once the tree has
   more consumers — `ROADMAP.md` ships the game cross-platform, Xbox included. Off is headers-only and
-  no call site changes.*
+  no call site changes. It is declared at the root defaulting off and switched on by the `debug` and
+  `release` presets, because that is where this repo already keeps `BUILD_TESTS`,
+  `BERNINI_BUILD_EXAMPLES` and `BUILD_COVERAGE` — a toggle buried in one library's CMakeLists is a
+  second place to look.*
 
 - **ADR-3 — Refuse both of Tracy's tempting features: no `crash-handler`, and no `on-demand`.** The
   crash handler contends with `core::install_crash_handlers()` and cpptrace, which already own that

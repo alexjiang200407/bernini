@@ -23,15 +23,6 @@ strip_msvc_only_interface_flags(spdlog::spdlog spdlog::spdlog_header_only)
 find_package(cpptrace CONFIG REQUIRED)
 find_package(nlohmann_json CONFIG REQUIRED)   # Settings (JSON config) parsing
 find_package(glm CONFIG REQUIRED)             # core/glm.h: shared glm config for all libs
-
-# Tracy compiles the zones in, and with them a client that opens a socket and announces itself so a
-# profiler can find it. On by default because that is the point (docs/profiling.md), but an option
-# because everything in the tree sits on core: a target that ships must be able to carry none of it,
-# and retrofitting the switch once many things link core is dearer than having it now.
-#
-# Off is headers-only. Without TRACY_ENABLE every zone macro expands to nothing, so no call site
-# changes and nothing links the client -- there is no second spelling of a zone to maintain.
-option(BERNINI_PROFILING "Compile Tracy zones and its client into the build" ON)
 find_package(Tracy CONFIG REQUIRED)
 
 target_link_libraries(
@@ -44,6 +35,8 @@ target_link_libraries(
         nlohmann_json::nlohmann_json
 )
 
+# Off is headers-only: TRACY_ENABLE rides on the link interface, so without it every zone macro
+# expands to nothing and no call site changes. Declared at the root, set per preset.
 if (BERNINI_PROFILING)
     target_link_libraries(core PUBLIC Tracy::TracyClient)
 else()

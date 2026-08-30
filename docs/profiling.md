@@ -4,13 +4,19 @@ CPU timing here is [Tracy](https://github.com/wolfpld/tracy). It is compiled int
 debug and release — not gated the way `BUILD_COVERAGE` is, because a zone costs a few nanoseconds
 where coverage changes the performance of everything it instruments.
 
-It is still an option, and the reason is not cost. Tracy's client opens a TCP socket and announces
+It is still a switch, and the reason is not cost. Tracy's client opens a TCP socket and announces
 itself over UDP from process start, so a profiler can find it — which is the whole mechanism, and is
-not something a shipping binary should carry. `core` links it, and everything links `core`, so the
-switch has to exist before the tree grows more consumers rather than after:
+not something a shipping binary should carry. `core` links it and everything links `core`, so the
+switch has to exist before the tree grows more consumers rather than after.
+
+`BERNINI_PROFILING` is declared at the root and defaults **off**; the `debug` and `release` presets
+in `CMakePresets.json` turn it on, the same way they carry `BUILD_TESTS` and `BERNINI_BUILD_EXAMPLES`.
+So every developer preset profiles, a build that asked for no preset carries none of it, and a
+shipping preset would say so in the one place the other build toggles already live. To turn it off
+for one configure, the command line still wins over the preset:
 
 ```bash
-cmake -S . -B build/<preset> -DBERNINI_PROFILING=OFF
+cmake --preset macos-clang-metal-debug -DBERNINI_PROFILING=OFF
 ```
 
 Off is headers-only: without `TRACY_ENABLE` every zone macro expands to nothing, the client is not
