@@ -33,7 +33,13 @@ Two things the licence does **not** cover, because both leak out of the app:
 
 ## Startup
 
-`main.cpp` shows an `editor::StartupScreen` **before** it constructs `MainWindow`, because
+`main.cpp` opens the log **first**, through `core::logging::init_file_logger`, and routes Qt's
+messages into its sinks with `InstallQtLogRouting` (`src/util/qt_logging.h`). Order is the whole
+point: bgl opens the log from its `Graphics` constructor, and the first caller names the file, so
+naming it here is what puts the renderer's lines, assetlib's and the editor's own `qWarning` in one
+`editor.log` on one clock instead of two files. There is no `bgl.log` under the editor.
+
+`main.cpp` then shows an `editor::StartupScreen` **before** it constructs `MainWindow`, because
 constructing the window is what takes the time: `Renderer` builds every pipeline the renderer will
 ever use, which on a cold shader cache is tens of seconds. The screen takes a
 `background::ProgressSink`; `MainWindow` reports one step for the shaders — bgl builds them all
