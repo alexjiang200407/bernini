@@ -23,6 +23,7 @@
 #include "idl/Rig.h"
 #include "idl/SkinnedBone.h"
 #include "idl/SkinnedState.h"
+#include "idl/SkinnedTableState.h"
 #include "idl/Submesh.h"
 #include "idl/VatGeom.h"
 #include "idl/VatState.h"

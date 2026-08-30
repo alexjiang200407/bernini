@@ -38,7 +38,9 @@ namespace bgl
 		// Zero for a static one -- the arena reserves offset 0 so it can mean null.
 		uint32_t animState = 0;
 
-		// kSkinnedMesh only: the instance's slice of the view's palette arena, freed with it.
+		// kSkinnedMesh only, and only on a kPerInstance one: the instance's slice of the view's
+		// palette arena, freed with it. Null on a kBoneAnimTable instance, which reads its rig's
+		// table instead -- and that absence is what the pose pass and the mesh shader branch on.
 		core::multi_slot_handle palette;
 	};
 
