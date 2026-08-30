@@ -81,9 +81,10 @@ namespace bgl
 		 *
 		 * The override outranks the default: a later Scene::SetSubmeshMaterial does not disturb it.
 		 *
-		 * Like every material binding this is a raw slot index, so deleting a material an instance
-		 * still overrides with re-points that instance at whatever takes the slot next. Clear the
-		 * override first, or let gamelib's AssetManager refcount it.
+		 * Like every material binding this is a raw byte offset into the scene's material arena, so
+		 * deleting a material an instance still overrides with re-points that instance at whatever
+		 * record takes those bytes next. Clear the override first, or let gamelib's AssetManager
+		 * refcount it.
 		 *
 		 * @throws SceneError if the instance handle is invalid, the material is invalid, or
 		 *         `submeshIndex` is out of range for the instance's geometry.

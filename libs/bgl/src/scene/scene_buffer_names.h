@@ -12,8 +12,7 @@ namespace bgl
 	constexpr std::string_view c_VertexDataBufferName = "scene.vertexDataBuffer"sv;
 	constexpr std::string_view c_IndexBufferName      = "scene.indexBuffer"sv;
 
-	constexpr std::string_view c_PbrMaterialBufferName   = "scene.pbrMaterialBuffer"sv;
-	constexpr std::string_view c_LooseMaterialBufferName = "scene.looseMaterialBuffer"sv;
+	constexpr std::string_view c_MaterialArenaBufferName = "scene.materialArenaBuffer"sv;
 
 	constexpr std::string_view c_VatGeomBufferName   = "scene.vatGeomBuffer"sv;
 	constexpr std::string_view c_VatColumnBufferName = "scene.vatColumnBuffer"sv;

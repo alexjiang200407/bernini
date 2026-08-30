@@ -512,12 +512,13 @@ namespace game
 			std::vector<bgl::MaterialHandle> overrides;
 		};
 
-		// A baked and a loose material live in *different* buffers, so their slot indices collide --
-		// both start at 0. The record key has to carry the type as well as the index.
+		// Every kind now shares one arena, so a byte offset already identifies a material on its
+		// own. The type stays in the key regardless: a handle whose type disagrees with the record
+		// at its offset is a caller error, and one that keys as a different record would hide it.
 		[[nodiscard]] static uint64_t
 		MaterialKey(bgl::MaterialHandle material) noexcept
 		{
-			return (static_cast<uint64_t>(material.materialType) << 32) | material.handle.index;
+			return (static_cast<uint64_t>(material.materialType) << 32) | material.byteOffset;
 		}
 
 		// An instance's slot index is unique only within its view -- each view numbers its own from 0 --

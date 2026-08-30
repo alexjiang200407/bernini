@@ -142,6 +142,30 @@ namespace bgl
 		}
 
 		/**
+		 * Overwrites a record's payload, keeping its offset and its tag.
+		 *
+		 * A record's size is a function of its kind and a kind cannot change, so the new payload is
+		 * the same length as the one it replaces -- which is what lets every reference to this
+		 * record stay valid with nothing rebound.
+		 *
+		 * @pre `entry` names a live record and `payload` is the length that record was written with.
+		 */
+		void
+		SetRecordPayload(idl::RawEntry entry, std::span<const std::byte> payload)
+		{
+			gassert(IsOffsetValid(entry.byteOffset), "SetRecordPayload on a dead record");
+
+			const auto handle = m_Blocks.HandleAt(ToBlockIndex(entry.byteOffset));
+			const auto record = m_Blocks.MutableRangeBytes(handle);
+
+			gassert(
+				idl::cRawPayloadOffset + payload.size() <= record.size(),
+				"A payload larger than the record it replaces");
+
+			std::memcpy(record.data() + idl::cRawPayloadOffset, payload.data(), payload.size());
+		}
+
+		/**
 		 * Writes `bytes` with no header, for data whose kind is recorded by whatever names it.
 		 *
 		 * @throws std::runtime_error if the range would take the arena past what a raw view can

@@ -131,8 +131,7 @@ public ForwardVSOut VatVertex(MeshletContext ctx, SubmeshInstance instance, uint
     vertexOut.uv = vertex.uv;
     vertexOut.tangent = float4(mul((float3x3)ctx.mesh.transform, tangent), vertex.tangent.w);
 
-    vertexOut.materialIndex = instance.material.GetOffset();
-    vertexOut.materialIsLoose = 0u;
+    vertexOut.materialOffset = instance.material.GetByteOffset();
 
     return vertexOut;
 }

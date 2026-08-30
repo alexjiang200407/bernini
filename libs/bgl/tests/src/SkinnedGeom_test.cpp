@@ -292,8 +292,8 @@ TEST_CASE("AddSkinnedMeshGeom uploads a rig's bones, clips and samples", "[skinn
 			CHECK_NOTHROW(scene->SetSubmeshMaterial(geom, 0, scene->CreatePbrMaterial(layerDesc)));
 		}
 
-		// The skinned geometry stage writes materialIsLoose = 0: there is no loose variant of it,
-		// and a loose handle would index the wrong material buffer rather than fail.
+		// There is no loose variant of the skinned geometry stage, so AcceptsMaterial refuses the
+		// handle here rather than letting a draw reach a pixel shader that cannot route channels.
 		const auto loose = scene->CreateLoosePbrMaterial(bgl::LoosePbrMaterialDesc());
 		CHECK_THROWS_AS(scene->SetSubmeshMaterial(geom, 0, loose), bgl::SceneError);
 	}

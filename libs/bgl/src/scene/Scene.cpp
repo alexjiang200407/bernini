@@ -161,6 +161,17 @@ namespace bgl
 
 		std::atomic<uint32_t> g_NextSceneId{ 0 };
 
+		// A texture handle as the bytes a raw-loaded payload stores. The descriptor exposes no
+		// accessor, so the conversion is a copy -- kept in one place, as DescriptorHandle keeps its
+		// own inverse.
+		idl::RawTextureHandle
+		RawHandleOf(DescriptorHandle descriptor) noexcept
+		{
+			auto raw = idl::RawTextureHandle();
+			std::memcpy(&raw, &descriptor, sizeof(raw));
+			return raw;
+		}
+
 		idl::VertexLayout
 		ConvertLayout(const assetlib::VertexLayout& src)
 		{
@@ -280,6 +291,28 @@ namespace bgl
 	}
 
 	void
+	Scene::RefreshMaterialHandleView()
+	{
+		const BufferHandle arena = m_Materials.GetBufferHandle();
+		if (arena.slot == m_ViewedMaterialBuffer.slot &&
+		    arena.bindlessIndex == m_ViewedMaterialBuffer.bindlessIndex)
+		{
+			return;
+		}
+
+		if (!m_MaterialHandleView.IsNull())
+		{
+			m_ResourceManager->DestroyBufferSrv(m_MaterialHandleView);
+		}
+
+		m_MaterialHandleView = m_ResourceManager->CreateBufferSrv(
+			arena,
+			BufferSrvDesc().SetElement<idl::TextureHandle>().SetDebugName("Material Handle View"));
+
+		m_ViewedMaterialBuffer = arena;
+	}
+
+	void
 	Scene::InitBuffers()
 	{
 		const auto atLeastOne = [](uint32_t n) -> uint32_t { return n != 0 ? n : 1; };
@@ -332,19 +365,31 @@ namespace bgl
 		}
 
 		{
-			auto pbrBufferDesc         = EntryBufferDesc();
-			pbrBufferDesc.initialCount = atLeastOne(m_Desc.initialPbrMaterials);
-			pbrBufferDesc.debugName    = "Pbr Material Buffer";
+			// The two kinds share one arena, so their budgets add up into it.
+			const uint64_t materialBytes =
+				(static_cast<uint64_t>(m_Desc.initialPbrMaterials) *
+			     (idl::cRawPayloadOffset + sizeof(idl::PbrMaterial))) +
+				(static_cast<uint64_t>(m_Desc.initialLoosePbrMaterials) *
+			     (idl::cRawPayloadOffset + sizeof(idl::LoosePbrMaterial)));
 
-			m_Pbr.Init(std::move(pbrBufferDesc), m_ResourceManager);
-		}
+			auto materialDesc = RawBufferDesc();
 
-		{
-			auto looseBufferDesc         = EntryBufferDesc();
-			looseBufferDesc.initialCount = atLeastOne(m_Desc.initialLoosePbrMaterials);
-			looseBufferDesc.debugName    = "Loose Pbr Material Buffer";
+			// Clamped, not truncated: a budget past what a raw view addresses would otherwise wrap
+			// to a small arena, which is the wrap the arena's own checks exist to make loud.
+			materialDesc.initialBytes = atLeastOne(
+				static_cast<uint32_t>(std::min<uint64_t>(materialBytes, c_MaxRawBufferBytes - 1)));
+			materialDesc.debugName = "Material Arena";
 
-			m_Loose.Init(std::move(looseBufferDesc), m_ResourceManager);
+			// The null record must cover the largest payload as well as its header: a null
+			// reference reads zeros for a whole record rather than the first live one.
+			materialDesc.nullRecordBytes =
+				idl::cRawPayloadOffset +
+				static_cast<uint32_t>(
+					std::max(sizeof(idl::PbrMaterial), sizeof(idl::LoosePbrMaterial)));
+
+			m_Materials.Init(std::move(materialDesc), m_ResourceManager);
+
+			RefreshMaterialHandleView();
 		}
 
 		// The VAT buffers start at one entry each rather than from a SceneDesc knob: most scenes
@@ -452,6 +497,12 @@ namespace bgl
 	Scene::ImportResources(FrameGraph& fg, std::vector<std::string>& resourceNames)
 	{
 		resourceNames.reserve(resourceNames.size() + std::tuple_size_v<decltype(c_Buffers)>);
+
+		// Before the import, and in the same breath as it: a growth replaces the resource the typed
+		// view describes, and nothing announces one -- the buffer handle changing is the signal.
+		// Taking the two at different instants is what would hand a frame the new bytes and the old
+		// view. See IResourceManager::CreateBufferSrv.
+		RefreshMaterialHandleView();
 
 		// Import every buffer (including the GPU-only compute buffer): the Update pass declares
 		// them as copy-dest so the graph transitions them, and the FrameGraph tracks the state
@@ -1340,10 +1391,12 @@ namespace bgl
 		// A caller-supplied texture resolves to its bindless descriptor; an invalid
 		// (default-constructed) handle falls back to the given default texture. The descriptor comes
 		// from the resource manager, not the slot: this one is read straight out of GPU memory, so it
-		// has to be whatever the backend's shader can dereference.
+		// has to be whatever the backend's shader can dereference -- as bytes, since the record it
+		// lands in is raw-loaded and the arena's typed view is what samples them.
 		const auto resolve = [this](TextureAssetHandle tex, core::slot_handle fallback) {
 			const core::slot_handle slot = tex.textureSlot ? tex.textureSlot : fallback;
-			return idl::TextureHandle{ m_Textures.GetDescriptor(slot) };
+
+			return RawHandleOf(m_Textures.GetDescriptor(slot));
 		};
 
 		idl::PbrMaterial material{};
@@ -1363,8 +1416,11 @@ namespace bgl
 	MaterialHandle
 	Scene::CreatePbrMaterial(const PbrMaterialDesc& desc)
 	{
-		const core::slot_handle slot = m_Pbr.Add(BuildPbrMaterial(desc));
-		return MaterialHandle{ MaterialType::kPBR, desc.layerType, slot };
+		const idl::PbrMaterial material = BuildPbrMaterial(desc);
+		const idl::RawEntry    entry =
+			m_Materials.AddRecord(MaterialType::kPBR, std::as_bytes(std::span(&material, 1)));
+
+		return MaterialHandle{ MaterialType::kPBR, desc.layerType, entry.byteOffset };
 	}
 
 	void
@@ -1374,17 +1430,28 @@ namespace bgl
 		{
 			throw SceneError("MaterialHandle passed to UpdatePbrMaterial is not a kPBR material");
 		}
-		if (!m_Pbr.IsValid(material.handle))
+		if (!m_Materials.IsOffsetValid(material.byteOffset))
 		{
 			throw SceneError(
 				"MaterialHandle passed to UpdatePbrMaterial has expired or is invalid");
 		}
 
-		// Rewriting the entry is all it takes: a submesh stores the material's entry *index*, so every
-		// submesh bound to this material picks the new contents up with no rebinding. The entry keeps
-		// its slot, so caller-held handles stay valid, and the PSO bucket -- which derives from
-		// materialType, not from the desc -- cannot change.
-		m_Pbr.Set(material.handle, BuildPbrMaterial(desc));
+		// The record says what it is, and the size guard alone would not: a stale handle whose
+		// bytes were recycled into a larger record of another kind fits inside it.
+		if (m_Materials.GetTagAt(material.byteOffset) != MaterialType::kPBR)
+		{
+			throw SceneError(
+				"MaterialHandle passed to UpdatePbrMaterial names a record of another type");
+		}
+
+		// Rewriting the payload is all it takes: a submesh stores the material's byte offset, so
+		// every submesh bound to this material picks the new contents up with no rebinding. The
+		// record keeps its offset and its tag, so caller-held handles stay valid, and the PSO
+		// bucket -- which derives from materialType, not from the desc -- cannot change.
+		const idl::PbrMaterial rebuilt = BuildPbrMaterial(desc);
+		m_Materials.SetRecordPayload(
+			idl::RawEntry{ material.byteOffset },
+			std::as_bytes(std::span(&rebuilt, 1)));
 
 		// Every rewrite counts, including one landing on the bytes already there: an entry is a
 		// GPU-layout mirror whose padding no comparison can trust.
@@ -1403,17 +1470,35 @@ namespace bgl
 		// PbrMaterial default for that output: white (1.0) for base color / ORM, and the flat-normal
 		// texture (R,G = 0.5) for normal X / Y.
 		const auto resolve = [this](
+								 idl::LoosePbrMaterial&  material,
+								 idl::PbrChannel         channel,
 								 const ChannelRouteDesc& route,
 								 core::slot_handle       fallbackTex,
 								 uint16_t                fallbackChannel) {
 			const bool              routed = !route.texture.textureSlot.is_null();
 			const core::slot_handle slot   = routed ? route.texture.textureSlot : fallbackTex;
+			const size_t            i      = static_cast<size_t>(channel);
 
-			idl::ChannelSource cs{};
-			cs.texture = idl::TextureHandle{ m_Textures.GetDescriptor(slot) };
-			cs.channel = routed ? route.channel : fallbackChannel;
-			return cs;
+			material.textures[i] = RawHandleOf(m_Textures.GetDescriptor(slot));
+			material.channels[i] = routed ? route.channel : fallbackChannel;
 		};
+
+		// The shader finds a payload's textures by position -- handle i at payloadOffset + i * 8 --
+		// so a reordered field is a silently swapped map rather than a compile error. These are what
+		// make it one. See MaterialData.slang's RecordTexture.
+		static_assert(offsetof(idl::PbrMaterial, baseColorTexture) == 0);
+		static_assert(offsetof(idl::PbrMaterial, normalTexture) == sizeof(idl::RawTextureHandle));
+		static_assert(offsetof(idl::PbrMaterial, ormTexture) == 2 * sizeof(idl::RawTextureHandle));
+		static_assert(offsetof(idl::LoosePbrMaterial, textures) == 0);
+		static_assert(
+			sizeof(idl::LoosePbrMaterial::textures) ==
+			idl::cLooseChannelCount * sizeof(idl::RawTextureHandle));
+
+		// The other half of that arithmetic: the payload stores RawTextureHandle while the view is
+		// strided by TextureHandle, and a payload offset that is not a whole number of handles
+		// truncates the division into the middle of a neighbouring one.
+		static_assert(sizeof(idl::TextureHandle) == sizeof(idl::RawTextureHandle));
+		static_assert(idl::cRawPayloadOffset % sizeof(idl::RawTextureHandle) == 0);
 
 		// The GPU's channel order is generated from the IDL; the file's is declared in BMaterial.h. They
 		// describe the same nine routes, so a mismatch would silently sample the wrong map -- roughness
@@ -1430,28 +1515,19 @@ namespace bgl
 					assetlib::channelIndex(assetlib::PbrChannel::kNormalX),
 			"idl::PbrChannel and assetlib::PbrChannel must index BMaterial::routes identically");
 
-		idl::LoosePbrMaterial material{};
+		auto material = idl::LoosePbrMaterial();
 		// Base color R,G,B,A -> white (any channel samples 1.0).
-		material.sources[static_cast<size_t>(idl::PbrChannel::kBaseColorR)] =
-			resolve(desc.baseColor[0], white, 0);
-		material.sources[static_cast<size_t>(idl::PbrChannel::kBaseColorG)] =
-			resolve(desc.baseColor[1], white, 0);
-		material.sources[static_cast<size_t>(idl::PbrChannel::kBaseColorB)] =
-			resolve(desc.baseColor[2], white, 0);
-		material.sources[static_cast<size_t>(idl::PbrChannel::kBaseColorA)] =
-			resolve(desc.baseColor[3], white, 0);
+		resolve(material, idl::PbrChannel::kBaseColorR, desc.baseColor[0], white, 0);
+		resolve(material, idl::PbrChannel::kBaseColorG, desc.baseColor[1], white, 0);
+		resolve(material, idl::PbrChannel::kBaseColorB, desc.baseColor[2], white, 0);
+		resolve(material, idl::PbrChannel::kBaseColorA, desc.baseColor[3], white, 0);
 		// ORM ao,roughness,metallic -> white (1.0; factors drive rough/metal).
-		material.sources[static_cast<size_t>(idl::PbrChannel::kAo)] =
-			resolve(desc.orm[0], white, 0);
-		material.sources[static_cast<size_t>(idl::PbrChannel::kRoughness)] =
-			resolve(desc.orm[1], white, 0);
-		material.sources[static_cast<size_t>(idl::PbrChannel::kMetallic)] =
-			resolve(desc.orm[2], white, 0);
+		resolve(material, idl::PbrChannel::kAo, desc.orm[0], white, 0);
+		resolve(material, idl::PbrChannel::kRoughness, desc.orm[1], white, 0);
+		resolve(material, idl::PbrChannel::kMetallic, desc.orm[2], white, 0);
 		// Normal X,Y -> flat-normal texture (R = 0.5, G = 0.5) -> decoded (0,0,1).
-		material.sources[static_cast<size_t>(idl::PbrChannel::kNormalX)] =
-			resolve(desc.normal[0], flatNormal, 0);
-		material.sources[static_cast<size_t>(idl::PbrChannel::kNormalY)] =
-			resolve(desc.normal[1], flatNormal, 1);
+		resolve(material, idl::PbrChannel::kNormalX, desc.normal[0], flatNormal, 0);
+		resolve(material, idl::PbrChannel::kNormalY, desc.normal[1], flatNormal, 1);
 
 		material.baseColorFactor    = desc.baseColorFactor;
 		material.metallicFactor     = desc.metallicFactor;
@@ -1466,8 +1542,11 @@ namespace bgl
 	MaterialHandle
 	Scene::CreateLoosePbrMaterial(const LoosePbrMaterialDesc& desc)
 	{
-		const core::slot_handle slot = m_Loose.Add(BuildLoosePbrMaterial(desc));
-		return MaterialHandle{ MaterialType::kLoosePbr, desc.layerType, slot };
+		const idl::LoosePbrMaterial material = BuildLoosePbrMaterial(desc);
+		const idl::RawEntry         entry =
+			m_Materials.AddRecord(MaterialType::kLoosePbr, std::as_bytes(std::span(&material, 1)));
+
+		return MaterialHandle{ MaterialType::kLoosePbr, desc.layerType, entry.byteOffset };
 	}
 
 	void
@@ -1478,15 +1557,27 @@ namespace bgl
 			throw SceneError(
 				"MaterialHandle passed to UpdateLoosePbrMaterial is not a kLoosePbr material");
 		}
-		if (!m_Loose.IsValid(material.handle))
+		if (!m_Materials.IsOffsetValid(material.byteOffset))
 		{
 			throw SceneError(
 				"MaterialHandle passed to UpdateLoosePbrMaterial has expired or is invalid");
 		}
 
-		// See UpdatePbrMaterial: the entry is rewritten in place, so every submesh bound to this
+		// The record says what it is, and the size guard alone would not: a stale handle whose
+		// bytes were recycled into a larger record of another kind fits inside it.
+		if (m_Materials.GetTagAt(material.byteOffset) != MaterialType::kLoosePbr)
+		{
+			throw SceneError(
+				"MaterialHandle passed to UpdateLoosePbrMaterial names a record of another type");
+		}
+
+		// See UpdatePbrMaterial: the payload is rewritten in place, so every submesh bound to this
 		// material follows it and the handle stays valid, and every rewrite moves the shading epoch.
-		m_Loose.Set(material.handle, BuildLoosePbrMaterial(desc));
+		const idl::LoosePbrMaterial rebuilt = BuildLoosePbrMaterial(desc);
+		m_Materials.SetRecordPayload(
+			idl::RawEntry{ material.byteOffset },
+			std::as_bytes(std::span(&rebuilt, 1)));
+
 		++m_TemporalEpoch;
 	}
 
@@ -1498,22 +1589,22 @@ namespace bgl
 		switch (material.materialType)
 		{
 		case MaterialType::kPBR:
-			if (!m_Pbr.IsValid(material.handle))
-			{
-				throw SceneError(
-					"MaterialHandle passed to DeleteMaterial has expired or is invalid");
-			}
-			m_Pbr.Erase(material.handle);
-			++m_TemporalEpoch;
-			return;
-
 		case MaterialType::kLoosePbr:
-			if (!m_Loose.IsValid(material.handle))
+			if (!m_Materials.IsOffsetValid(material.byteOffset))
 			{
 				throw SceneError(
 					"MaterialHandle passed to DeleteMaterial has expired or is invalid");
 			}
-			m_Loose.Erase(material.handle);
+
+			// The record says what it is, so the two kinds free the same way -- and the tag is what
+			// catches a handle whose type says one thing and whose offset holds another.
+			if (m_Materials.GetTagAt(material.byteOffset) != material.materialType)
+			{
+				throw SceneError(
+					"MaterialHandle passed to DeleteMaterial names a record of another type");
+			}
+
+			m_Materials.Erase(material.byteOffset);
 			++m_TemporalEpoch;
 			return;
 

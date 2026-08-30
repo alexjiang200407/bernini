@@ -21,7 +21,7 @@ public struct RawBuffer
 
     // The payload of a record, whose header the entry names. The payload type is named separately
     // from the entry's, because an entry is typed by the interface a record satisfies and a load
-    // must name the concrete payload behind it -- as Entry<IMaterial> and PbrMaterial::Load do.
+    // must name the concrete payload behind it -- as RawEntry<IMaterial> and PbrMaterial::Load do.
     //
     // A null entry reads the arena's reserved head: zeros, but never what the caller meant.
     public P LoadRecordAs<P, T>(RawEntry<T> entry)
