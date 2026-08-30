@@ -26,9 +26,9 @@ namespace bgl
 
 	constexpr std::string_view c_InstanceBufferName     = "scene.instanceBuffer"sv;
 	constexpr std::string_view c_MeshInstanceBufferName = "scene.meshInstanceBuffer"sv;
-	constexpr std::string_view c_VatStateBufferName     = "scene.vatStateBuffer"sv;
-	constexpr std::string_view c_SkinnedStateBufferName = "scene.skinnedStateBuffer"sv;
-	constexpr std::string_view c_SelectedInstancesName  = "scene.selectedInstances"sv;
+	// One arena for every animated placement's playback record, of either tier.
+	constexpr std::string_view c_PlaybackArenaBufferName = "scene.playbackBuffer"sv;
+	constexpr std::string_view c_SelectedInstancesName   = "scene.selectedInstances"sv;
 
 	// Written by the pose pass rather than uploaded, so neither is in c_Buffers -- see SceneView.
 	constexpr std::string_view c_PosedInstancesName = "scene.posedInstances"sv;

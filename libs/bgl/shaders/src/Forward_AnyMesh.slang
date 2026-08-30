@@ -5,27 +5,28 @@ import forward.skinned_vertex;
 import forward.static_vertex;
 import forward.vat_vertex;
 import idl.Constants;
+import idl.PlaybackType;
 
 // The tier-branching forward geometry stage, for a draw whose instance list mixes tiers: the
 // depth-sorted transparent list, whose order is depth and not PSO, and the outline mask's selection.
 //
-// Which tier an instance belongs to is read off its Mesh -- vatState and skinnedState are null for
-// anything but their own tier, and are never both set (idl/Mesh.slang) -- so nothing here mirrors the
-// PSO table. The branch is uniform across a mesh-shader group, one instance being one group's worth
-// of work, so it costs register pressure and not divergence.
+// Which tier an instance belongs to is read off its own playback record's header, so nothing here
+// mirrors the PSO table. The branch is uniform across a mesh-shader group, one instance being one
+// group's worth of work, so it costs register pressure and not divergence.
 ForwardVSOut EvaluateVertex(MeshletContext ctx, SubmeshInstance instance, uint v)
 {
-    if (!ctx.mesh.vatState.Null())
+    // A static placement owns no record, so there is no header to read -- null is the tier.
+    if (ctx.mesh.playback.Null())
+    {
+        return StaticVertex(ctx, instance, v);
+    }
+
+    if (forwardData.GetPlaybackKind(ctx.mesh.playback) == PlaybackType.kVat)
     {
         return VatVertex(ctx, instance, v);
     }
 
-    if (!ctx.mesh.skinnedState.Null())
-    {
-        return SkinnedVertex(ctx, instance, v);
-    }
-
-    return StaticVertex(ctx, instance, v);
+    return SkinnedVertex(ctx, instance, v);
 }
 
 [numthreads(cThreadsPerInstance, 1, 1)]

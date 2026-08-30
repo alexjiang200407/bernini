@@ -66,7 +66,7 @@ public ForwardVSOut SkinnedVertex(MeshletContext ctx, SubmeshInstance instance, 
     uint vertexIdx;
     DecodedVertex vertex = DecodeMeshletVertex(ctx, instance, v, vertexIdx);
 
-    let state = skinnedData.skinnedStateBuffer.Get(ctx.mesh.skinnedState);
+    let state = forwardData.playbackBuffer.LoadRecordAs<SkinnedState>(ctx.mesh.playback);
     let geom = skinnedData.skinnedGeomBuffer.Get(state.geom);
 
 #if defined(BERNINI_GPU_DEBUG)

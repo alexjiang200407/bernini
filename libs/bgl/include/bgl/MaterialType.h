@@ -3,9 +3,9 @@
 
 namespace bgl
 {
-	enum class MaterialType : uint8_t
+	enum class MaterialType : uint32_t
 	{
-		kInvalid = uint8_t(-1),
+		kInvalid = uint32_t(-1),
 		kNull = 0,
 		kAssert = 1,
 		kPBR = 2,
@@ -13,6 +13,6 @@ namespace bgl
 		kCount = 4,
 	};
 
-	static_assert(sizeof(MaterialType) == 1);
+	static_assert(sizeof(MaterialType) == 4);
 
 }

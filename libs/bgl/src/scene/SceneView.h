@@ -6,6 +6,7 @@
 #include "scene/EntryBuffer.h"
 #include "scene/NamedBuffer.h"
 #include "scene/PackedBuffer.h"
+#include "scene/RawBuffer.h"
 #include "scene/TransparentSortState.h"
 #include "scene/UploadBuffer.h"
 #include "scene/scene_buffer_names.h"
@@ -32,10 +33,10 @@ namespace bgl
 		// pso for the pipeline family it actually draws through.
 		GeomType geomType = GeomType::kStaticMesh;
 
-		// The instance's playback record, freed with the instance: a VatState for a kVatMesh
-		// placement, a SkinnedState for a kSkinnedMesh one, null for a static one. `geomType` is
-		// what says which buffer it indexes.
-		core::slot_handle animState;
+		// The byte offset of the instance's playback record in the view's arena, freed with the
+		// instance: a VatState for a kVatMesh placement, a SkinnedState for a kSkinnedMesh one.
+		// Zero for a static one -- the arena reserves offset 0 so it can mean null.
+		uint32_t animState = 0;
 
 		// kSkinnedMesh only: the instance's slice of the view's palette arena, freed with it.
 		core::multi_slot_handle palette;
@@ -214,9 +215,9 @@ namespace bgl
 		}
 
 		[[nodiscard]] auto&
-		GetSkinnedStateBuffer() noexcept
+		GetPlaybackArena() noexcept
 		{
-			return m_SkinnedStates;
+			return m_Playback;
 		}
 
 		/**
@@ -294,13 +295,14 @@ namespace bgl
 
 		/**
 		 * Writes the records a placement is made of -- the per-placement Mesh, with `animState` routed
-		 * onto the field the geom's type reads, and one resolved SubmeshInstance per submesh.
+		 * naming the record the geom's type reads, and one resolved SubmeshInstance per submesh.
 		 *
 		 * Validates nothing: `geom` must already be a live geom of the type the public creator above
-		 * accepts, and `animState` a state slot of the buffer that type reads. Only those three call it.
+		 * accepts, and `animState` the byte offset of a record of the kind that type reads. Only
+		 * those three call it.
 		 */
 		MeshInstanceHandle
-		WritePlacement(GeomHandle geom, glm::mat4 transform, core::slot_handle animState);
+		WritePlacement(GeomHandle geom, glm::mat4 transform, uint32_t animState);
 
 		/**
 		 * Re-resolves every non-overridden instance against the Scene's current defaults, rewriting
@@ -356,14 +358,16 @@ namespace bgl
 
 		PackedBuffer<SubmeshInstance>    m_InstanceBuffer;
 		EntryBuffer<idl::Mesh, MeshMeta> m_MeshBuffer;
-		EntryBuffer<idl::VatState>       m_VatStates;
-		EntryBuffer<idl::SkinnedState>   m_SkinnedStates;
+		// Both tiers' playback records in one arena, each behind a header naming its tier, so the
+		// stage that draws more than one can ask rather than mirror the PSO table.
+		RawBuffer<idl::PlaybackType> m_Playback;
 
 		BonePaletteBuffer m_Palettes;
 
-		// The SkinnedState indices the pose pass dispatches over, one workgroup each. Dense and
-		// CPU-authored rather than a sweep of m_SkinnedStates: erasing a slot only releases it, so a
-		// sweep would pose freed states -- into palette slices another instance may already own.
+		// The byte offsets of the skinned records the pose pass dispatches over, one workgroup each.
+		// Dense and CPU-authored rather than a sweep of the arena: erasing a record only releases
+		// its bytes, so a sweep would pose freed states -- into palette slices another instance may
+		// already own -- and would meet the VAT records sharing the arena.
 		UploadBuffer<uint32_t> m_PosedInstances;
 
 		// One entry per frustum this view is culled against; index 0 is the camera.
@@ -398,8 +402,7 @@ namespace bgl
 		static constexpr auto c_Buffers = std::tuple{
 			NamedBuffer{ c_InstanceBufferName, &SceneView::m_InstanceBuffer },
 			NamedBuffer{ c_MeshInstanceBufferName, &SceneView::m_MeshBuffer },
-			NamedBuffer{ c_VatStateBufferName, &SceneView::m_VatStates },
-			NamedBuffer{ c_SkinnedStateBufferName, &SceneView::m_SkinnedStates },
+			NamedBuffer{ c_PlaybackArenaBufferName, &SceneView::m_Playback },
 		};
 
 		static_assert(HasDistinctNames(c_Buffers), "two view buffers would import under one name");
