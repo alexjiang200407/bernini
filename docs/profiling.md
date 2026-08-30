@@ -51,6 +51,11 @@ interpolates a mesh path produces one statistics row per asset and no total; the
 rule worth stating, because the obvious spelling — a formatted name — is the one that ruins the
 statistics view.
 
+Tracy keys a zone on its **source location**, not on the string, so a zone in a function template
+appears once per instantiation — `load<BMesh>` and `load<Skeleton>` are two rows both reading
+"assetlib container load". That is usually what you want; it is only surprising if you expected the
+name to be the key.
+
 Zones nest by scope and are separated by thread automatically, so neither the containment nor the
 thread has to be passed anywhere. A thread that does load work is worth naming once, at the top of
 its body, so its track is legible rather than a number:
@@ -74,6 +79,30 @@ siblings are the door where a container is either read or regenerated, and which
 is legible from what nests *inside* — a hit contains a container load, a miss contains a glTF parse
 and a tangent pass. Splitting the name would put the same door in two rows of the statistics view
 and lose the total.
+
+## What a start-up costs
+
+Measured on `macos-clang-metal-debug`, the test project (3 glTF sources, 315 MB). Four scenarios,
+because "load time" means a different thing in each and only the first is what a developer pays
+daily:
+
+| Scenario | `editor startup` | Where it goes |
+|---|---:|---|
+| Everything warm | **0.90 s** | `assetlib scan stale textures` 0.39 s (43%), `editor create graphics` 0.29 s (32%) |
+| Cold shader cache | **5.14 s** | `editor create graphics` 4.43 s (86%) |
+| Derived containers absent | **24.2 s** | `assetlib reimport` 22.6 s (94%), of which `assetlib glTF parse` ×7 = 10.1 s |
+| …and materials stale too | **133.9 s** | the resave walk's material re-bake, ~110 s |
+
+Two things in that table are worth carrying in your head. The **glTF parse count is one per output,
+not one per source** — 3 sources with 3 `.bmesh`, 2 `.bskel` and 2 `.banim` between them parse seven
+times, because `Reimport` cooks a stage at a time and re-parses rather than holding a source's meshes
+resident across all three (`reimport.cpp`). And a **warm** start is nearly half staleness scanning:
+`GetStaleImportedTextureSources` walks every import document on every launch of a project where
+nothing changed.
+
+`apps/editor/CLAUDE.md` describes a cold pipeline build as "tens of seconds". On macOS/Metal it is
+**4.4 s**. That figure was never measured on this backend; it may still hold for DXIL on Windows,
+which these numbers say nothing about.
 
 ## Not zones
 

@@ -89,6 +89,9 @@ namespace assetlib
 			std::span<const std::byte> bytes,
 			bool                       dryRun)
 		{
+			ZoneScopedN("assetlib resave");
+			ZoneTextF("%.*s", static_cast<int>(key.size()), key.data());
+
 			switch (type)
 			{
 			case AssetType::kMesh:
@@ -152,6 +155,8 @@ namespace assetlib
 		std::unordered_map<std::string, SourceFacts>
 		factsFromDerived(const AssetStore& store, std::span<const std::filesystem::path> paths)
 		{
+			ZoneScopedN("assetlib migrate facts");
+
 			auto facts = std::unordered_map<std::string, SourceFacts>();
 
 			for (const std::filesystem::path& path : paths)
@@ -203,9 +208,12 @@ namespace assetlib
 		const ProgressSink sink = serialized(onProgress);
 
 		std::vector<std::filesystem::path> paths;
-		for (const auto& entry : std::filesystem::recursive_directory_iterator(GetDataRoot()))
-			if (entry.is_regular_file())
-				paths.push_back(entry.path());
+		{
+			ZoneScopedN("assetlib migrate walk data root");
+			for (const auto& entry : std::filesystem::recursive_directory_iterator(GetDataRoot()))
+				if (entry.is_regular_file())
+					paths.push_back(entry.path());
+		}
 
 		// Meshes first, then rigs, then clips: a regenerated `.banim` re-measures its posed
 		// boxes against the meshes on disk, so the meshes must be current before it looks.
@@ -338,24 +346,27 @@ namespace assetlib
 
 		// Last word on the textures: a material naming one that is not there draws untextured and
 		// says nothing about it, which is the failure that is hardest to see and easiest to ship.
-		for (const std::filesystem::path& path : paths)
 		{
-			if (assetTypeFromExtension(path) != AssetType::kMaterial)
-				continue;
+			ZoneScopedN("assetlib migrate dangling textures");
+			for (const std::filesystem::path& path : paths)
+			{
+				if (assetTypeFromExtension(path) != AssetType::kMaterial)
+					continue;
 
-			const std::string key =
-				normalizeRef(path.lexically_relative(GetDataRoot()).generic_string());
-			try
-			{
-				BMaterial material = Load<BMaterial>(key);
-				for (const auto& reference :
-				     mapMaterialTextures(material, [](const std::string& k) { return k; }))
-					if (!Exists(reference.first))
-						report.danglingTextures.push_back(key + ": " + reference.first);
-			}
-			catch (const std::exception&)
-			{
-				// Unreadable is the walk below's to report, with the reason.
+				const std::string key =
+					normalizeRef(path.lexically_relative(GetDataRoot()).generic_string());
+				try
+				{
+					BMaterial material = Load<BMaterial>(key);
+					for (const auto& reference :
+					     mapMaterialTextures(material, [](const std::string& k) { return k; }))
+						if (!Exists(reference.first))
+							report.danglingTextures.push_back(key + ": " + reference.first);
+				}
+				catch (const std::exception&)
+				{
+					// Unreadable is the walk below's to report, with the reason.
+				}
 			}
 		}
 		std::ranges::sort(report.danglingTextures);
@@ -427,15 +438,18 @@ namespace assetlib
 		// One rank at a time, for the reason the sort above exists: a regenerated `.banim`
 		// re-measures its posed boxes against the meshes on disk. Equal ranks are contiguous after
 		// the sort, so a run of them is one stage and its files are independent.
-		for (size_t begin = 0; begin < paths.size();)
 		{
-			size_t end = begin;
-			while (end < paths.size() && rank(paths[end]) == rank(paths[begin])) ++end;
+			ZoneScopedN("assetlib migrate resave walk");
+			for (size_t begin = 0; begin < paths.size();)
+			{
+				size_t end = begin;
+				while (end < paths.size() && rank(paths[end]) == rank(paths[begin])) ++end;
 
-			parallelFor(end - begin, c_MaxCookThreads, [&](size_t offset) {
-				resaveOne(begin + offset);
-			});
-			begin = end;
+				parallelFor(end - begin, c_MaxCookThreads, [&](size_t offset) {
+					resaveOne(begin + offset);
+				});
+				begin = end;
+			}
 		}
 
 		for (std::optional<MigratedFile>& file : walked)
