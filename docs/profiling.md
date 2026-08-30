@@ -33,16 +33,25 @@ timing is a separate, unbuilt thing (`ROADMAP.md` § Profiling), and `docs/gfx_d
 
 ## Taking a capture
 
-The client listens; the viewer dials in. Nothing is recorded to disk by the application itself.
+**Nothing is written to disk by the application, ever.** There is no Tracy log and no output
+directory: the client holds the run in memory and serves it on TCP 8086, and a `.tracy` file exists
+only because you asked for one at a path you chose. (`editor.log` / `bgl.log` beside the binary are
+the *other* channel — spdlog and Qt, see [gfx_debug.md](gfx_debug.md) — and share nothing with this.)
+
+The tools are not on `PATH`. vcpkg stages them per build directory:
+
+```bash
+TRACY=build/<preset>/vcpkg_installed/<triplet>/tools/tracy   # e.g. macos-metal-debug / arm64-osx
+```
 
 ```bash
 # Record headlessly. Start this FIRST -- it waits for the process to appear, which is the only
 # way to catch a start-up.
-tracy-capture -o start.tracy -f &
+$TRACY/tracy-capture -o start.tracy -f &
 just run editor
 
 # Turn a capture into per-zone totals.
-tracy-csvexport start.tracy > start.csv
+$TRACY/tracy-csvexport start.tracy > start.csv
 ```
 
 `tracy-csvexport` defaults to per-zone totals, which say nothing about what ran inside what. Add
@@ -51,7 +60,7 @@ tree by interval containment on each thread, and the only way to check the shape
 instrumentation without the GUI:
 
 ```bash
-tracy-csvexport -u start.tracy > events.csv   # name, ns_since_start, exec_time_ns, thread, value
+$TRACY/tracy-csvexport -u start.tracy > events.csv   # name, ns_since_start, exec_time_ns, thread, value
 ```
 
 Both tools come from the `tracy` port's `cli-tools` feature, so vcpkg has already put them in
