@@ -129,6 +129,34 @@ the Visual Studio LLVM component or in a Homebrew `llvm`, and installs the pinne
 there is none — so this needs nothing done by hand. If yours lives somewhere unusual, give
 `init.py` the path when it asks.
 
+### slangd (Slang LSP)
+
+Gives Claude Code go-to-definition, find-references and hover across the `.slang` sources under
+`libs/bgl`, which grep answers badly because every cross-file reference is a module import. Nothing
+depends on it: skip this and the build, the tests and the editor are unchanged.
+
+There is nothing to install. `slangd` is the language server behind the official Slang editor
+extensions, and the vcpkg `shader-slang` port already puts it beside `slangc`:
+
+```
+build/<preset>/vcpkg_installed/<triplet>/tools/shader-slang/slangd
+```
+
+Put that directory on PATH, then turn on the plugin this repo carries:
+
+```bash
+claude plugin marketplace add ./     # the trailing slash is required
+claude plugin install slang-lsp@bernini
+```
+
+The marketplace is recorded in your user settings as an absolute path, so re-add it if you move the
+clone. Restart Claude Code, then check it took by asking for the definition of `SubmeshInstance` on
+line 1 of `libs/bgl/shaders/src/forward/common.slang`; it should land in
+`types/SubmeshInstance.slang`.
+
+It is navigation only — Claude Code's LSP tool has no diagnostics operation, so a shader that does
+not compile is still caught by `just build`, exactly as it is today.
+
 ## Features
 - GPU Driven Instance Rendering
 - Forward Renderer
