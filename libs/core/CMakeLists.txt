@@ -23,12 +23,14 @@ strip_msvc_only_interface_flags(spdlog::spdlog spdlog::spdlog_header_only)
 find_package(cpptrace CONFIG REQUIRED)
 find_package(nlohmann_json CONFIG REQUIRED)   # Settings (JSON config) parsing
 find_package(glm CONFIG REQUIRED)             # core/glm.h: shared glm config for all libs
+find_package(Tracy CONFIG REQUIRED)           # profiling zones, PUBLIC so every layer above can open one
 
 target_link_libraries(
     core
     PUBLIC
         spdlog::spdlog_header_only
         glm::glm
+        Tracy::TracyClient
     PRIVATE
         cpptrace::cpptrace
         nlohmann_json::nlohmann_json

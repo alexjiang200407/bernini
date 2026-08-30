@@ -3,6 +3,7 @@
   "version": "0.0.1",
   "dependencies": [
     "spdlog",
+    { "name": "tracy", "default-features": false, "features": [ "cli-tools" ] },
     "glm",
     "catch2",
     "shader-slang",
