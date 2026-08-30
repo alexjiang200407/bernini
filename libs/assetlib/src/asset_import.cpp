@@ -31,7 +31,7 @@ namespace assetlib
 	requireSelfContainedSource(const std::filesystem::path& source)
 	{
 		core::throw_runtime_error_if(
-			extensionOf(source.generic_string()) != ".glb",
+			extensionOf(source.generic_string()) != c_ImportedSourceExtension,
 			"'{}': import needs a self-contained source; export as .glb",
 			source.string());
 	}
@@ -54,7 +54,8 @@ namespace assetlib
 	std::filesystem::path
 	AssetStore::ImportedSourcePath(std::string_view name) const
 	{
-		return GetDataRoot() / c_MeshSourcesDirectoryName / std::format("{}.glb", name);
+		return GetDataRoot() / c_MeshSourcesDirectoryName /
+		       std::format("{}{}", name, c_ImportedSourceExtension);
 	}
 
 	std::filesystem::path
