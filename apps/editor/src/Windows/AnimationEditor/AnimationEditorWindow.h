@@ -92,6 +92,19 @@ public:
 	 * The timeline slider position for a clock reading, and back: the slider is `tickCount`
 	 * integer ticks over the clip's period. Static so the mapping is pinnable without a window.
 	 */
+	/**
+	 * The tier selector's entry for a pose source, and back.
+	 *
+	 * A mapping and not a cast: the combo's order is a layout decision and the enum's is bgl's. It
+	 * is pinned by a test because the two tiers draw the same picture -- a selector wired to the
+	 * wrong one looks exactly like a selector wired to the right one.
+	 */
+	[[nodiscard]] static int
+	TierIndexFor(bgl::PoseSource source) noexcept;
+
+	[[nodiscard]] static bgl::PoseSource
+	TierSourceAt(int index) noexcept;
+
 	[[nodiscard]] static int
 	TimelineTicks(float seconds, float periodSeconds, int tickCount) noexcept;
 
@@ -151,8 +164,7 @@ private:
 	QComboBox* m_SourceSelector = nullptr;  // which .banim is played
 
 	// Which tier it is played through: the rig posed live, or the bake made of it.
-	QComboBox*   m_TierSelector  = nullptr;
-	QPushButton* m_BakeVatButton = nullptr;
+	QComboBox* m_TierSelector = nullptr;
 
 	QListWidget* m_ClipList     = nullptr;
 	QLabel*      m_ClipMetadata = nullptr;

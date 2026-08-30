@@ -3,10 +3,9 @@
 namespace editor
 {
 	/**
-	 * One playable clip, in source-asset terms. Its own type rather than gamelib's
-	 * `ClipInfo` so the transport names no backend: the panel fills it from a VAT
-	 * acquire today and a skinned source can fill it tomorrow without a VAT-named struct in the
-	 * signature.
+	 * One playable clip, in source-asset terms. Its own type rather than gamelib's `ClipInfo`, so
+	 * the transport names no backend: what fills it is the acquire, and the transport is the same
+	 * whichever pose source the instances on it draw through.
 	 */
 	struct ClipInfo
 	{

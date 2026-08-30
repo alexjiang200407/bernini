@@ -3,13 +3,11 @@
 #include "Render/OrbitCamera.h"
 #include "Render/environment.h"
 #include "Windows/AnimationEditor/PlaybackTransport.h"
-#include "Windows/AnimationEditor/animation_source.h"
 #include "Windows/RenderTarget/RenderTargetWindow.h"
 #include "util/held_open_assets.h"
 
 #include <bgl/GeomHandle.h>
 #include <bgl/MeshInstanceHandle.h>
-#include <gamelib/vat_freshness.h>
 
 namespace assetlib
 {
@@ -30,9 +28,9 @@ class QWheelEvent;
 /**
  * The Animation panel's viewport: a dropped or opened rigged `.bmesh` shown wearing its own
  * materials against the configured environment, under an orbit camera. A rigged mesh with clips
- * plays through whichever tier is selected -- skinned by default, or VAT -- with its static entries
- * beside it, and one with no clips stands in its bind pose. A mesh with no rig at all is refused:
- * nothing to animate.
+ * plays through whichever pose source is selected -- posed per instance by default, or read off the
+ * rig's shared table -- with its static entries beside it, and one with no clips stands in its bind
+ * pose. A mesh with no rig at all is refused: nothing to animate.
  *
  * Everything is acquired through `game::AssetManager`, so a mesh renders here exactly as it does
  * anywhere else the manager serves; SetAssets(nullptr) releases everything held, and MainWindow
@@ -87,18 +85,19 @@ public:
 	SetActiveClip(uint32_t index);
 
 	/**
-	 * Which tier the preview animates through. Switching re-loads the shown mesh, because the two
-	 * are different uploads -- and that is the point of having the switch: the skinned pose is what
-	 * the rig says, the VAT one is what the bake made of it, and the difference between them is a
-	 * bake bug you can otherwise only find in the game.
+	 * Where the preview's instances read their pose. Switching respawns them on the same upload --
+	 * both sources draw one geom, which is the property the crowd tier was built for.
 	 *
-	 * A no-op if nothing is shown, or if `source` is already the active one.
+	 * The two draw the same pixels at a whole frame, so this is not a difference to look for on
+	 * screen: it is how the crowd path gets exercised at all outside a test.
+	 *
+	 * A no-op if `source` is already the active one.
 	 */
 	void
-	SetAnimationSource(editor::AnimationSource source);
+	SetPoseSource(bgl::PoseSource source);
 
-	[[nodiscard]] editor::AnimationSource
-	GetAnimationSource() const noexcept
+	[[nodiscard]] bgl::PoseSource
+	GetPoseSource() const noexcept
 	{
 		return m_Source;
 	}
@@ -106,26 +105,6 @@ public:
 	/** Back to the empty state: geometry released, environment kept. */
 	void
 	Clear();
-
-	/**
-	 * Bakes the shown mesh's `.bvat` for the clip set it is playing, under a loading screen, and
-	 * reloads if VAT is what is on screen. A bake is seconds of CPU skinning, which is why nothing
-	 * does it implicitly -- see AnimationLoadSteps::needsFreshBake.
-	 *
-	 * Asks first, every press, naming the size the bake would write: the pair is hundreds of
-	 * megabytes on a dense rig, and this is a button one click away from Close.
-	 *
-	 * Does nothing when no mesh is shown or it has no clips: there is no pair to bake.
-	 */
-	void
-	BakeShownVat();
-
-	/** Whether BakeShownVat has something to bake -- what the Bake VAT button's enabled state is. */
-	[[nodiscard]] bool
-	CanBakeVat() const noexcept
-	{
-		return !m_MeshPath.empty() && !m_Animations.empty();
-	}
 
 Q_SIGNALS:
 	/** The preview now shows the mesh at this data-root-relative path (empty: cleared). */
@@ -145,12 +124,12 @@ Q_SIGNALS:
 	AnimationSourcesChanged(const QStringList& candidates, int activeIndex);
 
 	/**
-	 * The tier the panel is *actually* previewing through. Emitted after every SetAnimationSource,
+	 * The tier the panel is *actually* previewing through. Emitted after every SetPoseSource,
 	 * including one whose load failed -- the caller's control has already moved by then, and this is
 	 * what snaps it back to what is on screen.
 	 */
 	void
-	PreviewSourceChanged(editor::AnimationSource source);
+	PoseSourceChanged(bgl::PoseSource source);
 
 	/** The clip table now playable (empty: bind pose only). Feed it to the transport. */
 	void
@@ -188,23 +167,6 @@ protected:
 
 private:
 	/**
-	 * The "not baked / out of date" dialog with its Bake Now button, shown when the VAT tier is
-	 * asked for and no usable bake exists. It names what the bake would write. Taking the offer
-	 * bakes and re-enters the load; declining leaves the panel showing what it already had, the
-	 * tier included.
-	 */
-	void
-	OfferBakeForTier(
-		const std::filesystem::path& absolutePath,
-		const std::string&           animations,
-		const QString&               name,
-		game::VatBakeState           state);
-
-	/** The bake itself, off the UI thread. False when it was cancelled or failed (it reports). */
-	[[nodiscard]] bool
-	BakeVat(const std::filesystem::path& absolutePath, const std::string& animations);
-
-	/**
 	 * The refusal dialog, with a Bake Now button when the cause is fixable here: materials the
 	 * mesh names that are routed but never composited. Baking runs like the Content Explorer's --
 	 * off the UI thread, cancellable -- and a completed bake reloads the mesh.
@@ -225,33 +187,12 @@ private:
 	void
 	ClearGeometry();
 
-	/**
-	 * Places one animated instance on `clip` at phase 0, rate 1.
-	 *
-	 * `source` is explicit rather than read from m_Source: during a tier switch the geom has been
-	 * acquired through the *candidate* tier while m_Source still names the old one, and creating an
-	 * instance of the wrong kind for a geom is a SceneError.
-	 */
+	/** Places one animated instance on `clip` at phase 0, rate 1, reading the active pose source. */
 	[[nodiscard]] bgl::MeshInstanceHandle
-	SpawnAnimated(
-		bgl::GeomHandle         geom,
-		const glm::mat4&        world,
-		uint32_t                clip,
-		editor::AnimationSource source);
+	SpawnAnimated(bgl::GeomHandle geom, const glm::mat4& world, uint32_t clip);
 
-	/**
-	 * LoadMesh's body, carrying the tier to load *through* rather than reading m_Source. m_Source is
-	 * assigned only once the load has stood something up, so a failed switch leaves the panel
-	 * describing what is still on screen.
-	 */
-	void
-	LoadMeshAs(
-		const std::filesystem::path& absolutePath,
-		const std::string&           animationsRelPath,
-		editor::AnimationSource      source);
-
-	// One animated placement's live state, whichever tier it was acquired through: respawned in
-	// place on a clip switch.
+	// One animated placement's live state: respawned in place on a clip switch, and on a tier
+	// switch, which is the same destroy-and-recreate against the same geom.
 	struct AnimatedDraw
 	{
 		bgl::GeomHandle         geom;
@@ -259,9 +200,9 @@ private:
 		bgl::MeshInstanceHandle instance;
 	};
 
-	game::AssetManager*     m_Assets     = nullptr;
-	uint32_t                m_ActiveClip = 0;  // what the live animated instances were spawned on
-	editor::AnimationSource m_Source     = editor::AnimationSource::kSkinned;
+	game::AssetManager* m_Assets     = nullptr;
+	uint32_t            m_ActiveClip = 0;  // what the live animated instances were spawned on
+	bgl::PoseSource     m_Source     = bgl::PoseSource::kPerInstance;
 
 	std::vector<bgl::MeshInstanceHandle> m_Instances;  // static entries
 	std::vector<bgl::GeomHandle>         m_Geoms;      // one entry per acquire, repeats included
