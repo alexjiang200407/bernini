@@ -128,6 +128,13 @@ not have one.
   descriptor change together and nothing can observe them apart. The instant stops being a thing a
   reader has to know.
 
+  The view is dead weight on D3D12, where a raw-loaded handle *can* become a texture through
+  `ResourceDescriptorHeap` — it is Metal that cannot. Carrying it on both backends anyway is
+  ADR-8's rejected macro restated one layer up, and it is rejected here for the same reason: the
+  saving is a re-read of bytes the payload load already pulled into cache, and the price is a
+  permanent per-backend fork in the per-pixel path, on a project where each backend is exercised by
+  exactly one environment.
+
   *Rejected: leaving the two members independent and defending the instant with a test. That is
   what task 5 shipped, and `MaterialArenaGrowth_test` does hold it — but it pins one call site in
   one subsystem, and the next arena that grows a handle field has to rediscover the rule. A hazard a
