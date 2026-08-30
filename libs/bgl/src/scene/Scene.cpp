@@ -10,7 +10,6 @@
 #include "util/util.h"
 #include <assetlib_structs/BMaterial.h>  // the channel layout the static_asserts below pin us to
 #include <assetlib_structs/Bounds.h>
-#include <bgl/PsoType.h>
 #include <core/math.h>
 #include <numbers>
 

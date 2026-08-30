@@ -40,8 +40,7 @@ namespace
  *
  * What this deliberately does not cover is a record holding a bindless resource handle. Slang
  * lowers that load to `as_type<texture2d<...>>(ulong)`, which MSL rejects outright, so a
- * handle-bearing payload cannot be raw-loaded on Metal at all. See
- * docs/plans/byte-address-buffer.md.
+ * handle-bearing payload cannot be raw-loaded on Metal at all. See docs/slang_shaders.md.
  */
 TEST_CASE("A raw buffer loads records and loose attributes as written", "[raw][compute][bindless]")
 {

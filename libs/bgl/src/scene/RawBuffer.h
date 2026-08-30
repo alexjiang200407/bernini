@@ -335,7 +335,7 @@ namespace bgl
 
 			// The only place the arena can grow, and a growth replaces the resource the view
 			// describes without announcing it. Re-issued here rather than at a frame boundary so
-			// the buffer and its view are never observable apart -- see docs/plans ADR-9.
+			// the buffer and its view are never observable apart. See docs/rhi.md.
 			RefreshHandleView();
 
 			return handle;
