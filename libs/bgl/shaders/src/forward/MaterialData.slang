@@ -39,18 +39,18 @@ struct MaterialData
 
     SamplerState.Handle anisoLinearWrapSampler;
     SamplerState.Handle linearClampSampler;
+
+    // Handle `index` of the record at `byteOffset`, found by position: a payload's handle fields
+    // lead it and are contiguous, so handle i is element (payloadOffset + i * 8) / 8 of the typed
+    // view. PbrMaterial.slang and LoosePbrMaterial.slang are where that order is fixed.
+    TextureHandle GetTextureAt(uint byteOffset, uint index)
+    {
+        let element = (byteOffset + cRawPayloadOffset) / 8u + index;
+        return handleView[Entry<TextureHandle>.At(element)];
+    }
 };
 
 ConstantBuffer<MaterialData> materialData;
-
-// The handle a payload's field names, found by position. A payload's handle fields lead it and are
-// contiguous, so handle i of the record at `byteOffset` is element (payloadOffset + i * 8) / 8 of
-// the typed view. PbrMaterial.slang and LoosePbrMaterial.slang are where that order is fixed.
-TextureHandle RecordTexture(uint byteOffset, uint index)
-{
-    let element = (byteOffset + cRawPayloadOffset) / 8u + index;
-    return materialData.handleView[Entry<TextureHandle>.At(element)];
-}
 
 // Which kind of material a reference names, read from the record's own header. For the one pass
 // that draws more than one kind; every other is compiled for a single kind and never asks.
@@ -74,14 +74,17 @@ public struct PbrMaterialRecord : IPbrMaterial, IAlphaTestMaterial
         return record;
     }
 
-    float4 GetBaseColor(SamplerState.Handle s, float2 uv) { return RecordTexture(byteOffset, 0).Sample(s, uv) * payload.baseColorFactor; }
+    float4 GetBaseColor(SamplerState.Handle s, float2 uv)
+    {
+        return materialData.GetTextureAt(byteOffset, 0).Sample(s, uv) * payload.baseColorFactor;
+    }
 
     float3 GetORM(SamplerState.Handle s, float2 uv)
     {
-        return RecordTexture(byteOffset, 2).Sample(s, uv).rgb * float3(1.0, payload.roughnessFactor, payload.metallicFactor);
+        return materialData.GetTextureAt(byteOffset, 2).Sample(s, uv).rgb * float3(1.0, payload.roughnessFactor, payload.metallicFactor);
     }
 
-    float2 GetNormalXY(SamplerState.Handle s, float2 uv) { return RecordTexture(byteOffset, 1).Sample(s, uv).xy; }
+    float2 GetNormalXY(SamplerState.Handle s, float2 uv) { return materialData.GetTextureAt(byteOffset, 1).Sample(s, uv).xy; }
 
     float GetAlphaCutoff() { return payload.alphaCutoff; }
 
@@ -89,11 +92,11 @@ public struct PbrMaterialRecord : IPbrMaterial, IAlphaTestMaterial
 
     float4 GetSpecular() { return payload.specular; }
 
-    float2 GetBaseColorDimensions() { return RecordTexture(byteOffset, 0).GetDimensions(); }
+    float2 GetBaseColorDimensions() { return materialData.GetTextureAt(byteOffset, 0).GetDimensions(); }
 
     float GetBaseColorAlphaBiased(SamplerState.Handle s, float2 uv, float bias)
     {
-        return RecordTexture(byteOffset, 0).SampleBias(s, uv, bias).a * payload.baseColorFactor.a;
+        return materialData.GetTextureAt(byteOffset, 0).SampleBias(s, uv, bias).a * payload.baseColorFactor.a;
     }
 }
 
@@ -117,7 +120,7 @@ float SelectComponent(float4 v, uint c)
 // Channel `i` of a loose record: texture i sampled, then the component its `channels[i]` names.
 float SampleLooseChannel(LoosePbrMaterialRecord record, uint i, SamplerState.Handle s, float2 uv)
 {
-    return SelectComponent(RecordTexture(record.byteOffset, i).Sample(s, uv), record.payload.channels[i]);
+    return SelectComponent(materialData.GetTextureAt(record.byteOffset, i).Sample(s, uv), record.payload.channels[i]);
 }
 
 public struct LoosePbrMaterialRecord : IPbrMaterial, IAlphaTestMaterial
@@ -168,11 +171,12 @@ public struct LoosePbrMaterialRecord : IPbrMaterial, IAlphaTestMaterial
 
     // The alpha carrier's resolution: coverage machinery cares about the channel being tested,
     // and the loose colour channels may come from other maps at other sizes.
-    float2 GetBaseColorDimensions() { return RecordTexture(byteOffset, 3).GetDimensions(); }
+    float2 GetBaseColorDimensions() { return materialData.GetTextureAt(byteOffset, 3).GetDimensions(); }
 
     float GetBaseColorAlphaBiased(SamplerState.Handle s, float2 uv, float bias)
     {
-        return SelectComponent(RecordTexture(byteOffset, 3).SampleBias(s, uv, bias), payload.channels[3]) * payload.baseColorFactor.a;
+        return SelectComponent(materialData.GetTextureAt(byteOffset, 3).SampleBias(s, uv, bias), payload.channels[3]) *
+               payload.baseColorFactor.a;
     }
 }
 
