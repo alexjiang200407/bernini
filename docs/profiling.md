@@ -61,6 +61,7 @@ thread has to be passed anywhere.
 | `assetlib` cooks | the glTF parse, tangents, posed bounds, clip floors, the VAT bake, the prefilter, the whole-project bounds rebake |
 | `assetlib` reads | a whole container through a mount, a selective chunk read, a KTX2 decode/transcode |
 | `assetlib` doors | `Migrate`, `Reimport`, `RefreshImportedTextures`, `BakeVat`, and the two staleness scans a project pays on every open |
+| `gamelib` | every `AssetManager::Acquire*`, and the bake-on-demand `EnsureVatBaked` behind the VAT one |
 | `apps/editor` | an import, split into its worker and UI halves |
 
 **A cache hit and a cache miss share one zone name on purpose.** `LoadRegenMesh` and its two

@@ -5,6 +5,8 @@
 
 #include <core/err/util.h>
 
+#include <tracy/Tracy.hpp>
+
 namespace game
 {
 	namespace
@@ -145,6 +147,9 @@ namespace game
 		std::string_view            meshRelPath,
 		std::string_view            animationsRelPath)
 	{
+		ZoneScopedN("gamelib ensure vat baked");
+		ZoneTextF("%.*s", static_cast<int>(meshRelPath.size()), meshRelPath.data());
+
 		const std::string bvatRel =
 			assetlib::vatPathFor(meshRelPath, animationsRelPath).generic_string();
 

@@ -17,6 +17,8 @@
 #include <assetlib_structs/Skeleton.h>
 #include <core/err/util.h>
 
+#include <tracy/Tracy.hpp>
+
 namespace game
 {
 	namespace
@@ -218,6 +220,9 @@ namespace game
 	bgl::TextureAssetHandle
 	AssetManager::AcquireTexture(std::string_view relPath, TexturePrefetch* prefetch)
 	{
+		ZoneScopedN("gamelib acquire texture");
+		ZoneTextF("%.*s", static_cast<int>(relPath.size()), relPath.data());
+
 		// An absent map is not an error: the scene substitutes its own default (white, or a flat
 		// normal) for an invalid handle.
 		if (relPath.empty())
@@ -266,6 +271,9 @@ namespace game
 	AssetManager::Environment
 	AssetManager::AcquireEnvironment(std::string_view relPath)
 	{
+		ZoneScopedN("gamelib acquire environment");
+		ZoneTextF("%.*s", static_cast<int>(relPath.size()), relPath.data());
+
 		const assetlib::BEnv env = m_Store.Load<assetlib::BEnv>(relPath);
 
 		const auto acquireRoute = [this](const assetlib::EnvMapRoute& route) {
@@ -306,6 +314,9 @@ namespace game
 	bgl::MaterialHandle
 	AssetManager::AcquireMaterial(std::string_view relPath, TexturePrefetch* prefetch)
 	{
+		ZoneScopedN("gamelib acquire material");
+		ZoneTextF("%.*s", static_cast<int>(relPath.size()), relPath.data());
+
 		if (relPath.empty())
 			return {};
 
@@ -373,6 +384,9 @@ namespace game
 	bgl::GeomHandle
 	AssetManager::AcquireMesh(std::string_view relPath, uint32_t meshIndex)
 	{
+		ZoneScopedN("gamelib acquire mesh");
+		ZoneTextF("%.*s#%u", static_cast<int>(relPath.size()), relPath.data(), meshIndex);
+
 		// A .bmesh holds several meshes, so the file alone does not identify geometry.
 		const auto key = std::format("{}#{}", relPath, meshIndex);
 
@@ -440,6 +454,9 @@ namespace game
 		std::string_view animationsRelPath,
 		uint32_t         meshIndex)
 	{
+		ZoneScopedN("gamelib acquire vat mesh");
+		ZoneTextF("%.*s#%u", static_cast<int>(relPath.size()), relPath.data(), meshIndex);
+
 		// Its own keyspace beside AcquireMesh's "path#index": the same mesh may be live as static
 		// and as VAT geometry at once, and they are different uploads.
 		const auto key = std::format("{}#{}#vat", relPath, meshIndex);
@@ -599,6 +616,9 @@ namespace game
 		uint32_t                               meshIndex,
 		const std::optional<assetlib::Bounds>& posedBounds)
 	{
+		ZoneScopedN("gamelib acquire skinned mesh");
+		ZoneTextF("%.*s#%u", static_cast<int>(relPath.size()), relPath.data(), meshIndex);
+
 		// Its own keyspace beside AcquireMesh's and AcquireVatMesh's: one mesh may be live as static,
 		// as VAT and as skinned geometry at once, and all three are different uploads.
 		const auto key = std::format("{}#{}#skinned", relPath, meshIndex);
