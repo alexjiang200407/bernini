@@ -249,10 +249,20 @@ so it fails safe, but it should not be offered.
    yet; the tests do. Gate: `just run editor_tests -- "[importoutputs]"`, pinning the resolution, an
    absent document, an `outputs` naming no mesh, and an empty `textureDir`.
 
-3. **`feat(editor): the Content Explorer shows only what was authored`** — browse root at
-   `Data/Authored` with the data root left at `Data`, the `.bimport` hidden, `.glb` rows carrying the
-   mesh thumbnail through task 2, `AssetAt` returning an imported source, `AssetOperations` refusing
-   a `kDerived` target. Gate: `just run editor_tests -- "[contentexplorer][assetrules]"`, plus eyes.
+3. **`feat(editor): a source row wears the thumbnail of the mesh it produced`** — `AssetFileModel`
+   illustrates an imported source with the `.bmesh` task 2 resolves, and repaints the source's tile
+   when that mesh's thumbnail lands. Gate: `just run editor_tests -- "[thumbnails]"`, plus eyes.
+
+   *Split out of what this plan first called task 3, which bundled the rooting, the hide, the
+   thumbnail, an operations guard and a refactor — four "and"s, and not reviewable in one sitting.
+   The thumbnail leads because it stands on its own: `Authored/Meshes/` already shows `.glb` rows
+   today, so this improves the browser before anything is hidden, and leaves no gap if the rooting
+   is reviewed slowly.*
+
+4. **`feat(editor): the Content Explorer shows only what was authored`** — browse root at
+   `Data/Authored` with the data root left at `Data`, the `.bimport` hidden, `AssetOperations`
+   refusing a `kDerived` target. Gate: `just run editor_tests -- "[contentexplorer][assetrules]"`,
+   plus eyes.
 
    This task also converges the editor's spellings of *is this path inside that root*. There are
    three besides `IsContainedRelativePath`: `AssetAt` and `IsHeldOpen`
@@ -261,14 +271,17 @@ so it fails safe, but it should not be offered.
    `startsWith("..")`, so a folder legitimately named `..hidden` is unactionable — and this task
    rewrites the rooting all three sit on, so it is where they become one call.
 
-4. **`feat(editor): a viewport takes the source, not the container it produced`** — the three drop
+5. **`feat(editor): a viewport takes the source, not the container it produced`** — the three drop
    handlers accept a `.glb` and resolve it. Gate: `just run editor_tests -- "[drop]"` — the drop
    *rules* are driven straight through the handlers, since a `Drop` event cannot be synthesized.
 
-5. **`feat(editor): a source dropped on the graph canvas offers its textures`** — `MaterialGraphView`
+6. **`feat(editor): a source dropped on the graph canvas offers its textures`** — `MaterialGraphView`
    accepts a `.glb`, `MaterialEditorWindow` presents that source's textures and makes the node.
    Gate: `just run editor_tests -- "[materialgraph]"`, plus eyes.
 
-6. **`feat(editor): the source row renames what it produced`** — the context menu's Rename wired onto
-   task 1. Gate: the rule driven through a free function, since every dialog here is modal; plus
-   eyes.
+7. **`feat(editor): the source row renames what it produced`** — `AssetAt` returns an imported
+   source, and the context menu's Rename is wired onto task 1. **Both, or neither**: `AssetAt`
+   returning a `.glb` is what puts a menu on that row at all, and the same menu offers Delete, which
+   `planDeletion` refuses for a source under ADR-8 — so returning it before the menu knows that
+   would land a Delete that throws. Moved here from task 4 for that reason. Gate: the rule driven
+   through a free function, since every dialog here is modal; plus eyes.
