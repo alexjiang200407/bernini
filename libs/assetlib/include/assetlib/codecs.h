@@ -30,6 +30,11 @@ namespace assetlib
 	// Text, not a container: the authored half of one imported source, beside its `.glb`.
 	inline constexpr std::string_view c_ImportDocumentExtension = ".bimport";
 
+	// Not an asset either, and the only source kind an import takes: the file a `.bimport`
+	// describes, copied into the project beside it. `assetTypeFromExtension` does not know it, so a
+	// plan that has to reach one asks by this rather than by type.
+	inline constexpr std::string_view c_ImportedSourceExtension = ".glb";
+
 	// The archive the others are packed into, rather than an asset: nothing references a `.bpak`,
 	// and assetTypeFromExtension does not know it.
 	inline constexpr std::string_view c_PakExtension = ".bpak";

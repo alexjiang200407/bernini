@@ -78,7 +78,7 @@ namespace assetlib
 	std::string
 	importedSourceKeyFor(std::string_view documentKey)
 	{
-		return swapExtension(documentKey, ".glb");
+		return swapExtension(documentKey, c_ImportedSourceExtension);
 	}
 
 	ImportDocument
