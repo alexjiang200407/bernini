@@ -3,6 +3,7 @@
 #include "Thumbnails/AssetThumbnailCache.h"
 #include "Thumbnails/TexturePreviewCache.h"
 #include "util/asset_paths.h"
+#include "util/import_outputs.h"
 
 #include <QApplication>
 #include <QIcon>
@@ -20,6 +21,13 @@ void
 AssetFileModel::SetTexturePreviews(TexturePreviewCache* previews)
 {
 	Rebind(m_TexturePreviews, previews);
+}
+
+void
+AssetFileModel::SetDataRoot(const QString& dataRoot)
+{
+	m_ImportOutputs.SetDataRoot(dataRoot);
+	m_SourceForSubject.clear();
 }
 
 template <typename Cache>
@@ -58,6 +66,19 @@ AssetFileModel::CacheFor(const QString& path) const
 	return nullptr;
 }
 
+QString
+AssetFileModel::SubjectOf(const QString& path) const
+{
+	if (!editor::IsImportedSource(path))
+		return path;
+
+	const QString mesh = m_ImportOutputs.Of(path).mesh;
+	if (!mesh.isEmpty())
+		m_SourceForSubject.insert(mesh, path);
+
+	return mesh;
+}
+
 QVariant
 AssetFileModel::data(const QModelIndex& index, int role) const
 {
@@ -66,7 +87,11 @@ AssetFileModel::data(const QModelIndex& index, int role) const
 	    isDir(index))
 		return QFileSystemModel::data(index, role);
 
-	const QString       path  = filePath(index);
+	const QString row  = filePath(index);
+	const QString path = SubjectOf(row);
+	if (path.isEmpty())
+		return QFileSystemModel::data(index, role);
+
 	StampedPixmapCache* cache = CacheFor(path);
 	if (cache == nullptr)
 		return QFileSystemModel::data(index, role);
@@ -74,7 +99,11 @@ AssetFileModel::data(const QModelIndex& index, int role) const
 	if (const QString rejection = cache->GetRejection(path); !rejection.isEmpty())
 	{
 		if (role == Qt::ToolTipRole)
-			return tr("Cannot be read: %1").arg(rejection);
+			// Which file failed is the whole message for a source: its own bytes are fine, and a
+			// container it produced is rebuilt rather than repaired -- the opposite of what
+			// "cannot be read" on a `.glb` would have a person conclude about their model.
+			return path == row ? tr("Cannot be read: %1").arg(rejection) :
+			                     tr("The mesh it produced cannot be read: %1").arg(rejection);
 		return QApplication::style()->standardIcon(QStyle::SP_MessageBoxWarning);
 	}
 
@@ -90,9 +119,20 @@ AssetFileModel::data(const QModelIndex& index, int role) const
 }
 
 void
-AssetFileModel::OnThumbnailChanged(const QString& path)
+AssetFileModel::Repaint(const QString& path)
 {
 	const QModelIndex changed = index(path);
 	if (changed.isValid())
 		Q_EMIT dataChanged(changed, changed, { Qt::DecorationRole, Qt::ToolTipRole });
+}
+
+void
+AssetFileModel::OnThumbnailChanged(const QString& path)
+{
+	Repaint(path);
+
+	// A `.bmesh` rendered for a source's tile: the row that asked is the `.glb`, and once the
+	// explorer stops showing the derived half it is the only row there is to repaint.
+	if (const auto source = m_SourceForSubject.constFind(path); source != m_SourceForSubject.cend())
+		Repaint(*source);
 }

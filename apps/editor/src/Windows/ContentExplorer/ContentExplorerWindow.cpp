@@ -147,6 +147,7 @@ ContentExplorerWindow::SetRootPath(const QString& path)
 	setEnabled(true);
 	m_RootPath = path;
 	m_Operations->SetDataRoot(path);
+	m_FileModel->SetDataRoot(path);
 	m_History.clear();
 
 	m_Ui.FileExplorer->setRootIndex(m_HierarchyModel->setRootPath(path));
