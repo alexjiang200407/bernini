@@ -5,6 +5,7 @@
 #include <core/log/log.h>
 
 #include <spdlog/spdlog.h>
+#include <tracy/Tracy.hpp>
 
 #include "EditorStyle.h"
 #include "MainWindow.h"
@@ -49,6 +50,11 @@ main(int argc, char* argv[])
 	auto window = std::optional<MainWindow>();
 	try
 	{
+		// Everything between the splash and a usable editor, as one zone: the device and its
+		// pipelines, the project's mount, its staleness scans and whatever they rebuild. What the
+		// wall clock of a cold start is made of nests under this.
+		ZoneScopedN("editor startup");
+
 		window.emplace(nullptr, std::filesystem::path(), startup.Sink());
 	}
 	catch (const std::exception& e)

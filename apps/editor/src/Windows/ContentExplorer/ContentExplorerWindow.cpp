@@ -27,6 +27,8 @@
 #include <QToolButton>
 #include <QTreeView>
 
+#include <tracy/Tracy.hpp>
+
 namespace
 {
 	/** The folder `index` stands for: itself when it is one, otherwise the folder holding it. */
@@ -139,6 +141,8 @@ ContentExplorerWindow::SetThumbnails(AssetThumbnailCache* thumbnails)
 void
 ContentExplorerWindow::SetRootPath(const QString& path)
 {
+	ZoneScopedN("editor root content explorer");
+
 	AttachModels();
 	setEnabled(true);
 	m_RootPath = path;

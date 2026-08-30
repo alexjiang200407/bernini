@@ -19,6 +19,8 @@
 #include <bgl/Camera.h>
 #include <bgl/Viewport.h>
 
+#include <tracy/Tracy.hpp>
+
 namespace
 {
 	// The render target is this many times the output edge, and the capture is box-filtered back
@@ -128,6 +130,9 @@ namespace
 		void
 		run() override
 		{
+			ZoneScopedN("editor thumbnail load");
+			ZoneTextF("%s", m_RelPath.c_str());
+
 			std::shared_ptr<assetlib::BMesh>       mesh;
 			std::shared_ptr<CookedMeshes>          cooked;
 			std::shared_ptr<game::TexturePrefetch> prefetch;
