@@ -252,7 +252,7 @@ The renderer itself. Every one of these is open and none needs answering to land
   inert and the FrameGraph's value shrinks to scheduling and resource lifetime.
 * **Shaders.** Slang targets WGSL, so the language is not a barrier — but the shaders are written
   against bindless primitives and amp/mesh stages and would be rewritten regardless. Note that
-  Metal's runtime Slang→MSL compilation (`libs/bgl/CMakeLists.txt:125-126`) does not port to a
+  Metal's runtime Slang→MSL compilation (`libs/bgl/CMakeLists.txt:126-127`) does not port to a
   browser; bwgu precompiles.
 * **Feature parity.** TAA, the selection outline, VAT and skinning are all mesh-shader draws today.
   Which of them the browser target needs at all is a product question.
