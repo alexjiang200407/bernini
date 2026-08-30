@@ -317,6 +317,10 @@ Give it a box when you built on macOS and the change reaches:
 
 Name the command, not the need: *"`just run bgl_tests -- "[taa]" --gpu-validation` on Windows"*.
 
+Under [bcp-feature](.claude/skills/bcp-feature/SKILL.md) the box waits: a task PR merges into the
+feature branch rather than into `master`, so the whole feature earns one box on the landing PR
+instead of one per task. That skill's § 3 and § 5 own the rule.
+
 **Eyes.** A box for anything whose result is a picture or a gesture, which no assertion reaches:
 editor UI — a layout, a widget, a menu, what a panel reads; anything on screen — a pass's output, a
 material, a light, a colour; anything about feel — the frame loop, a loading screen, an interaction.

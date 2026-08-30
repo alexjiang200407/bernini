@@ -257,6 +257,14 @@ The body takes the shape and the ~350-word budget in
 **which task of the plan this is and what still has to land**, so a reviewer can tell a deliberate
 gap from an oversight.
 
+**A task PR carries no Windows box.** Platform verification is once per feature, not once per task: a
+task merges into `feat/<name>`, which nothing ships from, so a human booting Windows for each one
+verifies a string of intermediate states nobody will ever run, and only the last of them reaches
+`master`. Say so as a stated negative rather than leaving the section silent — *"Windows: deferred to
+the landing PR, where the feature is verified as one thing"* — so a reader can tell the deferral from
+an oversight. § 5 is where the box is written. **Eyes** boxes are unaffected and stay per task: a
+picture is judged beside the change that drew it, and by then the feature may have drawn over it.
+
 The plan is a hypothesis. When a task disproves it, correct `docs/plans/<name>.md` **in that task's
 PR**, so the correction is reviewed beside the code that forced it.
 
@@ -383,7 +391,11 @@ plus every unrelated `master` commit since. The base for this one is `origin/mas
 The body is the feature's story, in [bcp-implement § 10](.claude/skills/bcp-implement/SKILL.md)'s
 shape and budget — what it adds, why, how it was verified *as a whole*. Link the task PRs; do not
 restate them. Its `## Needs a human` boxes are the union of what the task PRs left open and never
-got ticked. Then § 4 again.
+got ticked, **plus the Windows box every one of them deferred** (§ 3) — this is the PR that proposes
+the work to `master`, and the first point at which running it there is worth a person's time. Judge
+it against [bcp-implement § 10](.claude/skills/bcp-implement/SKILL.md)'s list — D3D12, shaders, paths,
+the editor — over the whole feature's diff rather than any one task's, and name the commands to run.
+Then § 4 again.
 
 Read the plan against what actually shipped first: anything it still promises that the feature did
 not do is a correction for the last task PR. Whatever in it should outlive the feature — how the
