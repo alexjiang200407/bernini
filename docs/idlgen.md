@@ -53,8 +53,8 @@ are the source of truth; when this doc disagrees, trust them, then fix this doc.
   `EntryBuffer<T>`, so `sizeof`/`offsetof` on the CPU and the buffer stride on the GPU agree by
   construction.
 
-  A struct's size still depends on the final size of everything it embeds — shrink `TextureHandle`
-  and every member after `VatGeom::positions` moves — so idlgen resolves imports against the
+  A struct's size still depends on the final size of everything it embeds — shrink `RangeWithCount`
+  and `VatGeom::columnBases` moves — so idlgen resolves imports against the
   *generated* copies and reports the module under its output path, since Slang looks beside the
   importing file before consulting the search paths. The CMake rules carry an edge per `import` so a
   module is generated after its dependencies.

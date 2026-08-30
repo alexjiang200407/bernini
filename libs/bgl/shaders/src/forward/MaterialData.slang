@@ -1,4 +1,5 @@
 import types.RawHandleArena;
+import types.Texture;
 import idl.RawEntry;
 import idl.IMaterial;
 import idl.Constants;
@@ -6,7 +7,6 @@ import idl.PbrMaterial;
 import idl.LoosePbrMaterial;
 import idl.IPbrMaterial;
 import idl.IAlphaTestMaterial;
-import idl.TextureHandle;
 import idl.MaterialType;
 import forward.common;
 import forward.PbrShading;
@@ -24,11 +24,11 @@ struct MaterialData
     // The arena and the typed view of the same allocation, as one member: a payload keeps a
     // handle's bytes inline, and the view is the only thing that can make a texture of them.
     // See docs/slang_shaders.md.
-    RawHandleArena<TextureHandle> materials;
+    RawHandleArena<Texture2D.Handle> materials;
 
-    TextureCubeHandle irradianceMap;
-    TextureCubeHandle prefilterMap;
-    TextureHandle brdfLUT;
+    TextureCube.Handle irradianceMap;
+    TextureCube.Handle prefilterMap;
+    Texture2D.Handle brdfLUT;
 
     // (sin, cos) of the environment's rotation about the up axis -- the same spin the skybox pass
     // puts on its ray. See PbrShading::ToEnvSpace.
@@ -39,7 +39,7 @@ struct MaterialData
 
     // Handle `index` of the record at `byteOffset`, found by position: a payload's handle fields
     // lead it and are contiguous. PbrMaterial.slang and LoosePbrMaterial.slang fix that order.
-    TextureHandle GetTextureAt(uint byteOffset, uint index) { return materials.GetHandleAt(byteOffset + cRawPayloadOffset, index); }
+    Texture2D.Handle GetTextureAt(uint byteOffset, uint index) { return materials.GetHandleAt(byteOffset + cRawPayloadOffset, index); }
 };
 
 ConstantBuffer<MaterialData> materialData;

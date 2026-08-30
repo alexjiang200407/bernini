@@ -1,10 +1,8 @@
-import idl.TextureHandle;
-
 struct SkyboxData
 {
     float4x4 clipToWorld;     // inverse(viewProj) with camera translation removed
     float4x4 prevWorldToClip; // last frame's translation-free viewProj, with the skybox spin undone
-    TextureCubeHandle cubeTex;
+    TextureCube.Handle cubeTex;
     SamplerState.Handle sampler;
     float exposure;
     float mipLevel;
@@ -63,7 +61,7 @@ SkyboxPSOut PSMain(VSOut input)
 {
     float3 dir = normalize(input.dir);
 
-    float3 color = gSkyboxData.cubeTex.SampleCubeLevel(gSkyboxData.sampler, dir, gSkyboxData.mipLevel).rgb;
+    float3 color = gSkyboxData.cubeTex.SampleLevel(gSkyboxData.sampler, dir, gSkyboxData.mipLevel).rgb;
 
     color = color * gSkyboxData.exposure;
 

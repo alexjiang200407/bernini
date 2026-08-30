@@ -143,7 +143,6 @@ namespace bgl
 				return ReturnNullResult();
 			}
 
-			// Members are addressed by declaration position (see c_HandleUniformMember).
 			TraversalResult
 			Traverse(size_t currentOffset, uint32_t idx) override
 			{

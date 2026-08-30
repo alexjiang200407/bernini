@@ -35,7 +35,6 @@ set(IDL_CPP_SOURCES
     Clip.slang
     PbrMaterial.slang
     LoosePbrMaterial.slang
-    TextureHandle.slang
     RawTextureHandle.slang
     ErrorCode.slang
     PsoType.slang

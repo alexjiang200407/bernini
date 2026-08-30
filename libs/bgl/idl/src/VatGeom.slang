@@ -1,6 +1,5 @@
 import Range;
 import RangeWithCount;
-import TextureHandle;
 import Clip;
 
 // One rig's baked clip set: the texture pair every instance of the geom fetches, and the tables
@@ -10,8 +9,8 @@ import Clip;
 // backend agrees on).
 public struct VatGeom
 {
-    public TextureHandle positions; // R16G16B16A16_UNORM
-    public TextureHandle normals;   // R8G8B8A8_UNORM, xyz * 0.5 + 0.5; w the tangent twist, radians / 2pi + 0.5
+    public Texture2D.Handle positions; // R16G16B16A16_UNORM
+    public Texture2D.Handle normals;   // R8G8B8A8_UNORM, xyz * 0.5 + 0.5; w the tangent twist, radians / 2pi + 0.5
 
     public float4 boundsMin;
     public float4 boundsExtent;

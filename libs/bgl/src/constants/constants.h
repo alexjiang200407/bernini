@@ -41,11 +41,4 @@ namespace bgl
 		                                                                      "packedBuffer"sv,
 		                                                                      "rangeBuffer"sv,
 		                                                                      "rawBuffer"sv };
-
-	/**
-	 * Index of the sole member holding the descriptor inside an idl resource handle -- the
-	 * `DescriptorHandle` in e.g. TextureHandle { Texture2D.Handle texture; }. Addressed by position
-	 * rather than name because the member is spelled differently across handles (texture / sampler).
-	 */
-	constexpr uint32_t c_HandleUniformMember = 0;
 }

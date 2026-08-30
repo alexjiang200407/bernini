@@ -80,7 +80,7 @@ doc disagrees, trust the header, then fix this doc.
 | `UniformType` / `UniformValueType` | [UniformValueType.h](libs/bgl/src/uniforms/UniformValueType.h) | Node kind (array/struct/value/null) and leaf scalar type. |
 | `DescriptorHandle` | [DescriptorHandle.h](libs/bgl/src/uniforms/DescriptorHandle.h) | The 8 bytes a bindless handle occupies. `alignas(8)` on Metal only. |
 | `HandleSlot` / `MetalHandleOffsetMap` | [MetalPipelineReflection.h](libs/bgl/src/metal/pipeline/MetalPipelineReflection.h) | Metal-only side table: byte offset + pool kind of every handle field. |
-| `c_SmartBufferUniformIndices` / `c_HandleUniformMember` / `c_UnboundDescriptorIndex` | [constants.h](libs/bgl/src/constants/constants.h) | The member names and index the assignment operators search for, and the bindless index every allocator reserves. |
+| `c_SmartBufferUniformIndices` / `c_UnboundDescriptorIndex` | [constants.h](libs/bgl/src/constants/constants.h) | The member names the assignment operators search for, and the bindless index every allocator reserves. |
 
 ---
 
@@ -159,14 +159,13 @@ Each handle type finds its destination differently, and the rules are not symmet
   needs its member name added to that array.
 * **`BufferHandle` into a value** — written directly when the leaf is `kDescriptorHandle`. The path a
   bare `ComputeBuffer<T>` takes, being a `typealias` for `RWStructuredBuffer<T>.Handle`.
-* **`SrvHandle` / `TextureAssetHandle` into a struct** — write member **index 0**
-  (`c_HandleUniformMember`), by position because the member is spelled differently across handle
-  structs. @post **no type discrimination**: an `SrvHandle` assigned to an `EntryBuffer<T>` uniform
-  writes the SRV index into `entryBuffer` and succeeds.
+* **`SrvHandle` / `TextureAssetHandle` / `SamplerHandle`** — bare-value only: written directly when
+  the leaf is `kDescriptorHandle`, which is what a `Texture2D.Handle` / `TextureCube.Handle` /
+  `SamplerState.Handle` member reflects as. @post a struct wrapping one throws — there is no member
+  search, so nothing binds a texture into a smart-buffer wrapper by position.
 * **`BufferSrvHandle`** — a second, structured view of a buffer, written by the same rule as a
   `BufferHandle`: only its `bindlessIndex` travels, so it lands in whichever smart-buffer member the
   target names.
-* **`SamplerHandle`** — bare-value case only; a struct wrapping a sampler throws.
 * **`RawArenaBinding`** — a raw arena and the typed view of the *same* allocation, written as a
   pair: it assigns `["raw"]` and `["handles"]`, each of which is a struct of one handle and so lands
   through the `BufferHandle` rule above. One write rather than two because the two descriptors
@@ -271,5 +270,5 @@ assignments — see `BindSceneBuffers` in
 ---
 
 > **Maintenance:** the tables and file links above rot silently when files move, and the contracts
-> track specific constants (`c_SmartBufferUniformIndices`, `c_HandleUniformMember`,
-> `c_CacheFormatVersion`). Re-check both when the layer changes.
+> track specific constants (`c_SmartBufferUniformIndices`, `c_CacheFormatVersion`). Re-check both
+> when the layer changes.

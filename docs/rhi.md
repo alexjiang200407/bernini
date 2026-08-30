@@ -74,7 +74,7 @@ doc and a header disagree, trust the header, then fix this doc.
 
   **A resource handle cannot be loaded out of a raw buffer on Metal.** The element type must be on
   the binding: `StructuredBuffer<T, ScalarDataLayout>.Handle` lowers to `T device*`, so a
-  `TextureHandle` inside `T` is a real `texture2d`, while `ByteAddressBuffer.Handle` lowers to
+  `Texture2D.Handle` inside `T` is a real `texture2d`, while `ByteAddressBuffer.Handle` lowers to
   `uint32_t device*` and MSL will not construct a texture from an integer. A payload that is to be
   raw-loaded must therefore declare no resource type: it stores a `RawTextureHandle` — the same
   eight bytes with no texture in the type — and the second view above is what samples them.
@@ -100,9 +100,8 @@ doc and a header disagree, trust the header, then fix this doc.
   `SamplerHandle` (same `{idx, generation}` shape) but a sampler has **no backing GPU
   resource** — it owns only a slot in the shader-visible sampler heap (its own `maxSamplers`
   pool, separate from textures). Bind it bindlessly through its `bindlessIndex`, as any other handle.
-  Texture and sampler are separate handles — `TextureHandle` wraps a
-  `Texture2D.Handle`, `SamplerHandle` *is* a `SamplerState.Handle` (a plain typealias), and sampling
-  is `TextureHandle.Sample(SamplerHandle, uv)` in the shader IDL. `Scene`
+  Texture and sampler are separate handles on both sides: a shader declares a `Texture2D.Handle`
+  and a `SamplerState.Handle`, and sampling is `texture.Sample(sampler, uv)`. `Scene`
   exposes ready-made presets via `StandardSampler` (`kAnisoLinearWrap`, `kLinearClamp`).
 
 * **Interface objects use intrusive refcounting.** Every `I*` derives from `core::Ref`
@@ -363,10 +362,10 @@ Everything else is self-explanatory from the header.
 * **Assigning a `BufferHandle`** writes a descriptor index, not data: for a "smart buffer"
   struct the index lands in whichever of `entryBuffer` / `packedBuffer` / `rangeBuffer` /
   `rawBuffer` exists; for a `kDescriptorHandle` value it is written directly; otherwise it throws.
-* **Assigning a `SamplerHandle` / `TextureHandle`** likewise writes a `DescriptorHandle` (bindless).
-  The shader-side `TextureHandle` / `TextureCubeHandle` are IDL structs holding a single `.Handle`, so
-  the write lands in that sole member; `SamplerHandle` is a bare `SamplerState.Handle`, so it is
-  written directly. Assigning throws if the target is neither.
+* **Assigning a `SamplerHandle` / `SrvHandle` / `TextureAssetHandle`** likewise writes a
+  `DescriptorHandle` (bindless), and all three take one path: the shader declares the handle itself
+  (`SamplerState.Handle`, `Texture2D.Handle`, `TextureCube.Handle`), which reflects as a
+  `kDescriptorHandle` value and is written directly. Assigning throws if the target is anything else.
 
 ---
 

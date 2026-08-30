@@ -1,11 +1,9 @@
-import idl.TextureHandle;
-
 struct TaaResolveData
 {
-    TextureHandle sceneColor;
-    TextureHandle history;
-    TextureHandle motionVectors;
-    TextureHandle depth;
+    Texture2D.Handle sceneColor;
+    Texture2D.Handle history;
+    Texture2D.Handle motionVectors;
+    Texture2D.Handle depth;
 
     // The unjittered camera this frame and last -- this frame's inverse projection, and its view
     // space into last frame's clip -- for what the camera alone moves a surface by at a pixel's

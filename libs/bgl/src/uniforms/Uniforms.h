@@ -258,9 +258,10 @@ namespace bgl
 			AccessorBase&
 			operator=(SrvHandle handle)
 			{
-				if (GetType() == UniformType::kStruct && (*this)[c_HandleUniformMember].IsValid())
+				if (GetType() == UniformType::kValue &&
+				    m_Node->GetValueType() == UniformValueType::kDescriptorHandle)
 				{
-					(*this)[c_HandleUniformMember] = DescriptorHandle(handle.bindlessIndex);
+					*this = DescriptorHandle(handle.bindlessIndex);
 					return *this;
 				}
 
@@ -272,9 +273,10 @@ namespace bgl
 			AccessorBase&
 			operator=(TextureAssetHandle handle)
 			{
-				if (GetType() == UniformType::kStruct && (*this)[c_HandleUniformMember].IsValid())
+				if (GetType() == UniformType::kValue &&
+				    m_Node->GetValueType() == UniformValueType::kDescriptorHandle)
 				{
-					(*this)[c_HandleUniformMember] = DescriptorHandle(handle.shaderIndex);
+					*this = DescriptorHandle(handle.shaderIndex);
 					return *this;
 				}
 
