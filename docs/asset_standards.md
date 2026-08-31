@@ -428,8 +428,8 @@ Three different spaces are in play and they are easy to conflate. The contract, 
   index-parallel to the enum and its static_assert catches only an empty row, not a misordered one;
   arms in `GetPsoFromGeomAndMaterial` (`libs/bgl/src/util/util.cpp`); and material storage in
   `Scene`. The amp/mesh stages are shared: every pixel module draws through one of the three
-  geometry modules — `Forward_StaticMesh`, `Forward_SkinnedMesh`, or the tier-branching
-  `Forward_AnyMesh` — and a new layer adds no geometry code.
+  geometry modules — `programs.forward.StaticMesh`, `programs.forward.SkinnedMesh`, or the
+  tier-branching `programs.forward.AnyMesh` — and a new layer adds no geometry code.
 * **`.bskel`** (v1) — a skeleton: bones, their bind pose and inverse bind matrices, and a name pool.
   Struct: [libs/assetlib_structs/include/assetlib_structs/Skeleton.h](libs/assetlib_structs/include/assetlib_structs/Skeleton.h);
   I/O: [libs/assetlib/include/assetlib/codecs.h](libs/assetlib/include/assetlib/codecs.h).

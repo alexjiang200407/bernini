@@ -88,7 +88,7 @@ not obvious from a signature. The headers linked below are the source of truth.
 
   - **The table is a GPU buffer in the palette's three-rows-a-bone layout, not a texture.** Unreal
     stores it as a texture because its consumer is a material graph. Ours is
-    [skinned_vertex.slang](libs/bgl/shaders/src/forward/skinned_vertex.slang), which already reads a
+    [skinned_vertex.slang](libs/bgl/shaders/src/lib/forward/skinned_vertex.slang), which already reads a
     palette in exactly that layout, and every read is an exact row — there is nothing for a sampler
     to do.
   - **It is filled on the GPU at load, not baked offline.** Unreal and Unity bake because they have

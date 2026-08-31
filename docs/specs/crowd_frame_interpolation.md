@@ -2,9 +2,9 @@
 
 The crowd tier reads a fractional frame as the lerp of the two bracketing frames' **composed skin
 matrices**, in the vertex stage
-([skinned_vertex.slang](../../libs/bgl/shaders/src/forward/skinned_vertex.slang) `:93`). The hero
+([skinned_vertex.slang](../../libs/bgl/shaders/src/lib/forward/skinned_vertex.slang) `:93`). The hero
 tier instead nlerps each bone's **local rotation** and then walks the hierarchy, in a compute pass,
-once per instance ([pose_walk.slang](../../libs/bgl/shaders/src/pose_walk.slang) `:71`).
+once per instance ([pose_walk.slang](../../libs/bgl/shaders/src/lib/anim/pose_walk.slang) `:71`).
 
 The bone-anim-table feature chose the first, deliberately — [docs/skinning.md](../skinning.md)
 states the rule and why the two sources differ between frames. Nothing here disputes that choice.
@@ -71,7 +71,7 @@ the failure this file exists to prevent.
 ## What to do when it fires
 
 Both variants are small and local to
-[skinned_vertex.slang](../../libs/bgl/shaders/src/forward/skinned_vertex.slang): `SkinFromTable`
+[skinned_vertex.slang](../../libs/bgl/shaders/src/lib/forward/skinned_vertex.slang): `SkinFromTable`
 either lerps the two frames or rounds to the nearer one. Measure the vertex stage on a crowd scene
 dense enough to be vertex-bound, at the LOD a crowd unit actually draws at, and look at both the
 cost and the motion.
