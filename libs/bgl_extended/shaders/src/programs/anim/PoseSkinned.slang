@@ -2,6 +2,7 @@ import idl.BoneSample;
 import idl.Clip;
 import idl.Constants;
 import idl.IPlayback;
+import idl.MeshInstance;
 import idl.RawEntry;
 import idl.Rig;
 import idl.SkinnedBone;
@@ -24,10 +25,15 @@ import lib.types.UploadBuffer;
 
 struct Uniforms
 {
-    // The byte offsets of the playback records to pose, one per workgroup. Dense: erasing a record
-    // only releases its bytes, so a sweep of the arena would pose freed instances -- and would meet
-    // the crowd records sharing it, which own no palette for this pass to write.
+    // The mesh instances to pose, one per workgroup. Dense: erasing a placement only releases its
+    // bytes, so a sweep of the playback arena would pose freed instances -- and would meet the crowd
+    // records sharing it, which own no palette for this pass to write.
     UploadBuffer<uint> posedInstances;
+
+    // Where an instance stands and which record it plays from. Both are read from the placement
+    // rather than copied into the playback record: a foot is planted against the ground under the
+    // instance in the world, and one transform in two records is one that can disagree with itself.
+    EntryBuffer<MeshInstance> meshBuffer;
 
     RawBuffer playbackBuffer;
     EntryBuffer<Rig> rigs;
@@ -41,6 +47,11 @@ struct Uniforms
     float time;
     float prevTime;
     uint posedCount;
+
+    // The scene's ground plane, world space, normal unit length: what a planted foot is solved
+    // against.
+    float3 groundPoint;
+    float3 groundNormal;
 };
 
 ConstantBuffer<Uniforms> gUniforms;
@@ -56,8 +67,8 @@ void main(uint groupIdx: SV_GroupID, uint localIdx: SV_GroupIndex)
 
     // Group-uniform, so the early-out above and every barrier below are reached by the whole group
     // or by none of it.
-    let byteOffset = gUniforms.posedInstances[groupIdx];
-    SkinnedState state = gUniforms.playbackBuffer.LoadRecordAs<SkinnedState>(RawEntry<IPlayback>.At(byteOffset));
+    let mesh = gUniforms.meshBuffer.Get(gUniforms.posedInstances[groupIdx]);
+    SkinnedState state = gUniforms.playbackBuffer.LoadRecordAs<SkinnedState>(mesh.playback);
     Rig rig = gUniforms.rigs.Get(state.playback.rig);
     Clip clip = gUniforms.clipBuffer.Get(rig.clips, state.playback.clip);
 
