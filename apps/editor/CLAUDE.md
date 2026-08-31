@@ -123,6 +123,21 @@ lives beside it, and the split is by responsibility rather than by line count:
   them, so a panel added later is rooted without anyone remembering it -- the same reason
   `IHoldsAssets` is a walk. A panel that only forwards the root to a child it owns implements it;
   the child does not, or it is told twice and the owner loses its say in the order.
+- **A view rooted at a project shows one half of it, and resolves against the whole root.** The
+  Content Explorer's views root where `editor::BrowseRootFor` says its mode does — `Data/Authored`
+  for assets, `Data/Derived/SourceTextures` for the texture viewer; `AssetAt`, `AssetOperations` and
+  every stored reference still resolve against `Data`. The two are different strings on purpose —
+  moving where a view *points* must never move what a path *means*, because a key is
+  data-root-relative and every reference in a project is written against that. Nothing is hidden row
+  by row: a half is simply not somewhere the views can navigate, which holds without a sweep that
+  has to be reapplied on every insertion, and a mode is a browse root rather than a proxy model.
+  What genuinely must not be listed inside the authored half — a source's `.bimport` sidecar — is
+  `editor::IsHiddenInExplorer`.
+- **A mode that cannot be edited says so once, in `IsEditableMode`.** `IsActionableAsset` refuses a
+  rename or a delete one file at a time; the gestures that name no file — a new directory, an import
+  dropped from outside — are the ones it cannot see, and they are refused by the mode. A read-only
+  mode shows no context menu at all rather than a menu of items that decline, since an item that
+  does nothing reads as a broken one.
 - **Widget assembly** built in code rather than Designer goes to its own `*_ui` file
   (`material_editor_ui`), which builds and connects nothing. The `connect` calls stay in the window,
   because what a widget *does* is behaviour.

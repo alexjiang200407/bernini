@@ -7,6 +7,7 @@
 
 #include <QAbstractItemView>
 #include <QAction>
+#include <QComboBox>
 #include <QDir>
 #include <QDragEnterEvent>
 #include <QDragMoveEvent>
@@ -19,6 +20,7 @@
 #include <QLabel>
 #include <QListView>
 #include <QMenu>
+
 #include <QMessageBox>
 #include <QPushButton>
 #include <QSplitter>
@@ -26,6 +28,7 @@
 #include <QStyle>
 #include <QToolButton>
 #include <QTreeView>
+#include <assetlib/project_layout.h>
 
 #include <tracy/Tracy.hpp>
 
@@ -60,6 +63,14 @@ ContentExplorerWindow::ContentExplorerWindow(QWidget* parent, AssetsHeldOpenFn a
 	m_Ui.BackButton->setToolButtonStyle(Qt::ToolButtonIconOnly);
 	connect(m_Ui.BackButton, &QToolButton::clicked, this, &ContentExplorerWindow::NavigateBack);
 
+	connect(
+		m_Ui.ModeSelector,
+		&QComboBox::activated,  // activated, not currentIndexChanged: only a user's pick re-roots
+		this,
+		[this](int index) {
+			SetBrowseMode(index == 1 ? editor::BrowseMode::kTextures : editor::BrowseMode::kAssets);
+		});
+
 	// The hierarchy shows files as well as directories, so an asset can be found and dragged straight
 	// out of the tree without first navigating to its folder in the right-hand view.
 	m_HierarchyModel = new QFileSystemModel(this);
@@ -74,14 +85,14 @@ ContentExplorerWindow::ContentExplorerWindow(QWidget* parent, AssetsHeldOpenFn a
 		&QAbstractItemModel::rowsInserted,
 		this,
 		[this](const QModelIndex& parent, int first, int last) {
-			HideBuildProductRows(m_Ui.FileExplorer, *m_HierarchyModel, parent, first, last);
+			HideUnlistedRows(m_Ui.FileExplorer, *m_HierarchyModel, parent, first, last);
 		});
 	connect(
 		m_FileModel,
 		&QAbstractItemModel::rowsInserted,
 		this,
 		[this](const QModelIndex& parent, int first, int last) {
-			HideBuildProductRows(m_Ui.CurrentDirectoryExplorer, *m_FileModel, parent, first, last);
+			HideUnlistedRows(m_Ui.CurrentDirectoryExplorer, *m_FileModel, parent, first, last);
 		});
 
 	m_Ui.FileExplorer->setContextMenuPolicy(Qt::CustomContextMenu);
@@ -147,17 +158,60 @@ ContentExplorerWindow::SetRootPath(const QString& path)
 	setEnabled(true);
 	m_RootPath = path;
 	m_Operations->SetDataRoot(path);
+	m_FileModel->SetDataRoot(path);
 	m_History.clear();
 
-	m_Ui.FileExplorer->setRootIndex(m_HierarchyModel->setRootPath(path));
-	ShowDirectory(path);
+	// The views root one level in, at the half this mode browses. Everything else here keeps
+	// resolving against `m_RootPath`: a key is data-root-relative, so moving where the *views* point
+	// must not move what a path means.
+	SetBrowseMode(m_Mode);
+}
+
+void
+ContentExplorerWindow::SetBrowseMode(const editor::BrowseMode mode)
+{
+	const QString root = editor::GetBrowseRootFor(m_RootPath, mode);
+	if (root.isEmpty())
+		return;
+
+	// Project::Create and Project::Open scaffold every required directory, this one among them, so
+	// an absent root means the project's layout is broken rather than merely empty. Refused rather
+	// than repaired: a mode that exists to be read-only must not write to be entered, and papering
+	// over a missing required directory hides that the project needs reopening. Refusing matters
+	// because an unrooted QFileSystemModel lists the whole filesystem.
+	if (!QDir(root).exists())
+	{
+		qWarning(
+			"ContentExplorer: '%s' is missing, so the project's layout is incomplete",
+			qPrintable(root));
+
+		m_Ui.ModeSelector->setCurrentIndex(static_cast<int>(m_Mode));
+		return;
+	}
+
+	m_Mode       = mode;
+	m_BrowseRoot = root;
+	m_History.clear();
+
+	m_Ui.FileExplorer->setRootIndex(m_HierarchyModel->setRootPath(m_BrowseRoot));
+	ShowDirectory(m_BrowseRoot);
+}
+
+bool
+ContentExplorerWindow::IsInsideBrowseRoot(const QString& path) const
+{
+	return editor::IsKeyUnder(m_BrowseRoot, path);
 }
 
 void
 ContentExplorerWindow::ShowDirectory(const QString& path)
 {
+	// The last word on where a view may point, whoever asked. Every caller below reaches here.
+	if (!IsInsideBrowseRoot(path))
+		return;
+
 	m_Ui.CurrentDirectoryExplorer->setRootIndex(m_FileModel->setRootPath(path));
-	HideBuildProductRows(
+	HideUnlistedRows(
 		m_Ui.CurrentDirectoryExplorer,
 		*m_FileModel,
 		m_Ui.CurrentDirectoryExplorer->rootIndex());
@@ -183,6 +237,11 @@ ContentExplorerWindow::ShowDirectory(const QString& path)
 void
 ContentExplorerWindow::NavigateTo(const QString& path)
 {
+	// Before the history, not just before the move: recording a step Back can never return to
+	// would make the button lie about where it goes.
+	if (!IsInsideBrowseRoot(path))
+		return;
+
 	const QString shown = m_FileModel->filePath(m_Ui.CurrentDirectoryExplorer->rootIndex());
 
 	if (!shown.isEmpty())
@@ -216,7 +275,7 @@ ContentExplorerWindow::NavigateBack()
 }
 
 void
-ContentExplorerWindow::HideBuildProductRows(
+ContentExplorerWindow::HideUnlistedRows(
 	QAbstractItemView*      view,
 	const QFileSystemModel& model,
 	const QModelIndex&      parent,
@@ -234,7 +293,7 @@ ContentExplorerWindow::HideBuildProductRows(
 		last < 0 ? model.rowCount(parent) - 1 : std::min(last, model.rowCount(parent) - 1);
 	for (int row = first; row <= end; ++row)
 	{
-		if (!editor::IsHiddenBuildProductFile(model.filePath(model.index(row, 0, parent))))
+		if (!editor::IsHiddenInExplorer(model.filePath(model.index(row, 0, parent))))
 			continue;
 
 		if (tree != nullptr)
@@ -253,7 +312,7 @@ ContentExplorerWindow::AttachModels()
 	m_Ui.FileExplorer->setModel(m_HierarchyModel);
 	m_Ui.FileExplorer->setHeaderHidden(true);
 	connect(m_Ui.FileExplorer, &QTreeView::expanded, this, [this](const QModelIndex& parent) {
-		HideBuildProductRows(m_Ui.FileExplorer, *m_HierarchyModel, parent);
+		HideUnlistedRows(m_Ui.FileExplorer, *m_HierarchyModel, parent);
 	});
 	for (auto column = 1; column < m_HierarchyModel->columnCount(); ++column)
 		m_Ui.FileExplorer->hideColumn(column);
@@ -411,6 +470,11 @@ ContentExplorerWindow::ShowAssetMenu(
 	const QString parentPath = model.filePath(parent);
 	const QString asset      = editor::AssetAt(model, index, m_RootPath);
 
+	// Read-only modes offer no menu at all rather than a menu of refusals: IsActionableAsset would
+	// turn every one of these into a no-op, and an item that does nothing reads as a broken one.
+	if (!editor::IsEditableMode(m_Mode))
+		return;
+
 	auto  menu   = QMenu(this);
 	auto* addDir = menu.addAction("Add Directory");
 
@@ -418,14 +482,20 @@ ContentExplorerWindow::ShowAssetMenu(
 	QAction* rename        = nullptr;
 	QAction* remove        = nullptr;
 	QAction* removeCascade = nullptr;
-	if (!asset.isEmpty())
+	if (editor::IsActionableAsset(asset))
 	{
 		menu.addSeparator();
 		if (editor::IsMaterialAsset(asset))
 			bake = menu.addAction("Bake");
-		rename        = menu.addAction("Rename");
-		remove        = menu.addAction("Delete");
-		removeCascade = menu.addAction("Delete Cascade");
+		rename = menu.addAction("Rename");
+
+		// An imported source renames -- moving everything it produced with it -- but does not
+		// delete: `planDeletion` throws for one, and grouped deletion is ADR-8's non-goal.
+		if (editor::IsRemovableAsset(asset))
+		{
+			remove        = menu.addAction("Delete");
+			removeCascade = menu.addAction("Delete Cascade");
+		}
 	}
 
 	QAction* const chosen = menu.exec(view.viewport()->mapToGlobal(pos));
@@ -445,7 +515,7 @@ ContentExplorerWindow::ShowAssetMenu(
 void
 ContentExplorerWindow::dragEnterEvent(QDragEnterEvent* event)
 {
-	if (editor::AcceptsImportDrop(*event->mimeData()))
+	if (editor::IsEditableMode(m_Mode) && editor::AcceptsImportDrop(*event->mimeData()))
 		event->acceptProposedAction();
 }
 
@@ -453,13 +523,14 @@ void
 ContentExplorerWindow::dragMoveEvent(QDragMoveEvent* event)
 {
 	// The accept decision doesn't depend on position, so mirror dragEnterEvent.
-	event->acceptProposedAction();
+	if (editor::IsEditableMode(m_Mode) && editor::AcceptsImportDrop(*event->mimeData()))
+		event->acceptProposedAction();
 }
 
 void
 ContentExplorerWindow::dropEvent(QDropEvent* event)
 {
-	if (m_RootPath.isEmpty())
+	if (m_RootPath.isEmpty() || !editor::IsEditableMode(m_Mode))
 		return;
 
 	editor::RunImportDrop(this, m_RootPath, *event->mimeData());
@@ -473,11 +544,11 @@ ContentExplorerWindow::OnDirectoryDeleted(const QString& absolute)
 
 	// The trail led into a folder that is gone, so it is dropped rather than walked back into --
 	// and going home is not a step Back should offer to undo.
-	if (QDir(absolute).relativeFilePath(shown).startsWith(".."))
+	if (!editor::IsKeyUnder(absolute, shown))
 		return;
 
 	m_History.clear();
-	ShowDirectory(m_RootPath);
+	ShowDirectory(m_BrowseRoot);
 }
 
 void
@@ -486,9 +557,9 @@ ContentExplorerWindow::OnDirectoryRenamed(const QString& fromAbsolute, const QSt
 	// Follow the rename rather than dumping the user at the root. The history is left alone -- Back
 	// already skips a folder that is gone.
 	const QString shown  = m_FileModel->filePath(m_Ui.CurrentDirectoryExplorer->rootIndex());
-	const QString inside = QDir(fromAbsolute).relativeFilePath(shown);
+	const QString inside = editor::GetKeyUnder(fromAbsolute, shown);
 
-	if (inside.startsWith(".."))
+	if (inside.isEmpty())
 		return;
 
 	ShowDirectory(inside == "." ? toAbsolute : toAbsolute + "/" + inside);

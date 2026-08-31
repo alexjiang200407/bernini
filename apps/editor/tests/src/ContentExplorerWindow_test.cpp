@@ -6,6 +6,7 @@
 #include "util/asset_paths.h"
 #include <assetlib/Project.h>
 
+#include <QComboBox>
 #include <QDir>
 #include <QDragEnterEvent>
 #include <QFileSystemModel>
@@ -64,6 +65,28 @@ namespace
 	Back(const ContentExplorerWindow& window)
 	{
 		return window.findChild<QToolButton*>("BackButton");
+	}
+
+	QComboBox*
+	Mode(const ContentExplorerWindow& window)
+	{
+		return window.findChild<QComboBox*>("ModeSelector");
+	}
+
+	/**
+	 * Picks a mode the way a user does. The blocker matters: `setCurrentIndex` emits
+	 * `currentIndexChanged` by itself, so without it this would switch the mode even if the window
+	 * listened for the wrong signal, and the test could not tell the two apart.
+	 */
+	void
+	PickMode(const ContentExplorerWindow& window, const int index)
+	{
+		auto* mode = Mode(window);
+		{
+			const QSignalBlocker quiet(mode);
+			mode->setCurrentIndex(index);
+		}
+		Q_EMIT mode->activated(index);
 	}
 
 	/** The directory the grid is rooted at, or empty before the explorer has a project. */
@@ -188,7 +211,7 @@ TEST_CASE("The explorer previews a texture with no outside wiring", "[contentexp
 	REQUIRE(icon.pixmap(64).toImage().convertToFormat(QImage::Format_RGBA8888) == preview);
 }
 
-TEST_CASE("The content explorer is rooted at the project's data directory", "[contentexplorer]")
+TEST_CASE("The content explorer is rooted at the project's authored half", "[contentexplorer]")
 {
 	const Sandbox         sandbox;
 	ContentExplorerWindow window(nullptr, NothingOpen());
@@ -198,13 +221,34 @@ TEST_CASE("The content explorer is rooted at the project's data directory", "[co
 	auto* model = qobject_cast<QFileSystemModel*>(Hierarchy(window)->model());
 	REQUIRE(model != nullptr);
 
-	// It shows the project's Data tree and nothing above it: the rest of the disk is not the
-	// project's business.
-	REQUIRE(QDir(model->filePath(Hierarchy(window)->rootIndex())) == QDir(sandbox.DataRootPath()));
+	// One level inside the data root, not at it. `Derived/` is not hidden row by row -- it is
+	// simply not somewhere the views can navigate, which is a property of where they point.
+	REQUIRE(
+		QDir(model->filePath(Hierarchy(window)->rootIndex())) ==
+		QDir(sandbox.DataRootPath() + "/Authored"));
 
-	// And it fills in, on a worker thread. Two rows: the data root holds the authored half and the
-	// derived one, and every category Project::Create scaffolds sits under one of them.
-	REQUIRE(WaitFor([&] { return model->rowCount(Hierarchy(window)->rootIndex()) == 2; }));
+	// And it fills in, on a worker thread. Four rows: every authored category Project::Create
+	// scaffolds -- Meshes, Materials, Environments, Levels -- and nothing derived.
+	REQUIRE(WaitFor([&] { return model->rowCount(Hierarchy(window)->rootIndex()) == 4; }));
+}
+
+TEST_CASE("The explorer resolves against the data root it is not rooted at", "[contentexplorer]")
+{
+	// Moving where the views point must not move what a path means: a key is data-root-relative,
+	// and every reference stored in the project is written against that. This is the one thing
+	// rooting the views one level in could have broken silently.
+	const Sandbox sandbox;
+	Touch(sandbox, "Authored/Materials/kirk/Body.bmaterial");
+
+	QFileSystemModel model;
+	model.setRootPath(sandbox.DataRootPath());
+
+	const QModelIndex index =
+		IndexFor(model, sandbox.DataRootPath() + "/Authored/Materials/kirk/Body.bmaterial");
+
+	CHECK(
+		editor::AssetAt(model, index, sandbox.DataRootPath()) ==
+		QString("Authored/Materials/kirk/Body.bmaterial"));
 }
 
 TEST_CASE("Files are dragged out of the explorer rather than moved", "[contentexplorer]")
@@ -302,9 +346,17 @@ TEST_CASE("A right-clicked asset resolves to its path under the data root", "[co
 	          "Textures/basecolor_700a22db7b7ef785.ktx2" },
 		Case{ "Derived/SourceTextures/kirk/tex0.ktx2", "Derived/SourceTextures/kirk/tex0.ktx2" },
 
+		// The source row: not an asset kind, but the one a person renames, and its group moves
+		// with it. Only where sources live -- see the derived spelling below.
+		Case{ "Authored/Meshes/tree.glb", "Authored/Meshes/tree.glb" },
+
 		// Deleting these is not this window's business, whatever their suffix suggests.
 		Case{ "Derived/Meshes/notes.txt", "" },
-		Case{ "Derived/Meshes/tree.glb", "" },  // importable, but not yet an asset of the project
+
+		// The sidecar is machinery, and taking it alone would orphan everything it names -- so it
+		// is refused here, not merely hidden from the rows.
+		Case{ "Authored/Meshes/tree.bimport", "" },
+		Case{ "Derived/Meshes/tree.glb", "" },  // importable, but left there rather than imported
 		Case{ "Derived/Meshes/tree.BMESH",
 	          "Derived/Meshes/tree.BMESH" });  // the suffix decides, case and all
 
@@ -491,7 +543,7 @@ TEST_CASE("Back has nowhere to go until the explorer has been somewhere", "[cont
 TEST_CASE("Back returns the grid to the folder shown before", "[contentexplorer]")
 {
 	const Sandbox sandbox;
-	Touch(sandbox, "Derived/SourceTextures/kirk/tex0.ktx2");
+	Touch(sandbox, "Authored/Materials/kirk/Body.bmaterial");
 
 	ContentExplorerWindow window(nullptr, NothingOpen());
 	window.SetRootPath(sandbox.DataRootPath());
@@ -500,7 +552,7 @@ TEST_CASE("Back returns the grid to the folder shown before", "[contentexplorer]
 	auto* model = qobject_cast<QFileSystemModel*>(tree->model());
 	REQUIRE(model != nullptr);
 
-	const QString folder = sandbox.DataRootPath() + "/Derived/SourceTextures/kirk";
+	const QString folder = sandbox.DataRootPath() + "/Authored/Materials/kirk";
 	tree->setCurrentIndex(IndexFor(*model, folder));
 
 	REQUIRE(QDir(Shown(window)) == QDir(folder));
@@ -508,7 +560,7 @@ TEST_CASE("Back returns the grid to the folder shown before", "[contentexplorer]
 
 	Back(window)->click();
 
-	CHECK(QDir(Shown(window)) == QDir(sandbox.DataRootPath()));
+	CHECK(QDir(Shown(window)) == QDir(sandbox.DataRootPath() + "/Authored"));
 
 	// Back to the start, so there is nothing behind it again.
 	CHECK(!Back(window)->isEnabled());
@@ -517,8 +569,8 @@ TEST_CASE("Back returns the grid to the folder shown before", "[contentexplorer]
 TEST_CASE("Back skips a folder that has been deleted since it was shown", "[contentexplorer]")
 {
 	const Sandbox sandbox;
-	Touch(sandbox, "Derived/SourceTextures/kirk/tex0.ktx2");
-	Touch(sandbox, "Derived/SourceTextures/spock/tex0.ktx2");
+	Touch(sandbox, "Authored/Materials/kirk/Body.bmaterial");
+	Touch(sandbox, "Authored/Materials/spock/Body.bmaterial");
 
 	ContentExplorerWindow window(nullptr, NothingOpen());
 	window.SetRootPath(sandbox.DataRootPath());
@@ -527,25 +579,23 @@ TEST_CASE("Back skips a folder that has been deleted since it was shown", "[cont
 	auto* model = qobject_cast<QFileSystemModel*>(tree->model());
 	REQUIRE(model != nullptr);
 
-	tree->setCurrentIndex(
-		IndexFor(*model, sandbox.DataRootPath() + "/Derived/SourceTextures/kirk"));
-	tree->setCurrentIndex(
-		IndexFor(*model, sandbox.DataRootPath() + "/Derived/SourceTextures/spock"));
+	tree->setCurrentIndex(IndexFor(*model, sandbox.DataRootPath() + "/Authored/Materials/kirk"));
+	tree->setCurrentIndex(IndexFor(*model, sandbox.DataRootPath() + "/Authored/Materials/spock"));
 
 	// Removed from underneath the editor, as deleting it in Finder would. Nothing pumps the event
 	// loop between here and the click, so the model has not been told either -- which is the case
 	// this pins: the history is checked against the disk, not against what the model still lists.
-	fs::remove_all(sandbox.DataRoot() / "Derived/SourceTextures" / "kirk");
+	fs::remove_all(sandbox.DataRoot() / "Authored/Materials" / "kirk");
 
 	Back(window)->click();
 
-	CHECK(QDir(Shown(window)) == QDir(sandbox.DataRootPath()));
+	CHECK(QDir(Shown(window)) == QDir(sandbox.DataRootPath() + "/Authored"));
 }
 
 TEST_CASE("Back moves the tree's selection with the grid", "[contentexplorer]")
 {
 	const Sandbox sandbox;
-	Touch(sandbox, "Derived/SourceTextures/kirk/tex0.ktx2");
+	Touch(sandbox, "Authored/Materials/kirk/Body.bmaterial");
 
 	ContentExplorerWindow window(nullptr, NothingOpen());
 	window.SetRootPath(sandbox.DataRootPath());
@@ -554,7 +604,7 @@ TEST_CASE("Back moves the tree's selection with the grid", "[contentexplorer]")
 	auto* model = qobject_cast<QFileSystemModel*>(tree->model());
 	REQUIRE(model != nullptr);
 
-	const QString parent = sandbox.DataRootPath() + "/Derived/SourceTextures";
+	const QString parent = sandbox.DataRootPath() + "/Authored/Materials";
 	tree->setCurrentIndex(IndexFor(*model, parent));
 	tree->setCurrentIndex(IndexFor(*model, parent + "/kirk"));
 
@@ -565,12 +615,15 @@ TEST_CASE("Back moves the tree's selection with the grid", "[contentexplorer]")
 	CHECK(QDir(model->filePath(tree->currentIndex())) == QDir(parent));
 }
 
-TEST_CASE("A .bvat is a build product the explorer does not list", "[contentexplorer]")
+TEST_CASE("The explorer lists a source but not the document beside it", "[contentexplorer]")
 {
+	// One row per model. The `.bimport` carries the import settings and the `.glb` is the thing a
+	// person recognises, so the sidecar is not listed -- Unity hides a `.meta` and Godot a
+	// `.import` for the same reason.
 	const Sandbox sandbox;
-	Touch(sandbox, "Derived/Meshes/unit.bmesh");
-	Touch(sandbox, "Derived/Meshes/unit.bvat");
-	Touch(sandbox, "Derived/Meshes/UNIT2.BVAT");
+	Touch(sandbox, "Authored/Meshes/kirk.glb");
+	Touch(sandbox, "Authored/Meshes/kirk.bimport");
+	Touch(sandbox, "Authored/Meshes/SPOCK.BIMPORT");
 
 	ContentExplorerWindow window(nullptr, NothingOpen());
 	window.SetRootPath(sandbox.DataRootPath());
@@ -579,27 +632,330 @@ TEST_CASE("A .bvat is a build product the explorer does not list", "[contentexpl
 	auto* grid  = qobject_cast<QFileSystemModel*>(files->model());
 	REQUIRE(grid != nullptr);
 
-	// Root the grid at Derived/Meshes/ the way the user does: through the tree.
+	// Root the grid at Authored/Meshes/ the way the user does: through the tree.
 	auto* tree      = Hierarchy(window);
 	auto* hierarchy = qobject_cast<QFileSystemModel*>(tree->model());
 	REQUIRE(hierarchy != nullptr);
-	const QString meshes = QString::fromStdString((sandbox.DataRoot() / "Derived/Meshes").string());
+	const QString meshes =
+		QString::fromStdString((sandbox.DataRoot() / "Authored/Meshes").string());
 	tree->setCurrentIndex(IndexFor(*hierarchy, meshes));
 	REQUIRE(WaitFor([&] { return Shown(window) == meshes; }));
 
-	const QModelIndex bmesh = IndexFor(*grid, Touch(sandbox, "Derived/Meshes/unit.bmesh"));
-	const QModelIndex bvat  = IndexFor(*grid, Touch(sandbox, "Derived/Meshes/unit.bvat"));
-	const QModelIndex upper = IndexFor(*grid, Touch(sandbox, "Derived/Meshes/UNIT2.BVAT"));
+	const QModelIndex source   = IndexFor(*grid, meshes + "/kirk.glb");
+	const QModelIndex document = IndexFor(*grid, meshes + "/kirk.bimport");
+	const QModelIndex upper    = IndexFor(*grid, meshes + "/SPOCK.BIMPORT");
 
 	// Rows arrive asynchronously; the hider runs off rowsInserted, so wait for its verdicts.
-	CHECK(WaitFor([&] { return files->isRowHidden(bvat.row()); }));
+	CHECK(WaitFor([&] { return files->isRowHidden(document.row()); }));
 	CHECK(WaitFor([&] { return files->isRowHidden(upper.row()); }));
-	CHECK_FALSE(files->isRowHidden(bmesh.row()));
+	CHECK_FALSE(files->isRowHidden(source.row()));
 
 	// The tree hides them too, under the expanded folder.
 	tree->expand(IndexFor(*hierarchy, meshes));
-	const QModelIndex treeBvat = IndexFor(*hierarchy, meshes + "/unit.bvat");
-	CHECK(WaitFor([&] { return tree->isRowHidden(treeBvat.row(), treeBvat.parent()); }));
-	const QModelIndex treeBmesh = IndexFor(*hierarchy, meshes + "/unit.bmesh");
-	CHECK_FALSE(tree->isRowHidden(treeBmesh.row(), treeBmesh.parent()));
+	const QModelIndex treeDocument = IndexFor(*hierarchy, meshes + "/kirk.bimport");
+	CHECK(WaitFor([&] { return tree->isRowHidden(treeDocument.row(), treeDocument.parent()); }));
+	const QModelIndex treeSource = IndexFor(*hierarchy, meshes + "/kirk.glb");
+	CHECK_FALSE(tree->isRowHidden(treeSource.row(), treeSource.parent()));
+}
+
+TEST_CASE("A derived file is not a person's to rename or delete", "[contentexplorer]")
+{
+	// The views no longer reach these at all, which is what makes this unreachable in practice --
+	// and exactly why it is written down rather than left to be a consequence of where a view is
+	// rooted. Losing an authored file loses work; a derived one is a bake's to write back.
+	CHECK_FALSE(editor::IsActionableAsset("Derived/Meshes/unit.bmesh"));
+	CHECK_FALSE(editor::IsActionableAsset("Derived/Skeletons/rig.bskel"));
+	CHECK_FALSE(editor::IsActionableAsset("Derived/SourceTextures/kirk/tex0.ktx2"));
+	CHECK_FALSE(editor::IsActionableAsset("Derived/Sky/studio.bsky"));
+
+	// A directory under it is refused the same way: what is in it is what it would take.
+	CHECK_FALSE(editor::IsActionableAsset("Derived/SourceTextures/kirk"));
+
+	CHECK(editor::IsActionableAsset("Authored/Materials/skin.bmaterial"));
+	CHECK(editor::IsActionableAsset("Authored/Meshes/kirk.glb"));
+	CHECK(editor::IsActionableAsset("Authored/Environments/studio.benv"));
+	CHECK(editor::IsActionableAsset("Authored/Materials/kirk"));
+
+	// Normalized first, so a key cannot dodge the rule by spelling its way out and back in.
+	CHECK_FALSE(editor::IsActionableAsset("Authored/../Derived/Meshes/unit.bmesh"));
+
+	CHECK_FALSE(editor::IsActionableAsset({}));
+}
+
+TEST_CASE("The derived half is not somewhere the views can be sent", "[contentexplorer]")
+{
+	// setRootIndex limits what a view *draws*, not what setCurrentIndex may select, and
+	// currentChanged navigates -- so the model still holds an index for every derived directory,
+	// and a programmatic selection would re-root the grid onto one. That is the shape a later
+	// "reveal in explorer", a search box or a drop handler would arrive in.
+	const Sandbox sandbox;
+	Touch(sandbox, "Derived/SourceTextures/kirk/tex0.ktx2");
+	Touch(sandbox, "Authored/Materials/kirk/Body.bmaterial");
+
+	ContentExplorerWindow window(nullptr, NothingOpen());
+	window.SetRootPath(sandbox.DataRootPath());
+
+	auto* tree  = Hierarchy(window);
+	auto* model = qobject_cast<QFileSystemModel*>(tree->model());
+	REQUIRE(model != nullptr);
+
+	const QString authored = sandbox.DataRootPath() + "/Authored";
+	REQUIRE(QDir(Shown(window)) == QDir(authored));
+
+	SECTION("a derived folder selected in the tree moves nothing")
+	{
+		const QString derived = sandbox.DataRootPath() + "/Derived/SourceTextures/kirk";
+		tree->setCurrentIndex(IndexFor(*model, derived));
+
+		CHECK(QDir(Shown(window)) == QDir(authored));
+		CHECK(!Back(window)->isEnabled());
+	}
+
+	SECTION("nor does the data root above it")
+	{
+		tree->setCurrentIndex(IndexFor(*model, sandbox.DataRootPath()));
+
+		CHECK(QDir(Shown(window)) == QDir(authored));
+		CHECK(!Back(window)->isEnabled());
+	}
+
+	SECTION("and an authored folder still moves the grid")
+	{
+		const QString materials = sandbox.DataRootPath() + "/Authored/Materials/kirk";
+		tree->setCurrentIndex(IndexFor(*model, materials));
+
+		CHECK(WaitFor([&] { return QDir(Shown(window)) == QDir(materials); }));
+		CHECK(Back(window)->isEnabled());
+	}
+}
+
+TEST_CASE("A folder whose name begins with dots is still the project's", "[contentexplorer]")
+{
+	// The bug the one containment answer fixes. AssetAt rejected on a bare `startsWith("..")`,
+	// which is a test on the *key*, not on its first component -- so a folder at the data root
+	// named `..hidden` read as a climb out of the project and was unactionable: no rename, no
+	// delete, for a folder the user made and can see.
+	const Sandbox sandbox;
+	Touch(sandbox, "..hidden/Body.bmaterial");
+
+	QFileSystemModel model;
+	model.setRootPath(sandbox.DataRootPath());
+
+	const QModelIndex folder = IndexFor(model, sandbox.DataRootPath() + "/..hidden");
+	REQUIRE(model.isDir(folder));
+
+	CHECK(editor::AssetAt(model, folder, sandbox.DataRootPath()) == QString("..hidden"));
+
+	// The climb itself is still refused: a folder named `..` is not a folder at all.
+	CHECK(
+		editor::AssetAt(model, IndexFor(model, sandbox.DataRootPath()), sandbox.DataRootPath())
+			.isEmpty());
+}
+
+TEST_CASE("A held file is held whatever its name contains", "[contentexplorer]")
+{
+	// The regression the naive convergence would have caused, and the reason GetKeyUnder is not
+	// IsContainedRelativePath: this gate is what stops a Delete going through while a panel still
+	// has the file open. A name it read as "outside its own folder" would open that gate.
+	const Sandbox sandbox;
+	const QString root = sandbox.DataRootPath();
+
+	const QString awkward = Touch(sandbox, "Authored/Materials/a:b.bmaterial");
+	const QString dotted  = Touch(sandbox, "Authored/Materials/..hidden/Body.bmaterial");
+
+	const QString materials = QDir(root).absoluteFilePath("Authored/Materials");
+
+	CHECK(editor::IsHeldOpen({ awkward }, materials, true));
+	CHECK(editor::IsHeldOpen({ dotted }, materials, true));
+
+	// The folder still holds itself, so deleting it takes what is open inside it.
+	CHECK(editor::IsHeldOpen({ materials }, materials, true));
+
+	// And something genuinely elsewhere is still not held.
+	CHECK_FALSE(
+		editor::IsHeldOpen(
+			{ QDir(root).absoluteFilePath("Authored/Environments/studio.benv") },
+			materials,
+			true));
+}
+
+TEST_CASE("A mode is a browse root and nothing else", "[assetrules][textures]")
+{
+	const QString root = QStringLiteral("/projects/MyGame/Data");
+
+	CHECK(
+		editor::GetBrowseRootFor(root, editor::BrowseMode::kAssets) ==
+		QString("/projects/MyGame/Data/Authored"));
+
+	CHECK(
+		editor::GetBrowseRootFor(root, editor::BrowseMode::kTextures) ==
+		QString("/projects/MyGame/Data/Derived/SourceTextures"));
+
+	// Before a project is open there is no root to be under, and neither mode invents one.
+	CHECK(editor::GetBrowseRootFor({}, editor::BrowseMode::kAssets).isEmpty());
+	CHECK(editor::GetBrowseRootFor({}, editor::BrowseMode::kTextures).isEmpty());
+
+	// Textures are derived, and ADR-6 says a person never edits one.
+	CHECK(editor::IsEditableMode(editor::BrowseMode::kAssets));
+	CHECK_FALSE(editor::IsEditableMode(editor::BrowseMode::kTextures));
+}
+
+TEST_CASE("The texture viewer roots at what the imports extracted", "[contentexplorer][textures]")
+{
+	const Sandbox sandbox;
+	Touch(sandbox, "Derived/SourceTextures/kirk/body_bc.ktx2");
+	Touch(sandbox, "Authored/Materials/Body.bmaterial");
+
+	ContentExplorerWindow window(nullptr, NothingOpen());
+	window.SetRootPath(sandbox.DataRootPath());
+
+	const QString authored = sandbox.DataRootPath() + "/Authored";
+	const QString textures = sandbox.DataRootPath() + "/Derived/SourceTextures";
+
+	REQUIRE(QDir(Shown(window)) == QDir(authored));
+
+	PickMode(window, 1);
+	CHECK(QDir(Shown(window)) == QDir(textures));
+	auto* tree      = Hierarchy(window);
+	auto* treeModel = qobject_cast<QFileSystemModel*>(tree->model());
+	REQUIRE(treeModel != nullptr);
+	CHECK(QDir(treeModel->filePath(tree->rootIndex())) == QDir(textures));
+
+	SECTION("and going back to assets returns to the authored half")
+	{
+		PickMode(window, 0);
+		CHECK(QDir(Shown(window)) == QDir(authored));
+	}
+
+	SECTION("Back does not cross a mode")
+	{
+		// The trail behind it points outside the root the new mode allows, so it is dropped rather
+		// than offered and then refused by the navigation guard.
+		CHECK(!Back(window)->isEnabled());
+	}
+
+	SECTION("and the guard now holds the other way round")
+	{
+		tree->setCurrentIndex(IndexFor(*treeModel, authored));
+		CHECK(QDir(Shown(window)) == QDir(textures));
+	}
+}
+
+TEST_CASE("The texture viewer is read-only", "[contentexplorer][textures]")
+{
+	const Sandbox sandbox;
+	Touch(sandbox, "Derived/SourceTextures/kirk/body_bc.ktx2");
+
+	ContentExplorerWindow window(nullptr, NothingOpen());
+	window.SetRootPath(sandbox.DataRootPath());
+
+	const QString source = sandbox.DataRootPath() + "/incoming.glb";
+
+	// Importing is what the explorer takes a drop for, and an import writes into the project.
+	REQUIRE(AcceptsFile(window, source));
+
+	PickMode(window, 1);
+	CHECK_FALSE(AcceptsFile(window, source));
+
+	SECTION("and takes it again once the mode does")
+	{
+		PickMode(window, 0);
+		CHECK(AcceptsFile(window, source));
+	}
+}
+
+TEST_CASE("A mode whose root is missing is refused, not repaired", "[contentexplorer][textures]")
+{
+	// Project::Create scaffolds every required directory, SourceTextures among them, so this is a
+	// project whose layout was broken behind its back. Entering the mode anyway would root a
+	// QFileSystemModel at nothing, and an unrooted one lists the whole filesystem.
+	const Sandbox sandbox;
+
+	const QString textures = sandbox.DataRootPath() + "/Derived/SourceTextures";
+	REQUIRE(QDir(textures).exists());
+	REQUIRE(QDir(textures).removeRecursively());
+
+	ContentExplorerWindow window(nullptr, NothingOpen());
+	window.SetRootPath(sandbox.DataRootPath());
+
+	const QString authored = sandbox.DataRootPath() + "/Authored";
+	REQUIRE(QDir(Shown(window)) == QDir(authored));
+
+	PickMode(window, 1);
+
+	// Still on the authored half, and nothing was created to get there.
+	CHECK(QDir(Shown(window)) == QDir(authored));
+	CHECK_FALSE(QDir(textures).exists());
+
+	// The selector does not stand on a mode the window refused to enter.
+	CHECK(Mode(window)->currentIndex() == 0);
+}
+
+TEST_CASE("Only a user's pick re-roots the views", "[contentexplorer][textures]")
+{
+	// `activated` fires for a pick and not for a programmatic change. Assigning the combo -- a
+	// restore, a reset, anything that is not a person -- must not move the views.
+	const Sandbox sandbox;
+	Touch(sandbox, "Derived/SourceTextures/kirk/body_bc.ktx2");
+
+	ContentExplorerWindow window(nullptr, NothingOpen());
+	window.SetRootPath(sandbox.DataRootPath());
+
+	const QString authored = sandbox.DataRootPath() + "/Authored";
+	REQUIRE(QDir(Shown(window)) == QDir(authored));
+
+	Mode(window)->setCurrentIndex(1);
+	CHECK(QDir(Shown(window)) == QDir(authored));
+}
+
+TEST_CASE("A source row is what a rename is asked of", "[contentexplorer][sourcerow]")
+{
+	const Sandbox sandbox;
+	const QString source = Touch(sandbox, "Authored/Meshes/kirk.glb");
+	Touch(sandbox, "Authored/Meshes/kirk.bimport");
+	Touch(sandbox, "Derived/Meshes/kirk.bmesh");
+
+	ContentExplorerWindow window(nullptr, NothingOpen());
+	window.SetRootPath(sandbox.DataRootPath());
+
+	auto* files = Files(window);
+	auto* model = qobject_cast<QFileSystemModel*>(files->model());
+	REQUIRE(model != nullptr);
+
+	const QString dataRoot = sandbox.DataRootPath();
+
+	// The row a person sees for a model. `assetTypeFromExtension` does not know a `.glb`, so before
+	// this it answered empty and the row carried no menu at all.
+	CHECK(
+		editor::AssetAt(*model, IndexFor(*model, source), dataRoot) ==
+		QString("Authored/Meshes/kirk.glb"));
+
+	// Data-root-relative, not browse-root-relative: the views sit at Authored/ and the key does not.
+	CHECK(editor::AssetAt(*model, IndexFor(*model, source), dataRoot).startsWith("Authored/"));
+}
+
+TEST_CASE("A source renames but does not delete", "[assetrules][sourcerow]")
+{
+	// Both halves of ADR-8 in one place: `planDeletion` throws for a `.glb` -- it is not an asset
+	// kind -- and grouped deletion is the non-goal, so the row that gained a Rename must not gain a
+	// Delete beside it.
+	CHECK(editor::IsActionableAsset("Authored/Meshes/kirk.glb"));
+	CHECK_FALSE(editor::IsRemovableAsset("Authored/Meshes/kirk.glb"));
+
+	// Case is not what tells them apart.
+	CHECK_FALSE(editor::IsRemovableAsset("Authored/Meshes/kirk.GLB"));
+
+	SECTION("where everything else authored is both")
+	{
+		CHECK(editor::IsRemovableAsset("Authored/Materials/Body.bmaterial"));
+		CHECK(editor::IsRemovableAsset("Authored/Environments/day.benv"));
+		CHECK(editor::IsRemovableAsset("Authored/Meshes"));
+	}
+
+	SECTION("and everything derived is neither")
+	{
+		CHECK_FALSE(editor::IsActionableAsset("Derived/Meshes/kirk.bmesh"));
+		CHECK_FALSE(editor::IsRemovableAsset("Derived/Meshes/kirk.bmesh"));
+		CHECK_FALSE(editor::IsRemovableAsset("Derived/SourceTextures/kirk/body_bc.ktx2"));
+	}
 }

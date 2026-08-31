@@ -32,6 +32,84 @@ namespace
 	{
 		return root.Source().RenameAsset(planRename(root.Scan(), from, to));
 	}
+
+	/** The smallest real rig: one bone at the bind pose. */
+	Skeleton
+	MakeRig()
+	{
+		auto skeleton   = Skeleton();
+		auto bone       = Bone();
+		bone.bindPose   = { glm::vec3(0.0f), glm::quat(1.0f, 0.0f, 0.0f, 0.0f), glm::vec3(1.0f) };
+		bone.parent     = c_InvalidIndex;
+		bone.nameOffset = skeleton.stringPool.add("root");
+		skeleton.bones.push_back(bone);
+		skeleton.bones[0].inverseBind = glm::inverse(bindPoseModelTransforms(skeleton)[0]);
+		return skeleton;
+	}
+
+	/** Every key one import writes, so no test re-spells a category. */
+	struct Import
+	{
+		std::string source;
+		std::string document;
+		std::string mesh;
+		std::string skeleton;  // empty for a source carrying no skin
+		std::string animations;
+	};
+
+	/**
+	 * A whole import on disk under `stem`: the `.glb`, the containers it produced, and the
+	 * `.bimport` naming them in `outputs`. `rigged` is the difference between the two shapes an
+	 * import has -- three containers, or a mesh alone.
+	 */
+	Import
+	WriteImport(const DataRoot& root, const std::string& stem, bool rigged)
+	{
+		auto out       = Import();
+		out.source     = "Authored/Meshes/" + stem + ".glb";
+		out.document   = "Authored/Meshes/" + stem + ".bimport";
+		out.mesh       = "Derived/Meshes/" + stem + ".bmesh";
+		out.skeleton   = rigged ? "Derived/Skeletons/" + stem + ".bskel" : std::string();
+		out.animations = rigged ? "Derived/Animations/" + stem + ".banim" : std::string();
+
+		auto document    = ImportDocument();
+		document.outputs = { out.mesh };
+
+		if (rigged)
+		{
+			const Skeleton rig = MakeRig();
+			fs::create_directories(root.path / "Derived/Skeletons");
+			StoreAt(root.path).Save(rig, out.skeleton);
+
+			auto animations              = AnimationSet();
+			animations.skeleton          = out.skeleton;
+			animations.skeletonSignature = skeletonSignature(rig);
+			animations.boneCount         = 1;
+
+			auto clip       = AnimationClip();
+			clip.nameOffset = animations.stringPool.add("rest");
+			clip.frameCount = 1;
+			clip.sampleRate = 30.0f;
+			animations.clips.push_back(clip);
+			animations.samples.push_back(rig.bones[0].bindPose);
+
+			fs::create_directories(root.path / "Derived/Animations");
+			StoreAt(root.path).Save(animations, out.animations);
+
+			document.skeleton = out.skeleton;
+			document.outputs  = { out.animations, out.mesh, out.skeleton };
+		}
+
+		SaveMesh(root, (stem + ".bmesh").c_str(), {}, out.skeleton);
+
+		fs::create_directories(root.path / "Authored/Meshes");
+		core::file::write_atomic(
+			root.path / out.document,
+			AssetCodec<ImportDocument>::Serialize(document));
+		std::ofstream(root.path / out.source) << "source";
+
+		return out;
+	}
 }
 
 TEST_CASE("Renaming a texture rewrites the graph that compiles into its routes", "[assetrename]")
@@ -646,18 +724,199 @@ TEST_CASE("Renaming a material re-points the import document that binds it", "[a
 	CHECK(rewritten.bindings[0].material == "Authored/Materials/new.bmaterial");
 }
 
-TEST_CASE("An import document cannot be renamed away from its source", "[assetrename]")
+TEST_CASE("Renaming an imported source moves everything it produced", "[assetrename]")
 {
-	const DataRoot root("bernini_rename_importdoc_refuse");
+	const DataRoot root("bernini_rename_import_group");
+	const Import   before = WriteImport(root, "kirk", /*rigged*/ true);
 
-	fs::create_directories(root.path / "Authored/Meshes");
+	REQUIRE(
+		Rename(root, before.source, "Authored/Meshes/hero.glb").status == RenameStatus::kRenamed);
+
+	// Every file the import wrote is named from the source, so none of them can stay put.
+	for (const std::string* was :
+	     { &before.source, &before.document, &before.mesh, &before.skeleton, &before.animations })
+		CHECK_FALSE(fs::exists(root.path / *was));
+
+	const Import after = { "Authored/Meshes/hero.glb",
+		                   "Authored/Meshes/hero.bimport",
+		                   "Derived/Meshes/hero.bmesh",
+		                   "Derived/Skeletons/hero.bskel",
+		                   "Derived/Animations/hero.banim" };
+
+	for (const std::string* now :
+	     { &after.source, &after.document, &after.mesh, &after.skeleton, &after.animations })
+		CHECK(fs::exists(root.path / *now));
+
+	// An outputs entry naming a file that is gone reads as absent to Reimport, which would write
+	// the container straight back under the old name.
+	const ImportDocument document = loadImportDocument(root.Source().GetFiles(), after.document);
+	CHECK(document.skeleton == after.skeleton);
+	CHECK(
+		document.outputs ==
+		std::vector<std::string>{ after.animations, after.mesh, after.skeleton });
+
+	CHECK(loadMeshRefs(root.path / after.mesh).skeleton == after.skeleton);
+	CHECK(loadAnimationSkeletonPath(root.path / after.animations) == after.skeleton);
+}
+
+TEST_CASE("A rig a second source binds follows the source that produced it", "[assetrename]")
+{
+	// The one edge that makes a group rename more than five independent moves: a `.bskel` is
+	// produced by one import and may be *bound* by another, whose document stores the path. Move
+	// the rig without rewriting that document and the second model is skinned to nothing.
+	const DataRoot root("bernini_rename_import_shared_rig");
+	const Import   kirk = WriteImport(root, "kirk", /*rigged*/ true);
+
+	auto bound     = ImportDocument();
+	bound.skeleton = kirk.skeleton;
+	bound.outputs  = { "Derived/Meshes/spock.bmesh" };
+	SaveMesh(root, "spock.bmesh", {}, kirk.skeleton);
 	core::file::write_atomic(
-		root.path / "Authored/Meshes" / "kirk.bimport",
-		AssetCodec<ImportDocument>::Serialize(ImportDocument{}));
-	std::ofstream(root.path / "Authored/Meshes" / "kirk.glb") << "source";
+		root.path / "Authored/Meshes" / "spock.bimport",
+		AssetCodec<ImportDocument>::Serialize(bound));
+	std::ofstream(root.path / "Authored/Meshes" / "spock.glb") << "source";
 
-	// The source key is derived from the document's own path; a lone rename would orphan the
-	// pair. Renaming the directory moves them together and stays allowed.
-	CHECK_THROWS(
-		planRename(root.Scan(), "Authored/Meshes/kirk.bimport", "Authored/Meshes/hero.bimport"));
+	REQUIRE(Rename(root, kirk.source, "Authored/Meshes/hero.glb").status == RenameStatus::kRenamed);
+
+	const ImportDocument after =
+		loadImportDocument(root.Source().GetFiles(), "Authored/Meshes/spock.bimport");
+	CHECK(after.skeleton == "Derived/Skeletons/hero.bskel");
+
+	// The document is only half of what the second import says about the rig: its `.bmesh` stores
+	// the same path as its own edge, and a mesh left naming the old file is skinned to nothing.
+	CHECK(
+		loadMeshRefs(root.path / "Derived/Meshes/spock.bmesh").skeleton ==
+		"Derived/Skeletons/hero.bskel");
+
+	// The second source's own outputs are none of this rename's business.
+	CHECK(after.outputs == std::vector<std::string>{ "Derived/Meshes/spock.bmesh" });
+	CHECK(fs::exists(root.path / "Derived/Meshes/spock.bmesh"));
+}
+
+TEST_CASE("An import with no rig moves the one container it has", "[assetrename]")
+{
+	const DataRoot root("bernini_rename_import_norig");
+	const Import   before = WriteImport(root, "prop", /*rigged*/ false);
+
+	REQUIRE(
+		Rename(root, before.source, "Authored/Meshes/crate.glb").status == RenameStatus::kRenamed);
+
+	CHECK(fs::exists(root.path / "Authored/Meshes/crate.glb"));
+	CHECK(fs::exists(root.path / "Authored/Meshes/crate.bimport"));
+	CHECK(fs::exists(root.path / "Derived/Meshes/crate.bmesh"));
+	CHECK_FALSE(fs::exists(root.path / before.mesh));
+
+	const ImportDocument document =
+		loadImportDocument(root.Source().GetFiles(), "Authored/Meshes/crate.bimport");
+	CHECK(document.outputs == std::vector<std::string>{ "Derived/Meshes/crate.bmesh" });
+}
+
+TEST_CASE("An import document names the same move its source does", "[assetrename]")
+{
+	// A `.bimport` used to be refused outright, because renaming it alone orphaned the `.glb` whose
+	// key is derived from its path. It now carries the group like the source does -- the two are one
+	// asset under two names, so either spelling has to reach the same plan.
+	const DataRoot root("bernini_rename_import_bydocument");
+	const Import   before = WriteImport(root, "kirk", /*rigged*/ false);
+
+	const RenamePlan plan =
+		planRename(root.Scan(), before.document, "Authored/Meshes/hero.bimport");
+	CHECK(plan.subject.from == before.document);
+	CHECK(plan.assetType == AssetType::kImportDocument);
+
+	REQUIRE(root.Source().RenameAsset(plan).status == RenameStatus::kRenamed);
+
+	CHECK(fs::exists(root.path / "Authored/Meshes/hero.glb"));
+	CHECK(fs::exists(root.path / "Authored/Meshes/hero.bimport"));
+	CHECK_FALSE(fs::exists(root.path / before.source));
+}
+
+TEST_CASE("An output taken off its source's stem stays where it is", "[assetrename]")
+{
+	// Its name no longer says it came from this source, so the group has no claim on it -- but the
+	// document still names it, and that reference has to survive the source moving.
+	const DataRoot root("bernini_rename_import_odd_stem");
+	const Import   before = WriteImport(root, "kirk", /*rigged*/ false);
+
+	REQUIRE(
+		Rename(root, before.mesh, "Derived/Meshes/other.bmesh").status == RenameStatus::kRenamed);
+	REQUIRE(
+		Rename(root, before.source, "Authored/Meshes/hero.glb").status == RenameStatus::kRenamed);
+
+	CHECK(fs::exists(root.path / "Derived/Meshes/other.bmesh"));
+	CHECK_FALSE(fs::exists(root.path / "Derived/Meshes/hero.bmesh"));
+
+	const ImportDocument document =
+		loadImportDocument(root.Source().GetFiles(), "Authored/Meshes/hero.bimport");
+	CHECK(document.outputs == std::vector<std::string>{ "Derived/Meshes/other.bmesh" });
+}
+
+TEST_CASE("A missing source fails the rename, where a missing output does not", "[assetrename]")
+{
+	// The asymmetry the group rests on. A container is cache -- `Reimport` writes it back from the
+	// source, so one already swept has nothing to move and the rename carries on. The `.glb` is
+	// what `Reimport` reads, so nothing can put *it* back: a rename that proceeded without it would
+	// report success and leave the one irreplaceable file under neither name.
+	SECTION("a swept output is skipped")
+	{
+		const DataRoot root("bernini_rename_import_swept_output");
+		const Import   before = WriteImport(root, "kirk", /*rigged*/ false);
+
+		const RenamePlan plan = planRename(root.Scan(), before.source, "Authored/Meshes/hero.glb");
+		fs::remove(root.path / before.mesh);
+
+		REQUIRE(root.Source().RenameAsset(plan).status == RenameStatus::kRenamed);
+		CHECK(fs::exists(root.path / "Authored/Meshes/hero.glb"));
+
+		// The document names where the container will land, so the next reimport writes it there.
+		const ImportDocument document =
+			loadImportDocument(root.Source().GetFiles(), "Authored/Meshes/hero.bimport");
+		CHECK(document.outputs == std::vector<std::string>{ "Derived/Meshes/hero.bmesh" });
+	}
+
+	SECTION("a missing source fails, and the document stays put")
+	{
+		const DataRoot root("bernini_rename_import_lost_source");
+		const Import   before = WriteImport(root, "kirk", /*rigged*/ false);
+
+		const RenamePlan plan =
+			planRename(root.Scan(), before.document, "Authored/Meshes/hero.bimport");
+		fs::remove(root.path / before.source);
+
+		CHECK(root.Source().RenameAsset(plan).status == RenameStatus::kFailed);
+		CHECK(fs::exists(root.path / before.document));
+		CHECK_FALSE(fs::exists(root.path / "Authored/Meshes/hero.bimport"));
+	}
+
+	SECTION("a document whose source was already gone cannot even be planned")
+	{
+		const DataRoot root("bernini_rename_import_plan_lost_source");
+		const Import   before = WriteImport(root, "kirk", /*rigged*/ false);
+		fs::remove(root.path / before.source);
+
+		CHECK_THROWS(planRename(root.Scan(), before.document, "Authored/Meshes/hero.bimport"));
+	}
+}
+
+TEST_CASE("A group destination taken by something else fails the plan", "[assetrename]")
+{
+	// The subject's destination is checked when the plan is made, so a caller can refuse before it
+	// asks the user to confirm. What the group would land on is held to the same promise.
+	const DataRoot root("bernini_rename_import_group_collision");
+	const Import   before = WriteImport(root, "kirk", /*rigged*/ false);
+
+	SaveMesh(root, "hero.bmesh", {});
+
+	CHECK_THROWS(planRename(root.Scan(), before.source, "Authored/Meshes/hero.glb"));
+}
+
+TEST_CASE("An imported source cannot be renamed into another kind of asset", "[assetrename]")
+{
+	const DataRoot root("bernini_rename_import_kind");
+	const Import   before = WriteImport(root, "kirk", /*rigged*/ false);
+
+	// Without this the `.bmesh` would be swapped for a `.bimport` on the way in and the rename
+	// would look ordinary.
+	CHECK_THROWS(planRename(root.Scan(), before.source, "Authored/Meshes/hero.bmesh"));
+	CHECK_THROWS(planRename(root.Scan(), "Authored/Meshes/ghost.glb", "Authored/Meshes/hero.glb"));
 }

@@ -7,6 +7,7 @@
 #include "Windows/AnimationEditor/animation_bindings.h"
 #include "Windows/AnimationEditor/animation_draws.h"
 #include "Windows/MaterialEditor/material_io.h"
+#include "util/mesh_drop.h"
 #include "util/mime_files.h"
 
 #include <QDragEnterEvent>
@@ -29,12 +30,6 @@
 
 namespace
 {
-	QString
-	FirstMeshUrl(const QMimeData* mime)
-	{
-		return editor::FirstLocalFileWithSuffix(mime, u".bmesh");
-	}
-
 	QString
 	FirstEnvironmentUrl(const QMimeData* mime)
 	{
@@ -913,8 +908,7 @@ AnimationPreviewWindow::SetActiveClip(const uint32_t index)
 void
 AnimationPreviewWindow::dragEnterEvent(QDragEnterEvent* event)
 {
-	if (!FirstMeshUrl(event->mimeData()).isEmpty() ||
-	    !FirstEnvironmentUrl(event->mimeData()).isEmpty())
+	if (editor::IsMeshDrag(event->mimeData()) || !FirstEnvironmentUrl(event->mimeData()).isEmpty())
 		event->acceptProposedAction();
 }
 
@@ -922,8 +916,7 @@ void
 AnimationPreviewWindow::dragMoveEvent(QDragMoveEvent* event)
 {
 	// The accept decision doesn't depend on position, so mirror dragEnterEvent.
-	if (!FirstMeshUrl(event->mimeData()).isEmpty() ||
-	    !FirstEnvironmentUrl(event->mimeData()).isEmpty())
+	if (editor::IsMeshDrag(event->mimeData()) || !FirstEnvironmentUrl(event->mimeData()).isEmpty())
 		event->acceptProposedAction();
 }
 
@@ -937,11 +930,15 @@ AnimationPreviewWindow::dropEvent(QDropEvent* event)
 		return;
 	}
 
-	const QString file = FirstMeshUrl(event->mimeData());
-	if (file.isEmpty())
+	const editor::MeshDrop drop =
+		editor::GetMeshDroppedOn(event->mimeData(), QString::fromStdWString(m_DataRoot.wstring()));
+	if (drop.mesh.isEmpty())
+	{
+		editor::ReportUnresolved(window(), drop);
 		return;
+	}
 
-	LoadMesh(std::filesystem::path(file.toStdWString()));
+	LoadMesh(std::filesystem::path(drop.mesh.toStdWString()));
 	event->acceptProposedAction();
 }
 

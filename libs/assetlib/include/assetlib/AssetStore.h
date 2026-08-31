@@ -531,7 +531,7 @@ namespace assetlib
 		 * best-effort, and a machine that fails the restore too is reported with the first error
 		 * rather than a pretense of atomicity.
 		 *
-		 * `plan.to` may already exist when it holds the same bytes as `plan.from`: that is the file
+		 * `plan.subject.to` may already exist when it holds the same bytes as `plan.subject.from`: that is the file
 		 * having already moved, not a collision, and the rename collapses the pair and rewrites the
 		 * referrers onto the survivor. Any other existing `to` fails.
 		 *

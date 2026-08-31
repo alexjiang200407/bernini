@@ -22,13 +22,15 @@ namespace editor
 	IsTextureFile(const QString& path);
 
 	/**
-	 * Whether `path` names a derived build product (`.bvat`, case-insensitively) -- a file the
-	 * editor's views hide: it is wholly re-bakeable from its inputs, never committed, and offering
-	 * it for rename or delete implies an authorship it does not have. The reference graph still
-	 * reads it from the filesystem directly, so rename/delete cascades of its *inputs* see it.
+	 * Whether `path` names a file the Content Explorer's views do not list: a derived build product,
+	 * which offering for rename or delete would imply an authorship it does not have, or a sidecar
+	 * whose row is the file beside it -- as Unity hides a `.meta` and Godot a `.import`.
+	 *
+	 * The reference graph still reads these from the filesystem directly, so rename and delete
+	 * cascades of their *inputs* see them.
 	 */
 	[[nodiscard]] bool
-	IsHiddenBuildProductFile(const QString& path);
+	IsHiddenInExplorer(const QString& path);
 
 	/**
 	 * Whether `name` is a plain file stem -- letters, digits, `_`, `.` and `-`, and not `.` or `..`.
@@ -49,6 +51,35 @@ namespace editor
 	 */
 	[[nodiscard]] QString
 	ToPlainFileStem(const QString& name);
+
+	/**
+	 * `path` as a key relative to `root` -- `/`-separated, never climbing out -- or empty when
+	 * `path` does not lie inside `root`. `root` itself answers `"."`, since a directory contains
+	 * itself and a caller that cares can tell the two apart.
+	 *
+	 * **The one statement of "is this inside that."** `QDir::relativeFilePath` answers for a path
+	 * anywhere on the host by climbing out with `../`, and `QDir::filePath` reattaches such a
+	 * result without cleaning it -- so a path outside a root resolves straight back into it, and
+	 * only fails to when a directory along the climb happens not to exist. Every caller that
+	 * compared `startsWith("..")` by hand got a slightly different answer, and one of them
+	 * (`AssetAt`) rejected a folder legitimately named `..hidden`.
+	 *
+	 * Deliberately *not* IsContainedRelativePath below, which answers a different question: that
+	 * one validates a **typed** relative path before it is joined onto a category, so it also
+	 * refuses `:` and a leading separator -- spellings a person can enter and `relativeFilePath`
+	 * cannot return. Applying it here would make a file whose name contains `:` read as outside its
+	 * own root, and one caller of this is the gate on every deletion.
+	 */
+	[[nodiscard]] QString
+	GetKeyUnder(const QString& root, const QString& path);
+
+	/**
+	 * Whether `path` lies inside `root`: GetKeyUnder's answer with the key thrown away, for a caller
+	 * that only asks. One rule, two spellings of it -- a caller that needs the key must not have to
+	 * ask twice, and a caller that does not must not have to write `.isEmpty()` to mean "inside".
+	 */
+	[[nodiscard]] bool
+	IsKeyUnder(const QString& root, const QString& path);
 
 	/**
 	 * Whether `path` is a relative folder that cannot climb out of whatever it is joined onto.

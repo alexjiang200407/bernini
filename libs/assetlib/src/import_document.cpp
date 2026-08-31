@@ -1,3 +1,4 @@
+#include <assetlib/asset_refs.h>
 #include <assetlib/codecs.h>
 #include <assetlib/import_document.h>
 
@@ -70,6 +71,16 @@ namespace assetlib
 	}
 
 	std::string
+	ImportDocument::GetMeshOutput() const
+	{
+		for (const std::string& output : outputs)
+			if (assetTypeFromExtension(output) == AssetType::kMesh)
+				return output;
+
+		return {};
+	}
+
+	std::string
 	importDocumentKeyFor(std::string_view sourceKey)
 	{
 		return swapExtension(sourceKey, c_ImportDocumentExtension);
@@ -78,7 +89,7 @@ namespace assetlib
 	std::string
 	importedSourceKeyFor(std::string_view documentKey)
 	{
-		return swapExtension(documentKey, ".glb");
+		return swapExtension(documentKey, c_ImportedSourceExtension);
 	}
 
 	ImportDocument

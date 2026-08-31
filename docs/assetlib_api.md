@@ -232,9 +232,22 @@ The dotted edge is the asymmetry: reads go through the store, writes go around i
   from outside, and takes everything beneath it. Whether it is a directory the *project* needs is
   not a question this can answer; `Project::IsRequiredDirectory` is.
 * **`AssetStore::RenameAsset`** — reads and rewrites every referrer in memory first, saves them, then moves
-  the file last, because the move is the step most likely to be refused. A failure writes the
-  original bytes back — best-effort, and a machine that fails the restore too reports the first
-  error rather than a pretense of atomicity.
+  the files last, because a move is the step most likely to be refused. A failure writes the
+  original bytes back and puts every file already moved back where it was — best-effort, and a
+  machine that fails the restore too reports the first error rather than a pretense of atomicity.
+* **`planRename` on an imported source** — a `.glb` and its `.bimport` are one asset under two
+  names, so either spelling plans the same move and `subject` reads back as the document's. What
+  travels with it splits by the same rule the whole data root does. `RenamePlan::source` is the
+  `.glb`: **authored**, and the file `Reimport` reads *from*, so nothing can put it back — a rename
+  that cannot move it fails, exactly as it does for the subject. `RenamePlan::outputs` are the
+  containers the import wrote: **cache**, so one that is not on disk is skipped rather than failing,
+  since the document names the new path either way and `Reimport` writes it there. An output a
+  rename of its own has since taken off the source's stem is left where it is — its name no longer
+  says it came from this source — and the document's reference to it is rewritten like any other.
+
+  This is what makes a rig shared between two imports safe. A `.bskel` one source produced and
+  another source's document *binds* is a move like any other, so the second document is among the
+  `referrers` and is rewritten — where moving the file alone would skin the second model to nothing.
 
 ## Usage Sketch
 

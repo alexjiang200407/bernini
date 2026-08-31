@@ -55,16 +55,6 @@ namespace assetlib
 			std::vector<std::string> outputs;
 		};
 
-		/** The `.bmesh` among a document's outputs, or empty for a clips-only source. */
-		std::string
-		meshOutputOf(const ImportDocument& document)
-		{
-			for (const std::string& output : document.outputs)
-				if (assetTypeFromExtension(output) == AssetType::kMesh)
-					return output;
-			return {};
-		}
-
 		void
 		writeOutput(
 			const AssetStore&       store,
@@ -127,7 +117,7 @@ namespace assetlib
 				// disk); a clips-only source had none and swept the project's
 				// (WriteImportedClips). Re-measuring project-wide is `bakebounds`, deliberately
 				// its own operation.
-				if (const std::string mesh = meshOutputOf(document); mesh.empty())
+				if (const std::string mesh = document.GetMeshOutput(); mesh.empty())
 				{
 					bakeBoundsForRig(
 						store,

@@ -21,4 +21,13 @@ namespace editor
 		}
 		return {};
 	}
+
+	QString
+	FirstLocalFileWithSuffix(const QMimeData* mime, const std::string_view suffix)
+	{
+		const QString text =
+			QString::fromUtf8(suffix.data(), static_cast<qsizetype>(suffix.size()));
+
+		return FirstLocalFileWithSuffix(mime, text);
+	}
 }
