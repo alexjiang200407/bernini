@@ -41,6 +41,35 @@ namespace editor
 	[[nodiscard]] bool
 	IsActionableAsset(const QString& asset);
 
+	/** What the Content Explorer is browsing. Ordered to match `ModeSelector`'s items. */
+	enum class BrowseMode
+	{
+		kAssets,
+		kTextures
+	};
+
+	/**
+	 * Where the views root for `mode`, under the data root at `dataRoot`. Empty for an empty root.
+	 *
+	 * A mode is a browse root and nothing else, which is what keeps `AssetFileModel` a plain
+	 * `QFileSystemModel`: the alternative is a proxy standing between every view and the model to
+	 * present one directory as another. Everything else -- what a path *means*, what an operation
+	 * resolves against -- stays on the data root either way.
+	 */
+	[[nodiscard]] QString
+	BrowseRootFor(const QString& dataRoot, BrowseMode mode);
+
+	/**
+	 * Whether `mode` may be written into at all: a new directory, an import dropped from outside, a
+	 * rename, a delete.
+	 *
+	 * Textures are derived, and ADR-6 says a person never edits those. `IsActionableAsset` already
+	 * refuses each one file at a time; this refuses the gestures that name no file, which are the
+	 * ones it cannot see.
+	 */
+	[[nodiscard]] bool
+	IsEditableMode(BrowseMode mode);
+
 	/**
 	 * Whether any of `heldOpen` is `absolute`, or -- when that names a directory -- something
 	 * beneath it. `heldOpen` is what the panels have open, absolute or relative to the working
