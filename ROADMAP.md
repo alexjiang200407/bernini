@@ -161,9 +161,13 @@ and portability.
   - [ ] Skinned-tier only
     - [ ] Look-at (head + torso, angle clamp) — best liveliness cue per instruction, unavailable to a
       shared pose.
-    - [ ] Heightfield foot planting — analytic two-bone IK; breaks on stairs and siege structures.
-      Note it is not what grounds a clip: the standard solve preserves a foot's animated height
-      relative to the root, so on flat ground it corrects by zero. That is cook-side, and done.
+    - [~] Foot planting — analytic two-bone IK, and the ankle turned onto the ground under it: a
+      planted foot matches the surface's *orientation* as well as its height, clamped so a cliff
+      edge does not break an ankle. Done against `IScene::SetGround`'s single plane; the heightfield
+      that replaces the sampler is what is left, and it is what breaks on stairs and siege
+      structures. Note none of it is what grounds a clip: the standard solve preserves a foot's
+      animated height relative to the root, so on flat ground it corrects by zero. That is
+      cook-side, and done. See [docs/skinning.md](docs/skinning.md) § Foot planting.
   - [ ] Hit reaction
     - [ ] Directional reaction clips (4–8 variants) — works on both tiers, so build this first.
     - [ ] Additive flinch over locomotion (skinned tier) — one fixed slot, upper-body mask, ~0.3 s envelope.

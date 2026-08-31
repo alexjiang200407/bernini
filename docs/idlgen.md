@@ -100,7 +100,7 @@ are the source of truth; when this doc disagrees, trust them, then fix this doc.
 |---|---|---|---|
 | `public struct` | [Meshlet.slang](libs/bgl_extended/idl/src/Meshlet.slang) | `struct` + `sizeof`/`offsetof` asserts | Layout via host reflection. |
 | `public enum` | [VertexLayout.slang](libs/bgl_extended/idl/src/VertexLayout.slang) | `enum class : <underlying>` + `sizeof` assert | Values parsed textually; see contracts. |
-| `public static const` | [Constants.slang](libs/bgl_extended/idl/src/Constants.slang) | `constexpr <type> = <expr>` | RHS copied verbatim; `public` needed for shader import. |
+| `public static const` | [Constants.slang](libs/bgl_extended/idl/src/Constants.slang) | `constexpr <type> = <expr>` | RHS copied verbatim, except that a `float` gains an `f` suffix; `public` needed for shader import. |
 | `import <Module>` | [MeshInstance.slang](libs/bgl_extended/idl/src/MeshInstance.slang) | `#include "idl/<Module>.h"` | Only emitted for referenced types. |
 | `interface` / generic-only | [IMaterial.slang](libs/bgl_extended/idl/src/IMaterial.slang), [RangeWithCount.slang](libs/bgl_extended/idl/src/RangeWithCount.slang) | *(none)* | Slang copy only; no concrete layout. |
 
@@ -173,6 +173,10 @@ flowchart TD
   literals and arithmetic on them are safe; Slang-only constructs are not). @post `let` → C++
   `auto`; a recognized scalar keyword (`uint`,`int`,`float`,`double`,`bool`) → its `<cstdint>`/C++
   spelling; any other type name passes through unchanged.
+* **A `float` constant is emitted with an `f` suffix**, the one place the RHS is not copied
+  byte-for-byte. Without it the initializer is a `double` and MSVC reports the narrowing as C4305,
+  which this project builds as an error — so a float constant would compile on clang and break the
+  Windows build. An RHS that already carries the suffix is left alone.
 
 ### Enums
 * **Enumerator values are text-parsed, not reflected.** @post a value defaults to a running counter
