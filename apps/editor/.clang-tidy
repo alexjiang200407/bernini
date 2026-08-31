@@ -8,5 +8,5 @@
 InheritParentConfig: true
 
 CheckOptions:
-  readability-identifier-naming.MethodIgnoredRegexp: '^([a-zA-Z]*Event|eventFilter|reject|accept|run|sizeHint|minimumSizeHint|styleHint|drawPrimitive|convert)$'
+  readability-identifier-naming.MethodIgnoredRegexp: '^([a-zA-Z]*Event|eventFilter|reject|accept|run|sizeHint|minimumSizeHint|styleHint|drawPrimitive|standardIcon|paint|pixmap|clone|convert)$'
   readability-identifier-naming.NamespaceIgnoredRegexp: '^QtNodes$'
