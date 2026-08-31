@@ -98,13 +98,21 @@ task that lands the solve.
   mid-frame-spawn correctness it bought. Whoever adds instance movement owes a previous transform to
   static and skinned meshes alike, and this ADR is the line they amend.
 
-- **ADR-7 — The instance transform reaches the pose pass through `SkinnedState`.** The pass reads
-  only the playback record (`SkinnedState.slang`); the world transform lives on `Mesh` and is applied
-  in the mesh shader. The solve needs the foot's world `xz` (for the ground sample) and the ground
-  back in model space, so the record gains the instance's `transform`, written at spawn like every
-  other field. *Rejected:* binding the mesh buffer to the pose pass and an instance index into it —
-  the index is not known until `WritePlacement` returns, after the record is written, and it couples
-  the pose pass to the placement record's layout for 60 bytes.
+- **ADR-7 — The pose pass addresses an instance by its placement, and reads the transform there.**
+  The solve needs the foot's world `xz` for the ground sample, and the world transform lives on the
+  `Mesh` record. So the pass's work list holds mesh instance indices rather than playback byte
+  offsets: it reads `mesh.transform` and reaches the playback record through the `playback` entry
+  the placement already carries. This is the indirection `CullInstances.slang:60` and
+  `TransparentDepthKeys.slang:58` already make, and `scene.meshInstanceBuffer` is already imported
+  into the frame graph. *Rejected: copying the transform into `SkinnedState`.* It was written that
+  way first, on the reasoning that the mesh index is unknown until `WritePlacement` returns — which
+  is true at spawn and irrelevant, because `SceneView::RebuildPosedList` builds the list lazily off
+  a dirty flag by walking the mesh buffer, with every index in hand. What it left behind was one
+  authoritative fact in two records, safe only while a transform is immutable and silently wrong the
+  day one is not. The standard shape is a single per-instance record every pass indexes — Unreal's
+  GPUScene `FPrimitiveSceneData`, which is also where `PreviousLocalToWorld` lives when a renderer
+  needs one; this keeps that door open, since a previous transform would land beside the current one
+  and the pose pass would read both from the same place.
 
 - **ADR-8 — The solve is the standard one: analytic two-bone with pelvis drop and a clamped ankle.**
   Law of cosines on hip–knee–ankle toward the ankle target, the current knee direction as the pole;
@@ -248,7 +256,7 @@ cha800_00 are); `Dog.glb` is at `../../resources/glb-specular/Dog.glb`.
 | Where | What | What could break |
 |---|---|---|
 | `bgl_intfc/IScene.h`, `Scene.h/.cpp` | `GroundPlaneDesc { point, normal }`, `SetGround` (throws on a non-finite or zero normal, or one with `normal.y <= 0` — no height exists under a point; bumps the temporal epoch, ADR-10), `GetGround` | nothing existing reads it until task 3; from then it is a pose input |
-| `idl/SkinnedState.slang`, `SceneView.cpp` | `float4x4 transform` written at spawn | playback arena record size grows 64 B; the arena is raw bytes and sized per record |
+| `SceneView.cpp`, `PoseSkinned.slang`, `SkinnedPosePass.cpp` | the posed work list holds mesh instance indices; the pose pass binds the mesh buffer and resolves transform and playback record through the placement | a placement whose `playback` is null must never reach the list — `RebuildPosedList`'s existing `animState != 0` guard is what keeps it out |
 | `idl/SkinnedLegChain.slang`, `SkinnedGeom.slang`, `Scene.cpp` | per-geom leg table `{hip, knee, ankle, toe, solePoint, soleNormal}` and a packed plant-weight range; `FootPlantDesc` on `AddSkinnedMeshGeom` (defaulted empty); validation of chain parent links, bone range, weight count = frames × legs | a rig with an indirect chain is refused at upload; an empty desc changes nothing |
 | `PoseSkinned.slang`, `SkinnedPosePass.cpp` | ground uniforms; `SampleGround`; per-leg solve between the walk and the inverse bind; groupshared old/new for solved bones; descendants-follow pass; pelvis drop | every new barrier must be group-uniform (`:114-117`); a rig with no legs must pay one skipped branch and no barrier count change |
 | `forward` shaders | none — the palette is already the whole interface | |

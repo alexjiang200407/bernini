@@ -2,6 +2,7 @@
 #include "cmd/CommandList.h"
 #include "fg/FrameGraph.h"
 #include "passes/DrawData.h"
+#include "scene/Scene.h"
 #include "scene/SceneView.h"
 #include "uniforms/Uniforms.h"
 
@@ -33,6 +34,10 @@ namespace bgl
 				.SetName("Pose Skinned {}", draw.drawIdx)
 				.AddBufferArg(
 					"scene.posedInstances",
+					BarrierSyncFlag::kComputeShader,
+					BarrierAccessFlag::kShaderResource)
+				.AddBufferArg(
+					"scene.meshInstanceBuffer",
 					BarrierSyncFlag::kComputeShader,
 					BarrierAccessFlag::kShaderResource)
 				.AddBufferArg(
@@ -76,6 +81,7 @@ namespace bgl
 
 		Uniforms& uniforms         = m_PoseSkinned["gUniforms"];
 		uniforms["posedInstances"] = ctx.GetBuffer("scene.posedInstances");
+		uniforms["meshBuffer"]     = ctx.GetBuffer("scene.meshInstanceBuffer");
 		uniforms["playbackBuffer"] = ctx.GetBuffer("scene.playbackBuffer");
 		uniforms["rigs"]           = ctx.GetBuffer("scene.rigBuffer");
 		uniforms["boneBuffer"]     = ctx.GetBuffer("scene.skinnedBoneBuffer");
@@ -85,6 +91,10 @@ namespace bgl
 		uniforms["time"]           = draw.clock.time;
 		uniforms["prevTime"]       = draw.clock.prevTime;
 		uniforms["posedCount"]     = posed;
+
+		const GroundPlaneDesc& ground = view->GetScene()->As<Scene>()->GetGround();
+		uniforms["groundPoint"]       = ground.point;
+		uniforms["groundNormal"]      = ground.normal;
 
 		auto computeState   = ComputeState();
 		computeState.kernel = &m_PoseSkinned;

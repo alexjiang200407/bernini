@@ -385,6 +385,15 @@ namespace bgl
 			override;
 
 		void
+		SetGround(const GroundPlaneDesc& ground) override;
+
+		[[nodiscard]] const GroundPlaneDesc&
+		GetGround() const noexcept override
+		{
+			return m_Ground;
+		}
+
+		void
 		DeleteGeom(GeomHandle geom) override;
 
 	private:
@@ -472,6 +481,8 @@ namespace bgl
 
 		// Moves on a change no motion vector describes. SceneViews poll it; see GetTemporalEpoch.
 		uint64_t m_TemporalEpoch = 0;
+
+		GroundPlaneDesc m_Ground;
 
 		// One default material per submesh of a range, keyed at its root. It rides on the RangeBuffer
 		// as Meta, not a parallel array, so it is allocated and freed with the geometry it belongs to.

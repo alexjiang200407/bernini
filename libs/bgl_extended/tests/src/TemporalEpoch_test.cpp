@@ -114,3 +114,32 @@ TEST_CASE("Placing or deleting an instance breaks the temporal continuity", "[sc
 		CHECK_FALSE(view->AdvanceTemporalEpoch());
 	}
 }
+
+TEST_CASE("Moving the ground breaks the temporal continuity", "[scene][taa][ground]")
+{
+	auto gfx = bgl::CreateGraphics(HeadlessOptions());
+	REQUIRE(gfx != nullptr);
+
+	auto  sceneHandle = gfx->CreateScene(SmallSceneDesc());
+	auto* scene       = sceneHandle->As<bgl::Scene>();
+	REQUIRE(scene != nullptr);
+
+	auto  viewHandle = gfx->CreateSceneView(sceneHandle, 8);
+	auto* view       = viewHandle->As<bgl::SceneView>();
+	REQUIRE(view != nullptr);
+
+	Consume(view);
+	REQUIRE_FALSE(view->AdvanceTemporalEpoch());
+
+	// A planted foot is solved against the ground, so a pose after the move reprojects through
+	// one solved against ground that was not there: no motion vector describes that.
+	scene->SetGround({ glm::vec3(0.0f, -0.5f, 0.0f), glm::vec3(0.0f, 1.0f, 0.2f) });
+	CHECK(view->AdvanceTemporalEpoch());
+	CHECK_FALSE(view->AdvanceTemporalEpoch());
+
+	// A refused plane changed nothing, so it reports nothing.
+	CHECK_THROWS_AS(
+		scene->SetGround({ glm::vec3(0.0f), glm::vec3(0.0f, -1.0f, 0.0f) }),
+		bgl::SceneError);
+	CHECK_FALSE(view->AdvanceTemporalEpoch());
+}
