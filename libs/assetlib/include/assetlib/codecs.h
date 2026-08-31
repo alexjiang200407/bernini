@@ -25,7 +25,6 @@ namespace assetlib
 	inline constexpr std::string_view c_EnvLightingExtension = ".benvl";
 	inline constexpr std::string_view c_SkeletonExtension    = ".bskel";
 	inline constexpr std::string_view c_AnimationExtension   = ".banim";
-	inline constexpr std::string_view c_VatExtension         = ".bvat";
 
 	// Text, not a container: the authored half of one imported source, beside its `.glb`.
 	inline constexpr std::string_view c_ImportDocumentExtension = ".bimport";
@@ -39,13 +38,24 @@ namespace assetlib
 	// and assetTypeFromExtension does not know it.
 	inline constexpr std::string_view c_PakExtension = ".bpak";
 
+	/**
+	 * The one form every reference path is keyed and stored in: lexically normal, generic
+	 * separators. `Derived/BakedTextures/x.ktx2` and `./Derived/Meshes/../BakedTextures/x.ktx2` are
+	 * one asset, and only this says so -- compare a requested path against a stored one through
+	 * here, never raw.
+	 *
+	 * Beside the extensions above because both answer the same question: how a container is named
+	 * and addressed, as opposed to what is inside it.
+	 */
+	[[nodiscard]] std::string
+	normalizePath(std::string_view path);
+
 	struct AnimationSet;
 	struct BEnv;
 	struct BEnvLighting;
 	struct BMaterial;
 	struct BMesh;
 	struct BSky;
-	struct BVat;
 	struct ImportDocument;
 	struct Skeleton;
 
@@ -177,22 +187,6 @@ namespace assetlib
 		Serialize(const AnimationSet& value);
 
 		[[nodiscard]] static AnimationSet
-		Deserialize(std::span<const std::byte> bytes);
-	};
-
-	/** `.bvat` -- a cache entry. Serialize refuses a tables-only value and one with no frames. */
-	template <>
-	struct AssetCodec<BVat>
-	{
-		static constexpr std::string_view c_Extension = c_VatExtension;
-		static constexpr AssetType        c_Type      = AssetType::kVat;
-		static constexpr uint32_t         c_Magic     = magic::c_BVat;
-		static constexpr uint64_t         c_BakeToken = 0x25b90ce8f7143ad9ull;
-
-		[[nodiscard]] static std::vector<std::byte>
-		Serialize(const BVat& value);
-
-		[[nodiscard]] static BVat
 		Deserialize(std::span<const std::byte> bytes);
 	};
 

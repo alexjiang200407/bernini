@@ -39,18 +39,6 @@ namespace bgl
 		CreateStaticMeshInstance(GeomHandle geom, glm::mat4 transform) = 0;
 
 		/**
-		 * The kVatMesh counterpart of CreateStaticMeshInstance. Deleted through the same
-		 * DeleteMeshInstance as any other placement.
-		 *
-		 * @throws SceneError if `geom` is not a live kVatMesh geom, or `desc.clip` is out of range.
-		 */
-		virtual MeshInstanceHandle
-		CreateVatMeshInstance(
-			GeomHandle             geom,
-			glm::mat4              transform,
-			const VatInstanceDesc& desc) = 0;
-
-		/**
 		 * The kSkinnedMesh counterpart of CreateStaticMeshInstance. Deleted through the same
 		 * DeleteMeshInstance as any other placement.
 		 *

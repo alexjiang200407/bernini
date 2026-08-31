@@ -115,11 +115,11 @@ namespace
 		                                                    "Derived/Animations/rig.banim" } };
 }
 
-TEST_CASE("The static and VAT doors read their mesh once too", "[static][acquire][cache]")
+TEST_CASE("The static door reads its mesh once too", "[static][acquire][cache]")
 {
 	// A rig drawn as many meshes acquires once per mesh entry -- twenty-seven on the test project's
-	// character -- and these two doors used to deserialize the whole `.bmesh` on every one of them,
-	// where the skinned door has always gone through the cache.
+	// character -- and this door used to deserialize the whole `.bmesh` on every one of them, where
+	// the skinned door has always gone through the cache.
 	DataRoot root("bernini_container_cache_static");
 	WriteRig(root.path);
 

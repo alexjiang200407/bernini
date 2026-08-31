@@ -2,9 +2,9 @@
 #include "gfx/RenderTargetBase.h"
 #include "util/GoldenImage.h"
 #include "util/GpuValidation.h"
+#include "util/SkinnedSynth.h"
 #include "util/TestEnvironment.h"
 #include "util/TestOptions.h"
-#include "util/VatSynth.h"
 #include "util/jitter.h"
 #include <bgl/Camera.h>
 #include <bgl/IGraphics.h>
@@ -392,7 +392,7 @@ namespace
 		gfx->ScreenshotPng(target, path);
 	}
 
-	// An animating surface under a still camera: the fixture's VAT quad, tilted like the others,
+	// An animating surface under a still camera: the fixture's skinned quad, tilted like the others,
 	// dark, floating in front of a flat mid-grey backdrop, sweeping back and forth along its own X.
 	// Every pixel it sweeps over is background whose own motion is zero -- which no pan can
 	// produce, and which is where its outline smears. The sweep is `c_AnimSweepFrames` rendered
@@ -407,7 +407,7 @@ namespace
 	// One clip frame per sweep at the fixture's sample rate; the capture lands on an odd multiple
 	// of a whole clip frame, so the quad has just arrived at c_Step from the left.
 	constexpr float c_AnimStepSeconds =
-		1.0f / (bgl::test::vat_synth::c_SampleRate * c_AnimSweepFrames);
+		1.0f / (bgl::test::skinned_synth::c_SampleRate * c_AnimSweepFrames);
 	constexpr int c_AnimFrames = c_AnimSweepFrames * c_AnimSweeps + 1;
 
 	float
@@ -436,11 +436,11 @@ namespace
 	}
 
 	void
-	AddVatQuadOverBackdrop(
-		const bgl::SceneRef&        scene,
-		const bgl::SceneViewRef&    view,
-		const bgl::VatInstanceDesc& desc,
-		const glm::mat4&            transform)
+	AddAnimatedQuadOverBackdrop(
+		const bgl::SceneRef&            scene,
+		const bgl::SceneViewRef&        view,
+		const bgl::SkinnedInstanceDesc& desc,
+		const glm::mat4&                transform)
 	{
 		bgl::test::ApplyEnvironment(scene.Get(), view.Get());
 
@@ -452,19 +452,19 @@ namespace
 			scene->CreatePbrMaterial(Grey(c_BackdropGrey)));
 		view->CreateStaticMeshInstance(backdrop, glm::mat4(1.0f));
 
-		const auto quad = bgl::test::vat_synth::AddSlidingQuadGeom(
+		const auto quad = bgl::test::skinned_synth::AddSlidingQuadGeom(
 			*scene,
 			scene->CreatePbrMaterial(Grey(c_AnimQuadGrey)));
-		view->CreateVatMeshInstance(quad, transform, desc);
+		view->CreateSkinnedMeshInstance(quad, transform, desc);
 	}
 
 	void
 	AddAnimatingQuadOverBackdrop(const bgl::SceneRef& scene, const bgl::SceneViewRef& view)
 	{
-		AddVatQuadOverBackdrop(
+		AddAnimatedQuadOverBackdrop(
 			scene,
 			view,
-			{ bgl::test::vat_synth::c_LoopClip, 0.0f, 1.0f },
+			{ bgl::test::skinned_synth::c_LoopClip, 0.0f, 1.0f },
 			AnimatedQuadTransform());
 	}
 
@@ -475,10 +475,10 @@ namespace
 	void
 	AddArrivedQuadOverBackdrop(const bgl::SceneRef& scene, const bgl::SceneViewRef& view)
 	{
-		AddVatQuadOverBackdrop(
+		AddAnimatedQuadOverBackdrop(
 			scene,
 			view,
-			{ bgl::test::vat_synth::c_LoopClip, c_ArrivedPhase, 0.0f },
+			{ bgl::test::skinned_synth::c_LoopClip, c_ArrivedPhase, 0.0f },
 			AnimatedQuadTransform());
 	}
 
@@ -507,10 +507,10 @@ namespace
 		constexpr int c_Margin = 6;
 
 		int minX = c_Width, minY = c_Height, maxX = 0, maxY = 0;
-		for (const glm::vec3& corner : bgl::test::vat_synth::c_QuadAtOrigin)
+		for (const glm::vec3& corner : bgl::test::skinned_synth::c_QuadAtOrigin)
 		{
 			const glm::ivec2 px =
-				AnimatedQuadPx(bgl::test::vat_synth::c_Step, corner, AnimatedQuadTransform());
+				AnimatedQuadPx(bgl::test::skinned_synth::c_Step, corner, AnimatedQuadTransform());
 			minX = std::min(minX, px.x);
 			minY = std::min(minY, px.y);
 			maxX = std::max(maxX, px.x);
@@ -522,7 +522,7 @@ namespace
 			     maxY - minY + 2 * c_Margin };
 	}
 
-	// The leap fixture: the same VAT quad, untilted so the band it vacates is a clean rectangle,
+	// The leap fixture: the same skinned quad, untilted so the band it vacates is a clean rectangle,
 	// resting long enough to converge and then crossing its whole step in one frame -- a jump or
 	// fall clip's speed, which no pixel's 3x3 ever witnesses passing.
 	constexpr int c_WakeFrames = 8;
@@ -537,10 +537,10 @@ namespace
 	void
 	AddLeapingQuadOverBackdrop(const bgl::SceneRef& scene, const bgl::SceneViewRef& view)
 	{
-		AddVatQuadOverBackdrop(
+		AddAnimatedQuadOverBackdrop(
 			scene,
 			view,
-			{ bgl::test::vat_synth::c_ClampClip, 0.0f, 1.0f },
+			{ bgl::test::skinned_synth::c_ClampClip, 0.0f, 1.0f },
 			LeapQuadTransform());
 	}
 
@@ -549,10 +549,10 @@ namespace
 	void
 	AddLeaptQuadOverBackdrop(const bgl::SceneRef& scene, const bgl::SceneViewRef& view)
 	{
-		AddVatQuadOverBackdrop(
+		AddAnimatedQuadOverBackdrop(
 			scene,
 			view,
-			{ bgl::test::vat_synth::c_ClampClip, 1.0f, 0.0f },
+			{ bgl::test::skinned_synth::c_ClampClip, 1.0f, 0.0f },
 			LeapQuadTransform());
 	}
 
@@ -561,7 +561,7 @@ namespace
 	float
 	LeapClock(int frame)
 	{
-		return frame < c_ConvergeFrames ? 0.0f : 1.0f / bgl::test::vat_synth::c_SampleRate;
+		return frame < c_ConvergeFrames ? 0.0f : 1.0f / bgl::test::skinned_synth::c_SampleRate;
 	}
 
 	// The strip straddling the quad's resting left silhouette -- where a leap's ghost sits when
@@ -575,7 +575,7 @@ namespace
 		constexpr int c_Inset     = 4;
 
 		int restMinX = c_Width, restMinY = c_Height, restMaxY = 0;
-		for (const glm::vec3& corner : bgl::test::vat_synth::c_QuadAtOrigin)
+		for (const glm::vec3& corner : bgl::test::skinned_synth::c_QuadAtOrigin)
 		{
 			const glm::ivec2 rest = AnimatedQuadPx(0.0f, corner, LeapQuadTransform());
 			restMinX              = std::min(restMinX, rest.x);
@@ -964,9 +964,9 @@ TEST_CASE(
 // smeared one -- both are smooth -- so that half only guards that accumulation on a moving mesh
 // keeps working; the outline figure is what tells the two apart. One case for both, since each
 // render is a device creation.
-TEST_CASE("An animating mesh's outline is as sharp as when it is held", "[taa][vat][render]")
+TEST_CASE("An animating mesh's outline is as sharp as when it is held", "[taa][skinned][render]")
 {
-	using namespace bgl::test::vat_synth;
+	using namespace bgl::test::skinned_synth;
 
 	const std::string held     = "assets/golden/taa_anim_held.got.png";
 	const std::string animated = "assets/golden/taa_anim_moving.got.png";
@@ -1078,7 +1078,7 @@ TEST_CASE("An animating mesh's outline is as sharp as when it is held", "[taa][v
 // pixels a texel at a time is visible to their own neighbourhoods, a leap is not.
 TEST_CASE(
 	"A mesh leaping from rest leaves no ghost at its departure position",
-	"[taa][vat][render]")
+	"[taa][skinned][render]")
 {
 	const std::string leapt   = "assets/golden/taa_leap_wake.got.png";
 	const std::string held    = "assets/golden/taa_leap_held.got.png";

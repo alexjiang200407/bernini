@@ -8,7 +8,6 @@
 namespace assetlib
 {
 	struct BSky;
-	struct BVat;
 	struct DeletionPlan;
 	struct DeletionResult;
 	struct EnvImportDesc;
@@ -31,9 +30,6 @@ namespace assetlib
 	struct TexturePruneResult;
 	struct TexturePruneScan;
 	struct TextureRefresh;
-	struct VatBakeDesc;
-	struct VatRefs;
-	struct VatSize;
 	struct BMesh;
 	struct BMaterial;
 	struct BEnvLighting;
@@ -230,28 +226,6 @@ namespace assetlib
 		void
 		BakeEnvLighting(BEnvLighting& lighting, const CancelToken& cancel = {}) const;
 
-		/**
-		 * bakeVat over this project: loads the mesh, the skeleton it names and the clip set, bakes,
-		 * and records the three keys and their SourceStamps -- what `VatIsStale` later compares.
-		 * Writing the result is the caller's (`Save`): a `.bvat` is a derived build product, and
-		 * where it lands is the caller's convention, not this one's.
-		 *
-		 * @throws std::runtime_error if an input cannot be read, if the mesh names no skeleton, or
-		 *         for anything the in-memory `bakeVat` refuses.
-		 */
-		[[nodiscard]] BVat
-		BakeVat(const VatBakeDesc& desc) const;
-
-		/**
-		 * What BakeVat would write, over the same three inputs loaded the same way -- for a caller
-		 * that must offer the bake before paying for it. Loading is all it costs; nothing is
-		 * skinned.
-		 *
-		 * @throws what BakeVat throws.
-		 */
-		[[nodiscard]] VatSize
-		VatBakeSize(const VatBakeDesc& desc) const;
-
 		// --- Import writes -----------------------------------------------------------------------
 
 		/**
@@ -315,9 +289,7 @@ namespace assetlib
 		/**
 		 * Whether the geometry entry at `path` is a cache miss the LoadRegen forms would re-cook:
 		 * a stale bake token, a source stamp that moved, or parameters the `.bimport` no longer
-		 * matches. Always false on a read-only store, which trusts its keys. What a *derived*
-		 * consumer asks -- a `.bvat` whose group answers true is itself stale, whatever its own
-		 * stamps say.
+		 * matches. Always false on a read-only store, which trusts its keys.
 		 *
 		 * @throws std::runtime_error if `path` is not a `.bmesh`/`.bskel`/`.banim`, or its header
 		 *         cannot be read.
@@ -392,14 +364,6 @@ namespace assetlib
 		/** The skeleton a `.banim` names, without its samples. */
 		[[nodiscard]] std::string
 		LoadAnimationSkeletonPath(std::string_view path) const;
-
-		/** Everything but the pixels. See loadVatTables. */
-		[[nodiscard]] BVat
-		LoadVatTables(std::string_view path) const;
-
-		/** The three inputs a `.bvat` was baked from, read seek-only. */
-		[[nodiscard]] VatRefs
-		LoadVatRefs(std::string_view path) const;
 
 		// --- Textures --------------------------------------------------------------------------
 
@@ -483,9 +447,6 @@ namespace assetlib
 		/** Whether `material` draws from its routes rather than its triplet. */
 		[[nodiscard]] bool
 		DrawsLoose(const BMaterial& material) const;
-
-		[[nodiscard]] bool
-		VatIsStale(const BVat& vat) const;
 
 		[[nodiscard]] bool
 		IsSkyBakeStale(const BSky& sky) const;
@@ -573,10 +534,9 @@ namespace assetlib
 		 * `desc.target` is untouched until the archive is whole: `PakWriter` streams to a temp and
 		 * renames.
 		 *
-		 * @throws std::runtime_error if an asset cannot be read, if a stale `.bvat` cannot be
-		 *         re-baked, if a geometry group cannot be served (no source to regenerate a stale
-		 *         entry from, or a binding naming a submesh the mesh does not have), or if the
-		 *         archive cannot be written.
+		 * @throws std::runtime_error if an asset cannot be read, if a geometry group cannot be
+		 *         served (no source to regenerate a stale entry from, or a binding naming a submesh
+		 *         the mesh does not have), or if the archive cannot be written.
 		 */
 		[[nodiscard]] PackReport
 		Pack(const PackDesc& desc) const;
@@ -807,10 +767,6 @@ namespace assetlib
 		/** For a `.benv`, which holds no pixels: whether each file it names is actually there. */
 		[[nodiscard]] std::string
 		Describe(const BEnv& env) const;
-
-		/** Pass the tables-only form (LoadVatTables) -- nothing here reads a texel. */
-		[[nodiscard]] std::string
-		Describe(const BVat& vat) const;
 
 	private:
 		/**

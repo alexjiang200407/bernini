@@ -4,7 +4,6 @@
 #include <assetlib_structs/BEnv.h>
 #include <assetlib_structs/BMaterial.h>
 #include <assetlib_structs/BMesh.h>
-#include <assetlib_structs/BVat.h>
 #include <assetlib_structs/Skeleton.h>
 
 #include "asset_describe.h"
@@ -33,12 +32,6 @@ namespace assetlib
 	AssetStore::Describe(const BEnv& env) const
 	{
 		return describe(env, m_Files.get());
-	}
-
-	std::string
-	AssetStore::Describe(const BVat& vat) const
-	{
-		return describe(vat, m_Files.get());
 	}
 
 	std::string

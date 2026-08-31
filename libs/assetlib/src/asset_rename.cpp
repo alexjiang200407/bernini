@@ -6,12 +6,10 @@
 #include <core/err/util.h>
 
 #include "material_texture_refs.h"
-#include <assetlib/vat_bake.h>
 #include <assetlib_structs/Animation.h>
 #include <assetlib_structs/BEnv.h>
 #include <assetlib_structs/BMaterial.h>
 #include <assetlib_structs/BMesh.h>
-#include <assetlib_structs/BVat.h>
 #include <core/file/file.h>
 
 #include "fs_util.h"
@@ -145,20 +143,6 @@ namespace assetlib
 				AnimationSet clips = AssetCodec<AnimationSet>::Deserialize(bytes);
 				clips.skeleton     = mapTarget(plan, clips.skeleton);
 				return AssetCodec<AnimationSet>::Serialize(clips);
-			}
-
-			case AssetType::kVat:
-			{
-				// The stamps are left alone here and recomputed by renameAsset once every input is
-				// in its final place -- a rename rewrites the references inside a `.bmesh` and a
-				// `.banim`, so their contents, and their stamps, do move. renameAsset then puts the
-				// file under the name vatPathFor derives from these rewritten inputs, or the runtime
-				// would never look for it.
-				BVat vat       = AssetCodec<BVat>::Deserialize(bytes);
-				vat.mesh       = mapTarget(plan, vat.mesh);
-				vat.skeleton   = mapTarget(plan, vat.skeleton);
-				vat.animations = mapTarget(plan, vat.animations);
-				return AssetCodec<BVat>::Serialize(vat);
 			}
 
 			case AssetType::kMaterial:
@@ -475,39 +459,6 @@ namespace assetlib
 			}
 
 			moved.push_back(step);
-		}
-
-		// A bake's file name is derived from its inputs (vatPathFor), so a rewritten .bvat may now
-		// sit under a name the runtime will never ask for. Move each to its derived name -- what
-		// keeps a rename a load, not a re-bake. Best effort, after the rename is already done: a
-		// bake left behind is re-baked and later swept, never wrong.
-		for (const PendingReferrer& file : files)
-		{
-			if (file.type != AssetType::kVat)
-				continue;
-
-			try
-			{
-				// Re-stamp before moving: a rename rewrites the path references inside the `.bmesh`
-				// and `.banim` this was baked from, which changes their contents and so their stamps.
-				// The baked tables did not change, so re-reading the inputs here is what keeps the
-				// rename a load. Only now are they all in their final place.
-				BVat vat            = Load<BVat>(KeyFor(file.path));
-				vat.meshStamp       = stampOf(GetDataRoot() / vat.mesh);
-				vat.skeletonStamp   = stampOf(GetDataRoot() / vat.skeleton);
-				vat.animationsStamp = stampOf(GetDataRoot() / vat.animations);
-				Save(vat, KeyFor(file.path));
-
-				const std::filesystem::path derived =
-					GetDataRoot() / vatPathFor(vat.mesh, vat.animations);
-				if (!std::filesystem::equivalent(file.path, derived, ec) &&
-				    !std::filesystem::exists(derived))
-					std::filesystem::rename(file.path, derived, ec);
-			}
-			catch (const std::exception&)
-			{
-				// Already reported where it mattered; the orphan re-bakes.
-			}
 		}
 
 		return { RenameStatus::kRenamed, {} };

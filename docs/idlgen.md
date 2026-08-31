@@ -54,7 +54,7 @@ are the source of truth; when this doc disagrees, trust them, then fix this doc.
   construction.
 
   A struct's size still depends on the final size of everything it embeds — shrink `RangeWithCount`
-  and `VatGeom::columnBases` moves — so idlgen resolves imports against the
+  and `Rig.clips` moves — so idlgen resolves imports against the
   *generated* copies and reports the module under its output path, since Slang looks beside the
   importing file before consulting the search paths. The CMake rules carry an edge per `import` so a
   module is generated after its dependencies.
@@ -64,8 +64,7 @@ are the source of truth; when this doc disagrees, trust them, then fix this doc.
   field keeps its *declared* type name (the host layout would otherwise lower an enum field to its
   underlying scalar and erase the name). An `import`ed type pulls in the corresponding generated
   `#include`. A `float3` field in a C++-mirrored struct is **refused** outright — MSL sizes it 16
-  where C++ says 12, so no shared layout exists; carry a `float4` (VAT's bounds are min + extent
-  for exactly this reason). A `float4` placed *after* scalars is refused unless the bytes ahead of
+  where C++ says 12, so no shared layout exists; carry a `float4`. A `float4` placed *after* scalars is refused unless the bytes ahead of
   it already sum to a multiple of 16, because MSL aligns it to 16 and the C++ rules do not, and no
   struct alignment can rescue an interior mismatch. `Meshlet`'s trailing `float4` is legal on exactly
   that count; declaring the widest members first is how not to have to check.

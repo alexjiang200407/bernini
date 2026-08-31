@@ -30,7 +30,7 @@ when this page disagrees, trust the header, then fix this page.
 | Kind | Files | Written by |
 |---|---|---|
 | Authored text | `.bmaterial`, `.benv`, `.bimport` | the editor, `migrate`, deliberate saves |
-| Derived cache entry | `.bmesh`, `.bskel`, `.banim`, `.bvat`, `.bsky`, `.benvl` | the import, the bakes, `migrate`, `pack` |
+| Derived cache entry | `.bmesh`, `.bskel`, `.banim`, `.bsky`, `.benvl` | the import, the bakes, `migrate`, `pack` |
 | Foreign | `.ktx2` (Basis/RGB9E5 textures) | the bakes and the mesh import; stamp-governed by whatever names them |
 
 ## Text documents
@@ -71,7 +71,7 @@ The header carries the **cache key**, and the key is the whole design:
 A mismatch in any component — in either direction — is a **cache miss, not an error**. There is no
 conversion and no old shape to parse: the recovery is always regeneration from the authored side,
 through `AssetStore`'s `LoadRegen*` seam, and it is taken **deliberately** rather than at load:
-`migrate`, `pack`, the VAT bake. A read-only store never takes it, because `pack` made its keys true.
+`migrate`, `pack`. A read-only store never takes it, because `pack` made its keys true.
 
 A **scene load refuses** a stale container instead, naming `migrate` — re-cooking one there costs an
 import, writes none of it back, and pays that again on the next load. The editor offers to rebuild
@@ -126,7 +126,7 @@ written. Together those are the pair `AssetStore::GetStaleImportedTextureSources
 sit outside the document's `parameters`, so neither keys the geometry beside them.
 
 The miss is **not** taken at load. `LoadRegen*` passes `GltfTextures::kSkip`, deliberately: it is
-called on every mesh load, on every deletion's reference scan, and by `vat_bake` and `pack`, and
+called on every mesh load, on every deletion's reference scan, and by `pack`, and
 Basis-supercompressing a source's maps there would freeze a level load.
 `AssetStore::RefreshImportedTextures`
 ([libs/assetlib/include/assetlib/AssetStore.h](libs/assetlib/include/assetlib/AssetStore.h))
@@ -159,7 +159,7 @@ regimes were always pointing at is available:
 | | |
 |---|---|
 | **Committed** | everything under `Data/Authored/`, plus the `.bproj` beside it. Losing one loses work. |
-| **Ignorable** | `Data/Derived/`, less the two rows below — `.bmesh`, `.bskel` and `.banim` come back from `Reimport`, `.bvat` from the load-time bake, and a source's extracted `.ktx2` from the texture re-extract. |
+| **Ignorable** | `Data/Derived/`, less the two rows below — `.bmesh`, `.bskel` and `.banim` come back from `Reimport`, and a source's extracted `.ktx2` from the texture re-extract. |
 | **Ignorable, but by hand** | the baked maps under `Derived/BakedTextures/`. Nothing outside the editor writes one: `migrate` re-saves a material, it does not bake it, and there is no CLI that does. So a fresh checkout opens with every material stale and drawing untextured until someone runs **Bake All**. |
 | **Derived, and committed anyway** | `Derived/Sky/` and `Derived/EnvLighting/`, and the maps under `Derived/SourceTextures/` an environment import wrote. Their bake runs from a `.hdr`, and a project copies in no `.hdr` — so an absent one is unrecoverable, and only a *stale* one is `migrate`'s. The carve-out goes the day an env source lives in the project beside the meshes'. |
 

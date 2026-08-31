@@ -25,7 +25,7 @@ struct Uniforms
 {
     // The byte offsets of the playback records to pose, one per workgroup. Dense: erasing a record
     // only releases its bytes, so a sweep of the arena would pose freed instances -- and would meet
-    // the VAT records sharing it, which this pass has nothing to do with.
+    // the crowd records sharing it, which own no palette for this pass to write.
     UploadBuffer<uint> posedInstances;
 
     RawBuffer playbackBuffer;

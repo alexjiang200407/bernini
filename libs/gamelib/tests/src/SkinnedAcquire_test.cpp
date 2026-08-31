@@ -14,9 +14,9 @@
 #include <bgl/IGraphics.h>
 #include <catch2/catch_approx.hpp>
 
-// Acquiring a rig as skinned geometry. Unlike the VAT acquire there is no bake and no freshness
-// rule -- the containers are the source -- so what this pins instead is the sharing, the release,
-// and the one check bgl cannot make for itself: that a clip set still matches the rig it names.
+// Acquiring a rig as skinned geometry. There is no bake and no freshness rule -- the containers are
+// the source -- so what this pins is the sharing, the release, and the one check bgl cannot make for
+// itself: that a clip set still matches the rig it names.
 
 namespace
 {
@@ -117,26 +117,17 @@ TEST_CASE("a rig acquires as skinned geometry, shares, and releases", "[skinned]
 		CHECK(scene->IsGeomAlive(mesh.geom));
 	}
 
-	SECTION("the same mesh can be live as static, VAT and skinned at once")
+	SECTION("the same mesh can be live as static and skinned at once")
 	{
-		// Three keyspaces, three uploads. The editor's Animation panel is the caller that needs it:
-		// it holds a rig as skinned and as VAT together so the two can be compared.
+		// Two keyspaces, two uploads.
 		const auto staticGeom = assets.AcquireMesh("Derived/Meshes/rig.bmesh");
 		CHECK(staticGeom.IsValid());
 		CHECK(staticGeom.geomType == bgl::GeomType::kStaticMesh);
 
-		const auto vat =
-			assets.AcquireVatMesh("Derived/Meshes/rig.bmesh", "Derived/Animations/rig.banim");
-		CHECK(vat.geom.IsValid());
-		CHECK(vat.geom.geomType == bgl::GeomType::kVatMesh);
-
-		// All three distinct, and all three alive at once.
+		// Both distinct, and both alive at once.
 		CHECK(staticGeom.handle.index != mesh.geom.handle.index);
-		CHECK(vat.geom.handle.index != mesh.geom.handle.index);
-		CHECK(vat.geom.handle.index != staticGeom.handle.index);
 		CHECK(scene->IsGeomAlive(mesh.geom));
 		CHECK(scene->IsGeomAlive(staticGeom));
-		CHECK(scene->IsGeomAlive(vat.geom));
 	}
 
 	SECTION("acquiring live geometry with a different clip set is refused")

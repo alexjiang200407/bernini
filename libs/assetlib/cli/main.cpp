@@ -18,11 +18,9 @@
 #include <assetlib/rebake_bounds.h>
 #include <assetlib/skinning.h>
 #include <assetlib/texture_prune.h>
-#include <assetlib/vat_bake.h>
 #include <assetlib_structs/BEnv.h>
 #include <assetlib_structs/BMesh.h>
 #include <assetlib_structs/BMeshImport.h>
-#include <assetlib_structs/BVat.h>
 #include <assetlib_structs/magic.h>
 #include <core/err/util.h>
 #include <core/file/file.h>
@@ -103,8 +101,6 @@ namespace
 			return "produced";
 		case assetlib::RefKind::kClipSkeleton:
 			return "was resampled against";
-		case assetlib::RefKind::kVatSource:
-			return "was baked from";
 		case assetlib::RefKind::kImportedSource:
 			return "was imported from";
 		}
@@ -209,25 +205,6 @@ main(int argc, char** argv)
 			sampleRate,
 			"Hz every animation clip is resampled to (default: 30)")
 		->check(CLI::PositiveNumber);
-
-	std::string vatMesh;
-	std::string vatAnimations;
-	std::string vatOut;
-
-	auto* bakevat = app.add_subcommand(
-		"bakevat",
-		"Bake a rig's clips into a .bvat: every skinned vertex at every frame, as a position and a "
-		"normal texture the crowd tier fetches instead of skinning");
-	addProject(bakevat);
-	bakevat->add_option("mesh", vatMesh, "A .bmesh, relative to the data root")->required();
-	bakevat
-		->add_option("animations", vatAnimations, "The .banim to bake, relative to the data root")
-		->required();
-	bakevat->add_option(
-		"-o,--out",
-		vatOut,
-		"Output .bvat, relative to the data root (default: beside the mesh, named for the (mesh, "
-		"clip set) pair -- where the runtime loads from)");
 
 	std::string envInput;
 	uint32_t    envIemSize    = 128;
@@ -627,49 +604,6 @@ main(int argc, char** argv)
 		}
 	}
 
-	if (*bakevat)
-	{
-		try
-		{
-			auto desc       = assetlib::VatBakeDesc();
-			desc.mesh       = vatMesh;
-			desc.animations = vatAnimations;
-
-			const assetlib::Project     project = assetlib::Project::Open(projectFile);
-			const assetlib::AssetStore& store   = project.GetStore();
-
-			const assetlib::BVat vat = store.BakeVat(desc);
-
-			// generic_string, not string: vatPathFor hands back a path, and on Windows its native
-			// spelling is `\`-separated -- which a mount key never is.
-			std::string key = vatOut;
-			if (key.empty())
-				key = assetlib::vatPathFor(vatMesh, vatAnimations).generic_string();
-
-			store.Save(vat, key);
-
-			spdlog::info(
-				"Baked '{}' + '{}' -> '{}': {} x {} texels, {} clip(s), {} bones",
-				vatMesh,
-				vatAnimations,
-				key,
-				vat.width,
-				vat.height,
-				vat.clips.size(),
-				vat.boneCount);
-			spdlog::info(
-				"  positions {}, normals {}, palettes {}",
-				formatBytes(vat.positionsKtx2.size()),
-				formatBytes(vat.normalsKtx2.size()),
-				formatBytes(vat.palettes.size() * sizeof(glm::mat4)));
-		}
-		catch (const std::exception& e)
-		{
-			spdlog::error("bakevat failed: {}", e.what());
-			return 1;
-		}
-	}
-
 	if (*envmap)
 	{
 		try
@@ -833,11 +767,6 @@ main(int argc, char** argv)
 				std::cout << describeAsset(animations, skeleton ? &*skeleton : nullptr);
 				break;
 			}
-			case assetlib::AssetType::kVat:
-				// Tables only: the pixel chunks are tens of MB and describe never reads a texel.
-				std::cout << describeAsset(store.LoadVatTables(key));
-				break;
-
 			// sniff never answers either: a texture has no codec, and an import document is text
 			// whose extension the text branch does not accept. Listed so the switch stays
 			// exhaustive, which is what makes a new AssetType a compile error here.
@@ -1133,13 +1062,12 @@ main(int argc, char** argv)
 			const auto graph = assetlib::AssetRefGraph::Scan(store);
 
 			spdlog::info(
-				"Scanned {} meshes, {} materials, {} environment assets, {} clip sets, {} VAT "
-				"bakes and {} import documents: {} references",
+				"Scanned {} meshes, {} materials, {} environment assets, {} clip sets "
+				"and {} import documents: {} references",
 				graph.meshesScanned,
 				graph.materialsScanned,
 				graph.environmentsScanned,
 				graph.clipSetsScanned,
-				graph.vatsScanned,
 				graph.importDocumentsScanned,
 				graph.Edges().size());
 
@@ -1208,8 +1136,6 @@ main(int argc, char** argv)
 
 			const assetlib::PackReport report = store.Pack(desc);
 
-			if (report.vatsRebaked != 0)
-				spdlog::info("Re-baked {} stale .bvat before packing", report.vatsRebaked);
 			if (report.geometryRebaked != 0)
 				spdlog::info(
 					"Re-baked {} geometry entr{} into the archive (stale on disk, or a rebind "

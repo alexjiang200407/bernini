@@ -1,5 +1,4 @@
 #include <gamelib/AssetManager.h>
-#include <gamelib/vat_freshness.h>
 
 #include "CacheTamper.h"
 #include "ImportUnitGroup.h"
@@ -13,18 +12,15 @@
 #include <assetlib/bmesh_gltf.h>
 #include <assetlib/mesh_tangents.h>
 #include <assetlib/project_layout.h>
-#include <assetlib/vat_bake.h>
 #include <assetlib_structs/Animation.h>
 #include <assetlib_structs/BMesh.h>
-#include <assetlib_structs/BVat.h>
 #include <bgl/IGraphics.h>
 #include <catch2/matchers/catch_matchers_string.hpp>
 #include <core/file/file.h>
 
 // The loads behind an acquire go through the regeneration seam: a stale container is served from
 // its copied source, in memory, with the file on disk left exactly as it was -- #413's shape, where
-// the fix used to be re-importing by hand. The VAT rule rides the same axis: a bake over a stale
-// group is stale whatever its own stamps say.
+// the fix used to be re-importing by hand.
 
 namespace
 {
@@ -97,56 +93,4 @@ TEST_CASE("a stale clip set is refused at acquire, and names the way out", "[reg
 		// would be a load that writes.
 		CHECK(core::file::read_file_bytes(banim.string()) == stale);
 	}
-}
-
-TEST_CASE(
-	"a .bvat over a stale group is stale, and re-bakes from the regenerated geometry",
-	"[regen][vat]")
-{
-	DataRoot root("bernini_regen_vat");
-	ImportRig(root.path);
-
-	const assetlib::AssetStore store(root.path);
-	const std::string_view     mesh  = "Derived/Meshes/unit.bmesh";
-	const std::string_view     clips = "Derived/Animations/unit.banim";
-
-	static_cast<void>(game::EnsureVatBaked(store, mesh, clips));
-	REQUIRE(game::VatFreshness(store, mesh, clips) == game::VatBakeState::kFresh);
-
-	// The bake's own three stamps still hold -- the staleness is the group's cache key alone.
-	FlipTokenByte(root.path / "Derived/Meshes/unit.bmesh");
-	CHECK(game::VatFreshness(store, mesh, clips) == game::VatBakeState::kStale);
-
-	// Re-baked from the seam's outputs, not refused -- and the answer the bake just made true
-	// holds: without that, the editor's bake offer would loop and every acquire would pay the
-	// bake again until migrate rewrites the group on disk.
-	const assetlib::BVat rebaked = game::EnsureVatBaked(store, mesh, clips);
-	CHECK_FALSE(rebaked.positionsKtx2.empty());
-	CHECK(game::VatFreshness(store, mesh, clips) == game::VatBakeState::kFresh);
-
-	// That trust is pinned to the group's source, not just to the file: a re-exported .glb
-	// moves nothing the bake's own stamps watch, and must still fire the axis.
-	const assetlib::test::SkinnedGltf reexport(
-		"bernini_regen_vat_reexport_gltf",
-		{ { "\"translation\": [ 0, 2, 0 ]", "\"translation\": [ 0, 3, 0 ]" } });
-	std::filesystem::copy_file(
-		reexport.PackGlb(),
-		root.path / "Authored/Meshes/unit.glb",
-		std::filesystem::copy_options::overwrite_existing);
-	CHECK(game::VatFreshness(store, mesh, clips) == game::VatBakeState::kStale);
-
-	// And a re-bake over the re-export earns it back.
-	static_cast<void>(game::EnsureVatBaked(store, mesh, clips));
-	CHECK(game::VatFreshness(store, mesh, clips) == game::VatBakeState::kFresh);
-
-	// A bake this process did not make earns no such trust. Simulated by moving the file's
-	// write time -- how a sibling's bake actually arrives, stamped by the checkout that wrote
-	// it -- since rewriting identical bytes can land inside the same stamp second.
-	const std::filesystem::path bvatAbs =
-		root.path /
-		assetlib::vatPathFor("Derived/Meshes/unit.bmesh", "Derived/Animations/unit.banim");
-	std::filesystem::last_write_time(
-		bvatAbs,
-		std::filesystem::last_write_time(bvatAbs) + std::chrono::seconds(2));
-	CHECK(game::VatFreshness(store, mesh, clips) == game::VatBakeState::kStale);
 }

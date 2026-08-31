@@ -97,7 +97,7 @@ public:
 	// Hands the animation clock to the render thread, as SetCamera hands the camera: what this
 	// window's frames carry as RenderJob::time. Public because the clock is the *panel's* policy,
 	// not the viewport's -- the Animation panel's transport drives its preview from outside. A
-	// window nobody clocks draws at time zero, which freezes VAT instances on their phase.
+	// window nobody clocks draws at time zero, which freezes animated instances on their phase.
 	void
 	SetTime(float seconds);
 

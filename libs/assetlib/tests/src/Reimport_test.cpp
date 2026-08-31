@@ -8,10 +8,8 @@
 #include <assetlib/migrate.h>
 #include <assetlib/project_layout.h>
 #include <assetlib/skinning.h>
-#include <assetlib/vat_bake.h>
 #include <assetlib_structs/Animation.h>
 #include <assetlib_structs/BMesh.h>
-#include <assetlib_structs/BVat.h>
 #include <assetlib_structs/Bounds.h>
 #include <assetlib_structs/Skeleton.h>
 #include <catch2/catch_approx.hpp>
@@ -330,44 +328,6 @@ TEST_CASE("Deleting an import document leaves what it produced", "[reimport]")
 		planCascadeDeletion(AssetRefGraph::Scan(store), "Authored/Meshes/unit.bimport");
 	CHECK(std::ranges::find(plan.cascade, "Derived/Meshes/unit.bmesh") == plan.cascade.end());
 	CHECK(std::ranges::find(plan.cascade, "Derived/Skeletons/unit.bskel") == plan.cascade.end());
-}
-
-// The cascade removes files the caller never named -- deleting a `.bvat` frees the mesh and clips
-// only it still held -- so the claims that go with them are not the ones planDeletion collected.
-TEST_CASE("A cascade drops the claims on what it frees", "[reimport]")
-{
-	const test::SkinnedGltf source("bernini_reimport_casc_gltf");
-	const ImportedProject   project("bernini_reimport_casc", source.PackGlb());
-
-	const AssetStore& store = project.Store();
-
-	const BVat bake =
-		store.BakeVat({ "Derived/Meshes/unit.bmesh", "Derived/Animations/unit.banim" });
-	store.Save(bake, "Derived/Meshes/unit.bvat");
-	REQUIRE(fs::exists(project.dataRoot / "Derived/Meshes/unit.bvat"));
-
-	const DeletionPlan plan =
-		planCascadeDeletion(AssetRefGraph::Scan(store), "Derived/Meshes/unit.bvat");
-	REQUIRE(plan.Allowed());
-
-	// The bake was the last thing holding them, so they come free with it.
-	REQUIRE(std::ranges::find(plan.cascade, "Derived/Meshes/unit.bmesh") != plan.cascade.end());
-	CHECK(
-		std::ranges::find(plan.producers, "Authored/Meshes/unit.bimport") != plan.producers.end());
-
-	REQUIRE(store.DeleteAsset(plan).status == DeletionStatus::kDeleted);
-
-	const ImportDocument document =
-		loadImportDocument(store.GetFiles(), "Authored/Meshes/unit.bimport");
-	for (const std::string& freed : plan.cascade)
-	{
-		INFO("freed: " << freed);
-		CHECK(std::ranges::find(document.outputs, freed) == document.outputs.end());
-	}
-
-	// Without the claims dropped, this call would rebuild everything the cascade just removed.
-	CHECK(store.Reimport(/*dryRun*/ false).GetWrittenCount() == 0);
-	CHECK_FALSE(fs::exists(project.dataRoot / "Derived/Meshes/unit.bmesh"));
 }
 
 TEST_CASE("What a failed source wrote before it threw is still reported", "[reimport]")

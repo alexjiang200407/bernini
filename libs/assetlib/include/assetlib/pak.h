@@ -16,9 +16,6 @@ namespace assetlib
 		uint32_t entries      = 0;
 		uint64_t payloadBytes = 0;
 
-		/** `.bvat` files found stale and re-baked before packing. See `AssetStore::Pack`. */
-		uint32_t vatsRebaked = 0;
-
 		/** `.bsky` / `.benvl` files whose routed source moved, re-baked before packing. */
 		uint32_t envsRebaked = 0;
 

@@ -3,7 +3,6 @@
 
 #include <assetlib_structs/BEnv.h>
 #include <assetlib_structs/BMaterial.h>
-#include <assetlib_structs/BVat.h>
 #include <assetlib_structs/SourceStamp.h>
 
 #include "mounted_io.h"
@@ -26,12 +25,6 @@ namespace assetlib
 	AssetStore::DrawsLoose(const BMaterial& material) const
 	{
 		return drawsLoose(material, *m_Files);
-	}
-
-	bool
-	AssetStore::VatIsStale(const BVat& vat) const
-	{
-		return vatIsStale(vat, *m_Files);
 	}
 
 	bool

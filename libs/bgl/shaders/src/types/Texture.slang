@@ -5,7 +5,7 @@
 public extension Texture2D
 {
     // A texel by integer coordinate, no sampler in the loop. What a fetch keyed on an exact texel
-    // (a VAT column) wants -- and what a stage with no sampler bound can still do.
+    // wants -- and what a stage with no sampler bound can still do.
     public float4 Load(uint2 coord, uint mip = 0)
     {
         return this.Load(int3(coord, mip));

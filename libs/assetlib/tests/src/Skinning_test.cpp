@@ -200,7 +200,7 @@ TEST_CASE("Two bones blend a vertex between them", "[skinning]")
 	CHECK(skinned[0].position.y == Catch::Approx(3.0f).margin(1e-3));
 }
 
-// The VAT bake reconstructs a posed tangent from the posed normal plus a baked twist, and the
+// A posed tangent is reconstructed from the posed normal plus a twist, and the
 // twist is measured against this: a tangent that did not follow its bone would bake as a twist that
 // is not there.
 TEST_CASE("A tangent rides its bone's rotation, and a mesh without one skins to zero", "[skinning]")

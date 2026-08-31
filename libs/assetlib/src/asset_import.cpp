@@ -8,9 +8,9 @@
 
 #include <assetlib/import_document.h>
 
+#include <assetlib/codecs.h>
 #include <assetlib/project_layout.h>
 #include <assetlib/skinning.h>
-#include <assetlib/vat_bake.h>
 #include <assetlib_structs/Animation.h>
 #include <assetlib_structs/BMesh.h>
 #include <assetlib_structs/Node.h>
@@ -482,7 +482,7 @@ namespace assetlib
 
 		// Directory order is unspecified, so choosing one would make the reference written into the
 		// `.banim` depend on the filesystem -- and would scatter one rig's clips across two skeletons,
-		// which is the thing a VAT bake cannot then fit one bounding box around.
+		// which is the thing one bounding box cannot then be fitted around.
 		if (matches.size() > 1)
 		{
 			auto named = std::string();

@@ -6,7 +6,7 @@ namespace game
 	 * One playable clip of an acquired mesh, in source-asset terms. Its index in the acquire's clip
 	 * table is what an instance names.
 	 *
-	 * Shared by both animated tiers: a VAT bake and a skinned rig describe a clip identically, so a
+	 * Shared by both pose sources: the rig describes a clip once however it is played, so a
 	 * caller showing a clip list does not have to know which door it came through.
 	 */
 	struct ClipInfo

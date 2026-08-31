@@ -59,7 +59,7 @@ nothing in the tree can attribute a cost to one stage: the RHI has no timestamp 
 measures CPU command recording. Whole-frame throughput cannot separate a vertex-stage change from
 anything else in the frame.
 
-`ROADMAP.md` `:360` carries that work — *GPU timestamp per pass with on-screen breakdown* — and it
+`ROADMAP.md` `:347` carries that work — *GPU timestamp per pass with on-screen breakdown* — and it
 is the thing to wait for. A crowd scene that measures vertex-bound is the other trigger, and the
 more urgent one.
 

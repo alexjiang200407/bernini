@@ -142,8 +142,10 @@ frame.
 - **assetlib** — no new container and no token bump. The `.bvat` codec, its `TokenCanary` pin, its
   reference-graph edges and `pack`'s re-bake are removed and every suite passes without them, no
   other token moved.
-- **Retirement PR** — no VAT draw path, container or bake remains; the crowd-scene timing on VAT,
-  the bone anim table and the per-instance tier is in its body.
+- **Retirement PR** — no VAT draw path, container or bake remains. *Corrected by task 5:* the
+  crowd-scene timing this asked for is **dropped, not taken** — ADR-2 above says why, and the
+  question it would have informed is
+  [docs/specs/crowd_frame_interpolation.md](docs/specs/crowd_frame_interpolation.md).
 - **GPU residency, owned here** — a rig with a table holds `bones × frames × 48 B` beside its
   same-sized sample pool. Nothing clamps it: a table is as large as its clip set, and the levers
   are authoring and, later, quantization. So the roadmap's "VAT texture memory under 50 MB"

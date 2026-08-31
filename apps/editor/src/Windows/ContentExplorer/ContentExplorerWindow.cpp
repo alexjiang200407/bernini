@@ -404,7 +404,7 @@ ContentExplorerWindow::UpdateEmptyPlaceholder()
 	const auto root = m_Ui.CurrentDirectoryExplorer->rootIndex();
 
 	// Counting what the view shows, not what the model holds: a folder of nothing but hidden
-	// build products is empty to the user.
+	// sidecars is empty to the user.
 	auto visibleRows = 0;
 	for (int row = 0; row < m_FileModel->rowCount(root); ++row)
 		if (!m_Ui.CurrentDirectoryExplorer->isRowHidden(row))
