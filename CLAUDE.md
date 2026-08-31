@@ -3,7 +3,8 @@ Bernini is a 3D game engine. It uses CMake as the buildsystem.
 # General Notes
 
 - Use bash
-- Do not `#include` standard c++ libraries. They're already in the precompiled header `./PCH/pch.h` for all the targets
+- Do not `#include` standard c++ libraries. They're already in the precompiled header `./PCH/pch.h`, which every compiled target in the tree gets — that universality is what makes omitting them safe.
+- **Never drop an `#include` because a *subsystem* PCH has it.** `libs/<lib>/src/pch.h` and `apps/editor/src/pch.h` carry the third-party headers that subsystem leans on (Qt, glm) so they cost nothing — but unlike the root PCH they reach only some targets: assetlib's is `PRIVATE` while its public headers are compiled by gamelib and the editor without it, and two Objective-C++ files skip a PCH entirely. So still write `#include <QString>` and `<core/glm.h>` where you use them; the PCH is an optimisation, not an interface. See [docs/build_performance.md](./docs/build_performance.md).
 - Library subsystems live under `./libs` (currently `./libs/bgl`, `./libs/core`, `./libs/assetlib`, `./libs/gamelib`); executable apps live under `./apps` (currently `./apps/editor`); runnable examples under `./examples`
 - **Layering**: `bgl` (renderer) never links `assetlib` — it stays codec-free, taking decoded `assetlib_structs` PODs. `assetlib` (offline cook) never links `bgl` — the CLI baker must not drag in D3D12. `gamelib` is the seam that links both, and is where "load this asset into a scene" lives.
 - **The design bar is not the same everywhere.** See below.
@@ -100,9 +101,9 @@ Graphics debugging practices.
 
 **[Build Performance](./docs/build_performance.md)**
 
-How to tell where a build's time went: `just build --time`, reading the log ninja already writes.
-Why wall and CPU are different claims, why the per-target rollup is the one that matters, and why a
-measurement taken while a sibling checkout is building is not a measurement.
+How to tell where a build's time went (`just build --time`, reading the log ninja already writes),
+and what may and may not go in a precompiled header — a PCH is deserialized into every TU, so a
+header a minority of sources need is a net loss, and the decision is a measurement.
 
 **[Profiling](./docs/profiling.md)**
 
