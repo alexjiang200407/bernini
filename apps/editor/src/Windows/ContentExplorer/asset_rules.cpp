@@ -90,4 +90,29 @@ namespace editor
 		       !name.endsWith(' ') && !name.contains(c_Invalid) &&
 		       !c_Reserved.match(name).hasMatch();
 	}
+
+	QString
+	BrowseRootFor(const QString& dataRoot, const BrowseMode mode)
+	{
+		if (dataRoot.isEmpty())
+			return {};
+
+		const QDir root(dataRoot);
+
+		switch (mode)
+		{
+		case BrowseMode::kTextures:
+			return root.filePath(QString::fromUtf8(assetlib::c_SourceTexturesDirectoryName));
+		case BrowseMode::kAssets:
+			break;
+		}
+
+		return root.filePath(QString::fromUtf8(assetlib::c_AuthoredDirectoryName));
+	}
+
+	bool
+	IsEditableMode(const BrowseMode mode)
+	{
+		return mode == BrowseMode::kAssets;
+	}
 }

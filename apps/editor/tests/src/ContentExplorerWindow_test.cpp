@@ -6,6 +6,7 @@
 #include "util/asset_paths.h"
 #include <assetlib/Project.h>
 
+#include <QComboBox>
 #include <QDir>
 #include <QDragEnterEvent>
 #include <QFileSystemModel>
@@ -64,6 +65,28 @@ namespace
 	Back(const ContentExplorerWindow& window)
 	{
 		return window.findChild<QToolButton*>("BackButton");
+	}
+
+	QComboBox*
+	Mode(const ContentExplorerWindow& window)
+	{
+		return window.findChild<QComboBox*>("ModeSelector");
+	}
+
+	/**
+	 * Picks a mode the way a user does. The blocker matters: `setCurrentIndex` emits
+	 * `currentIndexChanged` by itself, so without it this would switch the mode even if the window
+	 * listened for the wrong signal, and the test could not tell the two apart.
+	 */
+	void
+	PickMode(const ContentExplorerWindow& window, const int index)
+	{
+		auto* mode = Mode(window);
+		{
+			const QSignalBlocker quiet(mode);
+			mode->setCurrentIndex(index);
+		}
+		Q_EMIT mode->activated(index);
 	}
 
 	/** The directory the grid is rooted at, or empty before the explorer has a project. */
@@ -746,4 +769,133 @@ TEST_CASE("A held file is held whatever its name contains", "[contentexplorer]")
 			{ QDir(root).absoluteFilePath("Authored/Environments/studio.benv") },
 			materials,
 			true));
+}
+
+TEST_CASE("A mode is a browse root and nothing else", "[assetrules][textures]")
+{
+	const QString root = QStringLiteral("/projects/MyGame/Data");
+
+	CHECK(
+		editor::BrowseRootFor(root, editor::BrowseMode::kAssets) ==
+		QString("/projects/MyGame/Data/Authored"));
+
+	CHECK(
+		editor::BrowseRootFor(root, editor::BrowseMode::kTextures) ==
+		QString("/projects/MyGame/Data/Derived/SourceTextures"));
+
+	// Before a project is open there is no root to be under, and neither mode invents one.
+	CHECK(editor::BrowseRootFor({}, editor::BrowseMode::kAssets).isEmpty());
+	CHECK(editor::BrowseRootFor({}, editor::BrowseMode::kTextures).isEmpty());
+
+	// Textures are derived, and ADR-6 says a person never edits one.
+	CHECK(editor::IsEditableMode(editor::BrowseMode::kAssets));
+	CHECK_FALSE(editor::IsEditableMode(editor::BrowseMode::kTextures));
+}
+
+TEST_CASE("The texture viewer roots at what the imports extracted", "[contentexplorer][textures]")
+{
+	const Sandbox sandbox;
+	Touch(sandbox, "Derived/SourceTextures/kirk/body_bc.ktx2");
+	Touch(sandbox, "Authored/Materials/Body.bmaterial");
+
+	ContentExplorerWindow window(nullptr, NothingOpen());
+	window.SetRootPath(sandbox.DataRootPath());
+
+	const QString authored = sandbox.DataRootPath() + "/Authored";
+	const QString textures = sandbox.DataRootPath() + "/Derived/SourceTextures";
+
+	REQUIRE(QDir(Shown(window)) == QDir(authored));
+
+	PickMode(window, 1);
+	CHECK(QDir(Shown(window)) == QDir(textures));
+	auto* tree      = Hierarchy(window);
+	auto* treeModel = qobject_cast<QFileSystemModel*>(tree->model());
+	REQUIRE(treeModel != nullptr);
+	CHECK(QDir(treeModel->filePath(tree->rootIndex())) == QDir(textures));
+
+	SECTION("and going back to assets returns to the authored half")
+	{
+		PickMode(window, 0);
+		CHECK(QDir(Shown(window)) == QDir(authored));
+	}
+
+	SECTION("Back does not cross a mode")
+	{
+		// The trail behind it points outside the root the new mode allows, so it is dropped rather
+		// than offered and then refused by the navigation guard.
+		CHECK(!Back(window)->isEnabled());
+	}
+
+	SECTION("and the guard now holds the other way round")
+	{
+		tree->setCurrentIndex(IndexFor(*treeModel, authored));
+		CHECK(QDir(Shown(window)) == QDir(textures));
+	}
+}
+
+TEST_CASE("The texture viewer is read-only", "[contentexplorer][textures]")
+{
+	const Sandbox sandbox;
+	Touch(sandbox, "Derived/SourceTextures/kirk/body_bc.ktx2");
+
+	ContentExplorerWindow window(nullptr, NothingOpen());
+	window.SetRootPath(sandbox.DataRootPath());
+
+	const QString source = sandbox.DataRootPath() + "/incoming.glb";
+
+	// Importing is what the explorer takes a drop for, and an import writes into the project.
+	REQUIRE(AcceptsFile(window, source));
+
+	PickMode(window, 1);
+	CHECK_FALSE(AcceptsFile(window, source));
+
+	SECTION("and takes it again once the mode does")
+	{
+		PickMode(window, 0);
+		CHECK(AcceptsFile(window, source));
+	}
+}
+
+TEST_CASE("A mode whose root is missing is refused, not repaired", "[contentexplorer][textures]")
+{
+	// Project::Create scaffolds every required directory, SourceTextures among them, so this is a
+	// project whose layout was broken behind its back. Entering the mode anyway would root a
+	// QFileSystemModel at nothing, and an unrooted one lists the whole filesystem.
+	const Sandbox sandbox;
+
+	const QString textures = sandbox.DataRootPath() + "/Derived/SourceTextures";
+	REQUIRE(QDir(textures).exists());
+	REQUIRE(QDir(textures).removeRecursively());
+
+	ContentExplorerWindow window(nullptr, NothingOpen());
+	window.SetRootPath(sandbox.DataRootPath());
+
+	const QString authored = sandbox.DataRootPath() + "/Authored";
+	REQUIRE(QDir(Shown(window)) == QDir(authored));
+
+	PickMode(window, 1);
+
+	// Still on the authored half, and nothing was created to get there.
+	CHECK(QDir(Shown(window)) == QDir(authored));
+	CHECK_FALSE(QDir(textures).exists());
+
+	// The selector does not stand on a mode the window refused to enter.
+	CHECK(Mode(window)->currentIndex() == 0);
+}
+
+TEST_CASE("Only a user's pick re-roots the views", "[contentexplorer][textures]")
+{
+	// `activated` fires for a pick and not for a programmatic change. Assigning the combo -- a
+	// restore, a reset, anything that is not a person -- must not move the views.
+	const Sandbox sandbox;
+	Touch(sandbox, "Derived/SourceTextures/kirk/body_bc.ktx2");
+
+	ContentExplorerWindow window(nullptr, NothingOpen());
+	window.SetRootPath(sandbox.DataRootPath());
+
+	const QString authored = sandbox.DataRootPath() + "/Authored";
+	REQUIRE(QDir(Shown(window)) == QDir(authored));
+
+	Mode(window)->setCurrentIndex(1);
+	CHECK(QDir(Shown(window)) == QDir(authored));
 }

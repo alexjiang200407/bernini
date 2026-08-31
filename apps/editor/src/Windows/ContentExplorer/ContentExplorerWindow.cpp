@@ -7,6 +7,7 @@
 
 #include <QAbstractItemView>
 #include <QAction>
+#include <QComboBox>
 #include <QDir>
 #include <QDragEnterEvent>
 #include <QDragMoveEvent>
@@ -61,6 +62,14 @@ ContentExplorerWindow::ContentExplorerWindow(QWidget* parent, AssetsHeldOpenFn a
 	m_Ui.BackButton->setIcon(style()->standardIcon(QStyle::SP_ArrowBack));
 	m_Ui.BackButton->setToolButtonStyle(Qt::ToolButtonIconOnly);
 	connect(m_Ui.BackButton, &QToolButton::clicked, this, &ContentExplorerWindow::NavigateBack);
+
+	connect(
+		m_Ui.ModeSelector,
+		&QComboBox::activated,  // activated, not currentIndexChanged: only a user's pick re-roots
+		this,
+		[this](int index) {
+			SetBrowseMode(index == 1 ? editor::BrowseMode::kTextures : editor::BrowseMode::kAssets);
+		});
 
 	// The hierarchy shows files as well as directories, so an asset can be found and dragged straight
 	// out of the tree without first navigating to its folder in the right-hand view.
@@ -152,10 +161,37 @@ ContentExplorerWindow::SetRootPath(const QString& path)
 	m_FileModel->SetDataRoot(path);
 	m_History.clear();
 
-	// The views root one level in, at the authored half. Everything else here keeps resolving
-	// against `m_RootPath`: a key is data-root-relative, so moving where the *views* point must not
-	// move what a path means -- see ADR-3 in docs/plans/derived-authored-editor-opt.md.
-	m_BrowseRoot = QDir(path).filePath(QString::fromUtf8(assetlib::c_AuthoredDirectoryName));
+	// The views root one level in, at the half this mode browses. Everything else here keeps
+	// resolving against `m_RootPath`: a key is data-root-relative, so moving where the *views* point
+	// must not move what a path means -- see ADR-3 in docs/plans/derived-authored-editor-opt.md.
+	SetBrowseMode(m_Mode);
+}
+
+void
+ContentExplorerWindow::SetBrowseMode(const editor::BrowseMode mode)
+{
+	const QString root = editor::BrowseRootFor(m_RootPath, mode);
+	if (root.isEmpty())
+		return;
+
+	// Project::Create and Project::Open scaffold every required directory, this one among them, so
+	// an absent root means the project's layout is broken rather than merely empty. Refused rather
+	// than repaired: a mode that exists to be read-only must not write to be entered, and papering
+	// over a missing required directory hides that the project needs reopening. Refusing matters
+	// because an unrooted QFileSystemModel lists the whole filesystem.
+	if (!QDir(root).exists())
+	{
+		qWarning(
+			"ContentExplorer: '%s' is missing, so the project's layout is incomplete",
+			qPrintable(root));
+
+		m_Ui.ModeSelector->setCurrentIndex(static_cast<int>(m_Mode));
+		return;
+	}
+
+	m_Mode       = mode;
+	m_BrowseRoot = root;
+	m_History.clear();
 
 	m_Ui.FileExplorer->setRootIndex(m_HierarchyModel->setRootPath(m_BrowseRoot));
 	ShowDirectory(m_BrowseRoot);
@@ -434,6 +470,11 @@ ContentExplorerWindow::ShowAssetMenu(
 	const QString parentPath = model.filePath(parent);
 	const QString asset      = editor::AssetAt(model, index, m_RootPath);
 
+	// Read-only modes offer no menu at all rather than a menu of refusals: IsActionableAsset would
+	// turn every one of these into a no-op, and an item that does nothing reads as a broken one.
+	if (!editor::IsEditableMode(m_Mode))
+		return;
+
 	auto  menu   = QMenu(this);
 	auto* addDir = menu.addAction("Add Directory");
 
@@ -441,7 +482,7 @@ ContentExplorerWindow::ShowAssetMenu(
 	QAction* rename        = nullptr;
 	QAction* remove        = nullptr;
 	QAction* removeCascade = nullptr;
-	if (!asset.isEmpty())
+	if (editor::IsActionableAsset(asset))
 	{
 		menu.addSeparator();
 		if (editor::IsMaterialAsset(asset))
@@ -468,7 +509,7 @@ ContentExplorerWindow::ShowAssetMenu(
 void
 ContentExplorerWindow::dragEnterEvent(QDragEnterEvent* event)
 {
-	if (editor::AcceptsImportDrop(*event->mimeData()))
+	if (editor::IsEditableMode(m_Mode) && editor::AcceptsImportDrop(*event->mimeData()))
 		event->acceptProposedAction();
 }
 
@@ -476,13 +517,14 @@ void
 ContentExplorerWindow::dragMoveEvent(QDragMoveEvent* event)
 {
 	// The accept decision doesn't depend on position, so mirror dragEnterEvent.
-	event->acceptProposedAction();
+	if (editor::IsEditableMode(m_Mode) && editor::AcceptsImportDrop(*event->mimeData()))
+		event->acceptProposedAction();
 }
 
 void
 ContentExplorerWindow::dropEvent(QDropEvent* event)
 {
-	if (m_RootPath.isEmpty())
+	if (m_RootPath.isEmpty() || !editor::IsEditableMode(m_Mode))
 		return;
 
 	editor::RunImportDrop(this, m_RootPath, *event->mimeData());

@@ -63,6 +63,23 @@
           </widget>
          </item>
          <item>
+          <widget class="QComboBox" name="ModeSelector">
+           <property name="toolTip">
+            <string>What the browser shows: the project's authored assets, or the textures its imports extracted</string>
+           </property>
+           <item>
+            <property name="text">
+             <string>Assets</string>
+            </property>
+           </item>
+           <item>
+            <property name="text">
+             <string>Textures</string>
+            </property>
+           </item>
+          </widget>
+         </item>
+         <item>
           <spacer name="navigationSpacer">
            <property name="orientation">
             <enum>Qt::Orientation::Horizontal</enum>

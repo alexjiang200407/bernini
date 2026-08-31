@@ -1,5 +1,7 @@
 #pragma once
 
+#include "Windows/ContentExplorer/asset_rules.h"
+
 #include <QStringList>
 #include <QWidget>
 
@@ -93,6 +95,13 @@ private:
 	IsInsideBrowseRoot(const QString& path) const;
 
 	/**
+	 * Points the views at `mode`'s root and forgets where they had been -- Back does not cross
+	 * modes, since the trail behind it is outside the root the new mode allows.
+	 */
+	void
+	SetBrowseMode(editor::BrowseMode mode);
+
+	/**
 	 * Hides every row of `model` in `view` that `editor::IsHiddenInExplorer` names -- a build
 	 * product or a source's import document -- among `parent`'s rows [`first`, `last`], or the
 	 * whole parent when `last` is -1. Row-hiding is per view and resets with the
@@ -163,12 +172,16 @@ private:
 	// AssetOperations resolve against. Not where the views are rooted -- see m_BrowseRoot.
 	QString m_RootPath;
 
-	// Where the views are rooted: `Data/Authored`, the half a person authored. The derived half is
-	// not hidden row by row but simply never reachable, which is a property of where the views
-	// point rather than of a sweep that has to be reapplied on every insertion.
-	QString          m_BrowseRoot;
-	QStringList      m_History;
-	AssetOperations* m_Operations = nullptr;
+	// Where the views are rooted: the half `m_Mode` browses, never set on its own. What a mode
+	// does not root at is not hidden row by row but simply never reachable, which is a property of
+	// where the views point rather than of a sweep that has to be reapplied on every insertion.
+	QString m_BrowseRoot;
+
+	// What the views are showing. The browse root is derived from it and the data root, never set
+	// on its own -- two fields that could disagree about the same thing is how they start to.
+	editor::BrowseMode m_Mode = editor::BrowseMode::kAssets;
+	QStringList        m_History;
+	AssetOperations*   m_Operations = nullptr;
 
 	// A pure-CPU decode with no renderer behind it, so the explorer stands its own cache instead of
 	// being handed one the way the GPU-backed AssetThumbnailCache is.
