@@ -491,7 +491,10 @@ namespace
 		mesh.meshlets.push_back(meshlet);
 
 		for (uint32_t v = 0; v < 4; ++v) mesh.meshletVertices.push_back(v);
-		for (uint8_t i : { 0, 1, 2, 2, 1, 3 }) mesh.meshletTriangles.push_back(i);
+		// Typed, not a braced list of ints: that deduces initializer_list<int> and narrows on the
+		// way out, which MSVC treats as an error.
+		constexpr std::array<uint8_t, 6> c_Indices = { { 0, 1, 2, 2, 1, 3 } };
+		for (uint8_t i : c_Indices) mesh.meshletTriangles.push_back(i);
 
 		auto submesh                  = assetlib::Submesh();
 		submesh.layout.attributeCount = 6;
