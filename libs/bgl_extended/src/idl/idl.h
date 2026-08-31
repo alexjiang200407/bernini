@@ -22,6 +22,7 @@
 #include "idl/RecordHeader.h"
 #include "idl/Rig.h"
 #include "idl/SkinnedBone.h"
+#include "idl/SkinnedLegChain.h"
 #include "idl/SkinnedState.h"
 #include "idl/SkinnedTableState.h"
 #include "idl/Submesh.h"
