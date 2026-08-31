@@ -110,11 +110,12 @@ and portability.
       rejected rather than half-imported), but the shared table export waits on the line above.
     - [x] Editor import writes the rig beside the mesh — the skeleton always, the clips behind the
       *Import animations* box, both rolled back with a failed import.
-  - [x] Crowd tier — a rig's every frame posed once into a bone anim table, read by instances that
-    own no palette of their own. Replaced Vertex Animation Textures, which is retired: the table
-    holds bone matrices rather than baked vertices, so a modular unit draws as several slot meshes
-    on one shared pose, and memory scales with `bones x frames` per rig rather than
-    `verts x frames` per mesh. See [docs/skinning.md](docs/skinning.md).
+  - [ ] Crowd tier — instances that own no palette, drawing a pose their rig computed once
+    - [x] Bone anim table — a rig's every frame posed once on the GPU into a buffer the whole rig
+      shares, filled the first time an instance asks for it. Replaced Vertex Animation Textures,
+      which is retired: the table holds bone matrices rather than baked vertices, so a modular unit
+      draws as several slot meshes on one shared pose, and memory scales `bones x frames` per rig
+      rather than `verts x frames` per mesh. See [docs/skinning.md](docs/skinning.md).
     - [ ] **In-place bake policy** — a clip authored with travel in the joints carries that travel
       (the coyote's box spans ~130 units), but ground contact and locomotion are the game's: decide
       whether the cook subtracts root translation and hands it to gameplay as metadata
@@ -173,19 +174,23 @@ and portability.
   - [ ] Root motion — cosmetic nudge only, never authoritative for position.
   - [ ] Stays on the CPU (hero tier): ragdoll against arbitrary collision, IK against non-heightfield
     geometry, layers beyond the one additive slot, montages, facial/lip sync, variable-depth graphs.
-- [ ] Crowd Variation — one mesh and one clip set means sameness is the primary visual risk; all of it
-  must be deterministic from unit ID so nothing changes at a LOD boundary or on death.
+- [ ] Crowd Variation — a few meshes and one clip set means sameness is the primary visual risk; all
+  of it must be deterministic from unit ID so nothing changes at a LOD boundary or on death.
   - [ ] Per-unit animation phase offset from an ID hash — non-negotiable, or a formation reads as one
     organism; offset clip time and preserve it across state transitions.
   - [ ] Per-unit `playRate` jitter (±3–5%) so units that synchronise don't stay synchronised.
   - [ ] Per-unit uniform scale (±3–4%) and small formation yaw jitter.
-  - [ ] Per-instance submesh mask (helmet, cape, quiver, shield) — bucket by mask alongside LOD.
-  - [ ] Attachment variation as separate instanced draws off the skeletal side-channel bone transform.
+  - [ ] Per-instance submesh mask for small toggles on one mesh — a cape, a quiver — bucketed by
+    mask alongside LOD. The *wardrobe* is not this: a swappable kit is a slot mesh of its own on the
+    shared rig, which is what the crowd tier was built for.
+  - [ ] Attachment variation as separate instanced draws off the rig's bone anim table, which is
+    addressable by (clip, frame, bone) from any consumer for exactly this.
   - [ ] Per-instance material variation — kit index into a texture array plus hue/value jitter, reusing
     the blood parameter struct.
   - [ ] Grime/wear float, ID-hashed, reusing the blood dissolve-mask machinery.
-  - [ ] Texture atlasing — a single mesh means a single material, so kit variation has nowhere else to
-    come from; now on the critical path.
+  - [ ] Texture atlasing — a slot mesh carries its own material, so a kit already varies by
+    construction; this is what is left for variation *within* a slot, and is no longer the only
+    place kit variation can come from.
   - [ ] Not recommended: X-mirroring, since reversed handedness is visible on armed units.
 - [ ] Crowd Simulation & Pathfinding
   - [ ] **Shared-source kernel harness** — one kernel body per pass, compiled as both a Slang entry
@@ -344,7 +349,10 @@ and portability.
   - [ ] Optional: a CUDA port of one or two kernels purely for `compute-sanitizer --tool racecheck`.
   - [ ] DRED & Aftermath / Radeon GPU Detective, paired with monotonic breadcrumb markers.
 - [ ] Profiling
-  - [ ] GPU timestamp per pass with on-screen breakdown — FrameGraph feature, same as hashing.
+  - [ ] GPU timestamp per pass with on-screen breakdown — FrameGraph feature, same as hashing. The
+    RHI has no timestamp query at all today, so nothing in the tree can attribute a cost to one
+    stage; [docs/specs/crowd_frame_interpolation.md](docs/specs/crowd_frame_interpolation.md) is a
+    measurement queued behind this line.
   - [ ] Live counters: agents alive/dying/corpse split by type, visible per tier, per-instance vs
     table against the top-K budget, events vs capacity, slots in use, cells at cap, corpse palette
     memory.
