@@ -6,9 +6,10 @@ matrices**, in the vertex stage
 tier instead nlerps each bone's **local rotation** and then walks the hierarchy, in a compute pass,
 once per instance ([pose_walk.slang](../../libs/bgl/shaders/src/pose_walk.slang) `:71`).
 
-ADR-10 of the bone-anim-table feature chose the first. Nothing here disputes that choice. What is
-recorded is that the option space was searched in one direction only, so the cheaper alternative
-was never on the table when it was made.
+The bone-anim-table feature chose the first, deliberately — [docs/skinning.md](../skinning.md)
+states the rule and why the two sources differ between frames. Nothing here disputes that choice.
+What is recorded is that the option space was searched in one direction only, so the cheaper
+alternative was never on the table when it was made.
 
 ## The cost nobody priced
 
@@ -37,11 +38,11 @@ in *both* directions at once, which is unusual:
 
 Normally one is paid to buy the other.
 
-## What ADR-10 rejected, and what it did not
+## What was rejected, and what was not considered
 
-Its rejected alternative is *"nlerp of local rotations then a walk, per vertex — that is the pose
-pass, and the reason the hero tier has one."* That is the **quality-up, cost-up** option, and
-rejecting it is plainly right.
+The alternative that was weighed and rejected is *nlerp of local rotations then a walk, per
+vertex* — which is what the pose pass already is, and the reason the hero tier has one. That is the
+**quality-up, cost-up** option, and rejecting it is plainly right.
 
 The **quality-down, cost-down** option was never stated: read the *nearest* frame and do not
 interpolate. That is 24 loads rather than 48 — parity with the hero tier — and it removes the
@@ -75,5 +76,5 @@ either lerps the two frames or rounds to the nearer one. Measure the vertex stag
 dense enough to be vertex-bound, at the LOD a crowd unit actually draws at, and look at both the
 cost and the motion.
 
-If nearest-frame wins, ADR-10 is reversed, and — per the rule in [CLAUDE.md](../../CLAUDE.md) — that
-reversal is an amendment carried in its own PR, not a silent edit to the record of the decision.
+If nearest-frame wins, the rule in [docs/skinning.md](../skinning.md) changes with the code, in the
+PR that changes it.
