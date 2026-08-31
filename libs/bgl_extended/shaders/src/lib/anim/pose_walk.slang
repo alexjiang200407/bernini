@@ -90,13 +90,18 @@ public BoneSample SampleBone(PoseTables tables, Rig rig, Clip clip, uint bone, f
     return blended;
 }
 
-// Poses one rig at one fractional frame into the slots starting at `paletteBase`.
+// Composes one rig at one fractional frame into the slots starting at `paletteBase`, leaving every
+// slot holding a *model-space* transform.
+//
+// Split from the inverse bind below rather than run with it, because between the two is the one
+// window in the frame where a bone is in model space -- which is where a foot is planted against a
+// world ground plane. A caller wanting nothing of that calls PoseInto and never sees the seam.
 //
 // Every barrier below must be reached by every thread of the group the same number of times. It is:
 // the only loop carrying one is bounded by `rig.maxDepth`, which is group-uniform (the whole group
 // poses one rig at one frame), and the strided per-bone loops that *are* thread-varying
 // contain no barrier. Nothing returns early inside here either.
-public void PoseInto(PoseTables tables, Rig rig, Clip clip, float frames, uint paletteBase, uint localIdx)
+public void PoseModelSpace(PoseTables tables, Rig rig, Clip clip, float frames, uint paletteBase, uint localIdx)
 {
     // Composed in the palette rather than in groupshared: a model transform is affine, so it fits the
     // three rows the slot already reserves for the skin matrix it ends up holding. Nothing bounds the
@@ -130,9 +135,15 @@ public void PoseInto(PoseTables tables, Rig rig, Clip clip, float frames, uint p
         }
         DeviceMemoryBarrierWithGroupSync();
     }
+}
 
-    // In place, and safe without a barrier between the two: the strided loops assign a bone to the
-    // same thread every time, so the slot read here is the one this thread composed above.
+// Folds each bone's inverse bind into the model transform PoseModelSpace left in its slot, turning
+// the palette into the skinning matrices the mesh shader reads.
+//
+// In place, and safe without a barrier before it: the strided loops assign a bone to the same thread
+// every time, so the slot read here is the one this thread composed.
+public void FoldInverseBind(PoseTables tables, Rig rig, uint paletteBase, uint localIdx)
+{
     for (uint bone = localIdx; bone < rig.boneCount; bone += cPoseGroupSize)
     {
         SkinnedBone record = tables.bones.Get(rig.bones, bone);
@@ -140,4 +151,11 @@ public void PoseInto(PoseTables tables, Rig rig, Clip clip, float frames, uint p
         WritePalette(tables, slot, mul(PaletteMatrix(tables, slot), record.inverseBind));
     }
     DeviceMemoryBarrierWithGroupSync();
+}
+
+// The whole walk, for a caller with nothing to do in the model-space window.
+public void PoseInto(PoseTables tables, Rig rig, Clip clip, float frames, uint paletteBase, uint localIdx)
+{
+    PoseModelSpace(tables, rig, clip, frames, paletteBase, localIdx);
+    FoldInverseBind(tables, rig, paletteBase, localIdx);
 }
