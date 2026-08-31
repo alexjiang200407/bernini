@@ -254,7 +254,7 @@ not obvious from a signature. The headers linked below are the source of truth.
 | Upload the rig | [`IScene::AddRig`](libs/bgl/include/bgl/IScene.h) | Bones, clip table and sample pool become scene buffers; per-bone depth is derived here; a rig whose caller supplies a `FootPlantDesc` carries its leg chains and per-frame plant weights alongside them. Once per clip set, not once per mesh |
 | Upload the mesh | [`IScene::AddSkinnedMeshGeom`](libs/bgl/include/bgl/IScene.h) | The bind-pose submeshes, exactly as the static path uploads them, against a rig handle |
 | Place | [`ISceneView::CreateSkinnedMeshInstance`](libs/bgl/include/bgl/ISceneView.h) | Writes the playback record and reserves the instance's palette slice |
-| Pose | [`SkinnedPosePass`](libs/bgl_extended/src/passes/SkinnedPosePass.h) | One workgroup per instance: sample, blend, walk the hierarchy, multiply by inverse bind |
+| Pose | [`SkinnedPosePass`](libs/bgl_extended/src/passes/SkinnedPosePass.h) | One workgroup per instance: sample, blend, walk the hierarchy, plant whatever feet the rig authored, multiply by inverse bind |
 | Draw | `lib/forward/skinned_vertex.slang`, blend in [`lib/anim/skinning.slang`](libs/bgl_common/shaders/src/lib/anim/skinning.slang) | `ResolveSkinnedPose` settles the pose source once per mesh-shader group — one group being one instance — and `SkinnedVertex` blends the bind-pose vertex bytes by it; position, normal and tangent through one matrix. Entered from `programs/forward/SkinnedMesh.slang`, or from `programs/forward/AnyMesh.slang` where a draw mixes tiers |
 
 ## In the editor
@@ -299,6 +299,82 @@ to keep in agreement beyond the one below.
   window as `apps/editor/CLAUDE.md` prescribes. The class of bug this once shipped — a tier switch that
   acquired the geom through one tier and created the instance through the other — is now unreachable
   rather than untested: there is one acquire and one geom, and the source is a field on the spawn.
+
+## Foot planting
+
+A rig that authored legs has each one solved onto the scene's ground plane before its palette is
+folded through the inverse binds. Nothing else in the frame changes: the plant is a per-instance
+compute step inside `PoseSkinned.slang`, and the forward shaders never learn it happened, because
+the palette was already the whole interface between the two.
+
+**It runs in the one window where a bone is in model space.** The shared walk seeds local
+transforms, composes the hierarchy a depth level at a time, then multiplies each slot by its inverse
+bind. Between the walk and that multiply — and nowhere else in the frame — every slot holds a bone's
+model transform, which is what a solve against a world plane needs. That is why `pose_walk` exposes
+the two halves (`PoseModelSpace`, `FoldInverseBind`) as well as the `PoseInto` that runs both:
+`PoseSkinned` calls `PlantFeet` between them, and a caller with nothing to do in that window never
+sees the seam.
+
+**Only the hero tier plants.** `PoseRigFrames` fills a rig's bone anim table once and every crowd
+instance of that rig reads it, so there is no placement to plant against — one table cannot hold
+several instances standing on different ground. A crowd instance draws the unplanted pose, which is
+why the crowd path calls `PoseInto` and the per-instance path does not.
+
+**A leg is four bone indices and a sole plane** (`SkinnedLegChain`), uploaded with the rig through
+`AddRig`'s `FootPlantDesc` and refused unless `hip → knee → ankle → toe` is a direct parent chain:
+the solve rewrites those slots and carries their descendants rigidly, so a twist bone between two
+links would
+be left holding a pose the joints above it no longer agree with. `bgl` resolves no names and measures
+no soles — both need assetlib — so whoever loaded the containers fills the desc in. It rides the rig
+and not a geom on it: a leg is bone indices into the skeleton and a weight per frame of the clip set,
+so two meshes on one rig plant the same feet.
+
+**The plane crosses into model space as a row vector**, `mul(worldPlane, modelToWorld)`, which needs
+no inverse. The instance's inverse is still built, once per group, to carry world down into model
+space: a planted foot is dropped *vertically* onto the plane rather than projected along its normal,
+because the closest point on a slope is not the point the animation was authored over.
+
+**The target is the ankle joint, not the sole.** The joint is aimed at the ground under it lifted by
+the foot's own height along the ground normal. Deriving it from where the sole currently sits does
+not converge — the solve rotates the ankle along with the shin, so that target is one the solve then
+moves. Taken with the tilt below, the sole lands exactly on the plane whatever the chain did, since
+the only part of the ankle-to-sole offset with any height is the part along that normal.
+
+**Then the ankle turns onto the ground**, bringing the sole normal onto the plane's, about the ankle
+joint and clamped to `cSoleClampRadians`. About the joint rather than about the sole because the
+joint is where the chain the solve just satisfied ends; turning the foot under it would put the shin
+back out of length. The sole then lifts off the plane by `1 - cos t` of its distance to the joint,
+which at the clamp is under two millimetres on a foot of any size we cook.
+
+**Everything is scaled by a plant weight** — one byte per leg per frame, packed four to a uint,
+baked by the cook and sampled at the same fractional frame the pose is. A weight of zero is exactly
+the pose the rig would have had. A weight rather than a flag because a foot that snapped between the
+two states would pop, which is what the cook's ramp at each end of a planted run exists to remove.
+
+**Descendants ride the nearest solved ancestor's delta.** Each bone walks up its parent chain until
+it finds one, which is bounded below by the shallowest solved depth — above that no ancestor can be
+solved, so a spine or a tail leaves the walk after a step or two. The deltas live in a groupshared
+array sized by `cMaxLegsPerRig`, not by the bone count: a bone-count-sized array is what once capped
+a rig at 192, and `AddRig` refuses more legs than the array holds.
+
+**The solve is limb-neutral; only the policy around it is a leg's.** `SolveTwoBone` takes a
+root/mid/tip chain and a target, and `CarrySolvedDescendants` takes whatever bones some thread
+marked solved — neither knows what a leg is. What foot planting owns is where the target comes from
+(the ground under the ankle) and what weights it (the baked plant weight). A second kind of solve in
+this window — a hand reaching for a prop — supplies its own two and calls the same pair, rather than
+copying the barrier discipline and the two exclusions in the fixup, which are the delicate part.
+Two things it would still need designing for: `Rig` carries a field per chain kind today and
+would want one range with a kind tag at the second, and it has to run *after* the pelvis drop, since
+that moves the whole rig out from under any target resolved before it.
+
+**One thread solves one leg.** A chain is serial — hip before knee before ankle — so a second lane
+has nothing of its own to do. The group then carries the descendants together. All three barriers sit
+outside the per-leg and per-bone branches, and the whole stage is skipped on a group-uniform test of
+`rig.legs`, so a rig without an avatar pays one branch and no barrier.
+
+**The pelvis is not lowered when a leg cannot reach.** The chain is held just inside full extension
+and the foot simply stops short. Lowering the root by the largest deficit across a rig's legs is the
+next stage.
 
 ## Risky / Non-obvious Contracts
 

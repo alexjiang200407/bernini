@@ -63,6 +63,14 @@ namespace bgl
 					BarrierSyncFlag::kComputeShader,
 					BarrierAccessFlag::kShaderResource)
 				.AddBufferArg(
+					"scene.skinnedLegBuffer",
+					BarrierSyncFlag::kComputeShader,
+					BarrierAccessFlag::kShaderResource)
+				.AddBufferArg(
+					"scene.plantWeightBuffer",
+					BarrierSyncFlag::kComputeShader,
+					BarrierAccessFlag::kShaderResource)
+				.AddBufferArg(
 					"scene.bonePalettes",
 					BarrierSyncFlag::kComputeShader,
 					BarrierAccessFlag::kUnorderedAccess)
@@ -81,18 +89,20 @@ namespace bgl
 			return;
 		}
 
-		Uniforms& uniforms         = m_PoseSkinned["gUniforms"];
-		uniforms["posedInstances"] = ctx.GetBuffer("scene.posedInstances");
-		uniforms["meshBuffer"]     = ctx.GetBuffer("scene.meshInstanceBuffer");
-		uniforms["playbackBuffer"] = ctx.GetBuffer("scene.playbackBuffer");
-		uniforms["rigs"]           = ctx.GetBuffer("scene.rigBuffer");
-		uniforms["boneBuffer"]     = ctx.GetBuffer("scene.skinnedBoneBuffer");
-		uniforms["clipBuffer"]     = ctx.GetBuffer("scene.clipBuffer");
-		uniforms["sampleBuffer"]   = ctx.GetBuffer("scene.boneSampleBuffer");
-		uniforms["bonePalettes"]   = ctx.GetBuffer("scene.bonePalettes");
-		uniforms["time"]           = draw.clock.time;
-		uniforms["prevTime"]       = draw.clock.prevTime;
-		uniforms["posedCount"]     = posed;
+		Uniforms& uniforms            = m_PoseSkinned["gUniforms"];
+		uniforms["posedInstances"]    = ctx.GetBuffer("scene.posedInstances");
+		uniforms["meshBuffer"]        = ctx.GetBuffer("scene.meshInstanceBuffer");
+		uniforms["playbackBuffer"]    = ctx.GetBuffer("scene.playbackBuffer");
+		uniforms["rigs"]              = ctx.GetBuffer("scene.rigBuffer");
+		uniforms["boneBuffer"]        = ctx.GetBuffer("scene.skinnedBoneBuffer");
+		uniforms["clipBuffer"]        = ctx.GetBuffer("scene.clipBuffer");
+		uniforms["sampleBuffer"]      = ctx.GetBuffer("scene.boneSampleBuffer");
+		uniforms["legBuffer"]         = ctx.GetBuffer("scene.skinnedLegBuffer");
+		uniforms["plantWeightBuffer"] = ctx.GetBuffer("scene.plantWeightBuffer");
+		uniforms["bonePalettes"]      = ctx.GetBuffer("scene.bonePalettes");
+		uniforms["time"]              = draw.clock.time;
+		uniforms["prevTime"]          = draw.clock.prevTime;
+		uniforms["posedCount"]        = posed;
 
 		const GroundPlaneDesc& ground = view->GetScene()->As<Scene>()->GetGround();
 		uniforms["groundPoint"]       = ground.point;

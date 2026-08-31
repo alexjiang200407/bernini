@@ -131,10 +131,11 @@ namespace bgl
 		 *                   that plants no feet -- which animates exactly as it did before.
 		 * @throws SceneError for a skeleton with no bones, bones that are not topologically sorted,
 		 *         an `animations` whose bone count disagrees with `skeleton`, an empty or
-		 *         zero-frame clip table, a clip whose frames fall outside the sample pool, a leg
-		 *         naming a bone outside the skeleton or a chain whose links are not directly
-		 *         parented, a leg whose sole normal is not finite and nonzero, or a `plantWeights`
-		 *         that is not one byte per leg for every frame in the sample pool.
+		 *         zero-frame clip table, a clip whose frames fall outside the sample pool, more legs
+		 *         than `idl::cMaxLegsPerRig`, a leg naming a bone outside the skeleton or a chain
+		 *         whose links are not directly parented, a leg whose sole normal is not finite and
+		 *         nonzero, or a `plantWeights` that is not one byte per leg for every frame in the
+		 *         sample pool.
 		 *
 		 * `AnimationSet::skeletonSignature` is deliberately **not** checked here: computing a
 		 * skeleton's signature needs assetlib, which bgl does not link. A clip set cooked against a
