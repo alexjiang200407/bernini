@@ -374,6 +374,25 @@ AssetOperations::Rename(const QString& asset)
 		return;
 	}
 
+	// A rename of an imported source moves what that import produced, and a panel holding one of
+	// those is holding a file about to move out from under it. The target's own check cannot see
+	// them: the file clicked was the `.glb`, and these are containers nobody named.
+	for (const assetlib::RenameMove& move : plan.outputs)
+	{
+		const QString from = QString::fromStdString(move.from);
+		if (!IsHeldOpen(QDir(m_DataRoot).absoluteFilePath(from), false))
+			continue;
+
+		QMessageBox::warning(
+			m_Parent,
+			"Rename",
+			QString(
+				"'%1' was produced by it and is open in an editor panel.\n\nClose it there "
+				"first: renaming moves it, and the panel would go on offering the old path.")
+				.arg(from));
+		return;
+	}
+
 	// The rewrite touches files the user did not click, and an open one is held for the reason the
 	// target itself would be: a re-save or a stale offer under the old path.
 	auto referrers = QStringList();

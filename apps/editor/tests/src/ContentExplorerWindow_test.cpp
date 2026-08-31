@@ -346,9 +346,17 @@ TEST_CASE("A right-clicked asset resolves to its path under the data root", "[co
 	          "Textures/basecolor_700a22db7b7ef785.ktx2" },
 		Case{ "Derived/SourceTextures/kirk/tex0.ktx2", "Derived/SourceTextures/kirk/tex0.ktx2" },
 
+		// The source row: not an asset kind, but the one a person renames, and its group moves
+		// with it. Only where sources live -- see the derived spelling below.
+		Case{ "Authored/Meshes/tree.glb", "Authored/Meshes/tree.glb" },
+
 		// Deleting these is not this window's business, whatever their suffix suggests.
 		Case{ "Derived/Meshes/notes.txt", "" },
-		Case{ "Derived/Meshes/tree.glb", "" },  // importable, but not yet an asset of the project
+
+		// The sidecar is machinery, and taking it alone would orphan everything it names -- so it
+		// is refused here, not merely hidden from the rows.
+		Case{ "Authored/Meshes/tree.bimport", "" },
+		Case{ "Derived/Meshes/tree.glb", "" },  // importable, but left there rather than imported
 		Case{ "Derived/Meshes/tree.BMESH",
 	          "Derived/Meshes/tree.BMESH" });  // the suffix decides, case and all
 
@@ -898,4 +906,56 @@ TEST_CASE("Only a user's pick re-roots the views", "[contentexplorer][textures]"
 
 	Mode(window)->setCurrentIndex(1);
 	CHECK(QDir(Shown(window)) == QDir(authored));
+}
+
+TEST_CASE("A source row is what a rename is asked of", "[contentexplorer][sourcerow]")
+{
+	const Sandbox sandbox;
+	const QString source = Touch(sandbox, "Authored/Meshes/kirk.glb");
+	Touch(sandbox, "Authored/Meshes/kirk.bimport");
+	Touch(sandbox, "Derived/Meshes/kirk.bmesh");
+
+	ContentExplorerWindow window(nullptr, NothingOpen());
+	window.SetRootPath(sandbox.DataRootPath());
+
+	auto* files = Files(window);
+	auto* model = qobject_cast<QFileSystemModel*>(files->model());
+	REQUIRE(model != nullptr);
+
+	const QString dataRoot = sandbox.DataRootPath();
+
+	// The row a person sees for a model. `assetTypeFromExtension` does not know a `.glb`, so before
+	// this it answered empty and the row carried no menu at all.
+	CHECK(
+		editor::AssetAt(*model, IndexFor(*model, source), dataRoot) ==
+		QString("Authored/Meshes/kirk.glb"));
+
+	// Data-root-relative, not browse-root-relative: the views sit at Authored/ and the key does not.
+	CHECK(editor::AssetAt(*model, IndexFor(*model, source), dataRoot).startsWith("Authored/"));
+}
+
+TEST_CASE("A source renames but does not delete", "[assetrules][sourcerow]")
+{
+	// Both halves of ADR-8 in one place: `planDeletion` throws for a `.glb` -- it is not an asset
+	// kind -- and grouped deletion is the non-goal, so the row that gained a Rename must not gain a
+	// Delete beside it.
+	CHECK(editor::IsActionableAsset("Authored/Meshes/kirk.glb"));
+	CHECK_FALSE(editor::IsRemovableAsset("Authored/Meshes/kirk.glb"));
+
+	// Case is not what tells them apart.
+	CHECK_FALSE(editor::IsRemovableAsset("Authored/Meshes/kirk.GLB"));
+
+	SECTION("where everything else authored is both")
+	{
+		CHECK(editor::IsRemovableAsset("Authored/Materials/Body.bmaterial"));
+		CHECK(editor::IsRemovableAsset("Authored/Environments/day.benv"));
+		CHECK(editor::IsRemovableAsset("Authored/Meshes"));
+	}
+
+	SECTION("and everything derived is neither")
+	{
+		CHECK_FALSE(editor::IsActionableAsset("Derived/Meshes/kirk.bmesh"));
+		CHECK_FALSE(editor::IsRemovableAsset("Derived/Meshes/kirk.bmesh"));
+		CHECK_FALSE(editor::IsRemovableAsset("Derived/SourceTextures/kirk/body_bc.ktx2"));
+	}
 }

@@ -9,9 +9,10 @@ class QModelIndex;
 namespace editor
 {
 	/**
-	 * The data-root-relative path of the thing at `index` that may be acted on -- an asset file, or a
-	 * directory the project is not scaffolded with. Empty for a file of no kind the project tracks, for
-	 * one of the scaffolded directories, for anything outside the data root, or for no row at all.
+	 * The data-root-relative path of the thing at `index` that may be acted on -- an asset file, an
+	 * imported source, or a directory the project is not scaffolded with. Empty for a file of no kind
+	 * the project tracks, for a source's `.bimport` sidecar, for one of the scaffolded directories,
+	 * for anything outside the data root, or for no row at all.
 	 *
 	 * `dataRoot` is what the explorer is rooted at. Free of the window because it is the one thing a
 	 * delete cannot afford to get wrong, and a QMenu cannot be driven from a test.
@@ -40,6 +41,18 @@ namespace editor
 	 */
 	[[nodiscard]] bool
 	IsActionableAsset(const QString& asset);
+
+	/**
+	 * Whether `asset` is a thing a person may delete, as opposed to merely rename.
+	 *
+	 * False for an imported source. `assetTypeFromExtension` does not know a `.glb`, so
+	 * `planDeletion` throws for one rather than planning it -- and grouped deletion is ADR-8's
+	 * explicit non-goal, because deleting a source that shares its rig with another would have to
+	 * either strand that rig or take it. A rename rewrites where a deletion destroys, which is why
+	 * the same group is safe to move and not safe to remove.
+	 */
+	[[nodiscard]] bool
+	IsRemovableAsset(const QString& asset);
 
 	/** What the Content Explorer is browsing. Ordered to match `ModeSelector`'s items. */
 	enum class BrowseMode

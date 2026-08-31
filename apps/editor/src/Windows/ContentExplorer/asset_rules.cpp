@@ -1,6 +1,7 @@
 #include "asset_rules.h"
 
 #include "util/asset_paths.h"
+#include "util/import_outputs.h"
 
 #include <assetlib/Project.h>
 
@@ -34,7 +35,25 @@ namespace editor
 			                                                                         relative;
 		}
 
-		return assetlib::assetTypeFromExtension(path.toStdWString()) ? relative : QString();
+		// An imported source is not an asset kind -- `assetTypeFromExtension` does not know a `.glb`
+		// -- but it is the row standing for a model, so it is what a rename is asked of. Authored
+		// only: the extension alone would also claim a `.glb` sitting in the derived half, which is
+		// a file someone left there rather than a source this project imported.
+		if (IsImportedSource(path) &&
+		    assetlib::originOf(relative.toStdString()) == assetlib::AssetOrigin::kAuthored)
+			return relative;
+
+		const std::optional<assetlib::AssetType> type =
+			assetlib::assetTypeFromExtension(path.toStdWString());
+
+		// A source's import document is machinery, not a row: the `.glb` above is what stands for
+		// the model. Refused here rather than left to the hide rule, because that lives in a view
+		// and this does not -- and deleting a document alone orphans every container its `outputs`
+		// names, which nothing puts back, since Reimport reads the document to find them.
+		if (type == assetlib::AssetType::kImportDocument)
+			return {};
+
+		return type ? relative : QString();
 	}
 
 	bool
@@ -114,5 +133,11 @@ namespace editor
 	IsEditableMode(const BrowseMode mode)
 	{
 		return mode == BrowseMode::kAssets;
+	}
+
+	bool
+	IsRemovableAsset(const QString& asset)
+	{
+		return IsActionableAsset(asset) && !IsImportedSource(asset);
 	}
 }

@@ -483,9 +483,15 @@ ContentExplorerWindow::ShowAssetMenu(
 		menu.addSeparator();
 		if (editor::IsMaterialAsset(asset))
 			bake = menu.addAction("Bake");
-		rename        = menu.addAction("Rename");
-		remove        = menu.addAction("Delete");
-		removeCascade = menu.addAction("Delete Cascade");
+		rename = menu.addAction("Rename");
+
+		// An imported source renames -- moving everything it produced with it -- but does not
+		// delete: `planDeletion` throws for one, and grouped deletion is ADR-8's non-goal.
+		if (editor::IsRemovableAsset(asset))
+		{
+			remove        = menu.addAction("Delete");
+			removeCascade = menu.addAction("Delete Cascade");
+		}
 	}
 
 	QAction* const chosen = menu.exec(view.viewport()->mapToGlobal(pos));
