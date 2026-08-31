@@ -956,7 +956,13 @@ namespace
 		// may use a constant as an array bound).
 		for (const ConstantInfo& c : constants)
 		{
-			out += std::format("\tconstexpr {} {} = {};\n", c.type, c.name, c.value);
+			// A float literal needs its suffix: without one the initializer is a double, which MSVC
+			// reports as a narrowing truncation and this project builds warnings as errors.
+			const bool suffixed =
+				!c.value.empty() && (c.value.back() == 'f' || c.value.back() == 'F');
+			const std::string value = (c.type == "float" && !suffixed) ? c.value + "f" : c.value;
+
+			out += std::format("\tconstexpr {} {} = {};\n", c.type, c.name, value);
 		}
 		if (!constants.empty())
 		{
