@@ -1,5 +1,7 @@
 #include "asset_rules.h"
 
+#include "util/asset_paths.h"
+
 #include <assetlib/Project.h>
 
 #include <QDir>
@@ -19,10 +21,11 @@ namespace editor
 			return {};
 
 		const QString path     = model.filePath(index);
-		const QString relative = QDir(dataRoot).relativeFilePath(path);
+		const QString relative = GetKeyUnder(dataRoot, path);
 
-		// Something outside the project is not the project's to delete, whatever it is named.
-		if (relative.isEmpty() || relative == "." || relative.startsWith(".."))
+		// Something outside the project is not the project's to delete, whatever it is named -- and
+		// the data root itself is not a thing inside the project either.
+		if (relative.isEmpty() || relative == ".")
 			return {};
 
 		if (model.isDir(index))
@@ -65,7 +68,8 @@ namespace editor
 			if (!isDirectory)
 				return QFileInfo(resolved) == QFileInfo(absolute);
 
-			return !QDir(absolute).relativeFilePath(resolved).startsWith("..");
+			// The directory holds itself, so "." counts: deleting a folder takes what is open in it.
+			return IsKeyUnder(absolute, resolved);
 		};
 
 		return std::ranges::any_of(heldOpen, holds);

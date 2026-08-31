@@ -61,6 +61,29 @@ namespace editor
 		return stem;
 	}
 
+	QString
+	GetKeyUnder(const QString& root, const QString& path)
+	{
+		if (root.isEmpty() || path.isEmpty())
+			return {};
+
+		// Cleaned first, so a key that climbs out and back in (`a/../../b`) is judged on where it
+		// lands rather than on how it is spelt.
+		const QString key = QDir::cleanPath(QDir(root).relativeFilePath(path));
+
+		// An absolute answer means there was no relative one -- another drive on Windows.
+		if (key.isEmpty() || QDir::isAbsolutePath(key) || key == ".." || key.startsWith("../"))
+			return {};
+
+		return key;
+	}
+
+	bool
+	IsKeyUnder(const QString& root, const QString& path)
+	{
+		return !GetKeyUnder(root, path).isEmpty();
+	}
+
 	bool
 	IsContainedRelativePath(const QString& path)
 	{
