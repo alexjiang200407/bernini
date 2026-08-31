@@ -247,6 +247,16 @@ solved, so a spine or a tail leaves the walk after a step or two. The deltas liv
 array sized by `cMaxLegsPerRig`, not by the bone count: a bone-count-sized array is what once capped
 a rig at 192, and `AddSkinnedMeshGeom` refuses more legs than the array holds.
 
+**The solve is limb-neutral; only the policy around it is a leg's.** `SolveTwoBone` takes a
+root/mid/tip chain and a target, and `CarrySolvedDescendants` takes whatever bones some thread
+marked solved — neither knows what a leg is. What foot planting owns is where the target comes from
+(the ground under the ankle) and what weights it (the baked plant weight). A second kind of solve in
+this window — a hand reaching for a prop — supplies its own two and calls the same pair, rather than
+copying the barrier discipline and the two exclusions in the fixup, which are the delicate part.
+Two things it would still need designing for: `SkinnedGeom` carries a field per chain kind today and
+would want one range with a kind tag at the second, and it has to run *after* the pelvis drop, since
+that moves the whole rig out from under any target resolved before it.
+
 **One thread solves one leg.** A chain is serial — hip before knee before ankle — so a second lane
 has nothing of its own to do. The group then carries the descendants together. All three barriers sit
 outside the per-leg and per-bone branches, and the whole stage is skipped on a group-uniform test of

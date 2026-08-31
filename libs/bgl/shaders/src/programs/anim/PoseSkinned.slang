@@ -126,15 +126,18 @@ BoneSample SampleBone(SkinnedGeom geom, Clip clip, uint bone, float frames)
     return blended;
 }
 
-// --- Foot planting ------------------------------------------------------------------------------
+// --- Solving a chain in the model-space window ------------------------------------------------------------------------------
 //
 // Runs in the model-space window: after the hierarchy walk every palette slot holds a bone's model
 // transform, and before the inverse bind is folded in they still do. Nothing else in the frame has
 // them, which is why the solve lives here rather than in a pass of its own.
 
-// Where a solved chain's bones are and how each one moved, so the descendant fixup can read a delta
-// the solving thread computed. Sized by cMaxLegsPerRig rather than by the bone count: a
-// bone-count-sized array is what once capped a rig at 192.
+// Where a solved chain's bones are and how each one moved, so CarrySolvedDescendants can read a
+// delta the solving thread computed. Shared by every kind of solve that runs in this window, not
+// just by legs -- which is the whole reason it is a table rather than three locals.
+//
+// Sized by cMaxLegsPerRig rather than by the bone count: a bone-count-sized array is what once
+// capped a rig at 192. A second kind of solve raises the bound rather than adding an array.
 groupshared uint gSolvedBone[cMaxLegsPerRig * 3];
 groupshared float4x4 gSolvedDelta[cMaxLegsPerRig * 3];
 groupshared uint gShallowestSolved;
@@ -309,6 +312,56 @@ int SolvedIndexOf(uint solved, uint bone)
     return -1;
 }
 
+// Carries every descendant of a solved bone by that bone's delta, rigidly.
+//
+// Knows nothing about *why* a bone moved: it reads the `solved` entries some threads left in
+// `gSolvedBone`/`gSolvedDelta` and applies each one to everything beneath it. So a second kind of
+// solve -- a hand reaching for a prop -- calls this rather than copying it, which matters more than
+// it looks: the barrier discipline above and the two exclusions below are the delicate part, and two
+// copies of them are two things that can drift.
+//
+// Which delta a bone takes is its nearest solved ancestor's, so each walks up until it finds one --
+// cut short at the shallowest solved depth, above which no ancestor can be one, which is what keeps
+// a spine or a tail out of the walk. A bone that is itself solved is skipped: its own delta is
+// already in its slot, and its parent's would be applied on top.
+//
+// @pre the caller has left a barrier between writing the table and calling this.
+void CarrySolvedDescendants(SkinnedGeom geom, uint solved, uint paletteBase, uint localIdx)
+{
+    for (uint bone = localIdx; bone < geom.boneCount; bone += cPoseGroupSize)
+    {
+        SkinnedBone record = gUniforms.boneBuffer.Get(geom.bones, bone);
+        if (record.depth <= gShallowestSolved || SolvedIndexOf(solved, bone) >= 0)
+        {
+            continue;
+        }
+
+        uint ancestor = record.parent;
+        int found = -1;
+        while (ancestor != cInvalidBone)
+        {
+            SkinnedBone up = gUniforms.boneBuffer.Get(geom.bones, ancestor);
+            if (up.depth < gShallowestSolved)
+            {
+                break;
+            }
+            found = SolvedIndexOf(solved, ancestor);
+            if (found >= 0)
+            {
+                break;
+            }
+            ancestor = up.parent;
+        }
+
+        if (found >= 0)
+        {
+            let slot = paletteBase + bone * cFloat4sPerBone;
+            WritePalette(slot, mul(gSolvedDelta[found], PaletteMatrix(slot)));
+        }
+    }
+    AllMemoryBarrierWithGroupSync();
+}
+
 // Plants every leg of one instance, in the model-space window described above.
 //
 // Group-uniform from end to end: the early-out is on `geom`, which the whole group shares, and both
@@ -386,42 +439,7 @@ void PlantFeet(SkinnedGeom geom, Clip clip, float frames, float4x4 modelToWorld,
     }
     AllMemoryBarrierWithGroupSync();
 
-    // Everything below a solved bone rides its delta rigidly. Which delta is the nearest solved
-    // ancestor's, so each bone walks up until it finds one -- cut short at the shallowest solved
-    // depth, above which no ancestor can be one, which is what keeps a spine or a tail out of it.
-    let solved = geom.legs.count * 3;
-    for (uint bone = localIdx; bone < geom.boneCount; bone += cPoseGroupSize)
-    {
-        SkinnedBone record = gUniforms.boneBuffer.Get(geom.bones, bone);
-        if (record.depth <= gShallowestSolved || SolvedIndexOf(solved, bone) >= 0)
-        {
-            continue;
-        }
-
-        uint ancestor = record.parent;
-        int found = -1;
-        while (ancestor != cInvalidBone)
-        {
-            SkinnedBone up = gUniforms.boneBuffer.Get(geom.bones, ancestor);
-            if (up.depth < gShallowestSolved)
-            {
-                break;
-            }
-            found = SolvedIndexOf(solved, ancestor);
-            if (found >= 0)
-            {
-                break;
-            }
-            ancestor = up.parent;
-        }
-
-        if (found >= 0)
-        {
-            let slot = paletteBase + bone * cFloat4sPerBone;
-            WritePalette(slot, mul(gSolvedDelta[found], PaletteMatrix(slot)));
-        }
-    }
-    AllMemoryBarrierWithGroupSync();
+    CarrySolvedDescendants(geom, geom.legs.count * 3, paletteBase, localIdx);
 }
 
 // Poses one instance into the palette starting at `paletteBase`.
