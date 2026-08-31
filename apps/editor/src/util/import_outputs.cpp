@@ -34,8 +34,8 @@ namespace editor
 			const QDir root(dataRoot);
 
 			// A source belonging to another project would otherwise resolve straight back into it;
-			// KeyUnder is where that is refused, and where the reason is written down.
-			const QString key = KeyUnder(dataRoot, source);
+			// GetKeyUnder is where that is refused, and where the reason is written down.
+			const QString key = GetKeyUnder(dataRoot, source);
 			if (key.isEmpty() || key == ".")
 				return {};
 

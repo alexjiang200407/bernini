@@ -21,7 +21,7 @@ namespace editor
 			return {};
 
 		const QString path     = model.filePath(index);
-		const QString relative = KeyUnder(dataRoot, path);
+		const QString relative = GetKeyUnder(dataRoot, path);
 
 		// Something outside the project is not the project's to delete, whatever it is named -- and
 		// the data root itself is not a thing inside the project either.

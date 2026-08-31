@@ -62,7 +62,7 @@ namespace editor
 	}
 
 	QString
-	KeyUnder(const QString& root, const QString& path)
+	GetKeyUnder(const QString& root, const QString& path)
 	{
 		if (root.isEmpty() || path.isEmpty())
 			return {};
@@ -81,7 +81,7 @@ namespace editor
 	bool
 	IsKeyUnder(const QString& root, const QString& path)
 	{
-		return !KeyUnder(root, path).isEmpty();
+		return !GetKeyUnder(root, path).isEmpty();
 	}
 
 	bool

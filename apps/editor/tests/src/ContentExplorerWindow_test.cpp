@@ -723,7 +723,7 @@ TEST_CASE("A folder whose name begins with dots is still the project's", "[conte
 
 TEST_CASE("A held file is held whatever its name contains", "[contentexplorer]")
 {
-	// The regression the naive convergence would have caused, and the reason KeyUnder is not
+	// The regression the naive convergence would have caused, and the reason GetKeyUnder is not
 	// IsContainedRelativePath: this gate is what stops a Delete going through while a panel still
 	// has the file open. A name it read as "outside its own folder" would open that gate.
 	const Sandbox sandbox;

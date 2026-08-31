@@ -78,10 +78,10 @@ namespace editor
 	 * own root, and one caller of this is the gate on every deletion.
 	 */
 	[[nodiscard]] QString
-	KeyUnder(const QString& root, const QString& path);
+	GetKeyUnder(const QString& root, const QString& path);
 
 	/**
-	 * Whether `path` lies inside `root`: KeyUnder's answer with the key thrown away, for a caller
+	 * Whether `path` lies inside `root`: GetKeyUnder's answer with the key thrown away, for a caller
 	 * that only asks. One rule, two spellings of it -- a caller that needs the key must not have to
 	 * ask twice, and a caller that does not must not have to write `.isEmpty()` to mean "inside".
 	 */

@@ -505,7 +505,7 @@ ContentExplorerWindow::OnDirectoryRenamed(const QString& fromAbsolute, const QSt
 	// Follow the rename rather than dumping the user at the root. The history is left alone -- Back
 	// already skips a folder that is gone.
 	const QString shown  = m_FileModel->filePath(m_Ui.CurrentDirectoryExplorer->rootIndex());
-	const QString inside = editor::KeyUnder(fromAbsolute, shown);
+	const QString inside = editor::GetKeyUnder(fromAbsolute, shown);
 
 	if (inside.isEmpty())
 		return;
