@@ -23,6 +23,15 @@ not obvious from a signature. The headers linked below are the source of truth.
   (`bgl::SkinnedInstanceDesc` beside `bgl::VatInstanceDesc`), so a unit can move between tiers without
   its playback record being rewritten. `rate = 0` holds a pose under any clock.
 
+* **A posed instance is addressed by its placement, not by its playback record.** A foot planted on
+  the ground needs to know where in the world the instance stands, and that is the `Mesh` record's
+  `transform` — so the pose pass's work list holds *mesh instance indices*, reads the transform
+  there, and reaches the playback record through the `playback` entry the placement already carries.
+  Copying the transform into `SkinnedState` instead was tried and rejected: it is one fact in two
+  records, and nothing would catch the two disagreeing the day a transform becomes mutable. It is
+  also the indirection `CullInstances` and `TransparentDepthKeys` already make. The ground itself is
+  the scene's (`IScene::SetGround`), one plane until a heightfield exists.
+
 * **The previous pose is re-evaluated, not remembered.** Motion vectors need last frame's pose. Rather
   than double-buffering the palette, the pose pass writes *two* palettes per instance in one dispatch
   — at `time` and at `prevTime` — and the mesh shader skins both. That is correct on the first frame

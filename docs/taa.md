@@ -159,7 +159,7 @@ alpha-tested, read dimmer — judged acceptable by eye against keeping the machi
   frame per edit; the alternative is a ghost lasting tens.
 
   It counts **discrete rebinds only** — a material's contents, a submesh's binding, a texture's
-  release, an environment map. Anything a caller moves every frame (the camera, a transform, the
+  release, an environment map, the scene's ground plane. Anything a caller moves every frame (the camera, a transform, the
   exposure) stays out of it: reprojection already follows that, and an epoch that moved with it
   would leave a moving scene permanently unaccumulated. A rewrite that lands on the bytes already
   there still counts, since the entries are GPU-layout mirrors whose padding no comparison can

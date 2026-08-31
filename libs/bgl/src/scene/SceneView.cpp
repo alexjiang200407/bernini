@@ -509,10 +509,12 @@ namespace bgl
 				continue;
 			}
 
+			// The placement, not its playback record: the pose pass reads the instance's transform
+			// from the one and reaches the other through it.
 			const MeshMeta& meta = m_MeshBuffer.MetaAt(meshIndex);
 			if (meta.geomType == GeomType::kSkinnedMesh && meta.animState != 0)
 			{
-				list.push_back(meta.animState);
+				list.push_back(meshIndex);
 			}
 		}
 
