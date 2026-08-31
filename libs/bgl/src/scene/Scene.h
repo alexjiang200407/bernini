@@ -396,9 +396,10 @@ namespace bgl
 		 * whose frames run past the end of the sample pool. The clip set's `skeletonSignature` is
 		 * not among these -- computing one needs assetlib; see IScene::AddSkinnedMeshGeom.
 		 *
-		 * `footPlant` is refused for a bone outside the skeleton, a chain whose links are not
-		 * directly parented, a sole normal that is not finite and nonzero, or a `plantWeights`
-		 * that is not one byte per leg for every frame in the pool.
+		 * `footPlant` is refused for more legs than `idl::cMaxLegsPerRig`, a bone outside the
+		 * skeleton, a chain whose links are not directly parented, a sole normal that is not finite
+		 * and nonzero, or a `plantWeights` that is not one byte per leg for every frame in the
+		 * pool.
 		 *
 		 * Static-only, because it reads nothing of the scene: the checks are all about the
 		 * containers agreeing with each other.

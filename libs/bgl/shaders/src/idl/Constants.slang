@@ -48,6 +48,17 @@ public static const uint cInfluencesPerVertex = 4;
 // the frame, and motion vectors double it.
 public static const uint cFloat4sPerBone = 3;
 
+// Legs one rig may author. The pose pass keeps a solve delta per chain bone in groupshared so the
+// descendant fixup can read every one of them, and that array has to have a size: 8 x 3 x 64 B is
+// 1.5 KiB, against the bone-count-sized array that once capped a rig at 192. Eight is two more than
+// any animal rig we cook; AddSkinnedMeshGeom refuses past it rather than overrunning here.
+public static const uint cMaxLegsPerRig = 8;
+
+// How far a planted ankle may be turned to bring its sole onto the ground, 30 degrees. A cliff edge
+// under one foot would otherwise rotate the ankle past where one bends, and a broken ankle reads as
+// a worse artefact than a foot that does not quite meet the slope.
+public static const float cSoleClampRadians = 0.5235988;
+
 // Threads per pose-pass workgroup. One group poses one instance, one thread a bone at a time, so a
 // rig with more bones than this strides.
 public static const uint cPoseGroupSize = 64;

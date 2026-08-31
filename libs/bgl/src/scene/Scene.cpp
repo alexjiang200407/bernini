@@ -824,6 +824,17 @@ namespace bgl
 			}
 		}
 
+		// The pose pass keeps a solve delta per chain bone in groupshared, and that array has a fixed
+		// size; past it a rig would overrun it rather than plant anything.
+		if (footPlant.legs.size() > idl::cMaxLegsPerRig)
+		{
+			throw SceneError(
+				std::format(
+					"skinned geometry: a rig may author at most {} legs, and this one authors {}",
+					idl::cMaxLegsPerRig,
+					footPlant.legs.size()));
+		}
+
 		// A leg is authored by bone name, so a refusal carrying only an index would send whoever
 		// wrote the avatar back to the rig to count bones. Falls back to the index for a bone the
 		// string pool has no name for.

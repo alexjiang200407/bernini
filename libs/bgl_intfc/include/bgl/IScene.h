@@ -194,8 +194,8 @@ namespace bgl
 		 *         whose bone count disagrees with `skeleton`, an empty or zero-frame clip table, a
 		 *         clip whose samples fall outside the pool, a submesh without skin binding, a submesh
 		 *         whose material does not resolve to kPBR, a `posedBounds` whose min exceeds its
-		 *         max on any axis, a leg naming a bone outside the skeleton or a chain whose links
-		 *         are not directly parented, a leg whose sole normal is not finite and nonzero, or a
+		 *         max on any axis, more legs than `idl::cMaxLegsPerRig`, a leg naming a bone outside
+		 *         the skeleton or a chain whose links are not directly parented, a leg whose sole normal is not finite and nonzero, or a
 		 *         `plantWeights` that is not one byte per leg for every frame in the sample pool.
 		 *
 		 * `AnimationSet::skeletonSignature` is deliberately **not** checked here: computing a
