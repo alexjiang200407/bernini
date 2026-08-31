@@ -21,18 +21,21 @@ constexpr auto c_PbrPixelSrc = "programs.forward.PBR"sv;
 ```
 
 Which half a file belongs in is decided by whether it carries a `[shader("…")]` entry point, and
-nothing else.
+nothing else — and that is enforced, not merely asked for. `programs/` is globbed for the DXIL
+validation below, and a file there declaring no entry point fails the configure with a message
+saying it belongs in `lib/`.
 
 A program is named for what it draws, not for where it lives — `programs/forward/PBR.slang`, never
 `Forward_PBR.slang`. The directory already said `forward`.
 
-On a D3D12 build only, there is a build-time pass over the same sources: the `compile_shader`
-entries in [`libs/bgl/shaders/CMakeLists.txt`](../libs/bgl/shaders/CMakeLists.txt) invoke `slangc`
-per entry point, so a construct the target rejects is a build failure rather than a runtime
-surprise. The `.dxil` it produces is validation output only, and nothing loads it. A Metal build
-does not run this step at all — `libs/bgl/CMakeLists.txt:128-129` adds the `shaders` subdirectory
-under `RENDERER_BACKEND STREQUAL "DX12"` and nowhere else — so on macOS a bad shader surfaces when
-the pass that needs it is first built, not at compile time.
+On a D3D12 build only, there is a build-time pass over the same sources:
+[`libs/bgl/shaders/CMakeLists.txt`](../libs/bgl/shaders/CMakeLists.txt) globs `programs/`, reads
+each program's entry points out of its `[shader("…")]` attributes, and invokes `slangc` once per
+entry point — so a construct the target rejects is a build failure rather than a runtime surprise.
+The `.dxil` it produces is validation output only, and nothing loads it. A Metal build does not run
+this step at all — `libs/bgl/CMakeLists.txt:128-129` adds the `shaders` subdirectory under
+`RENDERER_BACKEND STREQUAL "DX12"` and nowhere else — so on macOS a bad shader surfaces when the
+pass that needs it is first built, not at compile time.
 
 ## Atomics: `Atomic<T>`, never a plain field + `InterlockedAdd`
 
@@ -123,12 +126,16 @@ code. An enum a function **returns** is emitted as a type — and HLSL has no `u
 declared `: uint8_t` compiles here, passes every Metal test, and fails DXC with
 `unknown type name 'uint8_t'`. Tag enums are therefore `uint32_t`, as `PsoType` always was.
 
-This is worth knowing because the check that catches it is narrow. The `compile_shader` entries in
-[libs/bgl/shaders/CMakeLists.txt](../libs/bgl/shaders/CMakeLists.txt) validate to DXIL at build
+This is worth knowing because the check that catches it runs in one place only:
+[libs/bgl/shaders/CMakeLists.txt](../libs/bgl/shaders/CMakeLists.txt) validates to DXIL at build
 time, and there is no `dxcompiler` on macOS at all — so on a Metal machine that validation does not
-run. A shader missing from that list is checked by nothing until it reaches a Windows runtime, which
-is how `MaterialType : uint8_t` reached master: every forward shader imports `MaterialData`, but only
+run, and a Windows build is what catches this class of bug.
+
+It used to be narrower still. The list of what to validate was written out by hand, so a shader
+nobody remembered to add was checked by nothing until it reached a Windows runtime — which is how
+`MaterialType : uint8_t` reached master: every forward shader imports `MaterialData`, but only
 `programs.forward.Transparent` calls `LoadMaterialKind`, and it was the one shader not in the list.
+The list is now the `programs/` tree, so a shader that exists is a shader that is validated.
 
 ## A texture is its handle, and the extra accessors extend the resource type
 
