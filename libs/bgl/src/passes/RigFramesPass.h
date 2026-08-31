@@ -14,8 +14,10 @@ namespace bgl
 	 * dispatch per rig, one workgroup per frame of its clip set. Ordered ahead of the forward pass,
 	 * which reads what it wrote.
 	 *
-	 * Runs on almost no frame. A rig is filled when the first instance drawing from its table is
-	 * spawned, and again only if the arena grows, which discards what it held.
+	 * Attached on almost no frame, and absent from the graph entirely on the rest: a scene that
+	 * draws no crowd instance pays nothing for this pass, not even the barriers its arguments would
+	 * declare. A rig is filled when the first instance drawing from its table is spawned, and again
+	 * only if the arena grows, which discards what it held.
 	 */
 	class RigFramesPass
 	{

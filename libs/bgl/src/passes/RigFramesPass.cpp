@@ -29,6 +29,21 @@ namespace bgl
 	void
 	RigFramesPass::AttachToFrameGraph(FrameGraph& fg, const DrawData& draw)
 	{
+		const auto* view = draw.view->As<SceneView>();
+		gassert(view != nullptr, "RigFramesPass requires a bgl::SceneView");
+
+		auto* scene = view->GetScene()->As<Scene>();
+		gassert(scene != nullptr, "RigFramesPass requires a bgl::Scene");
+
+		// Attached only on a frame that has a table to fill, which is almost none of them. The pass
+		// writes `scene.boneAnimTables`, which the scene imports, so the frame graph would keep it as
+		// a root however little it did -- and a scene drawing no crowd instance at all would pay a
+		// pass node and a UAV transition every frame for a buffer nothing reads.
+		if (scene->PendingRigFills().empty())
+		{
+			return;
+		}
+
 		fg.AddPass(
 			PassDesc()
 				.SetName("Pose Rig Frames {}", draw.drawIdx)
@@ -64,11 +79,10 @@ namespace bgl
 		auto* scene = view->GetScene()->As<Scene>();
 		gassert(scene != nullptr, "RigFramesPass requires a bgl::Scene");
 
+		// AttachToFrameGraph asked the same question and did not add this pass on an empty answer;
+		// nothing between the two can spawn an instance.
 		const std::span<const Scene::RigFill> fills = scene->PendingRigFills();
-		if (fills.empty())
-		{
-			return;
-		}
+		gassert(!fills.empty(), "Pose Rig Frames was attached with no rig to fill");
 
 		Uniforms& uniforms         = m_PoseRigFrames["gUniforms"];
 		uniforms["rigs"]           = ctx.GetBuffer("scene.rigBuffer");

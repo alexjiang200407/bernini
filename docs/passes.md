@@ -355,7 +355,11 @@ frames would reproject through the wrong clip.
   palette, and GPU-only for the same reason.
 * **Ordered before `Pose Skinned` and the forward pass**, either of which may read a table this
   frame filled.
-* **Skipped on almost every frame.** A rig is filled when the first instance drawing from its table
+* **Absent from the graph on almost every frame**, rather than present and idle: it writes
+  `scene.boneAnimTables`, which the scene imports, so `WritesImported` would keep it as a root
+  however little it did — and a scene drawing no crowd instance would pay a pass node and a UAV
+  transition every frame for a buffer nothing reads. `AttachToFrameGraph` asks the scene first and
+  adds nothing on an empty answer. A rig is filled when the first instance drawing from its table
   is spawned, and again only when the arena grows — a growth discards what it held, so every rig
   holding a table is re-queued. Unlike the per-view palette, which is rewritten every frame anyway,
   a table is written once and a discarded one would otherwise stay discarded.
