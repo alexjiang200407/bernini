@@ -1,8 +1,10 @@
 # Build performance
 
-Two mechanisms: **precompiled headers** decide how much a translation unit parses, and **ccache**
-decides whether it is compiled at all. Measurement decides whether a change to either did anything,
-and it is not optional here — a PCH change is as likely to cost as to save.
+Three mechanisms, each answering a different question: **precompiled headers** decide how much a
+translation unit parses, **ccache** decides whether it is compiled at all, and the **jobserver**
+decides how many compile at once across every checkout on the machine. Measurement decides whether a
+change to any of them did anything, and it is not optional here — a PCH change is as likely to cost
+as to save.
 
 Measure before changing anything — `just build --time`.
 
@@ -170,3 +172,51 @@ honour a launcher — ccache's support for MSVC precompiled headers is an open i
 false *hit*, a wrong object returned rather than a miss, and every target here carries a PCH. There
 is no configuration in this tree where that would be safe, so clang gets the cache and MSVC does
 not.
+
+## The shared job budget
+
+Several checkouts share one machine, and each build sizes itself against the whole of it: ninja with
+no `-j` takes cores+2. Three checkouts building at once is three machines' worth of compilers on one
+machine's cores, and all three slow down together.
+
+A lock would be worse than the problem — a checkout building alone should still get the whole
+machine. What is wanted is a budget the builds *share*, decided continuously rather than at launch,
+and ninja 1.13 already speaks the standard for it: the GNU make jobserver. `scripts/util/jobserver.py`
+holds the pool (a fifo on POSIX, a named semaphore on Windows) and points ninja at it through
+`MAKEFLAGS`.
+
+```bash
+just build                     # shares the machine's budget
+just build --jobs 4            # a smaller budget
+just build --no-jobserver      # opt out; ninja takes the machine as before
+```
+
+The pool holds one token per core. ninja keeps one implicit token per instance on top of what it
+draws, so N concurrent builds run up to cores+N compilers — bounded by the number of builds, and the
+price of never idling a core.
+
+**What it actually buys is memory.** Measured on `editor_lib` with the cache off, peak resident
+memory across the compilers scales linearly at ~160 MB each, while wall time saturates at `-j 8`:
+
+| `-j` | 2 | 4 | 6 | 8 | 12 | 20 | 28 |
+|---|---|---|---|---|---|---|---|
+| peak RAM | 624 MB | 929 MB | 1.2 GB | 1.4 GB | 2.0 GB | 3.5 GB | 4.2 GB |
+| wall | 43s | 13s | 11s | 7s | 8s | 7s | 8s |
+
+Past eight jobs the extra memory buys nothing at all. Uncapped, that waste multiplies by the number
+of checkouts building — five of them is 70 compilers and roughly 11 GB, against 17 and 2.8 GB behind
+a twelve-token pool. Reproduce it with the numbers above rather than trusting them:
+
+```bash
+find build/<preset> -path '*<target>.dir*' \( -name '*.o' -o -name '*.pch' \) -delete
+ninja -C build/<preset> -j<N> <target>   # sample `ps -eo rss,comm` for clang while it runs
+```
+
+**It fails open.** A pool that cannot be created or joined produces a warning and an uncapped build,
+which is what happened before it existed. A wrong cap would be a hang, and a hung build is a far
+worse failure than a loud machine. A build killed while holding tokens leaks them until every build
+exits, at which point the next one primes a fresh pool.
+
+This is not the suite lock. [`scripts/util/lock.py`](../scripts/util/lock.py) lets **one** test suite
+run at a time, because a suite holds a graphics device and two of them oversubscribe in a way no
+budget divides; builds share a budget instead, because dividing them is exactly what works.
