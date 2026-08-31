@@ -41,9 +41,11 @@ not obvious from a signature. The headers linked below are the source of truth.
   `IScene::AddRig` and every geom skinned to them names the handle. A modular unit — a body cut into
   slots with swappable armour, each slot its own mesh on one skeleton — is several geoms sharing one
   bone table and one sample pool, where a per-geom upload would hold as many copies of the rig as the
-  unit has parts. `gamelib` keys the share on the normalized `.banim` path
-  (`AssetManager::AcquireRig`), because a clip set names its own skeleton and so the two are one
-  choice.
+  unit has parts. `gamelib` keys the share on the normalized `.banim` path, because a clip set names
+  its own skeleton and so the two are one choice. `AssetManager::AcquireRig` is **private** and
+  `AcquireSkinnedMesh` keeps its signature: a public one would be a second handle every caller holds
+  and releases for a share the manager can make itself. When attachments need a rig by handle, that
+  door opens then.
 
   **The rig outlives its geoms, and `bgl` enforces that rather than trusting it.** `DeleteRig`
   refuses while any geom still names the rig: a geom left pointing at freed bone and sample ranges
@@ -57,6 +59,12 @@ not obvious from a signature. The headers linked below are the source of truth.
   reimplemented — [pose_walk.slang](libs/bgl/shaders/src/lib/anim/pose_walk.slang) is what both kernels call,
   so the two producers cannot drift.
 
+  **It is addressable by (clip, frame, bone) from any consumer**, not private to the mesh shader
+  that reads it today: bone `b` of global frame `f` sits at
+  `boneAnimTable.GetStart() + (f * boneCount + b) * cFloat4sPerBone`. Nothing else wants it yet.
+  Attachments will — a prop following a hand needs that bone's matrix at that frame — and a table
+  reachable only from one shader would foreclose them for no saving.
+
   **It is filled on demand, not at upload.** A rig no crowd instance is ever spawned on never pays
   for one, which matters because the table is the size of the sample pool it is derived from: 68 MiB
   for a 663-bone rig with 2,254 frames, against ~9 MiB for a 60-bone crowd rig with 3,000. Reserving
@@ -68,6 +76,30 @@ not obvious from a signature. The headers linked below are the source of truth.
   `BonePaletteBuffer`, which discards on growth — safe for the per-view palette, which is rewritten
   every frame, and not for a table written once. Offsets survive a growth, so what a re-queue costs
   is the posing, not a re-allocation.
+
+* **The crowd tier is the standard one, with two deliberate departures.** Posing a rig's every
+  frame once and having instances read it is Unreal's AnimToTexture in its *Bone* mode — the City
+  Sample crowd — and Unity's Animation Instancing. Both were built for the same problem, and the
+  reason to follow them is the same one that motivated this feature: what a crowd instance reads is
+  a **bone matrix**, so several slot meshes can share one pose and a unit's armour becomes a
+  wardrobe rather than a re-bake.
+
+  Where we differ, and why:
+
+  - **The table is a GPU buffer in the palette's three-rows-a-bone layout, not a texture.** Unreal
+    stores it as a texture because its consumer is a material graph. Ours is
+    [skinned_vertex.slang](libs/bgl/shaders/src/forward/skinned_vertex.slang), which already reads a
+    palette in exactly that layout, and every read is an exact row — there is nothing for a sampler
+    to do.
+  - **It is filled on the GPU at load, not baked offline.** Unreal and Unity bake because they have
+    no hierarchy walk available at load time; we do (`PoseRigFrames` runs the same `pose_walk` the
+    per-instance pass runs). Baking would mean a container, a staleness rule, bake-on-demand,
+    `pack`'s re-bake and an editor bake dialog — roughly 1,500 lines, all of it caching what one
+    dispatch regenerates — plus a CPU pose evaluator obliged to agree with the GPU one. It cost
+    exactly that machinery to retire VAT, which was that design.
+
+  The cost of the second is real and worth stating: there is no CPU-readable palette on disk.
+  `assetlib::poseModelTransforms` serves anything that needs a pose on the CPU.
 
 * **The pose source is a property of the instance, not of the geom.** `SkinnedInstanceDesc::source`
   chooses: `kPerInstance` gets a palette slice `SkinnedPosePass` fills every frame — the hero tier,
@@ -223,8 +255,8 @@ to keep in agreement beyond the one below.
 
 * **Switching sources respawns; it does not re-load.** Both draw one upload, so the panel destroys
   its animated instances and creates them again against the same geoms — the same destroy-and-recreate
-  a clip switch does, there being no mutate-instance API by design. This is the property ADR-8 was
-  for: the tier belongs to the instance, so a unit moves between tiers without being uploaded twice.
+  a clip switch does, there being no mutate-instance API by design. This is what the pose source
+  being a property of the instance buys — a unit moves between sources without being uploaded twice.
 
 * **The selector's mapping is pinned by a test, and has to be.** The two sources draw the same picture
   at a whole frame — that is the crowd tier working — so a selector wired to the wrong source, or to
