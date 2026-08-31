@@ -1,4 +1,5 @@
 import idl.Clip;
+import idl.ClipPlayback;
 
 // Where a clip's playback sits at `time`, shared by every animated tier: phase advances along the
 // clip at the authored sample rate scaled by the instance's rate. A looping clip wraps; a one-shot
@@ -8,9 +9,9 @@ import idl.Clip;
 // clip looping precisely because its last frame repeats its first, so one cycle is that many
 // intervals. Wrapping over `frameCount` spends an extra interval blending the duplicate onto the
 // frame it duplicates -- the clip holds still for one frame and runs slow by 1/(frameCount - 1).
-public float ClipFrames(Clip clip, float phase, float rate, float time)
+public float ClipFrames(Clip clip, ClipPlayback playback, float time)
 {
-    float frames = phase + time * rate * clip.sampleRate;
+    float frames = playback.phase + time * playback.rate * clip.sampleRate;
     float count = float(clip.frameCount);
 
     if (clip.loop != 0)

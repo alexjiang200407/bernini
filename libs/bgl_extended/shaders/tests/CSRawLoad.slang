@@ -27,7 +27,8 @@ ConstantBuffer<Uniforms> gUniforms;
 void main()
 {
     let state = gUniforms.records.Load<SkinnedTableState>(gUniforms.stateOffset);
-    gUniforms.outValues[0] = float4(float(state.rig.GetOffset()), float(state.clip), state.phase, state.rate);
+    gUniforms.outValues[0] =
+        float4(float(state.playback.rig.GetOffset()), float(state.playback.clip), state.playback.phase, state.playback.rate);
 
     let view = gUniforms.records.Load<CullView>(gUniforms.viewOffset);
     gUniforms.outValues[1] = view.frustumPlanes[3];

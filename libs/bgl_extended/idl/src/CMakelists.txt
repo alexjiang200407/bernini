@@ -33,6 +33,7 @@ set(IDL_CPP_SOURCES
     DebugRecord.slang
     Constants.slang
     Clip.slang
+    ClipPlayback.slang
     PbrMaterial.slang
     LoosePbrMaterial.slang
     RawTextureHandle.slang

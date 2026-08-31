@@ -57,8 +57,8 @@ void main(uint groupIdx: SV_GroupID, uint localIdx: SV_GroupIndex)
     // or by none of it.
     let byteOffset = gUniforms.posedInstances[groupIdx];
     SkinnedState state = gUniforms.playbackBuffer.LoadRecordAs<SkinnedState>(RawEntry<IPlayback>.At(byteOffset));
-    Rig rig = gUniforms.rigs.Get(state.rig);
-    Clip clip = gUniforms.clipBuffer.Get(rig.clips, state.clip);
+    Rig rig = gUniforms.rigs.Get(state.playback.rig);
+    Clip clip = gUniforms.clipBuffer.Get(rig.clips, state.playback.clip);
 
     PoseTables tables;
     tables.bones = gUniforms.boneBuffer;
@@ -69,6 +69,6 @@ void main(uint groupIdx: SV_GroupID, uint localIdx: SV_GroupIndex)
 
     let base = state.palette.GetStart();
 
-    PoseInto(tables, rig, clip, ClipFrames(clip, state.phase, state.rate, gUniforms.time), base, localIdx);
-    PoseInto(tables, rig, clip, ClipFrames(clip, state.phase, state.rate, gUniforms.prevTime), base + stride, localIdx);
+    PoseInto(tables, rig, clip, ClipFrames(clip, state.playback, gUniforms.time), base, localIdx);
+    PoseInto(tables, rig, clip, ClipFrames(clip, state.playback, gUniforms.prevTime), base + stride, localIdx);
 }

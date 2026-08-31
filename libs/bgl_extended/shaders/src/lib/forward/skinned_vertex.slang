@@ -145,18 +145,18 @@ public ForwardVSOut SkinnedVertex(MeshletContext ctx, SubmeshInstance instance, 
     else if (forwardData.GetPlaybackKind(ctx.mesh.playback) == PlaybackType.kSkinnedTable)
     {
         let state = forwardData.playbackBuffer.LoadRecordAs<SkinnedTableState>(ctx.mesh.playback);
-        let rig = skinnedData.rigBuffer.Get(state.rig);
+        let rig = skinnedData.rigBuffer.Get(state.playback.rig);
         AssertBoneIndices(rig, vertex.joints, instance.submeshIndex);
 
-        Clip clip = skinnedData.clipBuffer.Get(rig.clips, state.clip);
+        Clip clip = skinnedData.clipBuffer.Get(rig.clips, state.playback.clip);
 
-        skin = SkinFromTable(rig, clip, ClipFrames(clip, state.phase, state.rate, viewData.time), vertex.joints, vertex.weights);
-        prevSkin = SkinFromTable(rig, clip, ClipFrames(clip, state.phase, state.rate, viewData.prevTime), vertex.joints, vertex.weights);
+        skin = SkinFromTable(rig, clip, ClipFrames(clip, state.playback, viewData.time), vertex.joints, vertex.weights);
+        prevSkin = SkinFromTable(rig, clip, ClipFrames(clip, state.playback, viewData.prevTime), vertex.joints, vertex.weights);
     }
     else
     {
         let state = forwardData.playbackBuffer.LoadRecordAs<SkinnedState>(ctx.mesh.playback);
-        let rig = skinnedData.rigBuffer.Get(state.rig);
+        let rig = skinnedData.rigBuffer.Get(state.playback.rig);
         AssertBoneIndices(rig, vertex.joints, instance.submeshIndex);
 
         // The pose pass wrote the previous frame's into the second half of this instance's slice, so

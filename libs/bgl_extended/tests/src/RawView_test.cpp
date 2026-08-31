@@ -67,11 +67,11 @@ TEST_CASE("A raw buffer loads records and loose attributes as written", "[raw][c
 	// Every field is distinct, so one read at a neighbour's offset is a wrong value rather than a
 	// coincidence. The two integers stay small enough to survive the float the shader reports them
 	// as.
-	auto state       = bgl::idl::SkinnedTableState();
-	state.rig.offset = 7;
-	state.clip       = 3;
-	state.phase      = 0.25f;
-	state.rate       = 1.5f;
+	auto state                = bgl::idl::SkinnedTableState();
+	state.playback.rig.offset = 7;
+	state.playback.clip       = 3;
+	state.playback.phase      = 0.25f;
+	state.playback.rate       = 1.5f;
 
 	auto view = bgl::idl::CullView();
 	for (int col = 0; col < 4; ++col)
@@ -168,10 +168,11 @@ TEST_CASE("A raw buffer loads records and loose attributes as written", "[raw][c
 
 	constexpr float c_Margin = 0.001f;
 
-	CHECK(got[0].x == Catch::Approx(static_cast<float>(state.rig.offset)).margin(c_Margin));
-	CHECK(got[0].y == Catch::Approx(static_cast<float>(state.clip)).margin(c_Margin));
-	CHECK(got[0].z == Catch::Approx(state.phase).margin(c_Margin));
-	CHECK(got[0].w == Catch::Approx(state.rate).margin(c_Margin));
+	CHECK(
+		got[0].x == Catch::Approx(static_cast<float>(state.playback.rig.offset)).margin(c_Margin));
+	CHECK(got[0].y == Catch::Approx(static_cast<float>(state.playback.clip)).margin(c_Margin));
+	CHECK(got[0].z == Catch::Approx(state.playback.phase).margin(c_Margin));
+	CHECK(got[0].w == Catch::Approx(state.playback.rate).margin(c_Margin));
 
 	CHECK(got[1].x == Catch::Approx(view.frustumPlanes[3].x).margin(c_Margin));
 	CHECK(got[1].y == Catch::Approx(view.frustumPlanes[3].y).margin(c_Margin));

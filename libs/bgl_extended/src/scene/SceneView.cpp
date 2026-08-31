@@ -258,12 +258,12 @@ namespace bgl
 			// what lets the mesh shader write a motion vector without a history buffer.
 			palette = m_Palettes.Allocate(idl::cFloat4sPerBone * rig.boneCount * 2);
 
-			auto state    = idl::SkinnedState();
-			state.rig     = rig.record;
-			state.clip    = desc.clip;
-			state.phase   = desc.phase;
-			state.rate    = desc.rate;
-			state.palette = palette;
+			auto state           = idl::SkinnedState();
+			state.playback.rig   = rig.record;
+			state.playback.clip  = desc.clip;
+			state.playback.phase = desc.phase;
+			state.playback.rate  = desc.rate;
+			state.palette        = palette;
 
 			record = m_Playback.AddRecord(
 				idl::PlaybackType::kSkinned,
@@ -275,11 +275,11 @@ namespace bgl
 			// pays for a table. RigFramesPass fills it before anything reads it this frame.
 			m_SceneRaw->RequestBoneAnimTable(RigHandle{ rig.record });
 
-			auto state  = idl::SkinnedTableState();
-			state.rig   = rig.record;
-			state.clip  = desc.clip;
-			state.phase = desc.phase;
-			state.rate  = desc.rate;
+			auto state           = idl::SkinnedTableState();
+			state.playback.rig   = rig.record;
+			state.playback.clip  = desc.clip;
+			state.playback.phase = desc.phase;
+			state.playback.rate  = desc.rate;
 
 			record = m_Playback.AddRecord(
 				idl::PlaybackType::kSkinnedTable,
