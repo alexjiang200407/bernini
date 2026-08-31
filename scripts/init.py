@@ -40,6 +40,7 @@ Usage:
     just init --force                               # overwrite without confirming
     just init --no-just                             # skip the `just` check
     just init --no-gh                               # skip the GitHub CLI check
+    just init --no-ccache                           # skip the compiler cache check
     just init --no-lfs                              # skip the Git LFS setup
     just init --lfs-key                             # replace the stored LFS credentials
     just init --no-vcpkg                            # skip the vcpkg check
@@ -80,6 +81,7 @@ WHEEL_TOOLS = ("cmake", "ninja", "clang-format", "clang-tidy")
 PACKAGE_IDS = {
     "gh": {"winget": "GitHub.cli", "brew": "gh", "apt": "gh"},
     "git-lfs": {"winget": "GitHub.GitLFS", "brew": "git-lfs", "apt": "git-lfs"},
+    "ccache": {"winget": "Ccache.Ccache", "brew": "ccache", "apt": "ccache"},
 }
 
 
@@ -624,6 +626,65 @@ def ensure_gh():
     )
 
 
+def ensure_ccache():
+    """Report on ccache, and offer to install it through the package manager.
+
+    Optional by construction: cmake/enable_compiler_cache.cmake looks for it and compiles without
+    one when it is absent, so this only decides whether a rebuild after a branch switch or a wiped
+    build directory has to happen at all. See docs/build_performance.md.
+    """
+    found = shutil.which("ccache")
+
+    if not found:
+        offer_package(
+            "ccache",
+            "It caches compiled objects, so a rebuild after a branch switch or a wiped build "
+            "directory mostly does not recompile. The build works without it.",
+            "Install it from https://ccache.dev/ and put it on PATH; the build simply runs uncached.",
+        )
+        # Re-resolved rather than trusting the install's word: the store has to be excluded on the
+        # run that creates it, which is the fresh machine and the one that matters most.
+        found = shutil.which("ccache")
+    else:
+        print(f"ccache is installed: {found}")
+
+    if found:
+        exclude_ccache_from_spotlight(found)
+
+
+def exclude_ccache_from_spotlight(ccache):
+    """Keep Spotlight out of the cache store, the way the workspace does for every build dir.
+
+    The store is gigabytes of small files rewritten constantly -- exactly what a content indexer
+    must not follow, and exactly why `ws init` seeds `.metadata_never_index` into each checkout's
+    build/. A cache that speeds the compiler up while feeding the indexer is not a saving.
+    """
+    if sys.platform != "darwin":
+        return
+
+    try:
+        out = subprocess.run([ccache, "--show-config"], capture_output=True, text=True).stdout
+    except OSError:
+        return
+
+    for line in out.splitlines():
+        if "cache_dir" in line and "=" in line:
+            store = line.split("=", 1)[1].strip()
+            break
+    else:
+        return
+
+    marker = os.path.join(store, ".metadata_never_index")
+    try:
+        os.makedirs(store, exist_ok=True)
+        if not os.path.exists(marker):
+            open(marker, "a").close()
+            print(f"excluded {store} from Spotlight indexing")
+    except OSError as exc:
+        # Cosmetic: a store that gets indexed still caches correctly.
+        print(f"note: could not mark {store} as unindexed: {exc}")
+
+
 def ensure_vcpkg(install=True):
     """Path to a vcpkg checkout to build against, cloning one when there is none.
 
@@ -832,6 +893,7 @@ def main():
     parser.add_argument("--show", action="store_true", help="Print the config that would be written; write nothing.")
     parser.add_argument("--no-just", action="store_true", help="Don't check for (or offer to install) just.")
     parser.add_argument("--no-gh", action="store_true", help="Don't check for the GitHub CLI.")
+    parser.add_argument("--no-ccache", action="store_true", help="Don't check for the compiler cache.")
     parser.add_argument("--no-lfs", action="store_true", help="Don't configure Git LFS or fetch its files.")
     parser.add_argument("--lfs-key", action="store_true",
                         help="Ask for the key that uploads assets, replacing what is stored.")
@@ -875,6 +937,8 @@ def main():
         ensure_just()
     if not args.no_gh:
         ensure_gh()
+    if not args.no_ccache:
+        ensure_ccache()
     ensure_hooks()
     if not args.no_lfs:
         ensure_lfs(args.lfs_key)

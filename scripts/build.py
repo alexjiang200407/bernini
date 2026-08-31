@@ -41,6 +41,7 @@ import sys
 
 import util.cmake_tools as ct
 import util.config as cfg
+import util.jobserver as jobserver
 
 # Digest of the CMakePresets.json a build dir was last configured from, written beside its cache.
 PRESETS_STAMP = ".bernini-presets.sha256"
@@ -151,6 +152,28 @@ def repair_deps_log(ninja, binary_dir, env):
               flush=True)
 
 
+def report_timing(binary_dir):
+    """Print where the build that just ran spent its time, or say why it cannot be told.
+
+    Never fatal: the build succeeded, and a report that could not be produced must not turn that
+    into a failure.
+    """
+    import build_timing
+
+    try:
+        entries = build_timing.parse(build_timing.log_path(binary_dir), binary_dir)
+    except build_timing.LogError as err:
+        print(f"warning: --time could not read the build log: {err}", file=sys.stderr)
+        return
+
+    invocations = build_timing.split_invocations(entries)
+    if not invocations:
+        print("--time: everything was already up to date; ninja recorded no edges.")
+        return
+
+    build_timing.report(build_timing.summarise(invocations[-1]), top=15)
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("target", nargs="?", help="Target to build (default: all).")
@@ -165,6 +188,12 @@ def main():
     configure_group.add_argument("--no-configure", action="store_true",
                                  help="Never configure, even if the build dir has not been.")
     parser.add_argument("--dry-run", action="store_true", help="Print what would run without executing.")
+    parser.add_argument("--time", action="store_true",
+                        help="After the build, report where its time went (scripts/build_timing.py).")
+    parser.add_argument("--no-jobserver", action="store_true",
+                        help="Do not share this machine's job budget with the other checkouts' builds.")
+    parser.add_argument("--jobs", type=int,
+                        help=f"Size of that shared budget (default: one per core, {jobserver.default_tokens()} here).")
     args = parser.parse_args()
 
     preset = cfg.preset(args.preset)
@@ -273,7 +302,18 @@ def main():
 
     repair_deps_log(ninja, binary_dir, env)
 
-    return subprocess.run(build_cmd, env=env).returncode
+    # ninja is a jobserver client, so the cap is a property of the environment it runs in rather
+    # than a -j decided here: several checkouts building at once then share one budget instead of
+    # each taking the whole machine. See scripts/util/jobserver.py.
+    with jobserver.shared_budget(env, enabled=not args.no_jobserver, tokens=args.jobs) as build_env:
+        rc = subprocess.run(build_cmd, env=build_env).returncode
+
+    # Read back rather than measured here: ninja's log already holds every edge's duration, and a
+    # wall clock around `cmake --build` would count the configure and hide where the time went.
+    if args.time and rc == 0:
+        report_timing(binary_dir)
+
+    return rc
 
 
 if __name__ == "__main__":
