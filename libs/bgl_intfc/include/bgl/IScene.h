@@ -75,6 +75,17 @@ namespace bgl
 		TextureAssetHandle prefilter;
 	};
 
+	/**
+	 * The ground under a scene, as the plane through `point` with `normal` up: what the skinned
+	 * pose pass samples to plant a foot. One plane for the whole scene until a heightfield exists,
+	 * and the fallback where none does. The default is `y = 0`, up.
+	 */
+	struct GroundPlaneDesc
+	{
+		glm::vec3 point  = glm::vec3(0.0f);
+		glm::vec3 normal = glm::vec3(0.0f, 1.0f, 0.0f);
+	};
+
 	struct PbrMaterialDesc
 	{
 		glm::vec4 baseColorFactor = glm::vec4(1.0f);
@@ -421,6 +432,26 @@ namespace bgl
 		 */
 		virtual void
 		SetSubmeshMaterial(GeomHandle geom, uint32_t submeshIndex, MaterialHandle material) = 0;
+
+		/**
+		 * Sets the ground plane every skinned instance in this scene plants its feet on. Scene-wide
+		 * rather than per view: every view of a scene stands on the same ground, where lighting is
+		 * per view because two views may be exposed differently.
+		 *
+		 * A change no motion vector describes, so it moves the temporal epoch: the frame after it
+		 * is taken whole rather than reprojected through a pose solved against ground that was not
+		 * there. Set it with the scene, not every frame.
+		 *
+		 * @param ground `normal` need not be unit length; it is normalised on the way in.
+		 * @throws SceneError if `point` or `normal` is not finite, `normal` is zero, or
+		 *         `normal.y <= 0` -- a vertical or overhanging plane has no height under a point.
+		 */
+		virtual void
+		SetGround(const GroundPlaneDesc& ground) = 0;
+
+		/** The plane SetGround last accepted, with its normal unit length; the default until then. */
+		[[nodiscard]] virtual const GroundPlaneDesc&
+		GetGround() const noexcept = 0;
 
 		/**
 		 * Whether `geom` still refers to live geometry in this scene.
