@@ -10,8 +10,9 @@
 #include "StoreAt.h"
 #include <catch2/catch_approx.hpp>
 
-// The transport glue behind the panel, pinned without a window: which mesh entries play as VAT
-// and which stand static, the clip-table conversion, and the timeline's tick mapping.
+// The transport glue behind the panel, pinned without a window: which mesh entries animate and
+// which stand static, the clip-table conversion, the timeline's tick mapping, and which pose source
+// each tier-selector entry names.
 
 namespace
 {
@@ -47,7 +48,7 @@ namespace
 	}
 }
 
-TEST_CASE("A skinned entry plays as VAT; a static one stands beside it", "[animation]")
+TEST_CASE("A skinned entry animates; a static one stands beside it", "[animation]")
 {
 	auto mesh     = assetlib::BMesh();
 	mesh.skeleton = "Derived/Skeletons/rig.bskel";
@@ -113,9 +114,9 @@ TEST_CASE("The scrubber's press-to-tick mapping spans the groove exactly", "[ani
 	CHECK(TimelineScrubber::ValueForX(5, 10, 1000) == 0);
 }
 
-// Whether the panel offers to bake is this, not the tier: a refusal it can answer gets the button
-// and one it cannot gets a plain message. The offer used to be gated on the VAT tier, which meant a
-// skinned mesh refused *for exactly this reason* was told to fix it and not offered the fix.
+// Whether the panel offers to bake is this: a refusal it can answer gets the button, one it cannot
+// gets a plain message. It is about the mesh's materials and never about which pose source is
+// selected -- the two sources draw the same upload, so a refusal reaches both alike.
 TEST_CASE("Only a material a bake would change is offered for baking", "[animation][source]")
 {
 	const QTemporaryDir dir;
@@ -156,41 +157,35 @@ TEST_CASE("Only a material a bake would change is offered for baking", "[animati
 			.empty());
 }
 
-TEST_CASE("A load's tier-dependent steps all follow from the source", "[animation][source]")
+TEST_CASE("The tier selector's entries are the two pose sources", "[animation][source]")
 {
-	using editor::AnimationSource;
-	using editor::PlanAnimationLoad;
-
-	SECTION("the VAT tier needs a bake and frames by its box")
+	// Pinned because nothing on screen can catch it: both sources draw the same picture at a whole
+	// frame (that is what the crowd tier is *for*), so a selector wired to the wrong one, or to
+	// nothing at all, looks exactly like a correct one. The panel's own Eyes check can only tell
+	// that the entry draws, not that it drew through the tier it names.
+	SECTION("the first entry is the per-instance pose, the second the rig's shared table")
 	{
-		const auto steps = PlanAnimationLoad(AnimationSource::kVat, /*hasAnimations*/ true);
-		CHECK(steps.needsFreshBake);
-		CHECK(steps.framedByBake);
+		CHECK(AnimationEditorWindow::TierSourceAt(0) == bgl::PoseSource::kPerInstance);
+		CHECK(AnimationEditorWindow::TierSourceAt(1) == bgl::PoseSource::kBoneAnimTable);
 	}
 
-	SECTION("the skinned tier does none of them")
+	SECTION("a source maps back to the entry that selects it")
 	{
-		// The bake is the one that matters: it is seconds of CPU skinning for a texture pair the
-		// skinned path never samples, and it would also make the preview need a bakeable material.
-		// It is a requirement, not an action -- no load bakes; the panel offers and the user takes it.
-		const auto steps = PlanAnimationLoad(AnimationSource::kSkinned, /*hasAnimations*/ true);
-		CHECK_FALSE(steps.needsFreshBake);
-
-		// It measures its own box instead. That box culls the geom as well as framing the camera,
-		// so reading it off a bake the skinned tier never made would hide the mesh, not just
-		// mis-aim the camera.
-		CHECK_FALSE(steps.framedByBake);
-	}
-
-	SECTION("with no clip file, neither tier does anything")
-	{
-		// Nothing to play: the mesh stands in its bind pose as static geometry, so a bake is
-		// meaningless -- including on the VAT tier, which would otherwise need one.
-		for (const AnimationSource source : { AnimationSource::kSkinned, AnimationSource::kVat })
+		for (const bgl::PoseSource source :
+		     { bgl::PoseSource::kPerInstance, bgl::PoseSource::kBoneAnimTable })
 		{
-			const auto steps = PlanAnimationLoad(source, /*hasAnimations*/ false);
-			CHECK_FALSE(steps.needsFreshBake);
-			CHECK_FALSE(steps.framedByBake);
+			CHECK(
+				AnimationEditorWindow::TierSourceAt(AnimationEditorWindow::TierIndexFor(source)) ==
+				source);
 		}
+	}
+
+	SECTION("an index the combo can never hold reads as the default tier")
+	{
+		// QComboBox::activated cannot deliver these, but the panel's own guard drops a negative
+		// index rather than relying on that -- so the mapping answers with the hero tier, which is
+		// what an instance gets when nothing sets a source.
+		CHECK(AnimationEditorWindow::TierSourceAt(-1) == bgl::PoseSource::kPerInstance);
+		CHECK(AnimationEditorWindow::TierIndexFor(bgl::PoseSource::kPerInstance) == 0);
 	}
 }

@@ -12,7 +12,6 @@
 
 #include <QDragEnterEvent>
 #include <QDropEvent>
-#include <QLocale>
 #include <QMessageBox>
 #include <QMimeData>
 #include <QMouseEvent>
@@ -22,11 +21,9 @@
 
 #include <assetlib/AssetStore.h>
 #include <assetlib/skinning.h>
-#include <assetlib/vat_bake.h>
 #include <assetlib_structs/BMesh.h>
 #include <assetlib_structs/Bounds.h>
 #include <gamelib/AssetManager.h>
-#include <gamelib/vat_freshness.h>
 
 namespace
 {
@@ -81,12 +78,6 @@ AnimationPreviewWindow::Clear()
 	ClearGeometry();
 	RestoreConfiguredEnvironment();
 	SetTime(0.0f);
-
-	// What "a mesh is shown" is read off -- SetAnimationSource takes an empty path as nothing to
-	// swap. Left set, a load that failed and cleared would make the next tier switch re-attempt the
-	// mesh that just failed instead of simply remembering the preference.
-	m_MeshPath.clear();
-	m_Animations.clear();
 
 	Q_EMIT MeshChanged(QString());
 	Q_EMIT AnimationSourcesChanged(QStringList(), -1);
@@ -148,15 +139,6 @@ AnimationPreviewWindow::LoadMesh(
 	const std::filesystem::path& absolutePath,
 	const std::string&           animationsRelPath)
 {
-	LoadMeshAs(absolutePath, animationsRelPath, m_Source);
-}
-
-void
-AnimationPreviewWindow::LoadMeshAs(
-	const std::filesystem::path&  absolutePath,
-	const std::string&            animationsRelPath,
-	const editor::AnimationSource source)
-{
 	const QString name = QString::fromStdString(absolutePath.filename().string());
 
 	if (m_Assets == nullptr || m_DataRoot.empty())
@@ -187,31 +169,16 @@ AnimationPreviewWindow::LoadMeshAs(
 	// culls by. A bind-pose box is not it -- a clip carrying root motion walks the rig clean out of
 	// it, so the camera frames the wrong place and the mesh culls away as soon as it travels.
 	//
-	// VAT reads the box its bake already closed over, one for the file. The skinned tier reads
-	// its own bake off the .banim, one per animated mesh entry -- the box is that geom's culling
-	// volume, and a .bmesh may hold two separately rigged meshes. Only a pairing the cook never
-	// measured is walked here, off the UI and render threads.
-	auto posedMin   = glm::vec3(0.0f);
-	auto posedMax   = glm::vec3(0.0f);
-	bool posedKnown = false;
-
+	// The box a placement poses in, read off the .banim's own bake, one per animated mesh entry --
+	// it is that geom's culling volume, and a .bmesh may hold two separately rigged meshes. Only a
+	// pairing the cook never measured is walked here, off the UI and render threads.
 	auto skinnedBounds = std::unordered_map<uint32_t, assetlib::Bounds>();
 
 	// Planned inside the task below so the measurement knows which mesh entries animate; the empty
 	// case is judged out here, where it reads as a refusal rather than a failed load.
 	auto plan = editor::AnimationDrawPlan();
 
-	// One plan for the whole load, so the three tier-dependent decisions cannot drift apart. Filled
-	// inside the task below, where `animations` is final -- it may still be resolved from the
-	// bindings scan.
-	auto steps = editor::AnimationLoadSteps();
-
-	// Only meaningful on the VAT tier; kFresh so the skinned tier never reads it as a refusal.
-	auto bakeState = game::VatBakeState::kFresh;
-
-	// The mesh read, the candidate scan and -- the expensive part -- a stale rig's re-bake, all
-	// off the UI and render threads. AcquireVatMesh afterwards finds the .bvat fresh and only
-	// uploads.
+	// The mesh read and the candidate scan, off the UI and render threads.
 	const background::TaskResult result = background::RunWithLoadingScreen(
 		this,
 		QString("Loading %1").arg(name),
@@ -226,31 +193,9 @@ AnimationPreviewWindow::LoadMeshAs(
 			if (animations.empty() && !bindings.animations.empty())
 				animations = bindings.animations.front();
 
-			steps = editor::PlanAnimationLoad(source, !animations.empty());
-			plan  = editor::PlanAnimationDraws(mesh);
+			plan = editor::PlanAnimationDraws(mesh);
 
-			if (steps.needsFreshBake)
-			{
-				progress.Report(0, 0, "Checking the bake...");
-
-				// Asked, not enforced: a bake is seconds of CPU skinning, so a load that made one
-				// behind the user would be the panel deciding to spend their time. The answer is
-				// carried out to the offer below. Reading it here also *is* the load -- VatFreshness
-				// hands back what it parsed, so the fresh path costs one read and no bake.
-				auto vat = assetlib::BVat();
-				bakeState =
-					game::VatFreshness(assetlib::AssetStore(m_DataRoot), rel, animations, &vat);
-
-				if (bakeState == game::VatBakeState::kFresh)
-				{
-					posedMin   = vat.boundsMin;
-					posedMax   = vat.boundsMax;
-					posedKnown = true;
-				}
-			}
-
-			// The VAT tier already has this box from its bake; the skinned tier reads its own.
-			if (!steps.framedByBake && !animations.empty())
+			if (!animations.empty())
 			{
 				progress.Report(0, 0, "Reading the pose bounds...");
 
@@ -300,19 +245,6 @@ AnimationPreviewWindow::LoadMeshAs(
 			QStringLiteral("'%1' has no rig -- nothing to animate.").arg(name));
 		return;
 	}
-
-	// Nothing to draw from, so the load stops here rather than showing a bind pose that reads as
-	// the tier working badly. Baking is offered, and taking it re-enters this function -- which
-	// finds the bake fresh and goes on. Declining leaves whatever was already on screen, m_Source
-	// included, so a refused switch to VAT does not silently become a switch.
-	if (bakeState != game::VatBakeState::kFresh)
-	{
-		OfferBakeForTier(absolutePath, animations, name, bakeState);
-		return;
-	}
-
-	m_MeshPath   = absolutePath;
-	m_Animations = animations;
 
 	try
 	{
@@ -373,8 +305,8 @@ AnimationPreviewWindow::LoadMeshAs(
 					for (const bmesh::InstancePlacement& placement : plan.animated)
 					{
 						// A rig with no clip file anywhere falls back to bind pose as static geometry --
-						// and so does one the VAT pipeline refuses (an unbaked or loose material): a
-						// mesh standing still beats a viewport cleared to nothing, and the refusal is
+						// and so does one the acquire refuses (an unbaked or loose material): a mesh
+						// standing still beats a viewport cleared to nothing, and the refusal is
 						// surfaced once the load completes.
 						if (animations.empty())
 						{
@@ -382,56 +314,32 @@ AnimationPreviewWindow::LoadMeshAs(
 							continue;
 						}
 
-						// The box this placement poses in: measured above for the skinned tier, read off
-						// the bake for VAT. It is the geom's culling volume as well as the camera's frame,
-						// so it is resolved per mesh entry rather than shared across the file.
-						const std::optional<assetlib::Bounds> posed = [&] {
-							if (source != editor::AnimationSource::kSkinned)
-								return posedKnown ?
-							               std::optional(assetlib::Bounds{ posedMin, posedMax }) :
-							               std::nullopt;
-
-							const auto it = skinnedBounds.find(placement.meshIndex);
-							return it != skinnedBounds.end() ? std::optional(it->second) :
-						                                       std::nullopt;
-						}();
+						// The box this placement poses in, measured above. It is the geom's culling
+						// volume as well as the camera's frame, so it is resolved per mesh entry
+						// rather than shared across the file.
+						const auto it = skinnedBounds.find(placement.meshIndex);
+						const std::optional<assetlib::Bounds> posed =
+							it != skinnedBounds.end() ? std::optional(it->second) : std::nullopt;
 
 						try
 						{
-							// The two tiers differ only in which door the acquire takes: both hand back a
-							// geom and the same clip table, and both spawn on {clip 0, phase 0, rate 1}.
-							bgl::GeomHandle             geom;
-							std::vector<game::ClipInfo> clips;
+							// One acquire for both sources: they share the upload and differ only in
+							// where the instance reads its pose. The box is handed over rather than
+							// measured again -- this runs on the render thread, and posedBounds is
+							// seconds on a dense rig. Absent only if the measurement was skipped, and
+							// then the acquire makes it: a stall beats culling the mesh by a box of
+							// nothing.
+							game::AssetManager::SkinnedMesh skinned = m_Assets->AcquireSkinnedMesh(
+								rel,
+								animations,
+								placement.meshIndex,
+								posed);
 
-							if (source == editor::AnimationSource::kSkinned)
-							{
-								// Handed over rather than measured again: this runs on the render thread,
-								// and posedBounds is seconds on a dense rig. Absent only if the measurement
-								// was skipped, and then the acquire makes it -- a stall beats culling the
-								// mesh by a box of nothing.
-								const game::AssetManager::SkinnedMesh skinned =
-									m_Assets->AcquireSkinnedMesh(
-										rel,
-										animations,
-										placement.meshIndex,
-										posed);
-								geom  = skinned.geom;
-								clips = std::move(skinned.clips);
-							}
-							else
-							{
-								game::AssetManager::VatMesh vat =
-									m_Assets->AcquireVatMesh(rel, animations, placement.meshIndex);
-								geom  = vat.geom;
-								clips = std::move(vat.clips);
-							}
-
+							const bgl::GeomHandle geom = skinned.geom;
 							m_Geoms.push_back(geom);
 							m_AnimatedDraws.push_back(
-								{ geom,
-						          placement.world,
-						          SpawnAnimated(geom, placement.world, 0, source) });
-							out.clips    = std::move(clips);
+								{ geom, placement.world, SpawnAnimated(geom, placement.world, 0) });
+							out.clips    = std::move(skinned.clips);
 							m_ActiveClip = 0;
 						}
 						catch (const std::exception& e)
@@ -493,9 +401,6 @@ AnimationPreviewWindow::LoadMeshAs(
 		Q_EMIT AnimationSourcesChanged(candidates, active < candidates.size() ? active : -1);
 		Q_EMIT ClipsChanged(editor::ToClipInfos(loaded.clips));
 
-		// The load stood something up, so the tier it was loaded through is now what is on screen.
-		m_Source = source;
-
 		if (!loaded.refusal.isEmpty())
 			OfferBakeForRefusal(
 				mesh,
@@ -519,195 +424,6 @@ AnimationPreviewWindow::LoadMeshAs(
 
 		Clear();
 	}
-}
-
-namespace
-{
-	QString
-	BakeStateReason(const game::VatBakeState state)
-	{
-		switch (state)
-		{
-		case game::VatBakeState::kStale:
-			return QStringLiteral(
-				"its bake is out of date -- the mesh, the rig or the clips have moved since "
-				"(a git pull makes every bake stale here)");
-		case game::VatBakeState::kOtherClips:
-			return QStringLiteral("its bake was made from a different clip set");
-		case game::VatBakeState::kMissing:
-		case game::VatBakeState::kFresh:
-			break;
-		}
-		return QStringLiteral("it has not been baked yet");
-	}
-
-	/** What a bake would write, or why it will not run -- `size` is meaningless when it will not. */
-	struct VatCost
-	{
-		assetlib::VatSize size{};
-		QString           refusal;
-	};
-
-	/**
-	 * The bake's size without the bake. Loading the three inputs is all it costs, and the panel has
-	 * just loaded them to draw what is on screen, so the read is warm.
-	 */
-	VatCost
-	MeasureVatBake(
-		const std::filesystem::path& dataRoot,
-		const std::filesystem::path& absolutePath,
-		const std::string&           animations)
-	{
-		try
-		{
-			const auto rel =
-				absolutePath.lexically_relative(dataRoot).lexically_normal().generic_string();
-
-			return { assetlib::AssetStore(dataRoot).VatBakeSize(
-						 assetlib::VatBakeDesc{ rel, animations }),
-				     {} };
-		}
-		catch (const std::exception& e)
-		{
-			return { {}, QString::fromUtf8(e.what()) };
-		}
-	}
-
-	/** "about 412.5 MB (18,204 vertex columns x 1,841 frame rows, 3 clips)" */
-	QString
-	VatCostLine(const assetlib::VatSize& size)
-	{
-		return QStringLiteral("about %1 (%2 vertex columns x %3 frame rows, %4)")
-		    .arg(QLocale().formattedDataSize(static_cast<qint64>(size.bytes)))
-		    .arg(QLocale().toString(size.width))
-		    .arg(QLocale().toString(size.height))
-		    .arg(
-				size.clipCount == 1 ? QStringLiteral("1 clip") :
-									  QStringLiteral("%1 clips").arg(size.clipCount));
-	}
-}
-
-bool
-AnimationPreviewWindow::BakeVat(
-	const std::filesystem::path& absolutePath,
-	const std::string&           animations)
-{
-	const QString name = QString::fromStdString(absolutePath.filename().string());
-
-	const auto rel =
-		absolutePath.lexically_relative(m_DataRoot).lexically_normal().generic_string();
-
-	// Off the UI thread: a bake is CPU skinning of every vertex at every frame, seconds on a dense
-	// rig. EnsureVatBaked is pure assetlib, which is what lets it run here at all.
-	const background::TaskResult result = background::RunWithLoadingScreen(
-		this,
-		QStringLiteral("Baking %1").arg(name),
-		[&](background::Progress& progress) {
-			progress.Report(0, 0, "Baking animation textures...");
-			(void)game::EnsureVatBaked(assetlib::AssetStore(m_DataRoot), rel, animations);
-		});
-
-	if (result.Cancelled())
-		return false;
-
-	if (result.Failed())
-	{
-		QMessageBox::warning(
-			window(),
-			QStringLiteral("Bake VAT"),
-			QStringLiteral("Could not bake '%1':\n\n%2").arg(name, result.error));
-		return false;
-	}
-
-	return true;
-}
-
-void
-AnimationPreviewWindow::BakeShownVat()
-{
-	if (!CanBakeVat())
-		return;
-
-	const QString name = QString::fromStdString(m_MeshPath.filename().string());
-	const VatCost cost = MeasureVatBake(m_DataRoot, m_MeshPath, m_Animations);
-
-	if (!cost.refusal.isEmpty())
-	{
-		QMessageBox::warning(
-			window(),
-			QStringLiteral("Bake VAT"),
-			QStringLiteral("Could not bake '%1':\n\n%2").arg(name, cost.refusal));
-		return;
-	}
-
-	auto ask = QMessageBox(window());
-	ask.setIcon(QMessageBox::Question);
-	ask.setWindowTitle(QStringLiteral("Bake VAT"));
-	ask.setText(QStringLiteral("Bake VAT for '%1'?").arg(name));
-	ask.setInformativeText(
-		QStringLiteral(
-			"This writes %1 beside the mesh, and takes a few seconds. The bake is a build "
-			"product: deleting it later costs only the time to make it again.")
-			.arg(VatCostLine(cost.size)));
-
-	QPushButton* bakeButton = ask.addButton(QStringLiteral("Bake"), QMessageBox::AcceptRole);
-	ask.addButton(QMessageBox::Cancel);
-	ask.setDefaultButton(QMessageBox::Cancel);
-	ask.exec();
-
-	if (ask.clickedButton() != bakeButton)
-		return;
-
-	if (!BakeVat(m_MeshPath, m_Animations))
-		return;
-
-	// Only the VAT tier draws from what just changed. Reloading the skinned tier would re-upload a
-	// rig for a file it never samples.
-	if (m_Source == editor::AnimationSource::kVat)
-		LoadMeshAs(m_MeshPath, m_Animations, editor::AnimationSource::kVat);
-}
-
-void
-AnimationPreviewWindow::OfferBakeForTier(
-	const std::filesystem::path& absolutePath,
-	const std::string&           animations,
-	const QString&               name,
-	const game::VatBakeState     state)
-{
-	const VatCost cost = MeasureVatBake(m_DataRoot, absolutePath, animations);
-
-	auto box = QMessageBox(window());
-	box.setIcon(QMessageBox::Information);
-	box.setWindowTitle(QStringLiteral("Preview as VAT"));
-	box.setText(
-		QStringLiteral("'%1' cannot be previewed as VAT: %2.").arg(name, BakeStateReason(state)));
-
-	// Nothing to offer: the bake this dialog's button would start is one already refused, and
-	// hearing that now beats hearing it after agreeing to pay for it.
-	if (!cost.refusal.isEmpty())
-	{
-		box.setInformativeText(
-			QStringLiteral("It cannot be baked either:\n\n%1").arg(cost.refusal));
-		box.exec();
-		return;
-	}
-
-	box.setInformativeText(
-		QStringLiteral(
-			"Baking skins every vertex of every frame into a texture pair: %1, written "
-			"beside the mesh, a few seconds' work. The Skinned tier needs no bake.")
-			.arg(VatCostLine(cost.size)));
-
-	QPushButton* bakeButton = box.addButton(QStringLiteral("Bake Now"), QMessageBox::AcceptRole);
-	box.addButton(QMessageBox::Cancel);
-	box.setDefaultButton(QMessageBox::Cancel);
-	box.exec();
-
-	if (box.clickedButton() != bakeButton)
-		return;
-
-	if (BakeVat(absolutePath, animations))
-		LoadMeshAs(absolutePath, animations, editor::AnimationSource::kVat);
 }
 
 namespace
@@ -832,50 +548,54 @@ AnimationPreviewWindow::OfferBakeForRefusal(
 
 bgl::MeshInstanceHandle
 AnimationPreviewWindow::SpawnAnimated(
-	const bgl::GeomHandle         geom,
-	const glm::mat4&              world,
-	const uint32_t                clip,
-	const editor::AnimationSource source)
+	const bgl::GeomHandle geom,
+	const glm::mat4&      world,
+	const uint32_t        clip)
 {
-	// The two descs carry the same three fields deliberately, so this is the whole of what the tiers
-	// differ by at spawn time. Phase 0 and rate 1: the panel's transport is the clock.
-	if (source == editor::AnimationSource::kSkinned)
-	{
-		return m_Assets->CreateSkinnedInstance(
-			GetPreviewViewRef(),
-			geom,
-			world,
-			bgl::SkinnedInstanceDesc{ clip, 0.0f, 1.0f });
-	}
-
-	return m_Assets->CreateVatInstance(
+	// Phase 0 and rate 1: the panel's transport is the clock. `source` is the whole of what the two
+	// tiers differ by at spawn -- one geom, one upload, two places to read a pose from.
+	return m_Assets->CreateSkinnedInstance(
 		GetPreviewViewRef(),
 		geom,
 		world,
-		bgl::VatInstanceDesc{ clip, 0.0f, 1.0f });
+		bgl::SkinnedInstanceDesc{ clip, 0.0f, 1.0f, m_Source });
 }
 
 void
-AnimationPreviewWindow::SetAnimationSource(const editor::AnimationSource source)
+AnimationPreviewWindow::SetPoseSource(const bgl::PoseSource source)
 {
 	if (source == m_Source)
 		return;
 
-	// With nothing shown there is no upload to swap, so the tier is just remembered for the next
-	// load.
-	if (m_MeshPath.empty())
+	m_Source = source;
+
+	// A re-spawn, not a re-load: both sources draw the same upload, so what changes is only where
+	// each instance reads its pose. Destroy and recreate, exactly as a clip switch does -- there is
+	// no mutate-instance API, by design. With nothing shown there is nothing to respawn, and the
+	// tier is simply what the next load spawns on.
+	if (m_Assets == nullptr || m_AnimatedDraws.empty())
 	{
-		m_Source = source;
-		Q_EMIT PreviewSourceChanged(m_Source);
+		Q_EMIT PoseSourceChanged(m_Source);
 		return;
 	}
 
-	// A re-load, not a re-spawn: the tiers are different uploads, so there is no instance to move
-	// between them. LoadMeshAs commits m_Source only once it has stood something up, so a load that
-	// fails leaves the panel -- and the signal below -- describing what is still on screen.
-	LoadMeshAs(m_MeshPath, m_Animations, source);
+	GetRenderer()->Invoke([&] {
+		for (AnimatedDraw& draw : m_AnimatedDraws)
+		{
+			try
+			{
+				m_Assets->DestroyInstance(GetPreviewViewRef(), draw.instance);
+				draw.instance = bgl::MeshInstanceHandle();
+				draw.instance = SpawnAnimated(draw.geom, draw.world, m_ActiveClip);
+			}
+			catch (const std::exception& e)
+			{
+				qWarning("AnimationPreview: failed to switch an instance's tier: %s", e.what());
+			}
+		}
+	});
 
-	Q_EMIT PreviewSourceChanged(m_Source);
+	Q_EMIT PoseSourceChanged(m_Source);
 }
 
 void
@@ -893,7 +613,7 @@ AnimationPreviewWindow::SetActiveClip(const uint32_t index)
 			{
 				m_Assets->DestroyInstance(GetPreviewViewRef(), draw.instance);
 				draw.instance = bgl::MeshInstanceHandle();
-				draw.instance = SpawnAnimated(draw.geom, draw.world, index, m_Source);
+				draw.instance = SpawnAnimated(draw.geom, draw.world, index);
 			}
 			catch (const std::exception& e)
 			{

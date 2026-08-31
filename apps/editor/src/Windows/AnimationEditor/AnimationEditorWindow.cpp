@@ -4,8 +4,6 @@
 #include "util/mesh_drop.h"
 #include <assetlib/Project.h>
 
-#include "Windows/AnimationEditor/animation_source.h"
-
 #include <QComboBox>
 #include <QDir>
 #include <QDoubleSpinBox>
@@ -92,7 +90,6 @@ AnimationEditorWindow::AnimationEditorWindow(QWidget* parent, AnimationEditorWin
 			m_SourceSelector->setCurrentIndex(activeIndex);
 			m_SourceSelector->setEnabled(candidates.size() > 1);
 			m_TierSelector->setEnabled(!candidates.isEmpty());
-			m_BakeVatButton->setEnabled(m_Preview->CanBakeVat());
 			m_SyncingUi = false;
 		});
 
@@ -100,11 +97,11 @@ AnimationEditorWindow::AnimationEditorWindow(QWidget* parent, AnimationEditorWin
 	// load fails leaves the old tier on screen, and this is what puts the combo back on it.
 	connect(
 		m_Preview,
-		&AnimationPreviewWindow::PreviewSourceChanged,
+		&AnimationPreviewWindow::PoseSourceChanged,
 		this,
-		[this](const editor::AnimationSource source) {
+		[this](const bgl::PoseSource source) {
 			m_SyncingUi = true;
-			m_TierSelector->setCurrentIndex(source == editor::AnimationSource::kSkinned ? 0 : 1);
+			m_TierSelector->setCurrentIndex(TierIndexFor(source));
 			m_SyncingUi = false;
 		});
 
@@ -173,25 +170,17 @@ AnimationEditorWindow::BuildPropertiesColumn()
 	m_TierSelector = new QComboBox(column);
 	m_TierSelector->setEnabled(false);
 	m_TierSelector->addItem(QStringLiteral("Skinned"));
-	m_TierSelector->addItem(QStringLiteral("VAT (baked)"));
+	m_TierSelector->addItem(QStringLiteral("Crowd"));
 	m_TierSelector->setToolTip(QStringLiteral(
-		"Skinned poses the rig directly; VAT plays what the bake made of it. "
-		"Switching re-uploads the mesh."));
+		"Skinned poses the rig every frame, per instance; Crowd reads a pose the rig posed once "
+		"and shares. The two draw the same picture -- this is how the crowd path gets exercised, "
+		"not something to look for on screen."));
 	connect(m_TierSelector, &QComboBox::activated, this, [this](int index) {
 		if (m_SyncingUi || index < 0)
 			return;
-		m_Preview->SetAnimationSource(
-			index == 0 ? editor::AnimationSource::kSkinned : editor::AnimationSource::kVat);
+		m_Preview->SetPoseSource(TierSourceAt(index));
 	});
 	layout->addWidget(m_TierSelector);
-
-	m_BakeVatButton = new QPushButton(QStringLiteral("Bake VAT"), column);
-	m_BakeVatButton->setEnabled(false);
-	m_BakeVatButton->setToolTip(QStringLiteral(
-		"Skins every vertex of every frame into the texture pair the VAT tier draws from. "
-		"Asks first, naming what it would write."));
-	connect(m_BakeVatButton, &QPushButton::clicked, this, [this] { m_Preview->BakeShownVat(); });
-	layout->addWidget(m_BakeVatButton);
 
 	layout->addSpacing(8);
 	layout->addWidget(new QLabel(QStringLiteral("Clips"), column));
@@ -347,6 +336,21 @@ AnimationEditorWindow::SetAssets(game::AssetManager* assets)
 	// keep advertising it.
 	if (assets == nullptr)
 		m_Preview->Clear();
+}
+
+int
+AnimationEditorWindow::TierIndexFor(const bgl::PoseSource source) noexcept
+{
+	return source == bgl::PoseSource::kPerInstance ? 0 : 1;
+}
+
+bgl::PoseSource
+AnimationEditorWindow::TierSourceAt(const int index) noexcept
+{
+	// Only entry 1 names the table; anything else is the hero tier, which is also what an instance
+	// gets when nothing sets a source. The combo cannot deliver an out-of-range index, but a
+	// mapping whose fallback is the crowd tier would switch tiers on one if it ever did.
+	return index == 1 ? bgl::PoseSource::kBoneAnimTable : bgl::PoseSource::kPerInstance;
 }
 
 int

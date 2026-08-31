@@ -216,34 +216,25 @@ not obvious from a signature. The headers linked below are the source of truth.
 
 ## In the editor
 
-The Animation panel previews a rig through **either** tier, chosen by a "Preview As" selector
-(`AnimationEditorWindow`'s `m_TierSelector`). Both doors hand back a geom and the same clip table, so
-the transport, the clip list and the scrubber are the same code either way — which is the point of
-`RenderJob::time` being the only per-frame input.
+The Animation panel previews a rig through **either** pose source, chosen by a "Preview As"
+selector (`AnimationEditorWindow`'s `m_TierSelector`). It names `bgl::PoseSource` directly rather
+than mirroring it into an editor enum, so the two entries are the two values and there is no mapping
+to keep in agreement beyond the one below.
 
-* **Switching tiers re-loads.** They are different uploads (`#vat` against `#skinned`), so the panel
-  drops its geometry and acquires again rather than swapping a handle. Not a limitation to route
-  around later: a tier is a property of the upload.
+* **Switching sources respawns; it does not re-load.** Both draw one upload, so the panel destroys
+  its animated instances and creates them again against the same geoms — the same destroy-and-recreate
+  a clip switch does, there being no mutate-instance API by design. This is the property ADR-8 was
+  for: the tier belongs to the instance, so a unit moves between tiers without being uploaded twice.
 
-* **Switching *to* VAT can refuse.** The VAT tier draws from a bake, and the panel will not make one
-  unprompted — seconds of the user's time is a decision, not a load step. `game::VatFreshness` asks
-  whether a usable bake exists; anything but `kFresh` stops the load and offers **Bake Now**, and
-  declining leaves the panel on the tier it was already showing. A **Bake VAT** button makes the same
-  bake deliberately, and asks the same question. Both name the size the bake would write before it is
-  written. See [vat.md](docs/vat.md); note this is the *editor's* rule — `AcquireVatMesh` still bakes
-  on demand, which is what loading a level wants.
+* **The selector's mapping is pinned by a test, and has to be.** The two sources draw the same picture
+  at a whole frame — that is the crowd tier working — so a selector wired to the wrong source, or to
+  nothing, looks exactly like a correct one. `AnimationEditorWindow::TierSourceAt` /
+  `TierIndexFor` are what `editor_tests` drives. An index the combo cannot deliver answers with the
+  hero tier, which is what an unset `SkinnedInstanceDesc::source` gives.
 
-* **The tier decides two things, and they live together.** `PlanAnimationLoad` returns them as one
-  `AnimationLoadSteps` so they cannot drift apart: whether the load needs a `.bvat` already baked
-  (the skinned tier does not — a bake is seconds of CPU skinning for a texture pair it never samples),
-  and whether the posed box is read off that bake or measured. Two fields rather than two tests of the
-  source spread through a long function, and the box is the one that punishes drift hardest: it culls
-  the geom as well as framing the camera, so taking it from the wrong place hides the mesh rather than
-  mis-aiming the view. This is the seam `editor_tests` drives; see below.
-
-  **Whether to offer a bake is not one of them.** Both tiers refuse a material that draws unbaked, so
-  the offer follows from `editor::BakeableMaterials` finding one rather than from the source — it was
-  once tier-gated, which left the skinned tier reporting exactly the refusal a bake answers without
+* **Whether to offer a material bake has nothing to do with the source.** Both refuse a material that
+  draws unbaked, so the offer follows from `editor::BakeableMaterials` finding one — it was once
+  tier-gated, which left the skinned tier reporting exactly the refusal a bake answers without
   offering it.
 
 * **The camera opens at a fixed yaw and elevation.** Nothing in the path knows which way a rig faces:
@@ -259,14 +250,12 @@ the transport, the clip list and the scrubber are the same code either way — w
   box and the same reason. The panel reads it off the `.banim`'s bake, and only a pairing the cook
   never measured is walked — inside its loading screen rather than on the render thread.
 
-* **The panel itself is not covered by a test**, and this is a pre-existing gap rather than one the
-  skinned tier introduced: `RenderTargetWindow`'s constructor calls `CreateRenderTarget` with a real
-  `winId()` and `headless = false`, so no test can construct `AnimationPreviewWindow`. What *is*
-  covered is `PlanAnimationLoad` — the tier-dependent decisions lifted clear of the window, which is
-  the shape `apps/editor/CLAUDE.md` prescribes for exactly this. The uncovered part is the toggle, and
-  it has already shipped one bug that every automated gate passed: a tier switch that acquired the
-  geom through the new tier while creating the instance through the old one. A `headless` flag on
-  `RenderTargetWindowDesc` is the seam that closes it.
+* **The panel itself is not covered by a test**, and this is a pre-existing gap: `RenderTargetWindow`'s
+  constructor calls `CreateRenderTarget` with a real `winId()` and `headless = false`, so no test can
+  construct `AnimationPreviewWindow`. What *is* covered is the selector's mapping, lifted clear of the
+  window as `apps/editor/CLAUDE.md` prescribes. The class of bug this once shipped — a tier switch that
+  acquired the geom through one tier and created the instance through the other — is now unreachable
+  rather than untested: there is one acquire and one geom, and the source is a field on the spawn.
 
 ## Risky / Non-obvious Contracts
 

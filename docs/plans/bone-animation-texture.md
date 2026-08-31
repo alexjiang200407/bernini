@@ -196,9 +196,10 @@ The VAT tier, to be removed:
   lines.
 - gamelib: `vat_freshness.h/.cpp` (235), `AcquireVatMesh` (~130), `CreateVatInstance`, `VatMesh`.
 - editor: the tier selector's "VAT (baked)" entry, the **Bake VAT** button, `AnimationLoadSteps`
-  `{needsFreshBake, framedByBake}` and `PlanAnimationLoad`'s VAT half, the freshness gate and both
-  **Bake Now** dialogs (~50 lines in `AnimationPreviewWindow.cpp`), `IsBuildProduct`, the Content
-  Explorer's `.bvat` filter.
+  `{needsFreshBake, framedByBake}` and `PlanAnimationLoad`, the freshness gate and
+  `OfferBakeForTier` (~90 lines in `AnimationPreviewWindow.cpp`) -- **not** `OfferBakeForRefusal`,
+  which offers a *material* bake and is about the mesh's materials rather than the tier;
+  `IsHiddenBuildProductFile` (`asset_paths.h`) and the Content Explorer's `.bvat` filter.
 - Tests: 18 cases in five VAT-only suites (2,518 lines: `VatBake`, `VatAcquire`, `VatRender`,
   `VatNormalMap`, `VatPlayback`), 9 named cases and assertions in 16 mixed suites, the `[taa][vat]`
   animating-outline case, two goldens, `VatSynth` and `VatFixture`.
@@ -243,7 +244,7 @@ the VAT declarations now are. Neither changes what the tier costs or what retiri
 | `libs/bgl/shaders` | `pose_walk.slang` shared by `PoseSkinned` and `PoseRigFrames`; `skinned_vertex.slang` branches on the record's kind and lerps rows across two frames at `time` and two at `prevTime`; VAT shaders go | 48 buffer loads a vertex on the crowd path, from a table shared by every instance on the frame |
 | `libs/gamelib` | `AssetManager` holds one rig per `.banim`, refcounted, shared by every `AcquireSkinnedMesh` on it; `CreateSkinnedInstance` carries the pose source; VAT acquire and freshness go | Release order: geoms before the rig, on the unwind too |
 | `libs/assetlib` | Deletions only (the inventory above); `TokenCanary` loses its `.bvat` row | A stale `.bvat` in a checkout is an unknown extension to the scan — must be skipped, not fatal |
-| `apps/editor` | The selector offers "Skinned" and "Crowd"; both load alike, so `AnimationLoadSteps` loses its bake fields; bake dialogs go | The panel is untested; `PlanAnimationLoad` is what `editor_tests` pins |
+| `apps/editor` | The selector offers "Skinned" and "Crowd" naming `bgl::PoseSource` directly (`editor::AnimationSource` goes -- one enum, not a mirror of it); both load alike, so `AnimationLoadSteps`, `PlanAnimationLoad` and `LoadMeshAs` all go, and a tier switch becomes a respawn on the same geom rather than a re-upload | The panel is untested through its window; what `editor_tests` can pin is the selector's mapping, and the two tiers look identical on screen |
 | `docs` | `skinning.md` becomes the two tiers' doc — the rig, the table, the pose sources; `vat.md` deleted; the index and every VAT section updated; `ROADMAP.md` lines rewritten | — |
 
 Memory, stated rather than deferred: a rig's table is `bones × frames × 48 B` beside the same-sized
@@ -324,10 +325,30 @@ per rig is this plan's cost to carry.
    binary tree — six levels, which is what a rig looks like — the honest figure is the pair above,
    about 13%, and it is an upper bound rather than a floor: the fixture's reads are as cache-hot as
    they get. Each correction made the tier look worse and the number more usable.
-4. **`feat(editor): the Animation panel previews the crowd tier`** — the selector, the load plan
-   without bake steps, the dialogs removed.
-   *Gate:* `editor_tests` `AnimationDraws` re-pinned to a plan with no bake decision; an **Eyes**
-   box: the coyote plays identically under both entries.
+4. **`feat(editor): the Animation panel previews the crowd tier`** — the selector, the VAT load
+   path and its bake dialog removed.
+   *Gate:* `editor_tests` pins which pose source each selector entry names; an **Eyes** box: the
+   coyote plays under the Crowd entry at all.
+
+   *Correction, from building it:* three things this row got wrong.
+
+   **"Both Bake Now dialogs" is one dialog.** `OfferBakeForTier` offers the VAT bake and goes.
+   `OfferBakeForRefusal` offers to bake *materials* — it is reached when a mesh is shown in bind pose
+   because its materials are unbaked, calls `BakeableMaterials`/`BakeMaterials`, and has nothing to
+   do with the tier. It survives this feature. Taking the inventory literally would have deleted a
+   working feature.
+
+   **`PlanAnimationLoad` is not re-pinned, it is deleted.** `AnimationLoadSteps` holds exactly
+   `needsFreshBake` and `framedByBake`, and both are "is this VAT". With one pose source per
+   instance and one upload behind both, the struct is empty; the function and its test case go.
+
+   **The Eyes box the row named cannot fail.** "Plays identically under both entries" is what task 3
+   *proved* — the two sources are pixel-equal at a whole frame — so a selector wired to nothing would
+   pass it looking perfect. The gate is now a test over the selector's index-to-`PoseSource` mapping,
+   which is the only part a person cannot check by looking. Eyes keeps a box, for what it can catch:
+   that the Crowd entry draws at all. Writing that test immediately paid: the mapping answered
+   *crowd* for an out-of-range index, and now answers with the hero tier, as an unset
+   `SkinnedInstanceDesc::source` does.
 5. **`refactor!(bgl,assetlib,gamelib): retire the VAT tier`** — ADR-2. The inventory deleted, the
    docs and roadmap rewritten, `TokenCanary` re-pinned without the row, ignore rules dropped.
    *Gate:* `just test` green; `TokenCanary` shows no other token moved; a case-insensitive grep
