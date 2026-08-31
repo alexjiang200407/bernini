@@ -321,5 +321,6 @@ so it fails safe, but it should not be offered.
    source, and the context menu's Rename is wired onto task 1. **Both, or neither**: `AssetAt`
    returning a `.glb` is what puts a menu on that row at all, and the same menu offers Delete, which
    `planDeletion` refuses for a source under ADR-8 — so returning it before the menu knows that
-   would land a Delete that throws. Moved here from task 4 for that reason. Gate: the rule driven
-   through a free function, since every dialog here is modal; plus eyes.
+   would land a Delete that throws. Moved here from task 4 for that reason. Gate:
+   `just run editor_tests -- "[sourcerow]"` -- the rule driven through a free function, since every
+   dialog here is modal; plus eyes.
