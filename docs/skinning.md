@@ -366,13 +366,34 @@ would want one range with a kind tag at the second, and it has to run *after* th
 that moves the whole rig out from under any target resolved before it.
 
 **One thread solves one leg.** A chain is serial — hip before knee before ankle — so a second lane
-has nothing of its own to do. The group then carries the descendants together. All three barriers sit
-outside the per-leg and per-bone branches, and the whole stage is skipped on a group-uniform test of
-`rig.legs`, so a rig without an avatar pays one branch and no barrier.
+has nothing of its own to do. The group then carries the descendants together. Three of the four
+barriers sit outside every branch; the fourth is inside the drop, on a condition read from
+groupshared after a barrier, so the whole group agrees on it. The stage as a whole is skipped on a
+group-uniform test of `rig.legs`, so a rig without an avatar pays one branch and no barrier.
 
-**The pelvis is not lowered when a leg cannot reach.** The chain is held just inside full extension
-and the foot simply stops short. Lowering the root by the largest deficit across a rig's legs is the
-next stage.
+**A rig whose legs cannot reach comes down to meet the ground.** Each leg is read once before
+anything moves, and how far the worst one falls short of its target is what the whole rig is lowered
+by, along the ground's own up. Then every leg solves against the lowered body. The rig moves rather
+than a leg stretching because a leg that stops short snaps straight, which reads as a limb popping;
+dropping the root is what a stride onto lower ground actually does.
+
+Every bone moves, not only the ones below the hips — the rig is one body. The deficit is measured
+across all legs before any of them solves, because the largest is a property of the rig and cannot
+be known one leg at a time; it reaches the group through a groupshared max over the *bits* of a
+float, which is exact here only because a deficit is never negative.
+
+The drop is solved for, not estimated. Dropping by the straight-line shortfall `|v| - reach` is
+right only when the target sits directly below the hip; along a slope the target is off to one side,
+and after dropping it is nearer the hip than that shortfall assumed, so the foot would still come up
+short on exactly the ground this feature exists for. The distance is the smaller root of
+`|v + d*n| = reach` instead — one `sqrt`, exact. A target too far to one side for any drop to reach
+gives a negative discriminant, and the clamp then yields the drop that gets closest. A leg at weight zero targets
+where its ankle already is, so it is reachable by construction and contributes nothing.
+
+The targets are re-derived after the drop rather than reused: every joint moved, so a target
+measured before it belongs to a rig that no longer exists. Both derivations go through one
+`ReadLeg`, so the target the drop is sized against and the target that is solved for cannot
+disagree.
 
 ## Risky / Non-obvious Contracts
 

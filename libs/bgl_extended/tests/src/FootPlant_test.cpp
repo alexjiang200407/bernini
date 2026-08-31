@@ -706,3 +706,265 @@ TEST_CASE("a planted foot on a slope draws", "[skinned][pose][plant][render]")
 			"assets/golden/foot_plant_slope.exp.png",
 			"assets/golden/foot_plant_slope.got.png"));
 }
+
+namespace
+{
+	// A pelvis with two legs hanging off it, each the same shape as the one-leg rig and mirrored
+	// across X. Two, because the drop is a property of the *rig*: the largest deficit across every
+	// leg is what the whole body comes down by, and one leg cannot show that.
+	constexpr uint32_t c_TwoLegBones = 9;
+
+	// The ankles are splayed outward from the hips, and by different amounts, which lets this rig
+	// say two things a straight-down rig cannot. Different amounts, so the legs fall short by
+	// different distances and the *largest* is observably what the body comes down by. Splayed at
+	// all, because a target off to one side of its hip is the case a drop sized as the straight-line
+	// shortfall gets wrong -- and on flat ground the target does not move when the rig drops, so
+	// nothing downstream rescues an estimate that came up short.
+	const std::array<glm::vec3, c_TwoLegBones> c_TwoLegBind = { {
+		glm::vec3(0.0f, 2.0f, 0.0f),   // 0 pelvis
+		glm::vec3(-0.4f, 2.0f, 0.0f),  // 1 hip   L
+		glm::vec3(-0.3f, 1.0f, 0.0f),  // 2 knee  L
+		glm::vec3(-1.0f, 0.0f, 0.0f),  // 3 ankle L
+		glm::vec3(-1.2f, 0.0f, 0.0f),  // 4 toe   L
+		glm::vec3(0.4f, 2.0f, 0.0f),   // 5 hip   R
+		glm::vec3(0.5f, 1.0f, 0.0f),   // 6 knee  R
+		glm::vec3(1.3f, 0.0f, 0.0f),   // 7 ankle R
+		glm::vec3(1.5f, 0.0f, 0.0f),   // 8 toe   R
+	} };
+
+	const std::array<uint32_t, c_TwoLegBones> c_TwoLegParent = { {
+		assetlib::c_InvalidIndex,
+		0,
+		1,
+		2,
+		3,
+		0,
+		5,
+		6,
+		7,
+	} };
+
+	assetlib::Skeleton
+	MakeTwoLegRig()
+	{
+		auto skeleton = assetlib::Skeleton();
+		for (uint32_t i = 0; i < c_TwoLegBones; ++i)
+		{
+			const uint32_t  parent = c_TwoLegParent[i];
+			const glm::vec3 origin =
+				parent == assetlib::c_InvalidIndex ? glm::vec3(0.0f) : c_TwoLegBind[parent];
+
+			auto bone        = assetlib::Bone();
+			bone.bindPose    = { c_TwoLegBind[i] - origin,
+				                 glm::quat(1.0f, 0.0f, 0.0f, 0.0f),
+				                 glm::vec3(1.0f) };
+			bone.inverseBind = glm::translate(glm::mat4(1.0f), -c_TwoLegBind[i]);
+			bone.parent      = parent;
+			bone.nameOffset  = skeleton.stringPool.add(std::format("Bone{}", i));
+			skeleton.bones.push_back(bone);
+		}
+		return skeleton;
+	}
+
+	assetlib::AnimationSet
+	MakeTwoLegClip()
+	{
+		auto set      = assetlib::AnimationSet();
+		set.boneCount = c_TwoLegBones;
+
+		for (uint32_t f = 0; f < c_Frames; ++f)
+		{
+			for (uint32_t b = 0; b < c_TwoLegBones; ++b)
+			{
+				const uint32_t  parent = c_TwoLegParent[b];
+				const glm::vec3 origin =
+					parent == assetlib::c_InvalidIndex ? glm::vec3(0.0f) : c_TwoLegBind[parent];
+
+				auto sample        = assetlib::Transform();
+				sample.translation = c_TwoLegBind[b] - origin;
+				sample.rotation    = glm::quat(1.0f, 0.0f, 0.0f, 0.0f);
+				sample.scale       = glm::vec3(1.0f);
+				set.samples.push_back(sample);
+			}
+		}
+
+		auto clip        = assetlib::AnimationClip();
+		clip.firstSample = 0;
+		clip.frameCount  = c_Frames;
+		clip.sampleRate  = 30.0f;
+		clip.duration    = 1.0f / 30.0f;
+		clip.loop        = 0;
+		clip.nameOffset  = 0;
+		set.clips.push_back(clip);
+
+		return set;
+	}
+
+	bgl::FootPlantDesc
+	MakeTwoLegs(uint8_t weight)
+	{
+		auto plant = bgl::FootPlantDesc();
+		for (uint32_t hip : { 1u, 5u })
+		{
+			auto leg       = bgl::FootPlantLegDesc();
+			leg.hip        = hip;
+			leg.knee       = hip + 1;
+			leg.ankle      = hip + 2;
+			leg.toe        = hip + 3;
+			leg.solePoint  = c_SolePoint;
+			leg.soleNormal = c_SoleNormal;
+			plant.legs.push_back(leg);
+		}
+		plant.plantWeights = std::vector<uint8_t>(size_t(c_Frames) * 2, weight);
+		return plant;
+	}
+
+	/** The two-leg rig posed against `ground`, read back. */
+	bgl::test::Palette
+	PoseTwoLegs(const bgl::GroundPlaneDesc& ground)
+	{
+		auto opts             = bgl::GraphicsOptions();
+		opts.shaderCacheDir   = bgl::test::ShaderCacheDir();
+		opts.enableDebugLayer = true;
+
+		auto gfx = bgl::CreateGraphics(opts);
+		REQUIRE(gfx != nullptr);
+
+		auto* gfxBase = gfx->As<bgl::GraphicsBase>();
+		REQUIRE(gfxBase != nullptr);
+
+		auto targetDesc     = bgl::RenderTargetDesc();
+		targetDesc.width    = 64;
+		targetDesc.height   = 64;
+		targetDesc.headless = true;
+		auto target         = gfx->CreateRenderTarget(targetDesc);
+
+		auto sceneDesc                        = bgl::SceneDesc();
+		sceneDesc.initialGeom                 = 4;
+		sceneDesc.initialMeshlets             = 8;
+		sceneDesc.initialSubmeshes            = 4;
+		sceneDesc.initialVertexBufferByteSize = 4096;
+		sceneDesc.initialIndices              = 64;
+		sceneDesc.initialPbrMaterials         = 4;
+
+		auto scene = gfx->CreateScene(sceneDesc);
+		scene->SetGround(ground);
+
+		auto view = gfx->CreateSceneView(scene, 4);
+		bgl::test::ApplyEnvironment(scene.Get(), view.Get());
+
+		const std::array<bgl::MaterialHandle, 1> materials = { { scene->CreatePbrMaterial(
+			bgl::PbrMaterialDesc()) } };
+
+		const bgl::RigHandle rig =
+			scene->AddRig(MakeTwoLegRig(), MakeTwoLegClip(), MakeTwoLegs(255));
+		REQUIRE(rig.IsValid());
+
+		const auto geom = scene->AddSkinnedMeshGeom(
+			MakeSkinnedTriangle(),
+			0,
+			materials,
+			rig,
+			assetlib::Bounds{ glm::vec3(-8.0f), glm::vec3(8.0f) });
+		REQUIRE(geom.IsValid());
+
+		auto* viewRaw = view->As<bgl::SceneView>();
+		REQUIRE(viewRaw != nullptr);
+
+		const auto instance =
+			view->CreateSkinnedMeshInstance(geom, glm::mat4(1.0f), { 0, 0.0f, 0.0f });
+
+		auto job     = bgl::RenderJob();
+		job.view     = view;
+		job.viewport = bgl::Viewport(64.0f, 64.0f);
+		gfx->DrawFrame(target, job);
+
+		return bgl::test::ReadPalette(
+			gfxBase,
+			viewRaw,
+			bgl::test::PaletteBaseOf(viewRaw, instance),
+			bgl::idl::cFloat4sPerBone * c_TwoLegBones);
+	}
+}
+
+TEST_CASE(
+	"a rig whose legs cannot reach comes down to meet the ground",
+	"[skinned][pose][plant][render]")
+{
+	// Both legs reach about 2.2 from a hip standing 2 above the origin, so a floor at -0.5 is past
+	// either of them -- and past the right one, whose ankle is splayed further out, by the more.
+	constexpr float c_Floor = -0.5f;
+
+	const auto ground =
+		bgl::GroundPlaneDesc{ glm::vec3(0.0f, c_Floor, 0.0f), glm::vec3(0.0f, 1.0f, 0.0f) };
+
+	const bgl::test::Palette posed = PoseTwoLegs(ground);
+
+	const auto sole = [&](uint32_t ankle) {
+		return posed.Apply(ankle, c_TwoLegBind[ankle] + c_SolePoint);
+	};
+
+	SECTION("both soles rest on the floor, so the drop was the larger leg's")
+	{
+		// The right leg needs the bigger drop; sized by the left one it would still hang above the
+		// floor. Sized as a straight-line shortfall it would hang there too, by less -- which is
+		// what makes this an assertion about the drop and not merely about planting.
+		CHECK(sole(3).y == Catch::Approx(c_Floor).margin(3e-3));
+		CHECK(sole(7).y == Catch::Approx(c_Floor).margin(3e-3));
+	}
+
+	SECTION("the rig came straight down, and it did move")
+	{
+		const glm::vec3 moved = posed.Apply(0, c_TwoLegBind[0]) - c_TwoLegBind[0];
+
+		REQUIRE(moved.y < -1e-3f);
+		CHECK(moved.x == Catch::Approx(0.0f).margin(1e-4));
+		CHECK(moved.z == Catch::Approx(0.0f).margin(1e-4));
+	}
+
+	SECTION("a rig that can reach is not lowered at all")
+	{
+		// The same rig on a floor inside its reach: the legs stretch and the pelvis stays put, which
+		// is what makes the drop above a consequence of the deficit rather than of planting at all.
+		const bgl::test::Palette easy = PoseTwoLegs(
+			bgl::GroundPlaneDesc{ glm::vec3(0.0f, -0.1f, 0.0f), glm::vec3(0.0f, 1.0f, 0.0f) });
+
+		bgl::test::CheckNear(easy.Apply(0, c_TwoLegBind[0]), c_TwoLegBind[0]);
+		CHECK(easy.Apply(3, c_TwoLegBind[3] + c_SolePoint).y == Catch::Approx(-0.1f).margin(1e-3));
+		CHECK(easy.Apply(7, c_TwoLegBind[7] + c_SolePoint).y == Catch::Approx(-0.1f).margin(1e-3));
+	}
+}
+
+// A slope gives the two legs different work to do: the feet sit either side of the centre line, so
+// one is much further above the ground than the other. That is what makes the *largest* deficit the
+// subject -- on a flat floor both legs need the same drop and a solve that used each leg's own
+// would look identical.
+//
+// It is also the geometry a drop sized as the straight-line shortfall gets wrong: the target is off
+// to one side of the hip, so dropping by `|v| - reach` leaves the foot short. Both soles landing on
+// the plane is what says the drop is solved for rather than estimated.
+TEST_CASE(
+	"on a slope the whole rig drops by the leg that falls furthest short",
+	"[skinned][pose][plant][render]")
+{
+	const float radians = glm::radians(15.0f);
+	const auto  normal  = glm::vec3(std::sin(radians), std::cos(radians), 0.0f);
+	const auto  origin  = glm::vec3(0.0f, -0.6f, 0.0f);
+
+	const bgl::test::Palette posed = PoseTwoLegs(bgl::GroundPlaneDesc{ origin, normal });
+
+	const auto sole = [&](uint32_t ankle) {
+		return posed.Apply(ankle, c_TwoLegBind[ankle] + c_SolePoint);
+	};
+
+	// On the plane, both of them. The right foot starts much further above it than the left, so a
+	// drop sized by the left leg would leave the right one hanging.
+	CHECK(glm::dot(sole(3) - origin, normal) == Catch::Approx(0.0f).margin(3e-3));
+	CHECK(glm::dot(sole(7) - origin, normal) == Catch::Approx(0.0f).margin(3e-3));
+
+	// The rig came down along the ground's up and nothing else, so the pelvis moved antiparallel to
+	// the normal rather than straight down.
+	const glm::vec3 moved = posed.Apply(0, c_TwoLegBind[0]) - c_TwoLegBind[0];
+	REQUIRE(glm::length(moved) > 1e-3f);
+	CHECK(glm::dot(glm::normalize(moved), normal) == Catch::Approx(-1.0f).margin(1e-3));
+}
