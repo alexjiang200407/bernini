@@ -43,6 +43,7 @@ set(IDL_CPP_SOURCES
     BaseTable.slang
     BoneSample.slang
     SkinnedBone.slang
+    SkinnedLegChain.slang
     Rig.slang
     SkinnedState.slang
     SkinnedTableState.slang

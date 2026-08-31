@@ -27,6 +27,8 @@ namespace bgl
 
 	constexpr std::string_view c_SkinnedBoneBufferName = "scene.skinnedBoneBuffer"sv;
 	constexpr std::string_view c_BoneSampleBufferName  = "scene.boneSampleBuffer"sv;
+	constexpr std::string_view c_SkinnedLegBufferName  = "scene.skinnedLegBuffer"sv;
+	constexpr std::string_view c_PlantWeightBufferName = "scene.plantWeightBuffer"sv;
 
 	constexpr std::string_view c_InstanceBufferName     = "scene.instanceBuffer"sv;
 	constexpr std::string_view c_MeshInstanceBufferName = "scene.meshInstanceBuffer"sv;

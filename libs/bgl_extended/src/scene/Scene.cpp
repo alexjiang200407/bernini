@@ -410,6 +410,22 @@ namespace bgl
 
 			m_BoneSamples.Init(std::move(boneSampleBufferDesc), m_ResourceManager);
 		}
+
+		{
+			auto skinnedLegBufferDesc         = RangeBufferDesc();
+			skinnedLegBufferDesc.initialCount = 1;
+			skinnedLegBufferDesc.debugName    = "Skinned Leg Buffer";
+
+			m_SkinnedLegs.Init(std::move(skinnedLegBufferDesc), m_ResourceManager);
+		}
+
+		{
+			auto plantWeightBufferDesc         = RangeBufferDesc();
+			plantWeightBufferDesc.initialCount = 1;
+			plantWeightBufferDesc.debugName    = "Plant Weight Buffer";
+
+			m_PlantWeights.Init(std::move(plantWeightBufferDesc), m_ResourceManager);
+		}
 	}
 
 	core::slot_handle
@@ -576,7 +592,8 @@ namespace bgl
 	void
 	Scene::ValidateSkinnedRig(
 		const assetlib::Skeleton&     skeleton,
-		const assetlib::AnimationSet& animations)
+		const assetlib::AnimationSet& animations,
+		const FootPlantDesc&          footPlant)
 	{
 		const size_t boneCount = skeleton.bones.size();
 		if (boneCount == 0)
@@ -632,6 +649,68 @@ namespace bgl
 					"skinned geometry: a clip's frames run past the end of the sample pool");
 			}
 		}
+
+		// A leg is authored by bone name, so a refusal carrying only an index would send whoever
+		// wrote the avatar back to the rig to count bones. Falls back to the index for a bone the
+		// string pool has no name for.
+		const auto nameOf = [&skeleton](uint32_t bone) {
+			const std::string_view name = skeleton.stringPool.at(skeleton.bones[bone].nameOffset);
+			return name.empty() ? std::format("bone {}", bone) : std::format("'{}'", name);
+		};
+
+		for (const FootPlantLegDesc& leg : footPlant.legs)
+		{
+			const std::array<uint32_t, 4> chain = { { leg.hip, leg.knee, leg.ankle, leg.toe } };
+			for (const uint32_t bone : chain)
+			{
+				if (bone >= boneCount)
+				{
+					throw SceneError(
+						std::format(
+							"skinned geometry: a leg names bone {}, which is outside the {}-bone "
+							"skeleton it was resolved against",
+							bone,
+							boneCount));
+				}
+			}
+
+			for (size_t link = 1; link < chain.size(); ++link)
+			{
+				// The solve rewrites these four slots and carries their descendants rigidly, so a
+				// bone between two links would keep a pose the joints above it no longer agree
+				// with.
+				if (skeleton.bones[chain[link]].parent != chain[link - 1])
+				{
+					throw SceneError(
+						std::format(
+							"skinned geometry: a leg's bones are not a direct chain: {} is not "
+							"parented to {}",
+							nameOf(chain[link]),
+							nameOf(chain[link - 1])));
+				}
+			}
+
+			// Judged after normalizing, for SetGround's reason: a zero normal divides to NaN and a
+			// finite one large enough to overflow the length divides to zero.
+			const glm::vec3 normal = leg.soleNormal / glm::length(leg.soleNormal);
+			if (!core::is_finite(normal) || glm::length(normal) == 0.0f)
+			{
+				throw SceneError(
+					std::format(
+						"skinned geometry: the sole normal on the leg ending at {} must be finite "
+						"and "
+						"nonzero",
+						nameOf(leg.ankle)));
+			}
+		}
+
+		const size_t frames = animations.samples.size() / boneCount;
+		if (footPlant.plantWeights.size() != frames * footPlant.legs.size())
+		{
+			throw SceneError(
+				"skinned geometry: the plant weights are not one byte per leg for every frame in "
+				"the sample pool");
+		}
 	}
 
 	RigMeta*
@@ -646,9 +725,12 @@ namespace bgl
 	}
 
 	RigHandle
-	Scene::AddRig(const assetlib::Skeleton& skeleton, const assetlib::AnimationSet& animations)
+	Scene::AddRig(
+		const assetlib::Skeleton&     skeleton,
+		const assetlib::AnimationSet& animations,
+		const FootPlantDesc&          footPlant)
 	{
-		ValidateSkinnedRig(skeleton, animations);
+		ValidateSkinnedRig(skeleton, animations, footPlant);
 
 		const uint32_t boneCount = static_cast<uint32_t>(skeleton.bones.size());
 
@@ -690,14 +772,41 @@ namespace bgl
 			      clip.loop ? 1u : 0u });
 		}
 
+		auto legs = std::vector<idl::SkinnedLegChain>();
+		legs.reserve(footPlant.legs.size());
+		for (const FootPlantLegDesc& leg : footPlant.legs)
+		{
+			legs.push_back(
+				{ glm::vec4(leg.solePoint, 0.0f),
+			      glm::vec4(glm::normalize(leg.soleNormal), 0.0f),
+			      leg.hip,
+			      leg.knee,
+			      leg.ankle,
+			      leg.toe });
+		}
+
+		// Four bytes to a uint, least-significant first. The tail of the last word is zero, which is
+		// a leg that is never planted -- the same thing an absent weight would mean.
+		auto weights = std::vector<uint32_t>((footPlant.plantWeights.size() + 3) / 4, 0u);
+		for (size_t i = 0; i < footPlant.plantWeights.size(); ++i)
+		{
+			weights[i / 4] |= uint32_t(footPlant.plantWeights[i]) << (8 * (i % 4));
+		}
+
 		auto rollback = GeomRollback();
 
 		try
 		{
-			auto record      = idl::Rig();
-			record.bones     = rollback.Track(m_SkinnedBones, m_SkinnedBones.Add(std::span(bones)));
-			record.samples   = rollback.Track(m_BoneSamples, m_BoneSamples.Add(std::span(samples)));
-			record.clips     = rollback.Track(m_Clips, m_Clips.Add(std::span(clips)));
+			auto record    = idl::Rig();
+			record.bones   = rollback.Track(m_SkinnedBones, m_SkinnedBones.Add(std::span(bones)));
+			record.samples = rollback.Track(m_BoneSamples, m_BoneSamples.Add(std::span(samples)));
+			record.clips   = rollback.Track(m_Clips, m_Clips.Add(std::span(clips)));
+			if (!legs.empty())
+			{
+				record.legs = rollback.Track(m_SkinnedLegs, m_SkinnedLegs.Add(std::span(legs)));
+				record.plantWeights =
+					rollback.Track(m_PlantWeights, m_PlantWeights.Add(std::span(weights)));
+			}
 			record.boneCount = boneCount;
 			record.maxDepth  = maxDepth;
 
@@ -849,6 +958,11 @@ namespace bgl
 		m_SkinnedBones.EraseByIndex(record.bones.offsetStart);
 		m_BoneSamples.EraseByIndex(record.samples.offsetStart);
 		m_Clips.EraseByIndex(record.clips.range.offsetStart);
+		if (!record.legs.Null())
+		{
+			m_SkinnedLegs.EraseByIndex(record.legs.range.offsetStart);
+			m_PlantWeights.EraseByIndex(record.plantWeights.offsetStart);
+		}
 		m_Rigs.Erase(rig.handle);
 	}
 

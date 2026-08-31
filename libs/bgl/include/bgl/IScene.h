@@ -16,6 +16,13 @@
 #include <bgl/api.h>
 #include <bgl/error.h>
 #include <bgl/glm.h>
+#include <bgl/types/ChannelRouteDesc.h>
+#include <bgl/types/EnvironmentMapDesc.h>
+#include <bgl/types/FootPlantDesc.h>
+#include <bgl/types/GroundPlaneDesc.h>
+#include <bgl/types/LoosePbrMaterialDesc.h>
+#include <bgl/types/PbrMaterialDesc.h>
+#include <bgl/types/SceneDesc.h>
 #include <core/containers/slot_handle.h>
 #include <core/ref/Ref.h>
 #include <core/ref/SharedRef.h>
@@ -27,117 +34,6 @@ namespace bgl
 	public:
 		SceneError() = delete;
 		using ApiError::ApiError;
-	};
-
-	/**
-	 * How big the scene's GPU arenas start, not how big they may get. Each one grows on demand,
-	 * bounded only by device memory, so these are a hint that trades startup residency against the
-	 * number of growth events during a load. Sizing them near the steady state avoids both.
-	 *
-	 * Every field is advisory. A renderer that keeps no arena of a given kind ignores that field
-	 * rather than failing on it.
-	 */
-	struct SceneDesc
-	{
-		uint32_t initialGeom                 = 1;
-		uint32_t initialMeshlets             = 1;
-		uint32_t initialIndices              = 1;
-		uint32_t initialSubmeshes            = 1;
-		uint32_t initialVertexBufferByteSize = 1;
-		uint32_t initialPbrMaterials         = 1;
-		uint32_t initialLoosePbrMaterials    = 1;
-	};
-
-	/**
-	 * The decoded IBL cube maps: the diffuse and specular convolutions of one environment.
-	 *
-	 * The split-sum BRDF table that completes the specular term is not here. It integrates a white
-	 * environment, so it belongs to the shading model rather than to any environment, and bgl
-	 * generates its own at device init -- there is nothing for a caller to supply or to mismatch.
-	 */
-	struct EnvironmentMapDesc
-	{
-		EnvironmentMapDesc() = default;
-
-		EnvironmentMapDesc(TextureAssetHandle irr, TextureAssetHandle pre) :
-			irradiance(irr), prefilter(pre)
-		{}
-
-		EnvironmentMapDesc(EnvironmentMapDesc&&) noexcept = default;
-		EnvironmentMapDesc(const EnvironmentMapDesc&)     = delete;
-
-		EnvironmentMapDesc&
-		operator=(EnvironmentMapDesc&&) noexcept = default;
-
-		EnvironmentMapDesc&
-		operator=(const EnvironmentMapDesc&) = delete;
-
-		TextureAssetHandle irradiance;
-		TextureAssetHandle prefilter;
-	};
-
-	/**
-	 * The ground under a scene, as the plane through `point` with `normal` up: what the skinned
-	 * pose pass samples to plant a foot. One plane for the whole scene until a heightfield exists,
-	 * and the fallback where none does. The default is `y = 0`, up.
-	 */
-	struct GroundPlaneDesc
-	{
-		glm::vec3 point  = glm::vec3(0.0f);
-		glm::vec3 normal = glm::vec3(0.0f, 1.0f, 0.0f);
-	};
-
-	struct PbrMaterialDesc
-	{
-		glm::vec4 baseColorFactor = glm::vec4(1.0f);
-		float     metallicFactor  = 1.0f;
-		float     roughnessFactor = 1.0f;
-
-		LayerType layerType   = LayerType::kOpaque;
-		float     alphaCutoff = 0.5f;
-
-		// What baseColorFactor.a means on a kBlend surface, and read by no other layer: 0 coverage
-		// (hair, foliage), 1 transmission (glass). glTF's KHR_materials_transmission.
-		float transmissionFactor = 0.0f;
-
-		// glTF's KHR_materials_specular. The colour tints a dielectric's F0 away from grey; the
-		// factor weights the whole specular lobe, so 0 is a surface with no reflection at all.
-		glm::vec3 specularColorFactor = glm::vec3(1.0f);
-		float     specularFactor      = 1.0f;
-
-		// Optional material maps, from AddTextureAsset.
-		TextureAssetHandle baseColorTexture;
-		TextureAssetHandle normalTexture;
-		TextureAssetHandle ormTexture;
-	};
-
-	struct ChannelRouteDesc
-	{
-		TextureAssetHandle texture;
-		uint16_t           channel = 0;  // 0 = R, 1 = G, 2 = B, 3 = A
-	};
-
-	struct LoosePbrMaterialDesc
-	{
-		glm::vec4 baseColorFactor = glm::vec4(1.0f);
-		float     metallicFactor  = 1.0f;
-		float     roughnessFactor = 1.0f;
-
-		// Cutout; see PbrMaterialDesc. A loose material routes its alpha explicitly (baseColor[3]),
-		// so unlike a baked one it can always sample a real alpha channel.
-		LayerType layerType   = LayerType::kOpaque;
-		float     alphaCutoff = 0.5f;
-
-		// Coverage against transmission; see PbrMaterialDesc.
-		float transmissionFactor = 0.0f;
-
-		// Dielectric F0 tint and specular strength; see PbrMaterialDesc.
-		glm::vec3 specularColorFactor = glm::vec3(1.0f);
-		float     specularFactor      = 1.0f;
-
-		std::array<ChannelRouteDesc, 4> baseColor;  // R, G, B, A
-		std::array<ChannelRouteDesc, 3> orm;        // AO, roughness, metallic
-		std::array<ChannelRouteDesc, 2> normal;     // X, Y (Z reconstructed in shader)
 	};
 
 	class BGL_API IScene : public core::Ref
@@ -223,13 +119,22 @@ namespace bgl
 		 * handle rather than re-uploaded per mesh.
 		 *
 		 * Takes the containers as they are: `Skeleton` and `AnimationSet` are `assetlib_structs`
-		 * PODs with nothing to decode, so there is no desc to mirror them into.
+		 * PODs with nothing to decode, so neither is mirrored into a desc. `footPlant` is the
+		 * exception, and carries only what no container holds: bone *names* resolved to indices and
+		 * a sole plane measured off the mesh, neither of which bgl can derive without assetlib. It
+		 * belongs to the rig and not to a geom on it -- a leg is bone indices into `skeleton` and a
+		 * weight per frame of `animations`, so two meshes on one rig plant the same feet.
 		 *
 		 * @param skeleton   The bones the clips and every skinned mesh address by bare index.
 		 * @param animations Clips cooked against `skeleton`.
+		 * @param footPlant  The rig's legs and their per-frame plant weights, or empty for a rig
+		 *                   that plants no feet -- which animates exactly as it did before.
 		 * @throws SceneError for a skeleton with no bones, bones that are not topologically sorted,
 		 *         an `animations` whose bone count disagrees with `skeleton`, an empty or
-		 *         zero-frame clip table, or a clip whose frames fall outside the sample pool.
+		 *         zero-frame clip table, a clip whose frames fall outside the sample pool, a leg
+		 *         naming a bone outside the skeleton or a chain whose links are not directly
+		 *         parented, a leg whose sole normal is not finite and nonzero, or a `plantWeights`
+		 *         that is not one byte per leg for every frame in the sample pool.
 		 *
 		 * `AnimationSet::skeletonSignature` is deliberately **not** checked here: computing a
 		 * skeleton's signature needs assetlib, which bgl does not link. A clip set cooked against a
@@ -237,7 +142,10 @@ namespace bgl
 		 * wrongly. Whoever loaded the two containers owns that check -- gamelib's acquire makes it.
 		 */
 		virtual RigHandle
-		AddRig(const assetlib::Skeleton& skeleton, const assetlib::AnimationSet& animations) = 0;
+		AddRig(
+			const assetlib::Skeleton&     skeleton,
+			const assetlib::AnimationSet& animations,
+			const FootPlantDesc&          footPlant = {}) = 0;
 
 		/**
 		 * Destroys a rig, releasing its bone, clip and sample ranges.
