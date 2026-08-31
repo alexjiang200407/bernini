@@ -1,7 +1,7 @@
 #include "AnimationEditorWindow.h"
 
 #include "Windows/AnimationEditor/TimelineScrubber.h"
-#include "util/mime_files.h"
+#include "util/mesh_drop.h"
 #include <assetlib/Project.h>
 
 #include "Windows/AnimationEditor/animation_source.h"
@@ -290,25 +290,28 @@ AnimationEditorWindow::SetDockVisible(const bool visible)
 void
 AnimationEditorWindow::dragEnterEvent(QDragEnterEvent* event)
 {
-	if (!editor::FirstLocalFileWithSuffix(event->mimeData(), u".bmesh").isEmpty())
+	if (editor::IsMeshDrag(event->mimeData()))
 		event->acceptProposedAction();
 }
 
 void
 AnimationEditorWindow::dragMoveEvent(QDragMoveEvent* event)
 {
-	if (!editor::FirstLocalFileWithSuffix(event->mimeData(), u".bmesh").isEmpty())
+	if (editor::IsMeshDrag(event->mimeData()))
 		event->acceptProposedAction();
 }
 
 void
 AnimationEditorWindow::dropEvent(QDropEvent* event)
 {
-	const QString file = editor::FirstLocalFileWithSuffix(event->mimeData(), u".bmesh");
-	if (file.isEmpty())
+	const editor::MeshDrop drop = editor::MeshDroppedOn(event->mimeData(), m_DataRoot);
+	if (drop.mesh.isEmpty())
+	{
+		editor::ReportUnresolved(window(), drop);
 		return;
+	}
 
-	m_Preview->LoadMesh(std::filesystem::path(file.toStdWString()));
+	m_Preview->LoadMesh(std::filesystem::path(drop.mesh.toStdWString()));
 	event->acceptProposedAction();
 }
 

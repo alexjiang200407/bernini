@@ -12,4 +12,8 @@ namespace editor
 	 */
 	[[nodiscard]] QString
 	FirstLocalFileWithSuffix(const QMimeData* mime, QStringView suffix);
+
+	/** As above, spelt for the `assetlib` extension constants, which are `std::string_view`. */
+	[[nodiscard]] QString
+	FirstLocalFileWithSuffix(const QMimeData* mime, std::string_view suffix);
 }
