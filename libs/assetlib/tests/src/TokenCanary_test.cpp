@@ -2,7 +2,6 @@
 #include <assetlib_structs/Animation.h>
 #include <assetlib_structs/BEnv.h>
 #include <assetlib_structs/BMesh.h>
-#include <assetlib_structs/BVat.h>
 #include <assetlib_structs/Skeleton.h>
 
 #include <catch2/catch_test_macros.hpp>
@@ -215,60 +214,6 @@ namespace
 		return animations;
 	}
 
-	BVat
-	CanaryVat()
-	{
-		BVat vat;
-		vat.boundsMin = glm::vec3(-1.0f, -2.0f, -3.0f);
-		vat.boundsMax = glm::vec3(4.0f, 5.0f, 6.0f);
-		vat.width     = 3;
-		vat.height    = 5;  // two clips: (1 + 1) + (2 + 1) padded rows
-		vat.boneCount = 2;
-
-		// Two clips, so the second's row and palette bases are non-zero and distinct -- the first
-		// clip's are forced to zero by validateVat, which cannot witness a reorder.
-		VatClip walk{};
-		walk.nameOffset   = vat.stringPool.add("walk");
-		walk.firstRow     = 0;
-		walk.frameCount   = 1;
-		walk.firstPalette = 0;
-		walk.sampleRate   = 24.0f;
-		walk.duration     = 0.5f;
-		walk.loop         = 1;
-
-		VatClip idle{};
-		idle.nameOffset   = vat.stringPool.add("idle");
-		idle.firstRow     = 2;
-		idle.frameCount   = 2;
-		idle.firstPalette = 2;
-		idle.sampleRate   = 30.0f;
-		idle.duration     = 0.75f;
-		idle.loop         = 0;
-
-		vat.clips    = { walk, idle };
-		vat.columns  = { VatColumns{ 0, 1 }, VatColumns{ 1, 2 } };
-		vat.palettes = { glm::mat4(2.0f), glm::mat4(3.0f), glm::mat4(4.0f),
-			             glm::mat4(5.0f), glm::mat4(6.0f), glm::mat4(7.0f) };
-
-		vat.mesh              = "Meshes/unit.bmesh";
-		vat.skeleton          = "Skeletons/unit.bskel";
-		vat.animations        = "Animations/unit.banim";
-		vat.skeletonSignature = 0xfeed;
-		vat.meshStamp         = SourceStamp{ 1, 2 };
-		vat.skeletonStamp     = SourceStamp{ 3, 4 };
-		vat.animationsStamp   = SourceStamp{ 5, 6 };
-
-		// Opaque payloads to the writer; literal bytes keep the hash off libktx entirely.
-		vat.positionsKtx2.resize(16);
-		vat.normalsKtx2.resize(16);
-		for (size_t i = 0; i < 16; ++i)
-		{
-			vat.positionsKtx2[i] = static_cast<std::byte>(0xA0 + i);
-			vat.normalsKtx2[i]   = static_cast<std::byte>(0xC0 + i);
-		}
-		return vat;
-	}
-
 	BSky
 	CanarySky()
 	{
@@ -320,14 +265,6 @@ TEST_CASE("a writer's output cannot change without its bake token", "[canary][io
 			AssetCodec<AnimationSet>::c_BakeToken,
 			Pin{ .token = 0x107bc43fdbd09c69ull, .hash = 0xe1f67cedf62d4c5full },
 			AssetCodec<AnimationSet>::Serialize(CanaryAnimations()));
-	}
-
-	SECTION(".bvat")
-	{
-		CheckCanary(
-			AssetCodec<BVat>::c_BakeToken,
-			Pin{ .token = 0x25b90ce8f7143ad9ull, .hash = 0x6e93b48621d0aca0ull },
-			AssetCodec<BVat>::Serialize(CanaryVat()));
 	}
 
 	SECTION(".bsky")

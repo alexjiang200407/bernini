@@ -45,6 +45,15 @@ frame.
   modular unit's slots, and its memory scales `verts × frames` per mesh against the table's
   `bones × frames` per rig. The retirement rests on that, on the library bar, and on there being no
   rule that says when VAT would be chosen. Task 5's timing is recorded, not relied on.
+
+  *Amended by task 5.* The timing was **dropped, not taken.** Nothing branches on it — this ADR
+  already says so — and it cannot be taken honestly: the claim worth testing is a per-vertex one,
+  the RHI has no timestamp query, and `EndFrame` records a fence rather than syncing, so a
+  whole-frame wall clock cannot attribute a cost to a stage. A number that coarse, written into a
+  merged PR body, is read later as though it had. The open question it would have informed is
+  [docs/specs/crowd_frame_interpolation.md](docs/specs/crowd_frame_interpolation.md), whose trigger
+  is `ROADMAP.md` `:360` landing; a spec also outlives task 6's deletion of this plan, which a PR
+  body does not.
 - **ADR-3 — The palette belongs to the rig: keyed on (skeleton, clip set), never on a mesh.**
   *Rejected: per-mesh, which `.bvat` and `AddSkinnedMeshGeom` both do today — a five-slot kit
   uploads five identical rigs.*
@@ -133,8 +142,10 @@ frame.
 - **assetlib** — no new container and no token bump. The `.bvat` codec, its `TokenCanary` pin, its
   reference-graph edges and `pack`'s re-bake are removed and every suite passes without them, no
   other token moved.
-- **Retirement PR** — no VAT draw path, container or bake remains; the crowd-scene timing on VAT,
-  the bone anim table and the per-instance tier is in its body.
+- **Retirement PR** — no VAT draw path, container or bake remains. *Corrected by task 5:* the
+  crowd-scene timing this asked for is **dropped, not taken** — ADR-2 above says why, and the
+  question it would have informed is
+  [docs/specs/crowd_frame_interpolation.md](docs/specs/crowd_frame_interpolation.md).
 - **GPU residency, owned here** — a rig with a table holds `bones × frames × 48 B` beside its
   same-sized sample pool. Nothing clamps it: a table is as large as its clip set, and the levers
   are authoring and, later, quantization. So the roadmap's "VAT texture memory under 50 MB"
@@ -357,7 +368,7 @@ per rig is this plan's cost to carry.
    (`grep -riE vat … | grep -viE 'private|activat|derivat|conservat|reservat|innovat|motivat|elevat'`),
    finds nothing outside `docs/plans/` — an exclusion list fails loud on a spelling it did not
    foresee, where an inclusion list (`\bvat\b` misses `vat_bake`, `kVat`, `vatPathFor`) passes
-   with the tier still in the tree; the roadmap's lines are rewritten, not left as history; the
-   timing from task 3 in the body.
+   with the tier still in the tree; the roadmap's lines are rewritten, not left as history. The
+   timing deferred from task 3 is dropped rather than taken, and ADR-2 says why.
 6. **`docs: fold the plan into docs/skinning.md and delete it`** — the decisions that outlive the
    feature move to the subsystem page; this file goes with the landing PR.

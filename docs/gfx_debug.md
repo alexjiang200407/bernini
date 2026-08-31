@@ -173,7 +173,7 @@ call `logger::…` with no extra include.
   and your own `logger::` output interleave in one file.
 
 * **Cook and load timings are not in this log at all — they are Tracy zones.** A glTF parse, a
-  tangent pass, a posed-bounds bake, a VAT bake, a prefilter and a whole-project bounds rebake each
+  tangent pass, a posed-bounds bake, a prefilter and a whole-project bounds rebake each
   open a zone carrying its own dimensions, and so does every stage of an editor start-up. They are
   read in the Tracy profiler, not here, because a duration on a line cannot say what it ran *inside*
   and a log interleaved from six threads cannot say which one it ran *on*. See

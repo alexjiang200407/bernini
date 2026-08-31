@@ -6,7 +6,6 @@
 #include <assetlib_structs/BEnv.h>
 #include <assetlib_structs/BMaterial.h>
 #include <assetlib_structs/BMesh.h>
-#include <assetlib_structs/BVat.h>
 #include <assetlib_structs/Skeleton.h>
 
 namespace assetlib
@@ -30,7 +29,6 @@ namespace assetlib
 			BEnvLighting,
 			Skeleton,
 			AnimationSet,
-			BVat,
 			ImportDocument>;
 
 		template <AssetCodecFor T>

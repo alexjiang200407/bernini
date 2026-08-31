@@ -1,12 +1,12 @@
 import types.RawBuffer;
 import types.ComputeBuffer;
-import idl.VatState;
+import idl.SkinnedTableState;
 import idl.CullView;
 
 // Loads out of one raw buffer, reported for a CPU comparison against the bytes it wrote.
 //
 // The two record loads answer whether a raw Load<T> lays T out the way bgl_idlgen's C++ mirror
-// asserts: VatState is a real playback record of packed scalars, CullView adds a matrix and a
+// asserts: SkinnedTableState is a real playback record of packed scalars, CullView adds a matrix and a
 // fixed array, which are where a target's own packing rules would show up first.
 //
 // The loose loads answer the other half: a vertex attribute is only ever 4-byte aligned, so both
@@ -26,8 +26,8 @@ ConstantBuffer<Uniforms> gUniforms;
 [numthreads(1, 1, 1)]
 void main()
 {
-    let state = gUniforms.records.Load<VatState>(gUniforms.stateOffset);
-    gUniforms.outValues[0] = float4(float(state.geom.GetOffset()), float(state.clip), state.phase, state.rate);
+    let state = gUniforms.records.Load<SkinnedTableState>(gUniforms.stateOffset);
+    gUniforms.outValues[0] = float4(float(state.rig.GetOffset()), float(state.clip), state.phase, state.rate);
 
     let view = gUniforms.records.Load<CullView>(gUniforms.viewOffset);
     gUniforms.outValues[1] = view.frustumPlanes[3];

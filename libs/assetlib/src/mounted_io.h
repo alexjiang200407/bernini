@@ -9,13 +9,11 @@ namespace assetlib
 	struct BEnvLighting;
 	struct BMaterial;
 	struct BSky;
-	struct BVat;
 	struct EnvMapRoute;
 	struct ImageData;
 	struct MeshRefs;
 	struct ResolvedEnvironment;
 	struct SourceStamp;
-	struct VatRefs;
 
 	/**
 	 * Every read addressed to a mount, gathered here because a mount alone is not a way anyone
@@ -59,12 +57,6 @@ namespace assetlib
 	[[nodiscard]] std::string
 	loadAnimationSkeletonPath(const core::file::IFileSystem& fileSystem, std::string_view path);
 
-	[[nodiscard]] BVat
-	loadVatTables(const core::file::IFileSystem& fileSystem, std::string_view path);
-
-	[[nodiscard]] VatRefs
-	loadVatRefs(const core::file::IFileSystem& fileSystem, std::string_view path);
-
 	[[nodiscard]] ImageData
 	loadKTX2(
 		const core::file::IFileSystem& fileSystem,
@@ -86,9 +78,6 @@ namespace assetlib
 
 	[[nodiscard]] bool
 	drawsLoose(const BMaterial& material, const core::file::IFileSystem& fileSystem);
-
-	[[nodiscard]] bool
-	vatIsStale(const BVat& vat, const core::file::IFileSystem& fileSystem);
 
 	[[nodiscard]] bool
 	isSkyBakeStale(const BSky& sky, const core::file::IFileSystem& fileSystem);

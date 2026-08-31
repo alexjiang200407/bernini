@@ -348,14 +348,6 @@ Three different spaces are in play and they are easy to conflate. The contract, 
   **material references by file path**.
   Struct: [libs/assetlib_structs/include/assetlib_structs/BMesh.h](libs/assetlib_structs/include/assetlib_structs/BMesh.h);
   container I/O: [libs/assetlib/include/assetlib/codecs.h](libs/assetlib/include/assetlib/codecs.h).
-* **`.bvat`** — a rig's clips baked to a position/normal texture pair, embedded as KTX2 payload
-  chunks (positions `R16G16B16A16_UNORM` unorm-packed in one all-clips AABB; normals
-  `R8G8B8A8_UNORM`, `rgb` as `xyz * 0.5 + 0.5` and `a` the tangent's twist about it), plus the clip/column tables and the per-frame skinning
-  palettes. **A derived build product, never committed**: it stamps its three inputs and is re-baked
-  in place when any of them moves — see [VAT](docs/vat.md). Struct:
-  [libs/assetlib_structs/include/assetlib_structs/BVat.h](libs/assetlib_structs/include/assetlib_structs/BVat.h);
-  I/O: [libs/assetlib/include/assetlib/codecs.h](libs/assetlib/include/assetlib/codecs.h);
-  bake: [libs/assetlib/include/assetlib/vat_bake.h](libs/assetlib/include/assetlib/vat_bake.h).
 * **`.bmaterial`** — **a shading-model tag plus that model's parameters**, as an authored text
   document: canonical JSON, factors and routes as named keys, the editor graph carried as an
   opaque string, unknown keys preserved on round-trip. Struct:
@@ -435,9 +427,9 @@ Three different spaces are in play and they are easy to conflate. The contract, 
   (`libs/bgl/idl/src/PsoType.slang`) appended at the end, because `c_Psos` in `ForwardPass.cpp` is
   index-parallel to the enum and its static_assert catches only an empty row, not a misordered one;
   arms in `GetPsoFromGeomAndMaterial` (`libs/bgl/src/util/util.cpp`); and material storage in
-  `Scene`. The amp/mesh stages are shared: every pixel module draws through one of the four
-  geometry modules — `Forward_StaticMesh`, `Forward_VatMesh`, `Forward_SkinnedMesh`, or the
-  tier-branching `Forward_AnyMesh` — and a new layer adds no geometry code.
+  `Scene`. The amp/mesh stages are shared: every pixel module draws through one of the three
+  geometry modules — `Forward_StaticMesh`, `Forward_SkinnedMesh`, or the tier-branching
+  `Forward_AnyMesh` — and a new layer adds no geometry code.
 * **`.bskel`** (v1) — a skeleton: bones, their bind pose and inverse bind matrices, and a name pool.
   Struct: [libs/assetlib_structs/include/assetlib_structs/Skeleton.h](libs/assetlib_structs/include/assetlib_structs/Skeleton.h);
   I/O: [libs/assetlib/include/assetlib/codecs.h](libs/assetlib/include/assetlib/codecs.h).
@@ -493,7 +485,7 @@ Three different spaces are in play and they are easy to conflate. The contract, 
     takes (`drawsLoose`), and for the same reason — `Derived/BakedTextures/` is regenerated per platform, so a
     fresh checkout has sources and no bakes. Only a route with neither throws.
 
-**`.bmesh`, `.bskel`, `.banim`, `.bvat`, `.bsky` and `.benvl` are the same cache-entry container**,
+**`.bmesh`, `.bskel`, `.banim`, `.bsky` and `.benvl` are the same cache-entry container**,
 in [libs/assetlib/src/cache_io.h](libs/assetlib/src/cache_io.h): a frozen header carrying the cache
 key (bake token, source stamp, parameter hash, source mount key), 16-byte-aligned schema-less
 chunks, a chunk table at the end. Chunks are addressed by id and an **absent chunk is not an

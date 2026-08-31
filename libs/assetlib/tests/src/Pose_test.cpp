@@ -86,7 +86,7 @@ namespace
 }
 
 // The property the whole bake rests on: a frame whose pose is the bind pose must skin every vertex
-// to exactly where it started. If this drifts, every baked VAT frame is wrong by the same drift and
+// to exactly where it started. If this drifts, every posed frame is wrong by the same drift and
 // nothing downstream can tell.
 TEST_CASE("A bind-pose frame skins to identity", "[pose][skinning]")
 {

@@ -34,8 +34,7 @@ namespace editor
 	bool
 	IsHiddenInExplorer(const QString& path)
 	{
-		return path.endsWith(QStringLiteral(".bvat"), Qt::CaseInsensitive) ||
-		       path.endsWith(QStringLiteral(".bimport"), Qt::CaseInsensitive);
+		return path.endsWith(QStringLiteral(".bimport"), Qt::CaseInsensitive);
 	}
 
 	bool

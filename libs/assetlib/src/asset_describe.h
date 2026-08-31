@@ -86,17 +86,6 @@ namespace assetlib
 	[[nodiscard]] std::string
 	describe(const AnimationSet& animations, const Skeleton* skeleton = nullptr);
 
-	struct BVat;
-
-	/**
-	 * Describes a VAT bake: its texture pair's dimensions and bounds, each clip's rows, each
-	 * submesh's columns, and the three inputs it was baked from with their stamps.
-	 *
-	 * Pass the tables-only form (loadVatTables) -- nothing here reads the
-	 * pixels, and a whole-project survey must not pay for them.
-	 */
-	[[nodiscard]] std::string
-	describe(const BVat& vat);
 	/**
 	 * The mounted form of describe: each routed source stamped, so a stale bake is visible.
 	 *
@@ -114,7 +103,4 @@ namespace assetlib
 
 	[[nodiscard]] std::string
 	describe(const BEnv& env, const core::file::IFileSystem* fileSystem);
-
-	[[nodiscard]] std::string
-	describe(const BVat& vat, const core::file::IFileSystem* fileSystem);
 }

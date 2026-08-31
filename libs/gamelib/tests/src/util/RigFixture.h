@@ -12,7 +12,7 @@
 
 // A rig on disk, as an importer would leave one: the .bmesh with its skin binding, the .bskel it
 // names, a .banim cooked against that skeleton, and the material and texture the submesh needs.
-// Shared by the VAT and skinned acquire suites, which need the same inputs and differ only in which
+// Shared by the acquire suites, which need the same inputs and differ only in which
 // door of the AssetManager they take them through.
 
 namespace game::test
@@ -73,7 +73,7 @@ namespace game::test
 	 * The rig on disk: one bone, a 4-vertex quad welded to it (one meshlet), and a 2-frame "slide"
 	 * clip translating the bone +1 X per frame -- so the pose at frame f is the quad on
 	 * [f - 1, f + 1], readable off the screen. Writes the mesh, its rig, one clip set and the
-	 * material; deliberately NO .bvat -- producing one is the manager's job.
+	 * material.
 	 */
 	inline void
 	WriteRig(const fs::path& dataRoot, bool looseMaterial = false)

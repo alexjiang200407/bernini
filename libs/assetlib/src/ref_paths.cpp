@@ -1,5 +1,6 @@
 #include "ref_paths.h"
 
+#include <assetlib/codecs.h>
 #include <core/err/util.h>
 
 namespace assetlib
@@ -8,6 +9,14 @@ namespace assetlib
 	normalizeRef(std::string_view path)
 	{
 		return std::filesystem::path(path).lexically_normal().generic_string();
+	}
+
+	std::string
+	normalizePath(std::string_view path)
+	{
+		// The public alias of normalizeRef: one body, so a stored reference and the reference
+		// graph's keyed form can never drift.
+		return normalizeRef(path);
 	}
 
 	std::string

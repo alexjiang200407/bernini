@@ -68,7 +68,6 @@
 *.bmesh -text
 *.bskel -text
 *.banim -text
-*.bvat -text
 *.bsky -text
 *.benvl -text
 

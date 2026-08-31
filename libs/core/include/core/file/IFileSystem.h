@@ -91,10 +91,10 @@ namespace core::file
 		 * Whether nothing here can be written, which is a property of the backing store and not of
 		 * one path. An archive is read-only; a directory is not.
 		 *
-		 * What a caller holding a derived build product asks before deciding to regenerate it: a
-		 * stale `.bvat` under a writable mount is re-baked, and under a read-only one is trusted,
-		 * because a shipped archive was packed with a fresh one and has no writable input to
-		 * re-bake from.
+		 * What a caller holding a derived build product asks before deciding to regenerate it: one
+		 * that is stale under a writable mount is remade, and under a read-only one is trusted,
+		 * because a shipped archive was packed with a fresh copy and has no writable input to
+		 * remake it from.
 		 */
 		[[nodiscard]] virtual bool
 		IsReadOnly() const noexcept = 0;

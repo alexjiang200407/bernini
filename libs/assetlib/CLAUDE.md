@@ -25,7 +25,7 @@ Two container regimes (see docs/asset_containers.md):
 survives a reader that has never heard of it. `.benv` carries the env family's authored state —
 the composition and the presentation knobs (`skyMipLevel`, `skyRotationY`, `exposureOverride`).
 
-Everything else derived — `.bmesh`, `.bskel`, `.banim`, `.bvat`, `.bsky`, `.benvl` — is a **cache
+Everything else derived — `.bmesh`, `.bskel`, `.banim`, `.bsky`, `.benvl` — is a **cache
 entry**, in `src/cache_io.h`: a frozen header carrying the cache key (bake token, source stamp,
 parameter hash, source mount key), raw current-layout chunks with no self-description, and a chunk
 table. A chunk is addressed by id and an absent one is not an error. There is no conversion and no
@@ -33,7 +33,7 @@ old shape to parse — a token mismatch is a cache miss. For geometry, `AssetSto
 methods are the seam that acts on one: a stale entry regenerates in memory from its `Authored/Meshes/`
 source at the parameters its `.bimport` records, with the document's bindings applied over the
 result, while a read-only store trusts its keys because `pack` made them true. For the env family
-and `.bvat` the re-bake is deliberate (`pack`, the editor) rather than at load. The textures an
+the re-bake is deliberate (`pack`, the editor) rather than at load. The textures an
 import extracted are the third case: keyed by the `textureDir` and `textureStamp` their `.bimport`
 carries, because a `.ktx2` has no header of its own, and refreshed by
 `AssetStore::RefreshImportedTextures` rather than at load — `LoadRegen*` runs on every mesh load and
@@ -61,8 +61,7 @@ Concretely, before adding to `include/assetlib/`:
   was deleted rather than kept — see [STYLE.md](../../STYLE.md) § Paths.
 - **An operation on a project is a method on `AssetStore`; an operation with state that outlives
   the call is a class.** A free function taking an `AssetStore&` is a method that has not been
-  written as one -- `bakeVat(store, desc)` sat beside `store.BakeMaterial` for exactly as long as
-  nobody noticed. The exception is real and narrow: `AssetRefGraph::Scan(store)` builds an object
+  written as one. The exception is real and narrow: `AssetRefGraph::Scan(store)` builds an object
   holding an edge index across every later `ReferrersOf`, so it is a named constructor and stays
   free. Stateless and about the project's contents means method.
 - **A container is written into the half its codec belongs to, and `Save` refuses anything else.**

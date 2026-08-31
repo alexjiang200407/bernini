@@ -33,9 +33,5 @@ dist/
 
 TODO.md
 
-# A .bvat is wholly derived from the .bmesh/.bskel/.banim it stamps -- baked on demand, never
-# committed. An accidental add would land tens of MB as a plain git blob.
-*.bvat
-
 # Finder drops these all over a macOS checkout; one `git add -A` and they land.
 .DS_Store

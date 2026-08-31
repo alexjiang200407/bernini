@@ -3,9 +3,7 @@
 #include <assetlib/codecs.h>
 #include <assetlib/import_document.h>
 #include <assetlib/pak.h>
-#include <assetlib/vat_bake.h>
 #include <assetlib_structs/BMesh.h>
-#include <assetlib_structs/BVat.h>
 #include <assetlib_structs/Skeleton.h>
 #include <core/file/LooseFileSystem.h>
 #include <core/file/file.h>
@@ -17,7 +15,6 @@
 #include "MountAt.h"
 #include "RefsSandbox.h"
 #include "SkinnedGltf.h"
-#include "VatFixture.h"
 #include "mounted_io.h"
 
 using namespace assetlib;
@@ -250,101 +247,6 @@ TEST_CASE("a material that draws loose is named, because the archive drops its s
 		std::vector<std::string>{ "Authored/Materials/unbaked.bmaterial" });
 }
 
-namespace
-{
-	// A rig on disk, and the `.bvat` baked from it, both under `root`.
-	void
-	StageRig(const DataRoot& root)
-	{
-		const VatFixture fixture;
-
-		fs::create_directories(root.path / "Derived/Skeletons");
-		fs::create_directories(root.path / "Derived/Animations");
-
-		StoreAt(root.path).Save(fixture.mesh, "Derived/Meshes/rig.bmesh");
-		StoreAt(root.path).Save(fixture.skeleton, "Derived/Skeletons/rig.bskel");
-		StoreAt(root.path).Save(fixture.animations, "Derived/Animations/rig.banim");
-
-		StoreAt(root.path).Save(
-			AssetStore(root.path).BakeVat(
-				VatBakeDesc{ "Derived/Meshes/rig.bmesh", "Derived/Animations/rig.banim" }),
-			"Derived/Meshes/rig.bvat");
-	}
-}
-
-/**
- * What makes a packed `.bvat` trustworthy: its inputs may ship beside it with nowhere to write a
- * re-bake, so packing is the last moment it can be made correct. Task 8's read-only mount skips the
- * staleness check entirely on the strength of this.
- */
-TEST_CASE("pack re-bakes a stale .bvat, and leaves a current one alone", "[pack][vat]")
-{
-	const DataRoot root("pack_vat");
-	StageRig(root);
-
-	SECTION("a current bake is packed untouched")
-	{
-		PackReport                     report;
-		const std::vector<std::string> entries = PackAndEnumerate(root, &report);
-
-		CHECK(report.vatsRebaked == 0);
-		CHECK(Contains(entries, "Derived/Meshes/rig.bvat"));
-	}
-
-	SECTION("a stale bake is re-baked first, and what is packed is not stale")
-	{
-		// Longer, not merely rewritten: the stamp is size + whole seconds, so a same-second edit of
-		// equal length would not move it.
-		VatFixture edited;
-		edited.animations.stringPool.add("padding-so-the-size-moves");
-		StoreAt(root.path).Save(edited.animations, "Derived/Animations/rig.banim");
-
-		REQUIRE(
-			vatIsStale(loadVatTables(root.path / "Derived/Meshes/rig.bvat"), MountAt(root.path)));
-
-		PackReport report;
-		static_cast<void>(PackAndEnumerate(root, &report));
-
-		CHECK(report.vatsRebaked == 1);
-
-		// Judged inside the archive, which is where a shipped build asks the question.
-		const PakFile pak(root.path / "Data.bpak");
-		CHECK_FALSE(vatIsStale(loadVatTables(pak, "Derived/Meshes/rig.bvat"), pak));
-	}
-}
-
-// Loud rather than silently shipping: a `.bvat` from another bake revision names its inputs in a
-// layout this build does not vouch for, so pack cannot re-bake it. The loose project heals one on
-// its next load, and that has to happen before an export.
-TEST_CASE("pack refuses a .bvat from another bake revision", "[pack][vat]")
-{
-	const DataRoot root("pack_vat_old");
-	StageRig(root);
-
-	test::TamperHeaderByte(root.path / "Derived/Meshes/rig.bvat", test::c_TokenOffset);
-
-	CHECK_THROWS_WITH(
-		AssetStore(root.path).Pack(PackDesc{ root.path / "Data.bpak" }),
-		Catch::Matchers::ContainsSubstring("another bake revision"));
-}
-
-// Loud rather than a quietly incomplete archive: a `.bvat` naming an input that is gone cannot be
-// made correct, and shipping the stale one is the outcome packing exists to prevent.
-TEST_CASE("pack fails when a stale .bvat cannot be re-baked", "[pack][vat]")
-{
-	const DataRoot root("pack_vat_broken");
-	StageRig(root);
-
-	VatFixture edited;
-	edited.animations.stringPool.add("padding-so-the-size-moves");
-	StoreAt(root.path).Save(edited.animations, "Derived/Animations/rig.banim");
-	fs::remove(root.path / "Derived/Skeletons/rig.bskel");
-
-	CHECK_THROWS_AS(
-		AssetStore(root.path).Pack(PackDesc{ root.path / "Data.bpak" }),
-		std::runtime_error);
-}
-
 TEST_CASE(
 	"a stale group re-bakes into the archive, a rebind rides along, disk untouched",
 	"[pack][regen]")
@@ -386,37 +288,4 @@ TEST_CASE("a group the seam cannot serve fails the pack", "[pack][regen]")
 	std::filesystem::remove(root.path / "Authored/Meshes/unit.glb");
 
 	CHECK_THROWS(AssetStore(root.path).Pack(PackDesc{ root.path / "Data.bpak" }));
-}
-
-TEST_CASE("a packed .bvat answers fresh inside the archive it shipped in", "[pack][regen][vat]")
-{
-	const test::DataRoot    root("bernini_pack_vat_regen");
-	const test::SkinnedGltf source("bernini_pack_vat_regen_gltf");
-	test::ImportUnitGroup(root.path, source.PackGlb());
-
-	const AssetStore  store(root.path);
-	const std::string vatKey =
-		vatPathFor("Derived/Meshes/unit.bmesh", "Derived/Animations/unit.banim").generic_string();
-	SaveAt(
-		store.BakeVat(VatBakeDesc{ "Derived/Meshes/unit.bmesh", "Derived/Animations/unit.banim" }),
-		root.path / vatKey);
-
-	// The group goes stale with every byte and stamp the bake recorded still holding: a
-	// parameter edit moves only the document, so nothing but the group axis can see it -- the
-	// shape a re-export or a sibling's merge leaves when nobody ran migrate.
-	auto document       = loadImportDocument(root.path / "Authored/Meshes/unit.bimport");
-	document.sampleRate = 60.0f;
-	core::file::write_atomic(
-		root.path / "Authored/Meshes/unit.bimport",
-		AssetCodec<ImportDocument>::Serialize(document));
-
-	const std::filesystem::path target = root.path / "Data.bpak";
-	const PackReport            report = store.Pack(PackDesc{ target });
-	CHECK(report.vatsRebaked == 1);  // the group axis alone fired
-
-	// Judged inside the archive, which is where a shipped build asks: the vat's stamps must
-	// describe the geometry as archived -- the seam's answers -- not the stale file the bake
-	// read them beside.
-	const AssetStore packed(root.path, std::make_shared<PakFile>(target));
-	CHECK_FALSE(packed.VatIsStale(packed.LoadVatTables(vatKey)));
 }

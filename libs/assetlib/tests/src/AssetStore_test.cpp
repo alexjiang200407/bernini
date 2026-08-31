@@ -2,10 +2,8 @@
 #include <assetlib/container_info.h>
 #include <assetlib/envmap.h>
 #include <assetlib/pak.h>
-#include <assetlib/vat_bake.h>
 #include <assetlib_structs/BEnv.h>
 #include <assetlib_structs/BMaterial.h>
-#include <assetlib_structs/BVat.h>
 #include <core/file/LayeredFileSystem.h>
 #include <core/file/LooseFileSystem.h>
 
@@ -146,10 +144,6 @@ TEST_CASE("the staleness methods answer as the free functions do", "[assetsource
 	lighting.prefilter.source  = "Derived/SourceTextures/skin.ktx2";
 	lighting.irradiance.source = "Derived/SourceTextures/skin.ktx2";
 	CHECK(store.IsEnvLightingBakeStale(lighting) == isEnvLightingBakeStale(lighting, loose));
-
-	BVat vat;
-	vat.mesh = "Derived/Meshes/gone.bmesh";
-	CHECK(store.VatIsStale(vat) == vatIsStale(vat, loose));
 
 	// An absent path is an answer, not a failure.
 	CHECK(store.StampOf("Derived/SourceTextures/gone.ktx2") == SourceStamp{});

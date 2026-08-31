@@ -171,7 +171,7 @@ alpha-tested, read dimmer — judged acceptable by eye against keeping the machi
   animated one is worse than absent, because the pose *and* the motion vector it writes come from
   the clip it now holds, so the frame after a switch reprojects along a velocity computed inside a
   clip that was never drawn — the ghost is of a pose the vector points nowhere near. There is no
-  mutate-instance API by design, so a clip switch, a VAT↔skinned tier switch and a mesh load all
+  mutate-instance API by design, so a clip switch, a pose-source switch and a mesh load all
   reach this through destroy + respawn and need no call of their own. Scrubbing the timeline does
   not: no instance churns, the pose moves within one clip, and the vector written across the jump
   is the one reprojection wants. This is the boundary that keeps the rule affordable — a caller
@@ -224,7 +224,7 @@ alpha-tested, read dimmer — judged acceptable by eye against keeping the machi
   reprojection differs from it enough to dilate every silhouette against the sky). A frame of
   several draws has no one camera to reconstruct with and reprojects by each pixel's own vector.
 
-  Measured on the tilted VAT quad sweeping over a flat backdrop, animated-against-held under TAA
+  Measured on the tilted skinned quad sweeping over a flat backdrop, animated-against-held under TAA
   with the raw pair at exactly 0: still camera 6.9e-4 → 1.1e-4, drifting camera 8.8e-4 → 1.8e-4.
   Off the suite, on the test project's coyote through a throwaway headless harness, against the
   still-camera converged image of the same pose: its ears in close-up 1.16 → 0.98 (mean |Δ|/255)
@@ -452,7 +452,7 @@ Two couplings worth knowing:
   not merely a pass or two over the eight-term sequence.
 
 * **A moving mesh is measured against itself held, never against a still frame.** The animating
-  VAT cases render the same pose twice — sweeping into it and held on it — and read the resolve's
+  cases render the same pose twice — sweeping into it and held on it — and read the resolve's
   difference; the unresolved pair is the guard that the poses are pixel-identical. A difference
   against a *converged* still would score the honest sub-pixel gap between a history accumulated
   along a moving path and one accumulated at rest as though it were a ghost.

@@ -13,13 +13,10 @@ TEST_CASE("A texture is named by its suffix alone, whatever the case", "[thumbna
 	REQUIRE_FALSE(editor::IsTextureFile(""));
 }
 
-TEST_CASE("The explorer lists neither a build product nor a source's sidecar", "[assetpaths]")
+TEST_CASE("The explorer does not list a source's sidecar", "[assetpaths]")
 {
-	// Two members, two reasons. A `.bvat` is re-bakeable from its inputs and never committed, so
-	// offering it for rename or delete implies an authorship it does not have. A `.bimport` is the
-	// settings sidecar of the `.glb` beside it, and the source is the row that stands for the model.
-	CHECK(editor::IsHiddenInExplorer("Derived/Meshes/unit.bvat"));
-	CHECK(editor::IsHiddenInExplorer("Derived/Meshes/UNIT.BVAT"));
+	// A `.bimport` is the settings sidecar of the `.glb` beside it, and the source is the row that
+	// stands for the model.
 	CHECK(editor::IsHiddenInExplorer("Authored/Meshes/kirk.bimport"));
 	CHECK(editor::IsHiddenInExplorer("Authored/Meshes/KIRK.BIMPORT"));
 

@@ -1,17 +1,13 @@
 #include <assetlib/envmap.h>
 #include <gamelib/AssetManager.h>
 
-#include <gamelib/vat_freshness.h>
-
 #include <assetlib/RegenMesh.h>
 #include <assetlib/image_io.h>
 #include <assetlib/skinning.h>
-#include <assetlib/vat_bake.h>
 #include <assetlib_structs/Animation.h>
 #include <assetlib_structs/BEnv.h>
 #include <assetlib_structs/BMaterial.h>
 #include <assetlib_structs/BMesh.h>
-#include <assetlib_structs/BVat.h>
 #include <assetlib_structs/Bounds.h>
 #include <assetlib_structs/ImageData.h>
 #include <assetlib_structs/Skeleton.h>
@@ -455,132 +451,6 @@ namespace game
 		return handle;
 	}
 
-	AssetManager::VatMesh
-	AssetManager::AcquireVatMesh(
-		std::string_view relPath,
-		std::string_view animationsRelPath,
-		uint32_t         meshIndex)
-	{
-		ZoneScopedN("gamelib acquire vat mesh");
-		ZoneTextF("%.*s#%u", static_cast<int>(relPath.size()), relPath.data(), meshIndex);
-
-		// Its own keyspace beside AcquireMesh's "path#index": the same mesh may be live as static
-		// and as VAT geometry at once, and they are different uploads.
-		const auto key = std::format("{}#{}#vat", relPath, meshIndex);
-
-		if (const auto it = m_GeomByPath.find(key); it != m_GeomByPath.end())
-		{
-			GeomRecord& record = m_Geoms.at(it->second);
-			core::throw_runtime_error_if(
-				record.vatAnimations != assetlib::normalizePath(animationsRelPath),
-				"AssetManager: '{}' is live with clips from '{}'; release it to zero before "
-				"acquiring with '{}'",
-				key,
-				record.vatAnimations,
-				animationsRelPath);
-			++record.refCount;
-			return VatMesh{ record.handle, record.vatClips };
-		}
-
-		const auto bvatRel = assetlib::vatPathFor(relPath, animationsRelPath);
-		const auto vat     = EnsureVatBaked(m_Store, relPath, animationsRelPath);
-
-		const assetlib::BMesh& mesh = ReadMesh(relPath);
-
-		core::throw_runtime_error_if(
-			meshIndex >= mesh.meshes.size(),
-			"AssetManager: mesh index {} out of range in '{}'",
-			meshIndex,
-			relPath);
-
-		const assetlib::Mesh& entry = mesh.meshes[meshIndex];
-		core::throw_runtime_error_if(
-			size_t(entry.firstSubmesh) + entry.submeshCount > vat.columns.size(),
-			"AssetManager: '{}' does not cover mesh {}'s submeshes",
-			bvatRel.string(),
-			meshIndex);
-
-		// Everything taken below is given back if any later step throws: a failed acquire owns
-		// nothing.
-		auto acquiredTextures  = std::vector<bgl::TextureAssetHandle>();
-		auto acquiredMaterials = std::vector<bgl::MaterialHandle>();
-		try
-		{
-			// The pair is keyed on the container and the bake it holds: two meshes of one .bvat
-			// share the uploads, but a rebake from another .banim must not inherit the old pixels.
-			acquiredTextures.push_back(AddEmbeddedTexture(
-				bvatRel.string() + "#" + vat.animations + "#positions",
-				assetlib::decodeKTX2(vat.positionsKtx2)));
-			acquiredTextures.push_back(AddEmbeddedTexture(
-				bvatRel.string() + "#" + vat.animations + "#normals",
-				assetlib::decodeKTX2(vat.normalsKtx2)));
-
-			auto materials        = std::vector<bgl::MaterialHandle>(mesh.materials.size());
-			auto submeshMaterials = std::vector<bgl::MaterialHandle>(entry.submeshCount);
-
-			for (uint32_t i = 0; i < entry.submeshCount; ++i)
-			{
-				const uint32_t index = mesh.submeshes[entry.firstSubmesh + i].material;
-				if (index >= mesh.materials.size())
-					continue;
-
-				const bgl::MaterialHandle handle = AcquireMaterial(mesh.materials[index]);
-				acquiredMaterials.push_back(handle);
-
-				materials[index]    = handle;
-				submeshMaterials[i] = handle;
-			}
-
-			auto desc      = bgl::VatGeomDesc();
-			desc.positions = acquiredTextures[0];
-			desc.normals   = acquiredTextures[1];
-			desc.boundsMin = vat.boundsMin;
-			desc.boundsMax = vat.boundsMax;
-
-			auto clipInfo = std::vector<ClipInfo>();
-			clipInfo.reserve(vat.clips.size());
-			desc.clips.reserve(vat.clips.size());
-			for (const assetlib::VatClip& clip : vat.clips)
-			{
-				desc.clips.push_back(
-					{ clip.firstRow, clip.frameCount, clip.sampleRate, clip.loop != 0 });
-				clipInfo.push_back(
-					{ std::string(vat.stringPool.at(clip.nameOffset)),
-				      clip.frameCount,
-				      clip.sampleRate,
-				      clip.duration,
-				      clip.loop != 0 });
-			}
-
-			desc.columnBases.reserve(entry.submeshCount);
-			for (uint32_t i = 0; i < entry.submeshCount; ++i)
-				desc.columnBases.push_back(vat.columns[entry.firstSubmesh + i].columnBase);
-
-			auto record             = GeomRecord();
-			record.handle           = m_Scene->AddVatMeshGeom(mesh, meshIndex, materials, desc);
-			record.key              = key;
-			record.submeshMaterials = std::move(submeshMaterials);
-			record.vatTextures      = acquiredTextures;
-			record.vatClips         = clipInfo;
-			record.vatAnimations    = vat.animations;
-			record.refCount         = 1;
-
-			const uint32_t slot = record.handle.handle.index;
-			m_GeomByPath.emplace(key, slot);
-
-			const bgl::GeomHandle handle = record.handle;
-			m_Geoms.emplace(slot, std::move(record));
-
-			return VatMesh{ handle, std::move(clipInfo) };
-		}
-		catch (...)
-		{
-			for (const bgl::MaterialHandle material : acquiredMaterials) ReleaseMaterial(material);
-			for (const bgl::TextureAssetHandle texture : acquiredTextures) ReleaseTexture(texture);
-			throw;
-		}
-	}
-
 	// The references ReadMesh and its siblings hand back stay valid as these grow:
 	// std::unordered_map is node-based, so an insert never moves an existing value.
 	struct AssetManager::ContainerReads
@@ -626,8 +496,8 @@ namespace game
 		ZoneScopedN("gamelib acquire skinned mesh");
 		ZoneTextF("%.*s#%u", static_cast<int>(relPath.size()), relPath.data(), meshIndex);
 
-		// Its own keyspace beside AcquireMesh's and AcquireVatMesh's: one mesh may be live as static,
-		// as VAT and as skinned geometry at once, and all three are different uploads.
+		// Its own keyspace beside AcquireMesh's: one mesh may be live as static and as skinned
+		// geometry at once, and the two are different uploads.
 		const auto key = std::format("{}#{}#skinned", relPath, meshIndex);
 
 		if (const auto it = m_GeomByPath.find(key); it != m_GeomByPath.end())
@@ -881,31 +751,6 @@ namespace game
 	}
 
 	bgl::MeshInstanceHandle
-	AssetManager::CreateVatInstance(
-		bgl::SceneViewRef           view,
-		bgl::GeomHandle             geom,
-		const glm::mat4&            transform,
-		const bgl::VatInstanceDesc& desc)
-	{
-		if (!view)
-			throw bgl::SceneError("CreateVatInstance requires a valid SceneView");
-
-		const auto it = m_Geoms.find(geom.handle.index);
-		if (it == m_Geoms.end() || !m_Scene->IsGeomAlive(geom))
-		{
-			throw bgl::SceneError(
-				"GeomHandle passed to CreateVatInstance is not owned by this AssetManager, or has "
-				"expired");
-		}
-
-		const bgl::MeshInstanceHandle instance = view->CreateVatMeshInstance(geom, transform, desc);
-
-		RegisterInstance(std::move(view), geom.handle.index, instance);
-
-		return instance;
-	}
-
-	bgl::MeshInstanceHandle
 	AssetManager::CreateSkinnedInstance(
 		bgl::SceneViewRef               view,
 		bgl::GeomHandle                 geom,
@@ -1014,10 +859,6 @@ namespace game
 
 		for (const bgl::MaterialHandle material : record.submeshMaterials)
 			ReleaseMaterial(material);
-
-		// After the geom, like the materials: a VAT record holds the pair's descriptors until
-		// DeleteGeom retires it.
-		for (const bgl::TextureAssetHandle texture : record.vatTextures) ReleaseTexture(texture);
 
 		// After the geom for a stricter reason than the textures: DeleteRig refuses outright while a
 		// geom is still skinned to the rig, and DeleteGeom is what releases that use.

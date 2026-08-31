@@ -2,6 +2,7 @@
 #include "util/TestEnvironment.h"
 #include "util/TestOptions.h"
 #include "util/VelocityReadback.h"
+#include "util/VertexPacking.h"
 #include <assetlib_structs/Bounds.h>
 #include <bgl/Camera.h>
 #include <bgl/IGraphics.h>
@@ -26,21 +27,6 @@ namespace
 	// (0,1,0), which takes the strip's top edge from +Y onto -X.
 	constexpr uint32_t c_Frames = 2;
 
-	// position(12) + normal(12) + uv(8) + tangent(16) + joints0(8) + weights0(8)
-	constexpr uint16_t c_Stride = 64;
-
-	void
-	PutFloats(std::vector<std::byte>& bytes, size_t at, std::span<const float> values)
-	{
-		std::memcpy(bytes.data() + at, values.data(), values.size() * sizeof(float));
-	}
-
-	void
-	PutU16x4(std::vector<std::byte>& bytes, size_t at, std::span<const uint16_t> values)
-	{
-		std::memcpy(bytes.data() + at, values.data(), values.size() * sizeof(uint16_t));
-	}
-
 	// Every pose the swing below reaches, with room to spare. The strip's own bind-pose box does not
 	// hold once the top edge rotates, and the geom culls by this -- see IScene::AddSkinnedMeshGeom.
 	const auto c_StripPosedBounds =
@@ -64,21 +50,21 @@ namespace
 		const std::array<uint16_t, 4>  bone      = { { 0, 0, 1, 1 } };
 
 		auto mesh = assetlib::BMesh();
-		mesh.vertexData.assign(size_t(4) * c_Stride, std::byte{ 0 });
+		mesh.vertexData.assign(size_t(4) * bgl::test::c_SkinnedVertexStride, std::byte{ 0 });
 
 		for (uint32_t v = 0; v < 4; ++v)
 		{
-			const size_t base = size_t(v) * c_Stride;
+			const size_t base = size_t(v) * bgl::test::c_SkinnedVertexStride;
 
 			const std::array<float, 3> pos = { { positions[v].x, positions[v].y, positions[v].z } };
 			const std::array<float, 3> normal = { { 0.0f, 0.0f, 1.0f } };
 			const std::array<float, 2> uv  = { { positions[v].x + 0.5f, positions[v].y * 0.5f } };
 			const std::array<float, 4> tan = { { 1.0f, 0.0f, 0.0f, 1.0f } };
 
-			PutFloats(mesh.vertexData, base + 0, pos);
-			PutFloats(mesh.vertexData, base + 12, normal);
-			PutFloats(mesh.vertexData, base + 24, uv);
-			PutFloats(mesh.vertexData, base + 32, tan);
+			bgl::test::PutFloats(mesh.vertexData, base + 0, pos);
+			bgl::test::PutFloats(mesh.vertexData, base + 12, normal);
+			bgl::test::PutFloats(mesh.vertexData, base + 24, uv);
+			bgl::test::PutFloats(mesh.vertexData, base + 32, tan);
 
 			// One influence at full weight, the rest at zero -- unorm16 0xFFFF is exactly 1.0. With
 			// `unboundTopEdge`, the two top vertices instead carry four zero weights: what an exporter
@@ -87,8 +73,8 @@ namespace
 			const bool                    unbound = unboundTopEdge && v >= 2;
 			const std::array<uint16_t, 4> joints  = { { bone[v], 0, 0, 0 } };
 			const std::array<uint16_t, 4> weights = { { uint16_t(unbound ? 0 : 0xFFFF), 0, 0, 0 } };
-			PutU16x4(mesh.vertexData, base + 48, joints);
-			PutU16x4(mesh.vertexData, base + 56, weights);
+			bgl::test::PutU16x4(mesh.vertexData, base + 48, joints);
+			bgl::test::PutU16x4(mesh.vertexData, base + 56, weights);
 		}
 
 		auto meshlet           = assetlib::Meshlet();
@@ -104,30 +90,11 @@ namespace
 		const std::array<uint8_t, 6> tris = { { 0, 1, 2, 2, 1, 3 } };
 		for (const uint8_t t : tris) mesh.meshletTriangles.push_back(t);
 
-		auto submesh                  = assetlib::Submesh();
-		submesh.layout.attributeCount = 6;
-		submesh.layout.stride         = c_Stride;
-		submesh.layout.attributes[0]  = { assetlib::VertexSemantic::kPosition,
-			                              assetlib::VertexFormat::kFloat32x3,
-			                              0 };
-		submesh.layout.attributes[1]  = { assetlib::VertexSemantic::kNormal,
-			                              assetlib::VertexFormat::kFloat32x3,
-			                              12 };
-		submesh.layout.attributes[2]  = { assetlib::VertexSemantic::kTexCoord0,
-			                              assetlib::VertexFormat::kFloat32x2,
-			                              24 };
-		submesh.layout.attributes[3]  = { assetlib::VertexSemantic::kTangent,
-			                              assetlib::VertexFormat::kFloat32x4,
-			                              32 };
-		submesh.layout.attributes[4]  = { assetlib::VertexSemantic::kJoints0,
-			                              assetlib::VertexFormat::kUint16x4,
-			                              48 };
-		submesh.layout.attributes[5]  = { assetlib::VertexSemantic::kWeights0,
-			                              assetlib::VertexFormat::kUnorm16x4,
-			                              56 };
-		submesh.vertexCount           = 4;
-		submesh.meshletCount          = 1;
-		submesh.material              = 0;
+		auto submesh         = assetlib::Submesh();
+		submesh.layout       = bgl::test::SkinnedVertexLayout();
+		submesh.vertexCount  = 4;
+		submesh.meshletCount = 1;
+		submesh.material     = 0;
 
 		submesh.aabbMin = glm::vec3(-0.5f, 0.0f, 0.0f);
 		submesh.aabbMax = glm::vec3(0.5f, 2.0f, 0.0f);
@@ -1041,10 +1008,8 @@ TEST_CASE("an instance on its rig's table draws what the pose pass draws", "[ski
 // hand -- `just run bgl_tests -- "[.posetiming]"` -- and read the numbers off the warning it prints.
 //
 // The two sources on the identical mesh, rig and clip, so the only difference is where each vertex
-// reads its pose. VAT is deliberately not a third leg here: its geometry comes from a different
-// door (a baked texture pair over a procedural quad), and timing it against a different mesh would
-// produce a number that reads like a comparison and is not one. That leg belongs where VAT and the
-// table can be put on one mesh, which is the retirement task's gamelib fixture.
+// reads its pose. It is a throughput number over a whole frame and not a per-stage one -- the RHI
+// has no timestamp query -- so read it as what a crowd costs, never as what one stage costs.
 TEST_CASE("what a crowd costs on each pose source", "[.posetiming]")
 {
 	constexpr uint32_t c_Instances      = 2000;

@@ -132,7 +132,6 @@ namespace assetlib
 			case AssetType::kEnvironment:
 				return AssetCodec<BEnv>::Serialize(AssetCodec<BEnv>::Deserialize(bytes));
 			case AssetType::kTexture:
-			case AssetType::kVat:
 			case AssetType::kImportDocument:
 			case AssetType::kCount:
 				return std::nullopt;

@@ -384,13 +384,12 @@ TEST_CASE("CreateSkinnedMeshInstance writes the playback record once", "[skinned
 			bgl::SceneError);
 	}
 
-	SECTION("a static geom is refused, and a skinned geom is refused by the VAT creator")
+	SECTION("a static geom is refused")
 	{
 		const auto cube = scene->AddCubeGeom(bgl::MaterialHandle());
 		CHECK_THROWS_AS(
 			view->CreateSkinnedMeshInstance(cube, glm::mat4(1.0f), desc),
 			bgl::SceneError);
-		CHECK_THROWS_AS(view->CreateVatMeshInstance(geom, glm::mat4(1.0f), {}), bgl::SceneError);
 	}
 
 	SECTION("deleting the instance releases its state, and the geom its tables")
