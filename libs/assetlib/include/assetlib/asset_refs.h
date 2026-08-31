@@ -8,17 +8,14 @@ namespace assetlib
 	/** The kinds of asset file a project holds, one file extension each. */
 	enum class AssetType : uint32_t
 	{
-		kMesh,         // .bmesh
-		kMaterial,     // .bmaterial
-		kTexture,      // .ktx2
-		kEnvironment,  // .benv
-		kSky,          // .bsky
-		kEnvLighting,  // .benvl
-		kSkeleton,     // .bskel
-		kAnimation,    // .banim
-		// .bvat. Derived and never committed, but still in the graph: rename and delete must see
-		// its recorded inputs, or a moved mesh would leave every bake pointing at nothing.
-		kVat,
+		kMesh,            // .bmesh
+		kMaterial,        // .bmaterial
+		kTexture,         // .ktx2
+		kEnvironment,     // .benv
+		kSky,             // .bsky
+		kEnvLighting,     // .benvl
+		kSkeleton,        // .bskel
+		kAnimation,       // .banim
 		kImportDocument,  // .bimport -- the authored half of one imported source; text, never packed
 		// The number of asset kinds. Anchors the assertion that every one of them has a codec;
 		// anchoring that on whichever enumerator happens to be last instead means appending one
@@ -47,7 +44,6 @@ namespace assetlib
 		kEnvSource,         // a .bsky or .benvl names the radiance its bake read
 		kMeshSkeleton,      // a .bmesh's joint indices address a .bskel
 		kClipSkeleton,      // a .banim's clips were resampled against a .bskel
-		kVatSource,         // a .bvat names the mesh, skeleton or clip set its bake read
 		kImportedSource,    // a .bimport names the .glb it was imported from
 		kDocumentSkeleton,  // a .bimport names the .bskel its source's joint indices address
 		kDocumentOutput,    // a .bimport names a container its source produced
@@ -91,18 +87,12 @@ namespace assetlib
 	{
 	public:
 		/**
-		 * A `.bvat` that cannot be read is **skipped**, not fatal. Its edges are `kVatSource`, which
-		 * planDeletion routes to `derived` and never to `blockers`, so they cannot hold anything alive
-		 * and losing them cannot widen what a deletion takes. What it costs is an orphan bake that
-		 * nothing here collects -- worth it, because one written before a major bump would otherwise
-		 * make a project unopenable.
-		 *
 		 * @throws std::runtime_error if a *referrer* -- a `.bmesh`, `.bmaterial`, `.banim`, `.benv`,
 		 *         `.bsky`, `.benvl` or `.bimport` -- in `store` cannot be read. For a `.bimport`
 		 *         that includes a merge left unresolved: its edges are blockers, so a document the
-		 *         scan cannot parse is knowingly fatal rather than skipped like a `.bvat` --
-		 *         deleting through unseen edges is the worse failure. The error names the file. Fatal on purpose, and for the
-		 *         reason the prune is: edges we cannot see are edges we would delete through.
+		 *         scan cannot parse is knowingly fatal. The error names the file. Fatal on purpose,
+		 *         and for the reason the prune is: edges we cannot see are edges we would delete
+		 *         through.
 		 */
 		[[nodiscard]] static AssetRefGraph
 		Scan(const AssetStore& store);
@@ -171,7 +161,6 @@ namespace assetlib
 		size_t materialsScanned       = 0;
 		size_t environmentsScanned    = 0;  // .benv, .bsky and .benvl together
 		size_t clipSetsScanned        = 0;
-		size_t vatsScanned            = 0;
 
 	private:
 		struct Range
@@ -202,19 +191,10 @@ namespace assetlib
 		std::vector<AssetRef> blockers;
 
 		/**
-		 * Derived files swept with the target: the `.bvat` bakes whose `kVatSource` edges name it
-		 * (or reach into the directory). A bake never blocks its own inputs -- one that outlived
-		 * them is stale by definition -- so those edges land here instead of `blockers`, and
-		 * DeleteAsset removes them *before* the target, so no step ever leaves a bake standing on
-		 * inputs that are gone.
-		 */
-		std::vector<std::string> derived;
-
-		/**
 		 * The `.bimport` documents naming anything this plan deletes -- the cascade included --
 		 * among their `outputs`, which DeleteAsset rewrites to drop those entries.
 		 *
-		 * Neither a blocker nor derived: a document does not *need* what it produced. But an
+		 * Not a blocker: a document does not *need* what it produced. But an
 		 * `outputs` entry naming a file that is gone reads as **absent** to Reimport, which would
 		 * put it straight back.
 		 */

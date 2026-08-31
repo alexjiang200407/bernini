@@ -3,7 +3,7 @@
 #include "cmd/CommandQueue.h"
 #include "gfx/GraphicsBase.h"
 #include "idl/CullView.h"
-#include "idl/VatState.h"
+#include "idl/SkinnedTableState.h"
 #include "pipeline/ComputeKernel.h"
 #include "pipeline/ComputePipeline.h"
 #include "resource/Buffer.h"
@@ -67,11 +67,11 @@ TEST_CASE("A raw buffer loads records and loose attributes as written", "[raw][c
 	// Every field is distinct, so one read at a neighbour's offset is a wrong value rather than a
 	// coincidence. The two integers stay small enough to survive the float the shader reports them
 	// as.
-	auto state        = bgl::idl::VatState();
-	state.geom.offset = 7;
-	state.clip        = 3;
-	state.phase       = 0.25f;
-	state.rate        = 1.5f;
+	auto state       = bgl::idl::SkinnedTableState();
+	state.rig.offset = 7;
+	state.clip       = 3;
+	state.phase      = 0.25f;
+	state.rate       = 1.5f;
 
 	auto view = bgl::idl::CullView();
 	for (int col = 0; col < 4; ++col)
@@ -90,7 +90,7 @@ TEST_CASE("A raw buffer loads records and loose attributes as written", "[raw][c
 	const auto vertexVec4 = glm::vec4(11.0f, 12.0f, 13.0f, 14.0f);
 	const auto vertexVec3 = glm::vec3(21.0f, 22.0f, 23.0f);
 
-	static_assert(c_StateOffset + sizeof(bgl::idl::VatState) <= c_ViewOffset);
+	static_assert(c_StateOffset + sizeof(bgl::idl::SkinnedTableState) <= c_ViewOffset);
 	static_assert(c_ViewOffset + sizeof(bgl::idl::CullView) <= c_VertexOffset);
 	static_assert(c_VertexOffset % 16 != 0, "the loose loads must not be 16-byte aligned");
 	static_assert(c_VertexOffset % 4 == 0);
@@ -168,7 +168,7 @@ TEST_CASE("A raw buffer loads records and loose attributes as written", "[raw][c
 
 	constexpr float c_Margin = 0.001f;
 
-	CHECK(got[0].x == Catch::Approx(static_cast<float>(state.geom.offset)).margin(c_Margin));
+	CHECK(got[0].x == Catch::Approx(static_cast<float>(state.rig.offset)).margin(c_Margin));
 	CHECK(got[0].y == Catch::Approx(static_cast<float>(state.clip)).margin(c_Margin));
 	CHECK(got[0].z == Catch::Approx(state.phase).margin(c_Margin));
 	CHECK(got[0].w == Catch::Approx(state.rate).margin(c_Margin));

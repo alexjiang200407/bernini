@@ -378,7 +378,7 @@ TEST_CASE("A rig is found by signature, not by name", "[importedrig]")
 
 	// Directory order is unspecified, so silently picking one would make the .banim's reference
 	// depend on the filesystem -- and scatter one rig's clips across two skeletons, which is exactly
-	// what a VAT bake cannot fit a single bounding box around.
+	// what a single bounding box cannot be fitted around.
 	SECTION("two rigs with the same signature are ambiguous, not a coin toss")
 	{
 		// Written directly, because no importer makes one any more: an import binds a rig it

@@ -40,8 +40,6 @@ set(IDL_CPP_SOURCES
     PsoType.slang
     DispatchArgs.slang
     BaseTable.slang
-    VatGeom.slang
-    VatState.slang
     BoneSample.slang
     SkinnedBone.slang
     Rig.slang

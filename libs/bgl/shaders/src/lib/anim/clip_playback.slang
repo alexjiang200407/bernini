@@ -35,10 +35,10 @@ public float ClipFrames(Clip clip, float phase, float rate, float time)
 // The two frames of the clip a fractional position falls between, relative to the clip's own frame 0,
 // and its blend weight. The upper index tops out at `frameCount - 1` on either kind of clip: on a
 // loop that frame is the authored duplicate of frame 0, so the seam reads it rather than wrapping
-// onto 0, and VAT's pad row past it stays unread.
+// onto 0.
 //
-// Relative, not absolute, because the two tiers add different bases to it -- a texture row for VAT, a
-// frame-major sample offset for a skinned rig.
+// Relative, not absolute, because the caller adds the base its own storage is addressed by -- the
+// sample pool for a pose walk, the rig's bone anim table for a crowd instance.
 public void ClipFrameIndices(Clip clip, float frames, out uint f0, out uint f1, out float weight)
 {
     f0 = uint(frames);

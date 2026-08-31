@@ -84,7 +84,7 @@ TEST_CASE(
 // The glass-eye shape: a surface tinted by its factors, with a normal and an orm map and nothing
 // routed to base colour at all. Every route is current and the bake produced everything it could,
 // so calling it stale strands the material as loose -- and loose is not kPBR, which the skinned and
-// VAT pipelines refuse outright. Baking again cannot lift it: there is no base colour to bake.
+// the animated pipeline refuses outright. Baking again cannot lift it: there is no base colour to bake.
 TEST_CASE("a material with no base-colour route bakes complete", "[bmaterial][bake]")
 {
 	const BakeDir dir("bernini_bake_no_basecolor");

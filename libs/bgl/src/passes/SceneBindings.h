@@ -53,9 +53,9 @@ namespace bgl
 		    BarrierSyncFlag::kVertexShader } }
 	};
 
-	// The rig tables the skinned vertex evaluation reads, and the bake tables the VAT one reads.
-	// Both live here beside the geometry tables because every pass built on the tier-branching
-	// geometry stage declares and binds all three sets.
+	// The rig tables the skinned vertex evaluation reads, whichever pose source a placement draws
+	// from. They live here beside the geometry tables because every pass built on the tier-branching
+	// geometry stage declares and binds both sets.
 	constexpr std::array<SceneBuffer, 4> c_SkinnedBuffers = {
 		{ { c_RigBufferName,
 		    "rigBuffer",
@@ -74,19 +74,6 @@ namespace bgl
 		    BarrierAccessFlag::kShaderResource,
 		    BarrierSyncFlag::kVertexShader } }
 	};
-
-	constexpr std::array<SceneBuffer, 3> c_VatBuffers = { { { c_VatGeomBufferName,
-		                                                      "vatGeomBuffer",
-		                                                      BarrierAccessFlag::kShaderResource,
-		                                                      BarrierSyncFlag::kVertexShader },
-		                                                    { c_ClipBufferName,
-		                                                      "clipBuffer",
-		                                                      BarrierAccessFlag::kShaderResource,
-		                                                      BarrierSyncFlag::kVertexShader },
-		                                                    { c_VatColumnBufferName,
-		                                                      "vatColumnBuffer",
-		                                                      BarrierAccessFlag::kShaderResource,
-		                                                      BarrierSyncFlag::kVertexShader } } };
 
 	constexpr std::array<SceneBuffer, 2> c_ExpansionBuffers = {
 		{ { c_CompactedInstancesName,

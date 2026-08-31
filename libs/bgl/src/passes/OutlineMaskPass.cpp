@@ -80,8 +80,7 @@ namespace bgl
 
 		for (const std::span<const SceneBuffer> bindings :
 		     { std::span<const SceneBuffer>(c_ForwardDataBuffers),
-		       std::span<const SceneBuffer>(c_SkinnedBuffers),
-		       std::span<const SceneBuffer>(c_VatBuffers) })
+		       std::span<const SceneBuffer>(c_SkinnedBuffers) })
 		{
 			for (const SceneBuffer& binding : bindings)
 			{
@@ -115,11 +114,6 @@ namespace bgl
 		if (auto foundSkinnedData = m_Kernel.FindUniforms("skinnedData"))
 		{
 			BindSceneBuffers(*foundSkinnedData, c_SkinnedBuffers, resources);
-		}
-
-		if (auto foundVatData = m_Kernel.FindUniforms("vatData"))
-		{
-			BindSceneBuffers(*foundVatData, c_VatBuffers, resources);
 		}
 
 		if (auto foundViewData = m_Kernel.FindUniforms("viewData"))

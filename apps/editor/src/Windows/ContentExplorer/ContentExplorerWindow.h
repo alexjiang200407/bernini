@@ -102,8 +102,8 @@ private:
 	SetBrowseMode(editor::BrowseMode mode);
 
 	/**
-	 * Hides every row of `model` in `view` that `editor::IsHiddenInExplorer` names -- a build
-	 * product or a source's import document -- among `parent`'s rows [`first`, `last`], or the
+	 * Hides every row of `model` in `view` that `editor::IsHiddenInExplorer` names -- a source's
+	 * import document -- among `parent`'s rows [`first`, `last`], or the
 	 * whole parent when `last` is -1. Row-hiding is per view and resets with the
 	 * model attachment, so this runs from rowsInserted (the lazy scan's arrivals, which pass their
 	 * batch), from the tree's expanded signal and after each grid re-root (rows already cached in

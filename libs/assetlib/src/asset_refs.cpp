@@ -1,7 +1,6 @@
 #include <assetlib/AssetStore.h>
 #include <assetlib/asset_refs.h>
 #include <assetlib/bmesh.h>
-#include <assetlib/vat_bake.h>
 
 #include <assetlib/AssetCodec.h>
 
@@ -115,29 +114,6 @@ namespace assetlib
 				addEdge(edges, referrer, document.skeleton, RefKind::kDocumentSkeleton);
 			for (const std::string& output : document.outputs)
 				addEdge(edges, referrer, output, RefKind::kDocumentOutput);
-		}
-
-		/** The three inputs a `.bvat` was baked from -- what a re-bake reads. */
-		void
-		collectVatEdges(
-			std::vector<AssetRef>&         edges,
-			const core::file::IFileSystem& files,
-			const std::string&             referrer)
-		{
-			VatRefs refs;
-			try
-			{
-				refs = loadVatRefs(files, referrer);
-			}
-			catch (const std::exception&)
-			{
-				// Skipped rather than fatal, unlike every other referrer here -- see Scan's docstring.
-				return;
-			}
-
-			addEdge(edges, referrer, refs.mesh, RefKind::kVatSource);
-			addEdge(edges, referrer, refs.skeleton, RefKind::kVatSource);
-			addEdge(edges, referrer, refs.animations, RefKind::kVatSource);
 		}
 
 		/** The baked triplet a `.bmaterial` names, and the sources its channels route from. */
@@ -335,11 +311,6 @@ namespace assetlib
 				collectAnimationEdges(edges, store, referrer);
 				++graph.clipSetsScanned;
 			}
-			else if (kind == c_VatExtension)
-			{
-				collectVatEdges(edges, files, referrer);
-				++graph.vatsScanned;
-			}
 			else if (kind == c_ImportDocumentExtension)
 			{
 				collectImportDocumentEdges(edges, files, referrer);
@@ -430,9 +401,6 @@ namespace assetlib
 			else
 				deleted.insert(plan.target);
 
-			// The swept bakes go too, so what only they referenced can come free.
-			deleted.insert(plan.derived.begin(), plan.derived.end());
-
 			auto cascade = std::vector<std::string>();
 
 			bool grew = true;
@@ -505,23 +473,17 @@ namespace assetlib
 			referrers.assign(held.begin(), held.end());
 		}
 
-		// A bake's edges sweep the bake rather than block (DeletionPlan::derived); a document's
-		// claim on what it produced rewrites that document instead (DeletionPlan::producers). Only
-		// an edge meaning "the referrer needs this" is a blocker.
+		// A document's claim on what it produced rewrites that document (DeletionPlan::producers).
+		// Only an edge meaning "the referrer needs this" is a blocker.
 		for (const AssetRef& ref : referrers)
 		{
-			if (ref.kind == RefKind::kVatSource)
-				plan.derived.push_back(ref.referrer);
-			else if (ref.kind == RefKind::kDocumentOutput)
+			if (ref.kind == RefKind::kDocumentOutput)
 				plan.producers.push_back(ref.referrer);
 			else
 				plan.blockers.push_back(ref);
 		}
-		for (std::vector<std::string>* list : { &plan.derived, &plan.producers })
-		{
-			std::ranges::sort(*list);
-			list->erase(std::ranges::unique(*list).begin(), list->end());
-		}
+		std::ranges::sort(plan.producers);
+		plan.producers.erase(std::ranges::unique(plan.producers).begin(), plan.producers.end());
 
 		return plan;
 	}
@@ -560,7 +522,7 @@ namespace assetlib
 		const std::filesystem::path path = GetDataRoot() / plan.target;
 
 		// A plan can name assets only the archive holds -- the target, a member of the directory it
-		// names, something its cascade frees, or a bake derived from it. `remove` reports no error
+		// names, or something its cascade frees. `remove` reports no error
 		// for a path that was never there, so each would come back kDeleted having touched nothing
 		// while staying readable through the mount. Task 10's tombstone is what answers this.
 		//
@@ -578,22 +540,13 @@ namespace assetlib
 			unreachable.push_back(plan.target);
 
 		std::ranges::copy_if(plan.cascade, std::back_inserter(unreachable), onlyInMount);
-		std::ranges::copy_if(plan.derived, std::back_inserter(unreachable), onlyInMount);
 
 		if (!unreachable.empty())
 			return DeletionResult{ DeletionStatus::kFailed,
 				                   "'" + unreachable.front() +
 				                       "' is only in a read-only mount, so it cannot be unlinked" };
 
-		// The bakes first: they reference the target, so no failure below leaves one standing on
-		// inputs that are gone. Already-vanished ones count as deleted, as the target itself does.
 		std::error_code ec;
-		for (const std::string& bake : plan.derived)
-		{
-			std::filesystem::remove(GetDataRoot() / bake, ec);
-			if (ec)
-				return DeletionResult{ DeletionStatus::kFailed, ec.message() };
-		}
 
 		if (plan.IsDirectory())
 			std::filesystem::remove_all(path, ec);
@@ -624,7 +577,6 @@ namespace assetlib
 		else
 			gone.insert(plan.target);
 		gone.insert(plan.cascade.begin(), plan.cascade.end());
-		gone.insert(plan.derived.begin(), plan.derived.end());
 
 		for (const std::string& documentKey : plan.producers)
 		{

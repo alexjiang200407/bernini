@@ -6,12 +6,10 @@
 #include <core/file/file.h>
 
 #include <assetlib/skinning.h>
-#include <assetlib/vat_bake.h>
 #include <assetlib_structs/Animation.h>
 #include <assetlib_structs/BEnv.h>
 #include <assetlib_structs/BMaterial.h>
 #include <assetlib_structs/BMesh.h>
-#include <assetlib_structs/BVat.h>
 #include <assetlib_structs/Skeleton.h>
 
 #include "RefsSandbox.h"
@@ -597,9 +595,9 @@ TEST_CASE("Renaming a skeleton re-points the whole rig that hangs off it", "[ass
 {
 	const DataRoot root("bernini_rename_rig");
 
-	// The smallest rig a .bvat can be baked from -- one bone, one skinned vertex, one single-frame
-	// clip -- so every kind of skeleton referrer exists to be re-pointed: the mesh names it, the
-	// clip set names it, and the bake stamps all three.
+	// The smallest rig there is -- one bone, one skinned vertex, one single-frame clip -- so every
+	// kind of skeleton referrer exists to be re-pointed: the mesh names it and the clip set names
+	// it.
 	auto skeleton = Skeleton();
 
 	auto bone       = Bone();
@@ -652,13 +650,6 @@ TEST_CASE("Renaming a skeleton re-points the whole rig that hangs off it", "[ass
 	mesh.skeletonSignature = skeletonSignature(skeleton);
 	StoreAt(root.path).Save(mesh, "Derived/Meshes/rig.bmesh");
 
-	const fs::path baked =
-		root.path / vatPathFor("Derived/Meshes/rig.bmesh", "Derived/Animations/rig.banim");
-	SaveAt(
-		AssetStore(root.path).BakeVat(
-			VatBakeDesc{ "Derived/Meshes/rig.bmesh", "Derived/Animations/rig.banim" }),
-		baked);
-
 	REQUIRE(
 		Rename(root, "Derived/Skeletons/rig.bskel", "Derived/Skeletons/hero.bskel").status ==
 		RenameStatus::kRenamed);
@@ -669,29 +660,6 @@ TEST_CASE("Renaming a skeleton re-points the whole rig that hangs off it", "[ass
 	CHECK(
 		loadAnimationSkeletonPath(root.path / "Derived/Animations/rig.banim") ==
 		"Derived/Skeletons/hero.bskel");
-
-	// A skeleton rename does not change the bake's derived name, so the file stays put.
-	const VatRefs refs = loadVatRefs(baked);
-	CHECK(refs.skeleton == "Derived/Skeletons/hero.bskel");
-	CHECK(refs.mesh == "Derived/Meshes/rig.bmesh");
-
-	// A rename rewrites the path references inside the .bmesh and .banim, so their stamps do move --
-	// renameAsset re-stamps the .bvat from them afterwards, and the rewritten bake is still fresh
-	// rather than a re-bake waiting to happen.
-	CHECK_FALSE(vatIsStale(loadVatTables(baked), MountAt(root.path)));
-
-	// An input only the .bvat references follows too -- and this one is part of the derived name,
-	// so the bake moves to where the runtime will now look, still fresh.
-	REQUIRE(
-		Rename(root, "Derived/Animations/rig.banim", "Derived/Animations/hero.banim").status ==
-		RenameStatus::kRenamed);
-
-	const fs::path moved =
-		root.path / vatPathFor("Derived/Meshes/rig.bmesh", "Derived/Animations/hero.banim");
-	CHECK_FALSE(fs::exists(baked));
-	REQUIRE(fs::exists(moved));
-	CHECK(loadVatRefs(moved).animations == "Derived/Animations/hero.banim");
-	CHECK_FALSE(vatIsStale(loadVatTables(moved), MountAt(root.path)));
 }
 
 TEST_CASE("Renaming a material re-points the import document that binds it", "[assetrename]")

@@ -8,8 +8,7 @@ import SkinnedBone;
 // indexes, and the sample pool both address.
 //
 // A rig belongs to no mesh. Every geom skinned to the same skeleton and clip set shares one of
-// these, which is what lets a modular unit draw as several meshes on one pose. Unlike VatGeom it
-// carries no textures -- a skinned pose is computed, not fetched.
+// these, which is what lets a modular unit draw as several meshes on one pose.
 public struct Rig
 {
     public Range<SkinnedBone> bones;

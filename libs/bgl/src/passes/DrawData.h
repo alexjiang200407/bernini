@@ -44,7 +44,7 @@ namespace bgl
 	};
 
 	/**
-	 * The animation clock this draw and the previous one ran at; the VAT pose and its motion
+	 * The animation clock this draw and the previous one ran at; an animated pose and its motion
 	 * vector are derived from the pair.
 	 */
 	struct TimeData

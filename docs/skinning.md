@@ -3,9 +3,8 @@
 The runtime half of animation: a rig's bones and clips upload once, a pose is computed on the GPU,
 and the mesh shader blends the bind-pose vertices by it. Where that pose comes from is the
 instance's choice — a palette a compute pass fills for it every frame, or its rig's bone anim table,
-posed once and shared by every instance on that rig. The other tier, [VAT](docs/vat.md), fetches a
-*baked* pose from a texture pair instead; the two share a clip table and a clock and differ only in
-where a pose comes from.
+posed once and shared by every instance on that rig. The two share a clip table and a clock, and
+differ only in where a pose comes from.
 
 **This document is a map, not a mirror.** It records the design choices and the contracts that are
 not obvious from a signature. The headers linked below are the source of truth.
@@ -21,8 +20,7 @@ not obvious from a signature. The headers linked below are the source of truth.
   instance, one thread per bone.
 
 * **`RenderJob::time` is the only per-frame input.** An instance is spawned with `{clip, phase, rate}`
-  and never touched again — the same bargain VAT makes, and deliberately the same three fields
-  (`bgl::SkinnedInstanceDesc` beside `bgl::VatInstanceDesc`), so a unit can move between tiers without
+  and never touched again, whichever source it draws from, so a unit can move between them without
   its playback record being rewritten. `rate = 0` holds a pose under any clock.
 
 * **The previous pose is re-evaluated, not remembered.** Motion vectors need last frame's pose. Rather
@@ -89,7 +87,9 @@ not obvious from a signature. The headers linked below are the source of truth.
   **Between two frames the two sources differ, by design.** The pose pass nlerps local rotations and
   then walks; the table lerps the two frames' finished skin matrices, because skinning is linear in
   the matrices and one blend per vertex replaces one per attribute. On a whole frame they agree
-  exactly, and on a rotation between frames they do not — the same trade VAT makes.
+  exactly, and on a rotation between frames they do not. What that trade costs was never priced
+  against the cheaper option, which is
+  [docs/specs/crowd_frame_interpolation.md](specs/crowd_frame_interpolation.md).
 
   **What the table buys is the pose pass, and the number depends on the rig.** 2,000 instances of a
   64-bone rig six levels deep drew in 1.06 ms/frame against 1.22 posed per instance — about 13%,
@@ -188,7 +188,7 @@ not obvious from a signature. The headers linked below are the source of truth.
   "follow it" — and full weight on that bone is exactly what that means in skinning terms. So the
   importer transforms such a mesh's vertices into the rig's space and writes `joints0`/`weights0` for
   it, and the runtime needs no notion of parenting at all: it draws through the skinned path like any
-  other mesh, VAT bakes it, and `posedBounds` measures it. The limit is that the baked transform is
+  other mesh, and `posedBounds` measures it. The limit is that the baked transform is
   per mesh, so a mesh instanced by *two* nodes cannot take one — it keeps its bind pose, as before.
 
 * **A bone's transform is the product of every node between it and its bone parent, at every frame.**
@@ -281,14 +281,13 @@ to keep in agreement beyond the one below.
   would otherwise decide which one a clip set names.
 
 * **Culling bounds are the caller's posed box, and `bgl` cannot measure it.** `AddSkinnedMeshGeom`
-  takes one and derives every submesh's sphere from it, the same rule VAT follows. The bind pose is
+  takes one and derives every submesh's sphere from it. The bind pose is
   not a substitute: it stops holding the moment a limb moves, and a clip carrying root motion walks
   the whole rig out of it, so bind-pose culling makes it disappear as soon as it does. Measuring the
   box means reading a vertex's influences, which means
   decoding a vertex layout — `assetlib`, which `bgl` does not link. `assetlib::posedBounds` is that
   walk, and it is paid at **import**:
-  `bakePosedBounds` stores the result in the `.banim`, the way the VAT bake writes
-  `boundsMin`/`boundsMax` into a `.bvat` — one box per rigged mesh entry, because it is that geom's
+  `bakePosedBounds` stores the result in the `.banim` — one box per rigged mesh entry, because it is that geom's
   culling volume and a `.bmesh` may hold two rigged meshes. Each box is keyed by a signature over
   the vertex data and the inverse binds (`posedBoundsSignature`), so a source re-authored since the
   bake simply stops matching. `AcquireSkinnedMesh` reads the bake (`findPosedBounds`) and walks only
@@ -329,10 +328,10 @@ to keep in agreement beyond the one below.
   per-frustum cull namespace matches no import, and the pass would be culled and never run. A palette
   is per instance, not per frustum, so posing once serves every frustum the view is culled against.
 
-* **One mesh may be live as static, VAT and skinned at once.** Three keyspaces in the `AssetManager`
-  (`path#index`, `#vat`, `#skinned`), three uploads — which is what lets the editor compare tiers.
-  The rig is keyed separately again, on the `.banim` alone, so those three uploads of one mesh still
-  share a single skeleton with every *other* mesh cooked against it.
+* **One mesh may be live as static and skinned at once.** Two keyspaces in the `AssetManager`
+  (`path#index`, `#skinned`), two uploads. The rig is keyed separately again, on the `.banim` alone,
+  so both uploads of one mesh still share a single skeleton with every *other* mesh cooked against
+  it.
 
 * **`kPBR`, any layer.** Opaque, cutout and hashed all draw an *opaque shape* — they discard rather
   than blend, so their depth is real and nothing has to be sorted — and each is one row of

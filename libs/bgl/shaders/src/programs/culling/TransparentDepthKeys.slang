@@ -12,7 +12,7 @@ import lib.types.SubmeshInstance;
 bool IsTransparentPso(PsoType pso)
 {
     return pso == PsoType::kTransparent_StaticMesh_PBR || pso == PsoType::kTransparent_StaticMesh_LoosePbr ||
-           pso == PsoType::kTransparent_VatMesh_PBR || pso == PsoType::kTransparent_SkinnedMesh_PBR;
+           pso == PsoType::kTransparent_SkinnedMesh_PBR;
 }
 
 struct Uniforms

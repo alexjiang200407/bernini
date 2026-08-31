@@ -8,7 +8,6 @@
 #include <assetlib_structs/BEnv.h>
 #include <assetlib_structs/BMaterial.h>
 #include <assetlib_structs/BMesh.h>
-#include <assetlib_structs/BVat.h>
 #include <assetlib_structs/Skeleton.h>
 
 #include "mounted_io.h"
@@ -568,100 +567,6 @@ namespace assetlib
 		return out;
 	}
 
-	namespace
-	{
-		// One input of a VAT bake: the path, the stamp the bake recorded, and -- against a data
-		// root -- whether the file still matches it.
-		void
-		describeVatInput(
-			std::string&                   out,
-			const char*                    label,
-			const std::string&             path,
-			const SourceStamp&             baked,
-			const core::file::IFileSystem* fileSystem)
-		{
-			out += std::format("    {:<10} {}\n", label, pathOr(path));
-
-			if (fileSystem == nullptr || path.empty())
-				return;
-
-			const SourceStamp live = stampOf(*fileSystem, path);
-			if (live.size == 0)
-				out += "               MISSING: the file is not on disk\n";
-			else if (live != baked)
-				out += std::format(
-					"               STALE: source is {} B / hash {:016x}, baked from {} B / hash "
-					"{:016x}\n",
-					live.size,
-					live.hash,
-					baked.size,
-					baked.hash);
-		}
-	}
-
-	std::string
-	describe(const BVat& vat, const core::file::IFileSystem* fileSystem)
-	{
-		std::string out;
-
-		out += "bvat\n";
-		out += std::format(
-			"  textures     {} x {} (vertex columns x padded frame rows)\n",
-			vat.width,
-			vat.height);
-		// Empty payloads mean a tables-only read, not an empty texture -- serializeVat refuses those.
-		const auto payload = [](const std::vector<std::byte>& bytes) {
-			return bytes.empty() ? std::string("(not read)") : byteSize(bytes.size());
-		};
-		out += std::format(
-			"  positions    {} (RGBA16 unorm in bounds), normals {} (RGBA8 unorm)\n",
-			payload(vat.positionsKtx2),
-			payload(vat.normalsKtx2));
-		out += std::format(
-			"  bounds       {} .. {} (all clips)\n",
-			vec3(vat.boundsMin),
-			vec3(vat.boundsMax));
-		out += std::format(
-			"  palettes     {} ({} bones x {} frames)\n",
-			vat.palettes.size(),
-			vat.boneCount,
-			vat.boneCount != 0 ? vat.palettes.size() / vat.boneCount : 0);
-
-		out += std::format("  inputs       (paths relative to the data root)\n");
-		describeVatInput(out, "mesh", vat.mesh, vat.meshStamp, fileSystem);
-		describeVatInput(out, "skeleton", vat.skeleton, vat.skeletonStamp, fileSystem);
-		describeVatInput(out, "animations", vat.animations, vat.animationsStamp, fileSystem);
-		out += std::format("    signature  {:016x}\n", vat.skeletonSignature);
-
-		out += std::format("  submeshes    {}\n", vat.columns.size());
-		for (size_t i = 0; i < vat.columns.size(); ++i)
-			out += std::format(
-				"    [{}] columns [{}, {})\n",
-				i,
-				vat.columns[i].columnBase,
-				vat.columns[i].columnBase + vat.columns[i].vertexCount);
-
-		out += std::format("  clips        {}\n", vat.clips.size());
-		for (size_t i = 0; i < vat.clips.size(); ++i)
-		{
-			const VatClip& clip = vat.clips[i];
-			out += std::format("\n  clip [{}] '{}'\n", i, vat.stringPool.at(clip.nameOffset));
-			out += std::format(
-				"    length     {:.3g} s, {} frames at {:.4g} Hz{}\n",
-				clip.duration,
-				clip.frameCount,
-				clip.sampleRate,
-				clip.loop != 0 ? ", looping" : "");
-			out += std::format(
-				"    rows       [{}, {}] + padding row {}\n",
-				clip.firstRow,
-				clip.firstRow + clip.frameCount - 1,
-				clip.firstRow + clip.frameCount);
-		}
-
-		return out;
-	}
-
 	// The public form: what a container records, with nothing stat'd. AssetStore::Describe is the
 	// one that also checks whether what it records is still true.
 	std::string
@@ -686,11 +591,5 @@ namespace assetlib
 	describe(const BEnv& env)
 	{
 		return describe(env, nullptr);
-	}
-
-	std::string
-	describe(const BVat& vat)
-	{
-		return describe(vat, nullptr);
 	}
 }

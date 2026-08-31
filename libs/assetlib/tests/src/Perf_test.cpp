@@ -3,7 +3,6 @@
 #include <assetlib/codecs.h>
 #include <assetlib/rebake_bounds.h>
 #include <assetlib/skinning.h>
-#include <assetlib/vat_bake.h>
 #include <assetlib_structs/Animation.h>
 #include <assetlib_structs/BMesh.h>
 #include <assetlib_structs/Bounds.h>
@@ -402,26 +401,4 @@ TEST_CASE("A clip floor does not skin the vertices that cannot be lowest", "[per
 	// Generous by design: the shape being caught is a gate that stopped gating, which reads as
 	// parity. A machine slow enough to blur 2x would blur any ceiling too.
 	CHECK(contending > raised * 2.0);
-}
-
-// vat_bake.h: vatBakeSize is "what a bake would produce, without producing it" -- the guarantee that
-// lets the editor offer a bake before paying for it. It holds only while the layout never skins, so
-// its cost must not grow with the frames a real bake would walk.
-TEST_CASE("Sizing a VAT bake does not skin it", "[perf][vat]")
-{
-	const Skeleton skeleton = MakeRig(c_Bones);
-	const BMesh    mesh     = MakeMesh(8, skeleton);
-
-	const AnimationSet few  = MakeClips(skeleton, 8);
-	const AnimationSet many = MakeClips(skeleton, 8 * 64);
-
-	REQUIRE(vatBakeSize(mesh, skeleton, many).frameCount == 8 * 64);
-
-	const double sizeFew  = FastestMillis(5, [&] { (void)vatBakeSize(mesh, skeleton, few); });
-	const double sizeMany = FastestMillis(5, [&] { (void)vatBakeSize(mesh, skeleton, many); });
-
-	INFO("sizing 8 frames " << sizeFew << " ms, 512 frames " << sizeMany << " ms");
-
-	// 64x the frames. A layout that skinned would scale with them; one that lays out does not.
-	CHECK(sizeMany < std::max(sizeFew, 0.05) * 8.0);
 }

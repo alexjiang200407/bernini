@@ -133,22 +133,9 @@ namespace bgl
 				gfatal("Invalid MaterialType");
 			}
 
-		// The material is constrained to kPBR at every door that binds one to VAT geometry
-		// (AddVatMeshGeom, SetSubmeshMaterial, SetSubmeshMaterialOverride), so any other type
+		// The material is constrained to kPBR at every door that binds one to skinned geometry
+		// (AddSkinnedMeshGeom, SetSubmeshMaterial, SetSubmeshMaterialOverride), so any other type
 		// reaching here is bgl's own bug.
-		case GeomType::kVatMesh:
-			if (material != MaterialType::kPBR)
-				gfatal("VAT geometry is only drawable with a kPBR material");
-			if (blend)
-				return idl::PsoType::kTransparent_VatMesh_PBR;
-			if (cutout)
-				return idl::PsoType::kAlphaTest_VatMesh_PBR;
-			if (hashed)
-				return idl::PsoType::kHashedAlpha_VatMesh_PBR;
-			return idl::PsoType::kOpaque_VatMesh_PBR;
-
-		// Constrained at every door that binds a material to skinned geometry, exactly as VAT is
-		// above.
 		case GeomType::kSkinnedMesh:
 			if (material != MaterialType::kPBR)
 				gfatal("Skinned geometry is only drawable with a kPBR material");
@@ -181,7 +168,6 @@ namespace bgl
 	{
 		return pso == static_cast<uint32_t>(idl::PsoType::kTransparent_StaticMesh_PBR) ||
 		       pso == static_cast<uint32_t>(idl::PsoType::kTransparent_StaticMesh_LoosePbr) ||
-		       pso == static_cast<uint32_t>(idl::PsoType::kTransparent_VatMesh_PBR) ||
 		       pso == static_cast<uint32_t>(idl::PsoType::kTransparent_SkinnedMesh_PBR);
 	}
 

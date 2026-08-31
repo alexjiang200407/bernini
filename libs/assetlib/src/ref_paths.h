@@ -7,7 +7,7 @@ namespace assetlib
 	 * one written by a bake, one clicked in a file browser -- meet. `Derived/BakedTextures/x.ktx2`
 	 * and `./Derived/Meshes/../BakedTextures/x.ktx2` are one asset.
 	 */
-	// assetlib::normalizePath (vat_bake.h) is this function's public alias -- one body between them.
+	// assetlib::normalizePath (codecs.h) is this function's public alias -- one body between them.
 	[[nodiscard]] std::string
 	normalizeRef(std::string_view path);
 

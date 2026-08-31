@@ -143,7 +143,6 @@ namespace assetlib
 			case AssetType::kEnvironment:
 			case AssetType::kSky:
 			case AssetType::kEnvLighting:
-			case AssetType::kVat:
 			case AssetType::kImportDocument:
 			case AssetType::kCount:
 				break;
