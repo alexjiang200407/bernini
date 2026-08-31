@@ -262,6 +262,60 @@ TEST_CASE("a rig's bone anim table holds every frame of every clip", "[skinned][
 	}
 }
 
+// The pass writes an imported buffer, so the frame graph keeps it as a root however little it does
+// -- an Execute early-return would leave a node and a UAV transition in every frame of every view.
+// AttachToFrameGraph asks this predicate instead, so what it answers is what a scene drawing no
+// crowd instance pays. There is no seam onto the graph's kept passes to assert against directly.
+TEST_CASE(
+	"a scene pays for the fill pass only on the frame that fills",
+	"[skinned][rigframes][render]")
+{
+	auto opts             = bgl::GraphicsOptions();
+	opts.shaderCacheDir   = bgl::test::ShaderCacheDir();
+	opts.enableDebugLayer = true;
+
+	auto gfx = bgl::CreateGraphics(opts);
+	REQUIRE(gfx != nullptr);
+
+	auto targetDesc     = bgl::RenderTargetDesc();
+	targetDesc.width    = 32;
+	targetDesc.height   = 32;
+	targetDesc.headless = true;
+	auto target         = gfx->CreateRenderTarget(targetDesc);
+
+	auto  sceneHandle = gfx->CreateScene(TestSceneDesc());
+	auto* scene       = sceneHandle->As<bgl::Scene>();
+	REQUIRE(scene != nullptr);
+
+	auto view = gfx->CreateSceneView(sceneHandle, 4);
+	bgl::test::ApplyEnvironment(sceneHandle.Get(), view.Get());
+
+	const assetlib::Skeleton     skeleton   = MakeChain();
+	const assetlib::AnimationSet animations = MakeTwoClips(skeleton);
+
+	const bgl::RigHandle rig = scene->AddRig(skeleton, animations);
+	REQUIRE(rig.IsValid());
+
+	auto job     = bgl::RenderJob();
+	job.view     = view;
+	job.viewport = bgl::Viewport(32.0f, 32.0f);
+
+	// A rig alone asks for nothing: a table is wanted by an instance drawing from one.
+	CHECK(scene->PendingRigFills().empty());
+	gfx->DrawFrame(target, job);
+	CHECK(scene->PendingRigFills().empty());
+
+	scene->RequestBoneAnimTable(rig);
+	CHECK(scene->PendingRigFills().size() == 1);
+
+	// The frame that fills it is the one frame the pass is attached to.
+	gfx->DrawFrame(target, job);
+
+	CHECK(scene->PendingRigFills().empty());
+	gfx->DrawFrame(target, job);
+	CHECK(scene->PendingRigFills().empty());
+}
+
 TEST_CASE("a growth of the arena leaves every filled table intact", "[skinned][rigframes][render]")
 {
 	auto opts             = bgl::GraphicsOptions();
