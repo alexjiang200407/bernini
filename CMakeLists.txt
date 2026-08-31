@@ -9,6 +9,7 @@ include(${CMAKE_SOURCE_DIR}/cmake/copy_to_target.cmake)
 include(${CMAKE_SOURCE_DIR}/cmake/compile_shader.cmake)
 include(${CMAKE_SOURCE_DIR}/cmake/enable_strict_compiler.cmake)
 include(${CMAKE_SOURCE_DIR}/cmake/enable_coverage.cmake)
+include(${CMAKE_SOURCE_DIR}/cmake/enable_compiler_cache.cmake)
 include(${CMAKE_SOURCE_DIR}/cmake/assign_folder.cmake)
 include(${CMAKE_SOURCE_DIR}/cmake/strip_msvc_only_flags.cmake)
 
@@ -17,6 +18,9 @@ include(${CMAKE_SOURCE_DIR}/cmake/strip_msvc_only_flags.cmake)
 # should carry. Every developer preset turns it on (CMakePresets.json); the default is off so a
 # build that asked for no preset carries none of it. See docs/profiling.md.
 option(BERNINI_PROFILING "Compile Tracy zones and its client into the build" OFF)
+
+# Before any add_subdirectory: a compiler launcher is read when a target is created.
+enable_compiler_cache()
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)

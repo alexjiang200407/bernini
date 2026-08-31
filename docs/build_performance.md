@@ -1,8 +1,8 @@
 # Build performance
 
-Two mechanisms: **precompiled headers** decide how much a translation unit parses, and measurement
-decides whether a change to them did anything. The second is not optional here — a PCH change is as
-likely to cost as to save, and only a measurement tells you which.
+Two mechanisms: **precompiled headers** decide how much a translation unit parses, and **ccache**
+decides whether it is compiled at all. Measurement decides whether a change to either did anything,
+and it is not optional here — a PCH change is as likely to cost as to save.
 
 Measure before changing anything — `just build --time`.
 
@@ -126,3 +126,47 @@ checkers are all used with no `#include` at the use site.
 
 That is the cost of writing against a subsystem PCH, which is why [CLAUDE.md](../CLAUDE.md) says not
 to. Both predate this change; fixing them is include hygiene and a change of its own.
+
+## ccache
+
+Detected, never required: `cmake/enable_compiler_cache.cmake` looks for it and the build compiles
+uncached when it is absent. `just init` offers to install it.
+
+ccache keys an object on the preprocessed source, the compiler and the flags, so it returns one
+built before a `git checkout`, a rebase, or a wiped build directory — none of which ninja survives,
+because its incremental build is mtimes and a dependency graph inside one build directory.
+
+The settings ride in a wrapper script generated into `build/<preset>/compiler-cache/` rather than in
+the environment, because this build is driven by `scripts/build.py`, by ninja directly and by an
+IDE, and a variable exported by only one of them would leave the others missing every time.
+
+`sloppiness = pch_defines,time_macros` is **not optional** with a PCH on every target: ccache cannot
+tell whether a PCH used `__TIME__`, nor see the defines a PCH already resolved, so without it every
+TU that uses one is declined. clang additionally stamps a PCH with a timestamp that moves on every
+rebuild, so the PCH is compiled `-Xclang -fno-pch-timestamp` — otherwise nothing behind it can ever
+hit.
+
+The store is gigabytes of small files rewritten constantly, so `just init` drops a
+`.metadata_never_index` marker in it on macOS — the same thing `ws init` does for every checkout's
+`build/`, and for the same reason. A cache that speeds the compiler up while feeding a content
+indexer is not a saving.
+
+```bash
+ccache --show-stats     # hit rate, size
+ccache --zero-stats     # before a measurement
+cmake -DBERNINI_COMPILER_CACHE=OFF ...   # opt out for one build dir
+```
+
+**Sharing between worktrees is limited, deliberately.** `CCACHE_BASEDIR` rewrites absolute paths
+under the checkout so two worktrees of the same commit can match — but a debug build reaches its
+working directory through DWARF, and disabling directory hashing to force those hits would leave a
+cached object's debug info pointing at a different worktree. The within-checkout win needs none of
+that and is the one this is for.
+
+Two configurations get no cache, and say so at configure time rather than pretending. Visual Studio
+and Xcode ignore compiler launchers entirely. **MSVC is refused on the compiler rather than the
+generator**, because the `windows-ninja-msvc-*` presets drive `cl.exe` through Ninja, which *does*
+honour a launcher — ccache's support for MSVC precompiled headers is an open issue with a reported
+false *hit*, a wrong object returned rather than a miss, and every target here carries a PCH. There
+is no configuration in this tree where that would be safe, so clang gets the cache and MSVC does
+not.

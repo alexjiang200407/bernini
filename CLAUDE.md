@@ -102,8 +102,9 @@ Graphics debugging practices.
 **[Build Performance](./docs/build_performance.md)**
 
 How to tell where a build's time went (`just build --time`, reading the log ninja already writes),
-and what may and may not go in a precompiled header — a PCH is deserialized into every TU, so a
-header a minority of sources need is a net loss, and the decision is a measurement.
+what may and may not go in a precompiled header — a PCH is deserialized into every TU, so a header a
+minority of sources need is a net loss — and the ccache that survives a branch switch or a wiped
+build directory.
 
 **[Profiling](./docs/profiling.md)**
 
