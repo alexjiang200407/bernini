@@ -233,59 +233,65 @@ float3 SampleGround(float4 plane, float3 down, float3 point)
     return point + down * (distance / -dot(plane.xyz, down));
 }
 
-// The analytic two-bone solve: law of cosines on hip-knee-ankle toward `target`, keeping the bend in
-// the plane the leg is already bent in, then one aim rotation bringing the ankle onto the target.
+// The analytic two-bone solve: law of cosines on a root-mid-tip chain toward `target`, keeping the
+// bend in the plane the chain is already bent in, then one aim rotation bringing the tip onto the
+// target.
 //
-// `hipDelta` and `kneeDelta` come back as the model-space transforms to premultiply onto the hip and
-// onto everything from the knee down -- the ankle included, since it is rigid below the knee.
-void SolveTwoBone(float3 hip, float3 knee, float3 ankle, float3 target, out float4x4 hipDelta, out float4x4 kneeDelta)
+// Limb-neutral on purpose. A leg is what calls it here, but nothing below knows that: a shoulder,
+// elbow and wrist reaching for a prop is the same three joints and the same maths, so whoever adds
+// that reaches for this rather than writing a second copy of it. What a leg owns is where the
+// target comes from and what weights it -- not the solve.
+//
+// `rootDelta` and `midDelta` come back as the model-space transforms to premultiply onto the root
+// and onto everything from the mid joint down -- the tip included, since it is rigid below the mid.
+void SolveTwoBone(float3 root, float3 mid, float3 tip, float3 target, out float4x4 rootDelta, out float4x4 midDelta)
 {
-    let upper = length(knee - hip);
-    let lower = length(ankle - knee);
+    let upper = length(mid - root);
+    let lower = length(tip - mid);
 
     // Held just inside full extension: at exactly upper + lower the bend plane is undefined, and one
-    // frame of a straight leg reads as a snap.
-    let reach = clamp(length(target - hip), 1e-4, upper + lower - 1e-4);
+    // frame of a straight chain reads as a snap.
+    let reach = clamp(length(target - root), 1e-4, upper + lower - 1e-4);
 
-    let toAnkle = normalize(ankle - hip);
-    let toKnee = normalize(knee - hip);
+    let toTip = normalize(tip - root);
+    let toMid = normalize(mid - root);
 
-    // The plane the leg is bent in. A leg that is already straight has no such plane, so nothing can
+    // The plane the chain is bent in. One that is already straight has no such plane, so nothing can
     // be said about which way it should bend and the solve leaves it alone.
-    float3 axis = cross(toAnkle, toKnee);
+    float3 axis = cross(toTip, toMid);
     if (length(axis) < 1e-6)
     {
-        hipDelta = float4x4(float4(1, 0, 0, 0), float4(0, 1, 0, 0), float4(0, 0, 1, 0), float4(0, 0, 0, 1));
-        kneeDelta = hipDelta;
+        rootDelta = float4x4(float4(1, 0, 0, 0), float4(0, 1, 0, 0), float4(0, 0, 1, 0), float4(0, 0, 0, 1));
+        midDelta = rootDelta;
         return;
     }
     axis = normalize(axis);
 
-    let hipNow = acos(clamp(dot(toAnkle, toKnee), -1.0, 1.0));
-    let kneeNow = acos(clamp(dot(normalize(hip - knee), normalize(ankle - knee)), -1.0, 1.0));
+    let rootNow = acos(clamp(dot(toTip, toMid), -1.0, 1.0));
+    let midNow = acos(clamp(dot(normalize(root - mid), normalize(tip - mid)), -1.0, 1.0));
 
-    let hipWanted = acos(clamp((upper * upper + reach * reach - lower * lower) / (2.0 * upper * reach), -1.0, 1.0));
-    let kneeWanted = acos(clamp((upper * upper + lower * lower - reach * reach) / (2.0 * upper * lower), -1.0, 1.0));
+    let rootWanted = acos(clamp((upper * upper + reach * reach - lower * lower) / (2.0 * upper * reach), -1.0, 1.0));
+    let midWanted = acos(clamp((upper * upper + lower * lower - reach * reach) / (2.0 * upper * lower), -1.0, 1.0));
 
-    let bendHip = RotationAbout(hip, axis, hipWanted - hipNow);
-    let knee1 = TransformPoint(bendHip, knee);
-    let bendKnee = RotationAbout(knee1, axis, kneeWanted - kneeNow);
+    let bendRoot = RotationAbout(root, axis, rootWanted - rootNow);
+    let mid1 = TransformPoint(bendRoot, mid);
+    let bendMid = RotationAbout(mid1, axis, midWanted - midNow);
 
-    let ankle1 = TransformPoint(bendKnee, TransformPoint(bendHip, ankle));
+    let tip1 = TransformPoint(bendMid, TransformPoint(bendRoot, tip));
 
     // Now the chain is the right shape but pointing where it was; swing it onto the target.
-    let from = normalize(ankle1 - hip);
-    let to = normalize(target - hip);
+    let from = normalize(tip1 - root);
+    let to = normalize(target - root);
     float3 aimAxis = cross(from, to);
 
     float4x4 aim = float4x4(float4(1, 0, 0, 0), float4(0, 1, 0, 0), float4(0, 0, 1, 0), float4(0, 0, 0, 1));
     if (length(aimAxis) > 1e-6)
     {
-        aim = RotationAbout(hip, normalize(aimAxis), acos(clamp(dot(from, to), -1.0, 1.0)));
+        aim = RotationAbout(root, normalize(aimAxis), acos(clamp(dot(from, to), -1.0, 1.0)));
     }
 
-    hipDelta = mul(aim, bendHip);
-    kneeDelta = mul(aim, mul(bendKnee, bendHip));
+    rootDelta = mul(aim, bendRoot);
+    midDelta = mul(aim, mul(bendMid, bendRoot));
 }
 
 // Which entry of the solved table `bone` is, or -1. A linear scan over at most cMaxLegsPerRig * 3
