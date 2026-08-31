@@ -163,7 +163,7 @@ ContentExplorerWindow::SetRootPath(const QString& path)
 
 	// The views root one level in, at the half this mode browses. Everything else here keeps
 	// resolving against `m_RootPath`: a key is data-root-relative, so moving where the *views* point
-	// must not move what a path means -- see ADR-3 in docs/plans/derived-authored-editor-opt.md.
+	// must not move what a path means.
 	SetBrowseMode(m_Mode);
 }
 
