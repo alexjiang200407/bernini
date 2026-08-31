@@ -62,7 +62,7 @@ namespace assetlib
 		 * "the one with a `.bmesh` extension".
 		 */
 		[[nodiscard]] std::string
-		MeshOutput() const;
+		GetMeshOutput() const;
 
 		bool
 		operator==(const ImportDocument&) const = default;

@@ -784,16 +784,16 @@ TEST_CASE("A mode is a browse root and nothing else", "[assetrules][textures]")
 	const QString root = QStringLiteral("/projects/MyGame/Data");
 
 	CHECK(
-		editor::BrowseRootFor(root, editor::BrowseMode::kAssets) ==
+		editor::GetBrowseRootFor(root, editor::BrowseMode::kAssets) ==
 		QString("/projects/MyGame/Data/Authored"));
 
 	CHECK(
-		editor::BrowseRootFor(root, editor::BrowseMode::kTextures) ==
+		editor::GetBrowseRootFor(root, editor::BrowseMode::kTextures) ==
 		QString("/projects/MyGame/Data/Derived/SourceTextures"));
 
 	// Before a project is open there is no root to be under, and neither mode invents one.
-	CHECK(editor::BrowseRootFor({}, editor::BrowseMode::kAssets).isEmpty());
-	CHECK(editor::BrowseRootFor({}, editor::BrowseMode::kTextures).isEmpty());
+	CHECK(editor::GetBrowseRootFor({}, editor::BrowseMode::kAssets).isEmpty());
+	CHECK(editor::GetBrowseRootFor({}, editor::BrowseMode::kTextures).isEmpty());
 
 	// Textures are derived, and ADR-6 says a person never edits one.
 	CHECK(editor::IsEditableMode(editor::BrowseMode::kAssets));

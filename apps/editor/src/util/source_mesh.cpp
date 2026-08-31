@@ -54,7 +54,7 @@ namespace editor
 	}
 
 	QString
-	MeshOfSource(const QString& dataRoot, const QString& path)
+	GetSourceMesh(const QString& dataRoot, const QString& path)
 	{
 		const QString document = DocumentFor(dataRoot, path);
 		if (document.isEmpty() || !QFileInfo::exists(document))
@@ -65,7 +65,7 @@ namespace editor
 			const assetlib::ImportDocument read =
 				assetlib::loadImportDocument(std::filesystem::path(document.toStdString()));
 
-			const std::string mesh = read.MeshOutput();
+			const std::string mesh = read.GetMeshOutput();
 
 			return mesh.empty() ? QString() : QDir(dataRoot).filePath(QString::fromStdString(mesh));
 		}
@@ -99,7 +99,7 @@ namespace editor
 		if (cached != m_Entries.cend() && cached->stamp == stamp)
 			return cached->mesh;
 
-		const Entry entry = { MeshOfSource(m_DataRoot, path), stamp };
+		const Entry entry = { GetSourceMesh(m_DataRoot, path), stamp };
 		m_Entries.insert(path, entry);
 		return entry.mesh;
 	}

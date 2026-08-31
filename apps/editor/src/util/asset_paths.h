@@ -22,18 +22,11 @@ namespace editor
 	IsTextureFile(const QString& path);
 
 	/**
-	 * Whether `path` names a file the Content Explorer's views do not list. Two kinds, for two
-	 * different reasons:
+	 * Whether `path` names a file the Content Explorer's views do not list: a derived build product,
+	 * which offering for rename or delete would imply an authorship it does not have, or a sidecar
+	 * whose row is the file beside it -- as Unity hides a `.meta` and Godot a `.import`.
 	 *
-	 * - a **`.bvat`**: a derived build product, wholly re-bakeable from its inputs, never
-	 *   committed, and offering it for rename or delete implies an authorship it does not have.
-	 *   Unreachable now that the views root inside `Authored/`, and kept because where they root is
-	 *   a choice while this is a rule.
-	 * - a **`.bimport`**: the sidecar carrying one source's import settings. The `.glb` beside it is
-	 *   the row that stands for the model -- Unity hides a `.meta` and Godot a `.import` for the
-	 *   same reason -- and listing both is two rows for one thing.
-	 *
-	 * The reference graph still reads both from the filesystem directly, so rename and delete
+	 * The reference graph still reads these from the filesystem directly, so rename and delete
 	 * cascades of their *inputs* see them.
 	 */
 	[[nodiscard]] bool

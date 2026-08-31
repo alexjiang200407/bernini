@@ -32,7 +32,7 @@ namespace editor
 	}
 
 	MeshDrop
-	MeshDroppedOn(const QMimeData* mime, const QString& dataRoot)
+	GetMeshDroppedOn(const QMimeData* mime, const QString& dataRoot)
 	{
 		// A payload holding both is one model's two halves, and the container is the half that
 		// reads without a project to resolve it.
@@ -43,7 +43,7 @@ namespace editor
 		if (source.isEmpty())
 			return {};
 
-		return { .mesh = MeshOfSource(dataRoot, source), .source = source };
+		return { .mesh = GetSourceMesh(dataRoot, source), .source = source };
 	}
 
 	void

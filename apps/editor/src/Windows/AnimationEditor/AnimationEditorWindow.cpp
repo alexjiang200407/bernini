@@ -304,7 +304,7 @@ AnimationEditorWindow::dragMoveEvent(QDragMoveEvent* event)
 void
 AnimationEditorWindow::dropEvent(QDropEvent* event)
 {
-	const editor::MeshDrop drop = editor::MeshDroppedOn(event->mimeData(), m_DataRoot);
+	const editor::MeshDrop drop = editor::GetMeshDroppedOn(event->mimeData(), m_DataRoot);
 	if (drop.mesh.isEmpty())
 	{
 		editor::ReportUnresolved(window(), drop);

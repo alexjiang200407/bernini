@@ -70,7 +70,7 @@ namespace editor
 	 * resolves against -- stays on the data root either way.
 	 */
 	[[nodiscard]] QString
-	BrowseRootFor(const QString& dataRoot, BrowseMode mode);
+	GetBrowseRootFor(const QString& dataRoot, BrowseMode mode);
 
 	/**
 	 * Whether `mode` may be written into at all: a new directory, an import dropped from outside, a

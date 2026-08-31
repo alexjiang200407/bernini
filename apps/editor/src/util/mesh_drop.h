@@ -25,7 +25,7 @@ namespace editor
 	 * Whether a drag carries a file a mesh viewport takes -- a `.bmesh`, or an imported source.
 	 * By extension alone: nothing is opened, because this answers every `dragMoveEvent`.
 	 *
-	 * So it accepts a source that will not resolve; MeshDroppedOn is where that is discovered and
+	 * So it accepts a source that will not resolve; GetMeshDroppedOn is where that is discovered and
 	 * ReportUnresolved is what says so. Resolving here instead would read a document from disk on
 	 * every mouse move of every drag.
 	 */
@@ -44,7 +44,7 @@ namespace editor
 	 * user more than this refusing the gesture.
 	 */
 	[[nodiscard]] MeshDrop
-	MeshDroppedOn(const QMimeData* mime, const QString& dataRoot);
+	GetMeshDroppedOn(const QMimeData* mime, const QString& dataRoot);
 
 	/**
 	 * Tells the user a dropped source had no mesh to show, in the shape a failed load uses.

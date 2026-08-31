@@ -422,7 +422,7 @@ MaterialPreviewWindow::dropEvent(QDropEvent* event)
 	}
 
 	const editor::MeshDrop drop =
-		editor::MeshDroppedOn(event->mimeData(), QString::fromStdWString(m_DataRoot.wstring()));
+		editor::GetMeshDroppedOn(event->mimeData(), QString::fromStdWString(m_DataRoot.wstring()));
 	if (drop.mesh.isEmpty())
 	{
 		editor::ReportUnresolved(window(), drop);

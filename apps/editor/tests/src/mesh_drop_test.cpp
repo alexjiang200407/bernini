@@ -96,14 +96,14 @@ TEST_CASE("A dropped source resolves to the mesh it produced", "[drop]")
 	SetLocalFiles(mime, { source });
 
 	CHECK(
-		editor::MeshDroppedOn(&mime, root).mesh ==
+		editor::GetMeshDroppedOn(&mime, root).mesh ==
 		QDir(root).filePath("Derived/Meshes/kirk.bmesh"));
 
 	SECTION("and needs the project to do it")
 	{
 		// Without a data root there is no document to read, so the source resolves to nothing --
 		// where a container would still have dropped, since it carries its own absolute path.
-		CHECK(editor::MeshDroppedOn(&mime, {}).mesh.isEmpty());
+		CHECK(editor::GetMeshDroppedOn(&mime, {}).mesh.isEmpty());
 	}
 
 	SECTION("a source of another project resolves to nothing")
@@ -111,7 +111,7 @@ TEST_CASE("A dropped source resolves to the mesh it produced", "[drop]")
 		QTemporaryDir elsewhere;
 		REQUIRE(elsewhere.isValid());
 
-		CHECK(editor::MeshDroppedOn(&mime, elsewhere.path()).mesh.isEmpty());
+		CHECK(editor::GetMeshDroppedOn(&mime, elsewhere.path()).mesh.isEmpty());
 	}
 
 	SECTION("a source whose document names no mesh resolves to nothing")
@@ -121,7 +121,7 @@ TEST_CASE("A dropped source resolves to the mesh it produced", "[drop]")
 		auto only = QMimeData();
 		SetLocalFiles(only, { rigOnly });
 
-		const editor::MeshDrop drop = editor::MeshDroppedOn(&only, root);
+		const editor::MeshDrop drop = editor::GetMeshDroppedOn(&only, root);
 		CHECK(drop.mesh.isEmpty());
 		CHECK(drop.source == rigOnly);
 	}
@@ -136,7 +136,7 @@ TEST_CASE("A dropped source resolves to the mesh it produced", "[drop]")
 		auto only = QMimeData();
 		SetLocalFiles(only, { orphan });
 
-		CHECK(editor::MeshDroppedOn(&only, root).mesh.isEmpty());
+		CHECK(editor::GetMeshDroppedOn(&only, root).mesh.isEmpty());
 	}
 }
 
@@ -150,22 +150,22 @@ TEST_CASE("A dropped container is taken as itself", "[drop]")
 	SetLocalFiles(mime, { "/tmp/loose/kirk.bmesh" });
 
 	// Never resolved through a project: a container names the file to read.
-	CHECK(editor::MeshDroppedOn(&mime, root).mesh == QString("/tmp/loose/kirk.bmesh"));
-	CHECK(editor::MeshDroppedOn(&mime, {}).mesh == QString("/tmp/loose/kirk.bmesh"));
+	CHECK(editor::GetMeshDroppedOn(&mime, root).mesh == QString("/tmp/loose/kirk.bmesh"));
+	CHECK(editor::GetMeshDroppedOn(&mime, {}).mesh == QString("/tmp/loose/kirk.bmesh"));
 
 	SECTION("and wins over a source dragged with it")
 	{
 		const QString source = WriteSource(root, "kirk", { "Derived/Meshes/kirk.bmesh" });
 
 		SetLocalFiles(mime, { source, "/tmp/loose/other.bmesh" });
-		CHECK(editor::MeshDroppedOn(&mime, root).mesh == QString("/tmp/loose/other.bmesh"));
+		CHECK(editor::GetMeshDroppedOn(&mime, root).mesh == QString("/tmp/loose/other.bmesh"));
 	}
 
 	SECTION("nothing droppable resolves to nothing")
 	{
 		SetLocalFiles(mime, { "/tmp/skin.bmaterial" });
-		CHECK(editor::MeshDroppedOn(&mime, root).mesh.isEmpty());
-		CHECK(editor::MeshDroppedOn(nullptr, root).mesh.isEmpty());
+		CHECK(editor::GetMeshDroppedOn(&mime, root).mesh.isEmpty());
+		CHECK(editor::GetMeshDroppedOn(nullptr, root).mesh.isEmpty());
 	}
 }
 
@@ -182,7 +182,7 @@ TEST_CASE("The mesh a source names need not exist yet", "[drop]")
 	auto mime = QMimeData();
 	SetLocalFiles(mime, { source });
 
-	const QString resolved = editor::MeshDroppedOn(&mime, root).mesh;
+	const QString resolved = editor::GetMeshDroppedOn(&mime, root).mesh;
 	CHECK(resolved == QDir(root).filePath("Derived/Meshes/kirk.bmesh"));
 	CHECK_FALSE(QFileInfo::exists(resolved));
 }
@@ -205,7 +205,7 @@ TEST_CASE("A source that resolves to nothing is still named", "[drop]")
 
 	// What separates "nothing was dropped" from "something was, and it had nothing to show". The
 	// second is reported to the user; the first is a drag this viewport simply did not want.
-	const editor::MeshDrop unresolved = editor::MeshDroppedOn(&mime, root);
+	const editor::MeshDrop unresolved = editor::GetMeshDroppedOn(&mime, root);
 	CHECK(unresolved.mesh.isEmpty());
 	CHECK(unresolved.source == orphan);
 
@@ -213,7 +213,7 @@ TEST_CASE("A source that resolves to nothing is still named", "[drop]")
 	{
 		SetLocalFiles(mime, { "/tmp/loose/kirk.bmesh" });
 
-		const editor::MeshDrop container = editor::MeshDroppedOn(&mime, root);
+		const editor::MeshDrop container = editor::GetMeshDroppedOn(&mime, root);
 		CHECK(container.mesh == QString("/tmp/loose/kirk.bmesh"));
 		CHECK(container.source.isEmpty());
 	}
@@ -222,7 +222,7 @@ TEST_CASE("A source that resolves to nothing is still named", "[drop]")
 	{
 		SetLocalFiles(mime, { "/tmp/skin.bmaterial" });
 
-		const editor::MeshDrop none = editor::MeshDroppedOn(&mime, root);
+		const editor::MeshDrop none = editor::GetMeshDroppedOn(&mime, root);
 		CHECK(none.mesh.isEmpty());
 		CHECK(none.source.isEmpty());
 	}

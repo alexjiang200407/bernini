@@ -83,7 +83,7 @@ TEST_CASE("A source resolves to what its document says it produced", "[sourcemes
 
 	const QString source = WriteImport(root, "kirk", document);
 
-	const QString mesh = editor::MeshOfSource(root, source);
+	const QString mesh = editor::GetSourceMesh(root, source);
 
 	// The mesh is picked out of `outputs` by what kind of asset it is, not by its position: the
 	// list is sorted by key, so the `.banim` leads it.
@@ -104,7 +104,7 @@ TEST_CASE("A stem carrying dots keeps every part of itself", "[sourcemesh]")
 	const QString source = WriteImport(root, "cha800_00.reduced", document);
 
 	CHECK(
-		editor::MeshOfSource(root, source) ==
+		editor::GetSourceMesh(root, source) ==
 		QDir(root).filePath("Derived/Meshes/cha800_00.reduced.bmesh"));
 }
 
@@ -122,7 +122,7 @@ TEST_CASE("A source with nothing behind it resolves to nothing", "[sourcemesh]")
 		REQUIRE(glb.open(QIODevice::WriteOnly));
 		glb.close();
 
-		CHECK(editor::MeshOfSource(root, dir.filePath("Authored/Meshes/loose.glb")).isEmpty());
+		CHECK(editor::GetSourceMesh(root, dir.filePath("Authored/Meshes/loose.glb")).isEmpty());
 	}
 
 	SECTION("a document that will not parse")
@@ -138,7 +138,7 @@ TEST_CASE("A source with nothing behind it resolves to nothing", "[sourcemesh]")
 		REQUIRE(glb.open(QIODevice::WriteOnly));
 		glb.close();
 
-		CHECK(editor::MeshOfSource(root, dir.filePath("Authored/Meshes/torn.glb")).isEmpty());
+		CHECK(editor::GetSourceMesh(root, dir.filePath("Authored/Meshes/torn.glb")).isEmpty());
 	}
 
 	SECTION("outputs naming no mesh")
@@ -146,17 +146,17 @@ TEST_CASE("A source with nothing behind it resolves to nothing", "[sourcemesh]")
 		auto document    = assetlib::ImportDocument();
 		document.outputs = { "Derived/Skeletons/rig.bskel" };
 
-		CHECK(editor::MeshOfSource(root, WriteImport(root, "rigonly", document)).isEmpty());
+		CHECK(editor::GetSourceMesh(root, WriteImport(root, "rigonly", document)).isEmpty());
 	}
 
 	SECTION("a file that is not a source at all")
 	{
 		CHECK(
-			editor::MeshOfSource(root, QDir(root).filePath("Authored/Materials/m.bmaterial"))
+			editor::GetSourceMesh(root, QDir(root).filePath("Authored/Materials/m.bmaterial"))
 				.isEmpty());
 	}
 
-	SECTION("no project open") { CHECK(editor::MeshOfSource({}, "/tmp/kirk.glb").isEmpty()); }
+	SECTION("no project open") { CHECK(editor::GetSourceMesh({}, "/tmp/kirk.glb").isEmpty()); }
 }
 
 TEST_CASE("The cache follows the document it answered from", "[sourcemesh]")
@@ -218,11 +218,11 @@ TEST_CASE("A source belonging to another project resolves to nothing", "[sourcem
 	other.outputs = { "Derived/Meshes/not-yours.bmesh" };
 	WriteImport(theirs, "kirk", other);
 
-	CHECK(editor::MeshOfSource(mine, source) == QDir(mine).filePath("Derived/Meshes/kirk.bmesh"));
-	CHECK(editor::MeshOfSource(theirs, source).isEmpty());
+	CHECK(editor::GetSourceMesh(mine, source) == QDir(mine).filePath("Derived/Meshes/kirk.bmesh"));
+	CHECK(editor::GetSourceMesh(theirs, source).isEmpty());
 
 	// A source nowhere near any project answers nothing rather than climbing to find out.
-	CHECK(editor::MeshOfSource(mine, QDir(temp.path()).filePath("loose/kirk.glb")).isEmpty());
+	CHECK(editor::GetSourceMesh(mine, QDir(temp.path()).filePath("loose/kirk.glb")).isEmpty());
 }
 
 TEST_CASE("The cache answers without re-reading the document", "[sourcemesh]")
@@ -253,6 +253,6 @@ TEST_CASE("The cache answers without re-reading the document", "[sourcemesh]")
 
 	CHECK(cache.Of(source) == QDir(root).filePath("Derived/Meshes/kirk.bmesh"));
 	CHECK(
-		editor::MeshOfSource(root, source) ==
+		editor::GetSourceMesh(root, source) ==
 		QDir(root).filePath("Derived/Meshes/rewritten.bmesh"));
 }

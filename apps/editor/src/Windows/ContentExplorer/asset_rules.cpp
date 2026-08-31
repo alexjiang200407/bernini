@@ -111,7 +111,7 @@ namespace editor
 	}
 
 	QString
-	BrowseRootFor(const QString& dataRoot, const BrowseMode mode)
+	GetBrowseRootFor(const QString& dataRoot, const BrowseMode mode)
 	{
 		if (dataRoot.isEmpty())
 			return {};

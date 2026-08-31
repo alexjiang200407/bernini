@@ -170,7 +170,7 @@ ContentExplorerWindow::SetRootPath(const QString& path)
 void
 ContentExplorerWindow::SetBrowseMode(const editor::BrowseMode mode)
 {
-	const QString root = editor::BrowseRootFor(m_RootPath, mode);
+	const QString root = editor::GetBrowseRootFor(m_RootPath, mode);
 	if (root.isEmpty())
 		return;
 

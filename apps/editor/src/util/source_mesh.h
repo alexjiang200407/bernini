@@ -23,10 +23,10 @@ namespace editor
 	 * more than an empty answer would.
 	 */
 	[[nodiscard]] QString
-	MeshOfSource(const QString& dataRoot, const QString& path);
+	GetSourceMesh(const QString& dataRoot, const QString& path);
 
 	/**
-	 * MeshOfSource, remembered until the document changes.
+	 * GetSourceMesh, remembered until the document changes.
 	 *
 	 * What makes the resolution usable from a model's `data()`, which runs on every paint of every
 	 * visible tile: a warm answer costs one `stat`, where re-reading and parsing a document each
