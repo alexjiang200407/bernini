@@ -167,6 +167,7 @@ disagrees, trust the header, then fix this doc.
 | `SceneDesc` | [libs/bgl/include/bgl/IScene.h](libs/bgl/include/bgl/IScene.h) | Fixed pool capacities for a scene. |
 | `PbrMaterialDesc` / `LoosePbrMaterialDesc` | [libs/bgl/include/bgl/IScene.h](libs/bgl/include/bgl/IScene.h) | Baked (three-map) vs. loose (per-channel routed) material parameters. `ChannelRouteDesc` feeds the latter. |
 | `EnvironmentMapDesc` | [libs/bgl/include/bgl/IScene.h](libs/bgl/include/bgl/IScene.h) | The IBL triplet (irradiance cube, prefilter cube, BRDF LUT). **Move-only** — copy is deleted. |
+| `GroundPlaneDesc` | [libs/bgl/include/bgl/IScene.h](libs/bgl/include/bgl/IScene.h) | The scene's ground: a point and an up normal. Defaults to `y = 0`. |
 | `RenderTargetDesc` | [libs/bgl/include/bgl/IRenderTarget.h](libs/bgl/include/bgl/IRenderTarget.h) | The output size, `renderScale` (how dense the geometry passes' grid is relative to it), `taaReconstructionWidth` (how wide a kernel the resolve rebuilds an output pixel with, in output pixels), `headless`, and `wnd` — an `HWND` on D3D12, a `CAMetalLayer*` on Metal; ignored when headless. |
 | `RenderJob` | [libs/bgl/include/bgl/RenderJob.h](libs/bgl/include/bgl/RenderJob.h) | One draw: `{view, camera, viewport, time}`. Holds a **copy** of the camera. |
 | `OverlayVertex`, `OverlayDraw`, `OverlayJob`, `OverlayRect` | [libs/bgl/include/bgl/IOverlay.h](libs/bgl/include/bgl/IOverlay.h) | A 24-byte pixel-space vertex; one draw of a geometry with its texture, translation, optional 4×4 transform and optional scissor; the overlay plus the draws one `DrawOverlay` submits; a pixel rectangle. |
@@ -312,6 +313,11 @@ flowchart TD
   stores the material's byte offset, not a generation-checked handle, so a stale binding silently
   picks up whatever record next takes those bytes. Rebind with `SetSubmeshMaterial` first. @throws `SceneError`
   for `kNull` / `kAssert`, which have no storage to free.
+* **`SetGround(ground)`** — the plane every skinned instance's feet are planted on, scene-wide
+  (every view stands on the same ground, where lighting is per view). The normal is normalised on
+  the way in. @throws `SceneError` for a non-finite point or normal, a zero normal, or one with
+  `normal.y <= 0` — a vertical or overhanging plane has no height under a point. Moves the temporal
+  epoch: a rebind, not a per-frame input, so set it with the scene.
 * **`DeleteTextureAsset(texture)`** — @pre no live material routes it. The scene does not know which
   materials sample which textures. The GPU release itself *is* safely deferred behind the frames that
   could still be reading it; the dangling *binding* is what is unsafe.
