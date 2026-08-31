@@ -189,6 +189,9 @@ before building the thing it describes, and delete it when that thing lands.
 
 - [Skeleton append](./docs/specs/skeleton_append.md) — appending a bone strands every clip, and the
   remap that will fix it.
+- [Crowd frame interpolation](./docs/specs/crowd_frame_interpolation.md) — the crowd tier's
+  two-frame lerp costs twice the hero tier's per-vertex fetch *and* is the coarser interpolation;
+  the cheaper alternative was never priced, and no GPU timestamp exists to price it.
 - [Animation compression](./docs/specs/animation_compression.md) — a 663-bone rig's clips are 60 MB
   uncompressed; why collapsing constant tracks was measured and dropped, and what to build instead.
 
