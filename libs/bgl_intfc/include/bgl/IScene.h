@@ -15,6 +15,14 @@
 #include <bgl/api.h>
 #include <bgl/error.h>
 #include <bgl/glm.h>
+#include <bgl/types/ChannelRouteDesc.h>
+#include <bgl/types/EnvironmentMapDesc.h>
+#include <bgl/types/FootPlantDesc.h>
+#include <bgl/types/GroundPlaneDesc.h>
+#include <bgl/types/LoosePbrMaterialDesc.h>
+#include <bgl/types/PbrMaterialDesc.h>
+#include <bgl/types/SceneDesc.h>
+#include <bgl/types/VatGeomDesc.h>
 #include <core/containers/slot_handle.h>
 #include <core/ref/Ref.h>
 #include <core/ref/SharedRef.h>
@@ -26,162 +34,6 @@ namespace bgl
 	public:
 		SceneError() = delete;
 		using ApiError::ApiError;
-	};
-
-	/**
-	 * How big the scene's GPU arenas start, not how big they may get. Each one grows on demand,
-	 * bounded only by device memory, so these are a hint that trades startup residency against the
-	 * number of growth events during a load. Sizing them near the steady state avoids both.
-	 *
-	 * Every field is advisory. A renderer that keeps no arena of a given kind ignores that field
-	 * rather than failing on it.
-	 */
-	struct SceneDesc
-	{
-		uint32_t initialGeom                 = 1;
-		uint32_t initialMeshlets             = 1;
-		uint32_t initialIndices              = 1;
-		uint32_t initialSubmeshes            = 1;
-		uint32_t initialVertexBufferByteSize = 1;
-		uint32_t initialPbrMaterials         = 1;
-		uint32_t initialLoosePbrMaterials    = 1;
-	};
-
-	/**
-	 * The decoded IBL cube maps: the diffuse and specular convolutions of one environment.
-	 *
-	 * The split-sum BRDF table that completes the specular term is not here. It integrates a white
-	 * environment, so it belongs to the shading model rather than to any environment, and bgl
-	 * generates its own at device init -- there is nothing for a caller to supply or to mismatch.
-	 */
-	struct EnvironmentMapDesc
-	{
-		EnvironmentMapDesc() = default;
-
-		EnvironmentMapDesc(TextureAssetHandle irr, TextureAssetHandle pre) :
-			irradiance(irr), prefilter(pre)
-		{}
-
-		EnvironmentMapDesc(EnvironmentMapDesc&&) noexcept = default;
-		EnvironmentMapDesc(const EnvironmentMapDesc&)     = delete;
-
-		EnvironmentMapDesc&
-		operator=(EnvironmentMapDesc&&) noexcept = default;
-
-		EnvironmentMapDesc&
-		operator=(const EnvironmentMapDesc&) = delete;
-
-		TextureAssetHandle irradiance;
-		TextureAssetHandle prefilter;
-	};
-
-	/**
-	 * The ground under a scene, as the plane through `point` with `normal` up: what the skinned
-	 * pose pass samples to plant a foot. One plane for the whole scene until a heightfield exists,
-	 * and the fallback where none does. The default is `y = 0`, up.
-	 */
-	struct GroundPlaneDesc
-	{
-		glm::vec3 point  = glm::vec3(0.0f);
-		glm::vec3 normal = glm::vec3(0.0f, 1.0f, 0.0f);
-	};
-
-	struct PbrMaterialDesc
-	{
-		glm::vec4 baseColorFactor = glm::vec4(1.0f);
-		float     metallicFactor  = 1.0f;
-		float     roughnessFactor = 1.0f;
-
-		LayerType layerType   = LayerType::kOpaque;
-		float     alphaCutoff = 0.5f;
-
-		// What baseColorFactor.a means on a kBlend surface, and read by no other layer: 0 coverage
-		// (hair, foliage), 1 transmission (glass). glTF's KHR_materials_transmission.
-		float transmissionFactor = 0.0f;
-
-		// glTF's KHR_materials_specular. The colour tints a dielectric's F0 away from grey; the
-		// factor weights the whole specular lobe, so 0 is a surface with no reflection at all.
-		glm::vec3 specularColorFactor = glm::vec3(1.0f);
-		float     specularFactor      = 1.0f;
-
-		// Optional material maps, from AddTextureAsset.
-		TextureAssetHandle baseColorTexture;
-		TextureAssetHandle normalTexture;
-		TextureAssetHandle ormTexture;
-	};
-
-	struct ChannelRouteDesc
-	{
-		TextureAssetHandle texture;
-		uint16_t           channel = 0;  // 0 = R, 1 = G, 2 = B, 3 = A
-	};
-
-	/** One vertex of a VAT geom's bind-pose mesh -- the full procedural layout, tightly packed. */
-	struct VatVertex
-	{
-		glm::vec3 position;
-		glm::vec3 normal;
-		glm::vec2 uv;
-		glm::vec4 tangent;
-	};
-
-	/** One clip's rows of the VAT texture pair; see VatGeomDesc. */
-	struct VatClipDesc
-	{
-		uint32_t firstRow   = 0;  // texture V of frame 0
-		uint32_t frameCount = 0;  // real frames; the bake pads a duplicate row after the last
-		float    sampleRate = 30.0f;
-		bool     loop       = false;
-	};
-
-	/**
-	 * A rig's baked clip set, as textures already uploaded through AddTextureAsset: positions
-	 * `R16G16B16A16_UNORM` unorm-packed in [boundsMin, boundsMax] -- one box over every frame of
-	 * every clip -- and normals `R8G8B8A8_UNORM`, `rgb` the unit object-space normal as
-	 * `xyz * 0.5 + 0.5` and `a` the tangent's twist about it, `radians / 2pi + 0.5` (see
-	 * docs/vat.md). Columns are geometry-local vertex indices; frame `f` of clip `c` is row
-	 * `clips[c].firstRow + f`, which is the row index the shared idl::Clip carries as `firstFrame`.
-	 *
-	 * bgl never reads a `.bvat` (it stays codec-free); whoever decodes one -- gamelib, or a test
-	 * synthesizing textures from scratch -- fills this in.
-	 */
-	struct VatGeomDesc
-	{
-		TextureAssetHandle positions;
-		TextureAssetHandle normals;
-
-		glm::vec3 boundsMin = glm::vec3(0.0f);
-		glm::vec3 boundsMax = glm::vec3(1.0f);
-
-		std::vector<VatClipDesc> clips;
-
-		// Where each submesh's vertex columns start along U, in submesh order -- the bake's
-		// VatColumns::columnBase values. Empty means a single submesh at column 0, which is what
-		// AddVatMeshGeom uploads; AddVatMeshGeom requires one entry per submesh.
-		std::vector<uint32_t> columnBases;
-	};
-
-	struct LoosePbrMaterialDesc
-	{
-		glm::vec4 baseColorFactor = glm::vec4(1.0f);
-		float     metallicFactor  = 1.0f;
-		float     roughnessFactor = 1.0f;
-
-		// Cutout; see PbrMaterialDesc. A loose material routes its alpha explicitly (baseColor[3]),
-		// so unlike a baked one it can always sample a real alpha channel.
-		LayerType layerType   = LayerType::kOpaque;
-		float     alphaCutoff = 0.5f;
-
-		// Coverage against transmission; see PbrMaterialDesc.
-		float transmissionFactor = 0.0f;
-
-		// Dielectric F0 tint and specular strength; see PbrMaterialDesc.
-		glm::vec3 specularColorFactor = glm::vec3(1.0f);
-		float     specularFactor      = 1.0f;
-
-		std::array<ChannelRouteDesc, 4> baseColor;  // R, G, B, A
-		std::array<ChannelRouteDesc, 3> orm;        // AO, roughness, metallic
-		std::array<ChannelRouteDesc, 2> normal;     // X, Y (Z reconstructed in shader)
 	};
 
 	class BGL_API IScene : public core::Ref
@@ -311,7 +163,10 @@ namespace bgl
 		 * sample pool upload with the geometry and are shared by every instance of it.
 		 *
 		 * Unlike VAT this takes the containers as they are: `Skeleton` and `AnimationSet` are
-		 * `assetlib_structs` PODs with nothing to decode, so there is no desc to mirror them into.
+		 * `assetlib_structs` PODs with nothing to decode, so neither is mirrored into a desc.
+		 * `footPlant` is the exception, and carries only what no container holds: bone *names*
+		 * resolved to indices and a sole plane measured off the mesh, neither of which bgl can
+		 * derive without assetlib.
 		 *
 		 * Each submesh must carry `joints0` and `weights0` -- a submesh with no skin binding has no
 		 * bones to follow and would draw its bind pose while the rest of the mesh moved.
@@ -332,12 +187,16 @@ namespace bgl
 		 * @param skeleton    The rig the mesh's joint indices address.
 		 * @param animations  Clips cooked against `skeleton`.
 		 * @param posedBounds A box holding the mesh in every pose of every clip, in model space.
+		 * @param footPlant   The rig's legs and their per-frame plant weights, or empty for a rig
+		 *                    that plants no feet -- which animates exactly as it did before.
 		 * @throws SceneError for anything AddStaticMeshGeom refuses, a skeleton with no bones,
 		 *         bones that are not topologically sorted, an `animations`
 		 *         whose bone count disagrees with `skeleton`, an empty or zero-frame clip table, a
 		 *         clip whose samples fall outside the pool, a submesh without skin binding, a submesh
-		 *         whose material does not resolve to kPBR, or a `posedBounds` whose min exceeds its
-		 *         max on any axis.
+		 *         whose material does not resolve to kPBR, a `posedBounds` whose min exceeds its
+		 *         max on any axis, a leg naming a bone outside the skeleton or a chain whose links
+		 *         are not directly parented, a leg whose sole normal is not finite and nonzero, or a
+		 *         `plantWeights` that is not one byte per leg for every frame in the sample pool.
 		 *
 		 * `AnimationSet::skeletonSignature` is deliberately **not** checked here: computing a
 		 * skeleton's signature needs assetlib, which bgl does not link. A clip set cooked against a
@@ -351,7 +210,8 @@ namespace bgl
 			std::span<const MaterialHandle> materials,
 			const assetlib::Skeleton&       skeleton,
 			const assetlib::AnimationSet&   animations,
-			const assetlib::Bounds&         posedBounds) = 0;
+			const assetlib::Bounds&         posedBounds,
+			const FootPlantDesc&            footPlant = {}) = 0;
 
 		virtual TextureAssetHandle
 		AddTextureAsset(assetlib::ImageData img, std::string debugName = "") = 0;

@@ -44,6 +44,7 @@ set(IDL_CPP_SOURCES
     VatState.slang
     BoneSample.slang
     SkinnedBone.slang
+    SkinnedLegChain.slang
     SkinnedGeom.slang
     SkinnedState.slang
     RawRange.slang

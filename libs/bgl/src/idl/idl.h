@@ -22,6 +22,7 @@
 #include "idl/RecordHeader.h"
 #include "idl/SkinnedBone.h"
 #include "idl/SkinnedGeom.h"
+#include "idl/SkinnedLegChain.h"
 #include "idl/SkinnedState.h"
 #include "idl/Submesh.h"
 #include "idl/VatGeom.h"
