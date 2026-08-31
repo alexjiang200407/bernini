@@ -81,6 +81,14 @@ namespace editor
 	KeyUnder(const QString& root, const QString& path);
 
 	/**
+	 * Whether `path` lies inside `root`: KeyUnder's answer with the key thrown away, for a caller
+	 * that only asks. One rule, two spellings of it -- a caller that needs the key must not have to
+	 * ask twice, and a caller that does not must not have to write `.isEmpty()` to mean "inside".
+	 */
+	[[nodiscard]] bool
+	IsKeyUnder(const QString& root, const QString& path);
+
+	/**
 	 * Whether `path` is a relative folder that cannot climb out of whatever it is joined onto.
 	 *
 	 * Rejects an absolute path, a leading separator, a drive-relative `D:` -- which

@@ -79,6 +79,12 @@ namespace editor
 	}
 
 	bool
+	IsKeyUnder(const QString& root, const QString& path)
+	{
+		return !KeyUnder(root, path).isEmpty();
+	}
+
+	bool
 	IsContainedRelativePath(const QString& path)
 	{
 		if (path.isEmpty() || QDir::isAbsolutePath(path))

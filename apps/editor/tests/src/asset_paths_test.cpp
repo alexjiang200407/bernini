@@ -72,3 +72,19 @@ TEST_CASE("A key under a root is the one answer to is this inside that", "[asset
 			QString("Authored/..hidden/x.bmaterial"));
 	}
 }
+
+TEST_CASE("The predicate spelling answers exactly what the key does", "[assetpaths]")
+{
+	const QString root = QStringLiteral("/projects/MyGame/Data");
+
+	CHECK(editor::IsKeyUnder(root, root + "/Authored/Meshes/kirk.glb"));
+
+	// The root itself is inside itself -- "." is a key, not a refusal, and a predicate that
+	// disagreed with the key would be the divergence this whole seam exists to remove.
+	CHECK(editor::IsKeyUnder(root, root));
+
+	CHECK_FALSE(editor::IsKeyUnder(root, "/elsewhere/kirk.glb"));
+	CHECK_FALSE(editor::IsKeyUnder(root, root + "/../sneaky.glb"));
+	CHECK_FALSE(editor::IsKeyUnder(root, {}));
+	CHECK_FALSE(editor::IsKeyUnder({}, root + "/Authored"));
+}

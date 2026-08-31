@@ -160,10 +160,7 @@ ContentExplorerWindow::SetRootPath(const QString& path)
 bool
 ContentExplorerWindow::IsInsideBrowseRoot(const QString& path) const
 {
-	if (m_BrowseRoot.isEmpty() || path.isEmpty())
-		return false;
-
-	return !editor::KeyUnder(m_BrowseRoot, path).isEmpty();
+	return editor::IsKeyUnder(m_BrowseRoot, path);
 }
 
 void
@@ -495,7 +492,7 @@ ContentExplorerWindow::OnDirectoryDeleted(const QString& absolute)
 
 	// The trail led into a folder that is gone, so it is dropped rather than walked back into --
 	// and going home is not a step Back should offer to undo.
-	if (editor::KeyUnder(absolute, shown).isEmpty())
+	if (!editor::IsKeyUnder(absolute, shown))
 		return;
 
 	m_History.clear();

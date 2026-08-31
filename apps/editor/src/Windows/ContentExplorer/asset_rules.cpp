@@ -69,7 +69,7 @@ namespace editor
 				return QFileInfo(resolved) == QFileInfo(absolute);
 
 			// The directory holds itself, so "." counts: deleting a folder takes what is open in it.
-			return !KeyUnder(absolute, resolved).isEmpty();
+			return IsKeyUnder(absolute, resolved);
 		};
 
 		return std::ranges::any_of(heldOpen, holds);
