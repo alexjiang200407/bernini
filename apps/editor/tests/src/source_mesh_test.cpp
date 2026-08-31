@@ -1,4 +1,4 @@
-#include "util/import_outputs.h"
+#include "util/source_mesh.h"
 
 #include "StoreAt.h"
 
@@ -58,7 +58,7 @@ namespace
 	}
 }
 
-TEST_CASE("An imported source is named by its extension alone", "[importoutputs]")
+TEST_CASE("An imported source is named by its extension alone", "[sourcemesh]")
 {
 	CHECK(editor::IsImportedSource("/tmp/Coyote.glb"));
 	CHECK(editor::IsImportedSource("/tmp/Coyote.GLB"));
@@ -69,7 +69,7 @@ TEST_CASE("An imported source is named by its extension alone", "[importoutputs]
 	CHECK_FALSE(editor::IsImportedSource({}));
 }
 
-TEST_CASE("A source resolves to what its document says it produced", "[importoutputs]")
+TEST_CASE("A source resolves to what its document says it produced", "[sourcemesh]")
 {
 	QTemporaryDir temp;
 	REQUIRE(temp.isValid());
@@ -83,15 +83,14 @@ TEST_CASE("A source resolves to what its document says it produced", "[importout
 
 	const QString source = WriteImport(root, "kirk", document);
 
-	const editor::ImportOutputs outputs = editor::ImportOutputsOf(root, source);
+	const QString mesh = editor::MeshOfSource(root, source);
 
 	// The mesh is picked out of `outputs` by what kind of asset it is, not by its position: the
 	// list is sorted by key, so the `.banim` leads it.
-	CHECK(outputs.mesh == QDir(root).filePath("Derived/Meshes/AdaWong/kirk.bmesh"));
-	CHECK(outputs.textureDir == QDir(root).filePath("Derived/SourceTextures/AdaWong"));
+	CHECK(mesh == QDir(root).filePath("Derived/Meshes/AdaWong/kirk.bmesh"));
 }
 
-TEST_CASE("A stem carrying dots keeps every part of itself", "[importoutputs]")
+TEST_CASE("A stem carrying dots keeps every part of itself", "[sourcemesh]")
 {
 	// `cha800_00.reduced.glb` is a real name in the test project, and only the last extension is
 	// the extension -- swapping the wrong one looks for a document that does not exist.
@@ -105,11 +104,11 @@ TEST_CASE("A stem carrying dots keeps every part of itself", "[importoutputs]")
 	const QString source = WriteImport(root, "cha800_00.reduced", document);
 
 	CHECK(
-		editor::ImportOutputsOf(root, source).mesh ==
+		editor::MeshOfSource(root, source) ==
 		QDir(root).filePath("Derived/Meshes/cha800_00.reduced.bmesh"));
 }
 
-TEST_CASE("A source with nothing behind it resolves to nothing", "[importoutputs]")
+TEST_CASE("A source with nothing behind it resolves to nothing", "[sourcemesh]")
 {
 	QTemporaryDir temp;
 	REQUIRE(temp.isValid());
@@ -123,9 +122,7 @@ TEST_CASE("A source with nothing behind it resolves to nothing", "[importoutputs
 		REQUIRE(glb.open(QIODevice::WriteOnly));
 		glb.close();
 
-		CHECK(
-			editor::ImportOutputsOf(root, dir.filePath("Authored/Meshes/loose.glb"))
-				.mesh.isEmpty());
+		CHECK(editor::MeshOfSource(root, dir.filePath("Authored/Meshes/loose.glb")).isEmpty());
 	}
 
 	SECTION("a document that will not parse")
@@ -141,8 +138,7 @@ TEST_CASE("A source with nothing behind it resolves to nothing", "[importoutputs
 		REQUIRE(glb.open(QIODevice::WriteOnly));
 		glb.close();
 
-		CHECK(
-			editor::ImportOutputsOf(root, dir.filePath("Authored/Meshes/torn.glb")).mesh.isEmpty());
+		CHECK(editor::MeshOfSource(root, dir.filePath("Authored/Meshes/torn.glb")).isEmpty());
 	}
 
 	SECTION("outputs naming no mesh")
@@ -150,58 +146,20 @@ TEST_CASE("A source with nothing behind it resolves to nothing", "[importoutputs
 		auto document    = assetlib::ImportDocument();
 		document.outputs = { "Derived/Skeletons/rig.bskel" };
 
-		CHECK(editor::ImportOutputsOf(root, WriteImport(root, "rigonly", document)).mesh.isEmpty());
-	}
-
-	SECTION("an import that extracted no textures")
-	{
-		auto document    = assetlib::ImportDocument();
-		document.outputs = { "Derived/Meshes/bare.bmesh" };
-
-		const QString source = WriteImport(root, "bare", document);
-		CHECK(editor::ImportOutputsOf(root, source).textureDir.isEmpty());
-		CHECK(editor::ImportTexturesOf(root, source).isEmpty());
+		CHECK(editor::MeshOfSource(root, WriteImport(root, "rigonly", document)).isEmpty());
 	}
 
 	SECTION("a file that is not a source at all")
 	{
 		CHECK(
-			editor::ImportOutputsOf(root, QDir(root).filePath("Authored/Materials/m.bmaterial"))
-				.mesh.isEmpty());
+			editor::MeshOfSource(root, QDir(root).filePath("Authored/Materials/m.bmaterial"))
+				.isEmpty());
 	}
 
-	SECTION("no project open")
-	{
-		CHECK(editor::ImportOutputsOf({}, "/tmp/kirk.glb").mesh.isEmpty());
-	}
+	SECTION("no project open") { CHECK(editor::MeshOfSource({}, "/tmp/kirk.glb").isEmpty()); }
 }
 
-TEST_CASE("An import's textures are read off the folder, not the document", "[importoutputs]")
-{
-	// A `.ktx2` carries no cache key of its own and is never listed in `outputs` -- the folder is
-	// the only statement of which textures an import wrote.
-	QTemporaryDir temp;
-	REQUIRE(temp.isValid());
-	const QString root = temp.path();
-
-	auto document       = assetlib::ImportDocument();
-	document.outputs    = { "Derived/Meshes/kirk.bmesh" };
-	document.textureDir = "Derived/SourceTextures/kirk";
-
-	const QString source = WriteImport(root, "kirk", document);
-
-	Touch(root, QStringLiteral("Derived/SourceTextures/kirk/normal.ktx2"));
-	Touch(root, QStringLiteral("Derived/SourceTextures/kirk/basecolor.ktx2"));
-	Touch(root, QStringLiteral("Derived/SourceTextures/kirk/notes.txt"));
-
-	const QStringList textures = editor::ImportTexturesOf(root, source);
-
-	REQUIRE(textures.size() == 2);
-	CHECK(textures[0] == QDir(root).filePath("Derived/SourceTextures/kirk/basecolor.ktx2"));
-	CHECK(textures[1] == QDir(root).filePath("Derived/SourceTextures/kirk/normal.ktx2"));
-}
-
-TEST_CASE("The cache follows the document it answered from", "[importoutputs]")
+TEST_CASE("The cache follows the document it answered from", "[sourcemesh]")
 {
 	QTemporaryDir temp;
 	REQUIRE(temp.isValid());
@@ -212,10 +170,10 @@ TEST_CASE("The cache follows the document it answered from", "[importoutputs]")
 
 	const QString source = WriteImport(root, "kirk", document);
 
-	auto cache = editor::ImportOutputsCache();
+	auto cache = editor::SourceMeshCache();
 	cache.SetDataRoot(root);
 
-	REQUIRE(cache.Of(source).mesh == QDir(root).filePath("Derived/Meshes/kirk.bmesh"));
+	REQUIRE(cache.Of(source) == QDir(root).filePath("Derived/Meshes/kirk.bmesh"));
 
 	// A reimport into a different folder rewrites the document, and the answer has to move with it.
 	// The stamp is the document's modification time, so the rewrite is made to land on a later
@@ -226,7 +184,7 @@ TEST_CASE("The cache follows the document it answered from", "[importoutputs]")
 	SaveAt(document, std::filesystem::path(documentPath.toStdString()));
 	SetModified(documentPath, QDateTime::currentDateTime().addSecs(1));
 
-	CHECK(cache.Of(source).mesh == QDir(root).filePath("Derived/Meshes/moved/kirk.bmesh"));
+	CHECK(cache.Of(source) == QDir(root).filePath("Derived/Meshes/moved/kirk.bmesh"));
 
 	// A new root is a different project; nothing resolved against the last one still applies. The
 	// folder is *made* first: a relative path climbs out of a root with `../`, which resolves fine
@@ -236,10 +194,10 @@ TEST_CASE("The cache follows the document it answered from", "[importoutputs]")
 	REQUIRE(QDir().mkpath(elsewhere));
 
 	cache.SetDataRoot(elsewhere);
-	CHECK(cache.Of(source).mesh.isEmpty());
+	CHECK(cache.Of(source).isEmpty());
 }
 
-TEST_CASE("A source belonging to another project resolves to nothing", "[importoutputs]")
+TEST_CASE("A source belonging to another project resolves to nothing", "[sourcemesh]")
 {
 	// Two projects side by side, each with a `kirk` import. Resolving one project's source against
 	// the other's root must answer nothing -- not the other project's mesh. `QDir::relativeFilePath`
@@ -260,18 +218,14 @@ TEST_CASE("A source belonging to another project resolves to nothing", "[importo
 	other.outputs = { "Derived/Meshes/not-yours.bmesh" };
 	WriteImport(theirs, "kirk", other);
 
-	CHECK(
-		editor::ImportOutputsOf(mine, source).mesh ==
-		QDir(mine).filePath("Derived/Meshes/kirk.bmesh"));
-	CHECK(editor::ImportOutputsOf(theirs, source).mesh.isEmpty());
-	CHECK(editor::ImportTexturesOf(theirs, source).isEmpty());
+	CHECK(editor::MeshOfSource(mine, source) == QDir(mine).filePath("Derived/Meshes/kirk.bmesh"));
+	CHECK(editor::MeshOfSource(theirs, source).isEmpty());
 
 	// A source nowhere near any project answers nothing rather than climbing to find out.
-	CHECK(
-		editor::ImportOutputsOf(mine, QDir(temp.path()).filePath("loose/kirk.glb")).mesh.isEmpty());
+	CHECK(editor::MeshOfSource(mine, QDir(temp.path()).filePath("loose/kirk.glb")).isEmpty());
 }
 
-TEST_CASE("The cache answers without re-reading the document", "[importoutputs]")
+TEST_CASE("The cache answers without re-reading the document", "[sourcemesh]")
 {
 	// Without this the test above would pass on a cache that never cached: re-reading every time
 	// gets the same answers. Holding the modification time still across a rewrite is the only way
@@ -289,16 +243,16 @@ TEST_CASE("The cache answers without re-reading the document", "[importoutputs]"
 		QDir(root).filePath(QStringLiteral("Authored/Meshes/kirk.bimport"));
 	const QDateTime stamp = QFileInfo(documentPath).lastModified();
 
-	auto cache = editor::ImportOutputsCache();
+	auto cache = editor::SourceMeshCache();
 	cache.SetDataRoot(root);
-	REQUIRE(cache.Of(source).mesh == QDir(root).filePath("Derived/Meshes/kirk.bmesh"));
+	REQUIRE(cache.Of(source) == QDir(root).filePath("Derived/Meshes/kirk.bmesh"));
 
 	document.outputs = { "Derived/Meshes/rewritten.bmesh" };
 	SaveAt(document, std::filesystem::path(documentPath.toStdString()));
 	SetModified(documentPath, stamp);
 
-	CHECK(cache.Of(source).mesh == QDir(root).filePath("Derived/Meshes/kirk.bmesh"));
+	CHECK(cache.Of(source) == QDir(root).filePath("Derived/Meshes/kirk.bmesh"));
 	CHECK(
-		editor::ImportOutputsOf(root, source).mesh ==
+		editor::MeshOfSource(root, source) ==
 		QDir(root).filePath("Derived/Meshes/rewritten.bmesh"));
 }

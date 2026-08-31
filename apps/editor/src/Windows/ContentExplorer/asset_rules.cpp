@@ -1,7 +1,7 @@
 #include "asset_rules.h"
 
 #include "util/asset_paths.h"
-#include "util/import_outputs.h"
+#include "util/source_mesh.h"
 
 #include <assetlib/Project.h>
 

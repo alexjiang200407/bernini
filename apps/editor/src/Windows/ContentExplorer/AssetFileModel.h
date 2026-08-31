@@ -3,7 +3,7 @@
 #include <QFileSystemModel>
 #include <QHash>
 
-#include "util/import_outputs.h"
+#include "util/source_mesh.h"
 
 class AssetThumbnailCache;
 class StampedPixmapCache;
@@ -87,7 +87,7 @@ private:
 	AssetThumbnailCache* m_Thumbnails      = nullptr;
 	TexturePreviewCache* m_TexturePreviews = nullptr;
 
-	editor::ImportOutputsCache m_ImportOutputs;
+	editor::SourceMeshCache m_SourceMeshes;
 
 	/**
 	 * Subject path -> the source row it illustrates. Only imported sources are in it.

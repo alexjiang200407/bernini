@@ -3,7 +3,7 @@
 #include "Thumbnails/AssetThumbnailCache.h"
 #include "Thumbnails/TexturePreviewCache.h"
 #include "util/asset_paths.h"
-#include "util/import_outputs.h"
+#include "util/source_mesh.h"
 
 #include <QApplication>
 #include <QIcon>
@@ -26,7 +26,7 @@ AssetFileModel::SetTexturePreviews(TexturePreviewCache* previews)
 void
 AssetFileModel::SetDataRoot(const QString& dataRoot)
 {
-	m_ImportOutputs.SetDataRoot(dataRoot);
+	m_SourceMeshes.SetDataRoot(dataRoot);
 	m_SourceForSubject.clear();
 }
 
@@ -72,7 +72,7 @@ AssetFileModel::SubjectOf(const QString& path) const
 	if (!editor::IsImportedSource(path))
 		return path;
 
-	const QString mesh = m_ImportOutputs.Of(path).mesh;
+	const QString mesh = m_SourceMeshes.Of(path);
 	if (!mesh.isEmpty())
 		m_SourceForSubject.insert(mesh, path);
 

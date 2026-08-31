@@ -1,7 +1,7 @@
 #include "util/mesh_drop.h"
 
-#include "util/import_outputs.h"
 #include "util/mime_files.h"
+#include "util/source_mesh.h"
 
 #include <QFileInfo>
 #include <QMessageBox>
@@ -43,7 +43,7 @@ namespace editor
 		if (source.isEmpty())
 			return {};
 
-		return { .mesh = ImportOutputsOf(dataRoot, source).mesh, .source = source };
+		return { .mesh = MeshOfSource(dataRoot, source), .source = source };
 	}
 
 	void

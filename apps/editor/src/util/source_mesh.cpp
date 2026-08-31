@@ -1,4 +1,4 @@
-#include "util/import_outputs.h"
+#include "util/source_mesh.h"
 
 #include "util/asset_paths.h"
 
@@ -18,24 +18,24 @@ namespace editor
 		}
 
 		/**
-		 * The `.bimport` describing `source`, absolute, or empty when `source` is not an imported
-		 * source of this project's.
+		 * The `.bimport` describing the source at `path`, absolute, or empty when it is not an
+		 * imported source of this project's.
 		 *
 		 * Through the key rather than the path: `importDocumentKeyFor` owns the `.glb` -> `.bimport`
 		 * rule, and a key is what it takes -- see STYLE.md § Paths for why the two are not
 		 * interchangeable.
 		 */
 		QString
-		DocumentFor(const QString& dataRoot, const QString& source)
+		DocumentFor(const QString& dataRoot, const QString& path)
 		{
-			if (!IsImportedSource(source) || dataRoot.isEmpty())
+			if (!IsImportedSource(path) || dataRoot.isEmpty())
 				return {};
 
 			const QDir root(dataRoot);
 
 			// A source belonging to another project would otherwise resolve straight back into it;
 			// GetKeyUnder is where that is refused, and where the reason is written down.
-			const QString key = GetKeyUnder(dataRoot, source);
+			const QString key = GetKeyUnder(dataRoot, path);
 			if (key.isEmpty() || key == ".")
 				return {};
 
@@ -53,10 +53,10 @@ namespace editor
 		return path.endsWith(Suffix(assetlib::c_ImportedSourceExtension), Qt::CaseInsensitive);
 	}
 
-	ImportOutputs
-	ImportOutputsOf(const QString& dataRoot, const QString& source)
+	QString
+	MeshOfSource(const QString& dataRoot, const QString& path)
 	{
-		const QString document = DocumentFor(dataRoot, source);
+		const QString document = DocumentFor(dataRoot, path);
 		if (document.isEmpty() || !QFileInfo::exists(document))
 			return {};
 
@@ -65,16 +65,9 @@ namespace editor
 			const assetlib::ImportDocument read =
 				assetlib::loadImportDocument(std::filesystem::path(document.toStdString()));
 
-			const QDir root(dataRoot);
+			const std::string mesh = assetlib::meshOutputOf(read);
 
-			auto outputs = ImportOutputs();
-			if (const std::string mesh = assetlib::meshOutputOf(read); !mesh.empty())
-				outputs.mesh = root.filePath(QString::fromStdString(mesh));
-
-			if (!read.textureDir.empty())
-				outputs.textureDir = root.filePath(QString::fromStdString(read.textureDir));
-
-			return outputs;
+			return mesh.empty() ? QString() : QDir(dataRoot).filePath(QString::fromStdString(mesh));
 		}
 		catch (const std::exception&)
 		{
@@ -84,34 +77,17 @@ namespace editor
 		}
 	}
 
-	QStringList
-	ImportTexturesOf(const QString& dataRoot, const QString& source)
-	{
-		const QString directory = ImportOutputsOf(dataRoot, source).textureDir;
-		if (directory.isEmpty())
-			return {};
-
-		auto found = QStringList();
-		for (const QFileInfo& entry : QDir(directory).entryInfoList(
-				 { QStringLiteral("*") + Suffix(assetlib::c_TextureExtension) },
-				 QDir::Files,
-				 QDir::Name))
-			found.push_back(entry.absoluteFilePath());
-
-		return found;
-	}
-
 	void
-	ImportOutputsCache::SetDataRoot(const QString& dataRoot)
+	SourceMeshCache::SetDataRoot(const QString& dataRoot)
 	{
 		m_DataRoot = dataRoot;
 		m_Entries.clear();
 	}
 
-	ImportOutputs
-	ImportOutputsCache::Of(const QString& source) const
+	QString
+	SourceMeshCache::Of(const QString& path) const
 	{
-		const QString document = DocumentFor(m_DataRoot, source);
+		const QString document = DocumentFor(m_DataRoot, path);
 		if (document.isEmpty())
 			return {};
 
@@ -119,12 +95,12 @@ namespace editor
 		// writes different containers, and the document is what names them.
 		const qint64 stamp = FileStamp(document);
 
-		const auto cached = m_Entries.constFind(source);
+		const auto cached = m_Entries.constFind(path);
 		if (cached != m_Entries.cend() && cached->stamp == stamp)
-			return cached->outputs;
+			return cached->mesh;
 
-		const Entry entry = { ImportOutputsOf(m_DataRoot, source), stamp };
-		m_Entries.insert(source, entry);
-		return entry.outputs;
+		const Entry entry = { MeshOfSource(m_DataRoot, path), stamp };
+		m_Entries.insert(path, entry);
+		return entry.mesh;
 	}
 }
