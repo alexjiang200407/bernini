@@ -149,9 +149,9 @@ namespace bgl
 	void
 	CommandQueue::Flush() noexcept
 	{
-		// NewCommandBuffer autoreleases, and a Flush from ~RenderContext would otherwise leave the
-		// buffer in whatever pool encloses it -- the one Graphics drains after releasing the device
-		// the buffer transitively holds. Committed before the drain, so the driver owns it in flight.
+		// NewCommandBuffer autoreleases, so without a pool of its own the buffer would sit in
+		// whichever one encloses the call -- the pool Graphics holds, which is the whole process.
+		// Committed before the drain, so the driver owns it for the rest of its flight.
 		NS::SharedPtr<NS::AutoreleasePool> pool =
 			NS::TransferPtr(NS::AutoreleasePool::alloc()->init());
 

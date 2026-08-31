@@ -50,9 +50,11 @@ in the pool when it drains than in a `bgl_tests` case that brings a device up an
 - `just run bgl_tests -- "[teardown]"` — the queue's retain count must not scale with the number of
   `Flush` calls. This is the gate, because it is deterministic: unfixed it reports 131 retains after
   128 flushes, one per flush.
-- `just test editor` twenty times with no crash. Weak evidence here rather than the gate: twelve runs
-  on this machine before the fix produced no crash at all, so the rate the issue reports is not one
-  this session could measure against.
+- `just test editor` twenty times. Weak evidence rather than the gate, and it did not come back
+  clean: twelve runs before the fix crashed zero times and twenty after crashed once, through a
+  different release chain, which distinguishes nothing at that rate. That residual is
+  [its own spec](../specs/metal_buffer_release_segfault.md); it is not what this change claims to
+  fix, and the mechanism this change does fix is the one the `[teardown]` case pins.
 
 ## Commits
 

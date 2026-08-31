@@ -294,8 +294,8 @@ if (BUILD_TESTS AND RENDERER_BACKEND STREQUAL "METAL")
 		PUBLIC  ${CMAKE_CURRENT_SOURCE_DIR}/tests
 		PRIVATE
 			${CMAKE_CURRENT_SOURCE_DIR}/src
-			# The backend's own root, because its headers include each other relative to it -- a
-			# Metal-only case reaches into them the way the D3D12 ones reach into d3d12/.
+			# The backend's own root: its headers include each other unprefixed, so a Metal-only
+			# case cannot reach one without it.
 			${CMAKE_CURRENT_SOURCE_DIR}/src/metal
 			${CMAKE_CURRENT_SOURCE_DIR}/tests/src
 			${CMAKE_BINARY_DIR}/generated
