@@ -60,6 +60,35 @@ namespace editor
 	ToPlainFileStem(const QString& name);
 
 	/**
+	 * `path` as a key relative to `root` -- `/`-separated, never climbing out -- or empty when
+	 * `path` does not lie inside `root`. `root` itself answers `"."`, since a directory contains
+	 * itself and a caller that cares can tell the two apart.
+	 *
+	 * **The one statement of "is this inside that."** `QDir::relativeFilePath` answers for a path
+	 * anywhere on the host by climbing out with `../`, and `QDir::filePath` reattaches such a
+	 * result without cleaning it -- so a path outside a root resolves straight back into it, and
+	 * only fails to when a directory along the climb happens not to exist. Every caller that
+	 * compared `startsWith("..")` by hand got a slightly different answer, and one of them
+	 * (`AssetAt`) rejected a folder legitimately named `..hidden`.
+	 *
+	 * Deliberately *not* IsContainedRelativePath below, which answers a different question: that
+	 * one validates a **typed** relative path before it is joined onto a category, so it also
+	 * refuses `:` and a leading separator -- spellings a person can enter and `relativeFilePath`
+	 * cannot return. Applying it here would make a file whose name contains `:` read as outside its
+	 * own root, and one caller of this is the gate on every deletion.
+	 */
+	[[nodiscard]] QString
+	GetKeyUnder(const QString& root, const QString& path);
+
+	/**
+	 * Whether `path` lies inside `root`: GetKeyUnder's answer with the key thrown away, for a caller
+	 * that only asks. One rule, two spellings of it -- a caller that needs the key must not have to
+	 * ask twice, and a caller that does not must not have to write `.isEmpty()` to mean "inside".
+	 */
+	[[nodiscard]] bool
+	IsKeyUnder(const QString& root, const QString& path);
+
+	/**
 	 * Whether `path` is a relative folder that cannot climb out of whatever it is joined onto.
 	 *
 	 * Rejects an absolute path, a leading separator, a drive-relative `D:` -- which
