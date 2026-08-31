@@ -146,6 +146,16 @@ private:
 	void
 	AddTextureNode(const QString& path, const QPointF& scenePos);
 
+	/**
+	 * Offers the textures the source at `source` extracted, and makes a node from the one picked.
+	 *
+	 * A source is not a texture, so it cannot become a node by itself -- an import writes a whole
+	 * folder of them. The menu is the ask, at the point of the drop; a source that extracted none
+	 * says so there rather than in a dialog somewhere else.
+	 */
+	void
+	OfferSourceTextures(const QString& source, const QPointF& scenePos);
+
 	void
 	SaveCurrentMaterial(bool saveAs);
 

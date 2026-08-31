@@ -1,35 +1,13 @@
 #include "Windows/MaterialEditor/MaterialGraphView.h"
 
-#include "util/asset_paths.h"
+#include "Windows/MaterialEditor/graph_drop.h"
 
 #include <QDragEnterEvent>
 #include <QDropEvent>
 #include <QGraphicsItem>
 #include <QGraphicsScene>
 #include <QKeyEvent>
-#include <QMimeData>
 #include <QShowEvent>
-#include <QUrl>
-
-namespace
-{
-	QString
-	FirstTextureUrl(const QMimeData* mime)
-	{
-		if (mime == nullptr || !mime->hasUrls())
-			return {};
-
-		for (const QUrl& url : mime->urls())
-		{
-			if (!url.isLocalFile())
-				continue;
-			const QString file = url.toLocalFile();
-			if (editor::IsTextureFile(file))
-				return file;
-		}
-		return {};
-	}
-}
 
 MaterialGraphView::MaterialGraphView(QWidget* parent) : QtNodes::GraphicsView(parent)
 {
@@ -68,7 +46,7 @@ MaterialGraphView::keyPressEvent(QKeyEvent* event)
 void
 MaterialGraphView::dragEnterEvent(QDragEnterEvent* event)
 {
-	if (!FirstTextureUrl(event->mimeData()).isEmpty())
+	if (editor::IsGraphDrag(event->mimeData()))
 	{
 		event->acceptProposedAction();
 		return;
@@ -79,7 +57,7 @@ MaterialGraphView::dragEnterEvent(QDragEnterEvent* event)
 void
 MaterialGraphView::dragMoveEvent(QDragMoveEvent* event)
 {
-	if (!FirstTextureUrl(event->mimeData()).isEmpty())
+	if (editor::IsGraphDrag(event->mimeData()))
 	{
 		event->acceptProposedAction();
 		return;
@@ -90,13 +68,18 @@ MaterialGraphView::dragMoveEvent(QDragMoveEvent* event)
 void
 MaterialGraphView::dropEvent(QDropEvent* event)
 {
-	const QString file = FirstTextureUrl(event->mimeData());
-	if (file.isEmpty())
+	const editor::GraphDrop drop = editor::GraphDroppedOn(event->mimeData());
+	const QPointF           at   = mapToScene(event->position().toPoint());
+
+	if (!drop.texture.isEmpty())
+		Q_EMIT TextureDropped(drop.texture, at);
+	else if (!drop.source.isEmpty())
+		Q_EMIT SourceDropped(drop.source, at);
+	else
 	{
 		QtNodes::GraphicsView::dropEvent(event);
 		return;
 	}
 
-	Q_EMIT TextureDropped(file, mapToScene(event->position().toPoint()));
 	event->acceptProposedAction();
 }

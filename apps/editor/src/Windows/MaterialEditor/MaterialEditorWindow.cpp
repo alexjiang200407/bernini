@@ -3,6 +3,7 @@
 #include <assetlib/bmesh.h>
 
 #include <QComboBox>
+#include <QCursor>
 #include <QDebug>
 #include <QFileDialog>
 #include <QFileInfo>
@@ -11,6 +12,7 @@
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QLabel>
+#include <QMenu>
 #include <QMessageBox>
 #include <QPointF>
 #include <QPushButton>
@@ -34,12 +36,14 @@
 #include "Windows/MaterialEditor/MaterialGraphScene.h"
 #include "Windows/MaterialEditor/MaterialGraphView.h"
 #include "Windows/MaterialEditor/graph_compiler.h"
+#include "Windows/MaterialEditor/graph_drop.h"
 #include "Windows/MaterialEditor/material_editor_ui.h"
 #include "Windows/MaterialEditor/material_graph.h"
 #include "Windows/MaterialEditor/material_io.h"
 #include "Windows/MaterialEditor/nodes/AlphaTestedMaterialOutputNode.h"
 #include "Windows/MaterialEditor/nodes/MaterialOutputNode.h"
 #include "Windows/MaterialEditor/nodes/TextureNode.h"
+#include "util/import_outputs.h"
 
 namespace
 {
@@ -129,6 +133,12 @@ MaterialEditorWindow::MaterialEditorWindow(QWidget* parent, MaterialEditorWindow
 		&MaterialGraphView::TextureDropped,
 		this,
 		&MaterialEditorWindow::AddTextureNode);
+
+	connect(
+		m_GraphView,
+		&MaterialGraphView::SourceDropped,
+		this,
+		&MaterialEditorWindow::OfferSourceTextures);
 
 	// Model Preview. It renders the editor's shared Scene through a SceneView of its own, so the
 	// geometry pools are sized once (in config.json) rather than split across two scenes.
@@ -540,6 +550,42 @@ MaterialEditorWindow::AddTextureNode(const QString& path, const QPointF& scenePo
 
 	if (auto* texture = model.delegateModel<TextureNode>(nodeId))
 		texture->SetTexturePath(path);
+}
+
+void
+MaterialEditorWindow::OfferSourceTextures(const QString& source, const QPointF& scenePos)
+{
+	if (m_Graphs.Current() < 0)
+		return;
+
+	const QStringList textures =
+		editor::ImportTexturesOf(QString::fromStdWString(m_DataRoot.wstring()), source);
+
+	auto menu = QMenu(this);
+
+	// A disabled row rather than QMenu::setTitle, which a popup shown with exec() never draws: a
+	// title renders only where the menu is somebody else's submenu.
+	menu.addAction(QFileInfo(source).fileName())->setEnabled(false);
+	menu.addSeparator();
+
+	if (textures.isEmpty())
+	{
+		// Named rather than silent: the drop was accepted on the extension alone, so this is the
+		// first point that can know there is nothing to offer.
+		QAction* none = menu.addAction(tr("No textures were extracted"));
+		none->setEnabled(false);
+	}
+
+	for (const QString& texture : textures)
+	{
+		connect(
+			menu.addAction(QFileInfo(texture).fileName()),
+			&QAction::triggered,
+			this,
+			[this, texture, scenePos]() { AddTextureNode(texture, scenePos); });
+	}
+
+	menu.exec(QCursor::pos());
 }
 
 void

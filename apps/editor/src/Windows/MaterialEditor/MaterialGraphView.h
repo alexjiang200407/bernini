@@ -20,6 +20,15 @@ Q_SIGNALS:
 	void
 	TextureDropped(const QString& path, const QPointF& scenePos);
 
+	/**
+	 * An imported source was dropped at `scenePos` in graph coordinates.
+	 *
+	 * Separate from TextureDropped because it is not an answer: the view has no project, so which
+	 * textures the source extracted -- and how they are offered -- is the window's to decide.
+	 */
+	void
+	SourceDropped(const QString& path, const QPointF& scenePos);
+
 protected:
 	/**
 	 * Shows the view without re-framing the scene, which is what the base class does here.
