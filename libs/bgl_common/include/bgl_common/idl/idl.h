@@ -22,6 +22,7 @@
 #include <bgl_common/idl/RecordHeader.h>
 #include <bgl_common/idl/Rig.h>
 #include <bgl_common/idl/SkinnedBone.h>
+#include <bgl_common/idl/SkinnedLegChain.h>
 #include <bgl_common/idl/SkinnedState.h>
 #include <bgl_common/idl/SkinnedTableState.h>
 #include <bgl_common/idl/Submesh.h>
