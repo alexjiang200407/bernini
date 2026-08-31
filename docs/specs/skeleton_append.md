@@ -12,7 +12,7 @@ remap lands.
 A clip set and a skinned mesh both address their skeleton by **bare bone index**, and a wrong
 index is undetectable from the pose it produces. The guard is `skeletonSignature`
 ([libs/assetlib/src/skeleton.cpp](../../libs/assetlib/src/skeleton.cpp), `:18-27`): a hash over
-every bone's **name and parent, in order**. A `.banim` (and a `.bvat`) records the signature of
+every bone's **name and parent, in order**. A `.banim` records the signature of
 the rig it was cooked against, and a clip set whose signature differs is refused at load —
 `AssetManager` throws *"was cooked against a different version of '…'"*
 ([libs/gamelib/src/AssetManager.cpp](../../libs/gamelib/src/AssetManager.cpp), `~:498`). A
@@ -94,8 +94,8 @@ Properties worth keeping when building it:
   exactly what keeps it playing. That residual case is the strongest reason to build this even
   after that model lands. An explicit rewrite (`migrate`) may bake the remapped indices down, at
   which point the stored signature updates and the fast path returns.
-- Consumers that bake indices downstream must be audited when this is built: the VAT bake and the
-  posed-bounds measurement both walk bones by index, and a remap must land *before* they read.
+- Consumers that bake indices downstream must be audited when this is built: the posed-bounds
+  measurement walks bones by index, and a remap must land *before* it reads.
 
 ## Non-goals
 

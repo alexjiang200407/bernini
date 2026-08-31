@@ -6,7 +6,6 @@
 #include <assetlib_structs/BEnv.h>
 #include <assetlib_structs/BMaterial.h>
 #include <assetlib_structs/BMesh.h>
-#include <assetlib_structs/BVat.h>
 #include <assetlib_structs/Skeleton.h>
 
 #include "RefsSandbox.h"
@@ -78,16 +77,6 @@ TEST_CASE("The store writes exactly what the codec encodes", "[codec]")
 		CheckStoreWritesCodecBytes(animations, "a.banim");
 	}
 
-	SECTION("bvat")
-	{
-		// Payloads, not a default: the codec refuses an empty pair outright, since that is
-		// what a tables-only read leaves behind and writing it back would silently lose the texels.
-		BVat vat;
-		vat.positionsKtx2 = { std::byte{ 1 }, std::byte{ 2 } };
-		vat.normalsKtx2   = { std::byte{ 3 }, std::byte{ 4 } };
-		CheckStoreWritesCodecBytes(vat, "a.bvat");
-	}
-
 	SECTION("bsky")
 	{
 		BSky sky;
@@ -148,7 +137,6 @@ TEST_CASE("The container table is the only list", "[codec]")
 		CHECK(containerKindFor(AssetType::kMesh).IsCacheEntry());
 		CHECK(containerKindFor(AssetType::kSkeleton).IsCacheEntry());
 		CHECK(containerKindFor(AssetType::kAnimation).IsCacheEntry());
-		CHECK(containerKindFor(AssetType::kVat).IsCacheEntry());
 		CHECK(containerKindFor(AssetType::kSky).IsCacheEntry());
 		CHECK(containerKindFor(AssetType::kEnvLighting).IsCacheEntry());
 

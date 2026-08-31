@@ -1,6 +1,7 @@
 #pragma once
 #include "idl/idl.h"
 #include "resource/ResourceManager.h"
+#include "scene/BonePaletteBuffer.h"
 #include "scene/ComputeBuffer.h"
 #include "scene/EntryBuffer.h"
 #include "scene/NamedBuffer.h"
@@ -20,10 +21,9 @@ namespace bgl
 	class FrameGraph;
 
 	/**
-	 * One live geom. Every geom has a submesh range; a kVatMesh one additionally owns its VatGeom
-	 * entry (whose Range fields name the clip and column ranges DeleteGeom frees) and a kSkinnedMesh
-	 * one its SkinnedGeom entry (naming the bone, sample and clip ranges). Both record their clip
-	 * count for instance-creation validation.
+	 * One live geom. Every geom has a submesh range; a kSkinnedMesh one additionally *names* a rig it
+	 * shares with every other geom skinned to it, and records its clip count for instance-creation
+	 * validation.
 	 *
 	 * Namespace-scope rather than nested in Scene: a nested class's default member initializers
 	 * only resolve once the enclosing class is complete, which would leave this
@@ -32,10 +32,41 @@ namespace bgl
 	struct GeomRecord
 	{
 		idl::RangeWithCount submeshes;
-		core::slot_handle   vatGeom;
-		core::slot_handle   skinnedGeom;
-		uint32_t            clipCount = 0;
-		uint32_t            boneCount = 0;  // kSkinnedMesh only
+
+		// kSkinnedMesh only: the rig this geom poses from, shared rather than owned -- deleting the
+		// geom releases its use of the rig, never the rig's ranges.
+		core::slot_handle rig;
+
+		uint32_t clipCount = 0;
+		uint32_t boneCount = 0;  // kSkinnedMesh only
+	};
+
+	/**
+	 * The CPU half of a rig: what creating an instance needs without reading back the GPU record,
+	 * and the count that decides whether the rig may be deleted.
+	 *
+	 * Namespace-scope for the same reason as GeomRecord above.
+	 */
+	struct RigMeta
+	{
+		uint32_t boneCount = 0;
+		uint32_t clipCount = 0;
+
+		// Frames across every clip, which sizes the bone anim table and is the fill's group count.
+		uint32_t frameCount = 0;
+
+		// Geoms added against this rig. DeleteRig refuses while it is nonzero: a geom outliving its
+		// rig would pose from freed ranges, which is a read of whatever lands there next rather
+		// than a misrender.
+		uint32_t useCount = 0;
+
+		// The rig's slice of the scene's bone anim table arena, null until something asks for one.
+		// Held here as well as on the GPU record because freeing it needs the allocator's handle.
+		core::multi_slot_handle boneAnimTable;
+
+		// Whether that slice holds a filled pose. False while one is allocated but unwritten -- on
+		// the first request, and again after a growth, which discards what the arena held.
+		bool tableFilled = false;
 	};
 
 	class Scene : public core::RefCounter<IScene>
@@ -117,10 +148,50 @@ namespace bgl
 		}
 
 		[[nodiscard]] auto&
-		GetSkinnedGeomBuffer() noexcept
+		GetRigBuffer() noexcept
 		{
-			return m_SkinnedGeoms;
+			return m_Rigs;
 		}
+
+		[[nodiscard]] const BonePaletteBuffer&
+		GetBoneAnimTables() const noexcept
+		{
+			return m_BoneAnimTables;
+		}
+
+		/** One rig whose bone anim table is allocated but not yet written. See PendingRigFills. */
+		struct RigFill
+		{
+			uint32_t rigIndex;
+			uint32_t frameCount;
+		};
+
+		/**
+		 * Sweeps the rigs RigFramesPass must fill this frame: those asked for since the last fill,
+		 * plus every filled one when a growth discarded the arena. Empty on almost every frame.
+		 *
+		 * Swept rather than maintained because a scene holds a handful of rigs, and a list kept
+		 * incrementally would have to be right about every path that allocates, grows or deletes one.
+		 */
+		[[nodiscard]] std::span<const RigFill>
+		PendingRigFills();
+
+		/**
+		 * Marks every rig the last PendingRigFills named as holding a pose.
+		 *
+		 * @pre the dispatches it named have been recorded.
+		 */
+		void
+		MarkRigFillsRecorded() noexcept;
+
+		/**
+		 * Gives `rig` a bone anim table, and queues it to be filled. Idempotent: a rig that already
+		 * holds a filled table is left alone.
+		 *
+		 * @throws SceneError if the handle is null or deleted, or the arena cannot grow.
+		 */
+		void
+		RequestBoneAnimTable(RigHandle rig);
 
 		[[nodiscard]] auto&
 		GetSkinnedBoneBuffer() noexcept
@@ -164,23 +235,15 @@ namespace bgl
 			core::slot_handle record;
 			uint32_t          clipCount = 0;
 
-			// Bones the rig carries, which is what sizes an instance's palette. 0 on a VAT geom: its
-			// pose is fetched, not composed, so nothing on that path needs a bone count.
+			// Bones the rig carries, which is what sizes an instance's palette.
 			uint32_t boneCount = 0;
 		};
-
-		[[nodiscard]] AnimGeomInfo
-		GetGeomVatInfo(uint32_t index) const noexcept
-		{
-			const GeomRecord& geom = m_Geoms[index];
-			return { geom.vatGeom, geom.clipCount };
-		}
 
 		[[nodiscard]] AnimGeomInfo
 		GetGeomSkinnedInfo(uint32_t index) const noexcept
 		{
 			const GeomRecord& geom = m_Geoms[index];
-			return { geom.skinnedGeom, geom.clipCount, geom.boneCount };
+			return { geom.rig, geom.clipCount, geom.boneCount };
 		}
 
 		/**
@@ -281,27 +344,19 @@ namespace bgl
 		AddStaticMeshGeom(PreparedStaticMesh mesh, std::span<const MaterialHandle> materials)
 			override;
 
-		GeomHandle
-		AddVatMeshGeom(
-			std::span<const VatVertex> verts,
-			std::span<const uint32_t>  indices,
-			const VatGeomDesc&         desc,
-			MaterialHandle             material) override;
+		RigHandle
+		AddRig(const assetlib::Skeleton& skeleton, const assetlib::AnimationSet& animations)
+			override;
 
-		GeomHandle
-		AddVatMeshGeom(
-			const assetlib::BMesh&          mesh,
-			uint32_t                        meshIndex,
-			std::span<const MaterialHandle> materials,
-			const VatGeomDesc&              desc) override;
+		void
+		DeleteRig(RigHandle rig) override;
 
 		GeomHandle
 		AddSkinnedMeshGeom(
 			const assetlib::BMesh&          mesh,
 			uint32_t                        meshIndex,
 			std::span<const MaterialHandle> materials,
-			const assetlib::Skeleton&       skeleton,
-			const assetlib::AnimationSet&   animations,
+			RigHandle                       rig,
 			const assetlib::Bounds&         posedBounds) override;
 
 		TextureAssetHandle
@@ -350,22 +405,15 @@ namespace bgl
 			const std::optional<glm::vec4> boundingSphere = std::nullopt);
 
 		/**
-		 * AddStaticMeshGeom's body, with the one knob VAT needs: `sphereOverride` replaces every
-		 * submesh's cooked bounding sphere, because a VAT submesh's bind-pose bounds do not hold
-		 * once its clips move it.
+		 * AddStaticMeshGeom's body, with the one knob an animated geom needs: `sphereOverride`
+		 * replaces every submesh's cooked bounding sphere, because a posed submesh's bind-pose
+		 * bounds do not hold once its clips move it.
 		 */
 		GeomHandle
 		AddPreparedMesh(
 			PreparedStaticMesh              mesh,
 			std::span<const MaterialHandle> materials,
 			const std::optional<glm::vec4>  sphereOverride);
-
-		/**
-		 * Refuses a VatGeomDesc whose textures are not live scene assets, whose clip table is
-		 * empty, or that carries a zero-frame clip.
-		 */
-		void
-		ValidateVatDesc(const VatGeomDesc& desc) const;
 
 		/**
 		 * Refuses a rig the pose pass could not walk or address: no bones, a `parent` that is not
@@ -383,26 +431,11 @@ namespace bgl
 			const assetlib::AnimationSet& animations);
 
 		/**
-		 * AttachVatRecords' counterpart: allocates the bone, sample and clip ranges plus the
-		 * SkinnedGeom record onto `base` and flips it to kSkinnedMesh. On any failure the geometry
-		 * half is taken back down (DeleteGeom) so a failed skinned add leaks nothing.
+		 * The live rig `rig` names, or nullptr if the handle is null or already deleted. The
+		 * pointer is into the entry buffer's metadata and is invalidated by the next AddRig.
 		 */
-		GeomHandle
-		AttachSkinnedRecords(
-			GeomHandle                    base,
-			const assetlib::Skeleton&     skeleton,
-			const assetlib::AnimationSet& animations);
-
-		/**
-		 * The tail AddVatMeshGeom and AddVatMeshGeom share: allocates the clip and column ranges plus the
-		 * VatGeom record onto `base` and flips it to kVatMesh. On any failure the geometry half is
-		 * taken back down (DeleteGeom) so a failed VAT add leaks nothing.
-		 */
-		GeomHandle
-		AttachVatRecords(
-			GeomHandle                base,
-			const VatGeomDesc&        desc,
-			std::span<const uint32_t> columnBases);
+		[[nodiscard]] RigMeta*
+		FindRig(RigHandle rig) noexcept;
 
 		/**
 		 * Sizes every GPU-mirrored buffer to its SceneDesc starting point.
@@ -429,7 +462,7 @@ namespace bgl
 		SceneDesc   m_Desc;
 		std::string m_NamePrefix;
 
-		// One entry per live geom: where its submeshes sit in m_SubmeshBuffer, plus the kVatMesh extras.
+		// One entry per live geom: where its submeshes sit in m_SubmeshBuffer, plus the animated extras.
 		// The slot generation is what makes a GeomHandle expire when its geom is deleted (see
 		// IsGeomAlive).
 		core::slot_vector<GeomRecord> m_Geoms;
@@ -459,12 +492,16 @@ namespace bgl
 		// buffer of the same element type would only be two things to grow.
 		RangeBuffer<idl::Clip> m_Clips;
 
-		EntryBuffer<idl::VatGeom> m_VatGeoms;
-		RangeBuffer<uint32_t>     m_VatColumns;
+		EntryBuffer<idl::Rig, RigMeta> m_Rigs;
+		RangeBuffer<idl::SkinnedBone>  m_SkinnedBones;
+		RangeBuffer<idl::BoneSample>   m_BoneSamples;
 
-		EntryBuffer<idl::SkinnedGeom> m_SkinnedGeoms;
-		RangeBuffer<idl::SkinnedBone> m_SkinnedBones;
-		RangeBuffer<idl::BoneSample>  m_BoneSamples;
+		// Every rig's posed frames, written by RigFramesPass and read by the crowd tier's mesh
+		// shader. The same storage-plus-offset-allocator the per-view palette uses, and it discards
+		// on growth for the same reason -- but a table is written once rather than every frame, so
+		// a growth re-queues every rig holding one instead of being free.
+		BonePaletteBuffer    m_BoneAnimTables;
+		std::vector<RigFill> m_PendingRigFills;
 
 		std::array<SamplerHandle, static_cast<size_t>(StandardSampler::kCount)> m_Samplers;
 
@@ -484,10 +521,8 @@ namespace bgl
 			NamedBuffer{ c_VertexDataBufferName, &Scene::m_VertexDataBuffer },
 			NamedBuffer{ c_IndexBufferName, &Scene::m_IndexBuffer },
 			NamedBuffer{ c_MaterialArenaBufferName, &Scene::m_Materials },
-			NamedBuffer{ c_VatGeomBufferName, &Scene::m_VatGeoms },
 			NamedBuffer{ c_ClipBufferName, &Scene::m_Clips },
-			NamedBuffer{ c_VatColumnBufferName, &Scene::m_VatColumns },
-			NamedBuffer{ c_SkinnedGeomBufferName, &Scene::m_SkinnedGeoms },
+			NamedBuffer{ c_RigBufferName, &Scene::m_Rigs },
 			NamedBuffer{ c_SkinnedBoneBufferName, &Scene::m_SkinnedBones },
 			NamedBuffer{ c_BoneSampleBufferName, &Scene::m_BoneSamples },
 		};

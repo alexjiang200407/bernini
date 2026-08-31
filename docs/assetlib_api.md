@@ -59,7 +59,7 @@ when this doc disagrees, trust the header, then fix this doc.
 
 * **Two container regimes, and the split is authored-vs-derived.** `.bmaterial`, `.benv` and
   `.bimport` are canonical-JSON text documents, unknown keys preserved on round-trip; `.bmesh`,
-  `.bskel`, `.banim`, `.bvat`, `.bsky` and `.benvl` are cache entries — a frozen header carrying
+  `.bskel`, `.banim`, `.bsky` and `.benvl` are cache entries — a frozen header carrying
   the cache key (bake token, source stamp, parameter hash, source mount key) over schema-less
   chunks. A key mismatch is a cache miss that regenerates, never a conversion.
   [docs/asset_containers.md](docs/asset_containers.md)
@@ -126,7 +126,6 @@ is what a caller reaches for only when it holds bytes no store addresses, which 
 | `.bmesh` | Geometry, meshlets, node hierarchy, material paths, skeleton path. Editing one is [bmesh.h](libs/assetlib/include/assetlib/bmesh.h). |
 | `.bmaterial` | Factors, the baked triplet, the per-channel routing table |
 | `.bskel` / `.banim` | A rig; clip samples resampled against it. Split because a rig outlives its clips. |
-| `.bvat` | A baked position/normal texture pair and its tables. Derived, never committed. |
 | `.bsky` / `.benvl` / `.benv` | Backdrop; the lighting pair convolved from it; the few bytes naming both. [docs/envmaps.md](docs/envmaps.md) |
 | `.bimport` | One per copied source under `Authored/Meshes/`: the bindings and parameters an import was authored with, as text. What a stale cache entry re-cooks from. Its struct is [import_document.h](libs/assetlib/include/assetlib/import_document.h). |
 | `.bpak` | The archive the rest are packed into — not a codec, since nothing references one. [pak.h](libs/assetlib/include/assetlib/pak.h). [docs/archives.md](docs/archives.md) |
@@ -138,7 +137,6 @@ is what a caller reaches for only when it holds bytes no store addresses, which 
 | Import from glTF | [bmesh_gltf.h](libs/assetlib/include/assetlib/bmesh_gltf.h), [asset_import.h](libs/assetlib/include/assetlib/asset_import.h) | Decode, then write the files an import produces — with a rollback for a cancelled one. |
 | Material bake | [material_bake.h](libs/assetlib/include/assetlib/material_bake.h) | Composites routes down to the baseColor/normal/orm triplet. |
 | Environment bake | [envmap.h](libs/assetlib/include/assetlib/envmap.h) | One header, in pipeline order: `.hdr` → the convolutions → the shipping RGB9E5 maps. |
-| VAT bake | [vat_bake.h](libs/assetlib/include/assetlib/vat_bake.h) | A rig's clips baked to textures. [docs/vat.md](docs/vat.md) |
 | Pose and CPU skinning | [skinning.h](libs/assetlib/include/assetlib/skinning.h) | Deliberately the unoptimised reference every GPU path is diffed against. [docs/skinning.md](docs/skinning.md) |
 | Images | [image_io.h](libs/assetlib/include/assetlib/image_io.h) | KTX2 encode/decode, RGB9E5 pack. [docs/asset_standards.md](docs/asset_standards.md) |
 | Texture refresh | `AssetStore::WriteTextures` / `GetStaleImportedTextureSources` / `RefreshImportedTextures` ([AssetStore.h](libs/assetlib/include/assetlib/AssetStore.h)) | Extract an import's textures, and re-extract them when the source has moved -- the one part of a group the load-time seam skips. |
@@ -164,7 +162,7 @@ flowchart TD
 
     STORE --> GRAPH["AssetRefGraph::Scan"]
     GRAPH --> PLAN["DeletionPlan / RenamePlan"]
-    STORE --> BAKE["BakeVat, Pack, FindUnusedBakedTextures"]
+    STORE --> BAKE["Pack, FindUnusedBakedTextures"]
 
     CLI["assetlib_cli"] --> STORE
     ED["apps/editor"] --> STORE
@@ -206,9 +204,6 @@ The dotted edge is the asymmetry: reads go through the store, writes go around i
   overlay.
 * **`StampOf`** — an absent path yields a **zeroed** stamp, which never compares equal to a real
   one. A missing source therefore reads as *stale*, not as unchanged.
-* **`Describe(const BVat&)`** — `@pre` pass the tables-only form from `LoadVatTables`. Nothing in
-  it reads a texel, and a whole-project survey must not pay for them.
-
 ### Containers
 * **`Save<BMesh>`** — `@throws` if the mesh carries joint indices but names no skeleton. Refused
   at write time because nothing reading the file afterwards can tell a joint index that resolves
@@ -226,8 +221,7 @@ The dotted edge is the asymmetry: reads go through the store, writes go around i
 
 ### Reference graph
 * **`AssetRefGraph::Scan`** — `@throws` if a *referrer* cannot be read, deliberately: an edge we
-  cannot see is an edge we would delete through. A `.bvat` that cannot be read is **skipped**
-  instead, because its edges can only ever route to `derived`.
+  cannot see is an edge we would delete through.
 * **`planDeletion` on a directory** — a directory is held only by an edge reaching *into* it
   from outside, and takes everything beneath it. Whether it is a directory the *project* needs is
   not a question this can answer; `Project::IsRequiredDirectory` is.

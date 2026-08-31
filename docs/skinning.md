@@ -1,9 +1,10 @@
-# Skinned Meshes — a rig posed on the GPU and drawn from its palette
+# Skinned Meshes — a rig posed on the GPU, and drawn from a palette or a table
 
-The runtime half of animation: a rig's bones and clips upload with its mesh, a compute pass poses
-every instance into a bone palette each frame, and the mesh shader blends the bind-pose vertices by
-it. The other tier, [VAT](docs/vat.md), fetches a *baked* pose from a texture pair instead; the two
-share a clip table and a clock and differ only in where a pose comes from.
+The runtime half of animation: a rig's bones and clips upload once, a pose is computed on the GPU,
+and the mesh shader blends the bind-pose vertices by it. Where that pose comes from is the
+instance's choice — a palette a compute pass fills for it every frame, or its rig's bone anim table,
+posed once and shared by every instance on that rig. The two share a clip table and a clock, and
+differ only in where a pose comes from.
 
 **This document is a map, not a mirror.** It records the design choices and the contracts that are
 not obvious from a signature. The headers linked below are the source of truth.
@@ -19,8 +20,7 @@ not obvious from a signature. The headers linked below are the source of truth.
   instance, one thread per bone.
 
 * **`RenderJob::time` is the only per-frame input.** An instance is spawned with `{clip, phase, rate}`
-  and never touched again — the same bargain VAT makes, and deliberately the same three fields
-  (`bgl::SkinnedInstanceDesc` beside `bgl::VatInstanceDesc`), so a unit can move between tiers without
+  and never touched again, whichever source it draws from, so a unit can move between them without
   its playback record being rewritten. `rate = 0` holds a pose under any clock.
 
 * **The previous pose is re-evaluated, not remembered.** Motion vectors need last frame's pose. Rather
@@ -36,6 +36,113 @@ not obvious from a signature. The headers linked below are the source of truth.
   [Temporal Antialiasing](docs/taa.md)); what that buys is one unaccumulated frame instead of a
   ghost. A *blend* between clips has no such edge to hang off, and whoever adds a state machine
   owns it.
+
+* **A rig is a scene object, not part of a geom.** A skeleton and its clips upload once through
+  `IScene::AddRig` and every geom skinned to them names the handle. A modular unit — a body cut into
+  slots with swappable armour, each slot its own mesh on one skeleton — is several geoms sharing one
+  bone table and one sample pool, where a per-geom upload would hold as many copies of the rig as the
+  unit has parts. `gamelib` keys the share on the normalized `.banim` path, because a clip set names
+  its own skeleton and so the two are one choice. `AssetManager::AcquireRig` is **private** and
+  `AcquireSkinnedMesh` keeps its signature: a public one would be a second handle every caller holds
+  and releases for a share the manager can make itself. When attachments need a rig by handle, that
+  door opens then.
+
+  **The rig outlives its geoms, and `bgl` enforces that rather than trusting it.** `DeleteRig`
+  refuses while any geom still names the rig: a geom left pointing at freed bone and sample ranges
+  does not misrender, it poses from whatever lands in them next. So the caller deletes geoms first —
+  `AssetManager` does it in that order, and reference-counts the rig so the last geom takes it down.
+
+* **A rig's every frame can be posed once instead of per instance, into a bone anim table.**
+  `RigFramesPass` runs the same walk over every frame of a rig's clip set and writes the result to
+  `Rig.boneAnimTable`; an instance drawing from it then reads a pose rather than computing one, which
+  is what takes the crowd tier's per-unit cost to nothing. The walk itself is shared rather than
+  reimplemented — [pose_walk.slang](libs/bgl/shaders/src/lib/anim/pose_walk.slang) is what both kernels call,
+  so the two producers cannot drift.
+
+  **It is addressable by (clip, frame, bone) from any consumer**, not private to the mesh shader
+  that reads it today: bone `b` of global frame `f` sits at
+  `boneAnimTable.GetStart() + (f * boneCount + b) * cFloat4sPerBone`. Nothing else wants it yet.
+  Attachments will — a prop following a hand needs that bone's matrix at that frame — and a table
+  reachable only from one shader would foreclose them for no saving.
+
+  **It is filled on demand, not at upload.** A rig no crowd instance is ever spawned on never pays
+  for one, which matters because the table is the size of the sample pool it is derived from: 68 MiB
+  for a 663-bone rig with 2,254 frames, against ~9 MiB for a 60-bone crowd rig with 3,000. Reserving
+  it is the cost — a device allocation, ~67 ms at that size, which is the one thing `bgl` opens a
+  Tracy zone for ([docs/profiling.md](profiling.md)). The posing is a dispatch of one workgroup per
+  frame and does not register against a frame at that scale.
+
+  **A growth of the arena re-queues every rig holding a table.** The storage is a
+  `BonePaletteBuffer`, which discards on growth — safe for the per-view palette, which is rewritten
+  every frame, and not for a table written once. Offsets survive a growth, so what a re-queue costs
+  is the posing, not a re-allocation.
+
+* **The crowd tier is the standard one, with two deliberate departures.** Posing a rig's every
+  frame once and having instances read it is Unreal's AnimToTexture in its *Bone* mode — the City
+  Sample crowd — and Unity's Animation Instancing. Both were built for the same problem, and the
+  reason to follow them is the same one that motivated this feature: what a crowd instance reads is
+  a **bone matrix**, so several slot meshes can share one pose and a unit's armour becomes a
+  wardrobe rather than a re-bake.
+
+  Where we differ, and why:
+
+  - **The table is a GPU buffer in the palette's three-rows-a-bone layout, not a texture.** Unreal
+    stores it as a texture because its consumer is a material graph. Ours is
+    [skinned_vertex.slang](libs/bgl/shaders/src/lib/forward/skinned_vertex.slang), which already reads a
+    palette in exactly that layout, and every read is an exact row — there is nothing for a sampler
+    to do.
+  - **It is filled on the GPU at load, not baked offline.** Unreal and Unity bake because they have
+    no hierarchy walk available at load time; we do (`PoseRigFrames` runs the same `pose_walk` the
+    per-instance pass runs). Baking would mean a container, a staleness rule, bake-on-demand,
+    `pack`'s re-bake and an editor bake dialog — roughly 1,500 lines, all of it caching what one
+    dispatch regenerates — plus a CPU pose evaluator obliged to agree with the GPU one. It cost
+    exactly that machinery to retire VAT, which was that design.
+
+  The cost of the second is real and worth stating: there is no CPU-readable palette on disk.
+  `assetlib::poseModelTransforms` serves anything that needs a pose on the CPU.
+
+* **The pose source is a property of the instance, not of the geom.** `SkinnedInstanceDesc::source`
+  chooses: `kPerInstance` gets a palette slice `SkinnedPosePass` fills every frame — the hero tier,
+  and the only source a per-unit blend, mask or IK can ever vary — while `kBoneAnimTable` reads the
+  rig's table and allocates nothing. One geom serves both, so two instances of one mesh may draw
+  from different sources in the same frame, and a unit changes tier by respawning rather than by
+  being re-uploaded.
+
+  **The source is the kind of playback record the placement holds**, and nowhere else. A hero
+  instance gets an `idl::SkinnedState`, a crowd one an `idl::SkinnedTableState` — the same
+  `{rig, clip, phase, rate}` and no palette, because the pose it draws is the rig's and belongs to no
+  instance. The mesh shader reads the arena's `RecordHeader` to know which, which is what that header
+  is for: the alternative, one record kind with the palette left null and the branch reading the
+  hole, is a second way of saying what the arena already says. What still turns on the palette itself
+  is `SkinnedPosePass`'s dense list, and only because a palette is what that pass writes into.
+
+  **Between two frames the two sources differ, by design.** The pose pass nlerps local rotations and
+  then walks; the table lerps the two frames' finished skin matrices, because skinning is linear in
+  the matrices and one blend per vertex replaces one per attribute. On a whole frame they agree
+  exactly, and on a rotation between frames they do not. What that trade costs was never priced
+  against the cheaper option, which is
+  [docs/specs/crowd_frame_interpolation.md](specs/crowd_frame_interpolation.md).
+
+  **What the table buys is the pose pass, and the number depends on the rig.** 2,000 instances of a
+  64-bone rig six levels deep drew in 1.06 ms/frame against 1.22 posed per instance — about 13%,
+  debug Metal. Three dimensions move that, and two of the three are the rig rather than the mesh:
+  the walk the table removes costs one barrier-synced level per *depth* (the same 64 bones as a
+  chain rather than a tree costs ten times the levels, and measured ≈33% instead of 13%), it costs
+  `instances × bones`, and the per-vertex fetches the table adds cost whatever is drawn. A two-bone
+  rig shows no win at all.
+
+  **Read the 13% as an upper bound.** The fixture's four-vertex strip fetches the same two bones at
+  the same two frames on every instance, so the table's reads are as cache-hot as they ever get; a
+  real crowd — colder reads, heavier units — pays more for them than this measures.
+  `[.posetiming]` in `SkinnedRender_test` is what measures it, and it reports the depth for this
+  reason.
+
+  **The structural argument is the stronger one, and it is not in that number.** The pose pass is
+  dispatched over every skinned instance the view holds, with no visibility or LOD test between —
+  `RebuildPosedList` walks the mesh buffer, and one workgroup runs per entry — so the hero tier pays
+  `instances × bones` for a unit that is off screen, behind the camera or one pixel wide. The
+  table's cost is per vertex *drawn*. A crowd at LOD distance is where the two diverge hardest, and
+  the fixture, with every instance on screen and four vertices each, is where they diverge least.
 
 * **Skinning happens in the mesh shader, not a compute pre-pass.** There is no transient skinned
   vertex buffer: nothing yet needs to *read back* skinned positions (physics, attachments), and until
@@ -113,7 +220,7 @@ not obvious from a signature. The headers linked below are the source of truth.
   "follow it" — and full weight on that bone is exactly what that means in skinning terms. So the
   importer transforms such a mesh's vertices into the rig's space and writes `joints0`/`weights0` for
   it, and the runtime needs no notion of parenting at all: it draws through the skinned path like any
-  other mesh, VAT bakes it, and `posedBounds` measures it. The limit is that the baked transform is
+  other mesh, and `posedBounds` measures it. The limit is that the baked transform is
   per mesh, so a mesh instanced by *two* nodes cannot take one — it keeps its bind pose, as before.
 
 * **A bone's transform is the product of every node between it and its bone parent, at every frame.**
@@ -133,41 +240,33 @@ not obvious from a signature. The headers linked below are the source of truth.
 | Ground | [`assetlib::groundClips`](libs/assetlib/include/assetlib/skinning.h) | At cook, before the boxes: each clip is moved so the lowest point its mesh reaches over it rests on `y = 0` |
 | Bound | [`assetlib::bakePosedBounds`](libs/assetlib/include/assetlib/skinning.h) | At import: sweeps a box per bone through every frame (`posedBounds`) and stores the result in the `.banim`, keyed by a content signature so a re-authored source falls back to measuring |
 | Acquire | [`AssetManager::AcquireSkinnedMesh`](libs/gamelib/include/gamelib/AssetManager.h) | Reads the three containers, checks the clip set still matches its rig, culls by the baked box (`findPosedBounds`) — measuring only a pairing the cook never saw — uploads |
-| Upload | [`IScene::AddSkinnedMeshGeom`](libs/bgl_intfc/include/bgl/IScene.h) | Bones, clip table and sample pool become scene buffers; per-bone depth is derived here |
+| Upload the rig | [`IScene::AddRig`](libs/bgl_intfc/include/bgl/IScene.h) | Bones, clip table and sample pool become scene buffers; per-bone depth is derived here. Once per clip set, not once per mesh |
+| Upload the mesh | [`IScene::AddSkinnedMeshGeom`](libs/bgl_intfc/include/bgl/IScene.h) | The bind-pose submeshes, exactly as the static path uploads them, against a rig handle |
 | Place | [`ISceneView::CreateSkinnedMeshInstance`](libs/bgl_intfc/include/bgl/ISceneView.h) | Writes the playback record and reserves the instance's palette slice |
 | Pose | [`SkinnedPosePass`](libs/bgl/src/passes/SkinnedPosePass.h) | One workgroup per instance: sample, blend, walk the hierarchy, multiply by inverse bind |
 | Draw | `lib/forward/skinned_vertex.slang` | Blends the bind-pose vertex bytes by the palette; position, normal and tangent through one matrix. Entered from `programs/forward/SkinnedMesh.slang`, or from `programs/forward/AnyMesh.slang` where a draw mixes tiers |
 
 ## In the editor
 
-The Animation panel previews a rig through **either** tier, chosen by a "Preview As" selector
-(`AnimationEditorWindow`'s `m_TierSelector`). Both doors hand back a geom and the same clip table, so
-the transport, the clip list and the scrubber are the same code either way — which is the point of
-`RenderJob::time` being the only per-frame input.
+The Animation panel previews a rig through **either** pose source, chosen by a "Preview As"
+selector (`AnimationEditorWindow`'s `m_TierSelector`). It names `bgl::PoseSource` directly rather
+than mirroring it into an editor enum, so the two entries are the two values and there is no mapping
+to keep in agreement beyond the one below.
 
-* **Switching tiers re-loads.** They are different uploads (`#vat` against `#skinned`), so the panel
-  drops its geometry and acquires again rather than swapping a handle. Not a limitation to route
-  around later: a tier is a property of the upload.
+* **Switching sources respawns; it does not re-load.** Both draw one upload, so the panel destroys
+  its animated instances and creates them again against the same geoms — the same destroy-and-recreate
+  a clip switch does, there being no mutate-instance API by design. This is what the pose source
+  being a property of the instance buys — a unit moves between sources without being uploaded twice.
 
-* **Switching *to* VAT can refuse.** The VAT tier draws from a bake, and the panel will not make one
-  unprompted — seconds of the user's time is a decision, not a load step. `game::VatFreshness` asks
-  whether a usable bake exists; anything but `kFresh` stops the load and offers **Bake Now**, and
-  declining leaves the panel on the tier it was already showing. A **Bake VAT** button makes the same
-  bake deliberately, and asks the same question. Both name the size the bake would write before it is
-  written. See [vat.md](docs/vat.md); note this is the *editor's* rule — `AcquireVatMesh` still bakes
-  on demand, which is what loading a level wants.
+* **The selector's mapping is pinned by a test, and has to be.** The two sources draw the same picture
+  at a whole frame — that is the crowd tier working — so a selector wired to the wrong source, or to
+  nothing, looks exactly like a correct one. `AnimationEditorWindow::TierSourceAt` /
+  `TierIndexFor` are what `editor_tests` drives. An index the combo cannot deliver answers with the
+  hero tier, which is what an unset `SkinnedInstanceDesc::source` gives.
 
-* **The tier decides two things, and they live together.** `PlanAnimationLoad` returns them as one
-  `AnimationLoadSteps` so they cannot drift apart: whether the load needs a `.bvat` already baked
-  (the skinned tier does not — a bake is seconds of CPU skinning for a texture pair it never samples),
-  and whether the posed box is read off that bake or measured. Two fields rather than two tests of the
-  source spread through a long function, and the box is the one that punishes drift hardest: it culls
-  the geom as well as framing the camera, so taking it from the wrong place hides the mesh rather than
-  mis-aiming the view. This is the seam `editor_tests` drives; see below.
-
-  **Whether to offer a bake is not one of them.** Both tiers refuse a material that draws unbaked, so
-  the offer follows from `editor::BakeableMaterials` finding one rather than from the source — it was
-  once tier-gated, which left the skinned tier reporting exactly the refusal a bake answers without
+* **Whether to offer a material bake has nothing to do with the source.** Both refuse a material that
+  draws unbaked, so the offer follows from `editor::BakeableMaterials` finding one — it was once
+  tier-gated, which left the skinned tier reporting exactly the refusal a bake answers without
   offering it.
 
 * **The camera opens at a fixed yaw and elevation.** Nothing in the path knows which way a rig faces:
@@ -183,14 +282,12 @@ the transport, the clip list and the scrubber are the same code either way — w
   box and the same reason. The panel reads it off the `.banim`'s bake, and only a pairing the cook
   never measured is walked — inside its loading screen rather than on the render thread.
 
-* **The panel itself is not covered by a test**, and this is a pre-existing gap rather than one the
-  skinned tier introduced: `RenderTargetWindow`'s constructor calls `CreateRenderTarget` with a real
-  `winId()` and `headless = false`, so no test can construct `AnimationPreviewWindow`. What *is*
-  covered is `PlanAnimationLoad` — the tier-dependent decisions lifted clear of the window, which is
-  the shape `apps/editor/CLAUDE.md` prescribes for exactly this. The uncovered part is the toggle, and
-  it has already shipped one bug that every automated gate passed: a tier switch that acquired the
-  geom through the new tier while creating the instance through the old one. A `headless` flag on
-  `RenderTargetWindowDesc` is the seam that closes it.
+* **The panel itself is not covered by a test**, and this is a pre-existing gap: `RenderTargetWindow`'s
+  constructor calls `CreateRenderTarget` with a real `winId()` and `headless = false`, so no test can
+  construct `AnimationPreviewWindow`. What *is* covered is the selector's mapping, lifted clear of the
+  window as `apps/editor/CLAUDE.md` prescribes. The class of bug this once shipped — a tier switch that
+  acquired the geom through one tier and created the instance through the other — is now unreachable
+  rather than untested: there is one acquire and one geom, and the source is a field on the spawn.
 
 ## Risky / Non-obvious Contracts
 
@@ -216,14 +313,13 @@ the transport, the clip list and the scrubber are the same code either way — w
   would otherwise decide which one a clip set names.
 
 * **Culling bounds are the caller's posed box, and `bgl` cannot measure it.** `AddSkinnedMeshGeom`
-  takes one and derives every submesh's sphere from it, the same rule VAT follows. The bind pose is
+  takes one and derives every submesh's sphere from it. The bind pose is
   not a substitute: it stops holding the moment a limb moves, and a clip carrying root motion walks
   the whole rig out of it, so bind-pose culling makes it disappear as soon as it does. Measuring the
   box means reading a vertex's influences, which means
   decoding a vertex layout — `assetlib`, which `bgl` does not link. `assetlib::posedBounds` is that
   walk, and it is paid at **import**:
-  `bakePosedBounds` stores the result in the `.banim`, the way the VAT bake writes
-  `boundsMin`/`boundsMax` into a `.bvat` — one box per rigged mesh entry, because it is that geom's
+  `bakePosedBounds` stores the result in the `.banim` — one box per rigged mesh entry, because it is that geom's
   culling volume and a `.bmesh` may hold two rigged meshes. Each box is keyed by a signature over
   the vertex data and the inverse binds (`posedBoundsSignature`), so a source re-authored since the
   bake simply stops matching. `AcquireSkinnedMesh` reads the bake (`findPosedBounds`) and walks only
@@ -264,8 +360,10 @@ the transport, the clip list and the scrubber are the same code either way — w
   per-frustum cull namespace matches no import, and the pass would be culled and never run. A palette
   is per instance, not per frustum, so posing once serves every frustum the view is culled against.
 
-* **One mesh may be live as static, VAT and skinned at once.** Three keyspaces in the `AssetManager`
-  (`path#index`, `#vat`, `#skinned`), three uploads — which is what lets the editor compare tiers.
+* **One mesh may be live as static and skinned at once.** Two keyspaces in the `AssetManager`
+  (`path#index`, `#skinned`), two uploads. The rig is keyed separately again, on the `.banim` alone,
+  so both uploads of one mesh still share a single skeleton with every *other* mesh cooked against
+  it.
 
 * **`kPBR`, any layer.** Opaque, cutout and hashed all draw an *opaque shape* — they discard rather
   than blend, so their depth is real and nothing has to be sorted — and each is one row of

@@ -84,9 +84,9 @@ and portability.
 - [ ] Motion Vectors
   - [x] Static geometry — an `RG16_FLOAT` velocity buffer written as MRT slot 1 by the forward and
     skybox passes. Instance transforms are immutable, so this is camera motion only; the mesh shader
-    hands the pixel stage both clip positions, which is the seam the skinned and VAT paths extend.
+    hands the pixel stage both clip positions, which is the seam the skinned path extends.
   - [ ] Skinned motion vectors (needs double-buffered bone palette) — hero and near tiers only.
-  - [x] VAT motion vectors — the pose re-evaluated at `prevTime` through the previous
+  - [x] Animated motion vectors — the pose re-evaluated at `prevTime` through the previous
     view-projection, substituted at the mesh-shader seam; real velocity from the first playback PR.
   - [ ] Corpses use the static MV path — the palette is unique but constant, so camera motion only.
   - [ ] TAA
@@ -110,42 +110,28 @@ and portability.
       rejected rather than half-imported), but the shared table export waits on the line above.
     - [x] Editor import writes the rig beside the mesh — the skeleton always, the clips behind the
       *Import animations* box, both rolled back with a failed import.
-  - [ ] Vertex Animation Textures (VAT) — the bake/draw/load core shipped, see
-    [docs/vat.md](docs/vat.md); the lines below the fold are editor tooling and authoring policy still open.
-    - [x] Bake pipeline: resampled clip → position texture (+ normal), unorm-packed in the mesh
-      bounding box — `assetlib_cli bakevat`, one `.bvat` per (rig, clip set) with both textures embedded. The
-      tangent is not baked but rebuilt: bind tangent, shortest arc onto the baked normal, and a
-      twist baked into the normal texture's alpha ([docs/vat.md](docs/vat.md)).
-    - [x] Use one global bounding box across all clips of a rig, or blended samples are meaningless.
-    - [x] **Per-frame skeletal side-channel** — baked bone palette alongside each VAT frame; required
-      for the death handoff, the cavalry saddle transform, and attachments. Baked and tested; no
-      GPU consumer yet.
-    - [x] Motion vectors (see above).
-    - [x] Editor preview — the Animation panel: a rigged mesh's clips resolved and played with
-      full transport (clip list, scrub, step, speed) against its own clock; the `.bvat` hidden as
-      the build product it is. See [docs/vat.md](docs/vat.md).
-    - [ ] Editor viewport playback — VAT instances placed and playing in the level viewport, which
-      needs a clock.
-    - [x] Free inter-frame interpolation — fractional frames blend the two rows they fall between
-      as two `Load`s and a lerp (a mesh-stage sampler breaks Metal's stage binding, and U is
-      always an exact column); the pad row duplicates each clip's end frame to stop bleed, and
-      playback never reaches it -- the upper row index tops out at the clip's last real frame,
-      which on a loop is a repeat of frame 0.
-    - [ ] **In-place bake policy** — a clip authored with travel in the joints bakes that travel
-      into the textures (the coyote's box spans ~130 units), but ground contact and locomotion are
-      the game's: decide whether `bakeVat` subtracts root translation and hands it to gameplay as
-      metadata (`AnimationClip::rootMotion` / `locomotionSpeed` already exist), or authoring simply
-      requires in-place, ground-relative clips. The *vertical* half of this is settled — clips are
-      grounded at cook, above — and what remains is the horizontal travel.
+  - [ ] Crowd tier — instances that own no palette, drawing a pose their rig computed once
+    - [x] Bone anim table — a rig's every frame posed once on the GPU into a buffer the whole rig
+      shares, filled the first time an instance asks for it. Replaced Vertex Animation Textures,
+      which is retired: the table holds bone matrices rather than baked vertices, so a modular unit
+      draws as several slot meshes on one shared pose, and memory scales `bones x frames` per rig
+      rather than `verts x frames` per mesh. See [docs/skinning.md](docs/skinning.md).
+    - [ ] **In-place bake policy** — a clip authored with travel in the joints carries that travel
+      (the coyote's box spans ~130 units), but ground contact and locomotion are the game's: decide
+      whether the cook subtracts root translation and hands it to gameplay as metadata
+      (`AnimationClip::rootMotion` / `locomotionSpeed` already exist), or authoring simply requires
+      in-place, ground-relative clips. The *vertical* half is settled — clips are grounded at cook,
+      above — and what remains is the horizontal travel.
     - [ ] **Bake transitions instead of blending them** — explicit idle→run, run→attack clips as
       ordinary states with exit-time transitions; better motion than a crossfade and memory is cheap.
-    - [ ] Per-vertex masked layering for upper/lower split — a baked vertex mask, near-free, and the
-      one blend VAT does well; align roots at bake time or the upper body floats.
     - [ ] Phase-matched crossfade for unbaked transitions — offline pose-distance table picks matching
       entry frames, since position lerp only holds below ~30–40° of joint difference.
     - [ ] Constraints: no additive layers, no look-at, no IK, no per-unit bone-level variation; hit
-      reactions must be full-body baked clips.
-    - [ ] Tier boundary policy — anything needing those features must sit above the VAT boundary.
+      reactions must be full-body baked clips. The table is the rig's and no instance may write it,
+      which is what forecloses all of them.
+    - [ ] Tier boundary policy — anything needing those features must sit on the per-instance source.
+    - [ ] Editor viewport playback — crowd instances placed and playing in the level viewport, which
+      needs a clock.
   - [ ] Skinned Meshes & Animation — hero tier and the near-distance tier of rank and file
     - [x] Bone palette buffer, GPU-resident, per-instance indexed.
     - [ ] Pose sampling — fixed clip count at compile time, unused slots weighted to zero.
@@ -155,23 +141,24 @@ and portability.
     - [x] Local→model hierarchy walk — workgroup per unit, thread per bone, barrier per depth level,
       group size 64.
     - [ ] GPU skinning (compute) to a transient vertex buffer — hero tier only; everything else skins
-      in the vertex shader or fetches VAT.
+      in the vertex shader.
     - [x] Skinned motion vectors — **not** by double-buffering the palette, which is what this line
       used to call for. The pose pass writes two palettes per instance in one dispatch, at `time`
       and at `prevTime`, and the mesh shader skins both: correct on the first frame and on an
       instance spawned mid-frame, where a history buffer holds garbage. It holds only while time is
       the sole input to a pose — a clip switched between frames reprojects through the wrong clip,
       which is the state machine's problem to own. See [docs/skinning.md](docs/skinning.md).
-    - [ ] Animation preview + playback at different LODs, including the skinned→VAT swap.
-      The editor's Animation panel previews either tier and switches between them by re-loading;
+    - [ ] Animation preview + playback at different LODs, including the pose-source swap.
+      The editor's Animation panel previews either source and switches between them by respawning;
       the runtime LOD swap is what remains.
     - [ ] Bone mask — small per-bone weight array, needed by additive flinch on the skinned tier.
   - [ ] State Machine — flat tables, tiny per-unit interpreter, ticked for all units regardless of
     tier and regardless of visibility.
-    - [ ] VAT units resolve state to a clip index and phase instead of a set of skeletal clips.
+    - [ ] Crowd units resolve state to a clip index and phase instead of a set of skeletal clips.
     - [ ] Mounted handling — rider and mount share clip index and phase.
   - [ ] Skinned-tier only
-    - [ ] Look-at (head + torso, angle clamp) — best liveliness cue per instruction, unavailable on VAT.
+    - [ ] Look-at (head + torso, angle clamp) — best liveliness cue per instruction, unavailable to a
+      shared pose.
     - [ ] Heightfield foot planting — analytic two-bone IK; breaks on stairs and siege structures.
       Note it is not what grounds a clip: the standard solve preserves a foot's animated height
       relative to the root, so on flat ground it corrects by zero. That is cook-side, and done.
@@ -187,19 +174,23 @@ and portability.
   - [ ] Root motion — cosmetic nudge only, never authoritative for position.
   - [ ] Stays on the CPU (hero tier): ragdoll against arbitrary collision, IK against non-heightfield
     geometry, layers beyond the one additive slot, montages, facial/lip sync, variable-depth graphs.
-- [ ] Crowd Variation — one mesh and one clip set means sameness is the primary visual risk; all of it
-  must be deterministic from unit ID so nothing changes at a LOD boundary or on death.
+- [ ] Crowd Variation — a few meshes and one clip set means sameness is the primary visual risk; all
+  of it must be deterministic from unit ID so nothing changes at a LOD boundary or on death.
   - [ ] Per-unit animation phase offset from an ID hash — non-negotiable, or a formation reads as one
     organism; offset clip time and preserve it across state transitions.
   - [ ] Per-unit `playRate` jitter (±3–5%) so units that synchronise don't stay synchronised.
   - [ ] Per-unit uniform scale (±3–4%) and small formation yaw jitter.
-  - [ ] Per-instance submesh mask (helmet, cape, quiver, shield) — bucket by mask alongside LOD.
-  - [ ] Attachment variation as separate instanced draws off the skeletal side-channel bone transform.
+  - [ ] Per-instance submesh mask for small toggles on one mesh — a cape, a quiver — bucketed by
+    mask alongside LOD. The *wardrobe* is not this: a swappable kit is a slot mesh of its own on the
+    shared rig, which is what the crowd tier was built for.
+  - [ ] Attachment variation as separate instanced draws off the rig's bone anim table, which is
+    addressable by (clip, frame, bone) from any consumer for exactly this.
   - [ ] Per-instance material variation — kit index into a texture array plus hue/value jitter, reusing
     the blood parameter struct.
   - [ ] Grime/wear float, ID-hashed, reusing the blood dissolve-mask machinery.
-  - [ ] Texture atlasing — a single mesh means a single material, so kit variation has nowhere else to
-    come from; now on the critical path.
+  - [ ] Texture atlasing — a slot mesh carries its own material, so a kit already varies by
+    construction; this is what is left for variation *within* a slot, and is no longer the only
+    place kit variation can come from.
   - [ ] Not recommended: X-mirroring, since reversed handedness is visible on armed units.
 - [ ] Crowd Simulation & Pathfinding
   - [ ] **Shared-source kernel harness** — one kernel body per pass, compiled as both a Slang entry
@@ -242,8 +233,8 @@ and portability.
   - [ ] Cavalry / mounted units
     - [ ] One agent per mount; the rider is an attachment with no nav, avoidance, or grid entry.
     - [ ] Rider and mount share clip index and phase.
-    - [ ] VAT bake strategy — separate VATs sharing phase plus the saddle transform keeps kits
-      orthogonal; a combined horse+rider bake is simpler but combinatorial.
+    - [ ] Rig strategy — separate rigs sharing phase plus the saddle transform keeps kits
+      orthogonal; a combined horse+rider rig is simpler but combinatorial.
     - [ ] Charge impact — a proximity event gated on relative velocity, with an impulse term.
     - [ ] Agent **type mutation** on mount or rider death (riderless horse, unhorsed rider) — design
       the mutable type index in now, it is painful to retrofit.
@@ -260,8 +251,8 @@ and portability.
 - [ ] Death & Corpses
   - [ ] Three-stage retirement `alive → dying → corpse`; a dying unit leaves grid, nav, avoidance, and
     combat immediately but still runs a solver.
-  - [ ] **VAT→skeletal handoff** — read the pose from the side-channel and switch to the skinned path,
-    since bone transforms cannot be recovered from baked vertices.
+  - [ ] **Crowd→hero handoff** — a dying unit switches to a palette of its own, which the solver
+    needs somewhere to write. The table is the rig's and shared, so it cannot be posed into.
   - [ ] Procedural settle solver — shared angular spring-damper or fixed-iteration PBD, colliding
     against the terrain heightfield only.
     - [ ] Hard timeout (~2 s) with forced settle, or the dying tier becomes unbounded.
@@ -283,17 +274,17 @@ and portability.
   - [ ] Editor LOD generator for static and skinned.
   - [ ] LOD selection on **projected screen size**, not distance, with thresholds authored in pixels.
   - [ ] True Euclidean distance to camera, not view-space Z, or panning makes edge units pop.
-  - [ ] **Role and distance are separate axes** — drive the skinned→VAT switch from screen size with a
-    top-K budget so near units are skinned regardless of rank.
-  - [ ] Hysteresis (~10–20% gap) against per-unit stored LOD, especially at the skinned→VAT boundary.
-  - [ ] Dithered LOD crossfade resolved by TAA; also the mechanism for the skinned→VAT swap.
+  - [ ] **Role and distance are separate axes** — drive the pose-source switch from screen size with a
+    top-K budget so near units are posed per instance regardless of rank.
+  - [ ] Hysteresis (~10–20% gap) against per-unit stored LOD, especially at the pose-source boundary.
+  - [ ] Dithered LOD crossfade resolved by TAA; also the mechanism for the pose-source swap.
   - [ ] Per-tier compaction → indirect args; fixed `maxPerLOD` regions hold until submesh-mask
     variation multiplies the bucket count.
   - [ ] Separate mesh LOD and animation LOD tables driven from the same screen-size value.
   - [ ] Animation ticking and tagging LODs.
-  - [ ] Compute skinning bandwidth — measure palette writes, palette reads, VAT fetches, and the
-    permanent corpse palette read before optimising ALU.
-  - [ ] Test motion vectors across LODs, skinned animation, VAT, corpses, mounts, and both transitions.
+  - [ ] Compute skinning bandwidth — measure palette writes, palette reads, bone anim table fetches,
+    and the permanent corpse palette read before optimising ALU.
+  - [ ] Test motion vectors across LODs, both pose sources, corpses, mounts, and both transitions.
 - [ ] Light and Shadow
   - [ ] Async Compute
   - [ ] Directional Lighting
@@ -301,8 +292,8 @@ and portability.
   - [ ] Ambient / Sky Light
   - [ ] Cascaded Shadow Maps
   - [ ] Static vs. Dynamic Shadow
-  - [ ] Shadow LODs — bias 1–2 tiers coarser, but a unit skinned for the camera must not be VAT for a
-    cascade.
+  - [ ] Shadow LODs — bias 1–2 tiers coarser, but a unit posed per instance for the camera must not
+    read the shared table for a cascade.
 - [ ] Terrain — **missing entirely and load-bearing**: the heightfield feeds the grounded test, foot
   planting, corpse settling, slope cost, and the ground blood field.
   - [ ] Heightfield representation + GPU-sampleable height/normal.
@@ -322,7 +313,8 @@ and portability.
   - [ ] Render Axis
 - [ ] Decals
   - [ ] Material parameters for regular units — a packed `uint32` (amount 8b / dryness 8b /
-    direction 16b) that works identically on VAT, skinned, and corpse tiers with no atlas or projection.
+    direction 16b) that works identically on both pose sources and the corpse tier, with no atlas or
+    projection.
     - [ ] Dissolve threshold against a cavity/AO mask, not a uniform tint.
     - [ ] Bias by world normal (upward faces accumulate) and by hit direction.
     - [ ] Drive roughness and normal, not just albedo; wet→dry via the dryness byte.
@@ -335,14 +327,14 @@ and portability.
   - [ ] LUT
   - [ ] Color Grading
   - [ ] Ambient Occlusion — cost is independent of unit count, and it is the main grounding cue
-    available on the VAT tier.
+    available to a crowd unit.
 - [ ] Weather
   - [x] Sky box (for interiors and editor)
   - [ ] Procedural Atmosphere Shader
   - [ ] Rain & Snow
   - [ ] Wetness (material modification) — one system with two inputs shared with blood; rain should
     also wash blood off.
-  - [ ] Vertex-shader wind on cloth/hair — stateless, works on VAT and corpses.
+  - [ ] Vertex-shader wind on cloth/hair — stateless, works on crowd units and corpses.
 - [ ] Debug & Tooling — **build before the GPU implementations, not after.**
   - [x] GPU-Side Assertions
   - [ ] Focus-unit trace — `g_debugUnit` uniform, tagged ring buffer, pretty-printer; gives one agent's
@@ -357,15 +349,22 @@ and portability.
   - [ ] Optional: a CUDA port of one or two kernels purely for `compute-sanitizer --tool racecheck`.
   - [ ] DRED & Aftermath / Radeon GPU Detective, paired with monotonic breadcrumb markers.
 - [ ] Profiling
-  - [ ] GPU timestamp per pass with on-screen breakdown — FrameGraph feature, same as hashing.
-  - [ ] Live counters: agents alive/dying/corpse split by type, visible per tier, skinned vs VAT against
-    the top-K budget, events vs capacity, slots in use, cells at cap, corpse palette memory.
+  - [ ] GPU timestamp per pass with on-screen breakdown — FrameGraph feature, same as hashing. The
+    RHI has no timestamp query at all today, so nothing in the tree can attribute a cost to one
+    stage; [docs/specs/crowd_frame_interpolation.md](docs/specs/crowd_frame_interpolation.md) is a
+    measurement queued behind this line.
+  - [ ] Live counters: agents alive/dying/corpse split by type, visible per tier, per-instance vs
+    table against the top-K budget, events vs capacity, slots in use, cells at cap, corpse palette
+    memory.
 - [ ] Capacity policy — one table, with clamp-and-report behaviour defined for every entry.
   - [ ] Max agents, max per cell, event buffer size, flow fields resident.
   - [ ] Top-K skinned budget.
   - [ ] Concurrent dying units and solver slots → overflow falls back to canned death clips.
   - [ ] Corpse cap and palette memory ceiling → overflow triggers oldest-first fadeout.
-  - [ ] VAT texture memory — under 50 MB at one humanoid and one equine rig, so budget generously.
+  - [ ] Bone anim table memory — a table is `bones x frames x 48 B` per rig and holds every clip
+    whether or not anything plays it, so the ceiling is authoring plus, later, quantization. A crowd
+    rig under 100 bones and 3,000 frames is under 15 MB; the project's 663-bone hero rig would be 68
+    MiB, which is why a rig gets a table only when a crowd instance spawns on it.
 - [ ] Misc
   - [ ] Texture Atlasing
   - [ ] Editor Build Texture Atlas
@@ -389,10 +388,8 @@ and portability.
   moves to a sparse hash table. Onesweep over the classic three-kernel build.
 - [ ] Corpse pose clustering — cluster settled palettes to K representatives at distance, the escape
   hatch if corpse memory binds.
-- [ ] Baked-palette middle tier — skin from the side-channel palette instead of fetching VAT, for
-  correct blending without pose evaluation; the data already exists.
 - [ ] Saliency-driven LOD - allocate fidelity by attention, not absolute distance. A smoothed autofocus
-  anchor (nearest large object, from an HZB center min-depth reduction) rides the skinned→VAT switch
+  anchor (nearest large object, from an HZB center min-depth reduction) rides the pose-source switch
   distance so an empty foreground upgrades the nearest far subject. Salience-ranked budget (screen size +
   proximity-to-anchor + velocity + center weight) picks the top-K for hero-tier skinning; heavy temporal
   smoothing + dithered LOD crossfades avoid global popping. Shares its focal distance with DOF if added.
@@ -444,8 +441,8 @@ and portability.
     not a list, and unclaimed extensions are counted rather than dropped silently.
   - [x] Ranged reads preserved through the seam — a chunk-table survey reads a few hundred bytes per
     container, not the whole project.
-  - [x] `.bvat` under a read-only mount is trusted rather than re-baked; `pack` bakes stale ones
-    fresh so a shipped archive is correct by construction.
+  - [x] A derived container under a read-only mount is trusted rather than regenerated; `pack`
+    resolves stale ones through the seam so a shipped archive is correct by construction.
   - [ ] Per-entry compression — the format reserves the flag; picking a codec wants a measurement.
   - [ ] `mmap`-backed reads — the alignment is there for it; the seam does not hand out a borrowed
     span yet.

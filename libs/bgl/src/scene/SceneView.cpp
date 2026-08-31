@@ -69,21 +69,20 @@ namespace bgl
 		}
 
 		{
-			// One entry, not m_InitialInstances: most views place no VAT instances at all, and the
-			// arena grows on the first that does.
 			auto playbackDesc = RawBufferDesc();
 
-			// One record of each tier: most views hold no animated placement at all, and the arena
+			// One record of each kind: most views hold no animated placement at all, and the arena
 			// grows on the first that does.
 			playbackDesc.initialBytes =
 				2 * idl::cRawPayloadOffset +
-				static_cast<uint32_t>(sizeof(idl::VatState) + sizeof(idl::SkinnedState));
+				static_cast<uint32_t>(sizeof(idl::SkinnedState) + sizeof(idl::SkinnedTableState));
 
 			// The null record must cover the largest payload as well as its header, so a null
 			// reference reads zeros for a whole record rather than the first live one.
 			playbackDesc.nullRecordBytes =
 				idl::cRawPayloadOffset +
-				static_cast<uint32_t>(std::max(sizeof(idl::VatState), sizeof(idl::SkinnedState)));
+				static_cast<uint32_t>(
+					std::max(sizeof(idl::SkinnedState), sizeof(idl::SkinnedTableState)));
 
 			playbackDesc.debugName = "Playback Arena";
 
@@ -223,50 +222,6 @@ namespace bgl
 	}
 
 	MeshInstanceHandle
-	SceneView::CreateVatMeshInstance(
-		GeomHandle             geom,
-		glm::mat4              transform,
-		const VatInstanceDesc& desc)
-	{
-		if (geom.geomType != GeomType::kVatMesh)
-		{
-			throw SceneError("GeomHandle passed to CreateVatMeshInstance must be of type kVatMesh");
-		}
-
-		if (!m_SceneRaw->IsGeomAlive(geom))
-		{
-			throw SceneError(
-				"GeomHandle passed to CreateVatMeshInstance has expired or is invalid");
-		}
-
-		const Scene::AnimGeomInfo vat = m_SceneRaw->GetGeomVatInfo(geom.handle.index);
-		if (desc.clip >= vat.clipCount)
-		{
-			throw SceneError(
-				"VatInstanceDesc::clip passed to CreateVatMeshInstance is out of "
-				"range for the geom's clip table");
-		}
-
-		auto state  = idl::VatState();
-		state.geom  = vat.record;
-		state.clip  = desc.clip;
-		state.phase = desc.phase;
-		state.rate  = desc.rate;
-
-		const idl::RawEntry record =
-			m_Playback.AddRecord(idl::PlaybackType::kVat, std::as_bytes(std::span(&state, 1)));
-		try
-		{
-			return WritePlacement(geom, transform, record.byteOffset);
-		}
-		catch (...)
-		{
-			m_Playback.Erase(record.byteOffset);
-			throw;
-		}
-	}
-
-	MeshInstanceHandle
 	SceneView::CreateSkinnedMeshInstance(
 		GeomHandle                 geom,
 		glm::mat4                  transform,
@@ -292,21 +247,44 @@ namespace bgl
 				"range for the geom's clip table");
 		}
 
-		// Two palettes, back to back: the pose at `time` and the pose at `prevTime`, which is what
-		// lets the mesh shader write a motion vector without a history buffer.
-		const uint32_t float4s = idl::cFloat4sPerBone * rig.boneCount * 2;
+		// The pose source is which record this placement gets, and nothing else records it: a hero
+		// instance owns a palette the pose pass writes, a crowd one owns no storage at all.
+		auto palette = core::multi_slot_handle();
+		auto record  = idl::RawEntry();
 
-		const core::multi_slot_handle palette = m_Palettes.Allocate(float4s);
+		if (desc.source == PoseSource::kPerInstance)
+		{
+			// Two palettes, back to back: the pose at `time` and the pose at `prevTime`, which is
+			// what lets the mesh shader write a motion vector without a history buffer.
+			palette = m_Palettes.Allocate(idl::cFloat4sPerBone * rig.boneCount * 2);
 
-		auto state    = idl::SkinnedState();
-		state.geom    = rig.record;
-		state.clip    = desc.clip;
-		state.phase   = desc.phase;
-		state.rate    = desc.rate;
-		state.palette = palette;
+			auto state    = idl::SkinnedState();
+			state.rig     = rig.record;
+			state.clip    = desc.clip;
+			state.phase   = desc.phase;
+			state.rate    = desc.rate;
+			state.palette = palette;
 
-		const idl::RawEntry record =
-			m_Playback.AddRecord(idl::PlaybackType::kSkinned, std::as_bytes(std::span(&state, 1)));
+			record = m_Playback.AddRecord(
+				idl::PlaybackType::kSkinned,
+				std::as_bytes(std::span(&state, 1)));
+		}
+		else
+		{
+			// Asked for here rather than at AddRig, so a rig no crowd instance is spawned on never
+			// pays for a table. RigFramesPass fills it before anything reads it this frame.
+			m_SceneRaw->RequestBoneAnimTable(RigHandle{ rig.record });
+
+			auto state  = idl::SkinnedTableState();
+			state.rig   = rig.record;
+			state.clip  = desc.clip;
+			state.phase = desc.phase;
+			state.rate  = desc.rate;
+
+			record = m_Playback.AddRecord(
+				idl::PlaybackType::kSkinnedTable,
+				std::as_bytes(std::span(&state, 1)));
+		}
 		try
 		{
 			const MeshInstanceHandle instance = WritePlacement(geom, transform, record.byteOffset);
@@ -318,7 +296,11 @@ namespace bgl
 		catch (...)
 		{
 			m_Playback.Erase(record.byteOffset);
-			m_Palettes.Free(palette);
+
+			if (palette)
+			{
+				m_Palettes.Free(palette);
+			}
 			throw;
 		}
 	}
@@ -423,10 +405,14 @@ namespace bgl
 		{
 			m_Playback.Erase(meta.animState);
 
-			// The palette and the pose list are the skinned tier's alone; a VAT record owns neither.
+			// A palette and a place in the pose list belong to the per-instance source alone.
 			if (meta.geomType == GeomType::kSkinnedMesh)
 			{
-				m_Palettes.Free(meta.palette);
+				// Null on a crowd instance, whose record owns nothing of its own.
+				if (meta.palette)
+				{
+					m_Palettes.Free(meta.palette);
+				}
 				m_PosedDirty = true;
 			}
 		}
@@ -509,8 +495,10 @@ namespace bgl
 				continue;
 			}
 
+			// Owning a palette is the predicate, not the record's kind: this list is what the pose
+			// pass writes into, so it is exactly the instances that have somewhere for it to write.
 			const MeshMeta& meta = m_MeshBuffer.MetaAt(meshIndex);
-			if (meta.geomType == GeomType::kSkinnedMesh && meta.animState != 0)
+			if (meta.geomType == GeomType::kSkinnedMesh && meta.animState != 0 && meta.palette)
 			{
 				list.push_back(meta.animState);
 			}

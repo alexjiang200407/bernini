@@ -30,7 +30,6 @@ TEST_CASE("every layer of a kPBR material binds to animated geometry", "[pso]")
 	{
 		const auto pbr = Handle(bgl::MaterialType::kPBR, layer);
 
-		CHECK(bgl::AcceptsMaterial(bgl::GeomType::kVatMesh, pbr));
 		CHECK(bgl::AcceptsMaterial(bgl::GeomType::kSkinnedMesh, pbr));
 	}
 }
@@ -39,16 +38,14 @@ TEST_CASE("animated geometry takes no material but kPBR", "[pso]")
 {
 	// No unlit variant to fall back to, so an unnamed material is a refusal rather than the flat
 	// shading a static submesh gets.
-	CHECK_FALSE(bgl::AcceptsMaterial(bgl::GeomType::kVatMesh, bgl::MaterialHandle{}));
 	CHECK_FALSE(bgl::AcceptsMaterial(bgl::GeomType::kSkinnedMesh, bgl::MaterialHandle{}));
 
-	// A loose material routes its channels rather than sampling a baked triplet, and neither
-	// animated geometry stage has a pixel shader that does the routing.
+	// A loose material routes its channels rather than sampling a baked triplet, and the animated
+	// geometry stage has no pixel shader that does the routing.
 	for (const bgl::LayerType layer : c_Layers)
 	{
 		const auto loose = Handle(bgl::MaterialType::kLoosePbr, layer);
 
-		CHECK_FALSE(bgl::AcceptsMaterial(bgl::GeomType::kVatMesh, loose));
 		CHECK_FALSE(bgl::AcceptsMaterial(bgl::GeomType::kSkinnedMesh, loose));
 	}
 
@@ -69,11 +66,6 @@ TEST_CASE("a layer resolves to its own tier's bucket", "[pso]")
 		return GetPsoFromGeomAndMaterial(geom, MaterialType::kPBR, layer);
 	};
 
-	CHECK(pso(GeomType::kVatMesh, LayerType::kOpaque) == PsoType::kOpaque_VatMesh_PBR);
-	CHECK(pso(GeomType::kVatMesh, LayerType::kMask) == PsoType::kAlphaTest_VatMesh_PBR);
-	CHECK(pso(GeomType::kVatMesh, LayerType::kHashed) == PsoType::kHashedAlpha_VatMesh_PBR);
-	CHECK(pso(GeomType::kVatMesh, LayerType::kBlend) == PsoType::kTransparent_VatMesh_PBR);
-
 	CHECK(pso(GeomType::kSkinnedMesh, LayerType::kOpaque) == PsoType::kOpaque_SkinnedMesh_PBR);
 	CHECK(pso(GeomType::kSkinnedMesh, LayerType::kMask) == PsoType::kAlphaTest_SkinnedMesh_PBR);
 	CHECK(pso(GeomType::kSkinnedMesh, LayerType::kHashed) == PsoType::kHashedAlpha_SkinnedMesh_PBR);
@@ -86,8 +78,7 @@ TEST_CASE("only a blended layer leaves the counting sort", "[pso]")
 	// from the depth-sorted list instead, whatever tier it is on. Read off the layer rather than
 	// off a second copy of IsTransparentPso's list, so a tier added without extending that list
 	// fails here.
-	for (const bgl::GeomType geom :
-	     { bgl::GeomType::kStaticMesh, bgl::GeomType::kVatMesh, bgl::GeomType::kSkinnedMesh })
+	for (const bgl::GeomType geom : { bgl::GeomType::kStaticMesh, bgl::GeomType::kSkinnedMesh })
 	{
 		for (const bgl::LayerType layer : c_Layers)
 		{

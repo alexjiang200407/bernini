@@ -6,11 +6,9 @@
 #include <assetlib/RegenMesh.h>
 #include <assetlib/asset_refs.h>
 #include <assetlib/project_layout.h>
-#include <assetlib/vat_bake.h>
 #include <assetlib_structs/Animation.h>
 #include <assetlib_structs/BEnv.h>
 #include <assetlib_structs/BMaterial.h>
-#include <assetlib_structs/BVat.h>
 #include <assetlib_structs/Skeleton.h>
 
 #include <core/err/util.h>
@@ -58,8 +56,8 @@ namespace assetlib
 			return out;
 		}
 
-		// A bake behind its routed source has nowhere to catch up once shipped, the same bind as a
-		// stale `.bvat`. A route that never recorded a source has nothing to be behind (the
+		// A bake behind its routed source has nowhere to catch up once shipped. A route that never
+		// recorded a source has nothing to be behind (the
 		// committed sets predate recording); one whose source is gone fails the bake loudly, which
 		// is the archive's job. Runs over a snapshot taken before the pack walk's own: a bake
 		// writes content-addressed maps, so a re-bake adds files that walk must still see.
@@ -106,52 +104,10 @@ namespace assetlib
 			return rebaked;
 		}
 
-		// A packed .bvat's inputs may ship beside it with nowhere to write a re-bake, so the archive
-		// carries one that is correct at pack time rather than one the runtime has to judge. The
-		// group axis is part of the question: geometry regenerated in memory leaves the disk
-		// stamps untouched, so a bake over a group that is a cache miss is stale however well its
-		// own stamps hold -- shipping it would split the VAT tier from the skinned one.
-		uint32_t
-		rebakeStaleVats(const AssetStore& store, const std::vector<std::filesystem::path>& files)
-		{
-			const core::file::LooseFileSystem loose(store.GetDataRoot());
-
-			uint32_t rebaked = 0;
-			for (const std::filesystem::path& file : files)
-			{
-				if (assetTypeFromExtension(file) != AssetType::kVat)
-					continue;
-
-				// Read whole, not tables alone: a bake from before a format change reads its
-				// tables cleanly and is stale all the same, and only the full read asks for the
-				// chunks the runtime will. The archive copies every byte of it next, so the pixels
-				// cost nothing here that they do not cost anyway.
-				bool fresh = false;
-				try
-				{
-					const BVat vat = store.Load<BVat>(store.KeyFor(file));
-					fresh          = !vatIsStale(vat, loose) && !store.GeometryIsStale(vat.mesh) &&
-					                 !store.GeometryIsStale(vat.skeleton) &&
-					                 !store.GeometryIsStale(vat.animations);
-				}
-				catch (const std::exception&)
-				{}
-				if (fresh)
-					continue;
-
-				const VatRefs refs = loadVatRefs(file);
-				store.Save(
-					store.BakeVat(VatBakeDesc{ refs.mesh, refs.animations }),
-					store.KeyFor(file));
-				++rebaked;
-			}
-			return rebaked;
-		}
-
 		/**
 		 * The bytes the archive will carry for a geometry entry: the seam's answer, serialized.
-		 * One construction, shared by the pack loop and the `.bvat` re-stamp, so the stamps a
-		 * vat records can never drift from the entry the archive actually stores.
+		 * One construction, shared by every asker, so the entry the archive stores cannot drift
+		 * from what a staleness question inside it later reads.
 		 */
 		std::vector<std::byte>
 		currentGeometryBytes(const AssetStore& store, AssetType type, std::string_view key)
@@ -175,7 +131,6 @@ namespace assetlib
 				return AssetCodec<AnimationSet>::Serialize(store.LoadRegenAnimations(key));
 			case AssetType::kMaterial:
 			case AssetType::kTexture:
-			case AssetType::kVat:
 			case AssetType::kSky:
 			case AssetType::kEnvLighting:
 			case AssetType::kEnvironment:
@@ -247,12 +202,10 @@ namespace assetlib
 		report.envsRebaked = rebakeStaleEnvs(*this, filesUnder(dataRoot));
 
 		const std::vector<std::filesystem::path> files = filesUnder(dataRoot);
-		report.vatsRebaked                             = rebakeStaleVats(*this, files);
 
 		const core::file::LooseFileSystem loose(dataRoot);
 
-		// The seam's answer per geometry key, computed once however many askers -- the entry's
-		// own pack, and any `.bvat` stamping against it.
+		// The seam's answer per geometry key, computed once however many askers.
 		ArchivedGeometry archived(*this);
 
 		PakWriter writer(desc.target);
@@ -292,31 +245,6 @@ namespace assetlib
 			case AssetType::kAnimation:
 				regenerated = archived.BytesFor(*type, key);
 				break;
-
-			case AssetType::kVat:
-			{
-				// The bake stamped the files on disk, but the archive stores the seam's answers
-				// for those same keys -- re-stamped here, so a staleness question asked *inside*
-				// the archive still answers fresh. The pixels were made current by
-				// rebakeStaleVats above. A vat whose stamps already describe the archived bytes
-				// -- the ordinary pack, nothing regenerated and nothing rebound -- copies
-				// verbatim rather than paying a decode and a re-encode.
-				BVat vat = Load<BVat>(KeyFor(file));
-
-				const SourceStamp meshStamp       = archived.StampFor(normalizeRef(vat.mesh));
-				const SourceStamp skeletonStamp   = archived.StampFor(normalizeRef(vat.skeleton));
-				const SourceStamp animationsStamp = archived.StampFor(normalizeRef(vat.animations));
-
-				if (meshStamp != vat.meshStamp || skeletonStamp != vat.skeletonStamp ||
-				    animationsStamp != vat.animationsStamp)
-				{
-					vat.meshStamp       = meshStamp;
-					vat.skeletonStamp   = skeletonStamp;
-					vat.animationsStamp = animationsStamp;
-					regenerated         = AssetCodec<BVat>::Serialize(vat);
-				}
-				break;
-			}
 
 			case AssetType::kMaterial:
 			case AssetType::kTexture:

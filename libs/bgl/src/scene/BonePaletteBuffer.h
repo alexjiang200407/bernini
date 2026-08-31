@@ -5,20 +5,23 @@
 namespace bgl
 {
 	/**
-	 * The bone palettes of one view's skinned instances: GPU-only storage the pose pass writes and the
-	 * skinned mesh shader reads, plus the allocator that hands each instance its slice of it. One slot
-	 * is one `float4`, so a slice is `cFloat4sPerBone * boneCount * 2` slots -- the pose at `time` and
-	 * the pose at `prevTime`, back to back.
+	 * GPU-only `float4` storage a compute pass writes and a shader reads, plus the allocator that
+	 * hands out slices of it. Two of these exist: a view's bone palettes, a slice per skinned
+	 * instance (`cFloat4sPerBone * boneCount * 2` slots -- the pose at `time` and at `prevTime`, back
+	 * to back), and the scene's bone anim tables, a slice per rig
+	 * (`frameCount * boneCount * cFloat4sPerBone`).
 	 *
 	 * The allocation pattern is a RangeBuffer's, but the storage cannot be: a RangeBuffer mirrors its
-	 * contents on the CPU and re-uploads a dirty range, which would overwrite what the pose pass just
+	 * contents on the CPU and re-uploads a dirty range, which would overwrite what the pass just
 	 * wrote. So allocation and storage are separate types here, and the allocator's element type is a
 	 * placeholder -- only the offsets it returns are ever read, which is why its CPU side costs a
 	 * quarter of what it hands out rather than all of it.
 	 *
-	 * Growth discards: the palette is rewritten from scratch every frame, so a resize has nothing to
-	 * carry forward. An allocation made before a growth keeps its offset, which is what lets an
-	 * instance hold one across frames.
+	 * **Growth discards, so whatever a holder puts here must be re-derivable.** An allocation made
+	 * before a growth keeps its offset -- which is what lets a slice be held across frames -- but its
+	 * contents are gone. The per-view palette is rewritten every frame and so pays nothing; the
+	 * scene's tables are written once, so `Scene::RequestBoneAnimTable` re-queues every rig holding
+	 * one when it sees the capacity move.
 	 */
 	class BonePaletteBuffer
 	{

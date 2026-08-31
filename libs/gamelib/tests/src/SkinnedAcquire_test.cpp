@@ -1,6 +1,8 @@
 #include <gamelib/AssetManager.h>
 
+#include "util/GoldenImage.h"
 #include "util/RigFixture.h"
+#include "util/TestEnvironment.h"
 #include "util/TestOptions.h"
 
 #include <assetlib/AssetStore.h>
@@ -12,9 +14,9 @@
 #include <bgl/IGraphics.h>
 #include <catch2/catch_approx.hpp>
 
-// Acquiring a rig as skinned geometry. Unlike the VAT acquire there is no bake and no freshness
-// rule -- the containers are the source -- so what this pins instead is the sharing, the release,
-// and the one check bgl cannot make for itself: that a clip set still matches the rig it names.
+// Acquiring a rig as skinned geometry. There is no bake and no freshness rule -- the containers are
+// the source -- so what this pins is the sharing, the release, and the one check bgl cannot make for
+// itself: that a clip set still matches the rig it names.
 
 namespace
 {
@@ -115,26 +117,17 @@ TEST_CASE("a rig acquires as skinned geometry, shares, and releases", "[skinned]
 		CHECK(scene->IsGeomAlive(mesh.geom));
 	}
 
-	SECTION("the same mesh can be live as static, VAT and skinned at once")
+	SECTION("the same mesh can be live as static and skinned at once")
 	{
-		// Three keyspaces, three uploads. The editor's Animation panel is the caller that needs it:
-		// it holds a rig as skinned and as VAT together so the two can be compared.
+		// Two keyspaces, two uploads.
 		const auto staticGeom = assets.AcquireMesh("Derived/Meshes/rig.bmesh");
 		CHECK(staticGeom.IsValid());
 		CHECK(staticGeom.geomType == bgl::GeomType::kStaticMesh);
 
-		const auto vat =
-			assets.AcquireVatMesh("Derived/Meshes/rig.bmesh", "Derived/Animations/rig.banim");
-		CHECK(vat.geom.IsValid());
-		CHECK(vat.geom.geomType == bgl::GeomType::kVatMesh);
-
-		// All three distinct, and all three alive at once.
+		// Both distinct, and both alive at once.
 		CHECK(staticGeom.handle.index != mesh.geom.handle.index);
-		CHECK(vat.geom.handle.index != mesh.geom.handle.index);
-		CHECK(vat.geom.handle.index != staticGeom.handle.index);
 		CHECK(scene->IsGeomAlive(mesh.geom));
 		CHECK(scene->IsGeomAlive(staticGeom));
-		CHECK(scene->IsGeomAlive(vat.geom));
 	}
 
 	SECTION("acquiring live geometry with a different clip set is refused")
@@ -334,4 +327,193 @@ TEST_CASE(
 		valid);
 	REQUIRE(own.geom.IsValid());
 	assets.ReleaseGeom(own.geom);
+}
+
+TEST_CASE("two meshes on one clip set share a single uploaded rig", "[skinned][acquire]")
+{
+	DataRoot root("bernini_skinned_acquire_shared_rig");
+	WriteRig(root.path);
+
+	// A second slot mesh against the same rig -- what a modular unit is: one skeleton, one clip
+	// set, several meshes.
+	{
+		const auto source =
+			assetlib::AssetStore(root.path).Load<assetlib::BMesh>("Derived/Meshes/rig.bmesh");
+		assetlib::AssetStore(root.path).Save(source, "Derived/Meshes/slot.bmesh");
+	}
+
+	auto gfx = bgl::CreateGraphics(HeadlessOptions());
+	REQUIRE(gfx != nullptr);
+
+	auto scene  = gfx->CreateScene(bgl::SceneDesc());
+	auto assets = game::AssetManager(scene, root.path);
+
+	const auto body =
+		assets.AcquireSkinnedMesh("Derived/Meshes/rig.bmesh", "Derived/Animations/rig.banim");
+	const auto piece =
+		assets.AcquireSkinnedMesh("Derived/Meshes/slot.bmesh", "Derived/Animations/rig.banim");
+
+	REQUIRE(body.geom.IsValid());
+	REQUIRE(piece.geom.IsValid());
+
+	// Two geoms, because they are two meshes -- the sharing is of the rig, not of the geometry.
+	CHECK(body.geom.handle.index != piece.geom.handle.index);
+
+	// One rig beneath them. Had each geom uploaded its own, releasing the first would delete a rig
+	// the second is still skinned to, which bgl refuses -- so this release would throw.
+	CHECK_NOTHROW(assets.ReleaseGeom(body.geom));
+	CHECK_NOTHROW(assets.ReleaseGeom(piece.geom));
+
+	// And the rig went with the last geom holding it: acquiring again stands a fresh one up.
+	const auto again =
+		assets.AcquireSkinnedMesh("Derived/Meshes/rig.bmesh", "Derived/Animations/rig.banim");
+	CHECK(again.geom.IsValid());
+	assets.ReleaseGeom(again.geom);
+}
+
+TEST_CASE("a manager torn down over a surviving scene leaves it usable", "[skinned][acquire]")
+{
+	DataRoot root("bernini_skinned_acquire_teardown");
+	WriteRig(root.path);
+
+	auto gfx = bgl::CreateGraphics(HeadlessOptions());
+	REQUIRE(gfx != nullptr);
+
+	auto scene = gfx->CreateScene(bgl::SceneDesc());
+
+	// The editor's shape: one scene outliving the manager over it, which is rebuilt on every project
+	// switch. The geom is left held on purpose, so the destructor is what hands it and its rig back
+	// -- and it must do so in that order, since bgl refuses a rig a geom is still skinned to. Were
+	// the order wrong, DeleteRig would throw, the destructor would swallow it, and both would be
+	// stranded.
+	//
+	// It does not pin the freeing itself: a rig the destructor forgot is invisible from here, since
+	// nothing on IScene reports one and gamelib_tests cannot reach bgl::Scene. That half is held by
+	// reading, not by this case.
+	{
+		auto       assets = game::AssetManager(scene, root.path);
+		const auto mesh =
+			assets.AcquireSkinnedMesh("Derived/Meshes/rig.bmesh", "Derived/Animations/rig.banim");
+		REQUIRE(mesh.geom.IsValid());
+	}
+
+	auto       second = game::AssetManager(scene, root.path);
+	const auto again =
+		second.AcquireSkinnedMesh("Derived/Meshes/rig.bmesh", "Derived/Animations/rig.banim");
+	CHECK(again.geom.IsValid());
+	second.ReleaseGeom(again.geom);
+}
+
+TEST_CASE("a two-slot unit draws off one rig's bone anim table", "[skinned][acquire][render]")
+{
+	DataRoot root("bernini_skinned_acquire_crowd");
+	WriteRig(root.path);
+
+	// The second slot of a modular unit: same skeleton, same clips, its own mesh.
+	{
+		const auto source =
+			assetlib::AssetStore(root.path).Load<assetlib::BMesh>("Derived/Meshes/rig.bmesh");
+		assetlib::AssetStore(root.path).Save(source, "Derived/Meshes/slot.bmesh");
+	}
+
+	auto gfx = bgl::CreateGraphics(HeadlessOptions());
+	REQUIRE(gfx != nullptr);
+
+	auto targetDesc     = bgl::RenderTargetDesc();
+	targetDesc.width    = 256;
+	targetDesc.height   = 256;
+	targetDesc.headless = true;
+	auto target         = gfx->CreateRenderTarget(targetDesc);
+
+	auto sceneDesc                        = bgl::SceneDesc();
+	sceneDesc.initialGeom                 = 8;
+	sceneDesc.initialSubmeshes            = 8;
+	sceneDesc.initialMeshlets             = 64;
+	sceneDesc.initialVertexBufferByteSize = 65536;
+	sceneDesc.initialIndices              = 1024;
+	sceneDesc.initialPbrMaterials         = 8;
+
+	auto scene = gfx->CreateScene(sceneDesc);
+	auto view  = gfx->CreateSceneView(scene, 8);
+	bgl::test::ApplyEnvironment(scene.Get(), view.Get());
+
+	auto assets = game::AssetManager(scene, root.path);
+
+	const auto body =
+		assets.AcquireSkinnedMesh("Derived/Meshes/rig.bmesh", "Derived/Animations/rig.banim");
+	const auto piece =
+		assets.AcquireSkinnedMesh("Derived/Meshes/slot.bmesh", "Derived/Animations/rig.banim");
+	REQUIRE(body.geom.IsValid());
+	REQUIRE(piece.geom.IsValid());
+
+	auto camera = bgl::Camera();
+	camera
+		.LookAt(
+			glm::vec3(0.0f, 0.0f, 10.0f),
+			glm::vec3(0.0f, 0.0f, 9.0f),
+			glm::vec3(0.0f, 1.0f, 0.0f))
+		.Perspective(glm::radians(60.0f), 1.0f, 0.5f, 100.0f);
+
+	auto job     = bgl::RenderJob();
+	job.view     = view;
+	job.camera   = camera;
+	job.viewport = bgl::Viewport(256.0f, 256.0f);
+
+	// Both slots on one clock and one pose, which is what a unit assembled from several meshes is.
+	// Frame 1 of the fixture's clip slides the rig to x = 1, and the two sources must put it in the
+	// same place -- the bone anim table is a different route to the same pose, not a different pose.
+	const auto drawUnit = [&](bgl::PoseSource source, const char* png) {
+		auto desc   = bgl::SkinnedInstanceDesc();
+		desc.clip   = 0;
+		desc.phase  = 1.0f;
+		desc.rate   = 0.0f;
+		desc.source = source;
+
+		// Offset, so the second slot occupies pixels the first does not. Placed coincident they
+		// would be one silhouette, and a slot that drew nothing at all would pass every check below.
+		const auto a = assets.CreateSkinnedInstance(view, body.geom, glm::mat4(1.0f), desc);
+		const auto b = assets.CreateSkinnedInstance(
+			view,
+			piece.geom,
+			glm::translate(glm::mat4(1.0f), glm::vec3(0.0f, -2.0f, 0.0f)),
+			desc);
+
+		gfx->DrawFrame(target, job);
+		gfx->ScreenshotPng(target, png);
+
+		assets.DestroyInstance(view, b);
+		assets.DestroyInstance(view, a);
+	};
+
+	const auto* palettePng = "assets/golden/crowd_unit_palette.got.png";
+	const auto* tablePng   = "assets/golden/crowd_unit_table.got.png";
+
+	drawUnit(bgl::PoseSource::kPerInstance, palettePng);
+	drawUnit(bgl::PoseSource::kBoneAnimTable, tablePng);
+
+	// The same pose by a different route, over the whole frame: a slot in the wrong place, a lost
+	// normal or a mis-addressed frame all have to show up.
+	CHECK(bgl::test::FrameDelta(palettePng, tablePng, 0, 0, 256, 256) < 1e-6f);
+
+	// And both slots are on screen, so the comparison above is not of two empty frames -- nor of two
+	// frames missing the same slot. The body alone must differ from the pair.
+	const auto* emptyPng = "assets/golden/crowd_unit_empty.got.png";
+	gfx->DrawFrame(target, job);
+	gfx->ScreenshotPng(target, emptyPng);
+	CHECK(bgl::test::FrameDelta(emptyPng, tablePng, 0, 0, 256, 256) > 1e-3f);
+
+	const auto* bodyOnlyPng = "assets/golden/crowd_unit_body_only.got.png";
+	{
+		auto desc   = bgl::SkinnedInstanceDesc();
+		desc.phase  = 1.0f;
+		desc.rate   = 0.0f;
+		desc.source = bgl::PoseSource::kBoneAnimTable;
+
+		const auto only = assets.CreateSkinnedInstance(view, body.geom, glm::mat4(1.0f), desc);
+		gfx->DrawFrame(target, job);
+		gfx->ScreenshotPng(target, bodyOnlyPng);
+		assets.DestroyInstance(view, only);
+	}
+
+	CHECK(bgl::test::FrameDelta(bodyOnlyPng, tablePng, 0, 0, 256, 256) > 1e-3f);
 }

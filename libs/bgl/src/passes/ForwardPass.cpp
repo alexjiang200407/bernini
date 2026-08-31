@@ -74,7 +74,6 @@ namespace bgl
 		constexpr auto c_SceneColorFormat   = Format::RGBA16_FLOAT;
 
 		constexpr auto c_GeomSrc             = "programs.forward.StaticMesh"sv;
-		constexpr auto c_VatGeomSrc          = "programs.forward.VatMesh"sv;
 		constexpr auto c_SkinnedGeomSrc      = "programs.forward.SkinnedMesh"sv;
 		constexpr auto c_AnyGeomSrc          = "programs.forward.AnyMesh"sv;
 		constexpr auto c_PbrPixelSrc         = "programs.forward.PBR"sv;
@@ -130,35 +129,6 @@ namespace bgl
 			{ c_LooseHashedPixelSrc, RasterCullMode::kNone, true, false },
 			// kAssert_StaticMesh
 			{ c_AssertPixelSrc, RasterCullMode::kBack, true, false },
-			// kOpaque_VatMesh_PBR
-			{ c_PbrPixelSrc,
-			  RasterCullMode::kBack,
-			  true,
-			  false,
-			  ComparisonFunc::kLess,
-			  c_VatGeomSrc },
-			// kAlphaTest_VatMesh_PBR: an opaque draw that discards, so it needs no sorting.
-			{ c_PbrCutoutPixelSrc,
-			  RasterCullMode::kNone,
-			  true,
-			  false,
-			  ComparisonFunc::kLess,
-			  c_VatGeomSrc },
-			// kHashedAlpha_VatMesh_PBR: stochastic coverage, so also an opaque shape.
-			{ c_PbrHashedPixelSrc,
-			  RasterCullMode::kNone,
-			  true,
-			  false,
-			  ComparisonFunc::kLess,
-			  c_VatGeomSrc },
-			// kTransparent_VatMesh_PBR: never drawn from its own bucket -- the depth-sorted list is,
-			// through kTransparent_StaticMesh_PBR's kernel. The row exists so the bucket has one.
-			{ c_TransparentSrc,
-			  RasterCullMode::kNone,
-			  false,
-			  true,
-			  ComparisonFunc::kLess,
-			  c_AnyGeomSrc },
 			// kOpaque_SkinnedMesh_PBR
 			{ c_PbrPixelSrc,
 			  RasterCullMode::kBack,
@@ -269,7 +239,6 @@ namespace bgl
 			.Check("viewData"sv, c_ViewDataFields)
 			.Check("materialData"sv, GetUniformKeys(c_MaterialBuffers))
 			.Check("materialData"sv, c_MaterialDataFields)
-			.Check("vatData"sv, GetUniformKeys(c_VatBuffers))
 			.Check("skinnedData"sv, GetUniformKeys(c_SkinnedBuffers));
 	}
 
@@ -322,11 +291,6 @@ namespace bgl
 			desc.AddBufferArg(binding.graphName, binding.sync, binding.access);
 		}
 
-		for (const auto& binding : c_VatBuffers)
-		{
-			desc.AddBufferArg(binding.graphName, binding.sync, binding.access);
-		}
-
 		for (const auto& binding : c_SkinnedBuffers)
 		{
 			desc.AddBufferArg(binding.graphName, binding.sync, binding.access);
@@ -351,11 +315,6 @@ namespace bgl
 		if (auto foundExpansion = kernel.FindUniforms("expansionData"))
 		{
 			BindSceneBuffers(*foundExpansion, c_ExpansionBuffers, resources);
-		}
-
-		if (auto foundVatData = kernel.FindUniforms("vatData"))
-		{
-			BindSceneBuffers(*foundVatData, c_VatBuffers, resources);
 		}
 
 		if (auto foundSkinnedData = kernel.FindUniforms("skinnedData"))

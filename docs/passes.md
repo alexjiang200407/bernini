@@ -16,7 +16,7 @@ source of truth; when this doc disagrees, trust the header, then fix this doc.
 
 `RenderContext` ([gfx/RenderContext.cpp](libs/bgl/src/gfx/RenderContext.cpp)) drives the frame and
 owns the long-lived pass objects (`m_Forward`, `m_Skybox`, `m_TransparentSort`,
-`m_CompactInstances`, `m_SkinnedPose`, `m_OutlineMask`, `m_PreparePresentPass`); `Graphics` owns one context and
+`m_CompactInstances`, `m_RigFrames`, `m_SkinnedPose`, `m_OutlineMask`, `m_PreparePresentPass`); `Graphics` owns one context and
 forwards the frame methods to it. A frame is built between `BeginFrame` and `EndFrame`, with one `Draw` per
 view in between; the passes are added in this order and, because the graph never reorders, execute
 in it:
@@ -27,7 +27,8 @@ flowchart TD
     CLR --> D["per Draw(view)"]
     subgraph D["per Draw(view) — resources imported under the view's namespace"]
         IMP["Scene / SceneView import their buffers"] --> SKY["Skybox (only if the view has one)"]
-        SKY --> POSE["Pose Skinned (one workgroup per skinned instance)"]
+        SKY --> RIG["Pose Rig Frames (only when a rig wants its bone anim table)"]
+        RIG --> POSE["Pose Skinned (one workgroup per skinned instance)"]
         POSE --> TS["Transparent Sort (3 sub-passes)"]
         TS --> CI["Compact Instances (3 sub-passes)"]
         CI --> FWD["Forward (indirect dispatch per PSO bucket, then one for the sorted list)"]
@@ -172,8 +173,9 @@ Every instance transform is fixed for its lifetime (there is no `SetTransform`),
 geometry the camera is the whole of the motion: the mesh shader reprojects one world position through
 `viewProj` and `prevViewProj` and hands the pixel stage both clip positions. An animated instance
 plugs into that seam by substituting its own previous-frame position for the second of those, with no
-change to the pixel stage — VAT re-samples its textures at `prevTime`, and the skinned tier blends by
-the second half of its palette slice, which `Pose Skinned` filled at `prevTime` for exactly this. `SceneView::AdvanceCamera` is what holds the previous frame's matrices; drawing one
+change to the pixel stage — a per-instance pose blends by the second half of its palette slice, which
+`Pose Skinned` filled at `prevTime` for exactly this, and a crowd instance reads its rig's table at
+`prevTime` the same way it reads it at `time`. `SceneView::AdvanceCamera` is what holds the previous frame's matrices; drawing one
 view twice in a frame reports the same history to both draws rather than letting the second treat
 the first as history.
 
@@ -333,12 +335,34 @@ frames would reproject through the wrong clip.
   the graph decides a pass is a root by whether it writes an *imported* resource, and a name resolved
   inside a cull namespace matches no import, which would cull the pass entirely.
 * **In:** `scene.posedInstances` (the dense list of byte offsets to pose — a sweep of the arena
-  would pose freed records, and would meet the VAT records sharing it), `scene.playbackBuffer`,
-  `scene.skinnedGeomBuffer`,
+  would pose freed records, and would meet the crowd records sharing it), `scene.playbackBuffer`,
+  `scene.rigBuffer`,
   `scene.skinnedBoneBuffer`, `scene.clipBuffer`, `scene.boneSampleBuffer`.
 * **Out:** `scene.bonePalettes`, the view's `BonePaletteBuffer` — GPU-only storage with a CPU-side offset
   allocator, because a `RangeBuffer` would re-upload its stale CPU mirror over what this wrote.
-* **Skipped** when the view places no skinned instance.
+* **Skipped** when the view places no skinned instance — and an instance drawing from its rig's bone
+  anim table is not one of them. The dense list is built from instances that own a palette, which is
+  what this pass writes into; a table instance owns none and is posed by `Pose Rig Frames` once.
+
+### Pose Rig Frames
+
+* **What it is:** the bone anim table's producer. One dispatch per rig that has been given a table
+  and not yet posed into it, one workgroup per frame of that rig's clip set, running the same walk
+  `Pose Skinned` runs ([pose_walk.slang](libs/bgl/shaders/src/lib/anim/pose_walk.slang) is shared by both).
+  A crowd instance then reads a pose rather than computing one.
+* **In:** `scene.rigBuffer`, `scene.skinnedBoneBuffer`, `scene.clipBuffer`, `scene.boneSampleBuffer`.
+* **Out:** `scene.boneAnimTables`, the scene's table arena — a `BonePaletteBuffer` like the view's
+  palette, and GPU-only for the same reason.
+* **Ordered before `Pose Skinned` and the forward pass**, either of which may read a table this
+  frame filled.
+* **Absent from the graph on almost every frame**, rather than present and idle: it writes
+  `scene.boneAnimTables`, which the scene imports, so `WritesImported` would keep it as a root
+  however little it did — and a scene drawing no crowd instance would pay a pass node and a UAV
+  transition every frame for a buffer nothing reads. `AttachToFrameGraph` asks the scene first and
+  adds nothing on an empty answer. A rig is filled when the first instance drawing from its table
+  is spawned, and again only when the arena grows — a growth discards what it held, so every rig
+  holding a table is re-queued. Unlike the per-view palette, which is rewritten every frame anyway,
+  a table is written once and a discarded one would otherwise stay discarded.
 
 ### Forward — [passes/ForwardPass.{h,cpp}](libs/bgl/src/passes/ForwardPass.cpp)
 
@@ -346,19 +370,15 @@ The main geometry pass: a mesh-shader forward render, in two phases. It holds `c
 `MeshletKernel`s, one per `PsoType`, built from the `c_Psos` config table (pixel-shader module +
 raster/depth/blend state + mesh-shader source).
 
-Every module named below lives in `programs/forward/`, and the CPU asks for it by the full module
-name — `programs.forward.StaticMesh`; the leaf alone is used here for readability.
-
-Each row names its amplification/mesh module, one per **tier**: `StaticMesh`, `VatMesh` — which
-fetches position and normal from the baked texture pair by (column, frame) instead of the vertex
-bytes (see [VAT](docs/vat.md)) — and `SkinnedMesh`, which blends the bind-pose vertex bytes by the
-bone palette `Pose Skinned` wrote this frame. All three are the same shader with one function
-swapped: the instance expansion, the meshlet lookup, the triangle fetch, the vertex decode and the
-reprojection live in `lib/forward/mesh_stage.slang`, and each tier's vertex evaluation in its own
-`lib/forward/{static,skinned,vat}_vertex.slang`. Only the mesh-output loops are still written out per
-entry point — Slang's Metal backend crashes on any function taking `OutputVertices`, so nothing but
-`MSMain` may index them. `AnyMesh` is the fourth, and calls whichever of the three an instance's
-`Mesh` names — see the transparent phase below.
+Each row names its amplification/mesh module, one per **tier**: `StaticMesh`, and `SkinnedMesh`,
+which blends the bind-pose vertex bytes by a pose — the bone palette `Pose Skinned` wrote this
+frame, or the rig's shared table, whichever kind of playback record the placement holds. Both are
+the same shader with one function swapped: the instance expansion, the meshlet lookup, the triangle
+fetch, the vertex decode and the reprojection live in `lib/forward/mesh_stage.slang`, and each
+tier's vertex evaluation in its own `lib/forward/{static,skinned}_vertex.slang`. Only the
+mesh-output loops are still written out per entry point — Slang's Metal backend crashes on any
+function taking `OutputVertices`, so nothing but `MSMain` may index them. `AnyMesh` is the third,
+and calls whichever of the two an instance's `Mesh` names — see the transparent phase below.
 
 The pixel shader varies per bucket instead (`Null`, `PBR`, `PBR_Loose`, `PBR_AlphaTest`,
 `PBR_Loose_AlphaTest`, `PBR_HashedAlpha`, `PBR_Loose_HashedAlpha`, `Transparent`, `Assert`), and is chosen by layer
@@ -368,10 +388,9 @@ empty row but not a misordering.
 
 **Opaque and alpha-test** are PSO-bucketed: per bucket it populates the cbuffers the kernel declares
 — `forwardData` (the scene geometry tables), `viewData` (this frame's and the previous frame's
-view-proj, plus the animation clock `time`/`prevTime` that VAT playback and its motion vectors
+view-proj, plus the animation clock `time`/`prevTime` that playback and its motion vectors
 derive the pose from), `expansionData` (`psoIndex` and the instance-list tables), `materialData`
-(samplers, IBL maps, camera position, exposure), and — where the kernel declares it — `vatData`
-(the VAT geom/clip/column buffers) — binds the meshlet state (viewport +
+(samplers, IBL maps, camera position, exposure) — binds the meshlet state (viewport +
 colour/velocity/depth framebuffer), and calls
 `DispatchMeshIndirect(pso)`, whose grid comes from the `compactDispatchArgs` entry that
 `Compact Instances` produced.
@@ -402,7 +421,7 @@ The depth-sorted path starts at zero; the opaque path reads `psoPrefixSum` index
 
 * **In:** the scene-colour and velocity buffers as render targets; `compactDispatchArgs` and
   `transparentSort.dispatchArgs` as indirect args; the seven `c_ForwardDataBuffers` scene
-  buffers, the three `c_SkinnedBuffers` and four `c_VatBuffers`, the two `c_ExpansionBuffers`,
+  buffers, the four `c_SkinnedBuffers`, the two `c_ExpansionBuffers`,
   `sortedTransparentInstances`, and the one `c_MaterialBuffers` (the material arena; its typed view
   is bound off the draw rather than the graph, being a second descriptor onto the same bytes). A cbuffer the shader does not declare is skipped, but a
   scene-buffer key missing from a cbuffer that *is* declared is fatal (`gfatal`); a missing

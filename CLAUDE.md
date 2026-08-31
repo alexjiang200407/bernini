@@ -135,16 +135,11 @@ How `bgl_idlgen` generates CPU/GPU structs, enums, and constants from one Slang 
 
 **[Skinned Meshes](./docs/skinning.md)**
 
-A rig posed on the GPU into a bone palette and drawn from it: the compute pass and its
-barrier-per-depth-level walk, why the previous pose is re-evaluated rather than remembered, where the
-skeleton signature is checked and why the culling box cannot be measured (both for the same reason —
-`bgl` does not link `assetlib`), and what the editor's Animation panel does with the tier.
-
-**[Vertex Animation Textures](./docs/vat.md)**
-
-A rig's clips baked to a position/normal texture pair and drawn as crowds: the `.bvat`
-container and bake (assetlib), the `programs.forward.VatMesh` draw path and the clock (bgl), and the
-bake-on-demand load (gamelib). Time is the only per-frame input.
+A rig posed on the GPU and drawn from a per-instance palette or a shared bone anim table: the
+compute pass and its barrier-per-depth-level walk, why the previous pose is re-evaluated rather than
+remembered, where the skeleton signature is checked and why the culling box cannot be measured (both
+for the same reason — `bgl` does not link `assetlib`), and what the editor's Animation panel does
+with the tier.
 
 **[Temporal Antialiasing](./docs/taa.md)**
 
@@ -197,6 +192,9 @@ before building the thing it describes, and delete it when that thing lands.
 
 - [Skeleton append](./docs/specs/skeleton_append.md) — appending a bone strands every clip, and the
   remap that will fix it.
+- [Crowd frame interpolation](./docs/specs/crowd_frame_interpolation.md) — the crowd tier's
+  two-frame lerp costs twice the hero tier's per-vertex fetch *and* is the coarser interpolation;
+  the cheaper alternative was never priced, and no GPU timestamp exists to price it.
 - [Animation compression](./docs/specs/animation_compression.md) — a 663-bone rig's clips are 60 MB
   uncompressed; why collapsing constant tracks was measured and dropped, and what to build instead.
 

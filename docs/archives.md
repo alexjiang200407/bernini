@@ -73,9 +73,9 @@ assetlib::AssetStore store(dataRoot, std::move(mount));     // reads through mou
 A container is loaded by its type — `store.Load<BMesh>(key)`, `store.Save(value, key)` — because
 the type is what names the codec; there is no method per container. The reads that are *not* a whole
 container keep their own names, since a type cannot say "the references only": `LoadMeshRefs`,
-`LoadVatTables`, `LoadVatRefs`, `LoadAnimationSkeletonPath`, the `LoadRegen*` seam, and
+`LoadAnimationSkeletonPath`, the `LoadRegen*` seam, and
 `LoadTexture`, which decodes an image rather than deserializing a struct. The staleness predicates
-(`BakeIsStale`, `DrawsLoose`, `VatIsStale`) and `Describe` are methods too. The mount-taking free
+(`BakeIsStale`, `DrawsLoose`) and `Describe` are methods too. The mount-taking free
 functions they forward to are internal to `assetlib/src`; a caller outside the library reaches them
 through a store or not at all.
 
@@ -188,7 +188,6 @@ rule it would ride into the archive it must never reach.
 | the shader cache (`.bsc`, `pipelines.psolib`) | excluded — per-machine, write-back, disposable |
 | `Derived/BakedTextures/` (baked) | **included**, and it is most of the bytes |
 | `.bmesh` / `.bskel` / `.banim` | **included as the seam answers**, not as the file lies on disk — a stale group re-bakes into the archive, a rebind is baked in, and a group the seam cannot serve fails the pack. `PackReport::geometryRebaked` counts the entries that differ |
-| `.bvat` | **included**, packed fresh and re-stamped against the geometry *as archived* — see below |
 | `.bsky` / `.benvl` | **included**, re-baked first when a routed source moved — the re-bake runs before the pack walk because it writes new content-addressed maps the walk must still see. `PackReport::envsRebaked` counts them; a `.benv` packs verbatim (authored) |
 
 Everything without a registered extension falls out of the same rule and is **counted**, not dropped
@@ -205,34 +204,21 @@ walk itself is in directory-iteration order and that is not the same on two file
 
 ---
 
-## `.bvat` under a read-only mount is trusted, not re-baked
+## A derived container under a read-only mount is trusted, not regenerated
 
-A `.bvat` is a derived build product, so `AcquireVatMesh` normally re-bakes a stale one — it is
-seconds of CPU and the inputs are right there. Packed, its inputs may be present but **the write
-target is not**, and the staleness question stops being worth asking: `pack` bakes every stale
-`.bvat` fresh as part of packing — stale by its own stamps *or* by its geometry group being a
-cache miss, since regenerated geometry moves no disk stamp — so what is in the archive is correct
-by construction. And because the archive stores the seam's answers for the geometry keys rather
-than the disk bytes the bake stamped, every packed `.bvat` is re-stamped against the entries as
-archived: the staleness question, asked *inside* the archive, answers fresh.
+A cache entry is regenerable, so the `LoadRegen*` seam normally re-cooks a stale one from its
+authored source. Packed, that source may be present but **the write target is not**, and the
+staleness question stops being worth asking: `pack` resolves every geometry entry through the seam
+as it writes, so what is in the archive is correct by construction. Because the archive stores the
+seam's answers rather than the disk bytes, a staleness question asked *inside* the archive answers
+fresh.
 
-So `EnsureVatBaked` ([vat_freshness.h](../libs/gamelib/include/gamelib/vat_freshness.h)) branches on
-`IsReadOnly` — trusting under a read-only mount, re-baking under any mount with somewhere to write.
-This is the one place the seam is not transparent, and it is the reason `IsReadOnly` is on the
-interface at all.
+So the seam branches on `IsReadOnly` — trusting under a read-only mount, re-cooking under any mount
+with somewhere to write. This is the one place the mount is not transparent, and it is the reason
+`IsReadOnly` is on the interface at all.
 
-Three things it does *not* relax:
-
-- **The clip-set check still holds.** One bake file per (mesh, clip set) via `vatPathFor`; a
-  container baked from a different `.banim` is stale even in an archive, and is never silently
-  returned. Loading the wrong clips is worse than refusing.
-- **A missing one is an error, not a bake.** `pack` only re-bakes the `.bvat` files already present,
-  so a rig nothing acquired before packing ships without one. That throws, naming the file, rather
-  than failing somewhere inside the write on a directory that was never there.
-- **A `.bvat` from another bake revision refuses, it does not re-bake.** Its inputs are recorded in
-  a layout `pack` no longer vouches for, so it cannot know what to re-bake from. The loose project
-  heals it first: a load through `VatFreshness` reads the refusal as missing and re-bakes in place,
-  which is the state `pack` then packs.
+What it does *not* relax: a group the seam cannot serve **fails the pack** rather than shipping
+stale, and an entry that is simply absent is an error rather than something the archive invents.
 
 ---
 
@@ -255,8 +241,7 @@ entry that cannot be renamed, no delete that has to become a tombstone, no windo
 which layer answered.
 
 The packed path is not therefore untested-until-ship-day. `AssetManager_test` acquires a mesh, its
-materials and its textures out of a `.bpak`; `VatAcquire_test` acquires from a read-only mount and
-from one whose `.bvat` has deliberately drifted; `Pack_test` packs a staged project and reads every
+materials and its textures out of a `.bpak`; `Pack_test` packs a staged project and reads every
 entry back against the tree it came from. That runs on every test run.
 
 The CLI itself is the exception, and it is worth knowing: nothing invokes the `assetlib_cli` binary

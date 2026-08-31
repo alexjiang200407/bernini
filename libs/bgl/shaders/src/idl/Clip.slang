@@ -1,9 +1,9 @@
 // THIS IS A FILE GENERATED FROM Clip.slang. DO NOT EDIT MANUALLY
 
-// One playable clip, shared by every animated tier. `firstFrame` is where the clip's frame 0 sits in
-// whatever the tier addresses frames by -- a texture row for VAT, a frame of the frame-major sample
-// pool for a skinned rig -- so the three fields below mean the same thing to both, which is what lets
-// per-clip metadata grow in one place.
+// One playable clip, shared by both pose sources. `firstFrame` is where the clip's frame 0 sits in
+// the frame-major pool the reader addresses -- the rig's samples for a pose walk, its bone anim
+// table for a crowd instance -- so the three fields below mean the same thing to both, which is what
+// lets per-clip metadata grow in one place.
 //
 // Frames span the closed interval [0, duration], so `frameCount` counts both ends. A looping clip's
 // last frame duplicates its first -- that is what marks it looping -- so a cycle is `frameCount - 1`

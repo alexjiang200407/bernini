@@ -11,6 +11,8 @@
 #include <assetlib_structs/BMaterial.h>  // the channel layout the static_asserts below pin us to
 #include <assetlib_structs/Bounds.h>
 #include <core/math.h>
+#include <tracy/Tracy.hpp>
+
 #include <numbers>
 
 namespace bgl
@@ -373,16 +375,8 @@ namespace bgl
 			m_Materials.Init(std::move(materialDesc), m_ResourceManager);
 		}
 
-		// The VAT buffers start at one entry each rather than from a SceneDesc knob: most scenes
-		// hold no VAT geometry at all, and the arenas grow on the first that does.
-		{
-			auto vatGeomBufferDesc         = EntryBufferDesc();
-			vatGeomBufferDesc.initialCount = 1;
-			vatGeomBufferDesc.debugName    = "Vat Geom Buffer";
-
-			m_VatGeoms.Init(std::move(vatGeomBufferDesc), m_ResourceManager);
-		}
-
+		// The animated buffers start at one entry each rather than from a SceneDesc knob: most scenes
+		// hold no animated geometry at all, and the arenas grow on the first that does.
 		{
 			auto clipBufferDesc         = RangeBufferDesc();
 			clipBufferDesc.initialCount = 1;
@@ -392,21 +386,14 @@ namespace bgl
 		}
 
 		{
-			auto vatColumnBufferDesc         = RangeBufferDesc();
-			vatColumnBufferDesc.initialCount = 1;
-			vatColumnBufferDesc.debugName    = "Vat Column Buffer";
+			auto rigBufferDesc         = EntryBufferDesc();
+			rigBufferDesc.initialCount = 1;
+			rigBufferDesc.debugName    = "Rig Buffer";
 
-			m_VatColumns.Init(std::move(vatColumnBufferDesc), m_ResourceManager);
+			m_Rigs.Init(std::move(rigBufferDesc), m_ResourceManager);
 		}
 
-		// One entry each for the same reason as the VAT arenas above.
-		{
-			auto skinnedGeomBufferDesc         = EntryBufferDesc();
-			skinnedGeomBufferDesc.initialCount = 1;
-			skinnedGeomBufferDesc.debugName    = "Skinned Geom Buffer";
-
-			m_SkinnedGeoms.Init(std::move(skinnedGeomBufferDesc), m_ResourceManager);
-		}
+		m_BoneAnimTables.Init(m_ResourceManager);
 
 		{
 			auto skinnedBoneBufferDesc         = RangeBufferDesc();
@@ -448,6 +435,10 @@ namespace bgl
 			}
 		});
 
+		// Outside the tuple, so it needs saying here. No copy is recorded -- the arena discards on
+		// growth -- but a growth still supersedes a device buffer, and this is what retires it.
+		m_BoneAnimTables.Update(cmdList);
+
 		// Textures loaded since the last frame (materials, environment maps) go up on this list, so
 		// the upload rides the same timeline as the frames that sample it -- another context's list
 		// flushing it would leave the two unordered on the GPU.
@@ -486,6 +477,12 @@ namespace bgl
 			fg.ImportBuffer(name, buffer.GetBufferHandle());
 			resourceNames.emplace_back(name);
 		});
+
+		// Outside the tuple because it is not a NamedBuffer: the arena's storage is GPU-only, and a
+		// growth mints a new handle, so this is re-read every frame like the view's palette.
+		auto tables = std::string(c_BoneAnimTableName);
+		fg.ImportBuffer(tables, m_BoneAnimTables.GetBufferHandle());
+		resourceNames.push_back(std::move(tables));
 	}
 
 	GeomHandle
@@ -532,8 +529,8 @@ namespace bgl
 			submesh.indices     = baseIndexGlobal;
 			submesh.vertexCount = static_cast<uint32_t>(verts.size());
 
-			// A VAT geom overrides the fold: its vertices move every frame, so the sphere must
-			// come from the bake's all-clips box rather than the bind pose uploaded here.
+			// An animated geom overrides the fold: its vertices move every frame, so the sphere must
+			// come from the clip set's posed bounds rather than the bind pose uploaded here.
 			if (boundingSphere.has_value())
 			{
 				submesh.boundingSphere = *boundingSphere;
@@ -574,177 +571,6 @@ namespace bgl
 		{
 			throw SceneError(e.what());
 		}
-	}
-
-	void
-	Scene::ValidateVatDesc(const VatGeomDesc& desc) const
-	{
-		if (!m_ResourceManager->ValidTextureHandle(TextureHandle::From(desc.positions)) ||
-		    !m_ResourceManager->ValidTextureHandle(TextureHandle::From(desc.normals)))
-		{
-			throw SceneError(
-				"VAT geometry: both VAT textures are required, live, from this scene's "
-				"AddTextureAsset");
-		}
-		if (desc.clips.empty())
-		{
-			throw SceneError(
-				"VAT geometry: the clip table is empty; a VAT with no clips draws "
-				"nothing");
-		}
-		for (const VatClipDesc& clip : desc.clips)
-		{
-			// The shader clamps the frame to frameCount - 1, and on a uint that underflows a
-			// zero to 4 billion rows of out-of-bounds fetches.
-			if (clip.frameCount == 0)
-			{
-				throw SceneError("VAT geometry: a clip with no frames has no row to fetch");
-			}
-		}
-	}
-
-	GeomHandle
-	Scene::AttachVatRecords(
-		GeomHandle                base,
-		const VatGeomDesc&        desc,
-		std::span<const uint32_t> columnBases)
-	{
-		try
-		{
-			auto clips = std::vector<idl::Clip>();
-			clips.reserve(desc.clips.size());
-			for (const VatClipDesc& clip : desc.clips)
-			{
-				clips.push_back(
-					{ clip.firstRow, clip.frameCount, clip.sampleRate, clip.loop ? 1u : 0u });
-			}
-
-			auto rollback = GeomRollback();
-
-			auto record         = idl::VatGeom();
-			record.positions    = m_Textures.GetDescriptor(desc.positions.textureSlot);
-			record.normals      = m_Textures.GetDescriptor(desc.normals.textureSlot);
-			record.boundsMin    = glm::vec4(desc.boundsMin, 0.0f);
-			record.boundsExtent = glm::vec4(desc.boundsMax - desc.boundsMin, 0.0f);
-			record.clips        = rollback.Track(m_Clips, m_Clips.Add(std::span(clips)));
-			record.columnBases  = rollback.Track(m_VatColumns, m_VatColumns.Add(columnBases));
-
-			GeomRecord& geom = m_Geoms[base.handle.index];
-			geom.vatGeom     = m_VatGeoms.Add(record);
-			geom.clipCount   = static_cast<uint32_t>(clips.size());
-
-			rollback.Commit();
-
-			base.geomType = GeomType::kVatMesh;
-			return base;
-		}
-		catch (const std::runtime_error& e)
-		{
-			// The geometry half committed above; take it back down so a failed VAT add leaks
-			// nothing. The handle is still the kStaticMesh one here, which is what DeleteGeom
-			// accepts.
-			DeleteGeom(base);
-			throw SceneError(e.what());
-		}
-		catch (...)
-		{
-			// Not everything the block can raise is a runtime_error -- an allocation failure is
-			// not -- and the cleanup must run on every path.
-			DeleteGeom(base);
-			throw;
-		}
-	}
-
-	GeomHandle
-	Scene::AddVatMeshGeom(
-		std::span<const VatVertex> verts,
-		std::span<const uint32_t>  indices,
-		const VatGeomDesc&         desc,
-		MaterialHandle             material)
-	{
-		ValidateVatDesc(desc);
-
-		if (!AcceptsMaterial(GeomType::kVatMesh, material))
-		{
-			throw SceneError(
-				"AddVatMeshGeom: a kPBR material is required -- the VAT pipeline has no unlit or "
-				"loose variant");
-		}
-		// The procedural path never splits a primitive, so there is exactly one submesh to base.
-		if (desc.columnBases.size() > 1)
-		{
-			throw SceneError(
-				"AddVatMeshGeom: a procedural VAT is one submesh; columnBases names more");
-		}
-
-		// Same fields, same packing: the bind-pose vertices go down the procedural path verbatim.
-		static_assert(
-			sizeof(VatVertex) == sizeof(VertexGen) &&
-			offsetof(VatVertex, position) == offsetof(VertexGen, pos) &&
-			offsetof(VatVertex, normal) == offsetof(VertexGen, normal) &&
-			offsetof(VatVertex, uv) == offsetof(VertexGen, uv) &&
-			offsetof(VatVertex, tangent) == offsetof(VertexGen, tangent));
-
-		const auto asGen = std::span<const VertexGen>(
-			reinterpret_cast<const VertexGen*>(verts.data()),
-			verts.size());
-
-		GeomHandle base = AddProceduralGeom(
-			asGen,
-			indices,
-			material,
-			BoundingSphereOf(desc.boundsMin, desc.boundsMax));
-
-		constexpr std::array<uint32_t, 1> c_SingleBase = { { 0 } };
-		return AttachVatRecords(
-			base,
-			desc,
-			desc.columnBases.empty() ? std::span<const uint32_t>(c_SingleBase) :
-									   std::span<const uint32_t>(desc.columnBases));
-	}
-
-	GeomHandle
-	Scene::AddVatMeshGeom(
-		const assetlib::BMesh&          mesh,
-		uint32_t                        meshIndex,
-		std::span<const MaterialHandle> materials,
-		const VatGeomDesc&              desc)
-	{
-		ValidateVatDesc(desc);
-
-		if (meshIndex >= mesh.meshes.size())
-		{
-			throw SceneError("AddVatMeshGeom: meshIndex out of range");
-		}
-
-		const assetlib::Mesh& entry = mesh.meshes[meshIndex];
-		if (desc.columnBases.size() != entry.submeshCount)
-		{
-			throw SceneError(
-				"AddVatMeshGeom: columnBases must carry one entry per submesh, in submesh order");
-		}
-
-		// The check every VAT door makes, per submesh here: no unlit VAT variant exists for a
-		// null-material submesh to ride.
-		for (uint32_t s = 0; s < entry.submeshCount; ++s)
-		{
-			const uint32_t       index = mesh.submeshes[entry.firstSubmesh + s].material;
-			const MaterialHandle bound =
-				index < materials.size() ? materials[index] : MaterialHandle{};
-			if (!AcceptsMaterial(GeomType::kVatMesh, bound))
-			{
-				throw SceneError(
-					"AddVatMeshGeom: every submesh needs a kPBR material -- the VAT pipeline has "
-					"no unlit or loose variant");
-			}
-		}
-
-		GeomHandle base = AddPreparedMesh(
-			CookStaticMesh(mesh, meshIndex),
-			materials,
-			BoundingSphereOf(desc.boundsMin, desc.boundsMax));
-
-		return AttachVatRecords(base, desc, desc.columnBases);
 	}
 
 	void
@@ -808,88 +634,222 @@ namespace bgl
 		}
 	}
 
-	GeomHandle
-	Scene::AttachSkinnedRecords(
-		GeomHandle                    base,
-		const assetlib::Skeleton&     skeleton,
-		const assetlib::AnimationSet& animations)
+	RigMeta*
+	Scene::FindRig(RigHandle rig) noexcept
 	{
+		if (!rig.IsValid() || !m_Rigs.IsValid(rig.handle))
+		{
+			return nullptr;
+		}
+
+		return &m_Rigs.MetaAt(rig.handle.index);
+	}
+
+	RigHandle
+	Scene::AddRig(const assetlib::Skeleton& skeleton, const assetlib::AnimationSet& animations)
+	{
+		ValidateSkinnedRig(skeleton, animations);
+
+		const uint32_t boneCount = static_cast<uint32_t>(skeleton.bones.size());
+
+		// Depth is derived rather than read: no container carries it, and one forward pass is
+		// enough because a parent always precedes its child.
+		auto     bones    = std::vector<idl::SkinnedBone>();
+		uint32_t maxDepth = 0;
+		bones.reserve(boneCount);
+		for (const assetlib::Bone& bone : skeleton.bones)
+		{
+			const uint32_t depth =
+				bone.parent == idl::cInvalidBone ? 0 : bones[bone.parent].depth + 1;
+			maxDepth = std::max(maxDepth, depth);
+			bones.push_back({ bone.inverseBind, bone.parent, depth });
+		}
+
+		auto samples = std::vector<idl::BoneSample>();
+		samples.reserve(animations.samples.size());
+		for (const assetlib::Transform& sample : animations.samples)
+		{
+			samples.push_back(
+				{ glm::vec4(sample.translation, 0.0f),
+			      glm::vec4(
+					  sample.rotation.x,
+					  sample.rotation.y,
+					  sample.rotation.z,
+					  sample.rotation.w),
+			      glm::vec4(sample.scale, 0.0f) });
+		}
+
+		auto clips = std::vector<idl::Clip>();
+		clips.reserve(animations.clips.size());
+		for (const assetlib::AnimationClip& clip : animations.clips)
+		{
+			clips.push_back(
+				{ clip.firstSample / boneCount,
+			      clip.frameCount,
+			      clip.sampleRate,
+			      clip.loop ? 1u : 0u });
+		}
+
+		auto rollback = GeomRollback();
+
 		try
 		{
-			const uint32_t boneCount = static_cast<uint32_t>(skeleton.bones.size());
-
-			// Depth is derived rather than read: no container carries it, and one forward pass is
-			// enough because a parent always precedes its child.
-			auto     bones    = std::vector<idl::SkinnedBone>();
-			uint32_t maxDepth = 0;
-			bones.reserve(boneCount);
-			for (const assetlib::Bone& bone : skeleton.bones)
-			{
-				const uint32_t depth =
-					bone.parent == idl::cInvalidBone ? 0 : bones[bone.parent].depth + 1;
-				maxDepth = std::max(maxDepth, depth);
-				bones.push_back({ bone.inverseBind, bone.parent, depth });
-			}
-
-			auto samples = std::vector<idl::BoneSample>();
-			samples.reserve(animations.samples.size());
-			for (const assetlib::Transform& sample : animations.samples)
-			{
-				samples.push_back(
-					{ glm::vec4(sample.translation, 0.0f),
-				      glm::vec4(
-						  sample.rotation.x,
-						  sample.rotation.y,
-						  sample.rotation.z,
-						  sample.rotation.w),
-				      glm::vec4(sample.scale, 0.0f) });
-			}
-
-			auto clips = std::vector<idl::Clip>();
-			clips.reserve(animations.clips.size());
-			for (const assetlib::AnimationClip& clip : animations.clips)
-			{
-				clips.push_back(
-					{ clip.firstSample / boneCount,
-				      clip.frameCount,
-				      clip.sampleRate,
-				      clip.loop ? 1u : 0u });
-			}
-
-			auto rollback = GeomRollback();
-
-			auto record      = idl::SkinnedGeom();
+			auto record      = idl::Rig();
 			record.bones     = rollback.Track(m_SkinnedBones, m_SkinnedBones.Add(std::span(bones)));
 			record.samples   = rollback.Track(m_BoneSamples, m_BoneSamples.Add(std::span(samples)));
 			record.clips     = rollback.Track(m_Clips, m_Clips.Add(std::span(clips)));
 			record.boneCount = boneCount;
 			record.maxDepth  = maxDepth;
 
-			GeomRecord& geom = m_Geoms[base.handle.index];
-			geom.skinnedGeom = m_SkinnedGeoms.Add(record);
-			geom.clipCount   = static_cast<uint32_t>(clips.size());
-			geom.boneCount   = boneCount;
+			const core::slot_handle entry = m_Rigs.Add(record);
+
+			RigMeta& meta   = m_Rigs.MetaAt(entry.index);
+			meta.boneCount  = boneCount;
+			meta.clipCount  = static_cast<uint32_t>(clips.size());
+			meta.frameCount = static_cast<uint32_t>(animations.samples.size() / boneCount);
+			meta.useCount   = 0;
 
 			rollback.Commit();
-
-			base.geomType = GeomType::kSkinnedMesh;
-			return base;
+			return RigHandle{ entry };
 		}
 		catch (const std::runtime_error& e)
 		{
-			// The geometry half committed above; take it back down so a failed skinned add leaks
-			// nothing. The handle is still the kStaticMesh one here, which is what DeleteGeom
-			// accepts.
-			DeleteGeom(base);
 			throw SceneError(e.what());
 		}
-		catch (...)
+	}
+
+	void
+	Scene::RequestBoneAnimTable(RigHandle rig)
+	{
+		RigMeta* meta = FindRig(rig);
+		if (meta == nullptr)
 		{
-			// Not everything the block can raise is a runtime_error -- an allocation failure is
-			// not -- and the cleanup must run on every path.
-			DeleteGeom(base);
-			throw;
+			throw SceneError(
+				"RigHandle passed to RequestBoneAnimTable is null, or already deleted");
 		}
+
+		if (meta->boneAnimTable)
+		{
+			// Allocated already. Either it holds a pose, or it is waiting for one -- and the sweep in
+			// PendingRigFills is what finds the second case, so there is nothing to record here.
+			return;
+		}
+
+		const uint32_t float4s = meta->frameCount * meta->boneCount * idl::cFloat4sPerBone;
+
+		// Reserving it is what can cost -- a growth reallocates the whole arena on the device. The
+		// posing itself is the GPU's, and no timestamp query exists to measure it from here.
+		ZoneScopedN("bgl reserve bone anim table");
+		ZoneTextF(
+			"%u bones x %u frames, %llu KiB",
+			meta->boneCount,
+			meta->frameCount,
+			(unsigned long long)((uint64_t(float4s) * sizeof(glm::vec4)) / 1024));
+
+		// Read before the allocation, because a growth is what discards every other rig's table and
+		// the capacity is the only thing that reports one.
+		const uint32_t capacityBefore = m_BoneAnimTables.Capacity();
+
+		// The arena discards on growth, and a table is written once rather than every frame, so every
+		// rig holding one has to be posed again. The offsets survive; the contents do not. Run on the
+		// throwing path too: a growth that then fails to hand out the slice has already discarded.
+		const auto requeueIfGrown = [&] {
+			if (m_BoneAnimTables.Capacity() == capacityBefore)
+			{
+				return;
+			}
+
+			for (uint32_t i = 0; i < m_Rigs.Capacity(); ++i)
+			{
+				if (m_Rigs.IsIndexValid(i) && m_Rigs.MetaAt(i).boneAnimTable)
+				{
+					m_Rigs.MetaAt(i).tableFilled = false;
+				}
+			}
+		};
+
+		try
+		{
+			meta->boneAnimTable = m_BoneAnimTables.Allocate(float4s);
+		}
+		catch (const std::runtime_error& e)
+		{
+			requeueIfGrown();
+			throw SceneError(e.what());
+		}
+
+		m_Rigs.MetaAt(rig.handle.index).tableFilled = false;
+
+		auto record          = m_Rigs[rig.handle];
+		record.boneAnimTable = m_Rigs.MetaAt(rig.handle.index).boneAnimTable;
+		m_Rigs.Set(rig.handle, record);
+
+		requeueIfGrown();
+	}
+
+	std::span<const Scene::RigFill>
+	Scene::PendingRigFills()
+	{
+		m_PendingRigFills.clear();
+
+		for (uint32_t i = 0; i < m_Rigs.Capacity(); ++i)
+		{
+			if (!m_Rigs.IsIndexValid(i))
+			{
+				continue;
+			}
+
+			const RigMeta& meta = m_Rigs.MetaAt(i);
+			if (meta.boneAnimTable && !meta.tableFilled)
+			{
+				m_PendingRigFills.push_back(RigFill{ i, meta.frameCount });
+			}
+		}
+
+		return m_PendingRigFills;
+	}
+
+	void
+	Scene::MarkRigFillsRecorded() noexcept
+	{
+		for (const RigFill& fill : m_PendingRigFills)
+		{
+			if (m_Rigs.IsIndexValid(fill.rigIndex))
+			{
+				m_Rigs.MetaAt(fill.rigIndex).tableFilled = true;
+			}
+		}
+
+		m_PendingRigFills.clear();
+	}
+
+	void
+	Scene::DeleteRig(RigHandle rig)
+	{
+		const RigMeta* meta = FindRig(rig);
+		if (meta == nullptr)
+		{
+			throw SceneError("RigHandle passed to DeleteRig refers to a deleted or unknown rig");
+		}
+
+		// Refused rather than permitted, unlike a texture asset: a geom left naming freed bone and
+		// sample ranges poses from whatever lands in them next.
+		if (meta->useCount > 0)
+		{
+			throw SceneError(
+				"RigHandle passed to DeleteRig still has geoms skinned to it; delete them first");
+		}
+
+		if (meta->boneAnimTable)
+		{
+			m_BoneAnimTables.Free(meta->boneAnimTable);
+		}
+
+		const idl::Rig record = m_Rigs[rig.handle];
+		m_SkinnedBones.EraseByIndex(record.bones.offsetStart);
+		m_BoneSamples.EraseByIndex(record.samples.offsetStart);
+		m_Clips.EraseByIndex(record.clips.range.offsetStart);
+		m_Rigs.Erase(rig.handle);
 	}
 
 	GeomHandle
@@ -897,11 +857,19 @@ namespace bgl
 		const assetlib::BMesh&          mesh,
 		uint32_t                        meshIndex,
 		std::span<const MaterialHandle> materials,
-		const assetlib::Skeleton&       skeleton,
-		const assetlib::AnimationSet&   animations,
+		RigHandle                       rig,
 		const assetlib::Bounds&         posedBounds)
 	{
-		ValidateSkinnedRig(skeleton, animations);
+		const RigMeta* meta = FindRig(rig);
+		if (meta == nullptr)
+		{
+			throw SceneError("AddSkinnedMeshGeom: rig is null, or names a rig already deleted");
+		}
+
+		// Read out before the geometry is built: the metadata lives in a vector another Add may
+		// reallocate, and nothing below needs the pointer again.
+		const uint32_t rigBoneCount = meta->boneCount;
+		const uint32_t rigClipCount = meta->clipCount;
 
 		if (glm::any(glm::greaterThan(posedBounds.min, posedBounds.max)))
 		{
@@ -941,7 +909,18 @@ namespace bgl
 			materials,
 			BoundingSphereOf(posedBounds.min, posedBounds.max));
 
-		return AttachSkinnedRecords(base, skeleton, animations);
+		GeomRecord& geom = m_Geoms[base.handle.index];
+		geom.rig         = rig.handle;
+		geom.clipCount   = rigClipCount;
+		geom.boneCount   = rigBoneCount;
+
+		// Last, so nothing above can throw with the use already counted.
+		RigMeta* counted = FindRig(rig);
+		gassert(counted != nullptr, "the rig validated above went away mid-add");
+		++counted->useCount;
+
+		base.geomType = GeomType::kSkinnedMesh;
+		return base;
 	}
 
 	GeomHandle
@@ -1640,23 +1619,17 @@ namespace bgl
 
 		const GeomRecord& record = m_Geoms[geom.handle.index];
 
-		// The VAT tables ride on the record; the textures do not -- they were the caller's
-		// AddTextureAsset handles, and remain the caller's to delete.
-		if (record.vatGeom)
+		// A rig is shared, so this releases the geom's use of it and frees nothing. DeleteRig frees
+		// the ranges, and refuses until every geom on the rig has been through here.
+		if (record.rig)
 		{
-			const idl::VatGeom vat = m_VatGeoms[record.vatGeom];
-			m_Clips.EraseByIndex(vat.clips.range.offsetStart);
-			m_VatColumns.EraseByIndex(vat.columnBases.offsetStart);
-			m_VatGeoms.Erase(record.vatGeom);
-		}
+			RigMeta* rig = FindRig(RigHandle{ record.rig });
+			gassert(rig != nullptr, "a live skinned geom names a rig that is already gone");
 
-		if (record.skinnedGeom)
-		{
-			const idl::SkinnedGeom skinned = m_SkinnedGeoms[record.skinnedGeom];
-			m_SkinnedBones.EraseByIndex(skinned.bones.offsetStart);
-			m_BoneSamples.EraseByIndex(skinned.samples.offsetStart);
-			m_Clips.EraseByIndex(skinned.clips.range.offsetStart);
-			m_SkinnedGeoms.Erase(record.skinnedGeom);
+			if (rig != nullptr && rig->useCount > 0)
+			{
+				--rig->useCount;
+			}
 		}
 
 		const auto& submeshes = record.submeshes;

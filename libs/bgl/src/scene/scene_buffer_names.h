@@ -14,13 +14,17 @@ namespace bgl
 
 	constexpr std::string_view c_MaterialArenaBufferName = "scene.materialArenaBuffer"sv;
 
-	constexpr std::string_view c_VatGeomBufferName   = "scene.vatGeomBuffer"sv;
-	constexpr std::string_view c_VatColumnBufferName = "scene.vatColumnBuffer"sv;
-
-	// Not vat-prefixed: both animated tiers play from one clip table (see docs/skinning.md).
+	// Not rig-prefixed: it is the rig's clip table, but both pose sources index it and the pose pass
+	// reads it too (see docs/skinning.md).
 	constexpr std::string_view c_ClipBufferName = "scene.clipBuffer"sv;
 
-	constexpr std::string_view c_SkinnedGeomBufferName = "scene.skinnedGeomBuffer"sv;
+	// Not skinned-prefixed: a rig is a skeleton and its clips, which no geom owns.
+	constexpr std::string_view c_RigBufferName = "scene.rigBuffer"sv;
+
+	// GPU-written like the per-view palette, and imported the same way -- RigFramesPass fills it,
+	// nothing uploads it.
+	constexpr std::string_view c_BoneAnimTableName = "scene.boneAnimTables"sv;
+
 	constexpr std::string_view c_SkinnedBoneBufferName = "scene.skinnedBoneBuffer"sv;
 	constexpr std::string_view c_BoneSampleBufferName  = "scene.boneSampleBuffer"sv;
 

@@ -2,6 +2,7 @@
 #include "util/TestEnvironment.h"
 #include "util/TestOptions.h"
 #include "util/VelocityReadback.h"
+#include "util/VertexPacking.h"
 #include <assetlib_structs/Bounds.h>
 #include <bgl/Camera.h>
 #include <bgl/IGraphics.h>
@@ -26,21 +27,6 @@ namespace
 	// (0,1,0), which takes the strip's top edge from +Y onto -X.
 	constexpr uint32_t c_Frames = 2;
 
-	// position(12) + normal(12) + uv(8) + tangent(16) + joints0(8) + weights0(8)
-	constexpr uint16_t c_Stride = 64;
-
-	void
-	PutFloats(std::vector<std::byte>& bytes, size_t at, std::span<const float> values)
-	{
-		std::memcpy(bytes.data() + at, values.data(), values.size() * sizeof(float));
-	}
-
-	void
-	PutU16x4(std::vector<std::byte>& bytes, size_t at, std::span<const uint16_t> values)
-	{
-		std::memcpy(bytes.data() + at, values.data(), values.size() * sizeof(uint16_t));
-	}
-
 	// Every pose the swing below reaches, with room to spare. The strip's own bind-pose box does not
 	// hold once the top edge rotates, and the geom culls by this -- see IScene::AddSkinnedMeshGeom.
 	const auto c_StripPosedBounds =
@@ -64,21 +50,21 @@ namespace
 		const std::array<uint16_t, 4>  bone      = { { 0, 0, 1, 1 } };
 
 		auto mesh = assetlib::BMesh();
-		mesh.vertexData.assign(size_t(4) * c_Stride, std::byte{ 0 });
+		mesh.vertexData.assign(size_t(4) * bgl::test::c_SkinnedVertexStride, std::byte{ 0 });
 
 		for (uint32_t v = 0; v < 4; ++v)
 		{
-			const size_t base = size_t(v) * c_Stride;
+			const size_t base = size_t(v) * bgl::test::c_SkinnedVertexStride;
 
 			const std::array<float, 3> pos = { { positions[v].x, positions[v].y, positions[v].z } };
 			const std::array<float, 3> normal = { { 0.0f, 0.0f, 1.0f } };
 			const std::array<float, 2> uv  = { { positions[v].x + 0.5f, positions[v].y * 0.5f } };
 			const std::array<float, 4> tan = { { 1.0f, 0.0f, 0.0f, 1.0f } };
 
-			PutFloats(mesh.vertexData, base + 0, pos);
-			PutFloats(mesh.vertexData, base + 12, normal);
-			PutFloats(mesh.vertexData, base + 24, uv);
-			PutFloats(mesh.vertexData, base + 32, tan);
+			bgl::test::PutFloats(mesh.vertexData, base + 0, pos);
+			bgl::test::PutFloats(mesh.vertexData, base + 12, normal);
+			bgl::test::PutFloats(mesh.vertexData, base + 24, uv);
+			bgl::test::PutFloats(mesh.vertexData, base + 32, tan);
 
 			// One influence at full weight, the rest at zero -- unorm16 0xFFFF is exactly 1.0. With
 			// `unboundTopEdge`, the two top vertices instead carry four zero weights: what an exporter
@@ -87,8 +73,8 @@ namespace
 			const bool                    unbound = unboundTopEdge && v >= 2;
 			const std::array<uint16_t, 4> joints  = { { bone[v], 0, 0, 0 } };
 			const std::array<uint16_t, 4> weights = { { uint16_t(unbound ? 0 : 0xFFFF), 0, 0, 0 } };
-			PutU16x4(mesh.vertexData, base + 48, joints);
-			PutU16x4(mesh.vertexData, base + 56, weights);
+			bgl::test::PutU16x4(mesh.vertexData, base + 48, joints);
+			bgl::test::PutU16x4(mesh.vertexData, base + 56, weights);
 		}
 
 		auto meshlet           = assetlib::Meshlet();
@@ -104,30 +90,11 @@ namespace
 		const std::array<uint8_t, 6> tris = { { 0, 1, 2, 2, 1, 3 } };
 		for (const uint8_t t : tris) mesh.meshletTriangles.push_back(t);
 
-		auto submesh                  = assetlib::Submesh();
-		submesh.layout.attributeCount = 6;
-		submesh.layout.stride         = c_Stride;
-		submesh.layout.attributes[0]  = { assetlib::VertexSemantic::kPosition,
-			                              assetlib::VertexFormat::kFloat32x3,
-			                              0 };
-		submesh.layout.attributes[1]  = { assetlib::VertexSemantic::kNormal,
-			                              assetlib::VertexFormat::kFloat32x3,
-			                              12 };
-		submesh.layout.attributes[2]  = { assetlib::VertexSemantic::kTexCoord0,
-			                              assetlib::VertexFormat::kFloat32x2,
-			                              24 };
-		submesh.layout.attributes[3]  = { assetlib::VertexSemantic::kTangent,
-			                              assetlib::VertexFormat::kFloat32x4,
-			                              32 };
-		submesh.layout.attributes[4]  = { assetlib::VertexSemantic::kJoints0,
-			                              assetlib::VertexFormat::kUint16x4,
-			                              48 };
-		submesh.layout.attributes[5]  = { assetlib::VertexSemantic::kWeights0,
-			                              assetlib::VertexFormat::kUnorm16x4,
-			                              56 };
-		submesh.vertexCount           = 4;
-		submesh.meshletCount          = 1;
-		submesh.material              = 0;
+		auto submesh         = assetlib::Submesh();
+		submesh.layout       = bgl::test::SkinnedVertexLayout();
+		submesh.vertexCount  = 4;
+		submesh.meshletCount = 1;
+		submesh.material     = 0;
 
 		submesh.aabbMin = glm::vec3(-0.5f, 0.0f, 0.0f);
 		submesh.aabbMax = glm::vec3(0.5f, 2.0f, 0.0f);
@@ -151,8 +118,12 @@ namespace
 				                 glm::quat(1.0f, 0.0f, 0.0f, 0.0f),
 				                 glm::vec3(1.0f) };
 			bone.inverseBind = glm::translate(glm::mat4(1.0f), glm::vec3(0.0f, -float(i), 0.0f));
-			bone.parent      = i == 0 ? assetlib::c_InvalidIndex : i - 1;
-			bone.nameOffset  = 0;
+			// A binary tree, not a chain: the pose pass walks one barrier-synced level per depth, so a
+			// chain of N bones costs N-1 serialized levels and is the worst rig of its size that
+			// exists. A real rig branches. At the default two bones this is bone 0's child either
+			// way, so every case below is unaffected.
+			bone.parent     = i == 0 ? assetlib::c_InvalidIndex : (i - 1) / 2;
+			bone.nameOffset = 0;
 			skeleton.bones.push_back(bone);
 		}
 		return skeleton;
@@ -174,6 +145,45 @@ namespace
 				sample.translation = glm::vec3(0.0f, b == 0 ? 0.0f : 1.0f, 0.0f);
 				sample.rotation    = (f == 1 && b == 1) ? swing : glm::quat(1.0f, 0.0f, 0.0f, 0.0f);
 				sample.scale       = glm::vec3(1.0f);
+				set.samples.push_back(sample);
+			}
+		}
+
+		auto clip        = assetlib::AnimationClip();
+		clip.firstSample = 0;
+		clip.frameCount  = c_Frames;
+		clip.sampleRate  = c_SampleRate;
+		clip.duration    = 1.0f / c_SampleRate;
+		clip.loop        = 0;
+		clip.nameOffset  = 0;
+		set.clips.push_back(clip);
+
+		return set;
+	}
+
+	/**
+	 * The swing again with the rotation taken out: bone 1 slides along +X instead of turning.
+	 *
+	 * It exists for the fractional-frame comparison. The two pose sources blend differently by
+	 * design -- the pose pass nlerps local rotations and then walks, the table lerps the two frames'
+	 * finished skin matrices (ADR-10) -- and those disagree on a rotation. On a pure translation they
+	 * cannot, so this isolates the table's addressing and blend from a difference that is not a bug.
+	 */
+	assetlib::AnimationSet
+	MakeSlideClip()
+	{
+		auto set      = assetlib::AnimationSet();
+		set.boneCount = c_BoneCount;
+
+		for (uint32_t f = 0; f < c_Frames; ++f)
+		{
+			for (uint32_t b = 0; b < c_BoneCount; ++b)
+			{
+				auto sample = assetlib::Transform();
+				sample.translation =
+					glm::vec3((f == 1 && b == 1) ? 0.75f : 0.0f, b == 0 ? 0.0f : 1.0f, 0.0f);
+				sample.rotation = glm::quat(1.0f, 0.0f, 0.0f, 0.0f);
+				sample.scale    = glm::vec3(1.0f);
 				set.samples.push_back(sample);
 			}
 		}
@@ -274,8 +284,7 @@ TEST_CASE(
 		MakeSkinnedStrip(),
 		0,
 		materials,
-		MakeTwoBoneRig(),
-		MakeSwingClip(),
+		scene->AddRig(MakeTwoBoneRig(), MakeSwingClip()),
 		c_StripPosedBounds);
 	REQUIRE(staticGeom.IsValid());
 	REQUIRE(skinnedGeom.IsValid());
@@ -360,8 +369,7 @@ TEST_CASE("a rig past the old groupshared ceiling poses correctly", "[skinned][r
 		MakeSkinnedStrip(),
 		0,
 		materials,
-		MakeTwoBoneRig(c_DeepBones),
-		MakeSwingClip(c_DeepBones),
+		scene->AddRig(MakeTwoBoneRig(c_DeepBones), MakeSwingClip(c_DeepBones)),
 		c_StripPosedBounds);
 
 	// The refusal this used to hit is gone, and that is half of what the test is for.
@@ -375,8 +383,7 @@ TEST_CASE("a rig past the old groupshared ceiling poses correctly", "[skinned][r
 		MakeSkinnedStrip(),
 		0,
 		materials,
-		MakeTwoBoneRig(),
-		MakeSwingClip(),
+		scene->AddRig(MakeTwoBoneRig(), MakeSwingClip()),
 		c_StripPosedBounds);
 	REQUIRE(shallowGeom.IsValid());
 
@@ -469,8 +476,7 @@ TEST_CASE("a posed skinned mesh moves the bones' vertices and nothing else", "[s
 		MakeSkinnedStrip(),
 		0,
 		materials,
-		MakeTwoBoneRig(),
-		MakeSwingClip(),
+		scene->AddRig(MakeTwoBoneRig(), MakeSwingClip()),
 		c_StripPosedBounds);
 	REQUIRE(geom.IsValid());
 
@@ -534,8 +540,7 @@ TEST_CASE("a vertex bound to no bone keeps its bind pose", "[skinned][render]")
 		MakeSkinnedStrip(true),
 		0,
 		materials,
-		MakeTwoBoneRig(),
-		MakeSwingClip(),
+		scene->AddRig(MakeTwoBoneRig(), MakeSwingClip()),
 		c_StripPosedBounds);
 	REQUIRE(geom.IsValid());
 
@@ -600,8 +605,7 @@ TEST_CASE(
 		MakeSkinnedStrip(),
 		0,
 		materials,
-		MakeTwoBoneRig(),
-		MakeSwingClip(),
+		scene->AddRig(MakeTwoBoneRig(), MakeSwingClip()),
 		c_StripPosedBounds);
 
 	auto job     = bgl::RenderJob();
@@ -703,8 +707,7 @@ TEST_CASE("a blended skinned mesh sorts among blended static geometry", "[skinne
 			MakeSkinnedStrip(),
 			0,
 			materials,
-			MakeTwoBoneRig(),
-			MakeSwingClip(),
+			scene->AddRig(MakeTwoBoneRig(), MakeSwingClip()),
 			c_StripPosedBounds);
 	};
 
@@ -817,8 +820,7 @@ TEST_CASE("a selected skinned instance contours its pose", "[skinned][selection]
 		MakeSkinnedStrip(),
 		0,
 		materials,
-		MakeTwoBoneRig(),
-		MakeSwingClip(),
+		scene->AddRig(MakeTwoBoneRig(), MakeSwingClip()),
 		c_StripPosedBounds);
 	REQUIRE(geom.IsValid());
 
@@ -858,4 +860,274 @@ TEST_CASE("a selected skinned instance contours its pose", "[skinned][selection]
 
 	CHECK(posed > 1e-3f);
 	CHECK(bindPose < 1e-5f);
+}
+
+TEST_CASE("an instance on its rig's table draws what the pose pass draws", "[skinned][render]")
+{
+	auto opts             = bgl::GraphicsOptions();
+	opts.shaderCacheDir   = bgl::test::ShaderCacheDir();
+	opts.enableDebugLayer = true;
+
+	auto gfx = bgl::CreateGraphics(opts);
+	REQUIRE(gfx != nullptr);
+
+	auto targetDesc     = bgl::RenderTargetDesc();
+	targetDesc.width    = static_cast<int>(c_Width);
+	targetDesc.height   = static_cast<int>(c_Height);
+	targetDesc.headless = true;
+	auto target         = gfx->CreateRenderTarget(targetDesc);
+
+	auto sceneDesc                        = bgl::SceneDesc();
+	sceneDesc.initialGeom                 = 4;
+	sceneDesc.initialMeshlets             = 8;
+	sceneDesc.initialSubmeshes            = 4;
+	sceneDesc.initialVertexBufferByteSize = 4096;
+	sceneDesc.initialIndices              = 64;
+	sceneDesc.initialPbrMaterials         = 4;
+
+	auto scene = gfx->CreateScene(sceneDesc);
+	auto view  = gfx->CreateSceneView(scene, 4);
+
+	bgl::test::ApplyEnvironment(scene.Get(), view.Get());
+
+	auto material            = bgl::PbrMaterialDesc();
+	material.baseColorFactor = glm::vec4(0.8f, 0.4f, 0.2f, 1.0f);
+	material.metallicFactor  = 0.0f;
+	material.roughnessFactor = 0.5f;
+
+	const std::array<bgl::MaterialHandle, 1> materials = { { scene->CreatePbrMaterial(material) } };
+
+	auto job     = bgl::RenderJob();
+	job.view     = view;
+	job.camera   = StripCamera();
+	job.viewport = bgl::Viewport(static_cast<float>(c_Width), static_cast<float>(c_Height));
+
+	// One geom on one rig, drawn twice: the only difference between the two frames is where the
+	// vertex stage read the pose from. The instances are placed one at a time so each frame holds
+	// exactly one.
+	const auto drawAs = [&](const assetlib::AnimationSet& clips,
+	                        bgl::PoseSource               source,
+	                        float                         phase,
+	                        const char*                   png) {
+		const auto geom = scene->AddSkinnedMeshGeom(
+			MakeSkinnedStrip(),
+			0,
+			materials,
+			scene->AddRig(MakeTwoBoneRig(), clips),
+			c_StripPosedBounds);
+		REQUIRE(geom.IsValid());
+
+		auto desc   = bgl::SkinnedInstanceDesc();
+		desc.clip   = 0;
+		desc.phase  = phase;
+		desc.rate   = 0.0f;  // holds `phase` under any clock
+		desc.source = source;
+
+		const auto instance = view->CreateSkinnedMeshInstance(geom, glm::mat4(1.0f), desc);
+		gfx->DrawFrame(target, job);
+		gfx->ScreenshotPng(target, png);
+		view->DeleteMeshInstance(instance);
+	};
+
+	const auto* palettePng = "assets/golden/pose_source_palette.got.png";
+	const auto* tablePng   = "assets/golden/pose_source_table.got.png";
+
+	SECTION("at every frame of the clip")
+	{
+		// Whole frames, where the table holds the pose exactly and no blend is involved either way.
+		// The two must agree to the bit: same walk, same inverse binds, same vertex bytes.
+		for (uint32_t frame = 0; frame < c_Frames; ++frame)
+		{
+			drawAs(MakeSwingClip(), bgl::PoseSource::kPerInstance, float(frame), palettePng);
+			drawAs(MakeSwingClip(), bgl::PoseSource::kBoneAnimTable, float(frame), tablePng);
+
+			CHECK(
+				bgl::test::FrameDelta(palettePng, tablePng, 0, 0, int(c_Width), int(c_Height)) <
+				1e-6f);
+		}
+	}
+
+	SECTION("and between two frames of a clip that only translates")
+	{
+		// See MakeSlideClip: the two sources blend differently, and on a translation that difference
+		// is zero, so a mismatch here is the table's addressing or its blend rather than ADR-10.
+		drawAs(MakeSlideClip(), bgl::PoseSource::kPerInstance, 0.5f, palettePng);
+		drawAs(MakeSlideClip(), bgl::PoseSource::kBoneAnimTable, 0.5f, tablePng);
+
+		CHECK(
+			bgl::test::FrameDelta(palettePng, tablePng, 0, 0, int(c_Width), int(c_Height)) < 1e-6f);
+	}
+
+	SECTION("and a moving one writes motion vectors, where a held one writes none")
+	{
+		const auto geom = scene->AddSkinnedMeshGeom(
+			MakeSkinnedStrip(),
+			0,
+			materials,
+			scene->AddRig(MakeTwoBoneRig(), MakeSwingClip()),
+			c_StripPosedBounds);
+
+		// The camera never moves, so any velocity on screen came from the pose -- which on this path
+		// is a second read of the table at prevTime rather than a second palette. A fresh view each
+		// time, and two frames, because prevTime equals time on the first by construction.
+		const auto peakVelocity = [&](float rate) {
+			auto localView = gfx->CreateSceneView(scene, 4);
+			bgl::test::ApplyEnvironment(scene.Get(), localView.Get());
+
+			auto localJob = job;
+			localJob.view = localView;
+
+			auto desc   = bgl::SkinnedInstanceDesc();
+			desc.rate   = rate;
+			desc.source = bgl::PoseSource::kBoneAnimTable;
+			localView->CreateSkinnedMeshInstance(geom, glm::mat4(1.0f), desc);
+
+			localJob.time = 0.0f;
+			gfx->DrawFrame(target, localJob);
+
+			localJob.time = 1.0f / c_SampleRate;
+			gfx->DrawFrame(target, localJob);
+
+			const auto velocity =
+				bgl::test::ReadMotionVectors(gfx.Get(), target.Get(), c_Width, c_Height);
+
+			float peak = 0.0f;
+			for (const glm::vec2& v : velocity)
+			{
+				peak = std::max(peak, glm::length(v));
+			}
+			return peak;
+		};
+
+		CHECK(peakVelocity(1.0f) > 1e-3f);
+		CHECK(peakVelocity(0.0f) < 1e-5f);
+	}
+}
+
+// Hidden: it spawns thousands of instances and is a measurement rather than an assertion. Run it by
+// hand -- `just run bgl_tests -- "[.posetiming]"` -- and read the numbers off the warning it prints.
+//
+// The two sources on the identical mesh, rig and clip, so the only difference is where each vertex
+// reads its pose. It is a throughput number over a whole frame and not a per-stage one -- the RHI
+// has no timestamp query -- so read it as what a crowd costs, never as what one stage costs.
+TEST_CASE("what a crowd costs on each pose source", "[.posetiming]")
+{
+	constexpr uint32_t c_Instances      = 2000;
+	constexpr uint32_t c_MeasuredFrames = 30;
+
+	// A crowd rig's bone count, not the two-bone fixture's. What the table removes is a pose pass
+	// costing instances x bones, so a rig with two bones has nearly nothing to remove and the two
+	// sources measure the same -- which says more about the fixture than about the tier.
+	constexpr uint32_t c_CrowdBones = 64;
+
+	auto opts           = bgl::GraphicsOptions();
+	opts.shaderCacheDir = bgl::test::ShaderCacheDir();
+
+	auto gfx = bgl::CreateGraphics(opts);
+	REQUIRE(gfx != nullptr);
+
+	auto targetDesc     = bgl::RenderTargetDesc();
+	targetDesc.width    = static_cast<int>(c_Width);
+	targetDesc.height   = static_cast<int>(c_Height);
+	targetDesc.headless = true;
+	auto target         = gfx->CreateRenderTarget(targetDesc);
+
+	auto sceneDesc                        = bgl::SceneDesc();
+	sceneDesc.initialGeom                 = 8;
+	sceneDesc.initialMeshlets             = 64;
+	sceneDesc.initialSubmeshes            = 8;
+	sceneDesc.initialVertexBufferByteSize = 65536;
+	sceneDesc.initialIndices              = 1024;
+	sceneDesc.initialPbrMaterials         = 8;
+
+	auto scene = gfx->CreateScene(sceneDesc);
+
+	auto material           = bgl::PbrMaterialDesc();
+	material.metallicFactor = 0.0f;
+
+	const std::array<bgl::MaterialHandle, 1> materials = { { scene->CreatePbrMaterial(material) } };
+
+	// The strip still weights its vertices to bones 0 and 1, which is what a real rig does too: a
+	// vertex touches at most four of however many the rig has. The rest are posed and never read,
+	// and paying for them per instance per frame is exactly the cost the table exists to remove.
+	const assetlib::Skeleton skeleton = MakeTwoBoneRig(c_CrowdBones);
+
+	// The walk runs one barrier-synced level per depth, so this is what the pose pass is really
+	// charged in -- reported beside the bone count, because the same 64 bones as a chain would cost
+	// ten times the levels.
+	uint32_t maxDepth = 0;
+	{
+		auto depth = std::vector<uint32_t>(skeleton.bones.size(), 0);
+		for (size_t i = 1; i < skeleton.bones.size(); ++i)
+		{
+			depth[i] = depth[skeleton.bones[i].parent] + 1;
+			maxDepth = std::max(maxDepth, depth[i]);
+		}
+	}
+
+	const auto geom = scene->AddSkinnedMeshGeom(
+		MakeSkinnedStrip(),
+		0,
+		materials,
+		scene->AddRig(skeleton, MakeSwingClip(c_CrowdBones)),
+		c_StripPosedBounds);
+	REQUIRE(geom.IsValid());
+
+	const auto msPerFrame = [&](bgl::PoseSource source) {
+		auto view = gfx->CreateSceneView(scene, c_Instances + 8);
+		bgl::test::ApplyEnvironment(scene.Get(), view.Get());
+
+		auto job     = bgl::RenderJob();
+		job.view     = view;
+		job.camera   = StripCamera();
+		job.viewport = bgl::Viewport(static_cast<float>(c_Width), static_cast<float>(c_Height));
+
+		for (uint32_t i = 0; i < c_Instances; ++i)
+		{
+			auto desc   = bgl::SkinnedInstanceDesc();
+			desc.phase  = float(i % 17);  // staggered, as a crowd is
+			desc.rate   = 1.0f;
+			desc.source = source;
+
+			const float x = float(i % 50) * 0.4f - 10.0f;
+			const float y = float(i / 50) * 0.4f - 8.0f;
+
+			view->CreateSkinnedMeshInstance(
+				geom,
+				glm::translate(glm::mat4(1.0f), glm::vec3(x, y, 0.0f)),
+				desc);
+		}
+
+		// One frame to fill the table and warm every PSO, then the measured run.
+		job.time = 0.0f;
+		gfx->DrawFrame(target, job);
+
+		const auto start = std::chrono::steady_clock::now();
+		for (uint32_t f = 0; f < c_MeasuredFrames; ++f)
+		{
+			job.time = float(f) / 30.0f;
+			gfx->DrawFrame(target, job);
+		}
+
+		return std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - start)
+		           .count() /
+		       double(c_MeasuredFrames);
+	};
+
+	const double perInstance = msPerFrame(bgl::PoseSource::kPerInstance);
+	const double table       = msPerFrame(bgl::PoseSource::kBoneAnimTable);
+
+	WARN(
+		std::format(
+			"crowd timing: {} instances x {} bones (depth {}) x {} frames | per-instance {:.2f} | "
+			"table {:.2f} ms/frame",
+			c_Instances,
+			c_CrowdBones,
+			maxDepth,
+			c_MeasuredFrames,
+			perInstance,
+			table));
+
+	CHECK(perInstance > 0.0);
+	CHECK(table > 0.0);
 }

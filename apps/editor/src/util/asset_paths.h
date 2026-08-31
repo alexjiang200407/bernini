@@ -22,9 +22,8 @@ namespace editor
 	IsTextureFile(const QString& path);
 
 	/**
-	 * Whether `path` names a file the Content Explorer's views do not list: a derived build product,
-	 * which offering for rename or delete would imply an authorship it does not have, or a sidecar
-	 * whose row is the file beside it -- as Unity hides a `.meta` and Godot a `.import`.
+	 * Whether `path` names a file the Content Explorer's views do not list: a sidecar whose row is
+	 * the file beside it -- as Unity hides a `.meta` and Godot a `.import`.
 	 *
 	 * The reference graph still reads these from the filesystem directly, so rename and delete
 	 * cascades of their *inputs* see them.

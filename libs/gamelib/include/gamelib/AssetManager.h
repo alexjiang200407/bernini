@@ -158,56 +158,12 @@ namespace game
 		bgl::GeomHandle
 		AcquireMesh(std::string_view relPath, uint32_t meshIndex = 0);
 
-		/** An acquired VAT mesh: the geom to instance, and the clips its instances can play. */
-		struct VatMesh
-		{
-			bgl::GeomHandle       geom;
-			std::vector<ClipInfo> clips;
-		};
-
-		/**
-		 * An acquired skinned mesh. Deliberately the same shape as VatMesh, down to the clip type: the
-		 * two tiers describe a clip identically, and a caller that shows a clip list should not have to
-		 * know which one it acquired.
-		 */
+		/** An acquired skinned mesh: the geom to instance, and the clips its instances can play. */
 		struct SkinnedMesh
 		{
 			bgl::GeomHandle       geom;
 			std::vector<ClipInfo> clips;
 		};
-
-		/**
-		 * Uploads mesh `meshIndex` of the `.bmesh` at `relPath` as VAT geometry -- pose fetched
-		 * from the rig's baked texture pair instead of skinned -- or shares it from a previous
-		 * call, acquiring its materials like AcquireMesh does.
-		 *
-		 * The pair's `.bvat` (assetlib::vatPathFor: beside the mesh, one file per clip set) is a
-		 * derived build product -- a bake is seconds of CPU skinning, and the file is never
-		 * committed. Missing, or out of date against the stamps of the three inputs it was baked
-		 * from, it is re-baked from `relPath` + `animationsRelPath` and written to the store's
-		 * writable layer, which may be an overlay that did not hold it before (see EnsureVatBaked,
-		 * which owns the rule and can run the bake off the render thread).
-		 *
-		 * **Unless the store has nowhere to write at all.** A shipped mount is an archive `pack`
-		 * baked every `.bvat` into, so what it carries is used without asking whether it is stale;
-		 * one it does not carry cannot be made, and throws.
-		 *
-		 * While the geom is live, every acquire must name the `.banim` it was first acquired
-		 * with: a shared acquire returns the cached clip table without reading the container, so
-		 * switching clip sets means releasing the geom to zero first -- the eviction is what lets
-		 * the freshness check see the new request.
-		 *
-		 * @throws std::runtime_error if an input cannot be read or the bake refuses it, or if the
-		 *         geom is live with clips from a different `.banim` than the one named, or
-		 *         bgl::SceneError if a submesh's material does not resolve to kPBR -- the VAT
-		 *         pipeline has no unlit or loose variant, so such a mesh cannot be acquired as VAT.
-		 *         A failed acquire owns nothing.
-		 */
-		VatMesh
-		AcquireVatMesh(
-			std::string_view relPath,
-			std::string_view animationsRelPath,
-			uint32_t         meshIndex = 0);
 
 		/**
 		 * Uploads mesh `meshIndex` of the `.bmesh` at `relPath` as skinned geometry, or shares it from
@@ -319,24 +275,12 @@ namespace game
 		CreateInstance(bgl::SceneViewRef view, bgl::GeomHandle geom, const glm::mat4& transform);
 
 		/**
-		 * The VAT counterpart of CreateInstance: places a geom AcquireVatMesh returned, spawned on
-		 * `desc`'s clip, phase and rate. The same references are taken and the same
-		 * DestroyInstance releases them.
-		 *
-		 * @throws bgl::SceneError if `view` is null, the geom is not this manager's or has
-		 *         expired, or `desc.clip` is out of the geom's clip table.
-		 */
-		bgl::MeshInstanceHandle
-		CreateVatInstance(
-			bgl::SceneViewRef           view,
-			bgl::GeomHandle             geom,
-			const glm::mat4&            transform,
-			const bgl::VatInstanceDesc& desc);
-
-		/**
 		 * The skinned counterpart of CreateInstance: places a geom AcquireSkinnedMesh returned, spawned
-		 * on `desc`'s clip, phase and rate. The same references are taken and the same DestroyInstance
-		 * releases them.
+		 * on `desc`'s clip, phase and rate and posed from its `source`. The same references are taken
+		 * and the same DestroyInstance releases them.
+		 *
+		 * `PoseSource::kBoneAnimTable` reserves the rig's table on the first such instance -- see
+		 * ISceneView::CreateSkinnedMeshInstance for what that costs.
 		 *
 		 * @throws bgl::SceneError if `view` is null, the geom is not this manager's or has expired, or
 		 *         `desc.clip` is out of the geom's clip table.
@@ -470,6 +414,18 @@ namespace game
 			uint32_t refCount = 0;
 		};
 
+		/**
+		 * One uploaded rig, shared by every skinned geom cooked against the same clip set.
+		 *
+		 * Keyed on the normalized `.banim` path rather than the `.bskel`'s: a clip set names its own
+		 * rig, so the two are one choice, and it is the path a skinned acquire already carries.
+		 */
+		struct RigRecord
+		{
+			bgl::RigHandle handle;
+			uint32_t       refCount = 0;
+		};
+
 		struct GeomRecord
 		{
 			std::string     key;  // empty for procedural geometry
@@ -478,17 +434,9 @@ namespace game
 			// One per submesh: the material that submesh is bound to, and holds a reference to.
 			std::vector<bgl::MaterialHandle> submeshMaterials;
 
-			// VAT only: the embedded texture pair this geom fetches from (each holding a
-			// reference), the clip table a shared acquire hands back without re-reading the
-			// container, and the normalized .banim path those clips came from -- what a shared
-			// acquire is checked against.
-			std::vector<bgl::TextureAssetHandle> vatTextures;
-			std::vector<ClipInfo>                vatClips;
-			std::string                          vatAnimations;
-
-			// Skinned only, and the same bargain as vatClips/vatAnimations above: the clip table a
-			// shared acquire hands back without re-reading the container, and the normalized .banim
-			// path it came from. No textures -- a skinned pose is computed, not fetched.
+			// Skinned only: the clip table a shared acquire hands back without re-reading the
+			// container, and the normalized .banim path it came from -- what a shared acquire is
+			// checked against.
 			std::vector<ClipInfo> skinnedClips;
 			std::string           skinnedAnimations;
 
@@ -588,8 +536,8 @@ namespace game
 		bgl::TextureAssetHandle
 		AddEmbeddedTexture(std::string key, assetlib::ImageData image);
 
-		// The record-keeping tail CreateInstance and CreateVatInstance share: takes the geom
-		// reference and files the InstanceRecord.
+		// The record-keeping tail every CreateInstance door shares: takes the geom reference and
+		// files the InstanceRecord.
 		void
 		RegisterInstance(
 			bgl::SceneViewRef       view,
@@ -611,6 +559,26 @@ namespace game
 		void
 		DestroyGeom(GeomRecord& record);
 
+		/**
+		 * The rig for `animationsNorm`, uploaded on the first acquire and shared afterwards. One
+		 * reference per skinned *geom*, not per geom reference: a geom takes one when it is built
+		 * and gives it back in DestroyGeom.
+		 */
+		[[nodiscard]] bgl::RigHandle
+		AcquireRig(
+			std::string_view              animationsNorm,
+			const assetlib::Skeleton&     skeleton,
+			const assetlib::AnimationSet& animations);
+
+		/**
+		 * Drops one reference, deleting the rig at zero.
+		 *
+		 * @pre Every geom skinned to it is already deleted -- bgl refuses otherwise, which is why
+		 *      this runs after DeleteGeom.
+		 */
+		void
+		ReleaseRig(std::string_view animationsNorm);
+
 		bgl::SceneRef        m_Scene;
 		assetlib::AssetStore m_Store;
 		AssetManagerOptions  m_Options;
@@ -622,6 +590,8 @@ namespace game
 		std::unordered_map<uint32_t, TextureRecord>  m_Textures;
 		std::unordered_map<uint64_t, MaterialRecord> m_Materials;
 		std::unordered_map<uint32_t, GeomRecord>     m_Geoms;
+
+		core::str::unordered_str_map<RigRecord> m_Rigs;
 
 		std::unique_ptr<ContainerReads> m_Reads;
 

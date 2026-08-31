@@ -40,12 +40,11 @@ set(IDL_CPP_SOURCES
     PsoType.slang
     DispatchArgs.slang
     BaseTable.slang
-    VatGeom.slang
-    VatState.slang
     BoneSample.slang
     SkinnedBone.slang
-    SkinnedGeom.slang
+    Rig.slang
     SkinnedState.slang
+    SkinnedTableState.slang
     RawRange.slang
     RecordHeader.slang
     PlaybackType.slang

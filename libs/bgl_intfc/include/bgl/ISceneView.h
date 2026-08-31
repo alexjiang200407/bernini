@@ -39,22 +39,16 @@ namespace bgl
 		CreateStaticMeshInstance(GeomHandle geom, glm::mat4 transform) = 0;
 
 		/**
-		 * The kVatMesh counterpart of CreateStaticMeshInstance. Deleted through the same
-		 * DeleteMeshInstance as any other placement.
-		 *
-		 * @throws SceneError if `geom` is not a live kVatMesh geom, or `desc.clip` is out of range.
-		 */
-		virtual MeshInstanceHandle
-		CreateVatMeshInstance(
-			GeomHandle             geom,
-			glm::mat4              transform,
-			const VatInstanceDesc& desc) = 0;
-
-		/**
 		 * The kSkinnedMesh counterpart of CreateStaticMeshInstance. Deleted through the same
 		 * DeleteMeshInstance as any other placement.
 		 *
-		 * @throws SceneError if `geom` is not a live kSkinnedMesh geom, or `desc.clip` is out of range.
+		 * @throws SceneError if `geom` is not a live kSkinnedMesh geom, `desc.clip` is out of range,
+		 *         or -- with `desc.source == PoseSource::kBoneAnimTable` -- the rig's bone anim table
+		 *         cannot be reserved.
+		 * @post With that source, the *first* such instance on a rig reserves its table:
+		 *       `boneCount * frameCount` skinning matrices of device memory, tens of megabytes on a
+		 *       dense rig, filled by the next frame this view is drawn. Later instances on the same
+		 *       rig cost nothing.
 		 */
 		virtual MeshInstanceHandle
 		CreateSkinnedMeshInstance(
