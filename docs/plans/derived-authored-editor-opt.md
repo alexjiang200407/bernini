@@ -61,14 +61,28 @@ path-referenced file) but Unity/Godot-shaped in lifecycle (gitignored, put back 
   reads it rather than assuming a fixed set. The existing `.bmesh` suffix match stays, so a path
   from a saved document still drops.
 
-- **ADR-5 — A `.glb` dropped on the material graph canvas offers that source's extracted textures.**
-  They are reached through the document's `textureDir`, not its `outputs` — `outputs` names only the
-  three containers. `MaterialGraphView` keeps accepting a bare `.ktx2` for a saved graph's sake.
-  *Rejected: Unity-style child rows under the source, because `AssetFileModel` would stop being a
-  plain `QFileSystemModel` and its own header records why it is one — "the views index straight into
-  this model in a dozen places, and a proxy would put a mapToSource in front of every one of them
-  for nothing" (`AssetFileModel.h:21-22`). Rejected a file picker on `TextureNode`, which trades a
-  direct gesture for a dialog.*
+- **ADR-5 — The Content Explorer gets a read-only texture viewer, and a `.ktx2` is dragged out of
+  it.** Textures mode re-roots the views at `Derived/SourceTextures`; the grid renders the
+  thumbnails it already renders, dragging out is how a texture reaches a graph, and nothing in that
+  mode can be renamed or deleted. *Reverses this ADR's first form, which made the `.glb` the way in
+  and asked which texture with a menu — see below. Rejected: Unity-style child rows under the
+  source, because `AssetFileModel` would stop being a plain `QFileSystemModel` and its own header
+  records why it is one ("the views index straight into this model in a dozen places, and a proxy
+  would put a mapToSource in front of every one of them for nothing", `AssetFileModel.h:21-22`).
+  Rejected a file picker on `TextureNode`, which trades a direct gesture for a dialog. Rejected
+  symlinking a texture directory under `Authored/`, which is not merely platform-specific: `originOf`
+  prefix-matches the key string (`project_layout.cpp:20`), so any scheme making a derived file
+  addressable as authored lets `requireOrigin` permit writes there, and a texture key spelled through
+  the link would resolve loose and miss in a `.bpak`.*
+
+  **Amended after task 7 was built and closed unmerged (#557).** Its first form was: drop the `.glb`
+  on the canvas, and offer that source's textures in a popup. That premise was that a texture could
+  not be reached directly once `Derived/` left the browser — and a viewer removes the premise rather
+  than working around it. What settled it was counting: `AnimalFriends` has 1 extracted texture,
+  `angelica` 11, `AdaWong` **44**. A 44-row popup is the wrong shape and thumbnails make each row
+  taller rather than fixing it; a scrollable grid is the right shape, and the explorer already has
+  one. The restored gesture is also the one that existed before this feature, so nothing new has to
+  be learned.
 
 - **ADR-6 — Derived files are never renamed or deleted by a person, only carried.**
   `AssetOperations` refuses any target whose `originOf` says `kDerived`, so the rule is an invariant
@@ -189,7 +203,8 @@ them is a gesture: the canvas drop (`MaterialEditorWindow.cpp:542`). The other t
 `BuildImportedMaterialGraph` wiring a graph from a glTF's own PBR material at import time
 (`material_graph.cpp:257`), and `TextureNode::load` restoring a saved graph
 (`nodes/TextureNode.cpp:154-157`). So dragging a `.ktx2` out of the browser is the only way a
-*person* puts a texture in a graph — which is why ADR-1 cannot land without ADR-5.
+*person* puts a texture in a graph — which is why ADR-1 cannot land without ADR-5, and why ADR-5
+ended up restoring that drag rather than replacing it.
 
 **Thumbnails.** `AssetThumbnailCache` renders "a `.bmesh` as itself, a `.bmaterial` on a sphere"
 (`apps/editor/src/Thumbnails/AssetThumbnailCache.h:36-37`) and, being a `StampedPixmapCache`, decides
@@ -284,9 +299,23 @@ so it fails safe, but it should not be offered.
    handlers accept a `.glb` and resolve it. Gate: `just run editor_tests -- "[drop]"` — the drop
    *rules* are driven straight through the handlers, since a `Drop` event cannot be synthesized.
 
-7. **`feat(editor): a source dropped on the graph canvas offers its textures`** — `MaterialGraphView`
-   accepts a `.glb`, `MaterialEditorWindow` presents that source's textures and makes the node.
-   Gate: `just run editor_tests -- "[materialgraph]"`, plus eyes.
+7. **`feat(editor): a read-only texture viewer in the Content Explorer`** — a mode switch whose
+   Textures half re-roots the views at `Derived/SourceTextures`, grouped by the import each folder
+   came from, and out of which a `.ktx2` is dragged onto the graph canvas exactly as before this
+   feature. `MaterialGraphView` is **not touched**: it already accepts a `.ktx2` drop.
+
+   Three pieces already landed do the work, which is why this is smaller than the menu it replaces:
+   `m_BrowseRoot` (task 4) already separates where the views point from what a path means, so a mode
+   is a different browse root rather than a proxy model; the navigation guard (task 5) then keeps
+   the mode inside its own root for free; and `IsActionableAsset` (task 4) already refuses rename
+   and delete on anything `kDerived`, so read-only needs no new enforcement. What does need writing
+   is the refusal of an *import* drop in Textures mode — `ContentExplorerWindow` takes a `.glb` from
+   outside to import it, and that is an edit.
+
+   Gate: `just run editor_tests -- "[textures]"`, plus eyes — bracket adjacency is AND, and the
+   rule itself is pinned under `[assetrules]`, so the narrower spelling would skip it.
+
+   *Replaces the drop-and-menu task built as #557 and closed unmerged. See ADR-5.*
 
 8. **`feat(editor): the source row renames what it produced`** — `AssetAt` returns an imported
    source, and the context menu's Rename is wired onto task 1. **Both, or neither**: `AssetAt`
