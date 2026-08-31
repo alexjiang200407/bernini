@@ -71,9 +71,9 @@ namespace assetlib
 	}
 
 	std::string
-	meshOutputOf(const ImportDocument& document)
+	ImportDocument::MeshOutput() const
 	{
-		for (const std::string& output : document.outputs)
+		for (const std::string& output : outputs)
 			if (assetTypeFromExtension(output) == AssetType::kMesh)
 				return output;
 

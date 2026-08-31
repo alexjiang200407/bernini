@@ -236,7 +236,7 @@ The dotted edge is the asymmetry: reads go through the store, writes go around i
   original bytes back and puts every file already moved back where it was — best-effort, and a
   machine that fails the restore too reports the first error rather than a pretense of atomicity.
 * **`planRename` on an imported source** — a `.glb` and its `.bimport` are one asset under two
-  names, so either spelling plans the same move and `from`/`to` read back as the document's. What
+  names, so either spelling plans the same move and `subject` reads back as the document's. What
   travels with it splits by the same rule the whole data root does. `RenamePlan::source` is the
   `.glb`: **authored**, and the file `Reimport` reads *from*, so nothing can put it back — a rename
   that cannot move it fails, exactly as it does for the subject. `RenamePlan::outputs` are the

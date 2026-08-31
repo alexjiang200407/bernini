@@ -117,7 +117,7 @@ namespace assetlib
 				// disk); a clips-only source had none and swept the project's
 				// (WriteImportedClips). Re-measuring project-wide is `bakebounds`, deliberately
 				// its own operation.
-				if (const std::string mesh = meshOutputOf(document); mesh.empty())
+				if (const std::string mesh = document.MeshOutput(); mesh.empty())
 				{
 					bakeBoundsForRig(
 						store,

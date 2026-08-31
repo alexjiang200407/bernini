@@ -53,20 +53,20 @@ namespace assetlib
 		std::string                  extraParametersJson = "{}";
 		std::string                  extraJson           = "{}";
 
+		/**
+		 * The `.bmesh` among `outputs`, or empty for a source that produced none -- a clips-only
+		 * import, or one whose mesh has since been deleted out of the list.
+		 *
+		 * Here rather than in each caller because "which output is the mesh" is a fact about what
+		 * an import writes, and two copies would drift the first time the answer stopped being
+		 * "the one with a `.bmesh` extension".
+		 */
+		[[nodiscard]] std::string
+		MeshOutput() const;
+
 		bool
 		operator==(const ImportDocument&) const = default;
 	};
-
-	/**
-	 * The `.bmesh` among `document`'s outputs, or empty for a source that produced none -- a
-	 * clips-only import, or one whose mesh has since been deleted out of the list.
-	 *
-	 * Here rather than in each caller because "which output is the mesh" is a fact about what an
-	 * import writes: the regeneration walk and the editor both ask it, and two copies would drift
-	 * the first time the answer stopped being "the one with a `.bmesh` extension".
-	 */
-	[[nodiscard]] std::string
-	meshOutputOf(const ImportDocument& document);
 
 	/** `Authored/Meshes/kirk.glb` -> `Authored/Meshes/kirk.bimport`. */
 	[[nodiscard]] std::string

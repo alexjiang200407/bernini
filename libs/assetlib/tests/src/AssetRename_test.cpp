@@ -821,7 +821,7 @@ TEST_CASE("An import document names the same move its source does", "[assetrenam
 
 	const RenamePlan plan =
 		planRename(root.Scan(), before.document, "Authored/Meshes/hero.bimport");
-	CHECK(plan.from == before.document);
+	CHECK(plan.subject.from == before.document);
 	CHECK(plan.assetType == AssetType::kImportDocument);
 
 	REQUIRE(root.Source().RenameAsset(plan).status == RenameStatus::kRenamed);

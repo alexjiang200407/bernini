@@ -116,8 +116,8 @@ namespace assetlib
 				}
 
 				RenamePlan plan;
-				plan.from                                 = stale;
-				plan.to                                   = match;
+				plan.subject.from                         = stale;
+				plan.subject.to                           = match;
 				plan.assetType                            = AssetType::kTexture;
 				const std::span<const AssetRef> referrers = graph.ReferrersOf(stale);
 				plan.referrers.assign(referrers.begin(), referrers.end());

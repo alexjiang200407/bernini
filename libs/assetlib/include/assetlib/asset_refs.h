@@ -296,7 +296,7 @@ namespace assetlib
 		std::string    error;  // non-empty only when status == kFailed
 	};
 
-	/** One file that travels with a rename rather than being its subject. Both data-root-relative. */
+	/** A file moving from one key to another. Both data-root-relative. */
 	struct RenameMove
 	{
 		std::string from;
@@ -309,31 +309,24 @@ namespace assetlib
 	/** What a rename would move, and every stored reference that must follow it. */
 	struct RenamePlan
 	{
-		std::string from;  // relative to the data root: an asset file, or a directory
-		std::string to;
+		RenameMove subject;  // an asset file, or a directory
 
-		/** What `from` is, or nullopt when it is a directory -- which is not an asset. */
+		/** What `subject` is, or nullopt when it is a directory -- which is not an asset. */
 		std::optional<AssetType> assetType;
 
 		/**
-		 * The `.glb` that moves with `from`, set only when `from` is an import document -- its key
-		 * is derived from the document's own path, so it cannot stay behind.
-		 *
-		 * Separate from `outputs` because it is **authored** where they are cache. `Reimport` reads
-		 * from this file to write them, so nothing can put it back: a rename that cannot move it
-		 * fails, where a missing output is skipped.
+		 * The `.glb` an import document describes. **Authored**, so a rename that cannot move it
+		 * fails: nothing regenerates one, and `Reimport` reads from it to write `outputs`.
 		 */
 		std::optional<RenameMove> source;
 
 		/**
-		 * The containers `from`'s document produced that are still named after its stem, set only
-		 * when `from` is an import document. Cache: one that is not on disk is skipped rather than
-		 * failing the rename, since the document names the new path either way and `Reimport`
-		 * writes it there.
+		 * The containers that document produced, still named after `subject`'s stem. **Cache**, so
+		 * one that is not on disk is skipped rather than failing the rename.
 		 *
-		 * Every entry is a rename target like `from` is, so `referrers` covers the edges naming any
-		 * of them: a `.bskel` this source produced but a *second* source's document binds is moved
-		 * here and rewritten there, rather than orphaned.
+		 * Rename targets like `subject`, so `referrers` covers the edges naming any of them -- a
+		 * `.bskel` a second source's document binds is rewritten there rather than orphaned.
+		 * [docs/assetlib_api.md](docs/assetlib_api.md)
 		 */
 		std::vector<RenameMove> outputs;
 

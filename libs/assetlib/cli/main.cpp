@@ -1111,8 +1111,8 @@ main(int argc, char** argv)
 
 			spdlog::info(
 				"Renamed {} -> {}, rewriting {} reference(s)",
-				plan.from,
-				plan.to,
+				plan.subject.from,
+				plan.subject.to,
 				plan.referrers.size());
 			return 0;
 		}

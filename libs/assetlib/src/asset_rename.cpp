@@ -41,7 +41,8 @@ namespace assetlib
 				return stored;
 
 			const std::string key = normalizeRef(stored);
-			if (const std::optional<std::string> moved = mapMove(plan.from, plan.to, key))
+			if (const std::optional<std::string> moved =
+			        mapMove(plan.subject.from, plan.subject.to, key))
 				return *moved;
 
 			if (plan.source)
@@ -90,21 +91,21 @@ namespace assetlib
 		void
 		planImportGroup(const std::filesystem::path& dataRoot, RenamePlan& plan)
 		{
-			const auto source =
-				RenameMove{ importedSourceKeyFor(plan.from), importedSourceKeyFor(plan.to) };
+			const auto source = RenameMove{ importedSourceKeyFor(plan.subject.from),
+				                            importedSourceKeyFor(plan.subject.to) };
 
 			core::throw_runtime_error_if(
 				!std::filesystem::exists(dataRoot / source.from),
 				"assetlib::planRename: '{}' describes '{}', which does not exist",
-				plan.from,
+				plan.subject.from,
 				source.from);
 
 			plan.source = source;
 
-			const std::string_view was = stemOf(plan.from);
-			const std::string_view now = stemOf(plan.to);
+			const std::string_view was = stemOf(plan.subject.from);
+			const std::string_view now = stemOf(plan.subject.to);
 
-			const ImportDocument document = loadImportDocument(dataRoot / plan.from);
+			const ImportDocument document = loadImportDocument(dataRoot / plan.subject.from);
 			for (const std::string& output : document.outputs)
 			{
 				const std::string key = normalizeRef(output);
@@ -222,65 +223,66 @@ namespace assetlib
 	RenamePlan
 	planRename(const AssetRefGraph& graph, std::string_view from, std::string_view to)
 	{
-		auto plan = RenamePlan();
-		plan.from = normalizeRef(from);
-		plan.to   = normalizeRef(to);
+		auto plan         = RenamePlan();
+		plan.subject.from = normalizeRef(from);
+		plan.subject.to   = normalizeRef(to);
 
 		// A `.glb` and its `.bimport` are one asset under two names, and only the document is of a
 		// kind the project stores anything about -- so a source named on either side plans as the
 		// document, and the source itself travels in `plan.source`.
-		if (extensionOf(plan.from) == c_ImportedSourceExtension)
+		if (extensionOf(plan.subject.from) == c_ImportedSourceExtension)
 		{
 			core::throw_runtime_error_if(
-				extensionOf(plan.to) != c_ImportedSourceExtension,
+				extensionOf(plan.subject.to) != c_ImportedSourceExtension,
 				"assetlib::planRename: renaming '{}' to '{}' would change what kind of asset it is",
-				plan.from,
-				plan.to);
+				plan.subject.from,
+				plan.subject.to);
 
 			core::throw_runtime_error_if(
-				!std::filesystem::exists(graph.DataRoot() / plan.from),
+				!std::filesystem::exists(graph.DataRoot() / plan.subject.from),
 				"assetlib::planRename: '{}' does not exist",
-				plan.from);
+				plan.subject.from);
 
-			plan.from = importDocumentKeyFor(plan.from);
-			plan.to   = importDocumentKeyFor(plan.to);
+			plan.subject.from = importDocumentKeyFor(plan.subject.from);
+			plan.subject.to   = importDocumentKeyFor(plan.subject.to);
 		}
 
-		requireInsideDataRoot("assetlib::planRename", plan.from);
-		requireInsideDataRoot("assetlib::planRename", plan.to);
+		requireInsideDataRoot("assetlib::planRename", plan.subject.from);
+		requireInsideDataRoot("assetlib::planRename", plan.subject.to);
 
-		if (plan.from == plan.to)
+		if (plan.subject.from == plan.subject.to)
 			throw std::runtime_error(
-				"assetlib::planRename: '" + plan.from + "' is already named that");
+				"assetlib::planRename: '" + plan.subject.from + "' is already named that");
 
-		if (isUnder(plan.to, plan.from))
+		if (isUnder(plan.subject.to, plan.subject.from))
 			throw std::runtime_error(
-				"assetlib::planRename: cannot move '" + plan.from + "' inside itself");
+				"assetlib::planRename: cannot move '" + plan.subject.from + "' inside itself");
 
-		const std::filesystem::path fromPath = graph.DataRoot() / plan.from;
-		const std::filesystem::path toPath   = graph.DataRoot() / plan.to;
+		const std::filesystem::path fromPath = graph.DataRoot() / plan.subject.from;
+		const std::filesystem::path toPath   = graph.DataRoot() / plan.subject.to;
 
 		if (!std::filesystem::exists(fromPath))
-			throw std::runtime_error("assetlib::planRename: '" + plan.from + "' does not exist");
+			throw std::runtime_error(
+				"assetlib::planRename: '" + plan.subject.from + "' does not exist");
 
 		if (std::filesystem::is_directory(fromPath))
 		{
 			for (const AssetRef& edge : graph.Edges())
-				if (isUnder(edge.target, plan.from))
+				if (isUnder(edge.target, plan.subject.from))
 					plan.referrers.push_back(edge);
 		}
 		else
 		{
-			plan.assetType = assetTypeFromExtension(plan.from);
+			plan.assetType = assetTypeFromExtension(plan.subject.from);
 			if (!plan.assetType)
 				throw std::runtime_error(
-					"assetlib::planRename: '" + plan.from +
+					"assetlib::planRename: '" + plan.subject.from +
 					"' is not an asset this project stores anything about");
 
-			if (assetTypeFromExtension(plan.to) != plan.assetType)
+			if (assetTypeFromExtension(plan.subject.to) != plan.assetType)
 				throw std::runtime_error(
-					"assetlib::planRename: renaming '" + plan.from + "' to '" + plan.to +
-					"' would change what kind of asset it is");
+					"assetlib::planRename: renaming '" + plan.subject.from + "' to '" +
+					plan.subject.to + "' would change what kind of asset it is");
 
 			// Its source key is derived from its own path and its outputs are named from the
 			// source, so a document never moves alone: the whole import goes with it.
@@ -292,7 +294,7 @@ namespace assetlib
 				plan.referrers.insert(plan.referrers.end(), held.begin(), held.end());
 			};
 
-			follow(plan.from);
+			follow(plan.subject.from);
 			if (plan.source)
 				follow(plan.source->from);
 			for (const RenameMove& move : plan.outputs) follow(move.from);
@@ -302,7 +304,8 @@ namespace assetlib
 		// filesystem, where the destination "exists" because it is the file being renamed.
 		std::error_code ec;
 		if (std::filesystem::exists(toPath) && !std::filesystem::equivalent(fromPath, toPath, ec))
-			throw std::runtime_error("assetlib::planRename: '" + plan.to + "' already exists");
+			throw std::runtime_error(
+				"assetlib::planRename: '" + plan.subject.to + "' already exists");
 
 		// The group's destinations are held to what the subject's is, so a caller that asks before
 		// confirming a rename is told here rather than after committing to it.
@@ -319,7 +322,7 @@ namespace assetlib
 
 		if (!std::filesystem::is_directory(toPath.parent_path()))
 			throw std::runtime_error(
-				"assetlib::planRename: the directory to rename '" + plan.from +
+				"assetlib::planRename: the directory to rename '" + plan.subject.from +
 				"' into does not exist");
 
 		return plan;
@@ -349,15 +352,15 @@ namespace assetlib
 	{
 		// Unlike a deletion, a rename cannot shrug at a file that has vanished since the plan: there is
 		// nothing to move, and rewriting the referrers anyway would break every one of them.
-		if (!std::filesystem::exists(GetDataRoot() / plan.from))
-			return { RenameStatus::kFailed, "'" + plan.from + "' no longer exists" };
+		if (!std::filesystem::exists(GetDataRoot() / plan.subject.from))
+			return { RenameStatus::kFailed, "'" + plan.subject.from + "' no longer exists" };
 
 		std::error_code ec;
 
 		// The subject, then everything travelling with it. The `.glb` is held to what the subject
 		// is: it is authored, and a reimport reads *from* it, so a rename that could not move it
 		// would leave the one file here nothing can put back under neither name.
-		auto steps = std::vector<RenameMove>{ { plan.from, plan.to } };
+		auto steps = std::vector<RenameMove>{ { plan.subject.from, plan.subject.to } };
 		if (plan.source)
 		{
 			if (!std::filesystem::exists(GetDataRoot() / plan.source->from))

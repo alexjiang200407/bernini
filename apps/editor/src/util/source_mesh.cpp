@@ -65,7 +65,7 @@ namespace editor
 			const assetlib::ImportDocument read =
 				assetlib::loadImportDocument(std::filesystem::path(document.toStdString()));
 
-			const std::string mesh = assetlib::meshOutputOf(read);
+			const std::string mesh = read.MeshOutput();
 
 			return mesh.empty() ? QString() : QDir(dataRoot).filePath(QString::fromStdString(mesh));
 		}
