@@ -1,5 +1,5 @@
-import types.ComputeBuffer;
-import util.Tonemap;
+import lib.types.ComputeBuffer;
+import lib.util.Tonemap;
 
 struct Uniforms
 {

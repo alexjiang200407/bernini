@@ -1,7 +1,7 @@
-import types.RawBuffer;
-import types.ComputeBuffer;
-import idl.VatState;
 import idl.CullView;
+import idl.VatState;
+import lib.types.ComputeBuffer;
+import lib.types.RawBuffer;
 
 // Loads out of one raw buffer, reported for a CPU comparison against the bytes it wrote.
 //

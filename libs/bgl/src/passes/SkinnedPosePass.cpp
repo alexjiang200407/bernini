@@ -14,7 +14,7 @@ namespace bgl
 
 		m_PoseSkinned = device->CreateComputeKernel(
 			ComputePipelineDesc()
-				.SetShader(device->CreateShader("PoseSkinned"))
+				.SetShader(device->CreateShader("programs.anim.PoseSkinned"))
 				.SetDebugName("Pose Skinned"));
 	}
 

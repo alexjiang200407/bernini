@@ -16,7 +16,7 @@ namespace bgl
 {
 	namespace
 	{
-		constexpr auto c_Src = "Skybox"sv;
+		constexpr auto c_Src = "programs.env.Skybox"sv;
 
 		// Keyed on the Slang global's name as reflection reports it, so this must track the
 		// ConstantBuffer declaration in Skybox.slang.

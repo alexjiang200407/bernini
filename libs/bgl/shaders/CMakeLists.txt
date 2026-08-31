@@ -14,235 +14,44 @@ set(SLANG_COMPILE_OUTS "")
 set(SLANG_SOURCE_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/src")
 
 
-compile_shader(
-    FILE         "${CMAKE_CURRENT_SOURCE_DIR}/src/Forward_StaticMesh.slang"
-    OUT_DIR      "${SHADER_OUT_DIR}"
-    TARGET       "dxil"
-    STAGE        "as_6_6"
-    INCLUDES     ${SLANG_SOURCE_ROOT}
-    ENTRY_POINTS "ASMain"
+# The list is the tree: every program under programs/ is compiled to DXIL here, at every entry
+# point its own source declares. A shader that exists is a shader that is validated -- a list kept
+# by hand is one a shader can be left out of, and DXIL validation is the only thing standing between
+# a construct Metal accepts and a Windows runtime (see docs/slang_shaders.md).
+file(GLOB_RECURSE SLANG_PROGRAM_SOURCES CONFIGURE_DEPENDS
+    "${SLANG_SOURCE_ROOT}/programs/*.slang"
 )
 
-compile_shader(
-    FILE         "${CMAKE_CURRENT_SOURCE_DIR}/src/Forward_StaticMesh.slang"
-    OUT_DIR      "${SHADER_OUT_DIR}"
-    TARGET       "dxil"
-    STAGE        "ms_6_6"
-    INCLUDES     ${SLANG_SOURCE_ROOT}
-    ENTRY_POINTS "MSMain"
-)
+foreach(SHADER ${SLANG_PROGRAM_SOURCES})
+    file(RELATIVE_PATH SHADER_REL "${SLANG_SOURCE_ROOT}" "${SHADER}")
+    get_filename_component(SHADER_REL_DIR "${SHADER_REL}" DIRECTORY)
 
-compile_shader(
-    FILE         "${CMAKE_CURRENT_SOURCE_DIR}/src/Forward_SkinnedMesh.slang"
-    OUT_DIR      "${SHADER_OUT_DIR}"
-    TARGET       "dxil"
-    STAGE        "as_6_6"
-    INCLUDES     ${SLANG_SOURCE_ROOT}
-    ENTRY_POINTS "ASMain"
-)
+    slang_entry_points("${SHADER}" SHADER_ENTRIES)
 
-compile_shader(
-    FILE         "${CMAKE_CURRENT_SOURCE_DIR}/src/Forward_SkinnedMesh.slang"
-    OUT_DIR      "${SHADER_OUT_DIR}"
-    TARGET       "dxil"
-    STAGE        "ms_6_6"
-    INCLUDES     ${SLANG_SOURCE_ROOT}
-    ENTRY_POINTS "MSMain"
-)
+    if(NOT SHADER_ENTRIES)
+        message(FATAL_ERROR
+            "${SHADER_REL} declares no [shader(...)] entry point. A module that is only imported "
+            "belongs under lib/, not programs/.")
+    endif()
 
-compile_shader(
-    FILE         "${CMAKE_CURRENT_SOURCE_DIR}/src/Forward_VatMesh.slang"
-    OUT_DIR      "${SHADER_OUT_DIR}"
-    TARGET       "dxil"
-    STAGE        "as_6_6"
-    INCLUDES     ${SLANG_SOURCE_ROOT}
-    ENTRY_POINTS "ASMain"
-)
+    foreach(ENTRY IN LISTS SHADER_ENTRIES)
+        string(REPLACE ":" ";" ENTRY_PARTS "${ENTRY}")
+        list(GET ENTRY_PARTS 0 ENTRY_STAGE)
+        list(GET ENTRY_PARTS 1 ENTRY_NAME)
+        slang_stage_profile("${ENTRY_STAGE}" ENTRY_PROFILE)
 
-compile_shader(
-    FILE         "${CMAKE_CURRENT_SOURCE_DIR}/src/Forward_VatMesh.slang"
-    OUT_DIR      "${SHADER_OUT_DIR}"
-    TARGET       "dxil"
-    STAGE        "ms_6_6"
-    INCLUDES     ${SLANG_SOURCE_ROOT}
-    ENTRY_POINTS "MSMain"
-)
-
-compile_shader(
-    FILE         "${CMAKE_CURRENT_SOURCE_DIR}/src/Forward_AnyMesh.slang"
-    OUT_DIR      "${SHADER_OUT_DIR}"
-    TARGET       "dxil"
-    STAGE        "as_6_6"
-    INCLUDES     ${SLANG_SOURCE_ROOT}
-    ENTRY_POINTS "ASMain"
-)
-
-compile_shader(
-    FILE         "${CMAKE_CURRENT_SOURCE_DIR}/src/Forward_AnyMesh.slang"
-    OUT_DIR      "${SHADER_OUT_DIR}"
-    TARGET       "dxil"
-    STAGE        "ms_6_6"
-    INCLUDES     ${SLANG_SOURCE_ROOT}
-    ENTRY_POINTS "MSMain"
-)
-
-# The only shader that reaches LoadMaterialKind, and so the only one whose emission carries the
-# material tag's type. It was absent here, which is how an enum a shader cannot express reached
-# master: every other forward shader imports MaterialData but dead-strips that function.
-compile_shader(
-    FILE         "${CMAKE_CURRENT_SOURCE_DIR}/src/Forward_Transparent.slang"
-    OUT_DIR      "${SHADER_OUT_DIR}"
-    TARGET       "dxil"
-    STAGE        "ps_6_6"
-    INCLUDES     ${SLANG_SOURCE_ROOT}
-    ENTRY_POINTS "PSMain"
-)
-
-compile_shader(
-    FILE         "${CMAKE_CURRENT_SOURCE_DIR}/src/Forward_PBR.slang"
-    OUT_DIR      "${SHADER_OUT_DIR}"
-    TARGET       "dxil"
-    STAGE        "ps_6_6"
-    ENTRY_POINTS "PSMain"
-    INCLUDES     ${SLANG_SOURCE_ROOT}
-)
-
-compile_shader(
-    FILE         "${CMAKE_CURRENT_SOURCE_DIR}/src/Forward_PBR_Loose.slang"
-    OUT_DIR      "${SHADER_OUT_DIR}"
-    TARGET       "dxil"
-    STAGE        "ps_6_6"
-    ENTRY_POINTS "PSMain"
-    INCLUDES     ${SLANG_SOURCE_ROOT}
-)
-
-compile_shader(
-    FILE         "${CMAKE_CURRENT_SOURCE_DIR}/src/Forward_Null.slang"
-    OUT_DIR      "${SHADER_OUT_DIR}"
-    TARGET       "dxil"
-    STAGE        "ps_6_6"
-    ENTRY_POINTS "PSMain"
-    INCLUDES     ${SLANG_SOURCE_ROOT}
-)
-
-compile_shader(
-    FILE         "${CMAKE_CURRENT_SOURCE_DIR}/src/Forward_Assert.slang"
-    OUT_DIR      "${SHADER_OUT_DIR}"
-    TARGET       "dxil"
-    STAGE        "ps_6_6"
-    ENTRY_POINTS "PSMain"
-    INCLUDES     ${SLANG_SOURCE_ROOT}
-)
-
-compile_shader(
-    FILE         "${CMAKE_CURRENT_SOURCE_DIR}/src/BrdfLut.slang"
-    OUT_DIR      "${SHADER_OUT_DIR}"
-    TARGET       "dxil"
-    STAGE        "ms_6_6"
-    INCLUDES     ${SLANG_SOURCE_ROOT}
-    ENTRY_POINTS "MSMain"
-)
-
-compile_shader(
-    FILE         "${CMAKE_CURRENT_SOURCE_DIR}/src/BrdfLut.slang"
-    OUT_DIR      "${SHADER_OUT_DIR}"
-    TARGET       "dxil"
-    STAGE        "ps_6_6"
-    ENTRY_POINTS "PSMain"
-    INCLUDES     ${SLANG_SOURCE_ROOT}
-)
-
-compile_shader(
-    FILE         "${CMAKE_CURRENT_SOURCE_DIR}/src/FullscreenRect.slang"
-    OUT_DIR      "${SHADER_OUT_DIR}"
-    TARGET       "dxil"
-    STAGE        "ms_6_6"
-    INCLUDES     ${SLANG_SOURCE_ROOT}
-    ENTRY_POINTS "MSMain"
-)
-
-compile_shader(
-    FILE         "${CMAKE_CURRENT_SOURCE_DIR}/src/FullscreenRect.slang"
-    OUT_DIR      "${SHADER_OUT_DIR}"
-    TARGET       "dxil"
-    STAGE        "ps_6_6"
-    ENTRY_POINTS "PSMain"
-    INCLUDES     ${SLANG_SOURCE_ROOT}
-)
-
-compile_shader(
-    FILE         "${CMAKE_CURRENT_SOURCE_DIR}/src/Skybox.slang"
-    OUT_DIR      "${SHADER_OUT_DIR}"
-    TARGET       "dxil"
-    STAGE        "ms_6_6"
-    INCLUDES     ${SLANG_SOURCE_ROOT}
-    ENTRY_POINTS "MSMain"
-)
-
-compile_shader(
-    FILE         "${CMAKE_CURRENT_SOURCE_DIR}/src/Skybox.slang"
-    OUT_DIR      "${SHADER_OUT_DIR}"
-    TARGET       "dxil"
-    STAGE        "ps_6_6"
-    INCLUDES     ${SLANG_SOURCE_ROOT}
-    ENTRY_POINTS "PSMain"
-)
-
-compile_shader(
-    FILE         "${CMAKE_CURRENT_SOURCE_DIR}/src/HistogramInstances.slang"
-    OUT_DIR      "${SHADER_OUT_DIR}"
-    TARGET       "dxil"
-    STAGE        "cs_6_6"
-    INCLUDES     ${SLANG_SOURCE_ROOT}
-)
-
-compile_shader(
-    FILE         "${CMAKE_CURRENT_SOURCE_DIR}/src/PrefixSumInstances.slang"
-    OUT_DIR      "${SHADER_OUT_DIR}"
-    TARGET       "dxil"
-    STAGE        "cs_6_6"
-    INCLUDES     ${SLANG_SOURCE_ROOT}
-)
-
-compile_shader(
-    FILE         "${CMAKE_CURRENT_SOURCE_DIR}/src/PoseSkinned.slang"
-    OUT_DIR      "${SHADER_OUT_DIR}"
-    TARGET       "dxil"
-    STAGE        "cs_6_6"
-    INCLUDES     ${SLANG_SOURCE_ROOT}
-)
-
-compile_shader(
-    FILE         "${CMAKE_CURRENT_SOURCE_DIR}/src/CompactInstances.slang"
-    OUT_DIR      "${SHADER_OUT_DIR}"
-    TARGET       "dxil"
-    STAGE        "cs_6_6"
-    INCLUDES     ${SLANG_SOURCE_ROOT}
-)
-
-compile_shader(
-    FILE         "${CMAKE_CURRENT_SOURCE_DIR}/src/TransparentSort.slang"
-    OUT_DIR      "${SHADER_OUT_DIR}"
-    TARGET       "dxil"
-    STAGE        "cs_6_6"
-    INCLUDES     ${SLANG_SOURCE_ROOT}
-)
-
-compile_shader(
-    FILE         "${CMAKE_CURRENT_SOURCE_DIR}/src/TransparentDepthKeys.slang"
-    OUT_DIR      "${SHADER_OUT_DIR}"
-    TARGET       "dxil"
-    STAGE        "cs_6_6"
-    INCLUDES     ${SLANG_SOURCE_ROOT}
-)
-
-compile_shader(
-    FILE         "${CMAKE_CURRENT_SOURCE_DIR}/src/CullInstances.slang"
-    OUT_DIR      "${SHADER_OUT_DIR}"
-    TARGET       "dxil"
-    STAGE        "cs_6_6"
-    INCLUDES     ${SLANG_SOURCE_ROOT}
-)
+        # The DXIL mirrors the source tree so two programs sharing a leaf name cannot compile onto
+        # each other's output. Nothing loads it; this is validation output.
+        compile_shader(
+            FILE         "${SHADER}"
+            OUT_DIR      "${SHADER_OUT_DIR}/${SHADER_REL_DIR}"
+            TARGET       "dxil"
+            STAGE        "${ENTRY_PROFILE}"
+            INCLUDES     ${SLANG_SOURCE_ROOT}
+            ENTRY_POINTS "${ENTRY_NAME}"
+        )
+    endforeach()
+endforeach()
 
 message(STATUS "Discovered Compiled Shaders: ${SLANG_COMPILE_OUTS}")
 

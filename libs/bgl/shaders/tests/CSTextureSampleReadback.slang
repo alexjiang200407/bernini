@@ -1,4 +1,4 @@
-import types.ComputeBuffer;
+import lib.types.ComputeBuffer;
 
 struct Uniforms
 {

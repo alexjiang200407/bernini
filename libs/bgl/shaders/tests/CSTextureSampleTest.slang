@@ -1,5 +1,5 @@
-import debug.dbg;
 import idl.ErrorCode;
+import lib.debug.dbg;
 struct Uniforms
 {
     Texture2D.Handle texture;

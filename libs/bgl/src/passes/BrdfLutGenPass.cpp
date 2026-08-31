@@ -12,7 +12,7 @@ namespace bgl
 {
 	namespace
 	{
-		constexpr auto c_Src = "BrdfLut"sv;  // the Slang module, not this class
+		constexpr auto c_Src = "programs.env.BrdfLut"sv;
 
 		// Two channels: the integral factors into a scale and a bias on F0, and nothing else is
 		// stored. Half float covers [0,1] with far more precision than the bilinear fetch resolves.

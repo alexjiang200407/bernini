@@ -154,7 +154,7 @@ TEST_CASE("Instances outside the frustum are culled, those inside survive", "[cu
 
 	auto cull = device->CreateComputeKernel(
 		bgl::ComputePipelineDesc()
-			.SetShader(device->CreateShader("CullInstances"))
+			.SetShader(device->CreateShader("programs.culling.CullInstances"))
 			.SetDebugName("Cull Instances"));
 	REQUIRE(cull.pipeline != nullptr);
 

@@ -23,22 +23,22 @@ namespace bgl
 
 		m_CullInstances = device->CreateComputeKernel(
 			ComputePipelineDesc()
-				.SetShader(device->CreateShader("CullInstances"))
+				.SetShader(device->CreateShader("programs.culling.CullInstances"))
 				.SetDebugName("Cull Instances"));
 
 		m_Histogram = device->CreateComputeKernel(
 			ComputePipelineDesc()
-				.SetShader(device->CreateShader("HistogramInstances"))
+				.SetShader(device->CreateShader("programs.culling.HistogramInstances"))
 				.SetDebugName("Histogram Instances"));
 
 		m_PrefixSum = device->CreateComputeKernel(
 			ComputePipelineDesc()
-				.SetShader(device->CreateShader("PrefixSumInstances"))
+				.SetShader(device->CreateShader("programs.culling.PrefixSumInstances"))
 				.SetDebugName("Prefix-Sum Instances"));
 
 		m_CompactInstances = device->CreateComputeKernel(
 			ComputePipelineDesc()
-				.SetShader(device->CreateShader("CompactInstances"))
+				.SetShader(device->CreateShader("programs.culling.CompactInstances"))
 				.SetDebugName("Compact Instances"));
 
 		{

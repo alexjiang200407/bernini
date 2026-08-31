@@ -24,6 +24,20 @@ namespace bgl
 			this->debugName = std::move(_debugName);
 			return *this;
 		}
+
+		/**
+		 * The module name as `ISession::loadModule` wants it: `/`-separated, not `.`-separated.
+		 * `loadModule` appends `.slang` to the string it is given and opens that, where `import`
+		 * translates the dots itself -- so the one spelling every caller and every shader uses has
+		 * to be converted here, at the only point that reaches Slang's file loader.
+		 */
+		[[nodiscard]] std::string
+		SlangModulePath() const noexcept
+		{
+			std::string path = slangModuleName;
+			std::ranges::replace(path, '.', '/');
+			return path;
+		}
 	};
 
 	class IShader : public core::Ref

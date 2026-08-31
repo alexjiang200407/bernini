@@ -50,7 +50,7 @@ and a test that pins it.
 Two things the dropped attempt got right and a real one should keep:
 
 - **Collapse on disk, expand at load.** The sample pool is frame-major and the GPU indexes it
-  directly (`PoseSkinned.slang` reads `firstFrame * boneCount + bone`, and `Scene.cpp` uploads the
+  directly (`programs/anim/PoseSkinned.slang` reads `firstFrame * boneCount + bone`, and `Scene.cpp` uploads the
   pool wholesale), so a stored form that differs from the in-memory one costs nothing downstream.
   Changing what the *GPU* indexes is a second, larger change — IDL, upload and shader — and it should
   be justified by its own measurement of GPU residency, not folded in.

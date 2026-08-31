@@ -1,7 +1,7 @@
-import types.RawBuffer;
-import types.ComputeBuffer;
 import idl.RawEntry;
 import idl.RawRange;
+import lib.types.ComputeBuffer;
+import lib.types.RawBuffer;
 
 // Reads back what a RawBuffer wrote: two records of different kinds and one headerless range. What
 // this pins is the seam -- the CPU's idea of where a header ends and a payload begins against the

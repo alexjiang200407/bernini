@@ -1,4 +1,4 @@
-import types.ComputeBuffer;
+import lib.types.ComputeBuffer;
 
 // Writes a known pattern into a bindless RWStructuredBuffer. A CPU readback then verifies the exact
 // values, which proves end to end that Slang->target codegen and the bindless handle resolution

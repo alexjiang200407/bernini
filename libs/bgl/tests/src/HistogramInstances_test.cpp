@@ -130,13 +130,13 @@ TEST_CASE("Bucket instances: histogram then prefix sum", "[compute][histogram][p
 
 	auto histogramKernel = device->CreateComputeKernel(
 		bgl::ComputePipelineDesc()
-			.SetShader(device->CreateShader("HistogramInstances"))
+			.SetShader(device->CreateShader("programs.culling.HistogramInstances"))
 			.SetDebugName("Histogram Instances"));
 	REQUIRE(histogramKernel.pipeline != nullptr);
 
 	auto prefixSumKernel = device->CreateComputeKernel(
 		bgl::ComputePipelineDesc()
-			.SetShader(device->CreateShader("PrefixSumInstances"))
+			.SetShader(device->CreateShader("programs.culling.PrefixSumInstances"))
 			.SetDebugName("Prefix-Sum Instances"));
 	REQUIRE(prefixSumKernel.pipeline != nullptr);
 

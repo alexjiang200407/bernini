@@ -1,5 +1,5 @@
-import debug.dbg;
 import idl.ErrorCode;
+import lib.debug.dbg;
 
 [shader("compute")]
 [numthreads(64, 1, 1)]

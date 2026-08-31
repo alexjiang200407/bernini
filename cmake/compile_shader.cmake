@@ -120,3 +120,57 @@ function(compile_shader)
     set(SLANG_COMPILE_OUTS ${LOCAL_OUTS} PARENT_SCOPE)
 
 endfunction()
+# The Slang profile a `[shader("<stage>")]` attribute compiles against.
+function(slang_stage_profile STAGE OUT_VAR)
+    set(STAGE_PROFILES
+        vertex        vs_6_6
+        pixel         ps_6_6
+        geometry      gs_6_6
+        mesh          ms_6_6
+        amplification as_6_6
+        compute       cs_6_6
+    )
+
+    list(FIND STAGE_PROFILES "${STAGE}" idx)
+    if(idx EQUAL -1)
+        message(FATAL_ERROR "slang_stage_profile: no profile for shader stage '${STAGE}'")
+    endif()
+
+    math(EXPR idx "${idx} + 1")
+    list(GET STAGE_PROFILES ${idx} profile)
+    set(${OUT_VAR} "${profile}" PARENT_SCOPE)
+endfunction()
+
+# Every entry point a Slang program declares, as a list of `<stage>:<name>` -- read from each
+# `[shader("...")]` attribute and the function it annotates. What a program must compile is a fact
+# about its source, so the source is what is asked; a build list kept by hand is one a shader can be
+# left out of, which is how an unvalidated shader reaches master (see docs/slang_shaders.md).
+function(slang_entry_points SHADER_FILE OUT_VAR)
+    file(STRINGS "${SHADER_FILE}" LINES)
+
+    set(ENTRIES "")
+    set(PENDING_STAGE "")
+
+    foreach(LINE IN LISTS LINES)
+        if(LINE MATCHES "^[ \t]*\\[shader\\(\"([a-z]+)\"\\)\\]")
+            set(PENDING_STAGE "${CMAKE_MATCH_1}")
+        elseif(NOT PENDING_STAGE STREQUAL "")
+            # [numthreads], [outputtopology] and blank lines sit between the shader attribute and
+            # the function it annotates.
+            if(LINE MATCHES "^[ \t]*\\[" OR LINE MATCHES "^[ \t]*$")
+                continue()
+            endif()
+
+            if(NOT LINE MATCHES "^[ \t]*[A-Za-z_][A-Za-z0-9_]*[ \t]+([A-Za-z_][A-Za-z0-9_]*)[ \t]*\\(")
+                message(FATAL_ERROR
+                    "slang_entry_points: ${SHADER_FILE}: [shader(\"${PENDING_STAGE}\")] is not "
+                    "followed by a declaration this can read -- '${LINE}'")
+            endif()
+
+            list(APPEND ENTRIES "${PENDING_STAGE}:${CMAKE_MATCH_1}")
+            set(PENDING_STAGE "")
+        endif()
+    endforeach()
+
+    set(${OUT_VAR} "${ENTRIES}" PARENT_SCOPE)
+endfunction()

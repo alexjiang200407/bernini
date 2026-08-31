@@ -1,5 +1,5 @@
-import types.ComputeBuffer;
-import types.HandleElement;
+import lib.types.ComputeBuffer;
+import lib.types.HandleElement;
 
 struct Uniforms
 {

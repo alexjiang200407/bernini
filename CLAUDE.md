@@ -134,7 +134,7 @@ skeleton signature is checked and why the culling box cannot be measured (both f
 **[Vertex Animation Textures](./docs/vat.md)**
 
 A rig's clips baked to a position/normal texture pair and drawn as crowds: the `.bvat`
-container and bake (assetlib), the `Forward_Vat` draw path and the clock (bgl), and the
+container and bake (assetlib), the `programs.forward.VatMesh` draw path and the clock (bgl), and the
 bake-on-demand load (gamelib). Time is the only per-frame input.
 
 **[Temporal Antialiasing](./docs/taa.md)**
