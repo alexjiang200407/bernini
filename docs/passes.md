@@ -407,11 +407,11 @@ premultiplied and their pixel shader returns premultiplied colour to match — s
 
 That one list holds **every tier at once**, which is why the transparent pipeline's geometry module is
 `programs.forward.AnyMesh` rather than a tier's own: it reads the tier off the header of the record the
-instance's `Mesh.playback` names — a null entry being the static tier, which owns no record — and calls that
-tier's vertex evaluation. So a blended rig standing behind a blended window composites in depth order
-and not in tier order, which one dispatch per tier could not do. The branch is uniform across a
-mesh-shader group, one instance being one group's work, so it costs register pressure rather than
-divergence. Nothing mirrors the PSO table into Slang for it.
+instance's `MeshInstance.playback` names — a null entry being the static tier, which owns no record — and calls
+that tier's vertex evaluation. So a blended rig standing behind a blended window composites in depth
+order and not in tier order, which one dispatch per tier could not do. The tier is uniform across a
+mesh-shader group, one instance being one group's work, so it is resolved once outside the vertex
+loop rather than per vertex. Nothing mirrors the PSO table into Slang for it.
 
 A surface that has to hide its own back layers uses `kHashed` ([Hashed alpha](#hashed-alpha)) rather
 than blending: stochastic coverage writes real depth, so it self-occludes in the opaque phase with no

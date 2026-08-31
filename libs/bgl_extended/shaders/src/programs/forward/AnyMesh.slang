@@ -9,19 +9,9 @@ import lib.types.SubmeshInstance;
 // depth-sorted transparent list, whose order is depth and not PSO, and the outline mask's selection.
 //
 // Whether a placement is animated is whether it owns a playback record, so nothing here mirrors the
-// PSO table; which of the two animated sources it draws from is SkinnedVertex's own branch, on the
-// record's header. Both are uniform across a mesh-shader group, one instance being one group's
-// worth of work, so they cost register pressure and not divergence.
-ForwardVSOut EvaluateVertex(MeshletContext ctx, SubmeshInstance instance, uint v)
-{
-    // A static placement owns no record, so there is no header to read -- null is the tier.
-    if (ctx.mesh.playback.Null())
-    {
-        return StaticVertex(ctx, instance, v);
-    }
-
-    return SkinnedVertex(ctx, instance, v);
-}
+// PSO table; which of the two animated sources it draws from is ResolveSkinnedPose's own branch, on
+// the record's header. Both are the group's rather than the vertex's, one instance being one group's
+// worth of work, so both are settled outside the loop below.
 
 [numthreads(cThreadsPerInstance, 1, 1)]
 [shader("amplification")]
@@ -50,9 +40,24 @@ void MSMain(
 
     // A meshlet holds up to cMaxVerticesPerMeshlet vertices, which the group's cMeshGroupSize threads
     // cover by striding. Never assume one thread per vertex: the two counts are unrelated.
-    for (uint v = gtid; v < ctx.meshlet.vertexCount; v += cMeshGroupSize)
+    //
+    // The tier is the group's, so the loop is written twice rather than branched inside: a static
+    // placement owns no record, and there is no header to read for one.
+    if (ctx.mesh.playback.Null())
     {
-        verts[v] = EvaluateVertex(ctx, payload.instance, v);
+        for (uint v = gtid; v < ctx.meshlet.vertexCount; v += cMeshGroupSize)
+        {
+            verts[v] = StaticVertex(ctx, payload.instance, v);
+        }
+    }
+    else
+    {
+        let pose = ResolveSkinnedPose(ctx);
+
+        for (uint v = gtid; v < ctx.meshlet.vertexCount; v += cMeshGroupSize)
+        {
+            verts[v] = SkinnedVertex(ctx, pose, payload.instance, v);
+        }
     }
 
     // Same striding. Every triangle SetMeshOutputCounts declared must be written, or the unwritten
