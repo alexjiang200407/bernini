@@ -205,6 +205,18 @@ namespace bgl
 			return m_BoneSamples;
 		}
 
+		[[nodiscard]] auto&
+		GetSkinnedLegBuffer() noexcept
+		{
+			return m_SkinnedLegs;
+		}
+
+		[[nodiscard]] auto&
+		GetPlantWeightBuffer() noexcept
+		{
+			return m_PlantWeights;
+		}
+
 		// --- SceneView support -------------------------------------------------
 		// Instances live in SceneViews and reference this Scene's geometry by value: a view copies
 		// the submesh range below into its MeshInstance. The Scene keeps no record of who
@@ -345,8 +357,10 @@ namespace bgl
 			override;
 
 		RigHandle
-		AddRig(const assetlib::Skeleton& skeleton, const assetlib::AnimationSet& animations)
-			override;
+		AddRig(
+			const assetlib::Skeleton&     skeleton,
+			const assetlib::AnimationSet& animations,
+			const FootPlantDesc&          footPlant = {}) override;
 
 		void
 		DeleteRig(RigHandle rig) override;
@@ -429,15 +443,20 @@ namespace bgl
 		 * lower than its own bone's index, a clip set whose
 		 * bone count disagrees with the skeleton's, an empty or zero-frame clip table, or a clip
 		 * whose frames run past the end of the sample pool. The clip set's `skeletonSignature` is
-		 * not among these -- computing one needs assetlib; see IScene::AddSkinnedMeshGeom.
+		 * not among these -- computing one needs assetlib; see IScene::AddRig.
 		 *
-		 * Static-only, because it reads nothing of the scene: the checks are all about the two
+		 * `footPlant` is refused for a bone outside the skeleton, a chain whose links are not
+		 * directly parented, a sole normal that is not finite and nonzero, or a `plantWeights`
+		 * that is not one byte per leg for every frame in the pool.
+		 *
+		 * Static-only, because it reads nothing of the scene: the checks are all about the
 		 * containers agreeing with each other.
 		 */
 		static void
 		ValidateSkinnedRig(
 			const assetlib::Skeleton&     skeleton,
-			const assetlib::AnimationSet& animations);
+			const assetlib::AnimationSet& animations,
+			const FootPlantDesc&          footPlant);
 
 		/**
 		 * The live rig `rig` names, or nullptr if the handle is null or already deleted. The
@@ -514,6 +533,12 @@ namespace bgl
 		BonePaletteBuffer    m_BoneAnimTables;
 		std::vector<RigFill> m_PendingRigFills;
 
+		// Both empty on every scene that holds no rig with an avatar; see AddSkinnedMeshGeom. The
+		// weights are packed four bytes to a uint rather than typed: no backend agrees on a
+		// structured buffer of bytes.
+		RangeBuffer<idl::SkinnedLegChain> m_SkinnedLegs;
+		RangeBuffer<uint32_t>             m_PlantWeights;
+
 		std::array<SamplerHandle, static_cast<size_t>(StandardSampler::kCount)> m_Samplers;
 
 		core::SharedRef<IResourceManager> m_ResourceManager;
@@ -536,6 +561,8 @@ namespace bgl
 			NamedBuffer{ c_RigBufferName, &Scene::m_Rigs },
 			NamedBuffer{ c_SkinnedBoneBufferName, &Scene::m_SkinnedBones },
 			NamedBuffer{ c_BoneSampleBufferName, &Scene::m_BoneSamples },
+			NamedBuffer{ c_SkinnedLegBufferName, &Scene::m_SkinnedLegs },
+			NamedBuffer{ c_PlantWeightBufferName, &Scene::m_PlantWeights },
 		};
 
 		static_assert(HasDistinctNames(c_Buffers), "two scene buffers would import under one name");
