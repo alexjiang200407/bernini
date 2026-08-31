@@ -98,6 +98,12 @@ handle actually writes, and why a name that resolves to nothing is silent.
 
 Graphics debugging practices.
 
+**[Build Performance](./docs/build_performance.md)**
+
+How to tell where a build's time went: `just build --time`, reading the log ninja already writes.
+Why wall and CPU are different claims, why the per-target rollup is the one that matters, and why a
+measurement taken while a sibling checkout is building is not a measurement.
+
 **[Profiling](./docs/profiling.md)**
 
 Where load and cook time is measured: taking a Tracy capture, the one rule for naming a zone, and
@@ -218,7 +224,7 @@ Everything is driven by `just` from the repo root, via the `justfile`. Each reci
 ```bash
 just                              # list the recipes
 just init                         # set this machine up and write scripts/config.json (see below)
-just build [target]               # build (default: all targets); configures first only if needed. --preset, --config, --dry-run
+just build [target]               # build (default: all targets); configures first only if needed. --preset, --config, --dry-run, --time
 just run <target> [-- args...]    # build a target, then run it with cwd set to its output dir; --no-build, --no-lock
 just test [names...]              # build and run every test suite (or only the matching ones); --list, --no-build, --no-lock
 just coverage [names...]          # macOS: build the coverage preset, run the suites instrumented, report; --diff [ref] names the added lines no test executed (--json for agents)
