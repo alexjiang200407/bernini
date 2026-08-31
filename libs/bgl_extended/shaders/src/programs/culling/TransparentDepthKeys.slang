@@ -57,9 +57,9 @@ void main(uint globalIdx: SV_DispatchThreadID)
 
     let mesh = gUniforms.meshBuffer.Get(instance.meshInstance);
 
-    // Where the instance's origin lands, transformed the same way the forward pass transforms a
-    // vertex -- so this cannot disagree with the matrix convention the geometry is drawn with.
-    float3 center = mul(mesh.transform, float4(0.0, 0.0, 0.0, 1.0)).xyz;
+    // Where the instance's origin lands, through the same accessor the forward pass transforms a
+    // vertex with -- so this cannot disagree with the convention the geometry is drawn under.
+    float3 center = mesh.TransformPoint(float3(0.0, 0.0, 0.0));
     float3 toCamera = center - gUniforms.cameraPos;
 
     // Squared distance is non-negative, so its bit pattern already orders like the float. Inverting

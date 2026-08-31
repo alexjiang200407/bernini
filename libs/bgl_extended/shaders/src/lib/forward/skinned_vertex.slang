@@ -206,8 +206,8 @@ public ForwardVSOut SkinnedVertex(MeshletContext ctx, SkinnedPose pose, SubmeshI
         prevSkin = SkinAt(pose, pose.prevBase, pose.prevUpperBase, pose.prevWeight, vertex.joints, vertex.weights);
     }
 
-    float4 worldPos = mul(ctx.mesh.transform, mul(skin, float4(vertex.position, 1.0)));
-    float4 prevWorldPos = mul(ctx.mesh.transform, mul(prevSkin, float4(vertex.position, 1.0)));
+    float4 worldPos = float4(ctx.mesh.TransformPoint(mul(skin, float4(vertex.position, 1.0)).xyz), 1.0);
+    float4 prevWorldPos = float4(ctx.mesh.TransformPoint(mul(prevSkin, float4(vertex.position, 1.0)).xyz), 1.0);
 
     ForwardVSOut vertexOut;
     ProjectVertex(vertexOut, worldPos, prevWorldPos);
@@ -215,13 +215,13 @@ public ForwardVSOut SkinnedVertex(MeshletContext ctx, SkinnedPose pose, SubmeshI
     // The skin matrix carries the bones' rotation, so the basis follows it before the instance
     // transform does. Not renormalized, exactly as the static tier leaves it.
     float3x3 skinRotation = (float3x3)skin;
-    vertexOut.normal = mul((float3x3)ctx.mesh.transform, mul(skinRotation, vertex.normal));
+    vertexOut.normal = ctx.mesh.TransformDirection(mul(skinRotation, vertex.normal));
 
     vertexOut.uv = vertex.uv;
 
     // The tangent is skinned by the same basis as the normal. w is handedness and must survive the
     // transform untouched.
-    vertexOut.tangent = float4(mul((float3x3)ctx.mesh.transform, mul(skinRotation, vertex.tangent.xyz)), vertex.tangent.w);
+    vertexOut.tangent = float4(ctx.mesh.TransformDirection(mul(skinRotation, vertex.tangent.xyz)), vertex.tangent.w);
 
     vertexOut.materialOffset = instance.material.GetByteOffset();
 

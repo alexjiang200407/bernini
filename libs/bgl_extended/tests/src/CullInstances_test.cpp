@@ -19,6 +19,7 @@
 #include "uniforms/Uniforms.h"
 #include "util/GpuValidation.h"
 #include "util/TestOptions.h"
+#include "util/util.h"
 #include <bgl/Camera.h>
 #include <bgl/IGraphics.h>
 #include <core/math.h>
@@ -121,8 +122,8 @@ TEST_CASE("Instances outside the frustum are culled, those inside survive", "[cu
 	for (const Placement& p : placements)
 	{
 		auto mesh      = bgl::idl::MeshInstance();
-		mesh.transform = glm::translate(glm::mat4(1.0f), p.position);
 		mesh.submeshes = submeshRange;
+		bgl::WriteInstanceTransform(mesh, glm::translate(glm::mat4(1.0f), p.position));
 
 		const auto meshHandle = meshBuffer.Add(mesh);
 

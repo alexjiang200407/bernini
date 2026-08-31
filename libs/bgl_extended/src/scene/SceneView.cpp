@@ -316,8 +316,8 @@ namespace bgl
 			const idl::RangeWithCount submeshes = m_SceneRaw->GetGeomSubmeshes(geom.handle.index);
 
 			auto mesh      = idl::MeshInstance();
-			mesh.transform = transform;
 			mesh.submeshes = submeshes;
+			WriteInstanceTransform(mesh, transform);
 
 			// One field for either tier: the record's own header says which, so nothing here
 			// decides it. Zero stays zero, which is the null a static placement wants.

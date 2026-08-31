@@ -156,7 +156,7 @@ Generated shader structs (GPU source of truth). Each has a byte-identical `bgl::
 
 | Struct | File | Role |
 |---|---|---|
-| `MeshInstance` | [MeshInstance.slang](libs/bgl_extended/shaders/src/idl/MeshInstance.slang) | Root descriptor of a placement: world `transform` + the geom's `RangeWithCount<Submesh>`, plus a `RawEntry<IPlayback>` naming its record in the view's playback arena, null on a static mesh. |
+| `MeshInstance` | [MeshInstance.slang](libs/bgl_extended/shaders/src/idl/MeshInstance.slang) | Root descriptor of a placement: the three rows of its world transform + the geom's `RangeWithCount<Submesh>`, plus a `RawEntry<IPlayback>` naming its record in the view's playback arena, null on a static mesh. |
 | `Clip` | [Clip.slang](libs/bgl_extended/shaders/src/idl/Clip.slang) | One playable clip: where its frame 0 sits in the tier's own frame space, its frame count, authored rate and loop flag. Shared by every animated tier out of one clip buffer. |
 | `Submesh` | [Submesh.slang](libs/bgl_extended/shaders/src/idl/Submesh.slang) | One drawable part, **geometry only**: its `VertexLayout`, meshlet range, vertexMap/indices ranges, a `RawRange` of vertex bytes, vertex count, local bounding sphere. No material, no PSO — those are per-instance. |
 | `Meshlet` | [Meshlet.slang](libs/bgl_extended/shaders/src/idl/Meshlet.slang) | A mesh-shader work unit: offsets into the parent submesh's vertexMap/indices windows, vertex/triangle counts, bounding sphere. |
@@ -303,6 +303,15 @@ green channel.
   the same reservation, one layer apart: reserve element 0 so the zero-filled default means
   "nothing" rather than "the first thing allocated". A new GPU-visible index should follow it.
 * **`VertexLayout` holds at most 8 attributes.** `attributeCount > 8` overruns the fixed array.
+* **A placement's transform is three `float4` *rows*, and nothing may index it directly.** The
+  fourth row of an affine transform is always `(0,0,0,1)` and is not stored. Rows and columns are
+  the same three `float4`s of the same matrix, so the bytes do not say which — and under an
+  identity transform the two readings agree, which is what makes a mistake here survive a smoke
+  test. `MeshInstance::TransformPoint` / `TransformDirection` are the only readers, and
+  `bgl::WriteInstanceTransform` ([util.h](libs/bgl_extended/src/util/util.h)) the only writer. There is no
+  `prevTransform`: a placement's transform is fixed for its lifetime, and the field lands with the
+  writer that moves one (see
+  [docs/specs/gpu_scene_instance_split.md](docs/specs/gpu_scene_instance_split.md)).
 * **A geom's submesh range is indexed by source submesh, and only stays so while the mapping is
   1:1.** Materials, and every other per-part property an asset author sets, are numbered by *source*
   submesh; `Scene::SetSubmeshMaterial` indexes the default-material array directly with that number,

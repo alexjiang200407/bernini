@@ -1,4 +1,5 @@
 #pragma once
+#include "idl/MeshInstance.h"
 #include "idl/PsoType.h"
 #include "types/Format.h"
 #include "types/FormatInfo.h"
@@ -6,6 +7,7 @@
 #include <bgl/LayerType.h>
 #include <bgl/MaterialHandle.h>
 #include <bgl/MaterialType.h>
+#include <bgl/glm.h>
 
 namespace bgl
 {
@@ -39,4 +41,15 @@ namespace bgl
 	 */
 	bool
 	IsTransparentPso(uint32_t pso) noexcept;
+
+	/**
+	 * Fills a placement's transform from an affine matrix. glm stores columns and the GPU reads
+	 * rows, so the transpose is the packing -- and this is the only place that knows it, because a
+	 * placement written the other way round draws correctly until something rotates or scales it.
+	 *
+	 * @param instance The placement to fill; only its transform is touched.
+	 * @param transform An affine model-to-world matrix. Its fourth row is discarded, not checked.
+	 */
+	void
+	WriteInstanceTransform(idl::MeshInstance& instance, const glm::mat4& transform) noexcept;
 }

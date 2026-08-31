@@ -176,8 +176,8 @@ TEST_CASE("Buffer contents around mesh deletion", "[delete][buffers][scene]")
 		// EntryBuffer (mesh record): live. It no longer records its source geom -- an instance
 		// references geometry only by the submesh range it copied.
 		CHECK(meshBuffer.IsIndexValid(meshIndex));
-		CHECK(meshBuffer.AtIndex(meshIndex).transform[0][0] == 1.0f);
-		CHECK(meshBuffer.AtIndex(meshIndex).transform[3][3] == 1.0f);
+		CHECK(meshBuffer.AtIndex(meshIndex).transform[0] == glm::vec4(1.0f, 0.0f, 0.0f, 0.0f));
+		CHECK(meshBuffer.AtIndex(meshIndex).transform[2] == glm::vec4(0.0f, 0.0f, 1.0f, 0.0f));
 
 		// Geometry (CPU-side): alive. Nothing counts the instances referencing it.
 		CHECK(scene->IsGeomAlive(geom));

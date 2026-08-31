@@ -14,7 +14,7 @@ public ForwardVSOut StaticVertex(MeshletContext ctx, SubmeshInstance instance, u
     uint vertexIdx;
     DecodedVertex vertex = DecodeMeshletVertex(ctx, instance, v, vertexIdx);
 
-    float4 worldPos = mul(ctx.mesh.transform, float4(vertex.position, 1.0));
+    float4 worldPos = float4(ctx.mesh.TransformPoint(vertex.position), 1.0);
 
     // The same world position through both cameras: an instance transform is fixed for its lifetime,
     // so the camera is the whole of a static surface's motion. A movable instance would carry its own
@@ -22,9 +22,9 @@ public ForwardVSOut StaticVertex(MeshletContext ctx, SubmeshInstance instance, u
     ForwardVSOut vertexOut;
     ProjectVertex(vertexOut, worldPos, worldPos);
 
-    vertexOut.normal = mul((float3x3)ctx.mesh.transform, vertex.normal);
+    vertexOut.normal = ctx.mesh.TransformDirection(vertex.normal);
     vertexOut.uv = vertex.uv;
-    vertexOut.tangent = float4(mul((float3x3)ctx.mesh.transform, vertex.tangent.xyz), vertex.tangent.w);
+    vertexOut.tangent = float4(ctx.mesh.TransformDirection(vertex.tangent.xyz), vertex.tangent.w);
 
     vertexOut.materialOffset = instance.material.GetByteOffset();
 

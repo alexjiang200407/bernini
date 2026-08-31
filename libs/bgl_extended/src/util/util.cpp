@@ -171,6 +171,16 @@ namespace bgl
 		       pso == static_cast<uint32_t>(idl::PsoType::kTransparent_SkinnedMesh_PBR);
 	}
 
+	void
+	WriteInstanceTransform(idl::MeshInstance& instance, const glm::mat4& transform) noexcept
+	{
+		const glm::mat4 rows = glm::transpose(transform);
+
+		instance.transform[0] = rows[0];
+		instance.transform[1] = rows[1];
+		instance.transform[2] = rows[2];
+	}
+
 	uint32_t
 	SubmeshPso(GeomType geomType, MaterialHandle material)
 	{
