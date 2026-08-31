@@ -161,6 +161,53 @@ namespace bgl
 		std::vector<uint32_t> columnBases;
 	};
 
+	/**
+	 * One leg of a rig, ready for the pose pass: bone indices into the skeleton uploaded beside it,
+	 * and the plane its sole rests on.
+	 *
+	 * The four bones must form a direct chain -- `knee`'s parent is `hip`, `ankle`'s is `knee`,
+	 * `toe`'s is `ankle`. The solve rewrites those slots and carries their descendants rigidly, so a
+	 * bone in between would be left holding a pose the joints above it no longer agree with.
+	 *
+	 * bgl never reads a `.bavatar` and never measures a sole: resolving a bone name needs the
+	 * skeleton's string pool and fitting a plane needs the mesh's vertex layout, and both live in
+	 * assetlib. Whoever loaded the containers fills this in -- gamelib's acquire.
+	 */
+	struct FootPlantLegDesc
+	{
+		uint32_t hip   = 0;
+		uint32_t knee  = 0;
+		uint32_t ankle = 0;
+		uint32_t toe   = 0;
+
+		// Ankle-local, and normalized on upload.
+		glm::vec3 solePoint  = glm::vec3(0.0f);
+		glm::vec3 soleNormal = glm::vec3(0.0f, 1.0f, 0.0f);
+	};
+
+	/**
+	 * What a rig needs to plant its feet, or nothing at all -- the default is a rig that animates
+	 * exactly as it did before foot IK existed, which is every rig whose skeleton has no `.bavatar`.
+	 *
+	 * `legs` and `plantWeights` stand or fall together: a leg with no weights would be solved on
+	 * every frame of every clip, including the ones it is mid-swing on. A rig that is never planted
+	 * is spelled as weights of zero, not as absent ones.
+	 */
+	struct FootPlantDesc
+	{
+		std::vector<FootPlantLegDesc> legs;
+
+		/**
+		 * How planted each leg is in each frame of the clip set's sample pool, 0 (free) to 255
+		 * (fully planted), frame-major: leg `l` of frame `f` is `plantWeights[f * legs.size() + l]`.
+		 * A weight rather than a flag because a foot that snapped between the two states would pop;
+		 * the cook ramps it over the frames at each end of a planted run.
+		 *
+		 * Empty exactly when `legs` is; otherwise `legs.size()` entries for every frame in the pool.
+		 */
+		std::vector<uint8_t> plantWeights;
+	};
+
 	struct LoosePbrMaterialDesc
 	{
 		glm::vec4 baseColorFactor = glm::vec4(1.0f);
@@ -311,7 +358,10 @@ namespace bgl
 		 * sample pool upload with the geometry and are shared by every instance of it.
 		 *
 		 * Unlike VAT this takes the containers as they are: `Skeleton` and `AnimationSet` are
-		 * `assetlib_structs` PODs with nothing to decode, so there is no desc to mirror them into.
+		 * `assetlib_structs` PODs with nothing to decode, so neither is mirrored into a desc.
+		 * `footPlant` is the exception, and carries only what no container holds: bone *names*
+		 * resolved to indices and a sole plane measured off the mesh, neither of which bgl can
+		 * derive without assetlib.
 		 *
 		 * Each submesh must carry `joints0` and `weights0` -- a submesh with no skin binding has no
 		 * bones to follow and would draw its bind pose while the rest of the mesh moved.
@@ -332,12 +382,16 @@ namespace bgl
 		 * @param skeleton    The rig the mesh's joint indices address.
 		 * @param animations  Clips cooked against `skeleton`.
 		 * @param posedBounds A box holding the mesh in every pose of every clip, in model space.
+		 * @param footPlant   The rig's legs and their per-frame plant weights, or empty for a rig
+		 *                    that plants no feet -- which animates exactly as it did before.
 		 * @throws SceneError for anything AddStaticMeshGeom refuses, a skeleton with no bones,
 		 *         bones that are not topologically sorted, an `animations`
 		 *         whose bone count disagrees with `skeleton`, an empty or zero-frame clip table, a
 		 *         clip whose samples fall outside the pool, a submesh without skin binding, a submesh
-		 *         whose material does not resolve to kPBR, or a `posedBounds` whose min exceeds its
-		 *         max on any axis.
+		 *         whose material does not resolve to kPBR, a `posedBounds` whose min exceeds its
+		 *         max on any axis, a leg naming a bone outside the skeleton or a chain whose links
+		 *         are not directly parented, a leg whose sole normal is not finite and nonzero, or a
+		 *         `plantWeights` that is not one byte per leg for every frame in the sample pool.
 		 *
 		 * `AnimationSet::skeletonSignature` is deliberately **not** checked here: computing a
 		 * skeleton's signature needs assetlib, which bgl does not link. A clip set cooked against a
@@ -351,7 +405,8 @@ namespace bgl
 			std::span<const MaterialHandle> materials,
 			const assetlib::Skeleton&       skeleton,
 			const assetlib::AnimationSet&   animations,
-			const assetlib::Bounds&         posedBounds) = 0;
+			const assetlib::Bounds&         posedBounds,
+			const FootPlantDesc&            footPlant = {}) = 0;
 
 		virtual TextureAssetHandle
 		AddTextureAsset(assetlib::ImageData img, std::string debugName = "") = 0;

@@ -134,6 +134,18 @@ namespace bgl
 			return m_BoneSamples;
 		}
 
+		[[nodiscard]] auto&
+		GetSkinnedLegBuffer() noexcept
+		{
+			return m_SkinnedLegs;
+		}
+
+		[[nodiscard]] auto&
+		GetPlantWeightBuffer() noexcept
+		{
+			return m_PlantWeights;
+		}
+
 		// --- SceneView support -------------------------------------------------
 		// Instances live in SceneViews and reference this Scene's geometry by value: a view copies
 		// the submesh range below into its per-placement Mesh. The Scene keeps no record of who
@@ -302,7 +314,8 @@ namespace bgl
 			std::span<const MaterialHandle> materials,
 			const assetlib::Skeleton&       skeleton,
 			const assetlib::AnimationSet&   animations,
-			const assetlib::Bounds&         posedBounds) override;
+			const assetlib::Bounds&         posedBounds,
+			const FootPlantDesc&            footPlant = {}) override;
 
 		TextureAssetHandle
 		AddTextureAsset(assetlib::ImageData img, std::string debugName = "") override;
@@ -383,24 +396,31 @@ namespace bgl
 		 * whose frames run past the end of the sample pool. The clip set's `skeletonSignature` is
 		 * not among these -- computing one needs assetlib; see IScene::AddSkinnedMeshGeom.
 		 *
-		 * Static-only, because it reads nothing of the scene: the checks are all about the two
+		 * `footPlant` is refused for a bone outside the skeleton, a chain whose links are not
+		 * directly parented, a sole normal that is not finite and nonzero, or a `plantWeights`
+		 * that is not one byte per leg for every frame in the pool.
+		 *
+		 * Static-only, because it reads nothing of the scene: the checks are all about the
 		 * containers agreeing with each other.
 		 */
 		static void
 		ValidateSkinnedRig(
 			const assetlib::Skeleton&     skeleton,
-			const assetlib::AnimationSet& animations);
+			const assetlib::AnimationSet& animations,
+			const FootPlantDesc&          footPlant);
 
 		/**
-		 * AttachVatRecords' counterpart: allocates the bone, sample and clip ranges plus the
-		 * SkinnedGeom record onto `base` and flips it to kSkinnedMesh. On any failure the geometry
-		 * half is taken back down (DeleteGeom) so a failed skinned add leaks nothing.
+		 * AttachVatRecords' counterpart: allocates the bone, sample, clip, leg and plant-weight
+		 * ranges plus the SkinnedGeom record onto `base` and flips it to kSkinnedMesh. On any
+		 * failure the geometry half is taken back down (DeleteGeom) so a failed skinned add leaks
+		 * nothing.
 		 */
 		GeomHandle
 		AttachSkinnedRecords(
 			GeomHandle                    base,
 			const assetlib::Skeleton&     skeleton,
-			const assetlib::AnimationSet& animations);
+			const assetlib::AnimationSet& animations,
+			const FootPlantDesc&          footPlant);
 
 		/**
 		 * The tail AddVatMeshGeom and AddVatMeshGeom share: allocates the clip and column ranges plus the
@@ -477,6 +497,12 @@ namespace bgl
 		RangeBuffer<idl::SkinnedBone> m_SkinnedBones;
 		RangeBuffer<idl::BoneSample>  m_BoneSamples;
 
+		// Both empty on every scene that holds no rig with an avatar; see AddSkinnedMeshGeom. The
+		// weights are packed four bytes to a uint rather than typed: no backend agrees on a
+		// structured buffer of bytes.
+		RangeBuffer<idl::SkinnedLegChain> m_SkinnedLegs;
+		RangeBuffer<uint32_t>             m_PlantWeights;
+
 		std::array<SamplerHandle, static_cast<size_t>(StandardSampler::kCount)> m_Samplers;
 
 		core::SharedRef<IResourceManager> m_ResourceManager;
@@ -501,6 +527,8 @@ namespace bgl
 			NamedBuffer{ c_SkinnedGeomBufferName, &Scene::m_SkinnedGeoms },
 			NamedBuffer{ c_SkinnedBoneBufferName, &Scene::m_SkinnedBones },
 			NamedBuffer{ c_BoneSampleBufferName, &Scene::m_BoneSamples },
+			NamedBuffer{ c_SkinnedLegBufferName, &Scene::m_SkinnedLegs },
+			NamedBuffer{ c_PlantWeightBufferName, &Scene::m_PlantWeights },
 		};
 
 		static_assert(HasDistinctNames(c_Buffers), "two scene buffers would import under one name");
