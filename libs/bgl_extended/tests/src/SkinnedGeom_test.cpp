@@ -1,6 +1,7 @@
 #include "scene/Scene.h"
 #include "scene/SceneView.h"
 #include "util/TestOptions.h"
+#include "util/util.h"
 #include <assetlib_structs/Bounds.h>
 #include <bgl/IGraphics.h>
 #include <catch2/catch_approx.hpp>
@@ -330,7 +331,9 @@ TEST_CASE("CreateSkinnedMeshInstance writes the playback record once", "[skinned
 	desc.phase = 4.5f;
 	desc.rate  = 2.0f;
 
-	const auto instance = view->CreateSkinnedMeshInstance(geom, glm::mat4(1.0f), desc);
+	const auto placed = glm::translate(glm::mat4(1.0f), glm::vec3(1.0f, 2.0f, 3.0f));
+
+	const auto instance = view->CreateSkinnedMeshInstance(geom, placed, desc);
 	REQUIRE(instance.IsValid());
 
 	auto& meshBuffer = view->GetMeshBuffer();
@@ -374,6 +377,14 @@ TEST_CASE("CreateSkinnedMeshInstance writes the playback record once", "[skinned
 
 		CHECK(sizeof(bgl::idl::SkinnedTableState) < sizeof(bgl::idl::SkinnedState));
 	}
+
+	// Where the instance stands is the placement's, and only the placement's: the pose pass reads
+	// it from here rather than from a copy of its own.
+	auto expected = bgl::idl::MeshInstance();
+	bgl::WriteInstanceTransform(expected, placed);
+	CHECK(mesh.transform[0] == expected.transform[0]);
+	CHECK(mesh.transform[1] == expected.transform[1]);
+	CHECK(mesh.transform[2] == expected.transform[2]);
 
 	SECTION("a clip past the geom's table is refused")
 	{

@@ -305,7 +305,11 @@ TEST_CASE("a rig far past the old ceiling poses every bone", "[skinned][pose][re
 	sceneDesc.initialPbrMaterials         = 4;
 
 	auto scene = gfx->CreateScene(sceneDesc);
-	auto view  = gfx->CreateSceneView(scene, 4);
+
+	// Tilted and lowered: a rig with no legs must pose identically on any ground.
+	scene->SetGround({ glm::vec3(0.0f, -0.3f, 0.0f), glm::vec3(0.2f, 1.0f, 0.1f) });
+
+	auto view = gfx->CreateSceneView(scene, 4);
 
 	bgl::test::ApplyEnvironment(scene.Get(), view.Get());
 
@@ -399,7 +403,11 @@ TEST_CASE("the pose pass writes the palette a rig's hierarchy implies", "[skinne
 	sceneDesc.initialPbrMaterials         = 4;
 
 	auto scene = gfx->CreateScene(sceneDesc);
-	auto view  = gfx->CreateSceneView(scene, 4);
+
+	// Tilted and lowered: a rig with no legs must pose identically on any ground.
+	scene->SetGround({ glm::vec3(0.0f, -0.3f, 0.0f), glm::vec3(0.2f, 1.0f, 0.1f) });
+
+	auto view = gfx->CreateSceneView(scene, 4);
 
 	bgl::test::ApplyEnvironment(scene.Get(), view.Get());
 
@@ -487,6 +495,41 @@ TEST_CASE("the pose pass writes the palette a rig's hierarchy implies", "[skinne
 		// once. Composing twice would double the offset; skipping the level would leave both at +Y.
 		CheckNear(palette.Apply(2, glm::vec3(0.0f, 2.0f, 0.0f)), glm::vec3(-1.0f, 1.0f, 0.0f));
 		CheckNear(palette.Apply(2, glm::vec3(0.0f, 3.0f, 0.0f)), glm::vec3(-2.0f, 1.0f, 0.0f));
+	}
+
+	SECTION("two placements of one geom pose from their own records")
+	{
+		// The pass's work list names mesh instances, so each workgroup reaches its playback record
+		// through the placement it was given. A list naming the wrong one, or a lookup that lost
+		// the pairing, poses both instances from whichever record it landed on -- and the two here
+		// are asked for different frames of the same clip, so that swap is visible.
+		//
+		// They stand in different places, which must not reach the palette at all: a bone matrix is
+		// model space, and where the instance stands is applied downstream in the mesh shader.
+		const auto held = view->CreateSkinnedMeshInstance(
+			geom,
+			glm::translate(glm::mat4(1.0f), glm::vec3(-3.0f, 0.0f, 0.0f)),
+			{ 0, 0.0f, 0.0f });
+		const auto swung = view->CreateSkinnedMeshInstance(
+			geom,
+			glm::translate(glm::mat4(1.0f), glm::vec3(3.0f, 0.0f, 0.0f)),
+			{ 0, 1.0f, 0.0f });
+
+		gfx->DrawFrame(target, job);
+
+		const Palette heldPalette =
+			ReadPalette(gfxBase, viewRaw, PaletteBaseOf(viewRaw, held), float4sPerPose);
+		const Palette swungPalette =
+			ReadPalette(gfxBase, viewRaw, PaletteBaseOf(viewRaw, swung), float4sPerPose);
+
+		for (uint32_t bone = 0; bone < c_BoneCount; ++bone)
+		{
+			CheckNear(
+				heldPalette.Apply(bone, glm::vec3(1.0f, 2.0f, 3.0f)),
+				glm::vec3(1.0f, 2.0f, 3.0f));
+		}
+
+		CheckNear(swungPalette.Apply(2, glm::vec3(0.0f, 3.0f, 0.0f)), glm::vec3(-2.0f, 1.0f, 0.0f));
 	}
 
 	SECTION("a fractional frame blends the two it falls between")
