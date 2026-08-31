@@ -149,6 +149,12 @@ namespace bgl
 	void
 	CommandQueue::Flush() noexcept
 	{
+		// NewCommandBuffer autoreleases, and a Flush from ~RenderContext would otherwise leave the
+		// buffer in whatever pool encloses it -- the one Graphics drains after releasing the device
+		// the buffer transitively holds. Committed before the drain, so the driver owns it in flight.
+		NS::SharedPtr<NS::AutoreleasePool> pool =
+			NS::TransferPtr(NS::AutoreleasePool::alloc()->init());
+
 		// An empty command buffer signals past everything already committed: Metal keeps submission
 		// order on a queue, so it cannot run before them.
 		auto* cmdBuffer = NewCommandBuffer();

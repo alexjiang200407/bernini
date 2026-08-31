@@ -7,6 +7,10 @@ FetchContent_Declare(metalcpp
 )
 FetchContent_MakeAvailable(metalcpp)
 
+# bgl_tests is a sibling directory, so it cannot see metalcpp_SOURCE_DIR: a Metal-only case there
+# needs the headers this pulled in.
+set(BGL_METALCPP_INCLUDE_DIR "${metalcpp_SOURCE_DIR}" CACHE INTERNAL "metal-cpp headers")
+
 file(GLOB_RECURSE BGL_METAL_SOURCES CONFIGURE_DEPENDS
     ${CMAKE_CURRENT_SOURCE_DIR}/*.cpp
 )

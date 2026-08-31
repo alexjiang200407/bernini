@@ -53,6 +53,15 @@ bgl or Bernini Graphics Library is the graphics library for the game engine. It 
   adds the `shaders` subdirectory only under `DX12`, so a shader error surfaces when the pass that
   needs it is first built rather than at compile time. See
   [Slang Shaders](../../docs/slang_shaders.md).
+- **A scope that creates an autoreleased Metal object owns the pool it drains into.** Most Metal
+  factories autorelease — `commandBuffer()`, `nextDrawable()` — and the pool the object lands in is
+  whichever one on this thread was pushed last. `Graphics` holds one for its whole lifetime as a net
+  for strays, and that net drains *before* the device, because a Metal object outliving the device it
+  references deallocs into a purged one and segfaults. Anything creating an autoreleased object
+  therefore scopes its own `NS::AutoreleasePool` — `CommandList::Open`..`Close`,
+  `RenderTarget::PresentToLayer`, `CommandQueue::Flush` — rather than letting it reach that net.
+  Committing a command buffer before the pool drains is safe: the driver holds its own reference
+  until the buffer retires.
 - GPU validation comes from the environment, not a flag — see `bgl_tests` below.
 - CMake: `./src/metal/CMakeLists.txt`
 - Verification: Check logs, bgl_tests
