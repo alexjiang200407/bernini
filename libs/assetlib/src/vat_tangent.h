@@ -4,7 +4,7 @@
 /**
  * The posed tangent a VAT texel carries: not a vector, but how far the bind tangent, carried onto
  * the posed normal by the shortest arc, must still turn about that normal. The bake writes this
- * twist into the normal texture's alpha; Forward_VatMesh.slang undoes it with the same two
+ * twist into the normal texture's alpha; programs/forward/VatMesh.slang undoes it with the same two
  * rotations, so the formulas here and there must agree to the step.
  */
 namespace assetlib

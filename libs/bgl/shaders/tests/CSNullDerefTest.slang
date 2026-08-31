@@ -1,9 +1,9 @@
-import debug.dbg;
 import idl.Entry;
 import idl.Range;
-import types.ComputeBuffer;
-import types.EntryBuffer;
-import types.RangeBuffer;
+import lib.debug.dbg;
+import lib.types.ComputeBuffer;
+import lib.types.EntryBuffer;
+import lib.types.RangeBuffer;
 
 // Dereferences a null Entry and a null Range on purpose. Offset 0 is the reserved element, so both
 // reads are in bounds and return zeroes -- the dbg_assert inside Get is the only thing that reports

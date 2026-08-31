@@ -1,8 +1,8 @@
-import types.RawBuffer;
-import types.EntryBuffer;
-import types.HandleElement;
-import types.ComputeBuffer;
 import idl.RawTextureHandle;
+import lib.types.ComputeBuffer;
+import lib.types.EntryBuffer;
+import lib.types.HandleElement;
+import lib.types.RawBuffer;
 
 // A record with no resource type in it, so a raw Load<T> is legal on every backend. The eight bytes
 // at `tex` are a texture handle's; only a typed view of the same allocation can sample them.

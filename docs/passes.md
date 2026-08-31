@@ -72,11 +72,11 @@ Every geometry pass renders into `sceneColor`, an `RGBA16_FLOAT` texture the ren
 `PostProcess` is what turns that into the backbuffer. The buffer holds **linear HDR with exposure already
 applied**: exposure is a per-view scale and a target may carry several views, so the geometry passes
 fold it in, while the display curve — `AgX` in
-[util/Tonemap.slang](libs/bgl/shaders/src/util/Tonemap.slang) — belongs to the output and runs once.
+[lib/util/Tonemap.slang](libs/bgl/shaders/src/lib/util/Tonemap.slang) — belongs to the output and runs once.
 `AgX` leaves its result linear, so the sRGB backbuffer view is still what encodes it.
 
 Two consequences worth knowing. Transparent surfaces blend in linear HDR rather than in display
-space. And a pixel shader that writes a literal colour — `Forward_Null`, `Forward_Assert` — is
+space. And a pixel shader that writes a literal colour — `programs.forward.Null`, `programs.forward.Assert` — is
 writing radiance, not a display value, so its `1.0` reaches the screen as the curve's answer for
 unit radiance and not as white.
 
@@ -100,7 +100,7 @@ not after**: the bitangent is `cross(N, T) * tangent.w`, so flipping N carries t
 where negating the finished shading normal would leave a mirrored bitangent and lean the normal map's
 detail the wrong way on every back face.
 
-`Forward_Null` and `Forward_Assert` take `ForwardVSOut` but never read its normal, so they do not
+`programs.forward.Null` and `programs.forward.Assert` take `ForwardVSOut` but never read its normal, so they do not
 take the flag. The opaque buckets cull back faces and can never see one,
 but their shaders share `Shade<M>` with the transparent bucket, which can — so they pass the hardware
 value rather than a literal `true`, which would encode an assumption about `c_Psos`' cull mode that
@@ -112,7 +112,7 @@ the shader cannot see.
 
 `LayerType::kBlend` resolves to the `kTransparent_*` buckets — one per (tier, material type) pair
 that can carry it — whose PSOs blend
-**premultiplied** — `SrcBlend = One`, `DestBlend = InvSrcAlpha`. `Forward_Transparent` therefore
+**premultiplied** — `SrcBlend = One`, `DestBlend = InvSrcAlpha`. `programs.forward.Transparent` therefore
 returns radiance already weighted by its own coverage, rather than radiance the blend then scales,
 and the alpha it returns is coverage rather than the material's own.
 
@@ -148,7 +148,7 @@ surface writes depth and participates, and the correct blend is what the ensembl
 It resolves to the `kHashedAlpha_*` buckets, which are **opaque-shaped** — depth
 write, no blend, velocity written like any other geometry — and drawn in the PSO-bucketed phase
 rather than the depth-sorted one. The pixel shader tests base-colour alpha against a per-pixel hashed
-threshold ([util/HashedAlpha.slang](libs/bgl/shaders/src/util/HashedAlpha.slang)) instead of the
+threshold ([lib/util/HashedAlpha.slang](libs/bgl/shaders/src/lib/util/HashedAlpha.slang)) instead of the
 material's cutoff, so a fragment survives with probability equal to its alpha and every layer of a
 self-occluding surface writes real depth.
 
@@ -213,7 +213,7 @@ inline each frame. It is the first pass of the frame, added in `BeginFrame`.
 ### Skybox — [passes/SkyboxPass.{h,cpp}](libs/bgl/src/passes/SkyboxPass.cpp)
 
 Draws the environment cube behind the scene as a single full-screen triangle. Its `MeshletKernel`
-is mesh + pixel only (no amplification shader), built from the `Skybox` module; `DispatchMesh(1, 1,
+is mesh + pixel only (no amplification shader), built from the `programs.env.Skybox` module; `DispatchMesh(1, 1,
 1)` emits the one covering triangle. Depth test is `LessOrEqual` with **depth-write off** and no
 culling, so it fills only where nothing has been drawn.
 
@@ -222,7 +222,7 @@ culling, so it fills only where nothing has been drawn.
 * **In:** the scene-colour and velocity buffers as render targets; samples the skybox cube texture
   through the view's linear-clamp sampler. The `gSkyboxData` cbuffer carries `clipToWorld`,
   `prevWorldToClip`, `cubeTex`, `sampler`, `exposure`, and `mipLevel`; the constant-buffer name is
-  matched against Slang reflection, so it must track the declaration in `Skybox.slang`.
+  matched against Slang reflection, so it must track the declaration in `programs/env/Skybox.slang`.
 * `prevWorldToClip` is last frame's rotation-only view-projection with the skybox's own `rotationY`
   divided back out, so a rotated sky reports the camera's motion and not its own offset. `rotationY`
   is authoring state, so last frame's spin is taken to be this frame's.
@@ -238,8 +238,9 @@ culling, so it fills only where nothing has been drawn.
 ### Compact Instances — [passes/CompactInstancesPass.{h,cpp}](libs/bgl/src/passes/CompactInstancesPass.cpp)
 
 Frustum-culls the view's instances, then buckets the survivors by PSO into contiguous ranges and
-builds the per-PSO indirect dispatch arguments that `Forward` consumes. Owns four compute kernels
-(`CullInstances`, `HistogramInstances`, `PrefixSumInstances`, `CompactInstances`) and one
+builds the per-PSO indirect dispatch arguments that `Forward` consumes. Owns four compute kernels, all
+under `programs/culling/` (`CullInstances`, `HistogramInstances`, `PrefixSumInstances`,
+`CompactInstances`), and one
 `ComputeBuffer` it imports globally (namespace-free): `cull.stats`, profiling counters written only
 in `BERNINI_GPU_DEBUG` builds and read by nothing on the CPU.
 
@@ -278,8 +279,8 @@ It adds **four sub-passes**:
 
 ### Transparent Sort — [passes/TransparentSortPass.{h,cpp}](libs/bgl/src/passes/TransparentSortPass.cpp)
 
-Depth-sorts the transparent instances on the GPU, in three sub-passes. Runs **after** `Compact
-Instances` and depends on it: the depth-key pass reads the per-instance visibility word the cull
+Depth-sorts the transparent instances on the GPU, in three sub-passes, from two kernels under
+`programs/culling/`. Runs **after** `Compact Instances` and depends on it: the depth-key pass reads the per-instance visibility word the cull
 sub-pass writes, so a frustum-culled transparent instance takes no slot in the sorted list.
 
 1. **Clear** — zeroes the entry counter and seeds `dispatchArgs` to `{0, 1, 1}`. Seeded rather than
@@ -345,20 +346,22 @@ The main geometry pass: a mesh-shader forward render, in two phases. It holds `c
 `MeshletKernel`s, one per `PsoType`, built from the `c_Psos` config table (pixel-shader module +
 raster/depth/blend state + mesh-shader source).
 
-Each row names its amplification/mesh module, one per **tier**: `Forward_StaticMesh`,
-`Forward_VatMesh` — which fetches position and normal from the baked texture pair by (column, frame)
-instead of the vertex bytes (see [VAT](docs/vat.md)) — and `Forward_SkinnedMesh`, which blends the
-bind-pose vertex bytes by the bone palette `Pose Skinned` wrote this frame. All three are the same
-shader with one function swapped: the instance expansion, the meshlet lookup, the triangle fetch, the
-vertex decode and the reprojection live in `forward/mesh_stage.slang`, and each tier's vertex
-evaluation in its own `forward/{static,skinned,vat}_vertex.slang`. Only the mesh-output loops are
-still written out per entry point — Slang's Metal backend crashes on any function taking
-`OutputVertices`, so nothing but `MSMain` may index them. `Forward_AnyMesh` is the fourth, and calls whichever of
-the three an instance's `Mesh` names — see the transparent phase below.
+Every module named below lives in `programs/forward/`, and the CPU asks for it by the full module
+name — `programs.forward.StaticMesh`; the leaf alone is used here for readability.
 
-The pixel shader varies per bucket instead (`Forward_Null`, `Forward_PBR`, `Forward_PBR_Loose`,
-`Forward_PBR_AlphaTest`, `Forward_PBR_Loose_AlphaTest`, `Forward_PBR_HashedAlpha`,
-`Forward_PBR_Loose_HashedAlpha`, `Forward_Transparent`, `Forward_Assert`), and is chosen by layer
+Each row names its amplification/mesh module, one per **tier**: `StaticMesh`, `VatMesh` — which
+fetches position and normal from the baked texture pair by (column, frame) instead of the vertex
+bytes (see [VAT](docs/vat.md)) — and `SkinnedMesh`, which blends the bind-pose vertex bytes by the
+bone palette `Pose Skinned` wrote this frame. All three are the same shader with one function
+swapped: the instance expansion, the meshlet lookup, the triangle fetch, the vertex decode and the
+reprojection live in `lib/forward/mesh_stage.slang`, and each tier's vertex evaluation in its own
+`lib/forward/{static,skinned,vat}_vertex.slang`. Only the mesh-output loops are still written out per
+entry point — Slang's Metal backend crashes on any function taking `OutputVertices`, so nothing but
+`MSMain` may index them. `AnyMesh` is the fourth, and calls whichever of the three an instance's
+`Mesh` names — see the transparent phase below.
+
+The pixel shader varies per bucket instead (`Null`, `PBR`, `PBR_Loose`, `PBR_AlphaTest`,
+`PBR_Loose_AlphaTest`, `PBR_HashedAlpha`, `PBR_Loose_HashedAlpha`, `Transparent`, `Assert`), and is chosen by layer
 alone — every tier draws every layer, so the buckets are the (tier × layer) product with the loose
 material type static-only. **`c_Psos` order must match `PsoType`** — a `static_assert` catches an
 empty row but not a misordering.
@@ -382,7 +385,7 @@ premultiplied and their pixel shader returns premultiplied colour to match — s
 [Blended surfaces](#blended-surfaces).
 
 That one list holds **every tier at once**, which is why the transparent pipeline's geometry module is
-`Forward_AnyMesh` rather than a tier's own: it reads the tier off the header of the record the
+`programs.forward.AnyMesh` rather than a tier's own: it reads the tier off the header of the record the
 instance's `Mesh.playback` names — a null entry being the static tier, which owns no record — and calls that
 tier's vertex evaluation. So a blended rig standing behind a blended window composites in depth order
 and not in tier order, which one dispatch per tier could not do. The branch is uniform across a
@@ -411,8 +414,8 @@ The depth-sorted path starts at zero; the opaque path reads `psoPrefixSum` index
 
 Draws the view's selected submesh instances (`ISceneView::SetSubmeshSelected`) into the target's
 R8 outline mask, which `PostProcess` dilates into the editor's selection outline. The kernel is
-the shared `Forward_AnyMesh` amplification/mesh shaders with a trivial coverage pixel shader
-(`OutlineMask.slang`), dispatched **directly** — `DispatchMesh(count, 1, 1)` over the view's
+the shared `programs.forward.AnyMesh` amplification/mesh shaders with a trivial coverage pixel shader
+(`programs/screen/OutlineMask.slang`), dispatched **directly** — `DispatchMesh(count, 1, 1)` over the view's
 CPU-built selected list with `baseTable = kDepthSorted`, the same expansion shape as the
 transparent phase, so no culling and no indirect args are involved. A selection mixes tiers as freely
 as the sorted list does, so it takes the same tier-branching geometry stage and a selected rig
@@ -434,7 +437,7 @@ contours the pose it is drawn in.
 
 Accumulates the jittered scene colour into the temporal history: reprojects the previous accumulation
 through the velocity buffer, clamps it to the 3x3 neighbourhood in YCoCg, and blends. A single
-full-screen triangle from the `TaaResolve` module, depth test off. Added in `EndFrame`, before
+full-screen triangle from the `programs.screen.TaaResolve` module, depth test off. Added in `EndFrame`, before
 `PostProcess`, and **only when the target has `taaEnabled`** — a target without it allocates no
 history and the pass is never attached.
 
@@ -461,12 +464,12 @@ has always been.
   shading changed, where the accumulation exists but describes a material that is gone; see
   [Temporal Antialiasing](docs/taa.md).
 * The `gTaaResolveData` cbuffer name is matched against Slang reflection, so it must track the
-  declaration in `TaaResolve.slang`.
+  declaration in `programs/screen/TaaResolve.slang`.
 
 ### PostProcess — [passes/PostProcessPass.{h,cpp}](libs/bgl/src/passes/PostProcessPass.cpp)
 
 Turns the linear HDR scene colour into the displayed image, as a single full-screen triangle from
-the `PostProcess` module (mesh + pixel, no amplification shader, depth test off). Added in
+the `programs.screen.PostProcess` module (mesh + pixel, no amplification shader, depth test off). Added in
 `EndFrame`, after every draw and before `PreparePresent`.
 
 Today it applies `AgX`, then — on a frame where a [Outline Mask](#outline-mask) pass ran —
@@ -489,7 +492,7 @@ contour no thicker on screen.
   resource, declared and sampled only on a frame whose `outlineEnabled` is set; its own
   point-clamp sampler, created by `RenderContext` because the pass runs outside any `Draw` and the
   per-scene samplers are not reachable there. The `gPostProcessData` cbuffer name is matched
-  against Slang reflection, so it must track the declaration in `PostProcess.slang`.
+  against Slang reflection, so it must track the declaration in `programs/screen/PostProcess.slang`.
 * **Out:** the backbuffer.
 * It covers the whole target, which is why `BeginFrame` does not clear the backbuffer.
 * **It is the only pass that writes the backbuffer**, which is what keeps `SubmitCapture` — a
@@ -524,7 +527,7 @@ in `EndFrame`, after all draws.
 * **`c_Psos` (Forward) is coupled to `PsoType` by position.** The rows are ordered to match the
   enum and indexed by it; a reordering is not caught by the `static_assert`, which only rejects an
   empty pixel-shader row.
-* **The transparent blend factor and `Forward_Transparent`'s return value are one decision made in
+* **The transparent blend factor and `programs.forward.Transparent`'s return value are one decision made in
   two files.** `SrcBlend = One` is only correct because the shader premultiplies; either one changed
   alone is silently wrong rather than a build error — a `SrcAlpha` factor against premultiplied
   colour squares the alpha, and `One` against unweighted colour ignores it. `PsoConfig::blend` is

@@ -73,19 +73,19 @@ namespace bgl
 		constexpr auto c_MotionVectorFormat = Format::RG16_FLOAT;
 		constexpr auto c_SceneColorFormat   = Format::RGBA16_FLOAT;
 
-		constexpr auto c_GeomSrc             = "Forward_StaticMesh"sv;
-		constexpr auto c_VatGeomSrc          = "Forward_VatMesh"sv;
-		constexpr auto c_SkinnedGeomSrc      = "Forward_SkinnedMesh"sv;
-		constexpr auto c_AnyGeomSrc          = "Forward_AnyMesh"sv;
-		constexpr auto c_PbrPixelSrc         = "Forward_PBR"sv;
-		constexpr auto c_LoosePixelSrc       = "Forward_PBR_Loose"sv;
-		constexpr auto c_NullPixelSrc        = "Forward_Null"sv;
-		constexpr auto c_PbrCutoutPixelSrc   = "Forward_PBR_AlphaTest"sv;
-		constexpr auto c_LooseCutoutPixelSrc = "Forward_PBR_Loose_AlphaTest"sv;
-		constexpr auto c_PbrHashedPixelSrc   = "Forward_PBR_HashedAlpha"sv;
-		constexpr auto c_LooseHashedPixelSrc = "Forward_PBR_Loose_HashedAlpha"sv;
-		constexpr auto c_TransparentSrc      = "Forward_Transparent"sv;
-		constexpr auto c_AssertPixelSrc      = "Forward_Assert"sv;
+		constexpr auto c_GeomSrc             = "programs.forward.StaticMesh"sv;
+		constexpr auto c_VatGeomSrc          = "programs.forward.VatMesh"sv;
+		constexpr auto c_SkinnedGeomSrc      = "programs.forward.SkinnedMesh"sv;
+		constexpr auto c_AnyGeomSrc          = "programs.forward.AnyMesh"sv;
+		constexpr auto c_PbrPixelSrc         = "programs.forward.PBR"sv;
+		constexpr auto c_LoosePixelSrc       = "programs.forward.PBR_Loose"sv;
+		constexpr auto c_NullPixelSrc        = "programs.forward.Null"sv;
+		constexpr auto c_PbrCutoutPixelSrc   = "programs.forward.PBR_AlphaTest"sv;
+		constexpr auto c_LooseCutoutPixelSrc = "programs.forward.PBR_Loose_AlphaTest"sv;
+		constexpr auto c_PbrHashedPixelSrc   = "programs.forward.PBR_HashedAlpha"sv;
+		constexpr auto c_LooseHashedPixelSrc = "programs.forward.PBR_Loose_HashedAlpha"sv;
+		constexpr auto c_TransparentSrc      = "programs.forward.Transparent"sv;
+		constexpr auto c_AssertPixelSrc      = "programs.forward.Assert"sv;
 
 		struct PsoConfig
 		{
@@ -226,7 +226,7 @@ namespace bgl
 				.SetDepthFunc(cfg.depthFunc)
 				.SetStencilEnable(false);
 
-			// Premultiplied: Forward_Transparent returns radiance already weighted by its own
+			// Premultiplied: programs.forward.Transparent returns radiance already weighted by its own
 			// coverage, so the reflection reaches the film undimmed by the material's alpha while
 			// the transmitted lobe is thinned in the shader. kSrcAlpha here would scale both.
 			auto blend = BlendState{};

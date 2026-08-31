@@ -325,7 +325,7 @@ TEST_CASE("GPU assertion handler replaces the crash", "[debug][gpu-assert][rende
 	CHECK(handler.calls >= 1);
 	CHECK(handler.raisedCount >= 1);
 	REQUIRE(handler.errcodes.size() >= 1);
-	CHECK(handler.errcodes[0] == 1u);  // Forward_Assert.slang raises errcode 1
+	CHECK(handler.errcodes[0] == 1u);  // programs/forward/Assert.slang raises errcode 1
 
 	gfx->DiscardPendingGpuAssertions();
 	gfx->SetGpuAssertionHandler(nullptr);

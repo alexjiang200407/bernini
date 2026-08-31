@@ -39,7 +39,7 @@ truth; when this doc disagrees, trust the header, then fix this doc.
   throw `GraphicsError`/`ApiError` so the caller can handle them. See
   [libs/bgl/CLAUDE.md](libs/bgl/CLAUDE.md).
 * **The word layout of the debug buffer is duplicated in two places on purpose** — the GPU
-  writer ([dbg.slang](libs/bgl/shaders/src/debug/dbg.slang)) and the CPU reader
+  writer ([dbg.slang](libs/bgl/shaders/src/lib/debug/dbg.slang)) and the CPU reader
   ([DebugBuffer.h](libs/bgl/src/debug/DebugBuffer.h)) each hardcode `kHeaderWords=4`,
   `kRecordWords=1`. They **must** stay in sync; there is no shared source for them.
 
@@ -64,7 +64,7 @@ A GPU→CPU assertion channel. A shader detects a bad condition and calls `dbg_r
 reads the buffer back a few frames later and either crashes (`gfatal`) or forwards a report to a
 registered handler.
 
-**Shader side** — [libs/bgl/shaders/src/debug/dbg.slang](libs/bgl/shaders/src/debug/dbg.slang):
+**Shader side** — [libs/bgl/shaders/src/lib/debug/dbg.slang](libs/bgl/shaders/src/lib/debug/dbg.slang):
 * `dbg_raise(ErrorCode errcode, uint value = 0, uint limit = 0, uint context = 0)` — atomically
   appends one record; sets the overflow flag if the buffer is full.
 * `dbg_assert(bool condition, ErrorCode errcode, uint value = 0, uint limit = 0, uint context = 0)`
@@ -124,7 +124,7 @@ flowchart TD
   the engine wires the live buffer from reflection, so every shader that imports `debug.dbg`
   gets it auto-bound.
 * **Layout constants must match** between [DebugBuffer.h](libs/bgl/src/debug/DebugBuffer.h) and
-  [dbg.slang](libs/bgl/shaders/src/debug/dbg.slang) (`kHeaderWords=4`, `kRecordWords=4`).
+  [dbg.slang](libs/bgl/shaders/src/lib/debug/dbg.slang) (`kHeaderWords=4`, `kRecordWords=4`).
   Changing a record's shape means editing both, plus the `DebugRecord` IDL struct the readback
   decodes over the words. A `static_assert` in `DebugBuffer.h` catches the struct and the word count
   disagreeing; nothing catches `dbg.slang` disagreeing, so change it in the same commit.
@@ -383,4 +383,4 @@ The file links in the tables and section headers are the load-bearing part of th
 silently if files move or are renamed. When the debug/logging layout changes — especially the
 buffer word layout duplicated across
 [DebugBuffer.h](libs/bgl/src/debug/DebugBuffer.h) and
-[dbg.slang](libs/bgl/shaders/src/debug/dbg.slang) — re-check the links and the constants.
+[dbg.slang](libs/bgl/shaders/src/lib/debug/dbg.slang) — re-check the links and the constants.

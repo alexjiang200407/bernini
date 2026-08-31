@@ -20,7 +20,7 @@ namespace bgl
 		{
 			SlangErrorChecker errChecker;
 			m_SlangModule = m_Session->loadModule(
-				m_Desc.slangModuleName.c_str(),
+				m_Desc.SlangModulePath().c_str(),
 				errChecker.WriteDiagnosticBlob());
 			errChecker.ReportError();
 		}

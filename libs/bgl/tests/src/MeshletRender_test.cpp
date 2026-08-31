@@ -66,8 +66,8 @@ TEST_CASE("Meshlet pipeline renders a fullscreen triangle", "[meshlet]")
 
 	auto kernel = device->CreateMeshletKernel(
 		bgl::MeshletPipelineDesc()
-			.SetMeshShader(device->CreateShader("FullscreenRect", "MSMain"))
-			.SetPixelShader(device->CreateShader("FullscreenRect", "PSMain"))
+			.SetMeshShader(device->CreateShader("programs.screen.FullscreenRect", "MSMain"))
+			.SetPixelShader(device->CreateShader("programs.screen.FullscreenRect", "PSMain"))
 			.AddRtvFormat(bgl::Format::RGBA32_FLOAT));
 
 	auto state   = bgl::MeshletState();

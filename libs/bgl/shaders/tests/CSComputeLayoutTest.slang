@@ -1,4 +1,4 @@
-import types.ComputeBuffer;
+import lib.types.ComputeBuffer;
 
 // A mixed uniform layout: a float3 (a 16-byte slot in an MSL cbuffer, not 12), a scalar, then a
 // bindless handle at a non-zero, alignment-dependent offset. If the float3 footprint or the handle

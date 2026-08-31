@@ -43,7 +43,7 @@ truth; when this doc disagrees, trust the header, then fix this doc.
 * **Clips stack along V; each is padded with a duplicate of its *last* frame.** Frame `f` of a
   clip is row `firstRow + f`; the pad row exists so fractional-frame blending never bleeds into
   the clip stacked below. Playback never reads it: the upper row index tops out at
-  `frameCount - 1` ([clip_playback.slang](libs/bgl/shaders/src/clip_playback.slang)), so the pad
+  `frameCount - 1` ([clip_playback.slang](libs/bgl/shaders/src/lib/anim/clip_playback.slang)), so the pad
   is unreachable by construction rather than by a rule the fetch has to remember.
 * **A looping clip's cycle is `frameCount - 1` frames.** The importer counts both ends
   (`round(duration × sampleRate) + 1`) and marks a clip looping precisely because its last frame
@@ -66,7 +66,7 @@ truth; when this doc disagrees, trust the header, then fix this doc.
 * **Every VAT door demands `kPBR`, in any layer.** No null and no loose variant of the VAT pipeline
   exists, so `AddVatMeshGeom`, `SetSubmeshMaterial` and `SetSubmeshMaterialOverride` refuse those —
   and nothing else. A blended VAT instance is drawn from the depth-sorted list rather than its own
-  bucket, through the tier-branching `Forward_AnyMesh` (see [Passes](docs/passes.md)).
+  bucket, through the tier-branching `programs.forward.AnyMesh` (see [Passes](docs/passes.md)).
 * **Motion vectors are the pose re-evaluated at `prevTime`.** The instance transform is
   immutable, so the previous frame's clip-space position is one extra position fetch through
   `prevViewProj` — real velocity from day one, because TAA ghosting on the majority path is not
@@ -83,7 +83,7 @@ truth; when this doc disagrees, trust the header, then fix this doc.
   and writes it into the normal texture's alpha channel, which was padding: `twist / 2π + 0.5`,
   one unorm8 step ≈ 1.4°. The two rotations live in
   [libs/assetlib/src/vat_tangent.h](libs/assetlib/src/vat_tangent.h) and are repeated verbatim in
-  [Forward_VatMesh.slang](libs/bgl/shaders/src/Forward_VatMesh.slang); antiparallel normals, which
+  [programs/forward/VatMesh.slang](libs/bgl/shaders/src/programs/forward/VatMesh.slang); antiparallel normals, which
   have no shortest arc, leave the tangent alone on both sides so the twist still closes the gap,
   and the bake measures against the normal *as the texel stores it*, so the two sides see the same
   input. Between frames the normal blends linearly like the position and the twist blends the
@@ -181,7 +181,7 @@ flowchart TD
     subgraph bgl
         SCENE["IScene::AddVatMeshGeom (geom + clip/column tables + texture pair)"]
         VIEW["ISceneView::CreateVatMeshInstance (VatState: clip, phase, rate)"]
-        MS["Forward_VatMesh mesh shader (Load x2, lerp; prev pose at prevTime)"]
+        MS["programs.forward.VatMesh mesh shader (Load x2, lerp; prev pose at prevTime)"]
     end
 
     BMESH & BSKEL & BANIM -- "inputs, stamped" --> BAKE

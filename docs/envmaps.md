@@ -112,7 +112,7 @@ flowchart TD
   binding them unconditionally is a crash rather than an unlit scene. Ask first — see `HasLighting` /
   `HasSky` below, and `editor::ApplyEnvironment`, which guards both.
 * The prefilter chain must be **7 mips**. `MAX_REFLECTION_LOD = 6` in
-  [libs/bgl/shaders/src/forward/PbrShading.slang](libs/bgl/shaders/src/forward/PbrShading.slang), and
+  [libs/bgl/shaders/src/lib/forward/PbrShading.slang](libs/bgl/shaders/src/lib/forward/PbrShading.slang), and
   roughness is `mip / (mipLevels - 1)` — a different count silently remaps roughness rather than
   failing.
 

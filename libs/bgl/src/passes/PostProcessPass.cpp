@@ -14,7 +14,7 @@ namespace bgl
 {
 	namespace
 	{
-		constexpr auto c_Src = "PostProcess"sv;
+		constexpr auto c_Src = "programs.screen.PostProcess"sv;
 
 		// Keyed on the Slang global's name as reflection reports it, so this must track the
 		// ConstantBuffer declaration in PostProcess.slang.

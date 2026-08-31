@@ -102,7 +102,7 @@ TEST_CASE(
 
 	auto kernel = device->CreateComputeKernel(
 		bgl::ComputePipelineDesc()
-			.SetShader(device->CreateShader("TransparentSort"))
+			.SetShader(device->CreateShader("programs.culling.TransparentSort"))
 			.SetDebugName("Transparent Sort"));
 
 	kernel["gUniforms"]["entries"]         = entries.GetBufferHandle();

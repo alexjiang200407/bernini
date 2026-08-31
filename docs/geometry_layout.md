@@ -54,7 +54,7 @@ path is the source of truth; when this doc disagrees, trust the struct, then fix
   `<build>/generated/idl/Constants.h`) and the shaders (`import idl.Constants`). A meshlet
   carries a bounding sphere, written by the scene but read by nothing yet: culling today is
   per-instance, against the submesh's sphere
-  ([CullInstances.slang](libs/bgl/shaders/src/CullInstances.slang)).
+  ([CullInstances.slang](libs/bgl/shaders/src/programs/culling/CullInstances.slang)).
 
   This model draws from the meshopt pools — `meshletVertices` and `meshletTriangles` — and **never
   from the cooked plain index range.** The cooked `assetlib::Submesh` carries that range too
@@ -123,7 +123,7 @@ path is the source of truth; when this doc disagrees, trust the struct, then fix
   pos/normal/uv/tangent — see `VertexGen` in
   [types/VertexGen.h](libs/bgl/src/types/VertexGen.h), whose field order *is* that layout. See
   `DecodeVertex` in
-  [forward/vertexdecode.slang](libs/bgl/shaders/src/forward/vertexdecode.slang).
+  [lib/forward/vertexdecode.slang](libs/bgl/shaders/src/lib/forward/vertexdecode.slang).
 
 * **CPU-side mirror buffers own the storage and hand back offsets.** Geometry is uploaded through
   `RangeBuffer` / `EntryBuffer` / `PackedBuffer` — GPU-mirrored containers whose `Add`/`EmplaceBack`
@@ -158,7 +158,7 @@ Generated shader structs (GPU source of truth). Each has a byte-identical `bgl::
 | `Clip` | [Clip.slang](libs/bgl/shaders/src/idl/Clip.slang) | One playable clip: where its frame 0 sits in the tier's own frame space, its frame count, authored rate and loop flag. Shared by every animated tier out of one clip buffer. |
 | `Submesh` | [Submesh.slang](libs/bgl/shaders/src/idl/Submesh.slang) | One drawable part, **geometry only**: its `VertexLayout`, meshlet range, vertexMap/indices ranges, a `RawRange` of vertex bytes, vertex count, local bounding sphere. No material, no PSO — those are per-instance. |
 | `Meshlet` | [Meshlet.slang](libs/bgl/shaders/src/idl/Meshlet.slang) | A mesh-shader work unit: offsets into the parent submesh's vertexMap/indices windows, vertex/triangle counts, bounding sphere. |
-| `DecodedVertex` | [vertexdecode.slang](libs/bgl/shaders/src/forward/vertexdecode.slang) | What a vertex decodes *to* — position, normal, uv, tangent, joints and weights. Not IDL and not stored anywhere: on the GPU vertices live as raw bytes. |
+| `DecodedVertex` | [vertexdecode.slang](libs/bgl/shaders/src/lib/forward/vertexdecode.slang) | What a vertex decodes *to* — position, normal, uv, tangent, joints and weights. Not IDL and not stored anywhere: on the GPU vertices live as raw bytes. |
 | `VertexLayout` | [VertexLayout.slang](libs/bgl/shaders/src/idl/VertexLayout.slang) | Up to 8 `VertexAttribute`s (semantic + format + byte offset) plus `stride`; describes how to decode a vertex from bytes. |
 
 One struct in the same buffers is **not** IDL-generated and is hand-mirrored instead, so the two
@@ -166,7 +166,7 @@ copies must be kept in step by hand:
 
 | Struct | Files | Role |
 |---|---|---|
-| `SubmeshInstance` | [SubmeshInstance.slang](libs/bgl/shaders/src/types/SubmeshInstance.slang) · [SubmeshInstance.h](libs/bgl/src/types/SubmeshInstance.h) | One drawable: a `Mesh` entry + submesh index, plus the **resolved** `material` entry and `pso`. The unit the counting sort buckets and the mesh shader draws. |
+| `SubmeshInstance` | [SubmeshInstance.slang](libs/bgl/shaders/src/lib/types/SubmeshInstance.slang) · [SubmeshInstance.h](libs/bgl/src/types/SubmeshInstance.h) | One drawable: a `Mesh` entry + submesh index, plus the **resolved** `material` entry and `pso`. The unit the counting sort buckets and the mesh shader draws. |
 
 ### Offset primitives
 
@@ -177,8 +177,8 @@ copies must be kept in step by hand:
 | `Entry<T>` | [Entry.slang](libs/bgl/shaders/src/idl/Entry.slang) | A single-element `uint offset` into a `StructuredBuffer<T>` (e.g. a `SubmeshInstance`'s `Entry<Mesh>`). |
 | `RawEntry<T>` | [RawEntry.slang](libs/bgl/shaders/src/idl/RawEntry.slang) | A `uint` **byte** offset into a raw arena, naming a record's `RecordHeader`; its payload begins `cRawPayloadOffset` later. |
 | `RawRange` | [RawRange.slang](libs/bgl/shaders/src/idl/RawRange.slang) | A `uint` byte offset to a headerless window of bytes, for data whose kind whatever names it already records. |
-| `RawHandleView<T>` | [RawHandleView.slang](libs/bgl/shaders/src/types/RawHandleView.slang) | The same allocation read as handles of `T`, addressed by byte offset — what makes a resource of handle bytes a record holds. Not an `EntryBuffer`: nothing in it is an allocated element. |
-| `RawHandleArena<T>` | [RawHandleArena.slang](libs/bgl/shaders/src/types/RawHandleArena.slang) | The two views of one arena as a single member, so they cannot be bound to different buffers. |
+| `RawHandleView<T>` | [RawHandleView.slang](libs/bgl/shaders/src/lib/types/RawHandleView.slang) | The same allocation read as handles of `T`, addressed by byte offset — what makes a resource of handle bytes a record holds. Not an `EntryBuffer`: nothing in it is an allocated element. |
+| `RawHandleArena<T>` | [RawHandleArena.slang](libs/bgl/shaders/src/lib/types/RawHandleArena.slang) | The two views of one arena as a single member, so they cannot be bound to different buffers. |
 
 `RawEntry<T>` is generic, so its C++ mirror is hand-written and carries `Null()`; `RawRange` and
 `RecordHeader` are concrete, so idlgen emits them and the C++ side is fields only.
@@ -226,7 +226,7 @@ flowchart TD
 
 ### The per-meshlet-vertex indirection chain
 
-For lane `gtid` of a meshlet (see [forward/mesh_stage.slang](libs/bgl/shaders/src/forward/mesh_stage.slang)):
+For lane `gtid` of a meshlet (see [lib/forward/mesh_stage.slang](libs/bgl/shaders/src/lib/forward/mesh_stage.slang)):
 
 1. **vertexMap lookup** — `vertexMapBuffer[submesh.vertexMap, meshlet.relativeVertexOffset + gtid]`
    yields a **geometry-local vertex index**. The meshlet's vertices are a compacted window inside
@@ -241,7 +241,7 @@ For lane `gtid` of a meshlet (see [forward/mesh_stage.slang](libs/bgl/shaders/sr
    vertex array — *not* geometry indices.
 
 All `relative*Offset`s are relative to the parent submesh's range start; the buffer accessors add
-the range's `GetStart()` (see [RangeBuffer.slang](libs/bgl/shaders/src/types/RangeBuffer.slang)).
+the range's `GetStart()` (see [RangeBuffer.slang](libs/bgl/shaders/src/lib/types/RangeBuffer.slang)).
 
 ---
 

@@ -136,7 +136,7 @@ not obvious from a signature. The headers linked below are the source of truth.
 | Upload | [`IScene::AddSkinnedMeshGeom`](libs/bgl_intfc/include/bgl/IScene.h) | Bones, clip table and sample pool become scene buffers; per-bone depth is derived here |
 | Place | [`ISceneView::CreateSkinnedMeshInstance`](libs/bgl_intfc/include/bgl/ISceneView.h) | Writes the playback record and reserves the instance's palette slice |
 | Pose | [`SkinnedPosePass`](libs/bgl/src/passes/SkinnedPosePass.h) | One workgroup per instance: sample, blend, walk the hierarchy, multiply by inverse bind |
-| Draw | `forward/skinned_vertex.slang` | Blends the bind-pose vertex bytes by the palette; position, normal and tangent through one matrix. Entered from `Forward_SkinnedMesh.slang`, or from `Forward_AnyMesh.slang` where a draw mixes tiers |
+| Draw | `lib/forward/skinned_vertex.slang` | Blends the bind-pose vertex bytes by the palette; position, normal and tangent through one matrix. Entered from `programs/forward/SkinnedMesh.slang`, or from `programs/forward/AnyMesh.slang` where a draw mixes tiers |
 
 ## In the editor
 
@@ -270,7 +270,7 @@ the transport, the clip list and the scrubber are the same code either way — w
 * **`kPBR`, any layer.** Opaque, cutout and hashed all draw an *opaque shape* — they discard rather
   than blend, so their depth is real and nothing has to be sorted — and each is one row of
   `ForwardPass`'s PSO table against the same skinned geometry shader. Blending is the one that needs
-  the depth-sorted list, which holds every tier at once and draws them through `Forward_AnyMesh`
+  the depth-sorted list, which holds every tier at once and draws them through `programs.forward.AnyMesh`
   (see [Passes](docs/passes.md)), so a blended rig sorts against blended static geometry rather than
   after it. What is refused is a *material type*: no unlit and no loose variant of the skinned
   pipeline exists, and a material's kind is read from its own record rather than stamped by the

@@ -17,12 +17,12 @@ namespace bgl
 
 		m_DepthKeys = device->CreateComputeKernel(
 			ComputePipelineDesc()
-				.SetShader(device->CreateShader("TransparentDepthKeys"))
+				.SetShader(device->CreateShader("programs.culling.TransparentDepthKeys"))
 				.SetDebugName("Transparent Depth Keys"));
 
 		m_Sort = device->CreateComputeKernel(
 			ComputePipelineDesc()
-				.SetShader(device->CreateShader("TransparentSort"))
+				.SetShader(device->CreateShader("programs.culling.TransparentSort"))
 				.SetDebugName("Transparent Sort"));
 	}
 

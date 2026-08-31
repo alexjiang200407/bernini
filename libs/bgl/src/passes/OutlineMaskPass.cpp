@@ -22,8 +22,8 @@ namespace bgl
 		// The tier-branching stage, so a selected rig or crowd contours the shape it is posed in
 		// rather than the bind pose its vertex bytes hold. A selection mixes tiers freely, and this
 		// pass dispatches its whole list at once.
-		constexpr auto c_GeomSrc  = "Forward_AnyMesh"sv;
-		constexpr auto c_PixelSrc = "OutlineMask"sv;
+		constexpr auto c_GeomSrc  = "programs.forward.AnyMesh"sv;
+		constexpr auto c_PixelSrc = "programs.screen.OutlineMask"sv;
 
 		constexpr auto c_MaskFormat = Format::R8_UNORM;
 	}

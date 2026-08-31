@@ -137,9 +137,9 @@ TEST_CASE(
 		return kernel;
 	};
 
-	auto histogram = makeKernel("HistogramInstances", "Histogram Instances");
-	auto prefixSum = makeKernel("PrefixSumInstances", "Prefix-Sum Instances");
-	auto compact   = makeKernel("CompactInstances", "Compact Instances");
+	auto histogram = makeKernel("programs.culling.HistogramInstances", "Histogram Instances");
+	auto prefixSum = makeKernel("programs.culling.PrefixSumInstances", "Prefix-Sum Instances");
+	auto compact   = makeKernel("programs.culling.CompactInstances", "Compact Instances");
 
 	bgl::FrameGraph fg;
 	fg.RegisterQueue("main", cmdQueue, cmdList);

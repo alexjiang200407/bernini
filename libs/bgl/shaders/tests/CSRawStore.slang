@@ -1,4 +1,4 @@
-import types.ComputeBuffer;
+import lib.types.ComputeBuffer;
 
 // Writes typed values into a raw UAV at byte offsets, which a CPU readback then checks. The
 // readable view has no part in it: what this pins is that a bindless RWByteAddressBuffer resolves

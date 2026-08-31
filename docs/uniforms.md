@@ -21,7 +21,7 @@ doc disagrees, trust the header, then fix this doc.
   way, and a change that "fixes" them to match would remove capability. Three reasons:
 
   1. **The layouts genuinely differ.** An `EntryBuffer<T>` element uses `ScalarDataLayout`
-     ([EntryBuffer.slang](libs/bgl/shaders/src/types/EntryBuffer.slang)), which is what makes the IDL
+     ([EntryBuffer.slang](libs/bgl/shaders/src/lib/types/EntryBuffer.slang)), which is what makes the IDL
      mirror `memcpy`-compatible. A `ConstantBuffer<T>` rounds vectors to 16-byte boundaries and pads
      between members, so the same struct cannot serve both.
 
@@ -32,12 +32,12 @@ doc disagrees, trust the header, then fix this doc.
      *asks the layout* whether a field exists instead of being compiled against a fixed struct, so
      variants declaring different subsets share one binder.
      [ForwardPass::BindKernel](libs/bgl/src/passes/ForwardPass.cpp) binds all `c_PsoCount` kernels
-     through one function even though [Forward_Null.slang](libs/bgl/shaders/src/Forward_Null.slang)
+     through one function even though [programs/forward/Null.slang](libs/bgl/shaders/src/programs/forward/Null.slang)
      imports no `MaterialData` and has no `materialData` cbuffer at all. A `memcpy`'d IDL struct
      structurally cannot express "this variant has no such field".
 
 * **The two regimes meet inside one shader struct.**
-  [MaterialData.slang](libs/bgl/shaders/src/forward/MaterialData.slang) holds an
+  [MaterialData.slang](libs/bgl/shaders/src/lib/forward/MaterialData.slang) holds an
   `RawBuffer` of material records alongside ordinary `float3`/`float2` members: the outer struct is
   reflected and addressed by name, the elements the handle points at are compile-time-proven. Expect
   the guarantees to change at that boundary.
@@ -222,7 +222,7 @@ drift.
 **`bool` is rejected rather than guessed at.** Slang's MSL `bool` ABI is unverified and a wrong
 alignment displaces every member after the field, so `MetalAlign` calls `gfatal` on `kBool` instead of
 falling through to its 4-byte default. @post a `bool` in a constant buffer aborts on Metal with a
-message naming the fix — use `uint` or `float`, as [TaaResolve.slang](libs/bgl/shaders/src/TaaResolve.slang)
+message naming the fix — use `uint` or `float`, as [TaaResolve.slang](libs/bgl/shaders/src/programs/screen/TaaResolve.slang)
 does. Lifting it needs a test pinning the emitted offsets against the GPU.
 
 **The Metalized layout is what the shader cache stores.** @pre a change to `MetalizeLayout` or

@@ -155,7 +155,7 @@ TEST_CASE(
 
 	auto kernel = device->CreateComputeKernel(
 		bgl::ComputePipelineDesc()
-			.SetShader(device->CreateShader("TransparentDepthKeys"))
+			.SetShader(device->CreateShader("programs.culling.TransparentDepthKeys"))
 			.SetDebugName("Transparent Depth Keys"));
 
 	kernel["gUniforms"]["instanceBuffer"] = instanceBuffer.GetBufferHandle();

@@ -14,7 +14,7 @@ namespace bgl
 {
 	namespace
 	{
-		constexpr auto c_Src = "TaaResolve"sv;
+		constexpr auto c_Src = "programs.screen.TaaResolve"sv;
 
 		// Keyed on the Slang global's name as reflection reports it, so this must track the
 		// ConstantBuffer declaration in TaaResolve.slang.

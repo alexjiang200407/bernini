@@ -19,7 +19,7 @@ namespace bgl
 		SlangErrorChecker errChecker;
 
 		slang::IModule* module = m_Device->GetSlangSession()->loadModule(
-			m_Desc.slangModuleName.c_str(),
+			m_Desc.SlangModulePath().c_str(),
 			errChecker.WriteDiagnosticBlob());
 		errChecker.ReportError();
 
