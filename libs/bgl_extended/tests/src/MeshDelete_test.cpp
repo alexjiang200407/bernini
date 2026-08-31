@@ -150,14 +150,14 @@ TEST_CASE("Buffer contents around mesh deletion", "[delete][buffers][scene]")
 	auto& instanceBuffer = view->GetInstanceBuffer();
 	auto& meshBuffer     = view->GetMeshBuffer();
 
-	// inst.handle now refers to the per-placement Mesh record; the mesh instance owns
+	// inst.handle now refers to the MeshInstance record; the placement owns
 	// one submesh-instance per submesh (the cube has exactly one).
 	const uint32_t meshIndex = inst.handle.index;
 
 	REQUIRE(meshBuffer.MetaAt(meshIndex).submeshInstances.size() == 1);
 	const auto submeshInstance = meshBuffer.MetaAt(meshIndex).submeshInstances[0];
 
-	// The per-placement Mesh (owned by the view) carries the submeshes descriptor.
+	// The MeshInstance (owned by the view) carries the submeshes descriptor.
 	const uint32_t submeshRoot = meshBuffer.AtIndex(meshIndex).submeshes.range.offsetStart;
 
 	const auto& submesh = submeshBuffer.AtIndex(submeshRoot);

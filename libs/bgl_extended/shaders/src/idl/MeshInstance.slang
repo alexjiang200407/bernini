@@ -1,11 +1,14 @@
-// THIS IS A FILE GENERATED FROM Mesh.slang. DO NOT EDIT MANUALLY
+// THIS IS A FILE GENERATED FROM MeshInstance.slang. DO NOT EDIT MANUALLY
 
 import IPlayback;
 import RangeWithCount;
 import RawEntry;
 import Submesh;
 
-public struct Mesh
+// One placement of a geom: its world transform, the geom's submesh range copied in by value, and
+// its playback record. The geom itself has no GPU record -- see
+// docs/specs/gpu_scene_instance_split.md.
+public struct MeshInstance
 {
     public float4x4 transform;
     public RangeWithCount<Submesh> submeshes;

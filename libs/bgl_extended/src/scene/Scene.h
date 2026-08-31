@@ -207,7 +207,7 @@ namespace bgl
 
 		// --- SceneView support -------------------------------------------------
 		// Instances live in SceneViews and reference this Scene's geometry by value: a view copies
-		// the submesh range below into its per-placement Mesh. The Scene keeps no record of who
+		// the submesh range below into its MeshInstance. The Scene keeps no record of who
 		// placed what, so the caller owns the ordering -- see IScene::DeleteGeom.
 
 		[[nodiscard]] bool
@@ -216,7 +216,7 @@ namespace bgl
 			return geom.IsValid() && m_Geoms.valid(geom.handle);
 		}
 
-		// The submesh range a SceneView copies into a per-placement Mesh at instance-creation time.
+		// The submesh range a SceneView copies into a MeshInstance at instance-creation time.
 		// Only valid while the geom is alive; check IsGeomAlive first.
 		[[nodiscard]] const idl::RangeWithCount&
 		GetGeomSubmeshes(uint32_t index) const noexcept

@@ -1,6 +1,6 @@
 import idl.Constants;
 import idl.InstanceVisibility;
-import idl.Mesh;
+import idl.MeshInstance;
 import idl.PsoType;
 import lib.types.ComputeBuffer;
 import lib.types.EntryBuffer;
@@ -18,7 +18,7 @@ bool IsTransparentPso(PsoType pso)
 struct Uniforms
 {
     PackedBuffer<SubmeshInstance> instanceBuffer;
-    EntryBuffer<Mesh> meshBuffer;
+    EntryBuffer<MeshInstance> meshBuffer;
     ComputeBuffer<InstanceVisibility> visibility;
 
     // (sortKey, instanceIndex) pairs, compacted: only transparent instances get a slot.

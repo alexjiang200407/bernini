@@ -262,7 +262,7 @@ It adds **four sub-passes**:
    `cull.view`, and seeds every `compactDispatchArgs` entry to `{ 0, 1, 1 }` (a group count of 0 with
    Y = Z = 1). The written buffers are declared copy-dest.
 2. **Cull Instances** (`CullInstances`, one thread per instance) — builds the instance's world-space
-   bounding sphere (`Mesh.transform` × the submesh's local sphere) and writes a per-instance
+   bounding sphere (the placement's transform × the submesh's local sphere) and writes a per-instance
    **visibility word** to `scene.instanceVisibility`; the histogram, compaction, and transparent
    depth-key passes all gate on it, so a culled instance reaches no draw. Skipped when the instance
    count is 0.
@@ -380,7 +380,7 @@ fetch, the vertex decode and the reprojection live in `lib/forward/mesh_stage.sl
 tier's vertex evaluation in its own `lib/forward/{static,skinned}_vertex.slang`. Only the
 mesh-output loops are still written out per entry point — Slang's Metal backend crashes on any
 function taking `OutputVertices`, so nothing but `MSMain` may index them. `AnyMesh` is the third,
-and calls whichever of the two an instance's `Mesh` names — see the transparent phase below.
+and calls whichever of the two an instance's `MeshInstance` names — see the transparent phase below.
 
 The pixel shader varies per bucket instead (`Null`, `PBR`, `PBR_Loose`, `PBR_AlphaTest`,
 `PBR_Loose_AlphaTest`, `PBR_HashedAlpha`, `PBR_Loose_HashedAlpha`, `Transparent`, `Assert`), and is chosen by layer

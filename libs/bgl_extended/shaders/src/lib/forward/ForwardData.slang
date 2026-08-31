@@ -1,5 +1,5 @@
 import idl.IPlayback;
-import idl.Mesh;
+import idl.MeshInstance;
 import idl.Meshlet;
 import idl.PlaybackType;
 import idl.RawEntry;
@@ -13,7 +13,7 @@ import lib.types.SubmeshInstance;
 public struct ForwardData
 {
     public PackedBuffer<SubmeshInstance> instanceBuffer;
-    public EntryBuffer<Mesh> meshBuffer;
+    public EntryBuffer<MeshInstance> meshBuffer;
     public RangeBuffer<Submesh> submeshBuffer;
     public RangeBuffer<Meshlet> meshletBuffer;
     public RangeBuffer<uint> vertexMapBuffer;
@@ -21,7 +21,7 @@ public struct ForwardData
     public RangeBuffer<uint> indexBuffer;
 
     // Every animated placement's playback record, each behind a header naming its tier. A static
-    // placement owns none and its Mesh.playback is null.
+    // placement owns none and its MeshInstance.playback is null.
     public RawBuffer playbackBuffer;
 
     // Which tier a placement's record is. Only the stage that draws more than one tier asks; the

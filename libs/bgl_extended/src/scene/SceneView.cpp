@@ -63,7 +63,7 @@ namespace bgl
 			auto meshBufferDesc         = EntryBufferDesc();
 			meshBufferDesc.initialCount = m_InitialInstances;
 			meshBufferDesc.debugName    = "Mesh Buffer";
-			meshBufferDesc.blockSize    = sizeof(idl::Mesh) * 256;
+			meshBufferDesc.blockSize    = sizeof(idl::MeshInstance) * 256;
 
 			m_MeshBuffer.Init(std::move(meshBufferDesc), m_ResourceManager);
 		}
@@ -217,7 +217,7 @@ namespace bgl
 				"GeomHandle passed to CreateStaticMeshInstance has expired or is invalid");
 		}
 
-		// No playback record: a static placement's Mesh.playback stays null.
+		// No playback record: a static placement's MeshInstance.playback stays null.
 		return WritePlacement(geom, transform, 0);
 	}
 
@@ -315,7 +315,7 @@ namespace bgl
 			// leaves it drawing whatever lands in that range next.
 			const idl::RangeWithCount submeshes = m_SceneRaw->GetGeomSubmeshes(geom.handle.index);
 
-			auto mesh      = idl::Mesh();
+			auto mesh      = idl::MeshInstance();
 			mesh.transform = transform;
 			mesh.submeshes = submeshes;
 
@@ -677,8 +677,8 @@ namespace bgl
 	void
 	SceneView::RefreshSubmeshInstance(uint32_t meshIndex, uint32_t submeshIndex)
 	{
-		const idl::Mesh& mesh = m_MeshBuffer.AtIndex(meshIndex);
-		const MeshMeta&  meta = m_MeshBuffer.MetaAt(meshIndex);
+		const idl::MeshInstance& mesh = m_MeshBuffer.AtIndex(meshIndex);
+		const MeshMeta&          meta = m_MeshBuffer.MetaAt(meshIndex);
 
 		const core::slot_handle handle = meta.submeshInstances[submeshIndex];
 		if (!m_InstanceBuffer.IsValid(handle))

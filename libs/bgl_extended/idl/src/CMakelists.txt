@@ -29,7 +29,7 @@ set(IDL_CPP_SOURCES
     CullView.slang
     CullStats.slang
     InstanceVisibility.slang
-    Mesh.slang
+    MeshInstance.slang
     DebugRecord.slang
     Constants.slang
     Clip.slang

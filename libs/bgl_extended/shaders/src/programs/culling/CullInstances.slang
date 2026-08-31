@@ -2,7 +2,7 @@ import idl.Constants;
 import idl.CullStats;
 import idl.CullView;
 import idl.InstanceVisibility;
-import idl.Mesh;
+import idl.MeshInstance;
 import idl.Submesh;
 import lib.debug.dbg;
 import lib.types.ComputeBuffer;
@@ -20,7 +20,7 @@ struct Uniforms
 {
     UploadBuffer<CullView> cullView;
     PackedBuffer<SubmeshInstance> instanceBuffer;
-    EntryBuffer<Mesh> meshBuffer;
+    EntryBuffer<MeshInstance> meshBuffer;
     RangeBuffer<Submesh> submeshBuffer;
     ComputeBuffer<InstanceVisibility> visibility;
 

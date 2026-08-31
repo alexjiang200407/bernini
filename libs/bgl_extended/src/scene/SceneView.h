@@ -292,7 +292,7 @@ namespace bgl
 		RebuildPosedList();
 
 		/**
-		 * Writes the records a placement is made of -- the per-placement Mesh, with `animState` routed
+		 * Writes the records a placement is made of -- the MeshInstance, with `animState` routed
 		 * naming the record the geom's type reads, and one resolved SubmeshInstance per submesh.
 		 *
 		 * Validates nothing: `geom` must already be a live geom of the type the public creator above
@@ -354,8 +354,8 @@ namespace bgl
 		uint64_t m_TemporalEpoch      = 0;
 		uint64_t m_DrawnTemporalEpoch = 0;
 
-		PackedBuffer<SubmeshInstance>    m_InstanceBuffer;
-		EntryBuffer<idl::Mesh, MeshMeta> m_MeshBuffer;
+		PackedBuffer<SubmeshInstance>            m_InstanceBuffer;
+		EntryBuffer<idl::MeshInstance, MeshMeta> m_MeshBuffer;
 		// Both tiers' playback records in one arena, each behind a header naming its tier, so the
 		// stage that draws more than one can ask rather than mirror the PSO table.
 		RawBuffer<idl::PlaybackType> m_Playback;

@@ -336,7 +336,7 @@ TEST_CASE("CreateSkinnedMeshInstance writes the playback record once", "[skinned
 	auto& meshBuffer = view->GetMeshBuffer();
 	auto& playback   = view->GetPlaybackArena();
 
-	const bgl::idl::Mesh& mesh = meshBuffer.AtIndex(instance.handle.index);
+	const bgl::idl::MeshInstance& mesh = meshBuffer.AtIndex(instance.handle.index);
 
 	// One field for either tier now, so what says which is the record's own header rather than
 	// which of two fields was left null.
@@ -357,7 +357,7 @@ TEST_CASE("CreateSkinnedMeshInstance writes the playback record once", "[skinned
 		const auto other = view->CreateSkinnedMeshInstance(geom, glm::mat4(1.0f), crowd);
 		REQUIRE(other.IsValid());
 
-		const bgl::idl::Mesh& crowdMesh = meshBuffer.AtIndex(other.handle.index);
+		const bgl::idl::MeshInstance& crowdMesh = meshBuffer.AtIndex(other.handle.index);
 		CHECK(
 			playback.GetTagAt(crowdMesh.playback.byteOffset) ==
 			bgl::idl::PlaybackType::kSkinnedTable);
