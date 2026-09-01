@@ -4,6 +4,7 @@
 
 #include "gfx/GraphicsBase.h"
 #include "gfx/RenderContext.h"
+#include "overlay/Overlay.h"
 #include "resource/ResourceManager.h"
 #include "scene/Scene.h"
 #include "scene/SceneView.h"
@@ -177,6 +178,18 @@ namespace bgl
 		CreateSceneView(const SceneRef& scene, uint32_t initialInstances) override
 		{
 			return core::SharedRef<SceneView>::Make(scene, initialInstances, m_ResourceManager);
+		}
+
+		OverlayRef
+		CreateOverlay() override
+		{
+			return core::SharedRef<Overlay>::Make(m_ResourceManager);
+		}
+
+		void
+		DrawOverlay(const OverlayJob& job) override
+		{
+			m_Context->DrawOverlay(job);
 		}
 
 		RenderTargetRef
