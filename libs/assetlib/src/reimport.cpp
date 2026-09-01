@@ -148,6 +148,7 @@ namespace assetlib
 			case AssetType::kUiDocument:
 			case AssetType::kUiStyle:
 			case AssetType::kFont:
+			case AssetType::kAvatar:
 			case AssetType::kCount:
 				break;
 			}

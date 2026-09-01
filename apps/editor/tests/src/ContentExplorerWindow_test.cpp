@@ -228,16 +228,16 @@ TEST_CASE("The content explorer is rooted at the project's authored half", "[con
 		QDir(model->filePath(Hierarchy(window)->rootIndex())) ==
 		QDir(sandbox.DataRootPath() + "/Authored"));
 
-	// And it fills in, on a worker thread. One row per authored category Project::Create scaffolds
-	// -- Meshes, Materials, Environments, Levels, UI, Fonts -- and nothing derived.
-	REQUIRE(WaitFor([&] {
-		return model->rowCount(Hierarchy(window)->rootIndex()) ==
-		       static_cast<int>(std::ranges::count_if(
-				   assetlib::c_RequiredDirectories,
-				   [](const std::string_view category) {
-					   return category.starts_with(assetlib::c_AuthoredDirectoryName);
-				   }));
-	}));
+	// And it fills in, on a worker thread. One row per authored category Project::Create scaffolds,
+	// and nothing derived. Counted off the layout rather than written out: a category added there is
+	// one the explorer gains, and a literal here would call that a failure.
+	const int authored = static_cast<int>(std::ranges::count_if(
+		assetlib::c_RequiredDirectories,
+		[](const std::string_view directory) {
+			return directory.starts_with(assetlib::c_AuthoredDirectoryName);
+		}));
+
+	REQUIRE(WaitFor([&] { return model->rowCount(Hierarchy(window)->rootIndex()) == authored; }));
 }
 
 TEST_CASE("The explorer resolves against the data root it is not rooted at", "[contentexplorer]")

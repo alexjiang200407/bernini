@@ -36,6 +36,9 @@ namespace assetlib
 	inline constexpr std::string_view c_UiStyleExtension    = ".rcss";
 	inline constexpr std::string_view c_FontExtension       = ".ttf";
 
+	// Text: the authored half of one rig, found by convention from its `.bskel`. See avatarKeyFor.
+	inline constexpr std::string_view c_AvatarExtension = ".bavatar";
+
 	// Not an asset either, and the only source kind an import takes: the file a `.bimport`
 	// describes, copied into the project beside it. `assetTypeFromExtension` does not know it, so a
 	// plan that has to reach one asks by this rather than by type.
@@ -69,6 +72,7 @@ namespace assetlib
 	requireInsideDataRoot(std::string_view who, std::string_view normalized);
 
 	struct AnimationSet;
+	struct Avatar;
 	struct BEnv;
 	struct BEnvLighting;
 	struct BMaterial;
@@ -222,6 +226,23 @@ namespace assetlib
 		Serialize(const ImportDocument& value);
 
 		[[nodiscard]] static ImportDocument
+		Deserialize(std::span<const std::byte> bytes);
+	};
+
+	/**
+	 * `.bavatar` -- an authored document: one rig's authored half, found by convention from the
+	 * `.bskel` it belongs to rather than by anything naming it.
+	 */
+	template <>
+	struct AssetCodec<Avatar>
+	{
+		static constexpr std::string_view c_Extension = c_AvatarExtension;
+		static constexpr AssetType        c_Type      = AssetType::kAvatar;
+
+		[[nodiscard]] static std::vector<std::byte>
+		Serialize(const Avatar& value);
+
+		[[nodiscard]] static Avatar
 		Deserialize(std::span<const std::byte> bytes);
 	};
 }
