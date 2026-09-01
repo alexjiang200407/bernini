@@ -80,6 +80,11 @@ groupshared uint gSolvedBone[cMaxLegsPerRig * 3];
 groupshared float4x4 gSolvedDelta[cMaxLegsPerRig * 3];
 groupshared uint gShallowestSolved;
 
+// The largest distance any leg falls short of its target, as the bits of a float. Interlocked ops
+// are integer-only, and a non-negative float's bit pattern orders exactly like the float, so a max
+// over the bits is a max over the values -- which holds only because a deficit is never negative.
+groupshared uint gMaxDeficit;
+
 // The three rows a placement stores, as the affine matrix the plane pullback and the inverse below
 // take. The fourth row is always (0,0,0,1) and is not stored.
 float4x4 InstanceTransform(MeshInstance mesh)
@@ -257,6 +262,77 @@ int SolvedIndexOf(uint solved, uint bone)
     return -1;
 }
 
+// One leg as the solve needs it: where its three joints are, where its ankle wants to be, and how
+// far past the chain's reach that is.
+//
+// Read once and used twice -- to measure the deficit, then to solve after the rig has dropped -- so
+// the target the drop is sized against and the target that is solved for cannot disagree.
+struct LegPose
+{
+    float3 hip;
+    float3 knee;
+    float3 ankle;
+    float3 target;
+    float weight;
+
+    // 0 when the chain can reach. A leg at weight 0 targets where its ankle already is, so it is
+    // reachable by construction and contributes nothing to the drop.
+    float deficit;
+};
+
+LegPose ReadLeg(
+    PoseTables tables,
+    Rig rig,
+    Clip clip,
+    SkinnedLegChain leg,
+    uint index,
+    float frames,
+    float4 plane,
+    float3 down,
+    uint paletteBase
+)
+{
+    LegPose pose;
+
+    let hipModel = PaletteMatrix(tables, paletteBase + leg.hip * cFloat4sPerBone);
+    let kneeModel = PaletteMatrix(tables, paletteBase + leg.knee * cFloat4sPerBone);
+    let ankleModel = PaletteMatrix(tables, paletteBase + leg.ankle * cFloat4sPerBone);
+
+    pose.hip = float3(hipModel[0].w, hipModel[1].w, hipModel[2].w);
+    pose.knee = float3(kneeModel[0].w, kneeModel[1].w, kneeModel[2].w);
+    pose.ankle = float3(ankleModel[0].w, ankleModel[1].w, ankleModel[2].w);
+
+    // The joint is aimed at the ground under it lifted by the foot's own height, rather than at
+    // wherever the sole currently is: the solve rotates the ankle along with the shin, so a target
+    // derived from the sole's present position would be a target the solve then moves. Taken with
+    // the tilt -- which brings the sole normal onto the ground's -- the sole lands exactly on the
+    // plane whatever the chain did, since the only part of the offset that has height is the part
+    // along that normal.
+    pose.weight = PlantWeight(rig, clip, index, frames);
+    let footHeight = -dot(leg.solePoint.xyz, normalize(leg.soleNormal.xyz));
+    pose.target = lerp(pose.ankle, SampleGround(plane, down, pose.ankle) + plane.xyz * footHeight, pose.weight);
+
+    // How far the rig must come down, along the ground's up, for this chain to reach: the smaller
+    // root of |v + d*n| = reach, where v is hip-to-target and n the ground normal.
+    //
+    // Not the straight-line shortfall `|v| - reach`, which is only correct when the target sits
+    // directly below the hip: the drop is along n, and a target off to one side is closer to the
+    // hip after dropping than that shortfall assumes, so the leg would still come up short on
+    // exactly the sloped ground this feature exists for. One sqrt buys the exact answer.
+    //
+    // A negative discriminant is a target too far to one side for any drop to reach; the clamp then
+    // yields -c, the drop that gets closest, and the solve stops short there rather than nowhere.
+    let reach = length(pose.knee - pose.hip) + length(pose.ankle - pose.knee);
+    let toTarget = pose.target - pose.hip;
+    let c = dot(toTarget, plane.xyz);
+    let disc = c * c - (dot(toTarget, toTarget) - reach * reach);
+
+    // A chain that can already reach gives a non-positive root, which the clamp reads as no drop.
+    pose.deficit = max(0.0, -c - sqrt(max(disc, 0.0)));
+
+    return pose;
+}
+
 // Carries every descendant of a solved bone by that bone's delta, rigidly.
 //
 // Knows nothing about *why* a bone moved: it reads the `solved` entries some threads left in
@@ -309,24 +385,62 @@ void CarrySolvedDescendants(PoseTables tables, Rig rig, uint solved, uint palett
 
 // Plants every leg of one instance, in the model-space window described above.
 //
-// Group-uniform from end to end, which both barriers below depend on: neither sits inside a branch,
-// and a branch on anything thread-varying must not carry one. One thread solves one leg -- a chain
-// is serial, hip before knee before ankle, so there is nothing in it for a second lane to do -- and
-// the whole group then carries the descendants.
+// Group-uniform from end to end, which every barrier below depends on. Three of the four sit outside
+// every branch; the fourth is inside `if (drop > 0.0)`, and that condition is read from groupshared
+// after a barrier, so the whole group agrees on it. A branch on anything thread-varying must not
+// carry one. One thread solves one leg -- a chain is serial, hip before knee before ankle, so there
+// is nothing in it for a second lane to do -- and the whole group then carries the descendants.
 void PlantFeet(PoseTables tables, Rig rig, Clip clip, float frames, float4x4 modelToWorld, uint paletteBase, uint localIdx)
 {
     if (localIdx == 0)
     {
         gShallowestSolved = 0xffffffffu;
+        gMaxDeficit = 0u;
     }
     AllMemoryBarrierWithGroupSync();
 
     let plane = ModelGroundPlane(modelToWorld);
     let down = normalize(TransformDir(AffineInverse(modelToWorld), float3(0.0, -1.0, 0.0)));
 
+    SkinnedLegChain leg;
     if (localIdx < rig.legs.count)
     {
-        SkinnedLegChain leg = gUniforms.legBuffer.Get(rig.legs, localIdx);
+        leg = gUniforms.legBuffer.Get(rig.legs, localIdx);
+
+        // Measured before anything moves: how far the worst leg falls short is what the whole rig
+        // has to come down by, and that cannot be known one leg at a time.
+        let reachOnly = ReadLeg(tables, rig, clip, leg, localIdx, frames, plane, down, paletteBase);
+        InterlockedMax(gMaxDeficit, asuint(reachOnly.deficit));
+    }
+    AllMemoryBarrierWithGroupSync();
+
+    // Lower the whole rig by the largest deficit, along the ground's own up. Group-uniform, so the
+    // barrier inside is reached by the group or by none of it.
+    //
+    // The rig moves rather than the leg stretching because a leg that simply stops short snaps
+    // straight, which reads as a limb popping; dropping the root is what a stride onto lower ground
+    // actually does. Every bone moves, not just the ones below the hips: the rig is one body.
+    let drop = asfloat(gMaxDeficit);
+    if (drop > 0.0)
+    {
+        let offset = -drop * plane.xyz;
+        for (uint bone = localIdx; bone < rig.boneCount; bone += cPoseGroupSize)
+        {
+            let slot = paletteBase + bone * cFloat4sPerBone;
+            float4x4 lowered = PaletteMatrix(tables, slot);
+            lowered[0].w += offset.x;
+            lowered[1].w += offset.y;
+            lowered[2].w += offset.z;
+            WritePalette(tables, slot, lowered);
+        }
+        AllMemoryBarrierWithGroupSync();
+    }
+
+    if (localIdx < rig.legs.count)
+    {
+        // Re-read rather than reuse: every joint moved in the drop, and so did the ground under the
+        // ankle, so a target measured before it is a target for a rig that no longer exists.
+        let pose = ReadLeg(tables, rig, clip, leg, localIdx, frames, plane, down, paletteBase);
 
         let hipSlot = paletteBase + leg.hip * cFloat4sPerBone;
         let kneeSlot = paletteBase + leg.knee * cFloat4sPerBone;
@@ -336,23 +450,9 @@ void PlantFeet(PoseTables tables, Rig rig, Clip clip, float frames, float4x4 mod
         let kneeModel = PaletteMatrix(tables, kneeSlot);
         let ankleModel = PaletteMatrix(tables, ankleSlot);
 
-        let hip = float3(hipModel[0].w, hipModel[1].w, hipModel[2].w);
-        let knee = float3(kneeModel[0].w, kneeModel[1].w, kneeModel[2].w);
-        let ankle = float3(ankleModel[0].w, ankleModel[1].w, ankleModel[2].w);
-
-        // The joint is aimed at the ground under it lifted by the foot's own height, rather than at
-        // wherever the sole currently is: the solve rotates the ankle along with the shin, so a
-        // target derived from the sole's present position would be a target the solve then moves.
-        // Taken with the tilt below -- which brings the sole normal onto the ground's -- the sole
-        // lands exactly on the plane whatever the chain did, since the only part of the offset that
-        // has height is the part along that normal.
-        let weight = PlantWeight(rig, clip, localIdx, frames);
-        let footHeight = -dot(leg.solePoint.xyz, normalize(leg.soleNormal.xyz));
-        let target = lerp(ankle, SampleGround(plane, down, ankle) + plane.xyz * footHeight, weight);
-
         float4x4 hipDelta;
         float4x4 kneeDelta;
-        SolveTwoBone(hip, knee, ankle, target, hipDelta, kneeDelta);
+        SolveTwoBone(pose.hip, pose.knee, pose.ankle, pose.target, hipDelta, kneeDelta);
 
         // Rotated about the ankle joint, not about the sole: the joint is where the chain the solve
         // just satisfied ends, and turning the foot under it would put the shin back out of length.
@@ -365,7 +465,7 @@ void PlantFeet(PoseTables tables, Rig rig, Clip clip, float frames, float4x4 mod
         {
             let angle = acos(clamp(dot(soleNormal, plane.xyz), -1.0, 1.0));
             let joint = float3(planted[0].w, planted[1].w, planted[2].w);
-            planted = mul(RotationAbout(joint, normalize(tilt), min(angle, cSoleClampRadians) * weight), planted);
+            planted = mul(RotationAbout(joint, normalize(tilt), min(angle, cSoleClampRadians) * pose.weight), planted);
         }
 
         WritePalette(tables, hipSlot, mul(hipDelta, hipModel));
