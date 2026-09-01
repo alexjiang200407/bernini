@@ -1,4 +1,5 @@
 #include "asset_describe.h"
+#include <assetlib/avatar.h>
 #include <assetlib/bmesh.h>
 #include <assetlib/container_info.h>
 #include <assetlib/envmap.h>
@@ -505,6 +506,41 @@ namespace assetlib
 				bone.parent == c_InvalidIndex ? std::string("(root)") : std::to_string(bone.parent),
 				vec3(bone.bindPose.translation),
 				vec3(bone.bindPose.scale));
+		}
+
+		return out;
+	}
+
+	std::string
+	describe(const Avatar& avatar, const Skeleton* skeleton)
+	{
+		std::string out;
+
+		out += "bavatar\n";
+		out += std::format("  legs         {}\n", avatar.legs.size());
+
+		// Resolved here rather than through resolveLegChains, which throws on the first name it
+		// cannot find: describe exists to show a person *which* names went bad, so it reports every
+		// one of them instead of stopping at the first.
+		const auto named = [skeleton](std::string_view name) {
+			if (skeleton == nullptr)
+				return std::format("'{}'", name);
+
+			const std::optional<uint32_t> bone = findBone(*skeleton, name);
+			return bone.has_value() ? std::format("'{}' [{}]", name, *bone) :
+			                          std::format("'{}' NOT IN THE SKELETON", name);
+		};
+
+		for (size_t i = 0; i < avatar.legs.size(); ++i)
+		{
+			const AvatarLeg& leg = avatar.legs[i];
+			out += std::format(
+				"    [{}] hip {} knee {} ankle {} toe {}\n",
+				i,
+				named(leg.hip),
+				named(leg.knee),
+				named(leg.ankle),
+				named(leg.toe));
 		}
 
 		return out;

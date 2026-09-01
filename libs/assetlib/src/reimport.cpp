@@ -144,6 +144,7 @@ namespace assetlib
 			case AssetType::kSky:
 			case AssetType::kEnvLighting:
 			case AssetType::kImportDocument:
+			case AssetType::kAvatar:
 			case AssetType::kCount:
 				break;
 			}

@@ -5,6 +5,7 @@
 #include <assetlib/asset_import.h>
 #include <assetlib/asset_refs.h>
 #include <assetlib/assetlib.h>
+#include <assetlib/avatar.h>
 #include <assetlib/bmesh.h>
 #include <assetlib/bmesh_gltf.h>
 #include <assetlib/codecs.h>
@@ -103,6 +104,8 @@ namespace
 			return "was resampled against";
 		case assetlib::RefKind::kImportedSource:
 			return "was imported from";
+		case assetlib::RefKind::kAvatarSkeleton:
+			return "authors the legs of";
 		}
 
 		return "references";
@@ -132,12 +135,13 @@ namespace
 		{
 			// A document opens with its content, so only its name can say which it is.
 			const auto type = assetlib::assetTypeFromExtension(std::filesystem::path(key));
-			if (type == assetlib::AssetType::kMaterial || type == assetlib::AssetType::kEnvironment)
+			if (type == assetlib::AssetType::kMaterial ||
+			    type == assetlib::AssetType::kEnvironment || type == assetlib::AssetType::kAvatar)
 				return *type;
 
 			core::throw_runtime_error(
 				"{} is a text document, and the only text containers this tool knows are "
-				".bmaterial and .benv",
+				".bmaterial, .benv and .bavatar",
 				key);
 		}
 
@@ -765,6 +769,17 @@ main(int argc, char** argv)
 				const auto animations = store.Load<assetlib::AnimationSet>(key);
 				const auto skeleton   = resolveSkeleton(store, animations.skeleton);
 				std::cout << describeAsset(animations, skeleton ? &*skeleton : nullptr);
+				break;
+			}
+			case assetlib::AssetType::kAvatar:
+			{
+				const auto avatar = store.Load<assetlib::Avatar>(key);
+
+				// Found by the key rather than by anything the avatar names, which is the whole of
+				// the convention -- and a rig that is not there is exactly what makes the names
+				// worth checking, so an absent one prints the avatar bare rather than failing.
+				const auto skeleton = resolveSkeleton(store, assetlib::skeletonKeyForAvatar(key));
+				std::cout << describeAsset(avatar, skeleton ? &*skeleton : nullptr);
 				break;
 			}
 			// sniff never answers either: a texture has no codec, and an import document is text

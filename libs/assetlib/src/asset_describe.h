@@ -10,6 +10,7 @@ namespace assetlib
 	struct BMesh;
 	struct BSky;
 	struct Skeleton;
+	struct Avatar;
 
 	/**
 	 * Renders the contents of an asset as human-readable text -- the counterpart of writeObj for the
@@ -85,6 +86,16 @@ namespace assetlib
 	 */
 	[[nodiscard]] std::string
 	describe(const AnimationSet& animations, const Skeleton* skeleton = nullptr);
+
+	/**
+	 * Describes an avatar: the bone names each leg is authored with.
+	 *
+	 * Pass the skeleton the avatar sits by convention beside to have each name resolved -- whether
+	 * the names still name bones is the whole question about an avatar, and a rig re-exported under
+	 * a renamed joint is what makes the answer change.
+	 */
+	[[nodiscard]] std::string
+	describe(const Avatar& avatar, const Skeleton* skeleton = nullptr);
 
 	/**
 	 * The mounted form of describe: each routed source stamped, so a stale bake is visible.

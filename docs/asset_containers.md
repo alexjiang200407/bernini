@@ -29,7 +29,7 @@ when this page disagrees, trust the header, then fix this page.
 
 | Kind | Files | Written by |
 |---|---|---|
-| Authored text | `.bmaterial`, `.benv`, `.bimport` | the editor, `migrate`, deliberate saves |
+| Authored text | `.bmaterial`, `.benv`, `.bimport`, `.bavatar` | the editor, `migrate`, deliberate saves |
 | Derived cache entry | `.bmesh`, `.bskel`, `.banim`, `.bsky`, `.benvl` | the import, the bakes, `migrate`, `pack` |
 | Foreign | `.ktx2` (Basis/RGB9E5 textures) | the bakes and the mesh import; stamp-governed by whatever names them |
 

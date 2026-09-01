@@ -1,3 +1,4 @@
+#include <assetlib/avatar.h>
 #include <assetlib/codecs.h>
 #include <assetlib/migrate.h>
 
@@ -131,6 +132,8 @@ namespace assetlib
 					AssetCodec<BEnvLighting>::Deserialize(bytes));
 			case AssetType::kEnvironment:
 				return AssetCodec<BEnv>::Serialize(AssetCodec<BEnv>::Deserialize(bytes));
+			case AssetType::kAvatar:
+				return AssetCodec<Avatar>::Serialize(AssetCodec<Avatar>::Deserialize(bytes));
 			case AssetType::kTexture:
 			case AssetType::kImportDocument:
 			case AssetType::kCount:
