@@ -197,6 +197,12 @@ urgent, and the design already settled on so nobody re-derives it. Unlike a doc 
 describes code that does not exist; unlike a plan, it is not tied to a change that happened. Read one
 before building the thing it describes, and delete it when that thing lands.
 
+A spec that has not landed yet is a **draft**, and it lives in `docs/specs/drafts/` — a worktree of
+the orphan `spec-drafts` branch, symlinked into every checkout so all of them read the same drafts,
+and committed on every write by `.claude/hooks/draft_commit.py`. The branch is local and never
+pushed, and it is never merged into anything: a draft becomes a spec below by a pull request that
+moves the file. The directory is absent in a checkout the workspace has not set up, and in CI.
+
 - [Skeleton append](./docs/specs/skeleton_append.md) — appending a bone strands every clip, and the
   remap that will fix it.
 - [Crowd frame interpolation](./docs/specs/crowd_frame_interpolation.md) — the crowd tier's
