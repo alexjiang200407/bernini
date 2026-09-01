@@ -1,6 +1,6 @@
 # bgl public API — what a client links against
 
-Everything under [libs/bgl_intfc/include/bgl](libs/bgl_intfc/include/bgl) is bgl's public surface: the interfaces
+Everything under [libs/bgl/include/bgl](libs/bgl/include/bgl) is bgl's public surface: the interfaces
 an application (the editor, the examples, `gamelib`) uses to put a scene on screen. It is a strict
 subset of what bgl_extended contains — the RHI (`IDevice`, `IResourceManager`, command lists) is internal and
 documented separately in [Render Hardware Interface](docs/rhi.md); neither shipped backend,
@@ -12,7 +12,7 @@ abstracts the *renderer*, in the vocabulary of geometry, materials, textures, in
 
 **Keep it that way.** No descriptor, meshlet, heap or pipeline-object vocabulary in a name, a field
 or a throw contract here — state what a caller is guaranteed, not the machinery that currently
-provides it. `bgl_intfc_selfcheck` enforces the dependency half (a public header that reaches into a
+provides it. `bgl_selfcheck` enforces the dependency half (a public header that reaches into a
 renderer's internals fails the build); the wording half is review's.
 
 **This document is a map, not a mirror.** It captures design choices, topology, and the *non-obvious*
@@ -36,8 +36,8 @@ disagrees, trust the header, then fix this doc.
   polymorphism.
 
 * **Scene holds geometry, SceneView holds instances — and rendering takes the view.** An
-  [IScene](libs/bgl_intfc/include/bgl/IScene.h) owns geometry, materials and texture assets; an
-  [ISceneView](libs/bgl_intfc/include/bgl/ISceneView.h) owns per-view mesh instances plus the lighting
+  [IScene](libs/bgl/include/bgl/IScene.h) owns geometry, materials and texture assets; an
+  [ISceneView](libs/bgl/include/bgl/ISceneView.h) owns per-view mesh instances plus the lighting
   environment (IBL maps, skybox, exposure). Many views may share one scene, so meshlets and vertices
   are stored once and instanced cheaply. A view keeps its scene alive. `RenderJob::view` is a
   `SceneViewRef` — there is no way to draw a scene directly.
@@ -106,7 +106,7 @@ disagrees, trust the header, then fix this doc.
   generated into `bgl::idl`, not onto this surface.
 
 * **Failures are exceptions, not return codes.** Everything derives from
-  [ApiError](libs/bgl_intfc/include/bgl/error.h): `GraphicsError` for device/frame misuse, `SceneError` for
+  [ApiError](libs/bgl/include/bgl/error.h): `GraphicsError` for device/frame misuse, `SceneError` for
   scene misuse. Methods that cannot fail are `noexcept`. Handle-returning methods signal "nothing" with
   an invalid handle rather than throwing.
 
@@ -116,7 +116,7 @@ disagrees, trust the header, then fix this doc.
   `IGraphics::c_MaxPendingCaptures` may be in flight.
 
 * **GPU assertions are a Debug-build facility.** `dbg_raise` in shaders reaches
-  [IGpuAssertionHandler](libs/bgl_intfc/include/bgl/IGpuAssertionHandler.h) only under `BERNINI_GPU_DEBUG`;
+  [IGpuAssertionHandler](libs/bgl/include/bgl/IGpuAssertionHandler.h) only under `BERNINI_GPU_DEBUG`;
   in Release the handler is never invoked. See [Graphics Debug](docs/gfx_debug.md).
 
 ---
@@ -125,32 +125,32 @@ disagrees, trust the header, then fix this doc.
 
 | Interface | File | Role |
 |---|---|---|
-| `IGraphics` | [libs/bgl_intfc/include/bgl/IGraphics.h](libs/bgl_intfc/include/bgl/IGraphics.h) | The device and its one submission context: creates targets/scenes/views, and drives frames, resizes and captures. Minted by `CreateGraphics`. |
-| `IScene` | [libs/bgl_intfc/include/bgl/IScene.h](libs/bgl_intfc/include/bgl/IScene.h) | Owns geometry, materials and texture assets. Shared by many views. |
-| `ISceneView` | [libs/bgl_intfc/include/bgl/ISceneView.h](libs/bgl_intfc/include/bgl/ISceneView.h) | Per-view mesh instances, material overrides, per-submesh selection marks, and lighting (IBL, skybox, exposure). |
-| `IRenderTarget` | [libs/bgl_intfc/include/bgl/IRenderTarget.h](libs/bgl_intfc/include/bgl/IRenderTarget.h) | A render output: windowed swapchain or headless offscreen backbuffers, plus depth, the linear-HDR scene colour every pass renders into, and the screen-space velocity buffer. `RenderTargetDesc::taaEnabled` opts it into a jittered projection and a temporal history, which `SetTaaEnabled` then runs or stops at runtime; `SetOutlineEnabled` runs or stops the selection outline, on by default. `GetWidth`/`GetHeight` are the output size — the backbuffer's, and every capture's; `GetRenderWidth`/`GetRenderHeight` are the grid the geometry passes draw on; `SetTaaReconstructionWidth` sweeps the resolve's kernel without reallocating anything or dropping the accumulation. |
-| `IGpuAssertionHandler` | [libs/bgl_intfc/include/bgl/IGpuAssertionHandler.h](libs/bgl_intfc/include/bgl/IGpuAssertionHandler.h) | Caller-implemented sink for shader `dbg_raise` reports. Not refcounted; a plain callback interface. |
+| `IGraphics` | [libs/bgl/include/bgl/IGraphics.h](libs/bgl/include/bgl/IGraphics.h) | The device and its one submission context: creates targets/scenes/views, and drives frames, resizes and captures. Minted by `CreateGraphics`. |
+| `IScene` | [libs/bgl/include/bgl/IScene.h](libs/bgl/include/bgl/IScene.h) | Owns geometry, materials and texture assets. Shared by many views. |
+| `ISceneView` | [libs/bgl/include/bgl/ISceneView.h](libs/bgl/include/bgl/ISceneView.h) | Per-view mesh instances, material overrides, per-submesh selection marks, and lighting (IBL, skybox, exposure). |
+| `IRenderTarget` | [libs/bgl/include/bgl/IRenderTarget.h](libs/bgl/include/bgl/IRenderTarget.h) | A render output: windowed swapchain or headless offscreen backbuffers, plus depth, the linear-HDR scene colour every pass renders into, and the screen-space velocity buffer. `RenderTargetDesc::taaEnabled` opts it into a jittered projection and a temporal history, which `SetTaaEnabled` then runs or stops at runtime; `SetOutlineEnabled` runs or stops the selection outline, on by default. `GetWidth`/`GetHeight` are the output size — the backbuffer's, and every capture's; `GetRenderWidth`/`GetRenderHeight` are the grid the geometry passes draw on; `SetTaaReconstructionWidth` sweeps the resolve's kernel without reallocating anything or dropping the accumulation. |
+| `IGpuAssertionHandler` | [libs/bgl/include/bgl/IGpuAssertionHandler.h](libs/bgl/include/bgl/IGpuAssertionHandler.h) | Caller-implemented sink for shader `dbg_raise` reports. Not refcounted; a plain callback interface. |
 
 ### Supporting types
 
 | Type | File | Role |
 |---|---|---|
-| `GraphicsOptions` | [libs/bgl_intfc/include/bgl/IGraphics.h](libs/bgl_intfc/include/bgl/IGraphics.h) | Device creation: debug layers, log level, `shaderCacheDir`, and every descriptor-heap/pool capacity. |
-| `CaptureTicket` | [libs/bgl_intfc/include/bgl/IGraphics.h](libs/bgl_intfc/include/bgl/IGraphics.h) | Names one in-flight backbuffer capture. Spent by resolve or discard. |
-| `SceneDesc` | [libs/bgl_intfc/include/bgl/IScene.h](libs/bgl_intfc/include/bgl/IScene.h) | Fixed pool capacities for a scene. |
-| `PbrMaterialDesc` / `LoosePbrMaterialDesc` | [libs/bgl_intfc/include/bgl/IScene.h](libs/bgl_intfc/include/bgl/IScene.h) | Baked (three-map) vs. loose (per-channel routed) material parameters. `ChannelRouteDesc` feeds the latter. |
-| `EnvironmentMapDesc` | [libs/bgl_intfc/include/bgl/IScene.h](libs/bgl_intfc/include/bgl/IScene.h) | The IBL triplet (irradiance cube, prefilter cube, BRDF LUT). **Move-only** — copy is deleted. |
-| `RenderTargetDesc` | [libs/bgl_intfc/include/bgl/IRenderTarget.h](libs/bgl_intfc/include/bgl/IRenderTarget.h) | The output size, `renderScale` (how dense the geometry passes' grid is relative to it), `taaReconstructionWidth` (how wide a kernel the resolve rebuilds an output pixel with, in output pixels), `headless`, and `wnd` — an `HWND` on D3D12, a `CAMetalLayer*` on Metal; ignored when headless. |
-| `RenderJob` | [libs/bgl_intfc/include/bgl/RenderJob.h](libs/bgl_intfc/include/bgl/RenderJob.h) | One draw: `{view, camera, viewport}`. Holds a **copy** of the camera. |
-| `Camera` | [libs/bgl_intfc/include/bgl/Camera.h](libs/bgl_intfc/include/bgl/Camera.h) | Chained-builder view/projection. Concrete, header-only, copyable. |
-| `Viewport` | [libs/bgl_intfc/include/bgl/Viewport.h](libs/bgl_intfc/include/bgl/Viewport.h) | Min/max XYZ; the `(width, height)` constructor is the usual one. |
-| `SkyboxDesc` | [libs/bgl_intfc/include/bgl/SkyboxDesc.h](libs/bgl_intfc/include/bgl/SkyboxDesc.h) | Cube texture plus `mipLevel`, `exposure`, `rotationY`. |
-| `GeomHandle`, `MaterialHandle`, `MeshInstanceHandle`, `RigHandle`, `TextureAssetHandle` | [GeomHandle.h](libs/bgl_intfc/include/bgl/GeomHandle.h), [MaterialHandle.h](libs/bgl_intfc/include/bgl/MaterialHandle.h), [MeshInstanceHandle.h](libs/bgl_intfc/include/bgl/MeshInstanceHandle.h), [RigHandle.h](libs/bgl_intfc/include/bgl/RigHandle.h), [TextureAssetHandle.h](libs/bgl_intfc/include/bgl/TextureAssetHandle.h) | Value handles into scene/view storage. See the shape caveat above. |
-| `GeomType`, `LayerType`, `MaterialType` | [GeomType.h](libs/bgl_intfc/include/bgl/GeomType.h), [LayerType.h](libs/bgl_intfc/include/bgl/LayerType.h), [MaterialType.h](libs/bgl_intfc/include/bgl/MaterialType.h) | Classification enums. `MaterialType` is **IDL-generated** from Slang — see [IDL Codegen](docs/idlgen.md). |
-| `ApiError` | [libs/bgl_intfc/include/bgl/error.h](libs/bgl_intfc/include/bgl/error.h) | Base of `GraphicsError` and `SceneError`. |
-| `BGL_API` | [libs/bgl_intfc/include/bgl/api.h](libs/bgl_intfc/include/bgl/api.h) | Export/import macro for the DLL boundary. |
+| `GraphicsOptions` | [libs/bgl/include/bgl/IGraphics.h](libs/bgl/include/bgl/IGraphics.h) | Device creation: debug layers, log level, `shaderCacheDir`, and every descriptor-heap/pool capacity. |
+| `CaptureTicket` | [libs/bgl/include/bgl/IGraphics.h](libs/bgl/include/bgl/IGraphics.h) | Names one in-flight backbuffer capture. Spent by resolve or discard. |
+| `SceneDesc` | [libs/bgl/include/bgl/IScene.h](libs/bgl/include/bgl/IScene.h) | Fixed pool capacities for a scene. |
+| `PbrMaterialDesc` / `LoosePbrMaterialDesc` | [libs/bgl/include/bgl/IScene.h](libs/bgl/include/bgl/IScene.h) | Baked (three-map) vs. loose (per-channel routed) material parameters. `ChannelRouteDesc` feeds the latter. |
+| `EnvironmentMapDesc` | [libs/bgl/include/bgl/IScene.h](libs/bgl/include/bgl/IScene.h) | The IBL triplet (irradiance cube, prefilter cube, BRDF LUT). **Move-only** — copy is deleted. |
+| `RenderTargetDesc` | [libs/bgl/include/bgl/IRenderTarget.h](libs/bgl/include/bgl/IRenderTarget.h) | The output size, `renderScale` (how dense the geometry passes' grid is relative to it), `taaReconstructionWidth` (how wide a kernel the resolve rebuilds an output pixel with, in output pixels), `headless`, and `wnd` — an `HWND` on D3D12, a `CAMetalLayer*` on Metal; ignored when headless. |
+| `RenderJob` | [libs/bgl/include/bgl/RenderJob.h](libs/bgl/include/bgl/RenderJob.h) | One draw: `{view, camera, viewport}`. Holds a **copy** of the camera. |
+| `Camera` | [libs/bgl/include/bgl/Camera.h](libs/bgl/include/bgl/Camera.h) | Chained-builder view/projection. Concrete, header-only, copyable. |
+| `Viewport` | [libs/bgl/include/bgl/Viewport.h](libs/bgl/include/bgl/Viewport.h) | Min/max XYZ; the `(width, height)` constructor is the usual one. |
+| `SkyboxDesc` | [libs/bgl/include/bgl/SkyboxDesc.h](libs/bgl/include/bgl/SkyboxDesc.h) | Cube texture plus `mipLevel`, `exposure`, `rotationY`. |
+| `GeomHandle`, `MaterialHandle`, `MeshInstanceHandle`, `RigHandle`, `TextureAssetHandle` | [GeomHandle.h](libs/bgl/include/bgl/GeomHandle.h), [MaterialHandle.h](libs/bgl/include/bgl/MaterialHandle.h), [MeshInstanceHandle.h](libs/bgl/include/bgl/MeshInstanceHandle.h), [RigHandle.h](libs/bgl/include/bgl/RigHandle.h), [TextureAssetHandle.h](libs/bgl/include/bgl/TextureAssetHandle.h) | Value handles into scene/view storage. See the shape caveat above. |
+| `GeomType`, `LayerType`, `MaterialType` | [GeomType.h](libs/bgl/include/bgl/GeomType.h), [LayerType.h](libs/bgl/include/bgl/LayerType.h), [MaterialType.h](libs/bgl/include/bgl/MaterialType.h) | Classification enums. `MaterialType` is **IDL-generated** from Slang — see [IDL Codegen](docs/idlgen.md). |
+| `ApiError` | [libs/bgl/include/bgl/error.h](libs/bgl/include/bgl/error.h) | Base of `GraphicsError` and `SceneError`. |
+| `BGL_API` | [libs/bgl/include/bgl/api.h](libs/bgl/include/bgl/api.h) | Export/import macro for the DLL boundary. |
 
-[bgl.h](libs/bgl_intfc/include/bgl/bgl.h) is the umbrella header; including it reaches all of the above.
+[bgl.h](libs/bgl/include/bgl/bgl.h) is the umbrella header; including it reaches all of the above.
 
 ---
 
@@ -342,4 +342,4 @@ scenes driven from one device.
 
 **Maintenance.** The interface and supporting-type tables are this doc's load-bearing part, and their
 file links rot silently when headers move or are renamed. Re-check them whenever
-[libs/bgl_intfc/include/bgl](libs/bgl_intfc/include/bgl) changes shape.
+[libs/bgl/include/bgl](libs/bgl/include/bgl) changes shape.

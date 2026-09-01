@@ -235,7 +235,7 @@ source texture.
 * **Factors are linear** and live in the material, not the texture:
   `baseColorFactor` (linear, multiplies the *decoded* albedo), `metallicFactor`, `roughnessFactor`,
   `specularColorFactor` and `specularFactor` ([above](#specular)).
-  See `PbrMaterialDesc` in [libs/bgl_intfc/include/bgl/IScene.h](libs/bgl_intfc/include/bgl/IScene.h) and, on disk,
+  See `PbrMaterialDesc` in [libs/bgl/include/bgl/IScene.h](libs/bgl/include/bgl/IScene.h) and, on disk,
   `PbrParams` — the `.bmaterial`'s PBR payload — in
   [libs/assetlib_structs/include/assetlib_structs/BMaterial.h](libs/assetlib_structs/include/assetlib_structs/BMaterial.h).
 * **Defaults come from the scene**, not the file — a null texture handle resolves to a 1×1 solid

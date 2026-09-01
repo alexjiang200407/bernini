@@ -6,11 +6,11 @@ file(GLOB_RECURSE BGL_COMMON_SOURCES CONFIGURE_DEPENDS
 )
 list(FILTER BGL_COMMON_SOURCES EXCLUDE REGEX ".*/src/(d3d12|metal)/.*")
 
-# The public surface lives in bgl_intfc; these are listed here only so an IDE shows them under the
+# The public surface lives in bgl; these are listed here only so an IDE shows them under the
 # renderer that implements them.
 file(GLOB_RECURSE BGL_SHARED_HEADERS CONFIGURE_DEPENDS
-	${CMAKE_SOURCE_DIR}/libs/bgl_intfc/include/bgl/*.h
-	${CMAKE_SOURCE_DIR}/libs/bgl_intfc/include/bgl/*.hpp
+	${CMAKE_SOURCE_DIR}/libs/bgl/include/bgl/*.h
+	${CMAKE_SOURCE_DIR}/libs/bgl/include/bgl/*.hpp
 )
 
 file(GLOB_RECURSE BGL_COMMON_HEADERS CONFIGURE_DEPENDS
@@ -21,7 +21,7 @@ list(FILTER BGL_COMMON_HEADERS EXCLUDE REGEX ".*/src/(d3d12|metal)/.*")
 
 
 source_group(TREE "${CMAKE_CURRENT_SOURCE_DIR}/src" PREFIX "Source Files" FILES ${BGL_COMMON_SOURCES} ${BGL_COMMON_HEADERS})
-source_group(TREE "${CMAKE_SOURCE_DIR}/libs/bgl_intfc/include/bgl" PREFIX "Shared Header Files" FILES ${BGL_SHARED_HEADERS})
+source_group(TREE "${CMAKE_SOURCE_DIR}/libs/bgl/include/bgl" PREFIX "Shared Header Files" FILES ${BGL_SHARED_HEADERS})
 
 
 add_library(bgl_extended_objects OBJECT
@@ -56,7 +56,7 @@ target_include_directories(bgl_extended_objects PRIVATE ${Stb_INCLUDE_DIR})
 
 target_link_libraries(bgl_extended_objects
 	PUBLIC
-		bgl_intfc
+		bgl
 		core
 		assetlib_structs
 		slang::slang
@@ -111,7 +111,7 @@ target_include_directories(bgl_extended
 
 add_dependencies(bgl_extended bgl_idl_generate)
 
-target_link_libraries(bgl_extended PUBLIC bgl_intfc bgl_extended_objects glm::glm)
+target_link_libraries(bgl_extended PUBLIC bgl bgl_extended_objects glm::glm)
 
 enable_strict_compiler(bgl_extended)
 

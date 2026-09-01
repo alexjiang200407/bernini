@@ -3,7 +3,7 @@
 Compiling shaders dominates startup and is otherwise paid on every launch: the Slang front-end
 parse alone is the majority of per-shader compile time, and the driver's DXIL→ISA compile is paid
 again on top. The shader cache is a persistent, backend-owned store that skips both. It is enabled
-by one knob, [GraphicsOptions::shaderCacheDir](libs/bgl_intfc/include/bgl/IGraphics.h) (empty ⇒ disabled),
+by one knob, [GraphicsOptions::shaderCacheDir](libs/bgl/include/bgl/IGraphics.h) (empty ⇒ disabled),
 and is otherwise transparent — pipeline creation consults it with no change to any interface.
 
 **This document is a map, not a mirror.** It captures the design choices, the data flow, and the
@@ -99,7 +99,7 @@ when this doc disagrees, trust the source, then fix this doc.
 | `ReflectedLayout` | [libs/bgl_extended/src/uniforms/ReflectedLayout.h](libs/bgl_extended/src/uniforms/ReflectedLayout.h) | Serializable, API-agnostic constant-buffer layout tree. |
 | `ReflectLayoutFromSlang` | [libs/bgl_extended/src/uniforms/SlangReflection.h](libs/bgl_extended/src/uniforms/SlangReflection.h) | The one place Slang reflection is read; emits `ReflectedLayout`. |
 | `ByteReader` / `ByteWriter` | [libs/core/include/core/io/ByteReader.h](libs/core/include/core/io/ByteReader.h) | Shared binary IO for the `.bsc` serialization (also used by assetlib). |
-| `shaderCacheDir` knob | [libs/bgl_intfc/include/bgl/IGraphics.h](libs/bgl_intfc/include/bgl/IGraphics.h) | The sole RHI-visible surface. |
+| `shaderCacheDir` knob | [libs/bgl/include/bgl/IGraphics.h](libs/bgl/include/bgl/IGraphics.h) | The sole RHI-visible surface. |
 
 ---
 

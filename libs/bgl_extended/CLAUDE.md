@@ -2,7 +2,7 @@
 
 bgl_extended is the extended-tier renderer: the implementation of the `bgl` contract for devices that
 offer bindless resource access and a mesh stage. It provides higher level abstractions of Mesh,
-Light and Material while hiding the graphics api. The contract it implements lives in `libs/bgl_intfc`
+Light and Material while hiding the graphics api. The contract it implements lives in `libs/bgl`
 and is a target of its own; nothing here is part of it.
 
 - CMake target: bgl_extended

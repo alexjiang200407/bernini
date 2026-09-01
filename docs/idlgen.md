@@ -78,7 +78,7 @@ are the source of truth; when this doc disagrees, trust them, then fix this doc.
   those (`Entry`, `Range`, `RangeWithCount`, `RawEntry`) are hand-written.
 
   **One public module is the exception and stays committed**, under
-  [libs/bgl_intfc/include/bgl/](libs/bgl_intfc/include/bgl/): a consumer includes `<bgl/...>` without building
+  [libs/bgl/include/bgl/](libs/bgl/include/bgl/): a consumer includes `<bgl/...>` without building
   bgl. That is safe only while `IDL_PUBLIC_CPP_SOURCES` holds no structs — today it is `MaterialType`
   alone, an enum with an explicit underlying type, which every backend lays out identically.
 

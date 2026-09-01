@@ -12,7 +12,7 @@ this interface is drawn at, not a general one: the only graphics pipeline object
 An API without those cannot implement this interface.
 
 This is the layer bgl_extended is built *on*. For the surface an application links against — `IGraphics`,
-`IScene`, `ISceneView` and the handle types in `libs/bgl_intfc/include/bgl` — see
+`IScene`, `ISceneView` and the handle types in `libs/bgl/include/bgl` — see
 [bgl Public API](docs/bgl_api.md).
 
 **This document is a map, not a mirror.** It captures the design choices, the object topology,
@@ -166,7 +166,7 @@ doc and a header disagree, trust the header, then fix this doc.
 
 | Interface | File | Role |
 |---|---|---|
-| `IGraphics` | [libs/bgl_intfc/include/bgl/IGraphics.h](libs/bgl_intfc/include/bgl/IGraphics.h) | Public façade above the RHI; owns the device and its one submission context, and mints render targets, scenes and scene views. Frames, resizes and captures are driven here. `GetDevice()` returns the RHI root. Fully documented in [bgl Public API](docs/bgl_api.md). |
+| `IGraphics` | [libs/bgl/include/bgl/IGraphics.h](libs/bgl/include/bgl/IGraphics.h) | Public façade above the RHI; owns the device and its one submission context, and mints render targets, scenes and scene views. Frames, resizes and captures are driven here. `GetDevice()` returns the RHI root. Fully documented in [bgl Public API](docs/bgl_api.md). |
 | `IDevice` | [libs/bgl_extended/src/device/Device.h](libs/bgl_extended/src/device/Device.h) | Root factory for every RHI object. |
 | `IResourceManager` | [libs/bgl_extended/src/resource/ResourceManager.h](libs/bgl_extended/src/resource/ResourceManager.h) | Owns all GPU buffers/textures/views behind index handles; creation, deferred destruction, lookup, readback, clears. |
 | `ICommandQueue` | [libs/bgl_extended/src/cmd/CommandQueue.h](libs/bgl_extended/src/cmd/CommandQueue.h) | Submits command lists; owns the fence; all CPU/GPU and cross-queue sync. |

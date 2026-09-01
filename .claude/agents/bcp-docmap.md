@@ -43,7 +43,7 @@ Two conventions coexist in the tree, so resolve a target in this order:
 
 | Form | Resolve from | Seen in |
 |---|---|---|
-| `docs/rhi.md`, `libs/bgl_intfc/include/bgl/IGraphics.h` | the repo root | most docs — [bcp-docs](.claude/skills/bcp-docs/SKILL.md) mandates it |
+| `docs/rhi.md`, `libs/bgl/include/bgl/IGraphics.h` | the repo root | most docs — [bcp-docs](.claude/skills/bcp-docs/SKILL.md) mandates it |
 | `../STYLE.md`, `../scripts/pr.py`, `../.lfsstore` | `docs/` | `naming.md`, `ai-coding.md`, `lfs.md`, `slang_shaders.md`, `coverage.md` |
 
 A target that resolves under neither is a dead link. Report it; do not guess at what it meant, and do
