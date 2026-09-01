@@ -56,7 +56,7 @@ is a record rather than an example.
 - **ADR-5 — the overlay owns its textures.** `IOverlay::CreateTexture(assetlib::ImageData)` and
   `ReleaseTexture`, uploaded by the overlay pass's own flush. *Rejected: `IScene::AddTextureAsset`,
   which the spec proposed — its upload rides `Scene::Update`, which runs only on a frame where that
-  scene is drawn (`libs/bgl/src/scene/Scene.cpp:442-463`), so a UI's atlas would be hostage to a
+  scene is drawn (`libs/bgl_extended/src/scene/Scene.cpp:442-463`), so a UI's atlas would be hostage to a
   scene it has nothing to do with.*
 - **ADR-6 — a capture includes the overlay, and there is no flag.** PostProcess's "only writer of
   the backbuffer" ([docs/passes.md](../passes.md) `:517-518`) exists so that `SubmitCapture`
@@ -116,7 +116,7 @@ is a record rather than an example.
   not a fence, which is the thing to revisit if a pass ever moves to a second queue.
 
   The barrier is two declarations, not one, because the frame graph persists an imported
-  resource's final state and restores nothing (`libs/bgl/src/fg/FrameGraph.cpp:591-598`), while
+  resource's final state and restores nothing (`libs/bgl_extended/src/fg/FrameGraph.cpp:591-598`), while
   every consumer of a backbuffer assumes `kPresent` as its *before* layout — `BeginFrame`'s
   import at `RenderContext.cpp:415-418` and the capture at `:876`. So the borrowed backbuffer is
   imported under a name of its own with an explicit `kPresent` initial (the handle behind it
@@ -192,9 +192,9 @@ is a record rather than an example.
 
 ## Acceptance
 
-- `METAL_DEVICE_WRAPPER_TYPE=1 MTL_SHADER_VALIDATION=1 just run bgl_tests -- "[overlay]"` green
+- `METAL_DEVICE_WRAPPER_TYPE=1 MTL_SHADER_VALIDATION=1 just run bgl_extended_tests -- "[overlay]"` green
   (`--gpu-validation` is D3D12's spelling and does nothing on Metal — `libs/bgl/CLAUDE.md`
-  § bgl_tests): a textured quad, a scissored quad and a transformed quad land where `MeanColor`
+  § bgl_extended_tests): a textured quad, a scissored quad and a transformed quad land where `MeanColor`
   expects them, and the capture contains them (ADR-6); a scene drawn to a headless target and
   sampled into a second target's overlay reads that scene's colour, and re-reads it after the
   preview target draws a different frame (ADR-14).
@@ -222,7 +222,7 @@ is a record rather than an example.
 ## What the survey found
 
 **Renderer.** `IGraphics` is `BeginFrame(target)` / `Draw(job)` / `EndFrame()`; there is no
-`Present`, it is the tail of `EndFrame` (`libs/bgl/src/gfx/RenderContext.cpp:750`). The target is
+`Present`, it is the tail of `EndFrame` (`libs/bgl_extended/src/gfx/RenderContext.cpp:750`). The target is
 bound by `BeginFrame`; a job carries `view`, `camera`, `viewport`, `time`. The frame graph is
 built across those three functions and never reorders: `EndFrame` adds TaaResolve, PostProcess
 (`:701`) and PreparePresent (`:703`), then compiles and executes. **The overlay pass goes between
@@ -257,10 +257,10 @@ restores it (`FrameGraph.cpp:591-598`); `BeginFrame` imports the backbuffer with
 
 **No vertex buffers exist.** `DrawIndexed`, `SetVertexBuffer`, `SetIndexBuffer` match nothing under
 `libs/bgl`; the draw verbs are `Dispatch`, `DispatchMesh`, `DispatchMeshIndirect`
-(`libs/bgl/src/cmd/CommandList.h:175-187`). Every screen-space pass synthesises its triangle in a
+(`libs/bgl_extended/src/cmd/CommandList.h:175-187`). Every screen-space pass synthesises its triangle in a
 mesh shader (`PostProcess.slang:74-93`, `DispatchMesh(1,1,1)` at `PostProcessPass.cpp:125`).
 Topology is declared on the mesh shader, not the PSO. The CPU-list-to-GPU path is
-`UploadBuffer<T>` (`libs/bgl/src/scene/UploadBuffer.h`) — `Assign` is a no-op on unchanged bytes,
+`UploadBuffer<T>` (`libs/bgl_extended/src/scene/UploadBuffer.h`) — `Assign` is a no-op on unchanged bytes,
 `Update(cmdList)` grows and uploads, `GetBufferHandle()` must be re-read after growth — and
 `OutlineMaskPass.cpp:141-160` is the precedent for reading one from a mesh shader.
 
@@ -279,7 +279,7 @@ Textures: `assetlib::ImageData` needs `width`, `height`, `vkFormat`, one subreso
 (`Graphics_d3d12.cpp:58-61`, `Graphics_metal.cpp:171-174`). Release is deferred behind in-flight
 frames (`TextureAssetStore.cpp:104-113`) — the overlay's stores copy that.
 
-Shaders: a `.slang` under `libs/bgl/shaders/src/programs/<dir>/` is module `programs.<dir>.<File>`
+Shaders: a `.slang` under `libs/bgl_extended/shaders/src/programs/<dir>/` is module `programs.<dir>.<File>`
 with no CMake change ([docs/slang_shaders.md](../slang_shaders.md) `:8-21`); the D3D12
 build-time validation does not run on macOS (`:129-132`), so a DXC-only error surfaces on Windows.
 
@@ -335,14 +335,14 @@ the loop stays single-threaded.
 
 ## What changes
 
-- **`libs/bgl_intfc`** — `bgl/IOverlay.h` (`OverlayVertex` mirroring `Rml::Vertex`'s
+- **`libs/bgl`** — `bgl/IOverlay.h` (`OverlayVertex` mirroring `Rml::Vertex`'s
   position/colour/uv, `OverlayGeometryHandle`, `OverlayTextureHandle`, `OverlayDraw` = geometry +
   translation + texture + optional transform + optional scissor, `OverlayJob` = the overlay plus a
   span of draws, the `IOverlay` interface) and two methods on `IGraphics`: `CreateOverlay()` and
   `DrawOverlay(const OverlayJob&)`; then the `CreateTexture(const RenderTargetRef&)` overload of
-  ADR-14. The `bgl_intfc_selfcheck` TU compiles the header alone. Could break: nothing links it
+  ADR-14. The `bgl_selfcheck` TU compiles the header alone. Could break: nothing links it
   yet; the risk is API shape, which the tests and gamelib's translation exercise.
-- **`libs/bgl`** — `src/overlay/Overlay.{h,cpp}` (geometry and texture stores over
+- **`libs/bgl_extended`** — `src/overlay/Overlay.{h,cpp}` (geometry and texture stores over
   `ResourceManager`, deferred release), `src/passes/OverlayPass.{h,cpp}` (PSO with the forward
   pass's premultiplied blend, depth off, `SBGRA8_UNORM`; per-draw cbuffer; scissor on
   `MeshletState`; texture flush), `shaders/src/programs/overlay/Overlay.slang` (mesh shader: 64
@@ -396,8 +396,8 @@ the loop stays single-threaded.
 
 1. **`feat(bgl): a 2D overlay drawn after post-processing`** — `IOverlay`, `OverlayDraw`, the two
    `IGraphics` methods, the stores, the pass, the shader, the docs. Dead scaffolding by design:
-   nothing outside `bgl_tests` calls it until task 5. Gate: `[overlay][render]` cases in
-   `bgl_tests` — a white quad with a generated 2×2 texture reads its texel colours at the four
+   nothing outside `bgl_extended_tests` calls it until task 5. Gate: `[overlay][render]` cases in
+   `bgl_extended_tests` — a white quad with a generated 2×2 texture reads its texel colours at the four
    corners through `MeanColor`; a scissored quad leaves the excluded region at the scene's colour;
    a translated and transformed quad lands where the matrix says; a frame with an empty draw list
    matches the frame before the pass existed (an existing golden, unchanged). Run with Metal's

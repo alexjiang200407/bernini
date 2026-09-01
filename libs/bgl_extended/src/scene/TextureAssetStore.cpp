@@ -13,6 +13,15 @@ namespace bgl
 			CreateSolid(128, 128, 255, 255);
 	}
 
+	TextureAssetStore::~TextureAssetStore() noexcept
+	{
+		for (const auto& [index, entry] : m_Srvs)
+		{
+			m_ResourceManager->DestroySrv(entry.srv);
+			m_ResourceManager->DestroyTexture(entry.texture);
+		}
+	}
+
 	TextureAssetHandle
 	TextureAssetStore::Add(assetlib::ImageData img, std::string debugName)
 	{
@@ -23,7 +32,7 @@ namespace bgl
 		}
 
 		// Create made the view, so this lookup always hits.
-		return TextureAssetHandle{ handle.slot, m_Srvs.at(handle.slot.index).bindlessIndex };
+		return TextureAssetHandle{ handle.slot, m_Srvs.at(handle.slot.index).srv.bindlessIndex };
 	}
 
 	TextureHandle
@@ -60,7 +69,7 @@ namespace bgl
 			m_ResourceManager->DestroyTexture(handle, /*deferred*/ false);
 			return TextureHandle{};
 		}
-		m_Srvs.emplace(handle.slot.index, srv);
+		m_Srvs.emplace(handle.slot.index, Entry{ handle, srv });
 
 		m_PendingUploads.push_back({ handle, std::move(img) });
 		return handle;
@@ -106,7 +115,7 @@ namespace bgl
 		// read it. The view is not cascaded to by DestroyTexture, so it goes on the same gate.
 		if (const auto it = m_Srvs.find(handle.slot.index); it != m_Srvs.end())
 		{
-			m_ResourceManager->DestroySrv(it->second);
+			m_ResourceManager->DestroySrv(it->second.srv);
 			m_Srvs.erase(it);
 		}
 
@@ -162,7 +171,14 @@ namespace bgl
 	TextureAssetStore::GetSrv(core::slot_handle textureSlot) const noexcept
 	{
 		const auto it = m_Srvs.find(textureSlot.index);
-		return it == m_Srvs.end() ? SrvHandle{} : it->second;
+		return it == m_Srvs.end() ? SrvHandle{} : it->second.srv;
+	}
+
+	bool
+	TextureAssetStore::Contains(core::slot_handle textureSlot) const noexcept
+	{
+		const auto it = m_Srvs.find(textureSlot.index);
+		return it != m_Srvs.end() && it->second.texture.slot == textureSlot;
 	}
 
 	DescriptorHandle
