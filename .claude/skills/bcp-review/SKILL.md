@@ -45,9 +45,9 @@ Roughly in order of how much damage it does.
 
 **Layering** — the rule that is invisible in a diff and expensive to undo:
 
-- `bgl` must never link or include `assetlib`. It stays codec-free and takes decoded
+- `bgl_extended` must never link or include `assetlib`. It stays codec-free and takes decoded
   `assetlib_structs` PODs.
-- `assetlib` must never link or include `bgl`. The CLI baker must not drag in D3D12.
+- `assetlib` must never link or include `bgl_extended`. The CLI baker must not drag in D3D12.
 - `gamelib` is the only seam that links both.
 
 A new `#include` that crosses one of these is a finding even when it compiles today.
@@ -116,7 +116,7 @@ diff themselves.
 gh api repos/{owner}/{repo}/pulls/{n}/reviews \
   -f event=COMMENT \
   -f body="<summary: what the change does, then what you found>" \
-  -f 'comments[][path]=libs/bgl/src/...' \
+  -f 'comments[][path]=libs/bgl_extended/src/...' \
   -f 'comments[][line]=42' \
   -f 'comments[][body]=<one finding>'
 ```

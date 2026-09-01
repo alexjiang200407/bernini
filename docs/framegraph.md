@@ -51,7 +51,7 @@ source of truth; when this doc disagrees, trust the header, then fix this doc.
   name was never imported is a *transient*: it participates in dependency/ordering by name but has
   no handle, so `PassContext::GetBuffer/GetTexture` throws for it. Because the match is by string,
   every scene-side name is a constant in
-  [scene_buffer_names.h](../libs/bgl/src/scene/scene_buffer_names.h) that producer and consumer both
+  [scene_buffer_names.h](../libs/bgl_extended/src/scene/scene_buffer_names.h) that producer and consumer both
   spell, rather than a literal typed at each end.
 
 * **Namespaces let many scopes share one graph, and they nest.** `SetResourceNamespace(ns)` prefixes
@@ -111,20 +111,20 @@ source of truth; when this doc disagrees, trust the header, then fix this doc.
 
 | Type | File | Role |
 |---|---|---|
-| `FrameGraph` | [fg/FrameGraph.h](libs/bgl/src/fg/FrameGraph.h) | The graph: import resources, add passes, register queues, `Compile` then `Execute`. |
-| `PassDesc` | [fg/PassDesc.h](libs/bgl/src/fg/PassDesc.h) | Fluent builder for one pass: name, queue, attachments, buffer/texture args, `exec` callback, side-effect pin. |
-| `PassContext` | [fg/PassDesc.h](libs/bgl/src/fg/PassDesc.h) | Handed to `exec`; resolves the pass's declared names to physical handles and exposes its command list/queue. |
+| `FrameGraph` | [fg/FrameGraph.h](libs/bgl_extended/src/fg/FrameGraph.h) | The graph: import resources, add passes, register queues, `Compile` then `Execute`. |
+| `PassDesc` | [fg/PassDesc.h](libs/bgl_extended/src/fg/PassDesc.h) | Fluent builder for one pass: name, queue, attachments, buffer/texture args, `exec` callback, side-effect pin. |
+| `PassContext` | [fg/PassDesc.h](libs/bgl_extended/src/fg/PassDesc.h) | Handed to `exec`; resolves the pass's declared names to physical handles and exposes its command list/queue. |
 
 ### Supporting types (POD / helpers)
 
 | Type | File | Role |
 |---|---|---|
-| `BufferArg` / `TextureArg` | [fg/PassDesc.h](libs/bgl/src/fg/PassDesc.h) | A declared access: resource name + `BarrierSync` + `BarrierAccess` (+ `BarrierLayout` for textures). A `BufferArg` also carries the poison flag. |
-| `BufferPoisoner` | [debug/BufferPoisoner.h](libs/bgl/src/debug/BufferPoisoner.h) | Fills a buffer with the poison word; installed with `SetBufferPoisoner`. |
-| `AccessState` | [fg/FrameGraph.h](libs/bgl/src/fg/FrameGraph.h) | `(sync, access, layout)` triple; the unit the graph merges and diffs to derive barriers. |
-| `PassBarriers` | [fg/FrameGraph.h](libs/bgl/src/fg/FrameGraph.h) | The buffer/texture handles + `*BarrierDesc`s derived for one pass; queryable via `BarriersFor`. |
-| `ResourceKind` | [fg/FrameGraph.h](libs/bgl/src/fg/FrameGraph.h) | `kBuffer` / `kTexture`; used to reject a resource imported as one kind but accessed as the other. |
-| Barrier vocabulary | [types/Barrier.h](libs/bgl/src/types/Barrier.h) | `BarrierSyncFlag`, `BarrierAccessFlag`, `BarrierLayout` the args are built from. |
+| `BufferArg` / `TextureArg` | [fg/PassDesc.h](libs/bgl_extended/src/fg/PassDesc.h) | A declared access: resource name + `BarrierSync` + `BarrierAccess` (+ `BarrierLayout` for textures). A `BufferArg` also carries the poison flag. |
+| `BufferPoisoner` | [debug/BufferPoisoner.h](libs/bgl_extended/src/debug/BufferPoisoner.h) | Fills a buffer with the poison word; installed with `SetBufferPoisoner`. |
+| `AccessState` | [fg/FrameGraph.h](libs/bgl_extended/src/fg/FrameGraph.h) | `(sync, access, layout)` triple; the unit the graph merges and diffs to derive barriers. |
+| `PassBarriers` | [fg/FrameGraph.h](libs/bgl_extended/src/fg/FrameGraph.h) | The buffer/texture handles + `*BarrierDesc`s derived for one pass; queryable via `BarriersFor`. |
+| `ResourceKind` | [fg/FrameGraph.h](libs/bgl_extended/src/fg/FrameGraph.h) | `kBuffer` / `kTexture`; used to reject a resource imported as one kind but accessed as the other. |
+| Barrier vocabulary | [types/Barrier.h](libs/bgl_extended/src/types/Barrier.h) | `BarrierSyncFlag`, `BarrierAccessFlag`, `BarrierLayout` the args are built from. |
 
 ---
 
@@ -244,5 +244,5 @@ fg.Execute();                  // record barriers + exec per pass, then consume 
 ```
 
 A pass typically ships as a small type with an `AttachToFrameGraph` method that builds and adds its
-`PassDesc` — see [passes/ClearPass.h](libs/bgl/src/passes/ClearPass.h) for a minimal one and
+`PassDesc` — see [passes/ClearPass.h](libs/bgl_extended/src/passes/ClearPass.h) for a minimal one and
 [docs/passes.md](docs/passes.md) for the full pass catalog.

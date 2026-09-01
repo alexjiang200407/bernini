@@ -98,9 +98,9 @@
 # CRLF: the generator would rewrite them on the next build and they would never
 # be clean. These are checked in, so their endings are not a private matter.
 ###############################################################################
-libs/bgl/src/idl/**         text eol=lf
-libs/bgl/shaders/src/idl/**  text eol=lf
-libs/bgl_intfc/include/bgl/MaterialType.h  text eol=lf
+libs/bgl_extended/src/idl/**            text eol=lf
+libs/bgl_extended/shaders/src/idl/**    text eol=lf
+libs/bgl_intfc/include/bgl/MaterialType.h text eol=lf
 
 ###############################################################################
 # Git hooks are executed as shell scripts, including by Linux/macOS checkouts.

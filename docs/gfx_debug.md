@@ -1,6 +1,6 @@
-# Graphics Debug — how to diagnose bgl rendering errors
+# Graphics Debug — how to diagnose bgl_extended rendering errors
 
-The tools bgl gives you to find out *why* a frame is wrong: GPU-side assertions that
+The tools bgl_extended gives you to find out *why* a frame is wrong: GPU-side assertions that
 report back through a debug buffer (`dbg_raise`), a spdlog file log, CPU-side asserts that
 crash on broken invariants, a post-mortem crash log with a stack trace, and the D3D12 debug
 / GPU-validation layer. This document maps how they fit together and when to reach for each.
@@ -18,7 +18,7 @@ truth; when this doc disagrees, trust the header, then fix this doc.
   compile out of Release. It is a Debug-config define for C++
   ([CMakeLists.txt](CMakeLists.txt), `$<$<CONFIG:Debug>:BERNINI_GPU_DEBUG>`); the runtime Slang
   session forwards the same macro into shaders it compiles at PSO creation, gated by the C++
-  define ([Device_d3d12.cpp](libs/bgl/src/d3d12/device/Device_d3d12.cpp)). In Release, `dbg_raise`
+  define ([Device_d3d12.cpp](libs/bgl_extended/src/d3d12/device/Device_d3d12.cpp)). In Release, `dbg_raise`
   is an empty function and no handler is ever invoked.
 * **GPU assertions travel through an implicit, engine-bound UAV.** Shaders never declare the
   debug buffer; they `import debug.dbg` and call `dbg_raise(errcode)`, which writes into the
@@ -33,14 +33,14 @@ truth; when this doc disagrees, trust the header, then fix this doc.
   handler lifetime are in the contracts below.
 * **The debug-buffer decode is a pure function**, split out of the orchestration so the crash
   path is unit-testable without terminating the process
-  ([DebugReadback.h](libs/bgl/src/debug/DebugReadback.h), `InspectDebugReadback`).
+  ([DebugReadback.h](libs/bgl_extended/src/debug/DebugReadback.h), `InspectDebugReadback`).
 * **CPU error handling splits by blame.** Internal invariant violations use `gassert`/`gfatal`
-  (log + `__debugbreak` + `std::terminate`); problems caused by the *caller* (code linking bgl)
+  (log + `__debugbreak` + `std::terminate`); problems caused by the *caller* (code linking bgl_extended)
   throw `GraphicsError`/`ApiError` so the caller can handle them. See
-  [libs/bgl/CLAUDE.md](libs/bgl/CLAUDE.md).
+  [libs/bgl_extended/CLAUDE.md](libs/bgl_extended/CLAUDE.md).
 * **The word layout of the debug buffer is duplicated in two places on purpose** — the GPU
-  writer ([dbg.slang](libs/bgl/shaders/src/lib/debug/dbg.slang)) and the CPU reader
-  ([DebugBuffer.h](libs/bgl/src/debug/DebugBuffer.h)) each hardcode `kHeaderWords=4`,
+  writer ([dbg.slang](libs/bgl_extended/shaders/src/lib/debug/dbg.slang)) and the CPU reader
+  ([DebugBuffer.h](libs/bgl_extended/src/debug/DebugBuffer.h)) each hardcode `kHeaderWords=4`,
   `kRecordWords=1`. They **must** stay in sync; there is no shared source for them.
 
 ---
@@ -64,7 +64,7 @@ A GPU→CPU assertion channel. A shader detects a bad condition and calls `dbg_r
 reads the buffer back a few frames later and either crashes (`gfatal`) or forwards a report to a
 registered handler.
 
-**Shader side** — [libs/bgl/shaders/src/lib/debug/dbg.slang](libs/bgl/shaders/src/lib/debug/dbg.slang):
+**Shader side** — [libs/bgl_extended/shaders/src/lib/debug/dbg.slang](libs/bgl_extended/shaders/src/lib/debug/dbg.slang):
 * `dbg_raise(ErrorCode errcode, uint value = 0, uint limit = 0, uint context = 0)` — atomically
   appends one record; sets the overflow flag if the buffer is full.
 * `dbg_assert(bool condition, ErrorCode errcode, uint value = 0, uint limit = 0, uint context = 0)`
@@ -75,10 +75,10 @@ registered handler.
   something went wrong, which cannot be traced back to *which* draw. One bad submesh raises once per
   vertex, so a bare errcode arrives a thousand times over and still names nothing.
 * Error codes are the generated enum
-  [idl/ErrorCode.slang](libs/bgl/idl/src/ErrorCode.slang) / C++ mirror
+  [idl/ErrorCode.slang](libs/bgl_extended/idl/src/ErrorCode.slang) / C++ mirror
   `<build>/generated/idl/ErrorCode.h` (`kUnknown=1 … kNullRawDeref=12`). Add
   new codes there, not inline — and give the new code a name in `ErrorCodeName`
-  ([DebugReadback.h](libs/bgl/src/debug/DebugReadback.h)), which the build enforces. See
+  ([DebugReadback.h](libs/bgl_extended/src/debug/DebugReadback.h)), which the build enforces. See
   [IDL Codegen](docs/idlgen.md).
 
 **Consumer API** — [libs/bgl_intfc/include/bgl/IGraphics.h](libs/bgl_intfc/include/bgl/IGraphics.h),
@@ -93,10 +93,10 @@ registered handler.
 
 | Type / entry | File | Role |
 |---|---|---|
-| `DebugBuffer` | [libs/bgl/src/debug/DebugBuffer.h](libs/bgl/src/debug/DebugBuffer.h) | CPU wrapper over the uint UAV; owns layout constants, `Init`/`Reset`/`Release` |
-| `InspectDebugReadback` | [libs/bgl/src/debug/DebugReadback.h](libs/bgl/src/debug/DebugReadback.h) | Pure decode of a mapped readback → `DebugReport` (`nullopt` if nothing fired) |
-| `ICommandList::SetActiveDebugBuffer` | [libs/bgl/src/cmd/CommandList.h](libs/bgl/src/cmd/CommandList.h) | Binds the UAV that subsequent dispatches auto-wire into `gDebug` (see [RHI](docs/rhi.md)) |
-| Orchestration | [libs/bgl/src/gfx/RenderContext.cpp](libs/bgl/src/gfx/RenderContext.cpp) | Owns the buffer + readback ring; resets/binds each `BeginFrame`, copies out each `EndFrame`, inspects and crashes-or-forwards |
+| `DebugBuffer` | [libs/bgl_extended/src/debug/DebugBuffer.h](libs/bgl_extended/src/debug/DebugBuffer.h) | CPU wrapper over the uint UAV; owns layout constants, `Init`/`Reset`/`Release` |
+| `InspectDebugReadback` | [libs/bgl_extended/src/debug/DebugReadback.h](libs/bgl_extended/src/debug/DebugReadback.h) | Pure decode of a mapped readback → `DebugReport` (`nullopt` if nothing fired) |
+| `ICommandList::SetActiveDebugBuffer` | [libs/bgl_extended/src/cmd/CommandList.h](libs/bgl_extended/src/cmd/CommandList.h) | Binds the UAV that subsequent dispatches auto-wire into `gDebug` (see [RHI](docs/rhi.md)) |
+| Orchestration | [libs/bgl_extended/src/gfx/RenderContext.cpp](libs/bgl_extended/src/gfx/RenderContext.cpp) | Owns the buffer + readback ring; resets/binds each `BeginFrame`, copies out each `EndFrame`, inspects and crashes-or-forwards |
 
 ### Data flow
 
@@ -123,8 +123,8 @@ flowchart TD
   own buffer. `gDebug` has no explicit `register()`; its binding is assigned at link time and
   the engine wires the live buffer from reflection, so every shader that imports `debug.dbg`
   gets it auto-bound.
-* **Layout constants must match** between [DebugBuffer.h](libs/bgl/src/debug/DebugBuffer.h) and
-  [dbg.slang](libs/bgl/shaders/src/lib/debug/dbg.slang) (`kHeaderWords=4`, `kRecordWords=4`).
+* **Layout constants must match** between [DebugBuffer.h](libs/bgl_extended/src/debug/DebugBuffer.h) and
+  [dbg.slang](libs/bgl_extended/shaders/src/lib/debug/dbg.slang) (`kHeaderWords=4`, `kRecordWords=4`).
   Changing a record's shape means editing both, plus the `DebugRecord` IDL struct the readback
   decodes over the words. A `static_assert` in `DebugBuffer.h` catches the struct and the word count
   disagreeing; nothing catches `dbg.slang` disagreeing, so change it in the same commit.
@@ -153,19 +153,21 @@ flowchart TD
 
 ## 2. Logging — `bgl.log`
 
-bgl logging is **spdlog aliased into the `bgl` namespace**. In
-[libs/bgl/src/pch.h](libs/bgl/src/pch.h): `namespace bgl { namespace logger = spdlog; }`. The
+bgl_extended logging is **spdlog aliased into the `bgl` namespace**. In
+[libs/bgl_extended/src/pch.h](libs/bgl_extended/src/pch.h): `namespace bgl { namespace logger = spdlog; }`. The
 public API is therefore the spdlog free functions:
-`logger::trace/debug/info/warn/error/critical(fmt, args...)`. It is PCH-included, so bgl sources
+`logger::trace/debug/info/warn/error/critical(fmt, args...)`. It is PCH-included, so bgl_extended sources
 call `logger::…` with no extra include.
 
 * **Log file:** one per process, named by whoever opens it first. The `Graphics` constructor
-  ([Graphics_d3d12.cpp](libs/bgl/src/d3d12/Graphics_d3d12.cpp)) asks for `bgl.log` next to the
-  binary, which is what `bgl_tests` and the examples get; under the editor `main.cpp` has already
-  asked for `editor.log`, so bgl's call only applies its level. `core::logging::init_file_logger`
+  ([Graphics_d3d12.cpp](libs/bgl_extended/src/d3d12/Graphics_d3d12.cpp)) asks for `bgl.log` next to the
+  binary, which is what `bgl_extended_tests` and the examples get; under the editor `main.cpp` has already
+  asked for `editor.log`, so bgl_extended's call only applies its level. `core::logging::init_file_logger`
   ([log.h](libs/core/include/core/log/log.h)) is where that rule lives: **the first call wins the
   file, every call applies its level**. Several `Graphics` instances therefore share one run's log
-  rather than clobbering it.
+  rather than clobbering it — which is why the name is `bgl.log` and not the renderer's. A process
+  holding two renderers cannot give them a file each; whichever constructs first names it, and the
+  other's lines land there too.
 * **Level & flush level** come from `GraphicsOptions::logLevel`
   ([IGraphics.h](libs/bgl_intfc/include/bgl/IGraphics.h), enum `kTrace … kOff`). **Default is `kError`**
   — to see the timeline of a run, pass `logLevel = kTrace` when calling `CreateGraphics`.
@@ -192,14 +194,14 @@ call `logger::…` with no extra include.
   why a duration was once written onto the line that reported it — that is now a Tracy zone, and the
   two logs are one.
 
-Per [libs/bgl/CLAUDE.md](libs/bgl/CLAUDE.md): after running `bgl_tests`, always read `bgl.log`
+Per [libs/bgl_extended/CLAUDE.md](libs/bgl_extended/CLAUDE.md): after running `bgl_extended_tests`, always read `bgl.log`
 for the warnings/errors/info the run emitted.
 
 ---
 
 ## 3. CPU-side assertions — `gassert` / `gfatal` / `gerror`
 
-Defined in [libs/bgl/src/error/gassert.h](libs/bgl/src/error/gassert.h) (PCH-included, namespace
+Defined in [libs/bgl_extended/src/error/gassert.h](libs/bgl_extended/src/error/gassert.h) (PCH-included, namespace
 `bgl`). All three log then break into the debugger on MSVC (`__debugbreak`):
 
 * `gassert(condition, fmt, args...)` — on failure: `logger::error`, break, `std::terminate`.
@@ -211,8 +213,8 @@ Defined in [libs/bgl/src/error/gassert.h](libs/bgl/src/error/gassert.h) (PCH-inc
 * `GWARN_ONCE(fmt_str, ...)` — logs a `warn` exactly once via a function-local `static bool`.
 
 **Contracts / gotchas:**
-* **Blame split:** `gassert` is for bgl's *own* broken invariants. For bad input from the caller
-  (code that links bgl), throw `GraphicsError`/`ApiError`
+* **Blame split:** `gassert` is for bgl_extended's *own* broken invariants. For bad input from the caller
+  (code that links bgl_extended), throw `GraphicsError`/`ApiError`
   ([IGraphics.h](libs/bgl_intfc/include/bgl/IGraphics.h)) so the caller can catch it.
 * **Not compiled out in Release.** These are function templates with no `NDEBUG` guard —
   `gassert`/`gfatal` still `terminate` on failure in every config. Don't put
@@ -226,7 +228,7 @@ Defined in [libs/bgl/src/error/gassert.h](libs/bgl/src/error/gassert.h) (PCH-inc
 
 ## 4. Crash log — `{exe}_crash_YYYYMMDD_HHMMSS.log`
 
-A post-mortem stack trace, provided by **core** (not bgl):
+A post-mortem stack trace, provided by **core** (not bgl_extended):
 [libs/core/src/err/util.cpp](libs/core/src/err/util.cpp), `core::install_crash_handlers`, which
 every app and test entry point calls first thing (e.g.
 [libs/assetlib/tests/src/main.cpp](libs/assetlib/tests/src/main.cpp)). On a fatal signal it writes
@@ -251,7 +253,7 @@ same second do still collide.
 
 Runtime-toggled via `GraphicsOptions` flags
 ([IGraphics.h](libs/bgl_intfc/include/bgl/IGraphics.h)), applied in the `Graphics` constructor
-([Graphics_d3d12.cpp](libs/bgl/src/d3d12/Graphics_d3d12.cpp)):
+([Graphics_d3d12.cpp](libs/bgl_extended/src/d3d12/Graphics_d3d12.cpp)):
 
 * `enableDebugLayer` → `ID3D12Debug::EnableDebugLayer()`. Turns on D3D12 API validation and sets
   break-on-severity for ERROR and CORRUPTION via `IDXGIInfoQueue`.
@@ -273,7 +275,7 @@ editor reads them from its config.
 Metal's validators are environment variables, not `GraphicsOptions` flags, so they need no rebuild:
 
 ```bash
-MTL_DEBUG_LAYER=1 MTL_DEBUG_LAYER_ERROR_MODE=assert MTL_SHADER_VALIDATION=1 ./bgl_tests "<name>"
+MTL_DEBUG_LAYER=1 MTL_DEBUG_LAYER_ERROR_MODE=assert MTL_SHADER_VALIDATION=1 ./bgl_extended_tests "<name>"
 ```
 
 `MTL_DEBUG_LAYER` is the API validator (the counterpart to `enableDebugLayer`);
@@ -284,12 +286,12 @@ frame between `BeginFrame` and `EndFrame` is written there, and the capture stop
 is submitted so the trace holds a complete one.
 
 ```bash
-MTL_CAPTURE_ENABLED=1 ./bgl_tests "PBR instances render headlessly"
+MTL_CAPTURE_ENABLED=1 ./bgl_extended_tests "PBR instances render headlessly"
 ```
 
-`MTL_CAPTURE_ENABLED=1` is required. Metal reads it when the process starts its device, so bgl
+`MTL_CAPTURE_ENABLED=1` is required. Metal reads it when the process starts its device, so bgl_extended
 cannot set it on your behalf; without it `supportsDestination` reports the destination unsupported
-and bgl throws, naming the variable.
+and bgl_extended throws, naming the variable.
 
 **Capturing needs no Xcode — reading the result does.** A machine with only the Command Line Tools
 writes a valid `.gputrace`, which then opens in Xcode's Metal debugger anywhere. That split is the
@@ -306,7 +308,7 @@ not read garbage; it reads *last frame's value*, which is plausible enough that 
 right and the bug surfaces later, somewhere else. Poisoning removes that luck: the graph fills the
 buffer with a value that is wrong under every interpretation just before the pass runs.
 
-* **The pattern is `0x7FBADBAD`** ([BufferPoisoner.h](libs/bgl/src/debug/BufferPoisoner.h),
+* **The pattern is `0x7FBADBAD`** ([BufferPoisoner.h](libs/bgl_extended/src/debug/BufferPoisoner.h),
   `c_PoisonWord`) — a **signalling NaN** read as a `float` and an impossible element index read as a
   `uint`. `0xDEADBEEF` alone is a finite float (-6.3e18) that a solver consumes without complaint,
   which is the interpretation poisoning most needs to break.
@@ -371,7 +373,7 @@ gfx->SetGpuAssertionHandler(nullptr);
 
 Driving the debug buffer manually on your own command list (custom compute) — the pattern the
 engine's `BeginFrame`/`EndFrame` follow — is shown end-to-end in
-[libs/bgl/tests/src/DebugAssert_test.cpp](libs/bgl/tests/src/DebugAssert_test.cpp): `Reset()` the
+[libs/bgl_extended/tests/src/DebugAssert_test.cpp](libs/bgl_extended/tests/src/DebugAssert_test.cpp): `Reset()` the
 header, barrier to UAV, `SetActiveDebugBuffer()`, `Dispatch()`, barrier to copy-source,
 `CopyBufferToReadback()`, then `InspectDebugReadback()`.
 
@@ -382,5 +384,5 @@ header, barrier to UAV, `SetActiveDebugBuffer()`, `Dispatch()`, barrier to copy-
 The file links in the tables and section headers are the load-bearing part of this doc; they rot
 silently if files move or are renamed. When the debug/logging layout changes — especially the
 buffer word layout duplicated across
-[DebugBuffer.h](libs/bgl/src/debug/DebugBuffer.h) and
-[dbg.slang](libs/bgl/shaders/src/lib/debug/dbg.slang) — re-check the links and the constants.
+[DebugBuffer.h](libs/bgl_extended/src/debug/DebugBuffer.h) and
+[dbg.slang](libs/bgl_extended/shaders/src/lib/debug/dbg.slang) — re-check the links and the constants.

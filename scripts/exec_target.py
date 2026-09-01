@@ -9,13 +9,13 @@ The output directory matters: binaries here resolve asset paths relative to the
 working directory, so this always runs from the folder containing the exe.
 
 Usage:
-    python scripts/exec_target.py bgl_tests
-    python scripts/exec_target.py bgl_tests -- --list-tests   # args after --
-    python scripts/exec_target.py bgl_tests --config Release
-    python scripts/exec_target.py bgl_tests --no-build        # run whatever is there
-    python scripts/exec_target.py bgl_tests --dry-run
+    python scripts/exec_target.py bgl_extended_tests
+    python scripts/exec_target.py bgl_extended_tests -- --list-tests   # args after --
+    python scripts/exec_target.py bgl_extended_tests --config Release
+    python scripts/exec_target.py bgl_extended_tests --no-build        # run whatever is there
+    python scripts/exec_target.py bgl_extended_tests --dry-run
 
-A test suite runs under the machine-wide lock in util/lock.py, so `just run bgl_tests` waits
+A test suite runs under the machine-wide lock in util/lock.py, so `just run bgl_extended_tests` waits
 for a suite another checkout is already running instead of competing with it for the CPU.
 Every other target runs unlocked. --no-lock opts out.
 

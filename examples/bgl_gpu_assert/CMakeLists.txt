@@ -13,7 +13,7 @@ add_executable(bgl_gpu_assert
     ${BGL_GPU_ASSERT_HEADERS}
 )
 
-target_link_libraries(bgl_gpu_assert PRIVATE core bgl example_util)
+target_link_libraries(bgl_gpu_assert PRIVATE core bgl_extended example_util)
 
 if(RENDERER_BACKEND STREQUAL "DX12")
     target_link_libraries(bgl_gpu_assert PRIVATE bgl_d3d12_agility)

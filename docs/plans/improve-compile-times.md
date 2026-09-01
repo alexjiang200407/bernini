@@ -9,8 +9,8 @@ several checkouts of this repo. Three things are true of the tree today and none
   `target_precompile_headers` to every compiled target there is. The per-subsystem PCHs beside it are
   not: `apps/editor/src/pch.h` holds two `core/ref` headers and **no Qt** while 95 editor files carry
   318 Qt include lines; `libs/assetlib/src/pch.h` is `#pragma once` and nothing, across 109 `.cpp`
-  reaching nlohmann, tiny_gltf and glm. Only `libs/bgl/src/pch.h` is actually filled.
-- **The suites bypass the PCH entirely.** `bgl_tests`, `assetlib_tests` and `gamelib_tests`
+  reaching nlohmann, tiny_gltf and glm. Only `libs/bgl_extended/src/pch.h` is actually filled.
+- **The suites bypass the PCH entirely.** `bgl_extended_tests`, `assetlib_tests` and `gamelib_tests`
   *force-include* `PCH/pch.h` and `src/pch.h` (`-include`, textual, uncached, per TU) and separately
   precompile a `tests/src/pch.h` whose entire content is `#include <catch2/catch_test_macros.hpp>`.
   198 test files and 54,381 lines pay a full standard-library parse each, with no reuse.

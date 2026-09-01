@@ -2,7 +2,7 @@
 
 Everything under [libs/bgl_intfc/include/bgl](libs/bgl_intfc/include/bgl) is bgl's public surface: the interfaces
 an application (the editor, the examples, `gamelib`) uses to put a scene on screen. It is a strict
-subset of what bgl contains — the RHI (`IDevice`, `IResourceManager`, command lists) is internal and
+subset of what bgl_extended contains — the RHI (`IDevice`, `IResourceManager`, command lists) is internal and
 documented separately in [Render Hardware Interface](docs/rhi.md); neither shipped backend,
 `bgl_d3d12` or `bgl_metal`, is ever visible here.
 
@@ -28,7 +28,7 @@ disagrees, trust the header, then fix this doc.
   context — `BeginFrame`/`Draw`/`EndFrame`, `Resize` and the capture family are methods on it, not on
   a separate object. There is exactly one context per device.
 
-* **Interfaces are pure-virtual and intrusively refcounted, because bgl is a DLL.** Every `I*` derives
+* **Interfaces are pure-virtual and intrusively refcounted, because bgl_extended is a DLL.** Every `I*` derives
   from `core::Ref` and is held behind `core::SharedRef<T>` (`GraphicsRef`, `SceneRef`, `SceneViewRef`,
   `RenderTargetRef`), with copy and move deleted — they are never value types. Each header ends with an
   explicit `template class BGL_API core::SharedRef<...>` instantiation so the refcount machinery
@@ -101,8 +101,8 @@ disagrees, trust the header, then fix this doc.
 * **A material's PSO bucket comes from the `(layer, type)` pair, not the type alone.** `MaterialHandle`
   carries `layerType` (`kOpaque`/`kMask`/`kBlend`/`kHashed`) alongside `materialType`, because a
   submesh cannot know which pipeline it belongs in from the material's storage alone. `layerType` is
-  therefore part of the handle, not just the desc. Which bucket a pair resolves to is bgl's own
-  business: the enum lives at [libs/bgl/idl/src/PsoType.slang](libs/bgl/idl/src/PsoType.slang) and is
+  therefore part of the handle, not just the desc. Which bucket a pair resolves to is bgl_extended's own
+  business: the enum lives at [libs/bgl_extended/idl/src/PsoType.slang](libs/bgl_extended/idl/src/PsoType.slang) and is
   generated into `bgl::idl`, not onto this surface.
 
 * **Failures are exceptions, not return codes.** Everything derives from
@@ -306,7 +306,7 @@ auto view  = graphics->CreateSceneView(scene, 100);
 
 // One .benv carries the prefilter, irradiance and skybox of an environment, plus its exposure. The
 // split-sum BRDF table is not among them: it integrates a white environment, so it belongs to the
-// shading model, and bgl generates its own at device init.
+// shading model, and bgl_extended generates its own at device init.
 auto env = assetlib::loadBenv("assets/forest.benv");
 view->SetEnvironmentMap(
     { scene->AddTextureAsset(std::move(env.irradiance)),

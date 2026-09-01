@@ -18,7 +18,7 @@ find_package(SDL3 CONFIG REQUIRED)
 target_link_libraries(example_util
     PUBLIC
         core
-        bgl
+        bgl_extended
         SDL3::SDL3
 )
 

@@ -1,7 +1,7 @@
 # gamelib
 
 gamelib provides game-related abstractions built on top of the renderer and the asset layer. It is the
-**seam**: the only library allowed to link both `bgl` and `assetlib`.
+**seam**: the only library allowed to link both `bgl_extended` and `assetlib`.
 
 - CMake target: `gamelib` (static). CMake: `./CMakeLists.txt`
 - Namespace: `game`
@@ -11,10 +11,10 @@ gamelib provides game-related abstractions built on top of the renderer and the 
 
 The two libraries below it are deliberately kept apart:
 
-- `bgl` links `assetlib_structs` (POD headers) but **never** `assetlib`. Image decoding lives in the
+- `bgl_extended` links `assetlib_structs` (POD headers) but **never** `assetlib`. Image decoding lives in the
   asset library; graphics code stays codec-free and consumes decoded `ImageData` through
   `IScene::AddTextureAsset`.
-- `assetlib` **never** links `bgl`. It is the offline cook library, and `assetlib_cli` uses it — a
+- `assetlib` **never** links `bgl_extended`. It is the offline cook library, and `assetlib_cli` uses it — a
   command-line baker must not pull in a D3D12 renderer.
 
 Anything that needs both — "read this `.bmaterial` off disk and give me a `MaterialHandle`" — belongs
@@ -26,7 +26,7 @@ here, not in either of them.
   sphere for procedural shapes), place instances of it, and ask which (instance, submesh) a
   world-space `game::Ray` meets first. It keeps its own compact copy of positions and triangles,
   because nothing retains CPU geometry after the GPU upload — feed it while the `BMesh` is still
-  in scope. Pure CPU, no bgl involvement; the editor's material preview drives click-to-select
+  in scope. Pure CPU, no bgl_extended involvement; the editor's material preview drives click-to-select
   with it.
 - `AssetManager` — constructed with an `IScene` and the project's **Data directory**. Textures,
   materials and geometry belong to the scene and are shared across every view drawn from it, so the
@@ -66,7 +66,7 @@ instance -> geom -> material -> texture
 `AcquireMesh` acquires the materials its submeshes name, which acquires the textures those materials
 name; `Release*` runs the chain in reverse and destroys only at zero.
 
-That is not just tidy — **it is what makes deletion safe**. `bgl` deliberately tracks nothing, and
+That is not just tidy — **it is what makes deletion safe**. `bgl_extended` deliberately tracks nothing, and
 documents preconditions it cannot check: a material may not be deleted while a submesh is bound to it,
 a texture may not be deleted while a material routes it, and geometry may not be deleted while an
 instance references it (`IScene::DeleteGeom`). A reference count of zero *means* exactly those things.
@@ -98,6 +98,6 @@ UI thread, which is the only way a folder of meshes can populate without freezin
 it. `SetInstanceSubmeshMaterial` overrides **one instance** and leaves its siblings alone — the same
 unit mesh, a different material per unit. The override outranks the default and holds a reference of
 its own, which is the edge above: `ClearInstanceSubmeshMaterial` and `DestroyInstance` release it.
-Without that reference `bgl` would happily let the material be deleted out from under an instance
+Without that reference `bgl_extended` would happily let the material be deleted out from under an instance
 still wearing it, since a binding there is a bare slot index with no generation
 (`ISceneView::SetSubmeshMaterialOverride`).

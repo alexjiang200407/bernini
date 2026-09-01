@@ -14,7 +14,7 @@ EXTENSION_MAP = {
 # path components rather than characters, which is what keeps `libs/assetlib` off
 # `libs/assetlib_structs`.
 MODULE_PREFIXES = (
-    ('libs/bgl', 'bgl'),
+    ('libs/bgl_extended', 'bgl_extended'),
     ('libs/bgl_intfc', 'bgl_intfc'),
     ('libs/core', 'core'),
     ('libs/assetlib', 'assetlib'),

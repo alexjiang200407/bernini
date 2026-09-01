@@ -1,4 +1,4 @@
-// bgl_tests globs every .cpp under tests/ whatever the backend, so a Metal-only case has to exclude
+// bgl_extended_tests globs every .cpp under tests/ whatever the backend, so a Metal-only case has to exclude
 // itself: autorelease pools are the Metal backend's problem alone.
 #if defined(RENDERER_BACKEND_METAL)
 

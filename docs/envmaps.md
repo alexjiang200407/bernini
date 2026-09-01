@@ -56,8 +56,8 @@ disagrees, trust the header, then fix this doc.
   `BEnv::skyMipLevel`, authored on the document and clamped at resolve to what the baked chain holds.
 * **The split-sum BRDF table is not an asset.** It is the same integral taken against a *white*
   environment, leaving a function of only `dot(N,V)` and roughness — a property of the shading model,
-  not of any environment. bgl renders its own 256² `RG16_FLOAT` copy once at device init
-  ([libs/bgl/src/passes/BrdfLutGenPass.cpp](libs/bgl/src/passes/BrdfLutGenPass.cpp)), so there is no file to ship, to
+  not of any environment. bgl_extended renders its own 256² `RG16_FLOAT` copy once at device init
+  ([libs/bgl_extended/src/passes/BrdfLutGenPass.cpp](libs/bgl_extended/src/passes/BrdfLutGenPass.cpp)), so there is no file to ship, to
   configure, or to get out of step with the shader that samples it.
 
 ## Interface Index
@@ -112,7 +112,7 @@ flowchart TD
   binding them unconditionally is a crash rather than an unlit scene. Ask first — see `HasLighting` /
   `HasSky` below, and `editor::ApplyEnvironment`, which guards both.
 * The prefilter chain must be **7 mips**. `MAX_REFLECTION_LOD = 6` in
-  [libs/bgl/shaders/src/lib/forward/PbrShading.slang](libs/bgl/shaders/src/lib/forward/PbrShading.slang), and
+  [libs/bgl_extended/shaders/src/lib/forward/PbrShading.slang](libs/bgl_extended/shaders/src/lib/forward/PbrShading.slang), and
   roughness is `mip / (mipLevels - 1)` — a different count silently remaps roughness rather than
   failing.
 

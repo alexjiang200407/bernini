@@ -4,12 +4,12 @@ assetlib is a static library that contains a set of asset-related utilities. The
 
 - Parsing glTF (.glb / .gltf, via tinygltf) and retrieving all the assets — geometry, materials,
   textures, and the skin and animations, which are cooked into `.bskel` / `.banim` beside the mesh
-- Provide shared structures that both bgl and editor can use to communicate
+- Provide shared structures that both bgl_extended and editor can use to communicate
 
-Pose evaluation and CPU skinning live here, not in `bgl`: `poseModelTransforms` walks a clip frame
+Pose evaluation and CPU skinning live here, not in `bgl_extended`: `poseModelTransforms` walks a clip frame
 from local into model space, `skinningMatrices` composes each with its inverse bind
 (`include/assetlib/skinning.h`), and `skinSubmesh` blends four influences per vertex
-(`include/assetlib/skinning.h`). The bake is offline and assetlib never links `bgl`, so this is
+(`include/assetlib/skinning.h`). The bake is offline and assetlib never links `bgl_extended`, so this is
 plain CPU code — and it is the reference every later GPU path is diffed against, which is why it is
 deliberately the unoptimised form.
 

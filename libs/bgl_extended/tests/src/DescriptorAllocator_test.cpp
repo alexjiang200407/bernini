@@ -1,7 +1,7 @@
 // Exercises the allocator against a real device but never wires it into a frame: these pin the
 // index-management contract the descriptor migration (D4 of the plan) will rely on.
 //
-// bgl_tests globs every .cpp under tests/ whatever the backend, so a D3D12-only case has to exclude
+// bgl_extended_tests globs every .cpp under tests/ whatever the backend, so a D3D12-only case has to exclude
 // itself: the headers below do not exist on a Metal build.
 #if defined(RENDERER_BACKEND_DX12)
 

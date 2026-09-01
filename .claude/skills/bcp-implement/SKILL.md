@@ -93,9 +93,9 @@ reports the answer with the line behind each claim — so the survey costs a par
 instead of a subsystem's worth. It reads only.
 
 Then read the **real source**, not just the docs. Also read the nearest `CLAUDE.md` — each subsystem
-has one (`libs/bgl/`, `libs/gamelib/`, `apps/editor/`) and it holds rules the root one does not.
+has one (`libs/bgl_extended/`, `libs/gamelib/`, `apps/editor/`) and it holds rules the root one does not.
 
-**Respect the layering.** `bgl` never links `assetlib`; `assetlib` never links `bgl`; `gamelib` is
+**Respect the layering.** `bgl_extended` never links `assetlib`; `assetlib` never links `bgl_extended`; `gamelib` is
 the seam that links both and is where "load this asset into a scene" lives. If a change seems to
 need a layering violation, the design is wrong — find the seam instead. Before writing a helper,
 check whether one exists: duplicating a rule that lives in one place is how two code paths start
@@ -114,7 +114,7 @@ is a reason to reopen the grill.
 Decide the commit boundaries **before** writing code. Each commit must build and pass on its own —
 they are the units a reviewer bisects with.
 
-The natural seam is the **layer**: one commit per `bgl` / `assetlib` / `gamelib` / `apps/editor`
+The natural seam is the **layer**: one commit per `bgl_extended` / `assetlib` / `gamelib` / `apps/editor`
 slice, bottom-up, so each rests on the one below. A refactor that enables the feature is its own
 commit, ahead of the feature.
 
@@ -123,7 +123,7 @@ suite, the tag, the golden image, the assertion. "It builds" is not a gate.
 
 ```markdown
 ## Commits
-1. `refactor(bgl): …` — <what it moves>. Gate: `just test bgl`.
+1. `refactor(bgl): …` — <what it moves>. Gate: `just test bgl_extended`.
 2. `feat(gamelib): …` — <what it adds>. Gate: `just run gamelib_tests -- "[vat]"`.
 ```
 
@@ -156,7 +156,7 @@ false confidence. Prefer a test that proves a *negative* — the strongest test 
 prefetched texture uploads even though its file does not exist on disk, which is the only way to
 prove the file was never read.
 
-Where a GPU is needed, `bgl_tests` renders headlessly and compares golden images; `editor_tests` can
+Where a GPU is needed, `bgl_extended_tests` renders headlessly and compares golden images; `editor_tests` can
 create a device too (it links `bgl_d3d12_agility`), so anything that does not need a *window* is
 testable. Tag GPU cases `[render]`.
 
@@ -181,7 +181,7 @@ It patches every shader, so it roughly doubles the suite — but it is the only 
 bad barrier:
 
 ```bash
-just run bgl_tests -- --gpu-validation
+just run bgl_extended_tests -- --gpu-validation
 ```
 
 A run is not "passing" until you have read the log. Report failures with their output; never claim
@@ -310,12 +310,12 @@ suite on either**, and builds `apps/editor` on neither (Qt is absent). So a Wind
 is caught for free and never needs a box; a Windows *behaviour* difference is caught by nothing.
 Give it a box when you built on macOS and the change reaches:
 
-- D3D12 in `libs/bgl` — the RHI, barriers, descriptors, PSOs, the Agility SDK.
+- D3D12 in `libs/bgl_extended` — the RHI, barriers, descriptors, PSOs, the Agility SDK.
 - shaders — DXIL is not the Metal path, and no runner compares a `[render]` golden image.
 - paths and files — `libs/core/file`, separators, case, the mount-key rule in [STYLE.md](STYLE.md).
 - `apps/editor` — nothing builds it in CI at all.
 
-Name the command, not the need: *"`just run bgl_tests -- "[taa]" --gpu-validation` on Windows"*.
+Name the command, not the need: *"`just run bgl_extended_tests -- "[taa]" --gpu-validation` on Windows"*.
 
 Under [bcp-feature](.claude/skills/bcp-feature/SKILL.md) the box waits: a task PR merges into the
 feature branch rather than into `master`, so the whole feature earns one box on the landing PR

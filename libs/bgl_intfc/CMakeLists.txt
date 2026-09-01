@@ -1,6 +1,6 @@
 # bgl's public surface: the contract a renderer implements, owned by no renderer.
 #
-# The headers live here rather than under libs/bgl so that `bgl` names one implementation of this
+# The headers live here rather than under libs/bgl_extended so that `bgl` names one implementation of this
 # interface instead of naming both the interface and an implementation of it. The <bgl/...> include
 # spelling and the bgl:: namespace are unchanged -- the include/bgl/ suffix moved with them.
 

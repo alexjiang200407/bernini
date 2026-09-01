@@ -74,8 +74,8 @@ Reading the answer right:
   reference `___llvm_profile_runtime`, which only a `-fprofile-instr-generate` link resolves.
   `PUBLIC` rides the link graph, so `assetlib_cli`, `editor`, `editor_tests` and the examples get
   it from the libraries they link without call sites of their own.
-* **`bgl` has no call site of its own.** Its only sources are headers, and the profile runtime
-  reaches the dylib's link line through `target_link_libraries(bgl PUBLIC bgl_objects)` — the
+* **`bgl_extended` has no call site of its own.** Its only sources are headers, and the profile runtime
+  reaches the dylib's link line through `target_link_libraries(bgl_extended PUBLIC bgl_extended_objects)` — the
   `$<TARGET_OBJECTS:>` absorption carries no usage requirements, but that link edge does.
 * **Counts are indicative, not exact.** `-fprofile-update=atomic` is deliberately off. Counter
   increments race under real thread pools (`libs/assetlib/src/envmap_bake.cpp`), which can lose
@@ -110,22 +110,22 @@ Two things every manual invocation must get right:
   shards each suite four ways — otherwise overwrite one file, and the merge sees a single shard.
   Relative patterns scatter profiles into whatever each process's cwd is.
 * **`llvm-cov` reports only the binary images it is handed, and omission is silent** — exit 0, no
-  warning. `bgl` is a shared library, so nearly all of `libs/bgl` lives in `libbgl.dylib`; a
+  warning. `bgl_extended` is a shared library, so nearly all of `libs/bgl_extended` lives in `libbgl_extended.dylib`; a
   report for any suite that loads it (`editor_tests`, the examples) must pass
-  `-object $BIN/libbgl.dylib`, or everything that lives in the dylib is missing — a few
+  `-object $BIN/libbgl_extended.dylib`, or everything that lives in the dylib is missing — a few
   header-inline rows compiled into the executable still appear, which is exactly what makes the
   truncation easy to miss. Passing every executable and dylib
   as `-object` is safe: identical function records are deduplicated, and an uninstrumented image
   is tolerated.
 
-`bgl_tests` is the exception that proves the rule: it embeds `bgl_objects`' and the backend's
-object files directly rather than linking the dylib, so its own binary carries the `libs/bgl`
+`bgl_extended_tests` is the exception that proves the rule: it embeds `bgl_extended_objects`' and the backend's
+object files directly rather than linking the dylib, so its own binary carries the `libs/bgl_extended`
 mapping.
 
 ## What the report can and cannot say
 
-Slang shaders are invisible to `llvm-cov`, and much of `bgl`'s C++ is thin RHI translation whose
-correctness lives on the GPU. `bgl`'s number will be low and does not mean what it appears to
+Slang shaders are invisible to `llvm-cov`, and much of `bgl_extended`'s C++ is thin RHI translation whose
+correctness lives on the GPU. `bgl_extended`'s number will be low and does not mean what it appears to
 mean; `core`, `assetlib` and the editor's material graph are where line coverage is informative.
 
 ## Troubleshooting

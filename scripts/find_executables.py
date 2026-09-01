@@ -8,7 +8,7 @@ paths without parsing CMakeLists.txt or guessing at CMAKE_RUNTIME_OUTPUT_DIRECTO
 
 Usage:
     python scripts/find_executables.py                  # list every executable
-    python scripts/find_executables.py --target bgl_tests   # print one path
+    python scripts/find_executables.py --target bgl_extended_tests   # print one path
     python scripts/find_executables.py --json           # machine-readable
     python scripts/find_executables.py --build-dir build/ninja-msvc-release
 """

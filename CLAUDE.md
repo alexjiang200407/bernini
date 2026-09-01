@@ -5,8 +5,8 @@ Bernini is a 3D game engine. It uses CMake as the buildsystem.
 - Use bash
 - Do not `#include` standard c++ libraries. They're already in the precompiled header `./PCH/pch.h`, which every compiled target in the tree gets — that universality is what makes omitting them safe.
 - **Never drop an `#include` because a *subsystem* PCH has it.** `libs/<lib>/src/pch.h` and `apps/editor/src/pch.h` carry the third-party headers that subsystem leans on (Qt, glm) so they cost nothing — but unlike the root PCH they reach only some targets: assetlib's is `PRIVATE` while its public headers are compiled by gamelib and the editor without it, and two Objective-C++ files skip a PCH entirely. So still write `#include <QString>` and `<core/glm.h>` where you use them; the PCH is an optimisation, not an interface. See [docs/build_performance.md](./docs/build_performance.md).
-- Library subsystems live under `./libs` (currently `./libs/bgl`, `./libs/core`, `./libs/assetlib`, `./libs/gamelib`); executable apps live under `./apps` (currently `./apps/editor`); runnable examples under `./examples`
-- **Layering**: `bgl` (renderer) never links `assetlib` — it stays codec-free, taking decoded `assetlib_structs` PODs. `assetlib` (offline cook) never links `bgl` — the CLI baker must not drag in D3D12. `gamelib` is the seam that links both, and is where "load this asset into a scene" lives.
+- Library subsystems live under `./libs` (currently `./libs/bgl_extended`, `./libs/core`, `./libs/assetlib`, `./libs/gamelib`); executable apps live under `./apps` (currently `./apps/editor`); runnable examples under `./examples`
+- **Layering**: `bgl_extended` (renderer) never links `assetlib` — it stays codec-free, taking decoded `assetlib_structs` PODs. `assetlib` (offline cook) never links `bgl_extended` — the CLI baker must not drag in D3D12. `gamelib` is the seam that links both, and is where "load this asset into a scene" lives.
 - **The design bar is not the same everywhere.** See below.
 - For each subsystem `$SUBSYSTEM/src` represents the internal .cpp and .h files that WON'T be shared with others.
 - For each subsystem `$SUBSYSTEM/include` represents all the headers that will be shared to others.
@@ -17,7 +17,7 @@ Bernini is a 3D game engine. It uses CMake as the buildsystem.
 
 ## The bar each subsystem is held to
 
-Everything under `./libs` — `bgl`, `core`, `assetlib`, `gamelib` — and `assetlib_cli` with it, is
+Everything under `./libs` — `bgl`, `bgl_extended`, `core`, `assetlib`, `gamelib` — and `assetlib_cli` with it, is
 held to a **strict** bar. These are libraries: their headers are the interface a reader learns the
 system from, and a client cannot route around a bad one. So the public surface must be readable on
 its own — one obvious seam per concern, a rule stated in one place, no second way to do the same
@@ -87,7 +87,7 @@ Describes the collection of structures, descriptors, and resources that are boun
 
 **[Render Hardware Interface](./docs/rhi.md)**
 
-RHI usage — the internal abstraction bgl is built *on*, one layer below the public API.
+RHI usage — the internal abstraction bgl_extended is built *on*, one layer below the public API.
 
 **[Uniforms](./docs/uniforms.md)**
 
@@ -138,7 +138,7 @@ How `bgl_idlgen` generates CPU/GPU structs, enums, and constants from one Slang 
 A rig posed on the GPU and drawn from a per-instance palette or a shared bone anim table: the
 compute pass and its barrier-per-depth-level walk, why the previous pose is re-evaluated rather than
 remembered, where the skeleton signature is checked and why the culling box cannot be measured (both
-for the same reason — `bgl` does not link `assetlib`), and what the editor's Animation panel does
+for the same reason — `bgl_extended` does not link `assetlib`), and what the editor's Animation panel does
 with the tier.
 
 **[Temporal Antialiasing](./docs/taa.md)**
@@ -267,9 +267,9 @@ so `just test -- "[tag]"` skips it and says so. It needs `pytest` (pinned in
 runs it: `.github/workflows/ci.yml` compiles and runs no suite at all.
 
 Every suite is Catch2, so they all take the same flags. A full run is minutes, nearly all of it
-`bgl_tests` (device creation per test). Name a suite to skip that: `just test editor`. A failing
+`bgl_extended_tests` (device creation per test). Name a suite to skip that: `just test editor`. A failing
 suite does not stop the others; the summary at the end says which failed. To pass a flag to one
-suite, use `just run`, which forwards it — `just run bgl_tests -- --gpu-validation`, or
+suite, use `just run`, which forwards it — `just run bgl_extended_tests -- --gpu-validation`, or
 `just run editor_tests -- "[materialgraph]"` to run one tag.
 
 One tag is not about behaviour: **`[perf]`** pins what a cook costs as its inputs grow — a read count
@@ -311,7 +311,7 @@ Use `just build`. It builds the preset from `config.json` (or `windows-vs2026-ms
 
 ```bash
 just build                                  # configured preset, all targets
-just build bgl_tests                        # one target
+just build bgl_extended_tests                        # one target
 just build --preset windows-ninja-msvc-dx12-debug
 just build --preset windows-clang-dx12-debug # clang (Ninja generator)
 just build --config Release                 # multi-config generators

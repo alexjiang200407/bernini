@@ -29,13 +29,13 @@ target_precompile_headers(gamelib
 	PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src/pch.h
 )
 
-# bgl_intfc for the contract, bgl for the symbols behind it -- gamelib names the interface it
+# bgl_intfc for the contract, bgl_extended for the symbols behind it -- gamelib names the interface it
 # compiles against rather than assuming one renderer provides it.
 target_link_libraries(gamelib
 	PUBLIC
 		core
 		bgl_intfc
-		bgl
+		bgl_extended
 		assetlib
 )
 
@@ -51,13 +51,13 @@ if (BUILD_TESTS)
 		${CMAKE_CURRENT_SOURCE_DIR}/tests/*.cpp
 	)
 
-	# bgl's golden-image, environment and shader-cache helpers, borrowed rather than re-grown:
-	# they speak only the public bgl API plus assetlib, both of which this target links. A list of
+	# bgl_extended's golden-image, environment and shader-cache helpers, borrowed rather than re-grown:
+	# they speak only the public bgl_extended API plus assetlib, both of which this target links. A list of
 	# their own so source_group's TREE only sees files under this directory.
 	set(GAMELIB_TESTS_BORROWED
-		${CMAKE_SOURCE_DIR}/libs/bgl/tests/src/util/GoldenImage.cpp
-		${CMAKE_SOURCE_DIR}/libs/bgl/tests/src/util/TestEnvironment.cpp
-		${CMAKE_SOURCE_DIR}/libs/bgl/tests/src/util/TestOptions.cpp
+		${CMAKE_SOURCE_DIR}/libs/bgl_extended/tests/src/util/GoldenImage.cpp
+		${CMAKE_SOURCE_DIR}/libs/bgl_extended/tests/src/util/TestEnvironment.cpp
+		${CMAKE_SOURCE_DIR}/libs/bgl_extended/tests/src/util/TestOptions.cpp
 	)
 
 	add_executable(gamelib_tests
@@ -70,7 +70,7 @@ if (BUILD_TESTS)
 			${CMAKE_CURRENT_SOURCE_DIR}/include
 			${CMAKE_CURRENT_SOURCE_DIR}/src
 			${CMAKE_CURRENT_SOURCE_DIR}/tests/src
-			${CMAKE_SOURCE_DIR}/libs/bgl/tests/src
+			${CMAKE_SOURCE_DIR}/libs/bgl_extended/tests/src
 			${CMAKE_SOURCE_DIR}/libs/assetlib/tests/src
 	)
 
@@ -97,7 +97,7 @@ if (BUILD_TESTS)
 	source_group(TREE "${CMAKE_CURRENT_SOURCE_DIR}/tests/src" PREFIX "Source Files" FILES ${GAMELIB_TESTS_SOURCES})
 
 	# The pixel test lights its view from "assets/Data/Environments/forest.benv", resolved from the
-	# runtime output directory like every bgl test asset; copy_assets is what stages it there.
+	# runtime output directory like every bgl_extended test asset; copy_assets is what stages it there.
 	add_dependencies(gamelib_tests copy_assets)
 
 	enable_strict_compiler(gamelib_tests)

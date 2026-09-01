@@ -42,7 +42,7 @@ watch it.
 
 To pass arguments to a single suite, use `just run` instead, which also forwards them:
 
-    just run bgl_tests -- --gpu-validation
+    just run bgl_extended_tests -- --gpu-validation
 """
 
 import argparse

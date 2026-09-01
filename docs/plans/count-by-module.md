@@ -18,7 +18,7 @@ a different set of exclusions than the script uses, so the two numbers disagree.
 
 - **ADR-2 — this follows the standard, which is that the directory defines the group.** `cloc`,
   `tokei` and `scc` all group by language and leave component grouping to the caller passing paths
-  (`cloc libs/bgl`); none reads a build system to discover components. The table is that idiom
+  (`cloc libs/bgl_extended`); none reads a build system to discover components. The table is that idiom
   written down once instead of retyped per invocation. *Rejected: a build-system-derived grouping,
   which no counter in wide use offers — see ADR-1 for the cost.*
 
@@ -53,7 +53,7 @@ a different set of exclusions than the script uses, so the two numbers disagree.
 
 - A `scripts_tests` pytest case pinning the classification: `libs/assetlib/cli/…` resolves to
   `assetlib_cli` and not `assetlib` (the longest-prefix rule is the part that can silently
-  regress), `libs/bgl/src/d3d12/…` resolves to `bgl`, and an unmatched path resolves to
+  regress), `libs/bgl_extended/src/d3d12/…` resolves to `bgl`, and an unmatched path resolves to
   `(unclassified)`.
 - A case asserting the module totals equal the language totals over the same file set, so no file
   is dropped or counted twice.

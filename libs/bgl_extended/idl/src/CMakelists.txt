@@ -2,10 +2,10 @@
 # generated for, so a committed copy would be right for one and silently wrong for the other.
 set(IDL_CPP_OUT_DIR        "${CMAKE_BINARY_DIR}/generated/idl")
 # The public headers stay in the source tree, and stay committed: a consumer includes <bgl/...>
-# without building bgl. Safe because IDL_PUBLIC_CPP_SOURCES holds no structs -- only enums with an
+# without building bgl_extended. Safe because IDL_PUBLIC_CPP_SOURCES holds no structs -- only enums with an
 # explicit underlying type and a constant, which no backend lays out differently.
 set(IDL_PUBLIC_CPP_OUT_DIR "${CMAKE_SOURCE_DIR}/libs/bgl_intfc/include/bgl")
-set(IDL_SLANG_OUT_DIR      "${CMAKE_SOURCE_DIR}/libs/bgl/shaders/src/idl")
+set(IDL_SLANG_OUT_DIR      "${CMAKE_SOURCE_DIR}/libs/bgl_extended/shaders/src/idl")
 set(IDL_SRC_ROOT           "${CMAKE_CURRENT_SOURCE_DIR}")
 
 file(GLOB_RECURSE IDL_SOURCES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/*.slang")
@@ -55,7 +55,7 @@ set(IDL_CPP_SOURCES
 # no `bgl::idl` copy of it -- a second, differently-namespaced definition of the same enum is a
 # duplicate waiting to be included by mistake.
 #
-# Keep this list to what a *client* names. An enum only bgl's own passes switch on belongs above,
+# Keep this list to what a *client* names. An enum only bgl_extended's own passes switch on belongs above,
 # however public its consumers feel: PsoType was here and enumerates this renderer's mesh-shader
 # pipeline permutations, which is not vocabulary a public interface should carry.
 set(IDL_PUBLIC_CPP_SOURCES

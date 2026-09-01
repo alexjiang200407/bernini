@@ -5,7 +5,7 @@ file(GLOB_RECURSE BGL_WINDOW_SOURCES CONFIGURE_DEPENDS
 
 add_executable(bgl_window ${BGL_WINDOW_SOURCES})
 
-target_link_libraries(bgl_window PRIVATE core bgl example_util)
+target_link_libraries(bgl_window PRIVATE core bgl_extended example_util)
 
 enable_strict_compiler(bgl_window)
 

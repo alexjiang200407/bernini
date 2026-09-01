@@ -103,7 +103,7 @@ endif()
 target_link_libraries(editor_lib
 	PUBLIC
 		core
-		bgl
+		bgl_extended
 		assetlib
 		gamelib
 		Qt6::Widgets

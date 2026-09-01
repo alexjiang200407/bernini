@@ -27,7 +27,7 @@ Usage:
     just idl --config Release               # pick a configuration
     just idl --build                        # build bgl_idlgen first
     just idl --dry-run                      # print commands, don't run
-    just idl libs/bgl/idl/src/Vertex.slang  # only these modules
+    just idl libs/bgl_extended/idl/src/Vertex.slang  # only these modules
 """
 
 import argparse
@@ -40,8 +40,8 @@ import util.cmake_tools as ct
 import util.config as cfg
 
 TOOL = "bgl_idlgen"
-SRC_ROOT = os.path.join(ct.REPO_ROOT, "libs", "bgl", "idl", "src")
-# Mirrors libs/bgl/idl/src/CMakelists.txt: the private headers are a build artifact, because a
+SRC_ROOT = os.path.join(ct.REPO_ROOT, "libs", "bgl_extended", "idl", "src")
+# Mirrors libs/bgl_extended/idl/src/CMakelists.txt: the private headers are a build artifact, because a
 # struct's layout follows the backend it was generated for. Resolved per build dir.
 def layout_args(build_dir):
     """--metal-layout when this build dir was configured for Metal: the C++ mirror follows the
@@ -62,7 +62,7 @@ def cpp_out_dir(tool):
 
 
 PUBLIC_CPP_OUT_DIR = os.path.join(ct.REPO_ROOT, "libs", "bgl_intfc", "include", "bgl")
-SLANG_OUT_DIR = os.path.join(ct.REPO_ROOT, "libs", "bgl", "shaders", "src", "idl")
+SLANG_OUT_DIR = os.path.join(ct.REPO_ROOT, "libs", "bgl_extended", "shaders", "src", "idl")
 IDL_CMAKE = os.path.join(SRC_ROOT, "CMakelists.txt")
 
 

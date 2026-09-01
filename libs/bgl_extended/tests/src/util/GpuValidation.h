@@ -11,7 +11,7 @@ namespace bgl::test
 	 * made a full run long enough that it stops being run, which costs more coverage than the layer
 	 * buys. So it is opt-in, for a final verification pass:
 	 *
-	 *     just run bgl_tests -- --gpu-validation
+	 *     just run bgl_extended_tests -- --gpu-validation
 	 *
 	 * Note this is *GPU-based* validation, not the D3D12 debug layer: the debug layer stays on either
 	 * way, and it is what catches the ordinary API misuse. This only adds the shader-level checks.

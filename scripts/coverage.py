@@ -21,7 +21,7 @@ sharding and cwd handling behave exactly like `just test`. Each process writes i
 profile (`%p` -- the shards of one suite would otherwise overwrite a single file), the
 profiles are merged, and the report hands llvm-cov every executable and shared library
 as an -object: llvm-cov silently omits any image it is not given, and nearly all of
-libs/bgl lives in libbgl.dylib.
+libs/bgl_extended lives in libbgl_extended.dylib.
 
 The report is filtered to our own source roots. Everything else the profile touches --
 vcpkg headers, FetchContent checkouts, generated code -- is somebody else's number.

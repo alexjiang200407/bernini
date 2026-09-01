@@ -18,7 +18,7 @@ building the engine.
 
 ### 1.1 The tone map is correct — not a suspect
 
-`AgX` in [util/Tonemap.slang](../../libs/bgl/shaders/src/util/Tonemap.slang) maps scene-linear
+`AgX` in [util/Tonemap.slang](../../libs/bgl_extended/shaders/src/util/Tonemap.slang) maps scene-linear
 `0.18` to **0.5005** in sRGB display code. Blender's AgX places middle grey at 0.5 by construction.
 They agree to within a fifth of a percent.
 
@@ -128,7 +128,7 @@ Bernini genuinely has no occlusion — the pass list is `BrdfLutGen`, `Clear`, `
 `Forward`, `PostProcess`, `PreparePresent`, `Skybox`, `TaaResolve`, `TransparentSort`; there are no
 analytic lights; `ao` is the ORM red channel, which is `0xFF` for a glTF with no occlusion map
 ([material_bake.cpp:40](../../libs/assetlib/src/material_bake.cpp)) and a white fallback texture for
-a material with no ORM ([Scene.cpp:955](../../libs/bgl/src/scene/Scene.cpp)). `ROADMAP.md:257-264`
+a material with no ORM ([Scene.cpp:955](../../libs/bgl_extended/src/scene/Scene.cpp)). `ROADMAP.md:257-264`
 and `:297` already want lights, shadows and AO. All true, all worth building — just not the
 explanation for *this* comparison.
 
@@ -141,7 +141,7 @@ Recorded so nobody re-opens them:
   ([envmap_bake.cpp:20-40](../../libs/assetlib/src/envmap_bake.cpp)) is exactly the standard
   D3D/GL cube face convention, and the r=0.99 background fit in §1.3 confirms it end to end.
 - **View-space shading normals** (which would make shading view-invariant). Normals are transformed
-  to world space at [Forward_StaticMesh.slang:46](../../libs/bgl/shaders/src/Forward_StaticMesh.slang).
+  to world space at [Forward_StaticMesh.slang:46](../../libs/bgl_extended/shaders/src/Forward_StaticMesh.slang).
 - **CPU skinning silently zeroing normals.** It blends them through the same matrices
   (`skinning.cpp:128`), and `decodableOffset` *throws* on an unexpected format rather than returning
   "absent", so a packed normal cannot become a silent zero.
@@ -240,7 +240,7 @@ Then bisect the direction's path, in this order — each is a one-line check:
 - `R = reflect(-V, N)` and the `SampleCube` argument, against the skybox's `clipToWorld` ray for the
   same pixel. Both must be world-space directions in the same handedness. **They are reconstructed
   by different code with no shared test**, which is exactly how a mirror survives.
-- `skyRotation`. [RenderContext.cpp:514-537](../../libs/bgl/src/gfx/RenderContext.cpp) applies
+- `skyRotation`. [RenderContext.cpp:514-537](../../libs/bgl_extended/src/gfx/RenderContext.cpp) applies
   `BSky::rotationY` to the skybox's `clipToWorld`, but `PbrShading` samples the IBL cubes with a raw
   world normal and no corresponding rotation. `forest` has `rotationY = 0`, so this is not today's
   bug — but it *is* a latent one: any non-zero `rotationY` rotates the backdrop away from the
@@ -290,7 +290,7 @@ The blur is a presentation choice and should not be burned into pixels.
 - Bake the skybox **sharp**, with a full mip chain (it is single-mip today, which is why
   `BSky::mipLevel` is 0 and can do nothing).
 - Let `BSky::mipLevel` — already plumbed through `SkyboxDesc` and already sampled by
-  [Skybox.slang:66](../../libs/bgl/shaders/src/Skybox.slang) — carry the defocus, making it a
+  [Skybox.slang:66](../../libs/bgl_extended/shaders/src/Skybox.slang) — carry the defocus, making it a
   container edit rather than minutes of convolution.
 - Keep a defocused default for the *material preview*, where §1.4's reasoning is sound; default a
   level viewport to mip 0.

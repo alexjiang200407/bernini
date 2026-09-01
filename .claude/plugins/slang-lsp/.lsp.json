@@ -7,7 +7,7 @@
     "settings": {
       "slang": {
         "additionalSearchPaths": [
-          "libs/bgl/shaders/src"
+          "libs/bgl_extended/shaders/src"
         ]
       }
     }

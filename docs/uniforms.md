@@ -21,7 +21,7 @@ doc disagrees, trust the header, then fix this doc.
   way, and a change that "fixes" them to match would remove capability. Three reasons:
 
   1. **The layouts genuinely differ.** An `EntryBuffer<T>` element uses `ScalarDataLayout`
-     ([EntryBuffer.slang](libs/bgl/shaders/src/lib/types/EntryBuffer.slang)), which is what makes the IDL
+     ([EntryBuffer.slang](libs/bgl_extended/shaders/src/lib/types/EntryBuffer.slang)), which is what makes the IDL
      mirror `memcpy`-compatible. A `ConstantBuffer<T>` rounds vectors to 16-byte boundaries and pads
      between members, so the same struct cannot serve both.
 
@@ -31,19 +31,19 @@ doc disagrees, trust the header, then fix this doc.
   3. **Reflection lets one binder serve a family of PSO variants.** The load-bearing reason. The pass
      *asks the layout* whether a field exists instead of being compiled against a fixed struct, so
      variants declaring different subsets share one binder.
-     [ForwardPass::BindKernel](libs/bgl/src/passes/ForwardPass.cpp) binds all `c_PsoCount` kernels
-     through one function even though [programs/forward/Null.slang](libs/bgl/shaders/src/programs/forward/Null.slang)
+     [ForwardPass::BindKernel](libs/bgl_extended/src/passes/ForwardPass.cpp) binds all `c_PsoCount` kernels
+     through one function even though [programs/forward/Null.slang](libs/bgl_extended/shaders/src/programs/forward/Null.slang)
      imports no `MaterialData` and has no `materialData` cbuffer at all. A `memcpy`'d IDL struct
      structurally cannot express "this variant has no such field".
 
 * **The two regimes meet inside one shader struct.**
-  [MaterialData.slang](libs/bgl/shaders/src/lib/forward/MaterialData.slang) holds an
+  [MaterialData.slang](libs/bgl_extended/shaders/src/lib/forward/MaterialData.slang) holds an
   `RawBuffer` of material records alongside ordinary `float3`/`float2` members: the outer struct is
   reflected and addressed by name, the elements the handle points at are compile-time-proven. Expect
   the guarantees to change at that boundary.
 
 * **Layout is reflected once per PSO and shared; the mirror is per kernel.** `ReflectLayoutFromSlang`
-  ([SlangReflection.h](libs/bgl/src/uniforms/SlangReflection.h)) walks Slang's cbuffer type layout
+  ([SlangReflection.h](libs/bgl_extended/src/uniforms/SlangReflection.h)) walks Slang's cbuffer type layout
   into `ReflectedLayout`, a POD tree held by `shared_ptr<const>`. Carrying no Slang pointers is what
   lets it survive into the [shader cache](docs/shader_cache.md) and be rebuilt from disk without
   loading a Slang module. Each `Uniforms` then builds its own node tree and owns its own bytes.
@@ -53,11 +53,11 @@ doc disagrees, trust the header, then fix this doc.
   handle's `bindlessIndex` into an 8-byte `DescriptorHandle` field. D3D12 indexes a directly-indexed
   heap with it; Metal rewrites it to a native address at dispatch. The root signature therefore
   carries only CBVs — one root parameter per cbuffer, no descriptor tables
-  ([PipelineLayout_d3d12.cpp](libs/bgl/src/d3d12/pipeline/PipelineLayout_d3d12.cpp)).
+  ([PipelineLayout_d3d12.cpp](libs/bgl_extended/src/d3d12/pipeline/PipelineLayout_d3d12.cpp)).
 
 * **A kernel is a pipeline plus one `Uniforms` per declared cbuffer, keyed by name.**
   `IDevice::CreateComputeKernel` / `CreateMeshletKernel`
-  ([Device.cpp](libs/bgl/src/device/Device.cpp)) enumerate the pipeline's cbuffer names and build a
+  ([Device.cpp](libs/bgl_extended/src/device/Device.cpp)) enumerate the pipeline's cbuffer names and build a
   mirror for each. Pass code reaches uniforms only through the kernel.
 
 ---
@@ -66,21 +66,21 @@ doc disagrees, trust the header, then fix this doc.
 
 | Type | File | Role |
 |---|---|---|
-| `Uniforms` | [Uniforms.h](libs/bgl/src/uniforms/Uniforms.h) | One cbuffer's CPU mirror: byte buffer + reflected tree, `operator[]` by name or index, `HasMember` / `GetLayout` to introspect. Move-only. |
-| `Uniforms::Accessor` / `ConstAccessor` | [Uniforms.h](libs/bgl/src/uniforms/Uniforms.h) | Cursor into the mirror: chainable `operator[]`, typed read/assign, `SetIfValid` for an optional write, `IsValid()`. Non-owning. |
-| `FindUnknownMembers` | [Uniforms.h](libs/bgl/src/uniforms/Uniforms.h) | Resolves a binder's names against a whole PSO family, returning those no variant declares. Call once at family construction. |
-| `ComputeKernel` / `MeshletKernel` | [ComputeKernel.h](libs/bgl/src/pipeline/ComputeKernel.h), [MeshletKernel.h](libs/bgl/src/pipeline/MeshletKernel.h) | Pipeline + per-cbuffer `Uniforms` map. `MeshletKernel` also offers `FindUniforms` / `ContainsUniforms`. |
+| `Uniforms` | [Uniforms.h](libs/bgl_extended/src/uniforms/Uniforms.h) | One cbuffer's CPU mirror: byte buffer + reflected tree, `operator[]` by name or index, `HasMember` / `GetLayout` to introspect. Move-only. |
+| `Uniforms::Accessor` / `ConstAccessor` | [Uniforms.h](libs/bgl_extended/src/uniforms/Uniforms.h) | Cursor into the mirror: chainable `operator[]`, typed read/assign, `SetIfValid` for an optional write, `IsValid()`. Non-owning. |
+| `FindUnknownMembers` | [Uniforms.h](libs/bgl_extended/src/uniforms/Uniforms.h) | Resolves a binder's names against a whole PSO family, returning those no variant declares. Call once at family construction. |
+| `ComputeKernel` / `MeshletKernel` | [ComputeKernel.h](libs/bgl_extended/src/pipeline/ComputeKernel.h), [MeshletKernel.h](libs/bgl_extended/src/pipeline/MeshletKernel.h) | Pipeline + per-cbuffer `Uniforms` map. `MeshletKernel` also offers `FindUniforms` / `ContainsUniforms`. |
 
 ### Supporting types
 
 | Type | File | Role |
 |---|---|---|
-| `ReflectedLayout` / `ReflectedField` | [ReflectedLayout.h](libs/bgl/src/uniforms/ReflectedLayout.h) | Serializable POD tree of one cbuffer: kind, value type, size, array count/stride, `handleKind`. |
-| `UniformLayoutEntry` / `UniformLayoutMap` | [UniformLayoutEntry.h](libs/bgl/src/uniforms/UniformLayoutEntry.h) | Shared layout + size + root parameter index, keyed by cbuffer name. |
-| `UniformType` / `UniformValueType` | [UniformValueType.h](libs/bgl/src/uniforms/UniformValueType.h) | Node kind (array/struct/value/null) and leaf scalar type. |
-| `DescriptorHandle` | [DescriptorHandle.h](libs/bgl/src/uniforms/DescriptorHandle.h) | The 8 bytes a bindless handle occupies. `alignas(8)` on Metal only. |
-| `HandleSlot` / `MetalHandleOffsetMap` | [MetalPipelineReflection.h](libs/bgl/src/metal/pipeline/MetalPipelineReflection.h) | Metal-only side table: byte offset + pool kind of every handle field. |
-| `c_SmartBufferUniformIndices` / `c_UnboundDescriptorIndex` | [constants.h](libs/bgl/src/constants/constants.h) | The member names the assignment operators search for, and the bindless index every allocator reserves. |
+| `ReflectedLayout` / `ReflectedField` | [ReflectedLayout.h](libs/bgl_extended/src/uniforms/ReflectedLayout.h) | Serializable POD tree of one cbuffer: kind, value type, size, array count/stride, `handleKind`. |
+| `UniformLayoutEntry` / `UniformLayoutMap` | [UniformLayoutEntry.h](libs/bgl_extended/src/uniforms/UniformLayoutEntry.h) | Shared layout + size + root parameter index, keyed by cbuffer name. |
+| `UniformType` / `UniformValueType` | [UniformValueType.h](libs/bgl_extended/src/uniforms/UniformValueType.h) | Node kind (array/struct/value/null) and leaf scalar type. |
+| `DescriptorHandle` | [DescriptorHandle.h](libs/bgl_extended/src/uniforms/DescriptorHandle.h) | The 8 bytes a bindless handle occupies. `alignas(8)` on Metal only. |
+| `HandleSlot` / `MetalHandleOffsetMap` | [MetalPipelineReflection.h](libs/bgl_extended/src/metal/pipeline/MetalPipelineReflection.h) | Metal-only side table: byte offset + pool kind of every handle field. |
+| `c_SmartBufferUniformIndices` / `c_UnboundDescriptorIndex` | [constants.h](libs/bgl_extended/src/constants/constants.h) | The member names the assignment operators search for, and the bindless index every allocator reserves. |
 
 ---
 
@@ -136,7 +136,7 @@ time, so it is the suballocation the GPU reads and the mirror may be rewritten i
   *either* "this variant does not declare the field" (routine, the reason the design exists) *or*
   "the name is wrong" (a bug). `FindUnknownMembers` separates them: absent from *every* variant is a
   typo, absent from some is a per-variant field. @pre resolve a binder's names once when the family
-  is built — `BinderNames` ([BinderNames.h](libs/bgl/src/passes/BinderNames.h)) is what every pass
+  is built — `BinderNames` ([BinderNames.h](libs/bgl_extended/src/passes/BinderNames.h)) is what every pass
   checks its cbuffers through from `Init`, and `SetIfValid` is the per-draw guard it licenses. A
   binder never validated this way has no protection against a shader rename.
 
@@ -183,9 +183,9 @@ only** — on D3D12 a handle reflects as a bare `uint2` and the declared type is
 * **Index 0 is the unbound sentinel; no resource is ever allocated there.** The mirror is zero-filled,
   so an unassigned handle field reads index 0. Every allocator feeding a bindless handle reserves it —
   the D3D12 descriptor heaps
-  ([DescriptorAllocator_d3d12.cpp](libs/bgl/src/d3d12/resource/DescriptorAllocator_d3d12.cpp)) and the
+  ([DescriptorAllocator_d3d12.cpp](libs/bgl_extended/src/d3d12/resource/DescriptorAllocator_d3d12.cpp)) and the
   Metal buffer/texture/sampler pools
-  ([ResourceManager_metal.cpp](libs/bgl/src/metal/resource/ResourceManager_metal.cpp)) — so "never
+  ([ResourceManager_metal.cpp](libs/bgl_extended/src/metal/resource/ResourceManager_metal.cpp)) — so "never
   bound" cannot collide with "bound to the first resource handed out". @pre a new bindless-addressable
   pool must reserve `c_UnboundDescriptorIndex` too, or it reopens the hole.
 
@@ -210,24 +210,24 @@ only** — on D3D12 a handle reflects as a bare `uint2` and the declared type is
 Metal reflection cannot report a handle-bearing cbuffer's byte layout: a bindless handle is a
 resource, invisible to the ordinary-data category, so the cbuffer measures zero bytes there while the
 emitted MSL lays each handle out as an 8-byte device pointer. `MetalizeLayout`
-([MetalPipelineReflection.cpp](libs/bgl/src/metal/pipeline/MetalPipelineReflection.cpp)) therefore
+([MetalPipelineReflection.cpp](libs/bgl_extended/src/metal/pipeline/MetalPipelineReflection.cpp)) therefore
 **discards the offsets, sizes and strides `ReflectLayoutFromSlang` produced and recomputes them from
 a hand-written model of MSL's alignment rules.**
 
 The consequence to carry: **`ReflectedField::offset` has two provenances** — what Slang reported on
-D3D12, what bgl *predicted* the Metal compiler will do on Metal. There is no `static_assert`
+D3D12, what bgl_extended *predicted* the Metal compiler will do on Metal. There is no `static_assert`
 equivalent; the IDL layer proves its parity, this one asserts it, and only golden-image tests catch
 drift.
 
 **`bool` is rejected rather than guessed at.** Slang's MSL `bool` ABI is unverified and a wrong
 alignment displaces every member after the field, so `MetalAlign` calls `gfatal` on `kBool` instead of
 falling through to its 4-byte default. @post a `bool` in a constant buffer aborts on Metal with a
-message naming the fix — use `uint` or `float`, as [TaaResolve.slang](libs/bgl/shaders/src/programs/screen/TaaResolve.slang)
+message naming the fix — use `uint` or `float`, as [TaaResolve.slang](libs/bgl_extended/shaders/src/programs/screen/TaaResolve.slang)
 does. Lifting it needs a test pinning the emitted offsets against the GPU.
 
 **The Metalized layout is what the shader cache stores.** @pre a change to `MetalizeLayout` or
 `MetalAlign` must bump `c_CacheFormatVersion` in
-[ShaderCache_metal.cpp](libs/bgl/src/metal/shadercache/ShaderCache_metal.cpp), or a warm cache keeps
+[ShaderCache_metal.cpp](libs/bgl_extended/src/metal/shadercache/ShaderCache_metal.cpp), or a warm cache keeps
 the old layout and the change appears not to work.
 
 ---
@@ -262,10 +262,10 @@ cmd->SetMeshletState(state);
 
 For a table-driven binder over a fixed set of scene buffers — preferable to repeated guarded
 assignments — see `BindSceneBuffers` in
-[SceneBindings.h](libs/bgl/src/passes/SceneBindings.h). The fullest call site is
-[ForwardPass.cpp](libs/bgl/src/passes/ForwardPass.cpp); offsets and types are pinned in
-[Uniforms_test.cpp](libs/bgl/tests/src/Uniforms_test.cpp) and
-[BindlessIndex_test.cpp](libs/bgl/tests/src/BindlessIndex_test.cpp).
+[SceneBindings.h](libs/bgl_extended/src/passes/SceneBindings.h). The fullest call site is
+[ForwardPass.cpp](libs/bgl_extended/src/passes/ForwardPass.cpp); offsets and types are pinned in
+[Uniforms_test.cpp](libs/bgl_extended/tests/src/Uniforms_test.cpp) and
+[BindlessIndex_test.cpp](libs/bgl_extended/tests/src/BindlessIndex_test.cpp).
 
 ---
 

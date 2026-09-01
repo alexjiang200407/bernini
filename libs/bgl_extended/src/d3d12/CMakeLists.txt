@@ -3,7 +3,7 @@ file(GLOB_RECURSE BGL_DX12_SOURCES CONFIGURE_DEPENDS
     ${CMAKE_CURRENT_SOURCE_DIR}/*.c
 )
 # The agility/ sources export the D3D12 Agility SDK symbols and must live in the
-# consuming executable, not the bgl DLL, so keep them out of the bgl_d3d12 object
+# consuming executable, not the bgl_extended DLL, so keep them out of the bgl_d3d12 object
 # library (see the bgl_d3d12_agility target below).
 list(FILTER BGL_DX12_SOURCES EXCLUDE REGEX ".*/agility/.*")
 
@@ -30,7 +30,7 @@ target_include_directories(bgl_d3d12
         ${CMAKE_CURRENT_SOURCE_DIR}
         ${CMAKE_CURRENT_SOURCE_DIR}/..
         # The generated IDL headers are a build artifact, and a generated one includes its
-        # hand-written imports as siblings -- so both roots, as bgl_objects has them.
+        # hand-written imports as siblings -- so both roots, as bgl_extended_objects has them.
         ${CMAKE_BINARY_DIR}/generated
         ${CMAKE_CURRENT_SOURCE_DIR}/../idl
         ${Stb_INCLUDE_DIR}

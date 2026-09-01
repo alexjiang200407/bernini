@@ -132,7 +132,7 @@ there is none — so this needs nothing done by hand. If yours lives somewhere u
 ### slangd (Slang LSP)
 
 Gives Claude Code go-to-definition, hover and document symbols across the `.slang` sources under
-`libs/bgl`, which grep answers badly because every cross-file reference is a module import. Nothing
+`libs/bgl_extended`, which grep answers badly because every cross-file reference is a module import. Nothing
 depends on it: skip this and the build, the tests and the editor are unchanged.
 
 Those three are the whole of it. slangd advertises no `referencesProvider` and no
@@ -155,7 +155,7 @@ claude plugin install slang-lsp@bernini
 
 The marketplace is recorded in your user settings as an absolute path, so re-add it if you move the
 clone. Restart Claude Code, then check it took by asking what `SubmeshInstance` is on line 6 of
-`libs/bgl/shaders/src/forward/common.slang` — hover has to resolve the imported module to answer, so
+`libs/bgl_extended/shaders/src/forward/common.slang` — hover has to resolve the imported module to answer, so
 it fails where go-to-definition on the import line above it still succeeds.
 
 slangd is given the same source roots the build compiles with, because it resolves an `import` the

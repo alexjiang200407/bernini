@@ -78,7 +78,7 @@ that silently corrupts:
 ```bash
 just build
 just test <suites...>
-just run bgl_tests -- --gpu-validation   # only when the change warrants it
+just run bgl_extended_tests -- --gpu-validation   # only when the change warrants it
 ```
 
 Read the logs (`build/<preset>/bin/*.log`), and check their timestamps — a stale log proves nothing

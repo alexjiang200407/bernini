@@ -7,7 +7,7 @@
   "plugins": [
     {
       "name": "slang-lsp",
-      "description": "Slang language server (slangd) for the shaders under libs/bgl",
+      "description": "Slang language server (slangd) for the shaders under libs/bgl_extended",
       "version": "1.0.0",
       "source": "./.claude/plugins/slang-lsp"
     }

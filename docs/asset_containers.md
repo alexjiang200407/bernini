@@ -164,7 +164,7 @@ regimes were always pointing at is available:
 | **Derived, and committed anyway** | `Derived/Sky/` and `Derived/EnvLighting/`, and the maps under `Derived/SourceTextures/` an environment import wrote. Their bake runs from a `.hdr`, and a project copies in no `.hdr` — so an absent one is unrecoverable, and only a *stale* one is `migrate`'s. The carve-out goes the day an env source lives in the project beside the meshes'. |
 
 It is a rule about **projects**. This repository's own `assets/` tree is not one: it is a fixture
-tree that `bgl_tests`, `assetlib_tests` and `editor_tests` read directly — `assets/Data` is opened
+tree that `bgl_extended_tests`, `assetlib_tests` and `editor_tests` read directly — `assets/Data` is opened
 as a store, a baked `.ktx2` is loaded by its content-hashed name, `assets/Data/Derived/Meshes/apples.bmesh`
 is read as a file — so those files are test inputs no import here produces, and they stay committed.
 
