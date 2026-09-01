@@ -32,7 +32,7 @@ float3 SrgbToLinear(float3 c)
 {
     const float3 low = c / 12.92;
     const float3 high = pow((c + 0.055) / 1.055, float3(2.4, 2.4, 2.4));
-    return select(c <= 0.04045, low, high);
+    return lerp(low, high, step(0.04045, c));
 }
 
 // The vertex carries sRGB bytes premultiplied by alpha. Premultiplication is only valid in the space
