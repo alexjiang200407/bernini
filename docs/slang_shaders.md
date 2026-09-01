@@ -168,6 +168,20 @@ rather than compiling it, so the error arrives from `newLibraryWithSource` at ru
 both plain data and resource handles cannot be placed. The reflection asserts rather than binding the
 wrong slot. Keep resources at the top level of the constant buffer, as `ExpansionData` does.
 
+## An algorithm on a constant buffer goes in an `extension`, in its own module
+
+The struct body holds the buffer's own accessors — what reads a member, or packs a few of them into
+a value, as `MaterialData::GetTextureAt` and `GetSurfaceEnv` do. An **algorithm** that happens to run
+on the buffer goes in an `extension` of the struct, in a module of its own, so the data file stays
+readable on its own.
+[lib/forward/MaterialShading.slang](../libs/bgl/shaders/src/lib/forward/MaterialShading.slang) is the
+worked example: it extends `MaterialData` with the four shading entry points the forward pixel
+programs call as `materialData.Shade<PbrMaterialRecord>(…)`.
+
+Slang's access control is per module, so the struct, its members **and** the `ConstantBuffer` global
+must all be `public` for an extension elsewhere to reach them — a member left internal fails with
+`E30600: declaration not accessible`, at the extension rather than at the call site.
+
 ## Declare a `ConstantBuffer` in the module that uses it, not in a shared one
 
 A `ConstantBuffer` global is a shader parameter, so declaring one in a widely-imported module adds it
