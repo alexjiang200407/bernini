@@ -190,35 +190,20 @@ cause is a different one.
 
 The two GitHub Apps that give AI work its own identity: `morgana-coding-agent`, which posts `bcp-revise`'s PR replies and co-authors commits from your machine, and the review agent that reviews a PR when you comment `/review` from a GitHub Actions runner. Covers registration, key custody, secrets, and revocation for both.
 
-**Specs** (`docs/specs/`)
+**Specs** — not here, and not in `docs/`
 
-One file per problem we have decided **not** to solve yet: what it is, the trigger that makes it
-urgent, and the design already settled on so nobody re-derives it. Unlike a doc above, a spec
-describes code that does not exist; unlike a plan, it is not tied to a change that happened. Read one
-before building the thing it describes, and delete it when that thing lands.
+A spec is one problem we have decided **not** to solve yet: what it is, the trigger that makes it
+urgent, and the design already settled on so nobody re-derives it. It describes code that does not
+exist, which is why it is not documentation and is not on master. Every page above says what the
+tree *is*, and the rule that keeps them worth reading — change the code, change the doc — has nothing
+to say about a file describing code nobody has written.
 
-A spec that has not landed yet is a **draft**, and it lives in `docs/specs/drafts/` — a worktree of
-the orphan `spec-drafts` branch, symlinked into every checkout so all of them read the same drafts,
-and committed on every write by `.claude/hooks/draft_commit.py`. The branch is local and never
-pushed, and it is never merged into anything: a draft becomes a spec below by a pull request that
-moves the file. The directory is absent in a checkout the workspace has not set up, and in CI.
-
-- [Skeleton append](./docs/specs/skeleton_append.md) — appending a bone strands every clip, and the
-  remap that will fix it.
-- [Crowd frame interpolation](./docs/specs/crowd_frame_interpolation.md) — the crowd tier's
-  two-frame lerp costs twice the hero tier's per-vertex fetch *and* is the coarser interpolation;
-  the cheaper alternative was never priced, and no GPU timestamp exists to price it.
-- [Animation compression](./docs/specs/animation_compression.md) — a 663-bone rig's clips are 60 MB
-  uncompressed; why collapsing constant tracks was measured and dropped, and what to build instead.
-- [GPU scene instance split](./docs/specs/gpu_scene_instance_split.md) — one record holds the
-  placement's transform and the geom's submesh range, so per-unit variation has nowhere to live,
-  culling repeats itself per submesh, and a moving instance has no previous transform.
-- [PSO sort key](./docs/specs/pso_sort_key.md) — `PsoType` flattens (tier, material, alpha mode) into
-  an enumerator that `IsTransparentPso` then un-flattens by listing members, in two languages; LOD
-  tiers and per-view culling multiply it.
-- [Vertex layout per submesh](./docs/specs/vertex_layout_per_submesh.md) — 104 of a `Submesh`'s 144
-  bytes are a decode rule shared by nearly every submesh, and `DecodeVertex` interprets it per
-  vertex.
+They live on `spec-drafts`, an orphan branch worktree'd once per workspace and symlinked into every
+checkout as `docs/specs/`, committed on every write by `.claude/hooks/draft_commit.py`. The branch is
+local, never pushed and never merged: a spec is written, revised and deleted there, and no pull
+request ever moves one onto master. Read one before building the thing it describes, and delete it
+when that thing lands. In a checkout the workspace has not set up, and in CI, the directory is simply
+absent.
 
 **[Plans and Decision Records](./docs/plans/)**
 
