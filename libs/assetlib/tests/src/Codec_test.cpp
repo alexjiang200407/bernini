@@ -1,4 +1,5 @@
 #include <assetlib/AssetStore.h>
+#include <assetlib/avatar.h>
 #include <assetlib/codecs.h>
 
 #include <assetlib/import_document.h>
@@ -101,6 +102,12 @@ TEST_CASE("The store writes exactly what the codec encodes", "[codec]")
 		ImportDocument document;
 		CheckStoreWritesCodecBytes(document, "a.bimport");
 	}
+
+	SECTION("bavatar")
+	{
+		Avatar avatar;
+		CheckStoreWritesCodecBytes(avatar, "a.bavatar");
+	}
 }
 
 TEST_CASE("The container table is the only list", "[codec]")
@@ -108,8 +115,10 @@ TEST_CASE("The container table is the only list", "[codec]")
 	const std::span<const ContainerKind> kinds = containerKinds();
 
 	// One entry per container, and every AssetType but the texture -- which is an image this
-	// library encodes rather than a container it serializes a struct into.
-	CHECK(kinds.size() == static_cast<size_t>(AssetType::kImportDocument));
+	// library encodes rather than a container it serializes a struct into. Counted off kCount, not
+	// off whichever enumerator happens to be last: naming one makes appending a type quietly
+	// rewrite what this asserts.
+	CHECK(kinds.size() == static_cast<size_t>(AssetType::kCount) - 1);
 	CHECK_FALSE(containerKindForExtension(c_TextureExtension).has_value());
 
 	SECTION("every extension resolves to the type its codec declares")

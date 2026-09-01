@@ -17,6 +17,7 @@ namespace assetlib
 		kSkeleton,        // .bskel
 		kAnimation,       // .banim
 		kImportDocument,  // .bimport -- the authored half of one imported source; text, never packed
+		kAvatar,          // .bavatar -- the authored half of one rig; text
 		// The number of asset kinds. Anchors the assertion that every one of them has a codec;
 		// anchoring that on whichever enumerator happens to be last instead means appending one
 		// silently satisfies it.
@@ -47,7 +48,23 @@ namespace assetlib
 		kImportedSource,    // a .bimport names the .glb it was imported from
 		kDocumentSkeleton,  // a .bimport names the .bskel its source's joint indices address
 		kDocumentOutput,    // a .bimport names a container its source produced
+		kAvatarSkeleton,  // a .bavatar's bone names address the .bskel it sits by convention beside
 	};
+
+	/**
+	 * Whether an edge of this kind is a path *stored inside* the referrer, and so something a
+	 * rename has to rewrite there.
+	 *
+	 * False for the two the scan derives from the referrer's own key: a `.bimport` sits beside its
+	 * `.glb` and a `.bavatar` at the swapped key of its `.bskel`. Those follow a rename by the file
+	 * moving, and there is nothing in either document to edit -- an avatar in particular holds bone
+	 * names and no path at all, so a rename that tried to rewrite one would have nothing to write.
+	 */
+	[[nodiscard]] constexpr bool
+	isStoredRef(const RefKind kind) noexcept
+	{
+		return kind != RefKind::kImportedSource && kind != RefKind::kAvatarSkeleton;
+	}
 
 	/** `referrer` names `target`. Both relative to the data root, in generic form. */
 	struct AssetRef
@@ -161,6 +178,7 @@ namespace assetlib
 		size_t materialsScanned       = 0;
 		size_t environmentsScanned    = 0;  // .benv, .bsky and .benvl together
 		size_t clipSetsScanned        = 0;
+		size_t avatarsScanned         = 0;
 
 	private:
 		struct Range
@@ -309,6 +327,17 @@ namespace assetlib
 		 * [docs/assetlib_api.md](docs/assetlib_api.md)
 		 */
 		std::vector<RenameMove> outputs;
+
+		/**
+		 * The `.bavatar` beside each `.bskel` this rename moves -- `subject` itself, or one of
+		 * `outputs`. **Authored**, so unlike an output a move that fails is fatal: nothing
+		 * regenerates one.
+		 *
+		 * Here rather than folded into `outputs` because the path *is* the attachment: an avatar
+		 * left behind by a skeleton that moved is not stale, it is detached, and no re-cook
+		 * reattaches it. Only avatars that exist are listed; most rigs have none.
+		 */
+		std::vector<RenameMove> avatars;
 
 		/**
 		 * The edges whose stored path must be rewritten: every reference to `from`, or -- for a

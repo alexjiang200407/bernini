@@ -57,9 +57,9 @@ when this doc disagrees, trust the header, then fix this doc.
   `pack` re-bakes some and copies others. Each is exhaustive with no `default:`, so `-Wall -Werror`
   makes a new `AssetType` a compile error there — which is the guarantee a table cannot give.
 
-* **Two container regimes, and the split is authored-vs-derived.** `.bmaterial`, `.benv` and
-  `.bimport` are canonical-JSON text documents, unknown keys preserved on round-trip; `.bmesh`,
-  `.bskel`, `.banim`, `.bsky` and `.benvl` are cache entries — a frozen header carrying
+* **Two container regimes, and the split is authored-vs-derived.** `.bmaterial`, `.benv`,
+  `.bimport` and `.bavatar` are canonical-JSON text documents, unknown keys preserved on
+  round-trip; `.bmesh`, `.bskel`, `.banim`, `.bsky` and `.benvl` are cache entries — a frozen header carrying
   the cache key (bake token, source stamp, parameter hash, source mount key) over schema-less
   chunks. A key mismatch is a cache miss that regenerates, never a conversion.
   [docs/asset_containers.md](docs/asset_containers.md)
@@ -128,6 +128,7 @@ is what a caller reaches for only when it holds bytes no store addresses, which 
 | `.bskel` / `.banim` | A rig; clip samples resampled against it. Split because a rig outlives its clips. |
 | `.bsky` / `.benvl` / `.benv` | Backdrop; the lighting pair convolved from it; the few bytes naming both. [docs/envmaps.md](docs/envmaps.md) |
 | `.bimport` | One per copied source under `Authored/Meshes/`: the bindings and parameters an import was authored with, as text. What a stale cache entry re-cooks from. Its struct is [import_document.h](libs/assetlib/include/assetlib/import_document.h). |
+| `.bavatar` | One rig's authored half: the legs a foot-plant solve walks, by bone name. Found by convention from the `.bskel` (`avatarKeyFor`) rather than by anything naming it — the path is the attachment. Its struct is [avatar.h](libs/assetlib/include/assetlib/avatar.h). |
 | `.bpak` | The archive the rest are packed into — not a codec, since nothing references one. [pak.h](libs/assetlib/include/assetlib/pak.h). [docs/archives.md](docs/archives.md) |
 
 ### Operations
@@ -242,6 +243,20 @@ The dotted edge is the asymmetry: reads go through the store, writes go around i
   This is what makes a rig shared between two imports safe. A `.bskel` one source produced and
   another source's document *binds* is a move like any other, so the second document is among the
   `referrers` and is rewritten — where moving the file alone would skin the second model to nothing.
+* **`planRename` on a skeleton** — `RenamePlan::avatars` is the `.bavatar` beside each `.bskel` the
+  rename moves. **Authored**, like the `.glb`: nothing regenerates one, so a move that fails is
+  fatal. It is a field of its own rather than an output because the path *is* the attachment — an
+  avatar left behind by a skeleton that moved is not stale, it is detached, and no re-cook
+  reattaches it. Renaming a `.bavatar` on its own is refused for the same reason, naming the
+  skeleton to rename instead. Only avatars that exist are listed; most rigs have none.
+
+  Its edge is derived from its key rather than stored in the document, so it is not a referrer to
+  rewrite — see `isStoredRef`, which is also why a `.bimport`'s edge to its own `.glb` is not one.
+
+  A **directory** rename gets the same treatment one file at a time, because the pair straddles the
+  two halves and no single move can carry both ends: renaming a directory of `.bskel`s takes each
+  avatar to the mirrored directory under `Authored/`, creating it if it is not there, and renaming a
+  directory of `.bavatar`s is refused for the reason renaming one is.
 
 ## Usage Sketch
 

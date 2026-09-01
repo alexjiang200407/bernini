@@ -34,6 +34,10 @@ namespace assetlib
 	inline constexpr auto c_EnvironmentsDirectoryName = "Authored/Environments";
 	inline constexpr auto c_LevelsDirectoryName       = "Authored/Levels";
 
+	// One rig's authored half, mirroring `Derived/Skeletons` name for name: an avatar is found from
+	// its `.bskel` by swapping the half and the extension, so the two directories are one layout.
+	inline constexpr auto c_AvatarsDirectoryName = "Authored/Skeletons";
+
 	inline constexpr auto c_MeshesDirectoryName     = "Derived/Meshes";
 	inline constexpr auto c_SkeletonsDirectoryName  = "Derived/Skeletons";
 	inline constexpr auto c_AnimationsDirectoryName = "Derived/Animations";
@@ -57,11 +61,12 @@ namespace assetlib
 	 * The halves themselves are not listed: they are the parents of everything here, and
 	 * IsRequiredDirectory reads them from the two constants above.
 	 */
-	inline constexpr std::array<std::string_view, 11> c_RequiredDirectories = { {
+	inline constexpr std::array<std::string_view, 12> c_RequiredDirectories = { {
 		c_MeshSourcesDirectoryName,
 		c_MaterialsDirectoryName,
 		c_EnvironmentsDirectoryName,
 		c_LevelsDirectoryName,
+		c_AvatarsDirectoryName,
 		c_MeshesDirectoryName,
 		c_SkeletonsDirectoryName,
 		c_AnimationsDirectoryName,
