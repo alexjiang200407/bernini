@@ -30,7 +30,8 @@ files by filename, which is how a question about descriptors lands in the wrong 
 If no entry fits, grep `docs/` for the concept by the name the code would use, not the name the
 question used.
 
-`docs/plans/` is not part of the index and is not subsystem documentation. A plan describes what did
+`docs/plans/` is a symlink onto the `artefacts` branch, not part of the index, and not subsystem
+documentation. A plan describes what did
 not exist yet when it was written and is deleted when its feature lands — **never cite one as the
 state of the code.**
 

@@ -171,10 +171,11 @@ Then **do not ask for confirmation** — write it. The caller puts it down as th
 and [bcp-feature § 0](.claude/skills/bcp-feature/SKILL.md). Invoked alone, the grill stops here and
 the consensus stays in chat for whichever skill runs next.
 
-The user confirms it **where it lands, by review**: the plan is the first commit of the PR under
-bcp-implement and its own PR under bcp-feature, so the boundaries are the first thing a reviewer
-reads and a wrong one comes back as a review comment, which [bcp-revise](.claude/skills/bcp-revise/SKILL.md)
-acts on. Waiting for a chat "yes" first was tried and dropped: it tests only whether the summary is
+The plan file itself never reaches a pull request — `docs/plans/` is a symlink onto the `artefacts`
+branch, not part of master — so the user confirms it **in the PR body**, where `## Design notes`
+carries one line per ADR with the alternative it rejected. A boundary they disagree with comes back
+as a review comment there, and [bcp-revise](.claude/skills/bcp-revise/SKILL.md) amends the ADR and
+whatever was built on it. Waiting for a chat "yes" first was tried and dropped: it tests only whether the summary is
 faithful to a conversation that already happened — the part a model gets wrong least — and it left
 unattended sessions idle on a question that was not one. The *questions* still block (below); the
 summary of their answers does not.

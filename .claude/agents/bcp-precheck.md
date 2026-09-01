@@ -120,11 +120,20 @@ Before a line of this change was written it was grilled
 **Context**, **Decisions** (ADRs, each with the alternative it rejected), **Non-goals**,
 **Acceptance**. Find it and read it:
 
+`docs/plans/` is a symlink onto the `artefacts` branch, so a plan is never in the diff. It is named
+after the change, and the branch is too — that pairing is the only way to tell which of the plans
+kept there belongs to the diff under review:
+
 ```bash
 FEATURE=$(git config bernini.feature || true)
-ls docs/plans/                                        # the feature's plan, when one is set
-git diff --name-only "$BASE"...HEAD -- docs/plans/    # a one-shot adds its plan in this very diff
+# feat/<name>, or the feature's name when one is set -> docs/plans/<name>.md
+NAME=${FEATURE:-$(git rev-parse --abbrev-ref HEAD)}
+cat "docs/plans/${NAME#feat/}.md"
+ls docs/plans/                                        # if that misses, the name drifted; find it here
 ```
+
+A plan you cannot find is a **finding**, not a reason to skip § 4: either the change was built
+without one, or it was named something its branch does not say.
 
 Two findings live here, and nothing else in the pipeline can see either — the roadmap is too coarse
 and the reviewer was not in the conversation:
