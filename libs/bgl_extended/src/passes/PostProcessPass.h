@@ -14,9 +14,10 @@ namespace bgl
 	class PassContext;
 
 	/**
-	 * Turns the linear HDR scene colour into the displayed image: the frame's last colour pass, and
-	 * the only writer of the backbuffer -- which is what keeps the capture path, a readback of the
-	 * last presented backbuffer, describing what was shown.
+	 * Turns the linear HDR scene colour into the displayed image: the frame's last colour pass over
+	 * the scene, and the first writer of the backbuffer, which it covers whole. Only the overlay
+	 * writes it afterwards, blending over this -- so the capture path, a readback of the last
+	 * presented backbuffer, still describes what was shown.
 	 *
 	 * Today that is the display curve alone. Everything between a resolved scene and the screen
 	 * belongs here as it lands -- bloom, grading, exposure adaptation -- so the stage is named for
