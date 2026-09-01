@@ -1,3 +1,4 @@
+#include <assetlib/avatar.h>
 #include <assetlib/bmesh.h>
 #include <assetlib/skinning.h>
 #include <assetlib_structs/Animation.h>
@@ -885,5 +886,367 @@ namespace assetlib
 
 			animations.clips[clip].groundOffset += floors[clip];
 		}
+	}
+
+	namespace
+	{
+		/**
+		 * The model-space position of every vertex `meshes` weight to `ankle` or `toe`, at bind pose
+		 * -- which is the position the vertex already carries: a bone's skinning matrix at bind pose
+		 * is its model transform times its own inverse, so the whole skin is identity there.
+		 */
+		std::vector<glm::vec3>
+		footVertices(
+			std::span<const BMesh> meshes,
+			const Skeleton&        skeleton,
+			const uint32_t         ankle,
+			const uint32_t         toe)
+		{
+			auto out = std::vector<glm::vec3>();
+
+			for (const BMesh& mesh : meshes)
+				for (uint32_t entry = 0; entry < mesh.meshes.size(); ++entry)
+					for (const std::vector<SkinInfluences>& submesh :
+					     entryInfluences(mesh, entry, skeleton))
+						for (const SkinInfluences& vertex : submesh)
+						{
+							if (!vertex.skinned)
+								continue;
+
+							// Any weight at all, not a majority: the sole's own vertices are shared
+							// with the toe and often mostly weighted to it, and a threshold high
+							// enough to exclude the ankle's neighbours excludes them too.
+							float held = 0.0f;
+							for (size_t i = 0; i < c_InfluencesPerVertex; ++i)
+								if (vertex.joints[i] == ankle || vertex.joints[i] == toe)
+									held += vertex.weights[i];
+
+							if (held > 0.0f)
+								out.push_back(vertex.position);
+						}
+
+			return out;
+		}
+
+		/**
+		 * The plane under `points`, as `y = ax + bz + d`.
+		 *
+		 * False when the system is singular -- fewer than three points, or a set that projects onto
+		 * a line in xz, which is a foot with no sole to fit.
+		 */
+		bool
+		fitSole(std::span<const glm::vec3> points, glm::vec3& normal, glm::vec3& on)
+		{
+			if (points.size() < 3)
+				return false;
+
+			// The lower envelope, reached by fitting and dropping whatever came out above: the
+			// foot's vertices are a closed shell whose upper half and whose vertices up the shin
+			// would otherwise pull the plane off the sole. Keeping the lowest *fraction* instead was
+			// tried and is wrong -- on a tilted sole the band it keeps is the heel alone, so it
+			// measures the tilt away.
+			auto sole = std::vector<glm::vec3>(points.begin(), points.end());
+
+			double a = 0, b = 0, d = 0;
+			bool   fitted = false;
+
+			for (int pass = 0; pass < 4; ++pass)
+			{
+				// Normal equations of the least-squares fit of y = ax + bz + d.
+				double sxx = 0, sxz = 0, sx = 0, szz = 0, sz = 0, n = 0;
+				double sxy = 0, szy = 0, sy = 0;
+				for (const glm::vec3& p : sole)
+				{
+					sxx += double(p.x) * p.x;
+					sxz += double(p.x) * p.z;
+					sx += p.x;
+					szz += double(p.z) * p.z;
+					sz += p.z;
+					n += 1.0;
+					sxy += double(p.x) * p.y;
+					szy += double(p.z) * p.y;
+					sy += p.y;
+				}
+
+				const double det = sxx * (szz * n - sz * sz) - sxz * (sxz * n - sz * sx) +
+				                   sx * (sxz * sz - szz * sx);
+
+				// A set that projects onto a line in xz -- a two-triangle foot, or a coplanar
+				// strip. Scaled by the count so the tolerance means the same at any density.
+				if (std::abs(det) < 1e-12 * n)
+					break;
+
+				a      = (sxy * (szz * n - sz * sz) - sxz * (szy * n - sz * sy) +
+				          sx * (szy * sz - szz * sy)) /
+				         det;
+				b      = (sxx * (szy * n - sz * sy) - sxy * (sxz * n - sz * sx) +
+				          sx * (sxz * sy - szy * sx)) /
+				         det;
+				d      = (sxx * (szz * sy - sz * szy) - sxz * (sxz * sy - sz * sxy) +
+				          sxy * (sxz * sz - szz * sx)) /
+				         det;
+				fitted = true;
+
+				auto below = std::vector<glm::vec3>();
+				for (const glm::vec3& p : sole)
+					if (double(p.y) <= a * p.x + b * p.z + d)
+						below.push_back(p);
+
+				// Converged, or down to a set too small to fit again: this pass's plane stands.
+				if (below.size() < 3 || below.size() == sole.size())
+					break;
+
+				sole = std::move(below);
+			}
+
+			if (!fitted)
+				return false;
+
+			normal = glm::normalize(glm::vec3(-float(a), 1.0f, -float(b)));
+
+			// A point on the plane below the sole's own centre, rather than the fit's intercept at
+			// the origin, which for a foot standing away from it is nowhere near the foot.
+			const glm::vec3 centre =
+				std::accumulate(sole.begin(), sole.end(), glm::vec3(0.0f)) / float(sole.size());
+			on = glm::vec3(centre.x, float(a * centre.x + b * centre.z + d), centre.z);
+			return true;
+		}
+	}
+
+	std::vector<SolePlane>
+	solePlanes(
+		const std::span<const BMesh>          meshes,
+		const Skeleton&                       skeleton,
+		const std::span<const AvatarLegChain> chains)
+	{
+		ZoneScopedN("assetlib sole planes");
+
+		const std::vector<glm::mat4> bind = bindPoseModelTransforms(skeleton);
+
+		auto out = std::vector<SolePlane>();
+		out.reserve(chains.size());
+
+		for (const AvatarLegChain& chain : chains)
+		{
+			core::throw_runtime_error_if(
+				chain.ankle >= skeleton.bones.size() || chain.toe >= skeleton.bones.size(),
+				"skinning: a leg names a bone outside the {}-bone skeleton",
+				skeleton.bones.size());
+
+			const glm::mat4 toAnkle = skeleton.bones[chain.ankle].inverseBind;
+
+			glm::vec3 normal;
+			glm::vec3 on;
+			if (!fitSole(footVertices(meshes, skeleton, chain.ankle, chain.toe), normal, on))
+			{
+				// The flat plane through the joint: a leg no mesh here carries has no sole to fit,
+				// and inventing a tilt would turn the foot at runtime for no reason.
+				out.push_back(
+					{ glm::vec3(toAnkle * glm::vec4(glm::vec3(bind[chain.ankle][3]), 1.0f)),
+				      glm::normalize(glm::vec3(toAnkle * glm::vec4(0.0f, 1.0f, 0.0f, 0.0f))) });
+				continue;
+			}
+
+			// Carried by the inverse bind rather than its inverse transpose, which is the trade
+			// skinSubmesh already makes: exact while a bone's scale is uniform, and every rig we
+			// cook is.
+			out.push_back(
+				{ glm::vec3(toAnkle * glm::vec4(on, 1.0f)),
+			      glm::normalize(glm::vec3(toAnkle * glm::vec4(normal, 0.0f))) });
+		}
+
+		return out;
+	}
+
+	uint64_t
+	plantWeightsSignature(
+		const std::span<const BMesh>          meshes,
+		const Skeleton&                       skeleton,
+		const std::span<const AvatarLegChain> chains) noexcept
+	{
+		uint64_t hash = core::hash_pod(skeletonSignature(skeleton), core::hash_seed());
+
+		for (const AvatarLegChain& chain : chains)
+		{
+			hash = core::hash_pod(chain.hip, hash);
+			hash = core::hash_pod(chain.knee, hash);
+			hash = core::hash_pod(chain.ankle, hash);
+			hash = core::hash_pod(chain.toe, hash);
+		}
+
+		// The geometry the soles were fitted on, by the same hash a posed box keys on: it is the
+		// vertex data and the tables that address it, which is exactly what a sole fit reads.
+		for (const BMesh& mesh : meshes)
+			hash = core::hash_pod(posedBoundsSignature(mesh, skeleton), hash);
+
+		return hash;
+	}
+
+	std::vector<uint8_t>
+	measurePlantWeights(
+		const AnimationSet&                   animations,
+		const Skeleton&                       skeleton,
+		const std::span<const AvatarLegChain> chains,
+		const std::span<const SolePlane>      soles)
+	{
+		ZoneScopedN("assetlib plant weights");
+
+		core::throw_runtime_error_if(
+			soles.size() != chains.size(),
+			"skinning: {} sole planes for {} legs",
+			soles.size(),
+			chains.size());
+
+		// Checked here and not left to the pose walk: this reads `model[chain.ankle]` directly, and
+		// a public function that indexes a caller's number has to judge it rather than trust that
+		// solePlanes was asked first.
+		for (const AvatarLegChain& chain : chains)
+			core::throw_runtime_error_if(
+				chain.ankle >= skeleton.bones.size(),
+				"skinning: a leg names bone {}, which is outside the {}-bone skeleton",
+				chain.ankle,
+				skeleton.bones.size());
+
+		const size_t legs = chains.size();
+		const size_t frames =
+			animations.boneCount == 0 ? 0 : animations.samples.size() / animations.boneCount;
+
+		auto out = std::vector<uint8_t>(frames * legs, 0u);
+		if (legs == 0 || frames == 0)
+			return out;
+
+		for (uint32_t clip = 0; clip < animations.clips.size(); ++clip)
+		{
+			const AnimationClip& played = animations.clips[clip];
+
+			// A clip that does not start on a frame boundary has no frame index to write its
+			// weights at, so it gets none rather than a run landing on another clip's frames. bgl
+			// refuses such a file outright; here the weights are derived and the rest of the set is
+			// still worth measuring.
+			if (played.firstSample % animations.boneCount != 0)
+				continue;
+
+			const uint32_t first = played.firstSample / animations.boneCount;
+
+			// Where each sole sits in each frame of this clip, walked once: the pose is the whole
+			// hierarchy, and evaluating it per leg would cost that again for each foot.
+			auto sole = std::vector<glm::vec3>(size_t(played.frameCount) * legs);
+			for (uint32_t frame = 0; frame < played.frameCount; ++frame)
+			{
+				const std::vector<glm::mat4> model =
+					poseModelTransforms(skeleton, animations, clip, frame);
+
+				for (size_t leg = 0; leg < legs; ++leg)
+					sole[size_t(frame) * legs + leg] =
+						glm::vec3(model[chains[leg].ankle] * glm::vec4(soles[leg].point, 1.0f));
+			}
+
+			for (size_t leg = 0; leg < legs; ++leg)
+			{
+				auto planted = std::vector<bool>(played.frameCount, false);
+				for (uint32_t frame = 0; frame < played.frameCount; ++frame)
+				{
+					const glm::vec3& here = sole[size_t(frame) * legs + leg];
+					if (here.y > c_PlantHeightEpsilon)
+						continue;
+
+					// The frame either side, clamped at the ends: a clip's first and last frame have
+					// only one neighbour, and a foot planted through the whole clip must not lose
+					// its ends to the absence of one.
+					const uint32_t before = frame == 0 ? 0 : frame - 1;
+					const uint32_t after =
+						frame + 1 >= played.frameCount ? played.frameCount - 1 : frame + 1;
+
+					const glm::vec3& was  = sole[size_t(before) * legs + leg];
+					const glm::vec3& will = sole[size_t(after) * legs + leg];
+
+					const float slide = glm::length(glm::vec2(will.x - was.x, will.z - was.z));
+					planted[frame]    = slide <= c_PlantSlideEpsilon;
+				}
+
+				// Ramped by distance to the nearest frame the foot is *not* planted in, which is the
+				// same thing as ramping each run in and out without having to find its boundaries:
+				// a run shorter than two ramps simply never reaches 1, which is what a foot that
+				// touched down and lifted straight off should read as.
+				//
+				// A run reaching the clip's own edge is not ramped there. That edge is where the
+				// clip stops, not a foot leaving the ground, and ramping a looping idle out at its
+				// last frame would put a pop exactly on the loop point.
+				const float ramp = float(c_PlantRampFrames - 1);
+
+				for (uint32_t frame = 0; frame < played.frameCount; ++frame)
+				{
+					if (!planted[frame])
+						continue;
+
+					uint32_t in = 0;
+					while (in < frame && planted[frame - in - 1]) ++in;
+
+					uint32_t held = 0;
+					while (frame + held + 1 < played.frameCount && planted[frame + held + 1])
+						++held;
+
+					// Each walk above stops either on an unplanted frame -- a transition, which the
+					// ramp is for -- or on the clip's edge, which is not one.
+					float edge = ramp;
+					if (in < frame)
+						edge = std::min(edge, float(in));
+					if (frame + held + 1 < played.frameCount)
+						edge = std::min(edge, float(held));
+
+					out[(size_t(first) + frame) * legs + leg] =
+						static_cast<uint8_t>(std::lround(edge / ramp * 255.0f));
+				}
+			}
+		}
+
+		return out;
+	}
+
+	void
+	bakePlantWeights(
+		AnimationSet&                         animations,
+		const std::span<const BMesh>          meshes,
+		const Skeleton&                       skeleton,
+		const std::span<const AvatarLegChain> chains)
+	{
+		animations.plantWeights = PlantWeights();
+		if (chains.empty())
+			return;
+
+		try
+		{
+			const std::vector<SolePlane> soles = solePlanes(meshes, skeleton, chains);
+
+			animations.plantWeights.weights =
+				measurePlantWeights(animations, skeleton, chains, soles);
+			animations.plantWeights.legCount  = static_cast<uint32_t>(chains.size());
+			animations.plantWeights.signature = plantWeightsSignature(meshes, skeleton, chains);
+		}
+		catch (const std::exception&)
+		{
+			// Derived data: a load measures, and reports, exactly as it would had this never run.
+			// Whatever refused has already been reported where it was read.
+			animations.plantWeights = PlantWeights();
+		}
+	}
+
+	std::optional<std::vector<uint8_t>>
+	findPlantWeights(
+		const AnimationSet&                   animations,
+		const std::span<const BMesh>          meshes,
+		const Skeleton&                       skeleton,
+		const std::span<const AvatarLegChain> chains)
+	{
+		if (animations.plantWeights.Empty() || chains.empty())
+			return std::nullopt;
+
+		if (animations.plantWeights.legCount != chains.size())
+			return std::nullopt;
+
+		if (animations.plantWeights.signature != plantWeightsSignature(meshes, skeleton, chains))
+			return std::nullopt;
+
+		return animations.plantWeights.weights;
 	}
 }

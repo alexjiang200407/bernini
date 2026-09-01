@@ -1,3 +1,5 @@
+#include <assetlib/avatar.h>
+#include <assetlib/project_layout.h>
 #include <assetlib/rebake_bounds.h>
 #include <assetlib/skinning.h>
 #include <assetlib_structs/Animation.h>
@@ -27,7 +29,7 @@ namespace
 		bone.bindPose    = { glm::vec3(0.0f), glm::quat(1.0f, 0.0f, 0.0f, 0.0f), glm::vec3(1.0f) };
 		bone.inverseBind = glm::mat4(1.0f);
 		bone.parent      = c_InvalidIndex;
-		bone.nameOffset  = 0;
+		bone.nameOffset  = skeleton.stringPool.add("root");
 		skeleton.bones.push_back(bone);
 		return skeleton;
 	}
@@ -136,6 +138,31 @@ TEST_CASE("The rebake writes the box a load then finds", "[rebake]")
 		const RebakeBoundsReport again = AssetStore(root.path).RebakePosedBounds(false);
 		CHECK(again.Count(RebakedFile::Outcome::kCurrent) == 1);
 		CHECK(again.Count(RebakedFile::Outcome::kRebaked) == 0);
+	}
+
+	SECTION("an avatar authored after the bake backfills the plant weights")
+	{
+		// Task 8's own workflow: the rig is cooked, and the avatar is authored afterwards. Without
+		// this the boxes read as current, the weights are never measured, and the only ways to get
+		// them are a re-import or paying the whole frame walk on every load.
+		(void)AssetStore(root.path).RebakePosedBounds(false);
+
+		fs::create_directories(root.path / c_AvatarsDirectoryName);
+		auto avatar = Avatar();
+		avatar.legs.push_back({ "root", "root", "root", "root" });
+		StoreAt(root.path).Save(avatar, "Authored/Skeletons/rig.bavatar");
+
+		const RebakeBoundsReport after = AssetStore(root.path).RebakePosedBounds(false);
+		CHECK(after.Count(RebakedFile::Outcome::kRebaked) == 1);
+
+		const AnimationSet read =
+			StoreAt(root.path).Load<AnimationSet>("Derived/Animations/rig.banim");
+		CHECK_FALSE(read.plantWeights.Empty());
+		CHECK(read.plantWeights.legCount == 1);
+
+		// And it settles: a second run has nothing left to measure.
+		const RebakeBoundsReport again = AssetStore(root.path).RebakePosedBounds(false);
+		CHECK(again.Count(RebakedFile::Outcome::kCurrent) == 1);
 	}
 
 	SECTION("a mesh re-authored since the bake makes its clip set stale again")
