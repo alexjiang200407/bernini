@@ -1,6 +1,7 @@
 import idl.MaterialType;
 import lib.forward.common;
 import lib.forward.MaterialData;
+import lib.forward.MaterialShading;
 
 // The transparent colour pass, shared by both material types. Folding them into one pipeline is what
 // lets the depth-sorted draw be a single dispatch, so a run in the sorted list never has to split
@@ -14,7 +15,7 @@ float4 PSMain(ForwardVSOut input, bool isFrontFace: SV_IsFrontFace) : SV_Target
 {
     if (LoadMaterialKind(input.materialOffset) == MaterialType.kLoosePbr)
     {
-        return ShadeBlended<LoosePbrMaterialRecord>(input, isFrontFace);
+        return materialData.ShadeBlended<LoosePbrMaterialRecord>(input, isFrontFace);
     }
-    return ShadeBlended<PbrMaterialRecord>(input, isFrontFace);
+    return materialData.ShadeBlended<PbrMaterialRecord>(input, isFrontFace);
 }

@@ -103,7 +103,7 @@ detail the wrong way on every back face.
 
 `programs.forward.Null` and `programs.forward.Assert` take `ForwardVSOut` but never read its normal, so they do not
 take the flag. The opaque buckets cull back faces and can never see one,
-but their shaders share `Shade<M>` with the transparent bucket, which can — so they pass the hardware
+but their shaders share `MaterialData::Shade<M>` with the transparent bucket, which can — so they pass the hardware
 value rather than a literal `true`, which would encode an assumption about `c_Psos`' cull mode that
 the shader cannot see.
 
@@ -118,7 +118,7 @@ returns radiance already weighted by its own coverage, rather than radiance the 
 and the alpha it returns is coverage rather than the material's own.
 
 That is what lets base-colour alpha mean two different things, which one number under a `SrcAlpha`
-blend cannot. `MaterialData::transmissionFactor` says which:
+blend cannot. `PbrMaterial::transmissionFactor` says which:
 
 * **At 0 the alpha is coverage** — how much surface is in the pixel — so it thins the diffuse and
   specular lobes alike. Hair, foliage, a dissolve. The arithmetic collapses to `alpha * (diffuse +
@@ -133,8 +133,10 @@ blend cannot. `MaterialData::transmissionFactor` says which:
 
 The two lobes are kept apart for this: `PbrShading::EvaluateSurface` returns a `SurfaceLobes`
 (diffuse, specular, and the reflectance the specular lobe returns) instead of a summed colour, and
-the callers weight it. `ShadeWithBaseColor` sums the pair, which is the opaque answer;
-`ShadeBlended` is the only thing that weights them apart.
+the callers weight it. `MaterialData::ShadeWithBaseColor` sums the pair, which is the opaque
+answer; `MaterialData::ShadeBlended` is the only thing that weights them apart. Both live in
+[lib/forward/MaterialShading.slang](libs/bgl/shaders/src/lib/forward/MaterialShading.slang), which
+extends the material constant buffer with the four shading entry points.
 
 **Only the blend bucket is premultiplied.** The opaque, cutout and hashed buckets write with no blend
 at all, so their pixel shaders keep returning the plain sum and the material's own alpha — a cutout
