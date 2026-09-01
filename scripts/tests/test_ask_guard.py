@@ -92,21 +92,21 @@ def test_a_notebook_carries_its_path_under_another_name():
     assert verdict("NotebookEdit", {"notebook_path": "docs/specs/x.md"}) == ALLOWED
 
 
-# --- the drafts directory ---------------------------------------------------
+# --- the specs directory ----------------------------------------------------
 #
-# `docs/specs/drafts` is a symlink onto a worktree of the spec-drafts branch,
-# shared by every checkout and therefore living outside all of them. Resolving it
-# is what makes the rest of the allowlist honest, and it is also what puts the
-# one path a draft is ever written to outside `docs/specs`.
+# `docs/specs` is a symlink onto a worktree of the spec-drafts branch, shared by
+# every checkout and therefore living outside all of them. Resolving it before
+# matching is what makes the allowlist honest, and it is also what puts the one
+# path a spec is ever written to outside the checkout.
 
 @pytest.fixture
 def checkout(tmp_path):
     root = tmp_path / "checkout"
-    (root / "docs" / "specs").mkdir(parents=True)
+    (root / "docs").mkdir(parents=True)
     (root / "libs").mkdir()
     worktree = tmp_path / "spec-drafts"
     worktree.mkdir()
-    (root / "docs" / "specs" / "drafts").symlink_to(worktree)
+    (root / "docs" / "specs").symlink_to(worktree)
     return root
 
 
@@ -121,20 +121,20 @@ def elsewhere(tmp_path):
     return {"TMPDIR": str(scratch), "TMP": str(scratch), "TEMP": str(scratch)}
 
 
-def test_a_draft_is_written_through_a_link_that_leaves_the_checkout(checkout, tmp_path):
-    for path in ("docs/specs/drafts/new_problem.md",
-                 str(checkout / "docs" / "specs" / "drafts" / "new_problem.md")):
+def test_a_spec_is_written_through_a_link_that_leaves_the_checkout(checkout, tmp_path):
+    for path in ("docs/specs/new_problem.md",
+                 str(checkout / "docs" / "specs" / "new_problem.md")):
         assert verdict("Write", {"file_path": path}, root=str(checkout),
                        **elsewhere(tmp_path)) == ALLOWED
 
 
-def test_a_draft_is_still_markdown(checkout, tmp_path):
-    assert verdict("Write", {"file_path": "docs/specs/drafts/notes.txt"}, root=str(checkout),
+def test_a_spec_is_still_markdown(checkout, tmp_path):
+    assert verdict("Write", {"file_path": "docs/specs/notes.txt"}, root=str(checkout),
                    **elsewhere(tmp_path)) == BLOCKED
 
 
 def test_the_link_opens_what_it_points_at_and_not_its_neighbours(checkout, tmp_path):
-    """The drafts worktree sits at the workspace root, beside the sibling checkouts this
+    """The specs worktree sits at the workspace root, beside the sibling checkouts this
     allowlist exists to protect. Allowing its parent would hand over all of them."""
     (tmp_path / "sibling").mkdir()
     for path in (tmp_path / "sibling" / "x.md", tmp_path / "x.md"):
@@ -142,9 +142,10 @@ def test_the_link_opens_what_it_points_at_and_not_its_neighbours(checkout, tmp_p
                        **elsewhere(tmp_path)) == BLOCKED
 
 
-def test_a_checkout_with_no_drafts_link_is_unchanged(tmp_path):
+def test_a_checkout_with_no_specs_link_still_lets_a_spec_be_written(tmp_path):
     """CI, a fresh clone, and any checkout whose `git clean -xfd` took the symlink. The
-    second spec root collapses onto the first and nothing new is allowed."""
+    root resolves back inside the checkout, so the spec is written and left untracked for
+    `ws init` to collect -- worse than a commit, better than nowhere to write at all."""
     root = tmp_path / "bare"
     (root / "docs" / "specs").mkdir(parents=True)
     assert verdict("Write", {"file_path": "docs/specs/x.md"}, root=str(root),
