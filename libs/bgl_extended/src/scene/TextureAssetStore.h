@@ -28,6 +28,10 @@ namespace bgl
 
 		explicit TextureAssetStore(core::SharedRef<IResourceManager> resourceManager);
 
+		// Releases every texture and view still held -- the defaults, and whatever the owner did not
+		// Delete -- deferred behind the frames that could still sample them.
+		~TextureAssetStore() noexcept;
+
 		TextureAssetStore(const TextureAssetStore&) noexcept = delete;
 		TextureAssetStore(TextureAssetStore&&) noexcept      = delete;
 
@@ -66,6 +70,11 @@ namespace bgl
 		// none.
 		[[nodiscard]] SrvHandle
 		GetSrv(core::slot_handle textureSlot) const noexcept;
+
+		// Whether this store created the texture `textureSlot` names and has not deleted it --
+		// generation included, so a slot reused since is not the same texture.
+		[[nodiscard]] bool
+		Contains(core::slot_handle textureSlot) const noexcept;
 
 		/**
 		 * The descriptor a GPU struct must carry to reach the texture in `textureSlot`, or a null
@@ -107,11 +116,17 @@ namespace bgl
 			operator=(const PendingUpload&) = delete;
 		};
 
+		struct Entry
+		{
+			TextureHandle texture;
+			SrvHandle     srv;
+		};
+
 		core::SharedRef<IResourceManager> m_ResourceManager;
 
 		// Keyed by the texture's slot index. A texture carries no descriptor of its own, and
 		// destroying one does not cascade to its views, so whoever created both releases both.
-		std::unordered_map<uint32_t, SrvHandle> m_Srvs;
+		std::unordered_map<uint32_t, Entry> m_Srvs;
 
 		std::vector<PendingUpload> m_PendingUploads;
 

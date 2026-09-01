@@ -1,6 +1,7 @@
 #pragma once
 #include <assetlib_structs/ImageData.h>
 #include <bgl/IGpuAssertionHandler.h>
+#include <bgl/IOverlay.h>
 #include <bgl/IRenderTarget.h>
 #include <bgl/IScene.h>
 #include <bgl/ISceneView.h>
@@ -128,6 +129,16 @@ namespace bgl
 		virtual void
 		Draw(const RenderJob& job) = 0;
 
+		/**
+		 * Queues 2D draws to land on this frame's output after post-processing, in submission
+		 * order across every call this frame. A frame with no call draws no overlay pass at all.
+		 *
+		 * @throws GraphicsError if called outside BeginFrame/EndFrame, if `job.overlay` is null, or
+		 *         if a draw names a geometry or texture that is null or no longer live.
+		 */
+		virtual void
+		DrawOverlay(const OverlayJob& job) = 0;
+
 		virtual void
 		EndFrame() = 0;
 
@@ -219,6 +230,13 @@ namespace bgl
 
 		virtual SceneViewRef
 		CreateSceneView(const SceneRef& scene, uint32_t initialInstances) = 0;
+
+		/**
+		 * An overlay's handles are usable on any target this graphics draws; several overlays may
+		 * be drawn in one frame.
+		 */
+		virtual OverlayRef
+		CreateOverlay() = 0;
 
 		/**
 		 * Registers a sink for GPU assertions (dbg_raise) the engine detects during

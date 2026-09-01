@@ -48,6 +48,15 @@ disagrees, trust the header, then fix this doc.
   are stored once and instanced cheaply. A view keeps its scene alive. `RenderJob::view` is a
   `SceneViewRef` — there is no way to draw a scene directly.
 
+* **An overlay is 2D output drawn over a frame, and it is not a scene.** `CreateOverlay` mints an
+  [IOverlay](libs/bgl/include/bgl/IOverlay.h) that compiles pixel-space triangle lists and
+  owns straight-alpha textures; `DrawOverlay`, between `BeginFrame` and `EndFrame`, queues draws
+  that land after post-processing, blended premultiplied over the tonemapped frame in submission
+  order. Positions are output pixels, origin top-left; colours are sRGB-encoded premultiplied bytes,
+  the form a UI library emits, and the renderer decodes them. A frame with no `DrawOverlay` draws
+  no overlay pass, and a capture holds the overlay because a capture is the presented frame.
+  General 2D output — a UI runtime is one client of it, and nothing here knows what a document is.
+
 * **Scene mutations are staged, not immediate.** `AddTextureAsset`, `AddStaticMeshGeom`,
   `CreatePbrMaterial` and friends record CPU-side state and queue the GPU upload; the upload runs as a
   frame-graph pass (`Scene Update <n>`) that `Draw` schedules. **Nothing reaches the GPU until a frame
@@ -134,6 +143,7 @@ disagrees, trust the header, then fix this doc.
 | `IGraphics` | [libs/bgl/include/bgl/IGraphics.h](libs/bgl/include/bgl/IGraphics.h) | The device and its one submission context: creates targets/scenes/views, and drives frames, resizes and captures. Minted by `CreateGraphics`. |
 | `IScene` | [libs/bgl/include/bgl/IScene.h](libs/bgl/include/bgl/IScene.h) | Owns geometry, materials and texture assets. Shared by many views. |
 | `ISceneView` | [libs/bgl/include/bgl/ISceneView.h](libs/bgl/include/bgl/ISceneView.h) | Per-view mesh instances, material overrides, per-submesh selection marks, and lighting (IBL, skybox, exposure). |
+| `IOverlay` | [libs/bgl/include/bgl/IOverlay.h](libs/bgl/include/bgl/IOverlay.h) | Compiled 2D geometry and the textures it samples, drawn over a frame by `IGraphics::DrawOverlay`. Usable on any target the graphics draws. |
 | `IRenderTarget` | [libs/bgl/include/bgl/IRenderTarget.h](libs/bgl/include/bgl/IRenderTarget.h) | A render output: windowed swapchain or headless offscreen backbuffers, plus depth, the linear-HDR scene colour every pass renders into, and the screen-space velocity buffer. `RenderTargetDesc::taaEnabled` opts it into a jittered projection and a temporal history, which `SetTaaEnabled` then runs or stops at runtime; `SetOutlineEnabled` runs or stops the selection outline, on by default. `GetWidth`/`GetHeight` are the output size — the backbuffer's, and every capture's; `GetRenderWidth`/`GetRenderHeight` are the grid the geometry passes draw on; `SetTaaReconstructionWidth` sweeps the resolve's kernel without reallocating anything or dropping the accumulation. |
 | `IGpuAssertionHandler` | [libs/bgl/include/bgl/IGpuAssertionHandler.h](libs/bgl/include/bgl/IGpuAssertionHandler.h) | Caller-implemented sink for shader `dbg_raise` reports. Not refcounted; a plain callback interface. |
 
@@ -147,7 +157,9 @@ disagrees, trust the header, then fix this doc.
 | `PbrMaterialDesc` / `LoosePbrMaterialDesc` | [libs/bgl/include/bgl/IScene.h](libs/bgl/include/bgl/IScene.h) | Baked (three-map) vs. loose (per-channel routed) material parameters. `ChannelRouteDesc` feeds the latter. |
 | `EnvironmentMapDesc` | [libs/bgl/include/bgl/IScene.h](libs/bgl/include/bgl/IScene.h) | The IBL triplet (irradiance cube, prefilter cube, BRDF LUT). **Move-only** — copy is deleted. |
 | `RenderTargetDesc` | [libs/bgl/include/bgl/IRenderTarget.h](libs/bgl/include/bgl/IRenderTarget.h) | The output size, `renderScale` (how dense the geometry passes' grid is relative to it), `taaReconstructionWidth` (how wide a kernel the resolve rebuilds an output pixel with, in output pixels), `headless`, and `wnd` — an `HWND` on D3D12, a `CAMetalLayer*` on Metal; ignored when headless. |
-| `RenderJob` | [libs/bgl/include/bgl/RenderJob.h](libs/bgl/include/bgl/RenderJob.h) | One draw: `{view, camera, viewport}`. Holds a **copy** of the camera. |
+| `RenderJob` | [libs/bgl/include/bgl/RenderJob.h](libs/bgl/include/bgl/RenderJob.h) | One draw: `{view, camera, viewport, time}`. Holds a **copy** of the camera. |
+| `OverlayVertex`, `OverlayDraw`, `OverlayJob`, `OverlayRect` | [libs/bgl/include/bgl/IOverlay.h](libs/bgl/include/bgl/IOverlay.h) | A 24-byte pixel-space vertex; one draw of a geometry with its texture, translation, optional 4×4 transform and optional scissor; the overlay plus the draws one `DrawOverlay` submits; a pixel rectangle. |
+| `OverlayGeometryHandle`, `OverlayTextureHandle` | [libs/bgl/include/bgl/IOverlay.h](libs/bgl/include/bgl/IOverlay.h) | Value handles into an overlay's storage, valid only on the overlay that minted them. |
 | `Camera` | [libs/bgl/include/bgl/Camera.h](libs/bgl/include/bgl/Camera.h) | Chained-builder view/projection. Concrete, header-only, copyable. |
 | `Viewport` | [libs/bgl/include/bgl/Viewport.h](libs/bgl/include/bgl/Viewport.h) | Min/max XYZ; the `(width, height)` constructor is the usual one. |
 | `SkyboxDesc` | [libs/bgl/include/bgl/SkyboxDesc.h](libs/bgl/include/bgl/SkyboxDesc.h) | Cube texture plus `mipLevel`, `exposure`, `rotationY`. |
@@ -218,6 +230,12 @@ flowchart TD
 * **`Draw(job)`** — @pre a frame is active (`BeginFrame` has been called and `EndFrame` has not).
   @post the job's scene and view are scheduled for GPU upload as part of *this* frame; content added
   since the last frame becomes visible only once this frame is submitted.
+* **`DrawOverlay(job)`** — @pre a frame is active; `job.overlay` non-null; every draw names a live
+  geometry of that overlay and a null or live texture of it, and no scissor with a negative extent.
+  @throws `GraphicsError` otherwise, with nothing queued from that call. @post the draws are copied and resolved at once — the span need not
+  outlive the call — and land after post-processing in order across every call this frame; the
+  overlay is retained until `EndFrame`, so a caller's last ref dropped mid-frame frees nothing early.
+  A geometry or texture named here must not be released before this frame's `EndFrame`.
 * **`Resize(target, w, h)`** — @pre not between `BeginFrame`/`EndFrame`; both dimensions non-zero.
   @throws `GraphicsError` otherwise. `w`/`h` are the *output* size; the render size is re-derived
   from the target's scale. Recreates backbuffers, depth, scene colour and the velocity buffer,
@@ -244,6 +262,23 @@ flowchart TD
   reported several frames after they fire (the readback ring is `c_SwapchainImageCount` deep), so
   clearing to `nullptr` does **not** cancel one already in flight — that would fall back to the crash
   path. Call `DiscardPendingGpuAssertions()` first to drop it.
+
+### IOverlay
+
+* **`CreateGeometry(vertices, indices)`** — @pre both non-empty, `indices` a multiple of three, every
+  index below `vertices.size()`. @throws `GraphicsError` otherwise, or if the device cannot
+  allocate; nothing is allocated before the checks pass. @post the bytes are copied; the upload rides
+  the first frame that draws this overlay, so a geometry compiled and released between two frames
+  costs no GPU work at all.
+* **`ReleaseGeometry` / `ReleaseTexture`** — @throws `GraphicsError` for a null handle, one already
+  released, or one minted by a different overlay — every overlay numbers its slots from zero, so a
+  handle carries its overlay's id and a foreign one is refused rather than looked up. @post the
+  handle is invalid at once and the GPU resources go once every frame that could read them has
+  retired.
+* **`CreateTexture(img)`** — @pre `img` has decoded pixels and at least one subresource. The image is
+  straight-alpha and sampled through the format `img.vkFormat` declares: an sRGB format decodes on
+  sample, a UNORM one does not. A UI library that hands over premultiplied bytes divides them out
+  before calling this.
 
 ### IScene
 
