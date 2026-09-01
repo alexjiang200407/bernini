@@ -22,12 +22,12 @@ ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)
 HOOK = os.path.join(ROOT, ".claude", "hooks", "ask_guard.py")
 
 
-def verdict(tool, tool_input, asking=True, **environment):
-    env = dict(os.environ, CLAUDE_PROJECT_DIR=ROOT, **environment)
+def verdict(tool, tool_input, asking=True, root=ROOT, **environment):
+    env = dict(os.environ, CLAUDE_PROJECT_DIR=root, **environment)
     env.pop("WS_ASK", None)
     if asking:
         env["WS_ASK"] = "1"
-    payload = json.dumps({"tool_name": tool, "cwd": ROOT, "tool_input": tool_input})
+    payload = json.dumps({"tool_name": tool, "cwd": root, "tool_input": tool_input})
     done = subprocess.run([sys.executable, HOOK], input=payload, env=env,
                           capture_output=True, text=True)
     return done.returncode
@@ -90,6 +90,67 @@ def test_a_write_with_no_path_is_not_a_reason_to_allow_it():
 def test_a_notebook_carries_its_path_under_another_name():
     assert verdict("NotebookEdit", {"notebook_path": "libs/x.ipynb"}) == BLOCKED
     assert verdict("NotebookEdit", {"notebook_path": "docs/specs/x.md"}) == ALLOWED
+
+
+# --- the drafts directory ---------------------------------------------------
+#
+# `docs/specs/drafts` is a symlink onto a worktree of the spec-drafts branch,
+# shared by every checkout and therefore living outside all of them. Resolving it
+# is what makes the rest of the allowlist honest, and it is also what puts the
+# one path a draft is ever written to outside `docs/specs`.
+
+@pytest.fixture
+def checkout(tmp_path):
+    root = tmp_path / "checkout"
+    (root / "docs" / "specs").mkdir(parents=True)
+    (root / "libs").mkdir()
+    worktree = tmp_path / "spec-drafts"
+    worktree.mkdir()
+    (root / "docs" / "specs" / "drafts").symlink_to(worktree)
+    return root
+
+
+def elsewhere(tmp_path):
+    """Env that moves the temp allowlist out of the way.
+
+    pytest's tmp_path lives *under* the system temp directory, which the guard allows
+    outright -- so without this every assertion below would pass for the wrong reason.
+    """
+    scratch = tmp_path / "scratch"
+    scratch.mkdir(exist_ok=True)
+    return {"TMPDIR": str(scratch), "TMP": str(scratch), "TEMP": str(scratch)}
+
+
+def test_a_draft_is_written_through_a_link_that_leaves_the_checkout(checkout, tmp_path):
+    for path in ("docs/specs/drafts/new_problem.md",
+                 str(checkout / "docs" / "specs" / "drafts" / "new_problem.md")):
+        assert verdict("Write", {"file_path": path}, root=str(checkout),
+                       **elsewhere(tmp_path)) == ALLOWED
+
+
+def test_a_draft_is_still_markdown(checkout, tmp_path):
+    assert verdict("Write", {"file_path": "docs/specs/drafts/notes.txt"}, root=str(checkout),
+                   **elsewhere(tmp_path)) == BLOCKED
+
+
+def test_the_link_opens_what_it_points_at_and_not_its_neighbours(checkout, tmp_path):
+    """The drafts worktree sits at the workspace root, beside the sibling checkouts this
+    allowlist exists to protect. Allowing its parent would hand over all of them."""
+    (tmp_path / "sibling").mkdir()
+    for path in (tmp_path / "sibling" / "x.md", tmp_path / "x.md"):
+        assert verdict("Write", {"file_path": str(path)}, root=str(checkout),
+                       **elsewhere(tmp_path)) == BLOCKED
+
+
+def test_a_checkout_with_no_drafts_link_is_unchanged(tmp_path):
+    """CI, a fresh clone, and any checkout whose `git clean -xfd` took the symlink. The
+    second spec root collapses onto the first and nothing new is allowed."""
+    root = tmp_path / "bare"
+    (root / "docs" / "specs").mkdir(parents=True)
+    assert verdict("Write", {"file_path": "docs/specs/x.md"}, root=str(root),
+                   **elsewhere(tmp_path)) == ALLOWED
+    assert verdict("Write", {"file_path": "libs/x.cpp"}, root=str(root),
+                   **elsewhere(tmp_path)) == BLOCKED
 
 
 # --- the shell --------------------------------------------------------------
