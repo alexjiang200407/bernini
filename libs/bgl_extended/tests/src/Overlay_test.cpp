@@ -285,3 +285,145 @@ TEST_CASE("Overlay", "[overlay][render]")
 		CHECK_THROWS_AS(overlay->CreateGeometry({}, notTriangles), bgl::GraphicsError);
 	}
 }
+
+TEST_CASE("Overlay samples a render target", "[overlay][render]")
+{
+	auto gfx = MakeGraphics();
+	REQUIRE(gfx != nullptr);
+
+	auto preview = MakeTarget(*gfx);
+	auto screen  = MakeTarget(*gfx);
+	REQUIRE(preview != nullptr);
+	REQUIRE(screen != nullptr);
+
+	auto previewOverlay = gfx->CreateOverlay();
+	auto screenOverlay  = gfx->CreateOverlay();
+
+	// The preview's frame is one full-target quad of a colour: what is under test is the target's
+	// output reaching another target, not what put the pixels there.
+	const auto drawPreview = [&](uint32_t color) {
+		const auto fill = Quad(*previewOverlay, 0.0f, 0.0f, 256.0f, 256.0f, color);
+		auto       draw = bgl::OverlayDraw();
+		draw.geometry   = fill;
+		DrawOverlayFrame(*gfx, preview, previewOverlay, { &draw, 1 });
+		previewOverlay->ReleaseGeometry(fill);
+	};
+
+	const auto view  = screenOverlay->CreateTexture(preview);
+	const auto panel = Quad(*screenOverlay, 64.0f, 64.0f, 192.0f, 192.0f, c_OpaqueWhite);
+
+	auto draw     = bgl::OverlayDraw();
+	draw.geometry = panel;
+	draw.texture  = view;
+
+	const auto drawScreen = [&](const std::string& png) {
+		DrawOverlayFrame(*gfx, screen, screenOverlay, { &draw, 1 });
+		gfx->ScreenshotPng(screen, png);
+	};
+
+	SECTION("The quad shows the target's last frame, and follows the next one")
+	{
+		drawPreview(c_OpaqueRed);
+		drawScreen("assets/golden/overlay_target_red.got.png");
+
+		CHECK(IsColor(
+			bgl::test::MeanColor("assets/golden/overlay_target_red.got.png", 112, 112, 32, 32),
+			1.0f,
+			0.0f,
+			0.0f));
+		CHECK(IsColor(
+			bgl::test::MeanColor("assets/golden/overlay_target_red.got.png", 16, 16, 32, 32),
+			0.0f,
+			0.0f,
+			0.0f));
+
+		drawPreview(Rgba(0, 255, 0, 255));
+		drawScreen("assets/golden/overlay_target_green.got.png");
+
+		CHECK(IsColor(
+			bgl::test::MeanColor("assets/golden/overlay_target_green.got.png", 112, 112, 32, 32),
+			0.0f,
+			1.0f,
+			0.0f));
+	}
+
+	SECTION("A sampled target still captures and still draws")
+	{
+		drawPreview(c_OpaqueRed);
+		drawScreen("assets/golden/overlay_target_sampled.got.png");
+
+		// The capture barriers from present. On D3D12 that is what proves the borrowed backbuffer
+		// was returned there after the read; Metal's barriers are no-ops, so here it proves the
+		// content survived.
+		const std::string previewPng = "assets/golden/overlay_target_source.got.png";
+		gfx->ScreenshotPng(preview, previewPng);
+		CHECK(IsColor(bgl::test::MeanColor(previewPng, 112, 112, 32, 32), 1.0f, 0.0f, 0.0f));
+
+		// And the preview's next frame imports it from present, as every frame does.
+		drawPreview(Rgba(0, 0, 255, 255));
+		drawScreen("assets/golden/overlay_target_blue.got.png");
+		CHECK(IsColor(
+			bgl::test::MeanColor("assets/golden/overlay_target_blue.got.png", 112, 112, 32, 32),
+			0.0f,
+			0.0f,
+			1.0f));
+	}
+
+	SECTION("The texture keeps its target alive")
+	{
+		drawPreview(c_OpaqueRed);
+		preview = nullptr;
+
+		drawScreen("assets/golden/overlay_target_retained.got.png");
+		CHECK(IsColor(
+			bgl::test::MeanColor("assets/golden/overlay_target_retained.got.png", 112, 112, 32, 32),
+			1.0f,
+			0.0f,
+			0.0f));
+
+		screenOverlay->ReleaseTexture(view);
+		CHECK_THROWS_AS(screenOverlay->ReleaseTexture(view), bgl::GraphicsError);
+	}
+
+	SECTION("A target that has not presented samples white")
+	{
+		drawScreen("assets/golden/overlay_target_unpresented.got.png");
+		CHECK(IsColor(
+			bgl::test::MeanColor(
+				"assets/golden/overlay_target_unpresented.got.png",
+				112,
+				112,
+				32,
+				32),
+			1.0f,
+			1.0f,
+			1.0f));
+	}
+
+	SECTION("A target cannot be sampled by its own frame, and a null target is refused")
+	{
+		drawPreview(c_OpaqueRed);
+
+		CHECK_THROWS_AS(
+			screenOverlay->CreateTexture(bgl::RenderTargetRef(nullptr)),
+			bgl::GraphicsError);
+
+		const auto self     = previewOverlay->CreateTexture(preview);
+		const auto quad     = Quad(*previewOverlay, 0.0f, 0.0f, 32.0f, 32.0f, c_OpaqueWhite);
+		auto       selfDraw = bgl::OverlayDraw();
+		selfDraw.geometry   = quad;
+		selfDraw.texture    = self;
+		const auto draws    = std::span<const bgl::OverlayDraw>(&selfDraw, 1);
+
+		gfx->BeginFrame(preview);
+		CHECK_THROWS_AS(
+			gfx->DrawOverlay(bgl::OverlayJob{ previewOverlay, draws }),
+			bgl::GraphicsError);
+		gfx->EndFrame();
+
+		// The same texture is fine on another target's frame.
+		gfx->BeginFrame(screen);
+		CHECK_NOTHROW(gfx->DrawOverlay(bgl::OverlayJob{ previewOverlay, draws }));
+		gfx->EndFrame();
+	}
+}

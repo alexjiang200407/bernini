@@ -1,4 +1,5 @@
 #pragma once
+#include "gfx/RenderTargetBase.h"
 #include "resource/ResourceManager.h"
 #include "scene/TextureAssetStore.h"
 #include <bgl/IOverlay.h>
@@ -17,8 +18,16 @@ namespace bgl
 		uint32_t     triangleCount = 0;
 	};
 
+	// What an OverlayTextureHandle names: an image in the store, or a target whose latest output is
+	// read. Exactly one is set.
+	struct OverlayTexture
+	{
+		TextureAssetHandle                image;
+		core::SharedRef<RenderTargetBase> target;
+	};
+
 	/**
-	 * The IOverlay behind IGraphics::CreateOverlay. Its textures ride the same store a scene's do.
+	 * The IOverlay behind IGraphics::CreateOverlay. Its images ride the same store a scene's do.
 	 *
 	 * Like a scene's textures, the bytes are held until Flush, which the overlay pass calls on the
 	 * command list of the frame that draws them -- the upload must be ordered against the frames
@@ -49,6 +58,9 @@ namespace bgl
 		OverlayTextureHandle
 		CreateTexture(assetlib::ImageData img, std::string debugName) override;
 
+		OverlayTextureHandle
+		CreateTexture(const RenderTargetRef& target) override;
+
 		void
 		ReleaseTexture(OverlayTextureHandle texture) override;
 
@@ -62,9 +74,15 @@ namespace bgl
 		[[nodiscard]] bool
 		ValidTexture(OverlayTextureHandle texture) const noexcept;
 
-		// A null handle resolves to the store's opaque white, so an untextured draw samples 1.
+		// A null handle resolves to the store's opaque white, so an untextured draw samples 1. A
+		// target-backed one resolves to the slot that target last presented, so the answer changes
+		// as the target draws -- and to white until it has presented at all.
 		[[nodiscard]] SrvHandle
 		GetTextureSrv(OverlayTextureHandle texture) const noexcept;
+
+		// The target behind a texture, or null for an image or a null handle.
+		[[nodiscard]] RenderTargetBase*
+		GetTextureTarget(OverlayTextureHandle texture) const noexcept;
 
 		/** Uploads every geometry and texture created since the last call, on `cmdList`. */
 		void
@@ -86,6 +104,7 @@ namespace bgl
 		core::slot_vector<OverlayGeometry> m_Geometry;
 		std::vector<PendingGeometry>       m_PendingGeometry;
 
-		TextureAssetStore m_Textures;
+		core::slot_vector<OverlayTexture> m_Textures;
+		TextureAssetStore                 m_Images;
 	};
 }

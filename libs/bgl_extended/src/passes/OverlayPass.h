@@ -69,8 +69,13 @@ namespace bgl
 		void
 		Init(IDevice* device);
 
+		/**
+		 * `sources` are the imported names of every other target a draw samples, declared as reads
+		 * so the graph barriers them into shader-resource before the first dispatch. Consumed here;
+		 * the exec keeps only `args`.
+		 */
 		void
-		AttachToFrameGraph(FrameGraph& fg, const Args& args);
+		AttachToFrameGraph(FrameGraph& fg, const Args& args, std::span<const std::string> sources);
 
 	private:
 		void

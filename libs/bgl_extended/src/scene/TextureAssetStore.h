@@ -71,11 +71,6 @@ namespace bgl
 		[[nodiscard]] SrvHandle
 		GetSrv(core::slot_handle textureSlot) const noexcept;
 
-		// Whether this store created the texture `textureSlot` names and has not deleted it --
-		// generation included, so a slot reused since is not the same texture.
-		[[nodiscard]] bool
-		Contains(core::slot_handle textureSlot) const noexcept;
-
 		/**
 		 * The descriptor a GPU struct must carry to reach the texture in `textureSlot`, or a null
 		 * one when that texture has no view. Null is not an error: a material may name a channel no
