@@ -212,7 +212,7 @@ Two things that measurement also settled. A **source-major restructure cannot wo
 `Reimport_test.cpp`'s "Two sources rebuild together" pins a clip set reading *another* source's
 `.bskel` from disk, so the stage barriers must stand and only a parse may cross them. And the real
 target in that row is the sweeps rather than the parse: `clip floors` plus `posed bounds` is 13 s of
-the 23 s, which `docs/plans/pose-bounds-perf.md` already names as the next thing.
+the 23 s, and that is where the next reduction has to come from.
 
 `apps/editor/CLAUDE.md` describes a cold pipeline build as "tens of seconds". On macOS/Metal it is
 **4.4 s**. That figure was never measured on this backend; it may still hold for DXIL on Windows,
