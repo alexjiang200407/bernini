@@ -198,21 +198,23 @@ exist, which is why it is not documentation and is not on master. Every page abo
 tree *is*, and the rule that keeps them worth reading — change the code, change the doc — has nothing
 to say about a file describing code nobody has written.
 
-They live on `spec-drafts`, an orphan branch worktree'd once per workspace and symlinked into every
+They live on `artefacts`, an orphan branch worktree'd once per workspace and symlinked into every
 checkout as `docs/specs/`, committed on every write by `.claude/hooks/draft_commit.py`. The branch is
 local, never pushed and never merged: a spec is written, revised and deleted there, and no pull
 request ever moves one onto master. Read one before building the thing it describes, and delete it
 when that thing lands. In a checkout the workspace has not set up, and in CI, the directory is simply
 absent.
 
-**[Plans and Decision Records](./docs/plans/)**
+**Plans and Decision Records** — not here either
 
 One file per change: the context it was written in, the decisions with the alternative each rejected,
-what it was explicitly *not* doing, and the gate that accepted it. These are the **exception to the
-rule above** — a record of a conversation on a date, not a description of the code, so a change that
-touches the same area does **not** update them. An ADR is amended only by a change that *reverses*
-it, in that change's own PR. A feature's plan additionally carries a survey and a task list and is
-deleted when the feature lands.
+what it was explicitly *not* doing, and the gate that accepted it. Like a spec it is a document about
+work rather than documentation of the tree, and it is addressed to whoever reviews the change rather
+than to whoever reads the code afterwards — so it is not on master.
+
+It sits beside the specs, at `docs/plans/`, the second symlink onto the `artefacts` worktree, and is
+committed there as it is written. An ADR is amended only by a change that *reverses* it; never edit
+one to match code that drifted, which is exactly what turns it into a second source of truth.
 
 # Directory Structure
 
