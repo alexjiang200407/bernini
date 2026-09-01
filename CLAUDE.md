@@ -179,6 +179,13 @@ tree and never reads an archive back, and why a mount key is a `string_view` and
 The `.bsky` / `.benvl` / `.benv` split, how a `.hdr` becomes them, who consumes which, and the
 authoring traps — gamma, cube-seam edge fixup, resampling — that still bite on a map from elsewhere.
 
+**[Known Issues](./docs/known_issues.md)**
+
+One entry per bug that cost somebody a day and could return: the symptom as it appears from the
+outside, the cause, the gate that pins the fix, and what was already ruled out. Read the matching
+entry *before* diagnosing a symptom it describes — a green gate there is the fastest way to learn the
+cause is a different one.
+
 **[AI Coding Bots](./docs/ai-coding.md)**
 
 The two GitHub Apps that give AI work its own identity: `morgana-coding-agent`, which posts `bcp-revise`'s PR replies and co-authors commits from your machine, and the review agent that reviews a PR when you comment `/review` from a GitHub Actions runner. Covers registration, key custody, secrets, and revocation for both.

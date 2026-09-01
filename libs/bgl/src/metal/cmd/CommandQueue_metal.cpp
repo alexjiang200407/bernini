@@ -149,12 +149,24 @@ namespace bgl
 	void
 	CommandQueue::Flush() noexcept
 	{
+		// NewCommandBuffer autoreleases, so without a pool of its own the buffer would sit in
+		// whichever one encloses the call -- the pool Graphics holds, which is the whole process.
+		// Committed before the drain, so the driver owns it for the rest of its flight.
+		NS::SharedPtr<NS::AutoreleasePool> pool =
+			NS::TransferPtr(NS::AutoreleasePool::alloc()->init());
+
 		// An empty command buffer signals past everything already committed: Metal keeps submission
 		// order on a queue, so it cannot run before them.
 		auto* cmdBuffer = NewCommandBuffer();
 		cmdBuffer->encodeSignalEvent(m_Event.get(), m_NextFenceValue);
 		cmdBuffer->commit();
 		WaitForFenceCPUBlocking(m_NextFenceValue++);
+
+		// The event fires as the GPU passes the signal, which leaves the driver still retiring the
+		// buffer and releasing what it held -- and every caller frees resources with deferred=false
+		// immediately after, which is only safe once it has. Metal keeps submission order, so this
+		// buffer being retired puts every one committed before it behind us too.
+		cmdBuffer->waitUntilCompleted();
 	}
 
 	void

@@ -294,11 +294,16 @@ if (BUILD_TESTS AND RENDERER_BACKEND STREQUAL "METAL")
 		PUBLIC  ${CMAKE_CURRENT_SOURCE_DIR}/tests
 		PRIVATE
 			${CMAKE_CURRENT_SOURCE_DIR}/src
+			# The backend's own root: its headers include each other unprefixed, so a Metal-only
+			# case cannot reach one without it.
+			${CMAKE_CURRENT_SOURCE_DIR}/src/metal
 			${CMAKE_CURRENT_SOURCE_DIR}/tests/src
 			${CMAKE_BINARY_DIR}/generated
 			${CMAKE_CURRENT_SOURCE_DIR}/src/idl
 			${Stb_INCLUDE_DIR}
 	)
+
+	target_include_directories(bgl_tests SYSTEM PRIVATE ${BGL_METALCPP_INCLUDE_DIR})
 
 	target_force_include(bgl_tests
 		PRIVATE "${CMAKE_SOURCE_DIR}/PCH/pch.h" "${CMAKE_CURRENT_SOURCE_DIR}/src/pch.h"
