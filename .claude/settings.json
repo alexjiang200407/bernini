@@ -23,6 +23,18 @@
         ]
       }
     ],
+    "PostToolUse": [
+      {
+        "matcher": "Write|Edit|MultiEdit|NotebookEdit|Bash|PowerShell",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "PY=$(command -v python3 || command -v python); exec \"$PY\" \"${CLAUDE_PROJECT_DIR:-.}\"/.claude/hooks/draft_commit.py",
+            "statusMessage": "Checking for a spec draft"
+          }
+        ]
+      }
+    ],
     "Stop": [
       {
         "hooks": [

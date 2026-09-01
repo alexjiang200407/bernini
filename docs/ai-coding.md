@@ -184,6 +184,20 @@ outright rather than inspected. [`bcp-ask`](../.claude/skills/bcp-ask/SKILL.md) 
 described; `scripts/tests/test_ask_guard.py` pins what it refuses, and carries the record of why
 inspecting a command line was abandoned.
 
+A fourth, [`draft_commit.py`](../.claude/hooks/draft_commit.py) (`PostToolUse`), is that guard's
+other half: it commits any write landing under `docs/specs/drafts/`, the worktree of the orphan
+`spec-drafts` branch every checkout links to. It matches the shell as well as the editing tools,
+because a `sed -i` names no file the hook could read — that path ignores the tool input and commits
+whatever the worktree turns out to be holding, behind a read-only `status` so the commands that
+touch no draft pay one cheap call and stop. An ask session cannot commit its own draft because it
+has no shell, and a rule saying somebody should commit it afterwards is what left an untracked spec
+to be deleted by a `git pull` on 2026-09-01. Unlike `ask_guard.py` it runs in every session, not only
+under `WS_ASK` — a feature agent revising a draft has the same window — and unlike it, it fails
+*open*: the write has already happened when the hook runs, so a crash here has only failed to commit
+a file, where a crash in a guard would have allowed a write. It finds the worktree by resolving the
+checkout's own symlink and is inert wherever there is none, which is CI and every fresh clone.
+`scripts/tests/test_draft_commit.py` pins it.
+
 ## Coding agent: commit attribution
 
 An AI-assisted commit stays **authored by the developer who ran it** and is **co-authored by the
