@@ -1,4 +1,5 @@
 #include <assetlib/AssetStore.h>
+#include <assetlib/avatar.h>
 
 #include <assetlib_structs/Animation.h>
 #include <assetlib_structs/BEnv.h>
@@ -50,5 +51,11 @@ namespace assetlib
 	AssetStore::Describe(const AnimationSet& animations, const Skeleton* skeleton) const
 	{
 		return describe(animations, skeleton);
+	}
+
+	std::string
+	AssetStore::Describe(const Avatar& avatar, const Skeleton* skeleton) const
+	{
+		return describe(avatar, skeleton);
 	}
 }

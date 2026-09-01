@@ -1,5 +1,6 @@
 #include <assetlib/AssetStore.h>
 #include <assetlib/asset_refs.h>
+#include <assetlib/avatar.h>
 #include <assetlib/codecs.h>
 #include <assetlib/container_info.h>
 #include <assetlib/import_document.h>
@@ -77,6 +78,24 @@ namespace assetlib
 		}
 
 		/**
+		 * Adds the avatar beside `skeleton`, when there is one on disk.
+		 *
+		 * By convention and not by an edge, which is the whole of ADR-3: a `.bskel` that moved
+		 * without its avatar has not stranded it, it has *detached* it -- the new key resolves to
+		 * no avatar and the old avatar resolves to no skeleton, both silently.
+		 */
+		void
+		planAvatar(
+			const std::filesystem::path& dataRoot,
+			RenamePlan&                  plan,
+			const RenameMove&            skeleton)
+		{
+			const auto move = RenameMove{ avatarKeyFor(skeleton.from), avatarKeyFor(skeleton.to) };
+			if (std::filesystem::exists(dataRoot / move.from))
+				plan.avatars.push_back(move);
+		}
+
+		/**
 		 * Fills in what travels with an import document: the source it describes, and each
 		 * container `outputs` names after that source's stem.
 		 *
@@ -115,6 +134,10 @@ namespace assetlib
 
 				plan.outputs.push_back({ key, reStem(key, now) });
 			}
+
+			for (const RenameMove& output : plan.outputs)
+				if (assetTypeFromExtension(output.from) == AssetType::kSkeleton)
+					planAvatar(dataRoot, plan, output);
 		}
 
 		/** One referrer file: where it is now, and the bytes that can undo its rewrite. */
@@ -192,8 +215,11 @@ namespace assetlib
 				return AssetCodec<ImportDocument>::Serialize(document);
 			}
 
+			// None of these stores a path: a texture and a skeleton hold no references at all,
+			// and an avatar reaches its skeleton by the convention its own key is, not by naming it.
 			case AssetType::kTexture:
 			case AssetType::kSkeleton:
+			case AssetType::kAvatar:
 			case AssetType::kCount:
 				break;
 			}
@@ -252,8 +278,32 @@ namespace assetlib
 		if (std::filesystem::is_directory(fromPath))
 		{
 			for (const AssetRef& edge : graph.Edges())
-				if (isUnder(edge.target, plan.subject.from))
+				if (isUnder(edge.target, plan.subject.from) && isStoredRef(edge.kind))
 					plan.referrers.push_back(edge);
+
+			// The avatars straddle the halves, so no directory move can carry both ends of the
+			// convention: a directory of skeletons takes its avatars along one file at a time, and
+			// a directory of avatars cannot move at all -- exactly as one avatar cannot.
+			for (const std::string& file : graph.GetFilesUnder(plan.subject.from))
+			{
+				const std::optional<AssetType> type = assetTypeFromExtension(file);
+				const std::string_view         tail =
+					std::string_view(file).substr(plan.subject.from.size());
+
+				if (type == AssetType::kAvatar)
+					core::throw_runtime_error(
+						"assetlib::planRename: '{}' holds '{}', which is found by its path from "
+						"'{}'; rename the skeletons and the avatars follow",
+						plan.subject.from,
+						file,
+						skeletonKeyForAvatar(file));
+
+				if (type == AssetType::kSkeleton)
+					planAvatar(
+						graph.DataRoot(),
+						plan,
+						{ file, plan.subject.to + std::string(tail) });
+			}
 		}
 		else
 		{
@@ -273,9 +323,25 @@ namespace assetlib
 			if (plan.assetType == AssetType::kImportDocument)
 				planImportGroup(graph.DataRoot(), plan);
 
+			// A skeleton's avatar is found from the skeleton's key, so it moves with it or stops
+			// being reachable at all.
+			if (plan.assetType == AssetType::kSkeleton)
+				planAvatar(graph.DataRoot(), plan, plan.subject);
+
+			// The other direction is refused rather than followed: the avatar's key is what
+			// attaches it, so moving one alone detaches it from a rig that has not moved.
+			if (plan.assetType == AssetType::kAvatar)
+				core::throw_runtime_error(
+					"assetlib::planRename: '{}' is found by its path from '{}'; rename the "
+					"skeleton "
+					"and the avatar follows",
+					plan.subject.from,
+					skeletonKeyForAvatar(plan.subject.from));
+
 			const auto follow = [&](std::string_view target) {
-				const std::span<const AssetRef> held = graph.ReferrersOf(target);
-				plan.referrers.insert(plan.referrers.end(), held.begin(), held.end());
+				for (const AssetRef& edge : graph.ReferrersOf(target))
+					if (isStoredRef(edge.kind))
+						plan.referrers.push_back(edge);
 			};
 
 			follow(plan.subject.from);
@@ -303,6 +369,7 @@ namespace assetlib
 		if (plan.source)
 			requireFree(*plan.source);
 		for (const RenameMove& move : plan.outputs) requireFree(move);
+		for (const RenameMove& move : plan.avatars) requireFree(move);
 
 		if (!std::filesystem::is_directory(toPath.parent_path()))
 			throw std::runtime_error(
@@ -358,6 +425,16 @@ namespace assetlib
 		for (const RenameMove& move : plan.outputs)
 			if (std::filesystem::exists(GetDataRoot() / move.from))
 				steps.push_back(move);
+
+		// An avatar is authored, so it is held to what the `.glb` is: one that has gone since the
+		// plan fails the rename rather than being skipped, because nothing writes it again.
+		for (const RenameMove& move : plan.avatars)
+		{
+			if (!std::filesystem::exists(GetDataRoot() / move.from))
+				return { RenameStatus::kFailed, "'" + move.from + "' no longer exists" };
+
+			steps.push_back(move);
+		}
 
 		for (const RenameMove& step : steps)
 		{
@@ -449,7 +526,14 @@ namespace assetlib
 
 		for (const RenameMove& step : steps)
 		{
-			std::filesystem::rename(GetDataRoot() / step.from, GetDataRoot() / step.to, ec);
+			// A directory rename carries its skeletons' avatars into the mirrored directory under
+			// the other half, which nothing has created yet -- the subject's own destination is the
+			// only one planRename could check for.
+			const std::filesystem::path destination = GetDataRoot() / step.to;
+			if (!std::filesystem::is_directory(destination.parent_path()))
+				std::filesystem::create_directories(destination.parent_path(), ec);
+
+			std::filesystem::rename(GetDataRoot() / step.from, destination, ec);
 			if (ec)
 			{
 				putBackMoved();

@@ -1,5 +1,6 @@
 #include <assetlib/AssetStore.h>
 #include <assetlib/asset_refs.h>
+#include <assetlib/avatar.h>
 #include <assetlib/bmesh.h>
 
 #include <assetlib/AssetCodec.h>
@@ -315,6 +316,15 @@ namespace assetlib
 			{
 				collectImportDocumentEdges(edges, files, referrer);
 				++graph.importDocumentsScanned;
+			}
+			else if (kind == c_AvatarExtension)
+			{
+				// Derived from the key and not read out of the file, the way a `.bimport` names its
+				// source: an avatar carries bone names, never a path, and the path it sits at is
+				// exactly what attaches it to a rig. A document that will not parse therefore does
+				// not hide this edge -- there is nothing to parse.
+				addEdge(edges, referrer, skeletonKeyForAvatar(referrer), RefKind::kAvatarSkeleton);
+				++graph.avatarsScanned;
 			}
 		}
 
