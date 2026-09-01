@@ -1,5 +1,13 @@
 #pragma once
-#include <spdlog/sinks/basic_file_sink.h>
+#include <spdlog/spdlog.h>
+
+namespace bgl
+{
+	// The alias every macro and template below is written against. It lives here rather than in a
+	// subsystem's PCH because this header has to compile on its own: a renderer that reaches these
+	// through its PCH still gets them, and one that has no PCH is not left with a name it cannot see.
+	namespace logger = spdlog;
+}
 
 // A breakpoint only under a debug build: __debugbreak() in a shipping build raises a breakpoint
 // exception that crashes the process whether or not a debugger is attached.

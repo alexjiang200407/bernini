@@ -1,4 +1,6 @@
-#include "uniforms/SlangReflection.h"
+#include <bgl_common/SlangReflection.h>
+
+#include <bgl_common/gassert.h>
 #include <slang.h>
 
 namespace bgl

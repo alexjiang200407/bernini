@@ -52,6 +52,6 @@ set_source_files_properties(MetalImpl.cpp PROPERTIES SKIP_PRECOMPILE_HEADERS ON)
 target_compile_definitions(bgl_metal PRIVATE RENDERER_BACKEND_METAL)
 
 target_link_libraries(bgl_metal
-    PUBLIC bgl core assetlib_structs glm::glm slang::slang
+    PUBLIC bgl bgl_common core assetlib_structs glm::glm slang::slang
     PRIVATE "-framework Metal" "-framework Foundation" "-framework QuartzCore"
 )

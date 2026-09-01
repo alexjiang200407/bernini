@@ -1,5 +1,5 @@
 #pragma once
-#include "uniforms/ReflectedLayout.h"
+#include <bgl_common/ReflectedLayout.h>
 #include <core/str/str.h>
 
 namespace bgl

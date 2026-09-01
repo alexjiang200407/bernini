@@ -43,7 +43,7 @@ doc disagrees, trust the header, then fix this doc.
   the guarantees to change at that boundary.
 
 * **Layout is reflected once per PSO and shared; the mirror is per kernel.** `ReflectLayoutFromSlang`
-  ([SlangReflection.h](libs/bgl_extended/src/uniforms/SlangReflection.h)) walks Slang's cbuffer type layout
+  ([SlangReflection.h](libs/bgl_common/include/bgl_common/SlangReflection.h)) walks Slang's cbuffer type layout
   into `ReflectedLayout`, a POD tree held by `shared_ptr<const>`. Carrying no Slang pointers is what
   lets it survive into the [shader cache](docs/shader_cache.md) and be rebuilt from disk without
   loading a Slang module. Each `Uniforms` then builds its own node tree and owns its own bytes.
@@ -75,9 +75,9 @@ doc disagrees, trust the header, then fix this doc.
 
 | Type | File | Role |
 |---|---|---|
-| `ReflectedLayout` / `ReflectedField` | [ReflectedLayout.h](libs/bgl_extended/src/uniforms/ReflectedLayout.h) | Serializable POD tree of one cbuffer: kind, value type, size, array count/stride, `handleKind`. |
+| `ReflectedLayout` / `ReflectedField` | [ReflectedLayout.h](libs/bgl_common/include/bgl_common/ReflectedLayout.h) | Serializable POD tree of one cbuffer: kind, value type, size, array count/stride, `handleKind`. |
 | `UniformLayoutEntry` / `UniformLayoutMap` | [UniformLayoutEntry.h](libs/bgl_extended/src/uniforms/UniformLayoutEntry.h) | Shared layout + size + root parameter index, keyed by cbuffer name. |
-| `UniformType` / `UniformValueType` | [UniformValueType.h](libs/bgl_extended/src/uniforms/UniformValueType.h) | Node kind (array/struct/value/null) and leaf scalar type. |
+| `UniformType` / `UniformValueType` | [UniformValueType.h](libs/bgl_common/include/bgl_common/UniformValueType.h) | Node kind (array/struct/value/null) and leaf scalar type. |
 | `DescriptorHandle` | [DescriptorHandle.h](libs/bgl_extended/src/uniforms/DescriptorHandle.h) | The 8 bytes a bindless handle occupies. `alignas(8)` on Metal only. |
 | `HandleSlot` / `MetalHandleOffsetMap` | [MetalPipelineReflection.h](libs/bgl_extended/src/metal/pipeline/MetalPipelineReflection.h) | Metal-only side table: byte offset + pool kind of every handle field. |
 | `c_SmartBufferUniformIndices` / `c_UnboundDescriptorIndex` | [constants.h](libs/bgl_extended/src/constants/constants.h) | The member names the assignment operators search for, and the bindless index every allocator reserves. |

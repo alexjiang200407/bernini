@@ -201,8 +201,12 @@ for the warnings/errors/info the run emitted.
 
 ## 3. CPU-side assertions — `gassert` / `gfatal` / `gerror`
 
-Defined in [libs/bgl_extended/src/error/gassert.h](libs/bgl_extended/src/error/gassert.h) (PCH-included, namespace
-`bgl`). All three log then break into the debugger on MSVC (`__debugbreak`):
+Defined in [libs/bgl_common/include/bgl_common/gassert.h](libs/bgl_common/include/bgl_common/gassert.h),
+namespace `bgl`. It sits in `bgl_common` rather than in a renderer because every renderer needs it,
+and it carries the `bgl::logger` alias itself rather than taking one from a PCH -- so a source that
+reaches it through `libs/bgl_extended/src/pch.h` needs no include, and one outside that PCH's reach
+gets the whole family from the single line. All three log then break into the debugger on MSVC
+(`__debugbreak`):
 
 * `gassert(condition, fmt, args...)` — on failure: `logger::error`, break, `std::terminate`.
   Use for internal invariants.
