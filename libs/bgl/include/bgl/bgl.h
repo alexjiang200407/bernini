@@ -7,6 +7,7 @@
 
 #include <bgl/Camera.h>
 #include <bgl/IGraphics.h>
+#include <bgl/IOverlay.h>
 #include <bgl/IScene.h>
 #include <bgl/RenderJob.h>
 #include <bgl/SkyboxDesc.h>

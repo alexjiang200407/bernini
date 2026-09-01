@@ -161,6 +161,7 @@ namespace bgl
 		m_Forward.Init(m_Device);
 		m_Skybox.Init(m_Device);
 		m_PostProcess.Init(m_Device);
+		m_OverlayPass.Init(m_Device);
 		m_OutlineMask.Init(m_Device);
 		m_TaaResolve.Init(m_Device);
 
@@ -213,6 +214,7 @@ namespace bgl
 		m_Forward.Release();
 		m_Skybox.Release();
 		m_PostProcess.Release();
+		m_OverlayPass.Release();
 		m_OutlineMask.Release();
 		m_TaaResolve.Release();
 		if (!m_PointClampSampler.IsNull())
@@ -407,6 +409,8 @@ namespace bgl
 		m_DrawCount        = 0;
 		m_TemporalBreak    = false;
 		m_OutlineMaskDrawn = false;
+		m_OverlayDraws.clear();
+		m_FrameOverlays.clear();
 		++m_FrameCounter;
 		rt.AdvanceFrameCount();
 		m_FrameGraph.RegisterQueue("main", m_CommandQueue, m_CommandList);
@@ -432,9 +436,9 @@ namespace bgl
 			}
 		}
 
-		// The backbuffer is not cleared: the tonemap covers it whole, and it is the only pass that
-		// writes it. Zero motion is "this pixel did not move", which is what an untouched pixel
-		// should read as.
+		// The backbuffer is not cleared: the tonemap covers it whole, and the overlay only ever
+		// blends over what the tonemap wrote. Zero motion is "this pixel did not move", which is
+		// what an untouched pixel should read as.
 		const std::array<ClearPass::ColorTarget, 3> colorTargets{
 			{ { std::string(c_SceneColorName), rt.GetSceneColorRtv(), { 0.0f, 0.0f, 0.0f, 1.0f } },
 			  { std::string(c_MotionVectorsName),
@@ -622,6 +626,90 @@ namespace bgl
 	}
 
 	void
+	RenderContext::DrawOverlay(const OverlayJob& job)
+	{
+		if (!m_FrameActive)
+		{
+			throw GraphicsError("DrawOverlay must be called between BeginFrame and EndFrame");
+		}
+
+		if (job.overlay == nullptr)
+		{
+			throw GraphicsError("OverlayJob passed to DrawOverlay requires an overlay");
+		}
+
+		auto* overlay = job.overlay->As<Overlay>();
+		gassert(overlay != nullptr, "An IOverlay this graphics did not create");
+
+		// Every draw is checked before any is queued, so a bad one leaves the frame as it was.
+		for (const OverlayDraw& draw : job.draws)
+		{
+			if (!overlay->ValidGeometry(draw.geometry))
+			{
+				throw GraphicsError(
+					"OverlayDraw names a geometry that is null, released, or not this overlay's");
+			}
+
+			if (draw.texture.IsValid() && !overlay->ValidTexture(draw.texture))
+			{
+				throw GraphicsError(
+					"OverlayDraw names a texture that is released or not this overlay's");
+			}
+
+			if (draw.scissor.has_value() && (draw.scissor->width < 0 || draw.scissor->height < 0))
+			{
+				throw GraphicsError("OverlayDraw scissor has a negative extent");
+			}
+		}
+
+		if (std::ranges::find_if(m_FrameOverlays, [&](const core::SharedRef<Overlay>& held) {
+				return held.Get() == overlay;
+			}) == m_FrameOverlays.end())
+		{
+			m_FrameOverlays.push_back(core::SharedRef<Overlay>(overlay));
+		}
+
+		const auto targetRect = Rect(Viewport(
+			static_cast<float>(m_ActiveTarget->GetWidth()),
+			static_cast<float>(m_ActiveTarget->GetHeight())));
+
+		for (const OverlayDraw& draw : job.draws)
+		{
+			const OverlayGeometry& geometry = overlay->GetGeometry(draw.geometry);
+
+			auto resolved          = OverlayPass::Draw();
+			resolved.vertices      = geometry.vertices;
+			resolved.indices       = geometry.indices;
+			resolved.triangleCount = geometry.triangleCount;
+			resolved.texture       = overlay->GetTextureSrv(draw.texture);
+			resolved.translation   = draw.translation;
+			resolved.transform     = draw.transform.value_or(glm::mat4(1.0f));
+			resolved.scissor       = targetRect;
+
+			if (draw.scissor.has_value())
+			{
+				// Summed in 64 bits: a client's rectangle may sit anywhere in int range, and the
+				// clamp is what brings it back onto the target.
+				const OverlayRect& s      = *draw.scissor;
+				const auto         clampX = [&](int64_t v) {
+					return static_cast<int>(
+						std::clamp<int64_t>(v, targetRect.minX, targetRect.maxX));
+				};
+				const auto clampY = [&](int64_t v) {
+					return static_cast<int>(
+						std::clamp<int64_t>(v, targetRect.minY, targetRect.maxY));
+				};
+				resolved.scissor.minX = clampX(s.x);
+				resolved.scissor.minY = clampY(s.y);
+				resolved.scissor.maxX = clampX(static_cast<int64_t>(s.x) + s.width);
+				resolved.scissor.maxY = clampY(static_cast<int64_t>(s.y) + s.height);
+			}
+
+			m_OverlayDraws.push_back(resolved);
+		}
+	}
+
+	void
 	RenderContext::EndFrame()
 	{
 		if (!m_FrameActive)
@@ -700,6 +788,17 @@ namespace bgl
 
 		m_PostProcess.AttachToFrameGraph(m_FrameGraph, postProcessArgs);
 
+		if (!m_OverlayDraws.empty())
+		{
+			auto overlayArgs       = OverlayPass::Args();
+			overlayArgs.overlays   = m_FrameOverlays;
+			overlayArgs.draws      = m_OverlayDraws;
+			overlayArgs.backBuffer = rt.GetBackbufferRtv(index);
+			overlayArgs.viewport   = viewport;
+			overlayArgs.sampler    = m_LinearClampSampler;
+			m_OverlayPass.AttachToFrameGraph(m_FrameGraph, overlayArgs);
+		}
+
 		m_PreparePresentPass.AttachToFrameGraph(m_FrameGraph, std::string(c_BackbufferName));
 
 		m_FrameGraph.Compile(m_ResourceManager.Get());
@@ -750,6 +849,9 @@ namespace bgl
 		rt.PresentAndAdvance();
 
 		m_ResourceManager->CleanupExpiredResources();
+
+		m_OverlayDraws.clear();
+		m_FrameOverlays.clear();
 
 		m_ActiveTarget = nullptr;
 		m_FrameActive  = false;

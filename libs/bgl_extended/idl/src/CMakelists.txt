@@ -49,6 +49,7 @@ set(IDL_CPP_SOURCES
     RawRange.slang
     RecordHeader.slang
     PlaybackType.slang
+    OverlayVertex.slang
 )
 
 # Public engine API: namespace `bgl`, emitted into include/bgl. MaterialType is named by a public
