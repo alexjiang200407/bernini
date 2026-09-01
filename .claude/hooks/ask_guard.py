@@ -20,15 +20,16 @@ spelling.
 
 What that costs is `git log` -- history, and the commit message behind a
 decision. It is a real loss and a smaller one here than elsewhere: `docs/plans/`
-keeps an ADR per change precisely so the reasoning is a file somebody can open,
-and Read, Grep and Glob open files without a shell to guard.
+keeps an ADR per change precisely so the reasoning is a file somebody can open --
+a symlink onto the `artefacts` branch rather than part of master, which changes
+nothing, since Read follows it without a shell to guard.
 
 The other rule is the write allowlist: `docs/specs/*.md` and a temp directory
 outside the checkout. Refusing "anywhere but this checkout" instead would sound
 friendlier and is the hole -- what it waves through is the sibling worktrees the
 other agents are working in.
 
-`docs/specs` is normally a symlink onto a worktree of the `spec-drafts` branch,
+`docs/specs` is normally a symlink onto a worktree of the `artefacts` branch,
 which lives outside every checkout, so the root is resolved before anything is
 matched against it. Where the workspace has not seeded that link the same
 resolution lands back inside the checkout, and a spec written there is untracked
@@ -53,7 +54,7 @@ SPEC_ONLY = ("The one thing an ask session may write is a spec:\n"
              "    docs/specs/<name>.md\n"
              "one file for a problem we have decided not to solve yet -- what it is, the trigger\n"
              "that makes it urgent, and the design already settled on. It is committed for you on\n"
-             "the spec-drafts branch and never lands on master. A temporary directory is the only\n"
+             "the artefacts branch and never lands on master. A temporary directory is the only\n"
              "other place a write is allowed; every other path, in this checkout or any worktree\n"
              "beside it, is refused.")
 

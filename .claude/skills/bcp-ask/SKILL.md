@@ -48,7 +48,8 @@ reports with the line behind each claim.
 Then read the **source**, because a doc says what was true when it was written.
 
 For *why*, `docs/plans/` is the record: one ADR per change, each decision written down with the
-alternative it rejected, and — unlike a commit message — a file you can open. Read it before
+alternative it rejected, and — unlike a commit message — a file you can open. It is a symlink onto
+the `artefacts` branch rather than part of master, which changes nothing here: `Read` follows it. Read it before
 concluding that a design was accidental. There is no `git log` here, so when the answer genuinely
 turns on history rather than on the tree, say that plainly and name what would need to be looked up.
 `ws cmd bernini -- claude` opens an unguarded session in this same clone for someone who needs it.
@@ -101,7 +102,7 @@ Write `docs/specs/<name>.md`, and keep it to the three things a spec is for:
 Do not write one for a problem that is merely interesting. A spec that nobody is waiting on is a
 file the next reader has to rule out.
 
-`docs/specs/` is a worktree of the orphan `spec-drafts` branch, shared by every checkout in the
+`docs/specs/` is a worktree of the orphan `artefacts` branch, shared by every checkout in the
 workspace, and `.claude/hooks/draft_commit.py` commits the file as you write it — so the feature
 checkout that would implement the spec can read it, and a `git pull` that removes it can be undone.
 Neither happens for a file sitting untracked in one working directory, which is what this used to be.

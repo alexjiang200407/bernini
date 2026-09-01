@@ -185,9 +185,10 @@ described; `scripts/tests/test_ask_guard.py` pins what it refuses, and carries t
 inspecting a command line was abandoned.
 
 A fourth, [`draft_commit.py`](../.claude/hooks/draft_commit.py) (`PostToolUse`), is that guard's
-other half: it commits any write landing under `docs/specs/`, the worktree of the orphan
-`spec-drafts` branch every checkout links to — specs are not documentation and are not on master, so
-that directory is the link and nothing else. It matches the shell as well as the editing tools,
+other half: it commits any write landing under `docs/specs/` or `docs/plans/`, two symlinks onto one
+worktree of the orphan `artefacts` branch. Neither a spec nor an ADR is documentation of the tree —
+one describes code that does not exist, the other the conversation behind a change — so neither is on
+master and both directories are links and nothing else. It matches the shell as well as the editing tools,
 because a `sed -i` names no file the hook could read — that path ignores the tool input and commits
 whatever the worktree turns out to be holding, behind a read-only `status` so the commands that
 touch no draft pay one cheap call and stop. An ask session cannot commit its own draft because it

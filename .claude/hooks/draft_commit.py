@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
 """Commit a spec draft the moment it is written.
 
-`docs/specs/` is a symlink onto a worktree of the `spec-drafts` branch -- an
-orphan branch carrying specs and nothing else, because a spec describes code that
-does not exist and so is not documentation and is not on master. This is a
-PostToolUse hook that commits any write landing inside it.
+`docs/specs/` and `docs/plans/` are symlinks onto one worktree of the `artefacts`
+branch -- an orphan branch carrying the documents that are about work rather than
+about the tree. A spec describes code that does not exist; an ADR records the
+conversation behind a change. Neither is documentation and neither is on master.
+This is a PostToolUse hook that commits any write landing inside either.
 
 The commit is the harness's job and not the model's because an ask session has no
 shell (`ask_guard.py`), and because a rule saying somebody should commit
@@ -20,7 +21,7 @@ That agent also has a shell, which is why Bash is matched too. A `sed -i` or a
 heredoc names no file the hook could read, so the shell's path ignores the tool
 input and looks at the worktree instead. It is gated on a read-only `status`
 first, because it runs after every shell command in the repository and nearly
-all of them leave the drafts alone.
+all of them leave these two directories alone.
 
 Bernini must not know where the workspace puts that worktree, so the path is
 found by resolving the checkout's own symlink. Everywhere without one -- CI, a
@@ -37,7 +38,7 @@ import subprocess
 import sys
 import time
 
-SPECS = os.path.join("docs", "specs")
+LINKED = (os.path.join("docs", "specs"), os.path.join("docs", "plans"))
 
 WRITE_TOOLS = {"Write", "Edit", "MultiEdit", "NotebookEdit"}
 SHELL_TOOLS = {"Bash", "PowerShell"}
@@ -71,20 +72,22 @@ def git(directory, *args):
         return subprocess.CompletedProcess(args, 1, "", str(error))
 
 
-def specs_link(root):
-    """Where this checkout's specs symlink points, or None when it has none.
+def artefact_links(root):
+    """The resolved artefact directories this checkout links to, outermost first.
 
-    It must resolve *outside* the checkout: a real directory of that name is an
+    Each must resolve *outside* the checkout: a real directory of that name is an
     ordinary part of the tree, already covered by the checkout's own git.
 
     Deliberately free of subprocesses -- this runs after every write and every
-    shell command in the repository, and all but a handful are nowhere near a
-    draft.
+    shell command in the repository, and all but a handful are nowhere near one.
     """
-    resolved = os.path.realpath(os.path.join(root, SPECS))
-    if not os.path.isdir(resolved) or contains(os.path.realpath(root), resolved):
-        return None
-    return resolved
+    here = os.path.realpath(root)
+    found = []
+    for link in LINKED:
+        resolved = os.path.realpath(os.path.join(root, link))
+        if os.path.isdir(resolved) and not contains(here, resolved):
+            found.append(resolved)
+    return found
 
 
 def common_dir(directory):
@@ -99,26 +102,29 @@ def common_dir(directory):
 def same_repository(root, worktree):
     """Whether the link points at a worktree of *this* repository.
 
-    The whole design turns on it: the drafts branch is bernini's own, which is
-    what lets a checkout with no symlink still read a draft with `git show`. It
-    is also the only thing standing between a link somebody repointed and a
-    commit landing in a repository that never asked for one.
+    The whole design turns on it: the artefacts branch is bernini's own, which is
+    what lets a checkout with no symlink still read one with `git show`. It is
+    also the only thing standing between a link somebody repointed and a commit
+    landing in a repository that never asked for one.
     """
     shared = common_dir(worktree)
     return shared is not None and shared == common_dir(root)
 
 
 def record(worktree, target):
-    """Commit what is already staged for one draft path. None when nothing was."""
-    name = os.path.basename(target)
+    """Commit what is already staged for one path. None when nothing was."""
+    # `specs/vat.md` -> "specs: vat.md". The branch holds two kinds and the
+    # subject is the only place a reader of `git log` sees which.
+    relative = os.path.relpath(target, worktree)
+    name = relative.replace(os.sep, ": ", 1)
     for attempt in range(ATTEMPTS):
         if git(worktree, "diff", "--cached", "--quiet", "--", target).returncode == 0:
             return None
-        # Path-limited, so a draft another agent is midway through staging is not
+        # Path-limited, so a file another agent is midway through staging is not
         # swept into this commit. Unsigned because a signature on a local branch
         # nobody pushes buys nothing and can block on a pinentry.
         done = git(worktree, "-c", "commit.gpgsign=false", "commit",
-                   "--quiet", "-m", f"draft: {name}", "--", target)
+                   "--quiet", "-m", name, "--", target)
         if done.returncode == 0:
             return None
         if attempt + 1 < ATTEMPTS:
@@ -127,7 +133,7 @@ def record(worktree, target):
 
 
 def commit(worktree, target):
-    """Stage one draft path and commit it."""
+    """Stage one path and commit it."""
     for attempt in range(ATTEMPTS):
         # -A rather than a plain add, so an Edit that emptied a draft away is
         # recorded as the deletion it is rather than refused as a missing path.
@@ -140,7 +146,7 @@ def commit(worktree, target):
 
 
 def sweep(worktree):
-    """Commit every draft the shell left uncommitted, one commit each.
+    """Commit everything the shell left uncommitted, one commit each.
 
     Staged in one pass rather than parsed out of `status`, because a rename there
     is two fields and a non-ascii name is quoted; the index turns both into plain
@@ -166,8 +172,15 @@ def directory(*candidates):
     return next(one for one in candidates if isinstance(one, str) and one)
 
 
-def written(payload, root, drafts):
-    """The draft a write tool names, or None when it named something else."""
+def worktree_root(directory):
+    """The top of the worktree a linked directory sits in, or None."""
+    done = git(directory, "rev-parse", "--show-toplevel")
+    top = done.stdout.strip()
+    return os.path.realpath(top) if done.returncode == 0 and top else None
+
+
+def written(payload, root, links):
+    """The artefact a write tool names, or None when it named something else."""
     tool_input = payload.get("tool_input")
     if not isinstance(tool_input, dict):
         return None
@@ -176,7 +189,7 @@ def written(payload, root, drafts):
         return None
     target = os.path.realpath(os.path.join(directory(payload.get("cwd"), root),
                                            os.path.expanduser(raw)))
-    return target if contains(drafts, target) else None
+    return target if any(contains(link, target) for link in links) else None
 
 
 def main():
@@ -192,29 +205,36 @@ def main():
 
     try:
         root = directory(os.environ.get("CLAUDE_PROJECT_DIR"), payload.get("cwd"), os.getcwd())
-        drafts = specs_link(root)
-        if drafts is None:
+        links = artefact_links(root)
+        if not links:
             return 0
 
+        target = None
         if tool in SHELL_TOOLS:
-            # Read-only, and the answer for nearly every command that runs here.
-            if not git(drafts, "status", "--porcelain").stdout.strip():
+            # One worktree behind both links, so a status from either answers for
+            # both -- and it is read-only, which is the answer for nearly every
+            # command that runs here.
+            if not git(links[0], "status", "--porcelain").stdout.strip():
                 return 0
-            target = drafts
         else:
-            target = written(payload, root, drafts)
+            target = written(payload, root, links)
             if target is None:
                 return 0
 
-        if not same_repository(root, drafts):
+        home = worktree_root(links[0])
+        if home is None or not same_repository(root, home):
             return 0
-        reason = sweep(drafts) if target is drafts else commit(drafts, target)
+        if target is None:
+            reason = sweep(home)
+            target = home
+        else:
+            reason = commit(home, target)
     except Exception as error:
         reason = f"{type(error).__name__}: {error}"
-        target = SPECS
+        target = LINKED[0]
     if reason is None:
         return 0
-    print(f"The draft was written but not committed, so it is only in the working tree:\n"
+    print(f"It was written but not committed, so it is only in the working tree:\n"
           f"    {target}\n{reason}", file=sys.stderr)
     return 2
 

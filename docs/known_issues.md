@@ -5,9 +5,9 @@ outside, what actually caused it, what closed it, and **what to check first if t
 appears again**. The point is that the second person to see a symptom recognises it in a minute
 instead of re-deriving it from a stack trace.
 
-This is not [`docs/plans/`](plans/), which records the decisions behind one change. An entry here is about a
-symptom, and it earns its place by being hard to diagnose rather than by being recent. Delete one
-when the code it warns about is gone — when a backend is retired, so is its entry.
+An entry here is about a symptom, and it earns its place by being hard to diagnose rather than by
+being recent. Delete one when the code it warns about is gone — when a backend is retired, so is its
+entry.
 
 Each entry states the gates that pin the fix. **If a gate is green and the symptom is back, the
 entry's cause is not this one** — that is the fastest thing the entry can tell you, and it is why the

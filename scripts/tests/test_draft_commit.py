@@ -3,7 +3,7 @@
 `.claude/hooks/draft_commit.py` is a PostToolUse hook, so the write has already
 happened by the time it runs. Exit 2 undoes nothing -- it only tells the model the
 draft is sitting uncommitted, which is the state the hook exists to end. Exit 0 is
-silence, and it is the right answer for every checkout that has no drafts worktree
+silence, and it is the right answer for every checkout that has no artefacts worktree
 linked into it.
 
 The hook is run as a subprocess rather than imported, because that is how Claude
@@ -64,7 +64,7 @@ def checkout(root, branch="master"):
     return root
 
 
-def orphan_worktree(root, path, branch="spec-drafts"):
+def orphan_worktree(root, path, branch="artefacts"):
     """The branch exactly as `ws _drafts` builds it: an empty tree, a parentless
     commit, a ref, and one worktree — never a checkout, so it carries no sources."""
     tree = git(root, "hash-object", "-w", "-t", "tree", os.devnull).stdout.strip()
@@ -76,58 +76,80 @@ def orphan_worktree(root, path, branch="spec-drafts"):
 
 @pytest.fixture
 def linked(tmp_path):
-    """A checkout whose docs/specs links to a worktree of its *own* repository.
+    """A checkout linking docs/specs and docs/plans into a worktree of its *own*
+    repository, one subdirectory each.
 
     That is the real topology and not a detail: the branch being bernini's own is
-    what lets a checkout with no symlink read a draft with `git show`, and what the
-    hook checks before committing anywhere.
+    what lets a checkout with no symlink read one with `git show`, and what the hook
+    checks before committing anywhere.
     """
     root = checkout(tmp_path / "checkout")
-    drafts = orphan_worktree(root, tmp_path / "spec-drafts")
-    (root / "docs" / "specs").symlink_to(drafts)
-    return root, drafts
+    artefacts = orphan_worktree(root, tmp_path / "artefacts")
+    for kind in ("specs", "plans"):
+        (artefacts / kind).mkdir()
+        (root / "docs" / kind).symlink_to(artefacts / kind)
+    return root, artefacts
 
 
-def write(root, name, text):
-    path = root / "docs" / "specs" / name
+def write(root, name, text, kind="specs"):
+    path = root / "docs" / kind / name
     path.write_text(text)
     return str(path)
 
 
 def test_a_draft_is_committed_where_it_lands(linked):
-    root, drafts = linked
+    root, artefacts = linked
     assert run(root, file_path=write(root, "vat.md", "# vat\n")).returncode == SILENT
-    assert log(drafts) == ["draft: vat.md"]
-    assert git(drafts, "status", "--porcelain").stdout == ""
+    assert log(artefacts) == ["specs: vat.md"]
+    assert git(artefacts, "status", "--porcelain").stdout == ""
 
 
 def test_every_revision_is_its_own_commit(linked):
     """One commit per write is what makes the branch a recovery mechanism rather than a
     backup: the version before the one that was wrong is a `git show` away."""
-    root, drafts = linked
+    root, artefacts = linked
     run(root, file_path=write(root, "vat.md", "# vat\n"))
     run(root, file_path=write(root, "vat.md", "# vat\n\nmore\n"))
-    assert log(drafts) == ["draft: vat.md", "draft: vat.md"]
+    assert log(artefacts) == ["specs: vat.md", "specs: vat.md"]
 
 
 def test_a_write_that_changed_nothing_leaves_no_empty_commit(linked):
-    root, drafts = linked
+    root, artefacts = linked
     run(root, file_path=write(root, "vat.md", "# vat\n"))
     assert run(root, file_path=write(root, "vat.md", "# vat\n")).returncode == SILENT
-    assert log(drafts) == ["draft: vat.md"]
+    assert log(artefacts) == ["specs: vat.md"]
 
 
 def test_one_draft_does_not_carry_another_into_its_commit(linked):
     """Several agents share the one worktree, so a draft another session is midway
     through writing must not be swept into this one's commit."""
-    root, drafts = linked
+    root, artefacts = linked
     write(root, "other.md", "half written\n")
     run(root, file_path=write(root, "vat.md", "# vat\n"))
-    assert log(drafts) == ["draft: vat.md"]
-    assert "other.md" in git(drafts, "status", "--porcelain").stdout
+    assert log(artefacts) == ["specs: vat.md"]
+    assert "other.md" in git(artefacts, "status", "--porcelain").stdout
 
 
-def test_a_checkout_with_no_drafts_link_is_untouched(tmp_path):
+def test_a_plan_is_committed_the_same_way_and_says_which_it_is(linked):
+    """Both directories are one worktree, so the subject is the only place `git log`
+    shows whether a commit was a spec or an ADR."""
+    root, artefacts = linked
+    run(root, file_path=write(root, "vat.md", "# vat\n", kind="specs"))
+    run(root, file_path=write(root, "vat.md", "# vat plan\n", kind="plans"))
+    assert log(artefacts) == ["plans: vat.md", "specs: vat.md"]
+
+
+def test_the_shell_sweep_reaches_both_directories(linked):
+    """`git add -A` has to run at the top of the worktree: from inside specs/ it would
+    stage that half and leave an ADR the same command wrote sitting uncommitted."""
+    root, artefacts = linked
+    write(root, "one.md", "# spec\n", kind="specs")
+    write(root, "two.md", "# plan\n", kind="plans")
+    assert run(root, tool="Bash", command="true").returncode == SILENT
+    assert sorted(log(artefacts)) == ["plans: two.md", "specs: one.md"]
+
+
+def test_a_checkout_with_no_links_is_untouched(tmp_path):
     """CI, a fresh clone, and every checkout whose `git clean -xfd` took the symlink.
     Bernini knows nothing about a workspace that puts a worktree beside it, so the
     absence of the link is the whole of the test for whether this applies."""
@@ -139,12 +161,12 @@ def test_a_checkout_with_no_drafts_link_is_untouched(tmp_path):
 
 
 def test_a_real_directory_of_that_name_is_left_to_the_checkouts_own_git(tmp_path):
-    """A drafts directory that resolves inside the checkout is an ordinary part of the
+    """A specs directory that resolves inside the checkout is an ordinary part of the
     tree, and committing it here would commit into the wrong repository."""
     root = tmp_path / "checkout"
-    drafts = root / "docs" / "specs" / "drafts"
-    drafts.mkdir(parents=True)
-    target = drafts / "vat.md"
+    specs = root / "docs" / "specs"
+    specs.mkdir(parents=True)
+    target = specs / "vat.md"
     target.write_text("# vat\n")
     assert run(root, file_path=str(target)).returncode == SILENT
 
@@ -176,12 +198,12 @@ def test_a_link_into_another_repository_commits_nothing(tmp_path):
 
 
 def test_a_write_outside_the_worktree_is_not_this_hooks_business(linked):
-    root, drafts = linked
+    root, artefacts = linked
     (root / "libs").mkdir()
     target = root / "libs" / "Renderer.cpp"
     target.write_text("int main() {}\n")
     assert run(root, file_path=str(target)).returncode == SILENT
-    assert log(drafts) == []
+    assert log(artefacts) == []
 
 
 def test_the_reading_tools_are_never_in_the_way(linked):
@@ -198,74 +220,74 @@ def test_the_reading_tools_are_never_in_the_way(linked):
 # loss window with an ask session.
 
 def test_a_draft_written_by_the_shell_is_committed_too(linked):
-    root, drafts = linked
+    root, artefacts = linked
     write(root, "vat.md", "# vat\n")
     assert run(root, tool="Bash", command="sed -i '' s/x/y/ docs/specs/vat.md").returncode == SILENT
-    assert log(drafts) == ["draft: vat.md"]
+    assert log(artefacts) == ["specs: vat.md"]
 
 
 def test_the_shell_path_reads_the_worktree_and_not_the_command(linked):
     """The command line is never parsed -- that is the guard's abandoned approach, and
     a draft can be written by a composition no parser sees. What changed is looked up."""
-    root, drafts = linked
+    root, artefacts = linked
     write(root, "one.md", "# one\n")
     write(root, "two.md", "# two\n")
     assert run(root, tool="Bash", command="true").returncode == SILENT
-    assert sorted(log(drafts)) == ["draft: one.md", "draft: two.md"]
+    assert sorted(log(artefacts)) == ["specs: one.md", "specs: two.md"]
 
 
 def test_a_shell_command_that_touched_no_draft_commits_nothing(linked):
-    root, drafts = linked
+    root, artefacts = linked
     assert run(root, tool="Bash", command="ls").returncode == SILENT
-    assert log(drafts) == []
+    assert log(artefacts) == []
 
 
 def test_a_deletion_by_the_shell_is_recorded(linked):
     """`rm` is how the 2026-09-01 loss looked from the outside. The commit is what makes
     it recoverable -- the version before it is still on the branch."""
-    root, drafts = linked
+    root, artefacts = linked
     run(root, file_path=write(root, "vat.md", "# vat\n"))
-    (drafts / "vat.md").unlink()
+    (artefacts / "specs" / "vat.md").unlink()
     assert run(root, tool="Bash", command="rm docs/specs/vat.md").returncode == SILENT
-    assert log(drafts) == ["draft: vat.md", "draft: vat.md"]
-    assert "vat.md" in git(drafts, "show", "--name-only", "--format=", "HEAD~1").stdout
+    assert log(artefacts) == ["specs: vat.md", "specs: vat.md"]
+    assert "vat.md" in git(artefacts, "show", "--name-only", "--format=", "HEAD~1").stdout
 
 
 def test_a_notebook_carries_its_path_under_another_name(linked):
-    root, drafts = linked
+    root, artefacts = linked
     path = write(root, "vat.md", "# vat\n")
     assert run(root, tool="NotebookEdit", notebook_path=path).returncode == SILENT
-    assert log(drafts) == ["draft: vat.md"]
+    assert log(artefacts) == ["specs: vat.md"]
 
 
 def test_a_commit_that_fails_is_reported_and_not_swallowed(linked):
     """Silence about an uncommitted draft is exactly the failure this file exists to
     prevent, so the one thing worth doing on the way out is saying so."""
-    root, drafts = linked
-    hooks = drafts / "hooks"
+    root, artefacts = linked
+    hooks = artefacts / "hooks"
     hooks.mkdir()
     refuse = hooks / "pre-commit"
     refuse.write_text("#!/bin/sh\nexit 1\n")
     refuse.chmod(0o755)
-    git(drafts, "config", "core.hooksPath", "hooks")
+    git(artefacts, "config", "core.hooksPath", "hooks")
 
     done = run(root, file_path=write(root, "vat.md", "# vat\n"))
     assert done.returncode == REPORTED
     assert "vat.md" in done.stderr
-    assert log(drafts) == []
+    assert log(artefacts) == []
 
 
 def test_git_that_hangs_is_not_allowed_to_hold_the_turn(linked, monkeypatch):
     """A PostToolUse hook sits in front of the result the agent is waiting for, and a
     commit is the one call here that can block rather than fail -- a stale lock, or a
     signing prompt with no terminal to answer it."""
-    root, drafts = linked
-    hooks = drafts / "hooks"
+    root, artefacts = linked
+    hooks = artefacts / "hooks"
     hooks.mkdir()
     stall = hooks / "pre-commit"
     stall.write_text("#!/bin/sh\nsleep 5\n")
     stall.chmod(0o755)
-    git(drafts, "config", "core.hooksPath", "hooks")
+    git(artefacts, "config", "core.hooksPath", "hooks")
 
     started = time.monotonic()
     env = dict(os.environ, CLAUDE_PROJECT_DIR=str(root), DRAFT_COMMIT_TIMEOUT="1")
@@ -275,7 +297,7 @@ def test_git_that_hangs_is_not_allowed_to_hold_the_turn(linked, monkeypatch):
                           capture_output=True, text=True)
     assert done.returncode == REPORTED
     assert time.monotonic() - started < 15
-    assert log(drafts) == []
+    assert log(artefacts) == []
 
 
 @pytest.mark.parametrize("payload", [

@@ -1,6 +1,6 @@
 ---
 name: bcp-feature
-description: Use when a change is too large to land on master as one PR — cuts an empty integration branch feat/<name>, gets the plan reviewed as its own PR, then lands the work one task at a time as small PRs into that branch, watching each one and revising until the user merges it. Only the finished feature is proposed to master. Also resumes an existing feature and reports its state. Triggers: "bcp-feature X <prompt>", "start a feature branch for X", "continue the feature", "what's left on the feature", "land the feature".
+description: Use when a change is too large to land on master as one PR — cuts an empty integration branch feat/<name>, writes the plan on the artefacts branch, then lands the work one task at a time as small PRs into that branch, watching each one and revising until the user merges it. Only the finished feature is proposed to master. Also resumes an existing feature and reports its state. Triggers: "bcp-feature X <prompt>", "start a feature branch for X", "continue the feature", "what's left on the feature", "land the feature".
 ---
 
 # Running a Bernini feature branch
@@ -11,16 +11,16 @@ PR at a time. Only the finished feature is proposed to `master`.
 
 ## The loop
 
-Everything is a PR into `feat/<name>` — the plan included. Every PR is watched. The user merges every
-one.
+Every *change* is a PR into `feat/<name>`. Every PR is watched. The user merges every one. The plan
+is the exception and not a PR at all — it lives on the `artefacts` branch, which nothing merges.
 
 ```
 bcp-feature <name> <prompt>
   │
   ├─ § 0  grill the request → consensus, written straight in  (nothing is created yet)
   ├─ § 1  cut feat/<name> from origin/master, empty, and publish it
-  ├─ § 2  plan PR      → watch → revise → user merges
-  ├─ § 3  task 1 PR    → watch → revise → user merges
+  ├─ § 2  write the plan  (committed on the artefacts branch; no PR, nothing on master)
+  ├─ § 3  task 1 PR    → watch → revise → user merges       (its body carries the consensus)
   │       task 2 PR    → watch → revise → user merges       (one at a time)
   │       …
   └─ § 5  the whole feature → PR to master
@@ -62,7 +62,7 @@ work:
 # feat/culling — <one line: what the feature delivers>
 plan: docs/plans/culling.md
 
-- [x] the plan — #111, merged
+- [x] the plan — on `artefacts`, no PR
 - [x] frustum planes on the camera — #112, merged
 - [>] per-instance cull compute pass — #118, in review
 - [ ] cull results feed the indirect draw
@@ -75,8 +75,8 @@ plan: docs/plans/culling.md
 **Nothing is created until the request has been grilled** — not the branch, not the tracker, not the
 plan. Run [bcp-grill](.claude/skills/bcp-grill/SKILL.md) on the prompt and close on a consensus once
 every question has its answer — no chat confirmation of the summary; the user confirms it by
-reviewing § 2's plan PR, whose head it is. With nobody at the keyboard it stops and waits on its
-questions rather than answering itself.
+reviewing the **first task PR**, whose body carries it. With nobody at the keyboard it stops and
+waits on its questions rather than answering itself.
 
 It runs ahead of § 1 because it is allowed to conclude that this feature should not exist: that the
 work is one PR to `master` after all ([bcp-implement](.claude/skills/bcp-implement/SKILL.md)), that
@@ -130,7 +130,7 @@ Task branches are **siblings** of the feature branch, never children: git stores
 once `feat/culling` exists no ref may begin `feat/culling/`. The push fails with
 `cannot lock ref ... exists; cannot create`, which does not explain itself.
 
-## 2. The plan, as its own PR
+## 2. The plan, written where it lives
 
 Read the code first — the docs the change touches (index in [CLAUDE.md](CLAUDE.md)) and the real
 source. A decomposition invented from the prompt text splits along the words rather than the seams,
@@ -160,23 +160,21 @@ should find that out before reading the decomposition that assumes them:
 
 It records reasoning and the shape of what does not exist yet — not a mirror of the code, which is
 what the source and `docs/` are for. Follow [bcp-docs](.claude/skills/bcp-docs/SKILL.md) for prose.
-It lives only as long as the feature: § 5 deletes it, once whatever should outlive the feature has
-moved into `docs/`.
+It lives only as long as the feature: delete it once whatever should outlive the feature has moved
+into `docs/`.
 
-```bash
-git switch -c docs/<name>-plan feat/<name>
-git add docs/plans/<name>.md
-git commit -m "docs(plans): plan <what the feature delivers>"   # the hook adds the bot co-author
-# spawn bcp-precheck here (§ 3), and act on it before pushing
-git push -u origin HEAD
-just pr create --base feat/<name> --body-file <file>
-```
+`docs/plans/` is a symlink onto the `artefacts` branch and is **not on master**, so the plan is
+committed there by `.claude/hooks/draft_commit.py` as you write it. Nothing is staged, nothing is
+pushed, and there is no plan PR: a file that cannot land cannot be proposed.
 
-The body is short by nature — [bcp-implement § 10](.claude/skills/bcp-implement/SKILL.md)'s shape,
-with the plan itself as the content and no box under `## Needs a human`, stated as such.
+What that costs is the gate the plan PR used to be, and § 3's first task PR is where it moves. Its
+body carries `## Design notes` — one line per ADR, with the alternative each rejected — so the
+boundaries are still the first thing the user reads, and a wrong one still comes back as a review
+comment before a second task is cut. Spawn [`bcp-precheck`](.claude/agents/bcp-precheck.md) on that
+first task with the plan in hand, exactly as the plan PR used to.
 
-The plan is where a design finding is cheapest of all — it costs a paragraph here and a rewrite once
-the tasks have landed.
+The plan is still where a design finding is cheapest of all — it costs a paragraph here and a rewrite
+once the tasks have landed.
 
 Then § 4. **No task branch is cut until this PR merges** — the plan fixes what every later PR is
 measured against, and a decomposition reviewed after three tasks have landed is reviewed too late to
@@ -233,10 +231,11 @@ git push -u origin HEAD
 just pr create --base feat/<name> --body-file <file>
 ```
 
-**Every PR this skill opens is read by [`bcp-precheck`](.claude/agents/bcp-precheck.md) first**, the
-plan's and § 5's included. Spawn it with the Agent tool, `subagent_type: bcp-precheck`, one tier below
-your own model, after the last verification step and before the push — § 2 has no rebase to hang it
-on, § 5 needs its base named explicitly. It reads the diff against the base for code that already
+**Every PR this skill opens is read by [`bcp-precheck`](.claude/agents/bcp-precheck.md) first**,
+§ 5's included. Spawn it with the Agent tool, `subagent_type: bcp-precheck`, one tier below
+your own model, after the last verification step and before the push — § 5 needs its base named
+explicitly. § 2 opens no PR, so the first task's is where the plan is first read back against a
+diff. It reads the diff against the base for code that already
 exists in `core`, a design that fights `ROADMAP.md` or departs from the standard with no ADR saying
 so, work that crosses a non-goal or contradicts an ADR in the plan, cost that is infeasible at AAA
 asset scale, and `STYLE.md` breaks. A `block` verdict means fix and re-run; the PR does not open
@@ -265,12 +264,13 @@ the landing PR, where the feature is verified as one thing"* — so a reader can
 an oversight. § 5 is where the box is written. **Eyes** boxes are unaffected and stay per task: a
 picture is judged beside the change that drew it, and by then the feature may have drawn over it.
 
-The plan is a hypothesis. When a task disproves it, correct `docs/plans/<name>.md` **in that task's
-PR**, so the correction is reviewed beside the code that forced it.
+The plan is a hypothesis. When a task disproves it, correct `docs/plans/<name>.md` as you go — the
+hook commits the correction on the artefacts branch — and say what changed in that task's PR body, so
+the reviewer sees it beside the code that forced it.
 
 ## 4. Watch, revise, wait for the merge
 
-Applies to every PR this skill opens, the plan's included.
+Applies to every PR this skill opens. § 2 opens none, so the first one is task 1's.
 
 **Report to the user in chat** — the PR, what it contains, what is next. Then start the watcher **in
 the background**, as the last action of the turn:
@@ -400,10 +400,10 @@ Then § 4 again.
 Read the plan against what actually shipped first: anything it still promises that the feature did
 not do is a correction for the last task PR. Whatever in it should outlive the feature — how the
 code now *behaves*, the decisions worth keeping — belongs in a subsystem page under `docs/`: move it
-there with [bcp-docs](.claude/skills/bcp-docs/SKILL.md), then **delete the plan** — by PR into
-`feat/<name>` like everything else, the feature's last, so the landing PR carries the deletion.
-A plan is scaffolding for the feature's review, not documentation; once the feature lands,
-`docs/*.md` is the record, and a kept plan is a second source of truth waiting to disagree.
+there with [bcp-docs](.claude/skills/bcp-docs/SKILL.md), then **delete the plan**, which is a plain
+`rm` in `docs/plans/` that the hook commits on the artefacts branch. No PR carries it: the plan was
+never on master. A plan is scaffolding for the feature's review, not documentation; once the feature
+lands, `docs/*.md` is the record, and a kept plan is a second source of truth waiting to disagree.
 
 `master` moves under a long feature. Rebase onto it when it drifts, and only when **no PR is open** —
 a rebase rewrites the commits those PRs are based on, and each then shows a diff nobody wrote. With
@@ -426,7 +426,8 @@ needs no cleanup either way: it went with the landing PR.
 - **Never merge a PR.** Continuous review is the entire point, and it only works if a human approves.
 - **Never cut the branch before the grill closes.** § 0 comes first, and it may end the feature.
 - **Never commit directly onto `feat/<name>` or `master`.** Everything arrives by PR.
-- **Never cut a task branch before the plan PR has merged.**
+- **Never cut a task branch before the plan is written.** § 2 is what task 1 is measured against,
+  and the first task PR's body is where the user first sees the boundaries.
 - **Never let a task quietly cross a non-goal.** Either it goes back to the grill and the ADR is
   amended in that PR, or the work is cut.
 - **Never open a PR without `--base`.** The default is `master` and it will be wrong.

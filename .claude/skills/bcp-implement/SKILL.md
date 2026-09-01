@@ -34,8 +34,8 @@ surfaces, which sends the work to [bcp-feature](.claude/skills/bcp-feature/SKILL
 is cut.
 
 Once the grill closes, write the consensus straight into `docs/plans/<name>.md` as the document's
-head — do not ask for a chat confirmation first; the user confirms it by reviewing this file where it
-lands, as the PR's first commit. It is an Architecture Decision Record, one entry per decision:
+head — do not ask for a chat confirmation first. It is an Architecture Decision Record, one entry per
+decision:
 
 ```markdown
 # <name> — implementation plan
@@ -56,22 +56,20 @@ What breaks today, and why now.
 Decisions and boundaries only — **no implementation steps**. § 3 appends the commit slices below it,
 and that is the whole document.
 
-The plan is the **first commit of the PR**, so a reviewer reads the boundaries before the diff, and
-[`bcp-precheck`](.claude/agents/bcp-precheck.md) § 4 later reads the diff back against them. That
-review *is* the consensus's confirmation: a boundary the user disagrees with comes back as a comment
-on the plan file, and [bcp-revise](.claude/skills/bcp-revise/SKILL.md) amends the ADR and whatever
-was built on it in the same revision.
+**`docs/plans/` is not on master.** It is a symlink onto the `artefacts` branch, beside `docs/specs/`,
+and `.claude/hooks/draft_commit.py` commits the file as you write it. A plan is a document about the
+change rather than documentation of the tree, addressed to whoever reviews it — so it never enters a
+commit here and never appears in the diff.
 
-It is **kept**, where a feature's plan is deleted at landing
-([bcp-feature § 5](.claude/skills/bcp-feature/SKILL.md)) — and the difference is what is in it, not
-the lifetime rule. A feature's plan carries a survey, a what-changes and a task list, all of which
-mirror code and therefore rot. This one carries a conversation that happened on a date, which cannot.
-Keep that true by keeping the file thin: anything describing how the code now **behaves** moves into
-`docs/` under § 7, and what stays is the decision and the alternative it rejected.
+The consensus therefore reaches the reviewer through the **PR body**: `## Design notes` (§ 10) carries
+one line per ADR, with the alternative each rejected, and that is where a boundary the user disagrees
+with comes back as a comment. [`bcp-precheck`](.claude/agents/bcp-precheck.md) § 4 reads the diff back
+against the plan file, which it opens through the symlink like any other file.
 
-**An ADR is amended only by a change that reverses it**, in that change's own PR. Never edit one to
-match code that drifted — that is precisely what turns it into a second source of truth, and it is
-why a feature's plan is deleted rather than maintained.
+Keep it thin: anything describing how the code now **behaves** moves into `docs/` under § 7, and what
+stays is the decision and the alternative it rejected. **An ADR is amended only by a change that
+reverses it.** Never edit one to match code that drifted — that is precisely what turns it into a
+second source of truth.
 
 ## 1. Read before writing
 
@@ -231,8 +229,7 @@ just format <files...>          # in place
 just format --check <files...>  # verify only
 ```
 
-`docs/plans/<name>.md` is the **first** commit — `docs(plans): plan <what it delivers>` — ahead of
-every slice, so the boundaries are the first thing in the log and the first thing in the diff.
+`docs/plans/<name>.md` is committed for you, on the artefacts branch, and is not part of this PR.
 
 Commit each slice with a message that says **why**, not what — the diff already says what. Subject
 line `type(scope): imperative summary`. Attribution is not your job: `.githooks/prepare-commit-msg`
@@ -286,7 +283,8 @@ Nothing else. No *what was wrong* narrative, no *how it works now*, no note on s
 commits and `docs/` each already carry one of those. `## Design notes` is where § 0's ADRs land, one
 line apiece, and `## Left out` is where its non-goals do — a reviewer must be able to tell a
 deliberate gap from an oversight, and that is the only sentence in the body they cannot get from the
-code. Where a `docs/plans/<name>.md` exists, link it from both rather than restating it.
+code. The plan file is not on master, so there is nothing to link: the two sections above are the
+whole of what a reviewer sees of it.
 
 **Do not tabulate the diff.** `just pr create` appends its own breakdown — production, shaders,
 tests, docs, tooling, assets — computed from `git diff --numstat` against the base, inside a fenced
