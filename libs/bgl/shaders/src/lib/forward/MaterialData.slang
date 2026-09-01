@@ -40,6 +40,19 @@ struct MaterialData
     // Handle `index` of the record at `byteOffset`, found by position: a payload's handle fields
     // lead it and are contiguous. PbrMaterial.slang and LoosePbrMaterial.slang fix that order.
     Texture2D.Handle GetTextureAt(uint byteOffset, uint index) { return materials.GetHandleAt(byteOffset + cRawPayloadOffset, index); }
+
+    SurfaceEnv GetSurfaceEnv()
+    {
+        SurfaceEnv env;
+        env.cameraPos = cameraPos;
+        env.exposure = exposure;
+        env.irradianceMap = irradianceMap;
+        env.prefilterMap = prefilterMap;
+        env.brdfLUT = brdfLUT;
+        env.clampSampler = linearClampSampler;
+        env.envRotation = envRotation;
+        return env;
+    }
 };
 
 ConstantBuffer<MaterialData> materialData;
@@ -179,19 +192,13 @@ SurfaceLobes EvaluateWithBaseColor<M : IPbrMaterial>(ForwardVSOut input, M mater
     let wrapSampler = materialData.anisoLinearWrapSampler;
 
     return EvaluateSurface(
+        materialData.GetSurfaceEnv(),
         input,
         baseColor,
         material.GetORM(wrapSampler, input.uv),
         material.GetNormalXY(wrapSampler, input.uv),
         material.GetSpecular(),
-        isFrontFace,
-        materialData.cameraPos,
-        materialData.irradianceMap,
-        materialData.prefilterMap,
-        materialData.brdfLUT,
-        materialData.linearClampSampler,
-        materialData.exposure,
-        materialData.envRotation
+        isFrontFace
     );
 }
 
