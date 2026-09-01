@@ -84,7 +84,7 @@ TEST_CASE(
 
 	constexpr uint32_t c_PaddedCount = c_ThreadsPerGroup;
 
-	auto meshBuffer = bgl::EntryBuffer<bgl::idl::Mesh>();
+	auto meshBuffer = bgl::EntryBuffer<bgl::idl::MeshInstance>();
 	{
 		auto desc         = bgl::EntryBufferDesc();
 		desc.initialCount = c_PaddedCount;
@@ -107,8 +107,10 @@ TEST_CASE(
 
 	for (const Placement& placement : placements)
 	{
-		auto mesh      = bgl::idl::Mesh();
-		mesh.transform = glm::translate(glm::mat4(1.0f), glm::vec3(0.0f, 0.0f, placement.z));
+		auto mesh = bgl::idl::MeshInstance();
+		bgl::WriteInstanceTransform(
+			mesh,
+			glm::translate(glm::mat4(1.0f), glm::vec3(0.0f, 0.0f, placement.z)));
 
 		const auto meshHandle = meshBuffer.Add(mesh);
 

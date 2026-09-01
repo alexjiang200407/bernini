@@ -1,8 +1,7 @@
 // THIS IS A FILE GENERATED FROM SkinnedState.slang. DO NOT EDIT MANUALLY
 
-import Entry;
+import ClipPlayback;
 import Range;
-import Rig;
 
 // A hero instance's playback record, written once at spawn and never touched per frame -- time is
 // the only per-frame input, and it arrives through ViewData, not here. SkinnedTableState is the same
@@ -10,16 +9,7 @@ import Rig;
 // placement draws from.
 public struct SkinnedState
 {
-    public Entry<Rig> rig;
-
-    public uint clip; // index into the rig's clip table
-
-    // Frame position within the clip: the spawn phase offset under playback, and the frozen frame an
-    // instance shows when `rate` is zero.
-    public float phase;
-
-    // Play-rate multiplier on the clip's authored sampleRate.
-    public float rate;
+    public ClipPlayback playback;
 
     // This instance's slice of the view's bone-palette buffer, in float4s. Two palettes live in it
     // back to back -- the pose at ViewData::time first, then the pose at ViewData::prevTime

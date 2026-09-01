@@ -1189,8 +1189,9 @@ namespace bgl
 			{
 				const assetlib::Meshlet& ml = mesh.meshlets[src.firstMeshlet + m];
 
-				// The counts also bound idl::Meshlet's 16-bit fields: a wider one would truncate
-				// on upload and claim elements its streams do not hold.
+				// A loose bound, not a truncation guard -- both sides' counts are uint32.
+				// What the mesh stage can actually emit is cMaxVerticesPerMeshlet /
+				// cMaxPrimsPerMeshlet, and only PrepareMeshlet checks that.
 				if (ml.vertexCount > std::numeric_limits<uint16_t>::max() ||
 				    ml.triangleCount > std::numeric_limits<uint16_t>::max() ||
 				    static_cast<uint64_t>(ml.vertexOffset) + ml.vertexCount >
@@ -1201,7 +1202,7 @@ namespace bgl
 					throw SceneError(
 						std::format(
 							"CookStaticMesh: submesh {} meshlet {} overflows its streams or the "
-							"meshlet's 16-bit counts",
+							"meshlet count bound",
 							s,
 							m));
 				}

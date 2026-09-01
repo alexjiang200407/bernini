@@ -256,7 +256,7 @@ namespace
 		auto& meshBuffer = view->GetMeshBuffer();
 		auto& playback   = view->GetPlaybackArena();
 
-		const bgl::idl::Mesh& mesh = meshBuffer.AtIndex(instance.handle.index);
+		const bgl::idl::MeshInstance& mesh = meshBuffer.AtIndex(instance.handle.index);
 		REQUIRE_FALSE(mesh.playback.Null());
 
 		return playback.GetPayloadAt<bgl::idl::SkinnedState>(mesh.playback.byteOffset)

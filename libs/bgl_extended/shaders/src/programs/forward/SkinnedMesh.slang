@@ -30,11 +30,14 @@ void MSMain(
 
     SetMeshOutputCounts(ctx.meshlet.vertexCount, ctx.meshlet.triangleCount);
 
+    // One group is one instance, so the pose is the group's and is resolved before the loop.
+    let pose = ResolveSkinnedPose(ctx);
+
     // A meshlet holds up to cMaxVerticesPerMeshlet vertices, which the group's cMeshGroupSize threads
     // cover by striding. Never assume one thread per vertex: the two counts are unrelated.
     for (uint v = gtid; v < ctx.meshlet.vertexCount; v += cMeshGroupSize)
     {
-        verts[v] = SkinnedVertex(ctx, payload.instance, v);
+        verts[v] = SkinnedVertex(ctx, pose, payload.instance, v);
     }
 
     // Same striding. Every triangle SetMeshOutputCounts declared must be written, or the unwritten

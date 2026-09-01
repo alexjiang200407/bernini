@@ -150,14 +150,14 @@ TEST_CASE("Buffer contents around mesh deletion", "[delete][buffers][scene]")
 	auto& instanceBuffer = view->GetInstanceBuffer();
 	auto& meshBuffer     = view->GetMeshBuffer();
 
-	// inst.handle now refers to the per-placement Mesh record; the mesh instance owns
+	// inst.handle now refers to the MeshInstance record; the placement owns
 	// one submesh-instance per submesh (the cube has exactly one).
 	const uint32_t meshIndex = inst.handle.index;
 
 	REQUIRE(meshBuffer.MetaAt(meshIndex).submeshInstances.size() == 1);
 	const auto submeshInstance = meshBuffer.MetaAt(meshIndex).submeshInstances[0];
 
-	// The per-placement Mesh (owned by the view) carries the submeshes descriptor.
+	// The MeshInstance (owned by the view) carries the submeshes descriptor.
 	const uint32_t submeshRoot = meshBuffer.AtIndex(meshIndex).submeshes.range.offsetStart;
 
 	const auto& submesh = submeshBuffer.AtIndex(submeshRoot);
@@ -176,8 +176,8 @@ TEST_CASE("Buffer contents around mesh deletion", "[delete][buffers][scene]")
 		// EntryBuffer (mesh record): live. It no longer records its source geom -- an instance
 		// references geometry only by the submesh range it copied.
 		CHECK(meshBuffer.IsIndexValid(meshIndex));
-		CHECK(meshBuffer.AtIndex(meshIndex).transform[0][0] == 1.0f);
-		CHECK(meshBuffer.AtIndex(meshIndex).transform[3][3] == 1.0f);
+		CHECK(meshBuffer.AtIndex(meshIndex).transform[0] == glm::vec4(1.0f, 0.0f, 0.0f, 0.0f));
+		CHECK(meshBuffer.AtIndex(meshIndex).transform[2] == glm::vec4(0.0f, 0.0f, 1.0f, 0.0f));
 
 		// Geometry (CPU-side): alive. Nothing counts the instances referencing it.
 		CHECK(scene->IsGeomAlive(geom));

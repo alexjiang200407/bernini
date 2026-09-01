@@ -101,7 +101,7 @@ are the source of truth; when this doc disagrees, trust them, then fix this doc.
 | `public struct` | [Meshlet.slang](libs/bgl_extended/idl/src/Meshlet.slang) | `struct` + `sizeof`/`offsetof` asserts | Layout via host reflection. |
 | `public enum` | [VertexLayout.slang](libs/bgl_extended/idl/src/VertexLayout.slang) | `enum class : <underlying>` + `sizeof` assert | Values parsed textually; see contracts. |
 | `public static const` | [Constants.slang](libs/bgl_extended/idl/src/Constants.slang) | `constexpr <type> = <expr>` | RHS copied verbatim; `public` needed for shader import. |
-| `import <Module>` | [Mesh.slang](libs/bgl_extended/idl/src/Mesh.slang) | `#include "idl/<Module>.h"` | Only emitted for referenced types. |
+| `import <Module>` | [MeshInstance.slang](libs/bgl_extended/idl/src/MeshInstance.slang) | `#include "idl/<Module>.h"` | Only emitted for referenced types. |
 | `interface` / generic-only | [IMaterial.slang](libs/bgl_extended/idl/src/IMaterial.slang), [RangeWithCount.slang](libs/bgl_extended/idl/src/RangeWithCount.slang) | *(none)* | Slang copy only; no concrete layout. |
 
 ### CLI options ([libs/bgl_extended/idl/idlgen.cpp](libs/bgl_extended/idl/idlgen.cpp))

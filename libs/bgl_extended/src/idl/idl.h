@@ -9,7 +9,7 @@
 #include "idl/Entry.h"
 #include "idl/InstanceVisibility.h"
 #include "idl/LoosePbrMaterial.h"
-#include "idl/Mesh.h"
+#include "idl/MeshInstance.h"
 #include "idl/Meshlet.h"
 #include "idl/PbrMaterial.h"
 #include "idl/PlaybackType.h"

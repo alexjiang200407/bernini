@@ -19,6 +19,7 @@
 #include "uniforms/Uniforms.h"
 #include "util/GpuValidation.h"
 #include "util/TestOptions.h"
+#include "util/util.h"
 #include <bgl/Camera.h>
 #include <bgl/IGraphics.h>
 #include <core/math.h>
@@ -102,7 +103,7 @@ TEST_CASE("Instances outside the frustum are culled, those inside survive", "[cu
 	submesh.boundingSphere  = glm::vec4(0.0f, 0.0f, 0.0f, 1.0f);
 	const auto submeshRange = submeshBuffer.Add(std::span<const bgl::idl::Submesh>(&submesh, 1));
 
-	auto meshBuffer = bgl::EntryBuffer<bgl::idl::Mesh>();
+	auto meshBuffer = bgl::EntryBuffer<bgl::idl::MeshInstance>();
 	{
 		auto desc         = bgl::EntryBufferDesc();
 		desc.initialCount = c_LiveCount;
@@ -120,9 +121,9 @@ TEST_CASE("Instances outside the frustum are culled, those inside survive", "[cu
 
 	for (const Placement& p : placements)
 	{
-		auto mesh      = bgl::idl::Mesh();
-		mesh.transform = glm::translate(glm::mat4(1.0f), p.position);
+		auto mesh      = bgl::idl::MeshInstance();
 		mesh.submeshes = submeshRange;
+		bgl::WriteInstanceTransform(mesh, glm::translate(glm::mat4(1.0f), p.position));
 
 		const auto meshHandle = meshBuffer.Add(mesh);
 

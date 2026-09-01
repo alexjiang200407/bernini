@@ -9,7 +9,7 @@
 // of them.
 
 import idl.Constants;
-import idl.Mesh;
+import idl.MeshInstance;
 import idl.Meshlet;
 import idl.Submesh;
 import lib.debug.dbg;
@@ -26,7 +26,7 @@ public ConstantBuffer<ViewData> viewData;
 // The tables one mesh-shader group draws from, resolved once per group rather than per vertex.
 public struct MeshletContext
 {
-    public Mesh mesh;
+    public MeshInstance mesh;
     public Submesh submesh;
     public Meshlet meshlet;
 };

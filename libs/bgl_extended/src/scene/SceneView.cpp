@@ -63,7 +63,7 @@ namespace bgl
 			auto meshBufferDesc         = EntryBufferDesc();
 			meshBufferDesc.initialCount = m_InitialInstances;
 			meshBufferDesc.debugName    = "Mesh Buffer";
-			meshBufferDesc.blockSize    = sizeof(idl::Mesh) * 256;
+			meshBufferDesc.blockSize    = sizeof(idl::MeshInstance) * 256;
 
 			m_MeshBuffer.Init(std::move(meshBufferDesc), m_ResourceManager);
 		}
@@ -217,7 +217,7 @@ namespace bgl
 				"GeomHandle passed to CreateStaticMeshInstance has expired or is invalid");
 		}
 
-		// No playback record: a static placement's Mesh.playback stays null.
+		// No playback record: a static placement's MeshInstance.playback stays null.
 		return WritePlacement(geom, transform, 0);
 	}
 
@@ -258,12 +258,12 @@ namespace bgl
 			// what lets the mesh shader write a motion vector without a history buffer.
 			palette = m_Palettes.Allocate(idl::cFloat4sPerBone * rig.boneCount * 2);
 
-			auto state    = idl::SkinnedState();
-			state.rig     = rig.record;
-			state.clip    = desc.clip;
-			state.phase   = desc.phase;
-			state.rate    = desc.rate;
-			state.palette = palette;
+			auto state           = idl::SkinnedState();
+			state.playback.rig   = rig.record;
+			state.playback.clip  = desc.clip;
+			state.playback.phase = desc.phase;
+			state.playback.rate  = desc.rate;
+			state.palette        = palette;
 
 			record = m_Playback.AddRecord(
 				idl::PlaybackType::kSkinned,
@@ -275,11 +275,11 @@ namespace bgl
 			// pays for a table. RigFramesPass fills it before anything reads it this frame.
 			m_SceneRaw->RequestBoneAnimTable(RigHandle{ rig.record });
 
-			auto state  = idl::SkinnedTableState();
-			state.rig   = rig.record;
-			state.clip  = desc.clip;
-			state.phase = desc.phase;
-			state.rate  = desc.rate;
+			auto state           = idl::SkinnedTableState();
+			state.playback.rig   = rig.record;
+			state.playback.clip  = desc.clip;
+			state.playback.phase = desc.phase;
+			state.playback.rate  = desc.rate;
 
 			record = m_Playback.AddRecord(
 				idl::PlaybackType::kSkinnedTable,
@@ -315,9 +315,9 @@ namespace bgl
 			// leaves it drawing whatever lands in that range next.
 			const idl::RangeWithCount submeshes = m_SceneRaw->GetGeomSubmeshes(geom.handle.index);
 
-			auto mesh      = idl::Mesh();
-			mesh.transform = transform;
+			auto mesh      = idl::MeshInstance();
 			mesh.submeshes = submeshes;
+			WriteInstanceTransform(mesh, transform);
 
 			// One field for either tier: the record's own header says which, so nothing here
 			// decides it. Zero stays zero, which is the null a static placement wants.
@@ -677,8 +677,8 @@ namespace bgl
 	void
 	SceneView::RefreshSubmeshInstance(uint32_t meshIndex, uint32_t submeshIndex)
 	{
-		const idl::Mesh& mesh = m_MeshBuffer.AtIndex(meshIndex);
-		const MeshMeta&  meta = m_MeshBuffer.MetaAt(meshIndex);
+		const idl::MeshInstance& mesh = m_MeshBuffer.AtIndex(meshIndex);
+		const MeshMeta&          meta = m_MeshBuffer.MetaAt(meshIndex);
 
 		const core::slot_handle handle = meta.submeshInstances[submeshIndex];
 		if (!m_InstanceBuffer.IsValid(handle))

@@ -204,6 +204,15 @@ before building the thing it describes, and delete it when that thing lands.
   the cheaper alternative was never priced, and no GPU timestamp exists to price it.
 - [Animation compression](./docs/specs/animation_compression.md) — a 663-bone rig's clips are 60 MB
   uncompressed; why collapsing constant tracks was measured and dropped, and what to build instead.
+- [GPU scene instance split](./docs/specs/gpu_scene_instance_split.md) — one record holds the
+  placement's transform and the geom's submesh range, so per-unit variation has nowhere to live,
+  culling repeats itself per submesh, and a moving instance has no previous transform.
+- [PSO sort key](./docs/specs/pso_sort_key.md) — `PsoType` flattens (tier, material, alpha mode) into
+  an enumerator that `IsTransparentPso` then un-flattens by listing members, in two languages; LOD
+  tiers and per-view culling multiply it.
+- [Vertex layout per submesh](./docs/specs/vertex_layout_per_submesh.md) — 104 of a `Submesh`'s 144
+  bytes are a decode rule shared by nearly every submesh, and `DecodeVertex` interprets it per
+  vertex.
 
 **[Plans and Decision Records](./docs/plans/)**
 

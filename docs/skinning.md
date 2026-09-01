@@ -244,7 +244,7 @@ not obvious from a signature. The headers linked below are the source of truth.
 | Upload the mesh | [`IScene::AddSkinnedMeshGeom`](libs/bgl/include/bgl/IScene.h) | The bind-pose submeshes, exactly as the static path uploads them, against a rig handle |
 | Place | [`ISceneView::CreateSkinnedMeshInstance`](libs/bgl/include/bgl/ISceneView.h) | Writes the playback record and reserves the instance's palette slice |
 | Pose | [`SkinnedPosePass`](libs/bgl_extended/src/passes/SkinnedPosePass.h) | One workgroup per instance: sample, blend, walk the hierarchy, multiply by inverse bind |
-| Draw | `lib/forward/skinned_vertex.slang` | Blends the bind-pose vertex bytes by the palette; position, normal and tangent through one matrix. Entered from `programs/forward/SkinnedMesh.slang`, or from `programs/forward/AnyMesh.slang` where a draw mixes tiers |
+| Draw | `lib/forward/skinned_vertex.slang` | `ResolveSkinnedPose` settles the pose source once per mesh-shader group — one group being one instance — and `SkinnedVertex` blends the bind-pose vertex bytes by it; position, normal and tangent through one matrix. Entered from `programs/forward/SkinnedMesh.slang`, or from `programs/forward/AnyMesh.slang` where a draw mixes tiers |
 
 ## In the editor
 

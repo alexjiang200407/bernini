@@ -1,10 +1,11 @@
 # Crowd-tier frame interpolation
 
 The crowd tier reads a fractional frame as the lerp of the two bracketing frames' **composed skin
-matrices**, in the vertex stage
-([skinned_vertex.slang](../../libs/bgl_extended/shaders/src/lib/forward/skinned_vertex.slang) `:93`). The hero
-tier instead nlerps each bone's **local rotation** and then walks the hierarchy, in a compute pass,
-once per instance ([pose_walk.slang](../../libs/bgl_extended/shaders/src/lib/anim/pose_walk.slang) `:71`).
+matrices**, in the vertex stage — `SkinAt` in
+[skinned_vertex.slang](../../libs/bgl_extended/shaders/src/lib/forward/skinned_vertex.slang), taken only when
+the group's resolved pose says it blends. The hero tier instead nlerps each bone's **local
+rotation** and then walks the hierarchy, in a compute pass, once per instance
+([pose_walk.slang](../../libs/bgl_extended/shaders/src/lib/anim/pose_walk.slang) `:71`).
 
 The bone-anim-table feature chose the first, deliberately — [docs/skinning.md](../skinning.md)
 states the rule and why the two sources differ between frames. Nothing here disputes that choice.
@@ -71,10 +72,11 @@ the failure this file exists to prevent.
 ## What to do when it fires
 
 Both variants are small and local to
-[skinned_vertex.slang](../../libs/bgl_extended/shaders/src/lib/forward/skinned_vertex.slang): `SkinFromTable`
-either lerps the two frames or rounds to the nearer one. Measure the vertex stage on a crowd scene
-dense enough to be vertex-bound, at the LOD a crowd unit actually draws at, and look at both the
-cost and the motion.
+[skinned_vertex.slang](../../libs/bgl_extended/shaders/src/lib/forward/skinned_vertex.slang): `SkinAt` either
+lerps the two frames or `ResolveSkinnedPose` rounds to the nearer one and clears `blends`, which
+drops the table path onto the fetch count the palette path already pays. Measure the vertex stage on
+a crowd scene dense enough to be vertex-bound, at the LOD a crowd unit actually draws at, and look
+at both the cost and the motion.
 
 If nearest-frame wins, the rule in [docs/skinning.md](../skinning.md) changes with the code, in the
 PR that changes it.

@@ -13,7 +13,8 @@ public struct Submesh
     public Range<uint> indices;
     public uint vertexCount;
 
-    // Local space, like Meshlet's; the world bound is derived per instance from Mesh.transform.
+    // Local space, like Meshlet's; the world bound is derived per instance from the placement's
+    // transform.
     // xyz is the centre, w the radius.
     public float4 boundingSphere;
 

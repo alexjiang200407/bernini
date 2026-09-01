@@ -336,7 +336,7 @@ TEST_CASE("CreateSkinnedMeshInstance writes the playback record once", "[skinned
 	auto& meshBuffer = view->GetMeshBuffer();
 	auto& playback   = view->GetPlaybackArena();
 
-	const bgl::idl::Mesh& mesh = meshBuffer.AtIndex(instance.handle.index);
+	const bgl::idl::MeshInstance& mesh = meshBuffer.AtIndex(instance.handle.index);
 
 	// One field for either tier now, so what says which is the record's own header rather than
 	// which of two fields was left null.
@@ -344,10 +344,10 @@ TEST_CASE("CreateSkinnedMeshInstance writes the playback record once", "[skinned
 	CHECK(playback.GetTagAt(mesh.playback.byteOffset) == bgl::idl::PlaybackType::kSkinned);
 
 	const auto state = playback.GetPayloadAt<bgl::idl::SkinnedState>(mesh.playback.byteOffset);
-	CHECK(state.clip == 1);
-	CHECK(state.phase == Catch::Approx(4.5f));
-	CHECK(state.rate == Catch::Approx(2.0f));
-	CHECK(state.rig.offset == scene->GetGeomSkinnedInfo(geom.handle.index).record.index);
+	CHECK(state.playback.clip == 1);
+	CHECK(state.playback.phase == Catch::Approx(4.5f));
+	CHECK(state.playback.rate == Catch::Approx(2.0f));
+	CHECK(state.playback.rig.offset == scene->GetGeomSkinnedInfo(geom.handle.index).record.index);
 
 	SECTION("a crowd instance is a record of its own kind, owning no palette")
 	{
@@ -357,20 +357,20 @@ TEST_CASE("CreateSkinnedMeshInstance writes the playback record once", "[skinned
 		const auto other = view->CreateSkinnedMeshInstance(geom, glm::mat4(1.0f), crowd);
 		REQUIRE(other.IsValid());
 
-		const bgl::idl::Mesh& crowdMesh = meshBuffer.AtIndex(other.handle.index);
+		const bgl::idl::MeshInstance& crowdMesh = meshBuffer.AtIndex(other.handle.index);
 		CHECK(
 			playback.GetTagAt(crowdMesh.playback.byteOffset) ==
 			bgl::idl::PlaybackType::kSkinnedTable);
 
-		// The same three playback fields, read out of a different record. What the crowd one does
+		// The same playback, read out of a different record. What the crowd one does
 		// not carry is the palette, which is the whole of the difference between the two kinds --
 		// so the layouts differ, and a record read as the wrong kind would not survive this.
 		const auto table =
 			playback.GetPayloadAt<bgl::idl::SkinnedTableState>(crowdMesh.playback.byteOffset);
-		CHECK(table.clip == 1);
-		CHECK(table.phase == Catch::Approx(4.5f));
-		CHECK(table.rate == Catch::Approx(2.0f));
-		CHECK(table.rig.offset == state.rig.offset);
+		CHECK(table.playback.clip == 1);
+		CHECK(table.playback.phase == Catch::Approx(4.5f));
+		CHECK(table.playback.rate == Catch::Approx(2.0f));
+		CHECK(table.playback.rig.offset == state.playback.rig.offset);
 
 		CHECK(sizeof(bgl::idl::SkinnedTableState) < sizeof(bgl::idl::SkinnedState));
 	}

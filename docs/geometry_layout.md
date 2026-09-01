@@ -1,6 +1,6 @@
 # Geometry Layout — the GPU geometry data model
 
-The structs that describe renderable geometry — `Mesh`, `Submesh`, `Meshlet`, `Vertex`,
+The structs that describe renderable geometry — `MeshInstance`, `Submesh`, `Meshlet`, `Vertex`,
 `VertexLayout`, and the `Range` / `RangeWithCount` / `Entry` offset primitives — plus the CPU-side
 buffers that mirror them onto the GPU. The structs are laid out once and shared between CPU and
 GPU: a single IDL source (`libs/bgl_extended/idl/src/*.slang`) generates a shader copy under
@@ -33,7 +33,7 @@ path is the source of truth; when this doc disagrees, trust the struct, then fix
   reaches a shader.
 
 * **One IDL, two generated targets, guaranteed layout parity.** The `.slang` structs
-  ([Mesh.slang](libs/bgl_extended/shaders/src/idl/Mesh.slang) etc.) and the C++ `bgl::idl::*` structs are both
+  ([MeshInstance.slang](libs/bgl_extended/shaders/src/idl/MeshInstance.slang) etc.) and the C++ `bgl::idl::*` structs are both
   generated from `libs/bgl_extended/idl/src`. The C++ side carries `static_assert(sizeof / offsetof …)` so the
   two never drift — CPU code can `memcpy` a struct straight into a GPU buffer. An IDL module can
   also declare `enum`s and `public static const` **constants** (e.g.
@@ -44,8 +44,10 @@ path is the source of truth; when this doc disagrees, trust the struct, then fix
 * **The geometry hierarchy is flat arrays cross-linked by offset.** Every level lives in its own
   global buffer — a submesh buffer, a meshlet buffer, a vertexMap buffer, a byte vertex buffer, an
   index buffer. A parent references a contiguous window of children by `(offset, count)`; there is
-  no nesting or pointer chasing. A `Mesh` is the root descriptor: a `transform` plus a
-  `RangeWithCount<Submesh>` into the submesh buffer.
+  no nesting or pointer chasing. A `MeshInstance` is the root descriptor: a `transform` plus a
+  `RangeWithCount<Submesh>` into the submesh buffer. It is a *placement*, not a mesh — the range is
+  the geom's, copied in by value, and the geom has no record of its own (see
+  [docs/specs/gpu_scene_instance_split.md](docs/specs/gpu_scene_instance_split.md)).
 
 * **Geometry is meshlet-partitioned for mesh-shader rendering.** Each submesh is split into
   `Meshlet`s of at most `idl::cMaxVerticesPerMeshlet` (64) unique vertices and
@@ -134,7 +136,7 @@ path is the source of truth; when this doc disagrees, trust the struct, then fix
 * **The arenas grow, and growth preserves every index.** `initialCount` is where a mirror buffer
   starts, not a ceiling: an allocation that does not fit enlarges the buffer instead of throwing.
   Because every cross-reference in these structs is an absolute offset, growth copies the old
-  contents to offset 0 of the new storage, which keeps every `Range` already written into a `Mesh` or
+  contents to offset 0 of the new storage, which keeps every `Range` already written into a `MeshInstance` or
   `Submesh` valid. The corollary is that the arenas are **grow-only and never compacted** — moving a
   live range would invalidate every offset that names it, and nothing back-references those offsets
   to fix them up. A load/unload cycle therefore fragments rather than compacts.
@@ -154,7 +156,7 @@ Generated shader structs (GPU source of truth). Each has a byte-identical `bgl::
 
 | Struct | File | Role |
 |---|---|---|
-| `Mesh` | [Mesh.slang](libs/bgl_extended/shaders/src/idl/Mesh.slang) | Root descriptor of a renderable: world `transform` + `RangeWithCount<Submesh>`, plus a `RawEntry<IPlayback>` naming the placement's record in the view's playback arena, null on a static mesh. |
+| `MeshInstance` | [MeshInstance.slang](libs/bgl_extended/shaders/src/idl/MeshInstance.slang) | Root descriptor of a placement: the three rows of its world transform + the geom's `RangeWithCount<Submesh>`, plus a `RawEntry<IPlayback>` naming its record in the view's playback arena, null on a static mesh. |
 | `Clip` | [Clip.slang](libs/bgl_extended/shaders/src/idl/Clip.slang) | One playable clip: where its frame 0 sits in the tier's own frame space, its frame count, authored rate and loop flag. Shared by every animated tier out of one clip buffer. |
 | `Submesh` | [Submesh.slang](libs/bgl_extended/shaders/src/idl/Submesh.slang) | One drawable part, **geometry only**: its `VertexLayout`, meshlet range, vertexMap/indices ranges, a `RawRange` of vertex bytes, vertex count, local bounding sphere. No material, no PSO — those are per-instance. |
 | `Meshlet` | [Meshlet.slang](libs/bgl_extended/shaders/src/idl/Meshlet.slang) | A mesh-shader work unit: offsets into the parent submesh's vertexMap/indices windows, vertex/triangle counts, bounding sphere. |
@@ -166,7 +168,7 @@ copies must be kept in step by hand:
 
 | Struct | Files | Role |
 |---|---|---|
-| `SubmeshInstance` | [SubmeshInstance.slang](libs/bgl_extended/shaders/src/lib/types/SubmeshInstance.slang) · [SubmeshInstance.h](libs/bgl_extended/src/types/SubmeshInstance.h) | One drawable: a `Mesh` entry + submesh index, plus the **resolved** `material` entry and `pso`. The unit the counting sort buckets and the mesh shader draws. |
+| `SubmeshInstance` | [SubmeshInstance.slang](libs/bgl_extended/shaders/src/lib/types/SubmeshInstance.slang) · [SubmeshInstance.h](libs/bgl_extended/src/types/SubmeshInstance.h) | One drawable: a `MeshInstance` entry + submesh index, plus the **resolved** `material` entry and `pso`. The unit the counting sort buckets and the mesh shader draws. |
 
 ### Offset primitives
 
@@ -174,7 +176,7 @@ copies must be kept in step by hand:
 |---|---|---|
 | `Range<T>` | [Range.slang](libs/bgl_extended/shaders/src/idl/Range.slang) | A `uint offsetStart` into a `StructuredBuffer<T>`; the element count is known from context. `Null()` at `0`. |
 | `RangeWithCount<T>` | [RangeWithCount.slang](libs/bgl_extended/shaders/src/idl/RangeWithCount.slang) | A `Range<T>` plus an explicit `count` (a self-describing span). |
-| `Entry<T>` | [Entry.slang](libs/bgl_extended/shaders/src/idl/Entry.slang) | A single-element `uint offset` into a `StructuredBuffer<T>` (e.g. a `SubmeshInstance`'s `Entry<Mesh>`). |
+| `Entry<T>` | [Entry.slang](libs/bgl_extended/shaders/src/idl/Entry.slang) | A single-element `uint offset` into a `StructuredBuffer<T>` (e.g. a `SubmeshInstance`'s `Entry<MeshInstance>`). |
 | `RawEntry<T>` | [RawEntry.slang](libs/bgl_extended/shaders/src/idl/RawEntry.slang) | A `uint` **byte** offset into a raw arena, naming a record's `RecordHeader`; its payload begins `cRawPayloadOffset` later. |
 | `RawRange` | [RawRange.slang](libs/bgl_extended/shaders/src/idl/RawRange.slang) | A `uint` byte offset to a headerless window of bytes, for data whose kind whatever names it already records. |
 | `RawHandleView<T>` | [RawHandleView.slang](libs/bgl_extended/shaders/src/lib/types/RawHandleView.slang) | The same allocation read as handles of `T`, addressed by byte offset — what makes a resource of handle bytes a record holds. Not an `EntryBuffer`: nothing in it is an allocated element. |
@@ -203,7 +205,7 @@ store. All dirty-track writes and flush via `Update(cmdList)`.
 ```mermaid
 flowchart TD
     Inst["SubmeshInstance (the drawable)<br/>meshInstance + submeshIndex<br/><b>+ resolved material + pso</b>"]
-    Mesh["Mesh (root)<br/>transform + submeshes"]
+    Mesh["MeshInstance (root)<br/>transform + submeshes"]
     Submesh["Submesh<br/>layout + ranges (geometry only)"]
     Meshlet["Meshlet<br/>rel offsets + bounds"]
     VMap["vertexMap buffer&lt;uint&gt;"]
@@ -212,7 +214,7 @@ flowchart TD
     Layout["VertexLayout"]
     Mat["material RawEntry&lt;IMaterial&gt;"]
 
-    Inst -- "Entry&lt;Mesh&gt;" --> Mesh
+    Inst -- "Entry&lt;MeshInstance&gt;" --> Mesh
     Inst -- "submeshIndex → one of" --> Submesh
     Inst -- "RawEntry&lt;IMaterial&gt; (override, else the geom default)" --> Mat
     Mesh -- "RangeWithCount&lt;Submesh&gt;" --> Submesh
@@ -301,6 +303,15 @@ green channel.
   the same reservation, one layer apart: reserve element 0 so the zero-filled default means
   "nothing" rather than "the first thing allocated". A new GPU-visible index should follow it.
 * **`VertexLayout` holds at most 8 attributes.** `attributeCount > 8` overruns the fixed array.
+* **A placement's transform is three `float4` *rows*, and nothing may index it directly.** The
+  fourth row of an affine transform is always `(0,0,0,1)` and is not stored. Rows and columns are
+  the same three `float4`s of the same matrix, so the bytes do not say which — and under an
+  identity transform the two readings agree, which is what makes a mistake here survive a smoke
+  test. `MeshInstance::TransformPoint` / `TransformDirection` are the only readers, and
+  `bgl::WriteInstanceTransform` ([util.h](libs/bgl_extended/src/util/util.h)) the only writer. There is no
+  `prevTransform`: a placement's transform is fixed for its lifetime, and the field lands with the
+  writer that moves one (see
+  [docs/specs/gpu_scene_instance_split.md](docs/specs/gpu_scene_instance_split.md)).
 * **A geom's submesh range is indexed by source submesh, and only stays so while the mapping is
   1:1.** Materials, and every other per-part property an asset author sets, are numbered by *source*
   submesh; `Scene::SetSubmeshMaterial` indexes the default-material array directly with that number,
