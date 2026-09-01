@@ -181,7 +181,7 @@ positive.
 | Skinned character | 663 bones, 27 mesh entries, 170k vertices, 2254 frames | posed-bounds bake 3.5 s, of which 2.4 s is the pose walk; the per-vertex `exactPosedBounds` reference is ~6 min (both debug) | `docs/skinning.md` |
 | Grounding that character's clips | the same rig, 5 clips | 14 s debug — the cook's largest stage, ahead of the bake beside it. Both are mostly the pose walk, and they make it separately | `docs/skinning.md` |
 | Re-importing it from source | a 97 MB `.glb` | parsed once per output kind, so three times per rebuild: ~14 s debug, now overlapped across `Reimport`'s parallel stages | `libs/assetlib/src/reimport.cpp` |
-| Clip set (`.banim`) | `boneCount * frameCount` 40-byte `Transform`s | 59.7 MB, ~780 ms to deserialize in a debug build | `docs/specs/animation_compression.md` |
+| Clip set (`.banim`) | `boneCount * frameCount` 40-byte `Transform`s | 59.7 MB, ~780 ms to deserialize in a debug build | `docs/skinning.md` |
 | Posed-bounds read-back | one signature over the whole mesh, every entry at once | 29 ms; asked once per entry instead, 740 ms | `docs/skinning.md` |
 | Mesh container (`.bmesh`) | vertex data is nearly all of it | 16.8 MB, of which a reference scan reads ~3 KB | `docs/asset_standards.md` |
 | Environment bake | prefilter 256 px / 7 mips / 2048 samples; skybox 512 px / 6 mips; irradiance 128 px | — | `docs/envmaps.md` |

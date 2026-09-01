@@ -46,8 +46,8 @@ path is the source of truth; when this doc disagrees, trust the struct, then fix
   index buffer. A parent references a contiguous window of children by `(offset, count)`; there is
   no nesting or pointer chasing. A `MeshInstance` is the root descriptor: a `transform` plus a
   `RangeWithCount<Submesh>` into the submesh buffer. It is a *placement*, not a mesh — the range is
-  the geom's, copied in by value, and the geom has no record of its own (see
-  [docs/specs/gpu_scene_instance_split.md](docs/specs/gpu_scene_instance_split.md)).
+  the geom's, copied in by value, and the geom has no record of its own — so per-unit variation has
+  nowhere to live, and culling repeats itself per submesh.
 
 * **Geometry is meshlet-partitioned for mesh-shader rendering.** Each submesh is split into
   `Meshlet`s of at most `idl::cMaxVerticesPerMeshlet` (64) unique vertices and
@@ -310,8 +310,7 @@ green channel.
   test. `MeshInstance::TransformPoint` / `TransformDirection` are the only readers, and
   `bgl::WriteInstanceTransform` ([util.h](libs/bgl_extended/src/util/util.h)) the only writer. There is no
   `prevTransform`: a placement's transform is fixed for its lifetime, and the field lands with the
-  writer that moves one (see
-  [docs/specs/gpu_scene_instance_split.md](docs/specs/gpu_scene_instance_split.md)).
+  writer that moves one.
 * **A geom's submesh range is indexed by source submesh, and only stays so while the mapping is
   1:1.** Materials, and every other per-part property an asset author sets, are numbered by *source*
   submesh; `Scene::SetSubmeshMaterial` indexes the default-material array directly with that number,
