@@ -197,9 +197,6 @@ before building the thing it describes, and delete it when that thing lands.
   the cheaper alternative was never priced, and no GPU timestamp exists to price it.
 - [Animation compression](./docs/specs/animation_compression.md) — a 663-bone rig's clips are 60 MB
   uncompressed; why collapsing constant tracks was measured and dropped, and what to build instead.
-- [Metal buffer release segfault](./docs/specs/metal_buffer_release_segfault.md) — a rarer teardown
-  crash than the one that was fixed, reached through the resource manager, with no repro small
-  enough to measure a fix against.
 
 **[Plans and Decision Records](./docs/plans/)**
 

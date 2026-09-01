@@ -161,6 +161,12 @@ namespace bgl
 		cmdBuffer->encodeSignalEvent(m_Event.get(), m_NextFenceValue);
 		cmdBuffer->commit();
 		WaitForFenceCPUBlocking(m_NextFenceValue++);
+
+		// The event fires as the GPU passes the signal, which leaves the driver still retiring the
+		// buffer and releasing what it held -- and every caller frees resources with deferred=false
+		// immediately after, which is only safe once it has. Metal keeps submission order, so this
+		// buffer being retired puts every one committed before it behind us too.
+		cmdBuffer->waitUntilCompleted();
 	}
 
 	void

@@ -62,6 +62,12 @@ bgl or Bernini Graphics Library is the graphics library for the game engine. It 
   `RenderTarget::PresentToLayer`, `CommandQueue::Flush` — rather than letting it reach that net.
   Committing a command buffer before the pool drains is safe: the driver holds its own reference
   until the buffer retires.
+- **A flush is not done when its fence is.** An event signalled with `encodeSignalEvent` fires as
+  the GPU passes it, and the driver goes on retiring the command buffer and releasing what it held
+  for a while after — measurably, most flushes. Anything that frees a resource because "the GPU is
+  idle" needs the buffer *retired*, so `CommandQueue::Flush` ends on `waitUntilCompleted`, which
+  submission order extends to everything committed before it. A deferred free needs no such thing:
+  its gate only drops our reference, and the in-flight buffer still holds its own.
 - GPU validation comes from the environment, not a flag — see `bgl_tests` below.
 - CMake: `./src/metal/CMakeLists.txt`
 - Verification: Check logs, bgl_tests
