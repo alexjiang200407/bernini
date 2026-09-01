@@ -1,6 +1,7 @@
 #include <assetlib/AssetCodec.h>
 #include <assetlib/codecs.h>
 
+#include <assetlib/avatar.h>
 #include <assetlib/import_document.h>
 #include <assetlib_structs/Animation.h>
 #include <assetlib_structs/BEnv.h>
@@ -28,7 +29,8 @@ namespace assetlib
 			BEnvLighting,
 			Skeleton,
 			AnimationSet,
-			ImportDocument>;
+			ImportDocument,
+			Avatar>;
 
 		template <AssetCodecFor T>
 		[[nodiscard]] constexpr ContainerKind
