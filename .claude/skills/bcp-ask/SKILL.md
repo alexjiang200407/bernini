@@ -10,9 +10,8 @@ quick fix is cut from and every feature lands into — so it reads, and the one 
 a spec.
 
 `.claude/hooks/ask_guard.py` enforces that while `ws ask` is what started the session, and it is two
-rules. **Writes**: `docs/specs/*.md` — including `docs/specs/drafts/`, which resolves outside the
-checkout — and a temporary directory; every other path is refused, in this checkout and in every
-worktree beside it. **There is no shell**: Bash is refused outright, not inspected, because a guard
+rules. **Writes**: `docs/specs/*.md` — normally a symlink resolving outside the checkout — and a
+temporary directory; every other path is refused, in this checkout and in every worktree beside it. **There is no shell**: Bash is refused outright, not inspected, because a guard
 that reads a command line to find the write in it has never once been finished.
 
 So the tools are the whole toolkit. Read opens a file, Grep searches the tree, Glob finds one; none
@@ -84,7 +83,7 @@ A question whose answer is *"that is a real problem, and we are not solving it t
 what [CLAUDE.md](CLAUDE.md) § Specs describes: one file per problem we have decided not to solve
 yet, so nobody re-derives it. That, and only that, is what this skill writes.
 
-Write `docs/specs/drafts/<name>.md`, and keep it to the three things a spec is for:
+Write `docs/specs/<name>.md`, and keep it to the three things a spec is for:
 
 ```markdown
 # <the problem>
@@ -102,15 +101,14 @@ Write `docs/specs/drafts/<name>.md`, and keep it to the three things a spec is f
 Do not write one for a problem that is merely interesting. A spec that nobody is waiting on is a
 file the next reader has to rule out.
 
-`drafts/` is where a spec waits, and `docs/specs/` itself is where the landed ones are. The draft
-directory is a worktree of the orphan `spec-drafts` branch, shared by every checkout in the
+`docs/specs/` is a worktree of the orphan `spec-drafts` branch, shared by every checkout in the
 workspace, and `.claude/hooks/draft_commit.py` commits the file as you write it — so the feature
 checkout that would implement the spec can read it, and a `git pull` that removes it can be undone.
 Neither happens for a file sitting untracked in one working directory, which is what this used to be.
 
-Landing is unchanged: a draft becomes a spec by a pull request that moves it into `docs/specs/`,
-opened on purpose from a checkout of its own. Say where the file is and what it would take to land
-it, and stop.
+**It never lands.** A spec describes code that does not exist, so it is not documentation and there
+is no pull request that moves it onto master; it is written, revised, and deleted on that branch when
+the thing it describes is built. Say where the file is, and stop.
 
 ## Rules
 

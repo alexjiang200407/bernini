@@ -23,15 +23,17 @@ decision. It is a real loss and a smaller one here than elsewhere: `docs/plans/`
 keeps an ADR per change precisely so the reasoning is a file somebody can open,
 and Read, Grep and Glob open files without a shell to guard.
 
-The other rule is the write allowlist: `docs/specs/*.md` under this checkout, and
-a temp directory outside it. Refusing "anywhere but this checkout" instead would
-sound friendlier and is the hole -- what it waves through is the sibling
-worktrees the other agents are working in.
+The other rule is the write allowlist: `docs/specs/*.md` and a temp directory
+outside the checkout. Refusing "anywhere but this checkout" instead would sound
+friendlier and is the hole -- what it waves through is the sibling worktrees the
+other agents are working in.
 
-`docs/specs/drafts` is the exception that has to be named, because it is a
-symlink onto a worktree of the `spec-drafts` branch that lives outside every
-checkout. Its real path is not under `docs/specs`, so containment against one
-root refuses it; both roots are matched instead.
+`docs/specs` is normally a symlink onto a worktree of the `spec-drafts` branch,
+which lives outside every checkout, so the root is resolved before anything is
+matched against it. Where the workspace has not seeded that link the same
+resolution lands back inside the checkout, and a spec written there is untracked
+until `ws init` collects it -- worse than a commit, and better than an ask
+session with nowhere at all to write.
 
 It is a guard rail against a brief that was misread, not a sandbox against
 someone trying to leave. Exit 2 blocks the call and sends stderr back to the
@@ -44,17 +46,16 @@ import sys
 import tempfile
 
 SPECS = os.path.join("docs", "specs")
-DRAFTS = os.path.join(SPECS, "drafts")
 
 WRITE_TOOLS = {"Write", "Edit", "MultiEdit", "NotebookEdit"}
 
 SPEC_ONLY = ("The one thing an ask session may write is a spec:\n"
-             "    docs/specs/drafts/<name>.md\n"
+             "    docs/specs/<name>.md\n"
              "one file for a problem we have decided not to solve yet -- what it is, the trigger\n"
-             "that makes it urgent, and the design already settled on. Write it under drafts/,\n"
-             "which is committed for you on the spec-drafts branch; docs/specs/ itself holds the\n"
-             "ones that have landed. A temporary directory is the only other place a write is\n"
-             "allowed; every other path, in this checkout or any worktree beside it, is refused.")
+             "that makes it urgent, and the design already settled on. It is committed for you on\n"
+             "the spec-drafts branch and never lands on master. A temporary directory is the only\n"
+             "other place a write is allowed; every other path, in this checkout or any worktree\n"
+             "beside it, is refused.")
 
 NO_SHELL = ("An ask session has no shell. Not this command in particular -- Bash at all, because a\n"
             "guard that reads a command line to find the write in it has never once been finished.\n"
@@ -92,22 +93,11 @@ def project_root(payload):
     return os.path.realpath(root)
 
 
-def spec_roots(root):
-    """Where a spec may be written, both resolved.
-
-    Two, because `docs/specs/drafts` is a symlink onto a worktree outside the
-    checkout: its real path is not under `docs/specs`, and resolving is what
-    keeps the rest of the allowlist honest. When the symlink is absent the second
-    root is just a path under the first, and matches nothing new.
-    """
-    return {os.path.realpath(os.path.join(root, SPECS)),
-            os.path.realpath(os.path.join(root, DRAFTS))}
-
-
 def verdict_for_path(root, cwd, raw):
     """None when the path may be written, else the message saying why not."""
     target = os.path.realpath(os.path.join(cwd, os.path.expanduser(raw)))
-    if target.endswith(".md") and any(contains(spec, target) for spec in spec_roots(root)):
+    specs = os.path.realpath(os.path.join(root, SPECS))
+    if target.endswith(".md") and contains(specs, target):
         return None
     if any(contains(temp, target) for temp in temp_roots(root)):
         return None

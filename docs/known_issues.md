@@ -5,8 +5,7 @@ outside, what actually caused it, what closed it, and **what to check first if t
 appears again**. The point is that the second person to see a symptom recognises it in a minute
 instead of re-deriving it from a stack trace.
 
-This is not [`docs/specs/`](specs/), which describes problems we have decided *not* to solve, and not
-[`docs/plans/`](plans/), which records the decisions behind one change. An entry here is about a
+This is not [`docs/plans/`](plans/), which records the decisions behind one change. An entry here is about a
 symptom, and it earns its place by being hard to diagnose rather than by being recent. Delete one
 when the code it warns about is gone — when a backend is retired, so is its entry.
 

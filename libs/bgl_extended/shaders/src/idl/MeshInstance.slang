@@ -6,8 +6,7 @@ import RawEntry;
 import Submesh;
 
 // One placement of a geom: its world transform, the geom's submesh range copied in by value, and
-// its playback record. The geom itself has no GPU record -- see
-// docs/specs/gpu_scene_instance_split.md.
+// its playback record. The geom itself has no GPU record.
 public struct MeshInstance
 {
     // The three rows of an affine placement; the fourth is always (0,0,0,1) and is not stored, as a

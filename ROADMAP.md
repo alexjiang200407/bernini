@@ -353,8 +353,7 @@ and portability.
 - [ ] Profiling
   - [ ] GPU timestamp per pass with on-screen breakdown — FrameGraph feature, same as hashing. The
     RHI has no timestamp query at all today, so nothing in the tree can attribute a cost to one
-    stage; [docs/specs/crowd_frame_interpolation.md](docs/specs/crowd_frame_interpolation.md) is a
-    measurement queued behind this line.
+    stage — the crowd tier's frame-interpolation trade is one measurement queued behind this line.
   - [ ] Live counters: agents alive/dying/corpse split by type, visible per tier, per-instance vs
     table against the top-K budget, events vs capacity, slots in use, cells at cap, corpse palette
     memory.

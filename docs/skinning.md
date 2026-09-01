@@ -120,8 +120,8 @@ not obvious from a signature. The headers linked below are the source of truth.
   then walks; the table lerps the two frames' finished skin matrices, because skinning is linear in
   the matrices and one blend per vertex replaces one per attribute. On a whole frame they agree
   exactly, and on a rotation between frames they do not. What that trade costs was never priced
-  against the cheaper option, which is
-  [docs/specs/crowd_frame_interpolation.md](specs/crowd_frame_interpolation.md).
+  against the cheaper option — one frame's matrices fetched and interpolated the way the pose pass
+  does it — and there is no GPU timestamp query to price it with.
 
   **What the table buys is the pose pass, and the number depends on the rig.** 2,000 instances of a
   64-bone rig six levels deep drew in 1.06 ms/frame against 1.22 posed per instance — about 13%,
@@ -345,6 +345,11 @@ to keep in agreement beyond the one below.
   the same bake is 131 ms optimised, 27x cheaper. Read them against each other, never against a
   release stage line. They are also not the cook's largest number — grounding the clips is, and it
   is measured against them above.
+
+  **The clip set is the largest thing a rig ships, and it is stored uncompressed.** Frame-major local
+  TRS is `boneCount * frameCount` 40-byte `Transform`s with nothing elided: 59.7 MB on the rig above,
+  ~780 ms to deserialize in a debug build. That is a load cost paid per clip set, not per instance,
+  and it is the number to beat before any of the sharing above matters.
 
   Reading the bake back answers for every mesh entry in one call, for the same reason: the signature
   a box is matched on (`posedBoundsSignature`) describes the whole mesh, so asking per entry hashes

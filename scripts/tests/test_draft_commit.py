@@ -49,8 +49,12 @@ def log(worktree):
 
 
 def checkout(root, branch="master"):
-    """A repository with one commit, so it has a HEAD to hang a worktree off."""
-    (root / "docs" / "specs").mkdir(parents=True)
+    """A repository with one commit, so it has a HEAD to hang a worktree off.
+
+    `docs/` and no `docs/specs` -- master carries no specs at all now, so the
+    directory only ever exists as the symlink a workspace seeds.
+    """
+    (root / "docs").mkdir(parents=True)
     git(root, "init", "--quiet", "--initial-branch", branch)
     git(root, "config", "user.email", "drafts@example.invalid")
     git(root, "config", "user.name", "drafts")
@@ -72,7 +76,7 @@ def orphan_worktree(root, path, branch="spec-drafts"):
 
 @pytest.fixture
 def linked(tmp_path):
-    """A checkout whose docs/specs/drafts links to a worktree of its *own* repository.
+    """A checkout whose docs/specs links to a worktree of its *own* repository.
 
     That is the real topology and not a detail: the branch being bernini's own is
     what lets a checkout with no symlink read a draft with `git show`, and what the
@@ -80,12 +84,12 @@ def linked(tmp_path):
     """
     root = checkout(tmp_path / "checkout")
     drafts = orphan_worktree(root, tmp_path / "spec-drafts")
-    (root / "docs" / "specs" / "drafts").symlink_to(drafts)
+    (root / "docs" / "specs").symlink_to(drafts)
     return root, drafts
 
 
 def write(root, name, text):
-    path = root / "docs" / "specs" / "drafts" / name
+    path = root / "docs" / "specs" / name
     path.write_text(text)
     return str(path)
 
@@ -152,7 +156,7 @@ def test_a_link_to_something_that_is_not_a_repository_commits_nothing(tmp_path):
     root = checkout(tmp_path / "checkout")
     plain = tmp_path / "not-a-repo"
     plain.mkdir()
-    (root / "docs" / "specs" / "drafts").symlink_to(plain)
+    (root / "docs" / "specs").symlink_to(plain)
     target = plain / "vat.md"
     target.write_text("# vat\n")
     assert run(root, file_path=str(target)).returncode == SILENT
@@ -164,7 +168,7 @@ def test_a_link_into_another_repository_commits_nothing(tmp_path):
     looking for it would ever read, and somewhere `git show` here cannot."""
     root = checkout(tmp_path / "checkout")
     stranger = checkout(tmp_path / "stranger", branch="main")
-    (root / "docs" / "specs" / "drafts").symlink_to(stranger)
+    (root / "docs" / "specs").symlink_to(stranger)
     target = stranger / "vat.md"
     target.write_text("# vat\n")
     assert run(root, file_path=str(target)).returncode == SILENT
@@ -196,7 +200,7 @@ def test_the_reading_tools_are_never_in_the_way(linked):
 def test_a_draft_written_by_the_shell_is_committed_too(linked):
     root, drafts = linked
     write(root, "vat.md", "# vat\n")
-    assert run(root, tool="Bash", command="sed -i '' s/x/y/ docs/specs/drafts/vat.md").returncode == SILENT
+    assert run(root, tool="Bash", command="sed -i '' s/x/y/ docs/specs/vat.md").returncode == SILENT
     assert log(drafts) == ["draft: vat.md"]
 
 
@@ -222,7 +226,7 @@ def test_a_deletion_by_the_shell_is_recorded(linked):
     root, drafts = linked
     run(root, file_path=write(root, "vat.md", "# vat\n"))
     (drafts / "vat.md").unlink()
-    assert run(root, tool="Bash", command="rm docs/specs/drafts/vat.md").returncode == SILENT
+    assert run(root, tool="Bash", command="rm docs/specs/vat.md").returncode == SILENT
     assert log(drafts) == ["draft: vat.md", "draft: vat.md"]
     assert "vat.md" in git(drafts, "show", "--name-only", "--format=", "HEAD~1").stdout
 
@@ -276,7 +280,7 @@ def test_git_that_hangs_is_not_allowed_to_hold_the_turn(linked, monkeypatch):
 
 @pytest.mark.parametrize("payload", [
     '{"tool_name":"Write","tool_input":{"file_path":42}}',
-    '{"tool_name":"Write","tool_input":["docs/specs/drafts/x.md"]}',
+    '{"tool_name":"Write","tool_input":["docs/specs/x.md"]}',
     '{"tool_name":"Write"}',
     '{"tool_name":"Write","cwd":7,"tool_input":{"file_path":"x.md"}}',
     'not json at all',

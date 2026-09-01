@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
 """Commit a spec draft the moment it is written.
 
-`docs/specs/drafts/` is a symlink onto a worktree of the `spec-drafts` branch --
-an orphan branch carrying draft specs and nothing else. This is a PostToolUse
-hook that commits any write landing inside it.
+`docs/specs/` is a symlink onto a worktree of the `spec-drafts` branch -- an
+orphan branch carrying specs and nothing else, because a spec describes code that
+does not exist and so is not documentation and is not on master. This is a
+PostToolUse hook that commits any write landing inside it.
 
 The commit is the harness's job and not the model's because an ask session has no
 shell (`ask_guard.py`), and because a rule saying somebody should commit
@@ -36,7 +37,7 @@ import subprocess
 import sys
 import time
 
-DRAFTS = os.path.join("docs", "specs", "drafts")
+SPECS = os.path.join("docs", "specs")
 
 WRITE_TOOLS = {"Write", "Edit", "MultiEdit", "NotebookEdit"}
 SHELL_TOOLS = {"Bash", "PowerShell"}
@@ -70,8 +71,8 @@ def git(directory, *args):
         return subprocess.CompletedProcess(args, 1, "", str(error))
 
 
-def drafts_link(root):
-    """Where this checkout's drafts symlink points, or None when it has none.
+def specs_link(root):
+    """Where this checkout's specs symlink points, or None when it has none.
 
     It must resolve *outside* the checkout: a real directory of that name is an
     ordinary part of the tree, already covered by the checkout's own git.
@@ -80,7 +81,7 @@ def drafts_link(root):
     shell command in the repository, and all but a handful are nowhere near a
     draft.
     """
-    resolved = os.path.realpath(os.path.join(root, DRAFTS))
+    resolved = os.path.realpath(os.path.join(root, SPECS))
     if not os.path.isdir(resolved) or contains(os.path.realpath(root), resolved):
         return None
     return resolved
@@ -191,7 +192,7 @@ def main():
 
     try:
         root = directory(os.environ.get("CLAUDE_PROJECT_DIR"), payload.get("cwd"), os.getcwd())
-        drafts = drafts_link(root)
+        drafts = specs_link(root)
         if drafts is None:
             return 0
 
@@ -210,7 +211,7 @@ def main():
         reason = sweep(drafts) if target is drafts else commit(drafts, target)
     except Exception as error:
         reason = f"{type(error).__name__}: {error}"
-        target = DRAFTS
+        target = SPECS
     if reason is None:
         return 0
     print(f"The draft was written but not committed, so it is only in the working tree:\n"
