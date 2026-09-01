@@ -10,6 +10,12 @@ The two are seams at different heights. The RHI abstracts a *graphics API*, and 
 D3D12 and Metal share — bindless resource access and mesh shaders. This surface sits above it and
 abstracts the *renderer*, in the vocabulary of geometry, materials, textures, instances and cameras.
 
+`bgl` is the target that carries these headers and nothing else. A renderer implementing them is
+named for what it is built on and is a target of its own: `bgl_extended` is the tier that assumes
+bindless resource access and a mesh stage, and it is the only one that ships today. `bgl_wgpu`, the
+baseline tier for the browser and for a device that misses that bar, is recorded in `ROADMAP.md` and
+not built.
+
 **Keep it that way.** No descriptor, meshlet, heap or pipeline-object vocabulary in a name, a field
 or a throw contract here — state what a caller is guaranteed, not the machinery that currently
 provides it. `bgl_selfcheck` enforces the dependency half (a public header that reaches into a

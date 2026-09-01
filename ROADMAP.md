@@ -29,7 +29,9 @@ and portability.
 - **RHI stays API-agnostic — among APIs with bindless resource access and mesh shaders.** All D3D12
   lives in `bgl_d3d12`, all Metal in `bgl_metal`. Every feature added to `bgl_extended` must be expressible
   without leaking backend types, so Vulkan stays viable. An API that clears that bar is a backend;
-  one that does not is a second renderer above `bgl`'s public interface, not under the RHI.
+  one that does not is a second renderer above `bgl`'s public interface, not under the RHI. `bgl`
+  names that interface and nothing else; a renderer under it is named for what it is built on, and
+  `bgl_extended` is the tier that assumes the bar above.
 - **IDL is the single source of truth** for structs shared by C++ and Slang (`libs/bgl_extended/idl`). New
   GPU-visible data (materials, lights, bones, LOD info) goes through the IDL, not hand-mirrored.
 - **Data-Oriented Design (DOD)** traditional Object-Oriented Programming (OOP) will decimate your CPU cache at scale update unit gameplay states (health, status effects) in tight memory arrays.
@@ -377,10 +379,15 @@ and portability.
 - [ ] Forward++ Shading
 - [ ] Screen space reflections
 - [ ] Gpu Virtual Memory
-- [ ] Browser target — **not** an RHI backend. Tried once as one and abandoned: WebGPU has no bindless
-  heap, no descriptor indexing and no mesh stage, so the whole port went on emulating what the renderer
-  already had. Anything here sits above the RHI, where the engine's binding model is not the thing being
-  translated.
+- [ ] `bgl_wgpu`, the baseline tier — **not** an RHI backend. Tried once as one and abandoned: WebGPU
+  has no bindless heap, no descriptor indexing and no mesh stage, so the whole port went on emulating
+  what the renderer already had. It is a second renderer above `bgl`'s public interface, where the
+  engine's binding model is not the thing being translated. It serves the browser, and natively it is
+  the fallback for a device that misses the bar `bgl_extended` assumes — so the two ship side by side
+  and neither one is "the native one". What that costs is a renderer, not a device layer: no meshlet
+  pipeline, no GPU-driven material lookup, its own culling and its own shaders. Choosing WebGPU as the
+  substrate buys writing that device layer once instead of once per API; it does not buy the
+  architecture. Whether the tier is picked at configure time or probed at runtime is undecided.
 - [ ] Texture-space decals - Render decals into the mesh's UV/texture space, not screen space for heroes
 - [ ] Analytic heightfield occlusion — march the height texture from camera to unit, useful only if
   occlusion is needed before the depth prepass or on a separate timeline.
