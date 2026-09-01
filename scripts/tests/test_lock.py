@@ -148,7 +148,7 @@ def test_the_holder_record_survives_a_longer_predecessor(tmp_path):
 
 
 @pytest.mark.parametrize("target, expected", [
-    ("bgl_tests", True),
+    ("bgl_extended_tests", True),
     ("editor_tests", True),
     ("editor", False),
     ("assetlib_cli", False),

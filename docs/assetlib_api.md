@@ -2,7 +2,7 @@
 
 `assetlib` is the cook. It reads authoring formats (glTF, `.hdr`, `.ktx2`), writes the engine's
 own containers, and answers questions about a project's assets — what references what, what is
-stale, what can be deleted. It is the one library that **never links `bgl`**, so the CLI baker
+stale, what can be deleted. It is the one library that **never links `bgl_extended`**, so the CLI baker
 does not drag in D3D12; the price is that nothing here can measure anything a GPU would have to
 draw. `gamelib` is the seam that links both.
 

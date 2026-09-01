@@ -36,7 +36,7 @@ windows-clang-dx12-debug` produces one on Windows.
 Usage:
     just tidy                              # every source file the preset compiles
     just tidy libs/core                    # only this subtree
-    just tidy libs/bgl/src/scene/Scene.cpp
+    just tidy libs/bgl_extended/src/scene/Scene.cpp
     just tidy --fix                        # apply the renames clang-tidy suggests
     just tidy --changed                    # staged files, staged lines only (the hook)
     just tidy --changed origin/master      # what this branch changed, its lines only

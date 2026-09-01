@@ -30,7 +30,7 @@ namespace
 	constexpr auto c_MeshPath     = "assets/Data/Derived/Meshes/apples.bmesh";
 	constexpr auto c_MaterialPath = "assets/Data/Authored/Materials/apples/Apple1.bmaterial";
 
-	// Where the renders are left for a human to look at, following bgl_tests' convention of writing a
+	// Where the renders are left for a human to look at, following bgl_extended_tests' convention of writing a
 	// `.got.png` beside the goldens.
 	constexpr auto c_MeshGot     = "assets/golden/thumbnail_mesh.got.png";
 	constexpr auto c_MaterialGot = "assets/golden/thumbnail_material.got.png";

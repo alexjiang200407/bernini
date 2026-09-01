@@ -23,7 +23,7 @@ must feed data that matches.
 
 * **The shader owns the texture contract, not the file.** Channel semantics and color space are
   fixed by the PBR pixel shader
-  [libs/bgl/shaders/src/programs/forward/PBR.slang](libs/bgl/shaders/src/programs/forward/PBR.slang) and the mesh /
+  [libs/bgl_extended/shaders/src/programs/forward/PBR.slang](libs/bgl_extended/shaders/src/programs/forward/PBR.slang) and the mesh /
   vertex-decode shaders. A `.ktx2` is just bytes + a format tag; if its channels or color
   space don't match what the shader reads, it renders wrong with no error. Author to the shader.
 * **sRGB is hardware, at both ends — no gamma in the shaders.** Base-color textures use an **sRGB
@@ -235,18 +235,18 @@ source texture.
 * **Factors are linear** and live in the material, not the texture:
   `baseColorFactor` (linear, multiplies the *decoded* albedo), `metallicFactor`, `roughnessFactor`,
   `specularColorFactor` and `specularFactor` ([above](#specular)).
-  See `PbrMaterialDesc` in [libs/bgl_intfc/include/bgl/IScene.h](libs/bgl_intfc/include/bgl/IScene.h) and, on disk,
+  See `PbrMaterialDesc` in [libs/bgl/include/bgl/IScene.h](libs/bgl/include/bgl/IScene.h) and, on disk,
   `PbrParams` — the `.bmaterial`'s PBR payload — in
   [libs/assetlib_structs/include/assetlib_structs/BMaterial.h](libs/assetlib_structs/include/assetlib_structs/BMaterial.h).
 * **Defaults come from the scene**, not the file — a null texture handle resolves to a 1×1 solid
   (white base/ORM, flat normal) built in
-  [libs/bgl/src/scene/Scene.cpp](libs/bgl/src/scene/Scene.cpp). A material can omit any map.
+  [libs/bgl_extended/src/scene/Scene.cpp](libs/bgl_extended/src/scene/Scene.cpp). A material can omit any map.
 * **Decoded image hand-off type:** `ImageData` in
   [libs/assetlib_structs/include/assetlib_structs/ImageData.h](libs/assetlib_structs/include/assetlib_structs/ImageData.h)
   — carries the raw **`vkFormat`** (the KTX2 container's native Vulkan format tag), cube flag, and
   D3D12-ordered (array-major, mip-minor) subresources. This is the API-neutral type between the codec
-  (assetlib) and the RHI (bgl): the codec stores KTX2's `vkFormat` verbatim, and `FromVkFormat` in
-  [libs/bgl/src/types/vk_format.h](libs/bgl/src/types/vk_format.h) turns it into a `bgl::Format`
+  (assetlib) and the RHI (bgl_extended): the codec stores KTX2's `vkFormat` verbatim, and `FromVkFormat` in
+  [libs/bgl_extended/src/types/vk_format.h](libs/bgl_extended/src/types/vk_format.h) turns it into a `bgl::Format`
   each backend then maps to its own. No DXGI leaks into assetlib.
 
 ---
@@ -257,7 +257,7 @@ source texture.
 Interleaved, tightly packed; **stride = sum of present attributes** (variable — e.g. 32 bytes without
 a tangent, 48 with). Decoded on the GPU per the submesh's `VertexLayout` descriptor, not a fixed
 struct — see `DecodeVertex` in
-[libs/bgl/shaders/src/lib/forward/vertexdecode.slang](libs/bgl/shaders/src/lib/forward/vertexdecode.slang).
+[libs/bgl_extended/shaders/src/lib/forward/vertexdecode.slang](libs/bgl_extended/shaders/src/lib/forward/vertexdecode.slang).
 
 | Attribute | Format | Required | Notes |
 |---|---|---|---|
@@ -273,7 +273,7 @@ weight with no joint has nothing to skin to, so the importer emits the pair or n
 them is only drawable against the `.bskel` it names — see [Rigs](#rigs).
 
 Semantics/format enums: [libs/assetlib_structs/include/assetlib_structs/VertexLayout.h](libs/assetlib_structs/include/assetlib_structs/VertexLayout.h)
-(CPU) mirror [libs/bgl/idl/src/VertexLayout.slang](libs/bgl/idl/src/VertexLayout.slang) (GPU) — the enum
+(CPU) mirror [libs/bgl_extended/idl/src/VertexLayout.slang](libs/bgl_extended/idl/src/VertexLayout.slang) (GPU) — the enum
 ordering is shared so a layout maps field-for-field between them.
 
 ### Normal & tangent space
@@ -289,14 +289,14 @@ Three different spaces are in play and they are easy to conflate. The contract, 
 
 * **Vertex normals and tangents are authored in object space** and transformed to world space per
   vertex by the mesh shader, both by the mesh's `transform`
-  ([lib/forward/static_vertex.slang](libs/bgl/shaders/src/lib/forward/static_vertex.slang), `StaticVertex`). A tangent is a direction, so it transforms exactly like the normal; only
+  ([lib/forward/static_vertex.slang](libs/bgl_extended/shaders/src/lib/forward/static_vertex.slang), `StaticVertex`). A tangent is a direction, so it transforms exactly like the normal; only
   `tangent.w` is left alone, because it is a sign and not a direction.
 * **Uniform scale only.** Both are transformed by the plain upper-left `float3x3` of the model matrix,
   not its inverse-transpose. Under a **non-uniform** scale that skews the basis and the lighting is
   wrong. Bake non-uniform scale into the vertices at import, or the shader must switch to a normal
   matrix.
 * **Normal maps are tangent-space, and Z is reconstructed, not sampled.** `CalculateNormal`
-  ([libs/bgl/shaders/src/lib/forward/PbrShading.slang](libs/bgl/shaders/src/lib/forward/PbrShading.slang))
+  ([libs/bgl_extended/shaders/src/lib/forward/PbrShading.slang](libs/bgl_extended/shaders/src/lib/forward/PbrShading.slang))
   takes only `xy`, unpacks `xy * 2 - 1`, and derives `z = sqrt(1 - dot(xy, xy))` — which is why the
   map can be stored two-channel `BC5_UNORM` with no blue channel. Two consequences:
   * An **object-space** or **world-space** normal map cannot be used. Z is forced positive, so any
@@ -319,16 +319,16 @@ Three different spaces are in play and they are easy to conflate. The contract, 
   ratio (~2 tris/vertex) matches typical manifold connectivity so both budgets fill together.
 * **A submesh's meshlet count is unbounded**, up to the 65535 thread groups one `DispatchMesh` can
   launch. `Scene::AddStaticMeshGeom`
-  ([libs/bgl/src/scene/Scene.cpp](libs/bgl/src/scene/Scene.cpp)) emits one GPU submesh per source
+  ([libs/bgl_extended/src/scene/Scene.cpp](libs/bgl_extended/src/scene/Scene.cpp)) emits one GPU submesh per source
   submesh and rejects anything past that limit; it never splits a submesh.
 * The mesh shader runs `cMeshGroupSize` (64) threads and strides over both the up-to-64 vertices and
   the up-to-124 primitives — do not assume one thread per vertex or per primitive
-  ([libs/bgl/shaders/src/programs/forward/StaticMesh.slang](libs/bgl/shaders/src/programs/forward/StaticMesh.slang)).
+  ([libs/bgl_extended/shaders/src/programs/forward/StaticMesh.slang](libs/bgl_extended/shaders/src/programs/forward/StaticMesh.slang)).
 * **A cooked submesh stores its triangles twice, and the plain index range is load-bearing.** Beside
   `firstMeshlet`/`meshletCount`, every `assetlib::Submesh` carries a plain
   `indexByteOffset`/`indexCount`/`indexType` range into `BMesh::indexData`
   ([libs/assetlib_structs/include/assetlib_structs/Mesh.h](libs/assetlib_structs/include/assetlib_structs/Mesh.h)).
-  **No renderer reads it** — `bgl` uploads `meshletVertices`/`meshletTriangles` instead — so it
+  **No renderer reads it** — `bgl_extended` uploads `meshletVertices`/`meshletTriangles` instead — so it
   profiles as pure cook-size overhead and is the obvious thing to drop. Three shipped paths read it
   today: cook-time tangent generation
   ([mesh_tangents.cpp](libs/assetlib/src/mesh_tangents.cpp), `readIndices`), `assetlib_cli describe`
@@ -338,8 +338,8 @@ Three different spaces are in play and they are easy to conflate. The contract, 
   an `AssetCodec<BMesh>::c_BakeToken` bump plus a re-cook of every asset in every project.
 * **`vertexByteOffset`/`vertexCount` is not the duplicated half, and is not a candidate.** There is
   one `vertexData` pool; `meshletVertices` holds remap *indices* into it, not a second vertex blob.
-  So that range is the only addressing into the pool and is read directly by `bgl`
-  ([Scene.cpp](libs/bgl/src/scene/Scene.cpp), `CookStaticMesh`) and by `gamelib`
+  So that range is the only addressing into the pool and is read directly by `bgl_extended`
+  ([Scene.cpp](libs/bgl_extended/src/scene/Scene.cpp), `CookStaticMesh`) and by `gamelib`
   ([Raycaster.cpp](libs/gamelib/src/Raycaster.cpp)).
 
 ### Containers
@@ -414,19 +414,19 @@ Three different spaces are in play and they are easy to conflate. The contract, 
   today rejects any model but `kPbr` rather than rendering it wrong. Each of those is a `switch` on
   `shadingModel` with no `default`, so the compiler names every one of them.
 
-  That is the offline half. The renderer's half lives in `bgl`: a `MaterialType` enumerator and a
-  material struct in the IDL (`libs/bgl/idl/src`, regenerated by `just idl`), whose texture handles
+  That is the offline half. The renderer's half lives in `bgl_extended`: a `MaterialType` enumerator and a
+  material struct in the IDL (`libs/bgl_extended/idl/src`, regenerated by `just idl`), whose texture handles
   are `RawTextureHandle` and come **first and contiguous**, because the shader finds them by
   position; an `XMaterialRecord` in `lib/forward/MaterialData.slang` conforming to the shading
   interfaces, which loads the payload out of the material arena and samples through the arena's
   typed view — no new buffer, no `c_MaterialBuffers` row and no uniform key, the arena being one
-  binding for every kind; pixel-shader modules under `libs/bgl/shaders/src` for the opaque,
+  binding for every kind; pixel-shader modules under `libs/bgl_extended/shaders/src` for the opaque,
   alpha-test and hashed modes — blend instead shares `programs.forward.Transparent` across material types,
   dispatching on the kind in the record's own header, which takes a third material type without
   changing shape; `PsoType` enumerators
-  (`libs/bgl/idl/src/PsoType.slang`) appended at the end, because `c_Psos` in `ForwardPass.cpp` is
+  (`libs/bgl_extended/idl/src/PsoType.slang`) appended at the end, because `c_Psos` in `ForwardPass.cpp` is
   index-parallel to the enum and its static_assert catches only an empty row, not a misordered one;
-  arms in `GetPsoFromGeomAndMaterial` (`libs/bgl/src/util/util.cpp`); and material storage in
+  arms in `GetPsoFromGeomAndMaterial` (`libs/bgl_extended/src/util/util.cpp`); and material storage in
   `Scene`. The amp/mesh stages are shared: every pixel module draws through one of the three
   geometry modules — `programs.forward.StaticMesh`, `programs.forward.SkinnedMesh`, or the
   tier-branching `programs.forward.AnyMesh` — and a new layer adds no geometry code.
@@ -693,10 +693,10 @@ both file and VRAM.
 ### Related cross-platform cleanups (done alongside the container swap)
 
 * **Screenshots use `stb_image_write`** (PNG), not DirectXTex/WIC — see `ScreenshotRaw`/`ScreenshotPng`
-  in [libs/bgl/src/d3d12/Graphics_d3d12.cpp](libs/bgl/src/d3d12/Graphics_d3d12.cpp). The BGRA
+  in [libs/bgl_extended/src/d3d12/Graphics_d3d12.cpp](libs/bgl_extended/src/d3d12/Graphics_d3d12.cpp). The BGRA
   back-buffer readback is repacked to tight RGBA (R/B swizzle, padding dropped) before encoding.
 * **Golden-image comparison** decodes the two PNGs with `stb_image` and computes a hand-written MSE
-  ([libs/bgl/tests/src/util/GoldenImage.cpp](libs/bgl/tests/src/util/GoldenImage.cpp),
+  ([libs/bgl_extended/tests/src/util/GoldenImage.cpp](libs/bgl_extended/tests/src/util/GoldenImage.cpp),
   `MatchesGolden`), replacing `DirectX::ComputeMSE`. Golden refs are `assets/golden/<name>.exp.png`.
 
 ---
@@ -1028,4 +1028,4 @@ upload geometry, draw): [examples/bgl_base/src/main.cpp](examples/bgl_base/src/m
 *Maintenance: the file links above are the load-bearing part of this doc and rot silently if files
 move. Re-check them when the asset pipeline's layout changes — the compression path lives in
 `image_io.cpp` (`writeKTX2` UASTC encode + `loadKTX2` BC7 transcode), the `VkFormat` catalog in
-`assetlib_structs/VkFormat.h`, and its `FromVkFormat` mapping in `libs/bgl/src/types/vk_format.cpp`.*
+`assetlib_structs/VkFormat.h`, and its `FromVkFormat` mapping in `libs/bgl_extended/src/types/vk_format.cpp`.*

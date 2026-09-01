@@ -7,7 +7,7 @@ on the desktop, in front of the editor the suite was run to check. `src/main.cpp
 `QT_QPA_PLATFORM` to `offscreen` for exactly this reason, but the default is compiled out: the
 `EDITOR_TESTS_HAVE_OFFSCREEN` define that guards it is set inside the `if(WIN32)` block that
 deploys the plugin, so no other platform ever gets it. It is the only suite affected — nothing in
-`bgl_tests`, `gamelib_tests`, `assetlib_tests` or `core_tests` names a swapchain, a surface, an
+`bgl_extended_tests`, `gamelib_tests`, `assetlib_tests` or `core_tests` names a swapchain, a surface, an
 `NSView` or a `QApplication`.
 
 ## Decisions

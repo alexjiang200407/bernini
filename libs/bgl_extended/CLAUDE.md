@@ -1,15 +1,18 @@
-# bgl
+# bgl_extended
 
-bgl or Bernini Graphics Library is the graphics library for the game engine. It should provide higher level abstractions of Mesh, Light, Material, while hiding the graphics api.
+bgl_extended is the extended-tier renderer: the implementation of the `bgl` contract for devices that
+offer bindless resource access and a mesh stage. It provides higher level abstractions of Mesh,
+Light and Material while hiding the graphics api. The contract it implements lives in `libs/bgl`
+and is a target of its own; nothing here is part of it.
 
-- CMake target: bgl
+- CMake target: bgl_extended
 - It is compiled to a Dynamic Linked Library.
-- bgl has its custom Render Hardware Interface (RHI). The interfaces are located `./libs/bgl/src` but we define the polymorphic implementation elsewhere — `bgl_d3d12` or `bgl_metal`, one per binary. Do not #include a backend's headers (d3d12 or metal-cpp) for any of the sources here.
-- Put all plain old data inside `./libs/bgl/src/types`
-- PCH is `./libs/bgl/src/pch.h`. Don't `#include` the headers in here.
-- Error Handling: For internal problems, use gassert. For caller (code that links to bgl) problems, throw an exception so the caller can handle them
+- bgl_extended has its custom Render Hardware Interface (RHI). The interfaces are located `./libs/bgl_extended/src` but we define the polymorphic implementation elsewhere — `bgl_d3d12` or `bgl_metal`, one per binary. Do not #include a backend's headers (d3d12 or metal-cpp) for any of the sources here.
+- Put all plain old data inside `./libs/bgl_extended/src/types`
+- PCH is `./libs/bgl_extended/src/pch.h`. Don't `#include` the headers in here.
+- Error Handling: For internal problems, use gassert. For caller (code that links to bgl_extended) problems, throw an exception so the caller can handle them
 - CMake: `./CMakeLists.txt`
-- Verification: Check logs, bgl_tests
+- Verification: Check logs, bgl_extended_tests
 
 
 # Subsystems
@@ -17,25 +20,25 @@ bgl or Bernini Graphics Library is the graphics library for the game engine. It 
 ## bgl_d3d12
 
 - Static RHI implementation library that is linked with d3d12 runtime. All code that use d3d12 API must be located in this subsystem
-- PCH is `./libs/bgl/src/d3d12/pch.h` Don't `#include` the headers in here.
-- To handle d3d12 HRESULT error returns `D3D12CreateDevice(...) >> d3d12ErrChecker;` d3d12ErrChecker located in libs/bgl/src/d3d12/D3d12ErrorChecker.h and is part of the PCH.h so don't `#include` it.
+- PCH is `./libs/bgl_extended/src/d3d12/pch.h` Don't `#include` the headers in here.
+- To handle d3d12 HRESULT error returns `D3D12CreateDevice(...) >> d3d12ErrChecker;` d3d12ErrChecker located in libs/bgl_extended/src/d3d12/D3d12ErrorChecker.h and is part of the PCH.h so don't `#include` it.
 - Doesn't have an include directory, all headers are included.
 - Implementation files (.h and .cpp) should have a _d3d12 suffix.
     e.g. We have IDevice class for API agnostic device, the Device_d3d12.cpp will be the class representing the d3d12 device class.
 - CMake: `./src/d3d12/CMakeLists.txt`
-- Verification: Check logs, bgl_tests
+- Verification: Check logs, bgl_extended_tests
 - **On Windows a target that compiles shaders needs `dxcompiler.dll` and `dxil.dll` beside the
   executable.** Slang loads both with `GetProcAddress` to emit and sign DXIL, so nothing imports them
-  and vcpkg's applocal deployment does not stage them. `bgl` copies them from the `directx-dxc` port
-  (`./CMakeLists.txt`), so a target that brings up a device must depend on `bgl` even when it links
-  only the backend's objects — `bgl_tests` does.
+  and vcpkg's applocal deployment does not stage them. `bgl_extended` copies them from the `directx-dxc` port
+  (`./CMakeLists.txt`), so a target that brings up a device must depend on `bgl_extended` even when it links
+  only the backend's objects — `bgl_extended_tests` does.
 
 ## bgl_metal
 
 - Static RHI implementation library linked against Metal. All code that uses the Metal API must be
   located in this subsystem. Selected by `RENDERER_BACKEND=METAL`, and exactly one backend is built
   per binary.
-- PCH is `./libs/bgl/src/metal/pch.h`. Don't `#include` the headers in here.
+- PCH is `./libs/bgl_extended/src/metal/pch.h`. Don't `#include` the headers in here.
 - Implementation files (.h and .cpp) take a `_metal` suffix, as the d3d12 ones take `_d3d12`.
 - Doesn't have an include directory; all headers are included.
 - Metal is reached through **metal-cpp**, Apple's header-only C++ interface. It is not on vcpkg, so
@@ -68,13 +71,13 @@ bgl or Bernini Graphics Library is the graphics library for the game engine. It 
   idle" needs the buffer *retired*, so `CommandQueue::Flush` ends on `waitUntilCompleted`, which
   submission order extends to everything committed before it. A deferred free needs no such thing:
   its gate only drops our reference, and the in-flight buffer still holds its own.
-- GPU validation comes from the environment, not a flag — see `bgl_tests` below.
+- GPU validation comes from the environment, not a flag — see `bgl_extended_tests` below.
 - CMake: `./src/metal/CMakeLists.txt`
-- Verification: Check logs, bgl_tests
+- Verification: Check logs, bgl_extended_tests
 
-## bgl_tests
+## bgl_extended_tests
 
-- After running bgl_tests always check the log to see the warnings, errors and basic info.
+- After running bgl_extended_tests always check the log to see the warnings, errors and basic info.
 - The suite is slow: nearly all of its runtime is `CreateGraphics`, which every test does at least
   once (and Catch2 re-runs a `TEST_CASE` body per `SECTION`, so a multi-section test pays it again
   each time). Budget minutes, not seconds, and do not mistake that for a hang.
@@ -82,8 +85,8 @@ bgl or Bernini Graphics Library is the graphics library for the game engine. It 
   D3D12's GBV does:
 
   ```bash
-  METAL_DEVICE_WRAPPER_TYPE=1 just run bgl_tests                        # API validation
-  METAL_DEVICE_WRAPPER_TYPE=1 MTL_SHADER_VALIDATION=1 just run bgl_tests  # + GPU validation
+  METAL_DEVICE_WRAPPER_TYPE=1 just run bgl_extended_tests                        # API validation
+  METAL_DEVICE_WRAPPER_TYPE=1 MTL_SHADER_VALIDATION=1 just run bgl_extended_tests  # + GPU validation
   ```
 
   `--gpu-validation` does nothing here — it is read only by `Graphics_d3d12`. The shader cache's
@@ -93,8 +96,8 @@ bgl or Bernini Graphics Library is the graphics library for the game engine. It 
 - **D3D12 GPU-based validation is opt-in**, via `--gpu-validation`:
 
   ```bash
-  just run bgl_tests                       # ~5 min: debug layer on, GPU validation off
-  just run bgl_tests -- --gpu-validation   # ~10 min: for a final verification run
+  just run bgl_extended_tests                       # ~5 min: debug layer on, GPU validation off
+  just run bgl_extended_tests -- --gpu-validation   # ~10 min: for a final verification run
   ```
 
   It patches every shader, which takes device creation from ~3s to ~18s and doubles the suite. The
@@ -117,13 +120,13 @@ bgl or Bernini Graphics Library is the graphics library for the game engine. It 
   resident. Nothing may retain a `slang::` object past pipeline construction, or the release
   reclaims nothing — see the same doc.
 - At runtime the Slang session resolves modules from `shaders/src` (and `shaders/tests`) beside the
-  executable. `shaders/src` is staged by a target `bgl` itself depends on — `bgl_copy_shader_src` on
+  executable. `shaders/src` is staged by a target `bgl_extended` itself depends on — `bgl_copy_shader_src` on
   D3D12, `bgl_metal_copy_shaders` on Metal — so anything that brings a device up has the sources,
   and a build that stages none aborts on the first program-cache miss with "cannot open file".
   `shaders/tests` is the suite's own (`bgl_copy_shader_tests` / `bgl_metal_copy_test_shaders`). A new
-  `.slang` placed under `libs/bgl/shaders/src` is therefore usable at runtime by its module name
+  `.slang` placed under `libs/bgl_extended/shaders/src` is therefore usable at runtime by its module name
   without any CMake change.
-- The `compile_shader(...)` entries in `libs/bgl/shaders/CMakeLists.txt` are now **build-time
+- The `compile_shader(...)` entries in `libs/bgl_extended/shaders/CMakeLists.txt` are now **build-time
   validation only** — they invoke `slangc` per entry point to fail the build on shader errors early;
   the resulting `.dxil` files are not loaded at runtime. Add an entry when you want that validation:
 

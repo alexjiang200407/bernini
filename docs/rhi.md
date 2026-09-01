@@ -1,9 +1,9 @@
 # Bernini Render Hardware Interface
 
-The Render Hardware Interface (RHI) is `bgl`'s API-agnostic graphics abstraction: a set of
+The Render Hardware Interface (RHI) is `bgl_extended`'s API-agnostic graphics abstraction: a set of
 pure-virtual interfaces (`bgl::I*`) plus plain-old-data descriptors and state structs. Two backends
 implement it — `bgl_d3d12` and `bgl_metal` — chosen at configure time by `RENDERER_BACKEND`
-([libs/bgl/CMakeLists.txt](libs/bgl/CMakeLists.txt)) and linked into `bgl` itself. Neither is ever
+([libs/bgl_extended/CMakeLists.txt](libs/bgl_extended/CMakeLists.txt)) and linked into `bgl_extended` itself. Neither is ever
 visible to a caller.
 
 **API-agnostic means among APIs with bindless resource access and mesh shaders.** That is the bar
@@ -11,8 +11,8 @@ this interface is drawn at, not a general one: the only graphics pipeline object
 `IMeshletPipeline`, and the draw verbs are `Dispatch`, `DispatchMesh` and `DispatchMeshIndirect`.
 An API without those cannot implement this interface.
 
-This is the layer bgl is built *on*. For the surface an application links against — `IGraphics`,
-`IScene`, `ISceneView` and the handle types in `libs/bgl_intfc/include/bgl` — see
+This is the layer bgl_extended is built *on*. For the surface an application links against — `IGraphics`,
+`IScene`, `ISceneView` and the handle types in `libs/bgl/include/bgl` — see
 [bgl Public API](docs/bgl_api.md).
 
 **This document is a map, not a mirror.** It captures the design choices, the object topology,
@@ -166,34 +166,34 @@ doc and a header disagree, trust the header, then fix this doc.
 
 | Interface | File | Role |
 |---|---|---|
-| `IGraphics` | [libs/bgl_intfc/include/bgl/IGraphics.h](libs/bgl_intfc/include/bgl/IGraphics.h) | Public façade above the RHI; owns the device and its one submission context, and mints render targets, scenes and scene views. Frames, resizes and captures are driven here. `GetDevice()` returns the RHI root. Fully documented in [bgl Public API](docs/bgl_api.md). |
-| `IDevice` | [libs/bgl/src/device/Device.h](libs/bgl/src/device/Device.h) | Root factory for every RHI object. |
-| `IResourceManager` | [libs/bgl/src/resource/ResourceManager.h](libs/bgl/src/resource/ResourceManager.h) | Owns all GPU buffers/textures/views behind index handles; creation, deferred destruction, lookup, readback, clears. |
-| `ICommandQueue` | [libs/bgl/src/cmd/CommandQueue.h](libs/bgl/src/cmd/CommandQueue.h) | Submits command lists; owns the fence; all CPU/GPU and cross-queue sync. |
-| `ICommandList` | [libs/bgl/src/cmd/CommandList.h](libs/bgl/src/cmd/CommandList.h) | Records uploads, copies, compute and mesh-shading dispatch, barriers, debug markers. |
-| `ICommandAllocator` | [libs/bgl/src/cmd/CommandAllocator.h](libs/bgl/src/cmd/CommandAllocator.h) | Backing memory pool for recorded commands. |
-| `IShader` | [libs/bgl/src/resource/Shader.h](libs/bgl/src/resource/Shader.h) | Immutable compiled DXIL + slang reflection module. |
-| `IComputePipeline` | [libs/bgl/src/pipeline/ComputePipeline.h](libs/bgl/src/pipeline/ComputePipeline.h) | Compute PSO + constant-buffer reflection. |
-| `IMeshletPipeline` | [libs/bgl/src/pipeline/MeshletPipeline.h](libs/bgl/src/pipeline/MeshletPipeline.h) | Mesh-shading PSO (amp/mesh/pixel) + render state + reflection. |
+| `IGraphics` | [libs/bgl/include/bgl/IGraphics.h](libs/bgl/include/bgl/IGraphics.h) | Public façade above the RHI; owns the device and its one submission context, and mints render targets, scenes and scene views. Frames, resizes and captures are driven here. `GetDevice()` returns the RHI root. Fully documented in [bgl Public API](docs/bgl_api.md). |
+| `IDevice` | [libs/bgl_extended/src/device/Device.h](libs/bgl_extended/src/device/Device.h) | Root factory for every RHI object. |
+| `IResourceManager` | [libs/bgl_extended/src/resource/ResourceManager.h](libs/bgl_extended/src/resource/ResourceManager.h) | Owns all GPU buffers/textures/views behind index handles; creation, deferred destruction, lookup, readback, clears. |
+| `ICommandQueue` | [libs/bgl_extended/src/cmd/CommandQueue.h](libs/bgl_extended/src/cmd/CommandQueue.h) | Submits command lists; owns the fence; all CPU/GPU and cross-queue sync. |
+| `ICommandList` | [libs/bgl_extended/src/cmd/CommandList.h](libs/bgl_extended/src/cmd/CommandList.h) | Records uploads, copies, compute and mesh-shading dispatch, barriers, debug markers. |
+| `ICommandAllocator` | [libs/bgl_extended/src/cmd/CommandAllocator.h](libs/bgl_extended/src/cmd/CommandAllocator.h) | Backing memory pool for recorded commands. |
+| `IShader` | [libs/bgl_extended/src/resource/Shader.h](libs/bgl_extended/src/resource/Shader.h) | Immutable compiled DXIL + slang reflection module. |
+| `IComputePipeline` | [libs/bgl_extended/src/pipeline/ComputePipeline.h](libs/bgl_extended/src/pipeline/ComputePipeline.h) | Compute PSO + constant-buffer reflection. |
+| `IMeshletPipeline` | [libs/bgl_extended/src/pipeline/MeshletPipeline.h](libs/bgl_extended/src/pipeline/MeshletPipeline.h) | Mesh-shading PSO (amp/mesh/pixel) + render state + reflection. |
 
 ### Supporting types (POD / helpers)
 
 | Type | File | Role |
 |---|---|---|
-| `Uniforms` | [libs/bgl/src/uniforms/Uniforms.h](libs/bgl/src/uniforms/Uniforms.h) | Reflection-driven CPU constant-buffer mirror; name/index `operator[]` access. |
-| `ComputeKernel` / `MeshletKernel` | [libs/bgl/src/pipeline/ComputeKernel.h](libs/bgl/src/pipeline/ComputeKernel.h), [MeshletKernel.h](libs/bgl/src/pipeline/MeshletKernel.h) | Move-only pipeline + per-cbuffer `Uniforms` map. |
-| `ComputeState` / `MeshletState` | [libs/bgl/src/types/ComputeState.h](libs/bgl/src/types/ComputeState.h), [MeshletState.h](libs/bgl/src/types/MeshletState.h) | Per-dispatch/draw binding; holds a **non-owning** kernel pointer. |
-| Buffer descriptors & `BufferHandle` | [libs/bgl/src/resource/Buffer.h](libs/bgl/src/resource/Buffer.h) | `StructBufferDesc`, `RawViewDesc`, `ConstantBufferDesc`, `ComputeBufferDesc`, `BufferBarrierDesc`. |
-| Texture descriptors & `TextureHandle` | [libs/bgl/src/resource/Texture.h](libs/bgl/src/resource/Texture.h) | `TextureDesc`, `TextureUsage`, `TextureBarrierDesc`. |
-| Views | [libs/bgl/src/resource/Rtv.h](libs/bgl/src/resource/Rtv.h), [Dsv.h](libs/bgl/src/resource/Dsv.h) | `RtvDesc`/`RtvHandle`, `DsvDesc`/`DsvHandle`. |
-| Sampler descriptors & `SamplerHandle` | [libs/bgl/src/resource/Sampler.h](libs/bgl/src/resource/Sampler.h) | `SamplerDesc` (chained builder), `SamplerAddressMode` (D3D + Vulkan aliases), `SamplerReductionType`; descriptor-heap-only. |
-| Readback | [libs/bgl/src/resource/Readback.h](libs/bgl/src/resource/Readback.h) | `ReadbackBufferDesc`, `ReadbackBufferHandle`, `TextureReadbackLayout`. |
-| `FrameBuffer` | [libs/bgl/src/resource/FrameBuffer.h](libs/bgl/src/resource/FrameBuffer.h) | Color attachments (RTV) + depth attachment (DSV). |
-| Render state | [libs/bgl/src/types/RenderState.h](libs/bgl/src/types/RenderState.h) | `RasterState` + `BlendState` + `DepthStencilState`; baked into `MeshletPipelineDesc`. |
-| `ViewportState` | [libs/bgl/src/types/ViewportState.h](libs/bgl/src/types/ViewportState.h) | Viewports + scissor rects. |
-| `ClearValue` | [libs/bgl/src/types/ClearValue.h](libs/bgl/src/types/ClearValue.h) | Variant of color or depth/stencil clear. |
-| Barrier vocabulary | [libs/bgl/src/types/Barrier.h](libs/bgl/src/types/Barrier.h) | `BarrierSyncFlag`, `BarrierAccessFlag`, `BarrierLayout` (enhanced barriers). |
-| `QueueType` | [libs/bgl/src/types/QueueType.h](libs/bgl/src/types/QueueType.h) | `kGraphics`, `kCompute`, `kCopy`. |
+| `Uniforms` | [libs/bgl_extended/src/uniforms/Uniforms.h](libs/bgl_extended/src/uniforms/Uniforms.h) | Reflection-driven CPU constant-buffer mirror; name/index `operator[]` access. |
+| `ComputeKernel` / `MeshletKernel` | [libs/bgl_extended/src/pipeline/ComputeKernel.h](libs/bgl_extended/src/pipeline/ComputeKernel.h), [MeshletKernel.h](libs/bgl_extended/src/pipeline/MeshletKernel.h) | Move-only pipeline + per-cbuffer `Uniforms` map. |
+| `ComputeState` / `MeshletState` | [libs/bgl_extended/src/types/ComputeState.h](libs/bgl_extended/src/types/ComputeState.h), [MeshletState.h](libs/bgl_extended/src/types/MeshletState.h) | Per-dispatch/draw binding; holds a **non-owning** kernel pointer. |
+| Buffer descriptors & `BufferHandle` | [libs/bgl_extended/src/resource/Buffer.h](libs/bgl_extended/src/resource/Buffer.h) | `StructBufferDesc`, `RawViewDesc`, `ConstantBufferDesc`, `ComputeBufferDesc`, `BufferBarrierDesc`. |
+| Texture descriptors & `TextureHandle` | [libs/bgl_extended/src/resource/Texture.h](libs/bgl_extended/src/resource/Texture.h) | `TextureDesc`, `TextureUsage`, `TextureBarrierDesc`. |
+| Views | [libs/bgl_extended/src/resource/Rtv.h](libs/bgl_extended/src/resource/Rtv.h), [Dsv.h](libs/bgl_extended/src/resource/Dsv.h) | `RtvDesc`/`RtvHandle`, `DsvDesc`/`DsvHandle`. |
+| Sampler descriptors & `SamplerHandle` | [libs/bgl_extended/src/resource/Sampler.h](libs/bgl_extended/src/resource/Sampler.h) | `SamplerDesc` (chained builder), `SamplerAddressMode` (D3D + Vulkan aliases), `SamplerReductionType`; descriptor-heap-only. |
+| Readback | [libs/bgl_extended/src/resource/Readback.h](libs/bgl_extended/src/resource/Readback.h) | `ReadbackBufferDesc`, `ReadbackBufferHandle`, `TextureReadbackLayout`. |
+| `FrameBuffer` | [libs/bgl_extended/src/resource/FrameBuffer.h](libs/bgl_extended/src/resource/FrameBuffer.h) | Color attachments (RTV) + depth attachment (DSV). |
+| Render state | [libs/bgl_extended/src/types/RenderState.h](libs/bgl_extended/src/types/RenderState.h) | `RasterState` + `BlendState` + `DepthStencilState`; baked into `MeshletPipelineDesc`. |
+| `ViewportState` | [libs/bgl_extended/src/types/ViewportState.h](libs/bgl_extended/src/types/ViewportState.h) | Viewports + scissor rects. |
+| `ClearValue` | [libs/bgl_extended/src/types/ClearValue.h](libs/bgl_extended/src/types/ClearValue.h) | Variant of color or depth/stencil clear. |
+| Barrier vocabulary | [libs/bgl_extended/src/types/Barrier.h](libs/bgl_extended/src/types/Barrier.h) | `BarrierSyncFlag`, `BarrierAccessFlag`, `BarrierLayout` (enhanced barriers). |
+| `QueueType` | [libs/bgl_extended/src/types/QueueType.h](libs/bgl_extended/src/types/QueueType.h) | `kGraphics`, `kCompute`, `kCopy`. |
 
 ---
 

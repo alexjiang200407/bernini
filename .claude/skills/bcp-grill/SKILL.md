@@ -112,7 +112,7 @@ Then the lenses this repo makes worth asking. Use the ones the survey lit up; sk
 - **Does it already exist?** Grep `core` and the subsystem by *behaviour*, not by name — the
   duplicate is never called the same thing. [`bcp-precheck`](.claude/agents/bcp-precheck.md) § 2 asks
   this after the code is written, which is the expensive time to find out.
-- **Which layer owns it?** `bgl` never links `assetlib`, `assetlib` never links `bgl`, `gamelib` is
+- **Which layer owns it?** `bgl_extended` never links `assetlib`, `assetlib` never links `bgl_extended`, `gamelib` is
   the seam. A request that needs a violation is a wrong request — find the seam and say so.
 - **Which Guiding Constraint does it touch?** GPU-driven by default, one dominant light, instances
   as the unit of scale, an API-agnostic RHI, the IDL as single source of truth. Breaking one is a

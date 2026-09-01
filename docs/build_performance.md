@@ -65,7 +65,7 @@ Objective-C++ cannot consume a C++ PCH. So a source file still includes the Qt, 
 it uses; the PCH only makes them free.
 
 The exception is a name a PCH *defines* rather than includes, which no `#include` could reach:
-`libs/bgl/src/pch.h` declares the `bgl::logger` alias every bgl source logs through
+`libs/bgl_extended/src/pch.h` declares the `bgl::logger` alias every bgl_extended source logs through
 ([docs/gfx_debug.md](gfx_debug.md)). That is why `MetalImpl.cpp`, which skips the PCH, does not log.
 
 ### A PCH is not free per translation unit
@@ -115,15 +115,15 @@ find build/<preset> -name 'cmake_pch.hxx.pch' -exec ls -lh {} \;
 
 ### What cannot come out of one
 
-`libs/bgl/src/pch.h` is load-bearing, not an optimisation. bgl's internal headers are written
+`libs/bgl_extended/src/pch.h` is load-bearing, not an optimisation. bgl_extended's internal headers are written
 against it: `ViewportState.h` uses `gassert`, `Shader.h` uses `slang`, `Srv.h` uses
 `DescriptorHandle`, `Uniforms.h` uses `glm`, and none of them includes what it uses. So every target
-that compiles bgl's internals — `bgl_objects`, `bgl_metal`, `bgl_tests` — must carry that header,
-however it reaches them. `bgl_tests` gets it by `target_force_include`; removing it there to make
+that compiles bgl_extended's internals — `bgl_extended_objects`, `bgl_metal`, `bgl_extended_tests` — must carry that header,
+however it reaches them. `bgl_extended_tests` gets it by `target_force_include`; removing it there to make
 the suite cheaper does not compile.
 
-`libs/bgl/src/metal/pch.h` is the same case and is documented as such in
-[libs/bgl/CLAUDE.md](../libs/bgl/CLAUDE.md): `metal_cpp.h`, the slang headers and the two error
+`libs/bgl_extended/src/metal/pch.h` is the same case and is documented as such in
+[libs/bgl_extended/CLAUDE.md](../libs/bgl_extended/CLAUDE.md): `metal_cpp.h`, the slang headers and the two error
 checkers are all used with no `#include` at the use site.
 
 That is the cost of writing against a subsystem PCH, which is why [CLAUDE.md](../CLAUDE.md) says not

@@ -132,7 +132,7 @@ and the reviewer was not in the conversation:
 - **Work outside the non-goals.** A diff that implements what the plan says it is explicitly not
   doing is scope that was already ruled out once. It is a finding even when the code is good. Quote
   the non-goal.
-- **A decision contradicted.** The ADR puts the seam in `gamelib` and the diff puts it in `bgl`; the
+- **A decision contradicted.** The ADR puts the seam in `gamelib` and the diff puts it in `bgl_extended`; the
   ADR rejected a cache and the diff adds one. Name the ADR and the line that breaks it.
 
 Neither is automatically blocking. A boundary can move, and the author may have moved it knowingly —
@@ -289,7 +289,7 @@ Report to the caller as text. Lead with the verdict, then the findings, worst fi
 ```
 VERDICT: block | revise | clean
 
-[blocking] libs/bgl/src/scene/Foo.cpp:112
+[blocking] libs/bgl_extended/src/scene/Foo.cpp:112
   Re-rolls align() from core/math.h.
   Fix: core::align(offset, 256).
 

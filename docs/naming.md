@@ -9,7 +9,7 @@ not by what the thing feels like. That is the whole rule; everything below is de
 | the rest of `libs/core/` | `lower_case` free functions, `PascalCase` types and methods | A `core` helper is read beside `std::` ones in the same expression — `split_once(str, "/")`, not `SplitOnce`. |
 | `libs/assetlib/`, `libs/assetlib_structs/` | `camelBack` free functions, `PascalCase` types and methods | The codec surface has always spelled them this way -- `loadKTX2`, `bake`, `serialize` -- and a caller reads `loadKTX2(path)` beside `load(path)`. `assetlib_structs` holds the PODs it decodes into, and `toMatrix(node.localTransform)` is read in the same expression as the rest. |
 | `libs/assetlib/tests/` | `PascalCase`, as everywhere else | A fixture is engine code. Only the published codec functions read beside `std::`. |
-| everything else | `PascalCase` types and functions | Engine code. `bgl`, `gamelib`, `apps`, `examples`. |
+| everything else | `PascalCase` types and functions | Engine code. `bgl`, `bgl_extended`, `gamelib`, `apps`, `examples`. |
 
 The boundary is a directory because a directory is checkable and a judgement call is not. The
 earlier form of this rule — "snake_case for containers, camelCase *or* snake_case for utilities" —

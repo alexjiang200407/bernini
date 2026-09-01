@@ -188,12 +188,12 @@ One PR. It must:
 
 - **build and pass on its own.** Never "part 1 of 2, compiles after part 2" — a reviewer bisects these.
 - **be reviewable in one sitting.** If it needs an "and" to describe, it is two.
-- **rest on what came before.** Bottom-up by layer: `bgl`, then `assetlib`, then `gamelib`, then
+- **rest on what came before.** Bottom-up by layer: `bgl_extended`, then `assetlib`, then `gamelib`, then
   `apps/editor`, because that is the direction the dependencies point. A refactor that enables the
   feature is its own task, ahead of the feature.
 - **be worth reviewing alone.** Do not split a 20-line change into three PRs to look incremental.
 
-Dead scaffolding is the one thing that justifies a task landing unused: a `bgl` task may add an
+Dead scaffolding is the one thing that justifies a task landing unused: a `bgl_extended` task may add an
 interface nothing calls yet, provided the tests call it. Say so in the PR body.
 
 ## 3. One task
@@ -224,7 +224,7 @@ Verify, format, open the PR:
 
 ```bash
 just build && just test                      # or the suites the change touches
-just run bgl_tests -- --gpu-validation       # if it touches shaders, barriers or descriptors
+just run bgl_extended_tests -- --gpu-validation       # if it touches shaders, barriers or descriptors
 just format <files...>
 git fetch origin && git rebase origin/feat/<name>   # the base moved if a sibling merged
 just build && just test                             # again — a rebase is a real merge
@@ -373,7 +373,7 @@ When the tracker is all `[x]`:
 ```bash
 git fetch origin && git switch feat/<name> && git rebase origin/master
 just build && just test                      # the whole feature at once
-just run bgl_tests -- --gpu-validation       # if any task touched shaders, barriers or descriptors
+just run bgl_extended_tests -- --gpu-validation       # if any task touched shaders, barriers or descriptors
 # spawn bcp-precheck here, against origin/master -- see below
 git push --force-with-lease
 just pr create --base master --head feat/<name> --body-file <file>

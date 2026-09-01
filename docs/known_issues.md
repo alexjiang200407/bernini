@@ -49,10 +49,10 @@ needs:
 
 **Fixed by** `Flush` owning the pool its buffer drains into and ending on `waitUntilCompleted`, and
 by `Graphics::m_Pool` being declared below the device. The two rules that came out of it are in
-[`libs/bgl/CLAUDE.md`](../libs/bgl/CLAUDE.md) § bgl_metal, which is where to read them before writing
+[`libs/bgl_extended/CLAUDE.md`](../libs/bgl_extended/CLAUDE.md) § bgl_metal, which is where to read them before writing
 Metal code — not here.
 
-**Gates.** `just run bgl_tests -- "[teardown]"`. Two cases, both deterministic where the crash is
+**Gates.** `just run bgl_extended_tests -- "[teardown]"`. Two cases, both deterministic where the crash is
 not, and each failed before its fix: the queue's retain count must not scale with the number of
 flushes (131 retains after 128 flushes, unfixed), and nothing executed before a `Flush` may still be
 unretired when it returns (31 of 64, unfixed).
@@ -71,7 +71,7 @@ following were already ruled out, so do not spend the day on them again:
   reclaim, and a deferred free's gate covers the frame being recorded when it was retired.
 
 **Reproducing it costs more than you expect.** Nothing smaller than the suite has ever reproduced it:
-120 shard runs, 60 runs of the case that crashed, and a 30-vs-30 A/B against the unfixed `libbgl` all
+120 shard runs, 60 runs of the case that crashed, and a 30-vs-30 A/B against the unfixed `libbgl_extended` all
 came back clean, as did Metal API validation. It appears to need the four shards running at once,
 each holding a device — which is what `just test editor` does and a lone binary does not. Budget for
 a rate near one suite run in twenty, and do not read a handful of clean runs as a fix.

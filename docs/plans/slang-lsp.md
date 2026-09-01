@@ -2,7 +2,7 @@
 
 ## Context
 
-125 `.slang` sources sit under `libs/bgl/shaders/src` and `libs/bgl/idl/src`, spread across `idl/`,
+125 `.slang` sources sit under `libs/bgl_extended/shaders/src` and `libs/bgl_extended/idl/src`, spread across `idl/`,
 `types/`, `forward/`, `util/` and `debug/`, and every cross-file reference is a Slang module import
 (`import types.SubmeshInstance`). An agent working in that tree has grep and nothing else: no
 go-to-definition, no find-references, no hover on a declaration. The ask was whether a "slang-mcp"
@@ -16,7 +16,7 @@ the official VS Code and Visual Studio extensions, and it is already built here:
 `build/<preset>/vcpkg_installed/<triplet>/tools/shader-slang/slangd`.
 
 Nothing is known to be broken today. No shader bug has been traced to an agent misreading the tree,
-and `libs/bgl/shaders/CMakeLists.txt` already runs `slangc` over all 25 entry points at build time,
+and `libs/bgl_extended/shaders/CMakeLists.txt` already runs `slangc` over all 25 entry points at build time,
 so a shader that does not compile is a build failure. This is a speculative convenience, and it is
 scoped as one.
 
@@ -71,7 +71,7 @@ scoped as one.
   Code launches the server in the same directory it passes as `rootUri`. *Rejected:
   `searchInAllWorkspaceDirectories`, which also fixes it but walks `build/` — gigabytes of
   regenerated output holding vcpkg's own copy of the Slang core module. Also rejected: a second root
-  for `libs/bgl/idl/src`, measured and found to be a no-op, since those imports are same-directory
+  for `libs/bgl_extended/idl/src`, measured and found to be a no-op, since those imports are same-directory
   siblings that Slang resolves beside the importing file.*
 
 ## Non-goals
@@ -89,8 +89,8 @@ scoped as one.
 
 - `claude plugin validate --strict <plugin path>` passes.
 - With the plugin installed and `slangd` on `PATH`, an `LSP` `goToDefinition` on `SubmeshInstance` at
-  `libs/bgl/shaders/src/forward/common.slang:1` resolves into
-  `libs/bgl/shaders/src/types/SubmeshInstance.slang` — a cross-file module import, which is the thing
+  `libs/bgl_extended/shaders/src/forward/common.slang:1` resolves into
+  `libs/bgl_extended/shaders/src/types/SubmeshInstance.slang` — a cross-file module import, which is the thing
   grep does worst and the only reason to do this at all.
 - **Insufficient, as it turned out.** slangd answers that query from its file search rather than the
   compiler, so it passes whether or not the module resolves — and it did pass while nothing else

@@ -389,7 +389,7 @@ TEST_CASE("a growth of the arena leaves every filled table intact", "[skinned][r
 
 // Hidden: it allocates ~72 MB of device memory and poses 1.5M bones, which is a cost the suite
 // should not pay on every run. Run it by hand when the fill's cost is the question --
-// `just run bgl_tests -- "[.rigtiming]"` -- and read the numbers off the log's stage lines.
+// `just run bgl_extended_tests -- "[.rigtiming]"` -- and read the numbers off the log's stage lines.
 TEST_CASE("what a dense rig's table costs to stand up", "[.rigtiming]")
 {
 	// cha800_00's shape, which is the largest rig the project holds: 663 bones, 2,254 frames.

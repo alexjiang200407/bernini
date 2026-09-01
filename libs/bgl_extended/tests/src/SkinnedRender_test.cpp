@@ -1005,7 +1005,7 @@ TEST_CASE("an instance on its rig's table draws what the pose pass draws", "[ski
 }
 
 // Hidden: it spawns thousands of instances and is a measurement rather than an assertion. Run it by
-// hand -- `just run bgl_tests -- "[.posetiming]"` -- and read the numbers off the warning it prints.
+// hand -- `just run bgl_extended_tests -- "[.posetiming]"` -- and read the numbers off the warning it prints.
 //
 // The two sources on the identical mesh, rig and clip, so the only difference is where each vertex
 // reads its pose. It is a throughput number over a whole frame and not a per-stage one -- the RHI

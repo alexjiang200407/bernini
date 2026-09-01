@@ -3,7 +3,7 @@
 
 Usage:
     python scripts/build.py                       # build everything (configured preset)
-    python scripts/build.py bgl_tests             # build one target
+    python scripts/build.py bgl_extended_tests             # build one target
     python scripts/build.py bgl --preset windows-ninja-msvc-dx12-debug
     python scripts/build.py --preset windows-clang-dx12-debug   # clang + Ninja
     python scripts/build.py --config Release      # multi-config generators

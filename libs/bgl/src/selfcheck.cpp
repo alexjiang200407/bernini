@@ -1,5 +1,5 @@
 // The whole point of this translation unit is what it does NOT link. It compiles the public surface
-// against bgl_intfc alone, so a public header that reaches into libs/bgl/src stops the build here
+// against bgl alone, so a public header that reaches into libs/bgl_extended/src stops the build here
 // rather than when a second renderer is written.
 //
 // It proves the *include* closure and nothing else: bgl.h declares symbols only a renderer defines

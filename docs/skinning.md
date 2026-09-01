@@ -47,7 +47,7 @@ not obvious from a signature. The headers linked below are the source of truth.
   and releases for a share the manager can make itself. When attachments need a rig by handle, that
   door opens then.
 
-  **The rig outlives its geoms, and `bgl` enforces that rather than trusting it.** `DeleteRig`
+  **The rig outlives its geoms, and `bgl_extended` enforces that rather than trusting it.** `DeleteRig`
   refuses while any geom still names the rig: a geom left pointing at freed bone and sample ranges
   does not misrender, it poses from whatever lands in them next. So the caller deletes geoms first —
   `AssetManager` does it in that order, and reference-counts the rig so the last geom takes it down.
@@ -56,7 +56,7 @@ not obvious from a signature. The headers linked below are the source of truth.
   `RigFramesPass` runs the same walk over every frame of a rig's clip set and writes the result to
   `Rig.boneAnimTable`; an instance drawing from it then reads a pose rather than computing one, which
   is what takes the crowd tier's per-unit cost to nothing. The walk itself is shared rather than
-  reimplemented — [pose_walk.slang](libs/bgl/shaders/src/lib/anim/pose_walk.slang) is what both kernels call,
+  reimplemented — [pose_walk.slang](libs/bgl_extended/shaders/src/lib/anim/pose_walk.slang) is what both kernels call,
   so the two producers cannot drift.
 
   **It is addressable by (clip, frame, bone) from any consumer**, not private to the mesh shader
@@ -68,7 +68,7 @@ not obvious from a signature. The headers linked below are the source of truth.
   **It is filled on demand, not at upload.** A rig no crowd instance is ever spawned on never pays
   for one, which matters because the table is the size of the sample pool it is derived from: 68 MiB
   for a 663-bone rig with 2,254 frames, against ~9 MiB for a 60-bone crowd rig with 3,000. Reserving
-  it is the cost — a device allocation, ~67 ms at that size, which is the one thing `bgl` opens a
+  it is the cost — a device allocation, ~67 ms at that size, which is the one thing `bgl_extended` opens a
   Tracy zone for ([docs/profiling.md](profiling.md)). The posing is a dispatch of one workgroup per
   frame and does not register against a frame at that scale.
 
@@ -88,7 +88,7 @@ not obvious from a signature. The headers linked below are the source of truth.
 
   - **The table is a GPU buffer in the palette's three-rows-a-bone layout, not a texture.** Unreal
     stores it as a texture because its consumer is a material graph. Ours is
-    [skinned_vertex.slang](libs/bgl/shaders/src/lib/forward/skinned_vertex.slang), which already reads a
+    [skinned_vertex.slang](libs/bgl_extended/shaders/src/lib/forward/skinned_vertex.slang), which already reads a
     palette in exactly that layout, and every read is an exact row — there is nothing for a sampler
     to do.
   - **It is filled on the GPU at load, not baked offline.** Unreal and Unity bake because they have
@@ -240,10 +240,10 @@ not obvious from a signature. The headers linked below are the source of truth.
 | Ground | [`assetlib::groundClips`](libs/assetlib/include/assetlib/skinning.h) | At cook, before the boxes: each clip is moved so the lowest point its mesh reaches over it rests on `y = 0` |
 | Bound | [`assetlib::bakePosedBounds`](libs/assetlib/include/assetlib/skinning.h) | At import: sweeps a box per bone through every frame (`posedBounds`) and stores the result in the `.banim`, keyed by a content signature so a re-authored source falls back to measuring |
 | Acquire | [`AssetManager::AcquireSkinnedMesh`](libs/gamelib/include/gamelib/AssetManager.h) | Reads the three containers, checks the clip set still matches its rig, culls by the baked box (`findPosedBounds`) — measuring only a pairing the cook never saw — uploads |
-| Upload the rig | [`IScene::AddRig`](libs/bgl_intfc/include/bgl/IScene.h) | Bones, clip table and sample pool become scene buffers; per-bone depth is derived here. Once per clip set, not once per mesh |
-| Upload the mesh | [`IScene::AddSkinnedMeshGeom`](libs/bgl_intfc/include/bgl/IScene.h) | The bind-pose submeshes, exactly as the static path uploads them, against a rig handle |
-| Place | [`ISceneView::CreateSkinnedMeshInstance`](libs/bgl_intfc/include/bgl/ISceneView.h) | Writes the playback record and reserves the instance's palette slice |
-| Pose | [`SkinnedPosePass`](libs/bgl/src/passes/SkinnedPosePass.h) | One workgroup per instance: sample, blend, walk the hierarchy, multiply by inverse bind |
+| Upload the rig | [`IScene::AddRig`](libs/bgl/include/bgl/IScene.h) | Bones, clip table and sample pool become scene buffers; per-bone depth is derived here. Once per clip set, not once per mesh |
+| Upload the mesh | [`IScene::AddSkinnedMeshGeom`](libs/bgl/include/bgl/IScene.h) | The bind-pose submeshes, exactly as the static path uploads them, against a rig handle |
+| Place | [`ISceneView::CreateSkinnedMeshInstance`](libs/bgl/include/bgl/ISceneView.h) | Writes the playback record and reserves the instance's palette slice |
+| Pose | [`SkinnedPosePass`](libs/bgl_extended/src/passes/SkinnedPosePass.h) | One workgroup per instance: sample, blend, walk the hierarchy, multiply by inverse bind |
 | Draw | `lib/forward/skinned_vertex.slang` | Blends the bind-pose vertex bytes by the palette; position, normal and tangent through one matrix. Entered from `programs/forward/SkinnedMesh.slang`, or from `programs/forward/AnyMesh.slang` where a draw mixes tiers |
 
 ## In the editor
@@ -291,8 +291,8 @@ to keep in agreement beyond the one below.
 
 ## Risky / Non-obvious Contracts
 
-* **The skeleton signature is checked in `gamelib`, not `bgl`.** Computing one needs `assetlib`, which
-  `bgl` does not link. `bgl` can only check that the bone *counts* agree — and a reordered rig has the
+* **The skeleton signature is checked in `gamelib`, not `bgl_extended`.** Computing one needs `assetlib`, which
+  `bgl_extended` does not link. `bgl_extended` can only check that the bone *counts* agree — and a reordered rig has the
   same count, so a stale clip set or mesh would reach the shader and animate the wrong joints
   silently. `AcquireSkinnedMesh` is the only door that catches it; anything constructing a geom
   another way inherits the gap, which is why `AddSkinnedMeshGeom` documents it.
@@ -312,12 +312,12 @@ to keep in agreement beyond the one below.
   rigs of one signature are refused as ambiguous rather than picked between, because directory order
   would otherwise decide which one a clip set names.
 
-* **Culling bounds are the caller's posed box, and `bgl` cannot measure it.** `AddSkinnedMeshGeom`
+* **Culling bounds are the caller's posed box, and `bgl_extended` cannot measure it.** `AddSkinnedMeshGeom`
   takes one and derives every submesh's sphere from it. The bind pose is
   not a substitute: it stops holding the moment a limb moves, and a clip carrying root motion walks
   the whole rig out of it, so bind-pose culling makes it disappear as soon as it does. Measuring the
   box means reading a vertex's influences, which means
-  decoding a vertex layout — `assetlib`, which `bgl` does not link. `assetlib::posedBounds` is that
+  decoding a vertex layout — `assetlib`, which `bgl_extended` does not link. `assetlib::posedBounds` is that
   walk, and it is paid at **import**:
   `bakePosedBounds` stores the result in the `.banim` — one box per rigged mesh entry, because it is that geom's
   culling volume and a `.bmesh` may hold two rigged meshes. Each box is keyed by a signature over

@@ -14,9 +14,9 @@ the fix: *"Covering them needs a seam first: a `headless` flag on `RenderTargetW
 The device is not the obstacle. `editor_tests` links `bgl_d3d12_agility` and may call
 `CreateGraphics`; `AssetThumbnailCache` is covered end to end because it owns a *headless* target
 and never asks for a `winId()`. `headless` is already a first-class bgl concept — `wnd` is
-documented "Ignored when headless" ([IRenderTarget.h](../../libs/bgl_intfc/include/bgl/IRenderTarget.h)
+documented "Ignored when headless" ([IRenderTarget.h](../../libs/bgl/include/bgl/IRenderTarget.h)
 `:30`) and a headless target "presents nothing and advances round-robin"
-([RenderTargetBase.h](../../libs/bgl/src/gfx/RenderTargetBase.h) `:238`). The only thing missing is
+([RenderTargetBase.h](../../libs/bgl_extended/src/gfx/RenderTargetBase.h) `:238`). The only thing missing is
 a way to ask a viewport for it.
 
 Two things the seam turned out to need that a `headless` flag alone does not give:
@@ -66,7 +66,7 @@ Two things the seam turned out to need that a `headless` flag alone does not giv
   the offers inside `SetActiveProject` are reached only where an empty project takes their early
   return.
 - **No golden image.** This buys construction and lifetime coverage — that a panel is released in
-  the right order and follows the project's data root. What a viewport *draws* stays `bgl_tests`' job.
+  the right order and follows the project's data root. What a viewport *draws* stays `bgl_extended_tests`' job.
 - **No `Drop` synthesis.** Unchanged by this.
 - **`ContentExplorerWindow` does not become an `IFollowsProject`.** Its `SetRootPath` is a view root
   with an ordering constraint against the thumbnails, not a data root; folding it into the walk

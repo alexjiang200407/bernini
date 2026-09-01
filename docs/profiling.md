@@ -137,7 +137,7 @@ every task rather than needing a thread body to put it in. Three are named: `bgl
 | `assetlib` cooks | the glTF parse, tangents, posed bounds, clip floors, the prefilter, the whole-project bounds rebake |
 | `assetlib` reads | a whole container through a mount, a selective chunk read, a KTX2 decode/transcode |
 | `assetlib` doors | `Migrate`, `Reimport`, `RefreshImportedTextures`, and the two staleness scans a project pays on every open |
-| `bgl` | reserving a rig's bone anim table — the only one here, because it is a device allocation of tens of megabytes rather than work the renderer does, and the dispatch that fills it has no timestamp query to measure it |
+| `bgl_extended` | reserving a rig's bone anim table — the only one here, because it is a device allocation of tens of megabytes rather than work the renderer does, and the dispatch that fills it has no timestamp query to measure it |
 | `gamelib` | every `AssetManager::Acquire*` |
 | `apps/editor` | the whole start-up, the device and pipeline build, the mount, each half of opening a project, the explorer root, the thumbnail pool, and an import split into its worker and UI halves |
 

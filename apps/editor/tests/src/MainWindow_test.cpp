@@ -14,7 +14,7 @@
 
 // What a viewport's `headless` flag buys: a whole editor -- device, renderer, three viewports --
 // standing in a test, so its construction and teardown are pinned rather than found by driving the
-// app. What it draws is still bgl_tests' job.
+// app. What it draws is still bgl_extended_tests' job.
 
 namespace
 {

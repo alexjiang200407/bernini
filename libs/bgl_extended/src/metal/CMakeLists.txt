@@ -7,7 +7,7 @@ FetchContent_Declare(metalcpp
 )
 FetchContent_MakeAvailable(metalcpp)
 
-# bgl_tests is a sibling directory, so it cannot see metalcpp_SOURCE_DIR: a Metal-only case there
+# bgl_extended_tests is a sibling directory, so it cannot see metalcpp_SOURCE_DIR: a Metal-only case there
 # needs the headers this pulled in.
 set(BGL_METALCPP_INCLUDE_DIR "${metalcpp_SOURCE_DIR}" CACHE INTERNAL "metal-cpp headers")
 
@@ -32,7 +32,7 @@ target_include_directories(bgl_metal
         ${CMAKE_CURRENT_SOURCE_DIR}
         ${CMAKE_CURRENT_SOURCE_DIR}/..
         # The generated IDL headers are a build artifact, and a generated one includes its
-        # hand-written imports as siblings -- so both roots, as bgl_objects has them.
+        # hand-written imports as siblings -- so both roots, as bgl_extended_objects has them.
         ${CMAKE_BINARY_DIR}/generated
         ${CMAKE_CURRENT_SOURCE_DIR}/../idl
     SYSTEM PRIVATE ${metalcpp_SOURCE_DIR}
@@ -52,6 +52,6 @@ set_source_files_properties(MetalImpl.cpp PROPERTIES SKIP_PRECOMPILE_HEADERS ON)
 target_compile_definitions(bgl_metal PRIVATE RENDERER_BACKEND_METAL)
 
 target_link_libraries(bgl_metal
-    PUBLIC bgl_intfc core assetlib_structs glm::glm slang::slang
+    PUBLIC bgl core assetlib_structs glm::glm slang::slang
     PRIVATE "-framework Metal" "-framework Foundation" "-framework QuartzCore"
 )

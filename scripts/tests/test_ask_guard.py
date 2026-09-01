@@ -35,7 +35,7 @@ def verdict(tool, tool_input, asking=True, **environment):
 
 def test_a_session_that_is_not_an_ask_is_untouched():
     """Without WS_ASK the hook is inert -- every other session in the repo works normally."""
-    assert verdict("Write", {"file_path": "libs/bgl/src/x.cpp"}, asking=False) == ALLOWED
+    assert verdict("Write", {"file_path": "libs/bgl_extended/src/x.cpp"}, asking=False) == ALLOWED
     assert verdict("Bash", {"command": "git commit -m x"}, asking=False) == ALLOWED
     assert verdict("Bash", {"command": "git log --oneline"}, asking=False) == ALLOWED
 
@@ -43,13 +43,13 @@ def test_a_session_that_is_not_an_ask_is_untouched():
 def test_the_reading_tools_are_never_in_the_way():
     """Read, Grep and Glob are how an ask session works, and the hook does not see them."""
     for tool in ("Read", "Grep", "Glob", "Task", "WebFetch"):
-        assert verdict(tool, {"file_path": "libs/bgl/src/Renderer.cpp"}) == ALLOWED
+        assert verdict(tool, {"file_path": "libs/bgl_extended/src/Renderer.cpp"}) == ALLOWED
 
 
 # --- writes -----------------------------------------------------------------
 
 @pytest.mark.parametrize("path, expected", [
-    ("libs/bgl/src/Renderer.cpp", BLOCKED),
+    ("libs/bgl_extended/src/Renderer.cpp", BLOCKED),
     ("apps/editor/src/Window.cpp", BLOCKED),
     ("CLAUDE.md", BLOCKED),
     ("docs/vat.md", BLOCKED),                       # a doc is not a spec
@@ -65,7 +65,7 @@ def test_only_a_spec_may_be_written(path, expected):
 
 
 @pytest.mark.parametrize("path", [
-    "../ask/libs/bgl/src/Renderer.cpp",             # another feature's worktree
+    "../ask/libs/bgl_extended/src/Renderer.cpp",             # another feature's worktree
     "../../bernini-test-project/README.md",         # the project landing clone
     "../../ws",                                     # the workspace tooling itself
     "~/.zshrc",
@@ -80,7 +80,7 @@ def test_a_worktree_beside_this_one_is_not_fair_game(path):
 def test_a_temp_root_inside_the_checkout_does_not_open_it():
     """TMPDIR is somebody's environment, not a fact. Pointed at the checkout it would turn
     the allowlist off for everything under it, silently."""
-    assert verdict("Write", {"file_path": "libs/bgl/src/x.cpp"}, TMPDIR=ROOT) == BLOCKED
+    assert verdict("Write", {"file_path": "libs/bgl_extended/src/x.cpp"}, TMPDIR=ROOT) == BLOCKED
 
 
 def test_a_write_with_no_path_is_not_a_reason_to_allow_it():
@@ -104,7 +104,7 @@ def test_a_notebook_carries_its_path_under_another_name():
     # a write, plainly
     "git commit -m x",
     "rm -rf build",
-    "sed -i 's/a/b/' libs/bgl/src/x.cpp",
+    "sed -i 's/a/b/' libs/bgl_extended/src/x.cpp",
     # a write behind a read's flag
     "find . -delete",
     r"find . -exec rm -rf {} \;",
@@ -122,9 +122,9 @@ def test_a_notebook_carries_its_path_under_another_name():
     "git --{git-dir=../../bernini/.git,z} log",     # ...via brace expansion
     "git diff --{output=a.txt,z} HEAD~1 HEAD",
     # a write behind composition
-    "echo x>libs/bgl/src/x.h",
-    'echo x > "libs/bgl/src/x.h"',
-    'sh -c "echo x > libs/bgl/src/x.h"',
+    "echo x>libs/bgl_extended/src/x.h",
+    'echo x > "libs/bgl_extended/src/x.h"',
+    'sh -c "echo x > libs/bgl_extended/src/x.h"',
     "R=$(git commit -m x)",
     "echo `git commit -m x`",
     "cat <(git commit -m x)",
@@ -132,7 +132,7 @@ def test_a_notebook_carries_its_path_under_another_name():
     "git status\ngit push origin HEAD",
     # ...and the reads, which go the same way
     "git log --oneline -5",
-    "grep -rn Renderer libs/bgl",
+    "grep -rn Renderer libs/bgl_extended",
     "cat CLAUDE.md",
     "ls",
     "",

@@ -41,7 +41,7 @@ def test_only_object_files_count_as_compile_time(tmp_path):
     """moc, codegen and linking are real build time but not compile time, and move separately."""
     log = write_log(tmp_path / ".ninja_log", [
         (0, 1000, "apps/editor/editor_lib_autogen/timestamp", "aaaa"),
-        (0, 500, "libs/bgl/shaders/src/idl/Entry.slang", "bbbb"),
+        (0, 500, "libs/bgl_extended/shaders/src/idl/Entry.slang", "bbbb"),
         (0, 200, "bin/editor", "cccc"),
         (0, 300, "apps/editor/CMakeFiles/editor_lib.dir/src/MainWindow.cpp.o", "dddd"),
         (0, 400, "libs/core/CMakeFiles/core.dir/cmake_pch.hxx.pch", "eeee"),
@@ -86,14 +86,14 @@ def test_wall_is_the_span_and_cpu_is_the_sum(tmp_path):
 def test_outputs_are_attributed_to_a_module(tmp_path):
     """The per-module rollup is the whole point; an unrecognised path must not join a neighbour."""
     log = write_log(tmp_path / ".ninja_log", [
-        (0, 100, "libs/bgl/CMakeFiles/bgl_objects.dir/src/A.cpp.o", "aaaa"),
+        (0, 100, "libs/bgl_extended/CMakeFiles/bgl_extended_objects.dir/src/A.cpp.o", "aaaa"),
         (0, 200, "apps/editor/CMakeFiles/editor_lib.dir/src/B.cpp.o", "bbbb"),
         (0, 300, "_deps/qtnodes-build/CMakeFiles/QtNodes.dir/src/C.cpp.o", "cccc"),
     ])
 
     by_module = bt.summarise(bt.parse(log))["by_module"]
 
-    assert by_module["bgl"]["ms"] == 100
+    assert by_module["bgl_extended"]["ms"] == 100
     assert by_module["editor"]["ms"] == 200
     assert by_module["(unclassified)"]["ms"] == 300
 
@@ -103,12 +103,12 @@ def test_an_absolute_output_inside_the_build_dir_is_relativised(tmp_path):
     binary_dir = tmp_path / "build" / "macos-metal-debug"
     os.makedirs(binary_dir)
     log = write_log(binary_dir / ".ninja_log", [
-        (0, 100, str(binary_dir / "libs/bgl/CMakeFiles/bgl_objects.dir/src/A.cpp.o"), "aaaa"),
+        (0, 100, str(binary_dir / "libs/bgl_extended/CMakeFiles/bgl_extended_objects.dir/src/A.cpp.o"), "aaaa"),
     ])
 
     entries = bt.parse(log, str(binary_dir))
 
-    assert entries[0]["output"] == "libs/bgl/CMakeFiles/bgl_objects.dir/src/A.cpp.o"
+    assert entries[0]["output"] == "libs/bgl_extended/CMakeFiles/bgl_extended_objects.dir/src/A.cpp.o"
 
 
 def test_a_log_with_no_header_is_refused(tmp_path):
@@ -137,14 +137,14 @@ def test_outputs_are_attributed_to_a_target(tmp_path):
     """A module is several targets, and a change that helps a library while hurting its suite nets
     out to nothing at module grain -- which is how a regression hid here once."""
     log = write_log(tmp_path / ".ninja_log", [
-        (0, 100, "libs/bgl/CMakeFiles/bgl_objects.dir/src/A.cpp.o", "aaaa"),
-        (0, 200, "libs/bgl/CMakeFiles/bgl_tests.dir/tests/src/B.cpp.o", "bbbb"),
+        (0, 100, "libs/bgl_extended/CMakeFiles/bgl_extended_objects.dir/src/A.cpp.o", "aaaa"),
+        (0, 200, "libs/bgl_extended/CMakeFiles/bgl_extended_tests.dir/tests/src/B.cpp.o", "bbbb"),
         (0, 300, "bin/editor", "cccc"),
     ])
 
     summary = bt.summarise(bt.parse(log))
 
-    assert summary["by_target"]["bgl_objects"]["ms"] == 100
-    assert summary["by_target"]["bgl_tests"]["ms"] == 200
-    assert summary["by_module"]["bgl"]["ms"] == 300
+    assert summary["by_target"]["bgl_extended_objects"]["ms"] == 100
+    assert summary["by_target"]["bgl_extended_tests"]["ms"] == 200
+    assert summary["by_module"]["bgl_extended"]["ms"] == 300
     assert "(no target)" not in summary["by_target"]
