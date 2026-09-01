@@ -138,6 +138,7 @@ namespace assetlib
 			case AssetType::kUiDocument:
 			case AssetType::kUiStyle:
 			case AssetType::kFont:
+			case AssetType::kAvatar:
 			case AssetType::kCount:
 				break;
 			}
@@ -259,6 +260,10 @@ namespace assetlib
 			case AssetType::kUiDocument:
 			case AssetType::kUiStyle:
 			case AssetType::kFont:
+			// Packed verbatim, unlike the `.bimport` above: the game reads an avatar to plant a
+			// rig, and it is found by its key, so an archive that dropped it would leave every
+			// packed rig unplanted.
+			case AssetType::kAvatar:
 			case AssetType::kCount:
 				break;
 			}

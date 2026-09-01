@@ -35,6 +35,7 @@ namespace assetlib
 	struct BEnvLighting;
 	struct BEnv;
 	struct AnimationSet;
+	struct Avatar;
 	struct EnvMapRoute;
 
 	enum class Ktx2Decode : uint32_t;
@@ -767,6 +768,13 @@ namespace assetlib
 		/** For a `.benv`, which holds no pixels: whether each file it names is actually there. */
 		[[nodiscard]] std::string
 		Describe(const BEnv& env) const;
+
+		/**
+		 * @param skeleton The rig the avatar sits by convention beside, to have each authored bone
+		 *        name resolved against it. Null prints the names alone.
+		 */
+		[[nodiscard]] std::string
+		Describe(const Avatar& avatar, const Skeleton* skeleton = nullptr) const;
 
 	private:
 		/**
