@@ -172,6 +172,20 @@ Nearly all of that half-minute is `CreateGraphics`, which every `[render]` case 
 (Catch2 re-runs a `TEST_CASE` body per `SECTION`, so a multi-section one pays it again each
 time). Everything else still runs on the CPU in about a second.
 
+**The suite runs offscreen.** `main.cpp` defaults `QT_QPA_PLATFORM` to `offscreen`, because the
+widgets these cases stand up are not all invisible — the loading screens `util/Modal.h` drives and
+the importer dialog show themselves, and on a presenting platform they land on the desktop and take
+focus off whatever the suite was run to check. It is a default only, so naming a platform still
+watches them:
+
+```bash
+just run editor_tests -- -platform cocoa "[assetimporter]"   # or `-platform windows`
+```
+
+The `[platform]` case pins the default, which is otherwise the kind of thing a build reshuffle
+drops in silence: `tests/CMakeLists.txt` sets `EDITOR_TESTS_HAVE_OFFSCREEN` when — and only when —
+Qt can load the plugin, since naming one it cannot aborts with a modal error box.
+
 ## Adding a suite
 
 One file per subject in `./tests/src`. Plain `TEST_CASE`s — no `Q_OBJECT`, no moc, and
