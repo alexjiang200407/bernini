@@ -29,14 +29,20 @@ target_precompile_headers(gamelib
 	PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src/pch.h
 )
 
+find_package(RmlUi CONFIG REQUIRED)
+
 # bgl for the contract, bgl_extended for the symbols behind it -- gamelib names the interface it
 # compiles against rather than assuming one renderer provides it.
+#
+# RmlUi is PUBLIC because a client drives Rml::Context itself (ADR-7); its include directories are
+# imported as SYSTEM, so enable_strict_compiler's warnings-as-errors never compile its headers.
 target_link_libraries(gamelib
 	PUBLIC
 		core
 		bgl
 		bgl_extended
 		assetlib
+		RmlUi::RmlUi
 )
 
 enable_strict_compiler(gamelib)
