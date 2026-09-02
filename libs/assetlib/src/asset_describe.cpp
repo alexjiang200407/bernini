@@ -558,6 +558,19 @@ namespace assetlib
 		out += std::format("  bones        {}\n", animations.boneCount);
 		out += std::format("  signature    {:016x}\n", animations.skeletonSignature);
 
+		if (animations.plantWeights.Empty())
+		{
+			out += "  plants       none\n";
+		}
+		else
+		{
+			out += std::format(
+				"  plants       {} leg(s), {} bytes, signature {:016x}\n",
+				animations.plantWeights.legCount,
+				animations.plantWeights.weights.size(),
+				animations.plantWeights.signature);
+		}
+
 		if (skeleton != nullptr)
 			out += std::format(
 				"  binding      {}\n",
