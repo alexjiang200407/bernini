@@ -31,12 +31,19 @@ target_precompile_headers(gamelib
 
 # bgl for the contract, bgl_extended for the symbols behind it -- gamelib names the interface it
 # compiles against rather than assuming one renderer provides it.
+#
+# RmlUi is PUBLIC because a client drives Rml::Context itself (ADR-7); its include directories are
+# imported as SYSTEM, so enable_strict_compiler's warnings-as-errors never compile its headers.
 target_link_libraries(gamelib
 	PUBLIC
 		core
 		bgl
 		bgl_extended
 		assetlib
+		RmlUi::RmlUi
+		# The stock Lua plugin: one Initialise call behind UiRuntimeOptions::scripting. PUBLIC with
+		# the core for the same reason -- a game's own <script> bindings are its business.
+		RmlUi::Lua
 )
 
 enable_strict_compiler(gamelib)

@@ -107,9 +107,37 @@ namespace assetlib
 	[[nodiscard]] std::optional<ContainerKind>
 	containerKindForExtension(std::string_view extension) noexcept;
 
-	/** The container `type` names. Total over AssetType, so this never fails. */
+	/**
+	 * The container `type` names.
+	 *
+	 * @pre `type` is a container rather than one of `foreignKinds()`, which have no entry. Total
+	 *      over the container kinds, so it never fails for one of those.
+	 */
 	[[nodiscard]] const ContainerKind&
 	containerKindFor(AssetType type) noexcept;
+
+	/**
+	 * An asset kind this library stores but does not encode: it is packed, deleted, renamed and
+	 * referenced like any other, and `Load<T>` has no struct to give for it.
+	 *
+	 * A texture is one because it is an image, and the UI's three because they are a runtime's own
+	 * text and a font binary. Listing them is what keeps `AssetType` total: the assertion in
+	 * `src/container_table.cpp` counts both tables, so a new kind is a compile error until it says
+	 * which side it is on.
+	 */
+	struct ForeignKind
+	{
+		AssetType        type;
+		std::string_view extension;  // with the leading dot, as codecs.h spells it
+	};
+
+	/** Every asset kind with no codec, one entry each. */
+	[[nodiscard]] std::span<const ForeignKind>
+	foreignKinds() noexcept;
+
+	/** The codec-less kind `extension` names, or nullopt when a codec claims it or nothing does. */
+	[[nodiscard]] std::optional<ForeignKind>
+	foreignKindForExtension(std::string_view extension) noexcept;
 
 	/**
 	 * The cache entry whose files open with `magic`, or nullopt for anything else.

@@ -1,0 +1,11 @@
+# The two names this library's public UI header forward-declares and does not own: RmlUi's `Rml`
+# namespace, and the `lua_State` its Lua plugin takes. Both are spelled the way the library that
+# defines them spells it -- a declaration that renames either declares a different type.
+#
+# Here rather than at the root: a child config's CheckOptions merge key by key, so the editor's own
+# NamespaceIgnoredRegexp would shadow a root one for every editor TU -- and the editor links gamelib.
+InheritParentConfig: true
+
+CheckOptions:
+  readability-identifier-naming.NamespaceIgnoredRegexp: '^Rml$'
+  readability-identifier-naming.TypedefIgnoredRegexp: '^lua_State$'

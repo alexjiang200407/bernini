@@ -82,6 +82,13 @@ are the source of truth; when this doc disagrees, trust them, then fix this doc.
   bgl. That is safe only while `IDL_PUBLIC_CPP_SOURCES` holds no structs — today it is `MaterialType`
   alone, an enum with an explicit underlying type, which every backend lays out identically.
 
+  A public *struct* a shader also reads therefore takes the `OverlayVertex` shape: the POD is
+  hand-written in `bgl` ([IOverlay.h](libs/bgl/include/bgl/IOverlay.h)), the IDL module
+  is internal and the shader imports it, and the renderer pins the two together with `sizeof` and
+  a per-field `offsetof` assert against the generated `bgl::idl` mirror
+  ([Overlay.cpp](libs/bgl_extended/src/overlay/Overlay.cpp)). The layout is still proven, just from the
+  side that can see both.
+
   The list is also what keeps renderer-shaped data off the public surface, which is the other half
   of the rule: a GPU struct laid out per backend cannot go here, and neither can an enum that
   describes *this* renderer's pipelines. `PsoType` was in this list and is no longer — it names

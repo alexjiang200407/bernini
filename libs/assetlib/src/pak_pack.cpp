@@ -135,6 +135,9 @@ namespace assetlib
 			case AssetType::kEnvLighting:
 			case AssetType::kEnvironment:
 			case AssetType::kImportDocument:
+			case AssetType::kUiDocument:
+			case AssetType::kUiStyle:
+			case AssetType::kFont:
 			case AssetType::kCount:
 				break;
 			}
@@ -246,12 +249,16 @@ namespace assetlib
 				regenerated = archived.BytesFor(*type, key);
 				break;
 
+			// Packed verbatim: a bake produces none of them, so the disk bytes are the answer.
 			case AssetType::kMaterial:
 			case AssetType::kTexture:
 			case AssetType::kSky:
 			case AssetType::kEnvLighting:
 			case AssetType::kEnvironment:
 			case AssetType::kImportDocument:
+			case AssetType::kUiDocument:
+			case AssetType::kUiStyle:
+			case AssetType::kFont:
 			case AssetType::kCount:
 				break;
 			}

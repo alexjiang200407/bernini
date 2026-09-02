@@ -22,8 +22,9 @@ source of truth; when this doc disagrees, trust the header, then fix this doc.
 ## The frame
 
 `RenderContext` ([gfx/RenderContext.cpp](libs/bgl_extended/src/gfx/RenderContext.cpp)) drives the frame and
-owns the long-lived pass objects (`m_Forward`, `m_Skybox`, `m_TransparentSort`,
-`m_CompactInstances`, `m_RigFrames`, `m_SkinnedPose`, `m_OutlineMask`, `m_PreparePresentPass`); `Graphics` owns one context and
+owns the long-lived pass objects (`m_BrdfLut`, `m_Forward`, `m_Skybox`, `m_TransparentSort`,
+`m_CompactInstances`, `m_RigFrames`, `m_SkinnedPose`, `m_OutlineMask`, `m_TaaResolve`,
+`m_PostProcess`, `m_OverlayPass`, `m_PreparePresentPass`); `Graphics` owns one context and
 forwards the frame methods to it. A frame is built between `BeginFrame` and `EndFrame`, with one `Draw` per
 view in between; the passes are added in this order and, because the graph never reorders, execute
 in it:
@@ -43,7 +44,8 @@ flowchart TD
     end
     D --> TAA["TaaResolve (only when the target has TAA)"]
     TAA --> PPX["PostProcess (-> backbuffer; dilates the outline mask into the outline)"]
-    PPX --> PP["PreparePresent (transition backbuffer to Present)"]
+    PPX --> OVL["Overlay (only when the frame submitted 2D draws; reads any target it borrowed)"]
+    OVL --> PP["PreparePresent (backbuffer, and every borrowed target, to Present)"]
     PP --> EF["EndFrame → Compile → Execute"]
 ```
 
@@ -52,9 +54,10 @@ render targets and the imported `depth` texture as their depth attachment — **
 the DSV declares `depth` in its `PassDesc`** (`kDepthStencil` / `kDepthWrite`), which is what lets a
 later pass read it as a shader resource and have the graph derive the write → read → write cycle;
 `TaaResolve` reads `sceneColor`, the velocity buffer, `depth` and the previous accumulation and
-writes the next one; `PostProcess` reads whichever of the two the last HDR stage produced and is the **only**
-writer of the backbuffer;
-`PreparePresent` only transitions the backbuffer to present; `Compact Instances`
+writes the next one; `PostProcess` reads whichever of the two the last HDR stage produced and writes
+the backbuffer whole; `Overlay`, on a frame that submitted 2D draws, blends over it, reading the
+last-presented backbuffer of any other headless target a draw sampled; `PreparePresent` only
+transitions the backbuffer — and each of those borrowed backbuffers — to present; `Compact Instances`
 and `Transparent Sort` are pure compute passes that touch no textures at all. All three read the scene/view buffers imported
 by [Scene](libs/bgl_extended/src/scene/Scene.cpp)/[SceneView](libs/bgl_extended/src/scene/SceneView.cpp)'s own
 `AttachToFrameGraph`. Multiple `Draw`s share one graph by prefixing their imports with the view's
@@ -523,15 +526,49 @@ contour no thicker on screen.
   against Slang reflection, so it must track the declaration in `programs/screen/PostProcess.slang`.
 * **Out:** the backbuffer.
 * It covers the whole target, which is why `BeginFrame` does not clear the backbuffer.
-* **It is the only pass that writes the backbuffer**, which is what keeps `SubmitCapture` — a
-  readback of the last presented backbuffer — describing what was displayed.
+* **It is the first writer of the backbuffer, and the only other is the overlay below**, which
+  blends over what it wrote. `SubmitCapture` reads the last presented backbuffer, so a capture
+  describes what was displayed either way — a scene golden simply submits no overlay.
+
+### Overlay — [passes/OverlayPass.{h,cpp}](libs/bgl_extended/src/passes/OverlayPass.cpp)
+
+Draws the frame's 2D output — what a client submitted through `IGraphics::DrawOverlay` — onto the
+backbuffer after PostProcess, in submission order. Attached only on a frame that submitted draws,
+so every other frame is byte-identical to one before the pass existed.
+
+Each draw is one `DispatchMesh` from the `programs.overlay.Overlay` module: a mesh group emits 64
+triangles, three unshared vertices each, read by index from the geometry's two bindless buffers
+(`IOverlay::CreateGeometry`'s vertices and indices, uploaded by the pass's own flush the first
+frame the overlay is drawn), positioned in output pixels through the draw's translation and 4×4
+transform and projected to clip with `w` kept. The pixel shader multiplies the sampled texture by
+the vertex colour and returns premultiplied linear; the blend is `ONE, INV_SRC_ALPHA` with depth
+off, and the backbuffer's opaque alpha stays opaque.
+
+* **In:** the geometry buffers and the draw's texture, bindless, through the `gOverlayDraw`
+  cbuffer; a texture-less draw samples the overlay store's opaque white. A texture may be another
+  headless target's output (`IOverlay::CreateTexture(target)`): `RenderContext` imports that
+  target's last-presented backbuffer as `overlay_source_{n}` with an explicit `kPresent` initial —
+  the handle behind the name changes as the ring advances, so a state resumed from an earlier
+  frame would describe another slot — and the pass declares it as a shader-resource read, which is
+  where the barrier comes from. Textures are straight
+  alpha in whatever format their `ImageData` declared, so an sRGB one decodes on sample; vertex
+  colours arrive sRGB-encoded and premultiplied, and the shader un-premultiplies before it decodes
+  — decoding the premultiplied value as-is would weight a half-covered edge by `0.5^2.2`. Filtered
+  by `RenderContext`'s linear-clamp sampler.
+* **Out:** the backbuffer, one scissor rect per draw (the whole target when the draw sets none).
+* Vertices are 24 bytes, `{float2 position, float2 uv, uint color, uint reserved}`, defined in the
+  IDL (`idl.OverlayVertex`) the shader imports; `Overlay.cpp` asserts the public
+  `bgl::OverlayVertex` against the generated struct field by field. The order is the one where
+  Metal's natural device-struct layout and the scalar layout D3D12 reads agree.
 
 ### PreparePresent — [passes/PreparePresentPass.h](libs/bgl_extended/src/passes/PreparePresentPass.h)
 
 A barrier-only pass with no `exec`: it declares the backbuffer with `BarrierLayout::kPresent` so the
-graph transitions it out of render-target state and into present. Because it has no attachment and
-writes no imported resource, it would be culled — it is pinned with `SetSideEffect()`. Added last,
-in `EndFrame`, after all draws.
+graph transitions it out of render-target state and into present, and every `overlay_source_{n}`
+the overlay borrowed with it, so a sampled target is left as its next `BeginFrame` and any
+`SubmitCapture` assume — the graph persists an imported resource's final state and restores
+nothing. Because it has no attachment and writes no imported resource, it would be culled — it is
+pinned with `SetSideEffect()`. Added last, in `EndFrame`, after all draws.
 
 ---
 

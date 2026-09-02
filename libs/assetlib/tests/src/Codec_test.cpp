@@ -107,10 +107,22 @@ TEST_CASE("The container table is the only list", "[codec]")
 {
 	const std::span<const ContainerKind> kinds = containerKinds();
 
-	// One entry per container, and every AssetType but the texture -- which is an image this
-	// library encodes rather than a container it serializes a struct into.
-	CHECK(kinds.size() == static_cast<size_t>(AssetType::kImportDocument));
-	CHECK_FALSE(containerKindForExtension(c_TextureExtension).has_value());
+	// One entry per container, and the kinds with no codec beside them: together they are every
+	// AssetType, which is what the table's static assertion holds at compile time and this holds
+	// through the accessors a client actually reaches.
+	const std::span<const ForeignKind> foreign = foreignKinds();
+	CHECK(kinds.size() + foreign.size() == static_cast<size_t>(AssetType::kCount));
+
+	SECTION("a kind with no codec is claimed by the other table, and by neither twice")
+	{
+		for (const ForeignKind& kind : foreign)
+		{
+			INFO("extension: " << kind.extension);
+			CHECK_FALSE(containerKindForExtension(kind.extension).has_value());
+			CHECK(
+				assetTypeFromExtension(std::filesystem::path("a") += kind.extension) == kind.type);
+		}
+	}
 
 	SECTION("every extension resolves to the type its codec declares")
 	{

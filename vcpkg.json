@@ -15,6 +15,7 @@
     "meshoptimizer",
     "ktx",
     "sdl3",
+    { "name": "rmlui", "features": [ "lua" ] },
     { "name": "directx-headers", "platform": "windows" },
     { "name": "directx-dxc", "platform": "windows" },
     { "name": "directx12-agility", "platform": "windows" },

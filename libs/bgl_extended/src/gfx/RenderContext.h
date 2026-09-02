@@ -7,10 +7,12 @@
 #include "device/Device.h"
 #include "fg/FrameGraph.h"
 #include "gfx/RenderTargetBase.h"
+#include "overlay/Overlay.h"
 #include "passes/BrdfLutGenPass.h"
 #include "passes/CompactInstancesPass.h"
 #include "passes/ForwardPass.h"
 #include "passes/OutlineMaskPass.h"
+#include "passes/OverlayPass.h"
 #include "passes/PostProcessPass.h"
 #include "passes/PreparePresentPass.h"
 #include "passes/RigFramesPass.h"
@@ -54,6 +56,9 @@ namespace bgl
 
 		void
 		Draw(const RenderJob& job);
+
+		void
+		DrawOverlay(const OverlayJob& job);
 
 		void
 		EndFrame();
@@ -165,6 +170,15 @@ namespace bgl
 		FrameGraph m_FrameGraph;
 		uint32_t   m_DrawCount = 0;
 
+		// This frame's overlay draws, resolved at DrawOverlay, and the overlays they came from --
+		// held so a caller's last ref cannot free one before the pass flushes it.
+		std::vector<OverlayPass::Draw>        m_OverlayDraws;
+		std::vector<core::SharedRef<Overlay>> m_FrameOverlays;
+
+		// The other targets this frame's overlay draws sample. Each one's last-presented backbuffer
+		// is imported for the overlay pass and returned to present by PreparePresent.
+		std::vector<core::SharedRef<RenderTargetBase>> m_FrameSources;
+
 		// Frames begun by this context, counting up forever. Unrelated to a render target's
 		// FrameIndex, which cycles over the backbuffer ring.
 		uint64_t m_FrameCounter = 0;
@@ -182,6 +196,7 @@ namespace bgl
 		ForwardPass          m_Forward;
 		SkyboxPass           m_Skybox;
 		PostProcessPass      m_PostProcess;
+		OverlayPass          m_OverlayPass;
 		OutlineMaskPass      m_OutlineMask;
 		TaaResolvePass       m_TaaResolve;
 		CompactInstancesPass m_CompactInstances;

@@ -440,11 +440,12 @@ Two couplings worth knowing:
 * **The velocity buffer needs an SRV, and did not have one until this landed.** It was allocated
   `kSRV`-capable from the start against a future reader; TAA is that reader.
 
-* **`PostProcess` is still the only writer of the backbuffer.** The capture path reads back the last
-  presented backbuffer, so anything that inserts itself after the post-process breaks the
-  screenshot's claim to be what was displayed. Which also fixes a capture's size at the target's
-  *output* size, whatever the render scale: a supersampled viewport hands back the window's
-  resolution, not twice it.
+* **`PostProcess` is the *first* writer of the backbuffer**, and the only other is the overlay,
+  which blends over what it wrote ([Passes](docs/passes.md) § PostProcess). The capture path reads
+  back the last presented backbuffer, so a screenshot describes what was displayed either way — a
+  TAA golden simply submits no overlay. It also fixes a capture's size at the target's *output*
+  size, whatever the render scale: a supersampled viewport hands back the window's resolution, not
+  twice it.
 
 * **A converged TAA frame is not reproducible in one frame.** Any test that asserts on TAA output has
   to drive a fixed number of frames first; a golden captured on frame 1 asserts nothing about the
