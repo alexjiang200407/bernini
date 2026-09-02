@@ -98,8 +98,8 @@
 # CRLF: the generator would rewrite them on the next build and they would never
 # be clean. These are checked in, so their endings are not a private matter.
 ###############################################################################
-libs/bgl_extended/src/idl/**            text eol=lf
-libs/bgl_extended/shaders/src/idl/**    text eol=lf
+libs/bgl_common/include/bgl_common/idl/**  text eol=lf
+libs/bgl_common/shaders/src/idl/**         text eol=lf
 libs/bgl/include/bgl/MaterialType.h text eol=lf
 
 ###############################################################################

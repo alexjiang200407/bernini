@@ -29,10 +29,6 @@ target_include_directories(bgl_d3d12
     PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}
         ${CMAKE_CURRENT_SOURCE_DIR}/..
-        # The generated IDL headers are a build artifact, and a generated one includes its
-        # hand-written imports as siblings -- so both roots, as bgl_extended_objects has them.
-        ${CMAKE_BINARY_DIR}/generated
-        ${CMAKE_CURRENT_SOURCE_DIR}/../idl
         ${Stb_INCLUDE_DIR}
 )
 

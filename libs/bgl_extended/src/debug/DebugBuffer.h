@@ -1,6 +1,6 @@
 #pragma once
-#include "idl/DebugRecord.h"
 #include "scene/ComputeBuffer.h"
+#include <bgl_common/idl/DebugRecord.h>
 
 #if defined(BERNINI_GPU_DEBUG)
 namespace bgl

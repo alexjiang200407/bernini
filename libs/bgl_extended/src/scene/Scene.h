@@ -1,5 +1,4 @@
 #pragma once
-#include "idl/idl.h"
 #include "resource/ResourceManager.h"
 #include "scene/BonePaletteBuffer.h"
 #include "scene/ComputeBuffer.h"
@@ -13,6 +12,7 @@
 #include "types/SubmeshInstance.h"
 #include "types/VertexGen.h"
 #include <bgl/IScene.h>
+#include <bgl_common/idl/idl.h>
 #include <core/containers/slot_vector.h>
 
 namespace bgl

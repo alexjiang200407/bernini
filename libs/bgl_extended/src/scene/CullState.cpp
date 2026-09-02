@@ -1,10 +1,10 @@
 #include "scene/CullState.h"
 #include "fg/FrameGraph.h"
-#include "idl/CullView.h"
-#include "idl/DispatchArgs.h"
-#include "idl/InstanceVisibility.h"
-#include "idl/PsoType.h"
 #include "scene/scene_buffer_names.h"
+#include <bgl_common/idl/CullView.h>
+#include <bgl_common/idl/DispatchArgs.h>
+#include <bgl_common/idl/InstanceVisibility.h>
+#include <bgl_common/idl/PsoType.h>
 
 namespace bgl
 {

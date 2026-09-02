@@ -108,7 +108,7 @@ disagrees, trust the header, then fix this doc.
   carries `layerType` (`kOpaque`/`kMask`/`kBlend`/`kHashed`) alongside `materialType`, because a
   submesh cannot know which pipeline it belongs in from the material's storage alone. `layerType` is
   therefore part of the handle, not just the desc. Which bucket a pair resolves to is bgl_extended's own
-  business: the enum lives at [libs/bgl_extended/idl/src/PsoType.slang](libs/bgl_extended/idl/src/PsoType.slang) and is
+  business: the enum lives at [libs/bgl_common/idl/src/PsoType.slang](libs/bgl_common/idl/src/PsoType.slang) and is
   generated into `bgl::idl`, not onto this surface.
 
 * **Failures are exceptions, not return codes.** Everything derives from

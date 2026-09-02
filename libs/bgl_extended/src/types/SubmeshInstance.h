@@ -1,7 +1,7 @@
 #pragma once
-#include "idl/Entry.h"
-#include "idl/PsoType.h"
-#include "idl/RawEntry.h"
+#include <bgl_common/idl/Entry.h>
+#include <bgl_common/idl/PsoType.h>
+#include <bgl_common/idl/RawEntry.h>
 
 namespace bgl
 {

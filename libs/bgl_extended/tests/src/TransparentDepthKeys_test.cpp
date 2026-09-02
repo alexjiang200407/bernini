@@ -2,8 +2,6 @@
 #include "cmd/CommandList.h"
 #include "cmd/CommandQueue.h"
 #include "gfx/GraphicsBase.h"
-#include "idl/PsoType.h"
-#include "idl/idl.h"
 #include "pipeline/ComputeKernel.h"
 #include "pipeline/ComputePipeline.h"
 #include "resource/Readback.h"
@@ -18,6 +16,8 @@
 #include "util/TestOptions.h"
 #include "util/util.h"
 #include <bgl/IGraphics.h>
+#include <bgl_common/idl/PsoType.h>
+#include <bgl_common/idl/idl.h>
 
 namespace
 {

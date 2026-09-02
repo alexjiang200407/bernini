@@ -12,6 +12,8 @@ endif()
 
 set(SLANG_COMPILE_OUTS "")
 set(SLANG_SOURCE_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/src")
+# The shared tree: idl.* resolves from here, and nothing under it is this renderer's to compile.
+set(SLANG_COMMON_ROOT "${CMAKE_SOURCE_DIR}/libs/bgl_common/shaders/src")
 
 
 # The list is the tree: every program under programs/ is compiled to DXIL here, at every entry
@@ -47,7 +49,7 @@ foreach(SHADER ${SLANG_PROGRAM_SOURCES})
             OUT_DIR      "${SHADER_OUT_DIR}/${SHADER_REL_DIR}"
             TARGET       "dxil"
             STAGE        "${ENTRY_PROFILE}"
-            INCLUDES     ${SLANG_SOURCE_ROOT}
+            INCLUDES     ${SLANG_SOURCE_ROOT} ${SLANG_COMMON_ROOT}
             ENTRY_POINTS "${ENTRY_NAME}"
         )
     endforeach()
@@ -77,7 +79,7 @@ if (BUILD_TESTS)
             FILE     "${SHADER}"
             OUT_DIR  "${SHADER_OUT_DIR}"
             TARGET   "dxil"
-            INCLUDES ${SLANG_SOURCE_ROOT}
+            INCLUDES ${SLANG_SOURCE_ROOT} ${SLANG_COMMON_ROOT}
         )
 
         list(APPEND SLANG_COMPILE_OUTS "${${SHADER_BARE_NAME}_OUTPUT}")

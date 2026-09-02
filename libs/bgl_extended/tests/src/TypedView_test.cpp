@@ -2,7 +2,6 @@
 #include "cmd/CommandList.h"
 #include "cmd/CommandQueue.h"
 #include "gfx/GraphicsBase.h"
-#include "idl/RawTextureHandle.h"
 #include "pipeline/ComputeKernel.h"
 #include "pipeline/ComputePipeline.h"
 #include "resource/Readback.h"
@@ -13,6 +12,7 @@
 #include "util/GpuValidation.h"
 #include "util/TestOptions.h"
 #include <bgl/IGraphics.h>
+#include <bgl_common/idl/RawTextureHandle.h>
 #include <catch2/catch_approx.hpp>
 
 namespace

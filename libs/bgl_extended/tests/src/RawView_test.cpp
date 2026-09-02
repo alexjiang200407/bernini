@@ -2,8 +2,6 @@
 #include "cmd/CommandList.h"
 #include "cmd/CommandQueue.h"
 #include "gfx/GraphicsBase.h"
-#include "idl/CullView.h"
-#include "idl/SkinnedTableState.h"
 #include "pipeline/ComputeKernel.h"
 #include "pipeline/ComputePipeline.h"
 #include "resource/Buffer.h"
@@ -14,6 +12,8 @@
 #include "util/GpuValidation.h"
 #include "util/TestOptions.h"
 #include <bgl/IGraphics.h>
+#include <bgl_common/idl/CullView.h>
+#include <bgl_common/idl/SkinnedTableState.h>
 #include <catch2/catch_approx.hpp>
 
 namespace

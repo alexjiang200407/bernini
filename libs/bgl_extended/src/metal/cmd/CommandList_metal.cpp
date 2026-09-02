@@ -8,7 +8,7 @@
 #include "resource/ResourceManager_metal.h"
 #include "util/util.h"
 
-#include <idl/DispatchArgs.h>
+#include <bgl_common/idl/DispatchArgs.h>
 
 #include <core/math.h>
 

@@ -1,11 +1,11 @@
 #pragma once
-#include "idl/CullView.h"
 #include "resource/Buffer.h"
 #include "resource/FrameBuffer.h"
 #include "resource/Sampler.h"
 #include "types/EnvironmentMap.h"
 #include "types/Viewport.h"
 #include <bgl/SkyboxDesc.h>
+#include <bgl_common/idl/CullView.h>
 
 namespace bgl
 {

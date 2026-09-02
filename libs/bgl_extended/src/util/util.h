@@ -1,6 +1,4 @@
 #pragma once
-#include "idl/MeshInstance.h"
-#include "idl/PsoType.h"
 #include "types/Format.h"
 #include "types/FormatInfo.h"
 #include <bgl/GeomType.h>
@@ -8,6 +6,8 @@
 #include <bgl/MaterialHandle.h>
 #include <bgl/MaterialType.h>
 #include <bgl/glm.h>
+#include <bgl_common/idl/MeshInstance.h>
+#include <bgl_common/idl/PsoType.h>
 
 namespace bgl
 {

@@ -1,7 +1,7 @@
 #pragma once
-#include "idl/CullView.h"
 #include "scene/ComputeBuffer.h"
 #include "scene/UploadBuffer.h"
+#include <bgl_common/idl/CullView.h>
 
 namespace bgl
 {

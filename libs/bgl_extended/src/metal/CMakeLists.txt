@@ -31,10 +31,6 @@ target_include_directories(bgl_metal
     PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}
         ${CMAKE_CURRENT_SOURCE_DIR}/..
-        # The generated IDL headers are a build artifact, and a generated one includes its
-        # hand-written imports as siblings -- so both roots, as bgl_extended_objects has them.
-        ${CMAKE_BINARY_DIR}/generated
-        ${CMAKE_CURRENT_SOURCE_DIR}/../idl
     SYSTEM PRIVATE ${metalcpp_SOURCE_DIR}
 )
 

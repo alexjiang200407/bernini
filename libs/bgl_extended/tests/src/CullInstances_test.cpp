@@ -4,8 +4,6 @@
 #include "culling/Frustum.h"
 #include "fg/FrameGraph.h"
 #include "gfx/GraphicsBase.h"
-#include "idl/PsoType.h"
-#include "idl/idl.h"
 #include "pipeline/ComputeKernel.h"
 #include "pipeline/ComputePipeline.h"
 #include "resource/Readback.h"
@@ -22,6 +20,8 @@
 #include "util/util.h"
 #include <bgl/Camera.h>
 #include <bgl/IGraphics.h>
+#include <bgl_common/idl/PsoType.h>
+#include <bgl_common/idl/idl.h>
 #include <core/math.h>
 
 // Drives the CullInstances kernel against a crafted scene: unit-radius spheres placed at known

@@ -1,15 +1,15 @@
 #include "scene/Scene.h"
 #include "cmd/CommandList.h"
 #include "fg/FrameGraph.h"
-#include "idl/Constants.h"
-#include "idl/Meshlet.h"
-#include "idl/PsoType.h"
 #include "types/SubmeshInstance.h"
 #include "types/vk_format.h"
 #include "uniforms/Uniforms.h"
 #include "util/util.h"
 #include <assetlib_structs/BMaterial.h>  // the channel layout the static_asserts below pin us to
 #include <assetlib_structs/Bounds.h>
+#include <bgl_common/idl/Constants.h>
+#include <bgl_common/idl/Meshlet.h>
+#include <bgl_common/idl/PsoType.h>
 #include <core/math.h>
 #include <tracy/Tracy.hpp>
 
