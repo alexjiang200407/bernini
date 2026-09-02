@@ -99,7 +99,9 @@ not obvious from a signature. The headers linked below are the source of truth.
     exactly that machinery to retire VAT, which was that design.
 
   The cost of the second is real and worth stating: there is no CPU-readable palette on disk.
-  `assetlib::poseModelTransforms` serves anything that needs a pose on the CPU.
+  `assetlib::poseModelTransforms` serves anything that needs a pose on the CPU — one clip at an
+  integer frame, or the weighted blend of fractional frames of several, which is the reference a
+  blend on the GPU is diffed against.
 
 * **The pose source is a property of the instance, not of the geom.** `SkinnedInstanceDesc::source`
   chooses: `kPerInstance` gets a palette slice `SkinnedPosePass` fills every frame — the hero tier,

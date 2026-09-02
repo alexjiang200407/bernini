@@ -80,6 +80,39 @@ namespace assetlib
 		uint32_t            frame);
 
 	/**
+	 * One weighted contribution to a blended pose: a clip, the fractional frame of it to sample,
+	 * and the weight it carries.
+	 *
+	 * `frames` is clip-relative and already wrapped or clamped -- the clock is the caller's, as it
+	 * is the GPU's `ClipFrames` -- and a pose between two frames is their nlerp with a hemisphere
+	 * flip, which is what `pose_walk.slang` does.
+	 */
+	struct BlendSample
+	{
+		uint32_t clip;
+		float    frames;
+		float    weight;
+	};
+
+	/**
+	 * Each bone's model-space transform of the blend of `blend`'s samples, in bone order.
+	 *
+	 * Blended local to each bone's parent, then walked once: translation and scale by the weighted
+	 * sum, rotation by accumulating the samples in order with each quaternion flipped into the
+	 * hemisphere of the sum so far, then normalized. The weights are normalized to one. This is the
+	 * reference a crossfade or a blend space on the GPU is diffed against.
+	 *
+	 * @throws std::runtime_error if `blend` is empty, a weight is negative, infinite or not a number
+	 *         or they sum to zero, a clip is out of range or holds no frames, `frames` is outside
+	 *         `[0, frameCount - 1]`, or `animations` was cooked against a different rig.
+	 */
+	[[nodiscard]] std::vector<glm::mat4>
+	poseModelTransforms(
+		const Skeleton&              skeleton,
+		const AnimationSet&          animations,
+		std::span<const BlendSample> blend);
+
+	/**
 	 * The matrix each bone skins a vertex by: its model-space pose times its inverse bind.
 	 *
 	 * The inverse bind is what takes a vertex from model space into the bone's own space, so the
