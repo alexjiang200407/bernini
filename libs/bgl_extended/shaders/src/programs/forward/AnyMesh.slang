@@ -3,7 +3,7 @@ import lib.forward.common;
 import lib.forward.mesh_stage;
 import lib.forward.skinned_vertex;
 import lib.forward.static_vertex;
-import lib.types.SubmeshInstance;
+import lib.data.SubmeshInstance;
 
 // The tier-branching forward geometry stage, for a draw whose instance list mixes tiers: the
 // depth-sorted transparent list, whose order is depth and not PSO, and the outline mask's selection.

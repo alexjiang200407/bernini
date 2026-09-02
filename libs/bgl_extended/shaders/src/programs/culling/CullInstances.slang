@@ -9,7 +9,7 @@ import lib.types.ComputeBuffer;
 import lib.types.EntryBuffer;
 import lib.types.PackedBuffer;
 import lib.types.RangeBuffer;
-import lib.types.SubmeshInstance;
+import lib.data.SubmeshInstance;
 import lib.types.UploadBuffer;
 
 // One thread per instance decides frustum visibility and writes a per-view visibility word the

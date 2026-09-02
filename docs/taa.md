@@ -257,7 +257,7 @@ alpha-tested, read dimmer — judged acceptable by eye against keeping the machi
 | `Scene::GetTemporalEpoch` | [scene/Scene.h](libs/bgl_extended/src/scene/Scene.h) | Counts the changes to the scene that no motion vector can carry. |
 | `SceneView::AdvanceTemporalEpoch` | [scene/SceneView.h](libs/bgl_extended/src/scene/SceneView.h) | Reports one to the frame drawing this view, and records that it has. |
 | `PostProcessPass` | [passes/PostProcessPass.h](libs/bgl_extended/src/passes/PostProcessPass.h) | Applies the display curve to whatever the last HDR stage produced. |
-| `ViewData::jitter` / `prevJitter` | [lib/forward/ViewData.slang](libs/bgl_extended/shaders/src/lib/forward/ViewData.slang) | What the mesh shader subtracts back out. |
+| `ViewData::jitter` / `prevJitter` | [lib/data/ViewData.slang](libs/bgl_common/shaders/src/lib/data/ViewData.slang) | What the mesh shader subtracts back out. |
 | History accessors | [gfx/RenderTargetBase.h](libs/bgl_extended/src/gfx/RenderTargetBase.h) | The ping-pong pair, its index, and its validity. |
 | `RenderTargetWindow::SetRenderScale` | [RenderTargetWindow.h](apps/editor/src/Windows/RenderTarget/RenderTargetWindow.h) | Drives a viewport at another display's pixel density, to reproduce the artifact. |
 

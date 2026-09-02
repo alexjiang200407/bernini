@@ -17,8 +17,8 @@ import lib.forward.common;
 import lib.forward.ExpansionData;
 import lib.forward.ForwardData;
 import lib.forward.vertexdecode;
-import lib.forward.ViewData;
-import lib.types.SubmeshInstance;
+import lib.data.ViewData;
+import lib.data.SubmeshInstance;
 
 public ConstantBuffer<ForwardData> forwardData;
 public ConstantBuffer<ViewData> viewData;
