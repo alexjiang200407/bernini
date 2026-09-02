@@ -1,0 +1,10 @@
+<rml>
+<head>
+	<link type="text/rcss" href="hud.rcss"/>
+</head>
+<body id="hud">
+	<div id="box" class="box"></div>
+	<div id="label" class="label">Bernini</div>
+	<img id="preview" class="preview" src="target://preview"/>
+</body>
+</rml>
