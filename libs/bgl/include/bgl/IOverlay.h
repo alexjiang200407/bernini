@@ -30,6 +30,10 @@ namespace bgl
 
 	// A handle names its overlay as well as its slot: every overlay numbers slots from zero, so the
 	// slot alone could not tell one overlay's geometry from another's.
+	//
+	// Declared here rather than in headers of their own, unlike GeomHandle and its siblings: these
+	// two mean nothing without the IOverlay that mints them, and a client reaches them only through
+	// this header.
 	struct OverlayGeometryHandle
 	{
 		core::slot_handle slot;

@@ -7,8 +7,7 @@ namespace game::test
 	 * A `RenderInterface` that draws nothing and hands back distinct handles.
 	 *
 	 * Layout, styling, data models and input are all resolved before anything is drawn, so the
-	 * cases about them need a render interface only because RmlUi requires one. The real one over
-	 * `bgl::IOverlay` is a later task; nothing here depends on it.
+	 * cases about them need a render interface only because RmlUi requires one.
 	 */
 	class UiStubRenderer final : public Rml::RenderInterface
 	{
