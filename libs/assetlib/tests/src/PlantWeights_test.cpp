@@ -29,32 +29,58 @@ namespace
 		glm::vec3(0.2f, 0.1f, 0.0f),  // 4 toe
 	} };
 
-	/** A leg rig whose sole sits on y = 0 at bind pose. */
+	/**
+	 * A leg rig whose sole sits on y = 0 at bind pose -- or two, the second the mirror of the
+	 * first across z, hanging off the same pelvis, for the cases where what one foot does has to
+	 * be told from what the other does.
+	 */
 	struct Leg
 	{
 		BMesh        mesh;
 		Skeleton     skeleton;
 		AnimationSet animations;
 
-		Leg()
+		explicit Leg(const bool twoLegs = false) : m_Legs(twoLegs ? 2 : 1)
 		{
-			for (uint32_t i = 0; i < c_Bones; ++i)
+			for (uint32_t i = 0; i < BoneCount(); ++i)
 			{
-				const uint32_t  parent = i == 0 ? c_InvalidIndex : i - 1;
-				const glm::vec3 origin = i == 0 ? glm::vec3(0.0f) : c_Bind[parent];
+				const uint32_t  parent = ParentOf(i);
+				const glm::vec3 at     = BindOf(i);
+				const glm::vec3 origin =
+					parent == c_InvalidIndex ? glm::vec3(0.0f) : BindOf(parent);
 
-				auto bone        = Bone();
-				bone.bindPose    = { c_Bind[i] - origin,
-					                 glm::quat(1.0f, 0.0f, 0.0f, 0.0f),
-					                 glm::vec3(1.0f) };
-				bone.inverseBind = glm::translate(glm::mat4(1.0f), -c_Bind[i]);
+				auto bone     = Bone();
+				bone.bindPose = { at - origin, glm::quat(1.0f, 0.0f, 0.0f, 0.0f), glm::vec3(1.0f) };
+				bone.inverseBind = glm::translate(glm::mat4(1.0f), -at);
 				bone.parent      = parent;
 				bone.nameOffset  = skeleton.stringPool.add(std::format("Bone{}", i));
 				skeleton.bones.push_back(bone);
 			}
 
-			animations.boneCount         = c_Bones;
+			animations.boneCount         = BoneCount();
 			animations.skeletonSignature = skeletonSignature(skeleton);
+		}
+
+		[[nodiscard]] uint32_t
+		BoneCount() const
+		{
+			return 1 + 4 * m_Legs;
+		}
+
+		// Bone 0 is the pelvis; leg `l` is bones 1 + 4l .. 4 + 4l, the second mirrored in z.
+		[[nodiscard]] static uint32_t
+		ParentOf(const uint32_t bone)
+		{
+			return bone == 0 ? c_InvalidIndex : ((bone - 1) % 4 == 0 ? 0 : bone - 1);
+		}
+
+		[[nodiscard]] static glm::vec3
+		BindOf(const uint32_t bone)
+		{
+			if (bone == 0)
+				return c_Bind[0];
+			const glm::vec3 at = c_Bind[1 + (bone - 1) % 4];
+			return (bone - 1) / 4 == 0 ? at : glm::vec3(at.x, at.y, at.z + 0.5f);
 		}
 
 		/**
@@ -64,11 +90,15 @@ namespace
 		void
 		AddFoot(float y = 0.0f, float tilt = 0.0f)
 		{
-			for (const glm::vec3 corner : { glm::vec3(-0.1f, y, -0.1f),
-			                                glm::vec3(-0.1f, y, 0.1f),
-			                                glm::vec3(0.3f, y + tilt, -0.1f),
-			                                glm::vec3(0.3f, y + tilt, 0.1f) })
-				AddVertex(corner, 3);
+			for (uint32_t leg = 0; leg < m_Legs; ++leg)
+			{
+				const float z = leg == 0 ? 0.0f : 0.5f;
+				for (const glm::vec3 corner : { glm::vec3(-0.1f, y, z - 0.1f),
+				                                glm::vec3(-0.1f, y, z + 0.1f),
+				                                glm::vec3(0.3f, y + tilt, z - 0.1f),
+				                                glm::vec3(0.3f, y + tilt, z + 0.1f) })
+					AddVertex(corner, static_cast<uint16_t>(3 + 4 * leg));
+			}
 
 			// Weighted to the knee, so it is neither in the fit's input nor in its output.
 			AddVertex(glm::vec3(0.0f, 1.0f, 0.0f), 2);
@@ -123,16 +153,28 @@ namespace
 		void
 		AddFrame(const glm::vec3& root)
 		{
-			for (uint32_t i = 0; i < c_Bones; ++i)
-			{
-				const uint32_t  parent = i == 0 ? c_InvalidIndex : i - 1;
-				const glm::vec3 origin = i == 0 ? glm::vec3(0.0f) : c_Bind[parent];
+			AddFrame(root, glm::vec3(0.0f), glm::vec3(0.0f));
+		}
 
-				auto pose = Transform{ c_Bind[i] - origin,
+		/** One frame with the rig at `root` and each leg moved on its own by its hip. */
+		void
+		AddFrame(const glm::vec3& root, const glm::vec3& left, const glm::vec3& right)
+		{
+			for (uint32_t i = 0; i < BoneCount(); ++i)
+			{
+				const uint32_t  parent = ParentOf(i);
+				const glm::vec3 origin =
+					parent == c_InvalidIndex ? glm::vec3(0.0f) : BindOf(parent);
+
+				auto pose = Transform{ BindOf(i) - origin,
 					                   glm::quat(1.0f, 0.0f, 0.0f, 0.0f),
 					                   glm::vec3(1.0f) };
 				if (i == 0)
 					pose.translation += root;
+				else if (i == 1)
+					pose.translation += left;
+				else if (i == 5)
+					pose.translation += right;
 
 				animations.samples.push_back(pose);
 			}
@@ -145,13 +187,17 @@ namespace
 			return std::span<const BMesh>(&mesh, 1);
 		}
 
-		[[nodiscard]] static std::vector<AvatarLegChain>
-		Chains()
+		[[nodiscard]] std::vector<AvatarLegChain>
+		Chains() const
 		{
-			return { AvatarLegChain{ 1, 2, 3, 4 } };
+			auto out = std::vector<AvatarLegChain>();
+			for (uint32_t leg = 0; leg < m_Legs; ++leg)
+				out.push_back({ 1 + 4 * leg, 2 + 4 * leg, 3 + 4 * leg, 4 + 4 * leg });
+			return out;
 		}
 
 	private:
+		uint32_t m_Legs        = 1;
 		uint32_t m_VertexCount = 0;
 	};
 
@@ -171,7 +217,7 @@ TEST_CASE("A sole plane is fitted to the underside of the foot", "[skinning][pla
 	leg.AddFoot();
 	leg.Finish();
 
-	const std::vector<SolePlane> soles = solePlanes(leg.Meshes(), leg.skeleton, Leg::Chains());
+	const std::vector<SolePlane> soles = solePlanes(leg.Meshes(), leg.skeleton, leg.Chains());
 	REQUIRE(soles.size() == 1);
 
 	// Ankle-local: the ankle sits 0.1 above the sole at bind, so the plane is 0.1 below its origin.
@@ -190,7 +236,7 @@ TEST_CASE("A sole plane is fitted to the underside of the foot", "[skinning][pla
 		tilted.Finish();
 
 		const std::vector<SolePlane> fitted =
-			solePlanes(tilted.Meshes(), tilted.skeleton, Leg::Chains());
+			solePlanes(tilted.Meshes(), tilted.skeleton, tilted.Chains());
 
 		CHECK(fitted[0].normal.x == Catch::Approx(-std::sin(std::atan(0.01f))).margin(1e-4));
 		CHECK(fitted[0].normal.y > 0.99f);
@@ -207,7 +253,7 @@ TEST_CASE("A sole plane is fitted to the underside of the foot", "[skinning][pla
 		arched.Finish();
 
 		const std::vector<SolePlane> fitted =
-			solePlanes(arched.Meshes(), arched.skeleton, Leg::Chains());
+			solePlanes(arched.Meshes(), arched.skeleton, arched.Chains());
 
 		CHECK(fitted[0].normal.y == Catch::Approx(1.0f).margin(1e-4));
 	}
@@ -218,7 +264,7 @@ TEST_CASE("A sole plane is fitted to the underside of the foot", "[skinning][pla
 		bare.AddVertex(glm::vec3(0.0f, 1.0f, 0.0f), 2);
 		bare.Finish();
 
-		const std::vector<SolePlane> flat = solePlanes(bare.Meshes(), bare.skeleton, Leg::Chains());
+		const std::vector<SolePlane> flat = solePlanes(bare.Meshes(), bare.skeleton, bare.Chains());
 
 		CHECK(flat[0].normal.y == Catch::Approx(1.0f).margin(1e-4));
 	}
@@ -234,9 +280,9 @@ TEST_CASE("A foot on the floor and still is planted", "[skinning][plant]")
 	leg.AddClip();
 	for (int i = 0; i < 8; ++i) leg.AddFrame(glm::vec3(0.0f));
 
-	const std::vector<SolePlane> soles = solePlanes(leg.Meshes(), leg.skeleton, Leg::Chains());
+	const std::vector<SolePlane> soles = solePlanes(leg.Meshes(), leg.skeleton, leg.Chains());
 	const std::vector<float>     w =
-		WeightsOf(measurePlantWeights(leg.animations, leg.skeleton, Leg::Chains(), soles));
+		WeightsOf(measurePlantWeights(leg.animations, leg.skeleton, leg.Chains(), soles));
 
 	REQUIRE(w.size() == 8);
 
@@ -258,30 +304,29 @@ TEST_CASE("A plant is ramped in and out of every transition inside a clip", "[sk
 	for (int i = 0; i < 9; ++i) leg.AddFrame(glm::vec3(0.1f, 0.0f, 0.0f));
 	for (int i = 0; i < 3; ++i) leg.AddFrame(glm::vec3(0.1f + 0.05f * float(i + 1), 0.4f, 0.0f));
 
-	const std::vector<SolePlane> soles = solePlanes(leg.Meshes(), leg.skeleton, Leg::Chains());
+	const std::vector<SolePlane> soles = solePlanes(leg.Meshes(), leg.skeleton, leg.Chains());
 	const std::vector<float>     w =
-		WeightsOf(measurePlantWeights(leg.animations, leg.skeleton, Leg::Chains(), soles));
+		WeightsOf(measurePlantWeights(leg.animations, leg.skeleton, leg.Chains(), soles));
 
 	REQUIRE(w.size() == 15);
 
 	// The foot is on the floor over 3..11, but the run is 3..10: frame 11's slide is measured across
 	// the frames either side of it, and frame 12 is already carrying the foot away. A foot on its
 	// way up is not planted, which is exactly what the slide test is for.
+	//
+	// The ramp is three frames counted from the one the foot is not down in: nothing at 2, half
+	// at 3, whole from 4 -- and the same going out. A weight, not a flag, which is the whole of
+	// ADR-5's ramp.
 	CHECK(w[2] == Catch::Approx(0.0f).margin(0.01));
-	CHECK(w[3] == Catch::Approx(0.0f).margin(0.01));
-	CHECK(w[4] == Catch::Approx(0.5f).margin(0.01));
-
-	// Fully planted through the middle -- a weight, not a flag, which is the whole of ADR-5's ramp.
-	for (size_t i = 5; i <= 8; ++i) CHECK(w[i] == Catch::Approx(1.0f).margin(0.01));
-
-	CHECK(w[9] == Catch::Approx(0.5f).margin(0.01));
-	CHECK(w[10] == Catch::Approx(0.0f).margin(0.01));
+	CHECK(w[3] == Catch::Approx(0.5f).margin(0.01));
+	for (size_t i = 4; i <= 9; ++i) CHECK(w[i] == Catch::Approx(1.0f).margin(0.01));
+	CHECK(w[10] == Catch::Approx(0.5f).margin(0.01));
 	CHECK(w[11] == Catch::Approx(0.0f).margin(0.01));
 }
 
 TEST_CASE("A foot off the floor or sliding along it is not planted", "[skinning][plant]")
 {
-	const std::vector<AvatarLegChain> chains = Leg::Chains();
+	const std::vector<AvatarLegChain> chains = Leg().Chains();
 
 	SECTION("lifted clear of the floor")
 	{
@@ -299,22 +344,112 @@ TEST_CASE("A foot off the floor or sliding along it is not planted", "[skinning]
 		CHECK(std::ranges::all_of(w, [](uint8_t byte) { return byte == 0; }));
 	}
 
-	SECTION("sliding along it, which height alone would call planted")
+	SECTION("dragged along it, unlike the stance -- which height alone would call planted")
 	{
 		Leg leg;
 		leg.AddFoot();
 		leg.Finish();
 
-		// On the floor throughout, and moving 10 cm a frame -- five times the slide the measurement
-		// allows.
+		// On the floor throughout: still for six frames, then dragged 10 cm a frame. The stance
+		// is the still foot -- it is most of what is on the floor -- and the drag is not it.
 		leg.AddClip();
-		for (int i = 0; i < 8; ++i) leg.AddFrame(glm::vec3(0.1f * float(i), 0.0f, 0.0f));
+		for (int i = 0; i < 6; ++i) leg.AddFrame(glm::vec3(0.0f));
+		for (int i = 1; i <= 2; ++i) leg.AddFrame(glm::vec3(0.1f * float(i), 0.0f, 0.0f));
+
+		const std::vector<SolePlane> soles = solePlanes(leg.Meshes(), leg.skeleton, chains);
+		const std::vector<float>     w =
+			WeightsOf(measurePlantWeights(leg.animations, leg.skeleton, chains, soles));
+
+		// Frame 5 is where the motion is measured to have begun -- its window reaches the first
+		// dragged frame -- so the run is 0..4, ramping out at its end.
+		CHECK(w[2] == Catch::Approx(1.0f).margin(0.01));
+		CHECK(w[4] == Catch::Approx(0.5f).margin(0.01));
+		for (size_t i = 5; i < 8; ++i) CHECK(w[i] == Catch::Approx(0.0f).margin(0.01));
+	}
+
+	SECTION("sliding uniformly is the stance of a clip played in place, and is planted")
+	{
+		// A clip played in place keeps its root still and slides the standing foot back under it
+		// at the stride, which is what a game plays. Every floor-level sample moves alike, so that
+		// motion *is* the stance, and a foot moving with it is down. Stillness was the first rule
+		// here, and planted nothing in any such clip.
+		Leg leg;
+		leg.AddFoot();
+		leg.Finish();
+
+		leg.AddClip();
+		for (int i = 0; i < 8; ++i) leg.AddFrame(glm::vec3(-0.1f * float(i), 0.0f, 0.0f));
+
+		const std::vector<SolePlane> soles = solePlanes(leg.Meshes(), leg.skeleton, chains);
+		const std::vector<float>     w =
+			WeightsOf(measurePlantWeights(leg.animations, leg.skeleton, chains, soles));
+
+		for (size_t i = 0; i < 8; ++i) CHECK(w[i] == Catch::Approx(1.0f).margin(0.01));
+	}
+
+	SECTION("two feet that disagree do not average into a motion neither made")
+	{
+		// Two legs, both on the floor, one moving along x and the other along z. A per-axis
+		// median over the pool of both takes its x from one and its z from the other and names a
+		// diagonal no foot moves along -- and then neither foot matches it, and nothing plants.
+		// The stance is a motion some foot made, and that foot is planted.
+		Leg both(true);
+		both.AddFoot();
+		both.Finish();
+
+		both.AddClip();
+		for (int i = 0; i < 8; ++i)
+			both.AddFrame(
+				glm::vec3(0.0f),
+				glm::vec3(0.05f * float(i), 0.0f, 0.0f),
+				glm::vec3(0.0f, 0.0f, 0.05f * float(i)));
+
+		const std::vector<SolePlane> soles =
+			solePlanes(both.Meshes(), both.skeleton, both.Chains());
+		const std::vector<float> w =
+			WeightsOf(measurePlantWeights(both.animations, both.skeleton, both.Chains(), soles));
+
+		REQUIRE(w.size() == 16);
+		const bool leftPlanted  = w[2 * 3 + 0] == Catch::Approx(1.0f).margin(0.01);
+		const bool rightPlanted = w[2 * 3 + 1] == Catch::Approx(1.0f).margin(0.01);
+		CHECK(leftPlanted != rightPlanted);
+	}
+
+	SECTION("hovering at its stillest is not standing")
+	{
+		// A rig sitting with its feet off the ground: the lowest a sole gets is where it hovers,
+		// and a floor that far above the ground the clip was rested on is no floor at all.
+		Leg leg;
+		leg.AddFoot();
+		leg.Finish();
+
+		leg.AddClip();
+		for (int i = 0; i < 8; ++i) leg.AddFrame(glm::vec3(0.0f, 0.2f, 0.0f));
 
 		const std::vector<SolePlane> soles = solePlanes(leg.Meshes(), leg.skeleton, chains);
 		const std::vector<uint8_t>   w =
 			measurePlantWeights(leg.animations, leg.skeleton, chains, soles);
 
 		CHECK(std::ranges::all_of(w, [](uint8_t byte) { return byte == 0; }));
+	}
+
+	SECTION("a standing foot lifted by a toe that dipped through the floor still plants")
+	{
+		// What groundClips does to a walk: the clip's lowest vertex is a toe tip punching through
+		// mid-swing, so resting that on zero leaves the standing foot a few centimetres up. The
+		// floor the plant measures against is the clip's own lowest sole, so it is found anyway.
+		Leg leg;
+		leg.AddFoot();
+		leg.Finish();
+
+		leg.AddClip();
+		for (int i = 0; i < 8; ++i) leg.AddFrame(glm::vec3(0.0f, 0.07f, 0.0f));
+
+		const std::vector<SolePlane> soles = solePlanes(leg.Meshes(), leg.skeleton, chains);
+		const std::vector<float>     w =
+			WeightsOf(measurePlantWeights(leg.animations, leg.skeleton, chains, soles));
+
+		for (size_t i = 0; i < 8; ++i) CHECK(w[i] == Catch::Approx(1.0f).margin(0.01));
 	}
 }
 
@@ -329,9 +464,9 @@ TEST_CASE("A step plants only while the foot is down", "[skinning][plant]")
 	for (int i = 0; i < 8; ++i) leg.AddFrame(glm::vec3(0.0f));
 	for (int i = 0; i < 4; ++i) leg.AddFrame(glm::vec3(0.05f * float(i + 1), 0.4f, 0.0f));
 
-	const std::vector<SolePlane> soles = solePlanes(leg.Meshes(), leg.skeleton, Leg::Chains());
+	const std::vector<SolePlane> soles = solePlanes(leg.Meshes(), leg.skeleton, leg.Chains());
 	const std::vector<float>     w =
-		WeightsOf(measurePlantWeights(leg.animations, leg.skeleton, Leg::Chains(), soles));
+		WeightsOf(measurePlantWeights(leg.animations, leg.skeleton, leg.Chains(), soles));
 
 	REQUIRE(w.size() == 12);
 
@@ -342,9 +477,10 @@ TEST_CASE("A step plants only while the foot is down", "[skinning][plant]")
 
 	// It ends at 6, not 7: frame 7's slide is measured across the frames either side of it, and
 	// frame 8 is already carrying the foot forward. That lift is a real transition, so it ramps out
-	// over 4..6 and everything airborne is zero.
-	CHECK(w[5] == Catch::Approx(0.5f).margin(0.01));
-	CHECK(w[6] == Catch::Approx(0.0f).margin(0.01));
+	// -- whole at 5, half at 6, nothing from 7 -- which is the three frames counted from the one
+	// the foot is no longer down in.
+	CHECK(w[5] == Catch::Approx(1.0f).margin(0.01));
+	CHECK(w[6] == Catch::Approx(0.5f).margin(0.01));
 	for (size_t i = 7; i < w.size(); ++i) CHECK(w[i] == Catch::Approx(0.0f).margin(0.01));
 }
 
@@ -361,9 +497,9 @@ TEST_CASE("Plant weights are addressed frame-major over the whole pool", "[skinn
 	leg.AddClip();
 	for (int i = 0; i < 8; ++i) leg.AddFrame(glm::vec3(0.0f));
 
-	const std::vector<SolePlane> soles = solePlanes(leg.Meshes(), leg.skeleton, Leg::Chains());
+	const std::vector<SolePlane> soles = solePlanes(leg.Meshes(), leg.skeleton, leg.Chains());
 	const std::vector<float>     w =
-		WeightsOf(measurePlantWeights(leg.animations, leg.skeleton, Leg::Chains(), soles));
+		WeightsOf(measurePlantWeights(leg.animations, leg.skeleton, leg.Chains(), soles));
 
 	REQUIRE(w.size() == 12);
 
@@ -404,7 +540,7 @@ TEST_CASE(
 	leg.AddClip();
 	for (int i = 0; i < 8; ++i) leg.AddFrame(glm::vec3(0.0f));
 
-	const std::vector<AvatarLegChain> chains = Leg::Chains();
+	const std::vector<AvatarLegChain> chains = leg.Chains();
 
 	bakePlantWeights(leg.animations, leg.Meshes(), leg.skeleton, chains);
 

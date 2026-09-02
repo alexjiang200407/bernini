@@ -92,6 +92,13 @@ task that lands the solve.
   authoring nobody will do. A wrong derivation on some clip gets a per-clip override in the avatar,
   not an authoring surface. *Also rejected:* the spec's one *bit* per frame — a one-frame lerp at
   30 Hz is a 33 ms pop, and the ramp has to live somewhere.
+  *Amended by task 8 (2026-09-02):* both halves of the rule as written plant nothing in a
+  locomotion clip. The floor is the clip's own lowest sole, not the grounded `y = 0` — a swinging
+  toe dipping through the floor lifts a walk's standing foot 7 cm off it — bounded by a slack past
+  which the rig is sitting or airborne. And a planted foot moves *with the clip's stance* (the
+  median motion of soles at that floor) rather than not at all: a clip played in place slides its
+  standing foot back under a still root, and that is what a game plays. The ramp counts from the
+  unplanted frame, so a sprint's two-frame contact reaches half weight rather than none.
 
 - **ADR-6 — The `prevTime` palette solves against the instance's one transform; the "time is the
   sole input" invariant holds.** An instance's transform is fixed for its lifetime: `ISceneView` has
