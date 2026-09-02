@@ -20,6 +20,16 @@ Both trees are staged into one `./shaders/src` beside the executable, `bgl_commo
 and one that imports anything from the renderer — a `.Handle` wrapper, `lib.debug.dbg` — fails the
 build with `cannot open file`. The rule is the same one `bgl_common_selfcheck` holds the C++ to.
 
+Resolving is half of it: the second renderer's target is WGSL, and a module alone lowers to nothing,
+because Slang emits per entry point. So every shared `lib/` module has a **driver** under
+`libs/bgl_common/shaders/wgsl/` — `PS<Module>.slang` or `CS<Module>.slang`, the stage the renderer
+runs the module at, which for one that takes derivatives can only be fragment — a minimal entry at
+that stage calling its public functions, which
+`bgl_common_check_wgsl` compiles `-target wgsl` on every preset. Slang checks stage capabilities as it
+lowers, so `ddx` reached from a compute driver stops the build naming the line. A driver is also the
+readable statement of what a second renderer calls; a module gains a public function, the driver gains
+a call. It is lowering, not validation — nothing here runs tint, which arrives with Dawn.
+
 **The directory is the module name.** `programs/forward/PBR.slang` is
 `programs.forward.PBR` — what `IDevice::CreateShader` is handed, and what an `import` names. One name
 resolves to one file, so the call site says where the shader lives:

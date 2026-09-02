@@ -131,3 +131,38 @@ foreach(MODULE ${BGL_COMMON_SHADER_SOURCES})
 	list(APPEND BGL_COMMON_SHADER_CHECKS "${MODULE_OUT}")
 endforeach()
 add_custom_target(bgl_common_check_shaders ALL DEPENDS ${BGL_COMMON_SHADER_CHECKS})
+
+# The other half of the same question: a module that resolves is not yet a module the second
+# renderer can use, because its target is WGSL. A module alone lowers to nothing -- Slang emits per
+# entry point -- so each shared lib module has a driver under shaders/wgsl/ that calls its public
+# surface from an entry at the stage the renderer runs it at (the PS or CS prefix), compiled to WGSL
+# and never loaded. Slang checks stage capabilities as it lowers, so a
+# derivative reached from a compute driver stops the build here, naming the line. This is lowering,
+# not validation: nothing in the tree runs tint, which arrives with Dawn.
+file(GLOB BGL_COMMON_WGSL_DRIVERS CONFIGURE_DEPENDS
+	${CMAKE_CURRENT_SOURCE_DIR}/shaders/wgsl/*.slang
+)
+
+set(BGL_COMMON_WGSL_CHECKS "")
+foreach(DRIVER ${BGL_COMMON_WGSL_DRIVERS})
+	get_filename_component(DRIVER_NAME "${DRIVER}" NAME_WE)
+	if(DRIVER_NAME MATCHES "^PS")
+		set(DRIVER_STAGE fragment)
+	elseif(DRIVER_NAME MATCHES "^CS")
+		set(DRIVER_STAGE compute)
+	else()
+		message(FATAL_ERROR "${DRIVER_NAME}: a WGSL driver is named PS<Module> or CS<Module>, which is its stage.")
+	endif()
+	set(DRIVER_OUT "${CMAKE_CURRENT_BINARY_DIR}/wgsl_check/${DRIVER_NAME}.wgsl")
+	add_custom_command(
+		OUTPUT  "${DRIVER_OUT}"
+		COMMAND ${CMAKE_COMMAND} -E make_directory "${CMAKE_CURRENT_BINARY_DIR}/wgsl_check"
+		COMMAND ${SLANG_EXECUTABLE} "${DRIVER}" -I "${CMAKE_CURRENT_SOURCE_DIR}/shaders/src"
+				-target wgsl -entry main -stage ${DRIVER_STAGE} -o "${DRIVER_OUT}"
+		DEPENDS "${DRIVER}" ${BGL_COMMON_SHADER_SOURCES} bgl_idl_generate
+		COMMENT "wgsl check ${DRIVER_NAME}"
+		VERBATIM
+	)
+	list(APPEND BGL_COMMON_WGSL_CHECKS "${DRIVER_OUT}")
+endforeach()
+add_custom_target(bgl_common_check_wgsl ALL DEPENDS ${BGL_COMMON_WGSL_CHECKS})
