@@ -117,9 +117,19 @@ namespace bgl
 		}
 	}
 
+	FrameGraph::ResourceKey
+	FrameGraph::KeyOf(const std::variant<BufferHandle, TextureHandle>& handle) noexcept
+	{
+		const core::slot_handle slot = std::visit([](const auto& h) { return h.slot; }, handle);
+
+		return ResourceKey{ slot.index,
+			                slot.generation,
+			                std::holds_alternative<TextureHandle>(handle) ? ResourceKind::kTexture :
+			                                                                ResourceKind::kBuffer };
+	}
+
 	AccessState
-	FrameGraph::ResolveInitialState(const std::string& key, std::optional<AccessState> initial)
-		const
+	FrameGraph::ResolveInitialState(const ResourceKey key, std::optional<AccessState> initial) const
 	{
 		if (initial.has_value())
 		{
@@ -158,7 +168,7 @@ namespace bgl
 	{
 		ImportedRes res;
 		res.handle  = handle;
-		res.initial = ResolveInitialState(key, initial);
+		res.initial = ResolveInitialState(KeyOf(res.handle), initial);
 		res.current = res.initial;
 		m_Imported.insert_or_assign(std::move(key), res);
 		return *this;
@@ -174,7 +184,7 @@ namespace bgl
 
 		ImportedRes res;
 		res.handle  = handle;
-		res.initial = ResolveInitialState(key, initial);
+		res.initial = ResolveInitialState(KeyOf(res.handle), initial);
 		res.current = res.initial;
 		m_Imported.insert_or_assign(key, res);
 		return *this;
@@ -586,10 +596,11 @@ namespace bgl
 		// Remember the state each imported resource was left in so the next frame's
 		// import resumes from it (DeriveBarriers leaves res.current at the final
 		// state). This is what lets callers omit the initial state on re-import,
-		// including when the same scene is drawn more than once.
+		// including when the same scene is drawn more than once, or when another
+		// render target imports its own attachments under the same names.
 		for (const auto& [name, res] : m_Imported)
 		{
-			m_LastState[name] = res.current;
+			m_LastState[KeyOf(res.handle)] = res.current;
 		}
 
 		// Executing consumes the frame: drop the passes (releasing their exec

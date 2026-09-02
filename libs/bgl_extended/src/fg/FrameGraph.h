@@ -54,7 +54,7 @@ namespace bgl
 		/**
 		 * Imports an external resource under `name`. The optional `initial` is its
 		 * access state on entry to the graph; when omitted the FrameGraph reuses the
-		 * state the resource was left in by the previous frame/draw (defaulting to an
+		 * state that *resource* was left in by the previous frame/draw (defaulting to an
 		 * undefined state the first time it is seen). See m_LastState.
 		 */
 		FrameGraph&
@@ -161,6 +161,32 @@ namespace bgl
 			AccessState                               current;
 		};
 
+		// Identity of the resource itself. Buffers and textures index separate pools, so the kind
+		// is part of it; the generation keeps a reused slot from inheriting the dead one's state.
+		struct ResourceKey
+		{
+			uint32_t     index      = core::slot_handle::invalid_index;
+			uint32_t     generation = 0;
+			ResourceKind kind       = ResourceKind::kBuffer;
+
+			[[nodiscard]] bool
+			operator==(const ResourceKey& other) const noexcept = default;
+		};
+
+		struct ResourceKeyHash
+		{
+			[[nodiscard]] size_t
+			operator()(const ResourceKey& key) const noexcept
+			{
+				const uint64_t packed = (uint64_t(key.index) << 32) | key.generation;
+				return std::hash<uint64_t>{}(packed) ^
+				       (key.kind == ResourceKind::kTexture ? 0x9E3779B97F4A7C15ull : 0ull);
+			}
+		};
+
+		[[nodiscard]] static ResourceKey
+		KeyOf(const std::variant<BufferHandle, TextureHandle>& handle) noexcept;
+
 		void
 		DeriveBarriers(IResourceManager* resourceManager);
 
@@ -173,7 +199,7 @@ namespace bgl
 		ImportBufferKey(std::string key, BufferHandle handle, std::optional<AccessState> initial);
 
 		[[nodiscard]] AccessState
-		ResolveInitialState(const std::string& key, std::optional<AccessState> initial) const;
+		ResolveInitialState(ResourceKey key, std::optional<AccessState> initial) const;
 
 		void
 		ClearFrame();
@@ -199,7 +225,10 @@ namespace bgl
 		std::vector<size_t>                        m_Order;
 		std::string                                m_CurrentNamespace;
 		bool                                       m_Compiled = false;
-		core::str::unordered_str_map<AccessState>  m_LastState;
-		BufferPoisoner*                            m_Poisoner = nullptr;
+		// Keyed on the resource, not on the name it was imported under: one FrameGraph serves
+		// every render target and the attachment names are shared constants, so a name says
+		// nothing about which resource was last left in that state.
+		std::unordered_map<ResourceKey, AccessState, ResourceKeyHash> m_LastState;
+		BufferPoisoner*                                               m_Poisoner = nullptr;
 	};
 }
