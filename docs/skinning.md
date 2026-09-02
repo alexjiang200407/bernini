@@ -385,18 +385,33 @@ rigidly, and it stays within the clamp. Attaching the plane to the toe instead w
 changes nothing on these rigs — the pad is blended, not the toe's.
 
 **The plant weights come from the frame walk** (`assetlib::measurePlantWeights`), stored in the
-`.banim` and self-keyed like `posedBoxes`: a foot is planted in a frame when its sole is within
-`c_PlantHeightEpsilon` of the grounded floor *and* has moved less than `c_PlantSlideEpsilon`
-horizontally over the frame either side. Height alone plants a foot sliding along the ground;
-stillness alone plants one held in the air. Each planted run is then ramped in and out over
-`c_PlantRampFrames`.
+`.banim` and self-keyed like `posedBoxes`. A foot is planted in a frame when two things hold, and
+both were first written the obvious way and were wrong on the first real walk:
 
-Runs are found per clip, and a run reaching a clip's own edge is **not** ramped there: that edge is
-where the clip stops, not a foot leaving the ground, so a looping idle planted throughout stays
-planted rather than dipping on the loop point.
+* **Its sole is within `c_PlantHeightEpsilon` of the clip's own floor** — the lowest any sole gets
+  in that clip — not of `y = 0`. `groundClips` rests a clip's lowest *vertex* on zero, and in a
+  walk that vertex is a toe tip dipping through the floor mid-swing, which lifts the whole clip
+  until the standing foot sits 7 cm up and nothing ever plants. A floor more than
+  `c_PlantFloorSlack` above zero is no floor at all — the rig sits, or flies — and plants nothing.
+* **It moves with the clip's stance**: the median motion of every sole at that floor, over the
+  frame either side, within `c_PlantSlideEpsilon` or `c_PlantSlideFraction` of it. Stillness was
+  the first rule, and it plants nothing in a clip played in place — whose standing foot slides back
+  at the stride under a root that stays put, which is what a game actually plays — and nothing in
+  a fast clip either, whose standing foot drifts a fraction of the stride. Moving with the ground
+  is the mark of a planted foot; stillness is only what that looks like when the root moves.
 
-It runs **after** grounding, since the floor it measures against is where `groundClips` puts a
-clip's lowest pose, and it is a third walk of every frame on the cook's largest stage
+Each planted run is then ramped in and out over `c_PlantRampFrames`, counted from the frame the
+foot is not down in: nothing, a half, then whole. Runs are found per clip, and a run reaching a
+clip's own edge is **not** ramped there: that edge is where the clip stops, not a foot leaving the
+ground, so a looping idle planted throughout stays planted rather than dipping on the loop point.
+
+On the test project's Coyote, `Walk` and `Walk_InPlace` plant the same seven-frame stance per foot
+(½ 1 1 1 1 1 ½); `Run`, a leaping sprint whose foot skids 12 cm forward and 9 back in its two
+frames of contact, gets a half-weight touchdown and nothing more — which is what a skid is.
+
+It runs **after** grounding: the clip's own floor counts only within `c_PlantFloorSlack` of the
+zero `groundClips` rests the clip on, so a clip measured before it is one whose floor is wherever
+the author left it, and plants nothing. It is a third walk of every frame on the cook's largest stage
 (`assetlib plant weights`). Measured on `cha800_00` (663 bones, 2254 frames, four legs' worth of
 rig): +2.7 s of a 48 s debug cook, and under the run-to-run noise in release.
 
