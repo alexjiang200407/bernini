@@ -1,0 +1,22 @@
+<rml>
+<head>
+	<link type="text/rcss" href="demo.rcss"/>
+</head>
+<body id="menu" data-model="menu">
+	<div id="backdrop"/>
+
+	<div id="frame">
+		<div id="title">BERNINI</div>
+		<img id="preview" src="target://preview"/>
+		<div id="hint">over the preview: WASD to fly, shift-drag inside it to look</div>
+	</div>
+
+	<div id="controls">
+		<div id="play" class="button" data-event-click="plays = plays + 1">PLAY</div>
+		<div id="toggle" class="button" data-event-click="spinning = !spinning">SPIN</div>
+		<div id="counter">started {{ plays }} times</div>
+	</div>
+
+	<div id="readout">{{ frameMs | format(2) }} ms</div>
+</body>
+</rml>
