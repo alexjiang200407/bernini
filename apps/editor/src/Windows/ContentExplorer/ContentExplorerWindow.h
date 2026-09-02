@@ -9,7 +9,7 @@
 #include "Windows/ContentExplorer/AssetFileModel.h"
 #include "Windows/ContentExplorer/AssetOperations.h"
 
-#include "ui_ContentExplorerWindow.h"
+#include "Windows/ContentExplorer/content_explorer_ui.h"
 
 class AssetThumbnailCache;
 class QAbstractItemView;
@@ -164,10 +164,10 @@ private:
 	void
 	UpdateEmptyPlaceholder();
 
-	Ui::ContentExplorerWindow m_Ui;
-	QFileSystemModel*         m_HierarchyModel;
-	AssetFileModel*           m_FileModel;
-	QLabel*                   m_EmptyPlaceholder = nullptr;
+	editor::ContentExplorerWidgets m_Ui;
+	QFileSystemModel*              m_HierarchyModel;
+	AssetFileModel*                m_FileModel;
+	QLabel*                        m_EmptyPlaceholder = nullptr;
 	// The project's Data directory: what every key here is relative to, and what AssetAt and
 	// AssetOperations resolve against. Not where the views are rooted -- see m_BrowseRoot.
 	QString m_RootPath;

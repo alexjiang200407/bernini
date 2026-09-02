@@ -53,18 +53,18 @@ namespace
 ContentExplorerWindow::ContentExplorerWindow(QWidget* parent, AssetsHeldOpenFn assetsHeldOpen) :
 	QWidget(parent)
 {
-	m_Ui.setupUi(this);
+	m_Ui = editor::BuildContentExplorerUi(this);
 
 	m_Ui.splitter->setStretchFactor(0, 0);
 	m_Ui.splitter->setStretchFactor(1, 1);
 	m_Ui.splitter->setSizes({ 220, 700 });
 
-	m_Ui.BackButton->setIcon(style()->standardIcon(QStyle::SP_ArrowBack));
-	m_Ui.BackButton->setToolButtonStyle(Qt::ToolButtonIconOnly);
-	connect(m_Ui.BackButton, &QToolButton::clicked, this, &ContentExplorerWindow::NavigateBack);
+	m_Ui.backButton->setIcon(style()->standardIcon(QStyle::SP_ArrowBack));
+	m_Ui.backButton->setToolButtonStyle(Qt::ToolButtonIconOnly);
+	connect(m_Ui.backButton, &QToolButton::clicked, this, &ContentExplorerWindow::NavigateBack);
 
 	connect(
-		m_Ui.ModeSelector,
+		m_Ui.modeSelector,
 		&QComboBox::activated,  // activated, not currentIndexChanged: only a user's pick re-roots
 		this,
 		[this](int index) {
@@ -85,31 +85,31 @@ ContentExplorerWindow::ContentExplorerWindow(QWidget* parent, AssetsHeldOpenFn a
 		&QAbstractItemModel::rowsInserted,
 		this,
 		[this](const QModelIndex& parent, int first, int last) {
-			HideUnlistedRows(m_Ui.FileExplorer, *m_HierarchyModel, parent, first, last);
+			HideUnlistedRows(m_Ui.fileExplorer, *m_HierarchyModel, parent, first, last);
 		});
 	connect(
 		m_FileModel,
 		&QAbstractItemModel::rowsInserted,
 		this,
 		[this](const QModelIndex& parent, int first, int last) {
-			HideUnlistedRows(m_Ui.CurrentDirectoryExplorer, *m_FileModel, parent, first, last);
+			HideUnlistedRows(m_Ui.currentDirectory, *m_FileModel, parent, first, last);
 		});
 
-	m_Ui.FileExplorer->setContextMenuPolicy(Qt::CustomContextMenu);
+	m_Ui.fileExplorer->setContextMenuPolicy(Qt::CustomContextMenu);
 	connect(
-		m_Ui.FileExplorer,
+		m_Ui.fileExplorer,
 		&QWidget::customContextMenuRequested,
 		this,
 		&ContentExplorerWindow::ShowHierarchyMenu);
 
-	m_Ui.CurrentDirectoryExplorer->setContextMenuPolicy(Qt::CustomContextMenu);
+	m_Ui.currentDirectory->setContextMenuPolicy(Qt::CustomContextMenu);
 	connect(
-		m_Ui.CurrentDirectoryExplorer,
+		m_Ui.currentDirectory,
 		&QWidget::customContextMenuRequested,
 		this,
 		&ContentExplorerWindow::ShowFileMenu);
 
-	auto* viewport = m_Ui.CurrentDirectoryExplorer->viewport();
+	auto* viewport = m_Ui.currentDirectory->viewport();
 	m_EmptyPlaceholder =
 		new QLabel("Nothing exists in this directory.\nRight-click to add.", viewport);
 	m_EmptyPlaceholder->setAlignment(Qt::AlignCenter);
@@ -185,7 +185,7 @@ ContentExplorerWindow::SetBrowseMode(const editor::BrowseMode mode)
 			"ContentExplorer: '%s' is missing, so the project's layout is incomplete",
 			qPrintable(root));
 
-		m_Ui.ModeSelector->setCurrentIndex(static_cast<int>(m_Mode));
+		m_Ui.modeSelector->setCurrentIndex(static_cast<int>(m_Mode));
 		return;
 	}
 
@@ -193,7 +193,7 @@ ContentExplorerWindow::SetBrowseMode(const editor::BrowseMode mode)
 	m_BrowseRoot = root;
 	m_History.clear();
 
-	m_Ui.FileExplorer->setRootIndex(m_HierarchyModel->setRootPath(m_BrowseRoot));
+	m_Ui.fileExplorer->setRootIndex(m_HierarchyModel->setRootPath(m_BrowseRoot));
 	ShowDirectory(m_BrowseRoot);
 }
 
@@ -210,11 +210,8 @@ ContentExplorerWindow::ShowDirectory(const QString& path)
 	if (!IsInsideBrowseRoot(path))
 		return;
 
-	m_Ui.CurrentDirectoryExplorer->setRootIndex(m_FileModel->setRootPath(path));
-	HideUnlistedRows(
-		m_Ui.CurrentDirectoryExplorer,
-		*m_FileModel,
-		m_Ui.CurrentDirectoryExplorer->rootIndex());
+	m_Ui.currentDirectory->setRootIndex(m_FileModel->setRootPath(path));
+	HideUnlistedRows(m_Ui.currentDirectory, *m_FileModel, m_Ui.currentDirectory->rootIndex());
 
 	// The tree follows, or it would go on highlighting the folder the grid has left -- and clicking
 	// that row again would be a dead click, setCurrentIndex on the current index emitting nothing.
@@ -222,15 +219,15 @@ ContentExplorerWindow::ShowDirectory(const QString& path)
 	// current index onto the folder would take it off the file the user just clicked. Re-entering
 	// through currentChanged is harmless -- the grid is rooted above, so NavigateTo returns early.
 	if (QDir(m_HierarchyModel->filePath(
-			FolderOf(*m_HierarchyModel, m_Ui.FileExplorer->currentIndex()))) != QDir(path))
+			FolderOf(*m_HierarchyModel, m_Ui.fileExplorer->currentIndex()))) != QDir(path))
 	{
 		// Cleared rather than set at the top of the tree, which is a root the tree has no row for.
 		const QModelIndex folder = m_HierarchyModel->index(path);
-		m_Ui.FileExplorer->setCurrentIndex(
-			folder == m_Ui.FileExplorer->rootIndex() ? QModelIndex() : folder);
+		m_Ui.fileExplorer->setCurrentIndex(
+			folder == m_Ui.fileExplorer->rootIndex() ? QModelIndex() : folder);
 	}
 
-	m_Ui.BackButton->setEnabled(!m_History.isEmpty());
+	m_Ui.backButton->setEnabled(!m_History.isEmpty());
 	UpdateEmptyPlaceholder();
 }
 
@@ -242,7 +239,7 @@ ContentExplorerWindow::NavigateTo(const QString& path)
 	if (!IsInsideBrowseRoot(path))
 		return;
 
-	const QString shown = m_FileModel->filePath(m_Ui.CurrentDirectoryExplorer->rootIndex());
+	const QString shown = m_FileModel->filePath(m_Ui.currentDirectory->rootIndex());
 
 	if (!shown.isEmpty())
 	{
@@ -271,7 +268,7 @@ ContentExplorerWindow::NavigateBack()
 		}
 	}
 
-	m_Ui.BackButton->setEnabled(false);
+	m_Ui.backButton->setEnabled(false);
 }
 
 void
@@ -306,45 +303,45 @@ ContentExplorerWindow::HideUnlistedRows(
 void
 ContentExplorerWindow::AttachModels()
 {
-	if (m_Ui.FileExplorer->model() == m_HierarchyModel)
+	if (m_Ui.fileExplorer->model() == m_HierarchyModel)
 		return;
 
-	m_Ui.FileExplorer->setModel(m_HierarchyModel);
-	m_Ui.FileExplorer->setHeaderHidden(true);
-	connect(m_Ui.FileExplorer, &QTreeView::expanded, this, [this](const QModelIndex& parent) {
-		HideUnlistedRows(m_Ui.FileExplorer, *m_HierarchyModel, parent);
+	m_Ui.fileExplorer->setModel(m_HierarchyModel);
+	m_Ui.fileExplorer->setHeaderHidden(true);
+	connect(m_Ui.fileExplorer, &QTreeView::expanded, this, [this](const QModelIndex& parent) {
+		HideUnlistedRows(m_Ui.fileExplorer, *m_HierarchyModel, parent);
 	});
 	for (auto column = 1; column < m_HierarchyModel->columnCount(); ++column)
-		m_Ui.FileExplorer->hideColumn(column);
+		m_Ui.fileExplorer->hideColumn(column);
 
-	m_Ui.CurrentDirectoryExplorer->setModel(m_FileModel);
-	m_Ui.CurrentDirectoryExplorer->setEditTriggers(QAbstractItemView::NoEditTriggers);
+	m_Ui.currentDirectory->setModel(m_FileModel);
+	m_Ui.currentDirectory->setEditTriggers(QAbstractItemView::NoEditTriggers);
 
 	// A grid of tiles, each an asset's thumbnail above its name.
-	m_Ui.CurrentDirectoryExplorer->setViewMode(QListView::IconMode);
-	m_Ui.CurrentDirectoryExplorer->setIconSize(QSize(c_TileIconDim, c_TileIconDim));
-	m_Ui.CurrentDirectoryExplorer->setGridSize(QSize(c_TileWidth, c_TileHeight));
-	m_Ui.CurrentDirectoryExplorer->setResizeMode(QListView::Adjust);
-	m_Ui.CurrentDirectoryExplorer->setUniformItemSizes(true);
-	m_Ui.CurrentDirectoryExplorer->setWordWrap(true);
+	m_Ui.currentDirectory->setViewMode(QListView::IconMode);
+	m_Ui.currentDirectory->setIconSize(QSize(c_TileIconDim, c_TileIconDim));
+	m_Ui.currentDirectory->setGridSize(QSize(c_TileWidth, c_TileHeight));
+	m_Ui.currentDirectory->setResizeMode(QListView::Adjust);
+	m_Ui.currentDirectory->setUniformItemSizes(true);
+	m_Ui.currentDirectory->setWordWrap(true);
 
 	// IconMode lets the user shuffle tiles around the grid by default, which would imply an ordering
 	// the folder does not have.
-	m_Ui.CurrentDirectoryExplorer->setMovement(QListView::Static);
+	m_Ui.currentDirectory->setMovement(QListView::Static);
 
 	// Assets can be dragged out of the explorer (e.g. a .bmesh onto the Material Editor preview).
 	// QFileSystemModel supplies the file URLs; DragOnly keeps the views from accepting drops, so
 	// dropped mesh files still bubble up to this widget's dropEvent for import.
-	m_Ui.FileExplorer->setDragEnabled(true);
-	m_Ui.FileExplorer->setDragDropMode(QAbstractItemView::DragOnly);
-	m_Ui.CurrentDirectoryExplorer->setDragEnabled(true);
-	m_Ui.CurrentDirectoryExplorer->setDragDropMode(QAbstractItemView::DragOnly);
+	m_Ui.fileExplorer->setDragEnabled(true);
+	m_Ui.fileExplorer->setDragDropMode(QAbstractItemView::DragOnly);
+	m_Ui.currentDirectory->setDragEnabled(true);
+	m_Ui.currentDirectory->setDragDropMode(QAbstractItemView::DragOnly);
 
 	// Selecting an entry on the left shows the containing folder's contents on the right. The tree
 	// lists files too, and a file is not a directory to root the right-hand view at, so selecting one
 	// shows the folder it lives in.
 	connect(
-		m_Ui.FileExplorer->selectionModel(),
+		m_Ui.fileExplorer->selectionModel(),
 		&QItemSelectionModel::currentChanged,
 		this,
 		[this](const QModelIndex& current, const QModelIndex&) {
@@ -360,7 +357,7 @@ ContentExplorerWindow::AttachModels()
 
 	// Double-clicking a folder on the right opens it.
 	connect(
-		m_Ui.CurrentDirectoryExplorer,
+		m_Ui.currentDirectory,
 		&QAbstractItemView::doubleClicked,
 		this,
 		[this](const QModelIndex& index) {
@@ -386,31 +383,31 @@ ContentExplorerWindow::AttachModels()
 void
 ContentExplorerWindow::Clear()
 {
-	m_Ui.FileExplorer->setModel(nullptr);
-	m_Ui.CurrentDirectoryExplorer->setModel(nullptr);
+	m_Ui.fileExplorer->setModel(nullptr);
+	m_Ui.currentDirectory->setModel(nullptr);
 	m_EmptyPlaceholder->hide();
 	m_History.clear();
-	m_Ui.BackButton->setEnabled(false);
+	m_Ui.backButton->setEnabled(false);
 	setEnabled(false);
 }
 
 void
 ContentExplorerWindow::UpdateEmptyPlaceholder()
 {
-	auto* viewport = m_Ui.CurrentDirectoryExplorer->viewport();
+	auto* viewport = m_Ui.currentDirectory->viewport();
 
 	// Only meaningful once a folder is shown; and while the model is still fetching the
 	// directory's contents we can't yet tell whether it's empty, so wait for the reload.
-	const auto root = m_Ui.CurrentDirectoryExplorer->rootIndex();
+	const auto root = m_Ui.currentDirectory->rootIndex();
 
 	// Counting what the view shows, not what the model holds: a folder of nothing but hidden
 	// sidecars is empty to the user.
 	auto visibleRows = 0;
 	for (int row = 0; row < m_FileModel->rowCount(root); ++row)
-		if (!m_Ui.CurrentDirectoryExplorer->isRowHidden(row))
+		if (!m_Ui.currentDirectory->isRowHidden(row))
 			++visibleRows;
 
-	const bool empty = m_Ui.CurrentDirectoryExplorer->model() == m_FileModel &&
+	const bool empty = m_Ui.currentDirectory->model() == m_FileModel &&
 	                   !m_FileModel->canFetchMore(root) && visibleRows == 0;
 
 	if (empty)
@@ -427,9 +424,9 @@ ContentExplorerWindow::UpdateEmptyPlaceholder()
 bool
 ContentExplorerWindow::eventFilter(QObject* watched, QEvent* event)
 {
-	if (watched == m_Ui.CurrentDirectoryExplorer->viewport() && event->type() == QEvent::Resize)
+	if (watched == m_Ui.currentDirectory->viewport() && event->type() == QEvent::Resize)
 	{
-		m_EmptyPlaceholder->setGeometry(m_Ui.CurrentDirectoryExplorer->viewport()->rect());
+		m_EmptyPlaceholder->setGeometry(m_Ui.currentDirectory->viewport()->rect());
 	}
 
 	return QWidget::eventFilter(watched, event);
@@ -438,19 +435,19 @@ ContentExplorerWindow::eventFilter(QObject* watched, QEvent* event)
 void
 ContentExplorerWindow::ShowHierarchyMenu(const QPoint& pos)
 {
-	if (m_Ui.FileExplorer->model() != m_HierarchyModel)
+	if (m_Ui.fileExplorer->model() != m_HierarchyModel)
 		return;
 
-	ShowAssetMenu(*m_Ui.FileExplorer, *m_HierarchyModel, pos);
+	ShowAssetMenu(*m_Ui.fileExplorer, *m_HierarchyModel, pos);
 }
 
 void
 ContentExplorerWindow::ShowFileMenu(const QPoint& pos)
 {
-	if (m_Ui.CurrentDirectoryExplorer->model() != m_FileModel)
+	if (m_Ui.currentDirectory->model() != m_FileModel)
 		return;
 
-	ShowAssetMenu(*m_Ui.CurrentDirectoryExplorer, *m_FileModel, pos);
+	ShowAssetMenu(*m_Ui.currentDirectory, *m_FileModel, pos);
 }
 
 void
@@ -540,7 +537,7 @@ ContentExplorerWindow::dropEvent(QDropEvent* event)
 void
 ContentExplorerWindow::OnDirectoryDeleted(const QString& absolute)
 {
-	const QString shown = m_FileModel->filePath(m_Ui.CurrentDirectoryExplorer->rootIndex());
+	const QString shown = m_FileModel->filePath(m_Ui.currentDirectory->rootIndex());
 
 	// The trail led into a folder that is gone, so it is dropped rather than walked back into --
 	// and going home is not a step Back should offer to undo.
@@ -556,7 +553,7 @@ ContentExplorerWindow::OnDirectoryRenamed(const QString& fromAbsolute, const QSt
 {
 	// Follow the rename rather than dumping the user at the root. The history is left alone -- Back
 	// already skips a folder that is gone.
-	const QString shown  = m_FileModel->filePath(m_Ui.CurrentDirectoryExplorer->rootIndex());
+	const QString shown  = m_FileModel->filePath(m_Ui.currentDirectory->rootIndex());
 	const QString inside = editor::GetKeyUnder(fromAbsolute, shown);
 
 	if (inside.isEmpty())
