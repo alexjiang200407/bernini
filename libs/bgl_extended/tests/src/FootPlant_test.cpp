@@ -51,19 +51,30 @@ namespace
 		glm::vec3(0.2f, 0.0f, 0.0f),  // toe
 	} };
 
+	/**
+	 * A bone's local TRS with the rig's root scaled by `rootScale`: the root carries the scale and
+	 * every child is authored in the units that scale produces, which is how a rig exported in
+	 * centimetres arrives -- a 0.01 on the root and a hundredfold in every inverse bind below it.
+	 */
+	assetlib::Transform
+	LocalOf(uint32_t bone, float rootScale)
+	{
+		const glm::vec3 parent = bone == 0 ? glm::vec3(0.0f) : c_Bind[bone - 1];
+		return { (c_Bind[bone] - parent) / (bone == 0 ? 1.0f : rootScale),
+			     glm::quat(1.0f, 0.0f, 0.0f, 0.0f),
+			     glm::vec3(bone == 0 ? rootScale : 1.0f) };
+	}
+
 	assetlib::Skeleton
-	MakeLegRig()
+	MakeLegRig(float rootScale = 1.0f)
 	{
 		auto skeleton = assetlib::Skeleton();
 		for (uint32_t i = 0; i < c_Bones; ++i)
 		{
-			const glm::vec3 parent = i == 0 ? glm::vec3(0.0f) : c_Bind[i - 1];
-
 			auto bone        = assetlib::Bone();
-			bone.bindPose    = { c_Bind[i] - parent,
-				                 glm::quat(1.0f, 0.0f, 0.0f, 0.0f),
-				                 glm::vec3(1.0f) };
-			bone.inverseBind = glm::translate(glm::mat4(1.0f), -c_Bind[i]);
+			bone.bindPose    = LocalOf(i, rootScale);
+			bone.inverseBind = glm::scale(glm::mat4(1.0f), glm::vec3(1.0f / rootScale)) *
+			                   glm::translate(glm::mat4(1.0f), -c_Bind[i]);
 			bone.parent      = i == 0 ? assetlib::c_InvalidIndex : i - 1;
 			bone.nameOffset  = skeleton.stringPool.add(std::format("Bone{}", i));
 			skeleton.bones.push_back(bone);
@@ -76,7 +87,7 @@ namespace
 	 * swings the hip, which only a case that runs the clock ever reaches.
 	 */
 	assetlib::AnimationSet
-	MakeStillClip()
+	MakeStillClip(float rootScale = 1.0f)
 	{
 		auto set      = assetlib::AnimationSet();
 		set.boneCount = c_Bones;
@@ -85,16 +96,12 @@ namespace
 		{
 			for (uint32_t b = 0; b < c_Bones; ++b)
 			{
-				const glm::vec3 parent = b == 0 ? glm::vec3(0.0f) : c_Bind[b - 1];
-
 				// Rz(25) as w-first, on the hip of frame 1 alone.
 				const auto swung = glm::quat(0.97437f, 0.0f, 0.0f, 0.22495f);
 
-				auto sample        = assetlib::Transform();
-				sample.translation = c_Bind[b] - parent;
-				sample.rotation =
-					(f == 1 && b == c_Hip) ? swung : glm::quat(1.0f, 0.0f, 0.0f, 0.0f);
-				sample.scale = glm::vec3(1.0f);
+				assetlib::Transform sample = LocalOf(b, rootScale);
+				if (f == 1 && b == c_Hip)
+					sample.rotation = swung;
 				set.samples.push_back(sample);
 			}
 		}
@@ -111,15 +118,16 @@ namespace
 		return set;
 	}
 
+	/** `solePoint` is the sole's offset from the ankle in model units; the leg stores it ankle-local. */
 	bgl::FootPlantDesc
-	MakeLeg(uint8_t weight, const glm::vec3& solePoint = c_SolePoint)
+	MakeLeg(uint8_t weight, const glm::vec3& solePoint = c_SolePoint, float rootScale = 1.0f)
 	{
 		auto leg       = bgl::FootPlantLegDesc();
 		leg.hip        = c_Hip;
 		leg.knee       = c_Knee;
 		leg.ankle      = c_Ankle;
 		leg.toe        = c_Toe;
-		leg.solePoint  = solePoint;
+		leg.solePoint  = solePoint / rootScale;
 		leg.soleNormal = c_SoleNormal;
 
 		auto plant         = bgl::FootPlantDesc();
@@ -212,7 +220,8 @@ namespace
 		const bgl::GroundPlaneDesc& ground,
 		uint8_t                     weight,
 		const glm::mat4&            world     = glm::mat4(1.0f),
-		const glm::vec3&            solePoint = c_SolePoint)
+		const glm::vec3&            solePoint = c_SolePoint,
+		float                       rootScale = 1.0f)
 	{
 		auto opts             = bgl::GraphicsOptions();
 		opts.shaderCacheDir   = bgl::test::ShaderCacheDir();
@@ -247,8 +256,10 @@ namespace
 		const std::array<bgl::MaterialHandle, 1> materials = { { scene->CreatePbrMaterial(
 			bgl::PbrMaterialDesc()) } };
 
-		const bgl::RigHandle rig =
-			scene->AddRig(MakeLegRig(), MakeStillClip(), MakeLeg(weight, solePoint));
+		const bgl::RigHandle rig = scene->AddRig(
+			MakeLegRig(rootScale),
+			MakeStillClip(rootScale),
+			MakeLeg(weight, solePoint, rootScale));
 		REQUIRE(rig.IsValid());
 
 		const auto geom = scene->AddSkinnedMeshGeom(
@@ -334,6 +345,24 @@ TEST_CASE("a planted foot meets the ground under it", "[skinned][pose][plant][re
 		// 128/255 of the way, which is what a weight interpolates -- not a threshold.
 		const float fraction = 128.0f / 255.0f;
 		CHECK(half.Bone(c_Ankle).y == Catch::Approx(fraction * full.Bone(c_Ankle).y).margin(2e-3));
+	}
+}
+
+// The Coyote's root is scaled 0.01 -- the rig is authored in centimetres -- so its ankle-local sole
+// sits twenty bone units from the joint. Read as metres, that put the target seven metres up and
+// swung the leg over the rig's head.
+TEST_CASE("a rig authored in centimetres plants the same foot", "[skinned][pose][plant][render]")
+{
+	const Posed metres      = PoseLeg(c_Flat, 255);
+	const Posed centimetres = PoseLeg(c_Flat, 255, glm::mat4(1.0f), c_SolePoint, 0.01f);
+
+	bgl::test::CheckNear(centimetres.Sole(), glm::vec3(0.0f));
+	CHECK(centimetres.Bone(c_Ankle).y == Catch::Approx(c_FootHeight).margin(1e-4));
+
+	for (uint32_t bone = 0; bone < c_Bones; ++bone)
+	{
+		INFO("bone " << bone);
+		bgl::test::CheckNear(centimetres.Bone(bone), metres.Bone(bone));
 	}
 }
 

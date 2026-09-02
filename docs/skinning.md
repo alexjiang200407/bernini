@@ -338,7 +338,11 @@ because the closest point on a slope is not the point the animation was authored
 the foot's own height along the ground normal. Deriving it from where the sole currently sits does
 not converge — the solve rotates the ankle along with the shin, so that target is one the solve then
 moves. Taken with the tilt below, the sole lands exactly on the plane whatever the chain did, since
-the only part of the ankle-to-sole offset with any height is the part along that normal.
+the only part of the ankle-to-sole offset with any height is the part along that normal. That height
+is measured in model space through the ankle's model transform, never off the stored ankle-local
+sole: bone space carries whatever scale the bind does — a rig authored in centimetres keeps a
+hundredfold in every inverse bind, and the Coyote's sole sits twenty bone units from its joint — so
+a distance read there is in those units.
 
 **Then the ankle turns onto the ground**, bringing the sole normal onto the plane's, about the ankle
 joint and clamped to `cSoleClampRadians`. About the joint rather than about the sole because the
