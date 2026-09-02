@@ -112,7 +112,7 @@ namespace game
 	 * RmlUi's process-global lifetime, and the two interfaces that bind it to bernini: the clock and
 	 * log, and the file system every document, stylesheet and font is read through.
 	 *
-	 * **One per process**, asserted -- `Rml::Initialise` is global, and so are the interfaces a
+	 * **One per process**, enforced by a throw -- `Rml::Initialise` is global, and so are the interfaces a
 	 * second instance would install over the first. The runtime outlives every context it creates.
 	 *
 	 * The render interface is the caller's: a headless test passes a stub, and a drawing client
