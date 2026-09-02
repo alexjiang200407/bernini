@@ -12,14 +12,12 @@ public extension MaterialData
     // alpha-tested path can test it without sampling the texture a second time.
     SurfaceLobes EvaluateWithBaseColor<M : IPbrMaterial>(ForwardVSOut input, M material, float4 baseColor, bool isFrontFace)
     {
-        let wrapSampler = anisoLinearWrapSampler;
-
         return EvaluateSurface(
             GetSurfaceEnv(),
             input,
             baseColor,
-            material.GetORM(wrapSampler, input.uv),
-            material.GetNormalXY(wrapSampler, input.uv),
+            material.GetORM(input.uv),
+            material.GetNormalXY(input.uv),
             material.GetSpecular(),
             isFrontFace
         );
@@ -36,7 +34,7 @@ public extension MaterialData
     {
         M material = M.Load(input.materialOffset);
 
-        return ShadeWithBaseColor(input, material, material.GetBaseColor(anisoLinearWrapSampler, input.uv), isFrontFace);
+        return ShadeWithBaseColor(input, material, material.GetBaseColor(input.uv), isFrontFace);
     }
 
     /**
@@ -51,7 +49,7 @@ public extension MaterialData
     {
         M material = M.Load(input.materialOffset);
 
-        let baseColor = material.GetBaseColor(anisoLinearWrapSampler, input.uv);
+        let baseColor = material.GetBaseColor(input.uv);
         let lobes = EvaluateWithBaseColor(input, material, baseColor, isFrontFace);
 
         let alpha = baseColor.a;
@@ -69,7 +67,7 @@ public extension MaterialData
     {
         M material = M.Load(input.materialOffset);
 
-        let baseColor = material.GetBaseColor(anisoLinearWrapSampler, input.uv);
+        let baseColor = material.GetBaseColor(input.uv);
 
         if (baseColor.a < material.GetAlphaCutoff())
         {
@@ -87,11 +85,9 @@ public extension MaterialData
     // applying both would put back the binary silhouette that costs the surface its layers.
     public float4 ShadeHashedAlpha<M : IPbrMaterial & IAlphaTestMaterial>(ForwardVSOut input, bool isFrontFace)
     {
-        let wrapSampler = anisoLinearWrapSampler;
-
         M material = M.Load(input.materialOffset);
 
-        let baseColor = material.GetBaseColor(wrapSampler, input.uv);
+        let baseColor = material.GetBaseColor(input.uv);
 
         // At minification the sampled alpha is many strands averaged, and coverage that honestly
         // matches it is a haze the backdrop swallows. The alpha driving the hash is read one level
@@ -100,8 +96,8 @@ public extension MaterialData
         // sharpening measures its minification in the sampled level's own texels -- the footprint's
         // would be an octave too steep and saturate diluted strands past their area.
         let texDim = material.GetBaseColorDimensions() * exp2(c_HashedAlphaLodBias);
-        let hashAlpha = material.GetBaseColorAlphaBiased(wrapSampler, input.uv, c_HashedAlphaLodBias);
-        let meanAlpha = material.GetBaseColorAlphaBiased(wrapSampler, input.uv, c_HashedAlphaLodBias + c_MinifiedAlphaMeanBias);
+        let hashAlpha = material.GetBaseColorAlphaBiased(input.uv, c_HashedAlphaLodBias);
+        let meanAlpha = material.GetBaseColorAlphaBiased(input.uv, c_HashedAlphaLodBias + c_MinifiedAlphaMeanBias);
 
         float alpha = SharpenMinifiedAlpha(hashAlpha, meanAlpha, input.uv, texDim);
 
