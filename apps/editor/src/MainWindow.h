@@ -6,7 +6,7 @@
 #include <gamelib/AssetManager.h>
 
 #include "Async/BackgroundTask.h"
-#include "ui_MainWindow.h"
+#include "main_window_ui.h"
 
 class QDockWidget;
 class QLabel;
@@ -137,7 +137,7 @@ private:
 	void
 	SetUpReconstructionWidthMenu(QMenu* render);
 
-	Ui::MainWindow m_Ui;
+	editor::MainWindowWidgets m_Ui;
 
 	// Set only while Build() is running: what startup reports into, and how RunBehindScreen tells
 	// which screen is up. Cleared once the window is ready, so a later Open Project gets the modal.

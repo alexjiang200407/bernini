@@ -7,6 +7,9 @@
 #include "util/follows_project.h"
 #include <assetlib/Project.h>
 
+#include <QAction>
+#include <QMenu>
+#include <QMenuBar>
 #include <QPointer>
 #include <QTemporaryDir>
 #include <catch2/catch_test_macros.hpp>
@@ -214,4 +217,84 @@ TEST_CASE("Building the editor reports what it is doing", "[mainwindow][startup]
 	// The shaders are one step because bgl builds every pipeline inside CreateGraphics; what
 	// follows is the project, which reports per file.
 	CHECK(std::ranges::count(labels, QStringLiteral("Compiling shaders...")) == 1);
+}
+
+TEST_CASE("What a project enables and an empty editor does not", "[mainwindow][render]")
+{
+	const HeadlessEditor editor;
+
+	// The File menu reached the way a user does, rather than through MainWindow's own handle on it:
+	// an entry that exists but never made it onto the bar would pass the other way round.
+	const auto entry = [](const QMainWindow& window, const QString& text) -> const QAction* {
+		for (const QAction* menu : window.menuBar()->actions())
+		{
+			if (menu->menu() == nullptr)
+				continue;
+
+			for (const QAction* action : menu->menu()->actions())
+			{
+				if (action->text() == text)
+					return action;
+			}
+		}
+		return nullptr;
+	};
+
+	// A whole menu rather than one entry: Edit and Window are greyed out as units, since neither
+	// has anything to offer without a project.
+	const auto menu = [](const QMainWindow& window, const QString& title) -> const QMenu* {
+		for (const QAction* action : window.menuBar()->actions())
+		{
+			if (action->menu() != nullptr && action->menu()->title() == title)
+				return action->menu();
+		}
+		return nullptr;
+	};
+
+	SECTION("with a project open")
+	{
+		const MainWindow window(nullptr, editor.ConfigFile());
+
+		const QAction* save  = entry(window, "Save");
+		const QAction* clean = entry(window, "Clean Unused Textures...");
+		const QMenu*   edit  = menu(window, "Edit");
+		const QMenu*   panes = menu(window, "Window");
+
+		REQUIRE(save != nullptr);
+		REQUIRE(clean != nullptr);
+		REQUIRE(edit != nullptr);
+		REQUIRE(panes != nullptr);
+
+		CHECK(save->isEnabled());
+		CHECK(clean->isEnabled());
+		CHECK(edit->isEnabled());
+		CHECK(panes->isEnabled());
+	}
+
+	SECTION("with none")
+	{
+		// The same config without a startupProject, so the window lands in its empty state. Both
+		// entries act on a project, and enabled they would reach a null one.
+		const fs::path config = editor.temp.path().toStdString() / fs::path("empty.json");
+		core::file::write_atomic(config, R"({ "headless": true })");
+
+		const MainWindow window(nullptr, config);
+
+		const QAction* save  = entry(window, "Save");
+		const QAction* clean = entry(window, "Clean Unused Textures...");
+		const QMenu*   edit  = menu(window, "Edit");
+		const QMenu*   panes = menu(window, "Window");
+
+		REQUIRE(save != nullptr);
+		REQUIRE(clean != nullptr);
+		REQUIRE(edit != nullptr);
+		REQUIRE(panes != nullptr);
+
+		CHECK_FALSE(save->isEnabled());
+		CHECK_FALSE(clean->isEnabled());
+
+		// Window lists the docks, which are hidden here; Edit is empty either way.
+		CHECK_FALSE(edit->isEnabled());
+		CHECK_FALSE(panes->isEnabled());
+	}
 }

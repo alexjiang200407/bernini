@@ -71,16 +71,12 @@ MainWindow::Build(const std::filesystem::path& configPath)
 {
 	ZoneScopedN("editor build window");
 
-	m_Ui.setupUi(this);
+	m_Ui = editor::BuildMainWindowUi(this);
 
-	connect(m_Ui.actionNewProject, &QAction::triggered, this, &MainWindow::NewProject);
-	connect(m_Ui.actionOpenProject, &QAction::triggered, this, &MainWindow::OpenProject);
-	connect(
-		m_Ui.actionCleanUnusedTextures,
-		&QAction::triggered,
-		this,
-		&MainWindow::CleanUnusedTextures);
-	connect(m_Ui.actionExit, &QAction::triggered, this, &QWidget::close);
+	connect(m_Ui.newProject, &QAction::triggered, this, &MainWindow::NewProject);
+	connect(m_Ui.openProject, &QAction::triggered, this, &MainWindow::OpenProject);
+	connect(m_Ui.cleanUnusedTextures, &QAction::triggered, this, &MainWindow::CleanUnusedTextures);
+	connect(m_Ui.exit, &QAction::triggered, this, &QWidget::close);
 
 	std::string startupProject;
 	{
@@ -329,10 +325,10 @@ MainWindow::Build(const std::filesystem::path& configPath)
 		m_MaterialEditor,
 		&MaterialEditorWindow::SetDockVisible));
 
-	m_Ui.menuWindow->addAction(m_LevelEditorDock->toggleViewAction());
-	m_Ui.menuWindow->addAction(m_MaterialEditorDock->toggleViewAction());
-	m_Ui.menuWindow->addAction(m_AnimationEditorDock->toggleViewAction());
-	m_Ui.menuWindow->addAction(m_ContentExplorerDock->toggleViewAction());
+	m_Ui.windowMenu->addAction(m_LevelEditorDock->toggleViewAction());
+	m_Ui.windowMenu->addAction(m_MaterialEditorDock->toggleViewAction());
+	m_Ui.windowMenu->addAction(m_AnimationEditorDock->toggleViewAction());
+	m_Ui.windowMenu->addAction(m_ContentExplorerDock->toggleViewAction());
 
 	SetUpRenderMenu();
 
@@ -1027,10 +1023,10 @@ MainWindow::ShowEmptyState()
 	m_AnimationEditorDock->hide();
 	m_ContentExplorerDock->hide();
 
-	m_Ui.actionSave->setEnabled(false);
-	m_Ui.actionCleanUnusedTextures->setEnabled(false);
-	m_Ui.menuEdit->setEnabled(false);
-	m_Ui.menuWindow->setEnabled(false);
+	m_Ui.save->setEnabled(false);
+	m_Ui.cleanUnusedTextures->setEnabled(false);
+	m_Ui.editMenu->setEnabled(false);
+	m_Ui.windowMenu->setEnabled(false);
 
 	auto* placeholder = new QLabel(
 		"Open a project to get started.\n\nFile ▸ New Project…   or   File ▸ Open Project…",
@@ -1053,10 +1049,10 @@ MainWindow::ShowProjectState()
 	m_ContentExplorerDock->show();
 	m_LevelEditorDock->raise();
 
-	m_Ui.actionSave->setEnabled(true);
-	m_Ui.actionCleanUnusedTextures->setEnabled(true);
-	m_Ui.menuEdit->setEnabled(true);
-	m_Ui.menuWindow->setEnabled(true);
+	m_Ui.save->setEnabled(true);
+	m_Ui.cleanUnusedTextures->setEnabled(true);
+	m_Ui.editMenu->setEnabled(true);
+	m_Ui.windowMenu->setEnabled(true);
 
 	resizeDocks({ m_LevelEditorDock, m_ContentExplorerDock }, { 700, 220 }, Qt::Vertical);
 }
