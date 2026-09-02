@@ -273,11 +273,29 @@ namespace assetlib
 	inline constexpr float c_PlantHeightEpsilon = 0.02f;
 
 	/**
-	 * How far a sole may travel horizontally across the frame either side of it and still count as
-	 * planted. Two centimetres over a 15th of a second at the default rate -- a third of a metre a
-	 * second, which is a shuffle rather than a stride.
+	 * How far a sole may drift from the clip's stance motion across the frame either side of it and
+	 * still count as planted, when the stance is still. Two centimetres over a 15th of a second at
+	 * the default rate -- a third of a metre a second, which is a shuffle rather than a stride.
 	 */
 	inline constexpr float c_PlantSlideEpsilon = 0.02f;
+
+	/**
+	 * How far a clip's lowest sole may sit above the ground it was rested on and still be standing
+	 * on it. groundClips rests a clip's lowest *vertex* on zero, and in a walk that is a toe tip
+	 * dipping through the floor mid-swing -- the standing foot then sits a few centimetres up, and
+	 * measuring against its own lowest point is what finds it. Ten centimetres, which a dipping
+	 * toe stays under and a foot hovering beside a seated or lying rig does not: past this, nothing
+	 * in the clip is standing, and no foot in it plants.
+	 */
+	inline constexpr float c_PlantFloorSlack = 0.10f;
+
+	/**
+	 * The same drift as a fraction of the stance motion, for a clip whose stance moves: the
+	 * standing foot of a fast clip drifts a fraction of its stride, and a fraction is what a rule
+	 * about sliding should read. A third, which the Coyote's run -- a tenth -- clears and a foot
+	 * dragged at half the stride does not.
+	 */
+	inline constexpr float c_PlantSlideFraction = 0.33f;
 
 	/**
 	 * How far above a foot's lowest vertex the sole reaches: the band of vertices `solePlanes`
@@ -353,10 +371,17 @@ namespace assetlib
 	 * How planted each leg is in each frame of `animations`, one byte per leg per frame, frame-major
 	 * over the whole sample pool.
 	 *
-	 * A foot is planted in a frame when its sole sits within `c_PlantHeightEpsilon` of the floor the
-	 * clips were grounded onto *and* has moved less than `c_PlantSlideEpsilon` horizontally over the
-	 * frame either side of it. Height alone would plant a foot sliding along the ground; stillness
-	 * alone would plant one held in the air.
+	 * A foot is planted in a frame when its sole sits within `c_PlantHeightEpsilon` of the lowest any
+	 * sole gets in that clip *and* moves with the clip's stance: the median motion of every sole at
+	 * that floor, judged over the frame either side, within `c_PlantSlideEpsilon` or
+	 * `c_PlantSlideFraction` of it, whichever is wider. Height alone would plant a foot dragged
+	 * along the ground; stillness alone would plant one held in the air -- and would plant nothing
+	 * in a clip played in place, whose standing foot slides back under a root that stays put.
+	 *
+	 * The floor is the clip's own and not y = 0: groundClips rests a clip's lowest *vertex* on
+	 * zero, and in a walk that is a toe tip dipping through the floor mid-swing, which lifts the
+	 * standing foot a few centimetres off it. A clip whose lowest sole is more than
+	 * `c_PlantFloorSlack` up has no standing foot -- it sits, or flies -- and plants nothing.
 	 *
 	 * Each planted run is then ramped in and out over `c_PlantRampFrames`, which is what makes this
 	 * a weight rather than the one bit the shape of the problem suggests: a foot that went from
@@ -370,9 +395,7 @@ namespace assetlib
 	 * A clip whose first sample is not on a frame boundary is skipped -- its weights would have no
 	 * frame index to sit at -- rather than failing the set.
 	 *
-	 * **Grounded clips only.** The floor this measures against is `y = 0`, which is where
-	 * `groundClips` puts a clip's lowest pose; run it before this or every foot measures as airborne.
-	 *
+
 	 * @throws std::runtime_error for anything poseModelTransforms refuses -- above all a clip set
 	 *         cooked against another rig.
 	 */
