@@ -3,8 +3,8 @@
 
 #include "convert_metal.h"
 #include "shadercache/ShaderCache_metal.h"
-#include "slang/SlangErrorChecker.h"
 #include "util/util.h"
+#include <bgl_common/SlangErrorChecker.h>
 
 #include <core/err/util.h>
 

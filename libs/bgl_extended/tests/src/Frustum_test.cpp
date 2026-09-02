@@ -1,5 +1,5 @@
-#include "culling/Frustum.h"
 #include <bgl/Camera.h>
+#include <bgl_common/Frustum.h>
 #include <catch2/catch_approx.hpp>
 #include <catch2/catch_message.hpp>
 

@@ -252,7 +252,7 @@ alpha-tested, read dimmer — judged acceptable by eye against keeping the machi
 |---|---|---|
 | `RenderTargetDesc::taaEnabled` | [bgl/IRenderTarget.h](libs/bgl/include/bgl/IRenderTarget.h) | The opt-in, and what allocates. Off by default. |
 | `IRenderTarget::SetTaaEnabled` | [bgl/IRenderTarget.h](libs/bgl/include/bgl/IRenderTarget.h) | Runs or stops it at runtime, on a target that allocated. |
-| `HaltonJitter` | [util/jitter.h](libs/bgl_extended/src/util/jitter.h) | The sub-pixel offset for a frame, in NDC. |
+| `HaltonJitter` | [bgl_common/jitter.h](libs/bgl_common/include/bgl_common/jitter.h) | The sub-pixel offset for a frame, in NDC. |
 | `TaaResolvePass` | [passes/TaaResolvePass.h](libs/bgl_extended/src/passes/TaaResolvePass.h) | Binds the frame and writes the new history. |
 | `Resolve<I : IResolveInputs>` | [lib/math/taa.slang](libs/bgl_common/shaders/src/lib/math/taa.slang) | The resolve itself -- clamp, reprojection, blend -- generic over what it samples, so both renderers run one body. |
 | `Scene::GetTemporalEpoch` | [scene/Scene.h](libs/bgl_extended/src/scene/Scene.h) | Counts the changes to the scene that no motion vector can carry. |

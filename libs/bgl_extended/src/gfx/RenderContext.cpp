@@ -1,15 +1,15 @@
 #include "gfx/RenderContext.h"
 
 #include "constants/constants.h"
-#include "culling/Frustum.h"
 #include "debug/DebugReadback.h"
 #include "passes/ClearPass.h"
 #include "passes/DrawData.h"
 #include "scene/Scene.h"
 #include "scene/SceneView.h"
-#include "util/jitter.h"
 #include "util/util.h"
 #include <bgl/IGraphics.h>
+#include <bgl_common/Frustum.h>
+#include <bgl_common/jitter.h>
 
 #define STB_IMAGE_WRITE_IMPLEMENTATION
 #include <stb_image_write.h>

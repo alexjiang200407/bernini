@@ -1,4 +1,6 @@
 #pragma once
+#include <bgl_common/gassert.h>
+#include <core/glm.h>
 #include <core/math.h>
 
 namespace bgl

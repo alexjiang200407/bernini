@@ -1,6 +1,6 @@
 #include "resource/Shader_metal.h"
 
-#include "slang/SlangErrorChecker.h"
+#include <bgl_common/SlangErrorChecker.h>
 
 namespace bgl
 {
