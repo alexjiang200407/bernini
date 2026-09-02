@@ -11,6 +11,7 @@ import lib.types.PackedBuffer;
 import lib.types.RangeBuffer;
 import lib.data.SubmeshInstance;
 import lib.types.UploadBuffer;
+import lib.math.frustum;
 
 // One thread per instance decides frustum visibility and writes a per-view visibility word the
 // counting sort and the transparent depth-key pass then read. CullView travels as buffer data, not
@@ -30,19 +31,6 @@ struct Uniforms
 };
 
 ConstantBuffer<Uniforms> gUniforms;
-
-bool SphereInFrustum(float4 planes[6], float3 center, float radius)
-{
-    [unroll]
-    for (uint i = 0; i < 6; ++i)
-    {
-        if (dot(planes[i].xyz, center) + planes[i].w < -radius)
-        {
-            return false;
-        }
-    }
-    return true;
-}
 
 [shader("compute")]
 [numthreads(cHistogramGroupSize, 1, 1)]

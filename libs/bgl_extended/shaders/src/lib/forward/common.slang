@@ -1,4 +1,5 @@
 import lib.data.SubmeshInstance;
+import lib.math.motion_vector;
 
 public struct InstancedPayload
 {
@@ -34,12 +35,8 @@ public struct ForwardPSOut
     public float2 motion : SV_Target1;
 };
 
-// Where this pixel's surface sat last frame, as a UV displacement: history is sampled at
-// `uv - motion`. NDC y runs opposite to UV y, hence the sign flip.
+// Where this pixel's surface sat last frame; the arithmetic is lib.math.motion_vector's.
 public float2 ComputeMotionVector(ForwardVSOut input)
 {
-    float2 ndc = input.clip.xy / input.clip.w;
-    float2 prevNdc = input.prevClip.xy / input.prevClip.w;
-
-    return (ndc - prevNdc) * float2(0.5, -0.5);
+    return ComputeMotionVector(input.clip, input.prevClip);
 }
