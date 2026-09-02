@@ -27,10 +27,21 @@ namespace assetlib
 			kClips = 1,
 			kSamples,
 			kStringPool,
-			kSkeletonRef,   // the signature and bone count the clips were cooked against
-			kSkeletonPath,  // the .bskel path
-			kPosedBoxes     // PosedBox entries: the posed culling boxes this file carries
+			kSkeletonRef,      // the signature and bone count the clips were cooked against
+			kSkeletonPath,     // the .bskel path
+			kPosedBoxes,       // PosedBox entries: the posed culling boxes this file carries
+			kPlantWeightsRef,  // what the plant weights were measured against
+			kPlantWeights      // one byte per leg per frame, frame-major over the sample pool
 		};
+
+		/** PlantWeights without its bytes; the bytes are a chunk of their own. */
+		struct PlantWeightsRef
+		{
+			uint64_t signature;
+			uint32_t legCount;
+		};
+
+		static_assert(sizeof(PlantWeightsRef) == 16);
 
 		/** What the clips were cooked against, so a rig that has changed since is refused. */
 		struct SkeletonRef
@@ -48,6 +59,30 @@ namespace assetlib
 			ref.signature = animations.skeletonSignature;
 			ref.boneCount = animations.boneCount;
 			return { ref };
+		}
+
+		void
+		unpackPlantWeights(
+			AnimationSet&                    animations,
+			std::span<const PlantWeightsRef> ref,
+			std::span<const uint8_t>         weights)
+		{
+			core::throw_runtime_error_if(
+				ref.size() > 1,
+				"banim: the plant weight reference chunk holds {} entries",
+				ref.size());
+			if (ref.empty())
+				return;
+
+			core::throw_runtime_error_if(
+				ref[0].legCount == 0 || weights.size() % ref[0].legCount != 0,
+				"banim: {} plant weight bytes are not a whole number of frames of {} legs",
+				weights.size(),
+				ref[0].legCount);
+
+			animations.plantWeights.signature = ref[0].signature;
+			animations.plantWeights.legCount  = ref[0].legCount;
+			animations.plantWeights.weights.assign(weights.begin(), weights.end());
 		}
 
 		void
@@ -80,6 +115,19 @@ namespace assetlib
 		writer.Add(ChunkId::kSkeletonPath, std::span<const char>(animations.skeleton));
 		if (!animations.posedBoxes.empty())
 			writer.Add(ChunkId::kPosedBoxes, animations.posedBoxes);
+
+		// Both chunks or neither: the count is what makes the bytes addressable, so a file carrying
+		// one without the other would read as a measurement nobody can index.
+		if (!animations.plantWeights.Empty())
+		{
+			const auto ref = std::array<PlantWeightsRef, 1>{
+				{ { animations.plantWeights.signature, animations.plantWeights.legCount } }
+			};
+			writer.Add(ChunkId::kPlantWeightsRef, std::span<const PlantWeightsRef>(ref));
+			writer.Add(
+				ChunkId::kPlantWeights,
+				std::span<const uint8_t>(animations.plantWeights.weights));
+		}
 		return writer.Finish(
 			magic::c_BAnim,
 			AssetCodec<AnimationSet>::c_BakeToken,
@@ -101,6 +149,10 @@ namespace assetlib
 		animations.samples    = reader.Read<Transform>(ChunkId::kSamples);
 		animations.stringPool = core::string_pool(reader.Read<char>(ChunkId::kStringPool));
 		animations.posedBoxes = reader.Read<PosedBox>(ChunkId::kPosedBoxes);
+		unpackPlantWeights(
+			animations,
+			reader.Read<PlantWeightsRef>(ChunkId::kPlantWeightsRef),
+			reader.Read<uint8_t>(ChunkId::kPlantWeights));
 		unpackSkeletonRef(
 			animations,
 			reader.Read<SkeletonRef>(ChunkId::kSkeletonRef),

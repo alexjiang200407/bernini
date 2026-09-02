@@ -1,4 +1,5 @@
 #include <assetlib/AssetStore.h>
+#include <assetlib/avatar.h>
 #include <assetlib/bmesh.h>
 #include <assetlib/codecs.h>
 #include <assetlib/rebake_bounds.h>
@@ -6,6 +7,8 @@
 #include <assetlib_structs/Animation.h>
 #include <assetlib_structs/BMesh.h>
 #include <assetlib_structs/Skeleton.h>
+
+#include "plant_bake.h"
 
 #include <tracy/Tracy.hpp>
 
@@ -176,7 +179,27 @@ namespace assetlib
 				wanted.erase(duplicates.begin(), duplicates.end());
 				std::ranges::sort(stored);
 
-				if (wanted == stored)
+				// The plant weights ride the same retrofit, and are asked about the same way: an
+				// avatar authored after its rig was cooked leaves a `.banim` whose boxes are current
+				// and whose weights were never measured, and without this the only ways to get them
+				// are a re-import or paying the whole frame walk on every load.
+				//
+				// The rig's meshes are gathered only when there is an avatar, so a project that
+				// authors none does not copy a vertex.
+				const std::vector<AvatarLegChain> legs =
+					legChainsForRig(GetFiles(), animations, skeleton);
+
+				auto planted = std::vector<BMesh>();
+				if (!legs.empty())
+					for (const std::string& meshPath : paired->second)
+						planted.push_back(meshAt(meshPath));
+
+				const uint64_t wantedPlant =
+					legs.empty() ? 0 : plantWeightsSignature(planted, skeleton, legs);
+				const uint64_t storedPlant =
+					animations.plantWeights.Empty() ? 0 : animations.plantWeights.signature;
+
+				if (wanted == stored && wantedPlant == storedPlant)
 				{
 					entry.outcome = RebakedFile::Outcome::kCurrent;
 					continue;
@@ -187,6 +210,8 @@ namespace assetlib
 					animations.posedBoxes.clear();
 					for (const std::string& meshPath : paired->second)
 						bakePosedBounds(animations, meshAt(meshPath), skeleton);
+
+					bakePlantWeights(animations, planted, skeleton, legs);
 
 					// A skin the bake refuses stays boxless and would land here every run; only a
 					// rewrite that changes bytes is worth dirtying a version-controlled binary for.

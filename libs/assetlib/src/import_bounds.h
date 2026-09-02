@@ -21,6 +21,10 @@ namespace assetlib
 	 * stales a clip set stales its geometry with it, and a floor measured off the stale copy would
 	 * move the rig to where that geometry used to be.
 	 *
+	 * The plant weights ride here too, for the same reason the boxes do and against the same mesh
+	 * set: a sole is fitted over every mesh that carries the foot, so a rig drawn as a body and a
+	 * boot measures once over both.
+	 *
 	 * By path rather than by signature: FindMatchingSkeleton has already refused a project where
 	 * two skeletons share a signature, so a mesh reaching this rig by signature names exactly
 	 * this file. A mesh that will not load contributes no box rather than failing the bake.
