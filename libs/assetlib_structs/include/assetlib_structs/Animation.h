@@ -67,6 +67,37 @@ namespace assetlib
 	static_assert(sizeof(PosedBox) == 40);
 
 	/**
+	 * How planted each leg is in each frame of the sample pool, measured at cook so a load plants a
+	 * foot without walking the clips -- see assetlib::findPlantWeights.
+	 *
+	 * One byte per leg per frame, frame-major over the whole pool exactly as `samples` is: leg `l`
+	 * of global frame `f` is `weights[f * legCount + l]`, so a clip reaches its own frames through
+	 * `AnimationClip::firstSample`. A weight and not a flag, because a foot that planted in one
+	 * frame would pop: the cook ramps each planted run in and out, and the shader reads the ramp
+	 * rather than reconstructing it.
+	 *
+	 * `signature` names the legs, the rig and the geometry the measurement was made against
+	 * (assetlib::plantWeightsSignature); a pairing whose signature differs is measured at load
+	 * instead, the way a posed box that does not match is.
+	 */
+	struct PlantWeights
+	{
+		uint64_t             signature = 0;
+		uint32_t             legCount  = 0;
+		std::vector<uint8_t> weights;
+
+		/** Empty is the ordinary case: most rigs author no avatar, so most clip sets carry none. */
+		[[nodiscard]] bool
+		Empty() const noexcept
+		{
+			return legCount == 0 || weights.empty();
+		}
+
+		bool
+		operator==(const PlantWeights&) const = default;
+	};
+
+	/**
 	 * The clips authored against one skeleton, and the poses they sample.
 	 *
 	 * `samples` is frame-major -- bone `b` of frame `f` of a clip is
@@ -84,6 +115,9 @@ namespace assetlib
 		core::string_pool          stringPool;
 
 		std::vector<PosedBox> posedBoxes;  // empty until a cook bakes them
+
+		// Empty until a cook bakes them, and empty forever for a rig that authors no avatar.
+		PlantWeights plantWeights;
 
 		SourceRef source;  // the copied .glb this was derived from; empty key when never recorded
 	};
