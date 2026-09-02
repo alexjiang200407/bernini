@@ -131,8 +131,12 @@ namespace assetlib
 					AssetCodec<BEnvLighting>::Deserialize(bytes));
 			case AssetType::kEnvironment:
 				return AssetCodec<BEnv>::Serialize(AssetCodec<BEnv>::Deserialize(bytes));
+			// No container to re-serialize, so nothing a schema change could have staled.
 			case AssetType::kTexture:
 			case AssetType::kImportDocument:
+			case AssetType::kUiDocument:
+			case AssetType::kUiStyle:
+			case AssetType::kFont:
 			case AssetType::kCount:
 				return std::nullopt;
 			}

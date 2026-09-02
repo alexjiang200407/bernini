@@ -17,9 +17,12 @@ namespace assetlib
 		kSkeleton,        // .bskel
 		kAnimation,       // .banim
 		kImportDocument,  // .bimport -- the authored half of one imported source; text, never packed
-		// The number of asset kinds. Anchors the assertion that every one of them has a codec;
-		// anchoring that on whichever enumerator happens to be last instead means appending one
-		// silently satisfies it.
+		kUiDocument,      // .rml  -- a UI document, read by the UI runtime
+		kUiStyle,         // .rcss -- a UI stylesheet
+		kFont,            // .ttf  -- a font a UI document names
+		// The number of asset kinds. Anchors the assertion that every one of them is either a
+		// container with a codec or a listed foreign kind; anchoring that on whichever enumerator
+		// happens to be last instead means appending one silently satisfies it.
 		kCount,
 	};
 

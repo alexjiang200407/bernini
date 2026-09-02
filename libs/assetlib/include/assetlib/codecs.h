@@ -29,6 +29,13 @@ namespace assetlib
 	// Text, not a container: the authored half of one imported source, beside its `.glb`.
 	inline constexpr std::string_view c_ImportDocumentExtension = ".bimport";
 
+	// The UI runtime's three: two text documents and a font binary. Like a texture, each is an
+	// asset the project stores, packs, deletes and renames, and none is a container it encodes --
+	// see `foreignKinds`.
+	inline constexpr std::string_view c_UiDocumentExtension = ".rml";
+	inline constexpr std::string_view c_UiStyleExtension    = ".rcss";
+	inline constexpr std::string_view c_FontExtension       = ".ttf";
+
 	// Not an asset either, and the only source kind an import takes: the file a `.bimport`
 	// describes, copied into the project beside it. `assetTypeFromExtension` does not know it, so a
 	// plan that has to reach one asks by this rather than by type.
@@ -49,6 +56,17 @@ namespace assetlib
 	 */
 	[[nodiscard]] std::string
 	normalizePath(std::string_view path);
+
+	/**
+	 * @throws std::runtime_error unless `normalized` (a `normalizePath` result) names something
+	 *         strictly inside the data root -- rejecting `..`, a leading `/` and an absolute path.
+	 *         `who` prefixes the message.
+	 *
+	 * Public because a client resolving a reference of its own -- a UI document's `@import`, say --
+	 * has the same escape to refuse, and two bodies for one rule is how the two come to disagree.
+	 */
+	void
+	requireInsideDataRoot(std::string_view who, std::string_view normalized);
 
 	struct AnimationSet;
 	struct BEnv;

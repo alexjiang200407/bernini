@@ -34,6 +34,11 @@ namespace assetlib
 	inline constexpr auto c_EnvironmentsDirectoryName = "Authored/Environments";
 	inline constexpr auto c_LevelsDirectoryName       = "Authored/Levels";
 
+	// The UI runtime's documents and stylesheets, and the fonts they name. Authored: a person wrote
+	// each one, and no bake puts one back.
+	inline constexpr auto c_UiDirectoryName    = "Authored/UI";
+	inline constexpr auto c_FontsDirectoryName = "Authored/Fonts";
+
 	inline constexpr auto c_MeshesDirectoryName     = "Derived/Meshes";
 	inline constexpr auto c_SkeletonsDirectoryName  = "Derived/Skeletons";
 	inline constexpr auto c_AnimationsDirectoryName = "Derived/Animations";
@@ -57,11 +62,13 @@ namespace assetlib
 	 * The halves themselves are not listed: they are the parents of everything here, and
 	 * IsRequiredDirectory reads them from the two constants above.
 	 */
-	inline constexpr std::array<std::string_view, 11> c_RequiredDirectories = { {
+	inline constexpr std::array<std::string_view, 13> c_RequiredDirectories = { {
 		c_MeshSourcesDirectoryName,
 		c_MaterialsDirectoryName,
 		c_EnvironmentsDirectoryName,
 		c_LevelsDirectoryName,
+		c_UiDirectoryName,
+		c_FontsDirectoryName,
 		c_MeshesDirectoryName,
 		c_SkeletonsDirectoryName,
 		c_AnimationsDirectoryName,

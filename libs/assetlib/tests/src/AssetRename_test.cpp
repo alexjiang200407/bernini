@@ -888,3 +888,26 @@ TEST_CASE("An imported source cannot be renamed into another kind of asset", "[a
 	CHECK_THROWS(planRename(root.Scan(), before.source, "Authored/Meshes/hero.bmesh"));
 	CHECK_THROWS(planRename(root.Scan(), "Authored/Meshes/ghost.glb", "Authored/Meshes/hero.glb"));
 }
+
+// Before the UI kinds were registered both paths threw "not an asset this project stores anything
+// about": a rename could not even be planned for one.
+TEST_CASE("A UI document renames as a leaf, and not into another kind", "[assetrename]")
+{
+	const DataRoot root("bernini_rename_ui");
+
+	fs::create_directories(root.path / "Authored/UI");
+	std::ofstream(root.path / "Authored/UI/menu.rml") << "<rml><body>menu</body></rml>";
+
+	REQUIRE(
+		Rename(root, "Authored/UI/menu.rml", "Authored/UI/main.rml").status ==
+		RenameStatus::kRenamed);
+
+	CHECK(fs::exists(root.path / "Authored/UI/main.rml"));
+	CHECK_FALSE(fs::exists(root.path / "Authored/UI/menu.rml"));
+
+	// A stylesheet is a different kind, so the extension cannot change under a rename any more
+	// than a `.bmesh` could become a `.bmaterial`.
+	CHECK_THROWS_AS(
+		planRename(root.Scan(), "Authored/UI/main.rml", "Authored/UI/main.rcss"),
+		std::runtime_error);
+}
