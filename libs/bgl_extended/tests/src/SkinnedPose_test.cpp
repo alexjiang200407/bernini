@@ -9,6 +9,7 @@
 #include "util/PaletteReadback.h"
 #include "util/TestEnvironment.h"
 #include "util/TestOptions.h"
+#include <assetlib/skinning.h>
 #include <assetlib_structs/Bounds.h>
 #include <bgl/Camera.h>
 #include <bgl/IGraphics.h>
@@ -84,6 +85,51 @@ namespace
 		clip.sampleRate  = c_SampleRate;
 		clip.duration    = 1.0f / c_SampleRate;
 		clip.loop        = 0;  // one-shot, so a held frame is exactly the frame asked for
+		clip.nameOffset  = 0;
+		set.clips.push_back(clip);
+
+		return set;
+	}
+
+	/**
+	 * The swing set with a second one-shot clip after it: frame 1 swings bone 2 by 90 degrees about
+	 * +X and slides the root by half a unit along +X, so a blend of the two clips moves a bone the
+	 * other never touches and a translation the other never has.
+	 */
+	assetlib::AnimationSet
+	MakeTwoClipSet()
+	{
+		auto set = MakeSwingClip();
+
+		// The CPU reference checks the pair; the upload does not.
+		set.skeletonSignature = assetlib::skeletonSignature(MakeChain());
+
+		// Rx(90) as xyzw = (sin45, 0, 0, cos45); glm::quat takes w first.
+		const auto tilt = glm::quat(0.70710678f, 0.70710678f, 0.0f, 0.0f);
+
+		const uint32_t firstSample = static_cast<uint32_t>(set.samples.size());
+		for (uint32_t f = 0; f < c_Frames; ++f)
+		{
+			for (uint32_t b = 0; b < c_BoneCount; ++b)
+			{
+				auto sample        = assetlib::Transform();
+				sample.translation = glm::vec3(0.0f, b == 0 ? 0.0f : 1.0f, 0.0f);
+				if (f == 1 && b == 0)
+				{
+					sample.translation.x = 0.5f;
+				}
+				sample.rotation = (f == 1 && b == 2) ? tilt : glm::quat(1.0f, 0.0f, 0.0f, 0.0f);
+				sample.scale    = glm::vec3(1.0f);
+				set.samples.push_back(sample);
+			}
+		}
+
+		auto clip        = assetlib::AnimationClip();
+		clip.firstSample = firstSample;
+		clip.frameCount  = c_Frames;
+		clip.sampleRate  = c_SampleRate;
+		clip.duration    = 1.0f / c_SampleRate;
+		clip.loop        = 0;
 		clip.nameOffset  = 0;
 		set.clips.push_back(clip);
 
@@ -171,6 +217,207 @@ namespace
 		return mesh;
 	}
 
+	/**
+	 * The palette against assetlib's weighted reference, through the points a skinning matrix moves
+	 * rather than the matrix itself: the reference is column-major glm and the palette holds three
+	 * rows as the shader indexed them, so what both agree on is where a point lands.
+	 */
+	void
+	CheckAgainstReference(
+		const bgl::test::Palette&              palette,
+		const assetlib::Skeleton&              skeleton,
+		const assetlib::AnimationSet&          animations,
+		std::span<const assetlib::BlendSample> blend)
+	{
+		const std::vector<glm::mat4> expected = assetlib::skinningMatrices(
+			skeleton,
+			assetlib::poseModelTransforms(skeleton, animations, blend));
+
+		const std::array<glm::vec3, 3> probes = {
+			{ { 0.0f, 0.0f, 0.0f }, { 0.0f, 2.0f, 0.0f }, { 0.5f, -0.25f, 2.0f } }
+		};
+
+		for (uint32_t bone = 0; bone < c_BoneCount; ++bone)
+		{
+			INFO("bone " << bone);
+			for (const glm::vec3& probe : probes)
+			{
+				bgl::test::CheckNear(
+					palette.Apply(bone, probe),
+					glm::vec3(expected[bone] * glm::vec4(probe, 1.0f)));
+			}
+		}
+	}
+
+	/** A slot playing `node` held at `phase`, whose weight ramps `from` to `to` over the window. */
+	bgl::PlaybackSlot
+	RampedSlot(uint32_t node, float phase, float from, float to, float rampStart, float rampEnd)
+	{
+		auto slot      = bgl::PlaybackSlot();
+		slot.node      = node;
+		slot.phase     = phase;
+		slot.rate      = 0.0f;
+		slot.weight0   = from;
+		slot.weight1   = to;
+		slot.rampStart = rampStart;
+		slot.rampEnd   = rampEnd;
+		return slot;
+	}
+}
+
+// The blend gates: what the pose pass writes for a record of several weighted slots, held against
+// the CPU reference the same slots evaluate to. The reference is what defines a blend here; the
+// palette has to agree with it, not with a hand-derived matrix.
+TEST_CASE("the pose pass blends a record's slots as the reference does", "[skinned][pose][render]")
+{
+	auto opts             = bgl::GraphicsOptions();
+	opts.shaderCacheDir   = bgl::test::ShaderCacheDir();
+	opts.enableDebugLayer = true;
+
+	auto gfx = bgl::CreateGraphics(opts);
+	REQUIRE(gfx != nullptr);
+
+	auto* gfxBase = gfx->As<bgl::GraphicsBase>();
+	REQUIRE(gfxBase != nullptr);
+
+	auto targetDesc     = bgl::RenderTargetDesc();
+	targetDesc.width    = static_cast<int>(c_Width);
+	targetDesc.height   = static_cast<int>(c_Height);
+	targetDesc.headless = true;
+	auto target         = gfx->CreateRenderTarget(targetDesc);
+	REQUIRE(target != nullptr);
+
+	auto sceneDesc                        = bgl::SceneDesc();
+	sceneDesc.initialGeom                 = 4;
+	sceneDesc.initialMeshlets             = 8;
+	sceneDesc.initialSubmeshes            = 4;
+	sceneDesc.initialVertexBufferByteSize = 4096;
+	sceneDesc.initialIndices              = 64;
+	sceneDesc.initialPbrMaterials         = 4;
+
+	auto scene = gfx->CreateScene(sceneDesc);
+	auto view  = gfx->CreateSceneView(scene, 4);
+
+	bgl::test::ApplyEnvironment(scene.Get(), view.Get());
+
+	auto material            = bgl::PbrMaterialDesc();
+	material.metallicFactor  = 0.0f;
+	material.roughnessFactor = 0.6f;
+	const auto pbr           = scene->CreatePbrMaterial(material);
+
+	const std::array<bgl::MaterialHandle, 1> materials = { { pbr } };
+
+	const assetlib::Skeleton     skeleton   = MakeChain();
+	const assetlib::AnimationSet animations = MakeTwoClipSet();
+
+	const auto geom = scene->AddSkinnedMeshGeom(
+		MakeSkinnedTriangle(),
+		0,
+		materials,
+		scene->AddRig(skeleton, animations),
+		assetlib::Bounds{ glm::vec3(-4.0f), glm::vec3(4.0f) });
+	REQUIRE(geom.IsValid());
+
+	auto job     = bgl::RenderJob();
+	job.view     = view;
+	job.viewport = bgl::Viewport(static_cast<float>(c_Width), static_cast<float>(c_Height));
+
+	auto* viewRaw = view->As<bgl::SceneView>();
+	REQUIRE(viewRaw != nullptr);
+
+	const uint32_t float4sPerPose = bgl::idl::cFloat4sPerBone * c_BoneCount;
+
+	// Clip 0 fading into clip 1 over t in [0.5, 1.5], both held at frame 1, where each differs from
+	// the bind pose.
+	auto crossfade    = bgl::SkinnedPlaybackDesc();
+	crossfade.slot[0] = RampedSlot(0, 1.0f, 1.0f, 0.0f, 0.5f, 1.5f);
+	crossfade.slot[1] = RampedSlot(1, 1.0f, 0.0f, 1.0f, 0.5f, 1.5f);
+
+	const auto paletteAt = [&](bgl::MeshInstanceHandle instance, float time) {
+		job.time = time;
+		gfx->DrawFrame(target, job);
+		return bgl::test::ReadPalette(
+			gfxBase,
+			viewRaw,
+			bgl::test::PaletteBaseOf(viewRaw, instance),
+			float4sPerPose);
+	};
+
+	SECTION("two clips mid-crossfade")
+	{
+		const auto instance = view->CreateSkinnedMeshInstance(geom, glm::mat4(1.0f), crossfade);
+
+		// Halfway along the ramp the weights are equal; a quarter of the way they are 3:1. Both are
+		// checked, because equal weights hide a slot read in the wrong order.
+		const std::array<assetlib::BlendSample, 2> even = { { { 0, 1.0f, 0.5f },
+			                                                  { 1, 1.0f, 0.5f } } };
+		CheckAgainstReference(paletteAt(instance, 1.0f), skeleton, animations, even);
+
+		const std::array<assetlib::BlendSample, 2> lopsided = { { { 0, 1.0f, 0.75f },
+			                                                      { 1, 1.0f, 0.25f } } };
+		CheckAgainstReference(paletteAt(instance, 0.75f), skeleton, animations, lopsided);
+	}
+
+	SECTION("a weight ramp read before and after its window is one clip alone")
+	{
+		const auto instance = view->CreateSkinnedMeshInstance(geom, glm::mat4(1.0f), crossfade);
+
+		const std::array<assetlib::BlendSample, 1> from = { { { 0, 1.0f, 1.0f } } };
+		CheckAgainstReference(paletteAt(instance, 0.25f), skeleton, animations, from);
+
+		const std::array<assetlib::BlendSample, 1> to = { { { 1, 1.0f, 1.0f } } };
+		CheckAgainstReference(paletteAt(instance, 2.0f), skeleton, animations, to);
+	}
+
+	SECTION("a rewrite rebased to now leaves the prevTime palette what the old record gave")
+	{
+		// Clip 0 at rate 1 from the clock's zero: at t1 it has reached frame 1 and holds there.
+		const auto instance = view->CreateSkinnedMeshInstance(
+			geom,
+			glm::mat4(1.0f),
+			bgl::SkinnedInstanceDesc{ 0, 0.0f, 1.0f });
+
+		const float t1 = 1.0f / c_SampleRate;
+		paletteAt(instance, 0.0f);
+		paletteAt(instance, t1);
+
+		// At t1 something happens: a crossfade to clip 1 over half a second. Both slots are rebased
+		// to t1 -- slot 0's phase re-expressed there, its ramp starting there -- so the record
+		// evaluated at t1 is still clip 0 at frame 1 at full weight.
+		auto rewrite         = bgl::SkinnedPlaybackDesc();
+		rewrite.slot[0]      = RampedSlot(0, 1.0f, 1.0f, 0.0f, t1, t1 + 0.5f);
+		rewrite.slot[0].rate = 1.0f;
+		rewrite.slot[0].tRef = t1;
+		rewrite.slot[1]      = RampedSlot(1, 0.0f, 0.0f, 1.0f, t1, t1 + 0.5f);
+		rewrite.slot[1].tRef = t1;
+		view->SetSkinnedPlayback(instance, rewrite);
+
+		// Half a frame later. prevTime is t1, and the second palette must be the pose the old
+		// record drew there -- which is what the motion vector reprojects through.
+		const float t2 = t1 + 0.5f / c_SampleRate;
+		job.time       = t2;
+		gfx->DrawFrame(target, job);
+
+		const bgl::test::Palette both = bgl::test::ReadPalette(
+			gfxBase,
+			viewRaw,
+			bgl::test::PaletteBaseOf(viewRaw, instance),
+			float4sPerPose * 2);
+
+		auto previous = bgl::test::Palette();
+		previous.rows.assign(both.rows.begin() + float4sPerPose, both.rows.end());
+		const std::array<assetlib::BlendSample, 1> old = { { { 0, 1.0f, 1.0f } } };
+		CheckAgainstReference(previous, skeleton, animations, old);
+
+		// And the current half is the fade begun: 1/30 of the way along, clip 0 still clamped at
+		// its last frame and clip 1 at its first.
+		auto current = bgl::test::Palette();
+		current.rows.assign(both.rows.begin(), both.rows.begin() + float4sPerPose);
+		const float                                fade = (0.5f / c_SampleRate) / 0.5f;
+		const std::array<assetlib::BlendSample, 2> now  = { { { 0, 1.0f, 1.0f - fade },
+			                                                  { 1, 0.0f, fade } } };
+		CheckAgainstReference(current, skeleton, animations, now);
+	}
 }
 
 // Where the render suite proves a deep rig draws right, this proves every bone of one is right --

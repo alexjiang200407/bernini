@@ -1004,6 +1004,90 @@ TEST_CASE("an instance on its rig's table draws what the pose pass draws", "[ski
 	}
 }
 
+// A blend's cheapest invariant, seen on screen: a clip weighted against itself is that clip, so
+// two slots of one clip must draw what one slot does. Within the golden tolerance rather than to
+// the bit -- a renormalized sum can differ from its input by an ulp.
+TEST_CASE("a clip blended with itself draws what the clip draws", "[skinned][render]")
+{
+	auto opts             = bgl::GraphicsOptions();
+	opts.shaderCacheDir   = bgl::test::ShaderCacheDir();
+	opts.enableDebugLayer = true;
+
+	auto gfx = bgl::CreateGraphics(opts);
+	REQUIRE(gfx != nullptr);
+
+	auto targetDesc     = bgl::RenderTargetDesc();
+	targetDesc.width    = static_cast<int>(c_Width);
+	targetDesc.height   = static_cast<int>(c_Height);
+	targetDesc.headless = true;
+	auto target         = gfx->CreateRenderTarget(targetDesc);
+
+	auto sceneDesc                        = bgl::SceneDesc();
+	sceneDesc.initialGeom                 = 4;
+	sceneDesc.initialMeshlets             = 8;
+	sceneDesc.initialSubmeshes            = 4;
+	sceneDesc.initialVertexBufferByteSize = 4096;
+	sceneDesc.initialIndices              = 64;
+	sceneDesc.initialPbrMaterials         = 4;
+
+	auto scene = gfx->CreateScene(sceneDesc);
+	auto view  = gfx->CreateSceneView(scene, 4);
+
+	bgl::test::ApplyEnvironment(scene.Get(), view.Get());
+
+	auto material            = bgl::PbrMaterialDesc();
+	material.baseColorFactor = glm::vec4(0.8f, 0.4f, 0.2f, 1.0f);
+	material.metallicFactor  = 0.0f;
+	material.roughnessFactor = 0.5f;
+
+	const std::array<bgl::MaterialHandle, 1> materials = { { scene->CreatePbrMaterial(material) } };
+
+	const auto geom = scene->AddSkinnedMeshGeom(
+		MakeSkinnedStrip(),
+		0,
+		materials,
+		scene->AddRig(MakeTwoBoneRig(), MakeSwingClip()),
+		c_StripPosedBounds);
+	REQUIRE(geom.IsValid());
+
+	auto job     = bgl::RenderJob();
+	job.view     = view;
+	job.camera   = StripCamera();
+	job.viewport = bgl::Viewport(static_cast<float>(c_Width), static_cast<float>(c_Height));
+
+	const auto* onePng = "assets/golden/self_blend_one.got.png";
+	const auto* twoPng = "assets/golden/self_blend_two.got.png";
+
+	// Between two frames, so the sample nlerp is live as well as the slot blend.
+	auto one  = bgl::SkinnedInstanceDesc();
+	one.phase = 0.5f;
+	one.rate  = 0.0f;
+	{
+		const auto instance = view->CreateSkinnedMeshInstance(geom, glm::mat4(1.0f), one);
+		gfx->DrawFrame(target, job);
+		gfx->ScreenshotPng(target, onePng);
+		view->DeleteMeshInstance(instance);
+	}
+
+	auto two = bgl::SkinnedPlaybackDesc();
+	for (uint32_t s = 0; s < 2; ++s)
+	{
+		two.slot[s].node    = 0;
+		two.slot[s].phase   = 0.5f;
+		two.slot[s].rate    = 0.0f;
+		two.slot[s].weight0 = 0.5f;
+		two.slot[s].weight1 = 0.5f;
+	}
+	{
+		const auto instance = view->CreateSkinnedMeshInstance(geom, glm::mat4(1.0f), two);
+		gfx->DrawFrame(target, job);
+		gfx->ScreenshotPng(target, twoPng);
+		view->DeleteMeshInstance(instance);
+	}
+
+	CHECK(bgl::test::FrameDelta(onePng, twoPng, 0, 0, int(c_Width), int(c_Height)) < 1e-4f);
+}
+
 // Hidden: it spawns thousands of instances and is a measurement rather than an assertion. Run it by
 // hand -- `just run bgl_extended_tests -- "[.posetiming]"` -- and read the numbers off the warning it prints.
 //

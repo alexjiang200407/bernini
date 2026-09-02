@@ -42,6 +42,10 @@ namespace bgl
 		// palette arena, freed with it. Null on a kBoneAnimTable instance, which reads its rig's
 		// table instead -- and that absence is what the pose pass and the mesh shader branch on.
 		core::multi_slot_handle palette;
+
+		// kSkinnedMesh only: how many nodes the record's slots may name, which is what a rewrite is
+		// checked against. Fixed for the instance's life -- a rig's tables never change under it.
+		uint32_t nodeCount = 0;
 	};
 
 	/**
@@ -80,6 +84,18 @@ namespace bgl
 			GeomHandle                 geom,
 			glm::mat4                  transform,
 			const SkinnedInstanceDesc& desc) override;
+
+		MeshInstanceHandle
+		CreateSkinnedMeshInstance(
+			GeomHandle                 geom,
+			glm::mat4                  transform,
+			const SkinnedPlaybackDesc& desc) override;
+
+		void
+		SetSkinnedPlayback(MeshInstanceHandle instance, const SkinnedPlaybackDesc& desc) override;
+
+		[[nodiscard]] SkinnedPlaybackDesc
+		GetSkinnedPlayback(MeshInstanceHandle instance) const override;
 
 		void
 		DeleteMeshInstance(MeshInstanceHandle instance) override;
@@ -301,6 +317,35 @@ namespace bgl
 		 */
 		MeshInstanceHandle
 		WritePlacement(GeomHandle geom, glm::mat4 transform, uint32_t animState);
+
+		/**
+		 * Spawns a per-instance placement on the rig `rig` of `boneCount` bones: a palette slice
+		 * and a kSkinned record holding `desc`, which the caller has validated against the rig.
+		 */
+		MeshInstanceHandle
+		PlacePosed(
+			GeomHandle                 geom,
+			glm::mat4                  transform,
+			core::slot_handle          rig,
+			uint32_t                   boneCount,
+			uint32_t                   nodeCount,
+			const SkinnedPlaybackDesc& desc);
+
+		/**
+		 * The placement of a record already in the arena, with everything rolled back if writing it
+		 * throws. `palette` is null for a record that owns none.
+		 */
+		MeshInstanceHandle
+		PlaceRecord(
+			GeomHandle              geom,
+			glm::mat4               transform,
+			idl::RawEntry           record,
+			core::multi_slot_handle palette,
+			uint32_t                nodeCount);
+
+		/** The meta of a live per-instance skinned placement, or a SceneError naming `what`. */
+		[[nodiscard]] const MeshMeta&
+		PosedMetaFor(MeshInstanceHandle instance, const char* what) const;
 
 		/**
 		 * Re-resolves every non-overridden instance against the Scene's current defaults, rewriting

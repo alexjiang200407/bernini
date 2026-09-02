@@ -57,6 +57,11 @@ public static const uint cMaxLegsPerRig = 8;
 // a worse artefact than a foot that does not quite meet the slope.
 public static const float cSoleClampRadians = 0.5235988;
 
+// Weighted slots a hero instance's playback record holds. Four because a crossfade between two
+// blend spaces is two nodes and an interrupted fade is three; a write that needs a fifth evicts the
+// lightest. Fixed so the pose kernel's slot loop has a constant bound.
+public static const uint cBlendSlots = 4;
+
 // Threads per pose-pass workgroup. One group poses one instance, one thread a bone at a time, so a
 // rig with more bones than this strides.
 public static const uint cPoseGroupSize = 64;

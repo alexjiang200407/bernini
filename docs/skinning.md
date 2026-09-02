@@ -19,9 +19,13 @@ not obvious from a signature. The headers linked below are the source of truth.
   does not survive contact with a crowd. `SkinnedPosePass` does it instead: one workgroup per
   instance, one thread per bone.
 
-* **`RenderJob::time` is the only per-frame input.** An instance is spawned with `{clip, phase, rate}`
-  and never touched again, whichever source it draws from, so a unit can move between them without
-  its playback record being rewritten. `rate = 0` holds a pose under any clock.
+* **`RenderJob::time` is the only per-frame input.** An instance is spawned with a playback record
+  and nothing writes it per frame, whichever source it draws from. A crowd record is one
+  `{clip, phase, rate}`. A per-instance one is `cBlendSlots` weighted slots, each a clip, a phase
+  and rate measured from its own `tRef`, and a weight ramp — so a crossfade is two slots whose ramps
+  cross, evaluated on the GPU from the clock, and the CPU touches the record only when something
+  happens to the instance (`ISceneView::SetSkinnedPlayback`). `rate = 0` holds a pose under any
+  clock. The `SkinnedInstanceDesc` spawn is the one-slot spelling of the same record.
 
 * **A posed instance is addressed by its placement, not by its playback record.** A foot planted on
   the ground needs to know where in the world the instance stands, and that is the `MeshInstance` record's
@@ -38,13 +42,15 @@ not obvious from a signature. The headers linked below are the source of truth.
   and on an instance spawned mid-frame, where a history buffer holds garbage, and it needs no
   ping-pong.
 
-  **It holds only while time is the sole input to a pose.** A clip switched between frames
-  reprojects through the wrong clip -- the pose at `prevTime` is evaluated on the clip the instance
-  now holds, which nothing drew. A switch is destroy + recreate, so the view's temporal epoch moves
-  and the TAA resolve takes that frame whole rather than reprojecting into it (see
-  [Temporal Antialiasing](docs/taa.md)); what that buys is one unaccumulated frame instead of a
-  ghost. A *blend* between clips has no such edge to hang off, and whoever adds a state machine
-  owns it.
+  **It holds because time is the sole input to a pose, and a rewrite has to keep it so.** The
+  pose at `prevTime` is evaluated on the record the instance holds *now*, so a record rewritten
+  between frames must evaluate at `prevTime` to what the old one gave: every slot rebased to now
+  (its phase re-expressed at `tRef = now`), every ramp starting at or after now, and a slot still
+  weighted at `prevTime` ramped down rather than dropped. Kept that way, a crossfade started
+  mid-frame reprojects exactly and no epoch moves. A clip *switched* by destroy + recreate is the
+  other case: the view's temporal epoch moves and the TAA resolve takes that frame whole rather
+  than reprojecting into it (see [Temporal Antialiasing](docs/taa.md)), one unaccumulated frame
+  instead of a ghost.
 
 * **A rig is a scene object, not part of a geom.** A skeleton and its clips upload once through
   `IScene::AddRig` and every geom skinned to them names the handle. A modular unit — a body cut into
@@ -122,9 +128,10 @@ not obvious from a signature. The headers linked below are the source of truth.
   being re-uploaded.
 
   **The source is the kind of playback record the placement holds**, and nowhere else. A hero
-  instance gets an `idl::SkinnedState`, a crowd one an `idl::SkinnedTableState` — the same
-  `{rig, clip, phase, rate}` and no palette, because the pose it draws is the rig's and belongs to no
-  instance. The mesh shader reads the arena's `RecordHeader` to know which, which is what that header
+  instance gets an `idl::SkinnedState` — the rig, its weighted slots and a palette — and a crowd one
+  an `idl::SkinnedTableState`: the one `{rig, clip, phase, rate}` a hero record's slot 0 spells, and
+  no palette, because the pose it draws is the rig's and belongs to no instance. The mesh shader
+  reads the arena's `RecordHeader` to know which, which is what that header
   is for: the alternative, one record kind with the palette left null and the branch reading the
   hole, is a second way of saying what the arena already says. What still turns on the palette itself
   is `SkinnedPosePass`'s dense list, and only because a palette is what that pass writes into.
@@ -268,7 +275,8 @@ to keep in agreement beyond the one below.
 
 * **Switching sources respawns; it does not re-load.** Both draw one upload, so the panel destroys
   its animated instances and creates them again against the same geoms — the same destroy-and-recreate
-  a clip switch does, there being no mutate-instance API by design. This is what the pose source
+  a clip switch does. `SetSkinnedPlayback` rewrites a record's slots, never its kind, and the source
+  is the kind. This is what the pose source
   being a property of the instance buys — a unit moves between sources without being uploaded twice.
 
 * **The selector's mapping is pinned by a test, and has to be.** The two sources draw the same picture
@@ -434,7 +442,10 @@ would put the shin back out of length. The contact was placed already turned, so
 nothing at the ground: the point that was dropped onto it is the point that stands on it.
 
 **Everything is scaled by a plant weight** — one byte per leg per frame, packed four to a uint,
-baked by the cook and sampled at the same fractional frame the pose is. A weight of zero is exactly
+baked by the cook and sampled at the same fractional frame the pose is. Under a blend it is the
+weighted sum of what each live slot's clip says, weighted exactly as that slot's pose is — the same
+sum every per-bone quantity takes, so a foot planted in both clips of a crossfade stays planted
+through it and one planted in neither is never planted by the blend. A weight of zero is exactly
 the pose the rig would have had. A weight rather than a flag because a foot that snapped between the
 two states would pop, which is what the cook's ramp at each end of a planted run exists to remove.
 
