@@ -139,7 +139,7 @@ namespace bgl
 	/**
 	 * How a renderer's own types are written into a mirror. `uniforms["x"] = handle` for a type the
 	 * mirror does not store as a value resolves here, so a renderer specialises it per handle type
-	 * with `static void Assign(UniformMirror::Accessor, const T&)`, written over the accessor's
+	 * with `static void Assign(UniformsBase::Accessor, const T&)`, written over the accessor's
 	 * `AssignDescriptorIndex`. Left undefined so that a type nobody maps is not assignable.
 	 */
 	template <typename T>
@@ -151,7 +151,7 @@ namespace bgl
 	 * indices, and nothing of what a descriptor names; a renderer extends it with its handle types
 	 * through `UniformAssign` and `UniformValueMap` (docs/uniforms.md).
 	 */
-	class UniformMirror
+	class UniformsBase
 	{
 	public:
 		template <typename DataPtr>
@@ -299,7 +299,7 @@ namespace bgl
 			AssertIsValue() const
 			{
 				if (!m_Node || m_Node->GetType() != UniformType::kValue)
-					core::throw_runtime_error("UniformMirror::Accessor: node is not a value type");
+					core::throw_runtime_error("UniformsBase::Accessor: node is not a value type");
 			}
 
 			template <detail::UniformValue T>
@@ -307,7 +307,7 @@ namespace bgl
 			AssertType() const
 			{
 				if (m_Node->GetValueType() != UniformValueMap<T>::c_Value)
-					core::throw_runtime_error("UniformMirror::Accessor: type mismatch");
+					core::throw_runtime_error("UniformsBase::Accessor: type mismatch");
 			}
 
 		private:
@@ -315,7 +315,7 @@ namespace bgl
 			size_t                m_Offset;
 			detail::UniformsNode* m_Node;
 
-			friend class UniformMirror;
+			friend class UniformsBase;
 		};
 
 	public:
@@ -323,7 +323,7 @@ namespace bgl
 		using ConstAccessor = AccessorBase<const void*>;
 
 	public:
-		UniformMirror() = default;
+		UniformsBase() = default;
 
 		/**
 		 * Lays `size` zeroed bytes out over `layout`.
@@ -331,16 +331,16 @@ namespace bgl
 		 * @param layout The reflected tree; shared, since one PSO's layout serves every kernel on it.
 		 * @param size The constant buffer's size in bytes, which the tree alone does not carry.
 		 */
-		UniformMirror(std::shared_ptr<const ReflectedLayout> layout, size_t size);
+		UniformsBase(std::shared_ptr<const ReflectedLayout> layout, size_t size);
 
-		UniformMirror(const UniformMirror&) = delete;
-		UniformMirror(UniformMirror&&)      = default;
+		UniformsBase(const UniformsBase&) = delete;
+		UniformsBase(UniformsBase&&)      = default;
 
-		UniformMirror&
-		operator=(UniformMirror&&) = default;
+		UniformsBase&
+		operator=(UniformsBase&&) = default;
 
-		UniformMirror&
-		operator=(const UniformMirror&) = delete;
+		UniformsBase&
+		operator=(const UniformsBase&) = delete;
 
 		Accessor
 		operator[](std::string_view name);
@@ -404,10 +404,10 @@ namespace bgl
 		std::vector<std::byte> m_Buffer;
 	};
 
-	/** A type one of `UniformMirror::Accessor`'s assignments accepts. */
+	/** A type one of `UniformsBase::Accessor`'s assignments accepts. */
 	template <typename T>
 	concept UniformAssignable =
-		requires(UniformMirror::Accessor accessor, const T& v) { accessor = v; };
+		requires(UniformsBase::Accessor accessor, const T& v) { accessor = v; };
 
 	/**
 	 * The names that resolve in none of `variants` -- the members a binder names but no PSO in the
@@ -424,7 +424,7 @@ namespace bgl
 	 * @return The offending names, in the order given. Empty when every name resolves somewhere.
 	 */
 	template <std::ranges::input_range Variants>
-		requires std::convertible_to<std::ranges::range_value_t<Variants>, const UniformMirror*>
+		requires std::convertible_to<std::ranges::range_value_t<Variants>, const UniformsBase*>
 	[[nodiscard]] std::vector<std::string_view>
 	FindUnknownMembers(const Variants& variants, std::span<const std::string_view> names)
 	{
@@ -433,7 +433,7 @@ namespace bgl
 		for (const std::string_view name : names)
 		{
 			const bool knownSomewhere =
-				std::ranges::any_of(variants, [name](const UniformMirror* variant) {
+				std::ranges::any_of(variants, [name](const UniformsBase* variant) {
 					return variant != nullptr && variant->HasMember(name);
 				});
 

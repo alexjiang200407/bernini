@@ -24,6 +24,6 @@ namespace bgl
 	{}
 
 	Uniforms::Uniforms(UniformLayoutEntry entry) :
-		UniformMirror(std::move(entry.layout), entry.size), m_RootParamIndex(entry.rootParamIndex)
+		UniformsBase(std::move(entry.layout), entry.size), m_RootParamIndex(entry.rootParamIndex)
 	{}
 }

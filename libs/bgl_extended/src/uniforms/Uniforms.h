@@ -7,7 +7,7 @@
 #include "resource/Texture.h"
 #include "uniforms/DescriptorHandle.h"
 #include "uniforms/UniformLayoutEntry.h"
-#include <bgl_common/UniformMirror.h>
+#include <bgl_common/UniformsBase.h>
 #include <core/err/util.h>
 
 namespace bgl
@@ -19,7 +19,7 @@ namespace bgl
 	 * One constant buffer's mirror as this renderer binds it: the shared layout walk, plus the root
 	 * parameter D3D12 binds the bytes at. The handle types it accepts are the specialisations below.
 	 */
-	class Uniforms final : public UniformMirror
+	class Uniforms final : public UniformsBase
 	{
 	public:
 		Uniforms() = default;
@@ -60,7 +60,7 @@ namespace bgl
 	struct UniformAssign<BufferHandle>
 	{
 		static void
-		Assign(UniformMirror::Accessor accessor, BufferHandle handle)
+		Assign(UniformsBase::Accessor accessor, BufferHandle handle)
 		{
 			if (accessor.GetType() == UniformType::kStruct &&
 			    accessor.GetSize() == detail::ValueTypeSize(UniformValueType::kDescriptorHandle))
@@ -87,7 +87,7 @@ namespace bgl
 	struct UniformAssign<BufferSrvHandle>
 	{
 		static void
-		Assign(UniformMirror::Accessor accessor, BufferSrvHandle handle)
+		Assign(UniformsBase::Accessor accessor, BufferSrvHandle handle)
 		{
 			// Only the descriptor travels: this handle's slot indexes the view pool, not the buffer
 			// pool, and naming it as a buffer's would be a lie waiting to be believed.
@@ -101,7 +101,7 @@ namespace bgl
 	struct UniformAssign<RawArenaBinding>
 	{
 		static void
-		Assign(UniformMirror::Accessor accessor, const RawArenaBinding& arena)
+		Assign(UniformsBase::Accessor accessor, const RawArenaBinding& arena)
 		{
 			accessor["raw"]     = arena.buffer;
 			accessor["handles"] = arena.handles;
@@ -112,7 +112,7 @@ namespace bgl
 	struct UniformAssign<SamplerHandle>
 	{
 		static void
-		Assign(UniformMirror::Accessor accessor, SamplerHandle handle)
+		Assign(UniformsBase::Accessor accessor, SamplerHandle handle)
 		{
 			accessor.AssignDescriptorIndex(handle.bindlessIndex);
 		}
@@ -122,7 +122,7 @@ namespace bgl
 	struct UniformAssign<SrvHandle>
 	{
 		static void
-		Assign(UniformMirror::Accessor accessor, SrvHandle handle)
+		Assign(UniformsBase::Accessor accessor, SrvHandle handle)
 		{
 			accessor.AssignDescriptorIndex(handle.bindlessIndex);
 		}
@@ -132,7 +132,7 @@ namespace bgl
 	struct UniformAssign<TextureAssetHandle>
 	{
 		static void
-		Assign(UniformMirror::Accessor accessor, TextureAssetHandle handle)
+		Assign(UniformsBase::Accessor accessor, TextureAssetHandle handle)
 		{
 			accessor.AssignDescriptorIndex(handle.shaderIndex);
 		}

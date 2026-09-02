@@ -1,4 +1,4 @@
-#include <bgl_common/UniformMirror.h>
+#include <bgl_common/UniformsBase.h>
 #include <bgl_common/gassert.h>
 
 namespace bgl
@@ -239,31 +239,31 @@ namespace bgl
 
 	}
 
-	UniformMirror::Accessor
-	UniformMirror::operator[](std::string_view name)
+	UniformsBase::Accessor
+	UniformsBase::operator[](std::string_view name)
 	{
 		return Accessor(m_Buffer.data(), 0, m_Root.get())[name];
 	}
 
-	UniformMirror::Accessor
-	UniformMirror::operator[](uint32_t idx)
+	UniformsBase::Accessor
+	UniformsBase::operator[](uint32_t idx)
 	{
 		return Accessor(m_Buffer.data(), 0, m_Root.get())[idx];
 	}
 
-	UniformMirror::ConstAccessor
-	UniformMirror::operator[](std::string_view name) const
+	UniformsBase::ConstAccessor
+	UniformsBase::operator[](std::string_view name) const
 	{
 		return ConstAccessor(m_Buffer.data(), 0, m_Root.get())[name];
 	}
 
-	UniformMirror::ConstAccessor
-	UniformMirror::operator[](uint32_t idx) const
+	UniformsBase::ConstAccessor
+	UniformsBase::operator[](uint32_t idx) const
 	{
 		return ConstAccessor(m_Buffer.data(), 0, m_Root.get())[idx];
 	}
 
-	UniformMirror::UniformMirror(std::shared_ptr<const ReflectedLayout> layout, size_t size)
+	UniformsBase::UniformsBase(std::shared_ptr<const ReflectedLayout> layout, size_t size)
 	{
 		gassert(layout != nullptr, "A mirror needs a reflected layout");
 
@@ -274,7 +274,7 @@ namespace bgl
 	}
 
 	bool
-	UniformMirror::HasMember(std::string_view name) const
+	UniformsBase::HasMember(std::string_view name) const
 	{
 		if (m_Root == nullptr)
 			return false;
@@ -283,7 +283,7 @@ namespace bgl
 	}
 
 	std::unique_ptr<detail::UniformsNode>
-	UniformMirror::BuildNode(const ReflectedLayout& layout)
+	UniformsBase::BuildNode(const ReflectedLayout& layout)
 	{
 		switch (layout.kind)
 		{

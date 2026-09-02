@@ -55,8 +55,8 @@ doc disagrees, trust the header, then fix this doc.
   carries only CBVs — one root parameter per cbuffer, no descriptor tables
   ([PipelineLayout_d3d12.cpp](libs/bgl_extended/src/d3d12/pipeline/PipelineLayout_d3d12.cpp)).
 
-* **The mirror is two halves, and the seam is what a descriptor names.** `UniformMirror`
-  ([bgl_common](libs/bgl_common/include/bgl_common/UniformMirror.h)) holds everything a renderer
+* **The mirror is two halves, and the seam is what a descriptor names.** `UniformsBase`
+  ([bgl_common](libs/bgl_common/include/bgl_common/UniformsBase.h)) holds everything a renderer
   cannot own: the node tree, the byte buffer, name resolution, and one primitive that writes a
   descriptor index into a member reflected as one. What a `BufferHandle` or a `SamplerHandle` *is*
   -- which pool its index names, which smart-buffer member it lands in -- is the renderer's, so each
@@ -76,11 +76,11 @@ doc disagrees, trust the header, then fix this doc.
 
 | Type | File | Role |
 |---|---|---|
-| `UniformMirror` | [UniformMirror.h](libs/bgl_common/include/bgl_common/UniformMirror.h) | One cbuffer's CPU mirror, shared by every renderer: byte buffer + reflected tree, `operator[]` by name or index, `HasMember` / `GetLayout` to introspect. Knows values and descriptor indices, never what a descriptor names. Move-only. |
-| `UniformMirror::Accessor` / `ConstAccessor` | [UniformMirror.h](libs/bgl_common/include/bgl_common/UniformMirror.h) | Cursor into the mirror: chainable `operator[]`, typed read/assign, `AssignDescriptorIndex` as the one primitive a handle write reduces to, `SetIfValid` for an optional write, `IsValid()`. Non-owning. |
-| `UniformAssign<T>` / `UniformValueMap<T>` | [UniformMirror.h](libs/bgl_common/include/bgl_common/UniformMirror.h) | The two seams a renderer specialises: how one of its handle types is written, and which value type one of its types is stored as. |
-| `Uniforms` | [Uniforms.h](libs/bgl_extended/src/uniforms/Uniforms.h) | This renderer's mirror: `UniformMirror` plus the D3D12 root parameter, built from a pipeline's `UniformLayoutEntry`. Its six `UniformAssign` specialisations are what make `uniforms["x"] = handle` compile. |
-| `FindUnknownMembers` | [UniformMirror.h](libs/bgl_common/include/bgl_common/UniformMirror.h) | Resolves a binder's names against a whole PSO family, returning those no variant declares. Call once at family construction. |
+| `UniformsBase` | [UniformsBase.h](libs/bgl_common/include/bgl_common/UniformsBase.h) | One cbuffer's CPU mirror, shared by every renderer: byte buffer + reflected tree, `operator[]` by name or index, `HasMember` / `GetLayout` to introspect. Knows values and descriptor indices, never what a descriptor names. Move-only. |
+| `UniformsBase::Accessor` / `ConstAccessor` | [UniformsBase.h](libs/bgl_common/include/bgl_common/UniformsBase.h) | Cursor into the mirror: chainable `operator[]`, typed read/assign, `AssignDescriptorIndex` as the one primitive a handle write reduces to, `SetIfValid` for an optional write, `IsValid()`. Non-owning. |
+| `UniformAssign<T>` / `UniformValueMap<T>` | [UniformsBase.h](libs/bgl_common/include/bgl_common/UniformsBase.h) | The two seams a renderer specialises: how one of its handle types is written, and which value type one of its types is stored as. |
+| `Uniforms` | [Uniforms.h](libs/bgl_extended/src/uniforms/Uniforms.h) | This renderer's mirror: `UniformsBase` plus the D3D12 root parameter, built from a pipeline's `UniformLayoutEntry`. Its six `UniformAssign` specialisations are what make `uniforms["x"] = handle` compile. |
+| `FindUnknownMembers` | [UniformsBase.h](libs/bgl_common/include/bgl_common/UniformsBase.h) | Resolves a binder's names against a whole PSO family, returning those no variant declares. Call once at family construction. |
 | `ComputeKernel` / `MeshletKernel` | [ComputeKernel.h](libs/bgl_extended/src/pipeline/ComputeKernel.h), [MeshletKernel.h](libs/bgl_extended/src/pipeline/MeshletKernel.h) | Pipeline + per-cbuffer `Uniforms` map. `MeshletKernel` also offers `FindUniforms` / `ContainsUniforms`. |
 
 ### Supporting types
