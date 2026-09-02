@@ -186,16 +186,16 @@ namespace assetlib
 				//
 				// The rig's meshes are gathered only when there is an avatar, so a project that
 				// authors none does not copy a vertex.
-				const std::vector<AvatarLegChain> legs =
-					legChainsForRig(GetFiles(), animations.skeleton, skeleton);
+				const ResolvedAvatar avatar =
+					avatarForRig(GetFiles(), animations.skeleton, skeleton);
 
 				auto planted = std::vector<BMesh>();
-				if (!legs.empty())
+				if (!avatar.legs.empty())
 					for (const std::string& meshPath : paired->second)
 						planted.push_back(meshAt(meshPath));
 
 				const uint64_t wantedPlant =
-					legs.empty() ? 0 : plantWeightsSignature(planted, skeleton, legs);
+					avatar.legs.empty() ? 0 : plantWeightsSignature(planted, skeleton, avatar);
 				const uint64_t storedPlant =
 					animations.plantWeights.Empty() ? 0 : animations.plantWeights.signature;
 
@@ -211,7 +211,7 @@ namespace assetlib
 					for (const std::string& meshPath : paired->second)
 						bakePosedBounds(animations, meshAt(meshPath), skeleton);
 
-					bakePlantWeights(animations, planted, skeleton, legs);
+					bakePlantWeights(animations, planted, skeleton, avatar);
 
 					// A skin the bake refuses stays boxless and would land here every run; only a
 					// rewrite that changes bytes is worth dirtying a version-controlled binary for.

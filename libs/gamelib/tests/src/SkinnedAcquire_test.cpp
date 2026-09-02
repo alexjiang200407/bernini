@@ -577,7 +577,7 @@ TEST_CASE("a rig with an avatar hands bgl its legs", "[skinned][acquire][skinned
 
 	SECTION("a chain the pose pass cannot walk is refused by bgl, naming the bone")
 	{
-		// hip -> ankle skips the knee. Only bgl refuses this -- resolveLegChains deliberately does
+		// hip -> ankle skips the knee. Only bgl refuses this -- resolveAvatar deliberately does
 		// not -- so a refusal here is the proof the legs reached it.
 		WriteLegAvatar(root.path, { { "hip", "ankle", "toe", "toe" } });
 

@@ -662,33 +662,33 @@ namespace game
 
 		auto desc = bgl::FootPlantDesc();
 
-		const std::vector<assetlib::AvatarLegChain> chains =
-			assetlib::legChainsForRig(m_Store.GetFiles(), animations.skeleton, skeleton);
-		if (chains.empty())
+		const assetlib::ResolvedAvatar avatar =
+			assetlib::avatarForRig(m_Store.GetFiles(), animations.skeleton, skeleton);
+		if (avatar.legs.empty())
 			return desc;
 
 		const auto meshes = std::span<const assetlib::BMesh>(&mesh, 1);
 
 		const std::vector<assetlib::SolePlane> soles =
-			assetlib::solePlanes(meshes, skeleton, chains);
+			assetlib::solePlanes(meshes, skeleton, avatar.legs);
 
 		// Read off the file when the cook measured them against this pairing, measured otherwise:
 		// the same rule a posed box follows, and for the same reason -- what is there is derived, so
 		// what was derived from something else is not trusted, it is redone. A branch and not
 		// value_or, whose argument is evaluated either way: the measure is a walk of every frame,
 		// and the whole point of the bake is that a load with a match does not make it.
-		if (auto baked = assetlib::findPlantWeights(animations, meshes, skeleton, chains))
+		if (auto baked = assetlib::findPlantWeights(animations, meshes, skeleton, avatar))
 			desc.plantWeights = std::move(*baked);
 		else
-			desc.plantWeights = assetlib::measurePlantWeights(animations, skeleton, chains, soles);
+			desc.plantWeights = assetlib::measurePlantWeights(animations, skeleton, avatar, soles);
 
-		desc.legs.reserve(chains.size());
-		for (size_t i = 0; i < chains.size(); ++i)
+		desc.legs.reserve(avatar.legs.size());
+		for (size_t i = 0; i < avatar.legs.size(); ++i)
 			desc.legs.push_back(
-				{ .hip        = chains[i].hip,
-			      .knee       = chains[i].knee,
-			      .ankle      = chains[i].ankle,
-			      .toe        = chains[i].toe,
+				{ .hip        = avatar.legs[i].hip,
+			      .knee       = avatar.legs[i].knee,
+			      .ankle      = avatar.legs[i].ankle,
+			      .toe        = avatar.legs[i].toe,
 			      .solePoint  = soles[i].point,
 			      .soleNormal = soles[i].normal });
 
