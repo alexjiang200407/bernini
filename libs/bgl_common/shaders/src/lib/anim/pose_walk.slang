@@ -2,6 +2,7 @@ import lib.anim.clip_playback;
 import idl.BoneSample;
 import idl.Clip;
 import idl.Constants;
+import idl.IBonePalette;
 import idl.IPoseTables;
 import idl.Rig;
 import idl.SkinnedBone;
@@ -12,8 +13,8 @@ import idl.SkinnedBone;
 // never again.
 
 // One bone's transform, read back out of the three rows a palette slot holds. Affine, so the fourth
-// row is (0,0,0,1) and was never stored -- the same convention the mesh shader reads.
-public float4x4 PaletteMatrix<T : IPoseTables>(T tables, uint slot)
+// row is (0,0,0,1) and was never stored. The vertex blend in skinning.slang reads through this too.
+public float4x4 PaletteMatrix<T : IBonePalette>(T tables, uint slot)
 {
     return float4x4(tables.GetPalette(slot + 0), tables.GetPalette(slot + 1), tables.GetPalette(slot + 2), float4(0.0, 0.0, 0.0, 1.0));
 }
