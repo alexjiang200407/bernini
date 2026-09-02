@@ -24,7 +24,7 @@ main(int argc, char** argv)
 		bool        headless      = false;
 		uint32_t    frames        = 16;
 		std::string dataRootPath  = "assets/Data";
-		std::string modelPath     = "Meshes/apples.bmesh";
+		std::string modelPath     = "Derived/Meshes/apples.bmesh";
 		float       exposure      = 1.0f;
 		bool        exposureGiven = false;
 
@@ -116,7 +116,7 @@ main(int argc, char** argv)
 		// authored.
 		auto assets = game::AssetManager(scene, dataRoot);
 
-		const auto env = assets.AcquireEnvironment("Environments/forest.benv");
+		const auto env = assets.AcquireEnvironment("Authored/Environments/forest.benv");
 		if (env.HasLighting())
 			view->SetEnvironmentMap({ env.irradiance, env.prefilter });
 

@@ -1,6 +1,5 @@
 #pragma once
-
-struct SDL_Window;
+#include <SDL3/SDL_events.h>
 
 namespace demo
 {
@@ -41,7 +40,7 @@ namespace demo
 
 	private:
 		friend void
-		PumpEvents();
+		PumpEvents(const std::function<void(const SDL_Event&)>& sink);
 
 		unsigned int m_Id           = 0;  // SDL_WindowID
 		SDL_Window*  m_Window       = nullptr;
@@ -50,8 +49,15 @@ namespace demo
 		bool         m_ShouldClose  = false;
 	};
 
+	/**
+	 * Drains SDL's queue, handling quit, close and key-down as it always has, and handing every
+	 * event to `sink` first.
+	 *
+	 * One pump: two would race for the same queue and each would see half the events. A UI that
+	 * wants the mouse passes a sink that forwards to it -- see RmlInput.h.
+	 */
 	void
-	PumpEvents();
+	PumpEvents(const std::function<void(const SDL_Event&)>& sink = {});
 
 	inline constexpr int c_ScancodeF10 = 67;  // SDL_SCANCODE_F10
 

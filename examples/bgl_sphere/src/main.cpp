@@ -74,7 +74,7 @@ main(int argc, char** argv)
 		// The manager holds the data root; every asset reference below is relative to it.
 		auto assets = game::AssetManager(scene, "assets/Data");
 
-		const auto env = assets.AcquireEnvironment("Environments/forest.benv");
+		const auto env = assets.AcquireEnvironment("Authored/Environments/forest.benv");
 		if (env.HasLighting())
 			view->SetEnvironmentMap({ env.irradiance, env.prefilter });
 		view->SetExposure(env.exposure);

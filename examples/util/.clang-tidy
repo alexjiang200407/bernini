@@ -1,0 +1,7 @@
+# Rml is RmlUi's own namespace, forward-declared by RmlInput.h so the SDL translation's header does
+# not pull the library in behind it. Spelled the way RmlUi spells it; a declaration that renames it
+# declares a different namespace. Same exemption libs/gamelib carries, for the same reason.
+InheritParentConfig: true
+
+CheckOptions:
+  readability-identifier-naming.NamespaceIgnoredRegexp: '^Rml$'

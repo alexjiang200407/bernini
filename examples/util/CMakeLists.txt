@@ -20,6 +20,9 @@ target_link_libraries(example_util
         core
         bgl_extended
         SDL3::SDL3
+        # RmlInput speaks Context::Process* directly: the engine declares no event type, so the
+        # SDL translation lives here beside the window that produces the events.
+        RmlUi::RmlUi
 )
 
 target_include_directories(example_util PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})

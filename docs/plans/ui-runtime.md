@@ -218,14 +218,22 @@ is a record rather than an example.
   click through the input door** — `ProcessMouseMove` to the button's computed box, then
   `ProcessMouseButtonDown(0)` / `ProcessMouseButtonUp(0)` — fires the bound `data-event-click`
   callback, `ProcessMouseButtonDown` returns `false` over the button (consumed) and `true` over
-  empty space, which is the bool the example gates the fly-cam on; `JoinPath` resolves a sibling
+  empty space, which is what tells a game a click landed on a control rather than on the world; `JoinPath` resolves a sibling
   `@import` to mount-key form, refuses `../` out of the root, and passes `target://` through.
 - `just run gamelib_tests -- "[ui][render]"` green: a document with a coloured box and a line of
   text matches `assets/golden/ui_hud.exp.png`, guarded so two blanks cannot pass.
 - `just run bgl_ui` opens on a menu: a styled background, the sphere scene animating live inside a
   framed panel, buttons over it; a click on the button increments the bound counter and the
-  fly-cam orbits the preview only while the cursor is over the panel — the landing PR's **Eyes**
+  fly-cam moves the preview only while the cursor is over the panel — the landing PR's **Eyes**
   box.
+
+  **Amended by task 6.** The gate below said the fly-cam is gated on
+  `ProcessMouseButtonDown`'s return. It cannot be: the panel is itself a UI element, so that bool
+  is false whenever the cursor is over an interactive element -- the panel among them -- so the
+  two conditions can never both hold.
+  The element under the cursor (`Context::GetHoverElement`) is what answers this; the consumed
+  bool answers whether a click landed on nothing, which is a different question and is what the
+  `[ui]` case pins.
 - The landing PR's **Windows** box: `[overlay]` under GPU validation and `[ui][render]` on D3D12,
   and `assetlib_cli pack` of a directory holding UI assets on a path with `\` separators.
 - `ROADMAP.md`'s In-game UI entry names RmlUi, what shipped, what is deferred and why, and links
@@ -456,7 +464,7 @@ the loop stays single-threaded.
    TAA on. Gate: builds on both platforms (CI); an **Eyes** box — the background is styled, the
    sphere animates inside the panel, the frame-time readout ticks, the button's click increments
    the counter, and the fly-cam moves the preview only while the cursor is over the panel
-   (`ProcessMouseButtonDown`'s return and the element under the cursor gate it).
+   (the element under the cursor gates it -- see the amendment in Acceptance).
 7. **`docs: the UI runtime page, the roadmap, and the plan's retirement`** — `docs/ui_runtime.md`
    by bcp-docs, with its *Replacing RmlUi* section (ADR-7), the RCSS traps and **what document
    scripting is and is not** (task 4b: the UI's Lua, not the engine's, and a scripted document is
