@@ -257,7 +257,7 @@ source texture.
 Interleaved, tightly packed; **stride = sum of present attributes** (variable — e.g. 32 bytes without
 a tangent, 48 with). Decoded on the GPU per the submesh's `VertexLayout` descriptor, not a fixed
 struct — see `DecodeVertex` in
-[libs/bgl_extended/shaders/src/lib/forward/vertexdecode.slang](libs/bgl_extended/shaders/src/lib/forward/vertexdecode.slang).
+[libs/bgl_common/shaders/src/lib/geom/vertexdecode.slang](libs/bgl_common/shaders/src/lib/geom/vertexdecode.slang).
 
 | Attribute | Format | Required | Notes |
 |---|---|---|---|
