@@ -2,7 +2,9 @@
 
 #include "Async/BackgroundTask.h"
 #include "Windows/ContentExplorer/asset_rules.h"
+#include "Windows/ContentExplorer/avatar_create.h"
 #include "Windows/MaterialEditor/material_io.h"
+#include "util/source_mesh.h"
 
 #include <QDir>
 #include <QFileInfo>
@@ -57,6 +59,29 @@ AssetOperations::Bake(const QString& asset)
 	// The thumbnail cache watches the material's mtime and repaints itself; the Material Editor does
 	// not, and is showing what this file said before the bake.
 	Q_EMIT MaterialBaked(asset);
+}
+
+void
+AssetOperations::CreateAvatar(const QString& asset)
+{
+	const QString skeleton =
+		editor::GetSourceSkeleton(m_DataRoot, QDir(m_DataRoot).filePath(asset));
+	if (skeleton.isEmpty())
+		return;
+
+	try
+	{
+		const QString key = editor::CreateEmptyAvatar(m_DataRoot, skeleton);
+		Q_EMIT AvatarCreated(QDir(m_DataRoot).filePath(key));
+	}
+	catch (const std::exception& e)
+	{
+		QMessageBox::warning(
+			m_Parent,
+			"Create Avatar",
+			QString("Could not create an avatar for '%1':\n\n%2")
+				.arg(QFileInfo(asset).fileName(), QString::fromUtf8(e.what())));
+	}
 }
 
 bool

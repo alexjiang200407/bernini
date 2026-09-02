@@ -291,6 +291,32 @@ to keep in agreement beyond the one below.
   box and the same reason. The panel reads it off the `.banim`'s bake, and only a pairing the cook
   never measured is walked — inside its loading screen rather than on the render thread.
 
+* **A ground-slope slider tilts what the rig stands on.** It sets the scene's ground plane — the one
+  a planted foot is solved against — and stands a floor under the rig at the same tilt, so the tilt
+  can be seen. Positive rises toward +X, and a heading slider turns uphill about +Y: nothing in the
+  path knows which way a rig moves (the test coyote runs along +Z), so a person turns the hill to
+  face the stride rather than the rig to face the hill. A checkbox hides the floor; the ground a
+  foot plants against stands either way. The floor and the ground are derived from one rotation
+  (`editor::GroundForSlope`, `FloorTransformForSlope`, free of the window and pinned by
+  `[slope]`), so the floor and the ground cannot lean different ways. It commits on **release**,
+  not on every tick of a drag:
+  `SetGround` moves the scene's temporal epoch, and a drag committing each tick would hold the
+  preview unaccumulated for the whole gesture. The floor is one plane geom for the window's life in
+  the shared scene, like the material preview's sphere, and one placement in this view while a rig
+  is shown; a placement does not move, so a slope change deletes and re-places it. The scene is
+  shared with the Level Editor, and its ground with it, so the slope stands only while the panel is
+  on screen: hiding the panel or clearing the preview lays the ground flat again, and showing it
+  brings the slope back. Nothing else in the scene should stand on a slope this panel set while
+  nobody is looking at it.
+
+* **The Content Explorer creates an avatar from the source.** *Create Avatar* is offered on an
+  imported `.glb` whose document binds a rig (`editor::GetSourceSkeleton`), because the source is
+  the row that stands for the rig in the views: its `.bskel` lives in the half they do not reach and
+  its `.bimport` is hidden. It writes `{ "legs": [] }` at the key `avatarKeyFor` names — nobody has
+  to know the convention — and refuses when one is already there, since an avatar is authored work.
+  The write is `editor::CreateEmptyAvatar`, free of the window so a test can drive it. The explorer
+  then shows the file where it landed, under `Authored/Skeletons`, not where the action was taken.
+
 * **The panel itself is not covered by a test**, and this is a pre-existing gap: `RenderTargetWindow`'s
   constructor calls `CreateRenderTarget` with a real `winId()` and `headless = false`, so no test can
   construct `AnimationPreviewWindow`. What *is* covered is the selector's mapping, lifted clear of the

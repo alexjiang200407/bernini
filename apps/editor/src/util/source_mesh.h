@@ -26,6 +26,18 @@ namespace editor
 	GetSourceMesh(const QString& dataRoot, const QString& path);
 
 	/**
+	 * The `.bskel` the source at `path` binds its joints to, as a data-root-relative key, or empty
+	 * for a source with no rig -- and for everything GetSourceMesh answers empty for, for the same
+	 * reasons. What decides whether a source can have an avatar: an avatar is the rig's, found from
+	 * the skeleton by convention, and the source is the row that stands for that rig in the views.
+	 *
+	 * A key and not an absolute path, unlike GetSourceMesh's answer, because what a caller does
+	 * with it is derive another key (`avatarKeyFor`) rather than open the file.
+	 */
+	[[nodiscard]] QString
+	GetSourceSkeleton(const QString& dataRoot, const QString& path);
+
+	/**
 	 * GetSourceMesh, remembered until the document changes.
 	 *
 	 * What makes the resolution usable from a model's `data()`, which runs on every paint of every
