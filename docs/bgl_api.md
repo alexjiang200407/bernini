@@ -63,7 +63,10 @@ disagrees, trust the header, then fix this doc.
   borrowed backbuffer under its own name and returns it to present before `EndFrame`, and the two
   targets keep their own histories and clocks; one queue in submission order is what orders the
   preview's frame before the read. A windowed target is refused, and a target cannot be sampled
-  by its own frame.
+  by its own frame. The seam is overlay-scoped rather than an SRV on `IRenderTarget` because the
+  overlay is its only consumer today; when a second one arrives — the hero damage-mask target in
+  `ROADMAP.md` is the candidate — the general spelling is the refactor, and this overload becomes
+  its first caller.
 
 * **Scene mutations are staged, not immediate.** `AddTextureAsset`, `AddStaticMeshGeom`,
   `CreatePbrMaterial` and friends record CPU-side state and queue the GPU upload; the upload runs as a
