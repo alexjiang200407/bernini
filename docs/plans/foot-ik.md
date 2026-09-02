@@ -106,6 +106,9 @@ task that lands the solve.
   slack bound (a seated rig plants nothing), and a foot's own floor counts only within a spread of
   it (`c_PlantFloorSpread`, 5 cm): the Dog's `Jump_Up` holds a knee up with the foot 8 cm above
   the other, and that foot is up on purpose.
+  *The per-clip override this ADR reserved is now real (2026-09-03):* the avatar's `unplanted`
+  list. Airborne clips are the case: `groundClips` rests a jump or a fall on the foot that hangs
+  lowest, which then reads as standing. Both project rigs list `Jump_Up` and `Fall`.
 
 - **ADR-6 — The `prevTime` palette solves against the instance's one transform; the "time is the
   sole input" invariant holds.** An instance's transform is fixed for its lifetime: `ISceneView` has

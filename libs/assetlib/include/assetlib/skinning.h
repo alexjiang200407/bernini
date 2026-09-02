@@ -17,6 +17,7 @@ namespace assetlib
 
 	struct AnimationSet;
 	struct AvatarLegChain;
+	struct ResolvedAvatar;
 	struct BMesh;
 	struct Bounds;
 	struct ClipFloor;
@@ -360,18 +361,18 @@ namespace assetlib
 		std::span<const AvatarLegChain> chains);
 
 	/**
-	 * What a baked plant weight was measured against: the rig, the legs resolved on it, and the
-	 * geometry the soles were fitted to. A re-imported mesh, a re-authored bind or an edited avatar
-	 * changes it; renames and material swaps do not.
+	 * What a baked plant weight was measured against: the rig, the avatar resolved on it -- legs
+	 * and unplanted clips both -- and the geometry the soles were fitted to. A re-imported mesh, a
+	 * re-authored bind or an edited avatar changes it; renames and material swaps do not.
 	 *
 	 * The clips are deliberately absent: they live in the same file, so a clip edit rewrites the
 	 * weights beside it and a signature over them would only be a second way to say so.
 	 */
 	[[nodiscard]] uint64_t
 	plantWeightsSignature(
-		std::span<const BMesh>          meshes,
-		const Skeleton&                 skeleton,
-		std::span<const AvatarLegChain> chains) noexcept;
+		std::span<const BMesh> meshes,
+		const Skeleton&        skeleton,
+		const ResolvedAvatar&  avatar) noexcept;
 
 	/**
 	 * How planted each leg is in each frame of `animations`: one byte per leg per frame, frame-major
@@ -383,6 +384,7 @@ namespace assetlib
 	 * Floor: the lowest that sole gets in the clip. No floor when the clip's lowest sole is above
 	 * `c_PlantFloorSlack`, or the foot's own is more than `c_PlantFloorSpread` above the clip's.
 	 * Ramp: `c_PlantRampFrames` in and out of each run, not at a clip's edge.
+	 * Zero throughout: a clip the avatar names in `unplanted`.
 	 * Skipped: a clip whose first sample is off a frame boundary.
 	 *
 	 * @throws std::runtime_error for anything poseModelTransforms refuses -- above all a clip set
@@ -390,13 +392,13 @@ namespace assetlib
 	 */
 	[[nodiscard]] std::vector<uint8_t>
 	measurePlantWeights(
-		const AnimationSet&             animations,
-		const Skeleton&                 skeleton,
-		std::span<const AvatarLegChain> chains,
-		std::span<const SolePlane>      soles);
+		const AnimationSet&        animations,
+		const Skeleton&            skeleton,
+		const ResolvedAvatar&      avatar,
+		std::span<const SolePlane> soles);
 
 	/**
-	 * Measure the plant weights for `chains` on `meshes` and store them on `animations`, keyed by
+	 * Measure the plant weights for `avatar` on `meshes` and store them on `animations`, keyed by
 	 * plantWeightsSignature -- what a cook runs after grounding, so no load has to.
 	 *
 	 * One measurement, not one per mesh: the legs are the rig's, so a rig drawn as several meshes
@@ -410,17 +412,17 @@ namespace assetlib
 	 */
 	void
 	bakePlantWeights(
-		AnimationSet&                   animations,
-		std::span<const BMesh>          meshes,
-		const Skeleton&                 skeleton,
-		std::span<const AvatarLegChain> chains);
+		AnimationSet&          animations,
+		std::span<const BMesh> meshes,
+		const Skeleton&        skeleton,
+		const ResolvedAvatar&  avatar);
 
 	/**
 	 * The weights bakePlantWeights stored for this pairing, or nullopt where the `.banim` carries
 	 * none -- never baked, a different rig or mesh, or a source that changed since. The caller
 	 * measures those, and weights that are there are trusted verbatim.
 	 *
-	 * The leg count is checked against `chains` as well as the signature: a signature match with a
+	 * The leg count is checked against `avatar` as well as the signature: a signature match with a
 	 * different count would index the wrong leg, and reading past the end is not the failure to
 	 * settle for.
 	 *
@@ -430,10 +432,10 @@ namespace assetlib
 	 */
 	[[nodiscard]] std::optional<std::vector<uint8_t>>
 	findPlantWeights(
-		const AnimationSet&             animations,
-		std::span<const BMesh>          meshes,
-		const Skeleton&                 skeleton,
-		std::span<const AvatarLegChain> chains);
+		const AnimationSet&    animations,
+		std::span<const BMesh> meshes,
+		const Skeleton&        skeleton,
+		const ResolvedAvatar&  avatar);
 
 	/** One vertex after skinning, in model space. */
 	struct SkinnedVertex

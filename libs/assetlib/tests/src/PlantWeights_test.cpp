@@ -140,12 +140,13 @@ namespace
 		}
 
 		void
-		AddClip()
+		AddClip(std::string_view name = "clip")
 		{
 			auto clip        = AnimationClip();
 			clip.firstSample = static_cast<uint32_t>(animations.samples.size());
 			clip.frameCount  = 0;
 			clip.sampleRate  = 30.0f;
+			clip.nameOffset  = animations.stringPool.add(name);
 			animations.clips.push_back(clip);
 		}
 
@@ -194,6 +195,13 @@ namespace
 			for (uint32_t leg = 0; leg < m_Legs; ++leg)
 				out.push_back({ 1 + 4 * leg, 2 + 4 * leg, 3 + 4 * leg, 4 + 4 * leg });
 			return out;
+		}
+
+		/** The chains as the avatar the plant measures with; `unplanted` names clips by name. */
+		[[nodiscard]] ResolvedAvatar
+		Plant(std::vector<std::string> unplanted = {}) const
+		{
+			return { Chains(), std::move(unplanted) };
 		}
 
 	private:
@@ -282,7 +290,7 @@ TEST_CASE("A foot on the floor and still is planted", "[skinning][plant]")
 
 	const std::vector<SolePlane> soles = solePlanes(leg.Meshes(), leg.skeleton, leg.Chains());
 	const std::vector<float>     w =
-		WeightsOf(measurePlantWeights(leg.animations, leg.skeleton, leg.Chains(), soles));
+		WeightsOf(measurePlantWeights(leg.animations, leg.skeleton, leg.Plant(), soles));
 
 	REQUIRE(w.size() == 8);
 
@@ -306,7 +314,7 @@ TEST_CASE("A plant is ramped in and out of every transition inside a clip", "[sk
 
 	const std::vector<SolePlane> soles = solePlanes(leg.Meshes(), leg.skeleton, leg.Chains());
 	const std::vector<float>     w =
-		WeightsOf(measurePlantWeights(leg.animations, leg.skeleton, leg.Chains(), soles));
+		WeightsOf(measurePlantWeights(leg.animations, leg.skeleton, leg.Plant(), soles));
 
 	REQUIRE(w.size() == 15);
 
@@ -327,6 +335,7 @@ TEST_CASE("A plant is ramped in and out of every transition inside a clip", "[sk
 TEST_CASE("A foot off the floor or sliding along it is not planted", "[skinning][plant]")
 {
 	const std::vector<AvatarLegChain> chains = Leg().Chains();
+	const ResolvedAvatar              plant  = Leg().Plant();
 
 	SECTION("lifted clear of the floor")
 	{
@@ -339,7 +348,7 @@ TEST_CASE("A foot off the floor or sliding along it is not planted", "[skinning]
 
 		const std::vector<SolePlane> soles = solePlanes(leg.Meshes(), leg.skeleton, chains);
 		const std::vector<uint8_t>   w =
-			measurePlantWeights(leg.animations, leg.skeleton, chains, soles);
+			measurePlantWeights(leg.animations, leg.skeleton, plant, soles);
 
 		CHECK(std::ranges::all_of(w, [](uint8_t byte) { return byte == 0; }));
 	}
@@ -358,7 +367,7 @@ TEST_CASE("A foot off the floor or sliding along it is not planted", "[skinning]
 
 		const std::vector<SolePlane> soles = solePlanes(leg.Meshes(), leg.skeleton, chains);
 		const std::vector<float>     w =
-			WeightsOf(measurePlantWeights(leg.animations, leg.skeleton, chains, soles));
+			WeightsOf(measurePlantWeights(leg.animations, leg.skeleton, plant, soles));
 
 		// Frame 5 is where the motion is measured to have begun -- its window reaches the first
 		// dragged frame -- so the run is 0..4, ramping out at its end.
@@ -382,7 +391,7 @@ TEST_CASE("A foot off the floor or sliding along it is not planted", "[skinning]
 
 		const std::vector<SolePlane> soles = solePlanes(leg.Meshes(), leg.skeleton, chains);
 		const std::vector<float>     w =
-			WeightsOf(measurePlantWeights(leg.animations, leg.skeleton, chains, soles));
+			WeightsOf(measurePlantWeights(leg.animations, leg.skeleton, plant, soles));
 
 		for (size_t i = 0; i < 8; ++i) CHECK(w[i] == Catch::Approx(1.0f).margin(0.01));
 	}
@@ -407,7 +416,7 @@ TEST_CASE("A foot off the floor or sliding along it is not planted", "[skinning]
 		const std::vector<SolePlane> soles =
 			solePlanes(both.Meshes(), both.skeleton, both.Chains());
 		const std::vector<float> w =
-			WeightsOf(measurePlantWeights(both.animations, both.skeleton, both.Chains(), soles));
+			WeightsOf(measurePlantWeights(both.animations, both.skeleton, both.Plant(), soles));
 
 		REQUIRE(w.size() == 16);
 		const bool leftPlanted  = w[2 * 3 + 0] == Catch::Approx(1.0f).margin(0.01);
@@ -428,7 +437,7 @@ TEST_CASE("A foot off the floor or sliding along it is not planted", "[skinning]
 
 		const std::vector<SolePlane> soles = solePlanes(leg.Meshes(), leg.skeleton, chains);
 		const std::vector<uint8_t>   w =
-			measurePlantWeights(leg.animations, leg.skeleton, chains, soles);
+			measurePlantWeights(leg.animations, leg.skeleton, plant, soles);
 
 		CHECK(std::ranges::all_of(w, [](uint8_t byte) { return byte == 0; }));
 	}
@@ -447,7 +456,7 @@ TEST_CASE("A foot off the floor or sliding along it is not planted", "[skinning]
 
 		const std::vector<SolePlane> soles = solePlanes(leg.Meshes(), leg.skeleton, chains);
 		const std::vector<float>     w =
-			WeightsOf(measurePlantWeights(leg.animations, leg.skeleton, chains, soles));
+			WeightsOf(measurePlantWeights(leg.animations, leg.skeleton, plant, soles));
 
 		for (size_t i = 0; i < 8; ++i) CHECK(w[i] == Catch::Approx(1.0f).margin(0.01));
 	}
@@ -468,7 +477,7 @@ TEST_CASE("A foot off the floor or sliding along it is not planted", "[skinning]
 		const std::vector<SolePlane> soles =
 			solePlanes(both.Meshes(), both.skeleton, both.Chains());
 		const std::vector<float> w =
-			WeightsOf(measurePlantWeights(both.animations, both.skeleton, both.Chains(), soles));
+			WeightsOf(measurePlantWeights(both.animations, both.skeleton, both.Plant(), soles));
 
 		REQUIRE(w.size() == 16);
 		for (size_t i = 0; i < 16; ++i) CHECK(w[i] == Catch::Approx(1.0f).margin(0.01));
@@ -489,7 +498,7 @@ TEST_CASE("A foot off the floor or sliding along it is not planted", "[skinning]
 		const std::vector<SolePlane> soles =
 			solePlanes(both.Meshes(), both.skeleton, both.Chains());
 		const std::vector<float> w =
-			WeightsOf(measurePlantWeights(both.animations, both.skeleton, both.Chains(), soles));
+			WeightsOf(measurePlantWeights(both.animations, both.skeleton, both.Plant(), soles));
 
 		REQUIRE(w.size() == 16);
 		for (size_t i = 0; i < 8; ++i)
@@ -513,7 +522,7 @@ TEST_CASE("A step plants only while the foot is down", "[skinning][plant]")
 
 	const std::vector<SolePlane> soles = solePlanes(leg.Meshes(), leg.skeleton, leg.Chains());
 	const std::vector<float>     w =
-		WeightsOf(measurePlantWeights(leg.animations, leg.skeleton, leg.Chains(), soles));
+		WeightsOf(measurePlantWeights(leg.animations, leg.skeleton, leg.Plant(), soles));
 
 	REQUIRE(w.size() == 12);
 
@@ -546,7 +555,7 @@ TEST_CASE("Plant weights are addressed frame-major over the whole pool", "[skinn
 
 	const std::vector<SolePlane> soles = solePlanes(leg.Meshes(), leg.skeleton, leg.Chains());
 	const std::vector<float>     w =
-		WeightsOf(measurePlantWeights(leg.animations, leg.skeleton, leg.Chains(), soles));
+		WeightsOf(measurePlantWeights(leg.animations, leg.skeleton, leg.Plant(), soles));
 
 	REQUIRE(w.size() == 12);
 
@@ -573,7 +582,8 @@ TEST_CASE("A leg naming a bone the rig does not carry is refused", "[skinning][p
 	// pose, so a caller that skipped solePlanes would read past the end of it.
 	const std::vector<SolePlane> soles = { SolePlane{ glm::vec3(0.0f),
 		                                              glm::vec3(0.0f, 1.0f, 0.0f) } };
-	CHECK_THROWS(measurePlantWeights(leg.animations, leg.skeleton, bad, soles));
+	CHECK_THROWS(
+		measurePlantWeights(leg.animations, leg.skeleton, ResolvedAvatar{ .legs = bad }, soles));
 }
 
 TEST_CASE(
@@ -587,23 +597,27 @@ TEST_CASE(
 	leg.AddClip();
 	for (int i = 0; i < 8; ++i) leg.AddFrame(glm::vec3(0.0f));
 
-	const std::vector<AvatarLegChain> chains = leg.Chains();
+	const ResolvedAvatar plant = leg.Plant();
 
-	bakePlantWeights(leg.animations, leg.Meshes(), leg.skeleton, chains);
+	bakePlantWeights(leg.animations, leg.Meshes(), leg.skeleton, plant);
 
 	REQUIRE_FALSE(leg.animations.plantWeights.Empty());
 	CHECK(leg.animations.plantWeights.legCount == 1);
 
 	const std::optional<std::vector<uint8_t>> found =
-		findPlantWeights(leg.animations, leg.Meshes(), leg.skeleton, chains);
+		findPlantWeights(leg.animations, leg.Meshes(), leg.skeleton, plant);
 	REQUIRE(found.has_value());
 	CHECK(*found == leg.animations.plantWeights.weights);
 
 	SECTION("a chain edited in the avatar is measured afresh")
 	{
 		const std::vector<AvatarLegChain> other = { AvatarLegChain{ 0, 1, 2, 3 } };
-		CHECK_FALSE(
-			findPlantWeights(leg.animations, leg.Meshes(), leg.skeleton, other).has_value());
+		CHECK_FALSE(findPlantWeights(
+						leg.animations,
+						leg.Meshes(),
+						leg.skeleton,
+						ResolvedAvatar{ .legs = other })
+		                .has_value());
 	}
 
 	SECTION("a mesh whose vertices moved is measured afresh")
@@ -613,15 +627,28 @@ TEST_CASE(
 		moved.Finish();
 
 		CHECK_FALSE(
-			findPlantWeights(leg.animations, moved.Meshes(), leg.skeleton, chains).has_value());
+			findPlantWeights(leg.animations, moved.Meshes(), leg.skeleton, plant).has_value());
+	}
+
+	SECTION("a clip taken out of the plant is measured afresh, and at zero")
+	{
+		// The list is the avatar's, so it keys the weights like a leg does. Nothing for an empty
+		// list, so a file baked before the key existed is still current.
+		CHECK_FALSE(
+			findPlantWeights(leg.animations, leg.Meshes(), leg.skeleton, leg.Plant({ "clip" }))
+				.has_value());
+
+		bakePlantWeights(leg.animations, leg.Meshes(), leg.skeleton, leg.Plant({ "clip" }));
+		for (const uint8_t w : leg.animations.plantWeights.weights) CHECK(w == 0);
 	}
 
 	SECTION("a rig with no avatar bakes nothing, and nothing is found for it")
 	{
-		bakePlantWeights(leg.animations, leg.Meshes(), leg.skeleton, {});
+		bakePlantWeights(leg.animations, leg.Meshes(), leg.skeleton, ResolvedAvatar());
 
 		CHECK(leg.animations.plantWeights.Empty());
-		CHECK_FALSE(findPlantWeights(leg.animations, leg.Meshes(), leg.skeleton, {}).has_value());
+		CHECK_FALSE(findPlantWeights(leg.animations, leg.Meshes(), leg.skeleton, ResolvedAvatar())
+		                .has_value());
 	}
 
 	SECTION("they round-trip through the .banim")

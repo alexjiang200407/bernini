@@ -14,6 +14,6 @@ namespace assetlib
 		const std::span<const BMesh>   meshes,
 		const Skeleton&                skeleton)
 	{
-		bakePlantWeights(clips, meshes, skeleton, legChainsForRig(files, clips.skeleton, skeleton));
+		bakePlantWeights(clips, meshes, skeleton, avatarForRig(files, clips.skeleton, skeleton));
 	}
 }

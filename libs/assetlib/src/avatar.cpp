@@ -14,11 +14,12 @@ namespace assetlib
 {
 	namespace
 	{
-		constexpr std::string_view c_LegsKey  = "legs";
-		constexpr std::string_view c_HipKey   = "hip";
-		constexpr std::string_view c_KneeKey  = "knee";
-		constexpr std::string_view c_AnkleKey = "ankle";
-		constexpr std::string_view c_ToeKey   = "toe";
+		constexpr std::string_view c_LegsKey      = "legs";
+		constexpr std::string_view c_UnplantedKey = "unplanted";
+		constexpr std::string_view c_HipKey       = "hip";
+		constexpr std::string_view c_KneeKey      = "knee";
+		constexpr std::string_view c_AnkleKey     = "ankle";
+		constexpr std::string_view c_ToeKey       = "toe";
 
 		/**
 		 * `from`'s tail beneath `fromDirectory`, re-rooted at `toDirectory` with `extension` in
@@ -106,23 +107,24 @@ namespace assetlib
 			c_SkeletonExtension);
 	}
 
-	std::vector<AvatarLegChain>
-	resolveLegChains(const Avatar& avatar, const Skeleton& skeleton)
+	ResolvedAvatar
+	resolveAvatar(const Avatar& avatar, const Skeleton& skeleton)
 	{
-		auto chains = std::vector<AvatarLegChain>();
-		chains.reserve(avatar.legs.size());
+		auto out = ResolvedAvatar();
+		out.legs.reserve(avatar.legs.size());
 
 		for (size_t i = 0; i < avatar.legs.size(); ++i)
 		{
 			const AvatarLeg& leg = avatar.legs[i];
-			chains.push_back(
+			out.legs.push_back(
 				{ boneIndex(skeleton, leg.hip, i, c_HipKey),
 			      boneIndex(skeleton, leg.knee, i, c_KneeKey),
 			      boneIndex(skeleton, leg.ankle, i, c_AnkleKey),
 			      boneIndex(skeleton, leg.toe, i, c_ToeKey) });
 		}
 
-		return chains;
+		out.unplanted = avatar.unplanted;
+		return out;
 	}
 
 	Avatar
@@ -132,8 +134,8 @@ namespace assetlib
 		return AssetCodec<Avatar>::Deserialize(bytes);
 	}
 
-	std::vector<AvatarLegChain>
-	legChainsForRig(
+	ResolvedAvatar
+	avatarForRig(
 		const core::file::IFileSystem& files,
 		const std::string_view         skeletonKey,
 		const Skeleton&                skeleton)
@@ -158,7 +160,7 @@ namespace assetlib
 
 		try
 		{
-			return resolveLegChains(loadAvatar(files, key), skeleton);
+			return resolveAvatar(loadAvatar(files, key), skeleton);
 		}
 		catch (const std::exception& e)
 		{
@@ -206,6 +208,26 @@ namespace assetlib
 			json.erase(it);
 		}
 
+		if (auto it = json.find(c_UnplantedKey); it != json.end())
+		{
+			core::throw_runtime_error_if(
+				!it->is_array(),
+				"avatar: '{}' is not an array",
+				c_UnplantedKey);
+
+			for (size_t i = 0; i < it->size(); ++i)
+			{
+				const nlohmann::json& name = (*it)[i];
+				core::throw_runtime_error_if(
+					!name.is_string() || name.get<std::string>().empty(),
+					"avatar: '{}' entry {} is not a clip name",
+					c_UnplantedKey,
+					i);
+				avatar.unplanted.push_back(name.get<std::string>());
+			}
+			json.erase(it);
+		}
+
 		avatar.extraJson = json.dump();
 		return avatar;
 	}
@@ -228,6 +250,12 @@ namespace assetlib
 		// Written even when empty: an avatar with no legs is what the editor's *Create avatar*
 		// writes, and a document with no keys at all reads as one nobody has opened yet.
 		json[std::string(c_LegsKey)] = std::move(legs);
+
+		// Absent when empty, unlike `legs`: the key is an exception to a rule, and a document that
+		// lists none reads as one with none.
+		json.erase(std::string(c_UnplantedKey));
+		if (!avatar.unplanted.empty())
+			json[std::string(c_UnplantedKey)] = avatar.unplanted;
 
 		return doc::toBytes(json);
 	}
