@@ -1,0 +1,117 @@
+/* The three layers this example exists to show: a styled backdrop, the live preview framed inside
+   it, and controls over the top. Only the preview is a render target; the rest is this document. */
+body
+{
+	width: 100%;
+	height: 100%;
+	font-family: Lato;
+	font-size: 16px;
+	color: #e8e8ecff;
+
+	/* The document covers the frame but takes no clicks, so anything it did not draw a control on
+	   is the game's. */
+	pointer-events: none;
+}
+
+#backdrop
+{
+	position: absolute;
+	left: 0px;
+	top: 0px;
+	width: 100%;
+	height: 100%;
+	background-color: #12141aff;
+}
+
+#frame
+{
+	position: absolute;
+	left: 64px;
+	top: 64px;
+	width: 512px;
+	height: 560px;
+	background-color: #1c2029ff;
+	pointer-events: auto;
+}
+
+#title
+{
+	position: absolute;
+	left: 24px;
+	top: 16px;
+	font-size: 28px;
+	color: #f0c674ff;
+}
+
+#preview
+{
+	position: absolute;
+	left: 24px;
+	top: 64px;
+	width: 464px;
+	height: 464px;
+}
+
+#hint
+{
+	position: absolute;
+	left: 24px;
+	top: 532px;
+	font-size: 13px;
+	color: #7a8290ff;
+}
+
+#controls
+{
+	position: absolute;
+	left: 616px;
+	top: 64px;
+	width: 320px;
+	height: 260px;
+	pointer-events: auto;
+}
+
+.button
+{
+	position: absolute;
+	width: 200px;
+	height: 44px;
+	background-color: #2b3444ff;
+	text-align: center;
+	line-height: 44px;
+	font-size: 18px;
+}
+
+.button:hover
+{
+	background-color: #3b6ea5ff;
+}
+
+#play
+{
+	left: 0px;
+	top: 0px;
+}
+
+#toggle
+{
+	left: 0px;
+	top: 60px;
+}
+
+#counter
+{
+	position: absolute;
+	left: 0px;
+	top: 124px;
+	color: #a8b0beff;
+}
+
+#readout
+{
+	position: absolute;
+	right: 24px;
+	bottom: 16px;
+	font-size: 13px;
+	color: #7a8290ff;
+}

@@ -239,7 +239,8 @@ TEST_CASE("A click through the input door fires the document's binding", "[ui]")
 
 	CHECK(fx.pressed == 1);
 
-	// False means the UI consumed it; the example gates its fly-cam on exactly this bool.
+	// False means the UI consumed it: what tells a game a click landed on a control rather than
+	// on the world.
 	CHECK_FALSE(overButton);
 
 	// Away from every element, the click is the game's.

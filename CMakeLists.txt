@@ -70,6 +70,11 @@ set_target_properties(KTX::ktx PROPERTIES
     MAP_IMPORTED_CONFIG_RELWITHDEBINFO Release
     MAP_IMPORTED_CONFIG_MINSIZEREL     Release)
 
+# Found once, here, for the reason above: its config script declares an ALIAS for the Lua plugin,
+# and a second find_package in another directory fails outright trying to declare it twice. Both
+# gamelib (the runtime) and examples/util (the SDL translation) name the targets.
+find_package(RmlUi CONFIG REQUIRED)
+
 add_subdirectory(libs/core)
 add_subdirectory(libs/assetlib_structs)
 add_subdirectory(libs/bgl)
