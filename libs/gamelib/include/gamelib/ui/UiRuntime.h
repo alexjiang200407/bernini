@@ -10,6 +10,9 @@ namespace Rml
 	class RenderInterface;
 }
 
+// The one C type this header names, spelled as Lua and RmlUi's plugin both spell it.
+typedef struct lua_State lua_State;
+
 namespace game
 {
 	/**
@@ -69,6 +72,42 @@ namespace game
 	// Owned by the caller; the runtime it came from must outlive it.
 	using UiContextPtr = std::unique_ptr<UiContext>;
 
+	/** What a runtime is built with beyond its two required collaborators. */
+	struct UiRuntimeOptions
+	{
+		/**
+		 * Whether a document may script itself: `<script>` blocks, inline `onclick`, and data
+		 * models declared from Lua tables. Off by default -- a game that binds everything from C++
+		 * never creates a VM.
+		 *
+		 * With it on, RmlUi's `body` tag builds a `LuaDocument` rather than a plain
+		 * `ElementDocument`, which is what gives a document its own scope.
+		 *
+		 * **A scripted document is trusted code.** The plugin opens Lua's standard libraries, `io`,
+		 * `os` and `package` among them, so a `<script>` reaches the host directly -- ADR-8's mount
+		 * confinement bounds which files the *document loader* resolves, and does not extend to
+		 * what a script does once it runs. Turn this on for documents the project ships, not for
+		 * ones it receives.
+		 */
+		bool scripting = false;
+
+		/**
+		 * The state RmlUi's bindings are added to, or null for one the plugin makes and closes
+		 * itself. Ignored unless `scripting`.
+		 *
+		 * A state you pass is yours to close, and only *after* the runtime is destroyed -- RmlUi
+		 * unregisters from it during `Rml::Shutdown`. It must also arrive with its standard
+		 * libraries already opened: RmlUi opens them only for a state it created itself, and a
+		 * document that hits a missing one raises outside any protected call, which aborts the
+		 * process rather than failing the load.
+		 *
+		 * This is the seam the engine-wide VM arrives through: when one exists it is handed in
+		 * here and the UI stops keeping its own -- and a document's `<script>` then reaches
+		 * whatever that state has bound into it.
+		 */
+		lua_State* luaState = nullptr;
+	};
+
 	/**
 	 * RmlUi's process-global lifetime, and the two interfaces that bind it to bernini: the clock and
 	 * log, and the file system every document, stylesheet and font is read through.
@@ -87,7 +126,10 @@ namespace game
 		 * @param renderer what RmlUi draws through; must outlive this runtime.
 		 * @throws std::runtime_error if RmlUi fails to initialise.
 		 */
-		UiRuntime(const assetlib::AssetStore& store, Rml::RenderInterface& renderer);
+		UiRuntime(
+			const assetlib::AssetStore& store,
+			Rml::RenderInterface&       renderer,
+			const UiRuntimeOptions&     options = {});
 		~UiRuntime() noexcept;
 
 		UiRuntime(const UiRuntime&)     = delete;
@@ -127,9 +169,14 @@ namespace game
 		[[nodiscard]] double
 		GetElapsedTime() const noexcept;
 
+		/** Whether documents may script themselves -- `UiRuntimeOptions::scripting`, as built. */
+		[[nodiscard]] bool
+		ScriptingEnabled() const noexcept;
+
 	private:
 		struct Interfaces;
 
 		std::unique_ptr<Interfaces> m_Interfaces;
+		bool                        m_Scripting = false;
 	};
 }

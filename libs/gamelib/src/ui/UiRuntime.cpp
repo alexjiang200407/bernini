@@ -4,6 +4,7 @@
 #include "ui/UiSystemInterface.h"
 
 #include <RmlUi/Core.h>
+#include <RmlUi/Lua.h>
 #include <core/err/util.h>
 #include <tracy/Tracy.hpp>
 
@@ -33,7 +34,10 @@ namespace game
 		operator=(Interfaces&&) noexcept = delete;
 	};
 
-	UiRuntime::UiRuntime(const assetlib::AssetStore& store, Rml::RenderInterface& renderer)
+	UiRuntime::UiRuntime(
+		const assetlib::AssetStore& store,
+		Rml::RenderInterface&       renderer,
+		const UiRuntimeOptions&     options) : m_Scripting(options.scripting)
 	{
 		core::throw_runtime_error_if(
 			g_Live.exchange(true),
@@ -55,7 +59,16 @@ namespace game
 			throw std::runtime_error("game::UiRuntime: Rml::Initialise failed");
 		}
 
-		logger::info("UI runtime up on RmlUi {}", Rml::GetVersion());
+		if (m_Scripting)
+		{
+			// After Rml::Initialise, which is what the plugin registers into.
+			Rml::Lua::Initialise(options.luaState);
+		}
+
+		logger::info(
+			"UI runtime up on RmlUi {}{}",
+			Rml::GetVersion(),
+			m_Scripting ? ", scripting on" : "");
 	}
 
 	UiRuntime::~UiRuntime() noexcept
@@ -122,6 +135,12 @@ namespace game
 	UiRuntime::GetElapsedTime() const noexcept
 	{
 		return m_Interfaces->system.Elapsed();
+	}
+
+	bool
+	UiRuntime::ScriptingEnabled() const noexcept
+	{
+		return m_Scripting;
 	}
 
 	UiContext::UiContext(Rml::Context& context, std::string name) noexcept :
