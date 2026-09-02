@@ -4,6 +4,7 @@
 #include "Windows/ContentExplorer/AssetOperations.h"
 #include "Windows/ContentExplorer/asset_rules.h"
 #include "util/asset_paths.h"
+#include "util/source_mesh.h"
 
 #include <QAbstractItemView>
 #include <QAction>
@@ -125,6 +126,11 @@ ContentExplorerWindow::ContentExplorerWindow(QWidget* parent, AssetsHeldOpenFn a
 		&AssetOperations::MaterialBaked,
 		this,
 		&ContentExplorerWindow::MaterialBaked);
+	connect(
+		m_Operations,
+		&AssetOperations::AvatarCreated,
+		this,
+		&ContentExplorerWindow::OnAvatarCreated);
 	connect(
 		m_Operations,
 		&AssetOperations::DirectoryDeleted,
@@ -476,6 +482,7 @@ ContentExplorerWindow::ShowAssetMenu(
 	auto* addDir = menu.addAction("Add Directory");
 
 	QAction* bake          = nullptr;
+	QAction* createAvatar  = nullptr;
 	QAction* rename        = nullptr;
 	QAction* remove        = nullptr;
 	QAction* removeCascade = nullptr;
@@ -484,6 +491,11 @@ ContentExplorerWindow::ShowAssetMenu(
 		menu.addSeparator();
 		if (editor::IsMaterialAsset(asset))
 			bake = menu.addAction("Bake");
+
+		// On the source, because the source is the row that stands for a rig here: its `.bskel`
+		// lives in the half the views do not reach, and its `.bimport` is hidden.
+		if (!editor::GetSourceSkeleton(m_RootPath, QDir(m_RootPath).filePath(asset)).isEmpty())
+			createAvatar = menu.addAction("Create Avatar");
 		rename = menu.addAction("Rename");
 
 		// An imported source renames -- moving everything it produced with it -- but does not
@@ -501,6 +513,8 @@ ContentExplorerWindow::ShowAssetMenu(
 		m_Operations->AddDirectory(&model, parentPath);
 	else if (bake != nullptr && chosen == bake)
 		m_Operations->Bake(asset);
+	else if (createAvatar != nullptr && chosen == createAvatar)
+		m_Operations->CreateAvatar(asset);
 	else if (rename != nullptr && chosen == rename)
 		m_Operations->Rename(asset);
 	else if (remove != nullptr && chosen == remove)
@@ -546,6 +560,44 @@ ContentExplorerWindow::OnDirectoryDeleted(const QString& absolute)
 
 	m_History.clear();
 	ShowDirectory(m_BrowseRoot);
+}
+
+void
+ContentExplorerWindow::OnAvatarCreated(const QString& absolute)
+{
+	// Shown where it landed, which is not where the action was taken: the source sits under
+	// Authored/Meshes and the avatar under Authored/Skeletons, and a person who just made a file
+	// wants to see it.
+	const QString folder = QFileInfo(absolute).absolutePath();
+	NavigateTo(folder);
+
+	// The model scans a directory off-thread, and this is usually the first time the views have
+	// looked at this one -- so the row is selected when the scan reports in rather than now, when
+	// index() would answer for a node the model does not hold yet. Once: the connection is cut
+	// the moment it fires, or the next scan of any folder would re-select this file.
+	const auto select = [this, absolute] {
+		const QModelIndex row = m_FileModel->index(absolute);
+		if (row.isValid())
+			m_Ui.currentDirectory->setCurrentIndex(row);
+	};
+
+	if (m_FileModel->index(absolute).isValid())
+	{
+		select();
+		return;
+	}
+
+	auto connection = std::make_shared<QMetaObject::Connection>();
+	*connection     = connect(
+		m_FileModel,
+		&QFileSystemModel::directoryLoaded,
+		this,
+		[this, folder, select, connection](const QString& loaded) {
+			if (QDir(loaded) != QDir(folder))
+				return;
+			disconnect(*connection);
+			select();
+		});
 }
 
 void

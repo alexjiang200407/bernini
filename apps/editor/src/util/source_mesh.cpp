@@ -77,6 +77,25 @@ namespace editor
 		}
 	}
 
+	QString
+	GetSourceSkeleton(const QString& dataRoot, const QString& path)
+	{
+		const QString document = DocumentFor(dataRoot, path);
+		if (document.isEmpty() || !QFileInfo::exists(document))
+			return {};
+
+		try
+		{
+			return QString::fromStdString(
+				assetlib::loadImportDocument(std::filesystem::path(document.toStdString()))
+					.skeleton);
+		}
+		catch (const std::exception&)
+		{
+			return {};
+		}
+	}
+
 	void
 	SourceMeshCache::SetDataRoot(const QString& dataRoot)
 	{
