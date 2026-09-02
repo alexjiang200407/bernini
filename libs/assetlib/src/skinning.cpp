@@ -11,6 +11,7 @@
 #include <core/err/util.h>
 #include <core/hash.h>
 #include <core/type_traits.h>
+#include <spdlog/spdlog.h>
 #include <tracy/Tracy.hpp>
 
 namespace assetlib
@@ -929,78 +930,67 @@ namespace assetlib
 		}
 
 		/**
-		 * The plane under `points`, as `y = ax + bz + d`.
+		 * The plane through the vertices of `points` that meet the ground, as `y = ax + bz + d`.
 		 *
-		 * False when the system is singular -- fewer than three points, or a set that projects onto
-		 * a line in xz, which is a foot with no sole to fit.
+		 * The sole is the band within c_SoleBand of the lowest vertex, fitted once. Iterating a
+		 * least-squares plane down from the whole foot was tried and does not converge: the ankle's
+		 * vertices run up the shin, the first plane is steep, and four passes of dropping what sits
+		 * above it shave a slanted half off a column rather than settling on its floor -- the
+		 * Coyote's flat sole measured seventeen degrees that way. What touches the ground is a
+		 * band, and a band is what a standing rig's bind pose puts at the bottom.
+		 *
+		 * False when the band holds fewer than three points, or points that lie on a line in xz --
+		 * a foot resting on an edge, which has no sole to fit.
 		 */
 		bool
 		fitSole(std::span<const glm::vec3> points, glm::vec3& normal, glm::vec3& on)
 		{
-			if (points.size() < 3)
+			if (points.empty())
 				return false;
 
-			// The lower envelope, reached by fitting and dropping whatever came out above: the
-			// foot's vertices are a closed shell whose upper half and whose vertices up the shin
-			// would otherwise pull the plane off the sole. Keeping the lowest *fraction* instead was
-			// tried and is wrong -- on a tilted sole the band it keeps is the heel alone, so it
-			// measures the tilt away.
-			auto sole = std::vector<glm::vec3>(points.begin(), points.end());
+			float low = points[0].y;
+			for (const glm::vec3& p : points) low = std::min(low, p.y);
 
-			double a = 0, b = 0, d = 0;
-			bool   fitted = false;
+			auto sole = std::vector<glm::vec3>();
+			for (const glm::vec3& p : points)
+				if (p.y <= low + c_SoleBand)
+					sole.push_back(p);
 
-			for (int pass = 0; pass < 4; ++pass)
+			if (sole.size() < 3)
+				return false;
+
+			// Normal equations of the least-squares fit.
+			double sxx = 0, sxz = 0, sx = 0, szz = 0, sz = 0, n = 0;
+			double sxy = 0, szy = 0, sy = 0;
+			for (const glm::vec3& p : sole)
 			{
-				// Normal equations of the least-squares fit of y = ax + bz + d.
-				double sxx = 0, sxz = 0, sx = 0, szz = 0, sz = 0, n = 0;
-				double sxy = 0, szy = 0, sy = 0;
-				for (const glm::vec3& p : sole)
-				{
-					sxx += double(p.x) * p.x;
-					sxz += double(p.x) * p.z;
-					sx += p.x;
-					szz += double(p.z) * p.z;
-					sz += p.z;
-					n += 1.0;
-					sxy += double(p.x) * p.y;
-					szy += double(p.z) * p.y;
-					sy += p.y;
-				}
-
-				const double det = sxx * (szz * n - sz * sz) - sxz * (sxz * n - sz * sx) +
-				                   sx * (sxz * sz - szz * sx);
-
-				// A set that projects onto a line in xz -- a two-triangle foot, or a coplanar
-				// strip. Scaled by the count so the tolerance means the same at any density.
-				if (std::abs(det) < 1e-12 * n)
-					break;
-
-				a      = (sxy * (szz * n - sz * sz) - sxz * (szy * n - sz * sy) +
-				          sx * (szy * sz - szz * sy)) /
-				         det;
-				b      = (sxx * (szy * n - sz * sy) - sxy * (sxz * n - sz * sx) +
-				          sx * (sxz * sy - szy * sx)) /
-				         det;
-				d      = (sxx * (szz * sy - sz * szy) - sxz * (sxz * sy - sz * sxy) +
-				          sxy * (sxz * sz - szz * sx)) /
-				         det;
-				fitted = true;
-
-				auto below = std::vector<glm::vec3>();
-				for (const glm::vec3& p : sole)
-					if (double(p.y) <= a * p.x + b * p.z + d)
-						below.push_back(p);
-
-				// Converged, or down to a set too small to fit again: this pass's plane stands.
-				if (below.size() < 3 || below.size() == sole.size())
-					break;
-
-				sole = std::move(below);
+				sxx += double(p.x) * p.x;
+				sxz += double(p.x) * p.z;
+				sx += p.x;
+				szz += double(p.z) * p.z;
+				sz += p.z;
+				n += 1.0;
+				sxy += double(p.x) * p.y;
+				szy += double(p.z) * p.y;
+				sy += p.y;
 			}
 
-			if (!fitted)
+			const double det =
+				sxx * (szz * n - sz * sz) - sxz * (sxz * n - sz * sx) + sx * (sxz * sz - szz * sx);
+
+			// Scaled by the count so the tolerance means the same at any density.
+			if (std::abs(det) < 1e-12 * n)
 				return false;
+
+			const double a = (sxy * (szz * n - sz * sz) - sxz * (szy * n - sz * sy) +
+			                  sx * (szy * sz - szz * sy)) /
+			                 det;
+			const double b = (sxx * (szy * n - sz * sy) - sxy * (sxz * n - sz * sx) +
+			                  sx * (sxz * sy - szy * sx)) /
+			                 det;
+			const double d = (sxx * (szz * sy - sz * szy) - sxz * (sxz * sy - sz * sxy) +
+			                  sxy * (sxz * sz - szz * sx)) /
+			                 det;
 
 			normal = glm::normalize(glm::vec3(-float(a), 1.0f, -float(b)));
 
@@ -1035,10 +1025,25 @@ namespace assetlib
 
 			const glm::mat4 toAnkle = skeleton.bones[chain.ankle].inverseBind;
 
+			const std::vector<glm::vec3> foot =
+				footVertices(meshes, skeleton, chain.ankle, chain.toe);
+
 			glm::vec3 normal;
 			glm::vec3 on;
-			if (!fitSole(footVertices(meshes, skeleton, chain.ankle, chain.toe), normal, on))
+			if (!fitSole(foot, normal, on))
 			{
+				// A foot with vertices and no sole among them -- a pad too sparse for the band, or a
+				// foot resting on an edge -- is not the ordinary case a leg no mesh carries is: the
+				// flat plane it gets is a guess, and a guessed sole plants a foot on a tilt nobody
+				// authored, so it is said out loud.
+				if (!foot.empty())
+					spdlog::warn(
+						"skinning: no sole among the {} vertices weighted to bones {} and {}; the "
+						"foot is planted flat",
+						foot.size(),
+						chain.ankle,
+						chain.toe);
+
 				// The flat plane through the joint: a leg no mesh here carries has no sole to fit,
 				// and inventing a tilt would turn the foot at runtime for no reason.
 				out.emplace_back(

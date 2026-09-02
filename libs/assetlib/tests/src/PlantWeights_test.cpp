@@ -180,20 +180,36 @@ TEST_CASE("A sole plane is fitted to the underside of the foot", "[skinning][pla
 	CHECK(soles[0].normal.y == Catch::Approx(1.0f).margin(1e-4));
 	CHECK(soles[0].normal.z == Catch::Approx(0.0f).margin(1e-4));
 
-	SECTION("a raised toe tilts the plane, which is the whole reason it is fitted")
+	SECTION("a sole on an incline tilts the plane, which is the whole reason it is fitted")
 	{
-		// A flat plane through the lowest vertex would report the same normal as above and plant
-		// this foot on its heel.
+		// The pad rises 0.004 over its 0.4 of x -- within the band, so the whole of it is fitted,
+		// and a plane through the lowest vertex alone would report flat and plant this foot on
+		// its heel. Rising 0.004 over 0.4 is atan(0.01), and the normal leans back by that much.
 		Leg tilted;
-		tilted.AddFoot(0.0f, 0.08f);
+		tilted.AddFoot(0.0f, 0.004f);
 		tilted.Finish();
 
 		const std::vector<SolePlane> fitted =
 			solePlanes(tilted.Meshes(), tilted.skeleton, Leg::Chains());
 
-		// Rising 0.08 over 0.4 of x is atan(0.2), and the normal leans back by that much.
-		CHECK(fitted[0].normal.x == Catch::Approx(-std::sin(std::atan(0.2f))).margin(1e-3));
-		CHECK(fitted[0].normal.y > 0.9f);
+		CHECK(fitted[0].normal.x == Catch::Approx(-std::sin(std::atan(0.01f))).margin(1e-4));
+		CHECK(fitted[0].normal.y > 0.99f);
+	}
+
+	SECTION("the instep is not the sole")
+	{
+		// A foot whose front rises 8 cm is not a tilted sole, it is a pad with an instep above it
+		// -- and here the pad is the two heel corners, which is a line, not a plane. The fit does
+		// not invent a tilt from a line: it falls back to flat through the ankle, exactly as it
+		// would for a foot no mesh carries.
+		Leg arched;
+		arched.AddFoot(0.0f, 0.08f);
+		arched.Finish();
+
+		const std::vector<SolePlane> fitted =
+			solePlanes(arched.Meshes(), arched.skeleton, Leg::Chains());
+
+		CHECK(fitted[0].normal.y == Catch::Approx(1.0f).margin(1e-4));
 	}
 
 	SECTION("a leg no mesh carries gets the flat plane through its joint, not a fit of nothing")
