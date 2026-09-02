@@ -3,7 +3,7 @@ find_package(Qt6 CONFIG REQUIRED COMPONENTS Core Gui Widgets)
 message(STATUS "Building Bernini editor")
 message(STATUS "Qt6 version: ${Qt6_VERSION}")
 
-qt_standard_project_setup()   # enables AUTOMOC / AUTOUIC / AUTORCC
+qt_standard_project_setup()   # enables AUTOMOC / AUTORCC
 
 find_package(nlohmann_json CONFIG REQUIRED)   # project file (de)serialization
 
@@ -41,18 +41,6 @@ file(GLOB_RECURSE EDITOR_SOURCES CONFIGURE_DEPENDS
 	${CMAKE_CURRENT_SOURCE_DIR}/src/*.hpp
 )
 
-file(GLOB_RECURSE EDITOR_UI CONFIGURE_DEPENDS
-	${CMAKE_CURRENT_SOURCE_DIR}/qt/*.ui
-)
-
-# AUTOUIC_SEARCH_PATHS is not recursive
-set(EDITOR_UI_DIRS "")
-foreach(_ui IN LISTS EDITOR_UI)
-	get_filename_component(_ui_dir "${_ui}" DIRECTORY)
-	list(APPEND EDITOR_UI_DIRS "${_ui_dir}")
-endforeach()
-list(REMOVE_DUPLICATES EDITOR_UI_DIRS)
-
 # `main.cpp` is the one thing editor_tests must NOT get: it owns main(), and the test runner has its
 # own. Everything else the editor is made of lives in editor_lib, so the tests exercise the very
 # objects that ship rather than a recompiled copy free to drift from them.
@@ -64,29 +52,11 @@ list(REMOVE_ITEM EDITOR_SOURCES "${EDITOR_MAIN}")
 # -- taking its moc registration with it.
 qt_add_library(editor_lib OBJECT
 	${EDITOR_SOURCES}
-	${EDITOR_UI}
 )
 
 target_include_directories(editor_lib PUBLIC
 	${CMAKE_CURRENT_SOURCE_DIR}/src
 )
-
-# The editor's headers `#include "ui_<Name>.h"`, so anything that includes one -- editor_tests --
-# needs AUTOUIC's output on its include path. That lands in editor_lib's own autogen directory,
-# which is private to it by default, so publish it.
-#
-# Multi-config generators (Visual Studio) suffix the directory with the configuration; single-config
-# ones (Ninja) do not. The test is GENERATOR_IS_MULTI_CONFIG and not CMAKE_CONFIGURATION_TYPES: the
-# presets set the latter even for Ninja, which would name a directory AUTOUIC never writes to.
-get_property(EDITOR_MULTI_CONFIG GLOBAL PROPERTY GENERATOR_IS_MULTI_CONFIG)
-
-if(EDITOR_MULTI_CONFIG)
-	set(EDITOR_AUTOGEN_INCLUDE "${CMAKE_CURRENT_BINARY_DIR}/editor_lib_autogen/include_$<CONFIG>")
-else()
-	set(EDITOR_AUTOGEN_INCLUDE "${CMAKE_CURRENT_BINARY_DIR}/editor_lib_autogen/include")
-endif()
-
-target_include_directories(editor_lib PUBLIC "${EDITOR_AUTOGEN_INCLUDE}")
 
 if (APPLE)
 	# Objective-C++ so the Qt view can be given a CAMetalLayer; globbed separately because the
@@ -121,10 +91,6 @@ target_precompile_headers(editor_lib
 # No enable_strict_compiler here -- Qt and moc output trip the strict set -- but instrumentation
 # is not a warning.
 enable_coverage(editor_lib)
-
-set_target_properties(editor_lib PROPERTIES
-	AUTOUIC_SEARCH_PATHS "${EDITOR_UI_DIRS}"
-)
 
 qt_add_executable(editor
 	${EDITOR_MAIN}
@@ -177,7 +143,6 @@ add_custom_command(TARGET editor POST_BUILD
 )
 
 source_group(TREE "${CMAKE_CURRENT_SOURCE_DIR}/src" PREFIX "Source Files" FILES ${EDITOR_SOURCES} ${EDITOR_MAIN})
-source_group(TREE "${CMAKE_CURRENT_SOURCE_DIR}/qt" PREFIX "UI Files" FILES ${EDITOR_UI})
 
 if(BUILD_TESTS)
 	add_subdirectory(tests)
