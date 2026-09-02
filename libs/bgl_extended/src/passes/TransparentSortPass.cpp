@@ -4,6 +4,7 @@
 #include "idl/DispatchArgs.h"
 #include "passes/DrawData.h"
 #include "pipeline/ComputePipeline.h"
+#include "pipeline/PipelineBatch.h"
 #include "scene/scene_buffer_names.h"
 #include <bgl/ISceneView.h>
 #include <core/math.h>
@@ -11,16 +12,18 @@
 namespace bgl
 {
 	void
-	TransparentSortPass::Init(IDevice* device)
+	TransparentSortPass::Init(IDevice* device, PipelineBatch& pipelines)
 	{
 		gassert(device != nullptr, "Device pointer is null");
 
-		m_DepthKeys = device->CreateComputeKernel(
+		pipelines.Add(
+			m_DepthKeys,
 			ComputePipelineDesc()
 				.SetShader(device->CreateShader("programs.culling.TransparentDepthKeys"))
 				.SetDebugName("Transparent Depth Keys"));
 
-		m_Sort = device->CreateComputeKernel(
+		pipelines.Add(
+			m_Sort,
 			ComputePipelineDesc()
 				.SetShader(device->CreateShader("programs.culling.TransparentSort"))
 				.SetDebugName("Transparent Sort"));

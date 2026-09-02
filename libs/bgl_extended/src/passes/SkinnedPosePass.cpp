@@ -2,17 +2,19 @@
 #include "cmd/CommandList.h"
 #include "fg/FrameGraph.h"
 #include "passes/DrawData.h"
+#include "pipeline/PipelineBatch.h"
 #include "scene/SceneView.h"
 #include "uniforms/Uniforms.h"
 
 namespace bgl
 {
 	void
-	SkinnedPosePass::Init(IDevice* device)
+	SkinnedPosePass::Init(IDevice* device, PipelineBatch& pipelines)
 	{
 		gassert(device != nullptr, "Device must be initialized");
 
-		m_PoseSkinned = device->CreateComputeKernel(
+		pipelines.Add(
+			m_PoseSkinned,
 			ComputePipelineDesc()
 				.SetShader(device->CreateShader("programs.anim.PoseSkinned"))
 				.SetDebugName("Pose Skinned"));

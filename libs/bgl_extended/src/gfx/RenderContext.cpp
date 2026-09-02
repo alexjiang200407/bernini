@@ -5,6 +5,7 @@
 #include "debug/DebugReadback.h"
 #include "passes/ClearPass.h"
 #include "passes/DrawData.h"
+#include "pipeline/PipelineBatch.h"
 #include "scene/Scene.h"
 #include "scene/SceneView.h"
 #include "util/jitter.h"
@@ -154,21 +155,30 @@ namespace bgl
 		m_CommandList =
 			m_Device->CreateCommandList(cmdListDesc, m_BootstrapAllocator, m_ResourceManager);
 
-		m_CompactInstances.Init(m_Device, m_ResourceManager);
-		m_RigFrames.Init(m_Device);
-		m_SkinnedPose.Init(m_Device);
-		m_TransparentSort.Init(m_Device);
-		m_Forward.Init(m_Device);
-		m_Skybox.Init(m_Device);
-		m_PostProcess.Init(m_Device);
-		m_OutlineMask.Init(m_Device);
-		m_TaaResolve.Init(m_Device);
+		// Every pipeline the renderer draws with, requested here and built at once: on a cold shader
+		// cache the build is most of a start-up, and the links are independent.
+		auto pipelines = PipelineBatch(m_Device.Get());
+		m_CompactInstances.Init(m_Device.Get(), pipelines, m_ResourceManager);
+		m_RigFrames.Init(m_Device.Get(), pipelines);
+		m_SkinnedPose.Init(m_Device.Get(), pipelines);
+		m_TransparentSort.Init(m_Device.Get(), pipelines);
+		m_Forward.Init(m_Device.Get(), pipelines);
+		m_Skybox.Init(m_Device.Get(), pipelines);
+		m_PostProcess.Init(m_Device.Get(), pipelines);
+		m_OutlineMask.Init(m_Device.Get(), pipelines);
+		m_TaaResolve.Init(m_Device.Get(), pipelines);
+		m_BrdfLut.Init(m_Device.Get(), pipelines, m_ResourceManager);
+		pipelines.Build();
+
+		m_Forward.CheckBindings();
+		m_Skybox.CheckBindings();
+		m_PostProcess.CheckBindings();
+		m_TaaResolve.CheckBindings();
 
 		m_PointClampSampler = m_ResourceManager->CreateSampler(
 			SamplerDesc().SetAllFilters(false).SetAllAddressModes(SamplerAddressMode::kClamp));
 		m_LinearClampSampler = m_ResourceManager->CreateSampler(
 			SamplerDesc().SetAllFilters(true).SetAllAddressModes(SamplerAddressMode::kClamp));
-		m_BrdfLut.Init(m_Device.Get(), m_ResourceManager);
 
 		m_CommandList->Open(m_CommandQueue.Get(), m_BootstrapAllocator.Get());
 		m_BrdfLut.Generate(m_CommandList.Get());

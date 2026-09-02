@@ -81,7 +81,8 @@ namespace bgl
 
 		// Loads a driver-compiled PSO previously stored under an identical identity.
 		// Returns false on a miss (including when the library is unavailable); the
-		// caller then creates the PSO normally.
+		// caller then creates the PSO normally. Safe from any thread, as is StorePipeline:
+		// pipelines are built in parallel.
 		[[nodiscard]] bool
 		LoadPipeline(
 			uint64_t                                identity,
@@ -100,5 +101,6 @@ namespace bgl
 		wrl::ComPtr<ID3D12PipelineLibrary1> m_PsoLibrary;
 		std::vector<std::byte>              m_PsoLibraryBlob;  // backs m_PsoLibrary
 		bool                                m_PsoLibraryDirty = false;
+		std::mutex                          m_PsoLibraryMutex;
 	};
 }

@@ -3,6 +3,7 @@
 #include "cmd/CommandQueue.h"
 #include "gfx/GraphicsBase.h"
 #include "passes/BrdfLutGenPass.h"
+#include "pipeline/PipelineBatch.h"
 #include "resource/Readback.h"
 #include "resource/ResourceManager.h"
 #include "util/HalfFloat.h"
@@ -44,8 +45,10 @@ namespace
 
 		// This suite's own table, not the RenderContext's: the point is to exercise the generation,
 		// and a second one costs a single 256x256 draw.
-		auto lut = bgl::BrdfLutGenPass();
-		lut.Init(device, resourceManager);
+		auto lut       = bgl::BrdfLutGenPass();
+		auto pipelines = bgl::PipelineBatch(device);
+		lut.Init(device, pipelines, resourceManager);
+		pipelines.Build();
 
 		const auto layout = resourceManager->GetTextureReadbackLayout(lut.GetTexture());
 

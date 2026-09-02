@@ -6,6 +6,8 @@
 
 namespace bgl
 {
+	class PipelineBatch;
+
 	class FrameGraph;
 	class IDevice;
 	class IResourceManager;
@@ -17,10 +19,6 @@ namespace bgl
 	public:
 		CompactInstancesPass() = default;
 		~CompactInstancesPass() noexcept { logger::trace("~CompactInstancesPass"); }
-		CompactInstancesPass(IDevice* device, core::SharedRef<IResourceManager> resourceManager)
-		{
-			Init(device, resourceManager);
-		}
 
 		CompactInstancesPass(const CompactInstancesPass&) noexcept = delete;
 		CompactInstancesPass(CompactInstancesPass&&) noexcept      = delete;
@@ -32,7 +30,10 @@ namespace bgl
 		operator=(CompactInstancesPass&&) noexcept = delete;
 
 		void
-		Init(IDevice* device, core::SharedRef<IResourceManager> resourceManager);
+		Init(
+			IDevice*                          device,
+			PipelineBatch&                    pipelines,
+			core::SharedRef<IResourceManager> resourceManager);
 
 		void
 		Release(bool deferred = true);

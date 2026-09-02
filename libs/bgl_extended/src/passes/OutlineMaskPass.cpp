@@ -8,6 +8,7 @@
 #include "passes/DrawData.h"
 #include "passes/SceneBindings.h"
 #include "pipeline/MeshletPipeline.h"
+#include "pipeline/PipelineBatch.h"
 #include "resource/FrameBuffer.h"
 #include "resource/Shader.h"
 #include "types/RenderState.h"
@@ -29,7 +30,7 @@ namespace bgl
 	}
 
 	void
-	OutlineMaskPass::Init(IDevice* device)
+	OutlineMaskPass::Init(IDevice* device, PipelineBatch& pipelines)
 	{
 		gassert(device != nullptr, "Device must be initialized");
 
@@ -54,7 +55,7 @@ namespace bgl
 
 		pipelineDesc.renderState = RenderState().SetRasterState(raster).SetDepthStencilState(depth);
 
-		m_Kernel = device->CreateMeshletKernel(pipelineDesc);
+		pipelines.Add(m_Kernel, std::move(pipelineDesc));
 	}
 
 	void

@@ -32,7 +32,8 @@ namespace bgl
 	 *
 	 * A variant omitting a member is ordinary and stays silent; a name *no* variant declares is a
 	 * typo or a shader rename, which binding cannot report because `IsValid()` reads the same either
-	 * way. @pre construct one in the pass's `Init` and check every cbuffer it writes, never per draw.
+	 * way. @pre construct one in the pass's `CheckBindings`, once its batch is built, and check every
+	 * cbuffer it writes there, never per draw.
 	 */
 	class BinderNames final
 	{

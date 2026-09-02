@@ -5,6 +5,8 @@
 
 namespace bgl
 {
+	class PipelineBatch;
+
 	class FrameGraph;
 	class IDevice;
 	class IResourceManager;
@@ -23,7 +25,6 @@ namespace bgl
 	public:
 		TransparentSortPass() = default;
 		~TransparentSortPass() noexcept { logger::trace("~TransparentSortPass"); }
-		explicit TransparentSortPass(IDevice* device) { Init(device); }
 
 		TransparentSortPass(const TransparentSortPass&) noexcept = delete;
 		TransparentSortPass(TransparentSortPass&&) noexcept      = delete;
@@ -35,7 +36,7 @@ namespace bgl
 		operator=(TransparentSortPass&&) noexcept = delete;
 
 		void
-		Init(IDevice* device);
+		Init(IDevice* device, PipelineBatch& pipelines);
 
 		// Owns no GPU storage -- the sort buffers live on the view's TransparentSortState, one set
 		// per view rather than per frustum -- so this only drops the kernels.

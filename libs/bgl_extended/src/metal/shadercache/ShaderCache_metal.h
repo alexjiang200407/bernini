@@ -78,16 +78,19 @@ namespace bgl
 		void
 		Store(uint64_t key, const CachedProgram& program) const;
 
-		// The archive to hand a pipeline descriptor, so the driver looks the pipeline up instead of
-		// compiling it. Null when no archive could be opened.
-		[[nodiscard]] MTL::BinaryArchive*
-		GetBinaryArchive() const noexcept
-		{
-			return m_Archive.get();
-		}
+		/**
+		 * Runs `build` with the binary archive held for the calling thread alone, or with null when
+		 * no archive could be opened. A descriptor handed the archive reads it inside the driver's
+		 * pipeline creation and the built pipeline is added back afterwards, so both belong inside
+		 * `build`: Metal documents no thread-safety for MTL::BinaryArchive, and pipelines are built
+		 * in parallel. The MSL compile, which is the cost, happens before this and outside it.
+		 */
+		void
+		WithArchive(const std::function<void(MTL::BinaryArchive*)>& build);
 
 		// Records that a pipeline was added to the archive, so the destructor writes it out. An
-		// archive is serialized whole, so this is deferred to one write per run.
+		// archive is serialized whole, so this is deferred to one write per run. @pre called from
+		// inside WithArchive's `build`.
 		void
 		MarkArchiveDirty() noexcept
 		{
@@ -99,6 +102,7 @@ namespace bgl
 		uint64_t              m_SourceSalt = 0;
 
 		NS::SharedPtr<MTL::BinaryArchive> m_Archive;
+		std::mutex                        m_ArchiveMutex;
 		bool                              m_ArchiveDirty = false;
 	};
 }

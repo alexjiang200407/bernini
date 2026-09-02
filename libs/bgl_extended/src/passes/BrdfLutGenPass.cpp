@@ -1,4 +1,5 @@
 #include "passes/BrdfLutGenPass.h"
+#include "pipeline/PipelineBatch.h"
 
 #include "cmd/CommandList.h"
 #include "device/Device.h"
@@ -20,7 +21,10 @@ namespace bgl
 	}
 
 	void
-	BrdfLutGenPass::Init(IDevice* device, ResourceManagerRef resourceManager)
+	BrdfLutGenPass::Init(
+		IDevice*           device,
+		PipelineBatch&     pipelines,
+		ResourceManagerRef resourceManager)
 	{
 		gassert(device != nullptr, "Device must be initialized");
 
@@ -71,7 +75,7 @@ namespace bgl
 
 		pipelineDesc.renderState = RenderState().SetRasterState(raster).SetDepthStencilState(depth);
 
-		m_Kernel = device->CreateMeshletKernel(pipelineDesc);
+		pipelines.Add(m_Kernel, std::move(pipelineDesc));
 	}
 
 	void

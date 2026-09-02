@@ -350,27 +350,32 @@ namespace bgl
 
 		m_DepthStencilState = BuildDepthStencilState(device);
 
-		MTL::BinaryArchive* archive =
-			shaderCache != nullptr ? shaderCache->GetBinaryArchive() : nullptr;
-		if (archive != nullptr)
-		{
-			const MTL::BinaryArchive* archives[] = { archive };
-			pd->setBinaryArchives(
-				NS::Array::array(
-					reinterpret_cast<const NS::Object* const*>(archives),
-					std::size(archives)));
-		}
+		const auto create = [&](MTL::BinaryArchive* archive) {
+			if (archive != nullptr)
+			{
+				const MTL::BinaryArchive* archives[] = { archive };
+				pd->setBinaryArchives(
+					NS::Array::array(
+						reinterpret_cast<const NS::Object* const*>(archives),
+						std::size(archives)));
+			}
 
-		m_PipelineState = NS::TransferPtr(device->newRenderPipelineState(
-			pd.get(),
-			MTL::PipelineOptionNone,
-			nullptr,
-			errChecker.WriteError()));
-		m_PipelineState.get() >> errChecker;
+			m_PipelineState = NS::TransferPtr(device->newRenderPipelineState(
+				pd.get(),
+				MTL::PipelineOptionNone,
+				nullptr,
+				errChecker.WriteError()));
+			m_PipelineState.get() >> errChecker;
 
-		// Adding after creation: the descriptor only reads from an archive, and a pipeline the
-		// archive already holds is added again as a no-op rather than an error.
-		if (archive != nullptr && archive->addMeshRenderPipelineFunctions(pd.get(), nullptr))
-			shaderCache->MarkArchiveDirty();
+			// Adding after creation: the descriptor only reads from an archive, and a pipeline the
+			// archive already holds is added again as a no-op rather than an error.
+			if (archive != nullptr && archive->addMeshRenderPipelineFunctions(pd.get(), nullptr))
+				shaderCache->MarkArchiveDirty();
+		};
+
+		if (shaderCache != nullptr)
+			shaderCache->WithArchive(create);
+		else
+			create(nullptr);
 	}
 }

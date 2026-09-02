@@ -112,6 +112,11 @@ and is a target of its own; nothing here is part of it.
   `pipeline_util::BuildPipelineLayout`, which links all of a PSO's entry points into one program.
   Because bytecode and reflection come from the same link, bindings always agree — shaders do
   **not** need explicit `register(bN, spaceM)` on their constant buffers.
+- The renderer's PSOs are built together, in parallel: a pass's `Init` requests its kernels from
+  the `PipelineBatch` it is handed (`src/pipeline/PipelineBatch.h`) and `RenderContext` builds the
+  set on `core::parallel_for` before any pass reads one. A new pass follows that shape — request in
+  `Init`, read kernels only from `CheckBindings` or later — and pipeline creation stays safe from
+  any thread.
 - A persistent shader cache (`GraphicsOptions::shaderCacheDir`) short-circuits compilation across
   runs. See [Shader Cache](../../docs/shader_cache.md) for the two-layer design, lazy module
   loading, invalidation, and why precompiled `.slang-module` IR is not used.

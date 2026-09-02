@@ -183,6 +183,13 @@ takes the `CreatePipelineState` path and none is stored (see Risky Contracts).
   process gets a say. `Graphics_metal` therefore reads both variables as well as
   `enableGPUValidationLayer`, or the flag would say "off" during a validating run.
 
+* **The cache is called from several threads at once.** The renderer builds its pipelines in
+  parallel, so `TryLoad`/`Store` run concurrently — safe because each key is its own file and
+  `WriteFileAtomic` renames a uniquely named temp into place — and the driver pipeline library
+  (`ID3D12PipelineLibrary`, `MTL::BinaryArchive`) is reached only under the cache's own mutex. Two
+  PSOs with the same shader composition may both miss and both compile on a cold run; the second
+  `Store` replaces the first with identical bytes.
+
 * **`GetSlangModule()` front-end-compiles on the calling thread's session.** @pre it may
   front-end-compile on first call (the slow path) and `gfatal` on a shader error; it does nothing on
   a program-cache hit because it is never called.

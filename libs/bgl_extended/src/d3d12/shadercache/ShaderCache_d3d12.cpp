@@ -155,6 +155,7 @@ namespace bgl
 			return false;
 
 		const std::wstring name = std::format(L"{:016x}", identity);
+		const auto         held = std::lock_guard(m_PsoLibraryMutex);
 		return SUCCEEDED(
 			m_PsoLibrary->LoadPipeline(name.c_str(), &desc, IID_PPV_ARGS(outPipeline)));
 	}
@@ -166,6 +167,7 @@ namespace bgl
 			return;
 
 		const std::wstring name = std::format(L"{:016x}", identity);
+		const auto         held = std::lock_guard(m_PsoLibraryMutex);
 		if (SUCCEEDED(m_PsoLibrary->StorePipeline(name.c_str(), pipeline)))
 			m_PsoLibraryDirty = true;
 	}

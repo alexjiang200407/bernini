@@ -3,6 +3,8 @@
 
 namespace bgl
 {
+	class PipelineBatch;
+
 	class IDevice;
 	class FrameGraph;
 	class PassContext;
@@ -33,7 +35,7 @@ namespace bgl
 		operator=(OutlineMaskPass&&) noexcept = delete;
 
 		void
-		Init(IDevice* device);
+		Init(IDevice* device, PipelineBatch& pipelines);
 
 		void
 		Release()

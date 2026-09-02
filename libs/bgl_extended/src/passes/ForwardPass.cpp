@@ -12,6 +12,7 @@
 #include "passes/DrawData.h"
 #include "passes/SceneBindings.h"
 #include "pipeline/MeshletPipeline.h"
+#include "pipeline/PipelineBatch.h"
 #include "resource/FrameBuffer.h"
 #include "resource/ResourceManager.h"
 #include "resource/Shader.h"
@@ -164,8 +165,8 @@ namespace bgl
 			"every PsoType needs a row in c_Psos; a missing one silently value-initializes to an "
 			"empty pixel shader");
 
-		MeshletKernel
-		BuildForwardKernel(IDevice* device, const PsoConfig& cfg)
+		MeshletPipelineDesc
+		ForwardPipelineDesc(IDevice* device, const PsoConfig& cfg)
 		{
 			auto pipelineDesc = MeshletPipelineDesc();
 
@@ -218,20 +219,24 @@ namespace bgl
 				RenderState().SetRasterState(raster).SetBlendState(blend).SetDepthStencilState(
 					depth);
 
-			return device->CreateMeshletKernel(pipelineDesc);
+			return pipelineDesc;
 		}
 	}
 
 	void
-	ForwardPass::Init(IDevice* device)
+	ForwardPass::Init(IDevice* device, PipelineBatch& pipelines)
 	{
 		gassert(device != nullptr, "Device must be initialized");
 
 		for (uint16_t pso = 0; pso < idl::c_PsoCount; ++pso)
 		{
-			m_Kernels[pso] = BuildForwardKernel(device, c_Psos[pso]);
+			pipelines.Add(m_Kernels[pso], ForwardPipelineDesc(device, c_Psos[pso]));
 		}
+	}
 
+	void
+	ForwardPass::CheckBindings() const
+	{
 		BinderNames("ForwardPass"sv, m_Kernels)
 			.Check("forwardData"sv, GetUniformKeys(c_ForwardDataBuffers))
 			.Check("expansionData"sv, GetUniformKeys(c_ExpansionBuffers))
