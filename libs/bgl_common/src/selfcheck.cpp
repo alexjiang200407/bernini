@@ -12,6 +12,7 @@
 #include <bgl_common/ReflectedLayout.h>
 #include <bgl_common/SlangReflection.h>
 #include <bgl_common/UniformValueType.h>
+#include <bgl_common/UniformsBase.h>
 #include <bgl_common/gassert.h>
 #include <bgl_common/idl/idl.h>
 #include <bgl_common/shadercache/util.h>
