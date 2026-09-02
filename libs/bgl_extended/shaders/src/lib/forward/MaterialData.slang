@@ -6,7 +6,9 @@ import idl.LoosePbrMaterial;
 import idl.MaterialType;
 import idl.PbrMaterial;
 import idl.RawEntry;
-import lib.forward.PbrShading;
+import idl.ISurfaceEnv;
+import lib.math.PbrShading;
+import lib.types.SurfaceEnv;
 import lib.types.RawHandleArena;
 import lib.types.Texture;
 
@@ -45,14 +47,20 @@ public struct MaterialData
     public SurfaceEnv GetSurfaceEnv()
     {
         SurfaceEnv env;
-        env.cameraPos = cameraPos;
-        env.exposure = exposure;
         env.irradianceMap = irradianceMap;
         env.prefilterMap = prefilterMap;
         env.brdfLUT = brdfLUT;
         env.clampSampler = linearClampSampler;
-        env.envRotation = envRotation;
         return env;
+    }
+
+    public SurfaceParams GetSurfaceParams()
+    {
+        SurfaceParams params;
+        params.cameraPos = cameraPos;
+        params.exposure = exposure;
+        params.envRotation = envRotation;
+        return params;
     }
 };
 
