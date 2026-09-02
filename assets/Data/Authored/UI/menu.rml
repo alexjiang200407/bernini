@@ -1,0 +1,11 @@
+<rml>
+<head>
+	<link type="text/rcss" href="menu.rcss"/>
+</head>
+<body id="menu" data-model="menu">
+	<div id="panel" class="panel wide">
+		<div id="play" class="button" data-event-click="pressed = pressed + 1"></div>
+		<div id="readout" class="readout" data-style-height="height + 'px'"></div>
+	</div>
+</body>
+</rml>

@@ -74,6 +74,7 @@ Windows" component all work too.
 | [`libs/assetlib/.clang-tidy`](../libs/assetlib/.clang-tidy) | `camelBack` free functions. |
 | [`libs/assetlib_structs/.clang-tidy`](../libs/assetlib_structs/.clang-tidy) | `camelBack` free functions, like the codec that decodes into them. |
 | [`libs/assetlib/tests/.clang-tidy`](../libs/assetlib/tests/.clang-tidy) | `PascalCase` functions again. |
+| [`libs/gamelib/.clang-tidy`](../libs/gamelib/.clang-tidy) | The one name RmlUi owns: the `Rml` namespace. |
 | [`apps/editor/.clang-tidy`](../apps/editor/.clang-tidy) | The names Qt and Catch2 own: virtual hooks, `StringMaker::convert`, the `QtNodes` namespace. |
 
 Each of the narrowing files sets `InheritParentConfig: true`. Without it a child config *replaces*
