@@ -126,9 +126,9 @@ core::profiling::name_this_thread("bgl-render");
 ```
 
 The first name a thread is given is the one it keeps, so a pooled worker can call that at the top of
-every task rather than needing a thread body to put it in. Three are named: `bgl-render`,
-`assetlib cook` (every fanned-out cook, so `Reimport`'s stages and `Migrate`'s resave walk both) and
-`editor thumbnails`.
+every task rather than needing a thread body to put it in. Four are named: `bgl-render`,
+`assetlib cook` (every fanned-out cook, so `Reimport`'s stages and `Migrate`'s resave walk both),
+`bgl pipeline build` (the renderer's start-up pipeline batch) and `editor thumbnails`.
 
 ## Where they are
 
@@ -156,7 +156,7 @@ daily:
 | Scenario | `editor startup` | Where it goes |
 |---|---:|---|
 | Everything warm | **0.90 s** | `assetlib scan stale textures` 0.39 s (43%), `editor create graphics` 0.29 s (32%) |
-| Cold shader cache | **5.14 s** | `editor create graphics` 4.43 s (86%) |
+| Cold shader cache | **5.14 s** | `editor create graphics` 4.43 s (86%). Captured before the pipelines were built in parallel; since then a cold `CreateGraphics` measures 1.5 s against 3.7 s in `bgl_extended_tests`, and this row has not been re-captured |
 | Derived containers absent | **24.2 s** | `assetlib reimport` 22.6 s (94%), of which `assetlib glTF parse` ×7 = 10.1 s |
 | Materials stale | **26.5 s** | `assetlib migrate resave walk` 22.0 s (83%) |
 

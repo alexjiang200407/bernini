@@ -207,6 +207,19 @@ namespace bgl
 		}
 	}
 
+	void
+	ShaderCache::WithArchive(const std::function<void(MTL::BinaryArchive*)>& build)
+	{
+		if (!m_Archive)
+		{
+			build(nullptr);
+			return;
+		}
+
+		const auto held = std::lock_guard(m_ArchiveMutex);
+		build(m_Archive.get());
+	}
+
 	uint64_t
 	ShaderCache::ComputeKey(std::vector<std::pair<std::string, std::string>> moduleEntries) const
 	{

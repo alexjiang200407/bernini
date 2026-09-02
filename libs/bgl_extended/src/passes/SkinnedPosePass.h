@@ -4,6 +4,8 @@
 
 namespace bgl
 {
+	class PipelineBatch;
+
 	class FrameGraph;
 	class IDevice;
 	class PassContext;
@@ -34,7 +36,7 @@ namespace bgl
 		operator=(SkinnedPosePass&&) noexcept = delete;
 
 		void
-		Init(IDevice* device);
+		Init(IDevice* device, PipelineBatch& pipelines);
 
 		void
 		Release();

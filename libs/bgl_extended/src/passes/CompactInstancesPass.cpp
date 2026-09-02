@@ -6,6 +6,7 @@
 #include "idl/PsoType.h"
 #include "passes/DrawData.h"
 #include "pipeline/ComputePipeline.h"
+#include "pipeline/PipelineBatch.h"
 #include "resource/ResourceManager.h"
 #include "scene/ComputeBuffer.h"
 #include "scene/CullState.h"
@@ -17,26 +18,33 @@
 namespace bgl
 {
 	void
-	CompactInstancesPass::Init(IDevice* device, core::SharedRef<IResourceManager> resourceManager)
+	CompactInstancesPass::Init(
+		IDevice*                          device,
+		PipelineBatch&                    pipelines,
+		core::SharedRef<IResourceManager> resourceManager)
 	{
 		gassert(device != nullptr, "Device pointer is null");
 
-		m_CullInstances = device->CreateComputeKernel(
+		pipelines.Add(
+			m_CullInstances,
 			ComputePipelineDesc()
 				.SetShader(device->CreateShader("programs.culling.CullInstances"))
 				.SetDebugName("Cull Instances"));
 
-		m_Histogram = device->CreateComputeKernel(
+		pipelines.Add(
+			m_Histogram,
 			ComputePipelineDesc()
 				.SetShader(device->CreateShader("programs.culling.HistogramInstances"))
 				.SetDebugName("Histogram Instances"));
 
-		m_PrefixSum = device->CreateComputeKernel(
+		pipelines.Add(
+			m_PrefixSum,
 			ComputePipelineDesc()
 				.SetShader(device->CreateShader("programs.culling.PrefixSumInstances"))
 				.SetDebugName("Prefix-Sum Instances"));
 
-		m_CompactInstances = device->CreateComputeKernel(
+		pipelines.Add(
+			m_CompactInstances,
 			ComputePipelineDesc()
 				.SetShader(device->CreateShader("programs.culling.CompactInstances"))
 				.SetDebugName("Compact Instances"));

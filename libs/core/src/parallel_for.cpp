@@ -1,10 +1,14 @@
-#include "parallel_for.h"
+#include <core/parallel_for.h>
 #include <core/profiling/thread_name.h>
 
-namespace assetlib
+namespace core
 {
 	void
-	parallelFor(size_t count, uint32_t threads, const std::function<void(size_t)>& body)
+	parallel_for(
+		size_t                             count,
+		uint32_t                           threads,
+		const char*                        threadName,
+		const std::function<void(size_t)>& body)
 	{
 		if (count == 0)
 			return;
@@ -21,9 +25,7 @@ namespace assetlib
 		auto failure = std::exception_ptr();
 
 		auto worker = [&]() {
-			// Every cook that fans out runs through here, so one name covers Reimport's stages and
-			// Migrate's resave walk both -- a capture of a rebuild is otherwise a row of thread ids.
-			core::profiling::name_this_thread("assetlib cook");
+			core::profiling::name_this_thread(threadName);
 
 			for (;;)
 			{

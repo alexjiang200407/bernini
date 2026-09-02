@@ -16,11 +16,12 @@
 #include <assetlib_structs/BMesh.h>
 #include <assetlib_structs/Skeleton.h>
 
+#include "cook_threads.h"
 #include "fs_util.h"
 #include "material_texture_refs.h"
-#include "parallel_for.h"
 #include "progress_report.h"
 #include "ref_paths.h"
+#include <core/parallel_for.h>
 
 #include <core/err/util.h>
 #include <core/file/file.h>
@@ -444,9 +445,11 @@ namespace assetlib
 				size_t end = begin;
 				while (end < paths.size() && rank(paths[end]) == rank(paths[begin])) ++end;
 
-				parallelFor(end - begin, c_MaxCookThreads, [&](size_t offset) {
-					resaveOne(begin + offset);
-				});
+				core::parallel_for(
+					end - begin,
+					c_MaxCookThreads,
+					c_CookThreadName,
+					[&](size_t offset) { resaveOne(begin + offset); });
 				begin = end;
 			}
 		}

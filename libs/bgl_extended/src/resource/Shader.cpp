@@ -1,16 +1,16 @@
-#include "resource/Shader_d3d12.h"
-#include "device/Device_d3d12.h"
+#include "resource/Shader.h"
+#include "slang/SlangErrorChecker.h"
+#include "slang/SlangSessions.h"
 
 namespace bgl
 {
-	Shader::Shader(ShaderDesc desc, const Device* device) :
-		m_Desc(std::move(desc)), m_Device(device)
+	Shader::Shader(ShaderDesc desc, SlangSessions* sessions) :
+		m_Desc(std::move(desc)), m_Sessions(sessions)
 	{
 		gassert(
 			m_Desc.slangModuleName.empty() == false,
 			"Shader must have a valid Slang module name");
-
-		gassert(device != nullptr, "Device cannot be null");
+		gassert(sessions != nullptr, "Slang sessions cannot be null");
 	}
 
 	slang::IModule*
@@ -18,7 +18,7 @@ namespace bgl
 	{
 		SlangErrorChecker errChecker;
 
-		slang::IModule* module = m_Device->GetSlangSession()->loadModule(
+		slang::IModule* module = m_Sessions->ForThisThread()->loadModule(
 			m_Desc.SlangModulePath().c_str(),
 			errChecker.WriteDiagnosticBlob());
 		errChecker.ReportError();

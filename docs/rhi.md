@@ -120,6 +120,18 @@ doc and a header disagree, trust the header, then fix this doc.
   pipeline with one `Uniforms` CPU-mirror per constant buffer the shader declares, keyed by
   name. `CreateComputeKernel` / `CreateMeshletKernel` build this from slang reflection.
 
+* **The renderer's kernels are requested first and built together.** A
+  [PipelineBatch](libs/bgl_extended/src/pipeline/PipelineBatch.h) collects every pass's kernel
+  request in `RenderContext`'s constructor and builds the set across worker threads
+  (`core::parallel_for`, up to six and never more than there are kernels — each worker that misses
+  the cache stands up a Slang global session of about 200 MB, and past six the links stop getting
+  faster), then the passes check their binder names against the built kernels. On a cold shader cache that build is
+  most of a start-up, and the links are independent. Pipeline creation is therefore callable from
+  any thread: each thread compiles on a Slang session of its own (see
+  [Shader Cache](docs/shader_cache.md)), and the backend's `ShaderCache` serializes its driver
+  pipeline library. A kernel created *after* `CreateGraphics` is built on the calling thread, as
+  before — the batch is a start-up device, not an async pipeline API.
+
 * **Uniforms are a reflection-driven CPU mirror, bound by name.** `Uniforms` lays out one
   constant buffer from the shader's slang reflection. Populate it with chained `operator[]`
   (`kernel["cbuffer"]["member"] = value`); the backend uploads the flat buffer at
@@ -182,6 +194,7 @@ doc and a header disagree, trust the header, then fix this doc.
 |---|---|---|
 | `Uniforms` | [libs/bgl_extended/src/uniforms/Uniforms.h](libs/bgl_extended/src/uniforms/Uniforms.h) | Reflection-driven CPU constant-buffer mirror; name/index `operator[]` access. |
 | `ComputeKernel` / `MeshletKernel` | [libs/bgl_extended/src/pipeline/ComputeKernel.h](libs/bgl_extended/src/pipeline/ComputeKernel.h), [MeshletKernel.h](libs/bgl_extended/src/pipeline/MeshletKernel.h) | Move-only pipeline + per-cbuffer `Uniforms` map. |
+| `PipelineBatch` | [libs/bgl_extended/src/pipeline/PipelineBatch.h](libs/bgl_extended/src/pipeline/PipelineBatch.h) | Kernels requested first and built together across threads; what `RenderContext` builds the passes' kernels with. |
 | `ComputeState` / `MeshletState` | [libs/bgl_extended/src/types/ComputeState.h](libs/bgl_extended/src/types/ComputeState.h), [MeshletState.h](libs/bgl_extended/src/types/MeshletState.h) | Per-dispatch/draw binding; holds a **non-owning** kernel pointer. |
 | Buffer descriptors & `BufferHandle` | [libs/bgl_extended/src/resource/Buffer.h](libs/bgl_extended/src/resource/Buffer.h) | `StructBufferDesc`, `RawViewDesc`, `ConstantBufferDesc`, `ComputeBufferDesc`, `BufferBarrierDesc`. |
 | Texture descriptors & `TextureHandle` | [libs/bgl_extended/src/resource/Texture.h](libs/bgl_extended/src/resource/Texture.h) | `TextureDesc`, `TextureUsage`, `TextureBarrierDesc`. |
@@ -233,6 +246,10 @@ flowchart TD
   (`ICommandList`) and everything scene-level run on the thread that owns their context.
   `IResourceManager` create/destroy/cleanup and the queue's fence bookkeeping are safe to call
   from any context's thread (see Design Choices).
+* **Pipeline creation is free-threaded.** `CreateShader`, `CreateComputePipeline`,
+  `CreateMeshletPipeline` and the kernel builders may run concurrently; the renderer builds its own
+  set that way through `PipelineBatch`. A `slang::IModule` belongs to the session of the thread
+  that loaded it and never crosses threads.
 * **One recorder per command list**, between `Open` and `Close`. Never share an open list.
 * **Fences are the only sync primitive.** `ExecuteCommandList` returns a monotonic fence value.
   CPU waits (`WaitForFenceCPUBlocking`, `IsFenceComplete`) and GPU-side waits

@@ -56,10 +56,11 @@ namespace bgl
 		// Compiles the whole PSO through slang into the cacheable form: the union of every stage's
 		// cbuffers, and per stage its MSL, its own [[buffer(N)]] indices and its threadgroup size.
 		CachedProgram
-		CompileProgram(slang::ISession* session, const MeshletPipelineDesc& desc)
+		CompileProgram(const MeshletPipelineDesc& desc)
 		{
 			SlangErrorChecker errChecker;
 
+			slang::ISession*                               session = nullptr;
 			std::vector<slang::IComponentType*>            components;
 			std::unordered_set<slang::IModule*>            modules;
 			std::vector<Slang::ComPtr<slang::IEntryPoint>> entryPoints;
@@ -69,6 +70,11 @@ namespace bgl
 					return;
 				slang::IModule* module = shader->GetSlangModule();
 				gassert(module != nullptr, "Shader module cannot be null");
+
+				// Read off the module so that reaching this function is what creates a session on
+				// this thread, and a cache hit never does.
+				session = module->getSession();
+
 				if (modules.insert(module).second)
 					components.push_back(module);
 
@@ -204,7 +210,6 @@ namespace bgl
 
 	MeshletPipeline::MeshletPipeline(
 		MTL::Device*               device,
-		slang::ISession*           session,
 		ShaderCache*               shaderCache,
 		const MeshletPipelineDesc& desc) : m_Desc(desc)
 	{
@@ -232,7 +237,7 @@ namespace bgl
 
 		if (!hit)
 		{
-			cached = CompileProgram(session, m_Desc);
+			cached = CompileProgram(m_Desc);
 			if (shaderCache != nullptr)
 				shaderCache->Store(key, cached);
 		}
@@ -345,27 +350,32 @@ namespace bgl
 
 		m_DepthStencilState = BuildDepthStencilState(device);
 
-		MTL::BinaryArchive* archive =
-			shaderCache != nullptr ? shaderCache->GetBinaryArchive() : nullptr;
-		if (archive != nullptr)
-		{
-			const MTL::BinaryArchive* archives[] = { archive };
-			pd->setBinaryArchives(
-				NS::Array::array(
-					reinterpret_cast<const NS::Object* const*>(archives),
-					std::size(archives)));
-		}
+		const auto create = [&](MTL::BinaryArchive* archive) {
+			if (archive != nullptr)
+			{
+				const MTL::BinaryArchive* archives[] = { archive };
+				pd->setBinaryArchives(
+					NS::Array::array(
+						reinterpret_cast<const NS::Object* const*>(archives),
+						std::size(archives)));
+			}
 
-		m_PipelineState = NS::TransferPtr(device->newRenderPipelineState(
-			pd.get(),
-			MTL::PipelineOptionNone,
-			nullptr,
-			errChecker.WriteError()));
-		m_PipelineState.get() >> errChecker;
+			m_PipelineState = NS::TransferPtr(device->newRenderPipelineState(
+				pd.get(),
+				MTL::PipelineOptionNone,
+				nullptr,
+				errChecker.WriteError()));
+			m_PipelineState.get() >> errChecker;
 
-		// Adding after creation: the descriptor only reads from an archive, and a pipeline the
-		// archive already holds is added again as a no-op rather than an error.
-		if (archive != nullptr && archive->addMeshRenderPipelineFunctions(pd.get(), nullptr))
-			shaderCache->MarkArchiveDirty();
+			// Adding after creation: the descriptor only reads from an archive, and a pipeline the
+			// archive already holds is added again as a no-op rather than an error.
+			if (archive != nullptr && archive->addMeshRenderPipelineFunctions(pd.get(), nullptr))
+				shaderCache->MarkArchiveDirty();
+		};
+
+		if (shaderCache != nullptr)
+			shaderCache->WithArchive(create);
+		else
+			create(nullptr);
 	}
 }

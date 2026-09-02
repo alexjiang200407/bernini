@@ -5,6 +5,8 @@
 
 namespace bgl
 {
+	class PipelineBatch;
+
 	class IDevice;
 	class FrameGraph;
 	class PassContext;
@@ -16,7 +18,6 @@ namespace bgl
 	public:
 		ForwardPass() = default;
 		~ForwardPass() noexcept { logger::trace("~ForwardPass"); }
-		ForwardPass(IDevice* device) { Init(device); }
 
 		ForwardPass(const ForwardPass&) noexcept = delete;
 		ForwardPass(ForwardPass&&) noexcept      = delete;
@@ -36,8 +37,13 @@ namespace bgl
 			}
 		}
 
+		/** Requests every PsoType's kernel; they are live once `pipelines` is built. */
 		void
-		Init(IDevice* device);
+		Init(IDevice* device, PipelineBatch& pipelines);
+
+		/** @pre the batch Init requested into has been built. Fatal on a binder name no PSO declares. */
+		void
+		CheckBindings() const;
 
 		void
 		AttachToFrameGraph(FrameGraph& fg, const DrawData& draw);

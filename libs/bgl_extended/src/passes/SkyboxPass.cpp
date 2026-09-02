@@ -7,6 +7,7 @@
 #include "passes/BinderNames.h"
 #include "passes/DrawData.h"
 #include "pipeline/MeshletPipeline.h"
+#include "pipeline/PipelineBatch.h"
 #include "resource/FrameBuffer.h"
 #include "resource/Shader.h"
 #include "types/RenderState.h"
@@ -32,7 +33,7 @@ namespace bgl
 	}
 
 	void
-	SkyboxPass::Init(IDevice* device)
+	SkyboxPass::Init(IDevice* device, PipelineBatch& pipelines)
 	{
 		gassert(device != nullptr, "Device must be initialized");
 
@@ -59,8 +60,12 @@ namespace bgl
 
 		pipelineDesc.renderState = RenderState().SetRasterState(raster).SetDepthStencilState(depth);
 
-		m_Kernel = device->CreateMeshletKernel(pipelineDesc);
+		pipelines.Add(m_Kernel, std::move(pipelineDesc));
+	}
 
+	void
+	SkyboxPass::CheckBindings() const
+	{
 		BinderNames("SkyboxPass"sv, { &m_Kernel, 1 }).Check(c_Cbuffer, c_Fields);
 	}
 

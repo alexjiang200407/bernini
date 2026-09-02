@@ -4,6 +4,8 @@
 
 namespace bgl
 {
+	class PipelineBatch;
+
 	class ICommandList;
 
 	/**
@@ -29,11 +31,11 @@ namespace bgl
 		operator=(BrdfLutGenPass&&) noexcept = delete;
 
 		/**
-		 * Creates the texture, its RTV and the pipeline. Compiles a shader, so it must run before the
-		 * Slang session is released.
+		 * Creates the texture and its RTV, and requests the pipeline; Generate needs `pipelines`
+		 * built first.
 		 */
 		void
-		Init(IDevice* device, ResourceManagerRef resourceManager);
+		Init(IDevice* device, PipelineBatch& pipelines, ResourceManagerRef resourceManager);
 
 		/**
 		 * Records the integration into `cmdList`, leaving the texture readable by a pixel shader. The

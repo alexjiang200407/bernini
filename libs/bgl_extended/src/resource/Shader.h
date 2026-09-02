@@ -62,4 +62,46 @@ namespace bgl
 	};
 
 	using ShaderRef = core::SharedRef<IShader>;
+
+	class SlangSessions;
+
+	/**
+	 * The one IShader: a module name and an entry point, resolved through whichever Slang session
+	 * belongs to the thread that compiles.
+	 */
+	class Shader final : public core::RefCounter<IShader>
+	{
+	public:
+		/** @pre `sessions` outlives the shader; the device that owns both guarantees it. */
+		Shader(ShaderDesc desc, SlangSessions* sessions);
+		~Shader() noexcept override { logger::trace("~Shader"); }
+		Shader(const Shader&)     = delete;
+		Shader(Shader&&) noexcept = delete;
+
+		Shader&
+		operator=(const Shader&) = delete;
+
+		Shader&
+		operator=(Shader&&) noexcept = delete;
+
+		// Front-end-compiles the module on every call, on the calling thread's session. Deferring
+		// it lets a shader-cache hit build a pipeline without ever parsing the source (the dominant
+		// compile cost), since the module is only touched when a PSO must recompile.
+		//
+		// Deliberately not memoized: the session already caches its modules by name, a module
+		// belongs to one thread's session, and a ref held past ReleaseSlangSession would pin the
+		// whole session.
+		slang::IModule*
+		GetSlangModule() const noexcept override;
+
+		const ShaderDesc&
+		GetDesc() const noexcept override
+		{
+			return m_Desc;
+		}
+
+	private:
+		ShaderDesc     m_Desc;
+		SlangSessions* m_Sessions = nullptr;
+	};
 }

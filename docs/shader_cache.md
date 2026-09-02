@@ -48,19 +48,24 @@ when this doc disagrees, trust the source, then fix this doc.
   program-cache miss. On a hit, `BuildPipelineLayout` rebuilds the root signature, reflection, and
   bytecode straight from the `.bsc` and never calls `GetSlangModule()`.
 
-* **The Slang session itself is lazy, and is dropped once the renderer is built.** Creating a
-  global session loads Slang's core module, which costs a few hundred megabytes that then stay
-  resident for the process — so `Device` creates one only when a compile actually reaches it, which
-  on a fully warm cache is never. `BuildPipelineLayout` therefore takes no session: it is reached
-  only through `Shader::GetSlangModule()`, down the miss path. Everything the renderer draws with
-  is built inside the `Graphics` constructor, which ends by calling `Device::ReleaseSlangSession()`;
-  a pipeline created later (every `bgl_extended_tests` case that builds its own kernel) transparently gets a
-  new session. The salt reads the compiler version through the free `spGetBuildTagString()` rather
-  than `IGlobalSession::getBuildTagString()` — the two return the same string, and only the free
-  one avoids creating a session just to key the cache.
+* **Slang sessions are per thread, lazy, and dropped once the renderer is built.** A global
+  session and everything created from it are not thread-safe, but distinct global sessions may run
+  in parallel (`slang.h`, `IGlobalSession`) — so
+  [SlangSessions](libs/bgl_extended/src/slang/SlangSessions.h) hands each thread that compiles a global
+  session and a session of its own, created on that thread's first compile. Creating a global
+  session loads Slang's core module, a few hundred megabytes that then stay resident, so none
+  exists until a compile actually reaches it — which on a fully warm cache is never. The compile
+  paths therefore take no session: they reach one only through `Shader::GetSlangModule()`, down the
+  miss path, and read it back off the module. Everything the renderer draws with is built inside the
+  `Graphics` constructor, which ends by calling `Device::ReleaseSlangSession()`; a pipeline created
+  later (every `bgl_extended_tests` case that builds its own kernel) transparently gets a new session
+  on whichever thread asks. The salt reads the compiler version through the free
+  `spGetBuildTagString()` rather than `IGlobalSession::getBuildTagString()` — the two return the
+  same string, and only the free one avoids creating a session just to key the cache.
 
-  Metal does the same: its `Device` creates the session lazily on the first compile and
-  `Graphics` releases it once every renderer PSO is built.
+  Both backends share the one `SlangSessions`, and with it the one `Shader`: the session
+  description (target, search paths, matrix layout, `BERNINI_GPU_DEBUG`) is built in one place, and
+  a backend contributes only its target format.
 
 * **Reflection is decoupled from the live Slang object.** A raw `slang::TypeLayoutReflection*` can't
   be serialized. So reflection is walked once, at pipeline build, into a serializable
@@ -96,6 +101,8 @@ when this doc disagrees, trust the source, then fix this doc.
 | `ShaderCache` (Metal) | [libs/bgl_extended/src/metal/shadercache/ShaderCache_metal.h](libs/bgl_extended/src/metal/shadercache/ShaderCache_metal.h) | The same, over MSL stages and an `MTL::BinaryArchive`. |
 | `BuildPipelineLayout` | [libs/bgl_extended/src/d3d12/pipeline/PipelineLayout_d3d12.cpp](libs/bgl_extended/src/d3d12/pipeline/PipelineLayout_d3d12.cpp) | The D3D12 hit/miss fork: load from cache, or compile with Slang and store. |
 | `CompileProgram` | [libs/bgl_extended/src/metal/pipeline/MeshletPipeline_metal.cpp](libs/bgl_extended/src/metal/pipeline/MeshletPipeline_metal.cpp) | The Metal miss path: one composed link for reflection, one per stage for MSL. |
+| `SlangSessions` | [libs/bgl_extended/src/slang/SlangSessions.h](libs/bgl_extended/src/slang/SlangSessions.h) | One global session + session per compiling thread; created lazily, released after the renderer is built. |
+| `Shader` | [libs/bgl_extended/src/resource/Shader.h](libs/bgl_extended/src/resource/Shader.h) | The one `IShader` for both backends: a module name and entry point, loaded on the calling thread's session. |
 | `ReflectedLayout` | [libs/bgl_extended/src/uniforms/ReflectedLayout.h](libs/bgl_extended/src/uniforms/ReflectedLayout.h) | Serializable, API-agnostic constant-buffer layout tree. |
 | `ReflectLayoutFromSlang` | [libs/bgl_extended/src/uniforms/SlangReflection.h](libs/bgl_extended/src/uniforms/SlangReflection.h) | The one place Slang reflection is read; emits `ReflectedLayout`. |
 | `ByteReader` / `ByteWriter` | [libs/core/include/core/io/ByteReader.h](libs/core/include/core/io/ByteReader.h) | Shared binary IO for the `.bsc` serialization (also used by assetlib). |
@@ -149,7 +156,8 @@ takes the `CreatePipelineState` path and none is stored (see Risky Contracts).
 * **No Slang object may be held past pipeline construction.** A `slang::IModule` keeps its session
   alive, so one cached ref re-pins the core module and `ReleaseSlangSession` reclaims nothing. This
   is why `Shader` does *not* memoize its module and calls `loadModule` each time — the session
-  already caches modules by name, so the repeat call is a lookup. @pre anything new that stores a
+  already caches modules by name, so the repeat call is a lookup — and why a module must never
+  cross threads: it belongs to the session of the thread that loaded it. @pre anything new that stores a
   `slang::` pointer must drop it before the `Graphics` constructor returns.
 
 * **Pipeline-library round-trip is the driver's prerogative.** Whether a given PSO reloads from the
@@ -175,7 +183,14 @@ takes the `CreatePipelineState` path and none is stored (see Risky Contracts).
   process gets a say. `Graphics_metal` therefore reads both variables as well as
   `enableGPUValidationLayer`, or the flag would say "off" during a validating run.
 
-* **`GetSlangModule()` is a lazy, memoizing const getter** (`mutable` module handle). @pre it may
+* **The cache is called from several threads at once.** The renderer builds its pipelines in
+  parallel, so `TryLoad`/`Store` run concurrently — safe because each key is its own file and
+  `WriteFileAtomic` renames a uniquely named temp into place — and the driver pipeline library
+  (`ID3D12PipelineLibrary`, `MTL::BinaryArchive`) is reached only under the cache's own mutex. Two
+  PSOs with the same shader composition may both miss and both compile on a cold run; the second
+  `Store` replaces the first with identical bytes.
+
+* **`GetSlangModule()` front-end-compiles on the calling thread's session.** @pre it may
   front-end-compile on first call (the slow path) and `gfatal` on a shader error; it does nothing on
   a program-cache hit because it is never called.
 

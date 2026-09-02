@@ -13,9 +13,7 @@
 #include "resource/ResourceManager.h"
 #include "resource/ResourceManager_d3d12.h"
 #include "resource/Shader.h"
-#include "resource/Shader_d3d12.h"
 #include "shadercache/ShaderCache_d3d12.h"
-#include "slang/SlangErrorChecker.h"
 #include "types/QueueType.h"
 #include <core/ref/SharedRef.h>
 
@@ -43,7 +41,8 @@ namespace bgl
 	Device::Device(
 		wrl::ComPtr<ID3D12Device> device,
 		const std::string&        shaderCacheDir,
-		bool                      gpuValidation) : m_Device(std::move(device))
+		bool                      gpuValidation) :
+		m_Device(std::move(device)), m_Slang(SlangSessionDesc{ SLANG_DXIL, c_ShaderSearchPaths })
 	{
 		gassert(m_Device != nullptr, "D3D12 device cannot be null");
 
@@ -60,56 +59,10 @@ namespace bgl
 		}
 	}
 
-	slang::ISession*
-	Device::GetSlangSession() const noexcept
-	{
-		if (m_SlangSession != nullptr)
-			return m_SlangSession.get();
-
-		slang::createGlobalSession(m_SlangGlobalSession.writeRef());
-		gassert(m_SlangGlobalSession != nullptr, "Failed to create Slang global session");
-
-		slang::SessionDesc sessionDesc = {};
-		slang::TargetDesc  targetDesc  = {};
-
-		targetDesc.format  = SLANG_DXIL;
-		targetDesc.profile = m_SlangGlobalSession->findProfile("sm_6_6");
-
-		const char* const* searchPaths = c_ShaderSearchPaths;
-
-		sessionDesc.targetCount     = 1;
-		sessionDesc.targets         = &targetDesc;
-		sessionDesc.searchPaths     = searchPaths;
-		sessionDesc.searchPathCount = std::size(c_ShaderSearchPaths);
-
-		// Match the column-major convention the CPU side uploads matrices in (and that the
-		// offline slangc default used). The Slang API's SessionDesc otherwise defaults to
-		// row-major, which would transpose viewProj / transforms and project geometry off
-		// screen once shaders are compiled through this session at PSO creation.
-		sessionDesc.defaultMatrixLayoutMode = SLANG_MATRIX_LAYOUT_COLUMN_MAJOR;
-
-#if defined(BERNINI_GPU_DEBUG)
-		// Enables dbg_raise() bodies in runtime-compiled shaders. Kept in lockstep
-		// with the offline slangc -D in cmake/compile_shader.cmake. Fully absent in
-		// Release, so gDebug drops out of reflection and dbg_raise becomes a no-op.
-		const slang::PreprocessorMacroDesc debugMacro = { "BERNINI_GPU_DEBUG", "1" };
-		sessionDesc.preprocessorMacros                = &debugMacro;
-		sessionDesc.preprocessorMacroCount            = 1;
-#endif
-
-		SlangErrorChecker errChecker;
-		m_SlangGlobalSession->createSession(sessionDesc, m_SlangSession.writeRef()) >> errChecker;
-
-		gassert(m_SlangSession != nullptr, "Failed to create Slang session");
-
-		return m_SlangSession.get();
-	}
-
 	void
 	Device::ReleaseSlangSession() noexcept
 	{
-		m_SlangSession.setNull();
-		m_SlangGlobalSession.setNull();
+		m_Slang.ReleaseAll();
 	}
 
 	Device::~Device() noexcept { logger::trace("~Device"); }
@@ -150,7 +103,7 @@ namespace bgl
 	ShaderRef
 	Device::CreateShader(ShaderDesc desc) const noexcept
 	{
-		return core::SharedRef<Shader>::Make(std::move(desc), this);
+		return core::SharedRef<Shader>::Make(std::move(desc), &m_Slang);
 	}
 
 	MeshletPipelineRef

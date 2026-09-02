@@ -112,13 +112,19 @@ and is a target of its own; nothing here is part of it.
   `pipeline_util::BuildPipelineLayout`, which links all of a PSO's entry points into one program.
   Because bytecode and reflection come from the same link, bindings always agree — shaders do
   **not** need explicit `register(bN, spaceM)` on their constant buffers.
+- The renderer's PSOs are built together, in parallel: a pass's `Init` requests its kernels from
+  the `PipelineBatch` it is handed (`src/pipeline/PipelineBatch.h`) and `RenderContext` builds the
+  set on `core::parallel_for` before any pass reads one. A new pass follows that shape — request in
+  `Init`, read kernels only from `CheckBindings` or later — and pipeline creation stays safe from
+  any thread.
 - A persistent shader cache (`GraphicsOptions::shaderCacheDir`) short-circuits compilation across
   runs. See [Shader Cache](../../docs/shader_cache.md) for the two-layer design, lazy module
   loading, invalidation, and why precompiled `.slang-module` IR is not used.
-- The Slang session is created on the first compile that reaches `Device` and dropped again once
-  `CreateGraphics` has built every renderer PSO, because its core module is a few hundred megabytes
-  resident. Nothing may retain a `slang::` object past pipeline construction, or the release
-  reclaims nothing — see the same doc.
+- Slang sessions are per thread (`src/slang/SlangSessions.h`): a thread's first compile creates
+  its own global session and session, and `CreateGraphics` drops them all once every renderer PSO
+  is built, because each global session's core module is a few hundred megabytes resident. Nothing
+  may retain a `slang::` object past pipeline construction, or the release reclaims nothing, and a
+  module never crosses threads — see the same doc.
 - At runtime the Slang session resolves modules from `shaders/src` (and `shaders/tests`) beside the
   executable. `shaders/src` is staged by a target `bgl_extended` itself depends on — `bgl_copy_shader_src` on
   D3D12, `bgl_metal_copy_shaders` on Metal — so anything that brings a device up has the sources,

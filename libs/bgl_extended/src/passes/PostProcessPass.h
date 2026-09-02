@@ -7,6 +7,8 @@
 
 namespace bgl
 {
+	class PipelineBatch;
+
 	class IDevice;
 	class FrameGraph;
 	class PassContext;
@@ -68,7 +70,11 @@ namespace bgl
 		}
 
 		void
-		Init(IDevice* device);
+		Init(IDevice* device, PipelineBatch& pipelines);
+
+		/** @pre the batch Init requested into has been built. Fatal on a binder name the PSO lacks. */
+		void
+		CheckBindings() const;
 
 		void
 		AttachToFrameGraph(FrameGraph& fg, const Args& args);

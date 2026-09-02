@@ -6,6 +6,13 @@ owns whatever GPU objects it needs across frames (kernels, scratch buffers) and 
 graph then culls, orders, derives barriers, and records — see [Frame Graph](docs/framegraph.md) for
 that machinery. This page is the catalog of the passes `bgl_extended` ships.
 
+A pass's `Init` does not build its kernels: it requests them from the
+[PipelineBatch](libs/bgl_extended/src/pipeline/PipelineBatch.h) it is handed, naming the member each
+lands in, and `RenderContext` builds every pass's requests at once across threads (see
+[RHI](docs/rhi.md) § Design Choices). Anything in a pass that reads a built kernel — the
+`BinderNames` check of the cbuffer names it binds — lives in `CheckBindings`, which `RenderContext`
+calls once the batch is built.
+
 **This document is a map, not a mirror.** It captures each pass's role, the resources it reads and
 writes, and the non-obvious contracts — not full signatures. The header at each linked path is the
 source of truth; when this doc disagrees, trust the header, then fix this doc.

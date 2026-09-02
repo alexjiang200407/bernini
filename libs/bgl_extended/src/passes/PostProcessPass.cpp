@@ -6,6 +6,7 @@
 #include "fg/PassDesc.h"
 #include "passes/BinderNames.h"
 #include "pipeline/MeshletPipeline.h"
+#include "pipeline/PipelineBatch.h"
 #include "resource/FrameBuffer.h"
 #include "resource/Shader.h"
 #include "types/RenderState.h"
@@ -30,7 +31,7 @@ namespace bgl
 	}
 
 	void
-	PostProcessPass::Init(IDevice* device)
+	PostProcessPass::Init(IDevice* device, PipelineBatch& pipelines)
 	{
 		gassert(device != nullptr, "Device must be initialized");
 
@@ -52,8 +53,12 @@ namespace bgl
 
 		pipelineDesc.renderState = RenderState().SetRasterState(raster).SetDepthStencilState(depth);
 
-		m_Kernel = device->CreateMeshletKernel(pipelineDesc);
+		pipelines.Add(m_Kernel, std::move(pipelineDesc));
+	}
 
+	void
+	PostProcessPass::CheckBindings() const
+	{
 		BinderNames("PostProcessPass"sv, { &m_Kernel, 1 }).Check(c_Cbuffer, c_Fields);
 	}
 

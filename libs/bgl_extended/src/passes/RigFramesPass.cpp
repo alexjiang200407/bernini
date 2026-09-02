@@ -2,6 +2,7 @@
 #include "cmd/CommandList.h"
 #include "fg/FrameGraph.h"
 #include "passes/DrawData.h"
+#include "pipeline/PipelineBatch.h"
 #include "scene/Scene.h"
 #include "scene/SceneView.h"
 #include "uniforms/Uniforms.h"
@@ -9,11 +10,12 @@
 namespace bgl
 {
 	void
-	RigFramesPass::Init(IDevice* device)
+	RigFramesPass::Init(IDevice* device, PipelineBatch& pipelines)
 	{
 		gassert(device != nullptr, "Device must be initialized");
 
-		m_PoseRigFrames = device->CreateComputeKernel(
+		pipelines.Add(
+			m_PoseRigFrames,
 			ComputePipelineDesc()
 				.SetShader(device->CreateShader("programs.anim.PoseRigFrames"))
 				.SetDebugName("Pose Rig Frames"));

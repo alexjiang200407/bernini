@@ -8,6 +8,7 @@
 #include "idl/idl.h"
 #include "passes/CompactInstancesPass.h"
 #include "passes/DrawData.h"
+#include "pipeline/PipelineBatch.h"
 #include "resource/Readback.h"
 #include "resource/ResourceManager.h"
 #include "scene/CullState.h"
@@ -165,7 +166,12 @@ TEST_CASE("One view culled against two frustums keeps both results", "[culling][
 	auto cmdList      = device->CreateCommandList(cmdListDesc, cmdAllocator, resourceManager);
 	auto cmdQueue     = device->CreateCommandQueue(bgl::QueueType::kGraphics);
 
-	auto compactPass = bgl::CompactInstancesPass(device, resourceManager);
+	auto compactPass = bgl::CompactInstancesPass();
+	{
+		auto pipelines = bgl::PipelineBatch(device);
+		compactPass.Init(device, pipelines, resourceManager);
+		pipelines.Build();
+	}
 
 	// Off the instance buffer's capacity, which is what CullState sizes against -- a readback
 	// smaller than its source overruns, since the copy is bounded by the source's byte size.
