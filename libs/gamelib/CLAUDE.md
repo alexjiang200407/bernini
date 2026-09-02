@@ -162,7 +162,38 @@ engine's language on its own evidence. `UiRuntimeOptions::luaState` is the seam 
 through: pass the engine's state and RmlUi adds its bindings to it instead of keeping its own. A
 state you pass is yours to close, and only after the runtime is destroyed.
 
-`gamelib_tests`' `[ui]` cases drive all of this headlessly through a no-op `RenderInterface`, and
+**Drawing is `UiRenderer`**, which a client builds and hands to the runtime — it needs an
+`IGraphics` the runtime knows nothing about, and a headless case swaps it for a stub. RmlUi's
+geometry becomes `bgl::OverlayDraw`s on one `bgl::IOverlay`, submitted as a single job inside the
+frame the client already has open, so the UI lands after the scene and after post-processing:
+
+```cpp
+game::UiRenderer renderer(*gfx, store);
+game::UiRuntime  runtime(store, renderer.Interface());
+// ...
+gfx->BeginFrame(target);
+gfx->Draw(job);                      // the 3D
+renderer.Render(*gfx, *context);     // the UI over it
+gfx->EndFrame();
+```
+
+The RmlUi half sits behind an implementation the header does not name, so a client that only draws
+a UI still compiles no RmlUi header.
+
+**Two texture sources.** A document's `src` is a mount key, decoded through `AssetStore::LoadTexture`
+like any other image; `src="target://<name>"` resolves to a target registered with
+`RegisterTarget`, which is how a live 3D render sits inside the UI (ADR-14). RmlUi's own generated
+textures — the glyph atlas — arrive premultiplied in sRGB and are divided back to straight alpha on
+upload, because a texture is sampled through an `_SRGB` view and decoding a premultiplied value
+weights a half-covered glyph edge by `0.5^2.2` instead of `0.5` (ADR-12).
+
+**A texture that fails to load draws a white box, not nothing.** RmlUi keeps the element and hands
+over its null handle, which the overlay samples as opaque white — the same rule that gives an
+untextured div its vertex colour. Loud rather than silent, which is the right failure for a
+misspelled key, and pinned by a case.
+
+`gamelib_tests`' `[ui]` cases drive the runtime headlessly through a no-op `RenderInterface`, and
+`[ui][render]` adds a real device, a real `UiRenderer` and a golden. Also
 `tests/src/ui/UiTree.h` dumps a context's element tree — tag, id, classes, computed border box — as
 text, so a case asserts a whole layout in one call and a failure prints the tree rather than a
 number.
