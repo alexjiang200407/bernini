@@ -3,7 +3,8 @@
 
 #include <stb_image.h>
 
-#include "parallel_for.h"
+#include "cook_threads.h"
+#include <core/parallel_for.h>
 
 #include <core/glm.h>
 #include <core/math.h>
@@ -683,7 +684,7 @@ namespace assetlib
 		const auto  srcSize = static_cast<float>(pyramid.BaseSize());
 		const float saTexel = 4.0f * c_Pi / (6.0f * srcSize * srcSize);
 
-		parallelFor(6, threads, [&](size_t face) {
+		core::parallel_for(6, threads, c_CookThreadName, [&](size_t face) {
 			auto* dst = reinterpret_cast<float*>(out.pixels.data() + out.subresources[face].offset);
 			convolveFace(
 				pyramid,
@@ -722,7 +723,7 @@ namespace assetlib
 
 		const std::vector<Job> jobs = faceMipJobs(mipLevels);
 
-		parallelFor(jobs.size(), threads, [&](size_t jobIndex) {
+		core::parallel_for(jobs.size(), threads, c_CookThreadName, [&](size_t jobIndex) {
 			const Job      job  = jobs[jobIndex];
 			const uint32_t size = std::max(1u, faceSize >> job.mip);
 
@@ -834,7 +835,7 @@ namespace assetlib
 		const float srcSize = static_cast<float>(pyramid.BaseSize());
 		const float saTexel = 4.0f * c_Pi / (6.0f * srcSize * srcSize);
 
-		parallelFor(jobs.size(), desc.threads, [&](size_t jobIndex) {
+		core::parallel_for(jobs.size(), desc.threads, c_CookThreadName, [&](size_t jobIndex) {
 			const Job      job  = jobs[jobIndex];
 			const uint32_t size = std::max(1u, desc.faceSize >> job.mip);
 			const float    roughness =

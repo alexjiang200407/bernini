@@ -14,11 +14,12 @@
 #include <assetlib_structs/BMesh.h>
 #include <assetlib_structs/Skeleton.h>
 
+#include "cook_threads.h"
 #include "import_bounds.h"
-#include "parallel_for.h"
 #include "progress_report.h"
 #include "ref_paths.h"
 #include "regen_group.h"
+#include <core/parallel_for.h>
 
 #include <core/err/util.h>
 #include <core/str/str.h>
@@ -305,9 +306,62 @@ namespace assetlib
 			{
 				const AssetType type = c_Order[stage];
 
-				parallelFor(stages[stage].size(), c_MaxCookThreads, [&](size_t index) {
-					const StageItem&     item   = stages[stage][index];
-					const PendingSource& source = pending[item.source];
+				core::parallel_for(
+					stages[stage].size(),
+					c_MaxCookThreads,
+					c_CookThreadName,
+					[&](size_t index) {
+						const StageItem&     item   = stages[stage][index];
+						const PendingSource& source = pending[item.source];
+
+						{
+							const auto held = std::lock_guard(guard);
+							if (failed.contains(source.key))
+								return;
+						}
+
+						try
+						{
+							core::throw_runtime_error_if(
+								!Exists(source.key),
+								"'{}' is not in the project, so nothing can be produced from it",
+								source.key);
+
+							// Parsed once per kind rather than held across all three: a source's
+							// meshes are the largest thing in this library, and every one of them
+							// would otherwise stay resident until the last clip set was baked.
+							const RegeneratedGroup group =
+								importGroup(*this, source.key, ImportDocument(source.document));
+
+							for (const std::string& output : item.outputs)
+							{
+								reportStep(
+									sink,
+									ProgressPhase::kRegenerating,
+									output,
+									done.fetch_add(1),
+									total);
+
+								writeOutput(*this, group, source.document, type, output);
+
+								const auto held = std::lock_guard(guard);
+								written[source.key].push_back(output);
+							}
+						}
+						catch (const std::exception& error)
+						{
+							const auto held = std::lock_guard(guard);
+							failed.emplace(source.key, error.what());
+						}
+					});
+			}
+
+			core::parallel_for(
+				textures.size(),
+				c_MaxCookThreads,
+				c_CookThreadName,
+				[&](size_t index) {
+					const PendingSource& source = pending[textures[index]];
 
 					{
 						const auto held = std::lock_guard(guard);
@@ -315,33 +369,26 @@ namespace assetlib
 							return;
 					}
 
+					const size_t at = done.fetch_add(1);
+					reportStep(sink, ProgressPhase::kExtractingTextures, source.key, at, total);
+
 					try
 					{
-						core::throw_runtime_error_if(
-							!Exists(source.key),
-							"'{}' is not in the project, so nothing can be produced from it",
-							source.key);
+						// The inner sink names the image being encoded without moving the bar: this
+						// whole extract is one of `total`, however many files it turns out to write.
+						const TextureRefresh refresh =
+							RefreshImportedTextures(source.key, [&](const ProgressEvent& event) {
+								reportStep(
+									sink,
+									ProgressPhase::kExtractingTextures,
+									event.subject,
+									at,
+									total);
+							});
 
-						// Parsed once per kind rather than held across all three: a source's
-						// meshes are the largest thing in this library, and every one of them
-						// would otherwise stay resident until the last clip set was baked.
-						const RegeneratedGroup group =
-							importGroup(*this, source.key, ImportDocument(source.document));
-
-						for (const std::string& output : item.outputs)
-						{
-							reportStep(
-								sink,
-								ProgressPhase::kRegenerating,
-								output,
-								done.fetch_add(1),
-								total);
-
-							writeOutput(*this, group, source.document, type, output);
-
-							const auto held = std::lock_guard(guard);
-							written[source.key].push_back(output);
-						}
+						const auto held = std::lock_guard(guard);
+						for (const std::string& file : refresh.written)
+							written[source.key].push_back(file);
 					}
 					catch (const std::exception& error)
 					{
@@ -349,44 +396,6 @@ namespace assetlib
 						failed.emplace(source.key, error.what());
 					}
 				});
-			}
-
-			parallelFor(textures.size(), c_MaxCookThreads, [&](size_t index) {
-				const PendingSource& source = pending[textures[index]];
-
-				{
-					const auto held = std::lock_guard(guard);
-					if (failed.contains(source.key))
-						return;
-				}
-
-				const size_t at = done.fetch_add(1);
-				reportStep(sink, ProgressPhase::kExtractingTextures, source.key, at, total);
-
-				try
-				{
-					// The inner sink names the image being encoded without moving the bar: this
-					// whole extract is one of `total`, however many files it turns out to write.
-					const TextureRefresh refresh =
-						RefreshImportedTextures(source.key, [&](const ProgressEvent& event) {
-							reportStep(
-								sink,
-								ProgressPhase::kExtractingTextures,
-								event.subject,
-								at,
-								total);
-						});
-
-					const auto held = std::lock_guard(guard);
-					for (const std::string& file : refresh.written)
-						written[source.key].push_back(file);
-				}
-				catch (const std::exception& error)
-				{
-					const auto held = std::lock_guard(guard);
-					failed.emplace(source.key, error.what());
-				}
-			});
 		}
 
 		ReimportReport report;

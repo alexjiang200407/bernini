@@ -301,10 +301,10 @@ TEST_CASE("migrate tells a delivered material from a broken one", "[migrate][bak
 
 // Migrate's resave walk fans out across the files already on disk, so two things have to survive
 // the threads: what it writes, and what it reports. Every other case here imports one group, which
-// gives each rank one file -- parallelFor then collapses to a single thread and none of this runs.
+// gives each rank one file -- core::parallel_for then collapses to a single thread and none of this runs.
 //
 // Deliberately *not* asserting the rank order through the sink. Reports are emitted when an item is
-// claimed, and parallelFor claims indices in order from one counter, so they come out in path order
+// claimed, and core::parallel_for claims indices in order from one counter, so they come out in path order
 // whether the ranks are batched or not -- an assertion on it passes with the barrier removed. The
 // barrier is about when an item *finishes*, which the sink cannot see.
 TEST_CASE("Migrate's threaded walk leaves a settled project untouched", "[migrate]")
