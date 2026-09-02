@@ -367,11 +367,22 @@ so the soles are fitted to whichever mesh first acquires the rig. A unit assembl
 has its soles fitted to the part that came first; a body and its boots disagree by the boot's
 thickness. `AssetManager::AcquireRig` says so, and it is the one place the choice is made.
 
-The fit is a least-squares `y = ax + bz + d`, iterated: fit, drop whatever came out above the plane,
-refit. A foot's vertices are a closed shell whose upper half and whose vertices up the shin would
-otherwise pull the plane off the sole; keeping the lowest *fraction* instead was tried and is wrong,
-because on a tilted sole the band it keeps is the heel alone — so it measures away the tilt it
-exists to find.
+The fit is a least-squares `y = ax + bz + d` through the band of vertices within `c_SoleBand` of
+the foot's lowest — what touches the ground. Two other shapes were tried and are wrong. Iterating a
+plane down from the whole foot does not converge: the ankle's vertices run up the shin, the first
+plane is steep, and four passes of dropping what sits above it shave a slanted half off a column
+rather than settling on its floor — the Coyote's flat sole measured seventeen degrees that way.
+Keeping the lowest *fraction* of the foot's height fails the other way, on a foot with an instep.
+
+**What a rigid plane cannot follow.** The sole is one plane pinned to the ankle, and a skinned foot
+is not rigid: its pad is blended between ankle and toe, so it flexes a few degrees relative to
+either bone between poses. Measured on the test project's rigs at frame 0 of every clip that plants
+a foot, the pinned plane sits within a degree of flat on the Coyote and on the Dog's `Damage`,
+`Kick` and `Carry_Idle`, and 6–7° off on the Dog's `Idle`, where the plan's per-frame fit of the
+skinned underside put the pad at 2.3°. The plant aligns the *plane* exactly, so on that clip the
+ankle is turned ~4° further than the pad needed. That is the price of a sole the shader can carry
+rigidly, and it stays within the clamp. Attaching the plane to the toe instead was measured and
+changes nothing on these rigs — the pad is blended, not the toe's.
 
 **The plant weights come from the frame walk** (`assetlib::measurePlantWeights`), stored in the
 `.banim` and self-keyed like `posedBoxes`: a foot is planted in a frame when its sole is within
