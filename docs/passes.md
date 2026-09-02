@@ -548,9 +548,9 @@ off, and the backbuffer's opaque alpha stays opaque.
   cbuffer; a texture-less draw samples the overlay store's opaque white. A texture may be another
   headless target's output (`IOverlay::CreateTexture(target)`): `RenderContext` imports that
   target's last-presented backbuffer as `overlay_source_{n}` with an explicit `kPresent` initial —
-  the handle behind the name changes as the ring advances, so a state resumed from an earlier
-  frame would describe another slot — and the pass declares it as a shader-resource read, which is
-  where the barrier comes from. Textures are straight
+  the graph has usually never seen that resource, since it belongs to another target whose own
+  frames leave it in present, and an unknown resource resolves to undefined rather than to that —
+  and the pass declares it as a shader-resource read, which is where the barrier comes from. Textures are straight
   alpha in whatever format their `ImageData` declared, so an sRGB one decodes on sample; vertex
   colours arrive sRGB-encoded and premultiplied, and the shader un-premultiplies before it decodes
   — decoding the premultiplied value as-is would weight a half-covered edge by `0.5^2.2`. Filtered

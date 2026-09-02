@@ -829,9 +829,10 @@ namespace bgl
 
 		if (!m_OverlayDraws.empty())
 		{
-			// A borrowed backbuffer is imported under its own name with an explicit present
-			// initial: the handle behind the name changes as that target's ring advances, so a
-			// state resumed from an earlier frame would describe another slot.
+			// A borrowed backbuffer is imported with an explicit present initial because this
+			// graph has usually never seen the resource: it belongs to another target, whose own
+			// frames put it in present, and a resource the graph does not know resolves to
+			// undefined rather than to that.
 			std::vector<std::string> sources;
 			sources.reserve(m_FrameSources.size());
 
