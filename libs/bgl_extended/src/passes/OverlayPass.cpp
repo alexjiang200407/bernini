@@ -75,7 +75,10 @@ namespace bgl
 	}
 
 	void
-	OverlayPass::AttachToFrameGraph(FrameGraph& fg, const Args& args)
+	OverlayPass::AttachToFrameGraph(
+		FrameGraph&                  fg,
+		const Args&                  args,
+		std::span<const std::string> sources)
 	{
 		gassert(!args.draws.empty(), "An empty draw list attaches no overlay pass");
 
@@ -86,6 +89,15 @@ namespace bgl
 		                BarrierSyncFlag::kRenderTarget,
 		                BarrierAccessFlag::kRenderTarget,
 		                BarrierLayout::kRenderTarget });
+
+		for (const std::string& source : sources)
+		{
+			desc.AddTextureArg(
+				TextureArg{ source,
+			                BarrierSyncFlag::kPixelShader,
+			                BarrierAccessFlag::kShaderResource,
+			                BarrierLayout::kShaderResource });
+		}
 
 		desc.SetExec([this, args](const PassContext& resources) { Execute(args, resources); });
 

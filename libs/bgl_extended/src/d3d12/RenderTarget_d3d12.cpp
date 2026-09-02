@@ -144,7 +144,8 @@ namespace bgl
 				texDesc.debugName = std::format("Offscreen Back Buffer: {}", i);
 				texDesc.dimension = TextureDimension::kTexture2D;
 				texDesc.format    = Format::SBGRA8_UNORM;
-				texDesc.usage     = TextureUsageFlag::kRenderTarget;
+				texDesc.usage =
+					TextureUsage{ TextureUsageFlag::kRenderTarget, TextureUsageFlag::kSRV };
 				texDesc.clearValue.SetColor(Color(0.0f, 0.0f, 0.0f, 1.0f));
 
 				m_BackBuffers[i].textureHandle = m_ResourceManager->CreateTexture(texDesc);
@@ -155,6 +156,13 @@ namespace bgl
 
 				m_BackBuffers[i].rtvHandle =
 					m_ResourceManager->CreateRtv(m_BackBuffers[i].textureHandle, rtvDesc);
+
+				auto srvDesc      = SrvDesc();
+				srvDesc.format    = Format::SBGRA8_UNORM;
+				srvDesc.debugName = std::format("Offscreen Back Buffer SRV: {}", i);
+
+				m_BackBuffers[i].srvHandle =
+					m_ResourceManager->CreateSrv(m_BackBuffers[i].textureHandle, srvDesc);
 			}
 		}
 
@@ -359,6 +367,7 @@ namespace bgl
 		// Recorded before advancing: a readback samples the frame that was just presented, not the
 		// one about to be recorded.
 		m_LastPresentedIndex = index;
+		m_Presented          = true;
 
 		// The swapchain, not arithmetic, decides which backbuffer comes next when there is one.
 		m_FrameIndex = m_Headless ? (index + 1) % c_SwapchainImageCount :
@@ -424,6 +433,7 @@ namespace bgl
 		}
 
 		m_LastPresentedIndex = m_FrameIndex;
+		m_Presented          = false;
 	}
 
 	void
@@ -431,6 +441,12 @@ namespace bgl
 	{
 		for (UINT i = 0; i < c_SwapchainImageCount; i++)
 		{
+			// Null on a windowed target, whose swapchain images get no view.
+			if (!m_BackBuffers[i].srvHandle.IsNull())
+			{
+				m_ResourceManager->DestroySrv(m_BackBuffers[i].srvHandle, false);
+			}
+
 			m_ResourceManager->DestroyRtv(m_BackBuffers[i].rtvHandle, false);
 			m_ResourceManager->DestroyTexture(m_BackBuffers[i].textureHandle, false);
 		}

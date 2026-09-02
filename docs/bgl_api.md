@@ -56,6 +56,14 @@ disagrees, trust the header, then fix this doc.
   the form a UI library emits, and the renderer decodes them. A frame with no `DrawOverlay` draws
   no overlay pass, and a capture holds the overlay because a capture is the presented frame.
   General 2D output — a UI runtime is one client of it, and nothing here knows what a document is.
+* **A live 3D render inside 2D output is a headless target sampled as an overlay texture.** The
+  frame cannot layer it — post-processing covers the backbuffer whole — so the scene is drawn every
+  tick into its own headless `IRenderTarget`, and `IOverlay::CreateTexture(target)` wraps what that
+  target last presented. The overlay retains the target, the frame that samples it imports the
+  borrowed backbuffer under its own name and returns it to present before `EndFrame`, and the two
+  targets keep their own histories and clocks; one queue in submission order is what orders the
+  preview's frame before the read. A windowed target is refused, and a target cannot be sampled
+  by its own frame.
 
 * **Scene mutations are staged, not immediate.** `AddTextureAsset`, `AddStaticMeshGeom`,
   `CreatePbrMaterial` and friends record CPU-side state and queue the GPU upload; the upload runs as a
@@ -235,7 +243,10 @@ flowchart TD
   @throws `GraphicsError` otherwise, with nothing queued from that call. @post the draws are copied and resolved at once — the span need not
   outlive the call — and land after post-processing in order across every call this frame; the
   overlay is retained until `EndFrame`, so a caller's last ref dropped mid-frame frees nothing early.
-  A geometry or texture named here must not be released before this frame's `EndFrame`.
+  A geometry or texture named here must not be released before this frame's `EndFrame`. A draw whose
+  texture wraps the target this frame is drawing to throws: a target's output is drawn on another
+  target. Every other target a draw samples is retained through the frame, and the frame reads the
+  slot it presented last — draw the preview target first, then the frame that shows it.
 * **`Resize(target, w, h)`** — @pre not between `BeginFrame`/`EndFrame`; both dimensions non-zero.
   @throws `GraphicsError` otherwise. `w`/`h` are the *output* size; the render size is re-derived
   from the target's scale. Recreates backbuffers, depth, scene colour and the velocity buffer,
@@ -279,6 +290,14 @@ flowchart TD
   straight-alpha and sampled through the format `img.vkFormat` declares: an sRGB format decodes on
   sample, a UNORM one does not. A UI library that hands over premultiplied bytes divides them out
   before calling this.
+* **`CreateTexture(target)`** — @pre `target` non-null and headless; @throws `GraphicsError` for a
+  windowed one, whose swapchain image is the surface a frame presents to. @post the target is
+  retained until `ReleaseTexture`, so a caller's last ref cannot free the ring under a live handle;
+  a draw sampling the handle reads the frame the target most recently finished, opaque, in the
+  output's sRGB encoding — or opaque white until the target has presented at all, since a ring
+  that never drew holds no frame. A `Resize` of the target between frames is followed — the view
+  is re-resolved every frame, and the resized ring reads white until its first present — but never
+  during one, which `Resize` refuses anyway.
 
 ### IScene
 

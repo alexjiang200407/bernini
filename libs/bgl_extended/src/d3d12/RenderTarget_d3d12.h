@@ -112,6 +112,19 @@ namespace bgl
 			return m_BackBuffers[frameIndex].rtvHandle;
 		}
 
+		[[nodiscard]] SrvHandle
+		GetBackbufferSrv(uint32_t frameIndex) const noexcept override
+		{
+			gassert(frameIndex < c_SwapchainImageCount, "Frame index out of range");
+			return m_BackBuffers[frameIndex].srvHandle;
+		}
+
+		[[nodiscard]] bool
+		HasPresented() const noexcept override
+		{
+			return m_Presented;
+		}
+
 		[[nodiscard]] DsvHandle
 		GetDepthDsv() const noexcept override
 		{
@@ -321,7 +334,8 @@ namespace bgl
 
 		UINT                m_FrameIndex         = 0;
 		UINT                m_LastPresentedIndex = 0;
-		TextureRtvHandle    m_BackBuffers[c_SwapchainImageCount];
+		bool                m_Presented          = false;
+		TextureRtvSrvHandle m_BackBuffers[c_SwapchainImageCount];
 		TextureDsvHandle    m_DepthBuffer;
 		TextureRtvHandle    m_MotionVectors;
 		TextureRtvSrvHandle m_SceneColor;
