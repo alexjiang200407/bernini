@@ -6,7 +6,7 @@
 
 import lib.forward.common;
 import lib.forward.mesh_stage;
-import lib.forward.vertexdecode;
+import lib.geom.vertexdecode;
 import lib.data.SubmeshInstance;
 
 public ForwardVSOut StaticVertex(MeshletContext ctx, SubmeshInstance instance, uint v)

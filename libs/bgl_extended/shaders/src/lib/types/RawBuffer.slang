@@ -1,4 +1,5 @@
 import idl.Constants;
+import idl.IVertexSource;
 import idl.RawEntry;
 import idl.RawRange;
 import idl.RecordHeader;
@@ -10,7 +11,7 @@ import lib.debug.dbg;
 //
 // A byte offset is a uint on every target, so one of these addresses at most 4 GiB
 // (bgl::c_MaxRawBufferBytes); the CPU arena refuses to grow past it.
-public struct RawBuffer
+public struct RawBuffer : IVertexSource
 {
     ByteAddressBuffer.Handle rawBuffer;
 

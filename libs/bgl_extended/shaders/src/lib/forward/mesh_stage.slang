@@ -12,11 +12,12 @@ import idl.Constants;
 import idl.MeshInstance;
 import idl.Meshlet;
 import idl.Submesh;
+import idl.VertexLayout;
 import lib.debug.dbg;
 import lib.forward.common;
 import lib.forward.ExpansionData;
 import lib.forward.ForwardData;
-import lib.forward.vertexdecode;
+import lib.geom.vertexdecode;
 import lib.data.ViewData;
 import lib.data.SubmeshInstance;
 
@@ -64,6 +65,14 @@ public MeshletContext PrepareMeshlet(SubmeshInstance instance, uint gid)
         gid < ctx.submesh.GetMeshletCount(), ErrorCode.kInvalidMeshletIndex, gid, ctx.submesh.GetMeshletCount(), instance.submeshIndex
     );
     dbg_assert(ctx.submesh.layout.stride > 0, ErrorCode.kInvalidVertexLayout, ctx.submesh.layout.stride, 0, instance.submeshIndex);
+    // Position is the only attribute a mesh cannot render without; every other decodes to a default.
+    // A property of the layout, so checked once per group here rather than once per vertex.
+    bool hasPosition = false;
+    for (uint i = 0; i < ctx.submesh.layout.attributeCount; ++i)
+    {
+        hasPosition = hasPosition || ctx.submesh.layout.attributes[i].semantic == VertexSemantic.kPosition;
+    }
+    dbg_assert(hasPosition, ErrorCode.kInvalidVertexLayout, 0, 0, instance.submeshIndex);
 
     // A submesh with meshlets has vertices. Only the arena's first 16 bytes are the reserved null
     // record, so a null range decodes a position of zero and reads the first live allocation for

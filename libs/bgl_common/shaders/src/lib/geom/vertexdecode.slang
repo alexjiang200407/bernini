@@ -1,7 +1,6 @@
+import idl.IVertexSource;
 import idl.VertexLayout;
-import lib.debug.dbg;
-import lib.types.RawBuffer;
-import lib.util.Vertex;
+import lib.geom.Vertex;
 
 public struct DecodedVertex
 {
@@ -17,7 +16,7 @@ public struct DecodedVertex
     public float4 weights;
 };
 
-public DecodedVertex DecodeVertex(RawBuffer data, VertexLayout layout, uint vertexByteBase)
+public DecodedVertex DecodeVertex<S : IVertexSource>(S data, VertexLayout layout, uint vertexByteBase)
 {
     DecodedVertex v;
     v.position = float3(0.0, 0.0, 0.0);
@@ -26,10 +25,6 @@ public DecodedVertex DecodeVertex(RawBuffer data, VertexLayout layout, uint vert
     v.tangent = float4(0.0, 0.0, 0.0, 0.0);
     v.joints = float4(0.0, 0.0, 0.0, 0.0);
     v.weights = float4(1.0, 0.0, 0.0, 0.0);
-
-#if defined(BERNINI_GPU_DEBUG)
-    bool hasPosition = false;
-#endif
 
     for (uint i = 0; i < layout.attributeCount; ++i)
     {
@@ -41,9 +36,6 @@ public DecodedVertex DecodeVertex(RawBuffer data, VertexLayout layout, uint vert
         {
         case VertexSemantic.kPosition:
             v.position = value.xyz;
-#if defined(BERNINI_GPU_DEBUG)
-            hasPosition = true;
-#endif
             break;
         case VertexSemantic.kNormal:
             v.normal = value.xyz;
@@ -64,11 +56,6 @@ public DecodedVertex DecodeVertex(RawBuffer data, VertexLayout layout, uint vert
             break;
         }
     }
-
-#if defined(BERNINI_GPU_DEBUG)
-    // Position is the only attribute a mesh cannot render without; the rest use the defaults above.
-    dbg_assert(hasPosition, ErrorCode.kInvalidVertexLayout);
-#endif
 
     return v;
 }
