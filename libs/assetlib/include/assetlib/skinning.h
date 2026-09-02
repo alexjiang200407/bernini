@@ -290,6 +290,16 @@ namespace assetlib
 	inline constexpr float c_PlantFloorSlack = 0.10f;
 
 	/**
+	 * How far above the clip's lowest sole a foot's own lowest may sit and still be a floor that
+	 * foot stands on. A pose that cocks the pelvis lifts one whole leg with it -- the Dog idles
+	 * with its right foot three centimetres above its left, every frame -- and a foot judged
+	 * against the other foot's floor never plants. Five centimetres, which a cocked pelvis stays
+	 * under and a knee held up does not: the Dog's jump keeps one foot eight centimetres above the
+	 * other for the whole clip, and that foot is up on purpose.
+	 */
+	inline constexpr float c_PlantFloorSpread = 0.05f;
+
+	/**
 	 * The same drift as a fraction of the stance motion, for a clip whose stance moves: the
 	 * standing foot of a fast clip drifts a fraction of its stride, and a fraction is what a rule
 	 * about sliding should read. A third, which the Coyote's run -- a tenth -- clears and a foot
@@ -371,17 +381,20 @@ namespace assetlib
 	 * How planted each leg is in each frame of `animations`, one byte per leg per frame, frame-major
 	 * over the whole sample pool.
 	 *
-	 * A foot is planted in a frame when its sole sits within `c_PlantHeightEpsilon` of the lowest any
-	 * sole gets in that clip *and* moves with the clip's stance: the median motion of every sole at
-	 * that floor, judged over the frame either side, within `c_PlantSlideEpsilon` or
-	 * `c_PlantSlideFraction` of it, whichever is wider. Height alone would plant a foot dragged
-	 * along the ground; stillness alone would plant one held in the air -- and would plant nothing
-	 * in a clip played in place, whose standing foot slides back under a root that stays put.
+	 * A foot is planted in a frame when its sole sits within `c_PlantHeightEpsilon` of its own floor
+	 * *and* moves with the clip's stance: the median motion of every sole at its floor, judged
+	 * over the frame either side, within `c_PlantSlideEpsilon` or `c_PlantSlideFraction` of it,
+	 * whichever is wider. Height alone would plant a foot dragged along the ground; stillness alone
+	 * would plant one held in the air -- and would plant nothing in a clip played in place, whose
+	 * standing foot slides back under a root that stays put.
 	 *
-	 * The floor is the clip's own and not y = 0: groundClips rests a clip's lowest *vertex* on
-	 * zero, and in a walk that is a toe tip dipping through the floor mid-swing, which lifts the
-	 * standing foot a few centimetres off it. A clip whose lowest sole is more than
-	 * `c_PlantFloorSlack` up has no standing foot -- it sits, or flies -- and plants nothing.
+	 * A foot's floor is the lowest its sole gets in that clip -- not y = 0, and not the other
+	 * foot's. groundClips rests a clip's lowest *vertex* on zero, and in a walk that is a toe tip
+	 * dipping through the floor mid-swing, which lifts the standing foot a few centimetres off it;
+	 * a cocked pelvis lifts one whole leg above the other. Two bounds say when a floor is one: a
+	 * clip whose lowest sole is more than `c_PlantFloorSlack` up has no standing foot -- it sits,
+	 * or flies -- and plants nothing; and a foot whose own lowest is more than `c_PlantFloorSpread`
+	 * above the clip's is held up, and does not plant.
 	 *
 	 * Each planted run is then ramped in and out over `c_PlantRampFrames`, which is what makes this
 	 * a weight rather than the one bit the shape of the problem suggests: a foot that went from

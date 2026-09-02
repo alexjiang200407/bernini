@@ -418,11 +418,17 @@ changes nothing on these rigs — the pad is blended, not the toe's.
 `.banim` and self-keyed like `posedBoxes`. A foot is planted in a frame when two things hold, and
 both were first written the obvious way and were wrong on the first real walk:
 
-* **Its sole is within `c_PlantHeightEpsilon` of the clip's own floor** — the lowest any sole gets
-  in that clip — not of `y = 0`. `groundClips` rests a clip's lowest *vertex* on zero, and in a
-  walk that vertex is a toe tip dipping through the floor mid-swing, which lifts the whole clip
-  until the standing foot sits 7 cm up and nothing ever plants. A floor more than
-  `c_PlantFloorSlack` above zero is no floor at all — the rig sits, or flies — and plants nothing.
+* **Its sole is within `c_PlantHeightEpsilon` of its own floor** — the lowest *that* sole gets in
+  that clip — not of `y = 0`, and not of the other foot's. `groundClips` rests a clip's lowest
+  *vertex* on zero, and in a walk that vertex is a toe tip dipping through the floor mid-swing,
+  which lifts the whole clip until the standing foot sits 7 cm up and nothing ever plants. And a
+  cocked pelvis lifts one whole leg: the Dog idles with its right foot 3 cm above its left on every
+  frame, and judged against the left foot's floor it never planted — one foot followed a slope and
+  the other hung where the clip left it. Two bounds say when a floor is one. A clip whose lowest
+  sole is more than `c_PlantFloorSlack` above zero has no floor at all — the rig sits, or flies —
+  and plants nothing; a foot whose own lowest is more than `c_PlantFloorSpread` above the clip's is
+  held up, not standing higher — the Dog's `Jump_Up` keeps a knee raised, its foot 8 cm above the
+  other for the whole clip — and does not plant.
 * **It moves with the clip's stance**: the median motion of every sole at that floor, over the
   frame either side, within `c_PlantSlideEpsilon` or `c_PlantSlideFraction` of it. Stillness was
   the first rule, and it plants nothing in a clip played in place — whose standing foot slides back
