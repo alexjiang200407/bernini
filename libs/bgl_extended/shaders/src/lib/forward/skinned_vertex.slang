@@ -23,7 +23,7 @@ import lib.debug.dbg;
 import lib.forward.common;
 import lib.forward.mesh_stage;
 import lib.forward.SkinnedData;
-import lib.forward.vertexdecode;
+import lib.geom.vertexdecode;
 import lib.types.ComputeBuffer;
 import lib.data.SubmeshInstance;
 

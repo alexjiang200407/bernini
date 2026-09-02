@@ -1,10 +1,10 @@
+import idl.IVertexSource;
 import idl.VertexLayout;
-import lib.types.RawBuffer;
 
 // @pre attrByteBase is 4-byte aligned, which every producer's layout keeps and Scene checks on
 // the way in. The float formats load as vectors; the packed ones are still assembled by hand,
 // because a raw buffer does no format conversion -- that is what a typed view is for.
-public float4 DecodeAttribute(RawBuffer data, uint attrByteBase, VertexFormat format)
+public float4 DecodeAttribute<S : IVertexSource>(S data, uint attrByteBase, VertexFormat format)
 {
     switch (format)
     {

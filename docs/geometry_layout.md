@@ -125,7 +125,7 @@ path is the source of truth; when this doc disagrees, trust the struct, then fix
   pos/normal/uv/tangent — see `VertexGen` in
   [types/VertexGen.h](libs/bgl_extended/src/types/VertexGen.h), whose field order *is* that layout. See
   `DecodeVertex` in
-  [lib/forward/vertexdecode.slang](libs/bgl_extended/shaders/src/lib/forward/vertexdecode.slang).
+  [lib/geom/vertexdecode.slang](libs/bgl_common/shaders/src/lib/geom/vertexdecode.slang).
 
 * **CPU-side mirror buffers own the storage and hand back offsets.** Geometry is uploaded through
   `RangeBuffer` / `EntryBuffer` / `PackedBuffer` — GPU-mirrored containers whose `Add`/`EmplaceBack`
@@ -160,7 +160,7 @@ Generated shader structs (GPU source of truth). Each has a byte-identical `bgl::
 | `Clip` | [Clip.slang](libs/bgl_common/shaders/src/idl/Clip.slang) | One playable clip: where its frame 0 sits in the tier's own frame space, its frame count, authored rate and loop flag. Shared by every animated tier out of one clip buffer. |
 | `Submesh` | [Submesh.slang](libs/bgl_common/shaders/src/idl/Submesh.slang) | One drawable part, **geometry only**: its `VertexLayout`, meshlet range, vertexMap/indices ranges, a `RawRange` of vertex bytes, vertex count, local bounding sphere. No material, no PSO — those are per-instance. |
 | `Meshlet` | [Meshlet.slang](libs/bgl_common/shaders/src/idl/Meshlet.slang) | A mesh-shader work unit: offsets into the parent submesh's vertexMap/indices windows, vertex/triangle counts, bounding sphere. |
-| `DecodedVertex` | [vertexdecode.slang](libs/bgl_extended/shaders/src/lib/forward/vertexdecode.slang) | What a vertex decodes *to* — position, normal, uv, tangent, joints and weights. Not IDL and not stored anywhere: on the GPU vertices live as raw bytes. |
+| `DecodedVertex` | [vertexdecode.slang](libs/bgl_common/shaders/src/lib/geom/vertexdecode.slang) | What a vertex decodes *to* — position, normal, uv, tangent, joints and weights. Not IDL and not stored anywhere: on the GPU vertices live as raw bytes. |
 | `VertexLayout` | [VertexLayout.slang](libs/bgl_common/shaders/src/idl/VertexLayout.slang) | Up to 8 `VertexAttribute`s (semantic + format + byte offset) plus `stride`; describes how to decode a vertex from bytes. |
 
 One struct in the same buffers is **not** IDL-generated and is hand-mirrored instead, so the two
