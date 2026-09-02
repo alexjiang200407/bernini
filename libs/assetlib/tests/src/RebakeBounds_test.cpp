@@ -149,7 +149,7 @@ TEST_CASE("The rebake writes the box a load then finds", "[rebake]")
 
 		fs::create_directories(root.path / c_AvatarsDirectoryName);
 		auto avatar = Avatar();
-		avatar.legs.push_back({ "root", "root", "root", "root" });
+		avatar.legs.emplace_back("root", "root", "root", "root");
 		StoreAt(root.path).Save(avatar, "Authored/Skeletons/rig.bavatar");
 
 		const RebakeBoundsReport after = AssetStore(root.path).RebakePosedBounds(false);

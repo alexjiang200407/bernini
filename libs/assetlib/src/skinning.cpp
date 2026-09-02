@@ -1041,18 +1041,18 @@ namespace assetlib
 			{
 				// The flat plane through the joint: a leg no mesh here carries has no sole to fit,
 				// and inventing a tilt would turn the foot at runtime for no reason.
-				out.push_back(
-					{ glm::vec3(toAnkle * glm::vec4(glm::vec3(bind[chain.ankle][3]), 1.0f)),
-				      glm::normalize(glm::vec3(toAnkle * glm::vec4(0.0f, 1.0f, 0.0f, 0.0f))) });
+				out.emplace_back(
+					glm::vec3(toAnkle * glm::vec4(glm::vec3(bind[chain.ankle][3]), 1.0f)),
+					glm::normalize(glm::vec3(toAnkle * glm::vec4(0.0f, 1.0f, 0.0f, 0.0f))));
 				continue;
 			}
 
 			// Carried by the inverse bind rather than its inverse transpose, which is the trade
 			// skinSubmesh already makes: exact while a bone's scale is uniform, and every rig we
 			// cook is.
-			out.push_back(
-				{ glm::vec3(toAnkle * glm::vec4(on, 1.0f)),
-			      glm::normalize(glm::vec3(toAnkle * glm::vec4(normal, 0.0f))) });
+			out.emplace_back(
+				glm::vec3(toAnkle * glm::vec4(on, 1.0f)),
+				glm::normalize(glm::vec3(toAnkle * glm::vec4(normal, 0.0f))));
 		}
 
 		return out;
