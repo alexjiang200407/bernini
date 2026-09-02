@@ -122,6 +122,17 @@ namespace bgl
 		[[nodiscard]] virtual RtvHandle
 		GetBackbufferRtv(uint32_t frameIndex) const noexcept = 0;
 
+		// A shader-readable view of a ring slot, for a pass on another target that samples what this
+		// one presented. Null on a D3D12 windowed target, whose swapchain images get no view; a
+		// windowed target's ring is never read on either backend.
+		[[nodiscard]] virtual SrvHandle
+		GetBackbufferSrv(uint32_t frameIndex) const noexcept = 0;
+
+		// Whether a frame has been presented since creation or the last resize; before that the
+		// ring holds no content.
+		[[nodiscard]] virtual bool
+		HasPresented() const noexcept = 0;
+
 		[[nodiscard]] virtual DsvHandle
 		GetDepthDsv() const noexcept = 0;
 

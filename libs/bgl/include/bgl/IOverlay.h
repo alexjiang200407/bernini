@@ -1,5 +1,6 @@
 #pragma once
 #include <assetlib_structs/ImageData.h>
+#include <bgl/IRenderTarget.h>
 #include <bgl/api.h>
 #include <bgl/glm.h>
 #include <core/containers/slot_handle.h>
@@ -84,7 +85,8 @@ namespace bgl
 	 * client: nothing here knows what a document is.
 	 *
 	 * Textures are straight-alpha and sampled through the format their `ImageData` declares, so an
-	 * sRGB format decodes on sample; vertex colors are decoded by the renderer.
+	 * sRGB format decodes on sample; vertex colors are decoded by the renderer. A texture may also
+	 * be a headless render target's output, which is how a live 3D render sits inside 2D output.
 	 *
 	 * A geometry or texture drawn by an IGraphics::DrawOverlay must not be released before that
 	 * frame's EndFrame. Releasing it afterwards is safe at any time: the GPU resources go once the
@@ -125,6 +127,18 @@ namespace bgl
 		 */
 		virtual OverlayTextureHandle
 		CreateTexture(assetlib::ImageData img, std::string debugName = "") = 0;
+
+		/**
+		 * A texture that shows what `target` last presented: a draw sampling it reads the frame
+		 * that target most recently finished, so a target drawn every frame is a live view. The
+		 * target is retained until ReleaseTexture. Its output is opaque, sampled in the output's
+		 * sRGB encoding like any other texture.
+		 *
+		 * @throws GraphicsError if `target` is null or windowed -- a swapchain image is the
+		 *         surface a frame is presenting to, and sampling it is not supported.
+		 */
+		virtual OverlayTextureHandle
+		CreateTexture(const RenderTargetRef& target) = 0;
 
 		/**
 		 * @throws GraphicsError if the handle is null, expired, or was never minted by this overlay.

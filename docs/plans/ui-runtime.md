@@ -121,9 +121,10 @@ is a record rather than an example.
   import at `RenderContext.cpp:415-418` and the capture at `:876`. So the borrowed backbuffer is
   imported under a name of its own with an explicit `kPresent` initial (the handle behind it
   changes as the ring advances, so a resumed state would be another handle's), the overlay pass
-  declares the read, and a second `PreparePresent`-shaped side-effect pass declares it back to
-  `kPresent` before `EndFrame` returns — the trick `:703` already uses for the frame's own
-  backbuffer. A windowed target's swapchain image is refused, not because it cannot be sampled
+  declares the read, and `PreparePresent` declares it back to `kPresent` beside the frame's own
+  backbuffer before `EndFrame` returns — the pass `:703` already uses, widened to every
+  presentable the frame touched (task 2 built one pass rather than the second one first
+  imagined here). A windowed target's swapchain image is refused, not because it cannot be sampled
   (both backends could allow it) but because sampling the surface a frame is presenting to is a
   self-reference nobody has asked for.
 
@@ -195,9 +196,10 @@ is a record rather than an example.
 - `METAL_DEVICE_WRAPPER_TYPE=1 MTL_SHADER_VALIDATION=1 just run bgl_extended_tests -- "[overlay]"` green
   (`--gpu-validation` is D3D12's spelling and does nothing on Metal — `libs/bgl/CLAUDE.md`
   § bgl_extended_tests): a textured quad, a scissored quad and a transformed quad land where `MeanColor`
-  expects them, and the capture contains them (ADR-6); a scene drawn to a headless target and
-  sampled into a second target's overlay reads that scene's colour, and re-reads it after the
-  preview target draws a different frame (ADR-14).
+  expects them, and the capture contains them (ADR-6); a frame drawn to a headless target and
+  sampled into a second target's overlay reads that frame's colour, and re-reads it after the
+  preview target draws a different frame (ADR-14) — a solid overlay fill in `bgl_extended_tests`,
+  since the mechanism is the same for any frame; the scene case is the example's (task 6).
 - `just run assetlib_tests -- "[pack]"` green: a `.rml`, `.rcss` and `.ttf` under `Authored/`
   ship in the archive rather than in `skippedByExtension`.
 - `just run gamelib_tests -- "[ui]"` green, headless: a document loads from a loose mount and from
@@ -404,12 +406,14 @@ the loop stays single-threaded.
    validation environment set, as in Acceptance.
 2. **`feat(bgl): a headless target's output is an overlay texture`** — `kSRV` on the headless
    ring, the target-backed texture, the pass's import and barrier, the throw on a windowed
-   target. Gate: a `[overlay][render]` case draws a solid-colour scene to a headless target, then
+   target. Gate: a `[overlay][render]` case draws a solid-colour frame to a headless target, then
    a second headless target whose overlay samples it into a quad; `MeanColor` on the quad is the
-   scene's colour; the preview target draws a second frame in another colour and the next sample
+   frame's colour; the preview target draws a second frame in another colour and the next sample
    follows it; a `ScreenshotPng` of the preview target after it was sampled still works, which is
-   what proves the return-to-present pass. With Metal's validation environment set, since it is
-   a barrier across targets, and a mismatched `layoutBefore` is the silent class.
+   what proves the return-to-present pass on D3D12. Metal's barriers are no-ops
+   (`libs/bgl_extended/src/metal/cmd/CommandList_metal.h`), so the barrier half of this task is
+   verified only by the landing PR's Windows box, `[overlay]` under `--gpu-validation` — a
+   mismatched `layoutBefore` is the silent class there.
 3. **`feat(assetlib): UI documents, styles and fonts are authored assets`** — the foreign-kind
    table (ADR-13) with `.ktx2` moved into it and the three kinds beside it, the two directories,
    `pack`, delete/rename, the exported escape check (ADR-8). Gate: `[pack]` ships a `.rml`,
