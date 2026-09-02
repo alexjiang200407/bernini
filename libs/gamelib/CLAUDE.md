@@ -142,6 +142,26 @@ that scrubs and resets to zero.
 context: `UiRuntime::LoadFontFace("Authored/Fonts/Lato-Regular.ttf")`. The repo's fixture tree
 carries Lato under the SIL Open Font License, its licence beside it.
 
+**A document can script itself**, off by default. `UiRuntimeOptions::scripting` installs RmlUi's
+stock Lua plugin, which is one `Rml::Lua::Initialise` call: documents then get `<script>` blocks,
+inline handlers, the element and event API, and data models declared from Lua tables — UI-only
+logic living in the asset tree beside the markup rather than in the binary, which is the split
+Scaleform drew with ActionScript. With it on, RmlUi's `body` tag builds a `LuaDocument` rather than
+a plain `ElementDocument`; with it off, a `<script>` block is inert markup and an inline `onclick`
+does nothing, so a game that binds everything from C++ never creates a VM. (The plugin is still
+linked in — it is a static library and the `Initialise` call site is unconditional at link time —
+so "no VM" is about what runs, not about binary size.)
+
+**A scripted document is trusted code.** The plugin opens Lua's standard libraries, `io`, `os` and
+`package` among them, so a `<script>` reaches the host directly: the mount confinement above bounds
+which files the document *loader* resolves, and does not extend to what a script does once it runs.
+That is why this is opt-in per runtime rather than on.
+
+This is **not** an engine-wide script host, and the roadmap's scripting item still decides the
+engine's language on its own evidence. `UiRuntimeOptions::luaState` is the seam that one arrives
+through: pass the engine's state and RmlUi adds its bindings to it instead of keeping its own. A
+state you pass is yours to close, and only after the runtime is destroyed.
+
 `gamelib_tests`' `[ui]` cases drive all of this headlessly through a no-op `RenderInterface`, and
 `tests/src/ui/UiTree.h` dumps a context's element tree — tag, id, classes, computed border box — as
 text, so a case asserts a whole layout in one call and a failure prints the tree rather than a

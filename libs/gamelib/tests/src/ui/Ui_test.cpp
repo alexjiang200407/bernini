@@ -4,7 +4,9 @@
 #include "ui/UiTree.h"
 
 #include <RmlUi/Core.h>
+#include <RmlUi/Lua.h>
 #include <assetlib/pak.h>
+#include <lua.h>
 
 #include <catch2/catch_approx.hpp>
 #include <catch2/generators/catch_generators.hpp>
@@ -312,4 +314,133 @@ TEST_CASE("The UI runtime is one per process", "[ui]")
 
 	// And the refusal did not tear the live one down.
 	CHECK(fx.context->LoadDocument(c_Document) != nullptr);
+}
+
+// A document that scripts itself: the plan's Lua non-goal, amended in this task's PR. What is
+// deferred is the engine-wide VM, not the plugin.
+TEST_CASE("A document scripts itself when scripting is on", "[ui][lua]")
+{
+	const Sandbox sandbox("bernini_ui_lua");
+	fs::copy_file(
+		AssetRoot() / "Authored/UI/scripted.rml",
+		sandbox.path / "Authored/UI/scripted.rml");
+
+	const assetlib::AssetStore store(sandbox.path);
+
+	game::test::UiStubRenderer renderer;
+	auto                       options = game::UiRuntimeOptions();
+	options.scripting                  = true;
+
+	game::UiRuntime runtime(store, renderer, options);
+	REQUIRE(runtime.ScriptingEnabled());
+	runtime.LoadFontFace(c_Font);
+
+	// The plugin is up and holds a state, which is what "scripting on" means underneath.
+	CHECK(Rml::Lua::Interpreter::GetLuaState() != nullptr);
+
+	game::UiContextPtr context = runtime.CreateContext("lua", 800, 600);
+
+	Rml::ElementDocument* document = context->LoadDocument("Authored/UI/scripted.rml");
+	REQUIRE(document != nullptr);
+	document->Show();
+	context->Get().Update();
+
+	Rml::Element* readout = context->Get().GetRootElement()->GetElementById("readout");
+	REQUIRE(readout != nullptr);
+	CHECK(readout->GetBox().GetSize(Rml::BoxArea::Border).y == Catch::Approx(8.0f));
+
+	// The inline onclick calls a function the document's own <script> defined, which then reaches
+	// back into the document -- none of it known to this binary.
+	Rml::Element* play = context->Get().GetRootElement()->GetElementById("play");
+	REQUIRE(play != nullptr);
+	play->DispatchEvent(Rml::EventId::Click, Rml::Dictionary());
+	context->Get().Update();
+
+	CHECK(readout->GetBox().GetSize(Rml::BoxArea::Border).y == Catch::Approx(24.0f));
+
+	// And the script's state persists across events, which is what makes it a document's scope
+	// rather than a handler.
+	play->DispatchEvent(Rml::EventId::Click, Rml::Dictionary());
+	context->Get().Update();
+
+	CHECK(readout->GetBox().GetSize(Rml::BoxArea::Border).y == Catch::Approx(40.0f));
+}
+
+TEST_CASE("Scripting is off unless it is asked for", "[ui][lua]")
+{
+	const Sandbox sandbox("bernini_ui_nolua");
+	fs::copy_file(
+		AssetRoot() / "Authored/UI/scripted.rml",
+		sandbox.path / "Authored/UI/scripted.rml");
+
+	const assetlib::AssetStore store(sandbox.path);
+
+	Fixture fx(store);
+	CHECK_FALSE(fx.runtime.ScriptingEnabled());
+
+	// No plugin, so no state: the absence is observed rather than inferred from the flag.
+	CHECK(Rml::Lua::Interpreter::GetLuaState() == nullptr);
+
+	// The document still loads -- its script is inert markup, not a parse error -- and the inline
+	// handler does nothing, so a game that binds from C++ never creates a VM.
+	Rml::ElementDocument* document = fx.context->LoadDocument("Authored/UI/scripted.rml");
+	REQUIRE(document != nullptr);
+	document->Show();
+	fx.context->Get().Update();
+
+	Rml::Element* readout = ById(*fx.context, "readout");
+	REQUIRE(readout != nullptr);
+
+	Rml::Element* play = ById(*fx.context, "play");
+	REQUIRE(play != nullptr);
+	play->DispatchEvent(Rml::EventId::Click, Rml::Dictionary());
+	fx.context->Get().Update();
+
+	CHECK(readout->GetBox().GetSize(Rml::BoxArea::Border).y == Catch::Approx(8.0f));
+}
+
+// The seam the engine-wide VM arrives through: RmlUi adds its bindings to a state the caller owns
+// and must not close it. Until that VM exists this is the only thing holding the promise.
+TEST_CASE("A caller's Lua state is used and not closed", "[ui][lua]")
+{
+	const Sandbox sandbox("bernini_ui_lua_state");
+	fs::copy_file(
+		AssetRoot() / "Authored/UI/scripted.rml",
+		sandbox.path / "Authored/UI/scripted.rml");
+
+	const assetlib::AssetStore store(sandbox.path);
+
+	lua_State* state = luaL_newstate();
+	REQUIRE(state != nullptr);
+
+	// The plugin opens the standard libraries only for a state it made itself, so a caller's state
+	// arrives bare and a document's first string concatenation would panic the process.
+	luaL_openlibs(state);
+
+	{
+		game::test::UiStubRenderer renderer;
+		auto                       options = game::UiRuntimeOptions();
+		options.scripting                  = true;
+		options.luaState                   = state;
+
+		game::UiRuntime runtime(store, renderer, options);
+		runtime.LoadFontFace(c_Font);
+
+		// Ours, not one the plugin made beside it.
+		CHECK(Rml::Lua::Interpreter::GetLuaState() == state);
+
+		game::UiContextPtr    context  = runtime.CreateContext("lua_state", 800, 600);
+		Rml::ElementDocument* document = context->LoadDocument("Authored/UI/scripted.rml");
+		REQUIRE(document != nullptr);
+		document->Show();
+		context->Get().Update();
+	}
+
+	// The runtime is gone and the state is not: still usable, and ours to close. A plugin that
+	// closed it would make this a use-after-free rather than a failed check.
+	CHECK(Rml::Lua::Interpreter::GetLuaState() == nullptr);
+	lua_pushinteger(state, 42);
+	CHECK(lua_tointeger(state, -1) == 42);
+
+	lua_close(state);
 }
