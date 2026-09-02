@@ -192,7 +192,7 @@ doc and a header disagree, trust the header, then fix this doc.
 
 | Type | File | Role |
 |---|---|---|
-| `Uniforms` | [libs/bgl_extended/src/uniforms/Uniforms.h](libs/bgl_extended/src/uniforms/Uniforms.h) | Reflection-driven CPU constant-buffer mirror; name/index `operator[]` access. |
+| `Uniforms` | [libs/bgl_extended/src/uniforms/Uniforms.h](libs/bgl_extended/src/uniforms/Uniforms.h) | Reflection-driven CPU constant-buffer mirror; name/index `operator[]` access. The walk itself is `UniformsBase` in `bgl_common`; this adds the root parameter and the handle writes. |
 | `ComputeKernel` / `MeshletKernel` | [libs/bgl_extended/src/pipeline/ComputeKernel.h](libs/bgl_extended/src/pipeline/ComputeKernel.h), [MeshletKernel.h](libs/bgl_extended/src/pipeline/MeshletKernel.h) | Move-only pipeline + per-cbuffer `Uniforms` map. |
 | `PipelineBatch` | [libs/bgl_extended/src/pipeline/PipelineBatch.h](libs/bgl_extended/src/pipeline/PipelineBatch.h) | Kernels requested first and built together across threads; what `RenderContext` builds the passes' kernels with. |
 | `ComputeState` / `MeshletState` | [libs/bgl_extended/src/types/ComputeState.h](libs/bgl_extended/src/types/ComputeState.h), [MeshletState.h](libs/bgl_extended/src/types/MeshletState.h) | Per-dispatch/draw binding; holds a **non-owning** kernel pointer. |
