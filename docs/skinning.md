@@ -351,6 +351,50 @@ baked by the cook and sampled at the same fractional frame the pose is. A weight
 the pose the rig would have had. A weight rather than a flag because a foot that snapped between the
 two states would pop, which is what the cook's ramp at each end of a planted run exists to remove.
 
+### What the cook derives
+
+Two measurements, both derived and neither authored — a plane per foot and a weight per leg per
+frame — because 21 clips × 4 feet on 29 purchased rigs is authoring nobody will do. Unreal makes
+this an animation notify and Unity a curve on the clip; a wrong derivation gets a per-clip override
+in the avatar rather than an authoring surface.
+
+**The sole plane is fitted to the underside of the foot** (`assetlib::solePlanes`), over the
+vertices weighted to a leg's ankle and toe at bind pose, and expressed in ankle-local space — the
+frame the plant turns the foot in. Model space would be a bind-pose fact the moment the ankle
+rotated. It is a property of a (mesh, skeleton) pairing rather than of the rig, so it lives in no
+container and is measured at load beside the boxes.
+
+The fit is a least-squares `y = ax + bz + d`, iterated: fit, drop whatever came out above the plane,
+refit. A foot's vertices are a closed shell whose upper half and whose vertices up the shin would
+otherwise pull the plane off the sole; keeping the lowest *fraction* instead was tried and is wrong,
+because on a tilted sole the band it keeps is the heel alone — so it measures away the tilt it
+exists to find.
+
+**The plant weights come from the frame walk** (`assetlib::measurePlantWeights`), stored in the
+`.banim` and self-keyed like `posedBoxes`: a foot is planted in a frame when its sole is within
+`c_PlantHeightEpsilon` of the grounded floor *and* has moved less than `c_PlantSlideEpsilon`
+horizontally over the frame either side. Height alone plants a foot sliding along the ground;
+stillness alone plants one held in the air. Each planted run is then ramped in and out over
+`c_PlantRampFrames`.
+
+Runs are found per clip, and a run reaching a clip's own edge is **not** ramped there: that edge is
+where the clip stops, not a foot leaving the ground, so a looping idle planted throughout stays
+planted rather than dipping on the loop point.
+
+It runs **after** grounding, since the floor it measures against is where `groundClips` puts a
+clip's lowest pose, and it is a third walk of every frame on the cook's largest stage
+(`assetlib plant weights`). Measured on `cha800_00` (663 bones, 2254 frames, four legs' worth of
+rig): +2.7 s of a 48 s debug cook, and under the run-to-run noise in release.
+
+The key is a signature over the resolved chains, the rig and the geometry the soles were fitted on
+(`assetlib::plantWeightsSignature`) — the clips are deliberately not in it, because they live in the
+same file. A load that finds no matching entry measures, exactly as `findPosedBounds` does.
+
+`assetlib_cli bakebounds` backfills them alongside the boxes, and for a reason of its own: an avatar
+is often authored *after* its rig is cooked, which leaves a `.banim` whose boxes are current and
+whose weights were never measured. Without the retrofit the only ways out are a re-import or paying
+the whole frame walk on every load.
+
 **Descendants ride the nearest solved ancestor's delta.** Each bone walks up its parent chain until
 it finds one, which is bounded below by the shallowest solved depth — above that no ancestor can be
 solved, so a spine or a tail leaves the walk after a step or two. The deltas live in a groupshared

@@ -132,7 +132,7 @@ is what a caller reaches for only when it holds bytes no store addresses, which 
 |---|---|
 | `.bmesh` | Geometry, meshlets, node hierarchy, material paths, skeleton path. Editing one is [bmesh.h](libs/assetlib/include/assetlib/bmesh.h). |
 | `.bmaterial` | Factors, the baked triplet, the per-channel routing table |
-| `.bskel` / `.banim` | A rig; clip samples resampled against it. Split because a rig outlives its clips. |
+| `.bskel` / `.banim` | A rig; clip samples resampled against it. Split because a rig outlives its clips. The `.banim` also carries what the cook derived off the walk: a posed box per mesh entry, and a plant weight per leg per frame, each self-keyed so a pairing that has changed is measured instead. |
 | `.rml` / `.rcss` / `.ttf` | Not containers — foreign kinds the UI runtime parses. Listed here only because the project stores and packs them. |
 | `.bsky` / `.benvl` / `.benv` | Backdrop; the lighting pair convolved from it; the few bytes naming both. [docs/envmaps.md](docs/envmaps.md) |
 | `.bimport` | One per copied source under `Authored/Meshes/`: the bindings and parameters an import was authored with, as text. What a stale cache entry re-cooks from. Its struct is [import_document.h](libs/assetlib/include/assetlib/import_document.h). |

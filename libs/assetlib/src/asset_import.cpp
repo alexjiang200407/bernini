@@ -23,6 +23,7 @@
 #include "CheckedFileReader.h"
 #include "cache_io.h"
 #include "import_bounds.h"
+#include "plant_bake.h"
 #include "ref_paths.h"
 
 namespace assetlib
@@ -436,6 +437,7 @@ namespace assetlib
 			bound,
 			authoredFloors(GetFiles(), source));
 		bakePosedBounds(clips, mesh, bound);
+		bakePlantWeightsForRig(GetFiles(), clips, std::span<const BMesh>(&mesh, 1), bound);
 		Save(clips, banimKey);
 
 		outputs.emplace_back(banimKey);
@@ -550,6 +552,7 @@ namespace assetlib
 		groundClips(clips, meshes, skeleton, authored);
 
 		for (const BMesh& mesh : meshes) bakePosedBounds(clips, mesh, skeleton);
+		bakePlantWeightsForRig(store.GetFiles(), clips, meshes, skeleton);
 	}
 
 	std::string
