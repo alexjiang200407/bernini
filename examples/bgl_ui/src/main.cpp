@@ -178,12 +178,21 @@ main(int argc, char** argv)
 
 			// The preview's own frame: a real scene, drawn every tick into its own target. An
 			// instance's transform is fixed at creation, so the camera is what moves.
-			if (overPanel)
+			//
+			// Flying takes the camera; hovering does not. The orbit recomputes the camera from
+			// `spin` every frame, so the two cannot share it -- but the one that yields is the
+			// orbit, and only once the cursor is over the preview *and* the user actually moved
+			// something. SPIN is then what hands it back, which is the whole reason that button
+			// exists.
+			if (overPanel && flew)
 			{
-				if (flew)
+				camera            = flyCam;
+				previewJob.camera = camera;
+
+				if (spinning)
 				{
-					camera            = flyCam;
-					previewJob.camera = camera;
+					spinning = false;
+					modelHandle.DirtyVariable("spinning");
 				}
 			}
 			else if (spinning)

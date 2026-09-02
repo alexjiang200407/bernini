@@ -8,12 +8,15 @@
 	<div id="frame">
 		<div id="title">BERNINI</div>
 		<img id="preview" src="target://preview"/>
-		<div id="hint">over the preview: WASD to fly, shift-drag inside it to look</div>
+		<div id="hint">over the preview: WASD to fly, shift-drag to look. flying stops the spin</div>
 	</div>
 
 	<div id="controls">
 		<div id="play" class="button" data-event-click="plays = plays + 1">PLAY</div>
-		<div id="toggle" class="button" data-event-click="spinning = !spinning">SPIN</div>
+		<div id="toggle" class="button" data-event-click="spinning = !spinning">
+			<span data-if="spinning">PAUSE SPIN</span>
+			<span data-if="!spinning">SPIN</span>
+		</div>
 		<div id="counter">started {{ plays }} times</div>
 	</div>
 
