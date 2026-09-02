@@ -179,6 +179,13 @@ tree and never reads an archive back, and why a mount key is a `string_view` and
 The `.bsky` / `.benvl` / `.benv` split, how a `.hdr` becomes them, who consumes which, and the
 authoring traps — gamma, cube-seam edge fixup, resampling — that still bite on a map from elsewhere.
 
+**[UI Runtime](./docs/ui_runtime.md)**
+
+The in-game UI: RmlUi documents read from the mount and drawn through `bgl`'s 2D overlay. The layer
+split that keeps the renderer free of the UI library, `target://` for a live 3D render inside a
+document, what document scripting is and is not, the RCSS traps a web author trips on, and what
+replacing RmlUi would actually cost.
+
 **[Known Issues](./docs/known_issues.md)**
 
 One entry per bug that cost somebody a day and could return: the symptom as it appears from the

@@ -106,6 +106,9 @@ still wearing it, since a binding there is a bare slot index with no generation
 
 ## The UI runtime
 
+The full picture — the layer split, `target://`, the RCSS traps and what replacing RmlUi costs — is
+[docs/ui_runtime.md](../../docs/ui_runtime.md). What follows is the part that belongs beside the code.
+
 `UiRuntime` ([include/gamelib/ui/UiRuntime.h](include/gamelib/ui/UiRuntime.h)) owns RmlUi. It is
 **one per process** and says so by throwing: `Rml::Initialise`, the interfaces and the context
 registry are all global, so a second instance would install its own over the first's and free them

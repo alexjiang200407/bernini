@@ -412,13 +412,38 @@ and portability.
       against the geom's default, and setting one. The mechanism ships (see Materials); this needs
       the placement and selection above it first.
 - [ ] In-game UI
-  - [ ] Adopt UI runtime e.g. Noesis
-  - [ ] Controller/focus
+  - [x] Adopt UI runtime — **RmlUi** (HTML/CSS-shaped documents, MIT), read from the project mount
+    and drawn through a renderer-neutral 2D overlay in `bgl`. Replaces the "e.g. Noesis" line:
+    Noesis is XAML and commercial, and the corpus we wanted was the web one. See
+    [docs/ui_runtime.md](docs/ui_runtime.md).
+  - [x] A 2D overlay in the renderer (`IOverlay`) — pixel-space triangle lists and textures drawn
+    after post-processing. General 2D output; it knows nothing about documents, which is what keeps
+    the UI library replaceable.
+  - [x] Documents, stylesheets and fonts are asset kinds — packed, deleted and renamed like any
+    other, addressed by mount key so loose and packed resolve alike.
+  - [x] A live 3D render inside a document (`target://`) — a headless render target sampled as an
+    overlay texture, which is how a menu shows an animated scene behind its controls.
+  - [x] Document scripting in Lua — RmlUi's stock plugin, off by default. The UI's VM, not the
+    engine's; see Integrate Scripting Into Engine below, which is still open.
+  - [ ] Controller/focus navigation — RCSS `nav` properties driven through
+    `Context::ProcessKeyDown`, and nothing forwards a key event yet. IME, clipboard and cursors are
+    `SystemInterface`'s defaults, likewise unwired. Needs the Input Engine below to say what a
+    focus move even is.
+  - [ ] Clip masks, layers, filters and shaders — the render interface implements the eight
+    required methods plus `SetTransform`, so `border-radius` does not clip. The layer column needs a
+    destination read, and chasing it would make `IOverlay` an RmlUi-shaped API rather than a general
+    2D one. (`opacity` groups flattening is *not* this: RmlUi premultiplies opacity per element, so
+    layers would not change it.)
+  - [ ] Hot reload — `ElementDocument::ReloadStyleSheet` is reachable through the context; nothing
+    watches a file yet.
 - [ ] Input Engine
   - [ ] Character Controls and Movement
   - [ ] Horse Controls and Movement
 - [ ] Combat
-- [ ] Integrate Scripting Into Engine e.g. Lua
+- [ ] Integrate Scripting Into Engine e.g. Lua — the engine-wide VM. The UI already runs Lua for
+  documents (see In-game UI), which is one input to this decision and not the decision itself: no
+  engine object is bound, and `vcpkg.json` now carries Lua either way. `UiRuntimeOptions::luaState`
+  is the seam the engine's state would arrive through.
 - [ ] Campaign Map Editor
   - [ ] Economy
   - [ ] Quests
