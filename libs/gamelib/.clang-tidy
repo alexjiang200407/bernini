@@ -1,0 +1,9 @@
+# Rml is RmlUi's own namespace, and the forward declaration in this library's one public UI header
+# has to spell it the way the library does.
+#
+# Here rather than at the root: a child config's CheckOptions merge key by key, so the editor's own
+# NamespaceIgnoredRegexp would shadow a root one for every editor TU -- and the editor links gamelib.
+InheritParentConfig: true
+
+CheckOptions:
+  readability-identifier-naming.NamespaceIgnoredRegexp: '^Rml$'
