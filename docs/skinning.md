@@ -440,6 +440,8 @@ Each planted run is then ramped in and out over `c_PlantRampFrames`, counted fro
 foot is not down in: nothing, a half, then whole. Runs are found per clip, and a run reaching a
 clip's own edge is **not** ramped there: that edge is where the clip stops, not a foot leaving the
 ground, so a looping idle planted throughout stays planted rather than dipping on the loop point.
+A clip whose first sample is off a frame boundary has no frame index to write weights at, and is
+skipped rather than failing the set (bgl refuses such a file outright).
 
 On the test project's Coyote, `Walk` and `Walk_InPlace` plant the same seven-frame stance per foot
 (½ 1 1 1 1 1 ½); `Run`, a leaping sprint whose foot skids 12 cm forward and 9 back in its two
