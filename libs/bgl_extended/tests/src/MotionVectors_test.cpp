@@ -12,7 +12,6 @@
 #include "util/TestEnvironment.h"
 #include "util/TestOptions.h"
 #include "util/VelocityReadback.h"
-#include "util/jitter.h"
 #include <assetlib/image_io.h>
 #include <bgl/Camera.h>
 #include <bgl/IGraphics.h>
@@ -20,6 +19,7 @@
 #include <bgl/ISceneView.h>
 #include <bgl/SkyboxDesc.h>
 #include <bgl/Viewport.h>
+#include <bgl_common/jitter.h>
 #include <catch2/catch_approx.hpp>
 
 namespace

@@ -15,8 +15,8 @@
 #include "resource/Shader.h"
 #include "resource/Shader_d3d12.h"
 #include "shadercache/ShaderCache_d3d12.h"
-#include "slang/SlangErrorChecker.h"
 #include "types/QueueType.h"
+#include <bgl_common/SlangErrorChecker.h>
 #include <core/ref/SharedRef.h>
 
 namespace bgl
