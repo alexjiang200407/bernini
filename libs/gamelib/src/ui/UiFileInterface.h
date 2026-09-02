@@ -18,6 +18,17 @@ namespace game
 	public:
 		explicit UiFileInterface(const core::file::IFileSystem& files) noexcept;
 
+		// All four declared rather than left implicit: the reference member deletes each, and MSVC
+		// warns -- as an error here -- about every special member it deletes for you.
+		UiFileInterface(const UiFileInterface&)     = delete;
+		UiFileInterface(UiFileInterface&&) noexcept = delete;
+
+		UiFileInterface&
+		operator=(const UiFileInterface&) = delete;
+
+		UiFileInterface&
+		operator=(UiFileInterface&&) noexcept = delete;
+
 		Rml::FileHandle
 		Open(const Rml::String& path) override;
 

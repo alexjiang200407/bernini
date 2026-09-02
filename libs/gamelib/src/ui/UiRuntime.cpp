@@ -22,6 +22,15 @@ namespace game
 		UiFileInterface   files;
 
 		explicit Interfaces(const core::file::IFileSystem& mount) noexcept : files(mount) {}
+
+		Interfaces(const Interfaces&)     = delete;
+		Interfaces(Interfaces&&) noexcept = delete;
+
+		Interfaces&
+		operator=(const Interfaces&) = delete;
+
+		Interfaces&
+		operator=(Interfaces&&) noexcept = delete;
 	};
 
 	UiRuntime::UiRuntime(const assetlib::AssetStore& store, Rml::RenderInterface& renderer)

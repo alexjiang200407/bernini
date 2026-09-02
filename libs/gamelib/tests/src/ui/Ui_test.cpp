@@ -71,6 +71,13 @@ namespace
 		float                height  = 8.0f;
 		Rml::DataModelHandle model;
 
+		Fixture(const Fixture&) = delete;
+		Fixture(Fixture&&)      = delete;
+		Fixture&
+		operator=(const Fixture&) = delete;
+		Fixture&
+		operator=(Fixture&&) noexcept = delete;
+
 		explicit Fixture(const assetlib::AssetStore& store) : runtime(store, renderer)
 		{
 			runtime.LoadFontFace(c_Font);

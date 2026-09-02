@@ -12,6 +12,18 @@ namespace game
 	class UiSystemInterface final : public Rml::SystemInterface
 	{
 	public:
+		UiSystemInterface() = default;
+
+		// Declared rather than left implicit, as UiFileInterface's are and for the same reason.
+		UiSystemInterface(const UiSystemInterface&)     = delete;
+		UiSystemInterface(UiSystemInterface&&) noexcept = delete;
+
+		UiSystemInterface&
+		operator=(const UiSystemInterface&) = delete;
+
+		UiSystemInterface&
+		operator=(UiSystemInterface&&) noexcept = delete;
+
 		double
 		GetElapsedTime() override;
 

@@ -13,6 +13,19 @@ namespace game::test
 	class UiStubRenderer final : public Rml::RenderInterface
 	{
 	public:
+		UiStubRenderer() = default;
+
+		// Rml::RenderInterface is NonCopyMoveable, so all four are deleted here -- declared rather
+		// than left implicit, which MSVC warns about as an error.
+		UiStubRenderer(const UiStubRenderer&)     = delete;
+		UiStubRenderer(UiStubRenderer&&) noexcept = delete;
+
+		UiStubRenderer&
+		operator=(const UiStubRenderer&) = delete;
+
+		UiStubRenderer&
+		operator=(UiStubRenderer&&) noexcept = delete;
+
 		Rml::CompiledGeometryHandle
 		CompileGeometry(Rml::Span<const Rml::Vertex>, Rml::Span<const int>) override
 		{
