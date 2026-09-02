@@ -2,7 +2,7 @@
 #include "MetalErrorChecker.h"
 
 #include "convert_metal.h"
-#include "shadercache/util.h"
+#include <bgl_common/shadercache/util.h>
 
 #include <core/file/file.h>
 #include <core/platform/util.h>

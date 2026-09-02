@@ -1,7 +1,7 @@
 #include "pipeline/PipelineLayout_d3d12.h"
 #include "resource/Shader.h"
 #include "shadercache/ShaderCache_d3d12.h"
-#include "uniforms/SlangReflection.h"
+#include <bgl_common/SlangReflection.h>
 
 namespace bgl::pipeline_util
 {

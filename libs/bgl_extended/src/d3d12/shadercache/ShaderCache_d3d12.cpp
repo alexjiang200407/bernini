@@ -1,6 +1,6 @@
 #include "shadercache/ShaderCache_d3d12.h"
 
-#include "shadercache/util.h"
+#include <bgl_common/shadercache/util.h>
 
 #include <core/file/file.h>
 #include <core/hash.h>

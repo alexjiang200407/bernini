@@ -3,7 +3,7 @@
 #include "types/ShaderStage.h"
 
 #include "pipeline/MetalPipelineReflection.h"
-#include "uniforms/ReflectedLayout.h"
+#include <bgl_common/ReflectedLayout.h>
 
 namespace bgl
 {

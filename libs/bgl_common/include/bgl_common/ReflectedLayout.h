@@ -1,5 +1,5 @@
 #pragma once
-#include "uniforms/UniformValueType.h"
+#include <bgl_common/UniformValueType.h>
 
 namespace bgl
 {

@@ -45,7 +45,7 @@ target_precompile_headers(bgl_d3d12
 target_compile_definitions(bgl_d3d12 PRIVATE RENDERER_BACKEND_DX12 $<$<CONFIG:Debug>:USE_PIX>)
 
 target_link_libraries(bgl_d3d12
-    PUBLIC bgl core assetlib_structs glm::glm
+    PUBLIC bgl bgl_common core assetlib_structs glm::glm
     PRIVATE d3d12 dxgi dxguid Microsoft::DirectX-Headers
             Microsoft::WinPixEventRuntime
 )
