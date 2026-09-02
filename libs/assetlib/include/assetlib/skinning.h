@@ -280,6 +280,13 @@ namespace assetlib
 	inline constexpr float c_PlantSlideEpsilon = 0.02f;
 
 	/**
+	 * How far above a foot's lowest vertex the sole reaches: the band of vertices `solePlanes`
+	 * fits its plane through. A centimetre -- a pad is flat to a few millimetres, and the next
+	 * thing up a standing leg is the instep, which is not.
+	 */
+	inline constexpr float c_SoleBand = 0.01f;
+
+	/**
 	 * Frames a planted run is ramped in and out over. Three, because one is a 33 ms step at 30 Hz
 	 * and reads as a pop; the foot is fully planted two frames into the run.
 	 */
@@ -310,10 +317,11 @@ namespace assetlib
 	 * mesh's -- which is why it is measured here and lives in no container. Several meshes because a
 	 * rig drawn as a body and a separately imported boot has its sole on whichever carries the foot.
 	 *
-	 * Fitted as `y = ax + bz + d` over the lowest vertices rather than by a general least-squares
-	 * plane: a sole in bind pose is within a few degrees of horizontal, so this parameterisation is
-	 * well conditioned and needs no eigen solve, and a foot that stood vertically would have no
-	 * sole to speak of.
+	 * Fitted as `y = ax + bz + d` over the band of vertices within `c_SoleBand` of the lowest --
+	 * what touches the ground -- rather than by a general least-squares plane over the foot: a
+	 * sole in bind pose is within a few degrees of horizontal, so this parameterisation is well
+	 * conditioned and needs no eigen solve, and a foot that stood vertically would have no sole to
+	 * speak of.
 	 *
 	 * A leg no mesh here has weight on gets the flat plane through the ankle -- the only answer that
 	 * does not invent one -- exactly as an unweighted clip measures a floor of 0.
