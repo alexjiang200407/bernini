@@ -184,7 +184,7 @@ namespace game::test
 		entry.submeshCount = 1;
 		mesh.meshes.push_back(entry);
 
-		mesh.materials.push_back("Authored/Materials/skin.bmaterial");
+		mesh.materials.emplace_back("Authored/Materials/skin.bmaterial");
 		mesh.skeleton          = "Derived/Skeletons/rig.bskel";
 		mesh.skeletonSignature = assetlib::skeletonSignature(skeleton);
 
@@ -348,7 +348,7 @@ namespace game::test
 		entry.submeshCount = 1;
 		mesh.meshes.push_back(entry);
 
-		mesh.materials.push_back("Authored/Materials/skin.bmaterial");
+		mesh.materials.emplace_back("Authored/Materials/skin.bmaterial");
 		mesh.skeleton          = "Derived/Skeletons/leg.bskel";
 		mesh.skeletonSignature = assetlib::skeletonSignature(skeleton);
 
