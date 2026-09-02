@@ -296,7 +296,7 @@ Three different spaces are in play and they are easy to conflate. The contract, 
   wrong. Bake non-uniform scale into the vertices at import, or the shader must switch to a normal
   matrix.
 * **Normal maps are tangent-space, and Z is reconstructed, not sampled.** `CalculateNormal`
-  ([libs/bgl_extended/shaders/src/lib/forward/PbrShading.slang](libs/bgl_extended/shaders/src/lib/forward/PbrShading.slang))
+  ([libs/bgl_common/shaders/src/lib/math/PbrShading.slang](libs/bgl_common/shaders/src/lib/math/PbrShading.slang))
   takes only `xy`, unpacks `xy * 2 - 1`, and derives `z = sqrt(1 - dot(xy, xy))` — which is why the
   map can be stored two-channel `BC5_UNORM` with no blue channel. Two consequences:
   * An **object-space** or **world-space** normal map cannot be used. Z is forced positive, so any
