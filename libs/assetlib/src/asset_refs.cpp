@@ -230,16 +230,15 @@ namespace assetlib
 	{
 		const std::string ext = lowerExtension(path);
 
-		// The one asset with no codec, so the one the table cannot answer for: a texture is an
-		// image this library encodes, not a container it serializes a struct into.
-		if (ext == c_TextureExtension)
-			return AssetType::kTexture;
+		if (const std::optional<ContainerKind> kind = containerKindForExtension(ext))
+			return kind->type;
 
-		const std::optional<ContainerKind> kind = containerKindForExtension(ext);
-		if (!kind.has_value())
-			return std::nullopt;
+		// The kinds this library stores without encoding, which the container table cannot answer
+		// for: an image, and the UI runtime's own text and font.
+		if (const std::optional<ForeignKind> foreign = foreignKindForExtension(ext))
+			return foreign->type;
 
-		return kind->type;
+		return std::nullopt;
 	}
 
 	bool

@@ -767,11 +767,14 @@ main(int argc, char** argv)
 				std::cout << describeAsset(animations, skeleton ? &*skeleton : nullptr);
 				break;
 			}
-			// sniff never answers either: a texture has no codec, and an import document is text
-			// whose extension the text branch does not accept. Listed so the switch stays
+			// sniff never answers either: a foreign kind has no codec, and an import document is
+			// text whose extension the text branch does not accept. Listed so the switch stays
 			// exhaustive, which is what makes a new AssetType a compile error here.
 			case assetlib::AssetType::kTexture:
 			case assetlib::AssetType::kImportDocument:
+			case assetlib::AssetType::kUiDocument:
+			case assetlib::AssetType::kUiStyle:
+			case assetlib::AssetType::kFont:
 			case assetlib::AssetType::kCount:
 				core::throw_runtime_error("{} is not a container describe can read", key);
 			}

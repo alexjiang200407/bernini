@@ -1,4 +1,5 @@
 #include <assetlib/AssetStore.h>
+#include <assetlib/codecs.h>  // requireInsideDataRoot
 
 #include <core/err/util.h>
 #include <core/file/LooseFileSystem.h>

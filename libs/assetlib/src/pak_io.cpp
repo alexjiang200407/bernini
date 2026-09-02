@@ -2,6 +2,7 @@
 #include "CheckedFileReader.h"
 #include "fs_util.h"
 #include "ref_paths.h"
+#include <assetlib/codecs.h>  // requireInsideDataRoot
 #include <assetlib/pak.h>
 #include <assetlib_structs/magic.h>
 #include <core/err/util.h>

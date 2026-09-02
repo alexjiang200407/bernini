@@ -5,6 +5,7 @@
 #include "util/QtSupport.h"
 #include "util/asset_paths.h"
 #include <assetlib/Project.h>
+#include <assetlib/project_layout.h>
 
 #include <QComboBox>
 #include <QDir>
@@ -227,9 +228,16 @@ TEST_CASE("The content explorer is rooted at the project's authored half", "[con
 		QDir(model->filePath(Hierarchy(window)->rootIndex())) ==
 		QDir(sandbox.DataRootPath() + "/Authored"));
 
-	// And it fills in, on a worker thread. Four rows: every authored category Project::Create
-	// scaffolds -- Meshes, Materials, Environments, Levels -- and nothing derived.
-	REQUIRE(WaitFor([&] { return model->rowCount(Hierarchy(window)->rootIndex()) == 4; }));
+	// And it fills in, on a worker thread. One row per authored category Project::Create scaffolds
+	// -- Meshes, Materials, Environments, Levels, UI, Fonts -- and nothing derived.
+	REQUIRE(WaitFor([&] {
+		return model->rowCount(Hierarchy(window)->rootIndex()) ==
+		       static_cast<int>(std::ranges::count_if(
+				   assetlib::c_RequiredDirectories,
+				   [](const std::string_view category) {
+					   return category.starts_with(assetlib::c_AuthoredDirectoryName);
+				   }));
+	}));
 }
 
 TEST_CASE("The explorer resolves against the data root it is not rooted at", "[contentexplorer]")
