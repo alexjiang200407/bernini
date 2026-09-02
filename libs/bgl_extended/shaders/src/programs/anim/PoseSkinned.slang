@@ -309,8 +309,16 @@ LegPose ReadLeg(
     // the tilt -- which brings the sole normal onto the ground's -- the sole lands exactly on the
     // plane whatever the chain did, since the only part of the offset that has height is the part
     // along that normal.
+    //
+    // The height is measured in model space through the ankle's transform, never off the stored
+    // ankle-local sole: bone space carries whatever scale the bind does -- a rig authored in
+    // centimetres keeps a hundredfold in every inverse bind -- so a distance read there is in those
+    // units. Measured before the solve is exact: the solve turns the ankle rigidly about the joint,
+    // which leaves the joint's distance to its sole where it is.
     pose.weight = PlantWeight(rig, clip, index, frames);
-    let footHeight = -dot(leg.solePoint.xyz, normalize(leg.soleNormal.xyz));
+    let sole = TransformPoint(ankleModel, leg.solePoint.xyz);
+    let soleUp = normalize(TransformDir(ankleModel, leg.soleNormal.xyz));
+    let footHeight = dot(pose.ankle - sole, soleUp);
     pose.target = lerp(pose.ankle, SampleGround(plane, down, pose.ankle) + plane.xyz * footHeight, pose.weight);
 
     // How far the rig must come down, along the ground's up, for this chain to reach: the smaller
