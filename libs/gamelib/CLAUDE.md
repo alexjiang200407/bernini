@@ -28,6 +28,8 @@ here, not in either of them.
   because nothing retains CPU geometry after the GPU upload — feed it while the `BMesh` is still
   in scope. Pure CPU, no bgl_extended involvement; the editor's material preview drives click-to-select
   with it.
+- `UiRuntime` / `UiContext` — the in-game UI: RmlUi's lifetime, its clock and log, and the file
+  interface every document, stylesheet and font is read through. See *The UI runtime* below.
 - `AssetManager` — constructed with an `IScene` and the project's **Data directory**. Textures,
   materials and geometry belong to the scene and are shared across every view drawn from it, so the
   manager is one per scene, and `CreateInstance` names the view each instance is placed in (holding it
@@ -101,3 +103,46 @@ its own, which is the edge above: `ClearInstanceSubmeshMaterial` and `DestroyIns
 Without that reference `bgl_extended` would happily let the material be deleted out from under an instance
 still wearing it, since a binding there is a bare slot index with no generation
 (`ISceneView::SetSubmeshMaterialOverride`).
+
+## The UI runtime
+
+`UiRuntime` ([include/gamelib/ui/UiRuntime.h](include/gamelib/ui/UiRuntime.h)) owns RmlUi. It is
+**one per process** and says so by throwing: `Rml::Initialise`, the interfaces and the context
+registry are all global, so a second instance would install its own over the first's and free them
+under it on the way out.
+
+**A context is handed out as `Rml::Context&`, not wrapped.** A game registers its data models and
+event listeners with RmlUi's own API — `CreateDataModel`, `data-event-click`, `ProcessMouseMove` —
+because that API and its documentation are what the library was chosen for, and a facade over it
+would be a second surface to keep in step. What gamelib owns instead is the three things RmlUi
+cannot know: lifetime, the mount, and the clock.
+
+So `Rml::` reaches a client through **one** gamelib header, which forward-declares the three types
+it names and includes no RmlUi header. A client that drives a context includes `<RmlUi/Core.h>`
+itself; the target is linked `PUBLIC` and its includes are imported as SYSTEM, so
+`enable_strict_compiler`'s warnings-as-errors never compile RmlUi's headers — which is also why the
+editor, which links gamelib and never touches a context, pays only the link.
+
+**Every path is a mount key.** `UiFileInterface` reads through the `AssetStore`'s `IFileSystem`, so
+`Authored/UI/menu.rml` resolves the same from a loose tree and from a `.bpak`, and nothing reaches
+`std::filesystem`. `UiSystemInterface::JoinPath` resolves a document's `@import` or `src` against
+the document's own key and puts it back in that form, refusing anything that leaves the data root
+through `assetlib::requireInsideDataRoot` — the same body assetlib checks its own references with,
+rather than a second rule that could disagree. A reference carrying a scheme (`target://preview`)
+passes through untouched for the renderer to resolve. A refusal yields an empty path rather than an
+exception: RmlUi calls `JoinPath` from inside its own parse, and the open that follows reports the
+failure with the document and line already in hand.
+
+**The clock is the client's.** `AdvanceTime` is what `GetElapsedTime` reports, so a headless test
+steps a transition exactly instead of racing a wall clock, and a paused game pauses its UI by not
+calling it. It is deliberately *not* `RenderJob::time`, which is a clip-local transport position
+that scrubs and resets to zero.
+
+**A document that lays out text needs a font face**, and faces are process-wide rather than per
+context: `UiRuntime::LoadFontFace("Authored/Fonts/Lato-Regular.ttf")`. The repo's fixture tree
+carries Lato under the SIL Open Font License, its licence beside it.
+
+`gamelib_tests`' `[ui]` cases drive all of this headlessly through a no-op `RenderInterface`, and
+`tests/src/ui/UiTree.h` dumps a context's element tree — tag, id, classes, computed border box — as
+text, so a case asserts a whole layout in one call and a failure prints the tree rather than a
+number.
