@@ -1,5 +1,4 @@
-import lib.forward.common;
-import lib.types.Texture;
+import idl.ISurfaceEnv;
 
 // Fresnel Schlick approximation adjusted for IBL Roughness
 public float3 FresnelSchlickRoughness(float cosTheta, float3 F0, float roughness)
@@ -74,30 +73,12 @@ public struct SurfaceLobes
     public float3 reflectance;
 };
 
-/**
- * What a surface is lit by, as opposed to what it is made of.
- *
- * Assembled at the call site rather than nested inside the constant buffer it comes from: a struct
- * mixing plain data with resource handles cannot be placed below a constant buffer's top level, and
- * the reflection asserts (docs/slang_shaders.md).
- */
-public struct SurfaceEnv
-{
-    public float3 cameraPos;
-    public float exposure;
-
-    public TextureCube.Handle irradianceMap;
-    public TextureCube.Handle prefilterMap;
-    public Texture2D.Handle brdfLUT;
-    public SamplerState.Handle clampSampler;
-
-    /// (sin, cos) of the environment's rotation about the up axis.
-    public float2 envRotation;
-};
-
-public SurfaceLobes EvaluateSurface(
-    SurfaceEnv env,
-    ForwardVSOut input,
+public SurfaceLobes EvaluateSurface<E : ISurfaceEnv>(
+    E env,
+    SurfaceParams params,
+    float3 worldPos,
+    float3 worldNormal,
+    float4 worldTangent,
     float4 baseColor,
     float3 orm,
     float2 normalXY,
@@ -111,8 +92,8 @@ public SurfaceLobes EvaluateSurface(
     float metallic = orm.b;
 
     // Setup Geometry Vectors
-    float3 N = CalculateNormal(input.normal, input.tangent, normalXY, isFrontFace);
-    float3 V = normalize(env.cameraPos - input.worldPos);
+    float3 N = CalculateNormal(worldNormal, worldTangent, normalXY, isFrontFace);
+    float3 V = normalize(params.cameraPos - worldPos);
     float3 R = reflect(-V, N);
 
     float cosTheta = max(dot(N, V), 0.0);
@@ -130,7 +111,7 @@ public SurfaceLobes EvaluateSurface(
     float3 kD = 1.0 - kS;
     kD *= 1.0 - metallic;
 
-    let irradiance = env.irradianceMap.Sample(env.clampSampler, ToEnvSpace(N, env.envRotation)).rgb;
+    let irradiance = env.Irradiance(ToEnvSpace(N, params.envRotation));
     let diffuse = irradiance * albedo;
 
     const float MAX_REFLECTION_LOD = 6.0f; // Highest mip index of the 7-level prefilter cube
@@ -168,20 +149,20 @@ public SurfaceLobes EvaluateSurface(
     const float c_AreaLodCap = 1.0f;
 
     const float footprint = max(length(ddx(R)), length(ddy(R)));
-    const float texel0 = 1.5707963f / float(env.prefilterMap.CubeFaceTexels());
+    const float texel0 = 1.5707963f / float(env.PrefilterFaceTexels());
     const float excess = max(footprint - texel0 * 3.0f, 0.0f);
     const float areaLod = min(sqrt(excess) * MAX_REFLECTION_LOD, c_AreaLodCap);
 
     const float lod = min(max(roughness * MAX_REFLECTION_LOD, areaLod), MAX_REFLECTION_LOD);
-    let prefilteredColor = env.prefilterMap.SampleLevel(env.clampSampler, ToEnvSpace(R, env.envRotation), lod).rgb;
-    float2 envBRDF = env.brdfLUT.Sample(env.clampSampler, float2(cosTheta, roughness)).rg;
+    let prefilteredColor = env.Prefiltered(ToEnvSpace(R, params.envRotation), lod);
+    float2 envBRDF = env.BrdfLut(cosTheta, roughness);
 
     SurfaceLobes lobes;
     // envBRDF.y is the split-sum's F90 term, which the weight scales as much as F0 -- it is already
     // in F. Left unweighted, a surface with the specular switched off keeps a grazing rim of it.
     lobes.reflectance = (F * envBRDF.x + envBRDF.y * specularWeight) * ao;
-    lobes.diffuse = kD * diffuse * ao * env.exposure;
-    lobes.specular = prefilteredColor * lobes.reflectance * env.exposure;
+    lobes.diffuse = kD * diffuse * ao * params.exposure;
+    lobes.specular = prefilteredColor * lobes.reflectance * params.exposure;
 
     return lobes;
 }

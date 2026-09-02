@@ -1,9 +1,10 @@
 import idl.Constants;
 import idl.IAlphaTestMaterial;
 import idl.IPbrMaterial;
+import idl.ISurfaceEnv;
 import lib.forward.common;
 import lib.forward.MaterialData;
-import lib.forward.PbrShading;
+import lib.math.PbrShading;
 import lib.math.HashedAlpha;
 
 public extension MaterialData
@@ -14,7 +15,10 @@ public extension MaterialData
     {
         return EvaluateSurface(
             GetSurfaceEnv(),
-            input,
+            GetSurfaceParams(),
+            input.worldPos,
+            input.normal,
+            input.tangent,
             baseColor,
             material.GetORM(input.uv),
             material.GetNormalXY(input.uv),
