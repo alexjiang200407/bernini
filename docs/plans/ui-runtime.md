@@ -171,16 +171,26 @@ is a record rather than an example.
   the editor either — the second trigger, not this one.
 - **A second renderer.** The overlay is declared in `bgl_intfc` because one is planned; nothing
   here builds, stubs or prices WebGPU.
-- **Lua, or any script engine.** No `EventListenerInstancer` is installed; inline `onclick` is
-  inert. `data-event-*` against a data model the binary registers is the whole interaction story.
-  The door is real and stays open: the roadmap's scripting item ([ROADMAP.md](../../ROADMAP.md)
-  `:414`, "e.g. Lua") decides the engine's language, and RmlUi's official Lua plugin
-  (`rmlui[lua]`) then gives documents `<script>` blocks, the element and event API, and data
-  models declared from Lua tables — UI-only logic in the asset tree, the Scaleform/ActionScript
-  split, without a second language. JavaScript was considered and set aside: RmlUi has no
-  official binding, so it would be either hand-written bindings or a browser-engine runtime
-  (ADR-1), and either way a second VM beside the engine's. The roadmap rewrite in task 7 lists
-  UI scripting as a `[ ]` child behind the scripting item.
+- ~~**Lua, or any script engine.**~~ **Amended.** This was written expecting the plugin to cost
+  what a scripting *engine* costs. It does not: `Rml::Lua::Initialise(lua_State*)` takes an
+  external state or makes its own, so the whole of it is one call and a build feature. It is
+  therefore built here, off by default, as `UiRuntimeOptions::scripting` — documents get
+  `<script>` blocks, inline handlers, the element and event API, and data models declared from
+  Lua tables, which is the Scaleform/ActionScript split without a second language.
+
+  It is off by default because it moves a trust boundary: the plugin opens Lua's standard
+  libraries, so a scripted document reaches the host directly and ADR-8's mount confinement bounds
+  what the document *loader* resolves rather than what a script does once it runs. Documents the
+  project ships, not documents it receives.
+
+  **What stays deferred is the engine-wide VM**, and the non-goal holds there: nothing outside
+  the UI runs Lua, no engine object is bound, and the roadmap's scripting item
+  ([ROADMAP.md](../../ROADMAP.md) `:414`, "e.g. Lua") still makes that decision. Not from a blank
+  slate, though, and the honest form of this is that `vcpkg.json` now carries Lua unconditionally:
+  a cost that decision inherits rather than a neutrality it keeps. `UiRuntimeOptions::luaState` is the seam it arrives through — hand the engine's
+  state in and the UI stops keeping one. JavaScript was considered and set aside for the reason
+  below, which is unchanged: RmlUi has no official binding, so it would be hand-written bindings
+  or a browser-engine runtime (ADR-1), and either way a second VM beside the engine's.
 - **Clip masks, layers, filters, shaders** (ADR-11).
 - **Controller and focus navigation, IME, clipboard, cursors.** `SystemInterface`'s defaults.
 - **An engine input layer** (ADR-10) and a game loop abstraction. The example's loop is the
@@ -428,6 +438,12 @@ the loop stays single-threaded.
    so a case asserts or diffs a whole layout in one call and a failing golden in task 5 logs the
    tree beside the PNG. Tests use a no-op `RenderInterface` stub, so nothing here depends on
    task 1. Gate: the headless `[ui]` cases in Acceptance, loose and packed.
+4b. **`feat(gamelib): documents script themselves in Lua`** — added after this plan merged, and
+   the task that amends the Lua non-goal above. `rmlui[lua]`, `UiRuntimeOptions::scripting` off by
+   default, `Rml::Lua::Initialise` on the plugin's own state or the caller's. Gate: `[ui][lua]` --
+   a document's `<script>` defines a function an inline `onclick` calls, its state persists across
+   clicks, the same document is inert with scripting off, and a caller's state is used and left
+   open. Numbered out of sequence because the tasks before it had already landed.
 5. **`feat(gamelib): the UI renders through the overlay`** — `UiRenderer`, the `LoadTexture`
    decode path and its `target://` resolution, `Render(IGraphics&)`. Gate: `[ui][render]` golden
    of a document with a coloured box and a line of text, with the not-two-blanks guard; a
@@ -442,7 +458,9 @@ the loop stays single-threaded.
    the counter, and the fly-cam moves the preview only while the cursor is over the panel
    (`ProcessMouseButtonDown`'s return and the element under the cursor gate it).
 7. **`docs: the UI runtime page, the roadmap, and the plan's retirement`** — `docs/ui_runtime.md`
-   by bcp-docs, with its *Replacing RmlUi* section (ADR-7) and the RCSS traps, `libs/gamelib/CLAUDE.md`, the `CLAUDE.md` index entry, `ROADMAP.md`'s In-game UI
+   by bcp-docs, with its *Replacing RmlUi* section (ADR-7), the RCSS traps and **what document
+   scripting is and is not** (task 4b: the UI's Lua, not the engine's, and a scripted document is
+   trusted code), `libs/gamelib/CLAUDE.md`, the `CLAUDE.md` index entry, `ROADMAP.md`'s In-game UI
    entry rewritten in the tree's pattern (the mechanism, what it replaced, the link, the deferred
-   children as `[ ]` with their reason), and this plan deleted. Gate: every claim in the new doc
+   children as `[ ]` with their reason -- the engine-wide VM among them), and this plan deleted. Gate: every claim in the new doc
    resolves to a file that exists.

@@ -43,6 +43,9 @@ target_link_libraries(gamelib
 		bgl_extended
 		assetlib
 		RmlUi::RmlUi
+		# The stock Lua plugin: one Initialise call behind UiRuntimeOptions::scripting. PUBLIC with
+		# the core for the same reason -- a game's own <script> bindings are its business.
+		RmlUi::Lua
 )
 
 enable_strict_compiler(gamelib)
