@@ -127,6 +127,27 @@ public:
 		return m_SlopeDegrees;
 	}
 
+	/**
+	 * Which way uphill points, in degrees about +Y from +X. Nothing here knows which way a rig
+	 * moves, so a person turns the hill to face its stride rather than the rig to face the hill.
+	 * A rebind like the slope, and committed the same way.
+	 */
+	void
+	SetGroundHeading(float degrees);
+
+	[[nodiscard]] float
+	GetGroundHeading() const noexcept
+	{
+		return m_HeadingDegrees;
+	}
+
+	/**
+	 * Whether the floor is drawn. The ground a foot plants against is the scene's either way;
+	 * this is only what is in the picture, for a rig that reads better against the backdrop.
+	 */
+	void
+	SetFloorVisible(bool visible);
+
 	/** Back to the empty state: geometry released, environment kept, ground left flat. */
 	void
 	Clear();
@@ -228,6 +249,10 @@ private:
 	void
 	PlaceGround();
 
+	/** PlaceGround from the UI thread, when there is a ground to re-place and it is on screen. */
+	void
+	ReplaceGround();
+
 	// One animated placement's live state: respawned in place on a clip switch, and on a tier
 	// switch, which is the same destroy-and-recreate against the same geom.
 	struct AnimatedDraw
@@ -251,7 +276,12 @@ private:
 	bgl::MaterialHandle     m_GroundMaterial;
 	bgl::GeomHandle         m_GroundGeom;
 	bgl::MeshInstanceHandle m_GroundInstance;
-	float                   m_SlopeDegrees = 0.0f;
+	float                   m_SlopeDegrees   = 0.0f;
+	float                   m_HeadingDegrees = 0.0f;
+	bool                    m_FloorVisible   = true;
+
+	// True while a rig is shown: the ground stands whether or not the floor is drawn.
+	bool m_GroundPlaced = false;
 
 	// The configured environment is kept whole because a drop carries only a path and Clear has to
 	// be able to get back to it. Its root stands in until a project opens and m_DataRoot names its

@@ -4,6 +4,7 @@
 #include "util/mesh_drop.h"
 #include <assetlib/Project.h>
 
+#include <QCheckBox>
 #include <QComboBox>
 #include <QDir>
 #include <QDoubleSpinBox>
@@ -209,6 +210,39 @@ AnimationEditorWindow::BuildPropertiesColumn()
 		m_Preview->SetGroundSlope(static_cast<float>(m_SlopeSlider->value()));
 	});
 	layout->addWidget(m_SlopeSlider);
+
+	// Which way uphill points. Nothing in the path knows which way a rig moves -- the test coyote
+	// runs along +Z -- so a person turns the hill to face the stride. Committed like the slope.
+	m_HeadingLabel = new QLabel(QStringLiteral("Uphill Heading: 0\u00b0"), column);
+	layout->addWidget(m_HeadingLabel);
+
+	m_HeadingSlider = new QSlider(Qt::Horizontal, column);
+	m_HeadingSlider->setRange(0, 359);
+	m_HeadingSlider->setValue(0);
+	m_HeadingSlider->setTickPosition(QSlider::TicksBelow);
+	m_HeadingSlider->setTickInterval(90);
+	m_HeadingSlider->setToolTip(QStringLiteral(
+		"Which way the ground rises, in degrees about the up axis from +X. Turn it to face the way "
+		"the rig moves to see it climb the slope rather than cross it."));
+	connect(m_HeadingSlider, &QSlider::valueChanged, this, [this](int degrees) {
+		m_HeadingLabel->setText(QStringLiteral("Uphill Heading: %1\u00b0").arg(degrees));
+		if (!m_HeadingSlider->isSliderDown())
+			m_Preview->SetGroundHeading(static_cast<float>(degrees));
+	});
+	connect(m_HeadingSlider, &QSlider::sliderReleased, this, [this] {
+		m_Preview->SetGroundHeading(static_cast<float>(m_HeadingSlider->value()));
+	});
+	layout->addWidget(m_HeadingSlider);
+
+	m_ShowFloor = new QCheckBox(QStringLiteral("Show floor"), column);
+	m_ShowFloor->setChecked(true);
+	m_ShowFloor->setToolTip(QStringLiteral(
+		"Draws the ground under the rig. Feet plant against it either way; this is only whether it "
+		"is in the picture."));
+	connect(m_ShowFloor, &QCheckBox::toggled, this, [this](bool checked) {
+		m_Preview->SetFloorVisible(checked);
+	});
+	layout->addWidget(m_ShowFloor);
 
 	layout->addSpacing(8);
 	layout->addWidget(new QLabel(QStringLiteral("Clips"), column));

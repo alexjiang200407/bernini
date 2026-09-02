@@ -95,18 +95,39 @@ void
 AnimationPreviewWindow::SetGroundSlope(const float degrees)
 {
 	m_SlopeDegrees = degrees;
+	ReplaceGround();
+}
 
-	if (m_GroundInstance.IsValid() && isVisible())
-		GetRenderer()->Invoke([&] {
-			try
-			{
-				PlaceGround();
-			}
-			catch (const std::exception& e)
-			{
-				qWarning("AnimationPreview: failed to tilt the ground: %s", e.what());
-			}
-		});
+void
+AnimationPreviewWindow::SetGroundHeading(const float degrees)
+{
+	m_HeadingDegrees = degrees;
+	ReplaceGround();
+}
+
+void
+AnimationPreviewWindow::SetFloorVisible(const bool visible)
+{
+	m_FloorVisible = visible;
+	ReplaceGround();
+}
+
+void
+AnimationPreviewWindow::ReplaceGround()
+{
+	if (!m_GroundPlaced || !isVisible())
+		return;
+
+	GetRenderer()->Invoke([&] {
+		try
+		{
+			PlaceGround();
+		}
+		catch (const std::exception& e)
+		{
+			qWarning("AnimationPreview: failed to place the ground: %s", e.what());
+		}
+	});
 }
 
 void
@@ -117,23 +138,13 @@ AnimationPreviewWindow::showEvent(QShowEvent* event)
 	// The ground is the scene's, and the scene is shared with the Level Editor: a slope set here
 	// is a slope every skinned instance anywhere in it plants against. So it stands only while
 	// this panel is on screen, and goes flat the moment it is not.
-	if (m_GroundInstance.IsValid())
-		GetRenderer()->Invoke([&] {
-			try
-			{
-				PlaceGround();
-			}
-			catch (const std::exception& e)
-			{
-				qWarning("AnimationPreview: failed to tilt the ground: %s", e.what());
-			}
-		});
+	ReplaceGround();
 }
 
 void
 AnimationPreviewWindow::hideEvent(QHideEvent* event)
 {
-	if (m_GroundInstance.IsValid())
+	if (m_GroundPlaced)
 		GetRenderer()->Invoke([&] { GetPreviewScene()->SetGround({}); });
 
 	RenderTargetWindow::hideEvent(event);
@@ -150,10 +161,13 @@ AnimationPreviewWindow::PlaceGround()
 		m_GroundInstance = bgl::MeshInstanceHandle();
 	}
 
-	GetPreviewScene()->SetGround(editor::GroundForSlope(m_SlopeDegrees));
-	m_GroundInstance = view->CreateStaticMeshInstance(
-		m_GroundGeom,
-		editor::FloorTransformForSlope(m_SlopeDegrees));
+	GetPreviewScene()->SetGround(editor::GroundForSlope(m_SlopeDegrees, m_HeadingDegrees));
+	m_GroundPlaced = true;
+
+	if (m_FloorVisible)
+		m_GroundInstance = view->CreateStaticMeshInstance(
+			m_GroundGeom,
+			editor::FloorTransformForSlope(m_SlopeDegrees, m_HeadingDegrees));
 }
 
 void
@@ -182,13 +196,15 @@ AnimationPreviewWindow::Clear()
 void
 AnimationPreviewWindow::ClearGeometry()
 {
-	if (m_GroundInstance.IsValid())
+	if (m_GroundPlaced)
 	{
 		// The floor leaves with the rig, and the ground it tilted goes back to flat: the scene is
 		// shared, and nothing else in it should stand on a slope this panel set.
 		GetRenderer()->Invoke([&] {
-			GetPreviewView()->DeleteMeshInstance(m_GroundInstance);
+			if (m_GroundInstance.IsValid())
+				GetPreviewView()->DeleteMeshInstance(m_GroundInstance);
 			m_GroundInstance = bgl::MeshInstanceHandle();
+			m_GroundPlaced   = false;
 			GetPreviewScene()->SetGround({});
 		});
 	}

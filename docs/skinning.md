@@ -293,7 +293,10 @@ to keep in agreement beyond the one below.
 
 * **A ground-slope slider tilts what the rig stands on.** It sets the scene's ground plane — the one
   a planted foot is solved against — and stands a floor under the rig at the same tilt, so the tilt
-  can be seen. Positive rises toward +X. The two are derived from one rotation
+  can be seen. Positive rises toward +X, and a heading slider turns uphill about +Y: nothing in the
+  path knows which way a rig moves (the test coyote runs along +Z), so a person turns the hill to
+  face the stride rather than the rig to face the hill. A checkbox hides the floor; the ground a
+  foot plants against stands either way. The floor and the ground are derived from one rotation
   (`editor::GroundForSlope`, `FloorTransformForSlope`, free of the window and pinned by
   `[slope]`), so the floor and the ground cannot lean different ways. It commits on **release**,
   not on every tick of a drag:

@@ -54,3 +54,32 @@ TEST_CASE("The floor stands on the ground it is drawn for", "[animation][slope]"
 		CheckNear(glm::vec3(floor * glm::vec4(0.0f, 0.0f, 0.0f, 1.0f)), glm::vec3(0.0f));
 	}
 }
+
+TEST_CASE("The heading turns uphill about +Y", "[animation][slope]")
+{
+	// At heading 0 the ground rises toward +X; at 90 it rises toward +Z -- the way the test coyote
+	// runs -- and at 180 back toward -X. The slope itself is untouched by the turn.
+	const bgl::GroundPlaneDesc east  = editor::GroundForSlope(30.0f, 0.0f);
+	const bgl::GroundPlaneDesc south = editor::GroundForSlope(30.0f, 90.0f);
+	const bgl::GroundPlaneDesc west  = editor::GroundForSlope(30.0f, 180.0f);
+
+	CHECK(east.normal.x < 0.0f);
+	CHECK(east.normal.z == Catch::Approx(0.0f).margin(1e-5));
+
+	CHECK(south.normal.z < 0.0f);
+	CHECK(south.normal.x == Catch::Approx(0.0f).margin(1e-5));
+
+	CHECK(west.normal.x > 0.0f);
+	CHECK(west.normal.z == Catch::Approx(0.0f).margin(1e-5));
+
+	for (const bgl::GroundPlaneDesc* ground : { &east, &south, &west })
+		CHECK(ground->normal.y == Catch::Approx(std::cos(glm::radians(30.0f))).margin(1e-5));
+
+	// And the floor turns with it.
+	for (const float heading : { 0.0f, 45.0f, 90.0f, 270.0f })
+	{
+		const glm::mat4 floor = editor::FloorTransformForSlope(20.0f, heading);
+		const glm::vec3 up = glm::normalize(glm::vec3(floor * glm::vec4(0.0f, 0.0f, 1.0f, 0.0f)));
+		CheckNear(up, editor::GroundForSlope(20.0f, heading).normal);
+	}
+}

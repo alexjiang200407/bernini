@@ -12,6 +12,7 @@ class QDragEnterEvent;
 class QDragMoveEvent;
 class QDropEvent;
 class QStackedWidget;
+class QCheckBox;
 class QComboBox;
 class QSlider;
 class QDoubleSpinBox;
@@ -173,6 +174,11 @@ private:
 	// preview unaccumulated for the whole gesture.
 	QSlider* m_SlopeSlider = nullptr;
 	QLabel*  m_SlopeLabel  = nullptr;
+
+	// Which way uphill points, in whole degrees about +Y from +X, and whether the floor is drawn.
+	QSlider*   m_HeadingSlider = nullptr;
+	QLabel*    m_HeadingLabel  = nullptr;
+	QCheckBox* m_ShowFloor     = nullptr;
 
 	QListWidget* m_ClipList     = nullptr;
 	QLabel*      m_ClipMetadata = nullptr;
