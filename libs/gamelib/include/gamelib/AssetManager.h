@@ -563,12 +563,33 @@ namespace game
 		 * The rig for `animationsNorm`, uploaded on the first acquire and shared afterwards. One
 		 * reference per skinned *geom*, not per geom reference: a geom takes one when it is built
 		 * and gives it back in DestroyGeom.
+		 *
+		 * The upload is where a rig's feet are planted: the avatar its skeleton authors is found by
+		 * convention, its legs resolved, each sole fitted to `mesh`, and the plant weights read off
+		 * the `.banim` or measured when the ones there were made against something else. A rig
+		 * with no avatar uploads exactly as before.
+		 *
+		 * `mesh` is the one in hand at that first acquire, and the soles are fitted to it alone: the
+		 * legs are the rig's and go up once, so a unit assembled from slot meshes has its soles
+		 * fitted to whichever mesh came first. A body and its boots disagree by the boot's thickness.
 		 */
 		[[nodiscard]] bgl::RigHandle
 		AcquireRig(
 			std::string_view              animationsNorm,
 			const assetlib::Skeleton&     skeleton,
-			const assetlib::AnimationSet& animations);
+			const assetlib::AnimationSet& animations,
+			const assetlib::BMesh&        mesh);
+
+		/**
+		 * What AddRig is handed about a rig's feet: its legs from the avatar beside its skeleton,
+		 * each sole fitted to `mesh`, and a plant weight per leg per frame. Empty for a rig with no
+		 * avatar, which is what AddRig reads as "plants nothing".
+		 */
+		[[nodiscard]] bgl::FootPlantDesc
+		FootPlantFor(
+			const assetlib::BMesh&        mesh,
+			const assetlib::Skeleton&     skeleton,
+			const assetlib::AnimationSet& animations) const;
 
 		/**
 		 * Drops one reference, deleting the rig at zero.

@@ -92,4 +92,22 @@ namespace assetlib
 	/** @throws what `IFileSystem::Read` and `AssetCodec<Avatar>::Deserialize` throw. */
 	[[nodiscard]] Avatar
 	loadAvatar(const core::file::IFileSystem& files, std::string_view key);
+
+	/**
+	 * The legs the rig at `skeletonKey` authors, resolved against `skeleton`, or empty when no
+	 * avatar sits beside it -- which is most rigs, and costs one stat.
+	 *
+	 * The whole of "does this rig plant, and where": the avatar found by its convention, read, and
+	 * its names resolved. One door for the cook and the load both, so the two cannot disagree about
+	 * which file a rig's legs come from.
+	 *
+	 * An avatar that will not parse, or that names bones this rig does not carry, resolves to no
+	 * legs and says so in the log rather than failing the caller: the rig still animates, unplanted,
+	 * but an authored file being ignored is not something to pass over in silence.
+	 */
+	[[nodiscard]] std::vector<AvatarLegChain>
+	legChainsForRig(
+		const core::file::IFileSystem& files,
+		std::string_view               skeletonKey,
+		const Skeleton&                skeleton);
 }
