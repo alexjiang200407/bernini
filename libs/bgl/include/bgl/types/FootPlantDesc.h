@@ -22,7 +22,8 @@ namespace bgl
 		uint32_t ankle = 0;
 		uint32_t toe   = 0;
 
-		// Ankle-local, and normalized on upload.
+		// Ankle-local -- in bone units, which carry whatever scale the bind does -- and normalized on
+		// upload.
 		glm::vec3 solePoint  = glm::vec3(0.0f);
 		glm::vec3 soleNormal = glm::vec3(0.0f, 1.0f, 0.0f);
 	};
