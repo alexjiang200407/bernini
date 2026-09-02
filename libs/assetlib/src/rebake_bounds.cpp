@@ -187,7 +187,7 @@ namespace assetlib
 				// The rig's meshes are gathered only when there is an avatar, so a project that
 				// authors none does not copy a vertex.
 				const std::vector<AvatarLegChain> legs =
-					legChainsForRig(GetFiles(), animations, skeleton);
+					legChainsForRig(GetFiles(), animations.skeleton, skeleton);
 
 				auto planted = std::vector<BMesh>();
 				if (!legs.empty())
