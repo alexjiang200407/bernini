@@ -1,11 +1,11 @@
 # Generated into the build tree, not the source tree: a struct's layout follows the backend it is
 # generated for, so a committed copy would be right for one and silently wrong for the other.
-set(IDL_CPP_OUT_DIR        "${CMAKE_BINARY_DIR}/generated/idl")
+set(IDL_CPP_OUT_DIR        "${CMAKE_BINARY_DIR}/generated/bgl_common/idl")
 # The public headers stay in the source tree, and stay committed: a consumer includes <bgl/...>
-# without building bgl_extended. Safe because IDL_PUBLIC_CPP_SOURCES holds no structs -- only enums with an
+# without building bgl_common. Safe because IDL_PUBLIC_CPP_SOURCES holds no structs -- only enums with an
 # explicit underlying type and a constant, which no backend lays out differently.
 set(IDL_PUBLIC_CPP_OUT_DIR "${CMAKE_SOURCE_DIR}/libs/bgl/include/bgl")
-set(IDL_SLANG_OUT_DIR      "${CMAKE_SOURCE_DIR}/libs/bgl_extended/shaders/src/idl")
+set(IDL_SLANG_OUT_DIR      "${CMAKE_SOURCE_DIR}/libs/bgl_common/shaders/src/idl")
 set(IDL_SRC_ROOT           "${CMAKE_CURRENT_SOURCE_DIR}")
 
 file(GLOB_RECURSE IDL_SOURCES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/*.slang")

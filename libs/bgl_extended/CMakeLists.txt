@@ -1,5 +1,3 @@
-add_subdirectory(./idl)
-
 file(GLOB_RECURSE BGL_EXTENDED_SOURCES CONFIGURE_DEPENDS
 	${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp
 	${CMAKE_CURRENT_SOURCE_DIR}/src/*.c
@@ -32,10 +30,6 @@ add_library(bgl_extended_objects OBJECT
 target_include_directories(bgl_extended_objects
 	PRIVATE
 		${CMAKE_CURRENT_SOURCE_DIR}/src
-		${CMAKE_BINARY_DIR}/generated
-		# A generated header includes its imports as siblings, and Entry/Range/RangeWithCount are
-		# hand-written and still in the source tree, so both directories have to be reachable.
-		${CMAKE_CURRENT_SOURCE_DIR}/src/idl
 )
 
 
@@ -128,6 +122,7 @@ target_compile_definitions(bgl_extended_objects PRIVATE
 # compiles its shaders at runtime (MSL via newLibraryWithSource) and needs no build-time step.
 if(RENDERER_BACKEND STREQUAL "DX12")
 	add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/shaders)
+	add_dependencies(bgl_copy_shader_src bgl_common_copy_shaders)
 	add_dependencies(bgl_extended bgl_copy_shaders bgl_copy_shader_src)
 
 	target_compile_definitions(bgl_d3d12 PRIVATE
@@ -175,6 +170,7 @@ elseif(RENDERER_BACKEND STREQUAL "METAL")
 		VERBATIM
 	)
 	add_custom_target(bgl_metal_copy_shaders ALL DEPENDS "${BGL_METAL_SHADER_STAMP}")
+	add_dependencies(bgl_metal_copy_shaders bgl_common_copy_shaders)
 	add_dependencies(bgl_extended bgl_metal_copy_shaders)
 endif()
 
@@ -216,8 +212,6 @@ if (BUILD_TESTS AND RENDERER_BACKEND STREQUAL "DX12")
         PRIVATE
             ${CMAKE_CURRENT_SOURCE_DIR}/src
             ${CMAKE_CURRENT_SOURCE_DIR}/tests/src
-            ${CMAKE_BINARY_DIR}/generated
-            ${CMAKE_CURRENT_SOURCE_DIR}/src/idl
             ${Stb_INCLUDE_DIR}
     )
 
@@ -299,8 +293,6 @@ if (BUILD_TESTS AND RENDERER_BACKEND STREQUAL "METAL")
 			# case cannot reach one without it.
 			${CMAKE_CURRENT_SOURCE_DIR}/src/metal
 			${CMAKE_CURRENT_SOURCE_DIR}/tests/src
-			${CMAKE_BINARY_DIR}/generated
-			${CMAKE_CURRENT_SOURCE_DIR}/src/idl
 			${Stb_INCLUDE_DIR}
 	)
 

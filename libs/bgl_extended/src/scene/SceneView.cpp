@@ -1,10 +1,10 @@
 #include "scene/SceneView.h"
 #include "fg/FrameGraph.h"
-#include "idl/Constants.h"
 #include "scene/Scene.h"
 #include "scene/scene_buffer_names.h"
 #include "types/SubmeshInstance.h"
 #include "util/util.h"
+#include <bgl_common/idl/Constants.h>
 #include <core/math.h>
 
 namespace bgl

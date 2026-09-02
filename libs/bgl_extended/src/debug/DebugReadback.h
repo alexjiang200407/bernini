@@ -1,7 +1,7 @@
 #pragma once
 #include "debug/DebugBuffer.h"
-#include "idl/DebugRecord.h"
-#include "idl/ErrorCode.h"
+#include <bgl_common/idl/DebugRecord.h>
+#include <bgl_common/idl/ErrorCode.h>
 
 #if defined(BERNINI_GPU_DEBUG)
 namespace bgl
