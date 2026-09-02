@@ -177,6 +177,9 @@ namespace game
 		struct Interfaces;
 
 		std::unique_ptr<Interfaces> m_Interfaces;
-		bool                        m_Scripting = false;
+
+		// As built. `luaState` is read once, at construction -- the live state is RmlUi's, and
+		// `Rml::Lua::Interpreter::GetLuaState()` is what answers for it.
+		UiRuntimeOptions m_Options;
 	};
 }

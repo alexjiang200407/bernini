@@ -37,7 +37,7 @@ namespace game
 	UiRuntime::UiRuntime(
 		const assetlib::AssetStore& store,
 		Rml::RenderInterface&       renderer,
-		const UiRuntimeOptions&     options) : m_Scripting(options.scripting)
+		const UiRuntimeOptions&     options) : m_Options(options)
 	{
 		core::throw_runtime_error_if(
 			g_Live.exchange(true),
@@ -59,16 +59,16 @@ namespace game
 			throw std::runtime_error("game::UiRuntime: Rml::Initialise failed");
 		}
 
-		if (m_Scripting)
+		if (m_Options.scripting)
 		{
 			// After Rml::Initialise, which is what the plugin registers into.
-			Rml::Lua::Initialise(options.luaState);
+			Rml::Lua::Initialise(m_Options.luaState);
 		}
 
 		logger::info(
 			"UI runtime up on RmlUi {}{}",
 			Rml::GetVersion(),
-			m_Scripting ? ", scripting on" : "");
+			m_Options.scripting ? ", scripting on" : "");
 	}
 
 	UiRuntime::~UiRuntime() noexcept
@@ -140,7 +140,7 @@ namespace game
 	bool
 	UiRuntime::ScriptingEnabled() const noexcept
 	{
-		return m_Scripting;
+		return m_Options.scripting;
 	}
 
 	UiContext::UiContext(Rml::Context& context, std::string name) noexcept :
