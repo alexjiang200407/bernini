@@ -8,7 +8,7 @@ import lib.types.EntryBuffer;
 import lib.types.PackedBuffer;
 import lib.types.RangeBuffer;
 import lib.types.RawBuffer;
-import lib.types.SubmeshInstance;
+import lib.data.SubmeshInstance;
 
 public struct ForwardData
 {

@@ -23,7 +23,7 @@ import lib.forward.mesh_stage;
 import lib.forward.SkinnedData;
 import lib.forward.vertexdecode;
 import lib.types.ComputeBuffer;
-import lib.types.SubmeshInstance;
+import lib.data.SubmeshInstance;
 
 public ConstantBuffer<SkinnedData> skinnedData;
 

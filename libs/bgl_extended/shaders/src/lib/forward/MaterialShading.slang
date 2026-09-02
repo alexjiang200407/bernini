@@ -4,7 +4,7 @@ import idl.IPbrMaterial;
 import lib.forward.common;
 import lib.forward.MaterialData;
 import lib.forward.PbrShading;
-import lib.util.HashedAlpha;
+import lib.math.HashedAlpha;
 
 public extension MaterialData
 {
