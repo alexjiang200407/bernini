@@ -56,15 +56,7 @@ public extension MaterialData
         let baseColor = material.GetBaseColor(input.uv);
         let lobes = EvaluateWithBaseColor(input, material, baseColor, isFrontFace);
 
-        let alpha = baseColor.a;
-        let transmission = saturate(material.GetTransmission());
-
-        let reflected = max(max(lobes.reflectance.r, lobes.reflectance.g), lobes.reflectance.b);
-
-        let specularWeight = lerp(alpha, 1.0, transmission);
-        let coverage = lerp(alpha, alpha + (1.0 - alpha) * reflected, transmission);
-
-        return float4(lobes.diffuse * alpha + lobes.specular * specularWeight, saturate(coverage));
+        return BlendedSurface(lobes, baseColor.a, saturate(material.GetTransmission()));
     }
 
     public float4 ShadeAlphaTested<M : IPbrMaterial & IAlphaTestMaterial>(ForwardVSOut input, bool isFrontFace)
