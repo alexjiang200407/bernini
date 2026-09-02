@@ -57,7 +57,9 @@ not obvious from a signature. The headers linked below are the source of truth.
   `Rig.boneAnimTable`; an instance drawing from it then reads a pose rather than computing one, which
   is what takes the crowd tier's per-unit cost to nothing. The walk itself is shared rather than
   reimplemented — [pose_walk.slang](libs/bgl_extended/shaders/src/lib/anim/pose_walk.slang) is what both kernels call,
-  so the two producers cannot drift.
+  so the two producers cannot drift. The walk is generic over `IPoseTables` and names no buffer type;
+  [PoseTables](libs/bgl_extended/shaders/src/lib/types/PoseTables.slang) is the bindless implementation
+  both kernels hand it.
 
   **It is addressable by (clip, frame, bone) from any consumer**, not private to the mesh shader
   that reads it today: bone `b` of global frame `f` sits at

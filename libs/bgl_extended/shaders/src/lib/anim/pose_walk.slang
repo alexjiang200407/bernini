@@ -2,39 +2,27 @@ import lib.anim.clip_playback;
 import idl.BoneSample;
 import idl.Clip;
 import idl.Constants;
+import idl.IPoseTables;
 import idl.Rig;
 import idl.SkinnedBone;
-import lib.types.ComputeBuffer;
-import lib.types.RangeBuffer;
 
 // The pose walk both animated kernels run: sample a clip at a fractional frame, compose the
 // hierarchy one depth level at a time, and multiply each bone through its inverse bind. PoseSkinned
 // runs it per instance per frame; PoseRigFrames runs it once per frame of a rig's clip set and
 // never again.
 
-/**
- * The tables a walk reads and the storage it writes, passed rather than read from a uniform block:
- * the two kernels agree on nothing else in theirs.
- */
-public struct PoseTables
-{
-    public RangeBuffer<SkinnedBone> bones;
-    public RangeBuffer<BoneSample> samples;
-    public ComputeBuffer<float4> palettes;
-};
-
 // One bone's transform, read back out of the three rows a palette slot holds. Affine, so the fourth
 // row is (0,0,0,1) and was never stored -- the same convention the mesh shader reads.
-public float4x4 PaletteMatrix(PoseTables tables, uint slot)
+public float4x4 PaletteMatrix<T : IPoseTables>(T tables, uint slot)
 {
-    return float4x4(tables.palettes[slot + 0], tables.palettes[slot + 1], tables.palettes[slot + 2], float4(0.0, 0.0, 0.0, 1.0));
+    return float4x4(tables.GetPalette(slot + 0), tables.GetPalette(slot + 1), tables.GetPalette(slot + 2), float4(0.0, 0.0, 0.0, 1.0));
 }
 
-public void WritePalette(PoseTables tables, uint slot, float4x4 transform)
+public void WritePalette<T : IPoseTables>(T tables, uint slot, float4x4 transform)
 {
-    tables.palettes[slot + 0] = transform[0];
-    tables.palettes[slot + 1] = transform[1];
-    tables.palettes[slot + 2] = transform[2];
+    tables.SetPalette(slot + 0, transform[0]);
+    tables.SetPalette(slot + 1, transform[1]);
+    tables.SetPalette(slot + 2, transform[2]);
 }
 
 // A local TRS as the matrix mul() expects: rows of the rotation scaled per axis, translation in .w.
@@ -68,7 +56,7 @@ public float4x4 LocalTransform(BoneSample sample)
 // Blended local pose of bone `bone` at a fractional frame. Rotation is nlerp'd with a hemisphere
 // flip, not slerp: clips are resampled to a fixed rate, so the angle between adjacent frames is small
 // enough that the error is invisible and the transcendentals are not worth paying per bone.
-public BoneSample SampleBone(PoseTables tables, Rig rig, Clip clip, uint bone, float frames)
+public BoneSample SampleBone<T : IPoseTables>(T tables, Rig rig, Clip clip, uint bone, float frames)
 {
     uint f0;
     uint f1;
@@ -76,8 +64,8 @@ public BoneSample SampleBone(PoseTables tables, Rig rig, Clip clip, uint bone, f
     ClipFrameIndices(clip, frames, f0, f1, weight);
 
     let base = clip.firstFrame * rig.boneCount + bone;
-    BoneSample a = tables.samples.Get(rig.samples, base + f0 * rig.boneCount);
-    BoneSample b = tables.samples.Get(rig.samples, base + f1 * rig.boneCount);
+    BoneSample a = tables.GetSample(rig.samples, base + f0 * rig.boneCount);
+    BoneSample b = tables.GetSample(rig.samples, base + f1 * rig.boneCount);
 
     // Without the flip a pair straddling the hemisphere boundary interpolates the long way round,
     // which reads as the bone snapping through its own axis.
@@ -96,7 +84,7 @@ public BoneSample SampleBone(PoseTables tables, Rig rig, Clip clip, uint bone, f
 // the only loop carrying one is bounded by `rig.maxDepth`, which is group-uniform (the whole group
 // poses one rig at one frame), and the strided per-bone loops that *are* thread-varying
 // contain no barrier. Nothing returns early inside here either.
-public void PoseInto(PoseTables tables, Rig rig, Clip clip, float frames, uint paletteBase, uint localIdx)
+public void PoseInto<T : IPoseTables>(T tables, Rig rig, Clip clip, float frames, uint paletteBase, uint localIdx)
 {
     // Composed in the palette rather than in groupshared: a model transform is affine, so it fits the
     // three rows the slot already reserves for the skin matrix it ends up holding. Nothing bounds the
@@ -119,7 +107,7 @@ public void PoseInto(PoseTables tables, Rig rig, Clip clip, float frames, uint p
     {
         for (uint bone = localIdx; bone < rig.boneCount; bone += cPoseGroupSize)
         {
-            SkinnedBone record = tables.bones.Get(rig.bones, bone);
+            SkinnedBone record = tables.GetBone(rig.bones, bone);
             if (record.depth == level)
             {
                 let slot = paletteBase + bone * cFloat4sPerBone;
@@ -135,7 +123,7 @@ public void PoseInto(PoseTables tables, Rig rig, Clip clip, float frames, uint p
     // same thread every time, so the slot read here is the one this thread composed above.
     for (uint bone = localIdx; bone < rig.boneCount; bone += cPoseGroupSize)
     {
-        SkinnedBone record = tables.bones.Get(rig.bones, bone);
+        SkinnedBone record = tables.GetBone(rig.bones, bone);
         let slot = paletteBase + bone * cFloat4sPerBone;
         WritePalette(tables, slot, mul(PaletteMatrix(tables, slot), record.inverseBind));
     }
