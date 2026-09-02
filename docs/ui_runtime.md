@@ -38,6 +38,12 @@ truth; when this doc disagrees, trust the header, then fix this doc.
   are `AssetType`s the project knows ([Asset Containers](docs/asset_containers.md)), which is what
   makes `assetlib_cli pack` ship them and the editor able to delete and rename them.
 
+* **The reference graph does not read a document.** `.rml`, `.rcss` and `.ttf` are stored, packed,
+  deleted and renamed like any other asset, but `assetlib` parses none of them — so a stylesheet a
+  document `<link>`s, or a font or image it names, has no referrers recorded and deletes or renames
+  **unguarded**, unlike every other authored kind. The runtime resolves those references itself at
+  load; nothing checks them offline.
+
 * **The clock is the client's.** `UiRuntime::AdvanceTime` is what `SystemInterface::GetElapsedTime`
   reports; nothing reads a wall clock. A headless test steps a transition exactly, and a paused game
   pauses its UI by not calling it.
@@ -141,10 +147,12 @@ owns the frame. There is no worker path here and none is planned; the load doors
 * **`Render(graphics, context)`** — @pre a frame is open on `graphics` (between `BeginFrame` and
   `EndFrame`). RmlUi walks the document and calls back into the render interface; everything it
   produces is submitted as **one** overlay job, after the scene and after post-processing.
-* **`RegisterTarget(name, target)`** — @pre `name` non-empty, `target` non-null and **headless**;
-  the overlay refuses a windowed target, whose swapchain image is the surface a frame presents to.
-  @post the target is retained until replaced or the renderer is destroyed. Register *before* the
-  document that names it loads: a document already resolved keeps the texture it resolved to.
+* **`RegisterTarget(name, target)`** — @pre `name` non-empty and `target` non-null, which is all
+  this door checks. A **windowed** target registers here and is refused later, by the overlay, when
+  a document first resolves it: the failure is a logged error and a white box rather than a throw at
+  the call site. @post the target is retained until replaced or the renderer is destroyed. Register
+  *before* the document that names it loads: a document already resolved keeps the texture it
+  resolved to.
 
 ### The failure a UI author meets first
 

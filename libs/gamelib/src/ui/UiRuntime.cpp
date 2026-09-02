@@ -15,6 +15,51 @@ namespace game
 		// Rml::Initialise and the interfaces behind it are process-global, so a second runtime would
 		// install its own over the first's and free them under it on the way out.
 		std::atomic<bool> g_Live{ false };
+
+		/**
+		 * Holds the one-per-process claim for as long as the constructor might still fail.
+		 *
+		 * A constructor that throws runs no destructor, so the claim cannot be released by
+		 * ~UiRuntime -- and a leaked claim means no UiRuntime can ever be built again in this
+		 * process. Released once the body has committed.
+		 */
+		class LiveClaim
+		{
+		public:
+			LiveClaim()
+			{
+				core::throw_runtime_error_if(
+					g_Live.exchange(true),
+					"game::UiRuntime: one per process -- RmlUi's lifetime and interfaces are "
+					"global");
+			}
+
+			~LiveClaim() noexcept
+			{
+				if (!m_Committed)
+				{
+					g_Live.store(false);
+				}
+			}
+
+			LiveClaim(const LiveClaim&)     = delete;
+			LiveClaim(LiveClaim&&) noexcept = delete;
+
+			LiveClaim&
+			operator=(const LiveClaim&) = delete;
+
+			LiveClaim&
+			operator=(LiveClaim&&) noexcept = delete;
+
+			void
+			Commit() noexcept
+			{
+				m_Committed = true;
+			}
+
+		private:
+			bool m_Committed = false;
+		};
 	}
 
 	struct UiRuntime::Interfaces
@@ -39,9 +84,7 @@ namespace game
 		Rml::RenderInterface&       renderer,
 		const UiRuntimeOptions&     options) : m_Options(options)
 	{
-		core::throw_runtime_error_if(
-			g_Live.exchange(true),
-			"game::UiRuntime: one per process -- RmlUi's lifetime and interfaces are global");
+		auto claim = LiveClaim();
 
 		m_Interfaces = std::make_unique<Interfaces>(store.GetFiles());
 
@@ -55,7 +98,6 @@ namespace game
 			Rml::SetFileInterface(nullptr);
 			Rml::SetSystemInterface(nullptr);
 			m_Interfaces.reset();
-			g_Live.store(false);
 			throw std::runtime_error("game::UiRuntime: Rml::Initialise failed");
 		}
 
@@ -69,6 +111,9 @@ namespace game
 			"UI runtime up on RmlUi {}{}",
 			Rml::GetVersion(),
 			m_Options.scripting ? ", scripting on" : "");
+
+		// Past every throw: from here the destructor is what releases the claim.
+		claim.Commit();
 	}
 
 	UiRuntime::~UiRuntime() noexcept
