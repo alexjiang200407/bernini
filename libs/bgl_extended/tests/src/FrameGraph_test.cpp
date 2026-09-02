@@ -896,3 +896,60 @@ TEST_CASE("FrameGraph: an outer scope cannot name an inner scope's import", "[fg
 
 	CHECK_THROWS_AS(fg.Execute(), std::runtime_error);
 }
+
+TEST_CASE(
+	"FrameGraph: carried state follows the resource, not the name it was imported under",
+	"[fg]")
+{
+	FrameGraph fg;
+
+	const auto runFrame = [&](BufferHandle handle, std::string passName) {
+		fg.ImportBuffer("sceneColor", handle);
+		fg.AddPass(
+			PassDesc{}
+				.SetName(std::move(passName))
+				.AddBufferArg(SrvBuf("sceneColor"))
+				.SetSideEffect());
+		fg.Compile(&NullRm());
+
+		CommandListRef  cmd   = core::SharedRef<NullCommandList>::Make();
+		CommandQueueRef queue = core::SharedRef<NullCommandQueue>::Make();
+		fg.RegisterQueue("main", queue, cmd);
+		fg.Execute();
+	};
+
+	runFrame(MakeBuffer(1), "ReadFirst");
+
+	// A second render target's attachment, imported under the same shared name. It is a different
+	// resource still in its 'none' state, so it needs the barrier the first one no longer does.
+	fg.ImportBuffer("sceneColor", MakeBuffer(2));
+	fg.AddPass(PassDesc{}.SetName("ReadSecond").AddBufferArg(SrvBuf("sceneColor")).SetSideEffect());
+	fg.Compile(&NullRm());
+
+	const PassBarriers& second = fg.BarriersFor("ReadSecond");
+	REQUIRE(second.bufferDescs.size() == 1);
+	CHECK(second.bufferHandles[0].slot.index == 2);
+	CHECK(second.bufferDescs[0].accessBefore == BarrierAccessFlag::kNone);
+	CHECK(second.bufferDescs[0].accessAfter == BarrierAccessFlag::kShaderResource);
+}
+
+TEST_CASE("FrameGraph: the same resource resumes its own state under a new name", "[fg]")
+{
+	FrameGraph fg;
+
+	fg.ImportBuffer("sceneColor", MakeBuffer(1));
+	fg.AddPass(PassDesc{}.SetName("Read").AddBufferArg(SrvBuf("sceneColor")).SetSideEffect());
+	fg.Compile(&NullRm());
+
+	CommandListRef  cmd   = core::SharedRef<NullCommandList>::Make();
+	CommandQueueRef queue = core::SharedRef<NullCommandQueue>::Make();
+	fg.RegisterQueue("main", queue, cmd);
+	fg.Execute();
+
+	fg.ImportBuffer("overlaySource", MakeBuffer(1));
+	fg.AddPass(
+		PassDesc{}.SetName("ReadAgain").AddBufferArg(SrvBuf("overlaySource")).SetSideEffect());
+	fg.Compile(&NullRm());
+
+	CHECK(fg.BarriersFor("ReadAgain").Empty());
+}
