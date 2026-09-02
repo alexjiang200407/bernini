@@ -55,6 +55,16 @@ doc disagrees, trust the header, then fix this doc.
   carries only CBVs — one root parameter per cbuffer, no descriptor tables
   ([PipelineLayout_d3d12.cpp](libs/bgl_extended/src/d3d12/pipeline/PipelineLayout_d3d12.cpp)).
 
+* **The mirror is two halves, and the seam is what a descriptor names.** `UniformMirror`
+  ([bgl_common](libs/bgl_common/include/bgl_common/UniformMirror.h)) holds everything a renderer
+  cannot own: the node tree, the byte buffer, name resolution, and one primitive that writes a
+  descriptor index into a member reflected as one. What a `BufferHandle` or a `SamplerHandle` *is*
+  -- which pool its index names, which smart-buffer member it lands in -- is the renderer's, so each
+  handle type is a `UniformAssign` specialisation in this renderer's `Uniforms.h`, and
+  `DescriptorHandle`, whose alignment is the backend's, reaches the value map the same way. The
+  neutral half compiles against `bgl_common` alone (`bgl_common_selfcheck`), which is the whole
+  point: a second renderer reuses the walk and writes its own leaf.
+
 * **A kernel is a pipeline plus one `Uniforms` per declared cbuffer, keyed by name.**
   `IDevice::CreateComputeKernel` / `CreateMeshletKernel`
   ([Device.cpp](libs/bgl_extended/src/device/Device.cpp)) enumerate the pipeline's cbuffer names and build a
@@ -66,9 +76,11 @@ doc disagrees, trust the header, then fix this doc.
 
 | Type | File | Role |
 |---|---|---|
-| `Uniforms` | [Uniforms.h](libs/bgl_extended/src/uniforms/Uniforms.h) | One cbuffer's CPU mirror: byte buffer + reflected tree, `operator[]` by name or index, `HasMember` / `GetLayout` to introspect. Move-only. |
-| `Uniforms::Accessor` / `ConstAccessor` | [Uniforms.h](libs/bgl_extended/src/uniforms/Uniforms.h) | Cursor into the mirror: chainable `operator[]`, typed read/assign, `SetIfValid` for an optional write, `IsValid()`. Non-owning. |
-| `FindUnknownMembers` | [Uniforms.h](libs/bgl_extended/src/uniforms/Uniforms.h) | Resolves a binder's names against a whole PSO family, returning those no variant declares. Call once at family construction. |
+| `UniformMirror` | [UniformMirror.h](libs/bgl_common/include/bgl_common/UniformMirror.h) | One cbuffer's CPU mirror, shared by every renderer: byte buffer + reflected tree, `operator[]` by name or index, `HasMember` / `GetLayout` to introspect. Knows values and descriptor indices, never what a descriptor names. Move-only. |
+| `UniformMirror::Accessor` / `ConstAccessor` | [UniformMirror.h](libs/bgl_common/include/bgl_common/UniformMirror.h) | Cursor into the mirror: chainable `operator[]`, typed read/assign, `AssignDescriptorIndex` as the one primitive a handle write reduces to, `SetIfValid` for an optional write, `IsValid()`. Non-owning. |
+| `UniformAssign<T>` / `UniformValueMap<T>` | [UniformMirror.h](libs/bgl_common/include/bgl_common/UniformMirror.h) | The two seams a renderer specialises: how one of its handle types is written, and which value type one of its types is stored as. |
+| `Uniforms` | [Uniforms.h](libs/bgl_extended/src/uniforms/Uniforms.h) | This renderer's mirror: `UniformMirror` plus the D3D12 root parameter, built from a pipeline's `UniformLayoutEntry`. Its six `UniformAssign` specialisations are what make `uniforms["x"] = handle` compile. |
+| `FindUnknownMembers` | [UniformMirror.h](libs/bgl_common/include/bgl_common/UniformMirror.h) | Resolves a binder's names against a whole PSO family, returning those no variant declares. Call once at family construction. |
 | `ComputeKernel` / `MeshletKernel` | [ComputeKernel.h](libs/bgl_extended/src/pipeline/ComputeKernel.h), [MeshletKernel.h](libs/bgl_extended/src/pipeline/MeshletKernel.h) | Pipeline + per-cbuffer `Uniforms` map. `MeshletKernel` also offers `FindUniforms` / `ContainsUniforms`. |
 
 ### Supporting types
@@ -150,7 +162,10 @@ time, so it is the suballocation the GPU reads and the mirror may be rewritten i
 
 ### Resource assignment
 
-Each handle type finds its destination differently, and the rules are not symmetric:
+Each handle type finds its destination differently, and the rules are not symmetric. Every rule is
+a `UniformAssign` specialisation in [Uniforms.h](libs/bgl_extended/src/uniforms/Uniforms.h), and every
+one ends in the accessor's `AssignDescriptorIndex`, which throws unless the member is a descriptor
+value:
 
 * **`BufferHandle` into a struct** — @pre the struct is exactly 8 bytes; members are then searched
   **by name** against `c_SmartBufferUniformIndices` (`entryBuffer` / `packedBuffer` / `rangeBuffer` /
