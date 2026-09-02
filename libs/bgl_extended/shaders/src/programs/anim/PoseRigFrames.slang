@@ -6,6 +6,7 @@ import idl.SkinnedBone;
 import lib.anim.pose_walk;
 import lib.types.ComputeBuffer;
 import lib.types.EntryBuffer;
+import lib.types.PoseTables;
 import lib.types.RangeBuffer;
 
 // Fills one rig's bone anim table: one workgroup per frame of its clip set, each running the same
