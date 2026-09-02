@@ -192,8 +192,13 @@ namespace assetlib
 				return AssetCodec<ImportDocument>::Serialize(document);
 			}
 
+			// Nothing here holds a reference to rewrite: a skeleton names no asset, and the
+			// foreign kinds are bytes this library does not read.
 			case AssetType::kTexture:
 			case AssetType::kSkeleton:
+			case AssetType::kUiDocument:
+			case AssetType::kUiStyle:
+			case AssetType::kFont:
 			case AssetType::kCount:
 				break;
 			}

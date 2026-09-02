@@ -43,7 +43,7 @@ read in the engine.
 ### Paths are keys, not locations
 
 Every path crossing this interface is a `std::string_view`: data-root-relative, `/`-separated,
-already in `assetlib::normalizeRef` form. **An implementation does not normalize what it is given** —
+already in `assetlib::normalizePath` form. **An implementation does not normalize what it is given** —
 two spellings of one path are two paths.
 
 A `std::filesystem::path` is a different thing and never crosses it. The failure is silent and it is
@@ -187,6 +187,7 @@ rule it would ride into the archive it must never reach.
 | the `.bproj` file | excluded — editor metadata |
 | the shader cache (`.bsc`, `pipelines.psolib`) | excluded — per-machine, write-back, disposable |
 | `Derived/BakedTextures/` (baked) | **included**, and it is most of the bytes |
+| `Authored/UI/`, `Authored/Fonts/` | **included**, packed verbatim — the UI runtime reads its documents, styles and fonts through the mount like any other asset |
 | `.bmesh` / `.bskel` / `.banim` | **included as the seam answers**, not as the file lies on disk — a stale group re-bakes into the archive, a rebind is baked in, and a group the seam cannot serve fails the pack. `PackReport::geometryRebaked` counts the entries that differ |
 | `.bsky` / `.benvl` | **included**, re-baked first when a routed source moved — the re-bake runs before the pack walk because it writes new content-addressed maps the walk must still see. `PackReport::envsRebaked` counts them; a `.benv` packs verbatim (authored) |
 
