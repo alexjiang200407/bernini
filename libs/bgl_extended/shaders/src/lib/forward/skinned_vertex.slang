@@ -12,11 +12,13 @@
 
 import idl.Clip;
 import idl.Constants;
+import idl.IBonePalette;
 import idl.PlaybackType;
 import idl.Rig;
 import idl.SkinnedState;
 import idl.SkinnedTableState;
 import lib.anim.clip_playback;
+import lib.anim.skinning;
 import lib.debug.dbg;
 import lib.forward.common;
 import lib.forward.mesh_stage;
@@ -30,11 +32,13 @@ public ConstantBuffer<SkinnedData> skinnedData;
 // One mesh-shader group's pose, resolved for the group rather than for each of its vertices: which
 // buffer holds the pose, where in it this instance's bone 0 sits, and which frames the blend spans.
 // A vertex contributes only its joints and weights.
-public struct SkinnedPose
+public struct SkinnedPose : IBonePalette
 {
     // The palette SkinnedPosePass wrote for this instance, or the table its rig shares. Which of the
     // two is the whole of the difference between the pose sources, and it is settled here.
     ComputeBuffer<float4> source;
+
+    float4 GetPalette(uint slot) { return source[slot]; }
 
     // Bone 0 of this frame's pose, and of the pose the previous frame drew.
     uint base;
@@ -52,19 +56,6 @@ public struct SkinnedPose
     // Bounds the bone-index assertion, which is the only thing here that needs the rig.
     uint boneCount;
 };
-
-// Bone 0 of each of the two frames a fractional position falls between, in the rig's table. The
-// indices are clip-local and the table is addressed globally, so the clip's own base is added.
-void TableFrameSlots(Rig rig, Clip clip, float frames, out uint lower, out uint upper, out float weight)
-{
-    uint f0;
-    uint f1;
-    ClipFrameIndices(clip, frames, f0, f1, weight);
-
-    let stride = rig.boneCount * cFloat4sPerBone;
-    lower = rig.boneAnimTable.GetStart() + (clip.firstFrame + f0) * stride;
-    upper = rig.boneAnimTable.GetStart() + (clip.firstFrame + f1) * stride;
-}
 
 /**
  * Resolves the pose one group draws from. Every load here is group-uniform, which is why it happens
@@ -115,52 +106,6 @@ public SkinnedPose ResolveSkinnedPose(MeshletContext ctx)
     return pose;
 }
 
-// One bone's skinning matrix, unpacked from the three rows the pose was stored as. The fourth row of
-// an affine transform is always (0,0,0,1), which is why it was not written.
-float4x4 BoneMatrix(SkinnedPose pose, uint slotBase, uint bone)
-{
-    let row = slotBase + bone * cFloat4sPerBone;
-    return float4x4(pose.source[row + 0], pose.source[row + 1], pose.source[row + 2], float4(0.0, 0.0, 0.0, 1.0));
-}
-
-// Linear blend skinning: the weighted sum of the influencing bones' matrices, applied once rather
-// than per attribute, so position, normal and tangent all follow the same blend.
-//
-// No renormalising divide: the importer already normalises a vertex whose weights sum to anything
-// other than zero (assetlib's readSkinAttributes), so paying for it per vertex here would only paper
-// over a bad cook. A vertex bound to no bone never reaches here -- SkinnedVertex answers that one
-// ahead of the blend.
-float4x4 SkinMatrix(SkinnedPose pose, uint slotBase, float4 joints, float4 weights)
-{
-    float4x4 skin = weights.x * BoneMatrix(pose, slotBase, uint(joints.x));
-
-    [unroll]
-    for (uint i = 1; i < cInfluencesPerVertex; ++i)
-    {
-        // A zero weight still costs the fetch; branching on it diverges the wave for no saving, since
-        // the influences of one vertex are almost always all live or all dead together.
-        skin += weights[i] * BoneMatrix(pose, slotBase, uint(joints[i]));
-    }
-
-    return skin;
-}
-
-// A fractional frame is the blend of the two frames' *skin matrices*, not of two skinned positions:
-// skinning is linear in the matrices, so the two agree, and this pays one blend per vertex instead
-// of one per attribute. `blends` is group-uniform, so a palette never pays the second fetch and the
-// branch costs no divergence.
-float4x4 SkinAt(SkinnedPose pose, uint slotBase, uint upperBase, float weight, float4 joints, float4 weights)
-{
-    let lower = SkinMatrix(pose, slotBase, joints, weights);
-
-    if (!pose.blends)
-    {
-        return lower;
-    }
-
-    return lerp(lower, SkinMatrix(pose, upperBase, joints, weights), weight);
-}
-
 // Gated, not just dbg_assert'd: only dbg_raise's *body* is compiled out, so the reduction would
 // otherwise cost three max()s per vertex in a release build.
 void AssertBoneIndices(SkinnedPose pose, float4 joints, uint submeshIndex)
@@ -202,8 +147,8 @@ public ForwardVSOut SkinnedVertex(MeshletContext ctx, SkinnedPose pose, SubmeshI
     {
         AssertBoneIndices(pose, vertex.joints, instance.submeshIndex);
 
-        skin = SkinAt(pose, pose.base, pose.upperBase, pose.weight, vertex.joints, vertex.weights);
-        prevSkin = SkinAt(pose, pose.prevBase, pose.prevUpperBase, pose.prevWeight, vertex.joints, vertex.weights);
+        skin = SkinAt(pose, pose.blends, pose.base, pose.upperBase, pose.weight, vertex.joints, vertex.weights);
+        prevSkin = SkinAt(pose, pose.blends, pose.prevBase, pose.prevUpperBase, pose.prevWeight, vertex.joints, vertex.weights);
     }
 
     float4 worldPos = float4(ctx.mesh.TransformPoint(mul(skin, float4(vertex.position, 1.0)).xyz), 1.0);
