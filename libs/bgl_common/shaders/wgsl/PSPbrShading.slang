@@ -42,5 +42,6 @@ float4 main(float3 worldPos: POSITION, float3 normal: NORMAL, float4 tangent: TA
     );
     let n = CalculateNormal(normal, tangent, float2(0.5, 0.5), true);
     let f = FresnelSchlickRoughness(0.5, float3(0.04, 0.04, 0.04), 0.5);
-    return float4(lobes.diffuse + lobes.specular * lobes.reflectance + n * f.x, 1.0);
+    let blended = BlendedSurface(lobes, 0.5, 0.5);
+    return float4(lobes.diffuse + lobes.specular * lobes.reflectance + n * f.x, 1.0) + blended;
 }

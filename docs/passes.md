@@ -134,7 +134,9 @@ blend cannot. `PbrMaterial::transmissionFactor` says which:
 The two lobes are kept apart for this: `PbrShading::EvaluateSurface` returns a `SurfaceLobes`
 (diffuse, specular, and the reflectance the specular lobe returns) instead of a summed colour, and
 the callers weight it. `MaterialData::ShadeWithBaseColor` sums the pair, which is the opaque
-answer; `MaterialData::ShadeBlended` is the only thing that weights them apart. Both live in
+answer; `MaterialData::ShadeBlended` is the only caller of `BlendedSurface`, the one function that
+weights them apart, which lives beside `SurfaceLobes` in
+[lib/math/PbrShading.slang](libs/bgl_common/shaders/src/lib/math/PbrShading.slang). Both methods live in
 [lib/forward/MaterialShading.slang](libs/bgl_extended/shaders/src/lib/forward/MaterialShading.slang), which
 extends the material constant buffer with the four shading entry points.
 

@@ -73,6 +73,23 @@ public struct SurfaceLobes
     public float3 reflectance;
 };
 
+/**
+ * A blended surface as premultiplied colour and the coverage that goes with it.
+ *
+ * `transmission` selects what `alpha` means: 0 for coverage, 1 for a surface the light passes
+ * through, whose specular stays whole and whose coverage rises with its reflectance. Why, and what
+ * the blend state on the other side has to be, is docs/passes.md#blended-surfaces.
+ */
+public float4 BlendedSurface(SurfaceLobes lobes, float alpha, float transmission)
+{
+    let reflected = max(max(lobes.reflectance.r, lobes.reflectance.g), lobes.reflectance.b);
+
+    let specularWeight = lerp(alpha, 1.0, transmission);
+    let coverage = lerp(alpha, alpha + (1.0 - alpha) * reflected, transmission);
+
+    return float4(lobes.diffuse * alpha + lobes.specular * specularWeight, saturate(coverage));
+}
+
 public SurfaceLobes EvaluateSurface<E : ISurfaceEnv>(
     E env,
     SurfaceParams params,
