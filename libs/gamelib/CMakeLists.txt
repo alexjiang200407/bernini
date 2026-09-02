@@ -29,8 +29,6 @@ target_precompile_headers(gamelib
 	PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src/pch.h
 )
 
-find_package(RmlUi CONFIG REQUIRED)
-
 # bgl for the contract, bgl_extended for the symbols behind it -- gamelib names the interface it
 # compiles against rather than assuming one renderer provides it.
 #
