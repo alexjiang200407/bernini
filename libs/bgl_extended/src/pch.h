@@ -1,13 +1,8 @@
 #pragma once
 #include <spdlog/sinks/basic_file_sink.h>
-#include <spdlog/spdlog.h>
 
-namespace bgl
-{
-	namespace logger = spdlog;
-}
-
-#include "error/gassert.h"
+// Carries bgl::logger and the gassert family, which nearly every source here names.
+#include <bgl_common/gassert.h>
 
 #include <bgl/error.h>
 #include <bgl/glm.h>

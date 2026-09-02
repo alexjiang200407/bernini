@@ -1,4 +1,6 @@
-#include "shadercache/util.h"
+#include <bgl_common/shadercache/util.h>
+
+#include <bgl_common/gassert.h>
 
 #include <core/file/file.h>
 #include <core/hash.h>

@@ -6,9 +6,9 @@
 #include "resource/Srv.h"
 #include "resource/Texture.h"
 #include "uniforms/DescriptorHandle.h"
-#include "uniforms/ReflectedLayout.h"
 #include "uniforms/UniformLayoutEntry.h"
-#include "uniforms/UniformValueType.h"
+#include <bgl_common/ReflectedLayout.h>
+#include <bgl_common/UniformValueType.h>
 #include <core/err/util.h>
 
 namespace bgl
