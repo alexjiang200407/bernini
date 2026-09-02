@@ -1,4 +1,5 @@
-#include "slang/SlangErrorChecker.h"
+#include <bgl_common/SlangErrorChecker.h>
+#include <bgl_common/gassert.h>
 #include <slang.h>
 
 namespace bgl

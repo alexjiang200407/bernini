@@ -194,7 +194,7 @@ view twice in a frame reports the same history to both draws rather than letting
 the first as history.
 
 When the target has `RenderTargetDesc::taaEnabled` set, every projection is offset by a sub-pixel
-`HaltonJitter` ([util/jitter.h](libs/bgl_extended/src/util/jitter.h)) that `RenderContext::Draw`
+`HaltonJitter` ([bgl_common/jitter.h](libs/bgl_common/include/bgl_common/jitter.h)) that `RenderContext::Draw`
 left-multiplies onto it, so the sample grid walks a *render* pixel's footprint. Across eight frames
 where the render and output grids coincide; across more when the output grid is denser and each of
 its sub-pixels wants that walk of its own ([Temporal Antialiasing](docs/taa.md)). The client's

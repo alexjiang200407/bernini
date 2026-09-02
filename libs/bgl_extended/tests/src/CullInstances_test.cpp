@@ -1,7 +1,6 @@
 #include "cmd/CommandAllocator.h"
 #include "cmd/CommandList.h"
 #include "cmd/CommandQueue.h"
-#include "culling/Frustum.h"
 #include "fg/FrameGraph.h"
 #include "gfx/GraphicsBase.h"
 #include "pipeline/ComputeKernel.h"
@@ -20,6 +19,7 @@
 #include "util/util.h"
 #include <bgl/Camera.h>
 #include <bgl/IGraphics.h>
+#include <bgl_common/Frustum.h>
 #include <bgl_common/idl/PsoType.h>
 #include <bgl_common/idl/idl.h>
 #include <core/math.h>

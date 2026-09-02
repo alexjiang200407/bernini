@@ -1,4 +1,4 @@
-#include "culling/Frustum.h"
+#include <bgl_common/Frustum.h>
 
 namespace bgl
 {

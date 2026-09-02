@@ -5,13 +5,13 @@
 #include "util/SkinnedSynth.h"
 #include "util/TestEnvironment.h"
 #include "util/TestOptions.h"
-#include "util/jitter.h"
 #include <bgl/Camera.h>
 #include <bgl/IGraphics.h>
 #include <bgl/IScene.h>
 #include <bgl/ISceneView.h>
 #include <bgl/RenderJob.h>
 #include <bgl/Viewport.h>
+#include <bgl_common/jitter.h>
 #include <catch2/catch_approx.hpp>
 
 namespace
