@@ -4,26 +4,8 @@
 namespace assetlib
 {
 	struct AnimationSet;
-	struct AvatarLegChain;
 	struct BMesh;
 	struct Skeleton;
-
-	/**
-	 * The legs `clips`' rig authors, resolved against `skeleton`, or empty when there is no avatar
-	 * beside it -- which is most rigs, and costs one stat.
-	 *
-	 * Separate from the bake below because a retrofit has to ask the same question twice: once to
-	 * decide whether a file is already current, and once to write it.
-	 *
-	 * An avatar that will not parse, or that names bones this rig does not carry, resolves to no
-	 * legs and says so in the log: a load measures instead, but an authored file being ignored is
-	 * not something to pass over in silence.
-	 */
-	[[nodiscard]] std::vector<AvatarLegChain>
-	legChainsForRig(
-		const core::file::IFileSystem& files,
-		const AnimationSet&            clips,
-		const Skeleton&                skeleton);
 
 	/**
 	 * Bakes `clips`' plant weights against the avatar its rig authors, if there is one.

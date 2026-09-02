@@ -73,6 +73,12 @@ task that lands the solve.
   `boneBoxesFor` already makes at load on a cache miss. *Rejected:* an authored plane per foot (the
   chore that would leave the feature unused); storing it in the `.bskel` (wrong owner) or `.bmesh`
   (a per-mesh entry keyed by the avatar, for a number that costs milliseconds).
+  *Amended by task 7 (2026-09-02):* master's #567 split the rig out of the geom after this was
+  written, and the legs — sole planes included — now upload once with the rig, shared by every
+  mesh skinned to it. So the sole is still derived from a mesh and measured at load, but it is
+  fitted to whichever mesh first acquires the rig, not per (mesh, skeleton) pairing: a unit
+  assembled from slot meshes has its soles fitted to the part that came first. Per-geom soles
+  would need `AddRig` and `FootPlantDesc` reworked to carry them, which no rig we cook asks for.
 
 - **ADR-5 — Plant weights are derived at cook from the frame walk and stored in the `.banim`,
   self-keyed like `posedBoxes`.** A foot is planted at frame `f` when its sole is within ε of the
