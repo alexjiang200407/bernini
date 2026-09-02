@@ -76,47 +76,31 @@ namespace game
 	struct UiRuntimeOptions
 	{
 		/**
-		 * Whether a document may script itself: `<script>` blocks, inline `onclick`, and data
-		 * models declared from Lua tables. Off by default -- a game that binds everything from C++
-		 * never creates a VM.
+		 * Whether a document may script itself: `<script>`, inline handlers, Lua data models.
 		 *
-		 * With it on, RmlUi's `body` tag builds a `LuaDocument` rather than a plain
-		 * `ElementDocument`, which is what gives a document its own scope.
-		 *
-		 * **A scripted document is trusted code.** The plugin opens Lua's standard libraries, `io`,
-		 * `os` and `package` among them, so a `<script>` reaches the host directly -- ADR-8's mount
-		 * confinement bounds which files the *document loader* resolves, and does not extend to
-		 * what a script does once it runs. Turn this on for documents the project ships, not for
-		 * ones it receives.
+		 * A scripted document is trusted code -- the plugin opens Lua's standard libraries, so a
+		 * script reaches the host whatever the mount allows. Ship-side documents only.
+		 * See [docs/ui_runtime.md](docs/ui_runtime.md) § Document scripting.
 		 */
 		bool scripting = false;
 
 		/**
-		 * The state RmlUi's bindings are added to, or null for one the plugin makes and closes
-		 * itself. Ignored unless `scripting`.
+		 * The state RmlUi's bindings are added to; null for one the plugin owns. Ignored unless
+		 * `scripting`.
 		 *
-		 * A state you pass is yours to close, and only *after* the runtime is destroyed -- RmlUi
-		 * unregisters from it during `Rml::Shutdown`. It must also arrive with its standard
-		 * libraries already opened: RmlUi opens them only for a state it created itself, and a
-		 * document that hits a missing one raises outside any protected call, which aborts the
-		 * process rather than failing the load.
-		 *
-		 * This is the seam the engine-wide VM arrives through: when one exists it is handed in
-		 * here and the UI stops keeping its own -- and a document's `<script>` then reaches
-		 * whatever that state has bound into it.
+		 * @pre standard libraries already opened -- RmlUi opens them only for its own state, and a
+		 *      script that hits a missing one aborts the process rather than failing the load.
+		 * @post yours to close, after this runtime is destroyed.
 		 */
 		lua_State* luaState = nullptr;
 	};
 
 	/**
-	 * RmlUi's process-global lifetime, and the two interfaces that bind it to bernini: the clock and
-	 * log, and the file system every document, stylesheet and font is read through.
+	 * RmlUi's process-global lifetime, plus the clock, the log and the mount every document,
+	 * stylesheet and font is read through.
 	 *
-	 * **One per process**, enforced by a throw -- `Rml::Initialise` is global, and so are the interfaces a
-	 * second instance would install over the first. The runtime outlives every context it creates.
-	 *
-	 * The render interface is the caller's: a headless test passes a stub, and a drawing client
-	 * passes the one over `bgl::IOverlay`. It must outlive this runtime.
+	 * One per process, enforced by a throw: `Rml::Initialise` and the interfaces are global.
+	 * Outlives every context it creates. The render interface is the caller's and must outlive it.
 	 */
 	class UiRuntime final
 	{
