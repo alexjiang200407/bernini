@@ -5,7 +5,7 @@ import idl.PsoType;
 import lib.types.ComputeBuffer;
 import lib.types.EntryBuffer;
 import lib.types.PackedBuffer;
-import lib.types.SubmeshInstance;
+import lib.data.SubmeshInstance;
 
 // Mirrors bgl::IsTransparentPso. A transparent instance is drawn from the depth-sorted list rather
 // than its counting-sort bucket, so it is the only kind this pass keys.

@@ -1,4 +1,4 @@
-import lib.types.SubmeshInstance;
+import lib.data.SubmeshInstance;
 
 public struct InstancedPayload
 {

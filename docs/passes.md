@@ -73,7 +73,7 @@ Every geometry pass renders into `sceneColor`, an `RGBA16_FLOAT` texture the ren
 `PostProcess` is what turns that into the backbuffer. The buffer holds **linear HDR with exposure already
 applied**: exposure is a per-view scale and a target may carry several views, so the geometry passes
 fold it in, while the display curve — `AgX` in
-[lib/util/Tonemap.slang](libs/bgl_extended/shaders/src/lib/util/Tonemap.slang) — belongs to the output and runs once.
+[lib/math/Tonemap.slang](libs/bgl_common/shaders/src/lib/math/Tonemap.slang) — belongs to the output and runs once.
 `AgX` leaves its result linear, so the sRGB backbuffer view is still what encodes it.
 
 Two consequences worth knowing. Transparent surfaces blend in linear HDR rather than in display
@@ -151,7 +151,7 @@ surface writes depth and participates, and the correct blend is what the ensembl
 It resolves to the `kHashedAlpha_*` buckets, which are **opaque-shaped** — depth
 write, no blend, velocity written like any other geometry — and drawn in the PSO-bucketed phase
 rather than the depth-sorted one. The pixel shader tests base-colour alpha against a per-pixel hashed
-threshold ([lib/util/HashedAlpha.slang](libs/bgl_extended/shaders/src/lib/util/HashedAlpha.slang)) instead of the
+threshold ([lib/math/HashedAlpha.slang](libs/bgl_common/shaders/src/lib/math/HashedAlpha.slang)) instead of the
 material's cutoff, so a fragment survives with probability equal to its alpha and every layer of a
 self-occluding surface writes real depth.
 
@@ -350,7 +350,7 @@ frames would reproject through the wrong clip.
 
 * **What it is:** the bone anim table's producer. One dispatch per rig that has been given a table
   and not yet posed into it, one workgroup per frame of that rig's clip set, running the same walk
-  `Pose Skinned` runs ([pose_walk.slang](libs/bgl_extended/shaders/src/lib/anim/pose_walk.slang) is shared by both).
+  `Pose Skinned` runs ([pose_walk.slang](libs/bgl_common/shaders/src/lib/anim/pose_walk.slang) is shared by both).
   A crowd instance then reads a pose rather than computing one.
 * **In:** `scene.rigBuffer`, `scene.skinnedBoneBuffer`, `scene.clipBuffer`, `scene.boneSampleBuffer`.
 * **Out:** `scene.boneAnimTables`, the scene's table arena — a `BonePaletteBuffer` like the view's

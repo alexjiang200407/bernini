@@ -93,3 +93,41 @@ add_custom_command(
 	VERBATIM
 )
 add_custom_target(bgl_common_copy_shaders ALL DEPENDS "${BGL_COMMON_SHADER_STAMP}")
+
+# Membership, enforced for Slang the way bgl_common_selfcheck enforces it for C++: every module here
+# is compiled with only this tree on the search path, so an import that reaches back into a renderer
+# fails to resolve and stops the build. A library module has no entry point, so this is module
+# compilation (-o .slang-module), which needs none. The output is never loaded; docs/shader_cache.md
+# says why .slang-module IR is not used at runtime, and nothing here changes that.
+#
+# The port stages slangc beside slangd under vcpkg's tools/, which is not on PATH; the hint is what
+# finds it on a preset whose renderer never runs a build-time shader step of its own. This runs before
+# any renderer's CMake (the root adds bgl_common first), so it is what fills the cache entry the D3D12
+# shader step's own find_program of the same name then reads back.
+find_program(SLANG_EXECUTABLE
+	NAMES slang slangc slangc.exe
+	HINTS "${VCPKG_INSTALLED_DIR}/${VCPKG_TARGET_TRIPLET}/tools/shader-slang"
+	DOC "Slang compiler, for the shared-module membership check"
+)
+if(NOT SLANG_EXECUTABLE)
+	message(FATAL_ERROR "slangc not found: bgl_common's shared Slang modules cannot be checked.")
+endif()
+
+set(BGL_COMMON_SHADER_CHECKS "")
+foreach(MODULE ${BGL_COMMON_SHADER_SOURCES})
+	file(RELATIVE_PATH MODULE_REL "${CMAKE_CURRENT_SOURCE_DIR}/shaders/src" "${MODULE}")
+	set(MODULE_OUT "${CMAKE_CURRENT_BINARY_DIR}/shader_check/${MODULE_REL}.slang-module")
+	get_filename_component(MODULE_OUT_DIR "${MODULE_OUT}" DIRECTORY)
+	# Every shared module, not just this one's imports: a change to any of them can be what makes
+	# this one stop resolving, and the set is small.
+	add_custom_command(
+		OUTPUT  "${MODULE_OUT}"
+		COMMAND ${CMAKE_COMMAND} -E make_directory "${MODULE_OUT_DIR}"
+		COMMAND ${SLANG_EXECUTABLE} "${MODULE}" -I "${CMAKE_CURRENT_SOURCE_DIR}/shaders/src" -o "${MODULE_OUT}"
+		DEPENDS ${BGL_COMMON_SHADER_SOURCES} bgl_idl_generate
+		COMMENT "shared-module check ${MODULE_REL}"
+		VERBATIM
+	)
+	list(APPEND BGL_COMMON_SHADER_CHECKS "${MODULE_OUT}")
+endforeach()
+add_custom_target(bgl_common_check_shaders ALL DEPENDS ${BGL_COMMON_SHADER_CHECKS})

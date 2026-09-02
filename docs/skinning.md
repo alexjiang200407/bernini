@@ -56,7 +56,7 @@ not obvious from a signature. The headers linked below are the source of truth.
   `RigFramesPass` runs the same walk over every frame of a rig's clip set and writes the result to
   `Rig.boneAnimTable`; an instance drawing from it then reads a pose rather than computing one, which
   is what takes the crowd tier's per-unit cost to nothing. The walk itself is shared rather than
-  reimplemented — [pose_walk.slang](libs/bgl_extended/shaders/src/lib/anim/pose_walk.slang) is what both kernels call,
+  reimplemented — [pose_walk.slang](libs/bgl_common/shaders/src/lib/anim/pose_walk.slang) is what both kernels call,
   so the two producers cannot drift. The walk is generic over `IPoseTables` and names no buffer type;
   [PoseTables](libs/bgl_extended/shaders/src/lib/types/PoseTables.slang) is the bindless implementation
   both kernels hand it.
