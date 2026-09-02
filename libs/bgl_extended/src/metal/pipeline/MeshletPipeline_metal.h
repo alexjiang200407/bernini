@@ -24,7 +24,6 @@ namespace bgl
 	public:
 		MeshletPipeline(
 			MTL::Device*               device,
-			slang::ISession*           session,
 			ShaderCache*               shaderCache,
 			const MeshletPipelineDesc& desc);
 

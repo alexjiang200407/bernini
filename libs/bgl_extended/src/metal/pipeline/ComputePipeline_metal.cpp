@@ -15,12 +15,16 @@ namespace bgl
 		// Compiles the kernel through slang into the cacheable form: MSL, reflection, the cbuffers'
 		// handle offsets and this stage's buffer indices.
 		CachedProgram
-		CompileProgram(slang::ISession* session, IShader* shader, const std::string& entryName)
+		CompileProgram(IShader* shader, const std::string& entryName)
 		{
 			SlangErrorChecker errChecker;
 
 			slang::IModule* module = shader->GetSlangModule();
 			gassert(module != nullptr, "Shader module cannot be null");
+
+			// Read off the module so that reaching this function is what creates a session on this
+			// thread, and a cache hit never does.
+			slang::ISession* session = module->getSession();
 
 			Slang::ComPtr<slang::IEntryPoint> entryPoint;
 			module->findEntryPointByName(entryName.c_str(), entryPoint.writeRef());
@@ -83,7 +87,6 @@ namespace bgl
 
 	ComputePipeline::ComputePipeline(
 		MTL::Device*               device,
-		slang::ISession*           session,
 		ShaderCache*               shaderCache,
 		const ComputePipelineDesc& desc) : m_Desc(desc)
 	{
@@ -103,7 +106,7 @@ namespace bgl
 
 		if (!hit)
 		{
-			cached = CompileProgram(session, shader, entryName);
+			cached = CompileProgram(shader, entryName);
 			if (shaderCache != nullptr)
 				shaderCache->Store(key, cached);
 		}

@@ -21,7 +21,6 @@ namespace bgl
 	public:
 		ComputePipeline(
 			MTL::Device*               device,
-			slang::ISession*           session,
 			ShaderCache*               shaderCache,
 			const ComputePipelineDesc& desc);
 

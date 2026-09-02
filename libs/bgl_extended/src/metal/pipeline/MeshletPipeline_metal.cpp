@@ -56,10 +56,11 @@ namespace bgl
 		// Compiles the whole PSO through slang into the cacheable form: the union of every stage's
 		// cbuffers, and per stage its MSL, its own [[buffer(N)]] indices and its threadgroup size.
 		CachedProgram
-		CompileProgram(slang::ISession* session, const MeshletPipelineDesc& desc)
+		CompileProgram(const MeshletPipelineDesc& desc)
 		{
 			SlangErrorChecker errChecker;
 
+			slang::ISession*                               session = nullptr;
 			std::vector<slang::IComponentType*>            components;
 			std::unordered_set<slang::IModule*>            modules;
 			std::vector<Slang::ComPtr<slang::IEntryPoint>> entryPoints;
@@ -69,6 +70,11 @@ namespace bgl
 					return;
 				slang::IModule* module = shader->GetSlangModule();
 				gassert(module != nullptr, "Shader module cannot be null");
+
+				// Read off the module so that reaching this function is what creates a session on
+				// this thread, and a cache hit never does.
+				session = module->getSession();
+
 				if (modules.insert(module).second)
 					components.push_back(module);
 
@@ -204,7 +210,6 @@ namespace bgl
 
 	MeshletPipeline::MeshletPipeline(
 		MTL::Device*               device,
-		slang::ISession*           session,
 		ShaderCache*               shaderCache,
 		const MeshletPipelineDesc& desc) : m_Desc(desc)
 	{
@@ -232,7 +237,7 @@ namespace bgl
 
 		if (!hit)
 		{
-			cached = CompileProgram(session, m_Desc);
+			cached = CompileProgram(m_Desc);
 			if (shaderCache != nullptr)
 				shaderCache->Store(key, cached);
 		}

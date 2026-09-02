@@ -38,8 +38,8 @@ namespace bgl::pipeline_util
 				slang::IModule* module = shader->GetSlangModule();
 				gassert(module != nullptr, "Shader module cannot be null");
 
-				// One device, one session -- read off the module so that reaching this function
-				// is what creates a session, and a cache hit never does.
+				// Read off the module so that reaching this function is what creates a session on
+				// this thread, and a cache hit never does.
 				session = module->getSession();
 
 				if (uniqueModules.insert(module).second)

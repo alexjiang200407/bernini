@@ -115,10 +115,11 @@ and is a target of its own; nothing here is part of it.
 - A persistent shader cache (`GraphicsOptions::shaderCacheDir`) short-circuits compilation across
   runs. See [Shader Cache](../../docs/shader_cache.md) for the two-layer design, lazy module
   loading, invalidation, and why precompiled `.slang-module` IR is not used.
-- The Slang session is created on the first compile that reaches `Device` and dropped again once
-  `CreateGraphics` has built every renderer PSO, because its core module is a few hundred megabytes
-  resident. Nothing may retain a `slang::` object past pipeline construction, or the release
-  reclaims nothing — see the same doc.
+- Slang sessions are per thread (`src/slang/SlangSessions.h`): a thread's first compile creates
+  its own global session and session, and `CreateGraphics` drops them all once every renderer PSO
+  is built, because each global session's core module is a few hundred megabytes resident. Nothing
+  may retain a `slang::` object past pipeline construction, or the release reclaims nothing, and a
+  module never crosses threads — see the same doc.
 - At runtime the Slang session resolves modules from `shaders/src` (and `shaders/tests`) beside the
   executable. `shaders/src` is staged by a target `bgl_extended` itself depends on — `bgl_copy_shader_src` on
   D3D12, `bgl_metal_copy_shaders` on Metal — so anything that brings a device up has the sources,

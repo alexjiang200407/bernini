@@ -8,7 +8,6 @@
 #include "pipeline/ComputePipeline_metal.h"
 #include "pipeline/MeshletPipeline_metal.h"
 #include "resource/ResourceManager_metal.h"
-#include "resource/Shader_metal.h"
 #include "shadercache/ShaderCache_metal.h"
 
 #include "cmd/CommandList.h"
@@ -43,7 +42,9 @@ namespace bgl
 	Device::Device(
 		MTL::Device*       device,
 		const std::string& shaderCacheDir,
-		bool               usePipelineLibrary) : m_Device(NS::RetainPtr(device))
+		bool               usePipelineLibrary) :
+		m_Device(NS::RetainPtr(device)),
+		m_Slang(SlangSessionDesc{ SLANG_METAL, c_ShaderSearchPaths })
 	{
 		if (!shaderCacheDir.empty())
 		{
@@ -58,48 +59,10 @@ namespace bgl
 		}
 	}
 
-	slang::ISession*
-	Device::GetSlangSession() const noexcept
-	{
-		if (m_SlangSession != nullptr)
-			return m_SlangSession.get();
-
-		slang::createGlobalSession(m_SlangGlobalSession.writeRef());
-		gassert(m_SlangGlobalSession != nullptr, "Failed to create Slang global session");
-
-		slang::SessionDesc sessionDesc = {};
-		slang::TargetDesc  targetDesc  = {};
-
-		targetDesc.format  = SLANG_METAL;
-		targetDesc.profile = m_SlangGlobalSession->findProfile("sm_6_6");
-
-		sessionDesc.targetCount     = 1;
-		sessionDesc.targets         = &targetDesc;
-		sessionDesc.searchPaths     = c_ShaderSearchPaths;
-		sessionDesc.searchPathCount = std::size(c_ShaderSearchPaths);
-		// Match the column-major convention the CPU side uploads matrices in (see Device_d3d12).
-		sessionDesc.defaultMatrixLayoutMode = SLANG_MATRIX_LAYOUT_COLUMN_MAJOR;
-
-#if defined(BERNINI_GPU_DEBUG)
-		// Enables dbg_raise() and the cull-stats counters in runtime-compiled shaders, as
-		// Device_d3d12 does. Without it every guarded block compiles out and the counters read
-		// zero while everything around them works.
-		const slang::PreprocessorMacroDesc debugMacro = { "BERNINI_GPU_DEBUG", "1" };
-		sessionDesc.preprocessorMacros                = &debugMacro;
-		sessionDesc.preprocessorMacroCount            = 1;
-#endif
-
-		m_SlangGlobalSession->createSession(sessionDesc, m_SlangSession.writeRef());
-		gassert(m_SlangSession != nullptr, "Failed to create Slang session");
-
-		return m_SlangSession.get();
-	}
-
 	void
 	Device::ReleaseSlangSession() noexcept
 	{
-		m_SlangSession.setNull();
-		m_SlangGlobalSession.setNull();
+		m_Slang.ReleaseAll();
 	}
 
 	core::SharedRef<ICommandQueue>
@@ -149,27 +112,19 @@ namespace bgl
 	core::SharedRef<IShader>
 	Device::CreateShader(ShaderDesc desc) const noexcept
 	{
-		return core::SharedRef<Shader>::Make(std::move(desc), GetSlangSession());
+		return core::SharedRef<Shader>::Make(std::move(desc), &m_Slang);
 	}
 
 	core::SharedRef<IComputePipeline>
 	Device::CreateComputePipeline(const ComputePipelineDesc& desc) const noexcept
 	{
-		return core::SharedRef<ComputePipeline>::Make(
-			m_Device.get(),
-			GetSlangSession(),
-			m_ShaderCache.get(),
-			desc);
+		return core::SharedRef<ComputePipeline>::Make(m_Device.get(), m_ShaderCache.get(), desc);
 	}
 
 	core::SharedRef<IMeshletPipeline>
 	Device::CreateMeshletPipeline(const MeshletPipelineDesc& desc) const noexcept
 	{
-		return core::SharedRef<MeshletPipeline>::Make(
-			m_Device.get(),
-			GetSlangSession(),
-			m_ShaderCache.get(),
-			desc);
+		return core::SharedRef<MeshletPipeline>::Make(m_Device.get(), m_ShaderCache.get(), desc);
 	}
 
 	Uniforms
