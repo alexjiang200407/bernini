@@ -14,5 +14,5 @@ public interface IAlphaTestMaterial
     // level so it inherits the hardware's LOD choice, anisotropy included -- a centre sampled
     // isotropically sits at a different level than an anisotropic base colour on a grazing card, and
     // the difference reads as coverage that is not there.
-    float GetBaseColorAlphaBiased(SamplerState.Handle s, float2 uv, float bias);
+    float GetBaseColorAlphaBiased(float2 uv, float bias);
 };
