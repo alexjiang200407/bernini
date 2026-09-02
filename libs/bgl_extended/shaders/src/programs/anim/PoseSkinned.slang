@@ -60,6 +60,9 @@ struct Uniforms
     // against.
     float3 groundPoint;
     float3 groundNormal;
+
+    // 0 when the scene has planting off: a rig with legs then poses exactly as one without.
+    uint plantFeet;
 };
 
 ConstantBuffer<Uniforms> gUniforms;
@@ -262,6 +265,13 @@ int SolvedIndexOf(uint solved, uint bone)
     return -1;
 }
 
+// A point projected onto the sole plane, the plane through `sole` with normal `soleUp`. All three
+// are ankle-relative.
+float3 OnSolePlane(float3 point, float3 sole, float3 soleUp)
+{
+    return point - dot(point - sole, soleUp) * soleUp;
+}
+
 // One leg as the solve needs it: where its three joints are, where its ankle wants to be, and how
 // far past the chain's reach that is.
 //
@@ -274,6 +284,11 @@ struct LegPose
     float3 ankle;
     float3 target;
     float weight;
+
+    // The turn the foot takes about its ankle: the ground's slope, weighted and clamped. Known
+    // before the solve, since nothing the solve does changes the ground.
+    float3 turnAxis;
+    float turnAngle;
 
     // 0 when the chain can reach. A leg at weight 0 targets where its ankle already is, so it is
     // reachable by construction and contributes nothing to the drop.
@@ -302,23 +317,40 @@ LegPose ReadLeg(
     pose.knee = float3(kneeModel[0].w, kneeModel[1].w, kneeModel[2].w);
     pose.ankle = float3(ankleModel[0].w, ankleModel[1].w, ankleModel[2].w);
 
-    // The joint is aimed at the ground under it lifted by the foot's own height, rather than at
-    // wherever the sole currently is: the solve rotates the ankle along with the shin, so a target
-    // derived from the sole's present position would be a target the solve then moves. Taken with
-    // the tilt -- which brings the sole normal onto the ground's -- the sole lands exactly on the
-    // plane whatever the chain did, since the only part of the offset that has height is the part
-    // along that normal.
+    // The foot's contact -- its lowest point once turned -- is dropped onto the ground and the
+    // ankle carried by the same vector; see docs/skinning.md for why it is the contact and not the
+    // sole's centre. Rigid with the ankle, since the foot keeps its orientation through the solve,
+    // so the contact measured here is the contact that lands.
     //
-    // The height is measured in model space through the ankle's transform, never off the stored
-    // ankle-local sole: bone space carries whatever scale the bind does -- a rig authored in
-    // centimetres keeps a hundredfold in every inverse bind -- so a distance read there is in those
-    // units. Measured before the solve is exact: the solve turns the ankle rigidly about the joint,
-    // which leaves the joint's distance to its sole where it is.
+    // Measured in model space through the ankle's transform, never in the stored ankle-local sole:
+    // bone space carries whatever scale the bind does, so a distance read there is in those units.
     pose.weight = PlantWeight(rig, clip, index, frames);
-    let sole = TransformPoint(ankleModel, leg.solePoint.xyz);
-    let soleUp = normalize(TransformDir(ankleModel, leg.soleNormal.xyz));
-    let footHeight = dot(pose.ankle - sole, soleUp);
-    pose.target = lerp(pose.ankle, SampleGround(plane, down, pose.ankle) + plane.xyz * footHeight, pose.weight);
+
+    // The turn is the ground's slope, not whatever would bring the sole flat: a foot the animator
+    // posed on its toe stays on its toe, and on level ground nothing turns.
+    let floorUp = float3(0.0, 1.0, 0.0);
+    float3 tilt = cross(floorUp, plane.xyz);
+    pose.turnAxis = float3(0.0, 0.0, 1.0);
+    pose.turnAngle = 0.0;
+    if (length(tilt) > 1e-6)
+    {
+        pose.turnAxis = normalize(tilt);
+        pose.turnAngle = min(acos(clamp(dot(floorUp, plane.xyz), -1.0, 1.0)), cSoleClampRadians) * pose.weight;
+    }
+    let turn = RotationAbout(float3(0.0, 0.0, 0.0), pose.turnAxis, pose.turnAngle);
+
+    // The foot as it will stand, turned about the ankle, with the ankle at the origin.
+    let sole = TransformDir(turn, TransformPoint(ankleModel, leg.solePoint.xyz) - pose.ankle);
+    let soleUp = normalize(TransformDir(turn, TransformDir(ankleModel, leg.soleNormal.xyz)));
+    let toeModel = PaletteMatrix(tables, paletteBase + leg.toe * cFloat4sPerBone);
+    let toe = TransformDir(turn, float3(toeModel[0].w, toeModel[1].w, toeModel[2].w) - pose.ankle);
+
+    // The heel and the ball: the two joints dropped onto the sole plane. Whichever is lower along
+    // the ground normal is what touches.
+    let heel = OnSolePlane(float3(0.0, 0.0, 0.0), sole, soleUp);
+    let ball = OnSolePlane(toe, sole, soleUp);
+    let contact = pose.ankle + (dot(heel, plane.xyz) < dot(ball, plane.xyz) ? heel : ball);
+    pose.target = lerp(pose.ankle, pose.ankle + (SampleGround(plane, down, contact) - contact), pose.weight);
 
     // How far the rig must come down, along the ground's up, for this chain to reach: the smaller
     // root of |v + d*n| = reach, where v is hip-to-target and n the ground normal.
@@ -462,19 +494,18 @@ void PlantFeet(PoseTables tables, Rig rig, Clip clip, float frames, float4x4 mod
         float4x4 kneeDelta;
         SolveTwoBone(pose.hip, pose.knee, pose.ankle, pose.target, hipDelta, kneeDelta);
 
-        // Rotated about the ankle joint, not about the sole: the joint is where the chain the solve
-        // just satisfied ends, and turning the foot under it would put the shin back out of length.
-        // The sole then lifts off the plane by (1 - cos t) of its distance to the joint, which at
-        // the 30 degree clamp is under two millimetres on a foot of any size we cook.
-        float4x4 planted = mul(kneeDelta, ankleModel);
-        let soleNormal = normalize(TransformDir(planted, leg.soleNormal.xyz));
-        float3 tilt = cross(soleNormal, plane.xyz);
-        if (length(tilt) > 1e-6)
-        {
-            let angle = acos(clamp(dot(soleNormal, plane.xyz), -1.0, 1.0));
-            let joint = float3(planted[0].w, planted[1].w, planted[2].w);
-            planted = mul(RotationAbout(joint, normalize(tilt), min(angle, cSoleClampRadians) * pose.weight), planted);
-        }
+        // The foot keeps the orientation the clip gave it: the ankle is carried to where the solve
+        // put the joint, in translation alone, so the shin's turn is absorbed at the ankle rather
+        // than passed to the foot. Then it takes the turn ReadLeg measured the contact with, about
+        // the joint -- not about the sole: the joint is where the chain the solve just satisfied
+        // ends, and turning the foot under it would put the shin back out of length. The contact
+        // was placed already turned, so it lands on the ground exactly.
+        let jointNow = TransformPoint(kneeDelta, pose.ankle);
+        float4x4 planted = ankleModel;
+        planted[0].w += jointNow.x - pose.ankle.x;
+        planted[1].w += jointNow.y - pose.ankle.y;
+        planted[2].w += jointNow.z - pose.ankle.z;
+        planted = mul(RotationAbout(jointNow, pose.turnAxis, pose.turnAngle), planted);
 
         WritePalette(tables, hipSlot, mul(hipDelta, hipModel));
         WritePalette(tables, kneeSlot, mul(kneeDelta, kneeModel));
@@ -498,13 +529,13 @@ void PlantFeet(PoseTables tables, Rig rig, Clip clip, float frames, float4x4 mod
 // Poses one instance into the palette starting at `paletteBase`, planting its feet in the one window
 // of the walk where every slot holds a model-space transform.
 //
-// The plant is group-uniform -- a rig either authored legs or did not -- so the barriers inside it
-// are reached by the whole group or by none of it.
+// The plant is group-uniform -- a rig either authored legs or did not, and the scene's switch is
+// one value -- so the barriers inside it are reached by the whole group or by none of it.
 void PoseInstance(PoseTables tables, Rig rig, Clip clip, float frames, float4x4 modelToWorld, uint paletteBase, uint localIdx)
 {
     PoseModelSpace(tables, rig, clip, frames, paletteBase, localIdx);
 
-    if (!rig.legs.Null())
+    if (!rig.legs.Null() && gUniforms.plantFeet != 0)
     {
         PlantFeet(tables, rig, clip, frames, modelToWorld, paletteBase, localIdx);
     }

@@ -179,6 +179,7 @@ private:
 	QSlider*   m_HeadingSlider = nullptr;
 	QLabel*    m_HeadingLabel  = nullptr;
 	QCheckBox* m_ShowFloor     = nullptr;
+	QCheckBox* m_PlantFeet     = nullptr;
 
 	QListWidget* m_ClipList     = nullptr;
 	QLabel*      m_ClipMetadata = nullptr;

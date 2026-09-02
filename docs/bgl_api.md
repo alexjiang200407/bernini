@@ -261,6 +261,9 @@ flowchart TD
   the way in. @throws `SceneError` for a non-finite point or normal, a zero normal, or one with
   `normal.y <= 0` — a vertical or overhanging plane has no height under a point. Moves the temporal
   epoch: a rebind, not a per-frame input, so set it with the scene.
+* **`SetFootPlanting(enabled)`** — whether skinned instances plant their feet at all; on by default.
+  Off, a rig that authored legs poses exactly as one that did not, against the same ground — what
+  judging the solve takes. Scene-wide like the ground, and moves the temporal epoch like it.
 * **`DeleteTextureAsset(texture)`** — @pre no live material routes it. The scene does not know which
   materials sample which textures. The GPU release itself *is* safely deferred behind the frames that
   could still be reading it; the dangling *binding* is what is unsafe.

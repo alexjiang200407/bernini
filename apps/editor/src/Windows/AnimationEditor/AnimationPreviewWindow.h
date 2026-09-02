@@ -148,6 +148,14 @@ public:
 	void
 	SetFloorVisible(bool visible);
 
+	/**
+	 * Whether the rig plants its feet. Off, the same clip plays against the same ground with the
+	 * solve out of it -- the other half of judging what the solve does. The scene's switch, so
+	 * like the slope it holds only while this panel is on screen.
+	 */
+	void
+	SetFootPlanting(bool enabled);
+
 	/** Back to the empty state: geometry released, environment kept, ground left flat. */
 	void
 	Clear();
@@ -279,6 +287,7 @@ private:
 	float                   m_SlopeDegrees   = 0.0f;
 	float                   m_HeadingDegrees = 0.0f;
 	bool                    m_FloorVisible   = true;
+	bool                    m_FootPlanting   = true;
 
 	// True while a rig is shown: the ground stands whether or not the floor is drawn.
 	bool m_GroundPlaced = false;

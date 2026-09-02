@@ -113,6 +113,13 @@ AnimationPreviewWindow::SetFloorVisible(const bool visible)
 }
 
 void
+AnimationPreviewWindow::SetFootPlanting(const bool enabled)
+{
+	m_FootPlanting = enabled;
+	ReplaceGround();
+}
+
+void
 AnimationPreviewWindow::ReplaceGround()
 {
 	if (!m_GroundPlaced || !isVisible())
@@ -145,7 +152,10 @@ void
 AnimationPreviewWindow::hideEvent(QHideEvent* event)
 {
 	if (m_GroundPlaced)
-		GetRenderer()->Invoke([&] { GetPreviewScene()->SetGround({}); });
+		GetRenderer()->Invoke([&] {
+			GetPreviewScene()->SetGround({});
+			GetPreviewScene()->SetFootPlanting(true);
+		});
 
 	RenderTargetWindow::hideEvent(event);
 }
@@ -162,6 +172,7 @@ AnimationPreviewWindow::PlaceGround()
 	}
 
 	GetPreviewScene()->SetGround(editor::GroundForSlope(m_SlopeDegrees, m_HeadingDegrees));
+	GetPreviewScene()->SetFootPlanting(m_FootPlanting);
 	m_GroundPlaced = true;
 
 	if (m_FloorVisible)
@@ -206,6 +217,7 @@ AnimationPreviewWindow::ClearGeometry()
 			m_GroundInstance = bgl::MeshInstanceHandle();
 			m_GroundPlaced   = false;
 			GetPreviewScene()->SetGround({});
+			GetPreviewScene()->SetFootPlanting(true);
 		});
 	}
 

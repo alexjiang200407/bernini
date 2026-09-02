@@ -102,9 +102,11 @@ namespace bgl
 		uniforms["prevTime"]          = draw.clock.prevTime;
 		uniforms["posedCount"]        = posed;
 
-		const GroundPlaneDesc& ground = view->GetScene()->As<Scene>()->GetGround();
+		const Scene*           scene  = view->GetScene()->As<Scene>();
+		const GroundPlaneDesc& ground = scene->GetGround();
 		uniforms["groundPoint"]       = ground.point;
 		uniforms["groundNormal"]      = ground.normal;
+		uniforms["plantFeet"]         = scene->GetFootPlanting() ? 1u : 0u;
 
 		auto computeState   = ComputeState();
 		computeState.kernel = &m_PoseSkinned;

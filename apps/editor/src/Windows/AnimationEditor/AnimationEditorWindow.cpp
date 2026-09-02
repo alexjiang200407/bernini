@@ -244,6 +244,16 @@ AnimationEditorWindow::BuildPropertiesColumn()
 	});
 	layout->addWidget(m_ShowFloor);
 
+	m_PlantFeet = new QCheckBox(QStringLiteral("Plant feet"), column);
+	m_PlantFeet->setChecked(true);
+	m_PlantFeet->setToolTip(QStringLiteral(
+		"Foot IK. Off, the clip plays as authored against the same ground, so the two can be "
+		"compared."));
+	connect(m_PlantFeet, &QCheckBox::toggled, this, [this](bool checked) {
+		m_Preview->SetFootPlanting(checked);
+	});
+	layout->addWidget(m_PlantFeet);
+
 	layout->addSpacing(8);
 	layout->addWidget(new QLabel(QStringLiteral("Clips"), column));
 

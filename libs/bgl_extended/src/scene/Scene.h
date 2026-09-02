@@ -408,6 +408,22 @@ namespace bgl
 		}
 
 		void
+		SetFootPlanting(bool enabled) noexcept override
+		{
+			if (m_FootPlanting != enabled)
+			{
+				m_FootPlanting = enabled;
+				++m_TemporalEpoch;
+			}
+		}
+
+		[[nodiscard]] bool
+		GetFootPlanting() const noexcept override
+		{
+			return m_FootPlanting;
+		}
+
+		void
 		DeleteGeom(GeomHandle geom) override;
 
 	private:
@@ -503,6 +519,7 @@ namespace bgl
 		uint64_t m_TemporalEpoch = 0;
 
 		GroundPlaneDesc m_Ground;
+		bool            m_FootPlanting = true;
 
 		// One default material per submesh of a range, keyed at its root. It rides on the RangeBuffer
 		// as Meta, not a parallel array, so it is allocated and freed with the geometry it belongs to.
