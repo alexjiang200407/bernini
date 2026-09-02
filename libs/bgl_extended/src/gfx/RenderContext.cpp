@@ -422,6 +422,7 @@ namespace bgl
 		m_OutlineMaskDrawn = false;
 		m_OverlayDraws.clear();
 		m_FrameOverlays.clear();
+		m_FrameSources.clear();
 		++m_FrameCounter;
 		rt.AdvanceFrameCount();
 		m_FrameGraph.RegisterQueue("main", m_CommandQueue, m_CommandList);
@@ -667,15 +668,24 @@ namespace bgl
 					"OverlayDraw names a texture that is released or not this overlay's");
 			}
 
+			if (overlay->GetTextureTarget(draw.texture) == m_ActiveTarget)
+			{
+				throw GraphicsError(
+					"OverlayDraw samples the target this frame draws to; a target's output is "
+					"drawn on another target");
+			}
+
 			if (draw.scissor.has_value() && (draw.scissor->width < 0 || draw.scissor->height < 0))
 			{
 				throw GraphicsError("OverlayDraw scissor has a negative extent");
 			}
 		}
 
-		if (std::ranges::find_if(m_FrameOverlays, [&](const core::SharedRef<Overlay>& held) {
-				return held.Get() == overlay;
-			}) == m_FrameOverlays.end())
+		const bool overlayHeld = std::ranges::any_of(m_FrameOverlays, [&](const auto& held) {
+			return held.Get() == overlay;
+		});
+
+		if (!overlayHeld)
 		{
 			m_FrameOverlays.push_back(core::SharedRef<Overlay>(overlay));
 		}
@@ -694,8 +704,23 @@ namespace bgl
 			resolved.triangleCount = geometry.triangleCount;
 			resolved.texture       = overlay->GetTextureSrv(draw.texture);
 			resolved.translation   = draw.translation;
-			resolved.transform     = draw.transform.value_or(glm::mat4(1.0f));
-			resolved.scissor       = targetRect;
+
+			// A target that has not presented resolved to white above, so its ring is not read
+			// and is not imported.
+			if (RenderTargetBase* source = overlay->GetTextureTarget(draw.texture);
+			    source != nullptr && source->HasPresented())
+			{
+				const bool held = std::ranges::any_of(m_FrameSources, [&](const auto& s) {
+					return s.Get() == source;
+				});
+
+				if (!held)
+				{
+					m_FrameSources.push_back(core::SharedRef<RenderTargetBase>(source));
+				}
+			}
+			resolved.transform = draw.transform.value_or(glm::mat4(1.0f));
+			resolved.scissor   = targetRect;
 
 			if (draw.scissor.has_value())
 			{
@@ -799,18 +824,40 @@ namespace bgl
 
 		m_PostProcess.AttachToFrameGraph(m_FrameGraph, postProcessArgs);
 
+		// Every presentable this frame leaves in kPresent: its own backbuffer first.
+		std::vector<std::string> presentables{ std::string(c_BackbufferName) };
+
 		if (!m_OverlayDraws.empty())
 		{
+			// A borrowed backbuffer is imported under its own name with an explicit present
+			// initial: the handle behind the name changes as that target's ring advances, so a
+			// state resumed from an earlier frame would describe another slot.
+			std::vector<std::string> sources;
+			sources.reserve(m_FrameSources.size());
+
+			for (const core::SharedRef<RenderTargetBase>& source : m_FrameSources)
+			{
+				sources.push_back(std::format("overlay_source_{}", sources.size()));
+				m_FrameGraph.ImportTexture(
+					sources.back(),
+					source->GetBackbufferTexture(source->GetLastPresentedIndex()),
+					AccessState{ BarrierSyncFlag::kNone,
+				                 BarrierAccessFlag::kNone,
+				                 BarrierLayout::kPresent });
+			}
+
 			auto overlayArgs       = OverlayPass::Args();
 			overlayArgs.overlays   = m_FrameOverlays;
 			overlayArgs.draws      = m_OverlayDraws;
 			overlayArgs.backBuffer = rt.GetBackbufferRtv(index);
 			overlayArgs.viewport   = viewport;
 			overlayArgs.sampler    = m_LinearClampSampler;
-			m_OverlayPass.AttachToFrameGraph(m_FrameGraph, overlayArgs);
+			m_OverlayPass.AttachToFrameGraph(m_FrameGraph, overlayArgs, sources);
+
+			presentables.insert(presentables.end(), sources.begin(), sources.end());
 		}
 
-		m_PreparePresentPass.AttachToFrameGraph(m_FrameGraph, std::string(c_BackbufferName));
+		m_PreparePresentPass.AttachToFrameGraph(m_FrameGraph, presentables);
 
 		m_FrameGraph.Compile(m_ResourceManager.Get());
 		m_FrameGraph.Execute();
@@ -863,6 +910,7 @@ namespace bgl
 
 		m_OverlayDraws.clear();
 		m_FrameOverlays.clear();
+		m_FrameSources.clear();
 
 		m_ActiveTarget = nullptr;
 		m_FrameActive  = false;

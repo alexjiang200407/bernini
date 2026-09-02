@@ -44,8 +44,8 @@ flowchart TD
     end
     D --> TAA["TaaResolve (only when the target has TAA)"]
     TAA --> PPX["PostProcess (-> backbuffer; dilates the outline mask into the outline)"]
-    PPX --> OVL["Overlay (only when the frame submitted 2D draws)"]
-    OVL --> PP["PreparePresent (transition backbuffer to Present)"]
+    PPX --> OVL["Overlay (only when the frame submitted 2D draws; reads any target it borrowed)"]
+    OVL --> PP["PreparePresent (backbuffer, and every borrowed target, to Present)"]
     PP --> EF["EndFrame → Compile → Execute"]
 ```
 
@@ -55,8 +55,9 @@ the DSV declares `depth` in its `PassDesc`** (`kDepthStencil` / `kDepthWrite`), 
 later pass read it as a shader resource and have the graph derive the write → read → write cycle;
 `TaaResolve` reads `sceneColor`, the velocity buffer, `depth` and the previous accumulation and
 writes the next one; `PostProcess` reads whichever of the two the last HDR stage produced and writes
-the backbuffer whole; `Overlay`, on a frame that submitted 2D draws, blends over it;
-`PreparePresent` only transitions the backbuffer to present; `Compact Instances`
+the backbuffer whole; `Overlay`, on a frame that submitted 2D draws, blends over it, reading the
+last-presented backbuffer of any other headless target a draw sampled; `PreparePresent` only
+transitions the backbuffer — and each of those borrowed backbuffers — to present; `Compact Instances`
 and `Transparent Sort` are pure compute passes that touch no textures at all. All three read the scene/view buffers imported
 by [Scene](libs/bgl_extended/src/scene/Scene.cpp)/[SceneView](libs/bgl_extended/src/scene/SceneView.cpp)'s own
 `AttachToFrameGraph`. Multiple `Draw`s share one graph by prefixing their imports with the view's
@@ -544,7 +545,12 @@ the vertex colour and returns premultiplied linear; the blend is `ONE, INV_SRC_A
 off, and the backbuffer's opaque alpha stays opaque.
 
 * **In:** the geometry buffers and the draw's texture, bindless, through the `gOverlayDraw`
-  cbuffer; a texture-less draw samples the overlay store's opaque white. Textures are straight
+  cbuffer; a texture-less draw samples the overlay store's opaque white. A texture may be another
+  headless target's output (`IOverlay::CreateTexture(target)`): `RenderContext` imports that
+  target's last-presented backbuffer as `overlay_source_{n}` with an explicit `kPresent` initial —
+  the handle behind the name changes as the ring advances, so a state resumed from an earlier
+  frame would describe another slot — and the pass declares it as a shader-resource read, which is
+  where the barrier comes from. Textures are straight
   alpha in whatever format their `ImageData` declared, so an sRGB one decodes on sample; vertex
   colours arrive sRGB-encoded and premultiplied, and the shader un-premultiplies before it decodes
   — decoding the premultiplied value as-is would weight a half-covered edge by `0.5^2.2`. Filtered
@@ -558,9 +564,11 @@ off, and the backbuffer's opaque alpha stays opaque.
 ### PreparePresent — [passes/PreparePresentPass.h](libs/bgl_extended/src/passes/PreparePresentPass.h)
 
 A barrier-only pass with no `exec`: it declares the backbuffer with `BarrierLayout::kPresent` so the
-graph transitions it out of render-target state and into present. Because it has no attachment and
-writes no imported resource, it would be culled — it is pinned with `SetSideEffect()`. Added last,
-in `EndFrame`, after all draws.
+graph transitions it out of render-target state and into present, and every `overlay_source_{n}`
+the overlay borrowed with it, so a sampled target is left as its next `BeginFrame` and any
+`SubmitCapture` assume — the graph persists an imported resource's final state and restores
+nothing. Because it has no attachment and writes no imported resource, it would be culled — it is
+pinned with `SetSideEffect()`. Added last, in `EndFrame`, after all draws.
 
 ---
 
