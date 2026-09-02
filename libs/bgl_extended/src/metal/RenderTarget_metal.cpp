@@ -73,8 +73,9 @@ namespace bgl
 
 	RenderTarget::~RenderTarget() noexcept
 	{
-		// Nothing else can still be reading these: Graphics idles its context before dropping a
-		// target, and the frame ring is this object's alone.
+		// Another target's frame may still be sampling this ring through an overlay texture, and
+		// the release below is immediate.
+		m_Queue->Flush();
 		ReleaseAttachments();
 	}
 
@@ -90,11 +91,11 @@ namespace bgl
 	{
 		for (uint32_t i = 0; i < c_SwapchainImageCount; ++i)
 		{
-			auto texDesc          = TextureDesc();
-			texDesc.width         = GetWidth();
-			texDesc.height        = GetHeight();
-			texDesc.format        = c_BackbufferFormat;
-			texDesc.usage         = TextureUsageFlag::kRenderTarget;
+			auto texDesc   = TextureDesc();
+			texDesc.width  = GetWidth();
+			texDesc.height = GetHeight();
+			texDesc.format = c_BackbufferFormat;
+			texDesc.usage = TextureUsage{ TextureUsageFlag::kRenderTarget, TextureUsageFlag::kSRV };
 			texDesc.initialLayout = BarrierLayout::kRenderTarget;
 			texDesc.debugName     = std::format("Offscreen Back Buffer: {}", i);
 			texDesc.clearValue.SetColor(Color(0.0f, 0.0f, 0.0f, 1.0f));
@@ -106,6 +107,12 @@ namespace bgl
 			rtvDesc.debugName = std::format("Offscreen Back Buffer RTV: {}", i);
 
 			m_Backbuffers[i].rtv = m_ResourceManager->CreateRtv(m_Backbuffers[i].texture, rtvDesc);
+
+			auto srvDesc      = SrvDesc();
+			srvDesc.format    = c_BackbufferFormat;
+			srvDesc.debugName = std::format("Offscreen Back Buffer SRV: {}", i);
+
+			m_Backbuffers[i].srv = m_ResourceManager->CreateSrv(m_Backbuffers[i].texture, srvDesc);
 		}
 
 		if (!m_TaaAllocated)
@@ -252,6 +259,8 @@ namespace bgl
 	{
 		for (Backbuffer& backbuffer : m_Backbuffers)
 		{
+			if (!backbuffer.srv.IsNull())
+				m_ResourceManager->DestroySrv(backbuffer.srv, false);
 			if (!backbuffer.rtv.IsNull())
 				m_ResourceManager->DestroyRtv(backbuffer.rtv, false);
 			if (!backbuffer.texture.IsNull())
@@ -358,6 +367,7 @@ namespace bgl
 
 		m_LastPresentedIndex = m_FrameIndex;
 		m_FrameIndex         = (m_FrameIndex + 1) % c_SwapchainImageCount;
+		m_Presented          = true;
 	}
 
 	void
@@ -378,6 +388,7 @@ namespace bgl
 		m_FrameFences.fill(0);
 		m_FrameIndex         = 0;
 		m_LastPresentedIndex = 0;
+		m_Presented          = false;
 	}
 
 	void

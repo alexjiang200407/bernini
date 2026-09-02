@@ -174,13 +174,6 @@ namespace bgl
 		return it == m_Srvs.end() ? SrvHandle{} : it->second.srv;
 	}
 
-	bool
-	TextureAssetStore::Contains(core::slot_handle textureSlot) const noexcept
-	{
-		const auto it = m_Srvs.find(textureSlot.index);
-		return it != m_Srvs.end() && it->second.texture.slot == textureSlot;
-	}
-
 	DescriptorHandle
 	TextureAssetStore::GetDescriptor(core::slot_handle textureSlot) const noexcept
 	{

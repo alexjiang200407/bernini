@@ -175,6 +175,10 @@ namespace bgl
 		std::vector<OverlayPass::Draw>        m_OverlayDraws;
 		std::vector<core::SharedRef<Overlay>> m_FrameOverlays;
 
+		// The other targets this frame's overlay draws sample. Each one's last-presented backbuffer
+		// is imported for the overlay pass and returned to present by PreparePresent.
+		std::vector<core::SharedRef<RenderTargetBase>> m_FrameSources;
+
 		// Frames begun by this context, counting up forever. Unrelated to a render target's
 		// FrameIndex, which cycles over the backbuffer ring.
 		uint64_t m_FrameCounter = 0;

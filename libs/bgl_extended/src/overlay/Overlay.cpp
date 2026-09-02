@@ -25,7 +25,7 @@ namespace bgl
 
 	Overlay::Overlay(ResourceManagerRef resourceManager) :
 		m_ResourceManager(std::move(resourceManager)), m_Id(NextOverlayId()),
-		m_Textures(m_ResourceManager)
+		m_Images(m_ResourceManager)
 	{
 		gassert(m_ResourceManager != nullptr, "Overlay requires a valid ResourceManager");
 	}
@@ -139,16 +139,43 @@ namespace bgl
 			throw GraphicsError("Overlay texture needs decoded pixels");
 		}
 
-		const TextureAssetHandle texture = m_Textures.Add(
+		const TextureAssetHandle image = m_Images.Add(
 			std::move(img),
 			debugName.empty() ? std::string("Overlay Texture") : std::move(debugName));
 
-		if (texture.textureSlot.is_null())
+		if (image.textureSlot.is_null())
 		{
 			throw GraphicsError("The device could not allocate an overlay texture");
 		}
 
-		return OverlayTextureHandle{ texture.textureSlot, m_Id };
+		const core::slot_handle slot =
+			m_Textures.allocate_and_emplace(OverlayTexture{ image, nullptr });
+
+		return OverlayTextureHandle{ slot, m_Id };
+	}
+
+	OverlayTextureHandle
+	Overlay::CreateTexture(const RenderTargetRef& target)
+	{
+		if (target == nullptr)
+		{
+			throw GraphicsError("Overlay texture needs a render target");
+		}
+
+		auto* source = target->As<RenderTargetBase>();
+		gassert(source != nullptr, "An IRenderTarget this graphics did not create");
+
+		if (!source->IsHeadless())
+		{
+			throw GraphicsError(
+				"Overlay texture cannot wrap a windowed target: its swapchain image is the surface "
+				"a frame presents to");
+		}
+
+		const core::slot_handle slot = m_Textures.allocate_and_emplace(
+			OverlayTexture{ TextureAssetHandle{}, core::SharedRef<RenderTargetBase>(source) });
+
+		return OverlayTextureHandle{ slot, m_Id };
 	}
 
 	void
@@ -161,7 +188,13 @@ namespace bgl
 				"overlay's");
 		}
 
-		m_Textures.Delete(TextureAssetHandle{ texture.slot });
+		const OverlayTexture& record = m_Textures[texture.slot];
+		if (record.target == nullptr)
+		{
+			m_Images.Delete(record.image);
+		}
+
+		m_Textures.release_slot(texture.slot);
 	}
 
 	bool
@@ -180,18 +213,45 @@ namespace bgl
 	bool
 	Overlay::ValidTexture(OverlayTextureHandle texture) const noexcept
 	{
-		return texture.IsValid() && texture.overlay == m_Id && m_Textures.Contains(texture.slot);
+		return texture.IsValid() && texture.overlay == m_Id && m_Textures.valid(texture.slot);
 	}
 
 	SrvHandle
 	Overlay::GetTextureSrv(OverlayTextureHandle texture) const noexcept
 	{
-		const core::slot_handle slot =
-			texture.IsValid() ?
-				texture.slot :
-				m_Textures.GetDefaultSlot(TextureAssetStore::DefaultTexture::kWhite);
+		const SrvHandle white =
+			m_Images.GetSrv(m_Images.GetDefaultSlot(TextureAssetStore::DefaultTexture::kWhite));
 
-		return m_Textures.GetSrv(slot);
+		if (!texture.IsValid())
+		{
+			return white;
+		}
+
+		gassert(ValidTexture(texture), "GetTextureSrv needs a live handle");
+		if (!ValidTexture(texture))
+		{
+			return white;
+		}
+
+		const OverlayTexture& record = m_Textures[texture.slot];
+		if (record.target == nullptr)
+		{
+			return m_Images.GetSrv(record.image.textureSlot);
+		}
+
+		// A target that has not presented since it was created or resized has no frame to show.
+		return record.target->HasPresented() ?
+		           record.target->GetBackbufferSrv(record.target->GetLastPresentedIndex()) :
+		           white;
+	}
+
+	RenderTargetBase*
+	Overlay::GetTextureTarget(OverlayTextureHandle texture) const noexcept
+	{
+		gassert(
+			!texture.IsValid() || ValidTexture(texture),
+			"GetTextureTarget needs a live handle");
+		return ValidTexture(texture) ? m_Textures[texture.slot].target.Get() : nullptr;
 	}
 
 	void
@@ -240,6 +300,6 @@ namespace bgl
 			m_PendingGeometry.clear();
 		}
 
-		m_Textures.Flush(cmdList);
+		m_Images.Flush(cmdList);
 	}
 }

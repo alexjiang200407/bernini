@@ -89,6 +89,19 @@ namespace bgl
 			return m_Backbuffers[frameIndex].rtv;
 		}
 
+		[[nodiscard]] SrvHandle
+		GetBackbufferSrv(uint32_t frameIndex) const noexcept override
+		{
+			gassert(frameIndex < c_SwapchainImageCount, "Frame index out of range");
+			return m_Backbuffers[frameIndex].srv;
+		}
+
+		[[nodiscard]] bool
+		HasPresented() const noexcept override
+		{
+			return m_Presented;
+		}
+
 		[[nodiscard]] DsvHandle
 		GetDepthDsv() const noexcept override
 		{
@@ -253,6 +266,7 @@ namespace bgl
 		{
 			TextureHandle texture;
 			RtvHandle     rtv;
+			SrvHandle     srv;
 		};
 
 		struct Accumulation
@@ -325,5 +339,6 @@ namespace bgl
 
 		uint32_t m_FrameIndex         = 0;
 		uint32_t m_LastPresentedIndex = 0;
+		bool     m_Presented          = false;
 	};
 }
