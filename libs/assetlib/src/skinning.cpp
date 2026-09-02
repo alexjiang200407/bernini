@@ -1063,6 +1063,39 @@ namespace assetlib
 		return out;
 	}
 
+	namespace
+	{
+		/**
+		 * The one of `motions` nearest their component-wise median, or zero for none: robust to
+		 * the few samples a swinging foot leaves at floor level on its way through, and always a
+		 * motion some foot actually made. The component-wise median alone is not: over two
+		 * clusters that disagree -- a front pair and a hind pair, or a foot skidding forward then
+		 * back -- each axis picks from whichever cluster holds its middle, and the pair can name a
+		 * direction no sample has.
+		 */
+		glm::vec2
+		medianMotion(std::vector<glm::vec2> motions)
+		{
+			if (motions.empty())
+				return glm::vec2(0.0f);
+
+			const auto middle = motions.begin() + static_cast<std::ptrdiff_t>(motions.size() / 2);
+
+			auto centre = glm::vec2(0.0f);
+			for (const int axis : { 0, 1 })
+			{
+				std::nth_element(motions.begin(), middle, motions.end(), [axis](auto a, auto b) {
+					return a[axis] < b[axis];
+				});
+				centre[axis] = (*middle)[axis];
+			}
+
+			return *std::ranges::min_element(motions, [&centre](auto a, auto b) {
+				return glm::distance(a, centre) < glm::distance(b, centre);
+			});
+		}
+	}
+
 	uint64_t
 	plantWeightsSignature(
 		const std::span<const BMesh>          meshes,
@@ -1146,27 +1179,65 @@ namespace assetlib
 						glm::vec3(model[chains[leg].ankle] * glm::vec4(soles[leg].point, 1.0f));
 			}
 
+			// The floor is the lowest any sole gets in *this clip*, not y = 0. groundClips rests
+			// the clip's lowest vertex on 0, and in a walk that vertex is a toe tip dipping through
+			// the floor mid-swing, which lifts the whole clip until the standing foot floats a few
+			// centimetres up. A foot is down when it is where feet go when they are down here.
+			float floor = std::numeric_limits<float>::max();
+			for (const glm::vec3& at : sole) floor = std::min(floor, at.y);
+
+			// But a floor is only a floor near the ground the clip was rested on. Past the slack,
+			// nothing in the clip stands: it sits, or lies, or is in the air, and the ground is
+			// under something other than a foot -- and the lowest a sole gets is where it hovers,
+			// not where it is planted.
+			if (floor > c_PlantFloorSlack)
+				continue;
+
+			// How a sole moves across the frame either side of it, per sample. A clip's first and
+			// last frame have one neighbour, so their motion is the one-sided step scaled to the
+			// same two-frame window: clamped instead, a foot sliding evenly through a clip played
+			// in place would read as slowing at both ends, and lose them.
+			auto slide = std::vector<glm::vec2>(sole.size());
+			for (uint32_t frame = 0; frame < played.frameCount; ++frame)
+			{
+				const uint32_t before = frame == 0 ? 0 : frame - 1;
+				const uint32_t after =
+					frame + 1 >= played.frameCount ? played.frameCount - 1 : frame + 1;
+				const float window = after == before ? 1.0f : 2.0f / float(after - before);
+				for (size_t leg = 0; leg < legs; ++leg)
+				{
+					const glm::vec3& was  = sole[size_t(before) * legs + leg];
+					const glm::vec3& will = sole[size_t(after) * legs + leg];
+					slide[size_t(frame) * legs + leg] =
+						glm::vec2(will.x - was.x, will.z - was.z) * window;
+				}
+			}
+
+			// How a foot moves when it is down in this clip: the median motion of every sole at
+			// floor level. Zero for a clip whose root carries the rig, and minus the stride for one
+			// played in place -- where the standing foot slides back under a root that stays put,
+			// which is what a game plays and what a still-foot test would never plant. Stillness
+			// is not the mark of a planted foot; moving with the ground is.
+			auto down = std::vector<glm::vec2>();
+			for (size_t i = 0; i < sole.size(); ++i)
+				if (sole[i].y <= floor + c_PlantHeightEpsilon)
+					down.push_back(slide[i]);
+			const glm::vec2 stance = medianMotion(down);
+
+			// Judged against the stance motion, with a tolerance that grows with it: a stance foot
+			// in a fast clip drifts a fraction of the stride -- the Coyote's run slides a tenth of
+			// its 0.6 m per two frames -- and a fraction is what a rule about sliding should read.
+			const float tolerance =
+				std::max(c_PlantSlideEpsilon, c_PlantSlideFraction * glm::length(stance));
+
 			for (size_t leg = 0; leg < legs; ++leg)
 			{
 				auto planted = std::vector<bool>(played.frameCount, false);
 				for (uint32_t frame = 0; frame < played.frameCount; ++frame)
 				{
-					const glm::vec3& here = sole[size_t(frame) * legs + leg];
-					if (here.y > c_PlantHeightEpsilon)
-						continue;
-
-					// The frame either side, clamped at the ends: a clip's first and last frame have
-					// only one neighbour, and a foot planted through the whole clip must not lose
-					// its ends to the absence of one.
-					const uint32_t before = frame == 0 ? 0 : frame - 1;
-					const uint32_t after =
-						frame + 1 >= played.frameCount ? played.frameCount - 1 : frame + 1;
-
-					const glm::vec3& was  = sole[size_t(before) * legs + leg];
-					const glm::vec3& will = sole[size_t(after) * legs + leg];
-
-					const float slide = glm::length(glm::vec2(will.x - was.x, will.z - was.z));
-					planted[frame]    = slide <= c_PlantSlideEpsilon;
+					const size_t i = size_t(frame) * legs + leg;
+					planted[frame] = sole[i].y <= floor + c_PlantHeightEpsilon &&
+					                 glm::length(slide[i] - stance) <= tolerance;
 				}
 
 				// Ramped by distance to the nearest frame the foot is *not* planted in, which is the
@@ -1199,8 +1270,12 @@ namespace assetlib
 					if (frame + held + 1 < played.frameCount)
 						edge = std::min(edge, float(held));
 
-					out[(size_t(first) + frame) * legs + leg] =
-						static_cast<uint8_t>(std::lround(edge / ramp * 255.0f));
+					// The ramp counts from the unplanted frame it rises out of: over three frames
+					// it is 0, a half, then whole. Counted from the first planted frame instead it
+					// was four, and a sprint's stance is two -- the foot touched and left before it
+					// reached any weight at all.
+					out[(size_t(first) + frame) * legs + leg] = static_cast<uint8_t>(
+						std::lround(std::min(edge + 1.0f, ramp) / ramp * 255.0f));
 				}
 			}
 		}
