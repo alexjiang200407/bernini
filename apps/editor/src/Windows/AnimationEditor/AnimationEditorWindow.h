@@ -13,6 +13,7 @@ class QDragMoveEvent;
 class QDropEvent;
 class QStackedWidget;
 class QComboBox;
+class QSlider;
 class QDoubleSpinBox;
 class QLabel;
 class QListWidget;
@@ -166,6 +167,12 @@ private:
 	// Where its instances read their pose: posed per instance every frame, or off the rig's
 	// shared table.
 	QComboBox* m_TierSelector = nullptr;
+
+	// The ground's tilt, in whole degrees. Committed on release, not per tick: the ground is a
+	// rebind that moves the temporal epoch, and a drag committing every tick would keep the
+	// preview unaccumulated for the whole gesture.
+	QSlider* m_SlopeSlider = nullptr;
+	QLabel*  m_SlopeLabel  = nullptr;
 
 	QListWidget* m_ClipList     = nullptr;
 	QLabel*      m_ClipMetadata = nullptr;

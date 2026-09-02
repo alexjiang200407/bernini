@@ -15,6 +15,7 @@
 #include <QListWidget>
 #include <QMimeData>
 #include <QPushButton>
+#include <QSlider>
 #include <QSplitter>
 #include <QStackedWidget>
 #include <QStyle>
@@ -181,6 +182,33 @@ AnimationEditorWindow::BuildPropertiesColumn()
 		m_Preview->SetPoseSource(TierSourceAt(index));
 	});
 	layout->addWidget(m_TierSelector);
+
+	layout->addSpacing(8);
+	m_SlopeLabel = new QLabel(QStringLiteral("Ground Slope: 0\u00b0"), column);
+	layout->addWidget(m_SlopeLabel);
+
+	m_SlopeSlider = new QSlider(Qt::Horizontal, column);
+	m_SlopeSlider->setRange(-30, 30);
+	m_SlopeSlider->setValue(0);
+	m_SlopeSlider->setTickPosition(QSlider::TicksBelow);
+	m_SlopeSlider->setTickInterval(10);
+	m_SlopeSlider->setToolTip(QStringLiteral(
+		"Tilts the ground the rig stands on. A rig with an avatar plants its feet against it; one "
+		"without stands through it. Rises toward +X."));
+
+	// The label follows the thumb so the number is readable mid-drag; the ground follows the
+	// release, because moving it moves the temporal epoch and a drag would hold the preview
+	// unaccumulated until it ended. A click or a keypress moves the thumb without a drag, and
+	// commits through the same release path.
+	connect(m_SlopeSlider, &QSlider::valueChanged, this, [this](int degrees) {
+		m_SlopeLabel->setText(QStringLiteral("Ground Slope: %1\u00b0").arg(degrees));
+		if (!m_SlopeSlider->isSliderDown())
+			m_Preview->SetGroundSlope(static_cast<float>(degrees));
+	});
+	connect(m_SlopeSlider, &QSlider::sliderReleased, this, [this] {
+		m_Preview->SetGroundSlope(static_cast<float>(m_SlopeSlider->value()));
+	});
+	layout->addWidget(m_SlopeSlider);
 
 	layout->addSpacing(8);
 	layout->addWidget(new QLabel(QStringLiteral("Clips"), column));
