@@ -5,6 +5,7 @@
 
 #include <core/err/util.h>
 #include <nlohmann/json.hpp>
+#include <spdlog/spdlog.h>
 
 #include "json_doc.h"
 #include "ref_paths.h"
@@ -129,6 +130,45 @@ namespace assetlib
 	{
 		const std::vector<std::byte> bytes = files.Read(key);
 		return AssetCodec<Avatar>::Deserialize(bytes);
+	}
+
+	std::vector<AvatarLegChain>
+	legChainsForRig(
+		const core::file::IFileSystem& files,
+		const std::string_view         skeletonKey,
+		const Skeleton&                skeleton)
+	{
+		if (skeletonKey.empty())
+			return {};
+
+		std::string key;
+		try
+		{
+			key = avatarKeyFor(skeletonKey);
+		}
+		catch (const std::exception&)
+		{
+			// A skeleton outside the skeletons directory: nothing here can act on it, and the
+			// reference scan is where a misplaced container gets reported.
+			return {};
+		}
+
+		if (!files.Stat(key).has_value())
+			return {};
+
+		try
+		{
+			return resolveLegChains(loadAvatar(files, key), skeleton);
+		}
+		catch (const std::exception& e)
+		{
+			spdlog::warn(
+				"'{}' cannot be used against '{}', so the rig plants no feet: {}",
+				key,
+				skeletonKey,
+				e.what());
+			return {};
+		}
 	}
 
 	Avatar

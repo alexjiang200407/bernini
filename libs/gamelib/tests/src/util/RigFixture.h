@@ -2,6 +2,7 @@
 #include "StoreAt.h"
 
 #include <assetlib/AssetStore.h>
+#include <assetlib/avatar.h>
 #include <assetlib/image_io.h>
 #include <assetlib/skinning.h>
 #include <assetlib_structs/Animation.h>
@@ -233,5 +234,139 @@ namespace game::test
 		}
 
 		assetlib::AssetStore(dataRoot).Save(animations, banimRel.generic_string());
+	}
+
+	/**
+	 * A leg on disk: hip -> knee -> ankle -> toe hanging straight down from y = 2, a quad welded to
+	 * the ankle with its underside on y = 0, and a two-frame clip standing still on the floor. The
+	 * material and texture are WriteRig's. What the plant path needs and WriteRig's one bone cannot
+	 * give it: a chain bgl will accept, and a sole to fit.
+	 */
+	inline void
+	WriteLegRig(const fs::path& dataRoot)
+	{
+		const std::array<glm::vec3, 4>       c_Bind  = { {
+			{ 0.0f, 2.0f, 0.0f },  // hip
+			{ 0.0f, 1.0f, 0.0f },  // knee
+			{ 0.0f, 0.1f, 0.0f },  // ankle
+			{ 0.2f, 0.1f, 0.0f },  // toe
+		} };
+		constexpr std::array<const char*, 4> c_Names = { { "hip", "knee", "ankle", "toe" } };
+
+		auto skeleton = assetlib::Skeleton();
+		for (uint32_t i = 0; i < 4; ++i)
+		{
+			auto bone       = assetlib::Bone();
+			bone.bindPose   = { c_Bind[i] - (i == 0 ? glm::vec3(0.0f) : c_Bind[i - 1]),
+				                glm::quat(1.0f, 0.0f, 0.0f, 0.0f),
+				                glm::vec3(1.0f) };
+			bone.parent     = i == 0 ? assetlib::c_InvalidIndex : i - 1;
+			bone.nameOffset = skeleton.stringPool.add(c_Names[i]);
+			skeleton.bones.push_back(bone);
+		}
+		const auto binds = assetlib::bindPoseModelTransforms(skeleton);
+		for (uint32_t i = 0; i < 4; ++i) skeleton.bones[i].inverseBind = glm::inverse(binds[i]);
+
+		auto animations              = assetlib::AnimationSet();
+		animations.skeleton          = "Derived/Skeletons/leg.bskel";
+		animations.skeletonSignature = assetlib::skeletonSignature(skeleton);
+		animations.boneCount         = 4;
+
+		auto stand        = assetlib::AnimationClip();
+		stand.nameOffset  = animations.stringPool.add("stand");
+		stand.firstSample = 0;
+		stand.frameCount  = 2;
+		stand.sampleRate  = 30.0f;
+		stand.duration    = 1.0f / 30.0f;
+		animations.clips.push_back(stand);
+
+		for (uint32_t frame = 0; frame < 2; ++frame)
+			for (const assetlib::Bone& bone : skeleton.bones)
+				animations.samples.push_back(bone.bindPose);
+
+		auto mesh = assetlib::BMesh();
+
+		auto submesh                  = assetlib::Submesh();
+		submesh.layout.attributeCount = 4;
+		submesh.layout.attributes[0]  = { assetlib::VertexSemantic::kPosition,
+			                              assetlib::VertexFormat::kFloat32x3,
+			                              0 };
+		submesh.layout.attributes[1]  = { assetlib::VertexSemantic::kNormal,
+			                              assetlib::VertexFormat::kFloat32x3,
+			                              12 };
+		submesh.layout.attributes[2]  = { assetlib::VertexSemantic::kJoints0,
+			                              assetlib::VertexFormat::kUint16x4,
+			                              24 };
+		submesh.layout.attributes[3]  = { assetlib::VertexSemantic::kWeights0,
+			                              assetlib::VertexFormat::kUnorm16x4,
+			                              32 };
+		submesh.layout.stride         = 40;
+
+		// A sole on y = 0 under the ankle, welded wholly to it.
+		const std::array<glm::vec3, 4> corners = { {
+			{ -0.1f, 0.0f, -0.1f },
+			{ 0.3f, 0.0f, -0.1f },
+			{ -0.1f, 0.0f, 0.1f },
+			{ 0.3f, 0.0f, 0.1f },
+		} };
+
+		for (const glm::vec3& corner : corners)
+		{
+			const size_t base = mesh.vertexData.size();
+			mesh.vertexData.resize(base + submesh.layout.stride);
+
+			const glm::vec3               normal  = { 0.0f, 1.0f, 0.0f };
+			const std::array<uint16_t, 4> joints  = { { 2, 0, 0, 0 } };
+			const std::array<uint16_t, 4> weights = { { 65535, 0, 0, 0 } };
+
+			std::byte* at = mesh.vertexData.data() + base;
+			std::memcpy(at, &corner, sizeof(corner));
+			std::memcpy(at + 12, &normal, sizeof(normal));
+			std::memcpy(at + 24, joints.data(), sizeof(joints));
+			std::memcpy(at + 32, weights.data(), sizeof(weights));
+			++submesh.vertexCount;
+		}
+
+		auto meshlet           = assetlib::Meshlet();
+		meshlet.vertexCount    = 4;
+		meshlet.triangleCount  = 2;
+		meshlet.boundingCenter = glm::vec3(0.1f, 0.0f, 0.0f);
+		meshlet.boundingRadius = 0.3f;
+		mesh.meshlets.push_back(meshlet);
+
+		for (const uint32_t v : { 0u, 1u, 2u, 3u }) mesh.meshletVertices.push_back(v);
+		for (const uint8_t t :
+		     { uint8_t(0), uint8_t(1), uint8_t(2), uint8_t(2), uint8_t(1), uint8_t(3) })
+			mesh.meshletTriangles.push_back(t);
+
+		submesh.meshletCount = 1;
+		submesh.aabbMin      = glm::vec3(-0.1f, 0.0f, -0.1f);
+		submesh.aabbMax      = glm::vec3(0.3f, 0.0f, 0.1f);
+		mesh.submeshes.push_back(submesh);
+
+		auto entry         = assetlib::Mesh();
+		entry.submeshCount = 1;
+		mesh.meshes.push_back(entry);
+
+		mesh.materials.push_back("Authored/Materials/skin.bmaterial");
+		mesh.skeleton          = "Derived/Skeletons/leg.bskel";
+		mesh.skeletonSignature = assetlib::skeletonSignature(skeleton);
+
+		const assetlib::AssetStore store(dataRoot);
+		store.Save(mesh, "Derived/Meshes/leg.bmesh");
+		store.Save(skeleton, "Derived/Skeletons/leg.bskel");
+		store.Save(animations, "Derived/Animations/leg.banim");
+
+		WriteTexture(dataRoot / "Textures/white.ktx2");
+		WriteMaterial(dataRoot / "Authored/Materials/skin.bmaterial", false);
+	}
+
+	/** The leg rig's avatar, at the key the acquire finds it by. `legs` in WriteLegRig's names. */
+	inline void
+	WriteLegAvatar(const fs::path& dataRoot, std::vector<assetlib::AvatarLeg> legs)
+	{
+		auto avatar = assetlib::Avatar();
+		avatar.legs = std::move(legs);
+		assetlib::AssetStore(dataRoot).Save(avatar, "Authored/Skeletons/leg.bavatar");
 	}
 }

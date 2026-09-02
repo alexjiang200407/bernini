@@ -248,7 +248,7 @@ not obvious from a signature. The headers linked below are the source of truth.
 | Import | `assetlib` | A glTF skin becomes `.bskel` (bones, topologically sorted, with inverse binds, each composed from its whole node chain) + `.banim` (clips resampled to a fixed rate, frame-major local TRS, composed the same way) + `joints0`/`weights0` on the `.bmesh` |
 | Ground | [`assetlib::groundClips`](libs/assetlib/include/assetlib/skinning.h) | At cook, before the boxes: each clip is moved so the lowest point its mesh reaches over it rests on `y = 0` |
 | Bound | [`assetlib::bakePosedBounds`](libs/assetlib/include/assetlib/skinning.h) | At import: sweeps a box per bone through every frame (`posedBounds`) and stores the result in the `.banim`, keyed by a content signature so a re-authored source falls back to measuring |
-| Acquire | [`AssetManager::AcquireSkinnedMesh`](libs/gamelib/include/gamelib/AssetManager.h) | Reads the three containers, checks the clip set still matches its rig, culls by the baked box (`findPosedBounds`) — measuring only a pairing the cook never saw — uploads |
+| Acquire | [`AssetManager::AcquireSkinnedMesh`](libs/gamelib/include/gamelib/AssetManager.h) | Reads the three containers, checks the clip set still matches its rig, culls by the baked box (`findPosedBounds`) — measuring only a pairing the cook never saw — uploads. The first acquire of a rig also plants it: the avatar beside its skeleton (`legChainsForRig`), each sole fitted to the mesh in hand (`solePlanes`), the weights read off the `.banim` or measured (`findPlantWeights`), all handed to `AddRig` as a `FootPlantDesc` |
 | Upload the rig | [`IScene::AddRig`](libs/bgl/include/bgl/IScene.h) | Bones, clip table and sample pool become scene buffers; per-bone depth is derived here; a rig whose caller supplies a `FootPlantDesc` carries its leg chains and per-frame plant weights alongside them. Once per clip set, not once per mesh |
 | Upload the mesh | [`IScene::AddSkinnedMeshGeom`](libs/bgl/include/bgl/IScene.h) | The bind-pose submeshes, exactly as the static path uploads them, against a rig handle |
 | Place | [`ISceneView::CreateSkinnedMeshInstance`](libs/bgl/include/bgl/ISceneView.h) | Writes the playback record and reserves the instance's palette slice |
@@ -361,6 +361,11 @@ vertices weighted to a leg's ankle and toe at bind pose, and expressed in ankle-
 frame the plant turns the foot in. Model space would be a bind-pose fact the moment the ankle
 rotated. It is a property of a (mesh, skeleton) pairing rather than of the rig, so it lives in no
 container and is measured at load beside the boxes.
+
+The legs themselves go up with the rig, once, and the rig is shared by every mesh skinned to it —
+so the soles are fitted to whichever mesh first acquires the rig. A unit assembled from slot meshes
+has its soles fitted to the part that came first; a body and its boots disagree by the boot's
+thickness. `AssetManager::AcquireRig` says so, and it is the one place the choice is made.
 
 The fit is a least-squares `y = ax + bz + d`, iterated: fit, drop whatever came out above the plane,
 refit. A foot's vertices are a closed shell whose upper half and whose vertices up the shin would
