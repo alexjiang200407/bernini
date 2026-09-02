@@ -81,18 +81,25 @@ An OBJECT library rather than a STATIC one: Qt classes are reached through the
 meta-object system as often as through the linker, and a static archive is free to drop
 an object whose symbols look unreferenced, taking its moc registration with it.
 
-`editor_lib` publishes its AUTOUIC output directory, because the editor's *headers*
-`#include "ui_<Name>.h"` — so anything that includes an editor header needs the
-generated `ui_*.h` on its include path.
+# UI: Qt Widgets in C++, not Designer and not QML
 
-# UI: Qt Widgets, not QML
+The UI is **Qt Widgets**, and every widget is **built in C++**. There are no `.ui` files and AUTOUIC
+is off.
 
-The UI is **Qt Widgets**, authored by drag-and-drop in **Qt Designer** (`.ui` files).
-QML/Qt Quick was deliberately not used: the editor is a docked, dense-widget tool
-(Outliner, Details, Content Browser around a 3D viewport), which is Widgets territory.
+QML/Qt Quick was deliberately not used: the editor is a docked, dense-widget tool (Outliner,
+Details, Content Browser around a 3D viewport), which is Widgets territory.
 
-- `./src`   — C++ (logic, behaviour, models, and any dynamic / runtime-built UI).
-- `./qt`    — `.ui` files (Designer-owned layout), organised per component
+Qt Designer was dropped separately, and later — `.ui` is still supported by Qt, so this is a house
+call rather than a deprecation. A form does not survive review: it does not diff, it cannot be
+parameterised, and nothing reads it, which is how two of the last four rotted unnoticed — one
+declaring a `QMainWindow` for a class that is a `QWidget`, the other included by a header that
+never named it. Code is read on the same terms as the behaviour beside it.
+
+The visible consequence is that **an object name is written by hand**. `uic` set one on every
+widget it made, silently; a builder sets the ones that are interface — the names
+`ContentExplorerWindow_test` reaches its views by — and nothing else.
+
+- `./src`   — C++: logic, behaviour, models, and the widget assembly itself.
 - `./tests` — `editor_tests`
 
 ## What belongs in a window, and what does not
@@ -138,15 +145,19 @@ lives beside it, and the split is by responsibility rather than by line count:
   dropped from outside — are the ones it cannot see, and they are refused by the mode. A read-only
   mode shows no context menu at all rather than a menu of items that decline, since an item that
   does nothing reads as a broken one.
-- **Widget assembly** built in code rather than Designer goes to its own `*_ui` file
-  (`material_editor_ui`), which builds and connects nothing. The `connect` calls stay in the window,
-  because what a widget *does* is behaviour.
+- **Widget assembly** goes to its own `*_ui` file — `main_window_ui`, `content_explorer_ui`,
+  `material_editor_ui` — which builds and connects nothing, and hands back a struct of the widgets
+  the window drives. The `connect` calls stay in the window, because what a widget *does* is
+  behaviour. It is also what makes a layout testable without a graphics device: `BuildMainWindowUi`
+  takes a bare `QMainWindow`, so the menu bar is pinned by `[menu]` cases that create no `Renderer`,
+  while everything reached through `MainWindow` itself is `[render]`.
 
 ## Rules
 
 - Qt is editor only don't link to other targets
-- **Generated `ui_*.h` and moc files are build artifacts** in the build tree — never
-  edit or commit them; just `#include "ui_<Name>.h"`.
+- **Generated moc files are build artifacts** in the build tree — never edit or commit them.
+- **No `.ui` files.** AUTOUIC is off, so one would be copied into the build and never compiled —
+  it fails by doing nothing. Build the widgets in a `*_ui` file (below).
 
 # editor_tests
 
