@@ -1,0 +1,21 @@
+<rml>
+<head>
+	<link type="text/rcss" href="menu.rcss"/>
+	<script>
+		-- Runs once, when the document loads: a document's own scope, in the asset tree rather
+		-- than in the binary.
+		clicks = 0
+
+		function OnPlayClick(document)
+			clicks = clicks + 1
+			document:GetElementById('readout').style.height = (8 + clicks * 16) .. 'px'
+		end
+	</script>
+</head>
+<body id="scripted">
+	<div id="panel" class="panel">
+		<div id="play" class="button" onclick="OnPlayClick(document)"></div>
+		<div id="readout" class="readout"></div>
+	</div>
+</body>
+</rml>
