@@ -2,13 +2,13 @@
 #include "cmd/CommandList.h"
 #include "cmd/CommandQueue.h"
 #include "gfx/GraphicsBase.h"
-#include "idl/idl.h"
 #include "resource/Readback.h"
 #include "resource/ResourceManager.h"
 #include "scene/Scene.h"
 #include "util/GpuValidation.h"
 #include "util/TestOptions.h"
 #include <bgl/IGraphics.h>
+#include <bgl_common/idl/idl.h>
 #include <catch2/catch_approx.hpp>
 
 namespace

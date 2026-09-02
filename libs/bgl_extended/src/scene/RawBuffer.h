@@ -1,6 +1,6 @@
 #pragma once
-#include "idl/idl.h"
 #include "scene/RangeBuffer.h"
+#include <bgl_common/idl/idl.h>
 
 namespace bgl
 {

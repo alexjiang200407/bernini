@@ -32,7 +32,7 @@ and portability.
   one that does not is a second renderer above `bgl`'s public interface, not under the RHI. `bgl`
   names that interface and nothing else; a renderer under it is named for what it is built on, and
   `bgl_extended` is the tier that assumes the bar above.
-- **IDL is the single source of truth** for structs shared by C++ and Slang (`libs/bgl_extended/idl`). New
+- **IDL is the single source of truth** for structs shared by C++ and Slang (`libs/bgl_common/idl`). New
   GPU-visible data (materials, lights, bones, LOD info) goes through the IDL, not hand-mirrored.
 - **Data-Oriented Design (DOD)** traditional Object-Oriented Programming (OOP) will decimate your CPU cache at scale update unit gameplay states (health, status effects) in tight memory arrays.
 
@@ -49,7 +49,7 @@ and portability.
 - [x] Static Geometry
   - [x] FrameGraph: pass ordering, auto barrier derivation, resource namespaces, multi-queue,
     dead-pass culling (`libs/bgl_extended/src/fg`)
-  - [x] Slang shader pipeline + IDL codegen for shared C++/Slang structs (`libs/bgl_extended/idl`)
+  - [x] Slang shader pipeline + IDL codegen for shared C++/Slang structs (`libs/bgl_common/idl`)
   - [x] GPU instance render
   - [x] Verification: golden-image comparison + structured error logging
   - [x] Submesh schema

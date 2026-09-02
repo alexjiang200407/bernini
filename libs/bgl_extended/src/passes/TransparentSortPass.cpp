@@ -1,12 +1,12 @@
 #include "passes/TransparentSortPass.h"
 #include "fg/FrameGraph.h"
-#include "idl/Constants.h"
-#include "idl/DispatchArgs.h"
 #include "passes/DrawData.h"
 #include "pipeline/ComputePipeline.h"
 #include "pipeline/PipelineBatch.h"
 #include "scene/scene_buffer_names.h"
 #include <bgl/ISceneView.h>
+#include <bgl_common/idl/Constants.h>
+#include <bgl_common/idl/DispatchArgs.h>
 #include <core/math.h>
 
 namespace bgl

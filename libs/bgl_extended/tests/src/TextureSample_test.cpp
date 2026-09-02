@@ -4,7 +4,6 @@
 #include "debug/DebugBuffer.h"
 #include "debug/DebugReadback.h"
 #include "gfx/GraphicsBase.h"
-#include "idl/ErrorCode.h"
 #include "pipeline/ComputeKernel.h"
 #include "pipeline/ComputePipeline.h"
 #include "resource/Readback.h"
@@ -13,6 +12,7 @@
 #include "util/GpuValidation.h"
 #include "util/TestOptions.h"
 #include <bgl/IGraphics.h>
+#include <bgl_common/idl/ErrorCode.h>
 #include <catch2/catch_approx.hpp>
 
 #if defined(BERNINI_GPU_DEBUG)

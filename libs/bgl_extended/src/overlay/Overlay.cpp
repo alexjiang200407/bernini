@@ -1,6 +1,6 @@
 #include "overlay/Overlay.h"
 #include "cmd/CommandList.h"
-#include "idl/OverlayVertex.h"
+#include <bgl_common/idl/OverlayVertex.h>
 #include <bgl/IGraphics.h>
 
 namespace bgl

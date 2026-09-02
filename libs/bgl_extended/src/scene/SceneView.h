@@ -1,5 +1,4 @@
 #pragma once
-#include "idl/idl.h"
 #include "resource/ResourceManager.h"
 #include "scene/BonePaletteBuffer.h"
 #include "scene/CullState.h"
@@ -15,6 +14,7 @@
 #include "types/ViewMatrices.h"
 #include <bgl/ISceneView.h>
 #include <bgl/SkyboxDesc.h>
+#include <bgl_common/idl/idl.h>
 #include <core/ref/RefCounter.h>
 
 namespace bgl

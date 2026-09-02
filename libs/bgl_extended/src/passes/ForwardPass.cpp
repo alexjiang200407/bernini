@@ -6,8 +6,6 @@
 #include "device/Device.h"
 #include "fg/FrameGraph.h"
 #include "fg/PassDesc.h"
-#include "idl/BaseTable.h"
-#include "idl/PsoType.h"
 #include "passes/BinderNames.h"
 #include "passes/DrawData.h"
 #include "passes/SceneBindings.h"
@@ -22,6 +20,8 @@
 #include "uniforms/Uniforms.h"
 #include "util/util.h"
 #include <bgl/ISceneView.h>
+#include <bgl_common/idl/BaseTable.h>
+#include <bgl_common/idl/PsoType.h>
 
 namespace bgl
 {

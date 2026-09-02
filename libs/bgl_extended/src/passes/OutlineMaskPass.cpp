@@ -4,7 +4,6 @@
 #include "device/Device.h"
 #include "fg/FrameGraph.h"
 #include "fg/PassDesc.h"
-#include "idl/BaseTable.h"
 #include "passes/DrawData.h"
 #include "passes/SceneBindings.h"
 #include "pipeline/MeshletPipeline.h"
@@ -12,6 +11,7 @@
 #include "resource/FrameBuffer.h"
 #include "resource/Shader.h"
 #include "types/RenderState.h"
+#include <bgl_common/idl/BaseTable.h>
 
 // The exec lambda copies DrawData, whose SceneViewRef needs the complete type to destroy.
 #include <bgl/ISceneView.h>

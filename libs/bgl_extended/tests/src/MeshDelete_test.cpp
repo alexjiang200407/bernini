@@ -2,13 +2,13 @@
 #include "cmd/CommandList.h"
 #include "cmd/CommandQueue.h"
 #include "gfx/GraphicsBase.h"
-#include "idl/PsoType.h"
-#include "idl/idl.h"
 #include "scene/Scene.h"
 #include "scene/SceneView.h"
 #include "util/TestOptions.h"
 #include "util/util.h"
 #include <bgl/IGraphics.h>
+#include <bgl_common/idl/PsoType.h>
+#include <bgl_common/idl/idl.h>
 
 namespace
 {

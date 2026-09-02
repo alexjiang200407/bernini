@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 """Generate the C++ headers and Slang copies from the .slang IDL modules.
 
-Drives the built `bgl_idlgen` tool over every module in `bgl/idl/src`, writing:
-  - a banner-stamped Slang copy to   bgl/shaders/src/idl/<rel>.slang   (every module)
+Drives the built `bgl_idlgen` tool over every module in `bgl_common/idl/src`, writing:
+  - a banner-stamped Slang copy to   bgl_common/shaders/src/idl/<rel>.slang   (every module)
   - a generated C++ header, to one of two roots depending on the module:
       * bgl/include/bgl/<rel>.h  in namespace `bgl`      (IDL_PUBLIC_CPP_SOURCES)
-      * <build>/generated/idl/<rel>.h  in namespace `bgl::idl` (IDL_CPP_SOURCES)
+      * <build>/generated/bgl_common/idl/<rel>.h  in namespace `bgl::idl` (IDL_CPP_SOURCES)
     A module in neither list gets no C++ header at all -- correct for the
     interface/generic-only modules, which carry no concrete layout to mirror.
 
@@ -13,7 +13,7 @@ Each module is written under its output root at the SAME path it has relative to
 the source root, so its import path, .slang location, #include and .h location
 stay in lockstep (see bgl/idl/idlgen.cpp).
 
-**The two lists are read from `bgl/idl/src/CMakelists.txt`, not restated here.**
+**The two lists are read from `bgl_common/idl/src/CMakelists.txt`, not restated here.**
 This must produce byte-for-byte the same tree as the `bgl_idl_generate` CMake
 target, and the only way to guarantee that is to route from the same source. A
 copy of the lists here drifted once already: it emitted a `bgl::idl::PsoType`
@@ -27,7 +27,7 @@ Usage:
     just idl --config Release               # pick a configuration
     just idl --build                        # build bgl_idlgen first
     just idl --dry-run                      # print commands, don't run
-    just idl libs/bgl_extended/idl/src/Vertex.slang  # only these modules
+    just idl libs/bgl_common/idl/src/Vertex.slang  # only these modules
 """
 
 import argparse
@@ -40,8 +40,8 @@ import util.cmake_tools as ct
 import util.config as cfg
 
 TOOL = "bgl_idlgen"
-SRC_ROOT = os.path.join(ct.REPO_ROOT, "libs", "bgl_extended", "idl", "src")
-# Mirrors libs/bgl_extended/idl/src/CMakelists.txt: the private headers are a build artifact, because a
+SRC_ROOT = os.path.join(ct.REPO_ROOT, "libs", "bgl_common", "idl", "src")
+# Mirrors libs/bgl_common/idl/src/CMakelists.txt: the private headers are a build artifact, because a
 # struct's layout follows the backend it was generated for. Resolved per build dir.
 def layout_args(build_dir):
     """--metal-layout when this build dir was configured for Metal: the C++ mirror follows the
@@ -56,13 +56,13 @@ def layout_args(build_dir):
 
 
 def cpp_out_dir(tool):
-    """<build>/generated/idl, derived from the tool so the headers land beside the binary that
+    """<build>/generated/bgl_common/idl, derived from the tool so the headers land beside the binary that
     wrote them -- one build dir per backend, each with its own layout."""
-    return os.path.join(os.path.dirname(os.path.dirname(tool)), "generated", "idl")
+    return os.path.join(os.path.dirname(os.path.dirname(tool)), "generated", "bgl_common", "idl")
 
 
 PUBLIC_CPP_OUT_DIR = os.path.join(ct.REPO_ROOT, "libs", "bgl", "include", "bgl")
-SLANG_OUT_DIR = os.path.join(ct.REPO_ROOT, "libs", "bgl_extended", "shaders", "src", "idl")
+SLANG_OUT_DIR = os.path.join(ct.REPO_ROOT, "libs", "bgl_common", "shaders", "src", "idl")
 IDL_CMAKE = os.path.join(SRC_ROOT, "CMakelists.txt")
 
 

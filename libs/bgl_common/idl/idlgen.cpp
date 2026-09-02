@@ -921,6 +921,18 @@ namespace
 			out += std::format("#include \"{}\"\n", header);
 		}
 
+		// A header names what it uses. The renderer's PCH carries glm and hid this for as long as
+		// the renderer was the only consumer; a header compiled anywhere else must not need it.
+		const bool usesGlm = std::ranges::any_of(structs, [](const StructInfo& s) {
+			return std::ranges::any_of(s.fields, [](const FieldInfo& f) {
+				return f.type.starts_with("glm::");
+			});
+		});
+		if (usesGlm)
+		{
+			out += "#include <core/glm.h>\n";
+		}
+
 		out += std::format("\nnamespace {}\n{{\n", ns);
 
 		// Enums first: constants below may cast an enumerator (e.g. `uint16_t(PsoType::kCount)`)

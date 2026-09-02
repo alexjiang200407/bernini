@@ -41,7 +41,7 @@ def test_only_object_files_count_as_compile_time(tmp_path):
     """moc, codegen and linking are real build time but not compile time, and move separately."""
     log = write_log(tmp_path / ".ninja_log", [
         (0, 1000, "apps/editor/editor_lib_autogen/timestamp", "aaaa"),
-        (0, 500, "libs/bgl_extended/shaders/src/idl/Entry.slang", "bbbb"),
+        (0, 500, "libs/bgl_common/shaders/src/idl/Entry.slang", "bbbb"),
         (0, 200, "bin/editor", "cccc"),
         (0, 300, "apps/editor/CMakeFiles/editor_lib.dir/src/MainWindow.cpp.o", "dddd"),
         (0, 400, "libs/core/CMakeFiles/core.dir/cmake_pch.hxx.pch", "eeee"),
