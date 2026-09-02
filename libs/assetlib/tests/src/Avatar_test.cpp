@@ -93,9 +93,9 @@ TEST_CASE("An avatar round-trips through its codec", "[avatar]")
 
 	SECTION("the unplanted clips round-trip, and are absent from a document naming none")
 	{
-		auto avatar      = MakeAvatar();
-		avatar.unplanted = { "Jump_Up", "Fall" };
-		CHECK(Parse(TextOf(avatar)) == avatar);
+		auto listed      = MakeAvatar();
+		listed.unplanted = { "Jump_Up", "Fall" };
+		CHECK(Parse(TextOf(listed)) == listed);
 
 		// An exception to a rule, so a document listing none does not carry the key.
 		CHECK_THAT(TextOf(MakeAvatar()), !Catch::Matchers::ContainsSubstring("unplanted"));
