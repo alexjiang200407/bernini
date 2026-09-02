@@ -87,13 +87,19 @@ namespace demo
 	}
 
 	void
-	PumpEvents()
+	PumpEvents(const std::function<void(const SDL_Event&)>& sink)
 	{
 		PressedKeys().clear();
 
 		SDL_Event e;
 		while (SDL_PollEvent(&e))
 		{
+			// Before the window's own handling, so a sink sees a close request too.
+			if (sink)
+			{
+				sink(e);
+			}
+
 			switch (e.type)
 			{
 			case SDL_EVENT_QUIT:
