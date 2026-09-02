@@ -298,3 +298,68 @@ TEST_CASE("An RCSS transform moves a box where the matrix says", "[ui][render]")
 	// And it left where it was laid out.
 	CHECK(bgl::test::MeanColor(png, 24, 24, 48, 48).Luma() < 0.02f);
 }
+
+// Alpha crosses three conversions between a stylesheet and the backbuffer: RmlUi premultiplies a
+// colour in sRGB, the renderer packs it, and the shader divides the alpha out to decode and
+// multiplies it back. bgl_extended pins that arithmetic on a hand-built vertex; this pins the half
+// of it that a document actually drives.
+TEST_CASE("A translucent element blends against what is under it", "[ui][render]")
+{
+	auto gfx = MakeGraphics();
+	REQUIRE(gfx != nullptr);
+
+	auto target = MakeTarget(*gfx);
+	REQUIRE(target != nullptr);
+
+	const assetlib::AssetStore store = FixtureStore();
+
+	game::UiRenderer renderer(*gfx, store);
+	game::UiRuntime  runtime(store, renderer.Interface());
+	runtime.LoadFontFace(c_Font);
+
+	game::UiContextPtr context = runtime.CreateContext("alpha", c_Size, c_Size);
+
+	Rml::ElementDocument* document = context->Get().LoadDocumentFromMemory(
+		R"(<rml><head><style>
+			body { width: 100%; height: 100%; }
+			div { position: absolute; width: 96px; height: 96px; }
+			#solid { left: 16px; top: 16px; background-color: #cc3333; }
+			#veil  { left: 64px; top: 64px; background-color: rgba(255,255,255,128); }
+		   </style></head>
+		   <body><div id="solid"/><div id="veil"/></body></rml>)",
+		"Authored/UI/alpha.rml");
+
+	REQUIRE(document != nullptr);
+	document->Show();
+	context->Get().Update();
+
+	const std::string png = "assets/golden/ui_alpha.got.png";
+
+	gfx->BeginFrame(target);
+	renderer.Render(*gfx, *context);
+	gfx->EndFrame();
+	gfx->ScreenshotPng(target, png);
+
+	// The two boxes overlap over 64..112; the veil alone covers 112..160.
+	const bgl::test::Rgba solid = bgl::test::MeanColor(png, 24, 24, 24, 24);
+	const bgl::test::Rgba over  = bgl::test::MeanColor(png, 76, 76, 24, 24);
+	const bgl::test::Rgba veil  = bgl::test::MeanColor(png, 124, 124, 24, 24);
+
+	// White at 50% over black is 0.5 in linear, which the sRGB backbuffer encodes as ~0.735 --
+	// the same value bgl_extended's overlay case pins, reached here through RCSS instead. Decoding
+	// the premultiplied bytes as-is would land ~0.5, and ignoring alpha would land 1.0.
+	CHECK(veil.r == Catch::Approx(0.735f).margin(0.03));
+	CHECK(veil.g == Catch::Approx(0.735f).margin(0.03));
+	CHECK(veil.b == Catch::Approx(0.735f).margin(0.03));
+
+	// The solid box is untouched where nothing covers it.
+	CHECK(solid.r == Catch::Approx(0.8f).margin(0.05));
+	CHECK(solid.g == Catch::Approx(0.2f).margin(0.05));
+
+	// And where they overlap the veil lightened the red rather than replacing it: every channel
+	// above the solid box, and the red still ahead of the green it was mixed into.
+	CHECK(over.r > solid.r);
+	CHECK(over.g > solid.g + 0.2f);
+	CHECK(over.b > solid.b + 0.2f);
+	CHECK(over.r > over.g);
+}
