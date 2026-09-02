@@ -33,10 +33,6 @@ namespace assetlib
 	[[nodiscard]] bool
 	isUnder(std::string_view path, std::string_view directory) noexcept;
 
-	/**
-	 * @throws std::runtime_error unless `normalized` (a normalizeRef result) names something
-	 *         strictly inside the data root. `who` prefixes the message.
-	 */
-	void
-	requireInsideDataRoot(std::string_view who, std::string_view normalized);
+	// requireInsideDataRoot is declared in codecs.h, which every user of this header includes: it
+	// is public, unlike the rest of these.
 }

@@ -17,9 +17,8 @@ namespace assetlib
 		 * assertions below hold it to `AssetType`, so a container added here and forgotten anywhere
 		 * else does not compile.
 		 *
-		 * `.ktx2` is deliberately absent: a texture is an image this library encodes, not a
-		 * container it serializes a struct into, so it has no codec and `AssetType::kTexture` is
-		 * the one entry the table carries without one.
+		 * The codec-less kinds are deliberately absent: they are listed in `c_Foreign` below, and
+		 * the assertion counts both.
 		 */
 		using Containers = std::tuple<
 			BMesh,
@@ -56,15 +55,48 @@ namespace assetlib
 		// order to get wrong -- every token is a constant expression in its own header.
 		constexpr auto c_Table = buildTable(static_cast<Containers*>(nullptr));
 
+		/**
+		 * Every asset kind this library stores without encoding: an image, and the UI runtime's own
+		 * text and font. Each is packed, deleted and renamed like a container and has no struct to
+		 * load, so it carries an extension and nothing else.
+		 */
+		constexpr std::array<ForeignKind, 4> c_Foreign = { {
+			{ AssetType::kTexture, c_TextureExtension },
+			{ AssetType::kUiDocument, c_UiDocumentExtension },
+			{ AssetType::kUiStyle, c_UiStyleExtension },
+			{ AssetType::kFont, c_FontExtension },
+		} };
+
 		constexpr size_t c_AssetTypeCount = static_cast<size_t>(AssetType::kCount);
 
-		// Every AssetType is either a container with a codec or the one texture case, so a new
-		// asset type has to say which it is here. Without this it would simply have no codec and
-		// drop out of the migrate and the pack that read this table -- silently, which is the
-		// failure the table exists to make impossible.
+		[[nodiscard]] constexpr bool
+		everyTypeListedOnce() noexcept
+		{
+			for (size_t i = 0; i < c_AssetTypeCount; ++i)
+			{
+				const auto type = static_cast<AssetType>(i);
+
+				const size_t listed =
+					static_cast<size_t>(std::ranges::count(c_Table, type, &ContainerKind::type)) +
+					static_cast<size_t>(std::ranges::count(c_Foreign, type, &ForeignKind::type));
+
+				if (listed != 1)
+					return false;
+			}
+			return true;
+		}
+
+		// Every AssetType is either a container with a codec or a foreign kind, so a new asset type
+		// has to say which it is here. Without this it would simply have no codec and drop out of
+		// the migrate and the pack that read these tables -- silently, which is the failure they
+		// exist to make impossible.
+		//
+		// Counted per type rather than in total: two rows naming one type sum to the right number
+		// while leaving another type in neither table, which is what a copied row does.
 		static_assert(
-			std::tuple_size_v<Containers> + 1 == c_AssetTypeCount,
-			"every AssetType but kTexture must have a codec listed in Containers");
+			everyTypeListedOnce(),
+			"every AssetType must appear exactly once, as a codec in Containers or a row in "
+			"c_Foreign");
 	}
 
 	std::span<const ContainerKind>
@@ -87,7 +119,23 @@ namespace assetlib
 	containerKindFor(AssetType type) noexcept
 	{
 		const auto it = std::ranges::find(c_Table, type, &ContainerKind::type);
-		assert(it != c_Table.end() && "the table is total over AssetType but kTexture");
+		assert(it != c_Table.end() && "the table is total over the container kinds");
+		return *it;
+	}
+
+	std::span<const ForeignKind>
+	foreignKinds() noexcept
+	{
+		return c_Foreign;
+	}
+
+	std::optional<ForeignKind>
+	foreignKindForExtension(std::string_view extension) noexcept
+	{
+		const auto it = std::ranges::find(c_Foreign, extension, &ForeignKind::extension);
+		if (it == c_Foreign.end())
+			return std::nullopt;
+
 		return *it;
 	}
 
