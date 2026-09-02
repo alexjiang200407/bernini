@@ -46,6 +46,14 @@ namespace
 
 		const Environment environment = WriteEnvironment(root);
 
+		// The UI runtime's three: text and a font binary the game reads, none of them a container
+		// this library encodes.
+		fs::create_directories(root.path / "Authored/UI");
+		fs::create_directories(root.path / "Authored/Fonts");
+		std::ofstream(root.path / "Authored/UI/menu.rml") << "<rml><body>menu</body></rml>";
+		std::ofstream(root.path / "Authored/UI/menu.rcss") << "body { color: #fff; }";
+		std::ofstream(root.path / "Authored/Fonts/ui.ttf") << "not really a font";
+
 		// The things an archive must not carry, each for its own reason.
 		{
 			std::ofstream(root.path / "Test.bproj") << "editor metadata";
@@ -106,6 +114,11 @@ TEST_CASE("pack carries what the runtime reads and nothing that produces it", "[
 		CHECK(Contains(entries, environment.skyBaked));
 		CHECK(Contains(entries, environment.prefilter));
 		CHECK(Contains(entries, environment.irradiance));
+
+		// A UI document, its stylesheet and its font are read at runtime like any other asset.
+		CHECK(Contains(entries, "Authored/UI/menu.rml"));
+		CHECK(Contains(entries, "Authored/UI/menu.rcss"));
+		CHECK(Contains(entries, "Authored/Fonts/ui.ttf"));
 	}
 
 	SECTION("authoring sources and non-assets are out")
@@ -144,6 +157,12 @@ TEST_CASE("pack carries what the runtime reads and nothing that produces it", "[
 		// `.ktx2` is a
 		// registered type, and counting these as unclaimed would misreport why they are absent.
 		CHECK(report.skippedByExtension.find(".ktx2") == report.skippedByExtension.end());
+
+		// The UI's three are claimed kinds, so they pack rather than being counted as unknown --
+		// which is what an unregistered extension would look like here.
+		CHECK(report.skippedByExtension.find(".rml") == report.skippedByExtension.end());
+		CHECK(report.skippedByExtension.find(".rcss") == report.skippedByExtension.end());
+		CHECK(report.skippedByExtension.find(".ttf") == report.skippedByExtension.end());
 	}
 }
 

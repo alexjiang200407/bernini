@@ -144,6 +144,9 @@ namespace assetlib
 			case AssetType::kSky:
 			case AssetType::kEnvLighting:
 			case AssetType::kImportDocument:
+			case AssetType::kUiDocument:
+			case AssetType::kUiStyle:
+			case AssetType::kFont:
 			case AssetType::kCount:
 				break;
 			}

@@ -730,3 +730,63 @@ TEST_CASE("An unreadable environment stops the scan rather than being skipped", 
 
 	REQUIRE_THROWS_AS(root.Scan(), std::runtime_error);
 }
+
+// The UI runtime reads its documents through the mount like every other asset, so the project has
+// to know the three kinds: an extension it does not claim is one `pack` drops and `planDeletion`
+// refuses to reason about at all.
+TEST_CASE("The UI documents, styles and fonts are assets the project knows", "[assetrefs]")
+{
+	CHECK(assetTypeFromExtension("Authored/UI/menu.rml") == AssetType::kUiDocument);
+	CHECK(assetTypeFromExtension("Authored/UI/menu.rcss") == AssetType::kUiStyle);
+	CHECK(assetTypeFromExtension("Authored/Fonts/ui.ttf") == AssetType::kFont);
+
+	// The suffix decides, case-insensitively, as it does for every other kind.
+	CHECK(assetTypeFromExtension("Authored/UI/MENU.RML") == AssetType::kUiDocument);
+
+	// .rcss must not be read as a .rml with something after it, nor either as a container.
+	CHECK(assetTypeFromExtension("a.rcss") != AssetType::kUiDocument);
+	CHECK_FALSE(containerKindForExtension(".rml").has_value());
+	CHECK_FALSE(containerKindForExtension(".ttf").has_value());
+}
+
+TEST_CASE("A UI document is a leaf: nothing holds it, and it holds nothing", "[assetrefs]")
+{
+	const DataRoot root("bernini_refs_ui");
+
+	fs::create_directories(root.path / "Authored/UI");
+	fs::create_directories(root.path / "Authored/Fonts");
+	std::ofstream(root.path / "Authored/UI/menu.rml") << "<rml><body>menu</body></rml>";
+	std::ofstream(root.path / "Authored/UI/menu.rcss") << "body { color: #fff; }";
+	std::ofstream(root.path / "Authored/Fonts/ui.ttf") << "not really a font";
+
+	const AssetRefGraph graph = root.Scan();
+
+	// The graph does not read a foreign kind, so a document's @import is not an edge -- the runtime
+	// resolves that itself, and nothing here claims otherwise.
+	for (const std::string& key : { std::string("Authored/UI/menu.rml"),
+	                                std::string("Authored/UI/menu.rcss"),
+	                                std::string("Authored/Fonts/ui.ttf") })
+	{
+		INFO("asset: " << key);
+		CHECK(graph.ReferrersOf(key).empty());
+
+		const DeletionPlan plan = planDeletion(graph, key);
+		REQUIRE(plan.Allowed());
+		CHECK(root.Source().DeleteAsset(plan).status == DeletionStatus::kDeleted);
+		CHECK_FALSE(fs::exists(root.path / key));
+	}
+}
+
+// ADR-8: gamelib's Rml::SystemInterface::JoinPath refuses an escape through this, rather than
+// re-rolling the rule -- so it has to be reachable from outside assetlib.
+TEST_CASE("The escape check is public, and refuses what leaves the data root", "[assetrefs]")
+{
+	CHECK_NOTHROW(requireInsideDataRoot("ui", normalizePath("Authored/UI/menu.rml")));
+	CHECK_NOTHROW(requireInsideDataRoot("ui", normalizePath("Authored/UI/../Fonts/ui.ttf")));
+
+	for (const std::string_view escape : { "../outside.rml", "/etc/passwd", "..", "" })
+	{
+		INFO("path: " << escape);
+		CHECK_THROWS_AS(requireInsideDataRoot("ui", normalizePath(escape)), std::runtime_error);
+	}
+}
