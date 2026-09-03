@@ -249,13 +249,13 @@ namespace assetlib
 
 		// Written even when empty: an avatar with no legs is what the editor's *Create avatar*
 		// writes, and a document with no keys at all reads as one nobody has opened yet.
-		json[std::string(c_LegsKey)] = std::move(legs);
+		json[c_LegsKey] = std::move(legs);
 
 		// Absent when empty, unlike `legs`: the key is an exception to a rule, and a document that
 		// lists none reads as one with none.
-		json.erase(std::string(c_UnplantedKey));
+		json.erase(c_UnplantedKey);
 		if (!avatar.unplanted.empty())
-			json[std::string(c_UnplantedKey)] = avatar.unplanted;
+			json[c_UnplantedKey] = avatar.unplanted;
 
 		return doc::toBytes(json);
 	}
