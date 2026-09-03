@@ -69,7 +69,7 @@ could want:
 2. **Math functions take values; callers do the fetching.** A function in `lib/math` or `lib/anim`
    takes the vectors, matrices and scalars it computes over and returns a value. Where it has to
    read at positions it computes itself — the neighbourhood a resolve clamps to, the bones a pose
-   walk visits — it is generic over an interface of reads (`Resolve<I : IResolveInputs>`,
+   walk visits — it is generic over an interface of reads (`TaaResolve<I : IResolveInputs>`,
    `SkinAt<P : IBonePalette>`), and every method on that interface is a lookup at a coordinate,
    nothing more.
 3. **Buffer access lives in thin named accessors, never inline in the math.** The struct that
