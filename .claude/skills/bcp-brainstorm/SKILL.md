@@ -65,10 +65,19 @@ rule quoted.
 Widening without a recommendation just moves the work. Once the options are on the table, say which
 one you would take and why, in a few lines — then let the user pick.
 
-The moment a direction is chosen, hand off to [bcp-grill](.claude/skills/bcp-grill/SKILL.md), which
-turns it into agreed boundaries and an acceptance gate. The brainstorm's own output goes no further
-than chat: the *why this direction over the others* is worth keeping, and it is kept as an ADR line
-in the grill's consensus, not as a document of its own.
+A chosen direction has two exits, and which one depends on whether it is being built now:
+
+- **Now** — hand off to [bcp-grill](.claude/skills/bcp-grill/SKILL.md), which turns it into agreed
+  boundaries and an acceptance gate. The brainstorm's own output goes no further than chat: the *why
+  this direction over the others* is kept as an ADR line in the grill's consensus, not as a document
+  of its own.
+- **Not now** — hand off to [bcp-spec](.claude/skills/bcp-spec/SKILL.md). A direction chosen and
+  then shelved is the one case where the options are worth a file: the range was surveyed once, and
+  without it the next person re-runs this whole conversation to reach the same answer. The spec is
+  where the rejected options and the trigger that would revive them live.
+
+Do not write the spec by reflex. Most brainstorms end at the grill, and a file for a direction
+somebody is about to build is a plan wearing the wrong name.
 
 ## Rules
 
@@ -77,4 +86,5 @@ in the grill's consensus, not as a document of its own.
 - **Never present variations as options.** If two differ only by a parameter, they are one.
 - **Always include do-nothing and reuse-what-exists.**
 - **Name the rule an option breaks; do not silently drop the option.**
-- **Write no plan and no code.** This skill ends in a decision, and bcp-grill picks it up.
+- **Write no plan and no code.** This skill ends in a decision; bcp-grill picks it up when the
+  work starts now, and bcp-spec when it does not.

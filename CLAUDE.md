@@ -201,11 +201,14 @@ The two GitHub Apps that give AI work its own identity: `morgana-coding-agent`, 
 
 **Specs** — not here, and not in `docs/`
 
-A spec is one problem we have decided **not** to solve yet: what it is, the trigger that makes it
-urgent, and the design already settled on so nobody re-derives it. It describes code that does not
-exist, which is why it is not documentation and is not on master. Every page above says what the
-tree *is*, and the rule that keeps them worth reading — change the code, change the doc — has nothing
-to say about a file describing code nobody has written.
+A spec describes **code that does not exist** — a problem we have decided not to solve yet, or a
+feature we intend to build and have not started. Either way it carries the evidence behind the
+claim, what a shipping engine does about it, the solutions considered with the reason each was
+rejected or kept, and the trigger that makes it urgent, so nobody re-derives any of it. That is why
+it is not documentation and is not on master: every page above says what the tree *is*, and the rule
+that keeps them worth reading — change the code, change the doc — has nothing to say about a file
+describing code nobody has written. [bcp-spec](.claude/skills/bcp-spec/SKILL.md) writes one, and the
+first thing it says is how a spec differs from a plan.
 
 They live on `artefacts`, an orphan branch worktree'd once per workspace and symlinked into every
 checkout as `docs/specs/`, committed on every write by `.claude/hooks/draft_commit.py`. The branch is
