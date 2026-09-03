@@ -237,9 +237,10 @@ AnimationEditorWindow::BuildPropertiesColumn()
 	m_ShowFloor = new QCheckBox(QStringLiteral("Show floor"), column);
 	m_ShowFloor->setChecked(true);
 	m_ShowFloor->setToolTip(QStringLiteral(
-		"Draws the ground under the rig. Feet plant against it either way; this is only whether it "
-		"is in the picture."));
+		"Draws the ground under the rig, and gates what stands on it: with no floor there is no "
+		"slope to see and nothing to plant against."));
 	connect(m_ShowFloor, &QCheckBox::toggled, this, [this](bool checked) {
+		UpdateGroundControls();
 		m_Preview->SetFloorVisible(checked);
 	});
 	layout->addWidget(m_ShowFloor);
@@ -249,9 +250,7 @@ AnimationEditorWindow::BuildPropertiesColumn()
 	m_PlantFeet->setToolTip(QStringLiteral(
 		"Foot IK. Off, the clip plays as authored against the same ground, so the two can be "
 		"compared."));
-	connect(m_PlantFeet, &QCheckBox::toggled, this, [this](bool checked) {
-		m_Preview->SetFootPlanting(checked);
-	});
+	connect(m_PlantFeet, &QCheckBox::toggled, this, [this] { UpdateGroundControls(); });
 	layout->addWidget(m_PlantFeet);
 
 	layout->addSpacing(8);
@@ -266,6 +265,20 @@ AnimationEditorWindow::BuildPropertiesColumn()
 	layout->addWidget(m_ClipMetadata);
 
 	return column;
+}
+
+void
+AnimationEditorWindow::UpdateGroundControls()
+{
+	const bool floor = m_ShowFloor->isChecked();
+
+	m_SlopeLabel->setEnabled(floor);
+	m_SlopeSlider->setEnabled(floor);
+	m_HeadingLabel->setEnabled(floor);
+	m_HeadingSlider->setEnabled(floor);
+	m_PlantFeet->setEnabled(floor);
+
+	m_Preview->SetFootPlanting(floor && m_PlantFeet->isChecked());
 }
 
 QWidget*

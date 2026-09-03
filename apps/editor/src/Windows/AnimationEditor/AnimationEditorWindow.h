@@ -145,6 +145,17 @@ private:
 	[[nodiscard]] QWidget*
 	BuildTransportBar();
 
+	/**
+	 * Pushes the ground group's state into the preview and greys what has nothing to act on.
+	 *
+	 * The floor is the group's master: with none drawn there is no slope to see and nothing
+	 * visible to plant against, so the sliders and *Plant feet* go insensitive and the rig poses
+	 * as authored. The checkbox keeps its own state through that, so showing the floor again
+	 * restores what was set.
+	 */
+	void
+	UpdateGroundControls();
+
 	// One clock tick: advance by the wall time since the last, push into the preview and the UI.
 	void
 	Tick();
