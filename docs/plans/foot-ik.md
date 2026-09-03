@@ -99,6 +99,13 @@ task that lands the solve.
   median motion of soles at that floor) rather than not at all: a clip played in place slides its
   standing foot back under a still root, and that is what a game plays. The ramp counts from the
   unplanted frame, so a sprint's two-frame contact reaches half weight rather than none.
+  *Amended again (2026-09-02):* the floor is each foot's own lowest, not the clip's. The Dog's
+  idle cocks the pelvis and holds its right foot 3 cm above its left on every frame; judged
+  against the left foot's floor the right never planted, and on a slope one foot followed the
+  ground while the other hung — the Dog looked to be hopping. The clip's lowest sole keeps the
+  slack bound (a seated rig plants nothing), and a foot's own floor counts only within a spread of
+  it (`c_PlantFloorSpread`, 5 cm): the Dog's `Jump_Up` holds a knee up with the foot 8 cm above
+  the other, and that foot is up on purpose.
 
 - **ADR-6 — The `prevTime` palette solves against the instance's one transform; the "time is the
   sole input" invariant holds.** An instance's transform is fixed for its lifetime: `ISceneView` has
