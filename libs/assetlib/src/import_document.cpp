@@ -51,7 +51,7 @@ namespace assetlib
 						ground.clip);
 					grounds[ground.clip] = doc::plainFloat(ground.floor);
 				}
-				parameters[std::string(c_ClipFloorKey)] = std::move(grounds);
+				parameters[c_ClipFloorKey] = std::move(grounds);
 			}
 
 			return parameters;
@@ -225,20 +225,20 @@ namespace assetlib
 
 		if (document.textureStamp != SourceStamp())
 		{
-			json[std::string(c_TextureStampSizeKey)] = document.textureStamp.size;
-			json[std::string(c_TextureStampHashKey)] = document.textureStamp.hash;
+			json[c_TextureStampSizeKey] = document.textureStamp.size;
+			json[c_TextureStampHashKey] = document.textureStamp.hash;
 		}
 
 		// Omitted rather than written empty, for the same reason textureDir is: a document for a
 		// source that produced neither stays byte-identical to one written before these existed.
 		if (!document.skeleton.empty())
-			json[std::string(c_SkeletonKey)] = document.skeleton;
+			json[c_SkeletonKey] = document.skeleton;
 
 		if (!document.outputs.empty())
 		{
 			auto outputs = std::vector<std::string>(document.outputs);
 			std::ranges::sort(outputs);
-			json[std::string(c_OutputsKey)] = std::move(outputs);
+			json[c_OutputsKey] = std::move(outputs);
 		}
 
 		auto bindings = nlohmann::json::object();
