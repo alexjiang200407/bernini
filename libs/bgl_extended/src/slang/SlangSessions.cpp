@@ -1,5 +1,5 @@
 #include "slang/SlangSessions.h"
-#include "slang/SlangErrorChecker.h"
+#include <bgl_common/SlangErrorChecker.h>
 
 namespace bgl
 {

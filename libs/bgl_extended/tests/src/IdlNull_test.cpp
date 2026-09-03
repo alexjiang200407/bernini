@@ -1,6 +1,6 @@
-#include "idl/Entry.h"
-#include "idl/Range.h"
-#include "idl/RangeWithCount.h"
+#include <bgl_common/idl/Entry.h>
+#include <bgl_common/idl/Range.h>
+#include <bgl_common/idl/RangeWithCount.h>
 
 TEST_CASE("A default-constructed offset primitive is null", "[idl]")
 {

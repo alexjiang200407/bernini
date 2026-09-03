@@ -1,10 +1,8 @@
-add_subdirectory(./idl)
-
-file(GLOB_RECURSE BGL_COMMON_SOURCES CONFIGURE_DEPENDS
+file(GLOB_RECURSE BGL_EXTENDED_SOURCES CONFIGURE_DEPENDS
 	${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp
 	${CMAKE_CURRENT_SOURCE_DIR}/src/*.c
 )
-list(FILTER BGL_COMMON_SOURCES EXCLUDE REGEX ".*/src/(d3d12|metal)/.*")
+list(FILTER BGL_EXTENDED_SOURCES EXCLUDE REGEX ".*/src/(d3d12|metal)/.*")
 
 # The public surface lives in bgl; these are listed here only so an IDE shows them under the
 # renderer that implements them.
@@ -13,29 +11,25 @@ file(GLOB_RECURSE BGL_SHARED_HEADERS CONFIGURE_DEPENDS
 	${CMAKE_SOURCE_DIR}/libs/bgl/include/bgl/*.hpp
 )
 
-file(GLOB_RECURSE BGL_COMMON_HEADERS CONFIGURE_DEPENDS
+file(GLOB_RECURSE BGL_EXTENDED_HEADERS CONFIGURE_DEPENDS
 	${CMAKE_CURRENT_SOURCE_DIR}/src/*.h
 	${CMAKE_CURRENT_SOURCE_DIR}/src/*.hpp
 )
-list(FILTER BGL_COMMON_HEADERS EXCLUDE REGEX ".*/src/(d3d12|metal)/.*")
+list(FILTER BGL_EXTENDED_HEADERS EXCLUDE REGEX ".*/src/(d3d12|metal)/.*")
 
 
-source_group(TREE "${CMAKE_CURRENT_SOURCE_DIR}/src" PREFIX "Source Files" FILES ${BGL_COMMON_SOURCES} ${BGL_COMMON_HEADERS})
+source_group(TREE "${CMAKE_CURRENT_SOURCE_DIR}/src" PREFIX "Source Files" FILES ${BGL_EXTENDED_SOURCES} ${BGL_EXTENDED_HEADERS})
 source_group(TREE "${CMAKE_SOURCE_DIR}/libs/bgl/include/bgl" PREFIX "Shared Header Files" FILES ${BGL_SHARED_HEADERS})
 
 
 add_library(bgl_extended_objects OBJECT
-	${BGL_COMMON_SOURCES}
-	${BGL_COMMON_HEADERS}
+	${BGL_EXTENDED_SOURCES}
+	${BGL_EXTENDED_HEADERS}
 )
 
 target_include_directories(bgl_extended_objects
 	PRIVATE
 		${CMAKE_CURRENT_SOURCE_DIR}/src
-		${CMAKE_BINARY_DIR}/generated
-		# A generated header includes its imports as siblings, and Entry/Range/RangeWithCount are
-		# hand-written and still in the source tree, so both directories have to be reachable.
-		${CMAKE_CURRENT_SOURCE_DIR}/src/idl
 )
 
 
@@ -57,6 +51,7 @@ target_include_directories(bgl_extended_objects PRIVATE ${Stb_INCLUDE_DIR})
 target_link_libraries(bgl_extended_objects
 	PUBLIC
 		bgl
+		bgl_common
 		core
 		assetlib_structs
 		slang::slang
@@ -127,6 +122,7 @@ target_compile_definitions(bgl_extended_objects PRIVATE
 # compiles its shaders at runtime (MSL via newLibraryWithSource) and needs no build-time step.
 if(RENDERER_BACKEND STREQUAL "DX12")
 	add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/shaders)
+	add_dependencies(bgl_copy_shader_src bgl_common_copy_shaders)
 	add_dependencies(bgl_extended bgl_copy_shaders bgl_copy_shader_src)
 
 	target_compile_definitions(bgl_d3d12 PRIVATE
@@ -174,6 +170,7 @@ elseif(RENDERER_BACKEND STREQUAL "METAL")
 		VERBATIM
 	)
 	add_custom_target(bgl_metal_copy_shaders ALL DEPENDS "${BGL_METAL_SHADER_STAMP}")
+	add_dependencies(bgl_metal_copy_shaders bgl_common_copy_shaders)
 	add_dependencies(bgl_extended bgl_metal_copy_shaders)
 endif()
 
@@ -215,8 +212,6 @@ if (BUILD_TESTS AND RENDERER_BACKEND STREQUAL "DX12")
         PRIVATE
             ${CMAKE_CURRENT_SOURCE_DIR}/src
             ${CMAKE_CURRENT_SOURCE_DIR}/tests/src
-            ${CMAKE_BINARY_DIR}/generated
-            ${CMAKE_CURRENT_SOURCE_DIR}/src/idl
             ${Stb_INCLUDE_DIR}
     )
 
@@ -298,8 +293,6 @@ if (BUILD_TESTS AND RENDERER_BACKEND STREQUAL "METAL")
 			# case cannot reach one without it.
 			${CMAKE_CURRENT_SOURCE_DIR}/src/metal
 			${CMAKE_CURRENT_SOURCE_DIR}/tests/src
-			${CMAKE_BINARY_DIR}/generated
-			${CMAKE_CURRENT_SOURCE_DIR}/src/idl
 			${Stb_INCLUDE_DIR}
 	)
 

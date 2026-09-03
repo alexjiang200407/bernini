@@ -83,7 +83,7 @@ Every geometry pass renders into `sceneColor`, an `RGBA16_FLOAT` texture the ren
 `PostProcess` is what turns that into the backbuffer. The buffer holds **linear HDR with exposure already
 applied**: exposure is a per-view scale and a target may carry several views, so the geometry passes
 fold it in, while the display curve — `AgX` in
-[lib/util/Tonemap.slang](libs/bgl_extended/shaders/src/lib/util/Tonemap.slang) — belongs to the output and runs once.
+[lib/math/Tonemap.slang](libs/bgl_common/shaders/src/lib/math/Tonemap.slang) — belongs to the output and runs once.
 `AgX` leaves its result linear, so the sRGB backbuffer view is still what encodes it.
 
 Two consequences worth knowing. Transparent surfaces blend in linear HDR rather than in display
@@ -144,7 +144,9 @@ blend cannot. `PbrMaterial::transmissionFactor` says which:
 The two lobes are kept apart for this: `PbrShading::EvaluateSurface` returns a `SurfaceLobes`
 (diffuse, specular, and the reflectance the specular lobe returns) instead of a summed colour, and
 the callers weight it. `MaterialData::ShadeWithBaseColor` sums the pair, which is the opaque
-answer; `MaterialData::ShadeBlended` is the only thing that weights them apart. Both live in
+answer; `MaterialData::ShadeBlended` is the only caller of `BlendedSurface`, the one function that
+weights them apart, which lives beside `SurfaceLobes` in
+[lib/math/PbrShading.slang](libs/bgl_common/shaders/src/lib/math/PbrShading.slang). Both methods live in
 [lib/forward/MaterialShading.slang](libs/bgl_extended/shaders/src/lib/forward/MaterialShading.slang), which
 extends the material constant buffer with the four shading entry points.
 
@@ -161,7 +163,7 @@ surface writes depth and participates, and the correct blend is what the ensembl
 It resolves to the `kHashedAlpha_*` buckets, which are **opaque-shaped** — depth
 write, no blend, velocity written like any other geometry — and drawn in the PSO-bucketed phase
 rather than the depth-sorted one. The pixel shader tests base-colour alpha against a per-pixel hashed
-threshold ([lib/util/HashedAlpha.slang](libs/bgl_extended/shaders/src/lib/util/HashedAlpha.slang)) instead of the
+threshold ([lib/math/HashedAlpha.slang](libs/bgl_common/shaders/src/lib/math/HashedAlpha.slang)) instead of the
 material's cutoff, so a fragment survives with probability equal to its alpha and every layer of a
 self-occluding surface writes real depth.
 
@@ -192,7 +194,7 @@ view twice in a frame reports the same history to both draws rather than letting
 the first as history.
 
 When the target has `RenderTargetDesc::taaEnabled` set, every projection is offset by a sub-pixel
-`HaltonJitter` ([util/jitter.h](libs/bgl_extended/src/util/jitter.h)) that `RenderContext::Draw`
+`HaltonJitter` ([bgl_common/jitter.h](libs/bgl_common/include/bgl_common/jitter.h)) that `RenderContext::Draw`
 left-multiplies onto it, so the sample grid walks a *render* pixel's footprint. Across eight frames
 where the render and output grids coincide; across more when the output grid is denser and each of
 its sub-pixels wants that walk of its own ([Temporal Antialiasing](docs/taa.md)). The client's
@@ -360,7 +362,7 @@ frames would reproject through the wrong clip.
 
 * **What it is:** the bone anim table's producer. One dispatch per rig that has been given a table
   and not yet posed into it, one workgroup per frame of that rig's clip set, running the same walk
-  `Pose Skinned` runs ([pose_walk.slang](libs/bgl_extended/shaders/src/lib/anim/pose_walk.slang) is shared by both).
+  `Pose Skinned` runs ([pose_walk.slang](libs/bgl_common/shaders/src/lib/anim/pose_walk.slang) is shared by both).
   A crowd instance then reads a pose rather than computing one.
 * **In:** `scene.rigBuffer`, `scene.skinnedBoneBuffer`, `scene.clipBuffer`, `scene.boneSampleBuffer`.
 * **Out:** `scene.boneAnimTables`, the scene's table arena — a `BonePaletteBuffer` like the view's

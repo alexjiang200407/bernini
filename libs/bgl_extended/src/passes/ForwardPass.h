@@ -1,7 +1,7 @@
 #pragma once
-#include "idl/PsoType.h"
 #include "pipeline/MeshletKernel.h"
 #include "types/MeshletState.h"
+#include <bgl_common/idl/PsoType.h>
 
 namespace bgl
 {

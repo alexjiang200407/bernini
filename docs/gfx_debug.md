@@ -75,8 +75,8 @@ registered handler.
   something went wrong, which cannot be traced back to *which* draw. One bad submesh raises once per
   vertex, so a bare errcode arrives a thousand times over and still names nothing.
 * Error codes are the generated enum
-  [idl/ErrorCode.slang](libs/bgl_extended/idl/src/ErrorCode.slang) / C++ mirror
-  `<build>/generated/idl/ErrorCode.h` (`kUnknown=1 … kNullRawDeref=12`). Add
+  [idl/ErrorCode.slang](libs/bgl_common/shaders/src/idl/ErrorCode.slang) / C++ mirror
+  `<build>/generated/bgl_common/idl/ErrorCode.h` (`kUnknown=1 … kNullRawDeref=12`). Add
   new codes there, not inline — and give the new code a name in `ErrorCodeName`
   ([DebugReadback.h](libs/bgl_extended/src/debug/DebugReadback.h)), which the build enforces. See
   [IDL Codegen](docs/idlgen.md).
@@ -201,8 +201,12 @@ for the warnings/errors/info the run emitted.
 
 ## 3. CPU-side assertions — `gassert` / `gfatal` / `gerror`
 
-Defined in [libs/bgl_extended/src/error/gassert.h](libs/bgl_extended/src/error/gassert.h) (PCH-included, namespace
-`bgl`). All three log then break into the debugger on MSVC (`__debugbreak`):
+Defined in [libs/bgl_common/include/bgl_common/gassert.h](libs/bgl_common/include/bgl_common/gassert.h),
+namespace `bgl`. It sits in `bgl_common` rather than in a renderer because every renderer needs it,
+and it carries the `bgl::logger` alias itself rather than taking one from a PCH -- so a source that
+reaches it through `libs/bgl_extended/src/pch.h` needs no include, and one outside that PCH's reach
+gets the whole family from the single line. All three log then break into the debugger on MSVC
+(`__debugbreak`):
 
 * `gassert(condition, fmt, args...)` — on failure: `logger::error`, break, `std::terminate`.
   Use for internal invariants.

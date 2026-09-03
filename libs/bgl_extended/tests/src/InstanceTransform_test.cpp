@@ -1,6 +1,6 @@
-#include "idl/MeshInstance.h"
 #include "util/util.h"
 #include <bgl/glm.h>
+#include <bgl_common/idl/MeshInstance.h>
 #include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
 

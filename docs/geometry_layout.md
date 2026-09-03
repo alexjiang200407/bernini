@@ -3,10 +3,10 @@
 The structs that describe renderable geometry — `MeshInstance`, `Submesh`, `Meshlet`, `Vertex`,
 `VertexLayout`, and the `Range` / `RangeWithCount` / `Entry` offset primitives — plus the CPU-side
 buffers that mirror them onto the GPU. The structs are laid out once and shared between CPU and
-GPU: a single IDL source (`libs/bgl_extended/idl/src/*.slang`) generates a shader copy under
-[libs/bgl_extended/shaders/src/idl/](libs/bgl_extended/shaders/src/idl/) and a byte-identical C++ mirror into the
-build tree at `<build>/generated/idl/`. Only the offset primitives are hand-written, in
-`libs/bgl_extended/src/idl/`: they are generic, and a generic has no concrete layout to mirror.
+GPU: the shaders import the IDL modules under [libs/bgl_common/shaders/src/idl/](libs/bgl_common/shaders/src/idl/)
+directly, and `bgl_idlgen` generates a byte-identical C++ mirror of each into the build tree at
+`<build>/generated/bgl_common/idl/`. Only the offset primitives are hand-written, in
+`libs/bgl_common/include/bgl_common/idl/`: they are generic, and a generic has no concrete layout to mirror.
 This document links the **generated shader slang** — the GPU-facing view is the one that drives
 rendering, and the C++ mirror pins the same offsets with `static_assert`s.
 
@@ -32,12 +32,12 @@ path is the source of truth; when this doc disagrees, trust the struct, then fix
   `slot_handle::invalid_index`, and the `BufferHandle::bindlessIndex` that mirrors it — which never
   reaches a shader.
 
-* **One IDL, two generated targets, guaranteed layout parity.** The `.slang` structs
-  ([MeshInstance.slang](libs/bgl_extended/shaders/src/idl/MeshInstance.slang) etc.) and the C++ `bgl::idl::*` structs are both
-  generated from `libs/bgl_extended/idl/src`. The C++ side carries `static_assert(sizeof / offsetof …)` so the
+* **One IDL, a generated mirror, guaranteed layout parity.** The `.slang` structs
+  ([MeshInstance.slang](libs/bgl_common/shaders/src/idl/MeshInstance.slang) etc.) are what the shaders import, and the
+  C++ `bgl::idl::*` structs are generated from them. The C++ side carries `static_assert(sizeof / offsetof …)` so the
   two never drift — CPU code can `memcpy` a struct straight into a GPU buffer. An IDL module can
   also declare `enum`s and `public static const` **constants** (e.g.
-  [Constants.slang](libs/bgl_extended/idl/src/Constants.slang)); constants are emitted as `constexpr` into the
+  [Constants.slang](libs/bgl_common/shaders/src/idl/Constants.slang)); constants are emitted as `constexpr` into the
   C++ mirror, keeping shared limits single-sourced across CPU and GPU. Never hand-edit either
   generated copy; edit the IDL source and regenerate.
 
@@ -52,8 +52,8 @@ path is the source of truth; when this doc disagrees, trust the struct, then fix
 * **Geometry is meshlet-partitioned for mesh-shader rendering.** Each submesh is split into
   `Meshlet`s of at most `idl::cMaxVerticesPerMeshlet` (64) unique vertices and
   `idl::cMaxPrimsPerMeshlet` (124) triangles. These are declared once in the IDL module
-  [Constants.slang](libs/bgl_extended/idl/src/Constants.slang) and consumed by both the CPU (generated
-  `<build>/generated/idl/Constants.h`) and the shaders (`import idl.Constants`). A meshlet
+  [Constants.slang](libs/bgl_common/shaders/src/idl/Constants.slang) and consumed by both the CPU (generated
+  `<build>/generated/bgl_common/idl/Constants.h`) and the shaders (`import idl.Constants`). A meshlet
   carries a bounding sphere, written by the scene but read by nothing yet: culling today is
   per-instance, against the submesh's sphere
   ([CullInstances.slang](libs/bgl_extended/shaders/src/programs/culling/CullInstances.slang)).
@@ -125,7 +125,7 @@ path is the source of truth; when this doc disagrees, trust the struct, then fix
   pos/normal/uv/tangent — see `VertexGen` in
   [types/VertexGen.h](libs/bgl_extended/src/types/VertexGen.h), whose field order *is* that layout. See
   `DecodeVertex` in
-  [lib/forward/vertexdecode.slang](libs/bgl_extended/shaders/src/lib/forward/vertexdecode.slang).
+  [lib/geom/vertexdecode.slang](libs/bgl_common/shaders/src/lib/geom/vertexdecode.slang).
 
 * **CPU-side mirror buffers own the storage and hand back offsets.** Geometry is uploaded through
   `RangeBuffer` / `EntryBuffer` / `PackedBuffer` — GPU-mirrored containers whose `Add`/`EmplaceBack`
@@ -156,29 +156,29 @@ Generated shader structs (GPU source of truth). Each has a byte-identical `bgl::
 
 | Struct | File | Role |
 |---|---|---|
-| `MeshInstance` | [MeshInstance.slang](libs/bgl_extended/shaders/src/idl/MeshInstance.slang) | Root descriptor of a placement: the three rows of its world transform + the geom's `RangeWithCount<Submesh>`, plus a `RawEntry<IPlayback>` naming its record in the view's playback arena, null on a static mesh. |
-| `Clip` | [Clip.slang](libs/bgl_extended/shaders/src/idl/Clip.slang) | One playable clip: where its frame 0 sits in the tier's own frame space, its frame count, authored rate and loop flag. Shared by every animated tier out of one clip buffer. |
-| `Submesh` | [Submesh.slang](libs/bgl_extended/shaders/src/idl/Submesh.slang) | One drawable part, **geometry only**: its `VertexLayout`, meshlet range, vertexMap/indices ranges, a `RawRange` of vertex bytes, vertex count, local bounding sphere. No material, no PSO — those are per-instance. |
-| `Meshlet` | [Meshlet.slang](libs/bgl_extended/shaders/src/idl/Meshlet.slang) | A mesh-shader work unit: offsets into the parent submesh's vertexMap/indices windows, vertex/triangle counts, bounding sphere. |
-| `DecodedVertex` | [vertexdecode.slang](libs/bgl_extended/shaders/src/lib/forward/vertexdecode.slang) | What a vertex decodes *to* — position, normal, uv, tangent, joints and weights. Not IDL and not stored anywhere: on the GPU vertices live as raw bytes. |
-| `VertexLayout` | [VertexLayout.slang](libs/bgl_extended/shaders/src/idl/VertexLayout.slang) | Up to 8 `VertexAttribute`s (semantic + format + byte offset) plus `stride`; describes how to decode a vertex from bytes. |
+| `MeshInstance` | [MeshInstance.slang](libs/bgl_common/shaders/src/idl/MeshInstance.slang) | Root descriptor of a placement: the three rows of its world transform + the geom's `RangeWithCount<Submesh>`, plus a `RawEntry<IPlayback>` naming its record in the view's playback arena, null on a static mesh. |
+| `Clip` | [Clip.slang](libs/bgl_common/shaders/src/idl/Clip.slang) | One playable clip: where its frame 0 sits in the tier's own frame space, its frame count, authored rate and loop flag. Shared by every animated tier out of one clip buffer. |
+| `Submesh` | [Submesh.slang](libs/bgl_common/shaders/src/idl/Submesh.slang) | One drawable part, **geometry only**: its `VertexLayout`, meshlet range, vertexMap/indices ranges, a `RawRange` of vertex bytes, vertex count, local bounding sphere. No material, no PSO — those are per-instance. |
+| `Meshlet` | [Meshlet.slang](libs/bgl_common/shaders/src/idl/Meshlet.slang) | A mesh-shader work unit: offsets into the parent submesh's vertexMap/indices windows, vertex/triangle counts, bounding sphere. |
+| `DecodedVertex` | [vertexdecode.slang](libs/bgl_common/shaders/src/lib/geom/vertexdecode.slang) | What a vertex decodes *to* — position, normal, uv, tangent, joints and weights. Not IDL and not stored anywhere: on the GPU vertices live as raw bytes. |
+| `VertexLayout` | [VertexLayout.slang](libs/bgl_common/shaders/src/idl/VertexLayout.slang) | Up to 8 `VertexAttribute`s (semantic + format + byte offset) plus `stride`; describes how to decode a vertex from bytes. |
 
 One struct in the same buffers is **not** IDL-generated and is hand-mirrored instead, so the two
 copies must be kept in step by hand:
 
 | Struct | Files | Role |
 |---|---|---|
-| `SubmeshInstance` | [SubmeshInstance.slang](libs/bgl_extended/shaders/src/lib/types/SubmeshInstance.slang) · [SubmeshInstance.h](libs/bgl_extended/src/types/SubmeshInstance.h) | One drawable: a `MeshInstance` entry + submesh index, plus the **resolved** `material` entry and `pso`. The unit the counting sort buckets and the mesh shader draws. |
+| `SubmeshInstance` | [SubmeshInstance.slang](libs/bgl_common/shaders/src/lib/data/SubmeshInstance.slang) · [SubmeshInstance.h](libs/bgl_extended/src/types/SubmeshInstance.h) | One drawable: a `MeshInstance` entry + submesh index, plus the **resolved** `material` entry and `pso`. The unit the counting sort buckets and the mesh shader draws. |
 
 ### Offset primitives
 
 | Type | File | Role |
 |---|---|---|
-| `Range<T>` | [Range.slang](libs/bgl_extended/shaders/src/idl/Range.slang) | A `uint offsetStart` into a `StructuredBuffer<T>`; the element count is known from context. `Null()` at `0`. |
-| `RangeWithCount<T>` | [RangeWithCount.slang](libs/bgl_extended/shaders/src/idl/RangeWithCount.slang) | A `Range<T>` plus an explicit `count` (a self-describing span). |
-| `Entry<T>` | [Entry.slang](libs/bgl_extended/shaders/src/idl/Entry.slang) | A single-element `uint offset` into a `StructuredBuffer<T>` (e.g. a `SubmeshInstance`'s `Entry<MeshInstance>`). |
-| `RawEntry<T>` | [RawEntry.slang](libs/bgl_extended/shaders/src/idl/RawEntry.slang) | A `uint` **byte** offset into a raw arena, naming a record's `RecordHeader`; its payload begins `cRawPayloadOffset` later. |
-| `RawRange` | [RawRange.slang](libs/bgl_extended/shaders/src/idl/RawRange.slang) | A `uint` byte offset to a headerless window of bytes, for data whose kind whatever names it already records. |
+| `Range<T>` | [Range.slang](libs/bgl_common/shaders/src/idl/Range.slang) | A `uint offsetStart` into a `StructuredBuffer<T>`; the element count is known from context. `Null()` at `0`. |
+| `RangeWithCount<T>` | [RangeWithCount.slang](libs/bgl_common/shaders/src/idl/RangeWithCount.slang) | A `Range<T>` plus an explicit `count` (a self-describing span). |
+| `Entry<T>` | [Entry.slang](libs/bgl_common/shaders/src/idl/Entry.slang) | A single-element `uint offset` into a `StructuredBuffer<T>` (e.g. a `SubmeshInstance`'s `Entry<MeshInstance>`). |
+| `RawEntry<T>` | [RawEntry.slang](libs/bgl_common/shaders/src/idl/RawEntry.slang) | A `uint` **byte** offset into a raw arena, naming a record's `RecordHeader`; its payload begins `cRawPayloadOffset` later. |
+| `RawRange` | [RawRange.slang](libs/bgl_common/shaders/src/idl/RawRange.slang) | A `uint` byte offset to a headerless window of bytes, for data whose kind whatever names it already records. |
 | `RawHandleView<T>` | [RawHandleView.slang](libs/bgl_extended/shaders/src/lib/types/RawHandleView.slang) | The same allocation read as handles of `T`, addressed by byte offset — what makes a resource of handle bytes a record holds. Not an `EntryBuffer`: nothing in it is an allocated element. |
 | `RawHandleArena<T>` | [RawHandleArena.slang](libs/bgl_extended/shaders/src/lib/types/RawHandleArena.slang) | The two views of one arena as a single member, so they cannot be bound to different buffers. |
 

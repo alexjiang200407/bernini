@@ -4,7 +4,7 @@ import idl.PsoType;
 import lib.debug.dbg;
 import lib.types.ComputeBuffer;
 import lib.types.PackedBuffer;
-import lib.types.SubmeshInstance;
+import lib.data.SubmeshInstance;
 
 static const uint kPsoCount = uint(PsoType::kCount);
 

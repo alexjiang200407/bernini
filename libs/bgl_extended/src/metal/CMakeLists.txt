@@ -31,10 +31,6 @@ target_include_directories(bgl_metal
     PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}
         ${CMAKE_CURRENT_SOURCE_DIR}/..
-        # The generated IDL headers are a build artifact, and a generated one includes its
-        # hand-written imports as siblings -- so both roots, as bgl_extended_objects has them.
-        ${CMAKE_BINARY_DIR}/generated
-        ${CMAKE_CURRENT_SOURCE_DIR}/../idl
     SYSTEM PRIVATE ${metalcpp_SOURCE_DIR}
 )
 
@@ -52,6 +48,6 @@ set_source_files_properties(MetalImpl.cpp PROPERTIES SKIP_PRECOMPILE_HEADERS ON)
 target_compile_definitions(bgl_metal PRIVATE RENDERER_BACKEND_METAL)
 
 target_link_libraries(bgl_metal
-    PUBLIC bgl core assetlib_structs glm::glm slang::slang
+    PUBLIC bgl bgl_common core assetlib_structs glm::glm slang::slang
     PRIVATE "-framework Metal" "-framework Foundation" "-framework QuartzCore"
 )

@@ -3,9 +3,6 @@
 #include "cmd/CommandQueue.h"
 #include "fg/FrameGraph.h"
 #include "gfx/GraphicsBase.h"
-#include "idl/DispatchArgs.h"
-#include "idl/PsoType.h"
-#include "idl/idl.h"
 #include "pipeline/ComputeKernel.h"
 #include "pipeline/ComputePipeline.h"
 #include "resource/Readback.h"
@@ -18,6 +15,9 @@
 #include "util/GpuValidation.h"
 #include "util/TestOptions.h"
 #include <bgl/IGraphics.h>
+#include <bgl_common/idl/DispatchArgs.h>
+#include <bgl_common/idl/PsoType.h>
+#include <bgl_common/idl/idl.h>
 
 // Drives the whole counting sort -- histogram, scan, compaction -- through a real FrameGraph, with
 // the same pass declarations CompactInstancesPass makes, and checks every instance landed inside its

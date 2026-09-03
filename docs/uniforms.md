@@ -43,7 +43,7 @@ doc disagrees, trust the header, then fix this doc.
   the guarantees to change at that boundary.
 
 * **Layout is reflected once per PSO and shared; the mirror is per kernel.** `ReflectLayoutFromSlang`
-  ([SlangReflection.h](libs/bgl_extended/src/uniforms/SlangReflection.h)) walks Slang's cbuffer type layout
+  ([SlangReflection.h](libs/bgl_common/include/bgl_common/SlangReflection.h)) walks Slang's cbuffer type layout
   into `ReflectedLayout`, a POD tree held by `shared_ptr<const>`. Carrying no Slang pointers is what
   lets it survive into the [shader cache](docs/shader_cache.md) and be rebuilt from disk without
   loading a Slang module. Each `Uniforms` then builds its own node tree and owns its own bytes.
@@ -54,6 +54,16 @@ doc disagrees, trust the header, then fix this doc.
   heap with it; Metal rewrites it to a native address at dispatch. The root signature therefore
   carries only CBVs — one root parameter per cbuffer, no descriptor tables
   ([PipelineLayout_d3d12.cpp](libs/bgl_extended/src/d3d12/pipeline/PipelineLayout_d3d12.cpp)).
+
+* **The mirror is two halves, and the seam is what a descriptor names.** `UniformsBase`
+  ([bgl_common](libs/bgl_common/include/bgl_common/UniformsBase.h)) holds everything a renderer
+  cannot own: the node tree, the byte buffer, name resolution, and one primitive that writes a
+  descriptor index into a member reflected as one. What a `BufferHandle` or a `SamplerHandle` *is*
+  -- which pool its index names, which smart-buffer member it lands in -- is the renderer's, so each
+  handle type is a `UniformAssign` specialisation in this renderer's `Uniforms.h`, and
+  `DescriptorHandle`, whose alignment is the backend's, reaches the value map the same way. The
+  neutral half compiles against `bgl_common` alone (`bgl_common_selfcheck`), which is the whole
+  point: a second renderer reuses the walk and writes its own leaf.
 
 * **A kernel is a pipeline plus one `Uniforms` per declared cbuffer, keyed by name.**
   `IDevice::CreateComputeKernel` / `CreateMeshletKernel`
@@ -66,18 +76,20 @@ doc disagrees, trust the header, then fix this doc.
 
 | Type | File | Role |
 |---|---|---|
-| `Uniforms` | [Uniforms.h](libs/bgl_extended/src/uniforms/Uniforms.h) | One cbuffer's CPU mirror: byte buffer + reflected tree, `operator[]` by name or index, `HasMember` / `GetLayout` to introspect. Move-only. |
-| `Uniforms::Accessor` / `ConstAccessor` | [Uniforms.h](libs/bgl_extended/src/uniforms/Uniforms.h) | Cursor into the mirror: chainable `operator[]`, typed read/assign, `SetIfValid` for an optional write, `IsValid()`. Non-owning. |
-| `FindUnknownMembers` | [Uniforms.h](libs/bgl_extended/src/uniforms/Uniforms.h) | Resolves a binder's names against a whole PSO family, returning those no variant declares. Call once at family construction. |
+| `UniformsBase` | [UniformsBase.h](libs/bgl_common/include/bgl_common/UniformsBase.h) | One cbuffer's CPU mirror, shared by every renderer: byte buffer + reflected tree, `operator[]` by name or index, `HasMember` / `GetLayout` to introspect. Knows values and descriptor indices, never what a descriptor names. Move-only. |
+| `UniformsBase::Accessor` / `ConstAccessor` | [UniformsBase.h](libs/bgl_common/include/bgl_common/UniformsBase.h) | Cursor into the mirror: chainable `operator[]`, typed read/assign, `AssignDescriptorIndex` as the one primitive a handle write reduces to, `SetIfValid` for an optional write, `IsValid()`. Non-owning. |
+| `UniformAssign<T>` / `UniformValueMap<T>` | [UniformsBase.h](libs/bgl_common/include/bgl_common/UniformsBase.h) | The two seams a renderer specialises: how one of its handle types is written, and which value type one of its types is stored as. |
+| `Uniforms` | [Uniforms.h](libs/bgl_extended/src/uniforms/Uniforms.h) | This renderer's mirror: `UniformsBase` plus the D3D12 root parameter, built from a pipeline's `UniformLayoutEntry`. Its six `UniformAssign` specialisations are what make `uniforms["x"] = handle` compile. |
+| `FindUnknownMembers` | [UniformsBase.h](libs/bgl_common/include/bgl_common/UniformsBase.h) | Resolves a binder's names against a whole PSO family, returning those no variant declares. Call once at family construction. |
 | `ComputeKernel` / `MeshletKernel` | [ComputeKernel.h](libs/bgl_extended/src/pipeline/ComputeKernel.h), [MeshletKernel.h](libs/bgl_extended/src/pipeline/MeshletKernel.h) | Pipeline + per-cbuffer `Uniforms` map. `MeshletKernel` also offers `FindUniforms` / `ContainsUniforms`. |
 
 ### Supporting types
 
 | Type | File | Role |
 |---|---|---|
-| `ReflectedLayout` / `ReflectedField` | [ReflectedLayout.h](libs/bgl_extended/src/uniforms/ReflectedLayout.h) | Serializable POD tree of one cbuffer: kind, value type, size, array count/stride, `handleKind`. |
+| `ReflectedLayout` / `ReflectedField` | [ReflectedLayout.h](libs/bgl_common/include/bgl_common/ReflectedLayout.h) | Serializable POD tree of one cbuffer: kind, value type, size, array count/stride, `handleKind`. |
 | `UniformLayoutEntry` / `UniformLayoutMap` | [UniformLayoutEntry.h](libs/bgl_extended/src/uniforms/UniformLayoutEntry.h) | Shared layout + size + root parameter index, keyed by cbuffer name. |
-| `UniformType` / `UniformValueType` | [UniformValueType.h](libs/bgl_extended/src/uniforms/UniformValueType.h) | Node kind (array/struct/value/null) and leaf scalar type. |
+| `UniformType` / `UniformValueType` | [UniformValueType.h](libs/bgl_common/include/bgl_common/UniformValueType.h) | Node kind (array/struct/value/null) and leaf scalar type. |
 | `DescriptorHandle` | [DescriptorHandle.h](libs/bgl_extended/src/uniforms/DescriptorHandle.h) | The 8 bytes a bindless handle occupies. `alignas(8)` on Metal only. |
 | `HandleSlot` / `MetalHandleOffsetMap` | [MetalPipelineReflection.h](libs/bgl_extended/src/metal/pipeline/MetalPipelineReflection.h) | Metal-only side table: byte offset + pool kind of every handle field. |
 | `c_SmartBufferUniformIndices` / `c_UnboundDescriptorIndex` | [constants.h](libs/bgl_extended/src/constants/constants.h) | The member names the assignment operators search for, and the bindless index every allocator reserves. |
@@ -150,7 +162,10 @@ time, so it is the suballocation the GPU reads and the mirror may be rewritten i
 
 ### Resource assignment
 
-Each handle type finds its destination differently, and the rules are not symmetric:
+Each handle type finds its destination differently, and the rules are not symmetric. Every rule is
+a `UniformAssign` specialisation in [Uniforms.h](libs/bgl_extended/src/uniforms/Uniforms.h), and every
+one ends in the accessor's `AssignDescriptorIndex`, which throws unless the member is a descriptor
+value:
 
 * **`BufferHandle` into a struct** — @pre the struct is exactly 8 bytes; members are then searched
   **by name** against `c_SmartBufferUniformIndices` (`entryBuffer` / `packedBuffer` / `rangeBuffer` /

@@ -50,11 +50,11 @@ Two conventions coexist in the tree, so resolve a target in this order:
 A target that resolves under neither is a dead link. Report it; do not guess at what it meant, and do
 not go hunting for a file with a similar name — a doc pointing at a moved file is itself the finding.
 
-One class of absence is not rot. `libs/bgl_extended/src/idl/` holds four hand-written headers; any *other*
-`libs/bgl_extended/src/idl/<Name>.h` a doc links is a generated one, and generated C++ is a build artifact
-under `<build>/generated/idl/` rather than a file in the tree. Answer from the IDL module in
-`libs/bgl_extended/idl/src/`, which is the source both outputs are generated from — see
-[docs/idlgen.md](docs/idlgen.md).
+One class of absence is not rot. `libs/bgl_common/include/bgl_common/idl/` holds the hand-written
+offset primitives and the `idl.h` umbrella; any *other* `bgl_common/idl/<Name>.h` a doc links is a
+generated one, and generated C++ is a build artifact under `<build>/generated/bgl_common/idl/` rather
+than a file in the tree. Answer from the IDL module in `libs/bgl_common/shaders/src/idl/`, which is the source
+both outputs are generated from — see [docs/idlgen.md](docs/idlgen.md).
 
 Traverse breadth-first from the entry doc and keep a set of what you have already opened: the docs
 cross-link heavily (`rhi.md` ↔ `framegraph.md` ↔ `passes.md`), and re-reading a page is the cheapest

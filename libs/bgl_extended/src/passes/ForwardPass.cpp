@@ -6,8 +6,6 @@
 #include "device/Device.h"
 #include "fg/FrameGraph.h"
 #include "fg/PassDesc.h"
-#include "idl/BaseTable.h"
-#include "idl/PsoType.h"
 #include "passes/BinderNames.h"
 #include "passes/DrawData.h"
 #include "passes/SceneBindings.h"
@@ -22,6 +20,8 @@
 #include "uniforms/Uniforms.h"
 #include "util/util.h"
 #include <bgl/ISceneView.h>
+#include <bgl_common/idl/BaseTable.h>
+#include <bgl_common/idl/PsoType.h>
 
 namespace bgl
 {
@@ -97,7 +97,7 @@ namespace bgl
 			std::string_view geomSrc   = c_GeomSrc;
 		};
 
-		// Order MUST match idl::PsoType (idl/PsoType.h, generated from idl/src/PsoType.slang).
+		// Order MUST match idl::PsoType (idl/PsoType.h, generated from shaders/src/idl/PsoType.slang).
 		static constexpr std::array<PsoConfig, idl::c_PsoCount> c_Psos = { {
 			// kOpaque_StaticMesh_Null
 			{ c_NullPixelSrc, RasterCullMode::kBack, true, false },

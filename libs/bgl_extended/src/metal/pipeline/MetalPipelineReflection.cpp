@@ -1,6 +1,6 @@
 #include "pipeline/MetalPipelineReflection.h"
 
-#include "uniforms/SlangReflection.h"
+#include <bgl_common/SlangReflection.h>
 
 #include "uniforms/Uniforms.h"  // detail::ValueTypeSize
 #include <core/math.h>

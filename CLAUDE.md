@@ -5,8 +5,9 @@ Bernini is a 3D game engine. It uses CMake as the buildsystem.
 - Use bash
 - Do not `#include` standard c++ libraries. They're already in the precompiled header `./PCH/pch.h`, which every compiled target in the tree gets — that universality is what makes omitting them safe.
 - **Never drop an `#include` because a *subsystem* PCH has it.** `libs/<lib>/src/pch.h` and `apps/editor/src/pch.h` carry the third-party headers that subsystem leans on (Qt, glm) so they cost nothing — but unlike the root PCH they reach only some targets: assetlib's is `PRIVATE` while its public headers are compiled by gamelib and the editor without it, and two Objective-C++ files skip a PCH entirely. So still write `#include <QString>` and `<core/glm.h>` where you use them; the PCH is an optimisation, not an interface. See [docs/build_performance.md](./docs/build_performance.md).
-- Library subsystems live under `./libs` (currently `./libs/bgl_extended`, `./libs/core`, `./libs/assetlib`, `./libs/gamelib`); executable apps live under `./apps` (currently `./apps/editor`); runnable examples under `./examples`
+- Library subsystems live under `./libs` (currently `./libs/bgl`, `./libs/bgl_common`, `./libs/bgl_extended`, `./libs/core`, `./libs/assetlib`, `./libs/gamelib`); executable apps live under `./apps` (currently `./apps/editor`); runnable examples under `./examples`
 - **Layering**: `bgl_extended` (renderer) never links `assetlib` — it stays codec-free, taking decoded `assetlib_structs` PODs. `assetlib` (offline cook) never links `bgl_extended` — the CLI baker must not drag in D3D12. `gamelib` is the seam that links both, and is where "load this asset into a scene" lives.
+- **`bgl_common` sits between the contract and the renderer**, and links neither `bgl_extended` nor any backend. It holds what every renderer needs and no renderer owns — the `gassert` family, the Slang reflection walk, the serializable `ReflectedLayout`, the constant-buffer mirror's layout walk (`UniformsBase`), the shader cache's salt/key/encoding, the TAA jitter sequence, frustum-plane extraction, the Slang diagnostic checker. A header there may name no backend and no bindless type; `bgl_common_selfcheck` compiles the whole public surface against `bgl_common` alone and fails the build on a reach into `libs/bgl_extended/src`.
 - **The design bar is not the same everywhere.** See below.
 - For each subsystem `$SUBSYSTEM/src` represents the internal .cpp and .h files that WON'T be shared with others.
 - For each subsystem `$SUBSYSTEM/include` represents all the headers that will be shared to others.
@@ -17,7 +18,7 @@ Bernini is a 3D game engine. It uses CMake as the buildsystem.
 
 ## The bar each subsystem is held to
 
-Everything under `./libs` — `bgl`, `bgl_extended`, `core`, `assetlib`, `gamelib` — and `assetlib_cli` with it, is
+Everything under `./libs` — `bgl`, `bgl_common`, `bgl_extended`, `core`, `assetlib`, `gamelib` — and `assetlib_cli` with it, is
 held to a **strict** bar. These are libraries: their headers are the interface a reader learns the
 system from, and a client cannot route around a bad one. So the public surface must be readable on
 its own — one obvious seam per concern, a rule stated in one place, no second way to do the same
@@ -122,8 +123,9 @@ Overview of all the Frame Graph Passes
 
 **[Slang Shaders](./docs/slang_shaders.md)**
 
-The conventions a shader source follows: `Atomic<T>` and its accessors, the bindless buffer
-primitives, where a constant buffer may hold a resource, and how the build enforces them.
+The conventions a shader source follows: which tree a module belongs in and the three rules that keep
+shared math handle-free, `Atomic<T>` and its accessors, the bindless buffer primitives, where a constant
+buffer may hold a resource, and how the build enforces them.
 
 **[Shader Cache](./docs/shader_cache.md)**
 
@@ -247,7 +249,7 @@ just test [names...]              # build and run every test suite (or only the 
 just coverage [names...]          # macOS: build the coverage preset, run the suites instrumented, report; --diff [ref] names the added lines no test executed (--json for agents)
 just format <files...>            # clang-format in place (--check to verify only)
 just tidy [paths...]              # clang-tidy the naming rules (--changed for a diff, --fix to apply)
-just idl                          # regenerate the IDL C++ headers and Slang copies
+just idl                          # regenerate the IDL C++ headers
 just targets                      # list all CMake targets (+ --type EXECUTABLE, --json)
 just exes                         # resolve executable paths (--target NAME prints one, --json)
 just count                        # count source files and lines by language and by module (bgl, assetlib_cli, editor...), tests counted separately

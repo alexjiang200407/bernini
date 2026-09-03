@@ -1,9 +1,5 @@
 #include "passes/CompactInstancesPass.h"
 #include "fg/FrameGraph.h"
-#include "idl/Constants.h"
-#include "idl/CullView.h"
-#include "idl/DispatchArgs.h"
-#include "idl/PsoType.h"
 #include "passes/DrawData.h"
 #include "pipeline/ComputePipeline.h"
 #include "pipeline/PipelineBatch.h"
@@ -13,6 +9,10 @@
 #include "scene/Scene.h"
 #include "scene/scene_buffer_names.h"
 #include <bgl/ISceneView.h>
+#include <bgl_common/idl/Constants.h>
+#include <bgl_common/idl/CullView.h>
+#include <bgl_common/idl/DispatchArgs.h>
+#include <bgl_common/idl/PsoType.h>
 #include <core/math.h>
 
 namespace bgl

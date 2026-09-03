@@ -1,6 +1,6 @@
-#include "idl/Constants.h"
 #include "scene/GrowableGpuBuffer.h"
 #include "types/SubmeshInstance.h"
+#include <bgl_common/idl/Constants.h>
 #include <catch2/catch_test_macros.hpp>
 #include <core/math.h>
 

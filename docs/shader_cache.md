@@ -32,7 +32,7 @@ when this doc disagrees, trust the source, then fix this doc.
   index per cbuffer, and backs the library with an `ID3D12PipelineLibrary`. Metal stores MSL per
   *stage* and that stage's `[[buffer(N)]]` indices, and backs the library with an
   `MTL::BinaryArchive`. The split is why the shared code
-  ([shadercache/util.h](libs/bgl_extended/src/shadercache/util.h)) is only the salt, the key, the
+  ([bgl_common/shadercache/util.h](libs/bgl_common/include/bgl_common/shadercache/util.h)) is only the salt, the key, the
   `ReflectedLayout` encoding and the atomic write, while each backend owns a `ShaderCache` of its
   own. A cache directory is written by one backend and is not portable between them — the
   salt differs, so the other backend misses every key rather than misreading one.
@@ -69,7 +69,7 @@ when this doc disagrees, trust the source, then fix this doc.
 
 * **Reflection is decoupled from the live Slang object.** A raw `slang::TypeLayoutReflection*` can't
   be serialized. So reflection is walked once, at pipeline build, into a serializable
-  [ReflectedLayout](libs/bgl_extended/src/uniforms/ReflectedLayout.h) POD, owned via `shared_ptr` in the
+  [ReflectedLayout](libs/bgl_common/include/bgl_common/ReflectedLayout.h) POD, owned via `shared_ptr` in the
   pipeline's `UniformLayoutEntry`. `Uniforms` is built from that POD, not from Slang — which is both
   what makes reflection cacheable and why the pipeline no longer retains the linked Slang program.
 
@@ -95,7 +95,7 @@ when this doc disagrees, trust the source, then fix this doc.
 
 | Piece | File | Role |
 |---|---|---|
-| `shader_cache::` util | [libs/bgl_extended/src/shadercache/util.h](libs/bgl_extended/src/shadercache/util.h) | Backend-agnostic core: salt, key, `ReflectedLayout` encoding, atomic write. |
+| `shader_cache::` util | [libs/bgl_common/include/bgl_common/shadercache/util.h](libs/bgl_common/include/bgl_common/shadercache/util.h) | Backend-agnostic core: salt, key, `ReflectedLayout` encoding, atomic write. |
 | `core::hash_bytes` | [libs/core/include/core/hash.h](libs/core/include/core/hash.h) | The FNV-1a chain the salt and every key are built from. |
 | `ShaderCache` (D3D12) | [libs/bgl_extended/src/d3d12/shadercache/ShaderCache_d3d12.h](libs/bgl_extended/src/d3d12/shadercache/ShaderCache_d3d12.h) | Owns both layers; keying, load/store, PSO identity hashing. |
 | `ShaderCache` (Metal) | [libs/bgl_extended/src/metal/shadercache/ShaderCache_metal.h](libs/bgl_extended/src/metal/shadercache/ShaderCache_metal.h) | The same, over MSL stages and an `MTL::BinaryArchive`. |
@@ -103,8 +103,8 @@ when this doc disagrees, trust the source, then fix this doc.
 | `CompileProgram` | [libs/bgl_extended/src/metal/pipeline/MeshletPipeline_metal.cpp](libs/bgl_extended/src/metal/pipeline/MeshletPipeline_metal.cpp) | The Metal miss path: one composed link for reflection, one per stage for MSL. |
 | `SlangSessions` | [libs/bgl_extended/src/slang/SlangSessions.h](libs/bgl_extended/src/slang/SlangSessions.h) | One global session + session per compiling thread; created lazily, released after the renderer is built. |
 | `Shader` | [libs/bgl_extended/src/resource/Shader.h](libs/bgl_extended/src/resource/Shader.h) | The one `IShader` for both backends: a module name and entry point, loaded on the calling thread's session. |
-| `ReflectedLayout` | [libs/bgl_extended/src/uniforms/ReflectedLayout.h](libs/bgl_extended/src/uniforms/ReflectedLayout.h) | Serializable, API-agnostic constant-buffer layout tree. |
-| `ReflectLayoutFromSlang` | [libs/bgl_extended/src/uniforms/SlangReflection.h](libs/bgl_extended/src/uniforms/SlangReflection.h) | The one place Slang reflection is read; emits `ReflectedLayout`. |
+| `ReflectedLayout` | [libs/bgl_common/include/bgl_common/ReflectedLayout.h](libs/bgl_common/include/bgl_common/ReflectedLayout.h) | Serializable, API-agnostic constant-buffer layout tree. |
+| `ReflectLayoutFromSlang` | [libs/bgl_common/include/bgl_common/SlangReflection.h](libs/bgl_common/include/bgl_common/SlangReflection.h) | The one place Slang reflection is read; emits `ReflectedLayout`. |
 | `ByteReader` / `ByteWriter` | [libs/core/include/core/io/ByteReader.h](libs/core/include/core/io/ByteReader.h) | Shared binary IO for the `.bsc` serialization (also used by assetlib). |
 | `shaderCacheDir` knob | [libs/bgl/include/bgl/IGraphics.h](libs/bgl/include/bgl/IGraphics.h) | The sole RHI-visible surface. |
 

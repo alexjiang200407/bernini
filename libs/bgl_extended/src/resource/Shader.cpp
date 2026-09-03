@@ -1,5 +1,5 @@
 #include "resource/Shader.h"
-#include "slang/SlangErrorChecker.h"
+#include <bgl_common/SlangErrorChecker.h>
 #include "slang/SlangSessions.h"
 
 namespace bgl

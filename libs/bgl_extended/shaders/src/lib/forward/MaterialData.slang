@@ -6,7 +6,9 @@ import idl.LoosePbrMaterial;
 import idl.MaterialType;
 import idl.PbrMaterial;
 import idl.RawEntry;
-import lib.forward.PbrShading;
+import idl.ISurfaceEnv;
+import lib.math.PbrShading;
+import lib.types.SurfaceEnv;
 import lib.types.RawHandleArena;
 import lib.types.Texture;
 
@@ -45,14 +47,20 @@ public struct MaterialData
     public SurfaceEnv GetSurfaceEnv()
     {
         SurfaceEnv env;
-        env.cameraPos = cameraPos;
-        env.exposure = exposure;
         env.irradianceMap = irradianceMap;
         env.prefilterMap = prefilterMap;
         env.brdfLUT = brdfLUT;
         env.clampSampler = linearClampSampler;
-        env.envRotation = envRotation;
         return env;
+    }
+
+    public SurfaceParams GetSurfaceParams()
+    {
+        SurfaceParams params;
+        params.cameraPos = cameraPos;
+        params.exposure = exposure;
+        params.envRotation = envRotation;
+        return params;
     }
 };
 
@@ -80,17 +88,18 @@ public struct PbrMaterialRecord : IPbrMaterial, IAlphaTestMaterial
         return record;
     }
 
-    float4 GetBaseColor(SamplerState.Handle s, float2 uv)
+    float4 GetBaseColor(float2 uv)
     {
-        return materialData.GetTextureAt(byteOffset, 0).Sample(s, uv) * payload.baseColorFactor;
+        return materialData.GetTextureAt(byteOffset, 0).Sample(materialData.anisoLinearWrapSampler, uv) * payload.baseColorFactor;
     }
 
-    float3 GetORM(SamplerState.Handle s, float2 uv)
+    float3 GetORM(float2 uv)
     {
-        return materialData.GetTextureAt(byteOffset, 2).Sample(s, uv).rgb * float3(1.0, payload.roughnessFactor, payload.metallicFactor);
+        return materialData.GetTextureAt(byteOffset, 2).Sample(materialData.anisoLinearWrapSampler, uv).rgb *
+               float3(1.0, payload.roughnessFactor, payload.metallicFactor);
     }
 
-    float2 GetNormalXY(SamplerState.Handle s, float2 uv) { return materialData.GetTextureAt(byteOffset, 1).Sample(s, uv).xy; }
+    float2 GetNormalXY(float2 uv) { return materialData.GetTextureAt(byteOffset, 1).Sample(materialData.anisoLinearWrapSampler, uv).xy; }
 
     float GetAlphaCutoff() { return payload.alphaCutoff; }
 
@@ -100,9 +109,10 @@ public struct PbrMaterialRecord : IPbrMaterial, IAlphaTestMaterial
 
     float2 GetBaseColorDimensions() { return materialData.GetTextureAt(byteOffset, 0).GetDimensions(); }
 
-    float GetBaseColorAlphaBiased(SamplerState.Handle s, float2 uv, float bias)
+    float GetBaseColorAlphaBiased(float2 uv, float bias)
     {
-        return materialData.GetTextureAt(byteOffset, 0).SampleBias(s, uv, bias).a * payload.baseColorFactor.a;
+        return materialData.GetTextureAt(byteOffset, 0).SampleBias(materialData.anisoLinearWrapSampler, uv, bias).a *
+               payload.baseColorFactor.a;
     }
 }
 
@@ -124,9 +134,11 @@ float SelectComponent(float4 v, uint c)
 }
 
 // Channel `i` of a loose record: texture i sampled, then the component its `channels[i]` names.
-float SampleLooseChannel(LoosePbrMaterialRecord record, uint i, SamplerState.Handle s, float2 uv)
+float SampleLooseChannel(LoosePbrMaterialRecord record, uint i, float2 uv)
 {
-    return SelectComponent(materialData.GetTextureAt(record.byteOffset, i).Sample(s, uv), record.payload.channels[i]);
+    return SelectComponent(
+        materialData.GetTextureAt(record.byteOffset, i).Sample(materialData.anisoLinearWrapSampler, uv), record.payload.channels[i]
+    );
 }
 
 public struct LoosePbrMaterialRecord : IPbrMaterial, IAlphaTestMaterial
@@ -142,30 +154,30 @@ public struct LoosePbrMaterialRecord : IPbrMaterial, IAlphaTestMaterial
         return record;
     }
 
-    float4 GetBaseColor(SamplerState.Handle s, float2 uv)
+    float4 GetBaseColor(float2 uv)
     {
         float4 c = float4(
-            SampleLooseChannel(this, 0, s, uv), // R
-            SampleLooseChannel(this, 1, s, uv), // G
-            SampleLooseChannel(this, 2, s, uv), // B
-            SampleLooseChannel(this, 3, s, uv)
+            SampleLooseChannel(this, 0, uv), // R
+            SampleLooseChannel(this, 1, uv), // G
+            SampleLooseChannel(this, 2, uv), // B
+            SampleLooseChannel(this, 3, uv)
         ); // A
         return c * payload.baseColorFactor;
     }
 
-    float3 GetORM(SamplerState.Handle s, float2 uv)
+    float3 GetORM(float2 uv)
     {
-        float ao = SampleLooseChannel(this, 4, s, uv);
-        float roughness = SampleLooseChannel(this, 5, s, uv) * payload.roughnessFactor;
-        float metallic = SampleLooseChannel(this, 6, s, uv) * payload.metallicFactor;
+        float ao = SampleLooseChannel(this, 4, uv);
+        float roughness = SampleLooseChannel(this, 5, uv) * payload.roughnessFactor;
+        float metallic = SampleLooseChannel(this, 6, uv) * payload.metallicFactor;
         return float3(ao, roughness, metallic);
     }
 
-    float2 GetNormalXY(SamplerState.Handle s, float2 uv)
+    float2 GetNormalXY(float2 uv)
     {
         return float2(
-            SampleLooseChannel(this, 7, s, uv), // X
-            SampleLooseChannel(this, 8, s, uv)
+            SampleLooseChannel(this, 7, uv), // X
+            SampleLooseChannel(this, 8, uv)
         ); // Y
     }
 
@@ -179,9 +191,11 @@ public struct LoosePbrMaterialRecord : IPbrMaterial, IAlphaTestMaterial
     // and the loose colour channels may come from other maps at other sizes.
     float2 GetBaseColorDimensions() { return materialData.GetTextureAt(byteOffset, 3).GetDimensions(); }
 
-    float GetBaseColorAlphaBiased(SamplerState.Handle s, float2 uv, float bias)
+    float GetBaseColorAlphaBiased(float2 uv, float bias)
     {
-        return SelectComponent(materialData.GetTextureAt(byteOffset, 3).SampleBias(s, uv, bias), payload.channels[3]) *
+        return SelectComponent(
+                   materialData.GetTextureAt(byteOffset, 3).SampleBias(materialData.anisoLinearWrapSampler, uv, bias), payload.channels[3]
+               ) *
                payload.baseColorFactor.a;
     }
 }

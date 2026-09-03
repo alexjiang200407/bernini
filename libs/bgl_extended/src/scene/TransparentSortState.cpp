@@ -1,7 +1,7 @@
 #include "scene/TransparentSortState.h"
 #include "fg/FrameGraph.h"
-#include "idl/DispatchArgs.h"
 #include "scene/scene_buffer_names.h"
+#include <bgl_common/idl/DispatchArgs.h>
 
 namespace bgl
 {
