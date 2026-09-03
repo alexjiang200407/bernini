@@ -29,6 +29,8 @@
 
 #include <meshoptimizer.h>
 
+#include <spdlog/spdlog.h>
+
 namespace assetlib
 {
 	using namespace imp;
@@ -1022,6 +1024,44 @@ namespace assetlib
 			return true;
 		}
 
+		/**
+		 * The occlusion map a glTF material names, mapped into imp::BMeshImport::textures.
+		 *
+		 * @return c_InvalidIndex when the material names none, or when it names one this importer
+		 *         cannot honour: a texCoord other than 0 is refused rather than sampled through
+		 *         TEXCOORD_0, which is the only set read (see readVertices) and the wrong
+		 *         parameterisation for a map baked against another.
+		 */
+		uint32_t
+		readOcclusion(
+			const tinygltf::Material&    gltfMat,
+			const tinygltf::Model&       model,
+			const std::vector<uint32_t>& imageToTexture)
+		{
+			const tinygltf::OcclusionTextureInfo& occlusion = gltfMat.occlusionTexture;
+			if (occlusion.index < 0)
+				return c_InvalidIndex;
+
+			if (occlusion.texCoord != 0)
+			{
+				spdlog::warn(
+					"material '{}': occlusion map dropped, it is addressed by TEXCOORD_{} and only "
+					"TEXCOORD_0 is read",
+					gltfMat.name,
+					occlusion.texCoord);
+				return c_InvalidIndex;
+			}
+
+			if (occlusion.strength != 1.0)
+				spdlog::warn(
+					"material '{}': occlusion strength {} ignored, the engine has no parameter for "
+					"it",
+					gltfMat.name,
+					occlusion.strength);
+
+			return mapTexture(model, occlusion.index, imageToTexture);
+		}
+
 		AlphaMode
 		toAlphaMode(const std::string& gltfAlphaMode)
 		{
@@ -1069,6 +1109,10 @@ namespace assetlib
 				// default-constructs that whether or not the file declares it, and a
 				// specular-glossiness material declares it never.
 				readSpecularGlossiness(gltfMat, model, imageToTexture, material);
+
+				// Outside that block on purpose: occlusionTexture is a sibling of
+				// pbrMetallicRoughness, so a specular-glossiness material can carry one.
+				material.occlusionTexture = readOcclusion(gltfMat, model, imageToTexture);
 
 				material.nameOffset = mesh.stringPool.add(gltfMat.name);
 

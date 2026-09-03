@@ -375,3 +375,109 @@ TEST_CASE("A glTF that will not parse is reported, not guessed at", "[bmesh][glt
 
 	std::filesystem::remove(path);
 }
+
+namespace
+{
+	// Three 1x1 PNGs inline, so the occlusion cases run without a fixture on disk: buildTextures skips
+	// an image it cannot decode, and an index into `textures` only exists for one that decoded.
+	constexpr const char* c_OcclusionGltf = R"({
+  "asset": { "version": "2.0" },
+  "images": [
+    { "name": "albedo", "uri": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADElEQVR4nGP4//8/AAX+Av4N70a4AAAAAElFTkSuQmCC" },
+    { "name": "ao", "uri": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADElEQVR4nGNwYGAAAADEAEG9pK30AAAAAElFTkSuQmCC" },
+    { "name": "mr", "uri": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADElEQVR4nGNgaPgPAAIDAYAkYfWXAAAAAElFTkSuQmCC" }
+  ],
+  "textures": [ { "source": 0 }, { "source": 1 }, { "source": 2 } ],
+  "materials": [
+    { "name": "occlusionOnly", "occlusionTexture": { "index": 1 } },
+    { "name": "sharedOrm", "occlusionTexture": { "index": 2 },
+      "pbrMetallicRoughness": { "metallicRoughnessTexture": { "index": 2 } } },
+    { "name": "separate", "occlusionTexture": { "index": 1 },
+      "pbrMetallicRoughness": { "metallicRoughnessTexture": { "index": 2 } } },
+    { "name": "secondUvSet", "occlusionTexture": { "index": 1, "texCoord": 1 } },
+    { "name": "attenuated", "occlusionTexture": { "index": 1, "strength": 0.5 } },
+    { "name": "none", "pbrMetallicRoughness": { "baseColorTexture": { "index": 0 } } },
+    { "name": "specGloss", "occlusionTexture": { "index": 1 },
+      "extensions": { "KHR_materials_pbrSpecularGlossiness": { "glossinessFactor": 0.5 } } }
+  ]
+})";
+
+	BMeshImport
+	LoadOcclusionGltf()
+	{
+		const auto path = WriteTempGltf(c_OcclusionGltf, "bmesh_occlusion_test.gltf");
+		auto       mesh = loadFromGltf(path);
+		std::filesystem::remove(path);
+		return mesh;
+	}
+}
+
+TEST_CASE("A material's own occlusion map is imported", "[bmesh][gltf][occlusion]")
+{
+	const BMeshImport mesh = LoadOcclusionGltf();
+	REQUIRE(mesh.materials.size() == 7);
+	REQUIRE(mesh.textures.size() == 3);
+
+	// The whole defect: an occlusionTexture with no metallic-roughness texture beside it used to
+	// arrive as nothing at all, which is every affected asset in the character pack.
+	const BMaterialImport& only = mesh.materials[0];
+	CHECK(only.occlusionTexture != c_InvalidIndex);
+	CHECK(only.ormTexture == c_InvalidIndex);
+}
+
+TEST_CASE("A shared-ORM material still names one texture for both", "[bmesh][gltf][occlusion]")
+{
+	// Reading occlusion must not disturb the convention it was assumed under: the two fields agree,
+	// so the routing that follows is identical to what it was before this was read at all.
+	const BMeshImport      mesh   = LoadOcclusionGltf();
+	const BMaterialImport& shared = mesh.materials[1];
+
+	CHECK(shared.occlusionTexture != c_InvalidIndex);
+	CHECK(shared.occlusionTexture == shared.ormTexture);
+}
+
+TEST_CASE("Occlusion and metallic-roughness are kept apart", "[bmesh][gltf][occlusion]")
+{
+	const BMeshImport      mesh     = LoadOcclusionGltf();
+	const BMaterialImport& separate = mesh.materials[2];
+
+	REQUIRE(separate.occlusionTexture != c_InvalidIndex);
+	REQUIRE(separate.ormTexture != c_InvalidIndex);
+	CHECK(separate.occlusionTexture != separate.ormTexture);
+}
+
+TEST_CASE(
+	"An occlusion map on a second UV set is refused, not resampled",
+	"[bmesh][gltf][occlusion]")
+{
+	// The one outcome worse than dropping it: only TEXCOORD_0 is read, so honouring this index would
+	// sample a map baked against another parameterisation and produce confident garbage.
+	CHECK(LoadOcclusionGltf().materials[3].occlusionTexture == c_InvalidIndex);
+}
+
+TEST_CASE(
+	"An occlusion strength the engine cannot apply does not lose the map",
+	"[bmesh][gltf][occlusion]")
+{
+	// strength is a documented gap, not a reason to drop authored data: the map is routed unattenuated
+	// and the shortfall is a warning.
+	CHECK(LoadOcclusionGltf().materials[4].occlusionTexture != c_InvalidIndex);
+}
+
+TEST_CASE("A material with no occlusion map claims none", "[bmesh][gltf][occlusion]")
+{
+	// AO defaults to white, which is correct; inferring one from the metallic-roughness texture that
+	// is not there is what this must not start doing.
+	CHECK(LoadOcclusionGltf().materials[5].occlusionTexture == c_InvalidIndex);
+}
+
+TEST_CASE("A specular-glossiness material keeps its occlusion map", "[bmesh][gltf][occlusion]")
+{
+	// The conversion overwrites the metallic-roughness block wholesale, and occlusionTexture is a
+	// sibling of it rather than a member -- so a read placed inside that block is silently undone.
+	const BMeshImport      mesh      = LoadOcclusionGltf();
+	const BMaterialImport& converted = mesh.materials[6];
+
+	REQUIRE(converted.isPbr);
+	CHECK(converted.occlusionTexture != c_InvalidIndex);
+}
