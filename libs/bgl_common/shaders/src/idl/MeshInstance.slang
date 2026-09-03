@@ -20,6 +20,9 @@ public struct MeshInstance
     // the PSO table.
     public RawEntry<IPlayback> playback;
 
+    // The placement as one affine matrix, the implied fourth row filled in.
+    public float4x4 Matrix() { return float4x4(transform[0], transform[1], transform[2], float4(0.0, 0.0, 0.0, 1.0)); }
+
     public float3 TransformPoint(float3 p)
     {
         let h = float4(p, 1.0);

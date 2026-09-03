@@ -519,7 +519,7 @@ namespace assetlib
 		out += "bavatar\n";
 		out += std::format("  legs         {}\n", avatar.legs.size());
 
-		// Resolved here rather than through resolveLegChains, which throws on the first name it
+		// Resolved here rather than through resolveAvatar, which throws on the first name it
 		// cannot find: describe exists to show a person *which* names went bad, so it reports every
 		// one of them instead of stopping at the first.
 		const auto named = [skeleton](std::string_view name) {
@@ -542,6 +542,9 @@ namespace assetlib
 				named(leg.ankle),
 				named(leg.toe));
 		}
+
+		for (const std::string& clip : avatar.unplanted)
+			out += std::format("  unplanted    '{}'\n", clip);
 
 		return out;
 	}
@@ -611,6 +614,33 @@ namespace assetlib
 				clip.locomotionSpeed);
 			out +=
 				std::format("    ground     moved down {:.4g} to rest on y 0\n", clip.groundOffset);
+
+			// Frames each leg carries any weight in, so a person can see which clips plant
+			// without reading bytes -- and which the avatar switched off.
+			const PlantWeights& plants = animations.plantWeights;
+			if (!plants.Empty() && animations.boneCount != 0 &&
+			    clip.firstSample % animations.boneCount == 0)
+			{
+				const size_t first = clip.firstSample / animations.boneCount;
+				std::string  legs;
+				for (uint32_t leg = 0; leg < plants.legCount; ++leg)
+				{
+					uint32_t planted = 0;
+					for (uint32_t frame = 0; frame < clip.frameCount; ++frame)
+					{
+						const size_t at = (first + frame) * plants.legCount + leg;
+						if (at < plants.weights.size() && plants.weights[at] != 0)
+							++planted;
+					}
+					legs += std::format(
+						"{}leg {} {}/{}",
+						leg == 0 ? "" : ", ",
+						leg,
+						planted,
+						clip.frameCount);
+				}
+				out += std::format("    planted    {} frames\n", legs);
+			}
 		}
 
 		return out;
