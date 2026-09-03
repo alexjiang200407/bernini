@@ -79,6 +79,15 @@ MaterialOutputNode::GroupFirstPort(unsigned int group) const
 	return first;
 }
 
+unsigned int
+MaterialOutputNode::GroupPort(unsigned int group, unsigned int component) const
+{
+	if (group >= c_GroupCount)
+		return 0u;
+
+	return GroupFirstPort(group) + (IsCollapsed(group) ? 0u : component);
+}
+
 MaterialOutputNode::PortRef
 MaterialOutputNode::ResolvePort(QtNodes::PortIndex port) const
 {

@@ -64,6 +64,18 @@ public:
 	QString
 	portCaption(QtNodes::PortType, QtNodes::PortIndex port) const override;
 
+	/**
+	 * The input port a group's component connects to, honouring whether the group is split.
+	 *
+	 * Splitting a group shifts every later group's ports, so a caller that wires the board must ask
+	 * rather than hold literal indices. A collapsed group answers its one wide port for every
+	 * component.
+	 *
+	 * @param group A group index below c_GroupCount; out of range answers 0.
+	 */
+	[[nodiscard]] unsigned int
+	GroupPort(unsigned int group, unsigned int component) const;
+
 	bool
 	portCaptionVisible(QtNodes::PortType, QtNodes::PortIndex) const override
 	{

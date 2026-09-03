@@ -87,11 +87,17 @@ struct ImportedMaterialMaps
 	QString baseColor;
 	QString normal;
 	QString orm;
+
+	// glTF's own occlusion map. Equal to `orm` under the shared-ORM convention, and empty for a
+	// material that names none.
+	QString occlusion;
 };
 
 /**
- * Lays out the board a glTF material describes in `model`, which must be empty: a Texture node per map
- * it names, each wired whole into its group's port on a sink of the alpha mode the material declares.
+ * Lays out the board a glTF material describes in `model`, which must be empty: a Texture node per
+ * distinct map it names, wired into the ports of a sink of the alpha mode the material declares.
+ * A map feeds its group's one wide port, except where an occlusion map of its own forces the ORM
+ * group apart -- then AO, roughness and metallic are wired a channel at a time.
  *
  * The graph is the material -- CompileMaterial reads the routes back out of it, so this is the only
  * place that decides what a glTF material routes where, and there is no second table to disagree with.

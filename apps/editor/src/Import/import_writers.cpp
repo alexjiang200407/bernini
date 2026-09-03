@@ -60,7 +60,8 @@ namespace editor
 				source,
 				ImportedMaterialMaps{ texturePath(source.baseColorTexture),
 			                          texturePath(source.normalTexture),
-			                          texturePath(source.ormTexture) });
+			                          texturePath(source.ormTexture),
+			                          texturePath(source.occlusionTexture) });
 
 			const assetlib::AssetStore store(dataRoot);
 			store.Save(CompileMaterial(model, stem, dataRoot), store.KeyFor(file));
