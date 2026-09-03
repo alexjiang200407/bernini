@@ -38,7 +38,16 @@ namespace assetlib
 	struct Avatar
 	{
 		std::vector<AvatarLeg> legs;
-		std::string            extraJson = "{}";
+
+		/**
+		 * Clips that plant nothing, by name. For a clip the cook cannot judge: groundClips rests
+		 * an airborne clip on whatever hangs lowest -- a foot -- and from inside the clip that
+		 * foot then looks exactly like a standing one. A name matching no clip is warned about
+		 * and ignored.
+		 */
+		std::vector<std::string> unplanted;
+
+		std::string extraJson = "{}";
 
 		bool
 		operator==(const Avatar&) const = default;
@@ -77,7 +86,21 @@ namespace assetlib
 	};
 
 	/**
-	 * The avatar's legs as indices into `skeleton`, in authored order.
+	 * An avatar resolved against the rig it belongs to: the legs as bone indices, in authored
+	 * order, and the clips it takes out of the plant. What the cook measures weights with, what
+	 * keys them, and what the load plants from -- one thing, so the three cannot disagree.
+	 */
+	struct ResolvedAvatar
+	{
+		std::vector<AvatarLegChain> legs;
+		std::vector<std::string>    unplanted;
+
+		bool
+		operator==(const ResolvedAvatar&) const = default;
+	};
+
+	/**
+	 * `avatar` against `skeleton`.
 	 *
 	 * Resolved at load and nowhere else: the `.bskel` keeps its names and the avatar enters no cache
 	 * key, so a rig re-imported under a reordered bone table resolves afresh rather than going
@@ -86,16 +109,16 @@ namespace assetlib
 	 *
 	 * @throws std::runtime_error naming the leg and the bone if `skeleton` carries no such name.
 	 */
-	[[nodiscard]] std::vector<AvatarLegChain>
-	resolveLegChains(const Avatar& avatar, const Skeleton& skeleton);
+	[[nodiscard]] ResolvedAvatar
+	resolveAvatar(const Avatar& avatar, const Skeleton& skeleton);
 
 	/** @throws what `IFileSystem::Read` and `AssetCodec<Avatar>::Deserialize` throw. */
 	[[nodiscard]] Avatar
 	loadAvatar(const core::file::IFileSystem& files, std::string_view key);
 
 	/**
-	 * The legs the rig at `skeletonKey` authors, resolved against `skeleton`, or empty when no
-	 * avatar sits beside it -- which is most rigs, and costs one stat.
+	 * The avatar the rig at `skeletonKey` authors, resolved against `skeleton`, or one with no legs
+	 * when no avatar sits beside it -- which is most rigs, and costs one stat.
 	 *
 	 * The whole of "does this rig plant, and where": the avatar found by its convention, read, and
 	 * its names resolved. One door for the cook and the load both, so the two cannot disagree about
@@ -105,8 +128,8 @@ namespace assetlib
 	 * legs and says so in the log rather than failing the caller: the rig still animates, unplanted,
 	 * but an authored file being ignored is not something to pass over in silence.
 	 */
-	[[nodiscard]] std::vector<AvatarLegChain>
-	legChainsForRig(
+	[[nodiscard]] ResolvedAvatar
+	avatarForRig(
 		const core::file::IFileSystem& files,
 		std::string_view               skeletonKey,
 		const Skeleton&                skeleton);

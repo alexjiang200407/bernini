@@ -1098,18 +1098,26 @@ namespace assetlib
 
 	uint64_t
 	plantWeightsSignature(
-		const std::span<const BMesh>          meshes,
-		const Skeleton&                       skeleton,
-		const std::span<const AvatarLegChain> chains) noexcept
+		const std::span<const BMesh> meshes,
+		const Skeleton&              skeleton,
+		const ResolvedAvatar&        avatar) noexcept
 	{
 		uint64_t hash = core::hash_pod(skeletonSignature(skeleton), core::hash_seed());
 
-		for (const AvatarLegChain& chain : chains)
+		for (const AvatarLegChain& chain : avatar.legs)
 		{
 			hash = core::hash_pod(chain.hip, hash);
 			hash = core::hash_pod(chain.knee, hash);
 			hash = core::hash_pod(chain.ankle, hash);
 			hash = core::hash_pod(chain.toe, hash);
+		}
+
+		// Each name with its length, so two lists cannot agree by concatenation; nothing at all
+		// for an empty list, so an avatar that names no clip keys as it did before the key existed.
+		for (const std::string& clip : avatar.unplanted)
+		{
+			hash = core::hash_pod(clip.size(), hash);
+			hash = core::hash_string(clip, hash);
 		}
 
 		// The geometry the soles were fitted on, by the same hash a posed box keys on: it is the
@@ -1122,12 +1130,14 @@ namespace assetlib
 
 	std::vector<uint8_t>
 	measurePlantWeights(
-		const AnimationSet&                   animations,
-		const Skeleton&                       skeleton,
-		const std::span<const AvatarLegChain> chains,
-		const std::span<const SolePlane>      soles)
+		const AnimationSet&              animations,
+		const Skeleton&                  skeleton,
+		const ResolvedAvatar&            avatar,
+		const std::span<const SolePlane> soles)
 	{
 		ZoneScopedN("assetlib plant weights");
+
+		const std::span<const AvatarLegChain> chains = avatar.legs;
 
 		core::throw_runtime_error_if(
 			soles.size() != chains.size(),
@@ -1153,9 +1163,30 @@ namespace assetlib
 		if (legs == 0 || frames == 0)
 			return out;
 
+		// A name matching no clip is said out loud rather than passed over: it is authored, and
+		// what it meant to switch off is still on.
+		auto unplanted = std::vector<bool>(animations.clips.size(), false);
+		for (const std::string& name : avatar.unplanted)
+		{
+			bool found = false;
+			for (uint32_t clip = 0; clip < animations.clips.size(); ++clip)
+				if (animations.stringPool.at(animations.clips[clip].nameOffset) == name)
+					unplanted[clip] = found = true;
+
+			if (!found)
+				spdlog::warn(
+					"skinning: the avatar names '{}' as unplanted, and the clip set has no such "
+					"clip",
+					name);
+		}
+
 		for (uint32_t clip = 0; clip < animations.clips.size(); ++clip)
 		{
 			const AnimationClip& played = animations.clips[clip];
+
+			// The weights are already zero; the clip is left at them.
+			if (unplanted[clip])
+				continue;
 
 			// A clip that does not start on a frame boundary has no frame index to write its
 			// weights at, so it gets none rather than a run landing on another clip's frames. bgl
@@ -1297,23 +1328,23 @@ namespace assetlib
 
 	void
 	bakePlantWeights(
-		AnimationSet&                         animations,
-		const std::span<const BMesh>          meshes,
-		const Skeleton&                       skeleton,
-		const std::span<const AvatarLegChain> chains)
+		AnimationSet&                animations,
+		const std::span<const BMesh> meshes,
+		const Skeleton&              skeleton,
+		const ResolvedAvatar&        avatar)
 	{
 		animations.plantWeights = PlantWeights();
-		if (chains.empty())
+		if (avatar.legs.empty())
 			return;
 
 		try
 		{
-			const std::vector<SolePlane> soles = solePlanes(meshes, skeleton, chains);
+			const std::vector<SolePlane> soles = solePlanes(meshes, skeleton, avatar.legs);
 
 			animations.plantWeights.weights =
-				measurePlantWeights(animations, skeleton, chains, soles);
-			animations.plantWeights.legCount  = static_cast<uint32_t>(chains.size());
-			animations.plantWeights.signature = plantWeightsSignature(meshes, skeleton, chains);
+				measurePlantWeights(animations, skeleton, avatar, soles);
+			animations.plantWeights.legCount  = static_cast<uint32_t>(avatar.legs.size());
+			animations.plantWeights.signature = plantWeightsSignature(meshes, skeleton, avatar);
 		}
 		catch (const std::exception&)
 		{
@@ -1325,18 +1356,18 @@ namespace assetlib
 
 	std::optional<std::vector<uint8_t>>
 	findPlantWeights(
-		const AnimationSet&                   animations,
-		const std::span<const BMesh>          meshes,
-		const Skeleton&                       skeleton,
-		const std::span<const AvatarLegChain> chains)
+		const AnimationSet&          animations,
+		const std::span<const BMesh> meshes,
+		const Skeleton&              skeleton,
+		const ResolvedAvatar&        avatar)
 	{
-		if (animations.plantWeights.Empty() || chains.empty())
+		if (animations.plantWeights.Empty() || avatar.legs.empty())
 			return std::nullopt;
 
-		if (animations.plantWeights.legCount != chains.size())
+		if (animations.plantWeights.legCount != avatar.legs.size())
 			return std::nullopt;
 
-		if (animations.plantWeights.signature != plantWeightsSignature(meshes, skeleton, chains))
+		if (animations.plantWeights.signature != plantWeightsSignature(meshes, skeleton, avatar))
 			return std::nullopt;
 
 		return animations.plantWeights.weights;

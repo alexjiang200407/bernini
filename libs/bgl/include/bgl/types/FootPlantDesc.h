@@ -30,7 +30,8 @@ namespace bgl
 
 	/**
 	 * What a rig needs to plant its feet, or nothing at all -- the default is a rig that animates
-	 * exactly as it did before foot IK existed, which is every rig whose skeleton has no `.bavatar`.
+	 * exactly as it did before foot planting existed, which is every rig whose skeleton has no
+	 * `.bavatar`.
 	 *
 	 * `legs` and `plantWeights` stand or fall together: a leg with no weights would be solved on
 	 * every frame of every clip, including the ones it is mid-swing on. A rig that is never planted

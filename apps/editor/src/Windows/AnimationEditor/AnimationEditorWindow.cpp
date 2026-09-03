@@ -234,15 +234,24 @@ AnimationEditorWindow::BuildPropertiesColumn()
 	});
 	layout->addWidget(m_HeadingSlider);
 
+	// Both off to begin with, so a panel just opened shows the clip as its author left it: the
+	// ground is a thing to try, and a preview that silently moved a foot on the way in would be
+	// answering a question nobody had asked yet.
 	m_ShowFloor = new QCheckBox(QStringLiteral("Show floor"), column);
-	m_ShowFloor->setChecked(true);
+	m_ShowFloor->setChecked(false);
 	m_ShowFloor->setToolTip(QStringLiteral(
-		"Draws the ground under the rig. Feet plant against it either way; this is only whether it "
-		"is in the picture."));
-	connect(m_ShowFloor, &QCheckBox::toggled, this, [this](bool checked) {
-		m_Preview->SetFloorVisible(checked);
-	});
+		"Draws the ground under the rig, and gates what stands on it: with no floor there is no "
+		"slope to see and nothing to plant against."));
+	connect(m_ShowFloor, &QCheckBox::toggled, this, [this] { UpdateGroundControls(); });
 	layout->addWidget(m_ShowFloor);
+
+	m_PlantFeet = new QCheckBox(QStringLiteral("Plant feet"), column);
+	m_PlantFeet->setChecked(false);
+	m_PlantFeet->setToolTip(QStringLiteral(
+		"Foot planting: each leg solved onto the ground under it. Off, the clip plays as authored "
+		"against the same ground, so the two can be compared."));
+	connect(m_PlantFeet, &QCheckBox::toggled, this, [this] { UpdateGroundControls(); });
+	layout->addWidget(m_PlantFeet);
 
 	layout->addSpacing(8);
 	layout->addWidget(new QLabel(QStringLiteral("Clips"), column));
@@ -255,7 +264,26 @@ AnimationEditorWindow::BuildPropertiesColumn()
 	m_ClipMetadata->setTextInteractionFlags(Qt::TextSelectableByMouse);
 	layout->addWidget(m_ClipMetadata);
 
+	// The boxes are the state; this is what puts the preview on it. Reaches the preview before it
+	// is on screen, where a rebind is recorded and applied when it is shown.
+	UpdateGroundControls();
+
 	return column;
+}
+
+void
+AnimationEditorWindow::UpdateGroundControls()
+{
+	const bool floor = m_ShowFloor->isChecked();
+
+	m_SlopeLabel->setEnabled(floor);
+	m_SlopeSlider->setEnabled(floor);
+	m_HeadingLabel->setEnabled(floor);
+	m_HeadingSlider->setEnabled(floor);
+	m_PlantFeet->setEnabled(floor);
+
+	m_Preview->SetFloorVisible(floor);
+	m_Preview->SetFootPlanting(floor && m_PlantFeet->isChecked());
 }
 
 QWidget*
