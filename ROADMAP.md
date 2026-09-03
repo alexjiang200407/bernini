@@ -2,8 +2,14 @@
 
 A 3D engine targeting a **battle game**: many skinned, instanced units under a single
 directional sun, forward-rendered, PBR now and an ink/toon path later, with a dedicated
-authoring editor. The game ships cross-platform (Windows / Linux / Xbox); the editor is
+authoring editor. The game ships cross-platform (Windows / Linux / Xbox), and **iOS through
+Dawn/WebGPU** — which is the `bgl_wgpu` baseline tier under Optional Features, not an RHI backend,
+because a device without a mesh stage misses the bar `bgl_extended` assumes. The editor is
 Windows-only.
+
+iOS is why memory has a budget rather than a preference: that platform terminates on footprint
+instead of degrading. `docs/profiling.md` § Memory is what measures it, and the Capacity policy
+section below is written in exactly those bytes.
 
 This roadmap is a living checklist. Legend:
 
@@ -355,6 +361,10 @@ and portability.
   - [ ] Optional: a CUDA port of one or two kernels purely for `compute-sanitizer --tool racecheck`.
   - [ ] DRED & Aftermath / Radeon GPU Detective, paired with monotonic breadcrumb markers.
 - [ ] Profiling
+  - [x] Memory — bytes charged to a coarse subsystem tag, live and peak, reported beside the OS
+    footprint at the end of every run and as JSON for a tool. `assetlib`'s cook and the editor's
+    thumbnail cache are still untagged and are most of the residual. See
+    [docs/profiling.md](docs/profiling.md) § Memory.
   - [ ] GPU timestamp per pass with on-screen breakdown — FrameGraph feature, same as hashing. The
     RHI has no timestamp query at all today, so nothing in the tree can attribute a cost to one
     stage — the crowd tier's frame-interpolation trade is one measurement queued behind this line.

@@ -111,7 +111,9 @@ machine.
 **[Profiling](./docs/profiling.md)**
 
 Where load and cook time is measured: taking a Tracy capture, the one rule for naming a zone, and
-why the frame loop deliberately has none.
+why the frame loop deliberately has none. Then **§ Memory**: bytes charged to a subsystem tag
+against what the OS says the process owns, why the untagged residual is the mechanism rather than a
+gap, how each binary is asked for a report, and what a cook and a suite were measured to hold.
 
 **[Frame Graph](./docs/framegraph.md)**
 
