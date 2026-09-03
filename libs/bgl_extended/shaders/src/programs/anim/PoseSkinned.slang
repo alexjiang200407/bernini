@@ -9,7 +9,9 @@ import idl.SkinnedBone;
 import idl.SkinnedLegChain;
 import idl.SkinnedState;
 import lib.anim.clip_playback;
+import lib.anim.foot_plant;
 import lib.anim.pose_walk;
+import lib.math.transform;
 import lib.types.ComputeBuffer;
 import lib.types.EntryBuffer;
 import lib.types.PoseTables;
@@ -91,58 +93,6 @@ groupshared uint gMaxDeficit;
 
 // The three rows a placement stores, as the affine matrix the plane pullback and the inverse below
 // take. The fourth row is always (0,0,0,1) and is not stored.
-float4x4 InstanceTransform(MeshInstance mesh)
-{
-    return float4x4(mesh.transform[0], mesh.transform[1], mesh.transform[2], float4(0.0, 0.0, 0.0, 1.0));
-}
-
-// The inverse of an affine transform: the upper 3x3 inverted through its adjugate, and the
-// translation carried back through that. Affine because an instance transform is -- the palette
-// stores three rows and drops the fourth on the same assumption.
-float4x4 AffineInverse(float4x4 m)
-{
-    float3x3 r = float3x3(m[0].xyz, m[1].xyz, m[2].xyz);
-    float3 t = float3(m[0].w, m[1].w, m[2].w);
-
-    float3 c0 = cross(r[1], r[2]);
-    float3 c1 = cross(r[2], r[0]);
-    float3 c2 = cross(r[0], r[1]);
-
-    float3x3 inv = transpose(float3x3(c0, c1, c2)) / dot(r[0], c0);
-    float3 it = -mul(inv, t);
-
-    return float4x4(float4(inv[0], it.x), float4(inv[1], it.y), float4(inv[2], it.z), float4(0.0, 0.0, 0.0, 1.0));
-}
-
-float3 TransformPoint(float4x4 m, float3 p)
-{
-    return mul(m, float4(p, 1.0)).xyz;
-}
-
-float3 TransformDir(float4x4 m, float3 v)
-{
-    return mul(m, float4(v, 0.0)).xyz;
-}
-
-// A rotation of `angle` about `axis` through `pivot`, as one affine matrix. Rodrigues rather than a
-// quaternion: the result is multiplied into a model transform either way, so building the matrix
-// directly saves the conversion.
-float4x4 RotationAbout(float3 pivot, float3 axis, float angle)
-{
-    float s = sin(angle);
-    float c = cos(angle);
-    float t = 1.0 - c;
-
-    float3 r0 = float3(t * axis.x * axis.x + c, t * axis.x * axis.y - s * axis.z, t * axis.x * axis.z + s * axis.y);
-    float3 r1 = float3(t * axis.x * axis.y + s * axis.z, t * axis.y * axis.y + c, t * axis.y * axis.z - s * axis.x);
-    float3 r2 = float3(t * axis.x * axis.z - s * axis.y, t * axis.y * axis.z + s * axis.x, t * axis.z * axis.z + c);
-
-    // pivot - R * pivot, so the pivot is the one point the rotation leaves alone.
-    float3 offset = pivot - float3(dot(r0, pivot), dot(r1, pivot), dot(r2, pivot));
-
-    return float4x4(float4(r0, offset.x), float4(r1, offset.y), float4(r2, offset.z), float4(0.0, 0.0, 0.0, 1.0));
-}
-
 // How planted leg `leg` is at a fractional frame, 0 to 1. Blended between the two frames the
 // position falls between, like every other per-frame quantity here: a weight that stepped would put
 // the pop back that the cook's ramp exists to remove.
@@ -166,91 +116,6 @@ float PlantWeight(Rig rig, Clip clip, uint leg, float frames)
     return lerp(byteA, byteB, blend) * (1.0 / 255.0);
 }
 
-// The ground plane in the instance's model space, as `(normal, -distance)` with a unit normal.
-//
-// Carried as a plane rather than sampled in world space: a plane is a row vector, so it crosses a
-// transform by multiplication from the left and needs no inverse of its own. The inverse is still
-// wanted for the drop direction below, which is why both are built once per group.
-float4 ModelGroundPlane(float4x4 modelToWorld)
-{
-    float4 world = float4(gUniforms.groundNormal, -dot(gUniforms.groundNormal, gUniforms.groundPoint));
-    float4 model = mul(world, modelToWorld);
-    return model / length(model.xyz);
-}
-
-// Where the ground sits under `point`, dropped along world down rather than along the plane's own
-// normal: a planted foot must keep the ground position it was authored over, and the closest point
-// on a slope is not that point.
-//
-// `down` is world -Y carried into model space. SetGround refuses a normal with no upward component,
-// so the denominator here cannot be zero.
-float3 SampleGround(float4 plane, float3 down, float3 point)
-{
-    let distance = dot(plane.xyz, point) + plane.w;
-    return point + down * (distance / -dot(plane.xyz, down));
-}
-
-// The analytic two-bone solve: law of cosines on a root-mid-tip chain toward `target`, keeping the
-// bend in the plane the chain is already bent in, then one aim rotation bringing the tip onto the
-// target.
-//
-// Limb-neutral on purpose. A leg is what calls it here, but nothing below knows that: a shoulder,
-// elbow and wrist reaching for a prop is the same three joints and the same maths, so whoever adds
-// that reaches for this rather than writing a second copy of it. What a leg owns is where the
-// target comes from and what weights it -- not the solve.
-//
-// `rootDelta` and `midDelta` come back as the model-space transforms to premultiply onto the root
-// and onto everything from the mid joint down -- the tip included, since it is rigid below the mid.
-void SolveTwoBone(float3 root, float3 mid, float3 tip, float3 target, out float4x4 rootDelta, out float4x4 midDelta)
-{
-    let upper = length(mid - root);
-    let lower = length(tip - mid);
-
-    // Held just inside full extension: at exactly upper + lower the bend plane is undefined, and one
-    // frame of a straight chain reads as a snap.
-    let reach = clamp(length(target - root), 1e-4, upper + lower - 1e-4);
-
-    let toTip = normalize(tip - root);
-    let toMid = normalize(mid - root);
-
-    // The plane the chain is bent in. One that is already straight has no such plane, so nothing can
-    // be said about which way it should bend and the solve leaves it alone.
-    float3 axis = cross(toTip, toMid);
-    if (length(axis) < 1e-6)
-    {
-        rootDelta = float4x4(float4(1, 0, 0, 0), float4(0, 1, 0, 0), float4(0, 0, 1, 0), float4(0, 0, 0, 1));
-        midDelta = rootDelta;
-        return;
-    }
-    axis = normalize(axis);
-
-    let rootNow = acos(clamp(dot(toTip, toMid), -1.0, 1.0));
-    let midNow = acos(clamp(dot(normalize(root - mid), normalize(tip - mid)), -1.0, 1.0));
-
-    let rootWanted = acos(clamp((upper * upper + reach * reach - lower * lower) / (2.0 * upper * reach), -1.0, 1.0));
-    let midWanted = acos(clamp((upper * upper + lower * lower - reach * reach) / (2.0 * upper * lower), -1.0, 1.0));
-
-    let bendRoot = RotationAbout(root, axis, rootWanted - rootNow);
-    let mid1 = TransformPoint(bendRoot, mid);
-    let bendMid = RotationAbout(mid1, axis, midWanted - midNow);
-
-    let tip1 = TransformPoint(bendMid, TransformPoint(bendRoot, tip));
-
-    // Now the chain is the right shape but pointing where it was; swing it onto the target.
-    let from = normalize(tip1 - root);
-    let to = normalize(target - root);
-    float3 aimAxis = cross(from, to);
-
-    float4x4 aim = float4x4(float4(1, 0, 0, 0), float4(0, 1, 0, 0), float4(0, 0, 1, 0), float4(0, 0, 0, 1));
-    if (length(aimAxis) > 1e-6)
-    {
-        aim = RotationAbout(root, normalize(aimAxis), acos(clamp(dot(from, to), -1.0, 1.0)));
-    }
-
-    rootDelta = mul(aim, bendRoot);
-    midDelta = mul(aim, mul(bendMid, bendRoot));
-}
-
 // Which entry of the solved table `bone` is, or -1. A linear scan over at most cMaxLegsPerRig * 3
 // entries: the alternative is a per-bone tag, and a bone-count-sized array is what this pass
 // deliberately does not keep.
@@ -264,13 +129,6 @@ int SolvedIndexOf(uint solved, uint bone)
         }
     }
     return -1;
-}
-
-// A point projected onto the sole plane, the plane through `sole` with normal `soleUp`. All three
-// are ankle-relative.
-float3 OnSolePlane(float3 point, float3 sole, float3 soleUp)
-{
-    return point - dot(point - sole, soleUp) * soleUp;
 }
 
 // One leg as the solve needs it: where its three joints are, where its ankle wants to be, and how
@@ -440,7 +298,7 @@ void PlantFeet(PoseTables tables, Rig rig, Clip clip, float frames, float4x4 mod
     }
     AllMemoryBarrierWithGroupSync();
 
-    let plane = ModelGroundPlane(modelToWorld);
+    let plane = GroundPlaneInModel(gUniforms.groundNormal, gUniforms.groundPoint, modelToWorld);
     let down = normalize(TransformDir(AffineInverse(modelToWorld), float3(0.0, -1.0, 0.0)));
 
     SkinnedLegChain leg;
@@ -565,7 +423,7 @@ void main(uint groupIdx: SV_GroupID, uint localIdx: SV_GroupIndex)
     tables.samples = gUniforms.sampleBuffer;
     tables.palettes = gUniforms.bonePalettes;
 
-    let modelToWorld = InstanceTransform(mesh);
+    let modelToWorld = mesh.Matrix();
     let stride = rig.boneCount * cFloat4sPerBone;
     let base = state.palette.GetStart();
 

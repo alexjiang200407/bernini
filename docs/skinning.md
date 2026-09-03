@@ -338,7 +338,11 @@ to keep in agreement beyond the one below.
 A rig that authored legs has each one solved onto the scene's ground plane before its palette is
 folded through the inverse binds. Nothing else in the frame changes: the plant is a per-instance
 compute step inside `PoseSkinned.slang`, and the forward shaders never learn it happened, because
-the palette was already the whole interface between the two.
+the palette was already the whole interface between the two. The geometry it is built on --
+`GroundPlaneInModel`, `SampleGround`, `OnSolePlane`, `SolveTwoBone` -- is
+[`lib/anim/foot_plant.slang`](libs/bgl_common/shaders/src/lib/anim/foot_plant.slang) in the shared
+tier, over values alone; what stays in the program is what reads a buffer or the groupshared solved
+table.
 
 **It runs in the one window where a bone is in model space.** The shared walk seeds local
 transforms, composes the hierarchy a depth level at a time, then multiplies each slot by its inverse
@@ -494,8 +498,9 @@ array sized by `cMaxLegsPerRig`, not by the bone count: a bone-count-sized array
 a rig at 192, and `AddRig` refuses more legs than the array holds.
 
 **The solve is limb-neutral; only the policy around it is a leg's.** `SolveTwoBone` takes a
-root/mid/tip chain and a target, and `CarrySolvedDescendants` takes whatever bones some thread
-marked solved — neither knows what a leg is. What foot planting owns is where the target comes from
+root/mid/tip chain and a target — which is why it is in the shared tier and not in the pass — and
+`CarrySolvedDescendants` takes whatever bones some thread marked solved; neither knows what a leg
+is. What foot planting owns is where the target comes from
 (the ground under the ankle) and what weights it (the baked plant weight). A second kind of solve in
 this window — a hand reaching for a prop — supplies its own two and calls the same pair, rather than
 copying the barrier discipline and the two exclusions in the fixup, which are the delicate part.
