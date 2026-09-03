@@ -297,8 +297,15 @@ to keep in agreement beyond the one below.
   a planted foot is solved against — and stands a floor under the rig at the same tilt, so the tilt
   can be seen. Positive rises toward +X, and a heading slider turns uphill about +Y: nothing in the
   path knows which way a rig moves (the test coyote runs along +Z), so a person turns the hill to
-  face the stride rather than the rig to face the hill. A checkbox hides the floor; the ground a
-  foot plants against stands either way. The floor and the ground are derived from one rotation
+  face the stride rather than the rig to face the hill. A second checkbox, *Plant feet*, is the
+  scene's `SetFootPlanting`: off, the clip plays as authored against the same ground, which is the
+  other half of judging what the solve does — and like the slope it holds only while the panel is
+  shown. *Show floor* is the group's master: with no floor drawn there is no slope to see and
+  nothing visible to plant against, so both sliders and *Plant feet* go insensitive and the rig
+  poses as authored, while the checkbox keeps its own state so showing the floor again restores it.
+  Both start **off**, so a panel just opened shows the clip as its author left it; the checkboxes
+  hold that state and one method pushes it, construction included.
+  The floor and the ground are derived from one rotation
   (`editor::GroundForSlope`, `FloorTransformForSlope`, free of the window and pinned by
   `[slope]`), so the floor and the ground cannot lean different ways. It commits on **release**,
   not on every tick of a drag:
@@ -360,21 +367,32 @@ no inverse. The instance's inverse is still built, once per group, to carry worl
 space: a planted foot is dropped *vertically* onto the plane rather than projected along its normal,
 because the closest point on a slope is not the point the animation was authored over.
 
-**The target is the ankle joint, not the sole.** The joint is aimed at the ground under it lifted by
-the foot's own height along the ground normal. Deriving it from where the sole currently sits does
-not converge — the solve rotates the ankle along with the shin, so that target is one the solve then
-moves. Taken with the tilt below, the sole lands exactly on the plane whatever the chain did, since
-the only part of the ankle-to-sole offset with any height is the part along that normal. That height
-is measured in model space through the ankle's model transform, never off the stored ankle-local
-sole: bone space carries whatever scale the bind does — a rig authored in centimetres keeps a
-hundredfold in every inverse bind, and the Coyote's sole sits twenty bone units from its joint — so
-a distance read there is in those units.
+**The target is the ankle joint, carried by the foot's contact.** The contact is the foot's lowest
+point as it will stand: the sole plane under the ankle (the heel) or under the toe joint (the
+ball), whichever sits lower along the ground normal, already turned by the slope below. It is
+dropped vertically onto the ground and the ankle is aimed at its own position moved by the same
+vector. A foot the clip rests flat touches along its whole sole and lands on it exactly; one posed
+on its toe lands on the toe with the heel where the animator put it — the Coyote's `Success` stands
+one foot heel-up 28°, and a target that put the plane's *centre* on the ground put that foot's toe
+through it. Deriving the target from where the sole currently sits would not converge — the solve
+moves the ankle, so that target is one the solve then moves — which is why the contact is measured
+rigidly against the ankle and the ankle is what is aimed. Everything is measured in model space
+through the ankle's model transform, never off the stored ankle-local sole: bone space carries
+whatever scale the bind does — a rig authored in centimetres keeps a hundredfold in every inverse
+bind, and the Coyote's sole sits twenty bone units from its joint — so a distance read there is in
+those units.
 
-**Then the ankle turns onto the ground**, bringing the sole normal onto the plane's, about the ankle
-joint and clamped to `cSoleClampRadians`. About the joint rather than about the sole because the
-joint is where the chain the solve just satisfied ends; turning the foot under it would put the shin
-back out of length. The sole then lifts off the plane by `1 - cos t` of its distance to the joint,
-which at the clamp is under two millimetres on a foot of any size we cook.
+**The foot keeps the orientation the clip gave it, turned by the slope.** The ankle is carried to
+where the solve put the joint in translation alone — the shin's turn is absorbed at the ankle, as a
+foot lock does, rather than passed to the foot — and then turned by the rotation taking the floor
+the clip was authored on (model-space up) onto the ground normal, about the ankle joint and clamped
+to `cSoleClampRadians`. The turn is the *ground's*, not whatever would bring the sole flat: the
+Coyote's `Success` stands one foot heel-up 28°, and a tilt that aligned the sole forced it flat on
+level ground, where the plant should change nothing. On level ground nothing turns, which is also
+what makes the editor's *Plant feet* checkbox an honest A/B. About the joint rather than about the
+sole because the joint is where the chain the solve just satisfied ends; turning the foot under it
+would put the shin back out of length. The contact was placed already turned, so the turn costs
+nothing at the ground: the point that was dropped onto it is the point that stands on it.
 
 **Everything is scaled by a plant weight** — one byte per leg per frame, packed four to a uint,
 baked by the cook and sampled at the same fractional frame the pose is. A weight of zero is exactly
@@ -416,10 +434,10 @@ is not rigid: its pad is blended between ankle and toe, so it flexes a few degre
 either bone between poses. Measured on the test project's rigs at frame 0 of every clip that plants
 a foot, the pinned plane sits within a degree of flat on the Coyote and on the Dog's `Damage`,
 `Kick` and `Carry_Idle`, and 6–7° off on the Dog's `Idle`, where the plan's per-frame fit of the
-skinned underside put the pad at 2.3°. The plant aligns the *plane* exactly, so on that clip the
-ankle is turned ~4° further than the pad needed. That is the price of a sole the shader can carry
-rigidly, and it stays within the clamp. Attaching the plane to the toe instead was measured and
-changes nothing on these rigs — the pad is blended, not the toe's.
+skinned underside put the pad at 2.3°. The plane is what the target height is measured along, so
+on that clip the ankle lands a few millimetres from where the pad would have put it; the foot's
+*turn* is the slope's and never the plane's, so the error stops there. Attaching the plane to the
+toe instead was measured and changes nothing on these rigs — the pad is blended, not the toe's.
 
 **The plant weights come from the frame walk** (`assetlib::measurePlantWeights`), stored in the
 `.banim` and self-keyed like `posedBoxes`. A foot is planted in a frame when two things hold, and

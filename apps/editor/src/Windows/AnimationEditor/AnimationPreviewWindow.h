@@ -148,6 +148,14 @@ public:
 	void
 	SetFloorVisible(bool visible);
 
+	/**
+	 * Whether the rig plants its feet. Off, the same clip plays against the same ground with the
+	 * solve out of it -- the other half of judging what the solve does. The scene's switch, so
+	 * like the slope it holds only while this panel is on screen.
+	 */
+	void
+	SetFootPlanting(bool enabled);
+
 	/** Back to the empty state: geometry released, environment kept, ground left flat. */
 	void
 	Clear();
@@ -278,7 +286,9 @@ private:
 	bgl::MeshInstanceHandle m_GroundInstance;
 	float                   m_SlopeDegrees   = 0.0f;
 	float                   m_HeadingDegrees = 0.0f;
-	bool                    m_FloorVisible   = true;
+	// Both off until the panel says otherwise: a preview opens on the clip as authored.
+	bool m_FloorVisible = false;
+	bool m_FootPlanting = false;
 
 	// True while a rig is shown: the ground stands whether or not the floor is drawn.
 	bool m_GroundPlaced = false;
