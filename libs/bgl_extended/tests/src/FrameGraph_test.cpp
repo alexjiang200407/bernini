@@ -897,6 +897,38 @@ TEST_CASE("FrameGraph: an outer scope cannot name an inner scope's import", "[fg
 	CHECK_THROWS_AS(fg.Execute(), std::runtime_error);
 }
 
+// Names resolve at Compile, not at AddPass, so a pass may name a resource the frame imports later.
+// Were it resolved at record time, "late" would be unresolvable and therefore a transient: the pass
+// would write nothing imported, so it would not be a root, and culling would drop it.
+TEST_CASE("FrameGraph: a pass resolves an import registered after it was added", "[fg]")
+{
+	FrameGraph fg;
+
+	fg.SetResourceNamespace("v0:");
+
+	BufferHandle resolved{};
+	fg.AddPass(
+		PassDesc{}
+			.SetName("Consumer")
+			.AddBufferArg(UavBuf("late"))
+			.SetExec([&](const PassContext& ctx) { resolved = ctx.GetBuffer("late"); }));
+
+	fg.ImportBuffer("late", MakeBuffer(11));
+
+	fg.Compile(&NullRm());
+
+	// Checked before Execute, which consumes the frame: it survived culling because the late
+	// import made it a root, which a record-time resolve could not have seen.
+	CHECK(fg.ExecutionOrder() == std::vector<std::string>{ "Consumer" });
+
+	CommandListRef  cmd   = core::SharedRef<NullCommandList>::Make();
+	CommandQueueRef queue = core::SharedRef<NullCommandQueue>::Make();
+	fg.RegisterQueue("main", queue, cmd);
+	fg.Execute();
+
+	CHECK(resolved.slot.index == 11);
+}
+
 TEST_CASE(
 	"FrameGraph: carried state follows the resource, not the name it was imported under",
 	"[fg]")

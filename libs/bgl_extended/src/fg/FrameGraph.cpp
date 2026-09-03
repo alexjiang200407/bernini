@@ -1,8 +1,6 @@
 #include "fg/FrameGraph.h"
 #include "resource/ResourceManager.h"
 
-#include <stack>
-
 namespace bgl
 {
 	namespace
@@ -226,7 +224,7 @@ namespace bgl
 	FrameGraph&
 	FrameGraph::AddPass(PassDesc desc)
 	{
-		if (FindPass(desc.name) != nullptr)
+		if (FindPassIndex(desc.name) != m_Passes.size())
 		{
 			core::throw_runtime_error(
 				"FrameGraph::AddPass: a pass named '{}' already exists",
@@ -346,62 +344,33 @@ namespace bgl
 			}
 		}
 
-		std::unordered_map<std::string, int32_t> producer;
-		for (size_t p = 0; p < m_Passes.size(); ++p)
-		{
-			PassNode& pass = m_Passes[p];
-			pass.deps.clear();
-			pass.kept = false;
-
-			for (const ResAccess& a : pass.accesses)
-			{
-				const std::string resolved = ResolveName(pass.ns, a.name);
-				if (const auto it = producer.find(resolved); it != producer.end())
-				{
-					pass.deps.push_back(it->second);
-				}
-				if (a.isWrite)
-				{
-					producer[resolved] = static_cast<int32_t>(p);
-				}
-			}
-		}
-
-		std::stack<size_t> live;
+		m_Scheduler.Clear();
 		for (size_t p = 0; p < m_Passes.size(); ++p)
 		{
 			const PassNode& pass = m_Passes[p];
-			const bool      root = pass.desc.sideEffect || !pass.desc.colorAttachments.empty() ||
-			                       !pass.desc.depthAttachment.IsNull() || WritesImported(pass);
-			if (root)
+
+			PassScheduler::Pass scheduled;
+			// Culling makes no distinction between these, and none of them can be named a tier
+			// down, so every reason to keep the pass regardless of its outputs arrives as one flag.
+			scheduled.pinned = pass.desc.sideEffect || !pass.desc.colorAttachments.empty() ||
+			                   !pass.desc.depthAttachment.IsNull() || WritesImported(pass);
+
+			// Resolved here rather than at AddPass: an import may be registered after the pass
+			// that names it, so the walk is only correct once the frame is fully declared.
+			scheduled.accesses.reserve(pass.accesses.size());
+			for (const ResAccess& a : pass.accesses)
 			{
-				m_Passes[p].kept = true;
-				live.push(p);
+				scheduled.accesses.emplace_back(ResolveName(pass.ns, a.name), a.isWrite);
 			}
+
+			const size_t scheduledIndex = m_Scheduler.AddPass(std::move(scheduled));
+			gassert(
+				scheduledIndex == p,
+				"DeriveBarriers and Execute index m_Passes with the scheduler's index, so the two "
+				"must stay in step");
 		}
 
-		while (!live.empty())
-		{
-			const size_t p = live.top();
-			live.pop();
-			for (const int32_t d : m_Passes[p].deps)
-			{
-				if (!m_Passes[static_cast<size_t>(d)].kept)
-				{
-					m_Passes[static_cast<size_t>(d)].kept = true;
-					live.push(static_cast<size_t>(d));
-				}
-			}
-		}
-
-		m_Order.clear();
-		for (size_t p = 0; p < m_Passes.size(); ++p)
-		{
-			if (m_Passes[p].kept)
-			{
-				m_Order.push_back(p);
-			}
-		}
+		m_Scheduler.Compile();
 
 		DeriveBarriers(resourceManager);
 		m_Compiled = true;
@@ -424,7 +393,7 @@ namespace bgl
 			                        BarrierAccessFlag::kDepthWrite,
 			                        BarrierLayout::kDepthWrite };
 
-		for (const size_t p : m_Order)
+		for (const size_t p : m_Scheduler.Order())
 		{
 			PassNode& pass = m_Passes[p];
 			pass.barriers  = PassBarriers{};
@@ -524,7 +493,7 @@ namespace bgl
 			throw std::runtime_error("FrameGraph::Execute called before Compile");
 		}
 
-		for (const size_t p : m_Order)
+		for (const size_t p : m_Scheduler.Order())
 		{
 			PassNode& pass = m_Passes[p];
 
@@ -659,7 +628,7 @@ namespace bgl
 	FrameGraph::ClearFrame()
 	{
 		m_Passes.clear();
-		m_Order.clear();
+		m_Scheduler.Clear();
 		m_Imported.clear();
 		m_Queues.clear();
 		m_Compiled = false;
@@ -671,25 +640,27 @@ namespace bgl
 		ClearFrame();
 	}
 
-	const FrameGraph::PassNode*
-	FrameGraph::FindPass(std::string_view name) const
+	size_t
+	FrameGraph::FindPassIndex(const std::string_view name) const
 	{
-		for (const PassNode& pass : m_Passes)
+		for (size_t p = 0; p < m_Passes.size(); ++p)
 		{
-			if (pass.desc.name == name)
+			if (m_Passes[p].desc.name == name)
 			{
-				return &pass;
+				return p;
 			}
 		}
-		return nullptr;
+		return m_Passes.size();
 	}
 
 	std::vector<std::string>
 	FrameGraph::ExecutionOrder() const
 	{
+		const std::vector<size_t>& order = m_Scheduler.Order();
+
 		std::vector<std::string> names;
-		names.reserve(m_Order.size());
-		for (const size_t p : m_Order)
+		names.reserve(order.size());
+		for (const size_t p : order)
 		{
 			names.push_back(m_Passes[p].desc.name);
 		}
@@ -699,15 +670,15 @@ namespace bgl
 	bool
 	FrameGraph::WasCulled(std::string_view passName) const
 	{
-		const PassNode* pass = FindPass(passName);
-		return pass && !pass->kept;
+		const size_t p = FindPassIndex(passName);
+		return p != m_Passes.size() && m_Scheduler.WasCulled(p);
 	}
 
 	const PassBarriers&
 	FrameGraph::BarriersFor(std::string_view passName) const
 	{
 		static const PassBarriers c_Empty;
-		const PassNode*           pass = FindPass(passName);
-		return pass ? pass->barriers : c_Empty;
+		const size_t              p = FindPassIndex(passName);
+		return p != m_Passes.size() ? m_Passes[p].barriers : c_Empty;
 	}
 }
