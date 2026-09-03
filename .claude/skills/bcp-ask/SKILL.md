@@ -81,35 +81,22 @@ ws feature <name> "<what to build>"        # its own checkout, its own branch, i
 ## 5. When the answer is a problem
 
 A question whose answer is *"that is a real problem, and we are not solving it today"* is exactly
-what [CLAUDE.md](CLAUDE.md) § Specs describes: one file per problem we have decided not to solve
-yet, so nobody re-derives it. That, and only that, is what this skill writes.
+what [CLAUDE.md](CLAUDE.md) § Specs describes: one file recording it so nobody re-derives it. That,
+and only that, is what this skill writes.
 
-Write `docs/specs/<name>.md`, and keep it to the three things a spec is for:
+**How to write it is not decided here.** Invoke [bcp-spec](.claude/skills/bcp-spec/SKILL.md), which
+owns the artefact — what evidence a claim carries, what a shipping engine does about it, how settled
+the solutions are allowed to be, and the trigger without which there is nothing to defer. It is
+written to be followed with no shell, which is what an ask session has.
 
-```markdown
-# <the problem>
+Two things are this skill's rather than that one's, because they are about *when* to write one at
+all:
 
-## What it is
-<the problem, and the measurement or the code that shows it>
-
-## The trigger
-<what has to happen for this to stop being deferrable>
-
-## The design
-<what has already been settled, with the alternative each part rejected>
-```
-
-Do not write one for a problem that is merely interesting. A spec that nobody is waiting on is a
-file the next reader has to rule out.
-
-`docs/specs/` is a worktree of the orphan `artefacts` branch, shared by every checkout in the
-workspace, and `.claude/hooks/draft_commit.py` commits the file as you write it — so the feature
-checkout that would implement the spec can read it, and a `git pull` that removes it can be undone.
-Neither happens for a file sitting untracked in one working directory, which is what this used to be.
-
-**It never lands.** A spec describes code that does not exist, so it is not documentation and there
-is no pull request that moves it onto master; it is written, revised, and deleted on that branch when
-the thing it describes is built. Say where the file is, and stop.
+- **Only when the answer is a problem.** A question answered is an answer, not a file. Do not write
+  a spec for something merely interesting — one nobody is waiting on is a file the next reader has
+  to open and rule out.
+- **Say where it is, and stop.** A spec never lands, so there is nothing further to do with it: no
+  branch, no pull request, no offer to build the thing. § 4 is where that goes.
 
 ## Rules
 

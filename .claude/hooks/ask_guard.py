@@ -52,11 +52,12 @@ WRITE_TOOLS = {"Write", "Edit", "MultiEdit", "NotebookEdit"}
 
 SPEC_ONLY = ("The one thing an ask session may write is a spec:\n"
              "    docs/specs/<name>.md\n"
-             "one file for a problem we have decided not to solve yet -- what it is, the trigger\n"
-             "that makes it urgent, and the design already settled on. It is committed for you on\n"
-             "the artefacts branch and never lands on master. A temporary directory is the only\n"
-             "other place a write is allowed; every other path, in this checkout or any worktree\n"
-             "beside it, is refused.")
+             "one file describing code that does not exist -- a problem we have decided not to\n"
+             "solve yet, or a feature we intend to build and have not started. The bcp-spec skill\n"
+             "says what goes in one and how it differs from a plan. It is committed for you on the\n"
+             "artefacts branch and never lands on master. A temporary directory is the only other\n"
+             "place a write is allowed; every other path, in this checkout or any worktree beside\n"
+             "it, is refused.")
 
 NO_SHELL = ("An ask session has no shell. Not this command in particular -- Bash at all, because a\n"
             "guard that reads a command line to find the write in it has never once been finished.\n"
