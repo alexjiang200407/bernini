@@ -229,18 +229,29 @@ namespace assetlib
 	 * loose, so a character standing still leaves roughly a quarter of its frames unpruned, and
 	 * skinning all 170k vertices of each is where the walk used to go.
 	 *
+	 * **A rig that authored legs is floored by its soles, not by its lowest vertex.** Given `legs`,
+	 * the floor is the lowest a sole plane reaches over the clip -- what the rig stands *on* --
+	 * because the lowest vertex need not be a foot: on the test Dog it is not, and its `Idle` soles
+	 * then sit 1 and 4 cm above zero. A plant applies the ground's departure from this floor, so a
+	 * floor measured somewhere other than the feet is one every planted foot then hovers above.
+	 * Cheaper than the vertex walk rather than dearer -- a sole is one transform of one point per
+	 * leg per frame, and no vertex is skinned at all.
+	 *
 	 * @throws std::runtime_error for anything posedBounds refuses (a clip set cooked against
-	 *         another rig, a malformed vertex layout, a bad joint index).
+	 *         another rig, a malformed vertex layout, a bad joint index), or anything solePlanes
+	 *         refuses when `legs` is given.
 	 */
 	[[nodiscard]] std::vector<float>
 	measureClipFloors(
-		const AnimationSet&    animations,
-		std::span<const BMesh> meshes,
-		const Skeleton&        skeleton);
+		const AnimationSet&             animations,
+		std::span<const BMesh>          meshes,
+		const Skeleton&                 skeleton,
+		std::span<const AvatarLegChain> legs = {});
 
 	/**
 	 * Move each clip of `animations` down by the floor measureClipFloors reports, so the lowest `y`
-	 * `meshes` reach over it rests on 0, recording the move in `AnimationClip::groundOffset`.
+	 * `meshes` reach over it rests on 0 -- or, for a rig whose `legs` are given, so its lowest sole
+	 * does -- recording the move in `AnimationClip::groundOffset`.
 	 *
 	 * A clip named by `authored` is moved by that floor instead of the measured one -- the escape
 	 * hatch for a clip whose lowest frame is not the one standing on the ground. The Coyote's `Land`
@@ -261,10 +272,11 @@ namespace assetlib
 	 */
 	void
 	groundClips(
-		AnimationSet&              animations,
-		std::span<const BMesh>     meshes,
-		const Skeleton&            skeleton,
-		std::span<const ClipFloor> authored = {});
+		AnimationSet&                   animations,
+		std::span<const BMesh>          meshes,
+		const Skeleton&                 skeleton,
+		std::span<const ClipFloor>      authored = {},
+		std::span<const AvatarLegChain> legs     = {});
 
 	/**
 	 * How close a sole must sit to the grounded floor to count as planted. Two centimetres: below a

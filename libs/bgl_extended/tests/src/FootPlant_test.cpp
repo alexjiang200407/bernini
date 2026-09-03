@@ -43,12 +43,16 @@ namespace
 	// leaving it alone -- and far enough forward that the leg has travel: hip to ankle is 2 against
 	// a 2.33 reach, so it can extend a third of a unit before it runs out and wants the pelvis drop
 	// that is a later stage.
+	//
+	// Lifted by c_FootHeight so the sole rests on y = 0, which is where a clip that has been
+	// through `groundClips` stands: the plant applies the ground's departure from that floor, so a
+	// fixture hanging below it would be measuring a clip the cook never produces.
 	const std::array<glm::vec3, c_Bones> c_Bind = { {
-		glm::vec3(0.0f, 2.0f, 0.0f),  // pelvis
-		glm::vec3(0.0f, 2.0f, 0.0f),  // hip
-		glm::vec3(0.6f, 1.0f, 0.0f),  // knee
-		glm::vec3(0.0f, 0.0f, 0.0f),  // ankle
-		glm::vec3(0.2f, 0.0f, 0.0f),  // toe
+		glm::vec3(0.0f, 2.0f + c_FootHeight, 0.0f),  // pelvis
+		glm::vec3(0.0f, 2.0f + c_FootHeight, 0.0f),  // hip
+		glm::vec3(0.6f, 1.0f + c_FootHeight, 0.0f),  // knee
+		glm::vec3(0.0f, 0.0f + c_FootHeight, 0.0f),  // ankle
+		glm::vec3(0.2f, 0.0f + c_FootHeight, 0.0f),  // toe
 	} };
 
 	/**
@@ -305,15 +309,22 @@ namespace
 
 TEST_CASE("a planted foot meets the ground under it", "[skinned][pose][plant][render]")
 {
-	SECTION("flat ground lifts the sole onto the plane")
+	SECTION("flat ground at the floor the clip was authored on moves nothing at all")
 	{
 		const Posed posed = PoseLeg(c_Flat, 255);
 
-		// The sole's bind position is c_FootHeight below the plane, so a solve that did nothing
-		// would leave it there.
-		bgl::test::CheckNear(posed.Sole(), glm::vec3(0.0f, 0.0f, 0.0f));
+		// The plant applies the ground's *departure* from the clip's authored floor, and here there
+		// is none: the rig already stands on y = 0. So a fully weighted plant is an exact identity,
+		// not a correction that happens to be small. Placing the contact on the ground absolutely
+		// would instead move every leg by however far the sole plane sits above the clip's lowest
+		// point, which is the leg stretch this framing removes.
+		for (uint32_t bone = 0; bone < c_Bones; ++bone)
+		{
+			INFO("bone " << bone);
+			bgl::test::CheckNear(posed.Bone(bone), c_Bind[bone]);
+		}
 
-		// The ankle carries the whole foot's height above the contact.
+		bgl::test::CheckNear(posed.Sole(), glm::vec3(0.0f, 0.0f, 0.0f));
 		CHECK(posed.Bone(c_Ankle).y == Catch::Approx(c_FootHeight).margin(1e-4));
 
 		// Nothing above the hip moves: lowering the rig when a leg cannot reach is a separate
@@ -347,12 +358,20 @@ TEST_CASE("a planted foot meets the ground under it", "[skinned][pose][plant][re
 
 	SECTION("half a weight moves the foot half way")
 	{
-		const Posed full = PoseLeg(c_Flat, 255);
-		const Posed half = PoseLeg(c_Flat, 128);
+		// Ground the rig has to reach down to: on flat ground at the authored floor the plant is an
+		// identity, so halving it would compare nothing with nothing.
+		const auto low =
+			bgl::GroundPlaneDesc{ glm::vec3(0.0f, -0.2f, 0.0f), glm::vec3(0.0f, 1.0f, 0.0f) };
+
+		const Posed full = PoseLeg(low, 255);
+		const Posed half = PoseLeg(low, 128);
 
 		// 128/255 of the way, which is what a weight interpolates -- not a threshold.
 		const float fraction = 128.0f / 255.0f;
-		CHECK(half.Bone(c_Ankle).y == Catch::Approx(fraction * full.Bone(c_Ankle).y).margin(2e-3));
+		const float bind     = c_Bind[c_Ankle].y;
+		CHECK(
+			half.Bone(c_Ankle).y ==
+			Catch::Approx(bind + fraction * (full.Bone(c_Ankle).y - bind)).margin(2e-3));
 	}
 }
 
@@ -401,15 +420,40 @@ TEST_CASE("a planted foot turns onto the slope it stands on", "[skinned][pose][p
 		const Posed level = PoseLeg(c_Flat, 255, toe);
 		bgl::test::CheckNear(level.SoleNormal(), toe.soleNormal);
 
-		// It lands on its lowest point -- the sole plane under the heel or under the toe -- and not
-		// on the plane's centre, which would put the low end of the foot through the floor.
-		const auto onSole = [&level](const glm::vec3& joint) {
+		// On level ground at the authored floor the plant changes nothing, so the heel stays
+		// exactly as high as the animator left it -- the foot is not pulled flat, and not pulled
+		// down onto the floor either.
+		for (uint32_t bone = 0; bone < c_Bones; ++bone)
+		{
+			INFO("bone " << bone);
+			bgl::test::CheckNear(level.Bone(bone), c_Bind[bone]);
+		}
+
+		// Reaching for ground below it, the foot lands on its lowest point -- the sole plane under
+		// the heel or under the toe -- and not on the plane's centre, which would put the low end
+		// of the foot through the floor.
+		const auto low =
+			bgl::GroundPlaneDesc{ glm::vec3(0.0f, -0.2f, 0.0f), glm::vec3(0.0f, 1.0f, 0.0f) };
+		const Posed reaching = PoseLeg(low, 255, toe);
+		const auto  onSole   = [&reaching](const glm::vec3& joint) {
+			return joint -
+			       glm::dot(joint - reaching.Sole(), reaching.SoleNormal()) * reaching.SoleNormal();
+		};
+		const float heelY = onSole(reaching.Bone(c_Ankle)).y;
+		const float ballY = onSole(reaching.Bone(c_Toe)).y;
+
+		// Its lowest point comes down by the ground's departure from the authored floor -- 0.2 --
+		// and no further: a foot standing a little above its own floor in the clip keeps that
+		// clearance rather than being pinned flat, which is the whole of the departure framing.
+		// Measured off the level pose rather than written out, so the invariant is the assertion.
+		const auto onLevelSole = [&level](const glm::vec3& joint) {
 			return joint - glm::dot(joint - level.Sole(), level.SoleNormal()) * level.SoleNormal();
 		};
-		const float heelY = onSole(level.Bone(c_Ankle)).y;
-		const float ballY = onSole(level.Bone(c_Toe)).y;
-		CHECK(std::min(heelY, ballY) == Catch::Approx(0.0f).margin(1e-4));
-		CHECK(std::max(heelY, ballY) > 0.01f);
+		const float hover =
+			std::min(onLevelSole(level.Bone(c_Ankle)).y, onLevelSole(level.Bone(c_Toe)).y);
+
+		CHECK(std::min(heelY, ballY) == Catch::Approx(hover - 0.2f).margin(1e-3));
+		CHECK(std::max(heelY, ballY) > std::min(heelY, ballY) + 0.01f);
 
 		// On a slope the heel comes up by the slope on top of what the animator gave it.
 		const float radians = glm::radians(15.0f);
@@ -802,16 +846,19 @@ namespace
 	// all, because a target off to one side of its hip is the case a drop sized as the straight-line
 	// shortfall gets wrong -- and on flat ground the target does not move when the rig drops, so
 	// nothing downstream rescues an estimate that came up short.
+	//
+	// Lifted by c_FootHeight for the same reason c_Bind is: both soles rest on y = 0, the floor a
+	// grounded clip stands on and the one the plant measures departure from.
 	const std::array<glm::vec3, c_TwoLegBones> c_TwoLegBind = { {
-		glm::vec3(0.0f, 2.0f, 0.0f),   // 0 pelvis
-		glm::vec3(-0.4f, 2.0f, 0.0f),  // 1 hip   L
-		glm::vec3(-0.3f, 1.0f, 0.0f),  // 2 knee  L
-		glm::vec3(-1.0f, 0.0f, 0.0f),  // 3 ankle L
-		glm::vec3(-1.2f, 0.0f, 0.0f),  // 4 toe   L
-		glm::vec3(0.4f, 2.0f, 0.0f),   // 5 hip   R
-		glm::vec3(0.5f, 1.0f, 0.0f),   // 6 knee  R
-		glm::vec3(1.3f, 0.0f, 0.0f),   // 7 ankle R
-		glm::vec3(1.5f, 0.0f, 0.0f),   // 8 toe   R
+		glm::vec3(0.0f, 2.0f + c_FootHeight, 0.0f),   // 0 pelvis
+		glm::vec3(-0.4f, 2.0f + c_FootHeight, 0.0f),  // 1 hip   L
+		glm::vec3(-0.3f, 1.0f + c_FootHeight, 0.0f),  // 2 knee  L
+		glm::vec3(-1.0f, 0.0f + c_FootHeight, 0.0f),  // 3 ankle L
+		glm::vec3(-1.2f, 0.0f + c_FootHeight, 0.0f),  // 4 toe   L
+		glm::vec3(0.4f, 2.0f + c_FootHeight, 0.0f),   // 5 hip   R
+		glm::vec3(0.5f, 1.0f + c_FootHeight, 0.0f),   // 6 knee  R
+		glm::vec3(1.3f, 0.0f + c_FootHeight, 0.0f),   // 7 ankle R
+		glm::vec3(1.5f, 0.0f + c_FootHeight, 0.0f),   // 8 toe   R
 	} };
 
 	const std::array<uint32_t, c_TwoLegBones> c_TwoLegParent = { {

@@ -11,6 +11,7 @@ void main(uint3 id: SV_DispatchThreadID)
     float4x4 modelToWorld = float4x4(gIn[0], gIn[1], gIn[2], float4(0.0, 0.0, 0.0, 1.0));
     let plane = GroundPlaneInModel(normalize(gIn[3].xyz), gIn[4].xyz, modelToWorld);
     let ground = SampleGround(plane, normalize(gIn[5].xyz), float3(id));
+    let departure = GroundDeparture(plane, float4(0.0, 1.0, 0.0, gIn[11].w), normalize(gIn[5].xyz), float3(id), gIn[12].xyz);
     let sole = OnSolePlane(ground, gIn[6].xyz, normalize(gIn[7].xyz));
 
     float4x4 rootDelta;
@@ -19,4 +20,5 @@ void main(uint3 id: SV_DispatchThreadID)
 
     gOut[0] = rootDelta[0];
     gOut[1] = midDelta[0];
+    gOut[2] = float4(departure, 0.0);
 }
