@@ -335,6 +335,15 @@ to keep in agreement beyond the one below.
 
 ## Foot planting
 
+**Why it exists, measured.** `groundClips` fixes *where a rig stands* — one constant per clip on the
+root track, resting the mesh's lowest point on `y = 0` — but it never touches a joint, so it cannot
+make a sole lie flat. Skinning each of the Dog's clips at frame 0 and fitting a plane to the
+underside of each foot, a sole standing on flat ground is off the ground normal by an **authored**
+2–17° (`Idle` −2.3°, `Walk` −5.5°, `Run` +7.2° / −2.2°, `Carry_Move` +16.9°), and the bind pose
+itself by −1.2°. No cook-side translation removes any of that: the target is the ground normal, not
+the bind pose. On flat ground the residual shows only on a hero close-up; on a slope every foot is
+wrong by the whole slope angle.
+
 A rig that authored legs has each one solved onto the scene's ground plane before its palette is
 folded through the inverse binds. Nothing else in the frame changes: the plant is a per-instance
 compute step inside `PoseSkinned.slang`, and the forward shaders never learn it happened, because
@@ -402,6 +411,14 @@ nothing at the ground: the point that was dropped onto it is the point that stan
 baked by the cook and sampled at the same fractional frame the pose is. A weight of zero is exactly
 the pose the rig would have had. A weight rather than a flag because a foot that snapped between the
 two states would pop, which is what the cook's ramp at each end of a planted run exists to remove.
+
+**Planting is gated at four scopes, and per instance is not one of them.** A rig plants only if it
+authored legs (`rig.legs.Null()` — no `.bavatar`, no planting); a clip plants only if the avatar's
+`unplanted` list does not name it; a leg plants on a frame only as far as that frame's baked weight;
+and the scene plants at all only while `IScene::SetFootPlanting` is on. The scene switch is scoped
+that way because the ground is — `SetGround` holds one plane and the solve is defined against it —
+so nothing today varies per instance that a fifth scope would express. Two instances of one rig
+therefore always agree about whether they plant.
 
 ### What the cook derives
 
