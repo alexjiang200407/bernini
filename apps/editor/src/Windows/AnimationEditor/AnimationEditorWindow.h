@@ -152,6 +152,9 @@ private:
 	 * visible to plant against, so the sliders and *Plant feet* go insensitive and the rig poses
 	 * as authored. The checkbox keeps its own state through that, so showing the floor again
 	 * restores what was set.
+	 *
+	 * The boxes hold the state and this is the one place that pushes it, construction included --
+	 * two defaults that could disagree is one that eventually does.
 	 */
 	void
 	UpdateGroundControls();

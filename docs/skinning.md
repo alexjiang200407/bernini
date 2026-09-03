@@ -301,6 +301,8 @@ to keep in agreement beyond the one below.
   shown. *Show floor* is the group's master: with no floor drawn there is no slope to see and
   nothing visible to plant against, so both sliders and *Plant feet* go insensitive and the rig
   poses as authored, while the checkbox keeps its own state so showing the floor again restores it.
+  Both start **off**, so a panel just opened shows the clip as its author left it; the checkboxes
+  hold that state and one method pushes it, construction included.
   The floor and the ground are derived from one rotation
   (`editor::GroundForSlope`, `FloorTransformForSlope`, free of the window and pinned by
   `[slope]`), so the floor and the ground cannot lean different ways. It commits on **release**,

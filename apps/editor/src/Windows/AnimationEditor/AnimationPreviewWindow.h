@@ -286,8 +286,9 @@ private:
 	bgl::MeshInstanceHandle m_GroundInstance;
 	float                   m_SlopeDegrees   = 0.0f;
 	float                   m_HeadingDegrees = 0.0f;
-	bool                    m_FloorVisible   = true;
-	bool                    m_FootPlanting   = true;
+	// Both off until the panel says otherwise: a preview opens on the clip as authored.
+	bool m_FloorVisible = false;
+	bool m_FootPlanting = false;
 
 	// True while a rig is shown: the ground stands whether or not the floor is drawn.
 	bool m_GroundPlaced = false;
