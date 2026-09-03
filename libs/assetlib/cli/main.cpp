@@ -25,6 +25,7 @@
 #include <assetlib_structs/magic.h>
 #include <core/err/util.h>
 #include <core/file/file.h>
+#include <core/profiling/MemoryReport.h>
 #include <core/str/str.h>
 #include <spdlog/spdlog.h>
 
@@ -156,6 +157,14 @@ main(int argc, char** argv)
 	CLI::App app{ "Bernini asset pipeline CLI" };
 	app.set_version_flag("--version", assetlib::version());
 	app.require_subcommand(1);
+
+	// Armed on request rather than on every run, unlike the editor's: this tool has no log file, so
+	// its report would land in the terminal of every scripted `describe`.
+	std::string memReportPath;
+	app.add_option(
+		"--mem-report",
+		memReportPath,
+		"Write the memory report to this JSON file when the command finishes");
 
 	// One project, named the same way by every command that addresses one. A command's asset
 	// arguments are then mount keys inside it -- never host paths, which is what let a directory that
@@ -431,6 +440,12 @@ main(int argc, char** argv)
 		->excludes(expSetOpt);
 
 	CLI11_PARSE(app, argc, argv);
+
+	// After the parse, so --help does not print a memory report; before the work, so every early
+	// return below is still covered.
+	auto memoryReport = std::optional<core::profiling::MemoryReport>();
+	if (!memReportPath.empty())
+		memoryReport.emplace(memReportPath);
 
 	if (*bake)
 	{
