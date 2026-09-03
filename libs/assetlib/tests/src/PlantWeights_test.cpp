@@ -451,6 +451,53 @@ TEST_CASE("A foot off the floor or sliding along it is not planted", "[skinning]
 
 		for (size_t i = 0; i < 8; ++i) CHECK(w[i] == Catch::Approx(1.0f).margin(0.01));
 	}
+
+	SECTION("a foot standing higher than the other stands at its own floor")
+	{
+		// A cocked pelvis: the Dog idles with its right foot three centimetres above its left,
+		// every frame. Judged against the left foot's floor the right never plants, and on a
+		// slope one foot follows the ground while the other hangs where the clip left it.
+		Leg both(true);
+		both.AddFoot();
+		both.Finish();
+
+		both.AddClip();
+		for (int i = 0; i < 8; ++i)
+			both.AddFrame(glm::vec3(0.0f), glm::vec3(0.0f), glm::vec3(0.0f, 0.03f, 0.0f));
+
+		const std::vector<SolePlane> soles =
+			solePlanes(both.Meshes(), both.skeleton, both.Chains());
+		const std::vector<float> w =
+			WeightsOf(measurePlantWeights(both.animations, both.skeleton, both.Chains(), soles));
+
+		REQUIRE(w.size() == 16);
+		for (size_t i = 0; i < 16; ++i) CHECK(w[i] == Catch::Approx(1.0f).margin(0.01));
+	}
+
+	SECTION("a foot held well above the other is up, not standing higher")
+	{
+		// A knee held up through a crouch: the foot's own lowest is where it hovers, and a floor
+		// that far above the standing foot's is no floor.
+		Leg both(true);
+		both.AddFoot();
+		both.Finish();
+
+		both.AddClip();
+		for (int i = 0; i < 8; ++i)
+			both.AddFrame(glm::vec3(0.0f), glm::vec3(0.0f), glm::vec3(0.0f, 0.08f, 0.0f));
+
+		const std::vector<SolePlane> soles =
+			solePlanes(both.Meshes(), both.skeleton, both.Chains());
+		const std::vector<float> w =
+			WeightsOf(measurePlantWeights(both.animations, both.skeleton, both.Chains(), soles));
+
+		REQUIRE(w.size() == 16);
+		for (size_t i = 0; i < 8; ++i)
+		{
+			CHECK(w[2 * i + 0] == Catch::Approx(1.0f).margin(0.01));
+			CHECK(w[2 * i + 1] == Catch::Approx(0.0f).margin(0.01));
+		}
+	}
 }
 
 TEST_CASE("A step plants only while the foot is down", "[skinning][plant]")

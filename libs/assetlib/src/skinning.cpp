@@ -1179,19 +1179,28 @@ namespace assetlib
 						glm::vec3(model[chains[leg].ankle] * glm::vec4(soles[leg].point, 1.0f));
 			}
 
-			// The floor is the lowest any sole gets in *this clip*, not y = 0. groundClips rests
-			// the clip's lowest vertex on 0, and in a walk that vertex is a toe tip dipping through
-			// the floor mid-swing, which lifts the whole clip until the standing foot floats a few
-			// centimetres up. A foot is down when it is where feet go when they are down here.
-			float floor = std::numeric_limits<float>::max();
-			for (const glm::vec3& at : sole) floor = std::min(floor, at.y);
+			// Each foot's floor is the lowest *that sole* gets in *this clip*, not y = 0 and not the
+			// other foot's. groundClips rests the clip's lowest vertex on 0, and in a walk that
+			// vertex is a toe tip dipping through the floor mid-swing, which lifts the whole clip
+			// until the standing foot floats a few centimetres up; a pose that cocks the pelvis
+			// lifts one whole leg above the other. A foot is down when it is where *it* goes when
+			// it is down here.
+			auto floor = std::vector<float>(legs, std::numeric_limits<float>::max());
+			for (size_t i = 0; i < sole.size(); ++i)
+				floor[i % legs] = std::min(floor[i % legs], sole[i].y);
 
 			// But a floor is only a floor near the ground the clip was rested on. Past the slack,
 			// nothing in the clip stands: it sits, or lies, or is in the air, and the ground is
 			// under something other than a foot -- and the lowest a sole gets is where it hovers,
-			// not where it is planted.
-			if (floor > c_PlantFloorSlack)
+			// not where it is planted. And a foot whose own lowest is well above the clip's is
+			// held up, not standing higher.
+			const float lowest = *std::ranges::min_element(floor);
+			if (lowest > c_PlantFloorSlack)
 				continue;
+
+			auto stands = [&floor, lowest](size_t leg) {
+				return floor[leg] <= lowest + c_PlantFloorSpread;
+			};
 
 			// How a sole moves across the frame either side of it, per sample. A clip's first and
 			// last frame have one neighbour, so their motion is the one-sided step scaled to the
@@ -1220,7 +1229,7 @@ namespace assetlib
 			// is not the mark of a planted foot; moving with the ground is.
 			auto down = std::vector<glm::vec2>();
 			for (size_t i = 0; i < sole.size(); ++i)
-				if (sole[i].y <= floor + c_PlantHeightEpsilon)
+				if (stands(i % legs) && sole[i].y <= floor[i % legs] + c_PlantHeightEpsilon)
 					down.push_back(slide[i]);
 			const glm::vec2 stance = medianMotion(down);
 
@@ -1232,11 +1241,14 @@ namespace assetlib
 
 			for (size_t leg = 0; leg < legs; ++leg)
 			{
+				if (!stands(leg))
+					continue;
+
 				auto planted = std::vector<bool>(played.frameCount, false);
 				for (uint32_t frame = 0; frame < played.frameCount; ++frame)
 				{
 					const size_t i = size_t(frame) * legs + leg;
-					planted[frame] = sole[i].y <= floor + c_PlantHeightEpsilon &&
+					planted[frame] = sole[i].y <= floor[leg] + c_PlantHeightEpsilon &&
 					                 glm::length(slide[i] - stance) <= tolerance;
 				}
 

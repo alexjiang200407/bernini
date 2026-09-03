@@ -290,6 +290,12 @@ namespace assetlib
 	inline constexpr float c_PlantFloorSlack = 0.10f;
 
 	/**
+	 * How far above the clip's lowest sole a foot's own floor may sit: a cocked pelvis lifts one
+	 * leg 3 cm (the Dog's idle), a knee held up lifts it 8 cm (the Dog's jump).
+	 */
+	inline constexpr float c_PlantFloorSpread = 0.05f;
+
+	/**
 	 * The same drift as a fraction of the stance motion, for a clip whose stance moves: the
 	 * standing foot of a fast clip drifts a fraction of its stride, and a fraction is what a rule
 	 * about sliding should read. A third, which the Coyote's run -- a tenth -- clears and a foot
@@ -368,34 +374,17 @@ namespace assetlib
 		std::span<const AvatarLegChain> chains) noexcept;
 
 	/**
-	 * How planted each leg is in each frame of `animations`, one byte per leg per frame, frame-major
-	 * over the whole sample pool.
+	 * How planted each leg is in each frame of `animations`: one byte per leg per frame, frame-major
+	 * over the whole sample pool. The rule, and why each part is what it is, is in docs/skinning.md.
 	 *
-	 * A foot is planted in a frame when its sole sits within `c_PlantHeightEpsilon` of the lowest any
-	 * sole gets in that clip *and* moves with the clip's stance: the median motion of every sole at
-	 * that floor, judged over the frame either side, within `c_PlantSlideEpsilon` or
-	 * `c_PlantSlideFraction` of it, whichever is wider. Height alone would plant a foot dragged
-	 * along the ground; stillness alone would plant one held in the air -- and would plant nothing
-	 * in a clip played in place, whose standing foot slides back under a root that stays put.
+	 * Planted: sole within `c_PlantHeightEpsilon` of the foot's own floor, and moving with the
+	 * clip's stance (median motion of soles at floor level over the frame either side) within
+	 * `c_PlantSlideEpsilon` or `c_PlantSlideFraction` of it.
+	 * Floor: the lowest that sole gets in the clip. No floor when the clip's lowest sole is above
+	 * `c_PlantFloorSlack`, or the foot's own is more than `c_PlantFloorSpread` above the clip's.
+	 * Ramp: `c_PlantRampFrames` in and out of each run, not at a clip's edge.
+	 * Skipped: a clip whose first sample is off a frame boundary.
 	 *
-	 * The floor is the clip's own and not y = 0: groundClips rests a clip's lowest *vertex* on
-	 * zero, and in a walk that is a toe tip dipping through the floor mid-swing, which lifts the
-	 * standing foot a few centimetres off it. A clip whose lowest sole is more than
-	 * `c_PlantFloorSlack` up has no standing foot -- it sits, or flies -- and plants nothing.
-	 *
-	 * Each planted run is then ramped in and out over `c_PlantRampFrames`, which is what makes this
-	 * a weight rather than the one bit the shape of the problem suggests: a foot that went from
-	 * unplanted to planted in a single frame is a 33 ms pop at 30 Hz, and the ramp has to live
-	 * somewhere.
-	 *
-	 * Runs are found per clip, and a run reaching a clip's own edge is not ramped there: the edge of
-	 * a clip is where the clip stops, not a foot leaving the ground, so a looping idle planted
-	 * throughout stays planted rather than dipping on the loop point.
-	 *
-	 * A clip whose first sample is not on a frame boundary is skipped -- its weights would have no
-	 * frame index to sit at -- rather than failing the set.
-	 *
-
 	 * @throws std::runtime_error for anything poseModelTransforms refuses -- above all a clip set
 	 *         cooked against another rig.
 	 */
