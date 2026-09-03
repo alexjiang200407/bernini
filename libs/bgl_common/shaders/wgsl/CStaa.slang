@@ -45,7 +45,7 @@ void main(uint3 id: SV_DispatchThreadID)
     p.sampleWeightK = 1.0;
     p.blendWeight = 0.1;
     p.historyValid = 1.0;
-    let resolved = Resolve(inputs, p, float2(0.5, 0.5));
+    let resolved = TaaResolve(inputs, p, float2(0.5, 0.5));
 
     gOut[0] = float4(back, w) + float4(m, 0.0, 0.0) + resolved;
 }

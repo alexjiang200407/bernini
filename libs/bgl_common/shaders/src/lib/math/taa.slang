@@ -154,7 +154,7 @@ float ObjectTexels<I : IResolveInputs>(I inputs, ResolveParams p, float2 uv, flo
  *
  * @return The new history at `uv`, alpha zero.
  */
-public float4 Resolve<I : IResolveInputs>(I inputs, ResolveParams p, float2 uv)
+public float4 TaaResolve<I : IResolveInputs>(I inputs, ResolveParams p, float2 uv)
 {
     let texel = p.renderTexelSize;
 

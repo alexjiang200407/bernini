@@ -92,5 +92,5 @@ void MSMain(uint gtid: SV_GroupThreadID, OutputVertices<VSOut, 3> verts, OutputI
 float4 PSMain(VSOut input) : SV_Target
 {
     TaaResolveData data = gTaaResolveData;
-    return Resolve(data, data.Params(), input.uv);
+    return TaaResolve(data, data.Params(), input.uv);
 }
