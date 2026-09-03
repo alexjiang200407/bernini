@@ -8,6 +8,22 @@
 namespace assetlib
 {
 	void
+	groundClipsForRig(
+		const core::file::IFileSystem&   files,
+		AnimationSet&                    clips,
+		const std::span<const BMesh>     meshes,
+		const Skeleton&                  skeleton,
+		const std::span<const ClipFloor> authored)
+	{
+		groundClips(
+			clips,
+			meshes,
+			skeleton,
+			authored,
+			avatarForRig(files, clips.skeleton, skeleton).legs);
+	}
+
+	void
 	bakePlantWeightsForRig(
 		const core::file::IFileSystem& files,
 		AnimationSet&                  clips,

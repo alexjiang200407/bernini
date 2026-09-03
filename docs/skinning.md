@@ -387,8 +387,9 @@ dropped vertically onto the ground and the ankle is aimed at its own position mo
 vector.
 
 **What moves the foot is the ground's departure from the floor the clip was authored on, not the
-ground's position.** `groundClips` rests every clip's lowest point on model `y = 0`, so that plane
-is the floor the animator posed against, and a plant applies `ground - authoredFloor` under the
+ground's position.** `groundClips` rests every clip on model `y = 0` — on its lowest **sole** for a
+rig that authored legs, and on its lowest vertex for one that did not — so that plane is the floor
+the animator posed against, and a plant applies `ground - authoredFloor` under the
 foot. On flat ground at that height the plant is an **exact identity** rather than a small
 correction. Placing the contact on the ground absolutely instead moved every leg by however far the
 sole plane sits above the clip's lowest point — the plane is fitted to a `c_SoleBand` band up from
@@ -398,6 +399,15 @@ turned contact goes onto the ground, and the height the clip's own untuned conta
 own floor is given back, so a foot posed hovering keeps its clearance and a foot turned by a slope
 does not read its own turn as ground. The standard solve is framed the same way — Unreal's Foot
 Placement keeps a foot's animated height relative to the root and adds the ground beneath it.
+
+**Which is why a rig with an avatar is floored by its soles.** The lowest vertex need not be a
+foot: on the test Dog it is not, and grounding on it left `Idle`'s soles 1 cm and 4 cm above zero —
+a hover the departure then faithfully preserved, so the whole dog floated and one foot hung lower
+than the other. Floored by its soles, the standing foot rests at exactly zero and the other keeps
+the 3 cm its cocked pelvis authored. `groundClipsForRig` is the pair of `bakePlantWeightsForRig`
+and is called before it, so the floor the weights are measured against is the floor the plant
+departs from. The sole walk is cheaper than the vertex one, not dearer — one point through the
+ankle's pose per leg per frame, and no vertex skinned at all.
 
 The authored floor is rigid with the pose, so the pelvis drop lowers it too (`float4(0, 1, 0,
 d * n.y)`). That is what keeps the target invariant under the drop, which is what lets the pass

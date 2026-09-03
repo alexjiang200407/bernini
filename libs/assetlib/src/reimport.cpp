@@ -133,7 +133,12 @@ namespace assetlib
 					BMesh swept = toBMesh(group.import);
 					generateTangents(swept);
 					swept.skeleton = document.skeleton;
-					groundClips(clips, std::span<const BMesh>(&swept, 1), rig, document.clipFloors);
+					groundClipsForRig(
+						store.GetFiles(),
+						clips,
+						std::span<const BMesh>(&swept, 1),
+						rig,
+						document.clipFloors);
 					bakePosedBounds(clips, swept, rig);
 					bakePlantWeightsForRig(
 						store.GetFiles(),

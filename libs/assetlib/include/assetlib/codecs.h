@@ -203,7 +203,7 @@ namespace assetlib
 		static constexpr std::string_view c_Extension = c_AnimationExtension;
 		static constexpr AssetType        c_Type      = AssetType::kAnimation;
 		static constexpr uint32_t         c_Magic     = magic::c_BAnim;
-		static constexpr uint64_t         c_BakeToken = 0x96bdca57859fd30dull;
+		static constexpr uint64_t         c_BakeToken = 0x125e6b43852f5999ull;
 
 		[[nodiscard]] static std::vector<std::byte>
 		Serialize(const AnimationSet& value);
