@@ -36,7 +36,11 @@ must feed data that matches.
 * **Color space is per-map.** Base color is sRGB (decoded by the sampler via its sRGB format).
   Normal, ORM, and the IBL maps carry linear data and are sampled raw.
 * **ORM packing follows glTF metallic-roughness.** One texture, `R` = occlusion (AO), `G` =
-  roughness, `B` = metallic. `roughness *= roughnessFactor`, `metallic *= metallicFactor`.
+  roughness, `B` = metallic. `roughness *= roughnessFactor`, `metallic *= metallicFactor`. Note that
+  glTF itself specifies only `G` and `B` of its metallic-roughness texture; `R` carrying occlusion is
+  the widespread shared-ORM convention, not the format. An imported material takes `R` from the
+  material's own `occlusionTexture` wherever it names one — see
+  [Importing a glTF's materials](#importing-a-gltfs-materials).
 * **assetlib never derives a material; the editor's import does.** `toBMesh` lands every submesh
   unassigned, and `attachMaterial` is the only thing that ever binds one — so `assetlib_cli bake`
   produces geometry and textures and nothing else. The editor's import is a *caller* of that seam: it
@@ -714,7 +718,7 @@ for each file before committing to the import. `editor::MaterialStems` turns tho
 default stems, and the writer is handed whatever the fields then hold rather than deriving them a
 second time — two copies of that rule is how a preview and a file come to disagree.
 
-Seven rules, each of which is a way to get this wrong:
+Eight rules, each of which is a way to get this wrong:
 
 * **PBR-ness is the absence of an extension, not the presence of `pbrMetallicRoughness`.** Metallic-
   roughness *is* glTF's shading model; tinygltf default-constructs the struct whether or not the file
@@ -744,6 +748,21 @@ Seven rules, each of which is a way to get this wrong:
   wired into the sink — and `CompileMaterial` reads the routes back out of it, exactly as the material
   editor's Save does. There is no second table mapping glTF to routes that could drift from the board,
   and the material reopens as the graph that produced it rather than a blank one.
+* **Occlusion comes from the map the material names, not from ORM's red channel.** glTF specifies
+  only `G` (roughness) and `B` (metalness) of `metallicRoughnessTexture`; `R` is unspecified, so
+  reading occlusion out of it is the shared-ORM convention rather than the format, and an asset that
+  leaves it as padding has that padding sampled as AO. A material's own `occlusionTexture` therefore
+  wins ORM red, and the metallic-roughness texture keeps `G` and `B` — the board splits the ORM group
+  into per-channel ports to say so. Where the two name **one image** the convention is holding and the
+  single wide wire stays, so nothing already imported reroutes. A material naming an occlusion map and
+  no metallic-roughness texture leaves roughness and metallic **unrouted**, which the bake fills with
+  the group's fallback: the factors alone drive them.
+
+  The map is **refused** rather than routed when its `texCoord` is not 0. Only `TEXCOORD_0` is read
+  ([libs/assetlib/src/bmesh_gltf.cpp](libs/assetlib/src/bmesh_gltf.cpp)), and baked AO is commonly
+  unwrapped onto a second UV set — sampling it through the wrong parameterisation is confident
+  garbage, which is worse than the white default. `occlusionTexture.strength` has no home in
+  `PbrParams` and is likewise ignored; both cases warn rather than passing silently.
 * **The alpha mode is read, never inferred.** glTF states `alphaMode`, so honouring it is not the
   guesswork [the texture standards forbid](#texture-standards): `MASK` builds an *Alpha Tested*
   sink and wires base colour RGBA, `OPAQUE` builds the 3-wide one and wires RGB with the alpha left
