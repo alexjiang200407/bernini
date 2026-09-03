@@ -2,6 +2,8 @@
 #include "metal_cpp.h"
 #include "resource/Buffer.h"
 
+#include <core/profiling/TaggedBytes.h>
+
 namespace bgl
 {
 	// The Metal definition of the RHI's forward-declared `Buffer`. A GPU-private structured buffer;
@@ -16,6 +18,10 @@ namespace bgl
 			m_Buffer =
 				NS::TransferPtr(device->newBuffer(desc.byteSize, MTL::ResourceStorageModePrivate));
 			gassert(m_Buffer.get() != nullptr, "Metal buffer allocation failed");
+
+			m_Tracked = core::profiling::TaggedBytes(
+				core::profiling::MemoryTag::kDeviceBuffer,
+				desc.byteSize);
 			if (!desc.debugName.empty())
 			{
 				m_Buffer->setLabel(
@@ -38,5 +44,10 @@ namespace bgl
 	private:
 		BufferDesc                 m_Desc;
 		NS::SharedPtr<MTL::Buffer> m_Buffer;
+
+		// The requested size, not the driver's padded allocation: a buffer is reasoned about as the
+		// bytes that were asked for, and per-backend alignment would make the two platforms'
+		// reports incomparable. A texture is the other way round -- see Texture_metal.h.
+		core::profiling::TaggedBytes m_Tracked;
 	};
 }

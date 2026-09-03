@@ -57,6 +57,9 @@ namespace bgl
 
 		std::wstring wName(desc.debugName.begin(), desc.debugName.end());
 		m_Buffer->SetName(wName.c_str());
+
+		m_Tracked =
+			core::profiling::TaggedBytes(core::profiling::MemoryTag::kDeviceBuffer, desc.byteSize);
 	}
 
 }

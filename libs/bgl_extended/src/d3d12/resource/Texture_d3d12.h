@@ -2,6 +2,8 @@
 #include "convert_d3d12.h"
 #include "resource/Texture.h"
 
+#include <core/profiling/TaggedBytes.h>
+
 namespace bgl
 {
 	class Texture final
@@ -71,8 +73,9 @@ namespace bgl
 		}
 
 	private:
-		TextureDesc                 m_Desc;
-		D3D12_CPU_DESCRIPTOR_HANDLE m_CpuHandle = {};
-		wrl::ComPtr<ID3D12Resource> m_Texture;
+		TextureDesc                  m_Desc;
+		D3D12_CPU_DESCRIPTOR_HANDLE  m_CpuHandle = {};
+		wrl::ComPtr<ID3D12Resource>  m_Texture;
+		core::profiling::TaggedBytes m_Tracked;
 	};
 }

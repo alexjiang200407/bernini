@@ -86,8 +86,24 @@ namespace bgl
 			nullptr,
 			IID_PPV_ARGS(&m_Texture)) >>
 			d3d12ErrChecker;
+
+		// The driver's number rather than one derived from the desc: a TextureDesc carries no byte
+		// size, and a format-size table here would restate what D3D12 already knows. It answers
+		// the max of its type for a layout it cannot size, which is charged as nothing rather than
+		// as everything. Spelled through <limits>, which the root PCH carries, rather than as
+		// UINT64_MAX, which needs a <cstdint> it does not.
+		const D3D12_RESOURCE_ALLOCATION_INFO allocation =
+			device10->GetResourceAllocationInfo2(0, 1, &textureDesc, nullptr);
+		if (allocation.SizeInBytes != std::numeric_limits<uint64_t>::max())
+		{
+			m_Tracked = core::profiling::TaggedBytes(
+				core::profiling::MemoryTag::kDeviceTexture,
+				allocation.SizeInBytes);
+		}
 	}
 
+	// Adopts a resource somebody else allocated -- a swap-chain buffer -- so it is deliberately not
+	// charged: the allocation is not this object's to account for or to release.
 	Texture::Texture(
 		ID3D12Device*               device,
 		ID3D12DescriptorHeap*       descriptorHeap,
