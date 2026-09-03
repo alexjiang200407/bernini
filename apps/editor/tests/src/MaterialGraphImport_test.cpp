@@ -5,6 +5,7 @@
 #include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
 
+#include <QDoubleSpinBox>
 #include <QJsonDocument>
 #include <QJsonObject>
 
@@ -21,6 +22,9 @@ namespace
 	const QString c_Orm = QStringLiteral("C:/proj/Data/Derived/SourceTextures/hydrant/tex1.ktx2");
 	const QString c_Normal =
 		QStringLiteral("C:/proj/Data/Derived/SourceTextures/hydrant/tex2.ktx2");
+
+	const QString c_Occlusion =
+		QStringLiteral("C:/proj/Data/Derived/SourceTextures/hydrant/tex3.ktx2");
 
 	ImportedMaterialMaps
 	AllMaps()
@@ -377,4 +381,148 @@ TEST_CASE("An imported material reopens as the board that produced it", "[materi
 	CHECK(recompiled.pbr.alphaCutoff == Catch::Approx(0.4f));
 	CHECK(recompiled.pbr.metallicFactor == Catch::Approx(0.6f));
 	CHECK(recompiled.pbr.roughnessFactor == Catch::Approx(0.7f));
+}
+
+TEST_CASE("An occlusion map of its own supplies ORM red", "[materialimport][occlusion]")
+{
+	// glTF specifies only G and B of the metallic-roughness texture; an explicit occlusion map is
+	// where its red is actually authored, so it wins the channel and the other two stay where they
+	// were.
+	const assetlib::BMaterial material =
+		Import({}, ImportedMaterialMaps{ c_BaseColor, c_Normal, c_Orm, c_Occlusion });
+
+	CHECK(Route(material, PbrChannel::kAo).texture == "Derived/SourceTextures/hydrant/tex3.ktx2");
+	CHECK(Route(material, PbrChannel::kAo).channel == 0);
+
+	CHECK(
+		Route(material, PbrChannel::kRoughness).texture ==
+		"Derived/SourceTextures/hydrant/tex1.ktx2");
+	CHECK(Route(material, PbrChannel::kRoughness).channel == 1);
+	CHECK(
+		Route(material, PbrChannel::kMetallic).texture ==
+		"Derived/SourceTextures/hydrant/tex1.ktx2");
+	CHECK(Route(material, PbrChannel::kMetallic).channel == 2);
+}
+
+TEST_CASE(
+	"An occlusion-only material leaves roughness and metallic to the factors",
+	"[materialimport][occlusion]")
+{
+	// Every affected asset in the character pack: an occlusion map and no metallic-roughness texture
+	// at all. Routing AO must not invent sources for the other two -- an unrouted channel bakes to the
+	// group's fallback, which is what leaves the factors in charge of them.
+	const assetlib::BMaterial material =
+		Import({}, ImportedMaterialMaps{ c_BaseColor, c_Normal, {}, c_Occlusion });
+
+	CHECK(Route(material, PbrChannel::kAo).texture == "Derived/SourceTextures/hydrant/tex3.ktx2");
+	CHECK(Route(material, PbrChannel::kAo).channel == 0);
+	CHECK(Route(material, PbrChannel::kRoughness).texture.empty());
+	CHECK(Route(material, PbrChannel::kMetallic).texture.empty());
+}
+
+TEST_CASE("A shared-ORM material routes exactly as it did before", "[materialimport][occlusion]")
+{
+	// The regression this feature must not cause. When the two name one image the convention holds,
+	// and the routes have to be indistinguishable from an import that never read occlusion at all --
+	// otherwise every asset already in the project rebakes to say the same thing.
+	const assetlib::BMaterial shared =
+		Import({}, ImportedMaterialMaps{ c_BaseColor, c_Normal, c_Orm, c_Orm });
+	const assetlib::BMaterial before = Import({}, AllMaps());
+
+	for (size_t i = 0; i < assetlib::c_LooseChannelCount; ++i)
+	{
+		INFO("channel " << i);
+		CHECK(shared.pbr.routes[i].texture == before.pbr.routes[i].texture);
+		CHECK(shared.pbr.routes[i].channel == before.pbr.routes[i].channel);
+	}
+}
+
+TEST_CASE("A split ORM board reopens as the board that produced it", "[materialimport][occlusion]")
+{
+	// The split lives in the saved graph rather than in the routes, so a board whose ports were
+	// expanded on the way in has to come back expanded: reloaded collapsed, its three connections
+	// would land on ports that no longer mean what they did when they were written.
+	const assetlib::BMaterial material =
+		Import({}, ImportedMaterialMaps{ c_BaseColor, c_Normal, c_Orm, c_Occlusion });
+
+	QJsonObject graph =
+		QJsonDocument::fromJson(QByteArray::fromStdString(material.editorGraph)).object();
+	REQUIRE_FALSE(graph.isEmpty());
+	RebaseGraphTextures(graph, c_DataRoot, false);
+
+	MaterialGraphModel reopened(MakeMaterialNodeRegistry(nullptr, nullptr));
+	reopened.load(graph);
+
+	const assetlib::BMaterial recompiled =
+		CompileMaterial(reopened, QStringLiteral("hydrant"), c_DataRoot);
+
+	for (size_t i = 0; i < assetlib::c_LooseChannelCount; ++i)
+	{
+		INFO("channel " << i);
+		CHECK(recompiled.pbr.routes[i].texture == material.pbr.routes[i].texture);
+		CHECK(recompiled.pbr.routes[i].channel == material.pbr.routes[i].channel);
+	}
+}
+
+TEST_CASE("One map feeding two channels is placed once", "[materialimport][occlusion]")
+{
+	// A split group asks the metallic-roughness texture for G and for B. Two Texture nodes on one
+	// path would compile to the same routes and look like an authoring mistake on the board.
+	const assetlib::BMaterial material =
+		Import({}, ImportedMaterialMaps{ c_BaseColor, c_Normal, c_Orm, c_Occlusion });
+
+	const QJsonObject graph =
+		QJsonDocument::fromJson(QByteArray::fromStdString(material.editorGraph)).object();
+
+	// Base colour, normal, metallic-roughness, occlusion, and the sink.
+	CHECK(graph["nodes"].toArray().size() == 5);
+	CHECK(graph["connections"].toArray().size() == 5);
+}
+
+TEST_CASE("An imported factor is snapped to what the board can hold", "[materialimport][precision]")
+{
+	// glTF carries more precision than the sink's three-decimal spin boxes can show. Left alone, the
+	// first person to touch one of those boxes rewrites the factor with a value nobody chose, and the
+	// material diffs on an edit that changed nothing.
+	auto imported            = assetlib::imp::BMaterialImport();
+	imported.roughnessFactor = 0.8585786f;
+	imported.metallicFactor  = 0.1234567f;
+	imported.specularFactor  = 0.9999996f;
+
+	const assetlib::BMaterial material = Import(imported, AllMaps());
+
+	CHECK(material.pbr.roughnessFactor == Catch::Approx(0.859f));
+	CHECK(material.pbr.metallicFactor == Catch::Approx(0.123f));
+	CHECK(material.pbr.specularFactor == Catch::Approx(1.0f));
+}
+
+TEST_CASE(
+	"An imported factor is one the editor's own spin box holds",
+	"[materialimport][precision]")
+{
+	// The property that keeps a material from diffing on an edit that changed nothing: every factor an
+	// import writes must already be a value the sink's spin box can represent, so showing it and
+	// setting it back reports the same number. A load/save round-trip was lossless before this too --
+	// what was not is a person touching the box, which reports back what it *displays*.
+	auto imported            = assetlib::imp::BMaterialImport();
+	imported.roughnessFactor = 0.8585786f;
+	imported.metallicFactor  = 0.1234567f;
+	imported.alphaMode       = assetlib::AlphaMode::kMask;
+	imported.alphaCutoff     = 0.4321098f;
+
+	const assetlib::BMaterial material = Import(imported, AllMaps());
+
+	// Built the way MakeFactorSpin builds the real one, so the two cannot drift apart unnoticed.
+	QDoubleSpinBox spin;
+	spin.setRange(0.0, 1.0);
+	spin.setDecimals(3);
+
+	const auto asShown = [&spin](float factor) {
+		spin.setValue(static_cast<double>(factor));
+		return static_cast<float>(spin.value());
+	};
+
+	CHECK(asShown(material.pbr.roughnessFactor) == material.pbr.roughnessFactor);
+	CHECK(asShown(material.pbr.metallicFactor) == material.pbr.metallicFactor);
+	CHECK(asShown(material.pbr.alphaCutoff) == material.pbr.alphaCutoff);
 }

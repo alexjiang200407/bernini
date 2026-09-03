@@ -9,14 +9,16 @@ namespace assetlib::imp
 	 * specular-glossiness one is converted on the way in. Texture fields index directly into
 	 * imp::BMeshImport::textures (0xFFFFFFFF when absent) -- the flattened counterpart of the modular
 	 * BMaterial, which references the same textures by file path instead. ormTexture is the glTF
-	 * metallic-roughness texture, interpreted as occlusion(R)/roughness(G)/metallic(B) -- occlusion is
-	 * only correct when the asset packs it into the same texture (the common shared-ORM convention).
+	 * metallic-roughness texture, which specifies only roughness(G) and metallic(B); its red channel
+	 * carries occlusion only under the shared-ORM convention. occlusionTexture is glTF's own
+	 * occlusion map and takes precedence over that red channel wherever it is present.
 	 */
 	struct BMaterialImport
 	{
 		uint32_t  baseColorTexture = 0xFFFFFFFFu;
 		uint32_t  normalTexture    = 0xFFFFFFFFu;
 		uint32_t  ormTexture       = 0xFFFFFFFFu;
+		uint32_t  occlusionTexture = 0xFFFFFFFFu;
 		glm::vec4 baseColorFactor  = glm::vec4(1.0f);
 		float     metallicFactor   = 1.0f;
 		float     roughnessFactor  = 1.0f;

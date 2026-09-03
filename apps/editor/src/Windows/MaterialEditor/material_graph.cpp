@@ -1,6 +1,7 @@
 #include "Windows/MaterialEditor/material_graph.h"
 
 #include <QFileInfo>
+#include <QHash>
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QPointF>
@@ -19,6 +20,27 @@ namespace
 	constexpr double c_TextureNodeGap = 210.0;
 	constexpr double c_OutputNodeX    = 220.0;
 	constexpr double c_OutputNodeY    = 40.0;
+
+	// TextureNode's output ports, in its own order: the bundles first, then one per channel.
+	constexpr unsigned int c_TextureRgba = 0;
+	constexpr unsigned int c_TextureRgb  = 1;
+	constexpr unsigned int c_TextureRg   = 2;
+	constexpr unsigned int c_TextureR    = 3;
+	constexpr unsigned int c_TextureG    = 4;
+	constexpr unsigned int c_TextureB    = 5;
+
+	// The sink's channel groups, in BMaterial::routes order.
+	constexpr unsigned int c_BaseColorGroup = 0;
+	constexpr unsigned int c_OrmGroup       = 1;
+	constexpr unsigned int c_NormalGroup    = 2;
+
+	/** A factor at the three decimals the sink's spin boxes hold. See docs/asset_standards.md. */
+	double
+	AtEditorPrecision(float factor)
+	{
+		constexpr auto c_Steps = 1000.0;
+		return std::round(static_cast<double>(factor) * c_Steps) / c_Steps;
+	}
 }
 
 QString
@@ -208,22 +230,28 @@ BuildImportedMaterialGraph(
 	if (output == nullptr)
 		return;
 
+	// glTF specifies only G and B of the metallic-roughness texture; its red is occlusion solely by
+	// the shared-ORM convention. A map of its own therefore wins ORM red, and forces the group into
+	// per-channel ports so the other two can keep coming from the metallic-roughness texture. A
+	// material where the two name one image is that convention holding, and keeps its single wire.
+	const bool splitOrm = !maps.occlusion.isEmpty() && maps.occlusion != maps.orm;
+
 	// The sink's own deserialization path is what carries the factors in; restoring a saved graph sets
-	// them the same way. `alphaCutoff` is ignored by the opaque sink, and `split` is absent, which
-	// leaves every group collapsed to the one wide port each map wires into below.
+	// them the same way. `alphaCutoff` is ignored by the opaque sink.
 	auto factors            = QJsonObject();
 	factors["baseColorR"]   = material.baseColorFactor.r;
 	factors["baseColorG"]   = material.baseColorFactor.g;
 	factors["baseColorB"]   = material.baseColorFactor.b;
 	factors["baseColorA"]   = material.baseColorFactor.a;
-	factors["metallic"]     = material.metallicFactor;
-	factors["roughness"]    = material.roughnessFactor;
-	factors["alphaCutoff"]  = material.alphaCutoff;
-	factors["transmission"] = material.transmissionFactor;
+	factors["metallic"]     = AtEditorPrecision(material.metallicFactor);
+	factors["roughness"]    = AtEditorPrecision(material.roughnessFactor);
+	factors["alphaCutoff"]  = AtEditorPrecision(material.alphaCutoff);
+	factors["transmission"] = AtEditorPrecision(material.transmissionFactor);
 	factors["specularR"]    = material.specularColorFactor.r;
 	factors["specularG"]    = material.specularColorFactor.g;
 	factors["specularB"]    = material.specularColorFactor.b;
-	factors["specular"]     = material.specularFactor;
+	factors["specular"]     = AtEditorPrecision(material.specularFactor);
+	factors["split"]        = QJsonArray{ false, splitOrm, false };
 	output->load(factors);
 
 	struct Wire
@@ -233,31 +261,55 @@ BuildImportedMaterialGraph(
 		unsigned int outputPort;
 	};
 
-	// Each map feeds its group's whole port: glTF packs occlusion/roughness/metallic in RGB, which is
-	// the ORM order, and a normal map's Z is reconstructed in the shader, so only RG is taken. Base
-	// colour draws alpha only for a cutout -- the opaque sink's port is 3-wide, and routing an alpha
-	// that nothing tests against is what turns a project into cutouts that cut nothing out.
-	const std::array<Wire, 3> wires = { {
-		{ maps.baseColor, carriesAlpha ? 0u : 1u, 0u },
-		{ maps.orm, 1u, 1u },
-		{ maps.normal, 2u, 2u },
-	} };
+	// A whole map feeds its group's wide port: glTF puts roughness in G and metallic in B, which is
+	// where ORM wants them, and a normal map's Z is reconstructed in the shader, so only RG is taken.
+	// Base colour
+	// draws alpha only for a cutout -- the opaque sink's port is 3-wide, and routing an alpha that
+	// nothing tests against is what turns a project into cutouts that cut nothing out.
+	auto wires = std::vector<Wire>{
+		{ maps.baseColor,
+		  carriesAlpha ? c_TextureRgba : c_TextureRgb,
+		  output->GroupPort(c_BaseColorGroup, 0) },
+		{ maps.normal, c_TextureRg, output->GroupPort(c_NormalGroup, 0) },
+	};
 
-	double y = 0.0;
+	if (splitOrm)
+	{
+		// An absent metallic-roughness texture leaves roughness and metallic unrouted, which the bake
+		// fills with the ORM group's fallback -- the value that leaves the factors alone in charge.
+		wires.push_back({ maps.occlusion, c_TextureR, output->GroupPort(c_OrmGroup, 0) });
+		wires.push_back({ maps.orm, c_TextureG, output->GroupPort(c_OrmGroup, 1) });
+		wires.push_back({ maps.orm, c_TextureB, output->GroupPort(c_OrmGroup, 2) });
+	}
+	else
+	{
+		wires.push_back({ maps.orm, c_TextureRgb, output->GroupPort(c_OrmGroup, 0) });
+	}
+
+	// One node per distinct map, so a texture feeding two channels of a split group is placed once.
+	auto   nodeForPath = QHash<QString, QtNodes::NodeId>();
+	double y           = 0.0;
+
 	for (const Wire& wire : wires)
 	{
 		if (wire.path.isEmpty())
 			continue;
 
-		const QtNodes::NodeId textureId = model.addNode(QStringLiteral("Texture"));
-		model.setNodeData(textureId, QtNodes::NodeRole::Position, QPointF(c_TextureNodeX, y));
-		y += c_TextureNodeGap;
+		auto placed = nodeForPath.find(wire.path);
+		if (placed == nodeForPath.end())
+		{
+			const QtNodes::NodeId textureId = model.addNode(QStringLiteral("Texture"));
+			model.setNodeData(textureId, QtNodes::NodeRole::Position, QPointF(c_TextureNodeX, y));
+			y += c_TextureNodeGap;
 
-		if (auto* texture = model.delegateModel<TextureNode>(textureId))
-			texture->SetTexturePath(wire.path);
+			if (auto* texture = model.delegateModel<TextureNode>(textureId))
+				texture->SetTexturePath(wire.path);
+
+			placed = nodeForPath.insert(wire.path, textureId);
+		}
 
 		model.addConnection(
-			QtNodes::ConnectionId{ textureId,
+			QtNodes::ConnectionId{ *placed,
 		                           static_cast<QtNodes::PortIndex>(wire.texturePort),
 		                           outputId,
 		                           static_cast<QtNodes::PortIndex>(wire.outputPort) });
