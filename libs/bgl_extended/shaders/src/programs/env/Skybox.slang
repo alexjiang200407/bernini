@@ -1,3 +1,5 @@
+import lib.math.motion_vector;
+
 struct SkyboxData
 {
     float4x4 clipToWorld;     // inverse(viewProj) with camera translation removed
@@ -72,6 +74,6 @@ SkyboxPSOut PSMain(VSOut input)
 
     SkyboxPSOut output;
     output.color = float4(color, 1.0);
-    output.motion = ((input.ndc - gSkyboxData.jitter) - prevNdc) * float2(0.5, -0.5);
+    output.motion = MotionFromNdc(input.ndc - gSkyboxData.jitter, prevNdc);
     return output;
 }
