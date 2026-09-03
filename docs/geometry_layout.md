@@ -3,9 +3,9 @@
 The structs that describe renderable geometry — `MeshInstance`, `Submesh`, `Meshlet`, `Vertex`,
 `VertexLayout`, and the `Range` / `RangeWithCount` / `Entry` offset primitives — plus the CPU-side
 buffers that mirror them onto the GPU. The structs are laid out once and shared between CPU and
-GPU: a single IDL source (`libs/bgl_common/idl/src/*.slang`) generates a shader copy under
-[libs/bgl_common/shaders/src/idl/](libs/bgl_common/shaders/src/idl/) and a byte-identical C++ mirror into the
-build tree at `<build>/generated/bgl_common/idl/`. Only the offset primitives are hand-written, in
+GPU: the shaders import the IDL modules under [libs/bgl_common/shaders/src/idl/](libs/bgl_common/shaders/src/idl/)
+directly, and `bgl_idlgen` generates a byte-identical C++ mirror of each into the build tree at
+`<build>/generated/bgl_common/idl/`. Only the offset primitives are hand-written, in
 `libs/bgl_common/include/bgl_common/idl/`: they are generic, and a generic has no concrete layout to mirror.
 This document links the **generated shader slang** — the GPU-facing view is the one that drives
 rendering, and the C++ mirror pins the same offsets with `static_assert`s.
@@ -32,12 +32,12 @@ path is the source of truth; when this doc disagrees, trust the struct, then fix
   `slot_handle::invalid_index`, and the `BufferHandle::bindlessIndex` that mirrors it — which never
   reaches a shader.
 
-* **One IDL, two generated targets, guaranteed layout parity.** The `.slang` structs
-  ([MeshInstance.slang](libs/bgl_common/shaders/src/idl/MeshInstance.slang) etc.) and the C++ `bgl::idl::*` structs are both
-  generated from `libs/bgl_common/idl/src`. The C++ side carries `static_assert(sizeof / offsetof …)` so the
+* **One IDL, a generated mirror, guaranteed layout parity.** The `.slang` structs
+  ([MeshInstance.slang](libs/bgl_common/shaders/src/idl/MeshInstance.slang) etc.) are what the shaders import, and the
+  C++ `bgl::idl::*` structs are generated from them. The C++ side carries `static_assert(sizeof / offsetof …)` so the
   two never drift — CPU code can `memcpy` a struct straight into a GPU buffer. An IDL module can
   also declare `enum`s and `public static const` **constants** (e.g.
-  [Constants.slang](libs/bgl_common/idl/src/Constants.slang)); constants are emitted as `constexpr` into the
+  [Constants.slang](libs/bgl_common/shaders/src/idl/Constants.slang)); constants are emitted as `constexpr` into the
   C++ mirror, keeping shared limits single-sourced across CPU and GPU. Never hand-edit either
   generated copy; edit the IDL source and regenerate.
 
@@ -52,7 +52,7 @@ path is the source of truth; when this doc disagrees, trust the struct, then fix
 * **Geometry is meshlet-partitioned for mesh-shader rendering.** Each submesh is split into
   `Meshlet`s of at most `idl::cMaxVerticesPerMeshlet` (64) unique vertices and
   `idl::cMaxPrimsPerMeshlet` (124) triangles. These are declared once in the IDL module
-  [Constants.slang](libs/bgl_common/idl/src/Constants.slang) and consumed by both the CPU (generated
+  [Constants.slang](libs/bgl_common/shaders/src/idl/Constants.slang) and consumed by both the CPU (generated
   `<build>/generated/bgl_common/idl/Constants.h`) and the shaders (`import idl.Constants`). A meshlet
   carries a bounding sphere, written by the scene but read by nothing yet: culling today is
   per-instance, against the submesh's sphere

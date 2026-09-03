@@ -1,5 +1,3 @@
-// THIS IS A FILE GENERATED FROM Constants.slang. DO NOT EDIT MANUALLY
-
 // Engine-wide constants shared by the CPU and GPU. idlgen emits these as
 // `constexpr` into bgl/src/idl/Constants.h and copies this module to
 // bgl/shaders/src/idl/Constants.slang, so both sides originate from here.

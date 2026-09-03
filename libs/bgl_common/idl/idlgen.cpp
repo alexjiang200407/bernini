@@ -5,15 +5,12 @@
 #include <slang.h>
 
 /**
- * bgl_idlgen - generate C++ POD structs, enums, and constants (and a
- * banner-stamped Slang copy) from an `.slang` IDL file, keeping the CPU and GPU
- * definitions in sync.
+ * bgl_idlgen - generate C++ POD structs, enums, and constants from an `.slang` IDL module, keeping
+ * the CPU definitions in lockstep with the module the shaders import.
  *
  * Usage:
- *   bgl_idlgen --src-root <dir> [--cpp-out-dir <dir>] [--slang-out-dir <dir>]
+ *   bgl_idlgen --src-root <dir> --cpp-out-dir <dir>
  *              [--namespace ns] [--metal-layout] [--public] [-I <search-dir>]... <input.slang>
- *
- * At least one of --cpp-out-dir / --slang-out-dir must be given.
  */
 
 using Slang::ComPtr;
@@ -1058,7 +1055,6 @@ main(int argc, char** argv)
 	std::string              input;
 	std::string              srcRoot;
 	std::string              cppOutDir;
-	std::string              slangOutDir;
 	std::string              baseNs = "bgl::idl";
 	std::vector<std::string> includeDirs;
 	bool                     metalLayout = false;
@@ -1067,8 +1063,8 @@ main(int argc, char** argv)
 	app.add_option("input", input, "Input .slang IDL file")->required();
 	app.add_option("--src-root", srcRoot, "Root the input's module path is relative to")
 		->required();
-	app.add_option("--cpp-out-dir", cppOutDir, "Output root for the generated C++ header");
-	app.add_option("--slang-out-dir", slangOutDir, "Output root for the banner-stamped Slang copy");
+	app.add_option("--cpp-out-dir", cppOutDir, "Output root for the generated C++ header")
+		->required();
 	app.add_option("--namespace", baseNs, "Base C++ namespace for the generated structs")
 		->capture_default_str();
 	app.add_option("-I,--include", includeDirs, "Search directory for imported Slang modules");
@@ -1083,12 +1079,6 @@ main(int argc, char** argv)
 		"is not the same on all of them");
 
 	CLI11_PARSE(app, argc, argv);
-
-	if (cppOutDir.empty() && slangOutDir.empty())
-	{
-		std::cerr << "error: at least one of --cpp-out-dir / --slang-out-dir is required\n";
-		return 1;
-	}
 
 	try
 	{
@@ -1114,25 +1104,6 @@ main(int argc, char** argv)
 
 		const std::string source = ReadFile(inputPath);
 
-		// Reported to Slang as this module's own path so that a sibling `import` resolves next to the
-		// *generated* copies -- Slang looks beside the importing file before it consults the search
-		// paths, and the sources there are unpadded.
-		const fs::path selfPath =
-			slangOutDir.empty() ? inputPath : fs::absolute(fs::path(slangOutDir) / rel);
-
-		// A module with no C++ mirror is interface- or generic-only, so it has no concrete layout to
-		// pad and the copy goes out verbatim. Every other module's copy is written after reflection,
-		// which is what knows the padding.
-		if (cppOutDir.empty())
-		{
-			if (!slangOutDir.empty())
-			{
-				const fs::path slangOut = fs::path(slangOutDir) / rel;
-				WriteFile(slangOut, Banner(rel.generic_string()) + "\n" + source);
-			}
-			return 0;
-		}
-
 		const fs::path cppOut = fs::path(cppOutDir) / relNoExt.concat(".h");
 
 		ComPtr<slang::IGlobalSession> globalSession;
@@ -1146,12 +1117,6 @@ main(int argc, char** argv)
 		target.format = SLANG_HOST_HOST_CALLABLE;  // C/C++ (scalar) layout rules
 
 		std::vector<std::string> searchPaths;
-		// The generated copies come first, so an import resolves to the same module text the shaders
-		// see. This module itself is loaded from its source text, never from its own generated copy.
-		if (!slangOutDir.empty())
-		{
-			searchPaths.push_back(fs::absolute(slangOutDir).string());
-		}
 		searchPaths.push_back(rootPath.string());
 		for (const std::string& dir : includeDirs)
 		{
@@ -1179,7 +1144,7 @@ main(int argc, char** argv)
 		ComPtr<slang::IBlob> diagnostics;
 		slang::IModule*      module = slangSession->loadModuleFromSourceString(
 			moduleLoadName.c_str(),
-			selfPath.string().c_str(),
+			inputPath.string().c_str(),
 			source.c_str(),
 			diagnostics.writeRef());
 		ReportDiagnostics(diagnostics.get());
@@ -1219,7 +1184,7 @@ main(int argc, char** argv)
 		}
 		slang::IModule* scalarModule = scalarSlangSession->loadModuleFromSourceString(
 			moduleLoadName.c_str(),
-			selfPath.string().c_str(),
+			inputPath.string().c_str(),
 			source.c_str(),
 			diagnostics.writeRef());
 		ReportDiagnostics(diagnostics.get());
@@ -1273,12 +1238,6 @@ main(int argc, char** argv)
 		}
 
 		std::vector<ConstantInfo> constants = ParseConstants(source);
-
-		if (!slangOutDir.empty())
-		{
-			const fs::path slangOut = fs::path(slangOutDir) / rel;
-			WriteFile(slangOut, Banner(rel.generic_string()) + "\n" + source);
-		}
 
 		if (structs.empty() && enums.empty() && constants.empty())
 		{

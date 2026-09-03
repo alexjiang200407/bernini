@@ -1,5 +1,3 @@
-// THIS IS A FILE GENERATED FROM PlaybackType.slang. DO NOT EDIT MANUALLY
-
 public enum PlaybackType : uint32_t
 {
     kInvalid = uint32_t(-1), // sentinel for an unset playback handle

@@ -1,5 +1,3 @@
-// THIS IS A FILE GENERATED FROM RawEntry.slang. DO NOT EDIT MANUALLY
-
 public struct RawEntry<T>
 {
     // A byte offset into a raw arena, naming the record's header; its payload begins

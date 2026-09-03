@@ -1,5 +1,3 @@
-// THIS IS A FILE GENERATED FROM SkinnedBone.slang. DO NOT EDIT MANUALLY
-
 // One bone of a rig, as the pose pass needs it.
 //
 // The bind pose is deliberately absent: a clip is resampled to carry a sample for every bone of

@@ -97,7 +97,7 @@ namespace bgl
 			std::string_view geomSrc   = c_GeomSrc;
 		};
 
-		// Order MUST match idl::PsoType (idl/PsoType.h, generated from idl/src/PsoType.slang).
+		// Order MUST match idl::PsoType (idl/PsoType.h, generated from shaders/src/idl/PsoType.slang).
 		static constexpr std::array<PsoConfig, idl::c_PsoCount> c_Psos = { {
 			// kOpaque_StaticMesh_Null
 			{ c_NullPixelSrc, RasterCullMode::kBack, true, false },

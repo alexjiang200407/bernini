@@ -1,5 +1,3 @@
-// THIS IS A FILE GENERATED FROM BoneSample.slang. DO NOT EDIT MANUALLY
-
 // One bone's local pose in one frame of a clip, relative to its parent.
 //
 // Three float4s rather than a float3/quat/float3: a float3 field has no layout every backend agrees

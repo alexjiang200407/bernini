@@ -1,5 +1,3 @@
-// THIS IS A FILE GENERATED FROM Range.slang. DO NOT EDIT MANUALLY
-
 public interface IRange
 {
     public uint GetStart();

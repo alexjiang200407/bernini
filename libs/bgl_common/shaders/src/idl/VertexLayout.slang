@@ -1,5 +1,3 @@
-// THIS IS A FILE GENERATED FROM VertexLayout.slang. DO NOT EDIT MANUALLY
-
 public enum VertexSemantic
 {
     kPosition,

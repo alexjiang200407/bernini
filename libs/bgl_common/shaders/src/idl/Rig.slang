@@ -1,5 +1,3 @@
-// THIS IS A FILE GENERATED FROM Rig.slang. DO NOT EDIT MANUALLY
-
 import BoneSample;
 import Clip;
 import Range;

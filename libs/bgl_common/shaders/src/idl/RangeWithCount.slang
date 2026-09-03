@@ -1,5 +1,3 @@
-// THIS IS A FILE GENERATED FROM RangeWithCount.slang. DO NOT EDIT MANUALLY
-
 import Range;
 
 public struct RangeWithCount<T> : IRange

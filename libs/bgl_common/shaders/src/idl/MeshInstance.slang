@@ -1,5 +1,3 @@
-// THIS IS A FILE GENERATED FROM MeshInstance.slang. DO NOT EDIT MANUALLY
-
 import IPlayback;
 import RangeWithCount;
 import RawEntry;

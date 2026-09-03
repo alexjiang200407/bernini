@@ -249,7 +249,7 @@ just test [names...]              # build and run every test suite (or only the 
 just coverage [names...]          # macOS: build the coverage preset, run the suites instrumented, report; --diff [ref] names the added lines no test executed (--json for agents)
 just format <files...>            # clang-format in place (--check to verify only)
 just tidy [paths...]              # clang-tidy the naming rules (--changed for a diff, --fix to apply)
-just idl                          # regenerate the IDL C++ headers and Slang copies
+just idl                          # regenerate the IDL C++ headers
 just targets                      # list all CMake targets (+ --type EXECUTABLE, --json)
 just exes                         # resolve executable paths (--target NAME prints one, --json)
 just count                        # count source files and lines by language and by module (bgl, assetlib_cli, editor...), tests counted separately

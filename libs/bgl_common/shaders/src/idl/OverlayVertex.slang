@@ -1,5 +1,3 @@
-// THIS IS A FILE GENERATED FROM OverlayVertex.slang. DO NOT EDIT MANUALLY
-
 /**
  * One corner of an overlay triangle, as bgl::OverlayVertex hands it over: output pixels, a texture
  * coordinate, and an RGBA8 color (red in the low byte) that is sRGB-encoded and premultiplied.

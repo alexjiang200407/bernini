@@ -1,5 +1,3 @@
-// THIS IS A FILE GENERATED FROM SkinnedTableState.slang. DO NOT EDIT MANUALLY
-
 import ClipPlayback;
 
 // A crowd instance's playback record: SkinnedState's playback and no palette, because the pose it

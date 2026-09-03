@@ -1,5 +1,3 @@
-// THIS IS A FILE GENERATED FROM ISurfaceEnv.slang. DO NOT EDIT MANUALLY
-
 // What a surface is lit by, as the shading math reads it: three lookups and one resolution query.
 // The math is generic over this so it names no texture; the one implementation today samples
 // bindless cubes, and a renderer without them supplies its own.

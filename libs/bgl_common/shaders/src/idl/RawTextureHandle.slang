@@ -1,5 +1,3 @@
-// THIS IS A FILE GENERATED FROM RawTextureHandle.slang. DO NOT EDIT MANUALLY
-
 // A texture handle in the byte domain: the same eight bytes idl::TextureHandle occupies, with no
 // resource type declared.
 //

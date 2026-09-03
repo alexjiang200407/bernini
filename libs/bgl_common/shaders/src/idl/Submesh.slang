@@ -1,5 +1,3 @@
-// THIS IS A FILE GENERATED FROM Submesh.slang. DO NOT EDIT MANUALLY
-
 import Range;
 import RangeWithCount;
 import RawRange;
