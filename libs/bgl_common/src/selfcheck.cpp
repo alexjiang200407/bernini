@@ -10,6 +10,7 @@
 // The list is by hand because a header nothing includes is exactly the one that rots. Add a public
 // header, add it here.
 #include <bgl_common/Frustum.h>
+#include <bgl_common/PassScheduler.h>
 #include <bgl_common/ReflectedLayout.h>
 #include <bgl_common/SlangErrorChecker.h>
 #include <bgl_common/SlangReflection.h>

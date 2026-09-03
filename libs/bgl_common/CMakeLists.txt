@@ -167,3 +167,42 @@ foreach(DRIVER ${BGL_COMMON_WGSL_DRIVERS})
 	list(APPEND BGL_COMMON_WGSL_CHECKS "${DRIVER_OUT}")
 endforeach()
 add_custom_target(bgl_common_check_wgsl ALL DEPENDS ${BGL_COMMON_WGSL_CHECKS})
+
+# The tier's own suite: everything here is renderer-free by construction, so its cases need no
+# device and no golden image -- which is the point of testing them here rather than through a
+# renderer's suite, where a graphics device is created per case.
+if (BUILD_TESTS)
+	find_package(Catch2 CONFIG REQUIRED)
+
+	file(GLOB_RECURSE BGL_COMMON_TESTS_SOURCES CONFIGURE_DEPENDS
+		${CMAKE_CURRENT_SOURCE_DIR}/tests/*.cpp
+	)
+
+	add_executable(bgl_common_tests ${BGL_COMMON_TESTS_SOURCES})
+
+	target_include_directories(bgl_common_tests
+		PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/tests/src
+	)
+
+	target_link_libraries(bgl_common_tests
+		PRIVATE
+			bgl_common
+			Catch2::Catch2
+			Catch2::Catch2WithMain
+	)
+
+	target_precompile_headers(bgl_common_tests
+		PUBLIC  ${CMAKE_SOURCE_DIR}/PCH/pch.h
+		PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/tests/src/pch.h
+	)
+
+	set_target_properties(bgl_common_tests PROPERTIES
+		VS_DEBUGGER_WORKING_DIRECTORY "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}"
+	)
+
+	source_group(TREE "${CMAKE_CURRENT_SOURCE_DIR}/tests/src" PREFIX "Source Files"
+		FILES ${BGL_COMMON_TESTS_SOURCES})
+
+	enable_strict_compiler(bgl_common_tests)
+	enable_coverage(bgl_common_tests)
+endif()
