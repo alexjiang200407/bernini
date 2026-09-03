@@ -248,8 +248,8 @@ AnimationEditorWindow::BuildPropertiesColumn()
 	m_PlantFeet = new QCheckBox(QStringLiteral("Plant feet"), column);
 	m_PlantFeet->setChecked(false);
 	m_PlantFeet->setToolTip(QStringLiteral(
-		"Foot IK. Off, the clip plays as authored against the same ground, so the two can be "
-		"compared."));
+		"Foot planting: each leg solved onto the ground under it. Off, the clip plays as authored "
+		"against the same ground, so the two can be compared."));
 	connect(m_PlantFeet, &QCheckBox::toggled, this, [this] { UpdateGroundControls(); });
 	layout->addWidget(m_PlantFeet);
 
