@@ -1,5 +1,3 @@
-// THIS IS A FILE GENERATED FROM PsoType.slang. DO NOT EDIT MANUALLY
-
 public enum PsoType : uint32_t
 {
     kInvalid = uint32_t(-1),

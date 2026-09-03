@@ -1,5 +1,3 @@
-// THIS IS A FILE GENERATED FROM PbrMaterial.slang. DO NOT EDIT MANUALLY
-
 import RawTextureHandle;
 
 public struct PbrMaterial

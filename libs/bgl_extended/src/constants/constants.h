@@ -21,7 +21,7 @@ namespace bgl
 	constexpr std::string_view c_OutlineMaskName = "outlineMask"sv;
 
 	// Constants shared with the GPU (meshlet caps, instance counting-sort group
-	// sizes, ...) now live in the IDL module bgl/idl/src/Constants.slang and are
+	// sizes, ...) now live in the IDL module bgl_common/shaders/src/idl/Constants.slang and are
 	// generated into idl::c... (see idl/Constants.h). Use those directly.
 
 	/**

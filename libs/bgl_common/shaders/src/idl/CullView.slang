@@ -1,5 +1,3 @@
-// THIS IS A FILE GENERATED FROM CullView.slang. DO NOT EDIT MANUALLY
-
 /**
  * One view a cull test runs against: the camera today, a shadow cascade later.
  * Planes are normalized (normal, distance) with the positive half-space inside.

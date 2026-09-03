@@ -1,5 +1,3 @@
-// THIS IS A FILE GENERATED FROM IResolveInputs.slang. DO NOT EDIT MANUALLY
-
 // What the temporal resolve reads, as the math reads it: five lookups at a uv, every one at mip
 // zero, so the resolve takes no derivative and its driver can be compute. The resolve is generic
 // over this so it names no texture; the one implementation today is the pass's constant buffer of

@@ -1,5 +1,3 @@
-// THIS IS A FILE GENERATED FROM IPoseTables.slang. DO NOT EDIT MANUALLY
-
 import BoneSample;
 import IBonePalette;
 import Range;

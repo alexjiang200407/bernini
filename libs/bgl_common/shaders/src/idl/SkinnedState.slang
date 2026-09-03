@@ -1,5 +1,3 @@
-// THIS IS A FILE GENERATED FROM SkinnedState.slang. DO NOT EDIT MANUALLY
-
 import ClipPlayback;
 import Range;
 

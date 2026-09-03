@@ -1,5 +1,3 @@
-// THIS IS A FILE GENERATED FROM Meshlet.slang. DO NOT EDIT MANUALLY
-
 public struct Meshlet
 {
     public uint relativeVertexOffset; // Relative to the parent Mesh vertexSegment

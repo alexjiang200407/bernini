@@ -1,5 +1,3 @@
-// THIS IS A FILE GENERATED FROM LoosePbrMaterial.slang. DO NOT EDIT MANUALLY
-
 import RawTextureHandle;
 
 public enum PbrChannel

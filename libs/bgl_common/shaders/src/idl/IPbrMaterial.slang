@@ -1,5 +1,3 @@
-// THIS IS A FILE GENERATED FROM IPbrMaterial.slang. DO NOT EDIT MANUALLY
-
 public interface IPbrMaterial
 {
     static This Load(uint byteOffset);

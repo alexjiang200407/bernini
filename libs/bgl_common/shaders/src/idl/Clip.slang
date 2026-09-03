@@ -1,5 +1,3 @@
-// THIS IS A FILE GENERATED FROM Clip.slang. DO NOT EDIT MANUALLY
-
 // One playable clip, shared by both pose sources. `firstFrame` is where the clip's frame 0 sits in
 // the frame-major pool the reader addresses -- the rig's samples for a pose walk, its bone anim
 // table for a crowd instance -- so the three fields below mean the same thing to both, which is what

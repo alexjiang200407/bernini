@@ -7,7 +7,8 @@
 # file, not a judgement -- a header belongs here only if it names no binding type and reaches
 # nothing outside this closure, which is what bgl_common_selfcheck below enforces.
 
-# The IDL first: bgl_idl_generate must exist before anything below can depend on it.
+# The IDL first: bgl_idl_generate must exist before anything below can depend on it. Its Slang
+# modules live under shaders/src/idl with the rest of the shared tree; it generates only C++.
 add_subdirectory(idl)
 
 file(GLOB_RECURSE BGL_COMMON_SOURCES CONFIGURE_DEPENDS
@@ -88,7 +89,7 @@ add_custom_command(
 			"${CMAKE_CURRENT_SOURCE_DIR}/shaders/src"
 			"${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/shaders/src"
 	COMMAND ${CMAKE_COMMAND} -E touch "${BGL_COMMON_SHADER_STAMP}"
-	DEPENDS ${BGL_COMMON_SHADER_SOURCES} bgl_idl_generate
+	DEPENDS ${BGL_COMMON_SHADER_SOURCES}
 	COMMENT "Staging the shared Slang sources"
 	VERBATIM
 )
@@ -124,7 +125,7 @@ foreach(MODULE ${BGL_COMMON_SHADER_SOURCES})
 		OUTPUT  "${MODULE_OUT}"
 		COMMAND ${CMAKE_COMMAND} -E make_directory "${MODULE_OUT_DIR}"
 		COMMAND ${SLANG_EXECUTABLE} "${MODULE}" -I "${CMAKE_CURRENT_SOURCE_DIR}/shaders/src" -o "${MODULE_OUT}"
-		DEPENDS ${BGL_COMMON_SHADER_SOURCES} bgl_idl_generate
+		DEPENDS ${BGL_COMMON_SHADER_SOURCES}
 		COMMENT "shared-module check ${MODULE_REL}"
 		VERBATIM
 	)
@@ -159,7 +160,7 @@ foreach(DRIVER ${BGL_COMMON_WGSL_DRIVERS})
 		COMMAND ${CMAKE_COMMAND} -E make_directory "${CMAKE_CURRENT_BINARY_DIR}/wgsl_check"
 		COMMAND ${SLANG_EXECUTABLE} "${DRIVER}" -I "${CMAKE_CURRENT_SOURCE_DIR}/shaders/src"
 				-target wgsl -entry main -stage ${DRIVER_STAGE} -o "${DRIVER_OUT}"
-		DEPENDS "${DRIVER}" ${BGL_COMMON_SHADER_SOURCES} bgl_idl_generate
+		DEPENDS "${DRIVER}" ${BGL_COMMON_SHADER_SOURCES}
 		COMMENT "wgsl check ${DRIVER_NAME}"
 		VERBATIM
 	)

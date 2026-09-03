@@ -1,5 +1,3 @@
-// THIS IS A FILE GENERATED FROM ClipPlayback.slang. DO NOT EDIT MANUALLY
-
 import Entry;
 import Rig;
 
