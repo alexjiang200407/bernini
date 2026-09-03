@@ -38,9 +38,19 @@ source of truth; when this doc disagrees, trust the header, then fix this doc.
   execute in `AddPass` order. `Compile` builds a *last-writer* dependency edge (a pass depends on
   the most recent prior pass that wrote each resource it accesses) purely to drive culling — it
   does not reschedule. `ExecutionOrder()` returns the surviving passes in their original order.
+  Note the edge is taken for *every* access, a write included, so a write-after-write keeps the
+  earlier writer alive: the graph cannot tell an overwrite from an accumulation.
+
+  The edges, the culling and the order are `bgl::PassScheduler`, which addresses a pass by
+  index and never learns its name, queue, attachments or `exec`. `Compile` reduces each pass to a
+  `pinned` flag and its accesses as resolved names, hands those over, and maps the returned indices
+  back — so the resolution rules below stay this renderer's, and what is shared is the scheduling
+  any renderer above `bgl` would write the same way.
 
 * **Dead-pass culling from roots.** A pass is a *root* if it has a color/depth attachment, writes an
-  imported resource, or is pinned with `SetSideEffect`. Culling keeps the roots and everything
+  imported resource, or is pinned with `SetSideEffect`. All three reach the scheduler as one
+  `pinned` flag, because culling treats them identically and none of them can be named a tier down;
+  the graph decides which of its own reasons apply and the scheduler decides what survives. Culling keeps the roots and everything
   reachable backward through their dependencies; every other pass is dropped. A pass that only
   writes a *transient* (a name never imported) is not a root and is culled unless pinned — use
   `SetSideEffect(true)` to keep it. `WasCulled(name)` reports the outcome.
@@ -63,6 +73,11 @@ source of truth; when this doc disagrees, trust the header, then fix this doc.
   This is how multiple scenes/views populate one graph without colliding, and how one view holds
   several frustums' cull outputs under the same names. `ImportGlobalBuffer` skips the prefix
   entirely, so it is what every scope reaches through the bare-name step.
+
+  **The walk stays here, in the renderer.** It exists so one graph can hold several views and
+  frustums, which is this renderer's scene structure; a renderer with a different one wants a
+  different rule, so `Compile` resolves every name before the scheduler sees it and the scheduler
+  compares resolved strings only.
 
   The walk is **import-only**: `ResolveName` consults imported resources and nothing else, while
   `Compile` keys transients on the unresolved scoped name. A transient produced under one scope and
@@ -114,6 +129,7 @@ source of truth; when this doc disagrees, trust the header, then fix this doc.
 | `FrameGraph` | [fg/FrameGraph.h](libs/bgl_extended/src/fg/FrameGraph.h) | The graph: import resources, add passes, register queues, `Compile` then `Execute`. |
 | `PassDesc` | [fg/PassDesc.h](libs/bgl_extended/src/fg/PassDesc.h) | Fluent builder for one pass: name, queue, attachments, buffer/texture args, `exec` callback, side-effect pin. |
 | `PassContext` | [fg/PassDesc.h](libs/bgl_extended/src/fg/PassDesc.h) | Handed to `exec`; resolves the pass's declared names to physical handles and exposes its command list/queue. |
+| `PassScheduler` | [bgl_common/PassScheduler.h](libs/bgl_common/include/bgl_common/PassScheduler.h) | The dependency edges, the culling and the execution order, over passes reduced to `{pinned, accesses}` with their names already resolved. Held privately by `FrameGraph`. |
 
 ### Supporting types (POD / helpers)
 

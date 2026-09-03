@@ -3,6 +3,7 @@
 #include "cmd/CommandQueue.h"
 #include "debug/BufferPoisoner.h"
 #include "fg/PassDesc.h"
+#include <bgl_common/PassScheduler.h>
 #include <core/str/str.h>
 
 namespace bgl
@@ -149,8 +150,6 @@ namespace bgl
 			PassDesc               desc;
 			std::string            ns;
 			std::vector<ResAccess> accesses;
-			std::vector<int32_t>   deps;
-			bool                   kept = false;
 			PassBarriers           barriers;
 		};
 
@@ -210,8 +209,9 @@ namespace bgl
 		[[nodiscard]] bool
 		WritesImported(const PassNode& pass) const;
 
-		[[nodiscard]] const PassNode*
-		FindPass(std::string_view name) const;
+		// m_Passes.size() when there is no such pass.
+		[[nodiscard]] size_t
+		FindPassIndex(std::string_view name) const;
 
 		struct QueueBinding
 		{
@@ -222,9 +222,11 @@ namespace bgl
 		std::vector<PassNode>                      m_Passes;
 		core::str::unordered_str_map<ImportedRes>  m_Imported;
 		core::str::unordered_str_map<QueueBinding> m_Queues;
-		std::vector<size_t>                        m_Order;
-		std::string                                m_CurrentNamespace;
-		bool                                       m_Compiled = false;
+		// The edges, the culling and the order, over passes reduced to a resolved name and a
+		// write flag. It is rebuilt from m_Passes on every Compile, so its index is m_Passes'.
+		PassScheduler m_Scheduler;
+		std::string   m_CurrentNamespace;
+		bool          m_Compiled = false;
 		// Keyed on the resource, not on the name it was imported under: one FrameGraph serves
 		// every render target and the attachment names are shared constants, so a name says
 		// nothing about which resource was last left in that state.
