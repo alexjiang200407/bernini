@@ -33,6 +33,14 @@ namespace
 	constexpr unsigned int c_BaseColorGroup = 0;
 	constexpr unsigned int c_OrmGroup       = 1;
 	constexpr unsigned int c_NormalGroup    = 2;
+
+	/** A factor at the three decimals the sink's spin boxes hold. See docs/asset_standards.md. */
+	double
+	AtEditorPrecision(float factor)
+	{
+		constexpr auto c_Steps = 1000.0;
+		return std::round(static_cast<double>(factor) * c_Steps) / c_Steps;
+	}
 }
 
 QString
@@ -235,14 +243,14 @@ BuildImportedMaterialGraph(
 	factors["baseColorG"]   = material.baseColorFactor.g;
 	factors["baseColorB"]   = material.baseColorFactor.b;
 	factors["baseColorA"]   = material.baseColorFactor.a;
-	factors["metallic"]     = material.metallicFactor;
-	factors["roughness"]    = material.roughnessFactor;
-	factors["alphaCutoff"]  = material.alphaCutoff;
-	factors["transmission"] = material.transmissionFactor;
+	factors["metallic"]     = AtEditorPrecision(material.metallicFactor);
+	factors["roughness"]    = AtEditorPrecision(material.roughnessFactor);
+	factors["alphaCutoff"]  = AtEditorPrecision(material.alphaCutoff);
+	factors["transmission"] = AtEditorPrecision(material.transmissionFactor);
 	factors["specularR"]    = material.specularColorFactor.r;
 	factors["specularG"]    = material.specularColorFactor.g;
 	factors["specularB"]    = material.specularColorFactor.b;
-	factors["specular"]     = material.specularFactor;
+	factors["specular"]     = AtEditorPrecision(material.specularFactor);
 	factors["split"]        = QJsonArray{ false, splitOrm, false };
 	output->load(factors);
 

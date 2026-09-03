@@ -5,6 +5,7 @@
 #include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
 
+#include <QDoubleSpinBox>
 #include <QJsonDocument>
 #include <QJsonObject>
 
@@ -476,4 +477,52 @@ TEST_CASE("One map feeding two channels is placed once", "[materialimport][occlu
 	// Base colour, normal, metallic-roughness, occlusion, and the sink.
 	CHECK(graph["nodes"].toArray().size() == 5);
 	CHECK(graph["connections"].toArray().size() == 5);
+}
+
+TEST_CASE("An imported factor is snapped to what the board can hold", "[materialimport][precision]")
+{
+	// glTF carries more precision than the sink's three-decimal spin boxes can show. Left alone, the
+	// first person to touch one of those boxes rewrites the factor with a value nobody chose, and the
+	// material diffs on an edit that changed nothing.
+	auto imported            = assetlib::imp::BMaterialImport();
+	imported.roughnessFactor = 0.8585786f;
+	imported.metallicFactor  = 0.1234567f;
+	imported.specularFactor  = 0.9999996f;
+
+	const assetlib::BMaterial material = Import(imported, AllMaps());
+
+	CHECK(material.pbr.roughnessFactor == Catch::Approx(0.859f));
+	CHECK(material.pbr.metallicFactor == Catch::Approx(0.123f));
+	CHECK(material.pbr.specularFactor == Catch::Approx(1.0f));
+}
+
+TEST_CASE(
+	"An imported factor is one the editor's own spin box holds",
+	"[materialimport][precision]")
+{
+	// The property that keeps a material from diffing on an edit that changed nothing: every factor an
+	// import writes must already be a value the sink's spin box can represent, so showing it and
+	// setting it back reports the same number. A load/save round-trip was lossless before this too --
+	// what was not is a person touching the box, which reports back what it *displays*.
+	auto imported            = assetlib::imp::BMaterialImport();
+	imported.roughnessFactor = 0.8585786f;
+	imported.metallicFactor  = 0.1234567f;
+	imported.alphaMode       = assetlib::AlphaMode::kMask;
+	imported.alphaCutoff     = 0.4321098f;
+
+	const assetlib::BMaterial material = Import(imported, AllMaps());
+
+	// Built the way MakeFactorSpin builds the real one, so the two cannot drift apart unnoticed.
+	QDoubleSpinBox spin;
+	spin.setRange(0.0, 1.0);
+	spin.setDecimals(3);
+
+	const auto asShown = [&spin](float factor) {
+		spin.setValue(static_cast<double>(factor));
+		return static_cast<float>(spin.value());
+	};
+
+	CHECK(asShown(material.pbr.roughnessFactor) == material.pbr.roughnessFactor);
+	CHECK(asShown(material.pbr.metallicFactor) == material.pbr.metallicFactor);
+	CHECK(asShown(material.pbr.alphaCutoff) == material.pbr.alphaCutoff);
 }

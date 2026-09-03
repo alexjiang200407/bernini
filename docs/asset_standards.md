@@ -718,7 +718,7 @@ for each file before committing to the import. `editor::MaterialStems` turns tho
 default stems, and the writer is handed whatever the fields then hold rather than deriving them a
 second time — two copies of that rule is how a preview and a file come to disagree.
 
-Eight rules, each of which is a way to get this wrong:
+Nine rules, each of which is a way to get this wrong:
 
 * **PBR-ness is the absence of an extension, not the presence of `pbrMetallicRoughness`.** Metallic-
   roughness *is* glTF's shading model; tinygltf default-constructs the struct whether or not the file
@@ -777,6 +777,15 @@ Eight rules, each of which is a way to get this wrong:
 * **Materials cannot come across without textures.** They route at the extracted `.ktx2` files, so
   the box is disabled when *Import textures* is off. A material naming textures nothing wrote is the
   dangling reference that made an import produce meshes `gamelib`'s `AcquireMaterial` threw on.
+* **An imported factor is snapped to the three decimals the sink's spin boxes hold.** glTF carries
+  more precision than the board can show, so an unsnapped factor is one the editor cannot represent:
+  the first person to touch that spin box writes back what it *displays*, and the material diffs on
+  an edit that changed nothing — which is a merge conflict between two people who edited different
+  materials. Reading a `.bmaterial` deliberately does **not** round (`MaterialOutputNode::load` blocks
+  the spin boxes' signals for exactly that reason): an authored factor comes back as authored, and
+  only a fresh import carries precision nobody chose. This covers metallic, roughness, specular, the
+  alpha cutoff and transmission — every factor edited through a 3-decimal box. Base and specular
+  *colour* come from a colour picker at 8 bits per channel and are not snapped.
 * **Every `.bmaterial` is written before any submesh names one.** A failure part-way through therefore
   leaves a mesh naming only materials that exist, and the rollback removes the files this import wrote
   **by name** rather than taking the folder — the folder may be another import's as well, since each
