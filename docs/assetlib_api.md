@@ -136,7 +136,7 @@ is what a caller reaches for only when it holds bytes no store addresses, which 
 | `.rml` / `.rcss` / `.ttf` | Not containers — foreign kinds the UI runtime parses. Listed here only because the project stores and packs them. |
 | `.bsky` / `.benvl` / `.benv` | Backdrop; the lighting pair convolved from it; the few bytes naming both. [docs/envmaps.md](docs/envmaps.md) |
 | `.bimport` | One per copied source under `Authored/Meshes/`: the bindings and parameters an import was authored with, as text. What a stale cache entry re-cooks from. Its struct is [import_document.h](libs/assetlib/include/assetlib/import_document.h). |
-| `.bavatar` | One rig's authored half: the legs a foot-plant solve walks, by bone name. Found by convention from the `.bskel` (`avatarKeyFor`) rather than by anything naming it — the path is the attachment. Its struct is [avatar.h](libs/assetlib/include/assetlib/avatar.h). |
+| `.bavatar` | One rig's authored half: the legs a foot-plant solve walks, by bone name, and the clips it plants nothing in (`unplanted`). Found by convention from the `.bskel` (`avatarKeyFor`) rather than by anything naming it — the path is the attachment. Its struct is [avatar.h](libs/assetlib/include/assetlib/avatar.h). |
 | `.bpak` | The archive the rest are packed into — not a codec, since nothing references one. [pak.h](libs/assetlib/include/assetlib/pak.h). [docs/archives.md](docs/archives.md) |
 
 ### Operations

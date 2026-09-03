@@ -118,17 +118,26 @@ namespace
 		return set;
 	}
 
-	/** `solePoint` is the sole's offset from the ankle in model units; the leg stores it ankle-local. */
+	/** What a case varies beyond the ground and the weight. */
+	struct PoseOptions
+	{
+		glm::mat4 world      = glm::mat4(1.0f);
+		glm::vec3 solePoint  = c_SolePoint;  // the sole's offset from the ankle, model units
+		glm::vec3 soleNormal = c_SoleNormal;
+		float     rootScale  = 1.0f;
+		bool      plantFeet  = true;
+	};
+
 	bgl::FootPlantDesc
-	MakeLeg(uint8_t weight, const glm::vec3& solePoint = c_SolePoint, float rootScale = 1.0f)
+	MakeLeg(uint8_t weight, const PoseOptions& options = {})
 	{
 		auto leg       = bgl::FootPlantLegDesc();
 		leg.hip        = c_Hip;
 		leg.knee       = c_Knee;
 		leg.ankle      = c_Ankle;
 		leg.toe        = c_Toe;
-		leg.solePoint  = solePoint / rootScale;
-		leg.soleNormal = c_SoleNormal;
+		leg.solePoint  = options.solePoint / options.rootScale;
+		leg.soleNormal = options.soleNormal;
 
 		auto plant         = bgl::FootPlantDesc();
 		plant.legs         = { leg };
@@ -198,7 +207,8 @@ namespace
 		}
 
 		/** Where the sole's contact point ends up, in the rig's model space. */
-		glm::vec3 solePoint = c_SolePoint;
+		glm::vec3 solePoint  = c_SolePoint;
+		glm::vec3 soleNormal = c_SoleNormal;
 
 		[[nodiscard]] glm::vec3
 		Sole() const
@@ -211,17 +221,12 @@ namespace
 		SoleNormal() const
 		{
 			return glm::normalize(
-				palette.Apply(c_Ankle, c_Bind[c_Ankle] + solePoint + c_SoleNormal) - Sole());
+				palette.Apply(c_Ankle, c_Bind[c_Ankle] + solePoint + soleNormal) - Sole());
 		}
 	};
 
 	Posed
-	PoseLeg(
-		const bgl::GroundPlaneDesc& ground,
-		uint8_t                     weight,
-		const glm::mat4&            world     = glm::mat4(1.0f),
-		const glm::vec3&            solePoint = c_SolePoint,
-		float                       rootScale = 1.0f)
+	PoseLeg(const bgl::GroundPlaneDesc& ground, uint8_t weight, const PoseOptions& options = {})
 	{
 		auto opts             = bgl::GraphicsOptions();
 		opts.shaderCacheDir   = bgl::test::ShaderCacheDir();
@@ -249,6 +254,7 @@ namespace
 
 		auto scene = gfx->CreateScene(sceneDesc);
 		scene->SetGround(ground);
+		scene->SetFootPlanting(options.plantFeet);
 
 		auto view = gfx->CreateSceneView(scene, 4);
 		bgl::test::ApplyEnvironment(scene.Get(), view.Get());
@@ -257,9 +263,9 @@ namespace
 			bgl::PbrMaterialDesc()) } };
 
 		const bgl::RigHandle rig = scene->AddRig(
-			MakeLegRig(rootScale),
-			MakeStillClip(rootScale),
-			MakeLeg(weight, solePoint, rootScale));
+			MakeLegRig(options.rootScale),
+			MakeStillClip(options.rootScale),
+			MakeLeg(weight, options));
 		REQUIRE(rig.IsValid());
 
 		const auto geom = scene->AddSkinnedMeshGeom(
@@ -275,16 +281,18 @@ namespace
 
 		// rate 0, so the clip holds frame 0 and the clock cannot move the pose between the two
 		// palettes -- the solve is then the only thing that differs from the bind pose.
-		const auto instance = view->CreateSkinnedMeshInstance(geom, world, { 0, 0.0f, 0.0f });
+		const auto instance =
+			view->CreateSkinnedMeshInstance(geom, options.world, { 0, 0.0f, 0.0f });
 
 		auto job     = bgl::RenderJob();
 		job.view     = view;
 		job.viewport = bgl::Viewport(64.0f, 64.0f);
 		gfx->DrawFrame(target, job);
 
-		auto posed      = Posed();
-		posed.solePoint = solePoint;
-		posed.palette   = bgl::test::ReadPalette(
+		auto posed       = Posed();
+		posed.solePoint  = options.solePoint;
+		posed.soleNormal = options.soleNormal;
+		posed.palette    = bgl::test::ReadPalette(
 			gfxBase,
 			viewRaw,
 			bgl::test::PaletteBaseOf(viewRaw, instance),
@@ -354,7 +362,7 @@ TEST_CASE("a planted foot meets the ground under it", "[skinned][pose][plant][re
 TEST_CASE("a rig authored in centimetres plants the same foot", "[skinned][pose][plant][render]")
 {
 	const Posed metres      = PoseLeg(c_Flat, 255);
-	const Posed centimetres = PoseLeg(c_Flat, 255, glm::mat4(1.0f), c_SolePoint, 0.01f);
+	const Posed centimetres = PoseLeg(c_Flat, 255, { .rootScale = 0.01f });
 
 	bgl::test::CheckNear(centimetres.Sole(), glm::vec3(0.0f));
 	CHECK(centimetres.Bone(c_Ankle).y == Catch::Approx(c_FootHeight).margin(1e-4));
@@ -368,7 +376,7 @@ TEST_CASE("a rig authored in centimetres plants the same foot", "[skinned][pose]
 
 TEST_CASE("a planted foot turns onto the slope it stands on", "[skinned][pose][plant][render]")
 {
-	SECTION("the sole normal comes onto the ground normal, and the sole stays on the plane")
+	SECTION("a flat sole comes onto the ground normal, and stays on the plane")
 	{
 		const float radians = glm::radians(15.0f);
 		const auto  normal  = glm::vec3(std::sin(radians), std::cos(radians), 0.0f);
@@ -382,6 +390,38 @@ TEST_CASE("a planted foot turns onto the slope it stands on", "[skinned][pose][p
 		CHECK(glm::dot(posed.Sole(), normal) == Catch::Approx(0.0f).margin(1e-4));
 	}
 
+	SECTION("a foot posed on its toe keeps its heel up: the turn is the slope's, not the sole's")
+	{
+		// The Coyote's Success stands one foot heel-up 28 degrees. A tilt that brought the sole
+		// onto the ground forced it flat on level ground, where the plant should change nothing.
+		const float heel = glm::radians(20.0f);
+		const auto  toe =
+			PoseOptions{ .soleNormal = glm::vec3(-std::sin(heel), std::cos(heel), 0.0f) };
+
+		const Posed level = PoseLeg(c_Flat, 255, toe);
+		bgl::test::CheckNear(level.SoleNormal(), toe.soleNormal);
+
+		// It lands on its lowest point -- the sole plane under the heel or under the toe -- and not
+		// on the plane's centre, which would put the low end of the foot through the floor.
+		const auto onSole = [&level](const glm::vec3& joint) {
+			return joint - glm::dot(joint - level.Sole(), level.SoleNormal()) * level.SoleNormal();
+		};
+		const float heelY = onSole(level.Bone(c_Ankle)).y;
+		const float ballY = onSole(level.Bone(c_Toe)).y;
+		CHECK(std::min(heelY, ballY) == Catch::Approx(0.0f).margin(1e-4));
+		CHECK(std::max(heelY, ballY) > 0.01f);
+
+		// On a slope the heel comes up by the slope on top of what the animator gave it.
+		const float radians = glm::radians(15.0f);
+		const auto  normal  = glm::vec3(std::sin(radians), std::cos(radians), 0.0f);
+		const auto  slope   = bgl::GroundPlaneDesc{ glm::vec3(0.0f), normal };
+
+		const Posed sloped = PoseLeg(slope, 255, toe);
+		const float turned =
+			std::acos(std::clamp(glm::dot(sloped.SoleNormal(), level.SoleNormal()), -1.0f, 1.0f));
+		CHECK(turned == Catch::Approx(radians).margin(1e-3));
+	}
+
 	SECTION("past thirty degrees the ankle stops turning")
 	{
 		// The sole point sits on the ankle joint and the plane passes through it, so the position
@@ -392,7 +432,7 @@ TEST_CASE("a planted foot turns onto the slope it stands on", "[skinned][pose][p
 		const auto  normal  = glm::vec3(std::sin(radians), std::cos(radians), 0.0f);
 		const auto  slope   = bgl::GroundPlaneDesc{ glm::vec3(0.0f), normal };
 
-		const Posed posed = PoseLeg(slope, 255, glm::mat4(1.0f), glm::vec3(0.0f));
+		const Posed posed = PoseLeg(slope, 255, { .solePoint = glm::vec3(0.0f) });
 		bgl::test::CheckNear(posed.Bone(c_Ankle), c_Bind[c_Ankle]);
 
 		const float turned =
@@ -403,6 +443,19 @@ TEST_CASE("a planted foot turns onto the slope it stands on", "[skinned][pose][p
 		const float shortfall =
 			std::acos(std::clamp(glm::dot(posed.SoleNormal(), normal), -1.0f, 1.0f));
 		CHECK(shortfall == Catch::Approx(radians - bgl::idl::cSoleClampRadians).margin(1e-3));
+	}
+}
+
+TEST_CASE(
+	"with planting off a rig with legs poses as one without",
+	"[skinned][pose][plant][render]")
+{
+	const Posed off = PoseLeg(c_Flat, 255, { .plantFeet = false });
+
+	for (uint32_t bone = 0; bone < c_Bones; ++bone)
+	{
+		INFO("bone " << bone);
+		bgl::test::CheckNear(off.Bone(bone), c_Bind[bone]);
 	}
 }
 
@@ -429,7 +482,7 @@ TEST_CASE(
 	const auto      world  = glm::translate(glm::mat4(1.0f), glm::vec3(0.0f, c_Lift, 0.0f));
 
 	const Posed posed = PoseLeg(c_Flat, 255);
-	const Posed moved = PoseLeg(c_Flat, 255, world);
+	const Posed moved = PoseLeg(c_Flat, 255, { .world = world });
 
 	// A pass that sampled the ground in the rig's own space would put both soles in the same place.
 	CHECK(posed.Sole().y == Catch::Approx(0.0f).margin(1e-4));

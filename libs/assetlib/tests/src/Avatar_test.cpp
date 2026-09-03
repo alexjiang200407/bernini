@@ -91,6 +91,16 @@ TEST_CASE("An avatar round-trips through its codec", "[avatar]")
 		CHECK(Parse(text).legs.empty());
 	}
 
+	SECTION("the unplanted clips round-trip, and are absent from a document naming none")
+	{
+		auto listed      = MakeAvatar();
+		listed.unplanted = { "Jump_Up", "Fall" };
+		CHECK(Parse(TextOf(listed)) == listed);
+
+		// An exception to a rule, so a document listing none does not carry the key.
+		CHECK_THAT(TextOf(MakeAvatar()), !Catch::Matchers::ContainsSubstring("unplanted"));
+	}
+
 	SECTION("keys a reader does not know survive a save")
 	{
 		// The whole reason this is text: a newer branch authoring a bone mask must not have it
@@ -114,13 +124,17 @@ TEST_CASE("An avatar refuses a document it could not act on", "[avatar]")
 	CHECK_THROWS(Parse(R"({"legs":[{"hip":"a","knee":"b","ankle":"c"}]})"));
 	CHECK_THROWS(Parse(R"({"legs":[{"hip":"a","knee":"b","ankle":"c","toe":""}]})"));
 	CHECK_THROWS(Parse(R"({"legs":[{"hip":"a","knee":"b","ankle":"c","toe":7}]})"));
+
+	CHECK_THROWS(Parse(R"({"legs":[],"unplanted":"Jump_Up"})"));
+	CHECK_THROWS(Parse(R"({"legs":[],"unplanted":[""]})"));
+	CHECK_THROWS(Parse(R"({"legs":[],"unplanted":[3]})"));
 }
 
 TEST_CASE("An avatar's names resolve to bone indices", "[avatar]")
 {
 	const Skeleton skeleton = MakeRig();
 
-	const std::vector<AvatarLegChain> chains = resolveLegChains(MakeAvatar(), skeleton);
+	const std::vector<AvatarLegChain> chains = resolveAvatar(MakeAvatar(), skeleton).legs;
 	REQUIRE(chains.size() == 1);
 	CHECK(chains[0] == AvatarLegChain{ 1, 2, 3, 4 });
 
@@ -130,7 +144,7 @@ TEST_CASE("An avatar's names resolve to bone indices", "[avatar]")
 		avatar.legs[0].ankle = "Dog R Foot";
 
 		CHECK_THROWS_WITH(
-			resolveLegChains(avatar, skeleton),
+			resolveAvatar(avatar, skeleton),
 			Catch::Matchers::ContainsSubstring("'Dog R Foot'"));
 	}
 
@@ -153,7 +167,7 @@ TEST_CASE("An avatar's names resolve to bone indices", "[avatar]")
 			reordered.bones.push_back(bone);
 		}
 
-		const std::vector<AvatarLegChain> now = resolveLegChains(MakeAvatar(), reordered);
+		const std::vector<AvatarLegChain> now = resolveAvatar(MakeAvatar(), reordered).legs;
 		REQUIRE(now.size() == 1);
 		CHECK(now[0] == AvatarLegChain{ 3, 2, 1, 0 });
 	}
@@ -168,7 +182,17 @@ TEST_CASE("An avatar's names resolve to bone indices", "[avatar]")
 		avatar.legs[0].ankle = "Dog L Toe";
 		avatar.legs[0].toe   = "Dog L Toe";
 
-		CHECK_NOTHROW(resolveLegChains(avatar, skeleton));
+		CHECK_NOTHROW(resolveAvatar(avatar, skeleton));
+	}
+
+	SECTION("the unplanted clips come through by name, unresolved")
+	{
+		// Clip names are the `.banim`'s, which the skeleton knows nothing about; the plant
+		// matches them when it measures.
+		auto avatar      = MakeAvatar();
+		avatar.unplanted = { "Jump_Up", "Fall" };
+
+		CHECK(resolveAvatar(avatar, skeleton).unplanted == avatar.unplanted);
 	}
 }
 
@@ -206,7 +230,7 @@ TEST_CASE("describe(Avatar) resolves each authored name against the rig", "[avat
 	CHECK_THAT(text, Catch::Matchers::ContainsSubstring("legs         2"));
 	CHECK_THAT(text, Catch::Matchers::ContainsSubstring("'Dog L Foot' [3]"));
 
-	// Reported rather than thrown, unlike resolveLegChains: describe exists to show a person which
+	// Reported rather than thrown, unlike resolveAvatar: describe exists to show a person which
 	// names went bad, so a rig re-exported with one joint renamed still prints the other three.
 	CHECK_THAT(text, Catch::Matchers::ContainsSubstring("'Dog R Foot' NOT IN THE SKELETON"));
 

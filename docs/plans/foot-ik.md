@@ -106,6 +106,9 @@ task that lands the solve.
   slack bound (a seated rig plants nothing), and a foot's own floor counts only within a spread of
   it (`c_PlantFloorSpread`, 5 cm): the Dog's `Jump_Up` holds a knee up with the foot 8 cm above
   the other, and that foot is up on purpose.
+  *The per-clip override this ADR reserved is now real (2026-09-03):* the avatar's `unplanted`
+  list. Airborne clips are the case: `groundClips` rests a jump or a fall on the foot that hangs
+  lowest, which then reads as standing. Both project rigs list `Jump_Up` and `Fall`.
 
 - **ADR-6 — The `prevTime` palette solves against the instance's one transform; the "time is the
   sole input" invariant holds.** An instance's transform is fixed for its lifetime: `ISceneView` has
@@ -141,6 +144,13 @@ task that lands the solve.
   skipping it is what makes a leg visibly snap straight); then the ankle is rotated to bring the sole
   normal onto the ground normal, clamped to 30° so a cliff edge does not break an ankle; every step
   scaled by the plant weight. Descendants of a solved bone follow it rigidly. No deviation.
+  *Amended (2026-09-03), reversing the ankle step:* the foot keeps the orientation the clip gave
+  it, and is turned by the ground's slope — the rotation taking model-space up onto the ground
+  normal — not onto the sole's. The Coyote's `Success` stands one foot heel-up 28°, and aligning
+  the sole forced it flat on level ground, where the plant should change nothing; the shin's turn
+  is absorbed at the ankle (carried in translation alone) rather than passed to the foot. The
+  clamp stands. On level ground nothing turns, which is what makes an A/B against the unplanted
+  clip honest.
 
 - **ADR-9 — The VAT tier gets none of it, permanently.** `ROADMAP.md:146` lists "no IK" among VAT's
   constraints and the reason is structural: that tier has no skeleton at runtime. A unit that needs

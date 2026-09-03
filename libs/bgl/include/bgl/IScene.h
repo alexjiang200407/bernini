@@ -299,6 +299,20 @@ namespace bgl
 		GetGround() const noexcept = 0;
 
 		/**
+		 * Whether skinned instances in this scene plant their feet at all. On by default; off, a rig
+		 * that authored legs poses exactly as one that did not -- the same clip against the same
+		 * ground with and without the solve, which is what judging the solve takes.
+		 *
+		 * Scene-wide like the ground, and like it a change no motion vector describes, so it moves
+		 * the temporal epoch.
+		 */
+		virtual void
+		SetFootPlanting(bool enabled) noexcept = 0;
+
+		[[nodiscard]] virtual bool
+		GetFootPlanting() const noexcept = 0;
+
+		/**
 		 * Whether `geom` still refers to live geometry in this scene.
 		 */
 		[[nodiscard]] virtual bool
