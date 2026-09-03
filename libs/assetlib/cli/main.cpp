@@ -25,6 +25,7 @@
 #include <assetlib_structs/magic.h>
 #include <core/err/util.h>
 #include <core/file/file.h>
+#include <core/str/str.h>
 #include <spdlog/spdlog.h>
 
 namespace
@@ -42,27 +43,6 @@ namespace
 			list += kind.extension;
 		}
 		return list;
-	}
-
-	std::string
-	formatBytes(uint64_t bytes)
-	{
-		constexpr std::array<const char*, 4> c_Units = { { "B", "KiB", "MiB", "GiB" } };
-
-		auto   value = static_cast<double>(bytes);
-		size_t unit  = 0;
-		while (value >= 1024.0 && unit + 1 < c_Units.size())
-		{
-			value /= 1024.0;
-			++unit;
-		}
-
-		char text[32] = {};
-		if (unit == 0)
-			std::snprintf(text, sizeof(text), "%.0f %s", value, c_Units[unit]);
-		else
-			std::snprintf(text, sizeof(text), "%.1f %s", value, c_Units[unit]);
-		return text;
 	}
 
 	// Reads a yes/no answer from stdin. A closed or piped-empty stdin answers no: the safe direction
@@ -1306,10 +1286,11 @@ main(int argc, char** argv)
 			}
 
 			// The listing is the command's output, so it goes to stdout rather than through the logger.
-			std::cout << "Unused (" << scan.unused.size() << ", " << formatBytes(scan.bytes)
-					  << "):\n";
+			std::cout << "Unused (" << scan.unused.size() << ", "
+					  << core::str::format_bytes(scan.bytes) << "):\n";
 			for (const assetlib::UnusedTexture& texture : scan.unused)
-				std::cout << "  " << texture.path << "  (" << formatBytes(texture.bytes) << ")\n";
+				std::cout << "  " << texture.path << "  (" << core::str::format_bytes(texture.bytes)
+						  << ")\n";
 			std::cout << std::flush;
 
 			if (pruneDryRun)
@@ -1318,9 +1299,10 @@ main(int argc, char** argv)
 				return 0;
 			}
 
-			if (!pruneYes && !confirm(
-								 "Delete " + std::to_string(scan.unused.size()) +
-								 " unused baked textures (" + formatBytes(scan.bytes) + ")?"))
+			if (!pruneYes &&
+			    !confirm(
+					"Delete " + std::to_string(scan.unused.size()) + " unused baked textures (" +
+					core::str::format_bytes(scan.bytes) + ")?"))
 			{
 				spdlog::info("Cancelled: nothing deleted.");
 				return 0;
@@ -1331,7 +1313,7 @@ main(int argc, char** argv)
 			spdlog::info(
 				"Deleted {} textures, reclaiming {}",
 				result.deleted,
-				formatBytes(result.bytes));
+				core::str::format_bytes(result.bytes));
 
 			if (!result.failed.empty())
 			{
