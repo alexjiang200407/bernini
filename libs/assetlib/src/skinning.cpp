@@ -770,10 +770,39 @@ namespace assetlib
 
 	std::vector<float>
 	measureClipFloors(
-		const AnimationSet&    animations,
-		std::span<const BMesh> meshes,
-		const Skeleton&        skeleton)
+		const AnimationSet&             animations,
+		std::span<const BMesh>          meshes,
+		const Skeleton&                 skeleton,
+		std::span<const AvatarLegChain> legs)
 	{
+		// A rig that authored legs stands on its soles, and the lowest vertex need not be one.
+		// No vertex is skinned on this path: a sole is one point through the ankle's pose.
+		if (!legs.empty())
+		{
+			auto                         out   = std::vector<float>(animations.clips.size(), 0.0f);
+			const std::vector<SolePlane> soles = solePlanes(meshes, skeleton, legs);
+
+			for (uint32_t clip = 0; clip < animations.clips.size(); ++clip)
+			{
+				auto lowest = std::numeric_limits<float>::max();
+				for (uint32_t frame = 0; frame < animations.clips[clip].frameCount; ++frame)
+				{
+					const std::vector<glm::mat4> pose =
+						poseModelTransforms(skeleton, animations, clip, frame);
+
+					for (size_t leg = 0; leg < legs.size(); ++leg)
+						lowest = std::min(
+							lowest,
+							(pose[legs[leg].ankle] * glm::vec4(soles[leg].point, 1.0f)).y);
+				}
+
+				if (lowest != std::numeric_limits<float>::max())
+					out[clip] = lowest;
+			}
+
+			return out;
+		}
+
 		auto out = std::vector<float>(animations.clips.size(), 0.0f);
 
 		auto entries = std::vector<SkinnedEntry>();
@@ -837,10 +866,11 @@ namespace assetlib
 
 	void
 	groundClips(
-		AnimationSet&              animations,
-		std::span<const BMesh>     meshes,
-		const Skeleton&            skeleton,
-		std::span<const ClipFloor> authored)
+		AnimationSet&                   animations,
+		std::span<const BMesh>          meshes,
+		const Skeleton&                 skeleton,
+		std::span<const ClipFloor>      authored,
+		std::span<const AvatarLegChain> legs)
 	{
 		ZoneScopedN("assetlib clip floors");
 		ZoneTextF(
@@ -853,7 +883,7 @@ namespace assetlib
 		auto floors = std::vector<float>(animations.clips.size(), 0.0f);
 		try
 		{
-			floors = measureClipFloors(animations, meshes, skeleton);
+			floors = measureClipFloors(animations, meshes, skeleton, legs);
 		}
 		catch (const std::exception&)
 		{

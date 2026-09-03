@@ -21,6 +21,7 @@
 #include "cache_io.h"
 #include "import_bounds.h"
 #include "mounted_io.h"
+#include "plant_bake.h"
 #include "ref_paths.h"
 #include "regen_group.h"
 
@@ -359,7 +360,7 @@ namespace assetlib
 		// somewhere the runtime will never draw it.
 		const std::span<const ClipFloor> authored = group.document->clipFloors;
 
-		groundClips(clips, std::span<const BMesh>(&mesh, 1), skeleton, authored);
+		groundClipsForRig(GetFiles(), clips, std::span<const BMesh>(&mesh, 1), skeleton, authored);
 
 		bakeBoundsForRig(*this, clips, normalizeRef(rigKey), skeleton, authored);
 		bakePosedBounds(clips, mesh, skeleton);

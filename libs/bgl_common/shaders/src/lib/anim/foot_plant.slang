@@ -31,6 +31,37 @@ public float3 SampleGround(float4 plane, float3 down, float3 point)
     return point + down * (distance / -dot(plane.xyz, down));
 }
 
+// How far the ground has moved away from the floor the clip was authored on, under `point`.
+//
+// This is what a plant applies, rather than the ground's absolute position. `groundClips` rests
+// every clip's lowest point on model `y = 0` -- measured, or the `.bimport`'s `clipFloor` for a clip
+// whose lowest frame is not its standing one -- so that plane is the floor the animator posed the
+// foot against, whatever the clip. Taking the departure from it makes a plant on flat ground at the
+// authored height an exact identity, where placing the contact on the ground absolutely corrects by
+// however far the contact sits above the clip's lowest point: the sole plane is fitted a
+// centimetre-scale band up from the lowest vertex, so that residual stretches every leg slightly on
+// ground the clip was already standing on. The standard solve is framed the same way -- it keeps a
+// foot's animated height relative to the root and adds the ground beneath it.
+// Two terms. The first puts the turned contact on the ground, which is what keeps the foot's lowest
+// point out of the floor on a slope. The second gives back the height the clip's own contact stood
+// above its own floor -- `authoredContact` is that contact with no turn applied -- which is the part
+// a plant must not discard: the sole plane is fitted a band up from the lowest vertex `groundClips`
+// rested on zero, so a foot standing in its clip already hovers a centimetre or so, and pinning it
+// flat is what stretches every leg on ground the clip was already standing on.
+//
+// On flat ground at the authored height the two cancel exactly and the plant is an identity.
+//
+// `authored` is that floor as a plane, which a caller that has lowered the rig must lower with it:
+// the floor is rigid with the pose, and a departure measured against a floor the rig has moved off
+// is one the rig then chases. Lowering by `d` along the ground's up `n` makes it
+// `float4(0, 1, 0, d * n.y)`. With that, the departure rises by `d * n` exactly as the joints fall,
+// so the target is invariant under the drop -- which is what lets a caller re-read a leg after
+// lowering and get the target it measured before.
+public float3 GroundDeparture(float4 plane, float4 authored, float3 down, float3 contact, float3 authoredContact)
+{
+    return (SampleGround(plane, down, contact) - contact) + (authoredContact - SampleGround(authored, down, authoredContact));
+}
+
 // A point projected onto the sole plane, the plane through `sole` with normal `soleUp`. All three
 // are ankle-relative.
 public float3 OnSolePlane(float3 point, float3 sole, float3 soleUp)
