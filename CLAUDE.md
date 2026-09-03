@@ -123,8 +123,9 @@ Overview of all the Frame Graph Passes
 
 **[Slang Shaders](./docs/slang_shaders.md)**
 
-The conventions a shader source follows: `Atomic<T>` and its accessors, the bindless buffer
-primitives, where a constant buffer may hold a resource, and how the build enforces them.
+The conventions a shader source follows: which tree a module belongs in and the three rules that keep
+shared math handle-free, `Atomic<T>` and its accessors, the bindless buffer primitives, where a constant
+buffer may hold a resource, and how the build enforces them.
 
 **[Shader Cache](./docs/shader_cache.md)**
 

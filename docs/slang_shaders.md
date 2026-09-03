@@ -15,7 +15,7 @@ libs/bgl_extended/shaders/src/        this renderer's own
 ```
 
 Both trees are staged into one `./shaders/src` beside the executable, `bgl_common`'s first, so an
-`import` never says which tree a module came from. Which tree a module belongs in is not a judgement:
+`import` never says which tree a module came from. Which tree a module belongs in is checked rather than asked for:
 `bgl_common_check_shaders` compiles every shared module with only the shared tree on the search path,
 and one that imports anything from the renderer — a `.Handle` wrapper, `lib.debug.dbg` — fails the
 build with `cannot open file`. The rule is the same one `bgl_common_selfcheck` holds the C++ to.
@@ -54,6 +54,38 @@ The `.dxil` it produces is validation output only, and nothing loads it. A Metal
 this step at all — `libs/bgl_extended/CMakeLists.txt:128-129` adds the `shaders` subdirectory under
 `RENDERER_BACKEND STREQUAL "DX12"` and nowhere else — so on macOS a bad shader surfaces when the
 pass that needs it is first built, not at compile time.
+
+## Shared math is handle-free: three rules for a module under `lib/`
+
+The shared tree is where the look is defined — the BRDF, the skinning, the vertex decode, the TAA
+resolve — and both renderers run one body of it so the image is the same on each. A module gets
+there by never naming what it reads from. Three rules, applied to any function a second renderer
+could want:
+
+1. **An interface never takes a binding type as a parameter.** A method that needs a sampler or a
+   buffer takes it from the implementation that holds it, not from the caller —
+   `IPbrMaterial::GetBaseColor(float2 uv)`, never `(float2 uv, SamplerState.Handle s)`. The
+   interface then says what is read, and the conforming struct alone says how.
+2. **Math functions take values; callers do the fetching.** A function in `lib/math` or `lib/anim`
+   takes the vectors, matrices and scalars it computes over and returns a value. Where it has to
+   read at positions it computes itself — the neighbourhood a resolve clamps to, the bones a pose
+   walk visits — it is generic over an interface of reads (`Resolve<I : IResolveInputs>`,
+   `SkinAt<P : IBonePalette>`), and every method on that interface is a lookup at a coordinate,
+   nothing more.
+3. **Buffer access lives in thin named accessors, never inline in the math.** The struct that
+   conforms — `TaaResolveData`, `SkinnedPose`, `SurfaceEnv` — is where a `.Handle` is dereferenced,
+   one line per read. So a renderer without bindless writes those lines and none of the math, and a
+   changed read changes in one place.
+
+The build holds a module to it mechanically: `bgl_common_check_shaders` fails a module that imports
+anything the shared tree does not hold, and `bgl_common_check_wgsl` fails one that does not lower
+to WGSL at the stage its driver names. What the rules add is the judgement the gates cannot make —
+a function that takes a `Texture2D.Handle` resolves fine and lowers fine, and is still the one
+thing the second renderer cannot call. And a module can pass both and still belong to this
+renderer: `lib/forward/common.slang` names no handle, and `ForwardVSOut` in it is the forward
+path's interpolant contract, `SV_Position` and a `MATERIAL` semantic included. What is shared is
+what every renderer computes; what one renderer's passes agree on between themselves stays with
+them, however clean it looks.
 
 ## Atomics: `Atomic<T>`, never a plain field + `InterlockedAdd`
 
