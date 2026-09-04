@@ -362,8 +362,8 @@ and portability.
   - [ ] DRED & Aftermath / Radeon GPU Detective, paired with monotonic breadcrumb markers.
 - [ ] Profiling
   - [x] Memory — bytes charged to a coarse subsystem tag, live and peak, reported beside the OS
-    footprint at the end of every run and as JSON for a tool. `assetlib`'s cook and the editor's
-    thumbnail cache are still untagged and are most of the residual. See
+    footprint when a run ends, and as JSON for a tool. `assetlib`'s cook and the editor's thumbnail
+    cache are still untagged and are most of the residual. See
     [docs/profiling.md](docs/profiling.md) § Memory.
   - [ ] GPU timestamp per pass with on-screen breakdown — FrameGraph feature, same as hashing. The
     RHI has no timestamp query at all today, so nothing in the tree can attribute a cost to one
