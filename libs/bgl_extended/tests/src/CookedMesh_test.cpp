@@ -1,9 +1,25 @@
 #include "util/TestEnvironment.h"
 #include "util/TestOptions.h"
+#include <array>
+#include <assetlib_structs/ImageData.h>
+#include <assetlib_structs/VertexLayout.h>
+#include <bgl/GeomHandle.h>
 #include <bgl/IGraphics.h>
+#include <bgl/IScene.h>
+#include <bgl/ISceneView.h>
+#include <bgl/MaterialHandle.h>
+#include <bgl/MeshInstanceHandle.h>
 #include <bgl/PreparedStaticMesh.h>
+#include <bgl/RenderJob.h>
+#include <bgl/types/SceneDesc.h>
 
 #include <catch2/catch_test_macros.hpp>
+#include <cstddef>
+#include <cstdint>
+#include <cstring>
+#include <set>
+#include <thread>
+#include <utility>
 
 namespace
 {

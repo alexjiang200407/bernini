@@ -20,11 +20,15 @@
 #include "Windows/LevelEditor/LevelEditorWindow.h"
 #include "Windows/MaterialEditor/MaterialEditorWindow.h"
 #include "Windows/RenderTarget/RenderTargetWindow.h"
+#include "main_window_ui.h"
 #include "util/follows_project.h"
 #include "util/frame_stats_text.h"
 #include "util/held_open_assets.h"
 #include "util/window_title.h"
+#include <array>
 #include <assetlib/Project.h>
+#include <assetlib/cancel.h>
+#include <assetlib/progress.h>
 
 #include <QActionGroup>
 #include <QMenuBar>
@@ -35,16 +39,35 @@
 #include <assetlib/texture_prune.h>
 #include <bgl/IGraphics.h>
 #include <core/err/util.h>
-#include <core/file/file.h>
 #include <core/platform/util.h>
 #include <core/settings/Settings.h>
 
 #include "util/editor_config.h"
+#include <cstddef>
+#include <cstdint>
+#include <exception>
+#include <filesystem>
+#include <functional>
 #include <gamelib/AssetManager.h>
 
 #include "Startup/startup_labels.h"
 
+#include <memory>
+#include <optional>
+#include <qaction.h>
+#include <qlist.h>
+#include <qlogging.h>
+#include <qnamespace.h>
+#include <qnumeric.h>
+#include <qobject.h>
+#include <qobjectdefs.h>
+#include <qsizepolicy.h>
+#include <qtypes.h>
+#include <qwidget.h>
+#include <string>
 #include <tracy/Tracy.hpp>
+#include <utility>
+#include <vector>
 
 MainWindow::MainWindow(
 	QWidget*                 parent,

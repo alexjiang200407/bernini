@@ -1,7 +1,10 @@
 #pragma once
 #include "types/Rect.h"
 #include "types/Viewport.h"
+#include <bgl/Viewport.h>
+#include <bgl_common/gassert.h>
 #include <core/containers/static_vector.h>
+#include <cstdint>
 
 namespace bgl
 {

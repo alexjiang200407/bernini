@@ -1,5 +1,8 @@
 #pragma once
 
+#include <cassert>
+#include <cstdint>
+#include <stdexcept>
 namespace core
 {
 	template <typename T>

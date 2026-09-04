@@ -1,11 +1,20 @@
 #include "util/qt_logging.h"
 
+#include <algorithm>
 #include <catch2/catch_test_macros.hpp>
 
 #include <QtLogging>
 
+#include <cstddef>
+#include <memory>
+#include <spdlog/common.h>
+#include <spdlog/logger.h>
 #include <spdlog/sinks/ringbuffer_sink.h>
 #include <spdlog/spdlog.h>
+#include <string_view>
+#include <thread>
+#include <utility>
+#include <vector>
 
 namespace
 {

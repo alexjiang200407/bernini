@@ -1,6 +1,7 @@
 #pragma once
 #include "metal_cpp.h"
 #include "resource/Buffer.h"
+#include <bgl_common/gassert.h>
 
 #include <bgl_common/MemoryTag.h>
 

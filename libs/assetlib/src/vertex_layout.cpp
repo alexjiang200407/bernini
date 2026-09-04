@@ -1,4 +1,6 @@
 #include <assetlib_structs/VertexLayout.h>
+#include <cstdint>
+#include <optional>
 
 namespace assetlib
 {

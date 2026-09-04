@@ -2,11 +2,16 @@
 
 #include <QWidget>
 
+#include "Render/Renderer.h"
 #include "util/follows_project.h"
 #include "util/held_open_assets.h"
 
-#include <bgl/IGraphics.h>
-#include <bgl/IScene.h>
+#include <cstdint>
+#include <filesystem>
+#include <memory>
+#include <qcontainerfwd.h>
+#include <qobject.h>
+#include <qtmetamacros.h>
 
 #include "Windows/MaterialEditor/MaterialGraphSet.h"
 #include "Windows/MaterialEditor/MaterialPreviewWindow.h"

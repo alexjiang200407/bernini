@@ -1,5 +1,23 @@
 #include "fg/FrameGraph.h"
+#include "cmd/CommandList.h"
+#include "cmd/CommandQueue.h"
+#include "fg/PassDesc.h"
+#include "resource/Buffer.h"
 #include "resource/ResourceManager.h"
+#include "resource/Texture.h"
+#include "types/Barrier.h"
+#include <bgl_common/gassert.h>
+#include <core/containers/slot_handle.h>
+#include <core/err/util.h>
+#include <cstddef>
+#include <cstdint>
+#include <optional>
+#include <stdexcept>
+#include <string_view>
+#include <unordered_map>
+#include <utility>
+#include <variant>
+#include <vector>
 
 namespace bgl
 {

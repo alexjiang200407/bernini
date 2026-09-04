@@ -4,6 +4,8 @@
 #include <QStringList>
 
 #include <assetlib_structs/BMaterial.h>
+#include <filesystem>
+#include <qcontainerfwd.h>
 
 #include "Async/BackgroundTask.h"
 

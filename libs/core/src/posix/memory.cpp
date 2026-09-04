@@ -1,6 +1,10 @@
 #include <core/platform/memory.h>
 
-#include <mach/mach.h>
+#include <cstdint>
+#include <mach/kern_return.h>
+#include <mach/mach_init.h>
+#include <mach/message.h>
+#include <mach/task.h>
 #include <mach/task_info.h>
 
 namespace core

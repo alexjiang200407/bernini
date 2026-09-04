@@ -3,6 +3,9 @@
 #include "pipeline/ComputePipeline.h"
 #include "pipeline/MeshletKernel.h"
 #include "pipeline/MeshletPipeline.h"
+#include <cstddef>
+#include <cstdint>
+#include <vector>
 
 namespace bgl
 {

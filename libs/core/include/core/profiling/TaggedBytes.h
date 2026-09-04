@@ -1,6 +1,9 @@
 #pragma once
 
 #include <core/profiling/memory.h>
+#include <cstddef>
+#include <cstdint>
+#include <utility>
 
 namespace core::profiling
 {

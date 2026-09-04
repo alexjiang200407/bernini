@@ -9,9 +9,30 @@
 # happens to have got there first. include-cleaner has no notion of a PCH, so this
 # is also the only setting under which it says anything true here.
 #
-# An include kept for a side effect rather than a symbol -- core/glm.h, which
-# configures glm before anything parses it -- is marked at the line with
-# `// IWYU pragma: keep`, which both tools honour.
+# An include kept for a side effect rather than a symbol is marked at the line with
+# `// IWYU pragma: keep`, which both tools honour. A header that exists to re-export
+# another gets `export` instead -- see libs/core/include/core/glm.h, where `keep` would
+# silence the tool and `export` tells it the truth.
 Diagnostics:
   UnusedIncludes: Strict
   MissingIncludes: Strict
+  Includes:
+    # glm only ever through <core/glm.h> -- the same rule, and the same string, as
+    # .clang-tidy's misc-include-cleaner.IgnoreHeaders. It has to be a full match: clangd
+    # anchors this regex against the whole resolved path, so `/glm/` matches nothing here
+    # even though clang-tidy, which searches rather than anchors, accepts it.
+    IgnoreHeader:
+      - ".*/glm/.*"
+      # ...and the two entry points, core/glm.h and bgl/glm.h -- see .clang-tidy.
+      - ".*/glm\\.h"
+      # RmlUi's sub-headers are not self-contained -- see .clang-tidy.
+      - ".*/RmlUi/.*"
+      # nlohmann declares in json_fwd.hpp and defines in json.hpp -- see .clang-tidy.
+      - ".*/nlohmann/.*"
+      # metal-cpp, reached through metal_cpp.h -- see .clang-tidy.
+      - ".*/metal_cpp\\.h"
+      - ".*/(Metal|Foundation|QuartzCore)/.*"
+      # The platform C library's internals -- see .clang-tidy for why.
+      - ".*/sys/_types/.*"
+      - ".*/sys/signal\\.h"
+      - ".*/mach/(arm|arm64|i386|x86_64)/.*"

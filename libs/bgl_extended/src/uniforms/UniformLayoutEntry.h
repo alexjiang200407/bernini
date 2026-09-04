@@ -1,6 +1,8 @@
 #pragma once
 #include <bgl_common/ReflectedLayout.h>
 #include <core/str/str.h>
+#include <cstdint>
+#include <memory>
 
 namespace bgl
 {

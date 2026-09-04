@@ -1,7 +1,10 @@
 #pragma once
 #include <assetlib/AssetStore.h>
 #include <bgl/IGraphics.h>
+#include <bgl/IRenderTarget.h>
 #include <gamelib/ui/UiRuntime.h>
+#include <memory>
+#include <string>
 
 namespace Rml
 {

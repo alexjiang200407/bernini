@@ -3,6 +3,8 @@
 #include <QObject>
 
 #include <catch2/catch_test_macros.hpp>
+#include <qcontainerfwd.h>
+#include <utility>
 
 namespace
 {

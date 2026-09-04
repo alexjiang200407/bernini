@@ -1,3 +1,4 @@
+#include <algorithm>
 #include <assetlib/AssetStore.h>
 #include <assetlib/asset_refs.h>
 #include <assetlib/avatar.h>
@@ -12,6 +13,17 @@
 #include <assetlib_structs/BMaterial.h>
 #include <assetlib_structs/BMesh.h>
 #include <core/file/file.h>
+#include <cstddef>
+#include <exception>
+#include <filesystem>
+#include <optional>
+#include <span>
+#include <stdexcept>
+#include <string>
+#include <string_view>
+#include <system_error>
+#include <utility>
+#include <vector>
 
 #include "fs_util.h"
 #include "ref_paths.h"

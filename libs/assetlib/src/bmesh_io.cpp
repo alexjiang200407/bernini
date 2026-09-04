@@ -1,3 +1,5 @@
+#include <algorithm>
+#include <array>
 #include <assetlib/AssetStore.h>
 #include <assetlib/bmesh.h>
 #include <assetlib/codecs.h>
@@ -15,9 +17,32 @@
 #include "fs_util.h"
 #include "progress_report.h"
 #include "ref_paths.h"
+#include <assetlib/cancel.h>
+#include <assetlib/progress.h>
+#include <assetlib/project_layout.h>
+#include <assetlib_structs/BMaterialImport.h>
+#include <assetlib_structs/Mesh.h>
+#include <assetlib_structs/Node.h>
+#include <assetlib_structs/VertexLayout.h>
 
+#include <cerrno>
 #include <core/file/file.h>
 #include <core/hash.h>
+#include <cstddef>
+#include <cstdint>
+#include <cstring>
+#include <filesystem>
+#include <format>
+#include <fstream>
+#include <iterator>
+#include <ranges>
+#include <set>
+#include <span>
+#include <stdexcept>
+#include <string>
+#include <string_view>
+#include <utility>
+#include <vector>
 
 #include "mounted_io.h"
 

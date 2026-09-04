@@ -1,6 +1,15 @@
+#include <atomic>
 #include <core/profiling/memory.h>
 
+#include <cstddef>
+#include <cstdint>
+#include <memory>
+#include <mutex>
+#include <string>
+#include <string_view>
 #include <tracy/Tracy.hpp>
+#include <utility>
+#include <vector>
 
 namespace core::profiling
 {

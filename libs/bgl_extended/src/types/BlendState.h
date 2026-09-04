@@ -1,5 +1,6 @@
 #pragma once
 #include "constants/constants.h"
+#include <cstdint>
 
 namespace bgl
 {

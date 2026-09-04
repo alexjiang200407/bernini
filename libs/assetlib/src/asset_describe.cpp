@@ -1,8 +1,8 @@
 #include "asset_describe.h"
+#include <array>
 #include <assetlib/avatar.h>
 #include <assetlib/bmesh.h>
 #include <assetlib/container_info.h>
-#include <assetlib/envmap.h>
 
 #include <assetlib/skinning.h>
 #include <assetlib_structs/Animation.h>
@@ -10,8 +10,18 @@
 #include <assetlib_structs/BMaterial.h>
 #include <assetlib_structs/BMesh.h>
 #include <assetlib_structs/Skeleton.h>
+#include <cstddef>
+#include <cstdint>
+#include <format>
+#include <optional>
+#include <string>
+#include <string_view>
 
 #include "mounted_io.h"
+#include <assetlib_structs/Mesh.h>
+#include <assetlib_structs/Node.h>
+#include <assetlib_structs/VertexLayout.h>
+#include <core/file/IFileSystem.h>
 
 namespace assetlib
 {

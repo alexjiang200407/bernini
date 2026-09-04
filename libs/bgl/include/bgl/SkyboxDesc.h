@@ -1,5 +1,6 @@
 #pragma once
 #include <bgl/TextureAssetHandle.h>
+#include <cstdint>
 
 namespace bgl
 {

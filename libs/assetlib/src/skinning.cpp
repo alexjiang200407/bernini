@@ -1,3 +1,5 @@
+#include <algorithm>
+#include <array>
 #include <assetlib/avatar.h>
 #include <assetlib/bmesh.h>
 #include <assetlib/skinning.h>
@@ -5,14 +7,30 @@
 #include <assetlib_structs/BMesh.h>
 #include <assetlib_structs/Bounds.h>
 #include <assetlib_structs/Mesh.h>
+#include <assetlib_structs/Node.h>
 #include <assetlib_structs/Skeleton.h>
 #include <assetlib_structs/VertexLayout.h>
 
+#include <cassert>
+#include <cmath>
 #include <core/err/util.h>
 #include <core/hash.h>
 #include <core/type_traits.h>
+#include <cstddef>
+#include <cstdint>
+#include <cstdlib>
+#include <cstring>
+#include <exception>
+#include <iterator>
+#include <limits>
+#include <numeric>
+#include <optional>
+#include <span>
 #include <spdlog/spdlog.h>
+#include <string>
 #include <tracy/Tracy.hpp>
+#include <utility>
+#include <vector>
 
 namespace assetlib
 {

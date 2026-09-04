@@ -1,6 +1,8 @@
 #pragma once
 
 #include <core/profiling/TaggedBytes.h>
+#include <cstddef>
+#include <cstdint>
 
 namespace bgl
 {

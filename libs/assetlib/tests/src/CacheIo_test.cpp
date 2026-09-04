@@ -1,14 +1,18 @@
+#include <array>
 #include <catch2/catch_test_macros.hpp>
-#include <catch2/matchers/catch_matchers.hpp>
-#include <catch2/matchers/catch_matchers_string.hpp>
 
 #include "CheckedFileReader.h"
 #include "cache_io.h"
 #include <assetlib/asset_import.h>
 #include <assetlib/import_document.h>
 #include <assetlib_structs/BMesh.h>
+#include <assetlib_structs/Mesh.h>
 #include <assetlib_structs/Node.h>
 #include <core/file/file.h>
+#include <cstddef>
+#include <cstdint>
+#include <filesystem>
+#include <vector>
 
 using namespace assetlib;
 

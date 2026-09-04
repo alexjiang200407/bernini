@@ -1,7 +1,29 @@
+#include <algorithm>
+#include <array>
 #include <assetlib/bmesh_gltf.h>
 #include <assetlib_structs/BMeshImport.h>
+#include <cmath>
+#include <cstddef>
+#include <cstdint>
+#include <cstring>
+#include <filesystem>
+#include <limits>
+#include <map>
+#include <span>
+#include <stdexcept>
+#include <string>
+#include <string_view>
+#include <system_error>
+#include <utility>
+#include <vector>
 
 #include "bmesh_texture.h"
+#include <assetlib/cancel.h>
+#include <assetlib_structs/BMaterial.h>
+#include <assetlib_structs/BMaterialImport.h>
+#include <assetlib_structs/Mesh.h>
+#include <assetlib_structs/Node.h>
+#include <assetlib_structs/VertexLayout.h>
 
 #define TINYGLTF_IMPLEMENTATION
 #define STB_IMAGE_IMPLEMENTATION

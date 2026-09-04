@@ -91,8 +91,18 @@ whoever edits it next.
 `misc-include-cleaner` quotes everything but the standard library, and
 [`scripts/util/include_style.py`](../scripts/util/include_style.py) turns `"bgl/IScene.h"` into
 `<bgl/IScene.h>` while leaving a subsystem's own `src/` header quoted. **Run `just format`
-afterwards** -- the bracket decides the sort order. Review the removals: an include kept for a side
-effect rather than a symbol, like `<core/glm.h>`, looks unused and needs `// IWYU pragma: keep`.
+afterwards** -- the bracket decides the sort order.
+
+Review the removals; they are the half no compiler checks. An include held for a side effect rather
+than a symbol looks unused: a subsystem `pch.h` entry is unused where it sits by construction and
+takes `// IWYU pragma: keep`. A header that exists to *re-export* another takes
+`// IWYU pragma: export` instead, which is the stronger claim -- `libs/core/include/core/glm.h`
+carries it, so `<core/glm.h>` counts as the header providing `glm::vec3` rather than merely being
+tolerated. Where even that is not enough, the header is excluded outright: an export reaches only
+what a header includes directly, so glm is additionally named in
+`misc-include-cleaner.IgnoreHeaders` and `.clangd`'s `IgnoreHeader` to stop a vendor `detail/`
+header being offered in `<core/glm.h>`'s place. Both take the same pattern only because it is
+written to full-match -- clangd anchors, clang-tidy searches.
 
 The same library backs clangd, configured in [`.clangd`](../.clangd), so the editor underlines what
 the hook would refuse.

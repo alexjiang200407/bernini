@@ -3,7 +3,15 @@
 #include <QMainWindow>
 
 #include <assetlib/Project.h>
+#include <filesystem>
+#include <functional>
 #include <gamelib/AssetManager.h>
+#include <memory>
+#include <qobject.h>
+#include <qobjectdefs.h>
+#include <qtmetamacros.h>
+#include <qwidget.h>
+#include <vector>
 
 #include "Async/BackgroundTask.h"
 #include "main_window_ui.h"

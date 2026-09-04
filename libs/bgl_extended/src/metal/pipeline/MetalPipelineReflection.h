@@ -1,7 +1,11 @@
 #pragma once
 #include "uniforms/UniformLayoutEntry.h"
+#include <bgl_common/ReflectedLayout.h>
 
 #include <core/str/str.h>
+#include <cstdint>
+#include <slang.h>
+#include <vector>
 
 namespace bgl
 {

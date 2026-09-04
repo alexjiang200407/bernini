@@ -1,6 +1,10 @@
 #include <assetlib_structs/BMeshImport.h>
+#include <assetlib_structs/Node.h>
 
 #include <catch2/catch_approx.hpp>
+#include <catch2/catch_test_macros.hpp>
+#include <cstdint>
+#include <vector>
 
 using namespace assetlib;
 using namespace assetlib::imp;

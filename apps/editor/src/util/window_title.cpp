@@ -1,6 +1,8 @@
 #include "util/window_title.h"
 
 #include <QStringList>
+#include <qobject.h>
+#include <qstringliteral.h>
 
 namespace editor
 {

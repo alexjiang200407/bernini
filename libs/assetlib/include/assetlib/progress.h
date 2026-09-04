@@ -1,5 +1,8 @@
 #pragma once
 
+#include <cstddef>
+#include <functional>
+#include <string_view>
 namespace assetlib
 {
 	/** What a cook is doing when it reports. One per kind of work a long operation splits into. */

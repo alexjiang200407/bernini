@@ -1,4 +1,7 @@
 #include <core/hash.h>
+#include <cstddef>
+#include <cstdint>
+#include <string_view>
 
 namespace core
 {

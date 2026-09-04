@@ -1,3 +1,4 @@
+#include "Thumbnails/StampedPixmapCache.h"
 #include "Thumbnails/TexturePreviewCache.h"
 
 #include "util/QtSupport.h"
@@ -5,6 +6,12 @@
 
 #include <QSignalSpy>
 #include <QTemporaryDir>
+#include <catch2/catch_test_macros.hpp>
+#include <qbuffer.h>
+#include <qdir.h>
+#include <qimage.h>
+#include <qnamespace.h>
+#include <qobject.h>
 
 namespace
 {

@@ -1,4 +1,7 @@
+#include <algorithm>
+#include <array>
 #include <assetlib/AssetCodec.h>
+#include <assetlib/asset_refs.h>
 #include <assetlib/codecs.h>
 
 #include <assetlib/avatar.h>
@@ -8,6 +11,13 @@
 #include <assetlib_structs/BMaterial.h>
 #include <assetlib_structs/BMesh.h>
 #include <assetlib_structs/Skeleton.h>
+#include <cassert>
+#include <cstddef>
+#include <cstdint>
+#include <optional>
+#include <span>
+#include <string_view>
+#include <tuple>
 
 namespace assetlib
 {

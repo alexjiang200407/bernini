@@ -4,12 +4,18 @@
 #include "gfx/GraphicsBase.h"
 #include "pipeline/ComputeKernel.h"
 #include "pipeline/ComputePipeline.h"
+#include "resource/Buffer.h"
 #include "resource/Readback.h"
 #include "resource/ResourceManager.h"
+#include "types/Barrier.h"
 #include "types/ComputeState.h"
+#include "types/QueueType.h"
 #include "util/TestOptions.h"
 #include <bgl/IGraphics.h>
 #include <catch2/catch_approx.hpp>
+#include <catch2/catch_message.hpp>
+#include <catch2/catch_test_macros.hpp>
+#include <cmath>
 
 namespace
 {

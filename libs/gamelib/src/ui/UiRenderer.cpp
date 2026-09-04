@@ -1,10 +1,31 @@
+#include <algorithm>
+#include <cstddef>
+#include <cstdint>
+#include <cstring>
+#include <exception>
 #include <gamelib/ui/UiRenderer.h>
 
 #include "ui/UiSystemInterface.h"
+#include <assetlib/AssetStore.h>
+#include <assetlib_structs/ImageData.h>
+#include <assetlib_structs/VkFormat.h>
+#include <bgl/IGraphics.h>
+#include <bgl/IOverlay.h>
+#include <bgl/IRenderTarget.h>
+#include <core/containers/fixed_buffer.h>
+#include <gamelib/ui/UiRuntime.h>
 
 #include <RmlUi/Core.h>
 #include <core/err/util.h>
+#include <memory>
+#include <span>
+#include <spdlog/spdlog.h>
+#include <string_view>
 #include <tracy/Tracy.hpp>
+#include <type_traits>
+#include <unordered_map>
+#include <utility>
+#include <vector>
 
 namespace game
 {

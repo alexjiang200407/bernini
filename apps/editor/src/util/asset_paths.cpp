@@ -4,6 +4,10 @@
 #include <QDir>
 #include <QFileInfo>
 #include <QRegularExpression>
+#include <qnamespace.h>
+#include <qobject.h>
+#include <qstringliteral.h>
+#include <qtypes.h>
 
 namespace editor
 {

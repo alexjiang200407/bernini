@@ -6,6 +6,8 @@
 #include <bgl/TextureAssetHandle.h>
 #include <core/containers/enum_set.h>
 #include <core/containers/slot_handle.h>
+#include <cstdint>
+#include <string>
 
 namespace bgl
 {

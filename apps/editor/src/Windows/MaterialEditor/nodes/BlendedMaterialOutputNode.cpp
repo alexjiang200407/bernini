@@ -1,9 +1,13 @@
 #include "Windows/MaterialEditor/nodes/BlendedMaterialOutputNode.h"
+#include "Windows/MaterialEditor/nodes/ChannelData.h"
+#include "Windows/MaterialEditor/nodes/MaterialOutputNode.h"
 
 #include <QDoubleSpinBox>
 #include <QFormLayout>
 #include <QJsonObject>
 #include <QSignalBlocker>
+#include <qstringliteral.h>
+#include <qtmetamacros.h>
 
 BlendedMaterialOutputNode::BlendedMaterialOutputNode() :
 	MaterialOutputNode(

@@ -2,12 +2,19 @@
 
 #include "Render/Renderer.h"
 #include "Windows/MaterialEditor/MaterialGraphModel.h"
+#include "Windows/MaterialEditor/MaterialGraphSet.h"
 #include "Windows/MaterialEditor/MaterialPreviewWindow.h"
+#include "Windows/MaterialEditor/nodes/ChannelData.h"
 #include "Windows/MaterialEditor/nodes/MaterialOutputNode.h"
+#include <bgl/LayerType.h>
 
 #include <QDebug>
 
 #include <assetlib_structs/BMaterial.h>
+#include <cstddef>
+#include <cstdint>
+#include <exception>
+#include <qlogging.h>
 
 namespace
 {

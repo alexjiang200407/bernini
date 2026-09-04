@@ -2,7 +2,7 @@
 
 #include <catch2/catch_test_macros.hpp>
 
-#include "util/QtSupport.h"
+#include "util/QtSupport.h"  // IWYU pragma: keep
 
 TEST_CASE("A checkout that names no instance titles its window as it always did", "[windowtitle]")
 {

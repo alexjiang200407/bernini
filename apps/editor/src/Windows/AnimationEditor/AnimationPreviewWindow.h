@@ -6,10 +6,22 @@
 #include "Windows/RenderTarget/RenderTargetWindow.h"
 #include "util/held_open_assets.h"
 
+#include <array>
 #include <bgl/GeomHandle.h>
 #include <bgl/InstanceDesc.h>
 #include <bgl/MaterialHandle.h>
 #include <bgl/MeshInstanceHandle.h>
+#include <cstdint>
+#include <filesystem>
+#include <qcontainerfwd.h>
+#include <qnamespace.h>
+#include <qobject.h>
+#include <qpoint.h>
+#include <qtmetamacros.h>
+#include <qwidget.h>
+#include <span>
+#include <string>
+#include <vector>
 
 namespace assetlib
 {

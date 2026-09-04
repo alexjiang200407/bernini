@@ -1,9 +1,12 @@
 #pragma once
 #include "metal_cpp.h"
+#include <bgl_common/gassert.h>
 
 #include "constants/constants.h"
 #include "convert_metal.h"
 #include "resource/Texture.h"
+#include "types/Format.h"
+#include "types/TextureDimension.h"
 
 #include <bgl_common/MemoryTag.h>
 

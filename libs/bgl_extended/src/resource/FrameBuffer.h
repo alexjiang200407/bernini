@@ -3,6 +3,7 @@
 #include "resource/Dsv.h"
 #include "resource/Rtv.h"
 #include <core/containers/static_vector.h>
+#include <utility>
 
 namespace bgl
 {

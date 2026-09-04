@@ -1,6 +1,8 @@
 #pragma once
 
 #include <QWidget>
+#include <qsize.h>
+#include <qtmetamacros.h>
 
 /**
  * A click-anywhere value bar, painted by hand. Everything is derived from the widget's current

@@ -8,9 +8,27 @@
 #include <assetlib/image_io.h>
 #include <assetlib_structs/ImageData.h>
 #include <bgl/IScene.h>
+#include <cstddef>
+#include <cstdint>
+#include <exception>
+#include <filesystem>
+#include <memory>
+#include <qlogging.h>
+#include <qnamespace.h>
+#include <qobject.h>
+#include <qpixmap.h>
+#include <qstringliteral.h>
+#include <qtmetamacros.h>
+#include <qwidget.h>
+#include <utility>
 
 #include "Render/Renderer.h"
+#include "Thumbnails/StampedPixmapCache.h"
 #include "Thumbnails/TexturePreviewCache.h"
+#include "Windows/MaterialEditor/nodes/ChannelData.h"
+#include <QtNodes/internal/Definitions.hpp>
+#include <QtNodes/internal/NodeData.hpp>
+#include <QtNodes/internal/NodeDelegateModel.hpp>
 
 namespace
 {

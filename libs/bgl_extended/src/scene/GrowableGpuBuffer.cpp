@@ -1,6 +1,16 @@
 #include "scene/GrowableGpuBuffer.h"
+#include "cmd/CommandList.h"
+#include "resource/Buffer.h"
+#include "resource/ResourceManager.h"
+#include "types/Barrier.h"
+#include <bgl_common/gassert.h>
 
+#include <algorithm>
 #include <core/err/util.h>
+#include <cstdint>
+#include <limits>
+#include <string>
+#include <utility>
 
 namespace bgl
 {

@@ -1,6 +1,12 @@
 #pragma once
+#include "device/Device.h"
 #include "pipeline/MeshletKernel.h"
 #include "resource/ResourceManager.h"
+#include "resource/Rtv.h"
+#include "resource/Srv.h"
+#include "resource/Texture.h"
+#include <cstdint>
+#include <spdlog/spdlog.h>
 
 namespace bgl
 {

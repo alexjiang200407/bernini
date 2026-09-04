@@ -1,5 +1,7 @@
 #pragma once
 
+#include <concepts>
+#include <type_traits>
 namespace core
 {
 	template <class E, class U = std::underlying_type_t<E>>

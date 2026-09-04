@@ -10,6 +10,12 @@
 #include <QDir>
 #include <QFile>
 #include <QTemporaryDir>
+#include <catch2/catch_test_macros.hpp>
+#include <filesystem>
+#include <qbuffer.h>
+#include <qobject.h>
+#include <qstringliteral.h>
+#include <string>
 
 // The Content Explorer's *Create Avatar*, lifted clear of its QMenu: which source offers it, where
 // the document lands, and that an avatar somebody already authored is never written over.

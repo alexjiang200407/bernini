@@ -1,5 +1,11 @@
 #include <catch2/catch_approx.hpp>
+#include <catch2/catch_test_macros.hpp>
 #include <core/settings/Settings.h>
+#include <cstdint>
+#include <filesystem>
+#include <fstream>
+#include <stdexcept>
+#include <string>
 
 namespace
 {

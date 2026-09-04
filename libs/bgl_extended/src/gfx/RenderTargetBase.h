@@ -4,8 +4,11 @@
 #include "resource/Rtv.h"
 #include "resource/Srv.h"
 #include "resource/Texture.h"
+#include <algorithm>
 #include <bgl/IGraphics.h>
 #include <bgl/IRenderTarget.h>
+#include <cmath>
+#include <cstdint>
 
 namespace bgl
 {

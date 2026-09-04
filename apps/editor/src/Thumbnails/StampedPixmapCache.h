@@ -5,6 +5,9 @@
 #include <QPixmap>
 #include <QSet>
 #include <QString>
+#include <optional>
+#include <qtmetamacros.h>
+#include <qtypes.h>
 
 /**
  * A pixmap per file path, kept only while the file still has the modification time it was made from,

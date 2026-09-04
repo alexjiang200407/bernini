@@ -8,7 +8,18 @@
 #include <QTemporaryDir>
 
 #include "StoreAt.h"
+#include <assetlib/AssetStore.h>
+#include <assetlib_structs/Mesh.h>
+#include <assetlib_structs/Node.h>
+#include <assetlib_structs/VertexLayout.h>
+#include <bgl/InstanceDesc.h>
 #include <catch2/catch_approx.hpp>
+#include <catch2/catch_test_macros.hpp>
+#include <cstdint>
+#include <filesystem>
+#include <gamelib/ClipInfo.h>
+#include <ios>
+#include <vector>
 
 // The transport glue behind the panel, pinned without a window: which mesh entries animate and
 // which stand static, the clip-table conversion, the timeline's tick mapping, and which pose source

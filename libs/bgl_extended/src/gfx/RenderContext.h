@@ -3,6 +3,7 @@
 #include "cmd/CommandList.h"
 #include "cmd/CommandQueue.h"
 #include "constants/constants.h"
+#include "debug/BufferPoisoner.h"
 #include "debug/DebugBuffer.h"
 #include "device/Device.h"
 #include "fg/FrameGraph.h"
@@ -20,8 +21,23 @@
 #include "passes/SkyboxPass.h"
 #include "passes/TaaResolvePass.h"
 #include "passes/TransparentSortPass.h"
+#include "resource/Readback.h"
 #include "resource/ResourceManager.h"
+#include "resource/Sampler.h"
+#include "types/Format.h"
+#include <array>
+#include <assetlib_structs/ImageData.h>
+#include <bgl/IGpuAssertionHandler.h>
 #include <bgl/IGraphics.h>
+#include <bgl/IOverlay.h>
+#include <bgl/IRenderTarget.h>
+#include <bgl/RenderJob.h>
+#include <core/ref/SharedRef.h>
+#include <cstdint>
+#include <optional>
+#include <string>
+#include <string_view>
+#include <vector>
 
 namespace bgl
 {

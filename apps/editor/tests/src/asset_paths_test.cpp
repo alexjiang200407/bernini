@@ -1,6 +1,7 @@
 #include "util/asset_paths.h"
 
 #include <catch2/catch_test_macros.hpp>
+#include <qstringliteral.h>
 
 TEST_CASE("A texture is named by its suffix alone, whatever the case", "[thumbnails]")
 {

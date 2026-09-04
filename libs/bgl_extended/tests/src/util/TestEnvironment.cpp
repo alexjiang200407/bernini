@@ -1,8 +1,12 @@
 #include "util/TestEnvironment.h"
 #include <assetlib/envmap.h>
+#include <bgl/IScene.h>
+#include <bgl/ISceneView.h>
+#include <bgl/TextureAssetHandle.h>
 
 #include <assetlib/AssetStore.h>
 #include <assetlib_structs/ImageData.h>
+#include <utility>
 
 namespace bgl::test
 {

@@ -1,4 +1,8 @@
+// <assetlib/codecs.h> carries the AssetCodec<T> specialisations that SaveAt's
+// `AssetCodecFor` constraint needs. A template specialisation is not a symbol reference
+// include-cleaner can see, so it reads as unused right up until the call stops matching.
 #include "util/mesh_drop.h"
+#include <assetlib/codecs.h>  // IWYU pragma: keep
 
 #include "StoreAt.h"
 
@@ -9,6 +13,14 @@
 #include <QMimeData>
 #include <QTemporaryDir>
 #include <QUrl>
+#include <catch2/catch_test_macros.hpp>
+#include <filesystem>
+#include <qbuffer.h>
+#include <qcontainerfwd.h>
+#include <qfileinfo.h>
+#include <qlist.h>
+#include <qobject.h>
+#include <qstringliteral.h>
 
 namespace
 {

@@ -1,4 +1,11 @@
 #include "util/GoldenImage.h"
+#include <algorithm>
+#include <cstddef>
+#include <cstdlib>
+#include <filesystem>
+#include <stdexcept>
+#include <string>
+#include <system_error>
 
 // STB_IMAGE_STATIC gives this TU its own internal-linkage copy of the decoder, avoiding a
 // duplicate-symbol clash with assetlib (which also compiles stb_image, via tinygltf).

@@ -2,6 +2,7 @@
 #include <bgl_common/idl/Entry.h>
 #include <bgl_common/idl/PsoType.h>
 #include <bgl_common/idl/RawEntry.h>
+#include <cstdint>
 
 namespace bgl
 {

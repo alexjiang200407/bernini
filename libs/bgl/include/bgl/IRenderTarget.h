@@ -2,6 +2,7 @@
 #include <bgl/api.h>
 #include <core/ref/Ref.h>
 #include <core/ref/SharedRef.h>
+#include <cstdint>
 
 namespace bgl
 {

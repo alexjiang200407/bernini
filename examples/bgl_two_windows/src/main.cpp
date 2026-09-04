@@ -1,7 +1,7 @@
 #include <DemoWindow.h>
-#include <SDL3/SDL.h>
-#include <bgl/bgl.h>
-#include <format>
+#include <SDL3/SDL_messagebox.h>
+#include <bgl/IGraphics.h>
+#include <cstdint>
 #include <stdexcept>
 
 int

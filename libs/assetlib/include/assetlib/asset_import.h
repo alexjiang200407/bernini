@@ -1,5 +1,9 @@
 #pragma once
 
+#include <filesystem>
+#include <span>
+#include <string>
+#include <vector>
 namespace assetlib
 {
 	struct BMesh;

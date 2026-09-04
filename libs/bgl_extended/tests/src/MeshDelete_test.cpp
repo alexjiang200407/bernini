@@ -4,11 +4,26 @@
 #include "gfx/GraphicsBase.h"
 #include "scene/Scene.h"
 #include "scene/SceneView.h"
+#include "types/QueueType.h"
 #include "util/TestOptions.h"
 #include "util/util.h"
+#include <array>
+#include <assetlib_structs/BMesh.h>
+#include <assetlib_structs/Node.h>
+#include <assetlib_structs/VertexLayout.h>
+#include <bgl/GeomType.h>
 #include <bgl/IGraphics.h>
+#include <bgl/IScene.h>
+#include <bgl/LayerType.h>
+#include <bgl/MaterialType.h>
+#include <bgl/types/SceneDesc.h>
 #include <bgl_common/idl/PsoType.h>
 #include <bgl_common/idl/idl.h>
+#include <catch2/catch_message.hpp>
+#include <catch2/catch_test_macros.hpp>
+#include <cstddef>
+#include <cstdint>
+#include <span>
 
 namespace
 {

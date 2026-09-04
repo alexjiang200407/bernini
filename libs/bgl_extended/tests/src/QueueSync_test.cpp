@@ -7,9 +7,16 @@
 #include "resource/ResourceManager.h"
 #include "resource/Rtv.h"
 #include "resource/Texture.h"
+#include "types/Format.h"
+#include "types/QueueType.h"
 #include "util/GpuValidation.h"
 #include "util/TestOptions.h"
 #include <bgl/IGraphics.h>
+#include <catch2/catch_test_macros.hpp>
+#include <chrono>
+#include <cstdint>
+#include <thread>
+#include <vector>
 
 namespace
 {

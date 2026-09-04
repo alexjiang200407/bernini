@@ -1,7 +1,24 @@
 #include "scene/TextureAssetStore.h"
 #include "cmd/CommandList.h"
+#include "resource/ResourceManager.h"
+#include "resource/Srv.h"
+#include "resource/Texture.h"
+#include "types/Barrier.h"
+#include "types/TextureDimension.h"
 #include "types/vk_format.h"
+#include "uniforms/DescriptorHandle.h"
+#include <assetlib_structs/ImageData.h>
+#include <assetlib_structs/VkFormat.h>
 #include <bgl/IScene.h>
+#include <bgl/TextureAssetHandle.h>
+#include <core/containers/fixed_buffer.h>
+#include <core/ref/SharedRef.h>
+#include <cstddef>
+#include <cstdint>
+#include <cstring>
+#include <string>
+#include <utility>
+#include <vector>
 
 namespace bgl
 {

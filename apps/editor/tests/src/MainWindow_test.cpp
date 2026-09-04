@@ -3,8 +3,9 @@
 #include "Windows/AnimationEditor/AnimationEditorWindow.h"
 #include "Windows/MaterialEditor/MaterialEditorWindow.h"
 #include "Windows/RenderTarget/RenderTargetWindow.h"
-#include "util/QtSupport.h"
+#include "util/QtSupport.h"  // IWYU pragma: keep
 #include "util/follows_project.h"
+#include <algorithm>
 #include <assetlib/Project.h>
 
 #include <QAction>
@@ -14,6 +15,14 @@
 #include <QTemporaryDir>
 #include <catch2/catch_test_macros.hpp>
 #include <core/file/file.h>
+#include <filesystem>
+#include <memory>
+#include <qlist.h>
+#include <qmainwindow.h>
+#include <qobject.h>
+#include <qstringliteral.h>
+#include <string>
+#include <vector>
 
 // What a viewport's `headless` flag buys: a whole editor -- device, renderer, three viewports --
 // standing in a test, so its construction and teardown are pinned rather than found by driving the

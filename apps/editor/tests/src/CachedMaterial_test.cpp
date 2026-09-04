@@ -1,9 +1,14 @@
 #include "Windows/MaterialEditor/CachedMaterial.h"
+#include <assetlib_structs/BMaterial.h>
 
 #include <QTemporaryDir>
 
 #include <assetlib/AssetStore.h>
 #include <catch2/catch_test_macros.hpp>
+#include <chrono>
+#include <filesystem>
+#include <qobject.h>
+#include <string>
 
 namespace
 {

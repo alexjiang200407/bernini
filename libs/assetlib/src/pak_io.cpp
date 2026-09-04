@@ -2,13 +2,32 @@
 #include "CheckedFileReader.h"
 #include "fs_util.h"
 #include "ref_paths.h"
+#include <algorithm>
+#include <array>
 #include <assetlib/codecs.h>  // requireInsideDataRoot
 #include <assetlib/pak.h>
 #include <assetlib_structs/magic.h>
+#include <atomic>
+#include <cerrno>
 #include <core/err/util.h>
+#include <core/file/IFileSystem.h>
 #include <core/io/ByteWriter.h>
 #include <core/math.h>
 #include <core/platform/util.h>
+#include <cstddef>
+#include <cstdint>
+#include <filesystem>
+#include <format>
+#include <fstream>
+#include <ios>
+#include <optional>
+#include <span>
+#include <stdexcept>
+#include <string>
+#include <string_view>
+#include <system_error>
+#include <utility>
+#include <vector>
 
 namespace assetlib
 {

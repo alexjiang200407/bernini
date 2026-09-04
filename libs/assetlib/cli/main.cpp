@@ -1,4 +1,6 @@
 #include <CLI/CLI.hpp>
+#include <algorithm>
+#include <array>
 #include <assetlib/AssetCodec.h>
 #include <assetlib/AssetStore.h>
 #include <assetlib/Project.h>
@@ -19,15 +21,30 @@
 #include <assetlib/rebake_bounds.h>
 #include <assetlib/skinning.h>
 #include <assetlib/texture_prune.h>
+#include <assetlib_structs/Animation.h>
 #include <assetlib_structs/BEnv.h>
 #include <assetlib_structs/BMesh.h>
 #include <assetlib_structs/BMeshImport.h>
-#include <assetlib_structs/magic.h>
 #include <core/err/util.h>
 #include <core/file/file.h>
 #include <core/profiling/MemoryReport.h>
 #include <core/str/str.h>
+#include <cstddef>
+#include <cstdint>
+#include <cstring>
+#include <exception>
+#include <filesystem>
+#include <format>
+#include <iostream>
+#include <optional>
+#include <ostream>
+#include <set>
 #include <spdlog/spdlog.h>
+#include <string>
+#include <string_view>
+#include <system_error>
+#include <utility>
+#include <vector>
 
 namespace
 {

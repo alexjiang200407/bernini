@@ -5,6 +5,12 @@
 #include <catch2/catch_session.hpp>
 #include <core/err/util.h>
 #include <core/profiling/MemoryReport.h>
+#include <cstddef>
+#include <filesystem>
+#include <optional>
+#include <qtenvironmentvariables.h>
+#include <string_view>
+#include <vector>
 
 namespace
 {

@@ -8,6 +8,11 @@
 #include <bgl/IGraphics.h>
 #include <bgl/IScene.h>
 #include <bgl/ISceneView.h>
+#include <catch2/catch_message.hpp>
+#include <catch2/catch_test_macros.hpp>
+#include <cstdint>
+#include <string>
+#include <vector>
 
 namespace
 {

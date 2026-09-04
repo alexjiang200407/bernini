@@ -1,9 +1,18 @@
 #include "Thumbnails/AssetThumbnailCache.h"
 #include "Mesh/mesh_load.h"
+#include <algorithm>
 #include <assetlib/bmesh.h>
 
 #include "Mesh/BMeshUtil.h"
 #include "Render/environment.h"
+#include "Thumbnails/StampedPixmapCache.h"
+#include <assetlib_structs/Mesh.h>
+#include <assetlib_structs/Node.h>
+#include <bgl/IScene.h>
+#include <bgl/ISceneView.h>
+#include <bgl/MeshInstanceHandle.h>
+#include <bgl/PreparedStaticMesh.h>
+#include <gamelib/AssetManager.h>
 
 #include <QDateTime>
 #include <QDebug>
@@ -19,8 +28,32 @@
 #include <bgl/Camera.h>
 #include <bgl/Viewport.h>
 
+#include <chrono>
+#include <cmath>
 #include <core/profiling/thread_name.h>
+#include <cstdint>
+#include <exception>
+#include <filesystem>
+#include <functional>
+#include <limits>
+#include <memory>
+#include <optional>
+#include <qcontainerfwd.h>
+#include <qlogging.h>
+#include <qnamespace.h>
+#include <qobject.h>
+#include <qobjectdefs.h>
+#include <qpixmap.h>
+#include <qtypes.h>
+#include <ratio>
+#include <stdexcept>
+#include <string>
+#include <string_view>
+#include <system_error>
 #include <tracy/Tracy.hpp>
+#include <unordered_map>
+#include <utility>
+#include <vector>
 
 namespace
 {

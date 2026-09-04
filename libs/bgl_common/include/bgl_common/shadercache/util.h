@@ -3,6 +3,14 @@
 
 #include <core/io/ByteReader.h>
 #include <core/io/ByteWriter.h>
+#include <cstddef>
+#include <cstdint>
+#include <filesystem>
+#include <span>
+#include <string>
+#include <string_view>
+#include <utility>
+#include <vector>
 
 // The parts of the persistent shader cache that hold whatever the backend stores in it: the
 // invalidation salt, the key hash, the reflection encoding and the atomic write. Each backend owns

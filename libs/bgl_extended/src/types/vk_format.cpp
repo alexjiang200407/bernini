@@ -1,4 +1,8 @@
 #include "types/vk_format.h"
+#include "types/Format.h"
+#include <assetlib_structs/VkFormat.h>
+#include <bgl_common/gassert.h>
+#include <cstdint>
 
 namespace bgl
 {

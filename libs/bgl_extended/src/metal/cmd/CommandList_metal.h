@@ -1,11 +1,24 @@
 #pragma once
 #include "metal_cpp.h"
+#include <core/ref/SharedRef.h>
 
 #include "cmd/CommandList.h"
+#include "resource/Buffer.h"
+#include "resource/Dsv.h"
+#include "resource/FrameBuffer.h"
+#include "resource/Readback.h"
 #include "resource/ResourceManager.h"
+#include "resource/Rtv.h"
+#include "resource/Texture.h"
+#include "types/ComputeState.h"
+#include "types/MeshletState.h"
+#include "types/QueueType.h"
 
 #include <core/ref/RefCounter.h>
-#include <core/ref/SharedRef.h>
+#include <cstddef>
+#include <cstdint>
+#include <span>
+#include <string_view>
 
 namespace bgl
 {

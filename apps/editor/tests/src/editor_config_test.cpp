@@ -2,7 +2,10 @@
 
 #include <catch2/catch_test_macros.hpp>
 
+#include <filesystem>
 #include <fstream>
+#include <string>
+#include <system_error>
 
 // The memory report is armed in main, before any window exists, so nothing about it can be driven
 // through MainWindow. What decides it is a free function taking a path, and these are that.

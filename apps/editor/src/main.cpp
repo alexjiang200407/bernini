@@ -5,7 +5,15 @@
 #include <core/log/log.h>
 #include <core/profiling/MemoryReport.h>
 
-#include <spdlog/spdlog.h>
+#include <exception>
+#include <filesystem>
+#include <optional>
+#include <qcoreapplication.h>
+#include <qlogging.h>
+#include <qobject.h>
+#include <qstringliteral.h>
+#include <spdlog/common.h>
+#include <string_view>
 #include <tracy/Tracy.hpp>
 
 #include "EditorStyle.h"

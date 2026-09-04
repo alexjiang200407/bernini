@@ -1,7 +1,17 @@
+#include <algorithm>
 #include <assetlib/envmap.h>
 #include <assetlib_structs/ImageData.h>
+#include <assetlib_structs/VkFormat.h>
+#include <core/containers/fixed_buffer.h>
 
 #include <catch2/catch_approx.hpp>
+#include <catch2/catch_message.hpp>
+#include <catch2/catch_test_macros.hpp>
+#include <cmath>
+#include <cstddef>
+#include <cstdint>
+#include <cstdlib>
+#include <stdexcept>
 
 using namespace assetlib;
 
