@@ -309,15 +309,14 @@ namespace
 
 TEST_CASE("a planted foot meets the ground under it", "[skinned][pose][plant][render]")
 {
-	SECTION("flat ground at the floor the clip was authored on moves nothing at all")
+	SECTION("a foot already standing on the floor is not moved")
 	{
 		const Posed posed = PoseLeg(c_Flat, 255);
 
-		// The plant applies the ground's *departure* from the clip's authored floor, and here there
-		// is none: the rig already stands on y = 0. So a fully weighted plant is an exact identity,
-		// not a correction that happens to be small. Placing the contact on the ground absolutely
-		// would instead move every leg by however far the sole plane sits above the clip's lowest
-		// point, which is the leg stretch this framing removes.
+		// The rig already stands on y = 0, which is where groundClips puts a clip's lowest sole, so
+		// the contact is on the ground before the solve runs and the solve has nothing to do. This
+		// is what a plant on a *grounded* clip costs: nothing. It used to cost a small leg stretch,
+		// because the floor was measured at the lowest vertex and the sole sits a band above it.
 		for (uint32_t bone = 0; bone < c_Bones; ++bone)
 		{
 			INFO("bone " << bone);
@@ -420,40 +419,15 @@ TEST_CASE("a planted foot turns onto the slope it stands on", "[skinned][pose][p
 		const Posed level = PoseLeg(c_Flat, 255, toe);
 		bgl::test::CheckNear(level.SoleNormal(), toe.soleNormal);
 
-		// On level ground at the authored floor the plant changes nothing, so the heel stays
-		// exactly as high as the animator left it -- the foot is not pulled flat, and not pulled
-		// down onto the floor either.
-		for (uint32_t bone = 0; bone < c_Bones; ++bone)
-		{
-			INFO("bone " << bone);
-			bgl::test::CheckNear(level.Bone(bone), c_Bind[bone]);
-		}
-
-		// Reaching for ground below it, the foot lands on its lowest point -- the sole plane under
-		// the heel or under the toe -- and not on the plane's centre, which would put the low end
-		// of the foot through the floor.
-		const auto low =
-			bgl::GroundPlaneDesc{ glm::vec3(0.0f, -0.2f, 0.0f), glm::vec3(0.0f, 1.0f, 0.0f) };
-		const Posed reaching = PoseLeg(low, 255, toe);
-		const auto  onSole   = [&reaching](const glm::vec3& joint) {
-			return joint -
-			       glm::dot(joint - reaching.Sole(), reaching.SoleNormal()) * reaching.SoleNormal();
-		};
-		const float heelY = onSole(reaching.Bone(c_Ankle)).y;
-		const float ballY = onSole(reaching.Bone(c_Toe)).y;
-
-		// Its lowest point comes down by the ground's departure from the authored floor -- 0.2 --
-		// and no further: a foot standing a little above its own floor in the clip keeps that
-		// clearance rather than being pinned flat, which is the whole of the departure framing.
-		// Measured off the level pose rather than written out, so the invariant is the assertion.
-		const auto onLevelSole = [&level](const glm::vec3& joint) {
+		// It lands on its lowest point -- the sole plane under the heel or under the toe -- and not
+		// on the plane's centre, which would put the low end of the foot through the floor.
+		const auto onSole = [&level](const glm::vec3& joint) {
 			return joint - glm::dot(joint - level.Sole(), level.SoleNormal()) * level.SoleNormal();
 		};
-		const float hover =
-			std::min(onLevelSole(level.Bone(c_Ankle)).y, onLevelSole(level.Bone(c_Toe)).y);
-
-		CHECK(std::min(heelY, ballY) == Catch::Approx(hover - 0.2f).margin(1e-3));
-		CHECK(std::max(heelY, ballY) > std::min(heelY, ballY) + 0.01f);
+		const float heelY = onSole(level.Bone(c_Ankle)).y;
+		const float ballY = onSole(level.Bone(c_Toe)).y;
+		CHECK(std::min(heelY, ballY) == Catch::Approx(0.0f).margin(1e-4));
+		CHECK(std::max(heelY, ballY) > 0.01f);
 
 		// On a slope the heel comes up by the slope on top of what the animator gave it.
 		const float radians = glm::radians(15.0f);
@@ -468,13 +442,14 @@ TEST_CASE("a planted foot turns onto the slope it stands on", "[skinned][pose][p
 
 	SECTION("past thirty degrees the ankle stops turning")
 	{
-		// The sole point sits on the ankle joint and the plane passes through it, so the position
-		// target is the joint itself and the chain does not move at all. What is left is the tilt
-		// alone, which is the only way to read the clamp off a palette: anywhere else the shin's own
-		// rotation is folded into the same number.
+		// The sole point sits on the ankle joint and the plane passes through it -- through the
+		// ankle's own bind, since a grounded rig stands its sole on the floor rather than its joint
+		// -- so the position target is the joint itself and the chain does not move at all. What is
+		// left is the tilt alone, which is the only way to read the clamp off a palette: anywhere
+		// else the shin's own rotation is folded into the same number.
 		const float radians = glm::radians(45.0f);
 		const auto  normal  = glm::vec3(std::sin(radians), std::cos(radians), 0.0f);
-		const auto  slope   = bgl::GroundPlaneDesc{ glm::vec3(0.0f), normal };
+		const auto  slope   = bgl::GroundPlaneDesc{ c_Bind[c_Ankle], normal };
 
 		const Posed posed = PoseLeg(slope, 255, { .solePoint = glm::vec3(0.0f) });
 		bgl::test::CheckNear(posed.Bone(c_Ankle), c_Bind[c_Ankle]);

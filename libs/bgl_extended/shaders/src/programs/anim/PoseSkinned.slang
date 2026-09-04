@@ -162,7 +162,6 @@ LegPose ReadLeg(
     uint index,
     float frames,
     float4 plane,
-    float4 authored,
     float3 down,
     uint paletteBase
 )
@@ -210,17 +209,7 @@ LegPose ReadLeg(
     let heel = OnSolePlane(float3(0.0, 0.0, 0.0), sole, soleUp);
     let ball = OnSolePlane(toe, sole, soleUp);
     let contact = pose.ankle + (dot(heel, plane.xyz) < dot(ball, plane.xyz) ? heel : ball);
-
-    // The same contact with no turn applied: where the clip itself put the foot down. The plant
-    // preserves its height above the authored floor, so the turn's own lift is not read as ground.
-    let soleFlat = TransformPoint(ankleModel, leg.solePoint.xyz) - pose.ankle;
-    let soleUpFlat = normalize(TransformDir(ankleModel, leg.soleNormal.xyz));
-    let toeFlat = float3(toeModel[0].w, toeModel[1].w, toeModel[2].w) - pose.ankle;
-    let heelFlat = OnSolePlane(float3(0.0, 0.0, 0.0), soleFlat, soleUpFlat);
-    let ballFlat = OnSolePlane(toeFlat, soleFlat, soleUpFlat);
-    let authoredContact = pose.ankle + (dot(heelFlat, plane.xyz) < dot(ballFlat, plane.xyz) ? heelFlat : ballFlat);
-
-    pose.target = lerp(pose.ankle, pose.ankle + GroundDeparture(plane, authored, down, contact, authoredContact), pose.weight);
+    pose.target = lerp(pose.ankle, pose.ankle + (SampleGround(plane, down, contact) - contact), pose.weight);
 
     // How far the rig must come down, along the ground's up, for this chain to reach: the smaller
     // root of |v + d*n| = reach, where v is hip-to-target and n the ground normal.
@@ -309,9 +298,6 @@ void PlantFeet(PoseTables tables, Rig rig, Clip clip, float frames, float4x4 mod
     }
     AllMemoryBarrierWithGroupSync();
 
-    // groundClips rests every clip's lowest point on model y = 0, so that plane is the floor the
-    // animator posed against and the one a plant measures departure from.
-    const float4 cAuthoredFloor = float4(0.0, 1.0, 0.0, 0.0);
     let plane = GroundPlaneInModel(gUniforms.groundNormal, gUniforms.groundPoint, modelToWorld);
     let down = normalize(TransformDir(AffineInverse(modelToWorld), float3(0.0, -1.0, 0.0)));
 
@@ -322,7 +308,7 @@ void PlantFeet(PoseTables tables, Rig rig, Clip clip, float frames, float4x4 mod
 
         // Measured before anything moves: how far the worst leg falls short is what the whole rig
         // has to come down by, and that cannot be known one leg at a time.
-        let reachOnly = ReadLeg(tables, rig, clip, leg, localIdx, frames, plane, cAuthoredFloor, down, paletteBase);
+        let reachOnly = ReadLeg(tables, rig, clip, leg, localIdx, frames, plane, down, paletteBase);
         InterlockedMax(gMaxDeficit, asuint(reachOnly.deficit));
     }
     AllMemoryBarrierWithGroupSync();
@@ -353,8 +339,7 @@ void PlantFeet(PoseTables tables, Rig rig, Clip clip, float frames, float4x4 mod
     {
         // Re-read rather than reuse: every joint moved in the drop, and so did the ground under the
         // ankle, so a target measured before it is a target for a rig that no longer exists.
-        let lowered = float4(0.0, 1.0, 0.0, drop * plane.y);
-        let pose = ReadLeg(tables, rig, clip, leg, localIdx, frames, plane, lowered, down, paletteBase);
+        let pose = ReadLeg(tables, rig, clip, leg, localIdx, frames, plane, down, paletteBase);
 
         let hipSlot = paletteBase + leg.hip * cFloat4sPerBone;
         let kneeSlot = paletteBase + leg.knee * cFloat4sPerBone;
