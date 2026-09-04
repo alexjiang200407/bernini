@@ -11,13 +11,26 @@ import idl.ClipPlayback;
 // frame it duplicates -- the clip holds still for one frame and runs slow by 1/(frameCount - 1).
 public float ClipFrames(Clip clip, ClipPlayback playback, float time)
 {
-    float frames = playback.phase + time * playback.rate * clip.sampleRate;
-    float count = float(clip.frameCount);
+    return ClipFramesAfter(clip, playback.phase, playback.rate, time);
+}
+
+// The intervals one cycle of a looping clip spans: `frameCount - 1`, for the reason above. Only
+// meaningful on a loop; a one-shot clamps rather than wraps.
+public float ClipCycle(Clip clip)
+{
+    return float(clip.frameCount) - 1.0;
+}
+
+// Where playback that sat at `phase` has reached `elapsed` seconds later, at `rate`. ClipFrames
+// measures from the clock's zero; a blend slot measures from its own reference time.
+public float ClipFramesAfter(Clip clip, float phase, float rate, float elapsed)
+{
+    float frames = phase + elapsed * rate * clip.sampleRate;
 
     if (clip.loop != 0)
     {
         // clip.loop is only ever set on a clip of more than one frame, so this cannot be zero.
-        float cycle = count - 1.0;
+        float cycle = ClipCycle(clip);
 
         frames = fmod(frames, cycle);
         if (frames < 0.0)
@@ -27,7 +40,7 @@ public float ClipFrames(Clip clip, ClipPlayback playback, float time)
     }
     else
     {
-        frames = clamp(frames, 0.0, count - 1.0);
+        frames = clamp(frames, 0.0, float(clip.frameCount) - 1.0);
     }
 
     return frames;
