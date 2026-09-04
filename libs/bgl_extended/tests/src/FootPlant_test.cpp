@@ -18,9 +18,11 @@
 #include <bgl/IGraphics.h>
 #include <bgl/MaterialHandle.h>
 #include <bgl/RigHandle.h>
+#include <bgl/types/FootIKDesc.h>
 #include <bgl/types/FootPlantDesc.h>
 #include <bgl/types/GroundPlaneDesc.h>
 #include <bgl_common/idl/Constants.h>
+#include <bgl_common/idl/FootIKLeg.h>
 #include <catch2/catch_approx.hpp>
 #include <catch2/catch_message.hpp>
 #include <catch2/catch_test_macros.hpp>
@@ -29,6 +31,8 @@
 #include <cstdint>
 #include <cstring>
 #include <format>
+#include <limits>
+#include <optional>
 #include <span>
 #include <vector>
 
@@ -256,15 +260,69 @@ namespace
 		}
 	};
 
-	Posed
-	PoseLeg(const bgl::GroundPlaneDesc& ground, uint8_t weight, const PoseOptions& options = {})
+	/** A device, a scene standing on `ground`, and a view, with the leg rig added as one geom. */
+	struct LegScene
+	{
+		bgl::GraphicsRef  gfx;
+		bgl::SceneRef     scene;
+		bgl::SceneViewRef view;
+		bgl::GeomHandle   geom;
+	};
+
+	LegScene
+	MakeLegScene(
+		const bgl::GroundPlaneDesc& ground,
+		uint8_t                     weight,
+		const PoseOptions&          options = {})
 	{
 		auto opts             = bgl::GraphicsOptions();
 		opts.shaderCacheDir   = bgl::test::ShaderCacheDir();
 		opts.enableDebugLayer = true;
 
-		auto gfx = bgl::CreateGraphics(opts);
-		REQUIRE(gfx != nullptr);
+		auto legScene = LegScene();
+		legScene.gfx  = bgl::CreateGraphics(opts);
+		REQUIRE(legScene.gfx != nullptr);
+
+		auto sceneDesc                        = bgl::SceneDesc();
+		sceneDesc.initialGeom                 = 4;
+		sceneDesc.initialMeshlets             = 8;
+		sceneDesc.initialSubmeshes            = 4;
+		sceneDesc.initialVertexBufferByteSize = 4096;
+		sceneDesc.initialIndices              = 64;
+		sceneDesc.initialPbrMaterials         = 4;
+
+		legScene.scene = legScene.gfx->CreateScene(sceneDesc);
+		legScene.scene->SetGround(ground);
+		legScene.scene->SetFootPlanting(options.plantFeet);
+
+		legScene.view = legScene.gfx->CreateSceneView(legScene.scene, 4);
+		bgl::test::ApplyEnvironment(legScene.scene.Get(), legScene.view.Get());
+
+		const std::array<bgl::MaterialHandle, 1> materials = { { legScene.scene->CreatePbrMaterial(
+			bgl::PbrMaterialDesc()) } };
+
+		const bgl::RigHandle rig = legScene.scene->AddRig(
+			MakeLegRig(options.rootScale),
+			MakeStillClip(options.rootScale, options.lift),
+			MakeLeg(weight, options));
+		REQUIRE(rig.IsValid());
+
+		legScene.geom = legScene.scene->AddSkinnedMeshGeom(
+			MakeSkinnedTriangle(),
+			0,
+			materials,
+			rig,
+			assetlib::Bounds{ glm::vec3(-8.0f), glm::vec3(8.0f) });
+		REQUIRE(legScene.geom.IsValid());
+		return legScene;
+	}
+
+	Posed
+	PoseLeg(const bgl::GroundPlaneDesc& ground, uint8_t weight, const PoseOptions& options = {})
+	{
+		const LegScene legScene = MakeLegScene(ground, weight, options);
+		auto&          gfx      = legScene.gfx;
+		auto&          view     = legScene.view;
 
 		auto* gfxBase = gfx->As<bgl::GraphicsBase>();
 		REQUIRE(gfxBase != nullptr);
@@ -275,45 +333,13 @@ namespace
 		targetDesc.headless = true;
 		auto target         = gfx->CreateRenderTarget(targetDesc);
 
-		auto sceneDesc                        = bgl::SceneDesc();
-		sceneDesc.initialGeom                 = 4;
-		sceneDesc.initialMeshlets             = 8;
-		sceneDesc.initialSubmeshes            = 4;
-		sceneDesc.initialVertexBufferByteSize = 4096;
-		sceneDesc.initialIndices              = 64;
-		sceneDesc.initialPbrMaterials         = 4;
-
-		auto scene = gfx->CreateScene(sceneDesc);
-		scene->SetGround(ground);
-		scene->SetFootPlanting(options.plantFeet);
-
-		auto view = gfx->CreateSceneView(scene, 4);
-		bgl::test::ApplyEnvironment(scene.Get(), view.Get());
-
-		const std::array<bgl::MaterialHandle, 1> materials = { { scene->CreatePbrMaterial(
-			bgl::PbrMaterialDesc()) } };
-
-		const bgl::RigHandle rig = scene->AddRig(
-			MakeLegRig(options.rootScale),
-			MakeStillClip(options.rootScale, options.lift),
-			MakeLeg(weight, options));
-		REQUIRE(rig.IsValid());
-
-		const auto geom = scene->AddSkinnedMeshGeom(
-			MakeSkinnedTriangle(),
-			0,
-			materials,
-			rig,
-			assetlib::Bounds{ glm::vec3(-8.0f), glm::vec3(8.0f) });
-		REQUIRE(geom.IsValid());
-
 		auto* viewRaw = view->As<bgl::SceneView>();
 		REQUIRE(viewRaw != nullptr);
 
 		// rate 0, so the clip holds frame 0 and the clock cannot move the pose between the two
 		// palettes -- the solve is then the only thing that differs from the bind pose.
 		const auto instance =
-			view->CreateSkinnedMeshInstance(geom, options.world, { 0, 0.0f, 0.0f });
+			view->CreateSkinnedMeshInstance(legScene.geom, options.world, { 0, 0.0f, 0.0f });
 
 		auto job     = bgl::RenderJob();
 		job.view     = view;
@@ -1171,4 +1197,196 @@ TEST_CASE(
 	const glm::vec3 moved = posed.Apply(0, c_TwoLegBind[0]) - c_TwoLegBind[0];
 	REQUIRE(glm::length(moved) > 1e-3f);
 	CHECK(glm::dot(glm::normalize(moved), normal) == Catch::Approx(-1.0f).margin(1e-3));
+}
+
+// The runtime weight a caller sets over the baked plant: one FootIKLeg per leg of the rig, in an
+// arena of the view's, reached through the pose list. Nothing on the GPU reads it yet; these cases
+// pin the record itself -- what a spawn writes, what a write stores, and what a delete frees.
+
+namespace
+{
+	bgl::WeightRamp
+	Ramp(float from, float to, float start, float end)
+	{
+		return { from, to, start, end };
+	}
+
+	void
+	CheckRamp(const bgl::WeightRamp& actual, const bgl::WeightRamp& expected)
+	{
+		CHECK(actual.from == expected.from);
+		CHECK(actual.to == expected.to);
+		CHECK(actual.start == expected.start);
+		CHECK(actual.end == expected.end);
+	}
+}
+
+TEST_CASE("a hero instance's foot-IK record starts at weight one", "[skinned][plant][footik]")
+{
+	const LegScene legScene = MakeLegScene(c_Flat, 255);
+	auto&          view     = legScene.view;
+
+	const auto instance =
+		view->CreateSkinnedMeshInstance(legScene.geom, glm::mat4(1.0f), { 0, 0.0f, 0.0f });
+
+	const bgl::FootIKDesc read = view->GetFootIK(instance);
+	for (const bgl::FootIKLegDesc& leg : read.leg)
+	{
+		CheckRamp(leg.position, bgl::WeightRamp());
+		CheckRamp(leg.rotation, bgl::WeightRamp());
+	}
+
+	// The pose list carries the record beside the placement, sized by the rig's legs: this is the
+	// one place the pose pass will read it from.
+	auto* viewRaw = view->As<bgl::SceneView>();
+	REQUIRE(viewRaw != nullptr);
+	const auto& meta = viewRaw->GetMeshBuffer().MetaAt(instance.handle.index);
+	REQUIRE(meta.footIK);
+	CHECK(meta.footIK.count == 1);
+
+	SECTION("a write stores every field of the rig's legs and reads them back")
+	{
+		auto desc            = bgl::FootIKDesc();
+		desc.leg[0].position = Ramp(1.0f, 0.25f, 2.0f, 2.5f);
+		desc.leg[0].rotation = Ramp(0.0f, 1.0f, 3.0f, 3.0f);
+
+		// Past the rig's one leg: not stored, and read back as the default.
+		desc.leg[1].position = Ramp(0.5f, 0.5f, 0.0f, 0.0f);
+
+		view->SetFootIK(instance, desc);
+
+		const bgl::FootIKDesc stored = view->GetFootIK(instance);
+		CheckRamp(stored.leg[0].position, desc.leg[0].position);
+		CheckRamp(stored.leg[0].rotation, desc.leg[0].rotation);
+		CheckRamp(stored.leg[1].position, bgl::WeightRamp());
+
+		const bgl::idl::FootIKLeg record = viewRaw->GetFootIKArena().Get(meta.footIK, 0);
+		CHECK(record.position.to == 0.25f);
+		CHECK(record.rotation.start == 3.0f);
+	}
+
+	SECTION("a refused write leaves the record as it was")
+	{
+		const auto before = bgl::FootIKDesc::Constant(0.5f, 0.5f);
+		view->SetFootIK(instance, before);
+
+		auto outside            = before;
+		outside.leg[0].position = Ramp(0.0f, 1.5f, 0.0f, 0.0f);
+		CHECK_THROWS_AS(view->SetFootIK(instance, outside), bgl::SceneError);
+
+		auto negative            = before;
+		negative.leg[0].rotation = Ramp(-0.1f, 1.0f, 0.0f, 0.0f);
+		CHECK_THROWS_AS(view->SetFootIK(instance, negative), bgl::SceneError);
+
+		auto backwards            = before;
+		backwards.leg[0].position = Ramp(0.0f, 1.0f, 2.0f, 1.0f);
+		CHECK_THROWS_AS(view->SetFootIK(instance, backwards), bgl::SceneError);
+
+		auto nan            = before;
+		nan.leg[0].rotation = Ramp(std::numeric_limits<float>::quiet_NaN(), 1.0f, 0.0f, 0.0f);
+		CHECK_THROWS_AS(view->SetFootIK(instance, nan), bgl::SceneError);
+
+		// A field past the rig's legs is not judged, since it is not stored.
+		auto ignored            = before;
+		ignored.leg[1].position = Ramp(7.0f, 7.0f, 0.0f, 0.0f);
+		CHECK_NOTHROW(view->SetFootIK(instance, ignored));
+
+		const bgl::FootIKDesc stored = view->GetFootIK(instance);
+		CheckRamp(stored.leg[0].position, before.leg[0].position);
+		CheckRamp(stored.leg[0].rotation, before.leg[0].rotation);
+	}
+
+	SECTION("a placement without a record is refused")
+	{
+		auto crowd       = bgl::SkinnedInstanceDesc();
+		crowd.source     = bgl::PoseSource::kBoneAnimTable;
+		const auto table = view->CreateSkinnedMeshInstance(legScene.geom, glm::mat4(1.0f), crowd);
+		CHECK_THROWS_AS(view->GetFootIK(table), bgl::SceneError);
+		CHECK_THROWS_AS(view->SetFootIK(table, bgl::FootIKDesc()), bgl::SceneError);
+
+		const auto cube = legScene.scene->AddCubeGeom(bgl::MaterialHandle());
+		const auto stat = view->CreateStaticMeshInstance(cube, glm::mat4(1.0f));
+		CHECK_THROWS_AS(view->GetFootIK(stat), bgl::SceneError);
+
+		view->DeleteMeshInstance(instance);
+		CHECK_THROWS_AS(view->GetFootIK(instance), bgl::SceneError);
+	}
+
+	SECTION("deleting the instance frees its record, and the next spawn starts clean")
+	{
+		view->SetFootIK(instance, bgl::FootIKDesc::Constant(0.0f, 0.0f));
+		const auto handle = meta.footIK;
+		view->DeleteMeshInstance(instance);
+		CHECK_FALSE(viewRaw->GetFootIKArena().IsValid(handle));
+
+		const auto next =
+			view->CreateSkinnedMeshInstance(legScene.geom, glm::mat4(1.0f), { 0, 0.0f, 0.0f });
+		const bgl::FootIKDesc fresh = view->GetFootIK(next);
+		CheckRamp(fresh.leg[0].position, bgl::WeightRamp());
+		CheckRamp(fresh.leg[0].rotation, bgl::WeightRamp());
+	}
+}
+
+TEST_CASE("a rig without legs owns no foot-IK record", "[skinned][plant][footik]")
+{
+	auto opts             = bgl::GraphicsOptions();
+	opts.shaderCacheDir   = bgl::test::ShaderCacheDir();
+	opts.enableDebugLayer = true;
+	auto gfx              = bgl::CreateGraphics(opts);
+	REQUIRE(gfx != nullptr);
+
+	auto sceneDesc                        = bgl::SceneDesc();
+	sceneDesc.initialGeom                 = 4;
+	sceneDesc.initialMeshlets             = 8;
+	sceneDesc.initialSubmeshes            = 4;
+	sceneDesc.initialVertexBufferByteSize = 4096;
+	sceneDesc.initialIndices              = 64;
+	sceneDesc.initialPbrMaterials         = 4;
+	auto scene                            = gfx->CreateScene(sceneDesc);
+	auto view                             = gfx->CreateSceneView(scene, 4);
+
+	const std::array<bgl::MaterialHandle, 1> materials = { { scene->CreatePbrMaterial(
+		bgl::PbrMaterialDesc()) } };
+	const bgl::RigHandle                     rig  = scene->AddRig(MakeLegRig(), MakeStillClip());
+	const auto                               geom = scene->AddSkinnedMeshGeom(
+		MakeSkinnedTriangle(),
+		0,
+		materials,
+		rig,
+		assetlib::Bounds{ glm::vec3(-8.0f), glm::vec3(8.0f) });
+	REQUIRE(geom.IsValid());
+
+	const auto instance = view->CreateSkinnedMeshInstance(geom, glm::mat4(1.0f), { 0, 0.0f, 0.0f });
+
+	auto* viewRaw = view->As<bgl::SceneView>();
+	REQUIRE(viewRaw != nullptr);
+	CHECK_FALSE(viewRaw->GetMeshBuffer().MetaAt(instance.handle.index).footIK);
+
+	CHECK_THROWS_AS(view->GetFootIK(instance), bgl::SceneError);
+	CHECK_THROWS_AS(view->SetFootIK(instance, bgl::FootIKDesc()), bgl::SceneError);
+}
+
+TEST_CASE("a weight ramp reads as the shader will", "[skinned][plant][footik]")
+{
+	const auto ramp = Ramp(0.2f, 1.0f, 2.0f, 4.0f);
+	CHECK(ramp.At(1.0f) == 0.2f);
+	CHECK(ramp.At(2.0f) == 0.2f);
+	CHECK(ramp.At(3.0f) == Catch::Approx(0.6f));
+	CHECK(ramp.At(4.0f) == 1.0f);
+	CHECK(ramp.At(9.0f) == 1.0f);
+
+	// A window of no width is a step at its start.
+	const auto step = Ramp(0.0f, 1.0f, 5.0f, 5.0f);
+	CHECK(step.At(4.999f) == 0.0f);
+	CHECK(step.At(5.0f) == 1.0f);
+
+	// A fade starts from what the ramp holds now, so a write built from it changes nothing before
+	// now -- which is what keeps the pose the previous frame drew, and its motion vector, exact.
+	const auto fade = ramp.FadeTo(0.0f, 3.0f, 1.0f);
+	CheckRamp(fade, Ramp(0.6f, 0.0f, 3.0f, 4.0f));
+
+	const auto whole =
+		bgl::FootIKDesc::FadeTo(bgl::FootIKDesc::Constant(1.0f, 0.5f), 3.0f, 0.25f, 0.0f, 0.0f);
+	CheckRamp(whole.leg[3].position, Ramp(1.0f, 0.0f, 3.0f, 3.25f));
+	CheckRamp(whole.leg[3].rotation, Ramp(0.5f, 0.0f, 3.0f, 3.25f));
 }
