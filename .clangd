@@ -1,0 +1,17 @@
+# Include hygiene, in the editor.
+#
+# The same clang-include-cleaner library `just tidy` runs through clang-tidy's
+# misc-include-cleaner, so what is underlined here is what the pre-commit hook
+# refuses -- see docs/naming.md.
+#
+# Strict on both halves because PCH/pch.h is an optimisation and not an interface:
+# a source that names std::vector says so, whether or not the precompiled header
+# happens to have got there first. include-cleaner has no notion of a PCH, so this
+# is also the only setting under which it says anything true here.
+#
+# An include kept for a side effect rather than a symbol -- core/glm.h, which
+# configures glm before anything parses it -- is marked at the line with
+# `// IWYU pragma: keep`, which both tools honour.
+Diagnostics:
+  UnusedIncludes: Strict
+  MissingIncludes: Strict

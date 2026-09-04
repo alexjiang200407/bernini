@@ -1,7 +1,14 @@
-# STYLE.md's naming rules, mechanically. See docs/naming.md.
+# STYLE.md's rules, mechanically. See docs/naming.md.
 #
-# Only the naming check runs. Everything else clang-tidy offers is deliberately
-# off: this file exists to make STYLE.md checkable, not to lint.
+# Two checks, and only two. Everything else clang-tidy offers is deliberately off:
+# this file exists to make STYLE.md checkable, not to lint.
+#
+# `readability-identifier-naming` runs everywhere. `misc-include-cleaner` is not
+# enabled here at all -- a subsystem turns it on for itself by adding it to the
+# `Checks` in its own .clang-tidy, which appends under InheritParentConfig. That is
+# what let the tree be swept one subsystem at a time without leaving the rest
+# ungated in the meantime, and the set of subsystems carrying that line is the
+# record of how far the sweep got.
 #
 # Headers are opted in per subsystem, never here. A check option is read once per
 # translation unit, from the .clang-tidy nearest that TU's .cpp -- so a header

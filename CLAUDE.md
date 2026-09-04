@@ -3,8 +3,10 @@ Bernini is a 3D game engine. It uses CMake as the buildsystem.
 # General Notes
 
 - Use bash
-- Do not `#include` standard c++ libraries. They're already in the precompiled header `./PCH/pch.h`, which every compiled target in the tree gets — that universality is what makes omitting them safe.
-- **Never drop an `#include` because a *subsystem* PCH has it.** `libs/<lib>/src/pch.h` and `apps/editor/src/pch.h` carry the third-party headers that subsystem leans on (Qt, glm) so they cost nothing — but unlike the root PCH they reach only some targets: assetlib's is `PRIVATE` while its public headers are compiled by gamelib and the editor without it, and two Objective-C++ files skip a PCH entirely. So still write `#include <QString>` and `<core/glm.h>` where you use them; the PCH is an optimisation, not an interface. See [docs/build_performance.md](./docs/build_performance.md).
+- **Include what you use** — every file, every symbol, the standard library included. Write `#include <vector>` where you name `std::vector` and `#include <QString>` where you name `QString`.
+- **Never drop an `#include` because a PCH has it.** `./PCH/pch.h` and the subsystem PCHs (`libs/<lib>/src/pch.h`, `apps/editor/src/pch.h`) are build optimisations, never interfaces: they make an include free, they do not stand in for one. A PCH that reaches every target still cannot be seen by a reader, by clangd, or by any tool that parses one file — and the subsystem ones do not even reach every target, since assetlib's is `PRIVATE` while its public headers are compiled by gamelib and the editor without it. See [docs/build_performance.md](./docs/build_performance.md).
+- **An include kept for a side effect gets `// IWYU pragma: keep`.** `<core/glm.h>` configures glm before anything parses it, so it is needed in files that name no glm symbol and is otherwise reported unused. The one thing no `#include` can replace is a name a PCH *defines*: `libs/bgl_extended/src/pch.h` declares the `bgl::logger` alias every source there logs through.
+- `just tidy` enforces this with clang-tidy's `misc-include-cleaner`, and [`.clangd`](./.clangd) underlines it live in the editor; `just tidy --fix` writes the includes and gives them the brackets the rule below asks for. See [docs/naming.md](./docs/naming.md).
 - Library subsystems live under `./libs` (currently `./libs/bgl`, `./libs/bgl_common`, `./libs/bgl_extended`, `./libs/core`, `./libs/assetlib`, `./libs/gamelib`); executable apps live under `./apps` (currently `./apps/editor`); runnable examples under `./examples`
 - **Layering**: `bgl_extended` (renderer) never links `assetlib` — it stays codec-free, taking decoded `assetlib_structs` PODs. `assetlib` (offline cook) never links `bgl_extended` — the CLI baker must not drag in D3D12. `gamelib` is the seam that links both, and is where "load this asset into a scene" lives.
 - **`bgl_common` sits between the contract and the renderer**, and links neither `bgl_extended` nor any backend. It holds what every renderer needs and no renderer owns — the `gassert` family, the Slang reflection walk, the serializable `ReflectedLayout`, the constant-buffer mirror's layout walk (`UniformsBase`), the shader cache's salt/key/encoding, the TAA jitter sequence, frustum-plane extraction, the Slang diagnostic checker, the engine's memory-tag taxonomy (the *list*; `core::profiling` owns the machinery), and the frame graph's pass scheduler — the dependency edges, the dead-pass cull and the execution order. A header there may name no backend and no bindless type; `bgl_common_selfcheck` compiles the whole public surface against `bgl_common` alone and fails the build on a reach into `libs/bgl_extended/src`.
@@ -70,7 +72,9 @@ Read through these documents if you deem them necessary to your given task. If y
 **[Naming](./docs/naming.md)**
 
 Which directories are `lower_case` and which are `PascalCase`, why the boundary is a directory
-rather than a judgement call, and how `just tidy` enforces it.
+rather than a judgement call, and how `just tidy` enforces it. Then the other check it runs —
+include hygiene, how a subsystem switches it on for itself, and what `--fix` will and will not do
+for you.
 
 **[bgl Public API](./docs/bgl_api.md)**
 
