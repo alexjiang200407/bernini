@@ -62,6 +62,11 @@ public static const float cSoleClampRadians = 0.5235988;
 // lightest. Fixed so the pose kernel's slot loop has a constant bound.
 public static const uint cBlendSlots = 4;
 
+// Clips one pose may blend. Twice the slot count because a blend-space slot resolves to the two
+// members straddling its parameter, and four slots of spaces is the case cBlendSlots was sized for
+// -- a crossfade between two spaces, interrupted by a third.
+public static const uint cMaxPoseClips = cBlendSlots * 2;
+
 // Threads per pose-pass workgroup. One group poses one instance, one thread a bone at a time, so a
 // rig with more bones than this strides.
 public static const uint cPoseGroupSize = 64;

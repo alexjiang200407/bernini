@@ -39,6 +39,7 @@ namespace bgl
 
 		uint32_t clipCount = 0;
 		uint32_t boneCount = 0;  // kSkinnedMesh only
+		uint32_t nodeCount = 0;  // kSkinnedMesh only: clips plus authored spaces
 	};
 
 	/**
@@ -51,6 +52,10 @@ namespace bgl
 	{
 		uint32_t boneCount = 0;
 		uint32_t clipCount = 0;
+
+		// Clip nodes plus authored ones, which is what a playback slot's `node` is checked against.
+		// Equal to `clipCount` on a rig with no blend set.
+		uint32_t nodeCount = 0;
 
 		// Frames across every clip, which sizes the bone anim table and is the fill's group count.
 		uint32_t frameCount = 0;
@@ -217,6 +222,18 @@ namespace bgl
 			return m_PlantWeights;
 		}
 
+		[[nodiscard]] auto&
+		GetBlendNodeBuffer() noexcept
+		{
+			return m_BlendNodes;
+		}
+
+		[[nodiscard]] auto&
+		GetBlendMemberBuffer() noexcept
+		{
+			return m_BlendMembers;
+		}
+
 		// --- SceneView support -------------------------------------------------
 		// Instances live in SceneViews and reference this Scene's geometry by value: a view copies
 		// the submesh range below into its MeshInstance. The Scene keeps no record of who
@@ -249,13 +266,17 @@ namespace bgl
 
 			// Bones the rig carries, which is what sizes an instance's palette.
 			uint32_t boneCount = 0;
+
+			// Nodes the rig's table holds -- its clips, then its authored spaces -- which is what a
+			// playback slot's `node` is checked against.
+			uint32_t nodeCount = 0;
 		};
 
 		[[nodiscard]] AnimGeomInfo
 		GetGeomSkinnedInfo(uint32_t index) const noexcept
 		{
 			const GeomRecord& geom = m_Geoms[index];
-			return { geom.rig, geom.clipCount, geom.boneCount };
+			return { geom.rig, geom.clipCount, geom.boneCount, geom.nodeCount };
 		}
 
 		/**
@@ -360,7 +381,8 @@ namespace bgl
 		AddRig(
 			const assetlib::Skeleton&     skeleton,
 			const assetlib::AnimationSet& animations,
-			const FootPlantDesc&          footPlant = {}) override;
+			const FootPlantDesc&          footPlant = {},
+			const BlendSetDesc&           blendSet  = {}) override;
 
 		void
 		DeleteRig(RigHandle rig) override;
@@ -473,7 +495,8 @@ namespace bgl
 		ValidateSkinnedRig(
 			const assetlib::Skeleton&     skeleton,
 			const assetlib::AnimationSet& animations,
-			const FootPlantDesc&          footPlant);
+			const FootPlantDesc&          footPlant,
+			const BlendSetDesc&           blendSet);
 
 		/**
 		 * The live rig `rig` names, or nullptr if the handle is null or already deleted. The
@@ -557,6 +580,12 @@ namespace bgl
 		RangeBuffer<idl::SkinnedLegChain> m_SkinnedLegs;
 		RangeBuffer<uint32_t>             m_PlantWeights;
 
+		// The node table every rig carries -- one clip node per clip, then its authored spaces --
+		// and the members those spaces address. Only the members are empty on a scene whose rigs
+		// author no blend set; a rig always has nodes.
+		RangeBuffer<idl::BlendNode>        m_BlendNodes;
+		RangeBuffer<idl::BlendSpaceMember> m_BlendMembers;
+
 		std::array<SamplerHandle, static_cast<size_t>(StandardSampler::kCount)> m_Samplers;
 
 		core::SharedRef<IResourceManager> m_ResourceManager;
@@ -581,6 +610,8 @@ namespace bgl
 			NamedBuffer{ c_BoneSampleBufferName, &Scene::m_BoneSamples },
 			NamedBuffer{ c_SkinnedLegBufferName, &Scene::m_SkinnedLegs },
 			NamedBuffer{ c_PlantWeightBufferName, &Scene::m_PlantWeights },
+			NamedBuffer{ c_BlendNodeBufferName, &Scene::m_BlendNodes },
+			NamedBuffer{ c_BlendMemberBufferName, &Scene::m_BlendMembers },
 		};
 
 		static_assert(HasDistinctNames(c_Buffers), "two scene buffers would import under one name");
