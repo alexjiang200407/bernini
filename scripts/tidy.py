@@ -53,6 +53,7 @@ from concurrent.futures import ThreadPoolExecutor
 
 import util.cmake_tools as ct
 import util.config as cfg
+import util.include_style as include_style
 from util.gitdiff import HEADER_EXTS, SOURCE_EXTS, SOURCE_ROOTS, changed, is_generated
 
 
@@ -382,9 +383,11 @@ PRE_INCLUDED = "included multiple times, additional include site here"
 
 
 def run_tidy(tidy, build_dir, main_file, args, filters=()):
-    # Only naming gates the exit code. A parse diagnostic still shows, and still fails
-    # the file, but a stray compiler warning in someone's header does not.
-    cmd = [tidy, "-p", build_dir, "--quiet", "--warnings-as-errors=readability-identifier-naming"]
+    # Only our own checks gate the exit code. A parse diagnostic still shows, and still fails
+    # the file, but a stray compiler warning in someone's header does not. include-cleaner is
+    # named here for every subsystem, and runs only in the ones whose .clang-tidy enables it.
+    cmd = [tidy, "-p", build_dir, "--quiet",
+           "--warnings-as-errors=readability-identifier-naming,misc-include-cleaner"]
     if args.fix:
         cmd.append("--fix")
     if args.checks:
@@ -413,6 +416,25 @@ def check(tidy, build_dir, path, args, spans=None, lender=None):
         rc, output = run_tidy(tidy, build_dir, lender, args, filters)
 
     return path, rc, output
+
+
+def restyle_includes(db_dir, files):
+    """clang-tidy's insertions given the bracket STYLE.md asks for. Returns how many moved.
+
+    `misc-include-cleaner` writes every insertion quoted except the standard library's, so a
+    --fix run leaves `"bgl/IScene.h"` where the rule wants `<bgl/IScene.h>`. Nothing about
+    the check can be configured to do it, so it is done afterwards, from the same database:
+    see util/include_style.
+    """
+    with open(os.path.join(db_dir, "compile_commands.json"), encoding="utf-8") as fh:
+        entries = {os.path.normpath(entry["file"]): entry for entry in json.load(fh)}
+
+    moved = 0
+    for path in files:
+        entry = entries.get(os.path.normpath(os.path.abspath(path)))
+        if entry:
+            moved += len(include_style.restyle_file(path, entry, ct.REPO_ROOT))
+    return moved
 
 
 def main():
@@ -487,6 +509,12 @@ def main():
                 sys.stdout.write(output if output.endswith("\n") else output + "\n")
             if rc != 0:
                 failures += 1
+
+    if args.fix:
+        moved = restyle_includes(db_dir, files)
+        if moved:
+            print(f"include style: {moved} include(s) rebracketed. Run `just format` -- the "
+                  "bracket decides the sort order.", file=sys.stderr)
 
     print(f"\nclang-tidy: {len(files)} file(s) checked, {failures} with findings.", file=sys.stderr)
     return 1 if failures else 0
