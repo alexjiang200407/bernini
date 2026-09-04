@@ -184,7 +184,10 @@ implicitly a full dielectric, so the surface arrives wearing a sheen its author 
 
 glTF carries the pair as `KHR_materials_specular`, which the importer reads; the two texture inputs
 that extension also defines (`specularTexture`, `specularColorTexture`) are **not** read, so a
-material that varies specular per-texel imports at its factors. Unlike transmission this costs no
+material that varies specular per-texel imports at its factors. A specular-glossiness material
+carries the same intent in its own `specularFactor`, and the conversion writes it across
+([below](#importing-a-gltfs-materials)) — that path, not this one, is where a Sketchfab-era Phong
+export's switched-off specular actually arrives. Unlike transmission this costs no
 version bump: since `.bmaterial` became [a text document](asset_containers.md), a field appended with a
 default reads back at that default out of every file written before it, and `1` / white is exactly
 the flat `0.04` those files already shaded at.
@@ -736,7 +739,17 @@ Nine rules, each of which is a way to get this wrong:
   because a specular-glossiness material never declares one and would otherwise keep tinygltf's
   defaults — white, fully metallic, fully rough.
 
-  Two consequences worth knowing before reading a converted asset. **The glossiness map is
+  **The authored specular also reaches the specular pair, which Khronos' conversion drops.** In
+  specular-glossiness the specular *is* F0, and that conversion targets base glTF 2.0, which cannot
+  express an F0 below the `0.04` dielectric — so everything under that line is discarded and every
+  such surface arrives as a full dielectric. This build can express it: `specularColorFactor` is the
+  authored specular over `0.04`, capped at white (above the line the reflection is already in
+  metallic and the base colour, and the editor's colour picker cannot hold a component past 1), and
+  `specularFactor` is 0 for an exactly black specular and 1 otherwise — the colour alone leaves the
+  split-sum's F90 term as a grazing rim, and F90 is total for any real dielectric interface. A Phong
+  export with its specular switched off says it nowhere else ([above](#specular)).
+
+  Two more consequences worth knowing before reading a converted asset. **The glossiness map is
   composited; the specular map is not.** A `specularGlossinessTexture` carries specular in RGB and
   glossiness in A, and ORM wants roughness in G — an inversion no `ChannelRoute` can express, since
   a route selects a channel and never transforms it. So the complement is written once at import
@@ -747,8 +760,8 @@ Nine rules, each of which is a way to get this wrong:
   `roughnessFactor` and `1 - g*f` is not `(1 - g)*(1 - f)`. A map whose alpha is constant is refused
   and the constant roughness kept: tinygltf pads every image to four channels, so a source with no
   alpha arrives indistinguishable from one whose alpha is uniform, and neither says anything the
-  factor did not. The RGB specular is still dropped — the engine has one specular factor and no map
-  behind it.
+  factor did not. The RGB specular is still dropped — the pair above is the whole of what the engine
+  has, with no map behind it.
 
   And **a black diffuse over any specular solves to metal**, because metallic-roughness has no
   other way to express it — which is right for a chrome surface and surprising on a transparent

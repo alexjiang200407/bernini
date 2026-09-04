@@ -1049,11 +1049,17 @@ namespace assetlib
 		 * alternative here was reading the material as PBR anyway, which silently takes tinygltf's
 		 * default-constructed pbrMetallicRoughness and imports every such surface as white metal.
 		 *
+		 * **The authored specular also reaches the specular pair, which Khronos' conversion drops.**
+		 * That conversion targets base glTF 2.0, which cannot express an F0 below the 0.04 dielectric;
+		 * this build can, so the residue is written rather than discarded. A specular of zero is the
+		 * case that costs something -- a Phong export with its specular switched off says it nowhere
+		 * else, and would otherwise arrive wearing a sheen its author removed.
+		 *
 		 * `specularGlossinessTexture` carries per-texel specular in RGB and glossiness in A, and the
 		 * engine's ORM wants roughness in G -- the complement, which no ChannelRoute can express,
 		 * since a route selects a channel and never transforms it. So `appendGlossinessOrm` writes it
 		 * once at import and this points the material at that map. Its RGB specular is still dropped:
-		 * the engine has one specular factor and no map behind it.
+		 * the factors above are the whole of what the engine has, with no map behind them.
 		 *
 		 * @return false when the material does not declare the extension, leaving `out` untouched.
 		 */
@@ -1120,6 +1126,17 @@ namespace assetlib
 			out.baseColorFactor = glm::vec4(baseColor, diffuse.a);
 			out.metallicFactor  = metallic;
 			out.roughnessFactor = 1.0f - glossiness;
+
+			// Specular-glossiness names F0 directly, and the shader rebuilds it as
+			// 0.04 * specularColorFactor -- so the authored value divides back out, capped at the
+			// dielectric line, above which metallic and the base colour carry the reflection instead.
+			const auto dielectricF0 =
+				glm::clamp(specular, glm::vec3(0.0f), glm::vec3(c_DielectricSpecular));
+			out.specularColorFactor = dielectricF0 / c_DielectricSpecular;
+
+			// The colour alone cannot switch the lobe off: the split-sum's F90 term survives an F0 of
+			// zero as a grazing rim, and F90 is total for any real dielectric interface.
+			out.specularFactor = dielectricF0 == glm::vec3(0.0f) ? 0.0f : 1.0f;
 
 			if (ext.Has("diffuseTexture"))
 			{
