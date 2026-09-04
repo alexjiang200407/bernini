@@ -38,6 +38,7 @@ namespace assetlib
 
 	// Text: the authored half of one rig, found by convention from its `.bskel`. See avatarKeyFor.
 	inline constexpr std::string_view c_AvatarExtension = ".bavatar";
+	inline constexpr std::string_view c_BlendExtension  = ".bblend";
 
 	// Not an asset either, and the only source kind an import takes: the file a `.bimport`
 	// describes, copied into the project beside it. `assetTypeFromExtension` does not know it, so a
@@ -73,6 +74,7 @@ namespace assetlib
 
 	struct AnimationSet;
 	struct Avatar;
+	struct BlendSet;
 	struct BEnv;
 	struct BEnvLighting;
 	struct BMaterial;
@@ -243,6 +245,23 @@ namespace assetlib
 		Serialize(const Avatar& value);
 
 		[[nodiscard]] static Avatar
+		Deserialize(std::span<const std::byte> bytes);
+	};
+
+	/**
+	 * `.bblend` -- an authored document: the blend spaces authored against one clip set, which it
+	 * names by path. No magic and no bake token, because nothing cooks it into anything.
+	 */
+	template <>
+	struct AssetCodec<BlendSet>
+	{
+		static constexpr std::string_view c_Extension = c_BlendExtension;
+		static constexpr AssetType        c_Type      = AssetType::kBlend;
+
+		[[nodiscard]] static std::vector<std::byte>
+		Serialize(const BlendSet& value);
+
+		[[nodiscard]] static BlendSet
 		Deserialize(std::span<const std::byte> bytes);
 	};
 }
