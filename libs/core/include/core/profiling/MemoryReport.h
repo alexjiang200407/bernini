@@ -4,13 +4,6 @@
 
 namespace core::profiling
 {
-	/** One tag's line in a report, plus what no tag accounted for. */
-	struct MemoryReportEntry
-	{
-		std::string_view name;
-		MemoryTotals     totals;
-	};
-
 	/**
 	 * The tag table and the process footprint as they stand, for logging or for a readout.
 	 *
@@ -21,11 +14,13 @@ namespace core::profiling
 	 */
 	struct MemorySnapshot
 	{
-		std::array<MemoryReportEntry, c_MemoryTagCount> tags;
-		MemoryTotals                                    tagged;
-		uint64_t                                        footprint;
-		uint64_t                                        footprintPeak;
-		uint64_t                                        untagged;
+		/** Every tag of every enum that has charged anything — see `memory_tag_totals`. */
+		std::vector<MemoryTagTotals> tags;
+
+		MemoryTotals tagged;
+		uint64_t     footprint;
+		uint64_t     footprintPeak;
+		uint64_t     untagged;
 	};
 
 	[[nodiscard]] MemorySnapshot

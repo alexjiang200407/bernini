@@ -7,10 +7,10 @@
 #include <assetlib/AssetStore.h>
 #include <assetlib_structs/Animation.h>
 #include <bgl/IGraphics.h>
+#include <bgl_common/MemoryTag.h>
 #include <catch2/matchers/catch_matchers_string.hpp>
 #include <core/file/IFileSystem.h>
 #include <core/file/LooseFileSystem.h>
-#include <core/profiling/memory.h>
 
 // Acquiring a rig reads three containers, and deserializing one is most of a second on a dense rig.
 // A rig drawn as many meshes acquires once per mesh entry, so what these pin is that the second
@@ -262,7 +262,7 @@ TEST_CASE("Acquiring a rig twice reads its containers once", "[skinned][acquire]
 // one, and a byte count would pin the fixture rather than the accounting.
 TEST_CASE("A cached container is charged to its subsystem's memory tag", "[containercache]")
 {
-	using core::profiling::MemoryTag;
+	using bgl::MemoryTag;
 	using core::profiling::tag_totals;
 
 	DataRoot root("bernini_container_cache_tagged");

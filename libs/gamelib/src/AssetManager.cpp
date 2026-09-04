@@ -13,8 +13,8 @@
 #include <assetlib_structs/Bounds.h>
 #include <assetlib_structs/ImageData.h>
 #include <assetlib_structs/Skeleton.h>
+#include <bgl_common/MemoryTag.h>
 #include <core/err/util.h>
-#include <core/profiling/TaggedBytes.h>
 
 #include <tracy/Tracy.hpp>
 
@@ -73,7 +73,7 @@ namespace game
 
 			// This cache is the CPU-side residency of everything the reference dimensions price --
 			// a .banim is 59.7 MB and a .bmesh 16.8 MB -- and it holds each until the manager dies.
-			core::profiling::TaggedBytes tracked;
+			bgl::TaggedBytes tracked;
 
 			// The charge is move-only, so an entry is too. Spelled out rather than left implicit
 			// because MSVC's /Wall makes an implicitly deleted copy an error, and a constructor is
@@ -94,29 +94,29 @@ namespace game
 		};
 
 		/** The tag a cached container is charged to; one overload per thing ReadCached holds. */
-		constexpr core::profiling::MemoryTag
+		constexpr bgl::MemoryTag
 		TagOf(const assetlib::BMesh&) noexcept
 		{
-			return core::profiling::MemoryTag::kMesh;
+			return bgl::MemoryTag::kMesh;
 		}
 
-		constexpr core::profiling::MemoryTag
+		constexpr bgl::MemoryTag
 		TagOf(const assetlib::Skeleton&) noexcept
 		{
-			return core::profiling::MemoryTag::kAnimation;
+			return bgl::MemoryTag::kAnimation;
 		}
 
-		constexpr core::profiling::MemoryTag
+		constexpr bgl::MemoryTag
 		TagOf(const assetlib::AnimationSet&) noexcept
 		{
-			return core::profiling::MemoryTag::kAnimation;
+			return bgl::MemoryTag::kAnimation;
 		}
 
 		template <std::movable T>
-		core::profiling::TaggedBytes
+		bgl::TaggedBytes
 		Charged(const T& value) noexcept
 		{
-			return core::profiling::TaggedBytes(TagOf(value), assetlib::residentBytes(value));
+			return bgl::TaggedBytes(TagOf(value), assetlib::residentBytes(value));
 		}
 
 		/** Reads the container a mount key names -- what ReadCached defers to when its stamp moves. */

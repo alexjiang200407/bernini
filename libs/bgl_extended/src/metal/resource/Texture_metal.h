@@ -5,7 +5,7 @@
 #include "convert_metal.h"
 #include "resource/Texture.h"
 
-#include <core/profiling/TaggedBytes.h>
+#include <bgl_common/MemoryTag.h>
 
 namespace bgl
 {
@@ -67,9 +67,7 @@ namespace bgl
 			gassert(m_Texture.get() != nullptr, "Metal texture allocation failed");
 
 			// The driver's size: a TextureDesc carries no byte count.
-			m_Tracked = core::profiling::TaggedBytes(
-				core::profiling::MemoryTag::kDeviceTexture,
-				m_Texture->allocatedSize());
+			m_Tracked = bgl::TaggedBytes(MemoryTag::kDeviceTexture, m_Texture->allocatedSize());
 			if (!desc.debugName.empty())
 				m_Texture->setLabel(
 					NS::String::string(desc.debugName.c_str(), NS::UTF8StringEncoding));
@@ -94,8 +92,8 @@ namespace bgl
 		}
 
 	private:
-		TextureDesc                  m_Desc;
-		NS::SharedPtr<MTL::Texture>  m_Texture;
-		core::profiling::TaggedBytes m_Tracked;
+		TextureDesc                 m_Desc;
+		NS::SharedPtr<MTL::Texture> m_Texture;
+		TaggedBytes                 m_Tracked;
 	};
 }

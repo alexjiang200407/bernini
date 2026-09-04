@@ -1,4 +1,3 @@
-#include <core/profiling/TaggedBytes.h>
 #include <core/profiling/memory.h>
 
 #include <tracy/Tracy.hpp>
@@ -14,8 +13,8 @@ namespace core::profiling
 			std::atomic<uint64_t> allocations{ 0 };
 
 			// Spelled out because an atomic member deletes all four implicitly, and MSVC's /Wall
-			// makes each of those an error. A counter is a fixed cell in the table and is only ever
-			// read through a reference, so deleting them says what was already true.
+			// makes each of those an error. A counter is a fixed cell in a table and is only ever
+			// reached through a reference, so deleting them says what was already true.
 			Counter() noexcept      = default;
 			Counter(const Counter&) = delete;
 			Counter(Counter&&)      = delete;
@@ -25,24 +24,6 @@ namespace core::profiling
 			operator=(Counter&&) = delete;
 		};
 
-		// Function-local rather than namespace-scope: a charge taken during dynamic initialisation
-		// would otherwise reach a table not yet constructed, and a release during teardown one
-		// already destroyed.
-		Counter&
-		counter_for(const MemoryTag tag) noexcept
-		{
-			static std::array<Counter, c_MemoryTagCount + 1> g_Counters;
-			return g_Counters[static_cast<std::size_t>(tag)];
-		}
-
-		// The whole-table high-water, which is not the sum of the per-tag peaks: two subsystems
-		// peaking at different moments never cost their sum. Indexed one past the tags.
-		Counter&
-		total_counter() noexcept
-		{
-			return counter_for(MemoryTag::kCount);
-		}
-
 		void
 		raise_peak(Counter& counter, const uint64_t live) noexcept
 		{
@@ -50,21 +31,6 @@ namespace core::profiling
 			while (peak < live &&
 			       !counter.peak.compare_exchange_weak(peak, live, std::memory_order_relaxed))
 			{}
-		}
-
-		void
-		charge(Counter& counter, const uint64_t bytes) noexcept
-		{
-			const auto live = counter.live.fetch_add(bytes, std::memory_order_relaxed) + bytes;
-			counter.allocations.fetch_add(1, std::memory_order_relaxed);
-			raise_peak(counter, live);
-		}
-
-		void
-		discharge(Counter& counter, const uint64_t bytes) noexcept
-		{
-			counter.live.fetch_sub(bytes, std::memory_order_relaxed);
-			counter.allocations.fetch_sub(1, std::memory_order_relaxed);
 		}
 
 		MemoryTotals
@@ -77,118 +43,210 @@ namespace core::profiling
 			};
 		}
 
-		// Tracy stores the pool name pointer rather than the string, so it must outlive the client.
-		const char*
-		pool_name(const MemoryTag tag) noexcept
+		// The whole-process high-water, which is not the sum of the per-tag peaks: two subsystems
+		// peaking at different moments never cost their sum.
+		Counter&
+		grand_total() noexcept
 		{
-			switch (tag)
-			{
-			case MemoryTag::kMesh:
-				return "mesh";
-			case MemoryTag::kAnimation:
-				return "animation";
-			case MemoryTag::kTexture:
-				return "texture";
-			case MemoryTag::kMaterial:
-				return "material";
-			case MemoryTag::kEnvironment:
-				return "environment";
-			case MemoryTag::kShader:
-				return "shader";
-			case MemoryTag::kDeviceBuffer:
-				return "device buffer";
-			case MemoryTag::kDeviceTexture:
-				return "device texture";
-			case MemoryTag::kEditor:
-				return "editor";
-			case MemoryTag::kCount:
-				break;
-			}
-			return "unknown";
+			static Counter g_Total;
+			return g_Total;
+		}
+
+		/**
+		 * Every table that has been used, in first-use order so a report reads the same way twice.
+		 *
+		 * Function-local: a table registers itself the first time something charges to it, which
+		 * may be during another translation unit's dynamic initialisation.
+		 */
+		struct Registry
+		{
+			std::mutex                                            lock;
+			std::vector<std::pair<std::string, detail::TagTable>> tables;
+
+			// A mutex member deletes all four implicitly, which MSVC's /Wall makes an error. The
+			// registry is a function-local singleton reached by reference, so deleting them says
+			// what was already true.
+			Registry()                = default;
+			Registry(const Registry&) = delete;
+			Registry(Registry&&)      = delete;
+			Registry&
+			operator=(const Registry&) = delete;
+			Registry&
+			operator=(Registry&&) = delete;
+		};
+
+		Registry&
+		registry() noexcept
+		{
+			static Registry g_Registry;
+			return g_Registry;
 		}
 	}
 
-	std::string_view
-	tag_name(const MemoryTag tag) noexcept
+	namespace detail
 	{
-		return pool_name(tag);
-	}
+		struct TagTable::Impl
+		{
+			std::vector<Counter> counters;
+			std::string_view (*nameOf)(std::size_t);
 
-	MemoryTotals
-	tag_totals(const MemoryTag tag) noexcept
-	{
-		return read_totals(counter_for(tag));
+			Impl(const std::size_t count, std::string_view (*names)(std::size_t)) :
+				counters(count), nameOf(names)
+			{}
+
+			// Held by one shared_ptr and never copied, and its counters could not be copied anyway.
+			Impl(const Impl&) = delete;
+			Impl(Impl&&)      = delete;
+			Impl&
+			operator=(const Impl&) = delete;
+			Impl&
+			operator=(Impl&&) = delete;
+		};
+
+		TagTable::TagTable(
+			const std::size_t count,
+			std::string_view (*nameOf)(std::size_t)) noexcept :
+			m_Impl(std::make_shared<Impl>(count, nameOf))
+		{}
+
+		void
+		TagTable::Charge(const std::size_t tag, const uint64_t bytes) noexcept
+		{
+			if (tag >= m_Impl->counters.size())
+				return;
+
+			Counter&   counter = m_Impl->counters[tag];
+			const auto live    = counter.live.fetch_add(bytes, std::memory_order_relaxed) + bytes;
+			counter.allocations.fetch_add(1, std::memory_order_relaxed);
+			raise_peak(counter, live);
+
+			Counter&   total     = grand_total();
+			const auto totalLive = total.live.fetch_add(bytes, std::memory_order_relaxed) + bytes;
+			total.allocations.fetch_add(1, std::memory_order_relaxed);
+			raise_peak(total, totalLive);
+		}
+
+		void
+		TagTable::Discharge(const std::size_t tag, const uint64_t bytes) noexcept
+		{
+			if (tag >= m_Impl->counters.size())
+				return;
+
+			Counter& counter = m_Impl->counters[tag];
+			counter.live.fetch_sub(bytes, std::memory_order_relaxed);
+			counter.allocations.fetch_sub(1, std::memory_order_relaxed);
+
+			Counter& total = grand_total();
+			total.live.fetch_sub(bytes, std::memory_order_relaxed);
+			total.allocations.fetch_sub(1, std::memory_order_relaxed);
+		}
+
+		MemoryTotals
+		TagTable::Totals(const std::size_t tag) const noexcept
+		{
+			return tag < m_Impl->counters.size() ? read_totals(m_Impl->counters[tag]) :
+			                                       MemoryTotals{};
+		}
+
+		std::size_t
+		TagTable::Count() const noexcept
+		{
+			return m_Impl->counters.size();
+		}
+
+		std::string_view
+		TagTable::NameOf(const std::size_t tag) const noexcept
+		{
+			return tag < m_Impl->counters.size() ? m_Impl->nameOf(tag) : std::string_view();
+		}
+
+		void
+		TagTable::ResetPeaks() noexcept
+		{
+			for (Counter& counter : m_Impl->counters)
+			{
+				counter.peak.store(
+					counter.live.load(std::memory_order_relaxed),
+					std::memory_order_relaxed);
+			}
+		}
+
+		TagTable&
+		register_table(
+			const std::string_view key,
+			const std::size_t      count,
+			std::string_view (*nameOf)(std::size_t))
+		{
+			Registry&                         all = registry();
+			const std::lock_guard<std::mutex> held(all.lock);
+
+			for (auto& [registered, table] : all.tables)
+			{
+				if (registered == key)
+					return table;
+			}
+
+			all.tables.emplace_back(std::string(key), TagTable(count, nameOf));
+			return all.tables.back().second;
+		}
+
+		uint64_t
+		mint_allocation_id() noexcept
+		{
+			static std::atomic<uint64_t> g_NextId{ 1 };
+			return g_NextId.fetch_add(1, std::memory_order_relaxed);
+		}
+
+		void
+		tracy_alloc(
+			[[maybe_unused]] const uint64_t id,
+			[[maybe_unused]] const uint64_t bytes,
+			[[maybe_unused]] const char*    pool) noexcept
+		{
+#ifdef TRACY_ENABLE
+			TracyAllocN(reinterpret_cast<void*>(id), bytes, pool);
+#endif
+		}
+
+		void
+		tracy_free([[maybe_unused]] const uint64_t id, [[maybe_unused]] const char* pool) noexcept
+		{
+#ifdef TRACY_ENABLE
+			TracyFreeN(reinterpret_cast<void*>(id), pool);
+#endif
+		}
 	}
 
 	MemoryTotals
 	memory_totals() noexcept
 	{
-		return read_totals(total_counter());
+		return read_totals(grand_total());
+	}
+
+	std::vector<MemoryTagTotals>
+	memory_tag_totals()
+	{
+		Registry&                         all = registry();
+		const std::lock_guard<std::mutex> held(all.lock);
+
+		auto totals = std::vector<MemoryTagTotals>();
+		for (const auto& [key, table] : all.tables)
+		{
+			for (std::size_t tag = 0; tag < table.Count(); ++tag)
+				totals.emplace_back(MemoryTagTotals{ table.NameOf(tag), table.Totals(tag) });
+		}
+		return totals;
 	}
 
 	void
 	reset_memory_peaks() noexcept
 	{
-		for (std::size_t tag = 0; tag <= c_MemoryTagCount; ++tag)
-		{
-			Counter& counter = counter_for(static_cast<MemoryTag>(tag));
-			counter.peak.store(
-				counter.live.load(std::memory_order_relaxed),
-				std::memory_order_relaxed);
-		}
-	}
+		Registry&                         all = registry();
+		const std::lock_guard<std::mutex> held(all.lock);
 
-	TaggedBytes::TaggedBytes(const MemoryTag tag, const std::size_t bytes) noexcept :
-		m_Tag(tag), m_Bytes(bytes)
-	{
-		static std::atomic<uint64_t> g_NextId{ 1 };
-		m_Id = g_NextId.fetch_add(1, std::memory_order_relaxed);
+		for (auto& [key, table] : all.tables) table.ResetPeaks();
 
-		charge(counter_for(tag), bytes);
-		charge(total_counter(), bytes);
-
-#ifdef TRACY_ENABLE
-		TracyAllocN(reinterpret_cast<void*>(m_Id), bytes, pool_name(tag));
-#endif
-	}
-
-	TaggedBytes::TaggedBytes(TaggedBytes&& other) noexcept :
-		m_Tag(other.m_Tag), m_Bytes(other.m_Bytes), m_Id(other.m_Id)
-	{
-		other.m_Id = 0;
-	}
-
-	TaggedBytes&
-	TaggedBytes::operator=(TaggedBytes&& other) noexcept
-	{
-		if (this == &other)
-			return *this;
-
-		Release();
-
-		m_Tag      = other.m_Tag;
-		m_Bytes    = other.m_Bytes;
-		m_Id       = other.m_Id;
-		other.m_Id = 0;
-
-		return *this;
-	}
-
-	TaggedBytes::~TaggedBytes() noexcept { Release(); }
-
-	void
-	TaggedBytes::Release() noexcept
-	{
-		if (m_Id == 0)
-			return;
-
-#ifdef TRACY_ENABLE
-		TracyFreeN(reinterpret_cast<void*>(m_Id), pool_name(m_Tag));
-#endif
-
-		discharge(counter_for(m_Tag), m_Bytes);
-		discharge(total_counter(), m_Bytes);
-
-		m_Id = 0;
+		Counter& total = grand_total();
+		total.peak.store(total.live.load(std::memory_order_relaxed), std::memory_order_relaxed);
 	}
 }

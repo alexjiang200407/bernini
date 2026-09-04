@@ -12,13 +12,7 @@ namespace core::profiling
 	{
 		MemorySnapshot snapshot{};
 
-		for (std::size_t tag = 0; tag < c_MemoryTagCount; ++tag)
-		{
-			const auto kind = static_cast<MemoryTag>(tag);
-			snapshot.tags[tag] =
-				MemoryReportEntry{ .name = tag_name(kind), .totals = tag_totals(kind) };
-		}
-
+		snapshot.tags   = memory_tag_totals();
 		snapshot.tagged = memory_totals();
 
 		const ProcessMemory process = process_memory();
@@ -36,17 +30,16 @@ namespace core::profiling
 		auto lines = std::vector<std::string>();
 		lines.emplace_back("memory report (peak / live, allocations)");
 
-		auto ordered = std::vector<const MemoryReportEntry*>();
-		for (const MemoryReportEntry& entry : snapshot.tags) ordered.emplace_back(&entry);
+		auto ordered = std::vector<const MemoryTagTotals*>();
+		for (const MemoryTagTotals& entry : snapshot.tags) ordered.emplace_back(&entry);
 
 		// Largest peak first: the report is read to find a hog, and a hog is what the top line
 		// should be. Ties keep tag order, so a run's table does not reshuffle between reports.
-		std::ranges::stable_sort(
-			ordered,
-			std::ranges::greater{},
-			[](const MemoryReportEntry* entry) { return entry->totals.peak; });
+		std::ranges::stable_sort(ordered, std::ranges::greater{}, [](const MemoryTagTotals* entry) {
+			return entry->totals.peak;
+		});
 
-		for (const MemoryReportEntry* entry : ordered)
+		for (const MemoryTagTotals* entry : ordered)
 		{
 			if (entry->totals.peak == 0)
 				continue;
@@ -103,7 +96,7 @@ namespace core::profiling
 		try
 		{
 			auto tags = nlohmann::json::array();
-			for (const MemoryReportEntry& entry : snapshot.tags)
+			for (const MemoryTagTotals& entry : snapshot.tags)
 			{
 				tags.push_back(
 					{

@@ -2,7 +2,7 @@
 #include "convert_d3d12.h"
 #include "resource/Buffer.h"
 
-#include <core/profiling/TaggedBytes.h>
+#include <bgl_common/MemoryTag.h>
 
 namespace bgl
 {
@@ -70,6 +70,6 @@ namespace bgl
 		wrl::ComPtr<ID3D12Resource> m_Buffer;
 
 		// The size asked for, not the driver's: alignment padding differs per backend.
-		core::profiling::TaggedBytes m_Tracked;
+		TaggedBytes m_Tracked;
 	};
 }

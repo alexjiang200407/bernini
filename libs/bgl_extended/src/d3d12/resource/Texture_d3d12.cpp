@@ -93,9 +93,7 @@ namespace bgl
 			device10->GetResourceAllocationInfo2(0, 1, &textureDesc, nullptr);
 		if (allocation.SizeInBytes != std::numeric_limits<uint64_t>::max())
 		{
-			m_Tracked = core::profiling::TaggedBytes(
-				core::profiling::MemoryTag::kDeviceTexture,
-				allocation.SizeInBytes);
+			m_Tracked = bgl::TaggedBytes(MemoryTag::kDeviceTexture, allocation.SizeInBytes);
 		}
 	}
 

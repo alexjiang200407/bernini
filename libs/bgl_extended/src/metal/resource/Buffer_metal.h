@@ -2,7 +2,7 @@
 #include "metal_cpp.h"
 #include "resource/Buffer.h"
 
-#include <core/profiling/TaggedBytes.h>
+#include <bgl_common/MemoryTag.h>
 
 namespace bgl
 {
@@ -19,9 +19,7 @@ namespace bgl
 				NS::TransferPtr(device->newBuffer(desc.byteSize, MTL::ResourceStorageModePrivate));
 			gassert(m_Buffer.get() != nullptr, "Metal buffer allocation failed");
 
-			m_Tracked = core::profiling::TaggedBytes(
-				core::profiling::MemoryTag::kDeviceBuffer,
-				desc.byteSize);
+			m_Tracked = bgl::TaggedBytes(MemoryTag::kDeviceBuffer, desc.byteSize);
 			if (!desc.debugName.empty())
 			{
 				m_Buffer->setLabel(
@@ -46,6 +44,6 @@ namespace bgl
 		NS::SharedPtr<MTL::Buffer> m_Buffer;
 
 		// The size asked for, not the driver's: alignment padding differs per backend.
-		core::profiling::TaggedBytes m_Tracked;
+		TaggedBytes m_Tracked;
 	};
 }

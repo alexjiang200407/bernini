@@ -13,17 +13,55 @@ using namespace core::profiling;
 
 namespace
 {
-	constexpr MemoryTag c_Tag   = MemoryTag::kMesh;
-	constexpr MemoryTag c_Other = MemoryTag::kTexture;
+	/**
+	 * A tag enum of this suite's own, which is the whole point: `core` owns the mechanism and
+	 * never the taxonomy, so a test declares what it charges to exactly as the engine does in
+	 * `bgl_common/MemoryTag.h`.
+	 */
+	enum class TestTag : uint8_t
+	{
+		kFirst,
+		kSecond,
+		kUnused,
+		kCount
+	};
+
+	constexpr std::size_t
+	MemoryTagCount(TestTag) noexcept
+	{
+		return static_cast<std::size_t>(TestTag::kCount);
+	}
+
+	constexpr const char*
+	MemoryTagName(const TestTag tag) noexcept
+	{
+		switch (tag)
+		{
+		case TestTag::kFirst:
+			return "test first";
+		case TestTag::kSecond:
+			return "test second";
+		case TestTag::kUnused:
+			return "test unused";
+		case TestTag::kCount:
+			break;
+		}
+		return "unknown";
+	}
+
+	using TestBytes = TaggedBytes<TestTag>;
+
+	constexpr TestTag c_Tag   = TestTag::kFirst;
+	constexpr TestTag c_Other = TestTag::kSecond;
 
 	uint64_t
-	LiveOf(const MemoryTag tag)
+	LiveOf(const TestTag tag)
 	{
 		return tag_totals(tag).live;
 	}
 
 	uint64_t
-	AllocationsOf(const MemoryTag tag)
+	AllocationsOf(const TestTag tag)
 	{
 		return tag_totals(tag).allocations;
 	}
@@ -35,7 +73,7 @@ TEST_CASE("A charge is released when its holder dies", "[memory]")
 	const uint64_t allocations = AllocationsOf(c_Tag);
 
 	{
-		const TaggedBytes charge(c_Tag, 4096);
+		const TestBytes charge(c_Tag, 4096);
 		CHECK(LiveOf(c_Tag) == before + 4096);
 		CHECK(AllocationsOf(c_Tag) == allocations + 1);
 	}
@@ -50,7 +88,7 @@ TEST_CASE("A peak survives the release that follows it", "[memory]")
 
 	const uint64_t base = LiveOf(c_Tag);
 	{
-		const TaggedBytes charge(c_Tag, 1024 * 1024);
+		const TestBytes charge(c_Tag, 1024 * 1024);
 	}
 
 	// The whole point of a peak: the bytes are gone and the number the OS had to honour is not.
@@ -64,8 +102,8 @@ TEST_CASE("A moved charge is counted once", "[memory]")
 	const uint64_t allocations = AllocationsOf(c_Tag);
 
 	{
-		TaggedBytes       original(c_Tag, 2048);
-		const TaggedBytes moved(std::move(original));
+		TestBytes       original(c_Tag, 2048);
+		const TestBytes moved(std::move(original));
 
 		// A move that charged again would read 4096 here, and a moved-from holder that still
 		// released would take the live count below `before` when the pair goes out of scope.
@@ -82,8 +120,8 @@ TEST_CASE("Re-seating a charge releases the one it replaces", "[memory]")
 {
 	const uint64_t before = LiveOf(c_Tag);
 
-	TaggedBytes charge(c_Tag, 512);
-	charge = TaggedBytes(c_Tag, 8192);
+	TestBytes charge(c_Tag, 512);
+	charge = TestBytes(c_Tag, 8192);
 
 	// The container grew; it did not acquire a second buffer.
 	CHECK(LiveOf(c_Tag) == before + 8192);
@@ -94,8 +132,8 @@ TEST_CASE("A tag is not charged for bytes taken under another", "[memory]")
 	const uint64_t mesh    = LiveOf(c_Tag);
 	const uint64_t texture = LiveOf(c_Other);
 
-	const TaggedBytes outer(c_Tag, 64);
-	const TaggedBytes inner(c_Other, 128);
+	const TestBytes outer(c_Tag, 64);
+	const TestBytes inner(c_Other, 128);
 
 	CHECK(LiveOf(c_Tag) == mesh + 64);
 	CHECK(LiveOf(c_Other) == texture + 128);
@@ -105,8 +143,8 @@ TEST_CASE("The total carries every tag", "[memory]")
 {
 	const uint64_t before = memory_totals().live;
 
-	const TaggedBytes mesh(c_Tag, 16);
-	const TaggedBytes texture(c_Other, 32);
+	const TestBytes mesh(c_Tag, 16);
+	const TestBytes texture(c_Other, 32);
 
 	CHECK(memory_totals().live == before + 48);
 }
@@ -116,7 +154,7 @@ TEST_CASE("A default-constructed holder charges nothing", "[memory]")
 	const uint64_t before = memory_totals().live;
 
 	{
-		const TaggedBytes empty;
+		const TestBytes empty;
 		CHECK(empty.Bytes() == 0);
 		CHECK(memory_totals().live == before);
 	}
@@ -127,15 +165,15 @@ TEST_CASE("A default-constructed holder charges nothing", "[memory]")
 TEST_CASE("Every tag has a name of its own", "[memory]")
 {
 	std::set<std::string_view> names;
-	for (std::size_t tag = 0; tag < c_MemoryTagCount; ++tag)
+	for (std::size_t tag = 0; tag < MemoryTagCount(TestTag{}); ++tag)
 	{
-		const std::string_view name = tag_name(static_cast<MemoryTag>(tag));
+		const std::string_view name = MemoryTagName(static_cast<TestTag>(tag));
 		CHECK_FALSE(name.empty());
 		names.insert(name);
 	}
 
 	// A duplicate would silently merge two subsystems in the report, and in Tracy's pool view.
-	CHECK(names.size() == c_MemoryTagCount);
+	CHECK(names.size() == MemoryTagCount(TestTag{}));
 }
 
 TEST_CASE("The process footprint is readable, or is honestly absent", "[memory]")
@@ -156,13 +194,13 @@ TEST_CASE("The process footprint is readable, or is honestly absent", "[memory]"
 
 TEST_CASE("A report names every tag that has held bytes", "[memory]")
 {
-	const TaggedBytes charge(c_Tag, 3 * 1024 * 1024);
+	const TestBytes charge(c_Tag, 3 * 1024 * 1024);
 
 	const MemorySnapshot snapshot = memory_snapshot();
 	const std::string    report   = format_memory_report(snapshot);
 
 	INFO(report);
-	CHECK(report.find(tag_name(c_Tag)) != std::string::npos);
+	CHECK(report.find(MemoryTagName(c_Tag)) != std::string::npos);
 	CHECK(report.find("3.0 MiB") != std::string::npos);
 	CHECK(report.find("tagged") != std::string::npos);
 }
@@ -173,7 +211,7 @@ TEST_CASE("A tag that never held bytes stays out of the report", "[memory]")
 	const std::string report = format_memory_report(memory_snapshot());
 
 	INFO(report);
-	CHECK(report.find(tag_name(MemoryTag::kEnvironment)) == std::string::npos);
+	CHECK(report.find(MemoryTagName(TestTag::kUnused)) == std::string::npos);
 }
 
 TEST_CASE("The untagged residual is the footprint the tags do not claim", "[memory]")
@@ -196,7 +234,7 @@ TEST_CASE("The untagged residual is the footprint the tags do not claim", "[memo
 
 TEST_CASE("The written report is JSON a tool can read back", "[memory]")
 {
-	const TaggedBytes charge(c_Tag, 65536);
+	const TestBytes charge(c_Tag, 65536);
 
 	const std::filesystem::path path =
 		std::filesystem::temp_directory_path() / "bernini_memory_report.json";
@@ -213,7 +251,7 @@ TEST_CASE("The written report is JSON a tool can read back", "[memory]")
 	CHECK(text.find("\"footprintBytes\"") != std::string::npos);
 	CHECK(text.find("\"untaggedBytes\"") != std::string::npos);
 	CHECK(text.find("\"peakBytes\"") != std::string::npos);
-	CHECK(text.find(std::string(tag_name(c_Tag))) != std::string::npos);
+	CHECK(text.find(std::string(MemoryTagName(c_Tag))) != std::string::npos);
 }
 
 TEST_CASE("An unwritable report path is reported, not thrown", "[memory]")
@@ -233,7 +271,7 @@ TEST_CASE("The guard writes its report when it dies", "[memory]")
 
 	{
 		const MemoryReport report(path);
-		const TaggedBytes  charge(c_Tag, 1024);
+		const TestBytes    charge(c_Tag, 1024);
 
 		// Nothing yet: the report is what the run cost, so it cannot be taken while it is running.
 		CHECK_FALSE(std::filesystem::exists(path));

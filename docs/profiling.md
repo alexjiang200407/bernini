@@ -281,6 +281,14 @@ Nine, at the granularity of Unreal's `ELLMTag`: `mesh`, `animation`, `texture`, 
 per thing somebody can act on. A finer taxonomy is a set of labels nobody maintains, and an
 unmaintained tag reports a number nobody trusts.
 
+**The list is the engine's, in `bgl_common/MemoryTag.h`; the machinery is `core`'s.** `core` is
+shared by every target and has no business knowing what a mesh is, so `core::profiling::TaggedBytes`
+is templated on a tag enum and asks only for a count and a name, both found by ADL beside it. The
+enum sits at the lowest point that everything charging memory can see — the renderer's resources and
+gamelib's container cache — so `bgl_wgpu` reaches it from there too. A report never names a tag enum
+at all: each instantiation registers its table on first use and the report walks what registered,
+which is what lets `assetlib_cli` write one without linking a renderer.
+
 **`untagged` is not an error, it is the mechanism.** It is `footprint - tagged live`: memory the OS
 charges us for that no tag claimed. It is how a missing tag announces itself, and on a unified-memory
 device it is the only warning there is. A tag is added when that column says one is worth adding, not
@@ -292,16 +300,16 @@ in advance.
 whatever owns the buffer**, so the release cannot be forgotten on a path that throws:
 
 ```cpp
-#include <core/profiling/TaggedBytes.h>
+#include <bgl_common/MemoryTag.h>
 
 struct CachedThing
 {
-    std::vector<std::byte>       bytes;
-    core::profiling::TaggedBytes tracked;
+    std::vector<std::byte> bytes;
+    bgl::TaggedBytes       tracked;
 };
 
 thing.bytes   = load(key);
-thing.tracked = core::profiling::TaggedBytes(core::profiling::MemoryTag::kMesh, thing.bytes.size());
+thing.tracked = bgl::TaggedBytes(bgl::MemoryTag::kMesh, thing.bytes.size());
 ```
 
 Assigning a fresh one releases the charge it replaces, which is what a container that grew wants —
