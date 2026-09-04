@@ -297,7 +297,7 @@ to keep in agreement beyond the one below.
   a planted foot is solved against — and stands a floor under the rig at the same tilt, so the tilt
   can be seen. Positive rises toward +X, and a heading slider turns uphill about +Y: nothing in the
   path knows which way a rig moves (the test coyote runs along +Z), so a person turns the hill to
-  face the stride rather than the rig to face the hill. A second checkbox, *Plant feet*, is the
+  face the stride rather than the rig to face the hill. The floor is drawn twice, back to back, because a plane is one face and the renderer culls its back: a single placement disappears the moment the camera drops to floor level, which is the one eye level a foot's contact can be read at when nothing casts a shadow. A second checkbox, *Plant feet*, is the
   scene's `SetFootPlanting`: off, the clip plays as authored against the same ground, which is the
   other half of judging what the solve does — and like the slope it holds only while the panel is
   shown. *Show floor* is the group's master: with no floor drawn there is no slope to see and
