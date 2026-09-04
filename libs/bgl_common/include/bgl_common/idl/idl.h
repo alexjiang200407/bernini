@@ -7,13 +7,16 @@
 #include <bgl_common/idl/CullView.h>
 #include <bgl_common/idl/DebugRecord.h>
 #include <bgl_common/idl/Entry.h>
+#include <bgl_common/idl/FootIKLeg.h>
 #include <bgl_common/idl/InstanceVisibility.h>
 #include <bgl_common/idl/LoosePbrMaterial.h>
 #include <bgl_common/idl/MeshInstance.h>
 #include <bgl_common/idl/Meshlet.h>
 #include <bgl_common/idl/PbrMaterial.h>
 #include <bgl_common/idl/PlaybackType.h>
+#include <bgl_common/idl/PosedInstance.h>
 #include <bgl_common/idl/PsoType.h>
+#include <bgl_common/idl/Ramp.h>
 #include <bgl_common/idl/Range.h>
 #include <bgl_common/idl/RangeWithCount.h>
 #include <bgl_common/idl/RawEntry.h>

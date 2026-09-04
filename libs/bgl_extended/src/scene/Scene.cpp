@@ -826,6 +826,7 @@ namespace bgl
 			RigMeta& meta   = m_Rigs.MetaAt(entry.index);
 			meta.boneCount  = boneCount;
 			meta.clipCount  = static_cast<uint32_t>(clips.size());
+			meta.legCount   = static_cast<uint32_t>(legs.size());
 			meta.frameCount = static_cast<uint32_t>(animations.samples.size() / boneCount);
 			meta.useCount   = 0;
 
@@ -1038,6 +1039,7 @@ namespace bgl
 		geom.rig         = rig.handle;
 		geom.clipCount   = rigClipCount;
 		geom.boneCount   = rigBoneCount;
+		geom.legCount    = meta->legCount;
 
 		// Last, so nothing above can throw with the use already counted.
 		RigMeta* counted = FindRig(rig);

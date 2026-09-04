@@ -1,6 +1,7 @@
 #pragma once
 #include <bgl/IScene.h>
 #include <bgl/InstanceDesc.h>
+#include <bgl/types/FootIKDesc.h>
 
 namespace bgl
 {
@@ -66,6 +67,29 @@ namespace bgl
 		 */
 		virtual void
 		DeleteMeshInstance(MeshInstanceHandle instance) = 0;
+
+		/**
+		 * Rewrites the runtime foot-IK weights of a skinned instance on the per-instance source --
+		 * see FootIKDesc. Written on an event and evaluated from RenderJob::time, so the pose at
+		 * any clock is a function of the record: a write whose ramps all start at or after now
+		 * leaves the pose the previous frame drew unchanged, which is what keeps that frame's
+		 * motion vector exact. FootIKDesc::FadeTo builds such a write from GetFootIK's record.
+		 *
+		 * @throws SceneError if the handle is invalid or removed, the placement is not a skinned
+		 *         one on the per-instance source, its rig authored no legs, or a stored leg's ramp
+		 *         holds a weight outside [0, 1], a non-finite field, or an end before its start.
+		 */
+		virtual void
+		SetFootIK(MeshInstanceHandle instance, const FootIKDesc& desc) = 0;
+
+		/**
+		 * The record SetFootIK or the spawn wrote: weight one on every leg until a write, and the
+		 * default on every entry past the rig's leg count.
+		 *
+		 * @throws SceneError under the first three conditions SetFootIK names.
+		 */
+		[[nodiscard]] virtual FootIKDesc
+		GetFootIK(MeshInstanceHandle instance) const = 0;
 
 		/**
 		 * Overrides the material of one submesh of ONE instance, leaving the geom's default -- and

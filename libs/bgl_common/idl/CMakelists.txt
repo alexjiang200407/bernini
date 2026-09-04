@@ -64,6 +64,9 @@ set(IDL_CPP_SOURCES
     BoneSample.slang
     SkinnedBone.slang
     SkinnedLegChain.slang
+    Ramp.slang
+    FootIKLeg.slang
+    PosedInstance.slang
     Rig.slang
     SkinnedState.slang
     SkinnedTableState.slang

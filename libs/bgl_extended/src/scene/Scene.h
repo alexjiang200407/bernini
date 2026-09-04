@@ -39,6 +39,7 @@ namespace bgl
 
 		uint32_t clipCount = 0;
 		uint32_t boneCount = 0;  // kSkinnedMesh only
+		uint32_t legCount  = 0;  // kSkinnedMesh only; zero on a rig that authored no legs
 	};
 
 	/**
@@ -51,6 +52,9 @@ namespace bgl
 	{
 		uint32_t boneCount = 0;
 		uint32_t clipCount = 0;
+
+		// Legs the rig's FootPlantDesc listed, which sizes a hero instance's foot-IK record.
+		uint32_t legCount = 0;
 
 		// Frames across every clip, which sizes the bone anim table and is the fill's group count.
 		uint32_t frameCount = 0;
@@ -249,13 +253,16 @@ namespace bgl
 
 			// Bones the rig carries, which is what sizes an instance's palette.
 			uint32_t boneCount = 0;
+
+			// Legs the rig authored, which is what sizes an instance's foot-IK record.
+			uint32_t legCount = 0;
 		};
 
 		[[nodiscard]] AnimGeomInfo
 		GetGeomSkinnedInfo(uint32_t index) const noexcept
 		{
 			const GeomRecord& geom = m_Geoms[index];
-			return { geom.rig, geom.clipCount, geom.boneCount };
+			return { geom.rig, geom.clipCount, geom.boneCount, geom.legCount };
 		}
 
 		/**
