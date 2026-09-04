@@ -5,6 +5,14 @@
 #include <QPushButton>
 #include <QTimer>
 #include <QtTest>
+#include <functional>
+#include <memory>
+#include <qnamespace.h>
+#include <qobject.h>
+#include <qprogressdialog.h>
+#include <qtestmouse.h>
+#include <qwidget.h>
+#include <utility>
 
 namespace editor::test
 {

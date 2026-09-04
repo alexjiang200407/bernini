@@ -10,6 +10,16 @@
 #include <QThread>
 #include <QtTest>
 #include <assetlib/cancel.h>
+#include <atomic>
+#include <catch2/catch_message.hpp>
+#include <catch2/catch_test_macros.hpp>
+#include <catch2/generators/catch_generators.hpp>
+#include <qcoreapplication.h>
+#include <qdeadlinetimer.h>
+#include <qnamespace.h>
+#include <qprogressdialog.h>
+#include <qtestmouse.h>
+#include <stdexcept>
 
 namespace
 {

@@ -1,5 +1,12 @@
 #pragma once
 #include <core/glm.h>
+#include <cstdint>
+#include <filesystem>
+#include <optional>
+#include <span>
+#include <string>
+#include <string_view>
+#include <vector>
 
 namespace assetlib
 {

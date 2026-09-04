@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cstdint>
 namespace bgl
 {
 	enum class Format : uint8_t

@@ -1,6 +1,23 @@
 #pragma once
+#include "cmd/CommandList.h"
+#include "resource/Buffer.h"
+#include "resource/ResourceManager.h"
 #include "scene/RangeBuffer.h"
+#include "uniforms/DescriptorHandle.h"
+#include <RawEntry.h>
+#include <algorithm>
+#include <bgl_common/gassert.h>
+#include <bgl_common/idl/Constants.h>
+#include <bgl_common/idl/RawRange.h>
 #include <bgl_common/idl/idl.h>
+#include <concepts>
+#include <core/err/util.h>
+#include <cstddef>
+#include <cstdint>
+#include <cstring>
+#include <span>
+#include <string>
+#include <utility>
 
 namespace bgl
 {

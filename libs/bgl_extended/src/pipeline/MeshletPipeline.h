@@ -5,10 +5,15 @@
 #include "types/Format.h"
 #include "types/RenderState.h"
 #include "uniforms/UniformLayoutEntry.h"
+#include <core/ref/Ref.h>
 
 #include <core/containers/static_vector.h>
 #include <core/ref/RefCounter.h>
 #include <core/ref/SharedRef.h>
+#include <string>
+#include <string_view>
+#include <utility>
+#include <vector>
 
 namespace bgl
 {

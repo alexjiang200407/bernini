@@ -9,6 +9,14 @@
 #include <QMimeData>
 #include <QTemporaryDir>
 #include <QUrl>
+#include <catch2/catch_test_macros.hpp>
+#include <filesystem>
+#include <qbuffer.h>
+#include <qcontainerfwd.h>
+#include <qfileinfo.h>
+#include <qlist.h>
+#include <qobject.h>
+#include <qstringliteral.h>
 
 namespace
 {

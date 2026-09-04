@@ -4,11 +4,22 @@
 #include <assetlib/skinning.h>
 
 #include <core/err/util.h>
+#include <cstddef>
+#include <cstdint>
+#include <exception>
 #include <nlohmann/json.hpp>
+#include <nlohmann/json_fwd.hpp>
+#include <optional>
+#include <span>
 #include <spdlog/spdlog.h>
+#include <string>
+#include <string_view>
+#include <utility>
+#include <vector>
 
 #include "json_doc.h"
 #include "ref_paths.h"
+#include <core/file/IFileSystem.h>
 
 namespace assetlib
 {

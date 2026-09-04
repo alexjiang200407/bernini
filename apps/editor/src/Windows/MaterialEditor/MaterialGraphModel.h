@@ -1,6 +1,10 @@
 #pragma once
 
 #include <QtNodes/DataFlowGraphModel>
+#include <QtNodes/internal/DataFlowGraphModel.hpp>
+#include <QtNodes/internal/Definitions.hpp>
+#include <qobject.h>
+#include <qtmetamacros.h>
 
 class MaterialOutputNode;
 

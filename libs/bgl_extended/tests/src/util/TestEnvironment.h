@@ -2,6 +2,7 @@
 
 #include <bgl/IScene.h>
 #include <bgl/ISceneView.h>
+#include <bgl/TextureAssetHandle.h>
 
 namespace bgl::test
 {

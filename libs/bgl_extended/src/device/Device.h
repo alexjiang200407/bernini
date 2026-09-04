@@ -5,8 +5,10 @@
 #include "uniforms/Uniforms.h"
 #include <bgl/IRenderTarget.h>
 #include <core/file/file.h>
+#include <core/ref/Ref.h>
 #include <core/ref/RefCounter.h>
 #include <core/ref/SharedRef.h>
+#include <string>
 
 namespace bgl
 {

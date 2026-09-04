@@ -1,3 +1,4 @@
+#include <algorithm>
 #include <assetlib/AssetStore.h>
 
 #include <assetlib/asset_import.h>
@@ -13,8 +14,19 @@
 
 #include "mounted_io.h"
 #include "ref_paths.h"
+#include <assetlib/cancel.h>
+#include <assetlib/codecs.h>
+#include <assetlib/progress.h>
 
+#include <cstddef>
+#include <exception>
+#include <iterator>
+#include <span>
+#include <string>
+#include <string_view>
 #include <tracy/Tracy.hpp>
+#include <utility>
+#include <vector>
 
 namespace assetlib
 {

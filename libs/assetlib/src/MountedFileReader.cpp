@@ -1,6 +1,13 @@
 #include "MountedFileReader.h"
+#include "IRangeReader.h"
+#include <core/file/IFileSystem.h>
 
+#include <algorithm>
 #include <core/err/util.h>
+#include <cstddef>
+#include <cstdint>
+#include <string_view>
+#include <vector>
 
 namespace assetlib
 {

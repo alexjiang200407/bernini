@@ -7,6 +7,8 @@
 #include <bgl/IScene.h>
 #include <bgl/ISceneView.h>
 #include <bgl/SkyboxDesc.h>
+#include <catch2/catch_test_macros.hpp>
+#include <cstdint>
 
 // SkyboxPass resolves its constant buffer by the name Slang reflection reports for the
 // shader global, and gfatal()s when the lookup misses. Renaming the ConstantBuffer in

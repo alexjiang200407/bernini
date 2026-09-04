@@ -1,4 +1,5 @@
 #include "import_pipeline.h"
+#include <array>
 #include <assetlib/AssetStore.h>
 #include <assetlib/bmesh.h>
 #include <assetlib/envmap.h>
@@ -9,6 +10,10 @@
 #include "Windows/AssetImporter/EnvironmentImporterDialog.h"
 #include <assetlib/Project.h>
 #include <assetlib/asset_import.h>
+#include <assetlib/cancel.h>
+#include <assetlib/progress.h>
+#include <assetlib/project_layout.h>
+#include <assetlib_structs/Animation.h>
 
 #include <QFileInfo>
 #include <QMessageBox>
@@ -18,7 +23,18 @@
 #include <assetlib/mesh_tangents.h>
 #include <assetlib_structs/BMesh.h>
 #include <assetlib_structs/BMeshImport.h>
+#include <exception>
+#include <filesystem>
+#include <optional>
+#include <qcontainerfwd.h>
+#include <qdialog.h>
+#include <qlogging.h>
+#include <qobject.h>
+#include <string>
+#include <system_error>
 #include <tracy/Tracy.hpp>
+#include <utility>
+#include <vector>
 
 namespace
 {

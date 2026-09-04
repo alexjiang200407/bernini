@@ -4,6 +4,10 @@
 
 #include <core/ref/Ref.h>
 #include <core/ref/SharedRef.h>
+#include <string>
+#include <string_view>
+#include <utility>
+#include <vector>
 
 namespace bgl
 {

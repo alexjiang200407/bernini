@@ -1,3 +1,5 @@
+#include <algorithm>
+#include <array>
 #include <assetlib/codecs.h>
 #include <assetlib/container_info.h>
 #include <assetlib/image_io.h>
@@ -12,11 +14,26 @@
 #include "RecordedProgress.h"
 #include "SkinnedGltf.h"
 #include "bmesh_texture.h"
+#include <assetlib/progress.h>
 
+#include <catch2/catch_message.hpp>
+#include <catch2/catch_test_macros.hpp>
+#include <catch2/matchers/catch_matchers.hpp>
+#include <chrono>
 #include <core/file/file.h>
 
 #include "MountAt.h"
 #include <catch2/matchers/catch_matchers_string.hpp>
+#include <cstddef>
+#include <cstdint>
+#include <filesystem>
+#include <fstream>
+#include <ios>
+#include <iterator>
+#include <map>
+#include <span>
+#include <string_view>
+#include <vector>
 
 using namespace assetlib;
 using Catch::Matchers::ContainsSubstring;

@@ -1,4 +1,9 @@
 #include <bgl_common/PassScheduler.h>
+#include <catch2/catch_test_macros.hpp>
+#include <cstddef>
+#include <string>
+#include <utility>
+#include <vector>
 
 using namespace bgl;
 

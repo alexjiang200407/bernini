@@ -1,4 +1,15 @@
 #include "util/util.h"
+#include "types/Format.h"
+#include "types/FormatInfo.h"
+#include <bgl/GeomType.h>
+#include <bgl/LayerType.h>
+#include <bgl/MaterialHandle.h>
+#include <bgl/MaterialType.h>
+#include <bgl_common/gassert.h>
+#include <bgl_common/idl/MeshInstance.h>
+#include <bgl_common/idl/PsoType.h>
+#include <cstddef>
+#include <cstdint>
 
 namespace bgl
 {

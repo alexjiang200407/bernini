@@ -1,11 +1,34 @@
 #pragma once
 #include "metal_cpp.h"
+#include <Foundation/NSAutoreleasePool.hpp>
+#include <Foundation/NSSharedPtr.hpp>
+#include <Metal/MTLBlitCommandEncoder.hpp>
+#include <Metal/MTLBuffer.hpp>
+#include <Metal/MTLCommandBuffer.hpp>
+#include <Metal/MTLCommandEncoder.hpp>
+#include <Metal/MTLComputeCommandEncoder.hpp>
+#include <Metal/MTLDevice.hpp>
+#include <Metal/MTLRenderCommandEncoder.hpp>
+#include <Metal/MTLTexture.hpp>
 
 #include "cmd/CommandList.h"
+#include "resource/Buffer.h"
+#include "resource/Dsv.h"
+#include "resource/FrameBuffer.h"
+#include "resource/Readback.h"
 #include "resource/ResourceManager.h"
+#include "resource/Rtv.h"
+#include "resource/Texture.h"
+#include "types/ComputeState.h"
+#include "types/MeshletState.h"
+#include "types/QueueType.h"
 
 #include <core/ref/RefCounter.h>
 #include <core/ref/SharedRef.h>
+#include <cstddef>
+#include <cstdint>
+#include <span>
+#include <string_view>
 
 namespace bgl
 {

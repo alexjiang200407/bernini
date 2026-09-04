@@ -1,5 +1,6 @@
 #pragma once
 
+#include <string_view>
 namespace bgl
 {
 	// The frame-graph names the scene's buffers are imported under. The graph matches a name by

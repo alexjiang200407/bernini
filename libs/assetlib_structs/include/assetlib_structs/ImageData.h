@@ -1,6 +1,9 @@
 #pragma once
 #include <assetlib_structs/VkFormat.h>
 #include <core/containers/fixed_buffer.h>
+#include <cstddef>
+#include <cstdint>
+#include <vector>
 
 namespace assetlib
 {

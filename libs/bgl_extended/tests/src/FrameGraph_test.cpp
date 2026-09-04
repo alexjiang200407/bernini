@@ -1,8 +1,36 @@
+#include "cmd/CommandList.h"
 #include "cmd/CommandQueue.h"
+#include "debug/BufferPoisoner.h"
 #include "fg/FrameGraph.h"
+#include "fg/PassDesc.h"
+#include "resource/Buffer.h"
+#include "resource/Dsv.h"
+#include "resource/Readback.h"
 #include "resource/ResourceManager.h"
+#include "resource/Rtv.h"
+#include "resource/Sampler.h"
+#include "resource/Srv.h"
+#include "resource/Texture.h"
+#include "types/Barrier.h"
+#include "types/ComputeState.h"
+#include "types/MeshletState.h"
+#include "types/QueueType.h"
+#include <core/ref/SharedRef.h>
 
+#include <algorithm>
+#include <catch2/catch_test_macros.hpp>
 #include <core/ref/RefCounter.h>
+#include <cstddef>
+#include <cstdint>
+#include <cstdlib>
+#include <format>
+#include <span>
+#include <stdexcept>
+#include <string>
+#include <string_view>
+#include <unordered_map>
+#include <utility>
+#include <vector>
 
 using namespace bgl;
 

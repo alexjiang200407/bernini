@@ -10,11 +10,22 @@
 #include "pipeline/PipelineBatch.h"
 #include "resource/FrameBuffer.h"
 #include "resource/Shader.h"
+#include "scene/scene_buffer_names.h"
+#include "types/Barrier.h"
+#include "types/DepthStencilState.h"
+#include "types/Format.h"
+#include "types/RasterState.h"
 #include "types/RenderState.h"
+#include <bgl_common/gassert.h>
 #include <bgl_common/idl/BaseTable.h>
 
 // The exec lambda copies DrawData, whose SceneViewRef needs the complete type to destroy.
 #include <bgl/ISceneView.h>
+#include <cstdint>
+#include <span>
+#include <string>
+#include <string_view>
+#include <utility>
 
 namespace bgl
 {

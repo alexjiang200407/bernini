@@ -4,10 +4,14 @@
 #include "pipeline/ComputePipeline.h"
 #include "pipeline/PipelineBatch.h"
 #include "scene/scene_buffer_names.h"
+#include "types/Barrier.h"
 #include <bgl/ISceneView.h>
+#include <bgl_common/gassert.h>
 #include <bgl_common/idl/Constants.h>
 #include <bgl_common/idl/DispatchArgs.h>
 #include <core/math.h>
+#include <cstdint>
+#include <spdlog/spdlog.h>
 
 namespace bgl
 {

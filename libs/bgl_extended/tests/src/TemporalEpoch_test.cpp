@@ -2,6 +2,10 @@
 #include "scene/SceneView.h"
 #include "util/TestOptions.h"
 #include <bgl/IGraphics.h>
+#include <bgl/IScene.h>
+#include <bgl/MaterialType.h>
+#include <bgl/types/SceneDesc.h>
+#include <catch2/catch_test_macros.hpp>
 
 // The temporal epoch: what a view reports to the frame drawing it when it has changed in a way no
 // motion vector describes, so the TAA resolve takes that frame whole instead of reprojecting into

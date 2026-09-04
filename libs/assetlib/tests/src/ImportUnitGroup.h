@@ -5,7 +5,13 @@
 #include <assetlib/bmesh_gltf.h>
 #include <assetlib/mesh_tangents.h>
 #include <assetlib/project_layout.h>
+#include <assetlib_structs/Animation.h>
 #include <assetlib_structs/BMesh.h>
+#include <filesystem>
+#include <format>
+#include <string>
+#include <string_view>
+#include <utility>
 
 namespace assetlib::test
 {

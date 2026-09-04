@@ -1,7 +1,17 @@
 #include "pipeline/PipelineBatch.h"
 #include "device/Device.h"
+#include "pipeline/ComputeKernel.h"
+#include "pipeline/MeshletKernel.h"
+#include <bgl_common/gassert.h>
 
+#include <algorithm>
+#include <chrono>
 #include <core/parallel_for.h>
+#include <cstddef>
+#include <cstdint>
+#include <spdlog/spdlog.h>
+#include <thread>
+#include <utility>
 
 namespace bgl
 {

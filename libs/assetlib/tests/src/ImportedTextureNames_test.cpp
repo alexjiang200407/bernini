@@ -1,6 +1,18 @@
+#include <algorithm>
 #include <assetlib/bmesh.h>
 #include <assetlib/bmesh_gltf.h>
 #include <assetlib_structs/BMeshImport.h>
+#include <assetlib_structs/ImageData.h>
+#include <catch2/catch_test_macros.hpp>
+#include <cctype>
+#include <cstddef>
+#include <cstdint>
+#include <filesystem>
+#include <set>
+#include <string>
+#include <string_view>
+#include <utility>
+#include <vector>
 
 using namespace assetlib;
 using namespace assetlib::imp;

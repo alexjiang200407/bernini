@@ -6,6 +6,10 @@
 #include <assetlib_structs/Node.h>
 #include <assetlib_structs/Skeleton.h>
 #include <core/str/string_pool.h>
+#include <cstddef>
+#include <cstdint>
+#include <string>
+#include <vector>
 
 namespace assetlib::imp
 {

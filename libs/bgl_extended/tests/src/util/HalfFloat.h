@@ -1,5 +1,7 @@
 #pragma once
 
+#include <bit>
+#include <cstdint>
 namespace bgl::test
 {
 	/** Decodes one IEEE 754 binary16, as an RG16_FLOAT texture reads back. */

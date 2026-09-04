@@ -1,3 +1,4 @@
+#include <algorithm>
 #include <assetlib/AssetStore.h>
 #include <assetlib/envmap.h>
 #include <assetlib/texture_prune.h>
@@ -6,11 +7,20 @@
 #include <core/file/LooseFileSystem.h>
 
 #include "ref_paths.h"
+#include <core/file/IFileSystem.h>
 
 #include <assetlib/codecs.h>
 #include <assetlib/material_bake.h>
 #include <assetlib_structs/BEnv.h>
 #include <assetlib_structs/BMaterial.h>
+#include <cstddef>
+#include <cstdint>
+#include <exception>
+#include <filesystem>
+#include <stdexcept>
+#include <string>
+#include <system_error>
+#include <unordered_set>
 
 #include "mounted_io.h"
 

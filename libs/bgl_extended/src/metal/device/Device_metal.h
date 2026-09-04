@@ -1,10 +1,18 @@
 #pragma once
 #include "metal_cpp.h"
+#include <Foundation/NSSharedPtr.hpp>
+#include <Metal/MTLDevice.hpp>
+#include <bgl/IRenderTarget.h>
+#include <core/ref/SharedRef.h>
 
 #include "device/Device.h"
 #include "slang/SlangSessions.h"
+#include "types/QueueType.h"
+#include "uniforms/Uniforms.h"
 
 #include <core/ref/RefCounter.h>
+#include <memory>
+#include <string>
 
 namespace bgl
 {

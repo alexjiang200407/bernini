@@ -1,9 +1,16 @@
+#include <catch2/catch_test_macros.hpp>
+#include <catch2/matchers/catch_matchers.hpp>
+#include <filesystem>
 #include <gamelib/AssetManager.h>
 
 #include "util/GoldenImage.h"
 #include "util/RigFixture.h"
 #include "util/TestEnvironment.h"
 #include "util/TestOptions.h"
+#include <assetlib_structs/Node.h>
+#include <bgl/GeomType.h>
+#include <bgl/IScene.h>
+#include <bgl/InstanceDesc.h>
 
 #include <assetlib/AssetStore.h>
 #include <assetlib/skinning.h>
@@ -14,6 +21,7 @@
 #include <bgl/IGraphics.h>
 #include <catch2/catch_approx.hpp>
 #include <catch2/matchers/catch_matchers_string.hpp>
+#include <stdexcept>
 
 // Acquiring a rig as skinned geometry. There is no bake and no freshness rule -- the containers are
 // the source -- so what this pins is the sharing, the release, and the one check bgl cannot make for

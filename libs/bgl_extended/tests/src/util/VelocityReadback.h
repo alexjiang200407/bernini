@@ -6,9 +6,15 @@
 #include "gfx/RenderTargetBase.h"
 #include "resource/Readback.h"
 #include "resource/ResourceManager.h"
+#include "resource/Texture.h"
+#include "types/Barrier.h"
+#include "types/QueueType.h"
 #include "util/HalfFloat.h"
 #include <bgl/IGraphics.h>
 #include <bgl/IRenderTarget.h>
+#include <cstddef>
+#include <cstdint>
+#include <vector>
 
 namespace bgl::test
 {

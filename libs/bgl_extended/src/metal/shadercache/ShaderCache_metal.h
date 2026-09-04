@@ -1,9 +1,21 @@
 #pragma once
 #include "metal_cpp.h"
 #include "types/ShaderStage.h"
+#include <Foundation/NSSharedPtr.hpp>
+#include <Metal/MTLBinaryArchive.hpp>
+#include <Metal/MTLDevice.hpp>
 
 #include "pipeline/MetalPipelineReflection.h"
+#include <array>
 #include <bgl_common/ReflectedLayout.h>
+#include <cstdint>
+#include <filesystem>
+#include <functional>
+#include <mutex>
+#include <string>
+#include <string_view>
+#include <utility>
+#include <vector>
 
 namespace bgl
 {

@@ -1,6 +1,10 @@
 #pragma once
 #include "cmd/CommandList.h"
+#include "resource/Buffer.h"
 #include "resource/ResourceManager.h"
+#include <cstdint>
+#include <string>
+#include <vector>
 
 namespace bgl
 {

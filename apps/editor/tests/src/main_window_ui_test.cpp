@@ -7,6 +7,10 @@
 #include <QMenu>
 #include <QMenuBar>
 #include <catch2/catch_test_macros.hpp>
+#include <qcontainerfwd.h>
+#include <qlist.h>
+#include <qobject.h>
+#include <qstringliteral.h>
 
 // The menu bar was a Designer form until it was built here, and a form is the kind of thing whose
 // contents nobody notices going missing. These cases are what noticed it before: the builder needs

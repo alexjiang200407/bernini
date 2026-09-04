@@ -2,6 +2,7 @@
 #include <assetlib/AssetCodec.h>
 #include <assetlib/AssetStore.h>
 #include <core/file/file.h>
+#include <filesystem>
 
 /**
  * Save or load a container at an absolute path, for a test that owns the whole path rather than a

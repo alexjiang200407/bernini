@@ -1,9 +1,16 @@
 #pragma once
 #include "metal_cpp.h"
+#include <Foundation/NSSharedPtr.hpp>
+#include <Metal/MTLCommandBuffer.hpp>
+#include <Metal/MTLCommandQueue.hpp>
+#include <Metal/MTLDevice.hpp>
+#include <Metal/MTLEvent.hpp>
 
 #include "cmd/CommandQueue.h"
 
 #include <core/ref/RefCounter.h>
+#include <cstdint>
+#include <vector>
 
 namespace bgl
 {

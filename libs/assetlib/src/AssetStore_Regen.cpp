@@ -25,7 +25,12 @@
 #include "ref_paths.h"
 #include "regen_group.h"
 
+#include <cstdint>
+#include <optional>
+#include <span>
+#include <string_view>
 #include <tracy/Tracy.hpp>
+#include <utility>
 
 namespace assetlib
 {

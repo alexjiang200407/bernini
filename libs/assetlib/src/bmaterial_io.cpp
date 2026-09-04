@@ -1,3 +1,5 @@
+#include <algorithm>
+#include <array>
 #include <assetlib/codecs.h>
 #include <assetlib/container_info.h>
 #include <assetlib_structs/BMaterial.h>
@@ -8,7 +10,22 @@
 
 #include <core/err/util.h>
 #include <core/file/file.h>
+#include <cstddef>
+#include <cstdint>
+#include <filesystem>
+#include <iterator>
+#include <mutex>
 #include <nlohmann/json.hpp>
+#include <nlohmann/json_fwd.hpp>
+#include <optional>
+#include <span>
+#include <stdexcept>
+#include <string>
+#include <string_view>
+#include <system_error>
+#include <unordered_map>
+#include <utility>
+#include <vector>
 
 #include "mounted_io.h"
 

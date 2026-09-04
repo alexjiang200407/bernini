@@ -1,5 +1,8 @@
 #pragma once
 
+#include <array>
+#include <cstdint>
+#include <optional>
 namespace assetlib
 {
 	enum class VertexSemantic : uint8_t

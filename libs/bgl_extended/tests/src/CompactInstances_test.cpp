@@ -2,22 +2,34 @@
 #include "cmd/CommandList.h"
 #include "cmd/CommandQueue.h"
 #include "fg/FrameGraph.h"
+#include "fg/PassDesc.h"
 #include "gfx/GraphicsBase.h"
 #include "pipeline/ComputeKernel.h"
 #include "pipeline/ComputePipeline.h"
+#include "resource/Buffer.h"
 #include "resource/Readback.h"
 #include "resource/ResourceManager.h"
 #include "scene/ComputeBuffer.h"
 #include "scene/PackedBuffer.h"
+#include "types/Barrier.h"
 #include "types/ComputeState.h"
+#include "types/QueueType.h"
 #include "types/SubmeshInstance.h"
 #include "uniforms/Uniforms.h"
 #include "util/GpuValidation.h"
 #include "util/TestOptions.h"
+#include <algorithm>
+#include <array>
 #include <bgl/IGraphics.h>
+#include <bgl_common/idl/Constants.h>
 #include <bgl_common/idl/DispatchArgs.h>
+#include <bgl_common/idl/InstanceVisibility.h>
 #include <bgl_common/idl/PsoType.h>
 #include <bgl_common/idl/idl.h>
+#include <catch2/catch_test_macros.hpp>
+#include <cstdint>
+#include <iterator>
+#include <vector>
 
 // Drives the whole counting sort -- histogram, scan, compaction -- through a real FrameGraph, with
 // the same pass declarations CompactInstancesPass makes, and checks every instance landed inside its

@@ -1,3 +1,4 @@
+#include <array>
 #include <assetlib/bmesh.h>
 #include <assetlib/codecs.h>
 #include <assetlib/skinning.h>
@@ -7,7 +8,15 @@
 
 #include "MountAt.h"
 #include "mounted_io.h"
+#include <assetlib_structs/Node.h>
+#include <assetlib_structs/VertexLayout.h>
 #include <catch2/catch_approx.hpp>
+#include <catch2/catch_test_macros.hpp>
+#include <cstddef>
+#include <cstdint>
+#include <filesystem>
+#include <stdexcept>
+#include <utility>
 
 using namespace assetlib;
 

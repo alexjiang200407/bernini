@@ -3,6 +3,10 @@
 #include <RmlUi/Core/Box.h>
 #include <RmlUi/Core/Context.h>
 #include <RmlUi/Core/Element.h>
+#include <cmath>
+#include <cstddef>
+#include <format>
+#include <string>
 
 namespace game::test
 {

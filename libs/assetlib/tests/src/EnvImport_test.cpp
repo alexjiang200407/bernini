@@ -1,13 +1,27 @@
 
+#include <algorithm>
 #include <assetlib/envmap.h>
 #include <assetlib/image_io.h>
 #include <assetlib_structs/BEnv.h>
 #include <assetlib_structs/ImageData.h>
 
 #include <catch2/catch_approx.hpp>
+#include <catch2/catch_message.hpp>
+#include <catch2/catch_test_macros.hpp>
+#include <cstddef>
+#include <cstdint>
+#include <filesystem>
+#include <stdexcept>
+#include <stop_token>
+#include <string_view>
+#include <vector>
 
 #include "MountAt.h"
 #include "mounted_io.h"
+#include <assetlib/AssetStore.h>
+#include <assetlib/cancel.h>
+#include <assetlib_structs/VkFormat.h>
+#include <core/containers/fixed_buffer.h>
 
 using namespace assetlib;
 

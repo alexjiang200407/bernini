@@ -12,10 +12,30 @@
 #include "types/EnvironmentMap.h"
 #include "types/SubmeshInstance.h"
 #include "types/ViewMatrices.h"
+#include <bgl/GeomHandle.h>
+#include <bgl/GeomType.h>
+#include <bgl/IScene.h>
 #include <bgl/ISceneView.h>
+#include <bgl/InstanceDesc.h>
+#include <bgl/MaterialHandle.h>
+#include <bgl/MeshInstanceHandle.h>
 #include <bgl/SkyboxDesc.h>
+#include <bgl/types/EnvironmentMapDesc.h>
+#include <bgl_common/gassert.h>
+#include <bgl_common/idl/MeshInstance.h>
+#include <bgl_common/idl/PlaybackType.h>
 #include <bgl_common/idl/idl.h>
+#include <core/containers/multi_slot_handle.h>
+#include <core/containers/slot_handle.h>
 #include <core/ref/RefCounter.h>
+#include <core/ref/SharedRef.h>
+#include <cstdint>
+#include <format>
+#include <optional>
+#include <span>
+#include <string>
+#include <tuple>
+#include <vector>
 
 namespace bgl
 {

@@ -1,6 +1,11 @@
 #include "device/Device.h"
 #include "cmd/CommandQueue.h"
+#include "pipeline/ComputeKernel.h"
+#include "pipeline/MeshletKernel.h"
 #include "resource/Shader.h"
+#include "types/QueueType.h"
+#include <string>
+#include <utility>
 
 namespace bgl
 {

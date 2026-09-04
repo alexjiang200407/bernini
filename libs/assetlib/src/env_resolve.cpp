@@ -1,3 +1,4 @@
+#include <algorithm>
 #include <assetlib/codecs.h>
 #include <assetlib/envmap.h>
 
@@ -7,6 +8,7 @@
 #include "mounted_io.h"
 #include <assetlib/AssetCodec.h>
 #include <core/file/file.h>
+#include <filesystem>
 
 namespace assetlib
 {

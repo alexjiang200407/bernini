@@ -6,6 +6,16 @@
 #include <QPainter>
 #include <QPalette>
 #include <QPixmap>
+#include <QtCore>
+#include <algorithm>
+#include <qnamespace.h>
+#include <qobject.h>
+#include <qpoint.h>
+#include <qpolygon.h>
+#include <qproxystyle.h>
+#include <qsize.h>
+#include <qstyle.h>
+#include <qtypes.h>
 
 namespace
 {

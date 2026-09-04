@@ -1,6 +1,7 @@
 #pragma once
 #include "pipeline/ComputeKernel.h"
 #include "pipeline/ComputePipeline.h"
+#include <spdlog/spdlog.h>
 
 namespace bgl
 {

@@ -1,9 +1,31 @@
 #include "RenderTarget_metal.h"
 
+#include "cmd/CommandAllocator.h"
+#include "cmd/CommandQueue.h"
 #include "cmd/CommandQueue_metal.h"
+#include "constants/constants.h"
 #include "convert_metal.h"
+#include "device/Device.h"
 #include "device/Device_metal.h"
+#include "resource/ResourceManager.h"
 #include "resource/ResourceManager_metal.h"
+#include "resource/Texture.h"
+#include "types/Barrier.h"
+#include "types/Format.h"
+#include <CoreFoundation/CFCGTypes.h>
+#include <CoreFoundation/CFDate.h>
+#include <Foundation/NSAutoreleasePool.hpp>
+#include <Foundation/NSSharedPtr.hpp>
+#include <Metal/MTLBlitCommandEncoder.hpp>
+#include <Metal/MTLCommandBuffer.hpp>
+#include <Metal/MTLTexture.hpp>
+#include <QuartzCore/CAMetalDrawable.hpp>
+#include <QuartzCore/CAMetalLayer.hpp>
+#include <bgl/IRenderTarget.h>
+#include <core/err/util.h>
+#include <cstdint>
+#include <format>
+#include <utility>
 
 namespace bgl
 {

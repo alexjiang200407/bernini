@@ -5,6 +5,7 @@
 // It proves the *include* closure and nothing else: bgl.h declares symbols only a renderer defines
 // (CreateGraphics, CookStaticMesh, PreparedStaticMesh's special members), so this target must stay a
 // library. An executable would demand them at link time and there would be nothing to satisfy it.
+#include <bgl/IGraphics.h>
 #include <bgl/bgl.h>
 
 namespace

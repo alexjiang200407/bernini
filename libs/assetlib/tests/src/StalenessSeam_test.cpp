@@ -1,7 +1,12 @@
 #include <assetlib/container_info.h>
 #include <assetlib/pak.h>
 #include <assetlib_structs/BMaterial.h>
+#include <catch2/catch_test_macros.hpp>
 #include <core/file/LooseFileSystem.h>
+#include <filesystem>
+#include <fstream>
+#include <ios>
+#include <string_view>
 
 #include "MountAt.h"
 #include "mounted_io.h"

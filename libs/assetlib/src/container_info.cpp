@@ -3,6 +3,13 @@
 #include <assetlib_structs/Animation.h>
 #include <assetlib_structs/BMesh.h>
 #include <assetlib_structs/Skeleton.h>
+#include <cstddef>
+#include <cstdint>
+#include <cstring>
+#include <optional>
+#include <span>
+#include <string>
+#include <vector>
 
 #include "cache_io.h"
 

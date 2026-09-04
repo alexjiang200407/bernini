@@ -8,6 +8,12 @@
 #include <QDir>
 #include <QFile>
 #include <QTemporaryDir>
+#include <catch2/catch_test_macros.hpp>
+#include <filesystem>
+#include <qbuffer.h>
+#include <qfiledevice.h>
+#include <qobject.h>
+#include <qstringliteral.h>
 
 namespace
 {

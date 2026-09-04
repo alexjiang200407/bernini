@@ -1,5 +1,8 @@
 #pragma once
+#include <cstdint>
 #include <gamelib/Ray.h>
+#include <optional>
+#include <vector>
 
 namespace assetlib
 {

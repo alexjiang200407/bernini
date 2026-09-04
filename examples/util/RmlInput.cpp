@@ -2,6 +2,11 @@
 
 #include <RmlUi/Core/Context.h>
 #include <RmlUi/Core/Input.h>
+#include <SDL3/SDL_events.h>
+#include <SDL3/SDL_keyboard.h>
+#include <SDL3/SDL_keycode.h>
+#include <SDL3/SDL_mouse.h>
+#include <SDL3/SDL_stdinc.h>
 
 namespace demo
 {

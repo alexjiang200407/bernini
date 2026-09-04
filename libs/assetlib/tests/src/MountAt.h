@@ -4,6 +4,10 @@
 #include <assetlib/project_layout.h>
 #include <core/file/LooseFileSystem.h>
 #include <core/file/file.h>
+#include <filesystem>
+#include <format>
+#include <string>
+#include <string_view>
 
 /**
  * A loose mount over `root`, for the predicates that resolve through one.

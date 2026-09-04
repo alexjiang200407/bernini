@@ -2,8 +2,12 @@
 #include "gfx/GraphicsBase.h"
 #include "resource/ResourceManager.h"
 #include "resource/Texture.h"
+#include "types/Format.h"
+#include "types/QueueType.h"
 #include "util/TestOptions.h"
 #include <bgl/IGraphics.h>
+#include <catch2/catch_test_macros.hpp>
+#include <cstdint>
 
 namespace
 {

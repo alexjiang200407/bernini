@@ -26,6 +26,10 @@
 #include <core/containers/slot_handle.h>
 #include <core/ref/Ref.h>
 #include <core/ref/SharedRef.h>
+#include <cstdint>
+#include <span>
+#include <stdexcept>
+#include <string>
 
 namespace bgl
 {

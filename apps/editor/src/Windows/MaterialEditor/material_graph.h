@@ -3,12 +3,16 @@
 #include <QJsonObject>
 #include <QPointF>
 #include <QString>
+#include <QtNodes/internal/NodeDelegateModelRegistry.hpp>
 
 #include <QtNodes/NodeDelegateModelRegistry>
 
 #include <assetlib_structs/BMaterial.h>
 #include <assetlib_structs/BMaterialImport.h>
 #include <bgl/IScene.h>
+#include <filesystem>
+#include <memory>
+#include <optional>
 
 class MaterialGraphModel;
 class TexturePreviewCache;

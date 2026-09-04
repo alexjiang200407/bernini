@@ -1,5 +1,7 @@
 #pragma once
 #include <bgl/glm.h>
+#include <cstdint>
+#include <vector>
 
 namespace bgl
 {

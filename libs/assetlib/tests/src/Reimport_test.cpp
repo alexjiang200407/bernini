@@ -1,3 +1,4 @@
+#include <algorithm>
 #include <assetlib/codecs.h>
 #include <assetlib/reimport.h>
 
@@ -13,14 +14,23 @@
 #include <assetlib_structs/Bounds.h>
 #include <assetlib_structs/Skeleton.h>
 #include <catch2/catch_approx.hpp>
+#include <catch2/catch_message.hpp>
 #include <catch2/catch_test_macros.hpp>
+#include <catch2/matchers/catch_matchers.hpp>
 #include <catch2/matchers/catch_matchers_string.hpp>
 #include <core/file/file.h>
+#include <cstddef>
+#include <filesystem>
+#include <map>
+#include <span>
+#include <string>
+#include <vector>
 
 #include "ImportUnitGroup.h"
 #include "MountAt.h"
 #include "RecordedProgress.h"
 #include "SkinnedGltf.h"
+#include <assetlib/progress.h>
 
 // Every other path that makes a container current is keyed on the file already being there --
 // LoadRegen* peeks the header it was handed, Migrate walks the data root. Reimport is the one that

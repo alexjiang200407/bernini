@@ -1,15 +1,37 @@
 #include "StoreAt.h"
+#include <algorithm>
+#include <assetlib/AssetStore.h>
 #include <assetlib/image_io.h>
 #include <assetlib/pak.h>
 #include <assetlib_structs/BEnv.h>
 #include <assetlib_structs/BMaterial.h>
 #include <assetlib_structs/BMesh.h>
 #include <assetlib_structs/ImageData.h>
+#include <assetlib_structs/Node.h>
+#include <assetlib_structs/VertexLayout.h>
+#include <assetlib_structs/VkFormat.h>
+#include <bgl/GeomHandle.h>
 #include <bgl/IGraphics.h>
+#include <bgl/IScene.h>
+#include <bgl/ISceneView.h>
+#include <bgl/LayerType.h>
 #include <bgl/MaterialType.h>
+#include <bgl/MeshInstanceHandle.h>
+#include <bgl/types/SceneDesc.h>
+#include <catch2/catch_test_macros.hpp>
+#include <core/containers/fixed_buffer.h>
 #include <core/file/LayeredFileSystem.h>
 #include <core/file/LooseFileSystem.h>
+#include <cstddef>
+#include <cstdint>
+#include <filesystem>
 #include <gamelib/AssetManager.h>
+#include <memory>
+#include <optional>
+#include <span>
+#include <stdexcept>
+#include <utility>
+#include <vector>
 
 namespace
 {

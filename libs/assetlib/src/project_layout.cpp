@@ -1,6 +1,9 @@
 #include <assetlib/project_layout.h>
 
 #include <core/err/util.h>
+#include <optional>
+#include <string>
+#include <string_view>
 
 #include "ref_paths.h"
 

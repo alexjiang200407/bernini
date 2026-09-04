@@ -1,9 +1,20 @@
 #include "pipeline/MetalPipelineReflection.h"
 
+#include <algorithm>
 #include <bgl_common/SlangReflection.h>
 
+#include "uniforms/UniformLayoutEntry.h"
 #include "uniforms/Uniforms.h"  // detail::ValueTypeSize
+#include <bgl_common/ReflectedLayout.h>
+#include <bgl_common/UniformValueType.h>
+#include <bgl_common/UniformsBase.h>
+#include <bgl_common/gassert.h>
 #include <core/math.h>
+#include <cstdint>
+#include <memory>
+#include <slang.h>
+#include <utility>
+#include <vector>
 
 namespace bgl
 {

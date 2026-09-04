@@ -5,11 +5,22 @@
 #include <assetlib_structs/BMaterial.h>
 #include <assetlib_structs/BMesh.h>
 
+#include <catch2/catch_message.hpp>
+#include <catch2/catch_test_macros.hpp>
+#include <catch2/matchers/catch_matchers.hpp>
+#include <filesystem>
+#include <fstream>
 #include <nlohmann/json.hpp>
 
 #include "RefsSandbox.h"
+#include <assetlib/project_layout.h>
 
 #include <catch2/matchers/catch_matchers_string.hpp>
+#include <nlohmann/json_fwd.hpp>
+#include <sstream>
+#include <stdexcept>
+#include <string>
+#include <string_view>
 
 using namespace assetlib;
 

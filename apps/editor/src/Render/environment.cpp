@@ -1,11 +1,22 @@
 #include "Render/environment.h"
 #include <assetlib/envmap.h>
+#include <bgl/IScene.h>
+#include <bgl/ISceneView.h>
 
 #include <QLoggingCategory>
 
 #include <assetlib/AssetStore.h>
 #include <assetlib_structs/ImageData.h>
 #include <bgl/SkyboxDesc.h>
+#include <cstdint>
+#include <exception>
+#include <filesystem>
+#include <optional>
+#include <qcontainerfwd.h>
+#include <qlogging.h>
+#include <qobject.h>
+#include <string>
+#include <utility>
 
 namespace editor
 {

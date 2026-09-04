@@ -1,3 +1,4 @@
+#include <catch2/catch_session.hpp>
 #define CATCH_CONFIG_RUNNER
 #include "util/GpuValidation.h"
 #include <catch2/catch_all.hpp>

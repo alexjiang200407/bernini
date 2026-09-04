@@ -1,4 +1,8 @@
 #include "Windows/MaterialEditor/nodes/MaterialOutputNode.h"
+#include "Windows/MaterialEditor/nodes/ChannelData.h"
+#include <QtNodes/internal/Definitions.hpp>
+#include <QtNodes/internal/NodeData.hpp>
+#include <QtNodes/internal/NodeDelegateModel.hpp>
 
 #include <QApplication>
 #include <QCheckBox>
@@ -10,6 +14,13 @@
 #include <QJsonObject>
 #include <QPushButton>
 #include <QSignalBlocker>
+#include <algorithm>
+#include <memory>
+#include <qlatin1stringview.h>
+#include <qnamespace.h>
+#include <qstringliteral.h>
+#include <qtmetamacros.h>
+#include <utility>
 
 namespace
 {

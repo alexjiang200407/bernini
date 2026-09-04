@@ -6,6 +6,16 @@
 #include <assetlib/import_document.h>
 
 #include <QDir>
+#include <cstddef>
+#include <exception>
+#include <filesystem>
+#include <qfileinfo.h>
+#include <qnamespace.h>
+#include <qobject.h>
+#include <qstringview.h>
+#include <qtypes.h>
+#include <string>
+#include <string_view>
 
 namespace editor
 {

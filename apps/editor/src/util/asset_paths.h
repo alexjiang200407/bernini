@@ -1,6 +1,7 @@
 #pragma once
 
 #include <QString>
+#include <qtypes.h>
 
 namespace editor
 {

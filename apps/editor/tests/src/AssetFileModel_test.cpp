@@ -6,12 +6,23 @@
 
 #include "StoreAt.h"
 
+#include <algorithm>
 #include <assetlib/import_document.h>
 
 #include <QDir>
 #include <QIcon>
 #include <QSignalSpy>
 #include <QTemporaryDir>
+#include <catch2/catch_test_macros.hpp>
+#include <filesystem>
+#include <qabstractitemmodel.h>
+#include <qbuffer.h>
+#include <qimage.h>
+#include <qlist.h>
+#include <qnamespace.h>
+#include <qobject.h>
+#include <qstringliteral.h>
+#include <utility>
 
 namespace
 {

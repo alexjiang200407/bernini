@@ -1,4 +1,5 @@
 #include "Import/import_writers.h"
+#include <array>
 #include <assetlib/bmesh.h>
 
 #include <assetlib/asset_import.h>
@@ -6,6 +7,10 @@
 #include "Windows/AssetImporter/material_stems.h"
 #include "util/QtSupport.h"
 #include "util/asset_paths.h"
+#include <assetlib/bmesh_gltf.h>
+#include <assetlib_structs/BMaterial.h>
+#include <assetlib_structs/BMaterialImport.h>
+#include <assetlib_structs/Node.h>
 
 #include <assetlib_structs/BMesh.h>
 #include <assetlib_structs/BMeshImport.h>
@@ -15,6 +20,19 @@
 #include "StoreAt.h"
 #include <QDir>
 #include <assetlib/AssetStore.h>
+#include <catch2/catch_message.hpp>
+#include <catch2/catch_test_macros.hpp>
+#include <cstddef>
+#include <cstdint>
+#include <filesystem>
+#include <qcontainerfwd.h>
+#include <qtypes.h>
+#include <stdexcept>
+#include <string>
+#include <string_view>
+#include <system_error>
+#include <utility>
+#include <vector>
 
 namespace
 {

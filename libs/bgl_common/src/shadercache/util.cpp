@@ -1,10 +1,29 @@
+#include <algorithm>
+#include <atomic>
+#include <bgl_common/ReflectedLayout.h>
+#include <bgl_common/UniformValueType.h>
 #include <bgl_common/shadercache/util.h>
+#include <core/io/ByteReader.h>
+#include <core/io/ByteWriter.h>
 
 #include <bgl_common/gassert.h>
 
 #include <core/file/file.h>
 #include <core/hash.h>
 #include <core/platform/util.h>
+#include <cstddef>
+#include <cstdint>
+#include <filesystem>
+#include <format>
+#include <fstream>
+#include <ios>
+#include <span>
+#include <spdlog/spdlog.h>
+#include <string>
+#include <string_view>
+#include <system_error>
+#include <utility>
+#include <vector>
 
 namespace bgl::shader_cache
 {

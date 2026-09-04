@@ -1,12 +1,25 @@
 #pragma once
+#include "device/Device.h"
 #include "metal_cpp.h"
+#include <Metal/MTLBuffer.hpp>
+#include <Metal/MTLDevice.hpp>
+#include <Metal/MTLResource.hpp>
+#include <Metal/MTLSampler.hpp>
+#include <Metal/MTLTexture.hpp>
 
+#include "resource/Buffer.h"
 #include "resource/Buffer_metal.h"
+#include "resource/Dsv.h"
 #include "resource/Dsv_metal.h"
+#include "resource/Readback.h"
 #include "resource/ReadbackBuffer_metal.h"
+#include "resource/Rtv.h"
 #include "resource/Rtv_metal.h"
+#include "resource/Sampler.h"
 #include "resource/Sampler_metal.h"
+#include "resource/Srv.h"
 #include "resource/Srv_metal.h"
+#include "resource/Texture.h"
 #include "resource/Texture_metal.h"
 
 #include "resource/ResourceManager.h"
@@ -14,6 +27,10 @@
 #include <core/containers/slot_vector.h>
 #include <core/containers/static_vector.h>
 #include <core/ref/RefCounter.h>
+#include <cstdint>
+#include <mutex>
+#include <span>
+#include <vector>
 
 namespace bgl
 {

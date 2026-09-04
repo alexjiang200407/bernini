@@ -1,10 +1,20 @@
+#include <array>
 #include <assetlib/AssetStore.h>
 #include <assetlib/image_io.h>
 #include <assetlib/material_bake.h>
 #include <assetlib/texture_prune.h>
 #include <assetlib_structs/BMaterial.h>
 #include <assetlib_structs/ImageData.h>
+#include <catch2/catch_test_macros.hpp>
 #include <core/file/LooseFileSystem.h>
+#include <cstddef>
+#include <cstdint>
+#include <filesystem>
+#include <ios>
+#include <memory>
+#include <stdexcept>
+#include <string>
+#include <vector>
 
 #include "MountAt.h"
 #include "bmesh_texture.h"

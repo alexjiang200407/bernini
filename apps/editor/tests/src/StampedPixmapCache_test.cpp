@@ -7,6 +7,13 @@
 #include <QTemporaryDir>
 
 #include <catch2/catch_test_macros.hpp>
+#include <optional>
+#include <qbuffer.h>
+#include <qdir.h>
+#include <qnamespace.h>
+#include <qobject.h>
+#include <qpixmap.h>
+#include <qtypes.h>
 
 namespace
 {

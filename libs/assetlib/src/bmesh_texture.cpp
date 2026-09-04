@@ -1,5 +1,16 @@
 #include "bmesh_texture.h"
+#include <algorithm>
 #include <assetlib_structs/ImageData.h>
+#include <assetlib_structs/VkFormat.h>
+#include <cmath>
+#include <core/containers/fixed_buffer.h>
+#include <cstddef>
+#include <cstdint>
+#include <cstring>
+#include <optional>
+#include <span>
+#include <stdexcept>
+#include <vector>
 
 #define STB_IMAGE_RESIZE_IMPLEMENTATION
 #include <stb_image_resize2.h>

@@ -3,6 +3,9 @@
 #include <QString>
 
 #include <assetlib_structs/BMaterial.h>
+#include <filesystem>
+#include <optional>
+#include <qtypes.h>
 
 /**
  * A `.bmaterial` parsed at most once per change to it.

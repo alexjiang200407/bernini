@@ -4,6 +4,9 @@
 #include <assetlib_structs/BEnv.h>
 #include <assetlib_structs/BMaterial.h>
 #include <assetlib_structs/SourceStamp.h>
+#include <filesystem>
+#include <string>
+#include <string_view>
 
 #include "mounted_io.h"
 

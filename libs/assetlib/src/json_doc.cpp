@@ -1,6 +1,14 @@
 #include "json_doc.h"
 
+#include <charconv>
 #include <core/err/util.h>
+#include <cstddef>
+#include <format>
+#include <nlohmann/json_fwd.hpp>
+#include <span>
+#include <string>
+#include <string_view>
+#include <vector>
 
 namespace assetlib::doc
 {

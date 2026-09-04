@@ -2,12 +2,18 @@
 #include <DemoWindow.h>
 #include <FlyCamera.h>
 #include <SDL3/SDL.h>
+#include <SDL3/SDL_messagebox.h>
 #include <assetlib/image_io.h>
 #include <assetlib_structs/ImageData.h>
+#include <bgl/IGraphics.h>
+#include <bgl/IRenderTarget.h>
+#include <bgl/RenderJob.h>
 #include <bgl/bgl.h>
+#include <cstdint>
 #include <format>
 #include <gamelib/AssetManager.h>
 #include <stdexcept>
+#include <utility>
 
 int
 main(int argc, char** argv)

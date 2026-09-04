@@ -1,4 +1,5 @@
 #include "Startup/StartupScreen.h"
+#include "Async/BackgroundTask.h"
 
 #include <QApplication>
 #include <QFontMetrics>
@@ -7,6 +8,12 @@
 #include <QProgressBar>
 #include <QScreen>
 #include <QVBoxLayout>
+#include <qfont.h>
+#include <qnamespace.h>
+#include <qobject.h>
+#include <qstringliteral.h>
+#include <qwidget.h>
+#include <utility>
 
 namespace editor
 {

@@ -4,7 +4,10 @@
 #include "Mesh/mesh_load.h"
 #include "Windows/MaterialEditor/MaterialGraphModel.h"
 #include "Windows/MaterialEditor/material_graph.h"
+#include <algorithm>
 #include <assetlib/Project.h>
+#include <assetlib/project_layout.h>
+#include <assetlib_structs/BMaterial.h>
 
 #include <QFileInfo>
 #include <QMessageBox>
@@ -14,6 +17,15 @@
 #include <assetlib/material_bake.h>
 #include <assetlib/mesh_tangents.h>
 #include <assetlib_structs/BMesh.h>
+#include <exception>
+#include <filesystem>
+#include <qcontainerfwd.h>
+#include <qlatin1stringview.h>
+#include <qlogging.h>
+#include <qnamespace.h>
+#include <qobject.h>
+#include <qstringliteral.h>
+#include <system_error>
 
 namespace editor
 {

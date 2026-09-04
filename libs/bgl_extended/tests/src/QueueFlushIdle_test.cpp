@@ -1,5 +1,10 @@
 // bgl_extended_tests globs every .cpp under tests/ whatever the backend, so a Metal-only case has to exclude
 // itself: a command buffer's retirement is only observable through metal-cpp.
+#include "resource/Buffer.h"
+#include "types/QueueType.h"
+#include <Metal/MTLCommandBuffer.hpp>
+#include <catch2/catch_test_macros.hpp>
+#include <cstdint>
 #if defined(RENDERER_BACKEND_METAL)
 
 #	include "cmd/CommandAllocator.h"

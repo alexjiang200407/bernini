@@ -2,6 +2,14 @@
 
 #include <QElapsedTimer>
 #include <QWidget>
+#include <bgl/Camera.h>
+#include <bgl/IRenderTarget.h>
+#include <cstddef>
+#include <cstdint>
+#include <qcoreevent.h>
+#include <qpaintdevice.h>
+#include <qtmetamacros.h>
+#include <qtypes.h>
 
 class QTimer;
 

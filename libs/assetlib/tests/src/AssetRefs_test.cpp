@@ -1,3 +1,4 @@
+#include <algorithm>
 #include <assetlib/asset_refs.h>
 #include <assetlib/bmesh.h>
 
@@ -11,7 +12,19 @@
 #include "RefsSandbox.h"
 #include "bmesh_texture.h"
 #include "mounted_io.h"
+#include <assetlib/AssetCodec.h>
 #include <assetlib/AssetStore.h>
+#include <assetlib/codecs.h>
+#include <assetlib_structs/Node.h>
+#include <catch2/catch_message.hpp>
+#include <catch2/catch_test_macros.hpp>
+#include <filesystem>
+#include <ios>
+#include <optional>
+#include <span>
+#include <stdexcept>
+#include <string>
+#include <vector>
 
 #ifdef _WIN32
 #	define NOMINMAX

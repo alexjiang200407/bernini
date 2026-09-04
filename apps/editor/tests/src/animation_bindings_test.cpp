@@ -2,8 +2,18 @@
 #include <assetlib/Project.h>
 
 #include "StoreAt.h"
+#include <assetlib/project_layout.h>
 #include <assetlib_structs/Animation.h>
 #include <assetlib_structs/BMesh.h>
+#include <catch2/catch_test_macros.hpp>
+#include <cstdint>
+#include <filesystem>
+#include <fstream>
+#include <ios>
+#include <stdexcept>
+#include <string>
+#include <string_view>
+#include <system_error>
 
 // Resolution is a query over the asset reference graph: the mesh names its rig, every .banim's
 // kClipSkeleton edge names the rig it was authored against, and candidacy is those agreeing.

@@ -1,6 +1,14 @@
 #pragma once
+#include <bgl/GeomHandle.h>
 #include <bgl/IScene.h>
 #include <bgl/InstanceDesc.h>
+#include <bgl/MaterialHandle.h>
+#include <bgl/MeshInstanceHandle.h>
+#include <bgl/api.h>
+#include <bgl/types/EnvironmentMapDesc.h>
+#include <core/ref/Ref.h>
+#include <core/ref/SharedRef.h>
+#include <cstdint>
 
 namespace bgl
 {

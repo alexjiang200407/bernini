@@ -3,7 +3,11 @@
 #include <assetlib_structs/BEnv.h>
 #include <core/err/util.h>
 #include <core/file/file.h>
+#include <cstddef>
 #include <nlohmann/json.hpp>
+#include <span>
+#include <string_view>
+#include <vector>
 
 #include "fs_util.h"
 #include "json_doc.h"

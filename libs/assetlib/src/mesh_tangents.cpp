@@ -1,10 +1,18 @@
 #include <assetlib/mesh_tangents.h>
+#include <assetlib_structs/Mesh.h>
+#include <assetlib_structs/VertexLayout.h>
 
 #include <assetlib_structs/BMesh.h>
 
+#include <cstddef>
+#include <cstdint>
+#include <cstdlib>
+#include <stdexcept>
 #include <tracy/Tracy.hpp>
 
 #include <glm/glm.hpp>
+#include <utility>
+#include <vector>
 
 namespace assetlib
 {

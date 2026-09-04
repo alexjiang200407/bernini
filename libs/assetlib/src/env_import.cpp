@@ -1,4 +1,5 @@
 
+#include <algorithm>
 #include <assetlib/AssetStore.h>
 #include <assetlib/envmap.h>
 
@@ -6,9 +7,22 @@
 #include <assetlib_structs/BEnv.h>
 #include <assetlib_structs/ImageData.h>
 
+#include <bit>
+#include <cctype>
+#include <cstdint>
+#include <filesystem>
 #include <spdlog/spdlog.h>
+#include <stdexcept>
+#include <string>
+#include <string_view>
+#include <system_error>
+#include <utility>
+#include <vector>
 
 #include "fs_util.h"
+#include <assetlib/cancel.h>
+#include <assetlib/project_layout.h>
+#include <assetlib_structs/VkFormat.h>
 
 namespace assetlib
 {

@@ -1,8 +1,12 @@
 #include "Render/Renderer.h"
 #include "Thumbnails/AssetThumbnailCache.h"
+#include "Thumbnails/StampedPixmapCache.h"
 #include "util/held_open_assets.h"
+#include <assetlib/codecs.h>
 #include <assetlib_structs/BMesh.h>
+#include <assetlib_structs/Mesh.h>
 #include <assetlib_structs/Node.h>
+#include <bgl/types/SceneDesc.h>
 
 #include "util/QtSupport.h"
 
@@ -13,12 +17,24 @@
 #include <assetlib_structs/magic.h>
 #include <bgl/IGraphics.h>
 #include <bgl/IScene.h>
+#include <catch2/catch_message.hpp>
 #include <core/file/file.h>
 #include <core/settings/Settings.h>
+#include <cstddef>
+#include <filesystem>
+#include <fstream>
 #include <gamelib/AssetManager.h>
 
 #include "StoreAt.h"
 #include <catch2/catch_test_macros.hpp>
+#include <ios>
+#include <optional>
+#include <qcolor.h>
+#include <qobject.h>
+#include <qrgb.h>
+#include <set>
+#include <string>
+#include <vector>
 
 using editor::test::WaitFor;
 

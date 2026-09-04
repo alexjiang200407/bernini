@@ -2,6 +2,11 @@
 #include <assetlib/cancel.h>
 #include <assetlib/project_layout.h>
 #include <assetlib_structs/ImageData.h>
+#include <cstdint>
+#include <filesystem>
+#include <string>
+#include <string_view>
+#include <vector>
 
 namespace assetlib
 {

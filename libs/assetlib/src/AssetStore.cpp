@@ -3,8 +3,15 @@
 
 #include <core/err/util.h>
 #include <core/file/LooseFileSystem.h>
+#include <filesystem>
+#include <memory>
+#include <string>
+#include <string_view>
+#include <system_error>
+#include <utility>
 
 #include "ref_paths.h"
+#include <core/file/IFileSystem.h>
 
 namespace assetlib
 {

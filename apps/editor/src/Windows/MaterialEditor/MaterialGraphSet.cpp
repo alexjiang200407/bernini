@@ -3,6 +3,11 @@
 #include "Windows/MaterialEditor/MaterialGraphModel.h"
 #include "Windows/MaterialEditor/MaterialGraphScene.h"
 #include "Windows/MaterialEditor/material_io.h"
+#include <algorithm>
+#include <cstddef>
+#include <cstdint>
+#include <qcontainerfwd.h>
+#include <qobject.h>
 
 void
 MaterialGraphSet::Reset(int submeshCount)

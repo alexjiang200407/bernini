@@ -1,3 +1,4 @@
+#include <algorithm>
 #include <assetlib/AssetStore.h>
 #include <assetlib/asset_refs.h>
 #include <assetlib/avatar.h>
@@ -9,11 +10,29 @@
 #include <assetlib_structs/BEnv.h>
 #include <assetlib_structs/BMaterial.h>
 
+#include <cctype>
 #include <core/file/LooseFileSystem.h>
 #include <core/file/file.h>
+#include <cstddef>
+#include <cstdint>
+#include <exception>
+#include <filesystem>
+#include <iterator>
+#include <optional>
+#include <ranges>
+#include <span>
+#include <stdexcept>
+#include <string>
+#include <string_view>
+#include <system_error>
+#include <tuple>
+#include <unordered_set>
+#include <utility>
+#include <vector>
 
 #include "material_texture_refs.h"
 #include "ref_paths.h"
+#include <assetlib/codecs.h>
 
 #include "mounted_io.h"
 

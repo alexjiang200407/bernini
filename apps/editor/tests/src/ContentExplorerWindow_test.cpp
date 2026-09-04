@@ -4,6 +4,7 @@
 #include "Thumbnails/TexturePreviewCache.h"
 #include "util/QtSupport.h"
 #include "util/asset_paths.h"
+#include <algorithm>
 #include <assetlib/Project.h>
 #include <assetlib/project_layout.h>
 
@@ -17,6 +18,20 @@
 #include <QTemporaryDir>
 #include <QToolButton>
 #include <QTreeView>
+#include <catch2/catch_message.hpp>
+#include <catch2/catch_test_macros.hpp>
+#include <catch2/generators/catch_generators.hpp>
+#include <filesystem>
+#include <qabstractitemmodel.h>
+#include <qcoreapplication.h>
+#include <qicon.h>
+#include <qimage.h>
+#include <qlist.h>
+#include <qnamespace.h>
+#include <qobject.h>
+#include <qstringliteral.h>
+#include <qtmetamacros.h>
+#include <string>
 
 namespace
 {

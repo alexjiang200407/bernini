@@ -1,5 +1,7 @@
 #pragma once
 
+#include <cstddef>
+#include <cstdint>
 namespace bgl
 {
 	enum class ShaderStage : uint32_t

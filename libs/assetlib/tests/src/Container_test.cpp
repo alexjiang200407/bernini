@@ -4,9 +4,21 @@
 
 #include "cache_io.h"
 #include "mounted_io.h"
+#include <assetlib_structs/Mesh.h>
+#include <assetlib_structs/Node.h>
 
 #include "MountAt.h"
+#include <catch2/catch_test_macros.hpp>
+#include <catch2/matchers/catch_matchers.hpp>
 #include <catch2/matchers/catch_matchers_string.hpp>
+#include <cstddef>
+#include <cstdint>
+#include <cstring>
+#include <filesystem>
+#include <span>
+#include <stdexcept>
+#include <utility>
+#include <vector>
 
 using namespace assetlib;
 

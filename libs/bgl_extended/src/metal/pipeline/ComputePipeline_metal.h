@@ -1,11 +1,19 @@
 #pragma once
 #include "metal_cpp.h"
+#include <Foundation/NSSharedPtr.hpp>
+#include <Metal/MTLComputePipeline.hpp>
+#include <Metal/MTLDevice.hpp>
+#include <Metal/MTLTypes.hpp>
+#include <bgl_common/gassert.h>
 
 #include "pipeline/ComputePipeline.h"
 #include "pipeline/MetalPipelineReflection.h"
 #include "uniforms/UniformLayoutEntry.h"
 
 #include <core/ref/RefCounter.h>
+#include <string>
+#include <string_view>
+#include <vector>
 
 namespace bgl
 {

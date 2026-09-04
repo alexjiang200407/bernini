@@ -7,6 +7,9 @@
 #include <QMessageBox>
 
 #include <assetlib/codecs.h>
+#include <qlogging.h>
+#include <qobject.h>
+#include <qstringliteral.h>
 
 namespace editor
 {

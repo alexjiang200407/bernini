@@ -1,6 +1,7 @@
 #pragma once
 #include <bgl/LayerType.h>
 #include <bgl/MaterialType.h>
+#include <cstdint>
 
 namespace bgl
 {

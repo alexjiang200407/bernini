@@ -1,6 +1,7 @@
 #include "Windows/MaterialEditor/MaterialGraphView.h"
 
 #include "util/asset_paths.h"
+#include <QtNodes/internal/GraphicsView.hpp>
 
 #include <QDragEnterEvent>
 #include <QDropEvent>
@@ -10,6 +11,10 @@
 #include <QMimeData>
 #include <QShowEvent>
 #include <QUrl>
+#include <qnamespace.h>
+#include <qobject.h>
+#include <qtmetamacros.h>
+#include <qwidget.h>
 
 namespace
 {

@@ -1,7 +1,14 @@
 #include "ref_paths.h"
 
+#include <algorithm>
 #include <assetlib/codecs.h>
+#include <cctype>
 #include <core/err/util.h>
+#include <cstddef>
+#include <filesystem>
+#include <string>
+#include <string_view>
+#include <system_error>
 
 namespace assetlib
 {

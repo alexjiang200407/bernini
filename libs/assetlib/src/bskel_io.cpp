@@ -9,6 +9,11 @@
 #include <assetlib_structs/magic.h>
 
 #include <core/file/file.h>
+#include <cstddef>
+#include <cstdint>
+#include <span>
+#include <string_view>
+#include <vector>
 
 #include "mounted_io.h"
 

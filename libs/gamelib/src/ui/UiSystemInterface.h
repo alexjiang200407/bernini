@@ -1,5 +1,6 @@
 #pragma once
 #include <RmlUi/Core/SystemInterface.h>
+#include <string_view>
 
 namespace game
 {

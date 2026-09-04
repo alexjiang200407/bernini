@@ -1,3 +1,4 @@
+#include <array>
 #include <assetlib/AssetStore.h>
 #include <assetlib/asset_refs.h>
 #include <assetlib/avatar.h>
@@ -7,9 +8,17 @@
 
 #include "MountAt.h"
 #include "RefsSandbox.h"
+#include <assetlib_structs/Node.h>
 
 #include <catch2/catch_test_macros.hpp>
+#include <catch2/matchers/catch_matchers.hpp>
 #include <catch2/matchers/catch_matchers_string.hpp>
+#include <cstddef>
+#include <cstdint>
+#include <filesystem>
+#include <span>
+#include <string>
+#include <vector>
 
 // The `.bavatar`: the document itself, the convention that finds it, and the two operations that
 // convention has to survive -- a reference scan and a rename.

@@ -4,10 +4,16 @@
 
 #include "cache_io.h"
 #include "fs_util.h"
+#include <assetlib_structs/SourceRef.h>
 
 #include <core/err/util.h>
 #include <core/file/file.h>
 #include <core/str/str.h>
+#include <cstddef>
+#include <cstdint>
+#include <span>
+#include <string_view>
+#include <vector>
 
 #include "mounted_io.h"
 

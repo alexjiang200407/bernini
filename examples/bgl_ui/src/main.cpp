@@ -4,10 +4,20 @@
 #include <RmlInput.h>
 #include <RmlUi/Core.h>
 #include <SDL3/SDL.h>
+#include <SDL3/SDL_events.h>
+#include <SDL3/SDL_messagebox.h>
+#include <bgl/IGraphics.h>
+#include <bgl/IRenderTarget.h>
+#include <bgl/RenderJob.h>
 #include <bgl/bgl.h>
+#include <cmath>
+#include <cstdint>
 #include <gamelib/AssetManager.h>
 #include <gamelib/ui/UiRenderer.h>
 #include <gamelib/ui/UiRuntime.h>
+#include <stdexcept>
+#include <string>
+#include <utility>
 
 /**
  * The three layers a menu is made of: a styled document underneath, a live 3D render inside it,

@@ -1,6 +1,29 @@
 #include "resource/ResourceManager_metal.h"
+#include "constants/constants.h"
+#include "resource/Buffer.h"
+#include "resource/Dsv.h"
+#include "resource/Dsv_metal.h"
+#include "resource/Readback.h"
+#include "resource/ReadbackBuffer_metal.h"
+#include "resource/ResourceManager.h"
+#include "resource/Rtv.h"
+#include "resource/Rtv_metal.h"
+#include "resource/Sampler.h"
+#include "resource/Sampler_metal.h"
+#include "resource/Srv.h"
+#include "resource/Texture.h"
+#include "types/FormatInfo.h"
+#include "uniforms/DescriptorHandle.h"
 #include "util/util.h"
+#include <Metal/MTLDevice.hpp>
+#include <Metal/MTLResource.hpp>
+#include <Metal/MTLTexture.hpp>
+#include <bgl_common/gassert.h>
+#include <core/containers/slot_handle.h>
+#include <core/containers/slot_vector.h>
+#include <core/containers/static_vector.h>
 
+#include <algorithm>
 #include <core/math.h>
 
 #include "cmd/CommandList_metal.h"
@@ -12,6 +35,10 @@
 #include <core/math.h>
 
 #include <core/math.h>
+#include <cstdint>
+#include <mutex>
+#include <span>
+#include <spdlog/spdlog.h>
 
 namespace bgl
 {

@@ -8,8 +8,20 @@
 #include <assetlib_structs/BMaterial.h>
 #include <assetlib_structs/BMesh.h>
 #include <assetlib_structs/Skeleton.h>
+#include <catch2/catch_message.hpp>
+#include <catch2/catch_test_macros.hpp>
+#include <cstddef>
+#include <filesystem>
+#include <optional>
+#include <span>
+#include <stdexcept>
+#include <string>
+#include <string_view>
 
 #include "RefsSandbox.h"
+#include <assetlib/AssetCodec.h>
+#include <assetlib/asset_refs.h>
+#include <assetlib/project_layout.h>
 
 using namespace assetlib;
 
