@@ -392,6 +392,8 @@ def run_tidy(tidy, build_dir, main_file, args, filters=()):
         cmd.append("--fix")
     if args.checks:
         cmd.append(f"--checks={args.checks}")
+    if args.config:
+        cmd.append(f"--config={args.config}")
     cmd += list(filters)
     cmd.append(main_file)
 
@@ -450,6 +452,14 @@ def main():
     parser.add_argument("--build-dir", help="Build directory holding compile_commands.json.")
     parser.add_argument("--preset", help="Take the build directory from this preset instead.")
     parser.add_argument("--checks", help="Override the Checks from .clang-tidy.")
+    parser.add_argument(
+        "--config", metavar="YAML",
+        help="Override the .clang-tidy files entirely, e.g. to set a check's options. Replaces "
+             "them rather than merging, so pass --checks with it. What splits an include sweep "
+             "into its two halves: --checks='-*,misc-include-cleaner' with "
+             "'{CheckOptions: {misc-include-cleaner.UnusedIncludes: false}}' inserts without "
+             "removing, and MissingIncludes: false removes without inserting.",
+    )
     parser.add_argument("--jobs", type=int, default=os.cpu_count(), help="Files to check at once.")
     parser.add_argument(
         "--if-configured", action="store_true",
