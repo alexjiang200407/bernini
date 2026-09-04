@@ -4,7 +4,6 @@
 #include <assetlib/texture_prune.h>
 
 #include <core/err/util.h>
-#include <core/file/LooseFileSystem.h>
 
 #include "ref_paths.h"
 #include <core/file/IFileSystem.h>

@@ -1,11 +1,5 @@
 #include "shadercache/ShaderCache_metal.h"
 #include "MetalErrorChecker.h"
-#include <Foundation/NSAutoreleasePool.hpp>
-#include <Foundation/NSError.hpp>
-#include <Foundation/NSSharedPtr.hpp>
-#include <Foundation/NSURL.hpp>
-#include <Metal/MTLBinaryArchive.hpp>
-#include <Metal/MTLDevice.hpp>
 
 #include "convert_metal.h"
 #include "pipeline/MetalPipelineReflection.h"

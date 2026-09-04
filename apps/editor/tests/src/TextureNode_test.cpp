@@ -2,7 +2,7 @@
 #include "Windows/MaterialEditor/nodes/TextureNode.h"
 #include <QtNodes/internal/Definitions.hpp>
 
-#include "util/QtSupport.h"
+#include "util/QtSupport.h"  // IWYU pragma: keep
 
 #include <QJsonObject>
 #include <catch2/catch_message.hpp>

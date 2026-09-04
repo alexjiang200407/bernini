@@ -1,6 +1,5 @@
 #pragma once
 #include "metal_cpp.h"
-#include <QuartzCore/CAMetalLayer.hpp>
 #include <bgl/IRenderTarget.h>
 #include <bgl_common/gassert.h>
 

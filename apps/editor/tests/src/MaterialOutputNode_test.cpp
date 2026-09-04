@@ -3,7 +3,7 @@
 #include "Windows/MaterialEditor/nodes/MaterialOutputNode.h"
 #include <QtNodes/internal/Definitions.hpp>
 
-#include "util/QtSupport.h"
+#include "util/QtSupport.h"  // IWYU pragma: keep
 #include <bgl/TextureAssetHandle.h>
 
 #include <QFormLayout>

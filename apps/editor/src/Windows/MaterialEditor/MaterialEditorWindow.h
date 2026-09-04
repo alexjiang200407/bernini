@@ -6,8 +6,6 @@
 #include "util/follows_project.h"
 #include "util/held_open_assets.h"
 
-#include <bgl/IGraphics.h>
-#include <bgl/IScene.h>
 #include <cstdint>
 #include <filesystem>
 #include <memory>

@@ -1,9 +1,7 @@
 #include <DemoWindow.h>
-#include <SDL3/SDL.h>
 #include <SDL3/SDL_messagebox.h>
 #include <bgl/IGraphics.h>
 #include <bgl/IRenderTarget.h>
-#include <bgl/bgl.h>
 #include <core/err/util.h>
 #include <exception>
 

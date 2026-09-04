@@ -3,7 +3,7 @@
 #include <catch2/catch_test_macros.hpp>
 #include <qstringliteral.h>
 
-#include "util/QtSupport.h"
+#include "util/QtSupport.h"  // IWYU pragma: keep
 #include <assetlib/progress.h>
 
 // The one part of the startup screen a test can reach: what each report turns into. The screen

@@ -4,7 +4,6 @@
 #include "Windows/AssetImporter/material_stems.h"
 #include "util/asset_paths.h"
 #include <algorithm>
-#include <assetlib/Project.h>
 #include <assetlib/bmesh_gltf.h>
 #include <assetlib/project_layout.h>
 

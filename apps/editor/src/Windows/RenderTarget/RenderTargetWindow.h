@@ -13,7 +13,6 @@
 
 class QTimer;
 
-#include <bgl/IGraphics.h>
 #include <bgl/IScene.h>
 #include <bgl/ISceneView.h>
 #include <core/stats/RollingWindow.h>

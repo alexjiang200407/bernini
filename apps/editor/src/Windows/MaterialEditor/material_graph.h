@@ -9,7 +9,6 @@
 
 #include <assetlib_structs/BMaterial.h>
 #include <assetlib_structs/BMaterialImport.h>
-#include <bgl/IScene.h>
 #include <filesystem>
 #include <memory>
 #include <optional>

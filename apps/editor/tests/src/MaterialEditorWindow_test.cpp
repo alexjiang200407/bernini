@@ -1,6 +1,6 @@
 #include "Windows/MaterialEditor/material_io.h"
 
-#include "util/QtSupport.h"
+#include "util/QtSupport.h"  // IWYU pragma: keep
 
 #include <QDir>
 #include <QTemporaryDir>

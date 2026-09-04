@@ -1,12 +1,6 @@
 #include "MetalErrorChecker.h"
 #include "cmd/CommandQueue_metal.h"
 #include "device/Device_metal.h"
-#include <Foundation/NSError.hpp>
-#include <Foundation/NSSharedPtr.hpp>
-#include <Foundation/NSString.hpp>
-#include <Foundation/NSURL.hpp>
-#include <Metal/MTLCaptureManager.hpp>
-#include <Metal/MTLDevice.hpp>
 #include <assetlib_structs/ImageData.h>
 #include <bgl/IGpuAssertionHandler.h>
 #include <bgl/IGraphics.h>

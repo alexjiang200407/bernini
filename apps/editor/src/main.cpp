@@ -13,7 +13,6 @@
 #include <qobject.h>
 #include <qstringliteral.h>
 #include <spdlog/common.h>
-#include <spdlog/spdlog.h>
 #include <string_view>
 #include <tracy/Tracy.hpp>
 

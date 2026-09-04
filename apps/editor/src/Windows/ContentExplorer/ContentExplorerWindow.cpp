@@ -32,7 +32,6 @@
 #include <QToolButton>
 #include <QTreeView>
 #include <algorithm>
-#include <assetlib/project_layout.h>
 
 #include <memory>
 #include <qabstractitemmodel.h>

@@ -6,7 +6,6 @@
 #include <cstdint>
 #include <glm/glm.hpp>
 #include <nlohmann/json.hpp>
-#include <nlohmann/json_fwd.hpp>
 #include <string>
 #include <string_view>
 #include <vector>

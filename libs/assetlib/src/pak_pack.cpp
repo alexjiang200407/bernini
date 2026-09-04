@@ -1,7 +1,6 @@
 #include <algorithm>
 #include <assetlib/AssetStore.h>
 #include <assetlib/codecs.h>
-#include <assetlib/envmap.h>
 #include <assetlib/pak.h>
 
 #include <assetlib/RegenMesh.h>

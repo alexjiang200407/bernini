@@ -1,5 +1,5 @@
 #include "Windows/AnimationEditor/animation_bindings.h"
-#include <assetlib/Project.h>
+#include <assetlib/Project.h>  // IWYU pragma: keep
 
 #include "StoreAt.h"
 #include <assetlib/project_layout.h>

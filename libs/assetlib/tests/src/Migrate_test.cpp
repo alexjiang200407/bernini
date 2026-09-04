@@ -4,10 +4,8 @@
 #include <assetlib/container_info.h>
 #include <assetlib/image_io.h>
 #include <assetlib/migrate.h>
-#include <assetlib_structs/BEnv.h>
 #include <assetlib_structs/BMaterial.h>
 #include <assetlib_structs/BMesh.h>
-#include <assetlib_structs/magic.h>
 
 #include "CacheTamper.h"
 #include "ImportUnitGroup.h"

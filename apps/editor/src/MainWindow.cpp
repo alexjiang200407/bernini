@@ -39,7 +39,6 @@
 #include <assetlib/texture_prune.h>
 #include <bgl/IGraphics.h>
 #include <core/err/util.h>
-#include <core/file/file.h>
 #include <core/platform/util.h>
 #include <core/settings/Settings.h>
 

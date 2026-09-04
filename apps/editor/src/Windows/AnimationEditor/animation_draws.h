@@ -6,7 +6,6 @@
 #include "Windows/AnimationEditor/PlaybackTransport.h"
 #include <gamelib/ClipInfo.h>
 
-#include <gamelib/AssetManager.h>
 #include <span>
 #include <string>
 #include <vector>

@@ -2,7 +2,6 @@
 
 #include "Windows/AssetImporter/folder_row.h"
 #include "util/asset_paths.h"
-#include <assetlib/Project.h>
 #include <assetlib/project_layout.h>
 
 #include <QCheckBox>

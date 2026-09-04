@@ -1,10 +1,10 @@
 #include "pipeline/MetalPipelineReflection.h"
+#include "uniforms/Uniforms.h"  // detail::ValueTypeSize
 
 #include <algorithm>
 #include <bgl_common/SlangReflection.h>
 
 #include "uniforms/UniformLayoutEntry.h"
-#include "uniforms/Uniforms.h"  // detail::ValueTypeSize
 #include <bgl_common/ReflectedLayout.h>
 #include <bgl_common/UniformValueType.h>
 #include <bgl_common/UniformsBase.h>

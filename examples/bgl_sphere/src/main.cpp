@@ -8,6 +8,7 @@
 #include <bgl/IGraphics.h>
 #include <bgl/IRenderTarget.h>
 #include <bgl/RenderJob.h>
+#include <bgl/SkyboxDesc.h>  // IWYU pragma: keep
 #include <bgl/bgl.h>
 #include <cstdint>
 #include <format>

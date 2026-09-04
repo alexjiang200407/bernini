@@ -9,14 +9,6 @@
 #include "util/RigFixture.h"
 #include "util/TestOptions.h"
 
-#include "StoreAt.h"
-#include <assetlib/AssetStore.h>
-#include <assetlib/asset_import.h>
-#include <assetlib/bmesh_gltf.h>
-#include <assetlib/mesh_tangents.h>
-#include <assetlib/project_layout.h>
-#include <assetlib_structs/Animation.h>
-#include <assetlib_structs/BMesh.h>
 #include <bgl/IGraphics.h>
 #include <catch2/matchers/catch_matchers_string.hpp>
 #include <core/file/file.h>

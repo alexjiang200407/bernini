@@ -1,8 +1,6 @@
 #include "device/Device_metal.h"
 
 #include "RenderTarget_metal.h"
-#include <Foundation/NSSharedPtr.hpp>
-#include <Metal/MTLDevice.hpp>
 
 #include "cmd/CommandAllocator_metal.h"
 #include "cmd/CommandList_metal.h"

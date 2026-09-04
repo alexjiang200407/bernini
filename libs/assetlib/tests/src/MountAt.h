@@ -1,7 +1,6 @@
 #pragma once
 #include <assetlib/AssetCodec.h>
 #include <assetlib/AssetStore.h>
-#include <assetlib/project_layout.h>
 #include <core/file/LooseFileSystem.h>
 #include <core/file/file.h>
 #include <filesystem>

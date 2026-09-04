@@ -3,7 +3,6 @@
 
 #include <QDebug>
 
-#include <assetlib/AssetCodec.h>
 #include <assetlib/AssetStore.h>
 #include <assetlib/RegenMesh.h>
 #include <assetlib_structs/BMesh.h>

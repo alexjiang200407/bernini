@@ -1,6 +1,4 @@
 #include "MetalErrorChecker.h"
-#include <Foundation/NSError.hpp>
-#include <Foundation/NSString.hpp>
 
 #include <bgl_common/gassert.h>
 #include <format>

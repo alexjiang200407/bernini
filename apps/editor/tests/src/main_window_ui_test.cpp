@@ -1,6 +1,6 @@
 #include "main_window_ui.h"
 
-#include "util/QtSupport.h"
+#include "util/QtSupport.h"  // IWYU pragma: keep
 
 #include <QAction>
 #include <QMainWindow>

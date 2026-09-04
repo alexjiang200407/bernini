@@ -10,7 +10,6 @@
 #include <cstdint>
 #include <cstring>
 #include <nlohmann/json.hpp>
-#include <nlohmann/json_fwd.hpp>
 #include <span>
 #include <string>
 #include <string_view>

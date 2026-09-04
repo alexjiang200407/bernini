@@ -14,9 +14,7 @@
 #include <QSignalSpy>
 
 #include <assetlib_structs/BMaterial.h>
-#include <assetlib_structs/magic.h>
 #include <bgl/IGraphics.h>
-#include <bgl/IScene.h>
 #include <catch2/catch_message.hpp>
 #include <core/file/file.h>
 #include <core/settings/Settings.h>

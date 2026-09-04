@@ -10,7 +10,6 @@
 
 #include "MountAt.h"
 #include "RefsSandbox.h"
-#include "bmesh_texture.h"
 #include "mounted_io.h"
 #include <assetlib/AssetCodec.h>
 #include <assetlib/AssetStore.h>

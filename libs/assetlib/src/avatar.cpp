@@ -8,7 +8,6 @@
 #include <cstdint>
 #include <exception>
 #include <nlohmann/json.hpp>
-#include <nlohmann/json_fwd.hpp>
 #include <optional>
 #include <span>
 #include <spdlog/spdlog.h>

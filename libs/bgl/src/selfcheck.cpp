@@ -6,7 +6,6 @@
 // (CreateGraphics, CookStaticMesh, PreparedStaticMesh's special members), so this target must stay a
 // library. An executable would demand them at link time and there would be nothing to satisfy it.
 #include <bgl/IGraphics.h>
-#include <bgl/bgl.h>
 
 namespace
 {

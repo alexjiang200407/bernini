@@ -1,12 +1,13 @@
+// `logger` is a namespace alias, which include-cleaner does not count as a use of the
+// header that declares it -- see bgl_common/gassert.h.
 #include <algorithm>
 #include <atomic>
 #include <bgl_common/ReflectedLayout.h>
 #include <bgl_common/UniformValueType.h>
+#include <bgl_common/gassert.h>  // IWYU pragma: keep
 #include <bgl_common/shadercache/util.h>
 #include <core/io/ByteReader.h>
 #include <core/io/ByteWriter.h>
-
-#include <bgl_common/gassert.h>
 
 #include <core/file/file.h>
 #include <core/hash.h>

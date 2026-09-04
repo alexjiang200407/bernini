@@ -4,7 +4,6 @@
 #include <core/err/util.h>
 #include <cstddef>
 #include <format>
-#include <nlohmann/json_fwd.hpp>
 #include <span>
 #include <string>
 #include <string_view>

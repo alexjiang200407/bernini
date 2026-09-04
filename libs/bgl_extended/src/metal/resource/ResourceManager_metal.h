@@ -1,11 +1,6 @@
 #pragma once
 #include "device/Device.h"
 #include "metal_cpp.h"
-#include <Metal/MTLBuffer.hpp>
-#include <Metal/MTLDevice.hpp>
-#include <Metal/MTLResource.hpp>
-#include <Metal/MTLSampler.hpp>
-#include <Metal/MTLTexture.hpp>
 
 #include "resource/Buffer.h"
 #include "resource/Buffer_metal.h"

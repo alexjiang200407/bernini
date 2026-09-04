@@ -1,6 +1,5 @@
 #pragma once
 #include <assetlib/AssetStore.h>
-#include <assetlib/project_layout.h>
 #include <cassert>
 #include <filesystem>
 #include <optional>

@@ -8,7 +8,6 @@
 #include <QCloseEvent>
 #include <QPushButton>
 #include <QThread>
-#include <QtTest>
 #include <assetlib/cancel.h>
 #include <atomic>
 #include <catch2/catch_message.hpp>

@@ -4,7 +4,6 @@
 #include "Windows/AnimationEditor/Scrubber.h"
 #include "util/mesh_drop.h"
 #include <algorithm>
-#include <assetlib/Project.h>
 #include <assetlib/project_layout.h>
 #include <bgl/InstanceDesc.h>
 

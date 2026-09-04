@@ -4,7 +4,6 @@
 #include <assetlib/asset_import.h>
 #include <assetlib/import_document.h>
 #include <assetlib/migrate.h>
-#include <assetlib/project_layout.h>
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers.hpp>
 #include <core/file/file.h>

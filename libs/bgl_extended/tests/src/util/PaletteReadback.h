@@ -1,4 +1,5 @@
 #pragma once
+// idl::SkinnedState arrived through the idl.h umbrella this sweep removed.
 #include "cmd/CommandAllocator.h"
 #include "cmd/CommandList.h"
 #include "cmd/CommandQueue.h"
@@ -12,6 +13,7 @@
 #include <bgl/MeshInstanceHandle.h>
 #include <bgl_common/idl/Constants.h>
 #include <bgl_common/idl/MeshInstance.h>
+#include <bgl_common/idl/SkinnedState.h>
 #include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
 #include <cstddef>

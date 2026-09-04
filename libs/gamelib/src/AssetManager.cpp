@@ -1,6 +1,5 @@
 #include <assetlib/AssetStore.h>
 #include <assetlib/codecs.h>
-#include <assetlib/envmap.h>
 #include <assetlib_structs/Mesh.h>
 #include <assetlib_structs/SourceStamp.h>
 #include <bgl/IScene.h>

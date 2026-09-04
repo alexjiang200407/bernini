@@ -3,7 +3,6 @@
 #include <assetlib_structs/BMesh.h>
 
 #include "cache_io.h"
-#include "mounted_io.h"
 #include <assetlib_structs/Mesh.h>
 #include <assetlib_structs/Node.h>
 

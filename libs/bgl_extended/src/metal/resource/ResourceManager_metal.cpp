@@ -1,5 +1,6 @@
 #include "resource/ResourceManager_metal.h"
 #include "constants/constants.h"
+#include "convert_metal.h"
 #include "resource/Buffer.h"
 #include "resource/Dsv.h"
 #include "resource/Dsv_metal.h"
@@ -15,9 +16,6 @@
 #include "types/FormatInfo.h"
 #include "uniforms/DescriptorHandle.h"
 #include "util/util.h"
-#include <Metal/MTLDevice.hpp>
-#include <Metal/MTLResource.hpp>
-#include <Metal/MTLTexture.hpp>
 #include <bgl_common/gassert.h>
 #include <core/containers/slot_handle.h>
 #include <core/containers/slot_vector.h>
@@ -30,7 +28,6 @@
 #include "cmd/CommandQueue.h"
 #include "util/util.h"
 
-#include "convert_metal.h"
 #include "util/util.h"
 #include <core/math.h>
 

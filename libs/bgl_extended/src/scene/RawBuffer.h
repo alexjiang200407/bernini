@@ -9,6 +9,7 @@
 #include <bgl_common/gassert.h>
 #include <bgl_common/idl/Constants.h>
 #include <bgl_common/idl/RawRange.h>
+#include <bgl_common/idl/RecordHeader.h>
 #include <bgl_common/idl/idl.h>
 #include <concepts>
 #include <core/err/util.h>

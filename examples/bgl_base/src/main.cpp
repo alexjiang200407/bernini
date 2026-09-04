@@ -4,6 +4,7 @@
 #include <bgl/IGraphics.h>
 #include <bgl/IRenderTarget.h>
 #include <bgl/RenderJob.h>
+#include <bgl/SkyboxDesc.h>  // IWYU pragma: keep
 #include <cstdint>
 #include <filesystem>
 #include <limits>

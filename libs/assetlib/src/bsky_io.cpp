@@ -3,10 +3,8 @@
 #include <assetlib_structs/magic.h>
 
 #include "cache_io.h"
-#include "fs_util.h"
 #include <assetlib_structs/SourceRef.h>
 
-#include <core/file/file.h>
 #include <cstddef>
 #include <cstdint>
 #include <span>

@@ -8,7 +8,6 @@
 #include "Import/import_writers.h"
 
 #include "Windows/AssetImporter/EnvironmentImporterDialog.h"
-#include <assetlib/Project.h>
 #include <assetlib/asset_import.h>
 #include <assetlib/cancel.h>
 #include <assetlib/progress.h>

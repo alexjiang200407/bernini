@@ -1,5 +1,6 @@
 #include "passes/BrdfLutGenPass.h"
 #include "pipeline/PipelineBatch.h"
+#include "resource/Shader.h"
 #include <bgl_common/gassert.h>
 
 #include "cmd/CommandList.h"
@@ -7,7 +8,6 @@
 #include "pipeline/MeshletPipeline.h"
 #include "resource/FrameBuffer.h"
 #include "resource/ResourceManager.h"
-#include "resource/Shader.h"
 #include "resource/Texture.h"
 #include "types/Barrier.h"
 #include "types/DepthStencilState.h"

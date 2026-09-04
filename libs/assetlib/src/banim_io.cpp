@@ -6,7 +6,6 @@
 #include <assetlib/skinning.h>
 
 #include "cache_io.h"
-#include "fs_util.h"
 #include <assetlib_structs/Node.h>
 
 #include <assetlib_structs/magic.h>

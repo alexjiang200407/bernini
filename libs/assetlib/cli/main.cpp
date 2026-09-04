@@ -25,7 +25,6 @@
 #include <assetlib_structs/BEnv.h>
 #include <assetlib_structs/BMesh.h>
 #include <assetlib_structs/BMeshImport.h>
-#include <assetlib_structs/magic.h>
 #include <core/err/util.h>
 #include <core/file/file.h>
 #include <core/profiling/MemoryReport.h>

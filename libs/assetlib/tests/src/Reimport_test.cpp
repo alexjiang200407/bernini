@@ -1,17 +1,18 @@
+#include "MountAt.h"  // IWYU pragma: keep
 #include <algorithm>
 #include <assetlib/codecs.h>
+#include <assetlib/project_layout.h>  // IWYU pragma: keep
 #include <assetlib/reimport.h>
+#include <assetlib_structs/Bounds.h>  // IWYU pragma: keep
 
 #include <assetlib/AssetStore.h>
 #include <assetlib/Project.h>
 #include <assetlib/asset_refs.h>
 #include <assetlib/import_document.h>
 #include <assetlib/migrate.h>
-#include <assetlib/project_layout.h>
 #include <assetlib/skinning.h>
 #include <assetlib_structs/Animation.h>
 #include <assetlib_structs/BMesh.h>
-#include <assetlib_structs/Bounds.h>
 #include <assetlib_structs/Skeleton.h>
 #include <catch2/catch_approx.hpp>
 #include <catch2/catch_message.hpp>
@@ -27,7 +28,6 @@
 #include <vector>
 
 #include "ImportUnitGroup.h"
-#include "MountAt.h"
 #include "RecordedProgress.h"
 #include "SkinnedGltf.h"
 #include <assetlib/progress.h>

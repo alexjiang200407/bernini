@@ -16,7 +16,6 @@
 #include <assetlib/project_layout.h>
 
 #include <catch2/matchers/catch_matchers_string.hpp>
-#include <nlohmann/json_fwd.hpp>
 #include <sstream>
 #include <stdexcept>
 #include <string>

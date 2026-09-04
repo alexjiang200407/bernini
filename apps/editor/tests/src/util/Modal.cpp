@@ -4,7 +4,6 @@
 #include <QElapsedTimer>
 #include <QPushButton>
 #include <QTimer>
-#include <QtTest>
 #include <functional>
 #include <memory>
 #include <qnamespace.h>

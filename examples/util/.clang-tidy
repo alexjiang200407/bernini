@@ -5,3 +5,8 @@ InheritParentConfig: true
 
 CheckOptions:
   readability-identifier-naming.NamespaceIgnoredRegexp: '^Rml$'
+
+# Include hygiene, on for this subsystem. See docs/naming.md; the root config enables it
+# nowhere and each subsystem opts itself in as it is swept.
+Checks: >
+  misc-include-cleaner

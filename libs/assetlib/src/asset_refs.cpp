@@ -11,7 +11,6 @@
 #include <assetlib_structs/BMaterial.h>
 
 #include <cctype>
-#include <core/file/LooseFileSystem.h>
 #include <core/file/file.h>
 #include <cstddef>
 #include <cstdint>

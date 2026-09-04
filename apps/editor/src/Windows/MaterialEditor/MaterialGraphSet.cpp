@@ -1,7 +1,8 @@
+// Held in a unique_ptr, whose deleter needs sizeof(T) -- invisible to include-cleaner.
 #include "MaterialGraphSet.h"
+#include "Windows/MaterialEditor/MaterialGraphModel.h"  // IWYU pragma: keep
+#include "Windows/MaterialEditor/MaterialGraphScene.h"  // IWYU pragma: keep
 
-#include "Windows/MaterialEditor/MaterialGraphModel.h"
-#include "Windows/MaterialEditor/MaterialGraphScene.h"
 #include "Windows/MaterialEditor/material_io.h"
 #include <algorithm>
 #include <cstddef>

@@ -14,13 +14,6 @@
 #include "types/Format.h"
 #include <CoreFoundation/CFCGTypes.h>
 #include <CoreFoundation/CFDate.h>
-#include <Foundation/NSAutoreleasePool.hpp>
-#include <Foundation/NSSharedPtr.hpp>
-#include <Metal/MTLBlitCommandEncoder.hpp>
-#include <Metal/MTLCommandBuffer.hpp>
-#include <Metal/MTLTexture.hpp>
-#include <QuartzCore/CAMetalDrawable.hpp>
-#include <QuartzCore/CAMetalLayer.hpp>
 #include <bgl/IRenderTarget.h>
 #include <core/err/util.h>
 #include <cstdint>

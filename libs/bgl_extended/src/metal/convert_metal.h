@@ -1,12 +1,5 @@
 #pragma once
 #include "metal_cpp.h"
-#include <Foundation/NSString.hpp>
-#include <Metal/MTLDepthStencil.hpp>
-#include <Metal/MTLPixelFormat.hpp>
-#include <Metal/MTLRenderCommandEncoder.hpp>
-#include <Metal/MTLRenderPipeline.hpp>
-#include <Metal/MTLSampler.hpp>
-#include <Metal/MTLTexture.hpp>
 
 #include "resource/Sampler.h"
 #include "types/BlendState.h"

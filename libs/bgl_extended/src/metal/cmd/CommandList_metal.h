@@ -1,15 +1,6 @@
 #pragma once
 #include "metal_cpp.h"
-#include <Foundation/NSAutoreleasePool.hpp>
-#include <Foundation/NSSharedPtr.hpp>
-#include <Metal/MTLBlitCommandEncoder.hpp>
-#include <Metal/MTLBuffer.hpp>
-#include <Metal/MTLCommandBuffer.hpp>
-#include <Metal/MTLCommandEncoder.hpp>
-#include <Metal/MTLComputeCommandEncoder.hpp>
-#include <Metal/MTLDevice.hpp>
-#include <Metal/MTLRenderCommandEncoder.hpp>
-#include <Metal/MTLTexture.hpp>
+#include <core/ref/SharedRef.h>
 
 #include "cmd/CommandList.h"
 #include "resource/Buffer.h"
@@ -24,7 +15,6 @@
 #include "types/QueueType.h"
 
 #include <core/ref/RefCounter.h>
-#include <core/ref/SharedRef.h>
 #include <cstddef>
 #include <cstdint>
 #include <span>

@@ -10,7 +10,6 @@
 #include <core/file/LooseFileSystem.h>
 #include <core/file/file.h>
 
-#include <catch2/matchers/catch_matchers_string.hpp>
 #include <cstddef>
 #include <filesystem>
 #include <fstream>

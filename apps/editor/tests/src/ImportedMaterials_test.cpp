@@ -5,7 +5,7 @@
 #include <assetlib/asset_import.h>
 
 #include "Windows/AssetImporter/material_stems.h"
-#include "util/QtSupport.h"
+#include "util/QtSupport.h"  // IWYU pragma: keep
 #include "util/asset_paths.h"
 #include <assetlib/bmesh_gltf.h>
 #include <assetlib_structs/BMaterial.h>

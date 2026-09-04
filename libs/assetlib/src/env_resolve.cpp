@@ -6,7 +6,6 @@
 #include <assetlib_structs/BEnv.h>
 
 #include "mounted_io.h"
-#include <assetlib/AssetCodec.h>
 #include <core/file/file.h>
 #include <filesystem>
 

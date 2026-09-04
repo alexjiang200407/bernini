@@ -1,14 +1,6 @@
 #include "pipeline/ComputePipeline_metal.h"
 #include "MetalErrorChecker.h"
-#include <Foundation/NSArray.hpp>
-#include <Foundation/NSAutoreleasePool.hpp>
-#include <Foundation/NSObject.hpp>
-#include <Foundation/NSSharedPtr.hpp>
-#include <Foundation/NSString.hpp>
-#include <Metal/MTLBinaryArchive.hpp>
-#include <Metal/MTLComputePipeline.hpp>
-#include <Metal/MTLDevice.hpp>
-#include <Metal/MTLLibrary.hpp>
+#include <core/err/util.h>
 
 #include "convert_metal.h"
 #include "pipeline/ComputePipeline.h"
@@ -19,7 +11,6 @@
 #include <bgl_common/SlangErrorChecker.h>
 #include <bgl_common/gassert.h>
 
-#include <core/err/util.h>
 #include <cstddef>
 #include <cstdint>
 #include <iterator>

@@ -3,7 +3,6 @@
 #include <QString>
 #include <QStringList>
 
-#include <bgl/IScene.h>
 #include <cstddef>
 #include <cstdint>
 #include <memory>

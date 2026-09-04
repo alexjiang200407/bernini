@@ -6,13 +6,6 @@
 #include "types/Format.h"
 #include "types/RasterState.h"
 #include "types/TextureDimension.h"
-#include <Foundation/NSString.hpp>
-#include <Metal/MTLDepthStencil.hpp>
-#include <Metal/MTLPixelFormat.hpp>
-#include <Metal/MTLRenderCommandEncoder.hpp>
-#include <Metal/MTLRenderPipeline.hpp>
-#include <Metal/MTLSampler.hpp>
-#include <Metal/MTLTexture.hpp>
 #include <bgl_common/gassert.h>
 #include <cstdint>
 #include <string>

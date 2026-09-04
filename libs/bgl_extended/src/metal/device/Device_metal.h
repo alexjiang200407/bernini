@@ -1,7 +1,5 @@
 #pragma once
 #include "metal_cpp.h"
-#include <Foundation/NSSharedPtr.hpp>
-#include <Metal/MTLDevice.hpp>
 #include <bgl/IRenderTarget.h>
 #include <core/ref/SharedRef.h>
 

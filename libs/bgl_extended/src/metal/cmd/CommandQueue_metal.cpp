@@ -1,13 +1,5 @@
 #include "cmd/CommandQueue_metal.h"
 #include "MetalErrorChecker.h"
-#include <Foundation/NSArray.hpp>
-#include <Foundation/NSAutoreleasePool.hpp>
-#include <Foundation/NSError.hpp>
-#include <Foundation/NSSharedPtr.hpp>
-#include <Foundation/NSString.hpp>
-#include <Foundation/NSTypes.hpp>
-#include <Metal/MTLCommandBuffer.hpp>
-#include <Metal/MTLDevice.hpp>
 
 #include "cmd/CommandList.h"
 #include "cmd/CommandList_metal.h"

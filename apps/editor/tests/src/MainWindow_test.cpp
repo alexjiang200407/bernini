@@ -3,7 +3,7 @@
 #include "Windows/AnimationEditor/AnimationEditorWindow.h"
 #include "Windows/MaterialEditor/MaterialEditorWindow.h"
 #include "Windows/RenderTarget/RenderTargetWindow.h"
-#include "util/QtSupport.h"
+#include "util/QtSupport.h"  // IWYU pragma: keep
 #include "util/follows_project.h"
 #include <algorithm>
 #include <assetlib/Project.h>

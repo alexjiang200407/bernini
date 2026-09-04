@@ -11,7 +11,6 @@
 
 #include <bgl/GeomHandle.h>
 #include <bgl/IGraphics.h>
-#include <bgl/IScene.h>
 #include <bgl/ISceneView.h>
 #include <bgl/MaterialHandle.h>
 #include <bgl/MeshInstanceHandle.h>

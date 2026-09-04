@@ -5,7 +5,6 @@
 #include <assetlib_structs/BMaterial.h>
 #include <core/file/LooseFileSystem.h>
 
-#include "fs_util.h"
 #include "json_doc.h"
 
 #include <core/err/util.h>
@@ -16,7 +15,6 @@
 #include <iterator>
 #include <mutex>
 #include <nlohmann/json.hpp>
-#include <nlohmann/json_fwd.hpp>
 #include <optional>
 #include <span>
 #include <stdexcept>

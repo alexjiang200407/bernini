@@ -1,5 +1,4 @@
 #pragma once
-#include <assetlib/cancel.h>
 #include <assetlib_structs/BMeshImport.h>
 #include <cstdint>
 #include <filesystem>

@@ -3,9 +3,7 @@
 
 #include <assetlib/asset_import.h>
 #include <assetlib/asset_refs.h>
-#include <assetlib/bmesh.h>
 #include <assetlib/bmesh_gltf.h>
-#include <assetlib/container_info.h>
 #include <assetlib/import_document.h>
 #include <assetlib/project_layout.h>
 #include <assetlib_structs/BMeshImport.h>

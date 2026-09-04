@@ -1,5 +1,4 @@
 #pragma once
-#include <assetlib/cancel.h>
 #include <assetlib/project_layout.h>
 #include <assetlib_structs/ImageData.h>
 #include <cstdint>

@@ -1,6 +1,6 @@
 #include "Thumbnails/StampedPixmapCache.h"
 
-#include "util/QtSupport.h"
+#include "util/QtSupport.h"  // IWYU pragma: keep
 #include "util/asset_paths.h"
 
 #include <QSignalSpy>

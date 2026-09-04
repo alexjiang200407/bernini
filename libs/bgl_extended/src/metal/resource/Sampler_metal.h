@@ -1,9 +1,5 @@
 #pragma once
 #include "metal_cpp.h"
-#include <Foundation/NSSharedPtr.hpp>
-#include <Foundation/NSTypes.hpp>
-#include <Metal/MTLDevice.hpp>
-#include <Metal/MTLSampler.hpp>
 #include <bgl_common/gassert.h>
 
 #include "convert_metal.h"
