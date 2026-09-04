@@ -1,4 +1,5 @@
 #include <assetlib/avatar.h>
+#include <assetlib/blend.h>
 #include <assetlib/codecs.h>
 #include <assetlib/migrate.h>
 
@@ -135,6 +136,8 @@ namespace assetlib
 				return AssetCodec<BEnv>::Serialize(AssetCodec<BEnv>::Deserialize(bytes));
 			case AssetType::kAvatar:
 				return AssetCodec<Avatar>::Serialize(AssetCodec<Avatar>::Deserialize(bytes));
+			case AssetType::kBlend:
+				return AssetCodec<BlendSet>::Serialize(AssetCodec<BlendSet>::Deserialize(bytes));
 			// No container to re-serialize, so nothing a schema change could have staled.
 			case AssetType::kTexture:
 			case AssetType::kImportDocument:

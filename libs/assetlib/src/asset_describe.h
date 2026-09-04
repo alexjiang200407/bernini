@@ -11,6 +11,7 @@ namespace assetlib
 	struct BSky;
 	struct Skeleton;
 	struct Avatar;
+	struct BlendSet;
 
 	/**
 	 * Renders the contents of an asset as human-readable text -- the counterpart of writeObj for the
@@ -96,6 +97,17 @@ namespace assetlib
 	 */
 	[[nodiscard]] std::string
 	describe(const Avatar& avatar, const Skeleton* skeleton = nullptr);
+
+	/**
+	 * Describes a blend set: the clip set it is authored against, and each space's clips in
+	 * parameter order.
+	 *
+	 * The clips are printed as authored, unresolved: a `.bblend` names them and the `.banim` that
+	 * holds them is a separate load, so whether each still names a clip is answered where the two
+	 * meet rather than here.
+	 */
+	[[nodiscard]] std::string
+	describe(const BlendSet& set);
 
 	/**
 	 * The mounted form of describe: each routed source stamped, so a stale bake is visible.

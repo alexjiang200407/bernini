@@ -36,6 +36,7 @@ namespace assetlib
 	struct BEnv;
 	struct AnimationSet;
 	struct Avatar;
+	struct BlendSet;
 	struct EnvMapRoute;
 
 	enum class Ktx2Decode : uint32_t;
@@ -775,6 +776,10 @@ namespace assetlib
 		 */
 		[[nodiscard]] std::string
 		Describe(const Avatar& avatar, const Skeleton* skeleton = nullptr) const;
+
+		/** The clip set the blend spaces are authored against, and each space's clips in order. */
+		[[nodiscard]] std::string
+		Describe(const BlendSet& set) const;
 
 	private:
 		/**

@@ -6,6 +6,7 @@
 #include <assetlib/asset_refs.h>
 #include <assetlib/assetlib.h>
 #include <assetlib/avatar.h>
+#include <assetlib/blend.h>
 #include <assetlib/bmesh.h>
 #include <assetlib/bmesh_gltf.h>
 #include <assetlib/codecs.h>
@@ -106,6 +107,8 @@ namespace
 			return "was imported from";
 		case assetlib::RefKind::kAvatarSkeleton:
 			return "authors the legs of";
+		case assetlib::RefKind::kBlendClips:
+			return "blends clips of";
 		}
 
 		return "references";
@@ -136,12 +139,13 @@ namespace
 			// A document opens with its content, so only its name can say which it is.
 			const auto type = assetlib::assetTypeFromExtension(std::filesystem::path(key));
 			if (type == assetlib::AssetType::kMaterial ||
-			    type == assetlib::AssetType::kEnvironment || type == assetlib::AssetType::kAvatar)
+			    type == assetlib::AssetType::kEnvironment || type == assetlib::AssetType::kAvatar ||
+			    type == assetlib::AssetType::kBlend)
 				return *type;
 
 			core::throw_runtime_error(
 				"{} is a text document, and the only text containers this tool knows are "
-				".bmaterial, .benv and .bavatar",
+				".bmaterial, .benv, .bavatar and .bblend",
 				key);
 		}
 
@@ -780,6 +784,11 @@ main(int argc, char** argv)
 				// worth checking, so an absent one prints the avatar bare rather than failing.
 				const auto skeleton = resolveSkeleton(store, assetlib::skeletonKeyForAvatar(key));
 				std::cout << describeAsset(avatar, skeleton ? &*skeleton : nullptr);
+				break;
+			}
+			case assetlib::AssetType::kBlend:
+			{
+				std::cout << describeAsset(store.Load<assetlib::BlendSet>(key));
 				break;
 			}
 			// sniff never answers either: a foreign kind has no codec, and an import document is

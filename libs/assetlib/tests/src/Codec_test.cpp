@@ -1,5 +1,6 @@
 #include <assetlib/AssetStore.h>
 #include <assetlib/avatar.h>
+#include <assetlib/blend.h>
 #include <assetlib/codecs.h>
 
 #include <assetlib/import_document.h>
@@ -108,6 +109,12 @@ TEST_CASE("The store writes exactly what the codec encodes", "[codec]")
 		Avatar avatar;
 		CheckStoreWritesCodecBytes(avatar, "a.bavatar");
 	}
+
+	SECTION("bblend")
+	{
+		BlendSet set;
+		CheckStoreWritesCodecBytes(set, "a.bblend");
+	}
 }
 
 TEST_CASE("The container table is the only list", "[codec]")
@@ -162,6 +169,7 @@ TEST_CASE("The container table is the only list", "[codec]")
 		CHECK_FALSE(containerKindFor(AssetType::kMaterial).IsCacheEntry());
 		CHECK_FALSE(containerKindFor(AssetType::kEnvironment).IsCacheEntry());
 		CHECK_FALSE(containerKindFor(AssetType::kImportDocument).IsCacheEntry());
+		CHECK_FALSE(containerKindFor(AssetType::kBlend).IsCacheEntry());
 	}
 }
 
