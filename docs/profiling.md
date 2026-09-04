@@ -247,7 +247,7 @@ and a binary whose log is a terminal arms it on request** rather than on every r
 
 | Binary | Reports |
 |---|---|
-| `editor` | always, into `editor.log`; `--mem-report <path>` also writes JSON |
+| `editor` | into `editor.log` unless `config.json` sets `"memoryReport": false`; `--mem-report <path>` also writes JSON, and outranks the setting |
 | `assetlib_cli` | on `--mem-report <path>` only, and the flag goes **before** the subcommand |
 | `editor_tests` | on `--mem-report <path>` only |
 

@@ -38,6 +38,8 @@
 #include <core/file/file.h>
 #include <core/platform/util.h>
 #include <core/settings/Settings.h>
+
+#include "util/editor_config.h"
 #include <gamelib/AssetManager.h>
 
 #include "Startup/startup_labels.h"
@@ -51,9 +53,7 @@ MainWindow::MainWindow(
 {
 	try
 	{
-		Build(
-			configPath.empty() ? core::file::get_executable_path().parent_path() / "config.json" :
-								 configPath);
+		Build(configPath.empty() ? editor::DefaultConfigPath() : configPath);
 	}
 	catch (...)
 	{

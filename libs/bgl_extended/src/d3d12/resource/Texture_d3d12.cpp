@@ -87,11 +87,8 @@ namespace bgl
 			IID_PPV_ARGS(&m_Texture)) >>
 			d3d12ErrChecker;
 
-		// The driver's number rather than one derived from the desc: a TextureDesc carries no byte
-		// size, and a format-size table here would restate what D3D12 already knows. It answers
-		// the max of its type for a layout it cannot size, which is charged as nothing rather than
-		// as everything. Spelled through <limits>, which the root PCH carries, rather than as
-		// UINT64_MAX, which needs a <cstdint> it does not.
+		// The driver's size: a TextureDesc carries no byte count. A layout it cannot size answers
+		// the max of its type, and is charged as nothing rather than as everything.
 		const D3D12_RESOURCE_ALLOCATION_INFO allocation =
 			device10->GetResourceAllocationInfo2(0, 1, &textureDesc, nullptr);
 		if (allocation.SizeInBytes != std::numeric_limits<uint64_t>::max())

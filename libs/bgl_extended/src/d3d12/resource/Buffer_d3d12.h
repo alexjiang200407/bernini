@@ -69,9 +69,7 @@ namespace bgl
 		D3D12_CPU_DESCRIPTOR_HANDLE m_CpuHandle       = {};
 		wrl::ComPtr<ID3D12Resource> m_Buffer;
 
-		// The requested size, not the driver's padded allocation: a buffer is reasoned about as the
-		// bytes that were asked for, and per-backend alignment would make the two platforms'
-		// reports incomparable. A texture is the other way round -- see Texture_d3d12.cpp.
+		// The size asked for, not the driver's: alignment padding differs per backend.
 		core::profiling::TaggedBytes m_Tracked;
 	};
 }

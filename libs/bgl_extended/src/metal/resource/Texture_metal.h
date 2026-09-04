@@ -66,8 +66,7 @@ namespace bgl
 			m_Texture = NS::TransferPtr(device->newTexture(td.get()));
 			gassert(m_Texture.get() != nullptr, "Metal texture allocation failed");
 
-			// The driver's number rather than one derived from the desc: a TextureDesc carries no
-			// byte size, and a format-size table here would restate what Metal already knows.
+			// The driver's size: a TextureDesc carries no byte count.
 			m_Tracked = core::profiling::TaggedBytes(
 				core::profiling::MemoryTag::kDeviceTexture,
 				m_Texture->allocatedSize());

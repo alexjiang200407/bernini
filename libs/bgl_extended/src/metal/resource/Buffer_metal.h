@@ -45,9 +45,7 @@ namespace bgl
 		BufferDesc                 m_Desc;
 		NS::SharedPtr<MTL::Buffer> m_Buffer;
 
-		// The requested size, not the driver's padded allocation: a buffer is reasoned about as the
-		// bytes that were asked for, and per-backend alignment would make the two platforms'
-		// reports incomparable. A texture is the other way round -- see Texture_metal.h.
+		// The size asked for, not the driver's: alignment padding differs per backend.
 		core::profiling::TaggedBytes m_Tracked;
 	};
 }

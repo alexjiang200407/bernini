@@ -11,6 +11,7 @@
 #include "EditorStyle.h"
 #include "MainWindow.h"
 #include "Startup/StartupScreen.h"
+#include "util/editor_config.h"
 #include "util/qt_logging.h"
 
 namespace
@@ -57,7 +58,13 @@ main(int argc, char* argv[])
 
 	// After the log, so the report it writes on the way out has somewhere to go, and before the
 	// window, so the peaks of building one are inside it.
-	const core::profiling::MemoryReport memoryReport(MemoryReportPath(argc, argv));
+	//
+	// A named path is an explicit ask and outranks the config, which is the precedence every other
+	// setting here follows.
+	const std::filesystem::path reportPath   = MemoryReportPath(argc, argv);
+	auto                        memoryReport = std::optional<core::profiling::MemoryReport>();
+	if (!reportPath.empty() || editor::MemoryReportEnabled(editor::DefaultConfigPath()))
+		memoryReport.emplace(reportPath);
 
 	// Up before the window, because building the window is what takes the time: the renderer
 	// compiles every pipeline it will ever use, which on a cold shader cache is tens of seconds
