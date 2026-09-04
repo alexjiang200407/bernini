@@ -254,7 +254,7 @@ not obvious from a signature. The headers linked below are the source of truth.
 | Upload the rig | [`IScene::AddRig`](libs/bgl/include/bgl/IScene.h) | Bones, clip table and sample pool become scene buffers; per-bone depth is derived here; a rig whose caller supplies a `FootPlantDesc` carries its leg chains and per-frame plant weights alongside them. Once per clip set, not once per mesh |
 | Upload the mesh | [`IScene::AddSkinnedMeshGeom`](libs/bgl/include/bgl/IScene.h) | The bind-pose submeshes, exactly as the static path uploads them, against a rig handle |
 | Place | [`ISceneView::CreateSkinnedMeshInstance`](libs/bgl/include/bgl/ISceneView.h) | Writes the playback record and reserves the instance's palette slice; on a rig with legs, its foot-IK record too, at weight one until `SetFootIK` rewrites it |
-| Pose | [`SkinnedPosePass`](libs/bgl_extended/src/passes/SkinnedPosePass.h) | One workgroup per instance: sample, blend, walk the hierarchy, plant whatever feet the rig authored, multiply by inverse bind |
+| Pose | [`SkinnedPosePass`](libs/bgl_extended/src/passes/SkinnedPosePass.h) | One workgroup per instance: sample, blend, walk the hierarchy, plant whatever feet the rig authored by the baked weight and the instance's own, multiply by inverse bind |
 | Draw | `lib/forward/skinned_vertex.slang`, blend in [`lib/anim/skinning.slang`](libs/bgl_common/shaders/src/lib/anim/skinning.slang) | `ResolveSkinnedPose` settles the pose source once per mesh-shader group — one group being one instance — and `SkinnedVertex` blends the bind-pose vertex bytes by it; position, normal and tangent through one matrix. Entered from `programs/forward/SkinnedMesh.slang`, or from `programs/forward/AnyMesh.slang` where a draw mixes tiers |
 
 ## In the editor
@@ -436,13 +436,28 @@ baked by the cook and sampled at the same fractional frame the pose is. A weight
 the pose the rig would have had. A weight rather than a flag because a foot that snapped between the
 two states would pop, which is what the cook's ramp at each end of a planted run exists to remove.
 
-**Planting is gated at four scopes, and per instance is not one of them.** A rig plants only if it
-authored legs (`rig.legs.Null()` — no `.bavatar`, no planting); a clip plants only if the avatar's
-`unplanted` list does not name it; a leg plants on a frame only as far as that frame's baked weight;
-and the scene plants at all only while `IScene::SetFootPlanting` is on. The scene switch is scoped
-that way because the ground is — `SetGround` holds one plane and the solve is defined against it —
-so nothing today varies per instance that a fifth scope would express. Two instances of one rig
-therefore always agree about whether they plant.
+**Planting is gated at five scopes.** A rig plants only if it authored legs (`rig.legs.Null()` —
+no `.bavatar`, no planting); a clip plants only if the avatar's `unplanted` list does not name it;
+a leg plants on a frame only as far as that frame's baked weight; an instance plants only as far
+as its own weight (below); and the scene plants at all only while `IScene::SetFootPlanting` is on.
+The scene switch stays with the ground — `SetGround` holds one plane and the solve is defined
+against it — and is the A/B affordance the editor's *Plant feet* box flips; the per-instance
+weight is what a game sets.
+
+**The instance's weight is Unity's, and it is two.** `ISceneView::SetFootIK` writes one
+`FootIKLegDesc` per leg: a *position* weight scaling how far the ankle is carried onto the ground
+and a *rotation* weight scaling the sole's turn onto the slope — `SetIKPositionWeight` and
+`SetIKRotationWeight` per foot, each multiplying the baked weight so a foot the animator lifted
+stays lifted whatever a caller asks. Each is a ramp in `RenderJob::time` (`idl.Ramp`, read by
+`RampAt` in [`lib/anim/ramp.slang`](libs/bgl_common/shaders/src/lib/anim/ramp.slang)): the record
+holds what to evaluate, never the evaluated value, so the pose at any clock stays a function of the
+record and the two palettes a frame writes agree with the frames that drew them. That is the
+caller's one rule — start a ramp at or after now and let `from` be what the leg holds now, which
+`FootIKDesc::FadeTo` computes — and why the write moves no temporal epoch. The record lives in an
+arena of the view's, one `FootIKLeg` per leg, and reaches the kernel through its pose-list entry
+(`PosedInstance`) rather than through the placement or the playback record: the pose pass is its
+only reader. The default is weight one, so an instance nobody writes plants exactly as the baked
+weights say; a rig without legs owns no record and `SetFootIK` refuses it.
 
 ### What the cook derives
 
