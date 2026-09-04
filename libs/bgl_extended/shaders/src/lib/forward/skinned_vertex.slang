@@ -87,7 +87,7 @@ public SkinnedPose ResolveSkinnedPose(MeshletContext ctx)
     }
 
     let state = forwardData.playbackBuffer.LoadRecordAs<SkinnedState>(ctx.mesh.playback);
-    let rig = skinnedData.rigBuffer.Get(state.playback.rig);
+    let rig = skinnedData.rigBuffer.Get(state.rig);
 
     pose.source = skinnedData.bonePaletteBuffer;
     pose.blends = false;

@@ -16,5 +16,5 @@ void main(uint3 id: SV_DispatchThreadID)
     uint f1;
     float weight;
     ClipFrameIndices(clip, frames, f0, f1, weight);
-    gOut[0] = float(f0 + f1) + weight;
+    gOut[0] = float(f0 + f1) + weight + ClipCycle(clip) + ClipFramesAfter(clip, 0.0, 1.0, float(id.x));
 }

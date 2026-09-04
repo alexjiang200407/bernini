@@ -221,25 +221,149 @@ namespace bgl
 		return WritePlacement(geom, transform, 0);
 	}
 
+	namespace
+	{
+		static_assert(
+			c_BlendSlots == idl::cBlendSlots,
+			"the public descriptor and the playback record disagree on the slot count");
+
+		void
+		ValidatePlayback(const SkinnedPlaybackDesc& desc, uint32_t nodeCount, const char* what)
+		{
+			bool weighted = false;
+			for (size_t s = 0; s < desc.slot.size(); ++s)
+			{
+				const PlaybackSlot& slot = desc.slot[s];
+
+				for (const float value : { slot.phase,
+				                           slot.rate,
+				                           slot.tRef,
+				                           slot.weight0,
+				                           slot.weight1,
+				                           slot.rampStart,
+				                           slot.rampEnd,
+				                           slot.param0,
+				                           slot.param1,
+				                           slot.paramStart,
+				                           slot.paramEnd })
+				{
+					if (!std::isfinite(value))
+					{
+						throw SceneError(
+							std::format(
+								"slot {} of the record passed to {} is not finite",
+								s,
+								what));
+					}
+				}
+
+				if (slot.node >= nodeCount)
+				{
+					throw SceneError(
+						std::format(
+							"slot {} of the record passed to {} names node {} of a rig that holds "
+							"{}",
+							s,
+							what,
+							slot.node,
+							nodeCount));
+				}
+
+				if (slot.weight0 < 0.0f || slot.weight1 < 0.0f)
+				{
+					throw SceneError(
+						std::format(
+							"slot {} of the record passed to {} carries a negative weight",
+							s,
+							what));
+				}
+
+				if (slot.rampEnd < slot.rampStart || slot.paramEnd < slot.paramStart)
+				{
+					throw SceneError(
+						std::format(
+							"slot {} of the record passed to {} has a ramp that ends before it "
+							"starts",
+							s,
+							what));
+				}
+
+				weighted = weighted || slot.weight0 > 0.0f || slot.weight1 > 0.0f;
+			}
+
+			if (!weighted)
+			{
+				throw SceneError(
+					std::format("the record passed to {} carries no weight in any slot", what));
+			}
+		}
+
+		idl::BlendSlot
+		ToRecord(const PlaybackSlot& slot) noexcept
+		{
+			auto record       = idl::BlendSlot();
+			record.node       = slot.node;
+			record.phase      = slot.phase;
+			record.rate       = slot.rate;
+			record.tRef       = slot.tRef;
+			record.weight0    = slot.weight0;
+			record.weight1    = slot.weight1;
+			record.rampStart  = slot.rampStart;
+			record.rampEnd    = slot.rampEnd;
+			record.param0     = slot.param0;
+			record.param1     = slot.param1;
+			record.paramStart = slot.paramStart;
+			record.paramEnd   = slot.paramEnd;
+			return record;
+		}
+
+		PlaybackSlot
+		FromRecord(const idl::BlendSlot& record) noexcept
+		{
+			auto slot       = PlaybackSlot();
+			slot.node       = record.node;
+			slot.phase      = record.phase;
+			slot.rate       = record.rate;
+			slot.tRef       = record.tRef;
+			slot.weight0    = record.weight0;
+			slot.weight1    = record.weight1;
+			slot.rampStart  = record.rampStart;
+			slot.rampEnd    = record.rampEnd;
+			slot.param0     = record.param0;
+			slot.param1     = record.param1;
+			slot.paramStart = record.paramStart;
+			slot.paramEnd   = record.paramEnd;
+			return slot;
+		}
+
+		/** The live kSkinnedMesh geom `geom` names in `scene`, or a SceneError naming `what`. */
+		Scene::AnimGeomInfo
+		RequireSkinnedGeom(const Scene& scene, GeomHandle geom, const char* what)
+		{
+			if (geom.geomType != GeomType::kSkinnedMesh)
+			{
+				throw SceneError(
+					std::format("GeomHandle passed to {} must be of type kSkinnedMesh", what));
+			}
+
+			if (!scene.IsGeomAlive(geom))
+			{
+				throw SceneError(
+					std::format("GeomHandle passed to {} has expired or is invalid", what));
+			}
+
+			return scene.GetGeomSkinnedInfo(geom.handle.index);
+		}
+	}
+
 	MeshInstanceHandle
 	SceneView::CreateSkinnedMeshInstance(
 		GeomHandle                 geom,
 		glm::mat4                  transform,
 		const SkinnedInstanceDesc& desc)
 	{
-		if (geom.geomType != GeomType::kSkinnedMesh)
-		{
-			throw SceneError(
-				"GeomHandle passed to CreateSkinnedMeshInstance must be of type kSkinnedMesh");
-		}
-
-		if (!m_SceneRaw->IsGeomAlive(geom))
-		{
-			throw SceneError(
-				"GeomHandle passed to CreateSkinnedMeshInstance has expired or is invalid");
-		}
-
-		const Scene::AnimGeomInfo rig = m_SceneRaw->GetGeomSkinnedInfo(geom.handle.index);
+		const Scene::AnimGeomInfo rig =
+			RequireSkinnedGeom(*m_SceneRaw, geom, "CreateSkinnedMeshInstance");
 		if (desc.clip >= rig.clipCount)
 		{
 			throw SceneError(
@@ -249,48 +373,99 @@ namespace bgl
 
 		// The pose source is which record this placement gets, and nothing else records it: a hero
 		// instance owns a palette the pose pass writes, a crowd one owns no storage at all.
-		auto palette = core::multi_slot_handle();
-		auto record  = idl::RawEntry();
-
 		if (desc.source == PoseSource::kPerInstance)
 		{
-			// Two palettes, back to back: the pose at `time` and the pose at `prevTime`, which is
-			// what lets the mesh shader write a motion vector without a history buffer.
-			palette = m_Palettes.Allocate(idl::cFloat4sPerBone * rig.boneCount * 2);
+			const auto record = SkinnedPlaybackDesc::FromClip(desc.clip, desc.phase, desc.rate);
+			ValidatePlayback(record, rig.clipCount, "CreateSkinnedMeshInstance");
+			return PlacePosed(geom, transform, rig.record, rig.boneCount, rig.clipCount, record);
+		}
 
-			auto state           = idl::SkinnedState();
-			state.playback.rig   = rig.record;
-			state.playback.clip  = desc.clip;
-			state.playback.phase = desc.phase;
-			state.playback.rate  = desc.rate;
-			state.palette        = palette;
+		// Asked for here rather than at AddRig, so a rig no crowd instance is spawned on never
+		// pays for a table. RigFramesPass fills it before anything reads it this frame.
+		m_SceneRaw->RequestBoneAnimTable(RigHandle{ rig.record });
 
+		auto state           = idl::SkinnedTableState();
+		state.playback.rig   = rig.record;
+		state.playback.clip  = desc.clip;
+		state.playback.phase = desc.phase;
+		state.playback.rate  = desc.rate;
+
+		const idl::RawEntry record = m_Playback.AddRecord(
+			idl::PlaybackType::kSkinnedTable,
+			std::as_bytes(std::span(&state, 1)));
+
+		return PlaceRecord(geom, transform, record, core::multi_slot_handle(), rig.clipCount);
+	}
+
+	MeshInstanceHandle
+	SceneView::CreateSkinnedMeshInstance(
+		GeomHandle                 geom,
+		glm::mat4                  transform,
+		const SkinnedPlaybackDesc& desc)
+	{
+		const Scene::AnimGeomInfo rig =
+			RequireSkinnedGeom(*m_SceneRaw, geom, "CreateSkinnedMeshInstance");
+
+		// Node `n` is clip `n` until an authored table widens the rig's.
+		ValidatePlayback(desc, rig.clipCount, "CreateSkinnedMeshInstance");
+
+		return PlacePosed(geom, transform, rig.record, rig.boneCount, rig.clipCount, desc);
+	}
+
+	MeshInstanceHandle
+	SceneView::PlacePosed(
+		GeomHandle                 geom,
+		glm::mat4                  transform,
+		core::slot_handle          rig,
+		uint32_t                   boneCount,
+		uint32_t                   nodeCount,
+		const SkinnedPlaybackDesc& desc)
+	{
+		// Two palettes, back to back: the pose at `time` and the pose at `prevTime`, which is what
+		// lets the mesh shader write a motion vector without a history buffer.
+		const auto palette = m_Palettes.Allocate(idl::cFloat4sPerBone * boneCount * 2);
+
+		auto state = idl::SkinnedState();
+		state.rig  = rig;
+		for (size_t s = 0; s < desc.slot.size(); ++s)
+		{
+			state.slots[s] = ToRecord(desc.slot[s]);
+		}
+		state.palette = palette;
+
+		auto record = idl::RawEntry();
+		try
+		{
 			record = m_Playback.AddRecord(
 				idl::PlaybackType::kSkinned,
 				std::as_bytes(std::span(&state, 1)));
 		}
-		else
+		catch (...)
 		{
-			// Asked for here rather than at AddRig, so a rig no crowd instance is spawned on never
-			// pays for a table. RigFramesPass fills it before anything reads it this frame.
-			m_SceneRaw->RequestBoneAnimTable(RigHandle{ rig.record });
-
-			auto state           = idl::SkinnedTableState();
-			state.playback.rig   = rig.record;
-			state.playback.clip  = desc.clip;
-			state.playback.phase = desc.phase;
-			state.playback.rate  = desc.rate;
-
-			record = m_Playback.AddRecord(
-				idl::PlaybackType::kSkinnedTable,
-				std::as_bytes(std::span(&state, 1)));
+			m_Palettes.Free(palette);
+			throw;
 		}
+
+		return PlaceRecord(geom, transform, record, palette, nodeCount);
+	}
+
+	MeshInstanceHandle
+	SceneView::PlaceRecord(
+		GeomHandle              geom,
+		glm::mat4               transform,
+		idl::RawEntry           record,
+		core::multi_slot_handle palette,
+		uint32_t                nodeCount)
+	{
 		try
 		{
 			const MeshInstanceHandle instance = WritePlacement(geom, transform, record.byteOffset);
 
-			m_MeshBuffer.MetaAt(instance.handle.index).palette = palette;
-			m_PosedDirty                                       = true;
+			auto& meta     = m_MeshBuffer.MetaAt(instance.handle.index);
+			meta.palette   = palette;
+			meta.nodeCount = nodeCount;
+
+			m_PosedDirty = true;
 			return instance;
 		}
 		catch (...)
@@ -303,6 +478,67 @@ namespace bgl
 			}
 			throw;
 		}
+	}
+
+	const MeshMeta&
+	SceneView::PosedMetaFor(MeshInstanceHandle instance, const char* what) const
+	{
+		if (!instance.IsValid() || !m_MeshBuffer.IsValid(instance.handle))
+		{
+			throw SceneError(
+				std::format("MeshInstanceHandle passed to {} is invalid or already removed", what));
+		}
+
+		const MeshMeta& meta = m_MeshBuffer.MetaAt(instance.handle.index);
+
+		// A palette is what the per-instance source owns and the shared one does not, so its
+		// absence is the crowd record -- which holds one clip and no slots to rewrite.
+		if (meta.geomType != GeomType::kSkinnedMesh || !meta.palette)
+		{
+			throw SceneError(
+				std::format(
+					"MeshInstanceHandle passed to {} is not a skinned placement on the "
+					"per-instance "
+					"source",
+					what));
+		}
+
+		return meta;
+	}
+
+	void
+	SceneView::SetSkinnedPlayback(MeshInstanceHandle instance, const SkinnedPlaybackDesc& desc)
+	{
+		const MeshMeta& meta = PosedMetaFor(instance, "SetSkinnedPlayback");
+
+		ValidatePlayback(desc, meta.nodeCount, "SetSkinnedPlayback");
+
+		// Same offset, same kind, same palette: only the slots move, so nothing that names this
+		// record -- the placement, the pose list -- has to be touched.
+		auto state = m_Playback.GetPayloadAt<idl::SkinnedState>(meta.animState);
+		for (size_t s = 0; s < desc.slot.size(); ++s)
+		{
+			state.slots[s] = ToRecord(desc.slot[s]);
+		}
+
+		m_Playback.SetRecordPayload(
+			idl::RawEntry{ meta.animState },
+			std::as_bytes(std::span(&state, 1)));
+	}
+
+	SkinnedPlaybackDesc
+	SceneView::GetSkinnedPlayback(MeshInstanceHandle instance) const
+	{
+		const MeshMeta& meta = PosedMetaFor(instance, "GetSkinnedPlayback");
+
+		const auto state = m_Playback.GetPayloadAt<idl::SkinnedState>(meta.animState);
+
+		auto desc = SkinnedPlaybackDesc();
+		for (size_t s = 0; s < desc.slot.size(); ++s)
+		{
+			desc.slot[s] = FromRecord(state.slots[s]);
+		}
+		return desc;
 	}
 
 	MeshInstanceHandle

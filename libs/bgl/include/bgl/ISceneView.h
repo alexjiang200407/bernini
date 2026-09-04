@@ -57,6 +57,45 @@ namespace bgl
 			const SkinnedInstanceDesc& desc) = 0;
 
 		/**
+		 * The same placement spawned on a whole playback record rather than one clip. Always the
+		 * per-instance source: a blend has nowhere to live on a pose the whole rig shares.
+		 *
+		 * @throws SceneError if `geom` is not a live kSkinnedMesh geom, a slot names a node past
+		 *         the rig's table, a weight is negative, a ramp ends before it starts, a value is
+		 *         not finite, or no slot carries any weight.
+		 */
+		virtual MeshInstanceHandle
+		CreateSkinnedMeshInstance(
+			GeomHandle                 geom,
+			glm::mat4                  transform,
+			const SkinnedPlaybackDesc& desc) = 0;
+
+		/**
+		 * Rewrites a per-instance skinned placement's playback record in place. The instance keeps
+		 * its pose storage and its place among the instances posed each frame; only what is
+		 * evaluated changes, from the next frame drawn.
+		 *
+		 * The caller owns the property that makes this safe under temporal reprojection: the new
+		 * record evaluated at the previous frame's time must give the pose the old one did. See
+		 * SkinnedPlaybackDesc.
+		 *
+		 * @throws SceneError if the handle is invalid or removed, the placement is not a skinned
+		 *         one on the per-instance source, or `desc` fails the checks CreateSkinnedMeshInstance
+		 *         makes.
+		 */
+		virtual void
+		SetSkinnedPlayback(MeshInstanceHandle instance, const SkinnedPlaybackDesc& desc) = 0;
+
+		/**
+		 * The record SetSkinnedPlayback or the spawn wrote, so a caller need not keep a copy.
+		 *
+		 * @throws SceneError if the handle is invalid or removed, or the placement is not a skinned
+		 *         one on the per-instance source.
+		 */
+		[[nodiscard]] virtual SkinnedPlaybackDesc
+		GetSkinnedPlayback(MeshInstanceHandle instance) const = 0;
+
+		/**
 		 * Removes a mesh instance from this view. The geometry it referenced is left
 		 * intact; the shared Scene's reference count for that geometry is decremented
 		 * so the geometry can later be removed by Scene::DeleteGeom.

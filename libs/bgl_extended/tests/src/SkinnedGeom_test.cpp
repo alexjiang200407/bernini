@@ -374,10 +374,20 @@ TEST_CASE("CreateSkinnedMeshInstance writes the playback record once", "[skinned
 	CHECK(playback.GetTagAt(mesh.playback.byteOffset) == bgl::idl::PlaybackType::kSkinned);
 
 	const auto state = playback.GetPayloadAt<bgl::idl::SkinnedState>(mesh.playback.byteOffset);
-	CHECK(state.playback.clip == 1);
-	CHECK(state.playback.phase == Catch::Approx(4.5f));
-	CHECK(state.playback.rate == Catch::Approx(2.0f));
-	CHECK(state.playback.rig.offset == scene->GetGeomSkinnedInfo(geom.handle.index).record.index);
+	CHECK(state.rig.offset == scene->GetGeomSkinnedInfo(geom.handle.index).record.index);
+
+	// A one-clip spawn is slot 0 at full weight, from the clock's zero, and the rest weightless.
+	CHECK(state.slots[0].node == 1);
+	CHECK(state.slots[0].phase == Catch::Approx(4.5f));
+	CHECK(state.slots[0].rate == Catch::Approx(2.0f));
+	CHECK(state.slots[0].tRef == 0.0f);
+	CHECK(state.slots[0].weight0 == 1.0f);
+	CHECK(state.slots[0].weight1 == 1.0f);
+	for (uint32_t s = 1; s < bgl::idl::cBlendSlots; ++s)
+	{
+		CHECK(state.slots[s].weight0 == 0.0f);
+		CHECK(state.slots[s].weight1 == 0.0f);
+	}
 
 	SECTION("a crowd instance is a record of its own kind, owning no palette")
 	{
@@ -400,7 +410,7 @@ TEST_CASE("CreateSkinnedMeshInstance writes the playback record once", "[skinned
 		CHECK(table.playback.clip == 1);
 		CHECK(table.playback.phase == Catch::Approx(4.5f));
 		CHECK(table.playback.rate == Catch::Approx(2.0f));
-		CHECK(table.playback.rig.offset == state.playback.rig.offset);
+		CHECK(table.playback.rig.offset == state.rig.offset);
 
 		CHECK(sizeof(bgl::idl::SkinnedTableState) < sizeof(bgl::idl::SkinnedState));
 	}
@@ -437,6 +447,180 @@ TEST_CASE("CreateSkinnedMeshInstance writes the playback record once", "[skinned
 
 		scene->DeleteGeom(geom);
 		CHECK_FALSE(scene->IsGeomAlive(geom));
+	}
+}
+
+TEST_CASE("SetSkinnedPlayback rewrites the record in place", "[skinned]")
+{
+	auto gfx = bgl::CreateGraphics(HeadlessOptions());
+	REQUIRE(gfx != nullptr);
+
+	auto  sceneHandle = gfx->CreateScene(TestSceneDesc());
+	auto* scene       = sceneHandle->As<bgl::Scene>();
+	REQUIRE(scene != nullptr);
+
+	auto  viewHandle = gfx->CreateSceneView(sceneHandle, 8);
+	auto* view       = viewHandle->As<bgl::SceneView>();
+	REQUIRE(view != nullptr);
+
+	const std::array<bgl::MaterialHandle, 1> materials = { { OpaquePbr(scene) } };
+	const auto                               geom      = scene->AddSkinnedMeshGeom(
+		MakeSkinnedMesh(),
+		0,
+		materials,
+		scene->AddRig(MakeRig(), MakeClips()),
+		c_AnyPose);
+	REQUIRE(geom.IsValid());
+
+	// A crossfade from clip 0 to clip 1 over one second from t = 2, both sides rebased to that
+	// instant, with every field set so the round trip below proves each one is carried.
+	auto crossfade = bgl::SkinnedPlaybackDesc();
+	{
+		auto& from      = crossfade.slot[0];
+		from.node       = 0;
+		from.phase      = 3.0f;
+		from.rate       = 1.0f;
+		from.tRef       = 2.0f;
+		from.weight0    = 1.0f;
+		from.weight1    = 0.0f;
+		from.rampStart  = 2.0f;
+		from.rampEnd    = 3.0f;
+		from.param0     = 0.25f;
+		from.param1     = 0.75f;
+		from.paramStart = 2.0f;
+		from.paramEnd   = 2.5f;
+
+		auto& to     = crossfade.slot[1];
+		to.node      = 1;
+		to.phase     = 0.0f;
+		to.rate      = 0.5f;
+		to.tRef      = 2.0f;
+		to.weight0   = 0.0f;
+		to.weight1   = 1.0f;
+		to.rampStart = 2.0f;
+		to.rampEnd   = 3.0f;
+	}
+
+	const auto same = [](const bgl::PlaybackSlot& a, const bgl::PlaybackSlot& b) {
+		CHECK(a.node == b.node);
+		CHECK(a.phase == b.phase);
+		CHECK(a.rate == b.rate);
+		CHECK(a.tRef == b.tRef);
+		CHECK(a.weight0 == b.weight0);
+		CHECK(a.weight1 == b.weight1);
+		CHECK(a.rampStart == b.rampStart);
+		CHECK(a.rampEnd == b.rampEnd);
+		CHECK(a.param0 == b.param0);
+		CHECK(a.param1 == b.param1);
+		CHECK(a.paramStart == b.paramStart);
+		CHECK(a.paramEnd == b.paramEnd);
+	};
+
+	SECTION("a spawn on one clip reads back as that clip in slot 0")
+	{
+		const auto instance = view->CreateSkinnedMeshInstance(
+			geom,
+			glm::mat4(1.0f),
+			bgl::SkinnedInstanceDesc{ 1, 4.5f, 2.0f });
+
+		const auto got  = view->GetSkinnedPlayback(instance);
+		const auto want = bgl::SkinnedPlaybackDesc::FromClip(1, 4.5f, 2.0f);
+		for (uint32_t s = 0; s < bgl::c_BlendSlots; ++s) same(got.slot[s], want.slot[s]);
+	}
+
+	SECTION("a rewrite keeps the record's offset, kind and palette, and moves only its slots")
+	{
+		const auto instance = view->CreateSkinnedMeshInstance(
+			geom,
+			glm::mat4(1.0f),
+			bgl::SkinnedInstanceDesc{ 0, 0.0f, 1.0f });
+
+		auto& meshBuffer = view->GetMeshBuffer();
+		auto& playback   = view->GetPlaybackArena();
+
+		const uint32_t offset = meshBuffer.AtIndex(instance.handle.index).playback.byteOffset;
+		const auto     before = playback.GetPayloadAt<bgl::idl::SkinnedState>(offset);
+
+		view->SetSkinnedPlayback(instance, crossfade);
+
+		CHECK(meshBuffer.AtIndex(instance.handle.index).playback.byteOffset == offset);
+		CHECK(playback.GetTagAt(offset) == bgl::idl::PlaybackType::kSkinned);
+
+		const auto after = playback.GetPayloadAt<bgl::idl::SkinnedState>(offset);
+		CHECK(after.rig.offset == before.rig.offset);
+		CHECK(after.palette.offsetStart == before.palette.offsetStart);
+
+		const auto got = view->GetSkinnedPlayback(instance);
+		for (uint32_t s = 0; s < bgl::c_BlendSlots; ++s) same(got.slot[s], crossfade.slot[s]);
+	}
+
+	SECTION("a spawn on a whole record is the same record")
+	{
+		const auto instance = view->CreateSkinnedMeshInstance(geom, glm::mat4(1.0f), crossfade);
+		const auto got      = view->GetSkinnedPlayback(instance);
+		for (uint32_t s = 0; s < bgl::c_BlendSlots; ++s) same(got.slot[s], crossfade.slot[s]);
+	}
+
+	SECTION("a record the rig cannot play is refused, at spawn and at rewrite")
+	{
+		const auto instance = view->CreateSkinnedMeshInstance(
+			geom,
+			glm::mat4(1.0f),
+			bgl::SkinnedInstanceDesc{ 0, 0.0f, 1.0f });
+
+		const auto refused = [&](const bgl::SkinnedPlaybackDesc& bad) {
+			CHECK_THROWS_AS(
+				view->CreateSkinnedMeshInstance(geom, glm::mat4(1.0f), bad),
+				bgl::SceneError);
+			CHECK_THROWS_AS(view->SetSkinnedPlayback(instance, bad), bgl::SceneError);
+		};
+
+		auto pastTheTable         = crossfade;
+		pastTheTable.slot[1].node = 2;
+		refused(pastTheTable);
+
+		// An unweighted slot still names a node, because the record holds still on slot 0 when
+		// nothing carries weight.
+		auto idleSlotPastTheTable         = crossfade;
+		idleSlotPastTheTable.slot[3].node = 7;
+		refused(idleSlotPastTheTable);
+
+		auto negative            = crossfade;
+		negative.slot[0].weight1 = -0.5f;
+		refused(negative);
+
+		auto backwards            = crossfade;
+		backwards.slot[1].rampEnd = 1.0f;
+		refused(backwards);
+
+		auto notANumber          = crossfade;
+		notANumber.slot[0].phase = std::nanf("");
+		refused(notANumber);
+
+		refused(bgl::SkinnedPlaybackDesc());  // no slot carries weight
+
+		// What survives a refusal is the record as it was.
+		const auto got = view->GetSkinnedPlayback(instance);
+		CHECK(got.slot[0].node == 0);
+		CHECK(got.slot[0].weight0 == 1.0f);
+	}
+
+	SECTION("a placement with no slots to rewrite is refused")
+	{
+		auto crowd       = bgl::SkinnedInstanceDesc{ 0, 0.0f, 1.0f };
+		crowd.source     = bgl::PoseSource::kBoneAnimTable;
+		const auto table = view->CreateSkinnedMeshInstance(geom, glm::mat4(1.0f), crowd);
+		CHECK_THROWS_AS(view->SetSkinnedPlayback(table, crossfade), bgl::SceneError);
+		CHECK_THROWS_AS(view->GetSkinnedPlayback(table), bgl::SceneError);
+
+		const auto cube  = scene->AddCubeGeom(bgl::MaterialHandle());
+		const auto still = view->CreateStaticMeshInstance(cube, glm::mat4(1.0f));
+		CHECK_THROWS_AS(view->SetSkinnedPlayback(still, crossfade), bgl::SceneError);
+		CHECK_THROWS_AS(view->GetSkinnedPlayback(still), bgl::SceneError);
+
+		CHECK_THROWS_AS(
+			view->SetSkinnedPlayback(bgl::MeshInstanceHandle(), crossfade),
+			bgl::SceneError);
 	}
 }
 

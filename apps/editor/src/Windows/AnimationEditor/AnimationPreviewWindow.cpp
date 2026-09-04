@@ -721,9 +721,10 @@ AnimationPreviewWindow::SetPoseSource(const bgl::PoseSource source)
 	m_Source = source;
 
 	// A re-spawn, not a re-load: both sources draw the same upload, so what changes is only where
-	// each instance reads its pose. Destroy and recreate, exactly as a clip switch does -- there is
-	// no mutate-instance API, by design. With nothing shown there is nothing to respawn, and the
-	// tier is simply what the next load spawns on.
+	// each instance reads its pose. Destroy and recreate, exactly as a clip switch does: the source
+	// is the kind of record a placement holds, and SetSkinnedPlayback rewrites a record's slots,
+	// never its kind. With nothing shown there is nothing to respawn, and the tier is simply what
+	// the next load spawns on.
 	if (m_Assets == nullptr || m_AnimatedDraws.empty())
 	{
 		Q_EMIT PoseSourceChanged(m_Source);

@@ -1,3 +1,4 @@
+import idl.BlendSlot;
 import idl.BoneSample;
 import idl.Clip;
 import idl.Constants;
@@ -8,6 +9,7 @@ import idl.Rig;
 import idl.SkinnedBone;
 import idl.SkinnedLegChain;
 import idl.SkinnedState;
+import lib.anim.blend_slots;
 import lib.anim.clip_playback;
 import lib.anim.foot_plant;
 import lib.anim.pose_walk;
@@ -19,15 +21,17 @@ import lib.types.RangeBuffer;
 import lib.types.RawBuffer;
 import lib.types.UploadBuffer;
 
-// One workgroup poses one skinned instance: sample its clip, walk the hierarchy, plant whatever feet
-// the rig authored, multiply through the inverse bind, write the palette. Twice over -- once at
+// One workgroup poses one skinned instance: resolve its weighted slots, sample and blend their
+// clips, walk the hierarchy, plant whatever feet the rig authored, multiply through the inverse
+// bind, write the palette. Twice over -- once at
 // `time` and once at `prevTime` -- so the mesh shader can skin both and derive a motion vector
 // without a history buffer.
 //
 // The walk itself is pose_walk's, shared with PoseRigFrames. What is this kernel's own is where a
-// pose comes from -- an instance's clip, phase and rate against the frame's clock -- and the foot
-// plant, which a shared bone anim table cannot have: one table serves every instance of a rig, and a
-// foot is planted against the ground under one instance in the world.
+// pose comes from -- an instance's slots, each a node with a phase, a rate and two ramps, against
+// the frame's clock -- and the foot plant, which a shared bone anim table cannot have: one table
+// serves every instance of a rig, and a foot is planted against the ground under one instance in
+// the world.
 
 struct Uniforms
 {
@@ -93,10 +97,10 @@ groupshared uint gMaxDeficit;
 
 // The three rows a placement stores, as the affine matrix the plane pullback and the inverse below
 // take. The fourth row is always (0,0,0,1) and is not stored.
-// How planted leg `leg` is at a fractional frame, 0 to 1. Blended between the two frames the
-// position falls between, like every other per-frame quantity here: a weight that stepped would put
-// the pop back that the cook's ramp exists to remove.
-float PlantWeight(Rig rig, Clip clip, uint leg, float frames)
+// How planted leg `leg` is at a fractional frame of one clip, 0 to 1. Blended between the two
+// frames the position falls between, like every other per-frame quantity here: a weight that
+// stepped would put the pop back that the cook's ramp exists to remove.
+float ClipPlantWeight(Rig rig, Clip clip, uint leg, float frames)
 {
     uint f0;
     uint f1;
@@ -114,6 +118,19 @@ float PlantWeight(Rig rig, Clip clip, uint leg, float frames)
     let byteB = float((wordB >> (8 * (b % 4))) & 0xffu);
 
     return lerp(byteA, byteB, blend) * (1.0 / 255.0);
+}
+
+// How planted leg `leg` is under a blended pose: each slot's plant weight, weighted as its pose is.
+// The same weighted sum every per-bone quantity takes, so a foot planted in both clips of a
+// crossfade stays planted through it and one planted in neither is never planted by the blend.
+float PlantWeight(Rig rig, LocalPose pose, uint leg)
+{
+    float weight = 0.0;
+    for (uint s = 0; s < pose.count; ++s)
+    {
+        weight += pose.weights[s] * ClipPlantWeight(rig, pose.clips[s], leg, pose.frames[s]);
+    }
+    return weight;
 }
 
 // Which entry of the solved table `bone` is, or -1. A linear scan over at most cMaxLegsPerRig * 3
@@ -154,27 +171,17 @@ struct LegPose
     float deficit;
 };
 
-LegPose ReadLeg(
-    PoseTables tables,
-    Rig rig,
-    Clip clip,
-    SkinnedLegChain leg,
-    uint index,
-    float frames,
-    float4 plane,
-    float3 down,
-    uint paletteBase
-)
+LegPose ReadLeg(PoseTables tables, Rig rig, LocalPose pose, SkinnedLegChain leg, uint index, float4 plane, float3 down, uint paletteBase)
 {
-    LegPose pose;
+    LegPose legPose;
 
     let hipModel = PaletteMatrix(tables, paletteBase + leg.hip * cFloat4sPerBone);
     let kneeModel = PaletteMatrix(tables, paletteBase + leg.knee * cFloat4sPerBone);
     let ankleModel = PaletteMatrix(tables, paletteBase + leg.ankle * cFloat4sPerBone);
 
-    pose.hip = float3(hipModel[0].w, hipModel[1].w, hipModel[2].w);
-    pose.knee = float3(kneeModel[0].w, kneeModel[1].w, kneeModel[2].w);
-    pose.ankle = float3(ankleModel[0].w, ankleModel[1].w, ankleModel[2].w);
+    legPose.hip = float3(hipModel[0].w, hipModel[1].w, hipModel[2].w);
+    legPose.knee = float3(kneeModel[0].w, kneeModel[1].w, kneeModel[2].w);
+    legPose.ankle = float3(ankleModel[0].w, ankleModel[1].w, ankleModel[2].w);
 
     // The foot's contact -- its lowest point once turned -- is dropped onto the ground and the
     // ankle carried by the same vector; see docs/skinning.md for why it is the contact and not the
@@ -183,33 +190,33 @@ LegPose ReadLeg(
     //
     // Measured in model space through the ankle's transform, never in the stored ankle-local sole:
     // bone space carries whatever scale the bind does, so a distance read there is in those units.
-    pose.weight = PlantWeight(rig, clip, index, frames);
+    legPose.weight = PlantWeight(rig, pose, index);
 
     // The turn is the ground's slope, not whatever would bring the sole flat: a foot the animator
     // posed on its toe stays on its toe, and on level ground nothing turns.
     let floorUp = float3(0.0, 1.0, 0.0);
     float3 tilt = cross(floorUp, plane.xyz);
-    pose.turnAxis = float3(0.0, 0.0, 1.0);
-    pose.turnAngle = 0.0;
+    legPose.turnAxis = float3(0.0, 0.0, 1.0);
+    legPose.turnAngle = 0.0;
     if (length(tilt) > 1e-6)
     {
-        pose.turnAxis = normalize(tilt);
-        pose.turnAngle = min(acos(clamp(dot(floorUp, plane.xyz), -1.0, 1.0)), cSoleClampRadians) * pose.weight;
+        legPose.turnAxis = normalize(tilt);
+        legPose.turnAngle = min(acos(clamp(dot(floorUp, plane.xyz), -1.0, 1.0)), cSoleClampRadians) * legPose.weight;
     }
-    let turn = RotationAbout(float3(0.0, 0.0, 0.0), pose.turnAxis, pose.turnAngle);
+    let turn = RotationAbout(float3(0.0, 0.0, 0.0), legPose.turnAxis, legPose.turnAngle);
 
     // The foot as it will stand, turned about the ankle, with the ankle at the origin.
-    let sole = TransformDir(turn, TransformPoint(ankleModel, leg.solePoint.xyz) - pose.ankle);
+    let sole = TransformDir(turn, TransformPoint(ankleModel, leg.solePoint.xyz) - legPose.ankle);
     let soleUp = normalize(TransformDir(turn, TransformDir(ankleModel, leg.soleNormal.xyz)));
     let toeModel = PaletteMatrix(tables, paletteBase + leg.toe * cFloat4sPerBone);
-    let toe = TransformDir(turn, float3(toeModel[0].w, toeModel[1].w, toeModel[2].w) - pose.ankle);
+    let toe = TransformDir(turn, float3(toeModel[0].w, toeModel[1].w, toeModel[2].w) - legPose.ankle);
 
     // The heel and the ball: the two joints dropped onto the sole plane. Whichever is lower along
     // the ground normal is what touches.
     let heel = OnSolePlane(float3(0.0, 0.0, 0.0), sole, soleUp);
     let ball = OnSolePlane(toe, sole, soleUp);
-    let contact = pose.ankle + (dot(heel, plane.xyz) < dot(ball, plane.xyz) ? heel : ball);
-    pose.target = lerp(pose.ankle, pose.ankle + (SampleGround(plane, down, contact) - contact), pose.weight);
+    let contact = legPose.ankle + (dot(heel, plane.xyz) < dot(ball, plane.xyz) ? heel : ball);
+    legPose.target = lerp(legPose.ankle, legPose.ankle + (SampleGround(plane, down, contact) - contact), legPose.weight);
 
     // How far the rig must come down, along the ground's up, for this chain to reach: the smaller
     // root of |v + d*n| = reach, where v is hip-to-target and n the ground normal.
@@ -221,15 +228,15 @@ LegPose ReadLeg(
     //
     // A negative discriminant is a target too far to one side for any drop to reach; the clamp then
     // yields -c, the drop that gets closest, and the solve stops short there rather than nowhere.
-    let reach = length(pose.knee - pose.hip) + length(pose.ankle - pose.knee);
-    let toTarget = pose.target - pose.hip;
+    let reach = length(legPose.knee - legPose.hip) + length(legPose.ankle - legPose.knee);
+    let toTarget = legPose.target - legPose.hip;
     let c = dot(toTarget, plane.xyz);
     let disc = c * c - (dot(toTarget, toTarget) - reach * reach);
 
     // A chain that can already reach gives a non-positive root, which the clamp reads as no drop.
-    pose.deficit = max(0.0, -c - sqrt(max(disc, 0.0)));
+    legPose.deficit = max(0.0, -c - sqrt(max(disc, 0.0)));
 
-    return pose;
+    return legPose;
 }
 
 // Carries every descendant of a solved bone by that bone's delta, rigidly.
@@ -289,7 +296,7 @@ void CarrySolvedDescendants(PoseTables tables, Rig rig, uint solved, uint palett
 // after a barrier, so the whole group agrees on it. A branch on anything thread-varying must not
 // carry one. One thread solves one leg -- a chain is serial, hip before knee before ankle, so there
 // is nothing in it for a second lane to do -- and the whole group then carries the descendants.
-void PlantFeet(PoseTables tables, Rig rig, Clip clip, float frames, float4x4 modelToWorld, uint paletteBase, uint localIdx)
+void PlantFeet(PoseTables tables, Rig rig, LocalPose pose, float4x4 modelToWorld, uint paletteBase, uint localIdx)
 {
     if (localIdx == 0)
     {
@@ -308,7 +315,7 @@ void PlantFeet(PoseTables tables, Rig rig, Clip clip, float frames, float4x4 mod
 
         // Measured before anything moves: how far the worst leg falls short is what the whole rig
         // has to come down by, and that cannot be known one leg at a time.
-        let reachOnly = ReadLeg(tables, rig, clip, leg, localIdx, frames, plane, down, paletteBase);
+        let reachOnly = ReadLeg(tables, rig, pose, leg, localIdx, plane, down, paletteBase);
         InterlockedMax(gMaxDeficit, asuint(reachOnly.deficit));
     }
     AllMemoryBarrierWithGroupSync();
@@ -339,7 +346,7 @@ void PlantFeet(PoseTables tables, Rig rig, Clip clip, float frames, float4x4 mod
     {
         // Re-read rather than reuse: every joint moved in the drop, and so did the ground under the
         // ankle, so a target measured before it is a target for a rig that no longer exists.
-        let pose = ReadLeg(tables, rig, clip, leg, localIdx, frames, plane, down, paletteBase);
+        let legPose = ReadLeg(tables, rig, pose, leg, localIdx, plane, down, paletteBase);
 
         let hipSlot = paletteBase + leg.hip * cFloat4sPerBone;
         let kneeSlot = paletteBase + leg.knee * cFloat4sPerBone;
@@ -351,7 +358,7 @@ void PlantFeet(PoseTables tables, Rig rig, Clip clip, float frames, float4x4 mod
 
         float4x4 hipDelta;
         float4x4 kneeDelta;
-        SolveTwoBone(pose.hip, pose.knee, pose.ankle, pose.target, hipDelta, kneeDelta);
+        SolveTwoBone(legPose.hip, legPose.knee, legPose.ankle, legPose.target, hipDelta, kneeDelta);
 
         // The foot keeps the orientation the clip gave it: the ankle is carried to where the solve
         // put the joint, in translation alone, so the shin's turn is absorbed at the ankle rather
@@ -359,12 +366,12 @@ void PlantFeet(PoseTables tables, Rig rig, Clip clip, float frames, float4x4 mod
         // the joint -- not about the sole: the joint is where the chain the solve just satisfied
         // ends, and turning the foot under it would put the shin back out of length. The contact
         // was placed already turned, so it lands on the ground exactly.
-        let jointNow = TransformPoint(kneeDelta, pose.ankle);
+        let jointNow = TransformPoint(kneeDelta, legPose.ankle);
         float4x4 planted = ankleModel;
-        planted[0].w += jointNow.x - pose.ankle.x;
-        planted[1].w += jointNow.y - pose.ankle.y;
-        planted[2].w += jointNow.z - pose.ankle.z;
-        planted = mul(RotationAbout(jointNow, pose.turnAxis, pose.turnAngle), planted);
+        planted[0].w += jointNow.x - legPose.ankle.x;
+        planted[1].w += jointNow.y - legPose.ankle.y;
+        planted[2].w += jointNow.z - legPose.ankle.z;
+        planted = mul(RotationAbout(jointNow, legPose.turnAxis, legPose.turnAngle), planted);
 
         WritePalette(tables, hipSlot, mul(hipDelta, hipModel));
         WritePalette(tables, kneeSlot, mul(kneeDelta, kneeModel));
@@ -390,16 +397,58 @@ void PlantFeet(PoseTables tables, Rig rig, Clip clip, float frames, float4x4 mod
 //
 // The plant is group-uniform -- a rig either authored legs or did not, and the scene's switch is
 // one value -- so the barriers inside it are reached by the whole group or by none of it.
-void PoseInstance(PoseTables tables, Rig rig, Clip clip, float frames, float4x4 modelToWorld, uint paletteBase, uint localIdx)
+void PoseInstance(PoseTables tables, Rig rig, LocalPose pose, float4x4 modelToWorld, uint paletteBase, uint localIdx)
 {
-    PoseModelSpace(tables, rig, clip, frames, paletteBase, localIdx);
+    PoseModelSpace(tables, rig, pose, paletteBase, localIdx);
 
     if (!rig.legs.Null() && gUniforms.plantFeet != 0)
     {
-        PlantFeet(tables, rig, clip, frames, modelToWorld, paletteBase, localIdx);
+        PlantFeet(tables, rig, pose, modelToWorld, paletteBase, localIdx);
     }
 
     FoldInverseBind(tables, rig, paletteBase, localIdx);
+}
+
+// The record's slots at `time`: every slot carrying weight, its clip and frame position, weights
+// normalized to one. Group-uniform, since the whole group reads one record at one time.
+LocalPose ResolveSlots(SkinnedState state, Rig rig, float time)
+{
+    LocalPose pose = EmptyPose();
+
+    float total = 0.0;
+    for (uint s = 0; s < cBlendSlots; ++s)
+    {
+        BlendSlot slot = state.slots[s];
+        float weight = SlotWeight(slot, time);
+        if (weight <= 0.0)
+        {
+            continue;
+        }
+
+        // The node table is implicit: node `n` is clip `n`. An authored blend space is what will
+        // make it a table this looks up.
+        Clip clip = gUniforms.clipBuffer.Get(rig.clips, slot.node);
+
+        pose.clips[pose.count] = clip;
+        pose.frames[pose.count] = SlotFrames(clip, slot, time);
+        pose.weights[pose.count] = weight;
+        total += weight;
+        ++pose.count;
+    }
+
+    // Nothing weighted at this time -- every ramp still ahead of it, say -- holds slot 0, which a
+    // record always names a clip in.
+    if (pose.count == 0)
+    {
+        Clip clip = gUniforms.clipBuffer.Get(rig.clips, state.slots[0].node);
+        return SingleClipPose(clip, SlotFrames(clip, state.slots[0], time));
+    }
+
+    for (uint s = 0; s < pose.count; ++s)
+    {
+        pose.weights[s] /= total;
+    }
+    return pose;
 }
 
 [shader("compute")]
@@ -415,8 +464,7 @@ void main(uint groupIdx: SV_GroupID, uint localIdx: SV_GroupIndex)
     // or by none of it.
     let mesh = gUniforms.meshBuffer.Get(gUniforms.posedInstances[groupIdx]);
     SkinnedState state = gUniforms.playbackBuffer.LoadRecordAs<SkinnedState>(mesh.playback);
-    Rig rig = gUniforms.rigs.Get(state.playback.rig);
-    Clip clip = gUniforms.clipBuffer.Get(rig.clips, state.playback.clip);
+    Rig rig = gUniforms.rigs.Get(state.rig);
 
     PoseTables tables;
     tables.bones = gUniforms.boneBuffer;
@@ -427,6 +475,6 @@ void main(uint groupIdx: SV_GroupID, uint localIdx: SV_GroupIndex)
     let stride = rig.boneCount * cFloat4sPerBone;
     let base = state.palette.GetStart();
 
-    PoseInstance(tables, rig, clip, ClipFrames(clip, state.playback, gUniforms.time), modelToWorld, base, localIdx);
-    PoseInstance(tables, rig, clip, ClipFrames(clip, state.playback, gUniforms.prevTime), modelToWorld, base + stride, localIdx);
+    PoseInstance(tables, rig, ResolveSlots(state, rig, gUniforms.time), modelToWorld, base, localIdx);
+    PoseInstance(tables, rig, ResolveSlots(state, rig, gUniforms.prevTime), modelToWorld, base + stride, localIdx);
 }

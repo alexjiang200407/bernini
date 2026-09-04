@@ -7,10 +7,10 @@ import idl.IPoseTables;
 import idl.Rig;
 import idl.SkinnedBone;
 
-// The pose walk both animated kernels run: sample a clip at a fractional frame, compose the
+// The pose walk both animated kernels run: sample the clips a local pose blends, compose the
 // hierarchy one depth level at a time, and multiply each bone through its inverse bind. PoseSkinned
-// runs it per instance per frame; PoseRigFrames runs it once per frame of a rig's clip set and
-// never again.
+// runs it per instance per frame over that instance's weighted slots; PoseRigFrames runs it once per
+// frame of a rig's clip set, one clip at a time, and never again.
 
 // One bone's transform, read back out of the three rows a palette slot holds. Affine, so the fourth
 // row is (0,0,0,1) and was never stored. The vertex blend in skinning.slang reads through this too.
@@ -79,7 +79,76 @@ public BoneSample SampleBone<T : IPoseTables>(T tables, Rig rig, Clip clip, uint
     return blended;
 }
 
-// Composes one rig at one fractional frame into the slots starting at `paletteBase`, leaving every
+// The local pose a walk starts from: up to cBlendSlots weighted clip samples, the live ones packed
+// first and their weights summing to one. Group-uniform -- every thread of a group resolves the same
+// record at the same time -- so a loop over it carries no barrier hazard.
+public struct LocalPose
+{
+    public Clip clips[cBlendSlots];
+    public float frames[cBlendSlots];
+    public float weights[cBlendSlots];
+    public uint count;
+};
+
+// No live slot yet: what a caller fills before packing what it resolved.
+public LocalPose EmptyPose()
+{
+    LocalPose pose;
+    for (uint s = 0; s < cBlendSlots; ++s)
+    {
+        pose.clips[s] = Clip();
+        pose.frames[s] = 0.0;
+        pose.weights[s] = 0.0;
+    }
+    pose.count = 0;
+    return pose;
+}
+
+public LocalPose SingleClipPose(Clip clip, float frames)
+{
+    LocalPose pose = EmptyPose();
+    pose.clips[0] = clip;
+    pose.frames[0] = frames;
+    pose.weights[0] = 1.0;
+    pose.count = 1;
+    return pose;
+}
+
+// One bone's local pose under `pose`. A single clip is SampleBone and nothing else, so the crowd
+// table and a plain hero instance keep the bytes they had. Several blend as assetlib's weighted
+// poseModelTransforms does -- the reference this is diffed against: translation and scale by the
+// weighted sum, each rotation flipped against the sum so far and then the sum normalized.
+public BoneSample SampleLocal<T : IPoseTables>(T tables, Rig rig, LocalPose pose, uint bone)
+{
+    if (pose.count == 1)
+    {
+        return SampleBone(tables, rig, pose.clips[0], bone, pose.frames[0]);
+    }
+
+    BoneSample blended;
+    blended.translation = float4(0.0);
+    blended.rotation = float4(0.0);
+    blended.scale = float4(0.0);
+
+    for (uint s = 0; s < pose.count; ++s)
+    {
+        BoneSample local = SampleBone(tables, rig, pose.clips[s], bone, pose.frames[s]);
+        float weight = pose.weights[s];
+
+        blended.translation += weight * local.translation;
+        blended.scale += weight * local.scale;
+
+        // Against the running sum rather than a fixed reference, so the sign decision is continuous
+        // in the weights: a crossfade passing 50 % flips nothing.
+        float4 aligned = (dot(blended.rotation, local.rotation) < 0.0) ? -local.rotation : local.rotation;
+        blended.rotation += weight * aligned;
+    }
+
+    blended.rotation = normalize(blended.rotation);
+    return blended;
+}
+
+// Composes one rig under one local pose into the slots starting at `paletteBase`, leaving every
 // slot holding a *model-space* transform.
 //
 // Split from the inverse bind below rather than run with it, because between the two is the one
@@ -90,7 +159,7 @@ public BoneSample SampleBone<T : IPoseTables>(T tables, Rig rig, Clip clip, uint
 // the only loop carrying one is bounded by `rig.maxDepth`, which is group-uniform (the whole group
 // poses one rig at one frame), and the strided per-bone loops that *are* thread-varying
 // contain no barrier. Nothing returns early inside here either.
-public void PoseModelSpace<T : IPoseTables>(T tables, Rig rig, Clip clip, float frames, uint paletteBase, uint localIdx)
+public void PoseModelSpace<T : IPoseTables>(T tables, Rig rig, LocalPose pose, uint paletteBase, uint localIdx)
 {
     // Composed in the palette rather than in groupshared: a model transform is affine, so it fits the
     // three rows the slot already reserves for the skin matrix it ends up holding. Nothing bounds the
@@ -98,7 +167,7 @@ public void PoseModelSpace<T : IPoseTables>(T tables, Rig rig, Clip clip, float 
     // character rig at 192.
     for (uint bone = localIdx; bone < rig.boneCount; bone += cPoseGroupSize)
     {
-        WritePalette(tables, paletteBase + bone * cFloat4sPerBone, LocalTransform(SampleBone(tables, rig, clip, bone, frames)));
+        WritePalette(tables, paletteBase + bone * cFloat4sPerBone, LocalTransform(SampleLocal(tables, rig, pose, bone)));
     }
     DeviceMemoryBarrierWithGroupSync();
 
@@ -143,8 +212,8 @@ public void FoldInverseBind<T : IPoseTables>(T tables, Rig rig, uint paletteBase
 }
 
 // The whole walk, for a caller with nothing to do in the model-space window.
-public void PoseInto<T : IPoseTables>(T tables, Rig rig, Clip clip, float frames, uint paletteBase, uint localIdx)
+public void PoseInto<T : IPoseTables>(T tables, Rig rig, LocalPose pose, uint paletteBase, uint localIdx)
 {
-    PoseModelSpace(tables, rig, clip, frames, paletteBase, localIdx);
+    PoseModelSpace(tables, rig, pose, paletteBase, localIdx);
     FoldInverseBind(tables, rig, paletteBase, localIdx);
 }
