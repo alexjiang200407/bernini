@@ -3,6 +3,7 @@
 #include <assetlib/codecs.h>
 #include <assetlib_structs/BMesh.h>
 #include <assetlib_structs/BMeshImport.h>
+#include <core/glm.h>
 
 #include <catch2/catch_approx.hpp>
 
@@ -57,6 +58,9 @@ namespace
 	 * Specular-glossiness materials with values chosen so the conversion lands on exact numbers: a
 	 * black specular is unambiguously dielectric, a white one against a black diffuse is
 	 * unambiguously metal, and each has a glossiness whose complement is exact in binary.
+	 *
+	 * `vinyl` sits between the two, at half the dielectric F0 -- the band the metallic-roughness
+	 * half cannot express at all, since it solves to the same metallic of 0 as `clay`.
 	 */
 	constexpr const char* c_SpecGlossGltf = R"({
   "asset": { "version": "2.0" },
@@ -69,7 +73,10 @@ namespace
     { "name": "chrome", "extensions": { "KHR_materials_pbrSpecularGlossiness": {
         "diffuseFactor": [ 0.0, 0.0, 0.0, 1.0 ], "specularFactor": [ 1.0, 1.0, 1.0 ],
         "glossinessFactor": 1.0 } } },
-    { "name": "bare", "extensions": { "KHR_materials_pbrSpecularGlossiness": {} } }
+    { "name": "bare", "extensions": { "KHR_materials_pbrSpecularGlossiness": {} } },
+    { "name": "vinyl", "extensions": { "KHR_materials_pbrSpecularGlossiness": {
+        "diffuseFactor": [ 0.5, 0.5, 0.5, 1.0 ], "specularFactor": [ 0.02, 0.02, 0.02 ],
+        "glossinessFactor": 0.5 } } }
   ]
 })";
 
@@ -301,7 +308,7 @@ TEST_CASE("A specular-glossiness material converts to metallic-roughness", "[bme
 	const auto mesh = loadFromGltf(path);
 	std::filesystem::remove(path);
 
-	REQUIRE(mesh.materials.size() == 3);
+	REQUIRE(mesh.materials.size() == 4);
 
 	// A black specular cannot be metal, so the diffuse survives as base colour -- divided by the
 	// 0.96 a dielectric does not reflect, which is what makes the two models agree on the lobe.
@@ -314,6 +321,12 @@ TEST_CASE("A specular-glossiness material converts to metallic-roughness", "[bme
 	CHECK(clay.baseColorFactor.b == Catch::Approx(0.3f / 0.96f));
 	CHECK(clay.baseColorFactor.a == Catch::Approx(1.0f));
 
+	// The switched-off Phong specular, which metallic-roughness alone cannot say: metallic is 0 for
+	// every non-metal alike, so only the specular pair separates this from an ordinary dielectric.
+	// The scalar has to go with the colour, or the split-sum's F90 term keeps a grazing rim.
+	CHECK(clay.specularColorFactor == glm::vec3(0.0f));
+	CHECK(clay.specularFactor == 0.0f);
+
 	// A white specular over a black diffuse is the one case that solves to a full metal, and its
 	// base colour is the specular it reflects rather than the diffuse it does not have.
 	const auto& chrome = mesh.materials[1];
@@ -321,12 +334,32 @@ TEST_CASE("A specular-glossiness material converts to metallic-roughness", "[bme
 	CHECK(chrome.roughnessFactor == Catch::Approx(0.0f));
 	CHECK(chrome.baseColorFactor.r == Catch::Approx(1.0f));
 
+	// Above the dielectric line the reflection is already in metallic and the base colour, so the
+	// pair stays at the defaults every material had before the conversion wrote it.
+	CHECK(chrome.specularColorFactor == glm::vec3(1.0f));
+	CHECK(chrome.specularFactor == 1.0f);
+
 	// An empty extension is glTF's defaults -- white diffuse, white specular, full glossiness -- and
 	// not this build's, which is the trap: tinygltf default-constructs pbrMetallicRoughness too, so
 	// a material that reached the metallic-roughness path would arrive rough and fully metallic.
 	const auto& bare = mesh.materials[2];
 	CHECK(bare.isPbr);
 	CHECK(bare.roughnessFactor == Catch::Approx(0.0f));
+	CHECK(bare.specularColorFactor == glm::vec3(1.0f));
+	CHECK(bare.specularFactor == 1.0f);
+
+	// Half the dielectric F0, which solves to the same metallic of 0 as clay: the pair is the only
+	// thing that tells the two apart, and the shader rebuilds 0.02 as 0.04 * 0.5.
+	const auto& vinyl = mesh.materials[3];
+	CHECK(vinyl.metallicFactor == Catch::Approx(0.0f));
+	CHECK(vinyl.roughnessFactor == Catch::Approx(0.5f));
+	CHECK(vinyl.specularColorFactor.r == Catch::Approx(0.5f));
+	CHECK(vinyl.specularColorFactor.g == Catch::Approx(0.5f));
+	CHECK(vinyl.specularColorFactor.b == Catch::Approx(0.5f));
+
+	// A dim specular is still an interface, so the lobe stays whole: only an exactly black one
+	// means there is none.
+	CHECK(vinyl.specularFactor == 1.0f);
 }
 
 TEST_CASE("probeGltfMaterials reports the PBR materials", "[bmesh][gltf]")
