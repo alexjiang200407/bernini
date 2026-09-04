@@ -2,7 +2,6 @@
 #include <atomic>
 #include <concepts>
 #include <core/ref/Ref.h>
-#include <core/type_traits.h>
 
 namespace core
 {

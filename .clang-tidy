@@ -87,3 +87,27 @@ CheckOptions:
   readability-identifier-naming.ConstexprVariableIgnoredRegexp: '^([a-z][a-z0-9]*_)+v$|^always_false$'
 
   readability-identifier-naming.MacroDefinitionCase: UPPER_CASE
+
+  # glm is reached through <core/glm.h> and never directly: that header sets
+  # GLM_FORCE_DEPTH_ZERO_TO_ONE and friends before glm is parsed, and glm reaching a
+  # translation unit unconfigured builds a projection matrix for the wrong depth range.
+  # include-cleaner cannot know that. Left to itself it writes <glm/ext.hpp> -- and
+  # <glm/detail/qualifier.hpp>, a vendor-internal header -- into any file naming glm::vec3,
+  # because `IWYU pragma: export` on core/glm.h only reaches what that header includes
+  # directly and not what those pull in transitively. So it is kept out of glm entirely and
+  # <core/glm.h> stays the only way in.
+  #
+  # The pattern is spelled to full-match on purpose, so the identical string works in .clangd:
+  # clang-tidy searches, clangd anchors, and `/glm/.*` silences only the first of them. It matches
+  # a `glm/` directory, which is vcpkg's layout on every platform; core/glm.h and bgl/glm.h are
+  # files rather than directories and are left alone.
+  #
+  # And the platform C library's own internals. A POSIX symbol has no standard-header mapping
+  # -- `sigaction`, `ucontext_t`, `pid_t` are not ISO C -- so include-cleaner falls back to the
+  # physical file that declares it, which on Darwin is a split-out internal like
+  # <sys/_types/_ucontext.h> or an arch-dispatch header like <mach/arm/kern_return.h>. Neither
+  # exists on Windows, and the arch one does not exist on an Intel mac either; <csignal> is what
+  # the source already includes and what it should keep. Sweeping from one platform's compile
+  # database can only ever name that platform's headers, which is why these are excluded rather
+  # than fixed one file at a time.
+  misc-include-cleaner.IgnoreHeaders: '.*/glm/.*;.*/sys/_types/.*;.*/sys/signal\.h;.*/mach/(arm|arm64|i386|x86_64)/.*'

@@ -1,7 +1,6 @@
 #include <core/err/util.h>
 #include <core/platform/util.h>
 #include <cpptrace/basic.hpp>
-#include <cpptrace/cpptrace.hpp>
 
 #include <cpptrace/forward.hpp>
 #include <csignal>

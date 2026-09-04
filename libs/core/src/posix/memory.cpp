@@ -2,7 +2,6 @@
 
 #include <cstdint>
 #include <mach/kern_return.h>
-#include <mach/mach.h>
 #include <mach/mach_init.h>
 #include <mach/message.h>
 #include <mach/task.h>
