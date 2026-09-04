@@ -1,9 +1,11 @@
 import idl.BoneSample;
 import idl.Clip;
 import idl.Constants;
+import idl.FootIKLeg;
 import idl.IPlayback;
 import idl.MeshInstance;
 import idl.PosedInstance;
+import idl.Range;
 import idl.RawEntry;
 import idl.Rig;
 import idl.SkinnedBone;
@@ -12,6 +14,7 @@ import idl.SkinnedState;
 import lib.anim.clip_playback;
 import lib.anim.foot_plant;
 import lib.anim.pose_walk;
+import lib.anim.ramp;
 import lib.math.transform;
 import lib.types.ComputeBuffer;
 import lib.types.EntryBuffer;
@@ -54,6 +57,10 @@ struct Uniforms
     // per frame of the sample pool packed four to a uint.
     RangeBuffer<SkinnedLegChain> legBuffer;
     RangeBuffer<uint> plantWeightBuffer;
+
+    // Read only by a rig that authored legs: each hero instance's runtime weights, one FootIKLeg per
+    // leg, reached through its pose-list entry.
+    RangeBuffer<FootIKLeg> footIKBuffer;
 
     ComputeBuffer<float4> bonePalettes;
 
@@ -144,16 +151,21 @@ struct LegPose
     float3 knee;
     float3 ankle;
     float3 target;
-    float weight;
+
+    // How far the ankle is carried onto the ground, and how far the sole turns onto its slope:
+    // the frame's baked weight by the instance's own for each.
+    float positionWeight;
+    float rotationWeight;
 
     // The turn the foot takes about its ankle: the ground's slope, weighted and clamped. Known
     // before the solve, since nothing the solve does changes the ground.
     float3 turnAxis;
     float turnAngle;
 
-    // 0 when the chain can reach, and scaled by the plant weight beyond that: the drop exists so a
-    // *planted* foot reaches the ground, and a swing foot that cannot reach the height the terrain
-    // carries it to stops short in the air rather than pulling the whole rig down after it.
+    // 0 when the chain can reach, and scaled by the position weight beyond that: the drop exists
+    // so a *planted* foot reaches the ground, and a swing foot that cannot reach the height the
+    // terrain carries it to stops short in the air rather than pulling the whole rig down after it.
+    // A leg at position weight 0 targets where its ankle already is and contributes nothing.
     float deficit;
 };
 
@@ -164,6 +176,8 @@ LegPose ReadLeg(
     SkinnedLegChain leg,
     uint index,
     float frames,
+    float positionScale,
+    float rotationScale,
     float4 plane,
     float3 down,
     uint paletteBase
@@ -186,7 +200,9 @@ LegPose ReadLeg(
     //
     // Measured in model space through the ankle's transform, never in the stored ankle-local sole:
     // bone space carries whatever scale the bind does, so a distance read there is in those units.
-    pose.weight = PlantWeight(rig, clip, index, frames);
+    let baked = PlantWeight(rig, clip, index, frames);
+    pose.positionWeight = baked * positionScale;
+    pose.rotationWeight = baked * rotationScale;
 
     // The turn is the ground's slope, not whatever would bring the sole flat: a foot the animator
     // posed on its toe stays on its toe, and on level ground nothing turns.
@@ -197,7 +213,7 @@ LegPose ReadLeg(
     if (length(tilt) > 1e-6)
     {
         pose.turnAxis = normalize(tilt);
-        pose.turnAngle = min(acos(clamp(dot(floorUp, plane.xyz), -1.0, 1.0)), cSoleClampRadians) * pose.weight;
+        pose.turnAngle = min(acos(clamp(dot(floorUp, plane.xyz), -1.0, 1.0)), cSoleClampRadians) * pose.rotationWeight;
     }
     let turn = RotationAbout(float3(0.0, 0.0, 0.0), pose.turnAxis, pose.turnAngle);
 
@@ -213,16 +229,19 @@ LegPose ReadLeg(
     let ball = OnSolePlane(toe, sole, soleUp);
     let contact = pose.ankle + (dot(heel, plane.xyz) < dot(ball, plane.xyz) ? heel : ball);
 
-    // Two terms, and the weight scales only one. The seat drops the contact from the height the clip
-    // authored it at onto the floor it was authored over -- model y = 0, where groundClips rests a
-    // clip. The lift is however far the real ground departs from that floor, and every weight gets
-    // it, so a foot the cook did not call planted keeps its arc over the terrain beneath it.
+    // Two terms, and the baked weight scales only one. The seat drops the contact from the height
+    // the clip authored it at onto the floor it was authored over -- model y = 0, where groundClips
+    // rests a clip. The lift is however far the real ground departs from that floor, and every
+    // baked weight gets it, so a foot the cook did not call planted keeps its arc over the terrain
+    // beneath it. The instance's own position weight scales the whole of it, lift included: at zero
+    // it is the animation, which is what a unit standing on something the ground does not describe
+    // asks for.
     //
     // The height is read off the contact rather than by dropping it onto that floor, which would
     // divide by the floor normal along `down` -- zero for an instance rotated onto its side.
     let seat = contact.y * down;
     let lift = (SampleGround(plane, down, contact) - contact) - seat;
-    pose.target = pose.ankle + lift + pose.weight * seat;
+    pose.target = pose.ankle + positionScale * (lift + baked * seat);
 
     // How far the rig must come down, along the ground's up, for this chain to reach: the smaller
     // root of |v + d*n| = reach, where v is hip-to-target and n the ground normal.
@@ -240,7 +259,7 @@ LegPose ReadLeg(
     let disc = c * c - (dot(toTarget, toTarget) - reach * reach);
 
     // A chain that can already reach gives a non-positive root, which the clamp reads as no drop.
-    pose.deficit = max(0.0, -c - sqrt(max(disc, 0.0))) * pose.weight;
+    pose.deficit = max(0.0, -c - sqrt(max(disc, 0.0))) * pose.positionWeight;
 
     return pose;
 }
@@ -302,7 +321,17 @@ void CarrySolvedDescendants(PoseTables tables, Rig rig, uint solved, uint palett
 // after a barrier, so the whole group agrees on it. A branch on anything thread-varying must not
 // carry one. One thread solves one leg -- a chain is serial, hip before knee before ankle, so there
 // is nothing in it for a second lane to do -- and the whole group then carries the descendants.
-void PlantFeet(PoseTables tables, Rig rig, Clip clip, float frames, float4x4 modelToWorld, uint paletteBase, uint localIdx)
+void PlantFeet(
+    PoseTables tables,
+    Rig rig,
+    Clip clip,
+    float frames,
+    Range<FootIKLeg> footIK,
+    float time,
+    float4x4 modelToWorld,
+    uint paletteBase,
+    uint localIdx
+)
 {
     if (localIdx == 0)
     {
@@ -315,13 +344,21 @@ void PlantFeet(PoseTables tables, Rig rig, Clip clip, float frames, float4x4 mod
     let down = normalize(TransformDir(AffineInverse(modelToWorld), float3(0.0, -1.0, 0.0)));
 
     SkinnedLegChain leg;
+    float positionScale = 1.0;
+    float rotationScale = 1.0;
     if (localIdx < rig.legs.count)
     {
         leg = gUniforms.legBuffer.Get(rig.legs, localIdx);
 
+        // The instance's own weights at this clock. Never null here: a hero spawned on a rig with
+        // legs owns a record for each of them.
+        let ik = gUniforms.footIKBuffer.Get(footIK, localIdx);
+        positionScale = RampAt(ik.position, time);
+        rotationScale = RampAt(ik.rotation, time);
+
         // Measured before anything moves: how far the worst leg falls short is what the whole rig
         // has to come down by, and that cannot be known one leg at a time.
-        let reachOnly = ReadLeg(tables, rig, clip, leg, localIdx, frames, plane, down, paletteBase);
+        let reachOnly = ReadLeg(tables, rig, clip, leg, localIdx, frames, positionScale, rotationScale, plane, down, paletteBase);
         InterlockedMax(gMaxDeficit, asuint(reachOnly.deficit));
     }
     AllMemoryBarrierWithGroupSync();
@@ -352,7 +389,7 @@ void PlantFeet(PoseTables tables, Rig rig, Clip clip, float frames, float4x4 mod
     {
         // Re-read rather than reuse: every joint moved in the drop, and so did the ground under the
         // ankle, so a target measured before it is a target for a rig that no longer exists.
-        let pose = ReadLeg(tables, rig, clip, leg, localIdx, frames, plane, down, paletteBase);
+        let pose = ReadLeg(tables, rig, clip, leg, localIdx, frames, positionScale, rotationScale, plane, down, paletteBase);
 
         let hipSlot = paletteBase + leg.hip * cFloat4sPerBone;
         let kneeSlot = paletteBase + leg.knee * cFloat4sPerBone;
@@ -403,13 +440,23 @@ void PlantFeet(PoseTables tables, Rig rig, Clip clip, float frames, float4x4 mod
 //
 // The plant is group-uniform -- a rig either authored legs or did not, and the scene's switch is
 // one value -- so the barriers inside it are reached by the whole group or by none of it.
-void PoseInstance(PoseTables tables, Rig rig, Clip clip, float frames, float4x4 modelToWorld, uint paletteBase, uint localIdx)
+void PoseInstance(
+    PoseTables tables,
+    Rig rig,
+    Clip clip,
+    float frames,
+    Range<FootIKLeg> footIK,
+    float time,
+    float4x4 modelToWorld,
+    uint paletteBase,
+    uint localIdx
+)
 {
     PoseModelSpace(tables, rig, clip, frames, paletteBase, localIdx);
 
     if (!rig.legs.Null() && gUniforms.plantFeet != 0)
     {
-        PlantFeet(tables, rig, clip, frames, modelToWorld, paletteBase, localIdx);
+        PlantFeet(tables, rig, clip, frames, footIK, time, modelToWorld, paletteBase, localIdx);
     }
 
     FoldInverseBind(tables, rig, paletteBase, localIdx);
@@ -426,7 +473,8 @@ void main(uint groupIdx: SV_GroupID, uint localIdx: SV_GroupIndex)
 
     // Group-uniform, so the early-out above and every barrier below are reached by the whole group
     // or by none of it.
-    let mesh = gUniforms.meshBuffer.Get(gUniforms.posedInstances[groupIdx].mesh);
+    let entry = gUniforms.posedInstances[groupIdx];
+    let mesh = gUniforms.meshBuffer.Get(entry.mesh);
     SkinnedState state = gUniforms.playbackBuffer.LoadRecordAs<SkinnedState>(mesh.playback);
     Rig rig = gUniforms.rigs.Get(state.playback.rig);
     Clip clip = gUniforms.clipBuffer.Get(rig.clips, state.playback.clip);
@@ -440,6 +488,18 @@ void main(uint groupIdx: SV_GroupID, uint localIdx: SV_GroupIndex)
     let stride = rig.boneCount * cFloat4sPerBone;
     let base = state.palette.GetStart();
 
-    PoseInstance(tables, rig, clip, ClipFrames(clip, state.playback, gUniforms.time), modelToWorld, base, localIdx);
-    PoseInstance(tables, rig, clip, ClipFrames(clip, state.playback, gUniforms.prevTime), modelToWorld, base + stride, localIdx);
+    PoseInstance(
+        tables, rig, clip, ClipFrames(clip, state.playback, gUniforms.time), entry.footIK, gUniforms.time, modelToWorld, base, localIdx
+    );
+    PoseInstance(
+        tables,
+        rig,
+        clip,
+        ClipFrames(clip, state.playback, gUniforms.prevTime),
+        entry.footIK,
+        gUniforms.prevTime,
+        modelToWorld,
+        base + stride,
+        localIdx
+    );
 }
