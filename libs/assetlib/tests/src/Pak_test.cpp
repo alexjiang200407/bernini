@@ -1,8 +1,26 @@
 
+#include <algorithm>
 #include <assetlib/pak.h>
+#include <atomic>
+#include <catch2/catch_test_macros.hpp>
+#include <core/file/IFileSystem.h>
 #include <core/file/LayeredFileSystem.h>
 #include <core/file/LooseFileSystem.h>
 #include <core/file/file.h>
+#include <cstddef>
+#include <cstdint>
+#include <cstring>
+#include <filesystem>
+#include <format>
+#include <fstream>
+#include <ios>
+#include <memory>
+#include <span>
+#include <stdexcept>
+#include <string>
+#include <string_view>
+#include <thread>
+#include <vector>
 
 namespace
 {

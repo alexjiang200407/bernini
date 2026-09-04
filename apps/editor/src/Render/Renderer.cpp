@@ -1,12 +1,24 @@
 #include "Render/Renderer.h"
+#include <bgl/IGraphics.h>
+#include <bgl/types/SceneDesc.h>
 
 #include <QEventLoop>
 #include <QThread>
 #include <QTimer>
 
+#include <atomic>
 #include <core/profiling/thread_name.h>
 
+#include <exception>
+#include <functional>
+#include <qlogging.h>
+#include <qnamespace.h>
+#include <qobject.h>
+#include <qobjectdefs.h>
+#include <qsemaphore.h>
+#include <stdexcept>
 #include <tracy/Tracy.hpp>
+#include <utility>
 
 Renderer::Renderer(
 	const bgl::GraphicsOptions& gfxOpts,

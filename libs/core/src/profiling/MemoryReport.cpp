@@ -10,7 +10,6 @@
 #include <fstream>
 #include <functional>
 #include <nlohmann/json.hpp>
-#include <nlohmann/json_fwd.hpp>
 #include <spdlog/spdlog.h>
 #include <string>
 #include <utility>

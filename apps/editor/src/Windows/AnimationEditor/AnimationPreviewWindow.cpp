@@ -4,12 +4,20 @@
 #include "Async/BackgroundTask.h"
 #include "Mesh/BMeshUtil.h"
 #include "Render/Renderer.h"
+#include "Render/environment.h"
 #include "Windows/AnimationEditor/animation_bindings.h"
 #include "Windows/AnimationEditor/animation_draws.h"
 #include "Windows/AnimationEditor/ground_slope.h"
 #include "Windows/MaterialEditor/material_io.h"
+#include "Windows/RenderTarget/RenderTargetWindow.h"
 #include "util/mesh_drop.h"
 #include "util/mime_files.h"
+#include <assetlib_structs/Mesh.h>
+#include <bgl/IScene.h>
+#include <bgl/ISceneView.h>
+#include <bgl/InstanceDesc.h>
+#include <bgl/MeshInstanceHandle.h>
+#include <gamelib/ClipInfo.h>
 
 #include <QDragEnterEvent>
 #include <QDropEvent>
@@ -21,12 +29,31 @@
 #include <QShowEvent>
 #include <QWheelEvent>
 
+#include <algorithm>
 #include <assetlib/AssetStore.h>
 #include <assetlib/skinning.h>
 #include <assetlib_structs/BMesh.h>
 #include <assetlib_structs/Bounds.h>
 #include <core/glm.h>
+#include <cstdint>
+#include <exception>
+#include <filesystem>
 #include <gamelib/AssetManager.h>
+#include <iterator>
+#include <limits>
+#include <optional>
+#include <qlogging.h>
+#include <qnamespace.h>
+#include <qobject.h>
+#include <qstringliteral.h>
+#include <qtmetamacros.h>
+#include <qtypes.h>
+#include <span>
+#include <stdexcept>
+#include <string>
+#include <unordered_map>
+#include <utility>
+#include <vector>
 
 namespace
 {

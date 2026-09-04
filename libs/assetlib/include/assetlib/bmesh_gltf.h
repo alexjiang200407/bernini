@@ -2,6 +2,9 @@
 #include <assetlib/cancel.h>
 #include <assetlib_structs/Animation.h>
 #include <assetlib_structs/BMeshImport.h>
+#include <filesystem>
+#include <string>
+#include <vector>
 
 namespace assetlib
 {

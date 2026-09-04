@@ -1,5 +1,6 @@
 #include "MaterialEditorWindow.h"
 #include "Mesh/mesh_load.h"
+#include <algorithm>
 #include <assetlib/bmesh.h>
 
 #include <QComboBox>
@@ -26,6 +27,22 @@
 #include <assetlib/mesh_tangents.h>
 #include <assetlib_structs/BMaterial.h>
 #include <assetlib_structs/BMesh.h>
+#include <cstddef>
+#include <cstdint>
+#include <exception>
+#include <filesystem>
+#include <iterator>
+#include <memory>
+#include <optional>
+#include <qcontainerfwd.h>
+#include <qlatin1stringview.h>
+#include <qlogging.h>
+#include <qnamespace.h>
+#include <qobject.h>
+#include <qstringliteral.h>
+#include <qstringview.h>
+#include <string>
+#include <utility>
 
 #include "Async/BackgroundTask.h"
 #include "Render/Renderer.h"
@@ -37,9 +54,10 @@
 #include "Windows/MaterialEditor/material_editor_ui.h"
 #include "Windows/MaterialEditor/material_graph.h"
 #include "Windows/MaterialEditor/material_io.h"
-#include "Windows/MaterialEditor/nodes/AlphaTestedMaterialOutputNode.h"
 #include "Windows/MaterialEditor/nodes/MaterialOutputNode.h"
 #include "Windows/MaterialEditor/nodes/TextureNode.h"
+#include <QtNodes/internal/Definitions.hpp>
+#include <assetlib_structs/Node.h>
 
 namespace
 {

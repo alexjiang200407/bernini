@@ -1,4 +1,9 @@
 #include <assetlib/AssetStore.h>
+#include <cstddef>
+#include <filesystem>
+#include <span>
+#include <string_view>
+#include <vector>
 
 #include "fs_util.h"
 

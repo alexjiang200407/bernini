@@ -1,4 +1,10 @@
 #include "Startup/startup_labels.h"
+#include <assetlib/progress.h>
+#include <cstddef>
+#include <qobject.h>
+#include <qstringliteral.h>
+#include <qtypes.h>
+#include <string_view>
 
 namespace editor::startup
 {

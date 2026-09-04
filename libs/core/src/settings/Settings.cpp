@@ -5,7 +5,6 @@
 #include <fstream>
 #include <memory>
 #include <nlohmann/json.hpp>
-#include <nlohmann/json_fwd.hpp>
 #include <stdexcept>
 #include <string>
 #include <string_view>

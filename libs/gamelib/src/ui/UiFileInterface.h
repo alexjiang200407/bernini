@@ -1,6 +1,9 @@
 #pragma once
 #include <RmlUi/Core/FileInterface.h>
 #include <core/file/IFileSystem.h>
+#include <cstddef>
+#include <unordered_map>
+#include <vector>
 
 namespace game
 {

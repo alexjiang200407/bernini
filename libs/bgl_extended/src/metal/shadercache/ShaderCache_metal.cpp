@@ -2,10 +2,27 @@
 #include "MetalErrorChecker.h"
 
 #include "convert_metal.h"
+#include "pipeline/MetalPipelineReflection.h"
+#include "types/ShaderStage.h"
+#include <bgl_common/ReflectedLayout.h>
 #include <bgl_common/shadercache/util.h>
+#include <core/io/ByteReader.h>
+#include <core/io/ByteWriter.h>
 
 #include <core/file/file.h>
 #include <core/platform/util.h>
+#include <cstddef>
+#include <cstdint>
+#include <exception>
+#include <filesystem>
+#include <format>
+#include <functional>
+#include <mutex>
+#include <spdlog/spdlog.h>
+#include <string_view>
+#include <system_error>
+#include <utility>
+#include <vector>
 
 namespace bgl
 {

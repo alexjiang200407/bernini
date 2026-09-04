@@ -1,5 +1,10 @@
 #pragma once
 
+#include <cstddef>
+#include <cstdint>
+#include <filesystem>
+#include <span>
+#include <vector>
 namespace assetlib
 {
 	struct ImageData;

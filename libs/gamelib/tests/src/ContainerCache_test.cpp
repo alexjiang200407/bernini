@@ -1,7 +1,16 @@
+#include <array>
+#include <catch2/catch_message.hpp>
+#include <catch2/catch_test_macros.hpp>
+#include <catch2/matchers/catch_matchers.hpp>
+#include <cstddef>
+#include <cstdint>
+#include <exception>
+#include <filesystem>
 #include <gamelib/AssetManager.h>
 
 #include "util/RigFixture.h"
 #include "util/TestOptions.h"
+#include <bgl/GeomHandle.h>
 
 #include "StoreAt.h"
 #include <assetlib/AssetStore.h>
@@ -11,6 +20,12 @@
 #include <catch2/matchers/catch_matchers_string.hpp>
 #include <core/file/IFileSystem.h>
 #include <core/file/LooseFileSystem.h>
+#include <map>
+#include <memory>
+#include <optional>
+#include <string_view>
+#include <utility>
+#include <vector>
 
 // Acquiring a rig reads three containers, and deserializing one is most of a second on a dense rig.
 // A rig drawn as many meshes acquires once per mesh entry, so what these pin is that the second

@@ -4,13 +4,14 @@
 #include <assetlib/skinning.h>
 
 #include "cache_io.h"
-#include "fs_util.h"
 
 #include <assetlib_structs/magic.h>
 
-#include <core/file/file.h>
-
-#include "mounted_io.h"
+#include <cstddef>
+#include <cstdint>
+#include <span>
+#include <string_view>
+#include <vector>
 
 namespace assetlib
 {

@@ -1,5 +1,10 @@
 #include "slang/SlangSessions.h"
 #include <bgl_common/SlangErrorChecker.h>
+#include <bgl_common/gassert.h>
+#include <mutex>
+#include <slang.h>
+#include <thread>
+#include <utility>
 
 namespace bgl
 {

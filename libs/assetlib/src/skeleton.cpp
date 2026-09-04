@@ -1,9 +1,15 @@
 #include <assetlib/skinning.h>
 #include <assetlib_structs/Animation.h>
+#include <assetlib_structs/Node.h>
 #include <assetlib_structs/Skeleton.h>
 
 #include <core/err/util.h>
 #include <core/hash.h>
+#include <cstddef>
+#include <cstdint>
+#include <optional>
+#include <span>
+#include <vector>
 
 namespace assetlib
 {

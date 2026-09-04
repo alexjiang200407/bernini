@@ -8,7 +8,6 @@
 #include <assetlib/bmesh_gltf.h>
 #include <assetlib/import_document.h>
 #include <assetlib/mesh_tangents.h>
-#include <assetlib/project_layout.h>
 #include <assetlib/skinning.h>
 #include <assetlib_structs/Animation.h>
 #include <assetlib_structs/BMeshImport.h>
@@ -25,7 +24,12 @@
 #include "ref_paths.h"
 #include "regen_group.h"
 
+#include <cstdint>
+#include <optional>
+#include <span>
+#include <string_view>
 #include <tracy/Tracy.hpp>
+#include <utility>
 
 namespace assetlib
 {

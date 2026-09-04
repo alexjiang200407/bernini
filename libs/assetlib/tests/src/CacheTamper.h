@@ -2,6 +2,9 @@
 #include <catch2/catch_test_macros.hpp>
 
 #include <core/file/file.h>
+#include <cstddef>
+#include <filesystem>
+#include <span>
 
 namespace assetlib::test
 {

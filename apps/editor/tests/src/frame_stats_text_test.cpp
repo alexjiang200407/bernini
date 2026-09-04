@@ -1,6 +1,8 @@
 #include "util/frame_stats_text.h"
 
 #include <catch2/catch_test_macros.hpp>
+#include <optional>
+#include <qobject.h>
 
 // The status bar's readout, pinned without a window or a device. What matters here is that "has not
 // measured yet" and "measured zero" are different strings: the bug this replaced showed a viewport's

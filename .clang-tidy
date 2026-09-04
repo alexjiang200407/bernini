@@ -110,4 +110,28 @@ CheckOptions:
   # the source already includes and what it should keep. Sweeping from one platform's compile
   # database can only ever name that platform's headers, which is why these are excluded rather
   # than fixed one file at a time.
-  misc-include-cleaner.IgnoreHeaders: '.*/glm/.*;.*/sys/_types/.*;.*/sys/signal\.h;.*/mach/(arm|arm64|i386|x86_64)/.*'
+  #
+  # And RmlUi, for a third reason: its sub-headers are not self-contained. <RmlUi/Core/Span.h>
+  # uses RMLUI_ASSERT and does not include what defines it, so a file given that header directly
+  # does not compile. docs/ui_runtime.md already names the entry point -- "a client that drives a
+  # context includes <RmlUi/Core.h> itself" -- and this is what keeps the tool from writing
+  # something else.
+  #
+  # `.*/glm\.h` covers the two entry points as well as the library: core/glm.h and bgl/glm.h,
+  # which is a re-export of it. An export pragma does not chain two levels -- bgl/glm.h exporting
+  # core/glm.h exporting glm leaves a file that uses glm::mat4 through bgl/glm.h reading as though
+  # it used neither -- so the header a file is *supposed* to include is excluded alongside the
+  # library it stands for.
+  #
+  # metal-cpp is the same shape again, and libs/bgl_extended/CLAUDE.md already names the way in:
+  # `metal_cpp.h` is the umbrella, and MetalImpl.cpp defines the *_PRIVATE_IMPLEMENTATION macros
+  # before it to emit the out-of-line symbols exactly once. Left to itself the tool writes 136
+  # per-class headers -- <Metal/MTLBuffer.hpp>, <Foundation/NSString.hpp> -- and reports the
+  # umbrella unused in every file that has one, including the file whose include is what makes
+  # the backend link at all.
+  #
+  # nlohmann is the fourth, and the reason is the sharpest: `nlohmann::json` is *declared* in
+  # json_fwd.hpp and *defined* in json.hpp, and include-cleaner names where a symbol is declared.
+  # Left alone it writes json_fwd.hpp into ten files and removes the header carrying the
+  # definition, which compiles right up until something touches the type.
+  misc-include-cleaner.IgnoreHeaders: '.*/glm/.*;.*/glm\.h;.*/RmlUi/.*;.*/nlohmann/.*;.*/metal_cpp\.h;.*/(Metal|Foundation|QuartzCore)/.*;.*/sys/_types/.*;.*/sys/signal\.h;.*/mach/(arm|arm64|i386|x86_64)/.*'

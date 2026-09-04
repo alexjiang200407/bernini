@@ -1,8 +1,11 @@
 #include "AnimationEditorWindow.h"
 
+#include "Windows/AnimationEditor/AnimationPreviewWindow.h"
 #include "Windows/AnimationEditor/Scrubber.h"
 #include "util/mesh_drop.h"
-#include <assetlib/Project.h>
+#include <algorithm>
+#include <assetlib/project_layout.h>
+#include <bgl/InstanceDesc.h>
 
 #include <QCheckBox>
 #include <QComboBox>
@@ -22,6 +25,17 @@
 #include <QTimer>
 #include <QToolButton>
 #include <QVBoxLayout>
+#include <cmath>
+#include <cstdint>
+#include <filesystem>
+#include <qcontainerfwd.h>
+#include <qlatin1stringview.h>
+#include <qnamespace.h>
+#include <qobject.h>
+#include <qsizepolicy.h>
+#include <qstringliteral.h>
+#include <utility>
+#include <vector>
 
 namespace
 {

@@ -2,6 +2,11 @@
 
 #include <QMimeData>
 #include <QUrl>
+#include <qnamespace.h>
+#include <qobject.h>
+#include <qstringview.h>
+#include <qtypes.h>
+#include <string_view>
 
 namespace editor
 {

@@ -1,13 +1,23 @@
 #include "passes/BrdfLutGenPass.h"
 #include "pipeline/PipelineBatch.h"
+#include "resource/Shader.h"
+#include <bgl_common/gassert.h>
 
 #include "cmd/CommandList.h"
 #include "device/Device.h"
 #include "pipeline/MeshletPipeline.h"
 #include "resource/FrameBuffer.h"
-#include "resource/Shader.h"
+#include "resource/ResourceManager.h"
+#include "resource/Texture.h"
+#include "types/Barrier.h"
+#include "types/DepthStencilState.h"
+#include "types/Format.h"
+#include "types/RasterState.h"
 #include "types/RenderState.h"
+#include "types/TextureDimension.h"
 #include <bgl/IGraphics.h>
+#include <string_view>
+#include <utility>
 
 namespace bgl
 {

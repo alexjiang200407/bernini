@@ -1,5 +1,8 @@
 #pragma once
 #include <core/file/IFileSystem.h>
+#include <cstdint>
+#include <string>
+#include <string_view>
 
 #include "IRangeReader.h"
 

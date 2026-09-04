@@ -1,7 +1,13 @@
 #include <DemoWindow.h>
-#include <SDL3/SDL.h>
-#include <bgl/bgl.h>
+#include <SDL3/SDL_messagebox.h>
+#include <bgl/IGraphics.h>
+#include <bgl/IRenderTarget.h>
+#include <bgl/MaterialHandle.h>
+#include <bgl/MaterialType.h>
+#include <bgl/RenderJob.h>
 #include <core/err/util.h>
+#include <stdexcept>
+#include <utility>
 
 int
 main(int, char**)

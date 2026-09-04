@@ -1,4 +1,12 @@
 #include "passes/BinderNames.h"
+#include "pipeline/MeshletKernel.h"
+#include "uniforms/Uniforms.h"
+#include <bgl_common/UniformsBase.h>
+#include <bgl_common/gassert.h>
+#include <span>
+#include <string>
+#include <string_view>
+#include <vector>
 
 namespace bgl
 {

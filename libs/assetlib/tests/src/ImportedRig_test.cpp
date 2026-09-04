@@ -1,8 +1,11 @@
+#include <algorithm>
+#include <array>
 #include <assetlib/Project.h>
 #include <assetlib/asset_import.h>
 #include <assetlib/bmesh.h>
 #include <assetlib/import_document.h>
 #include <assetlib/pak.h>
+#include <catch2/catch_test_macros.hpp>
 #include <core/file/LooseFileSystem.h>
 #include <core/file/file.h>
 
@@ -19,7 +22,25 @@
 #include <assetlib_structs/Skeleton.h>
 
 #include "MountAt.h"
+#include <assetlib/codecs.h>
+#include <assetlib_structs/Mesh.h>
+#include <assetlib_structs/Node.h>
+#include <assetlib_structs/VertexLayout.h>
 #include <catch2/catch_approx.hpp>
+#include <cstddef>
+#include <cstdint>
+#include <cstring>
+#include <filesystem>
+#include <format>
+#include <fstream>
+#include <ios>
+#include <optional>
+#include <span>
+#include <stdexcept>
+#include <string>
+#include <string_view>
+#include <system_error>
+#include <vector>
 
 namespace
 {

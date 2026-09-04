@@ -5,6 +5,8 @@
 #include <QEventLoop>
 #include <QString>
 #include <catch2/catch_tostring.hpp>
+#include <ostream>
+#include <string>
 
 namespace editor::test
 {

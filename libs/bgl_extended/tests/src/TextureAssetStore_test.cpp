@@ -1,9 +1,17 @@
+#include "resource/Texture.h"
 #include "scene/TextureAssetStore.h"
 #include "util/FakeResourceManager.h"
 #include "util/RecordingCommandList.h"
+#include <algorithm>
+#include <assetlib_structs/ImageData.h>
+#include <assetlib_structs/VkFormat.h>
 #include <bgl/IScene.h>
+#include <bgl/TextureAssetHandle.h>
+#include <core/containers/fixed_buffer.h>
+#include <core/ref/SharedRef.h>
 
 #include <catch2/catch_test_macros.hpp>
+#include <cstddef>
 
 // The store is the one half of a scene that needs no device: it drives an IResourceManager and a
 // command list, both faked here. Every case below would otherwise cost a CreateGraphics.

@@ -5,6 +5,7 @@
 #include "Windows/ContentExplorer/avatar_create.h"
 #include "Windows/MaterialEditor/material_io.h"
 #include "util/source_mesh.h"
+#include <assetlib/asset_refs.h>
 
 #include <QDir>
 #include <QFileInfo>
@@ -15,6 +16,15 @@
 #include <QPushButton>
 
 #include <assetlib/AssetStore.h>
+#include <exception>
+#include <filesystem>
+#include <optional>
+#include <qnamespace.h>
+#include <qobject.h>
+#include <qtmetamacros.h>
+#include <string>
+#include <string_view>
+#include <utility>
 
 AssetOperations::AssetOperations(QWidget* parent, AssetsHeldOpenFn assetsHeldOpen) :
 	QObject(parent), m_Parent(parent), m_AssetsHeldOpen(std::move(assetsHeldOpen))

@@ -1,7 +1,14 @@
 #pragma once
+#include <algorithm>
+#include <concepts>
 #include <core/err/util.h>
+#include <cstddef>
+#include <cstdint>
 #include <glm/glm.hpp>
 #include <nlohmann/json.hpp>
+#include <string>
+#include <string_view>
+#include <vector>
 
 // The shape every authored text document shares: parsed strictly, written canonically -- sorted
 // keys, tab indent, one trailing newline -- so one document is one byte sequence and two

@@ -3,7 +3,9 @@
 #include "Windows/AssetImporter/ImportSection.h"
 #include "Windows/AssetImporter/material_stems.h"
 #include "util/asset_paths.h"
-#include <assetlib/Project.h>
+#include <algorithm>
+#include <assetlib/bmesh_gltf.h>
+#include <assetlib/project_layout.h>
 
 #include <QCheckBox>
 #include <QDialogButtonBox>
@@ -16,6 +18,17 @@
 #include <QScreen>
 #include <QScrollArea>
 #include <QVBoxLayout>
+#include <cstddef>
+#include <qabstractscrollarea.h>
+#include <qcontainerfwd.h>
+#include <qdialog.h>
+#include <qframe.h>
+#include <qhash.h>
+#include <qobject.h>
+#include <qtypes.h>
+#include <qwidget.h>
+#include <span>
+#include <vector>
 
 namespace
 {

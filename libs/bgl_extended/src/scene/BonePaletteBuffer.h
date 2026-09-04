@@ -1,6 +1,11 @@
 #pragma once
+#include "cmd/CommandList.h"
+#include "resource/Buffer.h"
+#include "resource/ResourceManager.h"
 #include "scene/ComputeBuffer.h"
+#include <core/containers/multi_slot_handle.h>
 #include <core/containers/multi_slot_vector.h>
+#include <cstdint>
 
 namespace bgl
 {

@@ -1,7 +1,26 @@
 #include "overlay/Overlay.h"
 #include "cmd/CommandList.h"
-#include <bgl_common/idl/OverlayVertex.h>
+#include "gfx/RenderTargetBase.h"
+#include "resource/Buffer.h"
+#include "resource/ResourceManager.h"
+#include "resource/Srv.h"
+#include "types/Barrier.h"
+#include <assetlib_structs/ImageData.h>
+#include <atomic>
 #include <bgl/IGraphics.h>
+#include <bgl/IOverlay.h>
+#include <bgl/IRenderTarget.h>
+#include <bgl/TextureAssetHandle.h>
+#include <bgl_common/gassert.h>
+#include <bgl_common/idl/OverlayVertex.h>
+#include <core/containers/slot_handle.h>
+#include <core/ref/SharedRef.h>
+#include <cstddef>
+#include <cstdint>
+#include <format>
+#include <span>
+#include <utility>
+#include <vector>
 
 namespace bgl
 {

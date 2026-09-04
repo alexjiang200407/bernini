@@ -9,11 +9,24 @@
 #include "util/PaletteReadback.h"
 #include "util/TestEnvironment.h"
 #include "util/TestOptions.h"
+#include <array>
+#include <assetlib_structs/Animation.h>
+#include <assetlib_structs/BMesh.h>
 #include <assetlib_structs/Bounds.h>
+#include <assetlib_structs/Node.h>
+#include <assetlib_structs/Skeleton.h>
+#include <assetlib_structs/VertexLayout.h>
 #include <bgl/Camera.h>
 #include <bgl/IGraphics.h>
+#include <bgl/MaterialHandle.h>
+#include <bgl_common/idl/Constants.h>
 #include <catch2/catch_approx.hpp>
+#include <catch2/catch_message.hpp>
 #include <catch2/catch_test_macros.hpp>
+#include <cmath>
+#include <cstddef>
+#include <cstdint>
+#include <vector>
 
 // What the pose pass computes, read straight off the GPU. A golden image can tell you a skinned pose
 // is wrong; only this can tell you *which* stage got it wrong -- a bad inverse bind, a hierarchy walk

@@ -1,7 +1,10 @@
 #pragma once
 #include "pipeline/MeshletPipeline.h"
 #include "uniforms/Uniforms.h"
+#include <core/ref/SharedRef.h>
 #include <core/str/str.h>
+#include <string>
+#include <string_view>
 
 namespace bgl
 {

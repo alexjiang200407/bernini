@@ -6,11 +6,31 @@
 #include "util/TestEnvironment.h"
 #include "util/TestOptions.h"
 #include "util/VelocityReadback.h"
+#include <algorithm>
+#include <array>
+#include <assetlib_structs/Animation.h>
+#include <assetlib_structs/BMesh.h>
 #include <assetlib_structs/Bounds.h>
+#include <assetlib_structs/Node.h>
+#include <assetlib_structs/Skeleton.h>
+#include <assetlib_structs/VertexLayout.h>
 #include <bgl/Camera.h>
 #include <bgl/IGraphics.h>
+#include <bgl/MaterialHandle.h>
+#include <bgl/RigHandle.h>
+#include <bgl/types/FootPlantDesc.h>
+#include <bgl/types/GroundPlaneDesc.h>
+#include <bgl_common/idl/Constants.h>
 #include <catch2/catch_approx.hpp>
+#include <catch2/catch_message.hpp>
 #include <catch2/catch_test_macros.hpp>
+#include <cmath>
+#include <cstddef>
+#include <cstdint>
+#include <cstring>
+#include <format>
+#include <span>
+#include <vector>
 
 // What the foot-plant solve writes into the palette, read straight off the GPU. A golden image can
 // say a foot is in the wrong place; only this can say whether the two-bone solve, the sole tilt or

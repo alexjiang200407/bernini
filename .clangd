@@ -23,6 +23,15 @@ Diagnostics:
     # even though clang-tidy, which searches rather than anchors, accepts it.
     IgnoreHeader:
       - ".*/glm/.*"
+      # ...and the two entry points, core/glm.h and bgl/glm.h -- see .clang-tidy.
+      - ".*/glm\\.h"
+      # RmlUi's sub-headers are not self-contained -- see .clang-tidy.
+      - ".*/RmlUi/.*"
+      # nlohmann declares in json_fwd.hpp and defines in json.hpp -- see .clang-tidy.
+      - ".*/nlohmann/.*"
+      # metal-cpp, reached through metal_cpp.h -- see .clang-tidy.
+      - ".*/metal_cpp\\.h"
+      - ".*/(Metal|Foundation|QuartzCore)/.*"
       # The platform C library's internals -- see .clang-tidy for why.
       - ".*/sys/_types/.*"
       - ".*/sys/signal\\.h"

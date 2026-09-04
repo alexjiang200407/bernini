@@ -4,6 +4,8 @@
 #include "cmd/CommandQueue.h"
 
 #include <core/ref/RefCounter.h>
+#include <cstdint>
+#include <vector>
 
 namespace bgl
 {

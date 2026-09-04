@@ -8,6 +8,7 @@
 #include "types/Format.h"
 #include "types/RasterState.h"
 #include "types/TextureDimension.h"
+#include <string>
 
 namespace bgl
 {

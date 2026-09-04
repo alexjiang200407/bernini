@@ -1,6 +1,11 @@
 
 #include <assetlib/AssetStore.h>
 #include <assetlib_structs/BMesh.h>
+#include <catch2/catch_test_macros.hpp>
+#include <cstdint>
+#include <filesystem>
+#include <string>
+#include <system_error>
 
 namespace
 {

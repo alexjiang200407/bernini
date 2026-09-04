@@ -1,13 +1,22 @@
 #include "Windows/MaterialEditor/MaterialGraphModel.h"
 #include "Windows/MaterialEditor/material_graph.h"
 #include "Windows/MaterialEditor/nodes/MaterialOutputNode.h"
+#include <QtNodes/internal/Definitions.hpp>
+#include <assetlib_structs/BMaterial.h>
+#include <assetlib_structs/BMaterialImport.h>
 
 #include <catch2/catch_approx.hpp>
+#include <catch2/catch_message.hpp>
 #include <catch2/catch_test_macros.hpp>
 
 #include <QDoubleSpinBox>
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <cstddef>
+#include <filesystem>
+#include <qobject.h>
+#include <qstringliteral.h>
+#include <qstringview.h>
 
 namespace
 {

@@ -8,12 +8,20 @@
 #include "scene/CullState.h"
 #include "scene/Scene.h"
 #include "scene/scene_buffer_names.h"
+#include "types/Barrier.h"
+#include "uniforms/Uniforms.h"
+#include <array>
 #include <bgl/ISceneView.h>
+#include <bgl_common/gassert.h>
 #include <bgl_common/idl/Constants.h>
+#include <bgl_common/idl/CullStats.h>
 #include <bgl_common/idl/CullView.h>
 #include <bgl_common/idl/DispatchArgs.h>
 #include <bgl_common/idl/PsoType.h>
 #include <core/math.h>
+#include <core/ref/SharedRef.h>
+#include <span>
+#include <spdlog/spdlog.h>
 
 namespace bgl
 {

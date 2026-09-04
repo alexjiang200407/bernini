@@ -2,8 +2,14 @@
 
 #include <QJsonObject>
 #include <QPointF>
+#include <qobject.h>
+#include <unordered_set>
+#include <vector>
 
 #include "Windows/MaterialEditor/nodes/MaterialOutputNode.h"
+#include <QtNodes/internal/DataFlowGraphModel.hpp>
+#include <QtNodes/internal/Definitions.hpp>
+#include <QtNodes/internal/NodeData.hpp>
 
 using QtNodes::ConnectionId;
 using QtNodes::InvalidNodeId;

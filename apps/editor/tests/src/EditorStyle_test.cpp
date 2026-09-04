@@ -6,6 +6,9 @@
 #include <QPalette>
 #include <QPixmap>
 #include <catch2/catch_test_macros.hpp>
+#include <qguiapplication.h>
+#include <qrgb.h>
+#include <qtypes.h>
 
 // The Content Explorer's back arrow. No platform style here answers SP_ArrowBack, so without
 // EditorStyle's own the request falls through to QCommonStyle's bundled bitmap -- a fixed green

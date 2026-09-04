@@ -1,4 +1,6 @@
 #pragma once
+#include <exception>
+#include <fmt/base.h>
 #include <spdlog/spdlog.h>
 
 namespace bgl

@@ -1,4 +1,6 @@
 #include "util/frame_stats_text.h"
+#include <optional>
+#include <qobject.h>
 
 namespace editor
 {

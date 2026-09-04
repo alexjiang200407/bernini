@@ -1,10 +1,19 @@
 #pragma once
+#include <concepts>
 #include <core/file/IFileSystem.h>
 
 #include "IRangeReader.h"
 #include <assetlib_structs/SourceRef.h>
 #include <core/err/util.h>
 #include <core/io/ByteWriter.h>
+#include <cstddef>
+#include <cstdint>
+#include <filesystem>
+#include <span>
+#include <string>
+#include <string_view>
+#include <type_traits>
+#include <vector>
 
 namespace assetlib::cache
 {

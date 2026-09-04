@@ -1,10 +1,18 @@
 #include "util/SkinnedSynth.h"
 
 #include "util/VertexPacking.h"
+#include <assetlib_structs/Bounds.h>
+#include <assetlib_structs/Node.h>
+#include <bgl/GeomHandle.h>
+#include <bgl/IScene.h>
+#include <bgl/MaterialHandle.h>
 
+#include <array>
 #include <assetlib_structs/Animation.h>
 #include <assetlib_structs/BMesh.h>
 #include <assetlib_structs/Skeleton.h>
+#include <cstddef>
+#include <cstdint>
 
 namespace bgl::test::skinned_synth
 {

@@ -1,4 +1,7 @@
+#include <algorithm>
 #include <bgl_common/Frustum.h>
+#include <bgl_common/idl/CullView.h>
+#include <limits>
 
 namespace bgl
 {

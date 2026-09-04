@@ -1,7 +1,10 @@
 #include "util/TestOptions.h"
 #include <bgl/IGraphics.h>
+#include <bgl/IScene.h>
+#include <bgl/types/GroundPlaneDesc.h>
 #include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
+#include <limits>
 
 // The scene's ground plane: what it defaults to, what SetGround refuses, and that a plane it accepts
 // comes back with a unit normal. Whether a pose respects it is SkinnedPose_test's business.

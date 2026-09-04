@@ -7,10 +7,24 @@
 #include <assetlib_structs/BMaterial.h>
 #include <assetlib_structs/BMesh.h>
 #include <assetlib_structs/BMeshImport.h>
+#include <catch2/catch_message.hpp>
+#include <catch2/catch_test_macros.hpp>
+#include <cstddef>
+#include <cstdint>
+#include <exception>
+#include <filesystem>
+#include <fstream>
+#include <functional>
+#include <stdexcept>
+#include <stop_token>
+#include <string>
+#include <vector>
 
 #include "MountAt.h"
 #include "bmesh_texture.h"
 #include "fs_util.h"
+#include <assetlib/progress.h>
+#include <assetlib/project_layout.h>
 
 using namespace assetlib;
 

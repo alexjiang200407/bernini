@@ -1,3 +1,4 @@
+#include <algorithm>
 #include <assetlib/RegenMesh.h>
 #include <assetlib/asset_import.h>
 #include <assetlib/bmesh.h>
@@ -19,6 +20,20 @@
 #include <core/file/file.h>
 
 #include <assetlib_structs/magic.h>
+#include <cstddef>
+#include <cstdint>
+#include <exception>
+#include <filesystem>
+#include <format>
+#include <optional>
+#include <span>
+#include <stdexcept>
+#include <string_view>
+#include <system_error>
+#include <unordered_map>
+#include <unordered_set>
+#include <utility>
+#include <vector>
 
 #include "CheckedFileReader.h"
 #include "cache_io.h"

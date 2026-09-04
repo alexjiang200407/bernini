@@ -1,7 +1,9 @@
 #pragma once
+#include <algorithm>
 #include <bgl_common/gassert.h>
 #include <core/glm.h>
 #include <core/math.h>
+#include <cstdint>
 
 namespace bgl
 {

@@ -1,9 +1,18 @@
 #pragma once
+#include <assetlib/AssetCodec.h>
 #include <assetlib/cancel.h>
 #include <assetlib/codecs.h>
 #include <assetlib/progress.h>
 #include <assetlib_structs/BMeshImport.h>
 #include <core/file/IFileSystem.h>
+#include <cstddef>
+#include <cstdint>
+#include <filesystem>
+#include <memory>
+#include <span>
+#include <string>
+#include <string_view>
+#include <vector>
 
 namespace assetlib
 {

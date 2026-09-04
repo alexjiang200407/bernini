@@ -1,6 +1,7 @@
 #pragma once
 
 #include <QProgressDialog>
+#include <functional>
 
 namespace editor::test
 {

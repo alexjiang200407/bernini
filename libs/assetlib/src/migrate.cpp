@@ -1,3 +1,4 @@
+#include <algorithm>
 #include <assetlib/avatar.h>
 #include <assetlib/codecs.h>
 #include <assetlib/migrate.h>
@@ -22,12 +23,24 @@
 #include "material_texture_refs.h"
 #include "progress_report.h"
 #include "ref_paths.h"
+#include <assetlib/progress.h>
+#include <atomic>
 #include <core/parallel_for.h>
 
 #include <core/err/util.h>
 #include <core/file/file.h>
 
+#include <cstddef>
+#include <exception>
+#include <filesystem>
+#include <optional>
+#include <span>
+#include <string>
+#include <string_view>
 #include <tracy/Tracy.hpp>
+#include <unordered_map>
+#include <utility>
+#include <vector>
 
 namespace assetlib
 {

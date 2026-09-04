@@ -1,17 +1,34 @@
+#include <algorithm>
+#include <array>
 #include <assetlib/AssetStore.h>
 #include <assetlib/bmesh.h>
 #include <assetlib/codecs.h>
-#include <assetlib/rebake_bounds.h>
+#include <assetlib/rebake_bounds.h>  // IWYU pragma: keep
 #include <assetlib/skinning.h>
 #include <assetlib_structs/Animation.h>
 #include <assetlib_structs/BMesh.h>
-#include <assetlib_structs/Bounds.h>
+#include <assetlib_structs/Bounds.h>  // IWYU pragma: keep
 #include <assetlib_structs/Skeleton.h>
 
 #include <catch2/catch_approx.hpp>
+#include <catch2/catch_message.hpp>
+#include <catch2/catch_test_macros.hpp>
+#include <chrono>
+#include <cmath>
+#include <cstddef>
+#include <cstdint>
+#include <cstring>
+#include <filesystem>
+#include <format>
+#include <limits>
+#include <memory>
+#include <ratio>
+#include <span>
 
 #include "CountingFileSystem.h"
 #include "MountAt.h"
+#include <assetlib_structs/Node.h>
+#include <assetlib_structs/VertexLayout.h>
 
 /**
  * What a cook costs as its inputs grow.

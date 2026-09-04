@@ -1,9 +1,18 @@
 #include "material_texture_refs.h"
+// Carries the nlohmann::json definition. nlohmann is excluded from the check, so no
+// symbol attributes to this header and it reads as unused -- see .clang-tidy.
+#include "json_doc.h"  // IWYU pragma: keep
 
 #include <assetlib/codecs.h>
 #include <assetlib_structs/BMaterial.h>
+#include <cstddef>
+#include <functional>
+#include <stdexcept>
+#include <string>
+#include <utility>
+#include <vector>
 
-#include "json_doc.h"
+#include <assetlib/asset_refs.h>
 
 namespace assetlib
 {

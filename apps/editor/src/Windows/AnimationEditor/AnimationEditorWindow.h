@@ -2,9 +2,18 @@
 
 #include <QElapsedTimer>
 #include <QWidget>
+#include <cstdint>
+#include <qcontainerfwd.h>
+#include <qobject.h>
+#include <qtmetamacros.h>
+#include <vector>
 
+#include "Render/Renderer.h"
+#include "Render/environment.h"
+#include "Windows/AnimationEditor/PlaybackTransport.h"
 #include "util/follows_project.h"
 #include "util/held_open_assets.h"
+#include <bgl/InstanceDesc.h>
 
 #include "Windows/AnimationEditor/AnimationPreviewWindow.h"
 
