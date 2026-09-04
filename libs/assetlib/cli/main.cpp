@@ -25,6 +25,8 @@
 #include <assetlib_structs/magic.h>
 #include <core/err/util.h>
 #include <core/file/file.h>
+#include <core/profiling/MemoryReport.h>
+#include <core/str/str.h>
 #include <spdlog/spdlog.h>
 
 namespace
@@ -42,27 +44,6 @@ namespace
 			list += kind.extension;
 		}
 		return list;
-	}
-
-	std::string
-	formatBytes(uint64_t bytes)
-	{
-		constexpr std::array<const char*, 4> c_Units = { { "B", "KiB", "MiB", "GiB" } };
-
-		auto   value = static_cast<double>(bytes);
-		size_t unit  = 0;
-		while (value >= 1024.0 && unit + 1 < c_Units.size())
-		{
-			value /= 1024.0;
-			++unit;
-		}
-
-		char text[32] = {};
-		if (unit == 0)
-			std::snprintf(text, sizeof(text), "%.0f %s", value, c_Units[unit]);
-		else
-			std::snprintf(text, sizeof(text), "%.1f %s", value, c_Units[unit]);
-		return text;
 	}
 
 	// Reads a yes/no answer from stdin. A closed or piped-empty stdin answers no: the safe direction
@@ -176,6 +157,14 @@ main(int argc, char** argv)
 	CLI::App app{ "Bernini asset pipeline CLI" };
 	app.set_version_flag("--version", assetlib::version());
 	app.require_subcommand(1);
+
+	// Armed on request rather than on every run, unlike the editor's: this tool has no log file, so
+	// its report would land in the terminal of every scripted `describe`.
+	std::string memReportPath;
+	app.add_option(
+		"--mem-report",
+		memReportPath,
+		"Write the memory report to this JSON file when the command finishes");
 
 	// One project, named the same way by every command that addresses one. A command's asset
 	// arguments are then mount keys inside it -- never host paths, which is what let a directory that
@@ -451,6 +440,12 @@ main(int argc, char** argv)
 		->excludes(expSetOpt);
 
 	CLI11_PARSE(app, argc, argv);
+
+	// After the parse, so --help does not print a memory report; before the work, so every early
+	// return below is still covered.
+	auto memoryReport = std::optional<core::profiling::MemoryReport>();
+	if (!memReportPath.empty())
+		memoryReport.emplace(memReportPath);
 
 	if (*bake)
 	{
@@ -1306,10 +1301,11 @@ main(int argc, char** argv)
 			}
 
 			// The listing is the command's output, so it goes to stdout rather than through the logger.
-			std::cout << "Unused (" << scan.unused.size() << ", " << formatBytes(scan.bytes)
-					  << "):\n";
+			std::cout << "Unused (" << scan.unused.size() << ", "
+					  << core::str::format_bytes(scan.bytes) << "):\n";
 			for (const assetlib::UnusedTexture& texture : scan.unused)
-				std::cout << "  " << texture.path << "  (" << formatBytes(texture.bytes) << ")\n";
+				std::cout << "  " << texture.path << "  (" << core::str::format_bytes(texture.bytes)
+						  << ")\n";
 			std::cout << std::flush;
 
 			if (pruneDryRun)
@@ -1318,9 +1314,10 @@ main(int argc, char** argv)
 				return 0;
 			}
 
-			if (!pruneYes && !confirm(
-								 "Delete " + std::to_string(scan.unused.size()) +
-								 " unused baked textures (" + formatBytes(scan.bytes) + ")?"))
+			if (!pruneYes &&
+			    !confirm(
+					"Delete " + std::to_string(scan.unused.size()) + " unused baked textures (" +
+					core::str::format_bytes(scan.bytes) + ")?"))
 			{
 				spdlog::info("Cancelled: nothing deleted.");
 				return 0;
@@ -1331,7 +1328,7 @@ main(int argc, char** argv)
 			spdlog::info(
 				"Deleted {} textures, reclaiming {}",
 				result.deleted,
-				formatBytes(result.bytes));
+				core::str::format_bytes(result.bytes));
 
 			if (!result.failed.empty())
 			{

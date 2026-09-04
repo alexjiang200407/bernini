@@ -2,6 +2,8 @@
 #include "convert_d3d12.h"
 #include "resource/Buffer.h"
 
+#include <bgl_common/MemoryTag.h>
+
 namespace bgl
 {
 	class Buffer final
@@ -66,5 +68,8 @@ namespace bgl
 		uint32_t                    m_DescriptorIndex = 0xFFFFFFFF;
 		D3D12_CPU_DESCRIPTOR_HANDLE m_CpuHandle       = {};
 		wrl::ComPtr<ID3D12Resource> m_Buffer;
+
+		// The size asked for, not the driver's: alignment padding differs per backend.
+		TaggedBytes m_Tracked;
 	};
 }

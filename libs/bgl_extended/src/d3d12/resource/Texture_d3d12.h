@@ -2,6 +2,8 @@
 #include "convert_d3d12.h"
 #include "resource/Texture.h"
 
+#include <bgl_common/MemoryTag.h>
+
 namespace bgl
 {
 	class Texture final
@@ -74,5 +76,6 @@ namespace bgl
 		TextureDesc                 m_Desc;
 		D3D12_CPU_DESCRIPTOR_HANDLE m_CpuHandle = {};
 		wrl::ComPtr<ID3D12Resource> m_Texture;
+		TaggedBytes                 m_Tracked;
 	};
 }

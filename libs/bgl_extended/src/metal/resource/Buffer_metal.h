@@ -2,6 +2,8 @@
 #include "metal_cpp.h"
 #include "resource/Buffer.h"
 
+#include <bgl_common/MemoryTag.h>
+
 namespace bgl
 {
 	// The Metal definition of the RHI's forward-declared `Buffer`. A GPU-private structured buffer;
@@ -16,6 +18,8 @@ namespace bgl
 			m_Buffer =
 				NS::TransferPtr(device->newBuffer(desc.byteSize, MTL::ResourceStorageModePrivate));
 			gassert(m_Buffer.get() != nullptr, "Metal buffer allocation failed");
+
+			m_Tracked = bgl::TaggedBytes(MemoryTag::kDeviceBuffer, desc.byteSize);
 			if (!desc.debugName.empty())
 			{
 				m_Buffer->setLabel(
@@ -38,5 +42,8 @@ namespace bgl
 	private:
 		BufferDesc                 m_Desc;
 		NS::SharedPtr<MTL::Buffer> m_Buffer;
+
+		// The size asked for, not the driver's: alignment padding differs per backend.
+		TaggedBytes m_Tracked;
 	};
 }

@@ -2,6 +2,7 @@
     "startupProject": "",
     "instanceName": "",
     "headless": false,
+    "memoryReport": true,
     "graphics": {
         "enableDebugLayer": true,
         "enableGPUBasedValidation": false,

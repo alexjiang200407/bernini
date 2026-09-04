@@ -4,6 +4,7 @@
 #include <QtGlobal>
 #include <catch2/catch_session.hpp>
 #include <core/err/util.h>
+#include <core/profiling/MemoryReport.h>
 
 namespace
 {
@@ -21,6 +22,28 @@ namespace
 		}
 
 		return false;
+	}
+
+	/**
+	 * Takes `--mem-report <path>` out of argv and returns it, leaving `args` as the command line
+	 * Catch2 sees. Catch2 rejects an option it does not know, so this cannot simply be read past.
+	 */
+	std::filesystem::path
+	TakeMemoryReportPath(std::vector<char*>& args)
+	{
+		for (std::size_t i = 1; i + 1 < args.size(); ++i)
+		{
+			if (std::string_view(args[i]) != "--mem-report")
+				continue;
+
+			const std::filesystem::path path = args[i + 1];
+			args.erase(
+				args.begin() + static_cast<std::ptrdiff_t>(i),
+				args.begin() + static_cast<std::ptrdiff_t>(i) + 2);
+			return path;
+		}
+
+		return {};
 	}
 }
 
@@ -60,7 +83,22 @@ main(int argc, char* argv[])
 		qputenv("QT_QPA_PLATFORM", "offscreen");
 #endif
 
-	QApplication app(argc, argv);
+	// This suite stands up a real device and loads real containers, which makes it the one binary
+	// that can price them without a person driving a window. Armed on request rather than always:
+	// it has no log file, so the table would land in the terminal of every `just test`.
+	auto args = std::vector<char*>(argv, argv + argc);
 
-	return Catch::Session().run(argc, argv);
+	// Constructed only when armed: the guard logs its table from the destructor whether or not it
+	// was given a JSON path, so an unconditional one would print it after every `just test`.
+	const std::filesystem::path reportPath   = TakeMemoryReportPath(args);
+	auto                        memoryReport = std::optional<core::profiling::MemoryReport>();
+	if (!reportPath.empty())
+		memoryReport.emplace(reportPath);
+
+	// QApplication takes argc by non-const reference and consumes its own switches out of it, so
+	// `count` is what is left for Catch2 -- exactly as it was when Qt edited the real argv.
+	int          count = static_cast<int>(args.size());
+	QApplication app(count, args.data());
+
+	return Catch::Session().run(count, args.data());
 }

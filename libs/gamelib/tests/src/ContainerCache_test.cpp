@@ -7,6 +7,7 @@
 #include <assetlib/AssetStore.h>
 #include <assetlib_structs/Animation.h>
 #include <bgl/IGraphics.h>
+#include <bgl_common/MemoryTag.h>
 #include <catch2/matchers/catch_matchers_string.hpp>
 #include <core/file/IFileSystem.h>
 #include <core/file/LooseFileSystem.h>
@@ -254,4 +255,42 @@ TEST_CASE("Acquiring a rig twice reads its containers once", "[skinned][acquire]
 			Catch::Matchers::ContainsSubstring("Derived/Animations/rig.banim"));
 		CHECK(secondFailure == firstFailure);
 	}
+}
+
+// The cache is the CPU-side residency of the containers the reference dimensions price, so what it
+// holds has to be attributable. Nothing here asserts a size: the fixture's rig is not the reference
+// one, and a byte count would pin the fixture rather than the accounting.
+TEST_CASE("A cached container is charged to its subsystem's memory tag", "[containercache]")
+{
+	using bgl::MemoryTag;
+	using core::profiling::tag_totals;
+
+	DataRoot root("bernini_container_cache_tagged");
+	WriteRig(root.path);
+
+	auto gfx = bgl::CreateGraphics(HeadlessOptions());
+	REQUIRE(gfx != nullptr);
+
+	auto scene = gfx->CreateScene(bgl::SceneDesc());
+	auto view  = gfx->CreateSceneView(scene, 8);
+
+	const uint64_t meshBefore      = tag_totals(MemoryTag::kMesh).live;
+	const uint64_t animationBefore = tag_totals(MemoryTag::kAnimation).live;
+
+	{
+		auto assets = game::AssetManager(
+			scene,
+			assetlib::AssetStore(root.path, std::make_shared<CountingFiles>(root.path)));
+
+		(void)assets.AcquireSkinnedMesh("Derived/Meshes/rig.bmesh", "Derived/Animations/rig.banim");
+
+		// The .bmesh under mesh, and the .banim and the .bskel it named under animation.
+		CHECK(tag_totals(MemoryTag::kMesh).live > meshBefore);
+		CHECK(tag_totals(MemoryTag::kAnimation).live > animationBefore);
+	}
+
+	// The manager is gone, so its cache is: a charge that outlived its container would report
+	// memory nobody is holding, which is worse than reporting none.
+	CHECK(tag_totals(MemoryTag::kMesh).live == meshBefore);
+	CHECK(tag_totals(MemoryTag::kAnimation).live == animationBefore);
 }

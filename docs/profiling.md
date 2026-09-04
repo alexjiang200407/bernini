@@ -27,9 +27,10 @@ linked, and no call site changes. The one thing that does not degrade on its own
 **A variable read only to feed a `ZoneTextF` needs `[[maybe_unused]]`**, or `-Werror` calls it dead
 in that build; `bmesh_gltf.cpp`'s source size is the worked example.
 
-This page is about **load and cook time**: what a bake cost, where a start-up went. GPU per-pass
-timing is a separate, unbuilt thing (`ROADMAP.md` § Profiling), and `docs/gfx_debug.md` is where a
-*wrong* frame is diagnosed rather than a slow one.
+This page is about **load and cook time**: what a bake cost, where a start-up went -- and, in
+§ Memory below, what a run *held*. GPU per-pass timing is a separate, unbuilt thing
+(`ROADMAP.md` § Profiling), and `docs/gfx_debug.md` is where a *wrong* frame is diagnosed rather
+than a slow one.
 
 ## Taking a capture
 
@@ -224,3 +225,153 @@ Do not bracket the frame loop. Nothing here samples per frame, and that is what 
 unconnected client's memory flat. `AssetThumbnailCache::Advance`'s slow-tick warning stays a
 `qWarning` for the same reason its comment gives: a path that runs every frame wants a report that
 costs nothing until it has decided to complain.
+
+
+## Memory
+
+Time and memory are measured by different machinery here, and the reason is the readout. Tracy's
+`tracy-csvexport` exports **zones only** — its memory data is reachable through the GUI alone, so
+nothing scripted, and nothing on a device, can ever be handed a number. So the tracker is ours and
+Tracy is one of its sinks.
+
+What it is modelled on is Unreal's **LLM**: bytes charged to a coarse subsystem tag, reported beside
+what the OS says the process owns (`FPlatformMemory::GetStats` there, `core::process_memory` here).
+Both halves are needed. A tag accounts for what *we* allocated; a low-memory killer counts what the
+OS charges, GPU and driver and compressed pages included. The gap between them is the interesting
+number, and it has a name below.
+
+### Getting a report
+
+Every binary reports what it cost, and where the report goes follows one rule: **it goes to the log,
+and a binary whose log is a terminal arms it on request** rather than on every run.
+
+| Binary | Reports |
+|---|---|
+| `editor` | into `editor.log` unless `config.json` sets `"memoryReport": false`; `--mem-report <path>` also writes JSON, and outranks the setting |
+| `assetlib_cli` | on `--mem-report <path>` only, and the flag goes **before** the subcommand |
+| `editor_tests` | on `--mem-report <path>` only |
+
+```bash
+just run editor -- --mem-report start.json
+./assetlib_cli --mem-report bake.json bake -p Game.bproj model.glb   # flag first: it is global
+just run editor_tests -- --mem-report suite.json
+```
+
+The log form is a table; the JSON is the same numbers for something that parses them, which is what
+an agent reads:
+
+```
+memory report (peak / live, allocations)
+  device buffer      48.6 MiB peak         0 B live  0 allocations
+  device texture     15.2 MiB peak         0 B live  0 allocations
+  tagged             63.8 MiB peak         0 B live
+  process             1.4 GiB peak   592.1 MiB live
+  untagged          592.1 MiB       (footprint the tags do not account for)
+```
+
+**A report is read for its peaks, not its live column.** It is written at the end of `main`, by
+which point the subsystems are torn down and nearly everything reads zero — which is why a peak
+survives the release that follows it. Live is only interesting mid-run, or as the sign of something
+that was never given back.
+
+### The tags
+
+Nine, at the granularity of Unreal's `ELLMTag`: `mesh`, `animation`, `texture`, `material`,
+`environment`, `shader`, `device buffer`, `device texture`, `editor`. Coarse on purpose — one label
+per thing somebody can act on. A finer taxonomy is a set of labels nobody maintains, and an
+unmaintained tag reports a number nobody trusts.
+
+**The list is the engine's, in `bgl_common/MemoryTag.h`; the machinery is `core`'s.** `core` is
+shared by every target and has no business knowing what a mesh is, so `core::profiling::TaggedBytes`
+is templated on a tag enum and asks only for a count and a name, both found by ADL beside it. The
+enum sits at the lowest point that everything charging memory can see — the renderer's resources and
+gamelib's container cache — so `bgl_wgpu` reaches it from there too. A report never names a tag enum
+at all: each instantiation registers its table on first use and the report walks what registered,
+which is what lets `assetlib_cli` write one without linking a renderer.
+
+**`untagged` is not an error, it is the mechanism.** It is `footprint - tagged live`: memory the OS
+charges us for that no tag claimed. It is how a missing tag announces itself, and on a unified-memory
+device it is the only warning there is. A tag is added when that column says one is worth adding, not
+in advance.
+
+### Writing a tag
+
+`core::profiling::TaggedBytes` charges bytes for as long as it lives. Hold one **as a member of
+whatever owns the buffer**, so the release cannot be forgotten on a path that throws:
+
+```cpp
+#include <bgl_common/MemoryTag.h>
+
+struct CachedThing
+{
+    std::vector<std::byte> bytes;
+    bgl::TaggedBytes       tracked;
+};
+
+thing.bytes   = load(key);
+thing.tracked = bgl::TaggedBytes(bgl::MemoryTag::kMesh, thing.bytes.size());
+```
+
+Assigning a fresh one releases the charge it replaces, which is what a container that grew wants —
+never adjust a charge, re-seat it.
+
+**A charge is move-only, so whatever holds one is too** — and MSVC builds with `/Wall /WX`, where an
+implicitly deleted copy constructor is an *error* (C4625/C4626, and C5026/C5027 for the moves). So
+declare all five special members on the holder explicitly rather than letting them be deduced. The
+cost of forgetting is a Windows-only compile failure no macOS build reproduces; `Cached<T>` in
+`AssetManager.cpp` is the worked example, and note that declaring any of them also stops the type
+being an aggregate, so it needs a constructor of its own.
+
+**Tag doors, never elements.** A charge is two relaxed atomics plus, where profiling is compiled in,
+a Tracy pool event: right for a container, wrong for anything in a per-vertex or per-bone loop. It
+is the same rule zones follow, for the same reason.
+
+The charge is identified by a minted id rather than by the address it accounts for. A container that
+reallocates would otherwise hand Tracy a free for an address it never saw allocated, and there is
+no second spelling for a call site to get wrong.
+
+### What is measured, and what is not
+
+| Layer | Tagged |
+|---|---|
+| `bgl_extended` | every buffer and texture created through the RHI's `ResourceManager` — the buffer at the size asked for, the texture at the size the driver reports — in both backends. A swap-chain texture is adopted rather than allocated, so it is deliberately not charged |
+| `gamelib` | `AssetManager`'s stamped container cache — the `.bmesh` under `mesh`, the `.banim` and `.bskel` under `animation` |
+
+Nothing else, and the gaps below are what the residual is currently made of:
+
+- **`assetlib`'s cook is untagged**, and it is the largest consumer in the tree. The measurements
+  below say so plainly.
+- **The editor's thumbnail cache does not read through `AssetManager`**, so the `.bmesh` files it
+  loads are not charged to `mesh`.
+- **Device memory taken outside `ResourceManager` is untagged.** Three paths ask the device
+  directly: D3D12's `UploadManager` chunk pool (which already counts its own bytes in
+  `m_AllocatedMemory` and simply never hands them over), `ReadbackBuffer_d3d12`, and Metal's
+  staging buffers in `CommandList_metal`. So `device buffer` is the RHI's buffers, not the
+  process's.
+
+### What a run costs
+
+Measured on `macos-clang-metal-debug`, against the test project.
+
+| Run | Process peak | Tagged peak | Where the tagged bytes are |
+|---|---:|---:|---|
+| `editor_tests`, whole suite | **1.48 GiB** | 63.8 MiB | device buffers 48.6 MiB, device textures 15.2 MiB |
+| `assetlib_cli bake`, the 663-bone reference rig | **1.22 GiB** | 0 B | nothing on this path is tagged |
+
+Two things to take from that. A cook of one character costs **1.2 GiB of resident memory**, which no
+document previously stated because nothing could measure it — and `ROADMAP.md`'s Capacity policy
+section is written entirely in bytes of exactly this kind. And the residual is doing its job on both
+rows: the suite's peak is 96% untagged and the cook's is **entirely** untagged, which is what names
+`assetlib`'s cook as where the next tag goes — with a number rather than a guess.
+
+Neither row is an interactive editor start-up. This checkout cannot drive a GUI to a clean exit, and
+a report is written when `main` returns — so an editor figure needs somebody to launch it, open the
+project and close the window.
+
+### Tracy, when a peak is not enough
+
+A peak says how big; it never says what shape. When the question is a leak or a growth curve rather
+than a total, the same tags are Tracy memory pools in any build with `BERNINI_PROFILING` on — one
+pool per tag, on the same timeline as the zones above, so a spike lines up with the zone that caused
+it. Take a capture exactly as § Taking a capture describes; the pools are in the GUI's *Memory*
+window.
