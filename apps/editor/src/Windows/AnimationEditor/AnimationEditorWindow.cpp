@@ -1,6 +1,7 @@
 #include "AnimationEditorWindow.h"
 
 #include "Windows/AnimationEditor/Scrubber.h"
+#include "Windows/AnimationEditor/foot_ik_weights.h"
 #include "util/mesh_drop.h"
 #include <assetlib/Project.h>
 
@@ -225,6 +226,42 @@ AnimationEditorWindow::BuildPropertiesColumn()
 	});
 	layout->addWidget(m_HeadingSlider);
 
+	// One write carries both weights, so either slider's release commits the pair.
+	const auto commitFootIK = [this] {
+		m_Preview->SetFootIK(
+			editor::FootIKForSliders(m_IKWeightSlider->GetValue(), m_SoleTurnSlider->GetValue()));
+	};
+
+	m_IKWeightLabel = new QLabel(QStringLiteral("IK Weight: 100%"), column);
+	layout->addWidget(m_IKWeightLabel);
+
+	m_IKWeightSlider = new Scrubber(column);
+	m_IKWeightSlider->SetRange(0, 100);
+	m_IKWeightSlider->SetValue(100);
+	m_IKWeightSlider->setToolTip(QStringLiteral(
+		"How far each foot is carried onto the ground, over what the clip baked. 0 leaves the "
+		"ankle where the animation put it; 100 seats it on the plane."));
+	connect(m_IKWeightSlider, &Scrubber::ValueChanged, this, [this](int percent) {
+		m_IKWeightLabel->setText(QStringLiteral("IK Weight: %1%").arg(percent));
+	});
+	connect(m_IKWeightSlider, &Scrubber::Committed, this, commitFootIK);
+	layout->addWidget(m_IKWeightSlider);
+
+	m_SoleTurnLabel = new QLabel(QStringLiteral("Sole Turn: 100%"), column);
+	layout->addWidget(m_SoleTurnLabel);
+
+	m_SoleTurnSlider = new Scrubber(column);
+	m_SoleTurnSlider->SetRange(0, 100);
+	m_SoleTurnSlider->SetValue(100);
+	m_SoleTurnSlider->setToolTip(QStringLiteral(
+		"How far each sole turns onto the slope under it. 0 keeps the foot's authored tilt with "
+		"its contact still on the ground; 100 lays it on the slope."));
+	connect(m_SoleTurnSlider, &Scrubber::ValueChanged, this, [this](int percent) {
+		m_SoleTurnLabel->setText(QStringLiteral("Sole Turn: %1%").arg(percent));
+	});
+	connect(m_SoleTurnSlider, &Scrubber::Committed, this, commitFootIK);
+	layout->addWidget(m_SoleTurnSlider);
+
 	// Off to begin with, so a panel just opened shows the clip as its author left it: the ground is
 	// a thing to try, and a preview that silently moved a foot on the way in would be answering a
 	// question nobody had asked yet.
@@ -266,6 +303,10 @@ AnimationEditorWindow::UpdateGroundControls()
 	m_SlopeSlider->setEnabled(planting);
 	m_HeadingLabel->setEnabled(planting);
 	m_HeadingSlider->setEnabled(planting);
+	m_IKWeightLabel->setEnabled(planting);
+	m_IKWeightSlider->setEnabled(planting);
+	m_SoleTurnLabel->setEnabled(planting);
+	m_SoleTurnSlider->setEnabled(planting);
 
 	m_Preview->SetFloorVisible(planting);
 	m_Preview->SetFootPlanting(planting);
