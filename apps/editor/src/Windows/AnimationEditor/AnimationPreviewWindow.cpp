@@ -165,10 +165,11 @@ AnimationPreviewWindow::PlaceGround()
 {
 	bgl::ISceneView* view = GetPreviewView();
 
-	if (m_GroundInstance.IsValid())
+	for (bgl::MeshInstanceHandle& instance : m_GroundInstances)
 	{
-		view->DeleteMeshInstance(m_GroundInstance);
-		m_GroundInstance = bgl::MeshInstanceHandle();
+		if (instance.IsValid())
+			view->DeleteMeshInstance(instance);
+		instance = bgl::MeshInstanceHandle();
 	}
 
 	GetPreviewScene()->SetGround(editor::GroundForSlope(m_SlopeDegrees, m_HeadingDegrees));
@@ -176,9 +177,17 @@ AnimationPreviewWindow::PlaceGround()
 	m_GroundPlaced = true;
 
 	if (m_FloorVisible)
-		m_GroundInstance = view->CreateStaticMeshInstance(
-			m_GroundGeom,
-			editor::FloorTransformForSlope(m_SlopeDegrees, m_HeadingDegrees));
+	{
+		const glm::mat4 floor = editor::FloorTransformForSlope(m_SlopeDegrees, m_HeadingDegrees);
+
+		// The second is the same floor turned to face the other way, so dropping the camera to the
+		// floor -- where a contact is actually readable -- does not make it disappear.
+		const glm::mat4 flip =
+			glm::rotate(glm::mat4(1.0f), glm::radians(180.0f), glm::vec3(1.0f, 0.0f, 0.0f));
+
+		m_GroundInstances[0] = view->CreateStaticMeshInstance(m_GroundGeom, floor);
+		m_GroundInstances[1] = view->CreateStaticMeshInstance(m_GroundGeom, floor * flip);
+	}
 }
 
 void
@@ -212,10 +221,13 @@ AnimationPreviewWindow::ClearGeometry()
 		// The floor leaves with the rig, and the ground it tilted goes back to flat: the scene is
 		// shared, and nothing else in it should stand on a slope this panel set.
 		GetRenderer()->Invoke([&] {
-			if (m_GroundInstance.IsValid())
-				GetPreviewView()->DeleteMeshInstance(m_GroundInstance);
-			m_GroundInstance = bgl::MeshInstanceHandle();
-			m_GroundPlaced   = false;
+			for (bgl::MeshInstanceHandle& instance : m_GroundInstances)
+			{
+				if (instance.IsValid())
+					GetPreviewView()->DeleteMeshInstance(instance);
+				instance = bgl::MeshInstanceHandle();
+			}
+			m_GroundPlaced = false;
 			GetPreviewScene()->SetGround({});
 			GetPreviewScene()->SetFootPlanting(true);
 		});

@@ -281,11 +281,17 @@ private:
 
 	// The floor: one plane geom for the window's life, in the shared scene like the material
 	// preview's sphere, and a placement in this view alone while a rig is shown.
-	bgl::MaterialHandle     m_GroundMaterial;
-	bgl::GeomHandle         m_GroundGeom;
-	bgl::MeshInstanceHandle m_GroundInstance;
-	float                   m_SlopeDegrees   = 0.0f;
-	float                   m_HeadingDegrees = 0.0f;
+	//
+	// Two placements, back to back. A plane is a single face and the renderer culls the back of it,
+	// so one alone vanishes the moment the camera drops below the floor -- which is exactly the eye
+	// level a foot's contact is read at, there being no shadow to read it by. The pair is coplanar
+	// and never both drawn: whichever way the camera looks, one is front-facing and the other is
+	// culled, so there is nothing for them to z-fight over.
+	bgl::MaterialHandle                    m_GroundMaterial;
+	bgl::GeomHandle                        m_GroundGeom;
+	std::array<bgl::MeshInstanceHandle, 2> m_GroundInstances;
+	float                                  m_SlopeDegrees   = 0.0f;
+	float                                  m_HeadingDegrees = 0.0f;
 	// Both off until the panel says otherwise: a preview opens on the clip as authored.
 	bool m_FloorVisible = false;
 	bool m_FootPlanting = false;
