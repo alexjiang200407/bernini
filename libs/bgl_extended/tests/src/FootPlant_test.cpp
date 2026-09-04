@@ -1216,8 +1216,14 @@ TEST_CASE("a hero instance's foot-IK record starts at weight one", "[skinned][pl
 		const auto stat = view->CreateStaticMeshInstance(cube, glm::mat4(1.0f));
 		CHECK_THROWS_AS(view->GetFootIK(stat), bgl::SceneError);
 
+		// HasFootIK answers exactly the question the two calls throw on.
+		CHECK(view->HasFootIK(instance));
+		CHECK_FALSE(view->HasFootIK(table));
+		CHECK_FALSE(view->HasFootIK(stat));
+
 		view->DeleteMeshInstance(instance);
 		CHECK_THROWS_AS(view->GetFootIK(instance), bgl::SceneError);
+		CHECK_FALSE(view->HasFootIK(instance));
 	}
 
 	SECTION("deleting the instance frees its record, and the next spawn starts clean")
@@ -1272,6 +1278,7 @@ TEST_CASE("a rig without legs owns no foot-IK record", "[skinned][plant][footik]
 
 	CHECK_THROWS_AS(view->GetFootIK(instance), bgl::SceneError);
 	CHECK_THROWS_AS(view->SetFootIK(instance, bgl::FootIKDesc()), bgl::SceneError);
+	CHECK_FALSE(view->HasFootIK(instance));
 }
 
 TEST_CASE("a weight ramp reads as the shader will", "[skinned][plant][footik]")
