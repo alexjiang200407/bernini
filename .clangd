@@ -23,6 +23,8 @@ Diagnostics:
     # even though clang-tidy, which searches rather than anchors, accepts it.
     IgnoreHeader:
       - ".*/glm/.*"
+      # RmlUi's sub-headers are not self-contained -- see .clang-tidy.
+      - ".*/RmlUi/.*"
       # The platform C library's internals -- see .clang-tidy for why.
       - ".*/sys/_types/.*"
       - ".*/sys/signal\\.h"

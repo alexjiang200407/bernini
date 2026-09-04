@@ -110,4 +110,10 @@ CheckOptions:
   # the source already includes and what it should keep. Sweeping from one platform's compile
   # database can only ever name that platform's headers, which is why these are excluded rather
   # than fixed one file at a time.
-  misc-include-cleaner.IgnoreHeaders: '.*/glm/.*;.*/sys/_types/.*;.*/sys/signal\.h;.*/mach/(arm|arm64|i386|x86_64)/.*'
+  #
+  # And RmlUi, for a third reason: its sub-headers are not self-contained. <RmlUi/Core/Span.h>
+  # uses RMLUI_ASSERT and does not include what defines it, so a file given that header directly
+  # does not compile. docs/ui_runtime.md already names the entry point -- "a client that drives a
+  # context includes <RmlUi/Core.h> itself" -- and this is what keeps the tool from writing
+  # something else.
+  misc-include-cleaner.IgnoreHeaders: '.*/glm/.*;.*/RmlUi/.*;.*/sys/_types/.*;.*/sys/signal\.h;.*/mach/(arm|arm64|i386|x86_64)/.*'
