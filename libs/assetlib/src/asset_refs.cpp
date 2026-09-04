@@ -1,6 +1,7 @@
 #include <assetlib/AssetStore.h>
 #include <assetlib/asset_refs.h>
 #include <assetlib/avatar.h>
+#include <assetlib/blend.h>
 #include <assetlib/bmesh.h>
 
 #include <assetlib/AssetCodec.h>
@@ -224,6 +225,26 @@ namespace assetlib
 					"', so the assets it composes cannot be known: " + e.what());
 			}
 		}
+
+		/** The one clip set a `.bblend`'s spaces name clips of, stored as a path inside it. */
+		void
+		collectBlendEdges(
+			std::vector<AssetRef>&         edges,
+			const core::file::IFileSystem& files,
+			const std::string&             referrer)
+		{
+			try
+			{
+				const BlendSet set = load<BlendSet>(files, referrer);
+				addEdge(edges, referrer, set.animations, RefKind::kBlendClips);
+			}
+			catch (const std::exception& e)
+			{
+				throw std::runtime_error(
+					"assetlib::AssetRefGraph: cannot read the blend set '" + referrer +
+					"', so the clip set it names cannot be known: " + e.what());
+			}
+		}
 	}
 
 	std::optional<AssetType>
@@ -324,6 +345,11 @@ namespace assetlib
 				// not hide this edge -- there is nothing to parse.
 				addEdge(edges, referrer, skeletonKeyForAvatar(referrer), RefKind::kAvatarSkeleton);
 				++graph.avatarsScanned;
+			}
+			else if (kind == c_BlendExtension)
+			{
+				collectBlendEdges(edges, files, referrer);
+				++graph.blendSetsScanned;
 			}
 		}
 
