@@ -297,14 +297,14 @@ to keep in agreement beyond the one below.
   a planted foot is solved against — and stands a floor under the rig at the same tilt, so the tilt
   can be seen. Positive rises toward +X, and a heading slider turns uphill about +Y: nothing in the
   path knows which way a rig moves (the test coyote runs along +Z), so a person turns the hill to
-  face the stride rather than the rig to face the hill. The floor is drawn twice, back to back, because a plane is one face and the renderer culls its back: a single placement disappears the moment the camera drops to floor level, which is the one eye level a foot's contact can be read at when nothing casts a shadow. A second checkbox, *Plant feet*, is the
-  scene's `SetFootPlanting`: off, the clip plays as authored against the same ground, which is the
-  other half of judging what the solve does — and like the slope it holds only while the panel is
-  shown. *Show floor* is the group's master: with no floor drawn there is no slope to see and
-  nothing visible to plant against, so both sliders and *Plant feet* go insensitive and the rig
-  poses as authored, while the checkbox keeps its own state so showing the floor again restores it.
-  Both start **off**, so a panel just opened shows the clip as its author left it; the checkboxes
-  hold that state and one method pushes it, construction included.
+  face the stride rather than the rig to face the hill. The floor is drawn twice, back to back, because a plane is one face and the renderer culls its back: a single placement disappears the moment the camera drops to floor level, which is the one eye level a foot's contact can be read at when nothing casts a shadow. One checkbox, *Plant feet*, is the whole group: it draws the
+  floor, sets the scene's `SetFootPlanting`, and enables the two sliders that tilt it. One switch
+  rather than a floor and a solve separately, because neither half is worth anything alone — an
+  empty floor shows nothing, and there is nothing to plant against without one. Off, the clip plays
+  exactly as authored, which is the other half of judging what the solve does; the sliders keep
+  their values so turning it back on restores what was set. It starts **off**, so a panel just
+  opened shows the clip as its author left it, and like the slope it holds only while the panel is
+  shown. The box holds that state and one method pushes it, construction included.
   The floor and the ground are derived from one rotation
   (`editor::GroundForSlope`, `FloorTransformForSlope`, free of the window and pinned by
   `[slope]`), so the floor and the ground cannot lean different ways. Both are `Scrubber`s, the hand-painted click-anywhere bar the transport's timeline already used: a `QSlider` here shows a stale groove when a tabified dock is revealed at a size it was not laid out at, so a drag lands nowhere near the cursor. It commits on **release**,

@@ -147,12 +147,13 @@ private:
 	/**
 	 * Pushes the ground group's state into the preview and greys what has nothing to act on.
 	 *
-	 * The floor is the group's master: with none drawn there is no slope to see and nothing
-	 * visible to plant against, so the sliders and *Plant feet* go insensitive and the rig poses
-	 * as authored. The checkbox keeps its own state through that, so showing the floor again
-	 * restores what was set.
+	 * *Plant feet* is the whole group: the floor, the solve against it, and the two sliders that
+	 * tilt it. One switch rather than a floor and a solve separately, because neither half is worth
+	 * anything alone -- an empty floor shows nothing, and there is nothing to plant against without
+	 * one. Off, the sliders go insensitive and keep their values, so turning it back on restores
+	 * what was set.
 	 *
-	 * The boxes hold the state and this is the one place that pushes it, construction included --
+	 * The box holds the state and this is the one place that pushes it, construction included --
 	 * two defaults that could disagree is one that eventually does.
 	 */
 	void
@@ -191,7 +192,6 @@ private:
 	// Which way uphill points, in whole degrees about +Y from +X, and whether the floor is drawn.
 	Scrubber*  m_HeadingSlider = nullptr;
 	QLabel*    m_HeadingLabel  = nullptr;
-	QCheckBox* m_ShowFloor     = nullptr;
 	QCheckBox* m_PlantFeet     = nullptr;
 
 	QListWidget* m_ClipList     = nullptr;
