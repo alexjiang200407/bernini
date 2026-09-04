@@ -14,12 +14,11 @@ class QDropEvent;
 class QStackedWidget;
 class QCheckBox;
 class QComboBox;
-class QSlider;
 class QDoubleSpinBox;
 class QLabel;
 class QListWidget;
 class QPushButton;
-class TimelineScrubber;
+class Scrubber;
 class QTimer;
 class QToolButton;
 
@@ -186,11 +185,11 @@ private:
 	// The ground's tilt, in whole degrees. Committed on release, not per tick: the ground is a
 	// rebind that moves the temporal epoch, and a drag committing every tick would keep the
 	// preview unaccumulated for the whole gesture.
-	QSlider* m_SlopeSlider = nullptr;
-	QLabel*  m_SlopeLabel  = nullptr;
+	Scrubber* m_SlopeSlider = nullptr;
+	QLabel*   m_SlopeLabel  = nullptr;
 
 	// Which way uphill points, in whole degrees about +Y from +X, and whether the floor is drawn.
-	QSlider*   m_HeadingSlider = nullptr;
+	Scrubber*  m_HeadingSlider = nullptr;
 	QLabel*    m_HeadingLabel  = nullptr;
 	QCheckBox* m_ShowFloor     = nullptr;
 	QCheckBox* m_PlantFeet     = nullptr;
@@ -198,13 +197,13 @@ private:
 	QListWidget* m_ClipList     = nullptr;
 	QLabel*      m_ClipMetadata = nullptr;
 
-	QWidget*          m_TransportBar = nullptr;
-	QToolButton*      m_PlayButton   = nullptr;
-	QToolButton*      m_StepBack     = nullptr;
-	QToolButton*      m_StepForward  = nullptr;
-	TimelineScrubber* m_Timeline     = nullptr;
-	QDoubleSpinBox*   m_Speed        = nullptr;
-	QLabel*           m_TimeReadout  = nullptr;
+	QWidget*        m_TransportBar = nullptr;
+	QToolButton*    m_PlayButton   = nullptr;
+	QToolButton*    m_StepBack     = nullptr;
+	QToolButton*    m_StepForward  = nullptr;
+	Scrubber*       m_Timeline     = nullptr;
+	QDoubleSpinBox* m_Speed        = nullptr;
+	QLabel*         m_TimeReadout  = nullptr;
 
 	editor::PlaybackTransport m_Transport;
 	QTimer*                   m_Clock = nullptr;
