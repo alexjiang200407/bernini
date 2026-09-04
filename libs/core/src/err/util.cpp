@@ -1,9 +1,19 @@
 #include <core/err/util.h>
 #include <core/platform/util.h>
+#include <cpptrace/basic.hpp>
 #include <cpptrace/cpptrace.hpp>
 
+#include <cpptrace/forward.hpp>
 #include <csignal>
+#include <cstdint>
+#include <cstdlib>
 #include <ctime>
+#include <format>
+#include <fstream>
+#include <ios>
+#include <signal.h>
+#include <string>
+#include <string_view>
 
 #if defined(_WIN32)
 #	define WIN32_LEAN_AND_MEAN

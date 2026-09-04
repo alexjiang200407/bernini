@@ -1,3 +1,4 @@
+#include <common/TracySystem.hpp>
 #include <core/profiling/thread_name.h>
 
 #include <tracy/Tracy.hpp>

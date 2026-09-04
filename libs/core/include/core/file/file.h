@@ -1,5 +1,13 @@
 #pragma once
 
+#include <cstddef>
+#include <cstdint>
+#include <filesystem>
+#include <optional>
+#include <span>
+#include <string>
+#include <string_view>
+#include <vector>
 namespace core::file
 {
 	class IFileSystem;

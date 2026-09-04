@@ -1,5 +1,10 @@
 #pragma once
 
+#include <array>
+#include <cassert>
+#include <cstddef>
+#include <cstdint>
+#include <initializer_list>
 namespace core
 {
 	template <typename T, uint32_t MaxElements>

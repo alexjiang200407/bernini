@@ -1,5 +1,6 @@
 #pragma once
 #include <core/type_traits.h>
+#include <cstddef>
 
 namespace core
 {

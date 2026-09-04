@@ -1,5 +1,9 @@
 #pragma once
+#include <algorithm>
 #include <core/type_traits.h>
+#include <cstddef>
+#include <span>
+#include <stdexcept>
 
 namespace core::io
 {

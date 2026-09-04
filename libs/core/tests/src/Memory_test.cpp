@@ -1,7 +1,18 @@
+#include <catch2/catch_message.hpp>
+#include <catch2/catch_test_macros.hpp>
 #include <core/platform/memory.h>
 #include <core/profiling/MemoryReport.h>
 #include <core/profiling/TaggedBytes.h>
 #include <core/profiling/memory.h>
+#include <cstddef>
+#include <cstdint>
+#include <filesystem>
+#include <fstream>
+#include <iterator>
+#include <set>
+#include <string>
+#include <string_view>
+#include <utility>
 
 /**
  * The tag counters are process-wide and every case here shares them, so nothing asserts an absolute

@@ -1,4 +1,8 @@
+#include <catch2/catch_test_macros.hpp>
 #include <core/str/string_pool.h>
+#include <cstdint>
+#include <utility>
+#include <vector>
 
 using core::string_pool;
 

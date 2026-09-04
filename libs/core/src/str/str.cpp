@@ -1,4 +1,9 @@
+#include <array>
 #include <core/str/str.h>
+#include <cstddef>
+#include <cstdint>
+#include <format>
+#include <string>
 
 namespace core::str
 {

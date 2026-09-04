@@ -1,6 +1,10 @@
 #pragma once
 #include <core/containers/slot_handle.h>
 #include <core/err/util.h>
+#include <cstddef>
+#include <cstdint>
+#include <stdexcept>
+#include <vector>
 
 namespace core
 {

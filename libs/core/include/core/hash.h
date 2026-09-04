@@ -1,5 +1,10 @@
 #pragma once
+#include <concepts>
 #include <core/type_traits.h>
+#include <cstddef>
+#include <cstdint>
+#include <span>
+#include <string_view>
 
 namespace core
 {

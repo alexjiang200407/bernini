@@ -1,9 +1,20 @@
+#include <algorithm>
 #include <core/platform/memory.h>
 #include <core/profiling/MemoryReport.h>
+#include <core/profiling/memory.h>
 #include <core/str/str.h>
 
+#include <exception>
+#include <filesystem>
+#include <format>
+#include <fstream>
+#include <functional>
 #include <nlohmann/json.hpp>
+#include <nlohmann/json_fwd.hpp>
 #include <spdlog/spdlog.h>
+#include <string>
+#include <utility>
+#include <vector>
 
 namespace core::profiling
 {

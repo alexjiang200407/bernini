@@ -1,5 +1,6 @@
 #pragma once
 
+#include <concepts>
 namespace core::type_traits
 {
 	template <typename T>
