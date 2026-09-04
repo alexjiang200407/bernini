@@ -154,6 +154,11 @@ namespace
 		glm::vec3 soleNormal = c_SoleNormal;
 		float     rootScale  = 1.0f;
 		bool      plantFeet  = true;
+
+		// The instance's own foot-IK record, written after the spawn; none leaves the default of
+		// weight one. And the clock the frame is drawn at, which is what a ramp is read against.
+		std::optional<bgl::FootIKDesc> footIK;
+		float                          time = 0.0f;
 	};
 
 	bgl::FootPlantDesc
@@ -333,10 +338,15 @@ namespace
 		// palettes -- the solve is then the only thing that differs from the bind pose.
 		const auto instance =
 			view->CreateSkinnedMeshInstance(legScene.geom, options.world, { 0, 0.0f, 0.0f });
+		if (options.footIK)
+		{
+			view->SetFootIK(instance, *options.footIK);
+		}
 
 		auto job     = bgl::RenderJob();
 		job.view     = view;
 		job.viewport = bgl::Viewport(64.0f, 64.0f);
+		job.time     = options.time;
 		gfx->DrawFrame(target, job);
 
 		auto posed       = Posed();
@@ -351,6 +361,16 @@ namespace
 	}
 
 	const auto c_Flat = bgl::GroundPlaneDesc{ glm::vec3(0.0f), glm::vec3(0.0f, 1.0f, 0.0f) };
+
+	void
+	CheckBindPose(const Posed& posed)
+	{
+		for (uint32_t bone = 0; bone < c_Bones; ++bone)
+		{
+			INFO("bone " << bone);
+			bgl::test::CheckNear(posed.Bone(bone), c_Bind[bone]);
+		}
+	}
 }
 
 TEST_CASE("a planted foot meets the ground under it", "[skinned][pose][plant][render]")
@@ -363,11 +383,7 @@ TEST_CASE("a planted foot meets the ground under it", "[skinned][pose][plant][re
 		// the contact is on the ground before the solve runs and the solve has nothing to do. This
 		// is what a plant on a *grounded* clip costs: nothing. It used to cost a small leg stretch,
 		// because the floor was measured at the lowest vertex and the sole sits a band above it.
-		for (uint32_t bone = 0; bone < c_Bones; ++bone)
-		{
-			INFO("bone " << bone);
-			bgl::test::CheckNear(posed.Bone(bone), c_Bind[bone]);
-		}
+		CheckBindPose(posed);
 
 		bgl::test::CheckNear(posed.Sole(), glm::vec3(0.0f, 0.0f, 0.0f));
 		CHECK(posed.Bone(c_Ankle).y == Catch::Approx(c_FootHeight).margin(1e-4));
@@ -394,11 +410,7 @@ TEST_CASE("a planted foot meets the ground under it", "[skinned][pose][plant][re
 	{
 		const Posed posed = PoseLeg(c_Flat, 0);
 
-		for (uint32_t bone = 0; bone < c_Bones; ++bone)
-		{
-			INFO("bone " << bone);
-			bgl::test::CheckNear(posed.Bone(bone), c_Bind[bone]);
-		}
+		CheckBindPose(posed);
 	}
 
 	SECTION("half a weight moves the foot half way")
@@ -1309,4 +1321,154 @@ TEST_CASE("a weight ramp reads as the shader will", "[skinned][plant][footik]")
 		bgl::FootIKDesc::FadeTo(bgl::FootIKDesc::Constant(1.0f, 0.5f), 3.0f, 0.25f, 0.0f, 0.0f);
 	CheckRamp(whole.leg[3].position, Ramp(1.0f, 0.0f, 3.0f, 3.25f));
 	CheckRamp(whole.leg[3].rotation, Ramp(0.5f, 0.0f, 3.0f, 3.25f));
+}
+
+// The instance's own weights over the baked plant: Unity's SetIKPositionWeight and
+// SetIKRotationWeight, per leg, each a ramp in the render clock. Read straight off the palette like
+// the plant itself, since a weight that scaled the wrong half of the solve draws a foot in a place
+// a golden image cannot name.
+
+namespace
+{
+	// Ground the rig has to reach down to: on the authored floor the plant is an identity, and a
+	// weight over an identity would compare nothing with nothing.
+	const auto c_Low =
+		bgl::GroundPlaneDesc{ glm::vec3(0.0f, -0.2f, 0.0f), glm::vec3(0.0f, 1.0f, 0.0f) };
+
+	/** The ankle's height under a fraction of the full plant onto `c_Low`. */
+	float
+	AnkleAt(const Posed& full, float fraction)
+	{
+		const float bind = c_Bind[c_Ankle].y;
+		return bind + fraction * (full.Bone(c_Ankle).y - bind);
+	}
+}
+
+TEST_CASE("an instance's IK weight scales the plant", "[skinned][pose][plant][footik][render]")
+{
+	SECTION("position weight zero leaves every bone at its bind pose")
+	{
+		CheckBindPose(PoseLeg(c_Low, 255, { .footIK = bgl::FootIKDesc::Constant(0.0f, 1.0f) }));
+	}
+
+	SECTION("half a position weight moves the foot half way, like half a baked weight does")
+	{
+		const Posed full = PoseLeg(c_Low, 255);
+		const Posed half = PoseLeg(c_Low, 255, { .footIK = bgl::FootIKDesc::Constant(0.5f, 1.0f) });
+		CHECK(half.Bone(c_Ankle).y == Catch::Approx(AnkleAt(full, 0.5f)).margin(2e-3));
+	}
+
+	SECTION("the two weights multiply: a baked weight of zero is not overridden by weight one")
+	{
+		CheckBindPose(PoseLeg(c_Low, 0, { .footIK = bgl::FootIKDesc::Constant(1.0f, 1.0f) }));
+	}
+
+	SECTION("rotation weight zero seats the contact on a slope without turning the sole")
+	{
+		const float radians = glm::radians(15.0f);
+		const auto  normal  = glm::vec3(std::sin(radians), std::cos(radians), 0.0f);
+		const auto  slope   = bgl::GroundPlaneDesc{ glm::vec3(0.0f), normal };
+
+		const Posed posed =
+			PoseLeg(slope, 255, { .footIK = bgl::FootIKDesc::Constant(1.0f, 0.0f) });
+
+		// Unturned: the sole keeps the +Y the bind gave it.
+		bgl::test::CheckNear(posed.SoleNormal(), c_SoleNormal);
+
+		// And still on the ground: the heel is the lower end of a flat sole on ground rising
+		// toward +X, so the sole point under the ankle is what lands on the plane.
+		CHECK(glm::dot(posed.Sole(), normal) == Catch::Approx(0.0f).margin(1e-4));
+	}
+}
+
+TEST_CASE(
+	"an IK weight ramp is read against the render clock",
+	"[skinned][pose][plant][footik][render]")
+{
+	// Fully planted until t = 1, gone by t = 2, linear between.
+	auto fade            = bgl::FootIKDesc();
+	fade.leg[0].position = bgl::WeightRamp{ 1.0f, 0.0f, 1.0f, 2.0f };
+
+	const Posed full = PoseLeg(c_Low, 255);
+
+	SECTION("before the window the ramp holds its start")
+	{
+		const Posed before = PoseLeg(c_Low, 255, { .footIK = fade, .time = 0.5f });
+		bgl::test::CheckNear(before.Bone(c_Ankle), full.Bone(c_Ankle));
+	}
+
+	SECTION("inside the window it is the lerp")
+	{
+		const Posed inside = PoseLeg(c_Low, 255, { .footIK = fade, .time = 1.5f });
+		CHECK(inside.Bone(c_Ankle).y == Catch::Approx(AnkleAt(full, 0.5f)).margin(2e-3));
+	}
+
+	SECTION("past the window it holds its end")
+	{
+		CheckBindPose(PoseLeg(c_Low, 255, { .footIK = fade, .time = 2.5f }));
+	}
+}
+
+// A write that starts at or after now changes nothing before now, so the palette the pose pass
+// re-evaluates at prevTime after the write is the palette it drew before it -- which is what keeps
+// the motion vector of the frame that straddles the write honest.
+TEST_CASE(
+	"a fade written now leaves the prevTime palette exact",
+	"[skinned][pose][plant][footik][render]")
+{
+	const LegScene legScene = MakeLegScene(c_Low, 255);
+	auto&          gfx      = legScene.gfx;
+	auto&          view     = legScene.view;
+
+	auto* gfxBase = gfx->As<bgl::GraphicsBase>();
+	REQUIRE(gfxBase != nullptr);
+	auto* viewRaw = view->As<bgl::SceneView>();
+	REQUIRE(viewRaw != nullptr);
+
+	auto targetDesc     = bgl::RenderTargetDesc();
+	targetDesc.width    = 64;
+	targetDesc.height   = 64;
+	targetDesc.headless = true;
+	auto target         = gfx->CreateRenderTarget(targetDesc);
+
+	const auto instance =
+		view->CreateSkinnedMeshInstance(legScene.geom, glm::mat4(1.0f), { 0, 0.0f, 0.0f });
+
+	const size_t stride = size_t(bgl::idl::cFloat4sPerBone) * c_Bones;
+	const auto   readAt = [&](float time) {
+		auto job     = bgl::RenderJob();
+		job.view     = view;
+		job.viewport = bgl::Viewport(64.0f, 64.0f);
+		job.time     = time;
+		gfx->DrawFrame(target, job);
+		return bgl::test::ReadPalette(
+			gfxBase,
+			viewRaw,
+			bgl::test::PaletteBaseOf(viewRaw, instance),
+			2 * stride);
+	};
+
+	// Drawn planted at t = 1, then told to fade out over the next second starting from exactly
+	// then. The frame at t = 2 re-evaluates prevTime = 1 through the new record.
+	const bgl::test::Palette planted = readAt(1.0f);
+	view->SetFootIK(
+		instance,
+		bgl::FootIKDesc::FadeTo(view->GetFootIK(instance), 1.0f, 1.0f, 0.0f, 0.0f));
+	const bgl::test::Palette faded = readAt(2.0f);
+
+	for (size_t row = 0; row < stride; ++row)
+	{
+		INFO("row " << row);
+		const glm::vec4 drawn = planted.rows[row];
+		const glm::vec4 then  = faded.rows[stride + row];
+		CHECK(drawn.x == Catch::Approx(then.x).margin(1e-5));
+		CHECK(drawn.y == Catch::Approx(then.y).margin(1e-5));
+		CHECK(drawn.z == Catch::Approx(then.z).margin(1e-5));
+		CHECK(drawn.w == Catch::Approx(then.w).margin(1e-5));
+	}
+
+	// And at t = 2 the fade has run out: the bind pose.
+	auto posed    = Posed();
+	posed.palette = faded;
+	CheckBindPose(posed);
 }

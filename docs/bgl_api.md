@@ -351,12 +351,12 @@ flowchart TD
   there is no stale-binding hazard here, unlike materials.
 * **`SetFootIK(instance, desc)` / `GetFootIK(instance)`** — a hero skinned instance's runtime
   foot-IK record, one `FootIKLegDesc` per leg of its rig: a position ramp and a rotation ramp,
-  each in `RenderJob::time`. Written on an event, never per frame; a write whose ramps all start
-  at or after now leaves the previous frame's record unchanged, and `FootIKDesc::FadeTo` builds
-  one from the record read back. The pose pass does not read it yet — planting is still gated by
-  the four scopes [Skinned Meshes](skinning.md) § Foot planting names — so what a caller stores
-  today is the contract, not a result. @throws on a static or crowd placement, a rig with no
-  legs, a weight outside `[0, 1]`, a non-finite field, or a ramp ending before it starts.
+  each in `RenderJob::time` and each multiplying the weight the cook baked for the frame. Written
+  on an event, never per frame; a write whose ramps all start at or after now leaves the previous
+  frame's pose and its motion vector exact, and `FootIKDesc::FadeTo` builds one from the record
+  read back. @throws on a static or crowd placement, a rig with no legs, a weight outside
+  `[0, 1]`, a non-finite field, or a ramp ending before it starts. See
+  [Skinned Meshes](skinning.md) § Foot planting.
 * **`SetEnvironmentMap(desc)`** — @pre irradiance and prefilter are cube maps. Takes
   `EnvironmentMapDesc` by const reference but the struct is move-only, so build it in place at the
   call site. Replaces any previous environment wholesale.
