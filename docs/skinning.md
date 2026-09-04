@@ -307,7 +307,7 @@ to keep in agreement beyond the one below.
   hold that state and one method pushes it, construction included.
   The floor and the ground are derived from one rotation
   (`editor::GroundForSlope`, `FloorTransformForSlope`, free of the window and pinned by
-  `[slope]`), so the floor and the ground cannot lean different ways. It commits on **release**,
+  `[slope]`), so the floor and the ground cannot lean different ways. Both are `Scrubber`s, the hand-painted click-anywhere bar the transport's timeline already used: a `QSlider` here shows a stale groove when a tabified dock is revealed at a size it was not laid out at, so a drag lands nowhere near the cursor. It commits on **release**,
   not on every tick of a drag:
   `SetGround` moves the scene's temporal epoch, and a drag committing each tick would hold the
   preview unaccumulated for the whole gesture. The floor is one plane geom for the window's life in
