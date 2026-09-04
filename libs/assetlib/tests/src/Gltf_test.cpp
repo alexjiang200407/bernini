@@ -481,3 +481,141 @@ TEST_CASE("A specular-glossiness material keeps its occlusion map", "[bmesh][glt
 	REQUIRE(converted.isPbr);
 	CHECK(converted.occlusionTexture != c_InvalidIndex);
 }
+
+namespace
+{
+	// Two 2x2 PNGs inline. "gloss" carries a varying alpha, which is where specular-glossiness puts
+	// glossiness; "flat" has no alpha channel at all, which stb pads to a constant 255 -- the case
+	// that must not be mistaken for a glossiness of 1 everywhere.
+	constexpr const char* c_GlossGltf = R"({
+  "asset": { "version": "2.0" },
+  "extensionsUsed": [ "KHR_materials_pbrSpecularGlossiness" ],
+  "extensionsRequired": [ "KHR_materials_pbrSpecularGlossiness" ],
+  "images": [
+    { "name": "gloss", "uri": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAYAAABytg0kAAAAGklEQVR4nGPkEpFjYGBg+M/EwMDQwMDA4AgAEJkCALS/iFUAAAAASUVORK5CYII=" },
+    { "name": "flat", "uri": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAIAAAD91JpzAAAAFklEQVR4nGPkEpGTk5NjsbGxkZOTAwAKVgGqAUplOAAAAABJRU5ErkJggg==" }
+  ],
+  "textures": [ { "source": 0 }, { "source": 1 } ],
+  "materials": [
+    { "name": "varying", "extensions": { "KHR_materials_pbrSpecularGlossiness": {
+        "glossinessFactor": 1.0, "specularGlossinessTexture": { "index": 0 } } } },
+    { "name": "sameAgain", "extensions": { "KHR_materials_pbrSpecularGlossiness": {
+        "glossinessFactor": 1.0, "specularGlossinessTexture": { "index": 0 } } } },
+    { "name": "halfGloss", "extensions": { "KHR_materials_pbrSpecularGlossiness": {
+        "glossinessFactor": 0.5, "specularGlossinessTexture": { "index": 0 } } } },
+    { "name": "flatAlpha", "extensions": { "KHR_materials_pbrSpecularGlossiness": {
+        "glossinessFactor": 0.25, "specularGlossinessTexture": { "index": 1 } } } },
+    { "name": "secondUvSet", "extensions": { "KHR_materials_pbrSpecularGlossiness": {
+        "glossinessFactor": 1.0,
+        "specularGlossinessTexture": { "index": 0, "texCoord": 1 } } } }
+  ]
+})";
+
+	BMeshImport
+	LoadGlossGltf()
+	{
+		const auto path = WriteTempGltf(c_GlossGltf, "bmesh_gloss_test.gltf");
+		auto       mesh = loadFromGltf(path);
+		std::filesystem::remove(path);
+		return mesh;
+	}
+
+	/** The top mip of `texture` as RGBA8 texels, in row order. */
+	std::vector<std::array<uint8_t, 4>>
+	TopMipTexels(const ImageData& image)
+	{
+		const ImageSubresource& sub = image.subresources.front();
+
+		auto out = std::vector<std::array<uint8_t, 4>>();
+		for (uint32_t y = 0; y < image.height; ++y)
+			for (uint32_t x = 0; x < image.width; ++x)
+			{
+				const std::byte* px = image.pixels.data() + sub.offset + y * sub.rowPitch + x * 4u;
+				// Both pairs of braces: std::array wraps a C array, and MSVC's C5246 is an error here.
+				out.push_back(
+					{ { std::to_integer<uint8_t>(px[0]),
+				        std::to_integer<uint8_t>(px[1]),
+				        std::to_integer<uint8_t>(px[2]),
+				        std::to_integer<uint8_t>(px[3]) } });
+			}
+		return out;
+	}
+}
+
+TEST_CASE("A glossiness map becomes a roughness map at import", "[bmesh][gltf][specgloss]")
+{
+	// The whole defect: glossiness is the complement of roughness, a route selects a channel and
+	// cannot transform it, so the complement had to be written once here or not at all.
+	const BMeshImport      mesh    = LoadGlossGltf();
+	const BMaterialImport& varying = mesh.materials[0];
+
+	REQUIRE(varying.ormTexture != c_InvalidIndex);
+
+	// The factor rides in the texels, so it must not also ride on the material: the shader reads
+	// orm.g * roughnessFactor, and a factor in both places is applied twice.
+	CHECK(varying.roughnessFactor == 1.0f);
+
+	const std::vector<std::array<uint8_t, 4>> texels =
+		TopMipTexels(mesh.textures[varying.ormTexture]);
+	REQUIRE(texels.size() == 4);
+
+	// Green is 255 - alpha at a glossiness factor of 1. Red and blue are white, the identity for
+	// the occlusion and metallic the shader multiplies them into.
+	const std::array<uint8_t, 4> expected = { { 255, 0, 127, 191 } };
+	for (size_t i = 0; i < texels.size(); ++i)
+	{
+		CHECK(texels[i][1] == expected[i]);
+		CHECK(texels[i][0] == 255);
+		CHECK(texels[i][2] == 255);
+	}
+}
+
+TEST_CASE("The glossiness factor is folded into the map", "[bmesh][gltf][specgloss]")
+{
+	const BMeshImport      mesh = LoadGlossGltf();
+	const BMaterialImport& half = mesh.materials[2];
+
+	REQUIRE(half.ormTexture != c_InvalidIndex);
+	CHECK(half.roughnessFactor == 1.0f);
+
+	// 255 - alpha/2: glTF multiplies glossiness by its factor, and 1 - g*f is not (1 - g)*(1 - f),
+	// so the two cannot be split across the map and the material.
+	const std::vector<std::array<uint8_t, 4>> texels = TopMipTexels(mesh.textures[half.ormTexture]);
+	const std::array<uint8_t, 4>              expected = { { 255, 128, 191, 223 } };
+	for (size_t i = 0; i < texels.size(); ++i) CHECK(texels[i][1] == expected[i]);
+}
+
+TEST_CASE("One map serves every material that implies the same one", "[bmesh][gltf][specgloss]")
+{
+	const BMeshImport mesh = LoadGlossGltf();
+
+	// Two decoded images plus two maps: one for the materials at a factor of 1, one for the factor
+	// of 0.5. A map per material would be three, and the factor left out of the key would be one.
+	CHECK(mesh.textures.size() == 4);
+	CHECK(mesh.textures.size() == mesh.textureNames.size());
+
+	CHECK(mesh.materials[0].ormTexture == mesh.materials[1].ormTexture);
+	CHECK(mesh.materials[0].ormTexture != mesh.materials[2].ormTexture);
+}
+
+TEST_CASE("A glossiness map with nothing in it is refused", "[bmesh][gltf][specgloss]")
+{
+	// tinygltf pads every image to four channels, so a source with no alpha arrives indistinguishable
+	// from one whose alpha is uniform -- and reading either as glossiness would claim a mirror finish
+	// the artist never authored. The constant the factor already carried is the honest answer.
+	const BMeshImport      mesh = LoadGlossGltf();
+	const BMaterialImport& flat = mesh.materials[3];
+
+	CHECK(flat.ormTexture == c_InvalidIndex);
+	CHECK(flat.roughnessFactor == Catch::Approx(0.75f));
+}
+
+TEST_CASE("A glossiness map on a second UV set is refused", "[bmesh][gltf][specgloss]")
+{
+	// readOcclusion's rule, for readOcclusion's reason: TEXCOORD_0 is the only set read.
+	const BMeshImport      mesh   = LoadGlossGltf();
+	const BMaterialImport& second = mesh.materials[4];
+
+	CHECK(second.ormTexture == c_InvalidIndex);
+	CHECK(second.roughnessFactor == 0.0f);
+}

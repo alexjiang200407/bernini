@@ -932,6 +932,112 @@ namespace assetlib
 			return out;
 		}
 
+		// One ORM map per (glossiness image, glossiness factor): the factor is folded into the texels,
+		// so two materials sharing an image but not a factor do not share a map.
+		using GlossinessOrmCache = std::map<std::pair<const tinygltf::Image*, float>, uint32_t>;
+
+		/**
+		 * The glTF image a material's `specularGlossinessTexture` names, or nullptr.
+		 *
+		 * A texCoord other than 0 names none, for readOcclusion's reason: TEXCOORD_0 is the only set
+		 * read, and honouring the index against the wrong parameterisation is confident garbage.
+		 */
+		const tinygltf::Image*
+		glossinessImage(
+			const tinygltf::Value&    ext,
+			const tinygltf::Model&    model,
+			const tinygltf::Material& material)
+		{
+			if (!ext.Has("specularGlossinessTexture"))
+				return nullptr;
+
+			const tinygltf::Value& texture = ext.Get("specularGlossinessTexture");
+			if (!texture.Has("index"))
+				return nullptr;
+
+			const int texCoord =
+				texture.Has("texCoord") ? texture.Get("texCoord").GetNumberAsInt() : 0;
+			if (texCoord != 0)
+			{
+				spdlog::warn(
+					"material '{}': glossiness map dropped, it is addressed by TEXCOORD_{} and "
+					"only "
+					"TEXCOORD_0 is read",
+					material.name,
+					texCoord);
+				return nullptr;
+			}
+
+			const int index = texture.Get("index").GetNumberAsInt();
+			if (index < 0 || static_cast<size_t>(index) >= model.textures.size())
+				return nullptr;
+
+			const int source = model.textures[static_cast<size_t>(index)].source;
+			if (source < 0 || static_cast<size_t>(source) >= model.images.size())
+				return nullptr;
+
+			return &model.images[static_cast<size_t>(source)];
+		}
+
+		/**
+		 * Appends the ORM map a glossiness image implies and returns its index in `mesh.textures`.
+		 *
+		 * Green is the complement of glossiness, which is roughness. Red and blue are 0xFF because
+		 * white is the identity for both: MaterialData::GetORM reads `orm.rgb * (1, roughnessFactor,
+		 * metallicFactor)`, so a white red leaves the surface unoccluded -- and where the material
+		 * also carries its own occlusion map, red comes from that one instead and this never reaches
+		 * the bake. A white blue leaves the solved metallic in sole charge.
+		 *
+		 * `glossinessFactor` is folded into the texels rather than left on the material because that
+		 * same multiply would otherwise apply it twice, and glTF's `1 - g*f` is not `(1 - g)*(1 - f)`.
+		 * The caller sets `roughnessFactor` to 1 for the map to stand alone.
+		 *
+		 * @return c_InvalidIndex when the image never decoded, or when its alpha is constant. Constant
+		 *         alpha says nothing the factor did not, and is also how a source with no alpha at all
+		 *         arrives here: tinygltf pads every image to four channels, so the component count
+		 *         cannot tell the two apart.
+		 */
+		uint32_t
+		appendGlossinessOrm(BMeshImport& mesh, const tinygltf::Image& image, float glossinessFactor)
+		{
+			if (image.image.empty() || image.width <= 0 || image.height <= 0 || image.bits != 8 ||
+			    image.component < 4)
+				return c_InvalidIndex;
+
+			const auto   width  = static_cast<size_t>(image.width);
+			const auto   height = static_cast<size_t>(image.height);
+			const auto   comp   = static_cast<size_t>(image.component);
+			const size_t texels = width * height;
+
+			const unsigned char first  = image.image[3];
+			bool                varies = false;
+			for (size_t px = 1; px < texels && !varies; ++px)
+				varies = image.image[px * comp + 3] != first;
+			if (!varies)
+				return c_InvalidIndex;
+
+			auto rgba = std::vector<std::byte>(texels * 4);
+			for (size_t px = 0; px < texels; ++px)
+			{
+				const auto gloss =
+					glossinessFactor * static_cast<float>(image.image[px * comp + 3]) / 255.0f;
+				const auto roughness = static_cast<uint8_t>(
+					std::lround(std::clamp(1.0f - gloss, 0.0f, 1.0f) * 255.0f));
+
+				rgba[px * 4 + 0] = std::byte{ 0xFF };
+				rgba[px * 4 + 1] = static_cast<std::byte>(roughness);
+				rgba[px * 4 + 2] = std::byte{ 0xFF };
+				rgba[px * 4 + 3] = std::byte{ 0xFF };
+			}
+
+			mesh.textures.push_back(
+				rgba8ToImage(rgba, static_cast<uint32_t>(width), static_cast<uint32_t>(height)));
+			mesh.textureNames.push_back(
+				image.name.empty() ? std::string() : image.name + " roughness");
+
+			return static_cast<uint32_t>(mesh.textures.size() - 1);
+		}
+
 		/**
 		 * Converts KHR_materials_pbrSpecularGlossiness onto `out`'s metallic-roughness fields, by the
 		 * conversion Khronos publishes with the extension and every other importer implements
@@ -943,11 +1049,11 @@ namespace assetlib
 		 * alternative here was reading the material as PBR anyway, which silently takes tinygltf's
 		 * default-constructed pbrMetallicRoughness and imports every such surface as white metal.
 		 *
-		 * **Factors only, and the texture is not composited.** `specularGlossinessTexture` carries
-		 * per-texel specular in RGB and glossiness in A, and the engine's ORM wants roughness in G --
-		 * an inversion no ChannelRoute can express, so it would have to be baked into a new image at
-		 * import. A material carrying one therefore gets a constant roughness from `glossinessFactor`
-		 * rather than a varying one; its base colour and normal are unaffected.
+		 * `specularGlossinessTexture` carries per-texel specular in RGB and glossiness in A, and the
+		 * engine's ORM wants roughness in G -- the complement, which no ChannelRoute can express,
+		 * since a route selects a channel and never transforms it. So `appendGlossinessOrm` writes it
+		 * once at import and this points the material at that map. Its RGB specular is still dropped:
+		 * the engine has one specular factor and no map behind it.
 		 *
 		 * @return false when the material does not declare the extension, leaving `out` untouched.
 		 */
@@ -956,6 +1062,8 @@ namespace assetlib
 			const tinygltf::Material&    material,
 			const tinygltf::Model&       model,
 			const std::vector<uint32_t>& imageToTexture,
+			BMeshImport&                 mesh,
+			GlossinessOrmCache&          built,
 			BMaterialImport&             out)
 		{
 			const auto it = material.extensions.find(std::string(c_SpecGlossExtension));
@@ -989,9 +1097,9 @@ namespace assetlib
 
 			const glm::vec3 specular = readVec3(ext, "specularFactor", glm::vec3(1.0f));
 
-			const auto oneMinusSpecularStrength =
-				1.0f - std::max({ specular.r, specular.g, specular.b });
-			const auto metallic = solveMetallic(
+			const auto specularStrength         = std::max({ specular.r, specular.g, specular.b });
+			const auto oneMinusSpecularStrength = 1.0f - specularStrength;
+			const auto metallic                 = solveMetallic(
 				perceivedBrightness(glm::vec3(diffuse)),
 				perceivedBrightness(specular),
 				oneMinusSpecularStrength);
@@ -1019,6 +1127,21 @@ namespace assetlib
 				if (texture.Has("index"))
 					out.baseColorTexture =
 						mapTexture(model, texture.Get("index").GetNumberAsInt(), imageToTexture);
+			}
+
+			if (const tinygltf::Image* image = glossinessImage(ext, model, material))
+			{
+				const auto key   = std::make_pair(image, glossiness);
+				auto       entry = built.find(key);
+				if (entry == built.end())
+					entry = built.emplace(key, appendGlossinessOrm(mesh, *image, glossiness)).first;
+
+				if (entry->second != c_InvalidIndex)
+				{
+					out.ormTexture = entry->second;
+					// The map carries the factor already; leaving it here would apply it twice.
+					out.roughnessFactor = 1.0f;
+				}
 			}
 
 			return true;
@@ -1079,6 +1202,8 @@ namespace assetlib
 			const std::vector<uint32_t>& imageToTexture)
 		{
 			mesh.materials.reserve(model.materials.size());
+
+			auto glossinessOrms = GlossinessOrmCache();
 			for (const auto& gltfMat : model.materials)
 			{
 				const auto& pbr = gltfMat.pbrMetallicRoughness;
@@ -1108,7 +1233,13 @@ namespace assetlib
 				// Last, so it overwrites the metallic-roughness block above: tinygltf
 				// default-constructs that whether or not the file declares it, and a
 				// specular-glossiness material declares it never.
-				readSpecularGlossiness(gltfMat, model, imageToTexture, material);
+				readSpecularGlossiness(
+					gltfMat,
+					model,
+					imageToTexture,
+					mesh,
+					glossinessOrms,
+					material);
 
 				// Outside that block on purpose: occlusionTexture is a sibling of
 				// pbrMetallicRoughness, so a specular-glossiness material can carry one.
