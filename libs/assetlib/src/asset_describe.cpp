@@ -537,13 +537,13 @@ namespace assetlib
 			out += std::format(
 				"    [{}] hip {} knee {} ankle {} toe {}\n",
 				i,
-				named(leg.hip),
-				named(leg.knee),
-				named(leg.ankle),
-				named(leg.toe));
+				named(leg.hipBoneName),
+				named(leg.kneeBoneName),
+				named(leg.ankleBoneName),
+				named(leg.toeBoneName));
 		}
 
-		for (const std::string& clip : avatar.unplanted)
+		for (const std::string& clip : avatar.unplantedClips)
 			out += std::format("  unplanted    '{}'\n", clip);
 
 		return out;

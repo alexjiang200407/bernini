@@ -117,13 +117,13 @@ namespace assetlib
 		{
 			const AvatarLeg& leg = avatar.legs[i];
 			out.legs.push_back(
-				{ boneIndex(skeleton, leg.hip, i, c_HipKey),
-			      boneIndex(skeleton, leg.knee, i, c_KneeKey),
-			      boneIndex(skeleton, leg.ankle, i, c_AnkleKey),
-			      boneIndex(skeleton, leg.toe, i, c_ToeKey) });
+				{ boneIndex(skeleton, leg.hipBoneName, i, c_HipKey),
+			      boneIndex(skeleton, leg.kneeBoneName, i, c_KneeKey),
+			      boneIndex(skeleton, leg.ankleBoneName, i, c_AnkleKey),
+			      boneIndex(skeleton, leg.toeBoneName, i, c_ToeKey) });
 		}
 
-		out.unplanted = avatar.unplanted;
+		out.unplantedClips = avatar.unplantedClips;
 		return out;
 	}
 
@@ -199,10 +199,10 @@ namespace assetlib
 					i);
 
 				auto chain = AvatarLeg();
-				takeBone(leg, c_HipKey, chain.hip, i);
-				takeBone(leg, c_KneeKey, chain.knee, i);
-				takeBone(leg, c_AnkleKey, chain.ankle, i);
-				takeBone(leg, c_ToeKey, chain.toe, i);
+				takeBone(leg, c_HipKey, chain.hipBoneName, i);
+				takeBone(leg, c_KneeKey, chain.kneeBoneName, i);
+				takeBone(leg, c_AnkleKey, chain.ankleBoneName, i);
+				takeBone(leg, c_ToeKey, chain.toeBoneName, i);
 				avatar.legs.push_back(std::move(chain));
 			}
 			json.erase(it);
@@ -223,7 +223,7 @@ namespace assetlib
 					"avatar: '{}' entry {} is not a clip name",
 					c_UnplantedKey,
 					i);
-				avatar.unplanted.push_back(name.get<std::string>());
+				avatar.unplantedClips.push_back(name.get<std::string>());
 			}
 			json.erase(it);
 		}
@@ -241,10 +241,10 @@ namespace assetlib
 		for (const AvatarLeg& leg : avatar.legs)
 		{
 			legs.push_back(
-				nlohmann::json{ { c_HipKey, leg.hip },
-			                    { c_KneeKey, leg.knee },
-			                    { c_AnkleKey, leg.ankle },
-			                    { c_ToeKey, leg.toe } });
+				nlohmann::json{ { c_HipKey, leg.hipBoneName },
+			                    { c_KneeKey, leg.kneeBoneName },
+			                    { c_AnkleKey, leg.ankleBoneName },
+			                    { c_ToeKey, leg.toeBoneName } });
 		}
 
 		// Written even when empty: an avatar with no legs is what the editor's *Create avatar*
@@ -254,8 +254,8 @@ namespace assetlib
 		// Absent when empty, unlike `legs`: the key is an exception to a rule, and a document that
 		// lists none reads as one with none.
 		json.erase(c_UnplantedKey);
-		if (!avatar.unplanted.empty())
-			json[c_UnplantedKey] = avatar.unplanted;
+		if (!avatar.unplantedClips.empty())
+			json[c_UnplantedKey] = avatar.unplantedClips;
 
 		return doc::toBytes(json);
 	}

@@ -464,7 +464,8 @@ namespace
 
 			animations.boneCount         = 4;
 			animations.skeletonSignature = skeletonSignature(skeleton);
-			legs.push_back({ .hip = 0, .knee = 1, .ankle = 2, .toe = 3 });
+			legs.push_back(
+				{ .hipBoneIndex = 0, .kneeBoneIndex = 1, .ankleBoneIndex = 2, .toeBoneIndex = 3 });
 
 			// One clip of one frame, every bone at its bind pose.
 			AnimationClip clip{};
@@ -487,7 +488,7 @@ namespace
 		{
 			const std::vector<SolePlane> soles = solePlanes(Meshes(), skeleton, legs);
 			const std::vector<glm::mat4> pose  = poseModelTransforms(skeleton, animations, 0, 0);
-			return (pose[legs[0].ankle] * glm::vec4(soles[0].point, 1.0f)).y;
+			return (pose[legs[0].ankleBoneIndex] * glm::vec4(soles[0].point, 1.0f)).y;
 		}
 
 	private:

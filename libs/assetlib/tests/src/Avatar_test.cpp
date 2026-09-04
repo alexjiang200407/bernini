@@ -93,8 +93,8 @@ TEST_CASE("An avatar round-trips through its codec", "[avatar]")
 
 	SECTION("the unplanted clips round-trip, and are absent from a document naming none")
 	{
-		auto listed      = MakeAvatar();
-		listed.unplanted = { "Jump_Up", "Fall" };
+		auto listed           = MakeAvatar();
+		listed.unplantedClips = { "Jump_Up", "Fall" };
 		CHECK(Parse(TextOf(listed)) == listed);
 
 		// An exception to a rule, so a document listing none does not carry the key.
@@ -140,8 +140,8 @@ TEST_CASE("An avatar's names resolve to bone indices", "[avatar]")
 
 	SECTION("a name the rig does not carry is refused, and the message says which")
 	{
-		auto avatar          = MakeAvatar();
-		avatar.legs[0].ankle = "Dog R Foot";
+		auto avatar                  = MakeAvatar();
+		avatar.legs[0].ankleBoneName = "Dog R Foot";
 
 		CHECK_THROWS_WITH(
 			resolveAvatar(avatar, skeleton),
@@ -177,10 +177,10 @@ TEST_CASE("An avatar's names resolve to bone indices", "[avatar]")
 		// Deliberately not judged here. Two doors refusing one rule is two that can disagree, and
 		// the one that cannot walk the chain is the one that owns the message naming the bone --
 		// see IScene::AddRig.
-		auto avatar          = MakeAvatar();
-		avatar.legs[0].knee  = "Dog L Foot";
-		avatar.legs[0].ankle = "Dog L Toe";
-		avatar.legs[0].toe   = "Dog L Toe";
+		auto avatar                  = MakeAvatar();
+		avatar.legs[0].kneeBoneName  = "Dog L Foot";
+		avatar.legs[0].ankleBoneName = "Dog L Toe";
+		avatar.legs[0].toeBoneName   = "Dog L Toe";
 
 		CHECK_NOTHROW(resolveAvatar(avatar, skeleton));
 	}
@@ -189,10 +189,10 @@ TEST_CASE("An avatar's names resolve to bone indices", "[avatar]")
 	{
 		// Clip names are the `.banim`'s, which the skeleton knows nothing about; the plant
 		// matches them when it measures.
-		auto avatar      = MakeAvatar();
-		avatar.unplanted = { "Jump_Up", "Fall" };
+		auto avatar           = MakeAvatar();
+		avatar.unplantedClips = { "Jump_Up", "Fall" };
 
-		CHECK(resolveAvatar(avatar, skeleton).unplanted == avatar.unplanted);
+		CHECK(resolveAvatar(avatar, skeleton).unplantedClips == avatar.unplantedClips);
 	}
 }
 

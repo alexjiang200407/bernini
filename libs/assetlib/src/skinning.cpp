@@ -793,7 +793,7 @@ namespace assetlib
 					for (size_t leg = 0; leg < legs.size(); ++leg)
 						lowest = std::min(
 							lowest,
-							(pose[legs[leg].ankle] * glm::vec4(soles[leg].point, 1.0f)).y);
+							(pose[legs[leg].ankleBoneIndex] * glm::vec4(soles[leg].point, 1.0f)).y);
 				}
 
 				if (lowest != std::numeric_limits<float>::max())
@@ -1049,14 +1049,15 @@ namespace assetlib
 		for (const AvatarLegChain& chain : chains)
 		{
 			core::throw_runtime_error_if(
-				chain.ankle >= skeleton.bones.size() || chain.toe >= skeleton.bones.size(),
+				chain.ankleBoneIndex >= skeleton.bones.size() ||
+					chain.toeBoneIndex >= skeleton.bones.size(),
 				"skinning: a leg names a bone outside the {}-bone skeleton",
 				skeleton.bones.size());
 
-			const glm::mat4 toAnkle = skeleton.bones[chain.ankle].inverseBind;
+			const glm::mat4 toAnkle = skeleton.bones[chain.ankleBoneIndex].inverseBind;
 
 			const std::vector<glm::vec3> foot =
-				footVertices(meshes, skeleton, chain.ankle, chain.toe);
+				footVertices(meshes, skeleton, chain.ankleBoneIndex, chain.toeBoneIndex);
 
 			glm::vec3 normal;
 			glm::vec3 on;
@@ -1071,13 +1072,13 @@ namespace assetlib
 						"skinning: no sole among the {} vertices weighted to bones {} and {}; the "
 						"foot is planted flat",
 						foot.size(),
-						chain.ankle,
-						chain.toe);
+						chain.ankleBoneIndex,
+						chain.toeBoneIndex);
 
 				// The flat plane through the joint: a leg no mesh here carries has no sole to fit,
 				// and inventing a tilt would turn the foot at runtime for no reason.
 				out.emplace_back(
-					glm::vec3(toAnkle * glm::vec4(glm::vec3(bind[chain.ankle][3]), 1.0f)),
+					glm::vec3(toAnkle * glm::vec4(glm::vec3(bind[chain.ankleBoneIndex][3]), 1.0f)),
 					glm::normalize(glm::vec3(toAnkle * glm::vec4(0.0f, 1.0f, 0.0f, 0.0f))));
 				continue;
 			}
@@ -1136,15 +1137,15 @@ namespace assetlib
 
 		for (const AvatarLegChain& chain : avatar.legs)
 		{
-			hash = core::hash_pod(chain.hip, hash);
-			hash = core::hash_pod(chain.knee, hash);
-			hash = core::hash_pod(chain.ankle, hash);
-			hash = core::hash_pod(chain.toe, hash);
+			hash = core::hash_pod(chain.hipBoneIndex, hash);
+			hash = core::hash_pod(chain.kneeBoneIndex, hash);
+			hash = core::hash_pod(chain.ankleBoneIndex, hash);
+			hash = core::hash_pod(chain.toeBoneIndex, hash);
 		}
 
 		// Each name with its length, so two lists cannot agree by concatenation; nothing at all
 		// for an empty list, so an avatar that names no clip keys as it did before the key existed.
-		for (const std::string& clip : avatar.unplanted)
+		for (const std::string& clip : avatar.unplantedClips)
 		{
 			hash = core::hash_pod(clip.size(), hash);
 			hash = core::hash_string(clip, hash);
@@ -1175,14 +1176,14 @@ namespace assetlib
 			soles.size(),
 			chains.size());
 
-		// Checked here and not left to the pose walk: this reads `model[chain.ankle]` directly, and
+		// Checked here and not left to the pose walk: this reads `model[chain.ankleBoneIndex]` directly, and
 		// a public function that indexes a caller's number has to judge it rather than trust that
 		// solePlanes was asked first.
 		for (const AvatarLegChain& chain : chains)
 			core::throw_runtime_error_if(
-				chain.ankle >= skeleton.bones.size(),
+				chain.ankleBoneIndex >= skeleton.bones.size(),
 				"skinning: a leg names bone {}, which is outside the {}-bone skeleton",
-				chain.ankle,
+				chain.ankleBoneIndex,
 				skeleton.bones.size());
 
 		const size_t legs = chains.size();
@@ -1196,7 +1197,7 @@ namespace assetlib
 		// A name matching no clip is said out loud rather than passed over: it is authored, and
 		// what it meant to switch off is still on.
 		auto unplanted = std::vector<bool>(animations.clips.size(), false);
-		for (const std::string& name : avatar.unplanted)
+		for (const std::string& name : avatar.unplantedClips)
 		{
 			bool found = false;
 			for (uint32_t clip = 0; clip < animations.clips.size(); ++clip)
@@ -1236,8 +1237,8 @@ namespace assetlib
 					poseModelTransforms(skeleton, animations, clip, frame);
 
 				for (size_t leg = 0; leg < legs; ++leg)
-					sole[size_t(frame) * legs + leg] =
-						glm::vec3(model[chains[leg].ankle] * glm::vec4(soles[leg].point, 1.0f));
+					sole[size_t(frame) * legs + leg] = glm::vec3(
+						model[chains[leg].ankleBoneIndex] * glm::vec4(soles[leg].point, 1.0f));
 			}
 
 			// Each foot's floor is the lowest *that sole* gets in *this clip*, not y = 0 and not the

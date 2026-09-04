@@ -13,10 +13,10 @@ namespace assetlib
 	 */
 	struct AvatarLeg
 	{
-		std::string hip;
-		std::string knee;
-		std::string ankle;
-		std::string toe;
+		std::string hipBoneName;
+		std::string kneeBoneName;
+		std::string ankleBoneName;
+		std::string toeBoneName;
 
 		bool
 		operator==(const AvatarLeg&) const = default;
@@ -39,13 +39,9 @@ namespace assetlib
 	{
 		std::vector<AvatarLeg> legs;
 
-		/**
-		 * Clips that plant nothing, by name. For a clip the cook cannot judge: groundClips rests
-		 * an airborne clip on whatever hangs lowest -- a foot -- and from inside the clip that
-		 * foot then looks exactly like a standing one. A name matching no clip is warned about
-		 * and ignored.
-		 */
-		std::vector<std::string> unplanted;
+		/** Clips that plant nothing, by name; one matching nothing is warned about. Why an
+		 * airborne clip needs saying: docs/skinning.md. */
+		std::vector<std::string> unplantedClips;
 
 		std::string extraJson = "{}";
 
@@ -76,10 +72,10 @@ namespace assetlib
 	/** One leg's joints as bone indices into the skeleton they were resolved against. */
 	struct AvatarLegChain
 	{
-		uint32_t hip   = 0;
-		uint32_t knee  = 0;
-		uint32_t ankle = 0;
-		uint32_t toe   = 0;
+		uint32_t hipBoneIndex   = 0;
+		uint32_t kneeBoneIndex  = 0;
+		uint32_t ankleBoneIndex = 0;
+		uint32_t toeBoneIndex   = 0;
 
 		bool
 		operator==(const AvatarLegChain&) const = default;
@@ -93,7 +89,7 @@ namespace assetlib
 	struct ResolvedAvatar
 	{
 		std::vector<AvatarLegChain> legs;
-		std::vector<std::string>    unplanted;
+		std::vector<std::string>    unplantedClips;
 
 		bool
 		operator==(const ResolvedAvatar&) const = default;

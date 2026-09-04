@@ -685,10 +685,10 @@ namespace game
 		desc.legs.reserve(avatar.legs.size());
 		for (size_t i = 0; i < avatar.legs.size(); ++i)
 			desc.legs.push_back(
-				{ .hip        = avatar.legs[i].hip,
-			      .knee       = avatar.legs[i].knee,
-			      .ankle      = avatar.legs[i].ankle,
-			      .toe        = avatar.legs[i].toe,
+				{ .hip        = avatar.legs[i].hipBoneIndex,
+			      .knee       = avatar.legs[i].kneeBoneIndex,
+			      .ankle      = avatar.legs[i].ankleBoneIndex,
+			      .toe        = avatar.legs[i].toeBoneIndex,
 			      .solePoint  = soles[i].point,
 			      .soleNormal = soles[i].normal });
 
