@@ -736,14 +736,23 @@ Nine rules, each of which is a way to get this wrong:
   because a specular-glossiness material never declares one and would otherwise keep tinygltf's
   defaults — white, fully metallic, fully rough.
 
-  Two consequences worth knowing before reading a converted asset. **Factors only**: a
-  `specularGlossinessTexture` carries specular in RGB and glossiness in A, and ORM wants roughness
-  in G — an inversion no `ChannelRoute` can express, so it would have to be composited into a new
-  image at import. Such a material gets a constant roughness from `glossinessFactor`; its base
-  colour and normal are unaffected. And **a black diffuse over any specular solves to metal**,
-  because metallic-roughness has no other way to express it — which is right for a chrome surface
-  and surprising on a transparent reflection layer, where it is the model's limit rather than the
-  conversion's error.
+  Two consequences worth knowing before reading a converted asset. **The glossiness map is
+  composited; the specular map is not.** A `specularGlossinessTexture` carries specular in RGB and
+  glossiness in A, and ORM wants roughness in G — an inversion no `ChannelRoute` can express, since
+  a route selects a channel and never transforms it. So the complement is written once at import
+  into an ORM-shaped image, one per (image, `glossinessFactor`) pair, its red and blue white because
+  `GetORM` multiplies them into occlusion and metallic and white is the identity for both — and a
+  material carrying an occlusion map of its own takes red from that one instead. The factor rides in
+  the texels rather than on the material, because the shader multiplies the map's green by
+  `roughnessFactor` and `1 - g*f` is not `(1 - g)*(1 - f)`. A map whose alpha is constant is refused
+  and the constant roughness kept: tinygltf pads every image to four channels, so a source with no
+  alpha arrives indistinguishable from one whose alpha is uniform, and neither says anything the
+  factor did not. The RGB specular is still dropped — the engine has one specular factor and no map
+  behind it.
+
+  And **a black diffuse over any specular solves to metal**, because metallic-roughness has no
+  other way to express it — which is right for a chrome surface and surprising on a transparent
+  reflection layer, where it is the model's limit rather than the conversion's error.
 * **The graph *is* the material.** The import builds a `MaterialGraphModel` — a Texture node per map,
   wired into the sink — and `CompileMaterial` reads the routes back out of it, exactly as the material
   editor's Save does. There is no second table mapping glTF to routes that could drift from the board,
