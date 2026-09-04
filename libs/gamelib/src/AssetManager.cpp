@@ -2,6 +2,7 @@
 #include <gamelib/AssetManager.h>
 
 #include <assetlib/RegenMesh.h>
+#include <assetlib/avatar.h>
 #include <assetlib/image_io.h>
 #include <assetlib/skinning.h>
 #include <assetlib_structs/Animation.h>
@@ -598,7 +599,7 @@ namespace game
 
 			// One upload per clip set, however many meshes are skinned to it: a unit assembled from
 			// slot meshes is several geoms on one rig.
-			const bgl::RigHandle rig = AcquireRig(animationsNorm, skeleton, animations);
+			const bgl::RigHandle rig = AcquireRig(animationsNorm, skeleton, animations, mesh);
 			rigAcquired              = true;
 
 			auto record   = GeomRecord();
@@ -633,7 +634,8 @@ namespace game
 	AssetManager::AcquireRig(
 		std::string_view              animationsNorm,
 		const assetlib::Skeleton&     skeleton,
-		const assetlib::AnimationSet& animations)
+		const assetlib::AnimationSet& animations,
+		const assetlib::BMesh&        mesh)
 	{
 		if (const auto it = m_Rigs.find(animationsNorm); it != m_Rigs.end())
 		{
@@ -641,12 +643,56 @@ namespace game
 			return it->second.handle;
 		}
 
-		auto record     = RigRecord();
-		record.handle   = m_Scene->AddRig(skeleton, animations);
+		auto record = RigRecord();
+		record.handle =
+			m_Scene->AddRig(skeleton, animations, FootPlantFor(mesh, skeleton, animations));
 		record.refCount = 1;
 
 		m_Rigs.emplace(std::string(animationsNorm), record);
 		return record.handle;
+	}
+
+	bgl::FootPlantDesc
+	AssetManager::FootPlantFor(
+		const assetlib::BMesh&        mesh,
+		const assetlib::Skeleton&     skeleton,
+		const assetlib::AnimationSet& animations) const
+	{
+		ZoneScopedN("gamelib foot plant");
+
+		auto desc = bgl::FootPlantDesc();
+
+		const assetlib::ResolvedAvatar avatar =
+			assetlib::avatarForRig(m_Store.GetFiles(), animations.skeleton, skeleton);
+		if (avatar.legs.empty())
+			return desc;
+
+		const auto meshes = std::span<const assetlib::BMesh>(&mesh, 1);
+
+		const std::vector<assetlib::SolePlane> soles =
+			assetlib::solePlanes(meshes, skeleton, avatar.legs);
+
+		// Read off the file when the cook measured them against this pairing, measured otherwise:
+		// the same rule a posed box follows, and for the same reason -- what is there is derived, so
+		// what was derived from something else is not trusted, it is redone. A branch and not
+		// value_or, whose argument is evaluated either way: the measure is a walk of every frame,
+		// and the whole point of the bake is that a load with a match does not make it.
+		if (auto baked = assetlib::findPlantWeights(animations, meshes, skeleton, avatar))
+			desc.plantWeights = std::move(*baked);
+		else
+			desc.plantWeights = assetlib::measurePlantWeights(animations, skeleton, avatar, soles);
+
+		desc.legs.reserve(avatar.legs.size());
+		for (size_t i = 0; i < avatar.legs.size(); ++i)
+			desc.legs.push_back(
+				{ .hip        = avatar.legs[i].hipBoneIndex,
+			      .knee       = avatar.legs[i].kneeBoneIndex,
+			      .ankle      = avatar.legs[i].ankleBoneIndex,
+			      .toe        = avatar.legs[i].toeBoneIndex,
+			      .solePoint  = soles[i].point,
+			      .soleNormal = soles[i].normal });
+
+		return desc;
 	}
 
 	void

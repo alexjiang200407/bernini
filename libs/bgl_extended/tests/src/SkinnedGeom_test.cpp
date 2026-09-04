@@ -1,10 +1,12 @@
 #include "scene/Scene.h"
 #include "scene/SceneView.h"
 #include "util/TestOptions.h"
+#include "util/util.h"
 #include <assetlib_structs/Bounds.h>
 #include <bgl/IGraphics.h>
 #include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
+#include <catch2/matchers/catch_matchers_string.hpp>
 
 // What AddSkinnedMeshGeom uploads, and what it refuses. Nothing here draws: the skinned forward
 // kernel does not exist yet, so a skinned submesh resolves to PsoType::kInvalid and the counting
@@ -121,7 +123,8 @@ namespace
 				                 glm::vec3(1.0f) };
 			bone.inverseBind = glm::translate(glm::mat4(1.0f), glm::vec3(0.0f, -float(i), 0.0f));
 			bone.parent      = i == 0 ? assetlib::c_InvalidIndex : i - 1;
-			bone.nameOffset  = 0;
+			// Named, because a leg is authored by name and its refusals quote one.
+			bone.nameOffset = skeleton.stringPool.add(std::format("Bone{}", i));
 			skeleton.bones.push_back(bone);
 		}
 		return skeleton;
@@ -169,6 +172,31 @@ namespace
 		set.clips.push_back(held);
 
 		return set;
+	}
+
+	// A leg needs four bones, so the rigs in this file's foot-plant cases are MakeRig(4): the chain
+	// 0 -> 1 -> 2 -> 3 is exactly one hip, knee, ankle and toe.
+	constexpr uint32_t c_LegBoneCount = 4;
+
+	// Distinguishable and spanning the range, so a wrong byte within the packed word reads as a
+	// wrong value rather than a plausible one.
+	constexpr std::array<uint8_t, c_Frames> c_Weights = { { 0, 128, 255 } };
+
+	bgl::FootPlantDesc
+	MakeFootPlant()
+	{
+		auto leg       = bgl::FootPlantLegDesc();
+		leg.hip        = 0;
+		leg.knee       = 1;
+		leg.ankle      = 2;
+		leg.toe        = 3;
+		leg.solePoint  = glm::vec3(0.1f, -0.2f, 0.3f);
+		leg.soleNormal = glm::vec3(0.0f, 3.0f, 4.0f);  // unnormalized on purpose; upload fixes it
+
+		auto plant         = bgl::FootPlantDesc();
+		plant.legs         = { leg };
+		plant.plantWeights = { c_Weights.begin(), c_Weights.end() };
+		return plant;
 	}
 
 	bgl::MaterialHandle
@@ -330,7 +358,9 @@ TEST_CASE("CreateSkinnedMeshInstance writes the playback record once", "[skinned
 	desc.phase = 4.5f;
 	desc.rate  = 2.0f;
 
-	const auto instance = view->CreateSkinnedMeshInstance(geom, glm::mat4(1.0f), desc);
+	const auto placed = glm::translate(glm::mat4(1.0f), glm::vec3(1.0f, 2.0f, 3.0f));
+
+	const auto instance = view->CreateSkinnedMeshInstance(geom, placed, desc);
 	REQUIRE(instance.IsValid());
 
 	auto& meshBuffer = view->GetMeshBuffer();
@@ -374,6 +404,14 @@ TEST_CASE("CreateSkinnedMeshInstance writes the playback record once", "[skinned
 
 		CHECK(sizeof(bgl::idl::SkinnedTableState) < sizeof(bgl::idl::SkinnedState));
 	}
+
+	// Where the instance stands is the placement's, and only the placement's: the pose pass reads
+	// it from here rather than from a copy of its own.
+	auto expected = bgl::idl::MeshInstance();
+	bgl::WriteInstanceTransform(expected, placed);
+	CHECK(mesh.transform[0] == expected.transform[0]);
+	CHECK(mesh.transform[1] == expected.transform[1]);
+	CHECK(mesh.transform[2] == expected.transform[2]);
 
 	SECTION("a clip past the geom's table is refused")
 	{
@@ -696,4 +734,166 @@ TEST_CASE("a skinned submesh culls by its posed box, not its bind pose", "[skinn
 	CHECK(skinnedSphere.w == Catch::Approx(glm::length(posed.max - posed.min) * 0.5f));
 
 	CHECK(skinnedSphere.w > staticSphere.w);
+}
+
+TEST_CASE("AddRig uploads a rig's legs and their plant weights", "[skinned]")
+{
+	auto gfx = bgl::CreateGraphics(HeadlessOptions());
+	REQUIRE(gfx != nullptr);
+
+	auto  sceneHandle = gfx->CreateScene(TestSceneDesc());
+	auto* scene       = sceneHandle->As<bgl::Scene>();
+	REQUIRE(scene != nullptr);
+
+	const bgl::RigHandle rig =
+		scene->AddRig(MakeRig(c_LegBoneCount), MakeClips(c_LegBoneCount), MakeFootPlant());
+	REQUIRE(rig.IsValid());
+
+	const bgl::idl::Rig& record = scene->GetRigBuffer()[rig.handle];
+	REQUIRE(record.legs.count == 1);
+
+	SECTION("the leg carries its chain and its sole plane, with the normal normalized")
+	{
+		const bgl::idl::SkinnedLegChain& leg =
+			scene->GetSkinnedLegBuffer().AtIndex(record.legs.range.offsetStart);
+
+		CHECK(leg.hip == 0);
+		CHECK(leg.knee == 1);
+		CHECK(leg.ankle == 2);
+		CHECK(leg.toe == 3);
+
+		CHECK(leg.solePoint.x == Catch::Approx(0.1f));
+		CHECK(leg.solePoint.y == Catch::Approx(-0.2f));
+		CHECK(leg.solePoint.z == Catch::Approx(0.3f));
+
+		// (0, 3, 4) has length 5, so the stored normal is (0, 0.6, 0.8).
+		CHECK(leg.soleNormal.x == Catch::Approx(0.0f));
+		CHECK(leg.soleNormal.y == Catch::Approx(0.6f));
+		CHECK(leg.soleNormal.z == Catch::Approx(0.8f));
+	}
+
+	SECTION("one weight byte per leg per frame, packed four to a uint")
+	{
+		REQUIRE_FALSE(record.plantWeights.Null());
+
+		const uint32_t word =
+			scene->GetPlantWeightBuffer().AtIndex(record.plantWeights.offsetStart);
+		for (uint32_t f = 0; f < c_Frames; ++f)
+		{
+			CHECK(((word >> (8 * f)) & 0xffu) == c_Weights[f]);
+		}
+
+		// The pool is three frames of one leg, so the fourth byte is tail rather than data.
+		CHECK(((word >> 24) & 0xffu) == 0);
+	}
+
+	SECTION("deleting the rig frees both ranges")
+	{
+		const uint32_t legRoot    = record.legs.range.offsetStart;
+		const uint32_t weightRoot = record.plantWeights.offsetStart;
+
+		scene->DeleteRig(rig);
+
+		CHECK_FALSE(scene->GetSkinnedLegBuffer().IsIndexValid(legRoot));
+		CHECK_FALSE(scene->GetPlantWeightBuffer().IsIndexValid(weightRoot));
+	}
+}
+
+TEST_CASE("a rig with no legs uploads exactly what it did before", "[skinned]")
+{
+	auto gfx = bgl::CreateGraphics(HeadlessOptions());
+	REQUIRE(gfx != nullptr);
+
+	auto  sceneHandle = gfx->CreateScene(TestSceneDesc());
+	auto* scene       = sceneHandle->As<bgl::Scene>();
+	REQUIRE(scene != nullptr);
+
+	// Against the untouched arenas rather than a literal: what this pins is that a legless rig
+	// allocates out of neither, not what a fresh RangeBuffer happens to reserve.
+	const uint32_t legCapacity    = scene->GetSkinnedLegBuffer().Capacity();
+	const uint32_t weightCapacity = scene->GetPlantWeightBuffer().Capacity();
+
+	const bgl::RigHandle rig = scene->AddRig(MakeRig(), MakeClips());
+	REQUIRE(rig.IsValid());
+
+	const bgl::idl::Rig& record = scene->GetRigBuffer()[rig.handle];
+
+	// Null rather than an empty range: the pose pass branches on this, and a live range of zero
+	// legs would send it round a loop that runs no iterations instead of past one test.
+	CHECK(record.legs.Null());
+	CHECK(record.plantWeights.Null());
+
+	CHECK(scene->GetSkinnedLegBuffer().Capacity() == legCapacity);
+	CHECK(scene->GetPlantWeightBuffer().Capacity() == weightCapacity);
+}
+
+TEST_CASE("AddRig refuses a leg the pose pass could not solve", "[skinned]")
+{
+	auto gfx = bgl::CreateGraphics(HeadlessOptions());
+	REQUIRE(gfx != nullptr);
+
+	auto  sceneHandle = gfx->CreateScene(TestSceneDesc());
+	auto* scene       = sceneHandle->As<bgl::Scene>();
+	REQUIRE(scene != nullptr);
+
+	const auto add = [&](const bgl::FootPlantDesc& plant) {
+		return scene->AddRig(MakeRig(c_LegBoneCount), MakeClips(c_LegBoneCount), plant);
+	};
+
+	SECTION("a bone outside the skeleton")
+	{
+		auto plant        = MakeFootPlant();
+		plant.legs[0].toe = c_LegBoneCount;
+		CHECK_THROWS_AS(add(plant), bgl::SceneError);
+	}
+
+	SECTION("a chain whose links are not directly parented, named in the refusal")
+	{
+		// 0 -> 2 skips bone 1, which the solve would leave holding a stale pose.
+		auto plant          = MakeFootPlant();
+		plant.legs[0].knee  = 2;
+		plant.legs[0].ankle = 3;
+		plant.legs[0].toe   = 3;
+		CHECK_THROWS_AS(add(plant), bgl::SceneError);
+
+		// The message has to name a bone: a leg is authored by name, so an index alone would send
+		// whoever wrote the avatar back to the rig to count bones.
+		CHECK_THROWS_WITH(add(plant), Catch::Matchers::ContainsSubstring("'Bone2'"));
+	}
+
+	SECTION("a sole normal that cannot be normalized")
+	{
+		auto plant = MakeFootPlant();
+
+		plant.legs[0].soleNormal = glm::vec3(0.0f);
+		CHECK_THROWS_AS(add(plant), bgl::SceneError);
+
+		plant.legs[0].soleNormal = glm::vec3(std::numeric_limits<float>::quiet_NaN(), 1.0f, 0.0f);
+		CHECK_THROWS_AS(add(plant), bgl::SceneError);
+
+		// Finite, but its length overflows to infinity, so normalizing divides to zero.
+		plant.legs[0].soleNormal = glm::vec3(1e20f);
+		CHECK_THROWS_AS(add(plant), bgl::SceneError);
+	}
+
+	SECTION("a weight span that is not one byte per leg per frame")
+	{
+		auto shortSpan = MakeFootPlant();
+		shortSpan.plantWeights.pop_back();
+		CHECK_THROWS_AS(add(shortSpan), bgl::SceneError);
+
+		auto longSpan = MakeFootPlant();
+		longSpan.plantWeights.push_back(0);
+		CHECK_THROWS_AS(add(longSpan), bgl::SceneError);
+
+		// Both directions of the same rule: weights without legs are as unaddressable as legs
+		// without weights.
+		auto noLegs = MakeFootPlant();
+		noLegs.legs.clear();
+		CHECK_THROWS_AS(add(noLegs), bgl::SceneError);
+
+		auto noWeights = MakeFootPlant();
+		noWeights.plantWeights.clear();
+		CHECK_THROWS_AS(add(noWeights), bgl::SceneError);
+	}
 }

@@ -12,12 +12,13 @@ class QDragEnterEvent;
 class QDragMoveEvent;
 class QDropEvent;
 class QStackedWidget;
+class QCheckBox;
 class QComboBox;
 class QDoubleSpinBox;
 class QLabel;
 class QListWidget;
 class QPushButton;
-class TimelineScrubber;
+class Scrubber;
 class QTimer;
 class QToolButton;
 
@@ -143,6 +144,21 @@ private:
 	[[nodiscard]] QWidget*
 	BuildTransportBar();
 
+	/**
+	 * Pushes the ground group's state into the preview and greys what has nothing to act on.
+	 *
+	 * *Plant feet* is the whole group: the floor, the solve against it, and the two sliders that
+	 * tilt it. One switch rather than a floor and a solve separately, because neither half is worth
+	 * anything alone -- an empty floor shows nothing, and there is nothing to plant against without
+	 * one. Off, the sliders go insensitive and keep their values, so turning it back on restores
+	 * what was set.
+	 *
+	 * The box holds the state and this is the one place that pushes it, construction included --
+	 * two defaults that could disagree is one that eventually does.
+	 */
+	void
+	UpdateGroundControls();
+
 	// One clock tick: advance by the wall time since the last, push into the preview and the UI.
 	void
 	Tick();
@@ -167,16 +183,27 @@ private:
 	// shared table.
 	QComboBox* m_TierSelector = nullptr;
 
+	// The ground's tilt, in whole degrees. Committed on release, not per tick: the ground is a
+	// rebind that moves the temporal epoch, and a drag committing every tick would keep the
+	// preview unaccumulated for the whole gesture.
+	Scrubber* m_SlopeSlider = nullptr;
+	QLabel*   m_SlopeLabel  = nullptr;
+
+	// Which way uphill points, in whole degrees about +Y from +X, and whether the floor is drawn.
+	Scrubber*  m_HeadingSlider = nullptr;
+	QLabel*    m_HeadingLabel  = nullptr;
+	QCheckBox* m_PlantFeet     = nullptr;
+
 	QListWidget* m_ClipList     = nullptr;
 	QLabel*      m_ClipMetadata = nullptr;
 
-	QWidget*          m_TransportBar = nullptr;
-	QToolButton*      m_PlayButton   = nullptr;
-	QToolButton*      m_StepBack     = nullptr;
-	QToolButton*      m_StepForward  = nullptr;
-	TimelineScrubber* m_Timeline     = nullptr;
-	QDoubleSpinBox*   m_Speed        = nullptr;
-	QLabel*           m_TimeReadout  = nullptr;
+	QWidget*        m_TransportBar = nullptr;
+	QToolButton*    m_PlayButton   = nullptr;
+	QToolButton*    m_StepBack     = nullptr;
+	QToolButton*    m_StepForward  = nullptr;
+	Scrubber*       m_Timeline     = nullptr;
+	QDoubleSpinBox* m_Speed        = nullptr;
+	QLabel*         m_TimeReadout  = nullptr;
 
 	editor::PlaybackTransport m_Transport;
 	QTimer*                   m_Clock = nullptr;

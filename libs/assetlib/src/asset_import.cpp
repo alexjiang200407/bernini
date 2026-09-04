@@ -23,6 +23,7 @@
 #include "CheckedFileReader.h"
 #include "cache_io.h"
 #include "import_bounds.h"
+#include "plant_bake.h"
 #include "ref_paths.h"
 
 namespace assetlib
@@ -430,12 +431,14 @@ namespace assetlib
 
 		// Ahead of the boxes: a box measured before the clips are grounded describes a rig standing
 		// somewhere the runtime will never draw it.
-		groundClips(
+		groundClipsForRig(
+			GetFiles(),
 			clips,
 			std::span<const BMesh>(&mesh, 1),
 			bound,
 			authoredFloors(GetFiles(), source));
 		bakePosedBounds(clips, mesh, bound);
+		bakePlantWeightsForRig(GetFiles(), clips, std::span<const BMesh>(&mesh, 1), bound);
 		Save(clips, banimKey);
 
 		outputs.emplace_back(banimKey);
@@ -547,9 +550,10 @@ namespace assetlib
 		// Ahead of every box: a box measured before the clips are grounded describes a rig standing
 		// somewhere the runtime will never draw it. This is also the only door a clips-only import
 		// is grounded through -- it brings no mesh of its own.
-		groundClips(clips, meshes, skeleton, authored);
+		groundClipsForRig(store.GetFiles(), clips, meshes, skeleton, authored);
 
 		for (const BMesh& mesh : meshes) bakePosedBounds(clips, mesh, skeleton);
+		bakePlantWeightsForRig(store.GetFiles(), clips, meshes, skeleton);
 	}
 
 	std::string

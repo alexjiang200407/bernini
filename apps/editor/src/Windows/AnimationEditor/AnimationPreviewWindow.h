@@ -8,6 +8,7 @@
 
 #include <bgl/GeomHandle.h>
 #include <bgl/InstanceDesc.h>
+#include <bgl/MaterialHandle.h>
 #include <bgl/MeshInstanceHandle.h>
 
 namespace assetlib
@@ -23,7 +24,9 @@ namespace game
 class QDragEnterEvent;
 class QDragMoveEvent;
 class QDropEvent;
+class QHideEvent;
 class QMouseEvent;
+class QShowEvent;
 class QWheelEvent;
 
 /**
@@ -103,7 +106,57 @@ public:
 		return m_Source;
 	}
 
-	/** Back to the empty state: geometry released, environment kept. */
+	/**
+	 * Tilts the ground the rig stands on: the scene's ground plane, which a planted foot is solved
+	 * against, and the floor drawn under the rig so the tilt can be seen. Positive rises toward +X.
+	 *
+	 * A rebind, not a per-frame input: setting the ground moves the scene's temporal epoch, so a
+	 * control driving this should commit on release rather than on every tick of a drag -- a drag
+	 * that committed each tick would keep the preview unaccumulated for the whole gesture.
+	 *
+	 * The scene is shared with every other viewport, and its ground with it, so the slope is
+	 * applied only while this window is shown and the ground goes flat when it is hidden. The
+	 * value is kept either way, and comes back with the window.
+	 */
+	void
+	SetGroundSlope(float degrees);
+
+	[[nodiscard]] float
+	GetGroundSlope() const noexcept
+	{
+		return m_SlopeDegrees;
+	}
+
+	/**
+	 * Which way uphill points, in degrees about +Y from +X. Nothing here knows which way a rig
+	 * moves, so a person turns the hill to face its stride rather than the rig to face the hill.
+	 * A rebind like the slope, and committed the same way.
+	 */
+	void
+	SetGroundHeading(float degrees);
+
+	[[nodiscard]] float
+	GetGroundHeading() const noexcept
+	{
+		return m_HeadingDegrees;
+	}
+
+	/**
+	 * Whether the floor is drawn. The ground a foot plants against is the scene's either way;
+	 * this is only what is in the picture, for a rig that reads better against the backdrop.
+	 */
+	void
+	SetFloorVisible(bool visible);
+
+	/**
+	 * Whether the rig plants its feet. Off, the same clip plays against the same ground with the
+	 * solve out of it -- the other half of judging what the solve does. The scene's switch, so
+	 * like the slope it holds only while this panel is on screen.
+	 */
+	void
+	SetFootPlanting(bool enabled);
+
+	/** Back to the empty state: geometry released, environment kept, ground left flat. */
 	void
 	Clear();
 
@@ -139,6 +192,10 @@ Q_SIGNALS:
 protected:
 	void
 	resizeEvent(QResizeEvent* event) override;
+	void
+	showEvent(QShowEvent* event) override;
+	void
+	hideEvent(QHideEvent* event) override;
 
 	void
 	dragEnterEvent(QDragEnterEvent* event) override;
@@ -192,6 +249,18 @@ private:
 	[[nodiscard]] bgl::MeshInstanceHandle
 	SpawnAnimated(bgl::GeomHandle geom, const glm::mat4& world, uint32_t clip);
 
+	/**
+	 * Sets the scene's ground to the current slope and stands the floor under the rig at the same
+	 * tilt. Render thread only. The floor is a placement, and a placement does not move: it is
+	 * deleted and re-placed, which is what a slope change costs.
+	 */
+	void
+	PlaceGround();
+
+	/** PlaceGround from the UI thread, when there is a ground to re-place and it is on screen. */
+	void
+	ReplaceGround();
+
 	// One animated placement's live state: respawned in place on a clip switch, and on a tier
 	// switch, which is the same destroy-and-recreate against the same geom.
 	struct AnimatedDraw
@@ -209,6 +278,26 @@ private:
 	std::vector<bgl::GeomHandle>         m_Geoms;      // one entry per acquire, repeats included
 	std::vector<AnimatedDraw>            m_AnimatedDraws;
 	std::filesystem::path                m_DataRoot;
+
+	// The floor: one plane geom for the window's life, in the shared scene like the material
+	// preview's sphere, and a placement in this view alone while a rig is shown.
+	//
+	// Two placements, back to back. A plane is a single face and the renderer culls the back of it,
+	// so one alone vanishes the moment the camera drops below the floor -- which is exactly the eye
+	// level a foot's contact is read at, there being no shadow to read it by. The pair is coplanar
+	// and never both drawn: whichever way the camera looks, one is front-facing and the other is
+	// culled, so there is nothing for them to z-fight over.
+	bgl::MaterialHandle                    m_GroundMaterial;
+	bgl::GeomHandle                        m_GroundGeom;
+	std::array<bgl::MeshInstanceHandle, 2> m_GroundInstances;
+	float                                  m_SlopeDegrees   = 0.0f;
+	float                                  m_HeadingDegrees = 0.0f;
+	// Both off until the panel says otherwise: a preview opens on the clip as authored.
+	bool m_FloorVisible = false;
+	bool m_FootPlanting = false;
+
+	// True while a rig is shown: the ground stands whether or not the floor is drawn.
+	bool m_GroundPlaced = false;
 
 	// The configured environment is kept whole because a drop carries only a path and Clear has to
 	// be able to get back to it. Its root stands in until a project opens and m_DataRoot names its

@@ -77,6 +77,14 @@ public:
 	Bake(const QString& asset);
 
 	/**
+	 * Writes the empty avatar for the rig `asset` -- an imported source -- binds its joints to, and
+	 * says where by signal so the view can show it. Refused with a dialog when the rig already has
+	 * one: an avatar is authored work, and nothing puts one back.
+	 */
+	void
+	CreateAvatar(const QString& asset);
+
+	/**
 	 * `parentPath` rather than a QModelIndex: this runs a modal below, and QFileSystemModel populates on
 	 * a worker whose row insertions invalidate every index into it. The index is re-derived from the
 	 * path once the dialog is down.
@@ -91,6 +99,10 @@ Q_SIGNALS:
 	 */
 	void
 	MaterialBaked(const QString& asset);
+
+	/** An avatar was written at `absolute`. The view that offered the action shows it. */
+	void
+	AvatarCreated(const QString& absolute);
 
 	/** A directory at `absolute` is gone. A view rooted at or inside it now shows nothing. */
 	void

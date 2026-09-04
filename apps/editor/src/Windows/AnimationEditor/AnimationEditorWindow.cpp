@@ -1,9 +1,10 @@
 #include "AnimationEditorWindow.h"
 
-#include "Windows/AnimationEditor/TimelineScrubber.h"
+#include "Windows/AnimationEditor/Scrubber.h"
 #include "util/mesh_drop.h"
 #include <assetlib/Project.h>
 
+#include <QCheckBox>
 #include <QComboBox>
 #include <QDir>
 #include <QDoubleSpinBox>
@@ -183,6 +184,59 @@ AnimationEditorWindow::BuildPropertiesColumn()
 	layout->addWidget(m_TierSelector);
 
 	layout->addSpacing(8);
+	m_SlopeLabel = new QLabel(QStringLiteral("Ground Slope: 0\u00b0"), column);
+	layout->addWidget(m_SlopeLabel);
+
+	m_SlopeSlider = new Scrubber(column);
+	m_SlopeSlider->SetRange(-30, 30);
+	m_SlopeSlider->SetValue(0);
+	m_SlopeSlider->setToolTip(QStringLiteral(
+		"Tilts the ground the rig stands on. A rig with an avatar plants its feet against it; one "
+		"without stands through it. Rises toward +X."));
+
+	// The label follows the thumb so the number is readable mid-drag; the ground follows the
+	// release, because moving it moves the temporal epoch and a drag would hold the preview
+	// unaccumulated until it ended. A click or a keypress moves the thumb without a drag, and
+	// commits through the same release path.
+	connect(m_SlopeSlider, &Scrubber::ValueChanged, this, [this](int degrees) {
+		m_SlopeLabel->setText(QStringLiteral("Ground Slope: %1\u00b0").arg(degrees));
+	});
+	connect(m_SlopeSlider, &Scrubber::Committed, this, [this](int degrees) {
+		m_Preview->SetGroundSlope(static_cast<float>(degrees));
+	});
+	layout->addWidget(m_SlopeSlider);
+
+	// Which way uphill points. Nothing in the path knows which way a rig moves -- the test coyote
+	// runs along +Z -- so a person turns the hill to face the stride. Committed like the slope.
+	m_HeadingLabel = new QLabel(QStringLiteral("Uphill Heading: 0\u00b0"), column);
+	layout->addWidget(m_HeadingLabel);
+
+	m_HeadingSlider = new Scrubber(column);
+	m_HeadingSlider->SetRange(0, 359);
+	m_HeadingSlider->SetValue(0);
+	m_HeadingSlider->setToolTip(QStringLiteral(
+		"Which way the ground rises, in degrees about the up axis from +X. Turn it to face the way "
+		"the rig moves to see it climb the slope rather than cross it."));
+	connect(m_HeadingSlider, &Scrubber::ValueChanged, this, [this](int degrees) {
+		m_HeadingLabel->setText(QStringLiteral("Uphill Heading: %1\u00b0").arg(degrees));
+	});
+	connect(m_HeadingSlider, &Scrubber::Committed, this, [this](int degrees) {
+		m_Preview->SetGroundHeading(static_cast<float>(degrees));
+	});
+	layout->addWidget(m_HeadingSlider);
+
+	// Off to begin with, so a panel just opened shows the clip as its author left it: the ground is
+	// a thing to try, and a preview that silently moved a foot on the way in would be answering a
+	// question nobody had asked yet.
+	m_PlantFeet = new QCheckBox(QStringLiteral("Plant feet"), column);
+	m_PlantFeet->setChecked(false);
+	m_PlantFeet->setToolTip(QStringLiteral(
+		"Stands the rig on a ground plane and solves each leg onto it. Off, there is no floor and "
+		"the clip plays exactly as authored, which is the other half of judging the solve."));
+	connect(m_PlantFeet, &QCheckBox::toggled, this, [this] { UpdateGroundControls(); });
+	layout->addWidget(m_PlantFeet);
+
+	layout->addSpacing(8);
 	layout->addWidget(new QLabel(QStringLiteral("Clips"), column));
 
 	m_ClipList = new QListWidget(column);
@@ -193,7 +247,28 @@ AnimationEditorWindow::BuildPropertiesColumn()
 	m_ClipMetadata->setTextInteractionFlags(Qt::TextSelectableByMouse);
 	layout->addWidget(m_ClipMetadata);
 
+	// The box is the state; this is what puts the preview on it. Reaches the preview before it is
+	// on screen, where a rebind is recorded and applied when it is shown.
+	UpdateGroundControls();
+
 	return column;
+}
+
+void
+AnimationEditorWindow::UpdateGroundControls()
+{
+	// One switch for the whole group: the floor, the solve against it, and the two sliders that
+	// tilt it. There is nothing to see in a floor nothing stands on, and nothing to plant against
+	// without one.
+	const bool planting = m_PlantFeet->isChecked();
+
+	m_SlopeLabel->setEnabled(planting);
+	m_SlopeSlider->setEnabled(planting);
+	m_HeadingLabel->setEnabled(planting);
+	m_HeadingSlider->setEnabled(planting);
+
+	m_Preview->SetFloorVisible(planting);
+	m_Preview->SetFootPlanting(planting);
 }
 
 QWidget*
@@ -240,9 +315,9 @@ AnimationEditorWindow::BuildTransportBar()
 	});
 	layout->addWidget(m_StepForward);
 
-	m_Timeline = new TimelineScrubber(bar);
-	m_Timeline->SetTickCount(c_TimelineTicks);
-	connect(m_Timeline, &TimelineScrubber::ValueChanged, this, [this](int ticks) {
+	m_Timeline = new Scrubber(bar);
+	m_Timeline->SetRange(0, c_TimelineTicks);
+	connect(m_Timeline, &Scrubber::ValueChanged, this, [this](int ticks) {
 		if (m_SyncingUi)
 			return;
 		m_Transport.Scrub(TimelineSeconds(ticks, m_Transport.GetPeriodSeconds(), c_TimelineTicks));

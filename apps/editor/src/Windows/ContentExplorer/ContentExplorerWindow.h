@@ -161,6 +161,10 @@ private:
 	void
 	OnDirectoryRenamed(const QString& fromAbsolute, const QString& toAbsolute);
 
+	/** Shows the avatar an action just wrote, in the folder it landed in. */
+	void
+	OnAvatarCreated(const QString& absolute);
+
 	void
 	UpdateEmptyPlaceholder();
 

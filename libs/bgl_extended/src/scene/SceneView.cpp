@@ -497,10 +497,12 @@ namespace bgl
 
 			// Owning a palette is the predicate, not the record's kind: this list is what the pose
 			// pass writes into, so it is exactly the instances that have somewhere for it to write.
+			// What goes in it is the placement and not its playback record: the pose pass reads the
+			// instance's transform from the one and reaches the other through it.
 			const MeshMeta& meta = m_MeshBuffer.MetaAt(meshIndex);
 			if (meta.geomType == GeomType::kSkinnedMesh && meta.animState != 0 && meta.palette)
 			{
-				list.push_back(meta.animState);
+				list.push_back(meshIndex);
 			}
 		}
 

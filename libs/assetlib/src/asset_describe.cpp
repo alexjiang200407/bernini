@@ -1,4 +1,5 @@
 #include "asset_describe.h"
+#include <assetlib/avatar.h>
 #include <assetlib/bmesh.h>
 #include <assetlib/container_info.h>
 #include <assetlib/envmap.h>
@@ -511,6 +512,44 @@ namespace assetlib
 	}
 
 	std::string
+	describe(const Avatar& avatar, const Skeleton* skeleton)
+	{
+		std::string out;
+
+		out += "bavatar\n";
+		out += std::format("  legs         {}\n", avatar.legs.size());
+
+		// Resolved here rather than through resolveAvatar, which throws on the first name it
+		// cannot find: describe exists to show a person *which* names went bad, so it reports every
+		// one of them instead of stopping at the first.
+		const auto named = [skeleton](std::string_view name) {
+			if (skeleton == nullptr)
+				return std::format("'{}'", name);
+
+			const std::optional<uint32_t> bone = findBone(*skeleton, name);
+			return bone.has_value() ? std::format("'{}' [{}]", name, *bone) :
+			                          std::format("'{}' NOT IN THE SKELETON", name);
+		};
+
+		for (size_t i = 0; i < avatar.legs.size(); ++i)
+		{
+			const AvatarLeg& leg = avatar.legs[i];
+			out += std::format(
+				"    [{}] hip {} knee {} ankle {} toe {}\n",
+				i,
+				named(leg.hipBoneName),
+				named(leg.kneeBoneName),
+				named(leg.ankleBoneName),
+				named(leg.toeBoneName));
+		}
+
+		for (const std::string& clip : avatar.unplantedClips)
+			out += std::format("  unplanted    '{}'\n", clip);
+
+		return out;
+	}
+
+	std::string
 	describe(const AnimationSet& animations, const Skeleton* skeleton)
 	{
 		std::string out;
@@ -521,6 +560,19 @@ namespace assetlib
 			pathOr(animations.skeleton));
 		out += std::format("  bones        {}\n", animations.boneCount);
 		out += std::format("  signature    {:016x}\n", animations.skeletonSignature);
+
+		if (animations.plantWeights.Empty())
+		{
+			out += "  plants       none\n";
+		}
+		else
+		{
+			out += std::format(
+				"  plants       {} leg(s), {} bytes, signature {:016x}\n",
+				animations.plantWeights.legCount,
+				animations.plantWeights.weights.size(),
+				animations.plantWeights.signature);
+		}
 
 		if (skeleton != nullptr)
 			out += std::format(
@@ -562,6 +614,33 @@ namespace assetlib
 				clip.locomotionSpeed);
 			out +=
 				std::format("    ground     moved down {:.4g} to rest on y 0\n", clip.groundOffset);
+
+			// Frames each leg carries any weight in, so a person can see which clips plant
+			// without reading bytes -- and which the avatar switched off.
+			const PlantWeights& plants = animations.plantWeights;
+			if (!plants.Empty() && animations.boneCount != 0 &&
+			    clip.firstSample % animations.boneCount == 0)
+			{
+				const size_t first = clip.firstSample / animations.boneCount;
+				std::string  legs;
+				for (uint32_t leg = 0; leg < plants.legCount; ++leg)
+				{
+					uint32_t planted = 0;
+					for (uint32_t frame = 0; frame < clip.frameCount; ++frame)
+					{
+						const size_t at = (first + frame) * plants.legCount + leg;
+						if (at < plants.weights.size() && plants.weights[at] != 0)
+							++planted;
+					}
+					legs += std::format(
+						"{}leg {} {}/{}",
+						leg == 0 ? "" : ", ",
+						leg,
+						planted,
+						clip.frameCount);
+				}
+				out += std::format("    planted    {} frames\n", legs);
+			}
 		}
 
 		return out;

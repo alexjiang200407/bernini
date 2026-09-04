@@ -1,4 +1,5 @@
 #include <assetlib/AssetStore.h>
+#include <assetlib/avatar.h>
 #include <assetlib/codecs.h>
 
 #include <assetlib/import_document.h>
@@ -100,6 +101,12 @@ TEST_CASE("The store writes exactly what the codec encodes", "[codec]")
 		// The one container a person edits by hand: its bytes are the canonical JSON verbatim.
 		ImportDocument document;
 		CheckStoreWritesCodecBytes(document, "a.bimport");
+	}
+
+	SECTION("bavatar")
+	{
+		Avatar avatar;
+		CheckStoreWritesCodecBytes(avatar, "a.bavatar");
 	}
 }
 

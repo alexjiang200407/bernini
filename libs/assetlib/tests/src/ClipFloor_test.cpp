@@ -1,3 +1,4 @@
+#include <assetlib/avatar.h>
 #include <assetlib/skinning.h>
 #include <assetlib_structs/Animation.h>
 #include <assetlib_structs/BMesh.h>
@@ -409,5 +410,156 @@ TEST_CASE("A refused measurement still honours an authored floor", "[skinning][g
 
 		CHECK(rig.animations.clips[1].groundOffset == Catch::Approx(0.0f));
 		CHECK(rig.animations.samples[1].translation.y == Catch::Approx(5.0f));
+	}
+}
+
+namespace
+{
+	/**
+	 * A hip-knee-ankle-toe chain with a sole under the ankle and a belly slung beneath the hip, so
+	 * the lowest vertex is deliberately *not* a foot. That is the whole case the sole floor exists
+	 * for: the test Dog is shaped this way, and grounding it on its lowest vertex left every planted
+	 * foot hovering.
+	 */
+	struct LegRig
+	{
+		BMesh                       mesh;
+		Skeleton                    skeleton;
+		AnimationSet                animations;
+		std::vector<AvatarLegChain> legs;
+
+		static constexpr float c_SoleY  = 0.0f;
+		static constexpr float c_BellyY = -0.3f;
+
+		explicit LegRig()
+		{
+			const std::array<const char*, 4> names = { { "hip", "knee", "ankle", "toe" } };
+			const std::array<glm::vec3, 4>   bind  = { { glm::vec3(0.0f, 2.0f, 0.0f),
+				                                         glm::vec3(0.0f, 1.0f, 0.0f),
+				                                         glm::vec3(0.0f, 0.2f, 0.0f),
+				                                         glm::vec3(0.2f, 0.2f, 0.0f) } };
+
+			for (uint32_t i = 0; i < 4; ++i)
+			{
+				const glm::vec3 parent = i == 0 ? glm::vec3(0.0f) : bind[i - 1];
+
+				Bone bone{};
+				bone.bindPose    = { bind[i] - parent,
+					                 glm::quat(1.0f, 0.0f, 0.0f, 0.0f),
+					                 glm::vec3(1.0f) };
+				bone.inverseBind = glm::translate(glm::mat4(1.0f), -bind[i]);
+				bone.parent      = i == 0 ? c_InvalidIndex : i - 1;
+				bone.nameOffset  = skeleton.stringPool.add(names[i]);
+				skeleton.bones.push_back(bone);
+			}
+
+			// The sole: two vertices under the ankle and one under the toe, all on one plane.
+			AddVertex(glm::vec3(-0.05f, c_SoleY, -0.05f), 2);
+			AddVertex(glm::vec3(0.05f, c_SoleY, 0.05f), 2);
+			AddVertex(glm::vec3(0.2f, c_SoleY, 0.0f), 3);
+
+			// And the belly, hanging below every one of them off the hip.
+			AddVertex(glm::vec3(0.0f, c_BellyY, 0.0f), 0);
+			Finish();
+
+			animations.boneCount         = 4;
+			animations.skeletonSignature = skeletonSignature(skeleton);
+			legs.push_back(
+				{ .hipBoneIndex = 0, .kneeBoneIndex = 1, .ankleBoneIndex = 2, .toeBoneIndex = 3 });
+
+			// One clip of one frame, every bone at its bind pose.
+			AnimationClip clip{};
+			clip.firstSample = 0;
+			clip.frameCount  = 1;
+			clip.sampleRate  = 30.0f;
+			animations.clips.push_back(clip);
+			for (const Bone& bone : skeleton.bones) animations.samples.push_back(bone.bindPose);
+		}
+
+		[[nodiscard]] std::span<const BMesh>
+		Meshes() const
+		{
+			return std::span<const BMesh>(&mesh, 1);
+		}
+
+		/** Where the sole plane sits after whatever grounding has been applied. */
+		[[nodiscard]] float
+		SoleY() const
+		{
+			const std::vector<SolePlane> soles = solePlanes(Meshes(), skeleton, legs);
+			const std::vector<glm::mat4> pose  = poseModelTransforms(skeleton, animations, 0, 0);
+			return (pose[legs[0].ankleBoneIndex] * glm::vec4(soles[0].point, 1.0f)).y;
+		}
+
+	private:
+		void
+		AddVertex(const glm::vec3& position, uint16_t joint)
+		{
+			const auto write = [&](const auto& value) {
+				const auto* bytes = reinterpret_cast<const std::byte*>(&value);
+				mesh.vertexData.insert(mesh.vertexData.end(), bytes, bytes + sizeof(value));
+			};
+			write(position);
+			write(std::array<uint16_t, 4>{ { joint, 0, 0, 0 } });
+			write(std::array<uint16_t, 4>{ { 65535, 0, 0, 0 } });
+			++m_VertexCount;
+		}
+
+		void
+		Finish()
+		{
+			Submesh submesh{};
+			submesh.layout.attributeCount = 3;
+			submesh.layout.attributes[0]  = { VertexSemantic::kPosition,
+				                              VertexFormat::kFloat32x3,
+				                              0 };
+			submesh.layout.attributes[1]  = { VertexSemantic::kJoints0,
+				                              VertexFormat::kUint16x4,
+				                              12 };
+			submesh.layout.attributes[2]  = { VertexSemantic::kWeights0,
+				                              VertexFormat::kUnorm16x4,
+				                              20 };
+			submesh.layout.stride         = 28;
+			submesh.vertexCount           = m_VertexCount;
+			submesh.vertexByteOffset      = 0;
+			mesh.submeshes.push_back(submesh);
+			mesh.meshes.push_back({ .firstSubmesh = 0, .submeshCount = 1, .nameOffset = 0 });
+		}
+
+		uint32_t m_VertexCount = 0;
+	};
+}
+
+TEST_CASE("A rig that authored legs is grounded on its soles", "[skinning][grounding]")
+{
+	SECTION("without an avatar the belly is the floor, and the foot ends up above it")
+	{
+		LegRig rig;
+		REQUIRE(rig.SoleY() == Catch::Approx(LegRig::c_SoleY).margin(1e-5));
+
+		groundClips(rig.animations, rig.Meshes(), rig.skeleton);
+
+		// Moved by the belly, so the sole is left hanging by exactly the belly's clearance -- the
+		// gap a plant then preserves, because it measures departure from y = 0.
+		CHECK(rig.SoleY() == Catch::Approx(LegRig::c_SoleY - LegRig::c_BellyY).margin(1e-5));
+		CHECK(rig.SoleY() > 0.01f);
+	}
+
+	SECTION("with the legs given the sole is the floor, and the foot rests on it")
+	{
+		LegRig rig;
+		groundClips(rig.animations, rig.Meshes(), rig.skeleton, {}, rig.legs);
+
+		CHECK(rig.SoleY() == Catch::Approx(0.0f).margin(1e-5));
+	}
+
+	SECTION("an authored floor still overrules the soles")
+	{
+		LegRig                         rig;
+		const std::array<ClipFloor, 1> authored = { { ClipFloor{ .clip = "", .floor = 0.5f } } };
+
+		groundClips(rig.animations, rig.Meshes(), rig.skeleton, authored, rig.legs);
+
+		CHECK(rig.SoleY() == Catch::Approx(-0.5f).margin(1e-5));
 	}
 }

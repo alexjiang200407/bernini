@@ -16,9 +16,12 @@ namespace assetlib
 	 */
 
 	struct AnimationSet;
+	struct AvatarLegChain;
+	struct ResolvedAvatar;
 	struct BMesh;
 	struct Bounds;
 	struct ClipFloor;
+	struct PlantWeights;
 	struct Skeleton;
 	struct Submesh;
 
@@ -226,18 +229,29 @@ namespace assetlib
 	 * loose, so a character standing still leaves roughly a quarter of its frames unpruned, and
 	 * skinning all 170k vertices of each is where the walk used to go.
 	 *
+	 * **A rig that authored legs is floored by its soles, not by its lowest vertex.** Given `legs`,
+	 * the floor is the lowest a sole plane reaches over the clip -- what the rig stands *on* --
+	 * because the lowest vertex need not be a foot: on the test Dog it is not, and its `Idle` soles
+	 * then sit 1 and 4 cm above zero. A plant applies the ground's departure from this floor, so a
+	 * floor measured somewhere other than the feet is one every planted foot then hovers above.
+	 * Cheaper than the vertex walk rather than dearer -- a sole is one transform of one point per
+	 * leg per frame, and no vertex is skinned at all.
+	 *
 	 * @throws std::runtime_error for anything posedBounds refuses (a clip set cooked against
-	 *         another rig, a malformed vertex layout, a bad joint index).
+	 *         another rig, a malformed vertex layout, a bad joint index), or anything solePlanes
+	 *         refuses when `legs` is given.
 	 */
 	[[nodiscard]] std::vector<float>
 	measureClipFloors(
-		const AnimationSet&    animations,
-		std::span<const BMesh> meshes,
-		const Skeleton&        skeleton);
+		const AnimationSet&             animations,
+		std::span<const BMesh>          meshes,
+		const Skeleton&                 skeleton,
+		std::span<const AvatarLegChain> legs = {});
 
 	/**
 	 * Move each clip of `animations` down by the floor measureClipFloors reports, so the lowest `y`
-	 * `meshes` reach over it rests on 0, recording the move in `AnimationClip::groundOffset`.
+	 * `meshes` reach over it rests on 0 -- or, for a rig whose `legs` are given, so its lowest sole
+	 * does -- recording the move in `AnimationClip::groundOffset`.
 	 *
 	 * A clip named by `authored` is moved by that floor instead of the measured one -- the escape
 	 * hatch for a clip whose lowest frame is not the one standing on the ground. The Coyote's `Land`
@@ -258,10 +272,182 @@ namespace assetlib
 	 */
 	void
 	groundClips(
-		AnimationSet&              animations,
-		std::span<const BMesh>     meshes,
+		AnimationSet&                   animations,
+		std::span<const BMesh>          meshes,
+		const Skeleton&                 skeleton,
+		std::span<const ClipFloor>      authored = {},
+		std::span<const AvatarLegChain> legs     = {});
+
+	/**
+	 * How close a sole must sit to the grounded floor to count as planted. Two centimetres: below a
+	 * boot sole's own thickness, and above the millimetre a fitted plane and a quantized weight
+	 * disagree by.
+	 */
+	inline constexpr float c_PlantHeightEpsilon = 0.02f;
+
+	/**
+	 * How far a sole may drift from the clip's stance motion across the frame either side of it and
+	 * still count as planted, when the stance is still. Two centimetres over a 15th of a second at
+	 * the default rate -- a third of a metre a second, which is a shuffle rather than a stride.
+	 */
+	inline constexpr float c_PlantSlideEpsilon = 0.02f;
+
+	/**
+	 * How far a clip's lowest sole may sit above the ground it was rested on and still be standing
+	 * on it. groundClips rests a clip's lowest *vertex* on zero, and in a walk that is a toe tip
+	 * dipping through the floor mid-swing -- the standing foot then sits a few centimetres up, and
+	 * measuring against its own lowest point is what finds it. Ten centimetres, which a dipping
+	 * toe stays under and a foot hovering beside a seated or lying rig does not: past this, nothing
+	 * in the clip is standing, and no foot in it plants.
+	 */
+	inline constexpr float c_PlantFloorSlack = 0.10f;
+
+	/**
+	 * How far above the clip's lowest sole a foot's own floor may sit: a cocked pelvis lifts one
+	 * leg 3 cm (the Dog's idle), a knee held up lifts it 8 cm (the Dog's jump).
+	 */
+	inline constexpr float c_PlantFloorSpread = 0.05f;
+
+	/**
+	 * The same drift as a fraction of the stance motion, for a clip whose stance moves: the
+	 * standing foot of a fast clip drifts a fraction of its stride, and a fraction is what a rule
+	 * about sliding should read. A third, which the Coyote's run -- a tenth -- clears and a foot
+	 * dragged at half the stride does not.
+	 */
+	inline constexpr float c_PlantSlideFraction = 0.33f;
+
+	/**
+	 * How far above a foot's lowest vertex the sole reaches: the band of vertices `solePlanes`
+	 * fits its plane through. A centimetre -- a pad is flat to a few millimetres, and the next
+	 * thing up a standing leg is the instep, which is not.
+	 */
+	inline constexpr float c_SoleBand = 0.01f;
+
+	/**
+	 * Frames a planted run is ramped in and out over. Three, because one is a 33 ms step at 30 Hz
+	 * and reads as a pop; the foot is fully planted two frames into the run.
+	 */
+	inline constexpr uint32_t c_PlantRampFrames = 3;
+
+	/**
+	 * The plane one foot stands on, in its ankle's own space: a point on the sole and the outward
+	 * normal, which is the form `bgl::FootPlantLegDesc` takes.
+	 *
+	 * Ankle-local because that is the frame the plant solve turns the foot in -- see
+	 * docs/skinning.md. Model space would be a bind-pose fact the moment the ankle rotated.
+	 */
+	struct SolePlane
+	{
+		glm::vec3 point;
+		glm::vec3 normal;
+	};
+
+	/**
+	 * The sole plane of each of `chains`, fitted to the underside of the vertices `meshes` weight to
+	 * that leg's ankle and toe at bind pose.
+	 *
+	 * Derived and never authored: an authored plane per foot is a chore on 29 purchased rigs, and it
+	 * is the kind of chore that leaves a feature unused. It costs one pass over the vertex
+	 * influences, which a load already makes.
+	 *
+	 * A property of a (mesh, skeleton) pairing rather than of the rig alone -- the vertices are the
+	 * mesh's -- which is why it is measured here and lives in no container. Several meshes because a
+	 * rig drawn as a body and a separately imported boot has its sole on whichever carries the foot.
+	 *
+	 * Fitted as `y = ax + bz + d` over the band of vertices within `c_SoleBand` of the lowest --
+	 * what touches the ground -- rather than by a general least-squares plane over the foot: a
+	 * sole in bind pose is within a few degrees of horizontal, so this parameterisation is well
+	 * conditioned and needs no eigen solve, and a foot that stood vertically would have no sole to
+	 * speak of.
+	 *
+	 * A leg no mesh here has weight on gets the flat plane through the ankle -- the only answer that
+	 * does not invent one -- exactly as an unweighted clip measures a floor of 0.
+	 *
+	 * @throws std::runtime_error for anything decodeInfluences refuses (a malformed vertex layout, a
+	 *         joint index naming no bone), or if a chain names a bone outside `skeleton`.
+	 */
+	[[nodiscard]] std::vector<SolePlane>
+	solePlanes(
+		std::span<const BMesh>          meshes,
+		const Skeleton&                 skeleton,
+		std::span<const AvatarLegChain> chains);
+
+	/**
+	 * What a baked plant weight was measured against: the rig, the avatar resolved on it -- legs
+	 * and unplanted clips both -- and the geometry the soles were fitted to. A re-imported mesh, a
+	 * re-authored bind or an edited avatar changes it; renames and material swaps do not.
+	 *
+	 * The clips are deliberately absent: they live in the same file, so a clip edit rewrites the
+	 * weights beside it and a signature over them would only be a second way to say so.
+	 */
+	[[nodiscard]] uint64_t
+	plantWeightsSignature(
+		std::span<const BMesh> meshes,
+		const Skeleton&        skeleton,
+		const ResolvedAvatar&  avatar) noexcept;
+
+	/**
+	 * How planted each leg is in each frame of `animations`: one byte per leg per frame, frame-major
+	 * over the whole sample pool. The rule, and why each part is what it is, is in docs/skinning.md.
+	 *
+	 * Planted: sole within `c_PlantHeightEpsilon` of the foot's own floor, and moving with the
+	 * clip's stance (median motion of soles at floor level over the frame either side) within
+	 * `c_PlantSlideEpsilon` or `c_PlantSlideFraction` of it.
+	 * Floor: the lowest that sole gets in the clip. No floor when the clip's lowest sole is above
+	 * `c_PlantFloorSlack`, or the foot's own is more than `c_PlantFloorSpread` above the clip's.
+	 * Ramp: `c_PlantRampFrames` in and out of each run, not at a clip's edge.
+	 * Zero throughout: a clip the avatar names in `unplanted`.
+	 * Skipped: a clip whose first sample is off a frame boundary.
+	 *
+	 * @throws std::runtime_error for anything poseModelTransforms refuses -- above all a clip set
+	 *         cooked against another rig.
+	 */
+	[[nodiscard]] std::vector<uint8_t>
+	measurePlantWeights(
+		const AnimationSet&        animations,
 		const Skeleton&            skeleton,
-		std::span<const ClipFloor> authored = {});
+		const ResolvedAvatar&      avatar,
+		std::span<const SolePlane> soles);
+
+	/**
+	 * Measure the plant weights for `avatar` on `meshes` and store them on `animations`, keyed by
+	 * plantWeightsSignature -- what a cook runs after grounding, so no load has to.
+	 *
+	 * One measurement, not one per mesh: the legs are the rig's, so a rig drawn as several meshes
+	 * plants the same feet. The meshes are here for the soles alone.
+	 *
+	 * Whatever was stored is replaced: unlike a posed box, which is per mesh entry and so shares the
+	 * file with other meshes' boxes, a clip set has exactly one set of legs.
+	 *
+	 * A measurement the walk refuses leaves the file without weights rather than failing the cook:
+	 * the weights are derived data and a load measures, exactly as it would had this never run.
+	 */
+	void
+	bakePlantWeights(
+		AnimationSet&          animations,
+		std::span<const BMesh> meshes,
+		const Skeleton&        skeleton,
+		const ResolvedAvatar&  avatar);
+
+	/**
+	 * The weights bakePlantWeights stored for this pairing, or nullopt where the `.banim` carries
+	 * none -- never baked, a different rig or mesh, or a source that changed since. The caller
+	 * measures those, and weights that are there are trusted verbatim.
+	 *
+	 * The leg count is checked against `avatar` as well as the signature: a signature match with a
+	 * different count would index the wrong leg, and reading past the end is not the failure to
+	 * settle for.
+	 *
+	 * Costs the same whole-vertex-pool hash `findPosedBounds` pays, so a load asking both questions
+	 * hashes the same bytes twice -- ~30 ms a rig, measured in docs/skinning.md. Worth knowing
+	 * before putting either inside a per-entry loop.
+	 */
+	[[nodiscard]] std::optional<std::vector<uint8_t>>
+	findPlantWeights(
+		const AnimationSet&    animations,
+		std::span<const BMesh> meshes,
+		const Skeleton&        skeleton,
+		const ResolvedAvatar&  avatar);
 
 	/** One vertex after skinning, in model space. */
 	struct SkinnedVertex

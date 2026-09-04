@@ -6,6 +6,7 @@
 #include "Render/Renderer.h"
 #include "Windows/AnimationEditor/animation_bindings.h"
 #include "Windows/AnimationEditor/animation_draws.h"
+#include "Windows/AnimationEditor/ground_slope.h"
 #include "Windows/MaterialEditor/material_io.h"
 #include "util/mesh_drop.h"
 #include "util/mime_files.h"
@@ -17,12 +18,14 @@
 #include <QMouseEvent>
 #include <QPushButton>
 #include <QResizeEvent>
+#include <QShowEvent>
 #include <QWheelEvent>
 
 #include <assetlib/AssetStore.h>
 #include <assetlib/skinning.h>
 #include <assetlib_structs/BMesh.h>
 #include <assetlib_structs/Bounds.h>
+#include <core/glm.h>
 #include <gamelib/AssetManager.h>
 
 namespace
@@ -47,19 +50,145 @@ AnimationPreviewWindow::AnimationPreviewWindow(
 	m_Environment.configured = std::move(env);
 
 	GetRenderer()->Invoke([&] {
+		bgl::IScene* scene = GetPreviewScene();
+
 		editor::BindEnvironment(
-			GetPreviewScene(),
+			scene,
 			GetPreviewView(),
 			m_Environment,
 			m_Environment.configured.environmentMap,
 			m_Environment.configured.dataRoot,
 			"AnimationPreview");
+
+		// Matte and mid-grey, so a sole meeting it reads against it rather than into it. Wide
+		// enough that a clip with root motion does not walk off the edge.
+		m_GroundMaterial = scene->CreatePbrMaterial(
+			{ .baseColorFactor = glm::vec4(0.45f, 0.45f, 0.45f, 1.0f),
+		      .metallicFactor  = 0.0f,
+		      .roughnessFactor = 0.9f });
+		m_GroundGeom = scene->AddPlaneGeom(1, 1, 40.0f, 40.0f, m_GroundMaterial);
 	});
 
 	UpdateCamera();
 }
 
-AnimationPreviewWindow::~AnimationPreviewWindow() { ClearGeometry(); }
+AnimationPreviewWindow::~AnimationPreviewWindow()
+{
+	ClearGeometry();
+
+	GetRenderer()->Invoke([&] {
+		try
+		{
+			if (m_GroundGeom.IsValid())
+				GetPreviewScene()->DeleteGeom(m_GroundGeom);
+			if (m_GroundMaterial.IsValid())
+				GetPreviewScene()->DeleteMaterial(m_GroundMaterial);
+		}
+		catch (const std::exception& e)
+		{
+			qWarning("AnimationPreview: failed to delete the floor: %s", e.what());
+		}
+	});
+}
+
+void
+AnimationPreviewWindow::SetGroundSlope(const float degrees)
+{
+	m_SlopeDegrees = degrees;
+	ReplaceGround();
+}
+
+void
+AnimationPreviewWindow::SetGroundHeading(const float degrees)
+{
+	m_HeadingDegrees = degrees;
+	ReplaceGround();
+}
+
+void
+AnimationPreviewWindow::SetFloorVisible(const bool visible)
+{
+	m_FloorVisible = visible;
+	ReplaceGround();
+}
+
+void
+AnimationPreviewWindow::SetFootPlanting(const bool enabled)
+{
+	m_FootPlanting = enabled;
+	ReplaceGround();
+}
+
+void
+AnimationPreviewWindow::ReplaceGround()
+{
+	if (!m_GroundPlaced || !isVisible())
+		return;
+
+	GetRenderer()->Invoke([&] {
+		try
+		{
+			PlaceGround();
+		}
+		catch (const std::exception& e)
+		{
+			qWarning("AnimationPreview: failed to place the ground: %s", e.what());
+		}
+	});
+}
+
+void
+AnimationPreviewWindow::showEvent(QShowEvent* event)
+{
+	RenderTargetWindow::showEvent(event);
+
+	// The ground is the scene's, and the scene is shared with the Level Editor: a slope set here
+	// is a slope every skinned instance anywhere in it plants against. So it stands only while
+	// this panel is on screen, and goes flat the moment it is not.
+	ReplaceGround();
+}
+
+void
+AnimationPreviewWindow::hideEvent(QHideEvent* event)
+{
+	if (m_GroundPlaced)
+		GetRenderer()->Invoke([&] {
+			GetPreviewScene()->SetGround({});
+			GetPreviewScene()->SetFootPlanting(true);
+		});
+
+	RenderTargetWindow::hideEvent(event);
+}
+
+void
+AnimationPreviewWindow::PlaceGround()
+{
+	bgl::ISceneView* view = GetPreviewView();
+
+	for (bgl::MeshInstanceHandle& instance : m_GroundInstances)
+	{
+		if (instance.IsValid())
+			view->DeleteMeshInstance(instance);
+		instance = bgl::MeshInstanceHandle();
+	}
+
+	GetPreviewScene()->SetGround(editor::GroundForSlope(m_SlopeDegrees, m_HeadingDegrees));
+	GetPreviewScene()->SetFootPlanting(m_FootPlanting);
+	m_GroundPlaced = true;
+
+	if (m_FloorVisible)
+	{
+		const glm::mat4 floor = editor::FloorTransformForSlope(m_SlopeDegrees, m_HeadingDegrees);
+
+		// The second is the same floor turned to face the other way, so dropping the camera to the
+		// floor -- where a contact is actually readable -- does not make it disappear.
+		const glm::mat4 flip =
+			glm::rotate(glm::mat4(1.0f), glm::radians(180.0f), glm::vec3(1.0f, 0.0f, 0.0f));
+
+		m_GroundInstances[0] = view->CreateStaticMeshInstance(m_GroundGeom, floor);
+		m_GroundInstances[1] = view->CreateStaticMeshInstance(m_GroundGeom, floor * flip);
+	}
+}
 
 void
 AnimationPreviewWindow::SetAssets(game::AssetManager* assets)
@@ -87,6 +216,23 @@ AnimationPreviewWindow::Clear()
 void
 AnimationPreviewWindow::ClearGeometry()
 {
+	if (m_GroundPlaced)
+	{
+		// The floor leaves with the rig, and the ground it tilted goes back to flat: the scene is
+		// shared, and nothing else in it should stand on a slope this panel set.
+		GetRenderer()->Invoke([&] {
+			for (bgl::MeshInstanceHandle& instance : m_GroundInstances)
+			{
+				if (instance.IsValid())
+					GetPreviewView()->DeleteMeshInstance(instance);
+				instance = bgl::MeshInstanceHandle();
+			}
+			m_GroundPlaced = false;
+			GetPreviewScene()->SetGround({});
+			GetPreviewScene()->SetFootPlanting(true);
+		});
+	}
+
 	if (m_Assets != nullptr &&
 	    (!m_Instances.empty() || !m_Geoms.empty() || !m_AnimatedDraws.empty()))
 	{
@@ -365,6 +511,11 @@ AnimationPreviewWindow::LoadMesh(
 								aabbMin,
 								aabbMax);
 					}
+
+					// Under the rig, at whatever slope the panel last set: the floor is part of what
+					// a rig is previewed against, and a planted foot only means something with
+					// ground to meet.
+					PlaceGround();
 
 					out.center = (aabbMin + aabbMax) * 0.5f;
 					out.radius = std::max(0.001f, glm::length(aabbMax - aabbMin) * 0.5f);

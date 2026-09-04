@@ -6,6 +6,7 @@
 #include "resource/ResourceManager.h"
 #include "scene/Scene.h"
 #include "scene/SceneView.h"
+#include "util/PaletteReadback.h"
 #include "util/TestEnvironment.h"
 #include "util/TestOptions.h"
 #include <assetlib_structs/Bounds.h>
@@ -170,106 +171,6 @@ namespace
 		return mesh;
 	}
 
-	/**
-	 * The palette as the pose pass left it: `cFloat4sPerBone` rows a bone, each row of a skinning
-	 * matrix as the shader indexed it, so `dot(row[i], float4(p, 1))` is component i of `p` skinned.
-	 */
-	struct Palette
-	{
-		std::vector<glm::vec4> rows;
-
-		[[nodiscard]] glm::vec3
-		Apply(uint32_t bone, const glm::vec3& point) const
-		{
-			const glm::vec4 p(point, 1.0f);
-			const size_t    base = size_t(bone) * bgl::idl::cFloat4sPerBone;
-			return { glm::dot(rows[base + 0], p),
-				     glm::dot(rows[base + 1], p),
-				     glm::dot(rows[base + 2], p) };
-		}
-	};
-
-	/** Copies `float4Count` float4s out of the view's palette arena, starting at `base`. */
-	Palette
-	ReadPalette(
-		bgl::GraphicsBase*    gfxBase,
-		const bgl::SceneView* view,
-		uint32_t              base,
-		uint32_t              float4Count)
-	{
-		auto resourceManager = gfxBase->GetResourceManagerCpy();
-		auto device          = gfxBase->GetDevice();
-
-		auto cmdListDesc = bgl::CommandListDesc();
-		cmdListDesc.type = bgl::QueueType::kGraphics;
-
-		// Drain the renderer first: this copy rides its own queue, which nothing orders against the
-		// frame that wrote the palette.
-		gfxBase->WaitIdle();
-
-		auto cmdAllocator = device->CreateCommandAllocator();
-		auto cmdList      = device->CreateCommandList(cmdListDesc, cmdAllocator, resourceManager);
-		auto cmdQueue     = device->CreateCommandQueue(bgl::QueueType::kGraphics);
-
-		cmdAllocator->ResetAllocator();
-
-		const bgl::BufferHandle palettes = view->GetPalettes().GetBufferHandle();
-
-		// The whole arena, not just the slice wanted: CopyBufferToReadback copies the entire source
-		// buffer, so a destination sized to the slice overruns it -- silently, until GPU validation
-		// is on.
-		auto rbDesc      = bgl::ReadbackBufferDesc();
-		rbDesc.byteSize  = uint64_t(view->GetPalettes().Capacity()) * sizeof(glm::vec4);
-		rbDesc.debugName = "Bone Palette Readback";
-		auto rb          = resourceManager->CreateReadbackBuffer(rbDesc);
-
-		cmdList->Open(cmdQueue, cmdAllocator);
-
-		// The pass left it in UAV state; a copy needs it as a source.
-		auto barrier = bgl::BufferBarrierDesc();
-		barrier.AddSyncBefore(bgl::BarrierSyncFlag::kComputeShader)
-			.AddAccessBefore(bgl::BarrierAccessFlag::kUnorderedAccess)
-			.AddSyncAfter(bgl::BarrierSyncFlag::kCopy)
-			.AddAccessAfter(bgl::BarrierAccessFlag::kCopySource);
-		cmdList->Barrier(palettes, barrier);
-
-		cmdList->CopyBufferToReadback(rb, palettes);
-		cmdList->Close();
-
-		auto fence = cmdQueue->ExecuteCommandList(cmdList);
-		cmdQueue->WaitForFenceCPUBlocking(fence);
-
-		const auto* mapped = static_cast<const glm::vec4*>(resourceManager->MapReadback(rb));
-		REQUIRE(mapped != nullptr);
-
-		auto palette = Palette();
-		palette.rows.assign(mapped + base, mapped + base + float4Count);
-
-		resourceManager->UnmapReadback(rb);
-		return palette;
-	}
-
-	/** Where `instance`'s palette begins. Never assume 0: the arena reserves element 0 as its null. */
-	uint32_t
-	PaletteBaseOf(bgl::SceneView* view, bgl::MeshInstanceHandle instance)
-	{
-		auto& meshBuffer = view->GetMeshBuffer();
-		auto& playback   = view->GetPlaybackArena();
-
-		const bgl::idl::MeshInstance& mesh = meshBuffer.AtIndex(instance.handle.index);
-		REQUIRE_FALSE(mesh.playback.Null());
-
-		return playback.GetPayloadAt<bgl::idl::SkinnedState>(mesh.playback.byteOffset)
-		    .palette.offsetStart;
-	}
-
-	void
-	CheckNear(const glm::vec3& actual, const glm::vec3& expected)
-	{
-		CHECK(actual.x == Catch::Approx(expected.x).margin(1e-4));
-		CHECK(actual.y == Catch::Approx(expected.y).margin(1e-4));
-		CHECK(actual.z == Catch::Approx(expected.z).margin(1e-4));
-	}
 }
 
 // Where the render suite proves a deep rig draws right, this proves every bone of one is right --
@@ -305,7 +206,11 @@ TEST_CASE("a rig far past the old ceiling poses every bone", "[skinned][pose][re
 	sceneDesc.initialPbrMaterials         = 4;
 
 	auto scene = gfx->CreateScene(sceneDesc);
-	auto view  = gfx->CreateSceneView(scene, 4);
+
+	// Tilted and lowered: a rig with no legs must pose identically on any ground.
+	scene->SetGround({ glm::vec3(0.0f, -0.3f, 0.0f), glm::vec3(0.2f, 1.0f, 0.1f) });
+
+	auto view = gfx->CreateSceneView(scene, 4);
 
 	bgl::test::ApplyEnvironment(scene.Get(), view.Get());
 
@@ -338,11 +243,14 @@ TEST_CASE("a rig far past the old ceiling poses every bone", "[skinned][pose][re
 			view->CreateSkinnedMeshInstance(geom, glm::mat4(1.0f), { 0, 0.0f, 0.0f });
 		gfx->DrawFrame(target, job);
 
-		const Palette palette =
-			ReadPalette(gfxBase, viewRaw, PaletteBaseOf(viewRaw, instance), float4sPerPose);
+		const bgl::test::Palette palette = bgl::test::ReadPalette(
+			gfxBase,
+			viewRaw,
+			bgl::test::PaletteBaseOf(viewRaw, instance),
+			float4sPerPose);
 
 		for (uint32_t bone = 0; bone < c_DeepBones; ++bone)
-			CheckNear(
+			bgl::test::CheckNear(
 				palette.Apply(bone, glm::vec3(1.0f, 2.0f, 3.0f)),
 				glm::vec3(1.0f, 2.0f, 3.0f));
 	}
@@ -353,11 +261,14 @@ TEST_CASE("a rig far past the old ceiling poses every bone", "[skinned][pose][re
 			view->CreateSkinnedMeshInstance(geom, glm::mat4(1.0f), { 0, 1.0f, 0.0f });
 		gfx->DrawFrame(target, job);
 
-		const Palette palette =
-			ReadPalette(gfxBase, viewRaw, PaletteBaseOf(viewRaw, instance), float4sPerPose);
+		const bgl::test::Palette palette = bgl::test::ReadPalette(
+			gfxBase,
+			viewRaw,
+			bgl::test::PaletteBaseOf(viewRaw, instance),
+			float4sPerPose);
 
 		// Bone 0 is the root and never moves.
-		CheckNear(palette.Apply(0, glm::vec3(0.0f)), glm::vec3(0.0f));
+		bgl::test::CheckNear(palette.Apply(0, glm::vec3(0.0f)), glm::vec3(0.0f));
 
 		// Every bone below the swing lands its own origin on (1,1,0), whatever its depth: the chain
 		// continues along the rotated axis, and each bone's inverse bind takes exactly its own bind
@@ -366,7 +277,7 @@ TEST_CASE("a rig far past the old ceiling poses every bone", "[skinned][pose][re
 		for (uint32_t bone = 1; bone < c_DeepBones; ++bone)
 		{
 			INFO("bone " << bone);
-			CheckNear(palette.Apply(bone, glm::vec3(0.0f)), glm::vec3(1.0f, 1.0f, 0.0f));
+			bgl::test::CheckNear(palette.Apply(bone, glm::vec3(0.0f)), glm::vec3(1.0f, 1.0f, 0.0f));
 		}
 	}
 }
@@ -399,7 +310,11 @@ TEST_CASE("the pose pass writes the palette a rig's hierarchy implies", "[skinne
 	sceneDesc.initialPbrMaterials         = 4;
 
 	auto scene = gfx->CreateScene(sceneDesc);
-	auto view  = gfx->CreateSceneView(scene, 4);
+
+	// Tilted and lowered: a rig with no legs must pose identically on any ground.
+	scene->SetGround({ glm::vec3(0.0f, -0.3f, 0.0f), glm::vec3(0.2f, 1.0f, 0.1f) });
+
+	auto view = gfx->CreateSceneView(scene, 4);
 
 	bgl::test::ApplyEnvironment(scene.Get(), view.Get());
 
@@ -449,15 +364,18 @@ TEST_CASE("the pose pass writes the palette a rig's hierarchy implies", "[skinne
 			view->CreateSkinnedMeshInstance(geom, glm::mat4(1.0f), { 0, 0.0f, 0.0f });
 		gfx->DrawFrame(target, job);
 
-		const Palette palette =
-			ReadPalette(gfxBase, viewRaw, PaletteBaseOf(viewRaw, instance), float4sPerPose);
+		const bgl::test::Palette palette = bgl::test::ReadPalette(
+			gfxBase,
+			viewRaw,
+			bgl::test::PaletteBaseOf(viewRaw, instance),
+			float4sPerPose);
 
 		for (uint32_t bone = 0; bone < c_BoneCount; ++bone)
 		{
-			CheckNear(
+			bgl::test::CheckNear(
 				palette.Apply(bone, glm::vec3(0.0f, float(bone), 0.0f)),
 				glm::vec3(0.0f, float(bone), 0.0f));
-			CheckNear(
+			bgl::test::CheckNear(
 				palette.Apply(bone, glm::vec3(1.0f, 2.0f, 3.0f)),
 				glm::vec3(1.0f, 2.0f, 3.0f));
 		}
@@ -470,23 +388,77 @@ TEST_CASE("the pose pass writes the palette a rig's hierarchy implies", "[skinne
 			view->CreateSkinnedMeshInstance(geom, glm::mat4(1.0f), { 0, 1.0f, 0.0f });
 		gfx->DrawFrame(target, job);
 
-		const Palette palette =
-			ReadPalette(gfxBase, viewRaw, PaletteBaseOf(viewRaw, instance), float4sPerPose);
+		const bgl::test::Palette palette = bgl::test::ReadPalette(
+			gfxBase,
+			viewRaw,
+			bgl::test::PaletteBaseOf(viewRaw, instance),
+			float4sPerPose);
 
 		// Bone 0 never moves: it is the root and its own local pose is unchanged.
-		CheckNear(palette.Apply(0, glm::vec3(0.0f, 0.0f, 0.0f)), glm::vec3(0.0f));
+		bgl::test::CheckNear(palette.Apply(0, glm::vec3(0.0f, 0.0f, 0.0f)), glm::vec3(0.0f));
 
 		// Bone 1 rotates about its own origin, so its bind position is a fixed point -- and a point
 		// one unit above it swings onto -X.
-		CheckNear(palette.Apply(1, glm::vec3(0.0f, 1.0f, 0.0f)), glm::vec3(0.0f, 1.0f, 0.0f));
-		CheckNear(palette.Apply(1, glm::vec3(0.0f, 2.0f, 0.0f)), glm::vec3(-1.0f, 1.0f, 0.0f));
+		bgl::test::CheckNear(
+			palette.Apply(1, glm::vec3(0.0f, 1.0f, 0.0f)),
+			glm::vec3(0.0f, 1.0f, 0.0f));
+		bgl::test::CheckNear(
+			palette.Apply(1, glm::vec3(0.0f, 2.0f, 0.0f)),
+			glm::vec3(-1.0f, 1.0f, 0.0f));
 
 		// Bone 2 has no local rotation of its own: everything it does here it inherited through the
 		// walk. Its own base sits one unit above bone 1's pivot and its tip two, so the swing takes
 		// them onto -X at those distances -- which is also the check that the walk composed exactly
 		// once. Composing twice would double the offset; skipping the level would leave both at +Y.
-		CheckNear(palette.Apply(2, glm::vec3(0.0f, 2.0f, 0.0f)), glm::vec3(-1.0f, 1.0f, 0.0f));
-		CheckNear(palette.Apply(2, glm::vec3(0.0f, 3.0f, 0.0f)), glm::vec3(-2.0f, 1.0f, 0.0f));
+		bgl::test::CheckNear(
+			palette.Apply(2, glm::vec3(0.0f, 2.0f, 0.0f)),
+			glm::vec3(-1.0f, 1.0f, 0.0f));
+		bgl::test::CheckNear(
+			palette.Apply(2, glm::vec3(0.0f, 3.0f, 0.0f)),
+			glm::vec3(-2.0f, 1.0f, 0.0f));
+	}
+
+	SECTION("two placements of one geom pose from their own records")
+	{
+		// The pass's work list names mesh instances, so each workgroup reaches its playback record
+		// through the placement it was given. A list naming the wrong one, or a lookup that lost
+		// the pairing, poses both instances from whichever record it landed on -- and the two here
+		// are asked for different frames of the same clip, so that swap is visible.
+		//
+		// They stand in different places, which must not reach the palette at all: a bone matrix is
+		// model space, and where the instance stands is applied downstream in the mesh shader.
+		const auto held = view->CreateSkinnedMeshInstance(
+			geom,
+			glm::translate(glm::mat4(1.0f), glm::vec3(-3.0f, 0.0f, 0.0f)),
+			{ 0, 0.0f, 0.0f });
+		const auto swung = view->CreateSkinnedMeshInstance(
+			geom,
+			glm::translate(glm::mat4(1.0f), glm::vec3(3.0f, 0.0f, 0.0f)),
+			{ 0, 1.0f, 0.0f });
+
+		gfx->DrawFrame(target, job);
+
+		const bgl::test::Palette heldPalette = bgl::test::ReadPalette(
+			gfxBase,
+			viewRaw,
+			bgl::test::PaletteBaseOf(viewRaw, held),
+			float4sPerPose);
+		const bgl::test::Palette swungPalette = bgl::test::ReadPalette(
+			gfxBase,
+			viewRaw,
+			bgl::test::PaletteBaseOf(viewRaw, swung),
+			float4sPerPose);
+
+		for (uint32_t bone = 0; bone < c_BoneCount; ++bone)
+		{
+			bgl::test::CheckNear(
+				heldPalette.Apply(bone, glm::vec3(1.0f, 2.0f, 3.0f)),
+				glm::vec3(1.0f, 2.0f, 3.0f));
+		}
+
+		bgl::test::CheckNear(
+			swungPalette.Apply(2, glm::vec3(0.0f, 3.0f, 0.0f)),
+			glm::vec3(-2.0f, 1.0f, 0.0f));
 	}
 
 	SECTION("a fractional frame blends the two it falls between")
@@ -497,14 +469,19 @@ TEST_CASE("the pose pass writes the palette a rig's hierarchy implies", "[skinne
 			view->CreateSkinnedMeshInstance(geom, glm::mat4(1.0f), { 0, 0.5f, 0.0f });
 		gfx->DrawFrame(target, job);
 
-		const Palette palette =
-			ReadPalette(gfxBase, viewRaw, PaletteBaseOf(viewRaw, instance), float4sPerPose);
+		const bgl::test::Palette palette = bgl::test::ReadPalette(
+			gfxBase,
+			viewRaw,
+			bgl::test::PaletteBaseOf(viewRaw, instance),
+			float4sPerPose);
 
 		const float c = std::cos(glm::radians(45.0f));
 		const float s = std::sin(glm::radians(45.0f));
 
 		// (0,1,0) relative to bone 1's origin, rotated 45 degrees about +Z.
-		CheckNear(palette.Apply(1, glm::vec3(0.0f, 2.0f, 0.0f)), glm::vec3(-s, 1.0f + c, 0.0f));
+		bgl::test::CheckNear(
+			palette.Apply(1, glm::vec3(0.0f, 2.0f, 0.0f)),
+			glm::vec3(-s, 1.0f + c, 0.0f));
 	}
 
 	SECTION("growing the arena leaves every live instance's palette intact")
@@ -532,13 +509,17 @@ TEST_CASE("the pose pass writes the palette a rig's hierarchy implies", "[skinne
 		// it are covered.
 		for (const uint32_t which : { 0u, c_Instances - 1 })
 		{
-			const Palette palette = ReadPalette(
+			const bgl::test::Palette palette = bgl::test::ReadPalette(
 				gfxBase,
 				viewRaw,
-				PaletteBaseOf(viewRaw, handles[which]),
+				bgl::test::PaletteBaseOf(viewRaw, handles[which]),
 				float4sPerPose);
-			CheckNear(palette.Apply(1, glm::vec3(0.0f, 2.0f, 0.0f)), glm::vec3(-1.0f, 1.0f, 0.0f));
-			CheckNear(palette.Apply(2, glm::vec3(0.0f, 3.0f, 0.0f)), glm::vec3(-2.0f, 1.0f, 0.0f));
+			bgl::test::CheckNear(
+				palette.Apply(1, glm::vec3(0.0f, 2.0f, 0.0f)),
+				glm::vec3(-1.0f, 1.0f, 0.0f));
+			bgl::test::CheckNear(
+				palette.Apply(2, glm::vec3(0.0f, 3.0f, 0.0f)),
+				glm::vec3(-2.0f, 1.0f, 0.0f));
 		}
 	}
 
@@ -560,13 +541,18 @@ TEST_CASE("the pose pass writes the palette a rig's hierarchy implies", "[skinne
 			view->CreateSkinnedMeshInstance(looping, glm::mat4(1.0f), { 0, 2.5f, 0.0f });
 		gfx->DrawFrame(target, job);
 
-		const Palette palette =
-			ReadPalette(gfxBase, viewRaw, PaletteBaseOf(viewRaw, instance), float4sPerPose);
+		const bgl::test::Palette palette = bgl::test::ReadPalette(
+			gfxBase,
+			viewRaw,
+			bgl::test::PaletteBaseOf(viewRaw, instance),
+			float4sPerPose);
 
 		const float c = std::cos(glm::radians(45.0f));
 		const float s = std::sin(glm::radians(45.0f));
 
-		CheckNear(palette.Apply(1, glm::vec3(0.0f, 2.0f, 0.0f)), glm::vec3(-s, 1.0f + c, 0.0f));
+		bgl::test::CheckNear(
+			palette.Apply(1, glm::vec3(0.0f, 2.0f, 0.0f)),
+			glm::vec3(-s, 1.0f + c, 0.0f));
 	}
 
 	SECTION("a whole cycle returns a loop to its first frame")
@@ -585,12 +571,17 @@ TEST_CASE("the pose pass writes the palette a rig's hierarchy implies", "[skinne
 			view->CreateSkinnedMeshInstance(looping, glm::mat4(1.0f), { 0, 2.0f, 0.0f });
 		gfx->DrawFrame(target, job);
 
-		const Palette palette =
-			ReadPalette(gfxBase, viewRaw, PaletteBaseOf(viewRaw, instance), float4sPerPose);
+		const bgl::test::Palette palette = bgl::test::ReadPalette(
+			gfxBase,
+			viewRaw,
+			bgl::test::PaletteBaseOf(viewRaw, instance),
+			float4sPerPose);
 
 		for (uint32_t b = 0; b < c_BoneCount; ++b)
 		{
-			CheckNear(palette.Apply(b, glm::vec3(1.0f, 2.0f, 3.0f)), glm::vec3(1.0f, 2.0f, 3.0f));
+			bgl::test::CheckNear(
+				palette.Apply(b, glm::vec3(1.0f, 2.0f, 3.0f)),
+				glm::vec3(1.0f, 2.0f, 3.0f));
 		}
 	}
 
@@ -611,15 +602,22 @@ TEST_CASE("the pose pass writes the palette a rig's hierarchy implies", "[skinne
 		job.time = 1.0f / c_SampleRate;
 		gfx->DrawFrame(target, job);
 
-		const Palette both =
-			ReadPalette(gfxBase, viewRaw, PaletteBaseOf(viewRaw, instance), float4sPerPose * 2);
+		const bgl::test::Palette both = bgl::test::ReadPalette(
+			gfxBase,
+			viewRaw,
+			bgl::test::PaletteBaseOf(viewRaw, instance),
+			float4sPerPose * 2);
 
 		// Current half: bone 1 swung.
-		CheckNear(both.Apply(1, glm::vec3(0.0f, 2.0f, 0.0f)), glm::vec3(-1.0f, 1.0f, 0.0f));
+		bgl::test::CheckNear(
+			both.Apply(1, glm::vec3(0.0f, 2.0f, 0.0f)),
+			glm::vec3(-1.0f, 1.0f, 0.0f));
 
 		// Previous half, one pose further in: still the bind pose, so identity.
-		auto previous = Palette();
+		auto previous = bgl::test::Palette();
 		previous.rows.assign(both.rows.begin() + float4sPerPose, both.rows.end());
-		CheckNear(previous.Apply(1, glm::vec3(0.0f, 2.0f, 0.0f)), glm::vec3(0.0f, 2.0f, 0.0f));
+		bgl::test::CheckNear(
+			previous.Apply(1, glm::vec3(0.0f, 2.0f, 0.0f)),
+			glm::vec3(0.0f, 2.0f, 0.0f));
 	}
 }

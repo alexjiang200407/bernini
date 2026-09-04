@@ -13,6 +13,7 @@
 #include <assetlib_structs/Skeleton.h>
 #include <bgl/IGraphics.h>
 #include <catch2/catch_approx.hpp>
+#include <catch2/matchers/catch_matchers_string.hpp>
 
 // Acquiring a rig as skinned geometry. There is no bake and no freshness rule -- the containers are
 // the source -- so what this pins is the sharing, the release, and the one check bgl cannot make for
@@ -516,4 +517,110 @@ TEST_CASE("a two-slot unit draws off one rig's bone anim table", "[skinned][acqu
 	}
 
 	CHECK(bgl::test::FrameDelta(bodyOnlyPng, tablePng, 0, 0, 256, 256) > 1e-3f);
+}
+
+// The plant half of the acquire: the avatar found by convention beside the rig, its legs handed to
+// bgl with a sole fitted off the mesh, and the weights read off the .banim or measured. Observed
+// through the public API alone -- gamelib cannot open bgl's scene -- so what bgl *does* with the
+// desc is the evidence: a chain it cannot walk is refused naming the bone, and weights of the
+// wrong length are refused, and neither happens when the desc is right.
+
+namespace
+{
+	using game::test::WriteLegAvatar;
+	using game::test::WriteLegRig;
+
+	game::AssetManager::SkinnedMesh
+	AcquireLeg(game::AssetManager& assets)
+	{
+		return assets.AcquireSkinnedMesh(
+			"Derived/Meshes/leg.bmesh",
+			"Derived/Animations/leg.banim");
+	}
+}
+
+TEST_CASE("a rig with no avatar acquires as before", "[skinned][acquire][skinnedacquire]")
+{
+	DataRoot root("bernini_skinned_acquire_no_avatar");
+	WriteLegRig(root.path);
+
+	auto gfx = bgl::CreateGraphics(HeadlessOptions());
+	REQUIRE(gfx != nullptr);
+
+	auto scene  = gfx->CreateScene(bgl::SceneDesc());
+	auto assets = game::AssetManager(scene, root.path);
+
+	const auto leg = AcquireLeg(assets);
+	REQUIRE(leg.geom.IsValid());
+	assets.ReleaseGeom(leg.geom);
+}
+
+TEST_CASE("a rig with an avatar hands bgl its legs", "[skinned][acquire][skinnedacquire]")
+{
+	DataRoot root("bernini_skinned_acquire_avatar");
+	WriteLegRig(root.path);
+
+	auto gfx = bgl::CreateGraphics(HeadlessOptions());
+	REQUIRE(gfx != nullptr);
+
+	auto scene  = gfx->CreateScene(bgl::SceneDesc());
+	auto assets = game::AssetManager(scene, root.path);
+
+	SECTION("a direct chain is accepted")
+	{
+		WriteLegAvatar(root.path, { { "hip", "knee", "ankle", "toe" } });
+
+		const auto leg = AcquireLeg(assets);
+		REQUIRE(leg.geom.IsValid());
+		assets.ReleaseGeom(leg.geom);
+	}
+
+	SECTION("a chain the pose pass cannot walk is refused by bgl, naming the bone")
+	{
+		// hip -> ankle skips the knee. Only bgl refuses this -- resolveAvatar deliberately does
+		// not -- so a refusal here is the proof the legs reached it.
+		WriteLegAvatar(root.path, { { "hip", "ankle", "toe", "toe" } });
+
+		CHECK_THROWS_WITH(AcquireLeg(assets), Catch::Matchers::ContainsSubstring("'ankle'"));
+	}
+
+	SECTION("an avatar naming a bone the rig lacks plants nothing rather than failing the rig")
+	{
+		WriteLegAvatar(root.path, { { "hip", "knee", "ankle", "hoof" } });
+
+		const auto leg = AcquireLeg(assets);
+		REQUIRE(leg.geom.IsValid());
+		assets.ReleaseGeom(leg.geom);
+	}
+}
+
+TEST_CASE(
+	"a stale plant signature is measured rather than trusted",
+	"[skinned][acquire][skinnedacquire]")
+{
+	DataRoot root("bernini_skinned_acquire_stale_plant");
+	WriteLegRig(root.path);
+	WriteLegAvatar(root.path, { { "hip", "knee", "ankle", "toe" } });
+
+	// Weights that were measured against something else -- one leg, but a signature nothing here
+	// produces, and a byte count that is not two frames of one leg. Trusted, bgl would refuse
+	// the count; measured, the count is right and the rig stands.
+	{
+		const auto store      = assetlib::AssetStore(root.path);
+		auto       animations = store.Load<assetlib::AnimationSet>("Derived/Animations/leg.banim");
+		animations.plantWeights.signature = 0xDEADBEEFull;
+		animations.plantWeights.legCount  = 1;
+		animations.plantWeights.weights   = { 255, 255, 255 };
+		store.Save(animations, "Derived/Animations/leg.banim");
+	}
+
+	auto gfx = bgl::CreateGraphics(HeadlessOptions());
+	REQUIRE(gfx != nullptr);
+
+	auto scene  = gfx->CreateScene(bgl::SceneDesc());
+	auto assets = game::AssetManager(scene, root.path);
+
+	const auto leg = AcquireLeg(assets);
+	REQUIRE(leg.geom.IsValid());
+	assets.ReleaseGeom(leg.geom);
 }

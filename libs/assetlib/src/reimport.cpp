@@ -16,6 +16,7 @@
 
 #include "cook_threads.h"
 #include "import_bounds.h"
+#include "plant_bake.h"
 #include "progress_report.h"
 #include "ref_paths.h"
 #include "regen_group.h"
@@ -132,8 +133,18 @@ namespace assetlib
 					BMesh swept = toBMesh(group.import);
 					generateTangents(swept);
 					swept.skeleton = document.skeleton;
-					groundClips(clips, std::span<const BMesh>(&swept, 1), rig, document.clipFloors);
+					groundClipsForRig(
+						store.GetFiles(),
+						clips,
+						std::span<const BMesh>(&swept, 1),
+						rig,
+						document.clipFloors);
 					bakePosedBounds(clips, swept, rig);
+					bakePlantWeightsForRig(
+						store.GetFiles(),
+						clips,
+						std::span<const BMesh>(&swept, 1),
+						rig);
 				}
 
 				store.Save(clips, key);
@@ -148,6 +159,7 @@ namespace assetlib
 			case AssetType::kUiDocument:
 			case AssetType::kUiStyle:
 			case AssetType::kFont:
+			case AssetType::kAvatar:
 			case AssetType::kCount:
 				break;
 			}
