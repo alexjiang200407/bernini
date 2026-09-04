@@ -19,6 +19,69 @@ namespace bgl
 		// Each SceneView gets a process-unique namespace so views sharing one Scene
 		// don't collide in the frame graph.
 		std::atomic<uint32_t> g_NextViewId{ 0 };
+
+		static_assert(
+			c_MaxLegsPerRig == idl::cMaxLegsPerRig,
+			"FootIKDesc has a slot per leg the IDL lets a rig carry");
+
+		idl::Ramp
+		ToRecord(const WeightRamp& ramp) noexcept
+		{
+			return { ramp.from, ramp.to, ramp.start, ramp.end };
+		}
+
+		WeightRamp
+		FromRecord(const idl::Ramp& ramp) noexcept
+		{
+			return { ramp.from, ramp.to, ramp.start, ramp.end };
+		}
+
+		idl::FootIKLeg
+		ToRecord(const FootIKLegDesc& leg) noexcept
+		{
+			return { ToRecord(leg.position), ToRecord(leg.rotation) };
+		}
+
+		FootIKLegDesc
+		FromRecord(const idl::FootIKLeg& leg) noexcept
+		{
+			return { FromRecord(leg.position), FromRecord(leg.rotation) };
+		}
+
+		void
+		ValidateWeightRamp(const WeightRamp& ramp, uint32_t leg, std::string_view which)
+		{
+			const bool finite = std::isfinite(ramp.from) && std::isfinite(ramp.to) &&
+			                    std::isfinite(ramp.start) && std::isfinite(ramp.end);
+			if (!finite)
+			{
+				throw SceneError(
+					std::format(
+						"SetFootIK: leg {}'s {} ramp holds a non-finite field",
+						leg,
+						which));
+			}
+			if (ramp.from < 0.0f || ramp.from > 1.0f || ramp.to < 0.0f || ramp.to > 1.0f)
+			{
+				throw SceneError(
+					std::format(
+						"SetFootIK: leg {}'s {} weight must stay within [0, 1]",
+						leg,
+						which));
+			}
+			if (ramp.end < ramp.start)
+			{
+				throw SceneError(
+					std::format("SetFootIK: leg {}'s {} ramp ends before it starts", leg, which));
+			}
+		}
+
+		void
+		ValidateFootIKLeg(const FootIKLegDesc& desc, uint32_t leg)
+		{
+			ValidateWeightRamp(desc.position, leg, "position");
+			ValidateWeightRamp(desc.rotation, leg, "rotation");
+		}
 	}
 
 	SceneView::SceneView(
@@ -92,6 +155,14 @@ namespace bgl
 		m_Palettes.Init(m_ResourceManager);
 
 		{
+			auto footIKDesc         = RangeBufferDesc();
+			footIKDesc.initialCount = 1;
+			footIKDesc.debugName    = "Foot IK Buffer";
+
+			m_FootIK.Init(std::move(footIKDesc), m_ResourceManager);
+		}
+
+		{
 			auto desc         = UploadBufferDesc();
 			desc.initialCount = 1;
 			desc.debugName    = "Posed Instances";
@@ -161,6 +232,7 @@ namespace bgl
 		m_MeshBuffer.Release();
 		m_Playback.Release();
 		m_Palettes.Release();
+		m_FootIK.Release();
 		m_PosedInstances.Release();
 
 		for (CullState& cullState : m_CullStates)
@@ -250,59 +322,137 @@ namespace bgl
 		// The pose source is which record this placement gets, and nothing else records it: a hero
 		// instance owns a palette the pose pass writes, a crowd one owns no storage at all.
 		auto palette = core::multi_slot_handle();
+		auto footIK  = core::multi_slot_handle();
 		auto record  = idl::RawEntry();
 
-		if (desc.source == PoseSource::kPerInstance)
-		{
-			// Two palettes, back to back: the pose at `time` and the pose at `prevTime`, which is
-			// what lets the mesh shader write a motion vector without a history buffer.
-			palette = m_Palettes.Allocate(idl::cFloat4sPerBone * rig.boneCount * 2);
-
-			auto state           = idl::SkinnedState();
-			state.playback.rig   = rig.record;
-			state.playback.clip  = desc.clip;
-			state.playback.phase = desc.phase;
-			state.playback.rate  = desc.rate;
-			state.palette        = palette;
-
-			record = m_Playback.AddRecord(
-				idl::PlaybackType::kSkinned,
-				std::as_bytes(std::span(&state, 1)));
-		}
-		else
-		{
-			// Asked for here rather than at AddRig, so a rig no crowd instance is spawned on never
-			// pays for a table. RigFramesPass fills it before anything reads it this frame.
-			m_SceneRaw->RequestBoneAnimTable(RigHandle{ rig.record });
-
-			auto state           = idl::SkinnedTableState();
-			state.playback.rig   = rig.record;
-			state.playback.clip  = desc.clip;
-			state.playback.phase = desc.phase;
-			state.playback.rate  = desc.rate;
-
-			record = m_Playback.AddRecord(
-				idl::PlaybackType::kSkinnedTable,
-				std::as_bytes(std::span(&state, 1)));
-		}
+		// One rollback for everything the spawn allocates: each of the three arenas can throw at
+		// its ceiling, and whichever does, what the earlier ones handed out goes back.
 		try
 		{
+			if (desc.source == PoseSource::kPerInstance)
+			{
+				// Two palettes, back to back: the pose at `time` and the pose at `prevTime`, which
+				// is what lets the mesh shader write a motion vector without a history buffer.
+				palette = m_Palettes.Allocate(idl::cFloat4sPerBone * rig.boneCount * 2);
+
+				// Weight one on every leg, so an instance nobody writes plants as the baked
+				// weights say.
+				if (rig.legCount > 0)
+				{
+					auto defaults = core::static_vector<idl::FootIKLeg, c_MaxLegsPerRig>();
+					for (uint32_t leg = 0; leg < rig.legCount; ++leg)
+					{
+						defaults.push_back(ToRecord(FootIKLegDesc()));
+					}
+					footIK = m_FootIK.Add(std::span(defaults.data(), defaults.size()));
+				}
+
+				auto state           = idl::SkinnedState();
+				state.playback.rig   = rig.record;
+				state.playback.clip  = desc.clip;
+				state.playback.phase = desc.phase;
+				state.playback.rate  = desc.rate;
+				state.palette        = palette;
+
+				record = m_Playback.AddRecord(
+					idl::PlaybackType::kSkinned,
+					std::as_bytes(std::span(&state, 1)));
+			}
+			else
+			{
+				// Asked for here rather than at AddRig, so a rig no crowd instance is spawned on
+				// never pays for a table. RigFramesPass fills it before anything reads it this
+				// frame.
+				m_SceneRaw->RequestBoneAnimTable(RigHandle{ rig.record });
+
+				auto state           = idl::SkinnedTableState();
+				state.playback.rig   = rig.record;
+				state.playback.clip  = desc.clip;
+				state.playback.phase = desc.phase;
+				state.playback.rate  = desc.rate;
+
+				record = m_Playback.AddRecord(
+					idl::PlaybackType::kSkinnedTable,
+					std::as_bytes(std::span(&state, 1)));
+			}
+
 			const MeshInstanceHandle instance = WritePlacement(geom, transform, record.byteOffset);
 
-			m_MeshBuffer.MetaAt(instance.handle.index).palette = palette;
-			m_PosedDirty                                       = true;
+			auto& meta   = m_MeshBuffer.MetaAt(instance.handle.index);
+			meta.palette = palette;
+			meta.footIK  = footIK;
+			m_PosedDirty = true;
 			return instance;
 		}
 		catch (...)
 		{
-			m_Playback.Erase(record.byteOffset);
-
+			if (!record.Null())
+			{
+				m_Playback.Erase(record.byteOffset);
+			}
 			if (palette)
 			{
 				m_Palettes.Free(palette);
 			}
+			if (footIK)
+			{
+				m_FootIK.Erase(footIK);
+			}
 			throw;
 		}
+	}
+
+	const MeshMeta&
+	SceneView::FootIKMetaFor(MeshInstanceHandle instance, std::string_view what) const
+	{
+		if (!instance.IsValid() || !m_MeshBuffer.IsValid(instance.handle))
+		{
+			throw SceneError(
+				std::format("{}: the MeshInstanceHandle is invalid or already removed", what));
+		}
+
+		const MeshMeta& meta = m_MeshBuffer.MetaAt(instance.handle.index);
+		if (meta.geomType != GeomType::kSkinnedMesh || !meta.palette)
+		{
+			throw SceneError(
+				std::format(
+					"{}: the placement is not a skinned instance on the per-instance source",
+					what));
+		}
+		if (!meta.footIK)
+		{
+			throw SceneError(std::format("{}: the instance's rig authored no legs", what));
+		}
+		return meta;
+	}
+
+	void
+	SceneView::SetFootIK(MeshInstanceHandle instance, const FootIKDesc& desc)
+	{
+		const MeshMeta& meta = FootIKMetaFor(instance, "SetFootIK");
+
+		// Judged whole before anything is written, so a refused desc leaves the record as it was.
+		for (uint32_t leg = 0; leg < meta.footIK.count; ++leg)
+		{
+			ValidateFootIKLeg(desc.leg[leg], leg);
+		}
+		for (uint32_t leg = 0; leg < meta.footIK.count; ++leg)
+		{
+			m_FootIK.Set(meta.footIK, leg, ToRecord(desc.leg[leg]));
+		}
+	}
+
+	FootIKDesc
+	SceneView::GetFootIK(MeshInstanceHandle instance) const
+	{
+		const MeshMeta& meta = FootIKMetaFor(instance, "GetFootIK");
+
+		auto desc = FootIKDesc();
+		for (uint32_t leg = 0; leg < meta.footIK.count; ++leg)
+		{
+			desc.leg[leg] = FromRecord(m_FootIK.Get(meta.footIK, leg));
+		}
+		return desc;
 	}
 
 	MeshInstanceHandle
@@ -413,6 +563,10 @@ namespace bgl
 				{
 					m_Palettes.Free(meta.palette);
 				}
+				if (meta.footIK)
+				{
+					m_FootIK.Erase(meta.footIK);
+				}
 				m_PosedDirty = true;
 			}
 		}
@@ -486,7 +640,7 @@ namespace bgl
 	void
 	SceneView::RebuildPosedList()
 	{
-		auto list = std::vector<uint32_t>();
+		auto list = std::vector<idl::PosedInstance>();
 
 		for (uint32_t meshIndex = 0; meshIndex < m_MeshBuffer.Capacity(); ++meshIndex)
 		{
@@ -502,7 +656,9 @@ namespace bgl
 			const MeshMeta& meta = m_MeshBuffer.MetaAt(meshIndex);
 			if (meta.geomType == GeomType::kSkinnedMesh && meta.animState != 0 && meta.palette)
 			{
-				list.push_back(meshIndex);
+				auto& entry  = list.emplace_back();
+				entry.mesh   = meshIndex;
+				entry.footIK = meta.footIK;
 			}
 		}
 
