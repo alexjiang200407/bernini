@@ -15,11 +15,13 @@
 #include <QDragEnterEvent>
 #include <QDropEvent>
 #include <QFileDialog>
+#include <QFrame>
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QListWidget>
 #include <QMimeData>
 #include <QPushButton>
+#include <QScrollArea>
 #include <QSplitter>
 #include <QStackedWidget>
 #include <QStyle>
@@ -302,7 +304,17 @@ AnimationEditorWindow::BuildPropertiesColumn()
 	// on screen, where a rebind is recorded and applied when it is shown.
 	UpdateGroundControls();
 
-	return column;
+	// The column scrolls rather than asking the window for its height: every control adds to a
+	// minimum that would otherwise be taken out of whatever dock sits below the panel. Its width
+	// is still its own, though -- a scroll area hides both hints from the splitter, and the
+	// horizontal bar is off, so without the floor a narrowed column would clip its buttons.
+	auto* scrollBox = new QScrollArea(this);
+	scrollBox->setWidget(column);
+	scrollBox->setWidgetResizable(true);
+	scrollBox->setFrameShape(QFrame::NoFrame);
+	scrollBox->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+	scrollBox->setMinimumWidth(column->sizeHint().width());
+	return scrollBox;
 }
 
 void
