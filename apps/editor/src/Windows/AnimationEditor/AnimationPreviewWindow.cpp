@@ -158,6 +158,12 @@ AnimationPreviewWindow::SetFootIK(const bgl::FootIKDesc& desc)
 	GetRenderer()->Invoke([&] {
 		for (const AnimatedDraw& draw : m_AnimatedDraws) ApplyFootIK(draw.instance);
 	});
+
+	// A constant holds at prevTime as well as at time, so the frame after this write reprojects
+	// through a pose nothing drew. The ground is re-placed for the reason the slope commits through
+	// it: SetGround moves the temporal epoch, which is the one break in history the preview can
+	// ask for.
+	ReplaceGround();
 }
 
 void

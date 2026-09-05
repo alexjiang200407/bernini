@@ -382,10 +382,12 @@ namespace bgl
 				// weights say.
 				if (rig.legCount > 0)
 				{
+					const idl::FootIKLeg one = ToRecord(FootIKLegDesc());
+
 					auto defaults = core::static_vector<idl::FootIKLeg, c_MaxLegsPerRig>();
 					for (uint32_t leg = 0; leg < rig.legCount; ++leg)
 					{
-						defaults.push_back(ToRecord(FootIKLegDesc()));
+						defaults.push_back(one);
 					}
 					footIK = m_FootIK.Add(std::span(defaults.data(), defaults.size()));
 				}

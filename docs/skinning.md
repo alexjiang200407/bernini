@@ -324,7 +324,9 @@ to keep in agreement beyond the one below.
   because the panel's clock is the transport's clip time and wraps over the clip period, so a ramp
   stamped in it would re-read its start on every loop. `editor::FootIKForSliders`, free of the
   window and pinned by `[footik]`, is what a slider commits, and the preview re-applies it to every
-  instance a clip or tier switch respawns. A crowd instance and a rig without legs own no record
+  instance a clip or tier switch respawns — re-placing the ground on the way, since a constant holds
+  at `prevTime` too and the epoch `SetGround` moves is the one break in history the preview can ask
+  for. A crowd instance and a rig without legs own no record
   (`ISceneView::HasFootIK`), and the preview leaves them alone.
 
 * **The Content Explorer creates an avatar from the source.** *Create Avatar* is offered on an

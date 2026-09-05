@@ -97,6 +97,7 @@ namespace assetlib
 					entry.clip == clip,
 					"avatar: '{}' is weighted twice",
 					clip);
+			// Negative zero passes the range check and would print and hash as its own value.
 			avatar.clipWeights.emplace_back(std::move(clip), weight == 0.0f ? 0.0f : weight);
 		}
 
