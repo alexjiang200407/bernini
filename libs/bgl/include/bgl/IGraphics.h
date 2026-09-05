@@ -86,9 +86,15 @@ namespace bgl
 
 		// Second, structured views of buffers. Only an arena whose records hold resource handles
 		// needs one, so far fewer than there are buffers.
-		uint32_t maxBufferSrvs      = 64;
-		uint32_t maxRtvs            = 16;
-		uint32_t maxDsvs            = 5;
+		uint32_t maxBufferSrvs = 64;
+
+		// Sized together, because one render target draws on both: seven RTVs -- two swapchain
+		// images, two TAA history buffers, and one each for motion vectors, scene colour and the
+		// outline mask -- against the single DSV of its depth buffer. So these carry eight targets,
+		// alongside the one RTV the BRDF LUT holds for the life of the device. A viewport, a
+		// material preview, a texture preview and the thumbnail cache are already four.
+		uint32_t maxRtvs            = 64;
+		uint32_t maxDsvs            = 8;
 		uint32_t maxTextures        = 1000;
 		uint32_t maxSamplers        = 128;
 		uint32_t maxReadbackBuffers = 64;

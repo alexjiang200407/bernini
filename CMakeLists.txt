@@ -149,13 +149,30 @@ function(bernini_collect_executables dir out_var)
     set(${out_var} "${_found}" PARENT_SCOPE)
 endfunction()
 
-bernini_collect_executables("${CMAKE_CURRENT_SOURCE_DIR}" KTX_CONSUMER_TARGETS)
+bernini_collect_executables("${CMAKE_CURRENT_SOURCE_DIR}" BERNINI_EXECUTABLES)
 
-if (KTX_CONSUMER_TARGETS)
+if (BERNINI_EXECUTABLES)
     add_custom_target(deploy_release_ktx ALL
         COMMAND ${CMAKE_COMMAND} -E copy_if_different
                 "$<TARGET_FILE:KTX::ktx>" "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}"
         COMMENT "Deploying optimized Release libktx to the runtime output directory"
         VERBATIM)
-    add_dependencies(deploy_release_ktx ${KTX_CONSUMER_TARGETS})
+    add_dependencies(deploy_release_ktx ${BERNINI_EXECUTABLES})
+endif()
+
+# applocal deploys what it finds in the installed tree's `bin`, and the Tracy port puts its debug
+# DLL in `debug/bin/Debug` -- one directory below where that step looks. Nothing else in the tree
+# installs that way, so nothing copies it, and every executable linking core dies at load with
+# STATUS_DLL_NOT_FOUND before `main`. The imported target carries the real path.
+if (BERNINI_PROFILING AND BERNINI_EXECUTABLES AND TARGET Tracy::TracyClient)
+    get_target_property(TRACY_CLIENT_TYPE Tracy::TracyClient TYPE)
+
+    if (TRACY_CLIENT_TYPE STREQUAL "SHARED_LIBRARY")
+        add_custom_target(deploy_tracy_client ALL
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                    "$<TARGET_FILE:Tracy::TracyClient>" "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}"
+            COMMENT "Deploying the Tracy client to the runtime output directory"
+            VERBATIM)
+        add_dependencies(deploy_tracy_client ${BERNINI_EXECUTABLES})
+    endif()
 endif()

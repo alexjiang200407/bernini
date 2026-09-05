@@ -85,7 +85,13 @@ disagrees, trust the header, then fix this doc.
 
   `GraphicsOptions` is the opposite: `maxCbvSrvUavs`, `maxBuffers`, `maxSrvs`, `maxBufferSrvs`,
   `maxRtvs`, `maxDsvs`, `maxTextures`, `maxSamplers` and `maxReadbackBuffers` size fixed pools that
-  never grow, and exhausting one is a hard failure.
+  never grow. Exhausting one fails that creation and nothing else: the call logs and returns a null
+  handle rather than throwing, so a caller that stores the result holds something it must check
+  before using or releasing it.
+
+  `maxRtvs` and `maxDsvs` are sized against each other, because a render target draws seven views
+  from the first and one from the second. Raising the number of targets a client keeps open means
+  raising both.
 
   **`maxCbvSrvUavs` counts descriptors; the pool sizes count resources.** Every buffer, every SRV and
   every second view of a buffer takes one descriptor from the shader-visible heap, so the heap must

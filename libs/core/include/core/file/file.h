@@ -68,6 +68,25 @@ namespace core::file
 	void
 	write_atomic(const std::filesystem::path& path, std::span<const std::byte> bytes);
 
+	/**
+	 * Renames a finished temp file onto its final name, which is the step that publishes it.
+	 *
+	 * Windows refuses to replace a file while any handle is still open on it, so two writers
+	 * committing one derived path collide there and the loser is told access is denied for a
+	 * condition that clears in milliseconds. This retries for as long as that is worth waiting,
+	 * which POSIX never needs because its rename replaces silently.
+	 *
+	 * Callers that write their bytes themselves -- a codec handed a filename, an archive built in
+	 * place -- use this rather than restating the rule, so there is one description of what
+	 * committing means.
+	 *
+	 * @return The error that outlasted the retries, or a clear code on success. The temp file is
+	 *         left where it is either way; removing it belongs to the caller that named it.
+	 */
+	[[nodiscard]]
+	std::error_code
+	commit_atomic(const std::filesystem::path& tmp, const std::filesystem::path& path);
+
 	/** The text form: what a caller holding a serialized document writes without an as_bytes dance. */
 	inline void
 	write_atomic(const std::filesystem::path& path, std::string_view text)

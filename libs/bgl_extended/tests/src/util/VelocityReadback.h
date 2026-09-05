@@ -22,8 +22,8 @@ namespace bgl::test
 	 * The target's velocity buffer as one float2 per pixel, row-major and tightly packed.
 	 *
 	 * Drains the renderer first -- the copy rides its own queue, which nothing orders against --
-	 * and returns the texture to render-target layout afterwards, where the forward pass leaves it
-	 * between frames.
+	 * and returns the texture to the layout the frame left it in, which is what the next frame's
+	 * import resumes from.
 	 */
 	inline std::vector<glm::vec2>
 	ReadMotionVectors(IGraphics* gfx, IRenderTarget* target, uint32_t width, uint32_t height)
@@ -55,24 +55,37 @@ namespace bgl::test
 		cmdAllocator->ResetAllocator();
 		cmdList->Open(cmdQueue, cmdAllocator);
 
+		const auto accessFor = [](BarrierLayout layout) {
+			if (layout == BarrierLayout::kRenderTarget)
+			{
+				return BarrierAccessFlag::kRenderTarget;
+			}
+			if (layout == BarrierLayout::kShaderResource)
+			{
+				return BarrierAccessFlag::kShaderResource;
+			}
+			return BarrierAccessFlag::kCopySource;
+		};
+
 		const auto transition = [&](BarrierLayout before, BarrierLayout after) {
 			auto barrier = TextureBarrierDesc();
 			barrier.AddSyncBefore(BarrierSyncFlag::kAllCommands)
-				.AddAccessBefore(
-					before == BarrierLayout::kRenderTarget ? BarrierAccessFlag::kRenderTarget :
-															 BarrierAccessFlag::kCopySource)
+				.AddAccessBefore(accessFor(before))
 				.SetLayoutBefore(before)
 				.AddSyncAfter(BarrierSyncFlag::kAllCommands)
-				.AddAccessAfter(
-					after == BarrierLayout::kRenderTarget ? BarrierAccessFlag::kRenderTarget :
-															BarrierAccessFlag::kCopySource)
+				.AddAccessAfter(accessFor(after))
 				.SetLayoutAfter(after);
 			cmdList->Barrier(texture, barrier);
 		};
 
-		transition(BarrierLayout::kRenderTarget, BarrierLayout::kCopySource);
+		// The resolve samples the velocity buffer, so a target with TAA leaves it in
+		// shader-resource; without one the forward pass's render-target layout is the last set.
+		const BarrierLayout resident =
+			target->IsTaaEnabled() ? BarrierLayout::kShaderResource : BarrierLayout::kRenderTarget;
+
+		transition(resident, BarrierLayout::kCopySource);
 		cmdList->CopyTextureToReadback(readback, texture);
-		transition(BarrierLayout::kCopySource, BarrierLayout::kRenderTarget);
+		transition(BarrierLayout::kCopySource, resident);
 
 		cmdList->Close();
 		cmdQueue->WaitForFenceCPUBlocking(cmdQueue->ExecuteCommandList(cmdList));

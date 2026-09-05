@@ -254,10 +254,15 @@ TEST_CASE("A source whose mtime moved but whose bytes did not is not stale", "[b
 
 	// The other half of the same rule: content that did change is still caught, even at the same
 	// size, where an mtime stamp with one-second granularity could miss it.
+	//
+	// Moved past the mtime the stamp above cached rather than past the one the rewrite leaves:
+	// stampOf memoises a hash against size and mtime, and where the filesystem dates both writes
+	// the same -- which Windows does, its write times being coarser than the gap between them --
+	// landing back on that pair would hand the first bytes' hash back for the second bytes.
+	const auto stamped = std::filesystem::last_write_time(source);
+
 	write(source, "aaab");
-	std::filesystem::last_write_time(
-		source,
-		std::filesystem::last_write_time(source) + std::chrono::seconds(5));
+	std::filesystem::last_write_time(source, stamped + std::chrono::seconds(10));
 
 	REQUIRE(bakeIsStale(mat, MountAt(dir)));
 

@@ -4,6 +4,7 @@
 #include <atomic>
 #include <cerrno>
 #include <cmath>
+#include <core/file/file.h>
 #include <core/math.h>
 #include <core/platform/util.h>
 
@@ -705,8 +706,7 @@ namespace assetlib
 				std::format("assetlib::writeKTX2: cannot flush '{}'", tmp.string()));
 		}
 
-		std::error_code ec;
-		std::filesystem::rename(tmp, path, ec);
+		const std::error_code ec = core::file::commit_atomic(tmp, path);
 		if (ec)
 		{
 			std::error_code removeEc;
