@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cstdint>
 namespace assetlib
 {
 	// A source's meshes are the largest thing in this library and one cook holds a whole parse, so

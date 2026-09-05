@@ -1,6 +1,7 @@
 #pragma once
 
 #include <QStringList>
+#include <qcontainerfwd.h>
 
 class QObject;
 

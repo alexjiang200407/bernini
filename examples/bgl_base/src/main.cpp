@@ -1,3 +1,17 @@
+#include <SDL3/SDL_messagebox.h>
+#include <assetlib_structs/Node.h>
+#include <bgl/GeomHandle.h>
+#include <bgl/IGraphics.h>
+#include <bgl/IRenderTarget.h>
+#include <bgl/RenderJob.h>
+#include <bgl/SkyboxDesc.h>  // IWYU pragma: keep
+#include <cstdint>
+#include <filesystem>
+#include <limits>
+#include <optional>
+#include <string>
+#include <utility>
+#include <vector>
 #define NOMINMAX
 
 #include <CLI/CLI.hpp>

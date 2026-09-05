@@ -1,6 +1,8 @@
 #pragma once
 
 #include <bgl/api.h>
+#include <cstdint>
+#include <memory>
 
 namespace assetlib
 {

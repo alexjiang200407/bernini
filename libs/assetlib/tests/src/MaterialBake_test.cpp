@@ -1,3 +1,5 @@
+#include <algorithm>
+#include <array>
 #include <assetlib/container_info.h>
 #include <assetlib/image_io.h>
 #include <assetlib/material_bake.h>
@@ -5,8 +7,24 @@
 #include <assetlib_structs/ImageData.h>
 
 #include "bmesh_texture.h"
+#include <assetlib_structs/VkFormat.h>
 
+#include <atomic>
 #include <catch2/catch_approx.hpp>
+#include <catch2/catch_test_macros.hpp>
+#include <chrono>
+#include <cstddef>
+#include <cstdint>
+#include <cstring>
+#include <exception>
+#include <filesystem>
+#include <format>
+#include <fstream>
+#include <ios>
+#include <stdexcept>
+#include <string_view>
+#include <thread>
+#include <vector>
 
 #include "MountAt.h"
 #include "mounted_io.h"

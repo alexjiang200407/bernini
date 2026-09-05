@@ -1,7 +1,15 @@
 #include "CheckedFileReader.h"
 
+#include <cerrno>
 #include <core/err/util.h>
+#include <cstdint>
+#include <filesystem>
+#include <ios>
+#include <string_view>
+#include <system_error>
+#include <utility>
 
+#include "IRangeReader.h"
 #include "fs_util.h"
 
 namespace assetlib

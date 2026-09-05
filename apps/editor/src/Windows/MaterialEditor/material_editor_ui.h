@@ -1,6 +1,7 @@
 #pragma once
 
 #include <QString>
+#include <array>
 
 class MaterialGraphView;
 class QComboBox;

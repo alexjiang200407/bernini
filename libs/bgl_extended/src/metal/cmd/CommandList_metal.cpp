@@ -1,16 +1,45 @@
 #include "cmd/CommandList_metal.h"
 
+#include "cmd/CommandList.h"
+#include "cmd/CommandQueue.h"
 #include "cmd/CommandQueue_metal.h"
+#include "constants/constants.h"
+#include "convert_metal.h"
 #include "pipeline/ComputeKernel.h"
 #include "pipeline/ComputePipeline_metal.h"
 #include "pipeline/MeshletKernel.h"
 #include "pipeline/MeshletPipeline_metal.h"
+#include "pipeline/MetalPipelineReflection.h"
+#include "resource/Buffer.h"
+#include "resource/FrameBuffer.h"
+#include "resource/Readback.h"
+#include "resource/ResourceManager.h"
 #include "resource/ResourceManager_metal.h"
+#include "resource/Texture.h"
+#include "types/ComputeState.h"
+#include "types/MeshletState.h"
+#include "types/Rect.h"
+#include "types/RenderState.h"
+#include "types/ShaderStage.h"
+#include "uniforms/UniformLayoutEntry.h"
+#include "uniforms/Uniforms.h"
 #include "util/util.h"
+#include <bgl/Viewport.h>
+#include <bgl_common/ReflectedLayout.h>
+#include <bgl_common/gassert.h>
+#include <core/containers/slot_handle.h>
 
+#include <algorithm>
 #include <bgl_common/idl/DispatchArgs.h>
 
 #include <core/math.h>
+#include <cstddef>
+#include <cstdint>
+#include <cstring>
+#include <span>
+#include <string_view>
+#include <utility>
+#include <vector>
 
 namespace bgl
 {

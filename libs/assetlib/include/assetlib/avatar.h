@@ -1,6 +1,10 @@
 #pragma once
 #include <assetlib_structs/Skeleton.h>
 #include <core/file/IFileSystem.h>
+#include <cstdint>
+#include <string>
+#include <string_view>
+#include <vector>
 
 namespace assetlib
 {

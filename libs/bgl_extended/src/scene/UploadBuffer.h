@@ -1,9 +1,16 @@
 #pragma once
 #include "cmd/CommandList.h"
+#include "resource/Buffer.h"
 #include "resource/ResourceManager.h"
 #include "scene/GrowableGpuBuffer.h"
 #include "uniforms/DescriptorHandle.h"
+#include <bgl_common/gassert.h>
 #include <core/type_traits.h>
+#include <cstdint>
+#include <cstring>
+#include <span>
+#include <string>
+#include <utility>
 
 namespace bgl
 {

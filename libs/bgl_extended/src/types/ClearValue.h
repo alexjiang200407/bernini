@@ -1,6 +1,9 @@
 #pragma once
 #include "types/Color.h"
 #include "types/Format.h"
+#include <cstdint>
+#include <utility>
+#include <variant>
 
 namespace bgl
 {

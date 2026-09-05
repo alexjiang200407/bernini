@@ -2,11 +2,21 @@
 
 #include <QtNodes/NodeDelegateModel>
 
+#include <array>
 #include <glm/vec4.hpp>
 
 #include <assetlib_structs/BMaterial.h>
+#include <memory>
+#include <qjsonobject.h>
+#include <qobject.h>
+#include <qstringliteral.h>
+#include <qtmetamacros.h>
+#include <qwidget.h>
 
 #include "Windows/MaterialEditor/nodes/ChannelData.h"
+#include <QtNodes/internal/Definitions.hpp>
+#include <QtNodes/internal/NodeData.hpp>
+#include <QtNodes/internal/NodeDelegateModel.hpp>
 
 class QCheckBox;
 class QDoubleSpinBox;

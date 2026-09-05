@@ -1,13 +1,34 @@
+#include <algorithm>
 #include <assetlib/image_io.h>
 #include <assetlib_structs/ImageData.h>
+#include <atomic>
+#include <cerrno>
+#include <cmath>
 #include <core/math.h>
 #include <core/platform/util.h>
 
+#include <cstddef>
+#include <cstdint>
+#include <cstring>
+#include <filesystem>
+#include <format>
 #include <ktx.h>
 
 #include "mounted_io.h"
+#include <assetlib_structs/VkFormat.h>
+#include <core/containers/fixed_buffer.h>
+#include <core/file/IFileSystem.h>
 
+#include <mutex>
+#include <span>
+#include <stdexcept>
+#include <string>
+#include <string_view>
+#include <system_error>
+#include <thread>
 #include <tracy/Tracy.hpp>
+#include <utility>
+#include <vector>
 
 namespace assetlib
 {

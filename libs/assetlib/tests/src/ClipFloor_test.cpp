@@ -1,11 +1,20 @@
+#include <algorithm>
+#include <array>
 #include <assetlib/avatar.h>
 #include <assetlib/skinning.h>
 #include <assetlib_structs/Animation.h>
 #include <assetlib_structs/BMesh.h>
+#include <assetlib_structs/Node.h>
 #include <assetlib_structs/Skeleton.h>
+#include <assetlib_structs/VertexLayout.h>
 
 #include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
+#include <cstddef>
+#include <cstdint>
+#include <limits>
+#include <span>
+#include <vector>
 
 using namespace assetlib;
 

@@ -5,6 +5,20 @@
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QPointF>
+#include <algorithm>
+#include <cmath>
+#include <cstddef>
+#include <filesystem>
+#include <memory>
+#include <optional>
+#include <qjsonobject.h>
+#include <qlatin1stringview.h>
+#include <qobject.h>
+#include <qsize.h>
+#include <qstringliteral.h>
+#include <system_error>
+#include <tuple>
+#include <vector>
 
 #include "Windows/MaterialEditor/MaterialGraphModel.h"
 #include "Windows/MaterialEditor/nodes/AlphaTestedMaterialOutputNode.h"
@@ -13,6 +27,10 @@
 #include "Windows/MaterialEditor/nodes/HashedAlphaMaterialOutputNode.h"
 #include "Windows/MaterialEditor/nodes/MaterialOutputNode.h"
 #include "Windows/MaterialEditor/nodes/TextureNode.h"
+#include <QtNodes/internal/Definitions.hpp>
+#include <QtNodes/internal/NodeDelegateModelRegistry.hpp>
+#include <assetlib_structs/BMaterial.h>
+#include <assetlib_structs/BMaterialImport.h>
 
 namespace
 {

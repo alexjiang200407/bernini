@@ -3,6 +3,12 @@
 #include <QDialog>
 
 #include <assetlib/bmesh_gltf.h>
+#include <qcontainerfwd.h>
+#include <qobject.h>
+#include <qtmetamacros.h>
+#include <qwidget.h>
+#include <span>
+#include <vector>
 
 class QCheckBox;
 class QLabel;

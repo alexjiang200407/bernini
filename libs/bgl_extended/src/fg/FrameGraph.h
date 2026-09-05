@@ -3,8 +3,21 @@
 #include "cmd/CommandQueue.h"
 #include "debug/BufferPoisoner.h"
 #include "fg/PassDesc.h"
+#include "resource/Buffer.h"
+#include "resource/Texture.h"
+#include "types/Barrier.h"
 #include <bgl_common/PassScheduler.h>
+#include <core/containers/slot_handle.h>
 #include <core/str/str.h>
+#include <cstddef>
+#include <cstdint>
+#include <functional>
+#include <optional>
+#include <string>
+#include <string_view>
+#include <unordered_map>
+#include <variant>
+#include <vector>
 
 namespace bgl
 {

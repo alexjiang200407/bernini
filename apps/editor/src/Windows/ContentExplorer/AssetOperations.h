@@ -4,6 +4,10 @@
 #include <QStringList>
 
 #include <assetlib/asset_refs.h>
+#include <functional>
+#include <qcontainerfwd.h>
+#include <qtmetamacros.h>
+#include <string_view>
 
 class QFileSystemModel;
 class QWidget;

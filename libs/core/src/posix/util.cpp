@@ -1,7 +1,10 @@
 #include <core/platform/util.h>
 
+#include <cstdint>
 #include <fcntl.h>
 #include <mach-o/dyld.h>
+#include <string>
+#include <sys/fcntl.h>
 #include <unistd.h>
 
 namespace core

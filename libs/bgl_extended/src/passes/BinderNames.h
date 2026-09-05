@@ -1,6 +1,11 @@
 #pragma once
 #include "pipeline/MeshletKernel.h"
 #include "uniforms/Uniforms.h"
+#include <concepts>
+#include <ranges>
+#include <span>
+#include <string_view>
+#include <vector>
 
 namespace bgl
 {

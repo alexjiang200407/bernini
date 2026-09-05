@@ -1,5 +1,18 @@
 #pragma once
+#include <array>
 #include <catch2/catch_test_macros.hpp>
+#include <cstddef>
+#include <cstdint>
+#include <cstring>
+#include <filesystem>
+#include <fstream>
+#include <initializer_list>
+#include <ios>
+#include <sstream>
+#include <string>
+#include <string_view>
+#include <utility>
+#include <vector>
 
 namespace assetlib::test
 {

@@ -1,3 +1,5 @@
+// A SharedRef<ISceneView> is dereferenced and destroyed here, both of which need the
+// complete type -- include-cleaner sees only the declaration.
 #include "passes/OutlineMaskPass.h"
 #include "cmd/CommandList.h"
 #include "constants/constants.h"
@@ -10,11 +12,22 @@
 #include "pipeline/PipelineBatch.h"
 #include "resource/FrameBuffer.h"
 #include "resource/Shader.h"
+#include "scene/scene_buffer_names.h"
+#include "types/Barrier.h"
+#include "types/DepthStencilState.h"
+#include "types/Format.h"
+#include "types/RasterState.h"
 #include "types/RenderState.h"
+#include <bgl/ISceneView.h>  // IWYU pragma: keep
+#include <bgl_common/gassert.h>
 #include <bgl_common/idl/BaseTable.h>
 
 // The exec lambda copies DrawData, whose SceneViewRef needs the complete type to destroy.
-#include <bgl/ISceneView.h>
+#include <cstdint>
+#include <span>
+#include <string>
+#include <string_view>
+#include <utility>
 
 namespace bgl
 {

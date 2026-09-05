@@ -1,12 +1,26 @@
+#include <algorithm>
+#include <array>
 #include <assetlib/avatar.h>
 #include <assetlib/codecs.h>
 #include <assetlib/skinning.h>
 #include <assetlib_structs/Animation.h>
 #include <assetlib_structs/BMesh.h>
+#include <assetlib_structs/Node.h>
 #include <assetlib_structs/Skeleton.h>
+#include <assetlib_structs/VertexLayout.h>
 
 #include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
+#include <cmath>
+#include <cstddef>
+#include <cstdint>
+#include <format>
+#include <optional>
+#include <span>
+#include <string>
+#include <string_view>
+#include <utility>
+#include <vector>
 
 // The cook half of foot planting: the sole fitted off the mesh, and the per-frame weight measured
 // off the walk. Both are derived, so what these pin is that the derivation says what a person

@@ -1,7 +1,17 @@
 #include "animation_draws.h"
+#include "Mesh/BMeshUtil.h"
+#include "Windows/AnimationEditor/PlaybackTransport.h"
+#include <assetlib/AssetStore.h>
 #include <assetlib/bmesh.h>
+#include <assetlib_structs/BMaterial.h>
+#include <gamelib/ClipInfo.h>
 
 #include <QtGlobal>
+#include <exception>
+#include <qlogging.h>
+#include <span>
+#include <string>
+#include <vector>
 
 namespace editor
 {

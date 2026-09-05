@@ -1,6 +1,17 @@
 #include "Windows/RenderTarget/RenderTargetWindow.h"
 
 #include "Render/Renderer.h"
+#include <algorithm>
+#include <cassert>
+#include <cmath>
+#include <cstdint>
+#include <qcoreevent.h>
+#include <qlogging.h>
+#include <qnamespace.h>
+#include <qtmetamacros.h>
+#include <qtypes.h>
+#include <qwidget.h>
+#include <utility>
 
 #if defined(__APPLE__)
 #	include "Platform/MetalSurface.h"

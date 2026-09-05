@@ -1,3 +1,4 @@
+#include <array>
 #include <assetlib/bmesh.h>
 #include <assetlib/bmesh_gltf.h>
 #include <assetlib/codecs.h>
@@ -5,15 +6,31 @@
 #include <assetlib/mesh_tangents.h>
 #include <assetlib_structs/BMesh.h>
 #include <assetlib_structs/BMeshImport.h>
+#include <catch2/catch_test_macros.hpp>
+#include <catch2/matchers/catch_matchers.hpp>
+#include <chrono>
 #include <core/hash.h>
 
 #include <catch2/catch_approx.hpp>
 
 #include "MountAt.h"
 #include "mounted_io.h"
+#include <assetlib/project_layout.h>
+#include <assetlib_structs/BMaterial.h>
+#include <assetlib_structs/Node.h>
 
 #include <assetlib/AssetStore.h>
 #include <catch2/matchers/catch_matchers_string.hpp>
+#include <cstddef>
+#include <cstdint>
+#include <filesystem>
+#include <fstream>
+#include <ios>
+#include <span>
+#include <stdexcept>
+#include <string>
+#include <string_view>
+#include <vector>
 
 using namespace assetlib;
 

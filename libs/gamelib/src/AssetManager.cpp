@@ -1,5 +1,23 @@
-#include <assetlib/envmap.h>
+#include <assetlib/AssetStore.h>
+#include <assetlib/codecs.h>
+#include <assetlib_structs/Mesh.h>
+#include <assetlib_structs/SourceStamp.h>
+#include <bgl/IScene.h>
+#include <bgl/InstanceDesc.h>
+#include <bgl/LayerType.h>
+#include <bgl/types/FootPlantDesc.h>
+#include <bgl/types/LoosePbrMaterialDesc.h>
+#include <bgl/types/PbrMaterialDesc.h>
+#include <cassert>
+#include <concepts>
+#include <core/str/str.h>
+#include <cstddef>
+#include <cstdint>
+#include <exception>
+#include <filesystem>
+#include <format>
 #include <gamelib/AssetManager.h>
+#include <gamelib/ClipInfo.h>
 
 #include <assetlib/RegenMesh.h>
 #include <assetlib/avatar.h>
@@ -16,7 +34,17 @@
 #include <bgl_common/MemoryTag.h>
 #include <core/err/util.h>
 
+#include <memory>
+#include <optional>
+#include <span>
+#include <spdlog/spdlog.h>
+#include <stdexcept>
+#include <string>
+#include <string_view>
 #include <tracy/Tracy.hpp>
+#include <type_traits>
+#include <utility>
+#include <vector>
 
 namespace game
 {

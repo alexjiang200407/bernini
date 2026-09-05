@@ -2,6 +2,9 @@
 
 #include <QIcon>
 #include <QProxyStyle>
+#include <qobject.h>
+#include <qstyle.h>
+#include <qtmetamacros.h>
 
 /**
  * The platform's own style, with the rules that make a docked layout awkward overridden.

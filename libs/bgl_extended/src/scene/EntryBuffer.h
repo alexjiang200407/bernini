@@ -4,8 +4,18 @@
 #include "resource/ResourceManager.h"
 #include "scene/GrowableGpuBuffer.h"
 #include "uniforms/DescriptorHandle.h"
+#include <algorithm>
+#include <bgl_common/gassert.h>
+#include <core/containers/slot_handle.h>
 #include <core/containers/slot_vector.h>
 #include <core/type_traits.h>
+#include <cstddef>
+#include <cstdint>
+#include <string>
+#include <type_traits>
+#include <utility>
+#include <variant>
+#include <vector>
 
 namespace bgl
 {

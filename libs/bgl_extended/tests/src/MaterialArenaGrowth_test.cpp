@@ -2,10 +2,18 @@
 #include "util/TestEnvironment.h"
 #include "util/TestOptions.h"
 #include <assetlib_structs/ImageData.h>
+#include <assetlib_structs/VkFormat.h>
 #include <bgl/Camera.h>
 #include <bgl/IGraphics.h>
 #include <bgl/IScene.h>
 #include <bgl/ISceneView.h>
+#include <bgl/TextureAssetHandle.h>
+#include <bgl/types/PbrMaterialDesc.h>
+#include <catch2/catch_test_macros.hpp>
+#include <core/containers/fixed_buffer.h>
+#include <cstddef>
+#include <cstdint>
+#include <filesystem>
 
 /**
  * The material arena outgrowing its budget, with a frame drawn on either side of the growth.

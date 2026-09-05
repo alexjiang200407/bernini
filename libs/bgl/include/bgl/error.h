@@ -1,5 +1,6 @@
 #pragma once
 #include <bgl/api.h>
+#include <stdexcept>
 
 namespace bgl
 {

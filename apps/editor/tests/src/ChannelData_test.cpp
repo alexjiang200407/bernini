@@ -1,6 +1,12 @@
 #include "Windows/MaterialEditor/nodes/ChannelData.h"
+#include <QtNodes/internal/NodeData.hpp>
 
-#include "util/QtSupport.h"
+#include "util/QtSupport.h"  // IWYU pragma: keep
+#include <bgl/TextureAssetHandle.h>
+#include <catch2/catch_message.hpp>
+#include <catch2/catch_test_macros.hpp>
+#include <catch2/generators/catch_generators.hpp>
+#include <qobject.h>
 
 namespace
 {

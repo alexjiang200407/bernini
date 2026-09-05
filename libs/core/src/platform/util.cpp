@@ -1,4 +1,9 @@
 #include <core/platform/util.h>
+#include <cstdlib>
+#include <filesystem>
+#include <optional>
+#include <string>
+#include <string_view>
 
 namespace core
 {

@@ -1,14 +1,22 @@
+#include <algorithm>
 #include <assetlib/AssetStore.h>
 
 #include <assetlib/asset_import.h>
 #include <assetlib/import_document.h>
 #include <assetlib/migrate.h>
-#include <assetlib/project_layout.h>
+#include <catch2/catch_test_macros.hpp>
+#include <catch2/matchers/catch_matchers.hpp>
 #include <core/file/file.h>
 
 #include "ImportUnitGroup.h"
 
 #include <catch2/matchers/catch_matchers_string.hpp>
+#include <cstddef>
+#include <cstring>
+#include <filesystem>
+#include <string>
+#include <string_view>
+#include <vector>
 
 using namespace assetlib;
 using Catch::Matchers::ContainsSubstring;

@@ -3,8 +3,22 @@
 #include "pipeline/ComputeKernel.h"
 #include "pipeline/MeshletKernel.h"
 #include "pipeline/PipelineBatch.h"
+#include "types/Format.h"
 #include "util/GpuValidation.h"
+#include <array>
 #include <bgl/IGraphics.h>
+#include <catch2/catch_message.hpp>
+#include <catch2/catch_test_macros.hpp>
+#include <cstddef>
+#include <cstdint>
+#include <filesystem>
+#include <fstream>
+#include <ios>
+#include <map>
+#include <string>
+#include <system_error>
+#include <utility>
+#include <vector>
 
 namespace
 {

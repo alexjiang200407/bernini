@@ -1,11 +1,28 @@
+#include <algorithm>
+#include <array>
 #include <assetlib/bmesh.h>
 #include <assetlib/bmesh_gltf.h>
 #include <assetlib/codecs.h>
+#include <assetlib_structs/BMaterial.h>
+#include <assetlib_structs/BMaterialImport.h>
 #include <assetlib_structs/BMesh.h>
 #include <assetlib_structs/BMeshImport.h>
+#include <assetlib_structs/ImageData.h>
+#include <assetlib_structs/Mesh.h>
+#include <assetlib_structs/Node.h>
+#include <assetlib_structs/VertexLayout.h>
+#include <catch2/catch_message.hpp>
+#include <catch2/catch_test_macros.hpp>
 #include <core/glm.h>
 
 #include <catch2/catch_approx.hpp>
+#include <cstddef>
+#include <cstdint>
+#include <filesystem>
+#include <fstream>
+#include <ios>
+#include <stdexcept>
+#include <vector>
 
 using namespace assetlib;
 using namespace assetlib::imp;

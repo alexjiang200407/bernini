@@ -1,6 +1,9 @@
 #pragma once
 #include "pipeline/ComputePipeline.h"
 #include "uniforms/Uniforms.h"
+#include <core/ref/SharedRef.h>
+#include <string>
+#include <unordered_map>
 
 namespace bgl
 {

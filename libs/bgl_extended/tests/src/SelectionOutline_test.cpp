@@ -1,6 +1,14 @@
 #include "util/GoldenImage.h"
 #include "util/TestOptions.h"
+#include <array>
 #include <bgl/IGraphics.h>
+#include <catch2/catch_message.hpp>
+#include <catch2/catch_test_macros.hpp>
+#include <cstdint>
+#include <cstdio>
+#include <cstdlib>
+#include <string>
+#include <vector>
 
 // The selection outline end to end: marking a submesh selected draws the mask and the
 // post-process contours it; clearing the selection restores the plain image. Regions of one

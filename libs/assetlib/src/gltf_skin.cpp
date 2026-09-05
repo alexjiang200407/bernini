@@ -1,10 +1,26 @@
 #include "gltf_skin.h"
 
+#include <algorithm>
 #include <assetlib/skinning.h>
 
 #include "gltf_util.h"
+#include <assetlib_structs/Animation.h>
+#include <assetlib_structs/Node.h>
+#include <assetlib_structs/Skeleton.h>
 
+#include <cmath>
 #include <core/err/util.h>
+#include <cstddef>
+#include <cstdint>
+#include <cstdlib>
+#include <cstring>
+#include <iterator>
+#include <limits>
+#include <span>
+#include <string_view>
+#include <unordered_map>
+#include <utility>
+#include <vector>
 
 namespace assetlib
 {

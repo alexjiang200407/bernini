@@ -1,5 +1,6 @@
 #pragma once
 #include <core/file/IFileSystem.h>
+#include <span>
 
 namespace assetlib
 {

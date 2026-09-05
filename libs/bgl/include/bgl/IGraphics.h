@@ -8,8 +8,13 @@
 #include <bgl/RenderJob.h>
 #include <bgl/api.h>
 #include <bgl/error.h>
+#include <bgl/types/SceneDesc.h>
 #include <core/ref/Ref.h>
 #include <core/ref/SharedRef.h>
+#include <cstdint>
+#include <optional>
+#include <stdexcept>
+#include <string>
 
 namespace bgl
 {

@@ -1,7 +1,10 @@
 #include <core/file/file.h>
 
+#include <cstdint>
 #include <dlfcn.h>
+#include <filesystem>
 #include <mach-o/dyld.h>
+#include <string>
 
 namespace core::file
 {

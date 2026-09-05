@@ -1,9 +1,26 @@
+#include <algorithm>
+#include <atomic>
+#include <cerrno>
 #include <core/err/util.h>
 #include <core/file/IFileSystem.h>
 #include <core/file/file.h>
 #include <core/platform/util.h>
 
 #include <core/hash.h>
+#include <cstddef>
+#include <cstdint>
+#include <exception>
+#include <filesystem>
+#include <format>
+#include <fstream>
+#include <ios>
+#include <optional>
+#include <span>
+#include <stdexcept>
+#include <string>
+#include <string_view>
+#include <system_error>
+#include <vector>
 
 namespace core::file
 {

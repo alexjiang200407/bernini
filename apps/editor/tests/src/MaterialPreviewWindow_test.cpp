@@ -1,6 +1,10 @@
 #include "Windows/MaterialEditor/MaterialPreviewWindow.h"
+#include <bgl/MeshInstanceHandle.h>
 
+#include <algorithm>
 #include <catch2/catch_test_macros.hpp>
+#include <cstdint>
+#include <vector>
 
 // The selector-index -> selection mapping behind SetSelectedSubmesh and SetSubmeshMaterial, pinned
 // without a window or a device: which (instance, submesh) pairs a selector entry acts on. The

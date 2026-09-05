@@ -1,6 +1,10 @@
 #pragma once
+#include <array>
 #include <assetlib_structs/SourceStamp.h>
 #include <core/glm.h>
+#include <cstddef>
+#include <cstdint>
+#include <string>
 
 namespace assetlib
 {

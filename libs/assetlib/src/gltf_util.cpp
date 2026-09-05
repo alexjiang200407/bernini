@@ -1,6 +1,11 @@
 #include "gltf_util.h"
+#include <assetlib_structs/Node.h>
 
 #include <core/err/util.h>
+#include <cstddef>
+#include <cstdint>
+#include <cstring>
+#include <vector>
 
 namespace assetlib
 {

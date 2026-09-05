@@ -1,5 +1,8 @@
 #include "TrackedElement.h"
+#include <catch2/catch_test_macros.hpp>
 #include <core/containers/multi_slot_vector.h>
+#include <cstdint>
+#include <stdexcept>
 
 using test::TrackedElement;
 

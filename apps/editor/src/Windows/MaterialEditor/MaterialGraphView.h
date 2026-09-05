@@ -1,6 +1,11 @@
 #pragma once
 
 #include <QtNodes/GraphicsView>
+#include <QtNodes/internal/GraphicsView.hpp>
+#include <qobject.h>
+#include <qpoint.h>
+#include <qtmetamacros.h>
+#include <qwidget.h>
 
 class QDragEnterEvent;
 class QDragMoveEvent;

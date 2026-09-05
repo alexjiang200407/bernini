@@ -12,6 +12,19 @@
 #include "MountAt.h"
 #include "mounted_io.h"
 #include <assetlib/AssetStore.h>
+#include <assetlib/cancel.h>
+#include <assetlib/project_layout.h>
+#include <assetlib_structs/VkFormat.h>
+#include <catch2/catch_test_macros.hpp>
+#include <chrono>
+#include <core/containers/fixed_buffer.h>
+#include <cstddef>
+#include <cstdint>
+#include <filesystem>
+#include <fstream>
+#include <stdexcept>
+#include <stop_token>
+#include <string>
 
 using namespace assetlib;
 

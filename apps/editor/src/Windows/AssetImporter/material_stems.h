@@ -3,6 +3,8 @@
 #include <assetlib/bmesh_gltf.h>
 
 #include <QStringList>
+#include <qcontainerfwd.h>
+#include <span>
 
 namespace editor
 {

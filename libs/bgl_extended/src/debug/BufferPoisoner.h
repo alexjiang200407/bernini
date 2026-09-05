@@ -2,6 +2,7 @@
 #include "cmd/CommandList.h"
 #include "resource/Buffer.h"
 #include "resource/ResourceManager.h"
+#include <cstdint>
 
 namespace bgl
 {

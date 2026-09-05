@@ -1,7 +1,11 @@
 #include "cmd/CommandQueue_metal.h"
 #include "MetalErrorChecker.h"
 
+#include "cmd/CommandList.h"
 #include "cmd/CommandList_metal.h"
+#include "cmd/CommandQueue.h"
+#include <bgl_common/gassert.h>
+#include <cstdint>
 
 namespace bgl
 {

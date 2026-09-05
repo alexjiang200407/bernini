@@ -1,5 +1,13 @@
 #pragma once
 
+#include <cstddef>
+#include <cstdint>
+#include <functional>
+#include <span>
+#include <string>
+#include <string_view>
+#include <unordered_map>
+#include <utility>
 namespace core::str
 {
 #if defined(_WIN32)

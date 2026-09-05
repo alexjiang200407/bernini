@@ -1,6 +1,13 @@
 #include "baked_name.h"
 
+#include <algorithm>
+#include <cassert>
 #include <core/hash.h>
+#include <cstddef>
+#include <format>
+#include <span>
+#include <string>
+#include <string_view>
 
 namespace assetlib
 {

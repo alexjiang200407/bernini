@@ -1,6 +1,8 @@
 #include "Render/OrbitCamera.h"
 
 #include <catch2/catch_approx.hpp>
+#include <catch2/catch_test_macros.hpp>
+#include <cmath>
 
 // The orbit math shared by the preview viewports, pinned without a window: FocusOn's framing,
 // the pitch clamp, the geometric dolly and its bounds, and the view-plane pan.

@@ -1,5 +1,7 @@
 #pragma once
 #include "pipeline/MeshletKernel.h"
+#include <cstdint>
+#include <spdlog/spdlog.h>
 
 namespace bgl
 {

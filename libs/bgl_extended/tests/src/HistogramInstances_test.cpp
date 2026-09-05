@@ -11,14 +11,23 @@
 #include "scene/EntryBuffer.h"
 #include "scene/PackedBuffer.h"
 #include "scene/RangeBuffer.h"
+#include "types/Barrier.h"
 #include "types/ComputeState.h"
+#include "types/QueueType.h"
 #include "types/SubmeshInstance.h"
 #include "uniforms/Uniforms.h"
 #include "util/GpuValidation.h"
 #include "util/TestOptions.h"
+#include <array>
 #include <bgl/IGraphics.h>
+#include <bgl_common/idl/InstanceVisibility.h>
 #include <bgl_common/idl/PsoType.h>
 #include <bgl_common/idl/idl.h>
+#include <catch2/catch_test_macros.hpp>
+#include <cstddef>
+#include <cstdint>
+#include <iterator>
+#include <vector>
 
 // Exercises the counting-sort front end on the GPU: HistogramInstances counts instances
 // per PSO type, PrefixSumInstances turns that histogram into an inclusive prefix sum.

@@ -1,7 +1,9 @@
 #pragma once
 #include <assetlib_structs/Node.h>
 
+#include <cstdint>
 #include <tiny_gltf.h>
+#include <vector>
 
 namespace assetlib
 {

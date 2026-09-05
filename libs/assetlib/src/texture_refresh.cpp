@@ -1,10 +1,9 @@
+#include <algorithm>
 #include <assetlib/AssetStore.h>
 
 #include <assetlib/asset_import.h>
 #include <assetlib/asset_refs.h>
-#include <assetlib/bmesh.h>
 #include <assetlib/bmesh_gltf.h>
-#include <assetlib/container_info.h>
 #include <assetlib/import_document.h>
 #include <assetlib/project_layout.h>
 #include <assetlib_structs/BMeshImport.h>
@@ -13,8 +12,19 @@
 
 #include "mounted_io.h"
 #include "ref_paths.h"
+#include <assetlib/cancel.h>
+#include <assetlib/codecs.h>
+#include <assetlib/progress.h>
 
+#include <cstddef>
+#include <exception>
+#include <iterator>
+#include <span>
+#include <string>
+#include <string_view>
 #include <tracy/Tracy.hpp>
+#include <utility>
+#include <vector>
 
 namespace assetlib
 {

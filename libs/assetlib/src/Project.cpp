@@ -1,7 +1,15 @@
+#include <algorithm>
 #include <assetlib/Project.h>
+#include <assetlib/project_layout.h>
 
-#include <core/file/LooseFileSystem.h>
+#include <filesystem>
+#include <format>
+#include <fstream>
 #include <nlohmann/json.hpp>
+#include <stdexcept>
+#include <string>
+#include <string_view>
+#include <system_error>
 
 namespace assetlib
 {

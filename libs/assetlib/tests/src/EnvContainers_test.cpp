@@ -2,12 +2,24 @@
 #include <assetlib_structs/BEnv.h>
 #include <assetlib_structs/magic.h>
 
+#include <catch2/catch_test_macros.hpp>
+#include <catch2/matchers/catch_matchers.hpp>
 #include <core/io/ByteWriter.h>
 
 #include "MountAt.h"
 #include "mounted_io.h"
+#include <assetlib/AssetCodec.h>
+#include <assetlib/project_layout.h>
 #include <catch2/catch_approx.hpp>
 #include <catch2/matchers/catch_matchers_string.hpp>
+#include <cstddef>
+#include <cstdint>
+#include <cstring>
+#include <filesystem>
+#include <span>
+#include <stdexcept>
+#include <string_view>
+#include <vector>
 
 using namespace assetlib;
 

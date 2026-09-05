@@ -1,6 +1,11 @@
 #include "PlaybackTransport.h"
 
+#include <algorithm>
+#include <cmath>
 #include <core/err/util.h>
+#include <cstdint>
+#include <utility>
+#include <vector>
 
 namespace editor
 {

@@ -2,6 +2,7 @@
 #include "cmd/CommandList.h"
 #include "cmd/CommandQueue.h"
 #include "fg/FrameGraph.h"
+#include "fg/PassDesc.h"
 #include "gfx/GraphicsBase.h"
 #include "pipeline/ComputeKernel.h"
 #include "pipeline/ComputePipeline.h"
@@ -11,7 +12,9 @@
 #include "scene/EntryBuffer.h"
 #include "scene/PackedBuffer.h"
 #include "scene/RangeBuffer.h"
+#include "types/Barrier.h"
 #include "types/ComputeState.h"
+#include "types/QueueType.h"
 #include "types/SubmeshInstance.h"
 #include "uniforms/Uniforms.h"
 #include "util/GpuValidation.h"
@@ -20,9 +23,20 @@
 #include <bgl/Camera.h>
 #include <bgl/IGraphics.h>
 #include <bgl_common/Frustum.h>
+#include <bgl_common/idl/Constants.h>
+#include <bgl_common/idl/CullStats.h>
+#include <bgl_common/idl/CullView.h>
+#include <bgl_common/idl/InstanceVisibility.h>
+#include <bgl_common/idl/MeshInstance.h>
 #include <bgl_common/idl/PsoType.h>
+#include <bgl_common/idl/Submesh.h>
 #include <bgl_common/idl/idl.h>
+#include <catch2/catch_message.hpp>
+#include <catch2/catch_test_macros.hpp>
 #include <core/math.h>
+#include <cstdint>
+#include <iterator>
+#include <span>
 
 // Drives the CullInstances kernel against a crafted scene: unit-radius spheres placed at known
 // points around a known camera, one instance each. Reading back the visibility word proves the

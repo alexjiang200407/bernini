@@ -1,11 +1,14 @@
 #include <assetlib/AssetStore.h>
-#include <assetlib/container_info.h>
-#include <assetlib/envmap.h>
 #include <assetlib/pak.h>
 #include <assetlib_structs/BEnv.h>
 #include <assetlib_structs/BMaterial.h>
+#include <catch2/catch_test_macros.hpp>
 #include <core/file/LayeredFileSystem.h>
 #include <core/file/LooseFileSystem.h>
+#include <filesystem>
+#include <fstream>
+#include <memory>
+#include <stdexcept>
 
 #include "RefsSandbox.h"
 #include "mounted_io.h"

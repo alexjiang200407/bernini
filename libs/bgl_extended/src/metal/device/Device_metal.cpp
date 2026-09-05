@@ -5,16 +5,28 @@
 #include "cmd/CommandAllocator_metal.h"
 #include "cmd/CommandList_metal.h"
 #include "cmd/CommandQueue_metal.h"
+#include "device/Device.h"
 #include "pipeline/ComputePipeline_metal.h"
 #include "pipeline/MeshletPipeline_metal.h"
 #include "resource/ResourceManager_metal.h"
 #include "shadercache/ShaderCache_metal.h"
+#include <bgl/IRenderTarget.h>
+#include <core/ref/SharedRef.h>
 
 #include "cmd/CommandList.h"
 #include "pipeline/ComputePipeline.h"
 #include "pipeline/MeshletPipeline.h"
 #include "resource/ResourceManager.h"
 #include "resource/Shader.h"
+#include "slang/SlangSessions.h"
+#include "types/QueueType.h"
+#include "uniforms/Uniforms.h"
+#include <iterator>
+#include <memory>
+#include <slang.h>
+#include <string>
+#include <utility>
+#include <vector>
 
 namespace bgl
 {

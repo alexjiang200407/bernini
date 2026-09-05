@@ -1,4 +1,12 @@
+#include <catch2/catch_test_macros.hpp>
 #include <core/err/util.h>
+#include <cstdint>
+#include <cstdlib>
+#include <filesystem>
+#include <fstream>
+#include <sstream>
+#include <string>
+#include <system_error>
 
 // The crash log is written from a signal handler, so the only way to exercise it is to crash a
 // process: every case here forks, faults the child, and reads back what it left behind.

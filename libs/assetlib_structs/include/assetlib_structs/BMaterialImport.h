@@ -1,6 +1,7 @@
 #pragma once
 #include <assetlib_structs/BMaterial.h>
 #include <core/glm.h>
+#include <cstdint>
 
 namespace assetlib::imp
 {

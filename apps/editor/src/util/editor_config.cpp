@@ -2,6 +2,8 @@
 
 #include <core/file/file.h>
 #include <core/settings/Settings.h>
+#include <exception>
+#include <filesystem>
 
 namespace editor
 {

@@ -1,0 +1,17 @@
+# Include hygiene is NOT switched on here, and the reason is the subsystem's own shape.
+#
+# bgl_extended's interfaces are reached through core::Ref / core::SharedRef, and a caller holds
+# one via `auto`:
+#
+#     auto cmdQueue = device->CreateCommandQueue(bgl::QueueType::kGraphics);
+#
+# That file needs ICommandQueue complete -- SharedRef dereferences and destroys it inside the
+# template -- while naming nothing include-cleaner can see. So the unused-include half reports
+# cmd/CommandQueue.h, resource/ResourceManager.h and cmd/CommandAllocator.h as unused in dozens
+# of files where deleting them does not compile. Three of those headers are also never checked
+# as main files, because their directories hold no compiled .cpp for tidy.py to borrow flags from.
+#
+# The missing-include half is sound and has been applied. Removals here need a human pass over
+# each one and are their own change; until then this subsystem is not gated, in the same way
+# src/d3d12 is not.
+InheritParentConfig: true

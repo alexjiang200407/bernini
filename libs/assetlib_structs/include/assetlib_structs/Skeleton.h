@@ -3,6 +3,8 @@
 #include <core/str/string_pool.h>
 
 #include <assetlib_structs/SourceRef.h>
+#include <cstdint>
+#include <vector>
 
 namespace assetlib
 {

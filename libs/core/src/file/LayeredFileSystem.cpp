@@ -1,5 +1,19 @@
+#include <algorithm>
 #include <core/err/util.h>
+#include <core/file/IFileSystem.h>
 #include <core/file/LayeredFileSystem.h>
+#include <core/str/str.h>
+#include <cstddef>
+#include <cstdint>
+#include <functional>
+#include <memory>
+#include <optional>
+#include <span>
+#include <string>
+#include <string_view>
+#include <unordered_set>
+#include <utility>
+#include <vector>
 
 namespace core::file
 {
