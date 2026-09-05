@@ -77,10 +77,14 @@ TEST_CASE("the key peeks without the payload, foreign token included", "[cacheio
 	const fs::path at = fs::temp_directory_path() / "bernini_cache_peek.bin";
 	core::file::write_atomic(at, SampleEntry(SampleSource()));
 
-	CheckedFileReader reader(at, "test");
-	const auto        key = cache::peekKey(reader, 0xABCD1234u, "test");
-	CHECK(key.bakeToken == 42);
-	CHECK(key.source == SampleSource());
+	// Scoped: the reader holds the file open, and Windows refuses to remove one that is.
+	{
+		CheckedFileReader reader(at, "test");
+		const auto        key = cache::peekKey(reader, 0xABCD1234u, "test");
+		CHECK(key.bakeToken == 42);
+		CHECK(key.source == SampleSource());
+	}
+
 	fs::remove(at);
 }
 
