@@ -200,7 +200,11 @@ namespace bgl
 				continue;
 			}
 
-			outBindings[param->getName()] = static_cast<uint32_t>(param->getBindingIndex());
+			// By category, never getBindingIndex(): a cbuffer that also carries resource handles is
+			// Mixed, and that call then answers for whichever category comes first -- the pixel
+			// stage only ever agreed by coincidence, its buffer and its resource index both being 0.
+			outBindings[param->getName()] =
+				static_cast<uint32_t>(param->getOffset(slang::ParameterCategory::ConstantBuffer));
 		}
 	}
 }

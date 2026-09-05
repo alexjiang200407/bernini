@@ -33,7 +33,9 @@ namespace bgl
 		// Bump when the on-disk format below changes -- or when MetalizeLayout's rules do, since the
 		// layout it computed is what CachedCbuffer stores. Folded into every key so old files are
 		// missed rather than misread.
-		constexpr uint32_t c_CacheFormatVersion = 2;
+		// 3: a Mixed cbuffer's stage binding is its constant-buffer offset, not getBindingIndex();
+		// an entry written before that carries a wrong index for the same sources.
+		constexpr uint32_t c_CacheFormatVersion = 3;
 
 		// Named as on D3D12: one file per backend holding whatever its driver calls a pipeline
 		// library, so a cache directory reads the same whichever backend wrote it.
