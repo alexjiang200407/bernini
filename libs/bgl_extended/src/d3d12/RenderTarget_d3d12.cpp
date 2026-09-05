@@ -439,16 +439,26 @@ namespace bgl
 	void
 	RenderTarget::DestroyRenderTargets()
 	{
+		// Every handle is checked before it is released, as the Metal backend's counterpart does.
+		// A view is null when it was never made -- a windowed target's swapchain images get no
+		// SRV -- and also when its pool was exhausted, because CreateRtv reports that by returning
+		// a null handle rather than throwing. Cleared afterwards so a second teardown is a no-op.
 		for (UINT i = 0; i < c_SwapchainImageCount; i++)
 		{
-			// Null on a windowed target, whose swapchain images get no view.
 			if (!m_BackBuffers[i].srvHandle.IsNull())
 			{
 				m_ResourceManager->DestroySrv(m_BackBuffers[i].srvHandle, false);
 			}
+			if (!m_BackBuffers[i].rtvHandle.IsNull())
+			{
+				m_ResourceManager->DestroyRtv(m_BackBuffers[i].rtvHandle, false);
+			}
+			if (!m_BackBuffers[i].textureHandle.IsNull())
+			{
+				m_ResourceManager->DestroyTexture(m_BackBuffers[i].textureHandle, false);
+			}
 
-			m_ResourceManager->DestroyRtv(m_BackBuffers[i].rtvHandle, false);
-			m_ResourceManager->DestroyTexture(m_BackBuffers[i].textureHandle, false);
+			m_BackBuffers[i] = {};
 		}
 
 		DestroyHistoryAttachments();
@@ -460,13 +470,19 @@ namespace bgl
 	{
 		for (TextureRtvSrvHandle& history : m_History)
 		{
-			if (history.srvHandle.IsNull())
+			if (!history.srvHandle.IsNull())
 			{
-				continue;
+				m_ResourceManager->DestroySrv(history.srvHandle, false);
 			}
-			m_ResourceManager->DestroySrv(history.srvHandle, false);
-			m_ResourceManager->DestroyRtv(history.rtvHandle, false);
-			m_ResourceManager->DestroyTexture(history.textureHandle, false);
+			if (!history.rtvHandle.IsNull())
+			{
+				m_ResourceManager->DestroyRtv(history.rtvHandle, false);
+			}
+			if (!history.textureHandle.IsNull())
+			{
+				m_ResourceManager->DestroyTexture(history.textureHandle, false);
+			}
+
 			history = {};
 		}
 
@@ -481,24 +497,62 @@ namespace bgl
 		// starts it over -- the buffers themselves are the output's and stay.
 		m_HistoryValid = false;
 
-		m_ResourceManager->DestroySrv(m_DepthBuffer.srvHandle, false);
-		m_ResourceManager->DestroyDsv(m_DepthBuffer.dsvHandle, false);
-		m_ResourceManager->DestroyTexture(m_DepthBuffer.textureHandle, false);
+		if (!m_DepthBuffer.srvHandle.IsNull())
+		{
+			m_ResourceManager->DestroySrv(m_DepthBuffer.srvHandle, false);
+		}
+		if (!m_DepthBuffer.dsvHandle.IsNull())
+		{
+			m_ResourceManager->DestroyDsv(m_DepthBuffer.dsvHandle, false);
+		}
+		if (!m_DepthBuffer.textureHandle.IsNull())
+		{
+			m_ResourceManager->DestroyTexture(m_DepthBuffer.textureHandle, false);
+		}
 		m_DepthBuffer = {};
 
-		m_ResourceManager->DestroyRtv(m_MotionVectors.rtvHandle, false);
-		m_ResourceManager->DestroyTexture(m_MotionVectors.textureHandle, false);
+		if (!m_MotionVectors.rtvHandle.IsNull())
+		{
+			m_ResourceManager->DestroyRtv(m_MotionVectors.rtvHandle, false);
+		}
+		if (!m_MotionVectors.textureHandle.IsNull())
+		{
+			m_ResourceManager->DestroyTexture(m_MotionVectors.textureHandle, false);
+		}
+		m_MotionVectors = {};
 
-		m_ResourceManager->DestroySrv(m_SceneColor.srvHandle, false);
-		m_ResourceManager->DestroyRtv(m_SceneColor.rtvHandle, false);
-		m_ResourceManager->DestroyTexture(m_SceneColor.textureHandle, false);
+		if (!m_SceneColor.srvHandle.IsNull())
+		{
+			m_ResourceManager->DestroySrv(m_SceneColor.srvHandle, false);
+		}
+		if (!m_SceneColor.rtvHandle.IsNull())
+		{
+			m_ResourceManager->DestroyRtv(m_SceneColor.rtvHandle, false);
+		}
+		if (!m_SceneColor.textureHandle.IsNull())
+		{
+			m_ResourceManager->DestroyTexture(m_SceneColor.textureHandle, false);
+		}
+		m_SceneColor = {};
 
-		m_ResourceManager->DestroySrv(m_MotionVectorSrv, false);
+		if (!m_MotionVectorSrv.IsNull())
+		{
+			m_ResourceManager->DestroySrv(m_MotionVectorSrv, false);
+		}
 		m_MotionVectorSrv = {};
 
-		m_ResourceManager->DestroySrv(m_OutlineMask.srvHandle, false);
-		m_ResourceManager->DestroyRtv(m_OutlineMask.rtvHandle, false);
-		m_ResourceManager->DestroyTexture(m_OutlineMask.textureHandle, false);
+		if (!m_OutlineMask.srvHandle.IsNull())
+		{
+			m_ResourceManager->DestroySrv(m_OutlineMask.srvHandle, false);
+		}
+		if (!m_OutlineMask.rtvHandle.IsNull())
+		{
+			m_ResourceManager->DestroyRtv(m_OutlineMask.rtvHandle, false);
+		}
+		if (!m_OutlineMask.textureHandle.IsNull())
+		{
+			m_ResourceManager->DestroyTexture(m_OutlineMask.textureHandle, false);
+		}
 		m_OutlineMask = {};
 	}
 }
