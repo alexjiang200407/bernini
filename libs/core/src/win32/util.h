@@ -8,7 +8,7 @@ namespace core::win32
 	template <typename Fn>
 		requires std::invocable<Fn> && std::same_as<std::invoke_result_t<Fn>, LRESULT>
 	LRESULT
-	win32Invoke(Fn&& fn)
+	win32_invoke(Fn&& fn)
 	{
 		try
 		{
@@ -38,7 +38,7 @@ namespace core::win32
 	std::wstring
 	get_error_description(DWORD dw);
 
-	static const inline Win32ErrorChecker errorChecker;
+	static const inline Win32ErrorChecker c_ErrorChecker;
 
 	template <typename T>
 	T
