@@ -308,8 +308,8 @@ AnimationEditorWindow::BuildPropertiesColumn()
 void
 AnimationEditorWindow::UpdateGroundControls()
 {
-	// One switch for the whole group: the floor, the solve against it, and the two sliders that
-	// tilt it. There is nothing to see in a floor nothing stands on, and nothing to plant against
+	// One switch for the whole group: the floor, the solve against it, and the four sliders under
+	// it. There is nothing to see in a floor nothing stands on, and nothing to plant against
 	// without one.
 	const bool planting = m_PlantFeet->isChecked();
 

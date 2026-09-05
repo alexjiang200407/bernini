@@ -90,23 +90,18 @@ namespace bgl
 		}
 
 		/**
-		 * Every leg fading from what `current` holds at `now` to `position` and `rotation` over
+		 * Every leg fading from what this record holds at `now` to `position` and `rotation` over
 		 * `duration` seconds. Starts at `now`, so a write built from the record the instance holds
 		 * leaves everything before `now` as it was.
 		 */
-		[[nodiscard]] static FootIKDesc
-		FadeTo(
-			const FootIKDesc& current,
-			float             now,
-			float             duration,
-			float             position,
-			float             rotation) noexcept
+		[[nodiscard]] FootIKDesc
+		FadeTo(float position, float rotation, float now, float duration) const noexcept
 		{
 			auto desc = FootIKDesc();
 			for (size_t i = 0; i < desc.leg.size(); ++i)
 			{
-				desc.leg[i].position = current.leg[i].position.FadeTo(position, now, duration);
-				desc.leg[i].rotation = current.leg[i].rotation.FadeTo(rotation, now, duration);
+				desc.leg[i].position = leg[i].position.FadeTo(position, now, duration);
+				desc.leg[i].rotation = leg[i].rotation.FadeTo(rotation, now, duration);
 			}
 			return desc;
 		}

@@ -1324,8 +1324,7 @@ TEST_CASE("a weight ramp reads as the shader will", "[skinned][plant][footik]")
 	const auto fade = ramp.FadeTo(0.0f, 3.0f, 1.0f);
 	CheckRamp(fade, Ramp(0.6f, 0.0f, 3.0f, 4.0f));
 
-	const auto whole =
-		bgl::FootIKDesc::FadeTo(bgl::FootIKDesc::Constant(1.0f, 0.5f), 3.0f, 0.25f, 0.0f, 0.0f);
+	const auto whole = bgl::FootIKDesc::Constant(1.0f, 0.5f).FadeTo(0.0f, 0.0f, 3.0f, 0.25f);
 	CheckRamp(whole.leg[3].position, Ramp(1.0f, 0.0f, 3.0f, 3.25f));
 	CheckRamp(whole.leg[3].rotation, Ramp(0.5f, 0.0f, 3.0f, 3.25f));
 }
@@ -1458,9 +1457,7 @@ TEST_CASE(
 	// Drawn planted at t = 1, then told to fade out over the next second starting from exactly
 	// then. The frame at t = 2 re-evaluates prevTime = 1 through the new record.
 	const bgl::test::Palette planted = readAt(1.0f);
-	view->SetFootIK(
-		instance,
-		bgl::FootIKDesc::FadeTo(view->GetFootIK(instance), 1.0f, 1.0f, 0.0f, 0.0f));
+	view->SetFootIK(instance, view->GetFootIK(instance).FadeTo(0.0f, 0.0f, 1.0f, 1.0f));
 	const bgl::test::Palette faded = readAt(2.0f);
 
 	for (size_t row = 0; row < stride; ++row)
