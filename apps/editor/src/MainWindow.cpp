@@ -53,6 +53,8 @@
 
 #include "Startup/startup_labels.h"
 
+#include <QDebug>
+#include <QKeySequence>
 #include <memory>
 #include <optional>
 #include <qaction.h>
@@ -437,6 +439,16 @@ MainWindow::SetUpRenderMenu()
 		for (RenderTargetWindow* view : findChildren<RenderTargetWindow*>())
 			view->SetGpuTimingEnabled(enabled);
 	});
+
+	// One frame's table into editor.log, for a number that has to leave the machine or be read
+	// by something that cannot hover a tooltip. Needs timing on, so it follows the toggle.
+	auto* logTiming = render->addAction("Log GPU Pass Timings");
+	logTiming->setShortcut(QKeySequence("Ctrl+Shift+T"));
+	logTiming->setEnabled(false);
+	logTiming->setStatusTip(
+		"Write the rendering viewport's next per-pass GPU breakdown to editor.log.");
+	connect(timing, &QAction::toggled, logTiming, &QAction::setEnabled);
+	connect(logTiming, &QAction::triggered, this, [this] { m_LogNextPassTimings = true; });
 
 	SetUpRenderScaleMenu(render);
 }
@@ -1057,10 +1069,17 @@ MainWindow::SetUpFrameStats()
 					// The plain tip stands alone; the breakdown hangs under it while there is one.
 					// Both halves are rich text, or Qt would take the <pre> for prose.
 					m_FrameStats->setToolTip(
-						gpuPasses.isEmpty() ?
-							QString(c_FrameStatsTip) :
-							QString("<p>%1</p>%2")
-								.arg(QString(c_FrameStatsTip).toHtmlEscaped(), gpuPasses));
+						gpuPasses.isEmpty() ? QString(c_FrameStatsTip) :
+											  QString("<p>%1</p><pre>%2</pre>")
+												  .arg(
+													  QString(c_FrameStatsTip).toHtmlEscaped(),
+													  gpuPasses.toHtmlEscaped()));
+
+					if (m_LogNextPassTimings && !gpuPasses.isEmpty())
+					{
+						m_LogNextPassTimings = false;
+						qInfo().noquote() << "GPU pass timings," << name << "\n" << gpuPasses;
+					}
 				},
 				Qt::QueuedConnection);
 		}

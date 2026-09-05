@@ -25,9 +25,9 @@ namespace editor
 	FrameStatsText(const QString& viewport, const std::optional<FrameStats>& stats);
 
 	/**
-	 * The per-pass GPU breakdown under the readout's tooltip: one line per pass in the order the
-	 * frame ran them, its milliseconds, and their total. Rich text, since the columns only line up
-	 * in a fixed-width face.
+	 * The per-pass GPU breakdown: one line per pass in the order the frame ran them, its
+	 * milliseconds, and their total, in columns that line up in a fixed-width face. Plain text, so
+	 * the same table goes under the readout's tooltip and into the log.
 	 *
 	 * @return empty when there are no rows -- timing off, or no timed frame has landed yet -- so the
 	 *         tooltip is the plain one rather than a table with nothing in it.

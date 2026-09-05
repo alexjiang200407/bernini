@@ -30,19 +30,16 @@ namespace editor
 		std::size_t width = 0;
 		for (const bgl::PassTiming& row : rows) width = std::max(width, row.name.size());
 
-		QString text  = "<pre>";
+		QString text;
 		double  total = 0.0;
 		for (const bgl::PassTiming& row : rows)
 		{
-			text += QString::fromStdString(row.name)
-			            .leftJustified(static_cast<int>(width) + 2)
-			            .toHtmlEscaped() +
+			text += QString::fromStdString(row.name).leftJustified(static_cast<int>(width) + 2) +
 			        QString::asprintf("%8.3f ms\n", row.milliseconds);
 			total += row.milliseconds;
 		}
 		text += QString("total").leftJustified(static_cast<int>(width) + 2) +
 		        QString::asprintf("%8.3f ms", total);
-		text += "</pre>";
 		return text;
 	}
 }

@@ -169,6 +169,9 @@ private:
 	// status bar and be read as the visible viewport's.
 	RenderTargetWindow* m_FrameStatsSource = nullptr;
 
+	// Armed by Render > Log GPU Pass Timings; the next breakdown that arrives is logged and disarms it.
+	bool m_LogNextPassTimings = false;
+
 	std::unique_ptr<Renderer> m_Renderer;
 
 	// The dock-visibility connections, held so the destructor can cut them before the windows they
