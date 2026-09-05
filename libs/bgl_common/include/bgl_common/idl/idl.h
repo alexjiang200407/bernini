@@ -1,6 +1,9 @@
 #pragma once
 
+#include <bgl_common/idl/BlendNode.h>
+#include <bgl_common/idl/BlendNodeKind.h>
 #include <bgl_common/idl/BlendSlot.h>
+#include <bgl_common/idl/BlendSpaceMember.h>
 #include <bgl_common/idl/BoneSample.h>
 #include <bgl_common/idl/Clip.h>
 #include <bgl_common/idl/Constants.h>

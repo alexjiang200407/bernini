@@ -249,6 +249,135 @@ namespace
 		}
 	}
 
+	/**
+	 * Two looping clips of different lengths over the chain, so a blend space's shared phase has
+	 * something to prove: clip 0 wraps over one interval and clip 1 over two, and only a normalized
+	 * phase keeps them in step.
+	 *
+	 * Clip 0 swings bone 1; clip 1 slides bone 0 and tilts bone 2, so a blend of the two is
+	 * distinguishable from either alone at every bone.
+	 */
+	assetlib::AnimationSet
+	MakeSpaceClipSet()
+	{
+		auto set              = assetlib::AnimationSet();
+		set.boneCount         = c_BoneCount;
+		set.skeletonSignature = assetlib::skeletonSignature(MakeChain());
+
+		const auto swing = glm::quat(0.70710678f, 0.0f, 0.0f, 0.70710678f);
+		const auto tilt  = glm::quat(0.70710678f, 0.70710678f, 0.0f, 0.0f);
+
+		// Clip 0: two frames, bone 1 swings on the second.
+		auto first        = assetlib::AnimationClip();
+		first.firstSample = 0;
+		first.frameCount  = 2;
+		first.sampleRate  = c_SampleRate;
+		first.duration    = 1.0f / c_SampleRate;
+		first.loop        = 1;
+		set.clips.push_back(first);
+		for (uint32_t f = 0; f < 2; ++f)
+			for (uint32_t b = 0; b < c_BoneCount; ++b)
+			{
+				auto sample        = assetlib::Transform();
+				sample.translation = glm::vec3(0.0f, b == 0 ? 0.0f : 1.0f, 0.0f);
+				sample.rotation    = (f == 1 && b == 1) ? swing : glm::quat(1.0f, 0.0f, 0.0f, 0.0f);
+				sample.scale       = glm::vec3(1.0f);
+				set.samples.push_back(sample);
+			}
+
+		// Clip 1: three frames, so its cycle is twice clip 0's at the same rate.
+		auto second        = assetlib::AnimationClip();
+		second.firstSample = static_cast<uint32_t>(set.samples.size());
+		second.frameCount  = 3;
+		second.sampleRate  = c_SampleRate;
+		second.duration    = 2.0f / c_SampleRate;
+		second.loop        = 1;
+		set.clips.push_back(second);
+		for (uint32_t f = 0; f < 3; ++f)
+			for (uint32_t b = 0; b < c_BoneCount; ++b)
+			{
+				auto sample        = assetlib::Transform();
+				sample.translation = glm::vec3(0.0f, b == 0 ? 0.0f : 1.0f, 0.0f);
+				if (b == 0)
+					sample.translation.x = float(f) * 0.25f;
+				sample.rotation = (f == 1 && b == 2) ? tilt : glm::quat(1.0f, 0.0f, 0.0f, 0.0f);
+				sample.scale    = glm::vec3(1.0f);
+				set.samples.push_back(sample);
+			}
+
+		// Clip 2: five frames, so the three cycles are 1, 2 and 4 intervals -- a space over all
+		// three has a genuine kink at its middle member, which is what a crossing has to split at.
+		auto third        = assetlib::AnimationClip();
+		third.firstSample = static_cast<uint32_t>(set.samples.size());
+		third.frameCount  = 5;
+		third.sampleRate  = c_SampleRate;
+		third.duration    = 4.0f / c_SampleRate;
+		third.loop        = 1;
+		set.clips.push_back(third);
+		for (uint32_t f = 0; f < 5; ++f)
+			for (uint32_t b = 0; b < c_BoneCount; ++b)
+			{
+				auto sample        = assetlib::Transform();
+				sample.translation = glm::vec3(0.0f, b == 0 ? 0.0f : 1.0f, 0.0f);
+				if (b == 1)
+					sample.translation.z = float(f) * 0.125f;
+				sample.rotation = glm::quat(1.0f, 0.0f, 0.0f, 0.0f);
+				sample.scale    = glm::vec3(1.0f);
+				set.samples.push_back(sample);
+			}
+
+		return set;
+	}
+
+	/**
+	 * Two spaces over MakeSpaceClipSet: a two-member one across clips 0 and 1, then a three-member
+	 * one across all three. The second has an interior member, so a parameter ramp across it
+	 * crosses a breakpoint -- which is the case a single span cannot exercise.
+	 */
+	bgl::BlendSetDesc
+	MakeSpaceSet()
+	{
+		auto pair = bgl::BlendSpaceDesc();
+		pair.members.push_back({ 0, 0.0f });
+		pair.members.push_back({ 1, 1.0f });
+
+		// Four members, so a ramp can cross two interior ones: with a single crossing the walk
+		// visits the same edge whichever direction it takes, and the order cannot be observed.
+		// Clip 0 appears at both ends, which is legal and keeps this to the three clips in hand.
+		auto triple = bgl::BlendSpaceDesc();
+		triple.members.push_back({ 0, 0.0f });
+		triple.members.push_back({ 1, 0.33f });
+		triple.members.push_back({ 2, 0.66f });
+		triple.members.push_back({ 0, 1.0f });
+
+		auto set = bgl::BlendSetDesc();
+		set.spaces.push_back(std::move(pair));
+		set.spaces.push_back(std::move(triple));
+		return set;
+	}
+
+	/** The cycle of a clip in seconds: the intervals it wraps over, at its authored rate. */
+	float
+	CycleSeconds(const assetlib::AnimationClip& clip)
+	{
+		return float(clip.frameCount - 1) / clip.sampleRate;
+	}
+
+	/** A slot playing `node` at full weight, whose parameter is held at `parameter`. */
+	bgl::PlaybackSlot
+	SpaceSlot(uint32_t node, float phase, float rate, float parameter)
+	{
+		auto slot    = bgl::PlaybackSlot();
+		slot.node    = node;
+		slot.phase   = phase;
+		slot.rate    = rate;
+		slot.weight0 = 1.0f;
+		slot.weight1 = 1.0f;
+		slot.param0  = parameter;
+		slot.param1  = parameter;
+		return slot;
+	}
+
 	/** A slot playing `node` held at `phase`, whose weight ramps `from` to `to` over the window. */
 	bgl::PlaybackSlot
 	RampedSlot(uint32_t node, float phase, float from, float to, float rampStart, float rampEnd)
@@ -866,5 +995,266 @@ TEST_CASE("the pose pass writes the palette a rig's hierarchy implies", "[skinne
 		bgl::test::CheckNear(
 			previous.Apply(1, glm::vec3(0.0f, 2.0f, 0.0f)),
 			glm::vec3(0.0f, 2.0f, 0.0f));
+	}
+}
+
+// The blend-space gate: what the pose pass writes for a slot naming a space, held against the CPU
+// reference the same two clips evaluate to. The reference is what defines a blend here.
+TEST_CASE("the pose pass blends a space as the reference does", "[skinned][pose][render][blend]")
+{
+	auto opts             = bgl::GraphicsOptions();
+	opts.shaderCacheDir   = bgl::test::ShaderCacheDir();
+	opts.enableDebugLayer = true;
+
+	auto gfx = bgl::CreateGraphics(opts);
+	REQUIRE(gfx != nullptr);
+
+	auto* gfxBase = gfx->As<bgl::GraphicsBase>();
+	REQUIRE(gfxBase != nullptr);
+
+	auto targetDesc     = bgl::RenderTargetDesc();
+	targetDesc.width    = static_cast<int>(c_Width);
+	targetDesc.height   = static_cast<int>(c_Height);
+	targetDesc.headless = true;
+	auto target         = gfx->CreateRenderTarget(targetDesc);
+	REQUIRE(target != nullptr);
+
+	auto sceneDesc                        = bgl::SceneDesc();
+	sceneDesc.initialGeom                 = 4;
+	sceneDesc.initialMeshlets             = 8;
+	sceneDesc.initialSubmeshes            = 4;
+	sceneDesc.initialVertexBufferByteSize = 4096;
+	sceneDesc.initialIndices              = 64;
+	sceneDesc.initialPbrMaterials         = 4;
+
+	auto scene = gfx->CreateScene(sceneDesc);
+	auto view  = gfx->CreateSceneView(scene, 4);
+
+	bgl::test::ApplyEnvironment(scene.Get(), view.Get());
+
+	auto material            = bgl::PbrMaterialDesc();
+	material.baseColorFactor = glm::vec4(1.0f);
+	const auto pbr           = scene->CreatePbrMaterial(material);
+
+	const std::array<bgl::MaterialHandle, 1> materials = { { pbr } };
+
+	const assetlib::Skeleton     skeleton   = MakeChain();
+	const assetlib::AnimationSet animations = MakeSpaceClipSet();
+
+	const auto geom = scene->AddSkinnedMeshGeom(
+		MakeSkinnedTriangle(),
+		0,
+		materials,
+		scene->AddRig(skeleton, animations, bgl::FootPlantDesc(), MakeSpaceSet()),
+		assetlib::Bounds{ glm::vec3(-4.0f), glm::vec3(4.0f) });
+	REQUIRE(geom.IsValid());
+
+	auto job     = bgl::RenderJob();
+	job.view     = view;
+	job.viewport = bgl::Viewport(static_cast<float>(c_Width), static_cast<float>(c_Height));
+
+	auto* viewRaw = view->As<bgl::SceneView>();
+	REQUIRE(viewRaw != nullptr);
+
+	const uint32_t float4sPerPose = c_BoneCount * bgl::idl::cFloat4sPerBone;
+
+	// Three clips, so three clip nodes come first: node 3 is the two-member space and node 4 the
+	// three-member one.
+	constexpr uint32_t c_SpaceNode  = 3;
+	constexpr uint32_t c_TripleNode = 4;
+
+	const auto paletteAt = [&](bgl::MeshInstanceHandle instance, float time) {
+		job.time = time;
+		gfx->DrawFrame(target, job);
+		return bgl::test::ReadPalette(
+			gfxBase,
+			viewRaw,
+			bgl::test::PaletteBaseOf(viewRaw, instance),
+			float4sPerPose);
+	};
+
+	// What the space should resolve to at `time`, computed the way the ADR states it: one shared
+	// normalized phase, each member's frame that fraction of its own cycle.
+	const auto expected = [&](float parameter, float phase, float rate, float time) {
+		const float cycle0 = CycleSeconds(animations.clips[0]);
+		const float cycle1 = CycleSeconds(animations.clips[1]);
+		const float span   = glm::mix(cycle0, cycle1, parameter);
+
+		const float u = glm::fract(phase + rate * (time / span));
+
+		const std::array<assetlib::BlendSample, 2> blend = {
+			{ { 0, u * float(animations.clips[0].frameCount - 1), 1.0f - parameter },
+			  { 1, u * float(animations.clips[1].frameCount - 1), parameter } }
+		};
+		return std::vector<assetlib::BlendSample>(blend.begin(), blend.end());
+	};
+
+	SECTION("a parameter on a member plays that clip alone")
+	{
+		auto desc    = bgl::SkinnedPlaybackDesc();
+		desc.slot[0] = SpaceSlot(c_SpaceNode, 0.0f, 0.0f, 0.0f);
+
+		const auto instance = view->CreateSkinnedMeshInstance(geom, glm::mat4(1.0f), desc);
+
+		const std::array<assetlib::BlendSample, 1> alone = { { { 0, 0.0f, 1.0f } } };
+		CheckAgainstReference(paletteAt(instance, 0.0f), skeleton, animations, alone);
+	}
+
+	SECTION("a parameter between two members is their weighted blend at one shared phase")
+	{
+		auto desc    = bgl::SkinnedPlaybackDesc();
+		desc.slot[0] = SpaceSlot(c_SpaceNode, 0.25f, 0.0f, 0.5f);
+
+		const auto instance = view->CreateSkinnedMeshInstance(geom, glm::mat4(1.0f), desc);
+
+		// Rate zero, so the phase is exactly what the record holds and the clips are frozen at the
+		// same fraction of their different cycles -- the whole point of a normalized phase.
+		CheckAgainstReference(
+			paletteAt(instance, 0.0f),
+			skeleton,
+			animations,
+			expected(0.5f, 0.25f, 0.0f, 0.0f));
+	}
+
+	SECTION("the phase is exact mid-ramp, not merely at the ramp's ends")
+	{
+		// What ADR-11's closed form buys over the approximation it rejected: while the parameter
+		// ramps, the cycle length is moving, so the phase is an integral rather than a quotient.
+		// Held against a finely stepped numerical integral of the same thing.
+		constexpr float c_Rate  = 1.0f;
+		constexpr float c_Start = 0.0f;
+		constexpr float c_End   = 0.4f;
+		constexpr float c_Time  = 0.15f;  // inside the window, not at either end
+
+		auto slot       = SpaceSlot(c_SpaceNode, 0.0f, c_Rate, 0.0f);
+		slot.param0     = 0.0f;
+		slot.param1     = 1.0f;
+		slot.paramStart = c_Start;
+		slot.paramEnd   = c_End;
+
+		auto desc    = bgl::SkinnedPlaybackDesc();
+		desc.slot[0] = slot;
+
+		const auto instance = view->CreateSkinnedMeshInstance(geom, glm::mat4(1.0f), desc);
+
+		const float cycle0 = CycleSeconds(animations.clips[0]);
+		const float cycle1 = CycleSeconds(animations.clips[1]);
+
+		const auto parameterAt = [&](float t) {
+			return glm::clamp((t - c_Start) / (c_End - c_Start), 0.0f, 1.0f);
+		};
+
+		// The integral, stepped, and accumulated in double: at this step count a float sum loses
+		// more precision than the closed form it is checking, which is the wrong way round for a
+		// reference.
+		constexpr uint32_t c_Steps  = 200000;
+		const double       step     = double(c_Time) / double(c_Steps);
+		double             integral = 0.0;
+		for (uint32_t i = 0; i < c_Steps; ++i)
+		{
+			const float mid = static_cast<float>((double(i) + 0.5) * step);
+			integral += step / double(glm::mix(cycle0, cycle1, parameterAt(mid)));
+		}
+
+		const float u         = glm::fract(static_cast<float>(double(c_Rate) * integral));
+		const float parameter = parameterAt(c_Time);
+
+		const std::array<assetlib::BlendSample, 2> blend = {
+			{ { 0, u * float(animations.clips[0].frameCount - 1), 1.0f - parameter },
+			  { 1, u * float(animations.clips[1].frameCount - 1), parameter } }
+		};
+
+		CheckAgainstReference(paletteAt(instance, c_Time), skeleton, animations, blend);
+	}
+
+	SECTION("a ramp falling across an interior member is split in the order it reaches them")
+	{
+		// The regression this exists for: the segments have to be accumulated in the order the ramp
+		// reaches them, not in table order. A rising ramp reaches them in table order and hides the
+		// difference, so this one falls -- decelerating from a sprint, which is ordinary content.
+		constexpr float c_Rate  = 1.0f;
+		constexpr float c_Start = 0.0f;
+		constexpr float c_End   = 0.4f;
+		constexpr float c_Time  = 0.3f;  // past the middle member, so a breakpoint was crossed
+		constexpr float c_From  = 0.9f;
+		constexpr float c_To    = 0.1f;
+
+		auto slot       = SpaceSlot(c_TripleNode, 0.0f, c_Rate, 0.0f);
+		slot.param0     = c_From;
+		slot.param1     = c_To;
+		slot.paramStart = c_Start;
+		slot.paramEnd   = c_End;
+
+		auto desc    = bgl::SkinnedPlaybackDesc();
+		desc.slot[0] = slot;
+
+		const auto instance = view->CreateSkinnedMeshInstance(geom, glm::mat4(1.0f), desc);
+
+		const std::array<float, 4> cycles = { { CycleSeconds(animations.clips[0]),
+			                                    CycleSeconds(animations.clips[1]),
+			                                    CycleSeconds(animations.clips[2]),
+			                                    CycleSeconds(animations.clips[0]) } };
+		const std::array<float, 4> stops  = { { 0.0f, 0.33f, 0.66f, 1.0f } };
+
+		const auto parameterAt = [&](float t) {
+			return glm::mix(
+				c_From,
+				c_To,
+				glm::clamp((t - c_Start) / (c_End - c_Start), 0.0f, 1.0f));
+		};
+
+		// The weighted cycle at a parameter: linear between the two members straddling it, which is
+		// what makes it kink at the middle one.
+		const auto secondsAt = [&](float p) {
+			for (size_t i = 1; i < stops.size(); ++i)
+				if (p <= stops[i])
+					return glm::mix(
+						cycles[i - 1],
+						cycles[i],
+						(p - stops[i - 1]) / (stops[i] - stops[i - 1]));
+			return cycles.back();
+		};
+
+		constexpr uint32_t c_Steps  = 200000;
+		const double       step     = double(c_Time) / double(c_Steps);
+		double             integral = 0.0;
+		for (uint32_t i = 0; i < c_Steps; ++i)
+		{
+			const float mid = static_cast<float>((double(i) + 0.5) * step);
+			integral += step / double(secondsAt(parameterAt(mid)));
+		}
+
+		const float u         = glm::fract(static_cast<float>(double(c_Rate) * integral));
+		const float parameter = parameterAt(c_Time);
+
+		// Below the second member at this time, so it sits in the first span and both interior
+		// members were crossed on the way.
+		REQUIRE(parameter < stops[1]);
+		const float between = (parameter - stops[0]) / (stops[1] - stops[0]);
+
+		const std::array<assetlib::BlendSample, 2> blend = {
+			{ { 0, u * float(animations.clips[0].frameCount - 1), 1.0f - between },
+			  { 1, u * float(animations.clips[1].frameCount - 1), between } }
+		};
+
+		CheckAgainstReference(paletteAt(instance, c_Time), skeleton, animations, blend);
+	}
+
+	SECTION("the phase advances at the weighted cycle, so the members stay in step")
+	{
+		constexpr float c_Rate      = 1.0f;
+		constexpr float c_Parameter = 0.5f;
+		constexpr float c_Time      = 0.02f;
+
+		auto desc    = bgl::SkinnedPlaybackDesc();
+		desc.slot[0] = SpaceSlot(c_SpaceNode, 0.0f, c_Rate, c_Parameter);
+
+		const auto instance = view->CreateSkinnedMeshInstance(geom, glm::mat4(1.0f), desc);
+
+		CheckAgainstReference(
+			paletteAt(instance, c_Time),
+			skeleton,
+			animations,
+			expected(c_Parameter, 0.0f, c_Rate, c_Time));
 	}
 }

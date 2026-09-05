@@ -376,8 +376,8 @@ namespace bgl
 		if (desc.source == PoseSource::kPerInstance)
 		{
 			const auto record = SkinnedPlaybackDesc::FromClip(desc.clip, desc.phase, desc.rate);
-			ValidatePlayback(record, rig.clipCount, "CreateSkinnedMeshInstance");
-			return PlacePosed(geom, transform, rig.record, rig.boneCount, rig.clipCount, record);
+			ValidatePlayback(record, rig.nodeCount, "CreateSkinnedMeshInstance");
+			return PlacePosed(geom, transform, rig.record, rig.boneCount, rig.nodeCount, record);
 		}
 
 		// Asked for here rather than at AddRig, so a rig no crowd instance is spawned on never
@@ -394,7 +394,7 @@ namespace bgl
 			idl::PlaybackType::kSkinnedTable,
 			std::as_bytes(std::span(&state, 1)));
 
-		return PlaceRecord(geom, transform, record, core::multi_slot_handle(), rig.clipCount);
+		return PlaceRecord(geom, transform, record, core::multi_slot_handle(), rig.nodeCount);
 	}
 
 	MeshInstanceHandle
@@ -406,10 +406,10 @@ namespace bgl
 		const Scene::AnimGeomInfo rig =
 			RequireSkinnedGeom(*m_SceneRaw, geom, "CreateSkinnedMeshInstance");
 
-		// Node `n` is clip `n` until an authored table widens the rig's.
-		ValidatePlayback(desc, rig.clipCount, "CreateSkinnedMeshInstance");
+		// A slot names a node of the rig table: its clips first, then its authored spaces.
+		ValidatePlayback(desc, rig.nodeCount, "CreateSkinnedMeshInstance");
 
-		return PlacePosed(geom, transform, rig.record, rig.boneCount, rig.clipCount, desc);
+		return PlacePosed(geom, transform, rig.record, rig.boneCount, rig.nodeCount, desc);
 	}
 
 	MeshInstanceHandle

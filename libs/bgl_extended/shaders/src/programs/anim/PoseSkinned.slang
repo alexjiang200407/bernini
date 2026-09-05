@@ -1,4 +1,7 @@
+import idl.BlendNode;
+import idl.BlendNodeKind;
 import idl.BlendSlot;
+import idl.BlendSpaceMember;
 import idl.BoneSample;
 import idl.Clip;
 import idl.Constants;
@@ -10,6 +13,7 @@ import idl.SkinnedBone;
 import idl.SkinnedLegChain;
 import idl.SkinnedState;
 import lib.anim.blend_slots;
+import lib.anim.blend_space;
 import lib.anim.clip_playback;
 import lib.anim.foot_plant;
 import lib.anim.pose_walk;
@@ -56,6 +60,10 @@ struct Uniforms
     // per frame of the sample pool packed four to a uint.
     RangeBuffer<SkinnedLegChain> legBuffer;
     RangeBuffer<uint> plantWeightBuffer;
+
+    // The rig's node table and the members its space nodes address.
+    RangeBuffer<BlendNode> blendNodeBuffer;
+    RangeBuffer<BlendSpaceMember> blendMemberBuffer;
 
     ComputeBuffer<float4> bonePalettes;
 
@@ -409,8 +417,149 @@ void PoseInstance(PoseTables tables, Rig rig, LocalPose pose, float4x4 modelToWo
     FoldInverseBind(tables, rig, paletteBase, localIdx);
 }
 
-// The record's slots at `time`: every slot carrying weight, its clip and frame position, weights
-// normalized to one. Group-uniform, since the whole group reads one record at one time.
+// The clip a space's member plays, and the seconds its cycle spans.
+float MemberCycleSeconds(Rig rig, uint member)
+{
+    let entry = gUniforms.blendMemberBuffer.Get(rig.members, member);
+    return MemberSeconds(gUniforms.clipBuffer.Get(rig.clips, entry.clip));
+}
+
+// The two members of `node` straddling `parameter`, and how far between them it sits. A parameter
+// outside the authored range clamps onto the end member, which then plays alone.
+void SpaceMembers(Rig rig, BlendNode node, float parameter, out uint lo, out uint hi, out float weight)
+{
+    let last = node.firstMember + node.memberCount - 1;
+
+    lo = node.firstMember;
+    hi = node.firstMember;
+    weight = 0.0;
+
+    if (parameter >= gUniforms.blendMemberBuffer.Get(rig.members, last).parameter)
+    {
+        lo = last;
+        hi = last;
+        return;
+    }
+
+    // A walk, not a search: a space is a handful of members, and this runs once per slot per group
+    // rather than per bone.
+    for (uint i = node.firstMember; i < last; ++i)
+    {
+        let b = gUniforms.blendMemberBuffer.Get(rig.members, i + 1).parameter;
+        if (parameter < b)
+        {
+            let a = gUniforms.blendMemberBuffer.Get(rig.members, i).parameter;
+            lo = i;
+            hi = i + 1;
+            weight = SpanWeight(a, b, parameter);
+            return;
+        }
+    }
+}
+
+// The weighted cycle length in seconds at `parameter` -- the `D` the phase integral divides by.
+float SpaceSeconds(Rig rig, BlendNode node, float parameter)
+{
+    uint lo;
+    uint hi;
+    float weight;
+    SpaceMembers(rig, node, parameter, lo, hi, weight);
+
+    return lerp(MemberCycleSeconds(rig, lo), MemberCycleSeconds(rig, hi), weight);
+}
+
+// The slot's parameter at `time`, on the same ramp shape its weight uses.
+float SlotParameter(BlendSlot slot, float time)
+{
+    if (time < slot.paramStart)
+    {
+        return slot.param0;
+    }
+    if (time >= slot.paramEnd)
+    {
+        return slot.param1;
+    }
+    return lerp(slot.param0, slot.param1, (time - slot.paramStart) / (slot.paramEnd - slot.paramStart));
+}
+
+// The space's shared normalized phase at `time`: `phase` advanced from `tRef` at `rate` cycles per
+// weighted cycle length, integrated in closed form because the length moves while the parameter
+// ramps.
+//
+// Split at the ramp's ends and at every member the parameter crosses, because `D` is only linear in
+// the parameter *between* two adjacent members and kinks at each one. At most `memberCount + 1`
+// terms, once per slot per group.
+float SpacePhase(Rig rig, BlendNode node, BlendSlot slot, float time)
+{
+    // Nothing to integrate over, and the case a rewrite rebased to now hits at prevTime.
+    if (time <= slot.tRef)
+    {
+        return slot.phase;
+    }
+
+    float elapsed = 0.0;
+
+    // Before the ramp the parameter is fixed, so the cycle is too.
+    let rampFrom = clamp(slot.paramStart, slot.tRef, time);
+    if (rampFrom > slot.tRef)
+    {
+        elapsed += (rampFrom - slot.tRef) / SpaceSeconds(rig, node, slot.param0);
+    }
+
+    // Through the ramp, one term per span the parameter crosses.
+    let rampTo = clamp(slot.paramEnd, rampFrom, time);
+    if (rampTo > rampFrom)
+    {
+        let pFrom = SlotParameter(slot, rampFrom);
+        let pTo = SlotParameter(slot, rampTo);
+
+        float tSegment = rampFrom;
+        float pSegment = pFrom;
+        float dSegment = SpaceSeconds(rig, node, pFrom);
+
+        // Walked in the direction the parameter moves, not in table order: the segments have to be
+        // accumulated in the order they are reached, or a falling ramp fuses two spans of a kinked
+        // `D` into one closed-form term and the integral is wrong. Bounded by the table, not by the
+        // ramp, and the bound is group-uniform.
+        let ascending = pTo > pFrom;
+        for (uint k = 0; k < node.memberCount; ++k)
+        {
+            let i = ascending ? (node.firstMember + k) : (node.firstMember + node.memberCount - 1 - k);
+
+            let edge = gUniforms.blendMemberBuffer.Get(rig.members, i).parameter;
+            if (!(ascending ? (edge > pSegment && edge < pTo) : (edge < pSegment && edge > pTo)))
+            {
+                continue;
+            }
+
+            // Where the ramp reaches this member, by linear interpolation of the parameter in time.
+            let tEdge = lerp(rampFrom, rampTo, (edge - pFrom) / (pTo - pFrom));
+            let dEdge = SpaceSeconds(rig, node, edge);
+
+            elapsed += PhaseElapsed(tEdge - tSegment, dSegment, dEdge);
+
+            tSegment = tEdge;
+            pSegment = edge;
+            dSegment = dEdge;
+        }
+
+        elapsed += PhaseElapsed(rampTo - tSegment, dSegment, SpaceSeconds(rig, node, pTo));
+    }
+
+    // After the ramp the parameter is fixed again.
+    if (time > rampTo)
+    {
+        elapsed += (time - rampTo) / SpaceSeconds(rig, node, slot.param1);
+    }
+
+    return frac(slot.phase + slot.rate * elapsed);
+}
+
+// The record's slots at `time`: every clip carrying weight, its frame position, weights normalized
+// to one. Group-uniform, since the whole group reads one record at one time.
+//
+// A clip node contributes one clip; a space node contributes the two members straddling its
+// parameter, which is why the pose holds twice the slots.
 LocalPose ResolveSlots(SkinnedState state, Rig rig, float time)
 {
     LocalPose pose = EmptyPose();
@@ -425,22 +574,60 @@ LocalPose ResolveSlots(SkinnedState state, Rig rig, float time)
             continue;
         }
 
-        // The node table is implicit: node `n` is clip `n`. An authored blend space is what will
-        // make it a table this looks up.
-        Clip clip = gUniforms.clipBuffer.Get(rig.clips, slot.node);
+        BlendNode node = gUniforms.blendNodeBuffer.Get(rig.nodes, slot.node);
 
-        pose.clips[pose.count] = clip;
-        pose.frames[pose.count] = SlotFrames(clip, slot, time);
-        pose.weights[pose.count] = weight;
-        total += weight;
-        ++pose.count;
+        if (node.kind == BlendNodeKind.kClip)
+        {
+            Clip clip = gUniforms.clipBuffer.Get(rig.clips, node.clip);
+
+            pose.clips[pose.count] = clip;
+            pose.frames[pose.count] = SlotFrames(clip, slot, time);
+            pose.weights[pose.count] = weight;
+            total += weight;
+            ++pose.count;
+            continue;
+        }
+
+        let parameter = SlotParameter(slot, time);
+        let phase = SpacePhase(rig, node, slot, time);
+
+        uint lo;
+        uint hi;
+        float between;
+        SpaceMembers(rig, node, parameter, lo, hi, between);
+
+        // The phase is normalized and shared; each member's frame is that fraction of its own
+        // cycle, which is what keeps clips of different lengths in step.
+        let loEntry = gUniforms.blendMemberBuffer.Get(rig.members, lo);
+        let hiEntry = gUniforms.blendMemberBuffer.Get(rig.members, hi);
+        let loClip = gUniforms.clipBuffer.Get(rig.clips, loEntry.clip);
+        let hiClip = gUniforms.clipBuffer.Get(rig.clips, hiEntry.clip);
+
+        if (between < 1.0)
+        {
+            pose.clips[pose.count] = loClip;
+            pose.frames[pose.count] = phase * ClipCycle(loClip);
+            pose.weights[pose.count] = weight * (1.0 - between);
+            total += pose.weights[pose.count];
+            ++pose.count;
+        }
+        if (between > 0.0 && hi != lo)
+        {
+            pose.clips[pose.count] = hiClip;
+            pose.frames[pose.count] = phase * ClipCycle(hiClip);
+            pose.weights[pose.count] = weight * between;
+            total += pose.weights[pose.count];
+            ++pose.count;
+        }
     }
 
-    // Nothing weighted at this time -- every ramp still ahead of it, say -- holds slot 0, which a
-    // record always names a clip in.
+    // Nothing weighted at this time -- every ramp still ahead of it, say -- holds slot 0's node,
+    // which a record always names one in.
     if (pose.count == 0)
     {
-        Clip clip = gUniforms.clipBuffer.Get(rig.clips, state.slots[0].node);
+        BlendNode node = gUniforms.blendNodeBuffer.Get(rig.nodes, state.slots[0].node);
+        let clipIndex = node.kind == BlendNodeKind.kClip ? node.clip : gUniforms.blendMemberBuffer.Get(rig.members, node.firstMember).clip;
+        Clip clip = gUniforms.clipBuffer.Get(rig.clips, clipIndex);
         return SingleClipPose(clip, SlotFrames(clip, state.slots[0], time));
     }
 

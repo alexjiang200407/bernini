@@ -44,7 +44,9 @@ namespace bgl
 	/**
 	 * One weighted slot of a per-instance playback record: a node of the geom's rig, where its
 	 * playback sat at `tRef`, and the ramps that move its weight and its parameter over time. A
-	 * node is a clip index for now; an authored blend space is what will widen the table.
+	 * rig's node table holds one node per clip, in clip order, then the blend spaces passed to
+	 * `IScene::AddRig` -- so a node below the clip count is that clip, and adding a set never moves
+	 * one.
 	 *
 	 * Time is the only per-frame input, so a slot holds what to evaluate rather than a value: at
 	 * clock `t` the weight is `weight0` before `rampStart`, `weight1` from `rampEnd` and linear
@@ -52,8 +54,8 @@ namespace bgl
 	 * `(t - tRef) * rate * sampleRate`, wrapped or clamped as the clip says. The live weights are
 	 * normalized across the record's slots where they are read, so a set need not sum to anything.
 	 *
-	 * The parameter ramp has the same shape and is read only by a blend-space node; a clip node
-	 * ignores it.
+	 * The parameter ramp has the same shape and is read only by a blend-space node, which plays the
+	 * two members straddling it at one shared normalized phase; a clip node ignores it.
 	 */
 	struct PlaybackSlot
 	{

@@ -79,14 +79,14 @@ public BoneSample SampleBone<T : IPoseTables>(T tables, Rig rig, Clip clip, uint
     return blended;
 }
 
-// The local pose a walk starts from: up to cBlendSlots weighted clip samples, the live ones packed
+// The local pose a walk starts from: up to cMaxPoseClips weighted clip samples, the live ones packed
 // first and their weights summing to one. Group-uniform -- every thread of a group resolves the same
 // record at the same time -- so a loop over it carries no barrier hazard.
 public struct LocalPose
 {
-    public Clip clips[cBlendSlots];
-    public float frames[cBlendSlots];
-    public float weights[cBlendSlots];
+    public Clip clips[cMaxPoseClips];
+    public float frames[cMaxPoseClips];
+    public float weights[cMaxPoseClips];
     public uint count;
 };
 
@@ -94,7 +94,7 @@ public struct LocalPose
 public LocalPose EmptyPose()
 {
     LocalPose pose;
-    for (uint s = 0; s < cBlendSlots; ++s)
+    for (uint s = 0; s < cMaxPoseClips; ++s)
     {
         pose.clips[s] = Clip();
         pose.frames[s] = 0.0;

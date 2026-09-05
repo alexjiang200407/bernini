@@ -16,6 +16,7 @@
 #include <bgl/api.h>
 #include <bgl/error.h>
 #include <bgl/glm.h>
+#include <bgl/types/BlendSetDesc.h>
 #include <bgl/types/ChannelRouteDesc.h>
 #include <bgl/types/EnvironmentMapDesc.h>
 #include <bgl/types/FootPlantDesc.h>
@@ -141,12 +142,23 @@ namespace bgl
 		 * skeleton's signature needs assetlib, which bgl does not link. A clip set cooked against a
 		 * since-reordered rig of the same bone count therefore passes this door and animates
 		 * wrongly. Whoever loaded the two containers owns that check -- gamelib's acquire makes it.
+		 *
+		 * `blendSet`'s spaces become nodes after the one-per-clip nodes this synthesizes, so a
+		 * playback slot may name either and adding a set never moves a clip's node. bgl reads no
+		 * `.bblend` and resolves no clip name, exactly as it measures no sole: whoever loaded the
+		 * containers resolves them.
+		 *
+		 * A blend space is further refused for holding fewer than two members, naming a clip
+		 * outside the set, naming one that does not loop -- its members share one normalized
+		 * phase, and a clip that clamps would sit on its last frame while the others cycle -- or
+		 * for parameters that do not strictly increase.
 		 */
 		virtual RigHandle
 		AddRig(
 			const assetlib::Skeleton&     skeleton,
 			const assetlib::AnimationSet& animations,
-			const FootPlantDesc&          footPlant = {}) = 0;
+			const FootPlantDesc&          footPlant = {},
+			const BlendSetDesc&           blendSet  = {}) = 0;
 
 		/**
 		 * Destroys a rig, releasing its bone, clip and sample ranges.

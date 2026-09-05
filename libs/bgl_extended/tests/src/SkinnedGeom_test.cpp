@@ -182,6 +182,59 @@ namespace
 	// wrong value rather than a plausible one.
 	constexpr std::array<uint8_t, c_Frames> c_Weights = { { 0, 128, 255 } };
 
+	/**
+	 * Two looping clips of different lengths, which is what a blend space needs: its members share
+	 * one normalized phase, so clips that wrap over different numbers of intervals is the case the
+	 * phase exists to handle, and a clip that clamps has no cycle to share.
+	 */
+	assetlib::AnimationSet
+	MakeBlendClips(uint32_t boneCount = c_BoneCount)
+	{
+		auto set      = assetlib::AnimationSet();
+		set.boneCount = boneCount;
+
+		constexpr std::array<uint32_t, 2> c_Lengths = { { 2, 3 } };
+
+		for (const uint32_t frames : c_Lengths)
+		{
+			auto clip        = assetlib::AnimationClip();
+			clip.firstSample = static_cast<uint32_t>(set.samples.size());
+			clip.frameCount  = frames;
+			clip.sampleRate  = 30.0f;
+			clip.duration    = float(frames - 1) / 30.0f;
+			clip.loop        = 1;
+			clip.nameOffset  = 0;
+			set.clips.push_back(clip);
+
+			for (uint32_t f = 0; f < frames; ++f)
+			{
+				for (uint32_t b = 0; b < boneCount; ++b)
+				{
+					auto sample        = assetlib::Transform();
+					sample.translation = glm::vec3(float(f), float(b), 0.0f);
+					sample.rotation    = glm::quat(1.0f, 0.0f, 0.0f, 0.0f);
+					sample.scale       = glm::vec3(1.0f);
+					set.samples.push_back(sample);
+				}
+			}
+		}
+
+		return set;
+	}
+
+	/** A space over the two clips of MakeBlendClips, at parameters 0 and 1. */
+	bgl::BlendSetDesc
+	MakeBlendSet()
+	{
+		auto space = bgl::BlendSpaceDesc();
+		space.members.push_back({ 0, 0.0f });
+		space.members.push_back({ 1, 1.0f });
+
+		auto set = bgl::BlendSetDesc();
+		set.spaces.push_back(std::move(space));
+		return set;
+	}
+
 	bgl::FootPlantDesc
 	MakeFootPlant()
 	{
@@ -1079,5 +1132,143 @@ TEST_CASE("AddRig refuses a leg the pose pass could not solve", "[skinned]")
 		auto noWeights = MakeFootPlant();
 		noWeights.plantWeights.clear();
 		CHECK_THROWS_AS(add(noWeights), bgl::SceneError);
+	}
+}
+
+// The node table is what a playback slot's `node` indexes, and its order is load-bearing: clips
+// first, in clip order, so a slot naming a clip means what it did before blend spaces existed.
+TEST_CASE("AddRig builds a node table of its clips, then its blend spaces", "[skinned][blend]")
+{
+	auto gfx = bgl::CreateGraphics(HeadlessOptions());
+	REQUIRE(gfx != nullptr);
+
+	auto  sceneHandle = gfx->CreateScene(TestSceneDesc());
+	auto* scene       = sceneHandle->As<bgl::Scene>();
+	REQUIRE(scene != nullptr);
+
+	SECTION("a rig with a blend set appends its spaces after the clip nodes")
+	{
+		const auto rig =
+			scene->AddRig(MakeRig(), MakeBlendClips(), bgl::FootPlantDesc(), MakeBlendSet());
+		REQUIRE(rig.IsValid());
+
+		const bgl::idl::Rig& record = scene->GetRigBuffer().AtIndex(rig.handle.index);
+
+		// Two clips and one space.
+		CHECK(record.nodes.count == 3);
+		CHECK_FALSE(record.members.Null());
+
+		auto&          nodes = scene->GetBlendNodeBuffer();
+		const uint32_t base  = record.nodes.range.offsetStart;
+
+		CHECK(nodes.AtIndex(base + 0).kind == bgl::idl::BlendNodeKind::kClip);
+		CHECK(nodes.AtIndex(base + 0).clip == 0);
+		CHECK(nodes.AtIndex(base + 1).kind == bgl::idl::BlendNodeKind::kClip);
+		CHECK(nodes.AtIndex(base + 1).clip == 1);
+
+		const bgl::idl::BlendNode& space = nodes.AtIndex(base + 2);
+		CHECK(space.kind == bgl::idl::BlendNodeKind::kSpace);
+		CHECK(space.memberCount == 2);
+
+		auto&          members    = scene->GetBlendMemberBuffer();
+		const uint32_t memberBase = record.members.offsetStart + space.firstMember;
+		CHECK(members.AtIndex(memberBase + 0).clip == 0);
+		CHECK(members.AtIndex(memberBase + 0).parameter == 0.0f);
+		CHECK(members.AtIndex(memberBase + 1).clip == 1);
+		CHECK(members.AtIndex(memberBase + 1).parameter == 1.0f);
+
+		SECTION("deleting the rig frees both ranges")
+		{
+			const uint32_t nodeRoot   = record.nodes.range.offsetStart;
+			const uint32_t memberRoot = record.members.offsetStart;
+			scene->DeleteRig(rig);
+			CHECK_FALSE(scene->GetBlendNodeBuffer().IsIndexValid(nodeRoot));
+			CHECK_FALSE(scene->GetBlendMemberBuffer().IsIndexValid(memberRoot));
+		}
+	}
+
+	SECTION("a rig with no blend set still has one node per clip")
+	{
+		// Null members rather than an empty range, for the reason the legs are: the pose pass
+		// branches on the node's kind, and nothing should ever reach the member table.
+		const auto rig = scene->AddRig(MakeRig(), MakeBlendClips());
+		REQUIRE(rig.IsValid());
+
+		const bgl::idl::Rig& record = scene->GetRigBuffer().AtIndex(rig.handle.index);
+		CHECK(record.nodes.count == 2);
+		CHECK(record.members.Null());
+	}
+}
+
+TEST_CASE("AddRig refuses a blend space the pose pass could not evaluate", "[skinned][blend]")
+{
+	auto gfx = bgl::CreateGraphics(HeadlessOptions());
+	REQUIRE(gfx != nullptr);
+
+	auto  sceneHandle = gfx->CreateScene(TestSceneDesc());
+	auto* scene       = sceneHandle->As<bgl::Scene>();
+	REQUIRE(scene != nullptr);
+
+	const auto add = [&](const bgl::BlendSetDesc& set) {
+		return scene->AddRig(MakeRig(), MakeBlendClips(), bgl::FootPlantDesc(), set);
+	};
+
+	SECTION("a space of one member")
+	{
+		auto set = MakeBlendSet();
+		set.spaces[0].members.resize(1);
+		CHECK_THROWS_WITH(add(set), Catch::Matchers::ContainsSubstring("at least two"));
+	}
+
+	SECTION("a member naming a clip the set does not hold")
+	{
+		auto set                      = MakeBlendSet();
+		set.spaces[0].members[1].clip = 7;
+		CHECK_THROWS_WITH(add(set), Catch::Matchers::ContainsSubstring("clip 7"));
+	}
+
+	SECTION("a member that does not loop")
+	{
+		// One phase is shared across the members, and a clip that clamps would sit on its last
+		// frame while the others cycle.
+		auto clips          = MakeBlendClips();
+		clips.clips[1].loop = 0;
+		CHECK_THROWS_WITH(
+			scene->AddRig(MakeRig(), clips, bgl::FootPlantDesc(), MakeBlendSet()),
+			Catch::Matchers::ContainsSubstring("does not loop"));
+	}
+
+	SECTION("parameters that do not strictly increase")
+	{
+		auto set                           = MakeBlendSet();
+		set.spaces[0].members[1].parameter = 0.0f;
+		CHECK_THROWS_WITH(add(set), Catch::Matchers::ContainsSubstring("strictly increase"));
+	}
+
+	SECTION("a parameter that is not a number")
+	{
+		auto set                           = MakeBlendSet();
+		set.spaces[0].members[1].parameter = std::numeric_limits<float>::quiet_NaN();
+		CHECK_THROWS_AS(add(set), bgl::SceneError);
+	}
+
+	SECTION("a refused space leaves the arenas untouched")
+	{
+		// The allocator hands back the lowest free block, so a leak shows as the next rig landing
+		// somewhere else -- the only evidence available without an occupancy accessor.
+		const auto first = scene->AddRig(MakeRig(), MakeBlendClips());
+		REQUIRE(first.IsValid());
+		const uint32_t nodeRoot =
+			scene->GetRigBuffer().AtIndex(first.handle.index).nodes.range.offsetStart;
+		scene->DeleteRig(first);
+
+		auto bad = MakeBlendSet();
+		bad.spaces[0].members.resize(1);
+		CHECK_THROWS(add(bad));
+
+		const auto again = scene->AddRig(MakeRig(), MakeBlendClips());
+		REQUIRE(again.IsValid());
+		CHECK(
+			scene->GetRigBuffer().AtIndex(again.handle.index).nodes.range.offsetStart == nodeRoot);
 	}
 }

@@ -426,6 +426,22 @@ namespace bgl
 
 			m_PlantWeights.Init(std::move(plantWeightBufferDesc), m_ResourceManager);
 		}
+
+		{
+			auto blendNodeBufferDesc         = RangeBufferDesc();
+			blendNodeBufferDesc.initialCount = 1;
+			blendNodeBufferDesc.debugName    = "Blend Node Buffer";
+
+			m_BlendNodes.Init(std::move(blendNodeBufferDesc), m_ResourceManager);
+		}
+
+		{
+			auto blendMemberBufferDesc         = RangeBufferDesc();
+			blendMemberBufferDesc.initialCount = 1;
+			blendMemberBufferDesc.debugName    = "Blend Member Buffer";
+
+			m_BlendMembers.Init(std::move(blendMemberBufferDesc), m_ResourceManager);
+		}
 	}
 
 	core::slot_handle
@@ -593,7 +609,8 @@ namespace bgl
 	Scene::ValidateSkinnedRig(
 		const assetlib::Skeleton&     skeleton,
 		const assetlib::AnimationSet& animations,
-		const FootPlantDesc&          footPlant)
+		const FootPlantDesc&          footPlant,
+		const BlendSetDesc&           blendSet)
 	{
 		const size_t boneCount = skeleton.bones.size();
 		if (boneCount == 0)
@@ -722,6 +739,75 @@ namespace bgl
 				"skinned geometry: the plant weights are not one byte per leg for every frame in "
 				"the sample pool");
 		}
+
+		for (size_t s = 0; s < blendSet.spaces.size(); ++s)
+		{
+			const std::vector<BlendSpaceMemberDesc>& members = blendSet.spaces[s].members;
+
+			// One member is a clip, and every clip is already a node under its own index.
+			if (members.size() < 2)
+			{
+				throw SceneError(
+					std::format(
+						"skinned geometry: blend space {} holds {} members, and a blend space "
+						"needs at least two",
+						s,
+						members.size()));
+			}
+
+			for (size_t m = 0; m < members.size(); ++m)
+			{
+				const BlendSpaceMemberDesc& member = members[m];
+
+				if (member.clip >= animations.clips.size())
+				{
+					throw SceneError(
+						std::format(
+							"skinned geometry: member {} of blend space {} names clip {} of a set "
+							"that holds {}",
+							m,
+							s,
+							member.clip,
+							animations.clips.size()));
+				}
+
+				// A parameter sets one normalized phase every member plays at, and a clip that
+				// clamps rather than wraps would sit on its last frame while the others cycle.
+				if (animations.clips[member.clip].loop == 0)
+				{
+					throw SceneError(
+						std::format(
+							"skinned geometry: member {} of blend space {} names a clip that does "
+							"not loop, and a blend space shares one phase across its members",
+							m,
+							s));
+				}
+
+				if (!std::isfinite(member.parameter))
+				{
+					throw SceneError(
+						std::format(
+							"skinned geometry: member {} of blend space {} has a parameter of {}",
+							m,
+							s,
+							member.parameter));
+				}
+
+				// Strictly increasing, not merely sorted: the span between two members is what a
+				// weight divides by.
+				if (m > 0 && !(member.parameter > members[m - 1].parameter))
+				{
+					throw SceneError(
+						std::format(
+							"skinned geometry: blend space {} has parameter {} at member {} after "
+							"{}, and they must strictly increase",
+							s,
+							member.parameter,
+							m,
+							members[m - 1].parameter));
+				}
+			}
+		}
 	}
 
 	RigMeta*
@@ -739,9 +825,10 @@ namespace bgl
 	Scene::AddRig(
 		const assetlib::Skeleton&     skeleton,
 		const assetlib::AnimationSet& animations,
-		const FootPlantDesc&          footPlant)
+		const FootPlantDesc&          footPlant,
+		const BlendSetDesc&           blendSet)
 	{
-		ValidateSkinnedRig(skeleton, animations, footPlant);
+		ValidateSkinnedRig(skeleton, animations, footPlant, blendSet);
 
 		const uint32_t boneCount = static_cast<uint32_t>(skeleton.bones.size());
 
@@ -804,6 +891,36 @@ namespace bgl
 			weights[i / 4] |= uint32_t(footPlant.plantWeights[i]) << (8 * (i % 4));
 		}
 
+		// The node table: one clip node per clip in clip order, then the authored spaces. Clips
+		// first is what lets a slot naming node `n` below the clip count play clip `n`, so a
+		// one-clip spawn means what it did before blend spaces existed.
+		auto nodes   = std::vector<idl::BlendNode>();
+		auto members = std::vector<idl::BlendSpaceMember>();
+		nodes.reserve(clips.size() + blendSet.spaces.size());
+		for (uint32_t clip = 0; clip < clips.size(); ++clip)
+		{
+			auto node = idl::BlendNode();
+			node.kind = idl::BlendNodeKind::kClip;
+			node.clip = clip;
+			nodes.emplace_back(node);
+		}
+		for (const BlendSpaceDesc& space : blendSet.spaces)
+		{
+			auto node        = idl::BlendNode();
+			node.kind        = idl::BlendNodeKind::kSpace;
+			node.firstMember = static_cast<uint32_t>(members.size());
+			node.memberCount = static_cast<uint32_t>(space.members.size());
+			nodes.emplace_back(node);
+
+			for (const BlendSpaceMemberDesc& member : space.members)
+			{
+				auto entry      = idl::BlendSpaceMember();
+				entry.clip      = member.clip;
+				entry.parameter = member.parameter;
+				members.emplace_back(entry);
+			}
+		}
+
 		auto rollback = GeomRollback();
 
 		try
@@ -818,6 +935,13 @@ namespace bgl
 				record.plantWeights =
 					rollback.Track(m_PlantWeights, m_PlantWeights.Add(std::span(weights)));
 			}
+			record.nodes = rollback.Track(m_BlendNodes, m_BlendNodes.Add(std::span(nodes)));
+			if (!members.empty())
+			{
+				record.members =
+					rollback.Track(m_BlendMembers, m_BlendMembers.Add(std::span(members)));
+			}
+
 			record.boneCount = boneCount;
 			record.maxDepth  = maxDepth;
 
@@ -826,6 +950,7 @@ namespace bgl
 			RigMeta& meta   = m_Rigs.MetaAt(entry.index);
 			meta.boneCount  = boneCount;
 			meta.clipCount  = static_cast<uint32_t>(clips.size());
+			meta.nodeCount  = static_cast<uint32_t>(nodes.size());
 			meta.frameCount = static_cast<uint32_t>(animations.samples.size() / boneCount);
 			meta.useCount   = 0;
 
@@ -974,6 +1099,11 @@ namespace bgl
 			m_SkinnedLegs.EraseByIndex(record.legs.range.offsetStart);
 			m_PlantWeights.EraseByIndex(record.plantWeights.offsetStart);
 		}
+		m_BlendNodes.EraseByIndex(record.nodes.range.offsetStart);
+		if (!record.members.Null())
+		{
+			m_BlendMembers.EraseByIndex(record.members.offsetStart);
+		}
 		m_Rigs.Erase(rig.handle);
 	}
 
@@ -995,6 +1125,7 @@ namespace bgl
 		// reallocate, and nothing below needs the pointer again.
 		const uint32_t rigBoneCount = meta->boneCount;
 		const uint32_t rigClipCount = meta->clipCount;
+		const uint32_t rigNodeCount = meta->nodeCount;
 
 		if (glm::any(glm::greaterThan(posedBounds.min, posedBounds.max)))
 		{
@@ -1037,6 +1168,7 @@ namespace bgl
 		GeomRecord& geom = m_Geoms[base.handle.index];
 		geom.rig         = rig.handle;
 		geom.clipCount   = rigClipCount;
+		geom.nodeCount   = rigNodeCount;
 		geom.boneCount   = rigBoneCount;
 
 		// Last, so nothing above can throw with the use already counted.

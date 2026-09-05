@@ -65,6 +65,9 @@ set(IDL_CPP_SOURCES
     SkinnedBone.slang
     SkinnedLegChain.slang
     Rig.slang
+    BlendNodeKind.slang
+    BlendSpaceMember.slang
+    BlendNode.slang
     BlendSlot.slang
     SkinnedState.slang
     SkinnedTableState.slang
