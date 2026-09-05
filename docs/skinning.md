@@ -405,14 +405,14 @@ a clip leaves a planted foot above the floor, this is what seats it.
 **The target is two terms, and the weight scales only one of them.** The *seat* is the drop from the
 height the clip authored the contact at onto the floor it was authored over — model `y = 0`, where
 `groundClips` rests a clip — and that is the weighted half. The *lift* is however far the real ground
-departs from that floor under the contact, and every weight gets it. At weight one the sum is
+departs from that floor under the contact, and every baked weight gets it. At weight one the sum is
 `ground - contact` exactly, so the paragraph above is unchanged; below one the foot keeps the height
 the animator gave it and rides the ground beneath it. The height is read off the contact's model-space
 `y` rather than by dropping the contact onto that floor: the two agree wherever an instance stands
 upright, and the drop divides by the floor normal's component along world down, which an instance
 rotated onto its side has none of.
 
-Without the split a foot at any weight below one sat between the clip's floor and the real ground,
+Without the split a foot at any baked weight below one sat between the clip's floor and the real ground,
 which on ground above that floor is inside it — and every swing arc and the three ramp frames either
 side of every planted run are weighted below one.
 
@@ -434,8 +434,9 @@ ground* and the solve makes that true. The two rules agree exactly on a clip tha
 differ only on a foot the clip left off its floor.
 
 The departure is about weight 1 alone. Below it the lift *is* Unreal's height term, applied
-unconditionally exactly as `AnimNode_FootPlacement` applies it, with the weight gating only the seat
-and the turn — the lock and the orientation there. Unity's humanoid Foot IK is the other reading:
+unconditionally exactly as `AnimNode_FootPlacement` applies it, with the baked weight gating only the
+seat and the turn — the lock and the orientation there; the instance's position weight is the one
+scale over all of it (§ the five gates). Unity's humanoid Foot IK is the other reading:
 goal-only, a lifted foot not offset at all and no terrain under a swing.
 
 A foot the clip rests flat touches along its whole sole and lands on it exactly; one posed
@@ -464,7 +465,8 @@ nothing at the ground: the point that was dropped onto it is the point that stan
 **Everything is scaled by a plant weight** — one byte per leg per frame, packed four to a uint,
 baked by the cook and sampled at the same fractional frame the pose is. A weight of zero is exactly
 the pose the rig would have had *on the floor the clip was authored over*; on any other ground it is
-that pose carried by the lift, which is the whole of the split above. A weight rather than a flag
+that pose carried by the lift, which is the whole of the split above — a baked zero, that is; the
+instance's position weight at zero is the pose itself. A weight rather than a flag
 because a foot that snapped between the two states would pop, which is what the cook's ramp at each
 end of a planted run exists to remove.
 
@@ -492,11 +494,14 @@ arena of the view's, one `FootIKLeg` per leg, and reaches the kernel through its
 only reader. The default is weight one, so an instance nobody writes plants exactly as the baked
 weights say; a rig without legs owns no record and `SetFootIK` refuses it.
 
-The middle two gates reach the seat and the turn, not the lift: the shader sees a weight byte and
-cannot tell a clip the avatar excluded from a swing frame inside one that plants, so `unplanted`
-means *this clip never seats or turns a foot* rather than *this clip is untouched*. On the flat floor
-at `y = 0` those are the same sentence, since the lift is zero there. The two outer gates are whole:
-a rig without legs and a scene with planting off run no solve at all.
+The clip and frame gates reach the seat and the turn, not the lift: the shader sees a weight byte
+and cannot tell a clip the avatar excluded from a swing frame inside one that plants, so a `plant`
+weight of zero means *this clip never seats or turns a foot* rather than *this clip is untouched*.
+On the flat floor at `y = 0` those are the same sentence, since the lift is zero there. The
+instance's position weight scales the whole correction, lift included — at zero the foot is the
+animation's, terrain and all, which is what a unit standing on something the ground does not
+describe asks for — and its rotation weight the turn. The two outer gates are whole: a rig without
+legs and a scene with planting off run no solve at all.
 
 ### What the cook derives
 

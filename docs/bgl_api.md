@@ -362,7 +362,9 @@ flowchart TD
   there is no stale-binding hazard here, unlike materials.
 * **`SetFootIK(instance, desc)` / `GetFootIK(instance)`** — a hero skinned instance's runtime
   foot-IK record, one `FootIKLegDesc` per leg of its rig: a position ramp and a rotation ramp,
-  each in `RenderJob::time` and each multiplying the weight the cook baked for the frame. Written
+  each in `RenderJob::time` and each multiplying the weight the cook baked for the frame; the
+  position weight scales the whole correction, terrain lift included, so zero is the animated
+  pose. Written
   on an event, never per frame; a write whose ramps all start at or after now leaves the previous
   frame's pose and its motion vector exact, and `FootIKDesc::FadeTo` builds one from the record
   read back. @throws on a static or crowd placement, a rig with no legs, a weight outside

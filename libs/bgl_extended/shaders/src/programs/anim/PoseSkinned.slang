@@ -152,11 +152,6 @@ struct LegPose
     float3 ankle;
     float3 target;
 
-    // How far the ankle is carried onto the ground, and how far the sole turns onto its slope:
-    // the frame's baked weight by the instance's own for each.
-    float positionWeight;
-    float rotationWeight;
-
     // The turn the foot takes about its ankle: the ground's slope, weighted and clamped. Known
     // before the solve, since nothing the solve does changes the ground.
     float3 turnAxis;
@@ -165,7 +160,6 @@ struct LegPose
     // 0 when the chain can reach, and scaled by the position weight beyond that: the drop exists
     // so a *planted* foot reaches the ground, and a swing foot that cannot reach the height the
     // terrain carries it to stops short in the air rather than pulling the whole rig down after it.
-    // A leg at position weight 0 targets where its ankle already is and contributes nothing.
     float deficit;
 };
 
@@ -200,9 +194,10 @@ LegPose ReadLeg(
     //
     // Measured in model space through the ankle's transform, never in the stored ankle-local sole:
     // bone space carries whatever scale the bind does, so a distance read there is in those units.
+    // The frame's baked weight by the instance's own, for each of the two things it scales.
     let baked = PlantWeight(rig, clip, index, frames);
-    pose.positionWeight = baked * positionScale;
-    pose.rotationWeight = baked * rotationScale;
+    let seatWeight = baked * positionScale;
+    let turnWeight = baked * rotationScale;
 
     // The turn is the ground's slope, not whatever would bring the sole flat: a foot the animator
     // posed on its toe stays on its toe, and on level ground nothing turns.
@@ -213,7 +208,7 @@ LegPose ReadLeg(
     if (length(tilt) > 1e-6)
     {
         pose.turnAxis = normalize(tilt);
-        pose.turnAngle = min(acos(clamp(dot(floorUp, plane.xyz), -1.0, 1.0)), cSoleClampRadians) * pose.rotationWeight;
+        pose.turnAngle = min(acos(clamp(dot(floorUp, plane.xyz), -1.0, 1.0)), cSoleClampRadians) * turnWeight;
     }
     let turn = RotationAbout(float3(0.0, 0.0, 0.0), pose.turnAxis, pose.turnAngle);
 
@@ -241,7 +236,7 @@ LegPose ReadLeg(
     // divide by the floor normal along `down` -- zero for an instance rotated onto its side.
     let seat = contact.y * down;
     let lift = (SampleGround(plane, down, contact) - contact) - seat;
-    pose.target = pose.ankle + positionScale * (lift + baked * seat);
+    pose.target = pose.ankle + positionScale * lift + seatWeight * seat;
 
     // How far the rig must come down, along the ground's up, for this chain to reach: the smaller
     // root of |v + d*n| = reach, where v is hip-to-target and n the ground normal.
@@ -259,7 +254,7 @@ LegPose ReadLeg(
     let disc = c * c - (dot(toTarget, toTarget) - reach * reach);
 
     // A chain that can already reach gives a non-positive root, which the clamp reads as no drop.
-    pose.deficit = max(0.0, -c - sqrt(max(disc, 0.0))) * pose.positionWeight;
+    pose.deficit = max(0.0, -c - sqrt(max(disc, 0.0))) * seatWeight;
 
     return pose;
 }

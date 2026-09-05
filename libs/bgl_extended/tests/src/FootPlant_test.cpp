@@ -1446,7 +1446,45 @@ TEST_CASE("an instance's IK weight scales the plant", "[skinned][pose][plant][fo
 
 	SECTION("the two weights multiply: a baked weight of zero is not overridden by weight one")
 	{
-		CheckBindPose(PoseLeg(c_Low, 0, { .footIK = bgl::FootIKDesc::Constant(1.0f, 1.0f) }));
+		// A clip holding the foot off its floor, on that floor: the lift is zero and the seat is the
+		// whole correction, and a baked weight of zero withholds the seat whatever the instance asks.
+		const Posed posed =
+			PoseLeg(c_Flat, 0, { .lift = 0.2f, .footIK = bgl::FootIKDesc::Constant(1.0f, 1.0f) });
+		CHECK(posed.Sole().y == Catch::Approx(0.2f).margin(1e-3));
+	}
+
+	SECTION("the two weights compose by product, not by whichever is smaller")
+	{
+		// 128/255 baked by 0.5 asked: a quarter of the seat. A min() would take half of it. On the
+		// lifted clip over its own floor, since the lift on lowered ground is the instance weight's
+		// alone and would show no product at all.
+		constexpr float c_Lift  = 0.2f;
+		const Posed     quarter = PoseLeg(
+			c_Flat,
+			128,
+			{ .lift = c_Lift, .footIK = bgl::FootIKDesc::Constant(0.5f, 1.0f) });
+		CHECK(
+			quarter.Sole().y ==
+			Catch::Approx(c_Lift * (1.0f - 0.5f * 128.0f / 255.0f)).margin(2e-3));
+
+		// And the turn: the slope's angle by the same product.
+		const float radians = glm::radians(15.0f);
+		const auto  normal  = glm::vec3(std::sin(radians), std::cos(radians), 0.0f);
+		const auto  slope   = bgl::GroundPlaneDesc{ glm::vec3(0.0f), normal };
+		const Posed turned =
+			PoseLeg(slope, 128, { .footIK = bgl::FootIKDesc::Constant(1.0f, 0.5f) });
+		const float angle =
+			std::acos(std::clamp(glm::dot(turned.SoleNormal(), c_SoleNormal), -1.0f, 1.0f));
+		CHECK(angle == Catch::Approx(radians * 0.5f * 128.0f / 255.0f).margin(2e-3));
+	}
+
+	SECTION("the instance's position weight scales the lift as well as the seat")
+	{
+		// The lift is every baked weight's, but not every instance's: a unit standing on something
+		// the ground does not describe turns the whole correction off, terrain and all.
+		const Posed posed =
+			PoseLeg(c_Low, 0, { .lift = 0.2f, .footIK = bgl::FootIKDesc::Constant(0.0f, 1.0f) });
+		CHECK(posed.Sole().y == Catch::Approx(0.2f).margin(1e-3));
 	}
 
 	SECTION("rotation weight zero seats the contact on a slope without turning the sole")

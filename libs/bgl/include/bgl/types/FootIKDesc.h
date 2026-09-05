@@ -53,7 +53,9 @@ namespace bgl
 	/**
 	 * One leg's runtime IK weights, each multiplying the weight the cook baked per frame: how far
 	 * the solve carries the ankle onto the ground, and how far the sole turns onto the ground's
-	 * slope. Unity's `SetIKPositionWeight` and `SetIKRotationWeight`, per foot.
+	 * slope. Unity's `SetIKPositionWeight` and `SetIKRotationWeight`, per foot. The position
+	 * weight scales the whole correction, the terrain lift a baked weight never gates included,
+	 * so zero is the animated pose whatever the ground.
 	 */
 	struct FootIKLegDesc
 	{
