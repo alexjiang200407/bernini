@@ -670,8 +670,13 @@ TEST_CASE("a skinned acquire resolves a blend set's clips by name", "[gamelib][s
 		// So the space is node 2 -- its position after the clips.
 		REQUIRE(mesh.spaces.size() == 1);
 		CHECK(mesh.spaces[0].name == "locomotion");
-		CHECK(mesh.spaces[0].parameterMin == 0.0f);
-		CHECK(mesh.spaces[0].parameterMax == 4.0f);
+		CHECK(mesh.spaces[0].ParameterMin() == 0.0f);
+		CHECK(mesh.spaces[0].ParameterMax() == 4.0f);
+
+		// The members are what a retarget needs: the parameter each plays alone at, and which clip.
+		REQUIRE(mesh.spaces[0].members.size() == 2);
+		CHECK(mesh.spaces[0].members[0].clipIndex == 0);
+		CHECK(mesh.spaces[0].members[1].clipIndex == 1);
 
 		assets.ReleaseGeom(mesh.geom);
 	}

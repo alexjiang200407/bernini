@@ -12,7 +12,7 @@ namespace bgl
 	 */
 	struct BlendSpaceMemberDesc
 	{
-		uint32_t clip      = 0;
+		uint32_t clipIndex = 0;
 		float    parameter = 0.0f;
 	};
 
