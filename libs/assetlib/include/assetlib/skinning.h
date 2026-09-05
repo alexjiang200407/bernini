@@ -374,7 +374,7 @@ namespace assetlib
 
 	/**
 	 * What a baked plant weight was measured against: the rig, the avatar resolved on it -- legs
-	 * and unplanted clips both -- and the geometry the soles were fitted to. A re-imported mesh, a
+	 * and clip weights both -- and the geometry the soles were fitted to. A re-imported mesh, a
 	 * re-authored bind or an edited avatar changes it; renames and material swaps do not.
 	 *
 	 * The clips are deliberately absent: they live in the same file, so a clip edit rewrites the
@@ -396,7 +396,8 @@ namespace assetlib
 	 * Floor: the lowest that sole gets in the clip. No floor when the clip's lowest sole is above
 	 * `c_PlantFloorSlack`, or the foot's own is more than `c_PlantFloorSpread` above the clip's.
 	 * Ramp: `c_PlantRampFrames` in and out of each run, not at a clip's edge.
-	 * Zero throughout: a clip the avatar names in `unplanted`.
+	 * Scaled: every byte of a clip by the avatar's `plant` weight for it, so one at zero is zero
+	 * throughout.
 	 * Skipped: a clip whose first sample is off a frame boundary.
 	 *
 	 * @throws std::runtime_error for anything poseModelTransforms refuses -- above all a clip set

@@ -174,11 +174,12 @@ and portability.
       per-instance IK weight over the baked plant — Unity's `SetIKPositionWeight` and
       `SetIKRotationWeight`, per leg, ramped in the render clock and written on an event
       (`ISceneView::SetFootIK`) — which is what a state machine's transitions and a unit stepping
-      onto a prop will drive. What is left is the heightfield that replaces the sampler, which is
-      what breaks on stairs and siege structures, and with it the terrain lift that a foot below
-      full weight is owed (`docs/specs/foot_plant_swing_under_slope.md`). Note none of it is what
-      grounds a clip: the standard solve preserves a foot's animated height relative to the root,
-      so on flat ground it corrects by zero. That is cook-side, and done. See
+      onto a prop will drive — and an authored weight per clip in the avatar (`plant`), Unity's
+      per-state *Foot IK* as a scale. What is left is the heightfield that replaces the sampler,
+      which is what breaks on stairs and siege structures, and with it the terrain lift that a
+      foot below full weight is owed (`docs/specs/foot_plant_swing_under_slope.md`). Note none of
+      it is what grounds a clip: the standard solve preserves a foot's animated height relative to
+      the root, so on flat ground it corrects by zero. That is cook-side, and done. See
       [docs/skinning.md](docs/skinning.md) § Foot planting.
   - [ ] Hit reaction
     - [ ] Directional reaction clips (4–8 variants) — works on both tiers, so build this first.
