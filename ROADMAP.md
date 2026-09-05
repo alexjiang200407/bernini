@@ -136,10 +136,21 @@ and portability.
       needs a clock.
   - [ ] Skinned Meshes & Animation — hero tier and the near-distance tier of rank and file
     - [x] Bone palette buffer, GPU-resident, per-instance indexed.
-    - [ ] Pose sampling — fixed clip count at compile time, unused slots weighted to zero.
-      *One* clip per instance ships, sampled with nlerp between the two frames it falls between;
-      the weighted multi-slot form waits on the crossfade below.
-    - [ ] Cross fade blending — slerp local rotations then walk the hierarchy, never blend model space.
+    - [x] Pose sampling — fixed clip count at compile time, unused slots weighted to zero. Four
+      weighted slots per hero record, each naming a node of the rig; a blend space resolves to two
+      clips, so a pose holds up to eight. Sampled with nlerp between the two frames a fractional
+      position falls between.
+    - [x] Cross fade blending — local rotations blended, then the hierarchy walked; never model
+      space, which is the half of this line that was load-bearing. **Amended: nlerp, not slerp.**
+      Each rotation is flipped into the hemisphere of the running sum and the sum normalized, which
+      is Unreal's `AccumulateWithShortestRotation`. Clips are resampled to a fixed rate, so the
+      angle between the poses being blended is small enough that the error is invisible, and a slerp
+      per bone per instance per frame is transcendentals the tier cannot afford. The CPU reference
+      (`assetlib::poseModelTransforms`) does the same thing, which is what the GPU path is diffed
+      against.
+    - [x] 1D blend spaces — an authored `.bblend` names clips by name; members share one normalized
+      phase so clips of different lengths stay in step, and the phase advances at the reciprocal of
+      the weighted cycle length. See [docs/anim_blend.md](docs/anim_blend.md).
     - [x] Local→model hierarchy walk — workgroup per unit, thread per bone, barrier per depth level,
       group size 64.
     - [ ] GPU skinning (compute) to a transient vertex buffer — hero tier only; everything else skins
@@ -147,9 +158,10 @@ and portability.
     - [x] Skinned motion vectors — **not** by double-buffering the palette, which is what this line
       used to call for. The pose pass writes two palettes per instance in one dispatch, at `time`
       and at `prevTime`, and the mesh shader skins both: correct on the first frame and on an
-      instance spawned mid-frame, where a history buffer holds garbage. It holds only while time is
-      the sole input to a pose — a clip switched between frames reprojects through the wrong clip,
-      which is the state machine's problem to own. See [docs/skinning.md](docs/skinning.md).
+      instance spawned mid-frame, where a history buffer holds garbage. It holds because time is the
+      sole input to a pose, and a record is rewritten only on an event: a rewrite that leaves what it
+      says about `prevTime` alone reprojects exactly, which gamelib's `CrossfadeTo` and
+      `RetargetParameter` are what keep. See [docs/anim_blend.md](docs/anim_blend.md).
     - [ ] Animation preview + playback at different LODs, including the pose-source swap.
       The editor's Animation panel previews either source and switches between them by respawning;
       the runtime LOD swap is what remains.

@@ -144,6 +144,12 @@ for the same reason — `bgl_extended` does not link `assetlib`), how a foot is 
 in the one window where a bone is in model space, and what the editor's Animation panel does with
 the tier.
 
+**[Animation Blending](./docs/anim_blend.md)**
+
+The skinned tier's blending half: four weighted slots evaluated from the clock, why a rewrite may
+only change the future, and the 1D blend space — one normalized phase shared by clips of different
+lengths, advancing at an integral rather than a quotient.
+
 **[Temporal Antialiasing](./docs/taa.md)**
 
 The jitter, the history ping-pong and the resolve: why the client's camera never sees the offset, why

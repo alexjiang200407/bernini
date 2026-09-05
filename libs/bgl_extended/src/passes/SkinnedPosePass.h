@@ -12,13 +12,14 @@ namespace bgl
 	struct DrawData;
 
 	/**
-	 * Writes every skinned instance's bone palette for this draw: one workgroup per instance, sampling
-	 * its clip and walking its rig's hierarchy. Ordered ahead of the forward pass, which reads what it
-	 * wrote.
+	 * Writes every skinned instance's bone palette for this draw: one workgroup per instance, blending
+	 * what its playback record's slots resolve to and walking its rig's hierarchy. Ordered ahead of
+	 * the forward pass, which reads what it wrote.
 	 *
 	 * Each instance gets two palettes, at `time` and at `prevTime`, so the skinned mesh shader can
-	 * write a motion vector without a history buffer. That holds only while time is the sole input to a
-	 * pose -- a clip switched between frames would reproject through the wrong clip.
+	 * write a motion vector without a history buffer. That holds because time is the sole input to a
+	 * pose: a record is rewritten only on an event, and one that leaves what it says about `prevTime`
+	 * alone reprojects exactly -- see docs/anim_blend.md.
 	 */
 	class SkinnedPosePass
 	{

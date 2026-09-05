@@ -21,11 +21,13 @@ not obvious from a signature. The headers linked below are the source of truth.
 
 * **`RenderJob::time` is the only per-frame input.** An instance is spawned with a playback record
   and nothing writes it per frame, whichever source it draws from. A crowd record is one
-  `{clip, phase, rate}`. A per-instance one is `cBlendSlots` weighted slots, each a clip, a phase
-  and rate measured from its own `tRef`, and a weight ramp — so a crossfade is two slots whose ramps
-  cross, evaluated on the GPU from the clock, and the CPU touches the record only when something
-  happens to the instance (`ISceneView::SetSkinnedPlayback`). `rate = 0` holds a pose under any
-  clock. The `SkinnedInstanceDesc` spawn is the one-slot spelling of the same record.
+  `{clip, phase, rate}`. A per-instance one is `cBlendSlots` weighted slots, each naming a *node* of
+  the rig — a clip, or a blend space — with a phase and rate measured from its own `tRef`, a weight
+  ramp, and a parameter ramp a space reads. So a crossfade is two slots whose ramps cross, evaluated
+  on the GPU from the clock, and the CPU touches the record only when something happens to the
+  instance (`ISceneView::SetSkinnedPlayback`). `rate = 0` holds a pose under any clock. The
+  `SkinnedInstanceDesc` spawn is the one-slot spelling of the same record. See
+  [Animation Blending](docs/anim_blend.md).
 
 * **A posed instance is addressed by its placement, not by its playback record.** A foot planted on
   the ground needs to know where in the world the instance stands, and that is the `MeshInstance` record's
