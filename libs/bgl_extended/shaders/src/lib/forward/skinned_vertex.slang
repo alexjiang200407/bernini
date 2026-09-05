@@ -128,8 +128,9 @@ public ForwardVSOut SkinnedVertex(MeshletContext ctx, SkinnedPose pose, SubmeshI
 
     // Both this frame's matrix and the one the previous frame drew, because the motion vector needs
     // both -- and neither remembers anything, so an instance spawned mid-frame is correct on its
-    // first. That holds only while time is the sole input to a pose: a clip switched between frames
-    // would reproject through the wrong clip.
+    // first. That holds because time is the sole input to a pose: a record is rewritten only by
+    // SetSkinnedPlayback, and a rewrite that leaves what it says about prevTime alone reprojects
+    // exactly. gamelib's CrossfadeTo and RetargetParameter are what keep that.
     float4x4 skin;
     float4x4 prevSkin;
 
