@@ -195,6 +195,7 @@ CompileMaterial(
 
 		pbr.alphaMode          = output->GetAlphaMode();
 		pbr.alphaCutoff        = output->GetAlphaCutoff();
+		pbr.doubleSided        = output->GetDoubleSided();
 		pbr.transmissionFactor = output->GetTransmission();
 
 		pbr.specularColorFactor = output->GetSpecularColorFactor();
@@ -265,6 +266,7 @@ BuildImportedMaterialGraph(
 	factors["roughness"]    = AtEditorPrecision(material.roughnessFactor);
 	factors["alphaCutoff"]  = AtEditorPrecision(material.alphaCutoff);
 	factors["transmission"] = AtEditorPrecision(material.transmissionFactor);
+	factors["doubleSided"]  = material.doubleSided;
 	factors["specularR"]    = material.specularColorFactor.r;
 	factors["specularG"]    = material.specularColorFactor.g;
 	factors["specularB"]    = material.specularColorFactor.b;

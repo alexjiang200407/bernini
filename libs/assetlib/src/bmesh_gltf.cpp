@@ -1251,6 +1251,7 @@ namespace assetlib
 				material.isPbr              = isPbrMaterial(gltfMat);
 				material.alphaMode          = toAlphaMode(gltfMat.alphaMode);
 				material.alphaCutoff        = static_cast<float>(gltfMat.alphaCutoff);
+				material.doubleSided        = gltfMat.doubleSided;
 				material.transmissionFactor = toTransmission(gltfMat);
 				readSpecular(gltfMat, material);
 				material.baseColorTexture =

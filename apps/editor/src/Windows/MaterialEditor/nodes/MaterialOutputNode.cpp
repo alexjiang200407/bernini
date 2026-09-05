@@ -15,6 +15,7 @@
 #include <QPushButton>
 #include <QSignalBlocker>
 #include <algorithm>
+#include <assetlib_structs/BMaterial.h>
 #include <memory>
 #include <qlatin1stringview.h>
 #include <qnamespace.h>
@@ -264,6 +265,22 @@ MaterialOutputNode::embeddedWidget()
 
 	AddExtraRows(m_Widget, form);
 
+	// An opaque surface is drawn front-only by its pipeline, so the choice exists on the other sinks.
+	if (GetAlphaMode() != assetlib::AlphaMode::kOpaque)
+	{
+		m_DoubleSidedBox = new QCheckBox(m_Widget);
+		m_DoubleSidedBox->setChecked(m_DoubleSided);
+		m_DoubleSidedBox->setToolTip(QStringLiteral(
+			"Draw the back of each face too. Off, a card seen from behind is culled before it "
+			"reaches the rasterizer, which is most of what a dense hair costs at close range."));
+		form->addRow(QStringLiteral("Double Sided"), m_DoubleSidedBox);
+
+		connect(m_DoubleSidedBox, &QCheckBox::toggled, this, [this](bool checked) {
+			m_DoubleSided = checked;
+			Q_EMIT Changed();
+		});
+	}
+
 	// Queued, not called directly: the click arrives while the proxy widget is dispatching the mouse
 	// event, and QColorDialog::getColor spins a nested event loop. Opening it once the proxy has
 	// finished with the event leaves the graphics scene in a consistent state.
@@ -407,6 +424,8 @@ MaterialOutputNode::save() const
 	json["specularB"] = m_SpecularColorFactor.b;
 	json["specular"]  = m_SpecularFactor;
 
+	json["doubleSided"] = m_DoubleSided;
+
 	// Which groups are split, so a reloaded graph has the same ports its connections refer to.
 	auto split = QJsonArray();
 	for (const unsigned int count : m_GroupPorts) split.append(count > 1);
@@ -434,6 +453,10 @@ MaterialOutputNode::load(const QJsonObject& json)
 	m_SpecularColorFactor =
 		glm::vec3(factor("specularR", 1.0f), factor("specularG", 1.0f), factor("specularB", 1.0f));
 	m_SpecularFactor = factor("specular", 1.0f);
+
+	// True when absent: a graph saved before the key existed drew both sides.
+	const QJsonValue doubleSided = json["doubleSided"];
+	m_DoubleSided                = doubleSided.isBool() ? doubleSided.toBool() : true;
 
 	// Restore the port layout by assigning the counts directly: load() runs while the node is being
 	// created, before any connection has been restored, so there is nothing to rebase and the
@@ -472,6 +495,12 @@ MaterialOutputNode::load(const QJsonObject& json)
 			const QSignalBlocker blocker(m_ExpandBoxes[group]);
 			m_ExpandBoxes[group]->setChecked(m_GroupPorts[group] > 1);
 		}
+	}
+
+	if (m_DoubleSidedBox != nullptr)
+	{
+		const QSignalBlocker blocker(m_DoubleSidedBox);
+		m_DoubleSidedBox->setChecked(m_DoubleSided);
 	}
 
 	Q_EMIT Changed();

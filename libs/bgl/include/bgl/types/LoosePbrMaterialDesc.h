@@ -17,6 +17,9 @@ namespace bgl
 		LayerType layerType   = LayerType::kOpaque;
 		float     alphaCutoff = 0.5f;
 
+		// Back faces on a non-opaque layer; see PbrMaterialDesc.
+		bool doubleSided = true;
+
 		// Coverage against transmission; see PbrMaterialDesc.
 		float transmissionFactor = 0.0f;
 

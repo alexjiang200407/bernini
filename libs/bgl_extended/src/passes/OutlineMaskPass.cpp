@@ -160,6 +160,9 @@ namespace bgl
 			expansion["psoPrefixSum"]       = selected;
 			expansion["baseTable"]          = idl::BaseTable::kDepthSorted;
 			expansion["psoIndex"]           = 0u;
+			// The mask is the whole silhouette whichever way its triangles face, and this pass
+			// binds no material for the mesh stage to consult.
+			expansion["cullBackfaces"] = 0u;
 		}
 
 		auto gfxState   = MeshletState();

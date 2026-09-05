@@ -1237,6 +1237,7 @@ namespace game
 		desc.roughnessFactor     = pbr.roughnessFactor;
 		desc.layerType           = ToLayerType(pbr.alphaMode, m_Options.hashedAsBlend);
 		desc.alphaCutoff         = pbr.alphaCutoff;
+		desc.doubleSided         = pbr.doubleSided;
 		desc.transmissionFactor  = pbr.transmissionFactor;
 		desc.specularColorFactor = pbr.specularColorFactor;
 		desc.specularFactor      = pbr.specularFactor;
@@ -1259,6 +1260,7 @@ namespace game
 		desc.roughnessFactor     = pbr.roughnessFactor;
 		desc.layerType           = ToLayerType(pbr.alphaMode, m_Options.hashedAsBlend);
 		desc.alphaCutoff         = pbr.alphaCutoff;
+		desc.doubleSided         = pbr.doubleSided;
 		desc.transmissionFactor  = pbr.transmissionFactor;
 		desc.specularColorFactor = pbr.specularColorFactor;
 		desc.specularFactor      = pbr.specularFactor;

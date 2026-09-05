@@ -904,6 +904,7 @@ MaterialEditorWindow::OpenMaterialInto(int graphIndex, const QString& path, bool
 		seed["metallic"]     = material.pbr.metallicFactor;
 		seed["roughness"]    = material.pbr.roughnessFactor;
 		seed["transmission"] = material.pbr.transmissionFactor;
+		seed["doubleSided"]  = material.pbr.doubleSided;
 		seed["specularR"]    = material.pbr.specularColorFactor.r;
 		seed["specularG"]    = material.pbr.specularColorFactor.g;
 		seed["specularB"]    = material.pbr.specularColorFactor.b;

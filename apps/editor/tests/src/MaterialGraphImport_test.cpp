@@ -248,6 +248,38 @@ TEST_CASE("A blend import carries its transmission through the graph", "[materia
 	CHECK(material.pbr.transmissionFactor == Catch::Approx(0.85f));
 }
 
+// glTF says which side of a cut-out is drawn, and the graph is what the compile reads: a flag the
+// sink dropped would import every single-sided leaf and card as two-sided, at the rasterizer's cost.
+TEST_CASE("A cut-out import carries its double-sidedness through the graph", "[materialimport]")
+{
+	auto imported        = assetlib::imp::BMaterialImport();
+	imported.alphaMode   = assetlib::AlphaMode::kMask;
+	imported.doubleSided = false;
+
+	MaterialGraphModel model(MakeMaterialNodeRegistry(nullptr, nullptr));
+	BuildImportedMaterialGraph(model, imported, AllMaps());
+
+	const MaterialOutputNode* output = model.OutputNode();
+	REQUIRE(output != nullptr);
+	CHECK(!output->GetDoubleSided());
+
+	CHECK(!CompileMaterial(model, QStringLiteral("leaf"), c_DataRoot).pbr.doubleSided);
+}
+
+// A graph saved before the flag existed carries no key for it, and every card it described drew
+// both sides; that is what it has to keep compiling to.
+TEST_CASE("A graph with no double-sidedness of its own compiles to both sides", "[materialimport]")
+{
+	MaterialGraphModel    model(MakeMaterialNodeRegistry(nullptr, nullptr));
+	const QtNodes::NodeId id     = model.addNode(QStringLiteral("AlphaTestedMaterialOutput"));
+	auto*                 output = model.delegateModel<MaterialOutputNode>(id);
+	REQUIRE(output != nullptr);
+
+	output->load(QJsonObject{});
+	CHECK(output->GetDoubleSided());
+	CHECK(CompileMaterial(model, QStringLiteral("m"), c_DataRoot).pbr.doubleSided);
+}
+
 // The sink is what CompileMaterial reads, so a factor the node does not hold is silently reset the
 // first time an imported material is opened and saved -- and a squirrel whose author switched the
 // specular off gets its sheen back with nothing in the file to say why.

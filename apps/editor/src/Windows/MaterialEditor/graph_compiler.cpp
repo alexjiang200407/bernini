@@ -55,6 +55,7 @@ namespace editor
 
 		desc.layerType          = ToLayerType(output->GetAlphaMode());
 		desc.alphaCutoff        = output->GetAlphaCutoff();
+		desc.doubleSided        = output->GetDoubleSided();
 		desc.transmissionFactor = output->GetTransmission();
 
 		desc.specularColorFactor = output->GetSpecularColorFactor();

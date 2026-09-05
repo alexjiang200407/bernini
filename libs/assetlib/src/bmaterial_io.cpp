@@ -134,6 +134,7 @@ namespace assetlib
 			pbr.alphaMode = static_cast<AlphaMode>(mode - c_AlphaModeNames.begin());
 
 			taker.Take("alphaCutoff", pbr.alphaCutoff);
+			taker.Take("doubleSided", pbr.doubleSided);
 			taker.Take("baseColorFactor", pbr.baseColorFactor);
 			taker.Take("metallicFactor", pbr.metallicFactor);
 			taker.Take("roughnessFactor", pbr.roughnessFactor);
@@ -244,6 +245,7 @@ namespace assetlib
 		const PbrParams& pbr        = material.pbr;
 		json["alphaMode"]           = alphaModeName(pbr.alphaMode);
 		json["alphaCutoff"]         = doc::plainFloat(pbr.alphaCutoff);
+		json["doubleSided"]         = pbr.doubleSided;
 		json["baseColorFactor"]     = doc::vecToJson(pbr.baseColorFactor);
 		json["metallicFactor"]      = doc::plainFloat(pbr.metallicFactor);
 		json["roughnessFactor"]     = doc::plainFloat(pbr.roughnessFactor);

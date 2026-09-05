@@ -100,8 +100,29 @@ would hold transparency the image does not have.
 
 ## Two-sided surfaces
 
-Every cutout, blend and hashed bucket is `RasterCullMode::kNone`, so the rasterizer draws both sides
-of a surface. On the back one the interpolated normal still points away from the camera, which sends
+Every cutout, blend and hashed bucket is `RasterCullMode::kNone`, so the pipeline draws both sides
+of a surface. **Whether a given material's back faces reach the rasterizer is the material's
+choice** — `PbrMaterialDesc::doubleSided`, glTF's `doubleSided`, on by default — and the mesh stage
+is what honours it: `PrepareMeshlet` reads the flag once per group off the material record
+(`MaterialData::IsMaterialDoubleSided`, by kind), each vertex leaves its clip position in
+threadgroup memory beside its output, and `CullBackface` replaces a back-facing triangle of a
+single-sided material with a degenerate one — on a draw whose `expansionData.cullBackfaces` says
+the pipeline draws both sides, which Forward sets per bucket from `c_Psos`' cull mode and the
+[Outline Mask](#outline-mask) sets to zero, since the mask is the whole silhouette whichever way
+its triangles face. A draw that culls in hardware, and every double-sided material, skips the
+record, the barrier and the material read. The rasterizer sets a degenerate triangle up and drops
+it without walking a tile, which is the point: a long thin card triangle costs the rasterizer by its
+length on screen whether or not a pixel shader ever runs ([Asset Standards § Long thin
+triangles](docs/asset_standards.md)), so culling in the mesh stage is the same saving hardware
+culling would be. The facing is judged in homogeneous clip space, so a triangle crossing the near
+plane is judged as the hardware judges it, and the `[twosided]` cases pin the sign against both
+windings. It is the mesh stage and not a second PSO because the transparent phase draws every
+material through one pipeline and one sorted dispatch, where no PSO state can vary per material.
+
+The opaque buckets cull in hardware regardless, so an opaque material draws its front faces only
+whatever its flag says.
+
+On a back face the interpolated normal still points away from the camera, which sends
 the view angle, the irradiance lookup and the reflection vector into the wrong hemisphere — the same
 material then shades differently depending on which side happens to be visible.
 

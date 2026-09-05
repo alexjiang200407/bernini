@@ -79,10 +79,11 @@ namespace bgl
 		};
 		// clang-format on
 
-		constexpr std::array<std::string_view, 3> c_ExpansionDataFields = {
+		constexpr std::array<std::string_view, 4> c_ExpansionDataFields = {
 			"psoIndex"sv,
 			"baseTable"sv,
 			"compactedInstances"sv,
+			"cullBackfaces"sv,
 		};
 
 		constexpr auto c_MotionVectorFormat = Format::RG16_FLOAT;
@@ -412,6 +413,9 @@ namespace bgl
 			{
 				(*expansionData)["psoIndex"]  = static_cast<uint32_t>(pso);
 				(*expansionData)["baseTable"] = idl::BaseTable::kPsoBucketed;
+				// A bucket the pipeline culls in hardware leaves the mesh stage nothing to do.
+				(*expansionData)["cullBackfaces"] =
+					c_Psos[pso].cull == RasterCullMode::kNone ? 1u : 0u;
 			}
 
 			gfxState.kernel       = &kernel;
@@ -450,6 +454,7 @@ namespace bgl
 		{
 			(*expansionData)["compactedInstances"] = sortedInstances;
 			(*expansionData)["baseTable"]          = idl::BaseTable::kDepthSorted;
+			(*expansionData)["cullBackfaces"]      = 1u;
 		}
 
 		colorState.kernel       = &kernel;

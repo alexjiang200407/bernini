@@ -12,6 +12,7 @@
 #include <catch2/catch_approx.hpp>
 #include <catch2/catch_message.hpp>
 #include <catch2/catch_test_macros.hpp>
+#include <catch2/generators/catch_generators.hpp>
 #include <cstdint>
 #include <string>
 
@@ -22,7 +23,11 @@ namespace
 	// Renders a plane whose front faces the camera, or whose back does. Same material, same light,
 	// same screen position -- only the winding the camera sees differs.
 	bgl::test::Rgba
-	RenderFacing(const std::string& path, bool backFacing)
+	RenderFacing(
+		const std::string& path,
+		bool               backFacing,
+		bool               doubleSided = true,
+		bgl::LayerType     layer       = bgl::LayerType::kMask)
 	{
 		auto opts             = bgl::GraphicsOptions();
 		opts.shaderCacheDir   = bgl::test::ShaderCacheDir();
@@ -55,7 +60,8 @@ namespace
 		desc.roughnessFactor = 0.6f;
 		// kMask is two-sided (RasterCullMode::kNone) and alpha 1 discards nothing, so this is a
 		// fully opaque plane drawn by a two-sided pipeline -- the shape a hair card is.
-		desc.layerType = bgl::LayerType::kMask;
+		desc.layerType   = layer;
+		desc.doubleSided = doubleSided;
 
 		auto material = scene->CreatePbrMaterial(desc);
 		auto plane    = scene->AddPlaneGeom(1, 1, 12.0f, 12.0f, material);
@@ -120,4 +126,35 @@ TEST_CASE("A two-sided surface shades the same from either side", "[twosided][re
 	CHECK(back.r == Catch::Approx(front.r).margin(0.03));
 	CHECK(back.g == Catch::Approx(front.g).margin(0.03));
 	CHECK(back.b == Catch::Approx(front.b).margin(0.03));
+}
+
+// A single-sided material's back faces never reach the rasterizer: the mesh stage collapses them,
+// so from behind the plane the frame holds only the background. The pipeline is the same two-sided
+// one either way -- what changes is the material -- and the blend bucket is checked on its own
+// because it draws through the tier-branching AnyMesh stage rather than the static one.
+TEST_CASE(
+	"A single-sided surface is culled from behind and drawn from the front",
+	"[twosided][render]")
+{
+	const auto layer = GENERATE(bgl::LayerType::kMask, bgl::LayerType::kBlend);
+	INFO("layer " << static_cast<int>(layer));
+
+	const bgl::test::Rgba front =
+		RenderFacing("assets/golden/onesided_front.got.png", false, false, layer);
+	const bgl::test::Rgba back =
+		RenderFacing("assets/golden/onesided_back.got.png", true, false, layer);
+	const bgl::test::Rgba bothBack =
+		RenderFacing("assets/golden/onesided_ref_back.got.png", true, true, layer);
+
+	INFO(
+		"front = " << front.Luma() << ", back = " << back.Luma()
+				   << ", two-sided back = " << bothBack.Luma());
+
+	// The front is drawn: the same patch a two-sided plane shows from behind.
+	REQUIRE(front.Luma() > 0.05f);
+
+	// From behind, nothing of it: the patch reads far darker than the surface a two-sided
+	// material puts there, which pins the sign of the facing test -- a flipped one would draw the
+	// back and cull the front.
+	CHECK(back.Luma() < bothBack.Luma() * 0.5f);
 }
