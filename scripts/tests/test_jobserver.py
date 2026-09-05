@@ -49,7 +49,12 @@ needs_ninja = pytest.mark.skipif(ninja() is None,
 def write_project(directory, jobs):
     """A ninja project of `jobs` edges that each sleep for JOB seconds."""
     os.makedirs(directory, exist_ok=True)
-    lines = ["rule slow", f"  command = sleep {JOB} && touch $out", ""]
+    # Driven through this interpreter rather than `sleep && touch`: ninja runs an edge through
+    # cmd.exe on Windows, which carries neither.
+    python = sys.executable.replace("\\", "/")
+    sleeper = (f'"{python}" -c "import sys, time; time.sleep({JOB}); '
+               f"open(sys.argv[1], 'w').close()\" $out")
+    lines = ["rule slow", f"  command = {sleeper}", ""]
     lines += [f"build f{i}: slow" for i in range(jobs)]
     with open(os.path.join(directory, "build.ninja"), "w", encoding="utf-8") as handle:
         handle.write("\n".join(lines) + "\n")
