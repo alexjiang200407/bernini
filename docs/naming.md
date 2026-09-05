@@ -107,6 +107,41 @@ written to full-match -- clangd anchors, clang-tidy searches.
 The same library backs clangd, configured in [`.clangd`](../.clangd), so the editor underlines what
 the hook would refuse.
 
+### What the tool cannot see
+
+`misc-include-cleaner` reasons about *symbol references*. Everything below is a real dependency that
+is not one, so the check reports the header unused and deleting it breaks something. Each was found
+by building, not by reading, and each already has its answer in the tree — the point of the list is
+that the next one you meet is probably on it.
+
+| The dependency | Where it bit | The answer |
+|---|---|---|
+| A header that must be **configured** before it is parsed | `core/glm.h` sets `GLM_FORCE_DEPTH_ZERO_TO_ONE`; glm reached any other way builds a projection matrix for the wrong depth range | excluded, with its entry points |
+| A header that **does not exist off-platform** | `<sys/_types/_ucontext.h>` is Darwin-internal; `<mach/arm/…>` is not even on an Intel mac | excluded |
+| A header that is **not self-contained** | `<RmlUi/Core/Span.h>` uses `RMLUI_ASSERT` and includes nothing that defines it | excluded; the umbrella is the entry point |
+| An **umbrella that is the interface** | `metal_cpp.h` in `MetalImpl.cpp` emits metal-cpp's out-of-line symbols — deleting it compiles and breaks the *link* | excluded |
+| **Declared** in one header, **defined** in another | `nlohmann::json` is declared in `json_fwd.hpp`, defined in `json.hpp`, and the check names the declaration | excluded |
+| A **namespace alias** | `logger = spdlog` in `bgl_common/gassert.h`; using `logger::warn` references no symbol from it | `// IWYU pragma: keep` |
+| A type needed **complete inside a template** | `SharedRef<T>` dereferences and destroys T, `unique_ptr` needs `sizeof` for its deleter, `optional<T>` needs the definition | `// IWYU pragma: keep` |
+| A **template specialisation** | `AssetCodec<BMesh>` in `codecs.h` satisfies `SaveAt`'s concept; the call simply stops matching | `// IWYU pragma: keep` |
+
+The last two have no textual signal at all. `auto q = device->CreateCommandQueue(...)` needs
+`ICommandQueue` complete while naming neither the type nor the header nor even `SharedRef`, so no
+heuristic finds it and only a compiler does — and only for the configuration it just built. That is
+why the *unused* half is reviewed and the *missing* half is not, and why a sweep is not finished
+until CI's Windows compile is green as well as the local one.
+
+### Where the check is deliberately off
+
+`just tidy` prints a count of the files it skipped, and a subsystem the sweep could not reach says so
+in its own `.clang-tidy` rather than reporting clean over code nothing examined:
+
+| Not checked | Why | What lifts it |
+|---|---|---|
+| `libs/bgl_extended` (removals only) | its interfaces are `core::SharedRef<T>` behind `auto` — the row above | a human pass per file |
+| `libs/bgl_extended/src/d3d12`, `libs/core/src/win32`, `libs/core/src/web` | the macOS preset has no compile command for them | `just build --preset windows-clang-dx12-debug`, then `just tidy <dir>` |
+| `bgl_extended/src/cmd/Command{Allocator,List,Queue}.h`, `src/constants/constants.h`, `src/pch.h`, `gamelib/tests/src/util/RigFixture.h` | their directories hold no compiled `.cpp` for `tidy.py` to borrow flags from | a compiled source beside them |
+
 ## Where the config lives
 
 | File | Says |
