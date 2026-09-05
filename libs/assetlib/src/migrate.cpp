@@ -112,11 +112,13 @@ namespace assetlib
 			case AssetType::kMesh:
 			{
 				RegenMesh current = store.LoadRegenMesh(key);
-				core::throw_runtime_error_if(
-					!current.unboundBindings.empty(),
-					"its import document binds submesh '{}', which the mesh does not have; "
-					"rebind or re-export",
-					current.unboundBindings.front());
+				if (!current.unboundBindings.empty())
+				{
+					core::throw_runtime_error(
+						"its import document binds submesh '{}', which the mesh does not have; "
+						"rebind or re-export",
+						current.unboundBindings.front());
+				}
 				return AssetCodec<BMesh>::Serialize(current.mesh);
 			}
 			case AssetType::kSkeleton:

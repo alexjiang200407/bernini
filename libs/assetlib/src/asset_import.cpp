@@ -343,12 +343,14 @@ namespace assetlib
 				// A claimless document is a clips-only group, which binds nothing -- unless a
 				// mesh header would not read, in which case that mesh may be the claimant and
 				// clearing the bindings would silently destroy them.
-				core::throw_runtime_error_if(
-					claimants == 0 && !unreadable.empty(),
-					"no mesh claims '{}', but '{}' has an unreadable header and may be its "
-					"claimant; fix that mesh and re-run",
-					sourceKey,
-					unreadable.front());
+				if (claimants == 0 && !unreadable.empty())
+				{
+					core::throw_runtime_error(
+						"no mesh claims '{}', but '{}' has an unreadable header and may be its "
+						"claimant; fix that mesh and re-run",
+						sourceKey,
+						unreadable.front());
+				}
 
 				const std::vector<std::byte> bytes =
 					core::file::read_file_bytes(entry.path().string());
@@ -623,6 +625,14 @@ namespace assetlib
 			if (!file.existed)
 				fs::remove(file.path, ec);
 
+		// lexically_normal keeps a trailing separator, so `cat/.` normalises to `cat/` -- a path
+		// whose final element is empty, which compares unequal to `cat`. Spelling the category that
+		// way must not be a way past the guard below.
+		const auto asDirectory = [](const fs::path& path) {
+			const fs::path normal = path.lexically_normal();
+			return normal.has_filename() ? normal : normal.parent_path();
+		};
+
 		for (const ImportedDir& dir : dirs)
 		{
 			// remove_all is recursive, so the folder it is handed had better be the one this import made.
@@ -630,7 +640,7 @@ namespace assetlib
 			// would mean the import's subdirectory got lost somewhere, and taking the root down with it
 			// is not a recovery.
 			if (dir.existed || dir.path.empty() ||
-			    dir.path.lexically_normal() == dir.categoryRoot.lexically_normal())
+			    asDirectory(dir.path) == asDirectory(dir.categoryRoot))
 				continue;
 
 			fs::remove_all(dir.path, ec);
