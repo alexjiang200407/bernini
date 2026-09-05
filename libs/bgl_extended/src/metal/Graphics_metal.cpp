@@ -8,11 +8,13 @@
 #include <bgl/IRenderTarget.h>
 #include <bgl/IScene.h>
 #include <bgl/ISceneView.h>
+#include <bgl/PassTiming.h>
 #include <bgl/RenderJob.h>
 #include <bgl/api.h>
 #include <bgl/types/SceneDesc.h>
 #include <core/err/util.h>
 #include <core/ref/SharedRef.h>
+#include <vector>
 
 #include "gfx/GraphicsBase.h"
 #include "gfx/RenderContext.h"
@@ -295,6 +297,12 @@ namespace bgl
 		DiscardPendingGpuAssertions() noexcept override
 		{
 			m_Context->DiscardPendingGpuAssertions();
+		}
+
+		std::vector<PassTiming>
+		GetPassTimings(const RenderTargetRef& target) override
+		{
+			return m_Context->GetPassTimings(target);
 		}
 
 	private:

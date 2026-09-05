@@ -3,6 +3,7 @@
 #include "cmd/CommandQueue.h"
 #include "debug/BufferPoisoner.h"
 #include "fg/PassDesc.h"
+#include "fg/PassTimer.h"
 #include "resource/Buffer.h"
 #include "resource/Texture.h"
 #include "types/Barrier.h"
@@ -121,6 +122,17 @@ namespace bgl
 		SetBufferPoisoner(BufferPoisoner* poisoner) noexcept
 		{
 			m_Poisoner = poisoner;
+		}
+
+		/**
+		 * Installs the timer Execute brackets every kept pass with, inside the pass's debug event
+		 * and around its barriers. Null -- the default -- times nothing. Non-owning; the caller arms
+		 * it per frame and must keep it alive through Execute.
+		 */
+		void
+		SetPassTimer(PassTimer* timer) noexcept
+		{
+			m_PassTimer = timer;
 		}
 
 		void
@@ -244,6 +256,7 @@ namespace bgl
 		// every render target and the attachment names are shared constants, so a name says
 		// nothing about which resource was last left in that state.
 		std::unordered_map<ResourceKey, AccessState, ResourceKeyHash> m_LastState;
-		BufferPoisoner*                                               m_Poisoner = nullptr;
+		BufferPoisoner*                                               m_Poisoner  = nullptr;
+		PassTimer*                                                    m_PassTimer = nullptr;
 	};
 }

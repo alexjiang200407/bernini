@@ -7,7 +7,9 @@
 #include "resource/ResourceManager_d3d12.h"
 #include "scene/Scene.h"
 #include "scene/SceneView.h"
+#include <bgl/PassTiming.h>
 #include <core/log/log.h>
+#include <vector>
 
 namespace fs = std::filesystem;
 
@@ -155,6 +157,12 @@ namespace bgl
 		DiscardPendingGpuAssertions() noexcept override
 		{
 			m_Context->DiscardPendingGpuAssertions();
+		}
+
+		std::vector<PassTiming>
+		GetPassTimings(const RenderTargetRef& target) override
+		{
+			return m_Context->GetPassTimings(target);
 		}
 
 	private:

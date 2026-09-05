@@ -97,9 +97,20 @@ namespace bgl
 	{
 		// Apple GPUs sample at an encoder's stage boundary and nowhere finer, which is the point the
 		// command list attaches a span's slots to; a device without even that has no timestamps.
+		// Once: every render target asks at creation, and a device that cannot is the same device
+		// every time.
+		static bool g_Warned = false;
+		const auto  warnOnce = [](const char* why) {
+			if (!g_Warned)
+			{
+				logger::warn("CreateTimestampHeap: {}; no pass will be timed", why);
+				g_Warned = true;
+			}
+		};
+
 		if (!m_Device->supportsCounterSampling(MTL::CounterSamplingPointAtStageBoundary))
 		{
-			logger::warn("CreateTimestampHeap: the device cannot sample at a stage boundary");
+			warnOnce("the device cannot sample at a stage boundary");
 			return {};
 		}
 
@@ -119,7 +130,7 @@ namespace bgl
 
 		if (timestamps == nullptr)
 		{
-			logger::warn("CreateTimestampHeap: the device has no timestamp counter set");
+			warnOnce("the device has no timestamp counter set");
 			return {};
 		}
 

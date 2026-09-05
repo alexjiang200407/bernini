@@ -117,6 +117,19 @@ namespace bgl
 		virtual void
 		SetOutlineEnabled(bool enabled) noexcept = 0;
 
+		/** Whether every pass of a frame drawn to this target is timed on the GPU. Off by default. */
+		[[nodiscard]] virtual bool
+		IsGpuTimingEnabled() const noexcept = 0;
+
+		/**
+		 * Turns per-pass GPU timing on or off from the next frame on; IGraphics::GetPassTimings
+		 * reads the result. Nothing is allocated either way -- the slots exist from creation -- but
+		 * a timed frame costs a resolve and, on Metal, an encoder ended at every pass boundary, so
+		 * it is off until something reads the rows. Turning it off drops the rows already read.
+		 */
+		virtual void
+		SetGpuTimingEnabled(bool enabled) noexcept = 0;
+
 	protected:
 		IRenderTarget() noexcept = default;
 	};

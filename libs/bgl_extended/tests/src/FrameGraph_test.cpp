@@ -1,8 +1,10 @@
 #include "cmd/CommandList.h"
 #include "cmd/CommandQueue.h"
+#include "cmd/TimestampHeap.h"
 #include "debug/BufferPoisoner.h"
 #include "fg/FrameGraph.h"
 #include "fg/PassDesc.h"
+#include "fg/PassTimer.h"
 #include "resource/Buffer.h"
 #include "resource/Dsv.h"
 #include "resource/Readback.h"
@@ -1034,4 +1036,115 @@ TEST_CASE("FrameGraph: the same resource resumes its own state under a new name"
 	fg.Compile(&NullRm());
 
 	CHECK(fg.BarriersFor("ReadAgain").Empty());
+}
+
+namespace
+{
+	// A heap the graph can hand its timer without a device: the slots exist, and read as never
+	// written, which is all a test of *where the spans go* needs.
+	class NullTimestampHeap : public core::RefCounter<ITimestampHeap>
+	{
+	public:
+		NullTimestampHeap()                         = default;
+		NullTimestampHeap(const NullTimestampHeap&) = delete;
+		NullTimestampHeap(NullTimestampHeap&&)      = delete;
+
+		NullTimestampHeap&
+		operator=(const NullTimestampHeap&) = delete;
+
+		NullTimestampHeap&
+		operator=(NullTimestampHeap&&) = delete;
+
+		[[nodiscard]] uint32_t
+		GetCapacity() const noexcept override
+		{
+			return 16;
+		}
+
+		void
+		Read(uint32_t, std::span<uint64_t> out) const noexcept override
+		{
+			std::ranges::fill(out, c_UnwrittenTimestamp);
+		}
+	};
+}
+
+// The timer is the graph's, not a pass's: every kept pass is spanned in execution order, from the
+// slots the frame was armed with, and a culled pass takes no slots -- it never ran, so it has no
+// cost to report. The span opens before the pass's barriers, which are part of what it costs.
+TEST_CASE("FrameGraph: the pass timer spans every kept pass and skips the culled", "[fg]")
+{
+	PoisonHarness h;
+	auto          heap = core::SharedRef<NullTimestampHeap>::Make();
+
+	PassTimer timer;
+	timer.Arm(heap.Get(), 4, 4);
+
+	FrameGraph fg;
+	fg.SetPassTimer(&timer);
+	fg.ImportBuffer("a", MakeBuffer(7));
+	fg.AddPass(
+		PassDesc{}
+			.SetName("Producer")
+			.AddBufferArg("a", BarrierSyncFlag::kComputeShader, BarrierAccessFlag::kUnorderedAccess)
+			.SetExec([&](const PassContext&) { h.log.push_back("exec:Producer"); }));
+	fg.AddPass(PassDesc{}.SetName("Orphan").SetExec([&](const PassContext&) {
+		h.log.push_back("exec:Orphan");
+	}));
+	fg.AddPass(
+		PassDesc{}
+			.SetName("Consumer")
+			.AddBufferArg("a", BarrierSyncFlag::kComputeShader, BarrierAccessFlag::kShaderResource)
+			.SetSideEffect()
+			.SetExec([&](const PassContext&) { h.log.push_back("exec:Consumer"); }));
+
+	h.Run(fg);
+
+	CHECK(
+		h.log == std::vector<std::string>{ "timing:4-5",
+	                                       "barriers",
+	                                       "exec:Producer",
+	                                       "timing:6-7",
+	                                       "barriers",
+	                                       "exec:Consumer" });
+
+	const std::span<const PassTimer::Entry> entries = timer.Entries();
+	REQUIRE(entries.size() == 2);
+	CHECK(entries[0].name == "Producer");
+	CHECK(entries[0].startSlot == 4);
+	CHECK(entries[0].endSlot == 5);
+	CHECK(entries[0].sampled);
+	CHECK(entries[1].name == "Consumer");
+	CHECK(entries[1].startSlot == 6);
+	CHECK(entries[1].endSlot == 7);
+	CHECK(timer.GetSlotsUsed() == 4);
+	timer.Disarm();
+}
+
+// A frame with more passes than the timer was armed for still lists them all -- the breakdown
+// must not silently stop short -- but the ones past the capacity take no slots.
+TEST_CASE("FrameGraph: passes past the timer's capacity are listed unsampled", "[fg]")
+{
+	PoisonHarness h;
+	auto          heap = core::SharedRef<NullTimestampHeap>::Make();
+
+	PassTimer timer;
+	timer.Arm(heap.Get(), 0, 1);
+
+	FrameGraph fg;
+	fg.SetPassTimer(&timer);
+	fg.AddPass(PassDesc{}.SetName("First").SetSideEffect());
+	fg.AddPass(PassDesc{}.SetName("Second").SetSideEffect());
+
+	h.Run(fg);
+
+	CHECK(h.log == std::vector<std::string>{ "timing:0-1" });
+
+	const std::span<const PassTimer::Entry> entries = timer.Entries();
+	REQUIRE(entries.size() == 2);
+	CHECK(entries[0].sampled);
+	CHECK(entries[1].name == "Second");
+	CHECK(!entries[1].sampled);
+	CHECK(timer.GetSlotsUsed() == 2);
+	timer.Disarm();
 }
