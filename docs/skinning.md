@@ -318,6 +318,15 @@ to keep in agreement beyond the one below.
   brings the slope back. Nothing else in the scene should stand on a slope this panel set while
   nobody is looking at it.
 
+* **Two more sliders in the group, *IK Weight* and *Sole Turn*, are the instance's own weights**
+  (`ISceneView::SetFootIK`, § Foot planting), in percent: a partial plant held still, so a person
+  can read what the solve does to a foot by how far it is let do it. Constants and never a fade,
+  because the panel's clock is the transport's clip time and wraps over the clip period, so a ramp
+  stamped in it would re-read its start on every loop. `editor::FootIKForSliders`, free of the
+  window and pinned by `[footik]`, is what a slider commits, and the preview re-applies it to every
+  instance a clip or tier switch respawns. A crowd instance and a rig without legs own no record
+  (`ISceneView::HasFootIK`), and the preview leaves them alone.
+
 * **The Content Explorer creates an avatar from the source.** *Create Avatar* is offered on an
   imported `.glb` whose document binds a rig (`editor::GetSourceSkeleton`), because the source is
   the row that stands for the rig in the views: its `.bskel` lives in the half they do not reach and

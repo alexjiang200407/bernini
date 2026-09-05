@@ -118,6 +118,9 @@ namespace bgl
 		[[nodiscard]] FootIKDesc
 		GetFootIK(MeshInstanceHandle instance) const override;
 
+		[[nodiscard]] bool
+		HasFootIK(MeshInstanceHandle instance) const noexcept override;
+
 		void
 		SetSubmeshMaterialOverride(
 			MeshInstanceHandle instance,
