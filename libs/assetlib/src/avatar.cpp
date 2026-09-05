@@ -18,13 +18,18 @@
 
 #include "json_doc.h"
 #include "ref_paths.h"
+#include <algorithm>
+#include <cmath>
 #include <core/file/IFileSystem.h>
 
 namespace assetlib
 {
 	namespace
 	{
-		constexpr std::string_view c_LegsKey      = "legs";
+		constexpr std::string_view c_LegsKey  = "legs";
+		constexpr std::string_view c_PlantKey = "plant";
+		// Read and never written: the list this key was before it became a weight, kept so a
+		// document from then still loads. A save rewrites it as `plant`.
 		constexpr std::string_view c_UnplantedKey = "unplanted";
 		constexpr std::string_view c_HipKey       = "hip";
 		constexpr std::string_view c_KneeKey      = "knee";
@@ -75,6 +80,24 @@ namespace assetlib
 				index,
 				key);
 			out = it->get<std::string>();
+		}
+
+		void
+		addClipWeight(Avatar& avatar, std::string clip, float weight, std::string_view key)
+		{
+			core::throw_runtime_error_if(clip.empty(), "avatar: '{}' names an empty clip", key);
+			core::throw_runtime_error_if(
+				!std::isfinite(weight) || weight < 0.0f || weight > 1.0f,
+				"avatar: '{}' weights '{}' at {}, outside 0 to 1",
+				key,
+				clip,
+				weight);
+			for (const ClipPlantWeight& entry : avatar.clipWeights)
+				core::throw_runtime_error_if(
+					entry.clip == clip,
+					"avatar: '{}' is weighted twice",
+					clip);
+			avatar.clipWeights.emplace_back(std::move(clip), weight == 0.0f ? 0.0f : weight);
 		}
 
 		uint32_t
@@ -133,7 +156,7 @@ namespace assetlib
 			      boneIndex(skeleton, leg.toeBoneName, i, c_ToeKey) });
 		}
 
-		out.unplantedClips = avatar.unplantedClips;
+		out.clipWeights = avatar.clipWeights;
 		return out;
 	}
 
@@ -218,6 +241,25 @@ namespace assetlib
 			json.erase(it);
 		}
 
+		if (auto it = json.find(c_PlantKey); it != json.end())
+		{
+			core::throw_runtime_error_if(
+				!it->is_object(),
+				"avatar: '{}' is not an object of clip name to weight",
+				c_PlantKey);
+
+			for (const auto& [clip, weight] : it->items())
+			{
+				core::throw_runtime_error_if(
+					!weight.is_number(),
+					"avatar: '{}' weights '{}' with something that is not a number",
+					c_PlantKey,
+					clip);
+				addClipWeight(avatar, clip, weight.get<float>(), c_PlantKey);
+			}
+			json.erase(it);
+		}
+
 		if (auto it = json.find(c_UnplantedKey); it != json.end())
 		{
 			core::throw_runtime_error_if(
@@ -229,14 +271,16 @@ namespace assetlib
 			{
 				const nlohmann::json& name = (*it)[i];
 				core::throw_runtime_error_if(
-					!name.is_string() || name.get<std::string>().empty(),
+					!name.is_string(),
 					"avatar: '{}' entry {} is not a clip name",
 					c_UnplantedKey,
 					i);
-				avatar.unplantedClips.push_back(name.get<std::string>());
+				addClipWeight(avatar, name.get<std::string>(), 0.0f, c_UnplantedKey);
 			}
 			json.erase(it);
 		}
+
+		std::ranges::sort(avatar.clipWeights, {}, &ClipPlantWeight::clip);
 
 		avatar.extraJson = json.dump();
 		return avatar;
@@ -262,10 +306,16 @@ namespace assetlib
 		json[c_LegsKey] = std::move(legs);
 
 		// Absent when empty, unlike `legs`: the key is an exception to a rule, and a document that
-		// lists none reads as one with none.
+		// names none reads as one with none. The list it used to be is never written back.
 		json.erase(c_UnplantedKey);
-		if (!avatar.unplantedClips.empty())
-			json[c_UnplantedKey] = avatar.unplantedClips;
+		json.erase(c_PlantKey);
+		if (!avatar.clipWeights.empty())
+		{
+			auto plant = nlohmann::json::object();
+			for (const ClipPlantWeight& entry : avatar.clipWeights)
+				plant[entry.clip] = doc::plainFloat(entry.weight);
+			json[c_PlantKey] = std::move(plant);
+		}
 
 		return doc::toBytes(json);
 	}

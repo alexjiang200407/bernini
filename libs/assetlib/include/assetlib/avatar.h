@@ -27,6 +27,21 @@ namespace assetlib
 	};
 
 	/**
+	 * How far one clip plants, by the clip's name: a scale on every weight the cook measures for
+	 * it, 0 to 1. Zero is a clip that plants nothing, which is the one the walk cannot judge for
+	 * itself -- an airborne clip rests on a foot and looks planted from inside. A clip the avatar
+	 * does not name plants as measured. One matching no clip is warned about.
+	 */
+	struct ClipPlantWeight
+	{
+		std::string clip;
+		float       weight = 1.0f;
+
+		bool
+		operator==(const ClipPlantWeight&) const = default;
+	};
+
+	/**
 	 * The authored half of a rig: what a person decided about a skeleton, as opposed to what the
 	 * import measured off the source. A `.bmaterial` is a mesh's; this is a `.bskel`'s.
 	 *
@@ -43,9 +58,9 @@ namespace assetlib
 	{
 		std::vector<AvatarLeg> legs;
 
-		/** Clips that plant nothing, by name; one matching nothing is warned about. Why an
-		 * airborne clip needs saying: docs/skinning.md. */
-		std::vector<std::string> unplantedClips;
+		/** Sorted by clip name, unique; the document's `plant` object. Why an airborne clip needs
+		 * saying: docs/skinning.md. */
+		std::vector<ClipPlantWeight> clipWeights;
 
 		std::string extraJson = "{}";
 
@@ -87,13 +102,14 @@ namespace assetlib
 
 	/**
 	 * An avatar resolved against the rig it belongs to: the legs as bone indices, in authored
-	 * order, and the clips it takes out of the plant. What the cook measures weights with, what
-	 * keys them, and what the load plants from -- one thing, so the three cannot disagree.
+	 * order, and the clips it scales or takes out of the plant. What the cook measures weights
+	 * with, what keys them, and what the load plants from -- one thing, so the three cannot
+	 * disagree.
 	 */
 	struct ResolvedAvatar
 	{
-		std::vector<AvatarLegChain> legs;
-		std::vector<std::string>    unplantedClips;
+		std::vector<AvatarLegChain>  legs;
+		std::vector<ClipPlantWeight> clipWeights;
 
 		bool
 		operator==(const ResolvedAvatar&) const = default;

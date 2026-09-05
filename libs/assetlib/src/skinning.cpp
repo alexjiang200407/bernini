@@ -1163,10 +1163,11 @@ namespace assetlib
 
 		// Each name with its length, so two lists cannot agree by concatenation; nothing at all
 		// for an empty list, so an avatar that names no clip keys as it did before the key existed.
-		for (const std::string& clip : avatar.unplantedClips)
+		for (const ClipPlantWeight& entry : avatar.clipWeights)
 		{
-			hash = core::hash_pod(clip.size(), hash);
-			hash = core::hash_string(clip, hash);
+			hash = core::hash_pod(entry.clip.size(), hash);
+			hash = core::hash_string(entry.clip, hash);
+			hash = core::hash_pod(entry.weight, hash);
 		}
 
 		// The geometry the soles were fitted on, by the same hash a posed box keys on: it is the
@@ -1213,20 +1214,22 @@ namespace assetlib
 			return out;
 
 		// A name matching no clip is said out loud rather than passed over: it is authored, and
-		// what it meant to switch off is still on.
-		auto unplanted = std::vector<bool>(animations.clips.size(), false);
-		for (const std::string& name : avatar.unplantedClips)
+		// what it meant to scale is still at one.
+		auto scale = std::vector<float>(animations.clips.size(), 1.0f);
+		for (const ClipPlantWeight& entry : avatar.clipWeights)
 		{
 			bool found = false;
 			for (uint32_t clip = 0; clip < animations.clips.size(); ++clip)
-				if (animations.stringPool.at(animations.clips[clip].nameOffset) == name)
-					unplanted[clip] = found = true;
+				if (animations.stringPool.at(animations.clips[clip].nameOffset) == entry.clip)
+				{
+					scale[clip] = entry.weight;
+					found       = true;
+				}
 
 			if (!found)
 				spdlog::warn(
-					"skinning: the avatar names '{}' as unplanted, and the clip set has no such "
-					"clip",
-					name);
+					"skinning: the avatar weights '{}', and the clip set has no such clip",
+					entry.clip);
 		}
 
 		for (uint32_t clip = 0; clip < animations.clips.size(); ++clip)
@@ -1234,7 +1237,7 @@ namespace assetlib
 			const AnimationClip& played = animations.clips[clip];
 
 			// The weights are already zero; the clip is left at them.
-			if (unplanted[clip])
+			if (scale[clip] <= 0.0f)
 				continue;
 
 			// A clip that does not start on a frame boundary has no frame index to write its
@@ -1367,7 +1370,7 @@ namespace assetlib
 					// was four, and a sprint's stance is two -- the foot touched and left before it
 					// reached any weight at all.
 					out[(size_t(first) + frame) * legs + leg] = static_cast<uint8_t>(
-						std::lround(std::min(edge + 1.0f, ramp) / ramp * 255.0f));
+						std::lround(std::min(edge + 1.0f, ramp) / ramp * scale[clip] * 255.0f));
 				}
 			}
 		}
