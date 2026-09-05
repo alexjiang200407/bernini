@@ -1,6 +1,8 @@
 #include "Windows/RenderTarget/RenderTargetWindow.h"
 
 #include "Render/Renderer.h"
+#include "util/frame_stats_text.h"
+#include <QString>
 #include <algorithm>
 #include <cassert>
 #include <cmath>
@@ -230,10 +232,21 @@ RenderTargetWindow::ReportFrameTiming(qint64 startNs)
 		if (++m_FramesSinceEmit >= c_FrameStatsInterval)
 		{
 			m_FramesSinceEmit = 0;
+
+			// Read here, on the render thread, where the target's rows are the frame just behind
+			// the one this call follows. Empty text while timing is off.
+			QString gpuPasses;
+			if (m_RenderTarget->IsGpuTimingEnabled())
+			{
+				gpuPasses = editor::PassTimingsText(
+					m_Desc.renderer->GetGraphics()->GetPassTimings(m_RenderTarget));
+			}
+
 			Q_EMIT FrameStatsUpdated(
 				m_FrameTimes.Mean(),
 				m_FrameTimes.Max(),
-				static_cast<int>(m_MissedFrames));
+				static_cast<int>(m_MissedFrames),
+				gpuPasses);
 		}
 	}
 
@@ -305,6 +318,15 @@ RenderTargetWindow::SetOutlineEnabled(bool enabled)
 		return;
 
 	m_Desc.renderer->Invoke([&] { m_RenderTarget->SetOutlineEnabled(enabled); });
+}
+
+void
+RenderTargetWindow::SetGpuTimingEnabled(bool enabled)
+{
+	if (m_RenderTarget == nullptr || m_Desc.renderer == nullptr)
+		return;
+
+	m_Desc.renderer->Invoke([&] { m_RenderTarget->SetGpuTimingEnabled(enabled); });
 }
 
 void

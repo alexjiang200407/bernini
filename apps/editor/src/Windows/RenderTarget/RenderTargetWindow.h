@@ -1,6 +1,7 @@
 #pragma once
 
 #include <QElapsedTimer>
+#include <QString>
 #include <QWidget>
 #include <bgl/Camera.h>
 #include <bgl/IRenderTarget.h>
@@ -79,6 +80,11 @@ public:
 	// re-enabling shows the current selection again.
 	void
 	SetOutlineEnabled(bool enabled);
+
+	// Times every pass of this viewport's frames on the GPU; the rows ride FrameStatsUpdated as the
+	// breakdown the status bar shows under its readout. Off by default: a timed frame is not free.
+	void
+	SetGpuTimingEnabled(bool enabled);
 
 	// Whether this viewport allocated temporal-AA resources, and so has anything to toggle.
 	[[nodiscard]] bool
@@ -192,9 +198,12 @@ Q_SIGNALS:
 	 * @param meanMs   Mean frame time over the window.
 	 * @param maxMs    Worst frame time in the window -- the number a stall shows up in.
 	 * @param missed   Frames in the window that overran a vblank.
+	 * @param gpuPasses The per-pass GPU breakdown (editor::PassTimingsText), empty unless
+	 *                  SetGpuTimingEnabled is on and a timed frame has landed. Text rather than rows
+	 *                  because a queued connection carries a QString without a registered metatype.
 	 */
 	void
-	FrameStatsUpdated(double meanMs, double maxMs, int missed);
+	FrameStatsUpdated(double meanMs, double maxMs, int missed, const QString& gpuPasses);
 
 private:
 	// Records and presents one frame. Called by the Renderer's frame loop, on the render thread.

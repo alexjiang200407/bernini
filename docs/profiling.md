@@ -31,7 +31,8 @@ This page is about **load and cook time**: what a bake cost, where a start-up we
 § Memory below, what a run *held*. A slow *frame* is measured elsewhere: every frame graph pass can
 be timed on the GPU (`IRenderTarget::SetGpuTimingEnabled`, read through
 `IGraphics::GetPassTimings` -- see [bgl Public API](docs/bgl_api.md) and
-[Frame Graph](docs/framegraph.md)). `docs/gfx_debug.md` is where a *wrong* frame is diagnosed
+[Frame Graph](docs/framegraph.md)), which the editor lists under the frame-time readout's tooltip
+once Render › GPU Pass Timing is on. `docs/gfx_debug.md` is where a *wrong* frame is diagnosed
 rather than a slow one.
 
 ## Taking a capture

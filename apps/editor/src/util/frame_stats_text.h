@@ -1,7 +1,9 @@
 #pragma once
 
 #include <QString>
+#include <bgl/PassTiming.h>
 #include <optional>
+#include <vector>
 
 namespace editor
 {
@@ -21,4 +23,15 @@ namespace editor
 	 */
 	[[nodiscard]] QString
 	FrameStatsText(const QString& viewport, const std::optional<FrameStats>& stats);
+
+	/**
+	 * The per-pass GPU breakdown under the readout's tooltip: one line per pass in the order the
+	 * frame ran them, its milliseconds, and their total. Rich text, since the columns only line up
+	 * in a fixed-width face.
+	 *
+	 * @return empty when there are no rows -- timing off, or no timed frame has landed yet -- so the
+	 *         tooltip is the plain one rather than a table with nothing in it.
+	 */
+	[[nodiscard]] QString
+	PassTimingsText(const std::vector<bgl::PassTiming>& rows);
 }
