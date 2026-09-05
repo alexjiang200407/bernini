@@ -197,11 +197,11 @@ namespace
 			return out;
 		}
 
-		/** The chains as the avatar the plant measures with; `unplanted` names clips by name. */
+		/** The chains as the avatar the plant measures with; `weights` scale clips by name. */
 		[[nodiscard]] ResolvedAvatar
-		Plant(std::vector<std::string> unplanted = {}) const
+		Plant(std::vector<ClipPlantWeight> weights = {}) const
 		{
-			return { Chains(), std::move(unplanted) };
+			return { Chains(), std::move(weights) };
 		}
 
 	private:
@@ -632,14 +632,23 @@ TEST_CASE(
 
 	SECTION("a clip taken out of the plant is measured afresh, and at zero")
 	{
-		// The list is the avatar's, so it keys the weights like a leg does. Nothing for an empty
-		// list, so a file baked before the key existed is still current.
-		CHECK_FALSE(
-			findPlantWeights(leg.animations, leg.Meshes(), leg.skeleton, leg.Plant({ "clip" }))
-				.has_value());
+		// The weights are the avatar's, so they key the bytes like a leg does. Nothing for an
+		// empty list, so a file baked before the key existed is still current.
+		const ResolvedAvatar none = leg.Plant({ { "clip", 0.0f } });
+		CHECK_FALSE(findPlantWeights(leg.animations, leg.Meshes(), leg.skeleton, none).has_value());
 
-		bakePlantWeights(leg.animations, leg.Meshes(), leg.skeleton, leg.Plant({ "clip" }));
+		bakePlantWeights(leg.animations, leg.Meshes(), leg.skeleton, none);
 		for (const uint8_t w : leg.animations.plantWeights.weights) CHECK(w == 0);
+	}
+
+	SECTION("a clip weighted down is measured afresh, and scaled")
+	{
+		// A weight keys the bytes as a name does: the same clip at half is a different file.
+		const ResolvedAvatar half = leg.Plant({ { "clip", 0.5f } });
+		CHECK_FALSE(findPlantWeights(leg.animations, leg.Meshes(), leg.skeleton, half).has_value());
+
+		bakePlantWeights(leg.animations, leg.Meshes(), leg.skeleton, half);
+		for (const uint8_t w : leg.animations.plantWeights.weights) CHECK(w == 128);
 	}
 
 	SECTION("a rig with no avatar bakes nothing, and nothing is found for it")
