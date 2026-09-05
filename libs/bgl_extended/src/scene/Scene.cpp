@@ -759,7 +759,7 @@ namespace bgl
 			{
 				const BlendSpaceMemberDesc& member = members[m];
 
-				if (member.clip >= animations.clips.size())
+				if (member.clipIndex >= animations.clips.size())
 				{
 					throw SceneError(
 						std::format(
@@ -767,13 +767,13 @@ namespace bgl
 							"that holds {}",
 							m,
 							s,
-							member.clip,
+							member.clipIndex,
 							animations.clips.size()));
 				}
 
 				// A parameter sets one normalized phase every member plays at, and a clip that
 				// clamps rather than wraps would sit on its last frame while the others cycle.
-				if (animations.clips[member.clip].loop == 0)
+				if (animations.clips[member.clipIndex].loop == 0)
 				{
 					throw SceneError(
 						std::format(
@@ -915,7 +915,7 @@ namespace bgl
 			for (const BlendSpaceMemberDesc& member : space.members)
 			{
 				auto entry      = idl::BlendSpaceMember();
-				entry.clip      = member.clip;
+				entry.clip      = member.clipIndex;
 				entry.parameter = member.parameter;
 				members.emplace_back(entry);
 			}

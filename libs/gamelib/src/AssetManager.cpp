@@ -755,10 +755,11 @@ namespace game
 				resolved.members.push_back({ *clip, member.parameter });
 			}
 
-			auto info         = BlendSpaceInfo();
-			info.name         = space.name;
-			info.parameterMin = space.members.front().parameter;
-			info.parameterMax = space.members.back().parameter;
+			auto info = BlendSpaceInfo();
+			info.name = space.name;
+			info.members.reserve(resolved.members.size());
+			for (const bgl::BlendSpaceMemberDesc& member : resolved.members)
+				info.members.push_back({ member.clipIndex, member.parameter });
 			spaces.emplace_back(std::move(info));
 
 			desc.spaces.push_back(std::move(resolved));

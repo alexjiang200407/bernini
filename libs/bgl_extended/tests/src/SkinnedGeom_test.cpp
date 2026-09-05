@@ -1222,8 +1222,8 @@ TEST_CASE("AddRig refuses a blend space the pose pass could not evaluate", "[ski
 
 	SECTION("a member naming a clip the set does not hold")
 	{
-		auto set                      = MakeBlendSet();
-		set.spaces[0].members[1].clip = 7;
+		auto set                           = MakeBlendSet();
+		set.spaces[0].members[1].clipIndex = 7;
 		CHECK_THROWS_WITH(add(set), Catch::Matchers::ContainsSubstring("clip 7"));
 	}
 
