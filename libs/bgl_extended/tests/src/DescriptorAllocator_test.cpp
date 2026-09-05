@@ -10,6 +10,7 @@
 
 namespace wrl = Microsoft::WRL;
 
+#	include "constants/constants.h"
 #	include "d3d12/resource/DescriptorAllocator_d3d12.h"
 
 #	include <catch2/catch_test_macros.hpp>
@@ -17,6 +18,11 @@ namespace wrl = Microsoft::WRL;
 namespace
 {
 	constexpr uint32_t c_Capacity = 8;
+
+	// The heap holds c_Capacity descriptors and hands out one fewer: c_UnboundDescriptorIndex is
+	// reserved so a zero-filled uniform mirror addresses no live resource. ResourceManager budgets
+	// for it with the `+ 1` in its own capacity check.
+	constexpr uint32_t c_Allocatable = c_Capacity - 1;
 
 	wrl::ComPtr<ID3D12Device>
 	CreateTestDevice()
@@ -44,11 +50,12 @@ TEST_CASE("Descriptor indices are unique until the heap is exhausted", "[descrip
 	auto allocator = MakeAllocator(device.Get());
 
 	std::set<uint32_t> live;
-	for (uint32_t i = 0; i < c_Capacity; ++i)
+	for (uint32_t i = 0; i < c_Allocatable; ++i)
 	{
 		const auto index = allocator.Allocate();
 		CHECK(index < c_Capacity);
-		CHECK(live.insert(index).second);  // an index handed out twice fails to insert
+		CHECK(index != bgl::c_UnboundDescriptorIndex);  // the reserved slot is never handed out
+		CHECK(live.insert(index).second);               // an index handed out twice fails to insert
 	}
 
 	CHECK_THROWS_AS(allocator.Allocate(), std::runtime_error);
@@ -59,7 +66,7 @@ TEST_CASE("Only a freed index is handed out again", "[descriptor]")
 	auto device    = CreateTestDevice();
 	auto allocator = MakeAllocator(device.Get());
 
-	for (uint32_t i = 0; i < c_Capacity; ++i)
+	for (uint32_t i = 0; i < c_Allocatable; ++i)
 	{
 		(void)allocator.Allocate();
 	}
@@ -86,17 +93,20 @@ TEST_CASE("The heap can be drained and refilled to capacity", "[descriptor]")
 	auto device    = CreateTestDevice();
 	auto allocator = MakeAllocator(device.Get());
 
-	for (uint32_t i = 0; i < c_Capacity; ++i)
+	// Drained by the indices actually handed out: freeing a index the allocator never issued --
+	// the reserved slot among them -- is what Free's own assert refuses.
+	std::set<uint32_t> allocated;
+	for (uint32_t i = 0; i < c_Allocatable; ++i)
 	{
-		(void)allocator.Allocate();
+		allocated.insert(allocator.Allocate());
 	}
-	for (uint32_t i = 0; i < c_Capacity; ++i)
+	for (const auto index : allocated)
 	{
-		allocator.Free(i);
+		allocator.Free(index);
 	}
 
 	std::set<uint32_t> live;
-	for (uint32_t i = 0; i < c_Capacity; ++i)
+	for (uint32_t i = 0; i < c_Allocatable; ++i)
 	{
 		CHECK(live.insert(allocator.Allocate()).second);
 	}
