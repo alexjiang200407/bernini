@@ -115,6 +115,16 @@ source of truth; when this doc disagrees, trust the header, then fix this doc.
   owns. A transient (no imported handle) is skipped. See
   [Graphics Debug §7](docs/gfx_debug.md).
 
+* **Timing a pass is a graph service too.** With a `PassTimer` installed (`SetPassTimer`), `Execute`
+  brackets every kept pass with `ICommandList::BeginTiming`/`EndTiming` inside its debug event and
+  around its barriers — the barriers are part of what the pass costs — taking two `ITimestampHeap`
+  slots per pass from the range the timer was armed with. A culled pass takes none: it never ran.
+  The graph does it rather than the passes so every renderer built on it gets a breakdown without a
+  pass knowing it is timed, and so the rows are the passes as the graph ran them. What the timer is
+  left holding is the passes in execution order with their slots; reading those is the caller's
+  (`RenderContext`, behind the frame fence), and the timer never touches the heap. A frame past the
+  armed capacity lists the rest unsampled and logs the overflow once.
+
 * **The frame is consumed on execute.** `Execute` (and `Reset`) clears passes, imports, and queue
   bindings and requires a fresh `Compile` before the next `Execute`; only `m_LastState` survives.
   Passes — and everything their `exec` lambdas captured (e.g. scene references) — are rebuilt each
@@ -130,6 +140,7 @@ source of truth; when this doc disagrees, trust the header, then fix this doc.
 | `PassDesc` | [fg/PassDesc.h](libs/bgl_extended/src/fg/PassDesc.h) | Fluent builder for one pass: name, queue, attachments, buffer/texture args, `exec` callback, side-effect pin. |
 | `PassContext` | [fg/PassDesc.h](libs/bgl_extended/src/fg/PassDesc.h) | Handed to `exec`; resolves the pass's declared names to physical handles and exposes its command list/queue. |
 | `PassScheduler` | [bgl_common/PassScheduler.h](libs/bgl_common/include/bgl_common/PassScheduler.h) | The dependency edges, the culling and the execution order, over passes reduced to `{pinned, accesses}` with their names already resolved. Held privately by `FrameGraph`. |
+| `PassTimer` | [fg/PassTimer.h](libs/bgl_extended/src/fg/PassTimer.h) | Armed per frame over a slot range of an `ITimestampHeap`; `Execute` brackets each kept pass through it, and it is left holding the passes in execution order with the slots that time them. |
 
 ### Supporting types (POD / helpers)
 
@@ -208,6 +219,8 @@ flowchart TD
 * **`SetBufferPoisoner(poisoner)`** — the pointer is non-owning and must outlive every `Execute`
   that follows; `ClearFrame` does not drop it. Null (the default, and every Release build) leaves
   poison declarations inert.
+* **`SetPassTimer(timer)`** — non-owning, like the poisoner, and kept across `ClearFrame`. The
+  caller arms it before `Execute` and reads its entries after; null (the default) times nothing.
 
 ### PassContext (inside `exec`)
 

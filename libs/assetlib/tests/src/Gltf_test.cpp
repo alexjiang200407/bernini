@@ -59,7 +59,7 @@ namespace
   "extensionsUsed": [ "KHR_materials_unlit", "KHR_materials_pbrSpecularGlossiness", "KHR_materials_transmission", "KHR_materials_specular" ],
   "materials": [
     { "name": "plain", "pbrMetallicRoughness": { "metallicFactor": 0.25, "roughnessFactor": 0.5 } },
-    { "name": "leaves", "alphaMode": "MASK", "alphaCutoff": 0.3 },
+    { "name": "leaves", "alphaMode": "MASK", "alphaCutoff": 0.3, "doubleSided": true },
     { "name": "glass", "alphaMode": "BLEND" },
     { "name": "sign", "extensions": { "KHR_materials_unlit": {} } },
     { "name": "old", "extensions": { "KHR_materials_pbrSpecularGlossiness": {} } },
@@ -255,6 +255,10 @@ TEST_CASE("A glTF's alpha mode and cutoff come across", "[bmesh][gltf]")
 
 	// glTF's own default, not the engine's: a MASK material that names no cutoff cuts at 0.5.
 	CHECK(mesh.materials[0].alphaCutoff == Catch::Approx(0.5f));
+
+	// doubleSided comes across as the file says it, and glTF's default is one side.
+	CHECK(mesh.materials[1].doubleSided);
+	CHECK(!mesh.materials[0].doubleSided);
 }
 
 // A lens and a hair card both export as BLEND, and the alpha means something different in each: how

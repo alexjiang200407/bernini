@@ -365,9 +365,12 @@ and portability.
     footprint when a run ends, and as JSON for a tool. `assetlib`'s cook and the editor's thumbnail
     cache are still untagged and are most of the residual. See
     [docs/profiling.md](docs/profiling.md) § Memory.
-  - [ ] GPU timestamp per pass with on-screen breakdown — FrameGraph feature, same as hashing. The
-    RHI has no timestamp query at all today, so nothing in the tree can attribute a cost to one
-    stage — the crowd tier's frame-interpolation trade is one measurement queued behind this line.
+  - [x] GPU timestamp per pass with on-screen breakdown — a FrameGraph feature (`PassTimer`) over
+    an RHI timestamp span (`ICommandList::BeginTiming`), read through `IGraphics::GetPassTimings`
+    and written to `editor.log` on demand. Per pass, not per draw: a bucket inside Forward is not a
+    row. See [docs/framegraph.md](docs/framegraph.md).
+  - [ ] A frame-stats window that graphs the per-pass rows over time — one frame of numbers in a
+    log is what the tool has; a graph is what a person reads a spike off.
   - [ ] Live counters: agents alive/dying/corpse split by type, visible per tier, per-instance vs
     table against the top-K budget, events vs capacity, slots in use, cells at cap, corpse palette
     memory.

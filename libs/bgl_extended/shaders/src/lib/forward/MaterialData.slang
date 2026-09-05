@@ -73,6 +73,21 @@ public MaterialType LoadMaterialKind(uint byteOffset)
     return MaterialType(materialData.materials.LoadTag(RawEntry<IMaterial>.At(byteOffset)));
 }
 
+// Whether the material at `byteOffset` draws its back faces. Read by the mesh stage, once per
+// meshlet, for every kind at once: a null or assert material has no flag and draws both.
+public bool IsMaterialDoubleSided(uint byteOffset)
+{
+    switch (LoadMaterialKind(byteOffset))
+    {
+    case MaterialType.kPBR:
+        return materialData.materials.LoadRecordAs<PbrMaterial>(RawEntry<IMaterial>.At(byteOffset)).doubleSided != 0;
+    case MaterialType.kLoosePbr:
+        return materialData.materials.LoadRecordAs<LoosePbrMaterial>(RawEntry<IMaterial>.At(byteOffset)).doubleSided != 0;
+    default:
+        return true;
+    }
+}
+
 // A payload and where it lives. The interfaces hang off this rather than off the payload, because a
 // payload read out of the arena has forgotten its own offset and the handles are found by it.
 public struct PbrMaterialRecord : IPbrMaterial, IAlphaTestMaterial

@@ -86,6 +86,20 @@ namespace bgl::test
 		{}
 
 		void
+		BeginTiming(ITimestampHeap&, uint32_t, uint32_t) noexcept override
+		{}
+
+		bool
+		EndTiming() noexcept override
+		{
+			return false;
+		}
+
+		void
+		ResolveTimestamps(ITimestampHeap&, uint32_t, uint32_t) noexcept override
+		{}
+
+		void
 		WriteBuffer(BufferHandle, const void*, size_t, size_t) noexcept override
 		{}
 		void

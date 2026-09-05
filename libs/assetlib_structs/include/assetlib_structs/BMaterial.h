@@ -92,6 +92,10 @@ namespace assetlib
 		AlphaMode alphaMode   = AlphaMode::kOpaque;
 		float     alphaCutoff = 0.5f;
 
+		// Back faces on a cut-out, hashed or blended surface; opaque never draws them. True by
+		// default, since every such material drew both sides before the key existed.
+		bool doubleSided = true;
+
 		// What baseColorFactor.a means under AlphaMode::kBlend: 0 for coverage (hair, foliage), 1 for
 		// transmission (glass, a lens), and read by no other mode. glTF's KHR_materials_transmission.
 		float transmissionFactor = 0.0f;

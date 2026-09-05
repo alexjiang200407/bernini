@@ -1552,6 +1552,7 @@ namespace bgl
 		material.specular           = glm::vec4(desc.specularColorFactor, desc.specularFactor);
 		material.transmissionFactor = desc.transmissionFactor;
 		material.alphaCutoff        = desc.alphaCutoff;
+		material.doubleSided        = desc.doubleSided ? 1u : 0u;
 
 		return material;
 	}
@@ -1678,6 +1679,7 @@ namespace bgl
 		material.specular           = glm::vec4(desc.specularColorFactor, desc.specularFactor);
 		material.transmissionFactor = desc.transmissionFactor;
 		material.alphaCutoff        = desc.alphaCutoff;
+		material.doubleSided        = desc.doubleSided ? 1u : 0u;
 
 		return material;
 	}

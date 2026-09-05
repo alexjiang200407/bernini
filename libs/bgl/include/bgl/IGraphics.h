@@ -5,6 +5,7 @@
 #include <bgl/IRenderTarget.h>
 #include <bgl/IScene.h>
 #include <bgl/ISceneView.h>
+#include <bgl/PassTiming.h>
 #include <bgl/RenderJob.h>
 #include <bgl/api.h>
 #include <bgl/error.h>
@@ -15,6 +16,7 @@
 #include <optional>
 #include <stdexcept>
 #include <string>
+#include <vector>
 
 namespace bgl
 {
@@ -235,6 +237,16 @@ namespace bgl
 		 */
 		virtual void
 		DiscardCapture(CaptureTicket ticket) noexcept = 0;
+
+		/**
+		 * What each pass of the last completed timed frame on `target` cost on the GPU, in
+		 * execution order -- the rows behind an on-screen breakdown. A frame's rows arrive once its
+		 * fence has passed, so they trail the frame that wrote them by one or two. Empty while
+		 * IRenderTarget::SetGpuTimingEnabled is off, before the first timed frame completes, and on
+		 * a device that cannot sample a timestamp at a pass boundary. May be called mid-frame.
+		 */
+		[[nodiscard]] virtual std::vector<PassTiming>
+		GetPassTimings(const RenderTargetRef& target) = 0;
 
 		virtual SceneRef
 		CreateScene(SceneDesc desc) = 0;

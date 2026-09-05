@@ -14,6 +14,11 @@ namespace bgl
 		LayerType layerType   = LayerType::kOpaque;
 		float     alphaCutoff = 0.5f;
 
+		// Whether a kMask, kHashed or kBlend surface draws its back faces; glTF's `doubleSided`. A
+		// kOpaque surface draws its front faces only whatever this says. On by default, since every
+		// such surface drew both sides before the flag existed.
+		bool doubleSided = true;
+
 		// What baseColorFactor.a means on a kBlend surface, and read by no other layer: 0 coverage
 		// (hair, foliage), 1 transmission (glass). glTF's KHR_materials_transmission.
 		float transmissionFactor = 0.0f;

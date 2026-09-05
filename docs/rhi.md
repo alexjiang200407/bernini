@@ -148,6 +148,20 @@ doc and a header disagree, trust the header, then fix this doc.
   but the FrameGraph computes and inserts all resource-state transitions. Pass code should
   never call `Barrier` directly. See [Frame Graph](docs/framegraph.md).
 
+* **GPU time is measured as a span, and a span is a pass.** `ICommandList::BeginTiming` /
+  `EndTiming` bracket work with a pair of `ITimestampHeap` slots rather than exposing a
+  free-standing "write a timestamp here": Apple GPUs sample a counter only at an encoder's stage
+  boundary, so a span around a pass is the one promise both backends can keep. D3D12 writes
+  `EndQuery` at each end and `ResolveQueryData` into a readback the heap owns; Metal attaches a
+  counter sample buffer to every encoder the span opens — the start slot on the first, the end slot
+  on each, so the last to run is what the end holds — and **ends the open encoder at the span's
+  close**, which is a tile store and reload the untimed list would have merged away. That cost is why
+  the frame graph times only a target that asked (`IRenderTarget::SetGpuTimingEnabled`). A span that
+  recorded nothing an encoder can carry — barriers alone, on Metal — reports `EndTiming() == false`
+  and its slots read as `c_UnwrittenTimestamp` (zero, on both backends' fresh storage). Metal states
+  no unit for its GPU clock, so `ICommandQueue::GetTimestampFrequency` measures the tick rate against
+  the CPU clock from two correlated samples, the first taken when the queue is made.
+
 * **Context affinity, with a thread-safe resource-manager core.** Methods are `noexcept`. Each
   submission context (queue + list + frame state) is single-thread-affine: one thread drives it,
   and a command list is single-threaded between `Open` and `Close`. What contexts share is safe to
@@ -184,6 +198,7 @@ doc and a header disagree, trust the header, then fix this doc.
 | `ICommandQueue` | [libs/bgl_extended/src/cmd/CommandQueue.h](libs/bgl_extended/src/cmd/CommandQueue.h) | Submits command lists; owns the fence; all CPU/GPU and cross-queue sync. |
 | `ICommandList` | [libs/bgl_extended/src/cmd/CommandList.h](libs/bgl_extended/src/cmd/CommandList.h) | Records uploads, copies, compute and mesh-shading dispatch, barriers, debug markers. |
 | `ICommandAllocator` | [libs/bgl_extended/src/cmd/CommandAllocator.h](libs/bgl_extended/src/cmd/CommandAllocator.h) | Backing memory pool for recorded commands. |
+| `ITimestampHeap` | [libs/bgl_extended/src/cmd/TimestampHeap.h](libs/bgl_extended/src/cmd/TimestampHeap.h) | A fixed number of GPU timestamp slots, written by a command list's timed spans and read on the CPU once their fence has passed. Made by `IDevice::CreateTimestampHeap`; ref-counted, not pooled. |
 | `IShader` | [libs/bgl_extended/src/resource/Shader.h](libs/bgl_extended/src/resource/Shader.h) | Immutable compiled DXIL + slang reflection module. |
 | `IComputePipeline` | [libs/bgl_extended/src/pipeline/ComputePipeline.h](libs/bgl_extended/src/pipeline/ComputePipeline.h) | Compute PSO + constant-buffer reflection. |
 | `IMeshletPipeline` | [libs/bgl_extended/src/pipeline/MeshletPipeline.h](libs/bgl_extended/src/pipeline/MeshletPipeline.h) | Mesh-shading PSO (amp/mesh/pixel) + render state + reflection. |
@@ -335,6 +350,12 @@ Everything else is self-explanatory from the header.
 * **`Barrier(...)`** — **do not call from pass code.** The FrameGraph owns transitions. Batched
   overloads require `handles.size() == barriers.size()`.
 * **`BeginEvent` / `EndEvent`** must be balanced.
+* **`BeginTiming(heap, startSlot, endSlot)` / `EndTiming()`** — one span open at a time, closed
+  before `Close`; both slots inside the heap. On Metal `BeginTiming` and `EndTiming` each end the
+  encoder in flight. `EndTiming` returns whether the GPU will write both slots.
+* **`ResolveTimestamps(heap, first, count)`** — record after the spans that wrote the range, on the
+  same list; the slots are readable through `ITimestampHeap::Read` once that list's fence has passed.
+  A no-op on Metal, whose heap resolves on the CPU.
 * **`SetActiveDebugBuffer`** — only compiled under `BERNINI_GPU_DEBUG`; binds the buffer that
   subsequent compute dispatches auto-wire into the shader's implicit `gDebug` cbuffer.
 
@@ -348,6 +369,9 @@ Everything else is self-explanatory from the header.
   queue pointer required); do not confuse with the CPU-blocking wait.
 * **`GetLastCompletedFence`** returns the cached value from the last `PollCurrentFenceValue`;
   call `PollCurrentFenceValue` to refresh from the GPU.
+* **`GetTimestampFrequency`** — ticks per second of an `ITimestampHeap` slot on this queue's
+  timeline; zero when the backend cannot say. On Metal the first call may spin for a few
+  milliseconds to put the two correlated samples far enough apart to trust.
 
 ### ICommandAllocator
 
@@ -356,6 +380,14 @@ Everything else is self-explanatory from the header.
 
 ### IDevice
 
+* **`CreateTimestampHeap(capacity)`** — null, not an error, on a device that cannot sample a
+  timestamp at a pass boundary; a caller treats that as timing being unavailable. The heap is
+  ref-counted and owns its own readback, so it dies with its last owner — a render target's
+  destructor flushes the queue first, which is what makes that safe. On Metal `Read` resolves the
+  counter sample buffer, whose contract is command-buffer *completion* while the fence a caller
+  waits on is a signalled event the driver may still be retiring behind — the flush caveat in
+  `libs/bgl_extended/CLAUDE.md`. A sample read in that window comes back as `c_UnwrittenTimestamp`
+  and its row as zero, never as a stale value.
 * **`CreateShader(module, entry)`** — references a Slang module + entry point by name; `entry`
   defaults to `"main"`. No source is read here: the Slang module is **loaded lazily** on the first
   `GetSlangModule()`, which only happens when a PSO must actually compile (a shader-cache miss). The

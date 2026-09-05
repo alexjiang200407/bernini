@@ -12,6 +12,11 @@ public struct ExpansionData
 
     public ComputeBuffer<uint> compactedInstances;
     public ComputeBuffer<uint> psoPrefixSum;
+
+    // Non-zero on a draw whose pipeline draws both sides, so a single-sided material's back faces
+    // are the mesh stage's to cull; zero where the pipeline culls in hardware, and on a draw that
+    // wants the whole silhouette whichever way its triangles face.
+    public uint cullBackfaces;
 };
 
 public ConstantBuffer<ExpansionData> expansionData;

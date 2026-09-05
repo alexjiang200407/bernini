@@ -247,6 +247,7 @@ namespace assetlib
 			// The animated tiers draw opaque geometry only, so this is the field that decides whether
 			// a submesh can be skinned at all.
 			out += std::format("  alphaMode         {}\n", alphaModeName(pbr.alphaMode));
+			out += std::format("  doubleSided       {}\n", pbr.doubleSided);
 
 			// The triplet is what a `baked` material draws from; a `loose` one keeps it as the last
 			// bake's output, which is why it is printed either way.

@@ -24,4 +24,7 @@ public struct PbrMaterial
 
     // Only read by the alpha-test PSOs
     public float alphaCutoff;
+
+    // Non-zero draws a non-opaque surface's back faces; the mesh stage culls them otherwise.
+    public uint doubleSided;
 };

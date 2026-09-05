@@ -8,6 +8,7 @@
 #include <QMessageBox>
 #include <QPushButton>
 #include <QStatusBar>
+#include <QString>
 #include <QStringList>
 #include <QTabWidget>
 
@@ -52,6 +53,8 @@
 
 #include "Startup/startup_labels.h"
 
+#include <QDebug>
+#include <QKeySequence>
 #include <memory>
 #include <optional>
 #include <qaction.h>
@@ -416,6 +419,27 @@ MainWindow::SetUpRenderMenu()
 		for (RenderTargetWindow* view : findChildren<RenderTargetWindow*>())
 			view->SetOutlineEnabled(enabled);
 	});
+
+	auto* timing = render->addAction("GPU Pass Timing");
+	timing->setCheckable(true);
+	timing->setChecked(false);
+	timing->setStatusTip(
+		"Time every pass of the viewports' frames on the GPU, for Log GPU Pass Timings to write "
+		"out. Costs a little per frame, which is why it is off until asked for.");
+
+	connect(timing, &QAction::toggled, this, [this](bool enabled) {
+		for (RenderTargetWindow* view : findChildren<RenderTargetWindow*>())
+			view->SetGpuTimingEnabled(enabled);
+	});
+
+	// One frame's table into editor.log. Needs timing on, so it follows the toggle.
+	auto* logTiming = render->addAction("Log GPU Pass Timings");
+	logTiming->setShortcut(QKeySequence("Ctrl+Shift+T"));
+	logTiming->setEnabled(false);
+	logTiming->setStatusTip(
+		"Write the rendering viewport's next per-pass GPU breakdown to editor.log.");
+	connect(timing, &QAction::toggled, logTiming, &QAction::setEnabled);
+	connect(logTiming, &QAction::triggered, this, [this] { m_LogNextPassTimings = true; });
 
 	SetUpRenderScaleMenu(render);
 }
@@ -1020,7 +1044,9 @@ MainWindow::SetUpFrameStats()
 				view,
 				&RenderTargetWindow::FrameStatsUpdated,
 				this,
-				[this, view, name](double meanMs, double maxMs, int missed) {
+				[this,
+			     view,
+			     name](double meanMs, double maxMs, int missed, const QString& gpuPasses) {
 					if (m_FrameStatsSource != view)
 						return;
 
@@ -1030,6 +1056,15 @@ MainWindow::SetUpFrameStats()
 							editor::FrameStats{ .meanMs = meanMs,
 				                                .maxMs  = maxMs,
 				                                .missed = missed }));
+
+					// The breakdown is one frame of numbers, which is a log's to hold and a
+					// tooltip's to misread; a stats window that graphs the rows is the readout it
+					// wants, and is not this.
+					if (m_LogNextPassTimings && !gpuPasses.isEmpty())
+					{
+						m_LogNextPassTimings = false;
+						qInfo().noquote() << "GPU pass timings," << name << "\n" << gpuPasses;
+					}
 				},
 				Qt::QueuedConnection);
 		}

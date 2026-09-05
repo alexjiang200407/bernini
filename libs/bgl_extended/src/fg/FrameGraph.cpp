@@ -2,6 +2,7 @@
 #include "cmd/CommandList.h"
 #include "cmd/CommandQueue.h"
 #include "fg/PassDesc.h"
+#include "fg/PassTimer.h"
 #include "resource/Buffer.h"
 #include "resource/ResourceManager.h"
 #include "resource/Texture.h"
@@ -527,6 +528,10 @@ namespace bgl
 			ICommandQueue* queue = qit->second.queue.Get();
 
 			cmd->BeginEvent(pass.desc.name);
+			if (m_PassTimer != nullptr)
+			{
+				m_PassTimer->BeginPass(cmd, pass.desc.name);
+			}
 
 			const PassBarriers& b = pass.barriers;
 			if (!b.bufferHandles.empty())
@@ -577,6 +582,10 @@ namespace bgl
 				pass.desc.exec(ctx);
 			}
 
+			if (m_PassTimer != nullptr)
+			{
+				m_PassTimer->EndPass(cmd);
+			}
 			cmd->EndEvent();
 		}
 

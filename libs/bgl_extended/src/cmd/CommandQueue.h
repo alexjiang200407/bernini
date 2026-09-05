@@ -2,6 +2,7 @@
 
 #include <core/ref/RefCounter.h>
 #include <core/ref/SharedRef.h>
+#include <cstdint>
 
 namespace bgl
 {
@@ -54,6 +55,14 @@ namespace bgl
 		/** Signals a fence past all submitted work and blocks until the GPU reaches it. */
 		virtual void
 		Flush() noexcept = 0;
+
+		/**
+		 * How many ticks of an ITimestampHeap slot make one second on this queue's timeline. Zero
+		 * when the backend cannot say, in which case no tick can be converted and a timed span
+		 * reports nothing.
+		 */
+		[[nodiscard]] virtual double
+		GetTimestampFrequency() const noexcept = 0;
 	};
 
 	using CommandQueueRef = core::SharedRef<ICommandQueue>;

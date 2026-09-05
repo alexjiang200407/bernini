@@ -1,14 +1,21 @@
 #pragma once
 #include "cmd/CommandAllocator.h"
+#include "cmd/TimestampHeap.h"
+#include "constants/constants.h"
+#include "fg/PassTimer.h"
 #include "resource/Dsv.h"
 #include "resource/Rtv.h"
 #include "resource/Srv.h"
 #include "resource/Texture.h"
 #include <algorithm>
+#include <array>
 #include <bgl/IGraphics.h>
 #include <bgl/IRenderTarget.h>
+#include <bgl/PassTiming.h>
 #include <cmath>
 #include <cstdint>
+#include <utility>
+#include <vector>
 
 namespace bgl
 {
@@ -72,6 +79,78 @@ namespace bgl
 		GetTaaReconstructionWidth() const noexcept final
 		{
 			return m_TaaReconstructionWidth;
+		}
+
+		[[nodiscard]] bool
+		IsGpuTimingEnabled() const noexcept final
+		{
+			return m_GpuTimingEnabled;
+		}
+
+		void
+		SetGpuTimingEnabled(bool enabled) noexcept final
+		{
+			m_GpuTimingEnabled = enabled;
+
+			// Off means no rows, not the last rows: a reader that asks after turning it off would
+			// otherwise be told about a frame it did not ask to time.
+			if (!enabled)
+			{
+				m_PassTimings.clear();
+				for (TimingFrame& frame : m_TimingFrames)
+				{
+					frame.pending = false;
+				}
+			}
+		}
+
+		/**
+		 * One frame's timed passes and the slots that hold their samples, kept until the frame's
+		 * fence has passed and the slots can be read. Indexed like the backbuffer ring, since the
+		 * slots a frame owns follow its frame index.
+		 */
+		struct TimingFrame
+		{
+			std::vector<PassTimer::Entry> entries;
+			uint32_t                      firstSlot = 0;
+			uint32_t                      slotsUsed = 0;
+			uint64_t                      fence     = 0;
+			bool                          pending   = false;
+		};
+
+		/**
+		 * Gives the target its timestamp heap, once, from the context that created it. Null when
+		 * the device cannot time a pass; timing is then simply never armed.
+		 */
+		void
+		InitGpuTiming(TimestampHeapRef heap) noexcept
+		{
+			m_TimingHeap = std::move(heap);
+		}
+
+		[[nodiscard]] ITimestampHeap*
+		GetTimingHeap() const noexcept
+		{
+			return m_TimingHeap.Get();
+		}
+
+		[[nodiscard]] TimingFrame&
+		GetTimingFrame(uint32_t frameIndex) noexcept
+		{
+			return m_TimingFrames[frameIndex];
+		}
+
+		[[nodiscard]] const std::vector<PassTiming>&
+		GetPassTimings() const noexcept
+		{
+			return m_PassTimings;
+		}
+
+		/** The rows to overwrite in place, so a resolve reuses their capacity. */
+		[[nodiscard]] std::vector<PassTiming>&
+		EditPassTimings() noexcept
+		{
+			return m_PassTimings;
 		}
 
 		void
@@ -317,5 +396,10 @@ namespace bgl
 		// Not backend state: nothing is allocated from it, so it needs neither an override nor a
 		// GPU idle to change.
 		float m_TaaReconstructionWidth = RenderTargetDesc().taaReconstructionWidth;
+
+		bool                                           m_GpuTimingEnabled = false;
+		TimestampHeapRef                               m_TimingHeap;
+		std::array<TimingFrame, c_SwapchainImageCount> m_TimingFrames;
+		std::vector<PassTiming>                        m_PassTimings;
 	};
 }

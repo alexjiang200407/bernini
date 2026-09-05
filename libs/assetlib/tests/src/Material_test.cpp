@@ -82,6 +82,27 @@ TEST_CASE("a blend material's transmission survives a round trip", "[bmaterial][
 			.pbr.transmissionFactor == 0.0f);
 }
 
+// A single-sided cut-out has to come back single-sided, and a document written before the key
+// existed has to come back two-sided -- that is how every hair card and leaf drew until now, and a
+// default of false would silently cull half of each on the next load.
+TEST_CASE(
+	"a material's double-sidedness round-trips, and defaults to both sides",
+	"[bmaterial][io]")
+{
+	BMaterial mat;
+	mat.name            = "leaf";
+	mat.pbr.alphaMode   = AlphaMode::kMask;
+	mat.pbr.doubleSided = false;
+
+	const auto restored = AssetCodec<BMaterial>::Deserialize(AssetCodec<BMaterial>::Serialize(mat));
+	CHECK(!restored.pbr.doubleSided);
+
+	const std::string text = R"({"shadingModel":"pbr","name":"card","alphaMode":"mask"})";
+	const auto        legacy =
+		AssetCodec<BMaterial>::Deserialize(std::as_bytes(std::span(text.data(), text.size())));
+	CHECK(legacy.pbr.doubleSided);
+}
+
 TEST_CASE("a material's specular factors survive a round trip", "[bmaterial][io]")
 {
 	BMaterial mat;

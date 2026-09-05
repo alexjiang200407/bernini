@@ -28,9 +28,12 @@ linked, and no call site changes. The one thing that does not degrade on its own
 in that build; `bmesh_gltf.cpp`'s source size is the worked example.
 
 This page is about **load and cook time**: what a bake cost, where a start-up went -- and, in
-§ Memory below, what a run *held*. GPU per-pass timing is a separate, unbuilt thing
-(`ROADMAP.md` § Profiling), and `docs/gfx_debug.md` is where a *wrong* frame is diagnosed rather
-than a slow one.
+§ Memory below, what a run *held*. A slow *frame* is measured elsewhere: every frame graph pass can
+be timed on the GPU (`IRenderTarget::SetGpuTimingEnabled`, read through
+`IGraphics::GetPassTimings` -- see [bgl Public API](docs/bgl_api.md) and
+[Frame Graph](docs/framegraph.md)), which the editor writes to `editor.log` on Render › Log GPU
+Pass Timings once Render › GPU Pass Timing is on. `docs/gfx_debug.md` is where a *wrong* frame is
+diagnosed rather than a slow one.
 
 ## Taking a capture
 

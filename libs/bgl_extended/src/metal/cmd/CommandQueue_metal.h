@@ -60,6 +60,9 @@ namespace bgl
 		void
 		Flush() noexcept override;
 
+		[[nodiscard]] double
+		GetTimestampFrequency() const noexcept override;
+
 		[[nodiscard]] MTL::CommandQueue*
 		GetMTLCommandQueue() const noexcept
 		{
@@ -97,6 +100,13 @@ namespace bgl
 		NS::SharedPtr<MTL::CommandQueue> m_Queue;
 		NS::SharedPtr<MTL::SharedEvent>  m_Event;
 		uint64_t                         m_NextFenceValue = 1;
+
+		// Metal states no unit for a GPU timestamp: the tick rate is measured against the CPU clock
+		// from a pair of correlated samples, the first taken at construction. Cached once the pair
+		// spans long enough to be trusted; see GetTimestampFrequency.
+		MTL::Timestamp m_CpuBase            = 0;
+		MTL::Timestamp m_GpuBase            = 0;
+		mutable double m_TimestampFrequency = 0.0;
 
 		// Mutable because two of the three InsertWait* overloads are const on the RHI -- they do not
 		// mutate the queue on D3D12, where the wait goes straight to the queue object.

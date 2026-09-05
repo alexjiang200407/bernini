@@ -1,4 +1,6 @@
 #include "gfx/RenderContext.h"
+#include "cmd/TimestampHeap.h"
+#include "fg/PassTimer.h"
 
 #include "constants/constants.h"
 #include "debug/DebugReadback.h"
@@ -27,6 +29,7 @@
 #include <bgl/IGraphics.h>
 #include <bgl/IOverlay.h>
 #include <bgl/IRenderTarget.h>
+#include <bgl/PassTiming.h>
 #include <bgl/RenderJob.h>
 #include <bgl/Viewport.h>
 #include <bgl_common/Frustum.h>
@@ -401,7 +404,75 @@ namespace bgl
 	RenderTargetRef
 	RenderContext::CreateRenderTarget(const RenderTargetDesc& desc)
 	{
-		return m_Device->CreateRenderTarget(desc, m_CommandQueue, m_ResourceManager, m_EnableDebug);
+		RenderTargetRef target =
+			m_Device->CreateRenderTarget(desc, m_CommandQueue, m_ResourceManager, m_EnableDebug);
+
+		// Every target gets its slots at creation, so timing can be switched on between frames with
+		// nothing to allocate; a device that cannot sample leaves the heap null and is never armed.
+		target->As<RenderTargetBase>()->InitGpuTiming(
+			m_Device->CreateTimestampHeap(c_TimingHeapCapacity));
+		return target;
+	}
+
+	void
+	RenderContext::ResolvePassTimings(RenderTargetBase& rt, uint32_t index)
+	{
+		RenderTargetBase::TimingFrame& frame = rt.GetTimingFrame(index);
+		if (!frame.pending)
+		{
+			return;
+		}
+		frame.pending = false;
+
+		// Both buffers keep their capacity from frame to frame: the scratch here, the rows on the
+		// target, so a resolve allocates only when a frame has more passes than any before it.
+		m_TimingTicks.resize(frame.slotsUsed);
+		rt.GetTimingHeap()->Read(frame.firstSlot, m_TimingTicks);
+
+		const double ticksPerSecond = m_CommandQueue->GetTimestampFrequency();
+
+		std::vector<PassTiming>& rows = rt.EditPassTimings();
+		rows.clear();
+		for (const PassTimer::Entry& entry : frame.entries)
+		{
+			PassTiming& row = rows.emplace_back();
+			row.name        = entry.name;
+
+			if (entry.sampled)
+			{
+				row.milliseconds = TimestampSpanMilliseconds(
+					m_TimingTicks[entry.startSlot - frame.firstSlot],
+					m_TimingTicks[entry.endSlot - frame.firstSlot],
+					ticksPerSecond);
+			}
+		}
+	}
+
+	std::vector<PassTiming>
+	RenderContext::GetPassTimings(const RenderTargetRef& target)
+	{
+		RenderTargetBase& rt = *target->As<RenderTargetBase>();
+
+		// Oldest first, so when two frames have both landed the rows describe the later one.
+		std::array<uint32_t, c_SwapchainImageCount> order{};
+		for (uint32_t i = 0; i < c_SwapchainImageCount; ++i)
+		{
+			order[i] = i;
+		}
+		std::ranges::sort(order, [&rt](uint32_t a, uint32_t b) {
+			return rt.GetTimingFrame(a).fence < rt.GetTimingFrame(b).fence;
+		});
+
+		for (const uint32_t index : order)
+		{
+			const RenderTargetBase::TimingFrame& frame = rt.GetTimingFrame(index);
+			if (frame.pending && m_CommandQueue->IsFenceComplete(frame.fence))
+			{
+				ResolvePassTimings(rt, index);
+			}
+		}
+
+		return rt.GetPassTimings();
 	}
 
 	void
@@ -430,6 +501,9 @@ namespace bgl
 		InspectDebugSlot(index);
 #endif
 
+		// The same fence gates the timestamps this index's last frame wrote.
+		ResolvePassTimings(rt, index);
+
 		rt.GetFrameAllocator(index)->ResetAllocator();
 
 		m_CommandList->Open(m_CommandQueue.Get(), rt.GetFrameAllocator(index));
@@ -453,6 +527,15 @@ namespace bgl
 #endif
 
 		m_FrameGraph.Reset();
+		if (rt.IsGpuTimingEnabled() && rt.GetTimingHeap() != nullptr)
+		{
+			m_PassTimer.Arm(*rt.GetTimingHeap(), index * c_TimingSlotsPerFrame, c_MaxTimedPasses);
+			m_FrameGraph.SetPassTimer(&m_PassTimer);
+		}
+		else
+		{
+			m_FrameGraph.SetPassTimer(nullptr);
+		}
 		m_DrawCount        = 0;
 		m_TemporalBreak    = false;
 		m_OutlineMaskDrawn = false;
@@ -899,6 +982,23 @@ namespace bgl
 		m_FrameGraph.Compile(m_ResourceManager.Get());
 		m_FrameGraph.Execute();
 
+		// Whatever the timer bracketed is copied out on this list, behind the fence recorded below,
+		// and read at the next BeginFrame on this index -- or sooner, by GetPassTimings.
+		// A target switched off between BeginFrame and EndFrame keeps nothing: the header promises
+		// that turning it off drops the rows, and a frame armed before the switch would revive them.
+		const bool timed = m_PassTimer.IsArmed() && rt.IsGpuTimingEnabled();
+		if (m_PassTimer.IsArmed())
+		{
+			RenderTargetBase::TimingFrame& frame = rt.GetTimingFrame(index);
+			frame.firstSlot                      = m_PassTimer.GetFirstSlot();
+			frame.slotsUsed                      = m_PassTimer.GetSlotsUsed();
+			frame.entries.assign(m_PassTimer.Entries().begin(), m_PassTimer.Entries().end());
+			frame.pending = timed;
+			m_CommandList->ResolveTimestamps(*rt.GetTimingHeap(), frame.firstSlot, frame.slotsUsed);
+			m_PassTimer.Disarm();
+			m_FrameGraph.SetPassTimer(nullptr);
+		}
+
 #if defined(BERNINI_GPU_DEBUG)
 		// Snapshot this frame's GPU assertions into the slot's readback buffer, then
 		// leave the debug buffer in copy-dest ready for next frame's reset. The copy
@@ -930,6 +1030,11 @@ namespace bgl
 
 		const uint64_t frameFence = m_CommandQueue->ExecuteCommandList(m_CommandList);
 		rt.SetFrameFence(index, frameFence);
+
+		if (timed)
+		{
+			rt.GetTimingFrame(index).fence = frameFence;
+		}
 
 #if defined(BERNINI_GPU_DEBUG)
 		// The readback copy rode the list just submitted, so this is what gates it.
