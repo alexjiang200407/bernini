@@ -366,7 +366,8 @@ flowchart TD
   on an event, never per frame; a write whose ramps all start at or after now leaves the previous
   frame's pose and its motion vector exact, and `FootIKDesc::FadeTo` builds one from the record
   read back. @throws on a static or crowd placement, a rig with no legs, a weight outside
-  `[0, 1]`, a non-finite field, or a ramp ending before it starts. See
+  `[0, 1]`, a non-finite field, or a ramp ending before it starts. `HasFootIK(instance)` is
+  exactly when neither throws, for a caller that cannot tell a rig's legs from outside. See
   [Skinned Meshes](skinning.md) § Foot planting.
 * **`SetEnvironmentMap(desc)`** — @pre irradiance and prefilter are cube maps. Takes
   `EnvironmentMapDesc` by const reference but the struct is move-only, so build it in place at the
