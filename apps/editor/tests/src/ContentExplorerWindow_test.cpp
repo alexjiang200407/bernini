@@ -148,7 +148,10 @@ namespace
 		fs::create_directories(path.parent_path());
 		std::ofstream(path).put('\0');
 
-		return QString::fromStdString(path.string());
+		// Qt's spelling rather than the platform's. Every path the models hand back uses '/', and
+		// the caches here are keyed on the string the model said -- so a native path resolves to
+		// the same file while missing the entry standing against it.
+		return QDir::fromNativeSeparators(QString::fromStdString(path.string()));
 	}
 
 	/**
@@ -223,8 +226,18 @@ TEST_CASE("The explorer previews a texture with no outside wiring", "[contentexp
 	});
 	REQUIRE(tileRepainted);
 
-	const QIcon icon = model->data(tile, Qt::DecorationRole).value<QIcon>();
-	REQUIRE(icon.pixmap(64).toImage().convertToFormat(QImage::Format_RGBA8888) == preview);
+	// Asked for at a stated device pixel ratio, so a scaled desktop cannot decide the size.
+	const QIcon   icon  = model->data(tile, Qt::DecorationRole).value<QIcon>();
+	const QPixmap shown = icon.pixmap(QSize(64, 64), 1.0);
+	const QImage  got   = shown.toImage().convertToFormat(QImage::Format_RGBA8888);
+
+	// Two QImages compare as {?} to Catch2, so the mismatch says nothing on its own.
+	INFO(
+		"got " << got.width() << "x" << got.height() << " dpr " << shown.devicePixelRatio()
+			   << " pixel(0,0) " << got.pixelColor(0, 0).name(QColor::HexArgb).toStdString()
+			   << " -- expected " << preview.width() << "x" << preview.height() << " pixel(0,0) "
+			   << preview.pixelColor(0, 0).name(QColor::HexArgb).toStdString());
+	REQUIRE(got == preview);
 }
 
 TEST_CASE("The content explorer is rooted at the project's authored half", "[contentexplorer]")
@@ -659,8 +672,9 @@ TEST_CASE("The explorer lists a source but not the document beside it", "[conten
 	auto* tree      = Hierarchy(window);
 	auto* hierarchy = qobject_cast<QFileSystemModel*>(tree->model());
 	REQUIRE(hierarchy != nullptr);
-	const QString meshes =
-		QString::fromStdString((sandbox.DataRoot() / "Authored/Meshes").string());
+	// Through QDir, not path::string(): the model answers in Qt's '/' spelling, and a native
+	// path would compare unequal to it on Windows while still resolving to the same folder.
+	const QString meshes = QDir(sandbox.DataRootPath()).absoluteFilePath("Authored/Meshes");
 	tree->setCurrentIndex(IndexFor(*hierarchy, meshes));
 	REQUIRE(WaitFor([&] { return Shown(window) == meshes; }));
 
@@ -783,12 +797,19 @@ TEST_CASE("A held file is held whatever its name contains", "[contentexplorer]")
 	const Sandbox sandbox;
 	const QString root = sandbox.DataRootPath();
 
-	const QString awkward = Touch(sandbox, "Authored/Materials/a:b.bmaterial");
-	const QString dotted  = Touch(sandbox, "Authored/Materials/..hidden/Body.bmaterial");
+	const QString dotted = Touch(sandbox, "Authored/Materials/..hidden/Body.bmaterial");
 
 	const QString materials = QDir(root).absoluteFilePath("Authored/Materials");
 
+	// A colon is Windows' drive separator, so Qt reads `a:b.bmaterial` as a path on some drive `a`
+	// and GetKeyUnder refuses it as absolute. Nothing is lost by not asking: NTFS cannot carry that
+	// name either, and writing it opens an alternate data stream on the stem `a` instead. The
+	// hazard is one a POSIX filesystem has and Windows does not.
+#if !defined(_WIN32)
+	const QString awkward = Touch(sandbox, "Authored/Materials/a:b.bmaterial");
 	CHECK(editor::IsHeldOpen({ awkward }, materials, true));
+#endif
+
 	CHECK(editor::IsHeldOpen({ dotted }, materials, true));
 
 	// The folder still holds itself, so deleting it takes what is open inside it.
