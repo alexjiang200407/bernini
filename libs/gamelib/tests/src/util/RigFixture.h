@@ -3,6 +3,7 @@
 
 #include <assetlib/AssetStore.h>
 #include <assetlib/avatar.h>
+#include <assetlib/blend.h>
 #include <assetlib/image_io.h>
 #include <assetlib/skinning.h>
 #include <assetlib_structs/Animation.h>
@@ -234,6 +235,72 @@ namespace game::test
 		}
 
 		assetlib::AssetStore(dataRoot).Save(animations, banimRel.generic_string());
+	}
+
+	/**
+	 * A clip set of two *looping* clips over WriteRig's one bone, which a blend space needs: its
+	 * members share one normalized phase, and a clip that clamps rather than wraps has no cycle to
+	 * share. Different lengths, so the phase has something to keep in step.
+	 *
+	 * WriteClips leaves `loop` at its default, which `AddRig` refuses in a space -- hence a writer
+	 * of its own rather than a flag on that one.
+	 */
+	inline void
+	WriteLoopingClips(const fs::path& dataRoot, const fs::path& banimRel)
+	{
+		const auto skeleton =
+			assetlib::AssetStore(dataRoot).Load<assetlib::Skeleton>("Derived/Skeletons/rig.bskel");
+
+		auto animations              = assetlib::AnimationSet();
+		animations.skeleton          = "Derived/Skeletons/rig.bskel";
+		animations.skeletonSignature = assetlib::skeletonSignature(skeleton);
+		animations.boneCount         = 1;
+
+		const std::array<std::pair<const char*, uint32_t>, 2> c_Clips = { { { "walk", 2 },
+			                                                                { "run", 3 } } };
+
+		for (const auto& [name, frameCount] : c_Clips)
+		{
+			auto clip        = assetlib::AnimationClip();
+			clip.nameOffset  = animations.stringPool.add(name);
+			clip.firstSample = static_cast<uint32_t>(animations.samples.size());
+			clip.frameCount  = frameCount;
+			clip.sampleRate  = 30.0f;
+			clip.duration    = static_cast<float>(frameCount - 1) / 30.0f;
+			clip.loop        = 1;
+			animations.clips.push_back(clip);
+
+			for (uint32_t frame = 0; frame < frameCount; ++frame)
+			{
+				animations.samples.push_back(
+					{ glm::vec3(static_cast<float>(frame) * 0.25f, 0.0f, 0.0f),
+				      glm::quat(1.0f, 0.0f, 0.0f, 0.0f),
+				      glm::vec3(1.0f) });
+			}
+		}
+
+		assetlib::AssetStore(dataRoot).Save(animations, banimRel.generic_string());
+	}
+
+	/** A `.bblend` over `members`, authored against `banimRel`. Authored, so it goes under Authored/. */
+	inline void
+	WriteBlendSet(
+		const fs::path&                         dataRoot,
+		const fs::path&                         bblendRel,
+		const fs::path&                         banimRel,
+		std::vector<assetlib::BlendSpaceMember> members,
+		std::string_view                        spaceName = "locomotion")
+	{
+		auto space    = assetlib::BlendSpace();
+		space.name    = std::string(spaceName);
+		space.members = std::move(members);
+
+		auto set       = assetlib::BlendSet();
+		set.name       = "test";
+		set.animations = banimRel.generic_string();
+		set.spaces.push_back(std::move(space));
+
+		assetlib::AssetStore(dataRoot).Save(set, bblendRel.generic_string());
 	}
 
 	/**

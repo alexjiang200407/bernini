@@ -22,6 +22,9 @@
 namespace
 {
 	using game::test::DataRoot;
+	using game::test::WriteBlendSet;
+	using game::test::WriteClips;
+	using game::test::WriteLoopingClips;
 	using game::test::WriteRig;
 
 	bgl::GraphicsOptions
@@ -264,6 +267,7 @@ TEST_CASE("a skinned acquire passes its posed box down to the geom", "[skinned][
 		assets.AcquireSkinnedMesh(
 			"Derived/Meshes/rig.bmesh",
 			"Derived/Animations/rig.banim",
+			{},
 			0,
 			inverted),
 		bgl::SceneError);
@@ -279,6 +283,7 @@ TEST_CASE("a skinned acquire passes its posed box down to the geom", "[skinned][
 	const auto shared = assets.AcquireSkinnedMesh(
 		"Derived/Meshes/rig.bmesh",
 		"Derived/Animations/rig.banim",
+		{},
 		0,
 		inverted);
 	CHECK(shared.geom.handle.index == mesh.geom.handle.index);
@@ -324,6 +329,7 @@ TEST_CASE(
 	const auto own   = assets.AcquireSkinnedMesh(
 		"Derived/Meshes/rig.bmesh",
 		"Derived/Animations/rig.banim",
+		{},
 		0,
 		valid);
 	REQUIRE(own.geom.IsValid());
@@ -623,4 +629,207 @@ TEST_CASE(
 	const auto leg = AcquireLeg(assets);
 	REQUIRE(leg.geom.IsValid());
 	assets.ReleaseGeom(leg.geom);
+}
+
+// The blend set, observed through the public API alone: gamelib cannot open bgl's scene, so what a
+// set did is read off the node table the acquire hands back, and what it refused off the throw.
+TEST_CASE("a skinned acquire resolves a blend set's clips by name", "[gamelib][skinned][blend]")
+{
+	DataRoot root("bernini_gamelib_blend");
+	WriteRig(root.path);
+	WriteLoopingClips(root.path, "Derived/Animations/loco.banim");
+
+	auto gfx = bgl::CreateGraphics(HeadlessOptions());
+	REQUIRE(gfx != nullptr);
+	auto scene  = gfx->CreateScene(bgl::SceneDesc());
+	auto assets = game::AssetManager(scene, root.path);
+
+	const auto acquire = [&](std::string_view blend) {
+		return assets.AcquireSkinnedMesh(
+			"Derived/Meshes/rig.bmesh",
+			"Derived/Animations/loco.banim",
+			blend);
+	};
+
+	SECTION("every node is resolved, clips first and then the spaces")
+	{
+		WriteBlendSet(
+			root.path,
+			"Authored/Animations/loco.bblend",
+			"Derived/Animations/loco.banim",
+			{ { "walk", 0.0f }, { "run", 4.0f } });
+
+		const auto mesh = acquire("Authored/Animations/loco.bblend");
+
+		// The clip table is unchanged by a set: clips are nodes 0 and 1 under their own names,
+		// which is what lets a one-clip spawn keep working.
+		REQUIRE(mesh.clips.size() == 2);
+		CHECK(mesh.clips[0].name == "walk");
+		CHECK(mesh.clips[1].name == "run");
+
+		// So the space is node 2 -- its position after the clips.
+		REQUIRE(mesh.spaces.size() == 1);
+		CHECK(mesh.spaces[0].name == "locomotion");
+		CHECK(mesh.spaces[0].parameterMin == 0.0f);
+		CHECK(mesh.spaces[0].parameterMax == 4.0f);
+
+		assets.ReleaseGeom(mesh.geom);
+	}
+
+	SECTION("a rig acquired with no set reports its clips and no spaces")
+	{
+		const auto mesh = acquire({});
+
+		CHECK(mesh.clips.size() == 2);
+		CHECK(mesh.spaces.empty());
+
+		assets.ReleaseGeom(mesh.geom);
+	}
+
+	SECTION("a member naming a clip the set does not hold is refused")
+	{
+		// Refused, not warned: the caller named this set, so silently dropping its spaces would
+		// hand back a node table missing exactly what was asked for.
+		WriteBlendSet(
+			root.path,
+			"Authored/Animations/loco.bblend",
+			"Derived/Animations/loco.banim",
+			{ { "walk", 0.0f }, { "sprint", 4.0f } });
+
+		CHECK_THROWS_WITH(
+			acquire("Authored/Animations/loco.bblend"),
+			Catch::Matchers::ContainsSubstring("'sprint'"));
+
+		// The refusal fires after the mesh's materials were taken, so the unwind has to give them
+		// back: acquiring one now must count 1, not 2.
+		const auto material = assets.AcquireMaterial("Authored/Materials/skin.bmaterial");
+		CHECK(assets.MaterialRefCount(material) == 1);
+		assets.ReleaseMaterial(material);
+	}
+
+	SECTION("a set authored against another clip set is refused")
+	{
+		WriteLoopingClips(root.path, "Derived/Animations/other.banim");
+		WriteBlendSet(
+			root.path,
+			"Authored/Animations/other.bblend",
+			"Derived/Animations/other.banim",
+			{ { "walk", 0.0f }, { "run", 4.0f } });
+
+		CHECK_THROWS_WITH(
+			acquire("Authored/Animations/other.bblend"),
+			Catch::Matchers::ContainsSubstring("authored against"));
+	}
+
+	SECTION("a member that does not loop is refused by the rig")
+	{
+		// Forwarded from AddRig: a space shares one phase, and a clip that clamps would sit on its
+		// last frame while the others cycle.
+		WriteClips(root.path, "Derived/Animations/held.banim", "held", 0.5f, 2);
+		WriteBlendSet(
+			root.path,
+			"Authored/Animations/held.bblend",
+			"Derived/Animations/held.banim",
+			{ { "held", 0.0f }, { "held", 4.0f } });
+
+		CHECK_THROWS_WITH(
+			assets.AcquireSkinnedMesh(
+				"Derived/Meshes/rig.bmesh",
+				"Derived/Animations/held.banim",
+				"Authored/Animations/held.bblend"),
+			Catch::Matchers::ContainsSubstring("does not loop"));
+
+		const auto material = assets.AcquireMaterial("Authored/Materials/skin.bmaterial");
+		CHECK(assets.MaterialRefCount(material) == 1);
+		assets.ReleaseMaterial(material);
+	}
+}
+
+TEST_CASE("a rig's blend set is fixed by the acquire that built it", "[gamelib][skinned][blend]")
+{
+	DataRoot root("bernini_gamelib_blend_live");
+	WriteRig(root.path);
+	WriteLoopingClips(root.path, "Derived/Animations/loco.banim");
+	WriteBlendSet(
+		root.path,
+		"Authored/Animations/loco.bblend",
+		"Derived/Animations/loco.banim",
+		{ { "walk", 0.0f }, { "run", 4.0f } });
+	WriteBlendSet(
+		root.path,
+		"Authored/Animations/other.bblend",
+		"Derived/Animations/loco.banim",
+		{ { "walk", 0.0f }, { "run", 9.0f } },
+		"other");
+
+	// A second mesh on the same rig -- what a modular unit is, and what makes the rig-level rule
+	// observable apart from the geom-level one.
+	{
+		const auto source =
+			assetlib::AssetStore(root.path).Load<assetlib::BMesh>("Derived/Meshes/rig.bmesh");
+		assetlib::AssetStore(root.path).Save(source, "Derived/Meshes/slot.bmesh");
+	}
+
+	auto gfx = bgl::CreateGraphics(HeadlessOptions());
+	REQUIRE(gfx != nullptr);
+	auto scene  = gfx->CreateScene(bgl::SceneDesc());
+	auto assets = game::AssetManager(scene, root.path);
+
+	const auto first = assets.AcquireSkinnedMesh(
+		"Derived/Meshes/rig.bmesh",
+		"Derived/Animations/loco.banim",
+		"Authored/Animations/loco.bblend");
+	REQUIRE(first.spaces.size() == 1);
+
+	SECTION("a second acquire naming a different set is refused")
+	{
+		// The tables are the rig's, and nothing attaches a set to one already uploaded.
+		CHECK_THROWS_WITH(
+			assets.AcquireSkinnedMesh(
+				"Derived/Meshes/slot.bmesh",
+				"Derived/Animations/loco.banim",
+				"Authored/Animations/other.bblend"),
+			Catch::Matchers::ContainsSubstring("release it to zero"));
+	}
+
+	SECTION("a second acquire naming none accepts what the rig has")
+	{
+		// One-sided on purpose: a caller that asked for no spaces is not wrong to find some.
+		const auto second =
+			assets.AcquireSkinnedMesh("Derived/Meshes/slot.bmesh", "Derived/Animations/loco.banim");
+
+		CHECK(second.spaces.size() == 1);
+		assets.ReleaseGeom(second.geom);
+	}
+
+	SECTION("a geom that took the rig's set may be re-acquired naming it")
+	{
+		// A geom records what the *rig* carries, not what its own call asked for. Recording the
+		// empty request instead would refuse this geom the very set it is already drawing with.
+		const auto second =
+			assets.AcquireSkinnedMesh("Derived/Meshes/slot.bmesh", "Derived/Animations/loco.banim");
+		REQUIRE(second.spaces.size() == 1);
+
+		const auto again = assets.AcquireSkinnedMesh(
+			"Derived/Meshes/slot.bmesh",
+			"Derived/Animations/loco.banim",
+			"Authored/Animations/loco.bblend");
+		CHECK(again.geom.handle.index == second.geom.handle.index);
+		CHECK(again.spaces.size() == 1);
+
+		assets.ReleaseGeom(again.geom);
+		assets.ReleaseGeom(second.geom);
+	}
+
+	SECTION("the same geom re-acquired with a different set is refused")
+	{
+		CHECK_THROWS_WITH(
+			assets.AcquireSkinnedMesh(
+				"Derived/Meshes/rig.bmesh",
+				"Derived/Animations/loco.banim",
+				"Authored/Animations/other.bblend"),
+			Catch::Matchers::ContainsSubstring("release it to zero"));
+	}
+
+	assets.ReleaseGeom(first.geom);
 }
