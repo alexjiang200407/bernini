@@ -553,8 +553,8 @@ namespace assetlib
 				named(leg.toeBoneName));
 		}
 
-		for (const std::string& clip : avatar.unplantedClips)
-			out += std::format("  unplanted    '{}'\n", clip);
+		for (const ClipPlantWeight& entry : avatar.clipWeights)
+			out += std::format("  plant        '{}' {:.2f}\n", entry.clip, entry.weight);
 
 		return out;
 	}

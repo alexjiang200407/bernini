@@ -446,9 +446,10 @@ the pose the rig would have had. A weight rather than a flag because a foot that
 two states would pop, which is what the cook's ramp at each end of a planted run exists to remove.
 
 **Planting is gated at five scopes.** A rig plants only if it authored legs (`rig.legs.Null()` —
-no `.bavatar`, no planting); a clip plants only if the avatar's `unplanted` list does not name it;
-a leg plants on a frame only as far as that frame's baked weight; an instance plants only as far
-as its own weight (below); and the scene plants at all only while `IScene::SetFootPlanting` is on.
+no `.bavatar`, no planting); a clip plants only as far as the avatar's `plant` weight for it, zero
+for one it takes out; a leg plants on a frame only as far as that frame's baked weight; an
+instance plants only as far as its own weight (below); and the scene plants at all only while
+`IScene::SetFootPlanting` is on.
 The scene switch stays with the ground — `SetGround` holds one plane and the solve is defined
 against it — and is the A/B affordance the editor's *Plant feet* box flips; the per-instance
 weight is what a game sets.
@@ -473,12 +474,16 @@ weights say; a rig without legs owns no record and `SetFootIK` refuses it.
 Two measurements, both derived and neither authored — a plane per foot and a weight per leg per
 frame — because 21 clips × 4 feet on 29 purchased rigs is authoring nobody will do. Unreal makes
 this an animation notify and Unity a curve on the clip; a wrong derivation gets a per-clip override
-in the avatar rather than an authoring surface. That override is the avatar's `unplanted` list —
-clip names that plant nothing — and it exists for the one clip the walk cannot judge: an airborne
-one. `groundClips` rests a jump or a fall on whatever hangs lowest, which is a foot, and from
-inside the clip that foot then sits at floor height and does not move — exactly what a standing
-foot looks like. Both project rigs list `Jump_Up` and `Fall`. The list is part of the weights'
-signature, so editing it re-measures on the next load and `bakebounds` re-bakes.
+in the avatar rather than an authoring surface. That override is the avatar's `plant` object — a
+weight per clip name, 0 to 1, scaling every weight the walk measures for that clip — and its zero
+exists for the one clip the walk cannot judge: an airborne one. `groundClips` rests a jump or a
+fall on whatever hangs lowest, which is a foot, and from inside the clip that foot then sits at
+floor height and does not move — exactly what a standing foot looks like. Both project rigs take
+`Jump_Up` and `Fall` out. It is per clip and never per transition: what a crossfade does with two
+clips' weights is the blend's (`feat/anim-blend`), and the runtime knob over the result is the
+instance's (`SetFootIK`). The weights are part of the baked bytes' signature, so editing one
+re-measures on the next load and `bakebounds` re-bakes. A document written when this was an
+`unplanted` list still reads, as zeros, and a save or `migrate` rewrites it.
 
 **The sole plane is fitted to the underside of the foot** (`assetlib::solePlanes`), over the
 vertices weighted to a leg's ankle and toe at bind pose, and expressed in ankle-local space — the
