@@ -369,10 +369,11 @@ frames would reproject through the wrong clip.
   frustum, so it is posed once however many frustums the view is culled against. It also has to be:
   the graph decides a pass is a root by whether it writes an *imported* resource, and a name resolved
   inside a cull namespace matches no import, which would cull the pass entirely.
-* **In:** `scene.posedInstances` (the dense list of byte offsets to pose — a sweep of the arena
-  would pose freed records, and would meet the crowd records sharing it), `scene.playbackBuffer`,
-  `scene.rigBuffer`,
-  `scene.skinnedBoneBuffer`, `scene.clipBuffer`, `scene.boneSampleBuffer`.
+* **In:** `scene.posedInstances` (the dense list of placements to pose, each with its foot-IK
+  record beside it — a sweep of the arena would pose freed records, and would meet the crowd
+  records sharing it), `scene.meshInstanceBuffer`, `scene.playbackBuffer`, `scene.rigBuffer`,
+  `scene.skinnedBoneBuffer`, `scene.clipBuffer`, `scene.boneSampleBuffer`,
+  `scene.skinnedLegBuffer`, `scene.plantWeightBuffer`, `scene.footIKBuffer`.
 * **Out:** `scene.bonePalettes`, the view's `BonePaletteBuffer` — GPU-only storage with a CPU-side offset
   allocator, because a `RangeBuffer` would re-upload its stale CPU mirror over what this wrote.
 * **Skipped** when the view places no skinned instance — and an instance drawing from its rig's bone

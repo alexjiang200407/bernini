@@ -14,6 +14,7 @@ section below is written in exactly those bytes.
 This roadmap is a living checklist. Legend:
 
 - `[x]` done / in place
+- `[~]` partly in place; the line says what is left
 - `[ ]` not done
 
 Ordering within a milestone is roughly dependency order. Milestones are prioritized to
@@ -169,11 +170,16 @@ and portability.
       shared pose.
     - [~] Foot planting — analytic two-bone IK, and the ankle turned onto the ground under it: a
       planted foot matches the surface's *orientation* as well as its height, clamped so a cliff
-      edge does not break an ankle. Done against `IScene::SetGround`'s single plane; the heightfield
-      that replaces the sampler is what is left, and it is what breaks on stairs and siege
-      structures. Note none of it is what grounds a clip: the standard solve preserves a foot's
-      animated height relative to the root, so on flat ground it corrects by zero. That is
-      cook-side, and done. See [docs/skinning.md](docs/skinning.md) § Foot planting.
+      edge does not break an ankle. Done against `IScene::SetGround`'s single plane, with a
+      per-instance IK weight over the baked plant — Unity's `SetIKPositionWeight` and
+      `SetIKRotationWeight`, per leg, ramped in the render clock and written on an event
+      (`ISceneView::SetFootIK`) — which is what a state machine's transitions and a unit stepping
+      onto a prop will drive — and an authored weight per clip in the avatar (`plant`), Unity's
+      per-state *Foot IK* as a scale. What is left is the heightfield that replaces the sampler,
+      which is what breaks on stairs and siege structures. Note none of it is what grounds a clip:
+      the standard solve preserves a foot's animated height relative to the root, so on flat
+      ground it corrects by zero. That is cook-side, and done. See
+      [docs/skinning.md](docs/skinning.md) § Foot planting.
   - [ ] Hit reaction
     - [ ] Directional reaction clips (4–8 variants) — works on both tiers, so build this first.
     - [ ] Additive flinch over locomotion (skinned tier) — one fixed slot, upper-body mask, ~0.3 s envelope.

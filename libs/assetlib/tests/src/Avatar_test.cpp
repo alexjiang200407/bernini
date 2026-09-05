@@ -100,14 +100,37 @@ TEST_CASE("An avatar round-trips through its codec", "[avatar]")
 		CHECK(Parse(text).legs.empty());
 	}
 
-	SECTION("the unplanted clips round-trip, and are absent from a document naming none")
+	SECTION("the clip weights round-trip, sorted, and are absent from a document naming none")
 	{
-		auto listed           = MakeAvatar();
-		listed.unplantedClips = { "Jump_Up", "Fall" };
+		auto listed        = MakeAvatar();
+		listed.clipWeights = { { "Attack", 0.5f }, { "Fall", 0.0f }, { "Jump_Up", 0.0f } };
 		CHECK(Parse(TextOf(listed)) == listed);
+		CHECK_THAT(TextOf(listed), Catch::Matchers::ContainsSubstring("\"plant\""));
 
-		// An exception to a rule, so a document listing none does not carry the key.
-		CHECK_THAT(TextOf(MakeAvatar()), !Catch::Matchers::ContainsSubstring("unplanted"));
+		// An exception to a rule, so a document naming none does not carry the key.
+		CHECK_THAT(TextOf(MakeAvatar()), !Catch::Matchers::ContainsSubstring("plant"));
+
+		// At the float's shortest decimal, like every authored float: a hand-typed 0.6 comes back
+		// as 0.6, not as the double the float happens to be.
+		auto typed        = MakeAvatar();
+		typed.clipWeights = { { "Attack", 0.6f } };
+		CHECK_THAT(TextOf(typed), Catch::Matchers::ContainsSubstring("\"Attack\": 0.6\n"));
+		CHECK_THAT(TextOf(typed), !Catch::Matchers::ContainsSubstring("0.60000"));
+	}
+
+	SECTION(
+		"the unplanted list a document was written with reads as weight zero, and is not "
+		"written back")
+	{
+		const Avatar read = Parse(R"({"legs":[],"unplanted":["Jump_Up","Fall"]})");
+		CHECK(
+			read.clipWeights ==
+			std::vector<ClipPlantWeight>{ { "Fall", 0.0f }, { "Jump_Up", 0.0f } });
+
+		const std::string text = TextOf(read);
+		CHECK_THAT(text, !Catch::Matchers::ContainsSubstring("unplanted"));
+		CHECK_THAT(text, Catch::Matchers::ContainsSubstring("\"plant\""));
+		CHECK(Parse(text) == read);
 	}
 
 	SECTION("keys a reader does not know survive a save")
@@ -137,6 +160,15 @@ TEST_CASE("An avatar refuses a document it could not act on", "[avatar]")
 	CHECK_THROWS(Parse(R"({"legs":[],"unplanted":"Jump_Up"})"));
 	CHECK_THROWS(Parse(R"({"legs":[],"unplanted":[""]})"));
 	CHECK_THROWS(Parse(R"({"legs":[],"unplanted":[3]})"));
+
+	// A weight is a number in 0 to 1, and a clip is weighted once: twice would be two answers
+	// to how far it plants, and a document from before the key could name a clip in both.
+	CHECK_THROWS(Parse(R"({"legs":[],"plant":["Attack"]})"));
+	CHECK_THROWS(Parse(R"({"legs":[],"plant":{"Attack":"half"}})"));
+	CHECK_THROWS(Parse(R"({"legs":[],"plant":{"Attack":1.5}})"));
+	CHECK_THROWS(Parse(R"({"legs":[],"plant":{"Attack":-0.1}})"));
+	CHECK_THROWS(Parse(R"({"legs":[],"plant":{"":0.5}})"));
+	CHECK_THROWS(Parse(R"({"legs":[],"plant":{"Fall":0.5},"unplanted":["Fall"]})"));
 }
 
 TEST_CASE("An avatar's names resolve to bone indices", "[avatar]")
@@ -194,14 +226,14 @@ TEST_CASE("An avatar's names resolve to bone indices", "[avatar]")
 		CHECK_NOTHROW(resolveAvatar(avatar, skeleton));
 	}
 
-	SECTION("the unplanted clips come through by name, unresolved")
+	SECTION("the clip weights come through by name, unresolved")
 	{
 		// Clip names are the `.banim`'s, which the skeleton knows nothing about; the plant
 		// matches them when it measures.
-		auto avatar           = MakeAvatar();
-		avatar.unplantedClips = { "Jump_Up", "Fall" };
+		auto avatar        = MakeAvatar();
+		avatar.clipWeights = { { "Attack", 0.5f }, { "Fall", 0.0f } };
 
-		CHECK(resolveAvatar(avatar, skeleton).unplantedClips == avatar.unplantedClips);
+		CHECK(resolveAvatar(avatar, skeleton).clipWeights == avatar.clipWeights);
 	}
 }
 
@@ -242,6 +274,11 @@ TEST_CASE("describe(Avatar) resolves each authored name against the rig", "[avat
 	// Reported rather than thrown, unlike resolveAvatar: describe exists to show a person which
 	// names went bad, so a rig re-exported with one joint renamed still prints the other three.
 	CHECK_THAT(text, Catch::Matchers::ContainsSubstring("'Dog R Foot' NOT IN THE SKELETON"));
+
+	avatar.clipWeights = { { "Attack", 0.5f } };
+	CHECK_THAT(
+		StoreAt(fs::temp_directory_path()).Describe(avatar, &skeleton),
+		Catch::Matchers::ContainsSubstring("plant        'Attack' 0.50"));
 
 	SECTION("with no rig to resolve against, the names print alone")
 	{
