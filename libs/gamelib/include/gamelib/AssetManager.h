@@ -6,6 +6,7 @@
 #include <bgl/IScene.h>
 #include <bgl/ISceneView.h>
 #include <core/str/str.h>
+#include <gamelib/BlendSpaceInfo.h>
 #include <gamelib/ClipInfo.h>
 
 namespace game
@@ -158,11 +159,21 @@ namespace game
 		bgl::GeomHandle
 		AcquireMesh(std::string_view relPath, uint32_t meshIndex = 0);
 
-		/** An acquired skinned mesh: the geom to instance, and the clips its instances can play. */
+		/**
+		 * An acquired skinned mesh: the geom to instance, and the two kinds of thing its instances
+		 * can play -- a clip, or a blend space the `.bblend` authored.
+		 *
+		 * Together they are the node table a playback slot indexes, clips first: `clips[i]` is node
+		 * `i` and `spaces[i]` is node `clips.size() + i`. Two vectors rather than one of a tagged
+		 * kind, because the two carry different things and are driven differently -- a clip is
+		 * played, a space is played *and* steered by a parameter -- so a single table would leave
+		 * half of every entry meaningless.
+		 */
 		struct SkinnedMesh
 		{
-			bgl::GeomHandle       geom;
-			std::vector<ClipInfo> clips;
+			bgl::GeomHandle             geom;
+			std::vector<ClipInfo>       clips;
+			std::vector<BlendSpaceInfo> spaces;
 		};
 
 		/**
@@ -172,6 +183,18 @@ namespace game
 		 *
 		 * `animationsRelPath` names the clip set; the skeleton is the one that set was cooked against,
 		 * so a caller never names it. A live geom must be re-acquired with the same `.banim`.
+		 *
+		 * `blendRelPath` names a `.bblend` whose spaces become nodes after the clips, resolved
+		 * against this clip set. Unlike `posedBounds` below, a **shared** acquire *is* checked
+		 * against it -- a set is part of what the rig is, the way the `.banim` is, rather than a
+		 * property of the geom.
+		 *
+		 * The rule is one-sided at both levels it is checked: naming a different set than the geom
+		 * or its rig already has is refused, naming none accepts whatever they have, since a caller
+		 * that asked for no spaces is not wrong to find some. A geom records the set its *rig*
+		 * carries, so one that took a shared rig's spaces may name them later. Which handle to give
+		 * back differs: release the geom to zero to re-acquire it against another set, and every
+		 * geom on the rig to change the rig's.
 		 *
 		 * `posedBounds` is the box the geom culls by. When it is not given, the `.banim`'s baked box
 		 * is read (assetlib::findPosedBounds), and only a pairing the cook never measured falls back
@@ -184,16 +207,21 @@ namespace game
 		 * the geom to zero to re-bound it.
 		 *
 		 * @throws std::runtime_error if an input cannot be read, `meshIndex` is out of range, the clip
-		 *         set no longer matches the skeleton it names, or the geom is live with clips from a
-		 *         different `.banim`; bgl::SceneError for anything AddSkinnedMeshGeom refuses. A
-		 *         failed acquire owns nothing.
+		 *         set no longer matches the skeleton it names, the geom is live with clips from a
+		 *         different `.banim`, the geom is live with a different blend set, the rig is live
+		 *         with a different one, the blend set names another `.banim` than this one, or a
+		 *         member names a clip the set does not hold;
+		 *         bgl::SceneError for anything AddRig or AddSkinnedMeshGeom refuses -- a space of
+		 *         fewer than two members, a member that does not loop, parameters that do not
+		 *         strictly increase. A failed acquire owns nothing.
 		 */
 		SkinnedMesh
 		AcquireSkinnedMesh(
 			std::string_view                       relPath,
 			std::string_view                       animationsRelPath,
-			uint32_t                               meshIndex   = 0,
-			const std::optional<assetlib::Bounds>& posedBounds = std::nullopt);
+			std::string_view                       blendRelPath = {},
+			uint32_t                               meshIndex    = 0,
+			const std::optional<assetlib::Bounds>& posedBounds  = std::nullopt);
 
 		/**
 		 * A `.benv` followed to its uploads: one texture reference per baked map it references, plus
@@ -424,6 +452,15 @@ namespace game
 		{
 			bgl::RigHandle handle;
 			uint32_t       refCount = 0;
+
+			// The normalized `.bblend` this rig's spaces came from, empty when it was built with
+			// none. What a later acquire naming a set is checked against -- the tables are the
+			// rig's, and nothing attaches a set to one already uploaded.
+			std::string blend;
+
+			// The spaces as source-asset names, so a shared acquire answers without re-reading
+			// either container.
+			std::vector<BlendSpaceInfo> spaces;
 		};
 
 		struct GeomRecord
@@ -439,6 +476,11 @@ namespace game
 			// checked against.
 			std::vector<ClipInfo> skinnedClips;
 			std::string           skinnedAnimations;
+
+			// The spaces a shared acquire hands back, and the normalized `.bblend` they came
+			// from -- empty when the rig was built with no set.
+			std::vector<BlendSpaceInfo> skinnedSpaces;
+			std::string                 skinnedBlend;
 
 			uint32_t refCount = 0;
 		};
@@ -573,12 +615,44 @@ namespace game
 		 * legs are the rig's and go up once, so a unit assembled from slot meshes has its soles
 		 * fitted to whichever mesh came first. A body and its boots disagree by the boot's thickness.
 		 */
-		[[nodiscard]] bgl::RigHandle
+		/**
+		 * A rig as a geom records it: the handle, and what the *rig* carries rather than what this
+		 * call asked for. The two differ on a shared rig -- an acquire naming no set still gets the
+		 * spaces the rig was built with, and recording the empty request instead would later refuse
+		 * that geom its own set.
+		 */
+		struct AcquiredRig
+		{
+			bgl::RigHandle              handle;
+			std::string                 blend;
+			std::vector<BlendSpaceInfo> spaces;
+		};
+
+		[[nodiscard]] AcquiredRig
 		AcquireRig(
 			std::string_view              animationsNorm,
+			std::string_view              blendNorm,
 			const assetlib::Skeleton&     skeleton,
 			const assetlib::AnimationSet& animations,
-			const assetlib::BMesh&        mesh);
+			const assetlib::BMesh&        mesh,
+			const assetlib::BlendSet*     blendSet);
+
+		/**
+		 * `blendSet`'s spaces resolved against `animations`: a member's clip name becomes the index
+		 * `bgl` takes, and `spaces` is filled with what a caller needs to steer each one.
+		 *
+		 * Refused rather than warned when a name resolves to nothing, unlike an avatar naming a bone
+		 * the rig lacks: an avatar is found by convention beside the skeleton, so a rig that has
+		 * none is ordinary, but a `.bblend` was named by the caller and silently dropping its spaces
+		 * would hand back a node table missing what was asked for.
+		 *
+		 * @throws std::runtime_error if a member names a clip `animations` does not hold.
+		 */
+		[[nodiscard]] static bgl::BlendSetDesc
+		BlendSetFor(
+			const assetlib::AnimationSet& animations,
+			const assetlib::BlendSet*     blendSet,
+			std::vector<BlendSpaceInfo>&  spaces);
 
 		/**
 		 * What AddRig is handed about a rig's feet: its legs from the avatar beside its skeleton,

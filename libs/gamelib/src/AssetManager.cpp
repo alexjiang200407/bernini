@@ -3,6 +3,7 @@
 
 #include <assetlib/RegenMesh.h>
 #include <assetlib/avatar.h>
+#include <assetlib/blend.h>
 #include <assetlib/image_io.h>
 #include <assetlib/skinning.h>
 #include <assetlib_structs/Animation.h>
@@ -491,6 +492,7 @@ namespace game
 	AssetManager::AcquireSkinnedMesh(
 		std::string_view                       relPath,
 		std::string_view                       animationsRelPath,
+		std::string_view                       blendRelPath,
 		uint32_t                               meshIndex,
 		const std::optional<assetlib::Bounds>& posedBounds)
 	{
@@ -511,11 +513,26 @@ namespace game
 				key,
 				record.skinnedAnimations,
 				animationsRelPath);
+			// Unlike posedBounds, which a shared acquire ignores without even validating: a blend
+			// set is part of what the rig is, so naming a different one is refused here the way a
+			// different `.banim` is. Naming none accepts whatever the rig has.
+			const auto sharedBlendNorm =
+				blendRelPath.empty() ? std::string() : assetlib::normalizePath(blendRelPath);
+			core::throw_runtime_error_if(
+				!sharedBlendNorm.empty() && sharedBlendNorm != record.skinnedBlend,
+				"AssetManager: '{}' is live with the blend set '{}'; release it to zero before "
+				"acquiring with '{}'",
+				key,
+				record.skinnedBlend.empty() ? "<none>" : record.skinnedBlend,
+				blendRelPath);
+
 			++record.refCount;
-			return SkinnedMesh{ record.handle, record.skinnedClips };
+			return SkinnedMesh{ record.handle, record.skinnedClips, record.skinnedSpaces };
 		}
 
 		const auto animationsNorm = assetlib::normalizePath(animationsRelPath);
+		const auto blendNorm =
+			blendRelPath.empty() ? std::string() : assetlib::normalizePath(blendRelPath);
 
 		// Through the store, like every other read here: a project opens as a mount, so a rig that
 		// ships inside a .bpak is only reachable that way.
@@ -533,6 +550,25 @@ namespace game
 			"inserted, removed or reordered since, so its joint indices name different bones now",
 			animationsNorm,
 			animations.skeleton);
+
+		// Loaded before anything is taken, so a set that will not read or names another clip set
+		// refuses while the acquire still owns nothing.
+		auto blendSet = std::optional<assetlib::BlendSet>();
+		if (!blendNorm.empty())
+		{
+			blendSet = m_Store.Load<assetlib::BlendSet>(blendNorm);
+
+			// A set is authored against exactly one clip set, and its members are clip names in
+			// that one. Against the normalized path on both sides: the two spellings of one key
+			// are the same key.
+			core::throw_runtime_error_if(
+				assetlib::normalizePath(blendSet->animations) != animationsNorm,
+				"AssetManager: the blend set '{}' is authored against '{}', not the '{}' this "
+				"acquire names",
+				blendNorm,
+				blendSet->animations,
+				animationsNorm);
+		}
 
 		const assetlib::BMesh& mesh = ReadMesh(relPath);
 
@@ -599,16 +635,27 @@ namespace game
 
 			// One upload per clip set, however many meshes are skinned to it: a unit assembled from
 			// slot meshes is several geoms on one rig.
-			const bgl::RigHandle rig = AcquireRig(animationsNorm, skeleton, animations, mesh);
-			rigAcquired              = true;
+			const AcquiredRig rig = AcquireRig(
+				animationsNorm,
+				blendNorm,
+				skeleton,
+				animations,
+				mesh,
+				blendSet.has_value() ? &*blendSet : nullptr);
+			rigAcquired = true;
 
-			auto record   = GeomRecord();
-			record.handle = m_Scene->AddSkinnedMeshGeom(mesh, meshIndex, materials, rig, bounds);
-			record.key    = key;
+			auto record = GeomRecord();
+			record.handle =
+				m_Scene->AddSkinnedMeshGeom(mesh, meshIndex, materials, rig.handle, bounds);
+			record.key               = key;
 			record.submeshMaterials  = std::move(submeshMaterials);
 			record.skinnedClips      = clipInfo;
 			record.skinnedAnimations = animationsNorm;
-			record.refCount          = 1;
+			// The rig's, not this call's: a shared rig hands back the set it was built with, and
+			// recording the empty request instead would later refuse this geom its own set.
+			record.skinnedSpaces = rig.spaces;
+			record.skinnedBlend  = rig.blend;
+			record.refCount      = 1;
 
 			const uint32_t slot = record.handle.handle.index;
 			m_GeomByPath.emplace(key, slot);
@@ -616,7 +663,7 @@ namespace game
 			const bgl::GeomHandle handle = record.handle;
 			m_Geoms.emplace(slot, std::move(record));
 
-			return SkinnedMesh{ handle, std::move(clipInfo) };
+			return SkinnedMesh{ handle, std::move(clipInfo), rig.spaces };
 		}
 		catch (...)
 		{
@@ -630,26 +677,94 @@ namespace game
 		}
 	}
 
-	bgl::RigHandle
+	AssetManager::AcquiredRig
 	AssetManager::AcquireRig(
 		std::string_view              animationsNorm,
+		std::string_view              blendNorm,
 		const assetlib::Skeleton&     skeleton,
 		const assetlib::AnimationSet& animations,
-		const assetlib::BMesh&        mesh)
+		const assetlib::BMesh&        mesh,
+		const assetlib::BlendSet*     blendSet)
 	{
 		if (const auto it = m_Rigs.find(animationsNorm); it != m_Rigs.end())
 		{
+			// One-sided on purpose: the tables are the rig's and nothing attaches a set to one
+			// already uploaded, but a caller that asked for no spaces is not wrong to find some.
+			// Checked before the reference is taken, so a refusal owns nothing.
+			core::throw_runtime_error_if(
+				!blendNorm.empty() && blendNorm != it->second.blend,
+				"AssetManager: the rig from '{}' is live with the blend set '{}'; release it to "
+				"zero before acquiring with '{}'",
+				animationsNorm,
+				it->second.blend.empty() ? "<none>" : it->second.blend,
+				blendNorm);
+
 			++it->second.refCount;
-			return it->second.handle;
+
+			// The rig's own set, not this call's: a shared acquire naming none still gets the
+			// spaces the rig has, so that is what its geom records.
+			return AcquiredRig{ it->second.handle, it->second.blend, it->second.spaces };
 		}
 
-		auto record = RigRecord();
-		record.handle =
-			m_Scene->AddRig(skeleton, animations, FootPlantFor(mesh, skeleton, animations));
+		auto spaces   = std::vector<BlendSpaceInfo>();
+		auto record   = RigRecord();
+		record.handle = m_Scene->AddRig(
+			skeleton,
+			animations,
+			FootPlantFor(mesh, skeleton, animations),
+			BlendSetFor(animations, blendSet, spaces));
 		record.refCount = 1;
+		record.blend    = std::string(blendNorm);
+		record.spaces   = std::move(spaces);
 
-		m_Rigs.emplace(std::string(animationsNorm), record);
-		return record.handle;
+		const auto it = m_Rigs.emplace(std::string(animationsNorm), std::move(record)).first;
+		return AcquiredRig{ it->second.handle, it->second.blend, it->second.spaces };
+	}
+
+	bgl::BlendSetDesc
+	AssetManager::BlendSetFor(
+		const assetlib::AnimationSet& animations,
+		const assetlib::BlendSet*     blendSet,
+		std::vector<BlendSpaceInfo>&  spaces)
+	{
+		// The clip nodes need no description here: they are the acquire's clip table, in the same
+		// order, which is exactly what makes a space's node index its position after it.
+		spaces.clear();
+
+		auto desc = bgl::BlendSetDesc();
+		if (blendSet == nullptr)
+		{
+			return desc;
+		}
+
+		for (const assetlib::BlendSpace& space : blendSet->spaces)
+		{
+			auto resolved = bgl::BlendSpaceDesc();
+			resolved.members.reserve(space.members.size());
+
+			for (const assetlib::BlendSpaceMember& member : space.members)
+			{
+				const std::optional<uint32_t> clip = assetlib::findClip(animations, member.clip);
+				core::throw_runtime_error_if(
+					!clip.has_value(),
+					"AssetManager: blend space '{}' names the clip '{}', which '{}' does not hold",
+					space.name,
+					member.clip,
+					blendSet->animations);
+
+				resolved.members.push_back({ *clip, member.parameter });
+			}
+
+			auto info         = BlendSpaceInfo();
+			info.name         = space.name;
+			info.parameterMin = space.members.front().parameter;
+			info.parameterMax = space.members.back().parameter;
+			spaces.emplace_back(std::move(info));
+
+			desc.spaces.push_back(std::move(resolved));
+		}
+
+		return desc;
 	}
 
 	bgl::FootPlantDesc

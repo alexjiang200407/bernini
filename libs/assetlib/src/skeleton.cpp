@@ -79,6 +79,16 @@ namespace assetlib
 		return std::nullopt;
 	}
 
+	std::optional<uint32_t>
+	findClip(const AnimationSet& animations, std::string_view name)
+	{
+		for (size_t i = 0; i < animations.clips.size(); ++i)
+			if (animations.stringPool.at(animations.clips[i].nameOffset) == name)
+				return static_cast<uint32_t>(i);
+
+		return std::nullopt;
+	}
+
 	namespace
 	{
 		void

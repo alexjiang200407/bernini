@@ -59,6 +59,17 @@ namespace assetlib
 	findBone(const Skeleton& skeleton, std::string_view name);
 
 	/**
+	 * The index of the clip named `name`, or nullopt. Linear, like findBone, and for the same
+	 * reason: a name is resolved once at load, never per frame.
+	 *
+	 * A clip is addressed by name wherever something authored names one -- a `.bblend`'s members --
+	 * because an index is a fact about one cook, and a re-import that adds a clip shifts every one
+	 * after it.
+	 */
+	[[nodiscard]] std::optional<uint32_t>
+	findClip(const AnimationSet& animations, std::string_view name);
+
+	/**
 	 * Each bone's model-space bind transform, in bone order. One forward pass, because the bones are
 	 * topologically sorted.
 	 */

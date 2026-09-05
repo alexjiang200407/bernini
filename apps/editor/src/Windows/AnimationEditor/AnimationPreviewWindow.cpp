@@ -478,6 +478,7 @@ AnimationPreviewWindow::LoadMesh(
 							game::AssetManager::SkinnedMesh skinned = m_Assets->AcquireSkinnedMesh(
 								rel,
 								animations,
+								{},
 								placement.meshIndex,
 								posed);
 
