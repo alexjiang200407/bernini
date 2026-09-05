@@ -92,6 +92,14 @@ namespace bgl
 		GetFootIK(MeshInstanceHandle instance) const = 0;
 
 		/**
+		 * Whether `instance` owns a foot-IK record: a live skinned placement on the per-instance
+		 * source whose rig authored legs. Exactly when SetFootIK and GetFootIK would not throw, for
+		 * a caller that cannot tell a rig's legs from the outside.
+		 */
+		[[nodiscard]] virtual bool
+		HasFootIK(MeshInstanceHandle instance) const noexcept = 0;
+
+		/**
 		 * Overrides the material of one submesh of ONE instance, leaving the geom's default -- and
 		 * every other instance of it -- alone. This is what a cosmetic skin is: one mesh, a different
 		 * material per unit. The renderer groups draws by the *resolved* material, so an opaque

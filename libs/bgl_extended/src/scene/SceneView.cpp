@@ -442,6 +442,17 @@ namespace bgl
 		}
 	}
 
+	bool
+	SceneView::HasFootIK(MeshInstanceHandle instance) const noexcept
+	{
+		if (!instance.IsValid() || !m_MeshBuffer.IsValid(instance.handle))
+		{
+			return false;
+		}
+		const MeshMeta& meta = m_MeshBuffer.MetaAt(instance.handle.index);
+		return meta.geomType == GeomType::kSkinnedMesh && meta.palette && meta.footIK;
+	}
+
 	FootIKDesc
 	SceneView::GetFootIK(MeshInstanceHandle instance) const
 	{

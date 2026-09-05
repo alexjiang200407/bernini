@@ -120,6 +120,27 @@ AnimationPreviewWindow::SetFootPlanting(const bool enabled)
 }
 
 void
+AnimationPreviewWindow::SetFootIK(const bgl::FootIKDesc& desc)
+{
+	m_FootIK = desc;
+
+	if (m_AnimatedDraws.empty())
+		return;
+
+	GetRenderer()->Invoke([&] {
+		for (const AnimatedDraw& draw : m_AnimatedDraws) ApplyFootIK(draw.instance);
+	});
+}
+
+void
+AnimationPreviewWindow::ApplyFootIK(const bgl::MeshInstanceHandle instance)
+{
+	bgl::ISceneView* view = GetPreviewView();
+	if (view->HasFootIK(instance))
+		view->SetFootIK(instance, m_FootIK);
+}
+
+void
 AnimationPreviewWindow::ReplaceGround()
 {
 	if (!m_GroundPlaced || !isVisible())
@@ -705,11 +726,13 @@ AnimationPreviewWindow::SpawnAnimated(
 {
 	// Phase 0 and rate 1: the panel's transport is the clock. `source` is the whole of what the two
 	// tiers differ by at spawn -- one geom, one upload, two places to read a pose from.
-	return m_Assets->CreateSkinnedInstance(
+	const bgl::MeshInstanceHandle instance = m_Assets->CreateSkinnedInstance(
 		GetPreviewViewRef(),
 		geom,
 		world,
 		bgl::SkinnedInstanceDesc{ clip, 0.0f, 1.0f, m_Source });
+	ApplyFootIK(instance);
+	return instance;
 }
 
 void

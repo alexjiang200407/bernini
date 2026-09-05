@@ -156,6 +156,14 @@ public:
 	void
 	SetFootPlanting(bool enabled);
 
+	/**
+	 * The instance's own IK record (editor::FootIKForSliders), written to every animated instance
+	 * now and to every one the panel respawns. Per instance rather than the scene's, so unlike the
+	 * switch it needs no undoing on hide.
+	 */
+	void
+	SetFootIK(const bgl::FootIKDesc& desc);
+
 	/** Back to the empty state: geometry released, environment kept, ground left flat. */
 	void
 	Clear();
@@ -249,6 +257,11 @@ private:
 	[[nodiscard]] bgl::MeshInstanceHandle
 	SpawnAnimated(bgl::GeomHandle geom, const glm::mat4& world, uint32_t clip);
 
+	// Writes m_FootIK into one instance. Render thread only. A crowd instance and a rig without
+	// legs own no record and are left alone.
+	void
+	ApplyFootIK(bgl::MeshInstanceHandle instance);
+
 	/**
 	 * Sets the scene's ground to the current slope and stands the floor under the rig at the same
 	 * tilt. Render thread only. The floor is a placement, and a placement does not move: it is
@@ -295,6 +308,9 @@ private:
 	// Both off until the panel says otherwise: a preview opens on the clip as authored.
 	bool m_FloorVisible = false;
 	bool m_FootPlanting = false;
+
+	// Weight one on every leg, which is the record a spawn already holds.
+	bgl::FootIKDesc m_FootIK;
 
 	// True while a rig is shown: the ground stands whether or not the floor is drawn.
 	bool m_GroundPlaced = false;

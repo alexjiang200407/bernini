@@ -194,6 +194,13 @@ private:
 	QLabel*    m_HeadingLabel  = nullptr;
 	QCheckBox* m_PlantFeet     = nullptr;
 
+	// The instance's own IK weights, in percent: how far the ankle is carried onto the ground, and
+	// how far the sole turns onto it. Committed on release like the slope, as one write of both.
+	Scrubber* m_IKWeightSlider = nullptr;
+	QLabel*   m_IKWeightLabel  = nullptr;
+	Scrubber* m_SoleTurnSlider = nullptr;
+	QLabel*   m_SoleTurnLabel  = nullptr;
+
 	QListWidget* m_ClipList     = nullptr;
 	QLabel*      m_ClipMetadata = nullptr;
 
