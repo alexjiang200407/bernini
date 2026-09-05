@@ -26,11 +26,11 @@ namespace editor
 
 	/**
 	 * The per-pass GPU breakdown: one line per pass in the order the frame ran them, its
-	 * milliseconds, and their total, in columns that line up in a fixed-width face. Plain text, so
-	 * the same table goes under the readout's tooltip and into the log.
+	 * milliseconds, and their total, in columns that line up in a fixed-width face; what Render >
+	 * Log GPU Pass Timings writes to editor.log.
 	 *
-	 * @return empty when there are no rows -- timing off, or no timed frame has landed yet -- so the
-	 *         tooltip is the plain one rather than a table with nothing in it.
+	 * @return empty when there are no rows -- timing off, or no timed frame has landed yet -- so
+	 *         nothing is logged rather than a table with nothing in it.
 	 */
 	[[nodiscard]] QString
 	PassTimingsText(const std::vector<bgl::PassTiming>& rows);

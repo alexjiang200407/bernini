@@ -424,35 +424,28 @@ namespace bgl
 		}
 		frame.pending = false;
 
-		std::vector<uint64_t> ticks(frame.slotsUsed);
-		rt.GetTimingHeap()->Read(frame.firstSlot, ticks);
+		// Both buffers keep their capacity from frame to frame: the scratch here, the rows on the
+		// target, so a resolve allocates only when a frame has more passes than any before it.
+		m_TimingTicks.resize(frame.slotsUsed);
+		rt.GetTimingHeap()->Read(frame.firstSlot, m_TimingTicks);
 
 		const double ticksPerSecond = m_CommandQueue->GetTimestampFrequency();
 
-		std::vector<PassTiming> rows;
-		rows.reserve(frame.entries.size());
+		std::vector<PassTiming>& rows = rt.EditPassTimings();
+		rows.clear();
 		for (const PassTimer::Entry& entry : frame.entries)
 		{
 			PassTiming& row = rows.emplace_back();
 			row.name        = entry.name;
 
-			if (!entry.sampled || ticksPerSecond <= 0.0)
+			if (entry.sampled)
 			{
-				continue;
+				row.milliseconds = TimestampSpanMilliseconds(
+					m_TimingTicks[entry.startSlot - frame.firstSlot],
+					m_TimingTicks[entry.endSlot - frame.firstSlot],
+					ticksPerSecond);
 			}
-
-			const uint64_t start = ticks[entry.startSlot - frame.firstSlot];
-			const uint64_t end   = ticks[entry.endSlot - frame.firstSlot];
-			if (start == ITimestampHeap::c_UnwrittenTimestamp ||
-			    end == ITimestampHeap::c_UnwrittenTimestamp || end < start)
-			{
-				continue;
-			}
-
-			row.milliseconds = static_cast<double>(end - start) * 1000.0 / ticksPerSecond;
 		}
-
-		rt.SetPassTimings(std::move(rows));
 	}
 
 	std::vector<PassTiming>
@@ -536,7 +529,7 @@ namespace bgl
 		m_FrameGraph.Reset();
 		if (rt.IsGpuTimingEnabled() && rt.GetTimingHeap() != nullptr)
 		{
-			m_PassTimer.Arm(rt.GetTimingHeap(), index * c_TimingSlotsPerFrame, c_MaxTimedPasses);
+			m_PassTimer.Arm(*rt.GetTimingHeap(), index * c_TimingSlotsPerFrame, c_MaxTimedPasses);
 			m_FrameGraph.SetPassTimer(&m_PassTimer);
 		}
 		else
@@ -1001,7 +994,7 @@ namespace bgl
 			frame.slotsUsed                      = m_PassTimer.GetSlotsUsed();
 			frame.entries.assign(m_PassTimer.Entries().begin(), m_PassTimer.Entries().end());
 			frame.pending = timed;
-			m_CommandList->ResolveTimestamps(rt.GetTimingHeap(), frame.firstSlot, frame.slotsUsed);
+			m_CommandList->ResolveTimestamps(*rt.GetTimingHeap(), frame.firstSlot, frame.slotsUsed);
 			m_PassTimer.Disarm();
 			m_FrameGraph.SetPassTimer(nullptr);
 		}

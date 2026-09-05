@@ -86,7 +86,7 @@ namespace bgl::test
 		{}
 
 		void
-		BeginTiming(ITimestampHeap*, uint32_t, uint32_t) noexcept override
+		BeginTiming(ITimestampHeap&, uint32_t, uint32_t) noexcept override
 		{}
 
 		bool
@@ -96,7 +96,7 @@ namespace bgl::test
 		}
 
 		void
-		ResolveTimestamps(ITimestampHeap*, uint32_t, uint32_t) noexcept override
+		ResolveTimestamps(ITimestampHeap&, uint32_t, uint32_t) noexcept override
 		{}
 
 		void

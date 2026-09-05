@@ -184,7 +184,7 @@ namespace bgl
 		 * @pre no span is open on this list.
 		 */
 		virtual void
-		BeginTiming(ITimestampHeap* heap, uint32_t startSlot, uint32_t endSlot) noexcept = 0;
+		BeginTiming(ITimestampHeap& heap, uint32_t startSlot, uint32_t endSlot) noexcept = 0;
 
 		/**
 		 * Closes the open span.
@@ -201,7 +201,7 @@ namespace bgl
 		 * submission completes. Record after the spans that wrote them, on the same list.
 		 */
 		virtual void
-		ResolveTimestamps(ITimestampHeap* heap, uint32_t first, uint32_t count) noexcept = 0;
+		ResolveTimestamps(ITimestampHeap& heap, uint32_t first, uint32_t count) noexcept = 0;
 
 		virtual void
 		SetMeshletState(const MeshletState& gfxState) noexcept = 0;

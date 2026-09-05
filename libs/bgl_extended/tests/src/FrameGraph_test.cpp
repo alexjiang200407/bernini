@@ -107,7 +107,7 @@ namespace
 		CopyTextureToReadback(ReadbackBufferHandle, TextureHandle) noexcept override
 		{}
 		void
-		BeginTiming(ITimestampHeap*, uint32_t startSlot, uint32_t endSlot) noexcept override
+		BeginTiming(ITimestampHeap&, uint32_t startSlot, uint32_t endSlot) noexcept override
 		{
 			if (log != nullptr)
 			{
@@ -120,7 +120,7 @@ namespace
 			return true;
 		}
 		void
-		ResolveTimestamps(ITimestampHeap*, uint32_t, uint32_t) noexcept override
+		ResolveTimestamps(ITimestampHeap&, uint32_t, uint32_t) noexcept override
 		{}
 		void
 		Barrier(BufferHandle handle, const BufferBarrierDesc&) noexcept override
@@ -1078,7 +1078,7 @@ TEST_CASE("FrameGraph: the pass timer spans every kept pass and skips the culled
 	auto          heap = core::SharedRef<NullTimestampHeap>::Make();
 
 	PassTimer timer;
-	timer.Arm(heap.Get(), 4, 4);
+	timer.Arm(*heap, 4, 4);
 
 	FrameGraph fg;
 	fg.SetPassTimer(&timer);
@@ -1129,7 +1129,7 @@ TEST_CASE("FrameGraph: passes past the timer's capacity are listed unsampled", "
 	auto          heap = core::SharedRef<NullTimestampHeap>::Make();
 
 	PassTimer timer;
-	timer.Arm(heap.Get(), 0, 1);
+	timer.Arm(*heap, 0, 1);
 
 	FrameGraph fg;
 	fg.SetPassTimer(&timer);

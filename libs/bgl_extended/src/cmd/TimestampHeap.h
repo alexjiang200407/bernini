@@ -44,4 +44,19 @@ namespace bgl
 	};
 
 	using TimestampHeapRef = core::SharedRef<ITimestampHeap>;
+
+	/**
+	 * The span between two slots in milliseconds, or zero when either slot went unwritten, the
+	 * span runs backwards, or the queue could not say its tick rate.
+	 */
+	[[nodiscard]] constexpr double
+	TimestampSpanMilliseconds(uint64_t start, uint64_t end, double ticksPerSecond) noexcept
+	{
+		if (start == ITimestampHeap::c_UnwrittenTimestamp ||
+		    end == ITimestampHeap::c_UnwrittenTimestamp || end < start || ticksPerSecond <= 0.0)
+		{
+			return 0.0;
+		}
+		return static_cast<double>(end - start) * 1000.0 / ticksPerSecond;
+	}
 }

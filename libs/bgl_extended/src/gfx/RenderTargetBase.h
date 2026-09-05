@@ -146,10 +146,11 @@ namespace bgl
 			return m_PassTimings;
 		}
 
-		void
-		SetPassTimings(std::vector<PassTiming> timings) noexcept
+		/** The rows to overwrite in place, so a resolve reuses their capacity. */
+		[[nodiscard]] std::vector<PassTiming>&
+		EditPassTimings() noexcept
 		{
-			m_PassTimings = std::move(timings);
+			return m_PassTimings;
 		}
 
 		void

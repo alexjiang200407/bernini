@@ -86,14 +86,14 @@ TEST_CASE("A timed span brackets the work recorded inside it", "[timing]")
 	cmdList->Open(cmdQueue, cmdAllocator);
 
 	// Slots 0-1: a span with a dispatch in it.
-	cmdList->BeginTiming(heap.Get(), 0, 1);
+	cmdList->BeginTiming(*heap, 0, 1);
 	cmdList->SetComputeState(state);
 	cmdList->Dispatch(1, 1, 1);
 	const bool dispatchSampled = cmdList->EndTiming();
 
 	// Slots 2-3: a span holding a barrier and nothing else. D3D12 samples it regardless; Metal has
 	// no encoder to hang a sample on and must say so.
-	cmdList->BeginTiming(heap.Get(), 2, 3);
+	cmdList->BeginTiming(*heap, 2, 3);
 	cmdList->Barrier(
 		outBuf,
 		bgl::BufferBarrierDesc()
@@ -103,7 +103,7 @@ TEST_CASE("A timed span brackets the work recorded inside it", "[timing]")
 			.AddAccessAfter(bgl::BarrierAccessFlag::kUnorderedAccess));
 	const bool barrierSampled = cmdList->EndTiming();
 
-	cmdList->ResolveTimestamps(heap.Get(), 0, 4);
+	cmdList->ResolveTimestamps(*heap, 0, 4);
 	cmdList->Close();
 
 	cmdQueue->WaitForFenceCPUBlocking(cmdQueue->ExecuteCommandList(cmdList));

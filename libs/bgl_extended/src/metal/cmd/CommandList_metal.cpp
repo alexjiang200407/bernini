@@ -529,20 +529,19 @@ namespace bgl
 	}
 
 	void
-	CommandList::BeginTiming(ITimestampHeap* heap, uint32_t startSlot, uint32_t endSlot) noexcept
+	CommandList::BeginTiming(ITimestampHeap& heap, uint32_t startSlot, uint32_t endSlot) noexcept
 	{
 		gassert(m_Open, "BeginTiming on a closed command list");
-		gassert(heap != nullptr, "BeginTiming needs a heap");
 		gassert(m_TimingBuffer == nullptr, "BeginTiming while a timed span is open");
 		gassert(
-			startSlot < heap->GetCapacity() && endSlot < heap->GetCapacity(),
+			startSlot < heap.GetCapacity() && endSlot < heap.GetCapacity(),
 			"BeginTiming slot outside the heap");
 
 		// A stage-boundary sample belongs to an encoder, so an encoder carried over from before the
 		// span would have its start sampled where the previous work began.
 		EndEncoder();
 
-		m_TimingBuffer       = heap->As<TimestampHeap>()->GetMTLSampleBuffer();
+		m_TimingBuffer       = heap.As<TimestampHeap>()->GetMTLSampleBuffer();
 		m_TimingStartSlot    = startSlot;
 		m_TimingEndSlot      = endSlot;
 		m_TimingStartSampled = false;

@@ -82,7 +82,7 @@ public:
 	SetOutlineEnabled(bool enabled);
 
 	// Times every pass of this viewport's frames on the GPU; the rows ride FrameStatsUpdated as the
-	// breakdown the status bar shows under its readout. Off by default: a timed frame is not free.
+	// table Log GPU Pass Timings writes. Off by default: a timed frame is not free.
 	void
 	SetGpuTimingEnabled(bool enabled);
 

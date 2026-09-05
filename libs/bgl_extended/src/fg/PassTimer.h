@@ -35,10 +35,11 @@ namespace bgl
 		 * Arms the timer for one frame over slots [firstSlot, firstSlot + 2 * maxPasses) of `heap`.
 		 * A pass beyond `maxPasses` is listed unsampled, and the overflow logged once.
 		 *
-		 * @pre `heap` outlives the frame; the range lies within its capacity.
+		 * @pre `heap` outlives the frame -- the timer keeps its address; the range lies within its
+		 *      capacity.
 		 */
 		void
-		Arm(ITimestampHeap* heap, uint32_t firstSlot, uint32_t maxPasses) noexcept;
+		Arm(ITimestampHeap& heap, uint32_t firstSlot, uint32_t maxPasses) noexcept;
 
 		void
 		Disarm() noexcept;

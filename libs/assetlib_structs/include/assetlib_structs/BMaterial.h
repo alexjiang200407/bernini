@@ -92,10 +92,8 @@ namespace assetlib
 		AlphaMode alphaMode   = AlphaMode::kOpaque;
 		float     alphaCutoff = 0.5f;
 
-		// Whether a cut-out, hashed or blended surface draws its back faces. An opaque surface
-		// never does, whatever this says. True by default because every such material drew both
-		// sides before the flag existed, and a document without the key must keep its look; an
-		// import writes what the glTF said.
+		// Back faces on a cut-out, hashed or blended surface; opaque never draws them. True by
+		// default, since every such material drew both sides before the key existed.
 		bool doubleSided = true;
 
 		// What baseColorFactor.a means under AlphaMode::kBlend: 0 for coverage (hair, foliage), 1 for

@@ -93,14 +93,14 @@ namespace bgl
 		EndEvent() noexcept override;
 
 		void
-		BeginTiming(ITimestampHeap* heap, uint32_t startSlot, uint32_t endSlot) noexcept override;
+		BeginTiming(ITimestampHeap& heap, uint32_t startSlot, uint32_t endSlot) noexcept override;
 
 		bool
 		EndTiming() noexcept override;
 
 		// Nothing to record: the heap resolves its samples on the CPU once the fence has passed.
 		void
-		ResolveTimestamps(ITimestampHeap*, uint32_t, uint32_t) noexcept override
+		ResolveTimestamps(ITimestampHeap&, uint32_t, uint32_t) noexcept override
 		{}
 
 		[[nodiscard]] bool

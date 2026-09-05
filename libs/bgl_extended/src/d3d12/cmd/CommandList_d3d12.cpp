@@ -324,16 +324,15 @@ namespace bgl
 	}
 
 	void
-	CommandList::BeginTiming(ITimestampHeap* heap, uint32_t startSlot, uint32_t endSlot) noexcept
+	CommandList::BeginTiming(ITimestampHeap& heap, uint32_t startSlot, uint32_t endSlot) noexcept
 	{
 		gassert(m_Open, "BeginTiming on a closed command list");
-		gassert(heap != nullptr, "BeginTiming needs a heap");
 		gassert(m_TimingHeap == nullptr, "BeginTiming while a timed span is open");
 		gassert(
-			startSlot < heap->GetCapacity() && endSlot < heap->GetCapacity(),
+			startSlot < heap.GetCapacity() && endSlot < heap.GetCapacity(),
 			"BeginTiming slot outside the heap");
 
-		m_TimingHeap    = heap->As<TimestampHeap>()->GetD3D12QueryHeap();
+		m_TimingHeap    = heap.As<TimestampHeap>()->GetD3D12QueryHeap();
 		m_TimingEndSlot = endSlot;
 		m_CommandList->EndQuery(m_TimingHeap, D3D12_QUERY_TYPE_TIMESTAMP, startSlot);
 	}
@@ -349,18 +348,17 @@ namespace bgl
 	}
 
 	void
-	CommandList::ResolveTimestamps(ITimestampHeap* heap, uint32_t first, uint32_t count) noexcept
+	CommandList::ResolveTimestamps(ITimestampHeap& heap, uint32_t first, uint32_t count) noexcept
 	{
 		gassert(m_Open, "ResolveTimestamps on a closed command list");
-		gassert(heap != nullptr, "ResolveTimestamps needs a heap");
-		gassert(first + count <= heap->GetCapacity(), "ResolveTimestamps outside the heap");
+		gassert(first + count <= heap.GetCapacity(), "ResolveTimestamps outside the heap");
 
 		if (count == 0)
 		{
 			return;
 		}
 
-		auto* d3d12Heap = heap->As<TimestampHeap>();
+		auto* d3d12Heap = heap.As<TimestampHeap>();
 		m_CommandList->ResolveQueryData(
 			d3d12Heap->GetD3D12QueryHeap(),
 			D3D12_QUERY_TYPE_TIMESTAMP,

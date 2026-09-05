@@ -9,15 +9,14 @@
 namespace bgl
 {
 	void
-	PassTimer::Arm(ITimestampHeap* heap, uint32_t firstSlot, uint32_t maxPasses) noexcept
+	PassTimer::Arm(ITimestampHeap& heap, uint32_t firstSlot, uint32_t maxPasses) noexcept
 	{
-		gassert(heap != nullptr, "PassTimer::Arm needs a heap");
 		gassert(!m_PassOpen, "PassTimer::Arm inside a pass");
 		gassert(
-			firstSlot + 2 * maxPasses <= heap->GetCapacity(),
+			firstSlot + 2 * maxPasses <= heap.GetCapacity(),
 			"PassTimer::Arm range outside the heap");
 
-		m_Heap      = heap;
+		m_Heap      = &heap;
 		m_FirstSlot = firstSlot;
 		m_NextSlot  = firstSlot;
 		m_EndSlot   = firstSlot + 2 * maxPasses;
@@ -61,7 +60,7 @@ namespace bgl
 		entry.startSlot = m_NextSlot;
 		entry.endSlot   = m_NextSlot + 1;
 		m_NextSlot += 2;
-		cmd->BeginTiming(m_Heap, entry.startSlot, entry.endSlot);
+		cmd->BeginTiming(*m_Heap, entry.startSlot, entry.endSlot);
 	}
 
 	void

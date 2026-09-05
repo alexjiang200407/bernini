@@ -72,14 +72,6 @@
 #include <utility>
 #include <vector>
 
-namespace
-{
-	// What the frame-time readout's tooltip says on its own; the GPU breakdown hangs under it.
-	constexpr const char* c_FrameStatsTip =
-		"The rendering viewport's frame time: mean and worst over the last 120 frames, and how "
-		"many frames have overrun a vblank since the tab was selected.";
-}
-
 MainWindow::MainWindow(
 	QWidget*                 parent,
 	std::filesystem::path    configPath,
@@ -432,16 +424,15 @@ MainWindow::SetUpRenderMenu()
 	timing->setCheckable(true);
 	timing->setChecked(false);
 	timing->setStatusTip(
-		"Time every pass of the viewports' frames on the GPU and list them under the frame-time "
-		"readout's tooltip. Costs a little per frame, which is why it is off until asked for.");
+		"Time every pass of the viewports' frames on the GPU, for Log GPU Pass Timings to write "
+		"out. Costs a little per frame, which is why it is off until asked for.");
 
 	connect(timing, &QAction::toggled, this, [this](bool enabled) {
 		for (RenderTargetWindow* view : findChildren<RenderTargetWindow*>())
 			view->SetGpuTimingEnabled(enabled);
 	});
 
-	// One frame's table into editor.log, for a number that has to leave the machine or be read
-	// by something that cannot hover a tooltip. Needs timing on, so it follows the toggle.
+	// One frame's table into editor.log. Needs timing on, so it follows the toggle.
 	auto* logTiming = render->addAction("Log GPU Pass Timings");
 	logTiming->setShortcut(QKeySequence("Ctrl+Shift+T"));
 	logTiming->setEnabled(false);
@@ -1009,7 +1000,9 @@ MainWindow::SetUpFrameStats()
 	m_FrameStats->setObjectName("FrameStats");
 	// All three figures describe the current visit: a viewport clears them when it leaves the frame
 	// loop, so none of them reaches back to a previous time the tab was up.
-	m_FrameStats->setToolTip(c_FrameStatsTip);
+	m_FrameStats->setToolTip(
+		"The rendering viewport's frame time: mean and worst over the last 120 frames, and how "
+		"many frames have overrun a vblank since the tab was selected.");
 
 	// A permanent widget sits to the right of the bar and survives showMessage, so the project and
 	// texture-cleanup messages cannot overwrite the readout.
@@ -1036,13 +1029,11 @@ MainWindow::SetUpFrameStats()
 					{
 						m_FrameStatsSource = view;
 						m_FrameStats->setText(editor::FrameStatsText(name, std::nullopt));
-						m_FrameStats->setToolTip(c_FrameStatsTip);
 					}
 					else if (m_FrameStatsSource == view)
 					{
 						m_FrameStatsSource = nullptr;
 						m_FrameStats->clear();
-						m_FrameStats->setToolTip(c_FrameStatsTip);
 					}
 				}));
 
@@ -1066,15 +1057,9 @@ MainWindow::SetUpFrameStats()
 				                                .maxMs  = maxMs,
 				                                .missed = missed }));
 
-					// The plain tip stands alone; the breakdown hangs under it while there is one.
-					// Both halves are rich text, or Qt would take the <pre> for prose.
-					m_FrameStats->setToolTip(
-						gpuPasses.isEmpty() ? QString(c_FrameStatsTip) :
-											  QString("<p>%1</p><pre>%2</pre>")
-												  .arg(
-													  QString(c_FrameStatsTip).toHtmlEscaped(),
-													  gpuPasses.toHtmlEscaped()));
-
+					// The breakdown is one frame of numbers, which is a log's to hold and a
+					// tooltip's to misread; a stats window that graphs the rows is the readout it
+					// wants, and is not this.
 					if (m_LogNextPassTimings && !gpuPasses.isEmpty())
 					{
 						m_LogNextPassTimings = false;

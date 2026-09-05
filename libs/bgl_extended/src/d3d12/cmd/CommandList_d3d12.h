@@ -75,13 +75,13 @@ namespace bgl
 		EndEvent() noexcept override;
 
 		void
-		BeginTiming(ITimestampHeap* heap, uint32_t startSlot, uint32_t endSlot) noexcept override;
+		BeginTiming(ITimestampHeap& heap, uint32_t startSlot, uint32_t endSlot) noexcept override;
 
 		bool
 		EndTiming() noexcept override;
 
 		void
-		ResolveTimestamps(ITimestampHeap* heap, uint32_t first, uint32_t count) noexcept override;
+		ResolveTimestamps(ITimestampHeap& heap, uint32_t first, uint32_t count) noexcept override;
 
 		void
 		Barrier(BufferHandle handle, const BufferBarrierDesc& barrier) noexcept override;
@@ -195,7 +195,9 @@ namespace bgl
 		uint64_t m_RecordingVersion   = 0;
 		bool     m_Open               = false;
 
-		// The timed span in flight, if any; see BeginTiming.
+		// The timed span in flight, if any; see BeginTiming. Borrowed for the span, like the queue
+		// above: the heap is the render target's, ref-counted there, and outlives every list that
+		// records into it.
 		ID3D12QueryHeap* m_TimingHeap    = nullptr;
 		uint32_t         m_TimingEndSlot = 0;
 	};

@@ -206,6 +206,9 @@ namespace bgl
 		// to the graph for that frame.
 		PassTimer m_PassTimer;
 
+		// The slots of the frame being resolved; kept for its capacity.
+		std::vector<uint64_t> m_TimingTicks;
+
 		// This frame's overlay draws, resolved at DrawOverlay, and the overlays they came from --
 		// held so a caller's last ref cannot free one before the pass flushes it.
 		std::vector<OverlayPass::Draw>        m_OverlayDraws;
