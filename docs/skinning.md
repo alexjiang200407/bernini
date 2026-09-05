@@ -391,6 +391,20 @@ vector.
 own floor this costs nothing — the contact is already there and the solve is an identity — and where
 a clip leaves a planted foot above the floor, this is what seats it.
 
+**The target is two terms, and the weight scales only one of them.** The *seat* is the drop from the
+height the clip authored the contact at onto the floor it was authored over — model `y = 0`, where
+`groundClips` rests a clip — and that is the weighted half. The *lift* is however far the real ground
+departs from that floor under the contact, and every weight gets it. At weight one the sum is
+`ground - contact` exactly, so the paragraph above is unchanged; below one the foot keeps the height
+the animator gave it and rides the ground beneath it. The height is read off the contact's model-space
+`y` rather than by dropping the contact onto that floor: the two agree wherever an instance stands
+upright, and the drop divides by the floor normal's component along world down, which an instance
+rotated onto its side has none of.
+
+Without the split a foot at any weight below one sat between the clip's floor and the real ground,
+which on ground above that floor is inside it — and every swing arc and the three ramp frames either
+side of every planted run are weighted below one.
+
 **Which is why a rig with an avatar is floored by its soles** (`groundClipsForRig`, the pair of
 `bakePlantWeightsForRig` and called before it). The lowest vertex need not be a foot: on the test
 Dog it is not, and grounding on it left `Idle`'s soles 1 cm and 4 cm above zero, so every planted
@@ -407,6 +421,11 @@ every locomotion clip puts both feet down — and no authored override can fix i
 grounded is the case foot planting exists for, so a weight of 1 is read as *this foot is on the
 ground* and the solve makes that true. The two rules agree exactly on a clip that is grounded; they
 differ only on a foot the clip left off its floor.
+
+The departure is about weight 1 alone. Below it the lift *is* Unreal's height term, applied
+unconditionally exactly as `AnimNode_FootPlacement` applies it, with the weight gating only the seat
+and the turn — the lock and the orientation there. Unity's humanoid Foot IK is the other reading:
+goal-only, a lifted foot not offset at all and no terrain under a swing.
 
 A foot the clip rests flat touches along its whole sole and lands on it exactly; one posed
 on its toe lands on the toe with the heel where the animator put it — the Coyote's `Success` stands
@@ -433,8 +452,10 @@ nothing at the ground: the point that was dropped onto it is the point that stan
 
 **Everything is scaled by a plant weight** — one byte per leg per frame, packed four to a uint,
 baked by the cook and sampled at the same fractional frame the pose is. A weight of zero is exactly
-the pose the rig would have had. A weight rather than a flag because a foot that snapped between the
-two states would pop, which is what the cook's ramp at each end of a planted run exists to remove.
+the pose the rig would have had *on the floor the clip was authored over*; on any other ground it is
+that pose carried by the lift, which is the whole of the split above. A weight rather than a flag
+because a foot that snapped between the two states would pop, which is what the cook's ramp at each
+end of a planted run exists to remove.
 
 **Planting is gated at four scopes, and per instance is not one of them.** A rig plants only if it
 authored legs (`rig.legs.Null()` — no `.bavatar`, no planting); a clip plants only if the avatar's
@@ -443,6 +464,12 @@ and the scene plants at all only while `IScene::SetFootPlanting` is on. The scen
 that way because the ground is — `SetGround` holds one plane and the solve is defined against it —
 so nothing today varies per instance that a fifth scope would express. Two instances of one rig
 therefore always agree about whether they plant.
+
+The middle two gates reach the seat and the turn, not the lift: the shader sees a weight byte and
+cannot tell a clip the avatar excluded from a swing frame inside one that plants, so `unplanted`
+means *this clip never seats or turns a foot* rather than *this clip is untouched*. On the flat floor
+at `y = 0` those are the same sentence, since the lift is zero there. The two outer gates are whole:
+a rig without legs and a scene with planting off run no solve at all.
 
 ### What the cook derives
 
@@ -571,8 +598,14 @@ right only when the target sits directly below the hip; along a slope the target
 and after dropping it is nearer the hip than that shortfall assumed, so the foot would still come up
 short on exactly the ground this feature exists for. The distance is the smaller root of
 `|v + d*n| = reach` instead — one `sqrt`, exact. A target too far to one side for any drop to reach
-gives a negative discriminant, and the clamp then yields the drop that gets closest. A leg at weight zero targets
-where its ankle already is, so it is reachable by construction and contributes nothing.
+gives a negative discriminant, and the clamp then yields the drop that gets closest.
+
+Each leg's shortfall is scaled by its plant weight before the max. The drop exists so a *planted*
+foot reaches the ground; once a swinging foot has a target of its own, a foot passing out over
+ground below its reach would otherwise sink the whole body it hangs off — Unreal's
+pelvis-toward-the-lowest-foot without Unreal's interpolation or its clamp. Scaled, such a leg stops
+short in the air where it is least visible, and a leg at weight zero contributes nothing, exactly as
+it did when its target was its own ankle.
 
 The targets are re-derived after the drop rather than reused: every joint moved, so a target
 measured before it belongs to a rig that no longer exists. Both derivations go through one

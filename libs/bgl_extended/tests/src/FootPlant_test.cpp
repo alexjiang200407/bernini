@@ -109,9 +109,13 @@ namespace
 	/**
 	 * Frame 0 is the bind pose itself, so at rate 0 nothing but the solve can move a bone. Frame 1
 	 * swings the hip, which only a case that runs the clock ever reaches.
+	 *
+	 * `lift` raises the whole rig off the floor `groundClips` rested it on, in the clip and not in
+	 * the bind, which is what a frame mid-swing looks like: the foot is that far above the floor it
+	 * was authored over, and the bind the palette is read against has not moved.
 	 */
 	assetlib::AnimationSet
-	MakeStillClip(float rootScale = 1.0f)
+	MakeStillClip(float rootScale = 1.0f, float lift = 0.0f)
 	{
 		auto set      = assetlib::AnimationSet();
 		set.boneCount = c_Bones;
@@ -124,6 +128,8 @@ namespace
 				const auto swung = glm::quat(0.97437f, 0.0f, 0.0f, 0.22495f);
 
 				assetlib::Transform sample = LocalOf(b, rootScale);
+				if (b == 0)
+					sample.translation.y += lift;
 				if (f == 1 && b == c_Hip)
 					sample.rotation = swung;
 				set.samples.push_back(sample);
@@ -149,6 +155,7 @@ namespace
 		glm::vec3 solePoint  = c_SolePoint;  // the sole's offset from the ankle, model units
 		glm::vec3 soleNormal = c_SoleNormal;
 		float     rootScale  = 1.0f;
+		float     lift       = 0.0f;  // how far the clip holds the rig off its authored floor
 		bool      plantFeet  = true;
 	};
 
@@ -288,7 +295,7 @@ namespace
 
 		const bgl::RigHandle rig = scene->AddRig(
 			MakeLegRig(options.rootScale),
-			MakeStillClip(options.rootScale),
+			MakeStillClip(options.rootScale, options.lift),
 			MakeLeg(weight, options));
 		REQUIRE(rig.IsValid());
 
@@ -375,22 +382,95 @@ TEST_CASE("a planted foot meets the ground under it", "[skinned][pose][plant][re
 		}
 	}
 
-	SECTION("half a weight moves the foot half way")
+	SECTION("half a weight seats a lifted foot half way")
 	{
-		// Ground the rig has to reach down to: on flat ground at the authored floor the plant is an
-		// identity, so halving it would compare nothing with nothing.
-		const auto low =
-			bgl::GroundPlaneDesc{ glm::vec3(0.0f, -0.2f, 0.0f), glm::vec3(0.0f, 1.0f, 0.0f) };
+		// A foot the clip holds off its floor, on the floor itself: the ground has not departed from
+		// where the clip was authored, so the lift is zero and the seat -- the distance down onto the
+		// floor -- is the whole correction. What the weight scales is then exactly that distance.
+		constexpr float c_Lift = 0.2f;
 
-		const Posed full = PoseLeg(low, 255);
-		const Posed half = PoseLeg(low, 128);
+		const Posed none = PoseLeg(c_Flat, 0, { .lift = c_Lift });
+		const Posed half = PoseLeg(c_Flat, 128, { .lift = c_Lift });
+		const Posed full = PoseLeg(c_Flat, 255, { .lift = c_Lift });
+
+		CHECK(none.Sole().y == Catch::Approx(c_Lift).margin(1e-3));
+		CHECK(full.Sole().y == Catch::Approx(0.0f).margin(1e-3));
 
 		// 128/255 of the way, which is what a weight interpolates -- not a threshold.
 		const float fraction = 128.0f / 255.0f;
-		const float bind     = c_Bind[c_Ankle].y;
-		CHECK(
-			half.Bone(c_Ankle).y ==
-			Catch::Approx(bind + fraction * (full.Bone(c_Ankle).y - bind)).margin(2e-3));
+		CHECK(half.Sole().y == Catch::Approx(c_Lift * (1.0f - fraction)).margin(2e-3));
+	}
+}
+
+// Every swing arc and the three ramp frames either side of every planted run are weighted below one:
+// the cook drops the weight the moment a sole leaves the floor and ramps it back as it lands. Such a
+// foot used to hang wherever the clip's own floor put it, which on any ground but that floor is the
+// wrong height -- and on ground above it, inside the ground.
+TEST_CASE(
+	"a foot below full weight is carried by the ground under it",
+	"[skinned][pose][plant][render]")
+{
+	// The rig held a fifth of a unit off the floor it was authored over: one frame of a swing.
+	constexpr float c_Lift = 0.2f;
+
+	SECTION("on the floor it was authored over the pose is untouched")
+	{
+		const Posed posed = PoseLeg(c_Flat, 0, { .lift = c_Lift });
+
+		for (uint32_t bone = 0; bone < c_Bones; ++bone)
+		{
+			INFO("bone " << bone);
+			bgl::test::CheckNear(posed.Bone(bone), c_Bind[bone] + glm::vec3(0.0f, c_Lift, 0.0f));
+		}
+	}
+
+	SECTION("over a slope it keeps its authored height above the ground beneath it")
+	{
+		// The foot does not stand over the plane's origin, so the height under it is the slope's
+		// rather than the origin's: a solve that sampled the wrong point passes on flat ground and
+		// fails here.
+		const float radians = glm::radians(15.0f);
+		const auto  normal  = glm::vec3(std::sin(radians), std::cos(radians), 0.0f);
+		const auto  origin  = glm::vec3(-0.5f, 0.25f, 0.0f);
+
+		const Posed posed = PoseLeg(bgl::GroundPlaneDesc{ origin, normal }, 0, { .lift = c_Lift });
+
+		// Where the plane sits under the contact, which is directly below the ankle at x = 0.
+		const float ground = origin.y - 0.5f * std::tan(radians);
+
+		CHECK(posed.Sole().y == Catch::Approx(ground + c_Lift).margin(2e-3));
+
+		// So the sole is above the plane and not through it. It used to sit at c_Lift, which is
+		// below a ground at 0.116, and drawing a foot inside the slope is the whole of the bug.
+		CHECK(glm::dot(posed.Sole() - origin, normal) > 0.0f);
+	}
+
+	SECTION("and it does not pull the rig down after it when it cannot reach")
+	{
+		// Ground far past the leg's reach. A *planted* foot there lowers the whole rig, which is
+		// what the drop exists for; a swinging one must not, or a foot passing out over a ledge
+		// would sink the body it hangs off. So the leg stops short, in the air, and the pelvis is
+		// exactly where the clip left it.
+		const auto below =
+			bgl::GroundPlaneDesc{ glm::vec3(0.0f, -4.0f, 0.0f), glm::vec3(0.0f, 1.0f, 0.0f) };
+
+		const Posed posed = PoseLeg(below, 0, { .lift = c_Lift });
+
+		bgl::test::CheckNear(
+			posed.Bone(c_Pelvis),
+			c_Bind[c_Pelvis] + glm::vec3(0.0f, c_Lift, 0.0f));
+	}
+
+	SECTION("a full weight still seats it on the ground, so the lift is under the seat")
+	{
+		const float radians = glm::radians(15.0f);
+		const auto  normal  = glm::vec3(std::sin(radians), std::cos(radians), 0.0f);
+		const auto  origin  = glm::vec3(-0.5f, 0.25f, 0.0f);
+
+		const Posed posed =
+			PoseLeg(bgl::GroundPlaneDesc{ origin, normal }, 255, { .lift = c_Lift });
+
+		CHECK(glm::dot(posed.Sole() - origin, normal) == Catch::Approx(0.0f).margin(2e-3));
 	}
 }
 

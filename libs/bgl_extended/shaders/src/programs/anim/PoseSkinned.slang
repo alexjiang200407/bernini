@@ -149,8 +149,9 @@ struct LegPose
     float3 turnAxis;
     float turnAngle;
 
-    // 0 when the chain can reach. A leg at weight 0 targets where its ankle already is, so it is
-    // reachable by construction and contributes nothing to the drop.
+    // 0 when the chain can reach, and scaled by the plant weight beyond that: the drop exists so a
+    // *planted* foot reaches the ground, and a swing foot that cannot reach the height the terrain
+    // carries it to stops short in the air rather than pulling the whole rig down after it.
     float deficit;
 };
 
@@ -209,7 +210,17 @@ LegPose ReadLeg(
     let heel = OnSolePlane(float3(0.0, 0.0, 0.0), sole, soleUp);
     let ball = OnSolePlane(toe, sole, soleUp);
     let contact = pose.ankle + (dot(heel, plane.xyz) < dot(ball, plane.xyz) ? heel : ball);
-    pose.target = lerp(pose.ankle, pose.ankle + (SampleGround(plane, down, contact) - contact), pose.weight);
+
+    // Two terms, and the weight scales only one. The seat drops the contact from the height the clip
+    // authored it at onto the floor it was authored over -- model y = 0, where groundClips rests a
+    // clip. The lift is however far the real ground departs from that floor, and every weight gets
+    // it, so a foot the cook did not call planted keeps its arc over the terrain beneath it.
+    //
+    // The height is read off the contact rather than by dropping it onto that floor, which would
+    // divide by the floor normal along `down` -- zero for an instance rotated onto its side.
+    let seat = contact.y * down;
+    let lift = (SampleGround(plane, down, contact) - contact) - seat;
+    pose.target = pose.ankle + lift + pose.weight * seat;
 
     // How far the rig must come down, along the ground's up, for this chain to reach: the smaller
     // root of |v + d*n| = reach, where v is hip-to-target and n the ground normal.
@@ -227,7 +238,7 @@ LegPose ReadLeg(
     let disc = c * c - (dot(toTarget, toTarget) - reach * reach);
 
     // A chain that can already reach gives a non-positive root, which the clamp reads as no drop.
-    pose.deficit = max(0.0, -c - sqrt(max(disc, 0.0)));
+    pose.deficit = max(0.0, -c - sqrt(max(disc, 0.0))) * pose.weight;
 
     return pose;
 }
