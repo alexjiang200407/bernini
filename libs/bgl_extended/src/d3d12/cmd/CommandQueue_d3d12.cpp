@@ -23,6 +23,17 @@ namespace bgl
 		gassert(m_FenceEvent != nullptr, "Failed to create fence event");
 	}
 
+	double
+	CommandQueue::GetTimestampFrequency() const noexcept
+	{
+		UINT64 ticksPerSecond = 0;
+		if (FAILED(m_CommandQueue->GetTimestampFrequency(&ticksPerSecond)))
+		{
+			return 0.0;
+		}
+		return static_cast<double>(ticksPerSecond);
+	}
+
 	CommandQueue::~CommandQueue() noexcept
 	{
 		logger::trace("~CommandQueue");

@@ -5,6 +5,8 @@
 #include "cmd/CommandAllocator_metal.h"
 #include "cmd/CommandList_metal.h"
 #include "cmd/CommandQueue_metal.h"
+#include "cmd/TimestampHeap.h"
+#include "cmd/TimestampHeap_metal.h"
 #include "device/Device.h"
 #include "pipeline/ComputePipeline_metal.h"
 #include "pipeline/MeshletPipeline_metal.h"
@@ -21,6 +23,7 @@
 #include "slang/SlangSessions.h"
 #include "types/QueueType.h"
 #include "uniforms/Uniforms.h"
+#include <cstdint>
 #include <iterator>
 #include <memory>
 #include <slang.h>
@@ -87,6 +90,58 @@ namespace bgl
 	Device::CreateCommandAllocator(QueueType) const noexcept
 	{
 		return core::SharedRef<CommandAllocator>::Make();
+	}
+
+	core::SharedRef<ITimestampHeap>
+	Device::CreateTimestampHeap(uint32_t capacity) const noexcept
+	{
+		// Apple GPUs sample at an encoder's stage boundary and nowhere finer, which is the point the
+		// command list attaches a span's slots to; a device without even that has no timestamps.
+		if (!m_Device->supportsCounterSampling(MTL::CounterSamplingPointAtStageBoundary))
+		{
+			logger::warn("CreateTimestampHeap: the device cannot sample at a stage boundary");
+			return {};
+		}
+
+		const MTL::CounterSet* timestamps = nullptr;
+		if (NS::Array* sets = m_Device->counterSets(); sets != nullptr)
+		{
+			for (NS::UInteger i = 0; i < sets->count(); ++i)
+			{
+				const auto* set = sets->object<MTL::CounterSet>(i);
+				if (set->name()->isEqualToString(MTL::CommonCounterSetTimestamp))
+				{
+					timestamps = set;
+					break;
+				}
+			}
+		}
+
+		if (timestamps == nullptr)
+		{
+			logger::warn("CreateTimestampHeap: the device has no timestamp counter set");
+			return {};
+		}
+
+		auto desc = NS::TransferPtr(MTL::CounterSampleBufferDescriptor::alloc()->init());
+		desc->setCounterSet(timestamps);
+		desc->setSampleCount(capacity);
+		desc->setStorageMode(MTL::StorageModeShared);
+		desc->setLabel(NS::String::string("Timestamp Heap", NS::UTF8StringEncoding));
+
+		NS::Error* error  = nullptr;
+		auto       buffer = NS::TransferPtr(m_Device->newCounterSampleBuffer(desc.get(), &error));
+		if (buffer.get() == nullptr)
+		{
+			logger::warn(
+				"CreateTimestampHeap: newCounterSampleBuffer failed: {}",
+				error != nullptr && error->localizedDescription() != nullptr ?
+					error->localizedDescription()->utf8String() :
+					"no error given");
+			return {};
+		}
+
+		return core::SharedRef<TimestampHeap>::Make(std::move(buffer), capacity);
 	}
 
 	core::SharedRef<ICommandList>

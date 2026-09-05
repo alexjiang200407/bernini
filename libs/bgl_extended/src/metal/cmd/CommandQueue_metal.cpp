@@ -100,6 +100,40 @@ namespace bgl
 	{
 		gassert(m_Queue.get() != nullptr, "Metal command queue creation failed");
 		gassert(m_Event.get() != nullptr, "Metal shared event creation failed");
+
+		device->sampleTimestamps(&m_CpuBase, &m_GpuBase);
+	}
+
+	double
+	CommandQueue::GetTimestampFrequency() const noexcept
+	{
+		if (m_TimestampFrequency != 0.0)
+		{
+			return m_TimestampFrequency;
+		}
+
+		// The CPU stamp is nanoseconds; the GPU stamp's unit is what is being measured. Two samples
+		// a few milliseconds apart put the rate within a tenth of a percent, so a caller that asks
+		// before that much has passed since construction waits the remainder out rather than
+		// receiving a rate it would have to discard.
+		constexpr MTL::Timestamp c_MinSpanNs = 5'000'000;
+
+		MTL::Device*   device = m_Queue->device();
+		MTL::Timestamp cpuNow = 0;
+		MTL::Timestamp gpuNow = 0;
+		do
+		{
+			device->sampleTimestamps(&cpuNow, &gpuNow);
+		} while (cpuNow - m_CpuBase < c_MinSpanNs);
+
+		if (gpuNow <= m_GpuBase)
+		{
+			return 0.0;
+		}
+
+		m_TimestampFrequency = static_cast<double>(gpuNow - m_GpuBase) * 1.0e9 /
+		                       static_cast<double>(cpuNow - m_CpuBase);
+		return m_TimestampFrequency;
 	}
 
 	uint64_t

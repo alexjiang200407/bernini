@@ -105,6 +105,22 @@ namespace
 		CopyTextureToReadback(ReadbackBufferHandle, TextureHandle) noexcept override
 		{}
 		void
+		BeginTiming(ITimestampHeap*, uint32_t startSlot, uint32_t endSlot) noexcept override
+		{
+			if (log != nullptr)
+			{
+				log->push_back(std::format("timing:{}-{}", startSlot, endSlot));
+			}
+		}
+		bool
+		EndTiming() noexcept override
+		{
+			return true;
+		}
+		void
+		ResolveTimestamps(ITimestampHeap*, uint32_t, uint32_t) noexcept override
+		{}
+		void
 		Barrier(BufferHandle handle, const BufferBarrierDesc&) noexcept override
 		{
 			if (log != nullptr)
@@ -227,6 +243,12 @@ namespace
 		void
 		Flush() noexcept override
 		{}
+
+		double
+		GetTimestampFrequency() const noexcept override
+		{
+			return 0.0;
+		}
 	};
 
 	// A ResourceManager that only resolves attachment views to textures; the rest

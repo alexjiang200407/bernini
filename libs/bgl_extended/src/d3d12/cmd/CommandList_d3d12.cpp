@@ -2,6 +2,8 @@
 #include "cmd/CommandAllocator_d3d12.h"
 #include "cmd/CommandList.h"
 #include "cmd/CommandQueue.h"
+#include "cmd/TimestampHeap.h"
+#include "cmd/TimestampHeap_d3d12.h"
 #include "cmd/Version.h"
 #include "constants/constants.h"
 #include "convert_d3d12.h"
@@ -294,6 +296,7 @@ namespace bgl
 	{
 		gassert(m_Open, "Command list must be open before closing");
 
+		gassert(m_TimingHeap == nullptr, "Command list closed with a timed span open");
 		m_CommandList->Close() >> d3d12ErrChecker;
 		m_CurrentMeshletState.reset();
 		m_Open = false;
@@ -318,6 +321,53 @@ namespace bgl
 #if defined(USE_PIX) && defined(_WIN32)
 		PIXEndEvent(m_CommandList.Get());
 #endif
+	}
+
+	void
+	CommandList::BeginTiming(ITimestampHeap* heap, uint32_t startSlot, uint32_t endSlot) noexcept
+	{
+		gassert(m_Open, "BeginTiming on a closed command list");
+		gassert(heap != nullptr, "BeginTiming needs a heap");
+		gassert(m_TimingHeap == nullptr, "BeginTiming while a timed span is open");
+		gassert(
+			startSlot < heap->GetCapacity() && endSlot < heap->GetCapacity(),
+			"BeginTiming slot outside the heap");
+
+		m_TimingHeap    = heap->As<TimestampHeap>()->GetD3D12QueryHeap();
+		m_TimingEndSlot = endSlot;
+		m_CommandList->EndQuery(m_TimingHeap, D3D12_QUERY_TYPE_TIMESTAMP, startSlot);
+	}
+
+	bool
+	CommandList::EndTiming() noexcept
+	{
+		gassert(m_TimingHeap != nullptr, "EndTiming without a timed span open");
+
+		m_CommandList->EndQuery(m_TimingHeap, D3D12_QUERY_TYPE_TIMESTAMP, m_TimingEndSlot);
+		m_TimingHeap = nullptr;
+		return true;
+	}
+
+	void
+	CommandList::ResolveTimestamps(ITimestampHeap* heap, uint32_t first, uint32_t count) noexcept
+	{
+		gassert(m_Open, "ResolveTimestamps on a closed command list");
+		gassert(heap != nullptr, "ResolveTimestamps needs a heap");
+		gassert(first + count <= heap->GetCapacity(), "ResolveTimestamps outside the heap");
+
+		if (count == 0)
+		{
+			return;
+		}
+
+		auto* d3d12Heap = heap->As<TimestampHeap>();
+		m_CommandList->ResolveQueryData(
+			d3d12Heap->GetD3D12QueryHeap(),
+			D3D12_QUERY_TYPE_TIMESTAMP,
+			first,
+			count,
+			d3d12Heap->GetD3D12Readback(),
+			static_cast<UINT64>(first) * sizeof(uint64_t));
 	}
 
 	namespace

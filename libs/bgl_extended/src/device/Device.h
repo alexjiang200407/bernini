@@ -8,6 +8,7 @@
 #include <core/ref/Ref.h>
 #include <core/ref/RefCounter.h>
 #include <core/ref/SharedRef.h>
+#include <cstdint>
 #include <string>
 
 namespace bgl
@@ -19,6 +20,7 @@ namespace bgl
 	class IComputePipeline;
 	class ICommandAllocator;
 	class ICommandQueue;
+	class ITimestampHeap;
 	struct ShaderDesc;
 	struct MeshletPipelineDesc;
 	struct ComputePipelineDesc;
@@ -77,6 +79,15 @@ namespace bgl
 		[[nodiscard]]
 		virtual core::SharedRef<ICommandQueue>
 		CreateCommandQueue(QueueType type) const noexcept = 0;
+
+		/**
+		 * `capacity` timestamp slots for ICommandList's timed spans. Null when the device cannot
+		 * sample a timestamp at a pass boundary, which the caller treats as timing being unavailable
+		 * rather than as an error.
+		 */
+		[[nodiscard]]
+		virtual core::SharedRef<ITimestampHeap>
+		CreateTimestampHeap(uint32_t capacity) const noexcept = 0;
 
 		[[nodiscard]]
 		virtual core::SharedRef<IResourceManager>

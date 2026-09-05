@@ -6,6 +6,8 @@
 #include "cmd/CommandList_d3d12.h"
 #include "cmd/CommandQueue.h"
 #include "cmd/CommandQueue_d3d12.h"
+#include "cmd/TimestampHeap.h"
+#include "cmd/TimestampHeap_d3d12.h"
 #include "pipeline/ComputePipeline.h"
 #include "pipeline/ComputePipeline_d3d12.h"
 #include "pipeline/MeshletPipeline.h"
@@ -136,6 +138,12 @@ namespace bgl
 	Device::CreateCommandQueue(QueueType type) const noexcept
 	{
 		return core::SharedRef<CommandQueue>::Make(type, m_Device.Get());
+	}
+
+	core::SharedRef<ITimestampHeap>
+	Device::CreateTimestampHeap(uint32_t capacity) const noexcept
+	{
+		return core::SharedRef<TimestampHeap>::Make(m_Device.Get(), capacity);
 	}
 
 	Uniforms

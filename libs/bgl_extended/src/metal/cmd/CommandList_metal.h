@@ -14,6 +14,7 @@
 #include "types/MeshletState.h"
 #include "types/QueueType.h"
 
+#include "cmd/TimestampHeap.h"
 #include <core/ref/RefCounter.h>
 #include <cstddef>
 #include <cstdint>
@@ -90,6 +91,17 @@ namespace bgl
 
 		void
 		EndEvent() noexcept override;
+
+		void
+		BeginTiming(ITimestampHeap* heap, uint32_t startSlot, uint32_t endSlot) noexcept override;
+
+		bool
+		EndTiming() noexcept override;
+
+		// Nothing to record: the heap resolves its samples on the CPU once the fence has passed.
+		void
+		ResolveTimestamps(ITimestampHeap*, uint32_t, uint32_t) noexcept override
+		{}
 
 		[[nodiscard]] bool
 		IsOpen() const noexcept override
@@ -192,6 +204,18 @@ namespace bgl
 		[[nodiscard]] MTL::RenderCommandEncoder*
 		RenderEncoder(const FrameBuffer& fb) noexcept;
 
+		// Names the open timed span's slots on an encoder about to be created: the start on the
+		// first encoder the span opens, the end on every one, so the last to run is what the end
+		// slot holds. No-ops outside a span.
+		void
+		AttachTiming(MTL::RenderPassDescriptor* pass) noexcept;
+
+		void
+		AttachTiming(MTL::ComputePassDescriptor* pass) noexcept;
+
+		void
+		AttachTiming(MTL::BlitPassDescriptor* pass) noexcept;
+
 		struct MeshletDraw
 		{
 			MTL::RenderCommandEncoder* encoder;
@@ -234,5 +258,11 @@ namespace bgl
 		BufferHandle m_ActiveDebugBuffer;
 #endif
 		bool m_Open = false;
+
+		// The timed span in flight, if any; see BeginTiming.
+		MTL::CounterSampleBuffer* m_TimingBuffer       = nullptr;
+		uint32_t                  m_TimingStartSlot    = 0;
+		uint32_t                  m_TimingEndSlot      = 0;
+		bool                      m_TimingStartSampled = false;
 	};
 }
