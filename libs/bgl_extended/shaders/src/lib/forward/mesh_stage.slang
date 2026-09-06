@@ -9,6 +9,7 @@
 // of them.
 
 import idl.Constants;
+import idl.Geom;
 import idl.MeshInstance;
 import idl.Meshlet;
 import idl.Submesh;
@@ -84,7 +85,8 @@ public uint ResolveDispatch(uint gid, out InstancedPayload payload)
     uint drawInstanceIdx = expansionData.compactedInstances[ResolveInstanceBase() + gid];
     let instance = forwardData.instanceBuffer.Get(drawInstanceIdx);
     let mesh = forwardData.meshBuffer.Get(instance.meshInstance);
-    let submesh = forwardData.submeshBuffer.Get(mesh.submeshes, instance.submeshIndex);
+    let geom = forwardData.geomBuffer.Get(mesh.geom);
+    let submesh = forwardData.submeshBuffer.Get(geom.submeshes, instance.submeshIndex);
 
     payload.instance = instance;
 
@@ -95,16 +97,17 @@ public MeshletContext PrepareMeshlet(SubmeshInstance instance, uint gid)
 {
     MeshletContext ctx;
     ctx.mesh = forwardData.meshBuffer.Get(instance.meshInstance);
+    let geom = forwardData.geomBuffer.Get(ctx.mesh.geom);
 
     dbg_assert(
-        instance.submeshIndex < ctx.mesh.submeshes.count,
+        instance.submeshIndex < geom.submeshes.count,
         ErrorCode.kInvalidSubmeshIndex,
         instance.submeshIndex,
-        ctx.mesh.submeshes.count,
+        geom.submeshes.count,
         instance.meshInstance.GetOffset()
     );
 
-    ctx.submesh = forwardData.submeshBuffer.Get(ctx.mesh.submeshes, instance.submeshIndex);
+    ctx.submesh = forwardData.submeshBuffer.Get(geom.submeshes, instance.submeshIndex);
 
     dbg_assert(
         gid < ctx.submesh.GetMeshletCount(), ErrorCode.kInvalidMeshletIndex, gid, ctx.submesh.GetMeshletCount(), instance.submeshIndex

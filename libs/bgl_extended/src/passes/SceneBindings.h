@@ -21,15 +21,19 @@ namespace bgl
 	};
 
 	// The geometry tables every forward expansion and vertex decode reads. Every pass built on
-	// those shaders declares and binds all eight, so the set lives here rather than in any one
+	// those shaders declares and binds all nine, so the set lives here rather than in any one
 	// pass.
-	constexpr std::array<SceneBuffer, 8> c_ForwardDataBuffers = {
+	constexpr std::array<SceneBuffer, 9> c_ForwardDataBuffers = {
 		{ { c_InstanceBufferName,
 		    "instanceBuffer",
 		    BarrierAccessFlag::kShaderResource,
 		    BarrierSyncFlag::kVertexShader },
 		  { c_MeshInstanceBufferName,
 		    "meshBuffer",
+		    BarrierAccessFlag::kShaderResource,
+		    BarrierSyncFlag::kVertexShader },
+		  { c_GeomBufferName,
+		    "geomBuffer",
 		    BarrierAccessFlag::kShaderResource,
 		    BarrierSyncFlag::kVertexShader },
 		  { c_SubmeshBufferName,
