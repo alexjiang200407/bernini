@@ -116,6 +116,31 @@ namespace bgl
 		DeleteMeshInstance(MeshInstanceHandle instance) = 0;
 
 		/**
+		 * Moves a placement, effective on the next frame this view is drawn. The move writes a motion
+		 * vector rather than disturbing the temporal filter.
+		 *
+		 * The previous transform is the one the last *drawn* frame used, not the one the last write
+		 * replaced: writing twice in a frame reports the same velocity as writing once, and a
+		 * placement not written this frame has a velocity of exactly zero.
+		 *
+		 * A per-instance CPU write -- each scattered write uploads a block -- so not the path for
+		 * moving a crowd every frame.
+		 *
+		 * @param transform An affine model-to-world matrix; its fourth row is discarded, not checked.
+		 * @throws SceneError if the handle is invalid or already removed.
+		 */
+		virtual void
+		SetInstanceTransform(MeshInstanceHandle instance, const glm::mat4& transform) = 0;
+
+		/**
+		 * The matrix the placement was created with, or the one SetInstanceTransform last wrote.
+		 *
+		 * @throws SceneError if the handle is invalid or already removed.
+		 */
+		[[nodiscard]] virtual glm::mat4
+		GetInstanceTransform(MeshInstanceHandle instance) const = 0;
+
+		/**
 		 * Rewrites the runtime foot-IK weights of a skinned instance on the per-instance source --
 		 * see FootIKDesc. Written on an event and evaluated from RenderJob::time, so the pose at
 		 * any clock is a function of the record: a write whose ramps all start at or after now

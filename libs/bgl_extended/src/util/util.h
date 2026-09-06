@@ -53,4 +53,17 @@ namespace bgl
 	 */
 	void
 	WriteInstanceTransform(idl::MeshInstance& instance, const glm::mat4& transform) noexcept;
+
+	/**
+	 * Fills a placement's previous-frame transform, in the same packing WriteInstanceTransform uses.
+	 *
+	 * @param instance The placement to fill; only its prevTransform is touched.
+	 * @param transform An affine model-to-world matrix. Its fourth row is discarded, not checked.
+	 */
+	void
+	WriteInstancePrevTransform(idl::MeshInstance& instance, const glm::mat4& transform) noexcept;
+
+	/** The affine matrix WriteInstanceTransform packed, with the implied fourth row restored. */
+	[[nodiscard]] glm::mat4
+	ReadInstanceTransform(const idl::MeshInstance& instance) noexcept;
 }

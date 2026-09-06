@@ -1255,6 +1255,34 @@ namespace game
 	}
 
 	void
+	AssetManager::SetInstanceTransform(
+		bgl::SceneViewRef       view,
+		bgl::MeshInstanceHandle instance,
+		const glm::mat4&        transform)
+	{
+		const auto it = m_Instances.find(InstanceKey{ view.Get(), instance.handle.index });
+		if (it == m_Instances.end())
+			throw bgl::SceneError(
+				"MeshInstanceHandle passed to SetInstanceTransform is not owned by this "
+				"AssetManager");
+
+		it->second.view->SetInstanceTransform(it->second.handle, transform);
+	}
+
+	glm::mat4
+	AssetManager::GetInstanceTransform(bgl::SceneViewRef view, bgl::MeshInstanceHandle instance)
+		const
+	{
+		const auto it = m_Instances.find(InstanceKey{ view.Get(), instance.handle.index });
+		if (it == m_Instances.end())
+			throw bgl::SceneError(
+				"MeshInstanceHandle passed to GetInstanceTransform is not owned by this "
+				"AssetManager");
+
+		return it->second.view->GetInstanceTransform(it->second.handle);
+	}
+
+	void
 	AssetManager::SetMaterialTexture(
 		bgl::MaterialHandle material,
 		TextureSlot         slot,

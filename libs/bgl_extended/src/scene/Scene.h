@@ -37,6 +37,7 @@
 #include <bgl_common/idl/BlendSpaceMember.h>
 #include <bgl_common/idl/BoneSample.h>
 #include <bgl_common/idl/Clip.h>
+#include <bgl_common/idl/Geom.h>
 #include <bgl_common/idl/LoosePbrMaterial.h>
 #include <bgl_common/idl/Meshlet.h>
 #include <bgl_common/idl/PbrMaterial.h>
@@ -76,6 +77,10 @@ namespace bgl
 	struct GeomRecord
 	{
 		idl::RangeWithCount submeshes;
+
+		// The geom's GPU record, which holds the same range for a placement to name rather than
+		// copy. Freed with the geom.
+		core::slot_handle entry;
 
 		// kSkinnedMesh only: the rig this geom poses from, shared rather than owned -- deleting the
 		// geom releases its use of the rig, never the rig's ranges.
@@ -282,9 +287,9 @@ namespace bgl
 		}
 
 		// --- SceneView support -------------------------------------------------
-		// Instances live in SceneViews and reference this Scene's geometry by value: a view copies
-		// the submesh range below into its MeshInstance. The Scene keeps no record of who
-		// placed what, so the caller owns the ordering -- see IScene::DeleteGeom.
+		// Instances live in SceneViews and name this Scene's geometry by an entry with no
+		// generation. The Scene keeps no record of who placed what, so the caller owns the
+		// ordering -- see IScene::DeleteGeom.
 
 		[[nodiscard]] bool
 		IsGeomAlive(GeomHandle geom) const noexcept override
@@ -292,12 +297,28 @@ namespace bgl
 			return geom.IsValid() && m_Geoms.valid(geom.handle);
 		}
 
-		// The submesh range a SceneView copies into a MeshInstance at instance-creation time.
+		// The geom's submesh range. A SceneView reads it once at instance-creation time, for the
+		// submesh count and the root its shading resolve indexes by; the range itself reaches the
+		// GPU on the Geom record, not on the placement.
 		// Only valid while the geom is alive; check IsGeomAlive first.
 		[[nodiscard]] const idl::RangeWithCount&
 		GetGeomSubmeshes(uint32_t index) const noexcept
 		{
 			return m_Geoms[index].submeshes;
+		}
+
+		// The geom's GPU record, for a placement to name. Only valid while the geom is alive; check
+		// IsGeomAlive first.
+		[[nodiscard]] core::slot_handle
+		GetGeomEntry(uint32_t index) const noexcept
+		{
+			return m_Geoms[index].entry;
+		}
+
+		[[nodiscard]] const EntryBuffer<idl::Geom>&
+		GetGeomBuffer() const noexcept
+		{
+			return m_GeomBuffer;
 		}
 
 		/**
@@ -597,6 +618,10 @@ namespace bgl
 		// as Meta, not a parallel array, so it is allocated and freed with the geometry it belongs to.
 		using SubmeshDefaults = std::vector<MaterialHandle>;
 
+		// One record per live geom, named by every placement of it. Its slot is not m_Geoms' -- the
+		// two are different allocators -- so GeomRecord carries the handle.
+		EntryBuffer<idl::Geom> m_GeomBuffer;
+
 		RangeBuffer<idl::Submesh, SubmeshDefaults> m_SubmeshBuffer;
 		RangeBuffer<idl::Meshlet>                  m_MeshletBuffer;
 		RangeBuffer<uint32_t>                      m_VertexMapBuffer;
@@ -647,6 +672,7 @@ namespace bgl
 		// Every buffer the scene imports into the frame graph, each with the name it is imported
 		// under. Declared after the members it names.
 		static constexpr auto c_Buffers = std::tuple{
+			NamedBuffer{ c_GeomBufferName, &Scene::m_GeomBuffer },
 			NamedBuffer{ c_SubmeshBufferName, &Scene::m_SubmeshBuffer },
 			NamedBuffer{ c_MeshletBufferName, &Scene::m_MeshletBuffer },
 			NamedBuffer{ c_VertexMapBufferName, &Scene::m_VertexMapBuffer },

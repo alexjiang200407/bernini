@@ -44,10 +44,12 @@ path is the source of truth; when this doc disagrees, trust the struct, then fix
 * **The geometry hierarchy is flat arrays cross-linked by offset.** Every level lives in its own
   global buffer — a submesh buffer, a meshlet buffer, a vertexMap buffer, a byte vertex buffer, an
   index buffer. A parent references a contiguous window of children by `(offset, count)`; there is
-  no nesting or pointer chasing. A `MeshInstance` is the root descriptor: a `transform` plus a
-  `RangeWithCount<Submesh>` into the submesh buffer. It is a *placement*, not a mesh — the range is
-  the geom's, copied in by value, and the geom has no record of its own — so per-unit variation has
-  nowhere to live, and culling repeats itself per submesh.
+  no nesting or pointer chasing. A `MeshInstance` is the root descriptor: a `transform` plus an
+  `Entry<Geom>`, plus the transform the previous frame drew it with. It is a *placement*, not a mesh
+  — the submesh range belongs to the `Geom` it names,
+  so every placement of one mesh reads the same range rather than carrying a copy of it. Culling
+  still repeats itself per submesh: it resolves the geom once per thread and tests the submesh's
+  sphere, and the instance-level test that would collapse those threads is not built.
 
 * **Geometry is meshlet-partitioned for mesh-shader rendering.** Each submesh is split into
   `Meshlet`s of at most `idl::cMaxVerticesPerMeshlet` (64) unique vertices and
@@ -156,7 +158,8 @@ Generated shader structs (GPU source of truth). Each has a byte-identical `bgl::
 
 | Struct | File | Role |
 |---|---|---|
-| `MeshInstance` | [MeshInstance.slang](libs/bgl_common/shaders/src/idl/MeshInstance.slang) | Root descriptor of a placement: the three rows of its world transform + the geom's `RangeWithCount<Submesh>`, plus a `RawEntry<IPlayback>` naming its record in the view's playback arena, null on a static mesh. |
+| `MeshInstance` | [MeshInstance.slang](libs/bgl_common/shaders/src/idl/MeshInstance.slang) | Root descriptor of a placement: the three rows of its world transform and of the transform the previous frame drew it with, an `Entry<Geom>` naming what it was placed from, plus a `RawEntry<IPlayback>` naming its record in the view's playback arena, null on a static mesh. |
+| `Geom` | [Geom.slang](libs/bgl_common/shaders/src/idl/Geom.slang) | What a geometry-creating method produced and every placement from it shares: its `RangeWithCount<Submesh>`. Owned by the `Scene`, one per live geom, freed by `DeleteGeom`, and named by every `MeshInstance` placed from it. |
 | `Clip` | [Clip.slang](libs/bgl_common/shaders/src/idl/Clip.slang) | One playable clip: where its frame 0 sits in the tier's own frame space, its frame count, authored rate and loop flag. Shared by every animated tier out of one clip buffer. |
 | `Submesh` | [Submesh.slang](libs/bgl_common/shaders/src/idl/Submesh.slang) | One drawable part, **geometry only**: its `VertexLayout`, meshlet range, vertexMap/indices ranges, a `RawRange` of vertex bytes, vertex count, local bounding sphere. No material, no PSO — those are per-instance. |
 | `Meshlet` | [Meshlet.slang](libs/bgl_common/shaders/src/idl/Meshlet.slang) | A mesh-shader work unit: offsets into the parent submesh's vertexMap/indices windows, vertex/triangle counts, bounding sphere. |
@@ -308,9 +311,15 @@ green channel.
   the same three `float4`s of the same matrix, so the bytes do not say which — and under an
   identity transform the two readings agree, which is what makes a mistake here survive a smoke
   test. `MeshInstance::TransformPoint` / `TransformDirection` are the only readers, and
-  `bgl::WriteInstanceTransform` ([util.h](libs/bgl_extended/src/util/util.h)) the only writer. There is no
-  `prevTransform`: a placement's transform is fixed for its lifetime, and the field lands with the
-  writer that moves one.
+  `bgl::WriteInstanceTransform` ([util.h](libs/bgl_extended/src/util/util.h)) the only writer.
+  `prevTransform` is the same three rows again, written by `WriteInstancePrevTransform` and read
+  through `PrevMatrix` / `PrevTransformPoint`: where the placement was when the previous frame drew
+  it, which is what lets a moving instance write a motion vector.
+
+  **An array and not a `float3x4`,** which would say "matrix" in the type and is the obvious
+  spelling. It costs 16 bytes each: the generated mirror is `glm::mat4x3`, whose three-float columns
+  pad to 16, so the pair takes 128 bytes where the arrays take 96 and `MeshInstance` grows from 112
+  to 144. That is 2.9 MB at the 90k corpses `ROADMAP.md` budgets, bought with notation.
 * **A geom's submesh range is indexed by source submesh, and only stays so while the mapping is
   1:1.** Materials, and every other per-part property an asset author sets, are numbered by *source*
   submesh; `Scene::SetSubmeshMaterial` indexes the default-material array directly with that number,
@@ -320,8 +329,9 @@ green channel.
   triangle-aligned seam. If a future feature must expand a submesh (cluster culling, for instance),
   expand it at the *instance* level, not in the geometry buffers — which is exactly where the
   material and PSO now live.
-* **A stale instance reads a stale default.** An instance that outlives its geom keeps a by-value copy
-  of the submesh range, so a re-resolve looks up whatever default now occupies that index. That is the
+* **A stale instance reads a stale default.** An instance that outlives its geom keeps the submesh
+  root its placement recorded, and its `Entry<Geom>` names a slot the next geom may take, so a
+  re-resolve looks up whatever default now occupies that index. That is the
   same bargain `IScene::DeleteGeom` already documents (it would draw whatever geometry lands in the
   range next), not a new hazard. The defaults ride on the `RangeBuffer` as `Meta`, so they are
   allocated and freed with the geometry; `Scene::GetSubmeshDefaultMaterial` checks `IsIndexValid`

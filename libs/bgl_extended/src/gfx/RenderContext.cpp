@@ -644,6 +644,8 @@ namespace bgl
 
 		const ViewMatrices prevCamera = view->AdvanceCamera(m_FrameCounter, camera);
 
+		view->AdvanceInstanceTransforms(m_FrameCounter);
+
 		m_TemporalBreak |= view->AdvanceTemporalEpoch();
 
 		const glm::mat4 invView = glm::inverse(job.camera.GetView());

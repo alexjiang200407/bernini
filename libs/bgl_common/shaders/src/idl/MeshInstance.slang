@@ -1,10 +1,10 @@
+import Entry;
+import Geom;
 import IPlayback;
-import RangeWithCount;
 import RawEntry;
-import Submesh;
 
-// One placement of a geom: its world transform, the geom's submesh range copied in by value, and
-// its playback record. The geom itself has no GPU record.
+// One placement of a geom: its world transform, the geom it was placed from, and its playback
+// record.
 public struct MeshInstance
 {
     // The three rows of an affine placement; the fourth is always (0,0,0,1) and is not stored, as a
@@ -13,7 +13,14 @@ public struct MeshInstance
     // bgl::WriteInstanceTransform.
     public float4 transform[3];
 
-    public RangeWithCount<Submesh> submeshes;
+    // Where the placement was when the previous frame drew it, in the same row packing. Equal to
+    // `transform` on every frame but the ones after a move, which is what makes a still instance's
+    // velocity exactly zero rather than nearly so. Rolled by SceneView::AdvanceInstanceTransforms.
+    public float4 prevTransform[3];
+
+    // Named, not copied: the submesh range belongs to the geom, and every placement of one reads
+    // the same record.
+    public Entry<Geom> geom;
 
     // Null for a static mesh. Otherwise a record in the view's playback arena whose header says
     // which tier it is, so the one stage that draws more than one tier can ask rather than mirror
@@ -23,10 +30,21 @@ public struct MeshInstance
     // The placement as one affine matrix, the implied fourth row filled in.
     public float4x4 Matrix() { return float4x4(transform[0], transform[1], transform[2], float4(0.0, 0.0, 0.0, 1.0)); }
 
+    // The same, as the previous frame drew it.
+    public float4x4 PrevMatrix() { return float4x4(prevTransform[0], prevTransform[1], prevTransform[2], float4(0.0, 0.0, 0.0, 1.0)); }
+
     public float3 TransformPoint(float3 p)
     {
         let h = float4(p, 1.0);
         return float3(dot(transform[0], h), dot(transform[1], h), dot(transform[2], h));
+    }
+
+    // Where `p` sat when the previous frame drew this placement. The second half of every motion
+    // vector a moving instance writes.
+    public float3 PrevTransformPoint(float3 p)
+    {
+        let h = float4(p, 1.0);
+        return float3(dot(prevTransform[0], h), dot(prevTransform[1], h), dot(prevTransform[2], h));
     }
 
     // The translation is dropped rather than added, which is what makes this a direction. Not the

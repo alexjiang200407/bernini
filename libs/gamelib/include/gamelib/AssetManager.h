@@ -347,6 +347,27 @@ namespace game
 		void
 		DestroyInstance(bgl::SceneViewRef view, bgl::MeshInstanceHandle instance);
 
+		/**
+		 * Moves an instance this manager placed. A transform holds no references, so this adds only
+		 * the ownership check to ISceneView::SetInstanceTransform -- see it for what the move costs
+		 * and what it does not disturb.
+		 *
+		 * @throws bgl::SceneError if the instance is not one this manager owns in `view`.
+		 */
+		void
+		SetInstanceTransform(
+			bgl::SceneViewRef       view,
+			bgl::MeshInstanceHandle instance,
+			const glm::mat4&        transform);
+
+		/**
+		 * The matrix that instance was placed with, or the one SetInstanceTransform last wrote.
+		 *
+		 * @throws bgl::SceneError if the instance is not one this manager owns in `view`.
+		 */
+		[[nodiscard]] glm::mat4
+		GetInstanceTransform(bgl::SceneViewRef view, bgl::MeshInstanceHandle instance) const;
+
 		// --- Release: drop one reference. At zero the asset is destroyed, and its own references
 		//     are released in turn. ------------------------------------------------------------
 

@@ -307,6 +307,87 @@ namespace bgl
 		return m_PrevCamera;
 	}
 
+	void
+	SceneView::AdvanceInstanceTransforms(uint64_t frameCounter) noexcept
+	{
+		if (m_TransformFrame.has_value() && *m_TransformFrame == frameCounter)
+		{
+			return;
+		}
+
+		m_TransformFrame = frameCounter;
+
+		std::erase_if(m_MovingInstances, [this](core::slot_handle handle) {
+			if (!m_MeshBuffer.IsValid(handle))
+			{
+				return true;
+			}
+
+			MeshMeta& meta = m_MeshBuffer.MetaAt(handle.index);
+			if (meta.movedThisFrame)
+			{
+				meta.movedThisFrame = false;
+				return false;
+			}
+
+			meta.moving = false;
+
+			// Moved during the frame before last and not since, so the two transforms it still
+			// straddles describe motion that has already been drawn. Bringing prev up to current is
+			// what makes the next frame's velocity exactly zero.
+			auto mesh = m_MeshBuffer.AtIndex(handle.index);
+			WriteInstancePrevTransform(mesh, ReadInstanceTransform(mesh));
+			m_MeshBuffer.Set(handle, mesh);
+			return true;
+		});
+	}
+
+	void
+	SceneView::SetInstanceTransform(MeshInstanceHandle instance, const glm::mat4& transform)
+	{
+		if (!instance.IsValid() || !m_MeshBuffer.IsValid(instance.handle))
+		{
+			throw SceneError(
+				"MeshInstanceHandle passed to SetInstanceTransform is invalid or already removed");
+		}
+
+		MeshMeta& meta = m_MeshBuffer.MetaAt(instance.handle.index);
+		auto      mesh = m_MeshBuffer.AtIndex(instance.handle.index);
+
+		// Only the first write of a frame rolls: the previous transform is the one the last drawn
+		// frame used, so a second write must not push that history out with a value nothing drew.
+		if (!meta.movedThisFrame)
+		{
+			WriteInstancePrevTransform(mesh, ReadInstanceTransform(mesh));
+			meta.movedThisFrame = true;
+
+			if (!meta.moving)
+			{
+				meta.moving = true;
+				m_MovingInstances.push_back(instance.handle);
+			}
+		}
+
+		WriteInstanceTransform(mesh, transform);
+		m_MeshBuffer.Set(instance.handle, mesh);
+
+		// Deliberately no temporal epoch bump: a move is described by the motion vector the two
+		// transforms above produce, and moving the epoch would take every frame of a moving scene
+		// whole -- which is to say never accumulate. See docs/taa.md.
+	}
+
+	glm::mat4
+	SceneView::GetInstanceTransform(MeshInstanceHandle instance) const
+	{
+		if (!instance.IsValid() || !m_MeshBuffer.IsValid(instance.handle))
+		{
+			throw SceneError(
+				"MeshInstanceHandle passed to GetInstanceTransform is invalid or already removed");
+		}
+
+		return ReadInstanceTransform(m_MeshBuffer.AtIndex(instance.handle.index));
+	}
+
 	bool
 	SceneView::AdvanceTemporalEpoch() noexcept
 	{
@@ -755,14 +836,17 @@ namespace bgl
 	{
 		try
 		{
-			// Copied by value, and never revisited: from here the instance no longer refers to the
-			// geom, only to the range its submeshes occupied. Deleting the geom out from under it
-			// leaves it drawing whatever lands in that range next.
+			// The geom's record is named, not copied. The range is still read once here for the
+			// submesh count and the root the shading resolve indexes by; deleting the geom out from
+			// under the placement leaves it reading whatever record lands in that slot next.
 			const idl::RangeWithCount submeshes = m_SceneRaw->GetGeomSubmeshes(geom.handle.index);
 
-			auto mesh      = idl::MeshInstance();
-			mesh.submeshes = submeshes;
+			auto mesh = idl::MeshInstance();
+			mesh.geom = m_SceneRaw->GetGeomEntry(geom.handle.index);
 			WriteInstanceTransform(mesh, transform);
+
+			// Spawned where it already was, so nothing starts life with a velocity.
+			WriteInstancePrevTransform(mesh, transform);
 
 			// One field for either tier: the record's own header says which, so nothing here
 			// decides it. Zero stays zero, which is the null a static placement wants.
@@ -770,9 +854,10 @@ namespace bgl
 
 			auto meshHandle = m_MeshBuffer.Add(mesh);
 
-			auto& meta     = m_MeshBuffer.MetaAt(meshHandle.index);
-			meta.geomType  = geom.geomType;
-			meta.animState = animState;
+			auto& meta       = m_MeshBuffer.MetaAt(meshHandle.index);
+			meta.geomType    = geom.geomType;
+			meta.animState   = animState;
+			meta.submeshRoot = submeshes.range.offsetStart;
 
 			const uint32_t submeshCount = submeshes.count;
 			meta.submeshInstances.reserve(submeshCount);
@@ -1130,8 +1215,7 @@ namespace bgl
 	void
 	SceneView::RefreshSubmeshInstance(uint32_t meshIndex, uint32_t submeshIndex)
 	{
-		const idl::MeshInstance& mesh = m_MeshBuffer.AtIndex(meshIndex);
-		const MeshMeta&          meta = m_MeshBuffer.MetaAt(meshIndex);
+		const MeshMeta& meta = m_MeshBuffer.MetaAt(meshIndex);
 
 		const core::slot_handle handle = meta.submeshInstances[submeshIndex];
 		if (!m_InstanceBuffer.IsValid(handle))
@@ -1144,11 +1228,7 @@ namespace bgl
 		const idl::RawEntry material = instance.material;
 		const uint32_t      pso      = instance.pso;
 
-		ResolveShading(
-			instance,
-			mesh.submeshes.range.offsetStart,
-			meta.overrides[submeshIndex],
-			meta.geomType);
+		ResolveShading(instance, meta.submeshRoot, meta.overrides[submeshIndex], meta.geomType);
 
 		// Set marks the element's block dirty, so writing back an unchanged instance would re-upload
 		// a whole block to change nothing.

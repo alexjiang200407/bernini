@@ -1594,3 +1594,102 @@ TEST_CASE(
 	posed.palette = faded;
 	CheckBindPose(posed);
 }
+
+// The pose pass solves the plant twice, at `time` and at `prevTime`, and the ground crosses into
+// model space through the placement. Once a placement can move, the previous solve has to use the
+// previous placement -- on a slope, where the ground height under a foot depends on where it
+// stands, the two answers differ and the previous half of the palette is the evidence.
+TEST_CASE(
+	"a moved placement plants its previous feet where it previously stood",
+	"[skinned][pose][plant][transform][render]")
+{
+	// A slope, so moving along X changes the ground under the foot. On flat ground both solves
+	// agree and the case could not fail.
+	const float radians = glm::radians(15.0f);
+	const auto  normal  = glm::vec3(std::sin(radians), std::cos(radians), 0.0f);
+	const auto  slope   = bgl::GroundPlaneDesc{ glm::vec3(0.0f), normal };
+
+	constexpr float c_From = 0.0f;
+	constexpr float c_To   = 3.0f;
+
+	const LegScene legScene = MakeLegScene(slope, 255);
+	auto&          gfx      = legScene.gfx;
+	auto&          view     = legScene.view;
+
+	auto* gfxBase = gfx->As<bgl::GraphicsBase>();
+	REQUIRE(gfxBase != nullptr);
+
+	auto targetDesc     = bgl::RenderTargetDesc();
+	targetDesc.width    = 64;
+	targetDesc.height   = 64;
+	targetDesc.headless = true;
+	auto target         = gfx->CreateRenderTarget(targetDesc);
+
+	auto* viewRaw = view->As<bgl::SceneView>();
+	REQUIRE(viewRaw != nullptr);
+
+	const auto at = [](float x) {
+		return glm::translate(glm::mat4(1.0f), glm::vec3(x, 0.0f, 0.0f));
+	};
+
+	const auto instance =
+		view->CreateSkinnedMeshInstance(legScene.geom, at(c_From), { 0, 0.0f, 0.0f });
+
+	const auto draw = [&]() {
+		auto job     = bgl::RenderJob();
+		job.view     = view;
+		job.viewport = bgl::Viewport(64.0f, 64.0f);
+		job.time     = 0.0f;
+		gfx->DrawFrame(target, job);
+	};
+
+	draw();
+	view->SetInstanceTransform(instance, at(c_To));
+	draw();
+
+	const uint32_t base   = bgl::test::PaletteBaseOf(viewRaw, instance);
+	const uint32_t stride = bgl::idl::cFloat4sPerBone * c_Bones;
+
+	auto current     = Posed();
+	current.palette  = bgl::test::ReadPalette(gfxBase, viewRaw, base, stride);
+	auto previous    = Posed();
+	previous.palette = bgl::test::ReadPalette(gfxBase, viewRaw, base + stride, stride);
+
+	// The plant is solved in model space, so a correct pair differs: each sole sits on the slope
+	// under its own placement, and those are different heights in the world.
+	const glm::vec3 currentSole  = glm::vec3(at(c_To) * glm::vec4(current.Sole(), 1.0f));
+	const glm::vec3 previousSole = glm::vec3(at(c_From) * glm::vec4(previous.Sole(), 1.0f));
+
+	// Both land on the one plane through the origin, each under where its own placement stood.
+	CHECK(glm::dot(currentSole, normal) == Catch::Approx(0.0f).margin(1e-3));
+	CHECK(glm::dot(previousSole, normal) == Catch::Approx(0.0f).margin(1e-3));
+
+	// And they are not the same solve: planted against the current transform, the previous half
+	// would be identical to the current half in model space, which is the bug this pins.
+	CHECK(glm::distance(current.Sole(), previous.Sole()) > 1e-3f);
+}
+
+// The counterpart, and the one that would hide a rollover that never resets: a placement standing
+// still poses both halves identically, so nothing about moving one leaks into one that does not.
+TEST_CASE(
+	"a placement that has not moved plants both halves alike",
+	"[skinned][pose][plant][transform][render]")
+{
+	const float radians = glm::radians(15.0f);
+	const auto  normal  = glm::vec3(std::sin(radians), std::cos(radians), 0.0f);
+	const auto  slope   = bgl::GroundPlaneDesc{ glm::vec3(0.0f), normal };
+
+	const Posed posed = PoseLeg(
+		slope,
+		255,
+		PoseOptions{ .world = glm::translate(glm::mat4(1.0f), glm::vec3(3.0f, 0.0f, 0.0f)) });
+
+	const uint32_t stride = bgl::idl::cFloat4sPerBone * c_Bones;
+
+	auto previous = Posed();
+	previous.palette.rows.assign(
+		posed.palette.rows.begin() + stride,
+		posed.palette.rows.begin() + 2 * stride);
+
+	bgl::test::CheckNear(previous.Sole(), posed.Sole());
+}

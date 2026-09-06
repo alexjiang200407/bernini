@@ -999,3 +999,60 @@ TEST_CASE("AssetManager reads a loose material over its packed twin", "[gamelib]
 	CHECK((*fx).TextureRefCount(edited) == 2);
 	CHECK((*fx).TextureRefCount(packed) == 1);
 }
+
+TEST_CASE("AssetManager: an instance can be moved through the manager", "[gamelib][assets]")
+{
+	// A transform holds no references, so the forward adds only the ownership check -- which is the
+	// part worth pinning, since without it a handle from another manager would reach bgl and be
+	// answered against whatever instance shares its slot index.
+	Fixture fx("bernini_am_move");
+	WriteTexture(fx.root.path / "Textures" / "a.ktx2");
+	WriteBakedMaterial(fx.root.path / "Authored/Materials" / "m0.bmaterial", "Textures/a.ktx2");
+
+	const auto materials       = std::vector<std::string>{ "Authored/Materials/m0.bmaterial" };
+	const auto materialIndices = std::vector<uint32_t>{ 0 };
+	WriteMesh(fx.root.path / "Derived/Meshes" / "one.bmesh", materials, materialIndices);
+
+	const bgl::GeomHandle geom = (*fx).AcquireMesh("Derived/Meshes/one.bmesh");
+
+	const auto placed = glm::translate(glm::mat4(1.0f), glm::vec3(1.0f, 2.0f, 3.0f));
+	const auto moved  = glm::translate(glm::mat4(1.0f), glm::vec3(-4.0f, 0.0f, 0.5f));
+
+	const bgl::MeshInstanceHandle inst = (*fx).CreateInstance(fx.view, geom, placed);
+	REQUIRE(inst.IsValid());
+
+	CHECK((*fx).GetInstanceTransform(fx.view, inst) == placed);
+
+	(*fx).SetInstanceTransform(fx.view, inst, moved);
+	CHECK((*fx).GetInstanceTransform(fx.view, inst) == moved);
+
+	// And the view agrees, so the manager is forwarding rather than remembering.
+	CHECK(fx.view->GetInstanceTransform(inst) == moved);
+}
+
+TEST_CASE("AssetManager: moving an instance it does not own is refused", "[gamelib][assets]")
+{
+	Fixture fx("bernini_am_move_foreign");
+	WriteTexture(fx.root.path / "Textures" / "a.ktx2");
+	WriteBakedMaterial(fx.root.path / "Authored/Materials" / "m0.bmaterial", "Textures/a.ktx2");
+
+	const auto materials       = std::vector<std::string>{ "Authored/Materials/m0.bmaterial" };
+	const auto materialIndices = std::vector<uint32_t>{ 0 };
+	WriteMesh(fx.root.path / "Derived/Meshes" / "one.bmesh", materials, materialIndices);
+
+	const bgl::GeomHandle geom = (*fx).AcquireMesh("Derived/Meshes/one.bmesh");
+	const auto            inst = (*fx).CreateInstance(fx.view, geom, glm::mat4(1.0f));
+
+	// Placed directly on the view, so the manager never recorded it.
+	const bgl::MeshInstanceHandle foreign =
+		fx.view->CreateStaticMeshInstance(geom, glm::mat4(1.0f));
+
+	REQUIRE_THROWS_AS(
+		(*fx).SetInstanceTransform(fx.view, foreign, glm::mat4(1.0f)),
+		bgl::SceneError);
+	REQUIRE_THROWS_AS((*fx).GetInstanceTransform(fx.view, foreign), bgl::SceneError);
+
+	// The same handle in a view this manager has no instance in.
+	const bgl::SceneViewRef second = fx.gfx->CreateSceneView(fx.scene, 16);
+	REQUIRE_THROWS_AS((*fx).SetInstanceTransform(second, inst, glm::mat4(1.0f)), bgl::SceneError);
+}

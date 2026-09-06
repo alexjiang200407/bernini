@@ -170,9 +170,12 @@ alpha-tested, read dimmer — judged acceptable by eye against keeping the machi
   clip switch. A mesh that was not on screen last frame has no history to reproject from; an
   animated one is worse than absent, because the pose *and* the motion vector it writes come from
   the clip it now holds, so the frame after a switch reprojects along a velocity computed inside a
-  clip that was never drawn — the ghost is of a pose the vector points nowhere near. There is no
-  mutate-instance API by design, so a clip switch, a pose-source switch and a mesh load all
-  reach this through destroy + respawn and need no call of their own. Scrubbing the timeline does
+  clip that was never drawn — the ghost is of a pose the vector points nowhere near. Nothing may
+  mutate an instance's *identity*, so a clip switch, a pose-source switch and a mesh load all
+  reach this through destroy + respawn and need no call of their own. `SetInstanceTransform` is
+  not such a change and deliberately does not count: a placement carries the transform the
+  previous frame drew it with, so where it moved to is a value reprojection follows rather than a
+  rebind it cannot. Scrubbing the timeline does
   not: no instance churns, the pose moves within one clip, and the vector written across the jump
   is the one reprojection wants. This is the boundary that keeps the rule affordable — a caller
   that spawned or despawned every frame would never accumulate, and would need a batched-placement
@@ -458,3 +461,20 @@ Two couplings worth knowing:
   difference; the unresolved pair is the guard that the poses are pixel-identical. A difference
   against a *converged* still would score the honest sub-pixel gap between a history accumulated
   along a moving path and one accumulated at rest as though it were a ghost.
+
+* **A wrong motion vector is not visible as a ghost, and a colour test will not find one.** Measured
+  when the instance-transform setter landed, against a build with the previous transform reverted:
+  `BackgroundBleed` over an empty background *passes*, because the neighbourhood clamp collapses to
+  the background's own colour and scrubs a mis-reprojected history whether or not the vector is
+  right; over the slat wall the wake case already sits at 1.2e-4 with correct vectors, so there is
+  no headroom to detect anything in. `AliasEnergy` on the moving edge does separate them, but
+  backwards — `off` 0.00563, `still` 0.00278, `moving` 0.00150 correct against 0.00201 reverted: the
+  *correct* frame is smoother, because a followed history keeps accumulating while a rejected one
+  falls back toward a single jittered sample. A bound between those two is a 10% margin whose
+  assertion reads "the right answer is blurrier", which is why none of the three was kept.
+
+  What holds a motion vector is therefore the **velocity buffer**, not the resolve:
+  `MotionVectors_test` reads it back and compares against a displacement derived independently of
+  the shader. The resolve cannot tell whether a velocity came from a camera or a placement — it
+  consumes one texture — so the cases above already gate what it does with a correct one.
+
