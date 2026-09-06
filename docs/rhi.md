@@ -179,8 +179,9 @@ doc and a header disagree, trust the header, then fix this doc.
   allocate/retire/reclaim cycle at capacity.
 
 * **The shader cache is configuration, not an RHI object.** It is an internal optimization, so it
-  is **not** an `I*` interface — the only thing crossing the boundary is
-  `GraphicsOptions::shaderCacheDir` (empty ⇒ disabled), like the descriptor-heap capacities. The
+  is **not** an `I*` interface — what crosses the boundary is `GraphicsOptions::shaderCacheDir`
+  (empty ⇒ disabled) and `surfaceShaderDir`, whose files join the salt, like the descriptor-heap
+  capacities. The
   backend owns its two layers (a program cache of DXIL + reflection, and an
   `ID3D12PipelineLibrary`); to keep reflection cacheable and backend-agnostic it is decoupled from
   the live Slang object into a serializable `ReflectedLayout` POD. See
@@ -392,7 +393,10 @@ Everything else is self-explanatory from the header.
   defaults to `"main"`. No source is read here: the Slang module is **loaded lazily** on the first
   `GetSlangModule()`, which only happens when a PSO must actually compile (a shader-cache miss). The
   module source is resolved through the device's Slang session search paths (`./shaders/src`,
-  `./shaders/tests`), so run binaries with cwd set to their output dir (see project scripts). The
+  `./shaders/tests`, then `GraphicsOptions::surfaceShaderDir` when the client names one), so run
+  binaries with cwd set to their output dir (see project scripts) — or through
+  `IDevice::AddSourceModule`, a module given as text under a name that shadows any file of that name
+  for every compile after it. The
   DXIL and reflection are generated per-PSO at pipeline creation: `BuildPipelineLayout` links all of
   a PSO's entry points into one program and pulls both the bytecode (`getEntryPointCode`) and the
   reflection/root-signature from that single linked program, so bindings always agree (no per-shader
