@@ -80,6 +80,20 @@ namespace assetlib
 		"The channel groups must partition routes exactly; a channel in none of them is never "
 		"baked");
 
+	/**
+	 * The layer, which every shading model has and none owns: how alpha is read, and whether back
+	 * faces draw. gamelib derives the renderer's LayerType from alphaMode.
+	 */
+	struct MaterialLayer
+	{
+		AlphaMode alphaMode   = AlphaMode::kOpaque;
+		float     alphaCutoff = 0.5f;
+
+		// Back faces on a cut-out, hashed or blended surface; opaque never draws them. True by
+		// default, since every such material drew both sides before the key existed.
+		bool doubleSided = true;
+	};
+
 	struct PbrParams
 	{
 		std::string baseColorTexture;  // path to the base-color texture file (empty when absent)
@@ -88,13 +102,6 @@ namespace assetlib
 		glm::vec4   baseColorFactor = glm::vec4(1.0f);
 		float       metallicFactor  = 1.0f;
 		float       roughnessFactor = 1.0f;
-
-		AlphaMode alphaMode   = AlphaMode::kOpaque;
-		float     alphaCutoff = 0.5f;
-
-		// Back faces on a cut-out, hashed or blended surface; opaque never draws them. True by
-		// default, since every such material drew both sides before the key existed.
-		bool doubleSided = true;
 
 		// What baseColorFactor.a means under AlphaMode::kBlend: 0 for coverage (hair, foliage), 1 for
 		// transmission (glass, a lens), and read by no other mode. glTF's KHR_materials_transmission.
@@ -134,6 +141,8 @@ namespace assetlib
 		std::string name;
 
 		ShadingModel shadingModel = ShadingModel::kPbr;
+
+		MaterialLayer layer;
 
 		std::string editorGraph;
 

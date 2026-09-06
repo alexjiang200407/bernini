@@ -221,11 +221,11 @@ TEST_CASE("a cutout's base color bakes to a format that keeps its alpha", "[bmat
 	// The alpha mode is authored -- in the editor, by ending the graph in an Alpha Tested Material
 	// Output node rather than the opaque one. The bake reads it and never infers it.
 	BMaterial cutout;
-	cutout.pbr.alphaMode = AlphaMode::kMask;
-	cutout.pbr.routes[0] = { "leaf.ktx2", 0 };  // base R
-	cutout.pbr.routes[1] = { "leaf.ktx2", 1 };  // base G
-	cutout.pbr.routes[2] = { "leaf.ktx2", 2 };  // base B
-	cutout.pbr.routes[3] = { "leaf.ktx2", 3 };  // base A
+	cutout.layer.alphaMode = AlphaMode::kMask;
+	cutout.pbr.routes[0]   = { "leaf.ktx2", 0 };  // base R
+	cutout.pbr.routes[1]   = { "leaf.ktx2", 1 };  // base G
+	cutout.pbr.routes[2]   = { "leaf.ktx2", 2 };  // base B
+	cutout.pbr.routes[3]   = { "leaf.ktx2", 3 };  // base A
 
 	REQUIRE_NOTHROW(StoreAt(dir.path).BakeMaterial(cutout));
 
@@ -242,7 +242,7 @@ TEST_CASE("a cutout's base color bakes to a format that keeps its alpha", "[bmat
 	{
 		// Stored on the material rather than re-derived at load, because stripAuthoringData drops the
 		// routes for a shipping build -- there would be nothing left to derive it from.
-		REQUIRE(cutout.pbr.alphaMode == AlphaMode::kMask);
+		REQUIRE(cutout.layer.alphaMode == AlphaMode::kMask);
 	}
 
 	SECTION("an opaque material that routes alpha anyway is still opaque, still BC1")
@@ -262,7 +262,7 @@ TEST_CASE("a cutout's base color bakes to a format that keeps its alpha", "[bmat
 
 		const ImageData baked = loadKTX2(dir.path / opaque.pbr.baseColorTexture);
 		CHECK(baked.vkFormat == VkFormat::BC1_RGB_SRGB_BLOCK);
-		CHECK(opaque.pbr.alphaMode == AlphaMode::kOpaque);
+		CHECK(opaque.layer.alphaMode == AlphaMode::kOpaque);
 	}
 
 	SECTION("the cutout and opaque variants cannot collide on one file name")
@@ -286,16 +286,16 @@ TEST_CASE("alphaMode and alphaCutoff survive a .bmaterial round trip", "[bmateri
 	const BakeDir dir("bernini_bake_alpha_io");
 
 	BMaterial material;
-	material.pbr.alphaMode        = AlphaMode::kBlend;
-	material.pbr.alphaCutoff      = 0.25f;
+	material.layer.alphaMode      = AlphaMode::kBlend;
+	material.layer.alphaCutoff    = 0.25f;
 	material.pbr.baseColorTexture = "Derived/BakedTextures/basecolor_dead.ktx2";
 
 	const auto path = dir.path / "cutout.bmaterial";
 	REQUIRE_NOTHROW(SaveAt(material, path));
 
 	const BMaterial loaded = LoadAt<BMaterial>(path);
-	CHECK(loaded.pbr.alphaMode == AlphaMode::kBlend);
-	CHECK(loaded.pbr.alphaCutoff == 0.25f);
+	CHECK(loaded.layer.alphaMode == AlphaMode::kBlend);
+	CHECK(loaded.layer.alphaCutoff == 0.25f);
 }
 
 // kHashed is appended to the enum, so an old file's kOpaque/kMask/kBlend keep their values and a new
@@ -306,13 +306,13 @@ TEST_CASE("kHashed survives a .bmaterial round trip", "[bmaterial][alphatest][ha
 	const BakeDir dir("bernini_bake_hashed_io");
 
 	BMaterial material;
-	material.pbr.alphaMode        = AlphaMode::kHashed;
+	material.layer.alphaMode      = AlphaMode::kHashed;
 	material.pbr.baseColorTexture = "Derived/BakedTextures/basecolor_dead.ktx2";
 
 	const auto path = dir.path / "hashed.bmaterial";
 	REQUIRE_NOTHROW(SaveAt(material, path));
 
-	CHECK(LoadAt<BMaterial>(path).pbr.alphaMode == AlphaMode::kHashed);
+	CHECK(LoadAt<BMaterial>(path).layer.alphaMode == AlphaMode::kHashed);
 
 	// The values the enum already had must not have moved, or every material baked before this
 	// reads as a different mode.
@@ -327,8 +327,8 @@ TEST_CASE("a stale .bmaterial is rejected, not silently misread", "[bmaterial][a
 	// alternative to a version check is not "it still works", it is reading v4's bytes with v5's
 	// layout and getting a material made of garbage.
 	BMaterial material;
-	material.pbr.alphaMode   = AlphaMode::kMask;
-	material.pbr.alphaCutoff = 0.25f;
+	material.layer.alphaMode   = AlphaMode::kMask;
+	material.layer.alphaCutoff = 0.25f;
 
 	std::vector<std::byte> bytes = AssetCodec<BMaterial>::Serialize(material);
 

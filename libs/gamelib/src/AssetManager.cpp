@@ -1373,15 +1373,16 @@ namespace game
 	bgl::PbrMaterialDesc
 	AssetManager::BakedDesc(const MaterialRecord& record) const
 	{
-		const assetlib::PbrParams& pbr = record.source.pbr;
+		const assetlib::MaterialLayer& layer = record.source.layer;
+		const assetlib::PbrParams&     pbr   = record.source.pbr;
 
 		auto desc                = bgl::PbrMaterialDesc();
 		desc.baseColorFactor     = pbr.baseColorFactor;
 		desc.metallicFactor      = pbr.metallicFactor;
 		desc.roughnessFactor     = pbr.roughnessFactor;
-		desc.layerType           = ToLayerType(pbr.alphaMode, m_Options.hashedAsBlend);
-		desc.alphaCutoff         = pbr.alphaCutoff;
-		desc.doubleSided         = pbr.doubleSided;
+		desc.layerType           = ToLayerType(layer.alphaMode, m_Options.hashedAsBlend);
+		desc.alphaCutoff         = layer.alphaCutoff;
+		desc.doubleSided         = layer.doubleSided;
 		desc.transmissionFactor  = pbr.transmissionFactor;
 		desc.specularColorFactor = pbr.specularColorFactor;
 		desc.specularFactor      = pbr.specularFactor;
@@ -1396,15 +1397,16 @@ namespace game
 	bgl::LoosePbrMaterialDesc
 	AssetManager::LooseDesc(const MaterialRecord& record) const
 	{
-		const assetlib::PbrParams& pbr = record.source.pbr;
+		const assetlib::MaterialLayer& layer = record.source.layer;
+		const assetlib::PbrParams&     pbr   = record.source.pbr;
 
 		auto desc                = bgl::LoosePbrMaterialDesc();
 		desc.baseColorFactor     = pbr.baseColorFactor;
 		desc.metallicFactor      = pbr.metallicFactor;
 		desc.roughnessFactor     = pbr.roughnessFactor;
-		desc.layerType           = ToLayerType(pbr.alphaMode, m_Options.hashedAsBlend);
-		desc.alphaCutoff         = pbr.alphaCutoff;
-		desc.doubleSided         = pbr.doubleSided;
+		desc.layerType           = ToLayerType(layer.alphaMode, m_Options.hashedAsBlend);
+		desc.alphaCutoff         = layer.alphaCutoff;
+		desc.doubleSided         = layer.doubleSided;
 		desc.transmissionFactor  = pbr.transmissionFactor;
 		desc.specularColorFactor = pbr.specularColorFactor;
 		desc.specularFactor      = pbr.specularFactor;

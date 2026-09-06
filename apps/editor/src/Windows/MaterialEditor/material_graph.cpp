@@ -193,9 +193,10 @@ CompileMaterial(
 		pbr.metallicFactor  = output->MetallicFactor();
 		pbr.roughnessFactor = output->RoughnessFactor();
 
-		pbr.alphaMode          = output->GetAlphaMode();
-		pbr.alphaCutoff        = output->GetAlphaCutoff();
-		pbr.doubleSided        = output->GetDoubleSided();
+		material.layer.alphaMode   = output->GetAlphaMode();
+		material.layer.alphaCutoff = output->GetAlphaCutoff();
+		material.layer.doubleSided = output->GetDoubleSided();
+
 		pbr.transmissionFactor = output->GetTransmission();
 
 		pbr.specularColorFactor = output->GetSpecularColorFactor();
