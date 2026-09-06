@@ -99,7 +99,7 @@ namespace
 	{
 		auto material                 = assetlib::BMaterial();
 		material.pbr.baseColorTexture = baseColor;
-		material.pbr.alphaMode        = alphaMode;
+		material.layer.alphaMode      = alphaMode;
 
 		std::filesystem::create_directories(path.parent_path());
 		SaveAt(material, path);

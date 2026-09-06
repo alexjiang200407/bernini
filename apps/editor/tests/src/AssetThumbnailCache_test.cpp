@@ -159,7 +159,7 @@ namespace
 		material.pbr.baseColorFactor = glm::vec4(0.8f, 0.8f, 0.8f, alpha);
 		material.pbr.metallicFactor  = 0.0f;
 		material.pbr.roughnessFactor = 0.6f;
-		material.pbr.alphaMode       = alphaMode;
+		material.layer.alphaMode     = alphaMode;
 
 		const std::string relative = "Authored/Materials/" + name + ".bmaterial";
 		SaveAt(material, std::filesystem::path(c_DataRoot) / relative);

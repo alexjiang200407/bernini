@@ -244,11 +244,6 @@ namespace assetlib
 				pbr.specularColorFactor.y,
 				pbr.specularColorFactor.z);
 
-			// The animated tiers draw opaque geometry only, so this is the field that decides whether
-			// a submesh can be skinned at all.
-			out += std::format("  alphaMode         {}\n", alphaModeName(pbr.alphaMode));
-			out += std::format("  doubleSided       {}\n", pbr.doubleSided);
-
 			// The triplet is what a `baked` material draws from; a `loose` one keeps it as the last
 			// bake's output, which is why it is printed either way.
 			out += "\n  baked textures\n";
@@ -408,6 +403,11 @@ namespace assetlib
 
 		out += std::format("bmaterial '{}'\n", material.name);
 		out += std::format("  shadingModel      {}\n", shadingModelName(material.shadingModel));
+
+		// The animated tiers draw opaque geometry only, so this is the field that decides whether a
+		// submesh can be skinned at all.
+		out += std::format("  alphaMode         {}\n", alphaModeName(material.layer.alphaMode));
+		out += std::format("  doubleSided       {}\n", material.layer.doubleSided);
 
 		switch (material.shadingModel)
 		{
