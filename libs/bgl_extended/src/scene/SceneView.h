@@ -59,17 +59,11 @@ namespace bgl
 		// pso for the pipeline family it actually draws through.
 		GeomType geomType = GeomType::kStaticMesh;
 
-		// Whether SetInstanceTransform has written this placement since the last rollover, and so
-		// whether its prevTransform already holds what the previous frame drew. Cleared every
-		// rollover, so the next frame's first write rolls again.
+		// Whether a write has already rolled this placement's prevTransform this frame.
 		bool movedThisFrame = false;
 
-		// Whether m_MovingInstances holds this placement. A separate bit from movedThisFrame, which
-		// is cleared on every rollover: one answers "should this write roll", the other "is it
-		// already tracked", and conflating them pushed a second copy of a placement written on two
-		// consecutive frames -- whose duplicate then read the flag the first copy had just cleared
-		// and reset prevTransform to current, so anything moving every frame drew no velocity at
-		// all.
+		// Whether m_MovingInstances holds this placement. Not movedThisFrame, which every rollover
+		// clears: one flag for both pushes a duplicate for a placement written on consecutive frames.
 		bool moving = false;
 
 		// Where the geom's submeshes started when this placement was made. Held here rather than

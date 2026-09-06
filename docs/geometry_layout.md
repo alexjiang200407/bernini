@@ -315,6 +315,11 @@ green channel.
   `prevTransform` is the same three rows again, written by `WriteInstancePrevTransform` and read
   through `PrevMatrix` / `PrevTransformPoint`: where the placement was when the previous frame drew
   it, which is what lets a moving instance write a motion vector.
+
+  **An array and not a `float3x4`,** which would say "matrix" in the type and is the obvious
+  spelling. It costs 16 bytes each: the generated mirror is `glm::mat4x3`, whose three-float columns
+  pad to 16, so the pair takes 128 bytes where the arrays take 96 and `MeshInstance` grows from 112
+  to 144. That is 2.9 MB at the 90k corpses `ROADMAP.md` budgets, bought with notation.
 * **A geom's submesh range is indexed by source submesh, and only stays so while the mapping is
   1:1.** Materials, and every other per-part property an asset author sets, are numbered by *source*
   submesh; `Scene::SetSubmeshMaterial` indexes the default-material array directly with that number,
