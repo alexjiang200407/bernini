@@ -49,6 +49,9 @@ disagrees, trust the header, then fix this doc.
   without touching a tuned value. `resolveEnvironment` folds the two; the resolved
   `maps.exposure` is what a renderer reads. Author it with
   `assetlib_cli exposure -p <project> <key.benv> --set <v>`, or `--clear` to go back to the bake.
+  The shipped `forest` is authored at **1.0**: it is Blender's own `forest.exr`, and Blender's
+  Material Preview draws that at world strength 1.0 with no normalization, so 1.0 is what puts the
+  two side by side. See [Parity with Blender](#parity-with-blender) for what measures it.
 * **The backdrop's defocus is presentation, not pixels.** The sky is baked as a chain by `skyChain`:
   mip 0 is the sharp projection, and each level below it is convolved to the width its own texel
   subtends. Which level is drawn is a document edit rather than minutes of
@@ -243,9 +246,9 @@ is 0.222 and visibly softer. A viewport that wants a particular look on an arbit
 the level from the cube's face size rather than hardcode one, and the defaults here do not yet.
 
 **Only the skybox.** The prefilter and the irradiance convolve the sharp projection, so nothing about
-the background reaches the lighting — the shipped map keeps the source's full 1092 peak in prefilter
-mip 0 while a defocused backdrop is crushed to 91. Blurring the maps that light the scene would be the
-gamma mistake in another costume.
+the background reaches the lighting — the shipped map keeps the source's 1098 peak in prefilter mip 0
+while the backdrop the preview draws, mip 3 of the chain, is crushed to 77. Blurring the maps that
+light the scene would be the gamma mistake in another costume.
 
 ### A rotated sky rotates the lighting
 
@@ -253,6 +256,15 @@ gamma mistake in another costume.
 (`PbrShading::ToEnvSpace`). It has to: the cubes are one environment, and a normal that skipped the
 rotation would be lit from where the sky used to be. Nothing caught this for as long as it was wrong,
 because the only environment shipped has `skyRotationY` 0 — `EnvOrientation_test` is what catches it now.
+
+### Longitude runs the other way from Blender's
+
+`equirectToCube` reads longitude as `atan2(x, z)`, so standing inside the cube and turning towards
+`+X` walks *down* the source's columns. Blender, and a panoramic camera, walk up them. The two
+therefore show the same equirectangular source mirrored left-to-right about the camera's forward
+axis, and a comparison against Blender has to compare each side of the frame with the other's
+opposite — which `BlenderParity_test` does. The IBL and the backdrop agree with each other either
+way; what this changes is where a feature of the source lands on screen.
 
 ## Verifying
 
@@ -266,8 +278,33 @@ composes and whether those files are there.
 ```bash
 assetlib_cli describe -p <project> Authored/Environments/forest.benv
 assetlib_cli describe -p <project> Derived/Sky/forest.bsky
-assetlib_cli refs -p <project> Derived/BakedTextures/forest_sky.ktx2   # what holds a baked map alive
+assetlib_cli refs -p <project> Derived/BakedTextures/sky_<hash>.ktx2   # what holds a baked map alive
 ```
+
+## Parity with Blender
+
+A golden pins that a render has not moved; nothing in it says whether the level is right. The one
+measurement against another renderer is a matte middle-grey sphere under `forest`, rendered by
+both:
+
+```bash
+/Applications/Blender.app/Contents/MacOS/Blender -b --factory-startup \
+    --python scripts/blender_probe.py -- --out probe.png     # Blender's half, by hand
+just run bgl_extended_tests -- "[parity]"                      # ours, in the suite
+```
+
+The script builds the same sphere and camera under Blender's own `forest.exr` at strength 1.0,
+AgX, no look, exposure 0 — the factory Material Preview — with Eevee's shadows and world sun
+extraction off, so exposure and image-based lighting are the whole of what is compared. It prints
+display luma over four boxes, and the cosine integral of the source at the normal under each sphere
+box, in Bernini's conventions. CI has no Blender, so every number `BlenderParity_test` carries is
+copied from that output rather than computed there; re-run it whenever the reference changes.
+
+The test asserts the sphere's level against the exact cosine integral of the source through the
+shipped tone map, and the backdrop corners against Blender's frame, mirrored. The integral rather
+than Blender's own pixels because Blender's Cycles *is* that integral to a percent, while its Eevee
+lights diffuse from a first-order harmonic that reads flatter than the source, and its AgX pins
+middle grey lower than the shipped fit does. Both are recorded in the test; neither is an exposure.
 
 **Maintenance note.** The tables above are this document's load-bearing part, and their file links rot
 silently if files move. Re-check them whenever the environment file layout changes.
