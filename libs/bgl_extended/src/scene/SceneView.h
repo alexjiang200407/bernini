@@ -530,10 +530,12 @@ namespace bgl
 		float                     m_Exposure = 1.0f;
 
 		// The placements carrying a velocity: those SetInstanceTransform has written and whose
-		// prevTransform has not yet been brought back up to their transform. Handles rather than
-		// indices, so an entry left by a deleted placement fails IsValid instead of resetting
-		// whichever placement later takes that slot. Empty in a scene where nothing moves, which is
-		// what keeps the per-frame cost off the instance count.
+		// prevTransform has not yet been brought back up to their transform. Not an upload list --
+		// EntryBuffer's dirty blocks already cover that -- but the record of which placements need
+		// *retiring*, which is the frame a placement stops moving and so writes nothing to be dirty
+		// about. AdvanceInstanceTransforms empties it; without it that frame would have to be found
+		// by sweeping every instance. Handles rather than indices, so an entry left by a deleted
+		// placement fails IsValid instead of resetting whichever placement later takes that slot.
 		std::vector<core::slot_handle> m_MovingInstances;
 
 		// The frame AdvanceInstanceTransforms last ran for. See it and AdvanceCamera.
