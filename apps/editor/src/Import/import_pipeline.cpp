@@ -10,7 +10,6 @@
 #include "Windows/AssetImporter/EnvironmentImporterDialog.h"
 #include <assetlib/asset_import.h>
 #include <assetlib/cancel.h>
-#include <assetlib/codecs.h>
 #include <assetlib/progress.h>
 #include <assetlib/project_layout.h>
 #include <assetlib_structs/Animation.h>
@@ -25,7 +24,6 @@
 #include <assetlib_structs/BMeshImport.h>
 #include <exception>
 #include <filesystem>
-#include <format>
 #include <optional>
 #include <qcontainerfwd.h>
 #include <qdialog.h>
@@ -117,11 +115,7 @@ namespace editor
 			return ImportOutcome::kBlocked;
 		}
 
-		const std::string sourceKey = std::format(
-			"{}/{}{}",
-			assetlib::c_MeshSourcesDirectoryName,
-			source.stem().string(),
-			assetlib::c_ImportedSourceExtension);
+		const std::string sourceKey = options.outputs.source.toStdString();
 
 		// Sampled before a byte is written, because they decide two things: whether the import collides
 		// with something already there (and must be refused), and -- if it then fails or is cancelled --

@@ -133,6 +133,10 @@ TEST_CASE("An untouched dialog writes where it always did", "[assetimporter]")
 	// source's own, so an import nobody touched lands exactly where the folder-only dialog put it.
 	const ImportOutputs outputs = dialog.GetOutputs();
 
+	// The source is the one category whose folder starts blank: it has always landed at the root of
+	// Authored/Meshes/, and a default matching the sections beside it would put a project's sources
+	// in two places depending on when each was imported.
+	REQUIRE(outputs.source == QString("Authored/Meshes/stone_wall.glb"));
 	REQUIRE(outputs.mesh == QString("Derived/Meshes/stone_wall/stone_wall.bmesh"));
 	REQUIRE(outputs.skeleton == QString("Derived/Skeletons/stone_wall/stone_wall.bskel"));
 	REQUIRE(outputs.animations == QString("Derived/Animations/stone_wall/stone_wall.banim"));
@@ -188,6 +192,7 @@ TEST_CASE("A category's folder moves on its own", "[assetimporter]")
 	const ImportOutputs outputs = dialog.GetOutputs();
 
 	REQUIRE(outputs.animations == QString("Derived/Animations/shared/locomotion/stone_wall.banim"));
+	REQUIRE(outputs.source == QString("Authored/Meshes/stone_wall.glb"));
 	REQUIRE(outputs.mesh == QString("Derived/Meshes/stone_wall/stone_wall.bmesh"));
 	REQUIRE(outputs.skeleton == QString("Derived/Skeletons/stone_wall/stone_wall.bskel"));
 	REQUIRE(outputs.materialDir == QString("Authored/Materials/stone_wall"));
@@ -228,6 +233,7 @@ TEST_CASE("A destination field is dead when its piece is not imported", "[asseti
 {
 	const AssetImporterDialog dialog(c_SourceFile, Probe(1, 1));
 
+	REQUIRE(Field(dialog, "sourceFolder")->isEnabled());
 	REQUIRE(Field(dialog, "meshFolder")->isEnabled());
 	REQUIRE(Field(dialog, "meshName")->isEnabled());
 	REQUIRE(Field(dialog, "skeletonFolder")->isEnabled());
@@ -243,6 +249,14 @@ TEST_CASE("A destination field is dead when its piece is not imported", "[asseti
 		REQUIRE(!Field(dialog, "meshName")->isEnabled());
 		REQUIRE(!Field(dialog, "skeletonFolder")->isEnabled());
 		REQUIRE(Field(dialog, "textureFolder")->isEnabled());
+
+		// The source is not the mesh's: it is copied for a clips-only import too, so it goes dark
+		// only once neither piece that needs it is coming across.
+		REQUIRE(!Field(dialog, "sourceFolder")->isEnabled());
+
+		AnimationsBox(dialog)->setChecked(true);
+		REQUIRE(Field(dialog, "sourceFolder")->isEnabled());
+		REQUIRE(Field(dialog, "sourceName")->isEnabled());
 	}
 
 	SECTION("and the materials' folder follows whether one can be derived at all")
@@ -434,6 +448,131 @@ TEST_CASE("A dialog with no project checks no names against disk", "[assetimport
 	// The dialog is constructed with the data root, so a caller that has no project on disk -- which is
 	// every test above -- must still be able to drive it.
 	const AssetImporterDialog dialog(c_SourceFile);
+
+	REQUIRE(dialog.GetProblem().isEmpty());
+	REQUIRE(CanAccept(dialog));
+}
+
+// The half of the layout that had no field at all: a project can nest its derived meshes and could
+// not nest the sources they cook from.
+TEST_CASE("The copied source takes a folder of its own", "[assetimporter]")
+{
+	const AssetImporterDialog dialog(c_SourceFile);
+
+	Field(dialog, "sourceFolder")->setText("exterior/walls");
+
+	REQUIRE(dialog.GetOutputs().source == QString("Authored/Meshes/exterior/walls/stone_wall.glb"));
+
+	// And it moves alone, like every other category's.
+	REQUIRE(dialog.GetOutputs().mesh == QString("Derived/Meshes/stone_wall/stone_wall.bmesh"));
+}
+
+TEST_CASE("A source folder that escapes its category is refused", "[assetimporter]")
+{
+	// Same spellings the derived categories refuse, and the same answer -- except that a source
+	// falls back to the category root rather than to a subfolder, because that is where every one
+	// copied so far sits.
+	const QString typed = GENERATE(
+		QString(".."),
+		QString("../../Windows"),
+		QString("walls/../../../Windows"),
+		QString("C:/Windows/System32"),
+		QString("/etc"),
+		QString("\\Windows"),
+		QString("D:walls"));
+
+	INFO("typed: " << typed);
+
+	const AssetImporterDialog dialog(c_SourceFile);
+	Field(dialog, "sourceFolder")->setText(typed);
+
+	REQUIRE(dialog.GetOutputs().source == QString("Authored/Meshes/stone_wall.glb"));
+}
+
+// Why the source gets a name and not just a folder: a DCC hands you scene.glb whatever the asset
+// is, and before this the second one could not be imported at all.
+TEST_CASE("Two exports sharing a stem can be told apart by name", "[assetimporter]")
+{
+	const AssetImporterDialog dialog(c_SourceFile);
+
+	Field(dialog, "sourceName")->setText("stone_wall_lod1");
+
+	REQUIRE(dialog.GetOutputs().source == QString("Authored/Meshes/stone_wall_lod1.glb"));
+}
+
+TEST_CASE("A source name that cannot be written stops the import", "[assetimporter]")
+{
+	const QString typed = GENERATE(
+		QString(""),
+		QString("   "),
+		QString("."),
+		QString("walls/stone"),
+		QString("C:/Windows/hal"));
+
+	INFO("typed: " << typed);
+
+	const AssetImporterDialog dialog(c_SourceFile);
+	Field(dialog, "sourceName")->setText(typed);
+
+	REQUIRE(!dialog.GetProblem().isEmpty());
+	REQUIRE(!CanAccept(dialog));
+}
+
+// The `.glb` and its `.bimport` are one asset under two names, so one field places both -- and the
+// document must not be left behind in the folder the source came out of.
+TEST_CASE("The import document follows the source it describes", "[assetimporter]")
+{
+	QTemporaryDir root;
+	REQUIRE(root.isValid());
+	REQUIRE(QDir(root.path()).mkpath("Authored/Meshes/exterior"));
+
+	QFile taken(root.path() + "/Authored/Meshes/exterior/stone_wall.bimport");
+	REQUIRE(taken.open(QIODevice::WriteOnly));
+	taken.close();
+
+	const AssetImporterDialog dialog(c_SourceFile, {}, root.path());
+	Field(dialog, "sourceFolder")->setText("exterior");
+
+	// Nothing names the document in the dialog, so the only way this can be reported is if the
+	// source's field placed it.
+	REQUIRE(dialog.GetProblem().contains("exterior/stone_wall.bimport"));
+	REQUIRE(!CanAccept(dialog));
+}
+
+// Before this the collision was invisible until after OK, where ReportImportConflict advised
+// choosing a different folder -- naming a field that did not exist.
+TEST_CASE("A source already in the project stops the import as it is typed", "[assetimporter]")
+{
+	QTemporaryDir root;
+	REQUIRE(root.isValid());
+	REQUIRE(QDir(root.path()).mkpath("Authored/Meshes"));
+
+	QFile taken(root.path() + "/Authored/Meshes/stone_wall.glb");
+	REQUIRE(taken.open(QIODevice::WriteOnly));
+	taken.close();
+
+	const AssetImporterDialog dialog(c_SourceFile, {}, root.path());
+
+	REQUIRE(dialog.GetProblem().contains("stone_wall.glb"));
+	REQUIRE(!CanAccept(dialog));
+
+	// And the field is what resolves it, which is the whole point of having one.
+	Field(dialog, "sourceName")->setText("stone_wall_b");
+
+	REQUIRE(dialog.GetProblem().isEmpty());
+	REQUIRE(CanAccept(dialog));
+}
+
+// Nothing is written through a field whose piece is not coming across, here as for every other.
+TEST_CASE("A source name is not judged when no source is copied", "[assetimporter]")
+{
+	const AssetImporterDialog dialog(c_SourceFile);
+
+	Field(dialog, "sourceName")->setText("");
+	REQUIRE(!dialog.GetProblem().isEmpty());
+
+	// Textures alone copy no source: there is nothing for a re-import to cook from.
+	MeshBox(dialog)->setChecked(false);
 
 	REQUIRE(dialog.GetProblem().isEmpty());
 	REQUIRE(CanAccept(dialog));

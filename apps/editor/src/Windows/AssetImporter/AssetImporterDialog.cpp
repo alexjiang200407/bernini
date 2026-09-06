@@ -5,6 +5,7 @@
 #include "util/asset_paths.h"
 #include <algorithm>
 #include <assetlib/bmesh_gltf.h>
+#include <assetlib/import_document.h>
 #include <assetlib/project_layout.h>
 
 #include <QCheckBox>
@@ -32,6 +33,7 @@
 
 namespace
 {
+	constexpr auto c_SourceExtension   = ".glb";
 	constexpr auto c_MeshExtension     = ".bmesh";
 	constexpr auto c_SkeletonExtension = ".bskel";
 	constexpr auto c_AnimExtension     = ".banim";
@@ -79,23 +81,46 @@ AssetImporterDialog::AssetImporterDialog(
 		scrollBox->setMaximumHeight(screen->availableGeometry().height() * 2 / 3);
 	layout->addWidget(scrollBox);
 
-	// Every category gets its own section, each folder defaulting to the source's name -- so the
-	// layout an import lands in is the one it always was until a field is actually changed.
-	const auto addSection =
-		[&](const char* label, const char* category, const char* objectName, const QString& tip) {
-			auto* section = new editor::ImportSection(
-				contents,
-				content,
-				{ .label       = label,
-		          .category    = category,
-		          .objectName  = objectName,
-		          .text        = m_DefaultName,
-		          .placeholder = m_DefaultName,
-		          .tip         = tip });
+	// Every category gets its own section, each folder starting where that category's files have
+	// always landed -- so the layout an import lands in is the one it always was until a field is
+	// actually changed. For the derived categories that is a subfolder named after the source; for
+	// the source itself it is the category root, which is where every `.glb` copied so far sits.
+	const auto addSection = [&](const char*    label,
+	                            const char*    category,
+	                            const char*    objectName,
+	                            const QString& tip,
+	                            const QString& folder = {}) {
+		auto* section = new editor::ImportSection(
+			contents,
+			content,
+			{ .label       = label,
+		      .category    = category,
+		      .objectName  = objectName,
+		      .text        = folder,
+		      .placeholder = m_DefaultName,
+		      .tip         = tip });
 
-			connect(section, &editor::ImportSection::Expanded, this, &QDialog::adjustSize);
-			return section;
-		};
+		connect(section, &editor::ImportSection::Expanded, this, &QDialog::adjustSize);
+		return section;
+	};
+
+	// Above every box rather than under the mesh's: the source is copied for a clips-only import
+	// too, so a section that greyed out with the geometry would leave one unnameable.
+	m_SourceSection = addSection(
+		"Source folder:",
+		assetlib::c_MeshSourcesDirectoryName,
+		"sourceFolder",
+		"Folder under Authored/Meshes/ to copy the .glb and its .bimport into. The copy is what a "
+		"re-import cooks from, so it is kept rather than being a record of where the file came "
+		"from.");
+	m_SourceName = m_SourceSection->AddFile(
+		{ .label      = "Source file:",
+	      .stem       = m_DefaultName,
+	      .extension  = c_SourceExtension,
+	      .objectName = "sourceName",
+	      .tip = "What the copied source is called in the project. The .bimport beside it takes "
+	             "the same name; naming it is how two exports that came out of the DCC as "
+	             "scene.glb sit in one project." });
 
 	m_ImportMesh = new QCheckBox("Import mesh", content);
 	m_ImportMesh->setObjectName("importMesh");
@@ -113,7 +138,8 @@ AssetImporterDialog::AssetImporterDialog(
 		"meshFolder",
 		"Folder under Derived/Meshes/ to write the .bmesh into. Nested folders are allowed "
 		"(animals/coyote); the category itself is fixed, because every reference in the project is "
-		"written against it.");
+		"written against it.",
+		m_DefaultName);
 	m_MeshName = m_MeshSection->AddFile(
 		{ .label      = "Mesh file:",
 	      .stem       = m_DefaultName,
@@ -129,7 +155,8 @@ AssetImporterDialog::AssetImporterDialog(
 		assetlib::c_SkeletonsDirectoryName,
 		"skeletonFolder",
 		"Folder under Derived/Skeletons/ to write the .bskel into. Only written when the source "
-		"carries a skin.");
+		"carries a skin.",
+		m_DefaultName);
 	m_SkeletonName = m_SkeletonSection->AddFile(
 		{ .label      = "Skeleton file:",
 	      .stem       = m_DefaultName,
@@ -152,7 +179,8 @@ AssetImporterDialog::AssetImporterDialog(
 		"textureFolder",
 		"Folder under Derived/SourceTextures/ for the extracted textures. Each import wants "
 		"its own: they are named after the images they came from, so two imports sharing a "
-		"folder would overwrite one another.");
+		"folder would overwrite one another.",
+		m_DefaultName);
 
 	m_ImportPbrMaterials = new QCheckBox("Import PBR materials", content);
 	m_ImportPbrMaterials->setObjectName("importPbrMaterials");
@@ -170,7 +198,8 @@ AssetImporterDialog::AssetImporterDialog(
 		"materialFolder",
 		"Folder under Authored/Materials/ to write the derived .bmaterial files into. Materials "
 		"may "
-		"share one with another import, since each names its own files.");
+		"share one with another import, since each names its own files.",
+		m_DefaultName);
 
 	// Only the PBR ones: a material the writer skips would otherwise be offered a name for a file
 	// that never appears.
@@ -203,7 +232,8 @@ AssetImporterDialog::AssetImporterDialog(
 		"Animation folder:",
 		assetlib::c_AnimationsDirectoryName,
 		"animationFolder",
-		"Folder under Derived/Animations/ to write the .banim into.");
+		"Folder under Derived/Animations/ to write the .banim into.",
+		m_DefaultName);
 	m_AnimationName = m_AnimationSection->AddFile(
 		{ .label      = "Animation file:",
 	      .stem       = m_DefaultName,
@@ -293,13 +323,17 @@ AssetImporterDialog::Folder(const QLineEdit* field, const QString& category) con
 }
 
 QString
-AssetImporterDialog::File(
-	const editor::ImportSection* section,
-	const QLineEdit*             name,
-	const QString&               category,
-	const QString&               extension) const
+AssetImporterDialog::SourceFolder() const
 {
-	return Folder(section->GetFolder(), category) + '/' + name->text().trimmed() + extension;
+	return editor::JoinCategory(
+		assetlib::c_MeshSourcesDirectoryName,
+		m_SourceSection->GetFolder()->text().trimmed());
+}
+
+QString
+AssetImporterDialog::File(const QString& folder, const QLineEdit* name, const QString& extension)
+{
+	return folder + '/' + name->text().trimmed() + extension;
 }
 
 std::vector<AssetImporterDialog::PlannedFile>
@@ -315,8 +349,32 @@ AssetImporterDialog::PlanFiles() const
 		planned.push_back(
 			{ .subject = subject,
 		      .name    = name->text().trimmed(),
-		      .path    = File(section, name, category, extension) });
+		      .path    = File(Folder(section->GetFolder(), category), name, extension) });
 	};
+
+	// Copied for a clips-only import as well, which is the one place the source's destination is
+	// not the mesh's business.
+	if (m_ImportMesh->isChecked() || m_ImportAnimations->isChecked())
+	{
+		const QString name   = m_SourceName->text().trimmed();
+		const QString source = File(SourceFolder(), m_SourceName, c_SourceExtension);
+
+		planned.push_back({ .subject = "The source", .name = name, .path = source });
+
+		// Only for a name that could be written: `importDocumentKeyFor` throws on a path with no
+		// extension, and a blank name leaves `Authored/Meshes/.glb`, which is one. The source row
+		// above already refuses that, and this runs on every keystroke.
+		if (editor::IsPlainFileStem(name))
+		{
+			// Through the library's rule rather than a second `.bimport` beside the field: one name
+			// places both files, so the pair cannot come apart here and nowhere else.
+			planned.push_back(
+				{ .subject = "The import document",
+			      .name    = name,
+			      .path    = QString::fromStdString(
+					  assetlib::importDocumentKeyFor(source.toStdString())) });
+		}
+	}
 
 	if (m_ImportMesh->isChecked())
 	{
@@ -411,17 +469,18 @@ AssetImporterDialog::GetOutputs() const
 {
 	auto outputs = ImportOutputs();
 
-	outputs.mesh =
-		File(m_MeshSection, m_MeshName, assetlib::c_MeshesDirectoryName, c_MeshExtension);
+	outputs.source = File(SourceFolder(), m_SourceName, c_SourceExtension);
+	outputs.mesh   = File(
+		Folder(m_MeshSection->GetFolder(), assetlib::c_MeshesDirectoryName),
+		m_MeshName,
+		c_MeshExtension);
 	outputs.skeleton = File(
-		m_SkeletonSection,
+		Folder(m_SkeletonSection->GetFolder(), assetlib::c_SkeletonsDirectoryName),
 		m_SkeletonName,
-		assetlib::c_SkeletonsDirectoryName,
 		c_SkeletonExtension);
 	outputs.animations = File(
-		m_AnimationSection,
+		Folder(m_AnimationSection->GetFolder(), assetlib::c_AnimationsDirectoryName),
 		m_AnimationName,
-		assetlib::c_AnimationsDirectoryName,
 		c_AnimExtension);
 
 	outputs.materialDir =
@@ -440,6 +499,7 @@ AssetImporterDialog::Refresh()
 {
 	// A field is dead when nothing is going to be written through it. Disabling the section takes its
 	// file names with it, which is what keeps a dead name out of the validation.
+	m_SourceSection->setEnabled(m_ImportMesh->isChecked() || m_ImportAnimations->isChecked());
 	m_MeshSection->setEnabled(m_ImportMesh->isChecked());
 	m_SkeletonSection->setEnabled(m_ImportMesh->isChecked());
 	m_TextureSection->setEnabled(m_ImportTextures->isChecked());

@@ -29,6 +29,12 @@ namespace editor
  */
 struct ImportOutputs
 {
+	/**
+	 * The copied `.glb`. Its `.bimport` sidecar is derived from it by
+	 * `assetlib::importDocumentKeyFor`, so the pair is one destination and not two.
+	 */
+	QString source;
+
 	QString mesh;        // the `.bmesh`
 	QString skeleton;    // the `.bskel`, written only when the source carries a skin
 	QString animations;  // the `.banim`, one file holding every clip
@@ -124,13 +130,21 @@ private:
 	[[nodiscard]] QString
 	Folder(const QLineEdit* field, const QString& category) const;
 
-	/** The full path of one named file: its section's folder, the name, and a fixed extension. */
+	/**
+	 * Where the copied source goes: `Authored/Meshes/<what was typed>`, or the category itself when
+	 * nothing usable was typed.
+	 *
+	 * A blank field means the category root here and the source's name everywhere else. A derived
+	 * category must not be shared flat -- two imports' extracted textures would overwrite one
+	 * another -- while this one always has been, and a default that moved it would put a project's
+	 * sources in two places depending on when they were imported.
+	 */
 	[[nodiscard]] QString
-	File(
-		const editor::ImportSection* section,
-		const QLineEdit*             name,
-		const QString&               category,
-		const QString&               extension) const;
+	SourceFolder() const;
+
+	/** The full path of one named file: the folder it lands in, the name, and a fixed extension. */
+	[[nodiscard]] static QString
+	File(const QString& folder, const QLineEdit* name, const QString& extension);
 
 	/** Re-runs the validation and moves the OK button and the message with it. */
 	void
@@ -145,12 +159,14 @@ private:
 	QCheckBox* m_ImportPbrMaterials = nullptr;
 	QCheckBox* m_ImportAnimations   = nullptr;
 
+	editor::ImportSection* m_SourceSection    = nullptr;
 	editor::ImportSection* m_MeshSection      = nullptr;
 	editor::ImportSection* m_SkeletonSection  = nullptr;
 	editor::ImportSection* m_TextureSection   = nullptr;
 	editor::ImportSection* m_MaterialSection  = nullptr;
 	editor::ImportSection* m_AnimationSection = nullptr;
 
+	QLineEdit* m_SourceName    = nullptr;
 	QLineEdit* m_MeshName      = nullptr;
 	QLineEdit* m_SkeletonName  = nullptr;
 	QLineEdit* m_AnimationName = nullptr;

@@ -595,17 +595,26 @@ way out of one, which `editor::JoinCategory` enforces. Every reference in a proj
 that layout, so an asset that could move across categories is an asset whose references stop
 meaning anything.
 
-**Each folder field folds out into the files it will write**, one editable name apiece — the `.bmesh`,
-the `.bskel`, the `.banim`, and one per PBR material. Without them every output took the source file's
-name, so two imports that belonged in one folder collided and each had to be given a subfolder to keep
-them apart; naming the files is what lets `animals/coyote/` hold both skins rather than
-`animals/coyote/skin1/` and `animals/coyote/skin2/`. Textures are the exception and stay folder-only:
+**Each folder field folds out into the files it will write**, one editable name apiece — the copied
+`.glb`, the `.bmesh`, the `.bskel`, the `.banim`, and one per PBR material. Without them every output
+took the source file's name, so two imports that belonged in one folder collided and each had to be
+given a subfolder to keep them apart; naming the files is what lets `animals/coyote/` hold both skins
+rather than `animals/coyote/skin1/` and `animals/coyote/skin2/`. For the source that is the difference
+between importing a second `scene.glb` and not being able to at all: a DCC hands you the same stem
+whatever the asset is. Textures are the exception and stay folder-only:
 `AssetStore::WriteTextures` names its output after the image each came from, so an import can neither name them
 nor -- since two sources may name an image alike -- share their folder with another. The sections start **collapsed**, so a dialog nobody touches is the
 folder-per-category one it has always been, and every name starts at the source's own — an untouched
 import lands exactly where it used to.
 
-A *folder* that cannot be honoured falls back to the source's name. A *file name* does not: it
+The source's field sits above every checkbox rather than under the mesh's, because the copy is made
+for a clips-only import too. Its `.bimport` is not a field of its own — `assetlib::importDocumentKeyFor`
+derives it, so one name places both halves of what is one asset under two names.
+
+A *folder* that cannot be honoured falls back to the source's name — except the source's own, which
+falls back to the category root, because that is where every `.glb` copied so far sits and a default
+that moved it would leave a project's sources in two places depending on when each was imported. A
+*file name* does not fall back at all: it
 disables OK and states the reason, because discarding a name someone deliberately typed writes a file
 they did not ask for and cannot see coming. Names are also checked against the project as they are
 typed — importing into a folder another import already owns is the case this exists for, and finding
