@@ -162,14 +162,22 @@ blend cannot. `PbrMaterial::transmissionFactor` says which:
   angle, where Fresnel returns nearly everything, the surface has to hide what is behind it or the
   environment would be added to a backdrop still showing through in full.
 
-The two lobes are kept apart for this: `PbrShading::EvaluateSurface` returns a `SurfaceLobes`
-(diffuse, specular, and the reflectance the specular lobe returns) instead of a summed colour, and
-the callers weight it. `MaterialData::ShadeWithBaseColor` sums the pair, which is the opaque
-answer; `MaterialData::ShadeBlended` is the only caller of `BlendedSurface`, the one function that
-weights them apart, which lives beside `SurfaceLobes` in
-[lib/math/PbrShading.slang](libs/bgl_common/shaders/src/lib/math/PbrShading.slang). Both methods live in
+The two lobes are kept apart for this: `PbrShading::EvaluateSurface` reads a `PbrSurface` — the
+material's half, from the contract tree ([bgl/PbrSurface.slang](libs/bgl/shaders/src/bgl/PbrSurface.slang)) —
+and returns a `SurfaceLobes` (diffuse, specular, the reflectance the specular lobe returns, and the
+emissive) instead of a summed colour, and the callers weight it. `MaterialData::ShadeSurface` sums
+them, which is the opaque answer; `MaterialData::ShadeSurfaceBlended` is the only caller of
+`BlendedSurface`, the one function that weights them apart, which lives beside `SurfaceLobes` in
+[lib/math/PbrShading.slang](libs/bgl_common/shaders/src/lib/math/PbrShading.slang). Those two are the
+only BRDF entries; the four shading entry points the programs call (`Shade`, `ShadeBlended`,
+`ShadeAlphaTested`, `ShadeHashedAlpha`) each fill a `PbrSurface` from the engine's record and hand it to
+one of them. All of it is in
 [lib/forward/MaterialShading.slang](libs/bgl_extended/shaders/src/lib/forward/MaterialShading.slang), which
-extends the material constant buffer with the four shading entry points.
+extends the material constant buffer.
+
+Emissive follows the specular lobe, not the diffuse: it is light leaving the surface itself rather
+than light that came through from behind, so transmission exempts it from thinning the same way, and
+it raises the coverage not at all — emission adds to the backdrop, it does not hide it.
 
 **Only the blend bucket is premultiplied.** The opaque, cutout and hashed buckets write with no blend
 at all, so their pixel shaders keep returning the plain sum and the material's own alpha — a cutout

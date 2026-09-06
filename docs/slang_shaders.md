@@ -1,11 +1,13 @@
 # Slang Shaders
 
-Every shader is one Slang source under one of two trees, and **both backends compile it at runtime**
+Every shader is one Slang source under one of three trees, and **both backends compile it at runtime**
 from the staged Slang — to DXIL on D3D12, to MSL via `newLibraryWithSource` on Metal.
 
 ## The tree: a program has an entry point, a library module does not
 
 ```
+libs/bgl/shaders/src/                 the contract: what a game surface conforms to and reads through; names no handle, arena or bucket
+  bgl/                                PbrSurface, the material's half of shading as the PBR model reads it
 libs/bgl_common/shaders/src/          what every renderer shares; names no buffer, texture or handle
   idl/                                the IDL modules, the one source bgl_idlgen mirrors to C++; see docs/idlgen.md
   lib/  anim/ math/ geom/ data/       the pose walk and vertex blend, the foot-plant geometry and its two-bone solve; the BRDF and its LUT integral, the TAA resolve, hashed alpha, tonemapping, a motion vector, a frustum test, affine transform maths; vertex decode; plain view structs
@@ -14,11 +16,15 @@ libs/bgl_extended/shaders/src/        this renderer's own
   lib/        forward/ types/ debug/                 imported, never dispatched; types/ is the binding layer
 ```
 
-Both trees are staged into one `./shaders/src` beside the executable, `bgl_common`'s first, so an
-`import` never says which tree a module came from. Which tree a module belongs in is checked rather than asked for:
-`bgl_common_check_shaders` compiles every shared module with only the shared tree on the search path,
-and one that imports anything from the renderer — a `.Handle` wrapper, `lib.debug.dbg` — fails the
-build with `cannot open file`. The rule is the same one `bgl_common_selfcheck` holds the C++ to.
+All three are staged into one `./shaders/src` beside the executable, the contract first and
+`bgl_common`'s next, so an `import` never says which tree a module came from. Which tree a module
+belongs in is checked rather than asked for, and the checks point the way the C++ links:
+`bgl_check_shaders` compiles every contract module with only the contract on the search path;
+`bgl_common_check_shaders` compiles every shared module with the shared tree and the contract, and one
+that imports anything from the renderer — a `.Handle` wrapper, `lib.debug.dbg` — fails the build with
+`cannot open file`. The rule is the same one `bgl_selfcheck` and `bgl_common_selfcheck` hold the C++
+to. A game checks its own modules the same way, with the contract as the one path, and never sees
+the shared tree in the build or in the check.
 
 Resolving is half of it: the second renderer's target is WGSL, and a module alone lowers to nothing,
 because Slang emits per entry point. So every shared `lib/` module has a **driver** under
@@ -78,14 +84,15 @@ could want:
    changed read changes in one place.
 
 The build holds a module to it mechanically: `bgl_common_check_shaders` fails a module that imports
-anything the shared tree does not hold, and `bgl_common_check_wgsl` fails one that does not lower
-to WGSL at the stage its driver names. What the rules add is the judgement the gates cannot make —
-a function that takes a `Texture2D.Handle` resolves fine and lowers fine, and is still the one
-thing the second renderer cannot call. And a module can pass both and still belong to this
-renderer: `lib/forward/common.slang` names no handle, and `ForwardVSOut` in it is the forward
-path's interpolant contract, `SV_Position` and a `MATERIAL` semantic included. What is shared is
-what every renderer computes; what one renderer's passes agree on between themselves stays with
-them, however clean it looks.
+anything neither the shared tree nor the contract below it holds, and `bgl_common_check_wgsl` fails
+one that does not lower to WGSL at the stage its driver names. What the rules add is the judgement
+the gates cannot make — a function that takes a `Texture2D.Handle` resolves fine and lowers fine,
+and is still the one thing the second renderer cannot call. And a module can pass both and still
+belong to this renderer: `lib/forward/common.slang` names no handle, and `ForwardVSOut` in it is the
+forward path's interpolant contract, `SV_Position` and a `MATERIAL` semantic included. What is
+shared is what every renderer computes; what one renderer's passes agree on between themselves stays
+with them, however clean it looks.
+
 
 ## Atomics: `Atomic<T>`, never a plain field + `InterlockedAdd`
 

@@ -1,6 +1,7 @@
 // WGSL-lowering driver for lib.math.PbrShading. Fragment stage: the footprint LOD takes derivatives
 // of the reflection vector. The environment here is plain cube and 2D textures -- the first
 // ISurfaceEnv with no bindless handle.
+import bgl.PbrSurface;
 import idl.ISurfaceEnv;
 import lib.math.PbrShading;
 
@@ -28,20 +29,16 @@ float4 main(float3 worldPos: POSITION, float3 normal: NORMAL, float4 tangent: TA
 {
     BoundEnv env;
     SurfaceParams params = { float3(0.0, 1.0, 0.0), 1.0, float2(0.0, 1.0) };
-    let lobes = EvaluateSurface(
-        env,
-        params,
-        worldPos,
-        normal,
-        tangent,
-        float4(0.5, 0.5, 0.5, 1.0),
-        float3(1.0, 0.5, 0.0),
-        float2(0.5, 0.5),
-        float4(1.0, 1.0, 1.0, 1.0),
-        true
-    );
+    PbrSurface surface;
+    surface.baseColor = float4(0.5, 0.5, 0.5, 1.0);
+    surface.orm = float3(1.0, 0.5, 0.0);
+    surface.normalXY = float2(0.5, 0.5);
+    surface.specularFactors = float4(1.0, 1.0, 1.0, 1.0);
+    surface.transmissionFactor = 0.5;
+    surface.emissive = float3(0.1, 0.0, 0.0);
+    let lobes = EvaluateSurface(env, params, worldPos, normal, tangent, surface, true);
     let n = CalculateNormal(normal, tangent, float2(0.5, 0.5), true);
     let f = FresnelSchlickRoughness(0.5, float3(0.04, 0.04, 0.04), 0.5);
-    let blended = BlendedSurface(lobes, 0.5, 0.5);
-    return float4(lobes.diffuse + lobes.specular * lobes.reflectance + n * f.x, 1.0) + blended;
+    let blended = BlendedSurface(lobes, 0.5, surface.transmissionFactor);
+    return float4(lobes.diffuse + lobes.specular * lobes.reflectance + lobes.emissive + n * f.x, 1.0) + blended;
 }

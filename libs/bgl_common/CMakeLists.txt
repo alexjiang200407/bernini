@@ -94,25 +94,18 @@ add_custom_command(
 	VERBATIM
 )
 add_custom_target(bgl_common_copy_shaders ALL DEPENDS "${BGL_COMMON_SHADER_STAMP}")
+add_dependencies(bgl_common_copy_shaders bgl_copy_contract_shaders)
 
 # Membership, enforced for Slang the way bgl_common_selfcheck enforces it for C++: every module here
-# is compiled with only this tree on the search path, so an import that reaches back into a renderer
-# fails to resolve and stops the build. A library module has no entry point, so this is module
-# compilation (-o .slang-module), which needs none. The output is never loaded; docs/shader_cache.md
-# says why .slang-module IR is not used at runtime, and nothing here changes that.
+# is compiled with only this tree and the contract below it on the search path, so an import that
+# reaches back into a renderer fails to resolve and stops the build. A library module has no entry
+# point, so this is module compilation (-o .slang-module), which needs none. The output is never
+# loaded; docs/shader_cache.md says why .slang-module IR is not used at runtime, and nothing here
+# changes that.
 #
-# The port stages slangc beside slangd under vcpkg's tools/, which is not on PATH; the hint is what
-# finds it on a preset whose renderer never runs a build-time shader step of its own. This runs before
-# any renderer's CMake (the root adds bgl_common first), so it is what fills the cache entry the D3D12
-# shader step's own find_program of the same name then reads back.
-find_program(SLANG_EXECUTABLE
-	NAMES slang slangc slangc.exe
-	HINTS "${VCPKG_INSTALLED_DIR}/${VCPKG_TARGET_TRIPLET}/tools/shader-slang"
-	DOC "Slang compiler, for the shared-module membership check"
-)
-if(NOT SLANG_EXECUTABLE)
-	message(FATAL_ERROR "slangc not found: bgl_common's shared Slang modules cannot be checked.")
-endif()
+# SLANG_EXECUTABLE is the cache entry bgl's contract check filled: the root adds bgl first, and its
+# find_program carries the vcpkg tools/ hint that finds slangc on a preset whose renderer never runs
+# a build-time shader step of its own.
 
 set(BGL_COMMON_SHADER_CHECKS "")
 foreach(MODULE ${BGL_COMMON_SHADER_SOURCES})
@@ -124,8 +117,9 @@ foreach(MODULE ${BGL_COMMON_SHADER_SOURCES})
 	add_custom_command(
 		OUTPUT  "${MODULE_OUT}"
 		COMMAND ${CMAKE_COMMAND} -E make_directory "${MODULE_OUT_DIR}"
-		COMMAND ${SLANG_EXECUTABLE} "${MODULE}" -I "${CMAKE_CURRENT_SOURCE_DIR}/shaders/src" -o "${MODULE_OUT}"
-		DEPENDS ${BGL_COMMON_SHADER_SOURCES}
+		COMMAND ${SLANG_EXECUTABLE} "${MODULE}" -I "${CMAKE_CURRENT_SOURCE_DIR}/shaders/src"
+				-I "${BGL_SHADER_CONTRACT_ROOT}" -o "${MODULE_OUT}"
+		DEPENDS ${BGL_COMMON_SHADER_SOURCES} ${BGL_SHADER_CONTRACT_SOURCES}
 		COMMENT "shared-module check ${MODULE_REL}"
 		VERBATIM
 	)
@@ -159,8 +153,9 @@ foreach(DRIVER ${BGL_COMMON_WGSL_DRIVERS})
 		OUTPUT  "${DRIVER_OUT}"
 		COMMAND ${CMAKE_COMMAND} -E make_directory "${CMAKE_CURRENT_BINARY_DIR}/wgsl_check"
 		COMMAND ${SLANG_EXECUTABLE} "${DRIVER}" -I "${CMAKE_CURRENT_SOURCE_DIR}/shaders/src"
+				-I "${BGL_SHADER_CONTRACT_ROOT}"
 				-target wgsl -entry main -stage ${DRIVER_STAGE} -o "${DRIVER_OUT}"
-		DEPENDS "${DRIVER}" ${BGL_COMMON_SHADER_SOURCES}
+		DEPENDS "${DRIVER}" ${BGL_COMMON_SHADER_SOURCES} ${BGL_SHADER_CONTRACT_SOURCES}
 		COMMENT "wgsl check ${DRIVER_NAME}"
 		VERBATIM
 	)

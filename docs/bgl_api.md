@@ -21,6 +21,11 @@ or a throw contract here — state what a caller is guaranteed, not the machiner
 provides it. `bgl_selfcheck` enforces the dependency half (a public header that reaches into a
 renderer's internals fails the build); the wording half is review's.
 
+The same surface has a Slang half, [libs/bgl/shaders/src/bgl](libs/bgl/shaders/src/bgl): what a
+surface written outside the engine conforms to and reads through, and nothing that names a handle,
+an arena or a bucket. `bgl_check_shaders` holds it to the same rule, compiling each module with
+only that tree on the search path; [Slang Shaders](docs/slang_shaders.md) has the three trees.
+
 **This document is a map, not a mirror.** It captures design choices, topology, and the *non-obvious*
 contracts — not full signatures. The header at each linked path is the source of truth; when this doc
 disagrees, trust the header, then fix this doc.

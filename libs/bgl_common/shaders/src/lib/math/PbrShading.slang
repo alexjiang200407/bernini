@@ -1,3 +1,4 @@
+import bgl.PbrSurface;
 import idl.ISurfaceEnv;
 
 // Fresnel Schlick approximation adjusted for IBL Roughness
@@ -71,23 +72,28 @@ public struct SurfaceLobes
     /// The fraction of the environment the specular lobe returns, per channel. Exposure is not in it
     /// -- it is a ratio, not radiance.
     public float3 reflectance;
+
+    /// What the surface emits, exposed like the two lobes. Not a lobe: no light is involved.
+    public float3 emissive;
 };
 
 /**
  * A blended surface as premultiplied colour and the coverage that goes with it.
  *
  * `transmission` selects what `alpha` means: 0 for coverage, 1 for a surface the light passes
- * through, whose specular stays whole and whose coverage rises with its reflectance. Why, and what
- * the blend state on the other side has to be, is docs/passes.md#blended-surfaces.
+ * through, whose specular and emissive stay whole and whose coverage rises with its reflectance.
+ * Why, and what the blend state on the other side has to be, is docs/passes.md#blended-surfaces.
  */
 public float4 BlendedSurface(SurfaceLobes lobes, float alpha, float transmission)
 {
     let reflected = max(max(lobes.reflectance.r, lobes.reflectance.g), lobes.reflectance.b);
 
-    let specularWeight = lerp(alpha, 1.0, transmission);
+    // Light that leaves the surface itself -- reflected or emitted -- is what transmission exempts
+    // from thinning; only the diffuse lobe is the light that came through from behind.
+    let surfaceWeight = lerp(alpha, 1.0, transmission);
     let coverage = lerp(alpha, alpha + (1.0 - alpha) * reflected, transmission);
 
-    return float4(lobes.diffuse * alpha + lobes.specular * specularWeight, saturate(coverage));
+    return float4(lobes.diffuse * alpha + (lobes.specular + lobes.emissive) * surfaceWeight, saturate(coverage));
 }
 
 public SurfaceLobes EvaluateSurface<E : ISurfaceEnv>(
@@ -96,20 +102,18 @@ public SurfaceLobes EvaluateSurface<E : ISurfaceEnv>(
     float3 worldPos,
     float3 worldNormal,
     float4 worldTangent,
-    float4 baseColor,
-    float3 orm,
-    float2 normalXY,
-    float4 specularFactors,
+    PbrSurface surface,
     bool isFrontFace
 )
 {
-    float3 albedo = baseColor.rgb;
-    float ao = orm.r;
-    float roughness = orm.g;
-    float metallic = orm.b;
+    float3 albedo = surface.baseColor.rgb;
+    float ao = surface.orm.r;
+    float roughness = surface.orm.g;
+    float metallic = surface.orm.b;
+    float4 specularFactors = surface.specularFactors;
 
     // Setup Geometry Vectors
-    float3 N = CalculateNormal(worldNormal, worldTangent, normalXY, isFrontFace);
+    float3 N = CalculateNormal(worldNormal, worldTangent, surface.normalXY, isFrontFace);
     float3 V = normalize(params.cameraPos - worldPos);
     float3 R = reflect(-V, N);
 
@@ -180,6 +184,7 @@ public SurfaceLobes EvaluateSurface<E : ISurfaceEnv>(
     lobes.reflectance = (F * envBRDF.x + envBRDF.y * specularWeight) * ao;
     lobes.diffuse = kD * diffuse * ao * params.exposure;
     lobes.specular = prefilteredColor * lobes.reflectance * params.exposure;
+    lobes.emissive = surface.emissive * params.exposure;
 
     return lobes;
 }
