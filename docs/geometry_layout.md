@@ -46,8 +46,9 @@ path is the source of truth; when this doc disagrees, trust the struct, then fix
   index buffer. A parent references a contiguous window of children by `(offset, count)`; there is
   no nesting or pointer chasing. A `MeshInstance` is the root descriptor: a `transform` plus a
   `RangeWithCount<Submesh>` into the submesh buffer. It is a *placement*, not a mesh — the range is
-  the geom's, copied in by value, and the geom has no record of its own — so per-unit variation has
-  nowhere to live, and culling repeats itself per submesh.
+  the geom's, copied in by value — so per-unit variation has nowhere to live, and culling repeats
+  itself per submesh. The geom now has a record of its own, `Geom`, holding that same range, but a
+  placement does not yet name it and nothing reads it.
 
 * **Geometry is meshlet-partitioned for mesh-shader rendering.** Each submesh is split into
   `Meshlet`s of at most `idl::cMaxVerticesPerMeshlet` (64) unique vertices and
@@ -157,6 +158,7 @@ Generated shader structs (GPU source of truth). Each has a byte-identical `bgl::
 | Struct | File | Role |
 |---|---|---|
 | `MeshInstance` | [MeshInstance.slang](libs/bgl_common/shaders/src/idl/MeshInstance.slang) | Root descriptor of a placement: the three rows of its world transform + the geom's `RangeWithCount<Submesh>`, plus a `RawEntry<IPlayback>` naming its record in the view's playback arena, null on a static mesh. |
+| `Geom` | [Geom.slang](libs/bgl_common/shaders/src/idl/Geom.slang) | What a geometry-creating method produced and every placement from it shares: its `RangeWithCount<Submesh>`. Owned by the `Scene`, one per live geom, freed by `DeleteGeom`. |
 | `Clip` | [Clip.slang](libs/bgl_common/shaders/src/idl/Clip.slang) | One playable clip: where its frame 0 sits in the tier's own frame space, its frame count, authored rate and loop flag. Shared by every animated tier out of one clip buffer. |
 | `Submesh` | [Submesh.slang](libs/bgl_common/shaders/src/idl/Submesh.slang) | One drawable part, **geometry only**: its `VertexLayout`, meshlet range, vertexMap/indices ranges, a `RawRange` of vertex bytes, vertex count, local bounding sphere. No material, no PSO — those are per-instance. |
 | `Meshlet` | [Meshlet.slang](libs/bgl_common/shaders/src/idl/Meshlet.slang) | A mesh-shader work unit: offsets into the parent submesh's vertexMap/indices windows, vertex/triangle counts, bounding sphere. |

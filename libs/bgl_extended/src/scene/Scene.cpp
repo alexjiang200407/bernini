@@ -369,6 +369,14 @@ namespace bgl
 		m_Geoms.reset(atLeastOne(m_Desc.initialGeom));
 
 		{
+			auto geomBufferDesc         = EntryBufferDesc();
+			geomBufferDesc.initialCount = atLeastOne(m_Desc.initialGeom);
+			geomBufferDesc.debugName    = "Geom Buffer";
+
+			m_GeomBuffer.Init(std::move(geomBufferDesc), m_ResourceManager);
+		}
+
+		{
 			auto submeshBufferDesc         = RangeBufferDesc();
 			submeshBufferDesc.initialCount = atLeastOne(initialSubmeshes);
 			submeshBufferDesc.debugName    = "Submesh Buffer";
@@ -496,14 +504,25 @@ namespace bgl
 	core::slot_handle
 	Scene::AllocateGeomSlot(const GeomRecord& record)
 	{
-		auto slot = m_Geoms.try_allocate_and_emplace(record);
-		if (slot.is_null())
-		{
-			m_Geoms.grow(m_Geoms.capacity() * 2);
-			slot = m_Geoms.allocate_and_emplace(record);
-		}
+		auto placed  = record;
+		placed.entry = m_GeomBuffer.Add(idl::Geom{ .submeshes = record.submeshes });
 
-		return slot;
+		try
+		{
+			auto slot = m_Geoms.try_allocate_and_emplace(placed);
+			if (slot.is_null())
+			{
+				m_Geoms.grow(m_Geoms.capacity() * 2);
+				slot = m_Geoms.allocate_and_emplace(placed);
+			}
+
+			return slot;
+		}
+		catch (...)
+		{
+			m_GeomBuffer.Erase(placed.entry);
+			throw;
+		}
 	}
 
 	void
@@ -1873,6 +1892,7 @@ namespace bgl
 		}
 
 		m_SubmeshBuffer.EraseByIndex(submeshRoot);
+		m_GeomBuffer.Erase(record.entry);
 		m_Geoms.release_slot(geom.handle.index);
 	}
 
