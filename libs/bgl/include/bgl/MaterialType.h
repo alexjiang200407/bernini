@@ -10,7 +10,11 @@ namespace bgl
 		kAssert = 1,
 		kPBR = 2,
 		kLoosePbr = 3,
-		kCount = 4,
+		kGame0 = 4,
+		kGame1 = 5,
+		kGame2 = 6,
+		kGame3 = 7,
+		kCount = 8,
 	};
 
 	static_assert(sizeof(MaterialType) == 4);

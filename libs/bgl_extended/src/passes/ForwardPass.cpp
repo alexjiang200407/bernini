@@ -101,6 +101,14 @@ namespace bgl
 		constexpr auto c_LooseHashedPixelSrc = "programs.forward.PBR_Loose_HashedAlpha"sv;
 		constexpr auto c_TransparentSrc      = "programs.forward.Transparent"sv;
 		constexpr auto c_AssertPixelSrc      = "programs.forward.Assert"sv;
+		constexpr auto c_Game0PixelSrc       = "programs.forward.GameSlot0"sv;
+		constexpr auto c_Game0CutoutPixelSrc = "programs.forward.GameSlot0_AlphaTest"sv;
+		constexpr auto c_Game1PixelSrc       = "programs.forward.GameSlot1"sv;
+		constexpr auto c_Game1CutoutPixelSrc = "programs.forward.GameSlot1_AlphaTest"sv;
+		constexpr auto c_Game2PixelSrc       = "programs.forward.GameSlot2"sv;
+		constexpr auto c_Game2CutoutPixelSrc = "programs.forward.GameSlot2_AlphaTest"sv;
+		constexpr auto c_Game3PixelSrc       = "programs.forward.GameSlot3"sv;
+		constexpr auto c_Game3CutoutPixelSrc = "programs.forward.GameSlot3_AlphaTest"sv;
 
 		struct PsoConfig
 		{
@@ -167,6 +175,50 @@ namespace bgl
 			  ComparisonFunc::kLess,
 			  c_SkinnedGeomSrc },
 			// kTransparent_SkinnedMesh_PBR: as above, a bucket rather than a draw.
+			{ c_TransparentSrc,
+			  RasterCullMode::kNone,
+			  false,
+			  true,
+			  ComparisonFunc::kLess,
+			  c_AnyGeomSrc },
+			// kOpaque_StaticMesh_Game0
+			{ c_Game0PixelSrc, RasterCullMode::kBack, true, false },
+			// kAlphaTest_StaticMesh_Game0
+			{ c_Game0CutoutPixelSrc, RasterCullMode::kNone, true, false },
+			// kTransparent_StaticMesh_Game0: a bucket in the one shared transparent pipeline.
+			{ c_TransparentSrc,
+			  RasterCullMode::kNone,
+			  false,
+			  true,
+			  ComparisonFunc::kLess,
+			  c_AnyGeomSrc },
+			// kOpaque_StaticMesh_Game1
+			{ c_Game1PixelSrc, RasterCullMode::kBack, true, false },
+			// kAlphaTest_StaticMesh_Game1
+			{ c_Game1CutoutPixelSrc, RasterCullMode::kNone, true, false },
+			// kTransparent_StaticMesh_Game1: a bucket in the one shared transparent pipeline.
+			{ c_TransparentSrc,
+			  RasterCullMode::kNone,
+			  false,
+			  true,
+			  ComparisonFunc::kLess,
+			  c_AnyGeomSrc },
+			// kOpaque_StaticMesh_Game2
+			{ c_Game2PixelSrc, RasterCullMode::kBack, true, false },
+			// kAlphaTest_StaticMesh_Game2
+			{ c_Game2CutoutPixelSrc, RasterCullMode::kNone, true, false },
+			// kTransparent_StaticMesh_Game2: a bucket in the one shared transparent pipeline.
+			{ c_TransparentSrc,
+			  RasterCullMode::kNone,
+			  false,
+			  true,
+			  ComparisonFunc::kLess,
+			  c_AnyGeomSrc },
+			// kOpaque_StaticMesh_Game3
+			{ c_Game3PixelSrc, RasterCullMode::kBack, true, false },
+			// kAlphaTest_StaticMesh_Game3
+			{ c_Game3CutoutPixelSrc, RasterCullMode::kNone, true, false },
+			// kTransparent_StaticMesh_Game3: a bucket in the one shared transparent pipeline.
 			{ c_TransparentSrc,
 			  RasterCullMode::kNone,
 			  false,

@@ -45,6 +45,7 @@
 #include <bgl_common/idl/BoneSample.h>
 #include <bgl_common/idl/Clip.h>
 #include <bgl_common/idl/Constants.h>
+#include <bgl_common/idl/GameSurfaceRecord.h>
 #include <bgl_common/idl/LoosePbrMaterial.h>
 #include <bgl_common/idl/Meshlet.h>
 #include <bgl_common/idl/PbrMaterial.h>
@@ -1639,6 +1640,15 @@ namespace bgl
 		static_assert(
 			sizeof(idl::LoosePbrMaterial::textures) ==
 			idl::cLooseChannelCount * sizeof(idl::RawTextureHandle));
+		static_assert(offsetof(idl::GameSurfaceRecord, textures) == 0);
+		static_assert(
+			sizeof(idl::GameSurfaceRecord::textures) ==
+			idl::cGameSurfaceSlots * sizeof(idl::RawTextureHandle));
+		// A game surface's parameters follow the fixed part at an offset the shader holds as a
+		// constant; the struct growing without it is a record read one field late.
+		static_assert(
+			idl::cRawPayloadOffset + sizeof(idl::GameSurfaceRecord) ==
+			idl::cGameSurfaceParamsOffset);
 
 		// The other half of that arithmetic: the payload stores RawTextureHandle while the view is
 		// strided by the handle itself, and a payload offset that is not a whole number of handles
@@ -1731,19 +1741,23 @@ namespace bgl
 	void
 	Scene::DeleteMaterial(MaterialHandle material)
 	{
-		// Only the two material kinds the scene allocates storage for can be freed. kNull and
-		// kAssert name shading behaviour, not an entry in a buffer, so there is nothing to release.
+		// A kind with an arena record can be freed. kNull and kAssert name shading behaviour, not
+		// an entry in a buffer, so there is nothing to release.
 		switch (material.materialType)
 		{
 		case MaterialType::kPBR:
 		case MaterialType::kLoosePbr:
+		case MaterialType::kGame0:
+		case MaterialType::kGame1:
+		case MaterialType::kGame2:
+		case MaterialType::kGame3:
 			if (!m_Materials.IsOffsetValid(material.byteOffset))
 			{
 				throw SceneError(
 					"MaterialHandle passed to DeleteMaterial has expired or is invalid");
 			}
 
-			// The record says what it is, so the two kinds free the same way -- and the tag is what
+			// The record says what it is, so every kind frees the same way -- and the tag is what
 			// catches a handle whose type says one thing and whose offset holds another.
 			if (m_Materials.GetTagAt(material.byteOffset) != material.materialType)
 			{

@@ -19,5 +19,9 @@ public struct RawHandleArena<T>
 
     public uint LoadTag<U>(RawEntry<U> entry) { return raw.LoadTag(entry); }
 
+    // A value at a byte offset the caller has already derived from a record, for a payload whose
+    // tail starts past a fixed part -- see lib.forward.GameSurface.
+    public P LoadAt<P>(uint byteOffset) { return raw.Load<P>(byteOffset); }
+
     public T GetHandleAt(uint byteOffset, uint index) { return handles.GetAt(byteOffset, index); }
 }

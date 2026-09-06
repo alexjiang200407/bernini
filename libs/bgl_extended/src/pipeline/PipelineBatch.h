@@ -26,8 +26,9 @@ namespace bgl
 	{
 	public:
 		// Every worker that misses the shader cache stands up a Slang global session of its own,
-		// about 200 MB each, and the renderer's 27 links stop getting faster past six workers
-		// (measured: six and twelve within 0.1 s of each other, at 1.5 GB against 2.8 GB peak).
+		// about 200 MB each, and the renderer's links stop getting faster past six workers
+		// (measured at 27 links, before the reserved game rows made it 39: six and twelve within
+		// 0.1 s of each other, at 1.5 GB against 2.8 GB peak).
 		static constexpr uint32_t c_MaxBuildThreads = 6;
 
 		explicit PipelineBatch(IDevice* device) noexcept;

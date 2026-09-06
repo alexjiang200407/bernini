@@ -106,6 +106,32 @@ namespace bgl
 		return info;
 	}
 
+	namespace
+	{
+		// A game slot's three rows sit at its opaque row plus the layer's offset. Hashed alpha is
+		// closed to game surfaces at the door that creates one, so reaching here with it is bgl's
+		// own bug.
+		idl::PsoType
+		GameSlotPso(idl::PsoType opaqueRow, LayerType layer)
+		{
+			if (layer == LayerType::kHashed)
+				gfatal("A game surface has no hashed row");
+			const uint32_t offset = layer == LayerType::kBlend ? 2u :
+			                        layer == LayerType::kMask  ? 1u :
+			                                                     0u;
+			return static_cast<idl::PsoType>(static_cast<uint32_t>(opaqueRow) + offset);
+		}
+
+		static_assert(
+			static_cast<uint32_t>(idl::PsoType::kAlphaTest_StaticMesh_Game0) ==
+					static_cast<uint32_t>(idl::PsoType::kOpaque_StaticMesh_Game0) + 1 &&
+				static_cast<uint32_t>(idl::PsoType::kTransparent_StaticMesh_Game0) ==
+					static_cast<uint32_t>(idl::PsoType::kOpaque_StaticMesh_Game0) + 2 &&
+				static_cast<uint32_t>(idl::PsoType::kTransparent_StaticMesh_Game3) ==
+					static_cast<uint32_t>(idl::PsoType::kOpaque_StaticMesh_Game3) + 2,
+			"a game slot's rows are opaque, alpha-test, transparent, in that order");
+	}
+
 	idl::PsoType
 	GetPsoFromGeomAndMaterial(GeomType geom, MaterialType material, LayerType layer)
 	{
@@ -132,6 +158,15 @@ namespace bgl
 					return idl::PsoType::kHashedAlpha_StaticMesh_LoosePbr;
 				return cutout ? idl::PsoType::kAlphaTest_StaticMesh_LoosePbr :
 				                idl::PsoType::kOpaque_StaticMesh_LoosePbr;
+
+			case MaterialType::kGame0:
+				return GameSlotPso(idl::PsoType::kOpaque_StaticMesh_Game0, layer);
+			case MaterialType::kGame1:
+				return GameSlotPso(idl::PsoType::kOpaque_StaticMesh_Game1, layer);
+			case MaterialType::kGame2:
+				return GameSlotPso(idl::PsoType::kOpaque_StaticMesh_Game2, layer);
+			case MaterialType::kGame3:
+				return GameSlotPso(idl::PsoType::kOpaque_StaticMesh_Game3, layer);
 
 			// Neither shades a base color, so there is no alpha to cut or blend against.
 			case MaterialType::kNull:
@@ -179,7 +214,11 @@ namespace bgl
 	{
 		return pso == static_cast<uint32_t>(idl::PsoType::kTransparent_StaticMesh_PBR) ||
 		       pso == static_cast<uint32_t>(idl::PsoType::kTransparent_StaticMesh_LoosePbr) ||
-		       pso == static_cast<uint32_t>(idl::PsoType::kTransparent_SkinnedMesh_PBR);
+		       pso == static_cast<uint32_t>(idl::PsoType::kTransparent_SkinnedMesh_PBR) ||
+		       pso == static_cast<uint32_t>(idl::PsoType::kTransparent_StaticMesh_Game0) ||
+		       pso == static_cast<uint32_t>(idl::PsoType::kTransparent_StaticMesh_Game1) ||
+		       pso == static_cast<uint32_t>(idl::PsoType::kTransparent_StaticMesh_Game2) ||
+		       pso == static_cast<uint32_t>(idl::PsoType::kTransparent_StaticMesh_Game3);
 	}
 
 	void

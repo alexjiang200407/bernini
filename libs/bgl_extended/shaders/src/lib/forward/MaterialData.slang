@@ -1,4 +1,5 @@
 import idl.Constants;
+import idl.GameSurfaceRecord;
 import idl.IAlphaTestMaterial;
 import idl.IMaterial;
 import idl.IPbrMaterial;
@@ -38,7 +39,8 @@ public struct MaterialData
     public SamplerState.Handle linearClampSampler;
 
     // Handle `index` of the record at `byteOffset`, found by position: a payload's handle fields
-    // lead it and are contiguous. PbrMaterial.slang and LoosePbrMaterial.slang fix that order.
+    // lead it and are contiguous. PbrMaterial.slang, LoosePbrMaterial.slang and
+    // GameSurfaceRecord.slang fix that order.
     public Texture2D.Handle GetTextureAt(uint byteOffset, uint index)
     {
         return materials.GetHandleAt(byteOffset + cRawPayloadOffset, index);
@@ -83,6 +85,11 @@ public bool IsMaterialDoubleSided(uint byteOffset)
         return materialData.materials.LoadRecordAs<PbrMaterial>(RawEntry<IMaterial>.At(byteOffset)).doubleSided != 0;
     case MaterialType.kLoosePbr:
         return materialData.materials.LoadRecordAs<LoosePbrMaterial>(RawEntry<IMaterial>.At(byteOffset)).doubleSided != 0;
+    case MaterialType.kGame0:
+    case MaterialType.kGame1:
+    case MaterialType.kGame2:
+    case MaterialType.kGame3:
+        return materialData.materials.LoadRecordAs<GameSurfaceRecord>(RawEntry<IMaterial>.At(byteOffset)).doubleSided != 0;
     default:
         return true;
     }

@@ -106,3 +106,69 @@ TEST_CASE("only a blended layer leaves the counting sort", "[pso]")
 		CHECK(bgl::IsTransparentPso(pso) == (layer == bgl::LayerType::kBlend));
 	}
 }
+
+// Each reserved game slot has three static rows and no animated one. The rows are pinned by name
+// rather than by arithmetic, because GetPsoFromGeomAndMaterial reaches them by arithmetic and this
+// is what checks the enum's order against it. Hashed is closed to game surfaces at the door that
+// creates one, so it has no row here to check.
+TEST_CASE("a game slot's layers resolve to its own three rows, on static geometry only", "[pso]")
+{
+	using bgl::GeomType;
+	using bgl::GetPsoFromGeomAndMaterial;
+	using bgl::LayerType;
+	using bgl::MaterialType;
+	using bgl::idl::PsoType;
+
+	struct Slot
+	{
+		MaterialType type;
+		PsoType      opaque;
+		PsoType      cutout;
+		PsoType      blend;
+	};
+
+	constexpr std::array<Slot, 4> c_Slots = { {
+		{ MaterialType::kGame0,
+		  PsoType::kOpaque_StaticMesh_Game0,
+		  PsoType::kAlphaTest_StaticMesh_Game0,
+		  PsoType::kTransparent_StaticMesh_Game0 },
+		{ MaterialType::kGame1,
+		  PsoType::kOpaque_StaticMesh_Game1,
+		  PsoType::kAlphaTest_StaticMesh_Game1,
+		  PsoType::kTransparent_StaticMesh_Game1 },
+		{ MaterialType::kGame2,
+		  PsoType::kOpaque_StaticMesh_Game2,
+		  PsoType::kAlphaTest_StaticMesh_Game2,
+		  PsoType::kTransparent_StaticMesh_Game2 },
+		{ MaterialType::kGame3,
+		  PsoType::kOpaque_StaticMesh_Game3,
+		  PsoType::kAlphaTest_StaticMesh_Game3,
+		  PsoType::kTransparent_StaticMesh_Game3 },
+	} };
+
+	for (const Slot& slot : c_Slots)
+	{
+		const auto pso = [&](LayerType layer) {
+			return GetPsoFromGeomAndMaterial(GeomType::kStaticMesh, slot.type, layer);
+		};
+
+		CHECK(pso(LayerType::kOpaque) == slot.opaque);
+		CHECK(pso(LayerType::kMask) == slot.cutout);
+		CHECK(pso(LayerType::kBlend) == slot.blend);
+
+		// Only the blend row leaves the counting sort, read off the layer as above.
+		for (const LayerType layer : { LayerType::kOpaque, LayerType::kMask, LayerType::kBlend })
+		{
+			const uint32_t bucket =
+				bgl::SubmeshPso(GeomType::kStaticMesh, Handle(slot.type, layer));
+
+			CHECK(bgl::IsTransparentPso(bucket) == (layer == LayerType::kBlend));
+		}
+
+		// No skinned rows: the door stays shut for every layer.
+		for (const LayerType layer : c_Layers)
+		{
+			CHECK_FALSE(bgl::AcceptsMaterial(GeomType::kSkinnedMesh, Handle(slot.type, layer)));
+		}
+	}
+}
