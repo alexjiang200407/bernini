@@ -609,3 +609,143 @@ TEST_CASE(
 	CHECK(std::abs(expected.x) > 1e-2f);
 	CHECK(std::abs(expected.y) > 1e-2f);
 }
+
+// A moving surface under a camera that does not move. Before SetInstanceTransform existed the
+// velocity buffer could only ever describe the camera, so this case read exactly zero -- which is
+// what makes it evidence rather than a restatement of the shader.
+TEST_CASE("A moved instance writes its own velocity", "[motionvectors][transform][render]")
+{
+	auto       fixture  = MotionFixture();
+	const auto instance = fixture.AddQuad();
+
+	const glm::vec3   eye    = { 0.0f, 0.0f, c_CameraZ };
+	const bgl::Camera camera = CameraAt(eye);
+
+	fixture.RenderFrom(camera);
+
+	// Across the screen, not along the view axis: a shift in Z would change the surface point the
+	// centre pixel sees and confound the displacement with the reprojection.
+	constexpr float c_Shift = 0.35f;
+	fixture.view->SetInstanceTransform(
+		instance,
+		glm::translate(glm::mat4(1.0f), { c_Shift, 0.0f, c_PlaneZ }));
+
+	fixture.RenderFrom(camera);
+
+	const glm::vec2 measured = CentrePixel(fixture.ReadMotionVectors());
+
+	// The surface now under the centre pixel was one shift to the left on the previous frame.
+	const glm::vec3 surface  = SurfacePointAt(camera, eye, c_Width / 2, c_Height / 2);
+	const glm::vec2 expected = ProjectToUv(camera, surface) -
+	                           ProjectToUv(camera, surface - glm::vec3(c_Shift, 0.0f, 0.0f));
+
+	INFO("measured = " << measured.x << ", " << measured.y);
+	INFO("expected = " << expected.x << ", " << expected.y);
+
+	CHECK(measured.x == Catch::Approx(expected.x).margin(1e-3));
+	CHECK(measured.y == Catch::Approx(expected.y).margin(1e-3));
+
+	// Guards the assertion against passing on a zero it was supposed to detect.
+	CHECK(std::abs(expected.x) > 1e-2f);
+}
+
+TEST_CASE(
+	"A placement that stopped moving reports no velocity",
+	"[motionvectors][transform][render]")
+{
+	auto       fixture  = MotionFixture();
+	const auto instance = fixture.AddQuad();
+
+	const bgl::Camera camera = CameraAt({ 0.0f, 0.0f, c_CameraZ });
+
+	fixture.RenderFrom(camera);
+
+	fixture.view->SetInstanceTransform(
+		instance,
+		glm::translate(glm::mat4(1.0f), { 0.35f, 0.0f, c_PlaneZ }));
+	fixture.RenderFrom(camera);
+
+	// A third frame with no write. Velocity must be exactly zero rather than repeating the motion
+	// the previous frame already described -- the wobble a rollover that never resets would leave.
+	fixture.RenderFrom(camera);
+
+	const glm::vec2 measured = CentrePixel(fixture.ReadMotionVectors());
+
+	INFO("measured = " << measured.x << ", " << measured.y);
+	CHECK(measured.x == Catch::Approx(0.0f).margin(1e-4));
+	CHECK(measured.y == Catch::Approx(0.0f).margin(1e-4));
+}
+
+TEST_CASE(
+	"Writing a placement twice in one frame reports one frame of motion",
+	"[motionvectors][transform][render]")
+{
+	auto       fixture  = MotionFixture();
+	const auto instance = fixture.AddQuad();
+
+	const glm::vec3   eye    = { 0.0f, 0.0f, c_CameraZ };
+	const bgl::Camera camera = CameraAt(eye);
+
+	fixture.RenderFrom(camera);
+
+	// A caller that recomputes a position mid-frame. Only the last of these is ever drawn, so the
+	// velocity must describe the whole move and not the final leg of it.
+	constexpr float c_Shift = 0.35f;
+	fixture.view->SetInstanceTransform(
+		instance,
+		glm::translate(glm::mat4(1.0f), { c_Shift * 0.5f, 0.0f, c_PlaneZ }));
+	fixture.view->SetInstanceTransform(
+		instance,
+		glm::translate(glm::mat4(1.0f), { c_Shift, 0.0f, c_PlaneZ }));
+
+	fixture.RenderFrom(camera);
+
+	const glm::vec2 measured = CentrePixel(fixture.ReadMotionVectors());
+
+	const glm::vec3 surface  = SurfacePointAt(camera, eye, c_Width / 2, c_Height / 2);
+	const glm::vec2 expected = ProjectToUv(camera, surface) -
+	                           ProjectToUv(camera, surface - glm::vec3(c_Shift, 0.0f, 0.0f));
+
+	INFO("measured = " << measured.x << ", " << measured.y);
+	INFO("expected = " << expected.x << ", " << expected.y);
+
+	CHECK(measured.x == Catch::Approx(expected.x).margin(1e-3));
+}
+
+// A placement moved every frame -- a walking unit, which is what the setter exists for. Every other
+// case here writes at most once before a draw, and a rollover that loses track of an already-moving
+// placement passes all of them while reporting zero velocity from the second frame onward.
+TEST_CASE(
+	"A continuously moving instance keeps writing velocity",
+	"[motionvectors][transform][render]")
+{
+	auto       fixture  = MotionFixture();
+	const auto instance = fixture.AddQuad();
+
+	const glm::vec3   eye    = { 0.0f, 0.0f, c_CameraZ };
+	const bgl::Camera camera = CameraAt(eye);
+
+	constexpr float c_Step = 0.4f;
+
+	fixture.RenderFrom(camera);
+
+	// Four frames of motion, checked on each: the bug this pins appears on the second and every
+	// frame after, not the first.
+	for (uint32_t step = 1; step <= 4; ++step)
+	{
+		fixture.view->SetInstanceTransform(
+			instance,
+			glm::translate(glm::mat4(1.0f), { c_Step * static_cast<float>(step), 0.0f, c_PlaneZ }));
+		fixture.RenderFrom(camera);
+
+		const glm::vec2 measured = CentrePixel(fixture.ReadMotionVectors());
+
+		const glm::vec3 surface  = SurfacePointAt(camera, eye, c_Width / 2, c_Height / 2);
+		const glm::vec2 expected = ProjectToUv(camera, surface) -
+		                           ProjectToUv(camera, surface - glm::vec3(c_Step, 0.0f, 0.0f));
+
+		INFO("step " << step << " measured = " << measured.x << " expected = " << expected.x);
+		CHECK(measured.x == Catch::Approx(expected.x).margin(1e-3));
+		CHECK(std::abs(expected.x) > 1e-2f);
+	}
+}

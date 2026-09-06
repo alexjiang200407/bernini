@@ -480,6 +480,10 @@ void main(uint groupIdx: SV_GroupID, uint localIdx: SV_GroupIndex)
     tables.palettes = gUniforms.bonePalettes;
 
     let modelToWorld = mesh.Matrix();
+
+    // The ground plane crosses into model space through the placement, so the pose the previous
+    // frame drew is planted against where the placement was then -- not where it is now.
+    let prevModelToWorld = mesh.PrevMatrix();
     let stride = rig.boneCount * cFloat4sPerBone;
     let base = state.palette.GetStart();
 
@@ -493,7 +497,7 @@ void main(uint groupIdx: SV_GroupID, uint localIdx: SV_GroupIndex)
         ClipFrames(clip, state.playback, gUniforms.prevTime),
         entry.footIK,
         gUniforms.prevTime,
-        modelToWorld,
+        prevModelToWorld,
         base + stride,
         localIdx
     );

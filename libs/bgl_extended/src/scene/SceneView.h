@@ -13,6 +13,7 @@
 #include "types/EnvironmentMap.h"
 #include "types/SubmeshInstance.h"
 #include "types/ViewMatrices.h"
+#include <algorithm>
 #include <bgl/GeomHandle.h>
 #include <bgl/GeomType.h>
 #include <bgl/IScene.h>
@@ -57,6 +58,19 @@ namespace bgl
 		// What the placement was created as -- the epoch re-resolve must rebuild each instance's
 		// pso for the pipeline family it actually draws through.
 		GeomType geomType = GeomType::kStaticMesh;
+
+		// Whether SetInstanceTransform has written this placement since the last rollover, and so
+		// whether its prevTransform already holds what the previous frame drew. Cleared every
+		// rollover, so the next frame's first write rolls again.
+		bool movedThisFrame = false;
+
+		// Whether m_MovingInstances holds this placement. A separate bit from movedThisFrame, which
+		// is cleared on every rollover: one answers "should this write roll", the other "is it
+		// already tracked", and conflating them pushed a second copy of a placement written on two
+		// consecutive frames -- whose duplicate then read the flag the first copy had just cleared
+		// and reset prevTransform to current, so anything moving every frame drew no velocity at
+		// all.
+		bool moving = false;
 
 		// Where the geom's submeshes started when this placement was made. Held here rather than
 		// read back through the GPU record so a re-resolve never has to reach into the Scene, and
@@ -118,6 +132,12 @@ namespace bgl
 
 		void
 		DeleteMeshInstance(MeshInstanceHandle instance) override;
+
+		void
+		SetInstanceTransform(MeshInstanceHandle instance, const glm::mat4& transform) override;
+
+		[[nodiscard]] glm::mat4
+		GetInstanceTransform(MeshInstanceHandle instance) const override;
 
 		void
 		SetFootIK(MeshInstanceHandle instance, const FootIKDesc& desc) override;
@@ -294,6 +314,26 @@ namespace bgl
 		AdvanceCamera(uint64_t frameCounter, const ViewMatrices& current) noexcept;
 
 		/**
+		 * Closes frame `frameCounter` for the placements SetInstanceTransform moved: one written this
+		 * frame keeps the previous transform the write rolled, and one that was moving and has now
+		 * stopped has its previous transform brought up to its current, so its velocity is exactly
+		 * zero rather than a frame stale.
+		 *
+		 * Costs the number of *moving* placements, not the number of placements. Idempotent within a
+		 * frame, for the reason AdvanceCamera is: a view drawn twice must report one history to both
+		 * draws rather than letting the second treat the first as the previous frame.
+		 */
+		void
+		AdvanceInstanceTransforms(uint64_t frameCounter) noexcept;
+
+		/** How many placements currently carry a velocity. What the rollover's cost scales with. */
+		[[nodiscard]] size_t
+		GetMovingInstanceCount() const noexcept
+		{
+			return m_MovingInstances.size();
+		}
+
+		/**
 		 * Whether this view has changed in a way no motion vector describes -- a material's
 		 * contents, a submesh's binding, the environment, an instance placed or deleted -- since
 		 * the previous call, and records this draw as having seen it. A frame that sees it true
@@ -447,6 +487,16 @@ namespace bgl
 		EnvironmentMap            m_EnvironmentMap;
 		std::optional<SkyboxDesc> m_Skybox;
 		float                     m_Exposure = 1.0f;
+
+		// The placements carrying a velocity: those SetInstanceTransform has written and whose
+		// prevTransform has not yet been brought back up to their transform. Handles rather than
+		// indices, so an entry left by a deleted placement fails IsValid instead of resetting
+		// whichever placement later takes that slot. Empty in a scene where nothing moves, which is
+		// what keeps the per-frame cost off the instance count.
+		std::vector<core::slot_handle> m_MovingInstances;
+
+		// The frame AdvanceInstanceTransforms last ran for. See it and AdvanceCamera.
+		std::optional<uint64_t> m_TransformFrame;
 
 		// This view's camera now and on the frame before, plus the frame m_PrevCamera last rolled
 		// over on. See AdvanceCamera.

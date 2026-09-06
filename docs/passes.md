@@ -204,9 +204,11 @@ pixel, the UV displacement from where its surface sat last frame to where it sit
 samples history at `uv - motion`. It is `RG16_FLOAT`, owned by the render target beside the depth
 buffer, and cleared to zero each frame — a pixel nothing drew reads as static.
 
-Every instance transform is fixed for its lifetime (there is no `SetTransform`), so for static
-geometry the camera is the whole of the motion: the mesh shader reprojects one world position through
-`viewProj` and `prevViewProj` and hands the pixel stage both clip positions. An animated instance
+A placement carries the transform the previous frame drew it with as well as its current one
+(`ISceneView::SetInstanceTransform` writes the second and rolls the first), so the mesh shader
+places the vertex twice — once through each — and reprojects the two through `viewProj` and
+`prevViewProj`, handing the pixel stage both clip positions. The two transforms are the same matrix
+on anything nobody moved, so a static surface's motion is still the camera's alone. An animated instance
 plugs into that seam by substituting its own previous-frame position for the second of those, with no
 change to the pixel stage — a per-instance pose blends by the second half of its palette slice, which
 `Pose Skinned` filled at `prevTime` for exactly this, and a crowd instance reads its rig's table at

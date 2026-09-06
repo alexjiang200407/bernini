@@ -28,8 +28,9 @@ not obvious from a signature. The headers linked below are the source of truth.
   `transform` — so the pose pass's work list holds *mesh instance indices*, reads the transform
   there, and reaches the playback record through the `playback` entry the placement already carries.
   Copying the transform into `SkinnedState` instead was tried and rejected: it is one fact in two
-  records, and nothing would catch the two disagreeing the day a transform becomes mutable. It is
-  also the indirection `CullInstances` and `TransparentDepthKeys` already make. The ground itself is
+  records, and nothing would catch the two disagreeing. That day has since arrived —
+  `ISceneView::SetInstanceTransform` moves a placement — and the record stayed the single source. It
+  is also the indirection `CullInstances` and `TransparentDepthKeys` already make. The ground itself is
   the scene's (`IScene::SetGround`), one plane until a heightfield exists.
 
 * **The previous pose is re-evaluated, not remembered.** Motion vectors need last frame's pose. Rather
@@ -387,7 +388,10 @@ and not a geom on it: a leg is bone indices into the skeleton and a weight per f
 so two meshes on one rig plant the same feet.
 
 **The plane crosses into model space as a row vector**, `mul(worldPlane, modelToWorld)`, which needs
-no inverse. The instance's inverse is still built, once per group, to carry world down into model
+no inverse. The `prevTime` solve crosses it through `PrevMatrix` instead, because a placement that
+moved between the two frames stood over different ground on each: planting the previous pose against
+the current placement puts the previous foot off the plane, which on a slope is centimetres and
+visible. The instance's inverse is still built, once per group, to carry world down into model
 space: a planted foot is dropped *vertically* onto the plane rather than projected along its normal,
 because the closest point on a slope is not the point the animation was authored over.
 

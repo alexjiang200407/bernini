@@ -192,6 +192,27 @@ namespace bgl
 		instance.transform[2] = rows[2];
 	}
 
+	void
+	WriteInstancePrevTransform(idl::MeshInstance& instance, const glm::mat4& transform) noexcept
+	{
+		const glm::mat4 rows = glm::transpose(transform);
+
+		instance.prevTransform[0] = rows[0];
+		instance.prevTransform[1] = rows[1];
+		instance.prevTransform[2] = rows[2];
+	}
+
+	glm::mat4
+	ReadInstanceTransform(const idl::MeshInstance& instance) noexcept
+	{
+		return glm::transpose(
+			glm::mat4(
+				instance.transform[0],
+				instance.transform[1],
+				instance.transform[2],
+				glm::vec4(0.0f, 0.0f, 0.0f, 1.0f)));
+	}
+
 	uint32_t
 	SubmeshPso(GeomType geomType, MaterialHandle material)
 	{

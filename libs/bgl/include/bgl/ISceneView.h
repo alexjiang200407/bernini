@@ -77,6 +77,38 @@ namespace bgl
 		DeleteMeshInstance(MeshInstanceHandle instance) = 0;
 
 		/**
+		 * Moves a placement. The matrix replaces the one it was created with, and takes effect on the
+		 * next frame this view is drawn.
+		 *
+		 * The move is described to the temporal filter rather than hidden from it: a placement carries
+		 * the transform the previous frame drew it with, so the frame after a write reprojects through
+		 * both and the surface's own motion lands in the velocity buffer beside the camera's. Writing
+		 * the same matrix an instance already holds still costs the upload, but renders identically.
+		 *
+		 * Written any number of times per frame: the previous transform is the one the last *drawn*
+		 * frame used, not the one the last write replaced, so a caller that recomputes a position
+		 * twice in a frame gets the same velocity as one that computes it once. An instance not
+		 * written this frame has a velocity of exactly zero.
+		 *
+		 * This is a per-instance CPU write and is not the path for moving a crowd every frame -- it
+		 * uploads a block per scattered write. See docs/geometry_layout.md.
+		 *
+		 * @param instance A handle returned by a mesh-instance-creating method.
+		 * @param transform An affine model-to-world matrix; its fourth row is discarded, not checked.
+		 * @throws SceneError if the handle is invalid or already removed.
+		 */
+		virtual void
+		SetInstanceTransform(MeshInstanceHandle instance, const glm::mat4& transform) = 0;
+
+		/**
+		 * The matrix the placement was created with, or the one SetInstanceTransform last wrote.
+		 *
+		 * @throws SceneError if the handle is invalid or already removed.
+		 */
+		[[nodiscard]] virtual glm::mat4
+		GetInstanceTransform(MeshInstanceHandle instance) const = 0;
+
+		/**
 		 * Rewrites the runtime foot-IK weights of a skinned instance on the per-instance source --
 		 * see FootIKDesc. Written on an event and evaluated from RenderJob::time, so the pose at
 		 * any clock is a function of the record: a write whose ramps all start at or after now
