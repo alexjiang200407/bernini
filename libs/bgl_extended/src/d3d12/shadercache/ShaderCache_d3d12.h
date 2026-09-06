@@ -48,6 +48,10 @@ namespace bgl
 
 		~ShaderCache();
 
+		/** A module compiled from text joins the salt the way a file on a search path does. */
+		void
+		FoldSource(std::string_view name, std::string_view source) noexcept;
+
 		ShaderCache(const ShaderCache&) = delete;
 
 		ShaderCache&

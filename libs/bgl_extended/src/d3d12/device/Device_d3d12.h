@@ -2,6 +2,8 @@
 #include "device/Device.h"
 #include "slang/SlangSessions.h"
 #include <cstdint>
+#include <filesystem>
+#include <string>
 
 namespace bgl
 {
@@ -13,9 +15,10 @@ namespace bgl
 	{
 	public:
 		Device(
-			wrl::ComPtr<ID3D12Device> device,
-			const std::string&        shaderCacheDir,
-			bool                      gpuValidation);
+			wrl::ComPtr<ID3D12Device>    device,
+			const std::string&           shaderCacheDir,
+			const std::filesystem::path& surfaceShaderDir,
+			bool                         gpuValidation);
 
 		~Device() noexcept override;
 		Device(const Device&) noexcept = delete;
@@ -45,6 +48,9 @@ namespace bgl
 
 		core::SharedRef<IShader>
 		CreateShader(ShaderDesc desc) const noexcept override;
+
+		void
+		AddSourceModule(const SlangSourceModule& module) noexcept override;
 
 		core::SharedRef<ICommandAllocator>
 		CreateCommandAllocator(QueueType type) const noexcept override;

@@ -22,6 +22,7 @@ namespace bgl
 	class ICommandQueue;
 	class ITimestampHeap;
 	struct ShaderDesc;
+	struct SlangSourceModule;
 	struct MeshletPipelineDesc;
 	struct ComputePipelineDesc;
 	struct CommandListDesc;
@@ -47,6 +48,15 @@ namespace bgl
 		[[nodiscard]] core::SharedRef<IShader>
 		CreateShader(std::string slangModuleName, std::string entryPointName = "main")
 			const noexcept;
+
+		/**
+		 * A module compiled from text under a name, shadowing a file of that name on the search
+		 * path for every compile after this one. Folded into the shader cache's salt.
+		 *
+		 * @pre no compile is in flight, and no slang:: object is held -- the sessions are dropped.
+		 */
+		virtual void
+		AddSourceModule(const SlangSourceModule& module) noexcept = 0;
 
 		[[nodiscard]]
 		virtual core::SharedRef<IComputePipeline>

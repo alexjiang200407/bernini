@@ -4,6 +4,7 @@
 
 #include <core/file/file.h>
 #include <core/hash.h>
+#include <string_view>
 
 namespace bgl
 {
@@ -124,6 +125,12 @@ namespace bgl
 			m_PsoLibraryBlob.clear();
 			device1->CreatePipelineLibrary(nullptr, 0, IID_PPV_ARGS(&m_PsoLibrary));
 		}
+	}
+
+	void
+	ShaderCache::FoldSource(std::string_view name, std::string_view source) noexcept
+	{
+		m_SourceSalt = shader_cache::FoldSource(m_SourceSalt, name, source);
 	}
 
 	ShaderCache::~ShaderCache()
