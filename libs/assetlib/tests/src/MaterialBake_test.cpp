@@ -112,7 +112,7 @@ TEST_CASE("a material with no base-colour route bakes complete", "[bmaterial][ba
 
 	BMaterial mat;
 	mat.pbr.baseColorFactor = glm::vec4(0.8f, 0.8f, 0.8f, 0.03f);
-	mat.pbr.alphaMode       = AlphaMode::kBlend;
+	mat.layer.alphaMode     = AlphaMode::kBlend;
 	mat.pbr.routes[4]       = { "packed.ktx2", 0 };  // ao
 	mat.pbr.routes[5]       = { "packed.ktx2", 1 };  // roughness
 	mat.pbr.routes[6]       = { "packed.ktx2", 2 };  // metallic
@@ -234,11 +234,11 @@ TEST_CASE("bakeMaterial keeps base-color alpha for a blend material", "[bmateria
 
 	const auto bakeBaseColor = [&](AlphaMode mode) {
 		BMaterial mat;
-		mat.pbr.routes[0] = { "albedo.ktx2", 0 };
-		mat.pbr.routes[1] = { "albedo.ktx2", 1 };
-		mat.pbr.routes[2] = { "albedo.ktx2", 2 };
-		mat.pbr.routes[3] = { "albedo.ktx2", 3 };  // base A -- only meaningful once alpha is kept
-		mat.pbr.alphaMode = mode;
+		mat.pbr.routes[0]   = { "albedo.ktx2", 0 };
+		mat.pbr.routes[1]   = { "albedo.ktx2", 1 };
+		mat.pbr.routes[2]   = { "albedo.ktx2", 2 };
+		mat.pbr.routes[3]   = { "albedo.ktx2", 3 };  // base A -- only meaningful once alpha is kept
+		mat.layer.alphaMode = mode;
 		REQUIRE_NOTHROW(StoreAt(dir.path).BakeMaterial(mat));
 		return mat.pbr.baseColorTexture;
 	};
@@ -528,7 +528,7 @@ TEST_CASE("bakeMaterial reuses a map unless what it names changed", "[bmaterial]
 		// Nothing about the sources moved, so only the key's other half can carry this: cutout base
 		// colour keeps its alpha and bakes BC7 with coverage-preserving mips.
 		writeSentinel();
-		again.pbr.alphaMode = AlphaMode::kMask;
+		again.layer.alphaMode = AlphaMode::kMask;
 
 		REQUIRE_NOTHROW(StoreAt(dir.path).BakeMaterial(again));
 

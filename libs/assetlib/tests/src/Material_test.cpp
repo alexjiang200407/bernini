@@ -65,18 +65,18 @@ TEST_CASE("a blend material's transmission survives a round trip", "[bmaterial][
 {
 	BMaterial mat;
 	mat.name                   = "lens";
-	mat.pbr.alphaMode          = AlphaMode::kBlend;
+	mat.layer.alphaMode        = AlphaMode::kBlend;
 	mat.pbr.transmissionFactor = 0.85f;
 
 	const auto restored = AssetCodec<BMaterial>::Deserialize(AssetCodec<BMaterial>::Serialize(mat));
 
-	CHECK(restored.pbr.alphaMode == AlphaMode::kBlend);
+	CHECK(restored.layer.alphaMode == AlphaMode::kBlend);
 	CHECK(restored.pbr.transmissionFactor == Catch::Approx(0.85f));
 
 	// The default is what every material baked before the factor re-bakes to, and it is the reading
 	// blend has always had.
 	BMaterial coverage;
-	coverage.pbr.alphaMode = AlphaMode::kBlend;
+	coverage.layer.alphaMode = AlphaMode::kBlend;
 	CHECK(
 		AssetCodec<BMaterial>::Deserialize(AssetCodec<BMaterial>::Serialize(coverage))
 			.pbr.transmissionFactor == 0.0f);
@@ -90,17 +90,17 @@ TEST_CASE(
 	"[bmaterial][io]")
 {
 	BMaterial mat;
-	mat.name            = "leaf";
-	mat.pbr.alphaMode   = AlphaMode::kMask;
-	mat.pbr.doubleSided = false;
+	mat.name              = "leaf";
+	mat.layer.alphaMode   = AlphaMode::kMask;
+	mat.layer.doubleSided = false;
 
 	const auto restored = AssetCodec<BMaterial>::Deserialize(AssetCodec<BMaterial>::Serialize(mat));
-	CHECK(!restored.pbr.doubleSided);
+	CHECK(!restored.layer.doubleSided);
 
 	const std::string text = R"({"shadingModel":"pbr","name":"card","alphaMode":"mask"})";
 	const auto        legacy =
 		AssetCodec<BMaterial>::Deserialize(std::as_bytes(std::span(text.data(), text.size())));
-	CHECK(legacy.pbr.doubleSided);
+	CHECK(legacy.layer.doubleSided);
 }
 
 TEST_CASE("a material's specular factors survive a round trip", "[bmaterial][io]")
@@ -619,6 +619,25 @@ TEST_CASE("a material document preserves the keys this build does not know", "[b
 	CHECK(out.find("\"sheenFactor\"") != std::string::npos);
 }
 
+// The layer is every model's, so its keys sit beside shadingModel rather than inside a model's
+// payload -- and always did: moving them off PbrParams changed no document.
+TEST_CASE("the layer's keys are the document's own, beside shadingModel", "[bmaterial][io]")
+{
+	BMaterial mat;
+	mat.name              = "leaf";
+	mat.layer.alphaMode   = AlphaMode::kMask;
+	mat.layer.alphaCutoff = 0.25f;
+	mat.layer.doubleSided = false;
+
+	const auto        bytes = AssetCodec<BMaterial>::Serialize(mat);
+	const std::string out(reinterpret_cast<const char*>(bytes.data()), bytes.size());
+
+	// One tab of indent is the top level of a canonical document.
+	CHECK(out.find("\n\t\"alphaCutoff\": 0.25,\n") != std::string::npos);
+	CHECK(out.find("\n\t\"alphaMode\": \"mask\",\n") != std::string::npos);
+	CHECK(out.find("\n\t\"doubleSided\": false,\n") != std::string::npos);
+}
+
 TEST_CASE("a minimal hand-authored document defaults what it omits", "[bmaterial][io]")
 {
 	const std::string_view text = "{\n\t\"shadingModel\": \"pbr\"\n}\n";
@@ -627,7 +646,7 @@ TEST_CASE("a minimal hand-authored document defaults what it omits", "[bmaterial
 		AssetCodec<BMaterial>::Deserialize(std::as_bytes(std::span(text.data(), text.size())));
 	CHECK(material.pbr.baseColorFactor == glm::vec4(1.0f));
 	CHECK(material.pbr.metallicFactor == 1.0f);
-	CHECK(material.pbr.alphaMode == AlphaMode::kOpaque);
+	CHECK(material.layer.alphaMode == AlphaMode::kOpaque);
 	CHECK(material.pbr.baseColorTexture.empty());
 	CHECK(material.editorGraph.empty());
 }

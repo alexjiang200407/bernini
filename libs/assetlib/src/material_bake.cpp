@@ -209,11 +209,11 @@ namespace assetlib
 		 * (kHashed) -- keeps it, so it bakes BC7.
 		 */
 		bool
-		groupCarriesAlpha(const PbrParams& pbr, const Group& group)
+		groupCarriesAlpha(const MaterialLayer& layer, const Group& group)
 		{
 			return group.channels.count == c_BaseColorChannels.count &&
-			       (pbr.alphaMode == AlphaMode::kMask || pbr.alphaMode == AlphaMode::kBlend ||
-			        pbr.alphaMode == AlphaMode::kHashed);
+			       (layer.alphaMode == AlphaMode::kMask || layer.alphaMode == AlphaMode::kBlend ||
+			        layer.alphaMode == AlphaMode::kHashed);
 		}
 
 		/**
@@ -233,10 +233,10 @@ namespace assetlib
 		 * takes plain mips for the same reason: dilution is the prefiltering blending wants.
 		 */
 		bool
-		groupPreservesCoverage(const PbrParams& pbr, const Group& group)
+		groupPreservesCoverage(const MaterialLayer& layer, const Group& group)
 		{
 			return group.channels.count == c_BaseColorChannels.count &&
-			       pbr.alphaMode == AlphaMode::kMask;
+			       layer.alphaMode == AlphaMode::kMask;
 		}
 
 		/**
@@ -245,9 +245,9 @@ namespace assetlib
 		 *
 		 */
 		Ktx2Compression
-		groupCompression(const PbrParams& pbr, const Group& group)
+		groupCompression(const MaterialLayer& layer, const Group& group)
 		{
-			return groupCarriesAlpha(pbr, group) ? Ktx2Compression::kBC7_RGBA : group.compression;
+			return groupCarriesAlpha(layer, group) ? Ktx2Compression::kBC7_RGBA : group.compression;
 		}
 
 		// A group is sized to the largest source routed into *it*, so its output does not depend on any
@@ -393,7 +393,8 @@ namespace assetlib
 				"assetlib::bakeMaterial: shading model " +
 				std::to_string(static_cast<uint32_t>(material.shadingModel)) + " has no bake step");
 
-		PbrParams& pbr = material.pbr;
+		const MaterialLayer& layer = material.layer;
+		PbrParams&           pbr   = material.pbr;
 
 		const std::unordered_map<std::string, SourceStamp> stamps = stampRoutes(pbr, desc.dataRoot);
 
@@ -430,12 +431,13 @@ namespace assetlib
 
 			throwIfCancelled(cancel);
 
-			const Ktx2Compression compression = groupCompression(pbr, group);
+			const Ktx2Compression compression = groupCompression(layer, group);
 
 			// Cutout and hashed mips are keyed against the cutoff; blend keeps its alpha but bakes
 			// plain mips.
-			const std::optional<float> mipCutoff =
-				groupPreservesCoverage(pbr, group) ? std::optional(pbr.alphaCutoff) : std::nullopt;
+			const std::optional<float> mipCutoff = groupPreservesCoverage(layer, group) ?
+			                                           std::optional(layer.alphaCutoff) :
+			                                           std::nullopt;
 
 			const std::string name =
 				bakedMapFileName(group.name, bakeKey(pbr, group, stamps, compression, mipCutoff));
@@ -450,7 +452,7 @@ namespace assetlib
 				// A cutout/blend base colour keeps its alpha channel, so bleed opaque colour under the
 				// transparent texels before BC7 sees them -- otherwise a block on a cutout edge stores
 				// arbitrary colour there and it fringes back across the edge (worst at coarse mips).
-				if (groupCarriesAlpha(pbr, group))
+				if (groupCarriesAlpha(layer, group))
 				{
 					dilateColorIntoTransparent(composed, width, height);
 				}
