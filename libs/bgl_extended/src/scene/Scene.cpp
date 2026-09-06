@@ -1192,6 +1192,7 @@ namespace bgl
 		const uint32_t rigBoneCount = meta->boneCount;
 		const uint32_t rigClipCount = meta->clipCount;
 		const uint32_t rigNodeCount = meta->nodeCount;
+		const uint32_t rigLegCount  = meta->legCount;
 
 		if (glm::any(glm::greaterThan(posedBounds.min, posedBounds.max)))
 		{
@@ -1236,7 +1237,7 @@ namespace bgl
 		geom.clipCount   = rigClipCount;
 		geom.nodeCount   = rigNodeCount;
 		geom.boneCount   = rigBoneCount;
-		geom.legCount    = meta->legCount;
+		geom.legCount    = rigLegCount;
 
 		// Last, so nothing above can throw with the use already counted.
 		RigMeta* counted = FindRig(rig);
