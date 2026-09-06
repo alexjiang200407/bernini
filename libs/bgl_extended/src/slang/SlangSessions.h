@@ -79,7 +79,7 @@ namespace bgl
 		 *      the list this appends to.
 		 */
 		void
-		AddSourceModule(SlangSourceModule module) noexcept;
+		AddSourceModule(SlangSourceModule sourceModule) noexcept;
 
 		SlangSessions(const SlangSessions&) = delete;
 

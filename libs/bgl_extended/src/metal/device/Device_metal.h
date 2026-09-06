@@ -41,7 +41,7 @@ namespace bgl
 		ReleaseSlangSession() noexcept;
 
 		void
-		AddSourceModule(const SlangSourceModule& module) noexcept override;
+		AddSourceModule(const SlangSourceModule& sourceModule) noexcept override;
 
 		[[nodiscard]] MTL::Device*
 		GetMTLDevice() const noexcept

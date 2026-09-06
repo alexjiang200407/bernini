@@ -74,11 +74,11 @@ namespace bgl
 	}
 
 	void
-	Device::AddSourceModule(const SlangSourceModule& module) noexcept
+	Device::AddSourceModule(const SlangSourceModule& sourceModule) noexcept
 	{
-		m_Slang.AddSourceModule(module);
+		m_Slang.AddSourceModule(sourceModule);
 		if (m_ShaderCache)
-			m_ShaderCache->FoldSource(module.name, module.source);
+			m_ShaderCache->FoldSource(sourceModule.name, sourceModule.source);
 	}
 
 	void

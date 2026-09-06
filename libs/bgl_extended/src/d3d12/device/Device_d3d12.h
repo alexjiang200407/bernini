@@ -50,7 +50,7 @@ namespace bgl
 		CreateShader(ShaderDesc desc) const noexcept override;
 
 		void
-		AddSourceModule(const SlangSourceModule& module) noexcept override;
+		AddSourceModule(const SlangSourceModule& sourceModule) noexcept override;
 
 		core::SharedRef<ICommandAllocator>
 		CreateCommandAllocator(QueueType type) const noexcept override;

@@ -56,7 +56,7 @@ namespace bgl
 		 * @pre no compile is in flight, and no slang:: object is held -- the sessions are dropped.
 		 */
 		virtual void
-		AddSourceModule(const SlangSourceModule& module) noexcept = 0;
+		AddSourceModule(const SlangSourceModule& sourceModule) noexcept = 0;
 
 		[[nodiscard]]
 		virtual core::SharedRef<IComputePipeline>

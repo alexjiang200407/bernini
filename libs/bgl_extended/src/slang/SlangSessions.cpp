@@ -85,18 +85,21 @@ namespace bgl
 		// Loaded under the path form, which is what an import of a dotted name looks up: registered
 		// as `game.probe` the text is never found and the file wins. The second argument is a name
 		// for diagnostics, never opened.
-		for (const SlangSourceModule& module : desc.sourceModules)
+		for (const SlangSourceModule& sourceModule : desc.sourceModules)
 		{
-			const std::string path = SlangModulePath(module.name);
+			const std::string path = SlangModulePath(sourceModule.name);
 
 			SlangErrorChecker moduleChecker;
 			slang::IModule*   loaded = mine.session->loadModuleFromSourceString(
 				path.c_str(),
 				(path + ".slang").c_str(),
-				module.source.c_str(),
+				sourceModule.source.c_str(),
 				moduleChecker.WriteDiagnosticBlob());
 			moduleChecker.ReportError();
-			gassert(loaded != nullptr, "Failed to load Slang module '{}' from source", module.name);
+			gassert(
+				loaded != nullptr,
+				"Failed to load Slang module '{}' from source",
+				sourceModule.name);
 		}
 
 		const auto held = std::lock_guard(m_Mutex);
@@ -112,10 +115,10 @@ namespace bgl
 	}
 
 	void
-	SlangSessions::AddSourceModule(SlangSourceModule module) noexcept
+	SlangSessions::AddSourceModule(SlangSourceModule sourceModule) noexcept
 	{
 		const auto held = std::lock_guard(m_Mutex);
-		m_Desc.sourceModules.push_back(std::move(module));
+		m_Desc.sourceModules.push_back(std::move(sourceModule));
 		m_ByThread.clear();
 	}
 }
