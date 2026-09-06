@@ -115,7 +115,7 @@ namespace editor
 			return ImportOutcome::kBlocked;
 		}
 
-		const std::string sourceName = source.stem().string();
+		const std::string sourceKey = options.outputs.source.toStdString();
 
 		// Sampled before a byte is written, because they decide two things: whether the import collides
 		// with something already there (and must be refused), and -- if it then fails or is cancelled --
@@ -147,10 +147,9 @@ namespace editor
 
 		if (options.mesh || options.animations)
 		{
-			const fs::path sourceCopy =
-				assetlib::AssetStore(dataRoot).ImportedSourcePath(sourceName);
-			const fs::path importDoc =
-				assetlib::AssetStore(dataRoot).ImportDocumentPath(sourceName);
+			const assetlib::AssetStore store(dataRoot);
+			const fs::path             sourceCopy = store.ResolveWritePath(sourceKey);
+			const fs::path             importDoc  = store.ImportDocumentPath(sourceKey);
 			files.emplace_back(sourceCopy, fs::exists(sourceCopy, ec));
 			files.emplace_back(importDoc, fs::exists(importDoc, ec));
 		}
@@ -248,7 +247,7 @@ namespace editor
 					assetlib::requireUniqueSubmeshNames(*mesh);
 
 					const assetlib::AssetStore   store(dataRoot);
-					const assetlib::ImportTarget target{ sourceName,
+					const assetlib::ImportTarget target{ sourceKey,
 					                                     assetlib::c_DefaultSampleRate,
 					                                     textureDirKey };
 					const assetlib::SourceRef sourceRef = store.CopyImportedSource(source, target);
@@ -268,7 +267,7 @@ namespace editor
 					progress.Report(0, 0, QString("Baking the pose bounds..."));
 
 					const assetlib::AssetStore store(dataRoot);
-					assetlib::ImportTarget     target{ sourceName,
+					assetlib::ImportTarget     target{ sourceKey,
 					                                   assetlib::c_DefaultSampleRate,
 					                                   textureDirKey };
 					const assetlib::SourceRef  sourceRef = store.CopyImportedSource(source, target);
@@ -315,7 +314,7 @@ namespace editor
 					const assetlib::AssetStore meshStore(dataRoot);
 					meshStore.Save(*mesh, meshStore.KeyFor(bmeshPath));
 
-					assetlib::ImportTarget target{ sourceName,
+					assetlib::ImportTarget target{ sourceKey,
 						                           assetlib::c_DefaultSampleRate,
 						                           textureDirKey };
 					rigOutputs.push_back(meshStore.KeyFor(bmeshPath));

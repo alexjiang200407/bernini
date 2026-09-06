@@ -3,7 +3,9 @@
 #include <assetlib/asset_import.h>
 #include <assetlib/bmesh.h>
 #include <assetlib/bmesh_gltf.h>
+#include <assetlib/codecs.h>
 #include <assetlib/mesh_tangents.h>
+#include <assetlib/project_layout.h>
 #include <assetlib_structs/Animation.h>
 #include <assetlib_structs/BMesh.h>
 #include <filesystem>
@@ -38,7 +40,11 @@ namespace assetlib::test
 		generateTangents(mesh);
 		requireUniqueSubmeshNames(mesh);
 
-		ImportTarget     target{ std::string(name), sampleRate, std::string(textureDir) };
+		ImportTarget target{
+			std::format("{}/{}{}", c_MeshSourcesDirectoryName, name, c_ImportedSourceExtension),
+			sampleRate,
+			std::string(textureDir)
+		};
 		const AssetStore store(dataRoot);
 		const SourceRef  source = store.CopyImportedSource(glb, target);
 		mesh.source             = source;

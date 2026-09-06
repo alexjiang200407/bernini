@@ -28,6 +28,7 @@
 #include <optional>
 #include <span>
 #include <stdexcept>
+#include <string>
 #include <string_view>
 #include <system_error>
 #include <unordered_map>
@@ -68,21 +69,39 @@ namespace assetlib
 	}
 
 	std::filesystem::path
-	AssetStore::ImportedSourcePath(std::string_view name) const
+	AssetStore::ImportDocumentPath(std::string_view sourceKey) const
 	{
-		return GetDataRoot() / c_MeshSourcesDirectoryName /
-		       std::format("{}{}", name, c_ImportedSourceExtension);
-	}
-
-	std::filesystem::path
-	AssetStore::ImportDocumentPath(std::string_view name) const
-	{
-		return GetDataRoot() / c_MeshSourcesDirectoryName /
-		       std::format("{}{}", name, c_ImportDocumentExtension);
+		return ResolveWritePath(importDocumentKeyFor(sourceKey));
 	}
 
 	namespace
 	{
+		/**
+		 * @throws std::runtime_error unless `key` names a `.glb` under `Authored/Meshes/`.
+		 *
+		 * The category is what Reimport, Migrate and RefreshImportedTextures enumerate to find their
+		 * work, so a source outside it produces a project nothing can rebuild -- and nothing would
+		 * report that until a fresh checkout came up short.
+		 */
+		void
+		requireImportedSourceKey(std::string_view key)
+		{
+			const std::string normalized = normalizeRef(key);
+
+			core::throw_runtime_error_if(
+				!isUnder(normalized, c_MeshSourcesDirectoryName),
+				"'{}': an imported source lives under '{}', which is where a re-import looks for "
+				"it",
+				key,
+				c_MeshSourcesDirectoryName);
+
+			core::throw_runtime_error_if(
+				extensionOf(normalized) != c_ImportedSourceExtension,
+				"'{}': an imported source is a '{}'",
+				key,
+				c_ImportedSourceExtension);
+		}
+
 		/**
 		 * What an import computes, over whatever the document beside its source already authored.
 		 * The one construction the cache key and the file share, so a parameter added in only one
@@ -168,8 +187,9 @@ namespace assetlib
 		const
 	{
 		requireSelfContainedSource(source);
+		requireImportedSourceKey(target.source);
 
-		const std::filesystem::path copied = ImportedSourcePath(target.name);
+		const std::filesystem::path copied = ResolveWritePath(target.source);
 		std::filesystem::create_directories(copied.parent_path());
 
 		std::error_code ec;
@@ -186,8 +206,7 @@ namespace assetlib
 			ec.message());
 
 		SourceRef ref;
-		ref.key =
-			std::format("{}/{}", c_MeshSourcesDirectoryName, copied.filename().generic_string());
+		ref.key                            = normalizeRef(target.source);
 		ref.stamp.size                     = std::filesystem::file_size(copied);
 		const std::optional<uint64_t> hash = core::file::hash_file(copied);
 		core::throw_runtime_error_if(
@@ -196,15 +215,17 @@ namespace assetlib
 			copied.string());
 		ref.stamp.hash = *hash;
 		ref.parametersHash =
-			importParametersHash(ImportDocumentPath(target.name), target.sampleRate);
+			importParametersHash(ImportDocumentPath(target.source), target.sampleRate);
 		return ref;
 	}
 
 	void
 	AssetStore::WriteImportedDocument(const ImportTarget& target, const BMesh* mesh) const
 	{
+		requireImportedSourceKey(target.source);
+
 		ImportDocument document =
-			importParameters(ImportDocumentPath(target.name), target.sampleRate);
+			importParameters(ImportDocumentPath(target.source), target.sampleRate);
 		document.textureDir = target.textureDir;
 		document.skeleton   = target.skeleton;
 		document.outputs    = target.outputs;
@@ -212,12 +233,12 @@ namespace assetlib
 		// From the copy, not the caller's reference: the document cannot then disagree with the
 		// source standing beside it.
 		if (!document.textureDir.empty())
-			document.textureStamp = stampOf(ImportedSourcePath(target.name));
+			document.textureStamp = stampOf(ResolveWritePath(target.source));
 		if (mesh != nullptr)
 			document.bindings = bindingsOf(*mesh);
 
 		core::file::write_atomic(
-			ImportDocumentPath(target.name),
+			ImportDocumentPath(target.source),
 			AssetCodec<ImportDocument>::Serialize(document));
 	}
 

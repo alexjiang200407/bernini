@@ -34,7 +34,16 @@ namespace assetlib
 	 */
 	struct ImportTarget
 	{
-		std::string name;  // the copied source's stem: `Authored/Meshes/<name>.glb`
+		/**
+		 * The copied source's mount key -- `Authored/Meshes/<folder>/<stem>.glb`. A key rather than
+		 * a stem because the folder is the importer's to choose; the `.bimport` is derived from it
+		 * (`importDocumentKeyFor`), so the two cannot come to name different sources.
+		 *
+		 * The category is fixed: `Reimport`, `Migrate` and `RefreshImportedTextures` each find their
+		 * work by enumerating `Authored/Meshes`, so a source outside it is one no fresh checkout can
+		 * produce a project from. CopyImportedSource and WriteImportedDocument refuse one.
+		 */
+		std::string source;
 		float       sampleRate;
 		std::string textureDir;  // where the textures went; empty when none were extracted
 
