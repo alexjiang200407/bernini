@@ -120,7 +120,7 @@ caller that asked for no spaces is not wrong to find some. Release the rig to ze
 
 ## Risky / Non-obvious Contracts
 
-* **A slot's `node` is checked against the rig's node count, not its clip count.** They differ by the
+* **A slot's `nodeIndex` is checked against the rig's node count, not its clip count.** They differ by the
   number of authored spaces.
 * **A space needs at least two members**, with strictly increasing parameters — two at one parameter
   have no defined weighting between them and the span between them is a divisor. Refused at both

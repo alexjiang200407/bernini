@@ -458,7 +458,7 @@ TEST_CASE("CreateSkinnedMeshInstance writes the playback record once", "[skinned
 	CHECK(state.rig.offset == scene->GetGeomSkinnedInfo(geom.handle.index).record.index);
 
 	// A one-clip spawn is slot 0 at full weight, from the clock's zero, and the rest weightless.
-	CHECK(state.slots[0].node == 1);
+	CHECK(state.slots[0].nodeIndex == 1);
 	CHECK(state.slots[0].phase == Catch::Approx(4.5f));
 	CHECK(state.slots[0].rate == Catch::Approx(2.0f));
 	CHECK(state.slots[0].tRef == 0.0f);
@@ -558,7 +558,7 @@ TEST_CASE("SetSkinnedPlayback rewrites the record in place", "[skinned]")
 	auto crossfade = bgl::SkinnedPlaybackDesc();
 	{
 		auto& from      = crossfade.slot[0];
-		from.node       = 0;
+		from.nodeIndex  = 0;
 		from.phase      = 3.0f;
 		from.rate       = 1.0f;
 		from.tRef       = 2.0f;
@@ -572,7 +572,7 @@ TEST_CASE("SetSkinnedPlayback rewrites the record in place", "[skinned]")
 		from.paramEnd   = 2.5f;
 
 		auto& to     = crossfade.slot[1];
-		to.node      = 1;
+		to.nodeIndex = 1;
 		to.phase     = 0.0f;
 		to.rate      = 0.5f;
 		to.tRef      = 2.0f;
@@ -583,7 +583,7 @@ TEST_CASE("SetSkinnedPlayback rewrites the record in place", "[skinned]")
 	}
 
 	const auto same = [](const bgl::PlaybackSlot& a, const bgl::PlaybackSlot& b) {
-		CHECK(a.node == b.node);
+		CHECK(a.nodeIndex == b.nodeIndex);
 		CHECK(a.phase == b.phase);
 		CHECK(a.rate == b.rate);
 		CHECK(a.tRef == b.tRef);
@@ -656,14 +656,14 @@ TEST_CASE("SetSkinnedPlayback rewrites the record in place", "[skinned]")
 			CHECK_THROWS_AS(view->SetSkinnedPlayback(instance, bad), bgl::SceneError);
 		};
 
-		auto pastTheTable         = crossfade;
-		pastTheTable.slot[1].node = 2;
+		auto pastTheTable              = crossfade;
+		pastTheTable.slot[1].nodeIndex = 2;
 		refused(pastTheTable);
 
 		// An unweighted slot still names a node, because the record holds still on slot 0 when
 		// nothing carries weight.
-		auto idleSlotPastTheTable         = crossfade;
-		idleSlotPastTheTable.slot[3].node = 7;
+		auto idleSlotPastTheTable              = crossfade;
+		idleSlotPastTheTable.slot[3].nodeIndex = 7;
 		refused(idleSlotPastTheTable);
 
 		auto negative            = crossfade;
@@ -682,7 +682,7 @@ TEST_CASE("SetSkinnedPlayback rewrites the record in place", "[skinned]")
 
 		// What survives a refusal is the record as it was.
 		const auto got = view->GetSkinnedPlayback(instance);
-		CHECK(got.slot[0].node == 0);
+		CHECK(got.slot[0].nodeIndex == 0);
 		CHECK(got.slot[0].weight0 == 1.0f);
 	}
 

@@ -1092,11 +1092,11 @@ TEST_CASE("a clip blended with itself draws what the clip draws", "[skinned][ren
 	auto two = bgl::SkinnedPlaybackDesc();
 	for (uint32_t s = 0; s < 2; ++s)
 	{
-		two.slot[s].node    = 0;
-		two.slot[s].phase   = 0.5f;
-		two.slot[s].rate    = 0.0f;
-		two.slot[s].weight0 = 0.5f;
-		two.slot[s].weight1 = 0.5f;
+		two.slot[s].nodeIndex = 0;
+		two.slot[s].phase     = 0.5f;
+		two.slot[s].rate      = 0.0f;
+		two.slot[s].weight0   = 0.5f;
+		two.slot[s].weight1   = 0.5f;
 	}
 	{
 		const auto instance = view->CreateSkinnedMeshInstance(geom, glm::mat4(1.0f), two);

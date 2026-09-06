@@ -635,7 +635,7 @@ LocalPose ResolveSlots(SkinnedState state, Rig rig, float time)
             continue;
         }
 
-        BlendNode node = gUniforms.blendNodeBuffer.Get(rig.nodes, slot.node);
+        BlendNode node = gUniforms.blendNodeBuffer.Get(rig.nodes, slot.nodeIndex);
 
         if (node.kind == BlendNodeKind.kClip)
         {
@@ -686,7 +686,7 @@ LocalPose ResolveSlots(SkinnedState state, Rig rig, float time)
     // which a record always names one in.
     if (pose.count == 0)
     {
-        BlendNode node = gUniforms.blendNodeBuffer.Get(rig.nodes, state.slots[0].node);
+        BlendNode node = gUniforms.blendNodeBuffer.Get(rig.nodes, state.slots[0].nodeIndex);
         let clipIndex = node.kind == BlendNodeKind.kClip ? node.clip : gUniforms.blendMemberBuffer.Get(rig.members, node.firstMember).clip;
         Clip clip = gUniforms.clipBuffer.Get(rig.clips, clipIndex);
         return SingleClipPose(clip, SlotFrames(clip, state.slots[0], time));

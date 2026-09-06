@@ -380,14 +380,14 @@ namespace
 	bgl::PlaybackSlot
 	SpaceSlot(uint32_t node, float phase, float rate, float parameter)
 	{
-		auto slot    = bgl::PlaybackSlot();
-		slot.node    = node;
-		slot.phase   = phase;
-		slot.rate    = rate;
-		slot.weight0 = 1.0f;
-		slot.weight1 = 1.0f;
-		slot.param0  = parameter;
-		slot.param1  = parameter;
+		auto slot      = bgl::PlaybackSlot();
+		slot.nodeIndex = node;
+		slot.phase     = phase;
+		slot.rate      = rate;
+		slot.weight0   = 1.0f;
+		slot.weight1   = 1.0f;
+		slot.param0    = parameter;
+		slot.param1    = parameter;
 		return slot;
 	}
 
@@ -396,7 +396,7 @@ namespace
 	RampedSlot(uint32_t node, float phase, float from, float to, float rampStart, float rampEnd)
 	{
 		auto slot      = bgl::PlaybackSlot();
-		slot.node      = node;
+		slot.nodeIndex = node;
 		slot.phase     = phase;
 		slot.rate      = 0.0f;
 		slot.weight0   = from;

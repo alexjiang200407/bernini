@@ -60,10 +60,12 @@ namespace bgl
 	 */
 	struct PlaybackSlot
 	{
-		uint32_t node  = 0;
-		float    phase = 0.0f;
-		float    rate  = 1.0f;
-		float    tRef  = 0.0f;
+		// Into the rig's node table: below the rig's clip count it is that clip, above it an
+		// authored blend space. Checked against the node count, never the clip count.
+		uint32_t nodeIndex = 0;
+		float    phase     = 0.0f;
+		float    rate      = 1.0f;
+		float    tRef      = 0.0f;
 
 		float weight0   = 0.0f;
 		float weight1   = 0.0f;
@@ -102,12 +104,12 @@ namespace bgl
 		[[nodiscard]] static SkinnedPlaybackDesc
 		FromClip(uint32_t clip, float phase = 0.0f, float rate = 1.0f) noexcept
 		{
-			auto desc            = SkinnedPlaybackDesc();
-			desc.slot[0].node    = clip;
-			desc.slot[0].phase   = phase;
-			desc.slot[0].rate    = rate;
-			desc.slot[0].weight0 = 1.0f;
-			desc.slot[0].weight1 = 1.0f;
+			auto desc              = SkinnedPlaybackDesc();
+			desc.slot[0].nodeIndex = clip;
+			desc.slot[0].phase     = phase;
+			desc.slot[0].rate      = rate;
+			desc.slot[0].weight0   = 1.0f;
+			desc.slot[0].weight1   = 1.0f;
 			return desc;
 		}
 	};

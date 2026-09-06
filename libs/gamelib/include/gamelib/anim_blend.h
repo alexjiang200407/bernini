@@ -1,6 +1,8 @@
 #pragma once
+#include <cstdint>
 #include <gamelib/BlendSpaceInfo.h>
 #include <gamelib/ClipInfo.h>
+#include <span>
 
 #include <bgl/InstanceDesc.h>
 
@@ -40,13 +42,13 @@ namespace game
 	SlotParameterAt(const bgl::PlaybackSlot& slot, float time) noexcept;
 
 	/**
-	 * `desc` with a fade onto `node` begun at `now` and finished `duration` later: every slot that
-	 * carries weight ramps to zero over that window, and one slot takes `node` up from zero.
+	 * `desc` with a fade onto `nodeIndex` begun at `now` and finished `duration` later: every slot that
+	 * carries weight ramps to zero over that window, and one slot takes `nodeIndex` up from zero.
 	 *
 	 * The incoming slot starts at `phase` with `tRef = now`, so it begins where the caller says
 	 * rather than where the clock happens to be.
 	 *
-	 * A record already fading onto `node` is *not* restarted -- the same request twice in
+	 * A record already fading onto `nodeIndex` is *not* restarted -- the same request twice in
 	 * consecutive frames would otherwise never arrive. The incoming slot is the one already playing
 	 * it, and its ramp is left alone.
 	 *
@@ -58,14 +60,14 @@ namespace game
 	[[nodiscard]] bgl::SkinnedPlaybackDesc
 	CrossfadeTo(
 		const bgl::SkinnedPlaybackDesc& desc,
-		uint32_t                        node,
+		uint32_t                        nodeIndex,
 		float                           now,
 		float                           duration,
 		float                           phase = 0.0f,
 		float                           rate  = 1.0f);
 
 	/**
-	 * `desc` with the slot playing `node` moved to `parameter` over `duration` from `now`.
+	 * `desc` with the slot playing `nodeIndex` moved to `parameter` over `duration` from `now`.
 	 *
 	 * The slot's phase is rebased to `now` first, and that is the whole subtlety: a space's phase
 	 * advances at the reciprocal of the weighted cycle length, so a parameter that moves changes
@@ -76,7 +78,7 @@ namespace game
 	 *
 	 * `space` and `clips` are the acquire's, and are what the cycle lengths come from.
 	 *
-	 * A `node` no slot is playing is a no-op: there is nothing to steer, and a caller that
+	 * A `nodeIndex` no slot is playing is a no-op: there is nothing to steer, and a caller that
 	 * retargets before it crossfades should not silently start playing something.
 	 *
 	 * @throws std::runtime_error if `duration` is negative, `now` or `duration` is not finite, or a
@@ -85,7 +87,7 @@ namespace game
 	[[nodiscard]] bgl::SkinnedPlaybackDesc
 	RetargetParameter(
 		const bgl::SkinnedPlaybackDesc& desc,
-		uint32_t                        node,
+		uint32_t                        nodeIndex,
 		const BlendSpaceInfo&           space,
 		std::span<const ClipInfo>       clips,
 		float                           parameter,

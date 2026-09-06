@@ -372,7 +372,7 @@ namespace bgl
 					}
 				}
 
-				if (slot.node >= nodeCount)
+				if (slot.nodeIndex >= nodeCount)
 				{
 					throw SceneError(
 						std::format(
@@ -380,7 +380,7 @@ namespace bgl
 							"{}",
 							s,
 							what,
-							slot.node,
+							slot.nodeIndex,
 							nodeCount));
 				}
 
@@ -417,7 +417,7 @@ namespace bgl
 		ToRecord(const PlaybackSlot& slot) noexcept
 		{
 			auto record       = idl::BlendSlot();
-			record.node       = slot.node;
+			record.nodeIndex  = slot.nodeIndex;
 			record.phase      = slot.phase;
 			record.rate       = slot.rate;
 			record.tRef       = slot.tRef;
@@ -436,7 +436,7 @@ namespace bgl
 		FromRecord(const idl::BlendSlot& record) noexcept
 		{
 			auto slot       = PlaybackSlot();
-			slot.node       = record.node;
+			slot.nodeIndex  = record.nodeIndex;
 			slot.phase      = record.phase;
 			slot.rate       = record.rate;
 			slot.tRef       = record.tRef;

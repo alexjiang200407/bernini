@@ -3,11 +3,11 @@
 // per-frame input -- the slot holds what to evaluate, never the evaluated value -- so a pose at any
 // clock is a pure function of the record, which is what keeps the pose at prevTime exact.
 //
-// `node` indexes the rig's node table. That table is implicit for now: node `n` is clip `n`, and an
-// authored blend space is what will make it a table of its own.
+// `nodeIndex` indexes the rig's node table -- one node per clip in clip order, then the authored
+// blend spaces -- so an index below the rig's clip count is that clip.
 public struct BlendSlot
 {
-    public uint node;
+    public uint nodeIndex;
 
     // Where playback sat at `tRef`, in the node's own unit: frames of a clip. Advances from there
     // at `rate` times the clip's authored sampleRate.

@@ -1,4 +1,12 @@
+#include <algorithm>
+#include <bgl/InstanceDesc.h>
+#include <cmath>
+#include <cstddef>
+#include <cstdint>
+#include <gamelib/BlendSpaceInfo.h>
+#include <gamelib/ClipInfo.h>
 #include <gamelib/anim_blend.h>
+#include <span>
 
 #include <core/err/util.h>
 
@@ -136,7 +144,7 @@ namespace game
 	bgl::SkinnedPlaybackDesc
 	CrossfadeTo(
 		const bgl::SkinnedPlaybackDesc& desc,
-		uint32_t                        node,
+		uint32_t                        nodeIndex,
 		float                           now,
 		float                           duration,
 		float                           phase,
@@ -149,7 +157,8 @@ namespace game
 		// Already arriving at this node: restarting would mean the same request in two consecutive
 		// frames never finishes, because each would begin the fade again from where it had got to.
 		for (const bgl::PlaybackSlot& slot : next.slot)
-			if (slot.node == node && slot.weight1 > 0.0f && SlotWeightAt(slot, now) < slot.weight1)
+			if (slot.nodeIndex == nodeIndex && slot.weight1 > 0.0f &&
+			    SlotWeightAt(slot, now) < slot.weight1)
 				return next;
 
 		size_t incoming = next.slot.size();
@@ -159,9 +168,9 @@ namespace game
 			bgl::PlaybackSlot& slot = next.slot[s];
 			const float        held = SlotWeightAt(slot, now);
 
-			// The one already playing `node` becomes the incoming slot, so a fade back to what is
+			// The one already playing `nodeIndex` becomes the incoming slot, so a fade back to what is
 			// showing does not upload a second copy of it.
-			if (slot.node == node && held > 0.0f)
+			if (slot.nodeIndex == nodeIndex && held > 0.0f)
 			{
 				incoming = s;
 				continue;
@@ -192,11 +201,11 @@ namespace game
 
 			// A free slot is one at zero, so this picks one whenever there is one and only evicts
 			// something audible when there is not.
-			next.slot[incoming]       = bgl::PlaybackSlot();
-			next.slot[incoming].node  = node;
-			next.slot[incoming].phase = phase;
-			next.slot[incoming].rate  = rate;
-			next.slot[incoming].tRef  = now;
+			next.slot[incoming]           = bgl::PlaybackSlot();
+			next.slot[incoming].nodeIndex = nodeIndex;
+			next.slot[incoming].phase     = phase;
+			next.slot[incoming].rate      = rate;
+			next.slot[incoming].tRef      = now;
 		}
 
 		bgl::PlaybackSlot& arriving = next.slot[incoming];
@@ -211,7 +220,7 @@ namespace game
 	bgl::SkinnedPlaybackDesc
 	RetargetParameter(
 		const bgl::SkinnedPlaybackDesc& desc,
-		uint32_t                        node,
+		uint32_t                        nodeIndex,
 		const BlendSpaceInfo&           space,
 		std::span<const ClipInfo>       clips,
 		float                           parameter,
@@ -234,7 +243,7 @@ namespace game
 
 		for (bgl::PlaybackSlot& slot : next.slot)
 		{
-			if (slot.node != node)
+			if (slot.nodeIndex != nodeIndex)
 				continue;
 
 			// Rebased before the ramp moves: the phase the old parameter path already reached is

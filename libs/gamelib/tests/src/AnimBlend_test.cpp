@@ -30,7 +30,7 @@ namespace
 	SlotFor(const bgl::SkinnedPlaybackDesc& desc, uint32_t node)
 	{
 		for (const bgl::PlaybackSlot& slot : desc.slot)
-			if (slot.node == node && (slot.weight0 > 0.0f || slot.weight1 > 0.0f))
+			if (slot.nodeIndex == node && (slot.weight0 > 0.0f || slot.weight1 > 0.0f))
 				return &slot;
 
 		return nullptr;
@@ -258,14 +258,14 @@ TEST_CASE("a fifth node evicts the lightest slot", "[gamelib][animblend]")
 
 	// Which one is lightest is not the one that has been fading longest: each interruption restates
 	// every weight from where it had got to, so they do not decay in the order they started.
-	uint32_t quietest = desc.slot[0].node;
+	uint32_t quietest = desc.slot[0].nodeIndex;
 	float    least    = SlotWeightAt(desc.slot[0], 10.75f);
 	for (const bgl::PlaybackSlot& slot : desc.slot)
 	{
 		if (SlotWeightAt(slot, 10.75f) < least)
 		{
 			least    = SlotWeightAt(slot, 10.75f);
-			quietest = slot.node;
+			quietest = slot.nodeIndex;
 		}
 	}
 
@@ -277,8 +277,8 @@ TEST_CASE("a fifth node evicts the lightest slot", "[gamelib][animblend]")
 	// Everything louder than it survives, still ramping down.
 	for (const bgl::PlaybackSlot& slot : desc.slot)
 	{
-		if (slot.node != quietest)
-			CHECK(SlotFor(evicted, slot.node) != nullptr);
+		if (slot.nodeIndex != quietest)
+			CHECK(SlotFor(evicted, slot.nodeIndex) != nullptr);
 	}
 }
 
@@ -302,13 +302,13 @@ TEST_CASE("a retarget rebases the phase it had already reached", "[gamelib][anim
 
 	constexpr uint32_t c_SpaceNode = 2;  // two clips, so the space is node 2
 
-	auto desc            = bgl::SkinnedPlaybackDesc();
-	desc.slot[0].node    = c_SpaceNode;
-	desc.slot[0].rate    = 1.0f;
-	desc.slot[0].tRef    = 0.0f;
-	desc.slot[0].phase   = 0.0f;
-	desc.slot[0].weight0 = 1.0f;
-	desc.slot[0].weight1 = 1.0f;
+	auto desc              = bgl::SkinnedPlaybackDesc();
+	desc.slot[0].nodeIndex = c_SpaceNode;
+	desc.slot[0].rate      = 1.0f;
+	desc.slot[0].tRef      = 0.0f;
+	desc.slot[0].phase     = 0.0f;
+	desc.slot[0].weight0   = 1.0f;
+	desc.slot[0].weight1   = 1.0f;
 
 	SECTION("the phase carried in is what the old path had reached")
 	{
@@ -371,7 +371,7 @@ TEST_CASE("a retarget rebases the phase it had already reached", "[gamelib][anim
 		constexpr uint32_t c_WideNode = 4;  // three clips, then the two spaces
 
 		auto slot       = bgl::PlaybackSlot();
-		slot.node       = c_WideNode;
+		slot.nodeIndex  = c_WideNode;
 		slot.rate       = 1.0f;
 		slot.tRef       = 0.0f;
 		slot.phase      = 0.0f;
