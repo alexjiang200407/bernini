@@ -3,7 +3,15 @@
 #include <QMainWindow>
 
 #include <assetlib/Project.h>
+#include <filesystem>
+#include <functional>
 #include <gamelib/AssetManager.h>
+#include <memory>
+#include <qobject.h>
+#include <qobjectdefs.h>
+#include <qtmetamacros.h>
+#include <qwidget.h>
+#include <vector>
 
 #include "Async/BackgroundTask.h"
 #include "main_window_ui.h"
@@ -160,6 +168,9 @@ private:
 	// leaves the frame loop stops reporting, so without this its last figures would stay on the
 	// status bar and be read as the visible viewport's.
 	RenderTargetWindow* m_FrameStatsSource = nullptr;
+
+	// Armed by Render > Log GPU Pass Timings; the next breakdown that arrives is logged and disarms it.
+	bool m_LogNextPassTimings = false;
 
 	std::unique_ptr<Renderer> m_Renderer;
 

@@ -1,6 +1,7 @@
 #pragma once
 #include <assetlib_structs/BMaterial.h>
 #include <core/glm.h>
+#include <cstdint>
 
 namespace assetlib::imp
 {
@@ -25,6 +26,9 @@ namespace assetlib::imp
 
 		AlphaMode alphaMode   = AlphaMode::kOpaque;
 		float     alphaCutoff = 0.5f;
+
+		// glTF's `doubleSided`, and its default: a face is drawn from its front only.
+		bool doubleSided = false;
 
 		// KHR_materials_transmission's transmissionFactor; see PbrParams. Absent extension means 0,
 		// which is glTF's own default and the coverage reading BLEND has always had here.

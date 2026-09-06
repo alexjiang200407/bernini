@@ -1,8 +1,25 @@
 #pragma once
+#include "cmd/CommandList.h"
+#include "resource/ResourceManager.h"
 #include "scene/GrowableGpuBuffer.h"
 #include "uniforms/DescriptorHandle.h"
+#include <algorithm>
+#include <bgl_common/gassert.h>
+#include <core/containers/multi_slot_handle.h>
 #include <core/containers/multi_slot_vector.h>
 #include <core/err/util.h>
+#include <core/type_traits.h>
+#include <cstddef>
+#include <cstdint>
+#include <cstring>
+#include <limits>
+#include <span>
+#include <stdexcept>
+#include <string>
+#include <type_traits>
+#include <utility>
+#include <variant>
+#include <vector>
 
 namespace bgl
 {

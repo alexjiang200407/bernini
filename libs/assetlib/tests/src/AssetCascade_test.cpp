@@ -1,6 +1,11 @@
+#include <algorithm>
 #include <assetlib/asset_refs.h>
 
 #include <assetlib_structs/BMaterial.h>
+#include <catch2/catch_test_macros.hpp>
+#include <filesystem>
+#include <string>
+#include <vector>
 
 #include "MountAt.h"
 #include "RefsSandbox.h"

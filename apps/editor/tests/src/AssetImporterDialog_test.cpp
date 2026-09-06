@@ -1,6 +1,7 @@
 #include "Windows/AssetImporter/AssetImporterDialog.h"
 
 #include "util/QtSupport.h"
+#include <assetlib/bmesh_gltf.h>
 
 #include <QCheckBox>
 #include <QDialogButtonBox>
@@ -9,6 +10,13 @@
 #include <QPushButton>
 #include <QTemporaryDir>
 #include <QToolButton>
+#include <catch2/catch_message.hpp>
+#include <catch2/catch_test_macros.hpp>
+#include <catch2/generators/catch_generators.hpp>
+#include <cstddef>
+#include <qbuffer.h>
+#include <string>
+#include <vector>
 
 namespace
 {

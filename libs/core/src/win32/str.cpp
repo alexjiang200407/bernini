@@ -22,10 +22,10 @@ core::str::wide_to_string(std::wstring_view ws)
 	if (ws.empty())
 		return {};
 
-	int size_needed =
+	int sizeNeeded =
 		WideCharToMultiByte(CP_UTF8, 0, ws.data(), (int)ws.size(), nullptr, 0, nullptr, nullptr);
 
-	std::string result(static_cast<size_t>(size_needed), 0);
+	std::string result(static_cast<size_t>(sizeNeeded), 0);
 
 	WideCharToMultiByte(
 		CP_UTF8,
@@ -33,7 +33,7 @@ core::str::wide_to_string(std::wstring_view ws)
 		ws.data(),
 		(int)ws.size(),
 		result.data(),
-		size_needed,
+		sizeNeeded,
 		nullptr,
 		nullptr);
 

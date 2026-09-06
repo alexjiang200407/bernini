@@ -1,5 +1,6 @@
 #pragma once
 #include <bgl_common/ReflectedLayout.h>
+#include <bgl_common/UniformValueType.h>
 
 #include <slang.h>
 

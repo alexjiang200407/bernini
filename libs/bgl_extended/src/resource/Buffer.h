@@ -2,6 +2,9 @@
 #include "types/Barrier.h"
 #include <core/containers/slot_handle.h>
 #include <core/type_traits.h>
+#include <cstdint>
+#include <string>
+#include <utility>
 
 namespace bgl
 {

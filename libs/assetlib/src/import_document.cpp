@@ -1,3 +1,4 @@
+#include <algorithm>
 #include <assetlib/asset_refs.h>
 #include <assetlib/codecs.h>
 #include <assetlib/import_document.h>
@@ -5,10 +6,19 @@
 #include <core/err/util.h>
 #include <core/file/file.h>
 #include <core/hash.h>
+#include <cstddef>
+#include <cstdint>
+#include <cstring>
 #include <nlohmann/json.hpp>
+#include <span>
+#include <string>
+#include <string_view>
+#include <utility>
+#include <vector>
 
 #include "json_doc.h"
 #include "ref_paths.h"
+#include <assetlib_structs/Animation.h>
 
 namespace assetlib
 {

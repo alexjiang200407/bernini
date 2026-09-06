@@ -1,4 +1,9 @@
 #include "LevelEditorWindow.h"
+#include "Render/environment.h"
+#include "Windows/RenderTarget/RenderTargetWindow.h"
+#include <qcontainerfwd.h>
+#include <qwidget.h>
+#include <utility>
 
 LevelEditorWindow::LevelEditorWindow(
 	QWidget*               parent,

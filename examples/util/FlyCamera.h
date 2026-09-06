@@ -1,6 +1,7 @@
 #pragma once
 
-#include <bgl/bgl.h>
+#include <bgl/Camera.h>
+#include <chrono>
 
 namespace demo
 {

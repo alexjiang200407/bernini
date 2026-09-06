@@ -1,6 +1,7 @@
 #include "IRangeReader.h"
 
 #include <core/err/util.h>
+#include <cstdint>
 
 namespace assetlib
 {

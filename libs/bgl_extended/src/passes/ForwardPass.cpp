@@ -9,6 +9,7 @@
 #include "passes/BinderNames.h"
 #include "passes/DrawData.h"
 #include "passes/SceneBindings.h"
+#include "pipeline/MeshletKernel.h"
 #include "pipeline/MeshletPipeline.h"
 #include "pipeline/PipelineBatch.h"
 #include "resource/FrameBuffer.h"
@@ -16,12 +17,25 @@
 #include "resource/Shader.h"
 #include "scene/Scene.h"
 #include "scene/scene_buffer_names.h"
+#include "types/Barrier.h"
+#include "types/BlendState.h"
+#include "types/DepthStencilState.h"
+#include "types/Format.h"
+#include "types/RasterState.h"
 #include "types/RenderState.h"
 #include "uniforms/Uniforms.h"
 #include "util/util.h"
+#include <algorithm>
+#include <array>
 #include <bgl/ISceneView.h>
+#include <bgl_common/gassert.h>
 #include <bgl_common/idl/BaseTable.h>
 #include <bgl_common/idl/PsoType.h>
+#include <cstddef>
+#include <cstdint>
+#include <string>
+#include <string_view>
+#include <utility>
 
 namespace bgl
 {
@@ -65,10 +79,11 @@ namespace bgl
 		};
 		// clang-format on
 
-		constexpr std::array<std::string_view, 3> c_ExpansionDataFields = {
+		constexpr std::array<std::string_view, 4> c_ExpansionDataFields = {
 			"psoIndex"sv,
 			"baseTable"sv,
 			"compactedInstances"sv,
+			"cullBackfaces"sv,
 		};
 
 		constexpr auto c_MotionVectorFormat = Format::RG16_FLOAT;
@@ -398,6 +413,9 @@ namespace bgl
 			{
 				(*expansionData)["psoIndex"]  = static_cast<uint32_t>(pso);
 				(*expansionData)["baseTable"] = idl::BaseTable::kPsoBucketed;
+				// A bucket the pipeline culls in hardware leaves the mesh stage nothing to do.
+				(*expansionData)["cullBackfaces"] =
+					c_Psos[pso].cull == RasterCullMode::kNone ? 1u : 0u;
 			}
 
 			gfxState.kernel       = &kernel;
@@ -436,6 +454,7 @@ namespace bgl
 		{
 			(*expansionData)["compactedInstances"] = sortedInstances;
 			(*expansionData)["baseTable"]          = idl::BaseTable::kDepthSorted;
+			(*expansionData)["cullBackfaces"]      = 1u;
 		}
 
 		colorState.kernel       = &kernel;

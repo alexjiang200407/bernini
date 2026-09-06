@@ -1,3 +1,4 @@
+#include <array>
 #include <assetlib/bmesh.h>
 #include <assetlib/bmesh_gltf.h>
 #include <assetlib/codecs.h>
@@ -5,15 +6,31 @@
 #include <assetlib/mesh_tangents.h>
 #include <assetlib_structs/BMesh.h>
 #include <assetlib_structs/BMeshImport.h>
+#include <catch2/catch_test_macros.hpp>
+#include <catch2/matchers/catch_matchers.hpp>
+#include <chrono>
 #include <core/hash.h>
 
 #include <catch2/catch_approx.hpp>
 
 #include "MountAt.h"
 #include "mounted_io.h"
+#include <assetlib/project_layout.h>
+#include <assetlib_structs/BMaterial.h>
+#include <assetlib_structs/Node.h>
 
 #include <assetlib/AssetStore.h>
 #include <catch2/matchers/catch_matchers_string.hpp>
+#include <cstddef>
+#include <cstdint>
+#include <filesystem>
+#include <fstream>
+#include <ios>
+#include <span>
+#include <stdexcept>
+#include <string>
+#include <string_view>
+#include <vector>
 
 using namespace assetlib;
 
@@ -63,6 +80,27 @@ TEST_CASE("a blend material's transmission survives a round trip", "[bmaterial][
 	CHECK(
 		AssetCodec<BMaterial>::Deserialize(AssetCodec<BMaterial>::Serialize(coverage))
 			.pbr.transmissionFactor == 0.0f);
+}
+
+// A single-sided cut-out has to come back single-sided, and a document written before the key
+// existed has to come back two-sided -- that is how every hair card and leaf drew until now, and a
+// default of false would silently cull half of each on the next load.
+TEST_CASE(
+	"a material's double-sidedness round-trips, and defaults to both sides",
+	"[bmaterial][io]")
+{
+	BMaterial mat;
+	mat.name            = "leaf";
+	mat.pbr.alphaMode   = AlphaMode::kMask;
+	mat.pbr.doubleSided = false;
+
+	const auto restored = AssetCodec<BMaterial>::Deserialize(AssetCodec<BMaterial>::Serialize(mat));
+	CHECK(!restored.pbr.doubleSided);
+
+	const std::string text = R"({"shadingModel":"pbr","name":"card","alphaMode":"mask"})";
+	const auto        legacy =
+		AssetCodec<BMaterial>::Deserialize(std::as_bytes(std::span(text.data(), text.size())));
+	CHECK(legacy.pbr.doubleSided);
 }
 
 TEST_CASE("a material's specular factors survive a round trip", "[bmaterial][io]")
@@ -237,10 +275,15 @@ TEST_CASE("A source whose mtime moved but whose bytes did not is not stale", "[b
 
 	// The other half of the same rule: content that did change is still caught, even at the same
 	// size, where an mtime stamp with one-second granularity could miss it.
+	//
+	// Moved past the mtime the stamp above cached rather than past the one the rewrite leaves:
+	// stampOf memoises a hash against size and mtime, and where the filesystem dates both writes
+	// the same -- which Windows does, its write times being coarser than the gap between them --
+	// landing back on that pair would hand the first bytes' hash back for the second bytes.
+	const auto stamped = std::filesystem::last_write_time(source);
+
 	write(source, "aaab");
-	std::filesystem::last_write_time(
-		source,
-		std::filesystem::last_write_time(source) + std::chrono::seconds(5));
+	std::filesystem::last_write_time(source, stamped + std::chrono::seconds(10));
 
 	REQUIRE(bakeIsStale(mat, MountAt(dir)));
 

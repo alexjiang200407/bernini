@@ -6,11 +6,14 @@
 #include "resource/Buffer.h"
 #include "resource/Readback.h"
 #include "resource/ResourceManager.h"
+#include "types/Barrier.h"
 #include "types/ComputeState.h"
 #include "types/QueueType.h"
 #include "util/GpuValidation.h"
 #include "util/TestOptions.h"
 #include <bgl/IGraphics.h>
+#include <catch2/catch_test_macros.hpp>
+#include <cstdint>
 
 // The first shader-correctness test: a compute kernel writes a known pattern into a bindless
 // RWStructuredBuffer, read back and checked exactly. Unlike the buffer-copy readback test, this

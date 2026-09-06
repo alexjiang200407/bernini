@@ -1,5 +1,9 @@
 #pragma once
 
+#include <filesystem>
+#include <string>
+#include <string_view>
+#include <vector>
 namespace editor
 {
 	/** A rigged mesh's animation sources: the rig it names, and the clip files authored against it. */

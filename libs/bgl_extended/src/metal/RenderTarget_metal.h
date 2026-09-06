@@ -1,15 +1,23 @@
 #pragma once
 #include "metal_cpp.h"
+#include <bgl/IRenderTarget.h>
+#include <bgl_common/gassert.h>
 
 #include "cmd/CommandAllocator.h"
 #include "cmd/CommandQueue.h"
 #include "constants/constants.h"
 #include "device/Device.h"
 #include "gfx/RenderTargetBase.h"
+#include "resource/Dsv.h"
 #include "resource/ResourceManager.h"
+#include "resource/Rtv.h"
+#include "resource/Srv.h"
+#include "resource/Texture.h"
 
+#include <array>
 #include <bgl/IGraphics.h>
 #include <core/ref/RefCounter.h>
+#include <cstdint>
 
 namespace bgl
 {

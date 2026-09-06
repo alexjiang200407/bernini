@@ -1,4 +1,10 @@
+#include <algorithm>
+#include <cmath>
+#include <cstdlib>
 #include <gamelib/Ray.h>
+#include <limits>
+#include <optional>
+#include <utility>
 
 namespace game
 {

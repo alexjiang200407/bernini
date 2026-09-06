@@ -5,11 +5,18 @@
 #include <assetlib_structs/Animation.h>
 #include <assetlib_structs/BMesh.h>
 #include <assetlib_structs/Skeleton.h>
+#include <catch2/catch_test_macros.hpp>
 #include <core/file/LooseFileSystem.h>
+#include <cstddef>
+#include <cstdint>
+#include <filesystem>
 
 #include "CountingFileSystem.h"
 #include "MountAt.h"
 #include "mounted_io.h"
+#include <assetlib_structs/Mesh.h>
+#include <assetlib_structs/Node.h>
+#include <core/file/IFileSystem.h>
 
 using namespace assetlib;
 using namespace assetlib::test;

@@ -10,9 +10,22 @@
 #include "pipeline/PipelineBatch.h"
 #include "resource/FrameBuffer.h"
 #include "resource/Shader.h"
+#include "types/Barrier.h"
+#include "types/BlendState.h"
+#include "types/DepthStencilState.h"
+#include "types/Format.h"
 #include "types/MeshletState.h"
+#include "types/RasterState.h"
 #include "types/RenderState.h"
+#include <array>
+#include <bgl_common/gassert.h>
 #include <core/math.h>
+#include <core/ref/SharedRef.h>
+#include <cstdint>
+#include <span>
+#include <string>
+#include <string_view>
+#include <utility>
 
 namespace bgl
 {

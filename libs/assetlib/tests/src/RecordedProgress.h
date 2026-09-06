@@ -1,5 +1,11 @@
 #pragma once
+#include <algorithm>
 #include <assetlib/progress.h>
+#include <cstddef>
+#include <span>
+#include <string>
+#include <string_view>
+#include <vector>
 
 namespace assetlib::test
 {

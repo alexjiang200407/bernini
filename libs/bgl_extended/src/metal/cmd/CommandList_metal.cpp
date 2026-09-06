@@ -1,16 +1,47 @@
 #include "cmd/CommandList_metal.h"
 
+#include "cmd/CommandList.h"
+#include "cmd/CommandQueue.h"
 #include "cmd/CommandQueue_metal.h"
+#include "cmd/TimestampHeap.h"
+#include "cmd/TimestampHeap_metal.h"
+#include "constants/constants.h"
+#include "convert_metal.h"
 #include "pipeline/ComputeKernel.h"
 #include "pipeline/ComputePipeline_metal.h"
 #include "pipeline/MeshletKernel.h"
 #include "pipeline/MeshletPipeline_metal.h"
+#include "pipeline/MetalPipelineReflection.h"
+#include "resource/Buffer.h"
+#include "resource/FrameBuffer.h"
+#include "resource/Readback.h"
+#include "resource/ResourceManager.h"
 #include "resource/ResourceManager_metal.h"
+#include "resource/Texture.h"
+#include "types/ComputeState.h"
+#include "types/MeshletState.h"
+#include "types/Rect.h"
+#include "types/RenderState.h"
+#include "types/ShaderStage.h"
+#include "uniforms/UniformLayoutEntry.h"
+#include "uniforms/Uniforms.h"
 #include "util/util.h"
+#include <bgl/Viewport.h>
+#include <bgl_common/ReflectedLayout.h>
+#include <bgl_common/gassert.h>
+#include <core/containers/slot_handle.h>
 
+#include <algorithm>
 #include <bgl_common/idl/DispatchArgs.h>
 
 #include <core/math.h>
+#include <cstddef>
+#include <cstdint>
+#include <cstring>
+#include <span>
+#include <string_view>
+#include <utility>
+#include <vector>
 
 namespace bgl
 {
@@ -129,7 +160,16 @@ namespace bgl
 		if (m_EncoderKind != EncoderKind::kBlit)
 		{
 			EndEncoder();
-			m_Encoder     = m_CmdBuffer->blitCommandEncoder();
+			if (m_TimingBuffer != nullptr)
+			{
+				MTL::BlitPassDescriptor* pass = MTL::BlitPassDescriptor::blitPassDescriptor();
+				AttachTiming(pass);
+				m_Encoder = m_CmdBuffer->blitCommandEncoder(pass);
+			}
+			else
+			{
+				m_Encoder = m_CmdBuffer->blitCommandEncoder();
+			}
 			m_EncoderKind = EncoderKind::kBlit;
 		}
 		return static_cast<MTL::BlitCommandEncoder*>(m_Encoder);
@@ -141,7 +181,17 @@ namespace bgl
 		if (m_EncoderKind != EncoderKind::kCompute)
 		{
 			EndEncoder();
-			m_Encoder     = m_CmdBuffer->computeCommandEncoder();
+			if (m_TimingBuffer != nullptr)
+			{
+				MTL::ComputePassDescriptor* pass =
+					MTL::ComputePassDescriptor::computePassDescriptor();
+				AttachTiming(pass);
+				m_Encoder = m_CmdBuffer->computeCommandEncoder(pass);
+			}
+			else
+			{
+				m_Encoder = m_CmdBuffer->computeCommandEncoder();
+			}
 			m_EncoderKind = EncoderKind::kCompute;
 		}
 		return static_cast<MTL::ComputeCommandEncoder*>(m_Encoder);
@@ -189,10 +239,58 @@ namespace bgl
 			}
 		}
 
+		AttachTiming(pass);
 		m_Encoder            = m_CmdBuffer->renderCommandEncoder(pass);
 		m_EncoderKind        = EncoderKind::kRender;
 		m_EncoderFrameBuffer = fb;
 		return static_cast<MTL::RenderCommandEncoder*>(m_Encoder);
+	}
+
+	void
+	CommandList::AttachTiming(MTL::RenderPassDescriptor* pass) noexcept
+	{
+		if (m_TimingBuffer == nullptr)
+			return;
+
+		MTL::RenderPassSampleBufferAttachmentDescriptor* a =
+			pass->sampleBufferAttachments()->object(0);
+		a->setSampleBuffer(m_TimingBuffer);
+		a->setStartOfVertexSampleIndex(
+			m_TimingStartSampled ? MTL::CounterDontSample : m_TimingStartSlot);
+		a->setEndOfVertexSampleIndex(MTL::CounterDontSample);
+		a->setStartOfFragmentSampleIndex(MTL::CounterDontSample);
+		a->setEndOfFragmentSampleIndex(m_TimingEndSlot);
+		m_TimingStartSampled = true;
+	}
+
+	void
+	CommandList::AttachTiming(MTL::ComputePassDescriptor* pass) noexcept
+	{
+		if (m_TimingBuffer == nullptr)
+			return;
+
+		MTL::ComputePassSampleBufferAttachmentDescriptor* a =
+			pass->sampleBufferAttachments()->object(0);
+		a->setSampleBuffer(m_TimingBuffer);
+		a->setStartOfEncoderSampleIndex(
+			m_TimingStartSampled ? MTL::CounterDontSample : m_TimingStartSlot);
+		a->setEndOfEncoderSampleIndex(m_TimingEndSlot);
+		m_TimingStartSampled = true;
+	}
+
+	void
+	CommandList::AttachTiming(MTL::BlitPassDescriptor* pass) noexcept
+	{
+		if (m_TimingBuffer == nullptr)
+			return;
+
+		MTL::BlitPassSampleBufferAttachmentDescriptor* a =
+			pass->sampleBufferAttachments()->object(0);
+		a->setSampleBuffer(m_TimingBuffer);
+		a->setStartOfEncoderSampleIndex(
+			m_TimingStartSampled ? MTL::CounterDontSample : m_TimingStartSlot);
+		a->setEndOfEncoderSampleIndex(m_TimingEndSlot);
+		m_TimingStartSampled = true;
 	}
 
 	void
@@ -220,6 +318,7 @@ namespace bgl
 	CommandList::Close() noexcept
 	{
 		gassert(m_Open, "Command list is not open");
+		gassert(m_TimingBuffer == nullptr, "Command list closed with a timed span open");
 		EndEncoder();
 		m_Open = false;
 		m_ScopePool.reset();
@@ -328,6 +427,7 @@ namespace bgl
 			MTL::ClearColor::Make(clearVal[0], clearVal[1], clearVal[2], clearVal[3]));
 
 		// An empty pass: the Clear load action writes the color and Store keeps it.
+		AttachTiming(pass);
 		m_CmdBuffer->renderCommandEncoder(pass)->endEncoding();
 	}
 
@@ -355,6 +455,7 @@ namespace bgl
 			st->setClearStencil(stencil);
 		}
 
+		AttachTiming(pass);
 		m_CmdBuffer->renderCommandEncoder(pass)->endEncoding();
 	}
 
@@ -425,6 +526,40 @@ namespace bgl
 	CommandList::EndEvent() noexcept
 	{
 		m_CmdBuffer->popDebugGroup();
+	}
+
+	void
+	CommandList::BeginTiming(ITimestampHeap& heap, uint32_t startSlot, uint32_t endSlot) noexcept
+	{
+		gassert(m_Open, "BeginTiming on a closed command list");
+		gassert(m_TimingBuffer == nullptr, "BeginTiming while a timed span is open");
+		gassert(
+			startSlot < heap.GetCapacity() && endSlot < heap.GetCapacity(),
+			"BeginTiming slot outside the heap");
+
+		// A stage-boundary sample belongs to an encoder, so an encoder carried over from before the
+		// span would have its start sampled where the previous work began.
+		EndEncoder();
+
+		m_TimingBuffer       = heap.As<TimestampHeap>()->GetMTLSampleBuffer();
+		m_TimingStartSlot    = startSlot;
+		m_TimingEndSlot      = endSlot;
+		m_TimingStartSampled = false;
+	}
+
+	bool
+	CommandList::EndTiming() noexcept
+	{
+		gassert(m_TimingBuffer != nullptr, "EndTiming without a timed span open");
+
+		// The end sample is written where the last encoder ends, so it ends here rather than
+		// running on into the next span's work.
+		EndEncoder();
+
+		const bool sampled   = m_TimingStartSampled;
+		m_TimingBuffer       = nullptr;
+		m_TimingStartSampled = false;
+		return sampled;
 	}
 
 	void

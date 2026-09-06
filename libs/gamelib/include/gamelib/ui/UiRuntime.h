@@ -1,5 +1,9 @@
 #pragma once
 #include <assetlib/AssetStore.h>
+#include <cstdint>
+#include <memory>
+#include <string>
+#include <string_view>
 
 // The library reaches a client through this header alone, and never through a bernini one: a game
 // that drives a context includes <RmlUi/Core.h> itself. See docs/ui_runtime.md, Replacing RmlUi.

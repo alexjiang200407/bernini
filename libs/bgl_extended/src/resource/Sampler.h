@@ -1,5 +1,7 @@
 #pragma once
 #include "types/Color.h"
+#include <core/containers/slot_handle.h>
+#include <cstdint>
 
 namespace bgl
 {

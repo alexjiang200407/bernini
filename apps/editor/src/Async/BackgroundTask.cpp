@@ -1,4 +1,5 @@
 #include "Async/BackgroundTask.h"
+#include <assetlib/cancel.h>
 
 #include <QCloseEvent>
 #include <QEventLoop>
@@ -9,6 +10,15 @@
 #include <QThreadPool>
 #include <QTimer>
 #include <QWidget>
+#include <atomic>
+#include <exception>
+#include <functional>
+#include <qassert.h>
+#include <qnamespace.h>
+#include <qstringliteral.h>
+#include <qtmetamacros.h>
+#include <qtpreprocessorsupport.h>
+#include <utility>
 
 namespace background
 {

@@ -6,8 +6,13 @@
 #include "resource/Srv.h"
 #include "types/Rect.h"
 #include "types/Viewport.h"
+#include <bgl/Viewport.h>
 #include <bgl/glm.h>
 #include <core/ref/SharedRef.h>
+#include <cstdint>
+#include <span>
+#include <spdlog/spdlog.h>
+#include <string>
 
 namespace bgl
 {

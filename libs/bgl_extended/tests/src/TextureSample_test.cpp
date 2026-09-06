@@ -6,14 +6,27 @@
 #include "gfx/GraphicsBase.h"
 #include "pipeline/ComputeKernel.h"
 #include "pipeline/ComputePipeline.h"
+#include "resource/Buffer.h"
 #include "resource/Readback.h"
 #include "resource/ResourceManager.h"
+#include "resource/Srv.h"
+#include "resource/Texture.h"
+#include "types/Barrier.h"
 #include "types/ComputeState.h"
+#include "types/Format.h"
+#include "types/QueueType.h"
 #include "util/GpuValidation.h"
 #include "util/TestOptions.h"
+#include <array>
 #include <bgl/IGraphics.h>
 #include <bgl_common/idl/ErrorCode.h>
 #include <catch2/catch_approx.hpp>
+#include <catch2/catch_message.hpp>
+#include <catch2/catch_test_macros.hpp>
+#include <cstddef>
+#include <cstdint>
+#include <cstring>
+#include <vector>
 
 #if defined(BERNINI_GPU_DEBUG)
 

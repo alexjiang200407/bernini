@@ -2,6 +2,11 @@
 #include <assetlib_structs/Animation.h>
 #include <assetlib_structs/SourceStamp.h>
 #include <core/file/IFileSystem.h>
+#include <cstdint>
+#include <filesystem>
+#include <string>
+#include <string_view>
+#include <vector>
 
 namespace assetlib
 {

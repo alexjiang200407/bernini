@@ -1,7 +1,9 @@
 #pragma once
 #include "pipeline/MeshletKernel.h"
 #include "types/MeshletState.h"
+#include <array>
 #include <bgl_common/idl/PsoType.h>
+#include <spdlog/spdlog.h>
 
 namespace bgl
 {

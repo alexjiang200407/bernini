@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cstdint>
 namespace bgl
 {
 	enum class RasterFillMode : uint8_t

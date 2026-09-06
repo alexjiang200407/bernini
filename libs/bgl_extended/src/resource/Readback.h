@@ -1,5 +1,7 @@
 #pragma once
 #include <core/containers/slot_handle.h>
+#include <cstdint>
+#include <string>
 
 namespace bgl
 {

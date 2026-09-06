@@ -3,9 +3,14 @@
 #include "gfx/GraphicsBase.h"
 #include "resource/Readback.h"
 #include "scene/EntryBuffer.h"
+#include "types/Barrier.h"
+#include "types/QueueType.h"
 #include "util/GpuValidation.h"
 #include "util/TestOptions.h"
 #include <bgl/IGraphics.h>
+#include <catch2/catch_test_macros.hpp>
+#include <core/containers/slot_handle.h>
+#include <cstdint>
 
 TEST_CASE("EntryBuffer", "[entry][scene]")
 {

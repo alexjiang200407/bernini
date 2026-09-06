@@ -3,6 +3,13 @@
 #include <QKeyEvent>
 #include <QMouseEvent>
 #include <QPainter>
+#include <algorithm>
+#include <cmath>
+#include <qnamespace.h>
+#include <qsize.h>
+#include <qsizepolicy.h>
+#include <qtmetamacros.h>
+#include <qwidget.h>
 
 namespace
 {

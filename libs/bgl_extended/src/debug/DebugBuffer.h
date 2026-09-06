@@ -1,6 +1,13 @@
 #pragma once
+#include "cmd/CommandList.h"
+#include "resource/Buffer.h"
+#include "resource/ResourceManager.h"
 #include "scene/ComputeBuffer.h"
+#include <array>
+#include <bgl_common/gassert.h>
 #include <bgl_common/idl/DebugRecord.h>
+#include <cstdint>
+#include <utility>
 
 #if defined(BERNINI_GPU_DEBUG)
 namespace bgl

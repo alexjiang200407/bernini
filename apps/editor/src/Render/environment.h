@@ -1,9 +1,15 @@
 #pragma once
 
 #include <QStringList>
+#include <bgl/TextureAssetHandle.h>
 
 #include <bgl/IScene.h>
 #include <bgl/ISceneView.h>
+#include <cstdint>
+#include <filesystem>
+#include <optional>
+#include <qcontainerfwd.h>
+#include <string>
 
 namespace editor
 {

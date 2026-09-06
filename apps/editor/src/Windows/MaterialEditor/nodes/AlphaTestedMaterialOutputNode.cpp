@@ -1,9 +1,13 @@
 #include "Windows/MaterialEditor/nodes/AlphaTestedMaterialOutputNode.h"
+#include "Windows/MaterialEditor/nodes/ChannelData.h"
+#include "Windows/MaterialEditor/nodes/MaterialOutputNode.h"
 
 #include <QDoubleSpinBox>
 #include <QFormLayout>
 #include <QJsonObject>
 #include <QSignalBlocker>
+#include <qstringliteral.h>
+#include <qtmetamacros.h>
 
 AlphaTestedMaterialOutputNode::AlphaTestedMaterialOutputNode() :
 	MaterialOutputNode(ChannelData::c_MaxChannels)  // base color is RGBA here, not RGB

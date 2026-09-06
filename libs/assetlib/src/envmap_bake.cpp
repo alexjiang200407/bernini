@@ -1,14 +1,27 @@
+#include <algorithm>
 #include <assetlib/envmap.h>
 #include <assetlib_structs/ImageData.h>
 
+#include <atomic>
+#include <cmath>
+#include <cstddef>
+#include <cstdint>
+#include <cstring>
+#include <filesystem>
 #include <stb_image.h>
 
 #include "cook_threads.h"
+#include <assetlib_structs/VkFormat.h>
+#include <core/containers/fixed_buffer.h>
 #include <core/parallel_for.h>
 
 #include <core/glm.h>
 #include <core/math.h>
+#include <stdexcept>
+#include <string>
 #include <tracy/Tracy.hpp>
+#include <utility>
+#include <vector>
 
 namespace assetlib
 {

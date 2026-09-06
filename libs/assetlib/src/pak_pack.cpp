@@ -1,6 +1,6 @@
+#include <algorithm>
 #include <assetlib/AssetStore.h>
 #include <assetlib/codecs.h>
-#include <assetlib/envmap.h>
 #include <assetlib/pak.h>
 
 #include <assetlib/RegenMesh.h>
@@ -14,8 +14,18 @@
 #include <core/err/util.h>
 #include <core/file/LooseFileSystem.h>
 #include <core/hash.h>
+#include <cstddef>
+#include <cstdint>
+#include <exception>
+#include <filesystem>
+#include <optional>
+#include <string>
+#include <unordered_map>
+#include <utility>
+#include <vector>
 
 #include "ref_paths.h"
+#include <core/file/IFileSystem.h>
 
 #include "mounted_io.h"
 
@@ -117,12 +127,14 @@ namespace assetlib
 			case AssetType::kMesh:
 			{
 				RegenMesh current = store.LoadRegenMesh(key);
-				core::throw_runtime_error_if(
-					!current.unboundBindings.empty(),
-					"AssetStore::Pack: '{}' binds submesh '{}', which the mesh does not "
-					"have; rebind or re-export",
-					key,
-					current.unboundBindings.front());
+				if (!current.unboundBindings.empty())
+				{
+					core::throw_runtime_error(
+						"AssetStore::Pack: '{}' binds submesh '{}', which the mesh does not "
+						"have; rebind or re-export",
+						key,
+						current.unboundBindings.front());
+				}
 				return AssetCodec<BMesh>::Serialize(current.mesh);
 			}
 			case AssetType::kSkeleton:

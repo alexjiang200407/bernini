@@ -3,11 +3,13 @@ Bernini is a 3D game engine. It uses CMake as the buildsystem.
 # General Notes
 
 - Use bash
-- Do not `#include` standard c++ libraries. They're already in the precompiled header `./PCH/pch.h`, which every compiled target in the tree gets — that universality is what makes omitting them safe.
-- **Never drop an `#include` because a *subsystem* PCH has it.** `libs/<lib>/src/pch.h` and `apps/editor/src/pch.h` carry the third-party headers that subsystem leans on (Qt, glm) so they cost nothing — but unlike the root PCH they reach only some targets: assetlib's is `PRIVATE` while its public headers are compiled by gamelib and the editor without it, and two Objective-C++ files skip a PCH entirely. So still write `#include <QString>` and `<core/glm.h>` where you use them; the PCH is an optimisation, not an interface. See [docs/build_performance.md](./docs/build_performance.md).
+- **Include what you use** — every file, every symbol, the standard library included. Write `#include <vector>` where you name `std::vector` and `#include <QString>` where you name `QString`.
+- **Never drop an `#include` because a PCH has it.** `./PCH/pch.h` and the subsystem PCHs (`libs/<lib>/src/pch.h`, `apps/editor/src/pch.h`) are build optimisations, never interfaces: they make an include free, they do not stand in for one. A PCH that reaches every target still cannot be seen by a reader, by clangd, or by any tool that parses one file — and the subsystem ones do not even reach every target, since assetlib's is `PRIVATE` while its public headers are compiled by gamelib and the editor without it. See [docs/build_performance.md](./docs/build_performance.md).
+- **An include the tools cannot see the point of gets a pragma, never a deletion.** `// IWYU pragma: keep` for one held for a side effect — a subsystem `pch.h` entry, whose contents are unused where they sit by construction. `// IWYU pragma: export` for a header that exists to re-export another, which is the stronger claim and the right one for `<core/glm.h>`: `keep` would only silence the report, while `export` says that including it is how you get glm. The one thing no `#include` can replace is a name a PCH *defines*: `libs/bgl_extended/src/pch.h` declares the `bgl::logger` alias every source there logs through.
+- `just tidy` enforces this with clang-tidy's `misc-include-cleaner`, and [`.clangd`](./.clangd) underlines it live in the editor; `just tidy --fix` writes the includes and gives them the brackets the rule below asks for. See [docs/naming.md](./docs/naming.md).
 - Library subsystems live under `./libs` (currently `./libs/bgl`, `./libs/bgl_common`, `./libs/bgl_extended`, `./libs/core`, `./libs/assetlib`, `./libs/gamelib`); executable apps live under `./apps` (currently `./apps/editor`); runnable examples under `./examples`
 - **Layering**: `bgl_extended` (renderer) never links `assetlib` — it stays codec-free, taking decoded `assetlib_structs` PODs. `assetlib` (offline cook) never links `bgl_extended` — the CLI baker must not drag in D3D12. `gamelib` is the seam that links both, and is where "load this asset into a scene" lives.
-- **`bgl_common` sits between the contract and the renderer**, and links neither `bgl_extended` nor any backend. It holds what every renderer needs and no renderer owns — the `gassert` family, the Slang reflection walk, the serializable `ReflectedLayout`, the constant-buffer mirror's layout walk (`UniformsBase`), the shader cache's salt/key/encoding, the TAA jitter sequence, frustum-plane extraction, the Slang diagnostic checker, and the frame graph's pass scheduler — the dependency edges, the dead-pass cull and the execution order. A header there may name no backend and no bindless type; `bgl_common_selfcheck` compiles the whole public surface against `bgl_common` alone and fails the build on a reach into `libs/bgl_extended/src`.
+- **`bgl_common` sits between the contract and the renderer**, and links neither `bgl_extended` nor any backend. It holds what every renderer needs and no renderer owns — the `gassert` family, the Slang reflection walk, the serializable `ReflectedLayout`, the constant-buffer mirror's layout walk (`UniformsBase`), the shader cache's salt/key/encoding, the TAA jitter sequence, frustum-plane extraction, the Slang diagnostic checker, the engine's memory-tag taxonomy (the *list*; `core::profiling` owns the machinery), and the frame graph's pass scheduler — the dependency edges, the dead-pass cull and the execution order. A header there may name no backend and no bindless type; `bgl_common_selfcheck` compiles the whole public surface against `bgl_common` alone and fails the build on a reach into `libs/bgl_extended/src`.
 - **The design bar is not the same everywhere.** See below.
 - For each subsystem `$SUBSYSTEM/src` represents the internal .cpp and .h files that WON'T be shared with others.
 - For each subsystem `$SUBSYSTEM/include` represents all the headers that will be shared to others.
@@ -70,7 +72,9 @@ Read through these documents if you deem them necessary to your given task. If y
 **[Naming](./docs/naming.md)**
 
 Which directories are `lower_case` and which are `PascalCase`, why the boundary is a directory
-rather than a judgement call, and how `just tidy` enforces it.
+rather than a judgement call, and how `just tidy` enforces it. Then the other check it runs —
+include hygiene, how a subsystem switches it on for itself, and what `--fix` will and will not do
+for you.
 
 **[bgl Public API](./docs/bgl_api.md)**
 
@@ -111,7 +115,9 @@ machine.
 **[Profiling](./docs/profiling.md)**
 
 Where load and cook time is measured: taking a Tracy capture, the one rule for naming a zone, and
-why the frame loop deliberately has none.
+why the frame loop deliberately has none. Then **§ Memory**: bytes charged to a subsystem tag
+against what the OS says the process owns, why the untagged residual is the mechanism rather than a
+gap, how each binary is asked for a report, and what a cook and a suite were measured to hold.
 
 **[Frame Graph](./docs/framegraph.md)**
 

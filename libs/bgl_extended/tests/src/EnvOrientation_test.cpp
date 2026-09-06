@@ -3,11 +3,19 @@
 #include "util/TestOptions.h"
 #include <assetlib/envmap.h>
 #include <assetlib_structs/ImageData.h>
+#include <assetlib_structs/VkFormat.h>
 #include <bgl/Camera.h>
 #include <bgl/IGraphics.h>
+#include <bgl/IRenderTarget.h>
 #include <bgl/IScene.h>
 #include <bgl/ISceneView.h>
 #include <bgl/SkyboxDesc.h>
+#include <bgl/TextureAssetHandle.h>
+#include <catch2/catch_message.hpp>
+#include <catch2/catch_test_macros.hpp>
+#include <core/containers/fixed_buffer.h>
+#include <cstddef>
+#include <cstdint>
 
 // Every other environment test checks the *bake*, and the bake is correct. Nothing checks that a
 // world direction in the shader reaches the texel the bake put there -- so a mirrored axis, a

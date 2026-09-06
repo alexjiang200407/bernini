@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cstdint>
 namespace bgl
 {
 	enum class GeomType : uint8_t

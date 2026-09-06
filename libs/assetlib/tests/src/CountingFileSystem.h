@@ -1,5 +1,12 @@
 #pragma once
 #include <core/file/IFileSystem.h>
+#include <cstddef>
+#include <cstdint>
+#include <optional>
+#include <string>
+#include <string_view>
+#include <unordered_map>
+#include <vector>
 
 namespace assetlib::test
 {

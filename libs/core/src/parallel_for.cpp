@@ -1,5 +1,14 @@
+#include <algorithm>
+#include <atomic>
 #include <core/parallel_for.h>
 #include <core/profiling/thread_name.h>
+#include <cstddef>
+#include <cstdint>
+#include <exception>
+#include <functional>
+#include <mutex>
+#include <thread>
+#include <vector>
 
 namespace core
 {

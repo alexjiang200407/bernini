@@ -1,7 +1,10 @@
 #pragma once
 
 #include <assetlib_structs/BMesh.h>
+#include <assetlib_structs/Node.h>
 #include <bgl/glm.h>
+#include <cstdint>
+#include <vector>
 
 namespace bmesh
 {

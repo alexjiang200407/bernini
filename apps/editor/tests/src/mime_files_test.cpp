@@ -2,6 +2,7 @@
 
 #include <QMimeData>
 #include <QUrl>
+#include <catch2/catch_test_macros.hpp>
 
 TEST_CASE("The drop filter takes the first local file with the suffix", "[mime]")
 {

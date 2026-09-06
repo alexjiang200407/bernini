@@ -1,6 +1,9 @@
 #pragma once
 #include "types/Format.h"
 #include "types/TextureDimension.h"
+#include "uniforms/DescriptorHandle.h"
+#include <cstdint>
+#include <string>
 
 namespace bgl
 {

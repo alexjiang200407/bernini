@@ -2,6 +2,7 @@
 
 #include <QGuiApplication>
 #include <catch2/catch_test_macros.hpp>
+#include <qlatin1stringview.h>
 
 // The suite constructs real widgets, and some of them show themselves -- the loading screens
 // util/Modal.h drives, the importer dialog. On a platform that presents, those land on the desktop

@@ -1,6 +1,11 @@
 #pragma once
 
 #include <assetlib_structs/VertexLayout.h>
+#include <cstddef>
+#include <cstdint>
+#include <cstring>
+#include <span>
+#include <vector>
 
 /**
  * Describing one interleaved vertex of a synthesized `.bmesh`: where each field lands, and how to

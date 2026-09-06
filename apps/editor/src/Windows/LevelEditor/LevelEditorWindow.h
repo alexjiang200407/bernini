@@ -3,6 +3,9 @@
 #include "Render/environment.h"
 #include "Windows/RenderTarget/RenderTargetWindow.h"
 #include "util/held_open_assets.h"
+#include <qcontainerfwd.h>
+#include <qtmetamacros.h>
+#include <qwidget.h>
 
 /**
  * The environment the level viewport is lit and backed by.

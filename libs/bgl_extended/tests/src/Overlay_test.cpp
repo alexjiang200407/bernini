@@ -1,7 +1,19 @@
 #include "util/GoldenImage.h"
 #include "util/GpuValidation.h"
 #include "util/TestOptions.h"
+#include <array>
+#include <assetlib_structs/ImageData.h>
+#include <assetlib_structs/VkFormat.h>
 #include <bgl/IGraphics.h>
+#include <bgl/IOverlay.h>
+#include <bgl/IRenderTarget.h>
+#include <catch2/catch_test_macros.hpp>
+#include <core/containers/fixed_buffer.h>
+#include <cstddef>
+#include <cstdint>
+#include <cstdlib>
+#include <cstring>
+#include <span>
 
 namespace
 {

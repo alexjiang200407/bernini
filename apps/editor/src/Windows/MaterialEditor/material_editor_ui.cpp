@@ -8,6 +8,10 @@
 #include <QPushButton>
 #include <QSplitter>
 #include <QVBoxLayout>
+#include <qlatin1stringview.h>
+#include <qnamespace.h>
+#include <qsizepolicy.h>
+#include <qstringliteral.h>
 
 namespace editor
 {

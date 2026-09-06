@@ -2,10 +2,27 @@
 #include "MetalErrorChecker.h"
 
 #include "convert_metal.h"
+#include "pipeline/MetalPipelineReflection.h"
+#include "types/ShaderStage.h"
+#include <bgl_common/ReflectedLayout.h>
 #include <bgl_common/shadercache/util.h>
+#include <core/io/ByteReader.h>
+#include <core/io/ByteWriter.h>
 
 #include <core/file/file.h>
 #include <core/platform/util.h>
+#include <cstddef>
+#include <cstdint>
+#include <exception>
+#include <filesystem>
+#include <format>
+#include <functional>
+#include <mutex>
+#include <spdlog/spdlog.h>
+#include <string_view>
+#include <system_error>
+#include <utility>
+#include <vector>
 
 namespace bgl
 {
@@ -16,7 +33,9 @@ namespace bgl
 		// Bump when the on-disk format below changes -- or when MetalizeLayout's rules do, since the
 		// layout it computed is what CachedCbuffer stores. Folded into every key so old files are
 		// missed rather than misread.
-		constexpr uint32_t c_CacheFormatVersion = 2;
+		// 3: a Mixed cbuffer's stage binding is its constant-buffer offset, not getBindingIndex();
+		// an entry written before that carries a wrong index for the same sources.
+		constexpr uint32_t c_CacheFormatVersion = 3;
 
 		// Named as on D3D12: one file per backend holding whatever its driver calls a pipeline
 		// library, so a cache directory reads the same whichever backend wrote it.

@@ -1,6 +1,9 @@
 #pragma once
 #include <core/containers/multi_slot_handle.h>
 #include <core/err/util.h>
+#include <cstddef>
+#include <cstdint>
+#include <stdexcept>
 
 namespace core
 {

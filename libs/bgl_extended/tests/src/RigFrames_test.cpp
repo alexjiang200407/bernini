@@ -2,18 +2,34 @@
 #include "cmd/CommandList.h"
 #include "cmd/CommandQueue.h"
 #include "gfx/GraphicsBase.h"
+#include "resource/Buffer.h"
 #include "resource/Readback.h"
 #include "resource/ResourceManager.h"
 #include "scene/Scene.h"
 #include "scene/SceneView.h"
+#include "types/Barrier.h"
+#include "types/QueueType.h"
 #include "util/TestEnvironment.h"
 #include "util/TestOptions.h"
+#include <array>
 #include <assetlib/skinning.h>
 #include <assetlib_structs/Animation.h>
+#include <assetlib_structs/Node.h>
 #include <assetlib_structs/Skeleton.h>
 #include <bgl/IGraphics.h>
+#include <bgl/RigHandle.h>
+#include <bgl/types/SceneDesc.h>
+#include <bgl_common/idl/Constants.h>
 #include <catch2/catch_approx.hpp>
+#include <catch2/catch_message.hpp>
 #include <catch2/catch_test_macros.hpp>
+#include <chrono>
+#include <cstddef>
+#include <cstdint>
+#include <format>
+#include <ratio>
+#include <span>
+#include <vector>
 
 // The bone anim table: every frame of every clip of a rig, posed once by RigFramesPass and read by
 // every instance that draws from it instead of computing its own pose.

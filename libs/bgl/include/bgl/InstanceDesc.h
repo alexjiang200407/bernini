@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cstdint>
 namespace bgl
 {
 	/** Where a skinned instance's pose comes from. See docs/skinning.md. */

@@ -1,5 +1,8 @@
 #pragma once
 #include <bgl_common/UniformValueType.h>
+#include <cstdint>
+#include <string>
+#include <vector>
 
 namespace bgl
 {

@@ -1,5 +1,10 @@
 #include "util/TestOptions.h"
 #include <bgl/IGraphics.h>
+#include <bgl/IRenderTarget.h>
+#include <bgl/IScene.h>
+#include <bgl/MaterialType.h>
+#include <bgl/types/SceneDesc.h>
+#include <catch2/catch_test_macros.hpp>
 
 // Exercises the caller-facing error contract of the exported interfaces:
 // IScene throws SceneError and IGraphics throws GraphicsError when the caller

@@ -1,5 +1,7 @@
 #include <assetlib/AssetStore.h>
 #include <assetlib/bmesh.h>
+#include <string>
+#include <string_view>
 
 #include "mounted_io.h"
 

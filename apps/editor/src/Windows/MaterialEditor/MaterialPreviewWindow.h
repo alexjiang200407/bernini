@@ -12,7 +12,19 @@
 #include <bgl/GeomHandle.h>
 #include <bgl/MaterialHandle.h>
 #include <bgl/MeshInstanceHandle.h>
+#include <cstdint>
+#include <filesystem>
 #include <gamelib/Raycaster.h>
+#include <optional>
+#include <qcontainerfwd.h>
+#include <qnamespace.h>
+#include <qobject.h>
+#include <qpoint.h>
+#include <qtmetamacros.h>
+#include <qwidget.h>
+#include <span>
+#include <string>
+#include <vector>
 
 class QDragEnterEvent;
 class QDragMoveEvent;

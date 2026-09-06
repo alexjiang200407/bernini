@@ -1,6 +1,9 @@
 #include "asset_describe.h"
 #include <assetlib/bmesh.h>
 #include <assetlib/container_info.h>
+#include <assetlib_structs/Mesh.h>
+#include <assetlib_structs/Node.h>
+#include <assetlib_structs/VertexLayout.h>
 
 #include <assetlib/skinning.h>
 #include <assetlib_structs/Animation.h>
@@ -8,7 +11,13 @@
 #include <assetlib_structs/BMaterial.h>
 #include <assetlib_structs/BMesh.h>
 #include <assetlib_structs/Skeleton.h>
+#include <catch2/catch_test_macros.hpp>
 #include <core/file/LooseFileSystem.h>
+#include <cstdint>
+#include <filesystem>
+#include <format>
+#include <fstream>
+#include <ios>
 
 using namespace assetlib;
 

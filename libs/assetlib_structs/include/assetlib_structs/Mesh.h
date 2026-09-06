@@ -1,6 +1,7 @@
 #pragma once
 #include <assetlib_structs/VertexLayout.h>
 #include <core/glm.h>
+#include <cstdint>
 
 namespace assetlib
 {

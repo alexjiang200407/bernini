@@ -2,7 +2,9 @@
 #include <assetlib_structs/Animation.h>
 #include <assetlib_structs/Skeleton.h>
 
+#include <cstdint>
 #include <tiny_gltf.h>
+#include <vector>
 
 namespace assetlib
 {

@@ -1,8 +1,10 @@
 #include "scene/GrowableGpuBuffer.h"
 #include "types/SubmeshInstance.h"
 #include <bgl_common/idl/Constants.h>
+#include <catch2/catch_message.hpp>
 #include <catch2/catch_test_macros.hpp>
 #include <core/math.h>
+#include <cstdint>
 
 // The growth curve doubles until a buffer passes 64 MiB, then tapers to 1.5x + 1 so the transient
 // old+new residency of a doubling does not cost a second full copy. Doubling preserves any power-of-

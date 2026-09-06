@@ -1,9 +1,28 @@
+#include <algorithm>
+#include <atomic>
+#include <cerrno>
+#include <chrono>
 #include <core/err/util.h>
 #include <core/file/IFileSystem.h>
 #include <core/file/file.h>
 #include <core/platform/util.h>
 
 #include <core/hash.h>
+#include <cstddef>
+#include <cstdint>
+#include <exception>
+#include <filesystem>
+#include <format>
+#include <fstream>
+#include <ios>
+#include <optional>
+#include <span>
+#include <stdexcept>
+#include <string>
+#include <string_view>
+#include <system_error>
+#include <thread>
+#include <vector>
 
 namespace core::file
 {
@@ -97,6 +116,28 @@ namespace core::file
 		return hash;
 	}
 
+	std::error_code
+	commit_atomic(const std::filesystem::path& tmp, const std::filesystem::path& path)
+	{
+		// Long enough to outlast a handful of writers taking turns on one derived file, short
+		// enough that a genuinely unwritable path still reports rather than hangs. POSIX leaves on
+		// the first pass, so the wait is Windows' alone.
+		constexpr auto c_Attempts = 500;
+		constexpr auto c_Backoff  = std::chrono::milliseconds(4);
+
+		std::error_code ec;
+		for (auto attempt = 0; attempt < c_Attempts; ++attempt)
+		{
+			std::filesystem::rename(tmp, path, ec);
+			if (!ec)
+				return ec;
+
+			std::this_thread::sleep_for(c_Backoff);
+		}
+
+		return ec;
+	}
+
 	void
 	write_atomic(const std::filesystem::path& path, std::span<const std::byte> bytes)
 	{
@@ -147,8 +188,7 @@ namespace core::file
 			core::throw_runtime_error("write_atomic: cannot flush '{}'", tmp.string());
 		}
 
-		std::error_code ec;
-		std::filesystem::rename(tmp, path, ec);
+		const std::error_code ec = commit_atomic(tmp, path);
 		if (ec)
 		{
 			std::error_code removeEc;

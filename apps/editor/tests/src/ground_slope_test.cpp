@@ -1,7 +1,9 @@
 #include "Windows/AnimationEditor/ground_slope.h"
+#include <bgl/types/GroundPlaneDesc.h>
 
 #include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
+#include <cmath>
 
 // The Animation panel's ground slope, lifted clear of the window: the scene ground a planted foot
 // is solved against, and the floor drawn under the rig, must be the same plane -- a sign or an

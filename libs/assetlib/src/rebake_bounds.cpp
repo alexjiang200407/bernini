@@ -1,3 +1,4 @@
+#include <algorithm>
 #include <assetlib/AssetStore.h>
 #include <assetlib/avatar.h>
 #include <assetlib/bmesh.h>
@@ -10,7 +11,16 @@
 
 #include "plant_bake.h"
 
+#include <cstddef>
+#include <cstdint>
+#include <exception>
+#include <filesystem>
+#include <string>
+#include <string_view>
+#include <system_error>
 #include <tracy/Tracy.hpp>
+#include <unordered_map>
+#include <vector>
 
 namespace assetlib
 {

@@ -2,6 +2,8 @@
 #include <assetlib/import_document.h>
 #include <assetlib_structs/BMeshImport.h>
 #include <assetlib_structs/SourceRef.h>
+#include <optional>
+#include <string_view>
 
 namespace assetlib
 {

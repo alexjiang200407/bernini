@@ -1,7 +1,14 @@
 #pragma once
+#include <algorithm>
+#include <concepts>
 #include <core/err/util.h>
+#include <cstddef>
+#include <cstdint>
 #include <glm/glm.hpp>
 #include <nlohmann/json.hpp>
+#include <string>
+#include <string_view>
+#include <vector>
 
 // The shape every authored text document shares: parsed strictly, written canonically -- sorted
 // keys, tab indent, one trailing newline -- so one document is one byte sequence and two
@@ -60,7 +67,7 @@ namespace assetlib::doc
 	template <typename T>
 	concept DocumentValue =
 		std::same_as<T, std::string> || std::same_as<T, float> || std::same_as<T, uint32_t> ||
-		std::same_as<T, glm::vec3> || std::same_as<T, glm::vec4>;
+		std::same_as<T, bool> || std::same_as<T, glm::vec3> || std::same_as<T, glm::vec4>;
 
 	/** Takes `key` out of `json` into `out` when present, so what remains is the unknown. */
 	template <DocumentValue T>
@@ -118,6 +125,11 @@ namespace assetlib::doc
 				what,
 				key);
 			out = it->get<uint32_t>();
+		}
+		else if constexpr (std::is_same_v<T, bool>)
+		{
+			core::throw_runtime_error_if(!it->is_boolean(), "{}: '{}' is not a boolean", what, key);
+			out = it->get<bool>();
 		}
 		else
 		{

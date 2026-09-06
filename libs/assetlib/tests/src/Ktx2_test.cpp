@@ -1,8 +1,18 @@
 #include <assetlib/image_io.h>
 #include <assetlib_structs/ImageData.h>
+#include <atomic>
+#include <catch2/catch_test_macros.hpp>
+#include <cstddef>
+#include <cstdint>
+#include <exception>
+#include <filesystem>
+#include <stdexcept>
+#include <thread>
+#include <vector>
 
 #include "bmesh_texture.h"
 #include "mounted_io.h"
+#include <assetlib_structs/VkFormat.h>
 
 using namespace assetlib;
 

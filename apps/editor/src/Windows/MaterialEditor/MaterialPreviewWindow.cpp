@@ -5,8 +5,13 @@
 #include "Mesh/BMeshUtil.h"
 #include "Render/Renderer.h"
 #include "Render/environment.h"
+#include "Windows/RenderTarget/RenderTargetWindow.h"
 #include "util/mesh_drop.h"
 #include "util/mime_files.h"
+#include <assetlib_structs/Mesh.h>
+#include <assetlib_structs/Node.h>
+#include <bgl/GeomHandle.h>
+#include <gamelib/Ray.h>
 
 #include <QApplication>
 #include <QDebug>
@@ -19,11 +24,31 @@
 #include <QUrl>
 #include <QWheelEvent>
 
+#include <algorithm>
 #include <assetlib/mesh_tangents.h>
 #include <assetlib_structs/BMesh.h>
 #include <bgl/Camera.h>
 #include <bgl/IScene.h>
 #include <bgl/ISceneView.h>
+#include <cstddef>
+#include <cstdint>
+#include <exception>
+#include <filesystem>
+#include <limits>
+#include <optional>
+#include <qlogging.h>
+#include <qnamespace.h>
+#include <qobject.h>
+#include <qstringliteral.h>
+#include <qtmetamacros.h>
+#include <qtypes.h>
+#include <span>
+#include <stdexcept>
+#include <string>
+#include <string_view>
+#include <unordered_map>
+#include <utility>
+#include <vector>
 
 namespace
 {

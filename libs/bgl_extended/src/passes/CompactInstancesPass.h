@@ -3,6 +3,8 @@
 #include "pipeline/ComputePipeline.h"
 #include "scene/ComputeBuffer.h"
 #include "uniforms/Uniforms.h"
+#include <core/ref/SharedRef.h>
+#include <spdlog/spdlog.h>
 
 namespace bgl
 {

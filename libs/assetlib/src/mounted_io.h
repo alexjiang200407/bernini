@@ -2,6 +2,10 @@
 #include <assetlib/AssetCodec.h>
 #include <assetlib/image_io.h>
 #include <core/file/IFileSystem.h>
+#include <cstdint>
+#include <filesystem>
+#include <string>
+#include <string_view>
 #include <tracy/Tracy.hpp>
 
 namespace assetlib

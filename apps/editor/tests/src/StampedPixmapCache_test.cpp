@@ -1,12 +1,19 @@
 #include "Thumbnails/StampedPixmapCache.h"
 
-#include "util/QtSupport.h"
+#include "util/QtSupport.h"  // IWYU pragma: keep
 #include "util/asset_paths.h"
 
 #include <QSignalSpy>
 #include <QTemporaryDir>
 
 #include <catch2/catch_test_macros.hpp>
+#include <optional>
+#include <qbuffer.h>
+#include <qdir.h>
+#include <qnamespace.h>
+#include <qobject.h>
+#include <qpixmap.h>
+#include <qtypes.h>
 
 namespace
 {

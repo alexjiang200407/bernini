@@ -1,5 +1,6 @@
 #pragma once
 #include <core/containers/enum_set.h>
+#include <cstdint>
 
 namespace bgl
 {

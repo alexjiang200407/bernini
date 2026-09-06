@@ -1,14 +1,22 @@
 #pragma once
 #include "metal_cpp.h"
+#include <bgl/IRenderTarget.h>
+#include <core/ref/SharedRef.h>
 
 #include "device/Device.h"
 #include "slang/SlangSessions.h"
+#include "types/QueueType.h"
+#include "uniforms/Uniforms.h"
 
 #include <core/ref/RefCounter.h>
+#include <cstdint>
+#include <memory>
+#include <string>
 
 namespace bgl
 {
 	class ShaderCache;
+	class ITimestampHeap;
 
 	/**
 	 * The RHI device over an MTL::Device -- the sole factory for queues, allocators, and (later)
@@ -38,6 +46,9 @@ namespace bgl
 
 		core::SharedRef<ICommandAllocator>
 		CreateCommandAllocator(QueueType type) const noexcept override;
+
+		core::SharedRef<ITimestampHeap>
+		CreateTimestampHeap(uint32_t capacity) const noexcept override;
 
 		core::SharedRef<ICommandList>
 		CreateCommandList(

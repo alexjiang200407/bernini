@@ -2,11 +2,21 @@
 
 #include <QtNodes/NodeDelegateModel>
 
+#include <array>
 #include <glm/vec4.hpp>
 
 #include <assetlib_structs/BMaterial.h>
+#include <memory>
+#include <qjsonobject.h>
+#include <qobject.h>
+#include <qstringliteral.h>
+#include <qtmetamacros.h>
+#include <qwidget.h>
 
 #include "Windows/MaterialEditor/nodes/ChannelData.h"
+#include <QtNodes/internal/Definitions.hpp>
+#include <QtNodes/internal/NodeData.hpp>
+#include <QtNodes/internal/NodeDelegateModel.hpp>
 
 class QCheckBox;
 class QDoubleSpinBox;
@@ -116,6 +126,14 @@ public:
 		return 0.0f;
 	}
 
+	// Whether a non-opaque surface draws its back faces; glTF's doubleSided. Every sink but the
+	// opaque one offers it, and an opaque material draws front faces only whatever it holds.
+	[[nodiscard]] bool
+	GetDoubleSided() const noexcept
+	{
+		return m_DoubleSided;
+	}
+
 	[[nodiscard]] glm::vec4
 	BaseColorFactor() const noexcept
 	{
@@ -211,6 +229,7 @@ private:
 	float     m_RoughnessFactor     = 0.2f;
 	glm::vec3 m_SpecularColorFactor = glm::vec3(1.0f);
 	float     m_SpecularFactor      = 1.0f;
+	bool      m_DoubleSided         = true;
 
 	QWidget*                             m_Widget              = nullptr;
 	QPushButton*                         m_ColorButton         = nullptr;
@@ -219,4 +238,5 @@ private:
 	QPushButton*                         m_SpecularColorButton = nullptr;
 	QDoubleSpinBox*                      m_Specular            = nullptr;
 	std::array<QCheckBox*, c_GroupCount> m_ExpandBoxes         = {};
+	QCheckBox*                           m_DoubleSidedBox      = nullptr;
 };

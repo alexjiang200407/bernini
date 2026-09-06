@@ -1,12 +1,19 @@
 #pragma once
 #include "metal_cpp.h"
 #include "types/ShaderStage.h"
+#include <bgl_common/gassert.h>
 
 #include "pipeline/MeshletPipeline.h"
 #include "pipeline/MetalPipelineReflection.h"
 #include "uniforms/UniformLayoutEntry.h"
 
+#include <array>
 #include <core/ref/RefCounter.h>
+#include <cstddef>
+#include <cstdint>
+#include <string>
+#include <string_view>
+#include <vector>
 
 namespace bgl
 {

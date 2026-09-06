@@ -1,9 +1,11 @@
 #pragma once
 #include "metal_cpp.h"
+#include <bgl_common/gassert.h>
 
 #include "convert_metal.h"
 
 #include "resource/Sampler.h"
+#include <algorithm>
 
 namespace bgl
 {

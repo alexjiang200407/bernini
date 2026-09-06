@@ -1,5 +1,13 @@
 #pragma once
 
+#include <cstddef>
+#include <cstdint>
+#include <functional>
+#include <span>
+#include <string>
+#include <string_view>
+#include <unordered_map>
+#include <utility>
 namespace core::str
 {
 #if defined(_WIN32)
@@ -12,6 +20,15 @@ namespace core::str
 #endif
 
 	size_t to_utf32(std::span<char16_t>, std::span<char32_t>);
+
+	/**
+	 * `bytes` as a binary-prefixed size for a person to read: "512 B", "1.5 MiB", "2.0 GiB".
+	 *
+	 * Whole bytes below 1 KiB and one decimal above, because a tenth of a KiB is a distinction
+	 * nobody acts on and a tenth of a GiB is one they do. Never for a value something parses back.
+	 */
+	[[nodiscard]] std::string
+	format_bytes(uint64_t bytes);
 
 	struct string_view_hash
 	{

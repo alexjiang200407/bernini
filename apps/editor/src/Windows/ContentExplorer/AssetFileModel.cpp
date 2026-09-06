@@ -8,6 +8,13 @@
 #include <QApplication>
 #include <QIcon>
 #include <QStyle>
+#include <qabstractitemmodel.h>
+#include <qfilesystemmodel.h>
+#include <qnamespace.h>
+#include <qobject.h>
+#include <qpixmap.h>
+#include <qtmetamacros.h>
+#include <qvariant.h>
 
 AssetFileModel::AssetFileModel(QObject* parent) : QFileSystemModel(parent) {}
 

@@ -1,10 +1,24 @@
+#include "constants/constants.h"
 #include "device/Device.h"
 #include "gfx/GraphicsBase.h"
 #include "pipeline/ComputePipeline.h"
+#include "resource/Buffer.h"
 #include "resource/ResourceManager.h"
+#include "resource/Srv.h"
+#include "resource/Texture.h"
+#include "uniforms/DescriptorHandle.h"
 #include "uniforms/Uniforms.h"
 #include "util/GpuValidation.h"
 #include "util/TestOptions.h"
+#include <bgl/IGraphics.h>
+#include <bgl/TextureAssetHandle.h>
+#include <catch2/catch_test_macros.hpp>
+#include <core/containers/slot_handle.h>
+#include <cstddef>
+#include <cstdint>
+#include <cstring>
+#include <string_view>
+#include <type_traits>
 
 namespace
 {

@@ -4,6 +4,8 @@
 
 #include <assetlib_structs/BMesh.h>
 #include <assetlib_structs/BMeshImport.h>
+#include <filesystem>
+#include <span>
 
 namespace editor
 {

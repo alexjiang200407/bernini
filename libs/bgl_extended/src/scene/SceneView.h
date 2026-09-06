@@ -5,6 +5,7 @@
 #include "scene/EntryBuffer.h"
 #include "scene/NamedBuffer.h"
 #include "scene/PackedBuffer.h"
+#include "scene/RangeBuffer.h"
 #include "scene/RawBuffer.h"
 #include "scene/TransparentSortState.h"
 #include "scene/UploadBuffer.h"
@@ -12,10 +13,34 @@
 #include "types/EnvironmentMap.h"
 #include "types/SubmeshInstance.h"
 #include "types/ViewMatrices.h"
+#include <bgl/GeomHandle.h>
+#include <bgl/GeomType.h>
+#include <bgl/IScene.h>
 #include <bgl/ISceneView.h>
+#include <bgl/InstanceDesc.h>
+#include <bgl/MaterialHandle.h>
+#include <bgl/MeshInstanceHandle.h>
 #include <bgl/SkyboxDesc.h>
+#include <bgl/types/EnvironmentMapDesc.h>
+#include <bgl/types/FootIKDesc.h>
+#include <bgl_common/gassert.h>
+#include <bgl_common/idl/FootIKLeg.h>
+#include <bgl_common/idl/MeshInstance.h>
+#include <bgl_common/idl/PlaybackType.h>
+#include <bgl_common/idl/PosedInstance.h>
 #include <bgl_common/idl/idl.h>
+#include <core/containers/multi_slot_handle.h>
+#include <core/containers/slot_handle.h>
 #include <core/ref/RefCounter.h>
+#include <core/ref/SharedRef.h>
+#include <cstdint>
+#include <format>
+#include <optional>
+#include <span>
+#include <string>
+#include <string_view>
+#include <tuple>
+#include <vector>
 
 namespace bgl
 {
@@ -43,6 +68,9 @@ namespace bgl
 		// table instead -- and that absence is what the pose pass and the mesh shader branch on.
 		core::multi_slot_handle palette;
 
+		// kPerInstance only, and only on a rig that authored legs: the instance's FootIKLegs in the
+		// view's arena, one per leg, freed with it. What the pose list carries beside the mesh.
+		core::multi_slot_handle footIK;
 		// kSkinnedMesh only: how many nodes the record's slots may name, which is what a rewrite is
 		// checked against. Fixed for the instance's life -- a rig's tables never change under it.
 		uint32_t nodeCount = 0;
@@ -99,6 +127,15 @@ namespace bgl
 
 		void
 		DeleteMeshInstance(MeshInstanceHandle instance) override;
+
+		void
+		SetFootIK(MeshInstanceHandle instance, const FootIKDesc& desc) override;
+
+		[[nodiscard]] FootIKDesc
+		GetFootIK(MeshInstanceHandle instance) const override;
+
+		[[nodiscard]] bool
+		HasFootIK(MeshInstanceHandle instance) const noexcept override;
 
 		void
 		SetSubmeshMaterialOverride(
@@ -234,6 +271,12 @@ namespace bgl
 			return m_Playback;
 		}
 
+		[[nodiscard]] const auto&
+		GetFootIKArena() const noexcept
+		{
+			return m_FootIK;
+		}
+
 		/**
 		 * The selected submesh instances as dense indices into the instance buffer -- what the
 		 * selection-mask draw dispatches over. Rebuilt here if a selection change or an instance
@@ -319,8 +362,9 @@ namespace bgl
 		WritePlacement(GeomHandle geom, glm::mat4 transform, uint32_t animState);
 
 		/**
-		 * Spawns a per-instance placement on the rig `rig` of `boneCount` bones: a palette slice
-		 * and a kSkinned record holding `desc`, which the caller has validated against the rig.
+		 * Spawns a per-instance placement on the rig `rig` of `boneCount` bones: a palette slice, a
+		 * foot-IK record if `legCount` is nonzero, and a kSkinned record holding `desc`, which the
+		 * caller has validated against the rig.
 		 */
 		MeshInstanceHandle
 		PlacePosed(
@@ -329,11 +373,12 @@ namespace bgl
 			core::slot_handle          rig,
 			uint32_t                   boneCount,
 			uint32_t                   nodeCount,
+			uint32_t                   legCount,
 			const SkinnedPlaybackDesc& desc);
 
 		/**
 		 * The placement of a record already in the arena, with everything rolled back if writing it
-		 * throws. `palette` is null for a record that owns none.
+		 * throws. `palette` and `footIK` are null for a record that owns neither.
 		 */
 		MeshInstanceHandle
 		PlaceRecord(
@@ -341,11 +386,16 @@ namespace bgl
 			glm::mat4               transform,
 			idl::RawEntry           record,
 			core::multi_slot_handle palette,
+			core::multi_slot_handle footIK,
 			uint32_t                nodeCount);
 
 		/** The meta of a live per-instance skinned placement, or a SceneError naming `what`. */
 		[[nodiscard]] const MeshMeta&
-		PosedMetaFor(MeshInstanceHandle instance, const char* what) const;
+		PosedMetaFor(MeshInstanceHandle instance, std::string_view what) const;
+
+		/** PosedMetaFor, narrowed to a placement whose rig authored legs and so owns a foot-IK record. */
+		[[nodiscard]] const MeshMeta&
+		FootIKMetaFor(MeshInstanceHandle instance, std::string_view what) const;
 
 		/**
 		 * Re-resolves every non-overridden instance against the Scene's current defaults, rewriting
@@ -407,11 +457,17 @@ namespace bgl
 
 		BonePaletteBuffer m_Palettes;
 
-		// The byte offsets of the skinned records the pose pass dispatches over, one workgroup each.
-		// Dense and CPU-authored rather than a sweep of the arena: erasing a record only releases
-		// its bytes, so a sweep would pose freed states -- into palette slices another instance may
-		// already own -- and would meet the crowd records sharing the arena, which own no palette.
-		UploadBuffer<uint32_t> m_PosedInstances;
+		// Every hero placement's runtime foot-IK weights, legs.count FootIKLegs apiece. Its own
+		// arena rather than a field of the playback record: the pose pass is the only reader, and
+		// a rig without legs owns no entry at all.
+		RangeBuffer<idl::FootIKLeg> m_FootIK;
+
+		// The placements the pose pass dispatches over, one workgroup each, with the foot-IK record
+		// of each beside it. Dense and CPU-authored rather than a sweep of the arena: erasing a
+		// record only releases its bytes, so a sweep would pose freed states -- into palette slices
+		// another instance may already own -- and would meet the crowd records sharing the arena,
+		// which own no palette.
+		UploadBuffer<idl::PosedInstance> m_PosedInstances;
 
 		// One entry per frustum this view is culled against; index 0 is the camera.
 		std::vector<CullState> m_CullStates;
@@ -446,6 +502,7 @@ namespace bgl
 			NamedBuffer{ c_InstanceBufferName, &SceneView::m_InstanceBuffer },
 			NamedBuffer{ c_MeshInstanceBufferName, &SceneView::m_MeshBuffer },
 			NamedBuffer{ c_PlaybackArenaBufferName, &SceneView::m_Playback },
+			NamedBuffer{ c_FootIKBufferName, &SceneView::m_FootIK },
 		};
 
 		static_assert(HasDistinctNames(c_Buffers), "two view buffers would import under one name");

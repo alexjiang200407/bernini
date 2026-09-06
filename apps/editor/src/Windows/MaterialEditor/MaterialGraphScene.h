@@ -1,6 +1,10 @@
 #pragma once
 
 #include <QtNodes/DataFlowGraphicsScene>
+#include <QtNodes/internal/DataFlowGraphicsScene.hpp>
+#include <qmenu.h>
+#include <qpoint.h>
+#include <qtmetamacros.h>
 
 class MaterialGraphScene : public QtNodes::DataFlowGraphicsScene
 {

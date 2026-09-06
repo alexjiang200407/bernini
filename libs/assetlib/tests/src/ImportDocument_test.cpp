@@ -11,8 +11,18 @@
 #include <catch2/matchers/catch_matchers_string.hpp>
 #include <core/file/LooseFileSystem.h>
 #include <core/file/file.h>
+#include <cstddef>
+#include <cstdint>
+#include <filesystem>
+#include <span>
+#include <string>
+#include <string_view>
+#include <utility>
+#include <vector>
 
 #include "RefsSandbox.h"
+#include <assetlib_structs/Animation.h>
+#include <assetlib_structs/Mesh.h>
 
 using namespace assetlib;
 using namespace assetlib::test;

@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cstdint>
 namespace assetlib
 {
 	enum class VkFormat : uint32_t

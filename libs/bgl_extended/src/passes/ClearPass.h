@@ -2,7 +2,15 @@
 #include "cmd/CommandList.h"
 #include "fg/FrameGraph.h"
 #include "fg/PassDesc.h"
+#include "resource/Dsv.h"
 #include "resource/ResourceManager.h"
+#include "resource/Rtv.h"
+#include "types/Barrier.h"
+#include <array>
+#include <span>
+#include <string>
+#include <utility>
+#include <vector>
 
 namespace bgl
 {

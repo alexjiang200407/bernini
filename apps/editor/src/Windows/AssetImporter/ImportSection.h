@@ -3,6 +3,8 @@
 #include "Windows/AssetImporter/folder_row.h"
 
 #include <QWidget>
+#include <qobject.h>
+#include <qtmetamacros.h>
 
 class QFormLayout;
 class QLineEdit;

@@ -2,6 +2,7 @@
 #include "pipeline/ComputeKernel.h"
 #include "pipeline/ComputePipeline.h"
 #include "uniforms/Uniforms.h"
+#include <spdlog/spdlog.h>
 
 namespace bgl
 {

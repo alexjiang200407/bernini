@@ -1,3 +1,5 @@
+#include <algorithm>
+#include <array>
 #include <assetlib/codecs.h>
 #include <assetlib/reimport.h>
 
@@ -5,7 +7,6 @@
 #include <assetlib/asset_import.h>
 #include <assetlib/asset_refs.h>
 #include <assetlib/bmesh.h>
-#include <assetlib/bmesh_gltf.h>
 #include <assetlib/import_document.h>
 #include <assetlib/mesh_tangents.h>
 #include <assetlib/project_layout.h>
@@ -20,12 +21,24 @@
 #include "progress_report.h"
 #include "ref_paths.h"
 #include "regen_group.h"
+#include <assetlib/progress.h>
+#include <atomic>
 #include <core/parallel_for.h>
 
 #include <core/err/util.h>
 #include <core/str/str.h>
 
+#include <cstddef>
+#include <exception>
+#include <filesystem>
+#include <mutex>
+#include <span>
+#include <string>
+#include <string_view>
 #include <tracy/Tracy.hpp>
+#include <unordered_set>
+#include <utility>
+#include <vector>
 
 namespace assetlib
 {

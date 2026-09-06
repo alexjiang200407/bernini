@@ -3,6 +3,11 @@
 #include <assetlib/AssetStore.h>
 #include <assetlib/avatar.h>
 #include <core/err/util.h>
+#include <cstddef>
+#include <filesystem>
+#include <qobject.h>
+#include <qstringview.h>
+#include <string>
 
 namespace editor
 {

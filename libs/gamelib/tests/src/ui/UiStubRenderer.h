@@ -1,5 +1,6 @@
 #pragma once
 #include <RmlUi/Core/RenderInterface.h>
+#include <cstdint>
 
 namespace game::test
 {

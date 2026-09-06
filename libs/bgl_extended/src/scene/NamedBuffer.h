@@ -1,5 +1,9 @@
 #pragma once
 
+#include <array>
+#include <cstddef>
+#include <string_view>
+#include <tuple>
 namespace bgl
 {
 	/** One of an owner's buffers, paired with the frame-graph name it is imported under. */

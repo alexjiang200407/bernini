@@ -7,13 +7,21 @@
 #include "resource/Readback.h"
 #include "resource/ResourceManager.h"
 #include "scene/ComputeBuffer.h"
+#include "types/Barrier.h"
 #include "types/ComputeState.h"
+#include "types/QueueType.h"
 #include "uniforms/Uniforms.h"
 #include "util/GpuValidation.h"
 #include "util/TestOptions.h"
+#include <algorithm>
 #include <bgl/IGraphics.h>
 #include <bgl_common/idl/Constants.h>
 #include <bgl_common/idl/DispatchArgs.h>
+#include <catch2/catch_message.hpp>
+#include <catch2/catch_test_macros.hpp>
+#include <cstdint>
+#include <cstring>
+#include <vector>
 
 namespace
 {

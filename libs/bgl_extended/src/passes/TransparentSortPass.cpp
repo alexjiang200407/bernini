@@ -1,13 +1,19 @@
+// A SharedRef<ISceneView> is dereferenced and destroyed here, both of which need the
+// complete type -- include-cleaner sees only the declaration.
 #include "passes/TransparentSortPass.h"
 #include "fg/FrameGraph.h"
 #include "passes/DrawData.h"
 #include "pipeline/ComputePipeline.h"
 #include "pipeline/PipelineBatch.h"
 #include "scene/scene_buffer_names.h"
-#include <bgl/ISceneView.h>
+#include "types/Barrier.h"
+#include <bgl/ISceneView.h>  // IWYU pragma: keep
+#include <bgl_common/gassert.h>
 #include <bgl_common/idl/Constants.h>
 #include <bgl_common/idl/DispatchArgs.h>
 #include <core/math.h>
+#include <cstdint>
+#include <spdlog/spdlog.h>
 
 namespace bgl
 {

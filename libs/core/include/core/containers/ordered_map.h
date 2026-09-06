@@ -1,5 +1,11 @@
 #pragma once
 
+#include <concepts>
+#include <cstddef>
+#include <functional>
+#include <stdexcept>
+#include <unordered_map>
+#include <vector>
 namespace core
 {
 	template <typename K, typename Key, typename Hash, typename KeyEqual>

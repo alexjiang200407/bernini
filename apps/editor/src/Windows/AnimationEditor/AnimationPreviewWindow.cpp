@@ -4,12 +4,20 @@
 #include "Async/BackgroundTask.h"
 #include "Mesh/BMeshUtil.h"
 #include "Render/Renderer.h"
+#include "Render/environment.h"
 #include "Windows/AnimationEditor/animation_bindings.h"
 #include "Windows/AnimationEditor/animation_draws.h"
 #include "Windows/AnimationEditor/ground_slope.h"
 #include "Windows/MaterialEditor/material_io.h"
+#include "Windows/RenderTarget/RenderTargetWindow.h"
 #include "util/mesh_drop.h"
 #include "util/mime_files.h"
+#include <assetlib_structs/Mesh.h>
+#include <bgl/IScene.h>
+#include <bgl/ISceneView.h>
+#include <bgl/InstanceDesc.h>
+#include <bgl/MeshInstanceHandle.h>
+#include <gamelib/ClipInfo.h>
 
 #include <QDragEnterEvent>
 #include <QDropEvent>
@@ -21,12 +29,32 @@
 #include <QShowEvent>
 #include <QWheelEvent>
 
+#include <algorithm>
 #include <assetlib/AssetStore.h>
 #include <assetlib/skinning.h>
 #include <assetlib_structs/BMesh.h>
 #include <assetlib_structs/Bounds.h>
+#include <bgl/types/FootIKDesc.h>
 #include <core/glm.h>
+#include <cstdint>
+#include <exception>
+#include <filesystem>
 #include <gamelib/AssetManager.h>
+#include <iterator>
+#include <limits>
+#include <optional>
+#include <qlogging.h>
+#include <qnamespace.h>
+#include <qobject.h>
+#include <qstringliteral.h>
+#include <qtmetamacros.h>
+#include <qtypes.h>
+#include <span>
+#include <stdexcept>
+#include <string>
+#include <unordered_map>
+#include <utility>
+#include <vector>
 
 namespace
 {
@@ -117,6 +145,33 @@ AnimationPreviewWindow::SetFootPlanting(const bool enabled)
 {
 	m_FootPlanting = enabled;
 	ReplaceGround();
+}
+
+void
+AnimationPreviewWindow::SetFootIK(const bgl::FootIKDesc& desc)
+{
+	m_FootIK = desc;
+
+	if (m_AnimatedDraws.empty())
+		return;
+
+	GetRenderer()->Invoke([&] {
+		for (const AnimatedDraw& draw : m_AnimatedDraws) ApplyFootIK(draw.instance);
+	});
+
+	// A constant holds at prevTime as well as at time, so the frame after this write reprojects
+	// through a pose nothing drew. The ground is re-placed for the reason the slope commits through
+	// it: SetGround moves the temporal epoch, which is the one break in history the preview can
+	// ask for.
+	ReplaceGround();
+}
+
+void
+AnimationPreviewWindow::ApplyFootIK(const bgl::MeshInstanceHandle instance)
+{
+	bgl::ISceneView* view = GetPreviewView();
+	if (view->HasFootIK(instance))
+		view->SetFootIK(instance, m_FootIK);
 }
 
 void
@@ -706,11 +761,13 @@ AnimationPreviewWindow::SpawnAnimated(
 {
 	// Phase 0 and rate 1: the panel's transport is the clock. `source` is the whole of what the two
 	// tiers differ by at spawn -- one geom, one upload, two places to read a pose from.
-	return m_Assets->CreateSkinnedInstance(
+	const bgl::MeshInstanceHandle instance = m_Assets->CreateSkinnedInstance(
 		GetPreviewViewRef(),
 		geom,
 		world,
 		bgl::SkinnedInstanceDesc{ clip, 0.0f, 1.0f, m_Source });
+	ApplyFootIK(instance);
+	return instance;
 }
 
 void

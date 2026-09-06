@@ -1,5 +1,6 @@
 #pragma once
 
+#include <string_view>
 namespace bgl
 {
 	// The frame-graph names the scene's buffers are imported under. The graph matches a name by
@@ -37,6 +38,8 @@ namespace bgl
 	// One arena for every animated placement's playback record, of either tier.
 	constexpr std::string_view c_PlaybackArenaBufferName = "scene.playbackBuffer"sv;
 	constexpr std::string_view c_SelectedInstancesName   = "scene.selectedInstances"sv;
+	// One FootIKLeg per leg of every hero placement in the view, reached through the pose list.
+	constexpr std::string_view c_FootIKBufferName = "scene.footIKBuffer"sv;
 
 	// Written by the pose pass rather than uploaded, so neither is in c_Buffers -- see SceneView.
 	constexpr std::string_view c_PosedInstancesName = "scene.posedInstances"sv;

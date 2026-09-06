@@ -4,10 +4,19 @@
 #include <assetlib_structs/ImageData.h>
 
 #include <catch2/catch_approx.hpp>
+#include <catch2/catch_test_macros.hpp>
+#include <catch2/matchers/catch_matchers.hpp>
 #include <catch2/matchers/catch_matchers_string.hpp>
+#include <cstddef>
+#include <cstdint>
+#include <cstring>
+#include <filesystem>
+#include <stdexcept>
 
 #include "MountAt.h"
 #include "mounted_io.h"
+#include <assetlib_structs/VkFormat.h>
+#include <core/containers/fixed_buffer.h>
 
 using namespace assetlib;
 

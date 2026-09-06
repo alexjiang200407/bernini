@@ -7,13 +7,17 @@
 #include "resource/ResourceManager.h"
 #include "resource/Rtv.h"
 #include "resource/Texture.h"
+#include "types/Barrier.h"
 #include "types/Format.h"
 #include "types/MeshletState.h"
+#include "types/QueueType.h"
 #include "util/GpuValidation.h"
 #include "util/TestOptions.h"
 #include <bgl/IGraphics.h>
 #include <bgl/Viewport.h>
 #include <catch2/catch_approx.hpp>
+#include <catch2/catch_test_macros.hpp>
+#include <cstdint>
 
 // The first mesh-shader render test: a mesh pipeline (FullscreenRect: MSMain emits one full-screen
 // triangle, PSMain writes solid white) clears an offscreen RT to black, draws over it, reads it

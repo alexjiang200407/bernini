@@ -7,14 +7,20 @@
 #include "resource/Buffer.h"
 #include "resource/Readback.h"
 #include "resource/ResourceManager.h"
+#include "types/Barrier.h"
 #include "types/ComputeState.h"
 #include "types/QueueType.h"
 #include "util/GpuValidation.h"
 #include "util/TestOptions.h"
+#include <array>
 #include <bgl/IGraphics.h>
 #include <bgl_common/idl/CullView.h>
 #include <bgl_common/idl/SkinnedTableState.h>
 #include <catch2/catch_approx.hpp>
+#include <catch2/catch_test_macros.hpp>
+#include <cstddef>
+#include <cstdint>
+#include <cstring>
 
 namespace
 {

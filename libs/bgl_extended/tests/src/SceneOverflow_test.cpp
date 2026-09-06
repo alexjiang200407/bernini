@@ -1,6 +1,18 @@
 #include "scene/Scene.h"
 #include "util/TestOptions.h"
+#include <array>
+#include <assetlib_structs/BMesh.h>
+#include <assetlib_structs/Node.h>
+#include <assetlib_structs/VertexLayout.h>
+#include <bgl/GeomHandle.h>
 #include <bgl/IGraphics.h>
+#include <bgl/IScene.h>
+#include <bgl/types/SceneDesc.h>
+#include <catch2/catch_test_macros.hpp>
+#include <cstddef>
+#include <cstdint>
+#include <span>
+#include <vector>
 
 namespace
 {

@@ -3,6 +3,8 @@
 #include <QString>
 
 #include <assetlib/cancel.h>
+#include <functional>
+#include <utility>
 
 class QWidget;
 

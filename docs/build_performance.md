@@ -56,13 +56,21 @@ Every target compiles through `PCH/pch.h` — the standard library — and most 
 of their own (`libs/<lib>/src/pch.h`, `apps/editor/src/pch.h`) for the third-party libraries that
 subsystem leans on.
 
-**The root PCH may be written against; a subsystem PCH may not.** `PCH/pch.h` reaches every compiled
-target in the tree, which is what makes the rule in [CLAUDE.md](../CLAUDE.md) — never `#include` a
-standard header — safe. A subsystem PCH reaches only some: `libs/assetlib/src/pch.h` is `PRIVATE`
-while assetlib's public headers are compiled by `gamelib`, `editor_lib` and `assetlib_cli` without
-it, and `MetalImpl.cpp` and `MetalSurface_mac.mm` carry `SKIP_PRECOMPILE_HEADERS ON` because
-Objective-C++ cannot consume a C++ PCH. So a source file still includes the Qt, glm and json headers
-it uses; the PCH only makes them free.
+**No PCH may be written against, the root one included.** A precompiled header makes an include
+free; it does not stand in for one. So a source file includes the standard, Qt, glm and json headers
+it uses, and the PCH only decides what that costs.
+
+That is the same line Unreal draws — the engine moved to it in the 4.15/4.16 era under the name IWYU
+while keeping its shared and per-module PCHs — and the one Qt's `-no-pch` configure switch exists to
+prove. It is enforced here by `misc-include-cleaner`, which a subsystem's own `.clang-tidy` switches
+on ([docs/naming.md](naming.md)), and shown live by [`.clangd`](../.clangd).
+
+The reason is not tidiness. A PCH is invisible to everything that reads one file at a time — a
+person, clangd, clang-tidy — so a file that leans on one is a file none of them can judge. And the
+subsystem PCHs do not even reach every target that compiles their headers: `libs/assetlib/src/pch.h`
+is `PRIVATE` while assetlib's public headers are compiled by `gamelib`, `editor_lib` and
+`assetlib_cli` without it, and `MetalImpl.cpp` and `MetalSurface_mac.mm` carry
+`SKIP_PRECOMPILE_HEADERS ON` because Objective-C++ cannot consume a C++ PCH.
 
 The exception is a name a PCH *defines* rather than includes, which no `#include` could reach:
 `libs/bgl_extended/src/pch.h` declares the `bgl::logger` alias every bgl_extended source logs through
@@ -127,7 +135,8 @@ the suite cheaper does not compile.
 checkers are all used with no `#include` at the use site.
 
 That is the cost of writing against a subsystem PCH, which is why [CLAUDE.md](../CLAUDE.md) says not
-to. Both predate this change; fixing them is include hygiene and a change of its own.
+to. Both are being unpicked by the include sweep; until `libs/bgl_extended` carries
+`misc-include-cleaner` in its `.clang-tidy`, this section is still the truth about it.
 
 ## ccache
 

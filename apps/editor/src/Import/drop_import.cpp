@@ -7,9 +7,16 @@
 #include <QMessageBox>
 #include <QMimeData>
 #include <QUrl>
+#include <algorithm>
 #include <assetlib/asset_import.h>
 
 #include <assetlib/bmesh_gltf.h>
+#include <exception>
+#include <filesystem>
+#include <qdialog.h>
+#include <qlogging.h>
+#include <qobject.h>
+#include <vector>
 
 namespace editor
 {

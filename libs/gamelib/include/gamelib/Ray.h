@@ -1,5 +1,6 @@
 #pragma once
 #include <core/glm.h>
+#include <optional>
 
 namespace game
 {

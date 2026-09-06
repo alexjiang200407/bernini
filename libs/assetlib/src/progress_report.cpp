@@ -1,4 +1,10 @@
 #include "progress_report.h"
+#include <assetlib/progress.h>
+#include <cstddef>
+#include <memory>
+#include <mutex>
+#include <string_view>
+#include <utility>
 
 namespace assetlib
 {

@@ -1,6 +1,16 @@
+#include <assetlib_structs/Mesh.h>
+#include <assetlib_structs/VertexLayout.h>
+#include <cstddef>
+#include <cstdint>
+#include <cstring>
+#include <gamelib/Ray.h>
 #include <gamelib/Raycaster.h>
 
 #include <assetlib_structs/BMesh.h>
+#include <optional>
+#include <stdexcept>
+#include <utility>
+#include <vector>
 
 namespace game
 {

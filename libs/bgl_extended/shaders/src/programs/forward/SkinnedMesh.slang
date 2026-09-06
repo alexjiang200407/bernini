@@ -37,13 +37,26 @@ void MSMain(
     // cover by striding. Never assume one thread per vertex: the two counts are unrelated.
     for (uint v = gtid; v < ctx.meshlet.vertexCount; v += cMeshGroupSize)
     {
-        verts[v] = SkinnedVertex(ctx, pose, payload.instance, v);
+        let vertex = SkinnedVertex(ctx, pose, payload.instance, v);
+        verts[v] = vertex;
+        if (ctx.cull)
+        {
+            RecordClip(v, vertex.position);
+        }
     }
 
     // Same striding. Every triangle SetMeshOutputCounts declared must be written, or the unwritten
     // ones rasterize from undefined indices.
+    // Every vertex's clip position is on record before any triangle judges its facing. Gated on the
+    // draw, not the material: uniform across the group either way, but only the cbuffer value is
+    // uniform to the compiler.
+    if (DrawCullsBackfaces())
+    {
+        GroupMemoryBarrierWithGroupSync();
+    }
+
     for (uint t = gtid; t < ctx.meshlet.triangleCount; t += cMeshGroupSize)
     {
-        tris[t] = EvaluatePrimitive(ctx, t);
+        tris[t] = CullBackface(ctx, EvaluatePrimitive(ctx, t));
     }
 }

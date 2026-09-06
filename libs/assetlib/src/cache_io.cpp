@@ -1,9 +1,22 @@
 #include "cache_io.h"
 
 #include "CheckedFileReader.h"
+#include "IRangeReader.h"
 #include "MountedFileReader.h"
+#include <assetlib_structs/SourceRef.h>
+#include <core/err/util.h>
+#include <core/file/IFileSystem.h>
 
+#include <algorithm>
+#include <cstddef>
+#include <cstdint>
+#include <cstring>
+#include <filesystem>
+#include <span>
+#include <string_view>
 #include <tracy/Tracy.hpp>
+#include <utility>
+#include <vector>
 
 namespace assetlib::cache
 {

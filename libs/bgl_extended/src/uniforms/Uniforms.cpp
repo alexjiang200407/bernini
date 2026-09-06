@@ -1,6 +1,10 @@
 #include "uniforms/Uniforms.h"
 #include "pipeline/ComputePipeline.h"
 #include "pipeline/MeshletPipeline.h"
+#include "uniforms/UniformLayoutEntry.h"
+#include <bgl_common/UniformsBase.h>
+#include <string_view>
+#include <utility>
 
 namespace bgl
 {

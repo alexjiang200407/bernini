@@ -4,6 +4,10 @@
 
 #include "util/asset_paths.h"
 #include <assetlib/AssetStore.h>
+#include <exception>
+#include <filesystem>
+#include <qlogging.h>
+#include <qtypes.h>
 
 const assetlib::BMaterial*
 CachedMaterial::Get(const std::filesystem::path& dataRoot, const QString& path)

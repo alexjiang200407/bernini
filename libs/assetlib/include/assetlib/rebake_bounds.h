@@ -1,5 +1,9 @@
 #pragma once
 
+#include <cstddef>
+#include <filesystem>
+#include <string>
+#include <vector>
 namespace assetlib
 {
 	/** What happened to one file under RebakePosedBounds. */

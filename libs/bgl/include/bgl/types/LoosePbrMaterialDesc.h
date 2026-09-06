@@ -1,4 +1,5 @@
 #pragma once
+#include <array>
 #include <bgl/LayerType.h>
 #include <bgl/glm.h>
 #include <bgl/types/ChannelRouteDesc.h>
@@ -15,6 +16,9 @@ namespace bgl
 		// so unlike a baked one it can always sample a real alpha channel.
 		LayerType layerType   = LayerType::kOpaque;
 		float     alphaCutoff = 0.5f;
+
+		// Back faces on a non-opaque layer; see PbrMaterialDesc.
+		bool doubleSided = true;
 
 		// Coverage against transmission; see PbrMaterialDesc.
 		float transmissionFactor = 0.0f;

@@ -2,6 +2,9 @@
 
 #include <QImage>
 #include <QThreadPool>
+#include <qobject.h>
+#include <qtmetamacros.h>
+#include <qtypes.h>
 
 #include "Thumbnails/StampedPixmapCache.h"
 

@@ -1,5 +1,6 @@
 #pragma once
 #include <bgl/IGraphics.h>
+#include <core/ref/SharedRef.h>
 
 namespace bgl
 {

@@ -1,8 +1,26 @@
 #include <CLI/CLI.hpp>
+#include <algorithm>
+#include <cctype>
 #include <core/err/util.h>
 #include <core/math.h>
+#include <cstddef>
+#include <cstdlib>
+#include <exception>
+#include <filesystem>
+#include <format>
+#include <fstream>
+#include <ios>
+#include <iostream>
+#include <map>
+#include <set>
 #include <slang-com-ptr.h>
 #include <slang.h>
+#include <sstream>
+#include <stdexcept>
+#include <string>
+#include <system_error>
+#include <utility>
+#include <vector>
 
 /**
  * bgl_idlgen - generate C++ POD structs, enums, and constants from an `.slang` IDL module, keeping

@@ -1,4 +1,5 @@
 #include "ground_slope.h"
+#include <bgl/types/GroundPlaneDesc.h>
 
 namespace editor
 {

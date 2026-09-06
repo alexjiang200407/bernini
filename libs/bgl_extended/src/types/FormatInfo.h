@@ -1,5 +1,6 @@
 #pragma once
 #include "types/Format.h"
+#include <cstdint>
 
 namespace bgl
 {

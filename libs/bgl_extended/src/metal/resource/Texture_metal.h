@@ -1,9 +1,14 @@
 #pragma once
 #include "metal_cpp.h"
+#include <bgl_common/gassert.h>
 
 #include "constants/constants.h"
 #include "convert_metal.h"
 #include "resource/Texture.h"
+#include "types/Format.h"
+#include "types/TextureDimension.h"
+
+#include <bgl_common/MemoryTag.h>
 
 namespace bgl
 {
@@ -63,6 +68,9 @@ namespace bgl
 
 			m_Texture = NS::TransferPtr(device->newTexture(td.get()));
 			gassert(m_Texture.get() != nullptr, "Metal texture allocation failed");
+
+			// The driver's size: a TextureDesc carries no byte count.
+			m_Tracked = bgl::TaggedBytes(MemoryTag::kDeviceTexture, m_Texture->allocatedSize());
 			if (!desc.debugName.empty())
 				m_Texture->setLabel(
 					NS::String::string(desc.debugName.c_str(), NS::UTF8StringEncoding));
@@ -89,5 +97,6 @@ namespace bgl
 	private:
 		TextureDesc                 m_Desc;
 		NS::SharedPtr<MTL::Texture> m_Texture;
+		TaggedBytes                 m_Tracked;
 	};
 }

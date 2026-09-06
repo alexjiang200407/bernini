@@ -1,4 +1,13 @@
 #include "ui/UiFileInterface.h"
+#include <algorithm>
+#include <core/file/IFileSystem.h>
+#include <cstddef>
+#include <cstdint>
+#include <cstdio>
+#include <cstring>
+#include <exception>
+#include <spdlog/spdlog.h>
+#include <utility>
 
 namespace game
 {

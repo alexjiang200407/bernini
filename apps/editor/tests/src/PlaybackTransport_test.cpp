@@ -1,6 +1,9 @@
 #include "Windows/AnimationEditor/PlaybackTransport.h"
 
 #include <catch2/catch_approx.hpp>
+#include <catch2/catch_test_macros.hpp>
+#include <stdexcept>
+#include <vector>
 
 // The transport is the whole clock behind the Animation panel -- the preview instance is always
 // {clip, phase 0, rate 1} -- so these cases pin its arithmetic frame-exactly against the shader's

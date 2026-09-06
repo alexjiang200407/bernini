@@ -1,5 +1,7 @@
 #pragma once
 #include "types/Viewport.h"
+#include <bgl/Viewport.h>
+#include <cmath>
 
 namespace bgl
 {

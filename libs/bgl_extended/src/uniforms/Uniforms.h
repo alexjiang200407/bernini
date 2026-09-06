@@ -7,8 +7,12 @@
 #include "resource/Texture.h"
 #include "uniforms/DescriptorHandle.h"
 #include "uniforms/UniformLayoutEntry.h"
+#include <bgl/TextureAssetHandle.h>
+#include <bgl_common/UniformValueType.h>
 #include <bgl_common/UniformsBase.h>
 #include <core/err/util.h>
+#include <cstdint>
+#include <string_view>
 
 namespace bgl
 {

@@ -5,11 +5,18 @@
 #include <bgl/IRenderTarget.h>
 #include <bgl/IScene.h>
 #include <bgl/ISceneView.h>
+#include <bgl/PassTiming.h>
 #include <bgl/RenderJob.h>
 #include <bgl/api.h>
 #include <bgl/error.h>
+#include <bgl/types/SceneDesc.h>
 #include <core/ref/Ref.h>
 #include <core/ref/SharedRef.h>
+#include <cstdint>
+#include <optional>
+#include <stdexcept>
+#include <string>
+#include <vector>
 
 namespace bgl
 {
@@ -81,9 +88,15 @@ namespace bgl
 
 		// Second, structured views of buffers. Only an arena whose records hold resource handles
 		// needs one, so far fewer than there are buffers.
-		uint32_t maxBufferSrvs      = 64;
-		uint32_t maxRtvs            = 16;
-		uint32_t maxDsvs            = 5;
+		uint32_t maxBufferSrvs = 64;
+
+		// Sized together, because one render target draws on both: seven RTVs -- two swapchain
+		// images, two TAA history buffers, and one each for motion vectors, scene colour and the
+		// outline mask -- against the single DSV of its depth buffer. So these carry eight targets,
+		// alongside the one RTV the BRDF LUT holds for the life of the device. A viewport, a
+		// material preview, a texture preview and the thumbnail cache are already four.
+		uint32_t maxRtvs            = 64;
+		uint32_t maxDsvs            = 8;
 		uint32_t maxTextures        = 1000;
 		uint32_t maxSamplers        = 128;
 		uint32_t maxReadbackBuffers = 64;
@@ -224,6 +237,16 @@ namespace bgl
 		 */
 		virtual void
 		DiscardCapture(CaptureTicket ticket) noexcept = 0;
+
+		/**
+		 * What each pass of the last completed timed frame on `target` cost on the GPU, in
+		 * execution order -- the rows behind an on-screen breakdown. A frame's rows arrive once its
+		 * fence has passed, so they trail the frame that wrote them by one or two. Empty while
+		 * IRenderTarget::SetGpuTimingEnabled is off, before the first timed frame completes, and on
+		 * a device that cannot sample a timestamp at a pass boundary. May be called mid-frame.
+		 */
+		[[nodiscard]] virtual std::vector<PassTiming>
+		GetPassTimings(const RenderTargetRef& target) = 0;
 
 		virtual SceneRef
 		CreateScene(SceneDesc desc) = 0;

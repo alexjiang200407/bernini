@@ -1,3 +1,4 @@
+#include <array>
 #include <assetlib/avatar.h>
 #include <assetlib/project_layout.h>
 #include <assetlib/rebake_bounds.h>
@@ -10,7 +11,15 @@
 #include "RefsSandbox.h"
 
 #include "MountAt.h"
+#include <assetlib_structs/Node.h>
+#include <assetlib_structs/VertexLayout.h>
 #include <catch2/catch_approx.hpp>
+#include <catch2/catch_test_macros.hpp>
+#include <cstddef>
+#include <cstdint>
+#include <cstring>
+#include <filesystem>
+#include <optional>
 
 using namespace assetlib;
 using namespace assetlib::test;

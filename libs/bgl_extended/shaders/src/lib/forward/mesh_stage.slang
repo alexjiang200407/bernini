@@ -17,6 +17,7 @@ import lib.debug.dbg;
 import lib.forward.common;
 import lib.forward.ExpansionData;
 import lib.forward.ForwardData;
+import lib.forward.MaterialData;
 import lib.geom.vertexdecode;
 import lib.data.ViewData;
 import lib.data.SubmeshInstance;
@@ -30,7 +31,51 @@ public struct MeshletContext
     public MeshInstance mesh;
     public Submesh submesh;
     public Meshlet meshlet;
+
+    // Whether this group's back-facing triangles are the mesh stage's to cull: the draw says its
+    // pipeline draws both sides, and the material says it wants one. Decided once per group.
+    public bool cull;
 };
+
+// Whether the draw in flight leaves back faces to the mesh stage at all. A cbuffer value, so a
+// barrier gated on it sits in uniform control flow on every backend.
+public bool DrawCullsBackfaces()
+{
+    return expansionData.cullBackfaces != 0;
+}
+
+// Each vertex's clip position, kept for the primitive loop: the output array cannot be read back,
+// and a facing test wants all three corners of a triangle at once.
+groupshared float3 gClipXYW[cMaxVerticesPerMeshlet];
+
+public void RecordClip(uint v, float4 clip)
+{
+    gClipXYW[v] = clip.xyw;
+}
+
+// The triangle to emit for `tri`: itself, or a degenerate one the rasterizer sets up and drops
+// without walking a single tile -- which is the whole point, since a long thin card triangle costs
+// the rasterizer by its length whether or not a pixel shader ever runs. Taken in homogeneous clip
+// space so a triangle crossing the near plane is judged like the hardware judges it, and the sign
+// is the one FrontCounterClockwise names on the screen.
+//
+// @pre when ctx.cull, every vertex the triangle names has passed through RecordClip and the group
+// has synchronised since.
+public uint3 CullBackface(MeshletContext ctx, uint3 tri)
+{
+    if (!ctx.cull)
+    {
+        return tri;
+    }
+
+    float3 p0 = gClipXYW[tri.x];
+    float3 p1 = gClipXYW[tri.y];
+    float3 p2 = gClipXYW[tri.z];
+
+    float area = (p1.x * p2.y - p2.x * p1.y) * p0.z + (p2.x * p0.y - p0.x * p2.y) * p1.z + (p0.x * p1.y - p1.x * p0.y) * p2.z;
+
+    return area > 0.0 ? tri : uint3(tri.x, tri.x, tri.x);
+}
 
 // The instance this amplification group covers, and how many meshlets it dispatches. Each instance
 // is one submesh, so only that submesh's meshlets are dispatched.
@@ -80,6 +125,16 @@ public MeshletContext PrepareMeshlet(SubmeshInstance instance, uint gid)
     dbg_assert(!ctx.submesh.vertexData.Null(), ErrorCode.kNullRawDeref, 0, 0, instance.submeshIndex);
 
     ctx.meshlet = forwardData.meshletBuffer.Get(ctx.submesh.meshlets, gid);
+
+    // The material record is read only on a draw that culls here, and never for a submesh with no
+    // material: the reserved null entry at offset zero must not be dereferenced, and an `||` would
+    // still evaluate the operand. A draw that binds no material data at all -- the outline mask --
+    // says it culls nothing, and so never reaches the read.
+    ctx.cull = false;
+    if (DrawCullsBackfaces() && !instance.material.Null())
+    {
+        ctx.cull = !IsMaterialDoubleSided(instance.material.GetByteOffset());
+    }
 
     dbg_assert(
         ctx.meshlet.vertexCount <= cMaxVerticesPerMeshlet,

@@ -6,6 +6,7 @@
 #include <assetlib_structs/BMaterial.h>
 #include <assetlib_structs/BMesh.h>
 #include <assetlib_structs/Skeleton.h>
+#include <string>
 
 #include "asset_describe.h"
 

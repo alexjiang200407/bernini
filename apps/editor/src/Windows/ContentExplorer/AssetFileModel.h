@@ -2,6 +2,10 @@
 
 #include <QFileSystemModel>
 #include <QHash>
+#include <qabstractitemmodel.h>
+#include <qobject.h>
+#include <qtmetamacros.h>
+#include <qvariant.h>
 
 #include "util/source_mesh.h"
 

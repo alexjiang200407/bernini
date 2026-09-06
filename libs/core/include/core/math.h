@@ -1,4 +1,5 @@
 #pragma once
+#include <concepts>
 #include <core/glm.h>
 
 namespace core

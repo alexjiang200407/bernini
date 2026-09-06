@@ -1,4 +1,9 @@
 #include "scene/ComputeBuffer.h"
+#include "resource/Buffer.h"
+#include "resource/ResourceManager.h"
+#include <bgl_common/gassert.h>
+#include <cstdint>
+#include <utility>
 
 namespace bgl
 {

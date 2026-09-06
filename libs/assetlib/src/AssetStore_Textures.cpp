@@ -2,6 +2,8 @@
 
 #include <assetlib/image_io.h>
 #include <assetlib_structs/ImageData.h>
+#include <cstdint>
+#include <string_view>
 
 #include "mounted_io.h"
 

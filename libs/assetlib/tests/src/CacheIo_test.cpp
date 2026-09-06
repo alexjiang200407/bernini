@@ -1,14 +1,18 @@
+#include <array>
 #include <catch2/catch_test_macros.hpp>
-#include <catch2/matchers/catch_matchers.hpp>
-#include <catch2/matchers/catch_matchers_string.hpp>
 
 #include "CheckedFileReader.h"
 #include "cache_io.h"
 #include <assetlib/asset_import.h>
 #include <assetlib/import_document.h>
 #include <assetlib_structs/BMesh.h>
+#include <assetlib_structs/Mesh.h>
 #include <assetlib_structs/Node.h>
 #include <core/file/file.h>
+#include <cstddef>
+#include <cstdint>
+#include <filesystem>
+#include <vector>
 
 using namespace assetlib;
 
@@ -73,10 +77,14 @@ TEST_CASE("the key peeks without the payload, foreign token included", "[cacheio
 	const fs::path at = fs::temp_directory_path() / "bernini_cache_peek.bin";
 	core::file::write_atomic(at, SampleEntry(SampleSource()));
 
-	CheckedFileReader reader(at, "test");
-	const auto        key = cache::peekKey(reader, 0xABCD1234u, "test");
-	CHECK(key.bakeToken == 42);
-	CHECK(key.source == SampleSource());
+	// Scoped: the reader holds the file open, and Windows refuses to remove one that is.
+	{
+		CheckedFileReader reader(at, "test");
+		const auto        key = cache::peekKey(reader, 0xABCD1234u, "test");
+		CHECK(key.bakeToken == 42);
+		CHECK(key.source == SampleSource());
+	}
+
 	fs::remove(at);
 }
 

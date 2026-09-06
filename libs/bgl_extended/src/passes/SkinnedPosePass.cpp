@@ -5,7 +5,12 @@
 #include "pipeline/PipelineBatch.h"
 #include "scene/Scene.h"
 #include "scene/SceneView.h"
+#include "types/Barrier.h"
 #include "uniforms/Uniforms.h"
+#include <bgl/types/GroundPlaneDesc.h>
+#include <bgl_common/gassert.h>
+#include <cstdint>
+#include <spdlog/spdlog.h>
 
 namespace bgl
 {
@@ -79,6 +84,10 @@ namespace bgl
 					BarrierSyncFlag::kComputeShader,
 					BarrierAccessFlag::kShaderResource)
 				.AddBufferArg(
+					"scene.footIKBuffer",
+					BarrierSyncFlag::kComputeShader,
+					BarrierAccessFlag::kShaderResource)
+				.AddBufferArg(
 					"scene.bonePalettes",
 					BarrierSyncFlag::kComputeShader,
 					BarrierAccessFlag::kUnorderedAccess)
@@ -109,6 +118,7 @@ namespace bgl
 		uniforms["plantWeightBuffer"] = ctx.GetBuffer("scene.plantWeightBuffer");
 		uniforms["blendNodeBuffer"]   = ctx.GetBuffer("scene.blendNodeBuffer");
 		uniforms["blendMemberBuffer"] = ctx.GetBuffer("scene.blendMemberBuffer");
+		uniforms["footIKBuffer"]      = ctx.GetBuffer("scene.footIKBuffer");
 		uniforms["bonePalettes"]      = ctx.GetBuffer("scene.bonePalettes");
 		uniforms["time"]              = draw.clock.time;
 		uniforms["prevTime"]          = draw.clock.prevTime;

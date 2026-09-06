@@ -1,14 +1,27 @@
+#include <array>
+#include <catch2/catch_message.hpp>
+#include <catch2/catch_test_macros.hpp>
+#include <cstddef>
+#include <cstdint>
+#include <filesystem>
 #include <gamelib/ui/UiRenderer.h>
 #include <gamelib/ui/UiRuntime.h>
 
 #include "ui/UiTree.h"
 #include "util/GoldenImage.h"
 #include "util/TestOptions.h"
+#include <assetlib/AssetStore.h>
+#include <assetlib_structs/VkFormat.h>
+#include <bgl/IGraphics.h>
+#include <bgl/IOverlay.h>
+#include <bgl/IRenderTarget.h>
+#include <core/containers/fixed_buffer.h>
 
 #include <RmlUi/Core.h>
 #include <assetlib/image_io.h>
 
 #include <catch2/catch_approx.hpp>
+#include <string_view>
 
 namespace
 {

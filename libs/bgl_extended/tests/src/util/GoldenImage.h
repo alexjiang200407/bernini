@@ -1,5 +1,6 @@
 #pragma once
 
+#include <string>
 namespace bgl::test
 {
 	// Compares a freshly captured PNG (`gotPath`) against a golden reference PNG

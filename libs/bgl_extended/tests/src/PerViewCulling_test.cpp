@@ -12,14 +12,24 @@
 #include "scene/Scene.h"
 #include "scene/SceneView.h"
 #include "scene/scene_buffer_names.h"
+#include "types/Barrier.h"
+#include "types/QueueType.h"
 #include "util/GpuValidation.h"
 #include "util/TestOptions.h"
+#include <algorithm>
 #include <bgl/Camera.h>
 #include <bgl/IGraphics.h>
+#include <bgl/MaterialType.h>
 #include <bgl_common/Frustum.h>
+#include <bgl_common/idl/Constants.h>
 #include <bgl_common/idl/PsoType.h>
 #include <bgl_common/idl/idl.h>
+#include <catch2/catch_message.hpp>
+#include <catch2/catch_test_macros.hpp>
 #include <core/math.h>
+#include <cstdint>
+#include <iterator>
+#include <vector>
 
 // One SceneView culled against two different frustums in a single frame -- a cascade set in
 // miniature, and the thing that was impossible before each frustum got its own CullState. Both

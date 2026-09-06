@@ -1,6 +1,7 @@
 #pragma once
 
 #include <QWidget>
+#include <qobject.h>
 
 #include "Async/BackgroundTask.h"
 

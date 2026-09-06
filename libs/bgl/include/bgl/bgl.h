@@ -1,16 +1,3 @@
 #pragma once
 
-#include <bgl/api.h>
-#include <core/containers/multi_slot_handle.h>
-#include <core/containers/slot_handle.h>
-#include <core/ref/Ref.h>
-
-#include <bgl/Camera.h>
-#include <bgl/IGraphics.h>
-#include <bgl/IOverlay.h>
-#include <bgl/IScene.h>
-#include <bgl/RenderJob.h>
-#include <bgl/SkyboxDesc.h>
-#include <bgl/Viewport.h>
-#include <bgl/error.h>
 #include <bgl/glm.h>

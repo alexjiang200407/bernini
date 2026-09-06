@@ -1,3 +1,4 @@
+#include <algorithm>
 #include <assetlib/codecs.h>
 #include <assetlib/image_io.h>
 #include <assetlib/material_bake.h>
@@ -5,10 +6,20 @@
 #include <assetlib_structs/ImageData.h>
 
 #include "bmesh_texture.h"
+#include <assetlib_structs/VkFormat.h>
 
 #include "MountAt.h"
 #include "mounted_io.h"
 #include <catch2/catch_approx.hpp>
+#include <catch2/catch_message.hpp>
+#include <catch2/catch_test_macros.hpp>
+#include <cstddef>
+#include <cstdint>
+#include <cstring>
+#include <filesystem>
+#include <functional>
+#include <stdexcept>
+#include <vector>
 
 using namespace assetlib;
 

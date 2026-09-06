@@ -1,8 +1,10 @@
+#include <array>
 #include <assetlib/AssetStore.h>
 #include <assetlib/asset_refs.h>
 #include <assetlib/bmesh.h>
 #include <assetlib/codecs.h>
 #include <assetlib/import_document.h>
+#include <catch2/catch_test_macros.hpp>
 #include <core/file/file.h>
 
 #include <assetlib/skinning.h>
@@ -11,11 +13,24 @@
 #include <assetlib_structs/BMaterial.h>
 #include <assetlib_structs/BMesh.h>
 #include <assetlib_structs/Skeleton.h>
+#include <cstdint>
+#include <cstring>
+#include <filesystem>
+#include <fstream>
+#include <ios>
+#include <stdexcept>
+#include <string>
+#include <string_view>
+#include <vector>
 
 #include "RefsSandbox.h"
 
 #include "MountAt.h"
 #include "mounted_io.h"
+#include <assetlib/project_layout.h>
+#include <assetlib_structs/Mesh.h>
+#include <assetlib_structs/Node.h>
+#include <assetlib_structs/VertexLayout.h>
 
 using namespace assetlib;
 using namespace assetlib::test;

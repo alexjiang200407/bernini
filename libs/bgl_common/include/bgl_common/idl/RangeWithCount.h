@@ -1,5 +1,7 @@
 #pragma once
-#include "Range.h"
+#include <Range.h>
+#include <core/containers/multi_slot_handle.h>
+#include <cstdint>
 
 namespace bgl::idl
 {

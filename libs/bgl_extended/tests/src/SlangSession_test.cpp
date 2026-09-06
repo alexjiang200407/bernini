@@ -6,11 +6,18 @@
 #include "resource/Buffer.h"
 #include "resource/Readback.h"
 #include "resource/ResourceManager.h"
+#include "types/Barrier.h"
 #include "types/ComputeState.h"
 #include "types/QueueType.h"
 #include "util/GpuValidation.h"
 #include "util/TestOptions.h"
 #include <bgl/IGraphics.h>
+#include <catch2/catch_message.hpp>
+#include <catch2/catch_test_macros.hpp>
+#include <cstdint>
+#include <slang-com-ptr.h>
+#include <slang.h>
+#include <string>
 
 // The shader cache salt folds the Slang build tag, which is read through the free function so that
 // computing a salt never creates a global session. If the two ever disagreed, every shader cache

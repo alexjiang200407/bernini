@@ -1,4 +1,6 @@
+#include <catch2/catch_test_macros.hpp>
 #include <core/math.h>
+#include <limits>
 
 TEST_CASE("A vector is finite only when every one of its components is", "[math]")
 {

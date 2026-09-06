@@ -1,6 +1,12 @@
 #pragma once
+#include <algorithm>
+#include <cassert>
 #include <core/math.h>
 #include <core/type_traits.h>
+#include <cstddef>
+#include <span>
+#include <utility>
+#include <vector>
 
 namespace core::io
 {

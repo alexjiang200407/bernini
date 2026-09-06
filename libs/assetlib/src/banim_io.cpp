@@ -1,3 +1,4 @@
+#include <array>
 #include <assetlib/codecs.h>
 #include <assetlib_structs/Animation.h>
 #include <assetlib_structs/Skeleton.h>
@@ -5,12 +6,18 @@
 #include <assetlib/skinning.h>
 
 #include "cache_io.h"
-#include "fs_util.h"
+#include <assetlib_structs/Node.h>
 
 #include <assetlib_structs/magic.h>
 #include <core/err/util.h>
 
 #include <core/file/file.h>
+#include <cstddef>
+#include <cstdint>
+#include <filesystem>
+#include <span>
+#include <string_view>
+#include <vector>
 
 #include "mounted_io.h"
 

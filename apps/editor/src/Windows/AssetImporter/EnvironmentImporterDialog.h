@@ -1,6 +1,9 @@
 #pragma once
 
 #include <QDialog>
+#include <qobject.h>
+#include <qtmetamacros.h>
+#include <qwidget.h>
 
 class QCheckBox;
 class QLineEdit;

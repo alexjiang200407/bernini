@@ -3,9 +3,17 @@
 #include <QObject>
 #include <QSemaphore>
 #include <QThread>
+#include <bgl/types/SceneDesc.h>
 
 #include <bgl/IGraphics.h>
 #include <bgl/IScene.h>
+#include <cstdint>
+#include <exception>
+#include <functional>
+#include <qnamespace.h>
+#include <qtmetamacros.h>
+#include <type_traits>
+#include <vector>
 
 class QTimer;
 

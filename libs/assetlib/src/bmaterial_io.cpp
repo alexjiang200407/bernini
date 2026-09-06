@@ -1,14 +1,29 @@
+#include <algorithm>
+#include <array>
 #include <assetlib/codecs.h>
 #include <assetlib/container_info.h>
 #include <assetlib_structs/BMaterial.h>
 #include <core/file/LooseFileSystem.h>
 
-#include "fs_util.h"
 #include "json_doc.h"
 
 #include <core/err/util.h>
 #include <core/file/file.h>
+#include <cstddef>
+#include <cstdint>
+#include <filesystem>
+#include <iterator>
+#include <mutex>
 #include <nlohmann/json.hpp>
+#include <optional>
+#include <span>
+#include <stdexcept>
+#include <string>
+#include <string_view>
+#include <system_error>
+#include <unordered_map>
+#include <utility>
+#include <vector>
 
 #include "mounted_io.h"
 
@@ -119,6 +134,7 @@ namespace assetlib
 			pbr.alphaMode = static_cast<AlphaMode>(mode - c_AlphaModeNames.begin());
 
 			taker.Take("alphaCutoff", pbr.alphaCutoff);
+			taker.Take("doubleSided", pbr.doubleSided);
 			taker.Take("baseColorFactor", pbr.baseColorFactor);
 			taker.Take("metallicFactor", pbr.metallicFactor);
 			taker.Take("roughnessFactor", pbr.roughnessFactor);
@@ -229,6 +245,7 @@ namespace assetlib
 		const PbrParams& pbr        = material.pbr;
 		json["alphaMode"]           = alphaModeName(pbr.alphaMode);
 		json["alphaCutoff"]         = doc::plainFloat(pbr.alphaCutoff);
+		json["doubleSided"]         = pbr.doubleSided;
 		json["baseColorFactor"]     = doc::vecToJson(pbr.baseColorFactor);
 		json["metallicFactor"]      = doc::plainFloat(pbr.metallicFactor);
 		json["roughnessFactor"]     = doc::plainFloat(pbr.roughnessFactor);

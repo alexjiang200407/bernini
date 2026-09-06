@@ -3,13 +3,33 @@
 #include "util/TestOptions.h"
 #include "util/VelocityReadback.h"
 #include "util/VertexPacking.h"
+#include <algorithm>
+#include <array>
+#include <assetlib_structs/Animation.h>
+#include <assetlib_structs/BMesh.h>
 #include <assetlib_structs/Bounds.h>
+#include <assetlib_structs/Node.h>
+#include <assetlib_structs/Skeleton.h>
 #include <bgl/Camera.h>
+#include <bgl/GeomType.h>
 #include <bgl/IGraphics.h>
 #include <bgl/IScene.h>
 #include <bgl/ISceneView.h>
+#include <bgl/InstanceDesc.h>
+#include <bgl/LayerType.h>
+#include <bgl/MaterialHandle.h>
 #include <catch2/catch_approx.hpp>
+#include <catch2/catch_message.hpp>
 #include <catch2/catch_test_macros.hpp>
+#include <chrono>
+#include <cmath>
+#include <cstddef>
+#include <cstdint>
+#include <format>
+#include <ratio>
+#include <span>
+#include <string>
+#include <vector>
 
 // That the skinned path draws what its palette says. The strongest check here is not a golden image
 // but the static path: the same mesh, the same vertices, posed at bind pose, must rasterize to the

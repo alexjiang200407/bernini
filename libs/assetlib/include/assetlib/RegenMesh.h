@@ -1,5 +1,7 @@
 #pragma once
 #include <assetlib_structs/BMesh.h>
+#include <string>
+#include <vector>
 
 namespace assetlib
 {

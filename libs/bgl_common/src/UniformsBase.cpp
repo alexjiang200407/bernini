@@ -1,5 +1,14 @@
+#include <bgl_common/ReflectedLayout.h>
+#include <bgl_common/UniformValueType.h>
 #include <bgl_common/UniformsBase.h>
 #include <bgl_common/gassert.h>
+#include <cstddef>
+#include <cstdint>
+#include <memory>
+#include <string>
+#include <string_view>
+#include <utility>
+#include <vector>
 
 namespace bgl
 {

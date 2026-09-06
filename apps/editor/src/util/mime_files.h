@@ -1,6 +1,8 @@
 #pragma once
 
 #include <QString>
+#include <qstringview.h>
+#include <string_view>
 
 class QMimeData;
 

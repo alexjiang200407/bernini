@@ -5,7 +5,11 @@
 #include "pipeline/PipelineBatch.h"
 #include "scene/Scene.h"
 #include "scene/SceneView.h"
+#include "types/Barrier.h"
 #include "uniforms/Uniforms.h"
+#include <bgl_common/gassert.h>
+#include <span>
+#include <spdlog/spdlog.h>
 
 namespace bgl
 {

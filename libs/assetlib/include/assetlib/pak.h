@@ -1,6 +1,15 @@
 #pragma once
 #include <core/file/IFileSystem.h>
 #include <core/str/str.h>
+#include <cstddef>
+#include <cstdint>
+#include <filesystem>
+#include <fstream>
+#include <optional>
+#include <span>
+#include <string>
+#include <string_view>
+#include <vector>
 
 namespace assetlib
 {

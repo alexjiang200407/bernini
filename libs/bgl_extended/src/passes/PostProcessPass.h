@@ -4,6 +4,9 @@
 #include "resource/Sampler.h"
 #include "resource/Srv.h"
 #include "types/ViewportState.h"
+#include <bgl/Viewport.h>
+#include <spdlog/spdlog.h>
+#include <string>
 
 namespace bgl
 {

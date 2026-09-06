@@ -1,6 +1,7 @@
 #include "util/held_open_assets.h"
 
 #include <QObject>
+#include <qcontainerfwd.h>
 
 namespace editor
 {

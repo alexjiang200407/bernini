@@ -1,11 +1,14 @@
 #include "Windows/MaterialEditor/material_io.h"
 
-#include "util/QtSupport.h"
+#include "util/QtSupport.h"  // IWYU pragma: keep
 
 #include <QDir>
 #include <QTemporaryDir>
 
 #include <assetlib_structs/BMaterial.h>
+#include <catch2/catch_test_macros.hpp>
+#include <qbuffer.h>
+#include <qcontainerfwd.h>
 
 // Set Default Material writes the material into the `.bmesh`. Doing that when the mesh already names
 // it rewrites the file to say what it already says, so the button greys out -- which turns on telling

@@ -1,6 +1,13 @@
 #pragma once
 #include <assetlib/asset_refs.h>
 #include <assetlib/project_layout.h>
+#include <concepts>
+#include <cstddef>
+#include <cstdint>
+#include <optional>
+#include <span>
+#include <string_view>
+#include <vector>
 
 namespace assetlib
 {

@@ -1,4 +1,7 @@
 #include "OrbitCamera.h"
+#include <algorithm>
+#include <bgl/Camera.h>
+#include <cmath>
 
 namespace editor
 {

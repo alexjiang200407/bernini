@@ -1,6 +1,10 @@
 #pragma once
 
+#include <array>
+#include <bgl/GeomHandle.h>
 #include <bgl/IScene.h>
+#include <bgl/MaterialHandle.h>
+#include <cstdint>
 
 /**
  * A rig synthesized from scratch, so a test needs no `.bmesh`/`.bskel`/`.banim`: one ready-made

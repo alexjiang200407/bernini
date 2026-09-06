@@ -2,8 +2,14 @@
 
 #include <core/file/file.h>
 
+#include <filesystem>
+#include <memory>
+#include <spdlog/common.h>
+#include <spdlog/logger.h>
 #include <spdlog/sinks/basic_file_sink.h>
 #include <spdlog/spdlog.h>
+#include <string_view>
+#include <utility>
 
 namespace core::logging
 {

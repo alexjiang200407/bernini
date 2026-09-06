@@ -1,5 +1,11 @@
 #pragma once
 
+#include <mutex>
+#include <slang-com-ptr.h>
+#include <slang.h>
+#include <span>
+#include <thread>
+#include <unordered_map>
 namespace bgl
 {
 	/** What every compile on one backend shares: the code it generates and where sources are. */

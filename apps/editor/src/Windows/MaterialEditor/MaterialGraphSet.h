@@ -3,9 +3,14 @@
 #include <QString>
 #include <QStringList>
 
-#include <bgl/IScene.h>
+#include <cstddef>
+#include <cstdint>
+#include <memory>
+#include <qcontainerfwd.h>
+#include <vector>
 
 #include "Windows/MaterialEditor/CachedMaterial.h"
+#include <bgl/MaterialHandle.h>
 
 class MaterialGraphModel;
 class MaterialGraphScene;

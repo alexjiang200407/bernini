@@ -1,4 +1,6 @@
 #include "Windows/MaterialEditor/MaterialGraphScene.h"
+#include <qmenu.h>
+#include <qpoint.h>
 
 QMenu*
 MaterialGraphScene::createSceneMenu(QPointF)

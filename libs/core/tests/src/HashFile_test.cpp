@@ -1,6 +1,17 @@
+#include <catch2/catch_message.hpp>
+#include <catch2/catch_test_macros.hpp>
+#include <chrono>
 #include <core/file/LooseFileSystem.h>
 #include <core/file/file.h>
 #include <core/hash.h>
+#include <cstddef>
+#include <cstdint>
+#include <filesystem>
+#include <fstream>
+#include <ios>
+#include <optional>
+#include <system_error>
+#include <vector>
 
 namespace
 {

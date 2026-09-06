@@ -1,6 +1,19 @@
 #pragma once
 #include "resource/ResourceManager.h"
+#include "resource/Srv.h"
+#include "resource/Texture.h"
+#include "uniforms/DescriptorHandle.h"
+#include <array>
+#include <assetlib_structs/ImageData.h>
 #include <bgl/TextureAssetHandle.h>
+#include <core/containers/slot_handle.h>
+#include <core/ref/SharedRef.h>
+#include <cstddef>
+#include <cstdint>
+#include <string>
+#include <unordered_map>
+#include <utility>
+#include <vector>
 
 namespace bgl
 {

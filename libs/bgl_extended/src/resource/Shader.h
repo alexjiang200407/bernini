@@ -1,7 +1,13 @@
 #pragma once
 
+#include <algorithm>
+#include <core/ref/Ref.h>
 #include <core/ref/RefCounter.h>
 #include <core/ref/SharedRef.h>
+#include <slang.h>
+#include <spdlog/spdlog.h>
+#include <string>
+#include <utility>
 
 namespace bgl
 {

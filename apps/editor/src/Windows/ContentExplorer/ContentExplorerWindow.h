@@ -4,6 +4,10 @@
 
 #include <QStringList>
 #include <QWidget>
+#include <qcontainerfwd.h>
+#include <qcoreevent.h>
+#include <qobject.h>
+#include <qtmetamacros.h>
 
 #include "Thumbnails/TexturePreviewCache.h"
 #include "Windows/ContentExplorer/AssetFileModel.h"

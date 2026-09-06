@@ -1,11 +1,23 @@
+// SkyboxDesc is passed by value, which needs the complete type; the tool sees only the name.
 #include "Render/environment.h"
 #include <assetlib/envmap.h>
+#include <bgl/IScene.h>
+#include <bgl/ISceneView.h>
+#include <bgl/SkyboxDesc.h>  // IWYU pragma: keep
 
 #include <QLoggingCategory>
 
 #include <assetlib/AssetStore.h>
 #include <assetlib_structs/ImageData.h>
-#include <bgl/SkyboxDesc.h>
+#include <cstdint>
+#include <exception>
+#include <filesystem>
+#include <optional>
+#include <qcontainerfwd.h>
+#include <qlogging.h>
+#include <qobject.h>
+#include <string>
+#include <utility>
 
 namespace editor
 {

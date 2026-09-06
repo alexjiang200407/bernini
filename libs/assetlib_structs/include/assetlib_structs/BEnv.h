@@ -1,5 +1,8 @@
 #pragma once
 #include <assetlib_structs/SourceStamp.h>
+#include <cstdint>
+#include <optional>
+#include <string>
 
 namespace assetlib
 {

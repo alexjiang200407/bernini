@@ -1,3 +1,4 @@
+#include <algorithm>
 #include <assetlib/asset_import.h>
 #include <assetlib/bmesh.h>
 #include <assetlib/bmesh_gltf.h>
@@ -10,12 +11,26 @@
 #include <assetlib_structs/Skeleton.h>
 
 #include "mounted_io.h"
+#include <assetlib/project_layout.h>
+#include <assetlib_structs/Node.h>
+#include <assetlib_structs/VertexLayout.h>
 #include <catch2/catch_approx.hpp>
+#include <catch2/catch_test_macros.hpp>
+#include <catch2/matchers/catch_matchers.hpp>
 #include <catch2/matchers/catch_matchers_string.hpp>
 
 #include "MountAt.h"
 #include "SkinnedGltf.h"
 #include <assetlib/AssetStore.h>
+#include <cstddef>
+#include <cstdint>
+#include <cstring>
+#include <filesystem>
+#include <limits>
+#include <optional>
+#include <stdexcept>
+#include <string_view>
+#include <vector>
 
 using namespace assetlib;
 using assetlib::test::SkinnedGltf;

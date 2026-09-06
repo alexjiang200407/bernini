@@ -1,6 +1,20 @@
 #include "MetalErrorChecker.h"
 #include "cmd/CommandQueue_metal.h"
 #include "device/Device_metal.h"
+#include <assetlib_structs/ImageData.h>
+#include <bgl/IGpuAssertionHandler.h>
+#include <bgl/IGraphics.h>
+#include <bgl/IOverlay.h>
+#include <bgl/IRenderTarget.h>
+#include <bgl/IScene.h>
+#include <bgl/ISceneView.h>
+#include <bgl/PassTiming.h>
+#include <bgl/RenderJob.h>
+#include <bgl/api.h>
+#include <bgl/types/SceneDesc.h>
+#include <core/err/util.h>
+#include <core/ref/SharedRef.h>
+#include <vector>
 
 #include "gfx/GraphicsBase.h"
 #include "gfx/RenderContext.h"
@@ -13,6 +27,14 @@
 #include <core/log/log.h>
 #include <core/platform/util.h>
 #include <core/ref/RefCounter.h>
+#include <cstdint>
+#include <filesystem>
+#include <memory>
+#include <optional>
+#include <spdlog/spdlog.h>
+#include <string>
+#include <system_error>
+#include <utility>
 
 namespace fs = std::filesystem;
 
@@ -275,6 +297,12 @@ namespace bgl
 		DiscardPendingGpuAssertions() noexcept override
 		{
 			m_Context->DiscardPendingGpuAssertions();
+		}
+
+		std::vector<PassTiming>
+		GetPassTimings(const RenderTargetRef& target) override
+		{
+			return m_Context->GetPassTimings(target);
 		}
 
 	private:

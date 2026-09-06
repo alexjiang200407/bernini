@@ -1,6 +1,13 @@
 #pragma once
 #include <assetlib/AssetCodec.h>
+#include <assetlib/asset_refs.h>
 #include <assetlib_structs/magic.h>
+#include <cstddef>
+#include <cstdint>
+#include <span>
+#include <string>
+#include <string_view>
+#include <vector>
 
 namespace assetlib
 {

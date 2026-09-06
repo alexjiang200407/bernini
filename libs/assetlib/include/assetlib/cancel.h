@@ -1,5 +1,7 @@
 #pragma once
 
+#include <exception>
+#include <stop_token>
 namespace assetlib
 {
 	class Cancelled : public std::exception

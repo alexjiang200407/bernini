@@ -6,9 +6,18 @@
 #include "resource/Readback.h"
 #include "resource/ResourceManager.h"
 #include "scene/RangeBuffer.h"
+#include "types/Barrier.h"
+#include "types/QueueType.h"
 #include "util/GpuValidation.h"
 #include "util/TestOptions.h"
+#include <algorithm>
 #include <bgl/IGraphics.h>
+#include <catch2/catch_test_macros.hpp>
+#include <cstddef>
+#include <cstdint>
+#include <iterator>
+#include <span>
+#include <vector>
 
 TEST_CASE("RangeBuffer", "[range][scene]")
 {

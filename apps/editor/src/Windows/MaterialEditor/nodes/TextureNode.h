@@ -2,8 +2,18 @@
 
 #include <QPixmap>
 #include <QtNodes/NodeDelegateModel>
+#include <memory>
+#include <qjsonobject.h>
+#include <qobject.h>
+#include <qstringliteral.h>
+#include <qtmetamacros.h>
+#include <qwidget.h>
 
 #include "Windows/MaterialEditor/nodes/ChannelData.h"
+#include <QtNodes/internal/Definitions.hpp>
+#include <QtNodes/internal/NodeData.hpp>
+#include <QtNodes/internal/NodeDelegateModel.hpp>
+#include <bgl/TextureAssetHandle.h>
 
 class QLabel;
 class TexturePreviewCache;

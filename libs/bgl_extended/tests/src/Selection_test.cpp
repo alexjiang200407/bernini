@@ -2,6 +2,10 @@
 #include "scene/SceneView.h"
 #include "util/TestOptions.h"
 #include <bgl/IGraphics.h>
+#include <bgl/IScene.h>
+#include <bgl/MaterialType.h>
+#include <bgl/types/SceneDesc.h>
+#include <catch2/catch_test_macros.hpp>
 
 // Per-submesh selection on a SceneView: the marks, their queries, and the dense-index list the
 // selection-mask draw dispatches over.

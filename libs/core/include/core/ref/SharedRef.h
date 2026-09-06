@@ -1,5 +1,9 @@
 #pragma once
 
+#include <cassert>
+#include <concepts>
+#include <cstddef>
+#include <type_traits>
 namespace core
 {
 	template <typename T>

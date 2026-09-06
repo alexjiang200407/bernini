@@ -5,11 +5,7 @@
 #include <assetlib_structs/ImageData.h>
 #include <assetlib_structs/Skeleton.h>
 #include <bgl/GeomHandle.h>
-#include <bgl/GeomType.h>
-#include <bgl/LayerType.h>
 #include <bgl/MaterialHandle.h>
-#include <bgl/MaterialType.h>
-#include <bgl/MeshInstanceHandle.h>
 #include <bgl/PreparedStaticMesh.h>
 #include <bgl/RigHandle.h>
 #include <bgl/TextureAssetHandle.h>
@@ -17,16 +13,17 @@
 #include <bgl/error.h>
 #include <bgl/glm.h>
 #include <bgl/types/BlendSetDesc.h>
-#include <bgl/types/ChannelRouteDesc.h>
-#include <bgl/types/EnvironmentMapDesc.h>
 #include <bgl/types/FootPlantDesc.h>
 #include <bgl/types/GroundPlaneDesc.h>
 #include <bgl/types/LoosePbrMaterialDesc.h>
 #include <bgl/types/PbrMaterialDesc.h>
 #include <bgl/types/SceneDesc.h>
-#include <core/containers/slot_handle.h>
 #include <core/ref/Ref.h>
 #include <core/ref/SharedRef.h>
+#include <cstdint>
+#include <span>
+#include <stdexcept>
+#include <string>
 
 namespace bgl
 {

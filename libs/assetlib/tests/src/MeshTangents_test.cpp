@@ -1,10 +1,19 @@
 #include <assetlib/mesh_tangents.h>
+#include <assetlib_structs/Mesh.h>
+#include <assetlib_structs/VertexLayout.h>
 
 #include <assetlib_structs/BMesh.h>
 
 #include <catch2/catch_approx.hpp>
 
+#include <catch2/catch_message.hpp>
+#include <catch2/catch_test_macros.hpp>
+#include <cstddef>
+#include <cstdint>
+#include <cstring>
 #include <glm/glm.hpp>
+#include <stdexcept>
+#include <vector>
 
 using namespace assetlib;
 

@@ -8,6 +8,7 @@
 #include <QMessageBox>
 #include <QPushButton>
 #include <QStatusBar>
+#include <QString>
 #include <QStringList>
 #include <QTabWidget>
 
@@ -20,11 +21,15 @@
 #include "Windows/LevelEditor/LevelEditorWindow.h"
 #include "Windows/MaterialEditor/MaterialEditorWindow.h"
 #include "Windows/RenderTarget/RenderTargetWindow.h"
+#include "main_window_ui.h"
 #include "util/follows_project.h"
 #include "util/frame_stats_text.h"
 #include "util/held_open_assets.h"
 #include "util/window_title.h"
+#include <array>
 #include <assetlib/Project.h>
+#include <assetlib/cancel.h>
+#include <assetlib/progress.h>
 
 #include <QActionGroup>
 #include <QMenuBar>
@@ -35,14 +40,37 @@
 #include <assetlib/texture_prune.h>
 #include <bgl/IGraphics.h>
 #include <core/err/util.h>
-#include <core/file/file.h>
 #include <core/platform/util.h>
 #include <core/settings/Settings.h>
+
+#include "util/editor_config.h"
+#include <cstddef>
+#include <cstdint>
+#include <exception>
+#include <filesystem>
+#include <functional>
 #include <gamelib/AssetManager.h>
 
 #include "Startup/startup_labels.h"
 
+#include <QDebug>
+#include <QKeySequence>
+#include <memory>
+#include <optional>
+#include <qaction.h>
+#include <qlist.h>
+#include <qlogging.h>
+#include <qnamespace.h>
+#include <qnumeric.h>
+#include <qobject.h>
+#include <qobjectdefs.h>
+#include <qsizepolicy.h>
+#include <qtypes.h>
+#include <qwidget.h>
+#include <string>
 #include <tracy/Tracy.hpp>
+#include <utility>
+#include <vector>
 
 MainWindow::MainWindow(
 	QWidget*                 parent,
@@ -51,9 +79,7 @@ MainWindow::MainWindow(
 {
 	try
 	{
-		Build(
-			configPath.empty() ? core::file::get_executable_path().parent_path() / "config.json" :
-								 configPath);
+		Build(configPath.empty() ? editor::DefaultConfigPath() : configPath);
 	}
 	catch (...)
 	{
@@ -393,6 +419,27 @@ MainWindow::SetUpRenderMenu()
 		for (RenderTargetWindow* view : findChildren<RenderTargetWindow*>())
 			view->SetOutlineEnabled(enabled);
 	});
+
+	auto* timing = render->addAction("GPU Pass Timing");
+	timing->setCheckable(true);
+	timing->setChecked(false);
+	timing->setStatusTip(
+		"Time every pass of the viewports' frames on the GPU, for Log GPU Pass Timings to write "
+		"out. Costs a little per frame, which is why it is off until asked for.");
+
+	connect(timing, &QAction::toggled, this, [this](bool enabled) {
+		for (RenderTargetWindow* view : findChildren<RenderTargetWindow*>())
+			view->SetGpuTimingEnabled(enabled);
+	});
+
+	// One frame's table into editor.log. Needs timing on, so it follows the toggle.
+	auto* logTiming = render->addAction("Log GPU Pass Timings");
+	logTiming->setShortcut(QKeySequence("Ctrl+Shift+T"));
+	logTiming->setEnabled(false);
+	logTiming->setStatusTip(
+		"Write the rendering viewport's next per-pass GPU breakdown to editor.log.");
+	connect(timing, &QAction::toggled, logTiming, &QAction::setEnabled);
+	connect(logTiming, &QAction::triggered, this, [this] { m_LogNextPassTimings = true; });
 
 	SetUpRenderScaleMenu(render);
 }
@@ -997,7 +1044,9 @@ MainWindow::SetUpFrameStats()
 				view,
 				&RenderTargetWindow::FrameStatsUpdated,
 				this,
-				[this, view, name](double meanMs, double maxMs, int missed) {
+				[this,
+			     view,
+			     name](double meanMs, double maxMs, int missed, const QString& gpuPasses) {
 					if (m_FrameStatsSource != view)
 						return;
 
@@ -1007,6 +1056,15 @@ MainWindow::SetUpFrameStats()
 							editor::FrameStats{ .meanMs = meanMs,
 				                                .maxMs  = maxMs,
 				                                .missed = missed }));
+
+					// The breakdown is one frame of numbers, which is a log's to hold and a
+					// tooltip's to misread; a stats window that graphs the rows is the readout it
+					// wants, and is not this.
+					if (m_LogNextPassTimings && !gpuPasses.isEmpty())
+					{
+						m_LogNextPassTimings = false;
+						qInfo().noquote() << "GPU pass timings," << name << "\n" << gpuPasses;
+					}
 				},
 				Qt::QueuedConnection);
 		}

@@ -4,6 +4,10 @@
 #include <core/str/string_pool.h>
 
 #include <assetlib_structs/SourceRef.h>
+#include <cstddef>
+#include <cstdint>
+#include <string>
+#include <vector>
 
 namespace assetlib
 {

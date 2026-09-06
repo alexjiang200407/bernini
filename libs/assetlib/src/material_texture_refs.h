@@ -1,5 +1,9 @@
 #pragma once
 #include <assetlib/asset_refs.h>
+#include <functional>
+#include <string>
+#include <utility>
+#include <vector>
 
 namespace assetlib
 {

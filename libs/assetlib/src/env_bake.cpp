@@ -1,3 +1,4 @@
+#include <array>
 #include <assetlib/container_info.h>
 #include <assetlib/envmap.h>
 
@@ -9,9 +10,16 @@
 #include <assetlib_structs/BEnv.h>
 #include <assetlib_structs/ImageData.h>
 #include <core/err/util.h>
+#include <filesystem>
+#include <optional>
+#include <stdexcept>
+#include <string>
+#include <string_view>
 
 #include "baked_name.h"
 #include "fs_util.h"
+#include <assetlib_structs/VkFormat.h>
+#include <core/file/IFileSystem.h>
 
 #include "mounted_io.h"
 

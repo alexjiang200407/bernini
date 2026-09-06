@@ -1,9 +1,28 @@
-#include <assetlib/envmap.h>
+#include <assetlib/AssetStore.h>
+#include <assetlib/codecs.h>
+#include <assetlib_structs/Mesh.h>
+#include <assetlib_structs/SourceStamp.h>
+#include <bgl/IScene.h>
+#include <bgl/InstanceDesc.h>
+#include <bgl/LayerType.h>
+#include <bgl/types/FootPlantDesc.h>
+#include <bgl/types/LoosePbrMaterialDesc.h>
+#include <bgl/types/PbrMaterialDesc.h>
+#include <cassert>
+#include <concepts>
+#include <core/str/str.h>
+#include <cstddef>
+#include <cstdint>
+#include <exception>
+#include <filesystem>
+#include <format>
 #include <gamelib/AssetManager.h>
+#include <gamelib/ClipInfo.h>
 
 #include <assetlib/RegenMesh.h>
 #include <assetlib/avatar.h>
 #include <assetlib/blend.h>
+#include <assetlib/container_info.h>
 #include <assetlib/image_io.h>
 #include <assetlib/skinning.h>
 #include <assetlib_structs/Animation.h>
@@ -13,9 +32,20 @@
 #include <assetlib_structs/Bounds.h>
 #include <assetlib_structs/ImageData.h>
 #include <assetlib_structs/Skeleton.h>
+#include <bgl_common/MemoryTag.h>
 #include <core/err/util.h>
 
+#include <memory>
+#include <optional>
+#include <span>
+#include <spdlog/spdlog.h>
+#include <stdexcept>
+#include <string>
+#include <string_view>
 #include <tracy/Tracy.hpp>
+#include <type_traits>
+#include <utility>
+#include <vector>
 
 namespace game
 {
@@ -69,7 +99,54 @@ namespace game
 		{
 			assetlib::SourceStamp stamp;
 			T                     value;
+
+			// This cache is the CPU-side residency of everything the reference dimensions price --
+			// a .banim is 59.7 MB and a .bmesh 16.8 MB -- and it holds each until the manager dies.
+			bgl::TaggedBytes tracked;
+
+			// The charge is move-only, so an entry is too. Spelled out rather than left implicit
+			// because MSVC's /Wall makes an implicitly deleted copy an error, and a constructor is
+			// needed at all because declaring any of them stops this being an aggregate.
+			Cached(assetlib::SourceStamp readAt, T read) noexcept(
+				std::is_nothrow_move_constructible_v<T>) : stamp(readAt), value(std::move(read))
+			{}
+
+			~Cached() noexcept = default;
+
+			Cached(const Cached&) = delete;
+			Cached&
+			operator=(const Cached&) = delete;
+
+			Cached(Cached&&) noexcept = default;
+			Cached&
+			operator=(Cached&&) noexcept = default;
 		};
+
+		/** The tag a cached container is charged to; one overload per thing ReadCached holds. */
+		constexpr bgl::MemoryTag
+		TagOf(const assetlib::BMesh&) noexcept
+		{
+			return bgl::MemoryTag::kMesh;
+		}
+
+		constexpr bgl::MemoryTag
+		TagOf(const assetlib::Skeleton&) noexcept
+		{
+			return bgl::MemoryTag::kAnimation;
+		}
+
+		constexpr bgl::MemoryTag
+		TagOf(const assetlib::AnimationSet&) noexcept
+		{
+			return bgl::MemoryTag::kAnimation;
+		}
+
+		template <std::movable T>
+		bgl::TaggedBytes
+		Charged(const T& value) noexcept
+		{
+			return bgl::TaggedBytes(TagOf(value), assetlib::residentBytes(value));
+		}
 
 		/** Reads the container a mount key names -- what ReadCached defers to when its stamp moves. */
 		template <class Load, class T>
@@ -116,11 +193,18 @@ namespace game
 			{
 				it->second.value = std::move(value);
 				it->second.stamp = stamp;
+
+				// Re-seated rather than adjusted: the re-read replaced the container, so the charge
+				// it replaces is released by the assignment.
+				it->second.tracked = Charged(it->second.value);
 				return it->second.value;
 			}
 
-			return reads.try_emplace(std::string(path), Cached<T>{ stamp, std::move(value) })
-			    .first->second.value;
+			Cached<T>& entry =
+				reads.try_emplace(std::string(path), Cached<T>(stamp, std::move(value)))
+					.first->second;
+			entry.tracked = Charged(entry.value);
+			return entry.value;
 		}
 
 		bgl::LayerType
@@ -1269,6 +1353,7 @@ namespace game
 		desc.roughnessFactor     = pbr.roughnessFactor;
 		desc.layerType           = ToLayerType(pbr.alphaMode, m_Options.hashedAsBlend);
 		desc.alphaCutoff         = pbr.alphaCutoff;
+		desc.doubleSided         = pbr.doubleSided;
 		desc.transmissionFactor  = pbr.transmissionFactor;
 		desc.specularColorFactor = pbr.specularColorFactor;
 		desc.specularFactor      = pbr.specularFactor;
@@ -1291,6 +1376,7 @@ namespace game
 		desc.roughnessFactor     = pbr.roughnessFactor;
 		desc.layerType           = ToLayerType(pbr.alphaMode, m_Options.hashedAsBlend);
 		desc.alphaCutoff         = pbr.alphaCutoff;
+		desc.doubleSided         = pbr.doubleSided;
 		desc.transmissionFactor  = pbr.transmissionFactor;
 		desc.specularColorFactor = pbr.specularColorFactor;
 		desc.specularFactor      = pbr.specularFactor;

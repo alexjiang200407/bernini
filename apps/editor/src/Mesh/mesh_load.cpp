@@ -3,11 +3,15 @@
 
 #include <QDebug>
 
-#include <assetlib/AssetCodec.h>
 #include <assetlib/AssetStore.h>
 #include <assetlib/RegenMesh.h>
 #include <assetlib_structs/BMesh.h>
 #include <core/file/file.h>
+#include <filesystem>
+#include <qlogging.h>
+#include <string>
+#include <system_error>
+#include <utility>
 
 namespace editor
 {

@@ -3,9 +3,11 @@
 #include "cmd/CommandList.h"
 #include "cmd/CommandQueue.h"
 #include "constants/constants.h"
+#include "debug/BufferPoisoner.h"
 #include "debug/DebugBuffer.h"
 #include "device/Device.h"
 #include "fg/FrameGraph.h"
+#include "fg/PassTimer.h"
 #include "gfx/RenderTargetBase.h"
 #include "overlay/Overlay.h"
 #include "passes/BrdfLutGenPass.h"
@@ -20,8 +22,24 @@
 #include "passes/SkyboxPass.h"
 #include "passes/TaaResolvePass.h"
 #include "passes/TransparentSortPass.h"
+#include "resource/Readback.h"
 #include "resource/ResourceManager.h"
+#include "resource/Sampler.h"
+#include "types/Format.h"
+#include <array>
+#include <assetlib_structs/ImageData.h>
+#include <bgl/IGpuAssertionHandler.h>
 #include <bgl/IGraphics.h>
+#include <bgl/IOverlay.h>
+#include <bgl/IRenderTarget.h>
+#include <bgl/PassTiming.h>
+#include <bgl/RenderJob.h>
+#include <core/ref/SharedRef.h>
+#include <cstdint>
+#include <optional>
+#include <string>
+#include <string_view>
+#include <vector>
 
 namespace bgl
 {
@@ -107,7 +125,21 @@ namespace bgl
 		void
 		DiscardPendingGpuAssertions() noexcept;
 
+		[[nodiscard]] std::vector<PassTiming>
+		GetPassTimings(const RenderTargetRef& target);
+
 	private:
+		// Passes a frame may time; a frame past it lists the rest unsampled. Every target owns this
+		// many pairs per frame in flight, so the heap is sized from it.
+		static constexpr uint32_t c_MaxTimedPasses      = 128;
+		static constexpr uint32_t c_TimingSlotsPerFrame = 2 * c_MaxTimedPasses;
+		static constexpr uint32_t c_TimingHeapCapacity =
+			c_SwapchainImageCount * c_TimingSlotsPerFrame;
+
+		// Turns a completed timed frame's slots into the target's rows. No-op unless the frame at
+		// `index` is pending. @pre its fence has passed.
+		void
+		ResolvePassTimings(RenderTargetBase& rt, uint32_t index);
 #if defined(BERNINI_GPU_DEBUG)
 		// Maps the GPU-assertion readback for a completed frame slot and crashes via gfatal if any
 		// dbg_raise() fired. No-op if the slot has no pending snapshot.
@@ -169,6 +201,13 @@ namespace bgl
 
 		FrameGraph m_FrameGraph;
 		uint32_t   m_DrawCount = 0;
+
+		// Armed at BeginFrame over the active target's slots when it asks to be timed, and handed
+		// to the graph for that frame.
+		PassTimer m_PassTimer;
+
+		// The slots of the frame being resolved; kept for its capacity.
+		std::vector<uint64_t> m_TimingTicks;
 
 		// This frame's overlay draws, resolved at DrawOverlay, and the overlays they came from --
 		// held so a caller's last ref cannot free one before the pass flushes it.

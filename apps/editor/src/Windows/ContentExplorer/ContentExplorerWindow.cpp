@@ -1,8 +1,10 @@
 #include "ContentExplorerWindow.h"
 
 #include "Import/drop_import.h"
+#include "Windows/ContentExplorer/AssetFileModel.h"
 #include "Windows/ContentExplorer/AssetOperations.h"
 #include "Windows/ContentExplorer/asset_rules.h"
+#include "Windows/ContentExplorer/content_explorer_ui.h"
 #include "util/asset_paths.h"
 #include "util/source_mesh.h"
 
@@ -29,9 +31,16 @@
 #include <QStyle>
 #include <QToolButton>
 #include <QTreeView>
-#include <assetlib/project_layout.h>
+#include <algorithm>
 
+#include <memory>
+#include <qabstractitemmodel.h>
+#include <qlogging.h>
+#include <qnamespace.h>
+#include <qobject.h>
+#include <qobjectdefs.h>
 #include <tracy/Tracy.hpp>
+#include <utility>
 
 namespace
 {

@@ -1,4 +1,10 @@
 #include <bgl_common/PassScheduler.h>
+#include <cstddef>
+#include <cstdint>
+#include <stack>
+#include <string_view>
+#include <unordered_map>
+#include <utility>
 
 namespace bgl
 {

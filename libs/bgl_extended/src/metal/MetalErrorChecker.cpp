@@ -1,6 +1,8 @@
 #include "MetalErrorChecker.h"
 
 #include <bgl_common/gassert.h>
+#include <format>
+#include <string>
 
 namespace bgl
 {

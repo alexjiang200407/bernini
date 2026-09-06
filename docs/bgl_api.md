@@ -85,7 +85,13 @@ disagrees, trust the header, then fix this doc.
 
   `GraphicsOptions` is the opposite: `maxCbvSrvUavs`, `maxBuffers`, `maxSrvs`, `maxBufferSrvs`,
   `maxRtvs`, `maxDsvs`, `maxTextures`, `maxSamplers` and `maxReadbackBuffers` size fixed pools that
-  never grow, and exhausting one is a hard failure.
+  never grow. Exhausting one fails that creation and nothing else: the call logs and returns a null
+  handle rather than throwing, so a caller that stores the result holds something it must check
+  before using or releasing it.
+
+  `maxRtvs` and `maxDsvs` are sized against each other, because a render target draws seven views
+  from the first and one from the second. Raising the number of targets a client keeps open means
+  raising both.
 
   **`maxCbvSrvUavs` counts descriptors; the pool sizes count resources.** Every buffer, every SRV and
   every second view of a buffer takes one descriptor from the shader-visible heap, so the heap must
@@ -155,7 +161,7 @@ disagrees, trust the header, then fix this doc.
 | `IScene` | [libs/bgl/include/bgl/IScene.h](libs/bgl/include/bgl/IScene.h) | Owns geometry, materials and texture assets. Shared by many views. |
 | `ISceneView` | [libs/bgl/include/bgl/ISceneView.h](libs/bgl/include/bgl/ISceneView.h) | Per-view mesh instances, material overrides, per-submesh selection marks, and lighting (IBL, skybox, exposure). |
 | `IOverlay` | [libs/bgl/include/bgl/IOverlay.h](libs/bgl/include/bgl/IOverlay.h) | Compiled 2D geometry and the textures it samples, drawn over a frame by `IGraphics::DrawOverlay`. Usable on any target the graphics draws. |
-| `IRenderTarget` | [libs/bgl/include/bgl/IRenderTarget.h](libs/bgl/include/bgl/IRenderTarget.h) | A render output: windowed swapchain or headless offscreen backbuffers, plus depth, the linear-HDR scene colour every pass renders into, and the screen-space velocity buffer. `RenderTargetDesc::taaEnabled` opts it into a jittered projection and a temporal history, which `SetTaaEnabled` then runs or stops at runtime; `SetOutlineEnabled` runs or stops the selection outline, on by default. `GetWidth`/`GetHeight` are the output size — the backbuffer's, and every capture's; `GetRenderWidth`/`GetRenderHeight` are the grid the geometry passes draw on; `SetTaaReconstructionWidth` sweeps the resolve's kernel without reallocating anything or dropping the accumulation. |
+| `IRenderTarget` | [libs/bgl/include/bgl/IRenderTarget.h](libs/bgl/include/bgl/IRenderTarget.h) | A render output: windowed swapchain or headless offscreen backbuffers, plus depth, the linear-HDR scene colour every pass renders into, and the screen-space velocity buffer. `RenderTargetDesc::taaEnabled` opts it into a jittered projection and a temporal history, which `SetTaaEnabled` then runs or stops at runtime; `SetOutlineEnabled` runs or stops the selection outline, on by default; `SetGpuTimingEnabled` times every pass of a frame on the GPU, off by default, read back through `IGraphics::GetPassTimings`. `GetWidth`/`GetHeight` are the output size — the backbuffer's, and every capture's; `GetRenderWidth`/`GetRenderHeight` are the grid the geometry passes draw on; `SetTaaReconstructionWidth` sweeps the resolve's kernel without reallocating anything or dropping the accumulation. |
 | `IGpuAssertionHandler` | [libs/bgl/include/bgl/IGpuAssertionHandler.h](libs/bgl/include/bgl/IGpuAssertionHandler.h) | Caller-implemented sink for shader `dbg_raise` reports. Not refcounted; a plain callback interface. |
 
 ### Supporting types
@@ -164,8 +170,9 @@ disagrees, trust the header, then fix this doc.
 |---|---|---|
 | `GraphicsOptions` | [libs/bgl/include/bgl/IGraphics.h](libs/bgl/include/bgl/IGraphics.h) | Device creation: debug layers, log level, `shaderCacheDir`, and every descriptor-heap/pool capacity. |
 | `CaptureTicket` | [libs/bgl/include/bgl/IGraphics.h](libs/bgl/include/bgl/IGraphics.h) | Names one in-flight backbuffer capture. Spent by resolve or discard. |
+| `PassTiming` | [libs/bgl/include/bgl/PassTiming.h](libs/bgl/include/bgl/PassTiming.h) | One row of `IGraphics::GetPassTimings`: a frame graph pass's name and what it cost on the GPU, in milliseconds. |
 | `SceneDesc` | [libs/bgl/include/bgl/IScene.h](libs/bgl/include/bgl/IScene.h) | Fixed pool capacities for a scene. |
-| `PbrMaterialDesc` / `LoosePbrMaterialDesc` | [libs/bgl/include/bgl/IScene.h](libs/bgl/include/bgl/IScene.h) | Baked (three-map) vs. loose (per-channel routed) material parameters. `ChannelRouteDesc` feeds the latter. |
+| `PbrMaterialDesc` / `LoosePbrMaterialDesc` | [libs/bgl/include/bgl/IScene.h](libs/bgl/include/bgl/IScene.h) | Baked (three-map) vs. loose (per-channel routed) material parameters. `ChannelRouteDesc` feeds the latter. `doubleSided` says whether a non-opaque surface's back faces are drawn; on by default, and the mesh stage culls them otherwise — see [Passes § Two-sided surfaces](docs/passes.md). |
 | `EnvironmentMapDesc` | [libs/bgl/include/bgl/IScene.h](libs/bgl/include/bgl/IScene.h) | The IBL triplet (irradiance cube, prefilter cube, BRDF LUT). **Move-only** — copy is deleted. |
 | `GroundPlaneDesc` | [libs/bgl/include/bgl/IScene.h](libs/bgl/include/bgl/IScene.h) | The scene's ground: a point and an up normal. Defaults to `y = 0`. |
 | `RenderTargetDesc` | [libs/bgl/include/bgl/IRenderTarget.h](libs/bgl/include/bgl/IRenderTarget.h) | The output size, `renderScale` (how dense the geometry passes' grid is relative to it), `taaReconstructionWidth` (how wide a kernel the resolve rebuilds an output pixel with, in output pixels), `headless`, and `wnd` — an `HWND` on D3D12, a `CAMetalLayer*` on Metal; ignored when headless. |
@@ -265,6 +272,16 @@ flowchart TD
   presented to (the editor does, in `MainWindow::closeEvent`): a present left pending across the hide
   is never consumed, and every later fence wait on the queue — the teardown flushes among them —
   blocks behind it forever.
+* **`GetPassTimings(target)`** — the passes of the last *completed* timed frame on `target`, in
+  execution order, each with its GPU milliseconds; may be called mid-frame. A frame's rows arrive
+  once its fence has passed, so they trail the frame that wrote them by one or two, and a pass the
+  GPU could not sample — one that recorded nothing an encoder boundary can carry a timestamp on —
+  reports zero rather than going missing. Empty while `IRenderTarget::SetGpuTimingEnabled` is off,
+  before the first timed frame lands, and on a device without a pass-boundary timestamp. Timing is
+  off by default because a timed frame is not free: it resolves the slots, and on Metal it ends the
+  encoder at every pass boundary, which is a tile store and reload the untimed frame merges away —
+  so a number read with timing on carries that overhead, and an image does not (the `[timing]` cases
+  pin both).
 * **`SubmitCapture(target)`** — @pre not mid-frame; fewer than `c_MaxPendingCaptures` captures in
   flight. @post returns a ticket that **must** be spent by `TryResolveCapture` or `DiscardCapture`;
   leaking tickets exhausts the slots and the next submit throws. Captures the *last presented*
@@ -343,6 +360,17 @@ flowchart TD
   for editor feedback (the selection outline draws from it); no shading changes. The mark dies with
   the instance: `DeleteMeshInstance` drops it, and a handle reusing the slot starts unselected —
   there is no stale-binding hazard here, unlike materials.
+* **`SetFootIK(instance, desc)` / `GetFootIK(instance)`** — a hero skinned instance's runtime
+  foot-IK record, one `FootIKLegDesc` per leg of its rig: a position ramp and a rotation ramp,
+  each in `RenderJob::time` and each multiplying the weight the cook baked for the frame; the
+  position weight scales the whole correction, terrain lift included, so zero is the animated
+  pose. Written
+  on an event, never per frame; a write whose ramps all start at or after now leaves the previous
+  frame's pose and its motion vector exact, and `FootIKDesc::FadeTo` builds one from the record
+  read back. @throws on a static or crowd placement, a rig with no legs, a weight outside
+  `[0, 1]`, a non-finite field, or a ramp ending before it starts. `HasFootIK(instance)` is
+  exactly when neither throws, for a caller that cannot tell a rig's legs from outside. See
+  [Skinned Meshes](skinning.md) § Foot planting.
 * **`SetEnvironmentMap(desc)`** — @pre irradiance and prefilter are cube maps. Takes
   `EnvironmentMapDesc` by const reference but the struct is move-only, so build it in place at the
   call site. Replaces any previous environment wholesale.

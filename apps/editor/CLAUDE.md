@@ -57,9 +57,13 @@ open the project's own assets.
 
 ## config.json
 
-`config.json` (git-ignored, one per checkout, deployed next to the binary and read once by
-`MainWindow::Build`) is machine-local: `startupProject` names the project to open on launch,
-`instanceName` names *this* editor, and `headless` builds every viewport offscreen. An
+`config.json` (git-ignored, one per checkout, deployed next to the binary) is machine-local:
+`startupProject` names the project to open on launch, `instanceName` names *this* editor, `headless`
+builds every viewport offscreen, and `memoryReport` (default true) decides whether the run's memory
+table is written to `editor.log` on the way out — see [docs/profiling.md](../../docs/profiling.md)
+§ Memory. `MainWindow::Build` reads it for everything but the last: the report is armed in `main`
+before the window exists, so that building the window is inside what it measures, and
+`editor::DefaultConfigPath` is the one place that says where the file lives. An
 `instanceName` leads the window title — `A — Bernini Editor — Test Project` — so two editors run
 side by side for an A/B comparison can be told apart where every other part of the title is
 identical. Empty, and the title is what it always was. `config.example.json` carries the keys blank.

@@ -1,6 +1,6 @@
 ---
 name: bcp-precheck
-description: The critical read of a change before its pull request is opened. Reviews the working diff against the base for code that already exists in core, design that fights the roadmap or deviates from the standard without an ADR saying so, work that crosses a non-goal agreed in the grill, cost that is infeasible at AAA asset scale, and STYLE.md breaks, then reports back. Posts nothing and edits nothing. Spawn it as the last step before `just pr create`.
+description: The critical read of a change before its pull request is opened. Reviews the working diff against the base for code that already exists in core, design that fights the roadmap or deviates from the standard without an ADR saying so, work that crosses a non-goal agreed in the grill, cost -- in time and in memory -- that is infeasible at AAA asset scale, and STYLE.md breaks, then reports back. Posts nothing and edits nothing. Spawn it as the last step before `just pr create`.
 tools: Read, Grep, Glob, Bash
 model: sonnet
 ---
@@ -152,7 +152,7 @@ is not acceptable is the boundary quietly ceasing to hold.
 and move on. Do not infer the boundaries yourself: invented non-goals are the noise that teaches an
 author to skim this gate.
 
-## 5. Is it feasible at AAA scale?
+## 5. Is it feasible at AAA scale — in time, and in memory?
 
 The bottleneck in this engine is not the renderer. Bindless and GPU-driven force that path, and the
 roadmap's own constraints keep it there. What actually costs is **asset structure** — the offline and
@@ -195,6 +195,8 @@ positive.
 | Mesh container (`.bmesh`) | vertex data is nearly all of it | 16.8 MB, of which a reference scan reads ~3 KB | `docs/asset_standards.md` |
 | Environment bake | prefilter 256 px / 7 mips / 2048 samples; skybox 512 px / 6 mips; irradiance 128 px | — | `docs/envmaps.md` |
 | VAT | one bake per (rig, clip set) | seconds of CPU and hundreds of MB on a dense rig | `docs/vat.md` |
+| Cooking one character | the 663-bone reference rig, from a 97 MB `.glb` | **1.22 GiB resident peak**, none of it tagged | `docs/profiling.md` § What a run costs |
+| Standing up a device and the editor's widgets | `editor_tests`, whole suite | **1.48 GiB resident peak**; 48.6 MiB device buffers, 15.2 MiB device textures | `docs/profiling.md` § What a run costs |
 
 Terrain and the LOD/atlas multipliers are deliberately absent — terrain has no container yet, and
 LODs and atlasing multiply the rows above rather than adding one. Neither has a measurement to quote.
@@ -247,13 +249,41 @@ you started and then simply waited on.
 can find out in advance. Name the entry point and ask for the pre-flight, or for the number in the
 PR body.
 
+### What does it hold, and can anyone find out?
+
+The rows above are the first memory this project ever measured, and they exist because until
+`docs/profiling.md` § Memory there was no way to be wrong about a byte count out loud. Use them the
+same way as the time rows: name the dimensions, put the numbers in, and say what it holds.
+
+**The bar is the same shape as the pre-flight one above.** A cost may be inherent and accepted; what
+is not acceptable is that nobody can find out. So the finding is not "this allocates" — it is a new
+allocation whose size **scales with a dimension the table names**, that is **held** rather than
+transient, and that carries **no tag** and no number in the PR body. `revise`: name the allocation,
+its dimensions, and the `core::profiling::MemoryTag` it should be charged to.
+
+`core::profiling::TaggedBytes` is how a door is charged, held as a member of whatever owns the
+buffer. Two shapes to check rather than merely asking for a tag, and they mirror the zone rules:
+
+- **A charge in a per-element loop is the finding**, not the absence of one. A tag is two atomics
+  plus a Tracy event — right for a container, wrong per vertex or per bone. Tag doors.
+- **A charge that outlives its buffer** reports memory nobody holds, which is worse than reporting
+  none. The member-of-the-owner shape is what prevents it; a bare charge taken beside an allocation
+  and released on one return path is the defect.
+
+Two things are **not** findings here. An untagged allocation on a path the table shows is small —
+the residual is the mechanism, and a tag is added when `untagged` says it is worth adding, not in
+advance. And `assetlib`'s cook and the editor's thumbnail cache are known to be untagged
+(`docs/profiling.md` § What is measured); a diff touching them inherits that and does not have to
+fix it.
+
 ### Severity
 
 `block` only when the diff makes such a path **superlinear in a dimension the table names** — a
 per-vertex walk inside a per-frame loop, a whole-mesh hash per entry, a re-read per clip set. Those
 are the shapes that actually shipped and had to be fixed. Everything else is `revise`, including the
-linear-but-unaffordable case above: it may be the right cost, and that is the author's call to state
-rather than yours to refuse.
+linear-but-unaffordable case above and every memory finding: it may be the right cost, and that is
+the author's call to state rather than yours to refuse. Memory never blocks — a cache that is
+deliberately unbounded is a decision, and a gate that refuses one is a gate authors learn to skim.
 
 **Not findings here**, and flagging them trains the author to skim:
 

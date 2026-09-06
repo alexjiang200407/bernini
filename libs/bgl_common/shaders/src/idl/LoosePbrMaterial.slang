@@ -41,4 +41,7 @@ public struct LoosePbrMaterial
     // What baseColorFactor.a means on a blended surface: 0 for coverage, 1 for transmission. Only
     // read by the transparent PSO. See MaterialData::ShadeBlended.
     public float transmissionFactor;
+
+    // As PbrMaterial.doubleSided.
+    public uint doubleSided;
 };

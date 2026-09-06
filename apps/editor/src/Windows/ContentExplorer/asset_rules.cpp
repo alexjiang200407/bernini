@@ -3,6 +3,7 @@
 #include "util/asset_paths.h"
 #include "util/source_mesh.h"
 
+#include <algorithm>
 #include <assetlib/Project.h>
 
 #include <QDir>
@@ -12,6 +13,10 @@
 
 #include <assetlib/asset_refs.h>
 #include <assetlib/project_layout.h>
+#include <optional>
+#include <qcontainerfwd.h>
+#include <qobject.h>
+#include <qstringliteral.h>
 
 namespace editor
 {

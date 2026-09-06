@@ -1,5 +1,9 @@
 #pragma once
+#include "resource/ResourceManager.h"
 #include "scene/ComputeBuffer.h"
+#include <cstdint>
+#include <string>
+#include <vector>
 
 namespace bgl
 {

@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cstdint>
 namespace core
 {
 	struct multi_slot_handle

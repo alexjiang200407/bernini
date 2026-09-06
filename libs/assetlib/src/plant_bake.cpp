@@ -1,9 +1,11 @@
 #include "plant_bake.h"
+#include <core/file/IFileSystem.h>
 
 #include <assetlib/avatar.h>
 #include <assetlib/skinning.h>
 #include <assetlib_structs/Animation.h>
 #include <assetlib_structs/Skeleton.h>
+#include <span>
 
 namespace assetlib
 {

@@ -1,6 +1,8 @@
 #include <assetlib/bmesh.h>
 #include <assetlib/codecs.h>
+#include <assetlib_structs/Bounds.h>  // IWYU pragma: keep
 #include <catch2/catch_test_macros.hpp>
+#include <catch2/matchers/catch_matchers.hpp>
 #include <catch2/matchers/catch_matchers_string.hpp>
 
 #include <assetlib/AssetStore.h>
@@ -14,15 +16,22 @@
 #include <assetlib/skinning.h>
 #include <assetlib_structs/Animation.h>
 #include <assetlib_structs/BMesh.h>
-#include <assetlib_structs/Bounds.h>
 #include <assetlib_structs/Skeleton.h>
 #include <core/file/LooseFileSystem.h>
 #include <core/file/file.h>
+#include <cstddef>
+#include <cstdint>
+#include <filesystem>
+#include <memory>
+#include <optional>
+#include <string>
+#include <vector>
 
 #include "CacheTamper.h"
 #include "ImportUnitGroup.h"
 #include "MountAt.h"
 #include "SkinnedGltf.h"
+#include <core/file/IFileSystem.h>
 
 using namespace assetlib;
 

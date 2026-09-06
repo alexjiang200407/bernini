@@ -1,6 +1,12 @@
 #pragma once
 
 #include "Windows/MaterialEditor/nodes/MaterialOutputNode.h"
+#include <assetlib_structs/BMaterial.h>
+#include <qjsonobject.h>
+#include <qobject.h>
+#include <qstringliteral.h>
+#include <qtmetamacros.h>
+#include <qwidget.h>
 
 class QDoubleSpinBox;
 

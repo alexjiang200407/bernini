@@ -1,4 +1,5 @@
 #pragma once
+#include <array>
 #include <assetlib/AssetStore.h>
 #include <assetlib/asset_refs.h>
 #include <assetlib/container_info.h>
@@ -8,10 +9,17 @@
 #include <assetlib_structs/BEnv.h>
 #include <assetlib_structs/BMaterial.h>
 #include <assetlib_structs/BMesh.h>
-#include <assetlib_structs/ImageData.h>
+#include <cstddef>
+#include <cstdint>
+#include <filesystem>
+#include <string>
+#include <vector>
 
 #include "MountAt.h"
 #include "bmesh_texture.h"
+#include <assetlib/project_layout.h>
+#include <assetlib_structs/Mesh.h>
+#include <assetlib_structs/Node.h>
 
 /**
  * The on-disk scaffolding the reference-graph suites share: a scratch data root, and writers for

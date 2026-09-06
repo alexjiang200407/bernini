@@ -1,11 +1,13 @@
 #pragma once
 #include "device/Device.h"
 #include "slang/SlangSessions.h"
+#include <cstdint>
 
 namespace bgl
 {
 	struct ShaderDesc;
 	class ShaderCache;
+	class ITimestampHeap;
 
 	class Device final : public core::RefCounter<IDevice>
 	{
@@ -49,6 +51,9 @@ namespace bgl
 
 		core::SharedRef<ICommandQueue>
 		CreateCommandQueue(QueueType type) const noexcept override;
+
+		core::SharedRef<ITimestampHeap>
+		CreateTimestampHeap(uint32_t capacity) const noexcept override;
 
 		core::SharedRef<IMeshletPipeline>
 		CreateMeshletPipeline(const MeshletPipelineDesc& desc) const noexcept override;

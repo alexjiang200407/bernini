@@ -1,3 +1,5 @@
+#include <algorithm>
+#include <array>
 #include <assetlib/container_info.h>
 #include <assetlib/material_bake.h>
 
@@ -12,8 +14,20 @@
 #include "baked_name.h"
 #include "bmesh_texture.h"
 #include "fs_util.h"
+#include <assetlib_structs/VkFormat.h>
 
+#include <cstddef>
+#include <cstdint>
+#include <cstring>
+#include <filesystem>
+#include <optional>
 #include <stb_image_resize2.h>
+#include <stdexcept>
+#include <string>
+#include <system_error>
+#include <unordered_map>
+#include <utility>
+#include <vector>
 
 namespace assetlib
 {

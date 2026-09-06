@@ -1,8 +1,16 @@
 #include "Windows/AssetImporter/material_stems.h"
 
 #include "util/asset_paths.h"
+#include <assetlib/bmesh_gltf.h>
 
 #include <QSet>
+#include <cstddef>
+#include <qcontainerfwd.h>
+#include <qobject.h>
+#include <qstringliteral.h>
+#include <qtypes.h>
+#include <span>
+#include <string_view>
 
 namespace editor
 {

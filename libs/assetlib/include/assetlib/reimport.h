@@ -1,5 +1,8 @@
 #pragma once
 
+#include <cstddef>
+#include <string>
+#include <vector>
 namespace assetlib
 {
 	/** What Reimport did for one copied source. */

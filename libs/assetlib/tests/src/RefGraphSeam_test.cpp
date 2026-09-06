@@ -1,9 +1,19 @@
+#include <algorithm>
 #include <assetlib/AssetStore.h>
 #include <assetlib/asset_refs.h>
 #include <assetlib/pak.h>
 #include <assetlib/texture_prune.h>
+#include <catch2/catch_test_macros.hpp>
 #include <core/file/LayeredFileSystem.h>
 #include <core/file/LooseFileSystem.h>
+#include <cstddef>
+#include <cstdint>
+#include <filesystem>
+#include <memory>
+#include <span>
+#include <string_view>
+#include <utility>
+#include <vector>
 
 #include "CountingFileSystem.h"
 #include "MountAt.h"

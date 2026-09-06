@@ -1,6 +1,7 @@
 #include <bgl_common/idl/Entry.h>
 #include <bgl_common/idl/Range.h>
 #include <bgl_common/idl/RangeWithCount.h>
+#include <catch2/catch_test_macros.hpp>
 
 TEST_CASE("A default-constructed offset primitive is null", "[idl]")
 {

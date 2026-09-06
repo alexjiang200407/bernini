@@ -1,5 +1,7 @@
 #pragma once
 
+#include <span>
+#include <string>
 namespace assetlib
 {
 	class AssetStore;

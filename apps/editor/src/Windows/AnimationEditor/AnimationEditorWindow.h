@@ -2,9 +2,18 @@
 
 #include <QElapsedTimer>
 #include <QWidget>
+#include <cstdint>
+#include <qcontainerfwd.h>
+#include <qobject.h>
+#include <qtmetamacros.h>
+#include <vector>
 
+#include "Render/Renderer.h"
+#include "Render/environment.h"
+#include "Windows/AnimationEditor/PlaybackTransport.h"
 #include "util/follows_project.h"
 #include "util/held_open_assets.h"
+#include <bgl/InstanceDesc.h>
 
 #include "Windows/AnimationEditor/AnimationPreviewWindow.h"
 
@@ -193,6 +202,13 @@ private:
 	Scrubber*  m_HeadingSlider = nullptr;
 	QLabel*    m_HeadingLabel  = nullptr;
 	QCheckBox* m_PlantFeet     = nullptr;
+
+	// The instance's own IK weights, in percent: how far the ankle is carried onto the ground, and
+	// how far the sole turns onto it. Committed on release like the slope, as one write of both.
+	Scrubber* m_IKWeightSlider = nullptr;
+	QLabel*   m_IKWeightLabel  = nullptr;
+	Scrubber* m_SoleTurnSlider = nullptr;
+	QLabel*   m_SoleTurnLabel  = nullptr;
 
 	QListWidget* m_ClipList     = nullptr;
 	QLabel*      m_ClipMetadata = nullptr;

@@ -1,5 +1,15 @@
 #include <assetlib_structs/BMesh.h>
+#include <assetlib_structs/VertexLayout.h>
+#include <catch2/catch_test_macros.hpp>
+#include <cstddef>
+#include <cstdint>
+#include <cstdlib>
+#include <gamelib/Ray.h>
 #include <gamelib/Raycaster.h>
+#include <limits>
+#include <span>
+#include <stdexcept>
+#include <vector>
 
 namespace
 {

@@ -7,16 +7,28 @@
 #include "Render/environment.h"
 #include "Thumbnails/StampedPixmapCache.h"
 #include "util/held_open_assets.h"
+#include <assetlib_structs/ImageData.h>
 
 #include <bgl/GeomHandle.h>
 #include <bgl/IGraphics.h>
-#include <bgl/IScene.h>
 #include <bgl/ISceneView.h>
 #include <bgl/MaterialHandle.h>
 #include <bgl/MeshInstanceHandle.h>
 #include <bgl/PreparedStaticMesh.h>
 #include <bgl/RenderJob.h>
+#include <cstdint>
+#include <filesystem>
 #include <gamelib/AssetManager.h>
+#include <memory>
+#include <optional>
+#include <qcontainerfwd.h>
+#include <qobject.h>
+#include <qtmetamacros.h>
+#include <qtypes.h>
+#include <string>
+#include <string_view>
+#include <unordered_map>
+#include <vector>
 
 class QImage;
 

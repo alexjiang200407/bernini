@@ -2,8 +2,22 @@
 #include "gfx/GraphicsBase.h"
 #include "pipeline/ComputePipeline.h"
 #include "pipeline/MeshletPipeline.h"
+#include "resource/Sampler.h"
+#include "resource/Srv.h"
+#include "uniforms/DescriptorHandle.h"
 #include "util/GpuValidation.h"
 #include "util/TestOptions.h"
+#include <array>
+#include <bgl/IGraphics.h>
+#include <bgl/TextureAssetHandle.h>
+#include <bgl_common/UniformValueType.h>
+#include <bgl_common/UniformsBase.h>
+#include <catch2/catch_test_macros.hpp>
+#include <cstddef>
+#include <cstdint>
+#include <string>
+#include <string_view>
+#include <vector>
 
 namespace
 {

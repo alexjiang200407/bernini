@@ -1,5 +1,6 @@
 #pragma once
 #include "metal_cpp.h"
+#include <bgl_common/gassert.h>
 
 #include "resource/Readback.h"
 

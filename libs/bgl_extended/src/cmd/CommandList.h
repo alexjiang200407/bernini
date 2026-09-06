@@ -9,6 +9,9 @@
 
 #include <core/ref/RefCounter.h>
 #include <core/ref/SharedRef.h>
+#include <cstdint>
+#include <span>
+#include <string_view>
 
 namespace bgl
 {
@@ -20,6 +23,7 @@ namespace bgl
 
 	class ICommandAllocator;
 	class ICommandQueue;
+	class ITimestampHeap;
 
 	class ICommandList : public core::Ref
 	{
@@ -167,6 +171,37 @@ namespace bgl
 
 		virtual void
 		EndEvent() noexcept = 0;
+
+		/**
+		 * Opens a timed span: the GPU writes `startSlot` before the work recorded next and `endSlot`
+		 * after the work recorded before EndTiming. Pass-shaped rather than a free-standing write
+		 * because Metal samples a timestamp only at an encoder boundary, so a span is the one thing
+		 * both backends can promise.
+		 *
+		 * On Metal the span's end closes the encoder in flight, so two spans never share one; the
+		 * tile store and reload that costs is why a caller times only when asked to.
+		 *
+		 * @pre no span is open on this list.
+		 */
+		virtual void
+		BeginTiming(ITimestampHeap& heap, uint32_t startSlot, uint32_t endSlot) noexcept = 0;
+
+		/**
+		 * Closes the open span.
+		 *
+		 * @return whether both slots will be written: false when the span recorded nothing the GPU
+		 *         can attach a sample to -- a pass of barriers alone on Metal -- and the slots then
+		 *         read as ITimestampHeap::c_UnwrittenTimestamp.
+		 */
+		virtual bool
+		EndTiming() noexcept = 0;
+
+		/**
+		 * Makes slots [first, first + count) readable through ITimestampHeap::Read once this list's
+		 * submission completes. Record after the spans that wrote them, on the same list.
+		 */
+		virtual void
+		ResolveTimestamps(ITimestampHeap& heap, uint32_t first, uint32_t count) noexcept = 0;
 
 		virtual void
 		SetMeshletState(const MeshletState& gfxState) noexcept = 0;

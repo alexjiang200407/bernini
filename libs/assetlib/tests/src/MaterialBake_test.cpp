@@ -1,3 +1,5 @@
+#include <algorithm>
+#include <array>
 #include <assetlib/container_info.h>
 #include <assetlib/image_io.h>
 #include <assetlib/material_bake.h>
@@ -5,8 +7,26 @@
 #include <assetlib_structs/ImageData.h>
 
 #include "bmesh_texture.h"
+#include <assetlib_structs/VkFormat.h>
 
+#include <atomic>
 #include <catch2/catch_approx.hpp>
+#include <catch2/catch_message.hpp>
+#include <catch2/catch_test_macros.hpp>
+#include <chrono>
+#include <cstddef>
+#include <cstdint>
+#include <cstring>
+#include <exception>
+#include <filesystem>
+#include <format>
+#include <fstream>
+#include <ios>
+#include <mutex>
+#include <stdexcept>
+#include <string_view>
+#include <thread>
+#include <vector>
 
 #include "MountAt.h"
 #include "mounted_io.h"
@@ -703,6 +723,11 @@ TEST_CASE(
 	auto ready  = std::atomic<int>(0);
 	auto failed = std::atomic<int>(0);
 
+	// Kept, because "3 of 8 threw" does not say what lost the race, and this case only fails when
+	// the machine is loaded enough that reproducing it to ask again is the hard part.
+	auto reasonMutex = std::mutex();
+	auto reason      = std::string();
+
 	const auto bake = [&](int index) {
 		ready.fetch_add(1);
 		while (ready.load() < c_Writers) std::this_thread::yield();
@@ -711,9 +736,13 @@ TEST_CASE(
 		{
 			StoreAt(dir.path).BakeMaterial(materials[static_cast<size_t>(index)]);
 		}
-		catch (const std::exception&)
+		catch (const std::exception& e)
 		{
 			failed.fetch_add(1);
+
+			const std::lock_guard<std::mutex> lock(reasonMutex);
+			if (reason.empty())
+				reason = e.what();
 		}
 	};
 
@@ -721,6 +750,7 @@ TEST_CASE(
 	for (int i = 0; i < c_Writers; ++i) writers.emplace_back(bake, i);
 	for (std::thread& writer : writers) writer.join();
 
+	INFO("first bake failure: " << reason);
 	CHECK(failed.load() == 0);
 
 	const auto textures = dir.path / "Derived/BakedTextures";

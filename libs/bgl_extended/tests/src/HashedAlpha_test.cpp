@@ -4,15 +4,33 @@
 #include "util/GpuValidation.h"
 #include "util/TestEnvironment.h"
 #include "util/TestOptions.h"
+#include <algorithm>
+#include <array>
 #include <assetlib_structs/ImageData.h>
+#include <assetlib_structs/VkFormat.h>
 #include <bgl/Camera.h>
 #include <bgl/IGraphics.h>
+#include <bgl/IRenderTarget.h>
 #include <bgl/IScene.h>
 #include <bgl/ISceneView.h>
+#include <bgl/LayerType.h>
 #include <bgl/RenderJob.h>
 #include <bgl/Viewport.h>
 #include <catch2/catch_approx.hpp>
+#include <catch2/catch_message.hpp>
+#include <catch2/catch_test_macros.hpp>
 #include <catch2/generators/catch_generators.hpp>
+#include <cmath>
+#include <core/containers/fixed_buffer.h>
+#include <cstddef>
+#include <cstdint>
+#include <cstdlib>
+#include <cstring>
+#include <format>
+#include <span>
+#include <string>
+#include <utility>
+#include <vector>
 
 namespace
 {

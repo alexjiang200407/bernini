@@ -1,15 +1,19 @@
 // bgl_extended_tests globs every .cpp under tests/ whatever the backend, so a Metal-only case has to exclude
 // itself: a command buffer's retirement is only observable through metal-cpp.
+// Held through SharedRef via `auto`, and dereferenced: both need the complete type, which
+// include-cleaner cannot see through the template.
+#include "cmd/CommandAllocator.h"  // IWYU pragma: keep
+#include "cmd/CommandQueue.h"      // IWYU pragma: keep
+#include "resource/Buffer.h"
+#include "types/QueueType.h"
+#include <catch2/catch_test_macros.hpp>
+#include <cstdint>
 #if defined(RENDERER_BACKEND_METAL)
 
-#	include "cmd/CommandAllocator.h"
 #	include "cmd/CommandList.h"
-#	include "cmd/CommandQueue.h"
 #	include "device/Device.h"
 #	include "gfx/GraphicsBase.h"
 #	include "metal/cmd/CommandList_metal.h"
-#	include "resource/ResourceManager.h"
-#	include "util/GpuValidation.h"
 #	include "util/TestOptions.h"
 
 #	include <bgl/IGraphics.h>

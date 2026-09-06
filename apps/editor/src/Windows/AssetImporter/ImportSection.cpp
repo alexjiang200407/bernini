@@ -1,4 +1,5 @@
 #include "Windows/AssetImporter/ImportSection.h"
+#include "Windows/AssetImporter/folder_row.h"
 
 #include <QFormLayout>
 #include <QHBoxLayout>
@@ -6,6 +7,11 @@
 #include <QLineEdit>
 #include <QToolButton>
 #include <QVBoxLayout>
+#include <qnamespace.h>
+#include <qobject.h>
+#include <qstringliteral.h>
+#include <qtmetamacros.h>
+#include <qwidget.h>
 
 namespace editor
 {

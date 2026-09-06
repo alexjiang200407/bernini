@@ -1,6 +1,14 @@
 #include "util/GpuValidation.h"
 #include "util/TestOptions.h"
 #include <bgl/IGraphics.h>
+#include <bgl/IRenderTarget.h>
+#include <bgl/ISceneView.h>
+#include <catch2/catch_test_macros.hpp>
+#include <cstdint>
+#include <filesystem>
+#include <fstream>
+#include <ios>
+#include <string>
 
 namespace
 {

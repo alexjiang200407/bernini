@@ -1,0 +1,13 @@
+# Not swept, and not claiming to be. The macOS preset compiles nothing in here, so
+# `scripts/tidy.py` has no compile command for these 46 files and skips them. Leaving
+# misc-include-cleaner on for the subsystem would let `just tidy libs/bgl_extended` report clean
+# over the whole D3D12 backend, and let a Windows checkout that *can* compile it meet hundreds of
+# findings nobody had ever seen.
+#
+# Lift it once the sweep has been run from a preset that builds them:
+# `just build --preset windows-clang-dx12-debug`, then `just tidy libs/bgl_extended/src/d3d12`.
+# Naming still applies here; it needs no compile command this preset lacks.
+InheritParentConfig: true
+
+Checks: >
+  -misc-include-cleaner

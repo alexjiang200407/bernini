@@ -1,10 +1,11 @@
 #!/usr/bin/env sh
-# Format staged C++ and Slang sources with clang-format, then check the staged lines against the
-# naming rules, so neither lands wrong. Both scripts locate their tool via scripts/config.json, then
-# PATH, then a known LLVM install. Enabled by `git config core.hooksPath .githooks` (set by
-# `just init`).
+# Format staged C++ and Slang sources with clang-format, then check the staged lines with
+# clang-tidy, so neither lands wrong. That check is the naming rules everywhere, and include
+# hygiene in the subsystems whose own .clang-tidy asks for it -- see docs/naming.md. Both scripts
+# locate their tool via scripts/config.json, then PATH, then a known LLVM install. Enabled by
+# `git config core.hooksPath .githooks` (set by `just init`).
 #
-# The naming check needs a compile database, which only the Ninja and Makefile generators write; it
+# clang-tidy needs a compile database, which only the Ninja and Makefile generators write; it
 # is skipped rather than failed when there isn't one, so a Visual Studio-generator checkout still
 # commits. `SKIP_TIDY=1 git commit` skips it outright.
 

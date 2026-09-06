@@ -2,6 +2,7 @@
 
 #include <QString>
 #include <QStringList>
+#include <qcontainerfwd.h>
 
 class QFileSystemModel;
 class QModelIndex;

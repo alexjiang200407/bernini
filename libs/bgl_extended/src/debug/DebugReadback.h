@@ -1,7 +1,13 @@
 #pragma once
 #include "debug/DebugBuffer.h"
+#include <algorithm>
 #include <bgl_common/idl/DebugRecord.h>
 #include <bgl_common/idl/ErrorCode.h>
+#include <cstdint>
+#include <cstring>
+#include <optional>
+#include <string>
+#include <vector>
 
 #if defined(BERNINI_GPU_DEBUG)
 namespace bgl

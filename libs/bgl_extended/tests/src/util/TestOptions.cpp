@@ -1,4 +1,5 @@
 #include "util/TestOptions.h"
+#include <string>
 
 namespace bgl::test
 {

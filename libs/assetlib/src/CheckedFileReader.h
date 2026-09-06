@@ -1,5 +1,9 @@
 #pragma once
 #include "IRangeReader.h"
+#include <cstdint>
+#include <filesystem>
+#include <fstream>
+#include <string_view>
 
 namespace assetlib
 {

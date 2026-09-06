@@ -1,4 +1,5 @@
 #include "Thumbnails/TexturePreviewCache.h"
+#include "Thumbnails/StampedPixmapCache.h"
 
 #include <QDebug>
 #include <QPainter>
@@ -6,6 +7,19 @@
 
 #include <assetlib/image_io.h>
 #include <assetlib_structs/ImageData.h>
+#include <cstdint>
+#include <exception>
+#include <filesystem>
+#include <optional>
+#include <qcolor.h>
+#include <qimage.h>
+#include <qlogging.h>
+#include <qnamespace.h>
+#include <qobject.h>
+#include <qobjectdefs.h>
+#include <qpixmap.h>
+#include <qtypes.h>
+#include <utility>
 
 namespace
 {

@@ -1,6 +1,16 @@
 #pragma once
 #include <core/file/IFileSystem.h>
 #include <core/str/str.h>
+#include <cstddef>
+#include <cstdint>
+#include <functional>
+#include <memory>
+#include <optional>
+#include <span>
+#include <string>
+#include <string_view>
+#include <unordered_set>
+#include <vector>
 
 namespace core::file
 {

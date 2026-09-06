@@ -1,9 +1,9 @@
 #include "asset_describe.h"
+#include <array>
 #include <assetlib/avatar.h>
 #include <assetlib/blend.h>
 #include <assetlib/bmesh.h>
 #include <assetlib/container_info.h>
-#include <assetlib/envmap.h>
 
 #include <assetlib/skinning.h>
 #include <assetlib_structs/Animation.h>
@@ -11,8 +11,18 @@
 #include <assetlib_structs/BMaterial.h>
 #include <assetlib_structs/BMesh.h>
 #include <assetlib_structs/Skeleton.h>
+#include <cstddef>
+#include <cstdint>
+#include <format>
+#include <optional>
+#include <string>
+#include <string_view>
 
 #include "mounted_io.h"
+#include <assetlib_structs/Mesh.h>
+#include <assetlib_structs/Node.h>
+#include <assetlib_structs/VertexLayout.h>
+#include <core/file/IFileSystem.h>
 
 namespace assetlib
 {
@@ -238,6 +248,7 @@ namespace assetlib
 			// The animated tiers draw opaque geometry only, so this is the field that decides whether
 			// a submesh can be skinned at all.
 			out += std::format("  alphaMode         {}\n", alphaModeName(pbr.alphaMode));
+			out += std::format("  doubleSided       {}\n", pbr.doubleSided);
 
 			// The triplet is what a `baked` material draws from; a `loose` one keeps it as the last
 			// bake's output, which is why it is printed either way.
@@ -544,8 +555,8 @@ namespace assetlib
 				named(leg.toeBoneName));
 		}
 
-		for (const std::string& clip : avatar.unplantedClips)
-			out += std::format("  unplanted    '{}'\n", clip);
+		for (const ClipPlantWeight& entry : avatar.clipWeights)
+			out += std::format("  plant        '{}' {:.2f}\n", entry.clip, entry.weight);
 
 		return out;
 	}

@@ -1,5 +1,7 @@
 #pragma once
 #include <assetlib/progress.h>
+#include <cstddef>
+#include <string_view>
 
 namespace assetlib
 {

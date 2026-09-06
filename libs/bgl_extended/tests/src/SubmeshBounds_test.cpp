@@ -5,11 +5,22 @@
 #include "resource/Readback.h"
 #include "resource/ResourceManager.h"
 #include "scene/Scene.h"
+#include "types/Barrier.h"
+#include "types/QueueType.h"
 #include "util/GpuValidation.h"
 #include "util/TestOptions.h"
+#include <assetlib_structs/BMesh.h>
+#include <assetlib_structs/Node.h>
+#include <assetlib_structs/VertexLayout.h>
 #include <bgl/IGraphics.h>
+#include <bgl_common/idl/Submesh.h>
 #include <bgl_common/idl/idl.h>
 #include <catch2/catch_approx.hpp>
+#include <catch2/catch_test_macros.hpp>
+#include <cstddef>
+#include <cstdint>
+#include <span>
+#include <utility>
 
 namespace
 {

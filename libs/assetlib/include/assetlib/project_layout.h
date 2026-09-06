@@ -1,5 +1,8 @@
 #pragma once
 
+#include <array>
+#include <optional>
+#include <string_view>
 namespace assetlib
 {
 	/**

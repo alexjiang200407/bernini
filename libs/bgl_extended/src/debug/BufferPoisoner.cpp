@@ -1,6 +1,14 @@
 #include "debug/BufferPoisoner.h"
+#include "cmd/CommandList.h"
+#include "resource/ResourceManager.h"
+#include "types/Barrier.h"
+#include <bgl_common/gassert.h>
 
+#include <algorithm>
 #include <core/err/util.h>
+#include <cstdint>
+#include <utility>
+#include <vector>
 
 namespace bgl
 {

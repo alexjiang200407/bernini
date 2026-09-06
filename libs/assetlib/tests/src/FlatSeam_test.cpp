@@ -1,15 +1,26 @@
+#include <array>
 #include <assetlib/codecs.h>
 #include <assetlib/image_io.h>
 #include <assetlib/pak.h>
 #include <assetlib_structs/BEnv.h>
 #include <assetlib_structs/BMaterial.h>
 #include <assetlib_structs/ImageData.h>
+#include <catch2/catch_test_macros.hpp>
 #include <core/file/LayeredFileSystem.h>
 #include <core/file/LooseFileSystem.h>
+#include <cstddef>
+#include <cstdint>
+#include <cstring>
+#include <filesystem>
+#include <memory>
+#include <stdexcept>
+#include <vector>
 
 #include "MountAt.h"
 #include "bmesh_texture.h"
 #include "mounted_io.h"
+#include <assetlib_structs/VkFormat.h>
+#include <core/file/IFileSystem.h>
 
 using namespace assetlib;
 

@@ -8,11 +8,11 @@
 // per *parallel* job and again per checkout building at once -- twelve jobs across three checkouts
 // is the difference between ~1.9 GB and ~2.3 GB resident in precompiled headers alone. Time and
 // memory both count; see docs/build_performance.md.
-#include <QtCore/QtCore>
+#include <QtCore/QtCore>  // IWYU pragma: keep
 
 // Never <glm/*> directly: core/glm.h sets GLM_FORCE_DEPTH_ZERO_TO_ONE and friends first, and glm
 // reaching a TU unconfigured builds a projection matrix for the wrong depth range.
 #include <core/glm.h>
 
-#include <core/ref/Ref.h>
-#include <core/ref/SharedRef.h>
+#include <core/ref/Ref.h>        // IWYU pragma: keep
+#include <core/ref/SharedRef.h>  // IWYU pragma: keep

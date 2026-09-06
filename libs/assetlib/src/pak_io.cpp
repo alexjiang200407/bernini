@@ -2,13 +2,33 @@
 #include "CheckedFileReader.h"
 #include "fs_util.h"
 #include "ref_paths.h"
+#include <algorithm>
+#include <array>
 #include <assetlib/codecs.h>  // requireInsideDataRoot
 #include <assetlib/pak.h>
 #include <assetlib_structs/magic.h>
+#include <atomic>
+#include <cerrno>
 #include <core/err/util.h>
+#include <core/file/IFileSystem.h>
+#include <core/file/file.h>
 #include <core/io/ByteWriter.h>
 #include <core/math.h>
 #include <core/platform/util.h>
+#include <cstddef>
+#include <cstdint>
+#include <filesystem>
+#include <format>
+#include <fstream>
+#include <ios>
+#include <optional>
+#include <span>
+#include <stdexcept>
+#include <string>
+#include <string_view>
+#include <system_error>
+#include <utility>
+#include <vector>
 
 namespace assetlib
 {
@@ -197,8 +217,7 @@ namespace assetlib
 		if (!core::sync_file(m_Temp))
 			core::throw_runtime_error("bpak: cannot flush '{}'", m_Temp.string());
 
-		std::error_code ec;
-		std::filesystem::rename(m_Temp, m_Target, ec);
+		const std::error_code ec = core::file::commit_atomic(m_Temp, m_Target);
 		if (ec)
 			core::throw_runtime_error(
 				"bpak: cannot commit '{}': {}",

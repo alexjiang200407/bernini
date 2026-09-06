@@ -1,7 +1,12 @@
 #pragma once
+#include "resource/ResourceManager.h"
 #include "scene/ComputeBuffer.h"
 #include "scene/UploadBuffer.h"
 #include <bgl_common/idl/CullView.h>
+#include <cstdint>
+#include <string>
+#include <string_view>
+#include <vector>
 
 namespace bgl
 {

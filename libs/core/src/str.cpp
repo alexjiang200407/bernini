@@ -1,4 +1,6 @@
 #include <core/str/str.h>
+#include <cstddef>
+#include <span>
 
 namespace core::str
 {

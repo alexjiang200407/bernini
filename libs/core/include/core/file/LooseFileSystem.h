@@ -1,5 +1,12 @@
 #pragma once
 #include <core/file/IFileSystem.h>
+#include <cstddef>
+#include <cstdint>
+#include <filesystem>
+#include <optional>
+#include <string>
+#include <string_view>
+#include <vector>
 
 namespace core::file
 {

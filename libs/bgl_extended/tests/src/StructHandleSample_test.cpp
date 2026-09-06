@@ -4,14 +4,24 @@
 #include "gfx/GraphicsBase.h"
 #include "pipeline/ComputeKernel.h"
 #include "pipeline/ComputePipeline.h"
+#include "resource/Buffer.h"
 #include "resource/Readback.h"
 #include "resource/ResourceManager.h"
+#include "resource/Sampler.h"
+#include "resource/Srv.h"
+#include "resource/Texture.h"
+#include "types/Barrier.h"
 #include "types/ComputeState.h"
+#include "types/Format.h"
+#include "types/QueueType.h"
 #include "uniforms/DescriptorHandle.h"
 #include "util/GpuValidation.h"
 #include "util/TestOptions.h"
+#include <array>
 #include <bgl/IGraphics.h>
 #include <catch2/catch_approx.hpp>
+#include <catch2/catch_test_macros.hpp>
+#include <cstdint>
 
 /**
  * A texture handle stored *inside GPU memory* still resolves to its texture.

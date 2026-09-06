@@ -8,11 +8,12 @@
 #include "resource/Srv.h"
 #include "resource/Texture.h"
 #include "types/ClearValue.h"
-
 #include <assetlib_structs/ImageData.h>
-
+#include <core/ref/Ref.h>
 #include <core/ref/RefCounter.h>
+
 #include <core/ref/SharedRef.h>
+#include <cstdint>
 
 namespace bgl
 {

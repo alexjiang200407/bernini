@@ -1,6 +1,16 @@
 #include "fs_util.h"
 
+#include <cerrno>
 #include <core/file/file.h>
+#include <cstddef>
+#include <exception>
+#include <filesystem>
+#include <optional>
+#include <span>
+#include <stdexcept>
+#include <string>
+#include <string_view>
+#include <system_error>
 
 namespace assetlib
 {

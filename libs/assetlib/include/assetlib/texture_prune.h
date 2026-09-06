@@ -1,5 +1,10 @@
 #pragma once
 #include <assetlib/project_layout.h>
+#include <cstddef>
+#include <cstdint>
+#include <filesystem>
+#include <string>
+#include <vector>
 
 namespace assetlib
 {

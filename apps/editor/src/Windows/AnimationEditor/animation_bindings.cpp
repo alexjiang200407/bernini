@@ -1,7 +1,10 @@
 #include "animation_bindings.h"
 
+#include <algorithm>
 #include <assetlib/AssetStore.h>
 #include <assetlib/asset_refs.h>
+#include <filesystem>
+#include <string_view>
 
 namespace editor
 {

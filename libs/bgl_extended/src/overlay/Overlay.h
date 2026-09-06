@@ -1,10 +1,21 @@
 #pragma once
 #include "gfx/RenderTargetBase.h"
+#include "resource/Buffer.h"
 #include "resource/ResourceManager.h"
+#include "resource/Srv.h"
 #include "scene/TextureAssetStore.h"
+#include <assetlib_structs/ImageData.h>
 #include <bgl/IOverlay.h>
+#include <bgl/IRenderTarget.h>
+#include <bgl/TextureAssetHandle.h>
+#include <core/containers/slot_handle.h>
 #include <core/containers/slot_vector.h>
 #include <core/ref/RefCounter.h>
+#include <core/ref/SharedRef.h>
+#include <cstdint>
+#include <span>
+#include <string>
+#include <vector>
 
 namespace bgl
 {

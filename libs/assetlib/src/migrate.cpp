@@ -1,3 +1,4 @@
+#include <algorithm>
 #include <assetlib/avatar.h>
 #include <assetlib/blend.h>
 #include <assetlib/codecs.h>
@@ -23,12 +24,24 @@
 #include "material_texture_refs.h"
 #include "progress_report.h"
 #include "ref_paths.h"
+#include <assetlib/progress.h>
+#include <atomic>
 #include <core/parallel_for.h>
 
 #include <core/err/util.h>
 #include <core/file/file.h>
 
+#include <cstddef>
+#include <exception>
+#include <filesystem>
+#include <optional>
+#include <span>
+#include <string>
+#include <string_view>
 #include <tracy/Tracy.hpp>
+#include <unordered_map>
+#include <utility>
+#include <vector>
 
 namespace assetlib
 {
@@ -100,11 +113,13 @@ namespace assetlib
 			case AssetType::kMesh:
 			{
 				RegenMesh current = store.LoadRegenMesh(key);
-				core::throw_runtime_error_if(
-					!current.unboundBindings.empty(),
-					"its import document binds submesh '{}', which the mesh does not have; "
-					"rebind or re-export",
-					current.unboundBindings.front());
+				if (!current.unboundBindings.empty())
+				{
+					core::throw_runtime_error(
+						"its import document binds submesh '{}', which the mesh does not have; "
+						"rebind or re-export",
+						current.unboundBindings.front());
+				}
 				return AssetCodec<BMesh>::Serialize(current.mesh);
 			}
 			case AssetType::kSkeleton:

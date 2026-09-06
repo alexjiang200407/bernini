@@ -1,8 +1,14 @@
 #include <assetlib/skinning.h>
 #include <assetlib_structs/Animation.h>
+#include <assetlib_structs/Node.h>
 #include <assetlib_structs/Skeleton.h>
 
 #include <catch2/catch_approx.hpp>
+#include <catch2/catch_test_macros.hpp>
+#include <cstddef>
+#include <cstdint>
+#include <stdexcept>
+#include <vector>
 
 using namespace assetlib;
 

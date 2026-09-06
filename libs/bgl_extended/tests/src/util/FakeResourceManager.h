@@ -1,5 +1,19 @@
 #pragma once
+#include "device/Device.h"
+#include "resource/Buffer.h"
+#include "resource/Dsv.h"
+#include "resource/Readback.h"
 #include "resource/ResourceManager.h"
+#include "resource/Rtv.h"
+#include "resource/Sampler.h"
+#include "resource/Srv.h"
+#include "resource/Texture.h"
+#include <core/ref/RefCounter.h>
+#include <cstddef>
+#include <cstdint>
+#include <cstdlib>
+#include <unordered_set>
+#include <vector>
 
 namespace bgl::test
 {

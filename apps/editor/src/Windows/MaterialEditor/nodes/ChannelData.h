@@ -1,8 +1,15 @@
 #pragma once
 
 #include <QtNodes/NodeData>
+#include <QtNodes/internal/NodeData.hpp>
 
+#include <algorithm>
+#include <array>
 #include <bgl/TextureAssetHandle.h>
+#include <cstdint>
+#include <qobject.h>
+#include <qstringliteral.h>
+#include <utility>
 
 class ChannelData : public QtNodes::NodeData
 {

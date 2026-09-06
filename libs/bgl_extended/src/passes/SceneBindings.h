@@ -1,8 +1,13 @@
 #pragma once
 #include "fg/PassDesc.h"
 #include "scene/scene_buffer_names.h"
+#include "types/Barrier.h"
 #include "uniforms/Uniforms.h"
 #include "util/util.h"
+#include <array>
+#include <bgl_common/gassert.h>
+#include <span>
+#include <string_view>
 
 namespace bgl
 {

@@ -264,8 +264,8 @@ not obvious from a signature. The headers linked below are the source of truth.
 | Acquire | [`AssetManager::AcquireSkinnedMesh`](libs/gamelib/include/gamelib/AssetManager.h) | Reads the three containers, checks the clip set still matches its rig, culls by the baked box (`findPosedBounds`) — measuring only a pairing the cook never saw — uploads. The first acquire of a rig also plants it: the avatar beside its skeleton (`avatarForRig`), each sole fitted to the mesh in hand (`solePlanes`), the weights read off the `.banim` or measured (`findPlantWeights`), all handed to `AddRig` as a `FootPlantDesc` |
 | Upload the rig | [`IScene::AddRig`](libs/bgl/include/bgl/IScene.h) | Bones, clip table and sample pool become scene buffers; per-bone depth is derived here; a rig whose caller supplies a `FootPlantDesc` carries its leg chains and per-frame plant weights alongside them. Once per clip set, not once per mesh |
 | Upload the mesh | [`IScene::AddSkinnedMeshGeom`](libs/bgl/include/bgl/IScene.h) | The bind-pose submeshes, exactly as the static path uploads them, against a rig handle |
-| Place | [`ISceneView::CreateSkinnedMeshInstance`](libs/bgl/include/bgl/ISceneView.h) | Writes the playback record and reserves the instance's palette slice |
-| Pose | [`SkinnedPosePass`](libs/bgl_extended/src/passes/SkinnedPosePass.h) | One workgroup per instance: sample, blend, walk the hierarchy, plant whatever feet the rig authored, multiply by inverse bind |
+| Place | [`ISceneView::CreateSkinnedMeshInstance`](libs/bgl/include/bgl/ISceneView.h) | Writes the playback record and reserves the instance's palette slice; on a rig with legs, its foot-IK record too, at weight one until `SetFootIK` rewrites it |
+| Pose | [`SkinnedPosePass`](libs/bgl_extended/src/passes/SkinnedPosePass.h) | One workgroup per instance: sample, blend, walk the hierarchy, plant whatever feet the rig authored by the baked weight and the instance's own, multiply by inverse bind |
 | Draw | `lib/forward/skinned_vertex.slang`, blend in [`lib/anim/skinning.slang`](libs/bgl_common/shaders/src/lib/anim/skinning.slang) | `ResolveSkinnedPose` settles the pose source once per mesh-shader group — one group being one instance — and `SkinnedVertex` blends the bind-pose vertex bytes by it; position, normal and tangent through one matrix. Entered from `programs/forward/SkinnedMesh.slang`, or from `programs/forward/AnyMesh.slang` where a draw mixes tiers |
 
 ## In the editor
@@ -329,6 +329,17 @@ to keep in agreement beyond the one below.
   on screen: hiding the panel or clearing the preview lays the ground flat again, and showing it
   brings the slope back. Nothing else in the scene should stand on a slope this panel set while
   nobody is looking at it.
+
+* **Two more sliders in the group, *IK Weight* and *Sole Turn*, are the instance's own weights**
+  (`ISceneView::SetFootIK`, § Foot planting), in percent: a partial plant held still, so a person
+  can read what the solve does to a foot by how far it is let do it. Constants and never a fade,
+  because the panel's clock is the transport's clip time and wraps over the clip period, so a ramp
+  stamped in it would re-read its start on every loop. `editor::FootIKForSliders`, free of the
+  window and pinned by `[footik]`, is what a slider commits, and the preview re-applies it to every
+  instance a clip or tier switch respawns — re-placing the ground on the way, since a constant holds
+  at `prevTime` too and the epoch `SetGround` moves is the one break in history the preview can ask
+  for. A crowd instance and a rig without legs own no record
+  (`ISceneView::HasFootIK`), and the preview leaves them alone.
 
 * **The Content Explorer creates an avatar from the source.** *Create Avatar* is offered on an
   imported `.glb` whose document binds a rig (`editor::GetSourceSkeleton`), because the source is
@@ -403,6 +414,20 @@ vector.
 own floor this costs nothing — the contact is already there and the solve is an identity — and where
 a clip leaves a planted foot above the floor, this is what seats it.
 
+**The target is two terms, and the weight scales only one of them.** The *seat* is the drop from the
+height the clip authored the contact at onto the floor it was authored over — model `y = 0`, where
+`groundClips` rests a clip — and that is the weighted half. The *lift* is however far the real ground
+departs from that floor under the contact, and every baked weight gets it. At weight one the sum is
+`ground - contact` exactly, so the paragraph above is unchanged; below one the foot keeps the height
+the animator gave it and rides the ground beneath it. The height is read off the contact's model-space
+`y` rather than by dropping the contact onto that floor: the two agree wherever an instance stands
+upright, and the drop divides by the floor normal's component along world down, which an instance
+rotated onto its side has none of.
+
+Without the split a foot at any baked weight below one sat between the clip's floor and the real ground,
+which on ground above that floor is inside it — and every swing arc and the three ramp frames either
+side of every planted run are weighted below one.
+
 **Which is why a rig with an avatar is floored by its soles** (`groundClipsForRig`, the pair of
 `bakePlantWeightsForRig` and called before it). The lowest vertex need not be a foot: on the test
 Dog it is not, and grounding on it left `Idle`'s soles 1 cm and 4 cm above zero, so every planted
@@ -419,6 +444,12 @@ every locomotion clip puts both feet down — and no authored override can fix i
 grounded is the case foot planting exists for, so a weight of 1 is read as *this foot is on the
 ground* and the solve makes that true. The two rules agree exactly on a clip that is grounded; they
 differ only on a foot the clip left off its floor.
+
+The departure is about weight 1 alone. Below it the lift *is* Unreal's height term, applied
+unconditionally exactly as `AnimNode_FootPlacement` applies it, with the baked weight gating only the
+seat and the turn — the lock and the orientation there; the instance's position weight is the one
+scale over all of it (§ the five gates). Unity's humanoid Foot IK is the other reading:
+goal-only, a lifted foot not offset at all and no terrain under a swing.
 
 A foot the clip rests flat touches along its whole sole and lands on it exactly; one posed
 on its toe lands on the toe with the heel where the animator put it — the Coyote's `Success` stands
@@ -447,29 +478,61 @@ nothing at the ground: the point that was dropped onto it is the point that stan
 baked by the cook and sampled at the same fractional frame the pose is. Under a blend it is the
 weighted sum of what each live slot's clip says, weighted exactly as that slot's pose is — the same
 sum every per-bone quantity takes, so a foot planted in both clips of a crossfade stays planted
-through it and one planted in neither is never planted by the blend. A weight of zero is exactly
-the pose the rig would have had. A weight rather than a flag because a foot that snapped between the
-two states would pop, which is what the cook's ramp at each end of a planted run exists to remove.
+through it and one planted in neither is never planted by the blend. A weight of zero is exactly the
+pose the rig would have had *on the floor the clip was authored over*; on any other ground it is
+that pose carried by the lift, which is the whole of the split above — a baked zero, that is; the
+instance's position weight at zero is the pose itself. A weight rather than a flag because a foot
+that snapped between the two states would pop, which is what the cook's ramp at each end of a
+planted run exists to remove.
 
-**Planting is gated at four scopes, and per instance is not one of them.** A rig plants only if it
-authored legs (`rig.legs.Null()` — no `.bavatar`, no planting); a clip plants only if the avatar's
-`unplanted` list does not name it; a leg plants on a frame only as far as that frame's baked weight;
-and the scene plants at all only while `IScene::SetFootPlanting` is on. The scene switch is scoped
-that way because the ground is — `SetGround` holds one plane and the solve is defined against it —
-so nothing today varies per instance that a fifth scope would express. Two instances of one rig
-therefore always agree about whether they plant.
+**Planting is gated at five scopes.** A rig plants only if it authored legs (`rig.legs.Null()` —
+no `.bavatar`, no planting); a clip plants only as far as the avatar's `plant` weight for it, zero
+for one it takes out; a leg plants on a frame only as far as that frame's baked weight; an
+instance plants only as far as its own weight (below); and the scene plants at all only while
+`IScene::SetFootPlanting` is on.
+The scene switch stays with the ground — `SetGround` holds one plane and the solve is defined
+against it — and is the A/B affordance the editor's *Plant feet* box flips; the per-instance
+weight is what a game sets.
+
+**The instance's weight is Unity's, and it is two.** `ISceneView::SetFootIK` writes one
+`FootIKLegDesc` per leg: a *position* weight scaling how far the ankle is carried onto the ground
+and a *rotation* weight scaling the sole's turn onto the slope — `SetIKPositionWeight` and
+`SetIKRotationWeight` per foot, each multiplying the baked weight so a foot the animator lifted
+stays lifted whatever a caller asks. Each is a ramp in `RenderJob::time` (`idl.Ramp`, read by
+`RampAt` in [`lib/anim/ramp.slang`](libs/bgl_common/shaders/src/lib/anim/ramp.slang)): the record
+holds what to evaluate, never the evaluated value, so the pose at any clock stays a function of the
+record and the two palettes a frame writes agree with the frames that drew them. That is the
+caller's one rule — start a ramp at or after now and let `from` be what the leg holds now, which
+`FootIKDesc::FadeTo` computes — and why the write moves no temporal epoch. The record lives in an
+arena of the view's, one `FootIKLeg` per leg, and reaches the kernel through its pose-list entry
+(`PosedInstance`) rather than through the placement or the playback record: the pose pass is its
+only reader. The default is weight one, so an instance nobody writes plants exactly as the baked
+weights say; a rig without legs owns no record and `SetFootIK` refuses it.
+
+The clip and frame gates reach the seat and the turn, not the lift: the shader sees a weight byte
+and cannot tell a clip the avatar excluded from a swing frame inside one that plants, so a `plant`
+weight of zero means *this clip never seats or turns a foot* rather than *this clip is untouched*.
+On the flat floor at `y = 0` those are the same sentence, since the lift is zero there. The
+instance's position weight scales the whole correction, lift included — at zero the foot is the
+animation's, terrain and all, which is what a unit standing on something the ground does not
+describe asks for — and its rotation weight the turn. The two outer gates are whole: a rig without
+legs and a scene with planting off run no solve at all.
 
 ### What the cook derives
 
 Two measurements, both derived and neither authored — a plane per foot and a weight per leg per
 frame — because 21 clips × 4 feet on 29 purchased rigs is authoring nobody will do. Unreal makes
 this an animation notify and Unity a curve on the clip; a wrong derivation gets a per-clip override
-in the avatar rather than an authoring surface. That override is the avatar's `unplanted` list —
-clip names that plant nothing — and it exists for the one clip the walk cannot judge: an airborne
-one. `groundClips` rests a jump or a fall on whatever hangs lowest, which is a foot, and from
-inside the clip that foot then sits at floor height and does not move — exactly what a standing
-foot looks like. Both project rigs list `Jump_Up` and `Fall`. The list is part of the weights'
-signature, so editing it re-measures on the next load and `bakebounds` re-bakes.
+in the avatar rather than an authoring surface. That override is the avatar's `plant` object — a
+weight per clip name, 0 to 1, scaling every weight the walk measures for that clip — and its zero
+exists for the one clip the walk cannot judge: an airborne one. `groundClips` rests a jump or a
+fall on whatever hangs lowest, which is a foot, and from inside the clip that foot then sits at
+floor height and does not move — exactly what a standing foot looks like. Both project rigs take
+`Jump_Up` and `Fall` out. It is per clip and never per transition: what a crossfade does with two
+clips' weights is the blend's (`feat/anim-blend`), and the runtime knob over the result is the
+instance's (`SetFootIK`). The weights are part of the baked bytes' signature, so editing one
+re-measures on the next load and `bakebounds` re-bakes. A document written when this was an
+`unplanted` list still reads, as zeros, and a save or `migrate` rewrites it.
 
 **The sole plane is fitted to the underside of the foot** (`assetlib::solePlanes`), over the
 vertices weighted to a leg's ankle and toe at bind pose, and expressed in ankle-local space — the
@@ -586,8 +649,14 @@ right only when the target sits directly below the hip; along a slope the target
 and after dropping it is nearer the hip than that shortfall assumed, so the foot would still come up
 short on exactly the ground this feature exists for. The distance is the smaller root of
 `|v + d*n| = reach` instead — one `sqrt`, exact. A target too far to one side for any drop to reach
-gives a negative discriminant, and the clamp then yields the drop that gets closest. A leg at weight zero targets
-where its ankle already is, so it is reachable by construction and contributes nothing.
+gives a negative discriminant, and the clamp then yields the drop that gets closest.
+
+Each leg's shortfall is scaled by its plant weight before the max. The drop exists so a *planted*
+foot reaches the ground; once a swinging foot has a target of its own, a foot passing out over
+ground below its reach would otherwise sink the whole body it hangs off — Unreal's
+pelvis-toward-the-lowest-foot without Unreal's interpolation or its clamp. Scaled, such a leg stops
+short in the air where it is least visible, and a leg at weight zero contributes nothing, exactly as
+it did when its target was its own ankle.
 
 The targets are re-derived after the drop rather than reused: every joint moved, so a target
 measured before it belongs to a rig that no longer exists. Both derivations go through one

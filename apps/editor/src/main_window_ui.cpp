@@ -5,6 +5,7 @@
 #include <QMainWindow>
 #include <QMenu>
 #include <QMenuBar>
+#include <qstringliteral.h>
 
 namespace editor
 {

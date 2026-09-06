@@ -1,12 +1,31 @@
 #include "pipeline/MeshletPipeline_metal.h"
 #include "MetalErrorChecker.h"
+#include <core/err/util.h>
 
 #include "convert_metal.h"
+#include "pipeline/MetalPipelineReflection.h"
+#include "resource/Shader.h"
 #include "shadercache/ShaderCache_metal.h"
+#include "types/BlendState.h"
+#include "types/DepthStencilState.h"
+#include "types/Format.h"
+#include "types/ShaderStage.h"
+#include "uniforms/UniformLayoutEntry.h"
 #include "util/util.h"
+#include <algorithm>
+#include <array>
 #include <bgl_common/SlangErrorChecker.h>
+#include <bgl_common/gassert.h>
 
-#include <core/err/util.h>
+#include <cstddef>
+#include <cstdint>
+#include <iterator>
+#include <memory>
+#include <slang-com-ptr.h>
+#include <slang.h>
+#include <unordered_set>
+#include <utility>
+#include <vector>
 
 namespace bgl
 {

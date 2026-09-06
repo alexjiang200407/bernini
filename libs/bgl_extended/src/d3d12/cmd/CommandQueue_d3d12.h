@@ -1,6 +1,7 @@
 #pragma once
 #include "cmd/CommandQueue.h"
 #include "types/QueueType.h"
+#include <cstdint>
 
 namespace bgl
 {
@@ -69,6 +70,9 @@ namespace bgl
 
 		void
 		Flush() noexcept override;
+
+		[[nodiscard]] double
+		GetTimestampFrequency() const noexcept override;
 
 	private:
 		QueueType                       m_Type;

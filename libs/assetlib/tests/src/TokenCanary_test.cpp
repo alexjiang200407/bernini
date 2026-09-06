@@ -2,9 +2,19 @@
 #include <assetlib_structs/Animation.h>
 #include <assetlib_structs/BEnv.h>
 #include <assetlib_structs/BMesh.h>
+#include <assetlib_structs/Mesh.h>
+#include <assetlib_structs/Node.h>
 #include <assetlib_structs/Skeleton.h>
+#include <assetlib_structs/SourceRef.h>
+#include <assetlib_structs/SourceStamp.h>
+#include <assetlib_structs/VertexLayout.h>
 
+#include <catch2/catch_message.hpp>
 #include <catch2/catch_test_macros.hpp>
+#include <cstddef>
+#include <cstdint>
+#include <format>
+#include <span>
 
 using namespace assetlib;
 

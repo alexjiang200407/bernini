@@ -1,7 +1,11 @@
 #include "gfx/GraphicsBase.h"
+#include "resource/Buffer.h"
 #include "resource/ResourceManager.h"
 #include "util/GpuValidation.h"
 #include "util/TestOptions.h"
+#include <bgl/IGraphics.h>
+#include <catch2/catch_test_macros.hpp>
+#include <cstdint>
 
 // Once descriptors come from an allocator, freeing one returns it to a free list the next create
 // draws from -- so a recycled index is where an off-by-one or a double-free hands out a descriptor

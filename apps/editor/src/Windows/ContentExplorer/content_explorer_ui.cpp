@@ -8,6 +8,9 @@
 #include <QTreeView>
 #include <QVBoxLayout>
 #include <QWidget>
+#include <qnamespace.h>
+#include <qsizepolicy.h>
+#include <qstringliteral.h>
 
 namespace editor
 {

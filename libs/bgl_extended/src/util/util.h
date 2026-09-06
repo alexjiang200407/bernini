@@ -8,6 +8,7 @@
 #include <bgl/glm.h>
 #include <bgl_common/idl/MeshInstance.h>
 #include <bgl_common/idl/PsoType.h>
+#include <cstdint>
 
 namespace bgl
 {

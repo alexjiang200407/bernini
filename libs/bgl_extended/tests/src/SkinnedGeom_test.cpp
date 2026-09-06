@@ -2,11 +2,39 @@
 #include "scene/SceneView.h"
 #include "util/TestOptions.h"
 #include "util/util.h"
+#include <array>
+#include <assetlib_structs/Animation.h>
+#include <assetlib_structs/BMesh.h>
 #include <assetlib_structs/Bounds.h>
+#include <assetlib_structs/Node.h>
+#include <assetlib_structs/Skeleton.h>
+#include <assetlib_structs/VertexLayout.h>
+#include <bgl/GeomType.h>
 #include <bgl/IGraphics.h>
+#include <bgl/IScene.h>
+#include <bgl/InstanceDesc.h>
+#include <bgl/LayerType.h>
+#include <bgl/MaterialHandle.h>
+#include <bgl/types/FootPlantDesc.h>
+#include <bgl/types/SceneDesc.h>
+#include <bgl_common/idl/BoneSample.h>
+#include <bgl_common/idl/Clip.h>
+#include <bgl_common/idl/Constants.h>
+#include <bgl_common/idl/MeshInstance.h>
+#include <bgl_common/idl/PlaybackType.h>
+#include <bgl_common/idl/Rig.h>
+#include <bgl_common/idl/SkinnedBone.h>
+#include <bgl_common/idl/SkinnedLegChain.h>
+#include <bgl_common/idl/SkinnedState.h>
+#include <bgl_common/idl/SkinnedTableState.h>
 #include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
+#include <catch2/matchers/catch_matchers.hpp>
 #include <catch2/matchers/catch_matchers_string.hpp>
+#include <cstddef>
+#include <cstdint>
+#include <format>
+#include <limits>
 
 // What AddSkinnedMeshGeom uploads, and what it refuses. Nothing here draws: the skinned forward
 // kernel does not exist yet, so a skinned submesh resolves to PsoType::kInvalid and the counting

@@ -1,4 +1,5 @@
 #include <catch2/catch_approx.hpp>
+#include <catch2/catch_test_macros.hpp>
 #include <core/stats/RollingWindow.h>
 
 TEST_CASE("RollingWindow reports zero statistics while empty", "[rollingwindow]")

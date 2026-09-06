@@ -349,6 +349,34 @@ Three different spaces are in play and they are easy to conflate. The contract, 
   ([Scene.cpp](libs/bgl_extended/src/scene/Scene.cpp), `CookStaticMesh`) and by `gamelib`
   ([Raycaster.cpp](libs/gamelib/src/Raycaster.cpp)).
 
+### Long thin triangles
+
+A triangle costs the rasterizer by its **length on screen**, not by its area or by how many there
+are. The tiler visits every tile a triangle crosses and the fine rasterizer walks it in 2×2 quads,
+so a sliver lying diagonally across the frame is paid for tile by tile and row by row whatever the
+pixel shader does — measured on an M3 Pro at 2292×1996, one full-screen layer of 2000 thin strips
+costs 1.6 ms axis-aligned and 4.5 ms rolled 45°, opaque as much as hashed; four times as many strips
+over the same pixels cost 13.4 ms; and the same strips cut into twenty pieces along their length
+cost 1.8 ms. An 80k-triangle plane of compact triangles costs the same as two triangles. The
+per-part harness (`gamelib_tests "[.cha800cost]"`) put nine tenths of a hero character's face
+close-up in its hair, whose 46k triangles are exactly such slivers, drawn on both sides; the pixel
+shader was exonerated by costing the same with every fragment discarded.
+
+So for card hair, foliage and anything else built from long strips:
+
+* **Keep triangles short along the strip.** Subdivide a card along its length until each triangle's
+  length is a few times its width; that is what turned 4.5 ms into 1.8 above, and what card hair
+  is usually built like for bending anyway.
+* **Prefer fewer, wider strips to many thin ones.** The same coverage in a quarter as many strips
+  four times as wide also measured 1.8 ms.
+* **Say `doubleSided` only when the back is seen.** A single-sided card's back faces never reach the
+  rasterizer ([Passes § Two-sided surfaces](docs/passes.md)); on the character above, culling them
+  took the hair from 7.5 to 2.3 ms from the front.
+
+The cost scales with zoom, since zoom multiplies every length on screen, and doubles again at a 2×
+render scale for the same reason. Splitting slivers at cook time is recorded as a deferred option
+in `docs/specs/`.
+
 ### Containers
 * **`.bmesh`** — the modular on-disk mesh: node hierarchy, meshes, submeshes, meshlets +
   meshopt vertex/triangle pools, interleaved `vertexData`, the plain `indexData` pool (above), and
@@ -721,7 +749,14 @@ for each file before committing to the import. `editor::MaterialStems` turns tho
 default stems, and the writer is handed whatever the fields then hold rather than deriving them a
 second time — two copies of that rule is how a preview and a file come to disagree.
 
-Nine rules, each of which is a way to get this wrong:
+Ten rules, each of which is a way to get this wrong:
+
+* **`doubleSided` is read, and its absence means one side.** That is glTF's default, and the
+  renderer honours the flag on every cut-out, hashed and blended material
+  ([Passes § Two-sided surfaces](docs/passes.md)); an opaque material is front-only whatever it
+  says. A `.bmaterial` written before the key existed reads as two-sided, since that is how every
+  such material drew until then — so a file imported now says one thing, and an old one says the
+  other, on purpose.
 
 * **PBR-ness is the absence of an extension, not the presence of `pbrMetallicRoughness`.** Metallic-
   roughness *is* glTF's shading model; tinygltf default-constructs the struct whether or not the file

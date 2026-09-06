@@ -1,5 +1,8 @@
 #pragma once
+#include "resource/Buffer.h"
 #include "resource/ResourceManager.h"
+#include "resource/Sampler.h"
+#include "resource/Srv.h"
 #include "scene/BonePaletteBuffer.h"
 #include "scene/ComputeBuffer.h"
 #include "scene/EntryBuffer.h"
@@ -11,9 +14,50 @@
 #include "scene/scene_buffer_names.h"
 #include "types/SubmeshInstance.h"
 #include "types/VertexGen.h"
+#include <RangeWithCount.h>
+#include <array>
+#include <assetlib_structs/Animation.h>
+#include <assetlib_structs/BMesh.h>
+#include <assetlib_structs/Bounds.h>
+#include <assetlib_structs/ImageData.h>
+#include <assetlib_structs/Skeleton.h>
+#include <bgl/GeomHandle.h>
 #include <bgl/IScene.h>
+#include <bgl/MaterialHandle.h>
+#include <bgl/MaterialType.h>
+#include <bgl/PreparedStaticMesh.h>
+#include <bgl/RigHandle.h>
+#include <bgl/TextureAssetHandle.h>
+#include <bgl/types/FootPlantDesc.h>
+#include <bgl/types/GroundPlaneDesc.h>
+#include <bgl/types/LoosePbrMaterialDesc.h>
+#include <bgl/types/PbrMaterialDesc.h>
+#include <bgl/types/SceneDesc.h>
+#include <bgl_common/idl/BlendNode.h>
+#include <bgl_common/idl/BlendSpaceMember.h>
+#include <bgl_common/idl/BoneSample.h>
+#include <bgl_common/idl/Clip.h>
+#include <bgl_common/idl/LoosePbrMaterial.h>
+#include <bgl_common/idl/Meshlet.h>
+#include <bgl_common/idl/PbrMaterial.h>
+#include <bgl_common/idl/Rig.h>
+#include <bgl_common/idl/SkinnedBone.h>
+#include <bgl_common/idl/SkinnedLegChain.h>
+#include <bgl_common/idl/Submesh.h>
 #include <bgl_common/idl/idl.h>
+#include <core/containers/multi_slot_handle.h>
+#include <core/containers/slot_handle.h>
 #include <core/containers/slot_vector.h>
+#include <core/ref/RefCounter.h>
+#include <core/ref/SharedRef.h>
+#include <cstddef>
+#include <cstdint>
+#include <optional>
+#include <span>
+#include <spdlog/spdlog.h>
+#include <string>
+#include <tuple>
+#include <vector>
 
 namespace bgl
 {
@@ -40,6 +84,7 @@ namespace bgl
 		uint32_t clipCount = 0;
 		uint32_t boneCount = 0;  // kSkinnedMesh only
 		uint32_t nodeCount = 0;  // kSkinnedMesh only: clips plus authored spaces
+		uint32_t legCount  = 0;  // kSkinnedMesh only; zero on a rig that authored no legs
 	};
 
 	/**
@@ -56,6 +101,8 @@ namespace bgl
 		// Clip nodes plus authored ones, which is what a playback slot's `node` is checked against.
 		// Equal to `clipCount` on a rig with no blend set.
 		uint32_t nodeCount = 0;
+		// Legs the rig's FootPlantDesc listed, which sizes a hero instance's foot-IK record.
+		uint32_t legCount = 0;
 
 		// Frames across every clip, which sizes the bone anim table and is the fill's group count.
 		uint32_t frameCount = 0;
@@ -270,13 +317,15 @@ namespace bgl
 			// Nodes the rig's table holds -- its clips, then its authored spaces -- which is what a
 			// playback slot's `node` is checked against.
 			uint32_t nodeCount = 0;
+			// Legs the rig authored, which is what sizes an instance's foot-IK record.
+			uint32_t legCount = 0;
 		};
 
 		[[nodiscard]] AnimGeomInfo
 		GetGeomSkinnedInfo(uint32_t index) const noexcept
 		{
 			const GeomRecord& geom = m_Geoms[index];
-			return { geom.rig, geom.clipCount, geom.boneCount, geom.nodeCount };
+			return { geom.rig, geom.clipCount, geom.boneCount, geom.nodeCount, geom.legCount };
 		}
 
 		/**

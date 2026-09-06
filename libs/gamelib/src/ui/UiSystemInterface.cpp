@@ -1,5 +1,12 @@
 #include "ui/UiSystemInterface.h"
+#include <algorithm>
 #include <assetlib/codecs.h>
+#include <cstddef>
+#include <exception>
+#include <spdlog/spdlog.h>
+#include <string>
+#include <string_view>
+#include <utility>
 
 namespace game
 {

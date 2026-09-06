@@ -1,11 +1,28 @@
+#include <algorithm>
+#include <array>
 #include <assetlib/bmesh.h>
 #include <assetlib/bmesh_gltf.h>
 #include <assetlib/codecs.h>
+#include <assetlib_structs/BMaterial.h>
+#include <assetlib_structs/BMaterialImport.h>
 #include <assetlib_structs/BMesh.h>
 #include <assetlib_structs/BMeshImport.h>
+#include <assetlib_structs/ImageData.h>
+#include <assetlib_structs/Mesh.h>
+#include <assetlib_structs/Node.h>
+#include <assetlib_structs/VertexLayout.h>
+#include <catch2/catch_message.hpp>
+#include <catch2/catch_test_macros.hpp>
 #include <core/glm.h>
 
 #include <catch2/catch_approx.hpp>
+#include <cstddef>
+#include <cstdint>
+#include <filesystem>
+#include <fstream>
+#include <ios>
+#include <stdexcept>
+#include <vector>
 
 using namespace assetlib;
 using namespace assetlib::imp;
@@ -42,7 +59,7 @@ namespace
   "extensionsUsed": [ "KHR_materials_unlit", "KHR_materials_pbrSpecularGlossiness", "KHR_materials_transmission", "KHR_materials_specular" ],
   "materials": [
     { "name": "plain", "pbrMetallicRoughness": { "metallicFactor": 0.25, "roughnessFactor": 0.5 } },
-    { "name": "leaves", "alphaMode": "MASK", "alphaCutoff": 0.3 },
+    { "name": "leaves", "alphaMode": "MASK", "alphaCutoff": 0.3, "doubleSided": true },
     { "name": "glass", "alphaMode": "BLEND" },
     { "name": "sign", "extensions": { "KHR_materials_unlit": {} } },
     { "name": "old", "extensions": { "KHR_materials_pbrSpecularGlossiness": {} } },
@@ -238,6 +255,10 @@ TEST_CASE("A glTF's alpha mode and cutoff come across", "[bmesh][gltf]")
 
 	// glTF's own default, not the engine's: a MASK material that names no cutoff cuts at 0.5.
 	CHECK(mesh.materials[0].alphaCutoff == Catch::Approx(0.5f));
+
+	// doubleSided comes across as the file says it, and glTF's default is one side.
+	CHECK(mesh.materials[1].doubleSided);
+	CHECK(!mesh.materials[0].doubleSided);
 }
 
 // A lens and a hair card both export as BLEND, and the alpha means something different in each: how

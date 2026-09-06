@@ -72,6 +72,9 @@ if (PLATFORM STREQUAL "WINDOWS")
 
     target_sources(core PRIVATE ${WIN32_SOURCES})
 
+    # GetProcessMemoryInfo, for core::process_memory.
+    target_link_libraries(core PRIVATE psapi)
+
     source_group(TREE "${CMAKE_CURRENT_SOURCE_DIR}/src" PREFIX "Source Files" FILES ${WIN32_SOURCES})
 elseif (PLATFORM STREQUAL "MACOS")
     target_compile_definitions(core PRIVATE PLATFORM_MACOS)

@@ -4,10 +4,14 @@
 #include "device/Device.h"
 #include "gfx/GraphicsBase.h"
 #include "resource/ResourceManager.h"
+#include "types/QueueType.h"
 #include "util/GoldenImage.h"
 #include "util/GpuValidation.h"
 #include "util/TestOptions.h"
 #include <bgl/IGraphics.h>
+#include <bgl/IScene.h>
+#include <catch2/catch_test_macros.hpp>
+#include <cstdint>
 
 TEST_CASE("Geometry", "[geometry][render]")
 {

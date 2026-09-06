@@ -11,3 +11,8 @@ CheckOptions:
   # Only the snake_case spelling is exempt; a concept named for the engine's own idea of
   # a type, like PackedElementConcept, is still PascalCase.
   readability-identifier-naming.ConceptIgnoredRegexp: '^[a-z][a-z0-9_]*$'
+
+# Include hygiene, on for this subsystem. See docs/naming.md; the root config enables it
+# nowhere and each subsystem opts itself in as it is swept.
+Checks: >
+  misc-include-cleaner

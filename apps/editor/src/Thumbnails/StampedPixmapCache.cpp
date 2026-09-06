@@ -1,6 +1,12 @@
 #include "Thumbnails/StampedPixmapCache.h"
 
 #include "util/asset_paths.h"
+#include <algorithm>
+#include <optional>
+#include <qobject.h>
+#include <qpixmap.h>
+#include <qtmetamacros.h>
+#include <qtypes.h>
 
 StampedPixmapCache::StampedPixmapCache(int budgetKb, QObject* parent) :
 	QObject(parent), m_Cache(budgetKb)

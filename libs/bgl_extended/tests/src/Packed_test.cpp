@@ -6,9 +6,14 @@
 #include "resource/Readback.h"
 #include "resource/ResourceManager.h"
 #include "scene/PackedBuffer.h"
+#include "types/Barrier.h"
+#include "types/QueueType.h"
 #include "util/GpuValidation.h"
 #include "util/TestOptions.h"
 #include <bgl/IGraphics.h>
+#include <catch2/catch_test_macros.hpp>
+#include <cstddef>
+#include <vector>
 
 TEST_CASE("PackedBuffer", "[packed][scene]")
 {

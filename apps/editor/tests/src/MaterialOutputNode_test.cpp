@@ -1,13 +1,23 @@
 #include "Windows/MaterialEditor/nodes/AlphaTestedMaterialOutputNode.h"
+#include "Windows/MaterialEditor/nodes/ChannelData.h"
 #include "Windows/MaterialEditor/nodes/MaterialOutputNode.h"
+#include <QtNodes/internal/Definitions.hpp>
 
-#include "util/QtSupport.h"
+#include "util/QtSupport.h"  // IWYU pragma: keep
+#include <bgl/TextureAssetHandle.h>
 
 #include <QFormLayout>
 #include <QJsonArray>
 #include <QJsonObject>
 #include <QLabel>
 #include <QSignalSpy>
+#include <catch2/catch_message.hpp>
+#include <catch2/catch_test_macros.hpp>
+#include <cstdint>
+#include <memory>
+#include <qcontainerfwd.h>
+#include <qlayoutitem.h>
+#include <qobject.h>
 
 namespace
 {

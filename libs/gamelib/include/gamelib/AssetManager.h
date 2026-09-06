@@ -3,11 +3,30 @@
 #include <assetlib_structs/BMaterial.h>
 #include <assetlib_structs/Bounds.h>
 #include <assetlib_structs/ImageData.h>
+#include <bgl/GeomHandle.h>
 #include <bgl/IScene.h>
 #include <bgl/ISceneView.h>
+#include <bgl/InstanceDesc.h>
+#include <bgl/MaterialHandle.h>
+#include <bgl/MeshInstanceHandle.h>
+#include <bgl/RigHandle.h>
+#include <bgl/TextureAssetHandle.h>
+#include <bgl/types/FootPlantDesc.h>
+#include <bgl/types/LoosePbrMaterialDesc.h>
+#include <bgl/types/PbrMaterialDesc.h>
 #include <core/str/str.h>
+#include <cstddef>
+#include <cstdint>
+#include <filesystem>
+#include <functional>
 #include <gamelib/BlendSpaceInfo.h>
 #include <gamelib/ClipInfo.h>
+#include <memory>
+#include <optional>
+#include <string>
+#include <string_view>
+#include <unordered_map>
+#include <vector>
 
 namespace game
 {

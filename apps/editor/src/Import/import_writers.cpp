@@ -3,8 +3,18 @@
 
 #include "Windows/MaterialEditor/MaterialGraphModel.h"
 #include "Windows/MaterialEditor/material_graph.h"
+#include <assetlib_structs/BMaterialImport.h>
+#include <assetlib_structs/BMeshImport.h>
 
 #include <assetlib/AssetStore.h>
+#include <cstddef>
+#include <cstdint>
+#include <filesystem>
+#include <qobject.h>
+#include <span>
+#include <stdexcept>
+#include <string>
+#include <vector>
 
 namespace editor
 {
