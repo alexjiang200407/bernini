@@ -82,5 +82,5 @@ void main(uint groupIdx: SV_GroupID, uint localIdx: SV_GroupIndex)
     let base = rig.boneAnimTable.GetStart() + groupIdx * rig.boneCount * cFloat4sPerBone;
 
     // An integer frame, so the walk's blend weight is zero and it reads one sample per bone.
-    PoseInto(tables, rig, clip, float(frameInClip), base, localIdx);
+    PoseInto(tables, rig, SingleClipPose(clip, float(frameInClip)), base, localIdx);
 }

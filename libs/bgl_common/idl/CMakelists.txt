@@ -68,6 +68,10 @@ set(IDL_CPP_SOURCES
     FootIKLeg.slang
     PosedInstance.slang
     Rig.slang
+    BlendNodeKind.slang
+    BlendSpaceMember.slang
+    BlendNode.slang
+    BlendSlot.slang
     SkinnedState.slang
     SkinnedTableState.slang
     RawRange.slang

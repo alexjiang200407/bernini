@@ -2,6 +2,7 @@
 #include <assetlib/AssetStore.h>
 #include <assetlib/asset_refs.h>
 #include <assetlib/avatar.h>
+#include <assetlib/blend.h>
 #include <assetlib/codecs.h>
 #include <assetlib/container_info.h>
 #include <assetlib/import_document.h>
@@ -178,6 +179,13 @@ namespace assetlib
 				AnimationSet clips = AssetCodec<AnimationSet>::Deserialize(bytes);
 				clips.skeleton     = mapTarget(plan, clips.skeleton);
 				return AssetCodec<AnimationSet>::Serialize(clips);
+			}
+
+			case AssetType::kBlend:
+			{
+				BlendSet set   = AssetCodec<BlendSet>::Deserialize(bytes);
+				set.animations = mapTarget(plan, set.animations);
+				return AssetCodec<BlendSet>::Serialize(set);
 			}
 
 			case AssetType::kMaterial:

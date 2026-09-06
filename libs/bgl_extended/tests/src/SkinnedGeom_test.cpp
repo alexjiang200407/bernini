@@ -210,6 +210,59 @@ namespace
 	// wrong value rather than a plausible one.
 	constexpr std::array<uint8_t, c_Frames> c_Weights = { { 0, 128, 255 } };
 
+	/**
+	 * Two looping clips of different lengths, which is what a blend space needs: its members share
+	 * one normalized phase, so clips that wrap over different numbers of intervals is the case the
+	 * phase exists to handle, and a clip that clamps has no cycle to share.
+	 */
+	assetlib::AnimationSet
+	MakeBlendClips(uint32_t boneCount = c_BoneCount)
+	{
+		auto set      = assetlib::AnimationSet();
+		set.boneCount = boneCount;
+
+		constexpr std::array<uint32_t, 2> c_Lengths = { { 2, 3 } };
+
+		for (const uint32_t frames : c_Lengths)
+		{
+			auto clip        = assetlib::AnimationClip();
+			clip.firstSample = static_cast<uint32_t>(set.samples.size());
+			clip.frameCount  = frames;
+			clip.sampleRate  = 30.0f;
+			clip.duration    = float(frames - 1) / 30.0f;
+			clip.loop        = 1;
+			clip.nameOffset  = 0;
+			set.clips.push_back(clip);
+
+			for (uint32_t f = 0; f < frames; ++f)
+			{
+				for (uint32_t b = 0; b < boneCount; ++b)
+				{
+					auto sample        = assetlib::Transform();
+					sample.translation = glm::vec3(float(f), float(b), 0.0f);
+					sample.rotation    = glm::quat(1.0f, 0.0f, 0.0f, 0.0f);
+					sample.scale       = glm::vec3(1.0f);
+					set.samples.push_back(sample);
+				}
+			}
+		}
+
+		return set;
+	}
+
+	/** A space over the two clips of MakeBlendClips, at parameters 0 and 1. */
+	bgl::BlendSetDesc
+	MakeBlendSet()
+	{
+		auto space = bgl::BlendSpaceDesc();
+		space.members.push_back({ 0, 0.0f });
+		space.members.push_back({ 1, 1.0f });
+
+		auto set = bgl::BlendSetDesc();
+		set.spaces.push_back(std::move(space));
+		return set;
+	}
+
 	bgl::FootPlantDesc
 	MakeFootPlant()
 	{
@@ -402,10 +455,20 @@ TEST_CASE("CreateSkinnedMeshInstance writes the playback record once", "[skinned
 	CHECK(playback.GetTagAt(mesh.playback.byteOffset) == bgl::idl::PlaybackType::kSkinned);
 
 	const auto state = playback.GetPayloadAt<bgl::idl::SkinnedState>(mesh.playback.byteOffset);
-	CHECK(state.playback.clip == 1);
-	CHECK(state.playback.phase == Catch::Approx(4.5f));
-	CHECK(state.playback.rate == Catch::Approx(2.0f));
-	CHECK(state.playback.rig.offset == scene->GetGeomSkinnedInfo(geom.handle.index).record.index);
+	CHECK(state.rig.offset == scene->GetGeomSkinnedInfo(geom.handle.index).record.index);
+
+	// A one-clip spawn is slot 0 at full weight, from the clock's zero, and the rest weightless.
+	CHECK(state.slots[0].nodeIndex == 1);
+	CHECK(state.slots[0].phase == Catch::Approx(4.5f));
+	CHECK(state.slots[0].rate == Catch::Approx(2.0f));
+	CHECK(state.slots[0].tRef == 0.0f);
+	CHECK(state.slots[0].weight0 == 1.0f);
+	CHECK(state.slots[0].weight1 == 1.0f);
+	for (uint32_t s = 1; s < bgl::idl::cBlendSlots; ++s)
+	{
+		CHECK(state.slots[s].weight0 == 0.0f);
+		CHECK(state.slots[s].weight1 == 0.0f);
+	}
 
 	SECTION("a crowd instance is a record of its own kind, owning no palette")
 	{
@@ -428,7 +491,7 @@ TEST_CASE("CreateSkinnedMeshInstance writes the playback record once", "[skinned
 		CHECK(table.playback.clip == 1);
 		CHECK(table.playback.phase == Catch::Approx(4.5f));
 		CHECK(table.playback.rate == Catch::Approx(2.0f));
-		CHECK(table.playback.rig.offset == state.playback.rig.offset);
+		CHECK(table.playback.rig.offset == state.rig.offset);
 
 		CHECK(sizeof(bgl::idl::SkinnedTableState) < sizeof(bgl::idl::SkinnedState));
 	}
@@ -465,6 +528,180 @@ TEST_CASE("CreateSkinnedMeshInstance writes the playback record once", "[skinned
 
 		scene->DeleteGeom(geom);
 		CHECK_FALSE(scene->IsGeomAlive(geom));
+	}
+}
+
+TEST_CASE("SetSkinnedPlayback rewrites the record in place", "[skinned]")
+{
+	auto gfx = bgl::CreateGraphics(HeadlessOptions());
+	REQUIRE(gfx != nullptr);
+
+	auto  sceneHandle = gfx->CreateScene(TestSceneDesc());
+	auto* scene       = sceneHandle->As<bgl::Scene>();
+	REQUIRE(scene != nullptr);
+
+	auto  viewHandle = gfx->CreateSceneView(sceneHandle, 8);
+	auto* view       = viewHandle->As<bgl::SceneView>();
+	REQUIRE(view != nullptr);
+
+	const std::array<bgl::MaterialHandle, 1> materials = { { OpaquePbr(scene) } };
+	const auto                               geom      = scene->AddSkinnedMeshGeom(
+		MakeSkinnedMesh(),
+		0,
+		materials,
+		scene->AddRig(MakeRig(), MakeClips()),
+		c_AnyPose);
+	REQUIRE(geom.IsValid());
+
+	// A crossfade from clip 0 to clip 1 over one second from t = 2, both sides rebased to that
+	// instant, with every field set so the round trip below proves each one is carried.
+	auto crossfade = bgl::SkinnedPlaybackDesc();
+	{
+		auto& from      = crossfade.slot[0];
+		from.nodeIndex  = 0;
+		from.phase      = 3.0f;
+		from.rate       = 1.0f;
+		from.tRef       = 2.0f;
+		from.weight0    = 1.0f;
+		from.weight1    = 0.0f;
+		from.rampStart  = 2.0f;
+		from.rampEnd    = 3.0f;
+		from.param0     = 0.25f;
+		from.param1     = 0.75f;
+		from.paramStart = 2.0f;
+		from.paramEnd   = 2.5f;
+
+		auto& to     = crossfade.slot[1];
+		to.nodeIndex = 1;
+		to.phase     = 0.0f;
+		to.rate      = 0.5f;
+		to.tRef      = 2.0f;
+		to.weight0   = 0.0f;
+		to.weight1   = 1.0f;
+		to.rampStart = 2.0f;
+		to.rampEnd   = 3.0f;
+	}
+
+	const auto same = [](const bgl::PlaybackSlot& a, const bgl::PlaybackSlot& b) {
+		CHECK(a.nodeIndex == b.nodeIndex);
+		CHECK(a.phase == b.phase);
+		CHECK(a.rate == b.rate);
+		CHECK(a.tRef == b.tRef);
+		CHECK(a.weight0 == b.weight0);
+		CHECK(a.weight1 == b.weight1);
+		CHECK(a.rampStart == b.rampStart);
+		CHECK(a.rampEnd == b.rampEnd);
+		CHECK(a.param0 == b.param0);
+		CHECK(a.param1 == b.param1);
+		CHECK(a.paramStart == b.paramStart);
+		CHECK(a.paramEnd == b.paramEnd);
+	};
+
+	SECTION("a spawn on one clip reads back as that clip in slot 0")
+	{
+		const auto instance = view->CreateSkinnedMeshInstance(
+			geom,
+			glm::mat4(1.0f),
+			bgl::SkinnedInstanceDesc{ 1, 4.5f, 2.0f });
+
+		const auto got  = view->GetSkinnedPlayback(instance);
+		const auto want = bgl::SkinnedPlaybackDesc::FromClip(1, 4.5f, 2.0f);
+		for (uint32_t s = 0; s < bgl::c_BlendSlots; ++s) same(got.slot[s], want.slot[s]);
+	}
+
+	SECTION("a rewrite keeps the record's offset, kind and palette, and moves only its slots")
+	{
+		const auto instance = view->CreateSkinnedMeshInstance(
+			geom,
+			glm::mat4(1.0f),
+			bgl::SkinnedInstanceDesc{ 0, 0.0f, 1.0f });
+
+		auto& meshBuffer = view->GetMeshBuffer();
+		auto& playback   = view->GetPlaybackArena();
+
+		const uint32_t offset = meshBuffer.AtIndex(instance.handle.index).playback.byteOffset;
+		const auto     before = playback.GetPayloadAt<bgl::idl::SkinnedState>(offset);
+
+		view->SetSkinnedPlayback(instance, crossfade);
+
+		CHECK(meshBuffer.AtIndex(instance.handle.index).playback.byteOffset == offset);
+		CHECK(playback.GetTagAt(offset) == bgl::idl::PlaybackType::kSkinned);
+
+		const auto after = playback.GetPayloadAt<bgl::idl::SkinnedState>(offset);
+		CHECK(after.rig.offset == before.rig.offset);
+		CHECK(after.palette.offsetStart == before.palette.offsetStart);
+
+		const auto got = view->GetSkinnedPlayback(instance);
+		for (uint32_t s = 0; s < bgl::c_BlendSlots; ++s) same(got.slot[s], crossfade.slot[s]);
+	}
+
+	SECTION("a spawn on a whole record is the same record")
+	{
+		const auto instance = view->CreateSkinnedMeshInstance(geom, glm::mat4(1.0f), crossfade);
+		const auto got      = view->GetSkinnedPlayback(instance);
+		for (uint32_t s = 0; s < bgl::c_BlendSlots; ++s) same(got.slot[s], crossfade.slot[s]);
+	}
+
+	SECTION("a record the rig cannot play is refused, at spawn and at rewrite")
+	{
+		const auto instance = view->CreateSkinnedMeshInstance(
+			geom,
+			glm::mat4(1.0f),
+			bgl::SkinnedInstanceDesc{ 0, 0.0f, 1.0f });
+
+		const auto refused = [&](const bgl::SkinnedPlaybackDesc& bad) {
+			CHECK_THROWS_AS(
+				view->CreateSkinnedMeshInstance(geom, glm::mat4(1.0f), bad),
+				bgl::SceneError);
+			CHECK_THROWS_AS(view->SetSkinnedPlayback(instance, bad), bgl::SceneError);
+		};
+
+		auto pastTheTable              = crossfade;
+		pastTheTable.slot[1].nodeIndex = 2;
+		refused(pastTheTable);
+
+		// An unweighted slot still names a node, because the record holds still on slot 0 when
+		// nothing carries weight.
+		auto idleSlotPastTheTable              = crossfade;
+		idleSlotPastTheTable.slot[3].nodeIndex = 7;
+		refused(idleSlotPastTheTable);
+
+		auto negative            = crossfade;
+		negative.slot[0].weight1 = -0.5f;
+		refused(negative);
+
+		auto backwards            = crossfade;
+		backwards.slot[1].rampEnd = 1.0f;
+		refused(backwards);
+
+		auto notANumber          = crossfade;
+		notANumber.slot[0].phase = std::nanf("");
+		refused(notANumber);
+
+		refused(bgl::SkinnedPlaybackDesc());  // no slot carries weight
+
+		// What survives a refusal is the record as it was.
+		const auto got = view->GetSkinnedPlayback(instance);
+		CHECK(got.slot[0].nodeIndex == 0);
+		CHECK(got.slot[0].weight0 == 1.0f);
+	}
+
+	SECTION("a placement with no slots to rewrite is refused")
+	{
+		auto crowd       = bgl::SkinnedInstanceDesc{ 0, 0.0f, 1.0f };
+		crowd.source     = bgl::PoseSource::kBoneAnimTable;
+		const auto table = view->CreateSkinnedMeshInstance(geom, glm::mat4(1.0f), crowd);
+		CHECK_THROWS_AS(view->SetSkinnedPlayback(table, crossfade), bgl::SceneError);
+		CHECK_THROWS_AS(view->GetSkinnedPlayback(table), bgl::SceneError);
+
+		const auto cube  = scene->AddCubeGeom(bgl::MaterialHandle());
+		const auto still = view->CreateStaticMeshInstance(cube, glm::mat4(1.0f));
+		CHECK_THROWS_AS(view->SetSkinnedPlayback(still, crossfade), bgl::SceneError);
+		CHECK_THROWS_AS(view->GetSkinnedPlayback(still), bgl::SceneError);
+
+		CHECK_THROWS_AS(
+			view->SetSkinnedPlayback(bgl::MeshInstanceHandle(), crossfade),
+			bgl::SceneError);
 	}
 }
 
@@ -923,5 +1160,143 @@ TEST_CASE("AddRig refuses a leg the pose pass could not solve", "[skinned]")
 		auto noWeights = MakeFootPlant();
 		noWeights.plantWeights.clear();
 		CHECK_THROWS_AS(add(noWeights), bgl::SceneError);
+	}
+}
+
+// The node table is what a playback slot's `node` indexes, and its order is load-bearing: clips
+// first, in clip order, so a slot naming a clip means what it did before blend spaces existed.
+TEST_CASE("AddRig builds a node table of its clips, then its blend spaces", "[skinned][blend]")
+{
+	auto gfx = bgl::CreateGraphics(HeadlessOptions());
+	REQUIRE(gfx != nullptr);
+
+	auto  sceneHandle = gfx->CreateScene(TestSceneDesc());
+	auto* scene       = sceneHandle->As<bgl::Scene>();
+	REQUIRE(scene != nullptr);
+
+	SECTION("a rig with a blend set appends its spaces after the clip nodes")
+	{
+		const auto rig =
+			scene->AddRig(MakeRig(), MakeBlendClips(), bgl::FootPlantDesc(), MakeBlendSet());
+		REQUIRE(rig.IsValid());
+
+		const bgl::idl::Rig& record = scene->GetRigBuffer().AtIndex(rig.handle.index);
+
+		// Two clips and one space.
+		CHECK(record.nodes.count == 3);
+		CHECK_FALSE(record.members.Null());
+
+		auto&          nodes = scene->GetBlendNodeBuffer();
+		const uint32_t base  = record.nodes.range.offsetStart;
+
+		CHECK(nodes.AtIndex(base + 0).kind == bgl::idl::BlendNodeKind::kClip);
+		CHECK(nodes.AtIndex(base + 0).clip == 0);
+		CHECK(nodes.AtIndex(base + 1).kind == bgl::idl::BlendNodeKind::kClip);
+		CHECK(nodes.AtIndex(base + 1).clip == 1);
+
+		const bgl::idl::BlendNode& space = nodes.AtIndex(base + 2);
+		CHECK(space.kind == bgl::idl::BlendNodeKind::kSpace);
+		CHECK(space.memberCount == 2);
+
+		auto&          members    = scene->GetBlendMemberBuffer();
+		const uint32_t memberBase = record.members.offsetStart + space.firstMember;
+		CHECK(members.AtIndex(memberBase + 0).clip == 0);
+		CHECK(members.AtIndex(memberBase + 0).parameter == 0.0f);
+		CHECK(members.AtIndex(memberBase + 1).clip == 1);
+		CHECK(members.AtIndex(memberBase + 1).parameter == 1.0f);
+
+		SECTION("deleting the rig frees both ranges")
+		{
+			const uint32_t nodeRoot   = record.nodes.range.offsetStart;
+			const uint32_t memberRoot = record.members.offsetStart;
+			scene->DeleteRig(rig);
+			CHECK_FALSE(scene->GetBlendNodeBuffer().IsIndexValid(nodeRoot));
+			CHECK_FALSE(scene->GetBlendMemberBuffer().IsIndexValid(memberRoot));
+		}
+	}
+
+	SECTION("a rig with no blend set still has one node per clip")
+	{
+		// Null members rather than an empty range, for the reason the legs are: the pose pass
+		// branches on the node's kind, and nothing should ever reach the member table.
+		const auto rig = scene->AddRig(MakeRig(), MakeBlendClips());
+		REQUIRE(rig.IsValid());
+
+		const bgl::idl::Rig& record = scene->GetRigBuffer().AtIndex(rig.handle.index);
+		CHECK(record.nodes.count == 2);
+		CHECK(record.members.Null());
+	}
+}
+
+TEST_CASE("AddRig refuses a blend space the pose pass could not evaluate", "[skinned][blend]")
+{
+	auto gfx = bgl::CreateGraphics(HeadlessOptions());
+	REQUIRE(gfx != nullptr);
+
+	auto  sceneHandle = gfx->CreateScene(TestSceneDesc());
+	auto* scene       = sceneHandle->As<bgl::Scene>();
+	REQUIRE(scene != nullptr);
+
+	const auto add = [&](const bgl::BlendSetDesc& set) {
+		return scene->AddRig(MakeRig(), MakeBlendClips(), bgl::FootPlantDesc(), set);
+	};
+
+	SECTION("a space of one member")
+	{
+		auto set = MakeBlendSet();
+		set.spaces[0].members.resize(1);
+		CHECK_THROWS_WITH(add(set), Catch::Matchers::ContainsSubstring("at least two"));
+	}
+
+	SECTION("a member naming a clip the set does not hold")
+	{
+		auto set                           = MakeBlendSet();
+		set.spaces[0].members[1].clipIndex = 7;
+		CHECK_THROWS_WITH(add(set), Catch::Matchers::ContainsSubstring("clip 7"));
+	}
+
+	SECTION("a member that does not loop")
+	{
+		// One phase is shared across the members, and a clip that clamps would sit on its last
+		// frame while the others cycle.
+		auto clips          = MakeBlendClips();
+		clips.clips[1].loop = 0;
+		CHECK_THROWS_WITH(
+			scene->AddRig(MakeRig(), clips, bgl::FootPlantDesc(), MakeBlendSet()),
+			Catch::Matchers::ContainsSubstring("does not loop"));
+	}
+
+	SECTION("parameters that do not strictly increase")
+	{
+		auto set                           = MakeBlendSet();
+		set.spaces[0].members[1].parameter = 0.0f;
+		CHECK_THROWS_WITH(add(set), Catch::Matchers::ContainsSubstring("strictly increase"));
+	}
+
+	SECTION("a parameter that is not a number")
+	{
+		auto set                           = MakeBlendSet();
+		set.spaces[0].members[1].parameter = std::numeric_limits<float>::quiet_NaN();
+		CHECK_THROWS_AS(add(set), bgl::SceneError);
+	}
+
+	SECTION("a refused space leaves the arenas untouched")
+	{
+		// The allocator hands back the lowest free block, so a leak shows as the next rig landing
+		// somewhere else -- the only evidence available without an occupancy accessor.
+		const auto first = scene->AddRig(MakeRig(), MakeBlendClips());
+		REQUIRE(first.IsValid());
+		const uint32_t nodeRoot =
+			scene->GetRigBuffer().AtIndex(first.handle.index).nodes.range.offsetStart;
+		scene->DeleteRig(first);
+
+		auto bad = MakeBlendSet();
+		bad.spaces[0].members.resize(1);
+		CHECK_THROWS(add(bad));
+
+		const auto again = scene->AddRig(MakeRig(), MakeBlendClips());
+		REQUIRE(again.IsValid());
+		CHECK(
+			scene->GetRigBuffer().AtIndex(again.handle.index).nodes.range.offsetStart == nodeRoot);
 	}
 }

@@ -1,3 +1,5 @@
+import BlendNode;
+import BlendSpaceMember;
 import BoneSample;
 import Clip;
 import Range;
@@ -24,6 +26,14 @@ public struct Rig
     // `f * legs.count + l`, so a clip reaches its own frames through `Clip::firstFrame`. Null
     // exactly when `legs` is.
     public Range<uint> plantWeights;
+
+    // What a playback slot's `node` indexes: one clip node per clip, in clip order, then the
+    // authored blend spaces. Never null -- a rig with no blend set still has one node per clip,
+    // which is what lets a slot name a clip the way it always did.
+    public RangeWithCount<BlendNode> nodes;
+
+    // The members every space node's run addresses. Null exactly when no node is a space.
+    public Range<BlendSpaceMember> members;
 
     // What makes a frame addressable: the pool is frame-major, so one frame is a contiguous run of
     // exactly this many samples. Equal to the bone table's length.

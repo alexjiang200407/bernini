@@ -151,6 +151,7 @@ namespace assetlib
 			case AssetType::kUiStyle:
 			case AssetType::kFont:
 			case AssetType::kAvatar:
+			case AssetType::kBlend:
 			case AssetType::kCount:
 				break;
 			}
@@ -273,6 +274,7 @@ namespace assetlib
 			case AssetType::kUiStyle:
 			case AssetType::kFont:
 			case AssetType::kAvatar:
+			case AssetType::kBlend:
 			case AssetType::kCount:
 				break;
 			}

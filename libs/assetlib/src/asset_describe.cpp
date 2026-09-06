@@ -1,6 +1,7 @@
 #include "asset_describe.h"
 #include <array>
 #include <assetlib/avatar.h>
+#include <assetlib/blend.h>
 #include <assetlib/bmesh.h>
 #include <assetlib/container_info.h>
 
@@ -556,6 +557,26 @@ namespace assetlib
 
 		for (const ClipPlantWeight& entry : avatar.clipWeights)
 			out += std::format("  plant        '{}' {:.2f}\n", entry.clip, entry.weight);
+
+		return out;
+	}
+
+	std::string
+	describe(const BlendSet& set)
+	{
+		std::string out;
+
+		out += "bblend\n";
+		out += std::format("  name         '{}'\n", set.name);
+		out += std::format("  animations   '{}'\n", set.animations);
+		out += std::format("  spaces       {}\n", set.spaces.size());
+
+		for (const BlendSpace& space : set.spaces)
+		{
+			out += std::format("    '{}' ({} members)\n", space.name, space.members.size());
+			for (const BlendSpaceMember& member : space.members)
+				out += std::format("      {:>10} '{}'\n", member.parameter, member.clip);
+		}
 
 		return out;
 	}

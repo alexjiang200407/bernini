@@ -59,4 +59,10 @@ namespace assetlib
 	{
 		return describe(avatar, skeleton);
 	}
+
+	std::string
+	AssetStore::Describe(const BlendSet& set) const
+	{
+		return describe(set);
+	}
 }

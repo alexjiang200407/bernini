@@ -1,6 +1,7 @@
 #include <algorithm>
 #include <atomic>
 #include <cerrno>
+#include <chrono>
 #include <core/err/util.h>
 #include <core/file/IFileSystem.h>
 #include <core/file/file.h>
@@ -20,6 +21,7 @@
 #include <string>
 #include <string_view>
 #include <system_error>
+#include <thread>
 #include <vector>
 
 namespace core::file

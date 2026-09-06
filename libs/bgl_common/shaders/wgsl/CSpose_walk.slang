@@ -29,7 +29,8 @@ void main(uint localIdx: SV_GroupIndex)
     StorageTables tables;
     Rig rig = {};
     Clip clip = {};
-    PoseInto(tables, rig, clip, 0.0, 0, localIdx);
-    let sample = SampleBone(tables, rig, clip, 0, 0.0);
+    LocalPose pose = SingleClipPose(clip, 0.0);
+    PoseInto(tables, rig, pose, 0, localIdx);
+    let sample = SampleLocal(tables, rig, pose, 0);
     WritePalette(tables, 0, mul(LocalTransform(sample), PaletteMatrix(tables, 0)));
 }

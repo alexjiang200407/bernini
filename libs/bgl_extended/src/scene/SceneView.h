@@ -71,6 +71,9 @@ namespace bgl
 		// kPerInstance only, and only on a rig that authored legs: the instance's FootIKLegs in the
 		// view's arena, one per leg, freed with it. What the pose list carries beside the mesh.
 		core::multi_slot_handle footIK;
+		// kSkinnedMesh only: how many nodes the record's slots may name, which is what a rewrite is
+		// checked against. Fixed for the instance's life -- a rig's tables never change under it.
+		uint32_t nodeCount = 0;
 	};
 
 	/**
@@ -109,6 +112,18 @@ namespace bgl
 			GeomHandle                 geom,
 			glm::mat4                  transform,
 			const SkinnedInstanceDesc& desc) override;
+
+		MeshInstanceHandle
+		CreateSkinnedMeshInstance(
+			GeomHandle                 geom,
+			glm::mat4                  transform,
+			const SkinnedPlaybackDesc& desc) override;
+
+		void
+		SetSkinnedPlayback(MeshInstanceHandle instance, const SkinnedPlaybackDesc& desc) override;
+
+		[[nodiscard]] SkinnedPlaybackDesc
+		GetSkinnedPlayback(MeshInstanceHandle instance) const override;
 
 		void
 		DeleteMeshInstance(MeshInstanceHandle instance) override;
@@ -335,10 +350,6 @@ namespace bgl
 		void
 		RebuildPosedList();
 
-		/** The meta of a placement that owns a foot-IK record; `what` names the caller in the error. */
-		[[nodiscard]] const MeshMeta&
-		FootIKMetaFor(MeshInstanceHandle instance, std::string_view what) const;
-
 		/**
 		 * Writes the records a placement is made of -- the MeshInstance, with `animState` routed
 		 * naming the record the geom's type reads, and one resolved SubmeshInstance per submesh.
@@ -349,6 +360,42 @@ namespace bgl
 		 */
 		MeshInstanceHandle
 		WritePlacement(GeomHandle geom, glm::mat4 transform, uint32_t animState);
+
+		/**
+		 * Spawns a per-instance placement on the rig `rig` of `boneCount` bones: a palette slice, a
+		 * foot-IK record if `legCount` is nonzero, and a kSkinned record holding `desc`, which the
+		 * caller has validated against the rig.
+		 */
+		MeshInstanceHandle
+		PlacePosed(
+			GeomHandle                 geom,
+			glm::mat4                  transform,
+			core::slot_handle          rig,
+			uint32_t                   boneCount,
+			uint32_t                   nodeCount,
+			uint32_t                   legCount,
+			const SkinnedPlaybackDesc& desc);
+
+		/**
+		 * The placement of a record already in the arena, with everything rolled back if writing it
+		 * throws. `palette` and `footIK` are null for a record that owns neither.
+		 */
+		MeshInstanceHandle
+		PlaceRecord(
+			GeomHandle              geom,
+			glm::mat4               transform,
+			idl::RawEntry           record,
+			core::multi_slot_handle palette,
+			core::multi_slot_handle footIK,
+			uint32_t                nodeCount);
+
+		/** The meta of a live per-instance skinned placement, or a SceneError naming `what`. */
+		[[nodiscard]] const MeshMeta&
+		PosedMetaFor(MeshInstanceHandle instance, std::string_view what) const;
+
+		/** PosedMetaFor, narrowed to a placement whose rig authored legs and so owns a foot-IK record. */
+		[[nodiscard]] const MeshMeta&
+		FootIKMetaFor(MeshInstanceHandle instance, std::string_view what) const;
 
 		/**
 		 * Re-resolves every non-overridden instance against the Scene's current defaults, rewriting

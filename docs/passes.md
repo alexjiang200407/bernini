@@ -352,18 +352,36 @@ many instances turn out to be transparent; only the sort itself is bounded.
 ### Pose Skinned — [passes/SkinnedPosePass.{h,cpp}](libs/bgl_extended/src/passes/SkinnedPosePass.cpp)
 
 Writes every skinned instance's bone palette: one workgroup per instance, one thread per bone
-(striding when a rig has more bones than `cPoseGroupSize`). Per bone it samples the instance's clip at
-`ViewData::time`, blends the two frames the fractional position falls between (nlerp with a hemisphere
-flip), then the group walks the hierarchy **one depth level at a time** with a barrier between levels
+(striding when a rig has more bones than `cPoseGroupSize`). Once per group it resolves the record's
+`cBlendSlots` weighted slots at `ViewData::time` — each slot's weight from its ramp
+([blend_slots.slang](libs/bgl_common/shaders/src/lib/anim/blend_slots.slang)), and each slot's
+`node` through the rig's node table, which holds one node per clip in clip order and then the
+authored blend spaces.
+
+A clip node contributes one clip at its phase advanced since `tRef`. A space node contributes the
+two members straddling its parameter, at one shared normalized phase — its members are looping clips
+of different lengths, so a frame number means nothing between them, and what is shared is the
+fraction of a cycle. That phase advances at the reciprocal of the weighted cycle length, which is
+itself moving while the parameter ramps, so it is an integral rather than a quotient and is
+evaluated in closed form ([blend_space.slang](libs/bgl_common/shaders/src/lib/anim/blend_space.slang))
+— exact mid-ramp, and needing no state, which is what keeps a pose a pure function of the clock. A
+space therefore costs two of the `cMaxPoseClips` a pose holds, which is why that is twice the slot
+count. The live weights are normalized to one across whatever the slots resolved to. Per bone it
+samples each live clip (the two frames the fractional position falls between, nlerp with a hemisphere
+flip) and blends the samples local to the parent — translation and scale by weighted sum, each
+rotation flipped against the running sum, then normalized; one live slot is the plain sample, bit for
+bit. Then the group walks the hierarchy **one depth level at a time** with a barrier between levels
 and multiplies each result by the bone's inverse bind — all of it **in the palette itself**, which
 holds an affine transform in the three rows it reserves for the skin matrix. There is no groupshared
 hierarchy array and so no ceiling on a rig's bone count; the price is that the per-level barrier
 orders device memory rather than groupshared.
 
 It runs **twice per instance in one dispatch**, at `time` and at `prevTime`, writing two palettes back
-to back from `SkinnedState::paletteBase`. That is how skinned geometry gets a motion vector without a
-history buffer — and it holds only while time is the sole input to a pose, so a clip switched between
-frames would reproject through the wrong clip.
+to back from `SkinnedState::palette`. That is how skinned geometry gets a motion vector without a
+history buffer — and it holds because time is the sole input to a pose: a record is rewritten only by
+`ISceneView::SetSkinnedPlayback`, and a rewrite that leaves the record's value at `prevTime` what the
+old one gave reprojects exactly. A rewrite that does not — a slot dropped rather than ramped down —
+reprojects through a pose nothing drew, which is the caller's to avoid.
 
 * **Attached under the view's namespace, not a cull namespace.** A palette is per instance, not per
   frustum, so it is posed once however many frustums the view is culled against. It also has to be:
