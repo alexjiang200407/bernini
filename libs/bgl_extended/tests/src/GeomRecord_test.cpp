@@ -13,9 +13,9 @@
 #include <catch2/catch_test_macros.hpp>
 #include <cstdint>
 
-// The geom's own GPU record. Nothing reads it yet -- a placement still carries the submesh range by
-// value -- so these cases are what holds it to the range Scene keeps on the CPU until the reader
-// lands. They read the CPU mirror, which is exactly the bytes Update() uploads.
+// The geom's own GPU record, which every placement of it names rather than copying. These cases hold
+// it to the range Scene keeps on the CPU, and read the CPU mirror -- exactly the bytes Update()
+// uploads.
 
 namespace
 {
