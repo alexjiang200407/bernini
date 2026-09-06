@@ -1,12 +1,16 @@
 #include <assetlib/codecs.h>
 #include <assetlib/import_document.h>
 
+#include <algorithm>
 #include <assetlib/asset_import.h>
 #include <assetlib/asset_refs.h>
+#include <assetlib/project_layout.h>
 #include <assetlib_structs/BMaterial.h>
 #include <assetlib_structs/BMesh.h>
 #include <assetlib_structs/Node.h>
+#include <catch2/catch_message.hpp>
 #include <catch2/catch_test_macros.hpp>
+#include <catch2/generators/catch_generators.hpp>
 #include <catch2/matchers/catch_matchers.hpp>
 #include <catch2/matchers/catch_matchers_string.hpp>
 #include <core/file/LooseFileSystem.h>
@@ -254,7 +258,7 @@ TEST_CASE("an import records the bindings the mesh carries", "[importdoc]")
 		{ { "kirk[0]", 0 }, { "kirk[1]", 1 }, { "props", c_InvalidIndex } },
 		{ "Authored/Materials/skin.bmaterial", "Authored/Materials/teeth.bmaterial" });
 
-	const ImportTarget target{ "kirk", 24.0f, "Derived/SourceTextures/kirk" };
+	const ImportTarget target{ "Authored/Meshes/kirk.glb", 24.0f, "Derived/SourceTextures/kirk" };
 	const AssetStore   store(root.path);
 	const SourceRef    ref = store.CopyImportedSource(root.path / "kirk.glb", target);
 	CHECK(ref.key == "Authored/Meshes/kirk.glb");
@@ -272,6 +276,76 @@ TEST_CASE("an import records the bindings the mesh carries", "[importdoc]")
 		document.bindings[1] == MaterialBinding{ "kirk[1]", "Authored/Materials/teeth.bmaterial" });
 }
 
+// The importer places the source like every other output, so a project can organise the authored
+// half as deeply as the derived one -- and the `.bimport` has to follow it there, or a re-import
+// looks for its parameters beside a file that is not there.
+TEST_CASE("a source may be copied into a folder of its own", "[importdoc]")
+{
+	const DataRoot root("bernini_importdoc_nested");
+	WriteText(root.path / "coyote.glb", "the source");
+
+	const ImportTarget target{ "Authored/Meshes/animals/coyote/skin1.glb", 30.0f, {} };
+	const AssetStore   store(root.path);
+
+	const SourceRef ref = store.CopyImportedSource(root.path / "coyote.glb", target);
+	store.WriteImportedDocument(target, nullptr);
+
+	CHECK(ref.key == "Authored/Meshes/animals/coyote/skin1.glb");
+	CHECK(fs::exists(root.path / "Authored/Meshes/animals/coyote/skin1.glb"));
+	CHECK(fs::exists(root.path / "Authored/Meshes/animals/coyote/skin1.bimport"));
+
+	// And the enumeration every producer starts from still reaches it: Reimport, Migrate and
+	// RefreshImportedTextures each walk this prefix, and a nested source they cannot see is one no
+	// fresh checkout can put back.
+	const std::vector<std::string> found =
+		core::file::LooseFileSystem(root.path).Enumerate(c_MeshSourcesDirectoryName);
+	CHECK(std::ranges::find(found, "Authored/Meshes/animals/coyote/skin1.bimport") != found.end());
+}
+
+TEST_CASE("a source placed outside its category is refused", "[importdoc]")
+{
+	const DataRoot root("bernini_importdoc_stray");
+	WriteText(root.path / "kirk.glb", "the source");
+
+	const AssetStore store(root.path);
+
+	// Not a taste rule: the three producing operations find their work by enumerating
+	// `Authored/Meshes`, so a source anywhere else is silently absent from all of them and the
+	// project stops being one a checkout can rebuild.
+	const std::string_view stray = GENERATE(
+		std::string_view("Authored/Levels/kirk.glb"),      // another authored category
+		std::string_view("Derived/Meshes/kirk.glb"),       // the wrong half entirely
+		std::string_view("kirk.glb"),                      // the data root itself
+		std::string_view("Authored/MeshesOld/kirk.glb"));  // a prefix that only looks like one
+
+	INFO("key: " << stray);
+
+	CHECK_THROWS_WITH(
+		store.CopyImportedSource(
+			root.path / "kirk.glb",
+			ImportTarget{ std::string(stray), 30.0f, {} }),
+		Catch::Matchers::ContainsSubstring("Authored/Meshes"));
+
+	CHECK_THROWS_WITH(
+		store.WriteImportedDocument(ImportTarget{ std::string(stray), 30.0f, {} }, nullptr),
+		Catch::Matchers::ContainsSubstring("Authored/Meshes"));
+}
+
+// The extension is what `importDocumentKeyFor` swaps to reach the document, and what
+// `importedSourceKeyFor` swaps back to reach the source from it -- so a source under another one
+// has a document nothing can pair with it.
+TEST_CASE("a source key that is not a .glb is refused", "[importdoc]")
+{
+	const DataRoot root("bernini_importdoc_extension");
+	WriteText(root.path / "kirk.glb", "the source");
+
+	CHECK_THROWS_WITH(
+		AssetStore(root.path).CopyImportedSource(
+			root.path / "kirk.glb",
+			ImportTarget{ "Authored/Meshes/kirk.gltf", 30.0f, {} }),
+		Catch::Matchers::ContainsSubstring(".glb"));
+}
+
 TEST_CASE("a source that is not self-contained is refused", "[importdoc]")
 {
 	const DataRoot root("bernini_importdoc_gltf");
@@ -280,7 +354,7 @@ TEST_CASE("a source that is not self-contained is refused", "[importdoc]")
 	CHECK_THROWS_WITH(
 		AssetStore(root.path).CopyImportedSource(
 			root.path / "kirk.gltf",
-			ImportTarget{ "kirk", 30.0f, {} }),
+			ImportTarget{ "Authored/Meshes/kirk.glb", 30.0f, {} }),
 		Catch::Matchers::ContainsSubstring("export as .glb"));
 }
 

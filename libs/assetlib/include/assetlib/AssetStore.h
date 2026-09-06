@@ -640,16 +640,20 @@ namespace assetlib
 		[[nodiscard]] std::filesystem::path
 		FindMatchingSkeleton(const Skeleton& skeleton) const;
 
-		/** `Authored/Meshes/<name>.glb` -- where an import copies its source. */
+		/**
+		 * The `.bimport` beside the copied source at `sourceKey`, on disk.
+		 *
+		 * The extension swap is `importDocumentKeyFor`'s and the join is ResolveWritePath's, so no
+		 * caller composes either. The source's own path is ResolveWritePath of the key it already
+		 * holds, and has no spelling of its own here.
+		 *
+		 * @throws what ResolveWritePath throws for a key outside the data root.
+		 */
 		[[nodiscard]] std::filesystem::path
-		ImportedSourcePath(std::string_view name) const;
-
-		/** The `.bimport` beside the copied source. */
-		[[nodiscard]] std::filesystem::path
-		ImportDocumentPath(std::string_view name) const;
+		ImportDocumentPath(std::string_view sourceKey) const;
 
 		/**
-		 * Copies the self-contained source into `Authored/Meshes/` and stamps it: the returned reference
+		 * Copies the self-contained source to `target.source` and stamps it: the returned reference
 		 * -- key, content stamp, parameter hash -- is what the caller sets on every container
 		 * derived from it *before* saving them. The document itself is written afterwards by
 		 * WriteImportedDocument, once the bindings exist; the split is safe because bindings are
@@ -658,7 +662,8 @@ namespace assetlib
 		 * `target.sampleRate` -- the rate clips are resampled to at import, the import's one
 		 * parameter -- is what the returned reference's parameter hash covers.
 		 *
-		 * @throws what requireSelfContainedSource throws, and std::runtime_error on a copy failure.
+		 * @throws what requireSelfContainedSource throws, std::runtime_error if `target.source` is
+		 *         not a `.glb` under `Authored/Meshes/`, and std::runtime_error on a copy failure.
 		 */
 		SourceRef
 		CopyImportedSource(const std::filesystem::path& source, const ImportTarget& target) const;
@@ -668,7 +673,8 @@ namespace assetlib
 		 * and the source as it stood when they did, and -- when `mesh` is given -- the
 		 * submesh-name -> material bindings it carries. Null `mesh` is a clips-only import.
 		 *
-		 * @throws std::runtime_error on a write failure.
+		 * @throws std::runtime_error if `target.source` is not a `.glb` under `Authored/Meshes/`, or
+		 *         on a write failure.
 		 */
 		void
 		WriteImportedDocument(const ImportTarget& target, const BMesh* mesh) const;

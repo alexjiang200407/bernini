@@ -513,8 +513,14 @@ main(int argc, char** argv)
 					collisions.push_back(fs::relative(target, dataRoot, ec).generic_string());
 			};
 
-			const fs::path sourceCopy = assetlib::AssetStore(dataRoot).ImportedSourcePath(name);
-			const fs::path importDoc  = assetlib::AssetStore(dataRoot).ImportDocumentPath(name);
+			const std::string sourceKey = std::format(
+				"{}/{}{}",
+				assetlib::c_MeshSourcesDirectoryName,
+				name,
+				assetlib::c_ImportedSourceExtension);
+
+			const fs::path sourceCopy = assetlib::AssetStore(dataRoot).ResolveWritePath(sourceKey);
+			const fs::path importDoc = assetlib::AssetStore(dataRoot).ImportDocumentPath(sourceKey);
 			files.push_back(sourceCopy);
 			files.push_back(importDoc);
 
@@ -553,9 +559,11 @@ main(int argc, char** argv)
 				assetlib::requireUniqueSubmeshNames(mesh);
 
 				const assetlib::AssetStore importStore(dataRoot);
-				assetlib::ImportTarget target{ name, sampleRate, importStore.KeyFor(textureDir) };
-				const assetlib::SourceRef source = importStore.CopyImportedSource(input, target);
-				mesh.source                      = source;
+				assetlib::ImportTarget     target{ sourceKey,
+					                               sampleRate,
+					                               importStore.KeyFor(textureDir) };
+				const assetlib::SourceRef  source = importStore.CopyImportedSource(input, target);
+				mesh.source                       = source;
 
 				importStore.WriteTextures(imported, target.textureDir);
 

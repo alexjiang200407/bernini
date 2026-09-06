@@ -632,7 +632,7 @@ TEST_CASE("an import lands in the project's categories and reads back", "[import
 	static_cast<void>(assetlib::generateTangents(mesh));
 	assetlib::requireUniqueSubmeshNames(mesh);
 
-	const assetlib::ImportTarget target{ "apples",
+	const assetlib::ImportTarget target{ "Authored/Meshes/apples.glb",
 		                                 assetlib::c_DefaultSampleRate,
 		                                 "Derived/SourceTextures/apples" };
 	const assetlib::SourceRef    sourceRef = store.CopyImportedSource(glb, target);
@@ -898,7 +898,7 @@ TEST_CASE("Re-importing a source keeps the floors its document authors", "[impor
 
 	const TempRoot     root;
 	const AssetStore   store = root.Store();
-	const ImportTarget target{ "unit", c_DefaultSampleRate, {} };
+	const ImportTarget target{ "Authored/Meshes/unit.glb", c_DefaultSampleRate, {} };
 
 	// The source the import copies in, standing outside the data root as a real one does.
 	const fs::path source = root.Data() / "unit_source.glb";
