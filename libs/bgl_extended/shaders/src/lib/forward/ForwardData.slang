@@ -1,3 +1,4 @@
+import idl.Geom;
 import idl.IPlayback;
 import idl.MeshInstance;
 import idl.Meshlet;
@@ -14,6 +15,7 @@ public struct ForwardData
 {
     public PackedBuffer<SubmeshInstance> instanceBuffer;
     public EntryBuffer<MeshInstance> meshBuffer;
+    public EntryBuffer<Geom> geomBuffer;
     public RangeBuffer<Submesh> submeshBuffer;
     public RangeBuffer<Meshlet> meshletBuffer;
     public RangeBuffer<uint> vertexMapBuffer;

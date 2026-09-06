@@ -116,6 +116,10 @@ namespace bgl
 						BarrierSyncFlag::kComputeShader,
 						BarrierAccessFlag::kShaderResource)
 					.AddBufferArg(
+						c_GeomBufferName,
+						BarrierSyncFlag::kComputeShader,
+						BarrierAccessFlag::kShaderResource)
+					.AddBufferArg(
 						c_SubmeshBufferName,
 						BarrierSyncFlag::kComputeShader,
 						BarrierAccessFlag::kShaderResource)
@@ -219,6 +223,7 @@ namespace bgl
 		uniforms["cullView"]       = ctx.GetBuffer(c_CullViewName);
 		uniforms["instanceBuffer"] = ctx.GetBuffer(c_InstanceBufferName);
 		uniforms["meshBuffer"]     = ctx.GetBuffer(c_MeshInstanceBufferName);
+		uniforms["geomBuffer"]     = ctx.GetBuffer(c_GeomBufferName);
 		uniforms["submeshBuffer"]  = ctx.GetBuffer(c_SubmeshBufferName);
 		uniforms["visibility"]     = ctx.GetBuffer(c_InstanceVisibilityName);
 

@@ -58,6 +58,12 @@ namespace bgl
 		// pso for the pipeline family it actually draws through.
 		GeomType geomType = GeomType::kStaticMesh;
 
+		// Where the geom's submeshes started when this placement was made. Held here rather than
+		// read back through the GPU record so a re-resolve never has to reach into the Scene, and
+		// so a placement that outlives its geom keeps reading a stale root exactly as it did when
+		// it carried the whole range -- the bargain IScene::DeleteGeom documents.
+		uint32_t submeshRoot = 0;
+
 		// The byte offset of the instance's playback record in the view's arena, freed with the
 		// instance: a SkinnedState or a SkinnedTableState, whichever pose source it draws from.
 		// Zero for a static one -- the arena reserves offset 0 so it can mean null.

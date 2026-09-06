@@ -516,13 +516,13 @@ namespace bgl
 	{
 		try
 		{
-			// Copied by value, and never revisited: from here the instance no longer refers to the
-			// geom, only to the range its submeshes occupied. Deleting the geom out from under it
-			// leaves it drawing whatever lands in that range next.
+			// The geom's record is named, not copied. The range is still read once here for the
+			// submesh count and the root the shading resolve indexes by; deleting the geom out from
+			// under the placement leaves it reading whatever record lands in that slot next.
 			const idl::RangeWithCount submeshes = m_SceneRaw->GetGeomSubmeshes(geom.handle.index);
 
-			auto mesh      = idl::MeshInstance();
-			mesh.submeshes = submeshes;
+			auto mesh = idl::MeshInstance();
+			mesh.geom = m_SceneRaw->GetGeomEntry(geom.handle.index);
 			WriteInstanceTransform(mesh, transform);
 
 			// One field for either tier: the record's own header says which, so nothing here
@@ -531,9 +531,10 @@ namespace bgl
 
 			auto meshHandle = m_MeshBuffer.Add(mesh);
 
-			auto& meta     = m_MeshBuffer.MetaAt(meshHandle.index);
-			meta.geomType  = geom.geomType;
-			meta.animState = animState;
+			auto& meta       = m_MeshBuffer.MetaAt(meshHandle.index);
+			meta.geomType    = geom.geomType;
+			meta.animState   = animState;
+			meta.submeshRoot = submeshes.range.offsetStart;
 
 			const uint32_t submeshCount = submeshes.count;
 			meta.submeshInstances.reserve(submeshCount);
@@ -891,8 +892,7 @@ namespace bgl
 	void
 	SceneView::RefreshSubmeshInstance(uint32_t meshIndex, uint32_t submeshIndex)
 	{
-		const idl::MeshInstance& mesh = m_MeshBuffer.AtIndex(meshIndex);
-		const MeshMeta&          meta = m_MeshBuffer.MetaAt(meshIndex);
+		const MeshMeta& meta = m_MeshBuffer.MetaAt(meshIndex);
 
 		const core::slot_handle handle = meta.submeshInstances[submeshIndex];
 		if (!m_InstanceBuffer.IsValid(handle))
@@ -905,11 +905,7 @@ namespace bgl
 		const idl::RawEntry material = instance.material;
 		const uint32_t      pso      = instance.pso;
 
-		ResolveShading(
-			instance,
-			mesh.submeshes.range.offsetStart,
-			meta.overrides[submeshIndex],
-			meta.geomType);
+		ResolveShading(instance, meta.submeshRoot, meta.overrides[submeshIndex], meta.geomType);
 
 		// Set marks the element's block dirty, so writing back an unchanged instance would re-upload
 		// a whole block to change nothing.

@@ -26,6 +26,7 @@
 #include <bgl_common/idl/Constants.h>
 #include <bgl_common/idl/CullStats.h>
 #include <bgl_common/idl/CullView.h>
+#include <bgl_common/idl/Geom.h>
 #include <bgl_common/idl/InstanceVisibility.h>
 #include <bgl_common/idl/MeshInstance.h>
 #include <bgl_common/idl/PsoType.h>
@@ -117,6 +118,19 @@ TEST_CASE("Instances outside the frustum are culled, those inside survive", "[cu
 	submesh.boundingSphere  = glm::vec4(0.0f, 0.0f, 0.0f, 1.0f);
 	const auto submeshRange = submeshBuffer.Add(std::span<const bgl::idl::Submesh>(&submesh, 1));
 
+	auto geomBuffer = bgl::EntryBuffer<bgl::idl::Geom>();
+	{
+		auto desc         = bgl::EntryBufferDesc();
+		desc.initialCount = 1;
+		desc.debugName    = "Cull Geom";
+		geomBuffer.Init(desc, resourceManager);
+	}
+
+	auto geomRecord      = bgl::idl::Geom();
+	geomRecord.submeshes = submeshRange;
+
+	const auto geomHandle = geomBuffer.Add(geomRecord);
+
 	auto meshBuffer = bgl::EntryBuffer<bgl::idl::MeshInstance>();
 	{
 		auto desc         = bgl::EntryBufferDesc();
@@ -135,8 +149,8 @@ TEST_CASE("Instances outside the frustum are culled, those inside survive", "[cu
 
 	for (const Placement& p : placements)
 	{
-		auto mesh      = bgl::idl::MeshInstance();
-		mesh.submeshes = submeshRange;
+		auto mesh = bgl::idl::MeshInstance();
+		mesh.geom = geomHandle;
 		bgl::WriteInstanceTransform(mesh, glm::translate(glm::mat4(1.0f), p.position));
 
 		const auto meshHandle = meshBuffer.Add(mesh);
@@ -178,6 +192,7 @@ TEST_CASE("Instances outside the frustum are culled, those inside survive", "[cu
 
 	fg.ImportBuffer("instanceBuffer", instanceBuffer.GetBufferHandle());
 	fg.ImportBuffer("meshBuffer", meshBuffer.GetBufferHandle());
+	fg.ImportBuffer("geomBuffer", geomBuffer.GetBufferHandle());
 	fg.ImportBuffer("submeshBuffer", submeshBuffer.GetBufferHandle());
 	fg.ImportBuffer("cullView", cullView.GetBufferHandle());
 	fg.ImportBuffer("visibility", visibility.GetBufferHandle());
@@ -192,6 +207,10 @@ TEST_CASE("Instances outside the frustum are culled, those inside survive", "[cu
 				bgl::BarrierAccessFlag::kCopyDest)
 			.AddBufferArg(
 				"meshBuffer",
+				bgl::BarrierSyncFlag::kCopy,
+				bgl::BarrierAccessFlag::kCopyDest)
+			.AddBufferArg(
+				"geomBuffer",
 				bgl::BarrierSyncFlag::kCopy,
 				bgl::BarrierAccessFlag::kCopyDest)
 			.AddBufferArg(
@@ -210,6 +229,7 @@ TEST_CASE("Instances outside the frustum are culled, those inside survive", "[cu
 			.SetExec([&](const bgl::PassContext& ctx) {
 				auto* cmd = ctx.GetCommandList();
 				submeshBuffer.Update(cmd);
+				geomBuffer.Update(cmd);
 				meshBuffer.Update(cmd);
 				instanceBuffer.Update(cmd);
 				visibility.Clear(cmd);
@@ -229,6 +249,10 @@ TEST_CASE("Instances outside the frustum are culled, those inside survive", "[cu
 				bgl::BarrierAccessFlag::kShaderResource)
 			.AddBufferArg(
 				"meshBuffer",
+				bgl::BarrierSyncFlag::kComputeShader,
+				bgl::BarrierAccessFlag::kShaderResource)
+			.AddBufferArg(
+				"geomBuffer",
 				bgl::BarrierSyncFlag::kComputeShader,
 				bgl::BarrierAccessFlag::kShaderResource)
 			.AddBufferArg(
@@ -253,6 +277,7 @@ TEST_CASE("Instances outside the frustum are culled, those inside survive", "[cu
 				cull["gUniforms"]["cullView"]       = cullView.GetBufferHandle();
 				cull["gUniforms"]["instanceBuffer"] = instanceBuffer.GetBufferHandle();
 				cull["gUniforms"]["meshBuffer"]     = meshBuffer.GetBufferHandle();
+				cull["gUniforms"]["geomBuffer"]     = geomBuffer.GetBufferHandle();
 				cull["gUniforms"]["submeshBuffer"]  = submeshBuffer.GetBufferHandle();
 				cull["gUniforms"]["visibility"]     = visibility.GetBufferHandle();
 #if defined(BERNINI_GPU_DEBUG)

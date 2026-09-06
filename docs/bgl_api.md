@@ -123,7 +123,7 @@ disagrees, trust the header, then fix this doc.
   silently re-points it at whatever record next takes those bytes — and, the arena holding records of
   different sizes, at a record of another kind or at the middle of one. The header a record carries
   is what a debug build checks that against. Geometry deletion has the mirror-image problem: an
-  instance holds a plain copy of its geom's submesh range. Ordering these teardowns is the caller's
+  instance names its geom by an ungenerationed entry. Ordering these teardowns is the caller's
   job — or `gamelib`'s `AssetManager`, which refcounts them.
 
   **A rig is the exception, and it throws rather than corrupting.** `DeleteRig` refuses while any geom
@@ -324,8 +324,8 @@ flowchart TD
 
 * **`DeleteGeom(geom)`** — @pre every instance placed from this geom has been destroyed via
   `ISceneView::DeleteMeshInstance`. The scene does **not** track instances and cannot check: an
-  instance holds an ungenerationed copy of the geom's submesh range, so one that outlives its geometry
-  draws whatever is allocated into that range next.
+  instance names its geom by an ungenerationed entry, so one that outlives its geometry draws
+  whatever geom is allocated into that slot next.
 * **`DeleteMaterial(material)`** — @pre no live submesh or instance override still binds it. A submesh
   stores the material's byte offset, not a generation-checked handle, so a stale binding silently
   picks up whatever record next takes those bytes. Rebind with `SetSubmeshMaterial` first. @throws `SceneError`
