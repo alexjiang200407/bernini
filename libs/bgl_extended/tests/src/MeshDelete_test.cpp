@@ -172,8 +172,9 @@ TEST_CASE("Buffer contents around mesh deletion", "[delete][buffers][scene]")
 	REQUIRE(meshBuffer.MetaAt(meshIndex).submeshInstances.size() == 1);
 	const auto submeshInstance = meshBuffer.MetaAt(meshIndex).submeshInstances[0];
 
-	// The MeshInstance (owned by the view) carries the submeshes descriptor.
-	const uint32_t submeshRoot = meshBuffer.AtIndex(meshIndex).submeshes.range.offsetStart;
+	// The placement's meta records where its geom's submeshes started; the GPU record names the geom
+	// rather than repeating its range.
+	const uint32_t submeshRoot = meshBuffer.MetaAt(meshIndex).submeshRoot;
 
 	const auto& submesh = submeshBuffer.AtIndex(submeshRoot);
 	// A byte offset, not an element index: the vertex arena is byte-addressed.

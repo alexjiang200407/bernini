@@ -320,9 +320,9 @@ namespace bgl
 		 *
 		 * @pre Every mesh instance placed from this geom has been destroyed
 		 *      (ISceneView::DeleteMeshInstance). The scene does not track instances and cannot
-		 *      check: an instance holds a plain copy of the geom's submesh range, with no
-		 *      generation, so one that outlives its geometry will draw whatever geometry is
-		 *      allocated into that range next. Owning that lifetime is the caller's job.
+		 *      check: an instance names its geom by an entry with no generation, so one that
+		 *      outlives its geometry will draw whatever geom is allocated into that slot next.
+		 *      Owning that lifetime is the caller's job.
 		 *
 		 * @param geom A handle returned by a geometry-creating method.
 		 * @throws SceneError if the handle is invalid or already removed.

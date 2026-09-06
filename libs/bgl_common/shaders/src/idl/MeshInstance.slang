@@ -1,10 +1,10 @@
+import Entry;
+import Geom;
 import IPlayback;
-import RangeWithCount;
 import RawEntry;
-import Submesh;
 
-// One placement of a geom: its world transform, the geom's submesh range copied in by value, and
-// its playback record. The geom itself has no GPU record.
+// One placement of a geom: its world transform, the geom it was placed from, and its playback
+// record.
 public struct MeshInstance
 {
     // The three rows of an affine placement; the fourth is always (0,0,0,1) and is not stored, as a
@@ -13,7 +13,9 @@ public struct MeshInstance
     // bgl::WriteInstanceTransform.
     public float4 transform[3];
 
-    public RangeWithCount<Submesh> submeshes;
+    // Named, not copied: the submesh range belongs to the geom, and every placement of one reads
+    // the same record.
+    public Entry<Geom> geom;
 
     // Null for a static mesh. Otherwise a record in the view's playback arena whose header says
     // which tier it is, so the one stage that draws more than one tier can ask rather than mirror

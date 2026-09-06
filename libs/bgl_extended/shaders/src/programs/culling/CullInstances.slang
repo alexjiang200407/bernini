@@ -1,6 +1,7 @@
 import idl.Constants;
 import idl.CullStats;
 import idl.CullView;
+import idl.Geom;
 import idl.InstanceVisibility;
 import idl.MeshInstance;
 import idl.Submesh;
@@ -22,6 +23,7 @@ struct Uniforms
     UploadBuffer<CullView> cullView;
     PackedBuffer<SubmeshInstance> instanceBuffer;
     EntryBuffer<MeshInstance> meshBuffer;
+    EntryBuffer<Geom> geomBuffer;
     RangeBuffer<Submesh> submeshBuffer;
     ComputeBuffer<InstanceVisibility> visibility;
 
@@ -46,10 +48,11 @@ void main(uint globalIdx: SV_DispatchThreadID)
     }
 
     let mesh = gUniforms.meshBuffer.Get(instance.meshInstance);
+    let geom = gUniforms.geomBuffer.Get(mesh.geom);
 
-    dbg_assert(instance.submeshIndex < mesh.submeshes.count, ErrorCode.kInvalidSubmeshIndex, instance.submeshIndex, mesh.submeshes.count);
+    dbg_assert(instance.submeshIndex < geom.submeshes.count, ErrorCode.kInvalidSubmeshIndex, instance.submeshIndex, geom.submeshes.count);
 
-    let submesh = gUniforms.submeshBuffer.Get(mesh.submeshes, instance.submeshIndex);
+    let submesh = gUniforms.submeshBuffer.Get(geom.submeshes, instance.submeshIndex);
 
     // World-space bounding sphere. The centre transforms like a vertex -- the same accessor the
     // forward pass uses -- so cull and draw cannot disagree on where the instance is. The radius scales

@@ -269,9 +269,9 @@ namespace bgl
 		}
 
 		// --- SceneView support -------------------------------------------------
-		// Instances live in SceneViews and reference this Scene's geometry by value: a view copies
-		// the submesh range below into its MeshInstance. The Scene keeps no record of who
-		// placed what, so the caller owns the ordering -- see IScene::DeleteGeom.
+		// Instances live in SceneViews and name this Scene's geometry by an entry with no
+		// generation. The Scene keeps no record of who placed what, so the caller owns the
+		// ordering -- see IScene::DeleteGeom.
 
 		[[nodiscard]] bool
 		IsGeomAlive(GeomHandle geom) const noexcept override
@@ -279,7 +279,9 @@ namespace bgl
 			return geom.IsValid() && m_Geoms.valid(geom.handle);
 		}
 
-		// The submesh range a SceneView copies into a MeshInstance at instance-creation time.
+		// The geom's submesh range. A SceneView reads it once at instance-creation time, for the
+		// submesh count and the root its shading resolve indexes by; the range itself reaches the
+		// GPU on the Geom record, not on the placement.
 		// Only valid while the geom is alive; check IsGeomAlive first.
 		[[nodiscard]] const idl::RangeWithCount&
 		GetGeomSubmeshes(uint32_t index) const noexcept
