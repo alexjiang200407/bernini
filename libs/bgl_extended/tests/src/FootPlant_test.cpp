@@ -166,6 +166,12 @@ namespace
 		// weight one. And the clock the frame is drawn at, which is what a ramp is read against.
 		std::optional<bgl::FootIKDesc> footIK;
 		float                          time = 0.0f;
+
+		// The blended cases only: a clip set and plant table of their own, and the multi-slot
+		// record to spawn with. None of the three leaves the single still clip and its one slot.
+		std::optional<assetlib::AnimationSet>   clips;
+		std::optional<bgl::FootPlantDesc>       plant;
+		std::optional<bgl::SkinnedPlaybackDesc> playback;
 	};
 
 	bgl::FootPlantDesc
@@ -308,8 +314,8 @@ namespace
 
 		const bgl::RigHandle rig = legScene.scene->AddRig(
 			MakeLegRig(options.rootScale),
-			MakeStillClip(options.rootScale, options.lift),
-			MakeLeg(weight, options));
+			options.clips ? *options.clips : MakeStillClip(options.rootScale, options.lift),
+			options.plant ? *options.plant : MakeLeg(weight, options));
 		REQUIRE(rig.IsValid());
 
 		legScene.geom = legScene.scene->AddSkinnedMeshGeom(
@@ -344,7 +350,9 @@ namespace
 		// rate 0, so the clip holds frame 0 and the clock cannot move the pose between the two
 		// palettes -- the solve is then the only thing that differs from the bind pose.
 		const auto instance =
-			view->CreateSkinnedMeshInstance(legScene.geom, options.world, { 0, 0.0f, 0.0f });
+			options.playback ?
+				view->CreateSkinnedMeshInstance(legScene.geom, options.world, *options.playback) :
+				view->CreateSkinnedMeshInstance(legScene.geom, options.world, { 0, 0.0f, 0.0f });
 		if (options.footIK)
 		{
 			view->SetFootIK(instance, *options.footIK);
@@ -1692,4 +1700,119 @@ TEST_CASE(
 		posed.palette.rows.begin() + 2 * stride);
 
 	bgl::test::CheckNear(previous.Sole(), posed.Sole());
+}
+
+namespace
+{
+	/** How far the lifted clip holds the sole off its floor; the seat is what a weight scales. */
+	constexpr float c_BlendLift = 0.2f;
+
+	/**
+	 * Two still clips back to back over one sample pool, posing identically. A blend of them is an
+	 * identity on every bone, so the only thing a case built on them can measure is the plant
+	 * weight -- which is the point: the pose and the weight are blended by the same sum, and only
+	 * one of them is under test here.
+	 */
+	assetlib::AnimationSet
+	MakeTwoStillClips()
+	{
+		assetlib::AnimationSet set     = MakeStillClip(1.0f, c_BlendLift);
+		const size_t           samples = set.samples.size();
+
+		// Copied out first: inserting a vector's own range into itself invalidates the source
+		// iterators the moment it reallocates.
+		const std::vector<assetlib::Transform> first = set.samples;
+		set.samples.insert(set.samples.end(), first.begin(), first.end());
+
+		assetlib::AnimationClip second = set.clips[0];
+		second.firstSample             = static_cast<uint32_t>(samples);
+		set.clips.push_back(second);
+		return set;
+	}
+
+	/** One leg, baked at `first` across clip 0's frames and `second` across clip 1's. */
+	bgl::FootPlantDesc
+	MakeTwoClipLeg(uint8_t first, uint8_t second)
+	{
+		bgl::FootPlantDesc plant = MakeLeg(first);
+		plant.plantWeights.resize(size_t(c_Frames) * 2, second);
+		return plant;
+	}
+
+	/** A slot holding node `nodeIndex` at a constant `weight`, frame 0 at every clock. */
+	bgl::PlaybackSlot
+	HeldSlot(uint32_t nodeIndex, float weight)
+	{
+		auto slot      = bgl::PlaybackSlot();
+		slot.nodeIndex = nodeIndex;
+		slot.rate      = 0.0f;
+		slot.weight0   = weight;
+		slot.weight1   = weight;
+		return slot;
+	}
+
+	/**
+	 * The sole's height under the two clips blended `firstWeight` / `1 - firstWeight`.
+	 *
+	 * On the flat floor with a lifted clip, so the *seat* is the whole correction and the baked
+	 * weight is what scales it: on lowered ground every baked weight is carried by the lift alike
+	 * and the weight would not show at all.
+	 */
+	float
+	BlendedSole(uint8_t bakedFirst, uint8_t bakedSecond, float firstWeight)
+	{
+		auto record    = bgl::SkinnedPlaybackDesc();
+		record.slot[0] = HeldSlot(0, firstWeight);
+		record.slot[1] = HeldSlot(1, 1.0f - firstWeight);
+
+		return PoseLeg(
+				   c_Flat,
+				   0,
+				   { .lift     = c_BlendLift,
+		             .clips    = MakeTwoStillClips(),
+		             .plant    = MakeTwoClipLeg(bakedFirst, bakedSecond),
+		             .playback = record })
+		    .Sole()
+		    .y;
+	}
+}
+
+// The gate foot_ik_blending.md asks for and nothing had: every plant case before this one holds a
+// single clip, and every blend case runs on a rig with no legs, so the product of the two -- the
+// weighted sum PlantWeight(rig, pose, leg) computes -- was reasoned about and never measured.
+TEST_CASE(
+	"a blended plant weight is the slots' weighted sum",
+	"[skinned][pose][plant][blend][render]")
+{
+	SECTION("a foot planted in one clip and free in the other seats by that slot's weight")
+	{
+		// The Run -> Jump_Up shape: clip 0 plants, clip 1 is airborne and the avatar zeroes it. An
+		// average would answer half at every one of these, and reading slot 0 alone the full seat.
+		for (const float weight : { 0.25f, 0.5f, 0.75f })
+		{
+			INFO("slot weight " << weight);
+			CHECK(
+				BlendedSole(255, 0, weight) ==
+				Catch::Approx(c_BlendLift * (1.0f - weight)).margin(2e-3));
+		}
+	}
+
+	SECTION("a foot planted in both clips holds the full seat through the crossfade")
+	{
+		// Weights that sum to one over two fully planted clips must not dip: the case a mean over
+		// the live slots gets right and a mean over all four slots gets wrong.
+		for (const float weight : { 0.0f, 0.5f, 1.0f })
+		{
+			INFO("slot weight " << weight);
+			CHECK(BlendedSole(255, 255, weight) == Catch::Approx(0.0f).margin(2e-3));
+		}
+	}
+
+	SECTION("one live slot is the un-blended weight")
+	{
+		// The reduction the single-clip path depends on: all the weight on one slot must seat
+		// exactly as that clip's own baked weight says, and nothing of the other clip's.
+		CHECK(BlendedSole(255, 0, 1.0f) == Catch::Approx(0.0f).margin(1e-3));
+		CHECK(BlendedSole(0, 255, 1.0f) == Catch::Approx(c_BlendLift).margin(1e-3));
+	}
 }
