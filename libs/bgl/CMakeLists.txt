@@ -33,3 +33,66 @@ target_precompile_headers(bgl_selfcheck PRIVATE ${CMAKE_SOURCE_DIR}/PCH/pch.h)
 target_link_libraries(bgl_selfcheck PRIVATE bgl)
 
 enable_strict_compiler(bgl_selfcheck)
+
+# The contract's Slang half: what a game surface conforms to and reads through, and nothing that
+# names a handle, an arena or a bucket -- the rule docs/bgl_api.md holds headers to, held for shaders.
+# Staged into the one ./shaders/src every renderer resolves from, owning bgl/ there; the shared tree's
+# copier is ordered after this one so the root's make_directory never races.
+set(BGL_SHADER_CONTRACT_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/shaders/src")
+file(GLOB_RECURSE BGL_SHADER_CONTRACT_SOURCES CONFIGURE_DEPENDS
+	${BGL_SHADER_CONTRACT_ROOT}/*.slang
+)
+# The trees above this one compile against the contract, so both are theirs to read.
+set(BGL_SHADER_CONTRACT_ROOT "${BGL_SHADER_CONTRACT_ROOT}" PARENT_SCOPE)
+set(BGL_SHADER_CONTRACT_SOURCES "${BGL_SHADER_CONTRACT_SOURCES}" PARENT_SCOPE)
+
+set(BGL_SHADER_STAMP "${CMAKE_CURRENT_BINARY_DIR}/shaders.stamp")
+add_custom_command(
+	OUTPUT  "${BGL_SHADER_STAMP}"
+	COMMAND ${CMAKE_COMMAND} -E copy_directory
+			"${BGL_SHADER_CONTRACT_ROOT}"
+			"${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/shaders/src"
+	COMMAND ${CMAKE_COMMAND} -E touch "${BGL_SHADER_STAMP}"
+	DEPENDS ${BGL_SHADER_CONTRACT_SOURCES}
+	COMMENT "Staging the shader contract"
+	VERBATIM
+)
+add_custom_target(bgl_copy_contract_shaders ALL DEPENDS "${BGL_SHADER_STAMP}")
+
+# Membership, enforced the way bgl_common_check_shaders enforces the shared tree's: every module
+# here is compiled with only this tree on the search path, so an import of anything else fails to
+# resolve. A game runs the same check on its own modules with this tree as the one path.
+#
+# The port stages slangc beside slangd under vcpkg's tools/, which is not on PATH; the hint is what
+# finds it on a preset whose renderer never runs a build-time shader step of its own. This is the
+# first find_program of slangc in the tree, so it fills the cache entry the shared tree's checks and
+# the D3D12 shader step's own find_program of the same name then read back.
+#
+# slangc by name, never slang: the port stages a `slang` beside it that is a different CLI, and on
+# Windows nothing but the name tells the two apart. Every flag the checks and the DXIL step pass
+# (-profile, -target, -entry, -stage, -o) is slangc's.
+find_program(SLANG_EXECUTABLE
+	NAMES slangc slangc.exe
+	HINTS "${VCPKG_INSTALLED_DIR}/${VCPKG_TARGET_TRIPLET}/tools/shader-slang"
+	DOC "Slang compiler, for the shader-contract membership check"
+)
+if(NOT SLANG_EXECUTABLE)
+	message(FATAL_ERROR "slangc not found: bgl's shader contract cannot be checked.")
+endif()
+
+set(BGL_SHADER_CONTRACT_CHECKS "")
+foreach(MODULE ${BGL_SHADER_CONTRACT_SOURCES})
+	file(RELATIVE_PATH MODULE_REL "${BGL_SHADER_CONTRACT_ROOT}" "${MODULE}")
+	set(MODULE_OUT "${CMAKE_CURRENT_BINARY_DIR}/shader_check/${MODULE_REL}.slang-module")
+	get_filename_component(MODULE_OUT_DIR "${MODULE_OUT}" DIRECTORY)
+	add_custom_command(
+		OUTPUT  "${MODULE_OUT}"
+		COMMAND ${CMAKE_COMMAND} -E make_directory "${MODULE_OUT_DIR}"
+		COMMAND ${SLANG_EXECUTABLE} "${MODULE}" -I "${BGL_SHADER_CONTRACT_ROOT}" -o "${MODULE_OUT}"
+		DEPENDS ${BGL_SHADER_CONTRACT_SOURCES}
+		COMMENT "shader-contract check ${MODULE_REL}"
+		VERBATIM
+	)
+	list(APPEND BGL_SHADER_CONTRACT_CHECKS "${MODULE_OUT}")
+endforeach()
+add_custom_target(bgl_check_shaders ALL DEPENDS ${BGL_SHADER_CONTRACT_CHECKS})

@@ -1,9 +1,11 @@
 set(SHADER_OUT_DIR "${CMAKE_BINARY_DIR}/bin/shaders")
 file(MAKE_DIRECTORY "${SHADER_OUT_DIR}")
 
+# Normally the cache entry bgl's contract check filled (libs/bgl/CMakeLists.txt); the same rule
+# either way -- slangc, never the port's `slang`, which is a different CLI.
 find_program(SLANG_EXECUTABLE
-    NAMES slang slangc slangc.exe
-    DOC "Slang shader compiler (slang/slangc)"
+    NAMES slangc slangc.exe
+    DOC "Slang shader compiler (slangc)"
 )
 
 if(NOT SLANG_EXECUTABLE)
@@ -14,6 +16,8 @@ set(SLANG_COMPILE_OUTS "")
 set(SLANG_SOURCE_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/src")
 # The shared tree: idl.* resolves from here, and nothing under it is this renderer's to compile.
 set(SLANG_COMMON_ROOT "${CMAKE_SOURCE_DIR}/libs/bgl_common/shaders/src")
+# The contract below both: bgl.* resolves from here.
+set(SLANG_CONTRACT_ROOT "${BGL_SHADER_CONTRACT_ROOT}")
 
 
 # The list is the tree: every program under programs/ is compiled to DXIL here, at every entry
@@ -49,7 +53,7 @@ foreach(SHADER ${SLANG_PROGRAM_SOURCES})
             OUT_DIR      "${SHADER_OUT_DIR}/${SHADER_REL_DIR}"
             TARGET       "dxil"
             STAGE        "${ENTRY_PROFILE}"
-            INCLUDES     ${SLANG_SOURCE_ROOT} ${SLANG_COMMON_ROOT}
+            INCLUDES     ${SLANG_SOURCE_ROOT} ${SLANG_COMMON_ROOT} ${SLANG_CONTRACT_ROOT}
             ENTRY_POINTS "${ENTRY_NAME}"
         )
     endforeach()
@@ -79,7 +83,7 @@ if (BUILD_TESTS)
             FILE     "${SHADER}"
             OUT_DIR  "${SHADER_OUT_DIR}"
             TARGET   "dxil"
-            INCLUDES ${SLANG_SOURCE_ROOT} ${SLANG_COMMON_ROOT}
+            INCLUDES ${SLANG_SOURCE_ROOT} ${SLANG_COMMON_ROOT} ${SLANG_CONTRACT_ROOT}
         )
 
         list(APPEND SLANG_COMPILE_OUTS "${${SHADER_BARE_NAME}_OUTPUT}")
