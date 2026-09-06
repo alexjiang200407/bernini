@@ -54,7 +54,7 @@ namespace bgl
 
 	Device::Device(
 		MTL::Device*                 device,
-		const std::string&           shaderCacheDir,
+		const std::filesystem::path& shaderCacheDir,
 		const std::filesystem::path& surfaceShaderDir,
 		bool                         usePipelineLibrary) :
 		m_Device(NS::RetainPtr(device)),

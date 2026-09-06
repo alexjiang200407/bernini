@@ -29,7 +29,7 @@ namespace bgl
 	public:
 		Device(
 			MTL::Device*                 device,
-			const std::string&           shaderCacheDir,
+			const std::filesystem::path& shaderCacheDir,
 			const std::filesystem::path& surfaceShaderDir,
 			bool                         usePipelineLibrary);
 

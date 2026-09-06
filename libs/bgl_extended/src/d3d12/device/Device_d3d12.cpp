@@ -43,7 +43,7 @@ namespace bgl
 
 	Device::Device(
 		wrl::ComPtr<ID3D12Device>    device,
-		const std::string&           shaderCacheDir,
+		const std::filesystem::path& shaderCacheDir,
 		const std::filesystem::path& surfaceShaderDir,
 		bool                         gpuValidation) :
 		m_Device(std::move(device)),

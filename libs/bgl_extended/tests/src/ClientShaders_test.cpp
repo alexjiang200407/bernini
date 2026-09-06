@@ -161,7 +161,7 @@ TEST_CASE(
 	opts.surfaceShaderDir = dir;
 	// The salt folds each file's path, and the temp directory is fresh per run, so a cache shared
 	// with the suite would gain a generation no later run could hit. This one dies with the dir.
-	opts.shaderCacheDir = (dir / "shadercache").string();
+	opts.shaderCacheDir = dir / "shadercache";
 
 	CHECK(ProbeValue(opts, "CSClientProbe") == 7u);
 
@@ -187,7 +187,7 @@ TEST_CASE(
 	std::filesystem::create_directories(dir);
 
 	auto opts           = ProbeOptions();
-	opts.shaderCacheDir = (dir / "shadercache").string();
+	opts.shaderCacheDir = dir / "shadercache";
 
 	CHECK(ProbeValue(opts, "CSSourceProbe") == 1u);
 
