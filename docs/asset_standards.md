@@ -421,12 +421,16 @@ in `docs/specs/`.
     never affects rendering; it exists so reopening a material restores the board that produced the
     routes, node positions and unwired nodes included.
 
+  **`MaterialLayer` — the layer, which every model has and none owns**: `alphaMode`, `alphaCutoff`
+  and `doubleSided`, top-level keys beside `shadingModel`. `gamelib` derives the renderer's `LayerType`
+  from `alphaMode`; a model's payload holds nothing about how alpha is read.
+
   **`PbrParams` — the metallic-roughness payload**, in *both* of its forms at once:
 
   * **Sources** — a 9-entry `routes` table. Each PBR output channel (base colour R,G,B,A; ORM ao,
     roughness, metallic; normal X,Y) names a *source* texture and which of *its* RGBA channels to read.
     This is what the material editor authors, and what `LoosePbrMaterial` samples directly with no bake.
-  * **Optimized** — the baseColor / normal / orm triplet, plus the factors and the alpha mode/cutoff. The
+  * **Optimized** — the baseColor / normal / orm triplet, plus the factors. The
     output of `bakeMaterial` (or of a glTF import), and what `PbrMaterial` consumes. A bake writes the
     maps into `<Data>/Derived/BakedTextures/`.
   * Both may be populated simultaneously, and normally are: a baked material keeps its routes so it can

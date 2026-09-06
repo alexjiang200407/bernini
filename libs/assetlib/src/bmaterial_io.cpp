@@ -123,7 +123,7 @@ namespace assetlib
 			// back byte-for-byte, and nothing here may assume it parses.
 			taker.Take("editorGraph", material.editorGraph);
 
-			PbrParams& pbr = material.pbr;
+			MaterialLayer& layer = material.layer;
 
 			std::string alphaMode(c_AlphaModeNames[0]);
 			taker.Take("alphaMode", alphaMode);
@@ -132,10 +132,13 @@ namespace assetlib
 				mode == c_AlphaModeNames.end(),
 				"bmaterial: unknown alpha mode '{}'",
 				alphaMode);
-			pbr.alphaMode = static_cast<AlphaMode>(mode - c_AlphaModeNames.begin());
+			layer.alphaMode = static_cast<AlphaMode>(mode - c_AlphaModeNames.begin());
 
-			taker.Take("alphaCutoff", pbr.alphaCutoff);
-			taker.Take("doubleSided", pbr.doubleSided);
+			taker.Take("alphaCutoff", layer.alphaCutoff);
+			taker.Take("doubleSided", layer.doubleSided);
+
+			PbrParams& pbr = material.pbr;
+
 			taker.Take("baseColorFactor", pbr.baseColorFactor);
 			taker.Take("metallicFactor", pbr.metallicFactor);
 			taker.Take("roughnessFactor", pbr.roughnessFactor);
@@ -251,10 +254,12 @@ namespace assetlib
 		else
 			json.erase("editorGraph");
 
+		const MaterialLayer& layer = material.layer;
+		json["alphaMode"]          = alphaModeName(layer.alphaMode);
+		json["alphaCutoff"]        = doc::plainFloat(layer.alphaCutoff);
+		json["doubleSided"]        = layer.doubleSided;
+
 		const PbrParams& pbr        = material.pbr;
-		json["alphaMode"]           = alphaModeName(pbr.alphaMode);
-		json["alphaCutoff"]         = doc::plainFloat(pbr.alphaCutoff);
-		json["doubleSided"]         = pbr.doubleSided;
 		json["baseColorFactor"]     = doc::vecToJson(pbr.baseColorFactor);
 		json["metallicFactor"]      = doc::plainFloat(pbr.metallicFactor);
 		json["roughnessFactor"]     = doc::plainFloat(pbr.roughnessFactor);

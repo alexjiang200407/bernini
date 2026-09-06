@@ -446,8 +446,8 @@ TEST_CASE("A cutout import survives the round-trip to disk", "[importedmaterials
 
 	// The alpha mode is stored, not re-derived at load -- and the alpha is routed, which for a cutout
 	// is the channel it cuts against.
-	CHECK(material.pbr.alphaMode == assetlib::AlphaMode::kMask);
-	CHECK(material.pbr.alphaCutoff == Catch::Approx(0.25f));
+	CHECK(material.layer.alphaMode == assetlib::AlphaMode::kMask);
+	CHECK(material.layer.alphaCutoff == Catch::Approx(0.25f));
 	CHECK(
 		material.pbr.routes[assetlib::channelIndex(PbrChannel::kBaseColorA)].texture ==
 		"Derived/SourceTextures/hydrant/albedo.ktx2");

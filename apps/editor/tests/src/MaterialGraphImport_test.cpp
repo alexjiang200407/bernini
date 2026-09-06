@@ -180,7 +180,7 @@ TEST_CASE("An opaque import routes no alpha", "[materialimport]")
 	// The opaque sink's base-colour port is 3-wide, so the alpha channel has nowhere to land. Routing
 	// an alpha nothing tests against is what turns every material in a project into a BC7 cutout that
 	// cuts nothing out -- see docs/asset_standards.md.
-	CHECK(material.pbr.alphaMode == assetlib::AlphaMode::kOpaque);
+	CHECK(material.layer.alphaMode == assetlib::AlphaMode::kOpaque);
 	CHECK(Route(material, PbrChannel::kBaseColorA).texture.empty());
 }
 
@@ -192,8 +192,8 @@ TEST_CASE("A cutout import routes the alpha it cuts against", "[materialimport]"
 
 	const assetlib::BMaterial material = Import(imported, AllMaps());
 
-	CHECK(material.pbr.alphaMode == assetlib::AlphaMode::kMask);
-	CHECK(material.pbr.alphaCutoff == Catch::Approx(0.25f));
+	CHECK(material.layer.alphaMode == assetlib::AlphaMode::kMask);
+	CHECK(material.layer.alphaCutoff == Catch::Approx(0.25f));
 	CHECK(
 		Route(material, PbrChannel::kBaseColorA).texture ==
 		"Derived/SourceTextures/hydrant/tex0.ktx2");
@@ -218,7 +218,7 @@ TEST_CASE("A blend import routes its alpha into a blend sink", "[materialimport]
 	const assetlib::BMaterial material =
 		CompileMaterial(model, QStringLiteral("hydrant"), c_DataRoot);
 
-	CHECK(material.pbr.alphaMode == assetlib::AlphaMode::kBlend);
+	CHECK(material.layer.alphaMode == assetlib::AlphaMode::kBlend);
 
 	// Blend reads the base-color alpha, like a cutout, so its 4-wide port routes channel 3.
 	CHECK(
@@ -263,7 +263,7 @@ TEST_CASE("A cut-out import carries its double-sidedness through the graph", "[m
 	REQUIRE(output != nullptr);
 	CHECK(!output->GetDoubleSided());
 
-	CHECK(!CompileMaterial(model, QStringLiteral("leaf"), c_DataRoot).pbr.doubleSided);
+	CHECK(!CompileMaterial(model, QStringLiteral("leaf"), c_DataRoot).layer.doubleSided);
 }
 
 // A graph saved before the flag existed carries no key for it, and every card it described drew
@@ -277,7 +277,7 @@ TEST_CASE("A graph with no double-sidedness of its own compiles to both sides", 
 
 	output->load(QJsonObject{});
 	CHECK(output->GetDoubleSided());
-	CHECK(CompileMaterial(model, QStringLiteral("m"), c_DataRoot).pbr.doubleSided);
+	CHECK(CompileMaterial(model, QStringLiteral("m"), c_DataRoot).layer.doubleSided);
 }
 
 // The sink is what CompileMaterial reads, so a factor the node does not hold is silently reset the
@@ -302,7 +302,7 @@ TEST_CASE("An import carries its specular factors through the graph", "[material
 	CHECK(material.pbr.specularColorFactor.g == Catch::Approx(0.77f));
 
 	// An opaque sink carries them as much as any other: specular is not a property of the alpha mode.
-	CHECK(material.pbr.alphaMode == assetlib::AlphaMode::kOpaque);
+	CHECK(material.layer.alphaMode == assetlib::AlphaMode::kOpaque);
 }
 
 // A graph saved before the specular keys existed carries none of them, and must load as glTF's
@@ -366,7 +366,7 @@ TEST_CASE("A blend graph saved with the retired occlude keys still loads", "[mat
 	CHECK(output->GetAlphaMode() == assetlib::AlphaMode::kBlend);
 
 	const assetlib::BMaterial compiled = CompileMaterial(model, QStringLiteral("m"), c_DataRoot);
-	CHECK(compiled.pbr.alphaMode == assetlib::AlphaMode::kBlend);
+	CHECK(compiled.layer.alphaMode == assetlib::AlphaMode::kBlend);
 }
 
 TEST_CASE("A map a glTF material does not name is left unrouted", "[materialimport]")
@@ -418,8 +418,8 @@ TEST_CASE("An imported material reopens as the board that produced it", "[materi
 		CHECK(recompiled.pbr.routes[i].channel == material.pbr.routes[i].channel);
 	}
 
-	CHECK(recompiled.pbr.alphaMode == assetlib::AlphaMode::kMask);
-	CHECK(recompiled.pbr.alphaCutoff == Catch::Approx(0.4f));
+	CHECK(recompiled.layer.alphaMode == assetlib::AlphaMode::kMask);
+	CHECK(recompiled.layer.alphaCutoff == Catch::Approx(0.4f));
 	CHECK(recompiled.pbr.metallicFactor == Catch::Approx(0.6f));
 	CHECK(recompiled.pbr.roughnessFactor == Catch::Approx(0.7f));
 }
@@ -565,5 +565,5 @@ TEST_CASE(
 
 	CHECK(asShown(material.pbr.roughnessFactor) == material.pbr.roughnessFactor);
 	CHECK(asShown(material.pbr.metallicFactor) == material.pbr.metallicFactor);
-	CHECK(asShown(material.pbr.alphaCutoff) == material.pbr.alphaCutoff);
+	CHECK(asShown(material.layer.alphaCutoff) == material.layer.alphaCutoff);
 }
