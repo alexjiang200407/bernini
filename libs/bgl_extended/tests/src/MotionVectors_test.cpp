@@ -9,6 +9,7 @@
 #include "util/GoldenImage.h"
 #include "util/GpuValidation.h"
 #include "util/HalfFloat.h"
+#include "util/SkinnedSynth.h"
 #include "util/TestEnvironment.h"
 #include "util/TestOptions.h"
 #include "util/VelocityReadback.h"
@@ -19,9 +20,11 @@
 #include <bgl/IRenderTarget.h>
 #include <bgl/IScene.h>
 #include <bgl/ISceneView.h>
+#include <bgl/InstanceDesc.h>
 #include <bgl/MeshInstanceHandle.h>
 #include <bgl/SkyboxDesc.h>
 #include <bgl/Viewport.h>
+#include <bgl/types/PbrMaterialDesc.h>
 #include <bgl_common/jitter.h>
 #include <catch2/catch_approx.hpp>
 #include <catch2/catch_message.hpp>
@@ -151,6 +154,24 @@ namespace
 			return view->CreateStaticMeshInstance(
 				plane,
 				glm::translate(glm::mat4(1.0f), { 0, 0, c_PlaneZ }));
+		}
+
+		// The synthesised sliding quad, on the per-instance pose source so its palette carries both
+		// this frame's pose and the previous one. `rate` 0 holds it on frame 0, which is what lets a
+		// case move the placement and read the placement's contribution alone.
+		bgl::MeshInstanceHandle
+		AddSkinnedQuad(float rate)
+		{
+			bgl::test::ApplyEnvironment(scene.Get(), view.Get());
+
+			const auto geom = bgl::test::skinned_synth::AddSlidingQuadGeom(
+				*scene,
+				scene->CreatePbrMaterial(bgl::PbrMaterialDesc()));
+
+			return view->CreateSkinnedMeshInstance(
+				geom,
+				glm::translate(glm::mat4(1.0f), { 0, 0, c_PlaneZ }),
+				bgl::SkinnedInstanceDesc{ bgl::test::skinned_synth::c_LoopClip, 0.0f, rate });
 		}
 
 		void
@@ -748,4 +769,48 @@ TEST_CASE(
 		CHECK(measured.x == Catch::Approx(expected.x).margin(1e-3));
 		CHECK(std::abs(expected.x) > 1e-2f);
 	}
+}
+
+// The skinned tier's half of the same claim, and the one nothing else reaches: a skinned vertex is
+// placed by the instance transform *after* it is posed, so its previous position needs the previous
+// pose through the previous placement. Getting only the pose right leaves a moving unit reporting
+// the velocity of its animation and none of its travel -- and with the pose held still, none at all.
+//
+// The pose is held (`rate` 0) deliberately, which splits the acceptance item's "moves and animates"
+// into two single-variable cases: this one, and SkinnedRender_test's "an animating skinned mesh
+// writes motion vectors and a held one does not" for the pose. Deriving an expected velocity for a
+// vertex doing both at once would mean replicating the shader's own blend to stay independent of
+// it, which is what the derivation above exists to avoid.
+TEST_CASE(
+	"A moved skinned instance writes its placement's velocity",
+	"[motionvectors][transform][skinned][render]")
+{
+	auto       fixture  = MotionFixture();
+	const auto instance = fixture.AddSkinnedQuad(0.0f);
+
+	const glm::vec3   eye    = { 0.0f, 0.0f, c_CameraZ };
+	const bgl::Camera camera = CameraAt(eye);
+
+	fixture.RenderFrom(camera);
+
+	constexpr float c_Shift = 0.35f;
+	fixture.view->SetInstanceTransform(
+		instance,
+		glm::translate(glm::mat4(1.0f), { c_Shift, 0.0f, c_PlaneZ }));
+
+	fixture.RenderFrom(camera);
+
+	const glm::vec2 measured = CentrePixel(fixture.ReadMotionVectors());
+
+	const glm::vec3 surface  = SurfacePointAt(camera, eye, c_Width / 2, c_Height / 2);
+	const glm::vec2 expected = ProjectToUv(camera, surface) -
+	                           ProjectToUv(camera, surface - glm::vec3(c_Shift, 0.0f, 0.0f));
+
+	INFO("measured = " << measured.x << ", " << measured.y);
+	INFO("expected = " << expected.x << ", " << expected.y);
+
+	CHECK(measured.x == Catch::Approx(expected.x).margin(1e-3));
+	CHECK(measured.y == Catch::Approx(expected.y).margin(1e-3));
+
+	CHECK(std::abs(expected.x) > 1e-2f);
 }
