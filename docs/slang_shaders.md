@@ -7,7 +7,7 @@ from the staged Slang — to DXIL on D3D12, to MSL via `newLibraryWithSource` on
 
 ```
 libs/bgl/shaders/src/                 the contract: what a game surface conforms to and reads through; names no handle, arena or bucket
-  bgl/                                Surface, the material's half of shading as the BRDF reads it
+  bgl/                                PbrSurface, the material's half of shading as the PBR model reads it
 libs/bgl_common/shaders/src/          what every renderer shares; names no buffer, texture or handle
   idl/                                the IDL modules, the one source bgl_idlgen mirrors to C++; see docs/idlgen.md
   lib/  anim/ math/ geom/ data/       the pose walk and vertex blend, the foot-plant geometry and its two-bone solve; the BRDF and its LUT integral, the TAA resolve, hashed alpha, tonemapping, a motion vector, a frustum test, affine transform maths; vertex decode; plain view structs

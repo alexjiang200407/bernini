@@ -1,11 +1,11 @@
 /**
- * What a surface is, as the BRDF reads it: the material's half of shading. The lighting's half is
- * SurfaceLobes in lib.math.PbrShading, which a surface never sees.
+ * What the PBR model reads off a surface: the material's half of shading. The lighting's half is
+ * SurfaceLobes in lib.math.PbrShading, which a surface never sees. Another model reads another struct.
  *
  * Each default is what a surface that says nothing about the field means: white, a matte
  * dielectric, a flat normal, glTF's specular, no transmission, no emission.
  */
-public struct Surface
+public struct PbrSurface
 {
     public float4 baseColor = float4(1.0, 1.0, 1.0, 1.0);
 

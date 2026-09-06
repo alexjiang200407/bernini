@@ -1,7 +1,7 @@
 // WGSL-lowering driver for lib.math.PbrShading. Fragment stage: the footprint LOD takes derivatives
 // of the reflection vector. The environment here is plain cube and 2D textures -- the first
 // ISurfaceEnv with no bindless handle.
-import bgl.Surface;
+import bgl.PbrSurface;
 import idl.ISurfaceEnv;
 import lib.math.PbrShading;
 
@@ -29,7 +29,7 @@ float4 main(float3 worldPos: POSITION, float3 normal: NORMAL, float4 tangent: TA
 {
     BoundEnv env;
     SurfaceParams params = { float3(0.0, 1.0, 0.0), 1.0, float2(0.0, 1.0) };
-    Surface surface;
+    PbrSurface surface;
     surface.baseColor = float4(0.5, 0.5, 0.5, 1.0);
     surface.orm = float3(1.0, 0.5, 0.0);
     surface.normalXY = float2(0.5, 0.5);

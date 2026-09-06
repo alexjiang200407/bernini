@@ -1,4 +1,4 @@
-import bgl.Surface;
+import bgl.PbrSurface;
 import idl.ISurfaceEnv;
 
 // Fresnel Schlick approximation adjusted for IBL Roughness
@@ -102,7 +102,7 @@ public SurfaceLobes EvaluateSurface<E : ISurfaceEnv>(
     float3 worldPos,
     float3 worldNormal,
     float4 worldTangent,
-    Surface surface,
+    PbrSurface surface,
     bool isFrontFace
 )
 {

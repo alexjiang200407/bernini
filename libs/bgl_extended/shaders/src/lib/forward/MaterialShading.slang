@@ -1,4 +1,4 @@
-import bgl.Surface;
+import bgl.PbrSurface;
 import idl.Constants;
 import idl.IAlphaTestMaterial;
 import idl.IPbrMaterial;
@@ -12,9 +12,9 @@ public extension MaterialData
 {
     // Base colour is passed in rather than sampled here, so the tested paths can test it without
     // sampling the texture a second time.
-    Surface SurfaceOf<M : IPbrMaterial>(M material, float2 uv, float4 baseColor)
+    PbrSurface SurfaceOf<M : IPbrMaterial>(M material, float2 uv, float4 baseColor)
     {
-        Surface surface;
+        PbrSurface surface;
         surface.baseColor = baseColor;
         surface.orm = material.GetORM(uv);
         surface.normalXY = material.GetNormalXY(uv);
@@ -24,16 +24,16 @@ public extension MaterialData
         return surface;
     }
 
-    SurfaceLobes EvaluateLobes(ForwardVSOut input, Surface surface, bool isFrontFace)
+    SurfaceLobes EvaluateLobes(ForwardVSOut input, PbrSurface surface, bool isFrontFace)
     {
         return EvaluateSurface(GetSurfaceEnv(), GetSurfaceParams(), input.worldPos, input.normal, input.tangent, surface, isFrontFace);
     }
 
     /**
-     * The one BRDF entry for an opaque, cutout or hashed fragment. Every source of a Surface lights
+     * The one BRDF entry for an opaque, cutout or hashed fragment. Every source of a PbrSurface lights
      * through here or through ShadeSurfaceBlended; nothing else sums the lobes.
      */
-    public float4 ShadeSurface(ForwardVSOut input, Surface surface, bool isFrontFace)
+    public float4 ShadeSurface(ForwardVSOut input, PbrSurface surface, bool isFrontFace)
     {
         let lobes = EvaluateLobes(input, surface, isFrontFace);
 
@@ -48,7 +48,7 @@ public extension MaterialData
      * wrong rather than a build error. What the transmission factor selects between, and why coverage
      * rises with the reflectance, is in docs/passes.md#blended-surfaces.
      */
-    public float4 ShadeSurfaceBlended(ForwardVSOut input, Surface surface, bool isFrontFace)
+    public float4 ShadeSurfaceBlended(ForwardVSOut input, PbrSurface surface, bool isFrontFace)
     {
         let lobes = EvaluateLobes(input, surface, isFrontFace);
 
