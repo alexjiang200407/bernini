@@ -1,3 +1,4 @@
+import bgl.Surface;
 import idl.Constants;
 import idl.IAlphaTestMaterial;
 import idl.IPbrMaterial;
@@ -9,36 +10,34 @@ import lib.math.HashedAlpha;
 
 public extension MaterialData
 {
-    // The shared tail of both shading paths. Base color is passed in rather than sampled here, so the
-    // alpha-tested path can test it without sampling the texture a second time.
-    SurfaceLobes EvaluateWithBaseColor<M : IPbrMaterial>(ForwardVSOut input, M material, float4 baseColor, bool isFrontFace)
+    // Base colour is passed in rather than sampled here, so the tested paths can test it without
+    // sampling the texture a second time.
+    Surface SurfaceOf<M : IPbrMaterial>(M material, float2 uv, float4 baseColor)
     {
-        return EvaluateSurface(
-            GetSurfaceEnv(),
-            GetSurfaceParams(),
-            input.worldPos,
-            input.normal,
-            input.tangent,
-            baseColor,
-            material.GetORM(input.uv),
-            material.GetNormalXY(input.uv),
-            material.GetSpecular(),
-            isFrontFace
-        );
+        Surface surface;
+        surface.baseColor = baseColor;
+        surface.orm = material.GetORM(uv);
+        surface.normalXY = material.GetNormalXY(uv);
+        surface.specularFactors = material.GetSpecular();
+        surface.transmissionFactor = material.GetTransmission();
+        surface.emissive = float3(0.0, 0.0, 0.0);
+        return surface;
     }
 
-    float4 ShadeWithBaseColor<M : IPbrMaterial>(ForwardVSOut input, M material, float4 baseColor, bool isFrontFace)
+    SurfaceLobes EvaluateLobes(ForwardVSOut input, Surface surface, bool isFrontFace)
     {
-        let lobes = EvaluateWithBaseColor(input, material, baseColor, isFrontFace);
-
-        return float4(lobes.diffuse + lobes.specular, baseColor.a);
+        return EvaluateSurface(GetSurfaceEnv(), GetSurfaceParams(), input.worldPos, input.normal, input.tangent, surface, isFrontFace);
     }
 
-    public float4 Shade<M : IPbrMaterial>(ForwardVSOut input, bool isFrontFace)
+    /**
+     * The one BRDF entry for an opaque, cutout or hashed fragment. Every source of a Surface lights
+     * through here or through ShadeSurfaceBlended; nothing else sums the lobes.
+     */
+    public float4 ShadeSurface(ForwardVSOut input, Surface surface, bool isFrontFace)
     {
-        M material = M.Load(input.materialOffset);
+        let lobes = EvaluateLobes(input, surface, isFrontFace);
 
-        return ShadeWithBaseColor(input, material, material.GetBaseColor(input.uv), isFrontFace);
+        return float4(lobes.diffuse + lobes.specular + lobes.emissive, surface.baseColor.a);
     }
 
     /**
@@ -49,14 +48,25 @@ public extension MaterialData
      * wrong rather than a build error. What the transmission factor selects between, and why coverage
      * rises with the reflectance, is in docs/passes.md#blended-surfaces.
      */
+    public float4 ShadeSurfaceBlended(ForwardVSOut input, Surface surface, bool isFrontFace)
+    {
+        let lobes = EvaluateLobes(input, surface, isFrontFace);
+
+        return BlendedSurface(lobes, surface.baseColor.a, saturate(surface.transmissionFactor));
+    }
+
+    public float4 Shade<M : IPbrMaterial>(ForwardVSOut input, bool isFrontFace)
+    {
+        M material = M.Load(input.materialOffset);
+
+        return ShadeSurface(input, SurfaceOf(material, input.uv, material.GetBaseColor(input.uv)), isFrontFace);
+    }
+
     public float4 ShadeBlended<M : IPbrMaterial>(ForwardVSOut input, bool isFrontFace)
     {
         M material = M.Load(input.materialOffset);
 
-        let baseColor = material.GetBaseColor(input.uv);
-        let lobes = EvaluateWithBaseColor(input, material, baseColor, isFrontFace);
-
-        return BlendedSurface(lobes, baseColor.a, saturate(material.GetTransmission()));
+        return ShadeSurfaceBlended(input, SurfaceOf(material, input.uv, material.GetBaseColor(input.uv)), isFrontFace);
     }
 
     public float4 ShadeAlphaTested<M : IPbrMaterial & IAlphaTestMaterial>(ForwardVSOut input, bool isFrontFace)
@@ -70,7 +80,7 @@ public extension MaterialData
             discard;
         }
 
-        return ShadeWithBaseColor(input, material, baseColor, isFrontFace);
+        return ShadeSurface(input, SurfaceOf(material, input.uv, baseColor), isFrontFace);
     }
 
     // Stochastic coverage in place of a cutoff: the fragment survives with probability equal to its
@@ -102,6 +112,6 @@ public extension MaterialData
             discard;
         }
 
-        return ShadeWithBaseColor(input, material, baseColor, isFrontFace);
+        return ShadeSurface(input, SurfaceOf(material, input.uv, baseColor), isFrontFace);
     }
 }
