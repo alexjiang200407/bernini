@@ -173,7 +173,7 @@ disagrees, trust the header, then fix this doc.
 
 | Type | File | Role |
 |---|---|---|
-| `GraphicsOptions` | [libs/bgl/include/bgl/IGraphics.h](libs/bgl/include/bgl/IGraphics.h) | Device creation: debug layers, log level, `shaderCacheDir`, and every descriptor-heap/pool capacity. |
+| `GraphicsOptions` | [libs/bgl/include/bgl/IGraphics.h](libs/bgl/include/bgl/IGraphics.h) | Device creation: debug layers, log level, `shaderCacheDir`, `surfaceShaderDir` (the client's own Slang modules, imported by name), and every descriptor-heap/pool capacity. |
 | `CaptureTicket` | [libs/bgl/include/bgl/IGraphics.h](libs/bgl/include/bgl/IGraphics.h) | Names one in-flight backbuffer capture. Spent by resolve or discard. |
 | `PassTiming`, `PassTimings` | [libs/bgl/include/bgl/PassTiming.h](libs/bgl/include/bgl/PassTiming.h) | One row of `IGraphics::GetPassTimings` — a frame graph pass's name and what it cost on the GPU, in milliseconds — and the rows of one frame under the id of the frame they measured. |
 | `PassHistory` | [libs/bgl/include/bgl/PassHistory.h](libs/bgl/include/bgl/PassHistory.h) | The last N frames of `GetPassTimings` as a table of passes against frames, ignoring a frame id it has already recorded. The passes are a union in execution order and a cell is empty where that pass did not run, since a culled pass leaves no row. `PassHistoryCsv` in [pass_timing_csv.h](libs/bgl/include/bgl/pass_timing_csv.h) writes one out. |
@@ -405,6 +405,7 @@ flowchart TD
 ```cpp
 auto gfxOpts           = bgl::GraphicsOptions{};
 gfxOpts.shaderCacheDir = "shadercache";  // empty disables it; cold start is seconds slower
+gfxOpts.surfaceShaderDir = projectShaders;  // the client's own modules, importable by name; empty for none
 auto graphics          = bgl::CreateGraphics(gfxOpts);
 
 auto targetDesc     = bgl::RenderTargetDesc{};

@@ -238,6 +238,7 @@ namespace bgl
 		auto device = core::SharedRef<Device>::Make(
 			m_D3D12Device,
 			m_Opts.shaderCacheDir,
+			m_Opts.surfaceShaderDir,
 			m_Opts.enableGPUValidationLayer);
 		m_Device = device;
 

@@ -50,7 +50,7 @@ namespace
 	BuildTestKernels(const fs::path& cacheDir, uint32_t threads)
 	{
 		auto opts                     = bgl::GraphicsOptions();
-		opts.shaderCacheDir           = cacheDir.string();
+		opts.shaderCacheDir           = cacheDir;
 		opts.enableDebugLayer         = true;
 		opts.enableGPUValidationLayer = bgl::test::GpuValidationEnabled();
 

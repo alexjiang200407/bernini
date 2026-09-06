@@ -15,9 +15,9 @@ when this doc disagrees, trust the source, then fix this doc.
 ## Design Choices
 
 * **The cache is configuration, not an RHI object.** It is an internal optimization, so it is
-  **not** a `bgl::I*` interface — see [Render Hardware Interface](docs/rhi.md). The only thing that
-  crosses the RHI boundary is `GraphicsOptions::shaderCacheDir`, like the descriptor-heap
-  capacities. The `Device` owns the cache and threads it through pipeline creation. A future Vulkan
+  **not** a `bgl::I*` interface — see [Render Hardware Interface](docs/rhi.md). What crosses the RHI
+  boundary is `GraphicsOptions::shaderCacheDir` and, because its files are in the salt,
+  `GraphicsOptions::surfaceShaderDir`, like the descriptor-heap capacities. The `Device` owns the cache and threads it through pipeline creation. A future Vulkan
   backend reads the same directory and backs it with `VkPipelineCache`; the on-disk formats are the
   backend's private business.
 
@@ -75,7 +75,8 @@ when this doc disagrees, trust the source, then fix this doc.
 
 * **Invalidation is coarse, content-based, and automatic.** A single salt folds the shader compiler
   version, the compile options (matrix layout, `BERNINI_GPU_DEBUG`), the cache format version, and a
-  hash of the content of *every* shader source file, chained through `core::hash_bytes`. It is
+  hash of the content of *every* shader source file under every search path — the client's
+  `GraphicsOptions::surfaceShaderDir` included — chained through `core::hash_bytes`. It is
   combined with the PSO's (module, entry-point) pairs to form each program key. Any change to any of those flips every key, so a
   stale entry is **missed and recompiled, never misread**. The pipeline library additionally
   self-invalidates against the driver and adapter — D3D12 rejects a foreign blob and Metal refuses
@@ -106,7 +107,7 @@ when this doc disagrees, trust the source, then fix this doc.
 | `ReflectedLayout` | [libs/bgl_common/include/bgl_common/ReflectedLayout.h](libs/bgl_common/include/bgl_common/ReflectedLayout.h) | Serializable, API-agnostic constant-buffer layout tree. |
 | `ReflectLayoutFromSlang` | [libs/bgl_common/include/bgl_common/SlangReflection.h](libs/bgl_common/include/bgl_common/SlangReflection.h) | The one place Slang reflection is read; emits `ReflectedLayout`. |
 | `ByteReader` / `ByteWriter` | [libs/core/include/core/io/ByteReader.h](libs/core/include/core/io/ByteReader.h) | Shared binary IO for the `.bsc` serialization (also used by assetlib). |
-| `shaderCacheDir` knob | [libs/bgl/include/bgl/IGraphics.h](libs/bgl/include/bgl/IGraphics.h) | The sole RHI-visible surface. |
+| `shaderCacheDir`, `surfaceShaderDir` | [libs/bgl/include/bgl/IGraphics.h](libs/bgl/include/bgl/IGraphics.h) | The RHI-visible surface: where the cache lives, and the one client directory whose files join its salt. |
 
 ---
 
@@ -159,6 +160,15 @@ takes the `CreatePipelineState` path and none is stored (see Risky Contracts).
   already caches modules by name, so the repeat call is a lookup — and why a module must never
   cross threads: it belongs to the session of the thread that loaded it. @pre anything new that stores a
   `slang::` pointer must drop it before the `Graphics` constructor returns.
+
+* **A module loaded from source shadows the file of its name, and is in the salt.**
+  `IDevice::AddSourceModule` hands the sessions a module as text under a name spelled as an import
+  spells it; every session loads it, under the path form the loader keys a dotted import by, before
+  it compiles anything, so an `import` of that name resolves to the text before any search path is
+  consulted — which is how a registered surface replaces the no-op the tree ships under a
+  slot's fixed name. Adding one drops every live session, since a session that has already resolved
+  the name to a file keeps that answer, and folds the name and the text into the salt, so the
+  program compiled against the file and the one compiled against the text never share a key.
 
 * **Pipeline-library round-trip is the driver's prerogative.** Whether a given PSO reloads from the
   library is driver/environment-dependent (some PSOs miss and get re-stored). A miss only falls back

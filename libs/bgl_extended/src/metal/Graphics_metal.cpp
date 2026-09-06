@@ -145,8 +145,11 @@ namespace bgl
 			                           core::env_var("MTL_SHADER_VALIDATION").has_value() ||
 			                           core::env_var("METAL_DEVICE_WRAPPER_TYPE").has_value();
 
-			core::SharedRef<Device> device =
-				core::SharedRef<Device>::Make(mtlDevice.get(), opts.shaderCacheDir, !gpuValidation);
+			core::SharedRef<Device> device = core::SharedRef<Device>::Make(
+				mtlDevice.get(),
+				opts.shaderCacheDir,
+				opts.surfaceShaderDir,
+				!gpuValidation);
 			m_Device = device;
 
 			auto rmDesc               = ResourceManagerDesc();
