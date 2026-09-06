@@ -92,8 +92,11 @@ and portability.
   - [ ] Culling verification — CPU reference cull, diff the visible sets, assert.
 - [ ] Motion Vectors
   - [x] Static geometry — an `RG16_FLOAT` velocity buffer written as MRT slot 1 by the forward and
-    skybox passes. Instance transforms are immutable, so this is camera motion only; the mesh shader
-    hands the pixel stage both clip positions, which is the seam the skinned path extends.
+    skybox passes. The mesh shader hands the pixel stage both clip positions, which is the seam the
+    skinned path extends.
+  - [x] Moving instances — a placement carries the transform the previous frame drew it with, so
+    `ISceneView::SetInstanceTransform` writes a velocity rather than moving the temporal epoch. The
+    pose pass plants the previous frame's feet against the previous placement.
   - [ ] Skinned motion vectors (needs double-buffered bone palette) — hero and near tiers only.
   - [x] Animated motion vectors — the pose re-evaluated at `prevTime` through the previous
     view-projection, substituted at the mesh-shader seam; real velocity from the first playback PR.
