@@ -153,7 +153,10 @@ public ForwardVSOut SkinnedVertex(MeshletContext ctx, SkinnedPose pose, SubmeshI
     }
 
     float4 worldPos = float4(ctx.mesh.TransformPoint(mul(skin, float4(vertex.position, 1.0)).xyz), 1.0);
-    float4 prevWorldPos = float4(ctx.mesh.TransformPoint(mul(prevSkin, float4(vertex.position, 1.0)).xyz), 1.0);
+
+    // The previous pose through the previous placement: a walking unit moves by both, and a vertex
+    // reprojected through only one of them reports the wrong half of its velocity.
+    float4 prevWorldPos = float4(ctx.mesh.PrevTransformPoint(mul(prevSkin, float4(vertex.position, 1.0)).xyz), 1.0);
 
     ForwardVSOut vertexOut;
     ProjectVertex(vertexOut, worldPos, prevWorldPos);

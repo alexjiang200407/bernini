@@ -16,11 +16,12 @@ public ForwardVSOut StaticVertex(MeshletContext ctx, SubmeshInstance instance, u
 
     float4 worldPos = float4(ctx.mesh.TransformPoint(vertex.position), 1.0);
 
-    // The same world position through both cameras: an instance transform is fixed for its lifetime,
-    // so the camera is the whole of a static surface's motion. A movable instance would carry its own
-    // previous transform here.
+    // The bind-pose vertex placed by each frame's transform. The two are the same matrix on an
+    // instance nobody moved, so a still surface's motion is the camera's alone.
+    float4 prevWorldPos = float4(ctx.mesh.PrevTransformPoint(vertex.position), 1.0);
+
     ForwardVSOut vertexOut;
-    ProjectVertex(vertexOut, worldPos, worldPos);
+    ProjectVertex(vertexOut, worldPos, prevWorldPos);
 
     vertexOut.normal = ctx.mesh.TransformDirection(vertex.normal);
     vertexOut.uv = vertex.uv;

@@ -159,7 +159,7 @@ disagrees, trust the header, then fix this doc.
 |---|---|---|
 | `IGraphics` | [libs/bgl/include/bgl/IGraphics.h](libs/bgl/include/bgl/IGraphics.h) | The device and its one submission context: creates targets/scenes/views, and drives frames, resizes and captures. Minted by `CreateGraphics`. |
 | `IScene` | [libs/bgl/include/bgl/IScene.h](libs/bgl/include/bgl/IScene.h) | Owns geometry, materials and texture assets. Shared by many views. |
-| `ISceneView` | [libs/bgl/include/bgl/ISceneView.h](libs/bgl/include/bgl/ISceneView.h) | Per-view mesh instances, material overrides, per-submesh selection marks, and lighting (IBL, skybox, exposure). |
+| `ISceneView` | [libs/bgl/include/bgl/ISceneView.h](libs/bgl/include/bgl/ISceneView.h) | Per-view mesh instances and their transforms, material overrides, per-submesh selection marks, and lighting (IBL, skybox, exposure). |
 | `IOverlay` | [libs/bgl/include/bgl/IOverlay.h](libs/bgl/include/bgl/IOverlay.h) | Compiled 2D geometry and the textures it samples, drawn over a frame by `IGraphics::DrawOverlay`. Usable on any target the graphics draws. |
 | `IRenderTarget` | [libs/bgl/include/bgl/IRenderTarget.h](libs/bgl/include/bgl/IRenderTarget.h) | A render output: windowed swapchain or headless offscreen backbuffers, plus depth, the linear-HDR scene colour every pass renders into, and the screen-space velocity buffer. `RenderTargetDesc::taaEnabled` opts it into a jittered projection and a temporal history, which `SetTaaEnabled` then runs or stops at runtime; `SetOutlineEnabled` runs or stops the selection outline, on by default; `SetGpuTimingEnabled` times every pass of a frame on the GPU, off by default, read back through `IGraphics::GetPassTimings`. `GetWidth`/`GetHeight` are the output size — the backbuffer's, and every capture's; `GetRenderWidth`/`GetRenderHeight` are the grid the geometry passes draw on; `SetTaaReconstructionWidth` sweeps the resolve's kernel without reallocating anything or dropping the accumulation. |
 | `IGpuAssertionHandler` | [libs/bgl/include/bgl/IGpuAssertionHandler.h](libs/bgl/include/bgl/IGpuAssertionHandler.h) | Caller-implemented sink for shader `dbg_raise` reports. Not refcounted; a plain callback interface. |
@@ -352,6 +352,15 @@ flowchart TD
 
 ### ISceneView
 
+* **`SetInstanceTransform(instance, transform)` / `GetInstanceTransform(instance)`** — moves a
+  placement. The move is described to the temporal filter rather than hidden from it: the record
+  carries the transform the previous frame drew it with, so the frame after a write reprojects
+  through both and the surface's own motion joins the camera's in the velocity buffer. It does
+  **not** move the temporal epoch, and must not — see [TAA](docs/taa.md) § the epoch. The previous
+  transform is the one the last *drawn* frame used, not the one the last write replaced, so writing
+  twice in a frame reports the same velocity as writing once, and an instance not written this
+  frame reports exactly zero. A per-instance CPU write, so it is not the path for moving a crowd
+  every frame: each scattered write uploads a block.
 * **`SetSubmeshMaterialOverride(instance, submeshIndex, material)`** — overrides one submesh of *one*
   instance, outranking the geom default; a later `Scene::SetSubmeshMaterial` does not disturb it. Same
   raw-slot hazard as `DeleteMaterial`: clear the override before deleting the material it names. The

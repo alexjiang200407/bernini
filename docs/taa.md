@@ -170,9 +170,12 @@ alpha-tested, read dimmer — judged acceptable by eye against keeping the machi
   clip switch. A mesh that was not on screen last frame has no history to reproject from; an
   animated one is worse than absent, because the pose *and* the motion vector it writes come from
   the clip it now holds, so the frame after a switch reprojects along a velocity computed inside a
-  clip that was never drawn — the ghost is of a pose the vector points nowhere near. There is no
-  mutate-instance API by design, so a clip switch, a pose-source switch and a mesh load all
-  reach this through destroy + respawn and need no call of their own. Scrubbing the timeline does
+  clip that was never drawn — the ghost is of a pose the vector points nowhere near. Nothing may
+  mutate an instance's *identity*, so a clip switch, a pose-source switch and a mesh load all
+  reach this through destroy + respawn and need no call of their own. `SetInstanceTransform` is
+  not such a change and deliberately does not count: a placement carries the transform the
+  previous frame drew it with, so where it moved to is a value reprojection follows rather than a
+  rebind it cannot. Scrubbing the timeline does
   not: no instance churns, the pose moves within one clip, and the vector written across the jump
   is the one reprojection wants. This is the boundary that keeps the rule affordable — a caller
   that spawned or despawned every frame would never accumulate, and would need a batched-placement

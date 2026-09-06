@@ -721,11 +721,15 @@ void main(uint groupIdx: SV_GroupID, uint localIdx: SV_GroupIndex)
     tables.palettes = gUniforms.bonePalettes;
 
     let modelToWorld = mesh.Matrix();
+
+    // The ground plane crosses into model space through the placement, so the pose the previous
+    // frame drew is planted against where the placement was then -- not where it is now.
+    let prevModelToWorld = mesh.PrevMatrix();
     let stride = rig.boneCount * cFloat4sPerBone;
     let base = state.palette.GetStart();
 
     PoseInstance(tables, rig, ResolveSlots(state, rig, gUniforms.time), entry.footIK, gUniforms.time, modelToWorld, base, localIdx);
     PoseInstance(
-        tables, rig, ResolveSlots(state, rig, gUniforms.prevTime), entry.footIK, gUniforms.prevTime, modelToWorld, base + stride, localIdx
+        tables, rig, ResolveSlots(state, rig, gUniforms.prevTime), entry.footIK, gUniforms.prevTime, prevModelToWorld, base + stride, localIdx
     );
 }
