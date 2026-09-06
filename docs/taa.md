@@ -461,3 +461,20 @@ Two couplings worth knowing:
   difference; the unresolved pair is the guard that the poses are pixel-identical. A difference
   against a *converged* still would score the honest sub-pixel gap between a history accumulated
   along a moving path and one accumulated at rest as though it were a ghost.
+
+* **A wrong motion vector is not visible as a ghost, and a colour test will not find one.** Measured
+  when the instance-transform setter landed, against a build with the previous transform reverted:
+  `BackgroundBleed` over an empty background *passes*, because the neighbourhood clamp collapses to
+  the background's own colour and scrubs a mis-reprojected history whether or not the vector is
+  right; over the slat wall the wake case already sits at 1.2e-4 with correct vectors, so there is
+  no headroom to detect anything in. `AliasEnergy` on the moving edge does separate them, but
+  backwards — `off` 0.00563, `still` 0.00278, `moving` 0.00150 correct against 0.00201 reverted: the
+  *correct* frame is smoother, because a followed history keeps accumulating while a rejected one
+  falls back toward a single jittered sample. A bound between those two is a 10% margin whose
+  assertion reads "the right answer is blurrier", which is why none of the three was kept.
+
+  What holds a motion vector is therefore the **velocity buffer**, not the resolve:
+  `MotionVectors_test` reads it back and compares against a displacement derived independently of
+  the shader. The resolve cannot tell whether a velocity came from a camera or a placement — it
+  consumes one texture — so the cases above already gate what it does with a correct one.
+
