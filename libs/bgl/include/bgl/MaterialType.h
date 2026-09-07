@@ -10,9 +10,12 @@ namespace bgl
 		kAssert = 1,
 		kPBR = 2,
 		kLoosePbr = 3,
-		kCount = 4,
+		kGameStart = 4,
+		kCount = 8,
 	};
 
 	static_assert(sizeof(MaterialType) == 4);
+
+	constexpr uint32_t cGameSlots = 4;
 
 }

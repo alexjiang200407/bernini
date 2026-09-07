@@ -106,3 +106,50 @@ TEST_CASE("only a blended layer leaves the counting sort", "[pso]")
 		CHECK(bgl::IsTransparentPso(pso) == (layer == bgl::LayerType::kBlend));
 	}
 }
+
+// Each reserved game slot has three static rows and no animated one. The rows are reached by
+// arithmetic from kGameRowsStart, so what this checks is that the arithmetic agrees with the layer
+// and with the transparent predicate on both sides. Hashed is closed to game surfaces at the door
+// that creates one, so it has no row here to check.
+TEST_CASE("a game slot's layers resolve to its own three rows, on static geometry only", "[pso]")
+{
+	using bgl::GeomType;
+	using bgl::LayerType;
+	using bgl::idl::PsoType;
+
+	for (uint32_t slot = 0; slot < bgl::cGameSlots; ++slot)
+	{
+		const bgl::MaterialType kind = bgl::GameSlotKind(slot);
+		CHECK(bgl::GameSlot(kind) == slot);
+
+		const auto first =
+			static_cast<uint32_t>(PsoType::kGameRowsStart) + slot * bgl::idl::cGameSlotRows;
+		const auto pso = [&](LayerType layer) {
+			return static_cast<uint32_t>(
+				bgl::GetPsoFromGeomAndMaterial(GeomType::kStaticMesh, kind, layer));
+		};
+
+		CHECK(pso(LayerType::kOpaque) == first);
+		CHECK(pso(LayerType::kMask) == first + 1);
+		CHECK(pso(LayerType::kBlend) == first + 2);
+		CHECK(pso(LayerType::kBlend) < bgl::idl::c_PsoCount);
+
+		// Only the blend row leaves the counting sort, read off the layer as above.
+		for (const LayerType layer : { LayerType::kOpaque, LayerType::kMask, LayerType::kBlend })
+		{
+			const uint32_t bucket = bgl::SubmeshPso(GeomType::kStaticMesh, Handle(kind, layer));
+
+			CHECK(bgl::IsTransparentPso(bucket) == (layer == LayerType::kBlend));
+		}
+
+		// No skinned rows: the door stays shut for every layer.
+		for (const LayerType layer : c_Layers)
+		{
+			CHECK_FALSE(bgl::AcceptsMaterial(GeomType::kSkinnedMesh, Handle(kind, layer)));
+		}
+	}
+
+	// A kind outside the slots is nobody's slot.
+	CHECK_FALSE(bgl::GameSlot(bgl::MaterialType::kPBR).has_value());
+	CHECK_FALSE(bgl::GameSlot(bgl::MaterialType::kCount).has_value());
+}
