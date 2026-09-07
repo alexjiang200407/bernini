@@ -76,8 +76,8 @@ enable_coverage(bgl_extended_objects)
 
 # CreateGraphics is only ever defined inside a backend, and the shader step compiles for the
 # backend's IR, so nothing below can be built without one.
-if(NOT RENDERER_BACKEND)
-	message(STATUS "RENDERER_BACKEND unset - bgl_extended_objects only (no bgl_extended runtime, shaders or tests)")
+if(RENDERER_BACKEND STREQUAL "NONE")
+	message(STATUS "RENDERER_BACKEND=NONE - bgl_extended_objects only (no bgl_extended runtime, shaders or tests)")
 	return()
 endif()
 
@@ -94,10 +94,7 @@ elseif(RENDERER_BACKEND STREQUAL "METAL")
 		${BGL_SHARED_HEADERS}
 	)
 else()
-	add_library(bgl_extended SHARED
-		$<TARGET_OBJECTS:bgl_extended_objects>
-		${BGL_SHARED_HEADERS}
-	)
+	message(FATAL_ERROR "RENDERER_BACKEND must be DX12, METAL or NONE (got '${RENDERER_BACKEND}')")
 endif()
 
 target_include_directories(bgl_extended

@@ -19,6 +19,49 @@ include(${BERNINI_ROOT}/cmake/enable_compiler_cache.cmake)
 include(${BERNINI_ROOT}/cmake/assign_folder.cmake)
 include(${BERNINI_ROOT}/cmake/strip_msvc_only_flags.cmake)
 
+# --- What a preset would otherwise have decided ------------------------------
+#
+# Only CMakePresets.json sets these, and a project that embeds the engine does not use it. The
+# defaults are the host's, so an embedded build names only what it wants to change.
+#
+# Unconditional rather than nested-only: a vcpkg port configures this tree top-level, so a default
+# keyed on PROJECT_IS_TOP_LEVEL would hand a port build different settings from the same engine
+# added as a subdirectory.
+if (CMAKE_SYSTEM_NAME STREQUAL "Windows")
+    set(_bernini_platform WINDOWS)
+    set(_bernini_backend  DX12)
+elseif (CMAKE_SYSTEM_NAME STREQUAL "Darwin")
+    set(_bernini_platform MACOS)
+    set(_bernini_backend  METAL)
+elseif (CMAKE_SYSTEM_NAME STREQUAL "Emscripten")
+    # core has a web platform layer; no renderer targets it.
+    set(_bernini_platform WEB)
+    set(_bernini_backend  NONE)
+else()
+    # Left empty so libs/core reports the platform it was given rather than one guessed for it.
+    set(_bernini_platform "")
+    set(_bernini_backend  NONE)
+endif()
+
+set(PLATFORM "${_bernini_platform}" CACHE STRING
+    "Platform layer core compiles: WINDOWS, MACOS or WEB")
+set_property(CACHE PLATFORM PROPERTY STRINGS WINDOWS MACOS WEB)
+
+# NONE is a configuration, not a failure: bgl_extended_objects compiles without a backend and
+# nothing that needs CreateGraphics is declared. It is spelled rather than left unset because the
+# default above means unset is no longer reachable.
+set(RENDERER_BACKEND "${_bernini_backend}" CACHE STRING
+    "Graphics backend bgl_extended builds: DX12, METAL, or NONE for the objects alone")
+set_property(CACHE RENDERER_BACKEND PROPERTY STRINGS DX12 METAL NONE)
+
+# Shader debug info and the dbg_raise() bodies, in lockstep with BERNINI_GPU_DEBUG below. A
+# multi-config generator has no CMAKE_BUILD_TYPE, so there it stays a choice the preset makes.
+set(_bernini_is_debug OFF)
+if (CMAKE_BUILD_TYPE STREQUAL "Debug")
+    set(_bernini_is_debug ON)
+endif()
+set(IS_DEBUG ${_bernini_is_debug} CACHE BOOL "Compile shaders with debug info and GPU asserts")
+
 # Tracy compiles the zones in, and with them a client that opens a socket and announces itself so a
 # profiler can find it -- the mechanism, not a side effect, and not something a shipping binary
 # should carry. Every developer preset turns it on (CMakePresets.json); the default is off so a
