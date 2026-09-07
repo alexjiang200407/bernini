@@ -15,8 +15,15 @@ public enum PsoType : uint32_t
     kAlphaTest_SkinnedMesh_PBR,
     kHashedAlpha_SkinnedMesh_PBR,
     kTransparent_SkinnedMesh_PBR,
-    kCount,
+    // The reserved game slots' rows, cGameSlots of them from here, three each in this order: opaque,
+    // alpha-test, transparent. A slot's row is kGameRowsStart + 3 * slot + the layer's offset, and
+    // kCount is the literal the C++ side asserts.
+    kGameRowsStart,
+    kCount = 26,
 }
 ;
 
 public static const uint32_t c_PsoCount = uint32_t(PsoType::kCount);
+
+// A slot's three rows, in PsoType order.
+public static const uint32_t cGameSlotRows = 3;
