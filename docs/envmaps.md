@@ -300,11 +300,13 @@ display luma over four boxes, and the cosine integral of the source at the norma
 box, in Bernini's conventions. CI has no Blender, so every number `BlenderParity_test` carries is
 copied from that output rather than computed there; re-run it whenever the reference changes.
 
-The test asserts the sphere's level against the exact cosine integral of the source through the
-shipped tone map, and the backdrop corners against Blender's frame, mirrored. The integral rather
-than Blender's own pixels because Blender's Cycles *is* that integral to a percent, while its Eevee
-lights diffuse from a first-order harmonic that reads flatter than the source, and its AgX pins
-middle grey lower than the shipped fit does. Both are recorded in the test; neither is an exposure.
+The test asserts the sphere's level against Blender's Cycles pixels directly, and against the exact
+cosine integral of the source through the shipped tone map, and the backdrop corners against
+Blender's frame, mirrored. Cycles rather than the preview's own Eevee because Cycles *is* that
+integral to a percent, while Eevee lights diffuse from a first-order harmonic that reads flatter
+than the source — Blender's approximation, measured, and not a term to match. The tone map is
+Blender's own LUT ([passes.md](passes.md#scene-colour-and-where-the-display-curve-is-applied)), so
+the two frames agree to a few thousandths.
 
 **Maintenance note.** The tables above are this document's load-bearing part, and their file links rot
 silently if files move. Re-check them whenever the environment file layout changes.

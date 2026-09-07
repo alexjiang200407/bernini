@@ -156,6 +156,7 @@ elseif(RENDERER_BACKEND STREQUAL "METAL")
 	# relinks, so editing a .slang alone would leave the staged copy stale.
 	file(GLOB_RECURSE BGL_METAL_SHADER_SOURCES CONFIGURE_DEPENDS
 		${CMAKE_CURRENT_SOURCE_DIR}/shaders/src/*.slang
+		${CMAKE_CURRENT_SOURCE_DIR}/shaders/src/*.bin
 	)
 
 	set(BGL_METAL_SHADER_STAMP "${CMAKE_CURRENT_BINARY_DIR}/metal_shaders.stamp")

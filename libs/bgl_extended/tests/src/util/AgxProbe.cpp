@@ -3,11 +3,13 @@
 #include "cmd/CommandList.h"
 #include "cmd/CommandQueue.h"
 #include "gfx/GraphicsBase.h"
+#include "gfx/TonemapLut.h"
 #include "pipeline/ComputeKernel.h"
 #include "pipeline/ComputePipeline.h"
 #include "resource/Buffer.h"
 #include "resource/Readback.h"
 #include "resource/ResourceManager.h"
+#include "resource/Sampler.h"
 #include "types/Barrier.h"
 #include "types/ComputeState.h"
 #include "types/QueueType.h"
@@ -52,6 +54,13 @@ namespace bgl::test
 		rbDesc.debugName                   = "AgX Readback";
 		const bgl::ReadbackBufferHandle rb = resourceManager->CreateReadbackBuffer(rbDesc);
 
+		// The same file and the same class the renderer samples through, so this measures the
+		// shipped curve and not a copy of it.
+		auto lut = TonemapLut();
+		lut.Init(resourceManager, c_TonemapLutFile);
+		const SamplerHandle lutSampler = resourceManager->CreateSampler(
+			SamplerDesc().SetAllFilters(true).SetAllAddressModes(SamplerAddressMode::kClamp));
+
 		auto kernel = device->CreateComputeKernel(
 			bgl::ComputePipelineDesc()
 				.SetShader(device->CreateShader("CSAgxCalibration"))
@@ -61,8 +70,11 @@ namespace bgl::test
 
 		kernel["gUniforms"]["outColor"]    = outBuffer;
 		kernel["gUniforms"]["sceneLinear"] = sceneLinear;
+		kernel["gUniforms"]["lut"]         = lut.GetSrv();
+		kernel["gUniforms"]["lutSampler"]  = lutSampler;
 
 		cmdList->Open(cmdQueue, cmdAllocator);
+		lut.Upload(cmdList.Get());
 
 		auto state   = bgl::ComputeState();
 		state.kernel = &kernel;
@@ -89,6 +101,8 @@ namespace bgl::test
 		resourceManager->UnmapReadback(rb);
 		resourceManager->DestroyReadbackBuffer(rb, false);
 		resourceManager->DestroyBuffer(outBuffer, false);
+		resourceManager->DestroySampler(lutSampler, false);
+		lut.Release();
 
 		return result;
 	}

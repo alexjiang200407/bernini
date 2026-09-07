@@ -208,6 +208,7 @@ namespace bgl
 		m_OutlineMask.Init(m_Device.Get(), pipelines);
 		m_TaaResolve.Init(m_Device.Get(), pipelines);
 		m_BrdfLut.Init(m_Device.Get(), pipelines, m_ResourceManager);
+		m_TonemapLut.Init(m_ResourceManager, c_TonemapLutFile);
 		pipelines.Build();
 
 		m_Forward.CheckBindings();
@@ -223,6 +224,7 @@ namespace bgl
 
 		m_CommandList->Open(m_CommandQueue.Get(), m_BootstrapAllocator.Get());
 		m_BrdfLut.Generate(m_CommandList.Get());
+		m_TonemapLut.Upload(m_CommandList.Get());
 		m_CommandList->Close();
 		m_CommandQueue->WaitForFenceCPUBlocking(m_CommandQueue->ExecuteCommandList(m_CommandList));
 
@@ -276,6 +278,7 @@ namespace bgl
 			m_ResourceManager->DestroySampler(m_LinearClampSampler, false);
 		}
 		m_BrdfLut.Release();
+		m_TonemapLut.Release();
 		m_CompactInstances.Release(false);
 		m_RigFrames.Release();
 		m_SkinnedPose.Release();
@@ -890,6 +893,8 @@ namespace bgl
 		postProcessArgs.source     = rt.GetSceneColorSrv();
 		postProcessArgs.sourceName = std::string(c_SceneColorName);
 		postProcessArgs.backBuffer = rt.GetBackbufferRtv(index);
+		postProcessArgs.tonemapLut = m_TonemapLut.GetSrv();
+		postProcessArgs.lutSampler = m_LinearClampSampler;
 		postProcessArgs.viewport   = viewport;
 
 		// With the resolve running, the source is the history and already on this viewport's grid,

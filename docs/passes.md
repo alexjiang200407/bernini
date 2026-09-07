@@ -86,6 +86,21 @@ fold it in, while the display curve — `AgX` in
 [lib/math/Tonemap.slang](libs/bgl_common/shaders/src/lib/math/Tonemap.slang) — belongs to the output and runs once.
 `AgX` leaves its result linear, so the sRGB backbuffer view is still what encodes it.
 
+**The curve is Blender 5.2's AgX, and the LUT is Blender's own file.** Blender's `AgX Base sRGB`
+view is a 57³ formation LUT applied in FilmLight E-Gamut log2 space, then a Rec.1886 decode, and
+that is what `AgX` does: the Rec.709-to-E-Gamut matrix and the 25-stop log encoding are the OCIO
+config's view transform written out, the LUT is `AgX_Base_sRGB.cube` from the Blender install
+converted by `scripts/gen_agx_lut.py` into
+[shaders/src/luts/agx_base_srgb.bin](libs/bgl_extended/shaders/src/luts/agx_base_srgb.bin), and
+`TonemapLut` ([gfx/TonemapLut.h](libs/bgl_extended/src/gfx/TonemapLut.h)) uploads it once at device
+init. The file is a 2D strip of 57 slices rather than a 3D texture because neither backend's
+`WriteTexture` fills one yet; `StripLutTaps3D` in the same module is the trilinear read over that
+layout, shared so a second renderer's `ITonemapLut` does not re-derive it. The datafile reaches the
+tree under Blender's GPL-2-or-later. `AgxCalibration_test` pins the result to a twelve-point sweep
+measured off Blender itself, middle grey at display 0.461 — where sRGB puts it, not 0.5 — and
+`BlenderParity_test` checks a lit sphere against Blender's Cycles pixels. Regenerate the strip when
+the reference Blender changes, and re-measure the sweep with `scripts/blender_probe.py`.
+
 Two consequences worth knowing. Transparent surfaces blend in linear HDR rather than in display
 space. And a pixel shader that writes a literal colour — `programs.forward.Null`, `programs.forward.Assert` — is
 writing radiance, not a display value, so its `1.0` reaches the screen as the curve's answer for
@@ -547,7 +562,7 @@ Turns the linear HDR scene colour into the displayed image, as a single full-scr
 the `programs.screen.PostProcess` module (mesh + pixel, no amplification shader, depth test off). Added in
 `EndFrame`, after every draw and before `PreparePresent`.
 
-Today it applies `AgX`, then — on a frame where a [Outline Mask](#outline-mask) pass ran —
+Today it applies `AgX` through the LUT above, then — on a frame where a [Outline Mask](#outline-mask) pass ran —
 composites the selection outline: a pixel outside the mask but within the outline width of it
 takes the display-space outline colour instead of the tonemapped result. Compositing after the
 curve is deliberate: the outline is editor feedback rather than radiance, so exposure and AgX must

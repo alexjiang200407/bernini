@@ -1,50 +1,55 @@
+import idl.ITonemapLut;
 
-// 6th-order polynomial fit of the AgX sigmoid (Benjamin Wrensch).
-float3 AgxContrast(float3 x)
+// Blender's AgX Base sRGB view, as Blender 5.2 ships it: scene-linear Rec.709 into FilmLight
+// E-Gamut, a 25-stop log2 encoding, the 57^3 formation LUT, and the Rec.1886 decode of what it
+// returns. The LUT is Blender's own file (scripts/gen_agx_lut.py); everything around it is the
+// OCIO config's `AgX Base Rec.1886` view transform written out. See docs/passes.md.
+
+// The two bilinear taps and the blend that read a 3D LUT stored as a strip of `size` slices --
+// slice b at x offset b * size, texel (r, g) inside it. Shared so a renderer supplying its own
+// ITonemapLut does not re-derive the layout the generator wrote.
+public struct StripLutTaps
 {
-    float3 x2 = x * x;
-    float3 x4 = x2 * x2;
-    return +15.5 * x4 * x2 - 40.14 * x4 * x + 31.96 * x4 - 6.868 * x2 * x + 0.4298 * x2 + 0.1191 * x - 0.00232;
+    public float2 uv0;
+    public float2 uv1;
+    public float blend;
+};
+
+public StripLutTaps StripLutTaps3D(float3 coord, uint size)
+{
+    const float n = float(size);
+    const float last = n - 1.0;
+
+    const float slice = coord.b * last;
+    const float s0 = floor(slice);
+    const float s1 = min(s0 + 1.0, last);
+
+    const float x = 0.5 + coord.r * last;
+    const float y = (0.5 + coord.g * last) / n;
+
+    StripLutTaps taps;
+    taps.uv0 = float2((s0 * n + x) / (n * n), y);
+    taps.uv1 = float2((s1 * n + x) / (n * n), y);
+    taps.blend = slice - s0;
+    return taps;
 }
 
-public float3 AgX(float3 color)
+public float3 AgX<L : ITonemapLut>(float3 color, L lut)
 {
-    const float3x3 agxMat = float3x3(
-        0.842479062253094,
-        0.0423282422610123,
-        0.0423756549057051,
-        0.0784335999999992,
-        0.878468636469772,
-        0.0784336,
-        0.0792237451477643,
-        0.0791661274605434,
-        0.879142973793104
+    // Rec.709 -> CIE XYZ D65 -> Linear FilmLight E-Gamut, as one matrix in row-vector layout.
+    const float3x3 rec709ToEGamut = float3x3(
+        0.5593711304, 0.0762207051, 0.0655266974, 0.3047832593, 0.7879718287, 0.1645467499, 0.1358455635, 0.1358074780, 0.7699265344
     );
 
-    const float3x3 agxMatInv = float3x3(
-        1.19687900512017,
-        -0.0528968517574562,
-        -0.0529716355144438,
-        -0.0980208811401368,
-        1.15190312990417,
-        -0.0980434501171241,
-        -0.0990297440797205,
-        -0.0989611768448433,
-        1.15107367264116
-    );
-
+    // OCIO's lg2 allocation: log2 over [minEv, maxEv] normalized to [0, 1], 25 stops.
     const float minEv = -12.47393;
-    const float maxEv = 4.026069;
+    const float maxEv = 12.5260688117;
 
-    // Inset, log2-encode into the [minEv, maxEv] range, normalize, then the sigmoid contrast curve.
-    color = mul(color, agxMat);
-    color = clamp(log2(max(color, 1e-10)), minEv, maxEv);
-    color = (color - minEv) / (maxEv - minEv);
-    color = AgxContrast(color);
+    float3 e = mul(color, rec709ToEGamut);
+    float3 coord = (log2(max(e, exp2(minEv))) - minEv) / (maxEv - minEv);
 
-    // Outset, then linearize the display-encoded result so the sRGB target re-encodes it.
-    color = mul(color, agxMatInv);
-    color = pow(max(color, 0.0), float3(2.2, 2.2, 2.2));
+    float3 display = lut.Sample(saturate(coord));
 
-    return color;
+    // The LUT formed a Rec.1886 image; linearize it so the sRGB target re-encodes it.
+    return pow(max(display, 0.0), float3(2.4, 2.4, 2.4));
 }
