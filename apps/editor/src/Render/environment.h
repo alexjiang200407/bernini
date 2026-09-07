@@ -21,6 +21,37 @@ namespace editor
 		bgl::TextureAssetHandle skybox;
 	};
 
+	/**
+	 * How a viewport presents its sky, as distinct from what the environment is. Defaulted to the
+	 * look of Blender's Material Preview, which the asset previews exist to be compared against:
+	 * a defocused backdrop faded toward the viewport's grey, and an environment that turns with the
+	 * camera so the light stays where it is on screen. A level viewport wants none of it.
+	 */
+	struct SkyPresentation
+	{
+		// Which level of the `.bsky`'s defocus chain the backdrop draws; absent takes the file's
+		// own. A sky baked as a single mip cannot honour it and stays as it is.
+		std::optional<uint32_t> mipLevel = 3;
+
+		// How much of the backdrop is sky, the rest a scene-linear grey. Lighting is untouched.
+		float opacity      = 0.75f;
+		float backdropGrey = 0.055f;
+
+		// The environment attached to the camera rather than the world, lighting included.
+		bool followsView = true;
+
+		/** The level viewport's: the `.bsky` as authored, opaque, world-locked. */
+		[[nodiscard]] static SkyPresentation
+		World() noexcept
+		{
+			auto sky        = SkyPresentation();
+			sky.mipLevel    = std::nullopt;
+			sky.opacity     = 1.0f;
+			sky.followsView = false;
+			return sky;
+		}
+	};
+
 	/** ApplyEnvironment's value parameters, as the block a window's desc embeds or aliases. */
 	struct EnvironmentApplyDesc
 	{
@@ -37,11 +68,8 @@ namespace editor
 		// maps. Set it only to overrule that deliberately.
 		std::optional<float> exposureOverride;
 
-		// A preview wants the eye on its subject, and a defocused backdrop reads as depth of field
-		// where a sharp one competes for attention -- so these viewports overrule the `.bsky`'s
-		// own presentation by default. A sky baked as a single mip cannot honour it and stays as
-		// it is.
-		std::optional<uint32_t> skyMipLevelOverride = 3;
+		// How the sky is shown, which is the viewport's to say and not the environment's.
+		SkyPresentation sky;
 	};
 
 	/**
@@ -64,11 +92,10 @@ namespace editor
 	 *        subfolder, or a file dropped from anywhere -- and guessing lands on the wrong root
 	 *        without saying so.
 	 * @param exposureOverride Overrules the exposure the environment's lighting derived.
-	 * @param skyMipLevelOverride Overrules how defocused the `.bsky` says its backdrop is drawn.
-	 *        How much depth of field a backdrop wants is a property of the viewport and not of the
-	 *        environment -- a material preview wants the eye on the material where a level viewport
-	 *        wants the world. Clamped by the sampler to the mips the cube actually has, so asking a
-	 *        single-mip sky to defocus is a no-op rather than an error.
+	 * @param sky How the backdrop is shown and whether the environment follows the camera. A
+	 *        property of the viewport and not of the environment -- a material preview wants the
+	 *        eye on the material where a level viewport wants the world. The mip is clamped by the
+	 *        sampler to the levels the cube has, so asking a single-mip sky to defocus is a no-op.
 	 * @param who Prefix for warnings, naming the caller.
 	 * @return What was bound. Applying twice over one view leaks the first set's slots unless the
 	 *         caller releases them -- pass both to ReplaceEnvironment.
@@ -80,7 +107,7 @@ namespace editor
 		const std::string&           benvPath,
 		const std::filesystem::path& dataRoot,
 		std::optional<float>         exposureOverride,
-		std::optional<uint32_t>      skyMipLevelOverride,
+		const SkyPresentation&       sky,
 		const char*                  who);
 
 	/**
