@@ -505,15 +505,12 @@ namespace assetlib
 	}
 
 	ImageData
-	irradianceSh(const ImageData& source, const IrradianceDesc& desc)
+	irradianceSh(const ImageData& source, uint32_t faceSize)
 	{
-		const uint32_t faceSize = desc.faceSize;
 		if (faceSize == 0)
 			throw std::runtime_error("assetlib::irradianceSh: faceSize must be > 0");
 
 		const CubeMip0 src = readCubeMip0(source, "assetlib::irradianceSh");
-
-		const bool eevee = desc.model == IrradianceModel::kEeveePreview;
 
 		// L[i] are the projections of incident radiance onto the 9 real SH basis functions of
 		// order 3, ordered l=0; l=1 (m=-1,0,1); l=2 (m=-2,-1,0,1,2).
@@ -568,25 +565,6 @@ namespace assetlib
 		constexpr float c_C5    = 0.247708f;
 		constexpr float c_InvPi = 1.0f / c_Pi;
 
-		if (eevee)
-		{
-			// Eevee's dering (eevee_spherical_harmonics: spherical_harmonics::dering): the first
-			// band may not outweigh the zeroth once the Lambert weight and a bias are on it, and
-			// the most directional channel's factor is applied to all three so colour does not drift.
-			constexpr float c_L0Weight = 0.282094792f;
-			constexpr float c_L1Weight = 0.488602512f * (2.0f / 3.0f) + 0.05f;
-
-			float factor = 1.0f;
-			for (glm::length_t ch = 0; ch < 3; ++ch)
-			{
-				const float l0 = std::max(std::abs(coeff[0][ch]) * c_L0Weight, 1e-8f);
-				const float l1 =
-					glm::length(glm::vec3(coeff[1][ch], coeff[2][ch], coeff[3][ch])) * c_L1Weight;
-				factor = std::min(factor, l0 / std::max(l1, 1e-8f));
-			}
-			for (int i = 1; i < 4; ++i) coeff[i] *= factor;
-		}
-
 		ImageData out = makeCubeImage(faceSize, 1);
 
 		for (uint32_t face = 0; face < 6; ++face)
@@ -603,23 +581,13 @@ namespace assetlib
 						static_cast<float>(row),
 						faceSize);
 
-					glm::vec3 e = coeff[0] * c_C4 + coeff[3] * (2.0f * c_C2 * n.x) +
-					              coeff[1] * (2.0f * c_C2 * n.y) + coeff[2] * (2.0f * c_C2 * n.z);
-
-					if (eevee)
-					{
-						// Eevee clamps the harmonic's reconstruction rather than letting the first
-						// band go negative on the far side of a strong light.
-						e = glm::max(e, 0.0f);
-					}
-					else
-					{
-						e += coeff[8] * (c_C1 * (n.x * n.x - n.y * n.y)) +
-						     coeff[6] * (c_C3 * n.z * n.z) + coeff[6] * -c_C5 +
-						     coeff[4] * (2.0f * c_C1 * n.x * n.y) +
-						     coeff[7] * (2.0f * c_C1 * n.x * n.z) +
-						     coeff[5] * (2.0f * c_C1 * n.y * n.z);
-					}
+					const glm::vec3 e =
+						coeff[8] * (c_C1 * (n.x * n.x - n.y * n.y)) +
+						coeff[6] * (c_C3 * n.z * n.z) + coeff[0] * c_C4 + coeff[6] * -c_C5 +
+						coeff[4] * (2.0f * c_C1 * n.x * n.y) +
+						coeff[7] * (2.0f * c_C1 * n.x * n.z) +
+						coeff[5] * (2.0f * c_C1 * n.y * n.z) + coeff[3] * (2.0f * c_C2 * n.x) +
+						coeff[1] * (2.0f * c_C2 * n.y) + coeff[2] * (2.0f * c_C2 * n.z);
 
 					const size_t t = (static_cast<size_t>(row) * faceSize + col) * 4;
 					dst[t + 0]     = std::max(0.0f, e.x * c_InvPi);

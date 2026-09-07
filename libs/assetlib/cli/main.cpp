@@ -221,15 +221,14 @@ main(int argc, char** argv)
 		->check(CLI::PositiveNumber);
 
 	std::string envInput;
-	uint32_t    envIemSize         = 128;
-	std::string envIrradianceModel = "exact";
-	uint32_t    envSkyboxSize      = 512;
-	uint32_t    envSkyboxMips      = 6;
-	uint32_t    envSkyboxMip       = 0;
-	uint32_t    envSize            = 256;
-	uint32_t    envMips            = 7;
-	uint32_t    envSamples         = 128;
-	uint32_t    envThreads         = 0;
+	uint32_t    envIemSize    = 128;
+	uint32_t    envSkyboxSize = 512;
+	uint32_t    envSkyboxMips = 6;
+	uint32_t    envSkyboxMip  = 0;
+	uint32_t    envSize       = 256;
+	uint32_t    envMips       = 7;
+	uint32_t    envSamples    = 128;
+	uint32_t    envThreads    = 0;
 
 	auto* envmap = app.add_subcommand(
 		"envmap",
@@ -238,13 +237,6 @@ main(int argc, char** argv)
 		->required()
 		->check(CLI::ExistingFile);
 	envmap->add_option("--irradiance-size", envIemSize, "Irradiance face size (default: 128)");
-	envmap
-		->add_option(
-			"--irradiance-model",
-			envIrradianceModel,
-			"What the irradiance map holds: 'exact', the integral, or 'eevee', Blender's Material "
-			"Preview's deringed first-order harmonic (default: exact)")
-		->check(CLI::IsMember({ "exact", "eevee" }));
 	envmap->add_option(
 		"-s,--size",
 		envSize,
@@ -656,9 +648,6 @@ main(int argc, char** argv)
 			importDesc.prefilterMips      = envMips;
 			importDesc.prefilterSamples   = envSamples;
 			importDesc.irradianceFaceSize = envIemSize;
-			importDesc.irradianceModel    = envIrradianceModel == "eevee" ?
-			                                    assetlib::IrradianceModel::kEeveePreview :
-			                                    assetlib::IrradianceModel::kExact;
 			importDesc.threads            = envThreads;
 
 			const assetlib::EnvImportResult imported =
