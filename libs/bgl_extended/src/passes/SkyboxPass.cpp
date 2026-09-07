@@ -35,9 +35,9 @@ namespace bgl
 		// Every member Execute writes. Kept beside the code that writes them so
 		// BinderNames catches a shader rename at startup: an optional write is silent, so
 		// a stale name would otherwise resolve to nothing every frame and say nothing.
-		constexpr std::array<std::string_view, 8> c_Fields = {
-			"clipToWorld"sv, "prevWorldToClip"sv, "cubeTex"sv, "sampler"sv,
-			"exposure"sv,    "mipLevel"sv,        "jitter"sv,  "prevJitter"sv,
+		constexpr std::array<std::string_view, 10> c_Fields = {
+			"clipToWorld"sv, "prevWorldToClip"sv, "cubeTex"sv,    "sampler"sv, "exposure"sv,
+			"mipLevel"sv,    "jitter"sv,          "prevJitter"sv, "opacity"sv, "backdrop"sv,
 		};
 	}
 
@@ -130,6 +130,8 @@ namespace bgl
 			skybox["sampler"].SetIfValid(draw.samplers.linearClamp);
 			skybox["exposure"].SetIfValid(draw.lighting.SkyExposure());
 			skybox["mipLevel"].SetIfValid(static_cast<float>(draw.lighting.skybox->mipLevel));
+			skybox["opacity"].SetIfValid(draw.lighting.skybox->opacity);
+			skybox["backdrop"].SetIfValid(draw.lighting.skybox->backdrop);
 			skybox["jitter"].SetIfValid(draw.viewState.jitter);
 			skybox["prevJitter"].SetIfValid(draw.viewState.prevJitter);
 		}

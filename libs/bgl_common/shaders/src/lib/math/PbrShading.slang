@@ -52,11 +52,11 @@ public float3 CalculateNormal(float3 worldNormal, float4 worldTangent, float2 sa
  * is the texel at the rotated direction. The IBL cubes are the same environment, so a normal has to
  * be carried through the same rotation or the model is lit from where the sky used to be.
  *
- * @param envRotation (sin, cos) of the rotation about the up axis.
+ * @param envRotation World to environment space; a pure rotation.
  */
-float3 ToEnvSpace(float3 dir, float2 envRotation)
+float3 ToEnvSpace(float3 dir, float3x3 envRotation)
 {
-    return float3(envRotation.y * dir.x + envRotation.x * dir.z, dir.y, envRotation.y * dir.z - envRotation.x * dir.x);
+    return mul(envRotation, dir);
 }
 
 /**

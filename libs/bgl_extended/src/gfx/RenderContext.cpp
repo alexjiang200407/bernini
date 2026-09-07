@@ -638,9 +638,23 @@ namespace bgl
 		glm::mat4 viewNoTranslation = job.camera.GetView();
 		viewNoTranslation[3]        = glm::vec4(0.0f, 0.0f, 0.0f, 1.0f);
 
+		// The authored yaw, and under it the camera's rotation when the sky follows the view: the
+		// environment is then attached to the camera, and a direction in view space always looks up
+		// the same texel.
+		auto envRotation = glm::mat4(1.0f);
+		if (const auto skybox = view->GetSkybox(); skybox.has_value())
+		{
+			if (skybox->rotationY != 0.0f)
+				envRotation =
+					glm::rotate(glm::mat4(1.0f), skybox->rotationY, glm::vec3(0.0f, 1.0f, 0.0f));
+			if (skybox->followsView)
+				envRotation = envRotation * viewNoTranslation;
+		}
+
 		auto camera                 = ViewMatrices();
 		camera.viewProj             = viewProj;
 		camera.rotationOnlyViewProj = projection * viewNoTranslation;
+		camera.envRotation          = envRotation;
 		camera.jitter               = jitter;
 		camera.unjitteredViewProj   = job.camera.GetProjection() * job.camera.GetView();
 		camera.time                 = job.time;
@@ -707,28 +721,20 @@ namespace bgl
 
 		if (draw.lighting.skybox.has_value())
 		{
-			const float rotationY = draw.lighting.skybox->rotationY;
-
-			draw.lighting.envRotation = glm::vec2(std::sin(rotationY), std::cos(rotationY));
-
-			auto skyRotation = glm::mat4(1.0f);
-			if (rotationY != 0.0f)
-			{
-				skyRotation = glm::rotate(glm::mat4(1.0f), rotationY, glm::vec3(0.0f, 1.0f, 0.0f));
-			}
+			draw.lighting.envRotation = envRotation;
 
 			// Composed from the pieces, the jitter as an exact translation: inverting their product
 			// folds the jitter into the rotation and a still sky reports motion (docs/passes.md).
 			draw.lighting.skyboxClipToWorld =
-				skyRotation * glm::transpose(viewNoTranslation) *
+				envRotation * glm::transpose(viewNoTranslation) *
 				glm::inverse(job.camera.GetProjection()) *
 				glm::translate(glm::mat4(1.0f), glm::vec3(-jitter, 0.0f));
 
-			// Undoes the spin the ray direction was baked with before reprojecting, so a rotated
-			// skybox reports the camera's motion and not its own offset. rotationY is authoring
-			// state rather than per-frame animation, so last frame's spin is taken to be this one's.
+			// Undoes the spin last frame's ray was baked with before reprojecting, so a turned sky
+			// reports the camera's motion and not its own offset -- and a sky following the view,
+			// which turns with every orbit, reports none, since on screen it stands still.
 			draw.lighting.skyboxPrevWorldToClip =
-				prevCamera.rotationOnlyViewProj * glm::inverse(skyRotation);
+				prevCamera.rotationOnlyViewProj * glm::inverse(prevCamera.envRotation);
 
 			m_Skybox.AttachToFrameGraph(m_FrameGraph, draw);
 		}

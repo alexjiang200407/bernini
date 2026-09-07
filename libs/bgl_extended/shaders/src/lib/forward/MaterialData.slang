@@ -30,9 +30,9 @@ public struct MaterialData
     public TextureCube.Handle prefilterMap;
     public Texture2D.Handle brdfLUT;
 
-    // (sin, cos) of the environment's rotation about the up axis -- the same spin the skybox pass
-    // puts on its ray. See PbrShading::ToEnvSpace.
-    public float2 envRotation;
+    // World to environment space -- the same rotation the skybox pass puts on its ray, carried as
+    // the matrix the uniform mirror writes; only its 3x3 is read. See PbrShading::ToEnvSpace.
+    public float4x4 envRotation;
 
     public SamplerState.Handle anisoLinearWrapSampler;
     public SamplerState.Handle linearClampSampler;
@@ -59,7 +59,7 @@ public struct MaterialData
         SurfaceParams params;
         params.cameraPos = cameraPos;
         params.exposure = exposure;
-        params.envRotation = envRotation;
+        params.envRotation = float3x3(envRotation);
         return params;
     }
 };
