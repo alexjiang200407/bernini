@@ -198,3 +198,15 @@ TEST_CASE(
 
 	CHECK(ProbeValue(opts, "CSSourceProbe") == 1u);
 }
+
+// The contract's grammar, compiled by the same toolchain a game's surface will be: defaults of one,
+// two and four components, a slot field sampled through the generic reader, and an associated
+// Params type. The value also says that a PbrSurface constructed as PbrSurface() carries its field
+// defaults -- 102 is roughness defaulting to 1 in the hundreds and a slot at index 1 sampled as 0.5
+// in the units. A bare declaration does not, which is why the contract says to construct one.
+TEST_CASE(
+	"A surface declared against the contract compiles, and its defaults apply",
+	"[slang][compute]")
+{
+	CHECK(ProbeValue(ProbeOptions(), "CSProbeSurface") == 102u);
+}

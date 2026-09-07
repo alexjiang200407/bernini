@@ -465,9 +465,13 @@ function taking `OutputVertices`, so nothing but `MSMain` may index them. `AnyMe
 and calls whichever of the two an instance's `MeshInstance` names — see the transparent phase below.
 
 The pixel shader varies per bucket instead (`Null`, `PBR`, `PBR_Loose`, `PBR_AlphaTest`,
-`PBR_Loose_AlphaTest`, `PBR_HashedAlpha`, `PBR_Loose_HashedAlpha`, `Transparent`, `Assert`), and is chosen by layer
-alone — every tier draws every layer, so the buckets are the (tier × layer) product with the loose
-material type static-only. **`c_Psos` order must match `PsoType`** — a `static_assert` catches an
+`PBR_Loose_AlphaTest`, `PBR_HashedAlpha`, `PBR_Loose_HashedAlpha`, `Transparent`, `Assert`, and
+`GameSlot0..3` with their `_AlphaTest` variants), and is chosen by layer alone — every tier draws
+every layer, so the buckets are the (tier × layer) product with the loose material type and the four
+reserved game slots static-only. A game slot has three rows — opaque, alpha-test and a bucket in
+the shared transparent pipeline — that draw whatever surface `game.slotN` binds, the null surface
+until one is registered ([lib/forward/GameSurface.slang](libs/bgl_extended/shaders/src/lib/forward/GameSurface.slang));
+hashed is closed to them. **`c_Psos` order must match `PsoType`** — a `static_assert` catches an
 empty row but not a misordering.
 
 **Opaque and alpha-test** are PSO-bucketed: per bucket it populates the cbuffers the kernel declares
