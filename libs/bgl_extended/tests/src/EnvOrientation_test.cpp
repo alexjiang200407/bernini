@@ -171,7 +171,7 @@ namespace
 		prefilterDesc.samples   = 32;
 
 		auto irradiance = probe.scene->AddTextureAsset(
-			assetlib::irradianceSh(radiance, c_IrradianceFace),
+			assetlib::irradianceSh(radiance, { .faceSize = c_IrradianceFace }),
 			"probe_irradiance");
 		auto prefilter = probe.scene->AddTextureAsset(
 			assetlib::prefilterRadiance(radiance, prefilterDesc, nullptr),

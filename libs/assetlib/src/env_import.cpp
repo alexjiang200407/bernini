@@ -242,7 +242,10 @@ namespace assetlib
 		if (desc.lighting)
 		{
 			throwIfCancelled(cancel);
-			const ImageData irradiance = irradianceSh(source, desc.irradianceFaceSize);
+			auto irradianceDesc        = IrradianceDesc();
+			irradianceDesc.faceSize    = desc.irradianceFaceSize;
+			irradianceDesc.model       = desc.irradianceModel;
+			const ImageData irradiance = irradianceSh(source, irradianceDesc);
 
 			auto prefilterDesc      = PrefilterDesc();
 			prefilterDesc.faceSize  = desc.prefilterFaceSize;

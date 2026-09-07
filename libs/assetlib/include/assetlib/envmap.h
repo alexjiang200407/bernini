@@ -95,6 +95,18 @@ namespace assetlib
 		const PrefilterDesc& desc,
 		PrefilterStats*      stats = nullptr);
 
+	enum class IrradianceModel : uint8_t
+	{
+		kExact,
+		kEeveePreview,
+	};
+
+	struct IrradianceDesc
+	{
+		uint32_t        faceSize = 128;
+		IrradianceModel model    = IrradianceModel::kExact;
+	};
+
 	/**
 	 * Convolves a radiance environment cube map with the clamped-cosine kernel, via a 9-coefficient
 	 * spherical-harmonic projection, into the `irradianceMap` the diffuse term samples.
@@ -109,13 +121,22 @@ namespace assetlib
 	 * is what the shader's `irradiance * albedo` expects and what makes this map's mean comparable to
 	 * the prefilter's. A constant environment therefore round-trips to its own radiance.
 	 *
+	 * `IrradianceDesc::model` picks what the map holds. `kExact` is the second-order harmonic, within
+	 * a few percent of the integral everywhere. `kEeveePreview` is Blender's Material Preview written
+	 * out: the source projected to `l <= 1`, deringed the way Eevee does -- the first band scaled
+	 * until `|L0| * 0.282` covers `|L1| * (0.4886 * 2/3 + 0.05)`, the most directional channel's
+	 * factor applied to all three -- reconstructed as `L0 + 2/3 L1` and clamped at zero. Flatter
+	 * than the integral, on purpose, and only for an environment that exists to be compared against
+	 * that preview. The sun Eevee extracts above its threshold casts that preview's shadows; the
+	 * light itself stays in the harmonic, so there is no split here.
+	 *
 	 * @param source A cube map in `R32G32B32A32_SFLOAT`; only mip 0 is read.
-	 * @param faceSize Face size of the result. 128 is ample -- the signal is band-limited to l = 2.
+	 * @param desc Face size and model. 128 is ample: the signal is band-limited to l = 2.
 	 * @return A cube map in `R32G32B32A32_SFLOAT` with one mip level.
-	 * @throws std::runtime_error if `source` is not a float cube map, or `faceSize` is 0.
+	 * @throws std::runtime_error if `source` is not a float cube map, or the face size is 0.
 	 */
 	[[nodiscard]] ImageData
-	irradianceSh(const ImageData& source, uint32_t faceSize = 128);
+	irradianceSh(const ImageData& source, const IrradianceDesc& desc = {});
 
 	/**
 	 * Convolves a cube map with the GGX lobe at one fixed roughness, into a single mip -- a defocus
@@ -297,6 +318,10 @@ namespace assetlib
 		uint32_t prefilterMips      = 7;  // must match the shader's MAX_REFLECTION_LOD + 1
 		uint32_t prefilterSamples   = 128;
 		uint32_t irradianceFaceSize = 128;
+
+		// What the irradiance map holds -- see IrradianceDesc. Exact unless an environment is
+		// baked to be compared against Blender's Material Preview.
+		IrradianceModel irradianceModel = IrradianceModel::kExact;
 
 		uint32_t threads = 0;  // 0 means hardware concurrency
 	};

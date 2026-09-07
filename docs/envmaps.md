@@ -213,7 +213,7 @@ back.
 
 Each map has its own size, because the three are looked at differently. The prefilter is sampled
 through a roughness lobe that blurs it, so 256² is already generous; the irradiance is band-limited to
-`l = 2`, so 128² is more than the signal contains. The skybox is the one seen *directly*, at viewport
+`l = 2` at most, so 128² is more than the signal contains. The skybox is the one seen *directly*, at viewport
 resolution, and wants the most.
 
 **But not more than the source can supply.** An equirectangular `.hdr` gives `width / 4` texels across
@@ -318,13 +318,15 @@ display luma over four boxes, and the cosine integral of the source at the norma
 box, in Bernini's conventions. CI has no Blender, so every number `BlenderParity_test` carries is
 copied from that output rather than computed there; re-run it whenever the reference changes.
 
-The test asserts the sphere's level against Blender's Cycles pixels directly, and against the exact
-cosine integral of the source through the shipped tone map, and the backdrop corners against
-Blender's frame, each side with its own. Cycles rather than the preview's own Eevee because Cycles *is* that
-integral to a percent, while Eevee lights diffuse from a first-order harmonic that reads flatter
-than the source — Blender's approximation, measured, and not a term to match. The tone map is
-Blender's own LUT ([passes.md](passes.md#scene-colour-and-where-the-display-curve-is-applied)), so
-the two frames agree to a few thousandths.
+The test asserts the sphere's level against Blender's Eevee pixels from Blender's own front view,
+each side of the frame with its own, and the backdrop corners the same way. Eevee rather than Cycles
+because Eevee is the Material Preview, which is what the shipped environment exists to be compared
+against: Cycles integrates the source exactly, while Eevee lights diffuse from a first-order
+harmonic of it, deringed — flatter than the source, and the shipped `forest` is baked to light that
+way on purpose (`IrradianceDesc`'s
+`kEeveePreview`, `assetlib_cli envmap --irradiance-model eevee`). A fresh import bakes the integral.
+The tone map is Blender's own LUT ([passes.md](passes.md#scene-colour-and-where-the-display-curve-is-applied)),
+so the two frames agree to a few thousandths.
 
 **Maintenance note.** The tables above are this document's load-bearing part, and their file links rot
 silently if files move. Re-check them whenever the environment file layout changes.
