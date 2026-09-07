@@ -492,9 +492,10 @@ MainWindow::SetUpRenderScaleMenu(QMenu* render)
 	SetUpReconstructionWidthMenu(render);
 }
 
-// Beside the render scale because it is only legible against one: below 1.0 the resolve builds each
-// output pixel out of the jittered render samples nearest it, and this is how wide "nearest" is. At
-// scale 1.0 every output pixel has a sample of its own and nothing here moves the image.
+// Beside the render scale because half of what it does is only legible against one: the resolve
+// gathers each output pixel out of the jittered render samples around it, and this is the sigma of
+// that gather -- the film filter at every scale, and below 1.0 also how long a moving pixel waits
+// for the phase that serves it.
 void
 MainWindow::SetUpReconstructionWidthMenu(QMenu* render)
 {
@@ -505,10 +506,10 @@ MainWindow::SetUpReconstructionWidthMenu(QMenu* render)
 
 	QMenu* width = render->addMenu("TAA Reconstruction Width");
 	width->setStatusTip(
-		"How wide a kernel the temporal resolve rebuilds each output pixel with, in output pixels. "
-		"Narrower is sharper on a held frame and slower to settle on a moving one; it has no "
-		"effect "
-		"at a render scale of 1.");
+		"The sigma, in output pixels, of the Gaussian the temporal resolve gathers each output "
+		"pixel "
+		"from the frame's samples with. Narrower is sharper; at a render scale below 1 it is also "
+		"slower to settle on a moving frame.");
 
 	auto* group = new QActionGroup(width);
 	group->setExclusive(true);

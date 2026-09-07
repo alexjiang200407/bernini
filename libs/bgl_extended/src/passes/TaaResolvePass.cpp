@@ -147,7 +147,8 @@ namespace bgl
 			"TaaResolve needs a positive reconstruction width");
 
 		// One phase unless the output grid is the denser of the two, which is what leaves the
-		// reconstruction kernel at unity everywhere a render scale does not upscale.
+		// blend weight at unity everywhere a render scale does not upscale; the gather that
+		// reconstructs the colour runs at every scale.
 		const auto subPixels = glm::vec2(
 			std::max(1.0f, std::ceil(outputSize.x / args.renderSize.x)),
 			std::max(1.0f, std::ceil(outputSize.y / args.renderSize.y)));

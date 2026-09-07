@@ -40,11 +40,14 @@ it was reported on. `renderScale` under `levelEditor`,
 from there, live, because the comparison is what shows a temporal artifact.
 
 Beside it is **TAA Reconstruction Width** (`taaReconstructionWidth`, same three keys, 0.4 by
-default): how wide a kernel the resolve rebuilds each output pixel with, in output pixels. It is the
-one number in the resolve whose trade a still image only half shows — narrower keeps sharpening a
-held frame, and what it costs is the frames a moving pixel waits for the jitter phase that serves it
-— so it is swept by eye on a scene rather than fixed at whatever a test measured. At a render scale
-of 1 it does nothing at all: each output pixel has a sample of its own there.
+default): the sigma, in output pixels, of the Gaussian the resolve rebuilds each output pixel with
+from the frame's samples. It is the film filter — at a render scale of 1 it is the *only* thing it
+is — and at an upscale it is also the one number in the resolve whose trade a still image only half
+shows: narrower keeps sharpening a held frame, and what it costs there is the frames a moving pixel
+waits for the jitter phase that serves it. So it is swept by eye on a scene rather than fixed at
+whatever a test measured. Measured on a fur texture beside Blender's Material Preview, 0.4 gives a
+third of the preview's own softening of the texture and 1.0 all of it, at the cost of edges the
+preview keeps sharp; what Blender does to a texture there is not a spatial filter its edges share.
 
 **The resolve is deliberately the standard recipe** — jittered accumulation, YCoCg variance
 clipping, Catmull-Rom history, luma-weighted blending, silhouette dilation — and nothing else. It
@@ -101,10 +104,13 @@ alpha-tested, read dimmer — judged acceptable by eye against keeping the machi
   scale: mean squared distance from the full-scale image 5.8e-5 held and 7.4e-5 under a drift,
   against 5.2e-4 and 2.2e-4 for the filtered upscale it replaces.
 
-* **An output pixel takes the render sample whose jitter landed nearest it, weighted by how near.**
-  A Gaussian of `RenderTargetDesc::taaReconstructionWidth` *output* pixels, 0.4 by default,
-  normalized over the sub-pixel phases one render sample serves.
-  Both halves matter. Unnormalized, the kernel would scale the blend by the jitter's phase even where
+* **An output pixel is this frame's render 3×3 gathered by how near each sample landed, and takes
+  the frame by how near the nearest one did.** Both are a Gaussian of
+  `RenderTargetDesc::taaReconstructionWidth` *output* pixels, 0.4 by default. The gather is the
+  film filter, and runs at every scale: what a texture keeps apart at texel scale is averaged before
+  the display curve, which on fur reads lighter and less saturated than the strands. The blend
+  weight is that kernel normalized over the sub-pixel phases one render sample serves.
+  Both halves of that matter. Unnormalized, the kernel would scale the blend by the jitter's phase even where
   there is nothing to choose between, and would change the image at scale 1.0, where there is one
   phase and its weight is its own mean — exactly one, and *returned* as one rather than divided out,
   because a backend may implement that division as an approximate reciprocal and land either side of

@@ -39,7 +39,7 @@ public float3 UnToneWeight(float3 c)
 //
 // The division is what the accumulation depends on. Undivided, the kernel would scale the blend by
 // the jitter's phase even where there is nothing to choose between, and at one output pixel per
-// render pixel -- every render scale of 1.0 -- it would change an image nothing else here changes.
+// render pixel -- every render scale of 1.0 -- it would scale the blend by a phase alone.
 // Normalized, that case is a single phase whose weight is its own mean, which is exactly one, and
 // the kernel only ever redistributes a frame's weight between the sub-pixels sharing its sample.
 //
@@ -148,9 +148,10 @@ float ObjectTexels<I : IResolveInputs>(I inputs, ResolveParams p, float2 uv, flo
 }
 
 /**
- * The resolve for the output pixel at `uv`: the render 3x3 bounds the history admitted, the
- * neighbour moving most on its own lends its vector, and this frame is blended in by how near its
- * jittered sample landed. docs/taa.md is the recipe and the measurement behind each choice.
+ * The resolve for the output pixel at `uv`: this frame is the render 3x3 gathered by how near each
+ * jittered sample landed, the same 3x3 bounds the history admitted, the neighbour moving most on
+ * its own lends its vector, and the frame is blended in by how near its nearest sample landed.
+ * docs/taa.md is the recipe and the measurement behind each choice.
  *
  * @return The new history at `uv`, alpha zero.
  */
@@ -197,6 +198,16 @@ public float4 TaaResolve<I : IResolveInputs>(I inputs, ResolveParams p, float2 u
     float2 dilatedMotion = motion;
     float dilatedObjectTexels = max(ObjectTexels(inputs, p, sampleUv, motion, texel), c_ObjectTexels);
 
+    // This frame's colour is the 3x3 gathered by where each sample landed against this output
+    // pixel's centre, in output pixels: the film filter, and the blend weight's kernel up to the
+    // phase count's rounding. The strands a texture keeps apart are averaged here, before the
+    // display curve.
+    float2 outputPerRenderTexel = texel / p.outputTexelSize;
+    float2 centreDistance = sampleOffset * outputPerRenderTexel;
+    float centreWeight = exp(-p.sampleWeightK * dot(centreDistance, centreDistance));
+    float3 filtered = current.rgb * centreWeight;
+    float filteredWeight = centreWeight;
+
     for (int y = -1; y <= 1; ++y)
     {
         for (int x = -1; x <= 1; ++x)
@@ -207,7 +218,13 @@ public float4 TaaResolve<I : IResolveInputs>(I inputs, ResolveParams p, float2 u
             }
 
             float2 tapUv = sampleUv + float2(x, y) * texel;
-            float3 tap = RgbToYCoCg(inputs.Scene(tapUv).rgb);
+            float3 tapRgb = inputs.Scene(tapUv).rgb;
+            float3 tap = RgbToYCoCg(tapRgb);
+
+            float2 tapDistance = (sampleOffset - float2(x, y)) * outputPerRenderTexel;
+            float tapWeight = exp(-p.sampleWeightK * dot(tapDistance, tapDistance));
+            filtered += tapRgb * tapWeight;
+            filteredWeight += tapWeight;
 
             boxMin = min(boxMin, tap);
             boxMax = max(boxMax, tap);
@@ -224,6 +241,8 @@ public float4 TaaResolve<I : IResolveInputs>(I inputs, ResolveParams p, float2 u
             }
         }
     }
+
+    filtered /= filteredWeight;
 
     float2 historyUv = uv - dilatedMotion;
 
@@ -246,7 +265,7 @@ public float4 TaaResolve<I : IResolveInputs>(I inputs, ResolveParams p, float2 u
     {
         // Filtered onto the output grid rather than point-taken: there is no accumulation to build
         // the frame out of jittered samples yet, so this one frame is a plain resample.
-        float3 whole = resampling ? inputs.SceneLinear(uv) : current.rgb;
+        float3 whole = resampling ? inputs.SceneLinear(uv) : filtered;
 
         return float4(whole, 0.0);
     }
@@ -264,7 +283,7 @@ public float4 TaaResolve<I : IResolveInputs>(I inputs, ResolveParams p, float2 u
 
     float weight = sampleWeight * p.blendWeight;
 
-    float3 resolved = UnToneWeight(lerp(ToneWeight(history), ToneWeight(current.rgb), weight));
+    float3 resolved = UnToneWeight(lerp(ToneWeight(history), ToneWeight(filtered), weight));
 
     return float4(resolved, 0.0);
 }

@@ -23,8 +23,9 @@ namespace bgl
 		// the same resolve is a downsample. Nothing outside the resolve sees both grids.
 		float renderScale = 1.0f;
 
-		// The width, in output pixels, of the kernel the TAA resolve reconstructs each output pixel
-		// with. Narrower is sharper and slower to settle; see IRenderTarget::SetTaaReconstructionWidth.
+		// The sigma, in output pixels, of the Gaussian the TAA resolve reconstructs each output pixel
+		// with from the frame's samples. Narrower is sharper and slower to settle; see
+		// IRenderTarget::SetTaaReconstructionWidth.
 		float taaReconstructionWidth = 0.4f;
 
 		// The native surface a windowed target presents into: an HWND on D3D12, a CAMetalLayer
@@ -84,21 +85,21 @@ namespace bgl
 		virtual void
 		SetTaaEnabled(bool enabled) = 0;
 
-		/** The width, in output pixels, of the TAA resolve's reconstruction kernel. */
+		/** The sigma, in output pixels, of the TAA resolve's reconstruction Gaussian. */
 		[[nodiscard]] virtual float
 		GetTaaReconstructionWidth() const noexcept = 0;
 
 		/**
-		 * Sets how wide a kernel each output pixel weights the render sample nearest it by, in
-		 * output pixels, from the next frame on. Nothing is reallocated and the accumulation is
-		 * kept: this is a per-frame shader constant, so it can be swept while watching one scene.
+		 * Sets the sigma, in output pixels, of the Gaussian each output pixel gathers the frame's
+		 * neighbouring samples with -- by where each landed against the pixel's centre -- and
+		 * weights the nearest one's blend by, from the next frame on. Nothing is reallocated and the
+		 * accumulation is kept: this is a per-frame shader constant, so it can be swept while
+		 * watching one scene.
 		 *
-		 * Narrower sharpens a held frame without limit, because a still pixel eventually sees every
-		 * jitter phase. What it costs is the frames a moving pixel waits for the phase that serves
-		 * it, and only a moving image shows that -- which is why this is a knob and not a constant.
-		 *
-		 * It cannot change an image where the render and output grids coincide, whatever it is set
-		 * to: there is one phase there, and it weighs itself against its own mean.
+		 * It is the film filter: what a texture keeps apart at texel scale is averaged here, before
+		 * the display curve. Narrower sharpens a held frame; at an upscale it also slows the settle,
+		 * since a moving pixel waits for the jitter phase that serves it, and only a moving image
+		 * shows that -- which is why this is a knob and not a constant.
 		 *
 		 * @throws GraphicsError if `width` is not a positive, finite number.
 		 */

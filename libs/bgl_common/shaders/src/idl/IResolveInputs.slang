@@ -49,11 +49,12 @@ public struct ResolveParams
     // written so that one sample per output pixel falls out as the untouched render-grid resolve.
     public float resampling;
 
-    // Reciprocal of twice the squared width of PhaseWeight's kernel, in output pixels. A knob rather
-    // than a constant because narrowing it sharpens a held frame without limit while lengthening the
-    // wait a moving pixel has for the phase that serves it, and that trade is judged by eye at a
-    // render scale. It cannot move an image at scale 1.0: one phase weighs itself against its own
-    // mean whatever the width is.
+    // Reciprocal of twice the squared sigma, in output pixels, of the Gaussian both the gather of
+    // this frame's 3x3 and PhaseWeight use. A knob rather than a constant because narrowing it
+    // sharpens a held frame while, at an upscale, lengthening the wait a moving pixel has for the
+    // phase that serves it, and that trade is judged by eye. Only the phase-weight half is unity at
+    // scale 1.0, where one phase weighs itself against its own mean; the gather moves the image at
+    // every scale.
     public float sampleWeightK;
 
     // How much of the resolved pixel comes from this frame. Zero history -- the first frame, or the

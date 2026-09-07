@@ -630,6 +630,37 @@ TEST_CASE("A converged TAA frame has less edge aliasing than an unjittered one",
 	CHECK(resolved < aliased * 0.6f);
 }
 
+// The film filter, as a number: each output pixel is the frame's 3x3 gathered by a Gaussian of the
+// reconstruction width, at every scale, so a wider kernel leaves an edge with less adjacent-pixel
+// energy than a narrow one -- and a flat region exactly where it was.
+TEST_CASE("The reconstruction kernel filters the frame at a render scale of one", "[taa][render]")
+{
+	const std::string narrow = "assets/golden/taa_film_narrow.got.png";
+	const std::string wide   = "assets/golden/taa_film_wide.got.png";
+
+	RenderTo(narrow, true, c_ConvergeFrames, AddQuad, StillCamera, StoppedClock, 1.0f, 1, 0.1f);
+	RenderTo(wide, true, c_ConvergeFrames, AddQuad, StillCamera, StoppedClock, 1.0f, 1, 0.8f);
+
+	constexpr int c_BoxX = 60;
+	constexpr int c_BoxY = 60;
+	constexpr int c_Box  = 40;
+
+	const float sharp = bgl::test::AliasEnergy(narrow, c_BoxX, c_BoxY, c_Box, c_Box);
+	const float soft  = bgl::test::AliasEnergy(wide, c_BoxX, c_BoxY, c_Box, c_Box);
+	INFO("edge energy: narrow = " << sharp << ", wide = " << soft);
+
+	// Measured 0.0026 narrow and 0.0017 wide, a ratio of 0.66.
+	CHECK(sharp > 1e-4f);
+	CHECK(soft < sharp * 0.85f);
+
+	const bgl::test::Rgba interiorNarrow = bgl::test::MeanColor(narrow, 118, 118, 20, 20);
+	const bgl::test::Rgba interiorWide   = bgl::test::MeanColor(wide, 118, 118, 20, 20);
+	CHECK(interiorNarrow.Luma() > 0.1f);
+	CHECK(interiorWide.r == Catch::Approx(interiorNarrow.r).margin(0.01));
+	CHECK(interiorWide.g == Catch::Approx(interiorNarrow.g).margin(0.01));
+	CHECK(interiorWide.b == Catch::Approx(interiorNarrow.b).margin(0.01));
+}
+
 // Under jitter a static image must resolve to what it supersamples to, so away from the edges the
 // converged frame and the unjittered one are the same picture. This is what catches a resolve that
 // converges to something -- a darkened, tinted or drifting accumulation -- rather than to the truth.
@@ -689,15 +720,16 @@ TEST_CASE("A pan leaves no more than a bounded trail behind it", "[taa][render]"
 
 	INFO("background bleed: arrived from a pan = " << trail << ", never moved = " << floor);
 
-	// The same renderer that never moved is the zero. It is not exactly zero -- jitter spreads the
-	// quad's edge a fraction of a pixel into its neighbours -- so the trail is read against it and not
-	// against nothing.
-	CHECK(floor < 2.5e-3f);
+	// The same renderer that never moved is the zero. It is not exactly zero -- the reconstruction
+	// gathers the quad's edge a fraction of a pixel into its neighbours (0.0035 at the 0.4 kernel,
+	// 0.0017 before the gather) -- so the trail is read against it and not against nothing.
+	CHECK(floor < 5.0e-3f);
 
-	// Measured 0.0066 against a floor of 0.0017 -- most of that gap is the resolved edge spreading a
-	// fraction of a pixel, not a trail. What this actually guards is the clamp: bypassing it takes the
-	// history whole and the figure goes to 0.090, so the bound is set an order of magnitude below that
-	// rather than tight against the current number, which the blend weight moves by only a percent.
+	// Measured 0.0064 against a floor of 0.0035 (0.0066 against 0.0017 before the gather) -- most of
+	// that gap is the resolved edge spreading a fraction of a pixel, not a trail. What this actually
+	// guards is the clamp: bypassing it takes the history whole and the figure goes to 0.090, so the
+	// bound is set an order of magnitude below that rather than tight against the current number,
+	// which the blend weight moves by only a percent.
 	CHECK(trail < 2.0e-2f);
 }
 
@@ -1641,14 +1673,10 @@ TEST_CASE(
 }
 
 // The reconstruction kernel is the one thing about the resolve a viewport can sweep while watching
-// a scene, so what it can and cannot reach is worth pinning.
-//
-// It cannot reach scale 1.0. There is one jitter phase per output pixel there and PhaseWeight
-// weighs it against its own mean, so the ratio is one whatever the width is -- which is what keeps
-// every figure this file measures independent of the setting.
-TEST_CASE(
-	"The reconstruction width sharpens an upscale and cannot touch scale 1.0",
-	"[taa][render]")
+// a scene, so what it reaches at an upscale is worth pinning beside what it does at scale 1.0 (the
+// film-filter case above): the blend weight's phase normalization is what keeps the upscale
+// figures below independent of the setting, and the gather is what the width moves there.
+TEST_CASE("The reconstruction width sharpens an upscale", "[taa][render]")
 {
 	constexpr float c_HalfScale = 0.5f;
 
@@ -1656,37 +1684,6 @@ TEST_CASE(
 	// the measurement's own noise.
 	constexpr float c_Narrow = 0.25f;
 	constexpr float c_Wide   = 0.6f;
-
-	SECTION("at scale 1.0 the width changes nothing")
-	{
-		const std::string narrow = "assets/golden/taa_width_full_narrow.got.png";
-		const std::string wide   = "assets/golden/taa_width_full_wide.got.png";
-
-		RenderTo(
-			narrow,
-			true,
-			c_ConvergeFrames,
-			AddFineFence,
-			StillCamera,
-			StoppedClock,
-			1.0f,
-			1,
-			c_Narrow);
-		RenderTo(
-			wide,
-			true,
-			c_ConvergeFrames,
-			AddFineFence,
-			StillCamera,
-			StoppedClock,
-			1.0f,
-			1,
-			c_Wide);
-
-		// Byte-exact, not merely close: the two renders differ in one shader constant that the
-		// arithmetic cancels, so anything but zero here means it did not cancel.
-		CHECK(bgl::test::MatchesGolden(narrow, wide, 0.0f));
-	}
 
 	SECTION("at half render scale a narrower kernel resolves more detail")
 	{
