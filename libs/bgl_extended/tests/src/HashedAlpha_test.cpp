@@ -1164,9 +1164,10 @@ TEST_CASE("A pan leaves no smear across a hashed alpha ramp", "[hashedalpha][ren
 	CHECK(off.lead < 1e-5f);
 
 	// The still floors are the min/max box's own convergence noise; the moving-box gate reads
-	// zero motion at rest, so a tightening that leaks into the resting image shows up here.
-	CHECK(on.trailFloor < 5e-4f);
-	CHECK(on.leadFloor < 5e-4f);
+	// zero motion at rest, so a tightening that leaks into the resting image shows up here. Display
+	// space again, so the environment is in them: 5.6e-4 with the forest facing Blender's way.
+	CHECK(on.trailFloor < 8e-4f);
+	CHECK(on.leadFloor < 8e-4f);
 
 	// Measured 1.73e-3 with the min/max clamp box, 1.30e-3 with the motion-gated sigma box (1.38e-3
 	// after the mip and coverage work since), and 1.23e-3 with the blend weighted by the fetch's

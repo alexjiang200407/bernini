@@ -30,9 +30,9 @@ shadow term Bernini has no pass for, and that gap is a lighting feature rather t
 Everything else is factory: AgX, look None, exposure 0, the world at strength 1.0.
 
 The camera sits where the test's does -- Bernini's (0, 0, 20) looking at the origin with +Y up,
-which in Blender's Z-up frame is +X looking along -X with +Z up. The two renderers disagree about
-which way longitude runs on an equirectangular source, so the frames come out mirrored: the boxes
-below are placed symmetrically and the test compares each against its mirror.
+which in Blender's Z-up frame is its front view: -Y looking along +Y with +Z up. Bernini reads an
+equirectangular source's longitude the way Blender does, so the two frames show the same sky the
+same way round and the test compares each box with its own counterpart.
 """
 
 import argparse
@@ -46,8 +46,8 @@ import numpy as np
 
 WIDTH, HEIGHT = 400, 300
 
-# Sphere limbs, where the normal is closest to the horizontal axis, and two backdrop corners.
-# Symmetric about the frame's centre line, so a mirrored frame maps each box onto its opposite.
+# Sphere limbs, where the normal is closest to the horizontal axis, and two backdrop corners, at
+# the pixels BlenderParity_test reads.
 BOX = 16
 BOXES = {
     "sphereLeft": (141, 142),
@@ -68,9 +68,9 @@ NORMALS = {
 def irradiance(hdr):
     """Cosine-weighted irradiance of the equirectangular source at each normal, as Rec.709 luma.
 
-    Bernini reads longitude as `u = 0.5 + atan2(x, z) / 2pi` and latitude as `v = acos(y) / pi`,
-    and its irradiance map divides the integral by pi, so a Lambertian surface reflects
-    albedo * irradiance. Both conventions are reproduced here rather than Blender's.
+    Bernini reads longitude as `u = 0.5 + atan2(z, x) / 2pi` -- Blender's convention in glTF
+    axes -- and latitude as `v = acos(y) / pi`, and its irradiance map divides the integral by pi,
+    so a Lambertian surface reflects albedo * irradiance.
     """
     img = bpy.data.images.load(hdr)
     w, h = img.size
@@ -81,9 +81,9 @@ def irradiance(hdr):
     lon = (u - 0.5) * 2.0 * math.pi
     theta = v * math.pi
     sin_theta = np.sin(theta)[:, None]
-    dx = np.sin(lon)[None, :] * sin_theta
+    dx = np.cos(lon)[None, :] * sin_theta
     dy = np.cos(theta)[:, None] * np.ones((1, w))
-    dz = np.cos(lon)[None, :] * sin_theta
+    dz = np.sin(lon)[None, :] * sin_theta
     solid_angle = (2.0 * math.pi / w) * (math.pi / h) * sin_theta
     out = {}
     for name, (nx, ny, nz) in NORMALS.items():
@@ -154,8 +154,8 @@ def build_scene(hdr, samples, engine):
     cam_data.clip_start = 0.5
     cam_data.clip_end = 500.0
     cam = bpy.data.objects.new("probe", cam_data)
-    cam.location = (20.0, 0.0, 0.0)
-    cam.rotation_euler = (math.radians(90.0), 0.0, math.radians(90.0))
+    cam.location = (0.0, -20.0, 0.0)
+    cam.rotation_euler = (math.radians(90.0), 0.0, 0.0)
     scene.collection.objects.link(cam)
     scene.camera = cam
 

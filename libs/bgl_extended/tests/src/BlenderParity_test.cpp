@@ -28,14 +28,14 @@
 //
 // The backdrop corners are checked against Blender's frame loosely: they are foliage resampled twice
 // over, and their job is to catch a mirrored or rotated environment, which moves them by far more
-// than any level. The two renderers run longitude the opposite way round an equirectangular source,
-// so each of Bernini's boxes is compared against Blender's opposite one.
+// than any level. Bernini reads an equirectangular source's longitude the way Blender does, so each
+// box is compared with Blender's same side from Blender's own front view.
 //
 // What Blender 5.2.1 measured, display luma over the same boxes (blender_probe.py, 64 samples,
 // `--engine CYCLES` for the first row and the default Eevee for the second):
 //
-//   Cycles, Lambert     lit 0.5393   dark 0.3608   the exact integral through Blender's AgX
-//   Eevee, Lambert      lit 0.4925   dark 0.3995   Eevee's world diffuse is an L1 harmonic: flatter
+//   Cycles, Lambert     left 0.3973   right 0.5406   the exact integral through Blender's AgX
+//   Eevee, Lambert      left 0.4281   right 0.4945   Eevee's world diffuse is an L1 harmonic: flatter
 //
 // Eevee's row is what the Material Preview shows and is not asserted: the difference is Blender's
 // first-order approximation of the source, measured, and not a term to match.
@@ -47,8 +47,7 @@ namespace
 
 	constexpr int c_BoxSize = 16;
 
-	// The sphere's limbs, and two backdrop corners. Symmetric about the frame's centre line, so a
-	// mirrored frame maps each box onto its opposite.
+	// The sphere's limbs, and two backdrop corners, at the pixels blender_probe.py reads.
 	constexpr int c_SphereLeftX  = 141;
 	constexpr int c_SphereRightX = 243;
 	constexpr int c_SphereY      = 142;
@@ -60,15 +59,14 @@ namespace
 	// integral of forest.exr in the map's 1/pi convention, as blender_probe.py prints it under
 	// `irradiance`. Bernini's +X is the screen's right.
 	constexpr float c_Albedo          = 0.18f;
-	constexpr float c_IrradianceRight = 1.4481f;
-	constexpr float c_IrradianceLeft  = 0.6377f;
+	constexpr float c_IrradianceRight = 1.4543f;
+	constexpr float c_IrradianceLeft  = 0.7371f;
 
-	// Display luma Blender's Cycles rendered over the sphere's limbs and the backdrop corners, its
-	// own left and right.
-	constexpr float c_BlenderSphereLeft  = 0.5393f;
-	constexpr float c_BlenderSphereRight = 0.3608f;
-	constexpr float c_BlenderSkyLeft     = 0.7834f;
-	constexpr float c_BlenderSkyRight    = 0.4690f;
+	// Display luma Blender's Cycles rendered over the sphere's limbs and the backdrop corners.
+	constexpr float c_BlenderSphereLeft  = 0.3973f;
+	constexpr float c_BlenderSphereRight = 0.5406f;
+	constexpr float c_BlenderSkyLeft     = 0.5595f;
+	constexpr float c_BlenderSkyRight    = 0.2046f;
 
 	constexpr float c_LevelMargin = 0.015f;
 	constexpr float c_SkyMargin   = 0.08f;
@@ -147,17 +145,17 @@ TEST_CASE("A matte sphere under forest sits at Blender's level", "[pbr][ibl][par
 
 	INFO(
 		"sphere L/R " << sphereLeft.Luma() << "/" << sphereRight.Luma() << " expected "
-					  << expectedLeft << "/" << expectedRight << ", Blender's R/L "
-					  << c_BlenderSphereRight << "/" << c_BlenderSphereLeft);
+					  << expectedLeft << "/" << expectedRight << ", Blender's L/R "
+					  << c_BlenderSphereLeft << "/" << c_BlenderSphereRight);
 	INFO(
-		"sky L/R " << skyLeft.Luma() << "/" << skyRight.Luma() << " against Blender's R/L "
-				   << c_BlenderSkyRight << "/" << c_BlenderSkyLeft);
+		"sky L/R " << skyLeft.Luma() << "/" << skyRight.Luma() << " against Blender's L/R "
+				   << c_BlenderSkyLeft << "/" << c_BlenderSkyRight);
 
-	CHECK(std::abs(skyLeft.Luma() - c_BlenderSkyRight) < c_SkyMargin);
-	CHECK(std::abs(skyRight.Luma() - c_BlenderSkyLeft) < c_SkyMargin);
+	CHECK(std::abs(skyLeft.Luma() - c_BlenderSkyLeft) < c_SkyMargin);
+	CHECK(std::abs(skyRight.Luma() - c_BlenderSkyRight) < c_SkyMargin);
 
-	CHECK(std::abs(sphereLeft.Luma() - c_BlenderSphereRight) < c_LevelMargin);
-	CHECK(std::abs(sphereRight.Luma() - c_BlenderSphereLeft) < c_LevelMargin);
+	CHECK(std::abs(sphereLeft.Luma() - c_BlenderSphereLeft) < c_LevelMargin);
+	CHECK(std::abs(sphereRight.Luma() - c_BlenderSphereRight) < c_LevelMargin);
 
 	CHECK(std::abs(sphereLeft.Luma() - expectedLeft) < c_LevelMargin);
 	CHECK(std::abs(sphereRight.Luma() - expectedRight) < c_LevelMargin);

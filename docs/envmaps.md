@@ -272,14 +272,17 @@ viewport in `config.json` — `skyMipLevel`, `backdropOpacity`, `backdropGrey`, 
 `EnvOrientation_test` pins that a following sky keeps its lit side on screen from either side of the
 world, and that a fade leaves the sphere in front of it alone.
 
-### Longitude runs the other way from Blender's
+### Longitude is Blender's
 
-`equirectToCube` reads longitude as `atan2(x, z)`, so standing inside the cube and turning towards
-`+X` walks *down* the source's columns. Blender, and a panoramic camera, walk up them. The two
-therefore show the same equirectangular source mirrored left-to-right about the camera's forward
-axis, and a comparison against Blender has to compare each side of the frame with the other's
-opposite — which `BlenderParity_test` does. The IBL and the backdrop agree with each other either
-way; what this changes is where a feature of the source lands on screen.
+`equirectToCube` reads longitude as `atan2(z, x)`: `u = 0.5` faces `+X` and `u = 0.75` faces `+Z`,
+which is Blender's `u = 0.5 - atan2(y, x) / 2π` once its Z-up axes are glTF's. So a glTF-forward
+camera looking down `-Z` sees the column Blender's front view sees, with the same side on the left.
+It used to read `atan2(x, z)`, a mirror and a quarter turn off, and a pale face lit from the wrong
+side of the forest is how that showed: the same model's skin measured darker and more saturated than
+Blender's until the environment was turned. `EnvmapBake_test`'s longitude case pins the convention,
+and `BlenderParity_test` compares each side of the frame with Blender's same side. An environment
+baked before the turn keeps the old orientation until it is re-imported, and nothing reports it:
+staleness is judged against the source's stamp, and the source did not change.
 
 ## Verifying
 
@@ -317,7 +320,7 @@ copied from that output rather than computed there; re-run it whenever the refer
 
 The test asserts the sphere's level against Blender's Cycles pixels directly, and against the exact
 cosine integral of the source through the shipped tone map, and the backdrop corners against
-Blender's frame, mirrored. Cycles rather than the preview's own Eevee because Cycles *is* that
+Blender's frame, each side with its own. Cycles rather than the preview's own Eevee because Cycles *is* that
 integral to a percent, while Eevee lights diffuse from a first-order harmonic that reads flatter
 than the source — Blender's approximation, measured, and not a term to match. The tone map is
 Blender's own LUT ([passes.md](passes.md#scene-colour-and-where-the-display-curve-is-applied)), so
