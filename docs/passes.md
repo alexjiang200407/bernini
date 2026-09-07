@@ -275,11 +275,16 @@ culling, so it fills only where nothing has been drawn.
   nothing.
 * **In:** the scene-colour and velocity buffers as render targets; samples the skybox cube texture
   through the view's linear-clamp sampler. The `gSkyboxData` cbuffer carries `clipToWorld`,
-  `prevWorldToClip`, `cubeTex`, `sampler`, `exposure`, and `mipLevel`; the constant-buffer name is
-  matched against Slang reflection, so it must track the declaration in `programs/env/Skybox.slang`.
-* `prevWorldToClip` is last frame's rotation-only view-projection with the skybox's own `rotationY`
-  divided back out, so a rotated sky reports the camera's motion and not its own offset. `rotationY`
-  is authoring state, so last frame's spin is taken to be this frame's.
+  `prevWorldToClip`, `cubeTex`, `sampler`, `exposure`, `mipLevel`, `opacity` and `backdrop`; the
+  constant-buffer name is matched against Slang reflection, so it must track the declaration in
+  `programs/env/Skybox.slang`. `opacity` lerps the sampled sky toward `backdrop` in scene-linear,
+  ahead of the display curve and never touching the lighting.
+* `prevWorldToClip` is last frame's rotation-only view-projection with the environment rotation
+  *last frame's* sky was drawn through divided back out — `ViewMatrices::envRotation`, carried
+  beside the jitter — so a turned sky reports the camera's motion and not its own offset, and a sky
+  that follows the view (`SkyboxDesc::followsView`, which turns it every frame) reports none, since
+  on screen it stands still. The same rotation reaches the forward pass as `envRotation`, a
+  world-to-environment matrix the IBL lookup applies (docs/envmaps.md).
 * `clipToWorld` is composed from the transposed view rotation (the view is rigid, so its transpose
   is its inverse), the inverse of the *unjittered* projection, and the jitter as an exact
   translation — never the inverse of the jittered product. Inverting the composed matrix mixes the
