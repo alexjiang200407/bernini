@@ -391,7 +391,10 @@ TEST_CASE("pack re-bakes a sky whose routed source moved", "[envbake][pack]")
 	StoreAt(root.path).BakeSky(sky);
 	StoreAt(root.path).Save(sky, "Derived/Sky/test.bsky");
 
-	root.AddSource("sky_src.ktx2", 8, 2.0f);
+	// A different face size, not merely a different radiance: two same-size writes inside one of
+	// Windows' write-time ticks land back on the size and mtime stampOf memoises against, which
+	// hands the first bytes' hash back for the second.
+	root.AddSource("sky_src.ktx2", 16, 2.0f);
 
 	PackReport report = AssetStore(root.path).Pack(PackDesc{ root.path / "Data.bpak" });
 	CHECK(report.envsRebaked == 1);
