@@ -100,16 +100,14 @@ namespace bgl
 
 		for (slang::DeclReflection* child : decl->getChildren())
 		{
-			switch (child->getKind())
+			const slang::DeclReflection::Kind kind = child->getKind();
+			if (kind == slang::DeclReflection::Kind::Struct)
 			{
-			case slang::DeclReflection::Kind::Struct:
 				out.emplace_back(child);
-				break;
-			case slang::DeclReflection::Kind::Namespace:
+			}
+			else if (kind == slang::DeclReflection::Kind::Namespace)
+			{
 				CollectStructDecls(child, out);
-				break;
-			default:
-				break;
 			}
 		}
 	}

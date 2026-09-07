@@ -144,15 +144,15 @@ TEST_CASE("A surface's parameters are reflected at their target's offsets", "[su
 	SECTION("the scalar rules, which is what DXIL reads")
 	{
 		format     = SLANG_DXIL;
-		paramsSize = 44;
-		at         = { 0, 4, 16, 20, 24, 40 };
+		paramsSize = 44u;
+		at         = { 0u, 4u, 16u, 20u, 24u, 40u };
 	}
 
 	SECTION("MSL's rules, which align a vector to its own width")
 	{
 		format     = SLANG_METAL;
-		paramsSize = 80;
-		at         = { 0, 16, 32, 36, 48, 64 };
+		paramsSize = 80u;
+		at         = { 0u, 16u, 32u, 36u, 48u, 64u };
 	}
 
 	Session     session(format);
@@ -160,10 +160,10 @@ TEST_CASE("A surface's parameters are reflected at their target's offsets", "[su
 
 	CHECK(surface.name == "Gate");
 	// Registration's to assign, not reflection's.
-	CHECK(surface.slot == 0);
+	CHECK(surface.slot == 0u);
 	CHECK(surface.paramsSize == paramsSize);
 
-	REQUIRE(surface.parameters.size() == 4);
+	REQUIRE(surface.parameters.size() == 4u);
 
 	CHECK(surface.parameters[0].name == "power");
 	CHECK(surface.parameters[0].type == SurfaceParamType::kFloat);
@@ -189,16 +189,16 @@ TEST_CASE("A surface's parameters are reflected at their target's offsets", "[su
 	CHECK(surface.parameters[3].offset == at.unset);
 	CHECK(surface.parameters[3].defaultValue == glm::vec4(0.0f));
 
-	REQUIRE(surface.slots.size() == 2);
+	REQUIRE(surface.slots.size() == 2u);
 
 	CHECK(surface.slots[0].name == "base");
 	CHECK(surface.slots[0].kind == SurfaceSlotKind::kColor);
-	CHECK(surface.slots[0].index == 0);
+	CHECK(surface.slots[0].index == 0u);
 	CHECK(surface.slots[0].offset == at.base);
 
 	CHECK(surface.slots[1].name == "bumps");
 	CHECK(surface.slots[1].kind == SurfaceSlotKind::kNormal);
-	CHECK(surface.slots[1].index == 1);
+	CHECK(surface.slots[1].index == 1u);
 	CHECK(surface.slots[1].offset == at.bumps);
 }
 
@@ -237,7 +237,7 @@ struct KindSurface : ISurfaceSource
 	SurfaceType surface = ReflectSurface(session.Load("Kinds", Module(c_Kinds)), "Kinds");
 
 	CHECK(surface.parameters.empty());
-	REQUIRE(surface.slots.size() == 4);
+	REQUIRE(surface.slots.size() == 4u);
 	CHECK(surface.slots[0].kind == SurfaceSlotKind::kCoverage);
 	CHECK(surface.slots[1].kind == SurfaceSlotKind::kData);
 	CHECK(surface.slots[2].kind == SurfaceSlotKind::kNormal);
