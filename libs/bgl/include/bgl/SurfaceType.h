@@ -29,13 +29,13 @@ namespace bgl
 	};
 
 	/**
-	 * What a surface parameter may be. A material writes one number or a list of them.
+	 * What a surface value may be. A material writes one number or a list of them.
 	 *
 	 * Declared in component order, and read that way in both directions: the count is the
 	 * enumerator's distance from `kFloat` plus one, and a reflected component count is the
 	 * enumerator that far along.
 	 */
-	enum class SurfaceParameterType : uint8_t
+	enum class SurfaceValueType : uint8_t
 	{
 		kFloat,
 		kFloat2,
@@ -44,26 +44,24 @@ namespace bgl
 	};
 
 	constexpr uint32_t
-	SurfaceParameterComponents(SurfaceParameterType type) noexcept
+	SurfaceValueComponents(SurfaceValueType type) noexcept
 	{
-		return static_cast<uint32_t>(type) - static_cast<uint32_t>(SurfaceParameterType::kFloat) +
-		       1;
+		return static_cast<uint32_t>(type) - static_cast<uint32_t>(SurfaceValueType::kFloat) + 1;
 	}
 
-	/// One value a material sets by name, and where the record keeps it.
-	struct SurfaceParameter
+	/// One value a material sets by name, and where the block keeps it.
+	struct SurfaceValue
 	{
 		// The field's name in the surface's parameter struct, which is what a material's
 		// `parameters` writes to reach it.
 		std::string name;
 
-		SurfaceParameterType type = SurfaceParameterType::kFloat;
+		SurfaceValueType type = SurfaceValueType::kFloat;
 
-		// From the start of the parameter block, not of the record.
+		// From the start of the block, not of the record.
 		uint32_t offset = 0;
 
-		// What a material that does not name this parameter gets. Components past the type's are
-		// zero.
+		// What a material that does not name this value gets. Components past the type's are zero.
 		glm::vec4 defaultValue = glm::vec4(0.0f);
 	};
 
@@ -80,14 +78,27 @@ namespace bgl
 		// field at `offset`.
 		uint32_t index = 0;
 
-		// From the start of the parameter block, as SurfaceParameter::offset is.
+		// From the start of the block, as SurfaceValue::offset is.
 		uint32_t offset = 0;
 	};
 
 	/**
-	 * A surface the client registered, as the engine reads it: what a material may set and where
-	 * each value lands in the record. Reflected off the game's own Slang module, so the layout
-	 * comes from the code that reads it.
+	 * How a surface's parameter block is arranged: everything a material may set, and where each of
+	 * them lands. This is what packs a record and what reads one back, and it is the whole of what
+	 * a packer needs -- which surface it belongs to is not.
+	 */
+	struct SurfaceLayout
+	{
+		// Bytes of block, past the engine's fixed part of the record.
+		uint32_t size = 0;
+
+		std::vector<SurfaceValue> values;
+		std::vector<SurfaceSlot>  slots;
+	};
+
+	/**
+	 * A surface the client registered, as the engine reads it. Reflected off the game's own Slang
+	 * module, so the layout comes from the code that reads it rather than from a manifest beside it.
 	 */
 	struct SurfaceType
 	{
@@ -99,10 +110,6 @@ namespace bgl
 		// Assigned by registration; reflection leaves it invalid.
 		MaterialType kind = MaterialType::kInvalid;
 
-		// Bytes of parameter block, past the engine's fixed part of the record.
-		uint32_t paramsSize = 0;
-
-		std::vector<SurfaceParameter> parameters;
-		std::vector<SurfaceSlot>      slots;
+		SurfaceLayout layout;
 	};
 }

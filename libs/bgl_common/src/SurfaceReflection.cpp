@@ -109,8 +109,8 @@ namespace bgl
 			return true;
 		}
 
-		SurfaceParameterType
-		ParamTypeOf(
+		SurfaceValueType
+		ValueTypeOf(
 			slang::TypeReflection* type,
 			std::string_view       surfaceName,
 			std::string_view       fieldName)
@@ -128,17 +128,17 @@ namespace bgl
 			if (!packable)
 			{
 				core::throw_runtime_error(
-					"surface '{}': parameter '{}' is not a float or a float vector",
+					"surface '{}': '{}' is not a float or a float vector, so nothing can set it",
 					surfaceName,
 					fieldName);
 			}
 
-			return static_cast<SurfaceParameterType>(
-				static_cast<uint32_t>(SurfaceParameterType::kFloat) + componentCount - 1);
+			return static_cast<SurfaceValueType>(
+				static_cast<uint32_t>(SurfaceValueType::kFloat) + componentCount - 1);
 		}
 
 		glm::vec4
-		DefaultOf(slang::VariableReflection* var, SurfaceParameterType type)
+		DefaultOf(slang::VariableReflection* var, SurfaceValueType type)
 		{
 			glm::vec4 value(0.0f);
 			if (var == nullptr)
@@ -151,9 +151,8 @@ namespace bgl
 				if (name == nullptr || std::string_view(name) != "Default")
 					continue;
 
-				const uint32_t components = std::min<uint32_t>(
-					SurfaceParameterComponents(type),
-					attribute->getArgumentCount());
+				const uint32_t components =
+					std::min<uint32_t>(SurfaceValueComponents(type), attribute->getArgumentCount());
 				for (uint32_t c = 0; c < components; ++c)
 				{
 					float component = 0.0f;
@@ -199,8 +198,8 @@ namespace bgl
 		slang::TypeLayoutReflection* paramsLayout = ParamsLayoutOf(layout, params, surfaceName);
 
 		SurfaceType reflected;
-		reflected.name       = std::string(surfaceName);
-		reflected.paramsSize = static_cast<uint32_t>(paramsLayout->getStride());
+		reflected.name        = std::string(surfaceName);
+		reflected.layout.size = static_cast<uint32_t>(paramsLayout->getStride());
 
 		for (unsigned i = 0; i < paramsLayout->getFieldCount(); ++i)
 		{
@@ -216,7 +215,7 @@ namespace bgl
 			SurfaceSlotKind kind = SurfaceSlotKind::kColor;
 			if (typeName != nullptr && SlotKindOf(typeName, kind))
 			{
-				if (reflected.slots.size() == idl::cGameSurfaceSlots)
+				if (reflected.layout.slots.size() == idl::cGameSurfaceSlots)
 				{
 					core::throw_runtime_error(
 						"surface '{}': slot '{}' is past the {} a record carries",
@@ -228,18 +227,18 @@ namespace bgl
 				SurfaceSlot slot;
 				slot.name   = std::string(spelling);
 				slot.kind   = kind;
-				slot.index  = static_cast<uint32_t>(reflected.slots.size());
+				slot.index  = static_cast<uint32_t>(reflected.layout.slots.size());
 				slot.offset = offset;
-				reflected.slots.emplace_back(std::move(slot));
+				reflected.layout.slots.emplace_back(std::move(slot));
 				continue;
 			}
 
-			SurfaceParameter parameter;
-			parameter.name         = std::string(spelling);
-			parameter.type         = ParamTypeOf(type, surfaceName, spelling);
-			parameter.offset       = offset;
-			parameter.defaultValue = DefaultOf(field->getVariable(), parameter.type);
-			reflected.parameters.emplace_back(std::move(parameter));
+			SurfaceValue value;
+			value.name         = std::string(spelling);
+			value.type         = ValueTypeOf(type, surfaceName, spelling);
+			value.offset       = offset;
+			value.defaultValue = DefaultOf(field->getVariable(), value.type);
+			reflected.layout.values.emplace_back(std::move(value));
 		}
 
 		return reflected;

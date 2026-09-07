@@ -162,45 +162,45 @@ TEST_CASE("A surface's parameters are reflected at their target's offsets", "[su
 	CHECK(surface.name == "Gate");
 	// Registration's to assign, not reflection's.
 	CHECK(surface.kind == MaterialType::kInvalid);
-	CHECK(surface.paramsSize == paramsSize);
+	CHECK(surface.layout.size == paramsSize);
 
-	REQUIRE(surface.parameters.size() == 4u);
+	REQUIRE(surface.layout.values.size() == 4u);
 
-	CHECK(surface.parameters[0].name == "power");
-	CHECK(surface.parameters[0].type == SurfaceParameterType::kFloat);
-	CHECK(surface.parameters[0].offset == at.power);
-	CHECK(surface.parameters[0].defaultValue.x == 2.0f);
+	CHECK(surface.layout.values[0].name == "power");
+	CHECK(surface.layout.values[0].type == SurfaceValueType::kFloat);
+	CHECK(surface.layout.values[0].offset == at.power);
+	CHECK(surface.layout.values[0].defaultValue.x == 2.0f);
 
-	CHECK(surface.parameters[1].name == "tint");
-	CHECK(surface.parameters[1].type == SurfaceParameterType::kFloat3);
-	CHECK(surface.parameters[1].offset == at.tint);
-	CHECK(surface.parameters[1].defaultValue.x == 0.2f);
-	CHECK(surface.parameters[1].defaultValue.y == 0.6f);
-	CHECK(surface.parameters[1].defaultValue.z == 1.0f);
+	CHECK(surface.layout.values[1].name == "tint");
+	CHECK(surface.layout.values[1].type == SurfaceValueType::kFloat3);
+	CHECK(surface.layout.values[1].offset == at.tint);
+	CHECK(surface.layout.values[1].defaultValue.x == 0.2f);
+	CHECK(surface.layout.values[1].defaultValue.y == 0.6f);
+	CHECK(surface.layout.values[1].defaultValue.z == 1.0f);
 	// A component past the parameter's own is zero, not whatever the attribute's field defaulted to.
-	CHECK(surface.parameters[1].defaultValue.w == 0.0f);
+	CHECK(surface.layout.values[1].defaultValue.w == 0.0f);
 
-	CHECK(surface.parameters[2].name == "quad");
-	CHECK(surface.parameters[2].type == SurfaceParameterType::kFloat4);
-	CHECK(surface.parameters[2].offset == at.quad);
-	CHECK(surface.parameters[2].defaultValue == glm::vec4(1.0f, 2.0f, 3.0f, 4.0f));
+	CHECK(surface.layout.values[2].name == "quad");
+	CHECK(surface.layout.values[2].type == SurfaceValueType::kFloat4);
+	CHECK(surface.layout.values[2].offset == at.quad);
+	CHECK(surface.layout.values[2].defaultValue == glm::vec4(1.0f, 2.0f, 3.0f, 4.0f));
 
 	// No attribute is zero, which is also what a material that sets nothing writes.
-	CHECK(surface.parameters[3].name == "unset");
-	CHECK(surface.parameters[3].offset == at.unset);
-	CHECK(surface.parameters[3].defaultValue == glm::vec4(0.0f));
+	CHECK(surface.layout.values[3].name == "unset");
+	CHECK(surface.layout.values[3].offset == at.unset);
+	CHECK(surface.layout.values[3].defaultValue == glm::vec4(0.0f));
 
-	REQUIRE(surface.slots.size() == 2u);
+	REQUIRE(surface.layout.slots.size() == 2u);
 
-	CHECK(surface.slots[0].name == "base");
-	CHECK(surface.slots[0].kind == SurfaceSlotKind::kColor);
-	CHECK(surface.slots[0].index == 0u);
-	CHECK(surface.slots[0].offset == at.base);
+	CHECK(surface.layout.slots[0].name == "base");
+	CHECK(surface.layout.slots[0].kind == SurfaceSlotKind::kColor);
+	CHECK(surface.layout.slots[0].index == 0u);
+	CHECK(surface.layout.slots[0].offset == at.base);
 
-	CHECK(surface.slots[1].name == "bumps");
-	CHECK(surface.slots[1].kind == SurfaceSlotKind::kNormal);
-	CHECK(surface.slots[1].index == 1u);
-	CHECK(surface.slots[1].offset == at.bumps);
+	CHECK(surface.layout.slots[1].name == "bumps");
+	CHECK(surface.layout.slots[1].kind == SurfaceSlotKind::kNormal);
+	CHECK(surface.layout.slots[1].index == 1u);
+	CHECK(surface.layout.slots[1].offset == at.bumps);
 }
 
 // Each slot type is its own kind, and nothing but the declared type says so.
@@ -237,12 +237,12 @@ struct KindSurface : ISurfaceSource
 	Session     session;
 	SurfaceType surface = ReflectSurface(session.Load("Kinds", Module(c_Kinds)), "Kinds");
 
-	CHECK(surface.parameters.empty());
-	REQUIRE(surface.slots.size() == 4u);
-	CHECK(surface.slots[0].kind == SurfaceSlotKind::kCoverage);
-	CHECK(surface.slots[1].kind == SurfaceSlotKind::kData);
-	CHECK(surface.slots[2].kind == SurfaceSlotKind::kNormal);
-	CHECK(surface.slots[3].kind == SurfaceSlotKind::kColor);
+	CHECK(surface.layout.values.empty());
+	REQUIRE(surface.layout.slots.size() == 4u);
+	CHECK(surface.layout.slots[0].kind == SurfaceSlotKind::kCoverage);
+	CHECK(surface.layout.slots[1].kind == SurfaceSlotKind::kData);
+	CHECK(surface.layout.slots[2].kind == SurfaceSlotKind::kNormal);
+	CHECK(surface.layout.slots[3].kind == SurfaceSlotKind::kColor);
 }
 
 // Every refusal is a named throw, because each one is a mistake in a file the engine does not own
@@ -341,6 +341,6 @@ struct IntSurface : ISurfaceSource
 			ReflectSurface(session.Load("Ints", Module(c_Body)), "Ints"),
 			std::runtime_error,
 			Catch::Matchers::MessageMatches(
-				ContainsSubstring("parameter 'level' is not a float or a float vector")));
+				ContainsSubstring("'level' is not a float or a float vector")));
 	}
 }

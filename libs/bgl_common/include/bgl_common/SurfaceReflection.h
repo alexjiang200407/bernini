@@ -9,7 +9,7 @@ namespace bgl
 	/**
 	 * Reads the one surface out of a game's compiled module: the struct conforming to
 	 * `ISurfaceSource`, its `Params` fields at the offsets a record holds them at, the slot fields
-	 * among them by their declared type, and the defaults on the rest.
+	 * among them by their declared type, and the defaults on the values that are left.
 	 *
 	 * The layout is the one this session's target reconstructs, and the backends disagree: MSL
 	 * aligns a float3 to 16 where the scalar rules leave it at 4. So a surface is reflected once
