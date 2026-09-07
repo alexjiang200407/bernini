@@ -1,4 +1,5 @@
 #pragma once
+#include <bgl/MaterialType.h>
 #include <bgl/glm.h>
 
 #include <cstdint>
@@ -7,7 +8,18 @@
 
 namespace bgl
 {
-	/// What a slot's texture holds, read off the field's declared type in the surface's parameters.
+	// A surface is a shading function a game wrote and the engine draws through. It declares one
+	// struct of parameters, and every field in that struct is one of two things: a value a material
+	// sets by name, or a texture slot a material binds a texture to by name. What follows is that
+	// declaration as the engine read it back off the game's module -- the names a material writes,
+	// where each lands in the record, and what an unset one gets.
+
+	/**
+	 * What a slot's texture holds, which decides how it is sampled and how it will be baked.
+	 *
+	 * The surface says so by the type it declares the field as: `ColorSlot`, `DataSlot`,
+	 * `NormalSlot` or `CoverageSlot` in the shader contract's `bgl/MaterialReader.slang`.
+	 */
 	enum class SurfaceSlotKind : uint8_t
 	{
 		kColor,
@@ -23,7 +35,7 @@ namespace bgl
 	 * enumerator's distance from `kFloat` plus one, and a reflected component count is the
 	 * enumerator that far along.
 	 */
-	enum class SurfaceParamType : uint8_t
+	enum class SurfaceParameterType : uint8_t
 	{
 		kFloat,
 		kFloat2,
@@ -32,16 +44,20 @@ namespace bgl
 	};
 
 	constexpr uint32_t
-	SurfaceParamComponents(SurfaceParamType type) noexcept
+	SurfaceParameterComponents(SurfaceParameterType type) noexcept
 	{
-		return static_cast<uint32_t>(type) - static_cast<uint32_t>(SurfaceParamType::kFloat) + 1;
+		return static_cast<uint32_t>(type) - static_cast<uint32_t>(SurfaceParameterType::kFloat) +
+		       1;
 	}
 
-	/// A value a material sets by name, at a fixed place in the record's parameter block.
-	struct SurfaceParam
+	/// One value a material sets by name, and where the record keeps it.
+	struct SurfaceParameter
 	{
-		std::string      name;
-		SurfaceParamType type = SurfaceParamType::kFloat;
+		// The field's name in the surface's parameter struct, which is what a material's
+		// `parameters` writes to reach it.
+		std::string name;
+
+		SurfaceParameterType type = SurfaceParameterType::kFloat;
 
 		// From the start of the parameter block, not of the record.
 		uint32_t offset = 0;
@@ -51,17 +67,20 @@ namespace bgl
 		glm::vec4 defaultValue = glm::vec4(0.0f);
 	};
 
-	/// A texture a material binds by name, sampled through the index the engine packs into it.
+	/// One texture a material binds by name, sampled through the index the engine packs into it.
 	struct SurfaceSlot
 	{
-		std::string     name;
+		// The field's name in the surface's parameter struct, which is what a material's `slots`
+		// writes to bind a texture to it.
+		std::string name;
+
 		SurfaceSlotKind kind = SurfaceSlotKind::kColor;
 
 		// Which of the record's texture handles this slot samples, and the value written into the
 		// field at `offset`.
 		uint32_t index = 0;
 
-		// From the start of the parameter block, as SurfaceParam::offset is.
+		// From the start of the parameter block, as SurfaceParameter::offset is.
 		uint32_t offset = 0;
 	};
 
@@ -72,17 +91,18 @@ namespace bgl
 	 */
 	struct SurfaceType
 	{
-		// What a material names to draw with this surface.
+		// What a material names to draw with this surface, normally its module file's stem.
 		std::string name;
 
-		// Which reserved slot the surface was registered into. Assigned by registration, not by
-		// reflection.
-		uint32_t slot = 0;
+		// What a record of this surface is tagged with: one of the reserved game kinds from
+		// `MaterialType::kGameStart`, and the kind a material handle of this surface carries.
+		// Assigned by registration; reflection leaves it invalid.
+		MaterialType kind = MaterialType::kInvalid;
 
 		// Bytes of parameter block, past the engine's fixed part of the record.
 		uint32_t paramsSize = 0;
 
-		std::vector<SurfaceParam> parameters;
-		std::vector<SurfaceSlot>  slots;
+		std::vector<SurfaceParameter> parameters;
+		std::vector<SurfaceSlot>      slots;
 	};
 }

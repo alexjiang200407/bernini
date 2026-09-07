@@ -1,3 +1,4 @@
+#include <bgl/MaterialType.h>
 #include <bgl/SurfaceType.h>
 #include <bgl_common/SurfaceReflection.h>
 
@@ -160,18 +161,18 @@ TEST_CASE("A surface's parameters are reflected at their target's offsets", "[su
 
 	CHECK(surface.name == "Gate");
 	// Registration's to assign, not reflection's.
-	CHECK(surface.slot == 0u);
+	CHECK(surface.kind == MaterialType::kInvalid);
 	CHECK(surface.paramsSize == paramsSize);
 
 	REQUIRE(surface.parameters.size() == 4u);
 
 	CHECK(surface.parameters[0].name == "power");
-	CHECK(surface.parameters[0].type == SurfaceParamType::kFloat);
+	CHECK(surface.parameters[0].type == SurfaceParameterType::kFloat);
 	CHECK(surface.parameters[0].offset == at.power);
 	CHECK(surface.parameters[0].defaultValue.x == 2.0f);
 
 	CHECK(surface.parameters[1].name == "tint");
-	CHECK(surface.parameters[1].type == SurfaceParamType::kFloat3);
+	CHECK(surface.parameters[1].type == SurfaceParameterType::kFloat3);
 	CHECK(surface.parameters[1].offset == at.tint);
 	CHECK(surface.parameters[1].defaultValue.x == 0.2f);
 	CHECK(surface.parameters[1].defaultValue.y == 0.6f);
@@ -180,7 +181,7 @@ TEST_CASE("A surface's parameters are reflected at their target's offsets", "[su
 	CHECK(surface.parameters[1].defaultValue.w == 0.0f);
 
 	CHECK(surface.parameters[2].name == "quad");
-	CHECK(surface.parameters[2].type == SurfaceParamType::kFloat4);
+	CHECK(surface.parameters[2].type == SurfaceParameterType::kFloat4);
 	CHECK(surface.parameters[2].offset == at.quad);
 	CHECK(surface.parameters[2].defaultValue == glm::vec4(1.0f, 2.0f, 3.0f, 4.0f));
 

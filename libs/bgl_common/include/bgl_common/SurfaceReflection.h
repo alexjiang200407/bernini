@@ -16,10 +16,11 @@ namespace bgl
 	 * per device rather than once per build, and what a record holds is whatever
 	 * `RawBuffer.Load<Params>` reads back on the backend that will draw it.
 	 *
-	 * `SurfaceType::slot` is left at zero; registration assigns it.
+	 * `SurfaceType::kind` is left invalid; registration assigns it.
 	 *
-	 * @param module A module already loaded into the session that will compile the surface.
-	 * @param name What a material names to reach this surface, normally the module file's stem.
+	 * @param slangModule A module already loaded into the session that will compile the surface.
+	 * @param surfaceName What a material names to reach this surface, normally the module file's
+	 *        stem. Not a material's own name: a material names the surface it draws through.
 	 * @param targetIndex Which of the session's targets the layout is read for.
 	 * @return The reflected surface.
 	 * @throws std::runtime_error if the module does not import the contract, holds no conforming
@@ -29,5 +30,8 @@ namespace bgl
 	 *         where a bad module becomes one.
 	 */
 	SurfaceType
-	ReflectSurface(slang::IModule* module, std::string_view name, SlangInt targetIndex = 0);
+	ReflectSurface(
+		slang::IModule*  slangModule,
+		std::string_view surfaceName,
+		SlangInt         targetIndex = 0);
 }

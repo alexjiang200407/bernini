@@ -23,20 +23,20 @@ namespace bgl
 
 		slang::TypeReflection*
 		FindSurfaceStruct(
-			slang::IModule*       module,
+			slang::IModule*       slangModule,
 			slang::ProgramLayout* layout,
-			std::string_view      name)
+			std::string_view      surfaceName)
 		{
 			slang::TypeReflection* iface = layout->findTypeByName(c_SurfaceInterface);
 			if (iface == nullptr)
 			{
 				core::throw_runtime_error(
 					"surface '{}': the module does not import bgl.SurfaceSource",
-					name);
+					surfaceName);
 			}
 
 			std::vector<slang::DeclReflection*> structs;
-			CollectStructDecls(module->getModuleReflection(), structs);
+			CollectStructDecls(slangModule->getModuleReflection(), structs);
 
 			slang::TypeReflection* found = nullptr;
 			for (slang::DeclReflection* decl : structs)
@@ -49,7 +49,7 @@ namespace bgl
 				{
 					core::throw_runtime_error(
 						"surface '{}': '{}' and '{}' both conform to {}; a file declares one",
-						name,
+						surfaceName,
 						FullTypeName(found),
 						FullTypeName(type),
 						c_SurfaceInterface);
@@ -61,7 +61,7 @@ namespace bgl
 			{
 				core::throw_runtime_error(
 					"surface '{}': no struct in the module conforms to {}",
-					name,
+					surfaceName,
 					c_SurfaceInterface);
 			}
 			return found;
@@ -77,14 +77,14 @@ namespace bgl
 		ParamsLayoutOf(
 			slang::ProgramLayout*  layout,
 			slang::TypeReflection* params,
-			std::string_view       name)
+			std::string_view       surfaceName)
 		{
 			slang::TypeLayoutReflection* elementLayout = BufferElementLayout(layout, params);
 			if (elementLayout == nullptr)
 			{
 				core::throw_runtime_error(
 					"surface '{}': failed to lay out '{}' as a record's parameters",
-					name,
+					surfaceName,
 					FullTypeName(params));
 			}
 			return elementLayout;
@@ -109,7 +109,7 @@ namespace bgl
 			return true;
 		}
 
-		SurfaceParamType
+		SurfaceParameterType
 		ParamTypeOf(
 			slang::TypeReflection* type,
 			std::string_view       surfaceName,
@@ -133,12 +133,12 @@ namespace bgl
 					fieldName);
 			}
 
-			return static_cast<SurfaceParamType>(
-				static_cast<uint32_t>(SurfaceParamType::kFloat) + componentCount - 1);
+			return static_cast<SurfaceParameterType>(
+				static_cast<uint32_t>(SurfaceParameterType::kFloat) + componentCount - 1);
 		}
 
 		glm::vec4
-		DefaultOf(slang::VariableReflection* var, SurfaceParamType type)
+		DefaultOf(slang::VariableReflection* var, SurfaceParameterType type)
 		{
 			glm::vec4 value(0.0f);
 			if (var == nullptr)
@@ -151,8 +151,9 @@ namespace bgl
 				if (name == nullptr || std::string_view(name) != "Default")
 					continue;
 
-				const uint32_t components =
-					std::min<uint32_t>(SurfaceParamComponents(type), attribute->getArgumentCount());
+				const uint32_t components = std::min<uint32_t>(
+					SurfaceParameterComponents(type),
+					attribute->getArgumentCount());
 				for (uint32_t c = 0; c < components; ++c)
 				{
 					float component = 0.0f;
@@ -168,31 +169,37 @@ namespace bgl
 	}
 
 	SurfaceType
-	ReflectSurface(slang::IModule* module, std::string_view name, SlangInt targetIndex)
+	ReflectSurface(slang::IModule* slangModule, std::string_view surfaceName, SlangInt targetIndex)
 	{
 		Slang::ComPtr<slang::IBlob> diagnostics;
-		slang::ProgramLayout*       layout = module->getLayout(targetIndex, diagnostics.writeRef());
+		slang::ProgramLayout* layout = slangModule->getLayout(targetIndex, diagnostics.writeRef());
 		if (layout == nullptr)
 		{
 			const char* text = diagnostics != nullptr ?
 			                       static_cast<const char*>(diagnostics->getBufferPointer()) :
 			                       "no diagnostic";
-			core::throw_runtime_error("surface '{}': failed to lay out its module: {}", name, text);
+			core::throw_runtime_error(
+				"surface '{}': failed to lay out its module: {}",
+				surfaceName,
+				text);
 		}
 
-		slang::TypeReflection* surface = FindSurfaceStruct(module, layout, name);
+		slang::TypeReflection* surface = FindSurfaceStruct(slangModule, layout, surfaceName);
 
 		const std::string      paramsName = FullTypeName(surface) + ".Params";
 		slang::TypeReflection* params     = layout->findTypeByName(paramsName.c_str());
 		if (params == nullptr)
 		{
-			core::throw_runtime_error("surface '{}': failed to resolve '{}'", name, paramsName);
+			core::throw_runtime_error(
+				"surface '{}': failed to resolve '{}'",
+				surfaceName,
+				paramsName);
 		}
 
-		slang::TypeLayoutReflection* paramsLayout = ParamsLayoutOf(layout, params, name);
+		slang::TypeLayoutReflection* paramsLayout = ParamsLayoutOf(layout, params, surfaceName);
 
 		SurfaceType reflected;
-		reflected.name       = std::string(name);
+		reflected.name       = std::string(surfaceName);
 		reflected.paramsSize = static_cast<uint32_t>(paramsLayout->getStride());
 
 		for (unsigned i = 0; i < paramsLayout->getFieldCount(); ++i)
@@ -213,7 +220,7 @@ namespace bgl
 				{
 					core::throw_runtime_error(
 						"surface '{}': slot '{}' is past the {} a record carries",
-						name,
+						surfaceName,
 						spelling,
 						idl::cGameSurfaceSlots);
 				}
@@ -227,12 +234,12 @@ namespace bgl
 				continue;
 			}
 
-			SurfaceParam param;
-			param.name         = std::string(spelling);
-			param.type         = ParamTypeOf(type, name, spelling);
-			param.offset       = offset;
-			param.defaultValue = DefaultOf(field->getVariable(), param.type);
-			reflected.parameters.emplace_back(std::move(param));
+			SurfaceParameter parameter;
+			parameter.name         = std::string(spelling);
+			parameter.type         = ParamTypeOf(type, surfaceName, spelling);
+			parameter.offset       = offset;
+			parameter.defaultValue = DefaultOf(field->getVariable(), parameter.type);
+			reflected.parameters.emplace_back(std::move(parameter));
 		}
 
 		return reflected;
