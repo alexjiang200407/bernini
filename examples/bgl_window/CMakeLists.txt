@@ -10,7 +10,7 @@ target_link_libraries(bgl_window PRIVATE core bgl_extended example_util)
 enable_strict_compiler(bgl_window)
 
 target_precompile_headers(bgl_window
-    PUBLIC ${CMAKE_SOURCE_DIR}/PCH/pch.h
+    PUBLIC ${BERNINI_ROOT}/PCH/pch.h
 )
 
 source_group(TREE ${CMAKE_CURRENT_SOURCE_DIR}/src PREFIX "Source Files" FILES ${BGL_WINDOW_SOURCES})

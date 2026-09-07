@@ -25,7 +25,7 @@ enable_strict_compiler(bgl_ui)
 
 target_precompile_headers(bgl_ui
     PUBLIC
-        ${CMAKE_SOURCE_DIR}/PCH/pch.h
+        ${BERNINI_ROOT}/PCH/pch.h
 )
 
 add_dependencies(bgl_ui copy_assets)

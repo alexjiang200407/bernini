@@ -33,7 +33,7 @@ target_include_directories(bgl_d3d12
 )
 
 target_precompile_headers(bgl_d3d12
-    PRIVATE ${CMAKE_SOURCE_DIR}/PCH/pch.h
+    PRIVATE ${BERNINI_ROOT}/PCH/pch.h
             ${CMAKE_CURRENT_SOURCE_DIR}/../pch.h
             ${CMAKE_CURRENT_SOURCE_DIR}/pch.h
 )

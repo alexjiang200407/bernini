@@ -23,7 +23,7 @@ enable_strict_compiler(bgl_two_windows)
 
 target_precompile_headers(bgl_two_windows
     PUBLIC
-        ${CMAKE_SOURCE_DIR}/PCH/pch.h
+        ${BERNINI_ROOT}/PCH/pch.h
 )
 
 source_group(

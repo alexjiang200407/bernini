@@ -51,7 +51,7 @@ target_precompile_headers(core
     PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}/include/core/pch.h
     PUBLIC
-        ${CMAKE_SOURCE_DIR}/PCH/pch.h
+        ${BERNINI_ROOT}/PCH/pch.h
 )
 
 target_include_directories(core
@@ -130,7 +130,7 @@ if (BUILD_TESTS)
     )
 
     target_precompile_headers(core_tests
-        PUBLIC  ${CMAKE_SOURCE_DIR}/PCH/pch.h
+        PUBLIC  ${BERNINI_ROOT}/PCH/pch.h
         PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/tests/src/pch.h
     )
 

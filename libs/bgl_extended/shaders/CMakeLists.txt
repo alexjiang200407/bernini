@@ -13,7 +13,7 @@ endif()
 set(SLANG_COMPILE_OUTS "")
 set(SLANG_SOURCE_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/src")
 # The shared tree: idl.* resolves from here, and nothing under it is this renderer's to compile.
-set(SLANG_COMMON_ROOT "${CMAKE_SOURCE_DIR}/libs/bgl_common/shaders/src")
+set(SLANG_COMMON_ROOT "${BERNINI_ROOT}/libs/bgl_common/shaders/src")
 
 
 # The list is the tree: every program under programs/ is compiled to DXIL here, at every entry

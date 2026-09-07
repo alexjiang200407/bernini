@@ -30,14 +30,14 @@ function(_bernini_write_cache_wrapper ccache out_var)
         file(WRITE "${wrapper}"
             "@echo off\r\n"
             "set CCACHE_SLOPPINESS=pch_defines,time_macros\r\n"
-            "set CCACHE_BASEDIR=${CMAKE_SOURCE_DIR}\r\n"
+            "set CCACHE_BASEDIR=${BERNINI_ROOT}\r\n"
             "\"${ccache}\" %*\r\n")
     else()
         set(wrapper "${cache_dir}/ccache-wrapper.sh")
         file(WRITE "${wrapper}"
             "#!/bin/sh\n"
             "CCACHE_SLOPPINESS=pch_defines,time_macros\n"
-            "CCACHE_BASEDIR='${CMAKE_SOURCE_DIR}'\n"
+            "CCACHE_BASEDIR='${BERNINI_ROOT}'\n"
             "export CCACHE_SLOPPINESS CCACHE_BASEDIR\n"
             "exec '${ccache}' \"$@\"\n")
         file(CHMOD "${wrapper}" PERMISSIONS

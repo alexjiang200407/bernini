@@ -28,7 +28,7 @@ target_include_directories(assetlib
 )
 
 target_precompile_headers(assetlib
-	PUBLIC  ${CMAKE_SOURCE_DIR}/PCH/pch.h
+	PUBLIC  ${BERNINI_ROOT}/PCH/pch.h
 	PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src/pch.h
 )
 
@@ -79,7 +79,7 @@ target_link_libraries(assetlib_cli
 enable_strict_compiler(assetlib_cli)
 
 target_precompile_headers(assetlib_cli
-	PUBLIC ${CMAKE_SOURCE_DIR}/PCH/pch.h
+	PUBLIC ${BERNINI_ROOT}/PCH/pch.h
 )
 
 set_target_properties(assetlib_cli PROPERTIES
@@ -121,7 +121,7 @@ if (BUILD_TESTS)
 	)
 
 	target_force_include(assetlib_tests
-		PRIVATE "${CMAKE_SOURCE_DIR}/PCH/pch.h" "${CMAKE_CURRENT_SOURCE_DIR}/src/pch.h"
+		PRIVATE "${BERNINI_ROOT}/PCH/pch.h" "${CMAKE_CURRENT_SOURCE_DIR}/src/pch.h"
 	)
 
 	target_link_libraries(assetlib_tests

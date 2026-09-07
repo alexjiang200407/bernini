@@ -47,7 +47,7 @@ target_link_libraries(bgl_common PUBLIC bgl core slang::slang)
 # A renderer is a shared library and this archive is linked into one.
 set_target_properties(bgl_common PROPERTIES POSITION_INDEPENDENT_CODE ON)
 
-target_precompile_headers(bgl_common PRIVATE ${CMAKE_SOURCE_DIR}/PCH/pch.h)
+target_precompile_headers(bgl_common PRIVATE ${BERNINI_ROOT}/PCH/pch.h)
 
 enable_strict_compiler(bgl_common)
 enable_coverage(bgl_common)
@@ -58,7 +58,7 @@ add_library(bgl_common_selfcheck STATIC
 	${BGL_COMMON_HEADERS}
 )
 
-target_precompile_headers(bgl_common_selfcheck PRIVATE ${CMAKE_SOURCE_DIR}/PCH/pch.h)
+target_precompile_headers(bgl_common_selfcheck PRIVATE ${BERNINI_ROOT}/PCH/pch.h)
 
 # PRIVATE, and bgl_common only: linking a renderer would defeat the check.
 target_link_libraries(bgl_common_selfcheck PRIVATE bgl_common)
@@ -192,7 +192,7 @@ if (BUILD_TESTS)
 	)
 
 	target_precompile_headers(bgl_common_tests
-		PUBLIC  ${CMAKE_SOURCE_DIR}/PCH/pch.h
+		PUBLIC  ${BERNINI_ROOT}/PCH/pch.h
 		PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/tests/src/pch.h
 	)
 

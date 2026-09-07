@@ -25,7 +25,7 @@ enable_strict_compiler(bgl_sphere)
 
 target_precompile_headers(bgl_sphere
     PUBLIC
-        ${CMAKE_SOURCE_DIR}/PCH/pch.h
+        ${BERNINI_ROOT}/PCH/pch.h
 )
 
 add_dependencies(bgl_sphere copy_assets)

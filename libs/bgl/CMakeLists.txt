@@ -27,7 +27,7 @@ add_library(bgl_selfcheck STATIC
 	${BGL_HEADERS}
 )
 
-target_precompile_headers(bgl_selfcheck PRIVATE ${CMAKE_SOURCE_DIR}/PCH/pch.h)
+target_precompile_headers(bgl_selfcheck PRIVATE ${BERNINI_ROOT}/PCH/pch.h)
 
 # PRIVATE, and bgl only: linking anything else would defeat the check.
 target_link_libraries(bgl_selfcheck PRIVATE bgl)

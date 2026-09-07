@@ -1,17 +1,23 @@
 cmake_minimum_required(VERSION 3.24)
 project(BerniniEngine)
 
+# This checkout, whether or not it is the top of the build. CMAKE_SOURCE_DIR is the top-level
+# source directory of the *build*, so under a game's add_subdirectory it is the game's root and
+# every path built from it points at a file that is not there. Nothing below may name it; the
+# scripts_tests suite fails the build's own tests if one does.
+set(BERNINI_ROOT "${CMAKE_CURRENT_SOURCE_DIR}")
+
 # Group targets into folders for IDE generators (Visual Studio / Xcode).
 set_property(GLOBAL PROPERTY USE_FOLDERS ON)
 
-include(${CMAKE_SOURCE_DIR}/cmake/target_force_include.cmake)
-include(${CMAKE_SOURCE_DIR}/cmake/copy_to_target.cmake)
-include(${CMAKE_SOURCE_DIR}/cmake/compile_shader.cmake)
-include(${CMAKE_SOURCE_DIR}/cmake/enable_strict_compiler.cmake)
-include(${CMAKE_SOURCE_DIR}/cmake/enable_coverage.cmake)
-include(${CMAKE_SOURCE_DIR}/cmake/enable_compiler_cache.cmake)
-include(${CMAKE_SOURCE_DIR}/cmake/assign_folder.cmake)
-include(${CMAKE_SOURCE_DIR}/cmake/strip_msvc_only_flags.cmake)
+include(${BERNINI_ROOT}/cmake/target_force_include.cmake)
+include(${BERNINI_ROOT}/cmake/copy_to_target.cmake)
+include(${BERNINI_ROOT}/cmake/compile_shader.cmake)
+include(${BERNINI_ROOT}/cmake/enable_strict_compiler.cmake)
+include(${BERNINI_ROOT}/cmake/enable_coverage.cmake)
+include(${BERNINI_ROOT}/cmake/enable_compiler_cache.cmake)
+include(${BERNINI_ROOT}/cmake/assign_folder.cmake)
+include(${BERNINI_ROOT}/cmake/strip_msvc_only_flags.cmake)
 
 # Tracy compiles the zones in, and with them a client that opens a socket and announces itself so a
 # profiler can find it -- the mechanism, not a side effect, and not something a shipping binary
@@ -37,7 +43,7 @@ endif()
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 
-file(GLOB_RECURSE ASSET_FILES CONFIGURE_DEPENDS "${CMAKE_SOURCE_DIR}/assets/*")
+file(GLOB_RECURSE ASSET_FILES CONFIGURE_DEPENDS "${BERNINI_ROOT}/assets/*")
 
 set(ASSET_STAMP "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/.assets.stamp")
 
@@ -47,7 +53,7 @@ add_custom_command(
     OUTPUT "${ASSET_STAMP}"
     COMMAND ${CMAKE_COMMAND} -E rm -rf "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/assets"
     COMMAND ${CMAKE_COMMAND} -E copy_directory
-            "${CMAKE_SOURCE_DIR}/assets"
+            "${BERNINI_ROOT}/assets"
             "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/assets"
     COMMAND ${CMAKE_COMMAND} -E touch "${ASSET_STAMP}"
     DEPENDS ${ASSET_FILES}
