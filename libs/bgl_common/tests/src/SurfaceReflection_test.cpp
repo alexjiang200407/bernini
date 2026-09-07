@@ -1,5 +1,4 @@
 #include <bgl/SurfaceType.h>
-#include <bgl/error.h>
 #include <bgl_common/SurfaceReflection.h>
 
 #include <bgl/glm.h>
@@ -11,6 +10,7 @@
 #include <cstdint>
 #include <slang-com-ptr.h>
 #include <slang.h>
+#include <stdexcept>
 #include <string>
 #include <string_view>
 
@@ -261,7 +261,7 @@ TEST_CASE("A module the engine cannot draw from is refused by name", "[surface][
 )";
 		CHECK_THROWS_MATCHES(
 			ReflectSurface(session.Load("Lonely", Module(c_Body)), "Lonely"),
-			ApiError,
+			std::runtime_error,
 			Catch::Matchers::Message(
 				"surface 'Lonely': no struct in the module conforms to ISurfaceSource"));
 	}
@@ -270,7 +270,7 @@ TEST_CASE("A module the engine cannot draw from is refused by name", "[surface][
 	{
 		CHECK_THROWS_MATCHES(
 			ReflectSurface(session.Load("Bare", "struct Bare { float value; };\n"), "Bare"),
-			ApiError,
+			std::runtime_error,
 			Catch::Matchers::MessageMatches(
 				ContainsSubstring("does not import bgl.SurfaceSource")));
 	}
@@ -295,7 +295,7 @@ struct SecondSurface : ISurfaceSource
 )";
 		CHECK_THROWS_MATCHES(
 			ReflectSurface(session.Load("Two", Module(c_Body)), "Two"),
-			ApiError,
+			std::runtime_error,
 			Catch::Matchers::MessageMatches(ContainsSubstring("both conform to ISurfaceSource")));
 	}
 
@@ -317,7 +317,7 @@ struct NineSurface : ISurfaceSource
 )";
 		CHECK_THROWS_MATCHES(
 			ReflectSurface(session.Load("Nine", Module(c_Body)), "Nine"),
-			ApiError,
+			std::runtime_error,
 			Catch::Matchers::MessageMatches(
 				ContainsSubstring("slot 'ninth' is past the 8 a record carries")));
 	}
@@ -338,7 +338,7 @@ struct IntSurface : ISurfaceSource
 )";
 		CHECK_THROWS_MATCHES(
 			ReflectSurface(session.Load("Ints", Module(c_Body)), "Ints"),
-			ApiError,
+			std::runtime_error,
 			Catch::Matchers::MessageMatches(
 				ContainsSubstring("parameter 'level' is not a float or a float vector")));
 	}

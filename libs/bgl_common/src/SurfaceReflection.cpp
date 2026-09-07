@@ -1,14 +1,13 @@
 #include <bgl_common/SurfaceReflection.h>
 
 #include <bgl/SurfaceType.h>
-#include <bgl/error.h>
 #include <bgl/glm.h>
 #include <bgl_common/SlangReflection.h>
 #include <bgl_common/idl/GameSurfaceRecord.h>
 
 #include <algorithm>
+#include <core/err/util.h>
 #include <cstdint>
-#include <format>
 #include <slang-com-ptr.h>
 #include <slang.h>
 #include <string>
@@ -31,10 +30,9 @@ namespace bgl
 			slang::TypeReflection* iface = layout->findTypeByName(c_SurfaceInterface);
 			if (iface == nullptr)
 			{
-				throw ApiError(
-					std::format(
-						"surface '{}': the module does not import bgl.SurfaceSource",
-						name));
+				core::throw_runtime_error(
+					"surface '{}': the module does not import bgl.SurfaceSource",
+					name);
 			}
 
 			std::vector<slang::DeclReflection*> structs;
@@ -49,24 +47,22 @@ namespace bgl
 
 				if (found != nullptr)
 				{
-					throw ApiError(
-						std::format(
-							"surface '{}': '{}' and '{}' both conform to {}; a file declares one",
-							name,
-							FullTypeName(found),
-							FullTypeName(type),
-							c_SurfaceInterface));
+					core::throw_runtime_error(
+						"surface '{}': '{}' and '{}' both conform to {}; a file declares one",
+						name,
+						FullTypeName(found),
+						FullTypeName(type),
+						c_SurfaceInterface);
 				}
 				found = type;
 			}
 
 			if (found == nullptr)
 			{
-				throw ApiError(
-					std::format(
-						"surface '{}': no struct in the module conforms to {}",
-						name,
-						c_SurfaceInterface));
+				core::throw_runtime_error(
+					"surface '{}': no struct in the module conforms to {}",
+					name,
+					c_SurfaceInterface);
 			}
 			return found;
 		}
@@ -86,11 +82,10 @@ namespace bgl
 			slang::TypeLayoutReflection* elementLayout = BufferElementLayout(layout, params);
 			if (elementLayout == nullptr)
 			{
-				throw ApiError(
-					std::format(
-						"surface '{}': failed to lay out '{}' as a record's parameters",
-						name,
-						FullTypeName(params)));
+				core::throw_runtime_error(
+					"surface '{}': failed to lay out '{}' as a record's parameters",
+					name,
+					FullTypeName(params));
 			}
 			return elementLayout;
 		}
@@ -132,11 +127,10 @@ namespace bgl
 				scalar->getScalarType() == slang::TypeReflection::ScalarType::Float32;
 			if (!packable)
 			{
-				throw ApiError(
-					std::format(
-						"surface '{}': parameter '{}' is not a float or a float vector",
-						surfaceName,
-						fieldName));
+				core::throw_runtime_error(
+					"surface '{}': parameter '{}' is not a float or a float vector",
+					surfaceName,
+					fieldName);
 			}
 
 			return static_cast<SurfaceParamType>(
@@ -183,8 +177,7 @@ namespace bgl
 			const char* text = diagnostics != nullptr ?
 			                       static_cast<const char*>(diagnostics->getBufferPointer()) :
 			                       "no diagnostic";
-			throw ApiError(
-				std::format("surface '{}': failed to lay out its module: {}", name, text));
+			core::throw_runtime_error("surface '{}': failed to lay out its module: {}", name, text);
 		}
 
 		slang::TypeReflection* surface = FindSurfaceStruct(module, layout, name);
@@ -193,7 +186,7 @@ namespace bgl
 		slang::TypeReflection* params     = layout->findTypeByName(paramsName.c_str());
 		if (params == nullptr)
 		{
-			throw ApiError(std::format("surface '{}': failed to resolve '{}'", name, paramsName));
+			core::throw_runtime_error("surface '{}': failed to resolve '{}'", name, paramsName);
 		}
 
 		slang::TypeLayoutReflection* paramsLayout = ParamsLayoutOf(layout, params, name);
@@ -218,12 +211,11 @@ namespace bgl
 			{
 				if (reflected.slots.size() == idl::cGameSurfaceSlots)
 				{
-					throw ApiError(
-						std::format(
-							"surface '{}': slot '{}' is past the {} a record carries",
-							name,
-							spelling,
-							idl::cGameSurfaceSlots));
+					core::throw_runtime_error(
+						"surface '{}': slot '{}' is past the {} a record carries",
+						name,
+						spelling,
+						idl::cGameSurfaceSlots);
 				}
 
 				SurfaceSlot slot;

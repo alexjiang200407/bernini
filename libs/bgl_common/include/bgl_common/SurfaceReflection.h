@@ -22,9 +22,11 @@ namespace bgl
 	 * @param name What a material names to reach this surface, normally the module file's stem.
 	 * @param targetIndex Which of the session's targets the layout is read for.
 	 * @return The reflected surface.
-	 * @throws ApiError if the module does not import the contract, holds no conforming struct or
-	 *         more than one, declares more slots than a record carries, declares a parameter of a
-	 *         type the engine cannot pack, or does not reflect at all.
+	 * @throws std::runtime_error if the module does not import the contract, holds no conforming
+	 *         struct or more than one, declares more slots than a record carries, declares a
+	 *         parameter of a type the engine cannot pack, or does not reflect at all. Not
+	 *         `bgl::ApiError`: that type is the renderer's to throw, and registration is the seam
+	 *         where a bad module becomes one.
 	 */
 	SurfaceType
 	ReflectSurface(slang::IModule* module, std::string_view name, SlangInt targetIndex = 0);
