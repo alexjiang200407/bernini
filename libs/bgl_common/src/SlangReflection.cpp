@@ -4,8 +4,12 @@
 
 #include <bgl_common/gassert.h>
 #include <cstdint>
+#include <format>
+#include <slang-com-ptr.h>
 #include <slang.h>
+#include <string>
 #include <utility>
+#include <vector>
 
 namespace bgl
 {
@@ -86,6 +90,55 @@ namespace bgl
 		}
 
 		gfatal("Unsupported scalar/vector type in push constants");
+	}
+
+	void
+	CollectStructDecls(slang::DeclReflection* decl, std::vector<slang::DeclReflection*>& out)
+	{
+		if (decl == nullptr)
+			return;
+
+		for (slang::DeclReflection* child : decl->getChildren())
+		{
+			switch (child->getKind())
+			{
+			case slang::DeclReflection::Kind::Struct:
+				out.emplace_back(child);
+				break;
+			case slang::DeclReflection::Kind::Namespace:
+				CollectStructDecls(child, out);
+				break;
+			default:
+				break;
+			}
+		}
+	}
+
+	std::string
+	FullTypeName(slang::TypeReflection* type)
+	{
+		Slang::ComPtr<slang::IBlob> blob;
+		if (SLANG_SUCCEEDED(type->getFullName(blob.writeRef())) && blob != nullptr)
+		{
+			return std::string(static_cast<const char*>(blob->getBufferPointer()));
+		}
+
+		const char* name = type->getName();
+		return name != nullptr ? std::string(name) : std::string();
+	}
+
+	slang::TypeLayoutReflection*
+	BufferElementLayout(slang::ProgramLayout* layout, slang::TypeReflection* type)
+	{
+		// ScalarDataLayout is what every arena payload is spelled with: it is the only rule that
+		// keeps a nested handle struct 4-aligned, which the CPU mirrors depend on.
+		const std::string bufferName =
+			std::format("StructuredBuffer<{}, ScalarDataLayout>", FullTypeName(type));
+
+		slang::TypeReflection*       bufferType = layout->findTypeByName(bufferName.c_str());
+		slang::TypeLayoutReflection* bufferLayout =
+			bufferType != nullptr ? layout->getTypeLayout(bufferType) : nullptr;
+		return bufferLayout != nullptr ? bufferLayout->getElementTypeLayout() : nullptr;
 	}
 
 #define HANDLE_UNSUPPORTED_TYPE_KIND(kind) \
