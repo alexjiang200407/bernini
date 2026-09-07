@@ -7,6 +7,7 @@
 
 #include <assetlib/AssetStore.h>
 
+#include <assetlib/image_io.h>
 #include <assetlib/import_document.h>
 
 #include <assetlib/codecs.h>
@@ -233,7 +234,10 @@ namespace assetlib
 		// From the copy, not the caller's reference: the document cannot then disagree with the
 		// source standing beside it.
 		if (!document.textureDir.empty())
-			document.textureStamp = stampOf(ResolveWritePath(target.source));
+		{
+			document.textureStamp     = stampOf(ResolveWritePath(target.source));
+			document.textureBakeToken = c_TextureBakeToken;
+		}
 		if (mesh != nullptr)
 			document.bindings = bindingsOf(*mesh);
 

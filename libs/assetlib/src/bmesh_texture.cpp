@@ -106,7 +106,8 @@ namespace assetlib
 		std::span<const std::byte> rgba,
 		uint32_t                   width,
 		uint32_t                   height,
-		std::optional<float>       alphaCutoff)
+		std::optional<float>       alphaCutoff,
+		bool                       srgb)
 	{
 		const size_t expected = static_cast<size_t>(width) * height * 4;
 		if (rgba.size() < expected)
@@ -117,7 +118,7 @@ namespace assetlib
 		out.height    = height;
 		out.mipLevels = mipCount(width, height);
 		out.arraySize = 1;
-		out.vkFormat  = VkFormat::R8G8B8A8_UNORM;
+		out.vkFormat  = srgb ? VkFormat::R8G8B8A8_SRGB : VkFormat::R8G8B8A8_UNORM;
 		out.isCubemap = false;
 
 		// Sum every mip so we can pack the chain contiguously (mip-minor, matching D3D12 order).
@@ -133,7 +134,7 @@ namespace assetlib
 		out.subresources.reserve(out.mipLevels);
 
 		// Level 0 is the source image copied verbatim; each subsequent level is box-downsampled
-		// from the previous one in its stored (non-sRGB-aware) space -- matching the old bake.
+		// from the previous one.
 		std::memcpy(out.pixels.data(), rgba.data(), expected);
 		out.subresources.push_back({ 0, static_cast<uint64_t>(width) * 4, expected });
 
@@ -156,7 +157,8 @@ namespace assetlib
 				reinterpret_cast<const unsigned char*>(out.pixels.data() + prevOffset);
 			auto* dst = reinterpret_cast<unsigned char*>(out.pixels.data() + offset);
 
-			if (stbir_resize_uint8_linear(
+			const auto resize = srgb ? stbir_resize_uint8_srgb : stbir_resize_uint8_linear;
+			if (resize(
 					src,
 					static_cast<int>(prevW),
 					static_cast<int>(prevH),

@@ -147,10 +147,21 @@ the file is moved onto it and every material routed there is rewritten. Exactly 
 identical files leave nothing to say which the routes meant, and guessing is the failure the naming
 rule exists to prevent.
 
-`textureStamp` answers whether the *source* moved and nothing answers whether the naming rule did,
-so a folder still holding a `tex<N>.ktx2` -- the name an unnamed image had before it was named after
-its content -- is stale on that alone. That is what makes the change reach a project at all, and it
-is a migration: once no folder holds one, the check has nothing left to find.
+`textureStamp` answers whether the *source* moved, and `textureBakeToken` whether the *bake* did:
+`c_TextureBakeToken` ([image_io.h](libs/assetlib/include/assetlib/image_io.h)) is the revision of
+the mip chain every 8-bit bake writes, recorded in the document when the folder is, and a folder
+written under another revision is stale whatever the stamp says. A document from before the key
+reads as revision zero, which no revision equals, so such a folder is stale exactly once. It moves
+under the same rule as a codec's token -- any change to the bytes, to a fresh random value -- and
+`TokenCanary_test` pins the chain beside it. A baked triplet carries the same revision in its
+`.bmaterial` (`baked.token`), compared by `BakeIsStale` and mixed into the map's content-addressed
+name, so a re-bake under a new revision writes a new file rather than finding the old one already
+there.
+
+Neither answers whether the naming rule did, so a folder still holding a `tex<N>.ktx2` -- the name
+an unnamed image had before it was named after its content -- is stale on that alone. That is what
+made the change reach a project at all, and it is a migration: once no folder holds one, the check
+has nothing left to find.
 
 ## Which of these a project commits
 

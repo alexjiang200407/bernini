@@ -4,6 +4,7 @@
 #include <assetlib/asset_import.h>
 #include <assetlib/asset_refs.h>
 #include <assetlib/bmesh_gltf.h>
+#include <assetlib/image_io.h>
 #include <assetlib/import_document.h>
 #include <assetlib/project_layout.h>
 #include <assetlib_structs/BMeshImport.h>
@@ -176,7 +177,8 @@ namespace assetlib
 			// An absent source cannot be compared, so it stales nothing -- the rule the geometry
 			// cache keys follow, which keeps a project missing its sources usable.
 			const SourceStamp stamp = StampOf(importedSourceKeyFor(key));
-			if (stamp != SourceStamp() && stamp != document.textureStamp)
+			if (stamp != SourceStamp() &&
+			    (stamp != document.textureStamp || document.textureBakeToken != c_TextureBakeToken))
 			{
 				stale.push_back(importedSourceKeyFor(key));
 				continue;
@@ -246,8 +248,9 @@ namespace assetlib
 		refresh.superseded = followMovedTextures(*this, refresh.written, orphaned, refresh.moved);
 
 		// Last, so a refresh that threw or was cancelled is still reported stale.
-		ImportDocument advanced = document;
-		advanced.textureStamp   = StampOf(sourceKey);
+		ImportDocument advanced   = document;
+		advanced.textureStamp     = StampOf(sourceKey);
+		advanced.textureBakeToken = c_TextureBakeToken;
 		Save(advanced, documentKey);
 
 		return refresh;

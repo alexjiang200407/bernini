@@ -94,6 +94,7 @@ namespace editor
 				material.pbr.normalTexture    = existing.pbr.normalTexture;
 				material.pbr.ormTexture       = existing.pbr.ormTexture;
 				material.pbr.routeStamps      = existing.pbr.routeStamps;
+				material.pbr.bakeToken        = existing.pbr.bakeToken;
 
 				// Document keys this build does not know ride through a save untouched -- a
 				// sibling branch's field must survive this editor's round-trip.

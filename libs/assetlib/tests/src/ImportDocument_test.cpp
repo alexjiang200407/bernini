@@ -1,4 +1,5 @@
 #include <assetlib/codecs.h>
+#include <assetlib/image_io.h>
 #include <assetlib/import_document.h>
 
 #include <algorithm>
@@ -65,11 +66,13 @@ TEST_CASE("an import document records where its textures went", "[importdoc]")
 	ImportDocument document;
 	document.textureDir = "Derived/SourceTextures/kirk";
 
-	document.textureStamp = { 4096, 0xfeedfacecafebeefull };
+	document.textureStamp     = { 4096, 0xfeedfacecafebeefull };
+	document.textureBakeToken = c_TextureBakeToken;
 
 	const ImportDocument read = DocumentFrom(DocumentText(document));
 	CHECK(read.textureDir == "Derived/SourceTextures/kirk");
 	CHECK(read.textureStamp == document.textureStamp);
+	CHECK(read.textureBakeToken == c_TextureBakeToken);
 
 	SECTION("an import that extracted no textures writes no key at all")
 	{
@@ -79,6 +82,7 @@ TEST_CASE("an import document records where its textures went", "[importdoc]")
 		CHECK(none.find("texture") == std::string::npos);
 		CHECK(DocumentFrom(none).textureDir.empty());
 		CHECK(DocumentFrom(none).textureStamp == SourceStamp());
+		CHECK(DocumentFrom(none).textureBakeToken == 0);
 	}
 
 	SECTION("a document written before the key existed reads as no folder")
@@ -86,6 +90,16 @@ TEST_CASE("an import document records where its textures went", "[importdoc]")
 		const auto old = DocumentFrom(R"({"parameters":{"sampleRate":30.0}})");
 		CHECK(old.textureDir.empty());
 		CHECK(old.textureStamp == SourceStamp());
+	}
+
+	SECTION("a document from before textures had a bake revision reads as revision zero")
+	{
+		// Which no revision equals, so its folder is stale exactly once: the only way a change to
+		// the bytes a bake writes can reach a `.ktx2`, which carries no header to compare.
+		const auto old = DocumentFrom(
+			R"({"textureDir":"Derived/SourceTextures/kirk","textureStampSize":4096,"textureStampHash":7})");
+		CHECK(old.textureStamp == SourceStamp{ 4096, 7 });
+		CHECK(old.textureBakeToken == 0);
 	}
 
 	SECTION("it is outside the parameters, so it does not key the cache")
@@ -101,6 +115,7 @@ TEST_CASE("an import document records where its textures went", "[importdoc]")
 	{
 		CHECK_THROWS(DocumentFrom(R"({"textureDir":7})"));
 		CHECK_THROWS(DocumentFrom(R"({"textureStampHash":"beef"})"));
+		CHECK_THROWS(DocumentFrom(R"({"textureBakeToken":-1})"));
 	}
 }
 

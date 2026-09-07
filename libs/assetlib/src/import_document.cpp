@@ -31,6 +31,7 @@ namespace assetlib
 		constexpr std::string_view c_TextureDirKey       = "textureDir";
 		constexpr std::string_view c_TextureStampSizeKey = "textureStampSize";
 		constexpr std::string_view c_TextureStampHashKey = "textureStampHash";
+		constexpr std::string_view c_TextureBakeTokenKey = "textureBakeToken";
 		constexpr std::string_view c_SkeletonKey         = "skeleton";
 		constexpr std::string_view c_OutputsKey          = "outputs";
 
@@ -160,7 +161,8 @@ namespace assetlib
 		for (const auto& [stampKey, field] :
 		     { std::pair<std::string_view, uint64_t*>{ c_TextureStampSizeKey,
 		                                               &document.textureStamp.size },
-		       { c_TextureStampHashKey, &document.textureStamp.hash } })
+		       { c_TextureStampHashKey, &document.textureStamp.hash },
+		       { c_TextureBakeTokenKey, &document.textureBakeToken } })
 		{
 			if (const auto it = json.find(stampKey); it != json.end())
 			{
@@ -238,6 +240,8 @@ namespace assetlib
 			json[c_TextureStampSizeKey] = document.textureStamp.size;
 			json[c_TextureStampHashKey] = document.textureStamp.hash;
 		}
+		if (document.textureBakeToken != 0)
+			json[c_TextureBakeTokenKey] = document.textureBakeToken;
 
 		// Omitted rather than written empty, for the same reason textureDir is: a document for a
 		// source that produced neither stays byte-identical to one written before these existed.

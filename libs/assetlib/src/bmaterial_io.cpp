@@ -2,6 +2,7 @@
 #include <array>
 #include <assetlib/codecs.h>
 #include <assetlib/container_info.h>
+#include <assetlib/image_io.h>
 #include <assetlib_structs/BMaterial.h>
 #include <core/file/LooseFileSystem.h>
 
@@ -153,6 +154,14 @@ namespace assetlib
 				baked.Take("baseColor", pbr.baseColorTexture);
 				baked.Take("normal", pbr.normalTexture);
 				baked.Take("orm", pbr.ormTexture);
+				if (const auto token = it->find("token"); token != it->end())
+				{
+					core::throw_runtime_error_if(
+						!token->is_number_unsigned(),
+						"bmaterial: 'baked.token' is not an unsigned number");
+					pbr.bakeToken = token->get<uint64_t>();
+					it->erase(token);
+				}
 				if (it->empty())
 					json.erase(it);
 			}
@@ -261,6 +270,10 @@ namespace assetlib
 		setOrErase(baked, "baseColor", pbr.baseColorTexture);
 		setOrErase(baked, "normal", pbr.normalTexture);
 		setOrErase(baked, "orm", pbr.ormTexture);
+		if (pbr.bakeToken != 0)
+			baked["token"] = pbr.bakeToken;
+		else
+			baked.erase("token");
 		if (baked.empty())
 			json.erase("baked");
 
@@ -449,6 +462,9 @@ namespace assetlib
 		// No routes: an imported, triplet-only material. It has no sources to have drifted from.
 		if (!hasRoutes)
 			return false;
+
+		if (pbr.bakeToken != c_TextureBakeToken)
+			return true;
 
 		// Routed and every source matches -- but a map deleted since leaves the triplet naming a file
 		// that is not there to sample, and a base colour missing where something routes into one is a

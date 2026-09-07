@@ -1,4 +1,5 @@
 #include <assetlib/container_info.h>
+#include <assetlib/image_io.h>
 #include <assetlib/pak.h>
 #include <assetlib_structs/BMaterial.h>
 #include <catch2/catch_test_macros.hpp>
@@ -48,6 +49,7 @@ namespace
 		material.pbr.routes[0]        = { "Derived/SourceTextures/skin.ktx2", 0 };
 		material.pbr.routeStamps[0]   = stampOf(root / "Derived/SourceTextures/skin.ktx2");
 		material.pbr.baseColorTexture = "Derived/BakedTextures/skin_baked.ktx2";
+		material.pbr.bakeToken        = c_TextureBakeToken;
 		return material;
 	}
 
