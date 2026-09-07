@@ -15,6 +15,40 @@ gates are named rather than described.
 
 ---
 
+## The editor's viewport is more saturated than the same frame anywhere else
+
+**Symptom.** On a Mac, the material editor's viewport reads more saturated than Blender's Material
+Preview of the same model under the same environment, reds first: fur binned by luma has more red
+at the same brightness and the same green and blue. Every headless measurement agrees with Blender
+— `ScreenshotPng` captures, the `[parity]` sphere, a flat grey at any albedo — and only the screen
+does not. Seven measured changes to lighting, tone map, textures and the resolve did not move it.
+
+**Cause.** The window's colour space was never set. Qt's `NSWindow` *reports* `sRGB IEC61966-2.1`
+already, and the layer was composited unmatched all the same: its sRGB bytes taken as the display's
+own space, P3 on the built-in display of every current Mac, so every red was drawn a gamut wider
+than it was made for. Converting Blender's captured fur from Display P3 to sRGB reproduces
+Bernini's captured fur to within 0.006 per channel, which is the whole of the symptom. Tagging the
+`CAMetalLayer`'s `colorspace` sRGB changed nothing, on the editor and on a standalone window alike:
+macOS already treats an untagged sRGB-format layer as sRGB.
+
+**Fixed by** `[window setColorSpace:[NSColorSpace sRGBColorSpace]]` in
+[`MetalSurface_mac.mm`](../apps/editor/src/Platform/MetalSurface_mac.mm), which is the caller's to
+do: `RenderTargetDesc::wnd` is the caller's layer, in the caller's window. After it the viewport's
+fur lands on Blender's to within 0.003 per channel in every luma bin.
+
+**Gates.** None a test can hold — the compositor is not in a headless run. Eyes: the material editor
+beside Blender's Material Preview on a P3 display, fur the same red.
+
+**If it comes back.** Check that the window's colour space is still set by hand -- a toolkit that
+recreates the window, or a viewport created before its widget has one (`[nsView window]` is nil
+then, and the set is skipped), loses it. Already ruled out, by measurement, and not worth a second
+day: the tone map (a grey sphere matches Eevee to 0.001 and flat greys to 0.009 at every albedo), the
+texture bake (byte-for-byte the source, mips averaged in linear light), Eevee's specular (a Diffuse
+BSDF renders identically at the glb's specular factor of zero), and Blender's film filter (0.005 luma
+over an aligned mask, with a point spread of nearly a one-pixel box).
+
+---
+
 ## SIGSEGV in libobjc while a Metal `Graphics` is torn down
 
 **Symptom.** `editor_tests` on `macos-clang-metal-debug` exits 11 with no failing case named, roughly
