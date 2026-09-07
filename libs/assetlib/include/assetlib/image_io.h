@@ -125,6 +125,15 @@ namespace assetlib
 	loadKTX2Preview(const std::filesystem::path& path, uint32_t maxDim = 128);
 
 	/**
+	 * The revision of what a bake makes of an 8-bit image: the mip chain and how it is filtered. A
+	 * `.ktx2` has nowhere to carry a header, so the document that owns one -- a `.bimport` for the
+	 * textures an import extracted, a `.bmaterial` for its baked triplet -- records this beside its
+	 * source stamps, and a file written under another revision reads as stale. Bumped to a fresh
+	 * random value on any change to the bytes rgba8ToImage produces; TokenCanary_test pins it.
+	 */
+	inline constexpr uint64_t c_TextureBakeToken = 0x5e1a9c37d04b82f1ull;
+
+	/**
 	 * Encodes an ImageData (its mips and array/cube faces) into a `.ktx2` file on disk. The inverse of
 	 * loadKTX2; used to bake extracted asset textures to standalone files.
 	 *

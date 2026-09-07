@@ -2,6 +2,7 @@
 #include <assetlib/AssetStore.h>
 
 #include <assetlib/asset_import.h>
+#include <assetlib/image_io.h>
 #include <assetlib/import_document.h>
 #include <assetlib/migrate.h>
 #include <catch2/catch_test_macros.hpp>
@@ -134,6 +135,46 @@ TEST_CASE("A folder still holding a numbered texture is stale", "[refresh][textu
 		CHECK_FALSE(fs::exists(folder / "tex0.ktx2"));
 
 		// And having followed it, the folder is what the rule says it is.
+		CHECK(project.Store().GetStaleImportedTextureSources().empty());
+	}
+}
+
+TEST_CASE("A folder extracted at another bake revision is stale", "[refresh][textures]")
+{
+	// The other staleness a stamp cannot see: the source is as it was, and the bytes the extract
+	// makes of it are not. A `.ktx2` carries no revision, so the document carries it for the folder.
+	Project project("assetlib_texture_refresh_revision_test");
+	test::ImportUnitGroup(
+		project.root,
+		"assets/apples.glb",
+		"Authored/Materials/red.bmaterial",
+		30.0f,
+		c_TextureDir);
+
+	REQUIRE(project.Document().textureBakeToken == c_TextureBakeToken);
+	REQUIRE(project.Store().GetStaleImportedTextureSources().empty());
+
+	ImportDocument foreign   = project.Document();
+	foreign.textureBakeToken = 0;  // what a document from before the revision existed reads as
+	project.Store().Save(foreign, "Authored/Meshes/unit.bimport");
+
+	CHECK(
+		project.Store().GetStaleImportedTextureSources() ==
+		std::vector<std::string>{ "Authored/Meshes/unit.glb" });
+
+	SECTION("and the refresh brings it to the current revision")
+	{
+		const TextureRefresh refresh =
+			project.Store().RefreshImportedTextures("Authored/Meshes/unit.glb");
+
+		CHECK(refresh.written.size() == 2);
+		CHECK(project.Document().textureBakeToken == c_TextureBakeToken);
+		CHECK(project.Store().GetStaleImportedTextureSources().empty());
+	}
+
+	SECTION("unless the source is gone, which stales nothing")
+	{
+		fs::remove(project.root / "Authored/Meshes" / "unit.glb");
 		CHECK(project.Store().GetStaleImportedTextureSources().empty());
 	}
 }

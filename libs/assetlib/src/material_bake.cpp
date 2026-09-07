@@ -286,6 +286,8 @@ namespace assetlib
 		 * BC7 depending on whether the material routes alpha, and the two must not converge on one file
 		 * name. `mipCutoff` is likewise part of the identity: a cutout and a blend material can route
 		 * the same base color to the same BC7 format yet need different (coverage vs plain) mips.
+		 * c_TextureBakeToken leads, so a revision of the chain itself takes a new name rather than
+		 * finding the old one already on disk.
 		 */
 		std::string
 		bakeKey(
@@ -295,8 +297,8 @@ namespace assetlib
 			Ktx2Compression                                     compression,
 			std::optional<float>                                mipCutoff)
 		{
-			std::string key =
-				std::string(group.name) + '|' + std::to_string(static_cast<uint32_t>(compression));
+			std::string key = std::string(group.name) + '|' + std::to_string(c_TextureBakeToken) +
+			                  '|' + std::to_string(static_cast<uint32_t>(compression));
 
 			if (group.channels.count == c_BaseColorChannels.count)
 			{
@@ -474,6 +476,7 @@ namespace assetlib
 			const std::string& texture = pbr.routes[i].texture;
 			pbr.routeStamps[i]         = texture.empty() ? SourceStamp{} : stamps.at(texture);
 		}
+		pbr.bakeToken = c_TextureBakeToken;
 
 		// The routes stay: they are how it gets re-baked, and what it draws from until then.
 	}

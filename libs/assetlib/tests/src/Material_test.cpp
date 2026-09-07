@@ -3,6 +3,7 @@
 #include <assetlib/bmesh_gltf.h>
 #include <assetlib/codecs.h>
 #include <assetlib/container_info.h>
+#include <assetlib/image_io.h>
 #include <assetlib/mesh_tangents.h>
 #include <assetlib_structs/BMesh.h>
 #include <assetlib_structs/BMeshImport.h>
@@ -185,12 +186,26 @@ TEST_CASE("a BMaterial round-trips its bake provenance", "[bmaterial][io]")
 	// the way through, which is what the field being unsigned buys.
 	mat.pbr.routeStamps[8] = { 1, 0xffffffffffffffffull };
 
+	mat.pbr.bakeToken = 0xfedcba9876543210ull;
+
 	const auto restored = AssetCodec<BMaterial>::Deserialize(AssetCodec<BMaterial>::Serialize(mat));
 
 	REQUIRE(restored.pbr.routeStamps[0].size == 4096);
 	REQUIRE(restored.pbr.routeStamps[0].hash == 0x0123456789abcdefull);
 	REQUIRE(restored.pbr.routeStamps[8].hash == 0xffffffffffffffffull);
 	REQUIRE(restored.pbr.routeStamps[3] == SourceStamp{});  // unstamped routes stay zeroed
+	REQUIRE(restored.pbr.bakeToken == 0xfedcba9876543210ull);
+
+	SECTION("an unbaked material writes no revision, and one from before it reads zero")
+	{
+		BMaterial unbaked;
+		unbaked.pbr.routes[0] = { "albedo.ktx2", 0 };
+		const auto bytes      = AssetCodec<BMaterial>::Serialize(unbaked);
+		const auto text =
+			std::string_view(reinterpret_cast<const char*>(bytes.data()), bytes.size());
+		CHECK(text.find("token") == std::string_view::npos);
+		CHECK(AssetCodec<BMaterial>::Deserialize(bytes).pbr.bakeToken == 0);
+	}
 }
 
 TEST_CASE("a BMaterial carries both its sources and its baked triplet", "[bmaterial][io]")
@@ -262,6 +277,7 @@ TEST_CASE("A source whose mtime moved but whose bytes did not is not stale", "[b
 	mat.pbr.baseColorTexture = "mat_basecolor.ktx2";
 	mat.pbr.routes[0]        = { "albedo.ktx2", 0 };
 	mat.pbr.routeStamps[0]   = stampOf(source);
+	mat.pbr.bakeToken        = c_TextureBakeToken;
 
 	REQUIRE_FALSE(bakeIsStale(mat, MountAt(dir)));
 
@@ -309,12 +325,20 @@ TEST_CASE("bakeIsStale compares routed sources against their stamps", "[bmateria
 	BMaterial mat;
 	mat.pbr.baseColorTexture = "mat_basecolor.ktx2";
 	mat.pbr.routes[0]        = { "albedo.ktx2", 0 };
+	mat.pbr.bakeToken        = c_TextureBakeToken;
 
 	SECTION("a material with no routes is never stale")
 	{
 		BMaterial imported;
 		imported.pbr.baseColorTexture = "tex0.ktx2";
 		REQUIRE_FALSE(bakeIsStale(imported, MountAt(dir)));
+	}
+
+	SECTION("a triplet baked at another revision is stale whatever the stamps say")
+	{
+		mat.pbr.routeStamps[0] = stampOf(source);
+		mat.pbr.bakeToken      = 0;  // a material from before textures had a revision
+		REQUIRE(bakeIsStale(mat, MountAt(dir)));
 	}
 
 	SECTION("routed but unstamped means it was never baked")
@@ -381,6 +405,7 @@ TEST_CASE("drawsLoose falls back to routes only when they are there", "[bmateria
 	BMaterial mat;
 	mat.pbr.baseColorTexture = "mat_basecolor.ktx2";
 	mat.pbr.routes[0]        = { "albedo.ktx2", 0 };
+	mat.pbr.bakeToken        = c_TextureBakeToken;
 
 	SECTION("a current bake draws its triplet")
 	{
