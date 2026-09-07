@@ -9,6 +9,7 @@
 #include <bgl_common/idl/MeshInstance.h>
 #include <bgl_common/idl/PsoType.h>
 #include <cstdint>
+#include <optional>
 
 namespace bgl
 {
@@ -17,6 +18,21 @@ namespace bgl
 
 	idl::PsoType
 	GetPsoFromGeomAndMaterial(GeomType geom, MaterialType material, LayerType layer);
+
+	/** The reserved game slot a kind names, or empty for a kind that is not a slot's. */
+	[[nodiscard]] std::optional<uint32_t>
+	GameSlot(MaterialType material) noexcept;
+
+	/** The kind a reserved game slot's records carry. @pre slot < cGameSlots. */
+	[[nodiscard]] MaterialType
+	GameSlotKind(uint32_t slot) noexcept;
+
+	/**
+	 * A slot's row for a layer: opaque, alpha-test or transparent, from its first row. Hashed is
+	 * closed to game surfaces at the door that creates one, so it is bgl's own bug here.
+	 */
+	[[nodiscard]] idl::PsoType
+	GameSlotRow(uint32_t slot, LayerType layer);
 
 	/**
 	 * The PSO bucket for `SubmeshInstance::pso`. An invalid handle resolves to the unlit `kNull`

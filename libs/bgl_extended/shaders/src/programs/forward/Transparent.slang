@@ -18,19 +18,26 @@ import lib.forward.MaterialShading;
 [shader("pixel")]
 float4 PSMain(ForwardVSOut input, bool isFrontFace: SV_IsFrontFace) : SV_Target
 {
-    switch (LoadMaterialKind(input.materialOffset))
+    let kind = LoadMaterialKind(input.materialOffset);
+    if (kind == MaterialType.kLoosePbr)
     {
-    case MaterialType.kLoosePbr:
         return materialData.ShadeBlended<LoosePbrMaterialRecord>(input, isFrontFace);
-    case MaterialType.kGame0:
-        return materialData.ShadeGameBlended<Slot0Surface>(input, isFrontFace);
-    case MaterialType.kGame1:
-        return materialData.ShadeGameBlended<Slot1Surface>(input, isFrontFace);
-    case MaterialType.kGame2:
-        return materialData.ShadeGameBlended<Slot2Surface>(input, isFrontFace);
-    case MaterialType.kGame3:
-        return materialData.ShadeGameBlended<Slot3Surface>(input, isFrontFace);
-    default:
-        return materialData.ShadeBlended<PbrMaterialRecord>(input, isFrontFace);
     }
+    // One arm per reserved slot: a program has to name the surface's type, so the slots cannot be
+    // a loop here the way their rows are on the CPU.
+    if (uint(kind) >= uint(MaterialType.kGameStart))
+    {
+        switch (uint(kind) - uint(MaterialType.kGameStart))
+        {
+        case 0:
+            return materialData.ShadeGameBlended<Slot0Surface>(input, isFrontFace);
+        case 1:
+            return materialData.ShadeGameBlended<Slot1Surface>(input, isFrontFace);
+        case 2:
+            return materialData.ShadeGameBlended<Slot2Surface>(input, isFrontFace);
+        default:
+            return materialData.ShadeGameBlended<Slot3Surface>(input, isFrontFace);
+        }
+    }
+    return materialData.ShadeBlended<PbrMaterialRecord>(input, isFrontFace);
 }

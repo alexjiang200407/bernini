@@ -19,6 +19,5 @@ public struct GameSurfaceRecord
     // Only read by the alpha-test PSOs, against the surface's Coverage.
     public float alphaCutoff;
 
-    public uint pad0;
-    public uint pad1;
+    public uint pad[2];
 };

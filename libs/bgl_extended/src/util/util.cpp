@@ -10,6 +10,7 @@
 #include <bgl_common/idl/PsoType.h>
 #include <cstddef>
 #include <cstdint>
+#include <optional>
 
 namespace bgl
 {
@@ -106,30 +107,44 @@ namespace bgl
 		return info;
 	}
 
-	namespace
-	{
-		// A game slot's three rows sit at its opaque row plus the layer's offset. Hashed alpha is
-		// closed to game surfaces at the door that creates one, so reaching here with it is bgl's
-		// own bug.
-		idl::PsoType
-		GameSlotPso(idl::PsoType opaqueRow, LayerType layer)
-		{
-			if (layer == LayerType::kHashed)
-				gfatal("A game surface has no hashed row");
-			const uint32_t offset = layer == LayerType::kBlend ? 2u :
-			                        layer == LayerType::kMask  ? 1u :
-			                                                     0u;
-			return static_cast<idl::PsoType>(static_cast<uint32_t>(opaqueRow) + offset);
-		}
+	// The two enums end where the slots end: kCount is a literal in the IDL, so this is what holds
+	// it to the slot count.
+	static_assert(
+		static_cast<uint32_t>(MaterialType::kGameStart) + cGameSlots ==
+		static_cast<uint32_t>(MaterialType::kCount));
+	static_assert(
+		static_cast<uint32_t>(idl::PsoType::kGameRowsStart) + cGameSlots * idl::cGameSlotRows ==
+		static_cast<uint32_t>(idl::PsoType::kCount));
 
-		static_assert(
-			static_cast<uint32_t>(idl::PsoType::kAlphaTest_StaticMesh_Game0) ==
-					static_cast<uint32_t>(idl::PsoType::kOpaque_StaticMesh_Game0) + 1 &&
-				static_cast<uint32_t>(idl::PsoType::kTransparent_StaticMesh_Game0) ==
-					static_cast<uint32_t>(idl::PsoType::kOpaque_StaticMesh_Game0) + 2 &&
-				static_cast<uint32_t>(idl::PsoType::kTransparent_StaticMesh_Game3) ==
-					static_cast<uint32_t>(idl::PsoType::kOpaque_StaticMesh_Game3) + 2,
-			"a game slot's rows are opaque, alpha-test, transparent, in that order");
+	std::optional<uint32_t>
+	GameSlot(MaterialType material) noexcept
+	{
+		const auto kind  = static_cast<uint32_t>(material);
+		const auto start = static_cast<uint32_t>(MaterialType::kGameStart);
+		if (kind < start || kind >= static_cast<uint32_t>(MaterialType::kCount))
+			return std::nullopt;
+		return kind - start;
+	}
+
+	MaterialType
+	GameSlotKind(uint32_t slot) noexcept
+	{
+		gassert(slot < cGameSlots, "A reserved game slot is below cGameSlots");
+		return static_cast<MaterialType>(static_cast<uint32_t>(MaterialType::kGameStart) + slot);
+	}
+
+	idl::PsoType
+	GameSlotRow(uint32_t slot, LayerType layer)
+	{
+		gassert(slot < cGameSlots, "A reserved game slot is below cGameSlots");
+		if (layer == LayerType::kHashed)
+			gfatal("A game surface has no hashed row");
+		const uint32_t offset = layer == LayerType::kBlend ? 2u :
+		                        layer == LayerType::kMask  ? 1u :
+		                                                     0u;
+		return static_cast<idl::PsoType>(
+			static_cast<uint32_t>(idl::PsoType::kGameRowsStart) + slot * idl::cGameSlotRows +
+			offset);
 	}
 
 	idl::PsoType
@@ -142,6 +157,9 @@ namespace bgl
 		switch (geom)
 		{
 		case GeomType::kStaticMesh:
+			if (const auto slot = GameSlot(material))
+				return GameSlotRow(*slot, layer);
+
 			switch (material)
 			{
 			case MaterialType::kPBR:
@@ -159,21 +177,14 @@ namespace bgl
 				return cutout ? idl::PsoType::kAlphaTest_StaticMesh_LoosePbr :
 				                idl::PsoType::kOpaque_StaticMesh_LoosePbr;
 
-			case MaterialType::kGame0:
-				return GameSlotPso(idl::PsoType::kOpaque_StaticMesh_Game0, layer);
-			case MaterialType::kGame1:
-				return GameSlotPso(idl::PsoType::kOpaque_StaticMesh_Game1, layer);
-			case MaterialType::kGame2:
-				return GameSlotPso(idl::PsoType::kOpaque_StaticMesh_Game2, layer);
-			case MaterialType::kGame3:
-				return GameSlotPso(idl::PsoType::kOpaque_StaticMesh_Game3, layer);
-
 			// Neither shades a base color, so there is no alpha to cut or blend against.
 			case MaterialType::kNull:
 				return idl::PsoType::kOpaque_StaticMesh_Null;
 			case MaterialType::kAssert:
 				return idl::PsoType::kAssert_StaticMesh;
 
+			// kGameStart is every slot's kind, answered above.
+			case MaterialType::kGameStart:
 			case MaterialType::kInvalid:
 			case MaterialType::kCount:
 				gfatal("Invalid MaterialType");
@@ -212,13 +223,13 @@ namespace bgl
 	bool
 	IsTransparentPso(uint32_t pso) noexcept
 	{
+		if (const auto start = static_cast<uint32_t>(idl::PsoType::kGameRowsStart);
+		    pso >= start && pso < idl::c_PsoCount)
+			return (pso - start) % idl::cGameSlotRows == 2u;
+
 		return pso == static_cast<uint32_t>(idl::PsoType::kTransparent_StaticMesh_PBR) ||
 		       pso == static_cast<uint32_t>(idl::PsoType::kTransparent_StaticMesh_LoosePbr) ||
-		       pso == static_cast<uint32_t>(idl::PsoType::kTransparent_SkinnedMesh_PBR) ||
-		       pso == static_cast<uint32_t>(idl::PsoType::kTransparent_StaticMesh_Game0) ||
-		       pso == static_cast<uint32_t>(idl::PsoType::kTransparent_StaticMesh_Game1) ||
-		       pso == static_cast<uint32_t>(idl::PsoType::kTransparent_StaticMesh_Game2) ||
-		       pso == static_cast<uint32_t>(idl::PsoType::kTransparent_StaticMesh_Game3);
+		       pso == static_cast<uint32_t>(idl::PsoType::kTransparent_SkinnedMesh_PBR);
 	}
 
 	void

@@ -79,17 +79,17 @@ public MaterialType LoadMaterialKind(uint byteOffset)
 // meshlet, for every kind at once: a null or assert material has no flag and draws both.
 public bool IsMaterialDoubleSided(uint byteOffset)
 {
-    switch (LoadMaterialKind(byteOffset))
+    let kind = LoadMaterialKind(byteOffset);
+    if (uint(kind) >= uint(MaterialType.kGameStart))
+    {
+        return materialData.materials.LoadRecordAs<GameSurfaceRecord>(RawEntry<IMaterial>.At(byteOffset)).doubleSided != 0;
+    }
+    switch (kind)
     {
     case MaterialType.kPBR:
         return materialData.materials.LoadRecordAs<PbrMaterial>(RawEntry<IMaterial>.At(byteOffset)).doubleSided != 0;
     case MaterialType.kLoosePbr:
         return materialData.materials.LoadRecordAs<LoosePbrMaterial>(RawEntry<IMaterial>.At(byteOffset)).doubleSided != 0;
-    case MaterialType.kGame0:
-    case MaterialType.kGame1:
-    case MaterialType.kGame2:
-    case MaterialType.kGame3:
-        return materialData.materials.LoadRecordAs<GameSurfaceRecord>(RawEntry<IMaterial>.At(byteOffset)).doubleSided != 0;
     default:
         return true;
     }

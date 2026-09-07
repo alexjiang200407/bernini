@@ -11,10 +11,12 @@ import lib.data.SubmeshInstance;
 // than its counting-sort bucket, so it is the only kind this pass keys.
 bool IsTransparentPso(PsoType pso)
 {
+    if (uint(pso) >= uint(PsoType::kGameRowsStart))
+    {
+        return (uint(pso) - uint(PsoType::kGameRowsStart)) % cGameSlotRows == 2u;
+    }
     return pso == PsoType::kTransparent_StaticMesh_PBR || pso == PsoType::kTransparent_StaticMesh_LoosePbr ||
-           pso == PsoType::kTransparent_SkinnedMesh_PBR || pso == PsoType::kTransparent_StaticMesh_Game0 ||
-           pso == PsoType::kTransparent_StaticMesh_Game1 || pso == PsoType::kTransparent_StaticMesh_Game2 ||
-           pso == PsoType::kTransparent_StaticMesh_Game3;
+           pso == PsoType::kTransparent_SkinnedMesh_PBR;
 }
 
 struct Uniforms
