@@ -90,19 +90,19 @@ namespace bgl
 			return elementLayout;
 		}
 
-		// The declared type is what says a field is a slot rather than a value, so the match is on
-		// the contract's type names and there is no attribute to read.
+		// The declared type is what says a field is a texture rather than a value, so the match is
+		// on the contract's slot type names and there is no attribute to read.
 		bool
-		SlotKindOf(std::string_view typeName, SurfaceSlotKind& kind)
+		TextureKindOf(std::string_view typeName, SurfaceTextureKind& kind)
 		{
 			if (typeName == "ColorSlot")
-				kind = SurfaceSlotKind::kColor;
+				kind = SurfaceTextureKind::kColor;
 			else if (typeName == "DataSlot")
-				kind = SurfaceSlotKind::kData;
+				kind = SurfaceTextureKind::kData;
 			else if (typeName == "NormalSlot")
-				kind = SurfaceSlotKind::kNormal;
+				kind = SurfaceTextureKind::kNormal;
 			else if (typeName == "CoverageSlot")
-				kind = SurfaceSlotKind::kCoverage;
+				kind = SurfaceTextureKind::kCoverage;
 			else
 				return false;
 
@@ -199,7 +199,7 @@ namespace bgl
 
 		SurfaceType reflected;
 		reflected.name        = std::string(surfaceName);
-		reflected.layout.size = static_cast<uint32_t>(paramsLayout->getStride());
+		reflected.params.size = static_cast<uint32_t>(paramsLayout->getStride());
 
 		for (unsigned i = 0; i < paramsLayout->getFieldCount(); ++i)
 		{
@@ -212,24 +212,24 @@ namespace bgl
 			slang::TypeReflection* type     = field->getTypeLayout()->getType();
 			const char*            typeName = type->getName();
 
-			SurfaceSlotKind kind = SurfaceSlotKind::kColor;
-			if (typeName != nullptr && SlotKindOf(typeName, kind))
+			SurfaceTextureKind kind = SurfaceTextureKind::kColor;
+			if (typeName != nullptr && TextureKindOf(typeName, kind))
 			{
-				if (reflected.layout.slots.size() == idl::cGameSurfaceSlots)
+				if (reflected.params.textures.size() == idl::cGameSurfaceSlots)
 				{
 					core::throw_runtime_error(
-						"surface '{}': slot '{}' is past the {} a record carries",
+						"surface '{}': texture '{}' is past the {} a record carries",
 						surfaceName,
 						spelling,
 						idl::cGameSurfaceSlots);
 				}
 
-				SurfaceSlot slot;
-				slot.name   = std::string(spelling);
-				slot.kind   = kind;
-				slot.index  = static_cast<uint32_t>(reflected.layout.slots.size());
-				slot.offset = offset;
-				reflected.layout.slots.emplace_back(std::move(slot));
+				SurfaceTexture texture;
+				texture.name   = std::string(spelling);
+				texture.kind   = kind;
+				texture.index  = static_cast<uint32_t>(reflected.params.textures.size());
+				texture.offset = offset;
+				reflected.params.textures.emplace_back(std::move(texture));
 				continue;
 			}
 
@@ -238,7 +238,7 @@ namespace bgl
 			value.type         = ValueTypeOf(type, surfaceName, spelling);
 			value.offset       = offset;
 			value.defaultValue = DefaultOf(field->getVariable(), value.type);
-			reflected.layout.values.emplace_back(std::move(value));
+			reflected.params.values.emplace_back(std::move(value));
 		}
 
 		return reflected;

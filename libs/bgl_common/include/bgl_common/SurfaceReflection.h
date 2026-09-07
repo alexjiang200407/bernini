@@ -8,8 +8,8 @@ namespace bgl
 {
 	/**
 	 * Reads the one surface out of a game's compiled module: the struct conforming to
-	 * `ISurfaceSource`, its `Params` fields at the offsets a record holds them at, the slot fields
-	 * among them by their declared type, and the defaults on the values that are left.
+	 * `ISurfaceSource`, its `Params` fields at the offsets a record holds them at, the texture
+	 * fields among them by their declared type, and the defaults on the values that are left.
 	 *
 	 * The layout is the one this session's target reconstructs, and the backends disagree: MSL
 	 * aligns a float3 to 16 where the scalar rules leave it at 4. So a surface is reflected once
@@ -24,7 +24,7 @@ namespace bgl
 	 * @param targetIndex Which of the session's targets the layout is read for.
 	 * @return The reflected surface.
 	 * @throws std::runtime_error if the module does not import the contract, holds no conforming
-	 *         struct or more than one, declares more slots than a record carries, declares a
+	 *         struct or more than one, declares more textures than a record carries, declares a
 	 *         parameter of a type the engine cannot pack, or does not reflect at all. Not
 	 *         `bgl::ApiError`: that type is the renderer's to throw, and registration is the seam
 	 *         where a bad module becomes one.

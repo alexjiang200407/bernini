@@ -10,17 +10,18 @@ namespace bgl
 {
 	// A surface is a shading function a game wrote and the engine draws through. It declares one
 	// struct of parameters, and every field in that struct is one of two things: a value a material
-	// sets by name, or a texture slot a material binds a texture to by name. What follows is that
-	// declaration as the engine read it back off the game's module -- the names a material writes,
-	// where each lands in the record, and what an unset one gets.
+	// sets by name, or a texture a material binds by name. What follows is that struct as the engine
+	// read it back off the game's module -- the names a material writes, where each lands in the
+	// record, and what an unset one gets.
 
 	/**
-	 * What a slot's texture holds, which decides how it is sampled and how it will be baked.
+	 * What a texture holds, which decides how it is sampled and how it will be baked.
 	 *
 	 * The surface says so by the type it declares the field as: `ColorSlot`, `DataSlot`,
-	 * `NormalSlot` or `CoverageSlot` in the shader contract's `bgl/MaterialReader.slang`.
+	 * `NormalSlot` or `CoverageSlot` in the shader contract's `bgl/MaterialReader.slang`. Those
+	 * keep the shader's word for a numbered place in the record; this names what goes in one.
 	 */
-	enum class SurfaceSlotKind : uint8_t
+	enum class SurfaceTextureKind : uint8_t
 	{
 		kColor,
 		kData,
@@ -66,15 +67,15 @@ namespace bgl
 	};
 
 	/// One texture a material binds by name, sampled through the index the engine packs into it.
-	struct SurfaceSlot
+	struct SurfaceTexture
 	{
-		// The field's name in the surface's parameter struct, which is what a material's `slots`
+		// The field's name in the surface's parameter struct, which is what a material's `textures`
 		// writes to bind a texture to it.
 		std::string name;
 
-		SurfaceSlotKind kind = SurfaceSlotKind::kColor;
+		SurfaceTextureKind kind = SurfaceTextureKind::kColor;
 
-		// Which of the record's texture handles this slot samples, and the value written into the
+		// Which of the record's texture handles this one samples, and the value written into the
 		// field at `offset`.
 		uint32_t index = 0;
 
@@ -83,17 +84,17 @@ namespace bgl
 	};
 
 	/**
-	 * How a surface's parameter block is arranged: everything a material may set, and where each of
-	 * them lands. This is what packs a record and what reads one back, and it is the whole of what
-	 * a packer needs -- which surface it belongs to is not.
+	 * The surface's `Params` struct as the engine read it back: everything a material may set, where
+	 * each of them lands, and what an unset one gets. This is what packs a record and what reads one
+	 * back, and it is the whole of what a packer needs -- which surface it belongs to is not.
 	 */
-	struct SurfaceLayout
+	struct SurfaceParams
 	{
 		// Bytes of block, past the engine's fixed part of the record.
 		uint32_t size = 0;
 
-		std::vector<SurfaceValue> values;
-		std::vector<SurfaceSlot>  slots;
+		std::vector<SurfaceValue>   values;
+		std::vector<SurfaceTexture> textures;
 	};
 
 	/**
@@ -110,6 +111,6 @@ namespace bgl
 		// Assigned by registration; reflection leaves it invalid.
 		MaterialType kind = MaterialType::kInvalid;
 
-		SurfaceLayout layout;
+		SurfaceParams params;
 	};
 }

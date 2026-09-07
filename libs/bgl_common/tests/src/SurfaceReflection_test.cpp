@@ -133,7 +133,7 @@ struct GateSurface : ISurfaceSource
 }
 
 // The whole reflection in one pass: the fields in declaration order, at the offsets the target
-// puts them at, with the slots taken out of the parameter list and numbered as the record's handles
+// puts them at, with the textures taken out of the value list and numbered as the record's handles
 // are. Both targets are pinned because they disagree, which is why a surface is reflected once per
 // device: a record packed under one backend's offsets is read as noise by the other.
 TEST_CASE("A surface's parameters are reflected at their target's offsets", "[surface][reflection]")
@@ -162,49 +162,50 @@ TEST_CASE("A surface's parameters are reflected at their target's offsets", "[su
 	CHECK(surface.name == "Gate");
 	// Registration's to assign, not reflection's.
 	CHECK(surface.kind == MaterialType::kInvalid);
-	CHECK(surface.layout.size == paramsSize);
+	CHECK(surface.params.size == paramsSize);
 
-	REQUIRE(surface.layout.values.size() == 4u);
+	REQUIRE(surface.params.values.size() == 4u);
 
-	CHECK(surface.layout.values[0].name == "power");
-	CHECK(surface.layout.values[0].type == SurfaceValueType::kFloat);
-	CHECK(surface.layout.values[0].offset == at.power);
-	CHECK(surface.layout.values[0].defaultValue.x == 2.0f);
+	CHECK(surface.params.values[0].name == "power");
+	CHECK(surface.params.values[0].type == SurfaceValueType::kFloat);
+	CHECK(surface.params.values[0].offset == at.power);
+	CHECK(surface.params.values[0].defaultValue.x == 2.0f);
 
-	CHECK(surface.layout.values[1].name == "tint");
-	CHECK(surface.layout.values[1].type == SurfaceValueType::kFloat3);
-	CHECK(surface.layout.values[1].offset == at.tint);
-	CHECK(surface.layout.values[1].defaultValue.x == 0.2f);
-	CHECK(surface.layout.values[1].defaultValue.y == 0.6f);
-	CHECK(surface.layout.values[1].defaultValue.z == 1.0f);
+	CHECK(surface.params.values[1].name == "tint");
+	CHECK(surface.params.values[1].type == SurfaceValueType::kFloat3);
+	CHECK(surface.params.values[1].offset == at.tint);
+	CHECK(surface.params.values[1].defaultValue.x == 0.2f);
+	CHECK(surface.params.values[1].defaultValue.y == 0.6f);
+	CHECK(surface.params.values[1].defaultValue.z == 1.0f);
 	// A component past the parameter's own is zero, not whatever the attribute's field defaulted to.
-	CHECK(surface.layout.values[1].defaultValue.w == 0.0f);
+	CHECK(surface.params.values[1].defaultValue.w == 0.0f);
 
-	CHECK(surface.layout.values[2].name == "quad");
-	CHECK(surface.layout.values[2].type == SurfaceValueType::kFloat4);
-	CHECK(surface.layout.values[2].offset == at.quad);
-	CHECK(surface.layout.values[2].defaultValue == glm::vec4(1.0f, 2.0f, 3.0f, 4.0f));
+	CHECK(surface.params.values[2].name == "quad");
+	CHECK(surface.params.values[2].type == SurfaceValueType::kFloat4);
+	CHECK(surface.params.values[2].offset == at.quad);
+	CHECK(surface.params.values[2].defaultValue == glm::vec4(1.0f, 2.0f, 3.0f, 4.0f));
 
 	// No attribute is zero, which is also what a material that sets nothing writes.
-	CHECK(surface.layout.values[3].name == "unset");
-	CHECK(surface.layout.values[3].offset == at.unset);
-	CHECK(surface.layout.values[3].defaultValue == glm::vec4(0.0f));
+	CHECK(surface.params.values[3].name == "unset");
+	CHECK(surface.params.values[3].offset == at.unset);
+	CHECK(surface.params.values[3].defaultValue == glm::vec4(0.0f));
 
-	REQUIRE(surface.layout.slots.size() == 2u);
+	REQUIRE(surface.params.textures.size() == 2u);
 
-	CHECK(surface.layout.slots[0].name == "base");
-	CHECK(surface.layout.slots[0].kind == SurfaceSlotKind::kColor);
-	CHECK(surface.layout.slots[0].index == 0u);
-	CHECK(surface.layout.slots[0].offset == at.base);
+	CHECK(surface.params.textures[0].name == "base");
+	CHECK(surface.params.textures[0].kind == SurfaceTextureKind::kColor);
+	CHECK(surface.params.textures[0].index == 0u);
+	CHECK(surface.params.textures[0].offset == at.base);
 
-	CHECK(surface.layout.slots[1].name == "bumps");
-	CHECK(surface.layout.slots[1].kind == SurfaceSlotKind::kNormal);
-	CHECK(surface.layout.slots[1].index == 1u);
-	CHECK(surface.layout.slots[1].offset == at.bumps);
+	CHECK(surface.params.textures[1].name == "bumps");
+	CHECK(surface.params.textures[1].kind == SurfaceTextureKind::kNormal);
+	CHECK(surface.params.textures[1].index == 1u);
+	CHECK(surface.params.textures[1].offset == at.bumps);
 }
 
-// Each slot type is its own kind, and nothing but the declared type says so.
-TEST_CASE("A slot's kind is its declared type", "[surface][reflection]")
+// Each of the contract's four slot types is its own kind, and nothing but the declared type says
+// so.
+TEST_CASE("A texture's kind is its declared type", "[surface][reflection]")
 {
 	constexpr std::string_view c_Kinds = R"(struct KindParams
 {
@@ -237,12 +238,12 @@ struct KindSurface : ISurfaceSource
 	Session     session;
 	SurfaceType surface = ReflectSurface(session.Load("Kinds", Module(c_Kinds)), "Kinds");
 
-	CHECK(surface.layout.values.empty());
-	REQUIRE(surface.layout.slots.size() == 4u);
-	CHECK(surface.layout.slots[0].kind == SurfaceSlotKind::kCoverage);
-	CHECK(surface.layout.slots[1].kind == SurfaceSlotKind::kData);
-	CHECK(surface.layout.slots[2].kind == SurfaceSlotKind::kNormal);
-	CHECK(surface.layout.slots[3].kind == SurfaceSlotKind::kColor);
+	CHECK(surface.params.values.empty());
+	REQUIRE(surface.params.textures.size() == 4u);
+	CHECK(surface.params.textures[0].kind == SurfaceTextureKind::kCoverage);
+	CHECK(surface.params.textures[1].kind == SurfaceTextureKind::kData);
+	CHECK(surface.params.textures[2].kind == SurfaceTextureKind::kNormal);
+	CHECK(surface.params.textures[3].kind == SurfaceTextureKind::kColor);
 }
 
 // Every refusal is a named throw, because each one is a mistake in a file the engine does not own
@@ -300,7 +301,7 @@ struct SecondSurface : ISurfaceSource
 			Catch::Matchers::MessageMatches(ContainsSubstring("both conform to ISurfaceSource")));
 	}
 
-	SECTION("a ninth slot")
+	SECTION("a ninth texture")
 	{
 		constexpr std::string_view c_Body = R"(struct NineParams
 {
@@ -320,7 +321,7 @@ struct NineSurface : ISurfaceSource
 			ReflectSurface(session.Load("Nine", Module(c_Body)), "Nine"),
 			std::runtime_error,
 			Catch::Matchers::MessageMatches(
-				ContainsSubstring("slot 'ninth' is past the 8 a record carries")));
+				ContainsSubstring("texture 'ninth' is past the 8 a record carries")));
 	}
 
 	SECTION("a parameter the engine cannot pack")
