@@ -56,6 +56,7 @@ namespace assetlib
 			Rgba8    pixels;
 			uint32_t width  = 0;
 			uint32_t height = 0;
+			bool     srgb   = false;
 		};
 
 		// The three maps a PBR material bakes to.
@@ -110,15 +111,24 @@ namespace assetlib
 			return out;
 		}
 
-		// `pixels` (srcW x srcH RGBA8) resampled to dstW x dstH. A no-op when they already match.
+		// `pixels` (srcW x srcH RGBA8) resampled to dstW x dstH, in linear light when the source is
+		// sRGB. A no-op when the extents already match.
 		Rgba8
-		resample(const Rgba8& pixels, uint32_t srcW, uint32_t srcH, uint32_t dstW, uint32_t dstH)
+		resample(
+			const Rgba8& pixels,
+			bool         srgb,
+			uint32_t     srcW,
+			uint32_t     srcH,
+			uint32_t     dstW,
+			uint32_t     dstH)
 		{
 			if (srcW == dstW && srcH == dstH)
 				return pixels;
 
+			const auto resize = srgb ? stbir_resize_uint8_srgb : stbir_resize_uint8_linear;
+
 			Rgba8 out(static_cast<size_t>(dstW) * dstH * 4u);
-			if (stbir_resize_uint8_linear(
+			if (resize(
 					reinterpret_cast<const unsigned char*>(pixels.data()),
 					static_cast<int>(srcW),
 					static_cast<int>(srcH),
@@ -160,6 +170,7 @@ namespace assetlib
 				source.pixels = topMipRgba8(image, texture);
 				source.width  = image.width;
 				source.height = image.height;
+				source.srgb   = image.vkFormat == VkFormat::R8G8B8A8_SRGB;
 				return m_Decoded.emplace(texture, std::move(source)).first->second;
 			}
 
@@ -363,7 +374,13 @@ namespace assetlib
 					const Source& source = sources.Get(route.texture);
 					scaled.emplace(
 						route.texture,
-						resample(source.pixels, source.width, source.height, width, height));
+						resample(
+							source.pixels,
+							source.srgb,
+							source.width,
+							source.height,
+							width,
+							height));
 				}
 
 				const Rgba8& src     = scaled.at(route.texture);
@@ -457,7 +474,8 @@ namespace assetlib
 					dilateColorIntoTransparent(composed, width, height);
 				}
 
-				const ImageData image = rgba8ToImage(composed, width, height, mipCutoff);
+				const ImageData image =
+					rgba8ToImage(composed, width, height, mipCutoff, group.srgb);
 
 				writeKTX2(image, target, group.srgb, compression);
 			}

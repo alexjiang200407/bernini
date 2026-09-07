@@ -9,6 +9,7 @@
 #include <filesystem>
 #include <limits>
 #include <map>
+#include <optional>
 #include <span>
 #include <stdexcept>
 #include <string>
@@ -749,6 +750,39 @@ namespace assetlib
 					mesh.roots.push_back(static_cast<uint32_t>(i));
 		}
 
+		constexpr std::string_view c_SpecGlossExtension = "KHR_materials_pbrSpecularGlossiness";
+
+		// Which images a material reads as colour -- a base colour, or a specular-glossiness
+		// diffuse. The GPU decodes those as sRGB, so their mips are averaged in that light; every
+		// other image is data.
+		std::vector<bool>
+		srgbImages(const tinygltf::Model& model)
+		{
+			auto srgb = std::vector<bool>(model.images.size(), false);
+
+			const auto mark = [&](int textureIndex) {
+				if (textureIndex < 0 || static_cast<size_t>(textureIndex) >= model.textures.size())
+					return;
+				const int source = model.textures[static_cast<size_t>(textureIndex)].source;
+				if (source >= 0 && static_cast<size_t>(source) < srgb.size())
+					srgb[static_cast<size_t>(source)] = true;
+			};
+
+			for (const tinygltf::Material& material : model.materials)
+			{
+				mark(material.pbrMetallicRoughness.baseColorTexture.index);
+
+				const auto ext = material.extensions.find(std::string(c_SpecGlossExtension));
+				if (ext != material.extensions.end() && ext->second.Has("diffuseTexture"))
+				{
+					const tinygltf::Value& texture = ext->second.Get("diffuseTexture");
+					if (texture.Has("index"))
+						mark(texture.Get("index").GetNumberAsInt());
+				}
+			}
+			return srgb;
+		}
+
 		// Fills imageToTexture so material parsing can map a glTF texture (-> image) to a
 		// BMeshImport::textures index; skipped/unsupported images stay c_InvalidIndex.
 		void
@@ -758,6 +792,8 @@ namespace assetlib
 			std::vector<uint32_t>& imageToTexture,
 			const CancelToken&     cancel)
 		{
+			const std::vector<bool> srgb = srgbImages(model);
+
 			imageToTexture.assign(model.images.size(), c_InvalidIndex);
 			for (size_t i = 0; i < model.images.size(); ++i)
 			{
@@ -798,7 +834,9 @@ namespace assetlib
 				mesh.textures.push_back(rgba8ToImage(
 					rgba,
 					static_cast<uint32_t>(width),
-					static_cast<uint32_t>(height)));
+					static_cast<uint32_t>(height),
+					std::nullopt,
+					srgb[i]));
 
 				// The URI stands in for an absent name: a glTF referencing image files names them
 				// there and nowhere else.
@@ -826,8 +864,6 @@ namespace assetlib
 
 			return imageToTexture[static_cast<size_t>(source)];
 		}
-
-		constexpr std::string_view c_SpecGlossExtension = "KHR_materials_pbrSpecularGlossiness";
 
 		// glTF's shading model is metallic-roughness unless the material overrides it, so PBR-ness is
 		// decided by the absence of an extension rather than the presence of pbrMetallicRoughness --

@@ -390,13 +390,6 @@ namespace assetlib
 		const std::filesystem::path outDir = ResolveWritePath(textureDir);
 		createDirectories(outDir);
 
-		// Textures used as base color are sRGB (tagged so the GPU sampler decodes them); normal and
-		// ORM maps carry linear data and are written as-is.
-		std::set<uint32_t> srgbTextures;
-		for (const imp::BMaterialImport& material : mesh.materials)
-			if (material.baseColorTexture != c_InvalidIndex)
-				srgbTextures.insert(material.baseColorTexture);
-
 		const std::vector<std::string> names = importedTextureFileNames(mesh);
 
 		for (size_t i = 0; i < mesh.textures.size(); ++i)
@@ -410,10 +403,8 @@ namespace assetlib
 				i,
 				mesh.textures.size());
 
-			writeKTX2(
-				mesh.textures[i],
-				outDir / names[i],
-				srgbTextures.contains(static_cast<uint32_t>(i)));
+			// The extract tagged the images its materials read as colour, and the tag is written.
+			writeKTX2(mesh.textures[i], outDir / names[i]);
 		}
 
 		auto keys = std::vector<std::string>();

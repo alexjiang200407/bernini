@@ -1,7 +1,9 @@
 #include <assetlib/codecs.h>
+#include <assetlib/image_io.h>
 #include <assetlib_structs/Animation.h>
 #include <assetlib_structs/BEnv.h>
 #include <assetlib_structs/BMesh.h>
+#include <assetlib_structs/ImageData.h>
 #include <assetlib_structs/Mesh.h>
 #include <assetlib_structs/Node.h>
 #include <assetlib_structs/Skeleton.h>
@@ -14,7 +16,11 @@
 #include <cstddef>
 #include <cstdint>
 #include <format>
+#include <optional>
 #include <span>
+#include <vector>
+
+#include "bmesh_texture.h"
 
 using namespace assetlib;
 
@@ -249,6 +255,25 @@ namespace
 		lighting.exposure          = 1.5f;
 		return lighting;
 	}
+
+	// A gradient with something to average at every level below the first, so a change to the
+	// filter or to the space it averages in moves the hash.
+	std::vector<std::byte>
+	CanaryPixels()
+	{
+		constexpr uint32_t     c_Size = 16;
+		std::vector<std::byte> pixels(static_cast<size_t>(c_Size) * c_Size * 4);
+		for (uint32_t y = 0; y < c_Size; ++y)
+			for (uint32_t x = 0; x < c_Size; ++x)
+			{
+				const size_t t = (static_cast<size_t>(y) * c_Size + x) * 4;
+				pixels[t + 0]  = static_cast<std::byte>(x * 17);
+				pixels[t + 1]  = static_cast<std::byte>(y * 17);
+				pixels[t + 2]  = static_cast<std::byte>((x * y) & 0xFF);
+				pixels[t + 3]  = static_cast<std::byte>(255 - x * 8);
+			}
+		return pixels;
+	}
 }
 
 TEST_CASE("a writer's output cannot change without its bake token", "[canary][io]")
@@ -291,5 +316,28 @@ TEST_CASE("a writer's output cannot change without its bake token", "[canary][io
 			AssetCodec<BEnvLighting>::c_BakeToken,
 			Pin{ .token = 0xd48f19c7a35b062eull, .hash = 0x20569dd2f51e76d8ull },
 			AssetCodec<BEnvLighting>::Serialize(CanaryLighting()));
+	}
+
+	SECTION(".ktx2 mips")
+	{
+		// Not a codec's: the chain rgba8ToImage writes, which a .ktx2 cannot carry a token for, so
+		// the documents that own one carry c_TextureBakeToken instead (docs/asset_containers.md).
+		// All three chains it writes: colour in linear light, data as stored, and a cutout's
+		// coverage-preserving alpha. Any one of them moving under the same token is the failure.
+		const auto bytes = [](const ImageData& image) {
+			return std::span<const std::byte>(image.pixels.data(), image.pixels.size());
+		};
+		CheckCanary(
+			c_TextureBakeToken,
+			Pin{ .token = 0x9d2c7e41b06f358aull, .hash = 0x1e421995f2192fa1ull },
+			bytes(rgba8ToImage(CanaryPixels(), 16, 16, std::nullopt, /*srgb*/ true)));
+		CheckCanary(
+			c_TextureBakeToken,
+			Pin{ .token = 0x9d2c7e41b06f358aull, .hash = 0x0a2c7e2ccb9e07e3ull },
+			bytes(rgba8ToImage(CanaryPixels(), 16, 16)));
+		CheckCanary(
+			c_TextureBakeToken,
+			Pin{ .token = 0x9d2c7e41b06f358aull, .hash = 0x2032a96f19d50a48ull },
+			bytes(rgba8ToImage(CanaryPixels(), 16, 16, 0.5f, /*srgb*/ true)));
 	}
 }

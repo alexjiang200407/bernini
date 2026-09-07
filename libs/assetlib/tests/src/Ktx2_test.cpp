@@ -1,3 +1,4 @@
+#include <array>
 #include <assetlib/image_io.h>
 #include <assetlib_structs/ImageData.h>
 #include <atomic>
@@ -6,6 +7,7 @@
 #include <cstdint>
 #include <exception>
 #include <filesystem>
+#include <optional>
 #include <stdexcept>
 #include <thread>
 #include <vector>
@@ -74,6 +76,64 @@ TEST_CASE("KTX2 LDR round-trips through Basis UASTC -> BC7", "[ktx2][io]")
 // The bake targets: each writes a KTX2 that already carries its block format, so loadKTX2 hands it
 // straight to the GPU rather than transcoding. This is what makes a baked material cheaper to load
 // than the UASTC textures a mesh import emits.
+TEST_CASE("sRGB mips are averaged in the light they encode", "[ktx2][bake]")
+{
+	// A 0/255 checker, half dark and half bright. Averaged in the encoded bytes the next level reads
+	// 128, which encodes a fifth of the light; averaged in the light it reads 188, which encodes
+	// half of it -- what a driver's own mip generation writes for an sRGB format, and what the
+	// squirrel's fur was measured to be missing at the mips a preview samples.
+	constexpr uint32_t c_Size = 8;
+
+	const auto checker = [](auto texel) {
+		std::vector<std::byte> pixels(static_cast<size_t>(c_Size) * c_Size * 4);
+		for (uint32_t y = 0; y < c_Size; ++y)
+			for (uint32_t x = 0; x < c_Size; ++x)
+			{
+				const std::array<uint8_t, 4> rgba = texel((x + y) % 2 == 0);
+				for (size_t c = 0; c < 4; ++c)
+					pixels[(static_cast<size_t>(y) * c_Size + x) * 4 + c] = std::byte{ rgba[c] };
+			}
+		return pixels;
+	};
+	// A texel in the middle of the 4x4 level: the filter is wider than the 2x2 it stands for and
+	// clamps at the edge, so a corner texel reads a little off the average.
+	const auto firstMip = [](const ImageData& image, size_t channel) {
+		const ImageSubresource& sub = image.subresources[1];
+		return std::to_integer<int>(image.pixels[sub.offset + sub.rowPitch * 2 + 2 * 4 + channel]);
+	};
+
+	const std::vector<std::byte> colour = checker([](bool bright) {
+		const uint8_t v = bright ? 255 : 0;
+		return std::array<uint8_t, 4>{ { v, v, v, 255 } };
+	});
+
+	const ImageData linear = rgba8ToImage(colour, c_Size, c_Size);
+	CHECK(linear.vkFormat == VkFormat::R8G8B8A8_UNORM);
+	CHECK(firstMip(linear, 0) >= 127);
+	CHECK(firstMip(linear, 0) <= 128);
+
+	const ImageData srgb = rgba8ToImage(colour, c_Size, c_Size, std::nullopt, /*srgb*/ true);
+	CHECK(srgb.vkFormat == VkFormat::R8G8B8A8_SRGB);
+	CHECK(firstMip(srgb, 0) >= 186);
+	CHECK(firstMip(srgb, 0) <= 189);
+
+	SECTION("alpha is linear either way")
+	{
+		const std::vector<std::byte> coverage = checker([](bool bright) {
+			return std::array<uint8_t, 4>{
+				{ 255, 255, 255, bright ? uint8_t{ 255 } : uint8_t{ 0 } }
+			};
+		});
+		for (const bool asSrgb : { false, true })
+		{
+			const ImageData image = rgba8ToImage(coverage, c_Size, c_Size, std::nullopt, asSrgb);
+			CHECK(firstMip(image, 3) >= 127);
+			CHECK(firstMip(image, 3) <= 128);
+			CHECK(firstMip(image, 0) == 255);
+		}
+	}
+}
+
 TEST_CASE("KTX2 bake targets write their block format directly", "[ktx2][io][bake]")
 {
 	constexpr uint32_t c_Width  = 64;

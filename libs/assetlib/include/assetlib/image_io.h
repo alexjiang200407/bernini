@@ -131,7 +131,7 @@ namespace assetlib
 	 * source stamps, and a file written under another revision reads as stale. Bumped to a fresh
 	 * random value on any change to the bytes rgba8ToImage produces; TokenCanary_test pins it.
 	 */
-	inline constexpr uint64_t c_TextureBakeToken = 0x5e1a9c37d04b82f1ull;
+	inline constexpr uint64_t c_TextureBakeToken = 0x9d2c7e41b06f358aull;
 
 	/**
 	 * Encodes an ImageData (its mips and array/cube faces) into a `.ktx2` file on disk. The inverse of

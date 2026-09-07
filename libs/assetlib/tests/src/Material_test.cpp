@@ -1,3 +1,4 @@
+#include <algorithm>
 #include <array>
 #include <assetlib/bmesh.h>
 #include <assetlib/bmesh_gltf.h>
@@ -7,9 +8,12 @@
 #include <assetlib/mesh_tangents.h>
 #include <assetlib_structs/BMesh.h>
 #include <assetlib_structs/BMeshImport.h>
+#include <assetlib_structs/ImageData.h>
+#include <assetlib_structs/VkFormat.h>
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers.hpp>
 #include <chrono>
+#include <cmath>
 #include <core/hash.h>
 
 #include <catch2/catch_approx.hpp>
@@ -537,6 +541,38 @@ TEST_CASE("saveMaterial / loadMaterial round-trips through a file", "[bmaterial]
 	REQUIRE(restored.pbr.baseColorTexture == "tex0.ktx2");
 	REQUIRE(restored.pbr.normalTexture.empty());
 	REQUIRE(restored.pbr.roughnessFactor == Catch::Approx(0.9f));
+}
+
+TEST_CASE("an import averages a base colour's mips in the light it encodes", "[bmesh][bake]")
+{
+	// The extract decides which images are colour from the materials, so the whole chain under a
+	// base colour is built in linear light and tagged for it -- averaged in the encoded bytes it
+	// would read darker at every level below the first, which is what a re-extract has to fix.
+	const auto import = loadFromGltf("assets/apples.glb");
+	REQUIRE_FALSE(import.materials.empty());
+	REQUIRE(import.materials[0].baseColorTexture != c_InvalidIndex);
+
+	const auto meanLight = [](const ImageData& image, uint32_t mip) {
+		const ImageSubresource& sub = image.subresources[mip];
+		const uint32_t          w   = std::max(1u, image.width >> mip);
+		const uint32_t          h   = std::max(1u, image.height >> mip);
+		double                  sum = 0.0;
+		for (uint32_t y = 0; y < h; ++y)
+			for (uint32_t x = 0; x < w; ++x)
+				for (size_t c = 0; c < 3; ++c)
+				{
+					const double s = std::to_integer<int>(
+										 image.pixels[sub.offset + y * sub.rowPitch + x * 4 + c]) /
+					                 255.0;
+					sum += s <= 0.04045 ? s / 12.92 : std::pow((s + 0.055) / 1.055, 2.4);
+				}
+		return sum / (3.0 * w * h);
+	};
+
+	const ImageData& baseColour = import.textures[import.materials[0].baseColorTexture];
+	CHECK(baseColour.vkFormat == VkFormat::R8G8B8A8_SRGB);
+	REQUIRE(baseColour.mipLevels > 4);
+	CHECK(meanLight(baseColour, 4) == Catch::Approx(meanLight(baseColour, 0)).epsilon(0.01));
 }
 
 TEST_CASE("an import writes a loadable .bmesh and its textures, and no materials", "[bmesh][bake]")
