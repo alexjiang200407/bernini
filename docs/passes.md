@@ -98,7 +98,8 @@ init. The file is a 2D strip of 57 slices rather than a 3D texture because neith
 layout, shared so a second renderer's `ITonemapLut` does not re-derive it. The datafile reaches the
 tree under Blender's GPL-2-or-later. `AgxCalibration_test` pins the result to a twelve-point sweep
 measured off Blender itself, middle grey at display 0.461 — where sRGB puts it, not 0.5 — and
-`BlenderParity_test` checks a lit sphere against Blender's Cycles pixels. Regenerate the strip when
+`BlenderParity_test` checks a lit sphere against Blender's Eevee pixels — the Material Preview the
+shipped `forest` is baked to match. Regenerate the strip when
 the reference Blender changes, and re-measure the sweep with `scripts/blender_probe.py`.
 
 Two consequences worth knowing. Transparent surfaces blend in linear HDR rather than in display
