@@ -9,7 +9,11 @@ Not part of any suite: CI has no Blender, and a gate that passes wherever Blende
 nothing. Run it by hand:
 
     /Applications/Blender.app/Contents/MacOS/Blender -b --factory-startup \
-        --python scripts/blender_probe.py -- --out probe.png [--engine CYCLES]
+        --python scripts/blender_probe.py -- --out probe.png [--engine CYCLES] [--sweep]
+
+`--sweep` renders the same sphere as a grey emission at each of a dozen scene-linear values instead,
+and prints the display luma each lands at: Blender's tone map sampled on the neutral axis, which is
+what `AgxCalibration_test` pins the shipped one to.
 
 Eevee by default, which is what the Material Preview is. Cycles renders the same scene as the
 exact integral of the source, which is what the test's level is asserted against; run both and say
@@ -156,6 +160,24 @@ def build_scene(hdr, samples, engine):
     scene.camera = cam
 
 
+SWEEP = (0.01, 0.045, 0.1, 0.18, 0.3, 0.5, 0.72, 1.0, 2.0, 4.0, 8.0, 16.0)
+
+
+def sweep(out):
+    """Display luma of a grey emission at each SWEEP value, read over the sphere's left box."""
+    mat = bpy.data.materials["probe"]
+    nodes = mat.node_tree.nodes
+    emission = nodes.new("ShaderNodeEmission")
+    output = [n for n in nodes if n.type == "OUTPUT_MATERIAL"][0]
+    mat.node_tree.links.new(emission.outputs["Emission"], output.inputs["Surface"])
+    result = {}
+    for value in SWEEP:
+        emission.inputs["Color"].default_value = (value, value, value, 1.0)
+        render(out)
+        result[str(value)] = box_means(out)["sphereLeft"]["luma"]
+    return result
+
+
 def render(out):
     scene = bpy.context.scene
     scene.render.image_settings.file_format = "PNG"
@@ -198,9 +220,13 @@ def main():
     parser.add_argument("--hdr", default=forest_exr(), help="Equirectangular source (default: Blender's forest.exr)")
     parser.add_argument("--samples", type=int, default=64)
     parser.add_argument("--engine", choices=("EEVEE", "CYCLES"), default="EEVEE")
+    parser.add_argument("--sweep", action="store_true", help="Grey emissions through the tone map instead")
     args = parser.parse_args(argv)
 
     build_scene(args.hdr, args.samples, args.engine)
+    if args.sweep:
+        print(json.dumps({"blender": bpy.app.version_string, "sweep": sweep(args.out)}, indent=2))
+        return
     render(args.out)
     print(
         json.dumps(

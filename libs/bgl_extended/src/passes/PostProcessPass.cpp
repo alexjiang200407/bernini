@@ -33,9 +33,9 @@ namespace bgl
 		// Every member Execute writes. Kept beside the code that writes them so
 		// BinderNames catches a shader rename at startup: an optional write is silent, so
 		// a stale name would otherwise resolve to nothing every frame and say nothing.
-		constexpr std::array<std::string_view, 6> c_Fields = {
-			"sceneColor"sv,     "sampler"sv,     "maskSampler"sv,
-			"outlineEnabled"sv, "outlineMask"sv, "maskSize"sv,
+		constexpr std::array<std::string_view, 8> c_Fields = {
+			"sceneColor"sv,  "sampler"sv,  "maskSampler"sv, "outlineEnabled"sv,
+			"outlineMask"sv, "maskSize"sv, "tonemapLut"sv,  "lutSampler"sv,
 		};
 	}
 
@@ -117,6 +117,8 @@ namespace bgl
 			tonemap["sceneColor"].SetIfValid(args.source);
 			tonemap["sampler"].SetIfValid(args.sampler);
 			tonemap["maskSampler"].SetIfValid(args.maskSampler);
+			tonemap["tonemapLut"].SetIfValid(args.tonemapLut);
+			tonemap["lutSampler"].SetIfValid(args.lutSampler);
 			tonemap["outlineEnabled"].SetIfValid(args.outlineEnabled ? 1u : 0u);
 			if (args.outlineEnabled)
 			{

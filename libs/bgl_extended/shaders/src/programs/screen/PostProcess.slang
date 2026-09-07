@@ -1,4 +1,5 @@
 import lib.math.Tonemap;
+import lib.screen.TonemapLut;
 
 struct PostProcessData
 {
@@ -16,6 +17,10 @@ struct PostProcessData
 
     float2 maskSize;
     uint outlineEnabled;
+
+    // The display curve's LUT and the linear clamp it is read through.
+    Texture2D.Handle tonemapLut;
+    SamplerState.Handle lutSampler;
 };
 
 ConstantBuffer<PostProcessData> gPostProcessData;
@@ -101,7 +106,11 @@ float4 PSMain(VSOut input) : SV_Target
 {
     float4 scene = gPostProcessData.sceneColor.SampleLevel(gPostProcessData.sampler, input.uv, 0.0);
 
-    float3 color = AgX(scene.rgb);
+    TonemapLut lut;
+    lut.strip = gPostProcessData.tonemapLut;
+    lut.sampler = gPostProcessData.lutSampler;
+
+    float3 color = AgX(scene.rgb, lut);
 
     if (gPostProcessData.outlineEnabled != 0)
     {

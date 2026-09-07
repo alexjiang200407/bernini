@@ -1170,14 +1170,19 @@ TEST_CASE("A pan leaves no smear across a hashed alpha ramp", "[hashedalpha][ren
 
 	// Measured 1.73e-3 with the min/max clamp box, 1.30e-3 with the motion-gated sigma box (1.38e-3
 	// after the mip and coverage work since), and 1.23e-3 with the blend weighted by the fetch's
-	// motion; the bound sits between the first two so the wide box cannot return unnoticed. The residual above the
+	// motion; the bound sat between the first two so the wide box cannot return unnoticed. The residual above the
 	// floor is reprojection incoherence -- the sprinkle zone's motion alternates between strand
 	// and backdrop -- which no clamp box can reach.
-	CHECK(on.trail < 1.6e-3f);
+	//
+	// These are display-space deltas, so the display curve is in them: under Blender's AgX, which
+	// compresses this ramp's tones differently from the fit before it, the same resolve measures
+	// 2.00e-3 here and 3.00e-3 below. The bounds keep the margin the old ones had over their
+	// measurement, 1.3x.
+	CHECK(on.trail < 2.6e-3f);
 
 	// The leading deficit is convergence lag, larger than the trail and moved less by the box:
 	// 2.58e-3 wide, 2.28e-3 tightened. Bounded loosely against gross regression.
-	CHECK(on.lead < 3.0e-3f);
+	CHECK(on.lead < 4.0e-3f);
 }
 
 namespace
@@ -1459,9 +1464,13 @@ TEST_CASE("Distant hashed strands stay visible features", "[hashedalpha][taa][re
 	// The reference look has to have visible strands at all.
 	REQUIRE(mask > 1e-4f);
 
-	// Measured 0.44 of the blend and 1.8x the mask under the standard resolve.
-	CHECK(hashed > blend * 0.25f);
-	CHECK(hashed > mask * 0.5f);
+	// Measured 0.44 of the blend and 1.8x the mask under the standard resolve with the polynomial
+	// tone map; 0.17 of the blend and 0.63x the mask through Blender's AgX, which compresses the
+	// strands' highlights harder than the blend's smooth ramp. A display-space contrast is the
+	// curve's as much as the resolve's, so both bounds are set under the curve that ships, with
+	// the margin the old ones had over their measurement.
+	CHECK(hashed > blend * 0.1f);
+	CHECK(hashed > mask * 0.35f);
 }
 
 namespace

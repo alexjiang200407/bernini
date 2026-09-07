@@ -9,6 +9,7 @@
 #include "fg/FrameGraph.h"
 #include "fg/PassTimer.h"
 #include "gfx/RenderTargetBase.h"
+#include "gfx/TonemapLut.h"
 #include "overlay/Overlay.h"
 #include "passes/BrdfLutGenPass.h"
 #include "passes/CompactInstancesPass.h"
@@ -231,6 +232,7 @@ namespace bgl
 		uint64_t                                                 m_NextCaptureId = 1;
 
 		BrdfLutGenPass       m_BrdfLut;
+		TonemapLut           m_TonemapLut;
 		PreparePresentPass   m_PreparePresentPass;
 		ForwardPass          m_Forward;
 		SkyboxPass           m_Skybox;

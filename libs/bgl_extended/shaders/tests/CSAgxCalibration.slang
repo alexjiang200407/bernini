@@ -1,10 +1,13 @@
 import lib.types.ComputeBuffer;
 import lib.math.Tonemap;
+import lib.screen.TonemapLut;
 
 struct Uniforms
 {
     ComputeBuffer<float4> outColor;
     float sceneLinear;
+    Texture2D.Handle lut;
+    SamplerState.Handle lutSampler;
 };
 
 ConstantBuffer<Uniforms> gUniforms;
@@ -17,5 +20,8 @@ ConstantBuffer<Uniforms> gUniforms;
 void main(uint3 id: SV_DispatchThreadID)
 {
     float3 grey = float3(gUniforms.sceneLinear, gUniforms.sceneLinear, gUniforms.sceneLinear);
-    gUniforms.outColor[0] = float4(AgX(grey), 1.0);
+    TonemapLut lut;
+    lut.strip = gUniforms.lut;
+    lut.sampler = gUniforms.lutSampler;
+    gUniforms.outColor[0] = float4(AgX(grey, lut), 1.0);
 }

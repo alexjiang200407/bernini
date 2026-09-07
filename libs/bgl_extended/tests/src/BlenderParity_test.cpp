@@ -19,29 +19,26 @@
 // case renders the probe scripts/blender_probe.py renders in Blender: a Lambertian middle-grey
 // sphere under Blender's own forest.exr, from the same camera, and asks where it lands on screen.
 //
-// Two references, kept apart because they answer different questions.
+// The level is checked twice. Against Blender's Cycles pixels directly, because Cycles is the exact
+// cosine integral of the source and the tone map is now Blender's own LUT, so the two frames should
+// agree; and against that integral pushed through the shipped tone map by RunAgX, which separates a
+// lighting fault from a tone-map one when the first check fails. A 1.34 exposure, the normalization
+// this asset used to ship with, moves these by about 0.06; the polynomial fit the tone map used to
+// be sat 0.03 above Blender here.
 //
-// The level is checked against the exact cosine integral of the source at the two limb normals,
-// pushed through the shipped tone map by RunAgX. Blender's Cycles render of the same sphere is
-// that integral to within a percent, so this is what "Blender's level" means once Blender's own
-// tone map is taken out of the comparison -- which it has to be, because it is not ours (below).
-// A 1.34 exposure, the normalization this asset used to ship with, moves these by about 0.06.
-//
-// The backdrop corners are checked against Blender's frame directly, and loosely: they are foliage
-// resampled twice over, and their job is to catch a mirrored or rotated environment, which moves
-// them by far more than any level. The two renderers run longitude the opposite way round an
-// equirectangular source, so each of Bernini's corners is compared against Blender's opposite one.
+// The backdrop corners are checked against Blender's frame loosely: they are foliage resampled twice
+// over, and their job is to catch a mirrored or rotated environment, which moves them by far more
+// than any level. The two renderers run longitude the opposite way round an equirectangular source,
+// so each of Bernini's boxes is compared against Blender's opposite one.
 //
 // What Blender 5.2.1 measured, display luma over the same boxes (blender_probe.py, 64 samples,
 // `--engine CYCLES` for the first row and the default Eevee for the second):
 //
 //   Cycles, Lambert     lit 0.5393   dark 0.3608   the exact integral through Blender's AgX
 //   Eevee, Lambert      lit 0.4925   dark 0.3995   Eevee's world diffuse is an L1 harmonic: flatter
-//   Blender AgX(0.18)   0.4612       ours 0.5005   Blender pins middle grey where sRGB puts it
 //
-// The last line is why the level is not asserted against Blender's numbers: the shipped fit sits
-// 0.02-0.05 above Blender's AgX through the whole midtone range, and a margin wide enough to hide
-// that would hide an exposure too. It is a tone-map term, and it is measured, not ours to absorb.
+// Eevee's row is what the Material Preview shows and is not asserted: the difference is Blender's
+// first-order approximation of the source, measured, and not a term to match.
 
 namespace
 {
@@ -66,9 +63,12 @@ namespace
 	constexpr float c_IrradianceRight = 1.4481f;
 	constexpr float c_IrradianceLeft  = 0.6377f;
 
-	// Display luma Blender's Cycles rendered over the backdrop corners, its own left and right.
-	constexpr float c_BlenderSkyLeft  = 0.7834f;
-	constexpr float c_BlenderSkyRight = 0.4690f;
+	// Display luma Blender's Cycles rendered over the sphere's limbs and the backdrop corners, its
+	// own left and right.
+	constexpr float c_BlenderSphereLeft  = 0.5393f;
+	constexpr float c_BlenderSphereRight = 0.3608f;
+	constexpr float c_BlenderSkyLeft     = 0.7834f;
+	constexpr float c_BlenderSkyRight    = 0.4690f;
 
 	constexpr float c_LevelMargin = 0.015f;
 	constexpr float c_SkyMargin   = 0.08f;
@@ -147,13 +147,17 @@ TEST_CASE("A matte sphere under forest sits at Blender's level", "[pbr][ibl][par
 
 	INFO(
 		"sphere L/R " << sphereLeft.Luma() << "/" << sphereRight.Luma() << " expected "
-					  << expectedLeft << "/" << expectedRight);
+					  << expectedLeft << "/" << expectedRight << ", Blender's R/L "
+					  << c_BlenderSphereRight << "/" << c_BlenderSphereLeft);
 	INFO(
 		"sky L/R " << skyLeft.Luma() << "/" << skyRight.Luma() << " against Blender's R/L "
 				   << c_BlenderSkyRight << "/" << c_BlenderSkyLeft);
 
 	CHECK(std::abs(skyLeft.Luma() - c_BlenderSkyRight) < c_SkyMargin);
 	CHECK(std::abs(skyRight.Luma() - c_BlenderSkyLeft) < c_SkyMargin);
+
+	CHECK(std::abs(sphereLeft.Luma() - c_BlenderSphereRight) < c_LevelMargin);
+	CHECK(std::abs(sphereRight.Luma() - c_BlenderSphereLeft) < c_LevelMargin);
 
 	CHECK(std::abs(sphereLeft.Luma() - expectedLeft) < c_LevelMargin);
 	CHECK(std::abs(sphereRight.Luma() - expectedRight) < c_LevelMargin);
