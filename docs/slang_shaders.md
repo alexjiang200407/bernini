@@ -11,7 +11,8 @@ libs/bgl_common/shaders/src/          what every renderer shares; names no buffe
   lib/  anim/ math/ geom/ data/       the pose walk and vertex blend, the foot-plant geometry and its two-bone solve; the BRDF and its LUT integral, the TAA resolve, hashed alpha, tonemapping, a motion vector, a frustum test, affine transform maths; vertex decode; plain view structs
 libs/bgl_extended/shaders/src/        this renderer's own
   programs/   forward/ culling/ screen/ env/ anim/   one entry point or more, grouped by feature
-  lib/        forward/ types/ debug/                 imported, never dispatched; types/ is the binding layer
+  lib/        forward/ types/ debug/ screen/         imported, never dispatched; types/ is the binding layer, screen/ the post pass's LUT
+  luts/                                              the display curve's data, read by C++ and never imported: gen_agx_lut.py's strip
 ```
 
 Both trees are staged into one `./shaders/src` beside the executable, `bgl_common`'s first, so an
@@ -70,10 +71,10 @@ could want:
    takes the vectors, matrices and scalars it computes over and returns a value. Where it has to
    read at positions it computes itself — the neighbourhood a resolve clamps to, the bones a pose
    walk visits — it is generic over an interface of reads (`TaaResolve<I : IResolveInputs>`,
-   `SkinAt<P : IBonePalette>`), and every method on that interface is a lookup at a coordinate,
+   `SkinAt<P : IBonePalette>`, `AgX<L : ITonemapLut>`), and every method on that interface is a lookup at a coordinate,
    nothing more.
 3. **Buffer access lives in thin named accessors, never inline in the math.** The struct that
-   conforms — `TaaResolveData`, `SkinnedPose`, `SurfaceEnv` — is where a `.Handle` is dereferenced,
+   conforms — `TaaResolveData`, `SkinnedPose`, `SurfaceEnv`, `TonemapLut` — is where a `.Handle` is dereferenced,
    one line per read. So a renderer without bindless writes those lines and none of the math, and a
    changed read changes in one place.
 
