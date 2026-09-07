@@ -264,7 +264,7 @@ TEST_CASE("cube texel solid angles converge to 4 pi", "[envmap]")
 TEST_CASE("SH irradiance round-trips a constant environment", "[envmap][irradiance]")
 {
 	constexpr float c_Radiance = 0.75f;
-	const ImageData iem        = irradianceSh(ConstantCube(32, c_Radiance), 16);
+	const ImageData iem        = irradianceSh(ConstantCube(32, c_Radiance), { .faceSize = 16 });
 
 	REQUIRE(iem.isCubemap);
 	REQUIRE(iem.mipLevels == 1);
@@ -286,9 +286,118 @@ TEST_CASE("SH irradiance preserves the environment's mean", "[envmap][irradiance
 {
 	const ImageData src  = EquirectWithSpot(64, 32, 0.5f, 0.5f, 400.0f);
 	const ImageData cube = equirectToCube(src, 32);
-	const ImageData iem  = irradianceSh(cube, 16);
+	const ImageData iem  = irradianceSh(cube, { .faceSize = 16 });
 
 	CHECK(MeanRadiance(iem, 0) == Catch::Approx(MeanRadiance(cube, 0)).epsilon(0.05));
+}
+
+namespace
+{
+	/** The map's value at the texel nearest `dir`. */
+	glm::vec3
+	SampleCube(const ImageData& cube, glm::vec3 dir)
+	{
+		const auto*  px   = reinterpret_cast<const float*>(cube.pixels.data());
+		const size_t per  = static_cast<size_t>(cube.width) * cube.width;
+		float        best = -2.0f;
+		glm::vec3    value{ 0.0f };
+		for (uint32_t face = 0; face < 6; ++face)
+			for (uint32_t row = 0; row < cube.width; ++row)
+				for (uint32_t col = 0; col < cube.width; ++col)
+				{
+					const Vec3  fd = FaceDir(face, col, row, cube.width);
+					const float d  = fd.x * dir.x + fd.y * dir.y + fd.z * dir.z;
+					if (d > best)
+					{
+						best = d;
+						const auto t =
+							(face * per + static_cast<size_t>(row) * cube.width + col) * 4;
+						value = glm::vec3(px[t], px[t + 1], px[t + 2]);
+					}
+				}
+		return value;
+	}
+
+	IrradianceDesc
+	Eevee(uint32_t faceSize)
+	{
+		auto desc     = IrradianceDesc();
+		desc.faceSize = faceSize;
+		desc.model    = IrradianceModel::kEeveePreview;
+		return desc;
+	}
+}
+
+// The Eevee model is Blender's approximation reproduced on purpose, so what it pins is that it
+// reproduces it: a constant environment survives, a directional one reads flatter than the
+// integral, and a strong light's far side is clamped rather than driven negative.
+TEST_CASE("Eevee-model irradiance round-trips a constant environment", "[envmap][irradiance]")
+{
+	constexpr float c_Radiance = 40.0f;
+	const ImageData iem        = irradianceSh(ConstantCube(32, c_Radiance), Eevee(16));
+	REQUIRE(iem.width == 16);
+
+	// Every texel, as the exact model's case walks them: a constant environment has no direction,
+	// so any variation is an error in the basis evaluation rather than in the projection.
+	for (uint32_t face = 0; face < 6; ++face)
+	{
+		const float* px = FaceMip(iem, face, 0);
+		for (size_t t = 0; t < static_cast<size_t>(16) * 16; ++t)
+			CHECK(px[t * 4] == Catch::Approx(c_Radiance).epsilon(0.03));
+	}
+}
+
+TEST_CASE("Eevee-model irradiance reads flatter than the integral", "[envmap][irradiance]")
+{
+	// Radiance 1 towards +X, 0 elsewhere: the environment that shows the flattening most.
+	ImageData half = equirectToCube(EquirectWithBand(128, 64, 0, 0.0f), 32);
+	for (uint32_t face = 0; face < 6; ++face)
+	{
+		auto* px = reinterpret_cast<float*>(half.pixels.data() + half.subresources[face].offset);
+		for (uint32_t row = 0; row < half.width; ++row)
+			for (uint32_t col = 0; col < half.width; ++col)
+			{
+				const float v = FaceDir(face, col, row, half.width).x > 0.0f ? 1.0f : 0.0f;
+				const auto  t = (static_cast<size_t>(row) * half.width + col) * 4;
+				px[t] = px[t + 1] = px[t + 2] = v;
+				px[t + 3]                     = 1.0f;
+			}
+	}
+
+	const ImageData exact = irradianceSh(half, { .faceSize = 16 });
+	const ImageData eevee = irradianceSh(half, Eevee(16));
+
+	const float exactLit  = SampleCube(exact, { 1.0f, 0.0f, 0.0f }).x;
+	const float exactDark = SampleCube(exact, { -1.0f, 0.0f, 0.0f }).x;
+	const float eeveeLit  = SampleCube(eevee, { 1.0f, 0.0f, 0.0f }).x;
+	const float eeveeDark = SampleCube(eevee, { -1.0f, 0.0f, 0.0f }).x;
+	INFO(
+		"exact lit/dark " << exactLit << "/" << exactDark << ", eevee " << eeveeLit << "/"
+						  << eeveeDark);
+
+	CHECK(eeveeLit < exactLit * 0.95f);
+	CHECK(eeveeDark > exactDark * 1.05f);
+	// Never negative, which is what the dering and the clamp are for.
+	CHECK(eeveeDark >= 0.0f);
+}
+
+TEST_CASE("Eevee-model irradiance derings a strong light", "[envmap][irradiance]")
+{
+	// One texel at 500 on a dark sky. A first-order harmonic of a delta goes negative on its far
+	// side; Eevee scales the band down until it cannot, and the model has to do the same -- so the
+	// far side is zero, not negative, and the near side is well under the integral's peak.
+	const ImageData spot  = equirectToCube(EquirectWithSpot(128, 64, 0.5f, 0.5f, 500.0f), 32);
+	const ImageData exact = irradianceSh(spot, { .faceSize = 16 });
+	const ImageData eevee = irradianceSh(spot, Eevee(16));
+
+	const float exactLit = SampleCube(exact, { 1.0f, 0.0f, 0.0f }).x;
+	const float eeveeLit = SampleCube(eevee, { 1.0f, 0.0f, 0.0f }).x;
+	const float eeveeFar = SampleCube(eevee, { -1.0f, 0.0f, 0.0f }).x;
+	INFO("lit exact/eevee " << exactLit << "/" << eeveeLit << ", eevee far " << eeveeFar);
+	CHECK(eeveeLit < exactLit * 0.9f);
+	CHECK(eeveeLit > exactLit * 0.3f);
+	CHECK(eeveeFar >= 0.0f);
+	CHECK(eeveeFar < eeveeLit * 0.2f);
 }
 
 // The orientation case. A mirrored longitude still yields a plausible environment, just lit from
@@ -433,11 +542,11 @@ TEST_CASE("a non-float or non-cube source is rejected", "[envmap]")
 {
 	ImageData notCube = ConstantCube(8, 1.0f);
 	notCube.isCubemap = false;
-	CHECK_THROWS_AS(irradianceSh(notCube, 8), std::runtime_error);
+	CHECK_THROWS_AS(irradianceSh(notCube, { .faceSize = 8 }), std::runtime_error);
 
 	ImageData wrongFormat = ConstantCube(8, 1.0f);
 	wrongFormat.vkFormat  = VkFormat::R8G8B8A8_UNORM;
-	CHECK_THROWS_AS(irradianceSh(wrongFormat, 8), std::runtime_error);
+	CHECK_THROWS_AS(irradianceSh(wrongFormat, { .faceSize = 8 }), std::runtime_error);
 
 	CHECK_THROWS_AS(equirectToCube(ConstantCube(8, 1.0f), 8), std::runtime_error);
 }

@@ -1,4 +1,3 @@
-#include "util/AgxProbe.h"
 #include "util/GoldenImage.h"
 #include "util/TestEnvironment.h"
 #include "util/TestOptions.h"
@@ -19,12 +18,11 @@
 // case renders the probe scripts/blender_probe.py renders in Blender: a Lambertian middle-grey
 // sphere under Blender's own forest.exr, from the same camera, and asks where it lands on screen.
 //
-// The level is checked twice. Against Blender's Cycles pixels directly, because Cycles is the exact
-// cosine integral of the source and the tone map is now Blender's own LUT, so the two frames should
-// agree; and against that integral pushed through the shipped tone map by RunAgX, which separates a
-// lighting fault from a tone-map one when the first check fails. A 1.34 exposure, the normalization
-// this asset used to ship with, moves these by about 0.06; the polynomial fit the tone map used to
-// be sat 0.03 above Blender here.
+// The level is checked against Blender's Eevee pixels directly: Eevee is the Material Preview, which
+// is what the shipped environment exists to be compared against, and `forest` is baked with the
+// irradiance model that lights the way Eevee's preview does. Cycles, the exact integral, stays in
+// the table below as the answer the model deliberately does not give. A 1.34 exposure, the
+// normalization this asset used to ship with, moves these by about 0.06.
 //
 // The backdrop corners are checked against Blender's frame loosely: they are foliage resampled twice
 // over, and their job is to catch a mirrored or rotated environment, which moves them by far more
@@ -35,10 +33,7 @@
 // `--engine CYCLES` for the first row and the default Eevee for the second):
 //
 //   Cycles, Lambert     left 0.3973   right 0.5406   the exact integral through Blender's AgX
-//   Eevee, Lambert      left 0.4281   right 0.4945   Eevee's world diffuse is an L1 harmonic: flatter
-//
-// Eevee's row is what the Material Preview shows and is not asserted: the difference is Blender's
-// first-order approximation of the source, measured, and not a term to match.
+//   Eevee, Lambert      left 0.4281   right 0.4945   the Material Preview: a first-order harmonic
 
 namespace
 {
@@ -55,16 +50,12 @@ namespace
 	constexpr int c_SkyRightX    = 374;
 	constexpr int c_SkyY         = 20;
 
-	// Irradiance of the source at the normal under each limb box, (+-0.632, 0, 0.775): the cosine
-	// integral of forest.exr in the map's 1/pi convention, as blender_probe.py prints it under
-	// `irradiance`. Bernini's +X is the screen's right.
-	constexpr float c_Albedo          = 0.18f;
-	constexpr float c_IrradianceRight = 1.4543f;
-	constexpr float c_IrradianceLeft  = 0.7371f;
+	constexpr float c_Albedo = 0.18f;
 
-	// Display luma Blender's Cycles rendered over the sphere's limbs and the backdrop corners.
-	constexpr float c_BlenderSphereLeft  = 0.3973f;
-	constexpr float c_BlenderSphereRight = 0.5406f;
+	// Display luma Blender's Eevee rendered over the sphere's limbs, and its Cycles over the
+	// backdrop corners, which the engine does not change.
+	constexpr float c_BlenderSphereLeft  = 0.4281f;
+	constexpr float c_BlenderSphereRight = 0.4945f;
 	constexpr float c_BlenderSkyLeft     = 0.5595f;
 	constexpr float c_BlenderSkyRight    = 0.2046f;
 
@@ -138,14 +129,8 @@ TEST_CASE("A matte sphere under forest sits at Blender's level", "[pbr][ibl][par
 	const auto skyLeft  = bgl::test::MeanColor(shot, c_SkyLeftX, c_SkyY, c_BoxSize, c_BoxSize);
 	const auto skyRight = bgl::test::MeanColor(shot, c_SkyRightX, c_SkyY, c_BoxSize, c_BoxSize);
 
-	const float expectedLeft =
-		bgl::test::EncodeSrgb(bgl::test::RunAgX(*gfx, c_Albedo * c_IrradianceLeft).r);
-	const float expectedRight =
-		bgl::test::EncodeSrgb(bgl::test::RunAgX(*gfx, c_Albedo * c_IrradianceRight).r);
-
 	INFO(
-		"sphere L/R " << sphereLeft.Luma() << "/" << sphereRight.Luma() << " expected "
-					  << expectedLeft << "/" << expectedRight << ", Blender's L/R "
+		"sphere L/R " << sphereLeft.Luma() << "/" << sphereRight.Luma() << " against Blender's L/R "
 					  << c_BlenderSphereLeft << "/" << c_BlenderSphereRight);
 	INFO(
 		"sky L/R " << skyLeft.Luma() << "/" << skyRight.Luma() << " against Blender's L/R "
@@ -156,7 +141,4 @@ TEST_CASE("A matte sphere under forest sits at Blender's level", "[pbr][ibl][par
 
 	CHECK(std::abs(sphereLeft.Luma() - c_BlenderSphereLeft) < c_LevelMargin);
 	CHECK(std::abs(sphereRight.Luma() - c_BlenderSphereRight) < c_LevelMargin);
-
-	CHECK(std::abs(sphereLeft.Luma() - expectedLeft) < c_LevelMargin);
-	CHECK(std::abs(sphereRight.Luma() - expectedRight) < c_LevelMargin);
 }
