@@ -40,7 +40,11 @@
         "renderScale": 1.0,
         "taaReconstructionWidth": 0.4,
         "environmentMap": "assets/Data/Authored/Environments/forest.benv",
-        "dataRoot": "assets/Data"
+        "dataRoot": "assets/Data",
+        "skyMipLevel": 3,
+        "backdropOpacity": 0.75,
+        "backdropGrey": 0.055,
+        "followView": true
     },
     "animationEditor": {
         "initialPreviewInstances": 16,
@@ -48,12 +52,20 @@
         "renderScale": 1.0,
         "taaReconstructionWidth": 0.4,
         "environmentMap": "assets/Data/Authored/Environments/forest.benv",
-        "dataRoot": "assets/Data"
+        "dataRoot": "assets/Data",
+        "skyMipLevel": 3,
+        "backdropOpacity": 0.75,
+        "backdropGrey": 0.055,
+        "followView": true
     },
     "thumbnails": {
         "dimension": 256,
         "initialInstances": 256,
         "environmentMap": "assets/Data/Authored/Environments/forest.benv",
-        "dataRoot": "assets/Data"
+        "dataRoot": "assets/Data",
+        "skyMipLevel": 3,
+        "backdropOpacity": 0.75,
+        "backdropGrey": 0.055,
+        "followView": true
     }
 }

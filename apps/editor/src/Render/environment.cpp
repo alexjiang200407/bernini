@@ -1,9 +1,9 @@
-// SkyboxDesc is passed by value, which needs the complete type; the tool sees only the name.
 #include "Render/environment.h"
 #include <assetlib/envmap.h>
 #include <bgl/IScene.h>
 #include <bgl/ISceneView.h>
-#include <bgl/SkyboxDesc.h>  // IWYU pragma: keep
+#include <bgl/SkyboxDesc.h>
+#include <bgl/glm.h>
 
 #include <QLoggingCategory>
 
@@ -28,7 +28,7 @@ namespace editor
 		const std::string&           benvPath,
 		const std::filesystem::path& dataRoot,
 		std::optional<float>         exposureOverride,
-		std::optional<uint32_t>      skyMipLevelOverride,
+		const SkyPresentation&       sky,
 		const char*                  who)
 	{
 		auto applied = AppliedEnvironment();
@@ -76,11 +76,14 @@ namespace editor
 			if (const auto skybox = scene->AddTextureAsset(std::move(env.maps.skybox));
 			    skybox.textureSlot)
 			{
-				view->SetSkyBox(
-					{ skybox,
-				      skyMipLevelOverride.value_or(env.skyMipLevel),
-				      1.0f,
-				      env.skyRotationY });
+				auto desc          = bgl::SkyboxDesc();
+				desc.skyboxCubeTex = skybox;
+				desc.mipLevel      = sky.mipLevel.value_or(env.skyMipLevel);
+				desc.rotationY     = env.skyRotationY;
+				desc.followsView   = sky.followsView;
+				desc.opacity       = sky.opacity;
+				desc.backdrop      = glm::vec3(sky.backdropGrey);
+				view->SetSkyBox(desc);
 				applied.skybox = skybox;
 			}
 		}
@@ -147,7 +150,7 @@ namespace editor
 			benvPath,
 			dataRoot,
 			binding.configured.exposureOverride,
-			binding.configured.skyMipLevelOverride,
+			binding.configured.sky,
 			who);
 
 		// After the new one is bound, never before: releasing first would leave the view naming a

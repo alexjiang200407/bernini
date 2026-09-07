@@ -14,6 +14,6 @@ public struct SurfaceParams
 {
     public float3 cameraPos;
     public float exposure;
-    /// (sin, cos) of the environment's rotation about the up axis.
-    public float2 envRotation;
+    /// World to environment space, the rotation the cubes are looked up through.
+    public float3x3 envRotation;
 };

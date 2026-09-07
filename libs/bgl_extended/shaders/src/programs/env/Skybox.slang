@@ -9,6 +9,11 @@ struct SkyboxData
     float exposure;
     float mipLevel;
 
+    // What the backdrop fades toward, and how much of it is sky. Presentation, so applied here in
+    // scene-linear ahead of the display curve, and never to the lighting.
+    float opacity;
+    float3 backdrop;
+
     // The sub-pixel NDC offsets clipToWorld and prevWorldToClip were built with. The covering
     // triangle is not itself jittered, so the ray direction carries this frame's offset and the
     // reprojection carries last frame's; both come back out below.
@@ -65,7 +70,7 @@ SkyboxPSOut PSMain(VSOut input)
 
     float3 color = gSkyboxData.cubeTex.SampleLevel(gSkyboxData.sampler, dir, gSkyboxData.mipLevel).rgb;
 
-    color = color * gSkyboxData.exposure;
+    color = lerp(gSkyboxData.backdrop, color * gSkyboxData.exposure, gSkyboxData.opacity);
 
     // w = 0: the sky is infinitely far, so a camera translation displaces it nowhere and only the
     // rotation between the two frames survives.

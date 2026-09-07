@@ -257,6 +257,21 @@ light the scene would be the gamma mistake in another costume.
 rotation would be lit from where the sky used to be. Nothing caught this for as long as it was wrong,
 because the only environment shipped has `skyRotationY` 0 — `EnvOrientation_test` is what catches it now.
 
+### A sky can follow the view, and fade
+
+`SkyboxDesc::followsView` attaches the environment to the camera instead of the world: the renderer
+composes the camera's rotation under the authored yaw each frame, so a direction in view space always
+looks up the same texel and the light arrives from the same screen direction however the camera
+orbits — lighting and backdrop alike, since both read the one rotation. It is what Blender's Material
+Preview does with World Space Lighting off, and what the asset previews want; a level viewport keeps
+the world locked. `SkyboxDesc::opacity` and `backdrop` fade the backdrop toward a scene-linear grey
+without touching the lighting, Blender's World Opacity. In the editor both are the viewport's
+`SkyPresentation` ([apps/editor/src/Render/environment.h](apps/editor/src/Render/environment.h)),
+defaulted to that look for the material and animation previews and the thumbnails, and set per
+viewport in `config.json` — `skyMipLevel`, `backdropOpacity`, `backdropGrey`, `followView`.
+`EnvOrientation_test` pins that a following sky keeps its lit side on screen from either side of the
+world, and that a fade leaves the sphere in front of it alone.
+
 ### Longitude runs the other way from Blender's
 
 `equirectToCube` reads longitude as `atan2(x, z)`, so standing inside the cube and turning towards
