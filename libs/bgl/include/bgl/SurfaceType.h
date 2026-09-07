@@ -23,9 +23,16 @@ namespace bgl
 	 */
 	enum class SurfaceTextureKind : uint8_t
 	{
+		/// Colour, sRGB-encoded, its alpha kept where the layer reads one.
 		kColor,
+
+		/// Linear numbers rather than a colour: occlusion, roughness, metallic, a mask.
 		kData,
+
+		/// A tangent-space normal map, its xy as `PbrSurface::normalXY` reads them.
 		kNormal,
+
+		/// Coverage alone, for a surface whose alpha lives apart from its colour.
 		kCoverage,
 	};
 
@@ -60,7 +67,7 @@ namespace bgl
 		SurfaceValueType type = SurfaceValueType::kFloat;
 
 		// From the start of the block, not of the record.
-		uint32_t offset = 0;
+		uint32_t byteOffset = 0;
 
 		// What a material that does not name this value gets. Components past the type's are zero.
 		glm::vec4 defaultValue = glm::vec4(0.0f);
@@ -76,11 +83,11 @@ namespace bgl
 		SurfaceTextureKind kind = SurfaceTextureKind::kColor;
 
 		// Which of the record's texture handles this one samples, and the value written into the
-		// field at `offset`.
+		// field at `byteOffset`.
 		uint32_t index = 0;
 
-		// From the start of the block, as SurfaceValue::offset is.
-		uint32_t offset = 0;
+		// From the start of the block, as SurfaceValue::byteOffset is.
+		uint32_t byteOffset = 0;
 	};
 
 	/**
@@ -90,8 +97,8 @@ namespace bgl
 	 */
 	struct SurfaceParams
 	{
-		// Bytes of block, past the engine's fixed part of the record.
-		uint32_t size = 0;
+		// The block's own size, past the engine's fixed part of the record.
+		uint32_t byteSize = 0;
 
 		std::vector<SurfaceValue>   values;
 		std::vector<SurfaceTexture> textures;

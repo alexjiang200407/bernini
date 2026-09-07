@@ -98,6 +98,8 @@ namespace bgl
 		if (decl == nullptr)
 			return;
 
+		out.reserve(out.size() + decl->getChildrenCount());
+
 		for (slang::DeclReflection* child : decl->getChildren())
 		{
 			const slang::DeclReflection::Kind kind = child->getKind();

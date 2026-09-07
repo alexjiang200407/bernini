@@ -198,8 +198,8 @@ namespace bgl
 		slang::TypeLayoutReflection* paramsLayout = ParamsLayoutOf(layout, params, surfaceName);
 
 		SurfaceType reflected;
-		reflected.name        = std::string(surfaceName);
-		reflected.params.size = static_cast<uint32_t>(paramsLayout->getStride());
+		reflected.name            = std::string(surfaceName);
+		reflected.params.byteSize = static_cast<uint32_t>(paramsLayout->getStride());
 
 		for (unsigned i = 0; i < paramsLayout->getFieldCount(); ++i)
 		{
@@ -207,7 +207,7 @@ namespace bgl
 			const char*                      fieldName = field->getName();
 			const std::string_view           spelling =
 				fieldName != nullptr ? std::string_view(fieldName) : std::string_view();
-			const uint32_t offset = static_cast<uint32_t>(field->getOffset());
+			const uint32_t byteOffset = static_cast<uint32_t>(field->getOffset());
 
 			slang::TypeReflection* type     = field->getTypeLayout()->getType();
 			const char*            typeName = type->getName();
@@ -225,10 +225,10 @@ namespace bgl
 				}
 
 				SurfaceTexture texture;
-				texture.name   = std::string(spelling);
-				texture.kind   = kind;
-				texture.index  = static_cast<uint32_t>(reflected.params.textures.size());
-				texture.offset = offset;
+				texture.name       = std::string(spelling);
+				texture.kind       = kind;
+				texture.index      = static_cast<uint32_t>(reflected.params.textures.size());
+				texture.byteOffset = byteOffset;
 				reflected.params.textures.emplace_back(std::move(texture));
 				continue;
 			}
@@ -236,7 +236,7 @@ namespace bgl
 			SurfaceValue value;
 			value.name         = std::string(spelling);
 			value.type         = ValueTypeOf(type, surfaceName, spelling);
-			value.offset       = offset;
+			value.byteOffset   = byteOffset;
 			value.defaultValue = DefaultOf(field->getVariable(), value.type);
 			reflected.params.values.emplace_back(std::move(value));
 		}

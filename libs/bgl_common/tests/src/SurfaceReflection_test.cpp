@@ -162,18 +162,18 @@ TEST_CASE("A surface's parameters are reflected at their target's offsets", "[su
 	CHECK(surface.name == "Gate");
 	// Registration's to assign, not reflection's.
 	CHECK(surface.kind == MaterialType::kInvalid);
-	CHECK(surface.params.size == paramsSize);
+	CHECK(surface.params.byteSize == paramsSize);
 
 	REQUIRE(surface.params.values.size() == 4u);
 
 	CHECK(surface.params.values[0].name == "power");
 	CHECK(surface.params.values[0].type == SurfaceValueType::kFloat);
-	CHECK(surface.params.values[0].offset == at.power);
+	CHECK(surface.params.values[0].byteOffset == at.power);
 	CHECK(surface.params.values[0].defaultValue.x == 2.0f);
 
 	CHECK(surface.params.values[1].name == "tint");
 	CHECK(surface.params.values[1].type == SurfaceValueType::kFloat3);
-	CHECK(surface.params.values[1].offset == at.tint);
+	CHECK(surface.params.values[1].byteOffset == at.tint);
 	CHECK(surface.params.values[1].defaultValue.x == 0.2f);
 	CHECK(surface.params.values[1].defaultValue.y == 0.6f);
 	CHECK(surface.params.values[1].defaultValue.z == 1.0f);
@@ -182,12 +182,12 @@ TEST_CASE("A surface's parameters are reflected at their target's offsets", "[su
 
 	CHECK(surface.params.values[2].name == "quad");
 	CHECK(surface.params.values[2].type == SurfaceValueType::kFloat4);
-	CHECK(surface.params.values[2].offset == at.quad);
+	CHECK(surface.params.values[2].byteOffset == at.quad);
 	CHECK(surface.params.values[2].defaultValue == glm::vec4(1.0f, 2.0f, 3.0f, 4.0f));
 
 	// No attribute is zero, which is also what a material that sets nothing writes.
 	CHECK(surface.params.values[3].name == "unset");
-	CHECK(surface.params.values[3].offset == at.unset);
+	CHECK(surface.params.values[3].byteOffset == at.unset);
 	CHECK(surface.params.values[3].defaultValue == glm::vec4(0.0f));
 
 	REQUIRE(surface.params.textures.size() == 2u);
@@ -195,12 +195,12 @@ TEST_CASE("A surface's parameters are reflected at their target's offsets", "[su
 	CHECK(surface.params.textures[0].name == "base");
 	CHECK(surface.params.textures[0].kind == SurfaceTextureKind::kColor);
 	CHECK(surface.params.textures[0].index == 0u);
-	CHECK(surface.params.textures[0].offset == at.base);
+	CHECK(surface.params.textures[0].byteOffset == at.base);
 
 	CHECK(surface.params.textures[1].name == "bumps");
 	CHECK(surface.params.textures[1].kind == SurfaceTextureKind::kNormal);
 	CHECK(surface.params.textures[1].index == 1u);
-	CHECK(surface.params.textures[1].offset == at.bumps);
+	CHECK(surface.params.textures[1].byteOffset == at.bumps);
 }
 
 // Each of the contract's four slot types is its own kind, and nothing but the declared type says
