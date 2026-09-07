@@ -4,7 +4,7 @@ project(BerniniEngine)
 # This checkout, whether or not it is the top of the build. CMAKE_SOURCE_DIR is the top-level
 # source directory of the *build*, so under a game's add_subdirectory it is the game's root and
 # every path built from it points at a file that is not there. Nothing below may name it; the
-# scripts_tests suite fails the build's own tests if one does.
+# scripts_tests suite fails the build's own tests if one does. See docs/embedding.md.
 set(BERNINI_ROOT "${CMAKE_CURRENT_SOURCE_DIR}")
 
 # Group targets into folders for IDE generators (Visual Studio / Xcode).
@@ -77,14 +77,25 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 add_compile_definitions($<$<CONFIG:Debug>:BERNINI_GPU_DEBUG>)
 
 
-if(CMAKE_MAKE_PROGRAM MATCHES "msbuild|MSBUILD")
-    set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin/$<CONFIG>)
-else()
-    set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
-endif()
+# Embedded, these are the consumer's to choose and a `set()` here would not reach its executable
+# anyway -- so the engine stages its shaders and assets into whatever the consumer picked. It has
+# to have picked something: an unset runtime directory stages them to a relative path, which is a
+# build that succeeds and a binary that cannot find its shaders.
+if (PROJECT_IS_TOP_LEVEL)
+    if(CMAKE_MAKE_PROGRAM MATCHES "msbuild|MSBUILD")
+        set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin/$<CONFIG>)
+    else()
+        set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
+    endif()
 
-set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
-set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
+    set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
+    set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
+elseif (NOT CMAKE_RUNTIME_OUTPUT_DIRECTORY)
+    message(FATAL_ERROR
+        "CMAKE_RUNTIME_OUTPUT_DIRECTORY is unset. Bernini stages its shaders and assets there and "
+        "your executable has to land in the same directory to find them at runtime, so set it "
+        "before add_subdirectory(). See docs/embedding.md.")
+endif()
 
 file(GLOB_RECURSE ASSET_FILES CONFIGURE_DEPENDS "${BERNINI_ROOT}/assets/*")
 
@@ -124,6 +135,17 @@ set_target_properties(KTX::ktx PROPERTIES
 # gamelib (the runtime) and examples/util (the SDL translation) name the targets.
 find_package(RmlUi CONFIG REQUIRED)
 
+# None of these three is namespaced, and BUILD_TESTS and BUILD_COVERAGE are names a consuming
+# project is likely to have taken for its own suites and its own coverage -- the second would
+# otherwise fail the engine's configure outright under any compiler but clang. Scoped to this
+# directory and everything under it, so whatever the consumer set still reaches the consumer's
+# targets and never ours.
+if (NOT PROJECT_IS_TOP_LEVEL)
+    set(BUILD_TESTS OFF)
+    set(BERNINI_BUILD_EXAMPLES OFF)
+    set(BUILD_COVERAGE OFF)
+endif()
+
 add_subdirectory(libs/core)
 add_subdirectory(libs/assetlib_structs)
 add_subdirectory(libs/bgl)
@@ -137,11 +159,15 @@ if (TARGET bgl_extended)
     add_subdirectory(libs/gamelib)
 endif()
 
-find_package(Qt6 QUIET COMPONENTS Core Gui Widgets)
-if (Qt6_FOUND AND TARGET bgl_extended)
-    add_subdirectory(apps/editor)
-elseif (NOT Qt6_FOUND)
-    message(STATUS "Qt6 not found - skipping editor (set CMAKE_PREFIX_PATH to your Qt install to enable it)")
+# Qt is not a vcpkg dependency, so an embedded build would look for one the consumer never asked
+# for and occasionally find it.
+if (PROJECT_IS_TOP_LEVEL)
+    find_package(Qt6 QUIET COMPONENTS Core Gui Widgets)
+    if (Qt6_FOUND AND TARGET bgl_extended)
+        add_subdirectory(apps/editor)
+    elseif (NOT Qt6_FOUND)
+        message(STATUS "Qt6 not found - skipping editor (set CMAKE_PREFIX_PATH to your Qt install to enable it)")
+    endif()
 endif()
 
 if (BERNINI_BUILD_EXAMPLES AND TARGET bgl_extended)

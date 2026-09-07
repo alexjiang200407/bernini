@@ -21,19 +21,28 @@ function(_bernini_write_cache_wrapper ccache out_var)
     set(cache_dir "${CMAKE_BINARY_DIR}/compiler-cache")
     file(MAKE_DIRECTORY "${cache_dir}")
 
+    # The build directory is the consumer's when the engine is embedded, and a consumer that calls
+    # this function too would write its own wrapper over ours -- one file, one basedir, last write
+    # wins, and the loser compiles uncached with nothing on screen to say so. Naming the wrapper
+    # after the basedir it carries is what makes two callers two files.
+    string(MD5 basedir_key "${BERNINI_ROOT}")
+    string(SUBSTRING "${basedir_key}" 0 8 basedir_key)
+
     # base_dir lets ccache rewrite absolute paths under the checkout into relative ones, which is
-    # what gives two worktrees of the same commit a chance of sharing an entry. It is not enough on
-    # its own for a debug build -- the working directory reaches the object through DWARF, and
-    # hashing it is what keeps a cached object's debug info pointing at the tree it was built from.
+    # what gives two worktrees of the same commit a chance of sharing an entry -- and what makes a
+    # game compiling the engine into its own build tree a hit rather than a full build. It is not
+    # enough on its own for a debug build -- the working directory reaches the object through DWARF,
+    # and hashing it is what keeps a cached object's debug info pointing at the tree it was built
+    # from.
     if (WIN32)
-        set(wrapper "${cache_dir}/ccache-wrapper.bat")
+        set(wrapper "${cache_dir}/ccache-wrapper-${basedir_key}.bat")
         file(WRITE "${wrapper}"
             "@echo off\r\n"
             "set CCACHE_SLOPPINESS=pch_defines,time_macros\r\n"
             "set CCACHE_BASEDIR=${BERNINI_ROOT}\r\n"
             "\"${ccache}\" %*\r\n")
     else()
-        set(wrapper "${cache_dir}/ccache-wrapper.sh")
+        set(wrapper "${cache_dir}/ccache-wrapper-${basedir_key}.sh")
         file(WRITE "${wrapper}"
             "#!/bin/sh\n"
             "CCACHE_SLOPPINESS=pch_defines,time_macros\n"
