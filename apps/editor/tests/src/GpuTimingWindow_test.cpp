@@ -84,7 +84,7 @@ TEST_CASE("A window on screen asks for timing, and stops asking when it closes",
 	CHECK_FALSE(wanted.at(1).at(0).toBool());
 }
 
-TEST_CASE("An export writes the numbers and the picture under one stem", "[gputiming]")
+TEST_CASE("An export writes every frame the graph holds, and nothing else", "[gputiming]")
 {
 	editor::GpuTimingWindow window;
 	window.SetSource("Level Editor");
@@ -93,27 +93,18 @@ TEST_CASE("An export writes the numbers and the picture under one stem", "[gputi
 	const QTemporaryDir directory;
 	REQUIRE(directory.isValid());
 
-	const QString stem = window.Export(QDir(directory.path()));
-	REQUIRE(!stem.isEmpty());
+	const QString file = window.Export(QDir(directory.path()));
+	REQUIRE(!file.isEmpty());
 
 	const QDir written(directory.path());
-	CHECK(QFile::exists(written.filePath(stem + ".csv")));
+	REQUIRE(QFile::exists(written.filePath(file)));
 
-	// Vector, so the drawing zooms: a spike two pixels wide among six hundred frames is the thing
-	// somebody opens the file to look at. QSvgGenerator reports nothing, so the file is the check.
-	QFile drawing(written.filePath(stem + ".svg"));
-	REQUIRE(drawing.open(QIODevice::ReadOnly | QIODevice::Text));
-
-	const QString svg = QString::fromUtf8(drawing.readAll());
-	CHECK(svg.contains("<svg"));
-	CHECK(svg.contains("viewBox"));
-
-	// The bands are drawn shapes rather than a raster the generator embedded whole.
-	CHECK(svg.contains("<path"));
-	CHECK_FALSE(svg.contains("<image"));
+	// Nothing else: the picture is on screen, and a drawing of it in the folder would be a second
+	// thing to keep in step for a reader who cannot ask it anything.
+	CHECK(written.entryList(QDir::Files).size() == 1);
 
 	// The CSV is the history, not a summary of it: one row per frame recorded, under a header.
-	QFile csv(written.filePath(stem + ".csv"));
+	QFile csv(written.filePath(file));
 	REQUIRE(csv.open(QIODevice::ReadOnly | QIODevice::Text));
 	CHECK(QString::fromUtf8(csv.readAll()).split('\n', Qt::SkipEmptyParts).size() == 31);
 }

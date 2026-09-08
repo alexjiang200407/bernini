@@ -253,16 +253,16 @@ Three things about it are decisions rather than detail:
   resolve, and on Metal an encoder ended at every pass boundary, so the toggle is off by default —
   and a window that opened empty behind a menu item nobody had found would read as broken.
 
-**Export…** writes both halves of one capture beside `editor.log`, under a stamped stem:
-`gpu_timings_<stamp>.csv` — one row per sampled frame, one column per pass, a total, and an empty
-field where a pass did not run in that frame — and `gpu_timings_<stamp>.svg`, the graph as it stands.
+**Export CSV…** writes `gpu_timings_<stamp>.csv` beside `editor.log`: one row per sampled frame, one
+column per pass, a total, and an empty field where a pass did not run in that frame. There is no file
+dialog — a predictable path is what makes the capture reachable by whoever, or whatever, reads the
+log next.
 
-The drawing is **vector**, because the thing worth looking at is a spike two pixels wide among six
-hundred frames. It costs nothing extra: `QSvgGenerator` is a `QPaintDevice`, so the file is the same
-`PaintPassGraph` call the window paints with rather than a second drawing of the same numbers, and
-every axis label, pass name and figure lands in it as text a reader — or a tool — can select. There
-is no file dialog: a predictable path is what makes the capture reachable by whoever, or whatever,
-reads the log next.
+**The picture is not exported, deliberately.** A drawing of the chart was built — first a PNG, then
+an SVG through `QSvgGenerator` — and removed: the graph is already on screen, and a static copy of it
+answers no question the window does not. What the numbers buy that a picture cannot is being asked
+something, by a spreadsheet or by an agent. A capture of the *chart* comes back if it can be
+interactive.
 
 **Why this and not Tracy GPU zones.** Tracy would give the timeline for free and `tracy-csvexport`
 already exports it — but the frame loop deliberately carries no zones (§ Not zones), and the GUI is

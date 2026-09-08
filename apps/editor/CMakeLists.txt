@@ -1,8 +1,4 @@
-# Svg is QSvgGenerator alone: the GPU timing export paints through it, so the file it writes is the
-# same QPainter call the window paints with rather than a second drawing of the chart. Required
-# rather than optional -- an export that exists on some machines is a feature nobody can rely on,
-# and qtsvg ships with every standard Qt distribution.
-find_package(Qt6 CONFIG REQUIRED COMPONENTS Core Gui Widgets Svg)
+find_package(Qt6 CONFIG REQUIRED COMPONENTS Core Gui Widgets)
 
 message(STATUS "Building Bernini editor")
 message(STATUS "Qt6 version: ${Qt6_VERSION}")
@@ -81,7 +77,6 @@ target_link_libraries(editor_lib
 		assetlib
 		gamelib
 		Qt6::Widgets
-		Qt6::Svg
 		QtNodes::QtNodes
 		nlohmann_json::nlohmann_json
 )

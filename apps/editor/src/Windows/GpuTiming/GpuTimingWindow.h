@@ -47,12 +47,13 @@ namespace editor
 		AddFrames(const std::vector<bgl::PassTimings>& frames);
 
 		/**
-		 * Writes the history into `directory` as `gpu_timings_<stamp>.csv` and `.svg` -- the numbers
-		 * for a spreadsheet or an agent, and the graph as it stands for a person. Vector, so a
-		 * two-pixel spike among six hundred frames is something a reader can zoom into.
+		 * Writes the history into `directory` as `gpu_timings_<stamp>.csv`: every frame the graph
+		 * holds, for a spreadsheet or an agent. The picture is not exported -- it is on screen, and
+		 * a drawing of it that cannot be interrogated is worth nothing a reader does not already
+		 * have.
 		 *
-		 * @return the stem both files share, or an empty string when nothing was recorded or a file
-		 *         could not be written.
+		 * @return the file written, or an empty string when nothing was recorded or it could not be
+		 *         written.
 		 */
 		[[nodiscard]] QString
 		Export(const QDir& directory);
