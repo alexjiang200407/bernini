@@ -38,7 +38,7 @@ TEST_CASE("An empty transport is inert", "[animation]")
 
 	CHECK_FALSE(transport.HasClips());
 	CHECK(transport.GetTimeSeconds() == 0.0f);
-	CHECK(transport.GetCurrentFrame() == 0.0f);
+	CHECK_FALSE(transport.GetCurrentFrame().has_value());
 	CHECK(transport.GetPeriodSeconds() == 0.0f);
 
 	transport.Play();
@@ -250,8 +250,9 @@ TEST_CASE("A window has no frame of its own, and steps in the clip's interval", 
 	auto transport = Loaded(/*loop*/ true);
 	transport.SetTransitionWindow(10.0f, 11.0f);
 
-	// Two slots are live over a fade and neither one's frame is the playhead.
-	CHECK(transport.GetCurrentFrame() == 0.0f);
+	// Two slots are live over a fade and neither one's frame is the playhead. Empty rather than
+	// zero, which is a frame the clip really has.
+	CHECK_FALSE(transport.GetCurrentFrame().has_value());
 
 	// 10 Hz, so a frame is 0.1 s of the window's seconds.
 	transport.StepFrames(3);

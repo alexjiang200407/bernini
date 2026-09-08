@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstdint>
+#include <optional>
 #include <string>
 #include <vector>
 namespace editor
@@ -87,7 +88,7 @@ namespace editor
 		void
 		Pause() noexcept;
 
-		/** Multiplies wall time in Advance. Negative plays backwards: a loop wraps, a one-shot parks at zero. */
+		/** Multiplies wall time in Advance. Negative plays backwards: a loop wraps, a one-shot parks at zero, a transition window at its start. */
 		void
 		SetSpeed(float speed) noexcept;
 
@@ -121,11 +122,12 @@ namespace editor
 		GetTimeSeconds() const noexcept;
 
 		/**
-		 * The fractional frame the shader samples at GetTimeSeconds. Zero inside a transition
-		 * window: two slots are live over a fade and neither one's frame is the playhead, so there
-		 * is no answer to give rather than a wrong one.
+		 * The fractional frame the shader samples at GetTimeSeconds, or nothing inside a transition
+		 * window: two slots are live over a fade and neither one's frame is the playhead. Empty
+		 * rather than zero because zero is a frame -- the first one -- so a caller that forgot the
+		 * window would read a plausible number instead of no number.
 		 */
-		[[nodiscard]] float
+		[[nodiscard]] std::optional<float>
 		GetCurrentFrame() const noexcept;
 
 		/**

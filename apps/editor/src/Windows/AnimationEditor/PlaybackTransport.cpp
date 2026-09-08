@@ -4,6 +4,7 @@
 #include <cmath>
 #include <core/err/util.h>
 #include <cstdint>
+#include <optional>
 #include <utility>
 #include <vector>
 
@@ -157,7 +158,7 @@ namespace editor
 		// take a modulo by zero -- the importer never marks one looping, but nothing here checks.
 		const int cycle = std::max(1, static_cast<int>(clip.frameCount) - 1);
 
-		int frame = static_cast<int>(std::lround(GetCurrentFrame())) + frames;
+		int frame = static_cast<int>(std::lround(GetCurrentFrame().value())) + frames;
 		if (clip.loop)
 			frame = ((frame % cycle) + cycle) % cycle;
 		else
@@ -184,11 +185,11 @@ namespace editor
 		return m_Time;
 	}
 
-	float
+	std::optional<float>
 	PlaybackTransport::GetCurrentFrame() const noexcept
 	{
 		if (!HasClips() || m_InWindow)
-			return 0.0f;
+			return std::nullopt;
 
 		// The shader's ClipFrames with phase 0 and rate 1; m_Time is already in the clip's
 		// domain, so the wrap/clamp below only guards the exact period boundary.
