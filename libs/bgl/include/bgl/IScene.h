@@ -18,6 +18,7 @@
 #include <bgl/types/LoosePbrMaterialDesc.h>
 #include <bgl/types/PbrMaterialDesc.h>
 #include <bgl/types/SceneDesc.h>
+#include <bgl/types/SurfaceMaterialDesc.h>
 #include <core/ref/Ref.h>
 #include <core/ref/SharedRef.h>
 #include <cstdint>
@@ -244,6 +245,18 @@ namespace bgl
 		CreateLoosePbrMaterial(const LoosePbrMaterialDesc& desc) = 0;
 
 		/**
+		 * Creates a material drawn by one of the surfaces the client registered, in the same arena as
+		 * CreatePbrMaterial. Its `MaterialType` is the reserved kind that surface was given, which is
+		 * what decides the pipelines it draws through.
+		 *
+		 * @throws SceneError if no registered surface has that name, if a value or texture names a
+		 *         field the surface does not declare, or if the layer is kHashed -- hashed alpha
+		 *         needs texel counts the surface reader does not give, so no game row draws it.
+		 */
+		virtual MaterialHandle
+		CreateSurfaceMaterial(const SurfaceMaterialDesc& desc) = 0;
+
+		/**
 		 * Rewrites a material's contents in place, keeping its handle and its bytes in the arena.
 		 *
 		 * A submesh stores the material's *byte offset*, so every submesh bound to `material` picks
@@ -259,6 +272,14 @@ namespace bgl
 		/** The loose (per-channel) counterpart of UpdatePbrMaterial. */
 		virtual void
 		UpdateLoosePbrMaterial(MaterialHandle material, const LoosePbrMaterialDesc& desc) = 0;
+
+		/**
+		 * The surface counterpart of UpdatePbrMaterial. The surface itself cannot change -- it is
+		 * what the record's kind and its size were fixed by -- so `desc.surface` must name the one
+		 * the material was created with.
+		 */
+		virtual void
+		UpdateSurfaceMaterial(MaterialHandle material, const SurfaceMaterialDesc& desc) = 0;
 
 		/**
 		 * Destroys a material created by CreatePbrMaterial or CreateLoosePbrMaterial, freeing its

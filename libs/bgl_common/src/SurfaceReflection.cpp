@@ -66,12 +66,11 @@ namespace bgl
 			return found;
 		}
 
-		// The parameters as this target reads them back, and only this one: a raw load reconstructs
-		// its type under the buffer-element rules of the backend it was emitted for, and those
-		// differ -- MSL aligns a float3 to 16 where the scalar rules leave it at 4. bgl_idlgen
-		// mirrors its own structs per backend for the same reason, and refuses a committed one
-		// where the two disagree. A surface is reflected rather than mirrored, so it needs no such
-		// rule and gets no say in the layout.
+		// A record is read with RawBuffer.Load<T>, which reconstructs its type from scalar loads,
+		// so these are the offsets under the scalar rules -- the same ones bgl_idlgen mirrors every
+		// other record under. The caller's session decides: on a DXIL target this is that layout,
+		// on a Metal one it is MSL's, which belongs to a structured buffer's element and not to a
+		// raw load. See the header.
 		slang::TypeLayoutReflection*
 		ParamsLayoutOf(
 			slang::ProgramLayout*  layout,

@@ -14,7 +14,10 @@ struct TintSurface : ISurfaceSource
 {
     typealias MaterialParams = TintParams;
 
-    static float Coverage<R : IMaterialReader>(R reader, TintParams params) { return params.tint.a; }
+    // Coverage is only read on a tested layer, and it is the one thing a surface answers with a
+    // number rather than a sample -- so this varies across the mesh without a texture to vary by,
+    // which is what makes a cutout visible at all.
+    static float Coverage<R : IMaterialReader>(R reader, TintParams params) { return params.tint.a * step(0.5, frac(reader.Uv().x * 8.0)); }
 
     static PbrSurface Evaluate<R : IMaterialReader>(R reader, TintParams params)
     {
