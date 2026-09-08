@@ -43,6 +43,9 @@ namespace bgl
 		void
 		AddSourceModule(const SlangSourceModule& sourceModule) noexcept override;
 
+		[[nodiscard]] std::optional<ReflectedSurface>
+		ReflectSurfaceModule(std::string_view moduleName, std::string_view surfaceName) override;
+
 		[[nodiscard]] MTL::Device*
 		GetMTLDevice() const noexcept
 		{

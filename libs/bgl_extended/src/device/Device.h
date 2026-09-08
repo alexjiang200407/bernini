@@ -9,7 +9,9 @@
 #include <core/ref/RefCounter.h>
 #include <core/ref/SharedRef.h>
 #include <cstdint>
+#include <optional>
 #include <string>
+#include <string_view>
 
 namespace bgl
 {
@@ -23,6 +25,7 @@ namespace bgl
 	class ITimestampHeap;
 	struct ShaderDesc;
 	struct SlangSourceModule;
+	struct ReflectedSurface;
 	struct MeshletPipelineDesc;
 	struct ComputePipelineDesc;
 	struct CommandListDesc;
@@ -57,6 +60,19 @@ namespace bgl
 		 */
 		virtual void
 		AddSourceModule(const SlangSourceModule& sourceModule) noexcept = 0;
+
+		/**
+		 * The surface a game's module declares, read through this device's compiler and so at the
+		 * offsets this backend will read a record at.
+		 *
+		 * Empty when the module is not a surface at all -- it does not import the contract.
+		 *
+		 * @pre no compile is in flight; runs on the thread that will register the surface.
+		 * @throws std::runtime_error if the module does not compile, or imports the contract and
+		 *         declares no single surface.
+		 */
+		[[nodiscard]] virtual std::optional<ReflectedSurface>
+		ReflectSurfaceModule(std::string_view moduleName, std::string_view surfaceName) = 0;
 
 		[[nodiscard]]
 		virtual core::SharedRef<IComputePipeline>

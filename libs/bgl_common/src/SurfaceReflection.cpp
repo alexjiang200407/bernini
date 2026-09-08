@@ -8,6 +8,7 @@
 #include <algorithm>
 #include <core/err/util.h>
 #include <cstdint>
+#include <optional>
 #include <slang-com-ptr.h>
 #include <slang.h>
 #include <string>
@@ -27,13 +28,11 @@ namespace bgl
 			slang::ProgramLayout* layout,
 			std::string_view      surfaceName)
 		{
+			// Null when the module never imported the contract, which is how a module that is not a
+			// surface at all says so.
 			slang::TypeReflection* iface = layout->findTypeByName(c_SurfaceInterface);
 			if (iface == nullptr)
-			{
-				core::throw_runtime_error(
-					"surface '{}': the module does not import bgl.SurfaceSource",
-					surfaceName);
-			}
+				return nullptr;
 
 			std::vector<slang::DeclReflection*> structs;
 			CollectStructDecls(slangModule->getModuleReflection(), structs);
@@ -167,7 +166,7 @@ namespace bgl
 		}
 	}
 
-	SurfaceType
+	std::optional<ReflectedSurface>
 	ReflectSurface(slang::IModule* slangModule, std::string_view surfaceName, SlangInt targetIndex)
 	{
 		Slang::ComPtr<slang::IBlob> diagnostics;
@@ -184,8 +183,10 @@ namespace bgl
 		}
 
 		slang::TypeReflection* surface = FindSurfaceStruct(slangModule, layout, surfaceName);
+		if (surface == nullptr)
+			return std::nullopt;
 
-		const std::string      paramsName = FullTypeName(surface) + ".Params";
+		const std::string      paramsName = FullTypeName(surface) + ".MaterialParams";
 		slang::TypeReflection* params     = layout->findTypeByName(paramsName.c_str());
 		if (params == nullptr)
 		{
@@ -241,6 +242,6 @@ namespace bgl
 			reflected.params.values.emplace_back(std::move(value));
 		}
 
-		return reflected;
+		return ReflectedSurface{ std::move(reflected), FullTypeName(surface) };
 	}
 }

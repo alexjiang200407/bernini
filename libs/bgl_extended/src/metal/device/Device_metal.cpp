@@ -81,6 +81,12 @@ namespace bgl
 			m_ShaderCache->FoldSource(sourceModule.name, sourceModule.source);
 	}
 
+	std::optional<ReflectedSurface>
+	Device::ReflectSurfaceModule(std::string_view moduleName, std::string_view surfaceName)
+	{
+		return m_Slang.ReflectSurface(moduleName, surfaceName);
+	}
+
 	void
 	Device::ReleaseSlangSession() noexcept
 	{
