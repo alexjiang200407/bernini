@@ -42,6 +42,19 @@ doc disagrees, trust the header, then fix this doc.
   reflected and addressed by name, the elements the handle points at are compile-time-proven. Expect
   the guarantees to change at that boundary.
 
+* **A third regime, for a struct the engine does not own.** A game surface declares its parameters
+  in its own Slang module, so there is nothing to generate a mirror from at build time:
+  `ReflectSurface` ([SurfaceReflection.h](libs/bgl_common/include/bgl_common/SurfaceReflection.h))
+  walks the parameter struct's *structured-buffer* element layout instead, and the packer writes
+  each field by the offset that walk returned. It is the cbuffer regime's reflection applied to the
+  IDL regime's layout, and it exists because the third choice — a manifest the game commits beside
+  its shader — is a second artefact that can drift from the code that reads it.
+
+  The layout it returns belongs to **one target**, and the two disagree: MSL aligns a `float3` to
+  16 where the scalar rules leave it at 4, which is why `bgl_idlgen` refuses a `float3` in a
+  committed mirror outright ([idlgen](idlgen.md)). A surface is reflected once per device instead of
+  once per build, so it may declare one.
+
 * **Layout is reflected once per PSO and shared; the mirror is per kernel.** `ReflectLayoutFromSlang`
   ([SlangReflection.h](libs/bgl_common/include/bgl_common/SlangReflection.h)) walks Slang's cbuffer type layout
   into `ReflectedLayout`, a POD tree held by `shared_ptr<const>`. Carrying no Slang pointers is what

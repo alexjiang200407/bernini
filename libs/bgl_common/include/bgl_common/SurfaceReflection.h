@@ -1,0 +1,37 @@
+#pragma once
+#include <bgl/SurfaceType.h>
+
+#include <slang.h>
+#include <string_view>
+
+namespace bgl
+{
+	/**
+	 * Reads the one surface out of a game's compiled module: the struct conforming to
+	 * `ISurfaceSource`, its `Params` fields at the offsets a record holds them at, the texture
+	 * fields among them by their declared type, and the defaults on the values that are left.
+	 *
+	 * The layout is the one this session's target reconstructs, and the backends disagree: MSL
+	 * aligns a float3 to 16 where the scalar rules leave it at 4. So a surface is reflected once
+	 * per device rather than once per build, and what a record holds is whatever
+	 * `RawBuffer.Load<Params>` reads back on the backend that will draw it.
+	 *
+	 * `SurfaceType::kind` is left invalid; registration assigns it.
+	 *
+	 * @param slangModule A module already loaded into the session that will compile the surface.
+	 * @param surfaceName What a material names to reach this surface, normally the module file's
+	 *        stem. Not a material's own name: a material names the surface it draws through.
+	 * @param targetIndex Which of the session's targets the layout is read for.
+	 * @return The reflected surface.
+	 * @throws std::runtime_error if the module does not import the contract, holds no conforming
+	 *         struct or more than one, declares more textures than a record carries, declares a
+	 *         parameter of a type the engine cannot pack, or does not reflect at all. Not
+	 *         `bgl::ApiError`: that type is the renderer's to throw, and registration is the seam
+	 *         where a bad module becomes one.
+	 */
+	SurfaceType
+	ReflectSurface(
+		slang::IModule*  slangModule,
+		std::string_view surfaceName,
+		SlangInt         targetIndex = 0);
+}
