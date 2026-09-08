@@ -47,8 +47,9 @@ namespace editor
 		AddFrames(const std::vector<bgl::PassTimings>& frames);
 
 		/**
-		 * Writes the history into `directory` as `gpu_timings_<stamp>.csv` and `.png` -- the numbers
-		 * for a spreadsheet or an agent, and the graph as it stands for a person.
+		 * Writes the history into `directory` as `gpu_timings_<stamp>.csv` and `.svg` -- the numbers
+		 * for a spreadsheet or an agent, and the graph as it stands for a person. Vector, so a
+		 * two-pixel spike among six hundred frames is something a reader can zoom into.
 		 *
 		 * @return the stem both files share, or an empty string when nothing was recorded or a file
 		 *         could not be written.

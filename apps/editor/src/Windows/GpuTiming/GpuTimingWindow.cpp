@@ -7,14 +7,16 @@
 #include <QDateTime>
 #include <QDir>
 #include <QFile>
+#include <QFileInfo>
 #include <QHBoxLayout>
 #include <QHideEvent>
-#include <QImage>
 #include <QLabel>
 #include <QPainter>
 #include <QPushButton>
+#include <QRect>
 #include <QShowEvent>
 #include <QString>
+#include <QSvgGenerator>
 #include <QTextStream>
 #include <QVBoxLayout>
 #include <QWidget>
@@ -26,8 +28,9 @@
 
 namespace
 {
-	// Big enough that every band and its legend row is legible in the file, whatever size the window
-	// happened to be when the export was asked for.
+	// The exported drawing is vector, so this is the shape the chart is laid out in rather than a
+	// resolution -- the text metrics and band geometry are computed against it, and a reader zooms
+	// as far into it as they like.
 	constexpr int c_ExportWidth  = 1400;
 	constexpr int c_ExportHeight = 560;
 }
@@ -84,7 +87,7 @@ namespace editor
 				return;
 			}
 
-			qInfo() << "GPU pass timings written to" << here.filePath(stem) + ".{csv,png}";
+			qInfo() << "GPU pass timings written to" << here.filePath(stem) + ".{csv,svg}";
 		});
 
 		UpdateStatus();
@@ -133,13 +136,22 @@ namespace editor
 		QTextStream(&csv) << PassHistoryCsv(m_History);
 		csv.close();
 
-		QImage image(c_ExportWidth, c_ExportHeight, QImage::Format_ARGB32);
+		const QRect frame(0, 0, c_ExportWidth, c_ExportHeight);
+
+		QSvgGenerator drawing;
+		drawing.setFileName(directory.filePath(stem + ".svg"));
+		drawing.setSize(frame.size());
+		drawing.setViewBox(frame);
+		drawing.setTitle("Bernini GPU pass timings");
+		drawing.setDescription(QString("%1, %2 frames").arg(m_Source).arg(m_History.SampleCount()));
+
 		{
-			QPainter painter(&image);
-			PaintPassGraph(painter, image.rect(), m_History, m_Graph->Marked(), palette());
+			QPainter painter(&drawing);
+			PaintPassGraph(painter, frame, m_History, m_Graph->Marked(), palette());
 		}
 
-		return image.save(directory.filePath(stem + ".png")) ? stem : QString();
+		// QSvgGenerator reports nothing, so what says the drawing was written is the file.
+		return QFileInfo(drawing.fileName()).size() > 0 ? stem : QString();
 	}
 
 	void

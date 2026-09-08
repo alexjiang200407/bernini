@@ -6,6 +6,8 @@
 #include <QPainter>
 #include <QPalette>
 #include <QRect>
+#include <QSvgGenerator>
+#include <QSvgRenderer>
 #include <bgl/PassTiming.h>
 #include <catch2/catch_test_macros.hpp>
 #include <cmath>
@@ -22,7 +24,8 @@
 
 namespace
 {
-	constexpr auto c_Got = "assets/golden/gpu_timing_graph.got.png";
+	constexpr auto c_Got    = "assets/golden/gpu_timing_graph.got.png";
+	constexpr auto c_GotSvg = "assets/golden/gpu_timing_graph.got.svg";
 
 	// A frame whose Forward cost swings, so the picture has a spike in it to read.
 	[[nodiscard]] bgl::PassTimings
@@ -101,6 +104,42 @@ TEST_CASE("A history of frames draws its bands", "[gputiming]")
 	// drew every band in the same colour, could not reach this.
 	CHECK(DistinctColours(image) > 7);
 	CHECK(HasBandColour(image));
+}
+
+// What the export writes is the same call painting a vector device, so the drawing zooms instead of
+// blurring. Rendered back here because QSvgGenerator reports nothing at all: a file that parses and
+// draws the bands is the only evidence the export produced a chart rather than an empty canvas.
+TEST_CASE("The drawing the export writes is vector, and draws the same chart", "[gputiming]")
+{
+	editor::PassHistory history;
+	for (uint64_t frame = 1; frame <= 120; ++frame)
+	{
+		history.Append(SyntheticFrame(frame));
+	}
+
+	const QRect frame(0, 0, 900, 380);
+	{
+		QSvgGenerator drawing;
+		drawing.setFileName(c_GotSvg);
+		drawing.setSize(frame.size());
+		drawing.setViewBox(frame);
+
+		QPainter painter(&drawing);
+		editor::PaintPassGraph(painter, frame, history, std::nullopt, QPalette());
+	}
+
+	const QString path = QString::fromUtf8(c_GotSvg);
+	QSvgRenderer  rendered(path);
+	REQUIRE(rendered.isValid());
+
+	QImage raster(frame.size(), QImage::Format_ARGB32);
+	raster.fill(Qt::transparent);
+	{
+		QPainter painter(&raster);
+		rendered.render(&painter);
+	}
+
+	CHECK(HasBandColour(raster));
 }
 
 TEST_CASE("An empty history says so rather than drawing an empty chart", "[gputiming]")

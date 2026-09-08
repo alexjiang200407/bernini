@@ -254,10 +254,14 @@ Three things about it are decisions rather than detail:
 
 **Export…** writes both halves of one capture beside `editor.log`, under a stamped stem:
 `gpu_timings_<stamp>.csv` — one row per sampled frame, one column per pass, a total, and an empty
-field where a pass did not run in that frame — and `gpu_timings_<stamp>.png`, the graph as it stands.
-The picture comes from the call that paints the window (`PaintPassGraph`), so the file is what was on
-screen rather than a second drawing of the same numbers. There is no file dialog: a predictable path
-is what makes the capture reachable by whoever, or whatever, reads the log next.
+field where a pass did not run in that frame — and `gpu_timings_<stamp>.svg`, the graph as it stands.
+
+The drawing is **vector**, because the thing worth looking at is a spike two pixels wide among six
+hundred frames. It costs nothing extra: `QSvgGenerator` is a `QPaintDevice`, so the file is the same
+`PaintPassGraph` call the window paints with rather than a second drawing of the same numbers, and
+every axis label, pass name and figure lands in it as text a reader — or a tool — can select. There
+is no file dialog: a predictable path is what makes the capture reachable by whoever, or whatever,
+reads the log next.
 
 **Why this and not Tracy GPU zones.** Tracy would give the timeline for free and `tracy-csvexport`
 already exports it — but the frame loop deliberately carries no zones (§ Not zones), and the GUI is

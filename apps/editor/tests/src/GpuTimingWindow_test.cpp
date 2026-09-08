@@ -98,7 +98,19 @@ TEST_CASE("An export writes the numbers and the picture under one stem", "[gputi
 
 	const QDir written(directory.path());
 	CHECK(QFile::exists(written.filePath(stem + ".csv")));
-	CHECK(QFile::exists(written.filePath(stem + ".png")));
+
+	// Vector, so the drawing zooms: a spike two pixels wide among six hundred frames is the thing
+	// somebody opens the file to look at. QSvgGenerator reports nothing, so the file is the check.
+	QFile drawing(written.filePath(stem + ".svg"));
+	REQUIRE(drawing.open(QIODevice::ReadOnly | QIODevice::Text));
+
+	const QString svg = QString::fromUtf8(drawing.readAll());
+	CHECK(svg.contains("<svg"));
+	CHECK(svg.contains("viewBox"));
+
+	// The bands are drawn shapes rather than a raster the generator embedded whole.
+	CHECK(svg.contains("<path"));
+	CHECK_FALSE(svg.contains("<image"));
 
 	// The CSV is the history, not a summary of it: one row per frame recorded, under a header.
 	QFile csv(written.filePath(stem + ".csv"));
