@@ -2,10 +2,14 @@
 #include <algorithm>
 #include <bgl_common/SlangErrorChecker.h>
 #include <bgl_common/gassert.h>
+#include <core/err/util.h>
 #include <filesystem>
 #include <mutex>
+#include <optional>
+#include <slang-com-ptr.h>
 #include <slang.h>
 #include <string>
+#include <string_view>
 #include <thread>
 #include <utility>
 #include <vector>
@@ -18,6 +22,28 @@ namespace bgl
 		std::string path(moduleName);
 		std::ranges::replace(path, '.', '/');
 		return path;
+	}
+
+	namespace
+	{
+		// Every other loader here reports a diagnostic through SlangErrorChecker, which ends in
+		// gfatal -- right for the engine's own shaders, where a diagnostic is a bug. These two load
+		// text the client wrote, where it is a message to hand back.
+		slang::IModule*
+		LoadReporting(
+			slang::ISession* session,
+			std::string_view moduleName,
+			std::string&     diagnostic)
+		{
+			Slang::ComPtr<slang::IBlob> blob;
+			slang::IModule*             slangModule =
+				session->loadModule(SlangModulePath(moduleName).c_str(), blob.writeRef());
+
+			if (blob != nullptr)
+				diagnostic = static_cast<const char*>(blob->getBufferPointer());
+
+			return slangModule;
+		}
 	}
 
 	std::vector<std::string>
@@ -105,6 +131,22 @@ namespace bgl
 		const auto held = std::lock_guard(m_Mutex);
 		return m_ByThread.insert_or_assign(std::this_thread::get_id(), std::move(mine))
 		    .first->second.session.get();
+	}
+
+	std::optional<ReflectedSurface>
+	SlangSessions::ReflectSurface(std::string_view moduleName, std::string_view surfaceName)
+	{
+		std::string     diagnostic;
+		slang::IModule* slangModule = LoadReporting(ForThisThread(), moduleName, diagnostic);
+		if (slangModule == nullptr)
+		{
+			core::throw_runtime_error(
+				"surface '{}': its module did not compile\n{}",
+				surfaceName,
+				diagnostic);
+		}
+
+		return bgl::ReflectSurface(slangModule, surfaceName);
 	}
 
 	void

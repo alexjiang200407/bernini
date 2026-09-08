@@ -23,7 +23,7 @@ struct ProbeParams
 
 struct ProbeSurface : ISurfaceSource
 {
-    typealias Params = ProbeParams;
+    typealias MaterialParams = ProbeParams;
 
     static float Coverage<R : IMaterialReader>(R reader, ProbeParams params) { return 1.0; }
 
