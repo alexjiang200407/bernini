@@ -342,6 +342,11 @@ AnimationEditorWindow::BuildPropertiesColumn()
 	m_FadeSeconds->setDecimals(2);
 	m_FadeSeconds->setValue(c_DefaultFadeSeconds);
 	m_FadeSeconds->setSuffix(QStringLiteral(" s"));
+	// Committed rather than tracked: with keyboard tracking on, valueChanged fires per keystroke,
+	// and every one of those re-stamps the record and re-parks the clock at the window's start --
+	// so typing "0.35" would snap the playhead back three times and lose the scrub position the
+	// comparison is being made at.
+	m_FadeSeconds->setKeyboardTracking(false);
 	timing->addWidget(m_FadeSeconds, /*stretch*/ 1);
 	fade->addLayout(timing);
 
@@ -639,19 +644,22 @@ AnimationEditorWindow::StampTransition()
 		c_TransitionLead,
 		c_TransitionTail);
 
+	// The clock is parked outside the window *before* the record is written, and the order is the
+	// point: SetTime is queued to the render thread while the write below blocks on it, so writing
+	// first would leave the render thread free to draw the new fade against the old clock.
+	m_Transport.SetTransitionWindow(layout.windowStart, layout.windowEnd);
+	m_Preview->SetTime(m_Transport.GetTimeSeconds());
+
 	m_Preview->StampTransition(
 		static_cast<uint32_t>(from),
 		static_cast<uint32_t>(to),
 		layout.start,
 		layout.duration);
 
-	m_Transport.SetTransitionWindow(layout.windowStart, layout.windowEnd);
-	m_Preview->SetTime(m_Transport.GetTimeSeconds());
-
-	m_SyncingUi = true;
+	m_Strip->SetLayout(layout);
 	m_Strip->SetClipNames(m_FromClip->currentText(), m_ToClip->currentText());
-	m_SyncingUi = false;
 
+	UpdateTransitionControls();
 	SyncTransportUi();
 }
 
@@ -664,6 +672,7 @@ AnimationEditorWindow::ClearTransition()
 	m_Transport.ClearTransitionWindow();
 	m_Preview->SetActiveClip(m_Transport.GetActiveClipIndex(), m_Transport.GetTimeSeconds());
 	m_Preview->SetTime(m_Transport.GetTimeSeconds());
+	UpdateTransitionControls();
 	SyncTransportUi();
 }
 
@@ -677,7 +686,18 @@ AnimationEditorWindow::UpdateTransitionControls()
 	m_FromClip->setEnabled(usable);
 	m_ToClip->setEnabled(usable);
 	m_FadeSeconds->setEnabled(usable);
-	m_Strip->setEnabled(usable);
+
+	// The strip is live only while a fade is stamped. Left enabled with nothing behind it, a drag
+	// would feed the window's absolute seconds to a transport back in clip time, which reads them
+	// as that clip's own -- a picture disagreeing with the record, which is the one thing it must
+	// never do.
+	const bool live = m_Transport.InTransitionWindow();
+	m_Strip->setEnabled(usable && live);
+	if (!live)
+	{
+		m_Strip->SetLayout(editor::TransitionLayout());
+		m_Strip->SetClipNames(QString(), QString());
+	}
 
 	// Disabled with the reason rather than hidden: a control that vanishes on a tier switch reads
 	// as a bug, and this one is a constraint of the tier rather than a missing feature.
@@ -798,9 +818,12 @@ AnimationEditorWindow::SelectClip(const int index)
 		return;
 	}
 
+	// SelectClip drops the transport's window, so a strip left as it was would still be painting a
+	// fade that no longer exists on a clock that no longer means what it did.
 	m_Transport.SelectClip(static_cast<uint32_t>(index));
 	m_Preview->SetActiveClip(static_cast<uint32_t>(index), m_Transport.GetTimeSeconds());
 	m_Preview->SetTime(m_Transport.GetTimeSeconds());
+	UpdateTransitionControls();
 
 	const editor::ClipInfo& clip = m_Transport.GetActiveClip();
 	m_ClipMetadata->setText(QStringLiteral("%1\n%2 frames @ %3 Hz\n%4 s%5")
