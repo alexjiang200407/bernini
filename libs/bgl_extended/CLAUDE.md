@@ -126,7 +126,10 @@ and is a target of its own; nothing here is part of it.
   may retain a `slang::` object past pipeline construction, or the release reclaims nothing, and a
   module never crosses threads — see the same doc. `IDevice::AddSourceModule` gives every session a
   module as text under a name, shadowing a file of that name and joining the cache salt; it drops
-  the live sessions to do it, so it runs before the batch, never during.
+  the live sessions to do it, so it runs before the batch, never during. `RegisterSurfaces`
+  (`src/gfx/surface_registry.h`) is its one caller: it reflects every surface in
+  `GraphicsOptions::surfaceShaderDir` first and binds them all afterwards, because a binding drops
+  the sessions the next reflection would have used.
 - At runtime the Slang session resolves modules from `shaders/src` (and `shaders/tests`) beside the
   executable, then from `GraphicsOptions::surfaceShaderDir`, the one directory a client adds: its
   files are in the cache salt like the engine's, and a program imports its modules by name the same

@@ -174,6 +174,7 @@ disagrees, trust the header, then fix this doc.
 | Type | File | Role |
 |---|---|---|
 | `GraphicsOptions` | [libs/bgl/include/bgl/IGraphics.h](libs/bgl/include/bgl/IGraphics.h) | Device creation: debug layers, log level, `shaderCacheDir`, `surfaceShaderDir` (the client's own Slang modules, imported by name), and every descriptor-heap/pool capacity. |
+| `SurfaceType`, `SurfaceParams`, `SurfaceValue`, `SurfaceTexture` | [libs/bgl/include/bgl/SurfaceType.h](libs/bgl/include/bgl/SurfaceType.h) | A surface the client registered, read off its own Slang module: the name a material writes, the `MaterialType` its records carry, and the parameter block a material fills — each value's type, byte offset and default, and each texture's kind and slot. Listed by `IGraphics::GetSurfaceTypes()`. |
 | `CaptureTicket` | [libs/bgl/include/bgl/IGraphics.h](libs/bgl/include/bgl/IGraphics.h) | Names one in-flight backbuffer capture. Spent by resolve or discard. |
 | `PassTiming`, `PassTimings` | [libs/bgl/include/bgl/PassTiming.h](libs/bgl/include/bgl/PassTiming.h) | One row of `IGraphics::GetPassTimings` — a frame graph pass's name and what it cost on the GPU, in milliseconds — and the rows of one frame under the id of the frame they measured. |
 | `PassHistory` | [libs/bgl/include/bgl/PassHistory.h](libs/bgl/include/bgl/PassHistory.h) | The last N frames of `GetPassTimings` as a table of passes against frames, ignoring a frame id it has already recorded. The passes are a union in execution order and a cell is empty where that pass did not run, since a culled pass leaves no row. `PassHistoryCsv` in [pass_timing_csv.h](libs/bgl/include/bgl/pass_timing_csv.h) writes one out. |
@@ -264,6 +265,20 @@ flowchart TD
   texture wraps the target this frame is drawing to throws: a target's output is drawn on another
   target. Every other target a draw samples is retained through the frame, and the frame reads the
   slot it presented last — draw the preview target first, then the frame that shows it.
+* **`GetSurfaceTypes()`** — the surfaces read out of `GraphicsOptions::surfaceShaderDir` at
+  construction, in slot order. A `.slang` directly in that directory that **imports the contract** is
+  one surface: its name is the file's stem, its shading is the one struct in it conforming to
+  `ISurfaceSource`, and its slot is its position in filename order — so nothing outside the directory
+  names a file, and a file added later does not renumber the ones before it. Anything else there is
+  the game's own code: the same directory is its module search path, so a shared header beside the
+  surfaces is skipped rather than refused, and so is a file whose stem no `import` could name.
+  **At most four**, because each reserved
+  slot costs three PSO rows and two pipelines whether a surface fills it or not, and the culling
+  scan's single group bounds the total row count; a fifth is a `pso_sort_key` rework, not a bigger
+  number. A directory that is missing, a fifth surface, or a module that imports the contract and
+  holds no single conforming struct throws `ApiError` from `CreateGraphics`. **Read
+  once**: every pipeline that can draw a surface is built in the constructor, and nothing rebuilds one
+  afterwards, so an edited or added surface is seen at the next launch.
 * **`Resize(target, w, h)`** — @pre not between `BeginFrame`/`EndFrame`; both dimensions non-zero.
   @throws `GraphicsError` otherwise. `w`/`h` are the *output* size; the render size is re-derived
   from the target's scale. Recreates backbuffers, depth, scene colour and the velocity buffer,

@@ -7,6 +7,7 @@
 #include <bgl/ISceneView.h>
 #include <bgl/PassTiming.h>
 #include <bgl/RenderJob.h>
+#include <bgl/SurfaceType.h>
 #include <bgl/api.h>
 #include <bgl/error.h>
 #include <bgl/types/SceneDesc.h>
@@ -15,6 +16,7 @@
 #include <cstdint>
 #include <filesystem>
 #include <optional>
+#include <span>
 #include <stdexcept>
 #include <string>
 #include <vector>
@@ -255,6 +257,16 @@ namespace bgl
 		 */
 		[[nodiscard]] virtual PassTimings
 		GetPassTimings(const RenderTargetRef& target) = 0;
+
+		/**
+		 * The surfaces registered from `GraphicsOptions::surfaceShaderDir`, in slot order, each
+		 * carrying the `MaterialType` its materials are created with.
+		 *
+		 * Fixed at construction: every pipeline that can draw one is built there, so a surface added
+		 * to the directory afterwards is seen at the next launch. Empty when no directory was named.
+		 */
+		[[nodiscard]] virtual std::span<const SurfaceType>
+		GetSurfaceTypes() const noexcept = 0;
 
 		virtual SceneRef
 		CreateScene(SceneDesc desc) = 0;

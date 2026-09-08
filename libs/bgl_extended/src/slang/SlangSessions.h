@@ -1,7 +1,10 @@
 #pragma once
 
+#include <bgl_common/SurfaceReflection.h>
+
 #include <filesystem>
 #include <mutex>
+#include <optional>
 #include <slang-com-ptr.h>
 #include <slang.h>
 #include <string>
@@ -85,6 +88,20 @@ namespace bgl
 
 		SlangSessions&
 		operator=(const SlangSessions&) = delete;
+
+		/**
+		 * The surface a game's module declares, read through this thread's session.
+		 *
+		 * The module is loaded and reflected here rather than handed back, because a slang::IModule
+		 * only lives as long as the session that parsed it and the next AddSourceModule drops that.
+		 *
+		 * Empty when the module is not a surface at all -- it does not import the contract.
+		 *
+		 * @throws std::runtime_error if the module does not compile, or imports the contract and
+		 *         does not hold exactly one struct conforming to its ISurfaceSource.
+		 */
+		[[nodiscard]] std::optional<ReflectedSurface>
+		ReflectSurface(std::string_view moduleName, std::string_view surfaceName);
 
 		/**
 		 * The calling thread's session, created on first call.
