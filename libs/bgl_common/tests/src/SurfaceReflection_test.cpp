@@ -133,24 +133,28 @@ struct GateSurface : ISurfaceSource
 	};
 }
 
-// The whole reflection in one pass: the fields in declaration order, at the offsets the target
-// puts them at, with the textures taken out of the value list and numbered as the record's handles
-// are. Both targets are pinned because they disagree, which is why a surface is reflected once per
-// device: a record packed under one backend's offsets is read as noise by the other.
+// The whole reflection in one pass: the fields in declaration order, at the offsets the target puts
+// them at, with the textures taken out of the value list and numbered as the record's handles are.
+//
+// Both targets are pinned because they disagree, and the disagreement is a trap rather than a
+// choice. A record is read with RawBuffer.Load<T>, which reconstructs its type from scalar loads on
+// every backend, so the scalar column is the one a caller must reflect under. The MSL column is the
+// layout of a *structured buffer's element* on that target -- true for EntryBuffer<T> and wrong
+// here, and wrong quietly: every field after the first vector moves.
 TEST_CASE("A surface's parameters are reflected at their target's offsets", "[surface][reflection]")
 {
 	uint32_t           paramsSize = 0;
 	Offsets            at{};
 	SlangCompileTarget format = SLANG_DXIL;
 
-	SECTION("the scalar rules, which is what DXIL reads")
+	SECTION("the scalar rules, which is what a raw load reads on every backend")
 	{
 		format     = SLANG_DXIL;
 		paramsSize = 44u;
 		at         = { 0u, 4u, 16u, 20u, 24u, 40u };
 	}
 
-	SECTION("MSL's rules, which align a vector to its own width")
+	SECTION("MSL's rules for a structured buffer, which no record is read under")
 	{
 		format     = SLANG_METAL;
 		paramsSize = 80u;

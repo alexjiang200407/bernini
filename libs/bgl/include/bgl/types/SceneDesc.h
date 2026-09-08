@@ -20,5 +20,6 @@ namespace bgl
 		uint32_t initialVertexBufferByteSize = 1;
 		uint32_t initialPbrMaterials         = 1;
 		uint32_t initialLoosePbrMaterials    = 1;
+		uint32_t initialSurfaceMaterials     = 1;
 	};
 }

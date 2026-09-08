@@ -50,10 +50,14 @@ doc disagrees, trust the header, then fix this doc.
   IDL regime's layout, and it exists because the third choice — a manifest the game commits beside
   its shader — is a second artefact that can drift from the code that reads it.
 
-  The layout it returns belongs to **one target**, and the two disagree: MSL aligns a `float3` to
-  16 where the scalar rules leave it at 4, which is why `bgl_idlgen` refuses a `float3` in a
-  committed mirror outright ([idlgen](idlgen.md)). A surface is reflected once per device instead of
-  once per build, so it may declare one.
+  The layout it walks must be the **scalar** one, which means reflecting on a DXIL target whatever
+  backend will draw the surface. A record is read with `RawBuffer.Load<T>`, and a raw load
+  reconstructs its type from scalar loads on every backend — the same rules `bgl_idlgen` mirrors
+  every other record under. A Metal target reflects a structured-buffer *element* instead, under
+  MSL's rules, where a `float3` aligns to 16 rather than packing at 4. That is a true layout for
+  `EntryBuffer<T>` and the wrong one here, and it fails quietly: every field after the first vector
+  moves, so the shader reads a texture's slot index out of the bytes of the value before it and
+  samples nothing. The two accessors are what differ, not the two backends.
 
 * **Layout is reflected once per PSO and shared; the mirror is per kernel.** `ReflectLayoutFromSlang`
   ([SlangReflection.h](libs/bgl_common/include/bgl_common/SlangReflection.h)) walks Slang's cbuffer type layout

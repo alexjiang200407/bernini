@@ -138,6 +138,14 @@ but their shaders share `MaterialData::Shade<M>` with the transparent bucket, wh
 value rather than a literal `true`, which would encode an assumption about `c_Psos`' cull mode that
 the shader cannot see.
 
+A **closed** two-sided mesh in the blend bucket therefore composites twice: the sort orders instances,
+not the triangles inside one, so the far hemisphere blends under the near one in raster order and
+brings its own lighting with it. Flipped normals put its terminator somewhere the near hemisphere's
+is not, and on a coarse mesh that terminator steps along the triangle rows — a band of horizontal
+streaks over an otherwise smooth surface. It is the geometry showing through, not a defect in the
+sort: the fix is `doubleSided = false` where a translucent solid has no inside worth drawing, or
+`kHashed`, which writes real depth and self-occludes.
+
 ---
 
 ## Blended surfaces

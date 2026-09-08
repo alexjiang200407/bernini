@@ -73,23 +73,27 @@ TEST_CASE("A surface directory fills the reserved slots in filename order", "[su
 	REQUIRE(gfx != nullptr);
 
 	const std::span<const SurfaceType> types = gfx->GetSurfaceTypes();
-	REQUIRE(types.size() == 2u);
+	REQUIRE(types.size() == 3u);
 
 	// Filename order, so the directory alone decides which slot a surface lands in.
-	CHECK(types[0].name == "Rim");
+	CHECK(types[0].name == "PbrLike");
 	CHECK(types[0].kind == MaterialType::kGameStart);
-	CHECK(types[1].name == "Tint");
+	CHECK(types[1].name == "Rim");
+	CHECK(types[2].name == "Tint");
 	CHECK(
-		types[1].kind ==
-		static_cast<MaterialType>(static_cast<uint32_t>(MaterialType::kGameStart) + 1u));
+		types[2].kind ==
+		static_cast<MaterialType>(static_cast<uint32_t>(MaterialType::kGameStart) + 2u));
 
-	const SurfaceParams& rim = types[0].params;
-	REQUIRE(rim.values.size() == 2u);
+	const SurfaceParams& rim = types[1].params;
+	REQUIRE(rim.values.size() == 3u);
 	CHECK(rim.values[0].name == "rimColor");
 	CHECK(rim.values[0].type == SurfaceValueType::kFloat3);
-	CHECK(rim.values[0].defaultValue == glm::vec4(0.2f, 0.6f, 1.0f, 0.0f));
+	CHECK(rim.values[0].defaultValue == glm::vec4(1.0f, 3.0f, 6.0f, 0.0f));
 	CHECK(rim.values[1].name == "rimPower");
 	CHECK(rim.values[1].defaultValue.x == 3.0f);
+	CHECK(rim.values[2].name == "baseColorFactor");
+	CHECK(rim.values[2].type == SurfaceValueType::kFloat4);
+	CHECK(rim.values[2].defaultValue == glm::vec4(0.05f, 0.05f, 0.06f, 0.55f));
 
 	REQUIRE(rim.textures.size() == 1u);
 	CHECK(rim.textures[0].name == "baseColor");
@@ -97,9 +101,9 @@ TEST_CASE("A surface directory fills the reserved slots in filename order", "[su
 	CHECK(rim.textures[0].index == 0u);
 
 	// A surface with no texture at all still registers; the record's handles simply go unread.
-	CHECK(types[1].params.textures.empty());
-	REQUIRE(types[1].params.values.size() == 1u);
-	CHECK(types[1].params.values[0].name == "tint");
+	CHECK(types[2].params.textures.empty());
+	REQUIRE(types[2].params.values.size() == 1u);
+	CHECK(types[2].params.values[0].name == "tint");
 }
 
 // Naming no directory is not an error -- it is what every client that has no surfaces does, which
