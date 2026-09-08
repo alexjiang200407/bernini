@@ -1,3 +1,4 @@
+#include "Windows/AnimationEditor/TransitionStrip.h"
 #include "Windows/AnimationEditor/transition_spans.h"
 
 #include <catch2/catch_test_macros.hpp>
@@ -123,4 +124,36 @@ TEST_CASE("A window is never empty, whatever it is asked for", "[animation]")
 	const auto negative = WindowFor(5.0f, -1.0f, -1.0f, -1.0f);
 	CHECK(negative.windowEnd > negative.windowStart);
 	CHECK(negative.duration == 0.0f);
+}
+
+// The strip's other pure half: where a click lands on the clock. Its inverse is SpansForTransition's
+// playhead, and a drag that did not land back on the pixel it was made at would read as a jump.
+
+TEST_CASE("A click maps to the clock it points at, and back", "[animation]")
+{
+	const auto layout = Fade();
+
+	CHECK(TransitionStrip::TimeForX(layout, 0, 250) == 0.0f);
+	CHECK(TransitionStrip::TimeForX(layout, 125, 250) == 1.25f);
+	CHECK(TransitionStrip::TimeForX(layout, 250, 250) == 2.5f);
+
+	// Outside the strip clamps into the window, which is where a drag leaving the widget ends up.
+	CHECK(TransitionStrip::TimeForX(layout, -40, 250) == 0.0f);
+	CHECK(TransitionStrip::TimeForX(layout, 400, 250) == 2.5f);
+
+	// Round-trips against the span map, so the playhead lands under the cursor rather than beside it.
+	auto scrubbed = layout;
+	scrubbed.time = TransitionStrip::TimeForX(layout, 175, 250);
+	CHECK(SpansForTransition(scrubbed, 250).playheadX == 175);
+}
+
+TEST_CASE(
+	"A degenerate strip seeks to the window start rather than dividing by nothing",
+	"[animation]")
+{
+	auto layout = Fade();
+	CHECK(TransitionStrip::TimeForX(layout, 100, 0) == layout.windowStart);
+
+	layout.windowEnd = layout.windowStart;
+	CHECK(TransitionStrip::TimeForX(layout, 100, 250) == layout.windowStart);
 }
