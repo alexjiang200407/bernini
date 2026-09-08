@@ -1648,7 +1648,7 @@ namespace bgl
 		// constant; the struct growing without it is a record read one field late.
 		static_assert(
 			idl::cRawPayloadOffset + sizeof(idl::GameSurfaceRecord) ==
-			idl::cGameSurfaceParamsOffset);
+			idl::cGameSurfaceParamsByteOffset);
 
 		// The other half of that arithmetic: the payload stores RawTextureHandle while the view is
 		// strided by the handle itself, and a payload offset that is not a whole number of handles
