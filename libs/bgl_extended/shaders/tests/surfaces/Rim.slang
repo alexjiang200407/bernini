@@ -7,11 +7,14 @@ import bgl.SurfaceSource;
 // it imports the contract and nothing else, and names no handle, arena or bucket.
 struct RimParams
 {
-    [Default(0.2, 0.6, 1.0)]
+    [Default(1.0, 3.0, 6.0)]
     float3 rimColor;
 
     [Default(3.0)]
     float rimPower;
+
+    [Default(0.05, 0.05, 0.06, 0.55)]
+    float4 baseColorFactor;
 
     ColorSlot baseColor;
 };
@@ -20,12 +23,15 @@ struct RimSurface : ISurfaceSource
 {
     typealias MaterialParams = RimParams;
 
-    static float Coverage<R : IMaterialReader>(R reader, RimParams params) { return reader.Sample(params.baseColor, reader.Uv()).a; }
+    static float Coverage<R : IMaterialReader>(R reader, RimParams params)
+    {
+        return params.baseColorFactor.a * reader.Sample(params.baseColor, reader.Uv()).a;
+    }
 
     static PbrSurface Evaluate<R : IMaterialReader>(R reader, RimParams params)
     {
         PbrSurface surface = PbrSurface();
-        surface.baseColor = reader.Sample(params.baseColor, reader.Uv());
+        surface.baseColor = params.baseColorFactor * reader.Sample(params.baseColor, reader.Uv());
 
         let n = normalize(reader.WorldNormal());
         let v = normalize(reader.CameraPos() - reader.WorldPos());

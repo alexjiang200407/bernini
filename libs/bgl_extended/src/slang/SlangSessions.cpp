@@ -57,6 +57,73 @@ namespace bgl
 
 	SlangSessions::SlangSessions(SlangSessionDesc desc) noexcept : m_Desc(std::move(desc)) {}
 
+	namespace
+	{
+		// One session on `target`, with the desc's search paths and every source module loaded.
+		Slang::ComPtr<slang::ISession>
+		CreateSession(
+			slang::IGlobalSession*  global,
+			const SlangSessionDesc& desc,
+			SlangCompileTarget      target)
+		{
+			slang::SessionDesc sessionDesc = {};
+			slang::TargetDesc  targetDesc  = {};
+
+			targetDesc.format  = target;
+			targetDesc.profile = global->findProfile("sm_6_6");
+
+			std::vector<const char*> searchPaths;
+			searchPaths.reserve(desc.searchPaths.size());
+			for (const std::string& path : desc.searchPaths) searchPaths.push_back(path.c_str());
+
+			sessionDesc.targetCount     = 1;
+			sessionDesc.targets         = &targetDesc;
+			sessionDesc.searchPaths     = searchPaths.data();
+			sessionDesc.searchPathCount = static_cast<SlangInt>(searchPaths.size());
+
+			// Match the column-major convention the CPU side uploads matrices in (and that the
+			// offline slangc default used). The API's SessionDesc otherwise defaults to row-major,
+			// which would transpose viewProj / transforms and project geometry off screen.
+			sessionDesc.defaultMatrixLayoutMode = SLANG_MATRIX_LAYOUT_COLUMN_MAJOR;
+
+#if defined(BERNINI_GPU_DEBUG)
+			// Enables dbg_raise() bodies and the cull-stats counters in runtime-compiled shaders.
+			// Kept in lockstep with the offline slangc -D in cmake/compile_shader.cmake. Fully
+			// absent in Release, so gDebug drops out of reflection and dbg_raise becomes a no-op.
+			const slang::PreprocessorMacroDesc debugMacro = { "BERNINI_GPU_DEBUG", "1" };
+			sessionDesc.preprocessorMacros                = &debugMacro;
+			sessionDesc.preprocessorMacroCount            = 1;
+#endif
+
+			Slang::ComPtr<slang::ISession> session;
+			SlangErrorChecker              errChecker;
+			global->createSession(sessionDesc, session.writeRef()) >> errChecker;
+			gassert(session != nullptr, "Failed to create Slang session");
+
+			// Loaded under the path form, which is what an import of a dotted name looks up:
+			// registered as `game.probe` the text is never found and the file wins. The second
+			// argument is a name for diagnostics, never opened.
+			for (const SlangSourceModule& sourceModule : desc.sourceModules)
+			{
+				const std::string path = SlangModulePath(sourceModule.name);
+
+				SlangErrorChecker moduleChecker;
+				slang::IModule*   loaded = session->loadModuleFromSourceString(
+					path.c_str(),
+					(path + ".slang").c_str(),
+					sourceModule.source.c_str(),
+					moduleChecker.WriteDiagnosticBlob());
+				moduleChecker.ReportError();
+				gassert(
+					loaded != nullptr,
+					"Failed to load Slang module '{}' from source",
+					sourceModule.name);
+			}
+
+			return session;
+		}
+	}
+
 	slang::ISession*
 	SlangSessions::ForThisThread() noexcept
 	{
@@ -75,58 +142,7 @@ namespace bgl
 		slang::createGlobalSession(mine.global.writeRef());
 		gassert(mine.global != nullptr, "Failed to create Slang global session");
 
-		slang::SessionDesc sessionDesc = {};
-		slang::TargetDesc  targetDesc  = {};
-
-		targetDesc.format  = desc.target;
-		targetDesc.profile = mine.global->findProfile("sm_6_6");
-
-		std::vector<const char*> searchPaths;
-		searchPaths.reserve(desc.searchPaths.size());
-		for (const std::string& path : desc.searchPaths) searchPaths.push_back(path.c_str());
-
-		sessionDesc.targetCount     = 1;
-		sessionDesc.targets         = &targetDesc;
-		sessionDesc.searchPaths     = searchPaths.data();
-		sessionDesc.searchPathCount = static_cast<SlangInt>(searchPaths.size());
-
-		// Match the column-major convention the CPU side uploads matrices in (and that the offline
-		// slangc default used). The API's SessionDesc otherwise defaults to row-major, which would
-		// transpose viewProj / transforms and project geometry off screen.
-		sessionDesc.defaultMatrixLayoutMode = SLANG_MATRIX_LAYOUT_COLUMN_MAJOR;
-
-#if defined(BERNINI_GPU_DEBUG)
-		// Enables dbg_raise() bodies and the cull-stats counters in runtime-compiled shaders. Kept
-		// in lockstep with the offline slangc -D in cmake/compile_shader.cmake. Fully absent in
-		// Release, so gDebug drops out of reflection and dbg_raise becomes a no-op.
-		const slang::PreprocessorMacroDesc debugMacro = { "BERNINI_GPU_DEBUG", "1" };
-		sessionDesc.preprocessorMacros                = &debugMacro;
-		sessionDesc.preprocessorMacroCount            = 1;
-#endif
-
-		SlangErrorChecker errChecker;
-		mine.global->createSession(sessionDesc, mine.session.writeRef()) >> errChecker;
-		gassert(mine.session != nullptr, "Failed to create Slang session");
-
-		// Loaded under the path form, which is what an import of a dotted name looks up: registered
-		// as `game.probe` the text is never found and the file wins. The second argument is a name
-		// for diagnostics, never opened.
-		for (const SlangSourceModule& sourceModule : desc.sourceModules)
-		{
-			const std::string path = SlangModulePath(sourceModule.name);
-
-			SlangErrorChecker moduleChecker;
-			slang::IModule*   loaded = mine.session->loadModuleFromSourceString(
-				path.c_str(),
-				(path + ".slang").c_str(),
-				sourceModule.source.c_str(),
-				moduleChecker.WriteDiagnosticBlob());
-			moduleChecker.ReportError();
-			gassert(
-				loaded != nullptr,
-				"Failed to load Slang module '{}' from source",
-				sourceModule.name);
-		}
+		mine.session = CreateSession(mine.global.get(), desc, desc.target);
 
 		const auto held = std::lock_guard(m_Mutex);
 		return m_ByThread.insert_or_assign(std::this_thread::get_id(), std::move(mine))
@@ -136,8 +152,29 @@ namespace bgl
 	std::optional<ReflectedSurface>
 	SlangSessions::ReflectSurface(std::string_view moduleName, std::string_view surfaceName)
 	{
+		// Reflected on a DXIL target whatever this device compiles for, because what the offsets
+		// have to agree with is `RawBuffer.Load<T>`, and a raw load reconstructs a struct from
+		// scalar loads on every backend. A Metal target's *structured-buffer* element is laid out by
+		// MSL's rules instead -- a float3 aligned to 16 rather than packed at 4 -- which is a real
+		// layout for a real accessor (`EntryBuffer<T>`) and not the one a record is read with.
+		// Reflecting it moves every field after the first vector, and the shader then reads a
+		// texture's slot index out of the bytes of the value before it.
+		// For its side effect: this thread's entry, and the global session the one below is made
+		// from, exist once it returns.
+		static_cast<void>(ForThisThread());
+
+		slang::ISession* session = nullptr;
+		{
+			const auto      held = std::lock_guard(m_Mutex);
+			ThreadSessions& mine = m_ByThread.at(std::this_thread::get_id());
+			if (mine.scalarLayout == nullptr)
+				mine.scalarLayout = CreateSession(mine.global.get(), m_Desc, SLANG_DXIL);
+
+			session = mine.scalarLayout.get();
+		}
+
 		std::string     diagnostic;
-		slang::IModule* slangModule = LoadReporting(ForThisThread(), moduleName, diagnostic);
+		slang::IModule* slangModule = LoadReporting(session, moduleName, diagnostic);
 		if (slangModule == nullptr)
 		{
 			core::throw_runtime_error(
