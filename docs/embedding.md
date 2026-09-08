@@ -92,8 +92,9 @@ been made; until it is, a consuming project should prefix its own CMake function
 
 ## The compiler cache
 
-Every game's build tree compiles the engine into itself, so what the cache carries decides whether
-that is an afternoon or a coffee. [`cmake/enable_compiler_cache.cmake`](../cmake/enable_compiler_cache.cmake)
+Every game's build tree compiles the engine into itself, and the cache carries less of that than you
+would hope — so read this before budgeting a game's first build.
+[`cmake/enable_compiler_cache.cmake`](../cmake/enable_compiler_cache.cmake)
 puts ccache in front of the compiler and sets `CCACHE_BASEDIR` to **the engine checkout** — not the
 build root — so every absolute path under the engine is rewritten relative before it is hashed.
 
@@ -103,10 +104,21 @@ directory one level deeper than the engine's own build puts it, so the generated
 is `bernini/libs/core/…/cmake_pch.hxx` there and `libs/core/…/cmake_pch.hxx` here. That path is part
 of the hash and no basedir removes the difference. Measured: 0/147.
 
-**It does carry between one consumer build and the next**, which is the property worth having.
-Deleting a game's build directory and rebuilding it costs nothing — measured at 147/147 — and so does
-a second consumer whose build tree sits where the first one's did. `just embed` prints the rate for
-its own run.
+**Nor does it carry between two different games**, for the same reason one directory deeper. The
+basedir is the engine checkout, so ccache rewrites paths *under the engine* and leaves everything
+else absolute — and a game's build tree is not under the engine. Its generated PCH enters the hash
+as `/…/games/demo/build/…/bernini/libs/core/…/cmake_pch.hxx`, which is a different string for every
+game. So the first build of the second game is a full compile too.
+
+**What does carry is one build of a given tree to the next**: delete a game's build directory and
+rebuild it in place and the compiler runs for nothing — measured at 147/147. That is the whole of
+the reuse, and it is worth having, but it is not the "second game costs a coffee" this was expected
+to buy. `just embed` prints the rate for its own run.
+
+Making a game share with the engine or with another game means giving ccache a basedir that covers
+both trees, which is a decision about where every consumer's build directory lives rather than a
+line in this file — or building the engine once and consuming it as a binary, which is the
+`install()`/`export()` design this deliberately does not have.
 
 Two things cost hits and are worth knowing before blaming the basedir. Flags are hashed, so a
 consumer building `Release`, or with `BERNINI_PROFILING` set the other way from the engine, shares
