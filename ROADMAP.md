@@ -393,6 +393,9 @@ and portability.
   - [x] A frame-stats window that graphs the per-pass rows over time — a stacked band per pass over
     the last 600 timed frames, sampled every frame, exported as a CSV beside `editor.log`. See
     [docs/profiling.md](docs/profiling.md) § The frame-stats window.
+  - [x] A headless capture of the same rows — `bgl_pass_timings`, which renders a project's model
+    offscreen with timing armed and writes the window's CSV plus a median/max summary per pass. See
+    [docs/profiling.md](docs/profiling.md) § Capturing a run headlessly.
   - [ ] An *interactive* capture of that graph. A drawing of it was built and removed: a static
     picture answers nothing the window on screen does not.
   - [ ] Live counters: agents alive/dying/corpse split by type, visible per tier, per-instance vs

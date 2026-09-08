@@ -33,8 +33,9 @@ be timed on the GPU (`IRenderTarget::SetGpuTimingEnabled`, read through
 `IGraphics::GetPassTimings` -- see [bgl Public API](docs/bgl_api.md) and
 [Frame Graph](docs/framegraph.md)), which the editor reads two ways once Render › GPU Pass Timing
 is on: Log GPU Pass Timings writes one frame's table to `editor.log`, and GPU Timing Graph
-(§ The frame-stats window below) graphs every frame. `docs/gfx_debug.md` is where a *wrong* frame
-is diagnosed rather than a slow one.
+(§ The frame-stats window below) graphs every frame. Away from the editor the same rows are taken by
+`bgl_pass_timings` (§ Capturing a run headlessly). `docs/gfx_debug.md` is where a *wrong* frame is
+diagnosed rather than a slow one.
 
 ## Taking a capture
 
@@ -263,6 +264,51 @@ an SVG through `QSvgGenerator` — and removed: the graph is already on screen, 
 answers no question the window does not. What the numbers buy that a picture cannot is being asked
 something, by a spreadsheet or by an agent. A capture of the *chart* comes back if it can be
 interactive.
+
+## Capturing a run headlessly
+
+The window wants somebody watching it. `bgl_pass_timings` is the same numbers taken where nobody is:
+it renders a project's model offscreen with timing armed, keeps N frames, writes them as the same CSV
+the window exports, and prints what each pass cost.
+
+```bash
+# Both roots are absolute because `just run` puts the cwd at the binary's output directory, where a
+# checkout-relative path resolves to nothing. The default, assets/Data, is what copy_assets stages
+# there, so it is the one path that works bare.
+just run bgl_pass_timings -- --project "$PWD/test-project/Data" \
+	--env-root "$PWD/assets/Data" \
+	--mesh Derived/Meshes/AdaWong/cha800_00.reduced.bmesh --frames 60 --warmup 8
+```
+
+`--project` is the data root and every other key is relative to it, so the tool measures *your*
+content rather than the repo's — which is also what makes a capture taken here comparable with one
+exported from the editor: the same project, the same format, two producers. `--out` is the CSV, and
+`--taa` and `--width`/`--height` are the framing the numbers are read at.
+
+**Light it from somewhere, or know that you did not.** `--env` names the `.benv` and `--env-root` the
+root it is keyed under, defaulting to `--project` — a second root because a project is free to have
+none of its own, which the test project is: unlit, the character above still costs Forward 2.5 ms and
+still renders a black frame, a real number answering the wrong question. So the run says `lit` or
+`unlit` in its first line, and `--png` writes the last frame out, which is the only thing that says
+what was actually in shot.
+
+Two things are decisions rather than detail:
+
+- **The artifact is the CSV; stdout is a readout.** Several frames is the whole point, and a table is
+  a shape for one — which *Log GPU Pass Timings* already writes. So stdout gets the **median and max
+  per pass, costliest first**: median because one stalled frame moves a mean, and sorted by cost
+  because this answers *what is expensive*, where the window's legend answers *where in the frame it
+  happened*. The CSV is frames down and passes across, which is what a spreadsheet, a diff and an
+  agent all read.
+- **The opening frames are dropped.** A fresh device pays for pipelines, uploads and a TAA history
+  with nothing in it, and none of that is what the model costs. `--warmup` is how many resolved
+  frames go in the bin before the first one is kept, so the CSV and the summary describe the same
+  frames.
+
+The model is framed on its own bounding sphere, so a cost read here is comparable across models and
+not across framings: `[.cha800cost]` in `gamelib_tests` measures the same character's *face* filling a
+2292x1996 frame and reports a far larger Forward for it. That case is not superseded — it answers what
+one part costs under one camera, and this answers what a whole frame costs over a run.
 
 **Why this and not Tracy GPU zones.** Tracy would give the timeline for free and `tracy-csvexport`
 already exports it — but the frame loop deliberately carries no zones (§ Not zones), and the GUI is

@@ -56,7 +56,7 @@ if (BUILD_TESTS)
 	)
 
 	target_precompile_headers(bgl_tests
-		PUBLIC  ${CMAKE_SOURCE_DIR}/PCH/pch.h
+		PUBLIC  ${BERNINI_ROOT}/PCH/pch.h
 		PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/tests/src/pch.h
 	)
 
