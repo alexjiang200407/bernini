@@ -246,7 +246,7 @@ TEST_CASE("Timing a frame lists every kept pass with what it cost", "[timing][re
 		std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - cpuStart)
 			.count();
 
-	const std::vector<bgl::PassTiming> rows = s.gfx->GetPassTimings(s.target);
+	const std::vector<bgl::PassTiming> rows = s.gfx->GetPassTimings(s.target).passes;
 	REQUIRE(!rows.empty());
 
 	const std::vector<std::string> names = Names(rows);
@@ -284,20 +284,47 @@ TEST_CASE("Timing off reports no rows", "[timing][render]")
 	CHECK(!s.target->IsGpuTimingEnabled());
 	s.gfx->DrawFrame(s.target, s.job);
 	s.gfx->WaitIdle();
-	CHECK(s.gfx->GetPassTimings(s.target).empty());
+	CHECK(s.gfx->GetPassTimings(s.target).passes.empty());
 
 	s.target->SetGpuTimingEnabled(true);
 	s.gfx->DrawFrame(s.target, s.job);
 	s.gfx->WaitIdle();
-	CHECK(!s.gfx->GetPassTimings(s.target).empty());
+	CHECK(!s.gfx->GetPassTimings(s.target).passes.empty());
 
 	s.target->SetGpuTimingEnabled(false);
-	CHECK(s.gfx->GetPassTimings(s.target).empty());
+	CHECK(s.gfx->GetPassTimings(s.target).passes.empty());
+	CHECK(s.gfx->GetPassTimings(s.target).frame == 0);
 
 	// A frame drawn while off arms nothing, so the rows stay empty rather than reviving.
 	s.gfx->DrawFrame(s.target, s.job);
 	s.gfx->WaitIdle();
-	CHECK(s.gfx->GetPassTimings(s.target).empty());
+	CHECK(s.gfx->GetPassTimings(s.target).passes.empty());
+}
+
+// A reader sampling every frame has to tell a frame it has already recorded from a new one, and the
+// rows themselves cannot say: two frames of a still scene measure the same passes to within noise.
+TEST_CASE("Each frame's rows arrive under an id of their own", "[timing][render]")
+{
+	TimedScene s;
+	if (!s.CanTime())
+	{
+		SKIP("The device cannot sample a timestamp at a pass boundary");
+	}
+
+	s.target->SetGpuTimingEnabled(true);
+	s.gfx->DrawFrame(s.target, s.job);
+	s.gfx->WaitIdle();
+
+	const bgl::PassTimings first = s.gfx->GetPassTimings(s.target);
+	REQUIRE(!first.passes.empty());
+	CHECK(first.frame != 0);
+
+	// Nothing drawn in between, so the id repeats -- the sample is the one already recorded.
+	CHECK(s.gfx->GetPassTimings(s.target).frame == first.frame);
+
+	s.gfx->DrawFrame(s.target, s.job);
+	s.gfx->WaitIdle();
+	CHECK(s.gfx->GetPassTimings(s.target).frame > first.frame);
 }
 
 // The rows trail the frame by the fence, not by a fixed count: a frame timed and then waited on is
@@ -317,7 +344,7 @@ TEST_CASE("Timing switched on mid-run reports rows within two frames", "[timing]
 	s.gfx->DrawFrame(s.target, s.job);
 	s.gfx->DrawFrame(s.target, s.job);
 	s.gfx->WaitIdle();
-	CHECK(!s.gfx->GetPassTimings(s.target).empty());
+	CHECK(!s.gfx->GetPassTimings(s.target).passes.empty());
 }
 
 // On Metal a timed pass ends its encoder, which is a tile store and reload the untimed frame never

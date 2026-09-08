@@ -126,7 +126,7 @@ namespace bgl
 		void
 		DiscardPendingGpuAssertions() noexcept;
 
-		[[nodiscard]] std::vector<PassTiming>
+		[[nodiscard]] PassTimings
 		GetPassTimings(const RenderTargetRef& target);
 
 	private:

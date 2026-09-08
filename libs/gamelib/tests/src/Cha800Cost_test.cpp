@@ -77,7 +77,8 @@ namespace
 			gfx.WaitIdle();
 			if (frame < 3)
 				continue;
-			for (const bgl::PassTiming& row : gfx.GetPassTimings(target))
+			const bgl::PassTimings timings = gfx.GetPassTimings(target);
+			for (const bgl::PassTiming& row : timings.passes)
 			{
 				if (row.name == "Forward 0")
 					samples.push_back(row.milliseconds);

@@ -240,12 +240,14 @@ namespace bgl
 
 		/**
 		 * What each pass of the last completed timed frame on `target` cost on the GPU, in
-		 * execution order -- the rows behind an on-screen breakdown. A frame's rows arrive once its
-		 * fence has passed, so they trail the frame that wrote them by one or two. Empty while
-		 * IRenderTarget::SetGpuTimingEnabled is off, before the first timed frame completes, and on
-		 * a device that cannot sample a timestamp at a pass boundary. May be called mid-frame.
+		 * execution order, under the id of the frame it measured -- the rows behind an on-screen
+		 * breakdown. A frame's rows arrive once its fence has passed, so they trail the frame that
+		 * wrote them by one or two, and a caller reading every frame tells one sample from the next
+		 * by PassTimings::frame. No rows while IRenderTarget::SetGpuTimingEnabled is off, before the
+		 * first timed frame completes, and on a device that cannot sample a timestamp at a pass
+		 * boundary. May be called mid-frame.
 		 */
-		[[nodiscard]] virtual std::vector<PassTiming>
+		[[nodiscard]] virtual PassTimings
 		GetPassTimings(const RenderTargetRef& target) = 0;
 
 		virtual SceneRef

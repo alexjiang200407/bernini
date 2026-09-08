@@ -1,6 +1,7 @@
 #include "MainWindow.h"
 
 #include "Windows/AnimationEditor/AnimationEditorWindow.h"
+#include "Windows/GpuTiming/GpuTimingWindow.h"
 #include "Windows/MaterialEditor/MaterialEditorWindow.h"
 #include "Windows/RenderTarget/RenderTargetWindow.h"
 #include "util/QtSupport.h"  // IWYU pragma: keep
@@ -100,6 +101,16 @@ namespace
 		}
 	};
 
+	[[nodiscard]] QAction*
+	ActionNamed(const MainWindow& window, const QString& text)
+	{
+		const QList<QAction*> actions = window.findChildren<QAction*>();
+		const auto            named =
+			std::ranges::find_if(actions, [&text](const QAction* a) { return a->text() == text; });
+
+		return named == actions.end() ? nullptr : *named;
+	}
+
 	/** A panel nobody listed anywhere, to prove the walk finds one. */
 	class SpyPanel : public QObject, public editor::IFollowsProject
 	{
@@ -175,6 +186,41 @@ TEST_CASE("Every viewport a headless editor builds is headless", "[mainwindow][r
 	CHECK(static_cast<int>(viewports.size()) == c_ViewportCount);
 
 	for (const RenderTargetWindow* view : viewports) CHECK(view->IsHeadless());
+}
+
+// The graph costs a resolve per frame to fill, so it turns timing on for itself rather than opening
+// empty behind a menu item somebody was supposed to find first -- and gives back what it borrowed.
+TEST_CASE("The timing graph turns GPU timing on while it is open", "[mainwindow][render]")
+{
+	const HeadlessEditor editor;
+
+	MainWindow window(nullptr, editor.ConfigFile());
+
+	QAction* timing = ActionNamed(window, "GPU Pass Timing");
+	QAction* graph  = ActionNamed(window, "GPU Timing Graph");
+	REQUIRE(timing != nullptr);
+	REQUIRE(graph != nullptr);
+	REQUIRE_FALSE(timing->isChecked());
+
+	auto* readout = window.findChild<editor::GpuTimingWindow*>();
+	REQUIRE(readout != nullptr);
+
+	graph->setChecked(true);
+	CHECK(timing->isChecked());
+
+	readout->close();
+	CHECK_FALSE(timing->isChecked());
+
+	// The entry is the window's own state, so closing it from its title bar unchecks the box: an
+	// entry left checked beside a closed window makes the next click do nothing.
+	CHECK_FALSE(graph->isChecked());
+
+	// Switched on for the log before the window was opened, it stays on after it closes: the window
+	// restores what it found rather than switching off something it did not turn on.
+	timing->setChecked(true);
+	graph->setChecked(true);
+	readout->close();
+	CHECK(timing->isChecked());
 }
 
 TEST_CASE("A panel is rooted without being listed anywhere", "[project]")

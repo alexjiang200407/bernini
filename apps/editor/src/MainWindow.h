@@ -16,6 +16,7 @@
 #include "Async/BackgroundTask.h"
 #include "main_window_ui.h"
 
+class QAction;
 class QDockWidget;
 class QLabel;
 class QMenu;
@@ -26,6 +27,11 @@ class LevelEditorWindow;
 class MaterialEditorWindow;
 class RenderTargetWindow;
 class Renderer;
+
+namespace editor
+{
+	class GpuTimingWindow;
+}
 
 class MainWindow : public QMainWindow
 {
@@ -132,6 +138,11 @@ private:
 	void
 	ReleaseRenderResources() noexcept;
 
+	// The Window menu's entry for the GPU timing graph, which is a window rather than a dock and so
+	// has no toggleViewAction of its own to add.
+	void
+	SetUpGpuTimingEntry();
+
 	// The Render menu. Its entries toggle temporal AA and set the viewports' render scale, which is
 	// how a temporal artifact gets judged -- the difference is what shows it, and a restart loses that.
 	void
@@ -171,6 +182,13 @@ private:
 
 	// Armed by Render > Log GPU Pass Timings; the next breakdown that arrives is logged and disarms it.
 	bool m_LogNextPassTimings = false;
+
+	// The graph, and the Render > GPU Pass Timing entry it drives while it is on screen. Timing
+	// costs a resolve a frame, so what the toggle was before the window opened is what it goes back
+	// to when it closes.
+	editor::GpuTimingWindow* m_GpuTiming       = nullptr;
+	QAction*                 m_GpuTimingAction = nullptr;
+	bool                     m_GpuTimingWasOn  = false;
 
 	std::unique_ptr<Renderer> m_Renderer;
 

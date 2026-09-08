@@ -5,12 +5,14 @@
 #include <QWidget>
 #include <bgl/Camera.h>
 #include <bgl/IRenderTarget.h>
+#include <bgl/PassTiming.h>
 #include <cstddef>
 #include <cstdint>
 #include <qcoreevent.h>
 #include <qpaintdevice.h>
 #include <qtmetamacros.h>
 #include <qtypes.h>
+#include <vector>
 
 class QTimer;
 
@@ -198,12 +200,17 @@ Q_SIGNALS:
 	 * @param meanMs   Mean frame time over the window.
 	 * @param maxMs    Worst frame time in the window -- the number a stall shows up in.
 	 * @param missed   Frames in the window that overran a vblank.
-	 * @param gpuPasses The per-pass GPU breakdown (editor::PassTimingsText), empty unless
-	 *                  SetGpuTimingEnabled is on and a timed frame has landed. Text rather than rows
-	 *                  because a queued connection carries a QString without a registered metatype.
+	 * @param gpuFrames Every timed frame whose rows have landed since the last emission, oldest
+	 *                  first -- empty unless SetGpuTimingEnabled is on. Rows rather than a formatted
+	 *                  table: a graph needs the numbers, and formatting them here would leave the
+	 *                  log and the graph reading two copies.
 	 */
 	void
-	FrameStatsUpdated(double meanMs, double maxMs, int missed, const QString& gpuPasses);
+	FrameStatsUpdated(
+		double                               meanMs,
+		double                               maxMs,
+		int                                  missed,
+		const std::vector<bgl::PassTimings>& gpuFrames);
 
 private:
 	// Records and presents one frame. Called by the Renderer's frame loop, on the render thread.
@@ -221,6 +228,11 @@ private:
 
 	void
 	ReportFrameTiming(qint64 startNs);
+
+	// Appends this frame's pass rows to m_GpuFrames when they are a frame the batch does not
+	// already hold. Render thread, once per frame; a no-op while GPU timing is off.
+	void
+	SamplePassTimings();
 
 	// Single-shot, restarted by every resizeEvent, so it only fires once the window has been still
 	// long enough to call the drag finished. That firing is the only thing that resizes the
@@ -263,6 +275,15 @@ private:
 	// ~2 seconds of frames at 60Hz: long enough that one stall does not dominate the mean, short
 	// enough that the readout still tracks what the viewport is doing now.
 	static constexpr std::size_t c_FrameStatsWindow = 120;
+
+	// The timed frames sampled since the last emission, handed over and cleared by it. Sampled per
+	// frame because a spike lasts one, and batched because the readout is redrawn at the emission
+	// rate whatever it holds.
+	std::vector<bgl::PassTimings> m_GpuFrames;
+
+	// The id of the last frame appended above, so a read that resolved nothing new is not recorded
+	// twice. Zero before the first timed frame, which is also what timing switched off reports.
+	uint64_t m_LastGpuFrame = 0;
 
 	// Frames between FrameStatsUpdated emissions. Emitting per frame would queue 60 cross-thread
 	// events a second to move a number no one can read that fast.

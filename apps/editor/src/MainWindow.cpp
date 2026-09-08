@@ -18,6 +18,7 @@
 #include "Windows/AnimationEditor/AnimationEditorWindow.h"
 #include "Windows/AnimationEditor/AnimationPreviewWindow.h"
 #include "Windows/ContentExplorer/ContentExplorerWindow.h"
+#include "Windows/GpuTiming/GpuTimingWindow.h"
 #include "Windows/LevelEditor/LevelEditorWindow.h"
 #include "Windows/MaterialEditor/MaterialEditorWindow.h"
 #include "Windows/RenderTarget/RenderTargetWindow.h"
@@ -55,6 +56,7 @@
 
 #include <QDebug>
 #include <QKeySequence>
+#include <bgl/PassTiming.h>
 #include <memory>
 #include <optional>
 #include <qaction.h>
@@ -368,6 +370,8 @@ MainWindow::Build(const std::filesystem::path& configPath)
 	m_Ui.windowMenu->addAction(m_MaterialEditorDock->toggleViewAction());
 	m_Ui.windowMenu->addAction(m_AnimationEditorDock->toggleViewAction());
 	m_Ui.windowMenu->addAction(m_ContentExplorerDock->toggleViewAction());
+	m_Ui.windowMenu->addSeparator();
+	SetUpGpuTimingEntry();
 
 	SetUpRenderMenu();
 
@@ -444,6 +448,8 @@ MainWindow::SetUpRenderMenu()
 		for (RenderTargetWindow* view : findChildren<RenderTargetWindow*>())
 			view->SetGpuTimingEnabled(enabled);
 	});
+
+	m_GpuTimingAction = timing;
 
 	// One frame's table into editor.log. Needs timing on, so it follows the toggle.
 	auto* logTiming = render->addAction("Log GPU Pass Timings");
@@ -1004,6 +1010,46 @@ MainWindow::DriveViewportsFromTab(QDockWidget* dock)
 }
 
 void
+MainWindow::SetUpGpuTimingEntry()
+{
+	// In Window rather than Render: the four entries above it are the docks' own toggles, and this
+	// is the one thing here that opens a window of its own -- a graph docked among the viewports
+	// would stop the viewport it measures, since only the selected tab renders.
+	// Parented, so it goes with the editor; Qt::Window, so it is a window of its own. Hidden until
+	// this entry asks for it, and it is what turns timing on while it is up.
+	m_GpuTiming = new editor::GpuTimingWindow(this);
+	connect(m_GpuTiming, &editor::GpuTimingWindow::TimingWanted, this, [this](bool wanted) {
+		if (m_GpuTimingAction == nullptr)
+			return;
+
+		// Restore rather than switch off: somebody who had timing on for the log still wants it.
+		if (wanted)
+			m_GpuTimingWasOn = m_GpuTimingAction->isChecked();
+
+		m_GpuTimingAction->setChecked(wanted || m_GpuTimingWasOn);
+	});
+
+	auto* graph = m_Ui.windowMenu->addAction("GPU Timing Graph");
+	graph->setCheckable(true);
+	graph->setShortcut(QKeySequence("Ctrl+Shift+G"));
+	graph->setStatusTip(
+		"Graph what each pass of the rendering viewport's frames costs on the GPU, and export it.");
+
+	connect(graph, &QAction::toggled, this, [this](bool shown) {
+		m_GpuTiming->setVisible(shown);
+		if (shown)
+		{
+			m_GpuTiming->raise();
+			m_GpuTiming->activateWindow();
+		}
+	});
+
+	// Closed from its own title bar, the entry has to follow: an unchecked box beside a window that
+	// is up says the wrong thing, and the next click would then do nothing.
+	connect(m_GpuTiming, &editor::GpuTimingWindow::TimingWanted, graph, &QAction::setChecked);
+}
+
+void
 MainWindow::SetUpFrameStats()
 {
 	if (m_LevelEditor == nullptr)
@@ -1042,11 +1088,13 @@ MainWindow::SetUpFrameStats()
 					{
 						m_FrameStatsSource = view;
 						m_FrameStats->setText(editor::FrameStatsText(name, std::nullopt));
+						m_GpuTiming->SetSource(name);
 					}
 					else if (m_FrameStatsSource == view)
 					{
 						m_FrameStatsSource = nullptr;
 						m_FrameStats->clear();
+						m_GpuTiming->SetSource(QString());
 					}
 				}));
 
@@ -1057,9 +1105,11 @@ MainWindow::SetUpFrameStats()
 				view,
 				&RenderTargetWindow::FrameStatsUpdated,
 				this,
-				[this,
-			     view,
-			     name](double meanMs, double maxMs, int missed, const QString& gpuPasses) {
+				[this, view, name](
+					double                               meanMs,
+					double                               maxMs,
+					int                                  missed,
+					const std::vector<bgl::PassTimings>& gpuFrames) {
 					if (m_FrameStatsSource != view)
 						return;
 
@@ -1070,13 +1120,16 @@ MainWindow::SetUpFrameStats()
 				                                .maxMs  = maxMs,
 				                                .missed = missed }));
 
-					// The breakdown is one frame of numbers, which is a log's to hold and a
-					// tooltip's to misread; a stats window that graphs the rows is the readout it
-					// wants, and is not this.
-					if (m_LogNextPassTimings && !gpuPasses.isEmpty())
+					m_GpuTiming->AddFrames(gpuFrames);
+
+					// The latest frame, formatted here rather than on the render thread: the log
+					// wants one frame as a table and the graph wants every frame as numbers, and
+					// formatting at the source would make them two copies of the same rows.
+					if (m_LogNextPassTimings && !gpuFrames.empty())
 					{
 						m_LogNextPassTimings = false;
-						qInfo().noquote() << "GPU pass timings," << name << "\n" << gpuPasses;
+						qInfo().noquote() << "GPU pass timings," << name << "\n"
+										  << editor::PassTimingsText(gpuFrames.back().passes);
 					}
 				},
 				Qt::QueuedConnection);

@@ -390,8 +390,11 @@ and portability.
     an RHI timestamp span (`ICommandList::BeginTiming`), read through `IGraphics::GetPassTimings`
     and written to `editor.log` on demand. Per pass, not per draw: a bucket inside Forward is not a
     row. See [docs/framegraph.md](docs/framegraph.md).
-  - [ ] A frame-stats window that graphs the per-pass rows over time — one frame of numbers in a
-    log is what the tool has; a graph is what a person reads a spike off.
+  - [x] A frame-stats window that graphs the per-pass rows over time — a stacked band per pass over
+    the last 600 timed frames, sampled every frame, exported as a CSV beside `editor.log`. See
+    [docs/profiling.md](docs/profiling.md) § The frame-stats window.
+  - [ ] An *interactive* capture of that graph. A drawing of it was built and removed: a static
+    picture answers nothing the window on screen does not.
   - [ ] Live counters: agents alive/dying/corpse split by type, visible per tier, per-instance vs
     table against the top-K budget, events vs capacity, slots in use, cells at cap, corpse palette
     memory.
