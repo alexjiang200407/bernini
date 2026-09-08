@@ -147,10 +147,14 @@ TEST_CASE("Two surfaces draw side by side across three layers", "[surface][rende
 
 	// Middle: the rim again, blended, and taking every default it declares -- so the two differ by
 	// their parameters alone and a default that failed to land would show as the left one's colour.
+	// Single-sided, which the mesh stage reads off GameSurfaceRecord to cull back faces: a
+	// translucent sphere that kept its back hemisphere would composite that hemisphere's own
+	// terminator over the front, and the faceting of it is what the golden would then pin.
 	auto rimBlend = scene->CreateSurfaceMaterial(
 		{
-			.surface   = "Rim",
-			.layerType = LayerType::kBlend,
+			.surface     = "Rim",
+			.layerType   = LayerType::kBlend,
+			.doubleSided = false,
 		});
 
 	// Right: the second surface, blended too, so both are in the one transparent dispatch. Created
@@ -158,21 +162,25 @@ TEST_CASE("Two surfaces draw side by side across three layers", "[surface][rende
 	// record it names.
 	auto tintBlend = scene->CreateSurfaceMaterial(
 		{
-			.surface   = "Tint",
-			.layerType = LayerType::kBlend,
-			.values    = { { "tint", glm::vec4(1.0f, 0.0f, 0.0f, 1.0f) } },
+			.surface     = "Tint",
+			.layerType   = LayerType::kBlend,
+			.doubleSided = false,
+			.values      = { { "tint", glm::vec4(1.0f, 0.0f, 0.0f, 1.0f) } },
 		});
 
 	scene->UpdateSurfaceMaterial(
 		tintBlend,
 		{
-			.surface   = "Tint",
-			.layerType = LayerType::kBlend,
-			.values    = { { "tint", glm::vec4(0.2f, 0.9f, 0.4f, 0.6f) } },
+			.surface     = "Tint",
+			.layerType   = LayerType::kBlend,
+			.doubleSided = false,
+			.values      = { { "tint", glm::vec4(0.2f, 0.9f, 0.4f, 0.6f) } },
 		});
 
-	// Far right: the third layer. Tint's coverage runs only here, and its cutoff is what turns the
-	// stripes it answers with into a cutout -- so this is the pair of alpha-test rows drawing.
+	// Far right: the third layer, and the one two-sided record in the frame -- an alpha-test draw
+	// keeps its back faces and its depth resolves them. Tint's coverage runs only here, and its
+	// cutoff is what turns the stripes it answers with into a cutout -- so this is the pair of
+	// alpha-test rows drawing.
 	auto tintMask = scene->CreateSurfaceMaterial(
 		{
 			.surface     = "Tint",
