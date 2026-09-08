@@ -138,6 +138,11 @@ private:
 	void
 	ReleaseRenderResources() noexcept;
 
+	// The Window menu's entry for the GPU timing graph, which is a window rather than a dock and so
+	// has no toggleViewAction of its own to add.
+	void
+	SetUpGpuTimingEntry();
+
 	// The Render menu. Its entries toggle temporal AA and set the viewports' render scale, which is
 	// how a temporal artifact gets judged -- the difference is what shows it, and a restart loses that.
 	void

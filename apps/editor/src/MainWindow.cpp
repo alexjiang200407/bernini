@@ -370,6 +370,8 @@ MainWindow::Build(const std::filesystem::path& configPath)
 	m_Ui.windowMenu->addAction(m_MaterialEditorDock->toggleViewAction());
 	m_Ui.windowMenu->addAction(m_AnimationEditorDock->toggleViewAction());
 	m_Ui.windowMenu->addAction(m_ContentExplorerDock->toggleViewAction());
+	m_Ui.windowMenu->addSeparator();
+	SetUpGpuTimingEntry();
 
 	SetUpRenderMenu();
 
@@ -448,18 +450,6 @@ MainWindow::SetUpRenderMenu()
 	});
 
 	m_GpuTimingAction = timing;
-
-	// A window rather than a dock: the viewport docks are tabbed together and only the selected one
-	// renders, so a graph docked among them would stop the viewport it measures.
-	auto* graph = render->addAction("GPU Timing Graph…");
-	graph->setShortcut(QKeySequence("Ctrl+Shift+G"));
-	graph->setStatusTip(
-		"Graph what each pass of the rendering viewport's frames costs on the GPU, and export it.");
-	connect(graph, &QAction::triggered, this, [this] {
-		m_GpuTiming->show();
-		m_GpuTiming->raise();
-		m_GpuTiming->activateWindow();
-	});
 
 	// One frame's table into editor.log. Needs timing on, so it follows the toggle.
 	auto* logTiming = render->addAction("Log GPU Pass Timings");
@@ -1020,13 +1010,13 @@ MainWindow::DriveViewportsFromTab(QDockWidget* dock)
 }
 
 void
-MainWindow::SetUpFrameStats()
+MainWindow::SetUpGpuTimingEntry()
 {
-	if (m_LevelEditor == nullptr)
-		return;
-
+	// In Window rather than Render: the four entries above it are the docks' own toggles, and this
+	// is the one thing here that opens a window of its own -- a graph docked among the viewports
+	// would stop the viewport it measures, since only the selected tab renders.
 	// Parented, so it goes with the editor; Qt::Window, so it is a window of its own. Hidden until
-	// the Render menu asks for it, and it is what turns timing on while it is up.
+	// this entry asks for it, and it is what turns timing on while it is up.
 	m_GpuTiming = new editor::GpuTimingWindow(this);
 	connect(m_GpuTiming, &editor::GpuTimingWindow::TimingWanted, this, [this](bool wanted) {
 		if (m_GpuTimingAction == nullptr)
@@ -1038,6 +1028,32 @@ MainWindow::SetUpFrameStats()
 
 		m_GpuTimingAction->setChecked(wanted || m_GpuTimingWasOn);
 	});
+
+	auto* graph = m_Ui.windowMenu->addAction("GPU Timing Graph");
+	graph->setCheckable(true);
+	graph->setShortcut(QKeySequence("Ctrl+Shift+G"));
+	graph->setStatusTip(
+		"Graph what each pass of the rendering viewport's frames costs on the GPU, and export it.");
+
+	connect(graph, &QAction::toggled, this, [this](bool shown) {
+		m_GpuTiming->setVisible(shown);
+		if (shown)
+		{
+			m_GpuTiming->raise();
+			m_GpuTiming->activateWindow();
+		}
+	});
+
+	// Closed from its own title bar, the entry has to follow: an unchecked box beside a window that
+	// is up says the wrong thing, and the next click would then do nothing.
+	connect(m_GpuTiming, &editor::GpuTimingWindow::TimingWanted, graph, &QAction::setChecked);
+}
+
+void
+MainWindow::SetUpFrameStats()
+{
+	if (m_LevelEditor == nullptr)
+		return;
 
 	m_FrameStats = new QLabel(this);
 	m_FrameStats->setObjectName("FrameStats");

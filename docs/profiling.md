@@ -233,7 +233,7 @@ costs nothing until it has decided to complain.
 
 ## The frame-stats window
 
-A slow frame is read off **Render › GPU Timing Graph** in the editor (`Ctrl+Shift+G`): a stacked
+A slow frame is read off **Window › GPU Timing Graph** in the editor (`Ctrl+Shift+G`): a stacked
 band per frame graph pass over the last 600 timed frames, so the outline of the stack is what the
 frame cost on the GPU and a bulge names the pass that caused it. The pointer marks a frame and the
 legend breaks that one down, which is the same table Log GPU Pass Timings writes.
@@ -243,7 +243,8 @@ Three things about it are decisions rather than detail:
 - **It is a window, not a dock tab.** `MainWindow::DriveViewportsFromTab` keeps a viewport in the
   frame loop only while its dock is the selected tab, and the three viewport docks are tabbed
   together — so a graph docked among them would stop the viewport it is measuring the moment it was
-  brought forward.
+  brought forward. It is listed under Window with the docks' own toggles, because that menu is what
+  says which panels are up, and checkable for the same reason.
 - **It samples every frame, and pauses.** `RenderTargetWindow` reads the rows once per frame and
   hands over the batch at the frame-stats interval; a spike lasts one frame, and the 30-frame
   cadence the status bar reports on would show one frame in thirty. Ten seconds of history is also

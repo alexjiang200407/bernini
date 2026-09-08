@@ -197,7 +197,7 @@ TEST_CASE("The timing graph turns GPU timing on while it is open", "[mainwindow]
 	MainWindow window(nullptr, editor.ConfigFile());
 
 	QAction* timing = ActionNamed(window, "GPU Pass Timing");
-	QAction* graph  = ActionNamed(window, "GPU Timing Graph…");
+	QAction* graph  = ActionNamed(window, "GPU Timing Graph");
 	REQUIRE(timing != nullptr);
 	REQUIRE(graph != nullptr);
 	REQUIRE_FALSE(timing->isChecked());
@@ -205,16 +205,20 @@ TEST_CASE("The timing graph turns GPU timing on while it is open", "[mainwindow]
 	auto* readout = window.findChild<editor::GpuTimingWindow*>();
 	REQUIRE(readout != nullptr);
 
-	graph->trigger();
+	graph->setChecked(true);
 	CHECK(timing->isChecked());
 
 	readout->close();
 	CHECK_FALSE(timing->isChecked());
 
+	// The entry is the window's own state, so closing it from its title bar unchecks the box: an
+	// entry left checked beside a closed window makes the next click do nothing.
+	CHECK_FALSE(graph->isChecked());
+
 	// Switched on for the log before the window was opened, it stays on after it closes: the window
 	// restores what it found rather than switching off something it did not turn on.
 	timing->setChecked(true);
-	graph->trigger();
+	graph->setChecked(true);
 	readout->close();
 	CHECK(timing->isChecked());
 }
