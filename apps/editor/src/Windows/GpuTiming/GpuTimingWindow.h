@@ -6,7 +6,7 @@
 #include <qtmetamacros.h>
 #include <vector>
 
-#include "Windows/GpuTiming/PassHistory.h"
+#include <bgl/PassHistory.h>
 
 class QDir;
 class QLabel;
@@ -58,7 +58,7 @@ namespace editor
 		[[nodiscard]] QString
 		Export(const QDir& directory);
 
-		[[nodiscard]] const PassHistory&
+		[[nodiscard]] const bgl::PassHistory&
 		History() const noexcept
 		{
 			return m_History;
@@ -89,11 +89,11 @@ namespace editor
 		void
 		UpdateStatus();
 
-		PassHistory    m_History;
-		PassGraphView* m_Graph  = nullptr;
-		QLabel*        m_Status = nullptr;
-		QPushButton*   m_Pause  = nullptr;
-		QString        m_Source;
-		bool           m_Paused = false;
+		bgl::PassHistory m_History;
+		PassGraphView*   m_Graph  = nullptr;
+		QLabel*          m_Status = nullptr;
+		QPushButton*     m_Pause  = nullptr;
+		QString          m_Source;
+		bool             m_Paused = false;
 	};
 }

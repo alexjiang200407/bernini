@@ -9,10 +9,13 @@ class QMouseEvent;
 class QPaintEvent;
 class QEvent;
 
-namespace editor
+namespace bgl
 {
 	class PassHistory;
+}
 
+namespace editor
+{
 	/**
 	 * The chart itself: it draws a history it does not own and reports what the pointer is over.
 	 *
@@ -24,7 +27,7 @@ namespace editor
 		Q_OBJECT
 
 	public:
-		explicit PassGraphView(const PassHistory& history, QWidget* parent = nullptr);
+		explicit PassGraphView(const bgl::PassHistory& history, QWidget* parent = nullptr);
 
 		/** The sample under the pointer, or nullopt when the pointer is elsewhere. */
 		[[nodiscard]] std::optional<std::size_t>
@@ -44,7 +47,7 @@ namespace editor
 		leaveEvent(QEvent* event) override;
 
 	private:
-		const PassHistory&         m_History;
+		const bgl::PassHistory&    m_History;
 		std::optional<std::size_t> m_Marked;
 	};
 }

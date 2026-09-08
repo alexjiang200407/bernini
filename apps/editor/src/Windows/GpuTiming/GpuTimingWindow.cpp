@@ -1,7 +1,6 @@
 #include "Windows/GpuTiming/GpuTimingWindow.h"
 
 #include "Windows/GpuTiming/PassGraphView.h"
-#include "Windows/GpuTiming/pass_timing_csv.h"
 #include <QCoreApplication>
 #include <QDateTime>
 #include <QDir>
@@ -17,6 +16,7 @@
 #include <QWidget>
 #include <Qt>
 #include <bgl/PassTiming.h>
+#include <bgl/pass_timing_csv.h>
 #include <qlogging.h>
 #include <qtmetamacros.h>
 #include <vector>
@@ -119,7 +119,7 @@ namespace editor
 		if (!csv.open(QIODevice::WriteOnly | QIODevice::Text))
 			return {};
 
-		QTextStream(&csv) << PassHistoryCsv(m_History);
+		QTextStream(&csv) << QString::fromStdString(bgl::PassHistoryCsv(m_History));
 		csv.close();
 
 		return file;

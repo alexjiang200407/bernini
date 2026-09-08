@@ -6,6 +6,10 @@
 // (CreateGraphics, CookStaticMesh, PreparedStaticMesh's special members), so this target must stay a
 // library. An executable would demand them at link time and there would be nothing to satisfy it.
 #include <bgl/IGraphics.h>
+// Not reached from IGraphics.h: a client helper is included by whoever wants it, so this is the
+// only place the closure of one is checked.
+#include <bgl/PassHistory.h>      // IWYU pragma: keep
+#include <bgl/pass_timing_csv.h>  // IWYU pragma: keep
 
 namespace
 {
