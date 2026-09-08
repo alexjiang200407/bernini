@@ -27,7 +27,7 @@ struct BoundEnv : ISurfaceEnv
 float4 main(float3 worldPos: POSITION, float3 normal: NORMAL, float4 tangent: TANGENT) : SV_Target
 {
     BoundEnv env;
-    SurfaceParams params = { float3(0.0, 1.0, 0.0), 1.0, float2(0.0, 1.0) };
+    SurfaceParams params = { float3(0.0, 1.0, 0.0), 1.0, float3x3(1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0) };
     let lobes = EvaluateSurface(
         env,
         params,

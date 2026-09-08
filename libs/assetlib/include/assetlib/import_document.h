@@ -29,8 +29,8 @@ namespace assetlib
 	 *
 	 * Two halves with different duties: the `parameters` object changes what the importer computes,
 	 * so its serialized subtree is what the cache key hashes; `bindings`, `skeleton`, `outputs`,
-	 * `textureDir` and `textureStamp` never key -- none of them changes what the importer
-	 * computes. Keys a reader
+	 * `textureDir`, `textureStamp` and `textureBakeToken` never key -- none of them changes what
+	 * the importer computes. Keys a reader
 	 * does not know stay in the half they arrived in
 	 * (`extraParametersJson` / `extraJson`) and are written back on serialize, so a newer branch's
 	 * parameter still reaches the key through a reader that has never heard of it.
@@ -40,9 +40,11 @@ namespace assetlib
 		float sampleRate = c_DefaultSampleRate;
 
 		// The extracted textures' whole cache key, since a `.ktx2` carries none of its own: where
-		// they went (empty when none), and the source as it stood when they were written.
+		// they went (empty when none), the source as it stood when they were written, and
+		// c_TextureBakeToken as it stood then -- zero in a document from before it existed.
 		std::string textureDir;
 		SourceStamp textureStamp;
+		uint64_t    textureBakeToken = 0;
 
 		// Overrules what the cook measures for a named clip; see assetlib::groundClips. A parameter
 		// rather than a binding: it changes the samples the importer writes, so it has to key.

@@ -14,6 +14,11 @@ namespace bgl
 		// translation moves it nowhere and only rotation displaces it on screen.
 		glm::mat4 rotationOnlyViewProj{ 1.0f };
 
+		// World to environment space the frame's sky was drawn through. A sky that follows the view
+		// turns every frame, and its reprojection has to undo the spin it was drawn with, not the
+		// spin it is drawn with now.
+		glm::mat4 envRotation{ 1.0f };
+
 		// The sub-pixel offset in NDC that both matrices above were built with. Carried beside them
 		// because a motion vector describes the surface, not the sample pattern, so the shader has
 		// to subtract this frame's and last frame's before differencing.

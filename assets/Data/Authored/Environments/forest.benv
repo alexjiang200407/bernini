@@ -1,4 +1,5 @@
 {
+	"exposureOverride": 1.0,
 	"lighting": "Derived/EnvLighting/forest.benvl",
 	"name": "forest",
 	"sky": "Derived/Sky/forest.bsky",

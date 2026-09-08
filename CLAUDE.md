@@ -193,6 +193,8 @@ tree and never reads an archive back, and why a mount key is a `string_view` and
 
 The `.bsky` / `.benvl` / `.benv` split, how a `.hdr` becomes them, who consumes which, and the
 authoring traps — gamma, cube-seam edge fixup, resampling — that still bite on a map from elsewhere.
+Then the one measurement against another renderer: the shipped `forest` at Blender's level, and the
+probe that checks it.
 
 **[UI Runtime](./docs/ui_runtime.md)**
 

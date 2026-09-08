@@ -53,6 +53,10 @@ namespace bgl
 			SamplerHandle maskSampler;
 			glm::vec2     maskSize{ 0.0f };
 			bool          outlineEnabled = false;
+
+			// The display curve's LUT, and the linear clamp it is read through.
+			SrvHandle     tonemapLut;
+			SamplerHandle lutSampler;
 		};
 
 		PostProcessPass() = default;

@@ -49,6 +49,9 @@ disagrees, trust the header, then fix this doc.
   without touching a tuned value. `resolveEnvironment` folds the two; the resolved
   `maps.exposure` is what a renderer reads. Author it with
   `assetlib_cli exposure -p <project> <key.benv> --set <v>`, or `--clear` to go back to the bake.
+  The shipped `forest` is authored at **1.0**: it is Blender's own `forest.exr`, and Blender's
+  Material Preview draws that at world strength 1.0 with no normalization, so 1.0 is what puts the
+  two side by side. See [Parity with Blender](#parity-with-blender) for what measures it.
 * **The backdrop's defocus is presentation, not pixels.** The sky is baked as a chain by `skyChain`:
   mip 0 is the sharp projection, and each level below it is convolved to the width its own texel
   subtends. Which level is drawn is a document edit rather than minutes of
@@ -243,9 +246,9 @@ is 0.222 and visibly softer. A viewport that wants a particular look on an arbit
 the level from the cube's face size rather than hardcode one, and the defaults here do not yet.
 
 **Only the skybox.** The prefilter and the irradiance convolve the sharp projection, so nothing about
-the background reaches the lighting — the shipped map keeps the source's full 1092 peak in prefilter
-mip 0 while a defocused backdrop is crushed to 91. Blurring the maps that light the scene would be the
-gamma mistake in another costume.
+the background reaches the lighting — the shipped map keeps the source's 1098 peak in prefilter mip 0
+while the backdrop the preview draws, mip 3 of the chain, is crushed to 77. Blurring the maps that
+light the scene would be the gamma mistake in another costume.
 
 ### A rotated sky rotates the lighting
 
@@ -253,6 +256,33 @@ gamma mistake in another costume.
 (`PbrShading::ToEnvSpace`). It has to: the cubes are one environment, and a normal that skipped the
 rotation would be lit from where the sky used to be. Nothing caught this for as long as it was wrong,
 because the only environment shipped has `skyRotationY` 0 — `EnvOrientation_test` is what catches it now.
+
+### A sky can follow the view, and fade
+
+`SkyboxDesc::followsView` attaches the environment to the camera instead of the world: the renderer
+composes the camera's rotation under the authored yaw each frame, so a direction in view space always
+looks up the same texel and the light arrives from the same screen direction however the camera
+orbits — lighting and backdrop alike, since both read the one rotation. It is what Blender's Material
+Preview does with World Space Lighting off, and what the asset previews want; a level viewport keeps
+the world locked. `SkyboxDesc::opacity` and `backdrop` fade the backdrop toward a scene-linear grey
+without touching the lighting, Blender's World Opacity. In the editor both are the viewport's
+`SkyPresentation` ([apps/editor/src/Render/environment.h](apps/editor/src/Render/environment.h)),
+defaulted to that look for the material and animation previews and the thumbnails, and set per
+viewport in `config.json` — `skyMipLevel`, `backdropOpacity`, `backdropGrey`, `followView`.
+`EnvOrientation_test` pins that a following sky keeps its lit side on screen from either side of the
+world, and that a fade leaves the sphere in front of it alone.
+
+### Longitude is Blender's
+
+`equirectToCube` reads longitude as `atan2(z, x)`: `u = 0.5` faces `+X` and `u = 0.75` faces `+Z`,
+which is Blender's `u = 0.5 - atan2(y, x) / 2π` once its Z-up axes are glTF's. So a glTF-forward
+camera looking down `-Z` sees the column Blender's front view sees, with the same side on the left.
+It used to read `atan2(x, z)`, a mirror and a quarter turn off, and a pale face lit from the wrong
+side of the forest is how that showed: the same model's skin measured darker and more saturated than
+Blender's until the environment was turned. `EnvmapBake_test`'s longitude case pins the convention,
+and `BlenderParity_test` compares each side of the frame with Blender's same side. An environment
+baked before the turn keeps the old orientation until it is re-imported, and nothing reports it:
+staleness is judged against the source's stamp, and the source did not change.
 
 ## Verifying
 
@@ -266,8 +296,35 @@ composes and whether those files are there.
 ```bash
 assetlib_cli describe -p <project> Authored/Environments/forest.benv
 assetlib_cli describe -p <project> Derived/Sky/forest.bsky
-assetlib_cli refs -p <project> Derived/BakedTextures/forest_sky.ktx2   # what holds a baked map alive
+assetlib_cli refs -p <project> Derived/BakedTextures/sky_<hash>.ktx2   # what holds a baked map alive
 ```
+
+## Parity with Blender
+
+A golden pins that a render has not moved; nothing in it says whether the level is right. The one
+measurement against another renderer is a matte middle-grey sphere under `forest`, rendered by
+both:
+
+```bash
+/Applications/Blender.app/Contents/MacOS/Blender -b --factory-startup \
+    --python scripts/blender_probe.py -- --out probe.png     # Blender's half, by hand
+just run bgl_extended_tests -- "[parity]"                      # ours, in the suite
+```
+
+The script builds the same sphere and camera under Blender's own `forest.exr` at strength 1.0,
+AgX, no look, exposure 0 — the factory Material Preview — with Eevee's shadows and world sun
+extraction off, so exposure and image-based lighting are the whole of what is compared. It prints
+display luma over four boxes, and the cosine integral of the source at the normal under each sphere
+box, in Bernini's conventions. CI has no Blender, so every number `BlenderParity_test` carries is
+copied from that output rather than computed there; re-run it whenever the reference changes.
+
+The test asserts the sphere's level against Blender's Cycles pixels directly, and against the exact
+cosine integral of the source through the shipped tone map, and the backdrop corners against
+Blender's frame, each side with its own. Cycles rather than the preview's own Eevee because Cycles *is* that
+integral to a percent, while Eevee lights diffuse from a first-order harmonic that reads flatter
+than the source — Blender's approximation, measured, and not a term to match. The tone map is
+Blender's own LUT ([passes.md](passes.md#scene-colour-and-where-the-display-curve-is-applied)), so
+the two frames agree to a few thousandths.
 
 **Maintenance note.** The tables above are this document's load-bearing part, and their file links rot
 silently if files move. Re-check them whenever the environment file layout changes.

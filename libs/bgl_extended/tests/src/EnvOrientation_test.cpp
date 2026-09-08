@@ -11,6 +11,7 @@
 #include <bgl/ISceneView.h>
 #include <bgl/SkyboxDesc.h>
 #include <bgl/TextureAssetHandle.h>
+#include <catch2/catch_approx.hpp>
 #include <catch2/catch_message.hpp>
 #include <catch2/catch_test_macros.hpp>
 #include <core/containers/fixed_buffer.h>
@@ -341,4 +342,96 @@ TEST_CASE("A rotated sky rotates the lighting with it", "[pbr][ibl][orientation]
 
 	CHECK(skyLeft.Luma() > skyRight.Luma() * c_LitMargin);
 	CHECK(sphereLeft.Luma() > sphereRight.Luma() * c_LitMargin);
+}
+
+/**
+ * A sky that follows the view keeps its light where it is on screen.
+ *
+ * The world-locked case above has the bright side cross the frame as the camera crosses to the
+ * other side of the world. Attached to the camera, the environment turns with it, so the same
+ * screen side stays lit from either side -- and the backdrop, which follows too, agrees.
+ */
+TEST_CASE(
+	"A sky that follows the view keeps its light on screen",
+	"[pbr][ibl][orientation][render]")
+{
+	auto probe = MakeProbe(glm::vec3(1.0f, 0.0f, 0.0f));
+
+	auto following          = bgl::SkyboxDesc();
+	following.skyboxCubeTex = probe.skybox;
+	following.followsView   = true;
+	probe.view->SetSkyBox(following);
+
+	const std::string front = "assets/golden/env_following_front.got.png";
+	const std::string back  = "assets/golden/env_following_back.got.png";
+	const std::string side  = "assets/golden/env_following_side.got.png";
+
+	Shoot(probe, glm::vec3(0.0f, 0.0f, 20.0f), front);
+	Shoot(probe, glm::vec3(0.0f, 0.0f, -20.0f), back);
+
+	// The +Z and -Z views have symmetric rotations, equal to their own transposes, so a rotation
+	// composed the wrong way round would pass both. From +X the rotation is not its transpose:
+	// the right composition keeps the lit box on the right, the transposed one moves it left.
+	Shoot(probe, glm::vec3(20.0f, 0.0f, 0.0f), side);
+
+	const auto frontLeft  = bgl::test::MeanColor(front, c_LeftX, c_BoxY, c_BoxSize, c_BoxSize);
+	const auto frontRight = bgl::test::MeanColor(front, c_RightX, c_BoxY, c_BoxSize, c_BoxSize);
+	const auto backLeft   = bgl::test::MeanColor(back, c_LeftX, c_BoxY, c_BoxSize, c_BoxSize);
+	const auto backRight  = bgl::test::MeanColor(back, c_RightX, c_BoxY, c_BoxSize, c_BoxSize);
+	const auto sideLeft   = bgl::test::MeanColor(side, c_LeftX, c_BoxY, c_BoxSize, c_BoxSize);
+	const auto sideRight  = bgl::test::MeanColor(side, c_RightX, c_BoxY, c_BoxSize, c_BoxSize);
+	const auto skyFront   = bgl::test::MeanColor(front, c_SkyRightX, c_SkyY, c_BoxSize, c_BoxSize);
+	const auto skyBack    = bgl::test::MeanColor(back, c_SkyRightX, c_SkyY, c_BoxSize, c_BoxSize);
+
+	INFO(
+		"front L/R " << frontLeft.Luma() << "/" << frontRight.Luma() << ", back L/R "
+					 << backLeft.Luma() << "/" << backRight.Luma() << ", side L/R "
+					 << sideLeft.Luma() << "/" << sideRight.Luma() << ", sky right front/back "
+					 << skyFront.Luma() << "/" << skyBack.Luma());
+
+	CHECK(frontRight.Luma() > frontLeft.Luma() * c_LitMargin);
+	CHECK(backRight.Luma() > backLeft.Luma() * c_LitMargin);
+	CHECK(sideRight.Luma() > sideLeft.Luma() * c_LitMargin);
+	CHECK(skyFront.Luma() > 0.05f);
+	CHECK(skyBack.Luma() > 0.05f);
+}
+
+/**
+ * The backdrop fades toward its colour; the model does not.
+ *
+ * Opacity is presentation of the sky alone. A fade that reached the lighting would darken the
+ * sphere with the backdrop, which is the one thing a preview fading its world must not do.
+ */
+TEST_CASE("A faded backdrop leaves the lighting alone", "[skybox][orientation][render]")
+{
+	auto probe = MakeProbe(glm::vec3(1.0f, 0.0f, 0.0f));
+
+	const std::string opaque = "assets/golden/env_fade_opaque.got.png";
+	const std::string faded  = "assets/golden/env_fade_faded.got.png";
+
+	auto sky          = bgl::SkyboxDesc();
+	sky.skyboxCubeTex = probe.skybox;
+	probe.view->SetSkyBox(sky);
+	Shoot(probe, glm::vec3(0.0f, 0.0f, 20.0f), opaque);
+
+	sky.opacity  = 0.0f;
+	sky.backdrop = glm::vec3(0.0f, 0.0f, 0.2f);
+	probe.view->SetSkyBox(sky);
+	Shoot(probe, glm::vec3(0.0f, 0.0f, 20.0f), faded);
+
+	const auto skyOpaque = bgl::test::MeanColor(opaque, c_SkyRightX, c_SkyY, c_BoxSize, c_BoxSize);
+	const auto skyFaded  = bgl::test::MeanColor(faded, c_SkyRightX, c_SkyY, c_BoxSize, c_BoxSize);
+	const auto litOpaque = bgl::test::MeanColor(opaque, c_RightX, c_BoxY, c_BoxSize, c_BoxSize);
+	const auto litFaded  = bgl::test::MeanColor(faded, c_RightX, c_BoxY, c_BoxSize, c_BoxSize);
+
+	INFO(
+		"sky opaque/faded " << skyOpaque.Luma() << "/" << skyFaded.Luma() << ", sphere "
+							<< litOpaque.Luma() << "/" << litFaded.Luma());
+
+	// The lit backdrop becomes the backdrop colour: a dim blue, so its blue stands out where the
+	// half-lit environment had none.
+	CHECK(skyFaded.Luma() < skyOpaque.Luma() * 0.5f);
+	CHECK(skyFaded.b > skyFaded.r + 0.1f);
+
+	CHECK(litFaded.Luma() == Catch::Approx(litOpaque.Luma()).margin(0.01));
 }

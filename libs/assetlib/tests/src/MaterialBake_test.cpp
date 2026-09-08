@@ -539,6 +539,27 @@ TEST_CASE("bakeMaterial reuses a map unless what it names changed", "[bmaterial]
 	}
 }
 
+TEST_CASE("bakeMaterial brings a triplet to the current revision", "[bmaterial][bake]")
+{
+	const BakeDir dir("bernini_bake_revision");
+	WriteSource(dir.path / "a.ktx2", 16, { { 200, 100, 50, 255 } });
+
+	BMaterial mat;
+	mat.pbr.routes[0] = { "a.ktx2", 0 };
+	REQUIRE_NOTHROW(StoreAt(dir.path).BakeMaterial(mat));
+	REQUIRE(mat.pbr.bakeToken == c_TextureBakeToken);
+	REQUIRE_FALSE(bakeIsStale(mat, MountAt(dir.path)));
+
+	// The stamps still match and the map is still on disk: only the revision says it was baked
+	// under another rule, and that alone is a re-bake.
+	mat.pbr.bakeToken = 0;
+	REQUIRE(bakeIsStale(mat, MountAt(dir.path)));
+
+	REQUIRE_NOTHROW(StoreAt(dir.path).BakeMaterial(mat));
+	CHECK(mat.pbr.bakeToken == c_TextureBakeToken);
+	CHECK_FALSE(bakeIsStale(mat, MountAt(dir.path)));
+}
+
 TEST_CASE("bakeMaterial never decodes a source whose map is already there", "[bmaterial][bake]")
 {
 	const BakeDir dir("bernini_bake_nodecode");

@@ -1,5 +1,6 @@
 #pragma once
 #include <bgl/TextureAssetHandle.h>
+#include <bgl/glm.h>
 #include <cstdint>
 
 namespace bgl
@@ -22,8 +23,22 @@ namespace bgl
 		 */
 		float exposure = 1.0f;
 
-		// Radians about the up axis. Rotates the lighting with it: the IBL lookup carries the same
-		// spin, or a rotated sky would light the scene from where it used to be.
+		// Radians about the up axis -- the world's, or the camera's when followsView. Rotates the
+		// lighting with it: the IBL lookup carries the same spin, or a rotated sky would light the
+		// scene from where it used to be.
 		float rotationY = 0.0f;
+
+		// Attaches the environment to the camera instead of the world, lighting and backdrop
+		// alike, so its light arrives from the same screen direction however the camera orbits.
+		// See docs/envmaps.md.
+		bool followsView = false;
+
+		/**
+		 * How much of the backdrop is the sky, the rest being `backdrop`: 1 draws the sky alone.
+		 * The lighting is untouched either way -- this is presentation, applied before the display
+		 * curve, so `backdrop` is scene-linear.
+		 */
+		float     opacity = 1.0f;
+		glm::vec3 backdrop{ 0.0f };
 	};
 }

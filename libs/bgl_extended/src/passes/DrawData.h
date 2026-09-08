@@ -74,9 +74,10 @@ namespace bgl
 		EnvironmentMap env;
 		float          exposure = 1.0f;
 
-		// (sin, cos) of the sky's rotation about the up axis. The IBL cubes carry it too, or a
-		// rotated sky lights the scene from where it used to be.
-		glm::vec2 envRotation{ 0.0f, 1.0f };
+		// World to environment space: the authored yaw, and the camera's rotation when the sky
+		// follows the view. The IBL cubes and the backdrop are both looked up through it, or a
+		// turned sky lights the scene from where it used to be.
+		glm::mat4 envRotation{ 1.0f };
 
 		std::optional<SkyboxDesc> skybox;
 		glm::mat4                 skyboxClipToWorld{ 1.0f };

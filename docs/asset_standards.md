@@ -220,6 +220,15 @@ alpha independent, which is what lets a pipeline dilate colour out under the tra
 > 0 — nothing is supposed to sample it — and in practice the encoder lands on white. Dilate the colour
 > outward under the mask *before* baking if you care about the filtered edge.
 
+**sRGB mips are averaged in linear light.** A base colour is stored sRGB-encoded and decoded by the
+sampler, so its chain is built by decoding, averaging and re-encoding (`stbir_resize_uint8_srgb`).
+Averaging the encoded bytes lands under the light they encode -- on a fur texture, 1% at mip 3 and 5%
+at mip 5 -- and reads as a darker model at any distance a preview draws one. Which images are colour is
+decided once, by the glTF extract, from what the materials read as a base colour; the image carries the
+`R8G8B8A8_SRGB` tag from there to `WriteTextures`, and the material bake passes its group's. Normal and
+ORM maps are data and average as stored. The bytes this produces are the revision `c_TextureBakeToken`
+names ([asset_containers.md](asset_containers.md)).
+
 **Cutout mips preserve alpha coverage.** Averaging an alpha mask down a mip chain shrinks the area that
 survives the cutoff, so a naively mipped cutout thins out and dissolves with distance — foliage that
 evaporates as it recedes. For a cutout, `rgba8ToImage` rescales each level's alpha so the fraction of
@@ -231,9 +240,10 @@ base colour is written into an sRGB map regardless of its own source's tag — k
 source texture.
 
 * **What the bake emits**: [libs/assetlib/src/bmesh_texture.cpp](libs/assetlib/src/bmesh_texture.cpp)
-  (`rgba8ToImage`) builds an RGBA8 mip chain with `stb_image_resize`; `AssetStore::WriteTextures`
-  ([libs/assetlib/src/bmesh_io.cpp](libs/assetlib/src/bmesh_io.cpp)) tags **base-color maps as sRGB**
-  (from the material's `baseColorTexture` usage) and everything else `_UNORM`, then `writeKTX2`
+  (`rgba8ToImage`) builds an RGBA8 mip chain with `stb_image_resize`, in linear light for an image the
+  glTF extract tagged sRGB (one a material reads as its base colour); `AssetStore::WriteTextures`
+  ([libs/assetlib/src/bmesh_io.cpp](libs/assetlib/src/bmesh_io.cpp)) writes **that tag**, so a
+  base-color map lands sRGB and everything else `_UNORM`, then `writeKTX2`
   ([libs/assetlib/src/image_io.cpp](libs/assetlib/src/image_io.cpp)) **Basis-UASTC-compresses** LDR
   maps (multi-threaded, `LEVEL_FASTER`) and writes one `.ktx2` per image. HDR/float inputs (the IBL maps)
   skip compression. On load, `loadKTX2` transcodes any Basis-supercompressed KTX2 to **BC7** and hands

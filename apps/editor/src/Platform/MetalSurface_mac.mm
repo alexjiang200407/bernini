@@ -21,6 +21,12 @@ namespace platform
 		NSWindow* window   = [nsView window];
 		layer.contentsScale = window != nil ? [window backingScaleFactor] : 1.0;
 
+		// The window's colour space is set explicitly, to the sRGB the backbuffer is encoded in.
+		// Qt's window already reports sRGB, and until it is set by hand the layer is composited
+		// unmatched all the same -- measured on a P3 display, docs/known_issues.md.
+		if (window != nil)
+			[window setColorSpace:[NSColorSpace sRGBColorSpace]];
+
 		// Order matters: assigning the layer first and then asking for layer-backing keeps this
 		// layer, where setting wantsLayer first would have AppKit make one of its own.
 		[nsView setLayer:layer];

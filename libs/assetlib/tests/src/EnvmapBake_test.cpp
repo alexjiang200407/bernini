@@ -166,7 +166,13 @@ namespace
 		return out;
 	}
 
-	/** An equirectangular image, dark except for one bright texel at (u, v). */
+	/**
+	 * An equirectangular image, dark except for one bright texel at (u, v).
+	 *
+	 * The cases below were calibrated under the previous longitude convention; when it turned to
+	 * Blender's, each spot's u became 1.25 - u, which is the same direction on the cube, so the
+	 * energy and direction bounds still measure the spot they were set against.
+	 */
 	ImageData
 	EquirectWithSpot(uint32_t width, uint32_t height, float u, float v, float radiance)
 	{
@@ -285,9 +291,10 @@ TEST_CASE("SH irradiance preserves the environment's mean", "[envmap][irradiance
 	CHECK(MeanRadiance(iem, 0) == Catch::Approx(MeanRadiance(cube, 0)).epsilon(0.05));
 }
 
-// The orientation case. A mirrored longitude still yields a plausible environment, just rotated 42
-// degrees, and it shipped once precisely because nothing checked it. u = 0.5 must land on +Z and
-// u = 0.75 on +X; those two together pin both the offset and the handedness.
+// The orientation case. A mirrored longitude still yields a plausible environment, just lit from
+// the wrong side, and one shipped for as long as nothing checked it against Blender. u = 0.5 must
+// land on +X and u = 0.75 on +Z -- Blender's convention in glTF axes -- and those two together pin
+// both the offset and the handedness.
 TEST_CASE("equirect longitude maps to the expected cube direction", "[envmap][orientation]")
 {
 	struct Case
@@ -298,10 +305,10 @@ TEST_CASE("equirect longitude maps to the expected cube direction", "[envmap][or
 	};
 
 	const Case cases[] = {
-		{ 0.50f, { 0.0f, 0.0f, 1.0f }, "u=0.50 -> +Z" },
-		{ 0.75f, { 1.0f, 0.0f, 0.0f }, "u=0.75 -> +X" },
-		{ 0.00f, { 0.0f, 0.0f, -1.0f }, "u=0.00 -> -Z" },
-		{ 0.25f, { -1.0f, 0.0f, 0.0f }, "u=0.25 -> -X" },
+		{ 0.50f, { 1.0f, 0.0f, 0.0f }, "u=0.50 -> +X" },
+		{ 0.75f, { 0.0f, 0.0f, 1.0f }, "u=0.75 -> +Z" },
+		{ 0.00f, { -1.0f, 0.0f, 0.0f }, "u=0.00 -> -X" },
+		{ 0.25f, { 0.0f, 0.0f, -1.0f }, "u=0.25 -> -Z" },
 	};
 
 	for (const Case& c : cases)
@@ -330,7 +337,7 @@ TEST_CASE("equirect latitude maps v=0 to +Y and v=1 to -Y", "[envmap][orientatio
 // roughness-1 specular -- is easy to mistake for an exposure problem.
 TEST_CASE("the prefilter chain does not gain energy with roughness", "[envmap][prefilter]")
 {
-	const ImageData cube = equirectToCube(EquirectWithSpot(128, 64, 0.4f, 0.35f, 200.0f), 64);
+	const ImageData cube = equirectToCube(EquirectWithSpot(128, 64, 0.85f, 0.35f, 200.0f), 64);
 
 	auto desc      = PrefilterDesc();
 	desc.faceSize  = 64;  // a 7-mip chain needs at least this: 32 >> 6 would be 0
@@ -359,7 +366,7 @@ TEST_CASE("the prefilter chain does not gain energy with roughness", "[envmap][p
 // of it -- this is what keeps a mirror surface reflecting the world and not a blur of it.
 TEST_CASE("the prefilter's mip 0 reproduces the source", "[envmap][prefilter]")
 {
-	const ImageData cube = equirectToCube(EquirectWithSpot(128, 64, 0.6f, 0.5f, 300.0f), 32);
+	const ImageData cube = equirectToCube(EquirectWithSpot(128, 64, 0.65f, 0.5f, 300.0f), 32);
 
 	auto desc      = PrefilterDesc();
 	desc.faceSize  = 64;
@@ -441,7 +448,7 @@ TEST_CASE("a non-float or non-cube source is rejected", "[envmap]")
 // energy the source did not have.
 TEST_CASE("the sky chain keeps mip 0 sharp and conserves energy", "[envmap][sky]")
 {
-	const ImageData cube = equirectToCube(EquirectWithSpot(128, 64, 0.6f, 0.5f, 300.0f), 64);
+	const ImageData cube = equirectToCube(EquirectWithSpot(128, 64, 0.65f, 0.5f, 300.0f), 64);
 
 	const ImageData chain = skyChain(cube, 64, 6, 256, 0);
 

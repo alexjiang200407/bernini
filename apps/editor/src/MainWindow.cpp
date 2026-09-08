@@ -195,9 +195,19 @@ MainWindow::Build(const std::filesystem::path& configPath)
 			settings["levelEditor"]["environmentMap"].GetOrDefault(std::string());
 		levelEnv.dataRoot = settings["levelEditor"]["dataRoot"].GetOrDefault(std::string());
 
-		// A level viewport shows the world sharp, where the previews defocus their backdrop on
-		// purpose -- so it takes the `.bsky`'s own presentation rather than overruling it.
-		levelEnv.skyMipLevelOverride = std::nullopt;
+		// A level viewport shows the world as authored, where the previews present it as Blender's
+		// Material Preview does -- see editor::SkyPresentation.
+		levelEnv.sky = editor::SkyPresentation::World();
+
+		// The preview look, each knob overridable per viewport; absent keeps what `sky` came with.
+		const auto readSky = [](const auto& section, editor::SkyPresentation sky) {
+			if (auto mip = section["skyMipLevel"])
+				sky.mipLevel = mip.GetOrDefault(sky.mipLevel.value_or(0u));
+			sky.opacity      = section["backdropOpacity"].GetOrDefault(sky.opacity);
+			sky.backdropGrey = section["backdropGrey"].GetOrDefault(sky.backdropGrey);
+			sky.followsView  = section["followView"].GetOrDefault(sky.followsView);
+			return sky;
+		};
 
 		// Absent, and the .benv's own exposure stands -- which is the correct one for its maps.
 		if (auto exposure = settings["levelEditor"]["exposure"])
@@ -216,6 +226,7 @@ MainWindow::Build(const std::filesystem::path& configPath)
 		matDesc.previewEnv.environmentMap =
 			matSettings["environmentMap"].GetOrDefault(std::string());
 		matDesc.previewEnv.dataRoot = matSettings["dataRoot"].GetOrDefault(std::string());
+		matDesc.previewEnv.sky      = readSky(matSettings, editor::SkyPresentation());
 
 		// Absent, and the .benv's own derived exposure stands -- which is the correct one for its maps.
 		if (auto exposure = matSettings["exposure"])
@@ -228,6 +239,7 @@ MainWindow::Build(const std::filesystem::path& configPath)
 		thumbDesc.initialInstances   = thumbSettings["initialInstances"].GetOrDefault(256u);
 		thumbDesc.env.environmentMap = thumbSettings["environmentMap"].GetOrDefault(std::string());
 		thumbDesc.env.dataRoot       = thumbSettings["dataRoot"].GetOrDefault(std::string());
+		thumbDesc.env.sky            = readSky(thumbSettings, editor::SkyPresentation());
 
 		if (auto exposure = thumbSettings["exposure"])
 			thumbDesc.env.exposureOverride = exposure.GetOrDefault(1.0f);
@@ -248,6 +260,7 @@ MainWindow::Build(const std::filesystem::path& configPath)
 			matSettings["environmentMap"].GetOrDefault(std::string()));
 		animDesc.previewEnv.dataRoot = animSettings["dataRoot"].GetOrDefault(
 			matSettings["dataRoot"].GetOrDefault(std::string()));
+		animDesc.previewEnv.sky = readSky(animSettings, matDesc.previewEnv.sky);
 
 		// Absent, and the .benv's own derived exposure stands -- which is the correct one for its maps.
 		if (auto exposure = animSettings["exposure"])

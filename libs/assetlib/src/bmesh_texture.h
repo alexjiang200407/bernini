@@ -14,10 +14,17 @@ namespace assetlib
 	 * handles -- so it slots straight into imp::BMeshImport::textures and is baked to a standalone
 	 * `.ktx2` by AssetStore::WriteTextures.
 	 *
+	 * An sRGB image is averaged in the light it encodes and tagged `R8G8B8A8_SRGB`, which is the tag
+	 * WriteTextures writes; a chain averaged in the encoded bytes reads darker at every level below
+	 * the first, by more the deeper the level and the higher the contrast. Alpha is linear either way.
+	 * The bytes this produces are what c_TextureBakeToken names.
+	 *
 	 * @param rgba        width*height*4 bytes, row-major, no padding.
 	 * @param width       Image width in pixels.
 	 * @param height      Image height in pixels.
 	 * @param alphaCutoff The cutout threshold in [0,1], or empty for a map with no alpha test.
+	 * @param srgb        Whether the colour channels are sRGB-encoded (a base colour) rather than
+	 *                    linear data (a normal or ORM map).
 	 * @throws std::runtime_error if `rgba` is too small or the mip resize fails.
 	 */
 	[[nodiscard]] ImageData
@@ -25,7 +32,8 @@ namespace assetlib
 		std::span<const std::byte> rgba,
 		uint32_t                   width,
 		uint32_t                   height,
-		std::optional<float>       alphaCutoff = std::nullopt);
+		std::optional<float>       alphaCutoff = std::nullopt,
+		bool                       srgb        = false);
 
 	/**
 	 * Bleeds colour outward into fully-transparent (alpha == 0) texels: each takes the RGB of its

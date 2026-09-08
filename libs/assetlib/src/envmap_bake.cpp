@@ -472,9 +472,10 @@ namespace assetlib
 						static_cast<float>(row),
 						faceSize);
 
-					// atan2(x, z), not atan2(x, -z): the latter mirrors longitude, which lands the
-					// environment 42 degrees off the orientation CMFT produces from the same source.
-					const float u = 0.5f + std::atan2(d.x, d.z) / (2.0f * c_Pi);
+					// Blender's longitude in glTF axes: u = 0.5 faces +X and u = 0.75 faces +Z, so a
+					// camera looking down -Z sees the column Blender's front view sees, left and
+					// right included. atan2(x, z) is that mirrored and a quarter turn off.
+					const float u = 0.5f + std::atan2(d.z, d.x) / (2.0f * c_Pi);
 					const float v = std::acos(std::clamp(d.y, -1.0f, 1.0f)) / c_Pi;
 
 					const float x  = u * static_cast<float>(srcW) - 0.5f;

@@ -108,6 +108,10 @@ namespace assetlib
 		std::array<ChannelRoute, c_LooseChannelCount> routes;
 
 		std::array<SourceStamp, c_LooseChannelCount> routeStamps;
+
+		// assetlib::c_TextureBakeToken as it stood when the triplet was baked; zero before a bake, and
+		// in a material from before it existed.
+		uint64_t bakeToken = 0;
 	};
 
 	/**
