@@ -20,11 +20,6 @@ namespace bgl
 		uint32_t initialVertexBufferByteSize = 1;
 		uint32_t initialPbrMaterials         = 1;
 		uint32_t initialLoosePbrMaterials    = 1;
-
-		// A material drawn by a surface -- a shading function the game wrote, registered from
-		// GraphicsOptions::surfaceShaderDir and described by SurfaceMaterialDesc. Sized by the
-		// largest registered surface's parameter block, since the three kinds share one arena and
-		// this is the only one whose size is not known until a game's shaders are read.
-		uint32_t initialSurfaceMaterials = 1;
+		uint32_t initialSurfaceMaterials     = 1;
 	};
 }

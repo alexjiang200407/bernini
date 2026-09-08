@@ -562,14 +562,22 @@ namespace bgl
 		[[nodiscard]] idl::PbrMaterial
 		BuildPbrMaterial(const PbrMaterialDesc& desc) const;
 
+		/// A surface material packed for the arena: the record's bytes, and the kind they are filed
+		/// under -- the surface's own, since a game row belongs to one surface.
+		struct BuiltSurfaceMaterial
+		{
+			MaterialType           kind = MaterialType::kInvalid;
+			std::vector<std::byte> payload;
+		};
+
 		/**
-		 * The surface named by `desc`, and its record's bytes: the engine's fixed part, then the
+		 * Packs the surface named by `desc`: the engine's fixed part of the record, then the
 		 * parameter block with each declared field at the offset reflection read for it.
 		 *
 		 * @throws SceneError if no surface has that name, if the layer is one no game row draws, or
 		 *         if a value or texture names a field the surface does not declare.
 		 */
-		[[nodiscard]] std::pair<const SurfaceType&, std::vector<std::byte>>
+		[[nodiscard]] BuiltSurfaceMaterial
 		BuildSurfaceMaterial(const SurfaceMaterialDesc& desc) const;
 
 		[[nodiscard]] idl::LoosePbrMaterial

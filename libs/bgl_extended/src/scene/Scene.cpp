@@ -243,6 +243,41 @@ namespace bgl
 			return raw;
 		}
 
+		// Every surface's parameter block is a different size and one arena holds them all, so a
+		// game record is budgeted by the largest surface registered rather than by its own.
+		uint64_t
+		SurfaceRecordBytes(std::span<const SurfaceType> surfaces) noexcept
+		{
+			uint32_t largestParams = 0;
+			for (const SurfaceType& surface : surfaces)
+				largestParams = std::max(largestParams, surface.params.byteSize);
+
+			return idl::cRawPayloadOffset + sizeof(idl::GameSurfaceRecord) + largestParams;
+		}
+
+		// The three material kinds share one arena, so their budgets add up into it.
+		uint64_t
+		MaterialArenaBytes(const SceneDesc& desc, uint64_t surfaceRecordBytes) noexcept
+		{
+			return (static_cast<uint64_t>(desc.initialPbrMaterials) *
+			        (idl::cRawPayloadOffset + sizeof(idl::PbrMaterial))) +
+			       (static_cast<uint64_t>(desc.initialLoosePbrMaterials) *
+			        (idl::cRawPayloadOffset + sizeof(idl::LoosePbrMaterial))) +
+			       (static_cast<uint64_t>(desc.initialSurfaceMaterials) * surfaceRecordBytes);
+		}
+
+		// The null record must cover the largest payload as well as its header: a null reference
+		// reads zeros for a whole record rather than the first live one.
+		uint32_t
+		MaterialNullRecordBytes(uint64_t surfaceRecordBytes) noexcept
+		{
+			return std::max(
+				static_cast<uint32_t>(surfaceRecordBytes),
+				idl::cRawPayloadOffset +
+					static_cast<uint32_t>(
+						std::max(sizeof(idl::PbrMaterial), sizeof(idl::LoosePbrMaterial))));
+		}
+
 		idl::VertexLayout
 		ConvertLayout(const assetlib::VertexLayout& src)
 		{
@@ -417,22 +452,8 @@ namespace bgl
 		}
 
 		{
-			// Every surface's block is a different size, and one arena holds them all, so the
-			// budget and the null record below both go by the largest registered.
-			uint32_t largestSurfaceParams = 0;
-			for (const SurfaceType& surface : m_Surfaces)
-				largestSurfaceParams = std::max(largestSurfaceParams, surface.params.byteSize);
-
-			const uint64_t surfaceRecordBytes =
-				idl::cRawPayloadOffset + sizeof(idl::GameSurfaceRecord) + largestSurfaceParams;
-
-			// The kinds share one arena, so their budgets add up into it.
-			const uint64_t materialBytes =
-				(static_cast<uint64_t>(m_Desc.initialPbrMaterials) *
-			     (idl::cRawPayloadOffset + sizeof(idl::PbrMaterial))) +
-				(static_cast<uint64_t>(m_Desc.initialLoosePbrMaterials) *
-			     (idl::cRawPayloadOffset + sizeof(idl::LoosePbrMaterial))) +
-				(static_cast<uint64_t>(m_Desc.initialSurfaceMaterials) * surfaceRecordBytes);
+			const uint64_t surfaceRecordBytes = SurfaceRecordBytes(m_Surfaces);
+			const uint64_t materialBytes      = MaterialArenaBytes(m_Desc, surfaceRecordBytes);
 
 			auto materialDesc = RawBufferDesc();
 
@@ -446,13 +467,7 @@ namespace bgl
 			// view that makes textures of them -- and re-issues it inside its own growth.
 			materialDesc.handleStride = sizeof(DescriptorHandle);
 
-			// The null record must cover the largest payload as well as its header: a null
-			// reference reads zeros for a whole record rather than the first live one.
-			materialDesc.nullRecordBytes = std::max(
-				static_cast<uint32_t>(surfaceRecordBytes),
-				idl::cRawPayloadOffset +
-					static_cast<uint32_t>(
-						std::max(sizeof(idl::PbrMaterial), sizeof(idl::LoosePbrMaterial))));
+			materialDesc.nullRecordBytes = MaterialNullRecordBytes(surfaceRecordBytes);
 
 			m_Materials.Init(std::move(materialDesc), m_ResourceManager);
 		}
@@ -1576,7 +1591,7 @@ namespace bgl
 		return material;
 	}
 
-	std::pair<const SurfaceType&, std::vector<std::byte>>
+	Scene::BuiltSurfaceMaterial
 	Scene::BuildSurfaceMaterial(const SurfaceMaterialDesc& desc) const
 	{
 		const auto found = std::ranges::find(m_Surfaces, desc.surface, &SurfaceType::name);
@@ -1712,16 +1727,16 @@ namespace bgl
 
 		std::memcpy(payload.data(), &record, sizeof(record));
 
-		return { surface, std::move(payload) };
+		return { surface.kind, std::move(payload) };
 	}
 
 	MaterialHandle
 	Scene::CreateSurfaceMaterial(const SurfaceMaterialDesc& desc)
 	{
-		const auto [surface, payload] = BuildSurfaceMaterial(desc);
-		const idl::RawEntry entry     = m_Materials.AddRecord(surface.kind, payload);
+		const BuiltSurfaceMaterial built = BuildSurfaceMaterial(desc);
+		const idl::RawEntry        entry = m_Materials.AddRecord(built.kind, built.payload);
 
-		return MaterialHandle{ surface.kind, desc.layerType, entry.byteOffset };
+		return MaterialHandle{ built.kind, desc.layerType, entry.byteOffset };
 	}
 
 	void
@@ -1741,11 +1756,11 @@ namespace bgl
 				"MaterialHandle passed to UpdateSurfaceMaterial names a record of another kind");
 		}
 
-		const auto [surface, payload] = BuildSurfaceMaterial(desc);
+		const BuiltSurfaceMaterial built = BuildSurfaceMaterial(desc);
 
 		// The surface cannot change: it is what the record's kind and its size were fixed by, and a
 		// submesh keeps the byte offset either way.
-		if (material.materialType != surface.kind)
+		if (material.materialType != built.kind)
 		{
 			throw SceneError(
 				std::format(
@@ -1754,7 +1769,7 @@ namespace bgl
 					desc.surface));
 		}
 
-		m_Materials.SetRecordPayload(idl::RawEntry{ material.byteOffset }, payload);
+		m_Materials.SetRecordPayload(idl::RawEntry{ material.byteOffset }, built.payload);
 
 		// Every rewrite counts, including one landing on the bytes already there: an entry is a
 		// GPU-layout mirror whose padding no comparison can trust.
