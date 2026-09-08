@@ -146,6 +146,14 @@ namespace editor
 		[[nodiscard]] float
 		GetNormalizedPosition() const noexcept;
 
+		/**
+		 * Parks the clock at `position` of whichever domain it is in, clamped to 0..1 -- the
+		 * inverse of GetNormalizedPosition, and what a timeline widget scrubs through so the two
+		 * agree by construction rather than by both being written correctly.
+		 */
+		void
+		ScrubNormalized(float position) noexcept;
+
 		[[nodiscard]] bool
 		HasClips() const noexcept;
 

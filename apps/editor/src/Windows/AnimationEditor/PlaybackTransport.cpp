@@ -234,6 +234,18 @@ namespace editor
 		return period > 0.0f ? m_Time / period : 0.0f;
 	}
 
+	void
+	PlaybackTransport::ScrubNormalized(const float position) noexcept
+	{
+		if (!HasClips())
+			return;
+
+		const float at = std::clamp(position, 0.0f, 1.0f);
+		Scrub(
+			m_InWindow ? m_WindowStart + at * (m_WindowEnd - m_WindowStart) :
+						 at * GetPeriodSeconds());
+	}
+
 	bool
 	PlaybackTransport::HasClips() const noexcept
 	{

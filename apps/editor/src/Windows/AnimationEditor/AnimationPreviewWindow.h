@@ -113,6 +113,22 @@ public:
 	SetActiveClip(uint32_t index, float nowSeconds);
 
 	/**
+	 * Stamps a fade from clip `fromNode` onto `toNode`, beginning at `startSeconds` and taking
+	 * `duration`, and writes it to every animated instance. Nothing happens on the crowd source,
+	 * whose shared table holds one clip and no slots to write.
+	 *
+	 * Written once and then read by moving the clock, which is the whole of how a transition is
+	 * previewed: the ramps are stamped in absolute time, so `SetTime` across a window bracketing
+	 * them plays it, and the same scrub position is the same pose every time.
+	 *
+	 * The record is reset to `fromNode` alone first, so this is never a fade interrupting a live
+	 * fade -- the one case a rewrite is inexact about, at `prevTime` on the frame it lands. The
+	 * caller parks the clock outside the window before re-stamping, which is what makes that hold.
+	 */
+	void
+	StampTransition(uint32_t fromNode, uint32_t toNode, float startSeconds, float duration);
+
+	/**
 	 * Where the preview's instances read their pose, as of `nowSeconds`. Switching respawns them on
 	 * the same upload -- both sources draw one geom, which is the property the crowd tier was built
 	 * for -- and the record is reset onto whichever node it was mostly showing, since a spawn

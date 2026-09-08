@@ -2,7 +2,10 @@
 
 #include "Windows/AnimationEditor/AnimationPreviewWindow.h"
 #include "Windows/AnimationEditor/Scrubber.h"
+#include "Windows/AnimationEditor/TransitionStrip.h"
 #include "Windows/AnimationEditor/foot_ik_weights.h"
+#include "Windows/AnimationEditor/playback_writes.h"
+#include "Windows/AnimationEditor/transition_spans.h"
 #include "util/mesh_drop.h"
 #include <algorithm>
 #include <assetlib/project_layout.h>
@@ -43,9 +46,18 @@
 
 namespace
 {
-	constexpr int c_TimelineTicks           = 1000;
-	constexpr int c_ClockIntervalMs         = 16;
-	constexpr int c_RevealRepaintDelaysMs[] = { 0, 300 };
+	constexpr int c_TimelineTicks = 1000;
+
+	// Where a previewed fade is stamped, and what is shown either side of it. The clock has to be
+	// able to sit before t0, so it is not zero; the rest is how much run-up and settle reads.
+	constexpr float  c_TransitionStart         = 10.0f;
+	constexpr float  c_TransitionLead          = 0.6f;
+	constexpr float  c_TransitionTail          = 0.9f;
+	constexpr double c_MinFadeSeconds          = 0.01;
+	constexpr double c_MaxFadeSeconds          = 4.0;
+	constexpr double c_DefaultFadeSeconds      = 0.25;
+	constexpr int    c_ClockIntervalMs         = 16;
+	constexpr int    c_RevealRepaintDelaysMs[] = { 0, 300 };
 }
 
 AnimationEditorWindow::AnimationEditorWindow(QWidget* parent, AnimationEditorWindowDesc desc) :
@@ -122,6 +134,7 @@ AnimationEditorWindow::AnimationEditorWindow(QWidget* parent, AnimationEditorWin
 			m_SyncingUi = true;
 			m_TierSelector->setCurrentIndex(TierIndexFor(source));
 			m_SyncingUi = false;
+			UpdateTransitionControls();
 		});
 
 	connect(
@@ -301,6 +314,64 @@ AnimationEditorWindow::BuildPropertiesColumn()
 	m_ClipMetadata->setTextInteractionFlags(Qt::TextSelectableByMouse);
 	layout->addWidget(m_ClipMetadata);
 
+	// A crossfade, previewed. The clip list stays above rather than moving in here, because the two
+	// ends are chosen out of it and a list buried in a sibling group would be unreachable exactly
+	// when it is needed.
+	layout->addSpacing(8);
+	layout->addWidget(new QLabel(QStringLiteral("Transition"), column));
+
+	m_TransitionGroup = new QWidget(column);
+	auto* fade        = new QVBoxLayout(m_TransitionGroup);
+	fade->setContentsMargins(0, 0, 0, 0);
+
+	auto* ends = new QHBoxLayout();
+	ends->setContentsMargins(0, 0, 0, 0);
+	m_FromClip = new QComboBox(m_TransitionGroup);
+	m_ToClip   = new QComboBox(m_TransitionGroup);
+	ends->addWidget(m_FromClip, /*stretch*/ 1);
+	ends->addWidget(new QLabel(QStringLiteral("→"), m_TransitionGroup));
+	ends->addWidget(m_ToClip, /*stretch*/ 1);
+	fade->addLayout(ends);
+
+	auto* timing = new QHBoxLayout();
+	timing->setContentsMargins(0, 0, 0, 0);
+	timing->addWidget(new QLabel(QStringLiteral("Fade"), m_TransitionGroup));
+	m_FadeSeconds = new QDoubleSpinBox(m_TransitionGroup);
+	m_FadeSeconds->setRange(c_MinFadeSeconds, c_MaxFadeSeconds);
+	m_FadeSeconds->setSingleStep(0.05);
+	m_FadeSeconds->setDecimals(2);
+	m_FadeSeconds->setValue(c_DefaultFadeSeconds);
+	m_FadeSeconds->setSuffix(QStringLiteral(" s"));
+	timing->addWidget(m_FadeSeconds, /*stretch*/ 1);
+	fade->addLayout(timing);
+
+	m_Strip = new TransitionStrip(m_TransitionGroup);
+	fade->addWidget(m_Strip);
+
+	m_TransitionNote = new QLabel(m_TransitionGroup);
+	m_TransitionNote->setWordWrap(true);
+	fade->addWidget(m_TransitionNote);
+
+	// Any of the three re-stamps: the record is rewritten from a clean one each time, and the clock
+	// is parked at the window's start, so no stamp ever interrupts a live fade.
+	connect(m_FromClip, &QComboBox::activated, this, [this](int) { StampTransition(); });
+	connect(m_ToClip, &QComboBox::activated, this, [this](int) { StampTransition(); });
+	connect(m_FadeSeconds, &QDoubleSpinBox::valueChanged, this, [this](double) {
+		StampTransition();
+	});
+
+	// Scrubbing moves the clock and nothing else, which is the whole mechanism: the fade is already
+	// in the record, so time is all that has to change to play it.
+	connect(m_Strip, &TransitionStrip::TimeScrubbed, this, [this](const float seconds) {
+		if (m_SyncingUi)
+			return;
+		m_Transport.Scrub(seconds);
+		m_Preview->SetTime(m_Transport.GetTimeSeconds());
+		SyncTransportUi();
+	});
+
+	layout->addWidget(m_TransitionGroup);
+
 	// The box is the state; this is what puts the preview on it. Reaches the preview before it is
 	// on screen, where a rebind is recorded and applied when it is shown.
 	UpdateGroundControls();
@@ -388,7 +459,8 @@ AnimationEditorWindow::BuildTransportBar()
 	connect(m_Timeline, &Scrubber::ValueChanged, this, [this](int ticks) {
 		if (m_SyncingUi)
 			return;
-		m_Transport.Scrub(TimelineSeconds(ticks, m_Transport.GetPeriodSeconds(), c_TimelineTicks));
+		m_Transport.ScrubNormalized(
+			static_cast<float>(ticks) / static_cast<float>(c_TimelineTicks));
 		m_Preview->SetTime(m_Transport.GetTimeSeconds());
 		SyncTransportUi();
 	});
@@ -496,32 +568,6 @@ AnimationEditorWindow::TierSourceAt(const int index) noexcept
 	return index == 1 ? bgl::PoseSource::kBoneAnimTable : bgl::PoseSource::kPerInstance;
 }
 
-int
-AnimationEditorWindow::TimelineTicks(
-	const float seconds,
-	const float periodSeconds,
-	const int   tickCount) noexcept
-{
-	if (periodSeconds <= 0.0f)
-		return 0;
-
-	const float normalized = std::clamp(seconds / periodSeconds, 0.0f, 1.0f);
-	return static_cast<int>(std::lround(normalized * static_cast<float>(tickCount)));
-}
-
-float
-AnimationEditorWindow::TimelineSeconds(
-	const int   ticks,
-	const float periodSeconds,
-	const int   tickCount) noexcept
-{
-	if (tickCount <= 0 || periodSeconds <= 0.0f)
-		return 0.0f;
-
-	return periodSeconds * static_cast<float>(std::clamp(ticks, 0, tickCount)) /
-	       static_cast<float>(tickCount);
-}
-
 void
 AnimationEditorWindow::LoadShownMesh(const QString& animationsRelPath)
 {
@@ -571,6 +617,86 @@ AnimationEditorWindow::Tick()
 }
 
 void
+AnimationEditorWindow::StampTransition()
+{
+	if (m_SyncingUi || !m_Transport.HasClips() ||
+	    !editor::RewritesPlayback(m_Preview->GetPoseSource()))
+		return;
+
+	const int from = m_FromClip->currentIndex();
+	const int to   = m_ToClip->currentIndex();
+	if (from < 0 || to < 0 || from == to)
+	{
+		ClearTransition();
+		return;
+	}
+
+	// t0 is arbitrary and only has to be somewhere the clock can sit before it, since every ramp is
+	// stamped in absolute time and read by moving the clock across them.
+	const auto layout = editor::WindowFor(
+		c_TransitionStart,
+		static_cast<float>(m_FadeSeconds->value()),
+		c_TransitionLead,
+		c_TransitionTail);
+
+	m_Preview->StampTransition(
+		static_cast<uint32_t>(from),
+		static_cast<uint32_t>(to),
+		layout.start,
+		layout.duration);
+
+	m_Transport.SetTransitionWindow(layout.windowStart, layout.windowEnd);
+	m_Preview->SetTime(m_Transport.GetTimeSeconds());
+
+	m_SyncingUi = true;
+	m_Strip->SetClipNames(m_FromClip->currentText(), m_ToClip->currentText());
+	m_SyncingUi = false;
+
+	SyncTransportUi();
+}
+
+void
+AnimationEditorWindow::ClearTransition()
+{
+	if (!m_Transport.InTransitionWindow())
+		return;
+
+	m_Transport.ClearTransitionWindow();
+	m_Preview->SetActiveClip(m_Transport.GetActiveClipIndex(), m_Transport.GetTimeSeconds());
+	m_Preview->SetTime(m_Transport.GetTimeSeconds());
+	SyncTransportUi();
+}
+
+void
+AnimationEditorWindow::UpdateTransitionControls()
+{
+	const bool rewritable = editor::RewritesPlayback(m_Preview->GetPoseSource());
+	const bool playable   = m_Transport.HasClips();
+	const bool usable     = rewritable && playable;
+
+	m_FromClip->setEnabled(usable);
+	m_ToClip->setEnabled(usable);
+	m_FadeSeconds->setEnabled(usable);
+	m_Strip->setEnabled(usable);
+
+	// Disabled with the reason rather than hidden: a control that vanishes on a tier switch reads
+	// as a bug, and this one is a constraint of the tier rather than a missing feature.
+	if (!playable)
+		m_TransitionNote->setText(QStringLiteral("No clips to fade between."));
+	else if (!rewritable)
+	{
+		m_TransitionNote->setText(QStringLiteral(
+			"The shared bone table holds one clip and no slots to blend; "
+			"switch to the per-instance source to preview a fade."));
+	}
+	else
+		m_TransitionNote->clear();
+
+	if (!usable)
+		ClearTransition();
+}
+
+void
 AnimationEditorWindow::SyncTransportUi()
 {
 	m_SyncingUi = true;
@@ -581,10 +707,20 @@ AnimationEditorWindow::SyncTransportUi()
 	// Not while the user holds the handle: a loop's last tick wraps to zero, and writing that
 	// back mid-drag snaps the scrubber out from under the cursor.
 	if (!m_Timeline->IsScrubbing())
-		m_Timeline->SetValue(TimelineTicks(
-			m_Transport.GetTimeSeconds(),
-			m_Transport.GetPeriodSeconds(),
-			c_TimelineTicks));
+	{
+		m_Timeline->SetValue(
+			static_cast<int>(std::lround(
+				m_Transport.GetNormalizedPosition() * static_cast<float>(c_TimelineTicks))));
+	}
+
+	// The strip paints the same clock the timeline does; it holds the window rather than reading it,
+	// so the playhead moves whether the clock was advanced, scrubbed or stepped.
+	if (m_Transport.InTransitionWindow() && !m_Strip->IsScrubbing())
+	{
+		editor::TransitionLayout layout = m_Strip->GetLayout();
+		layout.time                     = m_Transport.GetTimeSeconds();
+		m_Strip->SetLayout(layout);
+	}
 
 	if (const std::optional<float> frame = m_Transport.GetCurrentFrame(); frame)
 	{
@@ -611,10 +747,22 @@ AnimationEditorWindow::SetClips(const std::vector<editor::ClipInfo>& clips)
 
 	m_SyncingUi = true;
 	m_ClipList->clear();
+	m_FromClip->clear();
+	m_ToClip->clear();
 	for (const editor::ClipInfo& clip : clips)
-		m_ClipList->addItem(QString::fromStdString(clip.name));
+	{
+		const QString name = QString::fromStdString(clip.name);
+		m_ClipList->addItem(name);
+		m_FromClip->addItem(name);
+		m_ToClip->addItem(name);
+	}
 	if (!clips.empty())
+	{
 		m_ClipList->setCurrentRow(0);
+		m_FromClip->setCurrentIndex(0);
+		// A fade wants two ends, so the second clip is offered when the set has one.
+		m_ToClip->setCurrentIndex(clips.size() > 1 ? 1 : 0);
+	}
 	m_SyncingUi = false;
 
 	const bool playable = !clips.empty();
@@ -633,6 +781,7 @@ AnimationEditorWindow::SetClips(const std::vector<editor::ClipInfo>& clips)
 
 	m_Preview->SetTime(0.0f);
 	SelectClip(playable ? 0 : -1);
+	UpdateTransitionControls();
 	SyncTransportUi();
 }
 
