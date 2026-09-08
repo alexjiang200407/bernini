@@ -1,5 +1,7 @@
 #include "AnimationPreviewWindow.h"
+
 #include "Mesh/mesh_load.h"
+#include "Windows/AnimationEditor/playback_writes.h"
 
 #include "Async/BackgroundTask.h"
 #include "Mesh/BMeshUtil.h"
@@ -541,8 +543,8 @@ AnimationPreviewWindow::LoadMesh(
 							m_Geoms.push_back(geom);
 							m_AnimatedDraws.push_back(
 								{ geom, placement.world, SpawnAnimated(geom, placement.world, 0) });
-							out.clips    = std::move(skinned.clips);
-							m_ActiveClip = 0;
+							out.clips  = std::move(skinned.clips);
+							m_Playback = bgl::SkinnedPlaybackDesc::FromClip(0);
 						}
 						catch (const std::exception& e)
 						{
@@ -771,7 +773,7 @@ AnimationPreviewWindow::SpawnAnimated(
 }
 
 void
-AnimationPreviewWindow::SetPoseSource(const bgl::PoseSource source)
+AnimationPreviewWindow::SetPoseSource(const bgl::PoseSource source, const float nowSeconds)
 {
 	if (source == m_Source)
 		return;
@@ -779,10 +781,16 @@ AnimationPreviewWindow::SetPoseSource(const bgl::PoseSource source)
 	m_Source = source;
 
 	// A re-spawn, not a re-load: both sources draw the same upload, so what changes is only where
-	// each instance reads its pose. Destroy and recreate, exactly as a clip switch does: the source
-	// is the kind of record a placement holds, and SetSkinnedPlayback rewrites a record's slots,
-	// never its kind. With nothing shown there is nothing to respawn, and the tier is simply what
-	// the next load spawns on.
+	// each instance reads its pose. SetSkinnedPlayback rewrites a record's slots, never its kind,
+	// so the kind is the one thing a rewrite cannot do. With nothing shown there is nothing to
+	// respawn, and the tier is simply what the next load spawns on.
+	//
+	// A spawn carries one clip, so the record cannot cross: it is reset onto the node it was mostly
+	// showing, which makes the switch a hard cut. That is what it already was -- a respawn moves
+	// the scene's temporal epoch either way.
+	const uint32_t node = editor::DominantNode(m_Playback, nowSeconds);
+	m_Playback          = bgl::SkinnedPlaybackDesc::FromClip(node);
+
 	if (m_Assets == nullptr || m_AnimatedDraws.empty())
 	{
 		Q_EMIT PoseSourceChanged(m_Source);
@@ -796,7 +804,7 @@ AnimationPreviewWindow::SetPoseSource(const bgl::PoseSource source)
 			{
 				m_Assets->DestroyInstance(GetPreviewViewRef(), draw.instance);
 				draw.instance = bgl::MeshInstanceHandle();
-				draw.instance = SpawnAnimated(draw.geom, draw.world, m_ActiveClip);
+				draw.instance = SpawnAnimated(draw.geom, draw.world, node);
 			}
 			catch (const std::exception& e)
 			{
@@ -809,13 +817,21 @@ AnimationPreviewWindow::SetPoseSource(const bgl::PoseSource source)
 }
 
 void
-AnimationPreviewWindow::SetActiveClip(const uint32_t index)
+AnimationPreviewWindow::SetActiveClip(const uint32_t index, const float nowSeconds)
 {
-	if (m_Assets == nullptr || m_AnimatedDraws.empty() || index == m_ActiveClip)
+	if (m_Assets == nullptr || m_AnimatedDraws.empty() ||
+	    index == editor::DominantNode(m_Playback, nowSeconds))
+	{
 		return;
+	}
 
-	// There is no mutate-instance API by design: a clip switch is destroy + recreate, and the
-	// caller rewinds its transport so the new clip starts from its first frame.
+	// Destroy and recreate on both sources, and deliberately not a rewrite. A clip switch rewinds
+	// the transport as well, so the pose and the clock both jump: there is no previous frame the
+	// new record could stay honest about, and the temporal epoch a respawn moves is what correctly
+	// drops the history rather than reprojecting through it. A rewrite is for a fade with a
+	// duration, where the record does carry its own past -- which is the strip's job, not this one's.
+	m_Playback = bgl::SkinnedPlaybackDesc::FromClip(index);
+
 	GetRenderer()->Invoke([&] {
 		for (AnimatedDraw& draw : m_AnimatedDraws)
 		{
@@ -831,8 +847,6 @@ AnimationPreviewWindow::SetActiveClip(const uint32_t index)
 			}
 		}
 	});
-
-	m_ActiveClip = index;
 }
 
 void
