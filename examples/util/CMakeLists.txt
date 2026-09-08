@@ -31,7 +31,7 @@ enable_strict_compiler(example_util)
 
 target_precompile_headers(example_util
     PUBLIC
-        ${CMAKE_SOURCE_DIR}/PCH/pch.h
+        ${BERNINI_ROOT}/PCH/pch.h
 )
 
 source_group(TREE ${CMAKE_CURRENT_SOURCE_DIR} PREFIX "Source Files"

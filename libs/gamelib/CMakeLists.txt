@@ -25,7 +25,7 @@ target_include_directories(gamelib
 )
 
 target_precompile_headers(gamelib
-	PUBLIC  ${CMAKE_SOURCE_DIR}/PCH/pch.h
+	PUBLIC  ${BERNINI_ROOT}/PCH/pch.h
 	PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src/pch.h
 )
 
@@ -62,9 +62,9 @@ if (BUILD_TESTS)
 	# they speak only the public bgl_extended API plus assetlib, both of which this target links. A list of
 	# their own so source_group's TREE only sees files under this directory.
 	set(GAMELIB_TESTS_BORROWED
-		${CMAKE_SOURCE_DIR}/libs/bgl_extended/tests/src/util/GoldenImage.cpp
-		${CMAKE_SOURCE_DIR}/libs/bgl_extended/tests/src/util/TestEnvironment.cpp
-		${CMAKE_SOURCE_DIR}/libs/bgl_extended/tests/src/util/TestOptions.cpp
+		${BERNINI_ROOT}/libs/bgl_extended/tests/src/util/GoldenImage.cpp
+		${BERNINI_ROOT}/libs/bgl_extended/tests/src/util/TestEnvironment.cpp
+		${BERNINI_ROOT}/libs/bgl_extended/tests/src/util/TestOptions.cpp
 	)
 
 	add_executable(gamelib_tests
@@ -77,12 +77,12 @@ if (BUILD_TESTS)
 			${CMAKE_CURRENT_SOURCE_DIR}/include
 			${CMAKE_CURRENT_SOURCE_DIR}/src
 			${CMAKE_CURRENT_SOURCE_DIR}/tests/src
-			${CMAKE_SOURCE_DIR}/libs/bgl_extended/tests/src
-			${CMAKE_SOURCE_DIR}/libs/assetlib/tests/src
+			${BERNINI_ROOT}/libs/bgl_extended/tests/src
+			${BERNINI_ROOT}/libs/assetlib/tests/src
 	)
 
 	target_force_include(gamelib_tests
-		PRIVATE "${CMAKE_SOURCE_DIR}/PCH/pch.h" "${CMAKE_CURRENT_SOURCE_DIR}/src/pch.h"
+		PRIVATE "${BERNINI_ROOT}/PCH/pch.h" "${CMAKE_CURRENT_SOURCE_DIR}/src/pch.h"
 	)
 
 	target_link_libraries(gamelib_tests

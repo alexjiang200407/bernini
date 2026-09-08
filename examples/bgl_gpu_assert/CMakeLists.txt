@@ -23,7 +23,7 @@ enable_strict_compiler(bgl_gpu_assert)
 
 target_precompile_headers(bgl_gpu_assert
     PUBLIC
-        ${CMAKE_SOURCE_DIR}/PCH/pch.h
+        ${BERNINI_ROOT}/PCH/pch.h
 )
 
 source_group(

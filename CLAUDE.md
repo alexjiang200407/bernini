@@ -112,6 +112,15 @@ minority of sources need is a net loss — the ccache that survives a branch swi
 directory, and the job budget every checkout's build shares so three of them do not thrash one
 machine.
 
+**[Embedding](./docs/embedding.md)**
+
+What a game's `CMakeLists.txt` owes the engine to build it as a subdirectory of its own project: the
+four lines before `add_subdirectory`, the cache variables and their host-derived defaults, the two
+option names that are not namespaced and what the engine does about them when it is not the top of
+the tree, what a consumer cannot link and why that is deliberate, and what the compiler cache does
+and does not carry between an engine build and a game's. `BERNINI_ROOT` — never `CMAKE_SOURCE_DIR` —
+is the rule that keeps all of it true.
+
 **[Profiling](./docs/profiling.md)**
 
 Where load and cook time is measured: taking a Tracy capture, the one rule for naming a zone, and

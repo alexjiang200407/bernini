@@ -84,7 +84,7 @@ target_link_libraries(editor_lib
 
 target_precompile_headers(editor_lib
 	PUBLIC
-		${CMAKE_SOURCE_DIR}/PCH/pch.h
+		${BERNINI_ROOT}/PCH/pch.h
 		${CMAKE_CURRENT_SOURCE_DIR}/src/pch.h
 )
 

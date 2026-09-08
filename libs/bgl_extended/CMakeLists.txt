@@ -7,8 +7,8 @@ list(FILTER BGL_EXTENDED_SOURCES EXCLUDE REGEX ".*/src/(d3d12|metal)/.*")
 # The public surface lives in bgl; these are listed here only so an IDE shows them under the
 # renderer that implements them.
 file(GLOB_RECURSE BGL_SHARED_HEADERS CONFIGURE_DEPENDS
-	${CMAKE_SOURCE_DIR}/libs/bgl/include/bgl/*.h
-	${CMAKE_SOURCE_DIR}/libs/bgl/include/bgl/*.hpp
+	${BERNINI_ROOT}/libs/bgl/include/bgl/*.h
+	${BERNINI_ROOT}/libs/bgl/include/bgl/*.hpp
 )
 
 file(GLOB_RECURSE BGL_EXTENDED_HEADERS CONFIGURE_DEPENDS
@@ -19,7 +19,7 @@ list(FILTER BGL_EXTENDED_HEADERS EXCLUDE REGEX ".*/src/(d3d12|metal)/.*")
 
 
 source_group(TREE "${CMAKE_CURRENT_SOURCE_DIR}/src" PREFIX "Source Files" FILES ${BGL_EXTENDED_SOURCES} ${BGL_EXTENDED_HEADERS})
-source_group(TREE "${CMAKE_SOURCE_DIR}/libs/bgl/include/bgl" PREFIX "Shared Header Files" FILES ${BGL_SHARED_HEADERS})
+source_group(TREE "${BERNINI_ROOT}/libs/bgl/include/bgl" PREFIX "Shared Header Files" FILES ${BGL_SHARED_HEADERS})
 
 
 add_library(bgl_extended_objects OBJECT
@@ -38,7 +38,7 @@ target_compile_definitions(bgl_extended_objects PRIVATE
 )
 
 target_precompile_headers(bgl_extended_objects
-	PUBLIC  ${CMAKE_SOURCE_DIR}/PCH/pch.h
+	PUBLIC  ${BERNINI_ROOT}/PCH/pch.h
 	PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src/pch.h
 )
 
@@ -76,8 +76,8 @@ enable_coverage(bgl_extended_objects)
 
 # CreateGraphics is only ever defined inside a backend, and the shader step compiles for the
 # backend's IR, so nothing below can be built without one.
-if(NOT RENDERER_BACKEND)
-	message(STATUS "RENDERER_BACKEND unset - bgl_extended_objects only (no bgl_extended runtime, shaders or tests)")
+if(RENDERER_BACKEND STREQUAL "NONE")
+	message(STATUS "RENDERER_BACKEND=NONE - bgl_extended_objects only (no bgl_extended runtime, shaders or tests)")
 	return()
 endif()
 
@@ -94,10 +94,7 @@ elseif(RENDERER_BACKEND STREQUAL "METAL")
 		${BGL_SHARED_HEADERS}
 	)
 else()
-	add_library(bgl_extended SHARED
-		$<TARGET_OBJECTS:bgl_extended_objects>
-		${BGL_SHARED_HEADERS}
-	)
+	message(FATAL_ERROR "RENDERER_BACKEND must be DX12, METAL or NONE (got '${RENDERER_BACKEND}')")
 endif()
 
 target_include_directories(bgl_extended
@@ -217,7 +214,7 @@ if (BUILD_TESTS AND RENDERER_BACKEND STREQUAL "DX12")
     )
 
     target_force_include(bgl_extended_tests
-        PRIVATE "${CMAKE_SOURCE_DIR}/PCH/pch.h" "${CMAKE_CURRENT_SOURCE_DIR}/src/pch.h"
+        PRIVATE "${BERNINI_ROOT}/PCH/pch.h" "${CMAKE_CURRENT_SOURCE_DIR}/src/pch.h"
     )
     
     target_link_libraries(
@@ -300,7 +297,7 @@ if (BUILD_TESTS AND RENDERER_BACKEND STREQUAL "METAL")
 	target_include_directories(bgl_extended_tests SYSTEM PRIVATE ${BGL_METALCPP_INCLUDE_DIR})
 
 	target_force_include(bgl_extended_tests
-		PRIVATE "${CMAKE_SOURCE_DIR}/PCH/pch.h" "${CMAKE_CURRENT_SOURCE_DIR}/src/pch.h"
+		PRIVATE "${BERNINI_ROOT}/PCH/pch.h" "${CMAKE_CURRENT_SOURCE_DIR}/src/pch.h"
 	)
 
 	# Embeds bgl_metal's objects, so it links the frameworks bgl_metal's PRIVATE deps do not carry.

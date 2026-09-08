@@ -38,6 +38,10 @@ test *args:
 coverage *args:
     @{{ python }} scripts/coverage.py {{ args }}
 
+# Build tests/embed: the engine as a subdirectory of somebody else's project.
+embed *args:
+    @{{ python }} scripts/embed.py {{ args }}
+
 # Build the CLI tools and stage them (with their DLLs) into ./dist, for PATH.
 install *args:
     @{{ python }} scripts/install.py {{ args }}

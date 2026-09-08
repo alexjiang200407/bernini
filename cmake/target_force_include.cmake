@@ -6,7 +6,7 @@
 Usage:
     target_force_include(my_target
         PRIVATE
-            "${CMAKE_SOURCE_DIR}/common/pch.h"
+            "${BERNINI_ROOT}/common/pch.h"
             "${CMAKE_CURRENT_SOURCE_DIR}/local_pch.h"
     )
     

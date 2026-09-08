@@ -149,7 +149,11 @@ because its incremental build is mtimes and a dependency graph inside one build 
 
 The settings ride in a wrapper script generated into `build/<preset>/compiler-cache/` rather than in
 the environment, because this build is driven by `scripts/build.py`, by ninja directly and by an
-IDE, and a variable exported by only one of them would leave the others missing every time.
+IDE, and a variable exported by only one of them would leave the others missing every time. Its name
+carries a digest of the basedir it sets, so a project that embeds the engine and calls
+`enable_compiler_cache()` for itself gets a second wrapper rather than overwriting this one — which
+would leave one of the two compiling uncached with nothing on screen to say so
+([docs/embedding.md](embedding.md)).
 
 `sloppiness = pch_defines,time_macros` is **not optional** with a PCH on every target: ccache cannot
 tell whether a PCH used `__TIME__`, nor see the defines a PCH already resolved, so without it every

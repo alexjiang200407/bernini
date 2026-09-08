@@ -25,7 +25,7 @@ enable_strict_compiler(bgl_moving)
 
 target_precompile_headers(bgl_moving
     PUBLIC
-        ${CMAKE_SOURCE_DIR}/PCH/pch.h
+        ${BERNINI_ROOT}/PCH/pch.h
 )
 
 add_dependencies(bgl_moving copy_assets)
