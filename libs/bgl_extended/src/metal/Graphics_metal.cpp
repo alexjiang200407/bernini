@@ -10,14 +10,17 @@
 #include <bgl/ISceneView.h>
 #include <bgl/PassTiming.h>
 #include <bgl/RenderJob.h>
+#include <bgl/SurfaceType.h>
 #include <bgl/api.h>
 #include <bgl/types/SceneDesc.h>
 #include <core/err/util.h>
 #include <core/ref/SharedRef.h>
+#include <span>
 #include <vector>
 
 #include "gfx/GraphicsBase.h"
 #include "gfx/RenderContext.h"
+#include "gfx/surface_registry.h"
 #include "overlay/Overlay.h"
 #include "resource/ResourceManager.h"
 #include "scene/Scene.h"
@@ -164,6 +167,10 @@ namespace bgl
 			rmDesc.maxReadbackBuffers = opts.maxReadbackBuffers;
 			m_ResourceManager         = m_Device->CreateResourceManager(rmDesc);
 
+			// Before the context: it builds every pipeline, and a slot's pipelines compile against
+			// whatever module this bound to that slot.
+			m_SurfaceTypes = RegisterSurfaces(*m_Device, opts.surfaceShaderDir);
+
 			m_Context =
 				std::make_unique<RenderContext>(m_Device, m_ResourceManager, opts.enableDebugLayer);
 
@@ -191,6 +198,12 @@ namespace bgl
 		WaitIdle() noexcept override
 		{
 			m_Context->WaitIdle();
+		}
+
+		std::span<const SurfaceType>
+		SurfaceTypes() const noexcept override
+		{
+			return m_SurfaceTypes;
 		}
 
 		SceneRef
@@ -321,6 +334,9 @@ namespace bgl
 		// Declared last so it is destroyed first: its teardown idles the GPU and releases pass
 		// resources through the members above, which must outlive it.
 		std::unique_ptr<RenderContext> m_Context;
+
+		// Fixed at construction, before the pipelines that draw them were built.
+		std::vector<SurfaceType> m_SurfaceTypes;
 	};
 
 	BGL_API GraphicsRef

@@ -9,6 +9,7 @@
 #include <catch2/matchers/catch_matchers_exception.hpp>
 #include <catch2/matchers/catch_matchers_string.hpp>
 #include <cstdint>
+#include <optional>
 #include <slang-com-ptr.h>
 #include <slang.h>
 #include <stdexcept>
@@ -156,8 +157,14 @@ TEST_CASE("A surface's parameters are reflected at their target's offsets", "[su
 		at         = { 0u, 16u, 32u, 36u, 48u, 64u };
 	}
 
-	Session     session(format);
-	SurfaceType surface = ReflectSurface(session.Load("Gate", Module(c_Gate)), "Gate");
+	Session                               session(format);
+	const std::optional<ReflectedSurface> reflected =
+		ReflectSurface(session.Load("Gate", Module(c_Gate)), "Gate");
+	REQUIRE(reflected.has_value());
+	const SurfaceType& surface = reflected->type;
+
+	// The binding module writes a typealias to this, so it is the struct and not the file.
+	CHECK(reflected->sourceTypeName == "GateSurface");
 
 	CHECK(surface.name == "Gate");
 	// Registration's to assign, not reflection's.
@@ -235,8 +242,11 @@ struct KindSurface : ISurfaceSource
 };
 )";
 
-	Session     session;
-	SurfaceType surface = ReflectSurface(session.Load("Kinds", Module(c_Kinds)), "Kinds");
+	Session                               session;
+	const std::optional<ReflectedSurface> reflected =
+		ReflectSurface(session.Load("Kinds", Module(c_Kinds)), "Kinds");
+	REQUIRE(reflected.has_value());
+	const SurfaceType& surface = reflected->type;
 
 	CHECK(surface.params.values.empty());
 	REQUIRE(surface.params.textures.size() == 4u);
@@ -244,6 +254,16 @@ struct KindSurface : ISurfaceSource
 	CHECK(surface.params.textures[1].kind == SurfaceTextureKind::kData);
 	CHECK(surface.params.textures[2].kind == SurfaceTextureKind::kNormal);
 	CHECK(surface.params.textures[3].kind == SurfaceTextureKind::kColor);
+}
+
+// A module that never imported the contract is not a failed surface, it is the game's own code:
+// the same directory is its module search path, so most of what sits there is nothing the engine
+// has an opinion about. Anything that does import the contract is held to it, below.
+TEST_CASE("A module that is not a surface reflects to nothing", "[surface][reflection]")
+{
+	Session session;
+	CHECK_FALSE(ReflectSurface(session.Load("Bare", "struct Bare { float value; };\n"), "Bare")
+	                .has_value());
 }
 
 // Every refusal is a named throw, because each one is a mistake in a file the engine does not own
@@ -266,15 +286,6 @@ TEST_CASE("A module the engine cannot draw from is refused by name", "[surface][
 			std::runtime_error,
 			Catch::Matchers::Message(
 				"surface 'Lonely': no struct in the module conforms to ISurfaceSource"));
-	}
-
-	SECTION("the contract is never imported")
-	{
-		CHECK_THROWS_MATCHES(
-			ReflectSurface(session.Load("Bare", "struct Bare { float value; };\n"), "Bare"),
-			std::runtime_error,
-			Catch::Matchers::MessageMatches(
-				ContainsSubstring("does not import bgl.SurfaceSource")));
 	}
 
 	SECTION("two structs conform")
