@@ -60,7 +60,7 @@ namespace bgl
 		}
 
 		std::span<const SurfaceType>
-		SurfaceTypes() const noexcept override
+		GetSurfaceTypes() const noexcept override
 		{
 			return m_SurfaceTypes;
 		}

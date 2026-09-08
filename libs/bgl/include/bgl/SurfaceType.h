@@ -60,7 +60,7 @@ namespace bgl
 	/// One value a material sets by name, and where the block keeps it.
 	struct SurfaceValue
 	{
-		// The field's name in the surface's parameter struct, which is what a material's
+		// The field's name in the surface's `MaterialParams`, which is what a material's
 		// `parameters` writes to reach it.
 		std::string name;
 
@@ -76,7 +76,7 @@ namespace bgl
 	/// One texture a material binds by name, sampled through the index the engine packs into it.
 	struct SurfaceTexture
 	{
-		// The field's name in the surface's parameter struct, which is what a material's `textures`
+		// The field's name in the surface's `MaterialParams`, which is what a material's `textures`
 		// writes to bind a texture to it.
 		std::string name;
 
@@ -91,7 +91,7 @@ namespace bgl
 	};
 
 	/**
-	 * The surface's `Params` struct as the engine read it back: everything a material may set, where
+	 * The surface's `MaterialParams` struct as the engine read it back: everything a material may set, where
 	 * each of them lands, and what an unset one gets. This is what packs a record and what reads one
 	 * back, and it is the whole of what a packer needs -- which surface it belongs to is not.
 	 */

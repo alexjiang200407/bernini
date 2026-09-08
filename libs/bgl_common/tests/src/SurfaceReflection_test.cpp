@@ -100,7 +100,7 @@ import bgl.SurfaceSource;
 
 struct GateSurface : ISurfaceSource
 {
-    typealias Params = GateParams;
+    typealias MaterialParams = GateParams;
 
     static float Coverage<R : IMaterialReader>(R reader, GateParams params) { return 1.0; }
 
@@ -224,7 +224,7 @@ TEST_CASE("A texture's kind is its declared type", "[surface][reflection]")
 
 struct KindSurface : ISurfaceSource
 {
-    typealias Params = KindParams;
+    typealias MaterialParams = KindParams;
 
     static float Coverage<R : IMaterialReader>(R reader, KindParams params)
     {
@@ -294,14 +294,14 @@ TEST_CASE("A module the engine cannot draw from is refused by name", "[surface][
 
 struct FirstSurface : ISurfaceSource
 {
-    typealias Params = TwoParams;
+    typealias MaterialParams = TwoParams;
     static float Coverage<R : IMaterialReader>(R reader, TwoParams params) { return 1.0; }
     static PbrSurface Evaluate<R : IMaterialReader>(R reader, TwoParams params) { return PbrSurface(); }
 };
 
 struct SecondSurface : ISurfaceSource
 {
-    typealias Params = TwoParams;
+    typealias MaterialParams = TwoParams;
     static float Coverage<R : IMaterialReader>(R reader, TwoParams params) { return 1.0; }
     static PbrSurface Evaluate<R : IMaterialReader>(R reader, TwoParams params) { return PbrSurface(); }
 };
@@ -323,7 +323,7 @@ struct SecondSurface : ISurfaceSource
 
 struct NineSurface : ISurfaceSource
 {
-    typealias Params = NineParams;
+    typealias MaterialParams = NineParams;
     static float Coverage<R : IMaterialReader>(R reader, NineParams params) { return 1.0; }
     static PbrSurface Evaluate<R : IMaterialReader>(R reader, NineParams params) { return PbrSurface(); }
 };
@@ -344,7 +344,7 @@ struct NineSurface : ISurfaceSource
 
 struct IntSurface : ISurfaceSource
 {
-    typealias Params = IntParams;
+    typealias MaterialParams = IntParams;
     static float Coverage<R : IMaterialReader>(R reader, IntParams params) { return 1.0; }
     static PbrSurface Evaluate<R : IMaterialReader>(R reader, IntParams params) { return PbrSurface(); }
 };

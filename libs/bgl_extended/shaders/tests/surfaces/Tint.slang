@@ -12,7 +12,7 @@ struct TintParams
 
 struct TintSurface : ISurfaceSource
 {
-    typealias Params = TintParams;
+    typealias MaterialParams = TintParams;
 
     static float Coverage<R : IMaterialReader>(R reader, TintParams params) { return params.tint.a; }
 

@@ -174,7 +174,7 @@ disagrees, trust the header, then fix this doc.
 | Type | File | Role |
 |---|---|---|
 | `GraphicsOptions` | [libs/bgl/include/bgl/IGraphics.h](libs/bgl/include/bgl/IGraphics.h) | Device creation: debug layers, log level, `shaderCacheDir`, `surfaceShaderDir` (the client's own Slang modules, imported by name), and every descriptor-heap/pool capacity. |
-| `SurfaceType`, `SurfaceParams`, `SurfaceValue`, `SurfaceTexture` | [libs/bgl/include/bgl/SurfaceType.h](libs/bgl/include/bgl/SurfaceType.h) | A surface the client registered, read off its own Slang module: the name a material writes, the `MaterialType` its records carry, and the parameter block a material fills — each value's type, byte offset and default, and each texture's kind and slot. Listed by `IGraphics::SurfaceTypes()`. |
+| `SurfaceType`, `SurfaceParams`, `SurfaceValue`, `SurfaceTexture` | [libs/bgl/include/bgl/SurfaceType.h](libs/bgl/include/bgl/SurfaceType.h) | A surface the client registered, read off its own Slang module: the name a material writes, the `MaterialType` its records carry, and the parameter block a material fills — each value's type, byte offset and default, and each texture's kind and slot. Listed by `IGraphics::GetSurfaceTypes()`. |
 | `CaptureTicket` | [libs/bgl/include/bgl/IGraphics.h](libs/bgl/include/bgl/IGraphics.h) | Names one in-flight backbuffer capture. Spent by resolve or discard. |
 | `PassTiming` | [libs/bgl/include/bgl/PassTiming.h](libs/bgl/include/bgl/PassTiming.h) | One row of `IGraphics::GetPassTimings`: a frame graph pass's name and what it cost on the GPU, in milliseconds. |
 | `SceneDesc` | [libs/bgl/include/bgl/IScene.h](libs/bgl/include/bgl/IScene.h) | Fixed pool capacities for a scene. |
@@ -264,7 +264,7 @@ flowchart TD
   texture wraps the target this frame is drawing to throws: a target's output is drawn on another
   target. Every other target a draw samples is retained through the frame, and the frame reads the
   slot it presented last — draw the preview target first, then the frame that shows it.
-* **`SurfaceTypes()`** — the surfaces read out of `GraphicsOptions::surfaceShaderDir` at
+* **`GetSurfaceTypes()`** — the surfaces read out of `GraphicsOptions::surfaceShaderDir` at
   construction, in slot order. A `.slang` directly in that directory that **imports the contract** is
   one surface: its name is the file's stem, its shading is the one struct in it conforming to
   `ISurfaceSource`, and its slot is its position in filename order — so nothing outside the directory

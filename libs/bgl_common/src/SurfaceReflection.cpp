@@ -186,7 +186,7 @@ namespace bgl
 		if (surface == nullptr)
 			return std::nullopt;
 
-		const std::string      paramsName = FullTypeName(surface) + ".Params";
+		const std::string      paramsName = FullTypeName(surface) + ".MaterialParams";
 		slang::TypeReflection* params     = layout->findTypeByName(paramsName.c_str());
 		if (params == nullptr)
 		{

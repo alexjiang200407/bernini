@@ -32,14 +32,14 @@ public struct ArenaReader : IMaterialReader
 public struct GameRecord<G : ISurfaceSource>
 {
     GameSurfaceRecord engine;
-    G.Params params;
+    G.MaterialParams params;
     uint byteOffset;
 
     public static GameRecord<G> Load(uint byteOffset)
     {
         GameRecord<G> record;
         record.engine = materialData.materials.LoadRecordAs<GameSurfaceRecord>(RawEntry<IMaterial>.At(byteOffset));
-        record.params = materialData.materials.LoadAt<G.Params>(byteOffset + cGameSurfaceParamsByteOffset);
+        record.params = materialData.materials.LoadAt<G.MaterialParams>(byteOffset + cGameSurfaceParamsByteOffset);
         record.byteOffset = byteOffset;
         return record;
     }
@@ -66,7 +66,7 @@ public struct NullSurfaceParams
 // every game.slotN, and a registered surface's binding module shadows that file.
 public struct NullSurface : ISurfaceSource
 {
-    public typealias Params = NullSurfaceParams;
+    public typealias MaterialParams = NullSurfaceParams;
 
     public static float Coverage<R : IMaterialReader>(R reader, NullSurfaceParams params) { return 1.0; }
 

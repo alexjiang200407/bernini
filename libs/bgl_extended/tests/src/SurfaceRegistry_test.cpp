@@ -57,7 +57,7 @@ namespace
 
 struct FillerSurface : ISurfaceSource
 {
-    typealias Params = FillerParams;
+    typealias MaterialParams = FillerParams;
     static float Coverage<R : IMaterialReader>(R reader, FillerParams params) { return 1.0; }
     static PbrSurface Evaluate<R : IMaterialReader>(R reader, FillerParams params) { return PbrSurface(); }
 };
@@ -72,7 +72,7 @@ TEST_CASE("A surface directory fills the reserved slots in filename order", "[su
 	auto gfx = bgl::CreateGraphics(SurfaceOptions("./shaders/tests/surfaces"));
 	REQUIRE(gfx != nullptr);
 
-	const std::span<const SurfaceType> types = gfx->SurfaceTypes();
+	const std::span<const SurfaceType> types = gfx->GetSurfaceTypes();
 	REQUIRE(types.size() == 2u);
 
 	// Filename order, so the directory alone decides which slot a surface lands in.
@@ -108,7 +108,7 @@ TEST_CASE("No surface directory registers nothing", "[surface][registry]")
 {
 	auto gfx = bgl::CreateGraphics(SurfaceOptions({}));
 	REQUIRE(gfx != nullptr);
-	CHECK(gfx->SurfaceTypes().empty());
+	CHECK(gfx->GetSurfaceTypes().empty());
 }
 
 // Each refusal is the client's mistake, so each is an ApiError naming the file rather than an
@@ -188,7 +188,7 @@ TEST_CASE("A module beside the surfaces is not one of them", "[surface][registry
 	auto gfx = bgl::CreateGraphics(SurfaceOptions(dir));
 	REQUIRE(gfx != nullptr);
 
-	const std::span<const SurfaceType> types = gfx->SurfaceTypes();
+	const std::span<const SurfaceType> types = gfx->GetSurfaceTypes();
 	REQUIRE(types.size() == 1u);
 	CHECK(types[0].name == "Only");
 	CHECK(types[0].kind == MaterialType::kGameStart);

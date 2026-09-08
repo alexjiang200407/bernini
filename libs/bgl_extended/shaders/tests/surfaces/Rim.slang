@@ -18,7 +18,7 @@ struct RimParams
 
 struct RimSurface : ISurfaceSource
 {
-    typealias Params = RimParams;
+    typealias MaterialParams = RimParams;
 
     static float Coverage<R : IMaterialReader>(R reader, RimParams params) { return reader.Sample(params.baseColor, reader.Uv()).a; }
 

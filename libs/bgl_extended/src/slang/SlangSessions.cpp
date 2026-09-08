@@ -36,13 +36,13 @@ namespace bgl
 			std::string&     diagnostic)
 		{
 			Slang::ComPtr<slang::IBlob> blob;
-			slang::IModule*             module =
+			slang::IModule*             slangModule =
 				session->loadModule(SlangModulePath(moduleName).c_str(), blob.writeRef());
 
 			if (blob != nullptr)
 				diagnostic = static_cast<const char*>(blob->getBufferPointer());
 
-			return module;
+			return slangModule;
 		}
 	}
 
@@ -137,8 +137,8 @@ namespace bgl
 	SlangSessions::ReflectSurface(std::string_view moduleName, std::string_view surfaceName)
 	{
 		std::string     diagnostic;
-		slang::IModule* module = LoadReporting(ForThisThread(), moduleName, diagnostic);
-		if (module == nullptr)
+		slang::IModule* slangModule = LoadReporting(ForThisThread(), moduleName, diagnostic);
+		if (slangModule == nullptr)
 		{
 			core::throw_runtime_error(
 				"surface '{}': its module did not compile\n{}",
@@ -146,7 +146,7 @@ namespace bgl
 				diagnostic);
 		}
 
-		return bgl::ReflectSurface(module, surfaceName);
+		return bgl::ReflectSurface(slangModule, surfaceName);
 	}
 
 	void

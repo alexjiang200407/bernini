@@ -264,7 +264,7 @@ namespace bgl
 		 * to the directory afterwards is seen at the next launch. Empty when no directory was named.
 		 */
 		[[nodiscard]] virtual std::span<const SurfaceType>
-		SurfaceTypes() const noexcept = 0;
+		GetSurfaceTypes() const noexcept = 0;
 
 		virtual SceneRef
 		CreateScene(SceneDesc desc) = 0;
