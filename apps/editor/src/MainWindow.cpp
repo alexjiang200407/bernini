@@ -18,6 +18,7 @@
 #include "Windows/AnimationEditor/AnimationEditorWindow.h"
 #include "Windows/AnimationEditor/AnimationPreviewWindow.h"
 #include "Windows/ContentExplorer/ContentExplorerWindow.h"
+#include "Windows/GpuTiming/GpuTimingWindow.h"
 #include "Windows/LevelEditor/LevelEditorWindow.h"
 #include "Windows/MaterialEditor/MaterialEditorWindow.h"
 #include "Windows/RenderTarget/RenderTargetWindow.h"
@@ -444,6 +445,20 @@ MainWindow::SetUpRenderMenu()
 	connect(timing, &QAction::toggled, this, [this](bool enabled) {
 		for (RenderTargetWindow* view : findChildren<RenderTargetWindow*>())
 			view->SetGpuTimingEnabled(enabled);
+	});
+
+	m_GpuTimingAction = timing;
+
+	// A window rather than a dock: the viewport docks are tabbed together and only the selected one
+	// renders, so a graph docked among them would stop the viewport it measures.
+	auto* graph = render->addAction("GPU Timing Graph…");
+	graph->setShortcut(QKeySequence("Ctrl+Shift+G"));
+	graph->setStatusTip(
+		"Graph what each pass of the rendering viewport's frames costs on the GPU, and export it.");
+	connect(graph, &QAction::triggered, this, [this] {
+		m_GpuTiming->show();
+		m_GpuTiming->raise();
+		m_GpuTiming->activateWindow();
 	});
 
 	// One frame's table into editor.log. Needs timing on, so it follows the toggle.
@@ -1010,6 +1025,20 @@ MainWindow::SetUpFrameStats()
 	if (m_LevelEditor == nullptr)
 		return;
 
+	// Parented, so it goes with the editor; Qt::Window, so it is a window of its own. Hidden until
+	// the Render menu asks for it, and it is what turns timing on while it is up.
+	m_GpuTiming = new editor::GpuTimingWindow(this);
+	connect(m_GpuTiming, &editor::GpuTimingWindow::TimingWanted, this, [this](bool wanted) {
+		if (m_GpuTimingAction == nullptr)
+			return;
+
+		// Restore rather than switch off: somebody who had timing on for the log still wants it.
+		if (wanted)
+			m_GpuTimingWasOn = m_GpuTimingAction->isChecked();
+
+		m_GpuTimingAction->setChecked(wanted || m_GpuTimingWasOn);
+	});
+
 	m_FrameStats = new QLabel(this);
 	m_FrameStats->setObjectName("FrameStats");
 	// All three figures describe the current visit: a viewport clears them when it leaves the frame
@@ -1043,11 +1072,13 @@ MainWindow::SetUpFrameStats()
 					{
 						m_FrameStatsSource = view;
 						m_FrameStats->setText(editor::FrameStatsText(name, std::nullopt));
+						m_GpuTiming->SetSource(name);
 					}
 					else if (m_FrameStatsSource == view)
 					{
 						m_FrameStatsSource = nullptr;
 						m_FrameStats->clear();
+						m_GpuTiming->SetSource(QString());
 					}
 				}));
 
@@ -1072,6 +1103,8 @@ MainWindow::SetUpFrameStats()
 							editor::FrameStats{ .meanMs = meanMs,
 				                                .maxMs  = maxMs,
 				                                .missed = missed }));
+
+					m_GpuTiming->AddFrames(gpuFrames);
 
 					// The latest frame, formatted here rather than on the render thread: the log
 					// wants one frame as a table and the graph wants every frame as numbers, and
