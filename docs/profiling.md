@@ -31,9 +31,10 @@ This page is about **load and cook time**: what a bake cost, where a start-up we
 § Memory below, what a run *held*. A slow *frame* is measured elsewhere: every frame graph pass can
 be timed on the GPU (`IRenderTarget::SetGpuTimingEnabled`, read through
 `IGraphics::GetPassTimings` -- see [bgl Public API](docs/bgl_api.md) and
-[Frame Graph](docs/framegraph.md)), which the editor writes to `editor.log` on Render › Log GPU
-Pass Timings once Render › GPU Pass Timing is on. `docs/gfx_debug.md` is where a *wrong* frame is
-diagnosed rather than a slow one.
+[Frame Graph](docs/framegraph.md)), which the editor reads two ways once Render › GPU Pass Timing
+is on: Log GPU Pass Timings writes one frame's table to `editor.log`, and GPU Timing Graph
+(§ The frame-stats window below) graphs every frame. `docs/gfx_debug.md` is where a *wrong* frame
+is diagnosed rather than a slow one.
 
 ## Taking a capture
 
@@ -228,6 +229,41 @@ Do not bracket the frame loop. Nothing here samples per frame, and that is what 
 unconnected client's memory flat. `AssetThumbnailCache::Advance`'s slow-tick warning stays a
 `qWarning` for the same reason its comment gives: a path that runs every frame wants a report that
 costs nothing until it has decided to complain.
+
+
+## The frame-stats window
+
+A slow frame is read off **Render › GPU Timing Graph** in the editor (`Ctrl+Shift+G`): a stacked
+band per frame graph pass over the last 600 timed frames, so the outline of the stack is what the
+frame cost on the GPU and a bulge names the pass that caused it. The pointer marks a frame and the
+legend breaks that one down, which is the same table Log GPU Pass Timings writes.
+
+Three things about it are decisions rather than detail:
+
+- **It is a window, not a dock tab.** `MainWindow::DriveViewportsFromTab` keeps a viewport in the
+  frame loop only while its dock is the selected tab, and the three viewport docks are tabbed
+  together — so a graph docked among them would stop the viewport it is measuring the moment it was
+  brought forward.
+- **It samples every frame, and pauses.** `RenderTargetWindow` reads the rows once per frame and
+  hands over the batch at the frame-stats interval; a spike lasts one frame, and the 30-frame
+  cadence the status bar reports on would show one frame in thirty. Ten seconds of history is also
+  how long a spike stays on screen, which is what Pause is for.
+- **Opening it turns timing on, and closing it gives back what it found.** A timed frame costs a
+  resolve, and on Metal an encoder ended at every pass boundary, so the toggle is off by default —
+  and a window that opened empty behind a menu item nobody had found would read as broken.
+
+**Export…** writes both halves of one capture beside `editor.log`, under a stamped stem:
+`gpu_timings_<stamp>.csv` — one row per sampled frame, one column per pass, a total, and an empty
+field where a pass did not run in that frame — and `gpu_timings_<stamp>.png`, the graph as it stands.
+The picture comes from the call that paints the window (`PaintPassGraph`), so the file is what was on
+screen rather than a second drawing of the same numbers. There is no file dialog: a predictable path
+is what makes the capture reachable by whoever, or whatever, reads the log next.
+
+**Why this and not Tracy GPU zones.** Tracy would give the timeline for free and `tracy-csvexport`
+already exports it — but the frame loop deliberately carries no zones (§ Not zones), and the GUI is
+deliberately not vendored, so reading a spike would mean installing a second application and
+connecting a socket to the editor. The rows already exist engine-side, which is the whole reason a
+window is affordable; a Tracy GPU context is a separate decision, not a cheaper way to do this one.
 
 
 ## Memory

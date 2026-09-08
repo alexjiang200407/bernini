@@ -170,7 +170,7 @@ disagrees, trust the header, then fix this doc.
 |---|---|---|
 | `GraphicsOptions` | [libs/bgl/include/bgl/IGraphics.h](libs/bgl/include/bgl/IGraphics.h) | Device creation: debug layers, log level, `shaderCacheDir`, and every descriptor-heap/pool capacity. |
 | `CaptureTicket` | [libs/bgl/include/bgl/IGraphics.h](libs/bgl/include/bgl/IGraphics.h) | Names one in-flight backbuffer capture. Spent by resolve or discard. |
-| `PassTiming` | [libs/bgl/include/bgl/PassTiming.h](libs/bgl/include/bgl/PassTiming.h) | One row of `IGraphics::GetPassTimings`: a frame graph pass's name and what it cost on the GPU, in milliseconds. |
+| `PassTiming`, `PassTimings` | [libs/bgl/include/bgl/PassTiming.h](libs/bgl/include/bgl/PassTiming.h) | One row of `IGraphics::GetPassTimings` — a frame graph pass's name and what it cost on the GPU, in milliseconds — and the rows of one frame under the id of the frame they measured. |
 | `SceneDesc` | [libs/bgl/include/bgl/IScene.h](libs/bgl/include/bgl/IScene.h) | Fixed pool capacities for a scene. |
 | `PbrMaterialDesc` / `LoosePbrMaterialDesc` | [libs/bgl/include/bgl/IScene.h](libs/bgl/include/bgl/IScene.h) | Baked (three-map) vs. loose (per-channel routed) material parameters. `ChannelRouteDesc` feeds the latter. `doubleSided` says whether a non-opaque surface's back faces are drawn; on by default, and the mesh stage culls them otherwise — see [Passes § Two-sided surfaces](docs/passes.md). |
 | `EnvironmentMapDesc` | [libs/bgl/include/bgl/IScene.h](libs/bgl/include/bgl/IScene.h) | The IBL triplet (irradiance cube, prefilter cube, BRDF LUT). **Move-only** — copy is deleted. |
@@ -273,7 +273,10 @@ flowchart TD
   is never consumed, and every later fence wait on the queue — the teardown flushes among them —
   blocks behind it forever.
 * **`GetPassTimings(target)`** — the passes of the last *completed* timed frame on `target`, in
-  execution order, each with its GPU milliseconds; may be called mid-frame. A frame's rows arrive
+  execution order, each with its GPU milliseconds, under `PassTimings::frame`: an id that moves when
+  newer samples resolve and repeats while none have, which is how a caller reading once a frame tells
+  a new frame from the one it already has — the rows cannot, since two frames of a still scene
+  measure the same passes to within noise. May be called mid-frame. A frame's rows arrive
   once its fence has passed, so they trail the frame that wrote them by one or two, and a pass the
   GPU could not sample — one that recorded nothing an encoder boundary can carry a timestamp on —
   reports zero rather than going missing. Empty while `IRenderTarget::SetGpuTimingEnabled` is off,
