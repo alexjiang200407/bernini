@@ -68,7 +68,7 @@ namespace bgl
 		SceneRef
 		CreateScene(SceneDesc desc) override
 		{
-			return core::SharedRef<Scene>::Make(std::move(desc), m_ResourceManager);
+			return core::SharedRef<Scene>::Make(std::move(desc), m_ResourceManager, m_SurfaceTypes);
 		}
 
 		SceneViewRef

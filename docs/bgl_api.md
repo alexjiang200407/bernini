@@ -179,6 +179,7 @@ disagrees, trust the header, then fix this doc.
 | `PassTiming` | [libs/bgl/include/bgl/PassTiming.h](libs/bgl/include/bgl/PassTiming.h) | One row of `IGraphics::GetPassTimings`: a frame graph pass's name and what it cost on the GPU, in milliseconds. |
 | `SceneDesc` | [libs/bgl/include/bgl/IScene.h](libs/bgl/include/bgl/IScene.h) | Fixed pool capacities for a scene. |
 | `PbrMaterialDesc` / `LoosePbrMaterialDesc` | [libs/bgl/include/bgl/IScene.h](libs/bgl/include/bgl/IScene.h) | Baked (three-map) vs. loose (per-channel routed) material parameters. `ChannelRouteDesc` feeds the latter. `doubleSided` says whether a non-opaque surface's back faces are drawn; on by default, and the mesh stage culls them otherwise — see [Passes § Two-sided surfaces](docs/passes.md). |
+| `SurfaceMaterialDesc` | [libs/bgl/include/bgl/types/SurfaceMaterialDesc.h](libs/bgl/include/bgl/types/SurfaceMaterialDesc.h) | A material drawn by a registered surface: the surface's name, the layer, and its values and textures **by name**, in any order — the names come from the game's own module, so the engine only learned them at startup. What it does not name takes the surface's declared default; a name the surface never declared throws. |
 | `EnvironmentMapDesc` | [libs/bgl/include/bgl/IScene.h](libs/bgl/include/bgl/IScene.h) | The IBL triplet (irradiance cube, prefilter cube, BRDF LUT). **Move-only** — copy is deleted. |
 | `GroundPlaneDesc` | [libs/bgl/include/bgl/IScene.h](libs/bgl/include/bgl/IScene.h) | The scene's ground: a point and an up normal. Defaults to `y = 0`. |
 | `RenderTargetDesc` | [libs/bgl/include/bgl/IRenderTarget.h](libs/bgl/include/bgl/IRenderTarget.h) | The output size, `renderScale` (how dense the geometry passes' grid is relative to it), `taaReconstructionWidth` (how wide a kernel the resolve rebuilds an output pixel with, in output pixels), `headless`, and `wnd` — an `HWND` on D3D12, a `CAMetalLayer*` on Metal; ignored when headless. |
@@ -209,7 +210,7 @@ flowchart TD
 
     SV -- "keeps alive" --> SC
     SC -- "AddStaticMeshGeom / AddSphereGeom / ..." --> GH[GeomHandle]
-    SC -- "CreatePbrMaterial / CreateLoosePbrMaterial" --> MH[MaterialHandle]
+    SC -- "CreatePbrMaterial / CreateLoosePbrMaterial / CreateSurfaceMaterial" --> MH[MaterialHandle]
     SC -- "AddTextureAsset(ImageData)" --> TH[TextureAssetHandle]
 
     GH -- "CreateStaticMeshInstance(geom, transform)" --> MI[MeshInstanceHandle]
@@ -365,6 +366,16 @@ flowchart TD
   record's offset and its header, so every submesh already bound picks the change up with no
   rebinding. The material's *type* cannot
   change, so the PSO bucket is unaffected. @throws `SceneError` on a type mismatch.
+* **`CreateSurfaceMaterial(desc)` / `UpdateSurfaceMaterial(material, desc)`** — a material drawn by
+  one of `IGraphics::GetSurfaceTypes()`. Its `MaterialType` is the reserved kind that surface was
+  given, so that is what picks its pipelines. Values and textures are matched by the names the
+  surface declared; anything the desc does not name takes the surface's own default, and a name the
+  surface never declared throws rather than landing somewhere harmless — including a name declared as
+  the *other* kind of field, which says so. An unbound texture reads the default its declared kind
+  implies: white for a colour or a data map, a flat normal for a normal map. `kHashed` throws: hashed
+  alpha needs texel counts a surface's coverage cannot give, so no game row draws it. An update
+  cannot change the surface, which is what the record's kind and size were fixed by. @throws
+  `SceneError` for all of the above.
 * **`AddStaticMeshGeom(mesh, meshIndex, materials)`** — `materials` is parallel to `mesh.materials`, and a
   submesh whose material index is out of range is left unlit rather than rejected. Resolving those
   paths to handles is the caller's job — `gamelib`'s `AssetManager` is the only implementation of the

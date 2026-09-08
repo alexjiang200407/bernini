@@ -34,6 +34,7 @@
 #include <bgl/MaterialType.h>
 #include <bgl/PreparedStaticMesh.h>
 #include <bgl/RigHandle.h>
+#include <bgl/SurfaceType.h>
 #include <bgl/TextureAssetHandle.h>
 #include <bgl/types/ChannelRouteDesc.h>
 #include <bgl/types/FootPlantDesc.h>
@@ -41,6 +42,7 @@
 #include <bgl/types/LoosePbrMaterialDesc.h>
 #include <bgl/types/PbrMaterialDesc.h>
 #include <bgl/types/SceneDesc.h>
+#include <bgl/types/SurfaceMaterialDesc.h>
 #include <bgl_common/gassert.h>
 #include <bgl_common/idl/BoneSample.h>
 #include <bgl_common/idl/Clip.h>
@@ -334,9 +336,12 @@ namespace bgl
 		};
 	}
 
-	Scene::Scene(SceneDesc desc, core::SharedRef<IResourceManager> resourceManager) :
-		m_Desc(std::move(desc)), m_ResourceManager(std::move(resourceManager)),
-		m_Textures(m_ResourceManager)
+	Scene::Scene(
+		SceneDesc                         desc,
+		core::SharedRef<IResourceManager> resourceManager,
+		std::span<const SurfaceType>      surfaces) :
+		m_Desc(std::move(desc)), m_Surfaces(surfaces.begin(), surfaces.end()),
+		m_ResourceManager(std::move(resourceManager)), m_Textures(m_ResourceManager)
 	{
 		m_NamePrefix = std::format("s{}:", g_NextSceneId.fetch_add(1));
 
@@ -412,12 +417,22 @@ namespace bgl
 		}
 
 		{
-			// The two kinds share one arena, so their budgets add up into it.
+			// Every surface's block is a different size, and one arena holds them all, so the
+			// budget and the null record below both go by the largest registered.
+			uint32_t largestSurfaceParams = 0;
+			for (const SurfaceType& surface : m_Surfaces)
+				largestSurfaceParams = std::max(largestSurfaceParams, surface.params.byteSize);
+
+			const uint64_t surfaceRecordBytes =
+				idl::cRawPayloadOffset + sizeof(idl::GameSurfaceRecord) + largestSurfaceParams;
+
+			// The kinds share one arena, so their budgets add up into it.
 			const uint64_t materialBytes =
 				(static_cast<uint64_t>(m_Desc.initialPbrMaterials) *
 			     (idl::cRawPayloadOffset + sizeof(idl::PbrMaterial))) +
 				(static_cast<uint64_t>(m_Desc.initialLoosePbrMaterials) *
-			     (idl::cRawPayloadOffset + sizeof(idl::LoosePbrMaterial)));
+			     (idl::cRawPayloadOffset + sizeof(idl::LoosePbrMaterial))) +
+				(static_cast<uint64_t>(m_Desc.initialSurfaceMaterials) * surfaceRecordBytes);
 
 			auto materialDesc = RawBufferDesc();
 
@@ -433,10 +448,11 @@ namespace bgl
 
 			// The null record must cover the largest payload as well as its header: a null
 			// reference reads zeros for a whole record rather than the first live one.
-			materialDesc.nullRecordBytes =
+			materialDesc.nullRecordBytes = std::max(
+				static_cast<uint32_t>(surfaceRecordBytes),
 				idl::cRawPayloadOffset +
-				static_cast<uint32_t>(
-					std::max(sizeof(idl::PbrMaterial), sizeof(idl::LoosePbrMaterial)));
+					static_cast<uint32_t>(
+						std::max(sizeof(idl::PbrMaterial), sizeof(idl::LoosePbrMaterial))));
 
 			m_Materials.Init(std::move(materialDesc), m_ResourceManager);
 		}
@@ -1558,6 +1574,191 @@ namespace bgl
 		material.doubleSided        = desc.doubleSided ? 1u : 0u;
 
 		return material;
+	}
+
+	std::pair<const SurfaceType&, std::vector<std::byte>>
+	Scene::BuildSurfaceMaterial(const SurfaceMaterialDesc& desc) const
+	{
+		const auto found = std::ranges::find(m_Surfaces, desc.surface, &SurfaceType::name);
+		if (found == m_Surfaces.end())
+		{
+			throw SceneError(
+				std::format(
+					"no surface named '{}' is registered; a surface is read from the client's "
+					"shader "
+					"directory when the graphics is created",
+					desc.surface));
+		}
+
+		// No game row draws hashed alpha: it needs the texel counts of the texture behind a
+		// coverage, and a surface answers with a number rather than a sample the engine can measure.
+		if (desc.layerType == LayerType::kHashed)
+		{
+			throw SceneError(
+				std::format(
+					"surface material '{}' asks for hashed alpha, which no game row draws",
+					desc.surface));
+		}
+
+		const SurfaceType&   surface = *found;
+		const SurfaceParams& params  = surface.params;
+
+		std::vector<std::byte> payload(sizeof(idl::GameSurfaceRecord) + params.byteSize);
+
+		// The offsets are reflection's, so a field landing outside the block it was measured in is
+		// an engine bug and not a caller's -- and one that would otherwise be a heap write rather
+		// than a wrong pixel.
+		const auto writeParam = [&payload](uint32_t byteOffset, const void* src, size_t bytes) {
+			gassert(
+				sizeof(idl::GameSurfaceRecord) + byteOffset + bytes <= payload.size(),
+				"A surface field at {} spans {} bytes, past the block reflection measured",
+				byteOffset,
+				bytes);
+
+			std::memcpy(payload.data() + sizeof(idl::GameSurfaceRecord) + byteOffset, src, bytes);
+		};
+
+		// Defaults first, so a value the material leaves alone still lands as the surface declared
+		// it rather than as zero.
+		for (const SurfaceValue& value : params.values)
+		{
+			const uint32_t components = SurfaceValueComponents(value.type);
+			writeParam(value.byteOffset, &value.defaultValue.x, components * sizeof(float));
+		}
+
+		for (const SurfaceValueBinding& binding : desc.values)
+		{
+			const auto declared =
+				std::ranges::find(params.values, binding.name, &SurfaceValue::name);
+			if (declared == params.values.end())
+			{
+				// Declared, but as the other kind of field: a name that exists and cannot take a
+				// number is worth saying out loud, since "no such value" would send its author
+				// looking for a typo that is not there.
+				const bool isTexture =
+					std::ranges::find(params.textures, binding.name, &SurfaceTexture::name) !=
+					params.textures.end();
+
+				throw SceneError(
+					isTexture ? std::format(
+									"surface '{}' declares '{}' as a texture, not a value",
+									desc.surface,
+									binding.name) :
+								std::format(
+									"surface '{}' declares no value named '{}'",
+									desc.surface,
+									binding.name));
+			}
+
+			const uint32_t components = SurfaceValueComponents(declared->type);
+			writeParam(declared->byteOffset, &binding.value.x, components * sizeof(float));
+		}
+
+		idl::GameSurfaceRecord record{};
+		record.doubleSided = desc.doubleSided ? 1u : 0u;
+		record.alphaCutoff = desc.alphaCutoff;
+
+		// Every handle is filled, so a slot the material never named still samples something rather
+		// than a null descriptor. What that something is comes from the kind the surface declared:
+		// white is the identity for a colour or a factor, and the identity for a normal map is a
+		// flat one -- the same two defaults the PBR path picks between.
+		const auto white = m_Textures.GetDefaultSlot(TextureAssetStore::DefaultTexture::kWhite);
+		const auto flatNormal =
+			m_Textures.GetDefaultSlot(TextureAssetStore::DefaultTexture::kFlatNormal);
+
+		for (idl::RawTextureHandle& handle : record.textures)
+			handle = RawHandleOf(m_Textures.GetDescriptor(white));
+
+		for (const SurfaceTexture& texture : params.textures)
+		{
+			if (texture.kind == SurfaceTextureKind::kNormal)
+			{
+				record.textures[texture.index] = RawHandleOf(m_Textures.GetDescriptor(flatNormal));
+			}
+
+			// The index the shader samples by is the engine's to write; the surface declared the
+			// field and never sets it.
+			const uint32_t index = texture.index;
+			writeParam(texture.byteOffset, &index, sizeof(index));
+		}
+
+		for (const SurfaceTextureBinding& binding : desc.textures)
+		{
+			const auto declared =
+				std::ranges::find(params.textures, binding.name, &SurfaceTexture::name);
+			if (declared == params.textures.end())
+			{
+				const bool isValue =
+					std::ranges::find(params.values, binding.name, &SurfaceValue::name) !=
+					params.values.end();
+
+				throw SceneError(
+					isValue ? std::format(
+								  "surface '{}' declares '{}' as a value, not a texture",
+								  desc.surface,
+								  binding.name) :
+							  std::format(
+								  "surface '{}' declares no texture named '{}'",
+								  desc.surface,
+								  binding.name));
+			}
+
+			if (binding.texture.textureSlot)
+			{
+				record.textures[declared->index] =
+					RawHandleOf(m_Textures.GetDescriptor(binding.texture.textureSlot));
+			}
+		}
+
+		std::memcpy(payload.data(), &record, sizeof(record));
+
+		return { surface, std::move(payload) };
+	}
+
+	MaterialHandle
+	Scene::CreateSurfaceMaterial(const SurfaceMaterialDesc& desc)
+	{
+		const auto [surface, payload] = BuildSurfaceMaterial(desc);
+		const idl::RawEntry entry     = m_Materials.AddRecord(surface.kind, payload);
+
+		return MaterialHandle{ surface.kind, desc.layerType, entry.byteOffset };
+	}
+
+	void
+	Scene::UpdateSurfaceMaterial(MaterialHandle material, const SurfaceMaterialDesc& desc)
+	{
+		// The handle first, as UpdatePbrMaterial checks it: a caller holding a stale one should hear
+		// about that rather than about whatever its desc says.
+		if (!m_Materials.IsOffsetValid(material.byteOffset))
+		{
+			throw SceneError(
+				"MaterialHandle passed to UpdateSurfaceMaterial is invalid or expired");
+		}
+
+		if (m_Materials.GetTagAt(material.byteOffset) != material.materialType)
+		{
+			throw SceneError(
+				"MaterialHandle passed to UpdateSurfaceMaterial names a record of another kind");
+		}
+
+		const auto [surface, payload] = BuildSurfaceMaterial(desc);
+
+		// The surface cannot change: it is what the record's kind and its size were fixed by, and a
+		// submesh keeps the byte offset either way.
+		if (material.materialType != surface.kind)
+		{
+			throw SceneError(
+				std::format(
+					"MaterialHandle passed to UpdateSurfaceMaterial was not created with surface "
+					"'{}'",
+					desc.surface));
+		}
+
+		m_Materials.SetRecordPayload(idl::RawEntry{ material.byteOffset }, payload);
+
+		// Every rewrite counts, including one landing on the bytes already there: an entry is a
+		// GPU-layout mirror whose padding no comparison can trust.
+		++m_TemporalEpoch;
 	}
 
 	MaterialHandle

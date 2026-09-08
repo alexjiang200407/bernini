@@ -27,12 +27,14 @@
 #include <bgl/MaterialType.h>
 #include <bgl/PreparedStaticMesh.h>
 #include <bgl/RigHandle.h>
+#include <bgl/SurfaceType.h>
 #include <bgl/TextureAssetHandle.h>
 #include <bgl/types/FootPlantDesc.h>
 #include <bgl/types/GroundPlaneDesc.h>
 #include <bgl/types/LoosePbrMaterialDesc.h>
 #include <bgl/types/PbrMaterialDesc.h>
 #include <bgl/types/SceneDesc.h>
+#include <bgl/types/SurfaceMaterialDesc.h>
 #include <bgl_common/idl/BoneSample.h>
 #include <bgl_common/idl/Clip.h>
 #include <bgl_common/idl/LoosePbrMaterial.h>
@@ -55,6 +57,7 @@
 #include <spdlog/spdlog.h>
 #include <string>
 #include <tuple>
+#include <utility>
 #include <vector>
 
 namespace bgl
@@ -125,7 +128,10 @@ namespace bgl
 			kCount
 		};
 
-		Scene(SceneDesc desc, core::SharedRef<IResourceManager> resourceManager);
+		Scene(
+			SceneDesc                         desc,
+			core::SharedRef<IResourceManager> resourceManager,
+			std::span<const SurfaceType>      surfaces);
 		~Scene() noexcept override { logger::trace("~Scene"); }
 		Scene(const Scene&) noexcept = delete;
 		Scene(Scene&&) noexcept      = delete;
@@ -434,11 +440,17 @@ namespace bgl
 		MaterialHandle
 		CreateLoosePbrMaterial(const LoosePbrMaterialDesc& desc) override;
 
+		MaterialHandle
+		CreateSurfaceMaterial(const SurfaceMaterialDesc& desc) override;
+
 		void
 		UpdatePbrMaterial(MaterialHandle material, const PbrMaterialDesc& desc) override;
 
 		void
 		UpdateLoosePbrMaterial(MaterialHandle material, const LoosePbrMaterialDesc& desc) override;
+
+		void
+		UpdateSurfaceMaterial(MaterialHandle material, const SurfaceMaterialDesc& desc) override;
 
 		void
 		DeleteMaterial(MaterialHandle material) override;
@@ -550,11 +562,25 @@ namespace bgl
 		[[nodiscard]] idl::PbrMaterial
 		BuildPbrMaterial(const PbrMaterialDesc& desc) const;
 
+		/**
+		 * The surface named by `desc`, and its record's bytes: the engine's fixed part, then the
+		 * parameter block with each declared field at the offset reflection read for it.
+		 *
+		 * @throws SceneError if no surface has that name, if the layer is one no game row draws, or
+		 *         if a value or texture names a field the surface does not declare.
+		 */
+		[[nodiscard]] std::pair<const SurfaceType&, std::vector<std::byte>>
+		BuildSurfaceMaterial(const SurfaceMaterialDesc& desc) const;
+
 		[[nodiscard]] idl::LoosePbrMaterial
 		BuildLoosePbrMaterial(const LoosePbrMaterialDesc& desc) const;
 
-		SceneDesc   m_Desc;
-		std::string m_NamePrefix;
+		SceneDesc m_Desc;
+
+		// The surfaces the graphics registered, by the name a material writes. Copied rather than
+		// referenced: a scene outlives no graphics, but it is small and read on every material.
+		std::vector<SurfaceType> m_Surfaces;
+		std::string              m_NamePrefix;
 
 		// One entry per live geom: where its submeshes sit in m_SubmeshBuffer, plus the animated extras.
 		// The slot generation is what makes a GeomHandle expire when its geom is deleted (see
