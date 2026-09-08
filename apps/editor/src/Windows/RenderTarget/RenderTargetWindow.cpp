@@ -1,8 +1,6 @@
 #include "Windows/RenderTarget/RenderTargetWindow.h"
 
 #include "Render/Renderer.h"
-#include "util/frame_stats_text.h"
-#include <QString>
 #include <algorithm>
 #include <cassert>
 #include <cmath>
@@ -25,6 +23,7 @@
 #include <QShowEvent>
 #include <QTimer>
 #include <bgl/IGraphics.h>
+#include <bgl/PassTiming.h>
 #include <bgl/RenderJob.h>
 #include <bgl/Viewport.h>
 
@@ -229,28 +228,43 @@ RenderTargetWindow::ReportFrameTiming(qint64 startNs)
 		if (deltaMs > c_MissedFrameMs)
 			++m_MissedFrames;
 
+		SamplePassTimings();
+
 		if (++m_FramesSinceEmit >= c_FrameStatsInterval)
 		{
 			m_FramesSinceEmit = 0;
-
-			// Read here, on the render thread, where the target's rows are the frame just behind
-			// the one this call follows. Empty text while timing is off.
-			QString gpuPasses;
-			if (m_RenderTarget->IsGpuTimingEnabled())
-			{
-				gpuPasses = editor::PassTimingsText(
-					m_Desc.renderer->GetGraphics()->GetPassTimings(m_RenderTarget).passes);
-			}
 
 			Q_EMIT FrameStatsUpdated(
 				m_FrameTimes.Mean(),
 				m_FrameTimes.Max(),
 				static_cast<int>(m_MissedFrames),
-				gpuPasses);
+				m_GpuFrames);
+
+			m_GpuFrames.clear();
 		}
 	}
 
 	m_LastFrameStartNs = startNs;
+}
+
+void
+RenderTargetWindow::SamplePassTimings()
+{
+	if (!m_RenderTarget->IsGpuTimingEnabled())
+	{
+		m_LastGpuFrame = 0;
+		m_GpuFrames.clear();
+		return;
+	}
+
+	// Read here, on the render thread, where the target's rows are the frame just behind the one
+	// this call follows.
+	bgl::PassTimings timings = m_Desc.renderer->GetGraphics()->GetPassTimings(m_RenderTarget);
+	if (timings.passes.empty() || timings.frame == m_LastGpuFrame)
+		return;
+
+	m_LastGpuFrame = timings.frame;
+	m_GpuFrames.emplace_back(std::move(timings));
 }
 
 void
@@ -410,6 +424,8 @@ RenderTargetWindow::UpdateViewport()
 	m_FrameTimes.Reset();
 	m_MissedFrames    = 0;
 	m_FramesSinceEmit = 0;
+	m_LastGpuFrame    = 0;
+	m_GpuFrames.clear();
 }
 
 void

@@ -55,6 +55,7 @@
 
 #include <QDebug>
 #include <QKeySequence>
+#include <bgl/PassTiming.h>
 #include <memory>
 #include <optional>
 #include <qaction.h>
@@ -1057,9 +1058,11 @@ MainWindow::SetUpFrameStats()
 				view,
 				&RenderTargetWindow::FrameStatsUpdated,
 				this,
-				[this,
-			     view,
-			     name](double meanMs, double maxMs, int missed, const QString& gpuPasses) {
+				[this, view, name](
+					double                               meanMs,
+					double                               maxMs,
+					int                                  missed,
+					const std::vector<bgl::PassTimings>& gpuFrames) {
 					if (m_FrameStatsSource != view)
 						return;
 
@@ -1070,13 +1073,14 @@ MainWindow::SetUpFrameStats()
 				                                .maxMs  = maxMs,
 				                                .missed = missed }));
 
-					// The breakdown is one frame of numbers, which is a log's to hold and a
-					// tooltip's to misread; a stats window that graphs the rows is the readout it
-					// wants, and is not this.
-					if (m_LogNextPassTimings && !gpuPasses.isEmpty())
+					// The latest frame, formatted here rather than on the render thread: the log
+					// wants one frame as a table and the graph wants every frame as numbers, and
+					// formatting at the source would make them two copies of the same rows.
+					if (m_LogNextPassTimings && !gpuFrames.empty())
 					{
 						m_LogNextPassTimings = false;
-						qInfo().noquote() << "GPU pass timings," << name << "\n" << gpuPasses;
+						qInfo().noquote() << "GPU pass timings," << name << "\n"
+										  << editor::PassTimingsText(gpuFrames.back().passes);
 					}
 				},
 				Qt::QueuedConnection);
