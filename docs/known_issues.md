@@ -15,6 +15,40 @@ gates are named rather than described.
 
 ---
 
+## `core_tests` hangs on one shard, at full CPU, with no failing case named
+
+**Symptom.** `just test` never finishes: one `core_tests` shard sits for hours with the suite lock
+held, and beside it a second `core_tests` process at 100% CPU. Sampled, the shard is in
+`CrashLog_test.cpp` → `wait4`; the child it forked is in the crash handler, at
+`crash_log_path()` → `localtime_r` → `tzsetwall_basic` → `notify_register_tz` →
+`notify_register_check` → two frames inside libsystem_notify → `_dispatch_once_wait`. Which
+shard, and whether at all, depends on the random test order: the suite is sharded across one
+random order, and the case lands wherever the partition puts it.
+
+**Cause.** The handler built its stamp with `localtime_r`. On macOS the first `localtime` in a
+process initialises the time zone through libnotify under a `dispatch_once`, and that state does
+not survive a `fork`: a child whose parent never called `localtime` waits on it forever. The crash
+tests fork a child to crash on purpose, so an order in which nothing before them had touched the
+time zone hung the child in the handler and the parent in `wait4`. The same call is not
+async-signal-safe in any process: a crash on one thread while another holds the time-zone lock
+deadlocks the handler with no log written.
+
+**Fixed by** the handler stamping from `time()` and integer arithmetic alone, in local time from an
+offset `install_crash_handlers` reads once, on the installing thread
+([util.cpp](../libs/core/src/err/util.cpp), `crash_log_path`).
+
+**Gates.** `just run core_tests -- "[crashlog]"`: the stamp is checked against the wall clock the
+parent reads the ordinary way, and the crash tests install the handlers in the parent, so the
+forked child calls no time function at all.
+
+**If it comes back.** Read the signal path from `crash_signal_action` to the file name first:
+nothing on it may call `localtime`, `gmtime`, `strftime` or `tzset`, and a new stamp, a new
+timestamp in the log body, or a logger reached from the handler is where one would arrive. The
+allocations the handler already makes (`std::ofstream`, `std::format`, cpptrace) are a different
+hazard: they can deadlock on a crash inside `malloc`, never wait forever on the time zone.
+
+---
+
 ## The editor's viewport is more saturated than the same frame anywhere else
 
 **Symptom.** On a Mac, the material editor's viewport reads more saturated than Blender's Material
