@@ -31,6 +31,7 @@
 #include <cmath>
 #include <cstdint>
 #include <filesystem>
+#include <optional>
 #include <qcontainerfwd.h>
 #include <qlatin1stringview.h>
 #include <qnamespace.h>
@@ -585,11 +586,15 @@ AnimationEditorWindow::SyncTransportUi()
 			m_Transport.GetPeriodSeconds(),
 			c_TimelineTicks));
 
-	if (m_Transport.HasClips())
+	if (const std::optional<float> frame = m_Transport.GetCurrentFrame(); frame)
 	{
 		m_TimeReadout->setText(QStringLiteral("%1s / frame %2")
 		                           .arg(m_Transport.GetTimeSeconds(), 0, 'f', 2)
-		                           .arg(m_Transport.GetCurrentFrame(), 0, 'f', 1));
+		                           .arg(*frame, 0, 'f', 1));
+	}
+	else if (m_Transport.HasClips())
+	{
+		m_TimeReadout->setText(QStringLiteral("%1s").arg(m_Transport.GetTimeSeconds(), 0, 'f', 2));
 	}
 	else
 	{
