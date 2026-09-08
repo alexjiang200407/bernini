@@ -182,7 +182,8 @@ namespace
 			s.gfx->WaitIdle();
 			if (frame < 3)
 				continue;
-			for (const bgl::PassTiming& row : s.gfx->GetPassTimings(s.target))
+			const bgl::PassTimings timings = s.gfx->GetPassTimings(s.target);
+			for (const bgl::PassTiming& row : timings.passes)
 			{
 				if (row.name == "Forward 0")
 					samples.push_back(row.milliseconds);

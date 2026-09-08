@@ -159,7 +159,7 @@ namespace bgl
 			m_Context->DiscardPendingGpuAssertions();
 		}
 
-		std::vector<PassTiming>
+		PassTimings
 		GetPassTimings(const RenderTargetRef& target) override
 		{
 			return m_Context->GetPassTimings(target);

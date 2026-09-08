@@ -427,6 +427,10 @@ namespace bgl
 		}
 		frame.pending = false;
 
+		// The queue's fence value for the frame just read: monotonic, so a caller sampling every
+		// frame sees it move exactly when there are new rows to see.
+		rt.SetPassTimingFrame(frame.fence);
+
 		// Both buffers keep their capacity from frame to frame: the scratch here, the rows on the
 		// target, so a resolve allocates only when a frame has more passes than any before it.
 		m_TimingTicks.resize(frame.slotsUsed);
@@ -451,7 +455,7 @@ namespace bgl
 		}
 	}
 
-	std::vector<PassTiming>
+	PassTimings
 	RenderContext::GetPassTimings(const RenderTargetRef& target)
 	{
 		RenderTargetBase& rt = *target->As<RenderTargetBase>();
@@ -475,7 +479,7 @@ namespace bgl
 			}
 		}
 
-		return rt.GetPassTimings();
+		return PassTimings{ .frame = rt.GetPassTimingFrame(), .passes = rt.GetPassTimings() };
 	}
 
 	void

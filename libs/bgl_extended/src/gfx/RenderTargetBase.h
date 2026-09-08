@@ -97,6 +97,7 @@ namespace bgl
 			if (!enabled)
 			{
 				m_PassTimings.clear();
+				m_PassTimingFrame = 0;
 				for (TimingFrame& frame : m_TimingFrames)
 				{
 					frame.pending = false;
@@ -151,6 +152,19 @@ namespace bgl
 		EditPassTimings() noexcept
 		{
 			return m_PassTimings;
+		}
+
+		/** Which frame the rows above describe, as bgl::PassTimings::frame reports it. */
+		[[nodiscard]] uint64_t
+		GetPassTimingFrame() const noexcept
+		{
+			return m_PassTimingFrame;
+		}
+
+		void
+		SetPassTimingFrame(uint64_t frame) noexcept
+		{
+			m_PassTimingFrame = frame;
 		}
 
 		void
@@ -401,5 +415,6 @@ namespace bgl
 		TimestampHeapRef                               m_TimingHeap;
 		std::array<TimingFrame, c_SwapchainImageCount> m_TimingFrames;
 		std::vector<PassTiming>                        m_PassTimings;
+		uint64_t                                       m_PassTimingFrame = 0;
 	};
 }

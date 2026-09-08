@@ -239,7 +239,7 @@ RenderTargetWindow::ReportFrameTiming(qint64 startNs)
 			if (m_RenderTarget->IsGpuTimingEnabled())
 			{
 				gpuPasses = editor::PassTimingsText(
-					m_Desc.renderer->GetGraphics()->GetPassTimings(m_RenderTarget));
+					m_Desc.renderer->GetGraphics()->GetPassTimings(m_RenderTarget).passes);
 			}
 
 			Q_EMIT FrameStatsUpdated(
