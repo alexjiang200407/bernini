@@ -137,12 +137,15 @@ TEST_CASE("Two surfaces draw side by side across three layers", "[surface][rende
 
 	bgl::test::ApplyEnvironment(scene.Get(), view.Get());
 
-	// Left: the rim opaque, its two parameters set away from the defaults it declared.
+	// Left: the rim opaque, every parameter set away from the defaults it declared. The emissive is
+	// well over one because the environment already lights the sphere to near white, and a rim that
+	// only just clears that is a rim nobody can see.
 	auto rimOpaque = scene->CreateSurfaceMaterial(
 		{
 			.surface = "Rim",
-			.values  = { { "rimColor", glm::vec4(1.0f, 0.3f, 0.1f, 0.0f) },
-	                     { "rimPower", glm::vec4(2.0f) } },
+			.values  = { { "rimColor", glm::vec4(10.0f, 3.0f, 1.0f, 0.0f) },
+	                     { "rimPower", glm::vec4(2.0f) },
+	                     { "baseColorFactor", glm::vec4(0.05f, 0.05f, 0.06f, 1.0f) } },
 		});
 
 	// Middle: the rim again, blended, and taking every default it declares -- so the two differ by

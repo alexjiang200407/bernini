@@ -85,12 +85,15 @@ TEST_CASE("A surface directory fills the reserved slots in filename order", "[su
 		static_cast<MaterialType>(static_cast<uint32_t>(MaterialType::kGameStart) + 2u));
 
 	const SurfaceParams& rim = types[1].params;
-	REQUIRE(rim.values.size() == 2u);
+	REQUIRE(rim.values.size() == 3u);
 	CHECK(rim.values[0].name == "rimColor");
 	CHECK(rim.values[0].type == SurfaceValueType::kFloat3);
-	CHECK(rim.values[0].defaultValue == glm::vec4(0.2f, 0.6f, 1.0f, 0.0f));
+	CHECK(rim.values[0].defaultValue == glm::vec4(1.0f, 3.0f, 6.0f, 0.0f));
 	CHECK(rim.values[1].name == "rimPower");
 	CHECK(rim.values[1].defaultValue.x == 3.0f);
+	CHECK(rim.values[2].name == "baseColorFactor");
+	CHECK(rim.values[2].type == SurfaceValueType::kFloat4);
+	CHECK(rim.values[2].defaultValue == glm::vec4(0.05f, 0.05f, 0.06f, 0.55f));
 
 	REQUIRE(rim.textures.size() == 1u);
 	CHECK(rim.textures[0].name == "baseColor");
