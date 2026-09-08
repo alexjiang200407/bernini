@@ -197,7 +197,7 @@ AnimationEditorWindow::BuildPropertiesColumn()
 	connect(m_TierSelector, &QComboBox::activated, this, [this](int index) {
 		if (m_SyncingUi || index < 0)
 			return;
-		m_Preview->SetPoseSource(TierSourceAt(index));
+		m_Preview->SetPoseSource(TierSourceAt(index), m_Transport.GetTimeSeconds());
 	});
 	layout->addWidget(m_TierSelector);
 
@@ -650,8 +650,8 @@ AnimationEditorWindow::SelectClip(const int index)
 	}
 
 	m_Transport.SelectClip(static_cast<uint32_t>(index));
-	m_Preview->SetActiveClip(static_cast<uint32_t>(index));
-	m_Preview->SetTime(0.0f);
+	m_Preview->SetActiveClip(static_cast<uint32_t>(index), m_Transport.GetTimeSeconds());
+	m_Preview->SetTime(m_Transport.GetTimeSeconds());
 
 	const editor::ClipInfo& clip = m_Transport.GetActiveClip();
 	m_ClipMetadata->setText(QStringLiteral("%1\n%2 frames @ %3 Hz\n%4 s%5")
