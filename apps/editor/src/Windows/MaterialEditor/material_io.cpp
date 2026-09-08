@@ -98,6 +98,13 @@ namespace editor
 				// Document keys this build does not know ride through a save untouched -- a
 				// sibling branch's field must survive this editor's round-trip.
 				material.extraJson = existing.extraJson;
+
+				// The board is a PBR one and CompileMaterial says so, so a material drawn by a
+				// game's surface would be demoted by a Save it never asked for -- and the three
+				// keys stripped with the model. The editor authors no surface, so what is on disk
+				// is the only thing that knows.
+				material.shadingModel = existing.shadingModel;
+				material.surface      = existing.surface;
 			}
 			catch (const std::exception& e)
 			{

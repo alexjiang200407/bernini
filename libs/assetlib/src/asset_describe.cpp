@@ -49,6 +49,8 @@ namespace assetlib
 			{
 			case ShadingModel::kPbr:
 				return "pbr";
+			case ShadingModel::kSurface:
+				return "surface";
 			case ShadingModel::kCount:
 				break;
 			}
@@ -220,6 +222,40 @@ namespace assetlib
 				break;
 			}
 			return "opaque";
+		}
+
+		void
+		describeSurface(
+			std::string&                   out,
+			const SurfaceParams&           surface,
+			const core::file::IFileSystem* fileSystem)
+		{
+			out += std::format("  surface           {}\n", surface.name);
+
+			out += "\n  parameters\n";
+			if (surface.values.empty())
+				out += "    (none set; every one takes the default the surface declared)\n";
+			for (const SurfaceValue& value : surface.values)
+			{
+				std::string numbers;
+				for (const float component : value.value)
+					numbers += std::format("{}{:.3g}", numbers.empty() ? "" : ", ", component);
+				out += std::format("    {:<15} {}\n", value.name, numbers);
+			}
+
+			out += "\n  textures\n";
+			if (surface.textures.empty())
+				out += "    (none bound; every slot samples the engine's default)\n";
+			for (const SurfaceTexture& texture : surface.textures)
+			{
+				out += std::format("    {:<15} {}\n", texture.name, pathOr(texture.texture));
+
+				// A surface texture is bound rather than baked, so there is no stamp to compare --
+				// the one thing worth reporting is whether the file is still there.
+				if (fileSystem != nullptr && !texture.texture.empty() &&
+				    stampOf(*fileSystem, texture.texture) == SourceStamp{})
+					out += "                    file is missing\n";
+			}
 		}
 
 		void
@@ -415,12 +451,18 @@ namespace assetlib
 			describePbr(out, material.pbr, fileSystem);
 			break;
 
+		case ShadingModel::kSurface:
+			describeSurface(out, material.surface, fileSystem);
+			break;
+
 		case ShadingModel::kCount:
 			out += "  (unknown shading model; its parameters cannot be described)\n";
 			break;
 		}
 
-		if (fileSystem != nullptr)
+		// Both questions are the triplet's, and a surface has none: reporting a bake as up to date
+		// for a material no bake produces reads as a bake having run.
+		if (fileSystem != nullptr && material.shadingModel == ShadingModel::kPbr)
 		{
 			out += std::format(
 				"\n  bake              {}\n  draws from        {}\n",

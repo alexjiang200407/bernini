@@ -1,4 +1,5 @@
 #include "Windows/MaterialEditor/CachedMaterial.h"
+#include "Windows/MaterialEditor/material_io.h"
 #include <assetlib_structs/BMaterial.h>
 
 #include <QTemporaryDir>
@@ -156,4 +157,35 @@ TEST_CASE("A material that appears later is picked up", "[materialeditor]")
 
 	REQUIRE(cached.Get(sandbox.Root(), sandbox.Path()) != nullptr);
 	REQUIRE(cached.Get(sandbox.Root(), sandbox.Path())->name == "first");
+}
+
+// A material drawn by a game's surface reaches the panel through the same read as every other one.
+// The editor authors PBR graphs and knows nothing about surfaces, so what it must do is open one
+// and say nothing about it -- not refuse it, and not show it as an unbaked PBR material.
+TEST_CASE("A surface material opens as a graphless one", "[materialeditor][surface]")
+{
+	const Sandbox sandbox;
+
+	{
+		auto material             = assetlib::BMaterial();
+		material.name             = "rim";
+		material.shadingModel     = assetlib::ShadingModel::kSurface;
+		material.surface.name     = "Rim";
+		material.surface.values   = { { "rimPower", { 2.0f } } };
+		material.surface.textures = { { "baseColor", "Derived/BakedTextures/rim.ktx2" } };
+
+		assetlib::AssetStore(sandbox.Root()).Save(material, "Authored/Materials/rust.bmaterial");
+	}
+
+	CachedMaterial             cached;
+	const assetlib::BMaterial* material = cached.Get(sandbox.Root(), sandbox.Path());
+
+	REQUIRE(material != nullptr);
+	CHECK(material->shadingModel == assetlib::ShadingModel::kSurface);
+	CHECK(material->surface.name == "Rim");
+	CHECK(material->editorGraph.empty());
+
+	// A baked triplet is a PBR notion. The panel's summary is what would otherwise show three
+	// em-dashes and invite a bake of a material no bake produces.
+	CHECK(editor::BakedTexturesSummary(*material).isEmpty());
 }

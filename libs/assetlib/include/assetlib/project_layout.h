@@ -32,8 +32,14 @@ namespace assetlib
 	inline constexpr auto c_DerivedDirectoryName  = "Derived";
 
 	// The imported .glb sources and their .bimport documents.
-	inline constexpr auto c_MeshSourcesDirectoryName  = "Authored/Meshes";
-	inline constexpr auto c_MaterialsDirectoryName    = "Authored/Materials";
+	inline constexpr auto c_MeshSourcesDirectoryName = "Authored/Meshes";
+	inline constexpr auto c_MaterialsDirectoryName   = "Authored/Materials";
+
+	// The game's own shading functions, as `.slang` sources. Authored: a person wrote them, nothing
+	// regenerates them, and losing one loses work. They are the one category no codec reads -- the
+	// renderer's Slang session opens them itself, off a host path rather than through the mount.
+	inline constexpr auto c_ShadersDirectoryName = "Authored/Shaders";
+
 	inline constexpr auto c_EnvironmentsDirectoryName = "Authored/Environments";
 	inline constexpr auto c_LevelsDirectoryName       = "Authored/Levels";
 
@@ -69,9 +75,10 @@ namespace assetlib
 	 * The halves themselves are not listed: they are the parents of everything here, and
 	 * IsRequiredDirectory reads them from the two constants above.
 	 */
-	inline constexpr std::array<std::string_view, 14> c_RequiredDirectories = { {
+	inline constexpr std::array<std::string_view, 15> c_RequiredDirectories = { {
 		c_MeshSourcesDirectoryName,
 		c_MaterialsDirectoryName,
+		c_ShadersDirectoryName,
 		c_EnvironmentsDirectoryName,
 		c_LevelsDirectoryName,
 		c_UiDirectoryName,

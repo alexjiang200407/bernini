@@ -5,12 +5,19 @@
 #include <cstddef>
 #include <cstdint>
 #include <string>
+#include <vector>
 
 namespace assetlib
 {
 	enum class ShadingModel : uint32_t
 	{
 		kPbr = 0,
+
+		// A shading function the game wrote, drawn through one of the renderer's reserved rows.
+		// What it declares lives in the shader rather than here, so a material sets it by name and
+		// nothing in this library can say whether a name is real.
+		kSurface = 1,
+
 		kCount,
 	};
 
@@ -132,6 +139,38 @@ namespace assetlib
 		return false;
 	}
 
+	/** One value a surface material sets, under the name the surface declared it as. */
+	struct SurfaceValue
+	{
+		std::string name;
+
+		// One to four numbers, as the document wrote them. The count is the author's and not the
+		// surface's: nothing here knows the declared type, and the renderer reads as many
+		// components as the parameter has.
+		std::vector<float> value;
+	};
+
+	/** One texture a surface material binds, under the name the surface declared it as. */
+	struct SurfaceTexture
+	{
+		std::string name;
+		std::string texture;  // path to the texture file (empty when unbound)
+	};
+
+	/**
+	 * What a material drawn by a game's own surface says: which surface, and what it sets on it.
+	 *
+	 * Nothing here is checked while the document is read. The names belong to a shader module the
+	 * cook never sees, so a value naming no parameter is refused where the surface is known -- at
+	 * the renderer, when the material is created -- and not at load.
+	 */
+	struct SurfaceParams
+	{
+		std::string                 name;
+		std::vector<SurfaceValue>   values;
+		std::vector<SurfaceTexture> textures;
+	};
+
 	struct BMaterial
 	{
 		std::string name;
@@ -143,6 +182,9 @@ namespace assetlib
 		std::string editorGraph;
 
 		PbrParams pbr;
+
+		// Read when shadingModel is kSurface, and left empty otherwise.
+		SurfaceParams surface;
 
 		// Document keys this build does not know, written back on save -- a sibling branch's new
 		// field survives a round-trip through a reader that has never heard of it.

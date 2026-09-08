@@ -54,6 +54,11 @@ namespace assetlib
 			"stampHash",
 		} };
 
+		constexpr std::array<std::string_view, 2> c_ShadingModelNames = { {
+			"pbr",
+			"surface",
+		} };
+
 		constexpr std::array<std::string_view, 4> c_AlphaModeNames = { {
 			"opaque",
 			"mask",
@@ -97,6 +102,131 @@ namespace assetlib
 				it = it->is_object() && it->empty() ? object.erase(it) : std::next(it);
 		}
 
+		/**
+		 * Takes `parameters`, whose members are one to four numbers each, in the document's own
+		 * key order so a save writes the file back as it was read.
+		 */
+		void
+		takeSurfaceValues(nlohmann::json& json, std::vector<SurfaceValue>& out)
+		{
+			const auto it = json.find("parameters");
+			if (it == json.end())
+				return;
+
+			core::throw_runtime_error_if(
+				!it->is_object(),
+				"bmaterial: 'parameters' is not an object");
+
+			for (const auto& [name, value] : it->items())
+			{
+				auto& parameter = out.emplace_back(name);
+
+				if (value.is_number())
+				{
+					parameter.value.push_back(value.get<float>());
+					continue;
+				}
+
+				core::throw_runtime_error_if(
+					!value.is_array() || value.empty() || value.size() > 4 ||
+						!std::ranges::all_of(value, [](const auto& v) { return v.is_number(); }),
+					"bmaterial: parameter '{}' is not a number or an array of one to four numbers",
+					name);
+
+				for (const auto& component : value)
+					parameter.value.push_back(component.get<float>());
+			}
+
+			json.erase(it);
+		}
+
+		/** Takes `textures`, whose members are each one mount key. */
+		void
+		takeSurfaceTextures(nlohmann::json& json, std::vector<SurfaceTexture>& out)
+		{
+			const auto it = json.find("textures");
+			if (it == json.end())
+				return;
+
+			core::throw_runtime_error_if(
+				!it->is_object(),
+				"bmaterial: 'textures' is not an object");
+
+			for (const auto& [name, value] : it->items())
+			{
+				core::throw_runtime_error_if(
+					!value.is_string(),
+					"bmaterial: texture '{}' is not a path",
+					name);
+				out.emplace_back(name, value.get<std::string>());
+			}
+
+			json.erase(it);
+		}
+
+		/**
+		 * Writes the three keys, or erases them when the material is not drawn by a surface.
+		 *
+		 * Rebuilt rather than merged, unlike `baked` and `routes`: every member of `parameters` is
+		 * a parameter and every member of `textures` a texture, so the reader took all of them and
+		 * there is nothing preserved underneath to write back around.
+		 *
+		 * The model decides, not the name: a document that stopped being a surface material still
+		 * carries the keys, and writing them back would leave a material claiming a surface it is
+		 * no longer drawn by.
+		 */
+		void
+		writeSurface(nlohmann::json& json, const BMaterial& material)
+		{
+			const SurfaceParams& surface = material.surface;
+
+			if (material.shadingModel != ShadingModel::kSurface)
+			{
+				json.erase("surface");
+				json.erase("parameters");
+				json.erase("textures");
+				return;
+			}
+
+			json["surface"] = surface.name;
+
+			auto parameters = nlohmann::json::object();
+			for (const SurfaceValue& value : surface.values)
+			{
+				core::throw_runtime_error_if(
+					value.value.empty() || value.value.size() > 4,
+					"bmaterial: parameter '{}' holds {} numbers, and a parameter is one to four",
+					value.name,
+					value.value.size());
+
+				// One number as a number: a scalar an author typed as `2.0` is written back as
+				// `2.0` rather than promoted to a one-element array.
+				if (value.value.size() == 1)
+				{
+					parameters[value.name] = doc::plainFloat(value.value.front());
+					continue;
+				}
+
+				auto array = nlohmann::json::array();
+				for (const float component : value.value)
+					array.push_back(doc::plainFloat(component));
+				parameters[value.name] = std::move(array);
+			}
+			if (parameters.empty())
+				json.erase("parameters");
+			else
+				json["parameters"] = std::move(parameters);
+
+			auto textures = nlohmann::json::object();
+			for (const SurfaceTexture& texture : surface.textures)
+				if (!texture.texture.empty())
+					textures[texture.name] = texture.texture;
+			if (textures.empty())
+				json.erase("textures");
+			else
+				json["textures"] = std::move(textures);
+		}
+
 		BMaterial
 		materialFromDocument(std::string_view text)
 		{
@@ -106,15 +236,16 @@ namespace assetlib
 
 			BMaterial material;
 
-			// The one model there is; refused rather than defaulted when it names another, since a
+			// Refused rather than defaulted when it names a model this build has not heard of: a
 			// typo that silently rendered as PBR would never be found.
-			std::string shadingModel = "pbr";
+			std::string shadingModel(c_ShadingModelNames[0]);
 			taker.Take("shadingModel", shadingModel);
+			const auto model = std::ranges::find(c_ShadingModelNames, shadingModel);
 			core::throw_runtime_error_if(
-				shadingModel != "pbr",
+				model == c_ShadingModelNames.end(),
 				"bmaterial: unknown shading model '{}'",
 				shadingModel);
-			material.shadingModel = ShadingModel::kPbr;
+			material.shadingModel = static_cast<ShadingModel>(model - c_ShadingModelNames.begin());
 
 			taker.Take("name", material.name);
 
@@ -144,6 +275,17 @@ namespace assetlib
 			taker.Take("transmissionFactor", pbr.transmissionFactor);
 			taker.Take("specularColorFactor", pbr.specularColorFactor);
 			taker.Take("specularFactor", pbr.specularFactor);
+
+			// Taken whatever the model is, so a surface's keys never ride `extraJson` back out
+			// beside the ones written from the struct.
+			taker.Take("surface", material.surface.name);
+			takeSurfaceValues(json, material.surface.values);
+			takeSurfaceTextures(json, material.surface.textures);
+
+			// Taken, then dropped: the keys are not this material's, and a struct still holding
+			// them would say it is drawn by a surface that its own model denies.
+			if (material.shadingModel != ShadingModel::kSurface)
+				material.surface = SurfaceParams();
 
 			// Known keys come out; what remains -- a sibling branch's field at any depth -- stays
 			// in the json and rides `extraJson` through the round-trip.
@@ -231,7 +373,8 @@ namespace assetlib
 		switch (material.shadingModel)
 		{
 		case ShadingModel::kPbr:
-			json["shadingModel"] = "pbr";
+		case ShadingModel::kSurface:
+			json["shadingModel"] = c_ShadingModelNames[static_cast<size_t>(material.shadingModel)];
 			break;
 		case ShadingModel::kCount:
 			throw std::runtime_error("bmaterial: unwritable shading model");
@@ -299,6 +442,8 @@ namespace assetlib
 		}
 		if (routes.empty())
 			json.erase("routes");
+
+		writeSurface(json, material);
 
 		return doc::toBytes(json);
 	}

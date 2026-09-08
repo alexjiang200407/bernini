@@ -33,6 +33,7 @@ when this page disagrees, trust the header, then fix this page.
 | Derived cache entry | `.bmesh`, `.bskel`, `.banim`, `.bsky`, `.benvl` | the import, the bakes, `migrate`, `pack` |
 | Foreign | `.ktx2` (Basis/RGB9E5 textures) | the bakes and the mesh import; stamp-governed by whatever names them |
 | Foreign, authored | `.rml`, `.rcss` (UI documents and styles), `.ttf` (fonts) | a person, in `Authored/UI` and `Authored/Fonts`; this library stores and packs them and parses none of them |
+| Foreign, authored, unpacked | `.slang` (game surfaces) | a person, in `Authored/Shaders`; the renderer opens them off a host path rather than through the mount, so `pack` skips them — see [Game Surfaces](game_surfaces.md) |
 
 ## Text documents
 

@@ -1,0 +1,174 @@
+# Game Surfaces
+
+A **surface** is a shading function a game writes and the engine draws through. It lives in the
+game's project as a `.slang` file, the engine reads it at startup, and a `.bmaterial` names it and
+sets its parameters by name. Nothing about it is compiled into the engine and nothing about it is
+generated: the shader is the only declaration of what a material may say.
+
+This page is the map. The contract is
+[`libs/bgl/shaders/src/bgl/SurfaceSource.slang`](../libs/bgl/shaders/src/bgl/SurfaceSource.slang)
+and the reader beside it, and when this page disagrees with those, trust them.
+
+## Writing one
+
+A surface conforms to `ISurfaceSource`: a parameter struct, a `Coverage` and an `Evaluate`.
+
+```slang
+import bgl.MaterialReader;
+import bgl.PbrSurface;
+import bgl.SurfaceSource;
+
+struct RimParams
+{
+    [Default(0.2, 0.6, 1.0)]
+    float3 rimColor;
+
+    [Default(3.0)]
+    float rimPower;
+
+    ColorSlot baseColor;
+};
+
+struct RimSurface : ISurfaceSource
+{
+    typealias MaterialParams = RimParams;
+
+    static float Coverage<R : IMaterialReader>(R reader, RimParams params)
+    {
+        return reader.Sample(params.baseColor, reader.Uv()).a;
+    }
+
+    static PbrSurface Evaluate<R : IMaterialReader>(R reader, RimParams params)
+    {
+        PbrSurface surface = PbrSurface();
+        surface.baseColor = reader.Sample(params.baseColor, reader.Uv());
+
+        let n = normalize(reader.WorldNormal());
+        let v = normalize(reader.CameraPos() - reader.WorldPos());
+        surface.emissive = params.rimColor * pow(1.0 - saturate(dot(n, v)), params.rimPower);
+
+        return surface;
+    }
+};
+```
+
+Three rules the file has to keep, each of which the engine checks and names:
+
+* **One conforming struct per file**, and the **file's stem is the surface's name** — `Rim.slang`
+  declares the surface a material writes as `"Rim"`. The struct inside may be called anything.
+* **The parameter struct is declared and never filled.** The engine reflects it to learn where each
+  field sits, packs a material's values at those offsets, and loads the struct back out to hand to
+  the two functions. That is why there is no second file to keep in step, and why a field's type is
+  what decides how a material may set it.
+* **A field is a value or a slot.** A `float`, `float2`, `float3` or `float4` is a value a material
+  sets by name; a `ColorSlot`, `DataSlot`, `NormalSlot` or `CoverageSlot` is a texture a material
+  binds by name. `[Default(...)]` on a value is what a material that says nothing about it gets;
+  an unbound slot samples white, or a flat normal for a `NormalSlot`.
+
+`Evaluate` returns a `PbrSurface` — the material's half of shading, which the engine's own PBR
+lighting then reads. A surface chooses what a pixel *is*, not how it is lit; there is no
+game-defined lighting model.
+
+`Coverage` runs first on an alpha-tested layer and discards before `Evaluate` is called, so a cheap
+coverage answers without the rest of the surface's samples. It is not read at all on an opaque
+layer.
+
+## Where the file goes, and when it is read
+
+Shaders live in the project at **`Authored/Shaders/`**
+([`project_layout.h`](../libs/assetlib/include/assetlib/project_layout.h)). They are authored: a
+person wrote them, no bake puts one back, and losing one loses work.
+
+They are the one asset category no codec reads. Slang opens them itself, so the renderer is handed
+a **host path** rather than a mount key — `GraphicsOptions::surfaceShaderDir` — and the directory is
+read by the `Graphics` constructor
+([`surface_registry.cpp`](../libs/bgl_extended/src/gfx/surface_registry.cpp)). The consequences
+follow from that and are worth stating plainly:
+
+* **Registration happens once, inside `CreateGraphics`.** The four reserved rows are bound to the
+  surfaces found then and every pipeline is built against them. An edited surface is seen at the
+  next launch.
+* **The editor passes the *startup* project's directory** and no other. Opening a second project in
+  the same session does not bring its shaders.
+* **A `.bpak` holds no shaders.** `pack` skips a file whose extension names no container, and a
+  packed game reads its shaders off the loose directory beside it.
+
+Registration is in filename order, so which surface takes which reserved slot is the directory's
+decision and not a document's. There are **four slots**; a fifth surface is refused by name at
+startup rather than ignored.
+
+## The document
+
+A material drawn by a surface says so, names it, and sets what it wants by name
+([`BMaterial.h`](../libs/assetlib_structs/include/assetlib_structs/BMaterial.h)):
+
+```json
+{
+	"alphaMode": "blend",
+	"doubleSided": false,
+	"name": "rimmed_glass",
+	"parameters": {
+		"rimColor": [1.0, 0.3, 0.1],
+		"rimPower": 2.0
+	},
+	"shadingModel": "surface",
+	"surface": "Rim",
+	"textures": {
+		"baseColor": "Derived/BakedTextures/glass_basecolor.ktx2"
+	}
+}
+```
+
+* **`surface`** is the shader file's stem.
+* **`parameters`** is one to four numbers per name, as many as the parameter was declared with. A
+  scalar may be written as a number. A name the surface does not declare is an error, not a value
+  dropped on the floor.
+* **`textures`** is one mount key per name. A surface texture is *bound*, not composited: there is
+  no channel routing behind one and no bake, so what the renderer samples is what the document
+  names.
+* **The layer keys are every model's** and sit beside `shadingModel`, not inside the parameters —
+  `alphaMode`, `alphaCutoff`, `doubleSided`.
+* **Everything else is PBR's.** `baseColorFactor`, `routes`, `baked` and the rest belong to
+  `shadingModel: "pbr"` and a save strips them from a surface material, exactly as a save strips
+  these three from a PBR one.
+
+## What is refused, and where
+
+The document reader knows nothing about any surface — the shader is not there when a material is
+cooked — so a name is checked at the one place a surface is in hand, which is
+`IScene::CreateSurfaceMaterial`:
+
+| The mistake | Where it is caught |
+|---|---|
+| a parameter that is not one to four numbers | reading the document (`bmaterial_io.cpp`) |
+| a `shadingModel` this build does not know | reading the document |
+| a surface no shader declared | `CreateSurfaceMaterial`, naming the surface |
+| a value or texture the surface does not declare | `CreateSurfaceMaterial`, naming both |
+| a value bound to a name declared as a texture, or the reverse | `CreateSurfaceMaterial`, saying which it is |
+| `alphaMode: "hashed"` | `CreateSurfaceMaterial` — no game row draws hashed alpha |
+| a file that will not compile, or a fifth surface | `CreateGraphics`, naming the file |
+
+## Boundaries
+
+Deliberate, and each is a decision rather than an omission:
+
+* **Static meshes only.** There are no skinned game rows; `AddSkinnedMeshGeom` refuses a game
+  material.
+* **Opaque, cutout and blend.** Hashed alpha needs the texel counts of the texture behind a
+  coverage, and a surface answers coverage with arithmetic there is nothing to measure.
+* **No bake.** A slot names a `.ktx2` the project already holds. Slot kinds are reflected and
+  reported through `IGraphics::GetSurfaceTypes()`, but they drive no format or colour-space rule
+  yet.
+* **No editor UI.** A surface material opens in the Material Editor as a graphless material and
+  draws in the viewport; there is no panel for its parameters, and the document is authored by
+  hand.
+* **No hot reload**, and no export-time compile.
+* **No scene inputs.** The reader gives interpolants, the camera and the material's own fields.
+  Nothing of the frame — no depth, no history, no lights.
+
+## Reading further
+
+* [bgl Public API](bgl_api.md) — `SurfaceType`, `SurfaceMaterialDesc`, `GetSurfaceTypes()`.
+* [Passes Overview](passes.md) § Two-sided surfaces, and the reserved game rows in the forward pass.
+* [Uniforms](uniforms.md) — why a record is reflected under scalar rules whatever backend draws it.
+* [Slang Shaders](slang_shaders.md) — the conventions every module in the tree keeps.
