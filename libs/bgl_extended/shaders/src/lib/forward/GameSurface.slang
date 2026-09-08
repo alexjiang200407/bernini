@@ -39,7 +39,7 @@ public struct GameRecord<G : ISurfaceSource>
     {
         GameRecord<G> record;
         record.engine = materialData.materials.LoadRecordAs<GameSurfaceRecord>(RawEntry<IMaterial>.At(byteOffset));
-        record.params = materialData.materials.LoadAt<G.Params>(byteOffset + cGameSurfaceParamsOffset);
+        record.params = materialData.materials.LoadAt<G.Params>(byteOffset + cGameSurfaceParamsByteOffset);
         record.byteOffset = byteOffset;
         return record;
     }

@@ -195,6 +195,10 @@ if (BUILD_TESTS)
 		VS_DEBUGGER_WORKING_DIRECTORY "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}"
 	)
 
+	# A surface case compiles a source-string module that imports the contract, resolved from
+	# ./shaders/src beside the suite exactly as a renderer resolves it.
+	add_dependencies(bgl_common_tests bgl_copy_contract_shaders)
+
 	source_group(TREE "${CMAKE_CURRENT_SOURCE_DIR}/tests/src" PREFIX "Source Files"
 		FILES ${BGL_COMMON_TESTS_SOURCES})
 

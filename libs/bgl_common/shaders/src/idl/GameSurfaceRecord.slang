@@ -6,7 +6,7 @@ public static const uint cGameSurfaceSlots = 8;
 
 // Where a game surface's parameters start, measured from the record's header: past
 // cRawPayloadOffset and this struct. The C++ side asserts the arithmetic.
-public static const uint cGameSurfaceParamsOffset = 96;
+public static const uint cGameSurfaceParamsByteOffset = 96;
 
 // The engine's fixed part of a game surface's payload; the surface's own parameters follow it.
 public struct GameSurfaceRecord
