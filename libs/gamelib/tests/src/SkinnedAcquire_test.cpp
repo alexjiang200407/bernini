@@ -845,3 +845,110 @@ TEST_CASE("a rig's blend set is fixed by the acquire that built it", "[gamelib][
 
 	assets.ReleaseGeom(first.geom);
 }
+
+TEST_CASE(
+	"a rig's sample parameters move without the rig being rebuilt",
+	"[gamelib][skinned][blend]")
+{
+	DataRoot root("bernini_gamelib_blend_move");
+	WriteRig(root.path);
+	WriteLoopingClips(root.path, "Derived/Animations/loco.banim");
+	WriteBlendSet(
+		root.path,
+		"Authored/Animations/loco.bblend",
+		"Derived/Animations/loco.banim",
+		{ { "walk", 0.0f }, { "run", 4.0f } });
+
+	// A second mesh on the same rig -- a modular unit. The manager caches the spaces per geom as
+	// well as per rig, so this is what makes the difference between updating one geom's cache and
+	// updating every geom's observable at all.
+	{
+		const auto source =
+			assetlib::AssetStore(root.path).Load<assetlib::BMesh>("Derived/Meshes/rig.bmesh");
+		assetlib::AssetStore(root.path).Save(source, "Derived/Meshes/slot.bmesh");
+	}
+
+	auto gfx = bgl::CreateGraphics(HeadlessOptions());
+	REQUIRE(gfx != nullptr);
+	auto scene  = gfx->CreateScene(bgl::SceneDesc());
+	auto assets = game::AssetManager(scene, root.path);
+
+	const auto acquire = [&](std::string_view meshPath) {
+		return assets.AcquireSkinnedMesh(
+			meshPath,
+			"Derived/Animations/loco.banim",
+			"Authored/Animations/loco.bblend");
+	};
+
+	const auto mesh = acquire("Derived/Meshes/rig.bmesh");
+	REQUIRE(mesh.spaces.size() == 1);
+	REQUIRE(mesh.spaces[0].samples.size() == 2);
+
+	SECTION("the move lands, and every geom on the rig answers with it")
+	{
+		// The other mesh is acquired *before* the move, so its own cached copy of the spaces is
+		// already sitting on its GeomRecord holding the old parameter.
+		const auto slot = acquire("Derived/Meshes/slot.bmesh");
+		REQUIRE(slot.geom.handle.index != mesh.geom.handle.index);
+		REQUIRE(slot.spaces[0].samples[1].parameter == 4.0f);
+
+		auto moved                    = mesh.spaces;
+		moved[0].samples[1].parameter = 9.0f;
+		assets.SetBlendParameters(mesh.geom, moved);
+
+		// A shared acquire answers from the cache without re-reading the container, so one that
+		// was not moved would describe the set the rig was uploaded with rather than the one it
+		// now carries.
+		const auto again = acquire("Derived/Meshes/rig.bmesh");
+		REQUIRE(again.spaces.size() == 1);
+		CHECK(again.spaces[0].samples[1].parameter == 9.0f);
+		CHECK(again.spaces[0].ParameterMax() == 9.0f);
+
+		// Shared, not rebuilt: the same geom came back, so nothing was released and re-uploaded.
+		CHECK(again.geom.handle.index == mesh.geom.handle.index);
+
+		// The geom the move was *not* addressed to. This is the whole reason the write sweeps
+		// every geom on the rig rather than the one it was handed: the spaces belong to the rig,
+		// and a sibling mesh on it would otherwise keep answering with the old parameter.
+		const auto slotAgain = acquire("Derived/Meshes/slot.bmesh");
+		CHECK(slotAgain.geom.handle.index == slot.geom.handle.index);
+		CHECK(slotAgain.spaces[0].samples[1].parameter == 9.0f);
+
+		assets.ReleaseGeom(again.geom);
+		assets.ReleaseGeom(slotAgain.geom);
+		assets.ReleaseGeom(slot.geom);
+	}
+
+	SECTION("a shape change is refused, and the cache does not move")
+	{
+		auto grown = mesh.spaces;
+		grown[0].samples.push_back({ 0, 12.0f });
+		CHECK_THROWS_AS(assets.SetBlendParameters(mesh.geom, grown), bgl::SceneError);
+
+		auto renamedClip                    = mesh.spaces;
+		renamedClip[0].samples[1].clipIndex = 0;
+		CHECK_THROWS_AS(assets.SetBlendParameters(mesh.geom, renamedClip), bgl::SceneError);
+
+		auto backwards                    = mesh.spaces;
+		backwards[0].samples[1].parameter = -1.0f;
+		CHECK_THROWS_AS(assets.SetBlendParameters(mesh.geom, backwards), bgl::SceneError);
+
+		const auto again = acquire("Derived/Meshes/rig.bmesh");
+		CHECK(again.spaces[0].samples[1].parameter == 4.0f);
+		assets.ReleaseGeom(again.geom);
+	}
+
+	SECTION("a geom this manager does not own is refused")
+	{
+		CHECK_THROWS_AS(assets.SetBlendParameters(bgl::GeomHandle(), mesh.spaces), bgl::SceneError);
+	}
+
+	SECTION("a geom that is not skinned is refused")
+	{
+		const bgl::GeomHandle cube = assets.CreateCube();
+		CHECK_THROWS_AS(assets.SetBlendParameters(cube, mesh.spaces), bgl::SceneError);
+		assets.ReleaseGeom(cube);
+	}
+
+	assets.ReleaseGeom(mesh.geom);
+}

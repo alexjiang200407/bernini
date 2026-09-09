@@ -24,6 +24,7 @@
 #include <gamelib/ClipInfo.h>
 #include <memory>
 #include <optional>
+#include <span>
 #include <string>
 #include <string_view>
 #include <unordered_map>
@@ -321,6 +322,30 @@ namespace game
 		 */
 		bgl::MeshInstanceHandle
 		CreateInstance(bgl::SceneViewRef view, bgl::GeomHandle geom, const glm::mat4& transform);
+
+		/**
+		 * Moves where each sample of `geom`'s rig's blend spaces plays alone, and nothing else.
+		 *
+		 * `spaces` describes the set the rig already carries, in the form AcquireSkinnedMesh handed
+		 * back: the same spaces, each holding the same samples naming the same clips, differing only
+		 * in each sample's `parameter`. Anything else is refused. The rig is not re-uploaded and no
+		 * geom on it is released, so every live instance keeps playing what it was playing -- which
+		 * is what makes this usable while an author drags a threshold and watches the pose.
+		 *
+		 * The manager's own copy of the spaces moves with it, on the rig and on every geom sharing
+		 * it, so a later shared acquire hands back what the rig now carries rather than what it was
+		 * uploaded with.
+		 *
+		 * Adding or removing a sample or a space is not this: those change the rig's node table.
+		 * Release every geom on the rig and acquire again against the new set.
+		 *
+		 * @throws bgl::SceneError if the geom is not this manager's, has expired, or is not skinned;
+		 *         anything IScene::SetRigBlendParameters refuses -- a different number of spaces or
+		 *         of samples, a sample naming a different clip, parameters that are not finite and
+		 *         strictly increasing. Nothing is written unless all of it passes.
+		 */
+		void
+		SetBlendParameters(bgl::GeomHandle geom, std::span<const BlendSpaceInfo> spaces);
 
 		/**
 		 * The skinned counterpart of CreateInstance: places a geom AcquireSkinnedMesh returned, spawned

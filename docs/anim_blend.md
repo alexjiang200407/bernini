@@ -103,7 +103,7 @@ A **1D blend space** is an ordered run of clips with the parameter each plays al
 | Author | `.bblend` | Canonical JSON under `Data/Authored/`: the clip set it is authored against, and each space's clips *by name*. [`blend.h`](libs/assetlib/include/assetlib/blend.h) |
 | Acquire | `AssetManager::AcquireSkinnedMesh` | Loads it, refuses one naming another `.banim`, resolves each sample's name to a clip index, hands `bgl` a `BlendSetDesc` and the caller a table of `spaces` |
 | Upload | `IScene::AddRig` | Synthesizes one node per clip, appends the spaces, uploads the node and sample tables with the rig |
-| Move | `IScene::SetRigBlendParameters` | A live rig's sample parameters rewritten in place; a changed shape refused |
+| Move | `AssetManager::SetBlendParameters` | A live rig's sample parameters rewritten in place through `IScene::SetRigBlendParameters`, and the manager's cached spaces moved with them; a changed shape refused |
 | Spawn | `ISceneView::CreateSkinnedMeshInstance` | A `SkinnedPlaybackDesc` of four slots, validated against the rig's node count |
 | Write | `ISceneView::SetSkinnedPlayback` | The record rewritten in place; `CrossfadeTo` / `RetargetParameter` build the new one |
 | Pose | `SkinnedPosePass` | Resolves each slot through the node table, blends what they resolve to, walks the hierarchy |
@@ -127,6 +127,13 @@ live slot keeps naming what it named — which is what makes it safe to expose a
 this and not a rewrite. It exists because a threshold is chosen by dragging it and watching the pose,
 and a rig torn down per drag tick cannot be watched. Adding or removing a sample or a space is still
 a rig re-uploaded.
+
+A caller of the manager reaches it through `AssetManager::SetBlendParameters`, which is where a
+`GeomHandle` becomes the `RigHandle` `bgl` wants — the acquire hands back a geom, its clips and its
+spaces, and never the rig. That door carries one obligation of its own: the manager caches the
+resolved spaces per rig *and* per geom, so a move that reached `bgl` alone would leave a later shared
+acquire describing the set the rig was uploaded with. The caches move only once the scene has
+accepted, and across every geom on the rig rather than the one that was named.
 
 ## Risky / Non-obvious Contracts
 
