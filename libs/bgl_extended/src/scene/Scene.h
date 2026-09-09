@@ -455,6 +455,9 @@ namespace bgl
 			const BlendSetDesc&           blendSet  = {}) override;
 
 		void
+		SetRigBlendParameters(RigHandle rig, const BlendSetDesc& blendSet) override;
+
+		void
 		DeleteRig(RigHandle rig) override;
 
 		GeomHandle
@@ -567,6 +570,17 @@ namespace bgl
 			const assetlib::AnimationSet& animations,
 			const FootPlantDesc&          footPlant,
 			const BlendSetDesc&           blendSet);
+
+		/**
+		 * What a member run must be whichever door it arrives at: two or more members, every
+		 * parameter finite, and strictly increasing. `space` names it in a refusal.
+		 *
+		 * Here rather than inline at each door so an upload and a later parameter move refuse the
+		 * same run in the same words -- the clip-side checks stay with ValidateSkinnedRig, since
+		 * only it has the clip set to check against.
+		 */
+		static void
+		ValidateBlendSpaceRun(size_t space, std::span<const BlendSpaceMemberDesc> members);
 
 		/**
 		 * The live rig `rig` names, or nullptr if the handle is null or already deleted. The
