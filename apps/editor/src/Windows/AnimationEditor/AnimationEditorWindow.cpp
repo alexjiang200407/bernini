@@ -310,6 +310,14 @@ AnimationEditorWindow::BuildPropertiesColumn()
 	m_Surfaces = new QTabWidget(column);
 	m_Surfaces->addTab(BuildClipTab(), QStringLiteral("Clip"));
 	m_Surfaces->addTab(BuildBlendTab(), QStringLiteral("Blend"));
+	// The tab decides what is being watched, so leaving Blend puts the clip back and entering it
+	// restores whatever fade its controls describe. That is also how a chosen To is undone.
+	connect(m_Surfaces, &QTabWidget::currentChanged, this, [this](int) {
+		if (m_Surfaces->currentWidget() == m_TransitionGroup)
+			StampTransition();
+		else
+			ClearTransition();
+	});
 	layout->addWidget(m_Surfaces, /*stretch*/ 1);
 
 	// The box is the state; this is what puts the preview on it. Reaches the preview before it is
@@ -390,32 +398,19 @@ AnimationEditorWindow::BuildBlendTab()
 	timing->addWidget(m_BlendEnabled);
 	fade->addLayout(timing);
 
-	// The way in. The combos and the duration re-stamp only once a fade is live, so nothing enters
-	// transition mode by surprise -- and without a button there was no way in at all: the combos
-	// come up already naming two clips, and QComboBox::activated does not fire for the indices that
-	// put them there.
-	m_PreviewFade = new QPushButton(QStringLiteral("Preview fade"), m_TransitionGroup);
-	connect(m_PreviewFade, &QPushButton::clicked, this, [this] { StampTransition(); });
-	fade->addWidget(m_PreviewFade);
-
 	m_TransitionNote = new QLabel(m_TransitionGroup);
 	m_TransitionNote->setWordWrap(true);
 	fade->addWidget(m_TransitionNote);
 
+	// Naming both ends is the request: there is nothing else a chosen From and To could mean here,
+	// so a button to confirm it would only be a second click. StampTransition itself decides
+	// whether the pair is one -- an unset or matching To leaves the clip playing.
+	//
 	// Re-stamped from a clean record each time, with the clock parked at the window's start, so no
-	// stamp interrupts a live fade. Only while one is live: changing a control is how a fade is
-	// adjusted, and the button above is how one is begun.
-	const auto restamp = [this] {
-		if (m_Transport.InTransitionWindow())
-			StampTransition();
-	};
-	// The ends also decide whether there is a fade to begin at all, so the button follows them.
-	const auto endChanged = [this, restamp] {
-		UpdateTransitionControls();
-		restamp();
-	};
-	connect(m_FromClip, &QComboBox::activated, this, [endChanged](int) { endChanged(); });
-	connect(m_ToClip, &QComboBox::activated, this, [endChanged](int) { endChanged(); });
+	// stamp is ever a fade interrupting a live one.
+	const auto restamp = [this] { StampTransition(); };
+	connect(m_FromClip, &QComboBox::activated, this, [restamp](int) { restamp(); });
+	connect(m_ToClip, &QComboBox::activated, this, [restamp](int) { restamp(); });
 	connect(m_FadeSeconds, &QDoubleSpinBox::valueChanged, this, [restamp](double) { restamp(); });
 	connect(m_BlendEnabled, &QCheckBox::toggled, this, [this, restamp](bool) {
 		UpdateTransitionControls();
@@ -657,9 +652,14 @@ AnimationEditorWindow::Tick()
 void
 AnimationEditorWindow::StampTransition()
 {
+	// Only while the Blend tab is the one showing: it is the surface that says a fade is what is
+	// being watched, and the Clip tab means the opposite.
 	if (m_SyncingUi || !m_Transport.HasClips() ||
-	    !editor::RewritesPlayback(m_Preview->GetPoseSource()))
+	    !editor::RewritesPlayback(m_Preview->GetPoseSource()) ||
+	    m_Surfaces->currentWidget() != m_TransitionGroup)
+	{
 		return;
+	}
 
 	const int from = m_FromClip->currentIndex();
 	const int to   = m_ToClip->currentIndex();
@@ -727,10 +727,6 @@ AnimationEditorWindow::UpdateTransitionControls()
 	// Nothing to set while the fade is a cut.
 	m_FadeSeconds->setEnabled(usable && m_BlendEnabled->isChecked());
 	m_BlendEnabled->setEnabled(usable);
-	// A fade wants two ends and they have to differ, so an unset To or a set of one clip has
-	// nothing to preview.
-	const int to = m_ToClip->currentIndex();
-	m_PreviewFade->setEnabled(usable && to >= 0 && to != m_FromClip->currentIndex());
 
 	// The strip is live only while a fade is stamped. Left enabled with nothing behind it, a drag
 	// would feed the window's absolute seconds to a transport back in clip time, which reads them
@@ -762,8 +758,7 @@ AnimationEditorWindow::UpdateTransitionControls()
 	}
 	else if (!live)
 	{
-		m_TransitionNote->setText(
-			QStringLiteral("Playing one clip. Choose what to fade to, then press Preview fade."));
+		m_TransitionNote->setText(QStringLiteral("Playing one clip. Choose what to fade to."));
 	}
 	else
 		m_TransitionNote->clear();
