@@ -65,6 +65,12 @@ Three rules the file has to keep, each of which the engine checks and names:
   binds by name. `[Default(...)]` on a value is what a material that says nothing about it gets;
   an unbound slot samples white, or a flat normal for a `NormalSlot`.
 
+**A file that never imports the contract is not a surface**, and is skipped rather than refused.
+The directory is the game's whole module search path, not a list of surfaces, so a shared header or
+a helper module can sit beside them and a game that keeps one still starts. The cost is that a
+surface which forgets the import is simply not registered — the mistake surfaces one step later,
+when a material names it, and still by name.
+
 `Evaluate` returns a `PbrSurface` — the material's half of shading, which the engine's own PBR
 lighting then reads. A surface chooses what a pixel *is*, not how it is lit; there is no
 game-defined lighting model.
