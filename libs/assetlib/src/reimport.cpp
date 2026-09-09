@@ -103,6 +103,7 @@ namespace assetlib
 						key);
 					mesh.skeleton          = document.skeleton;
 					mesh.skeletonSignature = skeletonSignature(group.import.skeleton);
+					mesh.skeletonBoneNames = skeletonBoneNames(group.import.skeleton);
 				}
 
 				static_cast<void>(applyBindings(mesh, document.bindings));

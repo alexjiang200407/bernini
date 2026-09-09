@@ -113,7 +113,8 @@ namespace assetlib
 			kStringPool,
 			kMaterialPaths,
 			kSkeletonPath,
-			kSkeletonSignature
+			kSkeletonSignature,
+			kSkeletonBoneNames  // the cooked rig's bone names, in bone order
 		};
 
 		bool
@@ -166,6 +167,7 @@ namespace assetlib
 		writer.Add(
 			ChunkId::kSkeletonSignature,
 			std::span<const uint64_t>(&mesh.skeletonSignature, 1));
+		writer.Add(ChunkId::kSkeletonBoneNames, cache::packStrings(mesh.skeletonBoneNames));
 		return writer.Finish(magic::c_BMesh, AssetCodec<BMesh>::c_BakeToken, mesh.source);
 	}
 
@@ -193,6 +195,8 @@ namespace assetlib
 
 		const auto signature   = reader.Read<uint64_t>(ChunkId::kSkeletonSignature);
 		mesh.skeletonSignature = signature.empty() ? 0 : signature.front();
+		mesh.skeletonBoneNames =
+			cache::unpackStrings(reader.Read<char>(ChunkId::kSkeletonBoneNames));
 
 		requireSkeletonIfSkinned(mesh);
 		return mesh;

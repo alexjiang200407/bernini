@@ -10,6 +10,7 @@
 #include <cstdint>
 #include <optional>
 #include <span>
+#include <string>
 #include <vector>
 
 namespace assetlib
@@ -28,6 +29,16 @@ namespace assetlib
 			hash = core::hash_pod(bone.parent, hash);
 		}
 		return hash;
+	}
+
+	std::vector<std::string>
+	skeletonBoneNames(const Skeleton& skeleton)
+	{
+		auto names = std::vector<std::string>();
+		names.reserve(skeleton.bones.size());
+		for (const Bone& bone : skeleton.bones)
+			names.emplace_back(skeleton.stringPool.at(bone.nameOffset));
+		return names;
 	}
 
 	void
