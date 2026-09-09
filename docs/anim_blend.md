@@ -103,6 +103,7 @@ A **1D blend space** is an ordered run of clips with the parameter each plays al
 | Author | `.bblend` | Canonical JSON under `Data/Authored/`: the clip set it is authored against, and each space's clips *by name*. [`blend.h`](libs/assetlib/include/assetlib/blend.h) |
 | Acquire | `AssetManager::AcquireSkinnedMesh` | Loads it, refuses one naming another `.banim`, resolves each member's name to a clip index, hands `bgl` a `BlendSetDesc` and the caller a table of `spaces` |
 | Upload | `IScene::AddRig` | Synthesizes one node per clip, appends the spaces, uploads the node and member tables with the rig |
+| Move | `IScene::SetRigBlendParameters` | A live rig's member parameters rewritten in place; a changed shape refused |
 | Spawn | `ISceneView::CreateSkinnedMeshInstance` | A `SkinnedPlaybackDesc` of four slots, validated against the rig's node count |
 | Write | `ISceneView::SetSkinnedPlayback` | The record rewritten in place; `CrossfadeTo` / `RetargetParameter` build the new one |
 | Pose | `SkinnedPosePass` | Resolves each slot through the node table, blends what they resolve to, walks the hierarchy |
@@ -117,6 +118,15 @@ space would be a table quietly short of what was asked for.
 one `.banim`, and the pose pass samples one clip set's pool, so a space cannot straddle two. A second
 acquire naming a *different* set is refused; one naming none accepts whatever the rig has, since a
 caller that asked for no spaces is not wrong to find some. Release the rig to zero to change it.
+
+**Except the parameters, which move on a live rig.** `IScene::SetRigBlendParameters` takes a
+`BlendSetDesc` describing the set the rig already carries and writes only what each member plays
+alone at: the same spaces, the same members, the same clips, refused otherwise. Nothing is
+reallocated, so the node table does not move, a geom keeps the node count it was added with, and a
+live slot keeps naming what it named — which is what makes it safe to expose at all, and why it is
+this and not a rewrite. It exists because a threshold is chosen by dragging it and watching the pose,
+and a rig torn down per drag tick cannot be watched. Adding or removing a member or a space is still
+a rig re-uploaded.
 
 ## Risky / Non-obvious Contracts
 

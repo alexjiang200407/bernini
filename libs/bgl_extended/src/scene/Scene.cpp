@@ -860,16 +860,7 @@ namespace bgl
 		{
 			const std::vector<BlendSpaceMemberDesc>& members = blendSet.spaces[s].members;
 
-			// One member is a clip, and every clip is already a node under its own index.
-			if (members.size() < 2)
-			{
-				throw SceneError(
-					std::format(
-						"skinned geometry: blend space {} holds {} members, and a blend space "
-						"needs at least two",
-						s,
-						members.size()));
-			}
+			ValidateBlendSpaceRun(s, members);
 
 			for (size_t m = 0; m < members.size(); ++m)
 			{
@@ -898,30 +889,50 @@ namespace bgl
 							m,
 							s));
 				}
+			}
+		}
+	}
 
-				if (!std::isfinite(member.parameter))
-				{
-					throw SceneError(
-						std::format(
-							"skinned geometry: member {} of blend space {} has a parameter of {}",
-							m,
-							s,
-							member.parameter));
-				}
+	void
+	Scene::ValidateBlendSpaceRun(const size_t space, std::span<const BlendSpaceMemberDesc> members)
+	{
+		// One member is a clip, and every clip is already a node under its own index.
+		if (members.size() < 2)
+		{
+			throw SceneError(
+				std::format(
+					"skinned geometry: blend space {} holds {} members, and a blend space needs at "
+					"least two",
+					space,
+					members.size()));
+		}
 
-				// Strictly increasing, not merely sorted: the span between two members is what a
-				// weight divides by.
-				if (m > 0 && !(member.parameter > members[m - 1].parameter))
-				{
-					throw SceneError(
-						std::format(
-							"skinned geometry: blend space {} has parameter {} at member {} after "
-							"{}, and they must strictly increase",
-							s,
-							member.parameter,
-							m,
-							members[m - 1].parameter));
-				}
+		for (size_t m = 0; m < members.size(); ++m)
+		{
+			const BlendSpaceMemberDesc& member = members[m];
+
+			if (!std::isfinite(member.parameter))
+			{
+				throw SceneError(
+					std::format(
+						"skinned geometry: member {} of blend space {} has a parameter of {}",
+						m,
+						space,
+						member.parameter));
+			}
+
+			// Strictly increasing, not merely sorted: the span between two members is what a
+			// weight divides by.
+			if (m > 0 && !(member.parameter > members[m - 1].parameter))
+			{
+				throw SceneError(
+					std::format(
+						"skinned geometry: blend space {} has parameter {} at member {} after {}, "
+						"and they must strictly increase",
+						space,
+						member.parameter,
+						m,
+						members[m - 1].parameter));
 			}
 		}
 	}
@@ -1077,6 +1088,95 @@ namespace bgl
 		catch (const std::runtime_error& e)
 		{
 			throw SceneError(e.what());
+		}
+	}
+
+	void
+	Scene::SetRigBlendParameters(RigHandle rig, const BlendSetDesc& blendSet)
+	{
+		const RigMeta* meta = FindRig(rig);
+		if (meta == nullptr)
+		{
+			throw SceneError(
+				"RigHandle passed to SetRigBlendParameters is null, or already deleted");
+		}
+
+		const idl::Rig& record = m_Rigs.AtIndex(rig.handle.index);
+
+		// Clips come first in the node table, so the spaces are whatever is left over.
+		const size_t spaceCount = meta->nodeCount - meta->clipCount;
+		if (blendSet.spaces.size() != spaceCount)
+		{
+			throw SceneError(
+				std::format(
+					"skinned geometry: the rig carries {} blend spaces and the set names {}; only "
+					"the parameters may move, and a rig whose spaces change shape is re-uploaded",
+					spaceCount,
+					blendSet.spaces.size()));
+		}
+
+		// A rig with no spaces has a null member range, so there is no handle to take: an empty set
+		// against one is the write that was asked for, and it is no bytes.
+		if (spaceCount == 0)
+		{
+			return;
+		}
+
+		const uint32_t firstSpaceNode = record.nodes.range.offsetStart + meta->clipCount;
+		const uint32_t memberBase     = record.members.offsetStart;
+
+		// Checked in full before a byte is written: a half-applied set is a rig posing from a run
+		// nobody authored, and there is no rollback for a write straight into the mirror.
+		for (size_t s = 0; s < spaceCount; ++s)
+		{
+			const std::vector<BlendSpaceMemberDesc>& members = blendSet.spaces[s].members;
+			ValidateBlendSpaceRun(s, members);
+
+			const idl::BlendNode& node =
+				m_BlendNodes.AtIndex(firstSpaceNode + static_cast<uint32_t>(s));
+			if (members.size() != node.memberCount)
+			{
+				throw SceneError(
+					std::format(
+						"skinned geometry: blend space {} holds {} members and the set names {}; "
+						"adding or removing one moves the member table",
+						s,
+						node.memberCount,
+						members.size()));
+			}
+
+			for (uint32_t m = 0; m < node.memberCount; ++m)
+			{
+				const uint32_t clip =
+					m_BlendMembers.AtIndex(memberBase + node.firstMember + m).clip;
+				if (members[m].clipIndex != clip)
+				{
+					throw SceneError(
+						std::format(
+							"skinned geometry: member {} of blend space {} plays clip {} and the "
+							"set names clip {}; only the parameters may move",
+							m,
+							s,
+							clip,
+							members[m].clipIndex));
+				}
+			}
+		}
+
+		const core::multi_slot_handle handle = m_BlendMembers.HandleAt(memberBase);
+
+		for (size_t s = 0; s < spaceCount; ++s)
+		{
+			const idl::BlendNode& node =
+				m_BlendNodes.AtIndex(firstSpaceNode + static_cast<uint32_t>(s));
+
+			for (uint32_t m = 0; m < node.memberCount; ++m)
+			{
+				auto entry      = idl::BlendSpaceMember();
+				entry.clip      = blendSet.spaces[s].members[m].clipIndex;
+				entry.parameter = blendSet.spaces[s].members[m].parameter;
+				m_BlendMembers.Set(handle, node.firstMember + m, entry);
+			}
 		}
 	}
 
