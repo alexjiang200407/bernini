@@ -1300,3 +1300,116 @@ TEST_CASE("AddRig refuses a blend space the pose pass could not evaluate", "[ski
 			scene->GetRigBuffer().AtIndex(again.handle.index).nodes.range.offsetStart == nodeRoot);
 	}
 }
+
+TEST_CASE("SetRigBlendParameters moves a run without moving the table", "[skinned][blend]")
+{
+	auto gfx = bgl::CreateGraphics(HeadlessOptions());
+	REQUIRE(gfx != nullptr);
+
+	auto  sceneHandle = gfx->CreateScene(TestSceneDesc());
+	auto* scene       = sceneHandle->As<bgl::Scene>();
+	REQUIRE(scene != nullptr);
+
+	const auto rig =
+		scene->AddRig(MakeRig(), MakeBlendClips(), bgl::FootPlantDesc(), MakeBlendSet());
+	REQUIRE(rig.IsValid());
+
+	const bgl::idl::Rig& record     = scene->GetRigBuffer().AtIndex(rig.handle.index);
+	const uint32_t       nodeRoot   = record.nodes.range.offsetStart;
+	const uint32_t       memberRoot = record.members.offsetStart;
+
+	const auto parameterAt = [&](uint32_t member) {
+		return scene->GetBlendMemberBuffer().AtIndex(memberRoot + member).parameter;
+	};
+
+	SECTION("the parameters land and nothing else does")
+	{
+		auto moved                           = MakeBlendSet();
+		moved.spaces[0].members[0].parameter = -2.0f;
+		moved.spaces[0].members[1].parameter = 7.5f;
+		scene->SetRigBlendParameters(rig, moved);
+
+		CHECK(parameterAt(0) == -2.0f);
+		CHECK(parameterAt(1) == 7.5f);
+
+		// The whole reason this is narrower than a rewrite: a slot naming a node still names it,
+		// and a geom on the rig still has the node count it was added with.
+		CHECK(scene->GetRigBuffer().AtIndex(rig.handle.index).nodes.range.offsetStart == nodeRoot);
+		CHECK(scene->GetRigBuffer().AtIndex(rig.handle.index).members.offsetStart == memberRoot);
+		CHECK(scene->GetRigBuffer().AtIndex(rig.handle.index).nodes.count == 3);
+		CHECK(scene->GetBlendMemberBuffer().AtIndex(memberRoot + 0).clip == 0);
+		CHECK(scene->GetBlendMemberBuffer().AtIndex(memberRoot + 1).clip == 1);
+	}
+
+	SECTION("a rig with no spaces takes an empty set and nothing else")
+	{
+		const auto plain = scene->AddRig(MakeRig(), MakeBlendClips());
+		REQUIRE(plain.IsValid());
+
+		CHECK_NOTHROW(scene->SetRigBlendParameters(plain, bgl::BlendSetDesc()));
+		CHECK_THROWS_WITH(
+			scene->SetRigBlendParameters(plain, MakeBlendSet()),
+			Catch::Matchers::ContainsSubstring("carries 0 blend spaces"));
+	}
+
+	SECTION("a handle that names no rig")
+	{
+		CHECK_THROWS_WITH(
+			scene->SetRigBlendParameters(bgl::RigHandle(), MakeBlendSet()),
+			Catch::Matchers::ContainsSubstring("null, or already deleted"));
+	}
+
+	SECTION("a set that changes the shape is refused, and writes nothing")
+	{
+		const auto refused = [&](const bgl::BlendSetDesc& set) {
+			CHECK_THROWS_AS(scene->SetRigBlendParameters(rig, set), bgl::SceneError);
+			CHECK(parameterAt(0) == 0.0f);
+			CHECK(parameterAt(1) == 1.0f);
+		};
+
+		SECTION("a second space")
+		{
+			auto set = MakeBlendSet();
+			set.spaces.push_back(set.spaces[0]);
+			refused(set);
+		}
+
+		SECTION("a member added")
+		{
+			auto set = MakeBlendSet();
+			set.spaces[0].members.push_back({ 0, 2.0f });
+			refused(set);
+		}
+
+		SECTION("a member naming another clip")
+		{
+			auto set                           = MakeBlendSet();
+			set.spaces[0].members[1].clipIndex = 0;
+			refused(set);
+		}
+	}
+
+	SECTION("a run the pose pass could not evaluate is refused, and writes nothing")
+	{
+		// Every parameter of the space is checked before any of them is written: the mirror is
+		// written straight through, so a half-applied set has no rollback.
+		SECTION("parameters that do not strictly increase")
+		{
+			auto set                           = MakeBlendSet();
+			set.spaces[0].members[0].parameter = 4.0f;
+			set.spaces[0].members[1].parameter = 4.0f;
+			CHECK_THROWS_WITH(
+				scene->SetRigBlendParameters(rig, set),
+				Catch::Matchers::ContainsSubstring("strictly increase"));
+			CHECK(parameterAt(0) == 0.0f);
+		}
+
+		SECTION("a parameter that is not a number")
+		{
+			auto set                           = MakeBlendSet();
+			set.spaces[0].members[1].parameter = std::numeric_limits<float>::quiet_NaN();
+			CHECK_THROWS_AS(scene->SetRigBlendParameters(rig, set), bgl::SceneError);
+			CHECK(parameterAt(1) == 1.0f);
+		}
+	}
+}

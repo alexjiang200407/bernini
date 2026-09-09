@@ -1054,11 +1054,14 @@ TEST_CASE("the pose pass blends a space as the reference does", "[skinned][pose]
 	const assetlib::Skeleton     skeleton   = MakeChain();
 	const assetlib::AnimationSet animations = MakeSpaceClipSet();
 
+	const auto rig = scene->AddRig(skeleton, animations, bgl::FootPlantDesc(), MakeSpaceSet());
+	REQUIRE(rig.IsValid());
+
 	const auto geom = scene->AddSkinnedMeshGeom(
 		MakeSkinnedTriangle(),
 		0,
 		materials,
-		scene->AddRig(skeleton, animations, bgl::FootPlantDesc(), MakeSpaceSet()),
+		rig,
 		assetlib::Bounds{ glm::vec3(-4.0f), glm::vec3(4.0f) });
 	REQUIRE(geom.IsValid());
 
@@ -1269,5 +1272,28 @@ TEST_CASE("the pose pass blends a space as the reference does", "[skinned][pose]
 			skeleton,
 			animations,
 			expected(c_Parameter, 0.0f, c_Rate, c_Time));
+	}
+
+	SECTION("a moved parameter re-poses the same record")
+	{
+		// The gate SetRigBlendParameters exists for, and the one a check of the member buffer
+		// cannot make: the pass has to read the moved parameter, which means the write has to
+		// reach the GPU. The pair sits at 0 and 1; moved to 0 and 2, a slot held at 1 is halfway
+		// between the members instead of on the second one.
+		auto moved                           = MakeSpaceSet();
+		moved.spaces[0].members[1].parameter = 2.0f;
+		scene->SetRigBlendParameters(rig, moved);
+
+		auto desc    = bgl::SkinnedPlaybackDesc();
+		desc.slot[0] = SpaceSlot(c_SpaceNode, 0.25f, 0.0f, 1.0f);
+
+		const auto instance = view->CreateSkinnedMeshInstance(geom, glm::mat4(1.0f), desc);
+
+		// `expected` takes the fraction between the two members, which the move has halved.
+		CheckAgainstReference(
+			paletteAt(instance, 0.0f),
+			skeleton,
+			animations,
+			expected(0.5f, 0.25f, 0.0f, 0.0f));
 	}
 }

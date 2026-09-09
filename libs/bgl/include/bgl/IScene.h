@@ -158,6 +158,27 @@ namespace bgl
 			const BlendSetDesc&           blendSet  = {}) = 0;
 
 		/**
+		 * Moves the parameters of a live rig's blend spaces, and nothing else about them.
+		 *
+		 * `blendSet` must describe the set the rig already carries -- the same spaces, each holding
+		 * the same members naming the same clips -- and differ only in the parameter each member
+		 * plays alone at. Nothing is reallocated, so the node table does not move, every geom on the
+		 * rig keeps the node count it was added with, and every live playback slot keeps naming what
+		 * it named. That is the whole reason this is narrower than a rewrite: a rig whose spaces
+		 * change *shape* is a rig re-uploaded, and its geoms released first.
+		 *
+		 * It exists for authoring. A threshold is chosen by dragging it and watching the pose, and
+		 * a rig torn down per drag tick cannot be watched.
+		 *
+		 * @throws SceneError if `rig` is null or already deleted, `blendSet` describes a different
+		 *         number of spaces or of members, a member names a different clip than the one it
+		 *         is replacing, or the parameters are not finite and strictly increasing. Nothing
+		 *         is written unless all of it passes.
+		 */
+		virtual void
+		SetRigBlendParameters(RigHandle rig, const BlendSetDesc& blendSet) = 0;
+
+		/**
 		 * Destroys a rig, releasing its bone, clip and sample ranges.
 		 *
 		 * @pre No geom added against this rig is still alive. Unlike a texture asset, whose
