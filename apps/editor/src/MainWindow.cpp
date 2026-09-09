@@ -32,6 +32,7 @@
 #include <assetlib/Project.h>
 #include <assetlib/cancel.h>
 #include <assetlib/progress.h>
+#include <assetlib/project_layout.h>
 
 #include <QActionGroup>
 #include <QMenuBar>
@@ -139,6 +140,16 @@ MainWindow::Build(const std::filesystem::path& configPath)
 		if (gfxSettings["enableShaderCache"].GetOrDefault(true))
 			gfxOpts.shaderCacheDir = "shadercache";
 
+		// The startup project's alone. Surfaces are registered inside CreateGraphics and the
+		// reserved rows are bound to what was there then, so opening another project later does not
+		// bring its shaders -- see docs/game_surfaces.md.
+		if (!startupProject.empty())
+		{
+			gfxOpts.surfaceShaderDir =
+				assetlib::Project::DataDirectoryOf(core::expand_home(startupProject)) /
+				assetlib::c_ShadersDirectoryName;
+		}
+
 		// The editor's one Scene. Every viewport (the Level Editor, the Material Editor's model
 		// preview) renders it through a SceneView of its own, so geometry, textures and materials
 		// are pooled here once and these budgets must cover all of them together.
@@ -153,6 +164,8 @@ MainWindow::Build(const std::filesystem::path& configPath)
 		sceneDesc.initialPbrMaterials = sceneSettings["initialPbrMaterials"].GetOrDefault(256);
 		sceneDesc.initialLoosePbrMaterials =
 			sceneSettings["initialLoosePbrMaterials"].GetOrDefault(256);
+		sceneDesc.initialSurfaceMaterials =
+			sceneSettings["initialSurfaceMaterials"].GetOrDefault(64);
 
 		// One step, not one per pipeline: bgl builds them all inside CreateGraphics and a warm
 		// shader cache turns the whole stretch into milliseconds. Cold it is seconds, which is why

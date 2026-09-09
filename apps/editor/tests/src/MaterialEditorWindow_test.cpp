@@ -1,3 +1,5 @@
+#include "Windows/MaterialEditor/MaterialGraphModel.h"
+#include "Windows/MaterialEditor/material_graph.h"
 #include "Windows/MaterialEditor/material_io.h"
 
 #include "util/QtSupport.h"  // IWYU pragma: keep
@@ -5,8 +7,10 @@
 #include <QDir>
 #include <QTemporaryDir>
 
+#include <assetlib/AssetStore.h>
 #include <assetlib_structs/BMaterial.h>
 #include <catch2/catch_test_macros.hpp>
+#include <filesystem>
 #include <qbuffer.h>
 #include <qcontainerfwd.h>
 
@@ -290,4 +294,42 @@ TEST_CASE("The default sphere holds nothing open", "[materialeditor]")
 	const QStringList held =
 		editor::HeldOpenByMaterialEditor({ "C:/Data/Materials/Leaf.bmaterial" }, {});
 	CHECK(held == QStringList{ "C:/Data/Materials/Leaf.bmaterial" });
+}
+
+// A Save from this panel compiles the board, and the board is a PBR one whatever the file on disk
+// is -- the editor authors no surfaces. So the material's own model and the three keys under it
+// have to come back off the file, the way the baked triplet already does, or opening a game
+// material here and pressing Save would quietly turn it into an ordinary PBR one.
+TEST_CASE("A save does not demote a surface material", "[materialeditor][surface]")
+{
+	QTemporaryDir temp;
+	REQUIRE(temp.isValid());
+
+	const std::filesystem::path root = std::filesystem::path(temp.path().toStdWString());
+	const QString               path = temp.filePath("Authored/Materials/rim.bmaterial");
+
+	{
+		auto material             = assetlib::BMaterial();
+		material.name             = "rim";
+		material.shadingModel     = assetlib::ShadingModel::kPbrSurface;
+		material.surface.name     = "Rim";
+		material.surface.values   = { { "rimPower", { 2.0f } } };
+		material.surface.textures = { { "baseColor", "Derived/BakedTextures/rim.ktx2" } };
+
+		assetlib::AssetStore(root).Save(material, "Authored/Materials/rim.bmaterial");
+	}
+
+	// The board the panel would show for it: the default PBR one, since a surface material carries
+	// no editorGraph for the editor to restore.
+	MaterialGraphModel model(MakeMaterialNodeRegistry(nullptr, nullptr));
+	model.addNode("MaterialOutput");
+
+	const assetlib::BMaterial saved = editor::BuildMaterial(model, path, root);
+
+	CHECK(saved.shadingModel == assetlib::ShadingModel::kPbrSurface);
+	CHECK(saved.surface.name == "Rim");
+	REQUIRE(saved.surface.values.size() == 1u);
+	CHECK(saved.surface.values[0].name == "rimPower");
+	REQUIRE(saved.surface.textures.size() == 1u);
+	CHECK(saved.surface.textures[0].texture == "Derived/BakedTextures/rim.ktx2");
 }
