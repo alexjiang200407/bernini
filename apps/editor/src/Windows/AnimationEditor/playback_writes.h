@@ -23,6 +23,12 @@ namespace editor
 	 * `SkinnedInstanceDesc` carries one clip, so a respawn cannot carry a record across; this is
 	 * the one slot of it that survives. Ties go to the lowest slot, and a record where no slot
 	 * carries weight yet answers slot 0, which is what such a record shows.
+	 *
+	 * A slot's weight is the whole pose's, which is what makes one node *the* answer. A bone mask
+	 * (`ROADMAP.md` § Skinned Meshes, unticked) would weight per bone, and no single node would be
+	 * dominant -- an upper body on one clip over a lower body on another has no one clip to respawn
+	 * onto. This returns the wrong answer that day rather than a wrong-looking one, so it is the
+	 * caller that has to change.
 	 */
 	[[nodiscard]] uint32_t
 	DominantNode(const bgl::SkinnedPlaybackDesc& desc, float nowSeconds) noexcept;

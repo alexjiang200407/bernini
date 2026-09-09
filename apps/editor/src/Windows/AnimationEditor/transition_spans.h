@@ -45,6 +45,11 @@ namespace editor
 	 *
 	 * Spans are clamped into the strip and never inverted. A degenerate window or a non-positive
 	 * width gives every span zero, which paints as nothing rather than as a wrong picture.
+	 *
+	 * One overlap is the whole rig crossing at once, which is what a fade currently is: a slot's
+	 * weight applies to every bone. A bone mask (`ROADMAP.md` § Skinned Meshes, unticked) would end
+	 * that -- an upper body could cross while the legs did not, and one bar per clip could no
+	 * longer say when. The strip would need a row per masked group, not a wider overlap.
 	 */
 	[[nodiscard]] TransitionSpans
 	SpansForTransition(const TransitionLayout& layout, int width) noexcept;
