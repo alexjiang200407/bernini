@@ -51,7 +51,7 @@ namespace assetlib
 			case ShadingModel::kPbr:
 				return "pbr";
 			case ShadingModel::kPbrSurface:
-				return "surface";
+				return "pbrSurface";
 			case ShadingModel::kCount:
 				break;
 			}
