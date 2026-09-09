@@ -42,6 +42,7 @@
 #include <exception>
 #include <filesystem>
 #include <gamelib/AssetManager.h>
+#include <gamelib/anim_blend.h>
 #include <iterator>
 #include <limits>
 #include <optional>
@@ -770,6 +771,37 @@ AnimationPreviewWindow::SpawnAnimated(
 		bgl::SkinnedInstanceDesc{ clip, 0.0f, 1.0f, m_Source });
 	ApplyFootIK(instance);
 	return instance;
+}
+
+void
+AnimationPreviewWindow::StampTransition(
+	const uint32_t fromNode,
+	const uint32_t toNode,
+	const float    startSeconds,
+	const float    duration)
+{
+	if (m_Assets == nullptr || m_AnimatedDraws.empty() || !editor::RewritesPlayback(m_Source))
+		return;
+
+	m_Playback = game::CrossfadeTo(
+		bgl::SkinnedPlaybackDesc::FromClip(fromNode),
+		toNode,
+		startSeconds,
+		duration);
+
+	GetRenderer()->Invoke([&] {
+		for (const AnimatedDraw& draw : m_AnimatedDraws)
+		{
+			try
+			{
+				GetPreviewViewRef()->SetSkinnedPlayback(draw.instance, m_Playback);
+			}
+			catch (const std::exception& e)
+			{
+				qWarning("AnimationPreview: failed to stamp a transition: %s", e.what());
+			}
+		}
+	});
 }
 
 void

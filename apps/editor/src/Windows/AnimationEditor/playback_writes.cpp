@@ -1,6 +1,7 @@
 #include "playback_writes.h"
 
 #include <bgl/InstanceDesc.h>
+#include <cmath>
 #include <cstddef>
 #include <cstdint>
 #include <gamelib/anim_blend.h>
@@ -31,5 +32,12 @@ namespace editor
 		}
 
 		return desc.slot[best].nodeIndex;
+	}
+
+	float
+	CutSeconds(const float sampleRate) noexcept
+	{
+		constexpr float c_Fallback = 1.0f / 60.0f;
+		return std::isfinite(sampleRate) && sampleRate > 0.0f ? 1.0f / sampleRate : c_Fallback;
 	}
 }

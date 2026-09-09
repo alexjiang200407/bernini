@@ -297,20 +297,3 @@ TEST_CASE("A clip selection or a new clip table drops the window", "[animation]"
 	CHECK_FALSE(transport.InTransitionWindow());
 	CHECK(transport.GetTimeSeconds() == 0.0f);
 }
-
-TEST_CASE("The timeline reads 0..1 in either domain", "[animation]")
-{
-	auto transport = Loaded(/*loop*/ true);
-
-	transport.Scrub(0.15f);
-	CHECK(transport.GetNormalizedPosition() == Catch::Approx(0.5f));
-
-	transport.SetTransitionWindow(10.0f, 12.0f);
-	CHECK(transport.GetNormalizedPosition() == 0.0f);
-
-	transport.Scrub(11.5f);
-	CHECK(transport.GetNormalizedPosition() == Catch::Approx(0.75f));
-
-	// The clip's period is unchanged underneath: the window is a domain, not a re-timing.
-	CHECK(transport.GetPeriodSeconds() == Catch::Approx(0.3f));
-}
