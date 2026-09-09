@@ -1,8 +1,11 @@
 #include <gamelib/anim_blend.h>
 
 #include <catch2/catch_approx.hpp>
+#include <catch2/catch_message.hpp>
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_string.hpp>
+#include <cmath>
+#include <gamelib/BlendSpaceInfo.h>
 
 // The writes a playback record takes between frames. No device and no scene: these are pure
 // functions from a record and a clock to the next record, which is the whole reason they are
@@ -410,4 +413,88 @@ TEST_CASE("a write that runs backwards is refused", "[gamelib][animblend]")
 		Catch::Matchers::ContainsSubstring("only changes the future"));
 
 	CHECK_THROWS(RetargetParameter(Playing(0), 0, MakeSpace(), MakeClips(), 1.0f, 10.0f, -1.0f));
+}
+
+TEST_CASE("a space says which two members a parameter is between", "[gamelib][animblend]")
+{
+	const std::vector<game::ClipInfo> clips = MakeClips();
+	const game::BlendSpaceInfo        space = MakeWideSpace();
+
+	// Members at 0, 0.33, 0.66 and 1, playing clips 0, 1, 2 and 0.
+	SECTION("between two members it is the pair and the fraction")
+	{
+		const game::BlendSpaceStraddle at = space.StraddleAt(0.495f);
+		CHECK(at.lower == 1);
+		CHECK(at.upper == 2);
+		CHECK(at.weight == Catch::Approx(0.5f));
+	}
+
+	SECTION("exactly on a member it carries that member alone")
+	{
+		// The lower end of the span above it, weight zero -- not the span below it at weight one.
+		// Either reads as the member playing alone, and this is the one the walk reaches first.
+		const game::BlendSpaceStraddle at = space.StraddleAt(0.33f);
+		CHECK(at.lower == 1);
+		CHECK(at.upper == 2);
+		CHECK(at.weight == 0.0f);
+	}
+
+	SECTION("past either end the end member plays alone")
+	{
+		const game::BlendSpaceStraddle below = space.StraddleAt(-5.0f);
+		CHECK(below.lower == 0);
+		CHECK(below.weight == 0.0f);
+
+		// Both indices name the last member, so a caller reading either one reads that member.
+		const game::BlendSpaceStraddle above = space.StraddleAt(5.0f);
+		CHECK(above.lower == 3);
+		CHECK(above.upper == 3);
+		CHECK(above.weight == 0.0f);
+	}
+
+	SECTION("it names an adjacent pair in range, at a weight in range, everywhere")
+	{
+		// Swept past both ends: the readout is driven by a cursor a person drags, so every
+		// parameter it can reach has to name members a caller may index with.
+		for (int step = -2; step <= 22; ++step)
+		{
+			const float                    parameter = float(step) / 20.0f;
+			const game::BlendSpaceStraddle at        = space.StraddleAt(parameter);
+
+			INFO("parameter " << parameter);
+			CHECK(at.upper < space.members.size());
+			CHECK((at.upper == at.lower || at.upper == at.lower + 1));
+			CHECK(at.weight >= 0.0f);
+			CHECK(at.weight <= 1.0f);
+		}
+	}
+
+	SECTION("it is the walk SecondsAt already made, so the two agree")
+	{
+		// SecondsAt is written in terms of this, which is the point of extracting it: one straddle
+		// rule rather than two that drift.
+		for (int step = -2; step <= 22; ++step)
+		{
+			const float                    parameter = float(step) / 20.0f;
+			const game::BlendSpaceStraddle at        = space.StraddleAt(parameter);
+
+			const float expected = std::lerp(
+				float(CycleSeconds(clips[space.members[at.lower].clipIndex])),
+				float(CycleSeconds(clips[space.members[at.upper].clipIndex])),
+				at.weight);
+
+			INFO("parameter " << parameter);
+			CHECK(space.SecondsAt(clips, parameter) == Catch::Approx(expected));
+		}
+	}
+
+	SECTION("a two-member space is the same rule with nothing interior")
+	{
+		const game::BlendSpaceInfo pair = MakeSpace();
+
+		const game::BlendSpaceStraddle at = pair.StraddleAt(0.25f);
+		CHECK(at.lower == 0);
+		CHECK(at.upper == 1);
+		CHECK(at.weight == Catch::Approx(0.25f));
+	}
 }

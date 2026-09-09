@@ -1,5 +1,12 @@
 #pragma once
+#include <algorithm>
+#include <cmath>
+#include <cstddef>
+#include <cstdint>
 #include <gamelib/ClipInfo.h>
+#include <span>
+#include <string>
+#include <vector>
 
 namespace game
 {
@@ -8,6 +15,20 @@ namespace game
 	{
 		uint32_t clipIndex = 0;
 		float    parameter = 0.0f;
+	};
+
+	/**
+	 * The two members a parameter sits between, and how far between them it sits.
+	 *
+	 * `weight` is the *upper* member's; the lower carries `1 - weight`. Outside the authored range
+	 * both name the end member and `weight` is zero, which is that member playing alone whichever
+	 * of the two a caller reads.
+	 */
+	struct BlendSpaceStraddle
+	{
+		size_t lower  = 0;  // into BlendSpaceInfo::members
+		size_t upper  = 0;
+		float  weight = 0.0f;
 	};
 
 	/**
@@ -55,27 +76,42 @@ namespace game
 		[[nodiscard]] float
 		SecondsAt(std::span<const ClipInfo> clips, float parameter) const
 		{
+			const BlendSpaceStraddle at = StraddleAt(parameter);
+
+			return std::lerp(
+				clips[members[at.lower].clipIndex].CycleSeconds(),
+				clips[members[at.upper].clipIndex].CycleSeconds(),
+				at.weight);
+		}
+
+		/**
+		 * Which two members `parameter` lands between, and how far between them -- what an author
+		 * reads off a space to see which clips are live under the cursor.
+		 *
+		 * The CPU twin of `SpaceMembers` in `PoseSkinned.slang`, walked rather than searched for
+		 * the same reason: a space is a handful of members. Like `SecondsAt` it is a *twin*, and
+		 * nothing mechanically holds the two in step -- a readout that disagreed with the pose on
+		 * screen is the failure this shape exists to make visible rather than to rule out.
+		 */
+		[[nodiscard]] BlendSpaceStraddle
+		StraddleAt(float parameter) const noexcept
+		{
 			const size_t last = members.size() - 1;
 
-			if (parameter <= members.front().parameter)
-				return clips[members.front().clipIndex].CycleSeconds();
 			if (parameter >= members[last].parameter)
-				return clips[members[last].clipIndex].CycleSeconds();
+				return { last, last, 0.0f };
 
 			for (size_t i = 0; i < last; ++i)
 			{
-				const float a = members[i].parameter;
 				const float b = members[i + 1].parameter;
 				if (parameter < b)
 				{
-					return std::lerp(
-						clips[members[i].clipIndex].CycleSeconds(),
-						clips[members[i + 1].clipIndex].CycleSeconds(),
-						(parameter - a) / (b - a));
+					const float a = members[i].parameter;
+					return { i, i + 1, std::clamp((parameter - a) / (b - a), 0.0f, 1.0f) };
 				}
 			}
 
-			return clips[members[last].clipIndex].CycleSeconds();
+			return { last, last, 0.0f };
 		}
 	};
 }
