@@ -58,4 +58,16 @@ namespace editor
 	 */
 	[[nodiscard]] TransitionLayout
 	WindowFor(float start, float duration, float lead, float tail) noexcept;
+
+	/**
+	 * One clip filling the whole strip, with the playhead at `timeSeconds`: the same widget with
+	 * nothing to fade to.
+	 *
+	 * A transition with its second end pushed to the far edge, rather than a mode of its own -- the
+	 * To bar and the overlap both come out empty, which is what a single clip *is*. So the strip
+	 * needs no notion of how many clips it is drawing, and the Clip tab and the Blend tab are the
+	 * same timeline showing different records.
+	 */
+	[[nodiscard]] TransitionLayout
+	WindowForClip(float periodSeconds, float timeSeconds) noexcept;
 }

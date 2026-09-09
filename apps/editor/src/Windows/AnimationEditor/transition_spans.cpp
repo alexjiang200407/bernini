@@ -52,6 +52,18 @@ namespace editor
 	}
 
 	TransitionLayout
+	WindowForClip(const float periodSeconds, const float timeSeconds) noexcept
+	{
+		auto layout        = TransitionLayout();
+		layout.windowStart = 0.0f;
+		layout.windowEnd   = periodSeconds > 0.0f ? periodSeconds : 1.0f;
+		layout.start       = layout.windowEnd;
+		layout.duration    = 0.0f;
+		layout.time        = timeSeconds;
+		return layout;
+	}
+
+	TransitionLayout
 	WindowFor(const float start, const float duration, const float lead, const float tail) noexcept
 	{
 		const float fade = std::max(0.0f, duration);

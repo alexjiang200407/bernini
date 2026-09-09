@@ -11,6 +11,7 @@
 #include "Render/Renderer.h"
 #include "Render/environment.h"
 #include "Windows/AnimationEditor/PlaybackTransport.h"
+#include "Windows/AnimationEditor/transition_spans.h"
 #include "util/follows_project.h"
 #include "util/held_open_assets.h"
 #include <bgl/InstanceDesc.h>
@@ -223,9 +224,12 @@ private:
 	Scrubber* m_SoleTurnSlider = nullptr;
 	QLabel*   m_SoleTurnLabel  = nullptr;
 
-	QTabWidget*  m_Surfaces     = nullptr;
-	QListWidget* m_ClipList     = nullptr;
-	QLabel*      m_ClipMetadata = nullptr;
+	QTabWidget* m_Surfaces = nullptr;
+
+	// The stamped fade's layout, which the shared strip is redrawn from every tick.
+	editor::TransitionLayout m_TransitionLayout;
+	QListWidget*             m_ClipList     = nullptr;
+	QLabel*                  m_ClipMetadata = nullptr;
 
 	// Previewing a crossfade: which two clips, how long, and the strip that is all three at once.
 	// The duration is typed rather than dragged because the question it answers is whether 0.2 s
@@ -243,7 +247,6 @@ private:
 	QToolButton*    m_PlayButton   = nullptr;
 	QToolButton*    m_StepBack     = nullptr;
 	QToolButton*    m_StepForward  = nullptr;
-	Scrubber*       m_Timeline     = nullptr;
 	QDoubleSpinBox* m_Speed        = nullptr;
 	QLabel*         m_TimeReadout  = nullptr;
 

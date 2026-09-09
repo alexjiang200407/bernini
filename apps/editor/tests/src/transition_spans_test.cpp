@@ -13,6 +13,7 @@ namespace
 	using editor::SpansForTransition;
 	using editor::TransitionLayout;
 	using editor::WindowFor;
+	using editor::WindowForClip;
 
 	// A 0.5 s fade at t = 1, with 1 s of lead and 1 s of tail: the window is [0, 2.5] and 250 px
 	// wide, so one second is 100 px and the fade is 50.
@@ -156,4 +157,27 @@ TEST_CASE(
 
 	layout.windowEnd = layout.windowStart;
 	CHECK(TransitionStrip::TimeForX(layout, 100, 250) == layout.windowStart);
+}
+
+TEST_CASE("One clip is the same strip with its second end at the far edge", "[animation]")
+{
+	const auto layout = WindowForClip(/*period*/ 2.0f, /*time*/ 0.5f);
+	const auto spans  = SpansForTransition(layout, 200);
+
+	// The clip fills the strip, and there is no second bar and no fade.
+	CHECK(spans.from.x == 0);
+	CHECK(spans.from.width == 200);
+	CHECK(spans.to.width == 0);
+	CHECK(spans.overlap.width == 0);
+
+	// And the playhead is the clip's own clock across it.
+	CHECK(spans.playheadX == 50);
+}
+
+TEST_CASE("A clip with no period still gives a strip to draw", "[animation]")
+{
+	// An empty transport reports a period of zero, and the panel paints before it has clips.
+	const auto layout = WindowForClip(0.0f, 0.0f);
+	CHECK(layout.windowEnd > layout.windowStart);
+	CHECK(SpansForTransition(layout, 200).from.width == 200);
 }

@@ -221,31 +221,6 @@ namespace editor
 		return std::max(1.0f, static_cast<float>(clip.frameCount) - 1.0f) / clip.sampleRate;
 	}
 
-	float
-	PlaybackTransport::GetNormalizedPosition() const noexcept
-	{
-		if (!HasClips())
-			return 0.0f;
-
-		if (m_InWindow)
-			return (m_Time - m_WindowStart) / (m_WindowEnd - m_WindowStart);
-
-		const float period = GetPeriodSeconds();
-		return period > 0.0f ? m_Time / period : 0.0f;
-	}
-
-	void
-	PlaybackTransport::ScrubNormalized(const float position) noexcept
-	{
-		if (!HasClips())
-			return;
-
-		const float at = std::clamp(position, 0.0f, 1.0f);
-		Scrub(
-			m_InWindow ? m_WindowStart + at * (m_WindowEnd - m_WindowStart) :
-						 at * GetPeriodSeconds());
-	}
-
 	bool
 	PlaybackTransport::HasClips() const noexcept
 	{

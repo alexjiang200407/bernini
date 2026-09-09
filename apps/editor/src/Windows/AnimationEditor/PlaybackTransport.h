@@ -134,25 +134,10 @@ namespace editor
 		 * One period of the active clip in seconds -- for a loop where it wraps:
 		 * `(frameCount - 1) / sampleRate`, the clip's `frameCount` frames being the ends of that
 		 * many intervals. Zero with no clips. This is the clip's own span whatever domain the clock
-		 * is in; where the *timeline* ends is `GetNormalizedPosition`.
+		 * is in; a transition window's ends are its own.
 		 */
 		[[nodiscard]] float
 		GetPeriodSeconds() const noexcept;
-
-		/**
-		 * Where the clock sits on whichever domain it is in, 0..1 -- what a timeline widget paints
-		 * in both, so nothing on screen has to know which one is live. Zero with no clips.
-		 */
-		[[nodiscard]] float
-		GetNormalizedPosition() const noexcept;
-
-		/**
-		 * Parks the clock at `position` of whichever domain it is in, clamped to 0..1 -- the
-		 * inverse of GetNormalizedPosition, and what a timeline widget scrubs through so the two
-		 * agree by construction rather than by both being written correctly.
-		 */
-		void
-		ScrubNormalized(float position) noexcept;
 
 		[[nodiscard]] bool
 		HasClips() const noexcept;

@@ -47,7 +47,6 @@
 
 namespace
 {
-	constexpr int c_TimelineTicks = 1000;
 
 	// Where a previewed fade is stamped, and what is shown either side of it. The clock has to be
 	// able to sit before t0, so it is not zero; the rest is how much run-up and settle reads.
@@ -399,9 +398,6 @@ AnimationEditorWindow::BuildBlendTab()
 	connect(m_PreviewFade, &QPushButton::clicked, this, [this] { StampTransition(); });
 	fade->addWidget(m_PreviewFade);
 
-	m_Strip = new TransitionStrip(m_TransitionGroup);
-	fade->addWidget(m_Strip);
-
 	m_TransitionNote = new QLabel(m_TransitionGroup);
 	m_TransitionNote->setWordWrap(true);
 	fade->addWidget(m_TransitionNote);
@@ -424,16 +420,6 @@ AnimationEditorWindow::BuildBlendTab()
 	connect(m_BlendEnabled, &QCheckBox::toggled, this, [this, restamp](bool) {
 		UpdateTransitionControls();
 		restamp();
-	});
-
-	// Scrubbing moves the clock and nothing else, which is the whole mechanism: the fade is already
-	// in the record, so time is all that has to change to play it.
-	connect(m_Strip, &TransitionStrip::TimeScrubbed, this, [this](const float seconds) {
-		if (m_SyncingUi)
-			return;
-		m_Transport.Scrub(seconds);
-		m_Preview->SetTime(m_Transport.GetTimeSeconds());
-		SyncTransportUi();
 	});
 
 	fade->addStretch(1);
@@ -505,17 +491,18 @@ AnimationEditorWindow::BuildTransportBar()
 	});
 	layout->addWidget(m_StepForward);
 
-	m_Timeline = new Scrubber(bar);
-	m_Timeline->SetRange(0, c_TimelineTicks);
-	connect(m_Timeline, &Scrubber::ValueChanged, this, [this](int ticks) {
+	// One timeline for both tabs. A clip is the same strip with nothing to fade to -- one bar, no
+	// overlap -- so the Clip tab and the Blend tab differ in what the record holds rather than in
+	// what draws it.
+	m_Strip = new TransitionStrip(bar);
+	connect(m_Strip, &TransitionStrip::TimeScrubbed, this, [this](const float seconds) {
 		if (m_SyncingUi)
 			return;
-		m_Transport.ScrubNormalized(
-			static_cast<float>(ticks) / static_cast<float>(c_TimelineTicks));
+		m_Transport.Scrub(seconds);
 		m_Preview->SetTime(m_Transport.GetTimeSeconds());
 		SyncTransportUi();
 	});
-	layout->addWidget(m_Timeline, /*stretch*/ 1);
+	layout->addWidget(m_Strip, /*stretch*/ 1);
 
 	m_TimeReadout = new QLabel(bar);
 	m_TimeReadout->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
@@ -707,6 +694,7 @@ AnimationEditorWindow::StampTransition()
 		layout.start,
 		layout.duration);
 
+	m_TransitionLayout = layout;
 	m_Strip->SetLayout(layout);
 	m_Strip->SetClipNames(m_FromClip->currentText(), m_ToClip->currentText());
 
@@ -748,12 +736,17 @@ AnimationEditorWindow::UpdateTransitionControls()
 	// would feed the window's absolute seconds to a transport back in clip time, which reads them
 	// as that clip's own -- a picture disagreeing with the record, which is the one thing it must
 	// never do.
+	// The strip stays live whatever the tab: with no fade stamped it is the active clip's own
+	// timeline, which is what the Clip tab wants of it.
 	const bool live = m_Transport.InTransitionWindow();
-	m_Strip->setEnabled(usable && live);
+	m_Strip->setEnabled(playable);
 	if (!live)
 	{
-		m_Strip->SetLayout(editor::TransitionLayout());
-		m_Strip->SetClipNames(QString(), QString());
+		m_TransitionLayout = editor::TransitionLayout();
+		m_Strip->SetClipNames(
+			m_Transport.HasClips() ? QString::fromStdString(m_Transport.GetActiveClip().name) :
+									 QString(),
+			QString());
 	}
 
 	// Disabled with the reason rather than hidden: a control that vanishes on a tier switch reads
@@ -763,8 +756,9 @@ AnimationEditorWindow::UpdateTransitionControls()
 	else if (!rewritable)
 	{
 		m_TransitionNote->setText(QStringLiteral(
-			"The shared bone table holds one clip and no slots to blend; "
-			"switch to the per-instance source to preview a fade."));
+			"The shared bone table plays one clip per instance and holds no slots, so there "
+			"is nothing to fade between -- it still interpolates frames within that clip. "
+			"Switch to the per-instance source to preview a fade."));
 	}
 	else if (!live)
 	{
@@ -788,19 +782,16 @@ AnimationEditorWindow::SyncTransportUi()
 			m_Transport.IsPlaying() ? QStyle::SP_MediaPause : QStyle::SP_MediaPlay));
 	// Not while the user holds the handle: a loop's last tick wraps to zero, and writing that
 	// back mid-drag snaps the scrubber out from under the cursor.
-	if (!m_Timeline->IsScrubbing())
+	// The strip is the timeline in both domains. A transition keeps the layout its stamp produced,
+	// since the window's ends and the fade inside it are the stamp's to decide; a single clip is
+	// derived fresh, because it is only ever the active clip's period.
+	if (!m_Strip->IsScrubbing())
 	{
-		m_Timeline->SetValue(
-			static_cast<int>(std::lround(
-				m_Transport.GetNormalizedPosition() * static_cast<float>(c_TimelineTicks))));
-	}
-
-	// The strip paints the same clock the timeline does; it holds the window rather than reading it,
-	// so the playhead moves whether the clock was advanced, scrubbed or stepped.
-	if (m_Transport.InTransitionWindow() && !m_Strip->IsScrubbing())
-	{
-		editor::TransitionLayout layout = m_Strip->GetLayout();
-		layout.time                     = m_Transport.GetTimeSeconds();
+		editor::TransitionLayout layout =
+			m_Transport.InTransitionWindow() ?
+				m_TransitionLayout :
+				editor::WindowForClip(m_Transport.GetPeriodSeconds(), 0.0f);
+		layout.time = m_Transport.GetTimeSeconds();
 		m_Strip->SetLayout(layout);
 	}
 
