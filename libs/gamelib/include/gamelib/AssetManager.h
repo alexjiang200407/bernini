@@ -229,9 +229,9 @@ namespace game
 		 *         set no longer matches the skeleton it names, the geom is live with clips from a
 		 *         different `.banim`, the geom is live with a different blend set, the rig is live
 		 *         with a different one, the blend set names another `.banim` than this one, or a
-		 *         member names a clip the set does not hold;
+		 *         sample names a clip the set does not hold;
 		 *         bgl::SceneError for anything AddRig or AddSkinnedMeshGeom refuses -- a space of
-		 *         fewer than two members, a member that does not loop, parameters that do not
+		 *         fewer than two samples, a sample that does not loop, parameters that do not
 		 *         strictly increase. A failed acquire owns nothing.
 		 */
 		SkinnedMesh
@@ -678,7 +678,7 @@ namespace game
 			const assetlib::BlendSet*     blendSet);
 
 		/**
-		 * `blendSet`'s spaces resolved against `animations`: a member's clip name becomes the index
+		 * `blendSet`'s spaces resolved against `animations`: a sample's clip name becomes the index
 		 * `bgl` takes, and `spaces` is filled with what a caller needs to steer each one.
 		 *
 		 * Refused rather than warned when a name resolves to nothing, unlike an avatar naming a bone
@@ -686,7 +686,7 @@ namespace game
 		 * none is ordinary, but a `.bblend` was named by the caller and silently dropping its spaces
 		 * would hand back a node table missing what was asked for.
 		 *
-		 * @throws std::runtime_error if a member names a clip `animations` does not hold.
+		 * @throws std::runtime_error if a sample names a clip `animations` does not hold.
 		 */
 		[[nodiscard]] static bgl::BlendSetDesc
 		BlendSetFor(

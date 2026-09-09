@@ -1,4 +1,6 @@
 #pragma once
+#include <cstdint>
+#include <vector>
 
 namespace bgl
 {
@@ -10,7 +12,7 @@ namespace bgl
 	 * clip set's own string pool, which lives in assetlib. Whoever loaded the containers fills this
 	 * in -- gamelib's acquire -- exactly as it does for FootPlantDesc.
 	 */
-	struct BlendSpaceMemberDesc
+	struct BlendSpaceSampleDesc
 	{
 		uint32_t clipIndex = 0;
 		float    parameter = 0.0f;
@@ -19,13 +21,13 @@ namespace bgl
 	/**
 	 * One 1D blend space: its clips in strictly increasing parameter order.
 	 *
-	 * Two members is the floor -- one is a clip, and every clip is already a node under its own
-	 * index. Every member must be a looping clip: the parameter sets a shared normalized phase, and
+	 * Two samples is the floor -- one is a clip, and every clip is already a node under its own
+	 * index. Every sample must be a looping clip: the parameter sets a shared normalized phase, and
 	 * a clip that clamps rather than wraps would sit on its last frame while the others cycle.
 	 */
 	struct BlendSpaceDesc
 	{
-		std::vector<BlendSpaceMemberDesc> members;
+		std::vector<BlendSpaceSampleDesc> samples;
 	};
 
 	/**

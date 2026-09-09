@@ -82,7 +82,7 @@ namespace game
 	 * retargets before it crossfades should not silently start playing something.
 	 *
 	 * @throws std::runtime_error if `duration` is negative, `now` or `duration` is not finite, or a
-	 *         member names a clip outside `clips`.
+	 *         sample names a clip outside `clips`.
 	 */
 	[[nodiscard]] bgl::SkinnedPlaybackDesc
 	RetargetParameter(
