@@ -81,7 +81,8 @@ public:
 	 * Leaving the panel resets it: the dock's tab switching away (or the dock closing) puts the
 	 * default sphere back, which drops the open materials and every held-open path with them.
 	 * MainWindow drives this from QDockWidget::visibilityChanged -- a tabified dock's widget gets
-	 * no hideEvent on a tab switch.
+	 * no hideEvent on a tab switch -- through editor::IsPanelShown, which is what keeps a minimized
+	 * window from reading as a panel the user left.
 	 *
 	 * Unsaved graph edits go with it. The panel writes nothing until Save, and there is no prompt.
 	 */

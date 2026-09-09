@@ -3,6 +3,7 @@
 #include "Windows/AnimationEditor/AnimationEditorWindow.h"
 #include "Windows/GpuTiming/GpuTimingWindow.h"
 #include "Windows/MaterialEditor/MaterialEditorWindow.h"
+#include "Windows/MaterialEditor/MaterialPreviewWindow.h"
 #include "Windows/RenderTarget/RenderTargetWindow.h"
 #include "util/QtSupport.h"  // IWYU pragma: keep
 #include "util/follows_project.h"
@@ -10,6 +11,8 @@
 #include <assetlib/Project.h>
 
 #include <QAction>
+#include <QCoreApplication>
+#include <QDockWidget>
 #include <QMenu>
 #include <QMenuBar>
 #include <QPointer>
@@ -170,6 +173,63 @@ TEST_CASE("Opening a project roots every panel that follows it", "[mainwindow][r
 
 	CHECK(materials->GetDataRoot() == editor.DataRoot());
 	CHECK(animation->GetDataRoot().toStdString() == editor.DataRoot().string());
+}
+
+// The bug this closes: the panels cleared off QDockWidget::visibilityChanged, and Qt reports every
+// dock invisible when the window minimizes as well as when a tab is deselected -- so minimizing the
+// editor threw away the mesh, its graphs and any unsaved edit to them.
+TEST_CASE(
+	"A minimized editor keeps the panel's mesh; leaving the tab still drops it",
+	"[mainwindow][panelclear][render]")
+{
+	const HeadlessEditor editor;
+
+	MainWindow window(nullptr, editor.ConfigFile());
+	window.show();
+
+	auto* materialDock = window.findChild<QDockWidget*>("MaterialEditorDock");
+	auto* levelDock    = window.findChild<QDockWidget*>("LevelEditorDock");
+	auto* materials    = window.findChild<MaterialEditorWindow*>();
+	auto* preview      = window.findChild<MaterialPreviewWindow*>();
+
+	REQUIRE(materialDock != nullptr);
+	REQUIRE(levelDock != nullptr);
+	REQUIRE(materials != nullptr);
+	REQUIRE(preview != nullptr);
+
+	// The Material tab on top, as it is when a user switches away from the editor.
+	materialDock->raise();
+	REQUIRE(editor::test::WaitFor([materialDock] { return materialDock->isVisible(); }));
+
+	// apples.bmesh names its materials relative to the shared asset directory, so that is the root
+	// the panel has to resolve them against -- not the scaffolded project's empty one.
+	const fs::path dataRoot = fs::absolute("assets/Data");
+	const fs::path mesh     = dataRoot / "Derived" / "Meshes" / "apples.bmesh";
+	REQUIRE(fs::exists(mesh));
+
+	materials->SetDataRoot(QString::fromStdString(dataRoot.string()));
+	preview->LoadMesh(mesh);
+	REQUIRE_FALSE(preview->MeshPath().empty());
+
+	window.showMinimized();
+	QCoreApplication::processEvents();
+	CHECK_FALSE(preview->MeshPath().empty());
+
+	window.showNormal();
+	QCoreApplication::processEvents();
+	CHECK_FALSE(preview->MeshPath().empty());
+
+	// Hidden as well as minimized: the window going away is one case however the platform spells it.
+	window.hide();
+	QCoreApplication::processEvents();
+	CHECK_FALSE(preview->MeshPath().empty());
+
+	window.show();
+	REQUIRE(editor::test::WaitFor([&window] { return window.isVisible(); }));
+
+	// And the half that must not change: leaving the tab still puts the default sphere back.
+	levelDock->raise();
+	CHECK(editor::test::WaitFor([preview] { return preview->MeshPath().empty(); }));
 }
 
 TEST_CASE("Every viewport a headless editor builds is headless", "[mainwindow][render]")

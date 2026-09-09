@@ -84,7 +84,8 @@ public:
 	 * Leaving the panel closes what it was showing: the dock's tab switching away (or the dock
 	 * closing) clears the preview, which releases the acquired assets and every held-open path.
 	 * MainWindow drives this from QDockWidget::visibilityChanged -- a tabified dock's widget gets
-	 * no hideEvent on a tab switch.
+	 * no hideEvent on a tab switch -- through editor::IsPanelShown, which is what keeps a minimized
+	 * window from reading as a panel the user left.
 	 */
 	void
 	SetDockVisible(bool visible);

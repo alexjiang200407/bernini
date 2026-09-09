@@ -26,6 +26,7 @@
 #include "util/follows_project.h"
 #include "util/frame_stats_text.h"
 #include "util/held_open_assets.h"
+#include "util/panel_visibility.h"
 #include "util/window_title.h"
 #include <array>
 #include <assetlib/Project.h>
@@ -352,11 +353,16 @@ MainWindow::Build(const std::filesystem::path& configPath)
 	// Leaving the Animation tab closes what it was showing, releasing its acquisitions and every
 	// held-open path. visibilityChanged, not hideEvent: a tabified dock's widget gets no hideEvent
 	// on a tab switch.
+	//
+	// Through IsPanelShown, because the same signal reports a minimized or hidden window -- and
+	// unlike the two connections above, what these do is destructive.
 	m_TabVisibility.push_back(connect(
 		m_AnimationEditorDock,
 		&QDockWidget::visibilityChanged,
 		m_AnimationEditor,
-		&AnimationEditorWindow::SetDockVisible));
+		[this](bool visible) {
+			m_AnimationEditor->SetDockVisible(editor::IsPanelShown(visible, this));
+		}));
 
 	// The Material tab the same way, back to the default sphere. Unsaved graph edits go with it,
 	// and nothing asks: the panel writes only on Save.
@@ -364,7 +370,9 @@ MainWindow::Build(const std::filesystem::path& configPath)
 		m_MaterialEditorDock,
 		&QDockWidget::visibilityChanged,
 		m_MaterialEditor,
-		&MaterialEditorWindow::SetDockVisible));
+		[this](bool visible) {
+			m_MaterialEditor->SetDockVisible(editor::IsPanelShown(visible, this));
+		}));
 
 	m_Ui.windowMenu->addAction(m_LevelEditorDock->toggleViewAction());
 	m_Ui.windowMenu->addAction(m_MaterialEditorDock->toggleViewAction());

@@ -142,3 +142,34 @@ following were already ruled out, so do not spend the day on them again:
 came back clean, as did Metal API validation. It appears to need the four shards running at once,
 each holding a device — which is what `just test editor` does and a lone binary does not. Budget for
 a rate near one suite run in twenty, and do not read a handful of clean runs as a fix.
+
+---
+
+## Coming back to the editor finds the Material or Animation panel emptied
+
+**Symptom.** The Material Editor holds a mesh, its per-submesh graphs and some unsaved edits to
+them. Minimize the editor, restore it, and the panel is back to the default sphere with the graphs
+blank — the same for the Animation panel's rig. Nothing warns, no dialog asks, and the held-open
+assets have been released, so the Content Explorer will now delete a mesh the panel was showing a
+moment ago. Reported as "alt-tab deletes the current mesh"; the app switch is not what does it.
+
+**Cause.** `MainWindow` cleared both panels off `QDockWidget::visibilityChanged(false)`, on the
+premise that the signal follows the tab. It follows two things. Measured on Qt 6.8.3 (cocoa): a tab
+switch emits `false` for the leaving dock with the window still showing, and **minimizing emits
+`false` for every dock** — `isVisible()` still true, `isMinimized()` true — as does hiding the
+window, with `isVisible()` false. A plain app switch (Cmd-Tab) and Cmd+H emit nothing at all, with
+or without a native child view, which is why the reported gesture never matched the code being read.
+
+**Fixed by** `editor::IsPanelShown` ([panel_visibility.cpp](../apps/editor/src/util/panel_visibility.cpp)),
+which holds a panel shown while its window is minimized or hidden, with both destructive
+connections in `MainWindow::Build` routed through it. Rendering and the animation clock still follow
+raw visibility: parking those while the window is away is right, and reverses itself on restore.
+
+**Gates.** `just run editor_tests -- "[panelclear]"`. The truth table, plus a headless editor holding
+`apples.bmesh` that is minimized, restored and hidden and must still name that mesh — and must still
+drop it when the tab is left. Three of its assertions fail against the unfixed wiring.
+
+**If it comes back.** The likely arrival is a *fourth* panel wired straight to
+`QDockWidget::visibilityChanged`, since only the two connections are guarded, not the signal. Check
+that first; `dock->isHidden()` is not the discriminator to reach for instead, because a tab switch
+does not hide the unselected dock — Qt moves it off-screen, so it reads unhidden either way.
