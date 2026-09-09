@@ -224,6 +224,7 @@ private:
 	QComboBox*       m_FromClip        = nullptr;
 	QComboBox*       m_ToClip          = nullptr;
 	QDoubleSpinBox*  m_FadeSeconds     = nullptr;
+	QPushButton*     m_PreviewFade     = nullptr;
 	TransitionStrip* m_Strip           = nullptr;
 	QLabel*          m_TransitionNote  = nullptr;
 
