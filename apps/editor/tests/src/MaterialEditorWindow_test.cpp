@@ -311,7 +311,7 @@ TEST_CASE("A save does not demote a surface material", "[materialeditor][surface
 	{
 		auto material             = assetlib::BMaterial();
 		material.name             = "rim";
-		material.shadingModel     = assetlib::ShadingModel::kSurface;
+		material.shadingModel     = assetlib::ShadingModel::kPbrSurface;
 		material.surface.name     = "Rim";
 		material.surface.values   = { { "rimPower", { 2.0f } } };
 		material.surface.textures = { { "baseColor", "Derived/BakedTextures/rim.ktx2" } };
@@ -326,7 +326,7 @@ TEST_CASE("A save does not demote a surface material", "[materialeditor][surface
 
 	const assetlib::BMaterial saved = editor::BuildMaterial(model, path, root);
 
-	CHECK(saved.shadingModel == assetlib::ShadingModel::kSurface);
+	CHECK(saved.shadingModel == assetlib::ShadingModel::kPbrSurface);
 	CHECK(saved.surface.name == "Rim");
 	REQUIRE(saved.surface.values.size() == 1u);
 	CHECK(saved.surface.values[0].name == "rimPower");

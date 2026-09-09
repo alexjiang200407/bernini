@@ -728,7 +728,7 @@ TEST_CASE("a surface material round-trips its three keys", "[bmaterial][io][surf
 {
 	BMaterial mat;
 	mat.name         = "rimmed";
-	mat.shadingModel = ShadingModel::kSurface;
+	mat.shadingModel = ShadingModel::kPbrSurface;
 	mat.surface.name = "Rim";
 
 	// A scalar, a triple and a quad: the count is the author's, and the renderer reads as many
@@ -743,7 +743,7 @@ TEST_CASE("a surface material round-trips its three keys", "[bmaterial][io][surf
 	const auto        bytes = AssetCodec<BMaterial>::Serialize(mat);
 	const std::string out(reinterpret_cast<const char*>(bytes.data()), bytes.size());
 
-	CHECK(out.find("\"shadingModel\": \"surface\"") != std::string::npos);
+	CHECK(out.find("\"shadingModel\": \"pbrSurface\"") != std::string::npos);
 	CHECK(out.find("\"surface\": \"Rim\"") != std::string::npos);
 
 	// A one-number parameter is written as a number rather than promoted to an array, so a
@@ -752,14 +752,14 @@ TEST_CASE("a surface material round-trips its three keys", "[bmaterial][io][surf
 
 	const BMaterial restored = AssetCodec<BMaterial>::Deserialize(bytes);
 
-	REQUIRE(restored.shadingModel == ShadingModel::kSurface);
+	REQUIRE(restored.shadingModel == ShadingModel::kPbrSurface);
 	CHECK(restored.surface.name == "Rim");
 
 	REQUIRE(restored.surface.values.size() == 3u);
-	for (const SurfaceValue& value : restored.surface.values)
+	for (const SurfaceValueBinding& value : restored.surface.values)
 	{
 		const auto original =
-			std::ranges::find(mat.surface.values, value.name, &SurfaceValue::name);
+			std::ranges::find(mat.surface.values, value.name, &SurfaceValueBinding::name);
 		REQUIRE(original != mat.surface.values.end());
 		CHECK(value.value == original->value);
 	}
@@ -812,16 +812,16 @@ TEST_CASE("a surface parameter of the wrong shape is refused", "[bmaterial][io][
 	};
 
 	CHECK_THROWS_AS(
-		read(R"({"shadingModel": "surface", "surface": "Rim", "parameters": {"p": []}})"),
+		read(R"({"shadingModel": "pbrSurface", "surface": "Rim", "parameters": {"p": []}})"),
 		std::runtime_error);
 	CHECK_THROWS_AS(
-		read(R"({"shadingModel": "surface", "surface": "Rim",
+		read(R"({"shadingModel": "pbrSurface", "surface": "Rim",
 		         "parameters": {"p": [1, 2, 3, 4, 5]}})"),
 		std::runtime_error);
 	CHECK_THROWS_AS(
-		read(R"({"shadingModel": "surface", "surface": "Rim", "parameters": {"p": "two"}})"),
+		read(R"({"shadingModel": "pbrSurface", "surface": "Rim", "parameters": {"p": "two"}})"),
 		std::runtime_error);
 	CHECK_THROWS_AS(
-		read(R"({"shadingModel": "surface", "surface": "Rim", "textures": {"t": 3}})"),
+		read(R"({"shadingModel": "pbrSurface", "surface": "Rim", "textures": {"t": 3}})"),
 		std::runtime_error);
 }

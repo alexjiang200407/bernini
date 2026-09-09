@@ -87,8 +87,8 @@ namespace assetlib
 						markMap(live, material.pbr.ormTexture);
 						break;
 
-					case ShadingModel::kSurface:
-						for (const SurfaceTexture& texture : material.surface.textures)
+					case ShadingModel::kPbrSurface:
+						for (const SurfaceTextureBinding& texture : material.surface.textures)
 							markMap(live, texture.texture);
 						break;
 

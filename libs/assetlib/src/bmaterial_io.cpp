@@ -56,7 +56,7 @@ namespace assetlib
 
 		constexpr std::array<std::string_view, 2> c_ShadingModelNames = { {
 			"pbr",
-			"surface",
+			"pbrSurface",
 		} };
 
 		constexpr std::array<std::string_view, 4> c_AlphaModeNames = { {
@@ -107,7 +107,7 @@ namespace assetlib
 		 * key order so a save writes the file back as it was read.
 		 */
 		void
-		takeSurfaceValues(nlohmann::json& json, std::vector<SurfaceValue>& out)
+		takeSurfaceValues(nlohmann::json& json, std::vector<SurfaceValueBinding>& out)
 		{
 			const auto it = json.find("parameters");
 			if (it == json.end())
@@ -142,7 +142,7 @@ namespace assetlib
 
 		/** Takes `textures`, whose members are each one mount key. */
 		void
-		takeSurfaceTextures(nlohmann::json& json, std::vector<SurfaceTexture>& out)
+		takeSurfaceTextures(nlohmann::json& json, std::vector<SurfaceTextureBinding>& out)
 		{
 			const auto it = json.find("textures");
 			if (it == json.end())
@@ -180,7 +180,7 @@ namespace assetlib
 		{
 			const SurfaceParams& surface = material.surface;
 
-			if (material.shadingModel != ShadingModel::kSurface)
+			if (material.shadingModel != ShadingModel::kPbrSurface)
 			{
 				json.erase("surface");
 				json.erase("parameters");
@@ -191,7 +191,7 @@ namespace assetlib
 			json["surface"] = surface.name;
 
 			auto parameters = nlohmann::json::object();
-			for (const SurfaceValue& value : surface.values)
+			for (const SurfaceValueBinding& value : surface.values)
 			{
 				core::throw_runtime_error_if(
 					value.value.empty() || value.value.size() > 4,
@@ -218,7 +218,7 @@ namespace assetlib
 				json["parameters"] = std::move(parameters);
 
 			auto textures = nlohmann::json::object();
-			for (const SurfaceTexture& texture : surface.textures)
+			for (const SurfaceTextureBinding& texture : surface.textures)
 				if (!texture.texture.empty())
 					textures[texture.name] = texture.texture;
 			if (textures.empty())
@@ -284,7 +284,7 @@ namespace assetlib
 
 			// Taken, then dropped: the keys are not this material's, and a struct still holding
 			// them would say it is drawn by a surface that its own model denies.
-			if (material.shadingModel != ShadingModel::kSurface)
+			if (material.shadingModel != ShadingModel::kPbrSurface)
 				material.surface = SurfaceParams();
 
 			// Known keys come out; what remains -- a sibling branch's field at any depth -- stays
@@ -373,7 +373,7 @@ namespace assetlib
 		switch (material.shadingModel)
 		{
 		case ShadingModel::kPbr:
-		case ShadingModel::kSurface:
+		case ShadingModel::kPbrSurface:
 			json["shadingModel"] = c_ShadingModelNames[static_cast<size_t>(material.shadingModel)];
 			break;
 		case ShadingModel::kCount:

@@ -11,12 +11,16 @@ namespace assetlib
 {
 	enum class ShadingModel : uint32_t
 	{
+		// The engine's own PBR material: factors, a baked triplet, and the channel routes behind
+		// it. Everything it holds is declared here and produced by a bake.
 		kPbr = 0,
 
-		// A shading function the game wrote, drawn through one of the renderer's reserved rows.
-		// What it declares lives in the shader rather than here, so a material sets it by name and
-		// nothing in this library can say whether a name is real.
-		kSurface = 1,
+		// The same lighting, over a material half the game computes. A surface fills `PbrSurface`
+		// in its own Slang function and the engine's PBR lobes shade it, so this is where the
+		// inputs come from rather than a second model -- and it is why there is no route, no bake
+		// and no graph behind one. A game-defined *lighting* model would be a third value, and
+		// nothing today can write one.
+		kPbrSurface = 1,
 
 		kCount,
 	};
@@ -139,8 +143,16 @@ namespace assetlib
 		return false;
 	}
 
-	/** One value a surface material sets, under the name the surface declared it as. */
-	struct SurfaceValue
+	/**
+	 * One value a surface material sets, under the name the surface declared it as.
+	 *
+	 * The binding, not the declaration: `bgl::SurfaceValue` is the field the shader declares, with
+	 * its type, its offset and its default, and only the renderer has ever read the shader. The
+	 * twin of this is `bgl::SurfaceValueBinding`, which this cannot be -- assetlib is the offline
+	 * cook and links no renderer contract, exactly as `assetlib::VertexLayout` is not
+	 * `idl::VertexLayout`.
+	 */
+	struct SurfaceValueBinding
 	{
 		std::string name;
 
@@ -151,7 +163,7 @@ namespace assetlib
 	};
 
 	/** One texture a surface material binds, under the name the surface declared it as. */
-	struct SurfaceTexture
+	struct SurfaceTextureBinding
 	{
 		std::string name;
 		std::string texture;  // path to the texture file (empty when unbound)
@@ -166,9 +178,9 @@ namespace assetlib
 	 */
 	struct SurfaceParams
 	{
-		std::string                 name;
-		std::vector<SurfaceValue>   values;
-		std::vector<SurfaceTexture> textures;
+		std::string                        name;
+		std::vector<SurfaceValueBinding>   values;
+		std::vector<SurfaceTextureBinding> textures;
 	};
 
 	struct BMaterial
@@ -183,7 +195,7 @@ namespace assetlib
 
 		PbrParams pbr;
 
-		// Read when shadingModel is kSurface, and left empty otherwise.
+		// Read when shadingModel is kPbrSurface, and left empty otherwise.
 		SurfaceParams surface;
 
 		// Document keys this build does not know, written back on save -- a sibling branch's new

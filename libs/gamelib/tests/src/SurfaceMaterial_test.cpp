@@ -104,7 +104,7 @@ struct RimSurface : ISurfaceSource
 	{
 		auto material           = assetlib::BMaterial();
 		material.name           = "rim";
-		material.shadingModel   = assetlib::ShadingModel::kSurface;
+		material.shadingModel   = assetlib::ShadingModel::kPbrSurface;
 		material.surface.name   = "Rim";
 		material.surface.values = { { "rimColor", { rimColor.r, rimColor.g, rimColor.b } },
 			                        { "rimPower", { 2.0f } } };

@@ -232,7 +232,7 @@ namespace game
 	std::vector<std::string>
 	MaterialTextures(const assetlib::BMaterial& material, const bool loose)
 	{
-		if (material.shadingModel == assetlib::ShadingModel::kSurface)
+		if (material.shadingModel == assetlib::ShadingModel::kPbrSurface)
 		{
 			auto paths = std::vector<std::string>(material.surface.textures.size());
 			for (size_t i = 0; i < paths.size(); ++i)
@@ -441,7 +441,7 @@ namespace game
 		std::string                key,
 		TexturePrefetch*           prefetch)
 	{
-		const bool surface = material.shadingModel == assetlib::ShadingModel::kSurface;
+		const bool surface = material.shadingModel == assetlib::ShadingModel::kPbrSurface;
 
 		if (material.shadingModel != assetlib::ShadingModel::kPbr && !surface)
 			throw bgl::SceneError(
@@ -1174,7 +1174,7 @@ namespace game
 		// A surface material is neither loose nor baked, so the check above lets one through --
 		// and the triplet it would write is a field no surface reads. Refused rather than ignored:
 		// the write would report success and change nothing on screen.
-		if (record.source.shadingModel == assetlib::ShadingModel::kSurface)
+		if (record.source.shadingModel == assetlib::ShadingModel::kPbrSurface)
 		{
 			throw bgl::SceneError(
 				"SetMaterialTexture expects a baked material; a surface material's textures are "
@@ -1242,7 +1242,7 @@ namespace game
 
 		// Rewritten in place, so the handle stays valid and every submesh bound to this material
 		// follows the change without being rebound.
-		if (record.source.shadingModel == assetlib::ShadingModel::kSurface)
+		if (record.source.shadingModel == assetlib::ShadingModel::kPbrSurface)
 			m_Scene->UpdateSurfaceMaterial(record.handle, SurfaceDesc(record));
 		else if (record.loose)
 			m_Scene->UpdateLoosePbrMaterial(record.handle, LooseDesc(record));
@@ -1289,7 +1289,7 @@ namespace game
 		desc.doubleSided = layer.doubleSided;
 
 		desc.values.reserve(surface.values.size());
-		for (const assetlib::SurfaceValue& value : surface.values)
+		for (const assetlib::SurfaceValueBinding& value : surface.values)
 		{
 			// Widened to four here and narrowed again by the renderer, which is the only side that
 			// knows how many components the parameter was declared with. A document that wrote

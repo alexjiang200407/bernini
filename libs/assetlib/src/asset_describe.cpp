@@ -49,7 +49,7 @@ namespace assetlib
 			{
 			case ShadingModel::kPbr:
 				return "pbr";
-			case ShadingModel::kSurface:
+			case ShadingModel::kPbrSurface:
 				return "surface";
 			case ShadingModel::kCount:
 				break;
@@ -235,7 +235,7 @@ namespace assetlib
 			out += "\n  parameters\n";
 			if (surface.values.empty())
 				out += "    (none set; every one takes the default the surface declared)\n";
-			for (const SurfaceValue& value : surface.values)
+			for (const SurfaceValueBinding& value : surface.values)
 			{
 				std::string numbers;
 				for (const float component : value.value)
@@ -246,7 +246,7 @@ namespace assetlib
 			out += "\n  textures\n";
 			if (surface.textures.empty())
 				out += "    (none bound; every slot samples the engine's default)\n";
-			for (const SurfaceTexture& texture : surface.textures)
+			for (const SurfaceTextureBinding& texture : surface.textures)
 			{
 				out += std::format("    {:<15} {}\n", texture.name, pathOr(texture.texture));
 
@@ -451,7 +451,7 @@ namespace assetlib
 			describePbr(out, material.pbr, fileSystem);
 			break;
 
-		case ShadingModel::kSurface:
+		case ShadingModel::kPbrSurface:
 			describeSurface(out, material.surface, fileSystem);
 			break;
 

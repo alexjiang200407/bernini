@@ -169,7 +169,7 @@ TEST_CASE("A surface material opens as a graphless one", "[materialeditor][surfa
 	{
 		auto material             = assetlib::BMaterial();
 		material.name             = "rim";
-		material.shadingModel     = assetlib::ShadingModel::kSurface;
+		material.shadingModel     = assetlib::ShadingModel::kPbrSurface;
 		material.surface.name     = "Rim";
 		material.surface.values   = { { "rimPower", { 2.0f } } };
 		material.surface.textures = { { "baseColor", "Derived/BakedTextures/rim.ktx2" } };
@@ -181,7 +181,7 @@ TEST_CASE("A surface material opens as a graphless one", "[materialeditor][surfa
 	const assetlib::BMaterial* material = cached.Get(sandbox.Root(), sandbox.Path());
 
 	REQUIRE(material != nullptr);
-	CHECK(material->shadingModel == assetlib::ShadingModel::kSurface);
+	CHECK(material->shadingModel == assetlib::ShadingModel::kPbrSurface);
 	CHECK(material->surface.name == "Rim");
 	CHECK(material->editorGraph.empty());
 

@@ -100,7 +100,13 @@ startup rather than ignored.
 ## The document
 
 A material drawn by a surface says so, names it, and sets what it wants by name
-([`BMaterial.h`](../libs/assetlib_structs/include/assetlib_structs/BMaterial.h)):
+([`BMaterial.h`](../libs/assetlib_structs/include/assetlib_structs/BMaterial.h)).
+
+The model is **`pbrSurface`**, not `surface`, and the name is the whole story: the lighting is the
+engine's PBR, and what a surface supplies is the material's half of it — a `PbrSurface`, which is
+the struct `Evaluate` returns. It is where the inputs come from rather than a second shading model,
+which is also why there is no route, no bake and no graph behind one. A game-defined *lighting*
+model would be a third value, and nothing in today's contract can write one.
 
 ```json
 {
@@ -111,7 +117,7 @@ A material drawn by a surface says so, names it, and sets what it wants by name
 		"rimColor": [1.0, 0.3, 0.1],
 		"rimPower": 2.0
 	},
-	"shadingModel": "surface",
+	"shadingModel": "pbrSurface",
 	"surface": "Rim",
 	"textures": {
 		"baseColor": "Derived/BakedTextures/glass_basecolor.ktx2"
