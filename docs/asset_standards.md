@@ -94,7 +94,8 @@ There are **two producers of textures**, and they compress differently:
   re-extracted over them without changing what any route means —
   `AssetStore::RefreshImportedTextures`, reached from `assetlib_cli migrate` and from the editor
   when a project with a moved source opens. **Name the images in the DCC**: one the source leaves
-  unnamed falls back to `tex<index>`, which an inserted image still shifts. See
+  unnamed falls back to `tex_<hash of the decoded source image>`, which is stable across a re-export
+  that did not touch it but says nothing about which map an artist meant. See
   [Asset Containers](asset_containers.md) § The textures a mesh import extracts.
 * **Material bake** (`bakeMaterial` in
   [libs/assetlib/src/material_bake.cpp](libs/assetlib/src/material_bake.cpp)) composites the material
