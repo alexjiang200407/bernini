@@ -320,7 +320,8 @@ to keep in agreement beyond the one below.
   shown. The box holds that state and one method pushes it, construction included.
   The floor and the ground are derived from one rotation
   (`editor::GroundForSlope`, `FloorTransformForSlope`, free of the window and pinned by
-  `[slope]`), so the floor and the ground cannot lean different ways. Both are `Scrubber`s, the hand-painted click-anywhere bar the transport's timeline already used: a `QSlider` here shows a stale groove when a tabified dock is revealed at a size it was not laid out at, so a drag lands nowhere near the cursor. It commits on **release**,
+  `[slope]`), so the floor and the ground cannot lean different ways. Both are `Scrubber`s, the hand-painted click-anywhere bar the transport's timeline used before
+  `TransitionStrip` replaced it — a different class for the same reason: a `QSlider` here shows a stale groove when a tabified dock is revealed at a size it was not laid out at, so a drag lands nowhere near the cursor. It commits on **release**,
   not on every tick of a drag:
   `SetGround` moves the scene's temporal epoch, and a drag committing each tick would hold the
   preview unaccumulated for the whole gesture. The floor is one plane geom for the window's life in
@@ -335,12 +336,53 @@ to keep in agreement beyond the one below.
   (`ISceneView::SetFootIK`, § Foot planting), in percent: a partial plant held still, so a person
   can read what the solve does to a foot by how far it is let do it. Constants and never a fade,
   because the panel's clock is the transport's clip time and wraps over the clip period, so a ramp
-  stamped in it would re-read its start on every loop. `editor::FootIKForSliders`, free of the
+  stamped in it would re-read its start on every loop. That is true of the clip domain only — a
+  transition window (below) is absolute and clamps — but these sliders hold across both, and a
+  weight that faded in one and not the other would be the harder thing to read. `editor::FootIKForSliders`, free of the
   window and pinned by `[footik]`, is what a slider commits, and the preview re-applies it to every
   instance a clip or tier switch respawns — re-placing the ground on the way, since a constant holds
   at `prevTime` too and the epoch `SetGround` moves is the one break in history the preview can ask
   for. A crowd instance and a rig without legs own no record
   (`ISceneView::HasFootIK`), and the preview leaves them alone.
+
+* **A crossfade can be watched, in the panel's *Blend* tab.** Naming a clip to fade to stamps one
+  `game::CrossfadeTo` onto the preview's record and puts the transport on a window bracketing it;
+  scrubbing then moves the clock and nothing else. That is the mechanism rather than an
+  optimisation — the ramps are stamped in absolute time, so the same scrub position is the same pose
+  every time, two durations compare against each other rather than against a memory, and the record
+  still says at `prevTime` what the previous frame drew, so the motion vector stays exact mid-drag.
+  A stamp always rebuilds from the From clip with the clock parked before the window, so it is never
+  a fade interrupting a live one.
+
+  The panel's properties column is a header over a `QTabWidget` for this: the header holds what the
+  clip set *is* and the tabs what is being done with it, with the ground, the plant switch and the
+  IK sliders staying in the header because a blended plant weight has to be judgeable on a slope
+  while the blend controls are visible. **The tab is the mode** — entering *Blend* stamps whatever
+  its controls describe and leaving it puts the clip back, which is also how a named target is
+  undone.
+
+  **A *Blend* switch is the comparison the fade has to win**, the same argument the *Plant feet*
+  switch is on: off, the two clips meet at one instant with nothing between them. That cut is one
+  sample interval and deliberately not zero — `game::CrossfadeTo` with no duration writes ramps that
+  have already completed, so every slot reads zero weight, the eviction search takes the outgoing
+  slot, and the record then shows the *destination* at every earlier clock rather than cutting to it
+  (`editor::CutSeconds`).
+
+  **The crowd source cannot hold one and the controls say so.** The shared table plays one clip per
+  instance and holds no slots, so `SetSkinnedPlayback` throws there; it still interpolates frames
+  within that clip, which is a different thing from blending between two.
+
+* **One timeline serves both tabs.** `TransitionStrip` draws two clip bars on a shared window with
+  the fade between them, and a single clip is the same widget with its second end at the far edge —
+  one bar, no overlap. Every span is read off what `CrossfadeTo` writes rather than chosen to look
+  right: the outgoing bar ends where its ramp reaches zero, the incoming one starts where its slot
+  is given `tRef`, and the overlap *is* the duration. A picture that disagreed with the record would
+  be worse than none. Hand-painted for `Scrubber`'s reason, and its geometry is a free function
+  (`editor::SpansForTransition`) the tests drive.
+
+  One overlap is the whole rig crossing at once, which is what a fade is while a slot's weight
+  applies to every bone. A bone mask would end that and the strip would want a row per masked group;
+  `editor::DominantNode` has the same dependency, and both say so at the line.
 
 * **The Content Explorer creates an avatar from the source.** *Create Avatar* is offered on an
   imported `.glb` whose document binds a rig (`editor::GetSourceSkeleton`), because the source is

@@ -210,6 +210,10 @@ AnimationEditorWindow::BuildPropertiesColumn()
 	connect(m_TierSelector, &QComboBox::activated, this, [this](int index) {
 		if (m_SyncingUi || index < 0)
 			return;
+		// The fade goes first. A tier switch respawns onto whatever the record was mostly showing,
+		// and leaving a transition puts the clip list's own selection back -- so clearing after the
+		// switch respawns twice for one click, onto two different clips.
+		ClearTransition();
 		m_Preview->SetPoseSource(TierSourceAt(index), m_Transport.GetTimeSeconds());
 	});
 	layout->addWidget(m_TierSelector);
