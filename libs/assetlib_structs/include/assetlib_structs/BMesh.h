@@ -45,6 +45,9 @@ namespace assetlib
 		 * That rig's bone names, in bone order -- what lets a rig that has grown a bone since be
 		 * matched to these joint indices by name rather than refused. Empty in a file written
 		 * before the list existed, and for a static mesh, which addresses no bone.
+		 *
+		 * Beside `joints0` and never instead of it: the vertex blob is what the GPU skins from, so
+		 * a name is resolved at load and the indices in it are remapped, never replaced.
 		 */
 		std::vector<std::string> skeletonBoneNames;
 
