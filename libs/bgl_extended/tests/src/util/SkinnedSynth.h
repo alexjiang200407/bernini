@@ -39,11 +39,18 @@ namespace bgl::test::skinned_synth
 	 * - `c_ClampClip`, frames [origin, +step]. A one-shot ends where it ends, so nothing is
 	 *   duplicated.
 	 *
-	 * Adds the rig and registers the quad against it, drawn with `material`, which must be opaque
-	 * PBR -- what AddSkinnedMeshGeom demands. The rig is the scene's for as long as the geom is; a
-	 * caller that never deletes the geom never has to name it, which is why only the geom comes
-	 * back.
+	 * Adds the rig and registers the quad against it, drawn with `material`, which must be one
+	 * AddSkinnedMeshGeom takes: a baked PBR material or a game surface's. The rig is the scene's for
+	 * as long as the geom is; a caller that never deletes the geom never has to name it, which is
+	 * why only the geom comes back.
 	 */
 	[[nodiscard]] GeomHandle
 	AddSlidingQuadGeom(IScene& scene, MaterialHandle material);
+
+	/**
+	 * The same quad as static geometry, at the offset its bind pose puts it -- frame 0 of either
+	 * clip slides by nothing. For a test comparing what the two tiers draw from one mesh.
+	 */
+	[[nodiscard]] GeomHandle
+	AddQuadStaticGeom(IScene& scene, MaterialHandle material);
 }

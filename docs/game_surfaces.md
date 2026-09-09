@@ -103,6 +103,18 @@ Registration is in filename order, so which surface takes which reserved slot is
 decision and not a document's. There are **four slots**; a fifth surface is refused by name at
 startup rather than ignored.
 
+## What it draws on
+
+Static and skinned geometry both, at every layer but hashed. A slot holds five pipeline rows: an
+opaque and an alpha-test row per tier, and one blended row the two tiers share, because the blended
+pipeline's geometry stage is `AnyMesh` and branches tier per instance. The tiers differ in nothing
+else — a slot's pixel shader reads a `ForwardVSOut` and a material offset, and neither says which
+geometry stage filled them, so a surface is written once and a rig costs it nothing.
+
+What the reader gives is the same on both: the interpolants, the camera and the material's own
+fields. A surface cannot see the pose, the palette or the bone it was skinned by; by the time it
+runs, a skinned vertex is a world-space position like any other.
+
 ## The document
 
 A material drawn by a surface says so, names it, and sets what it wants by name
@@ -164,10 +176,8 @@ cooked — so a name is checked at the one place a surface is in hand, which is
 
 Deliberate, and each is a decision rather than an omission:
 
-* **Static meshes only.** There are no skinned game rows; `AddSkinnedMeshGeom` refuses a game
-  material.
-* **Opaque, cutout and blend.** Hashed alpha needs the texel counts of the texture behind a
-  coverage, and a surface answers coverage with arithmetic there is nothing to measure.
+* **No hashed alpha.** Hashed alpha needs the texel counts of the texture behind a coverage, and a
+  surface answers coverage with arithmetic there is nothing to measure.
 * **No bake.** A slot names a `.ktx2` the project already holds. Slot kinds are reflected and
   reported through `IGraphics::GetSurfaceTypes()`, but they drive no format or colour-space rule
   yet.

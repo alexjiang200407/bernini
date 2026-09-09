@@ -134,14 +134,23 @@ namespace bgl
 	}
 
 	idl::PsoType
-	GameSlotRow(uint32_t slot, LayerType layer)
+	GameSlotRow(uint32_t slot, GeomType geom, LayerType layer)
 	{
 		gassert(slot < cGameSlots, "A reserved game slot is below cGameSlots");
 		if (layer == LayerType::kHashed)
 			gfatal("A game surface has no hashed row");
-		const uint32_t offset = layer == LayerType::kBlend ? 2u :
-		                        layer == LayerType::kMask  ? 1u :
-		                                                     0u;
+		if (geom != GeomType::kStaticMesh && geom != GeomType::kSkinnedMesh)
+			gfatal("A game surface draws on static and skinned geometry only");
+
+		const uint32_t offset = [&] {
+			if (layer == LayerType::kBlend)
+				return idl::cGameSlotBlendRow;
+
+			const uint32_t tier   = geom == GeomType::kSkinnedMesh ? 2u : 0u;
+			const uint32_t cutout = layer == LayerType::kMask ? 1u : 0u;
+			return tier + cutout;
+		}();
+
 		return static_cast<idl::PsoType>(
 			static_cast<uint32_t>(idl::PsoType::kGameRowsStart) + slot * idl::cGameSlotRows +
 			offset);
@@ -158,7 +167,7 @@ namespace bgl
 		{
 		case GeomType::kStaticMesh:
 			if (const auto slot = GameSlot(material))
-				return GameSlotRow(*slot, layer);
+				return GameSlotRow(*slot, geom, layer);
 
 			switch (material)
 			{
@@ -190,12 +199,15 @@ namespace bgl
 				gfatal("Invalid MaterialType");
 			}
 
-		// The material is constrained to kPBR at every door that binds one to skinned geometry
-		// (AddSkinnedMeshGeom, SetSubmeshMaterial, SetSubmeshMaterialOverride), so any other type
-		// reaching here is bgl's own bug.
+		// The material is constrained to kPBR and the game slots at every door that binds one to
+		// skinned geometry (AddSkinnedMeshGeom, SetSubmeshMaterial, SetSubmeshMaterialOverride), so
+		// any other type reaching here is bgl's own bug.
 		case GeomType::kSkinnedMesh:
+			if (const auto slot = GameSlot(material))
+				return GameSlotRow(*slot, geom, layer);
+
 			if (material != MaterialType::kPBR)
-				gfatal("Skinned geometry is only drawable with a kPBR material");
+				gfatal("Skinned geometry is only drawable with a kPBR or a game surface material");
 			if (blend)
 				return idl::PsoType::kTransparent_SkinnedMesh_PBR;
 			if (cutout)
@@ -217,7 +229,8 @@ namespace bgl
 		if (geomType == GeomType::kStaticMesh)
 			return true;
 
-		return material.IsValid() && material.materialType == MaterialType::kPBR;
+		return material.IsValid() && (material.materialType == MaterialType::kPBR ||
+		                              GameSlot(material.materialType).has_value());
 	}
 
 	bool
@@ -225,7 +238,7 @@ namespace bgl
 	{
 		if (const auto start = static_cast<uint32_t>(idl::PsoType::kGameRowsStart);
 		    pso >= start && pso < idl::c_PsoCount)
-			return (pso - start) % idl::cGameSlotRows == 2u;
+			return (pso - start) % idl::cGameSlotRows == idl::cGameSlotBlendRow;
 
 		return pso == static_cast<uint32_t>(idl::PsoType::kTransparent_StaticMesh_PBR) ||
 		       pso == static_cast<uint32_t>(idl::PsoType::kTransparent_StaticMesh_LoosePbr) ||
