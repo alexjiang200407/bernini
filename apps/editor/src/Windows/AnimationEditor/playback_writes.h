@@ -26,4 +26,20 @@ namespace editor
 	 */
 	[[nodiscard]] uint32_t
 	DominantNode(const bgl::SkinnedPlaybackDesc& desc, float nowSeconds) noexcept;
+
+	/**
+	 * The shortest fade that is still a fade, for a clip sampled at `sampleRate` -- what stands in
+	 * for a cut when blending is switched off.
+	 *
+	 * Deliberately not zero. A fade of no duration does not cut: every ramp it writes has already
+	 * completed at the moment it is written, so every slot reads zero weight there, the eviction
+	 * search overwrites the outgoing slot, and the record then shows the *destination* at every
+	 * earlier clock -- the whole window, rather than the half after the cut. One sample interval is
+	 * the shortest window that still leaves the outgoing clip in the record saying what it played.
+	 *
+	 * A non-positive or non-finite rate falls back to a sixtieth, since a cut has to be drawable
+	 * whatever the clip claims.
+	 */
+	[[nodiscard]] float
+	CutSeconds(float sampleRate) noexcept;
 }

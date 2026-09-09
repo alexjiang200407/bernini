@@ -328,6 +328,9 @@ AnimationEditorWindow::BuildPropertiesColumn()
 	ends->setContentsMargins(0, 0, 0, 0);
 	m_FromClip = new QComboBox(m_TransitionGroup);
 	m_ToClip   = new QComboBox(m_TransitionGroup);
+	// Nothing to fade to until somebody says so: the panel's resting state is one clip playing, and
+	// a second end filled in by default would offer a transition nobody asked for.
+	m_ToClip->setPlaceholderText(QStringLiteral("fade to..."));
 	ends->addWidget(m_FromClip, /*stretch*/ 1);
 	ends->addWidget(new QLabel(QStringLiteral("→"), m_TransitionGroup));
 	ends->addWidget(m_ToClip, /*stretch*/ 1);
@@ -348,6 +351,13 @@ AnimationEditorWindow::BuildPropertiesColumn()
 	// comparison is being made at.
 	m_FadeSeconds->setKeyboardTracking(false);
 	timing->addWidget(m_FadeSeconds, /*stretch*/ 1);
+
+	// The comparison the fade has to win. Off, the same two clips meet at the same instant with no
+	// blend between them, so what the fade is worth is the difference between two ticks of one box
+	// rather than a memory of the last time the panel was open -- the argument Plant feet is on.
+	m_BlendEnabled = new QCheckBox(QStringLiteral("Blend"), m_TransitionGroup);
+	m_BlendEnabled->setChecked(true);
+	timing->addWidget(m_BlendEnabled);
 	fade->addLayout(timing);
 
 	// The way in. The combos and the duration re-stamp only once a fade is live, so nothing enters
@@ -380,6 +390,10 @@ AnimationEditorWindow::BuildPropertiesColumn()
 	connect(m_FromClip, &QComboBox::activated, this, [endChanged](int) { endChanged(); });
 	connect(m_ToClip, &QComboBox::activated, this, [endChanged](int) { endChanged(); });
 	connect(m_FadeSeconds, &QDoubleSpinBox::valueChanged, this, [restamp](double) { restamp(); });
+	connect(m_BlendEnabled, &QCheckBox::toggled, this, [this, restamp](bool) {
+		UpdateTransitionControls();
+		restamp();
+	});
 
 	// Scrubbing moves the clock and nothing else, which is the whole mechanism: the fade is already
 	// in the record, so time is all that has to change to play it.
@@ -654,11 +668,16 @@ AnimationEditorWindow::StampTransition()
 
 	// t0 is arbitrary and only has to be somewhere the clock can sit before it, since every ramp is
 	// stamped in absolute time and read by moving the clock across them.
-	const auto layout = editor::WindowFor(
-		c_TransitionStart,
-		static_cast<float>(m_FadeSeconds->value()),
-		c_TransitionLead,
-		c_TransitionTail);
+	// Unblended, the two clips still meet -- they just meet over one sample interval instead of the
+	// authored window, which is a cut. Not a duration of zero: that evicts the outgoing clip from
+	// the record and shows the destination across the whole window (editor::CutSeconds).
+	const float fadeSeconds =
+		m_BlendEnabled->isChecked() ?
+			static_cast<float>(m_FadeSeconds->value()) :
+			editor::CutSeconds(m_Transport.GetClips().at(static_cast<unsigned>(from)).sampleRate);
+
+	const auto layout =
+		editor::WindowFor(c_TransitionStart, fadeSeconds, c_TransitionLead, c_TransitionTail);
 
 	// The clock is parked outside the window *before* the record is written, and the order is the
 	// point: SetTime is queued to the render thread while the write below blocks on it, so writing
@@ -701,9 +720,13 @@ AnimationEditorWindow::UpdateTransitionControls()
 
 	m_FromClip->setEnabled(usable);
 	m_ToClip->setEnabled(usable);
-	m_FadeSeconds->setEnabled(usable);
-	// A fade wants two ends, so a set of one clip has nothing to preview.
-	m_PreviewFade->setEnabled(usable && m_FromClip->currentIndex() != m_ToClip->currentIndex());
+	// Nothing to set while the fade is a cut.
+	m_FadeSeconds->setEnabled(usable && m_BlendEnabled->isChecked());
+	m_BlendEnabled->setEnabled(usable);
+	// A fade wants two ends and they have to differ, so an unset To or a set of one clip has
+	// nothing to preview.
+	const int to = m_ToClip->currentIndex();
+	m_PreviewFade->setEnabled(usable && to >= 0 && to != m_FromClip->currentIndex());
 
 	// The strip is live only while a fade is stamped. Left enabled with nothing behind it, a drag
 	// would feed the window's absolute seconds to a transport back in clip time, which reads them
@@ -730,7 +753,7 @@ AnimationEditorWindow::UpdateTransitionControls()
 	else if (!live)
 	{
 		m_TransitionNote->setText(
-			QStringLiteral("Pick two clips and press Preview fade, then scrub the strip."));
+			QStringLiteral("Playing one clip. Choose what to fade to, then press Preview fade."));
 	}
 	else
 		m_TransitionNote->clear();
@@ -803,9 +826,10 @@ AnimationEditorWindow::SetClips(const std::vector<editor::ClipInfo>& clips)
 	{
 		m_ClipList->setCurrentRow(0);
 		m_FromClip->setCurrentIndex(0);
-		// A fade wants two ends, so the second clip is offered when the set has one.
-		m_ToClip->setCurrentIndex(clips.size() > 1 ? 1 : 0);
 	}
+	// -1 after the fill, which is what the placeholder shows: a clip set arrives with one clip
+	// playing and no transition pending.
+	m_ToClip->setCurrentIndex(-1);
 	m_SyncingUi = false;
 
 	const bool playable = !clips.empty();

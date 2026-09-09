@@ -1,6 +1,7 @@
 #include "Windows/AnimationEditor/playback_writes.h"
 
 #include <bgl/InstanceDesc.h>
+#include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
 #include <gamelib/anim_blend.h>
 
@@ -99,4 +100,26 @@ TEST_CASE("A tie keeps the lower slot", "[animation]")
 	desc.slot[1].weight1   = 0.5f;
 
 	CHECK(DominantNode(desc, c_Now) == 4);
+}
+
+TEST_CASE("A cut is one sample interval, and never zero", "[animation]")
+{
+	CHECK(editor::CutSeconds(30.0f) == Catch::Approx(1.0f / 30.0f));
+	CHECK(editor::CutSeconds(60.0f) == Catch::Approx(1.0f / 60.0f));
+
+	// Zero would not cut at all. CrossfadeTo's ramps have already completed at the clock they are
+	// written at, so every slot reads zero weight there, the eviction search takes the outgoing
+	// slot, and the record shows the destination at every earlier clock -- the whole window rather
+	// than the half after the cut. The case below is that behaviour, stated from the other side.
+	const auto before  = bgl::SkinnedPlaybackDesc::FromClip(1);
+	const auto instant = game::CrossfadeTo(before, 2, c_Now, 0.0f);
+	CHECK(DominantNode(instant, c_Now - 1.0f) == 2);
+
+	const auto cut = game::CrossfadeTo(before, 2, c_Now, editor::CutSeconds(30.0f));
+	CHECK(DominantNode(cut, c_Now - 1.0f) == 1);  // the outgoing clip still plays up to the cut
+	CHECK(DominantNode(cut, c_Now + 1.0f) == 2);  // and the incoming one after it
+
+	// A rate a clip could not really have still yields something drawable.
+	CHECK(editor::CutSeconds(0.0f) > 0.0f);
+	CHECK(editor::CutSeconds(-5.0f) > 0.0f);
 }
