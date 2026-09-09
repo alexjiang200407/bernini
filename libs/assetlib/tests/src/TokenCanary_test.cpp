@@ -329,15 +329,15 @@ TEST_CASE("a writer's output cannot change without its bake token", "[canary][io
 		};
 		CheckCanary(
 			c_TextureBakeToken,
-			Pin{ .token = 0x9d2c7e41b06f358aull, .hash = 0x1e421995f2192fa1ull },
+			Pin{ .token = 0x4f1a83c05e7b29d6ull, .hash = 0x1e421995f2192fa1ull },
 			bytes(rgba8ToImage(CanaryPixels(), 16, 16, std::nullopt, /*srgb*/ true)));
 		CheckCanary(
 			c_TextureBakeToken,
-			Pin{ .token = 0x9d2c7e41b06f358aull, .hash = 0x0a2c7e2ccb9e07e3ull },
+			Pin{ .token = 0x4f1a83c05e7b29d6ull, .hash = 0x0a2c7e2ccb9e07e3ull },
 			bytes(rgba8ToImage(CanaryPixels(), 16, 16)));
 		CheckCanary(
 			c_TextureBakeToken,
-			Pin{ .token = 0x9d2c7e41b06f358aull, .hash = 0x2032a96f19d50a48ull },
+			Pin{ .token = 0x4f1a83c05e7b29d6ull, .hash = 0x2032a96f19d50a48ull },
 			bytes(rgba8ToImage(CanaryPixels(), 16, 16, 0.5f, /*srgb*/ true)));
 	}
 }

@@ -140,6 +140,14 @@ holds, and an inserted one takes a new name rather than displacing its neighbour
 source names nothing is named `tex_<content hash>` instead -- there is no name to keep stable, and
 the position it used to be numbered by is exactly what an insertion moves.
 
+That hash covers the **decoded source image and nothing else**: mip 0, which `rgba8ToImage` copies
+in verbatim, plus its dimensions. Not the chain below it and not the format tag, because those are
+what this engine made of the image rather than the image, and a name that read them moved every
+time mip generation or colour handling changed. It did: tagging base colours sRGB flipped both at
+once and renamed every unnamed one, leaving the authored routes naming files nothing writes -- and
+the byte-for-byte follow below cannot repair that, because the bytes it matches on are the ones
+that moved.
+
 A file the extract no longer produces is reported and left alone -- a material may still draw it,
 and both re-routing and deleting it are the user's. The one exception is a file that holds the same
 bytes as **exactly one** file the extract wrote: that is the same image under a different name, so
@@ -149,19 +157,22 @@ rule exists to prevent.
 
 `textureStamp` answers whether the *source* moved, and `textureBakeToken` whether the *bake* did:
 `c_TextureBakeToken` ([image_io.h](libs/assetlib/include/assetlib/image_io.h)) is the revision of
-the mip chain every 8-bit bake writes, recorded in the document when the folder is, and a folder
+the mip chain every 8-bit bake writes *and of the names the extract gives the files*, recorded in
+the document when the folder is, and a folder
 written under another revision is stale whatever the stamp says. A document from before the key
 reads as revision zero, which no revision equals, so such a folder is stale exactly once. It moves
-under the same rule as a codec's token -- any change to the bytes, to a fresh random value -- and
-`TokenCanary_test` pins the chain beside it. A baked triplet carries the same revision in its
+under the same rule as a codec's token -- any change to the bytes or to the naming rule, to a fresh
+random value -- and `TokenCanary_test` pins the chain beside it. A baked triplet carries the same revision in its
 `.bmaterial` (`baked.token`), compared by `BakeIsStale` and mixed into the map's content-addressed
 name, so a re-bake under a new revision writes a new file rather than finding the old one already
 there.
 
-Neither answers whether the naming rule did, so a folder still holding a `tex<N>.ktx2` -- the name
-an unnamed image had before it was named after its content -- is stale on that alone. That is what
-made the change reach a project at all, and it is a migration: once no folder holds one, the check
-has nothing left to find.
+The token carries the naming rule because on disk the two staleness are one: a folder whose files
+carry the wrong names is as stale as one whose bytes are wrong, and nothing else can see it. The
+positional names before it were the exception -- `tex<N>.ktx2` is a shape a filename sniff can find,
+so a folder still holding one is stale on that alone, a migration that runs itself out once no
+folder holds one. Every rule since has produced `tex_<16 hex>`, which is indistinguishable from the
+rule that replaced it, so a naming change is carried by the token or by nothing.
 
 ## Which of these a project commits
 

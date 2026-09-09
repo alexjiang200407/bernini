@@ -8,17 +8,24 @@
 #include <cstddef>
 #include <cstdint>
 #include <filesystem>
+#include <optional>
 #include <set>
 #include <string>
 #include <string_view>
 #include <utility>
 #include <vector>
 
+#include "bmesh_texture.h"
+
 using namespace assetlib;
 using namespace assetlib::imp;
 
 namespace
 {
+	// Wide enough for rgba8ToImage to build a chain worth several levels, which is what the cases
+	// below have to prove the name ignores.
+	constexpr uint32_t c_CanarySide = 16;
+
 	// An import carrying one texture per name. `marks` stands in for the images' content, which an
 	// unnamed one is named after: parallel to `names`, and defaulted to the position where a test
 	// does not care. A named image ignores it.
@@ -143,6 +150,49 @@ TEST_CASE("Two images resolving to one name get different files", "[import][text
 	}
 
 	CHECK(names[0] == "albedo.ktx2");
+}
+
+TEST_CASE("An unnamed image is named after the source, not the encoding", "[import][textures]")
+{
+	// The regression #676 left: it tagged base colours sRGB, which moved both the format tag and
+	// the mip filter, and the name was hashed over both. Every unnamed base colour was renamed, so
+	// every authored route went on naming a file nothing writes -- and followMovedTextures cannot
+	// follow that, because the bytes it matches an orphan on are the ones that moved.
+	//
+	// So the name may read mip 0 and the dimensions, which are the decoded image, and nothing this
+	// engine decided about it. All three chains rgba8ToImage writes must land on the one name.
+	auto pixels = std::vector<std::byte>(c_CanarySide * c_CanarySide * 4);
+	for (size_t i = 0; i < pixels.size(); ++i) pixels[i] = static_cast<std::byte>(i * 7 + (i >> 3));
+
+	const auto named = [&pixels](std::optional<float> alphaCutoff, bool srgb) {
+		auto mesh = BMeshImport();
+		mesh.textures.push_back(
+			rgba8ToImage(pixels, c_CanarySide, c_CanarySide, alphaCutoff, srgb));
+		mesh.textureNames = { "" };
+		return importedTextureFileNames(mesh).front();
+	};
+
+	const std::string linear = named(std::nullopt, false);
+	CHECK(IsUnnamedStem(linear));
+	CHECK(named(std::nullopt, true) == linear);
+	CHECK(named(0.5f, true) == linear);
+}
+
+TEST_CASE("Two unnamed images of different pictures still differ", "[import][textures]")
+{
+	// The counterweight to the case above: dropping the chain and the tag from the hash must not
+	// leave it blind to the picture, which would collide two images onto one file.
+	const auto named = [](std::byte fill) {
+		auto mesh = BMeshImport();
+		mesh.textures.push_back(rgba8ToImage(
+			std::vector<std::byte>(c_CanarySide * c_CanarySide * 4, fill),
+			c_CanarySide,
+			c_CanarySide));
+		mesh.textureNames = { "" };
+		return importedTextureFileNames(mesh).front();
+	};
+
+	CHECK(named(std::byte{ 0x10 }) != named(std::byte{ 0x20 }));
 }
 
 TEST_CASE("The names come off the glTF's own images", "[import][textures][gltf]")

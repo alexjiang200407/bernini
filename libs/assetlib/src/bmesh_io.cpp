@@ -335,15 +335,26 @@ namespace assetlib
 		 * (`tex0`, `tex1`) is what this replaces -- inserting an image renumbered every later one, so
 		 * a material's route silently resolved to a different picture. An unnamed image has no
 		 * identity to keep stable, so naming it after its bytes costs nothing a name would have held.
+		 *
+		 * Mip 0 alone, and no format tag: that is the decoded source image verbatim, while the chain
+		 * below it and the tag are what this engine made of it. Hashing either would rename every
+		 * file whenever mip generation or colour handling changed -- leaving every authored route
+		 * naming a file that no longer exists, which `followMovedTextures` cannot repair because the
+		 * bytes it matches on are the ones that moved.
 		 */
 		std::string
 		unnamedTextureStem(const ImageData& image)
 		{
-			uint64_t hash =
-				core::hash_bytes(image.pixels.data(), image.pixels.size(), core::hash_seed());
+			const size_t mip0 = image.subresources.empty() ?
+			                        image.pixels.size() :
+			                        static_cast<size_t>(image.subresources.front().slicePitch);
+
+			uint64_t hash = core::hash_bytes(
+				image.pixels.data(),
+				(std::min)(mip0, image.pixels.size()),
+				core::hash_seed());
 			hash = core::hash_pod(image.width, hash);
 			hash = core::hash_pod(image.height, hash);
-			hash = core::hash_pod(image.vkFormat, hash);
 			return std::format("tex_{:016x}", hash);
 		}
 	}
