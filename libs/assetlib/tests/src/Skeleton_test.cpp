@@ -62,6 +62,7 @@ namespace
 
 		mesh.skeleton          = "Derived/Skeletons/chain.bskel";
 		mesh.skeletonSignature = skeletonSignature(skeleton);
+		mesh.skeletonBoneNames = skeletonBoneNames(skeleton);
 		return mesh;
 	}
 
@@ -72,6 +73,7 @@ namespace
 		AnimationSet animations;
 		animations.boneCount         = static_cast<uint32_t>(skeleton.bones.size());
 		animations.skeletonSignature = skeletonSignature(skeleton);
+		animations.skeletonBoneNames = skeletonBoneNames(skeleton);
 		animations.skeleton          = "Derived/Animations/walk.bskel";
 
 		AnimationClip clip{};
@@ -172,6 +174,16 @@ TEST_CASE("A skeleton's signature covers its bones' names and parents", "[skelet
 	}
 }
 
+TEST_CASE("skeletonBoneNames answers in bone order", "[skeleton]")
+{
+	const auto skeleton = MakeChain();
+	const auto names    = skeletonBoneNames(skeleton);
+
+	REQUIRE(names.size() == skeleton.bones.size());
+	for (size_t i = 0; i < names.size(); ++i)
+		CHECK(names[i] == skeleton.stringPool.at(skeleton.bones[i].nameOffset));
+}
+
 TEST_CASE("A clip set survives a container round-trip", "[animation][io]")
 {
 	const auto skeleton   = MakeChain();
@@ -182,6 +194,7 @@ TEST_CASE("A clip set survives a container round-trip", "[animation][io]")
 	CHECK(restored.skeleton == animations.skeleton);
 	CHECK(restored.skeletonSignature == animations.skeletonSignature);
 	CHECK(restored.boneCount == animations.boneCount);
+	CHECK(restored.skeletonBoneNames == animations.skeletonBoneNames);
 	CHECK(restored.stringPool == animations.stringPool);
 	REQUIRE(restored.clips.size() == 1);
 	REQUIRE(restored.samples.size() == animations.samples.size());

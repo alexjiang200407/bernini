@@ -279,6 +279,7 @@ namespace assetlib
 		{
 			current.mesh.skeleton          = group.document->skeleton;
 			current.mesh.skeletonSignature = skeletonSignature(group.import.skeleton);
+			current.mesh.skeletonBoneNames = skeletonBoneNames(group.import.skeleton);
 			core::throw_runtime_error_if(
 				current.mesh.skeleton.empty(),
 				"'{}': its source carries a rig but the import document beside it names no "

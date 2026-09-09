@@ -69,7 +69,8 @@ namespace assetlib
 		       vectorBytes(mesh.submeshes) + vectorBytes(mesh.meshlets) +
 		       vectorBytes(mesh.meshletVertices) + vectorBytes(mesh.meshletTriangles) +
 		       vectorBytes(mesh.vertexData) + vectorBytes(mesh.indexData) +
-		       vectorBytes(mesh.stringPool.bytes()) + stringVectorBytes(mesh.materials);
+		       vectorBytes(mesh.stringPool.bytes()) + stringVectorBytes(mesh.materials) +
+		       stringVectorBytes(mesh.skeletonBoneNames);
 	}
 
 	uint64_t
@@ -84,6 +85,7 @@ namespace assetlib
 		// samples is nearly all of it: boneCount * frameCount Transforms, 59.7 MB on the reference
 		// rig (docs/skinning.md). The rest is named for the same reason as the meshes' above.
 		return vectorBytes(animations.clips) + vectorBytes(animations.samples) +
-		       vectorBytes(animations.posedBoxes) + vectorBytes(animations.stringPool.bytes());
+		       vectorBytes(animations.posedBoxes) + vectorBytes(animations.stringPool.bytes()) +
+		       stringVectorBytes(animations.skeletonBoneNames);
 	}
 }

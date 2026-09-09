@@ -113,6 +113,17 @@ namespace assetlib
 		uint64_t    skeletonSignature = 0;
 		uint32_t    boneCount         = 0;
 
+		/**
+		 * The cooked rig's bone names, in bone order -- what lets a rig that has grown a bone since
+		 * be matched to these samples by name rather than refused. Empty in a file written before
+		 * the list existed, which is a pairing that can only be checked by signature.
+		 *
+		 * Beside the bone indices and never instead of them: `samples` is addressed arithmetically,
+		 * as is the GPU's bone table, so nothing on a walk can resolve a name. One is resolved at
+		 * load into an old -> new index map, and the indices are remapped rather than replaced.
+		 */
+		std::vector<std::string> skeletonBoneNames;
+
 		std::vector<AnimationClip> clips;
 		std::vector<Transform>     samples;
 		core::string_pool          stringPool;

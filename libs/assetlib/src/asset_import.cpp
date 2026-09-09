@@ -455,6 +455,7 @@ namespace assetlib
 			mesh.skeleton = KeyFor(existing);
 		}
 		mesh.skeletonSignature = skeletonSignature(skeleton);
+		mesh.skeletonBoneNames = skeletonBoneNames(skeleton);
 
 		if (!writeClips || animations.clips.empty())
 			return outputs;
