@@ -34,11 +34,12 @@ namespace assetlib
 			kClips = 1,
 			kSamples,
 			kStringPool,
-			kSkeletonRef,      // the signature and bone count the clips were cooked against
-			kSkeletonPath,     // the .bskel path
-			kPosedBoxes,       // PosedBox entries: the posed culling boxes this file carries
-			kPlantWeightsRef,  // what the plant weights were measured against
-			kPlantWeights      // one byte per leg per frame, frame-major over the sample pool
+			kSkeletonRef,       // the signature and bone count the clips were cooked against
+			kSkeletonPath,      // the .bskel path
+			kPosedBoxes,        // PosedBox entries: the posed culling boxes this file carries
+			kPlantWeightsRef,   // what the plant weights were measured against
+			kPlantWeights,      // one byte per leg per frame, frame-major over the sample pool
+			kSkeletonBoneNames  // the cooked rig's bone names, in bone order
 		};
 
 		/** PlantWeights without its bytes; the bytes are a chunk of their own. */
@@ -120,6 +121,7 @@ namespace assetlib
 		writer.Add(ChunkId::kStringPool, animations.stringPool.bytes());
 		writer.Add(ChunkId::kSkeletonRef, packSkeletonRef(animations));
 		writer.Add(ChunkId::kSkeletonPath, std::span<const char>(animations.skeleton));
+		writer.Add(ChunkId::kSkeletonBoneNames, cache::packStrings(animations.skeletonBoneNames));
 		if (!animations.posedBoxes.empty())
 			writer.Add(ChunkId::kPosedBoxes, animations.posedBoxes);
 
@@ -164,6 +166,8 @@ namespace assetlib
 			animations,
 			reader.Read<SkeletonRef>(ChunkId::kSkeletonRef),
 			reader.Read<char>(ChunkId::kSkeletonPath));
+		animations.skeletonBoneNames =
+			cache::unpackStrings(reader.Read<char>(ChunkId::kSkeletonBoneNames));
 
 		validateAnimationSet(animations);
 		return animations;

@@ -41,6 +41,13 @@ namespace assetlib
 		/** The rig the joint indices were cooked against -- see assetlib::skeletonSignature. */
 		uint64_t skeletonSignature = 0;
 
+		/**
+		 * That rig's bone names, in bone order -- what lets a rig that has grown a bone since be
+		 * matched to these joint indices by name rather than refused. Empty in a file written
+		 * before the list existed, and for a static mesh, which addresses no bone.
+		 */
+		std::vector<std::string> skeletonBoneNames;
+
 		SourceRef source;  // the copied .glb this was derived from; empty key when never recorded
 	};
 }

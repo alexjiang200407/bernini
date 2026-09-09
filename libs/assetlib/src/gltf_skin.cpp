@@ -393,6 +393,7 @@ namespace assetlib
 
 		out.boneCount         = boneCount;
 		out.skeletonSignature = skeletonSignature(skin.skeleton);
+		out.skeletonBoneNames = skeletonBoneNames(skin.skeleton);
 
 		const auto authoredPoses = readNodeTransforms(model);
 

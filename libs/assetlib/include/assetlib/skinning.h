@@ -48,6 +48,17 @@ namespace assetlib
 	skeletonSignature(const Skeleton& skeleton) noexcept;
 
 	/**
+	 * Every bone's name, in bone order -- what a derived container stores beside the signature so a
+	 * rig that has changed since can be matched to it by name.
+	 *
+	 * The signature is a hash and answers only "the same or not"; this answers "which bone", which
+	 * is what an append needs. Stored rather than read back off the `.bskel`, because the edit that
+	 * makes the question worth asking is the one that already rewrote the `.bskel`.
+	 */
+	[[nodiscard]] std::vector<std::string>
+	skeletonBoneNames(const Skeleton& skeleton);
+
+	/**
 	 * @throws std::runtime_error if the bones are not topologically sorted (a parent at or after its
 	 *         child), a parent index is out of range, or a name offset is past the string pool.
 	 */
