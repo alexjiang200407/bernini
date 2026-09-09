@@ -21,6 +21,7 @@ class QDragEnterEvent;
 class QDragMoveEvent;
 class QDropEvent;
 class QStackedWidget;
+class QTabWidget;
 class QCheckBox;
 class QComboBox;
 class QDoubleSpinBox;
@@ -141,6 +142,14 @@ private:
 	[[nodiscard]] QWidget*
 	BuildPropertiesColumn();
 
+	// The two surfaces over the shared header: one clip watched, or two blended. Foot IK is the
+	// third the spec calls for and is not built here.
+	[[nodiscard]] QWidget*
+	BuildClipTab();
+
+	[[nodiscard]] QWidget*
+	BuildBlendTab();
+
 	[[nodiscard]] QWidget*
 	BuildTransportBar();
 
@@ -214,6 +223,7 @@ private:
 	Scrubber* m_SoleTurnSlider = nullptr;
 	QLabel*   m_SoleTurnLabel  = nullptr;
 
+	QTabWidget*  m_Surfaces     = nullptr;
 	QListWidget* m_ClipList     = nullptr;
 	QLabel*      m_ClipMetadata = nullptr;
 

@@ -28,6 +28,7 @@
 #include <QSplitter>
 #include <QStackedWidget>
 #include <QStyle>
+#include <QTabWidget>
 #include <QTimer>
 #include <QToolButton>
 #include <QVBoxLayout>
@@ -303,26 +304,56 @@ AnimationEditorWindow::BuildPropertiesColumn()
 	connect(m_PlantFeet, &QCheckBox::toggled, this, [this] { UpdateGroundControls(); });
 	layout->addWidget(m_PlantFeet);
 
+	// What is being done with the clip set, rather than what it is: one clip watched, or two
+	// blended. Everything above stays shared -- the ground and the plant switch especially, since a
+	// blended plant weight has to be judged on a slope while the blend controls are visible.
 	layout->addSpacing(8);
-	layout->addWidget(new QLabel(QStringLiteral("Clips"), column));
+	m_Surfaces = new QTabWidget(column);
+	m_Surfaces->addTab(BuildClipTab(), QStringLiteral("Clip"));
+	m_Surfaces->addTab(BuildBlendTab(), QStringLiteral("Blend"));
+	layout->addWidget(m_Surfaces, /*stretch*/ 1);
 
-	m_ClipList = new QListWidget(column);
+	// The box is the state; this is what puts the preview on it. Reaches the preview before it is
+	// on screen, where a rebind is recorded and applied when it is shown.
+	UpdateGroundControls();
+
+	// The column scrolls rather than asking the window for its height: every control adds to a
+	// minimum that would otherwise be taken out of whatever dock sits below the panel. Its width
+	// is still its own, though -- a scroll area hides both hints from the splitter, and the
+	// horizontal bar is off, so without the floor a narrowed column would clip its buttons.
+	auto* scrollBox = new QScrollArea(this);
+	scrollBox->setWidget(column);
+	scrollBox->setWidgetResizable(true);
+	scrollBox->setFrameShape(QFrame::NoFrame);
+	scrollBox->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+	scrollBox->setMinimumWidth(column->sizeHint().width());
+	return scrollBox;
+}
+
+QWidget*
+AnimationEditorWindow::BuildClipTab()
+{
+	auto* page   = new QWidget(this);
+	auto* layout = new QVBoxLayout(page);
+	layout->setContentsMargins(4, 4, 4, 4);
+
+	m_ClipList = new QListWidget(page);
 	connect(m_ClipList, &QListWidget::currentRowChanged, this, &AnimationEditorWindow::SelectClip);
 	layout->addWidget(m_ClipList, /*stretch*/ 1);
 
-	m_ClipMetadata = new QLabel(column);
+	m_ClipMetadata = new QLabel(page);
 	m_ClipMetadata->setTextInteractionFlags(Qt::TextSelectableByMouse);
 	layout->addWidget(m_ClipMetadata);
 
-	// A crossfade, previewed. The clip list stays above rather than moving in here, because the two
-	// ends are chosen out of it and a list buried in a sibling group would be unreachable exactly
-	// when it is needed.
-	layout->addSpacing(8);
-	layout->addWidget(new QLabel(QStringLiteral("Transition"), column));
+	return page;
+}
 
-	m_TransitionGroup = new QWidget(column);
+QWidget*
+AnimationEditorWindow::BuildBlendTab()
+{
+	m_TransitionGroup = new QWidget(this);
 	auto* fade        = new QVBoxLayout(m_TransitionGroup);
-	fade->setContentsMargins(0, 0, 0, 0);
+	fade->setContentsMargins(4, 4, 4, 4);
 
 	auto* ends = new QHBoxLayout();
 	ends->setContentsMargins(0, 0, 0, 0);
@@ -405,23 +436,8 @@ AnimationEditorWindow::BuildPropertiesColumn()
 		SyncTransportUi();
 	});
 
-	layout->addWidget(m_TransitionGroup);
-
-	// The box is the state; this is what puts the preview on it. Reaches the preview before it is
-	// on screen, where a rebind is recorded and applied when it is shown.
-	UpdateGroundControls();
-
-	// The column scrolls rather than asking the window for its height: every control adds to a
-	// minimum that would otherwise be taken out of whatever dock sits below the panel. Its width
-	// is still its own, though -- a scroll area hides both hints from the splitter, and the
-	// horizontal bar is off, so without the floor a narrowed column would clip its buttons.
-	auto* scrollBox = new QScrollArea(this);
-	scrollBox->setWidget(column);
-	scrollBox->setWidgetResizable(true);
-	scrollBox->setFrameShape(QFrame::NoFrame);
-	scrollBox->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
-	scrollBox->setMinimumWidth(column->sizeHint().width());
-	return scrollBox;
+	fade->addStretch(1);
+	return m_TransitionGroup;
 }
 
 void
