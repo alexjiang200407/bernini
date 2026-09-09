@@ -573,9 +573,9 @@ namespace assetlib
 
 		for (const BlendSpace& space : set.spaces)
 		{
-			out += std::format("    '{}' ({} members)\n", space.name, space.members.size());
-			for (const BlendSpaceMember& member : space.members)
-				out += std::format("      {:>10} '{}'\n", member.parameter, member.clip);
+			out += std::format("    '{}' ({} samples)\n", space.name, space.samples.size());
+			for (const BlendSpaceSample& sample : space.samples)
+				out += std::format("      {:>10} '{}'\n", sample.parameter, sample.clip);
 		}
 
 		return out;

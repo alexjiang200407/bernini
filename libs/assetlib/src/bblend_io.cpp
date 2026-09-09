@@ -1,8 +1,11 @@
 #include <assetlib/blend.h>
 #include <assetlib/codecs.h>
 #include <assetlib/container_info.h>
+#include <cmath>
 #include <core/err/util.h>
+#include <cstddef>
 #include <nlohmann/json.hpp>
+#include <utility>
 
 #include "json_doc.h"
 
@@ -18,39 +21,39 @@ namespace assetlib
 		constexpr std::string_view c_NameKey       = "name";
 		constexpr std::string_view c_AnimationsKey = "animations";
 		constexpr std::string_view c_SpacesKey     = "spaces";
-		constexpr std::string_view c_MembersKey    = "members";
+		constexpr std::string_view c_SamplesKey    = "samples";
 		constexpr std::string_view c_ClipKey       = "clip";
 		constexpr std::string_view c_ParameterKey  = "parameter";
 
-		BlendSpaceMember
-		memberFromJson(const nlohmann::json& json, size_t space, size_t index)
+		BlendSpaceSample
+		sampleFromJson(const nlohmann::json& json, size_t space, size_t index)
 		{
 			throw_runtime_error_if(
 				!json.is_object(),
-				"bblend: member {} of space {} is not an object",
+				"bblend: sample {} of space {} is not an object",
 				index,
 				space);
 
-			auto member = BlendSpaceMember();
+			auto sample = BlendSpaceSample();
 
 			const auto clip = json.find(c_ClipKey);
 			throw_runtime_error_if(
 				clip == json.end() || !clip->is_string() || clip->get<std::string>().empty(),
-				"bblend: member {} of space {} names no clip",
+				"bblend: sample {} of space {} names no clip",
 				index,
 				space);
-			member.clip = clip->get<std::string>();
+			sample.clip = clip->get<std::string>();
 
 			const auto parameter = json.find(c_ParameterKey);
 			throw_runtime_error_if(
 				parameter == json.end() || !parameter->is_number(),
-				"bblend: member {} of space {} has no numeric '{}'",
+				"bblend: sample {} of space {} has no numeric '{}'",
 				index,
 				space,
 				c_ParameterKey);
-			member.parameter = parameter->get<float>();
+			sample.parameter = parameter->get<float>();
 
-			return member;
+			return sample;
 		}
 
 		BlendSpace
@@ -67,15 +70,15 @@ namespace assetlib
 				index);
 			space.name = name->get<std::string>();
 
-			const auto members = json.find(c_MembersKey);
+			const auto samples = json.find(c_SamplesKey);
 			throw_runtime_error_if(
-				members == json.end() || !members->is_array(),
+				samples == json.end() || !samples->is_array(),
 				"bblend: space '{}' has no '{}' array",
 				space.name,
-				c_MembersKey);
+				c_SamplesKey);
 
-			for (size_t i = 0; i < members->size(); ++i)
-				space.members.push_back(memberFromJson((*members)[i], index, i));
+			for (size_t i = 0; i < samples->size(); ++i)
+				space.samples.push_back(sampleFromJson((*samples)[i], index, i));
 
 			return space;
 		}
@@ -103,41 +106,41 @@ namespace assetlib
 				if (set.spaces[other].name == space.name)
 					throw_runtime_error("blend set: two spaces are named '{}'", space.name);
 
-			// Two is the floor because a one-member space is a clip, and a clip is already a node
+			// Two is the floor because a one-sample space is a clip, and a clip is already a node
 			// under its own name -- an authored one would be a second name for the same thing.
-			if (space.members.size() < 2)
+			if (space.samples.size() < 2)
 				throw_runtime_error(
-					"blend set: space '{}' holds {} members, and a blend space needs at least two",
+					"blend set: space '{}' holds {} samples, and a blend space needs at least two",
 					space.name,
-					space.members.size());
+					space.samples.size());
 
-			for (size_t m = 0; m < space.members.size(); ++m)
+			for (size_t m = 0; m < space.samples.size(); ++m)
 			{
-				const BlendSpaceMember& member = space.members[m];
+				const BlendSpaceSample& sample = space.samples[m];
 
-				if (member.clip.empty())
+				if (sample.clip.empty())
 					throw_runtime_error(
-						"blend set: member {} of space '{}' names no clip",
+						"blend set: sample {} of space '{}' names no clip",
 						m,
 						space.name);
 
-				if (!std::isfinite(member.parameter))
+				if (!std::isfinite(sample.parameter))
 					throw_runtime_error(
-						"blend set: member {} of space '{}' has a parameter of {}",
+						"blend set: sample {} of space '{}' has a parameter of {}",
 						m,
 						space.name,
-						member.parameter);
+						sample.parameter);
 
-				// Strictly increasing, not merely sorted: two members at one parameter have no
+				// Strictly increasing, not merely sorted: two samples at one parameter have no
 				// defined weighting between them, and the span between them is a divisor.
-				if (m > 0 && !(member.parameter > space.members[m - 1].parameter))
+				if (m > 0 && !(sample.parameter > space.samples[m - 1].parameter))
 					throw_runtime_error(
-						"blend set: space '{}' has parameter {} at member {} after {}, and they "
+						"blend set: space '{}' has parameter {} at sample {} after {}, and they "
 						"must strictly increase",
 						space.name,
-						member.parameter,
+						sample.parameter,
 						m,
-						space.members[m - 1].parameter);
+						space.samples[m - 1].parameter);
 			}
 		}
 	}
@@ -189,16 +192,16 @@ namespace assetlib
 		auto spaces = nlohmann::json::array();
 		for (const BlendSpace& space : set.spaces)
 		{
-			auto members = nlohmann::json::array();
-			for (const BlendSpaceMember& member : space.members)
+			auto samples = nlohmann::json::array();
+			for (const BlendSpaceSample& sample : space.samples)
 			{
-				members.push_back(
-					nlohmann::json{ { c_ClipKey, member.clip },
-				                    { c_ParameterKey, doc::plainFloat(member.parameter) } });
+				samples.push_back(
+					nlohmann::json{ { c_ClipKey, sample.clip },
+				                    { c_ParameterKey, doc::plainFloat(sample.parameter) } });
 			}
 
 			spaces.push_back(
-				nlohmann::json{ { c_NameKey, space.name }, { c_MembersKey, std::move(members) } });
+				nlohmann::json{ { c_NameKey, space.name }, { c_SamplesKey, std::move(samples) } });
 		}
 
 		// Written even when empty, like an avatar's legs: a document with no keys at all reads as

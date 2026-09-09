@@ -319,7 +319,7 @@ namespace
 			}
 
 		// Clip 2: five frames, so the three cycles are 1, 2 and 4 intervals -- a space over all
-		// three has a genuine kink at its middle member, which is what a crossing has to split at.
+		// three has a genuine kink at its middle sample, which is what a crossing has to split at.
 		auto third        = assetlib::AnimationClip();
 		third.firstSample = static_cast<uint32_t>(set.samples.size());
 		third.frameCount  = 5;
@@ -343,25 +343,25 @@ namespace
 	}
 
 	/**
-	 * Two spaces over MakeSpaceClipSet: a two-member one across clips 0 and 1, then a three-member
-	 * one across all three. The second has an interior member, so a parameter ramp across it
+	 * Two spaces over MakeSpaceClipSet: a two-sample one across clips 0 and 1, then a three-sample
+	 * one across all three. The second has an interior sample, so a parameter ramp across it
 	 * crosses a breakpoint -- which is the case a single span cannot exercise.
 	 */
 	bgl::BlendSetDesc
 	MakeSpaceSet()
 	{
 		auto pair = bgl::BlendSpaceDesc();
-		pair.members.push_back({ 0, 0.0f });
-		pair.members.push_back({ 1, 1.0f });
+		pair.samples.push_back({ 0, 0.0f });
+		pair.samples.push_back({ 1, 1.0f });
 
-		// Four members, so a ramp can cross two interior ones: with a single crossing the walk
+		// Four samples, so a ramp can cross two interior ones: with a single crossing the walk
 		// visits the same edge whichever direction it takes, and the order cannot be observed.
 		// Clip 0 appears at both ends, which is legal and keeps this to the three clips in hand.
 		auto triple = bgl::BlendSpaceDesc();
-		triple.members.push_back({ 0, 0.0f });
-		triple.members.push_back({ 1, 0.33f });
-		triple.members.push_back({ 2, 0.66f });
-		triple.members.push_back({ 0, 1.0f });
+		triple.samples.push_back({ 0, 0.0f });
+		triple.samples.push_back({ 1, 0.33f });
+		triple.samples.push_back({ 2, 0.66f });
+		triple.samples.push_back({ 0, 1.0f });
 
 		auto set = bgl::BlendSetDesc();
 		set.spaces.push_back(std::move(pair));
@@ -1074,8 +1074,8 @@ TEST_CASE("the pose pass blends a space as the reference does", "[skinned][pose]
 
 	const uint32_t float4sPerPose = c_BoneCount * bgl::idl::cFloat4sPerBone;
 
-	// Three clips, so three clip nodes come first: node 3 is the two-member space and node 4 the
-	// three-member one.
+	// Three clips, so three clip nodes come first: node 3 is the two-sample space and node 4 the
+	// three-sample one.
 	constexpr uint32_t c_SpaceNode  = 3;
 	constexpr uint32_t c_TripleNode = 4;
 
@@ -1090,7 +1090,7 @@ TEST_CASE("the pose pass blends a space as the reference does", "[skinned][pose]
 	};
 
 	// What the space should resolve to at `time`, computed the way the ADR states it: one shared
-	// normalized phase, each member's frame that fraction of its own cycle.
+	// normalized phase, each sample's frame that fraction of its own cycle.
 	const auto expected = [&](float parameter, float phase, float rate, float time) {
 		const float cycle0 = CycleSeconds(animations.clips[0]);
 		const float cycle1 = CycleSeconds(animations.clips[1]);
@@ -1105,7 +1105,7 @@ TEST_CASE("the pose pass blends a space as the reference does", "[skinned][pose]
 		return std::vector<assetlib::BlendSample>(blend.begin(), blend.end());
 	};
 
-	SECTION("a parameter on a member plays that clip alone")
+	SECTION("a parameter on a sample plays that clip alone")
 	{
 		auto desc    = bgl::SkinnedPlaybackDesc();
 		desc.slot[0] = SpaceSlot(c_SpaceNode, 0.0f, 0.0f, 0.0f);
@@ -1116,7 +1116,7 @@ TEST_CASE("the pose pass blends a space as the reference does", "[skinned][pose]
 		CheckAgainstReference(paletteAt(instance, 0.0f), skeleton, animations, alone);
 	}
 
-	SECTION("a parameter between two members is their weighted blend at one shared phase")
+	SECTION("a parameter between two samples is their weighted blend at one shared phase")
 	{
 		auto desc    = bgl::SkinnedPlaybackDesc();
 		desc.slot[0] = SpaceSlot(c_SpaceNode, 0.25f, 0.0f, 0.5f);
@@ -1183,7 +1183,7 @@ TEST_CASE("the pose pass blends a space as the reference does", "[skinned][pose]
 		CheckAgainstReference(paletteAt(instance, c_Time), skeleton, animations, blend);
 	}
 
-	SECTION("a ramp falling across an interior member is split in the order it reaches them")
+	SECTION("a ramp falling across an interior sample is split in the order it reaches them")
 	{
 		// The regression this exists for: the segments have to be accumulated in the order the ramp
 		// reaches them, not in table order. A rising ramp reaches them in table order and hides the
@@ -1191,7 +1191,7 @@ TEST_CASE("the pose pass blends a space as the reference does", "[skinned][pose]
 		constexpr float c_Rate  = 1.0f;
 		constexpr float c_Start = 0.0f;
 		constexpr float c_End   = 0.4f;
-		constexpr float c_Time  = 0.3f;  // past the middle member, so a breakpoint was crossed
+		constexpr float c_Time  = 0.3f;  // past the middle sample, so a breakpoint was crossed
 		constexpr float c_From  = 0.9f;
 		constexpr float c_To    = 0.1f;
 
@@ -1219,7 +1219,7 @@ TEST_CASE("the pose pass blends a space as the reference does", "[skinned][pose]
 				glm::clamp((t - c_Start) / (c_End - c_Start), 0.0f, 1.0f));
 		};
 
-		// The weighted cycle at a parameter: linear between the two members straddling it, which is
+		// The weighted cycle at a parameter: linear between the two samples straddling it, which is
 		// what makes it kink at the middle one.
 		const auto secondsAt = [&](float p) {
 			for (size_t i = 1; i < stops.size(); ++i)
@@ -1243,8 +1243,8 @@ TEST_CASE("the pose pass blends a space as the reference does", "[skinned][pose]
 		const float u         = glm::fract(static_cast<float>(double(c_Rate) * integral));
 		const float parameter = parameterAt(c_Time);
 
-		// Below the second member at this time, so it sits in the first span and both interior
-		// members were crossed on the way.
+		// Below the second sample at this time, so it sits in the first span and both interior
+		// samples were crossed on the way.
 		REQUIRE(parameter < stops[1]);
 		const float between = (parameter - stops[0]) / (stops[1] - stops[0]);
 
@@ -1256,7 +1256,7 @@ TEST_CASE("the pose pass blends a space as the reference does", "[skinned][pose]
 		CheckAgainstReference(paletteAt(instance, c_Time), skeleton, animations, blend);
 	}
 
-	SECTION("the phase advances at the weighted cycle, so the members stay in step")
+	SECTION("the phase advances at the weighted cycle, so the samples stay in step")
 	{
 		constexpr float c_Rate      = 1.0f;
 		constexpr float c_Parameter = 0.5f;
@@ -1276,12 +1276,12 @@ TEST_CASE("the pose pass blends a space as the reference does", "[skinned][pose]
 
 	SECTION("a moved parameter re-poses the same record")
 	{
-		// The gate SetRigBlendParameters exists for, and the one a check of the member buffer
+		// The gate SetRigBlendParameters exists for, and the one a check of the sample buffer
 		// cannot make: the pass has to read the moved parameter, which means the write has to
 		// reach the GPU. The pair sits at 0 and 1; moved to 0 and 2, a slot held at 1 is halfway
-		// between the members instead of on the second one.
+		// between the samples instead of on the second one.
 		auto moved                           = MakeSpaceSet();
-		moved.spaces[0].members[1].parameter = 2.0f;
+		moved.spaces[0].samples[1].parameter = 2.0f;
 		scene->SetRigBlendParameters(rig, moved);
 
 		auto desc    = bgl::SkinnedPlaybackDesc();
@@ -1289,7 +1289,7 @@ TEST_CASE("the pose pass blends a space as the reference does", "[skinned][pose]
 
 		const auto instance = view->CreateSkinnedMeshInstance(geom, glm::mat4(1.0f), desc);
 
-		// `expected` takes the fraction between the two members, which the move has halved.
+		// `expected` takes the fraction between the two samples, which the move has halved.
 		CheckAgainstReference(
 			paletteAt(instance, 0.0f),
 			skeleton,
