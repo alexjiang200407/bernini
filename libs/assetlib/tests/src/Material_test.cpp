@@ -10,6 +10,7 @@
 #include <assetlib_structs/BMeshImport.h>
 #include <assetlib_structs/ImageData.h>
 #include <assetlib_structs/VkFormat.h>
+#include <catch2/catch_message.hpp>
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers.hpp>
 #include <chrono>
@@ -29,6 +30,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <filesystem>
+#include <format>
 #include <fstream>
 #include <ios>
 #include <span>
@@ -830,6 +832,30 @@ TEST_CASE("a surface material round-trips its three keys", "[bmaterial][io][surf
 
 	// Canonical, like every other document: one content, one byte sequence.
 	CHECK(AssetCodec<BMaterial>::Serialize(restored) == bytes);
+
+	// And it carries none of the other model's. PbrParams default-constructs to glTF's own
+	// defaults, so a writer that emitted them unconditionally would give a hand-authored surface
+	// material a white base colour and a metallic of one it never declared -- which is the
+	// mirror of the case below, and the reason both halves are written by model.
+	//
+	// At the top level, which is one tab of indent in a canonical document: this surface declares
+	// a parameter *called* `baseColorFactor`, as a surface that tints its own base naturally
+	// would, and that lives inside `parameters` where it belongs.
+	for (const std::string_view key : { "baseColorFactor",
+	                                    "metallicFactor",
+	                                    "roughnessFactor",
+	                                    "transmissionFactor",
+	                                    "specularColorFactor",
+	                                    "specularFactor",
+	                                    "baked",
+	                                    "routes" })
+	{
+		INFO("the pbr key '" << key << "'");
+		CHECK(out.find(std::format("\n\t\"{}\"", key)) == std::string::npos);
+	}
+
+	// The parameter of that name is still there, one level down.
+	CHECK(out.find("\n\t\t\"baseColorFactor\"") != std::string::npos);
 }
 
 // The other half of "the reader takes them": a document that is not drawn by a surface has no
