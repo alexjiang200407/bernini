@@ -1273,8 +1273,8 @@ namespace bgl
 			if (!AcceptsMaterial(GeomType::kSkinnedMesh, bound))
 			{
 				throw SceneError(
-					"AddSkinnedMeshGeom: every submesh needs a kPBR material -- the skinned "
-					"pipeline has no unlit or loose variant");
+					"AddSkinnedMeshGeom: every submesh needs a baked PBR or a game surface "
+					"material -- the skinned pipeline has no unlit or loose variant");
 			}
 		}
 
@@ -2194,8 +2194,8 @@ namespace bgl
 		if (!AcceptsMaterial(geom.geomType, material))
 		{
 			throw SceneError(
-				"SetSubmeshMaterial: animated geometry takes a kPBR material -- neither animated "
-				"pipeline has an unlit or loose variant");
+				"SetSubmeshMaterial: animated geometry takes a baked PBR or a game surface "
+				"material -- neither animated pipeline has an unlit or loose variant");
 		}
 
 		const idl::RangeWithCount& submeshes = m_Geoms[geom.handle.index].submeshes;

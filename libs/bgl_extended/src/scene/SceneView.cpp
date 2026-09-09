@@ -1114,8 +1114,8 @@ namespace bgl
 		if (!AcceptsMaterial(meta.geomType, material))
 		{
 			throw SceneError(
-				"SetSubmeshMaterialOverride: an animated instance takes a kPBR material -- neither "
-				"animated pipeline has an unlit or loose variant");
+				"SetSubmeshMaterialOverride: an animated instance takes a baked PBR or a game "
+				"surface material -- neither animated pipeline has an unlit or loose variant");
 		}
 
 		meta.overrides[submeshIndex] = material;

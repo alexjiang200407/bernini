@@ -163,4 +163,12 @@ namespace bgl::test::skinned_synth
 			scene.AddRig(MakeOneBoneRig(), MakeSlideClips()),
 			c_PosedBounds);
 	}
+
+	GeomHandle
+	AddQuadStaticGeom(IScene& scene, MaterialHandle material)
+	{
+		const std::array<MaterialHandle, 1> materials = { { material } };
+
+		return scene.AddStaticMeshGeom(MakeQuad(), 0, materials);
+	}
 }

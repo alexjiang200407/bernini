@@ -188,8 +188,9 @@ namespace bgl
 		 * `.banim`'s bake (`assetlib::findPosedBounds`)
 		 * or measured (`assetlib::posedBounds`), which is gamelib's acquire either way.
 		 *
-		 * `materials` must resolve every submesh to a `kPBR` material, in any layer: the skinned
-		 * pipeline shades through the PBR pixel stages and has no unlit or loose variant.
+		 * `materials` must resolve every submesh to a baked `kPBR` material or to a game surface's,
+		 * in any layer: the skinned pipeline shades through those pixel stages and has no unlit or
+		 * loose variant.
 		 *
 		 * @param mesh        A BMesh loaded from disk, carrying skin binding on every submesh.
 		 * @param meshIndex   Index into `mesh.meshes`.
@@ -197,8 +198,8 @@ namespace bgl
 		 * @param rig         The rig the mesh's joint indices address, from AddRig.
 		 * @param posedBounds A box holding the mesh in every pose of every clip, in model space.
 		 * @throws SceneError for anything AddStaticMeshGeom refuses, a null or deleted `rig`, a
-		 *         submesh without skin binding, a submesh whose material does not resolve to kPBR,
-		 *         or a `posedBounds` whose min exceeds its max on any axis.
+		 *         submesh without skin binding, a submesh whose material resolves to neither of
+		 *         those, or a `posedBounds` whose min exceeds its max on any axis.
 		 */
 		virtual GeomHandle
 		AddSkinnedMeshGeom(

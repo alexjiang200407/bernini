@@ -126,8 +126,8 @@ namespace bgl
 		};
 
 		// Order MUST match idl::PsoType (idl/PsoType.h, generated from shaders/src/idl/PsoType.slang).
-		// The named rows are listed; the reserved game slots' rows follow from kGameRowsStart, three
-		// per slot, in the order GameSlotRow derives them.
+		// The named rows are listed; the reserved game slots' rows follow from kGameRowsStart,
+		// cGameSlotRows per slot, in the order GameSlotRow derives them.
 		constexpr std::array<PsoConfig, idl::c_PsoCount>
 		MakePsos()
 		{
@@ -193,14 +193,22 @@ namespace bgl
 				  c_AnyGeomSrc },
 			} };
 
+			// The two tiers differ only in their geometry stage: the pixel shader reads a
+			// ForwardVSOut and a material offset, and neither says which tier filled them.
 			for (uint32_t slot = 0; slot < cGameSlots; ++slot)
 			{
 				const auto row =
 					static_cast<uint32_t>(idl::PsoType::kGameRowsStart) + slot * idl::cGameSlotRows;
 				psos[row]     = { c_GameSlotSrcs[slot].opaque, RasterCullMode::kBack, true, false };
 				psos[row + 1] = { c_GameSlotSrcs[slot].cutout, RasterCullMode::kNone, true, false };
-				psos[row + 2] = { c_TransparentSrc,      RasterCullMode::kNone, false, true,
-					              ComparisonFunc::kLess, c_AnyGeomSrc };
+				psos[row + 2] = { c_GameSlotSrcs[slot].opaque, RasterCullMode::kBack, true, false,
+					              ComparisonFunc::kLess,       c_SkinnedGeomSrc };
+				psos[row + 3] = { c_GameSlotSrcs[slot].cutout, RasterCullMode::kNone, true, false,
+					              ComparisonFunc::kLess,       c_SkinnedGeomSrc };
+				psos[row + idl::cGameSlotBlendRow] = {
+					c_TransparentSrc,      RasterCullMode::kNone, false, true,
+					ComparisonFunc::kLess, c_AnyGeomSrc
+				};
 			}
 			return psos;
 		}

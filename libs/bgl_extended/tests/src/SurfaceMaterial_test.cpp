@@ -1,11 +1,14 @@
 #include "util/GoldenImage.h"
 #include "util/GpuValidation.h"
+#include "util/SkinnedSynth.h"
 #include "util/TestEnvironment.h"
 #include "util/TestOptions.h"
 #include <bgl/Camera.h>
+#include <bgl/GeomType.h>
 #include <bgl/IGraphics.h>
 #include <bgl/IScene.h>
 #include <bgl/ISceneView.h>
+#include <bgl/InstanceDesc.h>
 #include <bgl/LayerType.h>
 #include <bgl/MaterialHandle.h>
 #include <bgl/MaterialType.h>
@@ -49,6 +52,19 @@ namespace
 		desc.initialPbrMaterials         = 8;
 		desc.initialSurfaceMaterials     = 8;
 		return desc;
+	}
+
+	bgl::Camera
+	QuadCamera()
+	{
+		auto camera = bgl::Camera();
+		camera
+			.LookAt(
+				glm::vec3(0.5f, 0.0f, 6.0f),
+				glm::vec3(0.5f, 0.0f, 5.0f),
+				glm::vec3(0.0f, 1.0f, 0.0f))
+			.Perspective(glm::radians(60.0f), 400.0f / 300.0f, 0.5f, 500.0f);
+		return camera;
 	}
 
 	bgl::Camera
@@ -312,4 +328,112 @@ TEST_CASE("A surface material the engine cannot pack is refused", "[surface][ren
 			SceneError,
 			MessageMatches(ContainsSubstring("hashed alpha, which no game row draws")));
 	}
+}
+
+// The skinned tier's own gate, and the whole of what a tier costs a surface. The two tiers differ
+// only in their geometry stage -- a pixel shader reads a ForwardVSOut and a material offset, and
+// neither says which tier filled them -- so one quad, one surface material, drawn static and drawn
+// skinned in its bind pose, has to land on the same pixels. A row derived wrong picks another slot's
+// program or none at all, and that is what the equality catches. The frames after it are what stop
+// the equality being two empty ones, and what separate a skinned draw from a static fallback.
+//
+// Linear rather than sectioned: a SECTION re-runs the body, and the body is a device.
+TEST_CASE("A surface material draws on skinned geometry", "[surface][render][skinned]")
+{
+	using bgl::test::skinned_synth::AddQuadStaticGeom;
+	using bgl::test::skinned_synth::AddSlidingQuadGeom;
+
+	auto gfx = bgl::CreateGraphics(SurfaceOptions());
+	REQUIRE(gfx != nullptr);
+
+	auto targetDesc     = bgl::RenderTargetDesc();
+	targetDesc.width    = 400;
+	targetDesc.height   = 300;
+	targetDesc.headless = true;
+	auto target         = gfx->CreateRenderTarget(targetDesc);
+	REQUIRE(target != nullptr);
+
+	auto scene = gfx->CreateScene(SphereScene());
+	auto view  = gfx->CreateSceneView(scene, 8);
+
+	bgl::test::ApplyEnvironment(scene.Get(), view.Get());
+
+	auto rim = scene->CreateSurfaceMaterial(
+		{
+			.surface = "Rim",
+			.values  = { { "rimColor", glm::vec4(10.0f, 3.0f, 1.0f, 0.0f) },
+	                     { "rimPower", glm::vec4(2.0f) },
+	                     { "baseColorFactor", glm::vec4(0.05f, 0.05f, 0.06f, 1.0f) } },
+		});
+
+	auto job     = bgl::RenderJob();
+	job.view     = view;
+	job.camera   = QuadCamera();
+	job.viewport = bgl::Viewport(400.0f, 300.0f);
+
+	const auto* emptyPng   = "assets/golden/surface_skinned_empty.got.png";
+	const auto* staticPng  = "assets/golden/surface_skinned_static_ref.got.png";
+	const auto* skinnedPng = "assets/golden/surface_skinned_bind_pose.got.png";
+	const auto* slidPng    = "assets/golden/surface_skinned_posed.got.png";
+	const auto* blendPng   = "assets/golden/surface_skinned_blend.got.png";
+
+	// What the environment alone draws, so every difference below has something to be measured
+	// against rather than being trusted to be non-empty.
+	gfx->DrawFrame(target, job);
+	gfx->ScreenshotPng(target, emptyPng);
+
+	// The door this feature opens: before it, AddSkinnedMeshGeom threw on a game material.
+	const auto skinned = AddSlidingQuadGeom(*scene, rim);
+	REQUIRE(skinned.IsValid());
+	CHECK(skinned.geomType == GeomType::kSkinnedMesh);
+
+	const auto still = AddQuadStaticGeom(*scene, rim);
+	REQUIRE(still.IsValid());
+
+	const auto stillInstance = view->CreateStaticMeshInstance(still, glm::mat4(1.0f));
+	gfx->DrawFrame(target, job);
+	gfx->ScreenshotPng(target, staticPng);
+	view->DeleteMeshInstance(stillInstance);
+
+	CHECK(bgl::test::FrameDelta(emptyPng, staticPng, 0, 0, 400, 300) > 1e-3f);
+
+	// rate 0 holds frame 0, which slides by nothing, so the vertex the skinned geometry stage emits
+	// is the one the static stage emits -- and the surface behind both is the one record.
+	const auto posed = view->CreateSkinnedMeshInstance(skinned, glm::mat4(1.0f), { 0, 0.0f, 0.0f });
+	gfx->DrawFrame(target, job);
+	gfx->ScreenshotPng(target, skinnedPng);
+
+	CHECK(bgl::test::FrameDelta(staticPng, skinnedPng, 0, 0, 400, 300) < 1e-6f);
+
+	// The clamp clip at its end is the quad slid by a whole unit. If the skinned row had quietly
+	// drawn through the static geometry stage the pose would not reach the vertices and this frame
+	// would be the last one.
+	view->SetSkinnedPlayback(
+		posed,
+		bgl::SkinnedPlaybackDesc::FromClip(bgl::test::skinned_synth::c_ClampClip, 1.0f, 0.0f));
+	gfx->DrawFrame(target, job);
+	gfx->ScreenshotPng(target, slidPng);
+
+	CHECK(bgl::test::FrameDelta(skinnedPng, slidPng, 0, 0, 400, 300) > 1e-3f);
+
+	// The blended layer is one row both tiers share, so a skinned blended surface is drawn by the
+	// pipeline the static one uses, off the depth-sorted list. Nothing else in the frame is blended,
+	// so what this measures is that draw arriving at all.
+	view->DeleteMeshInstance(posed);
+
+	auto blend = scene->CreateSurfaceMaterial(
+		{
+			.surface     = "Rim",
+			.layerType   = LayerType::kBlend,
+			.doubleSided = false,
+		});
+
+	const auto blendedGeom = AddSlidingQuadGeom(*scene, blend);
+	REQUIRE(blendedGeom.IsValid());
+
+	view->CreateSkinnedMeshInstance(blendedGeom, glm::mat4(1.0f), { 0, 0.0f, 0.0f });
+	gfx->DrawFrame(target, job);
+	gfx->ScreenshotPng(target, blendPng);
+
+	CHECK(bgl::test::FrameDelta(emptyPng, blendPng, 0, 0, 400, 300) > 1e-3f);
 }

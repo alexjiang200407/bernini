@@ -13,7 +13,7 @@ bool IsTransparentPso(PsoType pso)
 {
     if (uint(pso) >= uint(PsoType::kGameRowsStart))
     {
-        return (uint(pso) - uint(PsoType::kGameRowsStart)) % cGameSlotRows == 2u;
+        return (uint(pso) - uint(PsoType::kGameRowsStart)) % cGameSlotRows == cGameSlotBlendRow;
     }
     return pso == PsoType::kTransparent_StaticMesh_PBR || pso == PsoType::kTransparent_StaticMesh_LoosePbr ||
            pso == PsoType::kTransparent_SkinnedMesh_PBR;

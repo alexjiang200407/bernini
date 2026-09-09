@@ -28,11 +28,15 @@ namespace bgl
 	GameSlotKind(uint32_t slot) noexcept;
 
 	/**
-	 * A slot's row for a layer: opaque, alpha-test or transparent, from its first row. Hashed is
-	 * closed to game surfaces at the door that creates one, so it is bgl's own bug here.
+	 * A slot's row for a geometry tier and a layer, from its first row. Opaque and alpha-test are
+	 * per tier, since their geometry stage is the tier's own; blended is one row both tiers share,
+	 * because the blended pipeline's geometry stage branches tier per instance.
+	 *
+	 * Hashed is closed to game surfaces at the door that creates one, so it is bgl's own bug here,
+	 * as is a tier that is neither static nor skinned.
 	 */
 	[[nodiscard]] idl::PsoType
-	GameSlotRow(uint32_t slot, LayerType layer);
+	GameSlotRow(uint32_t slot, GeomType geom, LayerType layer);
 
 	/**
 	 * The PSO bucket for `SubmeshInstance::pso`. An invalid handle resolves to the unlit `kNull`
@@ -44,7 +48,8 @@ namespace bgl
 	/**
 	 * Whether `geomType` can be drawn with `material`, which is what every door binding one to
 	 * animated geometry checks. Static geometry takes anything; the animated tiers take every layer
-	 * of a `kPBR` material and no other material type, having neither an unlit nor a loose variant.
+	 * of a `kPBR` material and of a game surface's, and no other material type, having neither an
+	 * unlit nor a loose variant.
 	 *
 	 * An invalid handle is rejected -- animated geometry has no unlit variant to fall back to.
 	 */
