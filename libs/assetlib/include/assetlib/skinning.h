@@ -69,7 +69,7 @@ namespace assetlib
 	 * The index of the clip named `name`, or nullopt. Linear, like findBone, and for the same
 	 * reason: a name is resolved once at load, never per frame.
 	 *
-	 * A clip is addressed by name wherever something authored names one -- a `.bblend`'s members --
+	 * A clip is addressed by name wherever something authored names one -- a `.bblend`'s samples --
 	 * because an index is a fact about one cook, and a re-import that adds a clip shifts every one
 	 * after it.
 	 */

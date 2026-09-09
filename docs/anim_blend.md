@@ -59,10 +59,10 @@ The reasoning that is not obvious from a signature. The headers linked below are
 ## Blend spaces
 
 A **1D blend space** is an ordered run of clips with the parameter each plays alone at — a walk at
-1.5 and a run at 5, say, blended by speed. Its members are *looping* clips, refused otherwise.
+1.5 and a run at 5, say, blended by speed. Its samples are *looping* clips, refused otherwise.
 
-* **The members share one normalized phase.** They are clips of different lengths, so a frame number
-  means nothing between them: what is shared is the fraction of a cycle, and each member's frame is
+* **The samples share one normalized phase.** They are clips of different lengths, so a frame number
+  means nothing between them: what is shared is the fraction of a cycle, and each sample's frame is
   that fraction of its own. Without it a walk and a run blended together would drift in and out of
   step and the feet would slide.
 
@@ -77,21 +77,21 @@ A **1D blend space** is an ordered run of clips with the parameter each plays al
 
   with `D` the weighted cycle in seconds at parameter `p`. It is evaluated in closed form
   ([`blend_space.slang`](libs/bgl_common/shaders/src/lib/anim/blend_space.slang)), split at the
-  ramp's ends and at each member the parameter crosses, because `D` is only linear *between* two
-  adjacent members and kinks at each one. The approximation `(t − tRef) / D(p(t))` is cheaper by a
+  ramp's ends and at each sample the parameter crosses, because `D` is only linear *between* two
+  adjacent samples and kinks at each one. The approximation `(t − tRef) / D(p(t))` is cheaper by a
   few logarithms and wrong for the ramp's whole duration.
 
   **The segments must be accumulated in the order the ramp reaches them**, not in table order. A
-  falling parameter crosses the members backwards, and a walk in table order fuses two spans of a
+  falling parameter crosses the samples backwards, and a walk in table order fuses two spans of a
   kinked `D` into one term. This shipped once and was caught by review; the gate for it is a falling
-  ramp across four members, since a single crossing is visited in the same place either way.
+  ramp across four samples, since a single crossing is visited in the same place either way.
 
 * **Retargeting a parameter rebases the phase first.** Moving the parameter changes the rate the
   phase advances at, so integrating the *new* path from the old reference would land somewhere the
   record never was — a jump on the frame of the write. `RetargetParameter` integrates what the old
   path already covered into `phase` and starts the new one at `now`.
 
-  That is why `BlendSpaceInfo` carries its members: the rebase runs on the CPU and needs their cycle
+  That is why `BlendSpaceInfo` carries its samples: the rebase runs on the CPU and needs their cycle
   lengths. It is a twin of the pass's own integral, and deliberately — a shader cannot be called from
   gamelib, and `bgl_extended` cannot depend on it. Nothing mechanically holds the two in step, so a
   change to either is a change to both.
@@ -101,9 +101,9 @@ A **1D blend space** is an ordered run of clips with the parameter each plays al
 | Step | Where | What |
 |---|---|---|
 | Author | `.bblend` | Canonical JSON under `Data/Authored/`: the clip set it is authored against, and each space's clips *by name*. [`blend.h`](libs/assetlib/include/assetlib/blend.h) |
-| Acquire | `AssetManager::AcquireSkinnedMesh` | Loads it, refuses one naming another `.banim`, resolves each member's name to a clip index, hands `bgl` a `BlendSetDesc` and the caller a table of `spaces` |
-| Upload | `IScene::AddRig` | Synthesizes one node per clip, appends the spaces, uploads the node and member tables with the rig |
-| Move | `IScene::SetRigBlendParameters` | A live rig's member parameters rewritten in place; a changed shape refused |
+| Acquire | `AssetManager::AcquireSkinnedMesh` | Loads it, refuses one naming another `.banim`, resolves each sample's name to a clip index, hands `bgl` a `BlendSetDesc` and the caller a table of `spaces` |
+| Upload | `IScene::AddRig` | Synthesizes one node per clip, appends the spaces, uploads the node and sample tables with the rig |
+| Move | `IScene::SetRigBlendParameters` | A live rig's sample parameters rewritten in place; a changed shape refused |
 | Spawn | `ISceneView::CreateSkinnedMeshInstance` | A `SkinnedPlaybackDesc` of four slots, validated against the rig's node count |
 | Write | `ISceneView::SetSkinnedPlayback` | The record rewritten in place; `CrossfadeTo` / `RetargetParameter` build the new one |
 | Pose | `SkinnedPosePass` | Resolves each slot through the node table, blends what they resolve to, walks the hierarchy |
@@ -114,30 +114,30 @@ signature exists to catch one layer down. Resolution happens once, at acquire, w
 are in hand — and it is refused rather than warned, because the caller named the set and a missing
 space would be a table quietly short of what was asked for.
 
-**A blend set belongs to the rig, and the rig is keyed on its clip set.** A member names a clip of
+**A blend set belongs to the rig, and the rig is keyed on its clip set.** A sample names a clip of
 one `.banim`, and the pose pass samples one clip set's pool, so a space cannot straddle two. A second
 acquire naming a *different* set is refused; one naming none accepts whatever the rig has, since a
 caller that asked for no spaces is not wrong to find some. Release the rig to zero to change it.
 
 **Except the parameters, which move on a live rig.** `IScene::SetRigBlendParameters` takes a
-`BlendSetDesc` describing the set the rig already carries and writes only what each member plays
-alone at: the same spaces, the same members, the same clips, refused otherwise. Nothing is
+`BlendSetDesc` describing the set the rig already carries and writes only what each sample plays
+alone at: the same spaces, the same samples, the same clips, refused otherwise. Nothing is
 reallocated, so the node table does not move, a geom keeps the node count it was added with, and a
 live slot keeps naming what it named — which is what makes it safe to expose at all, and why it is
 this and not a rewrite. It exists because a threshold is chosen by dragging it and watching the pose,
-and a rig torn down per drag tick cannot be watched. Adding or removing a member or a space is still
+and a rig torn down per drag tick cannot be watched. Adding or removing a sample or a space is still
 a rig re-uploaded.
 
 ## Risky / Non-obvious Contracts
 
 * **A slot's `nodeIndex` is checked against the rig's node count, not its clip count.** They differ by the
   number of authored spaces.
-* **A space needs at least two members**, with strictly increasing parameters — two at one parameter
+* **A space needs at least two samples**, with strictly increasing parameters — two at one parameter
   have no defined weighting between them and the span between them is a divisor. Refused at both
   doors: the document's own validation, and `AddRig`.
-* **A member that does not loop is refused.** One phase is shared across the members, and a clip that
+* **A sample that does not loop is refused.** One phase is shared across the samples, and a clip that
   clamps would sit on its last frame while the others cycle.
-* **`cMaxPoseClips` is twice `cBlendSlots`.** A space resolves to the two members straddling its
+* **`cMaxPoseClips` is twice `cBlendSlots`.** A space resolves to the two samples straddling its
   parameter, so four slots of spaces is eight clips. That struct is held per thread in the pose
   kernel; its register cost has not been measured.
 * **A blend-aware culling box does not exist.** The `.banim`'s baked box is the union over every
