@@ -1,6 +1,5 @@
 #include "Windows/GpuTiming/pass_graph_paint.h"
 
-#include "Windows/GpuTiming/PassHistory.h"
 #include <QBrush>
 #include <QColor>
 #include <QFontMetrics>
@@ -14,6 +13,7 @@
 #include <QString>
 #include <Qt>
 #include <algorithm>
+#include <bgl/PassHistory.h>
 #include <cmath>
 #include <cstddef>
 #include <optional>
@@ -76,7 +76,7 @@ namespace
 namespace editor
 {
 	std::optional<std::size_t>
-	PassGraphSampleAt(const QRect& rect, const PassHistory& history, const int x)
+	PassGraphSampleAt(const QRect& rect, const bgl::PassHistory& history, const int x)
 	{
 		const std::size_t samples = history.SampleCount();
 		const QRect       plot    = PlotRect(rect);
@@ -101,7 +101,7 @@ namespace editor
 	PaintPassGraph(
 		QPainter&                        painter,
 		const QRect&                     rect,
-		const PassHistory&               history,
+		const bgl::PassHistory&          history,
 		const std::optional<std::size_t> selected,
 		const QPalette&                  palette)
 	{

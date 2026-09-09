@@ -171,6 +171,7 @@ disagrees, trust the header, then fix this doc.
 | `GraphicsOptions` | [libs/bgl/include/bgl/IGraphics.h](libs/bgl/include/bgl/IGraphics.h) | Device creation: debug layers, log level, `shaderCacheDir`, and every descriptor-heap/pool capacity. |
 | `CaptureTicket` | [libs/bgl/include/bgl/IGraphics.h](libs/bgl/include/bgl/IGraphics.h) | Names one in-flight backbuffer capture. Spent by resolve or discard. |
 | `PassTiming`, `PassTimings` | [libs/bgl/include/bgl/PassTiming.h](libs/bgl/include/bgl/PassTiming.h) | One row of `IGraphics::GetPassTimings` — a frame graph pass's name and what it cost on the GPU, in milliseconds — and the rows of one frame under the id of the frame they measured. |
+| `PassHistory` | [libs/bgl/include/bgl/PassHistory.h](libs/bgl/include/bgl/PassHistory.h) | The last N frames of `GetPassTimings` as a table of passes against frames, ignoring a frame id it has already recorded. The passes are a union in execution order and a cell is empty where that pass did not run, since a culled pass leaves no row. `PassHistoryCsv` in [pass_timing_csv.h](libs/bgl/include/bgl/pass_timing_csv.h) writes one out. |
 | `SceneDesc` | [libs/bgl/include/bgl/IScene.h](libs/bgl/include/bgl/IScene.h) | Fixed pool capacities for a scene. |
 | `PbrMaterialDesc` / `LoosePbrMaterialDesc` | [libs/bgl/include/bgl/IScene.h](libs/bgl/include/bgl/IScene.h) | Baked (three-map) vs. loose (per-channel routed) material parameters. `ChannelRouteDesc` feeds the latter. `doubleSided` says whether a non-opaque surface's back faces are drawn; on by default, and the mesh stage culls them otherwise — see [Passes § Two-sided surfaces](docs/passes.md). |
 | `EnvironmentMapDesc` | [libs/bgl/include/bgl/IScene.h](libs/bgl/include/bgl/IScene.h) | The IBL triplet (irradiance cube, prefilter cube, BRDF LUT). **Move-only** — copy is deleted. |
@@ -285,6 +286,9 @@ flowchart TD
   encoder at every pass boundary, which is a tile store and reload the untimed frame merges away —
   so a number read with timing on carries that overhead, and an image does not (the `[timing]` cases
   pin both).
+  A caller that polls it over a run wants `PassHistory` rather than a table of its own, and
+  `PassHistoryCsv` rather than a format of its own — one writer, so a capture taken here and a
+  capture taken there are the same artifact.
 * **`SubmitCapture(target)`** — @pre not mid-frame; fewer than `c_MaxPendingCaptures` captures in
   flight. @post returns a ticket that **must** be spent by `TryResolveCapture` or `DiscardCapture`;
   leaking tickets exhausts the slots and the next submit throws. Captures the *last presented*

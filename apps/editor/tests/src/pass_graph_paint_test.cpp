@@ -1,11 +1,11 @@
 #include "Windows/GpuTiming/pass_graph_paint.h"
 
-#include "Windows/GpuTiming/PassHistory.h"
 #include <QColor>
 #include <QImage>
 #include <QPainter>
 #include <QPalette>
 #include <QRect>
+#include <bgl/PassHistory.h>
 #include <bgl/PassTiming.h>
 #include <catch2/catch_test_macros.hpp>
 #include <cmath>
@@ -73,7 +73,7 @@ namespace
 	}
 
 	[[nodiscard]] QImage
-	Render(const editor::PassHistory& history, const std::optional<std::size_t> selected)
+	Render(const bgl::PassHistory& history, const std::optional<std::size_t> selected)
 	{
 		QImage image(900, 380, QImage::Format_ARGB32);
 		image.fill(Qt::transparent);
@@ -88,7 +88,7 @@ namespace
 
 TEST_CASE("A history of frames draws its bands", "[gputiming]")
 {
-	editor::PassHistory history;
+	bgl::PassHistory history;
 	for (uint64_t frame = 1; frame <= 120; ++frame)
 	{
 		history.Append(SyntheticFrame(frame));
@@ -105,7 +105,7 @@ TEST_CASE("A history of frames draws its bands", "[gputiming]")
 
 TEST_CASE("An empty history says so rather than drawing an empty chart", "[gputiming]")
 {
-	const QImage image = Render(editor::PassHistory(), std::nullopt);
+	const QImage image = Render(bgl::PassHistory(), std::nullopt);
 
 	// It drew something, and none of it is a band.
 	CHECK(DistinctColours(image) > 1);
@@ -114,7 +114,7 @@ TEST_CASE("An empty history says so rather than drawing an empty chart", "[gputi
 
 TEST_CASE("The marked sample is the one the caller asked for", "[gputiming]")
 {
-	editor::PassHistory history;
+	bgl::PassHistory history;
 	for (uint64_t frame = 1; frame <= 40; ++frame)
 	{
 		history.Append(SyntheticFrame(frame));

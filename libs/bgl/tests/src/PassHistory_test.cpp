@@ -1,19 +1,18 @@
-#include "Windows/GpuTiming/PassHistory.h"
+#include <bgl/PassHistory.h>
 
-#include "Windows/GpuTiming/pass_timing_csv.h"
-#include <QString>
-#include <QStringList>
 #include <bgl/PassTiming.h>
+#include <bgl/pass_timing_csv.h>
 #include <catch2/catch_test_macros.hpp>
+#include <cstddef>
 #include <cstdint>
-#include <qcontainerfwd.h>
 #include <string>
 #include <utility>
 #include <vector>
 
-// The table behind the GPU timing graph, and its export. Every rule here exists because the frame
-// graph does not run the same passes every frame: a culled pass leaves no row, and a pass appearing
-// part way through must not shift the samples already recorded onto the wrong columns.
+// The table a caller polling GetPassTimings accumulates, and its export. Every rule here exists
+// because the frame graph does not run the same passes every frame: a culled pass leaves no row, and
+// a pass appearing part way through must not shift the samples already recorded onto the wrong
+// columns.
 
 namespace
 {
@@ -22,11 +21,25 @@ namespace
 	{
 		return bgl::PassTimings{ .frame = id, .passes = std::move(passes) };
 	}
+
+	[[nodiscard]] std::vector<std::string>
+	Lines(const std::string& text)
+	{
+		std::vector<std::string> lines;
+		std::size_t              start = 0;
+		for (std::size_t at = text.find('\n'); at != std::string::npos; at = text.find('\n', start))
+		{
+			lines.emplace_back(text.substr(start, at - start));
+			start = at + 1;
+		}
+		lines.emplace_back(text.substr(start));
+		return lines;
+	}
 }
 
-TEST_CASE("A frame already recorded is not recorded twice", "[gputiming]")
+TEST_CASE("A frame already recorded is not recorded twice", "[passhistory]")
 {
-	editor::PassHistory history;
+	bgl::PassHistory history;
 
 	history.Append(Frame(7, { { .name = "Clear", .milliseconds = 1.0 } }));
 	history.Append(Frame(7, { { .name = "Clear", .milliseconds = 1.0 } }));
@@ -37,9 +50,9 @@ TEST_CASE("A frame already recorded is not recorded twice", "[gputiming]")
 	CHECK(history.SampleCount() == 2);
 }
 
-TEST_CASE("A read that resolved no rows records nothing", "[gputiming]")
+TEST_CASE("A read that resolved no rows records nothing", "[passhistory]")
 {
-	editor::PassHistory history;
+	bgl::PassHistory history;
 
 	history.Append(Frame(0, {}));
 
@@ -47,9 +60,9 @@ TEST_CASE("A read that resolved no rows records nothing", "[gputiming]")
 	CHECK(history.PeakTotal() == 0.0);
 }
 
-TEST_CASE("The oldest samples fall off the end once the history is full", "[gputiming]")
+TEST_CASE("The oldest samples fall off the end once the history is full", "[passhistory]")
 {
-	editor::PassHistory history(3);
+	bgl::PassHistory history(3);
 
 	for (uint64_t frame = 1; frame <= 5; ++frame)
 	{
@@ -62,9 +75,9 @@ TEST_CASE("The oldest samples fall off the end once the history is full", "[gput
 	CHECK(history.FrameAt(2) == 5);
 }
 
-TEST_CASE("A pass that appears part way through lands in execution order", "[gputiming]")
+TEST_CASE("A pass that appears part way through lands in execution order", "[passhistory]")
 {
-	editor::PassHistory history;
+	bgl::PassHistory history;
 
 	history.Append(Frame(
 		1,
@@ -91,9 +104,9 @@ TEST_CASE("A pass that appears part way through lands in execution order", "[gpu
 	CHECK(history.At(1, 2).value() == 0.5);
 }
 
-TEST_CASE("A frame's total is what its passes cost together", "[gputiming]")
+TEST_CASE("A frame's total is what its passes cost together", "[passhistory]")
 {
-	editor::PassHistory history;
+	bgl::PassHistory history;
 
 	history.Append(Frame(
 		1,
@@ -108,9 +121,9 @@ TEST_CASE("A frame's total is what its passes cost together", "[gputiming]")
 	CHECK(history.PeakTotal() == 12.5);
 }
 
-TEST_CASE("Clearing forgets the frames and the passes", "[gputiming]")
+TEST_CASE("Clearing forgets the frames and the passes", "[passhistory]")
 {
-	editor::PassHistory history;
+	bgl::PassHistory history;
 
 	history.Append(Frame(1, { { .name = "Clear", .milliseconds = 0.5 } }));
 	history.Clear();
@@ -124,16 +137,14 @@ TEST_CASE("Clearing forgets the frames and the passes", "[gputiming]")
 	CHECK(history.SampleCount() == 1);
 }
 
-TEST_CASE("The CSV holds a header even with nothing recorded", "[gputiming]")
+TEST_CASE("The CSV holds a header even with nothing recorded", "[passhistory]")
 {
-	const QString csv = editor::PassHistoryCsv(editor::PassHistory());
-
-	CHECK(csv == "sample,frame,total\n");
+	CHECK(bgl::PassHistoryCsv(bgl::PassHistory()) == "sample,frame,total\n");
 }
 
-TEST_CASE("The CSV lists one row per sample, oldest first, with a total", "[gputiming]")
+TEST_CASE("The CSV lists one row per sample, oldest first, with a total", "[passhistory]")
 {
-	editor::PassHistory history;
+	bgl::PassHistory history;
 	history.Append(Frame(
 		11,
 		{ { .name = "Clear", .milliseconds = 0.125 },
@@ -143,18 +154,18 @@ TEST_CASE("The CSV lists one row per sample, oldest first, with a total", "[gput
 		{ { .name = "Clear", .milliseconds = 0.125 },
 	      { .name = "Forward 0", .milliseconds = 1.0 } }));
 
-	const QStringList lines = editor::PassHistoryCsv(history).split('\n');
+	const std::vector<std::string> lines = Lines(bgl::PassHistoryCsv(history));
 
 	REQUIRE(lines.size() == 4);
 	CHECK(lines[0] == "sample,frame,Clear,Forward 0,total");
 	CHECK(lines[1] == "0,11,0.125,4.500,4.625");
 	CHECK(lines[2] == "1,12,0.125,1.000,1.125");
-	CHECK(lines[3].isEmpty());
+	CHECK(lines[3].empty());
 }
 
-TEST_CASE("A pass that did not run leaves the field empty, not zero", "[gputiming]")
+TEST_CASE("A pass that did not run leaves the field empty, not zero", "[passhistory]")
 {
-	editor::PassHistory history;
+	bgl::PassHistory history;
 	history.Append(Frame(1, { { .name = "Clear", .milliseconds = 0.125 } }));
 	history.Append(Frame(
 		2,
@@ -162,19 +173,19 @@ TEST_CASE("A pass that did not run leaves the field empty, not zero", "[gputimin
 	      // Zero is a pass that ran and could not be sampled, and must survive as a figure.
 	      { .name = "SceneUpdate 0", .milliseconds = 0.0 } }));
 
-	const QStringList lines = editor::PassHistoryCsv(history).split('\n');
+	const std::vector<std::string> lines = Lines(bgl::PassHistoryCsv(history));
 
 	REQUIRE(lines.size() >= 3);
 	CHECK(lines[1] == "0,1,0.125,,0.125");
 	CHECK(lines[2] == "1,2,0.125,0.000,0.125");
 }
 
-TEST_CASE("A pass name carrying a comma stays one field", "[gputiming]")
+TEST_CASE("A pass name carrying a comma stays one field", "[passhistory]")
 {
-	editor::PassHistory history;
+	bgl::PassHistory history;
 	history.Append(Frame(1, { { .name = "Forward, part 2", .milliseconds = 1.0 } }));
 
-	const QStringList lines = editor::PassHistoryCsv(history).split('\n');
+	const std::vector<std::string> lines = Lines(bgl::PassHistoryCsv(history));
 
 	CHECK(lines[0] == "sample,frame,\"Forward, part 2\",total");
 }

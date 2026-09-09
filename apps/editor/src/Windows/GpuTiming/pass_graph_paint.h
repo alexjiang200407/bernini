@@ -8,10 +8,13 @@ class QPainter;
 class QPalette;
 class QRect;
 
-namespace editor
+namespace bgl
 {
 	class PassHistory;
+}
 
+namespace editor
+{
 	/** The band a pass is drawn in. Keyed by column, so a pass keeps its colour for the run. */
 	[[nodiscard]] QColor
 	PassBandColor(std::size_t pass);
@@ -23,7 +26,7 @@ namespace editor
 	 * @return nullopt outside the plotted area, and when there is nothing recorded.
 	 */
 	[[nodiscard]] std::optional<std::size_t>
-	PassGraphSampleAt(const QRect& rect, const PassHistory& history, int x);
+	PassGraphSampleAt(const QRect& rect, const bgl::PassHistory& history, int x);
 
 	/**
 	 * Draws `history` over `rect` as a stacked area, oldest sample at the left: one band per pass in
@@ -43,7 +46,7 @@ namespace editor
 	PaintPassGraph(
 		QPainter&                  painter,
 		const QRect&               rect,
-		const PassHistory&         history,
+		const bgl::PassHistory&    history,
 		std::optional<std::size_t> selected,
 		const QPalette&            palette);
 }
