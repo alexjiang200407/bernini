@@ -50,6 +50,13 @@ namespace assetlib
 				mapOne(route.texture, RefKind::kChannelRoute, map, seen);
 			break;
 
+		case ShadingModel::kPbrSurface:
+			// Bound by hand rather than composited, so there is no route behind one and no bake to
+			// go stale -- the map the renderer samples is the map the document names.
+			for (SurfaceTextureBinding& texture : material.surface.textures)
+				mapOne(texture.texture, RefKind::kBakedMap, map, seen);
+			break;
+
 		case ShadingModel::kCount:
 			throw std::runtime_error(
 				"assetlib::mapMaterialTextures: the material names an unknown shading model, so "

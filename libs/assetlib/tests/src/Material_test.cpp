@@ -780,3 +780,108 @@ TEST_CASE("a preserved route outlives the channel it decorated", "[bmaterial][io
 	CHECK(out.find("\"blurRadius\"") != std::string::npos);
 	CHECK(AssetCodec<BMaterial>::Serialize(AssetCodec<BMaterial>::Deserialize(resaved)) == resaved);
 }
+
+// The three keys a surface material adds, and the one property they all have to have: the reader
+// takes them out of the document, so what a writer emits comes from the struct and not from
+// whatever rode `extraJson` through.
+TEST_CASE("a surface material round-trips its three keys", "[bmaterial][io][surface]")
+{
+	BMaterial mat;
+	mat.name         = "rimmed";
+	mat.shadingModel = ShadingModel::kPbrSurface;
+	mat.surface.name = "Rim";
+
+	// A scalar, a triple and a quad: the count is the author's, and the renderer reads as many
+	// components as the parameter it names was declared with.
+	mat.surface.values = {
+		{ "rimPower", { 2.0f } },
+		{ "rimColor", { 1.0f, 0.3f, 0.1f } },
+		{ "baseColorFactor", { 0.05f, 0.05f, 0.06f, 1.0f } },
+	};
+	mat.surface.textures = { { "baseColor", "Derived/BakedTextures/rim_basecolor.ktx2" } };
+
+	const auto        bytes = AssetCodec<BMaterial>::Serialize(mat);
+	const std::string out(reinterpret_cast<const char*>(bytes.data()), bytes.size());
+
+	CHECK(out.find("\"shadingModel\": \"pbrSurface\"") != std::string::npos);
+	CHECK(out.find("\"surface\": \"Rim\"") != std::string::npos);
+
+	// A one-number parameter is written as a number rather than promoted to an array, so a
+	// hand-typed scalar comes back looking like one.
+	CHECK(out.find("\"rimPower\": 2.0") != std::string::npos);
+
+	const BMaterial restored = AssetCodec<BMaterial>::Deserialize(bytes);
+
+	REQUIRE(restored.shadingModel == ShadingModel::kPbrSurface);
+	CHECK(restored.surface.name == "Rim");
+
+	REQUIRE(restored.surface.values.size() == 3u);
+	for (const SurfaceValueBinding& value : restored.surface.values)
+	{
+		const auto original =
+			std::ranges::find(mat.surface.values, value.name, &SurfaceValueBinding::name);
+		REQUIRE(original != mat.surface.values.end());
+		CHECK(value.value == original->value);
+	}
+
+	REQUIRE(restored.surface.textures.size() == 1u);
+	CHECK(restored.surface.textures[0].name == "baseColor");
+	CHECK(restored.surface.textures[0].texture == "Derived/BakedTextures/rim_basecolor.ktx2");
+
+	// Canonical, like every other document: one content, one byte sequence.
+	CHECK(AssetCodec<BMaterial>::Serialize(restored) == bytes);
+}
+
+// The other half of "the reader takes them": a document that is not drawn by a surface has no
+// business carrying the keys, so a save strips them rather than writing them back out.
+TEST_CASE("a pbr material strips the surface keys", "[bmaterial][io][surface]")
+{
+	const std::string_view text = R"({
+	"name": "was_a_surface",
+	"parameters": {
+		"rimPower": 2.0
+	},
+	"shadingModel": "pbr",
+	"surface": "Rim",
+	"textures": {
+		"baseColor": "Derived/BakedTextures/rim_basecolor.ktx2"
+	}
+}
+)";
+
+	const BMaterial material =
+		AssetCodec<BMaterial>::Deserialize(std::as_bytes(std::span(text.data(), text.size())));
+	REQUIRE(material.shadingModel == ShadingModel::kPbr);
+
+	const auto        bytes = AssetCodec<BMaterial>::Serialize(material);
+	const std::string out(reinterpret_cast<const char*>(bytes.data()), bytes.size());
+
+	CHECK(out.find("\"surface\"") == std::string::npos);
+	CHECK(out.find("\"parameters\"") == std::string::npos);
+	CHECK(out.find("\"rimPower\"") == std::string::npos);
+	CHECK(out.find("\"textures\"") == std::string::npos);
+}
+
+// A parameter is one to four numbers. Anything else is a document nobody can pack, and it is
+// refused where it is read rather than becoming a zero somewhere in the record.
+TEST_CASE("a surface parameter of the wrong shape is refused", "[bmaterial][io][surface]")
+{
+	const auto read = [](std::string_view text) {
+		return AssetCodec<BMaterial>::Deserialize(
+			std::as_bytes(std::span(text.data(), text.size())));
+	};
+
+	CHECK_THROWS_AS(
+		read(R"({"shadingModel": "pbrSurface", "surface": "Rim", "parameters": {"p": []}})"),
+		std::runtime_error);
+	CHECK_THROWS_AS(
+		read(R"({"shadingModel": "pbrSurface", "surface": "Rim",
+		         "parameters": {"p": [1, 2, 3, 4, 5]}})"),
+		std::runtime_error);
+	CHECK_THROWS_AS(
+		read(R"({"shadingModel": "pbrSurface", "surface": "Rim", "parameters": {"p": "two"}})"),
+		std::runtime_error);
+	CHECK_THROWS_AS(
+		read(R"({"shadingModel": "pbrSurface", "surface": "Rim", "textures": {"t": 3}})"),
+		std::runtime_error);
+}
