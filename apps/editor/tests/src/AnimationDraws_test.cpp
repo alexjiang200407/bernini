@@ -92,25 +92,6 @@ TEST_CASE("The clip table converts field for field", "[animation]")
 	CHECK_FALSE(infos[1].loop);
 }
 
-TEST_CASE("Timeline ticks round-trip the clock inside the period", "[animation]")
-{
-	CHECK(AnimationEditorWindow::TimelineTicks(0.0f, 2.0f, 1000) == 0);
-	CHECK(AnimationEditorWindow::TimelineTicks(1.0f, 2.0f, 1000) == 500);
-	CHECK(AnimationEditorWindow::TimelineTicks(2.0f, 2.0f, 1000) == 1000);
-	CHECK(AnimationEditorWindow::TimelineTicks(5.0f, 2.0f, 1000) == 1000);  // clamped
-	CHECK(AnimationEditorWindow::TimelineTicks(1.0f, 0.0f, 1000) == 0);     // no clips
-
-	CHECK(AnimationEditorWindow::TimelineSeconds(500, 2.0f, 1000) == Catch::Approx(1.0f));
-	CHECK(AnimationEditorWindow::TimelineSeconds(1000, 2.0f, 1000) == Catch::Approx(2.0f));
-	CHECK(AnimationEditorWindow::TimelineSeconds(2000, 2.0f, 1000) == Catch::Approx(2.0f));
-	CHECK(AnimationEditorWindow::TimelineSeconds(500, 0.0f, 1000) == 0.0f);
-
-	const int ticks = AnimationEditorWindow::TimelineTicks(0.733f, 2.2f, 1000);
-	CHECK(
-		AnimationEditorWindow::TimelineSeconds(ticks, 2.2f, 1000) ==
-		Catch::Approx(0.733f).margin(0.0023f));  // one tick of slack
-}
-
 TEST_CASE("The scrubber's press-to-tick mapping spans the groove exactly", "[animation]")
 {
 	// The handle's center travels [radius, width - radius]; presses outside clamp to the ends.

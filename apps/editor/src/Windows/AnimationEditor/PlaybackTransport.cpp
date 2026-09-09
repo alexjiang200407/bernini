@@ -4,6 +4,7 @@
 #include <cmath>
 #include <core/err/util.h>
 #include <cstdint>
+#include <optional>
 #include <utility>
 #include <vector>
 
@@ -24,6 +25,7 @@ namespace editor
 		m_ActiveClip = 0;
 		m_Time       = 0.0f;
 		m_Playing    = false;
+		m_InWindow   = false;
 	}
 
 	void
@@ -37,6 +39,51 @@ namespace editor
 
 		m_ActiveClip = index;
 		m_Time       = 0.0f;
+		m_InWindow   = false;
+	}
+
+	void
+	PlaybackTransport::SetTransitionWindow(const float startSeconds, const float endSeconds)
+	{
+		core::throw_runtime_error_if(
+			!std::isfinite(startSeconds) || !std::isfinite(endSeconds) ||
+				endSeconds <= startSeconds,
+			"PlaybackTransport: transition window [{}, {}] is empty or reversed",
+			startSeconds,
+			endSeconds);
+
+		m_InWindow    = true;
+		m_WindowStart = startSeconds;
+		m_WindowEnd   = endSeconds;
+		m_Time        = startSeconds;
+	}
+
+	void
+	PlaybackTransport::ClearTransitionWindow() noexcept
+	{
+		if (!m_InWindow)
+			return;
+
+		m_InWindow = false;
+		m_Time     = 0.0f;
+	}
+
+	bool
+	PlaybackTransport::InTransitionWindow() const noexcept
+	{
+		return m_InWindow;
+	}
+
+	float
+	PlaybackTransport::GetWindowStartSeconds() const noexcept
+	{
+		return m_WindowStart;
+	}
+
+	float
+	PlaybackTransport::GetWindowEndSeconds() const noexcept
+	{
+		return m_WindowEnd;
 	}
 
 	void
@@ -45,9 +92,16 @@ namespace editor
 		if (!HasClips())
 			return;
 
-		const auto& clip = m_Clips[m_ActiveClip];
-		if (!clip.loop && m_Time >= GetPeriodSeconds())
+		if (m_InWindow)
+		{
+			if (m_Time >= m_WindowEnd)
+				m_Time = m_WindowStart;
+		}
+		else if (
+			const auto& clip = m_Clips[m_ActiveClip]; !clip.loop && m_Time >= GetPeriodSeconds())
+		{
 			m_Time = 0.0f;
+		}
 
 		m_Playing = true;
 	}
@@ -92,12 +146,19 @@ namespace editor
 
 		const auto& clip = m_Clips[m_ActiveClip];
 
+		if (m_InWindow)
+		{
+			const float interval = static_cast<float>(frames) / clip.sampleRate;
+			m_Time               = std::clamp(m_Time + interval, m_WindowStart, m_WindowEnd);
+			return;
+		}
+
 		// The span both kinds of clip cover, matching clip_playback.slang: frameCount frames are the
 		// ends of frameCount - 1 intervals. Floored at 1 because a one-frame clip would otherwise
 		// take a modulo by zero -- the importer never marks one looping, but nothing here checks.
 		const int cycle = std::max(1, static_cast<int>(clip.frameCount) - 1);
 
-		int frame = static_cast<int>(std::lround(GetCurrentFrame())) + frames;
+		int frame = static_cast<int>(std::lround(GetCurrentFrame().value())) + frames;
 		if (clip.loop)
 			frame = ((frame % cycle) + cycle) % cycle;
 		else
@@ -124,11 +185,11 @@ namespace editor
 		return m_Time;
 	}
 
-	float
+	std::optional<float>
 	PlaybackTransport::GetCurrentFrame() const noexcept
 	{
-		if (!HasClips())
-			return 0.0f;
+		if (!HasClips() || m_InWindow)
+			return std::nullopt;
 
 		// The shader's ClipFrames with phase 0 and rate 1; m_Time is already in the clip's
 		// domain, so the wrap/clamp below only guards the exact period boundary.
@@ -188,6 +249,9 @@ namespace editor
 	float
 	PlaybackTransport::Normalized(const float seconds) const noexcept
 	{
+		if (m_InWindow)
+			return std::clamp(seconds, m_WindowStart, m_WindowEnd);
+
 		const auto& clip   = m_Clips[m_ActiveClip];
 		const float period = GetPeriodSeconds();
 

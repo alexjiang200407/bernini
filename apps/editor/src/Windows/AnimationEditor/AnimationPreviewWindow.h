@@ -97,13 +97,42 @@ public:
 	void
 	LoadMesh(const std::filesystem::path& absolutePath, const std::string& animationsRelPath = {});
 
-	/** Respawns the animated instances on clip `index`; the caller's transport is the clock. */
+	/**
+	 * Respawns the animated instances on clip `index`, and resets the record onto it. `nowSeconds`
+	 * is the caller's transport clock.
+	 *
+	 * A respawn on both sources, deliberately: the caller rewinds its transport too, so the pose
+	 * and the clock both jump, and the temporal epoch a respawn moves is what drops the history
+	 * rather than reprojecting through it. A record rewrite is for a fade with a duration, which
+	 * carries its own past; one of no duration does not, and evicts the clip it replaces.
+	 *
+	 * The clock is a parameter rather than state because it is the *panel's*, as SetTime's contract
+	 * says: this window has none of its own.
+	 */
 	void
-	SetActiveClip(uint32_t index);
+	SetActiveClip(uint32_t index, float nowSeconds);
 
 	/**
-	 * Where the preview's instances read their pose. Switching respawns them on the same upload --
-	 * both sources draw one geom, which is the property the crowd tier was built for.
+	 * Stamps a fade from clip `fromNode` onto `toNode`, beginning at `startSeconds` and taking
+	 * `duration`, and writes it to every animated instance. Nothing happens on the crowd source,
+	 * whose shared table holds one clip and no slots to write.
+	 *
+	 * Written once and then read by moving the clock, which is the whole of how a transition is
+	 * previewed: the ramps are stamped in absolute time, so `SetTime` across a window bracketing
+	 * them plays it, and the same scrub position is the same pose every time.
+	 *
+	 * The record is reset to `fromNode` alone first, so this is never a fade interrupting a live
+	 * fade -- the one case a rewrite is inexact about, at `prevTime` on the frame it lands. The
+	 * caller parks the clock outside the window before re-stamping, which is what makes that hold.
+	 */
+	void
+	StampTransition(uint32_t fromNode, uint32_t toNode, float startSeconds, float duration);
+
+	/**
+	 * Where the preview's instances read their pose, as of `nowSeconds`. Switching respawns them on
+	 * the same upload -- both sources draw one geom, which is the property the crowd tier was built
+	 * for -- and the record is reset onto whichever node it was mostly showing, since a spawn
+	 * carries one clip and no slots.
 	 *
 	 * The two draw the same pixels at a whole frame, so this is not a difference to look for on
 	 * screen: it is how the crowd path gets exercised at all outside a test.
@@ -111,7 +140,7 @@ public:
 	 * A no-op if `source` is already the active one.
 	 */
 	void
-	SetPoseSource(bgl::PoseSource source);
+	SetPoseSource(bgl::PoseSource source, float nowSeconds);
 
 	[[nodiscard]] bgl::PoseSource
 	GetPoseSource() const noexcept
@@ -296,9 +325,13 @@ private:
 		bgl::MeshInstanceHandle instance;
 	};
 
-	game::AssetManager* m_Assets     = nullptr;
-	uint32_t            m_ActiveClip = 0;  // what the live animated instances were spawned on
-	bgl::PoseSource     m_Source     = bgl::PoseSource::kPerInstance;
+	game::AssetManager* m_Assets = nullptr;
+	bgl::PoseSource     m_Source = bgl::PoseSource::kPerInstance;
+
+	// What the live animated instances are playing. One record for every animated draw: they are
+	// entries of one file on one rig, and the panel drives them as a unit. On the crowd source only
+	// its dominant node means anything -- a shared table holds one clip and no slots.
+	bgl::SkinnedPlaybackDesc m_Playback;
 
 	std::vector<bgl::MeshInstanceHandle> m_Instances;  // static entries
 	std::vector<bgl::GeomHandle>         m_Geoms;      // one entry per acquire, repeats included

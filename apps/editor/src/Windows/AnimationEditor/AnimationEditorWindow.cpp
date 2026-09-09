@@ -2,7 +2,10 @@
 
 #include "Windows/AnimationEditor/AnimationPreviewWindow.h"
 #include "Windows/AnimationEditor/Scrubber.h"
+#include "Windows/AnimationEditor/TransitionStrip.h"
 #include "Windows/AnimationEditor/foot_ik_weights.h"
+#include "Windows/AnimationEditor/playback_writes.h"
+#include "Windows/AnimationEditor/transition_spans.h"
 #include "util/mesh_drop.h"
 #include <algorithm>
 #include <assetlib/project_layout.h>
@@ -25,12 +28,14 @@
 #include <QSplitter>
 #include <QStackedWidget>
 #include <QStyle>
+#include <QTabWidget>
 #include <QTimer>
 #include <QToolButton>
 #include <QVBoxLayout>
 #include <cmath>
 #include <cstdint>
 #include <filesystem>
+#include <optional>
 #include <qcontainerfwd.h>
 #include <qlatin1stringview.h>
 #include <qnamespace.h>
@@ -42,9 +47,17 @@
 
 namespace
 {
-	constexpr int c_TimelineTicks           = 1000;
-	constexpr int c_ClockIntervalMs         = 16;
-	constexpr int c_RevealRepaintDelaysMs[] = { 0, 300 };
+
+	// Where a previewed fade is stamped, and what is shown either side of it. The clock has to be
+	// able to sit before t0, so it is not zero; the rest is how much run-up and settle reads.
+	constexpr float  c_TransitionStart         = 10.0f;
+	constexpr float  c_TransitionLead          = 0.6f;
+	constexpr float  c_TransitionTail          = 0.9f;
+	constexpr double c_MinFadeSeconds          = 0.01;
+	constexpr double c_MaxFadeSeconds          = 4.0;
+	constexpr double c_DefaultFadeSeconds      = 0.25;
+	constexpr int    c_ClockIntervalMs         = 16;
+	constexpr int    c_RevealRepaintDelaysMs[] = { 0, 300 };
 }
 
 AnimationEditorWindow::AnimationEditorWindow(QWidget* parent, AnimationEditorWindowDesc desc) :
@@ -121,6 +134,7 @@ AnimationEditorWindow::AnimationEditorWindow(QWidget* parent, AnimationEditorWin
 			m_SyncingUi = true;
 			m_TierSelector->setCurrentIndex(TierIndexFor(source));
 			m_SyncingUi = false;
+			UpdateTransitionControls();
 		});
 
 	connect(
@@ -196,7 +210,11 @@ AnimationEditorWindow::BuildPropertiesColumn()
 	connect(m_TierSelector, &QComboBox::activated, this, [this](int index) {
 		if (m_SyncingUi || index < 0)
 			return;
-		m_Preview->SetPoseSource(TierSourceAt(index));
+		// The fade goes first. A tier switch respawns onto whatever the record was mostly showing,
+		// and leaving a transition puts the clip list's own selection back -- so clearing after the
+		// switch respawns twice for one click, onto two different clips.
+		ClearTransition();
+		m_Preview->SetPoseSource(TierSourceAt(index), m_Transport.GetTimeSeconds());
 	});
 	layout->addWidget(m_TierSelector);
 
@@ -289,16 +307,22 @@ AnimationEditorWindow::BuildPropertiesColumn()
 	connect(m_PlantFeet, &QCheckBox::toggled, this, [this] { UpdateGroundControls(); });
 	layout->addWidget(m_PlantFeet);
 
+	// What is being done with the clip set, rather than what it is: one clip watched, or two
+	// blended. Everything above stays shared -- the ground and the plant switch especially, since a
+	// blended plant weight has to be judged on a slope while the blend controls are visible.
 	layout->addSpacing(8);
-	layout->addWidget(new QLabel(QStringLiteral("Clips"), column));
-
-	m_ClipList = new QListWidget(column);
-	connect(m_ClipList, &QListWidget::currentRowChanged, this, &AnimationEditorWindow::SelectClip);
-	layout->addWidget(m_ClipList, /*stretch*/ 1);
-
-	m_ClipMetadata = new QLabel(column);
-	m_ClipMetadata->setTextInteractionFlags(Qt::TextSelectableByMouse);
-	layout->addWidget(m_ClipMetadata);
+	m_Surfaces = new QTabWidget(column);
+	m_Surfaces->addTab(BuildClipTab(), QStringLiteral("Clip"));
+	m_Surfaces->addTab(BuildBlendTab(), QStringLiteral("Blend"));
+	// The tab decides what is being watched, so leaving Blend puts the clip back and entering it
+	// restores whatever fade its controls describe. That is also how a chosen To is undone.
+	connect(m_Surfaces, &QTabWidget::currentChanged, this, [this](int) {
+		if (m_Surfaces->currentWidget() == m_TransitionGroup)
+			StampTransition();
+		else
+			ClearTransition();
+	});
+	layout->addWidget(m_Surfaces, /*stretch*/ 1);
 
 	// The box is the state; this is what puts the preview on it. Reaches the preview before it is
 	// on screen, where a rebind is recorded and applied when it is shown.
@@ -315,6 +339,90 @@ AnimationEditorWindow::BuildPropertiesColumn()
 	scrollBox->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
 	scrollBox->setMinimumWidth(column->sizeHint().width());
 	return scrollBox;
+}
+
+QWidget*
+AnimationEditorWindow::BuildClipTab()
+{
+	auto* page   = new QWidget(this);
+	auto* layout = new QVBoxLayout(page);
+	layout->setContentsMargins(4, 4, 4, 4);
+
+	m_ClipList = new QListWidget(page);
+	connect(m_ClipList, &QListWidget::currentRowChanged, this, &AnimationEditorWindow::SelectClip);
+	layout->addWidget(m_ClipList, /*stretch*/ 1);
+
+	m_ClipMetadata = new QLabel(page);
+	m_ClipMetadata->setTextInteractionFlags(Qt::TextSelectableByMouse);
+	layout->addWidget(m_ClipMetadata);
+
+	return page;
+}
+
+QWidget*
+AnimationEditorWindow::BuildBlendTab()
+{
+	m_TransitionGroup = new QWidget(this);
+	auto* fade        = new QVBoxLayout(m_TransitionGroup);
+	fade->setContentsMargins(4, 4, 4, 4);
+
+	auto* ends = new QHBoxLayout();
+	ends->setContentsMargins(0, 0, 0, 0);
+	m_FromClip = new QComboBox(m_TransitionGroup);
+	m_ToClip   = new QComboBox(m_TransitionGroup);
+	// Nothing to fade to until somebody says so: the panel's resting state is one clip playing, and
+	// a second end filled in by default would offer a transition nobody asked for.
+	m_ToClip->setPlaceholderText(QStringLiteral("fade to..."));
+	ends->addWidget(m_FromClip, /*stretch*/ 1);
+	ends->addWidget(new QLabel(QStringLiteral("→"), m_TransitionGroup));
+	ends->addWidget(m_ToClip, /*stretch*/ 1);
+	fade->addLayout(ends);
+
+	auto* timing = new QHBoxLayout();
+	timing->setContentsMargins(0, 0, 0, 0);
+	timing->addWidget(new QLabel(QStringLiteral("Fade"), m_TransitionGroup));
+	m_FadeSeconds = new QDoubleSpinBox(m_TransitionGroup);
+	m_FadeSeconds->setRange(c_MinFadeSeconds, c_MaxFadeSeconds);
+	m_FadeSeconds->setSingleStep(0.05);
+	m_FadeSeconds->setDecimals(2);
+	m_FadeSeconds->setValue(c_DefaultFadeSeconds);
+	m_FadeSeconds->setSuffix(QStringLiteral(" s"));
+	// Committed rather than tracked: with keyboard tracking on, valueChanged fires per keystroke,
+	// and every one of those re-stamps the record and re-parks the clock at the window's start --
+	// so typing "0.35" would snap the playhead back three times and lose the scrub position the
+	// comparison is being made at.
+	m_FadeSeconds->setKeyboardTracking(false);
+	timing->addWidget(m_FadeSeconds, /*stretch*/ 1);
+
+	// The comparison the fade has to win. Off, the same two clips meet at the same instant with no
+	// blend between them, so what the fade is worth is the difference between two ticks of one box
+	// rather than a memory of the last time the panel was open -- the argument Plant feet is on.
+	m_BlendEnabled = new QCheckBox(QStringLiteral("Blend"), m_TransitionGroup);
+	m_BlendEnabled->setChecked(true);
+	timing->addWidget(m_BlendEnabled);
+	fade->addLayout(timing);
+
+	m_TransitionNote = new QLabel(m_TransitionGroup);
+	m_TransitionNote->setWordWrap(true);
+	fade->addWidget(m_TransitionNote);
+
+	// Naming both ends is the request: there is nothing else a chosen From and To could mean here,
+	// so a button to confirm it would only be a second click. StampTransition itself decides
+	// whether the pair is one -- an unset or matching To leaves the clip playing.
+	//
+	// Re-stamped from a clean record each time, with the clock parked at the window's start, so no
+	// stamp is ever a fade interrupting a live one.
+	const auto restamp = [this] { StampTransition(); };
+	connect(m_FromClip, &QComboBox::activated, this, [restamp](int) { restamp(); });
+	connect(m_ToClip, &QComboBox::activated, this, [restamp](int) { restamp(); });
+	connect(m_FadeSeconds, &QDoubleSpinBox::valueChanged, this, [restamp](double) { restamp(); });
+	connect(m_BlendEnabled, &QCheckBox::toggled, this, [this, restamp](bool) {
+		UpdateTransitionControls();
+		restamp();
+	});
+
+	fade->addStretch(1);
+	return m_TransitionGroup;
 }
 
 void
@@ -382,16 +490,18 @@ AnimationEditorWindow::BuildTransportBar()
 	});
 	layout->addWidget(m_StepForward);
 
-	m_Timeline = new Scrubber(bar);
-	m_Timeline->SetRange(0, c_TimelineTicks);
-	connect(m_Timeline, &Scrubber::ValueChanged, this, [this](int ticks) {
+	// One timeline for both tabs. A clip is the same strip with nothing to fade to -- one bar, no
+	// overlap -- so the Clip tab and the Blend tab differ in what the record holds rather than in
+	// what draws it.
+	m_Strip = new TransitionStrip(bar);
+	connect(m_Strip, &TransitionStrip::TimeScrubbed, this, [this](const float seconds) {
 		if (m_SyncingUi)
 			return;
-		m_Transport.Scrub(TimelineSeconds(ticks, m_Transport.GetPeriodSeconds(), c_TimelineTicks));
+		m_Transport.Scrub(seconds);
 		m_Preview->SetTime(m_Transport.GetTimeSeconds());
 		SyncTransportUi();
 	});
-	layout->addWidget(m_Timeline, /*stretch*/ 1);
+	layout->addWidget(m_Strip, /*stretch*/ 1);
 
 	m_TimeReadout = new QLabel(bar);
 	m_TimeReadout->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
@@ -495,32 +605,6 @@ AnimationEditorWindow::TierSourceAt(const int index) noexcept
 	return index == 1 ? bgl::PoseSource::kBoneAnimTable : bgl::PoseSource::kPerInstance;
 }
 
-int
-AnimationEditorWindow::TimelineTicks(
-	const float seconds,
-	const float periodSeconds,
-	const int   tickCount) noexcept
-{
-	if (periodSeconds <= 0.0f)
-		return 0;
-
-	const float normalized = std::clamp(seconds / periodSeconds, 0.0f, 1.0f);
-	return static_cast<int>(std::lround(normalized * static_cast<float>(tickCount)));
-}
-
-float
-AnimationEditorWindow::TimelineSeconds(
-	const int   ticks,
-	const float periodSeconds,
-	const int   tickCount) noexcept
-{
-	if (tickCount <= 0 || periodSeconds <= 0.0f)
-		return 0.0f;
-
-	return periodSeconds * static_cast<float>(std::clamp(ticks, 0, tickCount)) /
-	       static_cast<float>(tickCount);
-}
-
 void
 AnimationEditorWindow::LoadShownMesh(const QString& animationsRelPath)
 {
@@ -570,6 +654,124 @@ AnimationEditorWindow::Tick()
 }
 
 void
+AnimationEditorWindow::StampTransition()
+{
+	// Only while the Blend tab is the one showing: it is the surface that says a fade is what is
+	// being watched, and the Clip tab means the opposite.
+	if (m_SyncingUi || !m_Transport.HasClips() ||
+	    !editor::RewritesPlayback(m_Preview->GetPoseSource()) ||
+	    m_Surfaces->currentWidget() != m_TransitionGroup)
+	{
+		return;
+	}
+
+	const int from = m_FromClip->currentIndex();
+	const int to   = m_ToClip->currentIndex();
+	if (from < 0 || to < 0 || from == to)
+	{
+		ClearTransition();
+		return;
+	}
+
+	// t0 is arbitrary and only has to be somewhere the clock can sit before it, since every ramp is
+	// stamped in absolute time and read by moving the clock across them.
+	// Unblended, the two clips still meet -- they just meet over one sample interval instead of the
+	// authored window, which is a cut. Not a duration of zero: that evicts the outgoing clip from
+	// the record and shows the destination across the whole window (editor::CutSeconds).
+	const float fadeSeconds =
+		m_BlendEnabled->isChecked() ?
+			static_cast<float>(m_FadeSeconds->value()) :
+			editor::CutSeconds(m_Transport.GetClips().at(static_cast<unsigned>(from)).sampleRate);
+
+	const auto layout =
+		editor::WindowFor(c_TransitionStart, fadeSeconds, c_TransitionLead, c_TransitionTail);
+
+	// The clock is parked outside the window *before* the record is written, and the order is the
+	// point: SetTime is queued to the render thread while the write below blocks on it, so writing
+	// first would leave the render thread free to draw the new fade against the old clock.
+	m_Transport.SetTransitionWindow(layout.windowStart, layout.windowEnd);
+	m_Preview->SetTime(m_Transport.GetTimeSeconds());
+
+	m_Preview->StampTransition(
+		static_cast<uint32_t>(from),
+		static_cast<uint32_t>(to),
+		layout.start,
+		layout.duration);
+
+	m_TransitionLayout = layout;
+	m_Strip->SetLayout(layout);
+	m_Strip->SetClipNames(m_FromClip->currentText(), m_ToClip->currentText());
+
+	UpdateTransitionControls();
+	SyncTransportUi();
+}
+
+void
+AnimationEditorWindow::ClearTransition()
+{
+	if (!m_Transport.InTransitionWindow())
+		return;
+
+	m_Transport.ClearTransitionWindow();
+	m_Preview->SetActiveClip(m_Transport.GetActiveClipIndex(), m_Transport.GetTimeSeconds());
+	m_Preview->SetTime(m_Transport.GetTimeSeconds());
+	UpdateTransitionControls();
+	SyncTransportUi();
+}
+
+void
+AnimationEditorWindow::UpdateTransitionControls()
+{
+	const bool rewritable = editor::RewritesPlayback(m_Preview->GetPoseSource());
+	const bool playable   = m_Transport.HasClips();
+	const bool usable     = rewritable && playable;
+
+	m_FromClip->setEnabled(usable);
+	m_ToClip->setEnabled(usable);
+	// Nothing to set while the fade is a cut.
+	m_FadeSeconds->setEnabled(usable && m_BlendEnabled->isChecked());
+	m_BlendEnabled->setEnabled(usable);
+
+	// The strip is live only while a fade is stamped. Left enabled with nothing behind it, a drag
+	// would feed the window's absolute seconds to a transport back in clip time, which reads them
+	// as that clip's own -- a picture disagreeing with the record, which is the one thing it must
+	// never do.
+	// The strip stays live whatever the tab: with no fade stamped it is the active clip's own
+	// timeline, which is what the Clip tab wants of it.
+	const bool live = m_Transport.InTransitionWindow();
+	m_Strip->setEnabled(playable);
+	if (!live)
+	{
+		m_TransitionLayout = editor::TransitionLayout();
+		m_Strip->SetClipNames(
+			m_Transport.HasClips() ? QString::fromStdString(m_Transport.GetActiveClip().name) :
+									 QString(),
+			QString());
+	}
+
+	// Disabled with the reason rather than hidden: a control that vanishes on a tier switch reads
+	// as a bug, and this one is a constraint of the tier rather than a missing feature.
+	if (!playable)
+		m_TransitionNote->setText(QStringLiteral("No clips to fade between."));
+	else if (!rewritable)
+	{
+		m_TransitionNote->setText(QStringLiteral(
+			"The shared bone table plays one clip per instance and holds no slots, so there "
+			"is nothing to fade between -- it still interpolates frames within that clip. "
+			"Switch to the per-instance source to preview a fade."));
+	}
+	else if (!live)
+	{
+		m_TransitionNote->setText(QStringLiteral("Playing one clip. Choose what to fade to."));
+	}
+	else
+		m_TransitionNote->clear();
+
+	if (!usable)
+		ClearTransition();
+}
+
+void
 AnimationEditorWindow::SyncTransportUi()
 {
 	m_SyncingUi = true;
@@ -579,17 +781,28 @@ AnimationEditorWindow::SyncTransportUi()
 			m_Transport.IsPlaying() ? QStyle::SP_MediaPause : QStyle::SP_MediaPlay));
 	// Not while the user holds the handle: a loop's last tick wraps to zero, and writing that
 	// back mid-drag snaps the scrubber out from under the cursor.
-	if (!m_Timeline->IsScrubbing())
-		m_Timeline->SetValue(TimelineTicks(
-			m_Transport.GetTimeSeconds(),
-			m_Transport.GetPeriodSeconds(),
-			c_TimelineTicks));
+	// The strip is the timeline in both domains. A transition keeps the layout its stamp produced,
+	// since the window's ends and the fade inside it are the stamp's to decide; a single clip is
+	// derived fresh, because it is only ever the active clip's period.
+	if (!m_Strip->IsScrubbing())
+	{
+		editor::TransitionLayout layout =
+			m_Transport.InTransitionWindow() ?
+				m_TransitionLayout :
+				editor::WindowForClip(m_Transport.GetPeriodSeconds(), 0.0f);
+		layout.time = m_Transport.GetTimeSeconds();
+		m_Strip->SetLayout(layout);
+	}
 
-	if (m_Transport.HasClips())
+	if (const std::optional<float> frame = m_Transport.GetCurrentFrame(); frame)
 	{
 		m_TimeReadout->setText(QStringLiteral("%1s / frame %2")
 		                           .arg(m_Transport.GetTimeSeconds(), 0, 'f', 2)
-		                           .arg(m_Transport.GetCurrentFrame(), 0, 'f', 1));
+		                           .arg(*frame, 0, 'f', 1));
+	}
+	else if (m_Transport.HasClips())
+	{
+		m_TimeReadout->setText(QStringLiteral("%1s").arg(m_Transport.GetTimeSeconds(), 0, 'f', 2));
 	}
 	else
 	{
@@ -606,10 +819,23 @@ AnimationEditorWindow::SetClips(const std::vector<editor::ClipInfo>& clips)
 
 	m_SyncingUi = true;
 	m_ClipList->clear();
+	m_FromClip->clear();
+	m_ToClip->clear();
 	for (const editor::ClipInfo& clip : clips)
-		m_ClipList->addItem(QString::fromStdString(clip.name));
+	{
+		const QString name = QString::fromStdString(clip.name);
+		m_ClipList->addItem(name);
+		m_FromClip->addItem(name);
+		m_ToClip->addItem(name);
+	}
 	if (!clips.empty())
+	{
 		m_ClipList->setCurrentRow(0);
+		m_FromClip->setCurrentIndex(0);
+	}
+	// -1 after the fill, which is what the placeholder shows: a clip set arrives with one clip
+	// playing and no transition pending.
+	m_ToClip->setCurrentIndex(-1);
 	m_SyncingUi = false;
 
 	const bool playable = !clips.empty();
@@ -628,6 +854,7 @@ AnimationEditorWindow::SetClips(const std::vector<editor::ClipInfo>& clips)
 
 	m_Preview->SetTime(0.0f);
 	SelectClip(playable ? 0 : -1);
+	UpdateTransitionControls();
 	SyncTransportUi();
 }
 
@@ -644,9 +871,12 @@ AnimationEditorWindow::SelectClip(const int index)
 		return;
 	}
 
+	// SelectClip drops the transport's window, so a strip left as it was would still be painting a
+	// fade that no longer exists on a clock that no longer means what it did.
 	m_Transport.SelectClip(static_cast<uint32_t>(index));
-	m_Preview->SetActiveClip(static_cast<uint32_t>(index));
-	m_Preview->SetTime(0.0f);
+	m_Preview->SetActiveClip(static_cast<uint32_t>(index), m_Transport.GetTimeSeconds());
+	m_Preview->SetTime(m_Transport.GetTimeSeconds());
+	UpdateTransitionControls();
 
 	const editor::ClipInfo& clip = m_Transport.GetActiveClip();
 	m_ClipMetadata->setText(QStringLiteral("%1\n%2 frames @ %3 Hz\n%4 s%5")

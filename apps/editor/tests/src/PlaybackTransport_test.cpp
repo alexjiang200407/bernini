@@ -38,7 +38,7 @@ TEST_CASE("An empty transport is inert", "[animation]")
 
 	CHECK_FALSE(transport.HasClips());
 	CHECK(transport.GetTimeSeconds() == 0.0f);
-	CHECK(transport.GetCurrentFrame() == 0.0f);
+	CHECK_FALSE(transport.GetCurrentFrame().has_value());
 	CHECK(transport.GetPeriodSeconds() == 0.0f);
 
 	transport.Play();
@@ -193,4 +193,107 @@ TEST_CASE("StepFrames pauses and moves whole frames", "[animation]")
 	oneShot.Scrub(0.3f);
 	oneShot.StepFrames(5);
 	CHECK(oneShot.GetCurrentFrame() == Catch::Approx(3.0f));
+}
+
+// The second domain. A crossfade's ramp is stamped in absolute time, so the window that brackets it
+// must not wrap -- these pin that it clamps at both ends whatever the active clip does, that the
+// clip's own domain is untouched underneath, and that the timeline reads the same 0..1 in both.
+
+TEST_CASE("A transition window is absolute, clamped at both ends, and never wraps", "[animation]")
+{
+	auto transport = Loaded(/*loop*/ true);
+	transport.SetTransitionWindow(10.0f, 11.0f);
+
+	CHECK(transport.InTransitionWindow());
+	CHECK(transport.GetTimeSeconds() == 10.0f);
+	CHECK(transport.GetWindowStartSeconds() == 10.0f);
+	CHECK(transport.GetWindowEndSeconds() == 11.0f);
+
+	// The clip loops and its period is 0.3 s, so a clip-local clock would have wrapped this many
+	// times over. The window is the domain, and it holds.
+	transport.Play();
+	transport.Advance(0.4f);
+	CHECK(transport.GetTimeSeconds() == Catch::Approx(10.4f));
+
+	transport.Advance(5.0f);
+	CHECK(transport.GetTimeSeconds() == 11.0f);
+
+	transport.Scrub(9.0f);
+	CHECK(transport.GetTimeSeconds() == 10.0f);
+
+	transport.Scrub(10.25f);
+	CHECK(transport.GetTimeSeconds() == Catch::Approx(10.25f));
+}
+
+TEST_CASE("An empty or reversed window is refused up front", "[animation]")
+{
+	auto transport = Loaded(/*loop*/ true);
+
+	CHECK_THROWS_AS(transport.SetTransitionWindow(1.0f, 1.0f), std::runtime_error);
+	CHECK_THROWS_AS(transport.SetTransitionWindow(2.0f, 1.0f), std::runtime_error);
+	CHECK_FALSE(transport.InTransitionWindow());
+}
+
+TEST_CASE("Play rewinds a window parked on its end", "[animation]")
+{
+	auto transport = Loaded(/*loop*/ true);
+	transport.SetTransitionWindow(10.0f, 11.0f);
+
+	transport.Scrub(11.0f);
+	transport.Play();
+	CHECK(transport.GetTimeSeconds() == 10.0f);
+	CHECK(transport.IsPlaying());
+}
+
+TEST_CASE("A window has no frame of its own, and steps in the clip's interval", "[animation]")
+{
+	auto transport = Loaded(/*loop*/ true);
+	transport.SetTransitionWindow(10.0f, 11.0f);
+
+	// Two slots are live over a fade and neither one's frame is the playhead. Empty rather than
+	// zero, which is a frame the clip really has.
+	CHECK_FALSE(transport.GetCurrentFrame().has_value());
+
+	// 10 Hz, so a frame is 0.1 s of the window's seconds.
+	transport.StepFrames(3);
+	CHECK(transport.GetTimeSeconds() == Catch::Approx(10.3f));
+	CHECK_FALSE(transport.IsPlaying());
+
+	transport.StepFrames(-1);
+	CHECK(transport.GetTimeSeconds() == Catch::Approx(10.2f));
+
+	transport.StepFrames(100);
+	CHECK(transport.GetTimeSeconds() == 11.0f);
+}
+
+TEST_CASE("Leaving a window restores the clip's own domain", "[animation]")
+{
+	auto transport = Loaded(/*loop*/ true);
+	transport.SetTransitionWindow(10.0f, 11.0f);
+	transport.Scrub(10.5f);
+
+	transport.ClearTransitionWindow();
+
+	CHECK_FALSE(transport.InTransitionWindow());
+	CHECK(transport.GetTimeSeconds() == 0.0f);
+
+	// The clip's wrap is exactly what it was before the window existed.
+	transport.Scrub(0.35f);
+	CHECK(transport.GetTimeSeconds() == Catch::Approx(0.05f));
+	CHECK(transport.GetCurrentFrame() == Catch::Approx(0.5f));
+}
+
+TEST_CASE("A clip selection or a new clip table drops the window", "[animation]")
+{
+	auto transport = Loaded(/*loop*/ true);
+
+	transport.SetTransitionWindow(10.0f, 11.0f);
+	transport.SelectClip(0);
+	CHECK_FALSE(transport.InTransitionWindow());
+	CHECK(transport.GetTimeSeconds() == 0.0f);
+
+	transport.SetTransitionWindow(10.0f, 11.0f);
+	transport.SetClips(OneClip(/*loop*/ false));
+	CHECK_FALSE(transport.InTransitionWindow());
+	CHECK(transport.GetTimeSeconds() == 0.0f);
 }

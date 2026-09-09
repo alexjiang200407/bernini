@@ -11,6 +11,7 @@
 #include "Render/Renderer.h"
 #include "Render/environment.h"
 #include "Windows/AnimationEditor/PlaybackTransport.h"
+#include "Windows/AnimationEditor/transition_spans.h"
 #include "util/follows_project.h"
 #include "util/held_open_assets.h"
 #include <bgl/InstanceDesc.h>
@@ -21,6 +22,7 @@ class QDragEnterEvent;
 class QDragMoveEvent;
 class QDropEvent;
 class QStackedWidget;
+class QTabWidget;
 class QCheckBox;
 class QComboBox;
 class QDoubleSpinBox;
@@ -28,6 +30,7 @@ class QLabel;
 class QListWidget;
 class QPushButton;
 class Scrubber;
+class TransitionStrip;
 class QTimer;
 class QToolButton;
 
@@ -112,16 +115,6 @@ public:
 	[[nodiscard]] static bgl::PoseSource
 	TierSourceAt(int index) noexcept;
 
-	/**
-	 * The timeline slider position for a clock reading, and back: the slider is `tickCount`
-	 * integer ticks over the clip's period. Static so the mapping is pinnable without a window.
-	 */
-	[[nodiscard]] static int
-	TimelineTicks(float seconds, float periodSeconds, int tickCount) noexcept;
-
-	[[nodiscard]] static float
-	TimelineSeconds(int ticks, float periodSeconds, int tickCount) noexcept;
-
 protected:
 	// A dropped .bmesh lands here while the empty-state prompt is up; the preview handles its own
 	// drops once it is the visible page.
@@ -150,6 +143,14 @@ private:
 
 	[[nodiscard]] QWidget*
 	BuildPropertiesColumn();
+
+	// The two surfaces over the shared header: one clip watched, or two blended. Foot IK is the
+	// third the spec calls for and is not built here.
+	[[nodiscard]] QWidget*
+	BuildClipTab();
+
+	[[nodiscard]] QWidget*
+	BuildBlendTab();
 
 	[[nodiscard]] QWidget*
 	BuildTransportBar();
@@ -183,6 +184,19 @@ private:
 	void
 	SelectClip(int index);
 
+	// Stamps the fade the three controls describe and puts the transport on the window that
+	// brackets it. Called when any of them changes, and on a tier switch.
+	void
+	StampTransition();
+
+	// Leaves the transition window and returns the clock to the selected clip.
+	void
+	ClearTransition();
+
+	// Whether the tier on screen can hold a fade at all, and what the note says when it cannot.
+	void
+	UpdateTransitionControls();
+
 	AnimationPreviewWindow* m_Preview = nullptr;
 	QStackedWidget*         m_Stage   = nullptr;  // the drop prompt, or the viewport + transport
 
@@ -211,14 +225,28 @@ private:
 	Scrubber* m_SoleTurnSlider = nullptr;
 	QLabel*   m_SoleTurnLabel  = nullptr;
 
-	QListWidget* m_ClipList     = nullptr;
-	QLabel*      m_ClipMetadata = nullptr;
+	QTabWidget* m_Surfaces = nullptr;
+
+	// The stamped fade's layout, which the shared strip is redrawn from every tick.
+	editor::TransitionLayout m_TransitionLayout;
+	QListWidget*             m_ClipList     = nullptr;
+	QLabel*                  m_ClipMetadata = nullptr;
+
+	// Previewing a crossfade: which two clips, how long, and the strip that is all three at once.
+	// The duration is typed rather than dragged because the question it answers is whether 0.2 s
+	// beats 0.35 s, and two values have to be reachable exactly to be compared at all.
+	QWidget*         m_TransitionGroup = nullptr;
+	QComboBox*       m_FromClip        = nullptr;
+	QComboBox*       m_ToClip          = nullptr;
+	QDoubleSpinBox*  m_FadeSeconds     = nullptr;
+	QCheckBox*       m_BlendEnabled    = nullptr;
+	TransitionStrip* m_Strip           = nullptr;
+	QLabel*          m_TransitionNote  = nullptr;
 
 	QWidget*        m_TransportBar = nullptr;
 	QToolButton*    m_PlayButton   = nullptr;
 	QToolButton*    m_StepBack     = nullptr;
 	QToolButton*    m_StepForward  = nullptr;
-	Scrubber*       m_Timeline     = nullptr;
 	QDoubleSpinBox* m_Speed        = nullptr;
 	QLabel*         m_TimeReadout  = nullptr;
 
