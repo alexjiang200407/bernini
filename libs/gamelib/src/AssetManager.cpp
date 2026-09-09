@@ -18,6 +18,7 @@
 #include <filesystem>
 #include <format>
 #include <gamelib/AssetManager.h>
+#include <gamelib/BlendSpaceInfo.h>
 #include <gamelib/ClipInfo.h>
 
 #include <assetlib/RegenMesh.h>
@@ -995,6 +996,49 @@ namespace game
 		RegisterInstance(std::move(view), geom.handle.index, instance);
 
 		return instance;
+	}
+
+	void
+	AssetManager::SetBlendParameters(bgl::GeomHandle geom, std::span<const BlendSpaceInfo> spaces)
+	{
+		const auto it = m_Geoms.find(geom.handle.index);
+		if (it == m_Geoms.end() || !m_Scene->IsGeomAlive(geom))
+		{
+			throw bgl::SceneError(
+				"GeomHandle passed to SetBlendParameters is not owned by this AssetManager, or has "
+				"expired");
+		}
+
+		GeomRecord& record = it->second;
+
+		// A rig is keyed on the clip set it was cooked against, which is the one thing a skinned
+		// geom always records and a static one never does.
+		const auto rig =
+			record.skinnedAnimations.empty() ? m_Rigs.end() : m_Rigs.find(record.skinnedAnimations);
+		if (rig == m_Rigs.end())
+			throw bgl::SceneError("GeomHandle passed to SetBlendParameters is not skinned");
+
+		auto desc = bgl::BlendSetDesc();
+		desc.spaces.reserve(spaces.size());
+		for (const BlendSpaceInfo& space : spaces)
+		{
+			auto resolved = bgl::BlendSpaceDesc();
+			resolved.samples.reserve(space.samples.size());
+			for (const BlendSpaceSampleInfo& sample : space.samples)
+				resolved.samples.emplace_back(sample.clipIndex, sample.parameter);
+
+			desc.spaces.push_back(std::move(resolved));
+		}
+
+		// The scene decides whether this is a parameter move at all, and refuses before writing.
+		m_Scene->SetRigBlendParameters(rig->second.handle, desc);
+
+		// Only now: the cached spaces are what a shared acquire answers with, so moving them ahead
+		// of a refusal would leave the manager describing a rig that never changed.
+		rig->second.spaces.assign(spaces.begin(), spaces.end());
+		for (auto& [slot, other] : m_Geoms)
+			if (other.skinnedAnimations == record.skinnedAnimations)
+				other.skinnedSpaces.assign(spaces.begin(), spaces.end());
 	}
 
 	bgl::MeshInstanceHandle
