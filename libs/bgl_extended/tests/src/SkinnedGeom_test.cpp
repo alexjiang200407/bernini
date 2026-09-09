@@ -211,7 +211,7 @@ namespace
 	constexpr std::array<uint8_t, c_Frames> c_Weights = { { 0, 128, 255 } };
 
 	/**
-	 * Two looping clips of different lengths, which is what a blend space needs: its members share
+	 * Two looping clips of different lengths, which is what a blend space needs: its samples share
 	 * one normalized phase, so clips that wrap over different numbers of intervals is the case the
 	 * phase exists to handle, and a clip that clamps has no cycle to share.
 	 */
@@ -255,8 +255,8 @@ namespace
 	MakeBlendSet()
 	{
 		auto space = bgl::BlendSpaceDesc();
-		space.members.push_back({ 0, 0.0f });
-		space.members.push_back({ 1, 1.0f });
+		space.samples.push_back({ 0, 0.0f });
+		space.samples.push_back({ 1, 1.0f });
 
 		auto set = bgl::BlendSetDesc();
 		set.spaces.push_back(std::move(space));
@@ -1184,7 +1184,7 @@ TEST_CASE("AddRig builds a node table of its clips, then its blend spaces", "[sk
 
 		// Two clips and one space.
 		CHECK(record.nodes.count == 3);
-		CHECK_FALSE(record.members.Null());
+		CHECK_FALSE(record.blendSamples.Null());
 
 		auto&          nodes = scene->GetBlendNodeBuffer();
 		const uint32_t base  = record.nodes.range.offsetStart;
@@ -1196,35 +1196,35 @@ TEST_CASE("AddRig builds a node table of its clips, then its blend spaces", "[sk
 
 		const bgl::idl::BlendNode& space = nodes.AtIndex(base + 2);
 		CHECK(space.kind == bgl::idl::BlendNodeKind::kSpace);
-		CHECK(space.memberCount == 2);
+		CHECK(space.sampleCount == 2);
 
-		auto&          members    = scene->GetBlendMemberBuffer();
-		const uint32_t memberBase = record.members.offsetStart + space.firstMember;
-		CHECK(members.AtIndex(memberBase + 0).clip == 0);
-		CHECK(members.AtIndex(memberBase + 0).parameter == 0.0f);
-		CHECK(members.AtIndex(memberBase + 1).clip == 1);
-		CHECK(members.AtIndex(memberBase + 1).parameter == 1.0f);
+		auto&          samples    = scene->GetBlendSampleBuffer();
+		const uint32_t sampleBase = record.blendSamples.offsetStart + space.firstSample;
+		CHECK(samples.AtIndex(sampleBase + 0).clip == 0);
+		CHECK(samples.AtIndex(sampleBase + 0).parameter == 0.0f);
+		CHECK(samples.AtIndex(sampleBase + 1).clip == 1);
+		CHECK(samples.AtIndex(sampleBase + 1).parameter == 1.0f);
 
 		SECTION("deleting the rig frees both ranges")
 		{
 			const uint32_t nodeRoot   = record.nodes.range.offsetStart;
-			const uint32_t memberRoot = record.members.offsetStart;
+			const uint32_t sampleRoot = record.blendSamples.offsetStart;
 			scene->DeleteRig(rig);
 			CHECK_FALSE(scene->GetBlendNodeBuffer().IsIndexValid(nodeRoot));
-			CHECK_FALSE(scene->GetBlendMemberBuffer().IsIndexValid(memberRoot));
+			CHECK_FALSE(scene->GetBlendSampleBuffer().IsIndexValid(sampleRoot));
 		}
 	}
 
 	SECTION("a rig with no blend set still has one node per clip")
 	{
-		// Null members rather than an empty range, for the reason the legs are: the pose pass
-		// branches on the node's kind, and nothing should ever reach the member table.
+		// Null samples rather than an empty range, for the reason the legs are: the pose pass
+		// branches on the node's kind, and nothing should ever reach the sample table.
 		const auto rig = scene->AddRig(MakeRig(), MakeBlendClips());
 		REQUIRE(rig.IsValid());
 
 		const bgl::idl::Rig& record = scene->GetRigBuffer().AtIndex(rig.handle.index);
 		CHECK(record.nodes.count == 2);
-		CHECK(record.members.Null());
+		CHECK(record.blendSamples.Null());
 	}
 }
 
@@ -1241,23 +1241,23 @@ TEST_CASE("AddRig refuses a blend space the pose pass could not evaluate", "[ski
 		return scene->AddRig(MakeRig(), MakeBlendClips(), bgl::FootPlantDesc(), set);
 	};
 
-	SECTION("a space of one member")
+	SECTION("a space of one sample")
 	{
 		auto set = MakeBlendSet();
-		set.spaces[0].members.resize(1);
+		set.spaces[0].samples.resize(1);
 		CHECK_THROWS_WITH(add(set), Catch::Matchers::ContainsSubstring("at least two"));
 	}
 
-	SECTION("a member naming a clip the set does not hold")
+	SECTION("a sample naming a clip the set does not hold")
 	{
 		auto set                           = MakeBlendSet();
-		set.spaces[0].members[1].clipIndex = 7;
+		set.spaces[0].samples[1].clipIndex = 7;
 		CHECK_THROWS_WITH(add(set), Catch::Matchers::ContainsSubstring("clip 7"));
 	}
 
-	SECTION("a member that does not loop")
+	SECTION("a sample that does not loop")
 	{
-		// One phase is shared across the members, and a clip that clamps would sit on its last
+		// One phase is shared across the samples, and a clip that clamps would sit on its last
 		// frame while the others cycle.
 		auto clips          = MakeBlendClips();
 		clips.clips[1].loop = 0;
@@ -1269,14 +1269,14 @@ TEST_CASE("AddRig refuses a blend space the pose pass could not evaluate", "[ski
 	SECTION("parameters that do not strictly increase")
 	{
 		auto set                           = MakeBlendSet();
-		set.spaces[0].members[1].parameter = 0.0f;
+		set.spaces[0].samples[1].parameter = 0.0f;
 		CHECK_THROWS_WITH(add(set), Catch::Matchers::ContainsSubstring("strictly increase"));
 	}
 
 	SECTION("a parameter that is not a number")
 	{
 		auto set                           = MakeBlendSet();
-		set.spaces[0].members[1].parameter = std::numeric_limits<float>::quiet_NaN();
+		set.spaces[0].samples[1].parameter = std::numeric_limits<float>::quiet_NaN();
 		CHECK_THROWS_AS(add(set), bgl::SceneError);
 	}
 
@@ -1291,7 +1291,7 @@ TEST_CASE("AddRig refuses a blend space the pose pass could not evaluate", "[ski
 		scene->DeleteRig(first);
 
 		auto bad = MakeBlendSet();
-		bad.spaces[0].members.resize(1);
+		bad.spaces[0].samples.resize(1);
 		CHECK_THROWS(add(bad));
 
 		const auto again = scene->AddRig(MakeRig(), MakeBlendClips());
@@ -1316,17 +1316,17 @@ TEST_CASE("SetRigBlendParameters moves a run without moving the table", "[skinne
 
 	const bgl::idl::Rig& record     = scene->GetRigBuffer().AtIndex(rig.handle.index);
 	const uint32_t       nodeRoot   = record.nodes.range.offsetStart;
-	const uint32_t       memberRoot = record.members.offsetStart;
+	const uint32_t       sampleRoot = record.blendSamples.offsetStart;
 
-	const auto parameterAt = [&](uint32_t member) {
-		return scene->GetBlendMemberBuffer().AtIndex(memberRoot + member).parameter;
+	const auto parameterAt = [&](uint32_t sample) {
+		return scene->GetBlendSampleBuffer().AtIndex(sampleRoot + sample).parameter;
 	};
 
 	SECTION("the parameters land and nothing else does")
 	{
 		auto moved                           = MakeBlendSet();
-		moved.spaces[0].members[0].parameter = -2.0f;
-		moved.spaces[0].members[1].parameter = 7.5f;
+		moved.spaces[0].samples[0].parameter = -2.0f;
+		moved.spaces[0].samples[1].parameter = 7.5f;
 		scene->SetRigBlendParameters(rig, moved);
 
 		CHECK(parameterAt(0) == -2.0f);
@@ -1335,10 +1335,11 @@ TEST_CASE("SetRigBlendParameters moves a run without moving the table", "[skinne
 		// The whole reason this is narrower than a rewrite: a slot naming a node still names it,
 		// and a geom on the rig still has the node count it was added with.
 		CHECK(scene->GetRigBuffer().AtIndex(rig.handle.index).nodes.range.offsetStart == nodeRoot);
-		CHECK(scene->GetRigBuffer().AtIndex(rig.handle.index).members.offsetStart == memberRoot);
+		CHECK(
+			scene->GetRigBuffer().AtIndex(rig.handle.index).blendSamples.offsetStart == sampleRoot);
 		CHECK(scene->GetRigBuffer().AtIndex(rig.handle.index).nodes.count == 3);
-		CHECK(scene->GetBlendMemberBuffer().AtIndex(memberRoot + 0).clip == 0);
-		CHECK(scene->GetBlendMemberBuffer().AtIndex(memberRoot + 1).clip == 1);
+		CHECK(scene->GetBlendSampleBuffer().AtIndex(sampleRoot + 0).clip == 0);
+		CHECK(scene->GetBlendSampleBuffer().AtIndex(sampleRoot + 1).clip == 1);
 	}
 
 	SECTION("a rig with no spaces takes an empty set and nothing else")
@@ -1374,17 +1375,17 @@ TEST_CASE("SetRigBlendParameters moves a run without moving the table", "[skinne
 			refused(set);
 		}
 
-		SECTION("a member added")
+		SECTION("a sample added")
 		{
 			auto set = MakeBlendSet();
-			set.spaces[0].members.push_back({ 0, 2.0f });
+			set.spaces[0].samples.push_back({ 0, 2.0f });
 			refused(set);
 		}
 
-		SECTION("a member naming another clip")
+		SECTION("a sample naming another clip")
 		{
 			auto set                           = MakeBlendSet();
-			set.spaces[0].members[1].clipIndex = 0;
+			set.spaces[0].samples[1].clipIndex = 0;
 			refused(set);
 		}
 	}
@@ -1396,8 +1397,8 @@ TEST_CASE("SetRigBlendParameters moves a run without moving the table", "[skinne
 		SECTION("parameters that do not strictly increase")
 		{
 			auto set                           = MakeBlendSet();
-			set.spaces[0].members[0].parameter = 4.0f;
-			set.spaces[0].members[1].parameter = 4.0f;
+			set.spaces[0].samples[0].parameter = 4.0f;
+			set.spaces[0].samples[1].parameter = 4.0f;
 			CHECK_THROWS_WITH(
 				scene->SetRigBlendParameters(rig, set),
 				Catch::Matchers::ContainsSubstring("strictly increase"));
@@ -1407,7 +1408,7 @@ TEST_CASE("SetRigBlendParameters moves a run without moving the table", "[skinne
 		SECTION("a parameter that is not a number")
 		{
 			auto set                           = MakeBlendSet();
-			set.spaces[0].members[1].parameter = std::numeric_limits<float>::quiet_NaN();
+			set.spaces[0].samples[1].parameter = std::numeric_limits<float>::quiet_NaN();
 			CHECK_THROWS_AS(scene->SetRigBlendParameters(rig, set), bgl::SceneError);
 			CHECK(parameterAt(1) == 1.0f);
 		}

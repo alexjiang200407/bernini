@@ -239,7 +239,7 @@ namespace game::test
 
 	/**
 	 * A clip set of two *looping* clips over WriteRig's one bone, which a blend space needs: its
-	 * members share one normalized phase, and a clip that clamps rather than wraps has no cycle to
+	 * samples share one normalized phase, and a clip that clamps rather than wraps has no cycle to
 	 * share. Different lengths, so the phase has something to keep in step.
 	 *
 	 * WriteClips leaves `loop` at its default, which `AddRig` refuses in a space -- hence a writer
@@ -282,18 +282,18 @@ namespace game::test
 		assetlib::AssetStore(dataRoot).Save(animations, banimRel.generic_string());
 	}
 
-	/** A `.bblend` over `members`, authored against `banimRel`. Authored, so it goes under Authored/. */
+	/** A `.bblend` over `samples`, authored against `banimRel`. Authored, so it goes under Authored/. */
 	inline void
 	WriteBlendSet(
 		const fs::path&                         dataRoot,
 		const fs::path&                         bblendRel,
 		const fs::path&                         banimRel,
-		std::vector<assetlib::BlendSpaceMember> members,
+		std::vector<assetlib::BlendSpaceSample> samples,
 		std::string_view                        spaceName = "locomotion")
 	{
 		auto space    = assetlib::BlendSpace();
 		space.name    = std::string(spaceName);
-		space.members = std::move(members);
+		space.samples = std::move(samples);
 
 		auto set       = assetlib::BlendSet();
 		set.name       = "test";

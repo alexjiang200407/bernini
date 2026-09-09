@@ -80,7 +80,7 @@ namespace bgl
 					BarrierSyncFlag::kComputeShader,
 					BarrierAccessFlag::kShaderResource)
 				.AddBufferArg(
-					"scene.blendMemberBuffer",
+					"scene.blendSampleBuffer",
 					BarrierSyncFlag::kComputeShader,
 					BarrierAccessFlag::kShaderResource)
 				.AddBufferArg(
@@ -117,7 +117,7 @@ namespace bgl
 		uniforms["legBuffer"]         = ctx.GetBuffer("scene.skinnedLegBuffer");
 		uniforms["plantWeightBuffer"] = ctx.GetBuffer("scene.plantWeightBuffer");
 		uniforms["blendNodeBuffer"]   = ctx.GetBuffer("scene.blendNodeBuffer");
-		uniforms["blendMemberBuffer"] = ctx.GetBuffer("scene.blendMemberBuffer");
+		uniforms["blendSampleBuffer"] = ctx.GetBuffer("scene.blendSampleBuffer");
 		uniforms["footIKBuffer"]      = ctx.GetBuffer("scene.footIKBuffer");
 		uniforms["bonePalettes"]      = ctx.GetBuffer("scene.bonePalettes");
 		uniforms["time"]              = draw.clock.time;

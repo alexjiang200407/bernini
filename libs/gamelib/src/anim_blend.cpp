@@ -50,8 +50,8 @@ namespace game
 
 		/**
 		 * The space phase `slot` has reached at `now`, integrated over the parameter path it is
-		 * already on. Split at the ramp's ends and at each member the parameter crosses, because
-		 * the cycle length is only linear between two adjacent members.
+		 * already on. Split at the ramp's ends and at each sample the parameter crosses, because
+		 * the cycle length is only linear between two adjacent samples.
 		 */
 		float
 		SpacePhaseAt(
@@ -80,13 +80,13 @@ namespace game
 				float dSegment = space.SecondsAt(clips, pFrom);
 
 				// In the order the ramp reaches them, not in table order: a falling parameter
-				// crosses the members backwards, and a segment accumulated out of order fuses two
+				// crosses the samples backwards, and a segment accumulated out of order fuses two
 				// spans of a kinked cycle into one.
 				const bool ascending = pTo > pFrom;
-				for (size_t k = 0; k < space.members.size(); ++k)
+				for (size_t k = 0; k < space.samples.size(); ++k)
 				{
-					const size_t i    = ascending ? k : space.members.size() - 1 - k;
-					const float  edge = space.members[i].parameter;
+					const size_t i    = ascending ? k : space.samples.size() - 1 - k;
+					const float  edge = space.samples[i].parameter;
 
 					if (!(ascending ? (edge > pSegment && edge < pTo) :
 					                  (edge < pSegment && edge > pTo)))
@@ -229,13 +229,13 @@ namespace game
 	{
 		RequireWindow(now, duration, "RetargetParameter");
 
-		for (const BlendSpaceMemberInfo& member : space.members)
+		for (const BlendSpaceSampleInfo& sample : space.samples)
 		{
 			throw_runtime_error_if(
-				member.clipIndex >= clips.size(),
+				sample.clipIndex >= clips.size(),
 				"RetargetParameter: the space '{}' names clip {} of an acquire that holds {}",
 				space.name,
-				member.clipIndex,
+				sample.clipIndex,
 				clips.size());
 		}
 

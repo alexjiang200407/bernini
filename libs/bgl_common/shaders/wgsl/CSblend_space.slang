@@ -10,5 +10,5 @@ void main(uint3 id: SV_DispatchThreadID)
 {
     Clip clip = {};
     let t = float(id.x);
-    gOut[0] = MemberSeconds(clip) + SpanWeight(0.0, 1.0, t) + PhaseElapsed(t, 1.0, 2.0);
+    gOut[0] = SampleSeconds(clip) + SpanWeight(0.0, 1.0, t) + PhaseElapsed(t, 1.0, 2.0);
 }

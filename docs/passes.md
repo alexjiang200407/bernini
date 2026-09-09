@@ -399,7 +399,7 @@ Writes every skinned instance's bone palette: one workgroup per instance, one th
 authored blend spaces.
 
 A clip node contributes one clip at its phase advanced since `tRef`. A space node contributes the
-two members straddling its parameter, at one shared normalized phase — its members are looping clips
+two samples straddling its parameter, at one shared normalized phase — its samples are looping clips
 of different lengths, so a frame number means nothing between them, and what is shared is the
 fraction of a cycle. That phase advances at the reciprocal of the weighted cycle length, which is
 itself moving while the parameter ramps, so it is an integral rather than a quotient and is

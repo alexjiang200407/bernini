@@ -5,6 +5,7 @@
 #include <bgl/IScene.h>
 #include <bgl/InstanceDesc.h>
 #include <bgl/LayerType.h>
+#include <bgl/types/BlendSetDesc.h>
 #include <bgl/types/FootPlantDesc.h>
 #include <bgl/types/LoosePbrMaterialDesc.h>
 #include <bgl/types/PbrMaterialDesc.h>
@@ -658,7 +659,7 @@ namespace game
 		{
 			blendSet = m_Store.Load<assetlib::BlendSet>(blendNorm);
 
-			// A set is authored against exactly one clip set, and its members are clip names in
+			// A set is authored against exactly one clip set, and its samples are clip names in
 			// that one. Against the normalized path on both sides: the two spellings of one key
 			// are the same key.
 			core::throw_runtime_error_if(
@@ -840,26 +841,26 @@ namespace game
 		for (const assetlib::BlendSpace& space : blendSet->spaces)
 		{
 			auto resolved = bgl::BlendSpaceDesc();
-			resolved.members.reserve(space.members.size());
+			resolved.samples.reserve(space.samples.size());
 
-			for (const assetlib::BlendSpaceMember& member : space.members)
+			for (const assetlib::BlendSpaceSample& sample : space.samples)
 			{
-				const std::optional<uint32_t> clip = assetlib::findClip(animations, member.clip);
+				const std::optional<uint32_t> clip = assetlib::findClip(animations, sample.clip);
 				core::throw_runtime_error_if(
 					!clip.has_value(),
 					"AssetManager: blend space '{}' names the clip '{}', which '{}' does not hold",
 					space.name,
-					member.clip,
+					sample.clip,
 					blendSet->animations);
 
-				resolved.members.push_back({ *clip, member.parameter });
+				resolved.samples.push_back({ *clip, sample.parameter });
 			}
 
 			auto info = BlendSpaceInfo();
 			info.name = space.name;
-			info.members.reserve(resolved.members.size());
-			for (const bgl::BlendSpaceMemberDesc& member : resolved.members)
-				info.members.push_back({ member.clipIndex, member.parameter });
+			info.samples.reserve(resolved.samples.size());
+			for (const bgl::BlendSpaceSampleDesc& sample : resolved.samples)
+				info.samples.push_back({ sample.clipIndex, sample.parameter });
 			spaces.emplace_back(std::move(info));
 
 			desc.spaces.push_back(std::move(resolved));

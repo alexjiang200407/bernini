@@ -1,4 +1,6 @@
 #pragma once
+#include <string>
+#include <vector>
 
 namespace assetlib
 {
@@ -9,20 +11,20 @@ namespace assetlib
 	 * fact about one cook of one `.banim`, and a re-import that adds a clip would shift every index
 	 * after it, silently. Resolution happens where both name tables are in hand.
 	 */
-	struct BlendSpaceMember
+	struct BlendSpaceSample
 	{
 		std::string clip;
 		float       parameter = 0.0f;
 
 		bool
-		operator==(const BlendSpaceMember&) const = default;
+		operator==(const BlendSpaceSample&) const = default;
 	};
 
 	/** One 1D blend space: its clips in parameter order, blended by a parameter. */
 	struct BlendSpace
 	{
 		std::string                   name;
-		std::vector<BlendSpaceMember> members;
+		std::vector<BlendSpaceSample> samples;
 
 		bool
 		operator==(const BlendSpace&) const = default;
@@ -36,7 +38,7 @@ namespace assetlib
 	 * the rig is already a node under its own name, so an authored one would be a second name for
 	 * the same thing.
 	 *
-	 * `animations` is the one `.banim` every member names a clip of, stored as a path so a rename
+	 * `animations` is the one `.banim` every sample names a clip of, stored as a path so a rename
 	 * rewrites it. A set is authored against exactly one clip set, which is what lets the resolved
 	 * tables hang off the rig that clip set created.
 	 */
@@ -55,10 +57,10 @@ namespace assetlib
 
 	/**
 	 * @throws std::runtime_error if a space is unnamed, two spaces share a name, a space holds
-	 *         fewer than two members, a member names no clip, or its parameters are not strictly
+	 *         fewer than two samples, a sample names no clip, or its parameters are not strictly
 	 *         increasing.
 	 *
-	 * Strictly increasing rather than merely sorted: two members at one parameter have no defined
+	 * Strictly increasing rather than merely sorted: two samples at one parameter have no defined
 	 * weighting between them, and a set that reached the GPU would divide by a zero span.
 	 *
 	 * What is *not* checked here is whether a named clip exists or loops. Neither is knowable

@@ -680,10 +680,10 @@ TEST_CASE("a skinned acquire resolves a blend set's clips by name", "[gamelib][s
 		CHECK(mesh.spaces[0].ParameterMin() == 0.0f);
 		CHECK(mesh.spaces[0].ParameterMax() == 4.0f);
 
-		// The members are what a retarget needs: the parameter each plays alone at, and which clip.
-		REQUIRE(mesh.spaces[0].members.size() == 2);
-		CHECK(mesh.spaces[0].members[0].clipIndex == 0);
-		CHECK(mesh.spaces[0].members[1].clipIndex == 1);
+		// The samples are what a retarget needs: the parameter each plays alone at, and which clip.
+		REQUIRE(mesh.spaces[0].samples.size() == 2);
+		CHECK(mesh.spaces[0].samples[0].clipIndex == 0);
+		CHECK(mesh.spaces[0].samples[1].clipIndex == 1);
 
 		assets.ReleaseGeom(mesh.geom);
 	}

@@ -1,8 +1,12 @@
 #include <gamelib/anim_blend.h>
 
 #include <catch2/catch_approx.hpp>
+#include <catch2/catch_message.hpp>
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_string.hpp>
+#include <cmath>
+#include <cstddef>
+#include <gamelib/BlendSpaceInfo.h>
 
 // The writes a playback record takes between frames. No device and no scene: these are pure
 // functions from a record and a clock to the next record, which is the whole reason they are
@@ -75,13 +79,13 @@ namespace
 	{
 		auto space = game::BlendSpaceInfo();
 		space.name = "locomotion";
-		space.members.push_back({ 0, 0.0f });
-		space.members.push_back({ 1, 1.0f });
+		space.samples.push_back({ 0, 0.0f });
+		space.samples.push_back({ 1, 1.0f });
 		return space;
 	}
 
 	/**
-	 * Four members, so a ramp across them crosses two interior ones. Two is the point: with a
+	 * Four samples, so a ramp across them crosses two interior ones. Two is the point: with a
 	 * single crossing the walk visits the same edge whichever direction it takes, and the order it
 	 * accumulates segments in cannot be observed.
 	 */
@@ -90,14 +94,14 @@ namespace
 	{
 		auto space = game::BlendSpaceInfo();
 		space.name = "wide";
-		space.members.push_back({ 0, 0.0f });
-		space.members.push_back({ 1, 0.33f });
-		space.members.push_back({ 2, 0.66f });
-		space.members.push_back({ 0, 1.0f });
+		space.samples.push_back({ 0, 0.0f });
+		space.samples.push_back({ 1, 0.33f });
+		space.samples.push_back({ 2, 0.66f });
+		space.samples.push_back({ 0, 1.0f });
 		return space;
 	}
 
-	/** A member's cycle in seconds: the intervals it wraps over, at its authored rate. */
+	/** A sample's cycle in seconds: the intervals it wraps over, at its authored rate. */
 	double
 	CycleSeconds(const game::ClipInfo& clip)
 	{
@@ -117,26 +121,26 @@ namespace
 		float                              now)
 	{
 		const auto secondsAt = [&](double p) {
-			const auto& members = space.members;
-			if (p <= members.front().parameter)
-				return CycleSeconds(clips[members.front().clipIndex]);
-			if (p >= members.back().parameter)
-				return CycleSeconds(clips[members.back().clipIndex]);
+			const auto& samples = space.samples;
+			if (p <= samples.front().parameter)
+				return CycleSeconds(clips[samples.front().clipIndex]);
+			if (p >= samples.back().parameter)
+				return CycleSeconds(clips[samples.back().clipIndex]);
 
-			for (size_t i = 1; i < members.size(); ++i)
+			for (size_t i = 1; i < samples.size(); ++i)
 			{
-				if (p <= members[i].parameter)
+				if (p <= samples[i].parameter)
 				{
-					const double a = members[i - 1].parameter;
-					const double b = members[i].parameter;
+					const double a = samples[i - 1].parameter;
+					const double b = samples[i].parameter;
 					const double w = (p - a) / (b - a);
 					return std::lerp(
-						CycleSeconds(clips[members[i - 1].clipIndex]),
-						CycleSeconds(clips[members[i].clipIndex]),
+						CycleSeconds(clips[samples[i - 1].clipIndex]),
+						CycleSeconds(clips[samples[i].clipIndex]),
 						w);
 				}
 			}
-			return CycleSeconds(clips[members.back().clipIndex]);
+			return CycleSeconds(clips[samples.back().clipIndex]);
 		};
 
 		const auto parameterAt = [&](double t) {
@@ -359,12 +363,12 @@ TEST_CASE("a retarget rebases the phase it had already reached", "[gamelib][anim
 			Catch::Approx(SteppedPhase(slot, space, clips, c_Now)).margin(1e-4));
 	}
 
-	SECTION("a falling ramp is integrated in the order it reaches the members")
+	SECTION("a falling ramp is integrated in the order it reaches the samples")
 	{
 		// The regression this exists for, and the one the shader twin of this integral actually
 		// shipped: the segments have to be accumulated in the order the ramp reaches them, not in
 		// table order. A rising ramp reaches them in table order and hides the difference, so this
-		// one falls -- across four members, so it crosses two interior ones. One crossing is
+		// one falls -- across four samples, so it crosses two interior ones. One crossing is
 		// visited in the same place whichever way the table is walked and proves nothing.
 		const game::BlendSpaceInfo wide = MakeWideSpace();
 
@@ -385,7 +389,7 @@ TEST_CASE("a retarget rebases the phase it had already reached", "[gamelib][anim
 		auto ramping    = bgl::SkinnedPlaybackDesc();
 		ramping.slot[0] = slot;
 
-		constexpr float c_Now = 0.3f;  // past both interior members
+		constexpr float c_Now = 0.3f;  // past both interior samples
 
 		const auto after = RetargetParameter(ramping, c_WideNode, wide, clips, 0.5f, c_Now, 0.5f);
 
@@ -410,4 +414,88 @@ TEST_CASE("a write that runs backwards is refused", "[gamelib][animblend]")
 		Catch::Matchers::ContainsSubstring("only changes the future"));
 
 	CHECK_THROWS(RetargetParameter(Playing(0), 0, MakeSpace(), MakeClips(), 1.0f, 10.0f, -1.0f));
+}
+
+TEST_CASE("a space says which two samples a parameter is between", "[gamelib][animblend]")
+{
+	const std::vector<game::ClipInfo> clips = MakeClips();
+	const game::BlendSpaceInfo        space = MakeWideSpace();
+
+	// Samples at 0, 0.33, 0.66 and 1, playing clips 0, 1, 2 and 0.
+	SECTION("between two samples it is the pair and the fraction")
+	{
+		const game::BlendSpaceStraddle at = space.StraddleAt(0.495f);
+		CHECK(at.lower == 1);
+		CHECK(at.upper == 2);
+		CHECK(at.weight == Catch::Approx(0.5f));
+	}
+
+	SECTION("exactly on a sample it carries that sample alone")
+	{
+		// The lower end of the span above it, weight zero -- not the span below it at weight one.
+		// Either reads as the sample playing alone, and this is the one the walk reaches first.
+		const game::BlendSpaceStraddle at = space.StraddleAt(0.33f);
+		CHECK(at.lower == 1);
+		CHECK(at.upper == 2);
+		CHECK(at.weight == 0.0f);
+	}
+
+	SECTION("past either end the end sample plays alone")
+	{
+		const game::BlendSpaceStraddle below = space.StraddleAt(-5.0f);
+		CHECK(below.lower == 0);
+		CHECK(below.weight == 0.0f);
+
+		// Both indices name the last sample, so a caller reading either one reads that sample.
+		const game::BlendSpaceStraddle above = space.StraddleAt(5.0f);
+		CHECK(above.lower == 3);
+		CHECK(above.upper == 3);
+		CHECK(above.weight == 0.0f);
+	}
+
+	SECTION("it names an adjacent pair in range, at a weight in range, everywhere")
+	{
+		// Swept past both ends: the readout is driven by a cursor a person drags, so every
+		// parameter it can reach has to name samples a caller may index with.
+		for (int step = -2; step <= 22; ++step)
+		{
+			const float                    parameter = float(step) / 20.0f;
+			const game::BlendSpaceStraddle at        = space.StraddleAt(parameter);
+
+			INFO("parameter " << parameter);
+			CHECK(at.upper < space.samples.size());
+			CHECK((at.upper == at.lower || at.upper == at.lower + 1));
+			CHECK(at.weight >= 0.0f);
+			CHECK(at.weight <= 1.0f);
+		}
+	}
+
+	SECTION("it is the walk SecondsAt already made, so the two agree")
+	{
+		// SecondsAt is written in terms of this, which is the point of extracting it: one straddle
+		// rule rather than two that drift.
+		for (int step = -2; step <= 22; ++step)
+		{
+			const float                    parameter = float(step) / 20.0f;
+			const game::BlendSpaceStraddle at        = space.StraddleAt(parameter);
+
+			const float expected = std::lerp(
+				float(CycleSeconds(clips[space.samples[at.lower].clipIndex])),
+				float(CycleSeconds(clips[space.samples[at.upper].clipIndex])),
+				at.weight);
+
+			INFO("parameter " << parameter);
+			CHECK(space.SecondsAt(clips, parameter) == Catch::Approx(expected));
+		}
+	}
+
+	SECTION("a two-sample space is the same rule with nothing interior")
+	{
+		const game::BlendSpaceInfo pair = MakeSpace();
+
+		const game::BlendSpaceStraddle at = pair.StraddleAt(0.25f);
+		CHECK(at.lower == 0);
+		CHECK(at.upper == 1);
+		CHECK(at.weight == Catch::Approx(0.25f));
+	}
 }

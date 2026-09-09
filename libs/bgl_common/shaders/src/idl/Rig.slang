@@ -1,5 +1,5 @@
 import BlendNode;
-import BlendSpaceMember;
+import BlendSpaceSample;
 import BoneSample;
 import Clip;
 import Range;
@@ -32,8 +32,10 @@ public struct Rig
     // which is what lets a slot name a clip the way it always did.
     public RangeWithCount<BlendNode> nodes;
 
-    // The members every space node's run addresses. Null exactly when no node is a space.
-    public Range<BlendSpaceMember> members;
+    // The blend-space samples every space node's run addresses -- a clip and the parameter it plays
+    // alone at, and nothing to do with the bone `samples` above. Null exactly when no node is a
+    // space.
+    public Range<BlendSpaceSample> blendSamples;
 
     // What makes a frame addressable: the pool is frame-major, so one frame is a contiguous run of
     // exactly this many samples. Equal to the bone table's length.
