@@ -142,7 +142,7 @@ MainWindow::Build(const std::filesystem::path& configPath)
 
 		// The startup project's alone. Surfaces are registered inside CreateGraphics and the
 		// reserved rows are bound to what was there then, so opening another project later does not
-		// bring its shaders -- see docs/game_surfaces.md.
+		// bring its shaders -- see docs/game_defined_surfaces.md.
 		if (!startupProject.empty())
 		{
 			gfxOpts.surfaceShaderDir =

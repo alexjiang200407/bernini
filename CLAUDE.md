@@ -171,7 +171,7 @@ FrameGraph usage.
 
 Overview of all the Frame Graph Passes
 
-**[Game Surfaces](./docs/game_surfaces.md)**
+**[Game-Defined Surfaces](./docs/game_defined_surfaces.md)**
 
 A shading function the game writes and the engine draws through: the `ISurfaceSource` contract and
 the three rules a file keeps, where the `.slang` lives in a project and when it is read, the three

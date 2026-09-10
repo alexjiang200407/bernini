@@ -1,4 +1,4 @@
-# Game Surfaces
+# Game-Defined Surfaces
 
 A **surface** is a shading function a game writes and the engine draws through. It lives in the
 game's project as a `.slang` file, the engine reads it at startup, and a `.bmaterial` names it and

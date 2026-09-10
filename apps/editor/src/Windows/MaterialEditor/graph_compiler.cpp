@@ -137,9 +137,7 @@ namespace
 namespace editor
 {
 	bgl::SurfaceMaterialDesc
-	SurfaceDescOf(
-		const assetlib::BMaterial&                                        material,
-		const std::function<bgl::TextureAssetHandle(const std::string&)>& loadTexture)
+	SurfaceDescOf(const assetlib::BMaterial& material, const TextureLoader& loadTexture)
 	{
 		auto desc        = bgl::SurfaceMaterialDesc();
 		desc.surface     = material.surface.name;

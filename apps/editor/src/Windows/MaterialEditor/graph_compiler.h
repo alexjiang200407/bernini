@@ -2,22 +2,21 @@
 
 #include "Windows/MaterialEditor/MaterialGraphSet.h"
 
+#include <assetlib_structs/BMaterial.h>
 #include <bgl/TextureAssetHandle.h>
 #include <bgl/types/SurfaceMaterialDesc.h>
 #include <filesystem>
 #include <functional>
 #include <string>
 
-namespace assetlib
-{
-	struct BMaterial;
-}
-
 class MaterialPreviewWindow;
 class Renderer;
 
 namespace editor
 {
+	/** Hands back the handle to bind for a texture named by its data-root-relative key. */
+	using TextureLoader = std::function<bgl::TextureAssetHandle(const std::string&)>;
+
 	/**
 	 * The surface half of `material` as the renderer takes it: the surface it names, the layer keys,
 	 * and every value and texture it sets by name.
@@ -30,9 +29,7 @@ namespace editor
 	 * declared, which is the renderer's rule and not this function's to anticipate.
 	 */
 	[[nodiscard]] bgl::SurfaceMaterialDesc
-	SurfaceDescOf(
-		const assetlib::BMaterial&                                        material,
-		const std::function<bgl::TextureAssetHandle(const std::string&)>& loadTexture);
+	SurfaceDescOf(const assetlib::BMaterial& material, const TextureLoader& loadTexture);
 
 	/**
 	 * Compiles `graph`'s sink into the material the preview draws it through, and binds every

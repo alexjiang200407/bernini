@@ -796,7 +796,7 @@ disagree.
   the depth-sorted list, which holds every tier at once and draws them through `programs.forward.AnyMesh`
   (see [Passes](docs/passes.md)), so a blended rig sorts against blended static geometry rather than
   after it. A game surface draws here on the same terms, through rows of its own that differ from
-  the static tier's only in the geometry stage — see [Game Surfaces](game_surfaces.md) — except at
+  the static tier's only in the geometry stage — see [Game-Defined Surfaces](game_defined_surfaces.md) — except at
   the blended layer, where there is one row and both tiers share it. What is refused is a *material
   type*: no unlit and no loose variant of the skinned pipeline exists, and a material's kind is read
   from its own record rather than stamped by the geometry stage. `AcceptsMaterial`
