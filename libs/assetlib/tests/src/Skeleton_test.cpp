@@ -11,6 +11,7 @@
 #include <assetlib_structs/VertexLayout.h>
 #include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
+#include <core/hash.h>
 #include <cstddef>
 #include <cstdint>
 #include <filesystem>
@@ -202,6 +203,24 @@ namespace
 		}
 		return skeleton;
 	}
+}
+
+TEST_CASE("the factored signature is the one already on disk", "[skeleton][canary]")
+{
+	// Every .bskel, .banim and .bmesh stores a signature computed by the loop below. Factoring it
+	// into hashBones must not have moved the value by a bit: nothing compares a stored signature
+	// against a recomputed one in this suite -- both sides of every other check are computed fresh,
+	// so they would agree with each other while disagreeing with every file already written.
+	const auto skeleton = MakeChain();
+
+	uint64_t expected = core::hash_seed();
+	for (const Bone& bone : skeleton.bones)
+	{
+		expected = core::hash_string(skeleton.stringPool.at(bone.nameOffset), expected);
+		expected = core::hash_pod(bone.parent, expected);
+	}
+
+	CHECK(skeletonSignature(skeleton) == expected);
 }
 
 TEST_CASE("skeletonRemap accepts a rig that only grew", "[skeleton][remap]")
