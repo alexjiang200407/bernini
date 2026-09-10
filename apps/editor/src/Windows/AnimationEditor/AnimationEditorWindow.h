@@ -3,6 +3,7 @@
 #include <QElapsedTimer>
 #include <QWidget>
 #include <cstdint>
+#include <gamelib/BlendSpaceInfo.h>
 #include <qcontainerfwd.h>
 #include <qobject.h>
 #include <qtmetamacros.h>
@@ -137,9 +138,10 @@ private:
 	void
 	OpenMeshDialog();
 
-	// Reloads the mesh currently shown, played from `animationsRelPath`.
+	// Reloads the mesh currently shown, played from `animationsRelPath` and blended by
+	// `blendRelPath`.
 	void
-	LoadShownMesh(const QString& animationsRelPath);
+	LoadShownMesh(const QString& animationsRelPath, const QString& blendRelPath = {});
 
 	[[nodiscard]] QWidget*
 	BuildPropertiesColumn();
@@ -151,6 +153,33 @@ private:
 
 	[[nodiscard]] QWidget*
 	BuildBlendTab();
+
+	// The spaces the open set holds, listed. Read-only here: editing them is its own task, and a
+	// tab that showed nothing until it could edit would leave the acquire's own work unverifiable.
+	[[nodiscard]] QWidget*
+	BuildSpaceTab();
+
+	// Offers the sets authored against the live clip set, and opens the chosen one -- which is a
+	// reload, since a rig already uploaded refuses a different set.
+	void
+	SetBlendSets(const QStringList& sets, int activeIndex);
+
+	// Re-lists the spaces and their samples for whatever set is open.
+	void
+	ShowSpaces(const std::vector<game::BlendSpaceInfo>& spaces);
+
+	// Lists the samples of space `index`, or the empty-state note when there is none.
+	void
+	SelectSpace(int index);
+
+	// Creates the empty set for the live clip set and opens it.
+	void
+	CreateBlendSet();
+
+	// Where a set for the live clip set would be written, or empty when there is no clip set or the
+	// convention does not cover it. What decides whether creating one is offered at all.
+	[[nodiscard]] QString
+	CanonicalBlendSetKey() const;
 
 	[[nodiscard]] QWidget*
 	BuildTransportBar();
@@ -225,7 +254,25 @@ private:
 	Scrubber* m_SoleTurnSlider = nullptr;
 	QLabel*   m_SoleTurnLabel  = nullptr;
 
+	// Which `.bblend` is open, and the button that writes the first one. A set is the rig's rather
+	// than the panel's, so choosing one reloads the mesh.
+	QComboBox*   m_BlendSetSelector = nullptr;
+	QPushButton* m_CreateBlendSet   = nullptr;
+
 	QTabWidget* m_Surfaces = nullptr;
+
+	// The Space tab: the spaces the open set holds, and the samples of the selected one.
+	QWidget*     m_SpaceGroup    = nullptr;
+	QComboBox*   m_SpaceSelector = nullptr;
+	QListWidget* m_SampleList    = nullptr;
+	QLabel*      m_SpaceNote     = nullptr;
+
+	// What the open set resolved to, as the acquire reported it: what the Space tab lists, and
+	// what a later task edits.
+	std::vector<game::BlendSpaceInfo> m_Spaces;
+
+	// The set the panel has open, empty when none is. Kept because a reload names it again.
+	QString m_BlendRelPath;
 
 	// The stamped fade's layout, which the shared strip is redrawn from every tick.
 	editor::TransitionLayout m_TransitionLayout;

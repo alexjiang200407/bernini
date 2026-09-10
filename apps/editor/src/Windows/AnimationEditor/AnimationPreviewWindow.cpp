@@ -9,6 +9,7 @@
 #include "Render/environment.h"
 #include "Windows/AnimationEditor/animation_bindings.h"
 #include "Windows/AnimationEditor/animation_draws.h"
+#include "Windows/AnimationEditor/blend_sets.h"
 #include "Windows/AnimationEditor/ground_slope.h"
 #include "Windows/MaterialEditor/material_io.h"
 #include "Windows/RenderTarget/RenderTargetWindow.h"
@@ -19,6 +20,7 @@
 #include <bgl/ISceneView.h>
 #include <bgl/InstanceDesc.h>
 #include <bgl/MeshInstanceHandle.h>
+#include <gamelib/BlendSpaceInfo.h>
 #include <gamelib/ClipInfo.h>
 
 #include <QDragEnterEvent>
@@ -33,6 +35,7 @@
 
 #include <algorithm>
 #include <assetlib/AssetStore.h>
+#include <assetlib/asset_refs.h>
 #include <assetlib/skinning.h>
 #include <assetlib_structs/BMesh.h>
 #include <assetlib_structs/Bounds.h>
@@ -341,7 +344,8 @@ AnimationPreviewWindow::ClearGeometry()
 void
 AnimationPreviewWindow::LoadMesh(
 	const std::filesystem::path& absolutePath,
-	const std::string&           animationsRelPath)
+	const std::string&           animationsRelPath,
+	const std::string&           blendRelPath)
 {
 	const QString name = QString::fromStdString(absolutePath.filename().string());
 
@@ -368,6 +372,8 @@ AnimationPreviewWindow::LoadMesh(
 	assetlib::BMesh           mesh;
 	editor::AnimationBindings bindings;
 	std::string               animations = animationsRelPath;
+	std::vector<std::string>  blendSets;
+	std::string               blend = blendRelPath;
 
 	// The box every pose of every clip falls in: what the camera frames, and what the skinned geom
 	// culls by. A bind-pose box is not it -- a clip carrying root motion walks the rig clean out of
@@ -393,9 +399,18 @@ AnimationPreviewWindow::LoadMesh(
 				throw std::runtime_error("mesh contains no meshes");
 
 			progress.Report(0, 0, "Resolving animations...");
-			bindings = editor::ResolveAnimationBindings(m_DataRoot, mesh.skeleton);
+
+			// One scan answers both questions. It reads and parses every asset in the project, so
+			// asking each of them for its own would double the cost of every load.
+			const auto graph = assetlib::AssetRefGraph::Scan(assetlib::AssetStore(m_DataRoot));
+
+			bindings = editor::ResolveAnimationBindings(graph, mesh.skeleton);
 			if (animations.empty() && !bindings.animations.empty())
 				animations = bindings.animations.front();
+
+			// One edge over: the sets are per clip set, so which ones exist is only knowable once
+			// the `.banim` is settled.
+			blendSets = editor::ResolveBlendSets(graph, animations);
 
 			plan = editor::PlanAnimationDraws(mesh);
 
@@ -454,9 +469,10 @@ AnimationPreviewWindow::LoadMesh(
 	{
 		struct Loaded
 		{
-			glm::vec3                   center;
-			float                       radius;
-			std::vector<game::ClipInfo> clips;
+			glm::vec3                         center;
+			float                             radius;
+			std::vector<game::ClipInfo>       clips;
+			std::vector<game::BlendSpaceInfo> spaces;
 
 			// Empty when the tier stood up. A refusal is shown rather than thrown: the mesh is
 			// still on screen in its bind pose, which beats a viewport cleared to nothing.
@@ -536,7 +552,7 @@ AnimationPreviewWindow::LoadMesh(
 							game::AssetManager::SkinnedMesh skinned = m_Assets->AcquireSkinnedMesh(
 								rel,
 								animations,
-								{},
+								blend,
 								placement.meshIndex,
 								posed);
 
@@ -545,6 +561,7 @@ AnimationPreviewWindow::LoadMesh(
 							m_AnimatedDraws.push_back(
 								{ geom, placement.world, SpawnAnimated(geom, placement.world, 0) });
 							out.clips  = std::move(skinned.clips);
+							out.spaces = std::move(skinned.spaces);
 							m_Playback = bgl::SkinnedPlaybackDesc::FromClip(0);
 						}
 						catch (const std::exception& e)
@@ -607,9 +624,18 @@ AnimationPreviewWindow::LoadMesh(
 			bindings.animations.begin(),
 			std::find(bindings.animations.begin(), bindings.animations.end(), animations)));
 
+		auto setNames = QStringList();
+		for (const std::string& set : blendSets) setNames << QString::fromStdString(set);
+		const auto activeSet =
+			static_cast<int>(std::distance(blendSets.begin(), std::ranges::find(blendSets, blend)));
+
 		Q_EMIT MeshChanged(QString::fromStdString(rel));
 		Q_EMIT AnimationSourcesChanged(candidates, active < candidates.size() ? active : -1);
 		Q_EMIT ClipsChanged(editor::ToClipInfos(loaded.clips));
+		Q_EMIT BlendSetsChanged(
+			setNames,
+			blend.empty() || activeSet >= setNames.size() ? -1 : activeSet);
+		Q_EMIT SpacesChanged(loaded.spaces);
 
 		if (!loaded.refusal.isEmpty())
 			OfferBakeForRefusal(

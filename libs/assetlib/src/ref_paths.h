@@ -36,6 +36,25 @@ namespace assetlib
 	[[nodiscard]] bool
 	isUnder(std::string_view path, std::string_view directory) noexcept;
 
+	/**
+	 * `from`'s tail beneath `fromDirectory`, re-rooted at `toDirectory` with `toExtension` in place
+	 * of its own -- the whole of a "swap the half and the extension" convention, written once so
+	 * the directions of one cannot disagree, and so two of them cannot drift apart.
+	 *
+	 * `subject` names the convention in a refusal, since the caller is what a reader has in hand:
+	 * an avatar's key or a blend set's, not this.
+	 *
+	 * @throws std::runtime_error unless `from` is a `fromExtension` under `fromDirectory`.
+	 */
+	[[nodiscard]] std::string
+	swapHalf(
+		std::string_view subject,
+		std::string_view from,
+		std::string_view fromDirectory,
+		std::string_view toDirectory,
+		std::string_view fromExtension,
+		std::string_view toExtension);
+
 	// requireInsideDataRoot is declared in codecs.h, which every user of this header includes: it
 	// is public, unlike the rest of these.
 }

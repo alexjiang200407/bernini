@@ -14,6 +14,7 @@
 #include <bgl/types/FootIKDesc.h>
 #include <cstdint>
 #include <filesystem>
+#include <gamelib/BlendSpaceInfo.h>
 #include <qcontainerfwd.h>
 #include <qnamespace.h>
 #include <qobject.h>
@@ -92,10 +93,19 @@ public:
 	 * played from `animationsRelPath` -- or from the first resolved candidate when empty. A rig
 	 * whose clips are stale re-bakes under the loading screen before anything is uploaded.
 	 *
+	 * `blendRelPath` names a `.bblend` whose spaces become nodes after the clips, so the rig can be
+	 * *shown* a space rather than only its clips. Empty acquires the clips alone, which is every
+	 * load until somebody opens a set. A set that will not resolve is refused like any other
+	 * refusal -- the mesh stays on screen and the reason is shown -- rather than clearing the
+	 * viewport.
+	 *
 	 * What ends up shown is announced by the signals below; a failure warns and clears.
 	 */
 	void
-	LoadMesh(const std::filesystem::path& absolutePath, const std::string& animationsRelPath = {});
+	LoadMesh(
+		const std::filesystem::path& absolutePath,
+		const std::string&           animationsRelPath = {},
+		const std::string&           blendRelPath      = {});
 
 	/**
 	 * Respawns the animated instances on clip `index`, and resets the record onto it. `nowSeconds`
@@ -238,6 +248,19 @@ Q_SIGNALS:
 	/** The clip table now playable (empty: bind pose only). Feed it to the transport. */
 	void
 	ClipsChanged(const std::vector<editor::ClipInfo>& clips);
+
+	/**
+	 * The blend sets authored against the clip set now playing, and which one is open (-1: none).
+	 *
+	 * Emitted with every load, so a panel showing them never has to scan the project itself -- the
+	 * scan is the same one that found the `.banim` candidates, one edge over.
+	 */
+	void
+	BlendSetsChanged(const QStringList& candidates, int activeIndex);
+
+	/** The spaces the open set resolved to, in the acquire's own terms. Empty when none is open. */
+	void
+	SpacesChanged(const std::vector<game::BlendSpaceInfo>& spaces);
 
 protected:
 	void
