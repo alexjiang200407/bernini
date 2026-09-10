@@ -1,0 +1,114 @@
+#pragma once
+
+#include <assetlib/blend.h>
+#include <cstddef>
+#include <span>
+#include <string_view>
+
+namespace editor
+{
+	/**
+	 * The rules a blend space's sample run obeys while it is being authored, lifted clear of the
+	 * window that drives them.
+	 *
+	 * They exist here rather than at the door because the alternative is a rig that will not upload:
+	 * `validateBlendSet` and `AddRig` both refuse a run of fewer than two samples or one whose
+	 * parameters do not strictly increase, and a break found there surfaces as a scene that fails to
+	 * load rather than as a control that would not move. The panel cannot be tested at all --
+	 * `RenderTargetWindow`'s constructor needs a real `winId()` -- so every rule it enforces is a
+	 * free function here and pinned by a case, as GroundForSlope and FootIKForSliders already are.
+	 *
+	 * Every function takes the run in *authored* form: clips by name, in strictly increasing
+	 * parameter order, which is what a `.bblend` stores and what is saved back.
+	 *
+	 * `precision` is the step the caller's box shows -- 0.01 for two decimals -- not a constant of
+	 * the format. Two samples must be strictly apart because the span between them is what a weight
+	 * divides by, and the smallest gap worth having is the smallest one a person can see and type: a
+	 * rule holding the invariant to one ULP would read, in a box showing two decimals, as two
+	 * samples at the same threshold.
+	 *
+	 * So "too close" is *rounds to the same displayed value*, an integer comparison, rather than a
+	 * distance under `precision`. A distance cannot express it: the neighbouring step a person can
+	 * actually type is a hair under `precision` away in binary -- 3.21f minus 3.2f is 0.0099999905
+	 * -- so a subtraction refuses the very value the box was going to offer next.
+	 */
+
+	/**
+	 * Where `parameter` belongs in `run`, which is in strictly increasing order.
+	 *
+	 * The index it would be inserted *before*, so `run.size()` means past the last sample.
+	 */
+	[[nodiscard]] size_t
+	InsertionIndex(std::span<const assetlib::BlendSpaceSample> run, float parameter) noexcept;
+
+	/**
+	 * Whether a sample at `parameter` can join `run` and leave it a run a blend space accepts.
+	 *
+	 * False for a non-finite parameter, and for one that would display as a sample already there --
+	 * which is the duplicate `validateBlendSet` refuses, caught while it is still a gesture.
+	 */
+	[[nodiscard]] bool
+	CanInsertAt(
+		std::span<const assetlib::BlendSpaceSample> run,
+		float                                       parameter,
+		float                                       precision) noexcept;
+
+	/**
+	 * `parameter` held where sample `index` may actually go: strictly between its neighbours, one
+	 * displayed step clear of each. The ends are open, so the first and last samples move freely
+	 * outward.
+	 *
+	 * Clamped rather than reordered. A run in a list is read top to bottom, and a row that jumped
+	 * position mid-drag would move the thing under the cursor; this is the same choice the ground
+	 * slope makes by committing on release rather than tracking.
+	 *
+	 * A non-finite `parameter` leaves the sample where it is. An `index` outside the run answers
+	 * `parameter` unchanged -- there is nothing to hold it between.
+	 */
+	[[nodiscard]] float
+	ClampedParameter(
+		std::span<const assetlib::BlendSpaceSample> run,
+		size_t                                      index,
+		float                                       parameter,
+		float                                       precision) noexcept;
+
+	/**
+	 * Whether `run` can give one sample up and still be a blend space.
+	 *
+	 * Two is the floor: a one-sample space is a clip, and every clip is already a node under its own
+	 * name.
+	 */
+	[[nodiscard]] bool
+	CanRemoveSample(std::span<const assetlib::BlendSpaceSample> run) noexcept;
+
+	/**
+	 * Whether `name` may name a space in a set that already holds `existing`.
+	 *
+	 * Unnamed and duplicate are both refused by `validateBlendSet`, and a set that cannot be saved
+	 * is worse found at the save than at the keystroke.
+	 */
+	[[nodiscard]] bool
+	CanNameSpace(std::span<const assetlib::BlendSpace> existing, std::string_view name) noexcept;
+
+	/**
+	 * The parameter a `Scrubber` at `tick` addresses, over a run spanning `min` to `max` in `ticks`
+	 * steps.
+	 *
+	 * Scrubber is integer-valued on a closed range, and a parameter is not, so the cursor needs a
+	 * map rather than a cast. `ticks` is the resolution the bar is given, not a property of the run.
+	 *
+	 * A degenerate span (`max` at or below `min`) answers `min`: a space whose samples have
+	 * collapsed has one parameter to offer, and no cursor position means anything else.
+	 */
+	[[nodiscard]] float
+	ParameterForTick(float min, float max, int ticks, int tick) noexcept;
+
+	/**
+	 * The tick nearest `parameter`, the inverse of ParameterForTick and clamped into `[0, ticks]`.
+	 *
+	 * Nearest rather than truncated, so a parameter typed into the box and the thumb that follows it
+	 * do not disagree by a tick every time.
+	 */
+	[[nodiscard]] int
+	TickForParameter(float min, float max, int ticks, float parameter) noexcept;
+}
