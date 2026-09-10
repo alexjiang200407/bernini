@@ -14,6 +14,7 @@
 #include <span>
 #include <string>
 #include <string_view>
+#include <tracy/Tracy.hpp>
 #include <type_traits>
 #include <unordered_map>
 #include <utility>
@@ -133,6 +134,8 @@ namespace assetlib
 	bool
 	remapAnimations(AnimationSet& animations, const Skeleton& skeleton)
 	{
+		ZoneScopedN("assetlib remap animations");
+
 		const uint32_t oldBoneCount = animations.boneCount;
 		const auto     newBoneCount = static_cast<uint32_t>(skeleton.bones.size());
 
@@ -141,12 +144,22 @@ namespace assetlib
 		    animations.samples.size() % oldBoneCount != 0)
 			return false;
 
+		// Every clip must start on a frame boundary, the same condition findPlantWeights refuses a
+		// clip for. Rewriting an unaligned one would divide away the remainder and land it on
+		// another clip's frames.
+		for (const AnimationClip& clip : animations.clips)
+			if (clip.firstSample % oldBoneCount != 0 ||
+			    clip.firstSample > animations.samples.size())
+				return false;
+
 		const auto remap =
 			skeletonRemap(animations.skeletonBoneNames, animations.skeletonSignature, skeleton);
 		if (!remap)
 			return false;
 
 		const size_t frames = animations.samples.size() / oldBoneCount;
+
+		ZoneTextF("%u -> %u bones, %zu frames", oldBoneCount, newBoneCount, frames);
 
 		// The added bones rest: a bone no clip carried holds its bind pose rather than whatever
 		// the gather leaves behind, so a socket added to a rig does not drag it.
