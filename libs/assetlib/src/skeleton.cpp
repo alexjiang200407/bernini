@@ -1,9 +1,12 @@
+#include <algorithm>
 #include <assetlib/skinning.h>
 #include <assetlib/transform.h>
 #include <assetlib_structs/Animation.h>
 #include <assetlib_structs/Node.h>
 #include <assetlib_structs/Skeleton.h>
 
+#include <cmath>
+#include <concepts>
 #include <core/err/util.h>
 #include <core/hash.h>
 #include <cstddef>
@@ -11,24 +14,110 @@
 #include <optional>
 #include <span>
 #include <string>
+#include <string_view>
+#include <type_traits>
+#include <unordered_map>
 #include <vector>
 
 namespace assetlib
 {
 	using core::throw_runtime_error;
 
+	namespace
+	{
+		/** Called with a bone index, answers that bone's `T`. */
+		template <typename F, typename T>
+		concept BoneAccessor =
+			std::invocable<F, size_t> && std::convertible_to<std::invoke_result_t<F, size_t>, T>;
+
+		/**
+		 * The signature's one definition: each bone's name then its parent, in bone order.
+		 *
+		 * Two callers hash the same sequence -- one reads it off a `Skeleton`, the other off a
+		 * cooked name list and the parents reconstructed for it -- and skeletonRemap's whole
+		 * verdict is that the two agree, so they cannot be allowed to drift apart.
+		 */
+		template <BoneAccessor<std::string_view> NameAt, BoneAccessor<uint32_t> ParentAt>
+		uint64_t
+		hashBones(const size_t boneCount, NameAt nameAt, ParentAt parentAt) noexcept
+		{
+			uint64_t hash = core::hash_seed();
+			for (size_t i = 0; i < boneCount; ++i)
+			{
+				hash = core::hash_string(nameAt(i), hash);
+				hash = core::hash_pod(parentAt(i), hash);
+			}
+			return hash;
+		}
+	}
+
 	// Persisted in `.banim`, so a change to core's hash invalidates every file already written and
 	// needs a major version bump with it.
 	uint64_t
 	skeletonSignature(const Skeleton& skeleton) noexcept
 	{
-		uint64_t hash = core::hash_seed();
-		for (const Bone& bone : skeleton.bones)
+		return hashBones(
+			skeleton.bones.size(),
+			[&](size_t i) { return skeleton.stringPool.at(skeleton.bones[i].nameOffset); },
+			[&](size_t i) { return skeleton.bones[i].parent; });
+	}
+
+	std::optional<std::vector<uint32_t>>
+	skeletonRemap(
+		const std::span<const std::string> cookedBoneNames,
+		const uint64_t                     cookedSignature,
+		const Skeleton&                    skeleton)
+	{
+		if (cookedBoneNames.empty())
+			return std::nullopt;
+
+		auto newIndexByName = std::unordered_map<std::string_view, uint32_t>();
+		for (size_t i = 0; i < skeleton.bones.size(); ++i)
 		{
-			hash = core::hash_string(skeleton.stringPool.at(bone.nameOffset), hash);
-			hash = core::hash_pod(bone.parent, hash);
+			const std::string_view name = skeleton.stringPool.at(skeleton.bones[i].nameOffset);
+
+			// Two bones of one name make "which bone" unanswerable, and guessing is the failure
+			// the signature exists to prevent.
+			if (!newIndexByName.emplace(name, static_cast<uint32_t>(i)).second)
+				return std::nullopt;
 		}
-		return hash;
+
+		auto remap         = std::vector<uint32_t>(cookedBoneNames.size());
+		auto oldIndexByNew = std::vector<uint32_t>(skeleton.bones.size(), c_InvalidIndex);
+
+		for (size_t i = 0; i < cookedBoneNames.size(); ++i)
+		{
+			const auto found = newIndexByName.find(cookedBoneNames[i]);
+			if (found == newIndexByName.end())
+				return std::nullopt;
+
+			remap[i]                     = found->second;
+			oldIndexByNew[found->second] = static_cast<uint32_t>(i);
+		}
+
+		// What each bone's parent must have been: its nearest ancestor that the cooked rig also
+		// had. A bone inserted between two of them is skipped over, which is what makes an
+		// intermediate corrective an append rather than a reparent; a bone moved to another chain
+		// reaches a different ancestor and fails the hash below.
+		auto parents = std::vector<uint32_t>(cookedBoneNames.size(), c_InvalidIndex);
+		for (size_t i = 0; i < cookedBoneNames.size(); ++i)
+		{
+			uint32_t walk = skeleton.bones[remap[i]].parent;
+			while (walk != c_InvalidIndex && oldIndexByNew[walk] == c_InvalidIndex)
+				walk = skeleton.bones[walk].parent;
+
+			parents[i] = walk == c_InvalidIndex ? c_InvalidIndex : oldIndexByNew[walk];
+		}
+
+		const uint64_t reconstructed = hashBones(
+			cookedBoneNames.size(),
+			[&](size_t i) { return std::string_view(cookedBoneNames[i]); },
+			[&](size_t i) { return parents[i]; });
+
+		if (reconstructed != cookedSignature)
+			return std::nullopt;
+
+		return remap;
 	}
 
 	std::vector<std::string>
