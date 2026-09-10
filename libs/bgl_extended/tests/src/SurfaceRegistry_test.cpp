@@ -1,5 +1,6 @@
 #include "util/GpuValidation.h"
 #include "util/TestOptions.h"
+#include "util/util.h"
 #include <bgl/IGraphics.h>
 #include <bgl/MaterialType.h>
 #include <bgl/SurfaceType.h>
@@ -12,10 +13,13 @@
 #include <catch2/matchers/catch_matchers_string.hpp>
 #include <cstdint>
 #include <filesystem>
+#include <format>
 #include <fstream>
+#include <initializer_list>
 #include <span>
 #include <string>
 #include <string_view>
+#include <utility>
 
 using namespace bgl;
 
@@ -196,4 +200,68 @@ TEST_CASE("A module beside the surfaces is not one of them", "[surface][registry
 	REQUIRE(types.size() == 1u);
 	CHECK(types[0].name == "Only");
 	CHECK(types[0].kind == MaterialType::kGameStart);
+}
+
+namespace
+{
+	// A declared surface, as reflection leaves one. Built by hand rather than compiled: the carrier
+	// rule is a derivation over what was declared, so the cases that pin it need no device and no
+	// Slang.
+	SurfaceParams
+	DeclaredTextures(std::initializer_list<SurfaceTextureKind> kinds)
+	{
+		auto params = SurfaceParams();
+		for (const SurfaceTextureKind kind : kinds)
+		{
+			SurfaceTexture texture;
+			texture.name  = std::format("t{}", params.textures.size());
+			texture.kind  = kind;
+			texture.index = static_cast<uint32_t>(params.textures.size());
+			params.textures.push_back(std::move(texture));
+		}
+		return params;
+	}
+}
+
+TEST_CASE(
+	"A surface's coverage carrier is the texture it declared as coverage",
+	"[surface][carrier]")
+{
+	// Past the colour and past a second data slot, so the answer is the kind and not a position.
+	const SurfaceParams params = DeclaredTextures(
+		{
+			SurfaceTextureKind::kColor,
+			SurfaceTextureKind::kData,
+			SurfaceTextureKind::kCoverage,
+			SurfaceTextureKind::kNormal,
+		});
+
+	CHECK(CoverageCarrierSlot(params) == 2u);
+}
+
+TEST_CASE(
+	"A surface with no coverage slot is measured against its base colour",
+	"[surface][carrier]")
+{
+	// Where alpha rides in the colour, which is PBR's own rule and what PbrLike declares.
+	const SurfaceParams params = DeclaredTextures(
+		{
+			SurfaceTextureKind::kNormal,
+			SurfaceTextureKind::kColor,
+			SurfaceTextureKind::kColor,
+		});
+
+	CHECK(CoverageCarrierSlot(params) == 1u);
+}
+
+TEST_CASE(
+	"A surface declaring neither has nothing to measure coverage against",
+	"[surface][carrier]")
+{
+	CHECK_FALSE(CoverageCarrierSlot(
+					DeclaredTextures({ SurfaceTextureKind::kData, SurfaceTextureKind::kNormal }))
+	                .has_value());
+
+	// A surface whose coverage is pure arithmetic binds nothing at all.
+	CHECK_FALSE(CoverageCarrierSlot(DeclaredTextures({})).has_value());
 }

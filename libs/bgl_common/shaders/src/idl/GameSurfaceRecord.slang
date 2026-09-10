@@ -10,6 +10,12 @@ public static const uint cGameSurfaceTextureSlots = 8;
 // cRawPayloadOffset and this struct. The C++ side asserts the arithmetic.
 public static const uint cGameSurfaceParamsByteOffset = 96;
 
+// What `coverageSlot` holds for a surface declaring no texture hashed alpha could measure against.
+// Only the hashed rows read the field, and a material reaches one only through a surface that has a
+// carrier, so this never indexes a sample -- it is what makes a record that cannot be drawn hashed
+// say so.
+public static const uint cNoCoverageSlot = 0xFFFFFFFFu;
+
 // The engine's fixed part of a game surface's payload; the surface's own parameters follow it.
 public struct GameSurfaceRecord
 {
@@ -21,5 +27,9 @@ public struct GameSurfaceRecord
     // Only read by the alpha-test PSOs, against the surface's Coverage.
     public float alphaCutoff;
 
-    public uint pad[2];
+    // Which of `textures` hashed alpha measures its minification against, or cNoCoverageSlot. The
+    // surface declares it by slot kind and the engine resolves it; see bgl::CoverageCarrierSlot.
+    public uint coverageSlot;
+
+    public uint pad;
 };

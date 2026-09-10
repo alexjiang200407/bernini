@@ -1825,6 +1825,10 @@ namespace bgl
 		record.doubleSided = desc.doubleSided ? 1u : 0u;
 		record.alphaCutoff = desc.alphaCutoff;
 
+		// Written whatever the layer: which texture a surface's coverage is measured against is a
+		// property of the surface, and a material's layer can change under UpdateSurfaceMaterial.
+		record.coverageSlot = CoverageCarrierSlot(params).value_or(idl::cNoCoverageSlot);
+
 		// Every handle is filled, so a slot the material never named still samples something rather
 		// than a null descriptor. What that something is comes from the kind the surface declared:
 		// white is the identity for a colour or a factor, and the identity for a normal map is a

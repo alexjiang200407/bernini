@@ -1,10 +1,12 @@
 #include "util/util.h"
 #include "types/Format.h"
 #include "types/FormatInfo.h"
+#include <algorithm>
 #include <bgl/GeomType.h>
 #include <bgl/LayerType.h>
 #include <bgl/MaterialHandle.h>
 #include <bgl/MaterialType.h>
+#include <bgl/SurfaceType.h>
 #include <bgl_common/gassert.h>
 #include <bgl_common/idl/MeshInstance.h>
 #include <bgl_common/idl/PsoType.h>
@@ -131,6 +133,23 @@ namespace bgl
 	{
 		gassert(slot < cGameSlots, "A reserved game slot is below cGameSlots");
 		return static_cast<MaterialType>(static_cast<uint32_t>(MaterialType::kGameStart) + slot);
+	}
+
+	std::optional<uint32_t>
+	CoverageCarrierSlot(const SurfaceParams& params) noexcept
+	{
+		const auto kindIs = [&params](const SurfaceTextureKind kind) {
+			return std::ranges::find(params.textures, kind, &SurfaceTexture::kind);
+		};
+
+		if (const auto coverage = kindIs(SurfaceTextureKind::kCoverage);
+		    coverage != params.textures.end())
+			return coverage->index;
+
+		if (const auto color = kindIs(SurfaceTextureKind::kColor); color != params.textures.end())
+			return color->index;
+
+		return std::nullopt;
 	}
 
 	bool
