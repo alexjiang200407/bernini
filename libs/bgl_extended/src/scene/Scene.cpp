@@ -2011,7 +2011,7 @@ namespace bgl
 		static_assert(offsetof(idl::GameSurfaceRecord, textures) == 0);
 		static_assert(
 			sizeof(idl::GameSurfaceRecord::textures) ==
-			idl::cGameSurfaceSlots * sizeof(idl::RawTextureHandle));
+			idl::cGameSurfaceTextureSlots * sizeof(idl::RawTextureHandle));
 		// A game surface's parameters follow the fixed part at an offset the shader holds as a
 		// constant; the struct growing without it is a record read one field late.
 		static_assert(

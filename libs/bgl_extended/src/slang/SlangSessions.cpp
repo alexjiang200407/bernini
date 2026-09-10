@@ -152,13 +152,7 @@ namespace bgl
 	std::optional<ReflectedSurface>
 	SlangSessions::ReflectSurface(std::string_view moduleName, std::string_view surfaceName)
 	{
-		// Reflected on a DXIL target whatever this device compiles for, because what the offsets
-		// have to agree with is `RawBuffer.Load<T>`, and a raw load reconstructs a struct from
-		// scalar loads on every backend. A Metal target's *structured-buffer* element is laid out by
-		// MSL's rules instead -- a float3 aligned to 16 rather than packed at 4 -- which is a real
-		// layout for a real accessor (`EntryBuffer<T>`) and not the one a record is read with.
-		// Reflecting it moves every field after the first vector, and the shader then reads a
-		// texture's slot index out of the bytes of the value before it.
+		// DXIL whatever this device draws with -- see ReflectSurface in SurfaceReflection.h for why.
 		// For its side effect: this thread's entry, and the global session the one below is made
 		// from, exist once it returns.
 		static_cast<void>(ForThisThread());

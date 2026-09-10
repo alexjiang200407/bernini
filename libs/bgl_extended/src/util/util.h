@@ -28,6 +28,26 @@ namespace bgl
 	GameSlotKind(uint32_t slot) noexcept;
 
 	/**
+	 * The first of `slot`'s rows. @pre slot < cGameSlots.
+	 *
+	 * constexpr because ForwardPass's PSO table is built at compile time, which is also what holds
+	 * the table's order to PsoType's.
+	 */
+	[[nodiscard]] constexpr uint32_t
+	GameSlotRowBase(const uint32_t slot) noexcept
+	{
+		return static_cast<uint32_t>(idl::PsoType::kGameRowsStart) + slot * idl::cGameSlotRows;
+	}
+
+	/** Whether `pso` is one of the reserved game slots' rows at all. */
+	[[nodiscard]] bool
+	IsGameRow(uint32_t pso) noexcept;
+
+	/** Which of its slot's rows `pso` is. @pre IsGameRow(pso). */
+	[[nodiscard]] uint32_t
+	GameRowOffset(uint32_t pso) noexcept;
+
+	/**
 	 * A slot's row for a geometry tier and a layer, from its first row. Opaque and alpha-test are
 	 * per tier, since their geometry stage is the tier's own; blended is one row both tiers share,
 	 * because the blended pipeline's geometry stage branches tier per instance.

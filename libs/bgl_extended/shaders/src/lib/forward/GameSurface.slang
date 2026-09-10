@@ -10,7 +10,7 @@ import lib.forward.common;
 
 // The engine's side of the contract: every handle a surface reads is dereferenced here, and the
 // surface sees a slot index and a UV, never the arena.
-public struct ArenaReader : IMaterialReader
+public struct MaterialArenaReader : IMaterialReader
 {
     uint byteOffset;
     ForwardVSOut input;
@@ -44,9 +44,9 @@ public struct GameRecord<G : ISurfaceSource>
         return record;
     }
 
-    ArenaReader Reader(ForwardVSOut input)
+    MaterialArenaReader Reader(ForwardVSOut input)
     {
-        ArenaReader reader;
+        MaterialArenaReader reader;
         reader.byteOffset = byteOffset;
         reader.input = input;
         return reader;
@@ -62,8 +62,13 @@ public struct NullSurfaceParams
     public uint unused;
 };
 
-// What an unfilled slot draws: a flat mid-grey dielectric, fully covering. The tree ships it under
-// every game.slotN, and a registered surface's binding module shadows that file.
+// What an unfilled slot's pipelines compile against: a flat mid-grey dielectric, fully covering. The
+// tree ships it under every game.slotN, and a registered surface's binding module shadows that file.
+//
+// Not something anything draws. A material only carries slot N's MaterialType if surface N
+// registered -- CreateSurfaceMaterial refuses a name it has no SurfaceType for -- so an unfilled
+// slot's rows have no instances. This exists so the reserved rows link whether the slot is filled
+// or not, and its colour is never on screen.
 public struct NullSurface : ISurfaceSource
 {
     public typealias MaterialParams = NullSurfaceParams;

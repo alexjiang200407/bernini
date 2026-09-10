@@ -24,14 +24,11 @@ namespace bgl
 	 * `ISurfaceSource`, its `MaterialParams` fields at the offsets a record holds them at, the texture
 	 * fields among them by their declared type, and the defaults on the values that are left.
 	 *
-	 * **Reflect on a scalar-layout target**, which today means a DXIL one whatever backend will
-	 * draw the surface. The offsets have to be the ones `RawBuffer.Load<MaterialParams>` reads a
-	 * record at, and a raw load reconstructs its type from scalar loads on every backend. A Metal
-	 * target reflects a structured-buffer element under MSL's rules instead -- a float3 aligned to
-	 * 16 rather than packed at 4 -- which is a true layout for a different accessor
-	 * (`EntryBuffer<T>`) and not the one a record is read with. Reflecting it moves every field
-	 * after the first vector, and the shader reads a texture's slot index out of the bytes of the
-	 * value before it.
+	 * **Reflect on a scalar-layout target** -- DXIL, whatever backend draws it. The offsets must be
+	 * the ones `RawBuffer.Load<MaterialParams>` reads at, and a raw load rebuilds a struct from
+	 * scalar loads everywhere. Reflecting a Metal target gives the structured-buffer layout instead
+	 * (a float3 aligned to 16, not packed at 4): true for `EntryBuffer<T>`, wrong for a record, and
+	 * it moves every field after the first vector.
 	 *
 	 * `SurfaceType::kind` is left invalid; registration assigns it.
 	 *

@@ -133,6 +133,19 @@ namespace bgl
 		return static_cast<MaterialType>(static_cast<uint32_t>(MaterialType::kGameStart) + slot);
 	}
 
+	bool
+	IsGameRow(const uint32_t pso) noexcept
+	{
+		return pso >= static_cast<uint32_t>(idl::PsoType::kGameRowsStart) && pso < idl::c_PsoCount;
+	}
+
+	uint32_t
+	GameRowOffset(const uint32_t pso) noexcept
+	{
+		gassert(IsGameRow(pso), "GameRowOffset takes one of the reserved game rows");
+		return (pso - static_cast<uint32_t>(idl::PsoType::kGameRowsStart)) % idl::cGameSlotRows;
+	}
+
 	idl::PsoType
 	GameSlotRow(uint32_t slot, GeomType geom, LayerType layer)
 	{
@@ -151,9 +164,7 @@ namespace bgl
 			return tier + cutout;
 		}();
 
-		return static_cast<idl::PsoType>(
-			static_cast<uint32_t>(idl::PsoType::kGameRowsStart) + slot * idl::cGameSlotRows +
-			offset);
+		return static_cast<idl::PsoType>(GameSlotRowBase(slot) + offset);
 	}
 
 	idl::PsoType
@@ -236,9 +247,8 @@ namespace bgl
 	bool
 	IsTransparentPso(uint32_t pso) noexcept
 	{
-		if (const auto start = static_cast<uint32_t>(idl::PsoType::kGameRowsStart);
-		    pso >= start && pso < idl::c_PsoCount)
-			return (pso - start) % idl::cGameSlotRows == idl::cGameSlotBlendRow;
+		if (IsGameRow(pso))
+			return GameRowOffset(pso) == idl::cGameSlotBlendRow;
 
 		return pso == static_cast<uint32_t>(idl::PsoType::kTransparent_StaticMesh_PBR) ||
 		       pso == static_cast<uint32_t>(idl::PsoType::kTransparent_StaticMesh_LoosePbr) ||

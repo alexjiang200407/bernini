@@ -215,13 +215,13 @@ namespace bgl
 			SurfaceTextureKind kind = SurfaceTextureKind::kColor;
 			if (typeName != nullptr && TextureKindOf(typeName, kind))
 			{
-				if (reflected.params.textures.size() == idl::cGameSurfaceSlots)
+				if (reflected.params.textures.size() == idl::cGameSurfaceTextureSlots)
 				{
 					core::throw_runtime_error(
 						"surface '{}': texture '{}' is past the {} a record carries",
 						surfaceName,
 						spelling,
-						idl::cGameSurfaceSlots);
+						idl::cGameSurfaceTextureSlots);
 				}
 
 				SurfaceTexture texture;

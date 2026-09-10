@@ -197,8 +197,7 @@ namespace bgl
 			// ForwardVSOut and a material offset, and neither says which tier filled them.
 			for (uint32_t slot = 0; slot < cGameSlots; ++slot)
 			{
-				const auto row =
-					static_cast<uint32_t>(idl::PsoType::kGameRowsStart) + slot * idl::cGameSlotRows;
+				const uint32_t row = GameSlotRowBase(slot);
 				psos[row]     = { c_GameSlotSrcs[slot].opaque, RasterCullMode::kBack, true, false };
 				psos[row + 1] = { c_GameSlotSrcs[slot].cutout, RasterCullMode::kNone, true, false };
 				psos[row + 2] = { c_GameSlotSrcs[slot].opaque, RasterCullMode::kBack, true, false,
