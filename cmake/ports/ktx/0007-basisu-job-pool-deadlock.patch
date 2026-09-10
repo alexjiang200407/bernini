@@ -1,0 +1,38 @@
+Fix a lost wakeup that deadlocks basisu's job_pool destructor.
+
+The destructor set m_kill_flag and notified without holding m_mutex, which is the mutex a
+worker evaluates its wait predicate under. A worker that read the predicate false and was
+descheduled before enqueueing on the condition variable therefore missed the notify and
+slept forever on a flag that was already true, and the destructor's join() never returned.
+m_kill_flag being std::atomic removes the data race on the flag, not the lost wakeup.
+
+Observed as an assetlib_tests shard wedged for 83 minutes at no CPU inside
+ktxTexture2_CompressBasisEx, holding the machine-wide suite lock. See
+docs/known_issues.md, "assetlib_tests hangs on one shard, at no CPU, inside a texture bake".
+
+This is a backport: upstream basis_universal already takes the lock here, so the patch is
+expected to stop applying when ktx next vendors a newer basisu -- which is the signal to
+delete it and this overlay port with it.
+
+--- a/external/basisu/encoder/basisu_enc.cpp
++++ b/external/basisu/encoder/basisu_enc.cpp
+@@ -1532,10 +1532,16 @@
+ 	job_pool::~job_pool()
+ 	{
+ 		debug_printf("job_pool::~job_pool\n");
+-		
+-		// Notify all workers that they need to die right now.
+-		m_kill_flag = true;
+ 		
++		// Notify all workers that they need to die right now. The flag is set under the mutex a
++		// worker evaluates its wait predicate under: without it, a worker that has read the
++		// predicate false but has not yet enqueued on the condition variable misses this notify
++		// and sleeps on a flag that is already true, and the join below never returns.
++		{
++			std::lock_guard<std::mutex> lock(m_mutex);
++			m_kill_flag = true;
++		}
++
+ 		m_has_work.notify_all();
+ 
+ 		// Wait for all workers to die.

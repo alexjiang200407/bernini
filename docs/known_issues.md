@@ -49,6 +49,84 @@ hazard: they can deadlock on a crash inside `malloc`, never wait forever on the 
 
 ---
 
+## `assetlib_tests` hangs on one shard, at *no* CPU, inside a texture bake
+
+**Symptom.** `just test` never finishes: one `assetlib_tests` shard sits for hours holding the suite
+lock while every other shard passes. The discriminator against the `core_tests` hang above is the
+CPU — that one spins at 100%, this one consumes **nothing**. Sampled minutes apart its consumed time
+does not move (17s after 83 minutes) and its footprint stays near 6 MB. Sampled, the shard is in a
+bake, and the bottom of the stack is the whole story:
+
+```
+MaterialBake_test.cpp → AssetStore::BakeMaterial → bakeMaterial
+  → writeKTX2 → buildKtx → compressBasis (image_io.cpp)
+    → ktxTexture2_CompressBasisEx → basisu::job_pool::~job_pool()
+      → std::thread::join() → __ulock_wait
+```
+
+**Cause.** A lost wakeup in basisu's thread pool, vendored inside libktx and none of ours.
+`job_pool::~job_pool` (`external/basisu/encoder/basisu_enc.cpp`) sets its kill flag and notifies
+**without holding the pool's mutex**, then joins:
+
+```cpp
+m_kill_flag = true;        // std::atomic<bool>, but not under m_mutex
+m_has_work.notify_all();   // notified without the lock
+for (...) m_threads[i].join();
+```
+
+A worker waits on that condition variable under that mutex —
+`m_has_work.wait(lock, [this]{ return m_kill_flag || m_queue.size(); })`. A worker that evaluates the
+predicate false and is descheduled before it enqueues on the condition variable never receives the
+notification, then sleeps on a flag that is already true; the destructor's `join()` never returns.
+`std::atomic` removes the data race on the flag, not the lost wakeup: closing that window needs the
+destructor to hold `m_mutex` while setting the flag, and it never takes it.
+
+The window is a few instructions wide, so it takes load to land in — `just test` shards
+`assetlib_tests` four ways and each shard asks for `hardware_concurrency()` basisu threads
+(`bp.threadCount`, [image_io.cpp](../libs/assetlib/src/image_io.cpp)), so a 12-core machine runs 48
+workers and a thread descheduled inside that window stays there for a scheduler quantum rather than
+nanoseconds.
+
+**How rare it is, measured.** Sharding alone is *not* enough to bring it out: three consecutive
+`just test assetlib_tests` runs on an otherwise idle machine all passed, and the two unsharded
+`just run assetlib_tests` runs seen either side of the failure passed too. The one occurrence was a
+`just test` while a second checkout was also working the machine. So do not expect to reproduce it
+on demand, and do not read a clean run as evidence it is gone — the suite lock serialises *suites*
+across checkouts, not builds, so a sibling checkout compiling beside your suite is load the lock
+does not exclude.
+
+**Fixed by** taking `m_mutex` around the kill flag before notifying, in
+[cmake/ports/ktx/0007-basisu-job-pool-deadlock.patch](../cmake/ports/ktx/0007-basisu-job-pool-deadlock.patch).
+It had to be a patch: nothing bernini owns ever holds the pool, which is built and destroyed inside
+`ktxTexture2_CompressBasisEx`, so the only reachable seam is the dependency. vcpkg's `ktx` port
+already applies six patches, so this is a seventh, carried by an overlay port under
+[cmake/ports/ktx](../cmake/ports/ktx) that is otherwise vcpkg's port verbatim. It is a backport —
+upstream basis_universal already takes the lock, and adds a one-second `wait_for` timeout on top.
+
+Dropping `bp.threadCount` to 1 also removes it, since `job_pool` spawns no workers below two threads,
+and was rejected: single-threaded UASTC encoding of a 4K mip chain is too slow to ship.
+
+**Gates.** The build itself, and deliberately not a test. A race that survived three consecutive
+sharded runs cannot be pinned by a case that passes either way — such a test buys false confidence
+and would be worse than none. What pins the fix instead is that **vcpkg fails the build when a patch
+does not apply**: bump `ktx` past a basisu that already carries the lock and the port stops
+configuring, by name, which is the signal to delete the overlay rather than a silent revert.
+
+Do not read `just run assetlib_tests -- "[ktx2][threading]"` as this gate. That case covers
+`be6ad7ed`, which serialised Basis codec **init** behind `basisInitMutex` — a different phase whose
+green says nothing here. The sampled frame was `image_io.cpp`'s `g_Ready` fast path, which takes no
+lock at all, so init had long since succeeded and this hang was in pool teardown after an encode that
+worked.
+
+**If it comes back.** Check the overlay is still in the build before anything else: the port under
+`cmake/ports/ktx` and its `overlay-ports` entry in `vcpkg-configuration.json` are both load-bearing,
+and deleting either silently restores the upstream destructor. Then sample the wedged process before
+killing it — `job_pool::~job_pool` under `ktxTexture2_CompressBasisEx` at flat CPU is this one, and a
+stack anywhere else is not. Kill it promptly whatever the cause: it holds the machine-wide suite lock
+and every other checkout queues behind it.
+
+---
+
 ## The editor's viewport is more saturated than the same frame anywhere else
 
 **Symptom.** On a Mac, the material editor's viewport reads more saturated than Blender's Material
