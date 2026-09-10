@@ -36,40 +36,6 @@ namespace assetlib
 		constexpr std::string_view c_AnkleKey     = "ankle";
 		constexpr std::string_view c_ToeKey       = "toe";
 
-		/**
-		 * `from`'s tail beneath `fromDirectory`, re-rooted at `toDirectory` with `extension` in
-		 * place of its own -- the whole of the convention, written once so the two directions
-		 * cannot disagree about it.
-		 */
-		std::string
-		swapHalf(
-			std::string_view from,
-			std::string_view fromDirectory,
-			std::string_view toDirectory,
-			std::string_view fromExtension,
-			std::string_view toExtension)
-		{
-			const std::string key = normalizePath(from);
-
-			core::throw_runtime_error_if(
-				extensionOf(key) != fromExtension,
-				"avatar: '{}' is not a '{}'",
-				from,
-				fromExtension);
-
-			core::throw_runtime_error_if(
-				!isUnder(key, fromDirectory),
-				"avatar: '{}' is not under '{}'",
-				from,
-				fromDirectory);
-
-			const std::string_view tail = std::string_view(key).substr(
-				fromDirectory.size(),
-				key.size() - fromDirectory.size() - fromExtension.size());
-
-			return std::string(toDirectory).append(tail).append(toExtension);
-		}
-
 		void
 		takeBone(const nlohmann::json& leg, std::string_view key, std::string& out, size_t index)
 		{
@@ -123,6 +89,7 @@ namespace assetlib
 	avatarKeyFor(std::string_view skeletonKey)
 	{
 		return swapHalf(
+			"avatar",
 			skeletonKey,
 			c_SkeletonsDirectoryName,
 			c_AvatarsDirectoryName,
@@ -134,6 +101,7 @@ namespace assetlib
 	skeletonKeyForAvatar(std::string_view avatarKey)
 	{
 		return swapHalf(
+			"avatar",
 			avatarKey,
 			c_AvatarsDirectoryName,
 			c_SkeletonsDirectoryName,

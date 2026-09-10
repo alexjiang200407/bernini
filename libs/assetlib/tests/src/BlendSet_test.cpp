@@ -282,3 +282,36 @@ TEST_CASE(
 			"Authored/Animations/canonical.bblend")) == canonical);
 	CHECK(StoreAt(root.path).Load<BlendSet>("Authored/Animations/older.bblend") == MakeSet());
 }
+
+TEST_CASE("A blend set's key is its clip set's, with both halves swapped", "[assetlib][blend]")
+{
+	CHECK(
+		assetlib::blendSetKeyFor("Derived/Animations/loco.banim") ==
+		"Authored/Animations/loco.bblend");
+
+	SECTION("a nested clip set keeps its tail")
+	{
+		CHECK(
+			assetlib::blendSetKeyFor("Derived/Animations/dog/loco.banim") ==
+			"Authored/Animations/dog/loco.bblend");
+	}
+
+	SECTION("an unnormalized key is normalized first")
+	{
+		CHECK(
+			assetlib::blendSetKeyFor("./Derived/Meshes/../Animations/loco.banim") ==
+			"Authored/Animations/loco.bblend");
+	}
+
+	SECTION("anything that is not a .banim under the animations directory is refused")
+	{
+		CHECK_THROWS(assetlib::blendSetKeyFor(""));
+		CHECK_THROWS(assetlib::blendSetKeyFor("Derived/Animations/loco.bmesh"));
+		CHECK_THROWS(assetlib::blendSetKeyFor("Authored/Animations/loco.banim"));
+
+		// The refusal names the convention the caller asked about, not the helper behind it.
+		CHECK_THROWS_WITH(
+			assetlib::blendSetKeyFor("Derived/Meshes/loco.banim"),
+			Catch::Matchers::ContainsSubstring("blend set"));
+	}
+}

@@ -9,14 +9,13 @@
 namespace editor
 {
 	AnimationBindings
-	ResolveAnimationBindings(const std::filesystem::path& dataRoot, std::string_view skeleton)
+	ResolveAnimationBindings(const assetlib::AssetRefGraph& graph, const std::string_view skeleton)
 	{
 		auto bindings     = AnimationBindings();
 		bindings.skeleton = std::string(skeleton);
 		if (bindings.skeleton.empty())
 			return bindings;
 
-		const auto graph = assetlib::AssetRefGraph::Scan(assetlib::AssetStore(dataRoot));
 		for (const assetlib::AssetRef& ref : graph.ReferrersOf(bindings.skeleton))
 			if (ref.kind == assetlib::RefKind::kClipSkeleton)
 				bindings.animations.push_back(ref.referrer);

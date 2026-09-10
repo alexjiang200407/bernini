@@ -361,7 +361,8 @@ to keep in agreement beyond the one below.
   a fade interrupting a live one.
 
   The panel's properties column is a header over a `QTabWidget` for this: the header holds what the
-  clip set *is* and the tabs what is being done with it, with the ground, the plant switch and the
+  clip set *is* -- its `.banim`, and now the `.bblend` whose spaces the rig carries -- and the tabs
+  what is being done with it, with the ground, the plant switch and the
   IK sliders staying in the header because a blended plant weight has to be judgeable on a slope
   while the blend controls are visible. **The tab is the mode** — entering *Blend* stamps whatever
   its controls describe and leaving it puts the clip back, which is also how a named target is
@@ -377,6 +378,23 @@ to keep in agreement beyond the one below.
   **The crowd source cannot hold one and the controls say so.** The shared table plays one clip per
   instance and holds no slots, so `SetSkinnedPlayback` throws there; it still interpolates frames
   within that clip, which is a different thing from blending between two.
+
+* **A blend set is opened from the header, and its spaces listed in *Space*.** The sets authored
+  against the live clip set come from the same reference scan that found the `.banim` candidates,
+  one `kBlendClips` edge over (`editor::ResolveBlendSets`), and choosing one **reloads the mesh** --
+  a rig already uploaded refuses a set it was not built with, so this cannot be a rebind. Switching
+  `.banim` drops the set with it: a set names one clip set, and carrying it across would name a
+  file the rig no longer plays.
+
+  *Create Blend Set* writes the empty document at `assetlib::blendSetKeyFor`'s key and opens it.
+  The convention lives in assetlib beside `avatarKeyFor` rather than in the panel, since the layout
+  is the library's; what the editor owns is only the gesture. The empty set carries the `.banim` it
+  was authored against and no spaces, which is what makes it findable by the scan the moment it
+  exists -- nothing else attaches a set to a clip set.
+
+  The *Space* tab lists the open set's spaces and the samples of the selected one, clip by name and
+  threshold. It stamps nothing into the playback record: only *Blend* does, which is why entering
+  either *Clip* or *Space* clears whatever fade was live.
 
 * **One timeline serves both tabs.** `TransitionStrip` draws two clip bars on a shared window with
   the fade between them, and a single clip is the same widget with its second end at the far edge —
