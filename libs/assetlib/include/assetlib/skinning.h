@@ -87,44 +87,27 @@ namespace assetlib
 	 * Re-address `animations` to `skeleton`, whose bones skeletonRemap says are the cooked rig's
 	 * grown. True when it did; false leaves `animations` exactly as it was.
 	 *
-	 * The samples are re-strided rather than indirected, so everything downstream keeps addressing
-	 * a pose arithmetically and no GPU path learns what a bone name is. A bone the clips never
-	 * carried -- the added one -- holds its bind pose in every frame, which is how a name-binding
-	 * runtime behaves and why an added socket does not drag its rig.
+	 * The samples are re-strided, not indirected, so nothing downstream stops addressing a pose
+	 * arithmetically. A bone the clips never carried holds its bind pose in every frame.
 	 *
-	 * Each clip keeps the frame it started on: `firstSample / boneCount` is a frame index that the
-	 * baked plant weights address by, so a re-stride that renumbered frames would silently plant
-	 * the wrong feet.
+	 * Each clip keeps the frame it started on: the baked plant weights address by
+	 * `firstSample / boneCount`, so renumbering frames here plants the wrong feet.
 	 *
-	 * The posed boxes and plant weights are left as they are. Both are keyed by their own
-	 * signature, so a measurement made against another pairing is already refused where it is read.
+	 * The posed boxes and plant weights are left stale; each is keyed by its own signature.
 	 */
 	[[nodiscard]] bool
 	remapAnimations(AnimationSet& animations, const Skeleton& skeleton);
 
 	/**
 	 * Re-address `mesh`'s joint indices to `skeleton`, the clip set's counterpart. True when it did;
-	 * false leaves `mesh` exactly as it was.
-	 *
-	 * The indices are rewritten in place inside the interleaved vertex blob -- eight bytes a vertex,
-	 * leaving the layout, the meshlets and every other attribute alone -- so what reaches the GPU is
-	 * the same buffer it always was, addressing the bones it now means.
-	 *
-	 * An influence carrying no weight may name a bone the cooked rig never had -- decodeInfluences
-	 * accepts one, since a zero weight contributes nothing to the pose -- and there is no bone to
-	 * remap it to, so it is zeroed. Not left: `SkinMatrix` fetches all four palette matrices
-	 * whatever their weights, and `AssertBoneIndices` checks all four against the bone count, so a
-	 * stale index reads off the end of the palette and fails a `BERNINI_GPU_DEBUG` build. A
-	 * *weighted* influence naming a bone the cooked rig did not have is a corrupt mesh and is
+	 * false leaves `mesh` exactly as it was. A mesh carrying no joints addresses no bone and is
 	 * refused.
 	 *
-	 * A mesh carrying no joints is refused rather than trivially accepted: it addresses no bone, so
-	 * meshMatchesSkeleton already answers true for any rig and nothing should be asking.
+	 * An unweighted influence naming a bone the cooked rig never had is zeroed, not left: the GPU
+	 * fetches and range-asserts all four influences whatever their weights. A weighted one is a
+	 * corrupt mesh and is refused.
 	 *
-	 * @throws std::runtime_error for a malformed submesh -- no position attribute, one half of the
-	 *         skin pair, an attribute past the stride, or vertices outside the vertex data. That is
-	 *         a corrupt container rather than a rig that cannot be resolved, which is the `false`
-	 *         path; `mesh` is untouched either way.
+	 * @throws std::runtime_error for what resolveSkinLayout refuses -- a malformed submesh.
 	 */
 	[[nodiscard]] bool
 	remapMesh(BMesh& mesh, const Skeleton& skeleton);
