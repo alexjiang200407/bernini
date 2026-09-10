@@ -59,6 +59,31 @@ namespace assetlib
 	skeletonBoneNames(const Skeleton& skeleton);
 
 	/**
+	 * Where each of a cooked container's bones sits in `skeleton` now: `[oldIndex] -> newIndex`, or
+	 * nullopt when the two are not the same rig grown.
+	 *
+	 * A signature mismatch says only "not the same rig", and for the routine skeleton edit -- a
+	 * bone added -- nothing was invalidated: every old bone is still there under its own name. So
+	 * every cooked name is resolved in `skeleton`, each bone's nearest ancestor that the cooked rig
+	 * also had is taken as what its parent must have been, and that reconstruction is hashed by
+	 * skeletonSignature's own rule and checked against `cookedSignature`. Equal means the
+	 * reconstruction held and the indices may be remapped; anything else is refused.
+	 *
+	 * Accepts an added bone, a reordered one, and a corrective inserted *between* two existing
+	 * bones -- the child's nearest surviving ancestor is unchanged. Refuses a rename, a deletion, a
+	 * bone moved to another chain, and a rig carrying two bones of one name, where "which bone" has
+	 * no answer.
+	 *
+	 * `cookedBoneNames` empty is refused rather than trusted: a container written before the list
+	 * existed carries no names to resolve, and its signature has already disagreed.
+	 */
+	[[nodiscard]] std::optional<std::vector<uint32_t>>
+	skeletonRemap(
+		std::span<const std::string> cookedBoneNames,
+		uint64_t                     cookedSignature,
+		const Skeleton&              skeleton);
+
+	/**
 	 * @throws std::runtime_error if the bones are not topologically sorted (a parent at or after its
 	 *         child), a parent index is out of range, or a name offset is past the string pool.
 	 */

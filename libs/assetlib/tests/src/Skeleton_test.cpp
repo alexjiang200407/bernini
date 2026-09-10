@@ -11,11 +11,13 @@
 #include <assetlib_structs/VertexLayout.h>
 #include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
+#include <core/hash.h>
 #include <cstddef>
 #include <cstdint>
 #include <filesystem>
 #include <stdexcept>
 #include <utility>
+#include <vector>
 
 using namespace assetlib;
 
@@ -182,6 +184,148 @@ TEST_CASE("skeletonBoneNames answers in bone order", "[skeleton]")
 	REQUIRE(names.size() == skeleton.bones.size());
 	for (size_t i = 0; i < names.size(); ++i)
 		CHECK(names[i] == skeleton.stringPool.at(skeleton.bones[i].nameOffset));
+}
+
+namespace
+{
+	/** A rig built from `{name, parent}` pairs, in the order given. */
+	Skeleton
+	MakeRig(const std::vector<std::pair<const char*, uint32_t>>& bones)
+	{
+		Skeleton skeleton;
+		for (const auto& [name, parent] : bones)
+		{
+			Bone bone{};
+			bone.bindPose   = IdentityTransform();
+			bone.parent     = parent;
+			bone.nameOffset = skeleton.stringPool.add(name);
+			skeleton.bones.push_back(bone);
+		}
+		return skeleton;
+	}
+}
+
+TEST_CASE("the factored signature is the one already on disk", "[skeleton][canary]")
+{
+	// Every .bskel, .banim and .bmesh stores a signature computed by the loop below. Factoring it
+	// into hashBones must not have moved the value by a bit: nothing compares a stored signature
+	// against a recomputed one in this suite -- both sides of every other check are computed fresh,
+	// so they would agree with each other while disagreeing with every file already written.
+	const auto skeleton = MakeChain();
+
+	uint64_t expected = core::hash_seed();
+	for (const Bone& bone : skeleton.bones)
+	{
+		expected = core::hash_string(skeleton.stringPool.at(bone.nameOffset), expected);
+		expected = core::hash_pod(bone.parent, expected);
+	}
+
+	CHECK(skeletonSignature(skeleton) == expected);
+}
+
+TEST_CASE("skeletonRemap accepts a rig that only grew", "[skeleton][remap]")
+{
+	const auto cooked    = MakeChain();  // hips -> spine -> head
+	const auto names     = skeletonBoneNames(cooked);
+	const auto signature = skeletonSignature(cooked);
+
+	SECTION("the same rig maps every bone to itself")
+	{
+		const auto remap = skeletonRemap(names, signature, cooked);
+		REQUIRE(remap.has_value());
+		CHECK(*remap == std::vector<uint32_t>{ 0, 1, 2 });
+	}
+
+	SECTION("a bone appended at the end leaves the old indices alone")
+	{
+		const auto grown =
+			MakeRig({ { "hips", c_InvalidIndex }, { "spine", 0 }, { "head", 1 }, { "prop", 0 } });
+
+		const auto remap = skeletonRemap(names, signature, grown);
+		REQUIRE(remap.has_value());
+		CHECK(*remap == std::vector<uint32_t>{ 0, 1, 2 });
+	}
+
+	SECTION("a bone inserted mid-hierarchy shifts them")
+	{
+		// What a socket added to the spine looks like once the depth-first walk has placed it.
+		const auto grown =
+			MakeRig({ { "hips", c_InvalidIndex }, { "spine", 0 }, { "grip", 1 }, { "head", 1 } });
+
+		const auto remap = skeletonRemap(names, signature, grown);
+		REQUIRE(remap.has_value());
+		CHECK(*remap == std::vector<uint32_t>{ 0, 1, 3 });
+	}
+
+	SECTION("a corrective inserted *between* two bones is an append, not a reparent")
+	{
+		// head's parent is now `twist`, which the cooked rig never had -- so the test that matters
+		// is the nearest ancestor it did have, which is still spine.
+		const auto grown =
+			MakeRig({ { "hips", c_InvalidIndex }, { "spine", 0 }, { "twist", 1 }, { "head", 2 } });
+
+		const auto remap = skeletonRemap(names, signature, grown);
+		REQUIRE(remap.has_value());
+		CHECK(*remap == std::vector<uint32_t>{ 0, 1, 3 });
+	}
+
+	SECTION("a reorder is a bijection by name and maps through")
+	{
+		// Needs a branching rig: a chain has exactly one topological order, so there is nothing to
+		// permute. Bone order is seeded from `skin.joints` order, so an exporter version change
+		// swaps two siblings with no rig edit at all -- every parent is still the same bone by
+		// name, so the reconstruction holds and the clips are not stranded.
+		const auto forked = MakeRig({ { "hips", c_InvalidIndex }, { "armL", 0 }, { "armR", 0 } });
+		const auto forkedNames     = skeletonBoneNames(forked);
+		const auto forkedSignature = skeletonSignature(forked);
+
+		const auto swapped = MakeRig({ { "hips", c_InvalidIndex }, { "armR", 0 }, { "armL", 0 } });
+		REQUIRE(skeletonSignature(swapped) != forkedSignature);
+
+		const auto remap = skeletonRemap(forkedNames, forkedSignature, swapped);
+		REQUIRE(remap.has_value());
+		CHECK(*remap == std::vector<uint32_t>{ 0, 2, 1 });
+	}
+}
+
+TEST_CASE("skeletonRemap refuses what genuinely lost its target", "[skeleton][remap]")
+{
+	const auto cooked    = MakeChain();
+	const auto names     = skeletonBoneNames(cooked);
+	const auto signature = skeletonSignature(cooked);
+
+	SECTION("a rename has no bone to resolve to")
+	{
+		const auto renamed = MakeRig({ { "hips", c_InvalidIndex }, { "chest", 0 }, { "head", 1 } });
+		CHECK_FALSE(skeletonRemap(names, signature, renamed).has_value());
+	}
+
+	SECTION("a deletion likewise")
+	{
+		const auto deleted = MakeRig({ { "hips", c_InvalidIndex }, { "head", 0 } });
+		CHECK_FALSE(skeletonRemap(names, signature, deleted).has_value());
+	}
+
+	SECTION("a reparent resolves every name and must still be refused")
+	{
+		// The case that pins ADR-4: head moved off spine and onto hips. Name resolution alone
+		// accepts this and poses the rig wrongly with nothing to show for it.
+		const auto reparented =
+			MakeRig({ { "hips", c_InvalidIndex }, { "spine", 0 }, { "head", 0 } });
+		CHECK_FALSE(skeletonRemap(names, signature, reparented).has_value());
+	}
+
+	SECTION("two bones of one name leave 'which bone' unanswerable")
+	{
+		const auto ambiguous =
+			MakeRig({ { "hips", c_InvalidIndex }, { "spine", 0 }, { "head", 1 }, { "spine", 0 } });
+		CHECK_FALSE(skeletonRemap(names, signature, ambiguous).has_value());
+	}
+
+	SECTION("a container written before the name list existed carries nothing to resolve")
+	{
+		CHECK_FALSE(skeletonRemap({}, signature, cooked).has_value());
+	}
 }
 
 TEST_CASE("A clip set survives a container round-trip", "[animation][io]")
