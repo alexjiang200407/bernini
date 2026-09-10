@@ -647,9 +647,17 @@ the author left it, and plants nothing. It is a third walk of every frame on the
 (`assetlib plant weights`). Measured on `cha800_00` (663 bones, 2254 frames, four legs' worth of
 rig): +2.7 s of a 48 s debug cook, and under the run-to-run noise in release.
 
-The key is a signature over the resolved chains, the rig and the geometry the soles were fitted on
+The key is a signature over the resolved chains and the geometry the soles were fitted on
 (`assetlib::plantWeightsSignature`) — the clips are deliberately not in it, because they live in the
 same file. A load that finds no matching entry measures, exactly as `findPosedBounds` does.
+
+Each leg is hashed as its four bones **walked to the root**, by name and by both of its binds rather
+than by index: a sole sits in model space, so every ancestor's rest offset is part of where it lands,
+while a bone appended elsewhere renumbers the chain without moving it. Both binds, and neither
+substitutes for the other — `solePlanes` carries every sole through the ankle's `inverseBind`, which
+glTF authors separately from the local rest pose, while the flat-plane fallback composes `bindPose`
+up the chain. Keying on the whole rig — which is what this did until an append became survivable —
+re-measured the cook's largest stage for a socket that moves no sole.
 
 `assetlib_cli bakebounds` backfills them alongside the boxes, and for a reason of its own: an avatar
 is often authored *after* its rig is cooked, which leaves a `.banim` whose boxes are current and
@@ -741,8 +749,10 @@ disagree.
   walk, and it is paid at **import**:
   `bakePosedBounds` stores the result in the `.banim` — one box per rigged mesh entry, because it is that geom's
   culling volume and a `.bmesh` may hold two rigged meshes. Each box is keyed by a signature over
-  the vertex data and the inverse binds (`posedBoundsSignature`), so a source re-authored since the
-  bake simply stops matching. `AcquireSkinnedMesh` reads the bake (`findPosedBounds`) and walks only
+  the vertex data and the inverse binds of the bones the mesh has **weight on** (`posedBoundsSignature`),
+  so a source re-authored since the bake simply stops matching, while a bone nothing is weighted to —
+  an appended socket — leaves the measurement alone. A mesh whose layout will not decode is keyed on
+  every bone instead, since a pairing that cannot be read cannot be narrowed against. `AcquireSkinnedMesh` reads the bake (`findPosedBounds`) and walks only
   a pairing the cook never measured — a caller that cannot block still hands over its own box. A
   project imported before the boxes existed is retrofitted with
   `assetlib_cli bakebounds -p <project>`.
