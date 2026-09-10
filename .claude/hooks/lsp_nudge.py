@@ -35,9 +35,14 @@ CPP_ROOTS = ("libs", "apps", "examples")
 
 CPP_SUFFIXES = (".cpp", ".h", ".hpp", ".cc", ".cxx", ".inl")
 
-# Searched from the tree root rather than piped from another command's output. A bare
-# `grep foo` with neither is a filter over stdin and has nothing to do with the sources.
-RECURSIVE_FLAGS = {"-r", "-R", "--recursive", "-rn", "-rln", "-rin", "-nr", "-ln"}
+# The value of these is the pattern itself, so it is what gets inspected.
+PATTERN_FLAGS = {"-e", "--regexp", "-f", "--file"}
+
+# The value of these is a count, a glob, a type or a colour mode -- never the pattern, and
+# never a path. Consumed and dropped, or `-A 3` would offer `3` as the symbol to look up.
+VALUE_FLAGS = {"-m", "--max-count", "-A", "-B", "-C", "--after-context", "--before-context",
+               "--context", "--include", "--exclude", "--glob", "-g", "-t", "--type",
+               "--color", "--colour", "-M", "--max-columns"}
 
 ADVICE = (
     "The LSP answers this better than a regex: it knows a declaration from a definition,\n"
@@ -69,6 +74,20 @@ def segments(command):
         yield [t.strip("\"'") for t in tokens]
 
 
+def is_recursive(args):
+    """Whether the search walks a tree rather than filtering stdin.
+
+    By flag character rather than by whole token: -r, -R, -rn, -Rn and -nr all mean it, and
+    enumerating the spellings misses whichever one nobody thought of.
+    """
+    for arg in args:
+        if not arg.startswith("-") or arg.startswith("--"):
+            continue
+        if "r" in arg[1:] or "R" in arg[1:]:
+            return True
+    return "--recursive" in args
+
+
 def searches_cpp(paths, recursive):
     """Whether the paths a search was given are C++ sources."""
     if not paths:
@@ -94,20 +113,22 @@ def searches_cpp(paths, recursive):
 
 def symbol_of(args):
     """The bare C++ identifier a search is for, or None if it is not one."""
-    # Anything that takes a value, so its argument is never mistaken for the pattern.
-    takes_value = {"-e", "--regexp", "-f", "--file", "-m", "--max-count", "-A", "-B", "-C",
-                   "--include", "--exclude", "--glob", "-g", "-t", "--type", "--color"}
-
     operands = []
-    skip = False
+    keep_next = False
+    drop_next = False
     for arg in args:
-        if skip:
-            skip = False
-            # An -e pattern is still the pattern.
+        if keep_next:
+            keep_next = False
             operands.append(arg)
             continue
-        if arg in takes_value:
-            skip = True
+        if drop_next:
+            drop_next = False
+            continue
+        if arg in PATTERN_FLAGS:
+            keep_next = True
+            continue
+        if arg in VALUE_FLAGS:
+            drop_next = True
             continue
         operands.append(arg)
 
@@ -119,8 +140,7 @@ def symbol_of(args):
     if not IDENTIFIER.match(pattern) or len(pattern) < MIN_LENGTH:
         return None
 
-    recursive = any(a in RECURSIVE_FLAGS for a in args)
-    if not searches_cpp(positional[1:], recursive):
+    if not searches_cpp(positional[1:], is_recursive(args)):
         return None
     return pattern
 

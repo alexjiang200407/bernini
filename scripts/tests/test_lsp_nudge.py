@@ -57,6 +57,39 @@ def test_a_cpp_symbol_is_pointed_at_the_lsp(command):
     assert "findReferences" in said
 
 
+# A flag's value is not the pattern. Getting this wrong is silent in both directions: the
+# search that was meant to be caught goes by unremarked, or the count after -A is offered as
+# a symbol to look up. `rg -t cpp` is the case that stung -- the most natural spelling of a
+# C++-only search, and the one this hook exists for.
+@pytest.mark.parametrize(
+    "command",
+    [
+        "grep -A 3 GameSlotRow -r libs",
+        "grep -B 2 GameSlotRow -r libs",
+        "grep -m 1 GameSlotRow -r libs",
+        "rg -t cpp GameSlotRow libs",
+        "grep --color always -rn GameSlotRow libs",
+        "grep -rn --include *.cpp GameSlotRow libs",
+        # -e and -f are the other way round: their value IS the pattern.
+        "grep -e GameSlotRow -r libs",
+    ],
+)
+def test_a_flag_value_is_never_taken_for_the_pattern(command):
+    said = advice(command)
+    assert said is not None
+    assert "GameSlotRow" in said
+    for value in ("'3'", "'2'", "'1'", "'cpp'", "'always'"):
+        assert value not in said
+
+
+# Recursion is read off the flag characters, so every spelling of it counts rather than the
+# handful somebody thought to list.
+@pytest.mark.parametrize("command", ["grep -rn GameSlotRow", "grep -Rn GameSlotRow",
+                                     "grep -nr GameSlotRow", "grep --recursive GameSlotRow"])
+def test_every_spelling_of_recursive_is_a_tree_search(command):
+    assert advice(command) is not None
+
+
 def test_the_symbol_searched_for_is_named_back():
     # workspaceSymbol takes the name, so the advice is only actionable if it carries one.
     said = advice("grep -rn GameSlotRow libs")
