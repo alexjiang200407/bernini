@@ -310,14 +310,20 @@ to keep in agreement beyond the one below.
   a planted foot is solved against — and stands a floor under the rig at the same tilt, so the tilt
   can be seen. Positive rises toward +X, and a heading slider turns uphill about +Y: nothing in the
   path knows which way a rig moves (the test coyote runs along +Z), so a person turns the hill to
-  face the stride rather than the rig to face the hill. The floor is drawn twice, back to back, because a plane is one face and the renderer culls its back: a single placement disappears the moment the camera drops to floor level, which is the one eye level a foot's contact can be read at when nothing casts a shadow. One checkbox, *Plant feet*, is the whole group: it draws the
-  floor, sets the scene's `SetFootPlanting`, and enables the two sliders that tilt it. One switch
+  face the stride rather than the rig to face the hill. The floor is drawn twice, back to back, because a plane is one face and the renderer culls its back: a single placement disappears the moment the camera drops to floor level, which is the one eye level a foot's contact can be read at when nothing casts a shadow. *Plant feet* is a checkable group box, and the whole group is
+  inside it: checked, it draws the floor, sets the scene's `SetFootPlanting`, and shows the four
+  sliders that shape it — the slope and heading here, and the two IK weights below. One switch
   rather than a floor and a solve separately, because neither half is worth anything alone — an
-  empty floor shows nothing, and there is nothing to plant against without one. Off, the clip plays
-  exactly as authored, which is the other half of judging what the solve does; the sliders keep
-  their values so turning it back on restores what was set. It starts **off**, so a panel just
-  opened shows the clip as its author left it, and like the slope it holds only while the panel is
-  shown. The box holds that state and one method pushes it, construction included.
+  empty floor shows nothing, and there is nothing to plant against without one. The switch is the
+  group's *title*, so what it governs is drawn rather than left to adjacency. Unchecked, the group
+  collapses to that title rather than greying its body — the deviation from the disabled-but-visible sections
+  of Unreal's Details panel, Unity's Inspector and Blender's modifier stack, taken because the panel starts **off**, so a panel just opened
+  shows the clip as its author left it and a greyed body would be the resting view of the column
+  rather than an occasional one. The sliders keep their values, so turning it back on restores what
+  was set. Off, the clip plays exactly as authored, which is the other half of judging what the
+  solve does, and like the slope it holds only while the panel is shown. The group holds that state
+  and one method pushes it, construction included — after the column's minimum width is measured,
+  since a collapsed body contributes no slider to the hint.
   The floor and the ground are derived from one rotation
   (`editor::GroundForSlope`, `FloorTransformForSlope`, free of the window and pinned by
   `[slope]`), so the floor and the ground cannot lean different ways. Both are `Scrubber`s, the hand-painted click-anywhere bar the transport's timeline used before
@@ -515,7 +521,7 @@ the clip was authored on (model-space up) onto the ground normal, about the ankl
 to `cSoleClampRadians`. The turn is the *ground's*, not whatever would bring the sole flat: the
 Coyote's `Success` stands one foot heel-up 28°, and a tilt that aligned the sole forced it flat on
 level ground, where the plant should change nothing. On level ground nothing turns, which is also
-what makes the editor's *Plant feet* checkbox an honest A/B. About the joint rather than about the
+what makes the editor's *Plant feet* switch an honest A/B. About the joint rather than about the
 sole because the joint is where the chain the solve just satisfied ends; turning the foot under it
 would put the shin back out of length. The contact was placed already turned, so the turn costs
 nothing at the ground: the point that was dropped onto it is the point that stands on it.

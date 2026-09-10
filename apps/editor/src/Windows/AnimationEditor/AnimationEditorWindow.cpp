@@ -19,6 +19,7 @@
 #include <QDropEvent>
 #include <QFileDialog>
 #include <QFrame>
+#include <QGroupBox>
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QListWidget>
@@ -219,10 +220,41 @@ AnimationEditorWindow::BuildPropertiesColumn()
 	layout->addWidget(m_TierSelector);
 
 	layout->addSpacing(8);
-	m_SlopeLabel = new QLabel(QStringLiteral("Ground Slope: 0\u00b0"), column);
-	layout->addWidget(m_SlopeLabel);
 
-	m_SlopeSlider = new Scrubber(column);
+	// Off to begin with, so a panel just opened shows the clip as its author left it: the ground is
+	// a thing to try, and a preview that silently moved a foot on the way in would be answering a
+	// question nobody had asked yet.
+	m_PlantFeet = new QGroupBox(QStringLiteral("Plant feet"), column);
+	m_PlantFeet->setCheckable(true);
+	m_PlantFeet->setChecked(false);
+
+	// Flat, because the frame is the platform's and the column is not: every other control here is
+	// a bare label over a Scrubber, so a border would be the only one in the panel -- and collapsed
+	// it draws as an empty rounded sliver under the title, which reads as a stray rule.
+	m_PlantFeet->setFlat(true);
+	m_PlantFeet->setToolTip(QStringLiteral(
+		"Stands the rig on a ground plane and solves each leg onto it. Off, there is no floor and "
+		"the clip plays exactly as authored, which is the other half of judging the solve."));
+	layout->addWidget(m_PlantFeet);
+
+	// The four sliders sit in one body so the group collapses as a unit; hiding them one by one
+	// would leave the box's own height behind and the tabs under it would not move up.
+	auto* groundBox = new QVBoxLayout(m_PlantFeet);
+	groundBox->setContentsMargins(0, 0, 0, 0);
+	m_GroundBody = new QWidget(m_PlantFeet);
+	groundBox->addWidget(m_GroundBody);
+
+	auto* ground = new QVBoxLayout(m_GroundBody);
+	ground->setContentsMargins(0, 0, 0, 0);
+
+	// Connected once the body it hides exists, so no future setChecked above can fire into a
+	// half-built group.
+	connect(m_PlantFeet, &QGroupBox::toggled, this, [this] { UpdateGroundControls(); });
+
+	m_SlopeLabel = new QLabel(QStringLiteral("Ground Slope: 0\u00b0"), m_GroundBody);
+	ground->addWidget(m_SlopeLabel);
+
+	m_SlopeSlider = new Scrubber(m_GroundBody);
 	m_SlopeSlider->SetRange(-30, 30);
 	m_SlopeSlider->SetValue(0);
 	m_SlopeSlider->setToolTip(QStringLiteral(
@@ -239,14 +271,14 @@ AnimationEditorWindow::BuildPropertiesColumn()
 	connect(m_SlopeSlider, &Scrubber::Committed, this, [this](int degrees) {
 		m_Preview->SetGroundSlope(static_cast<float>(degrees));
 	});
-	layout->addWidget(m_SlopeSlider);
+	ground->addWidget(m_SlopeSlider);
 
 	// Which way uphill points. Nothing in the path knows which way a rig moves -- the test coyote
 	// runs along +Z -- so a person turns the hill to face the stride. Committed like the slope.
-	m_HeadingLabel = new QLabel(QStringLiteral("Uphill Heading: 0\u00b0"), column);
-	layout->addWidget(m_HeadingLabel);
+	m_HeadingLabel = new QLabel(QStringLiteral("Uphill Heading: 0\u00b0"), m_GroundBody);
+	ground->addWidget(m_HeadingLabel);
 
-	m_HeadingSlider = new Scrubber(column);
+	m_HeadingSlider = new Scrubber(m_GroundBody);
 	m_HeadingSlider->SetRange(0, 359);
 	m_HeadingSlider->SetValue(0);
 	m_HeadingSlider->setToolTip(QStringLiteral(
@@ -258,7 +290,7 @@ AnimationEditorWindow::BuildPropertiesColumn()
 	connect(m_HeadingSlider, &Scrubber::Committed, this, [this](int degrees) {
 		m_Preview->SetGroundHeading(static_cast<float>(degrees));
 	});
-	layout->addWidget(m_HeadingSlider);
+	ground->addWidget(m_HeadingSlider);
 
 	// One write carries both weights, so either slider's release commits the pair.
 	const auto commitFootIK = [this] {
@@ -266,10 +298,10 @@ AnimationEditorWindow::BuildPropertiesColumn()
 			editor::FootIKForSliders(m_IKWeightSlider->GetValue(), m_SoleTurnSlider->GetValue()));
 	};
 
-	m_IKWeightLabel = new QLabel(QStringLiteral("IK Weight: 100%"), column);
-	layout->addWidget(m_IKWeightLabel);
+	m_IKWeightLabel = new QLabel(QStringLiteral("IK Weight: 100%"), m_GroundBody);
+	ground->addWidget(m_IKWeightLabel);
 
-	m_IKWeightSlider = new Scrubber(column);
+	m_IKWeightSlider = new Scrubber(m_GroundBody);
 	m_IKWeightSlider->SetRange(0, 100);
 	m_IKWeightSlider->SetValue(100);
 	m_IKWeightSlider->setToolTip(QStringLiteral(
@@ -279,12 +311,12 @@ AnimationEditorWindow::BuildPropertiesColumn()
 		m_IKWeightLabel->setText(QStringLiteral("IK Weight: %1%").arg(percent));
 	});
 	connect(m_IKWeightSlider, &Scrubber::Committed, this, commitFootIK);
-	layout->addWidget(m_IKWeightSlider);
+	ground->addWidget(m_IKWeightSlider);
 
-	m_SoleTurnLabel = new QLabel(QStringLiteral("Sole Turn: 100%"), column);
-	layout->addWidget(m_SoleTurnLabel);
+	m_SoleTurnLabel = new QLabel(QStringLiteral("Sole Turn: 100%"), m_GroundBody);
+	ground->addWidget(m_SoleTurnLabel);
 
-	m_SoleTurnSlider = new Scrubber(column);
+	m_SoleTurnSlider = new Scrubber(m_GroundBody);
 	m_SoleTurnSlider->SetRange(0, 100);
 	m_SoleTurnSlider->SetValue(100);
 	m_SoleTurnSlider->setToolTip(QStringLiteral(
@@ -294,18 +326,7 @@ AnimationEditorWindow::BuildPropertiesColumn()
 		m_SoleTurnLabel->setText(QStringLiteral("Sole Turn: %1%").arg(percent));
 	});
 	connect(m_SoleTurnSlider, &Scrubber::Committed, this, commitFootIK);
-	layout->addWidget(m_SoleTurnSlider);
-
-	// Off to begin with, so a panel just opened shows the clip as its author left it: the ground is
-	// a thing to try, and a preview that silently moved a foot on the way in would be answering a
-	// question nobody had asked yet.
-	m_PlantFeet = new QCheckBox(QStringLiteral("Plant feet"), column);
-	m_PlantFeet->setChecked(false);
-	m_PlantFeet->setToolTip(QStringLiteral(
-		"Stands the rig on a ground plane and solves each leg onto it. Off, there is no floor and "
-		"the clip plays exactly as authored, which is the other half of judging the solve."));
-	connect(m_PlantFeet, &QCheckBox::toggled, this, [this] { UpdateGroundControls(); });
-	layout->addWidget(m_PlantFeet);
+	ground->addWidget(m_SoleTurnSlider);
 
 	// What is being done with the clip set, rather than what it is: one clip watched, or two
 	// blended. Everything above stays shared -- the ground and the plant switch especially, since a
@@ -324,10 +345,6 @@ AnimationEditorWindow::BuildPropertiesColumn()
 	});
 	layout->addWidget(m_Surfaces, /*stretch*/ 1);
 
-	// The box is the state; this is what puts the preview on it. Reaches the preview before it is
-	// on screen, where a rebind is recorded and applied when it is shown.
-	UpdateGroundControls();
-
 	// The column scrolls rather than asking the window for its height: every control adds to a
 	// minimum that would otherwise be taken out of whatever dock sits below the panel. Its width
 	// is still its own, though -- a scroll area hides both hints from the splitter, and the
@@ -338,6 +355,12 @@ AnimationEditorWindow::BuildPropertiesColumn()
 	scrollBox->setFrameShape(QFrame::NoFrame);
 	scrollBox->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
 	scrollBox->setMinimumWidth(column->sizeHint().width());
+
+	// The group is the state; this is what puts the preview on it. Reaches the preview before it is
+	// on screen, where a rebind is recorded and applied when it is shown. It runs after the width
+	// above is taken, because collapsing the group takes its sliders out of the column's hint and
+	// the floor would then be measured without the widest ground label.
+	UpdateGroundControls();
 	return scrollBox;
 }
 
@@ -428,19 +451,12 @@ AnimationEditorWindow::BuildBlendTab()
 void
 AnimationEditorWindow::UpdateGroundControls()
 {
-	// One switch for the whole group: the floor, the solve against it, and the four sliders under
-	// it. There is nothing to see in a floor nothing stands on, and nothing to plant against
+	// One switch for the whole group: the floor, the solve against it, and the four sliders it
+	// titles. There is nothing to see in a floor nothing stands on, and nothing to plant against
 	// without one.
 	const bool planting = m_PlantFeet->isChecked();
 
-	m_SlopeLabel->setEnabled(planting);
-	m_SlopeSlider->setEnabled(planting);
-	m_HeadingLabel->setEnabled(planting);
-	m_HeadingSlider->setEnabled(planting);
-	m_IKWeightLabel->setEnabled(planting);
-	m_IKWeightSlider->setEnabled(planting);
-	m_SoleTurnLabel->setEnabled(planting);
-	m_SoleTurnSlider->setEnabled(planting);
+	m_GroundBody->setVisible(planting);
 
 	m_Preview->SetFloorVisible(planting);
 	m_Preview->SetFootPlanting(planting);
