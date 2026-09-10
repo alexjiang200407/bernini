@@ -87,20 +87,30 @@ namespace assetlib
 	 * Re-address `animations` to `skeleton`, whose bones skeletonRemap says are the cooked rig's
 	 * grown. True when it did; false leaves `animations` exactly as it was.
 	 *
-	 * The samples are re-strided rather than indirected, so everything downstream keeps addressing
-	 * a pose arithmetically and no GPU path learns what a bone name is. A bone the clips never
-	 * carried -- the added one -- holds its bind pose in every frame, which is how a name-binding
-	 * runtime behaves and why an added socket does not drag its rig.
+	 * The samples are re-strided, not indirected, so nothing downstream stops addressing a pose
+	 * arithmetically. A bone the clips never carried holds its bind pose in every frame.
 	 *
-	 * Each clip keeps the frame it started on: `firstSample / boneCount` is a frame index that the
-	 * baked plant weights address by, so a re-stride that renumbered frames would silently plant
-	 * the wrong feet.
+	 * Each clip keeps the frame it started on: the baked plant weights address by
+	 * `firstSample / boneCount`, so renumbering frames here plants the wrong feet.
 	 *
-	 * The posed boxes and plant weights are left as they are. Both are keyed by their own
-	 * signature, so a measurement made against another pairing is already refused where it is read.
+	 * The posed boxes and plant weights are left stale; each is keyed by its own signature.
 	 */
 	[[nodiscard]] bool
 	remapAnimations(AnimationSet& animations, const Skeleton& skeleton);
+
+	/**
+	 * Re-address `mesh`'s joint indices to `skeleton`, the clip set's counterpart. True when it did;
+	 * false leaves `mesh` exactly as it was. A mesh carrying no joints addresses no bone and is
+	 * refused.
+	 *
+	 * An unweighted influence naming a bone the cooked rig never had is zeroed, not left: the GPU
+	 * fetches and range-asserts all four influences whatever their weights. A weighted one is a
+	 * corrupt mesh and is refused.
+	 *
+	 * @throws std::runtime_error for what resolveSkinLayout refuses -- a malformed submesh.
+	 */
+	[[nodiscard]] bool
+	remapMesh(BMesh& mesh, const Skeleton& skeleton);
 
 	/**
 	 * @throws std::runtime_error if the bones are not topologically sorted (a parent at or after its
