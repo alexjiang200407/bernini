@@ -5,6 +5,7 @@
 #include <assetlib_structs/Skeleton.h>
 
 #include <cmath>
+#include <concepts>
 #include <core/err/util.h>
 #include <core/hash.h>
 #include <cstddef>
@@ -13,6 +14,7 @@
 #include <span>
 #include <string>
 #include <string_view>
+#include <type_traits>
 #include <unordered_map>
 #include <vector>
 
@@ -22,6 +24,11 @@ namespace assetlib
 
 	namespace
 	{
+		/** Called with a bone index, answers that bone's `T`. */
+		template <typename F, typename T>
+		concept BoneAccessor =
+			std::invocable<F, size_t> && std::convertible_to<std::invoke_result_t<F, size_t>, T>;
+
 		/**
 		 * The signature's one definition: each bone's name then its parent, in bone order.
 		 *
@@ -29,7 +36,7 @@ namespace assetlib
 		 * cooked name list and the parents reconstructed for it -- and skeletonRemap's whole
 		 * verdict is that the two agree, so they cannot be allowed to drift apart.
 		 */
-		template <typename NameAt, typename ParentAt>
+		template <BoneAccessor<std::string_view> NameAt, BoneAccessor<uint32_t> ParentAt>
 		uint64_t
 		hashBones(const size_t boneCount, NameAt nameAt, ParentAt parentAt) noexcept
 		{
