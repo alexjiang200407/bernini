@@ -18,6 +18,37 @@ Bernini is a 3D game engine. It uses CMake as the buildsystem.
 - The source files are globbed. Just place source files where other sources are located.
 - Uses vcpkg with manifest mode
 
+## Read the code with clangd, not with grep
+
+This is a C++ codebase with a language server available, and it answers the questions grep only
+approximates. Reach for the LSP first:
+
+| The question | The operation |
+|---|---|
+| where is this defined? | `goToDefinition` |
+| who calls this / what breaks if I change it? | `findReferences` |
+| what is this type, what does it return? | `hover` |
+| what is in this file? | `documentSymbol` |
+| where is `SurfaceDescOf`? | `workspaceSymbol` |
+| who implements this `bgl::I*` interface? | `goToImplementation` |
+| what does this function reach, and who reaches it? | `outgoingCalls` / `incomingCalls` |
+
+It knows what the compiler knows, so it separates a declaration from a definition, follows a
+`typealias`, ignores a comment that happens to say the name, and does not answer with a different
+class's identically-named method — none of which a regex can do.
+
+**It needs `compile_commands.json`**, so a Ninja preset and a configured build dir (the same
+requirement `just tidy` has — see [docs/naming.md](./docs/naming.md)). A file the build does not
+compile has no index.
+
+**Its index lags the working tree.** A symbol added or moved since the last index may be missing
+from `findReferences`, so where completeness decides a change is safe — renaming a symbol, removing
+an enumerator, checking a call site really is the last one — confirm the sweep with `grep` before
+acting on it. Use the LSP to understand, grep to be exhaustive.
+
+Grep is still right for what is not a C++ symbol: text in `docs/`, a key in a `.json` or
+`.bmaterial`, a CMake variable, a string literal, a `.slang` identifier (Slang has no server here).
+
 ## The bar each subsystem is held to
 
 Everything under `./libs` — `bgl`, `bgl_common`, `bgl_extended`, `core`, `assetlib`, `gamelib` — and `assetlib_cli` with it, is
