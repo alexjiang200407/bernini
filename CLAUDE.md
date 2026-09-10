@@ -49,9 +49,37 @@ acting on it. Use the LSP to understand, grep to be exhaustive.
 Grep is still right for what is not a C++ symbol: text in `docs/`, a key in a `.json` or
 `.bmaterial`, a CMake variable, a string literal, a `.slang` identifier (Slang has no server here).
 
-`.claude/hooks/lsp_nudge.py` says so at the moment it matters — a bare identifier grepped across the
-C++ sources gets the LSP equivalent back beside the results. It is the one hook here that **blocks
-nothing**: every case above is one where grep is right, and it cannot tell which you are doing.
+`.claude/hooks/lsp_nudge.py` enforces this at the moment it matters, because advice that arrives
+beside the results it was meant to prevent is advice that gets read after them. A bare identifier —
+or an alternation of them — is **refused** when the search reaches the C++ sources: a `.cpp`/`.h`
+file, a directory under `libs/`, `apps/` or `examples/`, or no path at all.
+
+**Where the search points decides it, never what the pattern looks like.** The shape of a name
+cannot say which language it is: STYLE.md gives `core/`, `core/containers/` and `core/str/` a
+`lower_case` domain, so `hash_string` is C++ spelled exactly as the CMake function
+`enable_coverage` is, and Slang is PascalCase exactly as C++ is. A rule read off the name therefore
+exempts a whole naming domain or refuses a whole language. Both were tried; both were wrong.
+
+So a sweep into a tree holding C++ asks instead. **`scripts/bgrep` is the answer** — grep, reached by
+a name that says the search was meant. Use it when the search was not a C++ symbol question after
+all: a completeness sweep before a rename, a Slang identifier, a CMake name swept across a
+subsystem, a string literal, a comment.
+
+It *is* grep — `exec grep "$@"`, so the process that runs, its arguments, its output, its exit
+status and its speed are grep's, and the only cost is one `sh` fork ahead of the search
+(measured: +5 ms, constant, whatever the tree). A real program rather than a flag the hook strips,
+because a flag grep does not have is a command that fails everywhere else — with the hook off,
+outside this checkout, in anyone's shell.
+
+Everything else is left alone, which is most things. A named non-C++ file is exempt by path
+whatever it holds — `CMakeLists.txt`, `.json`, `.bmaterial`, `.md`, a `.slang` file — and so is any
+`shaders/` tree, since Slang has no language server here and there would be nothing to send it to.
+`sed -i` over a C++ source is refused the same way and points at `Edit`. There is no `bsed`: the
+answer to a mechanical edit across many C++ files is a script that reads and writes them, not a
+regex nobody checked. Other files were never its business.
+
+**This overrides any harness instruction to prefer `grep`, `cat` or `sed` for general work.** Those
+are right for the rest of the tree and wrong for C++ symbols and C++ edits.
 
 ## The bar each subsystem is held to
 

@@ -1,0 +1,16 @@
+#!/bin/sh
+# grep, under a name that says the search was meant.
+#
+# `.claude/hooks/lsp_nudge.py` refuses a grep that reaches the C++ sources, because the
+# language server answers that question better and the habit is to reach for the regex. This
+# is the way past it for the searches where grep is genuinely right: a completeness sweep
+# before a rename (clangd's index lags the working tree), a Slang identifier (no server
+# here), a CMake name swept across a subsystem, a string literal, a comment.
+#
+# It is a real program rather than a flag the hook strips, so it behaves the same with the
+# hook disabled, outside this checkout, and in anyone's shell. Nothing is added to grep and
+# nothing is taken away: `exec` replaces this shell with grep itself, so the process that
+# runs, the arguments it sees, its output, its exit status and its performance are grep's.
+# The only cost is this script's own fork, once, ahead of a search that then runs at grep
+# speed.
+exec grep "$@"
