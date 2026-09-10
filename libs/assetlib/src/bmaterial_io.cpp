@@ -103,9 +103,9 @@ namespace assetlib
 		setOrErase(nlohmann::json& object, std::string_view key, const std::string& value)
 		{
 			if (value.empty())
-				object.erase(std::string(key));
+				object.erase(key);
 			else
-				object[std::string(key)] = value;
+				object[key] = value;
 		}
 
 		/** Drops object members that ended empty, so a fully-taken route leaves no husk. */
@@ -131,6 +131,7 @@ namespace assetlib
 				!it->is_object(),
 				"bmaterial: 'parameters' is not an object");
 
+			out.reserve(out.size() + it->size());
 			for (const auto& [name, value] : it->items())
 			{
 				auto& parameter = out.emplace_back(name);
@@ -166,6 +167,7 @@ namespace assetlib
 				!it->is_object(),
 				"bmaterial: 'textures' is not an object");
 
+			out.reserve(out.size() + it->size());
 			for (const auto& [name, value] : it->items())
 			{
 				core::throw_runtime_error_if(
@@ -180,7 +182,7 @@ namespace assetlib
 
 		/**
 		 * Writes the PBR half, or erases every key of it when the material is not drawn by that
-		 * model -- the mirror of writeSurface, and the same rule read from the other side.
+		 * model -- the mirror of writePbrSurface, and the same rule read from the other side.
 		 *
 		 * The model decides, not whether the struct happens to hold anything: PbrParams
 		 * default-constructs to glTF's own defaults, so a surface material left to this writer
@@ -191,7 +193,7 @@ namespace assetlib
 		{
 			if (material.shadingModel != ShadingModel::kPbr)
 			{
-				for (const std::string_view key : c_PbrKeys) json.erase(std::string(key));
+				for (const std::string_view key : c_PbrKeys) json.erase(key);
 				return;
 			}
 
@@ -232,16 +234,16 @@ namespace assetlib
 					auto& route = routes[channelName];
 					if (!route.is_object())
 						route = nlohmann::json::object();
-					route[std::string(c_RouteKeys[0])] = pbr.routes[i].texture;
-					route[std::string(c_RouteKeys[1])] = pbr.routes[i].channel;
-					route[std::string(c_RouteKeys[2])] = pbr.routeStamps[i].size;
-					route[std::string(c_RouteKeys[3])] = pbr.routeStamps[i].hash;
+					route[c_RouteKeys[0]] = pbr.routes[i].texture;
+					route[c_RouteKeys[1]] = pbr.routes[i].channel;
+					route[c_RouteKeys[2]] = pbr.routeStamps[i].size;
+					route[c_RouteKeys[3]] = pbr.routeStamps[i].hash;
 				}
 				else if (const auto found = routes.find(channelName); found != routes.end())
 				{
 					// The struct says nothing for this channel any more; its known keys go, anything
 					// preserved stays.
-					for (const std::string_view key : c_RouteKeys) found->erase(std::string(key));
+					for (const std::string_view key : c_RouteKeys) found->erase(key);
 					if (found->empty())
 						routes.erase(found);
 				}
@@ -262,7 +264,7 @@ namespace assetlib
 		 * no longer drawn by.
 		 */
 		void
-		writeSurface(nlohmann::json& json, const BMaterial& material)
+		writePbrSurface(nlohmann::json& json, const BMaterial& material)
 		{
 			const SurfaceParams& surface = material.surface;
 
@@ -493,7 +495,7 @@ namespace assetlib
 		json["doubleSided"]        = layer.doubleSided;
 
 		writePbr(json, material);
-		writeSurface(json, material);
+		writePbrSurface(json, material);
 
 		return doc::toBytes(json);
 	}

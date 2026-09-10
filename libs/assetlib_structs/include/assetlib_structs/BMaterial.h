@@ -11,15 +11,11 @@ namespace assetlib
 {
 	enum class ShadingModel : uint32_t
 	{
-		// The engine's own PBR material: factors, a baked triplet, and the channel routes behind
-		// it. Everything it holds is declared here and produced by a bake.
+		// Factors, a baked triplet, and the channel routes behind it.
 		kPbr = 0,
 
-		// The same lighting, over a material half the game computes. A surface fills `PbrSurface`
-		// in its own Slang function and the engine's PBR lobes shade it, so this is where the
-		// inputs come from rather than a second model -- and it is why there is no route, no bake
-		// and no graph behind one. A game-defined *lighting* model would be a third value, and
-		// nothing today can write one.
+		// The same lighting, over a material half the game computes -- so there is no route, no
+		// bake and no graph behind one. A game-defined *lighting* model would be a third value.
 		kPbrSurface = 1,
 
 		kCount,
