@@ -10,11 +10,21 @@
 
 #include <QDebug>
 
+#include <assetlib/image_io.h>
 #include <assetlib_structs/BMaterial.h>
+#include <bgl/MaterialHandle.h>
+#include <bgl/MaterialType.h>
+#include <bgl/TextureAssetHandle.h>
+#include <bgl/glm.h>
+#include <bgl/types/SurfaceMaterialDesc.h>
 #include <cstddef>
 #include <cstdint>
 #include <exception>
+#include <filesystem>
+#include <functional>
 #include <qlogging.h>
+#include <string>
+#include <utility>
 
 namespace
 {
@@ -34,16 +44,143 @@ namespace
 		}
 		return bgl::LayerType::kOpaque;
 	}
+
+	bool
+	IsSurfaceMaterial(bgl::MaterialHandle handle) noexcept
+	{
+		const auto kind = static_cast<uint32_t>(handle.materialType);
+		return handle.IsValid() && kind >= static_cast<uint32_t>(bgl::MaterialType::kGameStart) &&
+		       kind < static_cast<uint32_t>(bgl::MaterialType::kCount);
+	}
+
+	void
+	BindSurfacePreview(
+		MaterialGraphSet::Graph&     graph,
+		Renderer&                    renderer,
+		MaterialPreviewWindow&       preview,
+		const assetlib::BMaterial&   material,
+		const std::filesystem::path& dataRoot)
+	{
+		// A texture that will not load is left null rather than abandoning the material: the surface
+		// samples a default for it, which draws something an author can see is wrong -- where losing
+		// the material would leave the last edit on screen and look like nothing happened.
+		const bgl::SurfaceMaterialDesc desc =
+			editor::SurfaceDescOf(material, [&](const std::string& key) {
+				try
+				{
+					auto image = assetlib::loadKTX2(dataRoot / key);
+					return renderer.Invoke(
+						[&] { return renderer.GetScene()->AddTextureAsset(std::move(image)); });
+				}
+				catch (const std::exception& e)
+				{
+					qWarning(
+						"MaterialEditor: could not load '%s' for a surface: %s",
+						key.c_str(),
+						e.what());
+					return bgl::TextureAssetHandle();
+				}
+			});
+
+		// An update keeps the record's surface and layer, so it stands only while both still agree;
+		// anything else is a different PSO row and has to be a new material.
+		if (IsSurfaceMaterial(graph.preview) && graph.preview.layerType == desc.layerType)
+		{
+			renderer.Post([owner = &renderer, handle = graph.preview, desc] {
+				try
+				{
+					owner->GetScene()->UpdateSurfaceMaterial(handle, desc);
+				}
+				catch (const std::exception& e)
+				{
+					qWarning("MaterialEditor: could not update a surface preview: %s", e.what());
+				}
+			});
+			return;
+		}
+
+		const bgl::MaterialHandle previous = graph.preview;
+
+		// A surface the engine never registered, or a parameter the document invented, is refused
+		// here rather than on the render thread. Leaving the previous binding is the readable
+		// failure: the viewport keeps drawing what it last drew and the warning says why.
+		try
+		{
+			graph.preview =
+				renderer.Invoke([&] { return renderer.GetScene()->CreateSurfaceMaterial(desc); });
+		}
+		catch (const std::exception& e)
+		{
+			qWarning("MaterialEditor: could not create a surface preview: %s", e.what());
+			return;
+		}
+
+		for (const uint32_t submesh : graph.submeshes)
+			preview.SetSubmeshMaterial(submesh, graph.preview);
+
+		if (previous.IsValid())
+		{
+			renderer.Post([owner = &renderer, previous] {
+				try
+				{
+					owner->GetScene()->DeleteMaterial(previous);
+				}
+				catch (const std::exception& e)
+				{
+					qWarning("MaterialEditor: could not delete a preview material: %s", e.what());
+				}
+			});
+		}
+	}
 }
 
 namespace editor
 {
+	bgl::SurfaceMaterialDesc
+	SurfaceDescOf(
+		const assetlib::BMaterial&                                        material,
+		const std::function<bgl::TextureAssetHandle(const std::string&)>& loadTexture)
+	{
+		auto desc        = bgl::SurfaceMaterialDesc();
+		desc.surface     = material.surface.name;
+		desc.layerType   = ToLayerType(material.layer.alphaMode);
+		desc.alphaCutoff = material.layer.alphaCutoff;
+		desc.doubleSided = material.layer.doubleSided;
+
+		desc.values.reserve(material.surface.values.size());
+		for (const assetlib::SurfaceValueBinding& value : material.surface.values)
+		{
+			// Widened to four and narrowed again by the renderer, which is the only side that knows
+			// how many components the parameter was declared with.
+			auto binding = bgl::SurfaceValueBinding{ value.name, glm::vec4(0.0f) };
+			for (size_t i = 0; i < value.value.size() && i < 4; ++i)
+				binding.value[static_cast<glm::length_t>(i)] = value.value[i];
+			desc.values.push_back(std::move(binding));
+		}
+
+		desc.textures.reserve(material.surface.textures.size());
+		for (const assetlib::SurfaceTextureBinding& texture : material.surface.textures)
+			desc.textures.emplace_back(texture.name, loadTexture(texture.texture));
+
+		return desc;
+	}
+
 	void
 	CompilePreviewMaterial(
-		MaterialGraphSet::Graph& graph,
-		Renderer&                renderer,
-		MaterialPreviewWindow&   preview)
+		MaterialGraphSet::Graph&     graph,
+		Renderer&                    renderer,
+		MaterialPreviewWindow&       preview,
+		const assetlib::BMaterial*   onDisk,
+		const std::filesystem::path& dataRoot)
 	{
+		// A surface material's board is a graphless one seeded from PbrParams, so compiling it would
+		// draw the seed -- a white, metallic material -- rather than the surface the document names.
+		if (onDisk != nullptr && onDisk->shadingModel == assetlib::ShadingModel::kPbrSurface)
+		{
+			BindSurfacePreview(graph, renderer, preview, *onDisk, dataRoot);
+			return;
+		}
+
 		const MaterialOutputNode* output = graph.model->OutputNode();
 		if (output == nullptr)
 			return;

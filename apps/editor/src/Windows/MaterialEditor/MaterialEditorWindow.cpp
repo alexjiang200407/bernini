@@ -926,7 +926,14 @@ MaterialEditorWindow::CompileGraph(int graphIndex)
 	if (!m_Graphs.Holds(graphIndex))
 		return;
 
-	editor::CompilePreviewMaterial(m_Graphs.At(graphIndex), *m_Desc.renderer, *m_Preview);
+	MaterialGraphSet::Graph& graph = m_Graphs.At(graphIndex);
+
+	editor::CompilePreviewMaterial(
+		graph,
+		*m_Desc.renderer,
+		*m_Preview,
+		graph.onDisk.Get(m_DataRoot, graph.materialPath),
+		m_DataRoot);
 }
 
 void
