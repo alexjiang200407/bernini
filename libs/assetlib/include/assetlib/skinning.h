@@ -103,6 +103,25 @@ namespace assetlib
 	remapAnimations(AnimationSet& animations, const Skeleton& skeleton);
 
 	/**
+	 * Re-address `mesh`'s joint indices to `skeleton`, the clip set's counterpart. True when it did;
+	 * false leaves `mesh` exactly as it was.
+	 *
+	 * The indices are rewritten in place inside the interleaved vertex blob -- eight bytes a vertex,
+	 * leaving the layout, the meshlets and every other attribute alone -- so what reaches the GPU is
+	 * the same buffer it always was, addressing the bones it now means.
+	 *
+	 * An influence carrying no weight is left as it is, out-of-range index included: decodeInfluences
+	 * accepts one, since a zero weight contributes nothing to the pose, and there is no bone for it
+	 * to be remapped to. A weighted influence naming a bone the cooked rig did not have is a corrupt
+	 * mesh and is refused.
+	 *
+	 * A mesh carrying no joints is refused rather than trivially accepted: it addresses no bone, so
+	 * meshMatchesSkeleton already answers true for any rig and nothing should be asking.
+	 */
+	[[nodiscard]] bool
+	remapMesh(BMesh& mesh, const Skeleton& skeleton);
+
+	/**
 	 * @throws std::runtime_error if the bones are not topologically sorted (a parent at or after its
 	 *         child), a parent index is out of range, or a name offset is past the string pool.
 	 */

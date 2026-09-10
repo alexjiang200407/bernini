@@ -47,6 +47,13 @@ namespace assetlib
 			return value;
 		}
 
+		template <core::type_traits::trivially_copyable T>
+		void
+		writeAt(std::span<std::byte> bytes, size_t offset, const T& value) noexcept
+		{
+			std::memcpy(bytes.data() + offset, &value, sizeof(T));
+		}
+
 		/**
 		 * The offset of `semantic`, having checked it is the format this decoder reads and that it
 		 * fits inside a vertex. The span check below bounds whole vertices, not the attributes
@@ -664,6 +671,78 @@ namespace assetlib
 			meshIndex);
 
 		return out;
+	}
+
+	bool
+	remapMesh(BMesh& mesh, const Skeleton& skeleton)
+	{
+		ZoneScopedN("assetlib remap mesh");
+
+		const size_t oldBoneCount = mesh.skeletonBoneNames.size();
+		if (oldBoneCount == 0 || skeleton.bones.size() > std::numeric_limits<uint16_t>::max())
+			return false;
+
+		const auto remap = skeletonRemap(mesh.skeletonBoneNames, mesh.skeletonSignature, skeleton);
+		if (!remap)
+			return false;
+
+		// Every submesh is checked before any is written: a blob half rewritten names bones from
+		// two rigs at once, and nothing downstream could tell which half it was reading.
+		auto layouts = std::vector<SkinLayout>();
+		layouts.reserve(mesh.submeshes.size());
+		for (const Submesh& submesh : mesh.submeshes)
+		{
+			const SkinLayout layout = resolveSkinLayout(mesh, submesh);
+			layouts.push_back(layout);
+
+			if (!layout.joints)
+				continue;
+
+			for (uint32_t v = 0; v < submesh.vertexCount; ++v)
+			{
+				const size_t base = layout.first + static_cast<size_t>(v) * layout.stride;
+				for (size_t i = 0; i < c_InfluencesPerVertex; ++i)
+				{
+					const auto joint = readAt<uint16_t>(
+						mesh.vertexData,
+						base + *layout.joints + i * sizeof(uint16_t));
+					const auto weight = readAt<uint16_t>(
+						mesh.vertexData,
+						base + *layout.weights + i * sizeof(uint16_t));
+
+					if (weight != 0 && joint >= oldBoneCount)
+						return false;
+				}
+			}
+		}
+
+		for (size_t s = 0; s < mesh.submeshes.size(); ++s)
+		{
+			const SkinLayout& layout = layouts[s];
+			if (!layout.joints)
+				continue;
+
+			for (uint32_t v = 0; v < mesh.submeshes[s].vertexCount; ++v)
+			{
+				const size_t base = layout.first + static_cast<size_t>(v) * layout.stride;
+				for (size_t i = 0; i < c_InfluencesPerVertex; ++i)
+				{
+					const size_t at    = base + *layout.joints + i * sizeof(uint16_t);
+					const auto   joint = readAt<uint16_t>(mesh.vertexData, at);
+
+					// An unweighted influence may name a bone that was never there; it moves no
+					// vertex, and there is nothing to move it to.
+					if (joint >= oldBoneCount)
+						continue;
+
+					writeAt(mesh.vertexData, at, static_cast<uint16_t>((*remap)[joint]));
+				}
+			}
+		}
+
+		mesh.skeletonSignature = skeletonSignature(skeleton);
+		mesh.skeletonBoneNames = skeletonBoneNames(skeleton);
+		return true;
 	}
 
 	uint64_t
