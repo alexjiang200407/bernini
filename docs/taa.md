@@ -376,6 +376,17 @@ Two couplings worth knowing:
   The minification is the *smaller* screen axis, since a grazing card minifies along the view axis at
   any distance and anisotropic filtering resolves that axis.
 
+  **A game-defined surface gets all of it, and says nothing about any of it.** A surface answers
+  coverage with arithmetic rather than a texel, so the engine cannot sample two levels of it —
+  instead it evaluates `Coverage` twice through `BiasedArenaReader`, which displaces every sample
+  the surface makes along the mip chain, and measures the slope against the texture the surface
+  declared as its coverage carrier. The two routes are bit-identical on the strand card at every
+  distance, which is the gate: see
+  [Game-Defined Surfaces § Hashed alpha](game_defined_surfaces.md#hashed-alpha) for the carrier rule
+  and `[hashedalpha][surface]` for the ladder. A surface declaring no carrier is refused the layer
+  rather than given an unmeasured one, because the lift above is the whole difference between hair
+  that keeps its strands and hair that fades.
+
 * **The base blend weight trades flicker against settling time, not against ghosting.** This is
   the opposite of the intuition and it is measured: at an equal convergence budget, halving the
   weight from 0.1 to 0.05 takes the frame-to-frame difference from 0.0020 to 0.0013 and moves the

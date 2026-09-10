@@ -66,12 +66,12 @@ namespace bgl
 	GameRowOffset(uint32_t pso) noexcept;
 
 	/**
-	 * A slot's row for a geometry tier and a layer, from its first row. Opaque and alpha-test are
-	 * per tier, since their geometry stage is the tier's own; blended is one row both tiers share,
-	 * because the blended pipeline's geometry stage branches tier per instance.
+	 * A slot's row for a geometry tier and a layer, from its first row. Opaque, alpha-test and
+	 * hashed are per tier, since their geometry stage is the tier's own; blended is one row both
+	 * tiers share, because the blended pipeline's geometry stage branches tier per instance.
 	 *
-	 * Hashed is closed to game surfaces at the door that creates one, so it is bgl's own bug here,
-	 * as is a tier that is neither static nor skinned.
+	 * A tier that is neither static nor skinned is bgl's own bug here, as is a layer that is
+	 * none of the four.
 	 */
 	[[nodiscard]] idl::PsoType
 	GameSlotRow(uint32_t slot, GeomType geom, LayerType layer);

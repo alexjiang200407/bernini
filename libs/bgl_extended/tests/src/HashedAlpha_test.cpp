@@ -161,6 +161,7 @@ namespace
 		sceneDesc.initialVertexBufferByteSize = 800000;
 		sceneDesc.initialIndices              = 20000;
 		sceneDesc.initialPbrMaterials         = 8;
+		sceneDesc.initialSurfaceMaterials     = 8;
 
 		auto scene = gfx->CreateScene(sceneDesc);
 		auto view  = gfx->CreateSceneView(scene, 8);
@@ -492,6 +493,15 @@ namespace
 	constexpr float c_BackdropZ    = -6.0f;
 	constexpr float c_BackdropSize = 40.0f;
 
+	// Which material draws the card. PbrLike fills PbrSurface exactly as the engine's own record
+	// does, so the two are the same card drawn down two paths, and a difference between them is the
+	// seam rather than the technique.
+	enum class CardMaterial
+	{
+		kPbr,
+		kSurface,
+	};
+
 	PatchScene
 	MakeCardScene(
 		assetlib::ImageData texture,
@@ -499,12 +509,19 @@ namespace
 		bool                withBackdrop = false,
 		float               cameraZ      = 20.0f,
 		bgl::LayerType      layer        = bgl::LayerType::kHashed,
-		Frame               frame        = {})
+		Frame               frame        = {},
+		CardMaterial        cardMaterial = CardMaterial::kPbr)
 	{
 		auto opts                     = bgl::GraphicsOptions();
 		opts.shaderCacheDir           = bgl::test::ShaderCacheDir();
 		opts.enableDebugLayer         = true;
 		opts.enableGPUValidationLayer = bgl::test::GpuValidationEnabled();
+
+		// Only for a surface card: registration is the Graphics constructor's and binds every
+		// reserved slot's pipelines to the directory's surfaces, which a PBR card has no reason to
+		// wait for.
+		if (cardMaterial == CardMaterial::kSurface)
+			opts.surfaceShaderDir = "./shaders/tests/surfaces";
 
 		auto gfx = bgl::CreateGraphics(opts);
 		REQUIRE(gfx != nullptr);
@@ -532,15 +549,31 @@ namespace
 		auto view  = gfx->CreateSceneView(scene, 8);
 		bgl::test::ApplyEnvironment(scene.Get(), view.Get());
 
-		auto desc             = bgl::PbrMaterialDesc();
-		desc.baseColorFactor  = glm::vec4(1.0f);
-		desc.metallicFactor   = 0.0f;
-		desc.roughnessFactor  = 0.6f;
-		desc.layerType        = layer;
-		desc.baseColorTexture = scene->AddTextureAsset(std::move(texture), "strands");
+		const auto strands = scene->AddTextureAsset(std::move(texture), "strands");
 
-		auto material = scene->CreatePbrMaterial(desc);
-		auto plane    = scene->AddPlaneGeom(1, 1, c_StrandPlane, c_StrandPlane, material);
+		// An unbound orm slot samples white, so PbrLike's ORM is (1, roughnessFactor,
+		// metallicFactor) -- which is what the PBR record computes from a white orm texture. The two
+		// materials are the same numbers by two routes.
+		const auto material = cardMaterial == CardMaterial::kSurface ?
+		                          scene->CreateSurfaceMaterial(
+									  {
+										  .surface     = "PbrLike",
+										  .layerType   = layer,
+										  .doubleSided = true,
+										  .values      = { { "roughnessFactor", glm::vec4(0.6f) },
+		                                                   { "metallicFactor", glm::vec4(0.0f) } },
+										  .textures    = { { "baseColor", strands } },
+									  }) :
+		                          scene->CreatePbrMaterial(
+									  {
+										  .baseColorFactor  = glm::vec4(1.0f),
+										  .metallicFactor   = 0.0f,
+										  .roughnessFactor  = 0.6f,
+										  .layerType        = layer,
+										  .baseColorTexture = strands,
+									  });
+
+		auto plane = scene->AddPlaneGeom(1, 1, c_StrandPlane, c_StrandPlane, material);
 		view->CreateStaticMeshInstance(plane, glm::mat4(1.0f));
 
 		if (withBackdrop)
@@ -1425,6 +1458,81 @@ TEST_CASE("A receding hashed card keeps its expected coverage", "[hashedalpha][t
 		// shelter existed to damp. The bound is the double of the worst measured rung, holding the
 		// regression watch without pinning a figure one GPU differs from another by.
 		CHECK(flicker < 3e-2f);
+	}
+}
+
+// The gate for hashed alpha reaching a game-defined surface, and the reason it is a ladder rather
+// than one frame. PbrLike fills PbrSurface exactly as the engine's own record does and takes its
+// coverage off the same texture's alpha, so the two cards are the same card by two routes: the
+// surface's Coverage is called through the biased reader at the two levels the hash and the
+// steepening want, while the PBR record samples the same two through SampleBias directly.
+//
+// A single distance would pass on the threshold alone -- the minification machinery does nothing at
+// mip 0. Three distances are what catch a surface path that lost the finer read or the carrier's
+// dimensions, because that is the defect that only appears once a strand goes sub-texel: the two
+// would part company at mid and far while still agreeing near.
+TEST_CASE(
+	"A receding hashed surface card keeps the engine's own coverage",
+	"[hashedalpha][surface][render]")
+{
+	struct Rung
+	{
+		float       cameraZ;
+		const char* name;
+	};
+	constexpr std::array<Rung, 3> c_Rungs = { {
+		{ 10.0f, "near" },
+		{ 20.0f, "mid" },
+		{ 40.0f, "far" },
+	} };
+
+	for (const auto& rung : c_Rungs)
+	{
+		INFO("distance " << rung.cameraZ);
+
+		const StrandBox box = StrandBoxFor(Frame{}, rung.cameraZ);
+
+		const auto lumaOf = [&](const char* route, CardMaterial cardMaterial) {
+			PatchScene card = MakeCardScene(
+				MakeStrandTexture(false, false),
+				true,
+				false,
+				rung.cameraZ,
+				bgl::LayerType::kHashed,
+				Frame{},
+				cardMaterial);
+			for (int frame = 0; frame < c_ConvergeFrames; ++frame)
+			{
+				card.gfx->DrawFrame(card.target, card.job);
+			}
+			const auto path =
+				std::string("assets/golden/strand_surface_") + rung.name + "_" + route + ".got.png";
+			card.gfx->ScreenshotPng(card.target, path);
+			return bgl::test::MeanColor(path, box.xy, box.xy, box.size, box.size).Luma();
+		};
+
+		const float surface = lumaOf("surface", CardMaterial::kSurface);
+		const float pbr     = lumaOf("pbr", CardMaterial::kPbr);
+
+		// WARN so the pair prints on a passing run: the two routes' agreement at each distance is
+		// what this instrument exists to show, and the figure is the comparison across backends.
+		WARN(
+			rung.name << ": surface luma " << surface << "  pbr luma " << pbr << "  ratio "
+					  << surface / pbr);
+
+		// Both have to have drawn something, or the ratio below compares two empty boxes.
+		REQUIRE(pbr > 0.01f);
+
+		// Measured at a ratio of exactly 1 on every rung: the hash is deterministic in world
+		// position and seed, and both routes read the same texture at the same two levels, so the
+		// two cards converge to the same pixels rather than merely to the same mean. The band is
+		// the margin for a backend whose sample differs in its last bit, and it is far inside both
+		// defects it guards -- a surface path reading coverage at the footprint level instead of
+		// one finer measures 1.02 / 1.81 / 1.36 near-mid-far, and one measuring the slope against
+		// the wrong texture size measures 1.40 / 2.84 / 3.15. Near passes both, which is why the
+		// ladder has three rungs.
+		CHECK(surface > pbr * 0.95f);
+		CHECK(surface < pbr * 1.05f);
 	}
 }
 

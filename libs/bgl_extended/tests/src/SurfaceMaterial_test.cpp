@@ -318,16 +318,37 @@ TEST_CASE("A surface material the engine cannot pack is refused", "[surface][ren
 			MessageMatches(ContainsSubstring("is invalid or expired")));
 	}
 
-	// Hashed alpha needs the texel counts of whatever a coverage was sampled from, and a surface
-	// answers with a number rather than a sample the engine can measure. So no game row draws it,
-	// and the door that would create one is where that is said.
-	SECTION("a layer no game row draws")
+	// Hashed alpha relates a UV footprint to texels, so it needs one of the surface's textures to
+	// measure against. Tint declares none at all -- its coverage is arithmetic over a parameter --
+	// so there is nothing to measure and the door that would create the material says so.
+	SECTION("hashed alpha on a surface with nothing to measure coverage against")
 	{
 		CHECK_THROWS_MATCHES(
-			scene->CreateSurfaceMaterial({ .surface = "Rim", .layerType = LayerType::kHashed }),
+			scene->CreateSurfaceMaterial({ .surface = "Tint", .layerType = LayerType::kHashed }),
 			SceneError,
-			MessageMatches(ContainsSubstring("hashed alpha, which no game row draws")));
+			MessageMatches(ContainsSubstring("declares no coverage carrier")));
 	}
+}
+
+// The other half of the refusal above, and what keeps it a statement about the carrier rather than
+// about the layer: Rim declares a ColorSlot, which is a carrier, so the same layer it was refused
+// for is accepted. Tint still draws every layer it always did -- the refusal is the hashed row's
+// alone and not a surface being disqualified.
+TEST_CASE("A surface declaring a carrier takes the hashed layer", "[surface][carrier][render]")
+{
+	auto gfx = bgl::CreateGraphics(SurfaceOptions());
+	REQUIRE(gfx != nullptr);
+
+	auto scene = gfx->CreateScene(SphereScene());
+	REQUIRE(scene != nullptr);
+
+	CHECK_NOTHROW(
+		scene->CreateSurfaceMaterial({ .surface = "Rim", .layerType = LayerType::kHashed }));
+
+	CHECK_NOTHROW(
+		scene->CreateSurfaceMaterial({ .surface = "Tint", .layerType = LayerType::kMask }));
+	CHECK_NOTHROW(
+		scene->CreateSurfaceMaterial({ .surface = "Tint", .layerType = LayerType::kBlend }));
 }
 
 // The skinned tier's own gate, and the whole of what a tier costs a surface. The two tiers differ

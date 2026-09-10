@@ -15,24 +15,30 @@ public enum PsoType : uint32_t
     kAlphaTest_SkinnedMesh_PBR,
     kHashedAlpha_SkinnedMesh_PBR,
     kTransparent_SkinnedMesh_PBR,
-    // The reserved game slots' rows, cGameSlots of them from here, five each in this order: the
-    // static tier's opaque and alpha-test, the skinned tier's opaque and alpha-test, then the one
+    // The reserved game slots' rows, cGameSlots of them from here, seven each: a tier's opaque,
+    // alpha-test and hashed rows in that order, the static tier then the skinned, then the one
     // transparent row both tiers share. A slot's row is kGameRowsStart + cGameSlotRows * slot + the
     // offset GameSlotRow derives, and kCount is the literal the C++ side asserts.
     kGameRowsStart,
-    kCount = 34,
+    kCount = 42,
 }
 ;
 
 public static const uint32_t c_PsoCount = uint32_t(PsoType::kCount);
 
 // A slot's rows, in PsoType order.
-public static const uint32_t cGameSlotRows = 5;
+public static const uint32_t cGameSlotRows = 7;
+
+// The geometry tiers a game surface draws on: static and skinned.
+public static const uint32_t cGameSlotTiers = 2;
+
+// The layers a tier has a row of its own for, which is every layer but blended.
+public static const uint32_t cGameSlotTierRows = 3;
 
 // Where a slot's transparent row sits in its block. One row rather than one per tier: the blended
 // pipeline's geometry stage is AnyMesh, which branches tier per instance, so a second row would
 // name the same pipeline -- which is what kTransparent_SkinnedMesh_PBR already does for kPBR.
-public static const uint32_t cGameSlotBlendRow = 4;
+public static const uint32_t cGameSlotBlendRow = 6;
 
 // The row arithmetic, written once for the shaders. The C++ side mirrors these in bgl's util.h,
 // and PsoSelection_test walks every slot and layer to hold the two together -- a shader deriving a

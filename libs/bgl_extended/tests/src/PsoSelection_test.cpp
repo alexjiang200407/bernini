@@ -107,20 +107,20 @@ TEST_CASE("only a blended layer leaves the counting sort", "[pso]")
 	}
 }
 
-// Each reserved game slot has five rows: an opaque and an alpha-test row per tier, and one
-// transparent row both tiers share. The rows are reached by arithmetic from kGameRowsStart, so what
-// this checks is that the arithmetic agrees with the tier, the layer and the transparent predicate
-// on both sides. Hashed is closed to game surfaces at the door that creates one, so it has no row
-// here to check.
+// Each reserved game slot has seven rows: an opaque, an alpha-test and a hashed row per tier, and
+// one transparent row both tiers share. The rows are reached by arithmetic from kGameRowsStart, so
+// what this checks is that the arithmetic agrees with the tier, the layer and the transparent
+// predicate on both sides.
 TEST_CASE("a game slot's layers resolve to its own rows, on both tiers", "[pso]")
 {
 	using bgl::GeomType;
 	using bgl::LayerType;
 	using bgl::idl::PsoType;
 
-	constexpr std::array<LayerType, 3> c_SurfaceLayers = { {
+	constexpr std::array<LayerType, 4> c_SurfaceLayers = { {
 		LayerType::kOpaque,
 		LayerType::kMask,
+		LayerType::kHashed,
 		LayerType::kBlend,
 	} };
 
@@ -135,10 +135,19 @@ TEST_CASE("a game slot's layers resolve to its own rows, on both tiers", "[pso]"
 			return static_cast<uint32_t>(bgl::GetPsoFromGeomAndMaterial(geom, kind, layer));
 		};
 
+		// A tier's rows are contiguous, so the skinned block starts cGameSlotTierRows along: the
+		// offsets are what a reader follows rather than a list to keep in step.
 		CHECK(pso(GeomType::kStaticMesh, LayerType::kOpaque) == first);
 		CHECK(pso(GeomType::kStaticMesh, LayerType::kMask) == first + 1);
-		CHECK(pso(GeomType::kSkinnedMesh, LayerType::kOpaque) == first + 2);
-		CHECK(pso(GeomType::kSkinnedMesh, LayerType::kMask) == first + 3);
+		CHECK(pso(GeomType::kStaticMesh, LayerType::kHashed) == first + 2);
+		CHECK(
+			pso(GeomType::kSkinnedMesh, LayerType::kOpaque) == first + bgl::idl::cGameSlotTierRows);
+		CHECK(
+			pso(GeomType::kSkinnedMesh, LayerType::kMask) ==
+			first + bgl::idl::cGameSlotTierRows + 1);
+		CHECK(
+			pso(GeomType::kSkinnedMesh, LayerType::kHashed) ==
+			first + bgl::idl::cGameSlotTierRows + 2);
 
 		// One row for both tiers rather than one each: the blended pipeline's geometry stage
 		// branches tier per instance, so a second row would name the same pipeline. Landing on the
@@ -159,8 +168,8 @@ TEST_CASE("a game slot's layers resolve to its own rows, on both tiers", "[pso]"
 				CHECK(bgl::IsTransparentPso(bucket) == (layer == LayerType::kBlend));
 			}
 
-		// The skinned door is open for every layer a game surface can carry. Hashed is not one of
-		// them -- CreateSurfaceMaterial refuses it -- so no handle reaching here holds it.
+		// The skinned door is open for every layer a game surface can carry, hashed included: a
+		// surface's tiers differ in nothing but the geometry stage.
 		for (const LayerType layer : c_SurfaceLayers)
 			CHECK(bgl::AcceptsMaterial(GeomType::kSkinnedMesh, Handle(kind, layer)));
 	}

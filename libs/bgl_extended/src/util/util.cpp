@@ -118,6 +118,11 @@ namespace bgl
 		static_cast<uint32_t>(idl::PsoType::kGameRowsStart) + cGameSlots * idl::cGameSlotRows ==
 		static_cast<uint32_t>(idl::PsoType::kCount));
 
+	// A slot's block is each tier's own layers, then the one row both tiers share -- which is what
+	// makes the blend row last and the skinned block start cGameSlotTierRows along.
+	static_assert(idl::cGameSlotTiers * idl::cGameSlotTierRows + 1 == idl::cGameSlotRows);
+	static_assert(idl::cGameSlotBlendRow == idl::cGameSlotRows - 1);
+
 	std::optional<uint32_t>
 	GameSlot(MaterialType material) noexcept
 	{
@@ -169,8 +174,6 @@ namespace bgl
 	GameSlotRow(uint32_t slot, GeomType geom, LayerType layer)
 	{
 		gassert(slot < cGameSlots, "A reserved game slot is below cGameSlots");
-		if (layer == LayerType::kHashed)
-			gfatal("A game surface has no hashed row");
 		if (geom != GeomType::kStaticMesh && geom != GeomType::kSkinnedMesh)
 			gfatal("A game surface draws on static and skinned geometry only");
 
@@ -178,9 +181,23 @@ namespace bgl
 			if (layer == LayerType::kBlend)
 				return idl::cGameSlotBlendRow;
 
-			const uint32_t tier   = geom == GeomType::kSkinnedMesh ? 2u : 0u;
-			const uint32_t cutout = layer == LayerType::kMask ? 1u : 0u;
-			return tier + cutout;
+			const uint32_t tier = geom == GeomType::kSkinnedMesh ? idl::cGameSlotTierRows : 0u;
+
+			// A tier's own layers, in the order PsoType lists them.
+			switch (layer)
+			{
+			case LayerType::kOpaque:
+				return tier;
+			case LayerType::kMask:
+				return tier + 1u;
+			case LayerType::kHashed:
+				return tier + 2u;
+			case LayerType::kBlend:
+			case LayerType::kInvalid:
+			case LayerType::kCount:
+				break;
+			}
+			gfatal("A game surface has no row for this layer");
 		}();
 
 		return static_cast<idl::PsoType>(GameSlotRowBase(slot) + offset);
