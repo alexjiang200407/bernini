@@ -84,6 +84,25 @@ namespace assetlib
 		const Skeleton&              skeleton);
 
 	/**
+	 * Re-address `animations` to `skeleton`, whose bones skeletonRemap says are the cooked rig's
+	 * grown. True when it did; false leaves `animations` exactly as it was.
+	 *
+	 * The samples are re-strided rather than indirected, so everything downstream keeps addressing
+	 * a pose arithmetically and no GPU path learns what a bone name is. A bone the clips never
+	 * carried -- the added one -- holds its bind pose in every frame, which is how a name-binding
+	 * runtime behaves and why an added socket does not drag its rig.
+	 *
+	 * Each clip keeps the frame it started on: `firstSample / boneCount` is a frame index that the
+	 * baked plant weights address by, so a re-stride that renumbered frames would silently plant
+	 * the wrong feet.
+	 *
+	 * The posed boxes and plant weights are left as they are. Both are keyed by their own
+	 * signature, so a measurement made against another pairing is already refused where it is read.
+	 */
+	[[nodiscard]] bool
+	remapAnimations(AnimationSet& animations, const Skeleton& skeleton);
+
+	/**
 	 * @throws std::runtime_error if the bones are not topologically sorted (a parent at or after its
 	 *         child), a parent index is out of range, or a name offset is past the string pool.
 	 */

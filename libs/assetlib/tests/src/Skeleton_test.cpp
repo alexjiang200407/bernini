@@ -328,6 +328,95 @@ TEST_CASE("skeletonRemap refuses what genuinely lost its target", "[skeleton][re
 	}
 }
 
+TEST_CASE("remapAnimations poses a grown rig exactly as the cooked one posed", "[skeleton][remap]")
+{
+	const auto cooked = MakeChain();  // hips -> spine -> head
+	auto       clips  = MakeClipSet(cooked, 4, 2.0f);
+
+	// The rig with a socket hung off the spine, which the depth-first walk places before head --
+	// so head moves from index 2 to 3 and every clip's samples now name the wrong bones.
+	auto grown =
+		MakeRig({ { "hips", c_InvalidIndex }, { "spine", 0 }, { "grip", 1 }, { "head", 1 } });
+	grown.bones[2].bindPose.translation = glm::vec3(9.0f, 9.0f, 9.0f);
+
+	REQUIRE_FALSE(animationsMatchSkeleton(clips, grown));
+
+	// What the cooked pairing produced, before anything is touched.
+	auto before = std::vector<std::vector<glm::mat4>>();
+	for (uint32_t frame = 0; frame < clips.clips[0].frameCount; ++frame)
+		before.push_back(poseModelTransforms(cooked, clips, 0, frame));
+
+	REQUIRE(remapAnimations(clips, grown));
+	CHECK(animationsMatchSkeleton(clips, grown));
+	CHECK(clips.boneCount == 4);
+
+	for (uint32_t frame = 0; frame < clips.clips[0].frameCount; ++frame)
+	{
+		const auto after = poseModelTransforms(grown, clips, 0, frame);
+		REQUIRE(after.size() == 4);
+
+		// Every surviving bone lands where it did, at its new index.
+		CHECK(after[0] == before[frame][0]);  // hips
+		CHECK(after[1] == before[frame][1]);  // spine
+		CHECK(after[3] == before[frame][2]);  // head, moved 2 -> 3
+	}
+
+	SECTION("and the added bone holds its bind pose in every frame")
+	{
+		// Its *local* sample, not its model transform: a grip hung off the spine has to travel
+		// with the spine, so what stays at bind is the bone's own offset from its parent.
+		const Transform& bind = grown.bones[2].bindPose;
+		for (uint32_t frame = 0; frame < clips.clips[0].frameCount; ++frame)
+		{
+			const Transform& sample = clips.samples[frame * clips.boneCount + 2];
+			CHECK(sample.translation == bind.translation);
+			CHECK(sample.rotation == bind.rotation);
+			CHECK(sample.scale == bind.scale);
+		}
+	}
+}
+
+TEST_CASE("remapAnimations keeps the frame each clip starts on", "[skeleton][remap]")
+{
+	// findPlantWeights reads a clip's start as `firstSample / boneCount`, so a re-stride that
+	// renumbered frames would leave every baked weight addressing the wrong pose.
+	const auto cooked = MakeChain();
+	auto       clips  = MakeClipSet(cooked, 4, 2.0f);
+
+	const uint32_t startFrame = clips.clips[0].firstSample / clips.boneCount;
+
+	const auto grown =
+		MakeRig({ { "hips", c_InvalidIndex }, { "spine", 0 }, { "grip", 1 }, { "head", 1 } });
+
+	REQUIRE(remapAnimations(clips, grown));
+	CHECK(clips.clips[0].firstSample % clips.boneCount == 0);
+	CHECK(clips.clips[0].firstSample / clips.boneCount == startFrame);
+}
+
+TEST_CASE("remapAnimations leaves a clip set it cannot resolve alone", "[skeleton][remap]")
+{
+	const auto cooked   = MakeChain();
+	const auto original = MakeClipSet(cooked, 4, 2.0f);
+
+	const auto reparented = MakeRig({ { "hips", c_InvalidIndex }, { "spine", 0 }, { "head", 0 } });
+
+	auto clips = original;
+	CHECK_FALSE(remapAnimations(clips, reparented));
+
+	// Not partially rewritten: a refusal that had already re-strided the pool would leave the
+	// caller a container that matches neither rig.
+	CHECK(clips.boneCount == original.boneCount);
+	REQUIRE(clips.samples.size() == original.samples.size());
+	for (size_t i = 0; i < clips.samples.size(); ++i)
+	{
+		CHECK(clips.samples[i].translation == original.samples[i].translation);
+		CHECK(clips.samples[i].rotation == original.samples[i].rotation);
+		CHECK(clips.samples[i].scale == original.samples[i].scale);
+	}
+	CHECK(clips.skeletonSignature == original.skeletonSignature);
+	CHECK(clips.clips[0].firstSample == original.clips[0].firstSample);
+}
+
 TEST_CASE("A clip set survives a container round-trip", "[animation][io]")
 {
 	const auto skeleton   = MakeChain();
