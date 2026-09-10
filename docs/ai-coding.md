@@ -200,6 +200,18 @@ a file, where a crash in a guard would have allowed a write. It finds the worktr
 checkout's own symlink and is inert wherever there is none, which is CI and every fresh clone.
 `scripts/tests/test_draft_commit.py` pins it.
 
+A fifth, [`lsp_nudge.py`](../.claude/hooks/lsp_nudge.py) (`PreToolUse`), is the only one that
+**refuses nothing**. A bare C++ identifier grepped across `libs`/`apps`/`examples` gets the language
+server's equivalent back — `findReferences` for who calls it, `goToDefinition` for where it lives —
+as `additionalContext`, which reaches the model without stopping the call, so the advice arrives
+beside the results rather than instead of them. It advises rather than blocks because grep is the
+right tool for most of what it sees: prose in `docs/`, a key in a `.bmaterial`, a CMake variable, a
+`.slang` identifier, and any sweep whose completeness decides a change is safe, since clangd's index
+lags the working tree. It exists because the rule was in [CLAUDE.md](../CLAUDE.md) already and an
+agent holding the tool still reached for the regex — a doc is read once a session, and this is read
+at the moment it is being ignored. `scripts/tests/test_lsp_nudge.py` pins it, and most of what it
+pins is the silence: a hook that cries wolf is a hook somebody switches off.
+
 ## Coding agent: commit attribution
 
 An AI-assisted commit stays **authored by the developer who ran it** and is **co-authored by the

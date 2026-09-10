@@ -21,6 +21,16 @@
             "statusMessage": "Checking the ask session is reading"
           }
         ]
+      },
+      {
+        "matcher": "Bash|PowerShell",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "PY=$(command -v python3 || command -v python); exec \"$PY\" \"${CLAUDE_PROJECT_DIR:-.}\"/.claude/hooks/lsp_nudge.py",
+            "statusMessage": "Checking whether the LSP answers this"
+          }
+        ]
       }
     ],
     "PostToolUse": [
