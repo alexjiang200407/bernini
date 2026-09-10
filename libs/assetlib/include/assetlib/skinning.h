@@ -110,13 +110,21 @@ namespace assetlib
 	 * leaving the layout, the meshlets and every other attribute alone -- so what reaches the GPU is
 	 * the same buffer it always was, addressing the bones it now means.
 	 *
-	 * An influence carrying no weight is left as it is, out-of-range index included: decodeInfluences
-	 * accepts one, since a zero weight contributes nothing to the pose, and there is no bone for it
-	 * to be remapped to. A weighted influence naming a bone the cooked rig did not have is a corrupt
-	 * mesh and is refused.
+	 * An influence carrying no weight may name a bone the cooked rig never had -- decodeInfluences
+	 * accepts one, since a zero weight contributes nothing to the pose -- and there is no bone to
+	 * remap it to, so it is zeroed. Not left: `SkinMatrix` fetches all four palette matrices
+	 * whatever their weights, and `AssertBoneIndices` checks all four against the bone count, so a
+	 * stale index reads off the end of the palette and fails a `BERNINI_GPU_DEBUG` build. A
+	 * *weighted* influence naming a bone the cooked rig did not have is a corrupt mesh and is
+	 * refused.
 	 *
 	 * A mesh carrying no joints is refused rather than trivially accepted: it addresses no bone, so
 	 * meshMatchesSkeleton already answers true for any rig and nothing should be asking.
+	 *
+	 * @throws std::runtime_error for a malformed submesh -- no position attribute, one half of the
+	 *         skin pair, an attribute past the stride, or vertices outside the vertex data. That is
+	 *         a corrupt container rather than a rig that cannot be resolved, which is the `false`
+	 *         path; `mesh` is untouched either way.
 	 */
 	[[nodiscard]] bool
 	remapMesh(BMesh& mesh, const Skeleton& skeleton);

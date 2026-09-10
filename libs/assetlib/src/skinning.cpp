@@ -677,9 +677,15 @@ namespace assetlib
 	remapMesh(BMesh& mesh, const Skeleton& skeleton)
 	{
 		ZoneScopedN("assetlib remap mesh");
+		ZoneTextF(
+			"%zu -> %zu bones, %zu submeshes",
+			mesh.skeletonBoneNames.size(),
+			skeleton.bones.size(),
+			mesh.submeshes.size());
 
 		const size_t oldBoneCount = mesh.skeletonBoneNames.size();
-		if (oldBoneCount == 0 || skeleton.bones.size() > std::numeric_limits<uint16_t>::max())
+		if (oldBoneCount == 0 ||
+		    skeleton.bones.size() > size_t{ std::numeric_limits<uint16_t>::max() } + 1)
 			return false;
 
 		const auto remap = skeletonRemap(mesh.skeletonBoneNames, mesh.skeletonSignature, skeleton);
@@ -730,12 +736,16 @@ namespace assetlib
 					const size_t at    = base + *layout.joints + i * sizeof(uint16_t);
 					const auto   joint = readAt<uint16_t>(mesh.vertexData, at);
 
-					// An unweighted influence may name a bone that was never there; it moves no
-					// vertex, and there is nothing to move it to.
-					if (joint >= oldBoneCount)
-						continue;
-
-					writeAt(mesh.vertexData, at, static_cast<uint16_t>((*remap)[joint]));
+					// An unweighted influence may name a bone that was never there, and there is no
+					// bone to remap it to -- so it is zeroed rather than left. SkinMatrix fetches
+					// all four palette matrices whatever their weights, and AssertBoneIndices
+					// checks all four against the bone count, so junk left here reads off the end
+					// of the palette and trips a GPU_DEBUG build.
+					writeAt(
+						mesh.vertexData,
+						at,
+						joint < oldBoneCount ? static_cast<uint16_t>((*remap)[joint]) :
+											   uint16_t{ 0 });
 				}
 			}
 		}

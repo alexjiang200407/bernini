@@ -1071,10 +1071,12 @@ TEST_CASE(
 	CHECK(fixture.mesh.skeletonSignature == skeletonSignature(cooked));
 }
 
-TEST_CASE("remapMesh leaves an unweighted influence alone", "[skinning][remap]")
+TEST_CASE("remapMesh zeroes an unweighted influence it cannot place", "[skinning][remap]")
 {
-	// decodeInfluences accepts an out-of-range joint whose weight is zero -- it moves no vertex,
-	// and there is no bone for the remap to point it at.
+	// decodeInfluences accepts an out-of-range joint whose weight is zero, so a mesh may carry one
+	// -- but SkinMatrix fetches all four palette matrices whatever their weights and
+	// AssertBoneIndices checks all four, so leaving it would read off the end of the palette and
+	// fail a GPU_DEBUG build.
 	const auto cooked = RigFrom({ { "hips", c_InvalidIndex }, { "spine", 0 }, { "head", 1 } });
 
 	SkinnedMesh fixture;
@@ -1094,11 +1096,15 @@ TEST_CASE("remapMesh leaves an unweighted influence alone", "[skinning][remap]")
 
 	REQUIRE(remapMesh(fixture.mesh, grown));
 
-	// head moved 2 -> 3; the junk index is still junk, which is what decodeInfluences tolerates.
+	// head moved 2 -> 3; the index that named nothing is now a bone that exists and weighs nothing.
 	uint16_t first  = 0;
 	uint16_t second = 0;
 	std::memcpy(&first, fixture.mesh.vertexData.data() + 24, sizeof(first));
 	std::memcpy(&second, fixture.mesh.vertexData.data() + 26, sizeof(second));
 	CHECK(first == 3);
-	CHECK(second == 9);
+	CHECK(second == 0);
+
+	// And every index the mesh now carries is one the grown rig holds -- what the GPU asserts.
+	CHECK(first < grown.bones.size());
+	CHECK(second < grown.bones.size());
 }
