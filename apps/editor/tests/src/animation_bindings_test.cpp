@@ -1,5 +1,7 @@
 #include "Windows/AnimationEditor/animation_bindings.h"
+#include <assetlib/AssetStore.h>
 #include <assetlib/Project.h>  // IWYU pragma: keep
+#include <assetlib/asset_refs.h>
 
 #include "StoreAt.h"
 #include <assetlib/project_layout.h>
@@ -21,6 +23,13 @@
 
 namespace
 {
+	// One scan, so a case reads the way the panel does: the graph is asked for, then queried.
+	assetlib::AssetRefGraph
+	Graph(const std::filesystem::path& dataRoot)
+	{
+		return assetlib::AssetRefGraph::Scan(assetlib::AssetStore(dataRoot));
+	}
+
 	namespace fs = std::filesystem;
 
 	class TempRoot
@@ -102,7 +111,7 @@ TEST_CASE("Bindings collect every .banim naming the mesh's rig, sorted", "[anima
 	WriteBanim(root.Data(), "Derived/Animations/other.banim", "Derived/Skeletons/other.bskel");
 
 	const auto bindings =
-		editor::ResolveAnimationBindings(root.Data(), "Derived/Skeletons/rig.bskel");
+		editor::ResolveAnimationBindings(Graph(root.Data()), "Derived/Skeletons/rig.bskel");
 
 	CHECK(bindings.skeleton == "Derived/Skeletons/rig.bskel");
 	REQUIRE(bindings.animations.size() == 2);
@@ -117,7 +126,7 @@ TEST_CASE("A recorded path matches in normalized form, not by bytes", "[animatio
 	WriteBanim(root.Data(), "Derived/Animations/walk.banim", "./Derived/Skeletons//rig.bskel");
 
 	const auto bindings =
-		editor::ResolveAnimationBindings(root.Data(), "Derived/Skeletons/rig.bskel");
+		editor::ResolveAnimationBindings(Graph(root.Data()), "Derived/Skeletons/rig.bskel");
 
 	REQUIRE(bindings.animations.size() == 1);
 	CHECK(bindings.animations[0] == "Derived/Animations/walk.banim");
@@ -132,7 +141,7 @@ TEST_CASE(
 	WriteBanim(root.Data(), "Derived/Animations/other.banim", "Derived/Skeletons/other.bskel");
 
 	const auto bindings =
-		editor::ResolveAnimationBindings(root.Data(), "Derived/Skeletons/rig.bskel");
+		editor::ResolveAnimationBindings(Graph(root.Data()), "Derived/Skeletons/rig.bskel");
 
 	CHECK(bindings.skeleton == "Derived/Skeletons/rig.bskel");
 	CHECK(bindings.animations.empty());
@@ -149,7 +158,7 @@ TEST_CASE("An unreadable .banim fails resolution, as it fails the reference scan
 	}
 
 	CHECK_THROWS_AS(
-		editor::ResolveAnimationBindings(root.Data(), "Derived/Skeletons/rig.bskel"),
+		editor::ResolveAnimationBindings(Graph(root.Data()), "Derived/Skeletons/rig.bskel"),
 		std::runtime_error);
 }
 
@@ -159,7 +168,7 @@ TEST_CASE("A static mesh resolves to nothing", "[animation]")
 	WriteMesh(root.Data(), "Derived/Meshes/rock.bmesh", "");
 	WriteBanim(root.Data(), "Derived/Animations/walk.banim", "Derived/Skeletons/rig.bskel");
 
-	const auto bindings = editor::ResolveAnimationBindings(root.Data(), "");
+	const auto bindings = editor::ResolveAnimationBindings(Graph(root.Data()), "");
 
 	CHECK(bindings.skeleton.empty());
 	CHECK(bindings.animations.empty());
@@ -172,7 +181,7 @@ TEST_CASE("A project with no Animations directory has no candidates, not an erro
 	fs::remove_all(root.Data() / assetlib::c_AnimationsDirectoryName);
 
 	const auto bindings =
-		editor::ResolveAnimationBindings(root.Data(), "Derived/Skeletons/rig.bskel");
+		editor::ResolveAnimationBindings(Graph(root.Data()), "Derived/Skeletons/rig.bskel");
 
 	CHECK(bindings.skeleton == "Derived/Skeletons/rig.bskel");
 	CHECK(bindings.animations.empty());

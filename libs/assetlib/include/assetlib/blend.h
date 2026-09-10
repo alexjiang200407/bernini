@@ -1,5 +1,6 @@
 #pragma once
 #include <string>
+#include <string_view>
 #include <vector>
 
 namespace assetlib
@@ -54,6 +55,22 @@ namespace assetlib
 		bool
 		operator==(const BlendSet&) const = default;
 	};
+
+	/**
+	 * `Derived/Animations/loco.banim` -> `Authored/Animations/loco.bblend`: where a set authored
+	 * against that clip set is written.
+	 *
+	 * Both halves of the key change, exactly as `avatarKeyFor` swaps a skeleton's -- a clip set is
+	 * derived while the spaces over it are authored. The convention is *weaker* than the avatar's,
+	 * and deliberately: nothing finds a `.bblend` by its path, because a set stores the `.banim` it
+	 * is authored against and the reference scan reads that. This only decides where a new one
+	 * goes, so a set moved or renamed afterwards still resolves.
+	 *
+	 * @throws std::runtime_error unless `animationsKey` is a `.banim` under the animations
+	 *         directory.
+	 */
+	[[nodiscard]] std::string
+	blendSetKeyFor(std::string_view animationsKey);
 
 	/**
 	 * @throws std::runtime_error if a space is unnamed, two spaces share a name, a space holds

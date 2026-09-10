@@ -8,6 +8,8 @@
 #include <utility>
 
 #include "json_doc.h"
+#include "ref_paths.h"
+#include <assetlib/project_layout.h>
 
 namespace assetlib
 {
@@ -82,6 +84,18 @@ namespace assetlib
 
 			return space;
 		}
+	}
+
+	std::string
+	blendSetKeyFor(const std::string_view animationsKey)
+	{
+		return swapHalf(
+			"blend set",
+			animationsKey,
+			c_AnimationsDirectoryName,
+			c_BlendSetsDirectoryName,
+			c_AnimationExtension,
+			c_BlendExtension);
 	}
 
 	void

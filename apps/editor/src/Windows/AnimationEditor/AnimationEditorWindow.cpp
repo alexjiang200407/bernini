@@ -3,13 +3,19 @@
 #include "Windows/AnimationEditor/AnimationPreviewWindow.h"
 #include "Windows/AnimationEditor/Scrubber.h"
 #include "Windows/AnimationEditor/TransitionStrip.h"
+#include "Windows/AnimationEditor/blend_sets.h"
 #include "Windows/AnimationEditor/foot_ik_weights.h"
 #include "Windows/AnimationEditor/playback_writes.h"
 #include "Windows/AnimationEditor/transition_spans.h"
 #include "util/mesh_drop.h"
 #include <algorithm>
+#include <assetlib/blend.h>
 #include <assetlib/project_layout.h>
 #include <bgl/InstanceDesc.h>
+#include <cstddef>
+#include <exception>
+#include <gamelib/BlendSpaceInfo.h>
+#include <string>
 
 #include <QCheckBox>
 #include <QComboBox>
@@ -22,6 +28,7 @@
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QListWidget>
+#include <QMessageBox>
 #include <QMimeData>
 #include <QPushButton>
 #include <QScrollArea>
@@ -112,6 +119,18 @@ AnimationEditorWindow::AnimationEditorWindow(QWidget* parent, AnimationEditorWin
 
 	connect(
 		m_Preview,
+		&AnimationPreviewWindow::BlendSetsChanged,
+		this,
+		[this](const QStringList& sets, int activeIndex) { SetBlendSets(sets, activeIndex); });
+
+	connect(
+		m_Preview,
+		&AnimationPreviewWindow::SpacesChanged,
+		this,
+		[this](const std::vector<game::BlendSpaceInfo>& spaces) { ShowSpaces(spaces); });
+
+	connect(
+		m_Preview,
 		&AnimationPreviewWindow::AnimationSourcesChanged,
 		this,
 		[this](const QStringList& candidates, int activeIndex) {
@@ -189,12 +208,43 @@ AnimationEditorWindow::BuildPropertiesColumn()
 	m_SourceSelector->setEnabled(false);
 	connect(m_SourceSelector, &QComboBox::activated, this, [this](int index) {
 		// A different .banim is a different bake: reload the same mesh naming it, which releases
-		// the live geom to zero first -- the eviction that lets gamelib see the new request.
+		// the live geom to zero first -- the eviction that lets gamelib see the new request. The
+		// blend set goes with it: a set is authored against one clip set and names it, so carrying
+		// this one across would name a `.banim` the rig no longer plays.
 		if (m_SyncingUi || index < 0 || m_MeshRelPath.isEmpty() || m_DataRoot.isEmpty())
 			return;
 		LoadShownMesh(m_SourceSelector->itemText(index));
 	});
 	layout->addWidget(m_SourceSelector);
+
+	// Which spaces the rig carries. In the header rather than in the Space tab, because it is a
+	// fact about the clip set on screen, the way the `.banim` above it is -- and because opening
+	// one reloads the rig, which is not something a tab switch should ever do.
+	layout->addSpacing(8);
+	layout->addWidget(new QLabel(QStringLiteral("Blend Set"), column));
+
+	m_BlendSetSelector = new QComboBox(column);
+	m_BlendSetSelector->setEnabled(false);
+	m_BlendSetSelector->addItem(QStringLiteral("None"));
+	m_BlendSetSelector->setToolTip(QStringLiteral(
+		"The .bblend whose blend spaces this rig carries. Choosing one reloads the mesh: a rig "
+		"already uploaded refuses a set it was not built with."));
+	connect(m_BlendSetSelector, &QComboBox::activated, this, [this](int index) {
+		if (m_SyncingUi || index < 0 || m_MeshRelPath.isEmpty() || m_DataRoot.isEmpty())
+			return;
+		// Index 0 is "None", so the sets themselves start at 1.
+		LoadShownMesh(
+			m_SourceSelector->currentText(),
+			index == 0 ? QString() : m_BlendSetSelector->itemText(index));
+	});
+	layout->addWidget(m_BlendSetSelector);
+
+	m_CreateBlendSet = new QPushButton(QStringLiteral("Create Blend Set"), column);
+	m_CreateBlendSet->setEnabled(false);
+	m_CreateBlendSet->setToolTip(QStringLiteral(
+		"Writes the empty .bblend for this clip set, beside it under Authored, and opens it."));
+	connect(m_CreateBlendSet, &QPushButton::clicked, this, &AnimationEditorWindow::CreateBlendSet);
+	layout->addWidget(m_CreateBlendSet);
 
 	layout->addSpacing(8);
 	layout->addWidget(new QLabel(QStringLiteral("Preview As"), column));
@@ -313,10 +363,13 @@ AnimationEditorWindow::BuildPropertiesColumn()
 	layout->addSpacing(8);
 	m_Surfaces = new QTabWidget(column);
 	m_Surfaces->addTab(BuildClipTab(), QStringLiteral("Clip"));
+	m_Surfaces->addTab(BuildSpaceTab(), QStringLiteral("Space"));
 	m_Surfaces->addTab(BuildBlendTab(), QStringLiteral("Blend"));
 	// The tab decides what is being watched, so leaving Blend puts the clip back and entering it
 	// restores whatever fade its controls describe. That is also how a chosen To is undone.
 	connect(m_Surfaces, &QTabWidget::currentChanged, this, [this](int) {
+		// Only the Blend tab stamps anything into the record; Clip and Space both leave the clip
+		// the list selected playing, which is what clearing restores.
 		if (m_Surfaces->currentWidget() == m_TransitionGroup)
 			StampTransition();
 		else
@@ -357,6 +410,35 @@ AnimationEditorWindow::BuildClipTab()
 	layout->addWidget(m_ClipMetadata);
 
 	return page;
+}
+
+QWidget*
+AnimationEditorWindow::BuildSpaceTab()
+{
+	m_SpaceGroup = new QWidget(this);
+	auto* layout = new QVBoxLayout(m_SpaceGroup);
+	layout->setContentsMargins(4, 4, 4, 4);
+
+	m_SpaceSelector = new QComboBox(m_SpaceGroup);
+	m_SpaceSelector->setEnabled(false);
+	m_SpaceSelector->setPlaceholderText(QStringLiteral("no spaces"));
+	connect(m_SpaceSelector, &QComboBox::currentIndexChanged, this, [this](int index) {
+		if (!m_SyncingUi)
+			SelectSpace(index);
+	});
+	layout->addWidget(m_SpaceSelector);
+
+	// Clip and threshold per row, in parameter order -- Unity's Motion list, which is what ADR-1
+	// chose over a canvas. Read-only until the task that makes it editable.
+	m_SampleList = new QListWidget(m_SpaceGroup);
+	layout->addWidget(m_SampleList, /*stretch*/ 1);
+
+	m_SpaceNote = new QLabel(m_SpaceGroup);
+	m_SpaceNote->setWordWrap(true);
+	m_SpaceNote->setEnabled(false);
+	layout->addWidget(m_SpaceNote);
+
+	return m_SpaceGroup;
 }
 
 QWidget*
@@ -606,11 +688,126 @@ AnimationEditorWindow::TierSourceAt(const int index) noexcept
 }
 
 void
-AnimationEditorWindow::LoadShownMesh(const QString& animationsRelPath)
+AnimationEditorWindow::LoadShownMesh(const QString& animationsRelPath, const QString& blendRelPath)
 {
 	const auto absolute = std::filesystem::path(m_DataRoot.toStdWString()) /
 	                      std::filesystem::path(m_MeshRelPath.toStdWString());
-	m_Preview->LoadMesh(absolute, animationsRelPath.toStdString());
+	m_Preview->LoadMesh(absolute, animationsRelPath.toStdString(), blendRelPath.toStdString());
+}
+
+void
+AnimationEditorWindow::SetBlendSets(const QStringList& sets, const int activeIndex)
+{
+	m_SyncingUi = true;
+	m_BlendSetSelector->clear();
+	m_BlendSetSelector->addItem(QStringLiteral("None"));
+	m_BlendSetSelector->addItems(sets);
+	m_BlendSetSelector->setCurrentIndex(activeIndex < 0 ? 0 : activeIndex + 1);
+	m_BlendSetSelector->setEnabled(!m_MeshRelPath.isEmpty());
+	m_BlendRelPath = activeIndex < 0 ? QString() : sets.at(activeIndex);
+
+	// Nothing to create a set *for* until a clip set is playing, and nothing to create when the
+	// convention's key is already taken -- which is every set this panel wrote. The create itself
+	// refuses that too; this is what stops it being offered as a button that only ever warns.
+	m_CreateBlendSet->setEnabled(
+		!m_MeshRelPath.isEmpty() && m_SourceSelector->currentIndex() >= 0 &&
+		!sets.contains(CanonicalBlendSetKey()));
+	m_SyncingUi = false;
+}
+
+QString
+AnimationEditorWindow::CanonicalBlendSetKey() const
+{
+	if (m_SourceSelector->currentIndex() < 0)
+		return {};
+
+	const QByteArray animations = m_SourceSelector->currentText().toUtf8();
+
+	try
+	{
+		return QString::fromStdString(
+			assetlib::blendSetKeyFor(
+				std::string_view(animations.constData(), static_cast<size_t>(animations.size()))));
+	}
+	catch (const std::exception&)
+	{
+		// A clip set somewhere the convention does not cover. Nothing can be created for it, which
+		// is what an empty key says to the one caller.
+		return {};
+	}
+}
+
+void
+AnimationEditorWindow::ShowSpaces(const std::vector<game::BlendSpaceInfo>& spaces)
+{
+	m_Spaces = spaces;
+
+	m_SyncingUi = true;
+	m_SpaceSelector->clear();
+	for (const game::BlendSpaceInfo& space : spaces)
+		m_SpaceSelector->addItem(QString::fromStdString(space.name));
+	m_SpaceSelector->setEnabled(!spaces.empty());
+	m_SyncingUi = false;
+
+	SelectSpace(spaces.empty() ? -1 : 0);
+}
+
+void
+AnimationEditorWindow::SelectSpace(const int index)
+{
+	m_SampleList->clear();
+
+	if (index < 0 || static_cast<size_t>(index) >= m_Spaces.size())
+	{
+		m_SpaceNote->setText(
+			m_BlendRelPath.isEmpty() ?
+				QStringLiteral("No blend set open. Choose one above, or create the first.") :
+				QStringLiteral("This set holds no blend spaces yet."));
+		return;
+	}
+
+	const game::BlendSpaceInfo& space = m_Spaces[static_cast<size_t>(index)];
+	for (const game::BlendSpaceSampleInfo& sample : space.samples)
+	{
+		// The clip by name rather than by index: an index is what the acquire resolved to, and the
+		// name is what the `.bblend` says and what a person recognizes.
+		const QString clip = sample.clipIndex < static_cast<uint32_t>(m_ClipList->count()) ?
+		                         m_ClipList->item(static_cast<int>(sample.clipIndex))->text() :
+		                         QStringLiteral("<clip %1>").arg(sample.clipIndex);
+
+		m_SampleList->addItem(
+			QStringLiteral("%1    %2").arg(clip).arg(sample.parameter, 0, 'f', 2));
+	}
+
+	m_SpaceNote->setText(QStringLiteral("Parameter %1 to %2")
+	                         .arg(space.ParameterMin(), 0, 'f', 2)
+	                         .arg(space.ParameterMax(), 0, 'f', 2));
+}
+
+void
+AnimationEditorWindow::CreateBlendSet()
+{
+	if (m_DataRoot.isEmpty() || m_SourceSelector->currentIndex() < 0)
+		return;
+
+	const QByteArray animations = m_SourceSelector->currentText().toUtf8();
+
+	try
+	{
+		const std::string key = editor::CreateEmptyBlendSet(
+			std::filesystem::path(m_DataRoot.toStdWString()),
+			std::string_view(animations.constData(), static_cast<size_t>(animations.size())));
+
+		// Opening it is a reload: a rig already uploaded refuses a set it was not built with.
+		LoadShownMesh(m_SourceSelector->currentText(), QString::fromStdString(key));
+	}
+	catch (const std::exception& e)
+	{
+		QMessageBox::warning(
+			window(),
+			QStringLiteral("Create Blend Set"),
+			QString::fromUtf8(e.what()));
+	}
 }
 
 void
