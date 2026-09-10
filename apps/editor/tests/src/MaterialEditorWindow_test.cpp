@@ -1,3 +1,6 @@
+#include "Windows/MaterialEditor/MaterialGraphModel.h"
+#include "Windows/MaterialEditor/graph_compiler.h"
+#include "Windows/MaterialEditor/material_graph.h"
 #include "Windows/MaterialEditor/material_io.h"
 
 #include "util/QtSupport.h"  // IWYU pragma: keep
@@ -5,10 +8,17 @@
 #include <QDir>
 #include <QTemporaryDir>
 
+#include <assetlib/AssetStore.h>
 #include <assetlib_structs/BMaterial.h>
+#include <bgl/LayerType.h>
+#include <bgl/TextureAssetHandle.h>
+#include <bgl/types/SurfaceMaterialDesc.h>
 #include <catch2/catch_test_macros.hpp>
+#include <filesystem>
 #include <qbuffer.h>
 #include <qcontainerfwd.h>
+#include <string>
+#include <vector>
 
 // Set Default Material writes the material into the `.bmesh`. Doing that when the mesh already names
 // it rewrites the file to say what it already says, so the button greys out -- which turns on telling
@@ -290,4 +300,117 @@ TEST_CASE("The default sphere holds nothing open", "[materialeditor]")
 	const QStringList held =
 		editor::HeldOpenByMaterialEditor({ "C:/Data/Materials/Leaf.bmaterial" }, {});
 	CHECK(held == QStringList{ "C:/Data/Materials/Leaf.bmaterial" });
+}
+
+// A Save from this panel compiles the board, and the board is a PBR one whatever the file on disk
+// is -- the editor authors no surfaces. So the material's own model and the three keys under it
+// have to come back off the file, the way the baked triplet already does, or opening a game
+// material here and pressing Save would quietly turn it into an ordinary PBR one.
+TEST_CASE("A save does not demote a surface material", "[materialeditor][surface]")
+{
+	QTemporaryDir temp;
+	REQUIRE(temp.isValid());
+
+	const std::filesystem::path root = std::filesystem::path(temp.path().toStdWString());
+	const QString               path = temp.filePath("Authored/Materials/rim.bmaterial");
+
+	{
+		auto material             = assetlib::BMaterial();
+		material.name             = "rim";
+		material.shadingModel     = assetlib::ShadingModel::kPbrSurface;
+		material.surface.name     = "Rim";
+		material.surface.values   = { { "rimPower", { 2.0f } } };
+		material.surface.textures = { { "baseColor", "Derived/BakedTextures/rim.ktx2" } };
+
+		assetlib::AssetStore(root).Save(material, "Authored/Materials/rim.bmaterial");
+	}
+
+	// The board the panel would show for it: the default PBR one, since a surface material carries
+	// no editorGraph for the editor to restore.
+	MaterialGraphModel model(MakeMaterialNodeRegistry(nullptr, nullptr));
+	model.addNode("MaterialOutput");
+
+	const assetlib::BMaterial saved = editor::BuildMaterial(model, path, root);
+
+	CHECK(saved.shadingModel == assetlib::ShadingModel::kPbrSurface);
+	CHECK(saved.surface.name == "Rim");
+	REQUIRE(saved.surface.values.size() == 1u);
+	CHECK(saved.surface.values[0].name == "rimPower");
+	REQUIRE(saved.surface.textures.size() == 1u);
+	CHECK(saved.surface.textures[0].texture == "Derived/BakedTextures/rim.ktx2");
+}
+
+// A surface material's board is a graphless one seeded from PbrParams, so the preview compiled it
+// into a white loose PBR material and drew that instead of the surface. What the renderer gets has
+// to come from the document, and this is the translation that does it -- the whole of it bar the
+// texture upload, which the loader here stands in for.
+TEST_CASE("A surface material previews through its own surface", "[materialeditor][surface]")
+{
+	assetlib::BMaterial material;
+	material.name              = "Dog_Rim";
+	material.shadingModel      = assetlib::ShadingModel::kPbrSurface;
+	material.layer.alphaMode   = assetlib::AlphaMode::kMask;
+	material.layer.alphaCutoff = 0.25f;
+	material.layer.doubleSided = false;
+	material.surface.name      = "Rim";
+	material.surface.values.emplace_back("rimColor", std::vector<float>{ 5.0f, 2.0f, 0.7f });
+	material.surface.values.emplace_back("rimPower", std::vector<float>{ 2.5f });
+	material.surface.textures.emplace_back("baseColor", "Derived/SourceTextures/Dog/coat.ktx2");
+
+	auto asked = std::vector<std::string>();
+
+	const bgl::SurfaceMaterialDesc desc =
+		editor::SurfaceDescOf(material, [&](const std::string& key) {
+			asked.push_back(key);
+			return bgl::TextureAssetHandle();
+		});
+
+	CHECK(desc.surface == "Rim");
+
+	// The layer keys are the document's. They decide the PSO row, so a preview that took the
+	// board's would draw the right colours through the wrong pipeline.
+	CHECK(desc.layerType == bgl::LayerType::kMask);
+	CHECK(desc.alphaCutoff == 0.25f);
+	CHECK_FALSE(desc.doubleSided);
+
+	// Every value the document sets, under the name the surface declared, widened to four.
+	REQUIRE(desc.values.size() == 2);
+	CHECK(desc.values[0].name == "rimColor");
+	CHECK(desc.values[0].value.x == 5.0f);
+	CHECK(desc.values[0].value.y == 2.0f);
+	CHECK(desc.values[0].value.z == 0.7f);
+	CHECK(desc.values[1].name == "rimPower");
+	CHECK(desc.values[1].value.x == 2.5f);
+
+	// The bound texture is asked for by its data-root-relative key, which is what the document
+	// stores and what a store resolves.
+	REQUIRE(desc.textures.size() == 1);
+	CHECK(desc.textures[0].name == "baseColor");
+	REQUIRE(asked.size() == 1);
+	CHECK(asked[0] == "Derived/SourceTextures/Dog/coat.ktx2");
+}
+
+// One that will not load is not worth the material: the surface samples its default for that slot
+// and the rest of the document still draws, which is a visible mistake rather than an invisible one.
+TEST_CASE("A surface texture that will not load leaves the rest", "[materialeditor][surface]")
+{
+	assetlib::BMaterial material;
+	material.shadingModel = assetlib::ShadingModel::kPbrSurface;
+	material.surface.name = "Rim";
+	material.surface.values.emplace_back("rimPower", std::vector<float>{ 3.0f });
+	material.surface.textures.emplace_back("baseColor", "Derived/SourceTextures/gone.ktx2");
+
+	const bgl::SurfaceMaterialDesc desc = editor::SurfaceDescOf(material, [](const std::string&) {
+		return bgl::TextureAssetHandle();
+	});
+
+	CHECK(desc.surface == "Rim");
+	REQUIRE(desc.values.size() == 1);
+	CHECK(desc.values[0].value.x == 3.0f);
+
+	// Still bound, and still null: the name is what the surface declared, so dropping the binding
+	// would be a different mistake from binding nothing.
+	REQUIRE(desc.textures.size() == 1);
+	CHECK(desc.textures[0].name == "baseColor");
+	CHECK(desc.textures[0].texture.textureSlot.is_null());
 }

@@ -190,6 +190,12 @@ namespace bgl
 		}
 	}
 
+	void
+	ShaderCache::FoldSource(std::string_view name, std::string_view source) noexcept
+	{
+		m_SourceSalt = shader_cache::FoldSource(m_SourceSalt, name, source);
+	}
+
 	ShaderCache::~ShaderCache()
 	{
 		if (!m_Archive || !m_ArchiveDirty)

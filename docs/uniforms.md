@@ -42,6 +42,23 @@ doc disagrees, trust the header, then fix this doc.
   reflected and addressed by name, the elements the handle points at are compile-time-proven. Expect
   the guarantees to change at that boundary.
 
+* **A third regime, for a struct the engine does not own.** A game surface declares its parameters
+  in its own Slang module, so there is nothing to generate a mirror from at build time:
+  `ReflectSurface` ([SurfaceReflection.h](libs/bgl_common/include/bgl_common/SurfaceReflection.h))
+  walks the parameter struct's *structured-buffer* element layout instead, and the packer writes
+  each field by the offset that walk returned. It is the cbuffer regime's reflection applied to the
+  IDL regime's layout, and it exists because the third choice — a manifest the game commits beside
+  its shader — is a second artefact that can drift from the code that reads it.
+
+  The layout it walks must be the **scalar** one, which means reflecting on a DXIL target whatever
+  backend will draw the surface. A record is read with `RawBuffer.Load<T>`, and a raw load
+  reconstructs its type from scalar loads on every backend — the same rules `bgl_idlgen` mirrors
+  every other record under. A Metal target reflects a structured-buffer *element* instead, under
+  MSL's rules, where a `float3` aligns to 16 rather than packing at 4. That is a true layout for
+  `EntryBuffer<T>` and the wrong one here, and it fails quietly: every field after the first vector
+  moves, so the shader reads a texture's slot index out of the bytes of the value before it and
+  samples nothing. The two accessors are what differ, not the two backends.
+
 * **Layout is reflected once per PSO and shared; the mirror is per kernel.** `ReflectLayoutFromSlang`
   ([SlangReflection.h](libs/bgl_common/include/bgl_common/SlangReflection.h)) walks Slang's cbuffer type layout
   into `ReflectedLayout`, a POD tree held by `shared_ptr<const>`. Carrying no Slang pointers is what

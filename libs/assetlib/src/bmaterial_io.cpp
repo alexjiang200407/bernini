@@ -55,6 +55,24 @@ namespace assetlib
 			"stampHash",
 		} };
 
+		// Every top-level key the PBR half owns, so a material of another model can be cleared of
+		// them by name rather than by whatever the writer below happens to emit.
+		constexpr std::array<std::string_view, 8> c_PbrKeys = { {
+			"baseColorFactor",
+			"metallicFactor",
+			"roughnessFactor",
+			"transmissionFactor",
+			"specularColorFactor",
+			"specularFactor",
+			"baked",
+			"routes",
+		} };
+
+		constexpr std::array<std::string_view, 2> c_ShadingModelNames = { {
+			"pbr",
+			"pbrSurface",
+		} };
+
 		constexpr std::array<std::string_view, 4> c_AlphaModeNames = { {
 			"opaque",
 			"mask",
@@ -85,9 +103,9 @@ namespace assetlib
 		setOrErase(nlohmann::json& object, std::string_view key, const std::string& value)
 		{
 			if (value.empty())
-				object.erase(std::string(key));
+				object.erase(key);
 			else
-				object[std::string(key)] = value;
+				object[key] = value;
 		}
 
 		/** Drops object members that ended empty, so a fully-taken route leaves no husk. */
@@ -96,6 +114,205 @@ namespace assetlib
 		{
 			for (auto it = object.begin(); it != object.end();)
 				it = it->is_object() && it->empty() ? object.erase(it) : std::next(it);
+		}
+
+		/**
+		 * Takes `parameters`, whose members are one to four numbers each, in the document's own
+		 * key order so a save writes the file back as it was read.
+		 */
+		void
+		takeSurfaceValues(nlohmann::json& json, std::vector<SurfaceValueBinding>& out)
+		{
+			const auto it = json.find("parameters");
+			if (it == json.end())
+				return;
+
+			core::throw_runtime_error_if(
+				!it->is_object(),
+				"bmaterial: 'parameters' is not an object");
+
+			out.reserve(out.size() + it->size());
+			for (const auto& [name, value] : it->items())
+			{
+				auto& parameter = out.emplace_back(name);
+
+				if (value.is_number())
+				{
+					parameter.value.push_back(value.get<float>());
+					continue;
+				}
+
+				core::throw_runtime_error_if(
+					!value.is_array() || value.empty() || value.size() > 4 ||
+						!std::ranges::all_of(value, [](const auto& v) { return v.is_number(); }),
+					"bmaterial: parameter '{}' is not a number or an array of one to four numbers",
+					name);
+
+				for (const auto& component : value)
+					parameter.value.push_back(component.get<float>());
+			}
+
+			json.erase(it);
+		}
+
+		/** Takes `textures`, whose members are each one mount key. */
+		void
+		takeSurfaceTextures(nlohmann::json& json, std::vector<SurfaceTextureBinding>& out)
+		{
+			const auto it = json.find("textures");
+			if (it == json.end())
+				return;
+
+			core::throw_runtime_error_if(
+				!it->is_object(),
+				"bmaterial: 'textures' is not an object");
+
+			out.reserve(out.size() + it->size());
+			for (const auto& [name, value] : it->items())
+			{
+				core::throw_runtime_error_if(
+					!value.is_string(),
+					"bmaterial: texture '{}' is not a path",
+					name);
+				out.emplace_back(name, value.get<std::string>());
+			}
+
+			json.erase(it);
+		}
+
+		/**
+		 * Writes the PBR half, or erases every key of it when the material is not drawn by that
+		 * model -- the mirror of writePbrSurface, and the same rule read from the other side.
+		 *
+		 * The model decides, not whether the struct happens to hold anything: PbrParams
+		 * default-constructs to glTF's own defaults, so a surface material left to this writer
+		 * would pick up a white base colour and a metallic of one that it never declared.
+		 */
+		void
+		writePbr(nlohmann::json& json, const BMaterial& material)
+		{
+			if (material.shadingModel != ShadingModel::kPbr)
+			{
+				for (const std::string_view key : c_PbrKeys) json.erase(key);
+				return;
+			}
+
+			const PbrParams& pbr        = material.pbr;
+			json["baseColorFactor"]     = doc::vecToJson(pbr.baseColorFactor);
+			json["metallicFactor"]      = doc::plainFloat(pbr.metallicFactor);
+			json["roughnessFactor"]     = doc::plainFloat(pbr.roughnessFactor);
+			json["transmissionFactor"]  = doc::plainFloat(pbr.transmissionFactor);
+			json["specularColorFactor"] = doc::vecToJson(pbr.specularColorFactor);
+			json["specularFactor"]      = doc::plainFloat(pbr.specularFactor);
+
+			// Merged into whatever `extraJson` preserved rather than rebuilt, so a sibling branch's
+			// key inside `baked` or a route survives this writer too.
+			auto& baked = json["baked"];
+			if (!baked.is_object())
+				baked = nlohmann::json::object();
+			setOrErase(baked, "baseColor", pbr.baseColorTexture);
+			setOrErase(baked, "normal", pbr.normalTexture);
+			setOrErase(baked, "orm", pbr.ormTexture);
+			if (pbr.bakeToken != 0)
+				baked["token"] = pbr.bakeToken;
+			else
+				baked.erase("token");
+			if (baked.empty())
+				json.erase("baked");
+
+			auto& routes = json["routes"];
+			if (!routes.is_object())
+				routes = nlohmann::json::object();
+			for (size_t i = 0; i < c_LooseChannelCount; ++i)
+			{
+				const std::string channelName(c_ChannelNames[i]);
+
+				// A stamp can outlive its route -- a bake's provenance is not dropped with a rerouted
+				// channel -- so an entry is written whenever either half says something.
+				if (!pbr.routes[i].texture.empty() || pbr.routeStamps[i] != SourceStamp{})
+				{
+					auto& route = routes[channelName];
+					if (!route.is_object())
+						route = nlohmann::json::object();
+					route[c_RouteKeys[0]] = pbr.routes[i].texture;
+					route[c_RouteKeys[1]] = pbr.routes[i].channel;
+					route[c_RouteKeys[2]] = pbr.routeStamps[i].size;
+					route[c_RouteKeys[3]] = pbr.routeStamps[i].hash;
+				}
+				else if (const auto found = routes.find(channelName); found != routes.end())
+				{
+					// The struct says nothing for this channel any more; its known keys go, anything
+					// preserved stays.
+					for (const std::string_view key : c_RouteKeys) found->erase(key);
+					if (found->empty())
+						routes.erase(found);
+				}
+			}
+			if (routes.empty())
+				json.erase("routes");
+		}
+
+		/**
+		 * Writes the three keys, or erases them when the material is not drawn by a surface.
+		 *
+		 * Rebuilt rather than merged, unlike `baked` and `routes`: every member of `parameters` is
+		 * a parameter and every member of `textures` a texture, so the reader took all of them and
+		 * there is nothing preserved underneath to write back around.
+		 *
+		 * The model decides, not the name: a document that stopped being a surface material still
+		 * carries the keys, and writing them back would leave a material claiming a surface it is
+		 * no longer drawn by.
+		 */
+		void
+		writePbrSurface(nlohmann::json& json, const BMaterial& material)
+		{
+			const SurfaceParams& surface = material.surface;
+
+			if (material.shadingModel != ShadingModel::kPbrSurface)
+			{
+				json.erase("surface");
+				json.erase("parameters");
+				json.erase("textures");
+				return;
+			}
+
+			json["surface"] = surface.name;
+
+			auto parameters = nlohmann::json::object();
+			for (const SurfaceValueBinding& value : surface.values)
+			{
+				core::throw_runtime_error_if(
+					value.value.empty() || value.value.size() > 4,
+					"bmaterial: parameter '{}' holds {} numbers, and a parameter is one to four",
+					value.name,
+					value.value.size());
+
+				// One number as a number: a scalar an author typed as `2.0` is written back as
+				// `2.0` rather than promoted to a one-element array.
+				if (value.value.size() == 1)
+				{
+					parameters[value.name] = doc::plainFloat(value.value.front());
+					continue;
+				}
+
+				auto array = nlohmann::json::array();
+				for (const float component : value.value)
+					array.push_back(doc::plainFloat(component));
+				parameters[value.name] = std::move(array);
+			}
+			if (parameters.empty())
+				json.erase("parameters");
+			else
+				json["parameters"] = std::move(parameters);
+
+			auto textures = nlohmann::json::object();
+			for (const SurfaceTextureBinding& texture : surface.textures)
+				if (!texture.texture.empty())
+					textures[texture.name] = texture.texture;
+			if (textures.empty())
+				json.erase("textures");
+			else
+				json["textures"] = std::move(textures);
 		}
 
 		BMaterial
@@ -107,15 +324,16 @@ namespace assetlib
 
 			BMaterial material;
 
-			// The one model there is; refused rather than defaulted when it names another, since a
+			// Refused rather than defaulted when it names a model this build has not heard of: a
 			// typo that silently rendered as PBR would never be found.
-			std::string shadingModel = "pbr";
+			std::string shadingModel(c_ShadingModelNames[0]);
 			taker.Take("shadingModel", shadingModel);
+			const auto model = std::ranges::find(c_ShadingModelNames, shadingModel);
 			core::throw_runtime_error_if(
-				shadingModel != "pbr",
+				model == c_ShadingModelNames.end(),
 				"bmaterial: unknown shading model '{}'",
 				shadingModel);
-			material.shadingModel = ShadingModel::kPbr;
+			material.shadingModel = static_cast<ShadingModel>(model - c_ShadingModelNames.begin());
 
 			taker.Take("name", material.name);
 
@@ -123,7 +341,7 @@ namespace assetlib
 			// back byte-for-byte, and nothing here may assume it parses.
 			taker.Take("editorGraph", material.editorGraph);
 
-			PbrParams& pbr = material.pbr;
+			MaterialLayer& layer = material.layer;
 
 			std::string alphaMode(c_AlphaModeNames[0]);
 			taker.Take("alphaMode", alphaMode);
@@ -132,16 +350,30 @@ namespace assetlib
 				mode == c_AlphaModeNames.end(),
 				"bmaterial: unknown alpha mode '{}'",
 				alphaMode);
-			pbr.alphaMode = static_cast<AlphaMode>(mode - c_AlphaModeNames.begin());
+			layer.alphaMode = static_cast<AlphaMode>(mode - c_AlphaModeNames.begin());
 
-			taker.Take("alphaCutoff", pbr.alphaCutoff);
-			taker.Take("doubleSided", pbr.doubleSided);
+			taker.Take("alphaCutoff", layer.alphaCutoff);
+			taker.Take("doubleSided", layer.doubleSided);
+
+			PbrParams& pbr = material.pbr;
+
 			taker.Take("baseColorFactor", pbr.baseColorFactor);
 			taker.Take("metallicFactor", pbr.metallicFactor);
 			taker.Take("roughnessFactor", pbr.roughnessFactor);
 			taker.Take("transmissionFactor", pbr.transmissionFactor);
 			taker.Take("specularColorFactor", pbr.specularColorFactor);
 			taker.Take("specularFactor", pbr.specularFactor);
+
+			// Taken whatever the model is, so a surface's keys never ride `extraJson` back out
+			// beside the ones written from the struct.
+			taker.Take("surface", material.surface.name);
+			takeSurfaceValues(json, material.surface.values);
+			takeSurfaceTextures(json, material.surface.textures);
+
+			// Taken, then dropped: the keys are not this material's, and a struct still holding
+			// them would say it is drawn by a surface that its own model denies.
+			if (material.shadingModel != ShadingModel::kPbrSurface)
+				material.surface = SurfaceParams();
 
 			// Known keys come out; what remains -- a sibling branch's field at any depth -- stays
 			// in the json and rides `extraJson` through the round-trip.
@@ -222,6 +454,11 @@ namespace assetlib
 					json.erase(it);
 			}
 
+			// The same rule from the other side: a material that is not drawn by the PBR model
+			// holds none of its factors, so nothing downstream reads a white base colour off one.
+			if (material.shadingModel != ShadingModel::kPbr)
+				material.pbr = PbrParams();
+
 			material.extraJson = json.dump();
 			return material;
 		}
@@ -237,7 +474,8 @@ namespace assetlib
 		switch (material.shadingModel)
 		{
 		case ShadingModel::kPbr:
-			json["shadingModel"] = "pbr";
+		case ShadingModel::kPbrSurface:
+			json["shadingModel"] = c_ShadingModelNames[static_cast<size_t>(material.shadingModel)];
 			break;
 		case ShadingModel::kCount:
 			throw std::runtime_error("bmaterial: unwritable shading model");
@@ -251,62 +489,13 @@ namespace assetlib
 		else
 			json.erase("editorGraph");
 
-		const PbrParams& pbr        = material.pbr;
-		json["alphaMode"]           = alphaModeName(pbr.alphaMode);
-		json["alphaCutoff"]         = doc::plainFloat(pbr.alphaCutoff);
-		json["doubleSided"]         = pbr.doubleSided;
-		json["baseColorFactor"]     = doc::vecToJson(pbr.baseColorFactor);
-		json["metallicFactor"]      = doc::plainFloat(pbr.metallicFactor);
-		json["roughnessFactor"]     = doc::plainFloat(pbr.roughnessFactor);
-		json["transmissionFactor"]  = doc::plainFloat(pbr.transmissionFactor);
-		json["specularColorFactor"] = doc::vecToJson(pbr.specularColorFactor);
-		json["specularFactor"]      = doc::plainFloat(pbr.specularFactor);
+		const MaterialLayer& layer = material.layer;
+		json["alphaMode"]          = alphaModeName(layer.alphaMode);
+		json["alphaCutoff"]        = doc::plainFloat(layer.alphaCutoff);
+		json["doubleSided"]        = layer.doubleSided;
 
-		// Merged into whatever `extraJson` preserved rather than rebuilt, so a sibling branch's
-		// key inside `baked` or a route survives this writer too.
-		auto& baked = json["baked"];
-		if (!baked.is_object())
-			baked = nlohmann::json::object();
-		setOrErase(baked, "baseColor", pbr.baseColorTexture);
-		setOrErase(baked, "normal", pbr.normalTexture);
-		setOrErase(baked, "orm", pbr.ormTexture);
-		if (pbr.bakeToken != 0)
-			baked["token"] = pbr.bakeToken;
-		else
-			baked.erase("token");
-		if (baked.empty())
-			json.erase("baked");
-
-		auto& routes = json["routes"];
-		if (!routes.is_object())
-			routes = nlohmann::json::object();
-		for (size_t i = 0; i < c_LooseChannelCount; ++i)
-		{
-			const std::string channelName(c_ChannelNames[i]);
-
-			// A stamp can outlive its route -- a bake's provenance is not dropped with a rerouted
-			// channel -- so an entry is written whenever either half says something.
-			if (!pbr.routes[i].texture.empty() || pbr.routeStamps[i] != SourceStamp{})
-			{
-				auto& route = routes[channelName];
-				if (!route.is_object())
-					route = nlohmann::json::object();
-				route[std::string(c_RouteKeys[0])] = pbr.routes[i].texture;
-				route[std::string(c_RouteKeys[1])] = pbr.routes[i].channel;
-				route[std::string(c_RouteKeys[2])] = pbr.routeStamps[i].size;
-				route[std::string(c_RouteKeys[3])] = pbr.routeStamps[i].hash;
-			}
-			else if (const auto found = routes.find(channelName); found != routes.end())
-			{
-				// The struct says nothing for this channel any more; its known keys go, anything
-				// preserved stays.
-				for (const std::string_view key : c_RouteKeys) found->erase(std::string(key));
-				if (found->empty())
-					routes.erase(found);
-			}
-		}
-		if (routes.empty())
-			json.erase("routes");
+		writePbr(json, material);
+		writePbrSurface(json, material);
 
 		return doc::toBytes(json);
 	}

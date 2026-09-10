@@ -14,6 +14,7 @@
 #include <bgl/types/FootPlantDesc.h>
 #include <bgl/types/LoosePbrMaterialDesc.h>
 #include <bgl/types/PbrMaterialDesc.h>
+#include <bgl/types/SurfaceMaterialDesc.h>
 #include <core/str/str.h>
 #include <cstddef>
 #include <cstdint>
@@ -636,6 +637,9 @@ namespace game
 
 		[[nodiscard]] bgl::LoosePbrMaterialDesc
 		LooseDesc(const MaterialRecord& record) const;
+
+		[[nodiscard]] bgl::SurfaceMaterialDesc
+		SurfaceDesc(const MaterialRecord& record) const;
 
 		// Destroys a geom and releases the materials it held. Assumes its refcount reached zero
 		void

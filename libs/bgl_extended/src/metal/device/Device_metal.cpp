@@ -24,7 +24,7 @@
 #include "types/QueueType.h"
 #include "uniforms/Uniforms.h"
 #include <cstdint>
-#include <iterator>
+#include <filesystem>
 #include <memory>
 #include <slang.h>
 #include <string>
@@ -35,8 +35,6 @@ namespace bgl
 {
 	namespace
 	{
-		const char* const c_ShaderSearchPaths[] = { "./shaders/src", "./shaders/tests" };
-
 		// Compile options that change generated code, folded into every cache key so a compiler
 		// upgrade or a debug/release switch never reuses stale binaries.
 		std::string
@@ -55,11 +53,14 @@ namespace bgl
 	Device::~Device() = default;
 
 	Device::Device(
-		MTL::Device*       device,
-		const std::string& shaderCacheDir,
-		bool               usePipelineLibrary) :
+		MTL::Device*                 device,
+		const std::filesystem::path& shaderCacheDir,
+		const std::filesystem::path& surfaceShaderDir,
+		bool                         usePipelineLibrary) :
 		m_Device(NS::RetainPtr(device)),
-		m_Slang(SlangSessionDesc{ SLANG_METAL, c_ShaderSearchPaths })
+		m_Slang(
+			SlangSessionDesc{ .target      = SLANG_METAL,
+	                          .searchPaths = ShaderSearchPaths(surfaceShaderDir) })
 	{
 		if (!shaderCacheDir.empty())
 		{
@@ -67,11 +68,23 @@ namespace bgl
 				m_Device.get(),
 				shaderCacheDir,
 				ShaderCacheSalt(),
-				std::vector<std::string>(
-					std::begin(c_ShaderSearchPaths),
-					std::end(c_ShaderSearchPaths)),
+				m_Slang.GetSearchPaths(),
 				usePipelineLibrary);
 		}
+	}
+
+	void
+	Device::AddSourceModule(const SlangSourceModule& sourceModule) noexcept
+	{
+		m_Slang.AddSourceModule(sourceModule);
+		if (m_ShaderCache)
+			m_ShaderCache->FoldSource(sourceModule.name, sourceModule.source);
+	}
+
+	std::optional<ReflectedSurface>
+	Device::ReflectSurfaceModule(std::string_view moduleName, std::string_view surfaceName)
+	{
+		return m_Slang.ReflectSurface(moduleName, surfaceName);
 	}
 
 	void

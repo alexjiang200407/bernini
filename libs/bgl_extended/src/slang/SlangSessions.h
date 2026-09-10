@@ -1,19 +1,54 @@
 #pragma once
 
+#include <bgl_common/SurfaceReflection.h>
+
+#include <filesystem>
 #include <mutex>
+#include <optional>
 #include <slang-com-ptr.h>
 #include <slang.h>
-#include <span>
+#include <string>
+#include <string_view>
 #include <thread>
 #include <unordered_map>
+#include <vector>
 namespace bgl
 {
+	/**
+	 * A module given as text rather than found on a search path. Loaded into every session under
+	 * `name` before anything else compiles, so an `import` of that name resolves to it, and a file
+	 * of the same name on a search path is shadowed. `name` is spelled as an import spells it --
+	 * `game.slot0` -- and never as a path.
+	 */
+	struct SlangSourceModule
+	{
+		std::string name;
+		std::string source;
+	};
+
+	/**
+	 * The module name as Slang's loader keys it: `/`-separated, not `.`-separated. `loadModule`
+	 * appends `.slang` to it and opens that, and an `import` of a dotted name looks a loaded module
+	 * up under the same form -- so the one spelling every caller and every shader uses is converted
+	 * here, at the only point that reaches the loader.
+	 */
+	[[nodiscard]] std::string
+	SlangModulePath(std::string_view moduleName);
+
 	/** What every compile on one backend shares: the code it generates and where sources are. */
 	struct SlangSessionDesc
 	{
-		SlangCompileTarget           target = SLANG_TARGET_UNKNOWN;
-		std::span<const char* const> searchPaths;
+		SlangCompileTarget             target = SLANG_TARGET_UNKNOWN;
+		std::vector<std::string>       searchPaths;
+		std::vector<SlangSourceModule> sourceModules;
 	};
+
+	/**
+	 * The engine's staged tree and the suite's, then `clientDir` when it is not empty. One list for
+	 * the session and the cache salt, so a module either resolves and keys correctly or does neither.
+	 */
+	[[nodiscard]] std::vector<std::string>
+	ShaderSearchPaths(const std::filesystem::path& clientDir);
 
 	/**
 	 * The Slang sessions a device compiles through: one per thread that compiles.
@@ -30,10 +65,46 @@ namespace bgl
 	public:
 		explicit SlangSessions(SlangSessionDesc desc) noexcept;
 
+		[[nodiscard]] const std::vector<std::string>&
+		GetSearchPaths() const noexcept
+		{
+			return m_Desc.searchPaths;
+		}
+
+		/**
+		 * Adds a module every session from now on loads from source before it compiles anything.
+		 *
+		 * Drops every existing session the way ReleaseAll does, since a session that has already
+		 * resolved the name to a file keeps that answer; the next compile on each thread recreates
+		 * its session with the module in place.
+		 *
+		 * @pre ReleaseAll's, and no compile in flight on any thread: a session being created reads
+		 *      the list this appends to.
+		 */
+		void
+		AddSourceModule(SlangSourceModule sourceModule) noexcept;
+
 		SlangSessions(const SlangSessions&) = delete;
 
 		SlangSessions&
 		operator=(const SlangSessions&) = delete;
+
+		/**
+		 * The surface a game's module declares.
+		 *
+		 * Reflected on a DXIL target whatever this device compiles for: the offsets have to be the
+		 * ones `RawBuffer.Load<T>` reads a record at, and a raw load is scalar-packed on every
+		 * backend. The module is loaded and reflected here rather than handed back, because a
+		 * slang::IModule only lives as long as the session that parsed it and the next
+		 * AddSourceModule drops that.
+		 *
+		 * Empty when the module is not a surface at all -- it does not import the contract.
+		 *
+		 * @throws std::runtime_error if the module does not compile, or imports the contract and
+		 *         does not hold exactly one struct conforming to its ISurfaceSource.
+		 */
+		[[nodiscard]] std::optional<ReflectedSurface>
+		ReflectSurface(std::string_view moduleName, std::string_view surfaceName);
 
 		/**
 		 * The calling thread's session, created on first call.
@@ -59,9 +130,13 @@ namespace bgl
 	private:
 		struct ThreadSessions
 		{
-			// The global session is declared first so it is destroyed after the session it made.
+			// The global session is declared first so it is destroyed after the sessions it made.
 			Slang::ComPtr<slang::IGlobalSession> global;
 			Slang::ComPtr<slang::ISession>       session;
+
+			// A second session on a DXIL target, made only if a surface is reflected: the layout a
+			// record is read at is the scalar one, which this device's own target may not give.
+			Slang::ComPtr<slang::ISession> scalarLayout;
 		};
 
 		SlangSessionDesc m_Desc;

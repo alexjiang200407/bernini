@@ -124,10 +124,18 @@ and is a target of its own; nothing here is part of it.
   its own global session and session, and `CreateGraphics` drops them all once every renderer PSO
   is built, because each global session's core module is a few hundred megabytes resident. Nothing
   may retain a `slang::` object past pipeline construction, or the release reclaims nothing, and a
-  module never crosses threads — see the same doc.
+  module never crosses threads — see the same doc. `IDevice::AddSourceModule` gives every session a
+  module as text under a name, shadowing a file of that name and joining the cache salt; it drops
+  the live sessions to do it, so it runs before the batch, never during. `RegisterSurfaces`
+  (`src/gfx/surface_registry.h`) is its one caller: it reflects every surface in
+  `GraphicsOptions::surfaceShaderDir` first and binds them all afterwards, because a binding drops
+  the sessions the next reflection would have used.
 - At runtime the Slang session resolves modules from `shaders/src` (and `shaders/tests`) beside the
-  executable. Two trees are staged into it: `libs/bgl_common/shaders/src` (`idl/`, `lib/anim/`,
-  `lib/math/`, `lib/data/`) by `bgl_common_copy_shaders`, and this renderer's own by a target
+  executable, then from `GraphicsOptions::surfaceShaderDir`, the one directory a client adds: its
+  files are in the cache salt like the engine's, and a program imports its modules by name the same
+  way. Three trees are staged into the engine's: the contract `libs/bgl/shaders/src` (`bgl/`) by
+  `bgl_copy_contract_shaders`, `libs/bgl_common/shaders/src` (`idl/`, `lib/anim/`, `lib/math/`,
+  `lib/data/`) by `bgl_common_copy_shaders` ordered after it, and this renderer's own by a target
   `bgl_extended` itself depends on — `bgl_copy_shader_src` on D3D12, `bgl_metal_copy_shaders` on
   Metal, each ordered after the shared one — so anything that brings a device up has the sources,
   and a build that stages none aborts on the first program-cache miss with "cannot open file".

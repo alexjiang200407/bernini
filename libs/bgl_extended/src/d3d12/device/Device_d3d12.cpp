@@ -19,13 +19,13 @@
 #include "types/QueueType.h"
 #include <bgl_common/SlangErrorChecker.h>
 #include <core/ref/SharedRef.h>
+#include <filesystem>
+#include <string>
 
 namespace bgl
 {
 	namespace
 	{
-		const char* const c_ShaderSearchPaths[] = { "./shaders/src", "./shaders/tests" };
-
 		// Compile options that change generated code, folded into every cache key so a
 		// compiler upgrade or a debug/release switch never reuses stale binaries.
 		std::string
@@ -42,10 +42,14 @@ namespace bgl
 	}
 
 	Device::Device(
-		wrl::ComPtr<ID3D12Device> device,
-		const std::string&        shaderCacheDir,
-		bool                      gpuValidation) :
-		m_Device(std::move(device)), m_Slang(SlangSessionDesc{ SLANG_DXIL, c_ShaderSearchPaths })
+		wrl::ComPtr<ID3D12Device>    device,
+		const std::filesystem::path& shaderCacheDir,
+		const std::filesystem::path& surfaceShaderDir,
+		bool                         gpuValidation) :
+		m_Device(std::move(device)),
+		m_Slang(
+			SlangSessionDesc{ .target      = SLANG_DXIL,
+	                          .searchPaths = ShaderSearchPaths(surfaceShaderDir) })
 	{
 		gassert(m_Device != nullptr, "D3D12 device cannot be null");
 
@@ -55,11 +59,23 @@ namespace bgl
 				m_Device.Get(),
 				shaderCacheDir,
 				ShaderCacheSalt(),
-				std::vector<std::string>(
-					std::begin(c_ShaderSearchPaths),
-					std::end(c_ShaderSearchPaths)),
+				m_Slang.GetSearchPaths(),
 				!gpuValidation);
 		}
+	}
+
+	void
+	Device::AddSourceModule(const SlangSourceModule& sourceModule) noexcept
+	{
+		m_Slang.AddSourceModule(sourceModule);
+		if (m_ShaderCache)
+			m_ShaderCache->FoldSource(sourceModule.name, sourceModule.source);
+	}
+
+	std::optional<ReflectedSurface>
+	Device::ReflectSurfaceModule(std::string_view moduleName, std::string_view surfaceName)
+	{
+		return m_Slang.ReflectSurface(moduleName, surfaceName);
 	}
 
 	void

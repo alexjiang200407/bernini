@@ -10,6 +10,7 @@
 #include <assetlib_structs/BMeshImport.h>
 #include <assetlib_structs/ImageData.h>
 #include <assetlib_structs/VkFormat.h>
+#include <catch2/catch_message.hpp>
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers.hpp>
 #include <chrono>
@@ -29,6 +30,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <filesystem>
+#include <format>
 #include <fstream>
 #include <ios>
 #include <span>
@@ -70,18 +72,18 @@ TEST_CASE("a blend material's transmission survives a round trip", "[bmaterial][
 {
 	BMaterial mat;
 	mat.name                   = "lens";
-	mat.pbr.alphaMode          = AlphaMode::kBlend;
+	mat.layer.alphaMode        = AlphaMode::kBlend;
 	mat.pbr.transmissionFactor = 0.85f;
 
 	const auto restored = AssetCodec<BMaterial>::Deserialize(AssetCodec<BMaterial>::Serialize(mat));
 
-	CHECK(restored.pbr.alphaMode == AlphaMode::kBlend);
+	CHECK(restored.layer.alphaMode == AlphaMode::kBlend);
 	CHECK(restored.pbr.transmissionFactor == Catch::Approx(0.85f));
 
 	// The default is what every material baked before the factor re-bakes to, and it is the reading
 	// blend has always had.
 	BMaterial coverage;
-	coverage.pbr.alphaMode = AlphaMode::kBlend;
+	coverage.layer.alphaMode = AlphaMode::kBlend;
 	CHECK(
 		AssetCodec<BMaterial>::Deserialize(AssetCodec<BMaterial>::Serialize(coverage))
 			.pbr.transmissionFactor == 0.0f);
@@ -95,17 +97,17 @@ TEST_CASE(
 	"[bmaterial][io]")
 {
 	BMaterial mat;
-	mat.name            = "leaf";
-	mat.pbr.alphaMode   = AlphaMode::kMask;
-	mat.pbr.doubleSided = false;
+	mat.name              = "leaf";
+	mat.layer.alphaMode   = AlphaMode::kMask;
+	mat.layer.doubleSided = false;
 
 	const auto restored = AssetCodec<BMaterial>::Deserialize(AssetCodec<BMaterial>::Serialize(mat));
-	CHECK(!restored.pbr.doubleSided);
+	CHECK(!restored.layer.doubleSided);
 
 	const std::string text = R"({"shadingModel":"pbr","name":"card","alphaMode":"mask"})";
 	const auto        legacy =
 		AssetCodec<BMaterial>::Deserialize(std::as_bytes(std::span(text.data(), text.size())));
-	CHECK(legacy.pbr.doubleSided);
+	CHECK(legacy.layer.doubleSided);
 }
 
 TEST_CASE("a material's specular factors survive a round trip", "[bmaterial][io]")
@@ -680,6 +682,25 @@ TEST_CASE("a material document preserves the keys this build does not know", "[b
 	CHECK(out.find("\"sheenFactor\"") != std::string::npos);
 }
 
+// The layer is every model's, so its keys sit beside shadingModel rather than inside a model's
+// payload -- and always did: moving them off PbrParams changed no document.
+TEST_CASE("the layer's keys are the document's own, beside shadingModel", "[bmaterial][io]")
+{
+	BMaterial mat;
+	mat.name              = "leaf";
+	mat.layer.alphaMode   = AlphaMode::kMask;
+	mat.layer.alphaCutoff = 0.25f;
+	mat.layer.doubleSided = false;
+
+	const auto        bytes = AssetCodec<BMaterial>::Serialize(mat);
+	const std::string out(reinterpret_cast<const char*>(bytes.data()), bytes.size());
+
+	// One tab of indent is the top level of a canonical document.
+	CHECK(out.find("\n\t\"alphaCutoff\": 0.25,\n") != std::string::npos);
+	CHECK(out.find("\n\t\"alphaMode\": \"mask\",\n") != std::string::npos);
+	CHECK(out.find("\n\t\"doubleSided\": false,\n") != std::string::npos);
+}
+
 TEST_CASE("a minimal hand-authored document defaults what it omits", "[bmaterial][io]")
 {
 	const std::string_view text = "{\n\t\"shadingModel\": \"pbr\"\n}\n";
@@ -688,7 +709,7 @@ TEST_CASE("a minimal hand-authored document defaults what it omits", "[bmaterial
 		AssetCodec<BMaterial>::Deserialize(std::as_bytes(std::span(text.data(), text.size())));
 	CHECK(material.pbr.baseColorFactor == glm::vec4(1.0f));
 	CHECK(material.pbr.metallicFactor == 1.0f);
-	CHECK(material.pbr.alphaMode == AlphaMode::kOpaque);
+	CHECK(material.layer.alphaMode == AlphaMode::kOpaque);
 	CHECK(material.pbr.baseColorTexture.empty());
 	CHECK(material.editorGraph.empty());
 }
@@ -760,4 +781,133 @@ TEST_CASE("a preserved route outlives the channel it decorated", "[bmaterial][io
 	const std::string out(reinterpret_cast<const char*>(resaved.data()), resaved.size());
 	CHECK(out.find("\"blurRadius\"") != std::string::npos);
 	CHECK(AssetCodec<BMaterial>::Serialize(AssetCodec<BMaterial>::Deserialize(resaved)) == resaved);
+}
+
+// The three keys a surface material adds, and the one property they all have to have: the reader
+// takes them out of the document, so what a writer emits comes from the struct and not from
+// whatever rode `extraJson` through.
+TEST_CASE("a surface material round-trips its three keys", "[bmaterial][io][surface]")
+{
+	BMaterial mat;
+	mat.name         = "rimmed";
+	mat.shadingModel = ShadingModel::kPbrSurface;
+	mat.surface.name = "Rim";
+
+	// A scalar, a triple and a quad: the count is the author's, and the renderer reads as many
+	// components as the parameter it names was declared with.
+	mat.surface.values = {
+		{ "rimPower", { 2.0f } },
+		{ "rimColor", { 1.0f, 0.3f, 0.1f } },
+		{ "baseColorFactor", { 0.05f, 0.05f, 0.06f, 1.0f } },
+	};
+	mat.surface.textures = { { "baseColor", "Derived/BakedTextures/rim_basecolor.ktx2" } };
+
+	const auto        bytes = AssetCodec<BMaterial>::Serialize(mat);
+	const std::string out(reinterpret_cast<const char*>(bytes.data()), bytes.size());
+
+	CHECK(out.find("\"shadingModel\": \"pbrSurface\"") != std::string::npos);
+	CHECK(out.find("\"surface\": \"Rim\"") != std::string::npos);
+
+	// A one-number parameter is written as a number rather than promoted to an array, so a
+	// hand-typed scalar comes back looking like one.
+	CHECK(out.find("\"rimPower\": 2.0") != std::string::npos);
+
+	const BMaterial restored = AssetCodec<BMaterial>::Deserialize(bytes);
+
+	REQUIRE(restored.shadingModel == ShadingModel::kPbrSurface);
+	CHECK(restored.surface.name == "Rim");
+
+	REQUIRE(restored.surface.values.size() == 3u);
+	for (const SurfaceValueBinding& value : restored.surface.values)
+	{
+		const auto original =
+			std::ranges::find(mat.surface.values, value.name, &SurfaceValueBinding::name);
+		REQUIRE(original != mat.surface.values.end());
+		CHECK(value.value == original->value);
+	}
+
+	REQUIRE(restored.surface.textures.size() == 1u);
+	CHECK(restored.surface.textures[0].name == "baseColor");
+	CHECK(restored.surface.textures[0].texture == "Derived/BakedTextures/rim_basecolor.ktx2");
+
+	// Canonical, like every other document: one content, one byte sequence.
+	CHECK(AssetCodec<BMaterial>::Serialize(restored) == bytes);
+
+	// And it carries none of the other model's. PbrParams default-constructs to glTF's own
+	// defaults, so a writer that emitted them unconditionally would give a hand-authored surface
+	// material a white base colour and a metallic of one it never declared -- which is the
+	// mirror of the case below, and the reason both halves are written by model.
+	//
+	// At the top level, which is one tab of indent in a canonical document: this surface declares
+	// a parameter *called* `baseColorFactor`, as a surface that tints its own base naturally
+	// would, and that lives inside `parameters` where it belongs.
+	for (const std::string_view key : { "baseColorFactor",
+	                                    "metallicFactor",
+	                                    "roughnessFactor",
+	                                    "transmissionFactor",
+	                                    "specularColorFactor",
+	                                    "specularFactor",
+	                                    "baked",
+	                                    "routes" })
+	{
+		INFO("the pbr key '" << key << "'");
+		CHECK(out.find(std::format("\n\t\"{}\"", key)) == std::string::npos);
+	}
+
+	// The parameter of that name is still there, one level down.
+	CHECK(out.find("\n\t\t\"baseColorFactor\"") != std::string::npos);
+}
+
+// The other half of "the reader takes them": a document that is not drawn by a surface has no
+// business carrying the keys, so a save strips them rather than writing them back out.
+TEST_CASE("a pbr material strips the surface keys", "[bmaterial][io][surface]")
+{
+	const std::string_view text = R"({
+	"name": "was_a_surface",
+	"parameters": {
+		"rimPower": 2.0
+	},
+	"shadingModel": "pbr",
+	"surface": "Rim",
+	"textures": {
+		"baseColor": "Derived/BakedTextures/rim_basecolor.ktx2"
+	}
+}
+)";
+
+	const BMaterial material =
+		AssetCodec<BMaterial>::Deserialize(std::as_bytes(std::span(text.data(), text.size())));
+	REQUIRE(material.shadingModel == ShadingModel::kPbr);
+
+	const auto        bytes = AssetCodec<BMaterial>::Serialize(material);
+	const std::string out(reinterpret_cast<const char*>(bytes.data()), bytes.size());
+
+	CHECK(out.find("\"surface\"") == std::string::npos);
+	CHECK(out.find("\"parameters\"") == std::string::npos);
+	CHECK(out.find("\"rimPower\"") == std::string::npos);
+	CHECK(out.find("\"textures\"") == std::string::npos);
+}
+
+// A parameter is one to four numbers. Anything else is a document nobody can pack, and it is
+// refused where it is read rather than becoming a zero somewhere in the record.
+TEST_CASE("a surface parameter of the wrong shape is refused", "[bmaterial][io][surface]")
+{
+	const auto read = [](std::string_view text) {
+		return AssetCodec<BMaterial>::Deserialize(
+			std::as_bytes(std::span(text.data(), text.size())));
+	};
+
+	CHECK_THROWS_AS(
+		read(R"({"shadingModel": "pbrSurface", "surface": "Rim", "parameters": {"p": []}})"),
+		std::runtime_error);
+	CHECK_THROWS_AS(
+		read(R"({"shadingModel": "pbrSurface", "surface": "Rim",
+		         "parameters": {"p": [1, 2, 3, 4, 5]}})"),
+		std::runtime_error);
+	CHECK_THROWS_AS(
+		read(R"({"shadingModel": "pbrSurface", "surface": "Rim", "parameters": {"p": "two"}})"),
+		std::runtime_error);
+	CHECK_THROWS_AS(
+		read(R"({"shadingModel": "pbrSurface", "surface": "Rim", "textures": {"t": 3}})"),
+		std::runtime_error);
 }

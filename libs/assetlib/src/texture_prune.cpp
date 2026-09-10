@@ -87,6 +87,11 @@ namespace assetlib
 						markMap(live, material.pbr.ormTexture);
 						break;
 
+					case ShadingModel::kPbrSurface:
+						for (const SurfaceTextureBinding& texture : material.surface.textures)
+							markMap(live, texture.texture);
+						break;
+
 					case ShadingModel::kCount:
 						throw std::runtime_error(
 							"AssetStore::FindUnusedBakedTextures: the material '" + key +

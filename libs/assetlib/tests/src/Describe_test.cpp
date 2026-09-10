@@ -1,5 +1,6 @@
 #include "asset_describe.h"
 #include <assetlib/bmesh.h>
+#include <assetlib/codecs.h>
 #include <assetlib/container_info.h>
 #include <assetlib/image_io.h>
 #include <assetlib_structs/Mesh.h>
@@ -14,11 +15,16 @@
 #include <assetlib_structs/Skeleton.h>
 #include <catch2/catch_test_macros.hpp>
 #include <core/file/LooseFileSystem.h>
+#include <cstddef>
 #include <cstdint>
 #include <filesystem>
 #include <format>
 #include <fstream>
 #include <ios>
+#include <span>
+#include <string>
+#include <string_view>
+#include <vector>
 
 using namespace assetlib;
 
@@ -167,6 +173,39 @@ TEST_CASE("describe(BMaterial) reports bake staleness against the data root", "[
 	}
 
 	std::filesystem::remove_all(root);
+}
+
+// A surface material is authored by hand, and the dump is where its author reads what to type. So
+// the shading model printed here is not a label of its own: it is the token the reader takes, fed
+// back through the reader below rather than asserted twice, since the failure a second spelling
+// causes is a document nobody can write from what the tool said.
+TEST_CASE("describe(BMaterial) names the shading model a document takes", "[describe][surface]")
+{
+	BMaterial material;
+	material.name         = "rim";
+	material.shadingModel = ShadingModel::kPbrSurface;
+	material.surface.name = "Rim";
+	material.surface.values.emplace_back("rimPower", std::vector<float>{ 2.5f });
+	material.surface.textures.emplace_back("baseColor", "Derived/SourceTextures/bear.ktx2");
+
+	const std::string text = describe(material);
+
+	CHECK(text.find("  surface           Rim\n") != std::string::npos);
+	CHECK(text.find("rimPower") != std::string::npos);
+	CHECK(text.find("Derived/SourceTextures/bear.ktx2") != std::string::npos);
+
+	constexpr std::string_view c_Label = "  shadingModel      ";
+	const size_t               at      = text.find(c_Label);
+	REQUIRE(at != std::string::npos);
+
+	const size_t      start = at + c_Label.size();
+	const std::string token = text.substr(start, text.find('\n', start) - start);
+
+	const std::string document = std::format(R"({{"name": "rim", "shadingModel": "{}"}})", token);
+	const BMaterial   restored = AssetCodec<BMaterial>::Deserialize(
+		std::as_bytes(std::span(document.data(), document.size())));
+
+	CHECK(restored.shadingModel == ShadingModel::kPbrSurface);
 }
 
 // A submesh whose material index is out of range draws with the renderer's default material. That is

@@ -102,7 +102,7 @@ def test_the_symbol_searched_for_is_named_back():
         # Not C++, whatever directory it sits in: Slang has no server here, and the rest
         # are prose and build files.
         "grep -rn cGameSlotRows libs/bgl_common/shaders/src/idl/PsoType.slang",
-        'grep -rn "surface" docs/game_surfaces.md',
+        'grep -rn "surface" docs/game_defined_surfaces.md',
         "grep -rn BERNINI_ROOT CMakeLists.txt",
         "grep -n shadingModel Data/Authored/Materials/Dog/Dog_Rim.bmaterial",
         # A regex is asking something the LSP cannot answer at all.

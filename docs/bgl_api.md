@@ -21,6 +21,11 @@ or a throw contract here — state what a caller is guaranteed, not the machiner
 provides it. `bgl_selfcheck` enforces the dependency half (a public header that reaches into a
 renderer's internals fails the build); the wording half is review's.
 
+The same surface has a Slang half, [libs/bgl/shaders/src/bgl](libs/bgl/shaders/src/bgl): what a
+surface written outside the engine conforms to and reads through, and nothing that names a handle,
+an arena or a bucket. `bgl_check_shaders` holds it to the same rule, compiling each module with
+only that tree on the search path; [Slang Shaders](docs/slang_shaders.md) has the three trees.
+
 **This document is a map, not a mirror.** It captures design choices, topology, and the *non-obvious*
 contracts — not full signatures. The header at each linked path is the source of truth; when this doc
 disagrees, trust the header, then fix this doc.
@@ -168,12 +173,14 @@ disagrees, trust the header, then fix this doc.
 
 | Type | File | Role |
 |---|---|---|
-| `GraphicsOptions` | [libs/bgl/include/bgl/IGraphics.h](libs/bgl/include/bgl/IGraphics.h) | Device creation: debug layers, log level, `shaderCacheDir`, and every descriptor-heap/pool capacity. |
+| `GraphicsOptions` | [libs/bgl/include/bgl/IGraphics.h](libs/bgl/include/bgl/IGraphics.h) | Device creation: debug layers, log level, `shaderCacheDir`, `surfaceShaderDir` (the client's own Slang modules, imported by name), and every descriptor-heap/pool capacity. |
+| `SurfaceType`, `SurfaceParams`, `SurfaceValue`, `SurfaceTexture` | [libs/bgl/include/bgl/SurfaceType.h](libs/bgl/include/bgl/SurfaceType.h) | A surface the client registered, read off its own Slang module: the name a material writes, the `MaterialType` its records carry, and the parameter block a material fills — each value's type, byte offset and default, and each texture's kind and slot. Listed by `IGraphics::GetSurfaceTypes()`. |
 | `CaptureTicket` | [libs/bgl/include/bgl/IGraphics.h](libs/bgl/include/bgl/IGraphics.h) | Names one in-flight backbuffer capture. Spent by resolve or discard. |
 | `PassTiming`, `PassTimings` | [libs/bgl/include/bgl/PassTiming.h](libs/bgl/include/bgl/PassTiming.h) | One row of `IGraphics::GetPassTimings` — a frame graph pass's name and what it cost on the GPU, in milliseconds — and the rows of one frame under the id of the frame they measured. |
 | `PassHistory` | [libs/bgl/include/bgl/PassHistory.h](libs/bgl/include/bgl/PassHistory.h) | The last N frames of `GetPassTimings` as a table of passes against frames, ignoring a frame id it has already recorded. The passes are a union in execution order and a cell is empty where that pass did not run, since a culled pass leaves no row. `PassHistoryCsv` in [pass_timing_csv.h](libs/bgl/include/bgl/pass_timing_csv.h) writes one out. |
 | `SceneDesc` | [libs/bgl/include/bgl/IScene.h](libs/bgl/include/bgl/IScene.h) | Fixed pool capacities for a scene. |
 | `PbrMaterialDesc` / `LoosePbrMaterialDesc` | [libs/bgl/include/bgl/IScene.h](libs/bgl/include/bgl/IScene.h) | Baked (three-map) vs. loose (per-channel routed) material parameters. `ChannelRouteDesc` feeds the latter. `doubleSided` says whether a non-opaque surface's back faces are drawn; on by default, and the mesh stage culls them otherwise — see [Passes § Two-sided surfaces](docs/passes.md). |
+| `SurfaceMaterialDesc` | [libs/bgl/include/bgl/types/SurfaceMaterialDesc.h](libs/bgl/include/bgl/types/SurfaceMaterialDesc.h) | A material drawn by a registered surface: the surface's name, the layer, and its values and textures **by name**, in any order — the names come from the game's own module, so the engine only learned them at startup. What it does not name takes the surface's declared default; a name the surface never declared throws. |
 | `EnvironmentMapDesc` | [libs/bgl/include/bgl/IScene.h](libs/bgl/include/bgl/IScene.h) | The IBL triplet (irradiance cube, prefilter cube, BRDF LUT). **Move-only** — copy is deleted. |
 | `GroundPlaneDesc` | [libs/bgl/include/bgl/IScene.h](libs/bgl/include/bgl/IScene.h) | The scene's ground: a point and an up normal. Defaults to `y = 0`. |
 | `RenderTargetDesc` | [libs/bgl/include/bgl/IRenderTarget.h](libs/bgl/include/bgl/IRenderTarget.h) | The output size, `renderScale` (how dense the geometry passes' grid is relative to it), `taaReconstructionWidth` (how wide a kernel the resolve rebuilds an output pixel with, in output pixels), `headless`, and `wnd` — an `HWND` on D3D12, a `CAMetalLayer*` on Metal; ignored when headless. |
@@ -204,7 +211,7 @@ flowchart TD
 
     SV -- "keeps alive" --> SC
     SC -- "AddStaticMeshGeom / AddSphereGeom / ..." --> GH[GeomHandle]
-    SC -- "CreatePbrMaterial / CreateLoosePbrMaterial" --> MH[MaterialHandle]
+    SC -- "CreatePbrMaterial / CreateLoosePbrMaterial / CreateSurfaceMaterial" --> MH[MaterialHandle]
     SC -- "AddTextureAsset(ImageData)" --> TH[TextureAssetHandle]
 
     GH -- "CreateStaticMeshInstance(geom, transform)" --> MI[MeshInstanceHandle]
@@ -259,6 +266,20 @@ flowchart TD
   texture wraps the target this frame is drawing to throws: a target's output is drawn on another
   target. Every other target a draw samples is retained through the frame, and the frame reads the
   slot it presented last — draw the preview target first, then the frame that shows it.
+* **`GetSurfaceTypes()`** — the surfaces read out of `GraphicsOptions::surfaceShaderDir` at
+  construction, in slot order. A `.slang` directly in that directory that **imports the contract** is
+  one surface: its name is the file's stem, its shading is the one struct in it conforming to
+  `ISurfaceSource`, and its slot is its position in filename order — so nothing outside the directory
+  names a file, and a file added later does not renumber the ones before it. Anything else there is
+  the game's own code: the same directory is its module search path, so a shared header beside the
+  surfaces is skipped rather than refused, and so is a file whose stem no `import` could name.
+  **At most four**, because each reserved
+  slot costs three PSO rows and two pipelines whether a surface fills it or not, and the culling
+  scan's single group bounds the total row count; a fifth is a `pso_sort_key` rework, not a bigger
+  number. A directory that is missing, a fifth surface, or a module that imports the contract and
+  holds no single conforming struct throws `ApiError` from `CreateGraphics`. **Read
+  once**: every pipeline that can draw a surface is built in the constructor, and nothing rebuilds one
+  afterwards, so an edited or added surface is seen at the next launch.
 * **`Resize(target, w, h)`** — @pre not between `BeginFrame`/`EndFrame`; both dimensions non-zero.
   @throws `GraphicsError` otherwise. `w`/`h` are the *output* size; the render size is re-derived
   from the target's scale. Recreates backbuffers, depth, scene colour and the velocity buffer,
@@ -352,6 +373,16 @@ flowchart TD
   record's offset and its header, so every submesh already bound picks the change up with no
   rebinding. The material's *type* cannot
   change, so the PSO bucket is unaffected. @throws `SceneError` on a type mismatch.
+* **`CreateSurfaceMaterial(desc)` / `UpdateSurfaceMaterial(material, desc)`** — a material drawn by
+  one of `IGraphics::GetSurfaceTypes()`. Its `MaterialType` is the reserved kind that surface was
+  given, so that is what picks its pipelines. Values and textures are matched by the names the
+  surface declared; anything the desc does not name takes the surface's own default, and a name the
+  surface never declared throws rather than landing somewhere harmless — including a name declared as
+  the *other* kind of field, which says so. An unbound texture reads the default its declared kind
+  implies: white for a colour or a data map, a flat normal for a normal map. `kHashed` throws: hashed
+  alpha needs texel counts a surface's coverage cannot give, so no game row draws it. An update
+  cannot change the surface, which is what the record's kind and size were fixed by. @throws
+  `SceneError` for all of the above.
 * **`AddStaticMeshGeom(mesh, meshIndex, materials)`** — `materials` is parallel to `mesh.materials`, and a
   submesh whose material index is out of range is left unlit rather than rejected. Resolving those
   paths to handles is the caller's job — `gamelib`'s `AssetManager` is the only implementation of the
@@ -400,6 +431,7 @@ flowchart TD
 ```cpp
 auto gfxOpts           = bgl::GraphicsOptions{};
 gfxOpts.shaderCacheDir = "shadercache";  // empty disables it; cold start is seconds slower
+gfxOpts.surfaceShaderDir = projectShaders;  // the client's own modules, importable by name; empty for none
 auto graphics          = bgl::CreateGraphics(gfxOpts);
 
 auto targetDesc     = bgl::RenderTargetDesc{};

@@ -71,6 +71,12 @@ namespace bgl::shader_cache
 	}
 
 	uint64_t
+	FoldSource(uint64_t salt, std::string_view name, std::string_view source)
+	{
+		return salt ^ core::hash_string(source, core::hash_string(name, core::hash_seed()));
+	}
+
+	uint64_t
 	ComputeKey(uint64_t salt, std::vector<std::pair<std::string, std::string>> moduleEntries)
 	{
 		std::sort(moduleEntries.begin(), moduleEntries.end());

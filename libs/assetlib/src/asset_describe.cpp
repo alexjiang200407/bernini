@@ -50,6 +50,8 @@ namespace assetlib
 			{
 			case ShadingModel::kPbr:
 				return "pbr";
+			case ShadingModel::kPbrSurface:
+				return "pbrSurface";
 			case ShadingModel::kCount:
 				break;
 			}
@@ -224,6 +226,40 @@ namespace assetlib
 		}
 
 		void
+		describeSurface(
+			std::string&                   out,
+			const SurfaceParams&           surface,
+			const core::file::IFileSystem* fileSystem)
+		{
+			out += std::format("  surface           {}\n", surface.name);
+
+			out += "\n  parameters\n";
+			if (surface.values.empty())
+				out += "    (none set; every one takes the default the surface declared)\n";
+			for (const SurfaceValueBinding& value : surface.values)
+			{
+				std::string numbers;
+				for (const float component : value.value)
+					numbers += std::format("{}{:.3g}", numbers.empty() ? "" : ", ", component);
+				out += std::format("    {:<15} {}\n", value.name, numbers);
+			}
+
+			out += "\n  textures\n";
+			if (surface.textures.empty())
+				out += "    (none bound; every slot samples the engine's default)\n";
+			for (const SurfaceTextureBinding& texture : surface.textures)
+			{
+				out += std::format("    {:<15} {}\n", texture.name, pathOr(texture.texture));
+
+				// A surface texture is bound rather than baked, so there is no stamp to compare --
+				// the one thing worth reporting is whether the file is still there.
+				if (fileSystem != nullptr && !texture.texture.empty() &&
+				    stampOf(*fileSystem, texture.texture) == SourceStamp{})
+					out += "                    file is missing\n";
+			}
+		}
+
+		void
 		describePbr(
 			std::string&                   out,
 			const PbrParams&               pbr,
@@ -244,11 +280,6 @@ namespace assetlib
 				pbr.specularColorFactor.x,
 				pbr.specularColorFactor.y,
 				pbr.specularColorFactor.z);
-
-			// The animated tiers draw opaque geometry only, so this is the field that decides whether
-			// a submesh can be skinned at all.
-			out += std::format("  alphaMode         {}\n", alphaModeName(pbr.alphaMode));
-			out += std::format("  doubleSided       {}\n", pbr.doubleSided);
 
 			// The triplet is what a `baked` material draws from; a `loose` one keeps it as the last
 			// bake's output, which is why it is printed either way.
@@ -410,10 +441,19 @@ namespace assetlib
 		out += std::format("bmaterial '{}'\n", material.name);
 		out += std::format("  shadingModel      {}\n", shadingModelName(material.shadingModel));
 
+		// The animated tiers draw opaque geometry only, so this is the field that decides whether a
+		// submesh can be skinned at all.
+		out += std::format("  alphaMode         {}\n", alphaModeName(material.layer.alphaMode));
+		out += std::format("  doubleSided       {}\n", material.layer.doubleSided);
+
 		switch (material.shadingModel)
 		{
 		case ShadingModel::kPbr:
 			describePbr(out, material.pbr, fileSystem);
+			break;
+
+		case ShadingModel::kPbrSurface:
+			describeSurface(out, material.surface, fileSystem);
 			break;
 
 		case ShadingModel::kCount:
@@ -421,7 +461,9 @@ namespace assetlib
 			break;
 		}
 
-		if (fileSystem != nullptr)
+		// Both questions are the triplet's, and a surface has none: reporting a bake as up to date
+		// for a material no bake produces reads as a bake having run.
+		if (fileSystem != nullptr && material.shadingModel == ShadingModel::kPbr)
 		{
 			out += std::format(
 				"\n  bake              {}\n  draws from        {}\n",

@@ -3,12 +3,14 @@
 #include "device/Device_d3d12.h"
 #include "gfx/GraphicsBase.h"
 #include "gfx/RenderContext.h"
+#include "gfx/surface_registry.h"
 #include "overlay/Overlay.h"
 #include "resource/ResourceManager_d3d12.h"
 #include "scene/Scene.h"
 #include "scene/SceneView.h"
 #include <bgl/PassTiming.h>
 #include <core/log/log.h>
+#include <span>
 #include <vector>
 
 namespace fs = std::filesystem;
@@ -57,10 +59,16 @@ namespace bgl
 			m_Context->WaitIdle();
 		}
 
+		std::span<const SurfaceType>
+		GetSurfaceTypes() const noexcept override
+		{
+			return m_SurfaceTypes;
+		}
+
 		SceneRef
 		CreateScene(SceneDesc desc) override
 		{
-			return core::SharedRef<Scene>::Make(std::move(desc), m_ResourceManager);
+			return core::SharedRef<Scene>::Make(std::move(desc), m_ResourceManager, m_SurfaceTypes);
 		}
 
 		SceneViewRef
@@ -190,6 +198,9 @@ namespace bgl
 		// Declared last so it is destroyed first: its teardown idles the GPU and releases pass and
 		// debug resources through the members above, which must outlive it.
 		std::unique_ptr<RenderContext> m_Context;
+
+		// Fixed at construction, before the pipelines that draw them were built.
+		std::vector<SurfaceType> m_SurfaceTypes;
 	};
 }
 
@@ -238,6 +249,7 @@ namespace bgl
 		auto device = core::SharedRef<Device>::Make(
 			m_D3D12Device,
 			m_Opts.shaderCacheDir,
+			m_Opts.surfaceShaderDir,
 			m_Opts.enableGPUValidationLayer);
 		m_Device = device;
 
@@ -267,6 +279,10 @@ namespace bgl
 
 			m_ResourceManager = m_Device->CreateResourceManager(resourceManagerDesc);
 		}
+
+		// Before the context: it builds every pipeline, and a slot's pipelines compile against
+		// whatever module this bound to that slot.
+		m_SurfaceTypes = RegisterSurfaces(*m_Device, m_Opts.surfaceShaderDir);
 
 		m_Context =
 			std::make_unique<RenderContext>(m_Device, m_ResourceManager, m_Opts.enableDebugLayer);

@@ -5,12 +5,19 @@
 #include <cstddef>
 #include <cstdint>
 #include <string>
+#include <vector>
 
 namespace assetlib
 {
 	enum class ShadingModel : uint32_t
 	{
+		// Factors, a baked triplet, and the channel routes behind it.
 		kPbr = 0,
+
+		// The same lighting, over a material half the game computes -- so there is no route, no
+		// bake and no graph behind one. A game-defined *lighting* model would be a third value.
+		kPbrSurface = 1,
+
 		kCount,
 	};
 
@@ -80,6 +87,20 @@ namespace assetlib
 		"The channel groups must partition routes exactly; a channel in none of them is never "
 		"baked");
 
+	/**
+	 * The layer, which every shading model has and none owns: how alpha is read, and whether back
+	 * faces draw. gamelib derives the renderer's LayerType from alphaMode.
+	 */
+	struct MaterialLayer
+	{
+		AlphaMode alphaMode   = AlphaMode::kOpaque;
+		float     alphaCutoff = 0.5f;
+
+		// Back faces on a cut-out, hashed or blended surface; opaque never draws them. True by
+		// default, since every such material drew both sides before the key existed.
+		bool doubleSided = true;
+	};
+
 	struct PbrParams
 	{
 		std::string baseColorTexture;  // path to the base-color texture file (empty when absent)
@@ -88,13 +109,6 @@ namespace assetlib
 		glm::vec4   baseColorFactor = glm::vec4(1.0f);
 		float       metallicFactor  = 1.0f;
 		float       roughnessFactor = 1.0f;
-
-		AlphaMode alphaMode   = AlphaMode::kOpaque;
-		float     alphaCutoff = 0.5f;
-
-		// Back faces on a cut-out, hashed or blended surface; opaque never draws them. True by
-		// default, since every such material drew both sides before the key existed.
-		bool doubleSided = true;
 
 		// What baseColorFactor.a means under AlphaMode::kBlend: 0 for coverage (hair, foliage), 1 for
 		// transmission (glass, a lens), and read by no other mode. glTF's KHR_materials_transmission.
@@ -129,15 +143,60 @@ namespace assetlib
 		return false;
 	}
 
+	/**
+	 * One value a surface material sets, under the name the surface declared it as.
+	 *
+	 * The binding, not the declaration: `bgl::SurfaceValue` is the field the shader declares, with
+	 * its type, its offset and its default, and only the renderer has ever read the shader. The
+	 * twin of this is `bgl::SurfaceValueBinding`, which this cannot be -- assetlib is the offline
+	 * cook and links no renderer contract, exactly as `assetlib::VertexLayout` is not
+	 * `idl::VertexLayout`.
+	 */
+	struct SurfaceValueBinding
+	{
+		std::string name;
+
+		// One to four numbers, as the document wrote them. The count is the author's and not the
+		// surface's: nothing here knows the declared type, and the renderer reads as many
+		// components as the parameter has.
+		std::vector<float> value;
+	};
+
+	/** One texture a surface material binds, under the name the surface declared it as. */
+	struct SurfaceTextureBinding
+	{
+		std::string name;
+		std::string texture;  // path to the texture file (empty when unbound)
+	};
+
+	/**
+	 * What a material drawn by a game's own surface says: which surface, and what it sets on it.
+	 *
+	 * Nothing here is checked while the document is read. The names belong to a shader module the
+	 * cook never sees, so a value naming no parameter is refused where the surface is known -- at
+	 * the renderer, when the material is created -- and not at load.
+	 */
+	struct SurfaceParams
+	{
+		std::string                        name;
+		std::vector<SurfaceValueBinding>   values;
+		std::vector<SurfaceTextureBinding> textures;
+	};
+
 	struct BMaterial
 	{
 		std::string name;
 
 		ShadingModel shadingModel = ShadingModel::kPbr;
 
+		MaterialLayer layer;
+
 		std::string editorGraph;
 
 		PbrParams pbr;
+
+		// Read when shadingModel is kPbrSurface, and left empty otherwise.
+		SurfaceParams surface;
 
 		// Document keys this build does not know, written back on save -- a sibling branch's new
 		// field survives a round-trip through a reader that has never heard of it.

@@ -7,13 +7,16 @@
 #include <bgl/ISceneView.h>
 #include <bgl/PassTiming.h>
 #include <bgl/RenderJob.h>
+#include <bgl/SurfaceType.h>
 #include <bgl/api.h>
 #include <bgl/error.h>
 #include <bgl/types/SceneDesc.h>
 #include <core/ref/Ref.h>
 #include <core/ref/SharedRef.h>
 #include <cstdint>
+#include <filesystem>
 #include <optional>
+#include <span>
 #include <stdexcept>
 #include <string>
 #include <vector>
@@ -66,7 +69,12 @@ namespace bgl
 		//
 		// Under GPU validation only the driver-pipeline layer is dropped -- the generated code and
 		// reflection are identical either way, so they stay cached. See docs/shader_cache.md.
-		std::string shaderCacheDir;
+		std::filesystem::path shaderCacheDir;
+
+		// A directory of the client's own Slang modules, searched after the engine's staged tree, so
+		// a program can import one by name. Every file under it is in the shader cache's salt. Read
+		// once, at construction: nothing rebuilds a pipeline after it. Empty means none.
+		std::filesystem::path surfaceShaderDir;
 
 		// Writes the first frame to a .gputrace bundle at this path. Metal only; empty disables it.
 		// Needs MTL_CAPTURE_ENABLED=1 in the environment -- Metal refuses to capture without it, and
@@ -249,6 +257,16 @@ namespace bgl
 		 */
 		[[nodiscard]] virtual PassTimings
 		GetPassTimings(const RenderTargetRef& target) = 0;
+
+		/**
+		 * The surfaces registered from `GraphicsOptions::surfaceShaderDir`, in slot order, each
+		 * carrying the `MaterialType` its materials are created with.
+		 *
+		 * Fixed at construction: every pipeline that can draw one is built there, so a surface added
+		 * to the directory afterwards is seen at the next launch. Empty when no directory was named.
+		 */
+		[[nodiscard]] virtual std::span<const SurfaceType>
+		GetSurfaceTypes() const noexcept = 0;
 
 		virtual SceneRef
 		CreateScene(SceneDesc desc) = 0;

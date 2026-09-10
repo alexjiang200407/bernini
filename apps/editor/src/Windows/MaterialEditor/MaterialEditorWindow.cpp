@@ -904,7 +904,7 @@ MaterialEditorWindow::OpenMaterialInto(int graphIndex, const QString& path, bool
 		seed["metallic"]     = material.pbr.metallicFactor;
 		seed["roughness"]    = material.pbr.roughnessFactor;
 		seed["transmission"] = material.pbr.transmissionFactor;
-		seed["doubleSided"]  = material.pbr.doubleSided;
+		seed["doubleSided"]  = material.layer.doubleSided;
 		seed["specularR"]    = material.pbr.specularColorFactor.r;
 		seed["specularG"]    = material.pbr.specularColorFactor.g;
 		seed["specularB"]    = material.pbr.specularColorFactor.b;
@@ -926,7 +926,14 @@ MaterialEditorWindow::CompileGraph(int graphIndex)
 	if (!m_Graphs.Holds(graphIndex))
 		return;
 
-	editor::CompilePreviewMaterial(m_Graphs.At(graphIndex), *m_Desc.renderer, *m_Preview);
+	MaterialGraphSet::Graph& graph = m_Graphs.At(graphIndex);
+
+	editor::CompilePreviewMaterial(
+		graph,
+		*m_Desc.renderer,
+		*m_Preview,
+		graph.onDisk.Get(m_DataRoot, graph.materialPath),
+		m_DataRoot);
 }
 
 void

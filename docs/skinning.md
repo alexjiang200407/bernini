@@ -790,13 +790,15 @@ disagree.
   so both uploads of one mesh still share a single skeleton with every *other* mesh cooked against
   it.
 
-* **`kPBR`, any layer.** Opaque, cutout and hashed all draw an *opaque shape* — they discard rather
+* **`kPBR` or a game surface, any layer.** Opaque, cutout and hashed all draw an *opaque shape* — they discard rather
   than blend, so their depth is real and nothing has to be sorted — and each is one row of
   `ForwardPass`'s PSO table against the same skinned geometry shader. Blending is the one that needs
   the depth-sorted list, which holds every tier at once and draws them through `programs.forward.AnyMesh`
   (see [Passes](docs/passes.md)), so a blended rig sorts against blended static geometry rather than
-  after it. What is refused is a *material type*: no unlit and no loose variant of the skinned
-  pipeline exists, and a material's kind is read from its own record rather than stamped by the
-  geometry stage. `AcceptsMaterial`
+  after it. A game surface draws here on the same terms, through rows of its own that differ from
+  the static tier's only in the geometry stage — see [Game-Defined Surfaces](game_defined_surfaces.md) — except at
+  the blended layer, where there is one row and both tiers share it. What is refused is a *material
+  type*: no unlit and no loose variant of the skinned pipeline exists, and a material's kind is read
+  from its own record rather than stamped by the geometry stage. `AcceptsMaterial`
   (`src/util/util.h`) is the rule, and every door that binds a material to animated geometry asks
   it.

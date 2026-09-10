@@ -8,6 +8,7 @@
 #include <bgl/types/FootPlantDesc.h>
 #include <bgl/types/LoosePbrMaterialDesc.h>
 #include <bgl/types/PbrMaterialDesc.h>
+#include <bgl/types/SurfaceMaterialDesc.h>
 #include <cassert>
 #include <concepts>
 #include <core/str/str.h>
@@ -226,12 +227,20 @@ namespace game
 
 	}
 
-	// The order MaterialRecord::textures parallels: the baked triplet, or the nine authoring routes.
-	// One order per case, in one place, so the record's texture references and the desc it rebuilds
-	// can never fall out of step.
+	// The order MaterialRecord::textures parallels: a surface's bindings as the document listed
+	// them, the baked triplet, or the nine authoring routes. One order per case, in one place, so
+	// the record's texture references and the desc it rebuilds can never fall out of step.
 	std::vector<std::string>
 	MaterialTextures(const assetlib::BMaterial& material, const bool loose)
 	{
+		if (material.shadingModel == assetlib::ShadingModel::kPbrSurface)
+		{
+			auto paths = std::vector<std::string>(material.surface.textures.size());
+			for (size_t i = 0; i < paths.size(); ++i)
+				paths[i] = material.surface.textures[i].texture;
+			return paths;
+		}
+
 		const assetlib::PbrParams& pbr = material.pbr;
 
 		if (loose)
@@ -433,7 +442,9 @@ namespace game
 		std::string                key,
 		TexturePrefetch*           prefetch)
 	{
-		if (material.shadingModel != assetlib::ShadingModel::kPbr)
+		const bool surface = material.shadingModel == assetlib::ShadingModel::kPbrSurface;
+
+		if (material.shadingModel != assetlib::ShadingModel::kPbr && !surface)
 			throw bgl::SceneError(
 				"AssetManager: shading model " +
 				std::to_string(static_cast<uint32_t>(material.shadingModel)) +
@@ -441,8 +452,8 @@ namespace game
 
 		// The disk decides: a triplet that is missing or older than the sources it was composited from
 		// cannot be sampled, so the material falls back to the routes that produced it -- when those
-		// are still there to fall back to.
-		const bool loose = m_Store.DrawsLoose(material);
+		// are still there to fall back to. A surface has no triplet and no routes, so it is neither.
+		const bool loose = !surface && m_Store.DrawsLoose(material);
 
 		// Acquire the textures first: the desc the scene needs is built out of their handles.
 		const std::vector<std::string> paths = MaterialTextures(material, loose);
@@ -457,8 +468,11 @@ namespace game
 		record.loose    = loose;
 		record.refCount = 1;
 
-		record.handle = loose ? m_Scene->CreateLoosePbrMaterial(LooseDesc(record)) :
-		                        m_Scene->CreatePbrMaterial(BakedDesc(record));
+		if (surface)
+			record.handle = m_Scene->CreateSurfaceMaterial(SurfaceDesc(record));
+		else
+			record.handle = loose ? m_Scene->CreateLoosePbrMaterial(LooseDesc(record)) :
+			                        m_Scene->CreatePbrMaterial(BakedDesc(record));
 
 		const uint64_t recordKey = MaterialKey(record.handle);
 		if (!key.empty())
@@ -1301,6 +1315,16 @@ namespace game
 				"one");
 		}
 
+		// A surface material is neither loose nor baked, so the check above lets one through --
+		// and the triplet it would write is a field no surface reads. Refused rather than ignored:
+		// the write would report success and change nothing on screen.
+		if (record.source.shadingModel == assetlib::ShadingModel::kPbrSurface)
+		{
+			throw bgl::SceneError(
+				"SetMaterialTexture expects a baked material; a surface material's textures are "
+				"the ones its own surface declares");
+		}
+
 		auto path = std::string(relPath);
 		switch (slot)
 		{
@@ -1362,7 +1386,9 @@ namespace game
 
 		// Rewritten in place, so the handle stays valid and every submesh bound to this material
 		// follows the change without being rebound.
-		if (record.loose)
+		if (record.source.shadingModel == assetlib::ShadingModel::kPbrSurface)
+			m_Scene->UpdateSurfaceMaterial(record.handle, SurfaceDesc(record));
+		else if (record.loose)
 			m_Scene->UpdateLoosePbrMaterial(record.handle, LooseDesc(record));
 		else
 			m_Scene->UpdatePbrMaterial(record.handle, BakedDesc(record));
@@ -1373,15 +1399,16 @@ namespace game
 	bgl::PbrMaterialDesc
 	AssetManager::BakedDesc(const MaterialRecord& record) const
 	{
-		const assetlib::PbrParams& pbr = record.source.pbr;
+		const assetlib::MaterialLayer& layer = record.source.layer;
+		const assetlib::PbrParams&     pbr   = record.source.pbr;
 
 		auto desc                = bgl::PbrMaterialDesc();
 		desc.baseColorFactor     = pbr.baseColorFactor;
 		desc.metallicFactor      = pbr.metallicFactor;
 		desc.roughnessFactor     = pbr.roughnessFactor;
-		desc.layerType           = ToLayerType(pbr.alphaMode, m_Options.hashedAsBlend);
-		desc.alphaCutoff         = pbr.alphaCutoff;
-		desc.doubleSided         = pbr.doubleSided;
+		desc.layerType           = ToLayerType(layer.alphaMode, m_Options.hashedAsBlend);
+		desc.alphaCutoff         = layer.alphaCutoff;
+		desc.doubleSided         = layer.doubleSided;
 		desc.transmissionFactor  = pbr.transmissionFactor;
 		desc.specularColorFactor = pbr.specularColorFactor;
 		desc.specularFactor      = pbr.specularFactor;
@@ -1393,18 +1420,52 @@ namespace game
 		return desc;
 	}
 
+	bgl::SurfaceMaterialDesc
+	AssetManager::SurfaceDesc(const MaterialRecord& record) const
+	{
+		const assetlib::MaterialLayer& layer   = record.source.layer;
+		const assetlib::SurfaceParams& surface = record.source.surface;
+
+		auto desc        = bgl::SurfaceMaterialDesc();
+		desc.surface     = surface.name;
+		desc.layerType   = ToLayerType(layer.alphaMode, m_Options.hashedAsBlend);
+		desc.alphaCutoff = layer.alphaCutoff;
+		desc.doubleSided = layer.doubleSided;
+
+		desc.values.reserve(surface.values.size());
+		for (const assetlib::SurfaceValueBinding& value : surface.values)
+		{
+			// Widened to four here and narrowed again by the renderer, which is the only side that
+			// knows how many components the parameter was declared with. A document that wrote
+			// fewer leaves the rest at zero rather than at the surface's default: it named the
+			// parameter, so it is setting it.
+			auto binding = bgl::SurfaceValueBinding{ value.name, glm::vec4(0.0f) };
+			for (size_t i = 0; i < value.value.size() && i < 4; ++i)
+				binding.value[static_cast<glm::length_t>(i)] = value.value[i];
+			desc.values.push_back(std::move(binding));
+		}
+
+		// Parallel to MaterialTextures' surface case, which is what filled record.textures.
+		desc.textures.reserve(surface.textures.size());
+		for (size_t i = 0; i < surface.textures.size(); ++i)
+			desc.textures.emplace_back(surface.textures[i].name, record.textures[i]);
+
+		return desc;
+	}
+
 	bgl::LoosePbrMaterialDesc
 	AssetManager::LooseDesc(const MaterialRecord& record) const
 	{
-		const assetlib::PbrParams& pbr = record.source.pbr;
+		const assetlib::MaterialLayer& layer = record.source.layer;
+		const assetlib::PbrParams&     pbr   = record.source.pbr;
 
 		auto desc                = bgl::LoosePbrMaterialDesc();
 		desc.baseColorFactor     = pbr.baseColorFactor;
 		desc.metallicFactor      = pbr.metallicFactor;
 		desc.roughnessFactor     = pbr.roughnessFactor;
-		desc.layerType           = ToLayerType(pbr.alphaMode, m_Options.hashedAsBlend);
-		desc.alphaCutoff         = pbr.alphaCutoff;
-		desc.doubleSided         = pbr.doubleSided;
+		desc.layerType           = ToLayerType(layer.alphaMode, m_Options.hashedAsBlend);
+		desc.alphaCutoff         = layer.alphaCutoff;
+		desc.doubleSided         = layer.doubleSided;
 		desc.transmissionFactor  = pbr.transmissionFactor;
 		desc.specularColorFactor = pbr.specularColorFactor;
 		desc.specularFactor      = pbr.specularFactor;

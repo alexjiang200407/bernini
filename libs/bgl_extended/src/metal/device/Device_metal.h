@@ -10,6 +10,7 @@
 
 #include <core/ref/RefCounter.h>
 #include <cstdint>
+#include <filesystem>
 #include <memory>
 #include <string>
 
@@ -26,7 +27,11 @@ namespace bgl
 	class Device final : public core::RefCounter<IDevice>
 	{
 	public:
-		Device(MTL::Device* device, const std::string& shaderCacheDir, bool usePipelineLibrary);
+		Device(
+			MTL::Device*                 device,
+			const std::filesystem::path& shaderCacheDir,
+			const std::filesystem::path& surfaceShaderDir,
+			bool                         usePipelineLibrary);
 
 		// Out of line: m_ShaderCache holds an incomplete type here.
 		~Device() override;
@@ -34,6 +39,12 @@ namespace bgl
 		/** Drops every thread's Slang session; see SlangSessions::ReleaseAll for the contract. */
 		void
 		ReleaseSlangSession() noexcept;
+
+		void
+		AddSourceModule(const SlangSourceModule& sourceModule) noexcept override;
+
+		[[nodiscard]] std::optional<ReflectedSurface>
+		ReflectSurfaceModule(std::string_view moduleName, std::string_view surfaceName) override;
 
 		[[nodiscard]] MTL::Device*
 		GetMTLDevice() const noexcept

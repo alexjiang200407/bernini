@@ -27,7 +27,13 @@ namespace bgl::shader_cache
 		const std::vector<std::string>& searchPaths,
 		uint32_t                        formatVersion);
 
-	// Folds a PSO's (module, entry-point) pairs into `salt`. Order-independent.
+	// Combines a module given as text into `salt` -- name and content both, mixed in a way that
+	// does not depend on the order modules arrive in, so two registered the other way round still
+	// share a salt. The same mixing the walk over the source files does.
+	uint64_t
+	FoldSource(uint64_t salt, std::string_view name, std::string_view source);
+
+	// Combines a PSO's (module, entry-point) pairs into `salt`, order-independently as above.
 	uint64_t
 	ComputeKey(uint64_t salt, std::vector<std::pair<std::string, std::string>> moduleEntries);
 

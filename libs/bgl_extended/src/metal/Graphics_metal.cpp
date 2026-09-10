@@ -10,14 +10,17 @@
 #include <bgl/ISceneView.h>
 #include <bgl/PassTiming.h>
 #include <bgl/RenderJob.h>
+#include <bgl/SurfaceType.h>
 #include <bgl/api.h>
 #include <bgl/types/SceneDesc.h>
 #include <core/err/util.h>
 #include <core/ref/SharedRef.h>
+#include <span>
 #include <vector>
 
 #include "gfx/GraphicsBase.h"
 #include "gfx/RenderContext.h"
+#include "gfx/surface_registry.h"
 #include "overlay/Overlay.h"
 #include "resource/ResourceManager.h"
 #include "scene/Scene.h"
@@ -145,8 +148,11 @@ namespace bgl
 			                           core::env_var("MTL_SHADER_VALIDATION").has_value() ||
 			                           core::env_var("METAL_DEVICE_WRAPPER_TYPE").has_value();
 
-			core::SharedRef<Device> device =
-				core::SharedRef<Device>::Make(mtlDevice.get(), opts.shaderCacheDir, !gpuValidation);
+			core::SharedRef<Device> device = core::SharedRef<Device>::Make(
+				mtlDevice.get(),
+				opts.shaderCacheDir,
+				opts.surfaceShaderDir,
+				!gpuValidation);
 			m_Device = device;
 
 			auto rmDesc               = ResourceManagerDesc();
@@ -160,6 +166,10 @@ namespace bgl
 			rmDesc.maxBufferSrvs      = opts.maxBufferSrvs;
 			rmDesc.maxReadbackBuffers = opts.maxReadbackBuffers;
 			m_ResourceManager         = m_Device->CreateResourceManager(rmDesc);
+
+			// Before the context: it builds every pipeline, and a slot's pipelines compile against
+			// whatever module this bound to that slot.
+			m_SurfaceTypes = RegisterSurfaces(*m_Device, opts.surfaceShaderDir);
 
 			m_Context =
 				std::make_unique<RenderContext>(m_Device, m_ResourceManager, opts.enableDebugLayer);
@@ -190,10 +200,16 @@ namespace bgl
 			m_Context->WaitIdle();
 		}
 
+		std::span<const SurfaceType>
+		GetSurfaceTypes() const noexcept override
+		{
+			return m_SurfaceTypes;
+		}
+
 		SceneRef
 		CreateScene(SceneDesc desc) override
 		{
-			return core::SharedRef<Scene>::Make(std::move(desc), m_ResourceManager);
+			return core::SharedRef<Scene>::Make(std::move(desc), m_ResourceManager, m_SurfaceTypes);
 		}
 
 		SceneViewRef
@@ -318,6 +334,9 @@ namespace bgl
 		// Declared last so it is destroyed first: its teardown idles the GPU and releases pass
 		// resources through the members above, which must outlive it.
 		std::unique_ptr<RenderContext> m_Context;
+
+		// Fixed at construction, before the pipelines that draw them were built.
+		std::vector<SurfaceType> m_SurfaceTypes;
 	};
 
 	BGL_API GraphicsRef

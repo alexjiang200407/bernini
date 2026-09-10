@@ -41,7 +41,7 @@ TEST_CASE("every layer of a kPBR material binds to animated geometry", "[pso]")
 	}
 }
 
-TEST_CASE("animated geometry takes no material but kPBR", "[pso]")
+TEST_CASE("animated geometry takes no unlit or loose material", "[pso]")
 {
 	// No unlit variant to fall back to, so an unnamed material is a refusal rather than the flat
 	// shading a static submesh gets.
@@ -105,4 +105,67 @@ TEST_CASE("only a blended layer leaves the counting sort", "[pso]")
 
 		CHECK(bgl::IsTransparentPso(pso) == (layer == bgl::LayerType::kBlend));
 	}
+}
+
+// Each reserved game slot has five rows: an opaque and an alpha-test row per tier, and one
+// transparent row both tiers share. The rows are reached by arithmetic from kGameRowsStart, so what
+// this checks is that the arithmetic agrees with the tier, the layer and the transparent predicate
+// on both sides. Hashed is closed to game surfaces at the door that creates one, so it has no row
+// here to check.
+TEST_CASE("a game slot's layers resolve to its own rows, on both tiers", "[pso]")
+{
+	using bgl::GeomType;
+	using bgl::LayerType;
+	using bgl::idl::PsoType;
+
+	constexpr std::array<LayerType, 3> c_SurfaceLayers = { {
+		LayerType::kOpaque,
+		LayerType::kMask,
+		LayerType::kBlend,
+	} };
+
+	for (uint32_t slot = 0; slot < bgl::cGameSlots; ++slot)
+	{
+		const bgl::MaterialType kind = bgl::GameSlotKind(slot);
+		CHECK(bgl::GameSlot(kind) == slot);
+
+		const auto first =
+			static_cast<uint32_t>(PsoType::kGameRowsStart) + slot * bgl::idl::cGameSlotRows;
+		const auto pso = [&](GeomType geom, LayerType layer) {
+			return static_cast<uint32_t>(bgl::GetPsoFromGeomAndMaterial(geom, kind, layer));
+		};
+
+		CHECK(pso(GeomType::kStaticMesh, LayerType::kOpaque) == first);
+		CHECK(pso(GeomType::kStaticMesh, LayerType::kMask) == first + 1);
+		CHECK(pso(GeomType::kSkinnedMesh, LayerType::kOpaque) == first + 2);
+		CHECK(pso(GeomType::kSkinnedMesh, LayerType::kMask) == first + 3);
+
+		// One row for both tiers rather than one each: the blended pipeline's geometry stage
+		// branches tier per instance, so a second row would name the same pipeline. Landing on the
+		// same row is the claim -- landing on two transparent rows would pass a weaker check.
+		CHECK(pso(GeomType::kStaticMesh, LayerType::kBlend) == first + bgl::idl::cGameSlotBlendRow);
+		CHECK(
+			pso(GeomType::kSkinnedMesh, LayerType::kBlend) ==
+			pso(GeomType::kStaticMesh, LayerType::kBlend));
+		CHECK(pso(GeomType::kStaticMesh, LayerType::kBlend) < bgl::idl::c_PsoCount);
+
+		// Only the blend row leaves the counting sort, read off the layer rather than off a second
+		// copy of IsTransparentPso's list.
+		for (const GeomType geom : { GeomType::kStaticMesh, GeomType::kSkinnedMesh })
+			for (const LayerType layer : c_SurfaceLayers)
+			{
+				const uint32_t bucket = bgl::SubmeshPso(geom, Handle(kind, layer));
+
+				CHECK(bgl::IsTransparentPso(bucket) == (layer == LayerType::kBlend));
+			}
+
+		// The skinned door is open for every layer a game surface can carry. Hashed is not one of
+		// them -- CreateSurfaceMaterial refuses it -- so no handle reaching here holds it.
+		for (const LayerType layer : c_SurfaceLayers)
+			CHECK(bgl::AcceptsMaterial(GeomType::kSkinnedMesh, Handle(kind, layer)));
+	}
+
+	// A kind outside the slots is nobody's slot.
+	CHECK_FALSE(bgl::GameSlot(bgl::MaterialType::kPBR).has_value());
+	CHECK_FALSE(bgl::GameSlot(bgl::MaterialType::kCount).has_value());
 }

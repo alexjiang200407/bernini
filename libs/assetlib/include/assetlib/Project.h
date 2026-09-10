@@ -72,7 +72,19 @@ namespace assetlib
 		std::filesystem::path
 		GetDataDirectory() const noexcept
 		{
-			return m_ProjectFile.parent_path() / c_DataDirectoryName;
+			return DataDirectoryOf(m_ProjectFile);
+		}
+
+		/**
+		 * Where the `.bproj` at `projectFile` keeps its data root, without opening it.
+		 *
+		 * For the caller that has a path and no project yet -- the renderer is built before the
+		 * startup project is opened, and it has to be told where that project's shaders are.
+		 */
+		[[nodiscard]] static std::filesystem::path
+		DataDirectoryOf(const std::filesystem::path& projectFile)
+		{
+			return projectFile.parent_path() / c_DataDirectoryName;
 		}
 
 		/**

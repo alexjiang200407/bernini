@@ -153,6 +153,14 @@ but their shaders share `MaterialData::Shade<M>` with the transparent bucket, wh
 value rather than a literal `true`, which would encode an assumption about `c_Psos`' cull mode that
 the shader cannot see.
 
+A **closed** two-sided mesh in the blend bucket therefore composites twice: the sort orders instances,
+not the triangles inside one, so the far hemisphere blends under the near one in raster order and
+brings its own lighting with it. Flipped normals put its terminator somewhere the near hemisphere's
+is not, and on a coarse mesh that terminator steps along the triangle rows — a band of horizontal
+streaks over an otherwise smooth surface. It is the geometry showing through, not a defect in the
+sort: the fix is `doubleSided = false` where a translucent solid has no inside worth drawing, or
+`kHashed`, which writes real depth and self-occludes.
+
 ---
 
 ## Blended surfaces
@@ -177,14 +185,22 @@ blend cannot. `PbrMaterial::transmissionFactor` says which:
   angle, where Fresnel returns nearly everything, the surface has to hide what is behind it or the
   environment would be added to a backdrop still showing through in full.
 
-The two lobes are kept apart for this: `PbrShading::EvaluateSurface` returns a `SurfaceLobes`
-(diffuse, specular, and the reflectance the specular lobe returns) instead of a summed colour, and
-the callers weight it. `MaterialData::ShadeWithBaseColor` sums the pair, which is the opaque
-answer; `MaterialData::ShadeBlended` is the only caller of `BlendedSurface`, the one function that
-weights them apart, which lives beside `SurfaceLobes` in
-[lib/math/PbrShading.slang](libs/bgl_common/shaders/src/lib/math/PbrShading.slang). Both methods live in
+The two lobes are kept apart for this: `PbrShading::EvaluateSurface` reads a `PbrSurface` — the
+material's half, from the contract tree ([bgl/PbrSurface.slang](libs/bgl/shaders/src/bgl/PbrSurface.slang)) —
+and returns a `SurfaceLobes` (diffuse, specular, the reflectance the specular lobe returns, and the
+emissive) instead of a summed colour, and the callers weight it. `MaterialData::ShadeSurface` sums
+them, which is the opaque answer; `MaterialData::ShadeSurfaceBlended` is the only caller of
+`BlendedSurface`, the one function that weights them apart, which lives beside `SurfaceLobes` in
+[lib/math/PbrShading.slang](libs/bgl_common/shaders/src/lib/math/PbrShading.slang). Those two are the
+only BRDF entries; the four shading entry points the programs call (`Shade`, `ShadeBlended`,
+`ShadeAlphaTested`, `ShadeHashedAlpha`) each fill a `PbrSurface` from the engine's record and hand it to
+one of them. All of it is in
 [lib/forward/MaterialShading.slang](libs/bgl_extended/shaders/src/lib/forward/MaterialShading.slang), which
-extends the material constant buffer with the four shading entry points.
+extends the material constant buffer.
+
+Emissive follows the specular lobe, not the diffuse: it is light leaving the surface itself rather
+than light that came through from behind, so transmission exempts it from thinning the same way, and
+it raises the coverage not at all — emission adds to the backdrop, it does not hide it.
 
 **Only the blend bucket is premultiplied.** The opaque, cutout and hashed buckets write with no blend
 at all, so their pixel shaders keep returning the plain sum and the material's own alpha — a cutout
@@ -457,9 +473,16 @@ function taking `OutputVertices`, so nothing but `MSMain` may index them. `AnyMe
 and calls whichever of the two an instance's `MeshInstance` names — see the transparent phase below.
 
 The pixel shader varies per bucket instead (`Null`, `PBR`, `PBR_Loose`, `PBR_AlphaTest`,
-`PBR_Loose_AlphaTest`, `PBR_HashedAlpha`, `PBR_Loose_HashedAlpha`, `Transparent`, `Assert`), and is chosen by layer
-alone — every tier draws every layer, so the buckets are the (tier × layer) product with the loose
-material type static-only. **`c_Psos` order must match `PsoType`** — a `static_assert` catches an
+`PBR_Loose_AlphaTest`, `PBR_HashedAlpha`, `PBR_Loose_HashedAlpha`, `Transparent`, `Assert`, and
+`GameSlot0..3` with their `_AlphaTest` variants), and is chosen by layer alone — every tier draws
+every layer, so the buckets are the (tier × layer) product with the loose material type static-only.
+A game slot has five rows: an opaque and an alpha-test row per tier, and one bucket in the shared
+transparent pipeline that both tiers use — the blended pipeline's geometry stage is `AnyMesh`, which
+branches tier per instance, so a second blended row would name the same pipeline. All five draw
+whatever surface `game.slotN` binds, the null surface
+until one is registered ([lib/forward/GameSurface.slang](libs/bgl_extended/shaders/src/lib/forward/GameSurface.slang));
+hashed is closed to them. The two tiers' rows differ only in their geometry stage: a game slot's
+pixel shader reads a `ForwardVSOut` and a material offset, and neither says which tier filled them. **`c_Psos` order must match `PsoType`** — a `static_assert` catches an
 empty row but not a misordering.
 
 **Opaque and alpha-test** are PSO-bucketed: per bucket it populates the cbuffers the kernel declares

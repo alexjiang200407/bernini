@@ -34,6 +34,7 @@
 #include <bgl/MaterialType.h>
 #include <bgl/PreparedStaticMesh.h>
 #include <bgl/RigHandle.h>
+#include <bgl/SurfaceType.h>
 #include <bgl/TextureAssetHandle.h>
 #include <bgl/types/ChannelRouteDesc.h>
 #include <bgl/types/FootPlantDesc.h>
@@ -41,10 +42,12 @@
 #include <bgl/types/LoosePbrMaterialDesc.h>
 #include <bgl/types/PbrMaterialDesc.h>
 #include <bgl/types/SceneDesc.h>
+#include <bgl/types/SurfaceMaterialDesc.h>
 #include <bgl_common/gassert.h>
 #include <bgl_common/idl/BoneSample.h>
 #include <bgl_common/idl/Clip.h>
 #include <bgl_common/idl/Constants.h>
+#include <bgl_common/idl/GameSurfaceRecord.h>
 #include <bgl_common/idl/LoosePbrMaterial.h>
 #include <bgl_common/idl/Meshlet.h>
 #include <bgl_common/idl/PbrMaterial.h>
@@ -240,6 +243,41 @@ namespace bgl
 			return raw;
 		}
 
+		// Every surface's parameter block is a different size and one arena holds them all, so a
+		// game record is budgeted by the largest surface registered rather than by its own.
+		uint64_t
+		SurfaceRecordBytes(std::span<const SurfaceType> surfaces) noexcept
+		{
+			uint32_t largestParams = 0;
+			for (const SurfaceType& surface : surfaces)
+				largestParams = std::max(largestParams, surface.params.byteSize);
+
+			return idl::cRawPayloadOffset + sizeof(idl::GameSurfaceRecord) + largestParams;
+		}
+
+		// The three material kinds share one arena, so their budgets add up into it.
+		uint64_t
+		MaterialArenaBytes(const SceneDesc& desc, uint64_t surfaceRecordBytes) noexcept
+		{
+			return (static_cast<uint64_t>(desc.initialPbrMaterials) *
+			        (idl::cRawPayloadOffset + sizeof(idl::PbrMaterial))) +
+			       (static_cast<uint64_t>(desc.initialLoosePbrMaterials) *
+			        (idl::cRawPayloadOffset + sizeof(idl::LoosePbrMaterial))) +
+			       (static_cast<uint64_t>(desc.initialSurfaceMaterials) * surfaceRecordBytes);
+		}
+
+		// The null record must cover the largest payload as well as its header: a null reference
+		// reads zeros for a whole record rather than the first live one.
+		uint32_t
+		MaterialNullRecordBytes(uint64_t surfaceRecordBytes) noexcept
+		{
+			return std::max(
+				static_cast<uint32_t>(surfaceRecordBytes),
+				idl::cRawPayloadOffset +
+					static_cast<uint32_t>(
+						std::max(sizeof(idl::PbrMaterial), sizeof(idl::LoosePbrMaterial))));
+		}
+
 		idl::VertexLayout
 		ConvertLayout(const assetlib::VertexLayout& src)
 		{
@@ -333,9 +371,12 @@ namespace bgl
 		};
 	}
 
-	Scene::Scene(SceneDesc desc, core::SharedRef<IResourceManager> resourceManager) :
-		m_Desc(std::move(desc)), m_ResourceManager(std::move(resourceManager)),
-		m_Textures(m_ResourceManager)
+	Scene::Scene(
+		SceneDesc                         desc,
+		core::SharedRef<IResourceManager> resourceManager,
+		std::span<const SurfaceType>      surfaces) :
+		m_Desc(std::move(desc)), m_Surfaces(surfaces.begin(), surfaces.end()),
+		m_ResourceManager(std::move(resourceManager)), m_Textures(m_ResourceManager)
 	{
 		m_NamePrefix = std::format("s{}:", g_NextSceneId.fetch_add(1));
 
@@ -419,12 +460,8 @@ namespace bgl
 		}
 
 		{
-			// The two kinds share one arena, so their budgets add up into it.
-			const uint64_t materialBytes =
-				(static_cast<uint64_t>(m_Desc.initialPbrMaterials) *
-			     (idl::cRawPayloadOffset + sizeof(idl::PbrMaterial))) +
-				(static_cast<uint64_t>(m_Desc.initialLoosePbrMaterials) *
-			     (idl::cRawPayloadOffset + sizeof(idl::LoosePbrMaterial)));
+			const uint64_t surfaceRecordBytes = SurfaceRecordBytes(m_Surfaces);
+			const uint64_t materialBytes      = MaterialArenaBytes(m_Desc, surfaceRecordBytes);
 
 			auto materialDesc = RawBufferDesc();
 
@@ -438,12 +475,7 @@ namespace bgl
 			// view that makes textures of them -- and re-issues it inside its own growth.
 			materialDesc.handleStride = sizeof(DescriptorHandle);
 
-			// The null record must cover the largest payload as well as its header: a null
-			// reference reads zeros for a whole record rather than the first live one.
-			materialDesc.nullRecordBytes =
-				idl::cRawPayloadOffset +
-				static_cast<uint32_t>(
-					std::max(sizeof(idl::PbrMaterial), sizeof(idl::LoosePbrMaterial)));
+			materialDesc.nullRecordBytes = MaterialNullRecordBytes(surfaceRecordBytes);
 
 			m_Materials.Init(std::move(materialDesc), m_ResourceManager);
 		}
@@ -1241,8 +1273,8 @@ namespace bgl
 			if (!AcceptsMaterial(GeomType::kSkinnedMesh, bound))
 			{
 				throw SceneError(
-					"AddSkinnedMeshGeom: every submesh needs a kPBR material -- the skinned "
-					"pipeline has no unlit or loose variant");
+					"AddSkinnedMeshGeom: every submesh needs a baked PBR or a game surface "
+					"material -- the skinned pipeline has no unlit or loose variant");
 			}
 		}
 
@@ -1711,6 +1743,191 @@ namespace bgl
 		return material;
 	}
 
+	Scene::BuiltSurfaceMaterial
+	Scene::BuildSurfaceMaterial(const SurfaceMaterialDesc& desc) const
+	{
+		const auto found = std::ranges::find(m_Surfaces, desc.surface, &SurfaceType::name);
+		if (found == m_Surfaces.end())
+		{
+			throw SceneError(
+				std::format(
+					"no surface named '{}' is registered; a surface is read from the client's "
+					"shader "
+					"directory when the graphics is created",
+					desc.surface));
+		}
+
+		// No game row draws hashed alpha: it needs the texel counts of the texture behind a
+		// coverage, and a surface answers with a number rather than a sample the engine can measure.
+		if (desc.layerType == LayerType::kHashed)
+		{
+			throw SceneError(
+				std::format(
+					"surface material '{}' asks for hashed alpha, which no game row draws",
+					desc.surface));
+		}
+
+		const SurfaceType&   surface = *found;
+		const SurfaceParams& params  = surface.params;
+
+		std::vector<std::byte> payload(sizeof(idl::GameSurfaceRecord) + params.byteSize);
+
+		// The offsets are reflection's, so a field landing outside the block it was measured in is
+		// an engine bug and not a caller's -- and one that would otherwise be a heap write rather
+		// than a wrong pixel.
+		const auto writeParam = [&payload](uint32_t byteOffset, const void* src, size_t bytes) {
+			gassert(
+				sizeof(idl::GameSurfaceRecord) + byteOffset + bytes <= payload.size(),
+				"A surface field at {} spans {} bytes, past the block reflection measured",
+				byteOffset,
+				bytes);
+
+			std::memcpy(payload.data() + sizeof(idl::GameSurfaceRecord) + byteOffset, src, bytes);
+		};
+
+		// Defaults first, so a value the material leaves alone still lands as the surface declared
+		// it rather than as zero.
+		for (const SurfaceValue& value : params.values)
+		{
+			const uint32_t components = SurfaceValueComponents(value.type);
+			writeParam(value.byteOffset, &value.defaultValue.x, components * sizeof(float));
+		}
+
+		for (const SurfaceValueBinding& binding : desc.values)
+		{
+			const auto declared =
+				std::ranges::find(params.values, binding.name, &SurfaceValue::name);
+			if (declared == params.values.end())
+			{
+				// Declared, but as the other kind of field: a name that exists and cannot take a
+				// number is worth saying out loud, since "no such value" would send its author
+				// looking for a typo that is not there.
+				const bool isTexture =
+					std::ranges::find(params.textures, binding.name, &SurfaceTexture::name) !=
+					params.textures.end();
+
+				throw SceneError(
+					isTexture ? std::format(
+									"surface '{}' declares '{}' as a texture, not a value",
+									desc.surface,
+									binding.name) :
+								std::format(
+									"surface '{}' declares no value named '{}'",
+									desc.surface,
+									binding.name));
+			}
+
+			const uint32_t components = SurfaceValueComponents(declared->type);
+			writeParam(declared->byteOffset, &binding.value.x, components * sizeof(float));
+		}
+
+		idl::GameSurfaceRecord record{};
+		record.doubleSided = desc.doubleSided ? 1u : 0u;
+		record.alphaCutoff = desc.alphaCutoff;
+
+		// Every handle is filled, so a slot the material never named still samples something rather
+		// than a null descriptor. What that something is comes from the kind the surface declared:
+		// white is the identity for a colour or a factor, and the identity for a normal map is a
+		// flat one -- the same two defaults the PBR path picks between.
+		const auto white = m_Textures.GetDefaultSlot(TextureAssetStore::DefaultTexture::kWhite);
+		const auto flatNormal =
+			m_Textures.GetDefaultSlot(TextureAssetStore::DefaultTexture::kFlatNormal);
+
+		for (idl::RawTextureHandle& handle : record.textures)
+			handle = RawHandleOf(m_Textures.GetDescriptor(white));
+
+		for (const SurfaceTexture& texture : params.textures)
+		{
+			if (texture.kind == SurfaceTextureKind::kNormal)
+			{
+				record.textures[texture.index] = RawHandleOf(m_Textures.GetDescriptor(flatNormal));
+			}
+
+			// The index the shader samples by is the engine's to write; the surface declared the
+			// field and never sets it.
+			const uint32_t index = texture.index;
+			writeParam(texture.byteOffset, &index, sizeof(index));
+		}
+
+		for (const SurfaceTextureBinding& binding : desc.textures)
+		{
+			const auto declared =
+				std::ranges::find(params.textures, binding.name, &SurfaceTexture::name);
+			if (declared == params.textures.end())
+			{
+				const bool isValue =
+					std::ranges::find(params.values, binding.name, &SurfaceValue::name) !=
+					params.values.end();
+
+				throw SceneError(
+					isValue ? std::format(
+								  "surface '{}' declares '{}' as a value, not a texture",
+								  desc.surface,
+								  binding.name) :
+							  std::format(
+								  "surface '{}' declares no texture named '{}'",
+								  desc.surface,
+								  binding.name));
+			}
+
+			if (binding.texture.textureSlot)
+			{
+				record.textures[declared->index] =
+					RawHandleOf(m_Textures.GetDescriptor(binding.texture.textureSlot));
+			}
+		}
+
+		std::memcpy(payload.data(), &record, sizeof(record));
+
+		return { surface.kind, std::move(payload) };
+	}
+
+	MaterialHandle
+	Scene::CreateSurfaceMaterial(const SurfaceMaterialDesc& desc)
+	{
+		const BuiltSurfaceMaterial built = BuildSurfaceMaterial(desc);
+		const idl::RawEntry        entry = m_Materials.AddRecord(built.kind, built.payload);
+
+		return MaterialHandle{ built.kind, desc.layerType, entry.byteOffset };
+	}
+
+	void
+	Scene::UpdateSurfaceMaterial(MaterialHandle material, const SurfaceMaterialDesc& desc)
+	{
+		// The handle first, as UpdatePbrMaterial checks it: a caller holding a stale one should hear
+		// about that rather than about whatever its desc says.
+		if (!m_Materials.IsOffsetValid(material.byteOffset))
+		{
+			throw SceneError(
+				"MaterialHandle passed to UpdateSurfaceMaterial is invalid or expired");
+		}
+
+		if (m_Materials.GetTagAt(material.byteOffset) != material.materialType)
+		{
+			throw SceneError(
+				"MaterialHandle passed to UpdateSurfaceMaterial names a record of another kind");
+		}
+
+		const BuiltSurfaceMaterial built = BuildSurfaceMaterial(desc);
+
+		// The surface cannot change: it is what the record's kind and its size were fixed by, and a
+		// submesh keeps the byte offset either way.
+		if (material.materialType != built.kind)
+		{
+			throw SceneError(
+				std::format(
+					"MaterialHandle passed to UpdateSurfaceMaterial was not created with surface "
+					"'{}'",
+					desc.surface));
+		}
+
+		m_Materials.SetRecordPayload(idl::RawEntry{ material.byteOffset }, built.payload);
+
+		// Every rewrite counts, including one landing on the bytes already there: an entry is a
+		// GPU-layout mirror whose padding no comparison can trust.
+		++m_TemporalEpoch;
+	}
+
 	MaterialHandle
 	Scene::CreatePbrMaterial(const PbrMaterialDesc& desc)
 	{
@@ -1791,6 +2008,15 @@ namespace bgl
 		static_assert(
 			sizeof(idl::LoosePbrMaterial::textures) ==
 			idl::cLooseChannelCount * sizeof(idl::RawTextureHandle));
+		static_assert(offsetof(idl::GameSurfaceRecord, textures) == 0);
+		static_assert(
+			sizeof(idl::GameSurfaceRecord::textures) ==
+			idl::cGameSurfaceTextureSlots * sizeof(idl::RawTextureHandle));
+		// A game surface's parameters follow the fixed part at an offset the shader holds as a
+		// constant; the struct growing without it is a record read one field late.
+		static_assert(
+			idl::cRawPayloadOffset + sizeof(idl::GameSurfaceRecord) ==
+			idl::cGameSurfaceParamsByteOffset);
 
 		// The other half of that arithmetic: the payload stores RawTextureHandle while the view is
 		// strided by the handle itself, and a payload offset that is not a whole number of handles
@@ -1883,19 +2109,23 @@ namespace bgl
 	void
 	Scene::DeleteMaterial(MaterialHandle material)
 	{
-		// Only the two material kinds the scene allocates storage for can be freed. kNull and
-		// kAssert name shading behaviour, not an entry in a buffer, so there is nothing to release.
-		switch (material.materialType)
+		// A kind with an arena record can be freed. kNull and kAssert name shading behaviour, not
+		// an entry in a buffer, so there is nothing to release.
+		// A game slot's kind is kGameStart + slot, so the switch below sees only the first.
+		const bool gameKind = GameSlot(material.materialType).has_value();
+
+		switch (gameKind ? MaterialType::kGameStart : material.materialType)
 		{
 		case MaterialType::kPBR:
 		case MaterialType::kLoosePbr:
+		case MaterialType::kGameStart:
 			if (!m_Materials.IsOffsetValid(material.byteOffset))
 			{
 				throw SceneError(
 					"MaterialHandle passed to DeleteMaterial has expired or is invalid");
 			}
 
-			// The record says what it is, so the two kinds free the same way -- and the tag is what
+			// The record says what it is, so every kind frees the same way -- and the tag is what
 			// catches a handle whose type says one thing and whose offset holds another.
 			if (m_Materials.GetTagAt(material.byteOffset) != material.materialType)
 			{
@@ -1964,8 +2194,8 @@ namespace bgl
 		if (!AcceptsMaterial(geom.geomType, material))
 		{
 			throw SceneError(
-				"SetSubmeshMaterial: animated geometry takes a kPBR material -- neither animated "
-				"pipeline has an unlit or loose variant");
+				"SetSubmeshMaterial: animated geometry takes a baked PBR or a game surface "
+				"material -- neither animated pipeline has an unlit or loose variant");
 		}
 
 		const idl::RangeWithCount& submeshes = m_Geoms[geom.handle.index].submeshes;

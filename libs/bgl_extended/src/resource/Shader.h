@@ -1,6 +1,6 @@
 #pragma once
 
-#include <algorithm>
+#include "slang/SlangSessions.h"
 #include <core/ref/Ref.h>
 #include <core/ref/RefCounter.h>
 #include <core/ref/SharedRef.h>
@@ -31,18 +31,11 @@ namespace bgl
 			return *this;
 		}
 
-		/**
-		 * The module name as `ISession::loadModule` wants it: `/`-separated, not `.`-separated.
-		 * `loadModule` appends `.slang` to the string it is given and opens that, where `import`
-		 * translates the dots itself -- so the one spelling every caller and every shader uses has
-		 * to be converted here, at the only point that reaches Slang's file loader.
-		 */
+		/** The module name as `ISession::loadModule` wants it; see bgl::SlangModulePath. */
 		[[nodiscard]] std::string
 		SlangModulePath() const noexcept
 		{
-			std::string path = slangModuleName;
-			std::ranges::replace(path, '.', '/');
-			return path;
+			return bgl::SlangModulePath(slangModuleName);
 		}
 	};
 

@@ -102,6 +102,19 @@ namespace bgl
 		constexpr auto c_TransparentSrc      = "programs.forward.Transparent"sv;
 		constexpr auto c_AssertPixelSrc      = "programs.forward.Assert"sv;
 
+		// A program is a file with an entry point, so the reserved slots are one pair each.
+		struct GameSlotSrcs
+		{
+			std::string_view opaque;
+			std::string_view cutout;
+		};
+		constexpr std::array<GameSlotSrcs, cGameSlots> c_GameSlotSrcs = { {
+			{ "programs.forward.GameSlot0"sv, "programs.forward.GameSlot0_AlphaTest"sv },
+			{ "programs.forward.GameSlot1"sv, "programs.forward.GameSlot1_AlphaTest"sv },
+			{ "programs.forward.GameSlot2"sv, "programs.forward.GameSlot2_AlphaTest"sv },
+			{ "programs.forward.GameSlot3"sv, "programs.forward.GameSlot3_AlphaTest"sv },
+		} };
+
 		struct PsoConfig
 		{
 			std::string_view pixelSrc;
@@ -113,67 +126,93 @@ namespace bgl
 		};
 
 		// Order MUST match idl::PsoType (idl/PsoType.h, generated from shaders/src/idl/PsoType.slang).
-		static constexpr std::array<PsoConfig, idl::c_PsoCount> c_Psos = { {
-			// kOpaque_StaticMesh_Null
-			{ c_NullPixelSrc, RasterCullMode::kBack, true, false },
-			// kOpaque_StaticMesh_PBR
-			{ c_PbrPixelSrc, RasterCullMode::kBack, true, false },
-			// kOpaque_StaticMesh_LoosePbr
-			{ c_LoosePixelSrc, RasterCullMode::kBack, true, false },
-			// kAlphaTest_StaticMesh_PBR
-			{ c_PbrCutoutPixelSrc, RasterCullMode::kNone, true, false },
-			// kAlphaTest_StaticMesh_LoosePbr
-			{ c_LooseCutoutPixelSrc, RasterCullMode::kNone, true, false },
-			// kTransparent_StaticMesh_PBR: the whole sorted list draws through this one pipeline,
-			// so its geometry stage is the tier-branching one.
-			{ c_TransparentSrc,
-			  RasterCullMode::kNone,
-			  false,
-			  true,
-			  ComparisonFunc::kLess,
-			  c_AnyGeomSrc },
-			// kTransparent_StaticMesh_LoosePbr
-			{ c_TransparentSrc,
-			  RasterCullMode::kNone,
-			  false,
-			  true,
-			  ComparisonFunc::kLess,
-			  c_AnyGeomSrc },
-			// kHashedAlpha_StaticMesh_PBR: opaque shape -- the coverage is stochastic, the depth is not.
-			{ c_PbrHashedPixelSrc, RasterCullMode::kNone, true, false },
-			// kHashedAlpha_StaticMesh_LoosePbr
-			{ c_LooseHashedPixelSrc, RasterCullMode::kNone, true, false },
-			// kAssert_StaticMesh
-			{ c_AssertPixelSrc, RasterCullMode::kBack, true, false },
-			// kOpaque_SkinnedMesh_PBR
-			{ c_PbrPixelSrc,
-			  RasterCullMode::kBack,
-			  true,
-			  false,
-			  ComparisonFunc::kLess,
-			  c_SkinnedGeomSrc },
-			// kAlphaTest_SkinnedMesh_PBR: an opaque draw that discards, so it needs no sorting.
-			{ c_PbrCutoutPixelSrc,
-			  RasterCullMode::kNone,
-			  true,
-			  false,
-			  ComparisonFunc::kLess,
-			  c_SkinnedGeomSrc },
-			// kHashedAlpha_SkinnedMesh_PBR: stochastic coverage, so also an opaque shape.
-			{ c_PbrHashedPixelSrc,
-			  RasterCullMode::kNone,
-			  true,
-			  false,
-			  ComparisonFunc::kLess,
-			  c_SkinnedGeomSrc },
-			// kTransparent_SkinnedMesh_PBR: as above, a bucket rather than a draw.
-			{ c_TransparentSrc,
-			  RasterCullMode::kNone,
-			  false,
-			  true,
-			  ComparisonFunc::kLess,
-			  c_AnyGeomSrc },
-		} };
+		// The named rows are listed; the reserved game slots' rows follow from kGameRowsStart,
+		// cGameSlotRows per slot, in the order GameSlotRow derives them.
+		constexpr std::array<PsoConfig, idl::c_PsoCount>
+		MakePsos()
+		{
+			std::array<PsoConfig, idl::c_PsoCount> psos = { {
+				// kOpaque_StaticMesh_Null
+				{ c_NullPixelSrc, RasterCullMode::kBack, true, false },
+				// kOpaque_StaticMesh_PBR
+				{ c_PbrPixelSrc, RasterCullMode::kBack, true, false },
+				// kOpaque_StaticMesh_LoosePbr
+				{ c_LoosePixelSrc, RasterCullMode::kBack, true, false },
+				// kAlphaTest_StaticMesh_PBR
+				{ c_PbrCutoutPixelSrc, RasterCullMode::kNone, true, false },
+				// kAlphaTest_StaticMesh_LoosePbr
+				{ c_LooseCutoutPixelSrc, RasterCullMode::kNone, true, false },
+				// kTransparent_StaticMesh_PBR: the whole sorted list draws through this one pipeline,
+				// so its geometry stage is the tier-branching one.
+				{ c_TransparentSrc,
+				  RasterCullMode::kNone,
+				  false,
+				  true,
+				  ComparisonFunc::kLess,
+				  c_AnyGeomSrc },
+				// kTransparent_StaticMesh_LoosePbr
+				{ c_TransparentSrc,
+				  RasterCullMode::kNone,
+				  false,
+				  true,
+				  ComparisonFunc::kLess,
+				  c_AnyGeomSrc },
+				// kHashedAlpha_StaticMesh_PBR: opaque shape -- the coverage is stochastic, the depth is not.
+				{ c_PbrHashedPixelSrc, RasterCullMode::kNone, true, false },
+				// kHashedAlpha_StaticMesh_LoosePbr
+				{ c_LooseHashedPixelSrc, RasterCullMode::kNone, true, false },
+				// kAssert_StaticMesh
+				{ c_AssertPixelSrc, RasterCullMode::kBack, true, false },
+				// kOpaque_SkinnedMesh_PBR
+				{ c_PbrPixelSrc,
+				  RasterCullMode::kBack,
+				  true,
+				  false,
+				  ComparisonFunc::kLess,
+				  c_SkinnedGeomSrc },
+				// kAlphaTest_SkinnedMesh_PBR: an opaque draw that discards, so it needs no sorting.
+				{ c_PbrCutoutPixelSrc,
+				  RasterCullMode::kNone,
+				  true,
+				  false,
+				  ComparisonFunc::kLess,
+				  c_SkinnedGeomSrc },
+				// kHashedAlpha_SkinnedMesh_PBR: stochastic coverage, so also an opaque shape.
+				{ c_PbrHashedPixelSrc,
+				  RasterCullMode::kNone,
+				  true,
+				  false,
+				  ComparisonFunc::kLess,
+				  c_SkinnedGeomSrc },
+				// kTransparent_SkinnedMesh_PBR: as above, a bucket rather than a draw.
+				{ c_TransparentSrc,
+				  RasterCullMode::kNone,
+				  false,
+				  true,
+				  ComparisonFunc::kLess,
+				  c_AnyGeomSrc },
+			} };
+
+			// The two tiers differ only in their geometry stage: the pixel shader reads a
+			// ForwardVSOut and a material offset, and neither says which tier filled them.
+			for (uint32_t slot = 0; slot < cGameSlots; ++slot)
+			{
+				const uint32_t row = GameSlotRowBase(slot);
+				psos[row]     = { c_GameSlotSrcs[slot].opaque, RasterCullMode::kBack, true, false };
+				psos[row + 1] = { c_GameSlotSrcs[slot].cutout, RasterCullMode::kNone, true, false };
+				psos[row + 2] = { c_GameSlotSrcs[slot].opaque, RasterCullMode::kBack, true, false,
+					              ComparisonFunc::kLess,       c_SkinnedGeomSrc };
+				psos[row + 3] = { c_GameSlotSrcs[slot].cutout, RasterCullMode::kNone, true, false,
+					              ComparisonFunc::kLess,       c_SkinnedGeomSrc };
+				psos[row + idl::cGameSlotBlendRow] = {
+					c_TransparentSrc,      RasterCullMode::kNone, false, true,
+					ComparisonFunc::kLess, c_AnyGeomSrc
+				};
+			}
+			return psos;
+		}
+
+		static constexpr std::array<PsoConfig, idl::c_PsoCount> c_Psos = MakePsos();
 
 		static_assert(
 			std::ranges::none_of(c_Psos, [](const PsoConfig& cfg) { return cfg.pixelSrc.empty(); }),
