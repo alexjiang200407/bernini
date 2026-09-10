@@ -49,6 +49,10 @@ acting on it. Use the LSP to understand, grep to be exhaustive.
 Grep is still right for what is not a C++ symbol: text in `docs/`, a key in a `.json` or
 `.bmaterial`, a CMake variable, a string literal, a `.slang` identifier (Slang has no server here).
 
+`.claude/hooks/lsp_nudge.py` says so at the moment it matters — a bare identifier grepped across the
+C++ sources gets the LSP equivalent back beside the results. It is the one hook here that **blocks
+nothing**: every case above is one where grep is right, and it cannot tell which you are doing.
+
 ## The bar each subsystem is held to
 
 Everything under `./libs` — `bgl`, `bgl_common`, `bgl_extended`, `core`, `assetlib`, `gamelib` — and `assetlib_cli` with it, is
