@@ -1,6 +1,7 @@
 #pragma once
 
 #include <assetlib/asset_refs.h>
+#include <assetlib/blend.h>
 #include <filesystem>
 #include <string>
 #include <string_view>
@@ -42,4 +43,36 @@ namespace editor
 	 */
 	[[nodiscard]] std::string
 	CreateEmptyBlendSet(const std::filesystem::path& dataRoot, std::string_view animationsKey);
+
+	/**
+	 * The set at `key`, as authored -- clips by name, which is the form every rule in
+	 * `blend_edits.h` takes and the form that is written back.
+	 *
+	 * Read from disk rather than rebuilt from what the acquire resolved: the resolved spaces hold
+	 * clip *indices* and carry neither the document's `extraJson` nor its `name`, and a save built
+	 * from them would quietly drop both.
+	 *
+	 * @throws std::runtime_error for what `AssetStore::Load` throws on a missing or unreadable
+	 *         container, and for what `validateBlendSet` refuses in one already on disk.
+	 */
+	[[nodiscard]] assetlib::BlendSet
+	LoadBlendSet(const std::filesystem::path& dataRoot, std::string_view key);
+
+	/**
+	 * Writes `set` back to `key`, over what stands there.
+	 *
+	 * Over, and not beside: this is the authored document being edited, so the write is the edit.
+	 * Unknown keys ride along in `extraJson` because that is what `LoadBlendSet` handed over --
+	 * which is the whole reason an edit loads the document rather than rebuilding it.
+	 *
+	 * @throws std::runtime_error for everything `validateBlendSet` refuses -- an unnamed space, two
+	 *         spaces of one name, a space under two samples, a sample naming no clip, parameters
+	 *         that are not strictly increasing -- since the codec validates on the way out. A
+	 *         refusal here means nothing was written.
+	 */
+	void
+	SaveBlendSet(
+		const std::filesystem::path& dataRoot,
+		std::string_view             key,
+		const assetlib::BlendSet&    set);
 }
