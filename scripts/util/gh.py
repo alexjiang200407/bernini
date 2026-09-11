@@ -45,6 +45,13 @@ def find_gh():
 
 
 def _find_bash():
+    if sys.platform == "win32":
+        git = shutil.which("git")
+        candidates = ([os.path.join(os.path.dirname(git), "..", "bin", "bash.exe"),
+                       os.path.join(os.path.dirname(git), "..", "usr", "bin", "bash.exe")] if git else [])
+        for path in candidates + list(_BASH_CANDIDATES):
+            if os.path.isfile(path):
+                return os.path.abspath(path)
     bash = shutil.which("bash")
     if bash:
         return bash

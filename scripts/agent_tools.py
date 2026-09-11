@@ -18,18 +18,25 @@ import subprocess
 import sys
 import threading
 
+from util import gh
+
 ENGINE = Path(os.environ.get('BERNINI_DIR') or Path(__file__).resolve().parent.parent).resolve()
 ROOT = Path.cwd().resolve()
 LIMIT = 40000
 
 
+def find_language_server(language):
+    executable = shutil.which('slangd' if language == 'slang' else 'clangd')
+    if not executable and language == 'slang':
+        executable = next(iter(ENGINE.glob('build/*/vcpkg_installed/*/tools/shader-slang/' + ('slangd.exe' if sys.platform == 'win32' else 'slangd'))), None)
+    if not executable:
+        raise ValueError(f'{language} language server missing; install clangd/slangd or build the Slang tools with just build')
+    return executable
+
+
 class LanguageServer:
     def __init__(self, language, root):
-        executable = shutil.which('slangd' if language == 'slang' else 'clangd')
-        if not executable and language == 'slang':
-            executable = next(iter(ENGINE.glob('build/*/vcpkg_installed/*/tools/shader-slang/slangd')), None)
-        if not executable:
-            raise ValueError(f'{language} language server missing; install clangd or run ws init after building Slang')
+        executable = find_language_server(language)
         command = [str(executable)]
         if language != 'slang':
             command += ['--background-index', '--log=error']
@@ -130,7 +137,7 @@ class LanguageServer:
         return value
 
     def open_file(self, path):
-        text = path.read_text()
+        text = path.read_text(encoding='utf-8')
         uri = path.as_uri()
         old = self.versions.get(uri)
         if old is None:
@@ -200,7 +207,7 @@ def read_file(args):
     path = (ROOT / args['path']).resolve()
     start = max(1, int(args.get('start', 1)))
     count = min(500, max(1, int(args.get('count', 200))))
-    with path.open() as f:
+    with path.open(encoding='utf-8') as f:
         return ''.join(f'{i}: {line}' for i, line in enumerate(
             itertools.islice(f, start - 1, start - 1 + count), start))[:LIMIT]
 
@@ -225,12 +232,20 @@ def bgrep(args):
     if not isinstance(paths, list) or not all(isinstance(p, str) for p in paths):
         raise ValueError('paths must be a list of paths')
     # Absolute operands and -e keep leading dashes literal. No shell or arbitrary flags.
-    command = [str(ENGINE / 'scripts/bgrep'), '-rnI', '--exclude-dir=.git', '--exclude-dir=build']
+    command = [(ENGINE / 'scripts/bgrep').as_posix(), '-rnI', '--exclude-dir=.git', '--exclude-dir=build']
     if args.get('literal'):
         command += ['-F']
-    command += ['-e', args['pattern'], '--'] + [str((ROOT / p).resolve()) for p in paths]
+    command += ['-e', args['pattern'], '--'] + [(ROOT / p).resolve().as_posix() for p in paths]
+    env = None
+    if sys.platform == 'win32':
+        bash = gh._find_bash()
+        if not bash:
+            raise ValueError('Git for Windows Bash is required for scripts/bgrep')
+        command.insert(0, bash)
+        binary = Path(bash).parent
+        env = {**os.environ, 'PATH': os.pathsep.join([str(binary), str(binary.parent / 'usr/bin'), os.environ.get('PATH', '')])}
     with tempfile.TemporaryFile() as output:
-        done = subprocess.run(command, stdout=output, stderr=subprocess.PIPE, timeout=30)
+        done = subprocess.run(command, stdout=output, stderr=subprocess.PIPE, timeout=30, env=env)
         output.seek(0)
         text = output.read(LIMIT + 1).decode(errors='replace')
     if done.returncode not in (0, 1):
@@ -244,11 +259,11 @@ def write_spec(args):
     if target.suffix != '.md' or specs not in target.parents:
         raise ValueError('Only docs/specs/*.md may be written')
     target.parent.mkdir(parents=True, exist_ok=True)
-    target.write_text(args['content'])
+    target.write_text(args['content'], encoding='utf-8')
     # Also works when invoked from a client without PostToolUse hooks.
-    done = subprocess.run([sys.executable, str(ENGINE / '.claude/hooks/draft_commit.py')],
+    done = subprocess.run([sys.executable, '-X', 'utf8', str(ENGINE / '.claude/hooks/draft_commit.py')],
         input=json.dumps({'cwd': str(ROOT), 'tool_name': 'Write', 'tool_input': {'file_path': str(target)}}),
-        text=True, capture_output=True, env={**os.environ, 'CLAUDE_PROJECT_DIR': str(ROOT)})
+        text=True, encoding='utf-8', capture_output=True, env={**os.environ, 'CLAUDE_PROJECT_DIR': str(ROOT)})
     if done.returncode:
         raise ValueError(f'Spec written but draft commit failed: {done.stderr}')
     return f'Wrote {target}'

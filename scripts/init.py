@@ -891,7 +891,7 @@ def main():
     parser.add_argument("--preset", help="CMake preset to record (default: ask).")
     parser.add_argument("--arch", help=f"vcvars architecture (default: {cfg.DEFAULT_ARCH}).")
     parser.add_argument("--agents-only", action="store_true",
-                        help="Repair the AGENTS.md symlink without changing machine config or installing tools.")
+                        help="Repair agent links and Codex config without changing build config or installing tools.")
     parser.add_argument("--force", action="store_true", help="Overwrite an existing config.json without asking.")
     parser.add_argument("--show", action="store_true", help="Print the config that would be written; write nothing.")
     parser.add_argument("--no-just", action="store_true", help="Don't check for (or offer to install) just.")
@@ -906,6 +906,7 @@ def main():
 
     if not args.show:
         agent_setup.instructions(ct.REPO_ROOT)
+        agent_setup.codex(ct.REPO_ROOT)
     if args.agents_only:
         return 0
 

@@ -336,7 +336,7 @@ def register_with_workspace():
     """Let ws clean up a watcher even when a shared Codex daemon spawned it."""
     from pathlib import Path
     registry = os.environ.get('WS_AGENT_REGISTRY')
-    if not registry:
+    if not registry or sys.platform == 'win32':
         return
     directory = Path(registry)
     if not directory.is_dir():
@@ -370,7 +370,7 @@ def notify_codex(payload):
     message = (f"Bernini PR #{payload['pr']} watcher: {payload.get('event', 'error')}. "
                f"Read the event at {path.resolve()} and continue the bcp review workflow.")
     try:
-        done = subprocess.run(['codex', 'queue', '--thread', thread, '--message', message],
+        done = subprocess.run([shutil.which('codex') or 'codex', 'queue', '--thread', thread, '--message', message],
                               text=True, capture_output=True, timeout=30)
     except (OSError, subprocess.SubprocessError) as error:
         raise NotificationError(f'Codex wake failed; event kept at {path}: {error}') from error

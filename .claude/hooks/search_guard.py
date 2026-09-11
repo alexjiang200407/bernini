@@ -9,7 +9,7 @@ import os
 import shlex
 import sys
 
-SEARCH = {'grep', 'egrep', 'fgrep', 'rg', 'ripgrep'}
+SEARCH = {'grep', 'egrep', 'fgrep', 'rg', 'ripgrep', 'select-string', 'sls', 'findstr'}
 MESSAGE = 'Use LSP for symbol navigation. For text or completeness searches use scripts/bgrep (or the bernini bgrep MCP tool). rg --files is allowed for file discovery.'
 
 
@@ -22,12 +22,17 @@ WRAPPERS = {
 }
 
 
+def command_name(value):
+    name = value.replace('\\', '/').rsplit('/', 1)[-1].lower()
+    return name[:-4] if name.endswith('.exe') else name
+
+
 def unwrap(args):
     while args:
         if '=' in args[0] and not args[0].startswith('-'):
             args = args[1:]
             continue
-        name = os.path.basename(args[0])
+        name = command_name(args[0])
         if name not in WRAPPERS:
             return args
         args = args[1:]
@@ -52,8 +57,10 @@ def unwrap(args):
     return args
 
 
-def refused(command):
+def refused(command, windows=False):
     lexer = shlex.shlex(command, posix=True, punctuation_chars=';&|()')
+    if windows:
+        lexer.escape = ""
     lexer.whitespace_split = True
     tokens = list(lexer)
     commands, current = [], []
@@ -70,10 +77,10 @@ def refused(command):
             return True
         if not args:
             continue
-        name = os.path.basename(args[0])
+        name = command_name(args[0])
         if name in ('bash', 'sh', 'zsh') and '-c' in args:
             index = args.index('-c') + 1
-            if index < len(args) and refused(args[index]):
+            if index < len(args) and refused(args[index], windows=windows):
                 return True
         if name == 'git' and len(args) > 1 and args[1] == 'grep':
             return True
@@ -84,7 +91,7 @@ def refused(command):
 
 def main(payload):
     tool = payload.get('tool_name', '')
-    if tool == 'Grep' or (tool in ('Bash', 'PowerShell') and refused(payload.get('tool_input', {}).get('command', ''))):
+    if tool == 'Grep' or (tool in ('Bash', 'PowerShell') and refused(payload.get('tool_input', {}).get('command', ''), windows=tool == 'PowerShell' or sys.platform == 'win32')):
         print(MESSAGE, file=sys.stderr)
         return 2
     return 0

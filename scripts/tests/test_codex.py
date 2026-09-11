@@ -134,7 +134,8 @@ def test_codex_watch_identity_and_wake(monkeypatch, tmp_path):
         return subprocess.CompletedProcess(args, 0, '', '')
     monkeypatch.setattr(watch_pr.subprocess, 'run', run)
     watch_pr.notify_codex({'pr': 42, 'event': 'review', 'comments': ['review']})
-    assert calls[0][:4] == ['codex', 'queue', '--thread', 'test-thread']
+    assert Path(calls[0][0]).stem in ('codex', 'codex.cmd')
+    assert calls[0][1:4] == ['queue', '--thread', 'test-thread']
     assert json.loads((tmp_path / 'bernini-pr-event-42.json').read_text())['event'] == 'review'
 
 
@@ -197,6 +198,7 @@ def test_watcher_failure_wakes_codex_without_losing_undelivered_event(monkeypatc
     assert json.loads(event_path.read_text())['event'] == 'review'
 
 
+@pytest.mark.skipif(sys.platform == 'win32', reason='ws process registry is Unix-only')
 def test_watcher_registers_with_workspace(monkeypatch, tmp_path):
     monkeypatch.setenv('WS_AGENT_REGISTRY', str(tmp_path))
     watch_pr.register_with_workspace()
@@ -217,7 +219,88 @@ def test_commit_attribution_tracks_the_assistant(tmp_path, session):
         env['CLAUDECODE'] = '1'
     elif session == 'codex':
         env['CODEX_THREAD_ID'] = 'test-thread'
-    command = ['sh', str(ENGINE / '.githooks/prepare-commit-msg'), str(message), 'message']
+    command = [agent_tools.gh._find_bash() or 'sh', str(ENGINE / '.githooks/prepare-commit-msg'), str(message), 'message']
     subprocess.run(command, env=env, check=True)
     subprocess.run(command, env=env, check=True)
     assert message.read_text().count('Co-authored-by: morgana-coding-agent[bot]') == (session != 'human')
+
+
+@pytest.mark.parametrize('command', [r'& "C:\Program Files\ripgrep\rg.exe" needle docs',
+                                      'Select-String needle docs/readme.md', 'sls needle docs/readme.md',
+                                      'findstr.exe needle docs/readme.md'])
+def test_powershell_search_is_guarded(tmp_path, command):
+    assert hook({'hook_event_name': 'PreToolUse', 'tool_name': 'PowerShell',
+                 'tool_input': {'command': command}}, tmp_path).returncode == 2
+
+
+def test_init_repairs_windows_skill_placeholder_and_generates_config(monkeypatch, tmp_path):
+    import base64
+    try:
+        import tomllib
+    except ImportError:
+        tomllib = pytest.importorskip('tomli')
+    import shutil
+    (tmp_path / '.agents').mkdir()
+    (tmp_path / '.agents/skills').write_text('../.claude/skills')
+    (tmp_path / '.claude/skills').mkdir(parents=True)
+    (tmp_path / '.codex').mkdir()
+    shutil.copyfile(ENGINE / '.codex/config.template.toml', tmp_path / '.codex/config.template.toml')
+    executable = r"C:\Program Files\Python\python.exe"
+    monkeypatch.setattr(sys, 'executable', executable)
+    agent_setup.codex(tmp_path)
+    assert (tmp_path / '.agents/skills').is_symlink()
+    path = tmp_path / '.codex/config.toml'
+    config = tomllib.loads(path.read_text(encoding='utf-8'))
+    assert config['mcp_servers']['bernini']['command'] == executable
+    command = config['hooks']['PreToolUse'][0]['hooks'][0]['command_windows']
+    decoded = base64.b64decode(command.split()[-1]).decode('utf-16-le')
+    assert "& '" + executable + "'" in decoded
+    assert 'codex_hook.py' in decoded
+    path.write_text('user-owned', encoding='utf-8')
+    agent_setup.codex(tmp_path)
+    assert path.read_text(encoding='utf-8') == 'user-owned'
+
+
+def test_windows_bgrep_launches_git_bash(monkeypatch, tmp_path):
+    monkeypatch.setattr(sys, 'platform', 'win32')
+    monkeypatch.setattr(agent_tools.gh, '_find_bash', lambda: 'C:/Program Files/Git/bin/bash.exe')
+    calls = []
+    def run(command, **kwargs):
+        calls.append((command, kwargs))
+        kwargs['stdout'].write('needle café'.encode('utf-8'))
+        return subprocess.CompletedProcess(command, 0, stderr=b'')
+    monkeypatch.setattr(agent_tools.subprocess, 'run', run)
+    assert 'café' in agent_tools.bgrep({'pattern': 'needle', 'paths': ['hello.txt']})
+    assert calls[0][0][0] == 'C:/Program Files/Git/bin/bash.exe'
+    assert calls[0][0][1].endswith('scripts/bgrep')
+    assert 'usr/bin' in calls[0][1]['env']['PATH']
+
+
+def test_unicode_files_are_utf8(monkeypatch, tmp_path):
+    monkeypatch.setattr(agent_tools, 'ROOT', tmp_path)
+    (tmp_path / 'unicode.txt').write_text('café 世界', encoding='utf-8')
+    assert 'café 世界' in agent_tools.read_file({'path': 'unicode.txt'})
+
+
+def test_windows_slang_executable_is_discovered(monkeypatch, tmp_path):
+    path = tmp_path / 'build/debug/vcpkg_installed/x64-windows/tools/shader-slang/slangd.exe'
+    path.parent.mkdir(parents=True)
+    path.touch()
+    monkeypatch.setattr(sys, 'platform', 'win32')
+    monkeypatch.setattr(agent_tools, 'ENGINE', tmp_path)
+    monkeypatch.setattr(agent_tools.shutil, 'which', lambda name: None)
+    assert agent_tools.find_language_server('slang') == path
+
+
+@pytest.mark.skipif(sys.platform != 'win32', reason='native Windows hook process contract')
+def test_windows_hook_receives_stdin_and_returns_policy_exit(tmp_path):
+    import tomllib
+    agent_setup.codex(ENGINE)
+    config = tomllib.loads((ENGINE / '.codex/config.toml').read_text(encoding='utf-8'))
+    command = config['hooks']['PreToolUse'][0]['hooks'][0]['command_windows']
+    result = subprocess.run(command, shell=True, input=json.dumps({
+        'hook_event_name': 'PreToolUse', 'cwd': str(ENGINE), 'tool_name': 'Bash',
+        'tool_input': {'command': 'grep needle docs'}}), text=True, capture_output=True,
+        env={**os.environ, 'WS_ASK': ''}, timeout=15)
+    assert result.returncode == 2, result.stderr
+    assert 'bgrep' in result.stderr

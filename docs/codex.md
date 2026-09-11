@@ -3,9 +3,12 @@
 Both agents use `CLAUDE.md`. `just init` creates the relative `AGENTS.md -> CLAUDE.md`
 symlink in this repository, including when an existing machine config is kept.
 `just init --agents-only` repairs the link without installing tools or changing build
-configuration. `--show` writes nothing. Existing regular `AGENTS.md` files are preserved
+configuration. It also generates `.codex/config.toml` from the tracked template using the running
+Python interpreter and absolute tool paths. Rerun init after moving the checkout.
+User-owned Codex configs are preserved. `--show` writes nothing. Existing regular `AGENTS.md` files are preserved
 with a warning; stale symlinks are repaired. Windows needs Developer Mode or permission
-to create symlinks.
+to create symlinks. Init repairs the plain-text `.agents/skills` placeholder produced
+by Git with `core.symlinks=false`; skills remain shared through a directory symlink.
 
 The workspace's `ws init` owns its separate instruction link. Feature and game setup
 backfills their links. The relative links continue to work when a checkout moves.
@@ -17,6 +20,14 @@ MCP, custom agent roles, skills, and `codex queue` (validated against 0.154.0).
 On first opening a checkout, trust the project and review its hooks with `/hooks`.
 Codex skips untrusted hooks; ordinary permission bypass does not enable them. These
 scripts do not bypass hook trust or change your global trust settings.
+
+Bernini supports native Windows and macOS. Run `python scripts/init.py --agents-only`
+(or `just init --agents-only`) from PowerShell on Windows before opening Codex.
+MCP runs Python directly; hook configuration uses the documented
+[Windows command override](https://learn.chatgpt.com/docs/hooks).
+Text files use UTF-8. MCP bgrep invokes the existing script through Git for Windows
+Bash, and Slang discovery includes `slangd.exe`. Install Git for Windows and clangd;
+no workspace scripts are needed. The separate bernini-workspace is Unix-only.
 
 In a workspace:
 
@@ -96,11 +107,18 @@ The read-only sandbox is also enabled. Do not work around a blocked ask tool.
 
 Codex's shell execution does not provide Claude's `run_in_background` wake-up
 contract. Start the existing watcher as a background process with explicit delivery
-back to the current Codex thread:
+back to the current Codex thread. In a Unix shell:
 
 ```sh
 mkdir -p .claude/features
 just watch-pr 123 --notify-codex >.claude/features/pr-123.watch.log 2>&1 &
+```
+
+In Windows PowerShell, start Python directly (the child inherits `CODEX_THREAD_ID`):
+
+```powershell
+New-Item -ItemType Directory -Force .claude/features | Out-Null
+Start-Process -FilePath (Get-Command python).Source -ArgumentList @('scripts/watch_pr.py', '123', '--notify-codex') -RedirectStandardOutput .claude/features/pr-123.watch.log -RedirectStandardError .claude/features/pr-123.watch.err
 ```
 
 The watcher retains its normal claim and single-watcher behavior. When activity
@@ -111,6 +129,8 @@ and error remain on disk. `--once` never queues a message. Do not substitute a
 foreground wait or periodic `gh` polling. ws's process watchdog cleans background
 work up when the CLI exits. PR watchers explicitly register with it, so cleanup
 also works when Codex's shared app-server starts them outside the CLI process tree.
+This registry is Unix workspace behavior; standalone Windows watchers use Bernini's
+existing platform-aware process claims.
 
 ## Games
 

@@ -13,8 +13,8 @@ HOOKS = ENGINE / '.claude' / 'hooks'
 def run(name, payload):
     local_hook = Path(payload.get('cwd') or os.getcwd()) / '.claude/hooks' / (name + '.py')
     script = local_hook if local_hook.is_file() else HOOKS / (name + '.py')
-    done = subprocess.run([sys.executable, str(script)],
-                          input=json.dumps(payload), text=True, capture_output=True)
+    done = subprocess.run([sys.executable, '-X', 'utf8', str(script)],
+                          input=json.dumps(payload), text=True, encoding='utf-8', capture_output=True)
     if done.stdout:
         print(done.stdout, end='')
     if done.stderr:
@@ -47,7 +47,7 @@ def main(payload):
                 print('ws ask has no shell or arbitrary editing tools. Use the bernini MCP '
                       'read_file, list_files, bgrep, lsp and write_spec tools.', file=sys.stderr)
                 return 2
-        if tool == 'Bash':
+        if tool in ('Bash', 'PowerShell'):
             for hook in ('gh_guard', 'lsp_nudge', 'search_guard'):
                 if run(hook, payload):
                     return 2
@@ -55,7 +55,7 @@ def main(payload):
             print('Use LSP for symbols or bernini bgrep for explicit text searches.', file=sys.stderr)
             return 2
     elif event == 'PostToolUse':
-        if tool == 'Bash' or tool == 'apply_patch' or tool.startswith('mcp__bernini__'):
+        if tool in ('Bash', 'PowerShell') or tool == 'apply_patch' or tool.startswith('mcp__bernini__'):
             # Scan the shared draft worktree after any write, including patches
             # that touch several files or rename one (not a single file_path).
             return run('draft_commit', {**payload, 'tool_name': 'Bash'})

@@ -106,3 +106,6 @@ libs/bgl/include/bgl/MaterialType.h text eol=lf
 # CRLF in a shebang line makes the interpreter lookup fail, so pin them to LF.
 ###############################################################################
 .githooks/** text eol=lf
+
+# Executed by Git Bash from the native Windows MCP process.
+scripts/bgrep text eol=lf
