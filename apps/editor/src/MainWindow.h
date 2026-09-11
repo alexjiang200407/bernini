@@ -23,7 +23,6 @@ class QMenu;
 class ContentExplorerWindow;
 class AssetThumbnailCache;
 class AnimationEditorWindow;
-class LevelEditorWindow;
 class MaterialEditorWindow;
 class RenderTargetWindow;
 class Renderer;
@@ -118,7 +117,7 @@ private:
 	DriveViewportsFromTab(QDockWidget* dock);
 
 	// Adds the viewport frame-time readout to the status bar and connects every viewport to it. The
-	// three viewport docks are tabbed together, so at most one of them reports at a time.
+	// viewport docks are tabbed together, so at most one of them reports at a time.
 	void
 	SetUpFrameStats();
 
@@ -166,10 +165,8 @@ private:
 
 	std::unique_ptr<assetlib::Project> m_Project;
 	ContentExplorerWindow*             m_ContentExplorer     = nullptr;
-	LevelEditorWindow*                 m_LevelEditor         = nullptr;
 	MaterialEditorWindow*              m_MaterialEditor      = nullptr;
 	AnimationEditorWindow*             m_AnimationEditor     = nullptr;
-	QDockWidget*                       m_LevelEditorDock     = nullptr;
 	QDockWidget*                       m_MaterialEditorDock  = nullptr;
 	QDockWidget*                       m_AnimationEditorDock = nullptr;
 	QDockWidget*                       m_ContentExplorerDock = nullptr;

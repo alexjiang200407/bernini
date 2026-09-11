@@ -333,8 +333,8 @@ to keep in agreement beyond the one below.
   preview unaccumulated for the whole gesture. The floor is one plane geom for the window's life in
   the shared scene, like the material preview's sphere, and one placement in this view while a rig
   is shown; a placement does not move, so a slope change deletes and re-places it. The scene is
-  shared with the Level Editor, and its ground with it, so the slope stands only while the panel is
-  on screen: hiding the panel or clearing the preview lays the ground flat again, and showing it
+  shared with the Material Editor's preview, and its ground with it, so the slope stands only while
+  the panel is on screen: hiding the panel or clearing the preview lays the ground flat again, and showing it
   brings the slope back. Nothing else in the scene should stand on a slope this panel set while
   nobody is looking at it.
 

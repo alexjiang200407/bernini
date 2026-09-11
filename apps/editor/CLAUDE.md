@@ -220,7 +220,7 @@ for anything Qt does off-thread, like `QFileSystemModel` scanning a directory) a
 A viewport no longer needs a window. `RenderTargetWindowDesc::headless` builds the target
 offscreen at an explicit extent, asking the widget for no `winId()` and taking neither
 `WA_PaintOnScreen` (which implies `WA_NativeWindow`) nor the null `paintEngine()` that goes with it.
-So `RenderTargetWindow`, `LevelEditorWindow`, `MaterialPreviewWindow`, `AnimationPreviewWindow` and
+So `RenderTargetWindow`, `MaterialPreviewWindow`, `AnimationPreviewWindow` and
 `MainWindow` all stand in a test — see `MainWindow_test.cpp`, which builds a whole headless editor
 and pins its teardown order, its data-root propagation, and that every viewport it built is
 headless. A null `Renderer` **asserts**: no shipping path produces one, and four methods here

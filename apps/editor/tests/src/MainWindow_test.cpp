@@ -16,6 +16,7 @@
 #include <QMenu>
 #include <QMenuBar>
 #include <QPointer>
+#include <QTabBar>
 #include <QTemporaryDir>
 #include <catch2/catch_test_macros.hpp>
 #include <core/file/file.h>
@@ -28,7 +29,7 @@
 #include <string>
 #include <vector>
 
-// What a viewport's `headless` flag buys: a whole editor -- device, renderer, three viewports --
+// What a viewport's `headless` flag buys: a whole editor -- device, renderer, every viewport --
 // standing in a test, so its construction and teardown are pinned rather than found by driving the
 // app. What it draws is still bgl_extended_tests' job.
 
@@ -36,8 +37,8 @@ namespace
 {
 	namespace fs = std::filesystem;
 
-	// The panels that own a viewport today. The count below is what makes a fourth one loud.
-	constexpr int c_ViewportCount = 3;
+	// The panels that own a viewport today. The count below is what makes a third one loud.
+	constexpr int c_ViewportCount = 2;
 
 	/** A scaffolded project and a config.json naming it, both in a directory of their own. */
 	struct HeadlessEditor
@@ -51,13 +52,12 @@ namespace
 			// Written here rather than into the deployed config.json, which editor_tests shares
 			// with the editor binary it is built beside.
 			//
-			// temporalAA off in all three: a history costs a viewport nothing to skip here, and
+			// temporalAA off in both: a history costs a viewport nothing to skip here, and
 			// these cases are about what is built, not what it accumulates.
 			const std::string config = R"({
   "headless": true,
   "startupProject": ")" + EscapedProjectFile() +
 			                           R"(",
-  "levelEditor":     { "temporalAA": false },
   "materialEditor":  { "temporalAA": false },
   "animationEditor": { "temporalAA": false }
 })";
@@ -187,13 +187,13 @@ TEST_CASE(
 	MainWindow window(nullptr, editor.ConfigFile());
 	window.show();
 
-	auto* materialDock = window.findChild<QDockWidget*>("MaterialEditorDock");
-	auto* levelDock    = window.findChild<QDockWidget*>("LevelEditorDock");
-	auto* materials    = window.findChild<MaterialEditorWindow*>();
-	auto* preview      = window.findChild<MaterialPreviewWindow*>();
+	auto* materialDock  = window.findChild<QDockWidget*>("MaterialEditorDock");
+	auto* animationDock = window.findChild<QDockWidget*>("AnimationEditorDock");
+	auto* materials     = window.findChild<MaterialEditorWindow*>();
+	auto* preview       = window.findChild<MaterialPreviewWindow*>();
 
 	REQUIRE(materialDock != nullptr);
-	REQUIRE(levelDock != nullptr);
+	REQUIRE(animationDock != nullptr);
 	REQUIRE(materials != nullptr);
 	REQUIRE(preview != nullptr);
 
@@ -228,7 +228,7 @@ TEST_CASE(
 	REQUIRE(editor::test::WaitFor([&window] { return window.isVisible(); }));
 
 	// And the half that must not change: leaving the tab still puts the default sphere back.
-	levelDock->raise();
+	animationDock->raise();
 	CHECK(editor::test::WaitFor([preview] { return preview->MeshPath().empty(); }));
 }
 
@@ -240,12 +240,33 @@ TEST_CASE("Every viewport a headless editor builds is headless", "[mainwindow][r
 
 	const QList<RenderTargetWindow*> viewports = window.findChildren<RenderTargetWindow*>();
 
-	// The Level Editor, the Material Editor's preview and the Animation Editor's. A panel added
-	// later fails this line, which is the point: it then has to say whether it threads `headless`
-	// through, rather than being window-backed in a suite that cannot realise a window.
+	// The Material Editor's preview and the Animation Editor's. A panel added later fails this
+	// line, which is the point: it then has to say whether it threads `headless` through, rather
+	// than being window-backed in a suite that cannot realise a window.
 	CHECK(static_cast<int>(viewports.size()) == c_ViewportCount);
 
 	for (const RenderTargetWindow* view : viewports) CHECK(view->IsHeadless());
+}
+
+// Which tab is up decides which viewport is in the frame loop, so the tab a project opens on is
+// behaviour rather than layout: the panel behind it holds no mesh and renders nothing.
+TEST_CASE("A project opens on the Material Editor tab", "[mainwindow][render]")
+{
+	const HeadlessEditor editor;
+
+	MainWindow window(nullptr, editor.ConfigFile());
+	window.show();
+	QCoreApplication::processEvents();
+
+	// The dock group's own bar, which QMainWindow parents to itself -- not the Animation panel's
+	// Clip/Blend one, which is a bar inside a dock.
+	const QList<QTabBar*> bars   = window.findChildren<QTabBar*>();
+	const auto            docked = std::ranges::find_if(bars, [&window](const QTabBar* bar) {
+		return bar->parentWidget() == &window;
+	});
+
+	REQUIRE(docked != bars.end());
+	CHECK((*docked)->tabText((*docked)->currentIndex()) == QStringLiteral("Material Editor"));
 }
 
 // The graph costs a resolve per frame to fill, so it turns timing on for itself rather than opening

@@ -12,8 +12,8 @@ the editor that split is the viewport windows (which redraw continuously) agains
 cache, which renders one frame per asset and does not opt in at all: its private asset manager
 loads each hashed-alpha material as the blend material its coverage converges to
 (`AssetManagerOptions::hashedAsBlend`), so the converged look is drawn directly rather than
-accumulated. Each viewport reads its own `temporalAA` key in `config.json` — under `levelEditor`,
-`materialEditor` and `animationEditor`, beside the other things that size that window's render target, rather than
+accumulated. Each viewport reads its own `temporalAA` key in `config.json` — under `materialEditor` and
+`animationEditor`, beside the other things that size that window's render target, rather than
 under `graphics`, which is where `GraphicsOptions` lives.
 
 The desc flag decides **allocation**; `IRenderTarget::SetTaaEnabled` decides whether it **runs**, so
@@ -35,11 +35,11 @@ Render menu carries a **Render Scale** for that: it multiplies each viewport's r
 top of the display's device pixel ratio, and the resolve reconstructs the window's own resolution
 back out of the jittered frames. Half scale on a 2× display is a 1080p sample grid inside a 4K
 window, which is what makes the artifact reproducible on the machine that does not have the display
-it was reported on. `renderScale` under `levelEditor`,
-`materialEditor` and `animationEditor` in `config.json` sets the value the editor starts at; the menu moves every viewport
+it was reported on. `renderScale` under `materialEditor` and `animationEditor` in `config.json`
+sets the value the editor starts at; the menu moves every viewport
 from there, live, because the comparison is what shows a temporal artifact.
 
-Beside it is **TAA Reconstruction Width** (`taaReconstructionWidth`, same three keys, 0.4 by
+Beside it is **TAA Reconstruction Width** (`taaReconstructionWidth`, same two keys, 0.4 by
 default): how wide a kernel the resolve rebuilds each output pixel with, in output pixels. It is the
 one number in the resolve whose trade a still image only half shows — narrower keeps sharpening a
 held frame, and what it costs is the frames a moving pixel waits for the jitter phase that serves it

@@ -26,14 +26,6 @@
         "initialPbrMaterials": 256,
         "initialLoosePbrMaterials": 256
     },
-    "levelEditor": {
-        "initialInstances": 1000,
-        "temporalAA": true,
-        "renderScale": 1.0,
-        "taaReconstructionWidth": 0.4,
-        "environmentMap": "assets/Data/Authored/Environments/forest.benv",
-        "dataRoot": "assets/Data"
-    },
     "materialEditor": {
         "initialPreviewInstances": 16,
         "temporalAA": true,

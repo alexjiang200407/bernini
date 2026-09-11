@@ -28,9 +28,9 @@ TEST_CASE("A reported frame shows its three figures under the viewport's name", 
 	// Deliberately off the .x5 boundary: Qt::asprintf does its own double formatting and rounds
 	// half away from zero where libc rounds half to even, and this pins the readout, not that.
 	const auto    stats = editor::FrameStats{ .meanMs = 3.4, .maxMs = 12.5, .missed = 7 };
-	const QString text  = editor::FrameStatsText("Level Editor", stats);
+	const QString text  = editor::FrameStatsText("Material Editor", stats);
 
-	CHECK(text.contains("Level Editor"));
+	CHECK(text.contains("Material Editor"));
 	CHECK(text.contains("3.4 ms"));
 	CHECK(text.contains("12.5 ms"));
 	CHECK(text.contains("7 missed"));
@@ -52,8 +52,8 @@ TEST_CASE("The viewport's name is what distinguishes one readout from another", 
 	const auto stats = editor::FrameStats{ .meanMs = 1.0, .maxMs = 2.0, .missed = 0 };
 
 	CHECK(
-		editor::FrameStatsText("Level Editor", stats) !=
-		editor::FrameStatsText("Material Editor", stats));
+		editor::FrameStatsText("Material Editor", stats) !=
+		editor::FrameStatsText("Animation Editor", stats));
 }
 
 // The tooltip's per-pass table: every pass by name in the order given, its cost, and a total, or

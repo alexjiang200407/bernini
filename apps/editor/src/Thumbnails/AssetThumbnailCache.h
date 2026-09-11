@@ -58,7 +58,7 @@ struct AssetThumbnailDesc
  * image comes back to the GUI thread as a queued call.
  *
  * Geometry is added to the shared scene and torn down again after each shot, so a thumbnail leaves
- * nothing behind for the Level Editor's view to draw.
+ * nothing behind for the preview viewports to draw.
  */
 class AssetThumbnailCache : public StampedPixmapCache, public editor::IHoldsAssets
 {

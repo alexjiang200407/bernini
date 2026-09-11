@@ -451,7 +451,7 @@ TEST_CASE("AssetManager: an instance keeps its geometry alive", "[gamelib][asset
 
 TEST_CASE("AssetManager places instances into more than one view", "[gamelib][assets]")
 {
-	// One scene, more than one view: the Level Editor's viewport and the Material Editor's preview both
+	// One scene, more than one view: the Material Editor's preview and the Animation Editor's both
 	// draw the editor's single scene. The manager is the scene's, so geometry it holds is one upload
 	// counted once however many views instance it, and each instance names the view it lives in.
 	Fixture fx("bernini_am_multiview");
