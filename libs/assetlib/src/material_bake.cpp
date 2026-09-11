@@ -17,6 +17,7 @@
 #include <assetlib_structs/VkFormat.h>
 
 #include <core/err/util.h>
+#include <core/str/str.h>
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
@@ -188,8 +189,8 @@ namespace assetlib
 			}
 
 		private:
-			std::filesystem::path                   m_DataRoot;
-			std::unordered_map<std::string, Source> m_Decoded;
+			std::filesystem::path                m_DataRoot;
+			core::str::unordered_str_map<Source> m_Decoded;
 		};
 
 		/**
@@ -203,9 +204,9 @@ namespace assetlib
 		 */
 		void
 		stampRoutes(
-			std::span<const ChannelRoute>                 routes,
-			const std::filesystem::path&                  dataRoot,
-			std::unordered_map<std::string, SourceStamp>& stamps)
+			std::span<const ChannelRoute>              routes,
+			const std::filesystem::path&               dataRoot,
+			core::str::unordered_str_map<SourceStamp>& stamps)
 		{
 			for (const ChannelRoute& route : routes)
 			{
@@ -324,10 +325,10 @@ namespace assetlib
 		 */
 		std::string
 		bakeKey(
-			std::string                                         lead,
-			std::span<const ChannelRoute>                       routes,
-			const std::unordered_map<std::string, SourceStamp>& stamps,
-			uint8_t                                             fallback)
+			std::string                                      lead,
+			std::span<const ChannelRoute>                    routes,
+			const core::str::unordered_str_map<SourceStamp>& stamps,
+			uint8_t                                          fallback)
 		{
 			std::string key = std::move(lead);
 			for (const ChannelRoute& route : routes)
@@ -374,7 +375,7 @@ namespace assetlib
 
 			// Resampling is per (source, extent), so a source feeding two components of one group is
 			// only scaled once.
-			auto scaled = std::unordered_map<std::string, Rgba8>();
+			auto scaled = core::str::unordered_str_map<Rgba8>();
 
 			Rgba8 out(texels * 4u, std::byte{ 0xFF });
 			for (size_t component = 0; component < routes.size(); ++component)
@@ -429,7 +430,7 @@ namespace assetlib
 		const MaterialLayer& layer = material.layer;
 		PbrParams&           pbr   = material.pbr;
 
-		auto stamps = std::unordered_map<std::string, SourceStamp>();
+		auto stamps = core::str::unordered_str_map<SourceStamp>();
 		stampRoutes(pbr.routes, desc.dataRoot, stamps);
 
 		// Routing nothing is a complete material, not a failed one: its factors are the whole
@@ -533,7 +534,7 @@ namespace assetlib
 	static void
 	bakeSurface(BMaterial& material, const BakeDesc& desc, const CancelToken& cancel)
 	{
-		auto stamps = std::unordered_map<std::string, SourceStamp>();
+		auto stamps = core::str::unordered_str_map<SourceStamp>();
 		for (const SurfaceTextureBinding& slot : material.surface.textures)
 			stampRoutes(slot.routes, desc.dataRoot, stamps);
 
