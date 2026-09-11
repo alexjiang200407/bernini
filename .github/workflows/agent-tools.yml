@@ -1,0 +1,27 @@
+name: Agent tooling
+
+on:
+  pull_request:
+    paths:
+      - '.codex/**'
+      - '.agents/**'
+      - '.claude/hooks/**'
+      - '.githooks/**'
+      - 'scripts/**'
+      - '.github/workflows/agent-tools.yml'
+
+jobs:
+  codex:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python -m pip install pytest==8.3.5
+      - run: python scripts/init.py --agents-only
+      - run: python -m pytest -q scripts/tests/test_codex.py

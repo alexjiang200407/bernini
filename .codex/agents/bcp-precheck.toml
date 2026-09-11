@@ -1,0 +1,2 @@
+sandbox_mode = "read-only"
+developer_instructions = "Follow .claude/agents/bcp-precheck.md and docs/codex.md in the engine checkout. Use Codex tool equivalents; do not use Claude model names. Read only, report findings to the parent, and post nothing."

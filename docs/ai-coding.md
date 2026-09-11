@@ -216,8 +216,8 @@ pins is the silence: a hook that cries wolf is a hook somebody switches off.
 
 An AI-assisted commit stays **authored by the developer who ran it** and is **co-authored by the
 bot** — the human is accountable for it, the bot is credited for the work. Claude Code exports
-`CLAUDECODE=1` into every command it runs, and the committed hook
-[`.githooks/prepare-commit-msg`](../.githooks/prepare-commit-msg) keys off that rather than off a
+`CLAUDECODE=1` into every command it runs; Codex exports `CODEX_THREAD_ID`. The committed hook
+[`.githooks/prepare-commit-msg`](../.githooks/prepare-commit-msg) keys off either rather than off a
 trailer the assistant has to remember to write. It also replaces any `Co-authored-by: Claude …` line
 the assistant did stamp, so the credit is the bot's either way:
 
@@ -225,7 +225,7 @@ the assistant did stamp, so the credit is the bot's either way:
 Co-authored-by: morgana-coding-agent[bot] <305433938+morgana-coding-agent[bot]@users.noreply.github.com>
 ```
 
-A commit made from your own shell has no `CLAUDECODE` and no trailer, so it is left untouched and the
+A commit made from your own shell has neither session variable nor a trailer, so it is left untouched and the
 bot is credited only where it actually did the work. GitHub matches co-authors by that no-reply email
 — `<user-id>+<login>@users.noreply.github.com`, where the user id (`305433938`) is stable across App
 renames. The hook is idempotent (an amend does not duplicate the trailer), keeps the trailer out of

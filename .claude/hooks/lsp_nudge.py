@@ -300,6 +300,8 @@ def verdict(command):
             args = tool_args(tokens, name)
             if args is None:
                 continue
+            if name == "rg" and "--files" in args:
+                continue  # file discovery has no content pattern
             symbol, operands = symbol_of(args)
             if not symbol:
                 continue
