@@ -218,6 +218,45 @@ private:
 	void
 	ShowSampleClips();
 
+	/**
+	 * Puts the preview on the selected space at the cursor's parameter, or back on the selected
+	 * clip when the Space tab is not the one showing.
+	 *
+	 * The tab decides what is being watched, which is the rule the Blend tab already follows: each
+	 * one owns exactly what it stamps into the playback record (ADR-8).
+	 */
+	void
+	ShowSelectedSpace();
+
+	// Moves the space on screen to the cursor's parameter, and re-reads the weights under it.
+	void
+	MoveCursor(int tick);
+
+	// The cursor's range and position for the selected space, and the weights beneath it.
+	void
+	SyncCursor();
+
+	/**
+	 * Which two clips are live under the cursor and what each weighs, from `BlendSpaceInfo`'s own
+	 * `StraddleAt` rather than a second copy of the rule (ADR-4).
+	 *
+	 * It is the CPU twin of what the pose pass computes, and nothing mechanically holds the two in
+	 * step -- a readout disagreeing with the pose on screen is what this is here to make visible.
+	 */
+	void
+	ShowCursorWeights();
+
+	/**
+	 * Takes the selected space's thresholds from each clip's measured `locomotionSpeed` (ADR-7).
+	 *
+	 * The run is re-sorted by the speeds it takes, because thresholds from speed *are* an ordering
+	 * by speed. Refused when two of its clips were animated at the same speed, or when one does not
+	 * travel -- neither gives a run that strictly increases, and a blend space divides by the span
+	 * between two samples.
+	 */
+	void
+	ThresholdsFromSpeed();
+
 	// How many clips of the live set may be sampled at all, and the `n`th of them (-1: no such
 	// clip). What decides whether a space can be added, since one needs two of them.
 	[[nodiscard]] int
@@ -337,6 +376,17 @@ private:
 	QPushButton*    m_AddSample       = nullptr;
 	QPushButton*    m_RemoveSample    = nullptr;
 	QDoubleSpinBox* m_SampleParameter = nullptr;
+
+	// The parameter cursor over the selected space's range, the two clips live under it, and the
+	// action that takes every threshold from its clip's measured speed.
+	Scrubber*    m_SpaceCursor  = nullptr;
+	QLabel*      m_CursorLabel  = nullptr;
+	QLabel*      m_SpaceWeights = nullptr;
+	QPushButton* m_FromSpeed    = nullptr;
+
+	// Where the cursor sits on the selected space, in the space's own parameter. Kept across a
+	// reload for the reason the selection is: an edit should not move what is being watched.
+	float m_SpaceParameter = 0.0f;
 
 	/**
 	 * The open set as authored -- clips by name -- which is what every rule takes and what is saved.

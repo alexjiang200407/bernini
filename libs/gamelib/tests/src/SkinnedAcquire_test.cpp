@@ -1,3 +1,4 @@
+#include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers.hpp>
 #include <filesystem>
@@ -114,6 +115,11 @@ TEST_CASE("a rig acquires as skinned geometry, shares, and releases", "[skinned]
 		CHECK(mesh.clips[0].name == "slide");
 		CHECK(mesh.clips[0].frameCount == 2);
 		CHECK(mesh.clips[0].sampleRate == 30.0f);
+
+		// The speed the cook measured, carried through the acquire: what a locomotion space's
+		// thresholds are taken from, and the reason the panel needs no second decode of the
+		// `.banim` for one float per clip (ADR-7).
+		CHECK(mesh.clips[0].locomotionSpeed == Catch::Approx(2.5f));
 	}
 
 	SECTION("a second acquire shares the upload rather than making another")

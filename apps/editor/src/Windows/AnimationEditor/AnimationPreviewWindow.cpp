@@ -339,6 +339,8 @@ AnimationPreviewWindow::ClearGeometry()
 	m_AnimatedDraws.clear();
 	m_Instances.clear();
 	m_Geoms.clear();
+	m_Clips.clear();
+	m_Spaces.clear();
 }
 
 void
@@ -629,6 +631,9 @@ AnimationPreviewWindow::LoadMesh(
 		const auto activeSet =
 			static_cast<int>(std::distance(blendSets.begin(), std::ranges::find(blendSets, blend)));
 
+		m_Clips  = loaded.clips;
+		m_Spaces = loaded.spaces;
+
 		Q_EMIT MeshChanged(QString::fromStdString(rel));
 		Q_EMIT AnimationSourcesChanged(candidates, active < candidates.size() ? active : -1);
 		Q_EMIT ClipsChanged(editor::ToClipInfos(loaded.clips));
@@ -895,7 +900,98 @@ AnimationPreviewWindow::RetargetBlendParameters(const std::vector<game::BlendSpa
 		}
 	});
 
+	// Only once the scene took it: the cursor's own math reads these for cycle lengths, and a table
+	// ahead of the rig would retarget from a path the pose pass never walked.
+	if (refusal.isEmpty())
+		m_Spaces = spaces;
+
 	return refusal;
+}
+
+void
+AnimationPreviewWindow::ShowSpace(
+	const uint32_t spaceIndex,
+	const float    parameter,
+	const float    nowSeconds)
+{
+	if (m_Assets == nullptr || m_AnimatedDraws.empty() || spaceIndex >= m_Spaces.size() ||
+	    !editor::RewritesPlayback(m_Source))
+	{
+		return;
+	}
+
+	// Clips first and then the authored spaces, which is what makes a space's node index its
+	// position after them -- and why adding a set never moves a clip's.
+	const uint32_t node = static_cast<uint32_t>(m_Clips.size()) + spaceIndex;
+
+	m_Playback                = bgl::SkinnedPlaybackDesc::FromClip(node);
+	m_Playback.slot[0].param0 = parameter;
+	m_Playback.slot[0].param1 = parameter;
+	m_Playback.slot[0].tRef   = nowSeconds;
+
+	GetRenderer()->Invoke([&] {
+		for (AnimatedDraw& draw : m_AnimatedDraws)
+		{
+			try
+			{
+				m_Assets->DestroyInstance(GetPreviewViewRef(), draw.instance);
+				draw.instance = bgl::MeshInstanceHandle();
+				draw.instance = SpawnAnimated(draw.geom, draw.world, node);
+				GetPreviewViewRef()->SetSkinnedPlayback(draw.instance, m_Playback);
+			}
+			catch (const std::exception& e)
+			{
+				qWarning("AnimationPreview: failed to show a blend space: %s", e.what());
+			}
+		}
+	});
+}
+
+void
+AnimationPreviewWindow::RetargetSpace(
+	const uint32_t spaceIndex,
+	const float    parameter,
+	const float    nowSeconds,
+	const float    duration)
+{
+	if (m_Assets == nullptr || m_AnimatedDraws.empty() || spaceIndex >= m_Spaces.size() ||
+	    !editor::RewritesPlayback(m_Source))
+	{
+		return;
+	}
+
+	const uint32_t node = static_cast<uint32_t>(m_Clips.size()) + spaceIndex;
+
+	try
+	{
+		m_Playback = game::RetargetParameter(
+			m_Playback,
+			node,
+			m_Spaces[spaceIndex],
+			m_Clips,
+			parameter,
+			nowSeconds,
+			duration);
+	}
+	catch (const std::exception& e)
+	{
+		qWarning("AnimationPreview: failed to retarget a blend space: %s", e.what());
+		return;
+	}
+
+	GetRenderer()->Invoke([&] {
+		for (const AnimatedDraw& draw : m_AnimatedDraws)
+		{
+			try
+			{
+				GetPreviewViewRef()->SetSkinnedPlayback(draw.instance, m_Playback);
+			}
+			catch (const std::exception& e)
+			{
+				qWarning("AnimationPreview: failed to write a retargeted space: %s", e.what());
+			}
+		}
+	});
 }
 
 void

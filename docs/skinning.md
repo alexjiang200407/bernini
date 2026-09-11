@@ -408,6 +408,33 @@ to keep in agreement beyond the one below.
   it cannot find -- which is what lets `editor::ApplyParameters` move a threshold onto the live space
   without resolving a name twice.
 
+  **The cursor is what makes a space watchable.** A `Scrubber` under the run addresses the space's
+  own parameter range through `editor::ParameterForTick` -- integer-valued on a closed range, so the
+  bar needs a map rather than a cast -- and moving it calls `game::RetargetParameter` rather than
+  restamping the record. That is the whole reason a retarget exists: a space's phase advances at the
+  reciprocal of the weighted cycle length, so a parameter that moves changes the *rate*, and
+  integrating the new path from the old reference time would jump on the frame of the write. The slot
+  is rebased onto now first, so the pose keeps the cycle it was already walking.
+
+  Entering the tab puts the preview on the selected space -- node `clipCount + spaceIndex`, which is
+  what the node ordering is for -- and leaving it returns to the selected clip. Each tab owns exactly
+  what it stamps into the playback record (ADR-8), and a space and a crossfade are two different
+  clocks.
+
+  **The weight readout comes from `BlendSpaceInfo::StraddleAt`, not from a second copy of the rule**
+  (ADR-4). It is the CPU twin of what the pose pass computes, and nothing mechanically holds the two
+  in step -- a readout that disagreed with the pose on screen is the failure this shape exists to
+  make *visible* rather than to rule out. Outside the authored range both ends name the same sample,
+  which reads as that clip alone at 100%.
+
+  **Thresholds can be taken from measurement rather than guessed.** Every clip carries the speed its
+  root travelled at, measured at cook (`ClipInfo::locomotionSpeed`, ADR-7), and *Thresholds from
+  speed* writes each sample's threshold from its clip's. `editor::ThresholdsFromSpeed` **re-sorts the
+  run** by those speeds, because thresholds from speed *are* an ordering by speed: a run authored
+  walk-then-run but measured the other way round would otherwise stop strictly increasing. Two clips
+  animated at one speed -- two that do not travel included, since both measure zero -- are refused
+  with both names, because the span between two samples is what a weight divides by.
+
   **A space is created with two samples because there is no other kind.** `validateBlendSet` refuses
   a run under two -- one sample is a clip, and every clip is already a node under its own name -- so
   there is no empty space to add and fill in afterwards. *New* seeds the first two looping clips at

@@ -8,6 +8,8 @@
 #include <limits>
 #include <span>
 #include <string_view>
+#include <utility>
+#include <vector>
 
 #include "Windows/AnimationEditor/PlaybackTransport.h"
 
@@ -185,5 +187,40 @@ namespace editor
 			return "does not loop, so it cannot share a blend space's phase";
 
 		return {};
+	}
+
+	SpeedThresholds
+	ThresholdsFromSpeed(
+		const std::span<const assetlib::BlendSpaceSample> run,
+		const std::span<const ClipInfo>                   clips)
+	{
+		auto taken = std::vector<assetlib::BlendSpaceSample>(run.begin(), run.end());
+
+		for (assetlib::BlendSpaceSample& sample : taken)
+		{
+			const auto clip = std::ranges::find_if(clips, [&sample](const ClipInfo& c) {
+				return c.name == sample.clip;
+			});
+
+			if (clip == clips.end())
+				return { {}, "'" + sample.clip + "' is not a clip of this set" };
+
+			sample.parameter = clip->locomotionSpeed;
+		}
+
+		std::ranges::sort(taken, {}, &assetlib::BlendSpaceSample::parameter);
+
+		for (size_t i = 1; i < taken.size(); ++i)
+		{
+			if (taken[i].parameter > taken[i - 1].parameter)
+				continue;
+
+			return { {},
+				     "'" + taken[i - 1].clip + "' and '" + taken[i].clip +
+				         "' were animated at the same speed, so there is no run of increasing "
+				         "thresholds to take from them" };
+		}
+
+		return { std::move(taken), {} };
 	}
 }

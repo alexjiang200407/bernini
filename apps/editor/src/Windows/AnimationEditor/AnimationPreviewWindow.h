@@ -15,6 +15,7 @@
 #include <cstdint>
 #include <filesystem>
 #include <gamelib/BlendSpaceInfo.h>
+#include <gamelib/ClipInfo.h>
 #include <qcontainerfwd.h>
 #include <qnamespace.h>
 #include <qobject.h>
@@ -139,6 +140,32 @@ public:
 	 */
 	[[nodiscard]] QString
 	RetargetBlendParameters(const std::vector<game::BlendSpaceInfo>& spaces);
+
+	/**
+	 * Puts every animated instance on blend space `spaceIndex`, playing at `parameter`.
+	 *
+	 * A space is a node like a clip, after the clips -- `clipCount + spaceIndex` -- so this is
+	 * SetActiveClip's gesture with a parameter attached, and it respawns for the same reason: the
+	 * pose jumps, and the temporal epoch a respawn moves is what drops the history rather than
+	 * reprojecting through it.
+	 *
+	 * Nothing happens on the crowd source, whose shared table holds one clip and no slots.
+	 */
+	void
+	ShowSpace(uint32_t spaceIndex, float parameter, float nowSeconds);
+
+	/**
+	 * Moves the space already playing to `parameter` over `duration` from `nowSeconds`.
+	 *
+	 * `game::RetargetParameter`, which rebases the slot's phase first: a space's phase advances at
+	 * the reciprocal of the weighted cycle length, so a parameter that moves changes the rate, and
+	 * integrating the new path from the old reference time would jump on the frame of the write.
+	 * This is the cursor's door; ShowSpace is what starts the space playing at all.
+	 *
+	 * A no-op when no slot is playing that space, exactly as RetargetParameter is.
+	 */
+	void
+	RetargetSpace(uint32_t spaceIndex, float parameter, float nowSeconds, float duration);
 
 	/**
 	 * Stamps a fade from clip `fromNode` onto `toNode`, beginning at `startSeconds` and taking
@@ -373,6 +400,11 @@ private:
 	// entries of one file on one rig, and the panel drives them as a unit. On the crowd source only
 	// its dominant node means anything -- a shared table holds one clip and no slots.
 	bgl::SkinnedPlaybackDesc m_Playback;
+
+	// The acquire's own tables, kept because a space is played from them: RetargetParameter needs
+	// the cycle length at a parameter, which is the clips' and the space's together.
+	std::vector<game::ClipInfo>       m_Clips;
+	std::vector<game::BlendSpaceInfo> m_Spaces;
 
 	std::vector<bgl::MeshInstanceHandle> m_Instances;  // static entries
 	std::vector<bgl::GeomHandle>         m_Geoms;      // one entry per acquire, repeats included

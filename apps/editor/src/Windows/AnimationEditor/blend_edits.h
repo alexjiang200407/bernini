@@ -4,7 +4,9 @@
 #include <cstddef>
 #include <gamelib/BlendSpaceInfo.h>
 #include <span>
+#include <string>
 #include <string_view>
+#include <vector>
 
 #include "Windows/AnimationEditor/PlaybackTransport.h"
 
@@ -155,4 +157,29 @@ namespace editor
 	 */
 	[[nodiscard]] std::string_view
 	ClipRefusalReason(const ClipInfo& clip) noexcept;
+
+	/** A run taken from measured speed, or the reason it could not be. Exactly one is set. */
+	struct SpeedThresholds
+	{
+		std::vector<assetlib::BlendSpaceSample> run;
+		std::string                             refusal;
+	};
+
+	/**
+	 * `run` with every threshold taken from the speed its clip was animated at (ADR-7), re-sorted by
+	 * those speeds.
+	 *
+	 * Re-sorted because thresholds from speed *are* an ordering by speed: a run authored walk-then-
+	 * run but measured the other way round would otherwise stop strictly increasing, which is the
+	 * one thing a blend space cannot be. So the measurement decides the order, not the authoring.
+	 *
+	 * Refused -- with `run` left empty -- when two clips were animated at the same speed, when one
+	 * does not travel and another also does not, or when a sample names a clip `clips` does not
+	 * hold. The first two are the same refusal: the span between two samples is what a weight
+	 * divides by, so two at one threshold have no weighting between them.
+	 */
+	[[nodiscard]] SpeedThresholds
+	ThresholdsFromSpeed(
+		std::span<const assetlib::BlendSpaceSample> run,
+		std::span<const ClipInfo>                   clips);
 }

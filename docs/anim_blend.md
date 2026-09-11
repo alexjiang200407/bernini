@@ -142,6 +142,13 @@ door. Comparing the *resolved* spaces instead would miss the one case that matte
 indices, so a sample retargeted onto another clip reads as no change at all and arrives at a rig that
 refuses it. Everything else reloads the mesh, which is the reacquire opening a set already performs.
 
+**A clip carries the speed it was animated at.** `ClipInfo::locomotionSpeed` is measured at cook
+(`gltf_skin.cpp`) and travels with the acquire's clip table, which is what lets a locomotion space's
+thresholds be *taken* from the clips rather than guessed at: a walk at 1.4 and a run at 4.2 blend
+correctly at 2.8 precisely because those are the speeds they were animated at. Zero for a clip that
+does not travel, so two such clips cannot share a run -- they measure the same threshold, and the
+span between two samples is what a weight divides by.
+
 ## Risky / Non-obvious Contracts
 
 * **A slot's `nodeIndex` is checked against the rig's node count, not its clip count.** They differ by the
