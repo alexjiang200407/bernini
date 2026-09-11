@@ -39,8 +39,9 @@ namespace editor
 				"this file's materials changed while the import dialog was open; import it again");
 		}
 
-		// No device: the graph is authored, not drawn, and a TextureNode takes a null scene on purpose.
-		const auto registry = MakeMaterialNodeRegistry(nullptr, nullptr);
+		// No device: the graph is authored, not drawn, and a TextureNode takes a null scene on
+		// purpose. No surfaces either -- glTF can only describe a PBR material.
+		const auto registry = MakeMaterialNodeRegistry(nullptr, nullptr, {});
 
 		const std::vector<std::string> textureNames = assetlib::importedTextureFileNames(imported);
 
