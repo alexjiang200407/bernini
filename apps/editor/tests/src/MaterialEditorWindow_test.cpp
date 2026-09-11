@@ -1,5 +1,6 @@
 #include "Windows/MaterialEditor/MaterialGraphModel.h"
 #include "Windows/MaterialEditor/graph_compiler.h"
+#include "Windows/MaterialEditor/material_editor_ui.h"
 #include "Windows/MaterialEditor/material_graph.h"
 #include "Windows/MaterialEditor/material_io.h"
 #include "Windows/MaterialEditor/nodes/SurfaceOutputNode.h"
@@ -15,7 +16,6 @@
 #include <assetlib_structs/BMaterial.h>
 #include <bgl/LayerType.h>
 #include <bgl/SurfaceType.h>
-#include <bgl/TextureAssetHandle.h>
 #include <bgl/glm.h>
 #include <bgl/types/SurfaceMaterialDesc.h>
 #include <catch2/catch_approx.hpp>
@@ -24,6 +24,7 @@
 #include <qbuffer.h>
 #include <qcontainerfwd.h>
 #include <qobject.h>
+#include <qstringliteral.h>
 #include <string>
 #include <vector>
 
@@ -364,76 +365,94 @@ TEST_CASE("A surface board's save writes the board, not the disk", "[materialedi
 	CHECK(saved.extraJson.find("studio") != std::string::npos);
 }
 
-// A surface material previews from its document. What the renderer gets has to come from that
-// document, and this is the translation that does it -- the whole of it bar the texture upload,
-// which the loader here stands in for.
-TEST_CASE("A surface material previews through its own surface", "[materialeditor][surface]")
+// A surface material previews from its live board. What the renderer gets has to say what the
+// panel shows -- values as dialled in, layer as chosen, textures as wired -- and this is the
+// translation that does it, bar the texture upload the Texture nodes own.
+TEST_CASE("A surface board previews through its own surface", "[materialeditor][surface]")
 {
-	assetlib::BMaterial material;
-	material.name              = "Dog_Rim";
+	auto surface = bgl::SurfaceType();
+	surface.name = "Rim";
+
+	auto colour         = bgl::SurfaceValue();
+	colour.name         = "rimColor";
+	colour.type         = bgl::SurfaceValueType::kFloat3;
+	colour.defaultValue = glm::vec4(1.0f, 1.0f, 1.0f, 0.0f);
+	auto power          = bgl::SurfaceValue();
+	power.name          = "rimPower";
+	power.defaultValue  = glm::vec4(8.0f, 0.0f, 0.0f, 0.0f);
+
+	auto base  = bgl::SurfaceTexture();
+	base.name  = "baseColor";
+	auto mask  = bgl::SurfaceTexture();
+	mask.name  = "mask";
+	mask.index = 1;
+
+	surface.params.values   = { colour, power };
+	surface.params.textures = { base, mask };
+
+	auto material              = assetlib::BMaterial();
 	material.shadingModel      = assetlib::ShadingModel::kPbrSurface;
 	material.layer.alphaMode   = assetlib::AlphaMode::kMask;
 	material.layer.alphaCutoff = 0.25f;
 	material.layer.doubleSided = false;
 	material.surface.name      = "Rim";
-	material.surface.values.emplace_back("rimColor", std::vector<float>{ 5.0f, 2.0f, 0.7f });
-	material.surface.values.emplace_back("rimPower", std::vector<float>{ 2.5f });
-	material.surface.textures.emplace_back("baseColor", "Derived/SourceTextures/Dog/coat.ktx2");
+	material.surface.values    = { { "rimColor", { 5.0f, 2.0f, 0.7f } } };
+	material.surface.textures  = { { "baseColor", "Derived/SourceTextures/Dog/coat.ktx2" } };
 
-	auto asked = std::vector<std::string>();
+	MaterialGraphModel model(MakeMaterialNodeRegistry(nullptr, nullptr, { &surface, 1 }));
+	REQUIRE(BuildSurfaceMaterialGraph(model, material, std::filesystem::path("C:/proj/Data")));
 
-	const bgl::SurfaceMaterialDesc desc =
-		editor::SurfaceDescOf(material, [&](const std::string& key) {
-			asked.push_back(key);
-			return bgl::TextureAssetHandle();
-		});
+	const auto* sink = qobject_cast<const SurfaceOutputNode*>(model.OutputNode());
+	REQUIRE(sink != nullptr);
+
+	const bgl::SurfaceMaterialDesc desc = editor::SurfaceDescOfBoard(*sink);
 
 	CHECK(desc.surface == "Rim");
 
-	// The layer keys are the document's. They decide the PSO row, so a preview that took the
-	// board's would draw the right colours through the wrong pipeline.
+	// The layer keys decide the PSO row, and they are the board's own widgets.
 	CHECK(desc.layerType == bgl::LayerType::kMask);
 	CHECK(desc.alphaCutoff == 0.25f);
 	CHECK_FALSE(desc.doubleSided);
 
-	// Every value the document sets, under the name the surface declared, widened to four.
+	// Every declared value at its current setting: the edited colour, the untouched default.
 	REQUIRE(desc.values.size() == 2);
 	CHECK(desc.values[0].name == "rimColor");
 	CHECK(desc.values[0].value.x == 5.0f);
 	CHECK(desc.values[0].value.y == 2.0f);
 	CHECK(desc.values[0].value.z == 0.7f);
 	CHECK(desc.values[1].name == "rimPower");
-	CHECK(desc.values[1].value.x == 2.5f);
+	CHECK(desc.values[1].value.x == 8.0f);
 
-	// The bound texture is asked for by its data-root-relative key, which is what the document
-	// stores and what a store resolves.
-	REQUIRE(desc.textures.size() == 1);
-	CHECK(desc.textures[0].name == "baseColor");
-	REQUIRE(asked.size() == 1);
-	CHECK(asked[0] == "Derived/SourceTextures/Dog/coat.ktx2");
-}
-
-// One that will not load is not worth the material: the surface samples its default for that slot
-// and the rest of the document still draws, which is a visible mistake rather than an invisible one.
-TEST_CASE("A surface texture that will not load leaves the rest", "[materialeditor][surface]")
-{
-	assetlib::BMaterial material;
-	material.shadingModel = assetlib::ShadingModel::kPbrSurface;
-	material.surface.name = "Rim";
-	material.surface.values.emplace_back("rimPower", std::vector<float>{ 3.0f });
-	material.surface.textures.emplace_back("baseColor", "Derived/SourceTextures/gone.ktx2");
-
-	const bgl::SurfaceMaterialDesc desc = editor::SurfaceDescOf(material, [](const std::string&) {
-		return bgl::TextureAssetHandle();
-	});
-
-	CHECK(desc.surface == "Rim");
-	REQUIRE(desc.values.size() == 1);
-	CHECK(desc.values[0].value.x == 3.0f);
-
-	// Still bound, and still null: the name is what the surface declared, so dropping the binding
-	// would be a different mistake from binding nothing.
+	// The wired slot is bound and -- with no device to upload through -- null: the surface
+	// samples its default for it, a visible mistake rather than a lost material. The unwired
+	// slot is simply absent.
 	REQUIRE(desc.textures.size() == 1);
 	CHECK(desc.textures[0].name == "baseColor");
 	CHECK(desc.textures[0].texture.textureSlot.is_null());
+}
+
+TEST_CASE("The Output selector lists the four PBR sinks, then every surface", "[materialeditor]")
+{
+	auto rim = bgl::SurfaceType();
+	rim.name = "Rim";
+	auto fur = bgl::SurfaceType();
+	fur.name = "Fur";
+
+	const bgl::SurfaceType surfaces[] = { rim, fur };
+
+	const std::vector<editor::OutputType> types = editor::OutputTypesFor(surfaces);
+
+	// The four static entries first, in the order the selector has always listed them -- an index
+	// into this list is an index into the combo.
+	REQUIRE(types.size() == 6u);
+	CHECK(types[0].modelName == QStringLiteral("MaterialOutput"));
+	CHECK(types[1].modelName == QStringLiteral("AlphaTestedMaterialOutput"));
+	CHECK(types[2].modelName == QStringLiteral("BlendedMaterialOutput"));
+	CHECK(types[3].modelName == QStringLiteral("HashedAlphaMaterialOutput"));
+
+	// A surface entry is labelled by the surface and names its registered sink.
+	CHECK(types[4].label == QStringLiteral("Rim"));
+	CHECK(types[4].modelName == QStringLiteral("SurfaceOutput:Rim"));
+	CHECK(types[5].label == QStringLiteral("Fur"));
+	CHECK(types[5].modelName == QStringLiteral("SurfaceOutput:Fur"));
 }

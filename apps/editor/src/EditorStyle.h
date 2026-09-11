@@ -15,6 +15,10 @@
  *
  * It also paints the navigation arrows itself, because no platform style here answers them and the
  * fallback is a fixed green bitmap that ignores the palette.
+ *
+ * A combo box embedded in a graphics scene (the material graph's sink) is denied the platform's
+ * overlay popup, which misrenders when the proxy embeds it into the scene; it gets the plain
+ * dropdown list instead. Combos in ordinary panels keep the platform's.
  */
 class EditorStyle final : public QProxyStyle
 {

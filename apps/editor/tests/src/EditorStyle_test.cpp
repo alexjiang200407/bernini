@@ -2,9 +2,12 @@
 
 #include <QApplication>
 #include <QColor>
+#include <QComboBox>
+#include <QGraphicsScene>
 #include <QImage>
 #include <QPalette>
 #include <QPixmap>
+#include <QWidget>
 #include <catch2/catch_test_macros.hpp>
 #include <qguiapplication.h>
 #include <qrgb.h>
@@ -147,6 +150,28 @@ TEST_CASE("The arrow is rasterised at the device pixel ratio asked for", "[edito
 		CHECK(rendered.height() == int(32 * ratio));
 		CHECK(rendered.devicePixelRatio() == ratio);
 	}
+}
+
+TEST_CASE("A combo embedded in a graphics scene never gets the overlay popup", "[editorstyle]")
+{
+	const EditorStyle style;
+
+	// The surface sink's Layer combo: a child of a panel the scene embeds through a proxy, where
+	// macOS's draw-over-the-control menu paints its items on top of each other.
+	auto  scene = QGraphicsScene();
+	auto* panel = new QWidget();
+	auto* combo = new QComboBox(panel);
+	scene.addWidget(panel);  // the proxy owns the panel now
+
+	// Teeth only where the base style answers 1 (macOS, where the bug lives): a base already
+	// answering 0 satisfies this through the pass-through as well.
+	CHECK(style.styleHint(QStyle::SH_ComboBox_Popup, nullptr, combo, nullptr) == 0);
+
+	// A combo in an ordinary panel keeps the platform's answer, whatever it is.
+	const QComboBox plain;
+	CHECK(
+		style.styleHint(QStyle::SH_ComboBox_Popup, nullptr, &plain, nullptr) ==
+		style.baseStyle()->styleHint(QStyle::SH_ComboBox_Popup, nullptr, &plain, nullptr));
 }
 
 TEST_CASE("Every other standard pixmap is still the platform's", "[editorstyle]")

@@ -221,6 +221,9 @@ Deliberate, and each is a decision rather than an omission:
 * **Editor UI is reflected, never authored twice.** A surface material opens in the Material
   Editor as a sink node generated from `GetSurfaceTypes()` — one port per texture slot, one row
   per value, the layer keys beside them — and Save writes the document from that board. The
+  Output selector lists every registered surface beside the four PBR sinks, which is how a
+  surface material is created from scratch: pick the surface, and its board replaces the PBR
+  one. The
   `.slang` stays the only declaration of what a material may say; the panel edits the *material*.
   A surface the session did not register has no board: the editor refuses to open its materials,
   naming the surface, because the only board it could offer is a PBR one a Save would compile

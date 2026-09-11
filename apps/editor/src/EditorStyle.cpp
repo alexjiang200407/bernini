@@ -6,6 +6,7 @@
 #include <QPainter>
 #include <QPalette>
 #include <QPixmap>
+#include <QWidget>
 #include <QtCore>
 #include <algorithm>
 #include <qnamespace.h>
@@ -124,6 +125,13 @@ EditorStyle::styleHint(
 {
 	if (hint == SH_TabBar_Alignment)
 		return Qt::AlignLeft;
+
+	// A combo embedded in a graphics scene cannot use the platform's overlay popup: the proxy
+	// embeds the popup into the scene, where macOS's draw-over-the-control menu paints its items
+	// on top of each other. The plain dropdown list is the shape the proxy embeds correctly.
+	if (hint == SH_ComboBox_Popup && widget != nullptr &&
+	    widget->window()->graphicsProxyWidget() != nullptr)
+		return 0;
 
 	return QProxyStyle::styleHint(hint, option, widget, returnData);
 }

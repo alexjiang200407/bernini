@@ -39,7 +39,6 @@
 #include <memory>
 #include <optional>
 #include <qcontainerfwd.h>
-#include <qlatin1stringview.h>
 #include <qlogging.h>
 #include <qnamespace.h>
 #include <qobject.h>
@@ -209,6 +208,9 @@ MaterialEditorWindow::MaterialEditorWindow(QWidget* parent, MaterialEditorWindow
 
 	m_Registry = MakeMaterialNodeRegistry(m_Desc.renderer, m_TexturePreviews, surfaces);
 
+	m_OutputTypes = editor::OutputTypesFor(surfaces);
+	for (const editor::OutputType& type : m_OutputTypes) m_OutputSelector->addItem(type.label);
+
 	splitter->addWidget(ui.leftPanel);
 	splitter->addWidget(rightPanel);
 
@@ -243,11 +245,10 @@ MaterialEditorWindow::~MaterialEditorWindow()
 MaterialSinkNode*
 MaterialEditorWindow::ResetGraph(int graphIndex, const QJsonObject& graph)
 {
-	return RebuildGraph(graphIndex, [&graph](MaterialGraphModel& model) {
+	return RebuildGraph(graphIndex, [this, &graph](MaterialGraphModel& model) {
 		if (graph.isEmpty())
 		{
-			const QtNodes::NodeId outputId =
-				model.addNode(QLatin1String(editor::c_OutputTypes[0].modelName));
+			const QtNodes::NodeId outputId = model.addNode(m_OutputTypes.front().modelName);
 			model.setNodeData(outputId, QtNodes::NodeRole::Position, QPointF(220.0, 40.0));
 		}
 		else
@@ -331,13 +332,12 @@ MaterialEditorWindow::SetOutputType(int comboIndex)
 	const int graphIndex = m_Graphs.Current();
 	if (graphIndex < 0)
 		return;
-	if (comboIndex < 0 || comboIndex >= static_cast<int>(editor::c_OutputTypes.size()))
+	if (comboIndex < 0 || comboIndex >= static_cast<int>(m_OutputTypes.size()))
 		return;
 
 	MaterialGraphSet::Graph& entry = m_Graphs.At(graphIndex);
 
-	const QString modelName =
-		QLatin1String(editor::c_OutputTypes[static_cast<size_t>(comboIndex)].modelName);
+	const QString& modelName = m_OutputTypes[static_cast<size_t>(comboIndex)].modelName;
 	if (!entry.model->SetOutputType(modelName))
 		return;
 
@@ -360,25 +360,14 @@ MaterialEditorWindow::SyncOutputSelector()
 	if (output == nullptr)
 		return;
 
-	// The selector lists only the PBR sinks, so on a surface board it would show a lie and one
-	// click would swap the surface sink for a PBR one -- silently demoting the document on the
-	// next Save. Disabled while the board's sink is one it cannot name.
-	if (qobject_cast<const MaterialOutputNode*>(output) == nullptr)
-	{
-		m_OutputSelector->setEnabled(false);
-		return;
-	}
-
-	const auto it =
-		std::ranges::find_if(editor::c_OutputTypes, [&output](const editor::OutputType& type) {
-			return output->name() == QLatin1String(type.modelName);
-		});
-	if (it == editor::c_OutputTypes.end())
+	const auto it = std::ranges::find_if(m_OutputTypes, [&output](const editor::OutputType& type) {
+		return output->name() == type.modelName;
+	});
+	if (it == m_OutputTypes.end())
 		return;
 
 	const QSignalBlocker blocker(m_OutputSelector);
-	m_OutputSelector->setCurrentIndex(
-		static_cast<int>(std::distance(editor::c_OutputTypes.begin(), it)));
+	m_OutputSelector->setCurrentIndex(static_cast<int>(std::distance(m_OutputTypes.begin(), it)));
 }
 
 void
@@ -1019,12 +1008,7 @@ MaterialEditorWindow::CompileGraph(int graphIndex)
 
 	MaterialGraphSet::Graph& graph = m_Graphs.At(graphIndex);
 
-	editor::CompilePreviewMaterial(
-		graph,
-		*m_Desc.renderer,
-		*m_Preview,
-		graph.onDisk.Get(m_DataRoot, graph.materialPath),
-		m_DataRoot);
+	editor::CompilePreviewMaterial(graph, *m_Desc.renderer, *m_Preview);
 }
 
 void

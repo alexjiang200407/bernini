@@ -8,6 +8,7 @@
 
 #include <assetlib_structs/BMaterial.h>
 #include <bgl/SurfaceType.h>
+#include <bgl/TextureAssetHandle.h>
 #include <filesystem>
 #include <qjsonobject.h>
 #include <qobject.h>
@@ -107,10 +108,27 @@ public:
 	[[nodiscard]] QString
 	BoundTexture(size_t slot) const;
 
+	/** The uploaded texture bound into slot `slot`; null while nothing is wired, and null when
+	 *  there was no device to upload through -- the surface then samples its default. */
+	[[nodiscard]] bgl::TextureAssetHandle
+	BoundTextureAsset(size_t slot) const;
+
 	[[nodiscard]] assetlib::AlphaMode
 	GetAlphaMode() const noexcept
 	{
 		return m_AlphaMode;
+	}
+
+	[[nodiscard]] float
+	GetAlphaCutoff() const noexcept
+	{
+		return m_AlphaCutoff;
+	}
+
+	[[nodiscard]] bool
+	GetDoubleSided() const noexcept
+	{
+		return m_DoubleSided;
 	}
 
 private:

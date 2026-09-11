@@ -13,9 +13,11 @@
 #include <qcontainerfwd.h>
 #include <qobject.h>
 #include <qtmetamacros.h>
+#include <vector>
 
 #include "Windows/MaterialEditor/MaterialGraphSet.h"
 #include "Windows/MaterialEditor/MaterialPreviewWindow.h"
+#include "Windows/MaterialEditor/material_editor_ui.h"
 
 class TexturePreviewCache;
 
@@ -207,6 +209,9 @@ private:
 	TexturePreviewCache* m_TexturePreviews = nullptr;
 
 	std::shared_ptr<QtNodes::NodeDelegateModelRegistry> m_Registry;
+
+	// The Output selector's entries, index-aligned with the combo.
+	std::vector<editor::OutputType> m_OutputTypes;
 
 	MaterialGraphSet m_Graphs;
 

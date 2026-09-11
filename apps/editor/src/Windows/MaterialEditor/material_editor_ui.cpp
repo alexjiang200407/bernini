@@ -1,6 +1,7 @@
 #include "material_editor_ui.h"
 
 #include "Windows/MaterialEditor/MaterialGraphView.h"
+#include "Windows/MaterialEditor/nodes/SurfaceOutputNode.h"
 
 #include <QComboBox>
 #include <QHBoxLayout>
@@ -8,13 +9,37 @@
 #include <QPushButton>
 #include <QSplitter>
 #include <QVBoxLayout>
-#include <qlatin1stringview.h>
+#include <bgl/SurfaceType.h>
 #include <qnamespace.h>
 #include <qsizepolicy.h>
+#include <qstring.h>
 #include <qstringliteral.h>
+#include <span>
+#include <vector>
 
 namespace editor
 {
+	std::vector<OutputType>
+	OutputTypesFor(std::span<const bgl::SurfaceType> surfaces)
+	{
+		auto types = std::vector<OutputType>{
+			{ QStringLiteral("Opaque"), QStringLiteral("MaterialOutput") },
+			{ QStringLiteral("Alpha Tested"), QStringLiteral("AlphaTestedMaterialOutput") },
+			{ QStringLiteral("Alpha Blend"), QStringLiteral("BlendedMaterialOutput") },
+			{ QStringLiteral("Hashed Alpha"), QStringLiteral("HashedAlphaMaterialOutput") },
+		};
+
+		types.reserve(types.size() + surfaces.size());
+		for (const bgl::SurfaceType& surface : surfaces)
+		{
+			types.emplace_back(
+				QString::fromStdString(surface.name),
+				SurfaceOutputNode::ModelNameFor(surface.name));
+		}
+
+		return types;
+	}
+
 	MaterialEditorWidgets
 	BuildMaterialEditorUi(QWidget* parent)
 	{
@@ -98,14 +123,15 @@ namespace editor
 		// The graph's sink, chosen rather than dragged in: a material has exactly one, and which one it is
 		// *is* the alpha mode. The context menu does not offer them (see MaterialGraphScene).
 		propertiesLayout->addWidget(new QLabel(QStringLiteral("Output"), propertiesPanel));
+		// Entries arrive from the window (OutputTypesFor): the surfaces half is known only once
+		// the registry is.
 		widgets.outputSelector = new QComboBox(propertiesPanel);
-		for (const OutputType& type : c_OutputTypes)
-			widgets.outputSelector->addItem(QLatin1String(type.label));
 		widgets.outputSelector->setEnabled(false);
 		widgets.outputSelector->setToolTip(QStringLiteral(
 			"Alpha Tested adds a base-color alpha input and a cutoff: pixels below it are "
 			"discarded. Alpha Blend uses that alpha to blend the surface, back-to-front, with no "
-			"cutoff."));
+			"cutoff. A surface entry hands the material to that game surface, whose parameters "
+			"appear on its output node."));
 		propertiesLayout->addWidget(widgets.outputSelector);
 
 		// The material's current baked textures, if any. Read-only: the graph authors the routes they are

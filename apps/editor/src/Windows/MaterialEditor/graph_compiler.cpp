@@ -7,26 +7,21 @@
 #include "Windows/MaterialEditor/MaterialPreviewWindow.h"
 #include "Windows/MaterialEditor/nodes/ChannelData.h"
 #include "Windows/MaterialEditor/nodes/MaterialOutputNode.h"
+#include "Windows/MaterialEditor/nodes/SurfaceOutputNode.h"
 #include <bgl/LayerType.h>
+#include <bgl/SurfaceType.h>
 
 #include <QDebug>
 #include <qobject.h>
 
-#include <assetlib/image_io.h>
 #include <assetlib_structs/BMaterial.h>
 #include <bgl/MaterialHandle.h>
 #include <bgl/MaterialType.h>
-#include <bgl/TextureAssetHandle.h>
-#include <bgl/glm.h>
 #include <bgl/types/SurfaceMaterialDesc.h>
 #include <cstddef>
 #include <cstdint>
 #include <exception>
-#include <filesystem>
-#include <functional>
 #include <qlogging.h>
-#include <string>
-#include <utility>
 
 namespace
 {
@@ -47,46 +42,19 @@ namespace
 		return bgl::LayerType::kOpaque;
 	}
 
-	bool
-	IsSurfaceMaterial(bgl::MaterialHandle handle) noexcept
-	{
-		const auto kind = static_cast<uint32_t>(handle.materialType);
-		return handle.IsValid() && kind >= static_cast<uint32_t>(bgl::MaterialType::kGameStart) &&
-		       kind < static_cast<uint32_t>(bgl::MaterialType::kCount);
-	}
-
 	void
 	BindSurfacePreview(
-		MaterialGraphSet::Graph&     graph,
-		Renderer&                    renderer,
-		MaterialPreviewWindow&       preview,
-		const assetlib::BMaterial&   material,
-		const std::filesystem::path& dataRoot)
+		MaterialGraphSet::Graph&        graph,
+		Renderer&                       renderer,
+		MaterialPreviewWindow&          preview,
+		bgl::MaterialType               kind,
+		const bgl::SurfaceMaterialDesc& desc)
 	{
-		// A texture that will not load is left null rather than abandoning the material: the surface
-		// samples a default for it, which draws something an author can see is wrong -- where losing
-		// the material would leave the last edit on screen and look like nothing happened.
-		const bgl::SurfaceMaterialDesc desc =
-			editor::SurfaceDescOf(material, [&](const std::string& key) {
-				try
-				{
-					auto image = assetlib::loadKTX2(dataRoot / key);
-					return renderer.Invoke(
-						[&] { return renderer.GetScene()->AddTextureAsset(std::move(image)); });
-				}
-				catch (const std::exception& e)
-				{
-					qWarning(
-						"MaterialEditor: could not load '%s' for a surface: %s",
-						key.c_str(),
-						e.what());
-					return bgl::TextureAssetHandle();
-				}
-			});
-
-		// An update keeps the record's surface and layer, so it stands only while both still agree;
-		// anything else is a different PSO row and has to be a new material.
-		if (IsSurfaceMaterial(graph.preview) && graph.preview.layerType == desc.layerType)
+		// An update keeps the record's surface and layer, so it stands only while both still
+		// agree -- `kind` is *this* surface's, so a handle from another surface, or from a PBR
+		// board this one replaced, is a different PSO row and has to be a new material.
+		if (graph.preview.IsValid() && graph.preview.materialType == kind &&
+		    graph.preview.layerType == desc.layerType)
 		{
 			renderer.Post([owner = &renderer, handle = graph.preview, desc] {
 				try
@@ -139,50 +107,51 @@ namespace
 namespace editor
 {
 	bgl::SurfaceMaterialDesc
-	SurfaceDescOf(const assetlib::BMaterial& material, const TextureLoader& loadTexture)
+	SurfaceDescOfBoard(const SurfaceOutputNode& sink)
 	{
+		const bgl::SurfaceType& surface = sink.Surface();
+
 		auto desc        = bgl::SurfaceMaterialDesc();
-		desc.surface     = material.surface.name;
-		desc.layerType   = ToLayerType(material.layer.alphaMode);
-		desc.alphaCutoff = material.layer.alphaCutoff;
-		desc.doubleSided = material.layer.doubleSided;
+		desc.surface     = surface.name;
+		desc.layerType   = ToLayerType(sink.GetAlphaMode());
+		desc.alphaCutoff = sink.GetAlphaCutoff();
+		desc.doubleSided = sink.GetDoubleSided();
 
-		desc.values.reserve(material.surface.values.size());
-		for (const assetlib::SurfaceValueBinding& value : material.surface.values)
+		// Every declared value at its current setting, carried at four wide; the renderer is the
+		// side that knows how many components the parameter was declared with.
+		desc.values.reserve(surface.params.values.size());
+		for (size_t i = 0; i < surface.params.values.size(); ++i)
+			desc.values.emplace_back(surface.params.values[i].name, sink.Value(i));
+
+		for (size_t slot = 0; slot < surface.params.textures.size(); ++slot)
 		{
-			// Widened to four and narrowed again by the renderer, which is the only side that knows
-			// how many components the parameter was declared with.
-			auto binding = bgl::SurfaceValueBinding{ value.name, glm::vec4(0.0f) };
-			for (size_t i = 0; i < value.value.size() && i < 4; ++i)
-				binding.value[static_cast<glm::length_t>(i)] = value.value[i];
-			desc.values.push_back(std::move(binding));
+			if (sink.BoundTexture(slot).isEmpty())
+				continue;
+			desc.textures.emplace_back(
+				surface.params.textures[slot].name,
+				sink.BoundTextureAsset(slot));
 		}
-
-		desc.textures.reserve(material.surface.textures.size());
-		for (const assetlib::SurfaceTextureBinding& texture : material.surface.textures)
-			desc.textures.emplace_back(texture.name, loadTexture(texture.texture));
 
 		return desc;
 	}
 
 	void
 	CompilePreviewMaterial(
-		MaterialGraphSet::Graph&     graph,
-		Renderer&                    renderer,
-		MaterialPreviewWindow&       preview,
-		const assetlib::BMaterial*   onDisk,
-		const std::filesystem::path& dataRoot)
+		MaterialGraphSet::Graph& graph,
+		Renderer&                renderer,
+		MaterialPreviewWindow&   preview)
 	{
-		// A surface material previews from its document rather than from the live board: a Save
-		// rewrites the document, and the next board change is what re-reads it here.
-		if (onDisk != nullptr && onDisk->shadingModel == assetlib::ShadingModel::kPbrSurface)
+		if (const auto* surface = qobject_cast<const SurfaceOutputNode*>(graph.model->OutputNode()))
 		{
-			BindSurfacePreview(graph, renderer, preview, *onDisk, dataRoot);
+			BindSurfacePreview(
+				graph,
+				renderer,
+				preview,
+				surface->Surface().kind,
+				SurfaceDescOfBoard(*surface));
 			return;
 		}
 
-		// The PBR preview reads the PBR sink's factors and routes; a sink of another kind has no
-		// preview path here yet.
 		const auto* output = qobject_cast<const MaterialOutputNode*>(graph.model->OutputNode());
 		if (output == nullptr)
 			return;
@@ -222,7 +191,10 @@ namespace editor
 		for (size_t i = 0; i < desc.normal.size(); ++i)
 			desc.normal[i] = route(channel(assetlib::c_NormalChannels, i));
 
-		if (graph.preview.IsValid() && graph.preview.layerType == desc.layerType)
+		// The kind check matters since a board switches: a handle left by a surface sink is a
+		// different PSO row, and updating it in place would throw on every keystroke.
+		if (graph.preview.IsValid() && graph.preview.materialType == bgl::MaterialType::kLoosePbr &&
+		    graph.preview.layerType == desc.layerType)
 		{
 			// Fire-and-forget on every keystroke; the instances already override with this handle, so the
 			// in-place rewrite is all the edit needs.
