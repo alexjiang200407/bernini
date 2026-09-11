@@ -58,11 +58,11 @@ namespace assetlib::test
 				std::ofstream out(path, std::ios::binary);
 				REQUIRE(out.is_open());
 				const auto writeU32 = [&](uint32_t value) {
-					const std::array<char, 4> bytes{ static_cast<char>(value & 0xff),
-						                             static_cast<char>((value >> 8) & 0xff),
-						                             static_cast<char>((value >> 16) & 0xff),
-						                             static_cast<char>((value >> 24) & 0xff) };
-					out.write(bytes.data(), bytes.size());
+					const std::array<char, 4> bytes{ { static_cast<char>(value & 0xff),
+						                               static_cast<char>((value >> 8) & 0xff),
+						                               static_cast<char>((value >> 16) & 0xff),
+						                               static_cast<char>((value >> 24) & 0xff) } };
+					out.write(bytes.data(), static_cast<std::streamsize>(bytes.size()));
 				};
 				writeU32(0x46546c67);
 				writeU32(2);
