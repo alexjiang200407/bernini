@@ -1,3 +1,4 @@
+#include "TexturedGltf.h"
 #include <assetlib/bmesh.h>
 #include <assetlib/codecs.h>
 #include <assetlib_structs/Bounds.h>  // IWYU pragma: keep
@@ -155,7 +156,7 @@ namespace
 
 TEST_CASE("a fresh entry loads untouched, its document applied", "[regen]")
 {
-	const ImportedProject sandbox("bernini_regen_fresh", "assets/apples.glb");
+	const ImportedProject sandbox("bernini_regen_fresh", test::TexturedGltfPath());
 	const auto            before = BytesOf(sandbox.meshPath);
 
 	const RegenMesh current = sandbox.Store().LoadRegenMesh("Derived/Meshes/unit.bmesh");
@@ -167,7 +168,7 @@ TEST_CASE("a fresh entry loads untouched, its document applied", "[regen]")
 
 TEST_CASE("a binding-only document edit rebinds the loaded mesh without regeneration", "[regen]")
 {
-	const ImportedProject sandbox("bernini_regen_rebind", "assets/apples.glb");
+	const ImportedProject sandbox("bernini_regen_rebind", test::TexturedGltfPath());
 	const auto            before = BytesOf(sandbox.meshPath);
 
 	AssetStore(sandbox.dataRoot)
@@ -201,7 +202,7 @@ TEST_CASE("a binding-only document edit rebinds the loaded mesh without regenera
 
 TEST_CASE("a stale bake token regenerates the mesh from its source", "[regen]")
 {
-	const ImportedProject sandbox("bernini_regen_token", "assets/apples.glb");
+	const ImportedProject sandbox("bernini_regen_token", test::TexturedGltfPath());
 	const BMesh           fresh = LoadAt<BMesh>(sandbox.meshPath);
 
 	sandbox.Tamper(sandbox.meshPath, test::c_TokenOffset);
@@ -226,7 +227,7 @@ TEST_CASE(
 	"a recorded stamp that no longer matches the source regenerates -- the merge property",
 	"[regen]")
 {
-	const ImportedProject sandbox("bernini_regen_stamp", "assets/apples.glb");
+	const ImportedProject sandbox("bernini_regen_stamp", test::TexturedGltfPath());
 	const BMesh           fresh = LoadAt<BMesh>(sandbox.meshPath);
 
 	// A sibling branch's binary swapped in by a merge: current token, foreign source stamp.
@@ -241,7 +242,7 @@ TEST_CASE("a stale entry that cannot regenerate refuses", "[regen]")
 {
 	SECTION("no source was ever recorded")
 	{
-		const ImportedProject sandbox("bernini_regen_norecord", "assets/apples.glb");
+		const ImportedProject sandbox("bernini_regen_norecord", test::TexturedGltfPath());
 
 		BMesh synthetic  = LoadAt<BMesh>(sandbox.meshPath);
 		synthetic.source = SourceRef();
@@ -255,7 +256,7 @@ TEST_CASE("a stale entry that cannot regenerate refuses", "[regen]")
 
 	SECTION("the recorded source is gone from the project")
 	{
-		const ImportedProject sandbox("bernini_regen_nosource", "assets/apples.glb");
+		const ImportedProject sandbox("bernini_regen_nosource", test::TexturedGltfPath());
 
 		fs::remove(sandbox.dataRoot / "Authored/Meshes/unit.glb");
 		sandbox.Tamper(sandbox.meshPath, test::c_TokenOffset);
@@ -267,7 +268,7 @@ TEST_CASE("a stale entry that cannot regenerate refuses", "[regen]")
 
 	SECTION("the import document is gone, so the parameters are unknowable")
 	{
-		const ImportedProject sandbox("bernini_regen_nodocregen", "assets/apples.glb");
+		const ImportedProject sandbox("bernini_regen_nodocregen", test::TexturedGltfPath());
 
 		fs::remove(sandbox.documentPath);
 		sandbox.Tamper(sandbox.meshPath, test::c_TokenOffset);
@@ -280,7 +281,7 @@ TEST_CASE("a stale entry that cannot regenerate refuses", "[regen]")
 
 TEST_CASE("a read-only store trusts its keys and its baked bindings", "[regen]")
 {
-	const ImportedProject sandbox("bernini_regen_readonly", "assets/apples.glb");
+	const ImportedProject sandbox("bernini_regen_readonly", test::TexturedGltfPath());
 
 	// Stale by stamp, and rebound in the document: a writable store would act on both.
 	sandbox.Tamper(sandbox.meshPath, test::c_SourceHashOffset);
@@ -385,7 +386,7 @@ TEST_CASE("a stale rig regenerates, and its clips follow the document's sample r
 
 TEST_CASE("reauthor rewrites a document from its mesh, once", "[regen][importdoc]")
 {
-	const ImportedProject sandbox("bernini_regen_reauthor", "assets/apples.glb");
+	const ImportedProject sandbox("bernini_regen_reauthor", test::TexturedGltfPath());
 
 	// A rebind saved straight into the mesh, the way every save worked before documents: the
 	// document still records red, the mesh now says blue.
@@ -448,7 +449,7 @@ TEST_CASE("reauthor rewrites a document from its mesh, once", "[regen][importdoc
 
 TEST_CASE("a rebind with no document to land in is refused", "[regen][importdoc]")
 {
-	const ImportedProject sandbox("bernini_regen_nodoc", "assets/apples.glb");
+	const ImportedProject sandbox("bernini_regen_nodoc", test::TexturedGltfPath());
 	fs::remove(sandbox.documentPath);
 
 	CHECK_THROWS_WITH(
@@ -462,7 +463,7 @@ TEST_CASE("a rebind with no document to land in is refused", "[regen][importdoc]
 
 TEST_CASE("GeometryIsStale answers the key without loading a payload", "[regen]")
 {
-	const ImportedProject sandbox("bernini_regen_isstale", "assets/apples.glb");
+	const ImportedProject sandbox("bernini_regen_isstale", test::TexturedGltfPath());
 
 	CHECK_FALSE(sandbox.Store().GeometryIsStale("Derived/Meshes/unit.bmesh"));
 
@@ -487,8 +488,9 @@ TEST_CASE("GeometryIsStale answers the key without loading a payload", "[regen]"
 
 TEST_CASE("skipping textures still imports the geometry and the rig", "[regen][gltf]")
 {
-	const auto full    = loadFromGltf("assets/apples.glb");
-	const auto skipped = loadFromGltf("assets/apples.glb", { .textures = GltfTextures::kSkip });
+	const auto full = loadFromGltf(test::TexturedGltfPath());
+	const auto skipped =
+		loadFromGltf(test::TexturedGltfPath(), { .textures = GltfTextures::kSkip });
 
 	CHECK(skipped.submeshes.size() == full.submeshes.size());
 	CHECK(skipped.vertexData == full.vertexData);
@@ -498,7 +500,7 @@ TEST_CASE("skipping textures still imports the geometry and the rig", "[regen][g
 
 TEST_CASE("a foreign-token mesh still answers a reference scan from its headers", "[regen]")
 {
-	const ImportedProject sandbox("bernini_regen_refscan", "assets/apples.glb");
+	const ImportedProject sandbox("bernini_regen_refscan", test::TexturedGltfPath());
 	sandbox.Tamper(sandbox.meshPath, test::c_TokenOffset);
 
 	// No regeneration behind this: the materials are the document's and the rig answers by

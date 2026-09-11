@@ -1,3 +1,4 @@
+#include "TexturedGltf.h"
 #include <algorithm>
 #include <assetlib/bmesh.h>
 #include <assetlib/bmesh_gltf.h>
@@ -197,7 +198,7 @@ TEST_CASE("Two unnamed images of different pictures still differ", "[import][tex
 
 TEST_CASE("The names come off the glTF's own images", "[import][textures][gltf]")
 {
-	const std::filesystem::path glb = "assets/apples.glb";
+	const std::filesystem::path glb = test::TexturedGltfPath();
 	REQUIRE(std::filesystem::exists(glb));
 
 	const BMeshImport import = loadFromGltf(glb);

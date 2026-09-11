@@ -79,6 +79,7 @@ Use these Codex equivalents when a shared skill names Claude tools:
 | LSP | `bernini.lsp`, with `goToDefinition`, `findReferences`, `hover`, `documentSymbol`, `workspaceSymbol`, `goToImplementation`, `incomingCalls`, or `outgoingCalls` |
 | Explicit text search | `bernini.bgrep` or `scripts/bgrep` in a shell |
 | Edit / Write | `apply_patch`; in an ask session, `bernini.write_spec` only |
+| AskUserQuestion / selectable forks | `request_user_input_async` or `request_user_input`, subject to availability and active-mode restrictions; the rule lives in `CLAUDE.md` |
 | Skill invocation | `$bcp-…`, or read and follow the linked SKILL.md |
 | Agent `bcp-docmap` / `bcp-precheck` | The corresponding Codex agent role; use the configured Codex subagent model, not a Claude tier name |
 

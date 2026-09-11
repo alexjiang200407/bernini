@@ -3,6 +3,14 @@ Bernini is a 3D game engine. It uses CMake as the buildsystem.
 **Claude and Codex share these instructions.** Init creates `AGENTS.md` as a symlink to this
 file. In Codex, read [docs/codex.md](docs/codex.md) for tool, skill, and PR-watcher mappings.
 
+**Grill questions use selectable options.** For decision forks in `bcp-grill`, use the native
+question UI, put the recommendation first, and explain each option's trade-off. Claude uses
+`AskUserQuestion`. Codex prefers `request_user_input_async` when available and permitted, or
+`request_user_input` when its active-mode restrictions allow it. A Plan-only restriction on the
+blocking tool does not rule out the asynchronous tool. If neither is available or permitted,
+explain that briefly and ask in chat. Wait for the user's answer before dependent work;
+a preselected option or elapsed time is not an answer.
+
 # General Notes
 
 - Use bash

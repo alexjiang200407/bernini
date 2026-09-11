@@ -1,4 +1,5 @@
 #include "MountAt.h"  // IWYU pragma: keep
+#include "TexturedGltf.h"
 #include <algorithm>
 #include <assetlib/codecs.h>
 #include <assetlib/project_layout.h>  // IWYU pragma: keep
@@ -215,14 +216,12 @@ TEST_CASE("Reimport puts back only what is missing", "[reimport]")
 
 TEST_CASE("An emptied texture folder is re-extracted", "[reimport]")
 {
-	// apples.glb, not the synthetic rig: it is the only fixture carrying real images, and an
-	// extract with nothing to extract would pass this test without proving anything.
 	const Project  project  = MakeTexProject();
 	const fs::path dataRoot = project.GetDataDirectory();
 
 	test::ImportUnitGroup(
 		dataRoot,
-		"assets/apples.glb",
+		test::TexturedGltfPath(),
 		"Authored/Materials/red.bmaterial",
 		30.0f,
 		"Derived/BakedTextures/unit");

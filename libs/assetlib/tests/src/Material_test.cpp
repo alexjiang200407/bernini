@@ -1,3 +1,4 @@
+#include "TexturedGltf.h"
 #include <algorithm>
 #include <array>
 #include <assetlib/bmesh.h>
@@ -550,7 +551,7 @@ TEST_CASE("an import averages a base colour's mips in the light it encodes", "[b
 	// The extract decides which images are colour from the materials, so the whole chain under a
 	// base colour is built in linear light and tagged for it -- averaged in the encoded bytes it
 	// would read darker at every level below the first, which is what a re-extract has to fix.
-	const auto import = loadFromGltf("assets/apples.glb");
+	const auto import = loadFromGltf(test::TexturedGltfPath());
 	REQUIRE_FALSE(import.materials.empty());
 	REQUIRE(import.materials[0].baseColorTexture != c_InvalidIndex);
 
