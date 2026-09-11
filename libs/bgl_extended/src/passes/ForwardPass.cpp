@@ -273,6 +273,7 @@ namespace bgl
 			// coverage, so the reflection reaches the film undimmed by the material's alpha while
 			// the transmitted lobe is thinned in the shader. kSrcAlpha here would scale both.
 			auto blend = BlendState{};
+			// Composited colour has no single depth; zero alpha excludes it from TAA depth validation.
 			if (cfg.blend)
 			{
 				blend.SetRenderTarget(
@@ -282,8 +283,8 @@ namespace bgl
 						.SetSrcBlend(BlendFactor::kOne)
 						.SetDestBlend(BlendFactor::kInvSrcAlpha)
 						.SetBlendOp(BlendOp::kAdd)
-						.SetSrcBlendAlpha(BlendFactor::kOne)
-						.SetDestBlendAlpha(BlendFactor::kInvSrcAlpha)
+						.SetSrcBlendAlpha(BlendFactor::kZero)
+						.SetDestBlendAlpha(BlendFactor::kZero)
 						.SetBlendOpAlpha(BlendOp::kAdd));
 			}
 

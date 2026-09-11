@@ -37,7 +37,7 @@ public extension MaterialData
     {
         let lobes = EvaluateLobes(input, surface, isFrontFace);
 
-        return float4(lobes.diffuse + lobes.specular + lobes.emissive, surface.baseColor.a);
+        return float4(lobes.diffuse + lobes.specular + lobes.emissive, 1.0);
     }
 
     /**
@@ -112,6 +112,6 @@ public extension MaterialData
             discard;
         }
 
-        return ShadeSurface(input, SurfaceOf(material, input.uv, baseColor), isFrontFace);
+        return float4(ShadeSurface(input, SurfaceOf(material, input.uv, baseColor), isFrontFace).rgb, 0.0);
     }
 }

@@ -106,10 +106,12 @@ space. And a pixel shader that writes a literal colour — `programs.forward.Nul
 writing radiance, not a display value, so its `1.0` reaches the screen as the curve's answer for
 unit radiance and not as white.
 
-`sceneColor`'s alpha never reaches the screen: a surviving hashed or cutout fragment writes its
-*texture* alpha there, which is the surface's own coverage and not the pixel's, so `PostProcess`
-writes the backbuffer opaque — a capture (or anything compositing the backbuffer) that inherited it
-would hold transparency the image does not have.
+`sceneColor` alpha marks reliable opaque coverage for TAA: opaque and surviving cutout fragments
+write one; built-in and game-defined hashed fragments write zero. Transparent PSOs keep their
+premultiplied RGB blend but clear destination alpha with zero alpha blend factors. TAA stores
+unavailable history depth for uncertain pixels rather than mistaking stochastic coverage or a
+composited surface for an opaque disocclusion. `PostProcess` reads RGB and writes the backbuffer
+opaque; the marker never becomes display transparency.
 
 ---
 
@@ -203,8 +205,8 @@ than light that came through from behind, so transmission exempts it from thinni
 it raises the coverage not at all — emission adds to the backdrop, it does not hide it.
 
 **Only the blend bucket is premultiplied.** The opaque, cutout and hashed buckets write with no blend
-at all, so their pixel shaders keep returning the plain sum and the material's own alpha — a cutout
-fragment that survives is fully opaque, and scaling its diffuse by a texture alpha would be wrong.
+at all, so their pixel shaders return the plain radiance sum. Their alpha is the TAA depth-validity
+marker described above; scaling a surviving cutout fragment's radiance by texture alpha would be wrong.
 
 ## Hashed alpha
 

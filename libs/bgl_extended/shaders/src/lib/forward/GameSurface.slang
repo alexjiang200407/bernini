@@ -172,7 +172,7 @@ public extension MaterialData
             discard;
         }
 
-        return ShadeSurface(input, record.Evaluate(input), isFrontFace);
+        return float4(ShadeSurface(input, record.Evaluate(input), isFrontFace).rgb, 0.0);
     }
 
     // Premultiplied, against the transparent PSOs' SrcBlend = One; see ShadeSurfaceBlended.

@@ -1,6 +1,7 @@
 #include "gfx/RenderContext.h"
 #include "cmd/TimestampHeap.h"
 #include "fg/PassTimer.h"
+#include <core/glm.h>
 
 #include "constants/constants.h"
 #include "debug/DebugReadback.h"
@@ -657,6 +658,7 @@ namespace bgl
 
 		auto camera                 = ViewMatrices();
 		camera.viewProj             = viewProj;
+		camera.view                 = job.camera.GetView();
 		camera.rotationOnlyViewProj = projection * viewNoTranslation;
 		camera.envRotation          = envRotation;
 		camera.jitter               = jitter;
@@ -675,6 +677,7 @@ namespace bgl
 		// for the target, so a frame of several draws disables it rather than choosing.
 		m_TaaClipToView     = glm::inverse(job.camera.GetProjection());
 		m_TaaViewToPrevClip = prevCamera.unjitteredViewProj * invView;
+		m_TaaViewToPrevView = prevCamera.view * invView;
 		m_TaaJitter         = jitter;
 
 		const uint32_t drawIdx = m_DrawCount++;
@@ -948,6 +951,7 @@ namespace bgl
 			taaArgs.depth               = rt.GetDepthSrv();
 			taaArgs.clipToView          = m_TaaClipToView;
 			taaArgs.viewToPrevClip      = m_TaaViewToPrevClip;
+			taaArgs.viewToPrevView      = m_TaaViewToPrevView;
 			taaArgs.jitter              = m_TaaJitter;
 			taaArgs.cameraPairValid     = m_DrawCount == 1;
 			taaArgs.historyValid        = rt.IsHistoryValid() && !m_TemporalBreak;

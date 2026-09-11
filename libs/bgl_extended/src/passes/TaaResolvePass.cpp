@@ -18,6 +18,7 @@
 #include <array>
 #include <bgl_common/gassert.h>
 #include <cmath>
+#include <core/glm.h>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -35,21 +36,15 @@ namespace bgl
 		// Every member Execute writes. Kept beside the code that writes them so
 		// BinderNames catches a shader rename at startup: an optional write is silent, so
 		// a stale name would otherwise resolve to nothing every frame and say nothing.
-		constexpr std::array<std::string_view, 19> c_Fields = {
-			"sceneColor"sv,      "history"sv,        "motionVectors"sv, "depth"sv,
-			"clipToView"sv,      "viewToPrevClip"sv, "jitter"sv,        "cameraPairValid"sv,
-			"pointSampler"sv,    "linearSampler"sv,  "renderSize"sv,    "renderTexelSize"sv,
-			"outputTexelSize"sv, "jitterTexels"sv,   "subPixels"sv,     "resampling"sv,
-			"sampleWeightK"sv,   "blendWeight"sv,    "historyValid"sv,
+		constexpr std::array<std::string_view, 20> c_Fields = {
+			"sceneColor"sv,      "history"sv,         "motionVectors"sv,  "depth"sv,
+			"clipToView"sv,      "viewToPrevClip"sv,  "viewToPrevView"sv, "jitter"sv,
+			"cameraPairValid"sv, "pointSampler"sv,    "linearSampler"sv,  "renderSize"sv,
+			"renderTexelSize"sv, "outputTexelSize"sv, "jitterTexels"sv,   "subPixels"sv,
+			"resampling"sv,      "sampleWeightK"sv,   "blendWeight"sv,    "historyValid"sv,
 		};
 
-		// How much of the resolved pixel is this frame. The trade is flicker against how fast the
-		// antialiasing converges, *not* against ghosting -- the neighbourhood clamp is what bounds a
-		// trail, and the weight barely moves it. Measured: 0.1 leaves 0.0022 of frame-to-frame noise
-		// on a hashed surface, 0.05 leaves 0.0015, 0.025 leaves 0.0014 but no longer resolves an edge
-		// within the frames a camera actually holds still for. This is the base: the resolve divides
-		// it by remembered stochastic spread at rest (TaaResolve.slang), which is what reaches the
-		// residual a constant weight cannot.
+		// Valid history retains subpixel detail; disoccluded pixels bypass accumulation.
 		constexpr float c_BlendWeight = 0.05f;
 	}
 
@@ -162,6 +157,7 @@ namespace bgl
 			taa["depth"].SetIfValid(args.depth);
 			taa["clipToView"].SetIfValid(args.clipToView);
 			taa["viewToPrevClip"].SetIfValid(args.viewToPrevClip);
+			taa["viewToPrevView"].SetIfValid(args.viewToPrevView);
 			taa["jitter"].SetIfValid(args.jitter);
 			taa["cameraPairValid"].SetIfValid(args.cameraPairValid ? 1.0f : 0.0f);
 			taa["pointSampler"].SetIfValid(args.pointSampler);

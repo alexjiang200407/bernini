@@ -13,6 +13,7 @@ struct TaaResolveData : IResolveInputs
 
     float4x4 clipToView;
     float4x4 viewToPrevClip;
+    float4x4 viewToPrevView;
     float cameraPairValid;
     float2 jitter;
 
@@ -34,6 +35,7 @@ struct TaaResolveData : IResolveInputs
     float historyValid;
 
     float3 History(float2 uv) { return history.SampleLevel(linearSampler, uv, 0.0).rgb; }
+    float HistoryDepth(float2 uv) { return history.SampleLevel(pointSampler, uv, 0.0).a; }
     float4 Scene(float2 uv) { return sceneColor.SampleLevel(pointSampler, uv, 0.0); }
     float3 SceneLinear(float2 uv) { return sceneColor.SampleLevel(linearSampler, uv, 0.0).rgb; }
     float2 Motion(float2 uv) { return motionVectors.SampleLevel(pointSampler, uv, 0.0).xy; }
@@ -44,6 +46,7 @@ struct TaaResolveData : IResolveInputs
         ResolveParams p;
         p.clipToView = clipToView;
         p.viewToPrevClip = viewToPrevClip;
+        p.viewToPrevView = viewToPrevView;
         p.cameraPairValid = cameraPairValid;
         p.jitter = jitter;
         p.renderSize = renderSize;

@@ -144,7 +144,10 @@ float ObjectTexels<I : IResolveInputs>(I inputs, ResolveParams p, float2 uv, flo
         return 0.0;
     }
 
-    return length((motion - CameraMotion(uv, depth, p.jitter, p.clipToView, p.viewToPrevClip)) / texel);
+    float2 cameraMotion = CameraMotion(uv, depth, p.jitter, p.clipToView, p.viewToPrevClip);
+    // Binary16 velocity rounding grows with speed; it is not independent object motion.
+    float2 rounding = abs(cameraMotion) / 2048.0 + 1.0 / 33554432.0;
+    return length(max(abs(motion - cameraMotion) - rounding, 0.0) / texel);
 }
 
 /**
@@ -152,7 +155,7 @@ float ObjectTexels<I : IResolveInputs>(I inputs, ResolveParams p, float2 uv, flo
  * neighbour moving most on its own lends its vector, and this frame is blended in by how near its
  * jittered sample landed. docs/taa.md is the recipe and the measurement behind each choice.
  *
- * @return The new history at `uv`, alpha zero.
+ * @return The new colour history and unaccumulated view depth; zero depth means unavailable.
  */
 public float4 TaaResolve<I : IResolveInputs>(I inputs, ResolveParams p, float2 uv)
 {
@@ -176,6 +179,13 @@ public float4 TaaResolve<I : IResolveInputs>(I inputs, ResolveParams p, float2 u
     float4 current = inputs.Scene(sampleUv);
 
     float2 motion = inputs.Motion(sampleUv);
+    float depth = inputs.Depth(sampleUv);
+    float2 ndc = float2(sampleUv.x * 2.0 - 1.0, 1.0 - sampleUv.y * 2.0) - p.jitter;
+    float4 view = mul(p.clipToView, float4(ndc, depth, 1.0));
+    view /= view.w;
+    float viewDepth = abs(view.z);
+    // Scene alpha marks opaque coverage; stochastic and composited depth cannot validate history.
+    float historyDepth = p.cameraPairValid != 0.0 && current.a >= 1.0 && viewDepth <= 65504.0 ? viewDepth : 0.0;
 
     // What a surface must move by on its own before a neighbour's vector is worth borrowing: a
     // twentieth of a texel doubles no edge, and clears the reconstruction's residue on a static
@@ -242,13 +252,32 @@ public float4 TaaResolve<I : IResolveInputs>(I inputs, ResolveParams p, float2 u
     // first frame it holds whatever the allocation did, which may decode as NaN. `lerp(NaN, c, 1.0)`
     // is NaN -- the zero coefficient does not discard the operand -- and a NaN written into the
     // accumulation stays there for the life of the target.
-    if (!onScreen || p.historyValid == 0.0)
+    bool occluded = false;
+    if (onScreen && p.historyValid != 0.0 && p.cameraPairValid != 0.0 && historyDepth > 0.0 && depth < 0.99999 &&
+        length(motion / texel) > c_ObjectTexels && dilatedObjectTexels <= c_ObjectTexels)
+    {
+        float previousDepth = abs(mul(p.viewToPrevView, view).z);
+        // A nearer footprint must be complete: one uncertain tap preserves stochastic accumulation.
+        float farthest = 0.0;
+        bool available = true;
+        for (int y = -1; y <= 1; ++y)
+        {
+            for (int x = -1; x <= 1; ++x)
+            {
+                float tap = inputs.HistoryDepth(historyUv + float2(x, y) * max(texel, p.outputTexelSize));
+                farthest = max(farthest, tap);
+                available = available && tap > 0.0;
+            }
+        }
+        occluded = available && previousDepth > farthest * 1.01;
+    }
+    if (!onScreen || p.historyValid == 0.0 || occluded)
     {
         // Filtered onto the output grid rather than point-taken: there is no accumulation to build
         // the frame out of jittered samples yet, so this one frame is a plain resample.
         float3 whole = resampling ? inputs.SceneLinear(uv) : current.rgb;
 
-        return float4(whole, 0.0);
+        return float4(whole, historyDepth);
     }
 
     float3 history = SampleHistoryCatmullRom(inputs, historyUv, p.outputTexelSize);
@@ -262,9 +291,9 @@ public float4 TaaResolve<I : IResolveInputs>(I inputs, ResolveParams p, float2 u
     float sampleWeight = PhaseWeight(sampleOffset.x, p.jitterTexels.x, p.subPixels.x, p.sampleWeightK) *
                          PhaseWeight(sampleOffset.y, p.jitterTexels.y, p.subPixels.y, p.sampleWeightK);
 
-    float weight = sampleWeight * p.blendWeight;
+    float weight = saturate(sampleWeight * p.blendWeight);
 
     float3 resolved = UnToneWeight(lerp(ToneWeight(history), ToneWeight(current.rgb), weight));
 
-    return float4(resolved, 0.0);
+    return float4(resolved, historyDepth);
 }

@@ -14,6 +14,7 @@ RWStructuredBuffer<float4> gOut;
 struct BoundInputs : IResolveInputs
 {
     float3 History(float2 uv) { return gHistory.SampleLevel(gLinear, uv, 0.0).rgb; }
+    float HistoryDepth(float2 uv) { return gHistory.SampleLevel(gPoint, uv, 0.0).a; }
     float4 Scene(float2 uv) { return gScene.SampleLevel(gPoint, uv, 0.0); }
     float3 SceneLinear(float2 uv) { return gScene.SampleLevel(gLinear, uv, 0.0).rgb; }
     float2 Motion(float2 uv) { return gMotion.SampleLevel(gPoint, uv, 0.0).xy; }
@@ -34,6 +35,7 @@ void main(uint3 id: SV_DispatchThreadID)
     ResolveParams p;
     p.clipToView = float4x4(1.0);
     p.viewToPrevClip = float4x4(1.0);
+    p.viewToPrevView = float4x4(1.0);
     p.cameraPairValid = 1.0;
     p.jitter = float2(0.0, 0.0);
     p.renderSize = float2(64.0, 64.0);

@@ -1,4 +1,5 @@
 #pragma once
+#include <core/glm.h>
 
 namespace bgl
 {
@@ -9,6 +10,7 @@ namespace bgl
 	struct ViewMatrices
 	{
 		glm::mat4 viewProj{ 1.0f };
+		glm::mat4 view{ 1.0f };
 
 		// viewProj with the camera's translation dropped. The skybox sits at infinity, so a
 		// translation moves it nowhere and only rotation displaces it on screen.
