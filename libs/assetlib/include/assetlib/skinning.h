@@ -284,10 +284,14 @@ namespace assetlib
 		const AnimationSet& animations);
 
 	/**
-	 * What a baked posed box was measured against: the mesh's vertex data, the entry and submesh
-	 * tables that address it, and the skeleton's inverse binds -- everything posedBounds reads
-	 * that does not live in the `.banim` itself. A re-imported mesh or a re-authored bind changes
-	 * it; renames, material swaps and clip edits do not.
+	 * What a baked posed box was measured against: the mesh's geometry (assetlib::geometrySignature,
+	 * taken from `BMesh::geometrySignature` where the cook recorded one) and the inverse binds of
+	 * the bones it has weight on -- everything posedBounds reads that does not live in the `.banim`
+	 * itself. A re-imported mesh or a re-authored bind changes it; renames, material swaps, clip
+	 * edits and a bone nothing is weighted to do not.
+	 *
+	 * A mesh whose vertex layout will not decode keys on every bone instead: a pairing that cannot
+	 * be read cannot be narrowed against, and this may not throw.
 	 */
 	[[nodiscard]] uint64_t
 	posedBoundsSignature(const BMesh& mesh, const Skeleton& skeleton) noexcept;
@@ -489,9 +493,15 @@ namespace assetlib
 		std::span<const AvatarLegChain> chains);
 
 	/**
-	 * What a baked plant weight was measured against: the rig, the avatar resolved on it -- legs
-	 * and clip weights both -- and the geometry the soles were fitted to. A re-imported mesh, a
-	 * re-authored bind or an edited avatar changes it; renames and material swaps do not.
+	 * What a baked plant weight was measured against: each leg walked to the root by name and by
+	 * both of its binds, the clip weights the avatar resolved, and the geometry the soles were
+	 * fitted to. A re-imported mesh, a re-authored bind along a leg, a renamed leg bone or an edited
+	 * avatar changes it; material swaps and a bone appended off the legs do not.
+	 *
+	 * By name and not by index, and the chain and not the rig: a sole sits in model space, so every
+	 * ancestor's rest offset is part of where it lands, while a bone added elsewhere renumbers the
+	 * chain without moving it. Both binds, because solePlanes carries every sole through the ankle's
+	 * `inverseBind` while the flat-plane fallback composes `bindPose` up the chain.
 	 *
 	 * The clips are deliberately absent: they live in the same file, so a clip edit rewrites the
 	 * weights beside it and a signature over them would only be a second way to say so.
