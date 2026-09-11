@@ -4,9 +4,12 @@
 #include <catch2/catch_approx.hpp>
 #include <catch2/catch_message.hpp>
 #include <catch2/catch_test_macros.hpp>
+#include <gamelib/BlendSpaceInfo.h>
 #include <limits>
 #include <string>
 #include <vector>
+
+#include "Windows/AnimationEditor/PlaybackTransport.h"
 
 // The rules a blend space's sample run obeys while it is authored, lifted clear of the panel that
 // drives them. What every case here is really checking is one property: whatever the gesture, the
@@ -245,5 +248,141 @@ TEST_CASE("The cursor maps a Scrubber's ticks onto the run's parameters", "[anim
 				c_Max,
 				c_Ticks,
 				std::numeric_limits<float>::quiet_NaN()) == 0);
+	}
+}
+
+namespace
+{
+	// A set of one space over `Run()`, in authored form -- clips by name, which is what a `.bblend`
+	// stores and what every rule here takes.
+	std::vector<assetlib::BlendSpace>
+	Authored()
+	{
+		auto space    = assetlib::BlendSpace();
+		space.name    = "locomotion";
+		space.samples = Run();
+		return { space };
+	}
+
+	// The same space as the acquire resolved it: clip *indices*, in the same order. That positional
+	// correspondence is what ApplyParameters relies on.
+	std::vector<game::BlendSpaceInfo>
+	Resolved()
+	{
+		auto info    = game::BlendSpaceInfo();
+		info.name    = "locomotion";
+		info.samples = { { 7, 1.5f }, { 4, 3.2f }, { 9, 6.0f } };
+		return { info };
+	}
+}
+
+TEST_CASE("A threshold that moved goes live; a changed shape does not", "[animation][blend]")
+{
+	const std::vector<assetlib::BlendSpace> before = Authored();
+
+	SECTION("moving every threshold is still the same set")
+	{
+		std::vector<assetlib::BlendSpace> after = Authored();
+		for (assetlib::BlendSpaceSample& sample : after[0].samples) sample.parameter *= 10.0f;
+
+		CHECK(editor::IsParameterMove(before, after));
+	}
+
+	SECTION("adding or removing a sample is a node table that has to be built again")
+	{
+		std::vector<assetlib::BlendSpace> added = Authored();
+		added[0].samples.push_back({ "sprint", 9.0f });
+		CHECK_FALSE(editor::IsParameterMove(before, added));
+
+		std::vector<assetlib::BlendSpace> removed = Authored();
+		removed[0].samples.pop_back();
+		CHECK_FALSE(editor::IsParameterMove(before, removed));
+	}
+
+	SECTION("adding or removing a space is too")
+	{
+		std::vector<assetlib::BlendSpace> added = Authored();
+		added.push_back(added[0]);
+		added[1].name = "strafe";
+		CHECK_FALSE(editor::IsParameterMove(before, added));
+
+		CHECK_FALSE(editor::IsParameterMove(before, {}));
+	}
+
+	SECTION("a sample pointed at another clip is not a parameter move")
+	{
+		// The case that needs the *authored* sets to see at all: the live form holds indices, so a
+		// clip swap would read as no change there and reach a rig that refuses it.
+		std::vector<assetlib::BlendSpace> swapped = Authored();
+		swapped[0].samples[1].clip                = "canter";
+
+		CHECK_FALSE(editor::IsParameterMove(before, swapped));
+	}
+
+	SECTION("a renamed space is not one either")
+	{
+		std::vector<assetlib::BlendSpace> renamed = Authored();
+		renamed[0].name                           = "locomotion 2";
+
+		CHECK_FALSE(editor::IsParameterMove(before, renamed));
+	}
+}
+
+TEST_CASE(
+	"A moved threshold reaches the resolved space without a second lookup",
+	"[animation][blend]")
+{
+	std::vector<game::BlendSpaceInfo> live = Resolved();
+
+	SECTION("every parameter is written and no clip index moves")
+	{
+		std::vector<assetlib::BlendSpace> authored = Authored();
+		authored[0].samples[0].parameter           = -2.0f;
+		authored[0].samples[1].parameter           = 0.5f;
+		authored[0].samples[2].parameter           = 11.0f;
+
+		REQUIRE(editor::ApplyParameters(authored, live));
+
+		CHECK(live[0].samples[0].parameter == Catch::Approx(-2.0f));
+		CHECK(live[0].samples[1].parameter == Catch::Approx(0.5f));
+		CHECK(live[0].samples[2].parameter == Catch::Approx(11.0f));
+
+		// The indices are what the acquire resolved; nothing here re-resolves a name.
+		CHECK(live[0].samples[0].clipIndex == 7);
+		CHECK(live[0].samples[1].clipIndex == 4);
+		CHECK(live[0].samples[2].clipIndex == 9);
+	}
+
+	SECTION("shapes that do not correspond write nothing at all")
+	{
+		// Checked in full first, so a run that breaks halfway leaves no half-written space -- the
+		// same bargain SetRigBlendParameters strikes at the door.
+		std::vector<assetlib::BlendSpace> shorter = Authored();
+		shorter[0].samples.pop_back();
+		shorter[0].samples[0].parameter = 99.0f;
+
+		CHECK_FALSE(editor::ApplyParameters(shorter, live));
+		CHECK(live[0].samples[0].parameter == Catch::Approx(1.5f));
+
+		CHECK_FALSE(editor::ApplyParameters({}, live));
+		CHECK(live[0].samples[0].parameter == Catch::Approx(1.5f));
+	}
+}
+
+TEST_CASE("A clip that does not loop cannot be a sample", "[animation][blend]")
+{
+	auto clip = editor::ClipInfo();
+	clip.name = "walk";
+
+	SECTION("a one-shot is refused, and says why")
+	{
+		clip.loop = false;
+		CHECK_FALSE(editor::ClipRefusalReason(clip).empty());
+	}
+
+	SECTION("a looping clip is not refused")
+	{
+		clip.loop = true;
+		CHECK(editor::ClipRefusalReason(clip).empty());
 	}
 }

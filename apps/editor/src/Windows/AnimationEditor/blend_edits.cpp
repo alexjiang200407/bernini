@@ -4,9 +4,12 @@
 #include <assetlib/blend.h>
 #include <cmath>
 #include <cstddef>
+#include <gamelib/BlendSpaceInfo.h>
 #include <limits>
 #include <span>
 #include <string_view>
+
+#include "Windows/AnimationEditor/PlaybackTransport.h"
 
 namespace editor
 {
@@ -130,5 +133,57 @@ namespace editor
 		// range.
 		const float t = std::clamp((parameter - min) / (max - min), 0.0f, 1.0f);
 		return std::clamp(static_cast<int>(std::lround(t * static_cast<float>(ticks))), 0, ticks);
+	}
+
+	bool
+	IsParameterMove(
+		const std::span<const assetlib::BlendSpace> before,
+		const std::span<const assetlib::BlendSpace> after) noexcept
+	{
+		if (before.size() != after.size())
+			return false;
+
+		for (size_t s = 0; s < before.size(); ++s)
+		{
+			if (before[s].name != after[s].name ||
+			    before[s].samples.size() != after[s].samples.size())
+				return false;
+
+			for (size_t i = 0; i < before[s].samples.size(); ++i)
+				if (before[s].samples[i].clip != after[s].samples[i].clip)
+					return false;
+		}
+
+		return true;
+	}
+
+	bool
+	ApplyParameters(
+		const std::span<const assetlib::BlendSpace> authored,
+		const std::span<game::BlendSpaceInfo>       live) noexcept
+	{
+		if (authored.size() != live.size())
+			return false;
+
+		for (size_t s = 0; s < authored.size(); ++s)
+			if (authored[s].samples.size() != live[s].samples.size())
+				return false;
+
+		// Checked in full before a byte moves, for the reason IScene::SetRigBlendParameters is: a
+		// half-written run is one nothing refuses and nobody authored.
+		for (size_t s = 0; s < authored.size(); ++s)
+			for (size_t i = 0; i < authored[s].samples.size(); ++i)
+				live[s].samples[i].parameter = authored[s].samples[i].parameter;
+
+		return true;
+	}
+
+	std::string_view
+	ClipRefusalReason(const ClipInfo& clip) noexcept
+	{
+		if (!clip.loop)
+			return "does not loop, so it cannot share a blend space's phase";
+
+		return {};
 	}
 }

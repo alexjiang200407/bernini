@@ -2,8 +2,11 @@
 
 #include <assetlib/blend.h>
 #include <cstddef>
+#include <gamelib/BlendSpaceInfo.h>
 #include <span>
 #include <string_view>
+
+#include "Windows/AnimationEditor/PlaybackTransport.h"
 
 namespace editor
 {
@@ -111,4 +114,45 @@ namespace editor
 	 */
 	[[nodiscard]] int
 	TickForParameter(float min, float max, int ticks, float parameter) noexcept;
+
+	/**
+	 * Whether `after` differs from `before` in nothing but where its samples sit -- the same spaces
+	 * under the same names, each holding the same samples naming the same clips.
+	 *
+	 * This is ADR-3's fork, and it is exactly the change `AssetManager::SetBlendParameters` accepts:
+	 * true goes live on the rig already uploaded, false is a node table that has to be built again,
+	 * so the mesh reloads. Asking it of the two authored sets rather than of the live spaces is what
+	 * lets a *clip* swap be seen at all -- the live form holds indices, and a sample renamed onto
+	 * another clip would otherwise read as no change until the rig refused it.
+	 */
+	[[nodiscard]] bool
+	IsParameterMove(
+		std::span<const assetlib::BlendSpace> before,
+		std::span<const assetlib::BlendSpace> after) noexcept;
+
+	/**
+	 * Writes each authored parameter onto the matching live sample, leaving every clip index alone.
+	 * False -- and nothing written -- unless the two correspond space for space and sample for
+	 * sample, which is what `IsParameterMove` against the set the rig was acquired with establishes.
+	 *
+	 * The correspondence is positional, and it holds because `AssetManager::BlendSetFor` resolves a
+	 * set in its own order and drops nothing: a clip it cannot find throws rather than skipping the
+	 * sample. So `live[s].samples[i]` is `authored[s].samples[i]` resolved, and moving a threshold
+	 * needs no second resolution of the names.
+	 */
+	[[nodiscard]] bool
+	ApplyParameters(
+		std::span<const assetlib::BlendSpace> authored,
+		std::span<game::BlendSpaceInfo>       live) noexcept;
+
+	/**
+	 * Why `clip` cannot be a sample of a blend space, or empty when it can.
+	 *
+	 * A space sets one normalized phase shared by every sample, so a clip that clamps rather than
+	 * wraps would sit on its last frame while the others cycle -- which is why `AddRig` refuses one.
+	 * Offered here so the clip is greyed with the reason beside it (ADR-5) rather than accepted and
+	 * then refused by a rig that will not upload.
+	 */
+	[[nodiscard]] std::string_view
+	ClipRefusalReason(const ClipInfo& clip) noexcept;
 }

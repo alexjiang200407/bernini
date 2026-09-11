@@ -387,8 +387,34 @@ to keep in agreement beyond the one below.
   exists -- nothing else attaches a set to a clip set.
 
   The *Space* tab lists the open set's spaces and the samples of the selected one, clip by name and
-  threshold. It stamps nothing into the playback record: only *Blend* does, which is why entering
-  either *Clip* or *Space* clears whatever fade was live.
+  threshold, and is where both are authored. It stamps nothing into the playback record: only
+  *Blend* does, which is why entering either *Clip* or *Space* clears whatever fade was live.
+
+  **An edit takes one of two paths, and which one is the shape of the change.** A threshold that
+  moved is written onto the rig already uploaded (`AssetManager::SetBlendParameters`), so the pose
+  keeps playing while the box is dragged -- live on `valueChanged`, saved on `editingFinished`,
+  because a file rewritten per keystroke is not the point and a pose that waits for the save is.
+  Anything that changes the rig's node table -- a sample or a space added or removed, a space
+  renamed -- saves and then **reloads the mesh**, which is the same reacquire choosing a set already
+  does. `editor::IsParameterMove` is the fork, and it compares the two *authored* sets rather than
+  the resolved ones: the resolved form holds clip indices, so a sample pointed at another clip would
+  read as no change there and reach a rig that refuses it.
+
+  **The panel edits the document, not what the acquire resolved.** `editor::LoadBlendSet` reads the
+  `.bblend` back when a set opens, and that is what every gesture mutates and what is saved. Building
+  a save out of the resolved spaces instead would silently drop the set's `name` and the `extraJson`
+  holding whatever keys a later tool wrote. The two forms correspond position for position --
+  `AssetManager::BlendSetFor` resolves a set in its own order and throws rather than skipping a clip
+  it cannot find -- which is what lets `editor::ApplyParameters` move a threshold onto the live space
+  without resolving a name twice.
+
+  **A space is created with two samples because there is no other kind.** `validateBlendSet` refuses
+  a run under two -- one sample is a clip, and every clip is already a node under its own name -- so
+  there is no empty space to add and fill in afterwards. *New* seeds the first two looping clips at
+  0 and 1 and is disabled, with the reason, when the clip set has fewer than two. A clip that does
+  not loop is **listed and disabled** rather than hidden, with `editor::ClipRefusalReason` beside it:
+  the author is looking for that clip, and its absence would read as a bad clip set rather than as
+  one a blend space cannot hold.
 
 * **One timeline serves both tabs.** `TransitionStrip` draws two clip bars on a shared window with
   the fade between them, and a single clip is the same widget with its second end at the far edge —

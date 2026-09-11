@@ -123,6 +123,24 @@ public:
 	SetActiveClip(uint32_t index, float nowSeconds);
 
 	/**
+	 * Moves where each sample of the open set's spaces plays alone, on the rig already uploaded.
+	 * Returns the refusal, or an empty string when it took.
+	 *
+	 * `spaces` must be the set the acquire handed back with its parameters moved and nothing else;
+	 * adding or removing a sample or a space changes the rig's node table and is a reload instead
+	 * (ADR-3). `editor::IsParameterMove` is what decides which of the two an edit was.
+	 *
+	 * One call covers the whole preview: every animated entry here was acquired from one file
+	 * against one clip set, so they share a rig, and the manager sweeps every geom on it.
+	 *
+	 * Refusals are returned rather than thrown because the caller is a control being dragged: a
+	 * threshold that will not go live leaves the pose where it was and says why, which is the same
+	 * bargain LoadMesh strikes when an acquire is refused.
+	 */
+	[[nodiscard]] QString
+	RetargetBlendParameters(const std::vector<game::BlendSpaceInfo>& spaces);
+
+	/**
 	 * Stamps a fade from clip `fromNode` onto `toNode`, beginning at `startSeconds` and taking
 	 * `duration`, and writes it to every animated instance. Nothing happens on the crowd source,
 	 * whose shared table holds one clip and no slots to write.

@@ -43,4 +43,21 @@ namespace editor
 		store.Save(set, key);
 		return key;
 	}
+
+	assetlib::BlendSet
+	LoadBlendSet(const std::filesystem::path& dataRoot, const std::string_view key)
+	{
+		const assetlib::AssetStore store(dataRoot);
+		return store.Load<assetlib::BlendSet>(key);
+	}
+
+	void
+	SaveBlendSet(
+		const std::filesystem::path& dataRoot,
+		const std::string_view       key,
+		const assetlib::BlendSet&    set)
+	{
+		const assetlib::AssetStore store(dataRoot);
+		store.Save(set, key);
+	}
 }
