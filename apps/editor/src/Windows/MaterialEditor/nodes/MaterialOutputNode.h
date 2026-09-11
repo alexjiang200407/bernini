@@ -3,6 +3,7 @@
 #include <QtNodes/NodeDelegateModel>
 
 #include <array>
+#include <filesystem>
 #include <glm/vec4.hpp>
 
 #include <assetlib_structs/BMaterial.h>
@@ -14,16 +15,16 @@
 #include <qwidget.h>
 
 #include "Windows/MaterialEditor/nodes/ChannelData.h"
+#include "Windows/MaterialEditor/nodes/MaterialSinkNode.h"
 #include <QtNodes/internal/Definitions.hpp>
 #include <QtNodes/internal/NodeData.hpp>
-#include <QtNodes/internal/NodeDelegateModel.hpp>
 
 class QCheckBox;
 class QDoubleSpinBox;
 class QFormLayout;
 class QPushButton;
 
-class MaterialOutputNode : public QtNodes::NodeDelegateModel
+class MaterialOutputNode : public MaterialSinkNode
 {
 	Q_OBJECT
 
@@ -166,9 +167,11 @@ public:
 		return m_SpecularFactor;
 	}
 
-Q_SIGNALS:
+	// The PBR compile: kPbr, the factors, the layer keys and the nine routes. One implementation
+	// serves all four PBR-family sinks -- what differs between them is virtual.
 	void
-	Changed();
+	CompileInto(assetlib::BMaterial& material, const std::filesystem::path& dataRoot)
+		const override;
 
 protected:
 	// `baseColorArity` is 3 (RGB) for an opaque material, 4 (RGBA) for a cutout.
