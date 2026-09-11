@@ -17,6 +17,7 @@
 #include <algorithm>
 #include <assetlib_structs/BMaterial.h>
 #include <bgl/SurfaceType.h>
+#include <bgl/TextureAssetHandle.h>
 #include <cstddef>
 #include <cstdint>
 #include <filesystem>
@@ -410,4 +411,11 @@ QString
 SurfaceOutputNode::BoundTexture(size_t slot) const
 {
 	return slot < m_Bound.size() && m_Bound[slot] != nullptr ? m_Bound[slot]->Path() : QString();
+}
+
+bgl::TextureAssetHandle
+SurfaceOutputNode::BoundTextureAsset(size_t slot) const
+{
+	return slot < m_Bound.size() && m_Bound[slot] != nullptr ? m_Bound[slot]->Texture() :
+	                                                           bgl::TextureAssetHandle();
 }
