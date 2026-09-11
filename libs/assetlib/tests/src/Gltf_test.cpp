@@ -1,3 +1,4 @@
+#include "TexturedGltf.h"
 #include <algorithm>
 #include <array>
 #include <assetlib/bmesh.h>
@@ -208,8 +209,7 @@ TEST_CASE(
 	"A glTF's images arrive decoded, and its materials point at them",
 	"[bmesh][gltf][textures]")
 {
-	// The only test model with images; suzanne.glb has none, so nothing else reaches buildTextures.
-	const std::filesystem::path glb = "assets/apples.glb";
+	const std::filesystem::path glb = test::TexturedGltfPath();
 	REQUIRE(std::filesystem::exists(glb));
 
 	const auto import = loadFromGltf(glb);
@@ -398,11 +398,8 @@ TEST_CASE("probeGltfMaterials reports the PBR materials", "[bmesh][gltf]")
 
 TEST_CASE("probeGltfMaterials sees what a full import sees", "[bmesh][gltf]")
 {
-	// The stubbed image loader is the whole point of the probe, and it is also the thing most likely to
-	// make it disagree with an import -- a loader that fails rather than no-ops takes the parse down
-	// with it. apples.glb is the only fixture with real textures, so it is the only one where the stub
-	// is exercised at all.
-	const std::filesystem::path glb = "assets/apples.glb";
+	// Embedded images exercise the probe's stub image loader.
+	const std::filesystem::path glb = test::TexturedGltfPath();
 	REQUIRE(std::filesystem::exists(glb));
 
 	const auto import = loadFromGltf(glb);

@@ -46,6 +46,18 @@ remember.
 
 The public surface is documented as a map in [docs/assetlib_api.md](../../docs/assetlib_api.md).
 
+## Test workloads
+
+The default import, texture-refresh and regeneration tests use `tests/src/TexturedGltf.h`:
+two static triangles with named 32×32 checkerboard images. The contrasting texels retain the
+sRGB mip-averaging check, while the two image names exercise texture routing and renames.
+The fixture is self-contained and lives in the suite process's temporary directory.
+
+The original `assets/apples.glb` project round-trip uses the same assertions but is hidden from
+default runs. Run it deliberately with `just run assetlib_tests -- "[.fullimport]"`; it imports
+and encodes the full-size textures again for each section and can produce sustained CPU load.
+Production import and compression settings are unchanged.
+
 ## The bar here is the strict one
 
 assetlib and `assetlib_cli` are held to the same bar as `bgl`: the headers under `include/` are

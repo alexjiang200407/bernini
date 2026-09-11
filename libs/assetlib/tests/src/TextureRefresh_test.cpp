@@ -1,3 +1,4 @@
+#include "TexturedGltf.h"
 #include <algorithm>
 #include <assetlib/AssetStore.h>
 
@@ -91,7 +92,7 @@ TEST_CASE("A source that has not changed has nothing to refresh", "[refresh][tex
 	Project project("assetlib_texture_refresh_unchanged_test");
 	test::ImportUnitGroup(
 		project.root,
-		"assets/apples.glb",
+		test::TexturedGltfPath(),
 		"Authored/Materials/red.bmaterial",
 		30.0f,
 		c_TextureDir);
@@ -108,7 +109,7 @@ TEST_CASE("A folder still holding a numbered texture is stale", "[refresh][textu
 	Project project("assetlib_texture_refresh_numbered_test");
 	test::ImportUnitGroup(
 		project.root,
-		"assets/apples.glb",
+		test::TexturedGltfPath(),
 		"Authored/Materials/red.bmaterial",
 		30.0f,
 		c_TextureDir);
@@ -146,7 +147,7 @@ TEST_CASE("A folder extracted at another bake revision is stale", "[refresh][tex
 	Project project("assetlib_texture_refresh_revision_test");
 	test::ImportUnitGroup(
 		project.root,
-		"assets/apples.glb",
+		test::TexturedGltfPath(),
 		"Authored/Materials/red.bmaterial",
 		30.0f,
 		c_TextureDir);
@@ -184,7 +185,7 @@ TEST_CASE("An edited source's textures are re-extracted over the routes", "[refr
 	Project project("assetlib_texture_refresh_edited_test");
 	test::ImportUnitGroup(
 		project.root,
-		"assets/apples.glb",
+		test::TexturedGltfPath(),
 		"Authored/Materials/red.bmaterial",
 		30.0f,
 		c_TextureDir);
@@ -241,7 +242,7 @@ TEST_CASE("An import that recorded no texture folder refuses the refresh", "[ref
 	// Every project imported before the folder was recorded is this case, and guessing the folder
 	// is how one import comes to overwrite another's textures.
 	Project project("assetlib_texture_refresh_nofolder_test");
-	test::ImportUnitGroup(project.root, "assets/apples.glb");
+	test::ImportUnitGroup(project.root, test::TexturedGltfPath());
 
 	CHECK(project.Store().GetStaleImportedTextureSources().empty());
 	CHECK_THROWS_WITH(
@@ -254,7 +255,7 @@ TEST_CASE("A source that is gone refuses the refresh rather than staling", "[ref
 	Project project("assetlib_texture_refresh_nosource_test");
 	test::ImportUnitGroup(
 		project.root,
-		"assets/apples.glb",
+		test::TexturedGltfPath(),
 		"Authored/Materials/red.bmaterial",
 		30.0f,
 		c_TextureDir);
@@ -273,7 +274,7 @@ TEST_CASE("migrate re-extracts a moved source's textures", "[refresh][textures][
 	Project project("assetlib_texture_refresh_migrate_test");
 	test::ImportUnitGroup(
 		project.root,
-		"assets/apples.glb",
+		test::TexturedGltfPath(),
 		"Authored/Materials/red.bmaterial",
 		30.0f,
 		c_TextureDir);
