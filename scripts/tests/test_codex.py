@@ -273,7 +273,7 @@ def test_windows_bgrep_launches_git_bash(monkeypatch, tmp_path):
     assert 'café' in agent_tools.bgrep({'pattern': 'needle', 'paths': ['hello.txt']})
     assert calls[0][0][0] == 'C:/Program Files/Git/bin/bash.exe'
     assert calls[0][0][1].endswith('scripts/bgrep')
-    assert 'usr/bin' in calls[0][1]['env']['PATH']
+    assert 'usr/bin' in calls[0][1]['env']['PATH'].replace('\\', '/')
 
 
 def test_unicode_files_are_utf8(monkeypatch, tmp_path):
@@ -294,7 +294,10 @@ def test_windows_slang_executable_is_discovered(monkeypatch, tmp_path):
 
 @pytest.mark.skipif(sys.platform != 'win32', reason='native Windows hook process contract')
 def test_windows_hook_receives_stdin_and_returns_policy_exit(tmp_path):
-    import tomllib
+    try:
+        import tomllib
+    except ImportError:
+        tomllib = pytest.importorskip('tomli')
     agent_setup.codex(ENGINE)
     config = tomllib.loads((ENGINE / '.codex/config.toml').read_text(encoding='utf-8'))
     command = config['hooks']['PreToolUse'][0]['hooks'][0]['command_windows']
