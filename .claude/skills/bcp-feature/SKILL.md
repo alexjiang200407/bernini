@@ -282,6 +282,8 @@ just watch-pr <n>        # python scripts/watch_pr.py <n>  -- run it in the back
 Run it in the foreground and the session is parked until the PR moves: the user cannot type, and
 reaching you means killing the wait. Backgrounded, the turn ends, they keep their session, and the
 event wakes you when it arrives. In Claude Code that is the Bash tool's `run_in_background`.
+In Codex, use `just watch-pr <n> --notify-codex` with shell backgrounding and redirected
+output as described in [docs/codex.md](docs/codex.md); it queues the event back to your thread.
 
 **It waits indefinitely, and that is the point.** The watcher only exits on something you can act
 on. Do not give it a `--timeout` to "check in" with: a timeout wakes the session to report that

@@ -3,7 +3,8 @@
 # authored by the developer who ran it, and the bot is credited for the work the
 # assistant did. CLAUDECODE=1 is exported into every command Claude Code runs,
 # which is what makes this fire whether or not the assistant remembered its own
-# trailer; a Claude trailer alone also counts, for tooling that does not set it.
+# trailer; Codex exports CODEX_THREAD_ID for the same purpose. A Claude trailer
+# alone also counts, for tooling that does not set either variable.
 # A commit with neither is a human one and is left untouched. GitHub matches
 # co-authors by the no-reply email below. Enabled by
 # `git config core.hooksPath .githooks` (set by `just init`). See docs/ai-coding.md.
@@ -13,7 +14,7 @@ bot='Co-authored-by: morgana-coding-agent[bot] <305433938+morgana-coding-agent[b
 
 [ "$source" = "merge" ] && exit 0
 
-if [ "${CLAUDECODE:-}" != "1" ] && ! grep -qi '^Co-authored-by: Claude' "$msg"; then
+if [ "${CLAUDECODE:-}" != "1" ] && [ -z "${CODEX_THREAD_ID:-}" ] && ! grep -qi '^Co-authored-by: Claude' "$msg"; then
   exit 0
 fi
 

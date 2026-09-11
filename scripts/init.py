@@ -61,6 +61,7 @@ import util.lfs as lfs
 import util.lfs_store as lfs_store
 import util.secrets as secrets
 import util.vcpkg as vcpkg
+import util.agent_setup as agent_setup
 
 REQUIREMENTS = os.path.join(ct.REPO_ROOT, "scripts", "requirements.txt")
 
@@ -889,6 +890,8 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--preset", help="CMake preset to record (default: ask).")
     parser.add_argument("--arch", help=f"vcvars architecture (default: {cfg.DEFAULT_ARCH}).")
+    parser.add_argument("--agents-only", action="store_true",
+                        help="Repair the AGENTS.md symlink without changing machine config or installing tools.")
     parser.add_argument("--force", action="store_true", help="Overwrite an existing config.json without asking.")
     parser.add_argument("--show", action="store_true", help="Print the config that would be written; write nothing.")
     parser.add_argument("--no-just", action="store_true", help="Don't check for (or offer to install) just.")
@@ -901,11 +904,16 @@ def main():
     parser.add_argument("--no-bot", action="store_true", help="Don't offer to set up the morgana-coding-agent review key.")
     args = parser.parse_args()
 
+    if not args.show:
+        agent_setup.instructions(ct.REPO_ROOT)
+    if args.agents_only:
+        return 0
+
     existing = cfg.load()
     if cfg.exists() and not args.force and not args.show:
         current = existing.get("preset", "?")
         if not confirm(f"{cfg.rel(cfg.PATH)} already exists (preset: {current}). Overwrite?"):
-            print("aborted; nothing written.")
+            print("machine config unchanged; agent instructions checked.")
             return 1
 
     # An existing config's preset is the natural default when re-running init.

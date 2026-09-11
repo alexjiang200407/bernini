@@ -1,5 +1,8 @@
 Bernini is a 3D game engine. It uses CMake as the buildsystem. 
 
+**Claude and Codex share these instructions.** Init creates `AGENTS.md` as a symlink to this
+file. In Codex, read [docs/codex.md](docs/codex.md) for tool, skill, and PR-watcher mappings.
+
 # General Notes
 
 - Use bash

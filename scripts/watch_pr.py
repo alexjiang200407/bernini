@@ -332,6 +332,52 @@ def summarize_check(gh, check, repo):
     return dict(check, log=job_log(gh, check, repo))
 
 
+def register_with_workspace():
+    """Let ws clean up a watcher even when a shared Codex daemon spawned it."""
+    from pathlib import Path
+    registry = os.environ.get('WS_AGENT_REGISTRY')
+    if not registry:
+        return
+    directory = Path(registry)
+    if not directory.is_dir():
+        raise RuntimeError('The ws agent session has ended; refusing to start an orphan watcher')
+    process = subprocess.run(['ps', '-o', 'command=', '-p', str(os.getpid())],
+                             capture_output=True, text=True, timeout=10, check=True)
+    target = directory / str(os.getpid())
+    temporary = target.with_suffix('.tmp')
+    temporary.write_text(f'{os.getpid()}\t{process.stdout.strip()}\n')
+    temporary.replace(target)
+
+
+NOTIFY_CODEX = False
+NOTIFY_PR = None
+
+
+class NotificationError(RuntimeError):
+    """The event is saved, but could not be delivered to Codex."""
+
+
+def notify_codex(payload):
+    """Wake the originating Codex thread; persist the event if delivery fails."""
+    from pathlib import Path
+    thread = os.environ.get('CODEX_THREAD_ID')
+    if not thread:
+        raise RuntimeError('--notify-codex requires CODEX_THREAD_ID from a Codex session')
+    path = Path(watchlist.PATH).parent / f"bernini-pr-event-{payload['pr']}.json"
+    path.write_text(json.dumps(payload, indent=2) + '\n')
+    # The event may contain megabytes of CI logs. Queue its local path, not its
+    # contents, to stay below process argument limits and keep the wake concise.
+    message = (f"Bernini PR #{payload['pr']} watcher: {payload.get('event', 'error')}. "
+               f"Read the event at {path.resolve()} and continue the bcp review workflow.")
+    try:
+        done = subprocess.run(['codex', 'queue', '--thread', thread, '--message', message],
+                              text=True, capture_output=True, timeout=30)
+    except (OSError, subprocess.SubprocessError) as error:
+        raise NotificationError(f'Codex wake failed; event kept at {path}: {error}') from error
+    if done.returncode:
+        raise NotificationError(f'Codex wake failed; event kept at {path}: {done.stderr.strip()}')
+
+
 def emit(payload):
     """Prints the one event, and re-arms the watch if the PR still needs answering.
 
@@ -346,7 +392,9 @@ def emit(payload):
         watchlist.arm(payload["pr"], payload.get("url", ""), newest or None)
     elif event in ("merged", "closed"):
         watchlist.disarm(payload["pr"])
-    print(json.dumps(payload, indent=2))
+    print(json.dumps(payload, indent=2), flush=True)
+    if NOTIFY_CODEX and event != "snapshot":
+        notify_codex(payload)
 
 
 def main():
@@ -357,6 +405,8 @@ def main():
     parser.add_argument(
         "--timeout", type=float, default=0,
         help="give up after this many seconds; 0 waits forever (default 0)")
+    parser.add_argument("--notify-codex", action="store_true",
+                        help="Wake CODEX_THREAD_ID with codex queue when the background watch completes.")
     parser.add_argument("--once", action="store_true", help="print a snapshot and exit")
     parser.add_argument(
         "--since",
@@ -364,6 +414,11 @@ def main():
         "baseline, and anything already waiting fires immediately. Defaults to the time pr.py last "
         "posted to this PR, which is what keeps the watch from firing on its own reply")
     args = parser.parse_args()
+    global NOTIFY_CODEX, NOTIFY_PR
+    NOTIFY_PR = args.pr
+    NOTIFY_CODEX = args.notify_codex and not args.once
+    if NOTIFY_CODEX and not os.environ.get("CODEX_THREAD_ID"):
+        parser.error("--notify-codex requires CODEX_THREAD_ID from a Codex session")
 
     since = args.since or watchlist.since_for(args.pr)
 
@@ -376,6 +431,7 @@ def main():
             print(f"PR #{args.pr} is already watched by pid {running}; not starting a second watcher.",
                   file=sys.stderr)
             return
+        register_with_workspace()
         watchlist.claim(args.pr)
 
     gh = find_gh()
@@ -502,5 +558,18 @@ def main():
             return
 
 
+def entrypoint():
+    try:
+        main()
+    except (Exception, SystemExit) as error:
+        failed = not isinstance(error, SystemExit) or error.code not in (None, 0, 3)
+        if NOTIFY_CODEX and NOTIFY_PR and failed and not isinstance(error, NotificationError):
+            try:
+                notify_codex({"event": "watcher_error", "pr": NOTIFY_PR, "error": str(error)})
+            except Exception as delivery_error:
+                print(f"warning: {delivery_error}", file=sys.stderr)
+        raise
+
+
 if __name__ == "__main__":
-    main()
+    entrypoint()

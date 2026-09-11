@@ -1,0 +1,34 @@
+project_doc_max_bytes = 131072
+
+[mcp_servers.bernini]
+command = "python3"
+env_vars = ["WS_ASK", "BERNINI_DIR", "CODEX_THREAD_ID"]
+args = ["scripts/agent_tools.py"]
+
+[[hooks.SessionStart]]
+[[hooks.SessionStart.hooks]]
+type = "command"
+command = "python3 scripts/codex_hook.py"
+
+[[hooks.PreToolUse]]
+[[hooks.PreToolUse.hooks]]
+type = "command"
+command = "python3 scripts/codex_hook.py"
+
+[[hooks.PostToolUse]]
+[[hooks.PostToolUse.hooks]]
+type = "command"
+command = "python3 scripts/codex_hook.py"
+
+[[hooks.Stop]]
+[[hooks.Stop.hooks]]
+type = "command"
+command = "python3 scripts/codex_hook.py"
+
+[agents.bcp-docmap]
+description = "Read-only documentation traversal with source citations."
+config_file = "../.codex/agents/bcp-docmap.toml"
+
+[agents.bcp-precheck]
+description = "Read-only review of the change before opening a PR."
+config_file = "../.codex/agents/bcp-precheck.toml"

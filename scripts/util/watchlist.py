@@ -48,7 +48,7 @@ PATH = os.path.join(_git_dir(), "bernini-pr-watch.json")
 
 
 def _session():
-    return os.environ.get("CLAUDE_CODE_SESSION_ID", "")
+    return os.environ.get("CLAUDE_CODE_SESSION_ID") or os.environ.get("CODEX_THREAD_ID", "")
 
 
 def _doc():
