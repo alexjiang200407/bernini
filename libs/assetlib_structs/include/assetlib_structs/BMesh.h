@@ -51,6 +51,17 @@ namespace assetlib
 		 */
 		std::vector<std::string> skeletonBoneNames;
 
+		/**
+		 * The geometry this file holds, hashed once at cook time -- the vertex blob and the entry
+		 * and submesh tables that address it (assetlib::geometrySignature). Zero means "not
+		 * recorded": a file written before the field existed, or a mesh whose blob has been
+		 * rewritten in memory since it was read, and a reader that finds zero computes it.
+		 *
+		 * Written by the codec from the bytes it is about to emit, never by a producer, so a
+		 * `.bmesh` on disk cannot carry one that disagrees with its own geometry.
+		 */
+		uint64_t geometrySignature = 0;
+
 		SourceRef source;  // the copied .glb this was derived from; empty key when never recorded
 	};
 }

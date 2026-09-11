@@ -29,6 +29,7 @@
 #include <span>
 #include <spdlog/spdlog.h>
 #include <string>
+#include <string_view>
 #include <tracy/Tracy.hpp>
 #include <utility>
 #include <vector>
@@ -753,38 +754,73 @@ namespace assetlib
 
 		mesh.skeletonSignature = skeletonSignature(skeleton);
 		mesh.skeletonBoneNames = skeletonBoneNames(skeleton);
+
+		// The blob just changed, so the cooked hash describes geometry this mesh no longer holds.
+		// Zeroed rather than recomputed: a remapped mesh is usually on its way to a re-serialize,
+		// and the codec computes a fresh one there.
+		mesh.geometrySignature = 0;
 		return true;
+	}
+
+	namespace
+	{
+		/**
+		 * Which of `boneCount` bones the mesh has any weight on, or empty where the mesh cannot be
+		 * decoded against that many bones -- a caller that gets nothing back hashes every bone, which
+		 * is what it did before this narrowed anything.
+		 *
+		 * @return one flag per bone, or an empty vector meaning "cannot narrow".
+		 */
+		std::vector<bool>
+		weightedBones(const BMesh& mesh, const size_t boneCount) noexcept
+		{
+			auto weighted = std::vector<bool>(boneCount, false);
+
+			try
+			{
+				for (const Submesh& submesh : mesh.submeshes)
+				{
+					const SkinLayout layout = resolveSkinLayout(mesh, submesh);
+					if (!layout.joints)
+						continue;
+
+					for (const SkinInfluences& vertex :
+					     decodeInfluences(mesh, submesh, layout, boneCount))
+						for (size_t i = 0; i < c_InfluencesPerVertex; ++i)
+							if (vertex.weights[i] > 0.0f)
+								weighted[vertex.joints[i]] = true;
+				}
+			}
+			catch (const std::exception&)
+			{
+				// A layout the decode refuses -- including a vertex naming a bone the rig does not
+				// hold -- is one nothing can narrow against. This is a signature rather than the bake:
+				// refusing the cook is bakePosedBounds's to do.
+				return {};
+			}
+
+			return weighted;
+		}
 	}
 
 	uint64_t
 	posedBoundsSignature(const BMesh& mesh, const Skeleton& skeleton) noexcept
 	{
+		// The cooked value where there is one: this is read once per skinned-mesh acquire, and
+		// geometrySignature walks the whole vertex blob. Chained on directly, never re-hashed --
+		// this number is stored in every baked PosedBox, so a wrap here would strand them all.
 		uint64_t hash =
-			core::hash_bytes(mesh.vertexData.data(), mesh.vertexData.size(), core::hash_seed());
+			mesh.geometrySignature != 0 ? mesh.geometrySignature : geometrySignature(mesh);
 
-		// The tables that say which of those bytes a mesh index means: without them, a re-export
-		// that regroups entries over identical bytes would keep matching a box that no longer
-		// holds. Materials are left out -- swapping one does not move a vertex.
-		for (const Mesh& entry : mesh.meshes)
-		{
-			hash = core::hash_pod(entry.firstSubmesh, hash);
-			hash = core::hash_pod(entry.submeshCount, hash);
-		}
-		for (const Submesh& submesh : mesh.submeshes)
-		{
-			hash = core::hash_pod(submesh.vertexByteOffset, hash);
-			hash = core::hash_pod(submesh.vertexCount, hash);
-			hash = core::hash_pod(submesh.layout.stride, hash);
-			for (uint32_t i = 0; i < submesh.layout.attributeCount; ++i)
-			{
-				const VertexAttribute& attribute = submesh.layout.attributes[i];
-				hash                             = core::hash_pod(attribute.semantic, hash);
-				hash                             = core::hash_pod(attribute.format, hash);
-				hash                             = core::hash_pod(attribute.offset, hash);
-			}
-		}
+		// Only the bones the mesh has weight on. An unweighted bone sweeps no box, and its own
+		// inverse bind reaches no vertex -- a pose composes an ancestor's *samples*, never its
+		// inverse bind -- so hashing every bone made an added socket invalidate a measurement it
+		// cannot change. In bone order, which an insert leaves alone for the bones that survive it.
+		const std::vector<bool> weighted = weightedBones(mesh, skeleton.bones.size());
+		for (size_t i = 0; i < skeleton.bones.size(); ++i)
+			if (weighted.empty() || weighted[i])
+				hash = core::hash_pod(skeleton.bones[i].inverseBind, hash);
 
-		for (const Bone& bone : skeleton.bones) hash = core::hash_pod(bone.inverseBind, hash);
 		return hash;
 	}
 
@@ -1241,14 +1277,40 @@ namespace assetlib
 		const Skeleton&              skeleton,
 		const ResolvedAvatar&        avatar) noexcept
 	{
-		uint64_t hash = core::hash_pod(skeletonSignature(skeleton), core::hash_seed());
+		// The legs and what poses them, not the whole rig. skeletonSignature moves for a bone added
+		// anywhere, and a bone with no weight moves no sole -- so keying on it re-measured every
+		// clip of a rig that had grown a socket. The chains are hashed by *name*, since an insert
+		// renumbers them without touching which bones they are.
+		uint64_t hash = core::hash_seed();
 
 		for (const AvatarLegChain& chain : avatar.legs)
 		{
-			hash = core::hash_pod(chain.hipBoneIndex, hash);
-			hash = core::hash_pod(chain.kneeBoneIndex, hash);
-			hash = core::hash_pod(chain.ankleBoneIndex, hash);
-			hash = core::hash_pod(chain.toeBoneIndex, hash);
+			// Each leg walked to the root: a sole sits in model space, so every ancestor's rest
+			// offset is part of where it lands. Names and local binds, never indices.
+			for (const uint32_t chainBone : { chain.hipBoneIndex,
+			                                  chain.kneeBoneIndex,
+			                                  chain.ankleBoneIndex,
+			                                  chain.toeBoneIndex })
+			{
+				uint32_t walk = chainBone;
+				while (walk < skeleton.bones.size())
+				{
+					const Bone&            bone = skeleton.bones[walk];
+					const std::string_view name = skeleton.stringPool.at(bone.nameOffset);
+					hash                        = core::hash_pod(name.size(), hash);
+					hash                        = core::hash_string(name, hash);
+
+					// Both binds, and neither is the other: solePlanes carries every sole through
+					// the ankle's `inverseBind`, which glTF authors separately from the local rest
+					// pose, while the flat-plane fallback composes `bindPose` up the chain.
+					hash = core::hash_pod(bone.bindPose, hash);
+					hash = core::hash_pod(bone.inverseBind, hash);
+					walk = bone.parent;
+				}
+
+				// Closes the chain, so two legs cannot agree by running together.
+				hash = core::hash_pod(c_InvalidIndex, hash);
+			}
 		}
 
 		// Each name with its length, so two lists cannot agree by concatenation; nothing at all
