@@ -1,7 +1,9 @@
 #pragma once
 
 #include <QString>
-#include <array>
+#include <bgl/SurfaceType.h>
+#include <span>
+#include <vector>
 
 class MaterialGraphView;
 class QComboBox;
@@ -11,20 +13,22 @@ class QWidget;
 
 namespace editor
 {
-	/** A sink a material graph can end in, and the alpha mode choosing it *is*. */
+	/** One Output selector entry: the label it shows, and the registered sink choosing it swaps
+	 *  in. */
 	struct OutputType
 	{
-		const char* label;
-		const char* modelName;
+		QString label;
+		QString modelName;
 	};
 
-	/** The sinks the Output selector offers, in the order it lists them. */
-	inline constexpr std::array<OutputType, 4> c_OutputTypes = { {
-		{ "Opaque", "MaterialOutput" },
-		{ "Alpha Tested", "AlphaTestedMaterialOutput" },
-		{ "Alpha Blend", "BlendedMaterialOutput" },
-		{ "Hashed Alpha", "HashedAlphaMaterialOutput" },
-	} };
+	/**
+	 * The Output selector's entries, in the order it lists them: the four PBR sinks -- choosing
+	 * one *is* choosing the alpha mode -- then one entry per registered surface, labelled with
+	 * the surface's name. Built beside the registry from the same surface list, so an entry
+	 * always names a sink that exists.
+	 */
+	[[nodiscard]] std::vector<OutputType>
+	OutputTypesFor(std::span<const bgl::SurfaceType> surfaces);
 
 	/**
 	 * The widgets BuildMaterialEditorUi creates, so the window can connect and drive them.
