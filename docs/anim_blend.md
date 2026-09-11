@@ -153,6 +153,12 @@ span between two samples is what a weight divides by.
 
 * **A slot's `nodeIndex` is checked against the rig's node count, not its clip count.** They differ by the
   number of authored spaces.
+* **A blend space is reached through the *record*, never through the spawn.**
+  `SkinnedInstanceDesc::clip` is checked against the **clip** count and a space is past the end of
+  it, so `CreateSkinnedMeshInstance` refuses one; a `PlaybackSlot` is checked against the **node**
+  count and accepts it. To play a space: spawn onto any clip, then `SetSkinnedPlayback` a record
+  naming the space. Getting this backwards throws *after* the old instance is destroyed, so the
+  symptom is a mesh that silently disappears rather than a refusal anybody sees.
 * **A space needs at least two samples**, with strictly increasing parameters — two at one parameter
   have no defined weighting between them and the span between them is a divisor. Refused at both
   doors: the document's own validation, and `AddRig`.

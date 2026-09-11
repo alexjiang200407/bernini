@@ -922,7 +922,15 @@ AnimationPreviewWindow::ShowSpace(
 
 	// Clips first and then the authored spaces, which is what makes a space's node index its
 	// position after them -- and why adding a set never moves a clip's.
-	const uint32_t node = static_cast<uint32_t>(m_Clips.size()) + spaceIndex;
+	const game::BlendSpaceInfo& space = m_Spaces[spaceIndex];
+	const uint32_t              node  = static_cast<uint32_t>(m_Clips.size()) + spaceIndex;
+
+	// The spawn names a *clip* and the record names the space. `SkinnedInstanceDesc::clip` is
+	// checked against the clip table and a space is past the end of it, while a playback slot is
+	// checked against the node count -- so a space is reached by writing the record, which is what
+	// SetSkinnedPlayback is for. The clip chosen is the one the parameter sits on, so the spawn pose
+	// is already near what the record shows rather than a jump away from it.
+	const uint32_t seed = space.samples[space.StraddleAt(parameter).lower].clipIndex;
 
 	m_Playback                = bgl::SkinnedPlaybackDesc::FromClip(node);
 	m_Playback.slot[0].param0 = parameter;
@@ -936,7 +944,7 @@ AnimationPreviewWindow::ShowSpace(
 			{
 				m_Assets->DestroyInstance(GetPreviewViewRef(), draw.instance);
 				draw.instance = bgl::MeshInstanceHandle();
-				draw.instance = SpawnAnimated(draw.geom, draw.world, node);
+				draw.instance = SpawnAnimated(draw.geom, draw.world, seed);
 				GetPreviewViewRef()->SetSkinnedPlayback(draw.instance, m_Playback);
 			}
 			catch (const std::exception& e)
