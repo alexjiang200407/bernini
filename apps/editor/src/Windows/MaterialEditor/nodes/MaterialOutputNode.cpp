@@ -362,6 +362,7 @@ MaterialOutputNode::embeddedWidget()
 		m_ExpandBoxes[group] = box;
 	}
 
+	WatchEmbeddedWidget(m_Widget);
 	return m_Widget;
 }
 
