@@ -218,6 +218,7 @@ SurfaceOutputNode::embeddedWidget()
 	});
 
 	SyncWidgets();
+	WatchEmbeddedWidget(m_Widget);
 	return m_Widget;
 }
 

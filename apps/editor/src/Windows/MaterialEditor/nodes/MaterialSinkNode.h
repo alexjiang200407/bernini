@@ -8,6 +8,10 @@
 
 #include <QtNodes/internal/NodeDelegateModel.hpp>
 
+class QEvent;
+class QObject;
+class QWidget;
+
 /**
  * A material graph's sink: the node the material compiles from.
  *
@@ -28,6 +32,22 @@ public:
 	 */
 	virtual void
 	CompileInto(assetlib::BMaterial& material, const std::filesystem::path& dataRoot) const = 0;
+
+protected:
+	/**
+	 * Re-measures the node whenever `widget` resizes. QtNodes reads the embedded widget's size
+	 * only when the node is created, so a widget that settles on first show -- or a form row
+	 * shown or hidden later -- would otherwise overflow the frame or leave a gap. Call it once
+	 * from embeddedWidget() on the widget it built.
+	 */
+	void
+	WatchEmbeddedWidget(QWidget* widget);
+
+	bool
+	eventFilter(QObject* watched, QEvent* event) override;
+
+private:
+	QWidget* m_WatchedWidget = nullptr;
 
 Q_SIGNALS:
 	// Something the compiled material depends on changed; the window recompiles the preview on it.
