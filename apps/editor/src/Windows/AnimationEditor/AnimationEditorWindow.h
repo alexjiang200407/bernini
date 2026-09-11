@@ -357,6 +357,17 @@ private:
 	// whether it can go live, and the reason that decision cannot be taken by whoever made the edit.
 	std::vector<assetlib::BlendSpace> m_AcquiredSpaces;
 
+	/**
+	 * What the author was looking at, kept across the reload an edit causes (ADR-3).
+	 *
+	 * The space by name rather than by index, since adding or removing one moves every index after
+	 * it. `m_PendingSampleRow` is where the cursor should land once the reload arrives -- the sample
+	 * just added -- and is spent the first time it is read.
+	 */
+	QString m_SelectedSpace;
+	int     m_PendingSampleRow = -1;
+	int     m_SelectedClip     = -1;
+
 	// What the open set resolved to, as the acquire reported it: what the Space tab lists, and
 	// what a later task edits.
 	std::vector<game::BlendSpaceInfo> m_Spaces;

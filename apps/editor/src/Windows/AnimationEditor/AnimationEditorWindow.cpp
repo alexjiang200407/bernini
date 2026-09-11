@@ -851,9 +851,14 @@ AnimationEditorWindow::ShowSpaces(const std::vector<game::BlendSpaceInfo>& space
 	for (const game::BlendSpaceInfo& space : spaces)
 		m_SpaceSelector->addItem(QString::fromStdString(space.name));
 	m_SpaceSelector->setEnabled(!spaces.empty());
-	m_SyncingUi = false;
 
-	SelectSpace(spaces.empty() ? -1 : 0);
+	// By name, because an added or removed space moves every index after it and the author was
+	// editing a space rather than a position. Adding a sample reloads the mesh (ADR-3), so without
+	// this the selector walks back to the first space on every edit.
+	const int restored = m_SpaceSelector->findText(m_SelectedSpace);
+	m_SyncingUi        = false;
+
+	SelectSpace(spaces.empty() ? -1 : std::max(restored, 0));
 }
 
 void
@@ -872,6 +877,8 @@ AnimationEditorWindow::SelectSpace(const int index)
 	}
 
 	const game::BlendSpaceInfo& space = m_Spaces[static_cast<size_t>(index)];
+	m_SelectedSpace                   = QString::fromStdString(space.name);
+
 	for (const game::BlendSpaceSampleInfo& sample : space.samples)
 	{
 		// The clip by name rather than by index: an index is what the acquire resolved to, and the
@@ -885,8 +892,12 @@ AnimationEditorWindow::SelectSpace(const int index)
 		                          .arg(sample.parameter, 0, 'f', c_ParameterDecimals));
 	}
 
+	const int wanted   = m_PendingSampleRow >= 0 ? m_PendingSampleRow : 0;
+	m_PendingSampleRow = -1;
+
 	m_SyncingUi = true;
-	m_SampleList->setCurrentRow(space.samples.empty() ? -1 : 0);
+	m_SampleList->setCurrentRow(
+		space.samples.empty() ? -1 : std::min(wanted, static_cast<int>(space.samples.size()) - 1));
 	m_SyncingUi = false;
 
 	m_SpaceNote->setText(QStringLiteral("Parameter %1 to %2")
@@ -1192,6 +1203,10 @@ AnimationEditorWindow::AddSample()
 	}
 
 	const size_t at = editor::InsertionIndex(space->samples, parameter);
+
+	// Where the reload should leave the cursor: the author added this sample to work on it.
+	m_PendingSampleRow = static_cast<int>(at);
+
 	space->samples.insert(
 		space->samples.begin() + static_cast<ptrdiff_t>(at),
 		{ clip.name, parameter });
@@ -1492,10 +1507,13 @@ AnimationEditorWindow::SetClips(const std::vector<editor::ClipInfo>& clips)
 		m_FromClip->addItem(name);
 		m_ToClip->addItem(name);
 	}
+	// By name and not by index: an edit that reloads the mesh comes back through here, and the
+	// author was watching a clip rather than a row. A name that is gone falls back to the first.
+	const int wasClip = m_ClipList->count() > 0 ? m_SelectedClip : -1;
 	if (!clips.empty())
 	{
-		m_ClipList->setCurrentRow(0);
-		m_FromClip->setCurrentIndex(0);
+		m_ClipList->setCurrentRow(wasClip >= 0 ? wasClip : 0);
+		m_FromClip->setCurrentIndex(wasClip >= 0 ? wasClip : 0);
 	}
 	// -1 after the fill, which is what the placeholder shows: a clip set arrives with one clip
 	// playing and no transition pending.
@@ -1517,7 +1535,7 @@ AnimationEditorWindow::SetClips(const std::vector<editor::ClipInfo>& clips)
 	}
 
 	m_Preview->SetTime(0.0f);
-	SelectClip(playable ? 0 : -1);
+	SelectClip(playable ? m_ClipList->currentRow() : -1);
 	UpdateTransitionControls();
 	SyncTransportUi();
 }
@@ -1525,6 +1543,8 @@ AnimationEditorWindow::SetClips(const std::vector<editor::ClipInfo>& clips)
 void
 AnimationEditorWindow::SelectClip(const int index)
 {
+	m_SelectedClip = index;
+
 	if (m_SyncingUi && index >= 0)
 		return;
 
