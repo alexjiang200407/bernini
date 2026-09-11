@@ -2,21 +2,28 @@
 #include "Windows/MaterialEditor/graph_compiler.h"
 #include "Windows/MaterialEditor/material_graph.h"
 #include "Windows/MaterialEditor/material_io.h"
+#include "Windows/MaterialEditor/nodes/SurfaceOutputNode.h"
 
 #include "util/QtSupport.h"  // IWYU pragma: keep
 
 #include <QDir>
+#include <QJsonArray>
+#include <QJsonObject>
 #include <QTemporaryDir>
 
 #include <assetlib/AssetStore.h>
 #include <assetlib_structs/BMaterial.h>
 #include <bgl/LayerType.h>
+#include <bgl/SurfaceType.h>
 #include <bgl/TextureAssetHandle.h>
+#include <bgl/glm.h>
 #include <bgl/types/SurfaceMaterialDesc.h>
+#include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
 #include <filesystem>
 #include <qbuffer.h>
 #include <qcontainerfwd.h>
+#include <qobject.h>
 #include <string>
 #include <vector>
 
@@ -302,11 +309,12 @@ TEST_CASE("The default sphere holds nothing open", "[materialeditor]")
 	CHECK(held == QStringList{ "C:/Data/Materials/Leaf.bmaterial" });
 }
 
-// A Save from this panel compiles the board, and the board is a PBR one whatever the file on disk
-// is -- the editor authors no surfaces. So the material's own model and the three keys under it
-// have to come back off the file, the way the baked triplet already does, or opening a game
-// material here and pressing Save would quietly turn it into an ordinary PBR one.
-TEST_CASE("A save does not demote a surface material", "[materialeditor][surface]")
+// The save path takes the board's word for what the material is: a surface board writes a surface
+// material, edits included, where saving used to re-read the model and its parameters off disk --
+// which, now that a surface board is real, would clobber every edit made on it. What keeps a
+// surface document from being demoted is upstream: OpenMaterialInto never puts one behind a PBR
+// board.
+TEST_CASE("A surface board's save writes the board, not the disk", "[materialeditor][surface]")
 {
 	QTemporaryDir temp;
 	REQUIRE(temp.isValid());
@@ -315,20 +323,33 @@ TEST_CASE("A save does not demote a surface material", "[materialeditor][surface
 	const QString               path = temp.filePath("Authored/Materials/rim.bmaterial");
 
 	{
-		auto material             = assetlib::BMaterial();
-		material.name             = "rim";
-		material.shadingModel     = assetlib::ShadingModel::kPbrSurface;
-		material.surface.name     = "Rim";
-		material.surface.values   = { { "rimPower", { 2.0f } } };
-		material.surface.textures = { { "baseColor", "Derived/BakedTextures/rim.ktx2" } };
+		auto material           = assetlib::BMaterial();
+		material.name           = "rim";
+		material.shadingModel   = assetlib::ShadingModel::kPbrSurface;
+		material.surface.name   = "Rim";
+		material.surface.values = { { "rimPower", { 2.0f } } };
+		material.extraJson      = R"({"studio":"keep"})";
 
 		assetlib::AssetStore(root).Save(material, "Authored/Materials/rim.bmaterial");
 	}
 
-	// The board the panel would show for it: the default PBR one, since a surface material carries
-	// no editorGraph for the editor to restore.
-	MaterialGraphModel model(MakeMaterialNodeRegistry(nullptr, nullptr));
-	model.addNode("MaterialOutput");
+	auto surface          = bgl::SurfaceType();
+	surface.name          = "Rim";
+	auto power            = bgl::SurfaceValue();
+	power.name            = "rimPower";
+	power.defaultValue    = glm::vec4(8.0f, 0.0f, 0.0f, 0.0f);
+	surface.params.values = { power };
+
+	// The board the panel now shows for it: the surface's own sink, seeded from the document.
+	MaterialGraphModel        model(MakeMaterialNodeRegistry(nullptr, nullptr, { &surface, 1 }));
+	const assetlib::BMaterial onDisk =
+		assetlib::AssetStore(root).Load<assetlib::BMaterial>("Authored/Materials/rim.bmaterial");
+	REQUIRE(BuildSurfaceMaterialGraph(model, onDisk, root));
+
+	// An edit the disk knows nothing about.
+	auto* sink = qobject_cast<SurfaceOutputNode*>(model.OutputNode());
+	REQUIRE(sink != nullptr);
+	sink->load(QJsonObject{ { "parameters", QJsonObject{ { "rimPower", QJsonArray{ 5.5 } } } } });
 
 	const assetlib::BMaterial saved = editor::BuildMaterial(model, path, root);
 
@@ -336,14 +357,16 @@ TEST_CASE("A save does not demote a surface material", "[materialeditor][surface
 	CHECK(saved.surface.name == "Rim");
 	REQUIRE(saved.surface.values.size() == 1u);
 	CHECK(saved.surface.values[0].name == "rimPower");
-	REQUIRE(saved.surface.textures.size() == 1u);
-	CHECK(saved.surface.textures[0].texture == "Derived/BakedTextures/rim.ktx2");
+	REQUIRE(saved.surface.values[0].value.size() == 1u);
+	CHECK(saved.surface.values[0].value[0] == Catch::Approx(5.5f));
+
+	// A document key this build does not know still rides through.
+	CHECK(saved.extraJson.find("studio") != std::string::npos);
 }
 
-// A surface material's board is a graphless one seeded from PbrParams, so the preview compiled it
-// into a white loose PBR material and drew that instead of the surface. What the renderer gets has
-// to come from the document, and this is the translation that does it -- the whole of it bar the
-// texture upload, which the loader here stands in for.
+// A surface material previews from its document. What the renderer gets has to come from that
+// document, and this is the translation that does it -- the whole of it bar the texture upload,
+// which the loader here stands in for.
 TEST_CASE("A surface material previews through its own surface", "[materialeditor][surface]")
 {
 	assetlib::BMaterial material;

@@ -173,8 +173,8 @@ namespace editor
 		const assetlib::BMaterial*   onDisk,
 		const std::filesystem::path& dataRoot)
 	{
-		// A surface material's board is a graphless one seeded from PbrParams, so compiling it would
-		// draw the seed -- a white, metallic material -- rather than the surface the document names.
+		// A surface material previews from its document rather than from the live board: a Save
+		// rewrites the document, and the next board change is what re-reads it here.
 		if (onDisk != nullptr && onDisk->shadingModel == assetlib::ShadingModel::kPbrSurface)
 		{
 			BindSurfacePreview(graph, renderer, preview, *onDisk, dataRoot);

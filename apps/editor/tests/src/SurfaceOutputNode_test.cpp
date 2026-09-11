@@ -228,6 +228,114 @@ TEST_CASE("A graph with no rim key loads the rim at its default", "[materialgrap
 	CHECK(node.Value(1) == glm::vec4(1.0f, 0.5f, 0.25f, 0.0f));
 }
 
+TEST_CASE("A surface document builds its board", "[materialgraph][surfacesink]")
+{
+	MaterialGraphModel model(Registry());
+
+	auto material              = assetlib::BMaterial();
+	material.name              = "head_rim";
+	material.shadingModel      = assetlib::ShadingModel::kPbrSurface;
+	material.layer.alphaMode   = assetlib::AlphaMode::kHashed;
+	material.layer.doubleSided = false;
+	material.surface.name      = "Rim";
+	material.surface.values    = { { "rimPower", { 2.5f } } };
+	material.surface.textures  = { { "baseColor", "Derived/SourceTextures/head/rim.ktx2" } };
+
+	REQUIRE(BuildSurfaceMaterialGraph(model, material, c_DataRoot));
+
+	SurfaceOutputNode* sink = Sink(model);
+	REQUIRE(sink != nullptr);
+
+	// The document's edits arrive; a value it does not set stays at the declaration's default.
+	CHECK(sink->Value(0).x == 2.5f);
+	CHECK(sink->Value(1) == glm::vec4(1.0f, 0.5f, 0.25f, 0.0f));
+	CHECK(sink->GetAlphaMode() == assetlib::AlphaMode::kHashed);
+
+	// The bound slot holds the file, absolute like every live-graph path.
+	CHECK(sink->BoundTexture(0).endsWith(QStringLiteral("Derived/SourceTextures/head/rim.ktx2")));
+	CHECK(sink->BoundTexture(1).isEmpty());
+
+	// And back out: the board compiles to the document that built it.
+	const assetlib::BMaterial compiled =
+		CompileMaterial(model, QStringLiteral("head_rim"), c_DataRoot);
+	CHECK(compiled.shadingModel == assetlib::ShadingModel::kPbrSurface);
+	CHECK(compiled.layer.alphaMode == assetlib::AlphaMode::kHashed);
+	CHECK_FALSE(compiled.layer.doubleSided);
+	REQUIRE(compiled.surface.textures.size() == 1u);
+	CHECK(compiled.surface.textures[0].texture == "Derived/SourceTextures/head/rim.ktx2");
+}
+
+TEST_CASE(
+	"A document naming an unregistered surface builds no board",
+	"[materialgraph][surfacesink]")
+{
+	// Registration happens once at startup, so a second project's surface has no sink here. The
+	// board is the surface's or nothing -- a PBR fallback would be compiled into a demotion by
+	// the next Save.
+	MaterialGraphModel model(MakeMaterialNodeRegistry(nullptr, nullptr, {}));
+
+	auto material         = assetlib::BMaterial();
+	material.shadingModel = assetlib::ShadingModel::kPbrSurface;
+	material.surface.name = "Rim";
+
+	CHECK_FALSE(BuildSurfaceMaterialGraph(model, material, c_DataRoot));
+	CHECK(model.allNodeIds().empty());
+}
+
+TEST_CASE("A binding the surface does not declare is skipped", "[materialgraph][surfacesink]")
+{
+	// The same document is refused at CreateSurfaceMaterial by name; the board simply cannot show
+	// the stray binding, and the rest of the material still opens.
+	MaterialGraphModel model(Registry());
+
+	auto material             = assetlib::BMaterial();
+	material.shadingModel     = assetlib::ShadingModel::kPbrSurface;
+	material.surface.name     = "Rim";
+	material.surface.textures = { { "glitter", "Derived/SourceTextures/head/glitter.ktx2" },
+		                          { "baseColor", "Derived/SourceTextures/head/rim.ktx2" } };
+
+	REQUIRE(BuildSurfaceMaterialGraph(model, material, c_DataRoot));
+
+	REQUIRE(Sink(model) != nullptr);
+	CHECK(Sink(model)->BoundTexture(0).endsWith(QStringLiteral("rim.ktx2")));
+
+	// One sink, one texture node: nothing was placed for the binding that has no slot.
+	CHECK(model.allNodeIds().size() == 2u);
+}
+
+TEST_CASE("Two slots sharing one file share one texture node", "[materialgraph][surfacesink]")
+{
+	MaterialGraphModel model(Registry());
+
+	auto material             = assetlib::BMaterial();
+	material.shadingModel     = assetlib::ShadingModel::kPbrSurface;
+	material.surface.name     = "Rim";
+	material.surface.textures = { { "baseColor", "Derived/SourceTextures/head/rim.ktx2" },
+		                          { "mask", "Derived/SourceTextures/head/rim.ktx2" } };
+
+	REQUIRE(BuildSurfaceMaterialGraph(model, material, c_DataRoot));
+
+	REQUIRE(Sink(model) != nullptr);
+	CHECK(Sink(model)->BoundTexture(0) == Sink(model)->BoundTexture(1));
+	CHECK_FALSE(Sink(model)->BoundTexture(0).isEmpty());
+	CHECK(model.allNodeIds().size() == 2u);
+}
+
+TEST_CASE("A saved board says which sink it holds", "[materialgraph][surfacesink]")
+{
+	// What OpenMaterialInto branches on: a surface document whose stored graph already holds the
+	// surface's sink reloads that board; any other stored graph -- the blank PBR relic every
+	// surface document carried while its board could not be authored -- is rebuilt from the
+	// document instead.
+	MaterialGraphModel surface(Registry());
+	surface.addNode(QStringLiteral("SurfaceOutput:Rim"));
+	CHECK(GraphHoldsNodeType(surface.save(), QStringLiteral("SurfaceOutput:Rim")));
+
+	MaterialGraphModel pbr(Registry());
+	pbr.addNode(QStringLiteral("MaterialOutput"));
+	CHECK_FALSE(GraphHoldsNodeType(pbr.save(), QStringLiteral("SurfaceOutput:Rim")));
+}
+
 TEST_CASE(
 	"Switching a PBR board to a surface keeps its place and drops its wires",
 	"[materialgraph][surfacesink]")
