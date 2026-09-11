@@ -10,6 +10,7 @@
 #include <qwidget.h>
 
 #include "Windows/MaterialEditor/nodes/ChannelData.h"
+#include "Windows/MaterialEditor/nodes/SurfaceTextureData.h"
 #include <QtNodes/internal/Definitions.hpp>
 #include <QtNodes/internal/NodeData.hpp>
 #include <QtNodes/internal/NodeDelegateModel.hpp>
@@ -24,10 +25,12 @@ class TextureNode : public QtNodes::NodeDelegateModel
 	Q_OBJECT
 
 public:
-	// Ports 0..2 are the RGBA / RGB / RG bundles; ports 3..6 are the scalar R / G / B / A channels.
+	// Ports 0..2 are the RGBA / RGB / RG bundles; ports 3..6 are the scalar R / G / B / A channels;
+	// port 7 is the whole texture, for a surface slot -- bound, never routed.
 	static constexpr unsigned int c_BundleCount  = 3;
 	static constexpr unsigned int c_ChannelCount = 4;
-	static constexpr unsigned int c_PortCount    = c_BundleCount + c_ChannelCount;
+	static constexpr unsigned int c_TexturePort  = c_BundleCount + c_ChannelCount;
+	static constexpr unsigned int c_PortCount    = c_TexturePort + 1;
 
 	// `previews` may be null when the editor runs without graphics; the node then shows no image.
 	TextureNode(Renderer* renderer, TexturePreviewCache* previews);
@@ -53,9 +56,12 @@ public:
 	QtNodes::NodeDataType
 	dataType(QtNodes::PortType, QtNodes::PortIndex port) const override
 	{
+		if (static_cast<unsigned int>(port) == c_TexturePort)
+			return SurfaceTextureData::Type();
 		return ChannelData::Type(ArityOf(port));
 	}
 
+	// The channel width of a bundle or scalar port; the whole-texture port never asks.
 	[[nodiscard]] static unsigned int
 	ArityOf(QtNodes::PortIndex port) noexcept
 	{
