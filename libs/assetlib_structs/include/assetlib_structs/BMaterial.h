@@ -14,8 +14,9 @@ namespace assetlib
 		// Factors, a baked triplet, and the channel routes behind it.
 		kPbr = 0,
 
-		// The same lighting, over a material half the game computes -- so there is no route, no
-		// bake and no graph behind one. A game-defined *lighting* model would be a third value.
+		// The same lighting, over a material half the game computes. Its textures bind whole by
+		// name; a slot may instead carry channel routes and a per-slot bake (SurfaceTextureBinding).
+		// A game-defined *lighting* model would be a third value.
 		kPbrSurface = 1,
 
 		kCount,
@@ -162,12 +163,42 @@ namespace assetlib
 		std::vector<float> value;
 	};
 
-	/** One texture a surface material binds, under the name the surface declared it as. */
+	/** The components a routed surface slot composites, R through A. */
+	inline constexpr size_t c_SurfaceSlotChannelCount = 4;
+
+	/**
+	 * One texture a surface material binds, under the name the surface declared it as.
+	 *
+	 * A slot is either bound whole (`texture`) or composited from channel routes -- the editor
+	 * refuses wiring both, and the routes win where a document carries both anyway. Which slots
+	 * *may* route is the declaring surface's business (the editor offers routes on data slots
+	 * only); this side stores and bakes whatever the document says, exactly as it stores a value
+	 * for a parameter it cannot check.
+	 */
 	struct SurfaceTextureBinding
 	{
 		std::string name;
 		std::string texture;  // path to the texture file (empty when unbound)
+
+		std::array<ChannelRoute, c_SurfaceSlotChannelCount> routes{};
+		std::array<SourceStamp, c_SurfaceSlotChannelCount>  routeStamps{};
+
+		// The composited map, data-root-relative; empty until the slot is baked.
+		std::string baked{};
+
+		// assetlib::c_TextureBakeToken as it stood when `baked` was written; zero before a bake.
+		uint64_t bakeToken = 0;
 	};
+
+	/** Whether anything routes into `slot` -- the routed-or-whole fork every reader takes. */
+	[[nodiscard]] inline bool
+	slotIsRouted(const SurfaceTextureBinding& slot) noexcept
+	{
+		for (const ChannelRoute& route : slot.routes)
+			if (!route.texture.empty())
+				return true;
+		return false;
+	}
 
 	/**
 	 * What a material drawn by a game's own surface says: which surface, and what it sets on it.

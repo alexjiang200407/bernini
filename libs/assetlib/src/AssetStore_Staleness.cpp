@@ -31,6 +31,12 @@ namespace assetlib
 	}
 
 	bool
+	AssetStore::SurfaceSlotBakeIsStale(const SurfaceTextureBinding& slot) const
+	{
+		return surfaceSlotBakeIsStale(slot, *m_Files);
+	}
+
+	bool
 	AssetStore::IsSkyBakeStale(const BSky& sky) const
 	{
 		return isSkyBakeStale(sky, *m_Files);

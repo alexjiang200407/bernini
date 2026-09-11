@@ -51,10 +51,15 @@ namespace assetlib
 			break;
 
 		case ShadingModel::kPbrSurface:
-			// Bound by hand rather than composited, so there is no route behind one and no bake to
-			// go stale -- the map the renderer samples is the map the document names.
+			// The PBR shape per slot: a whole binding or a composited map is what the renderer
+			// samples, and a route is what the bake reads (ADR-7).
 			for (SurfaceTextureBinding& texture : material.surface.textures)
+			{
 				mapOne(texture.texture, RefKind::kBakedMap, map, seen);
+				mapOne(texture.baked, RefKind::kBakedMap, map, seen);
+				for (ChannelRoute& route : texture.routes)
+					mapOne(route.texture, RefKind::kChannelRoute, map, seen);
+			}
 			break;
 
 		case ShadingModel::kCount:

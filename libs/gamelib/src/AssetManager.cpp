@@ -5,6 +5,7 @@
 #include <bgl/IScene.h>
 #include <bgl/InstanceDesc.h>
 #include <bgl/LayerType.h>
+#include <bgl/types/BlendSetDesc.h>
 #include <bgl/types/FootPlantDesc.h>
 #include <bgl/types/LoosePbrMaterialDesc.h>
 #include <bgl/types/PbrMaterialDesc.h>
@@ -18,6 +19,7 @@
 #include <filesystem>
 #include <format>
 #include <gamelib/AssetManager.h>
+#include <gamelib/BlendSpaceInfo.h>
 #include <gamelib/ClipInfo.h>
 
 #include <assetlib/RegenMesh.h>
@@ -237,7 +239,13 @@ namespace game
 		{
 			auto paths = std::vector<std::string>(material.surface.textures.size());
 			for (size_t i = 0; i < paths.size(); ++i)
-				paths[i] = material.surface.textures[i].texture;
+			{
+				const assetlib::SurfaceTextureBinding& slot = material.surface.textures[i];
+
+				// A routed slot samples its composited map, never a source: the whole binding and
+				// the routes are exclusive, and the routes win where a document carries both.
+				paths[i] = assetlib::slotIsRouted(slot) ? slot.baked : slot.texture;
+			}
 			return paths;
 		}
 
@@ -452,18 +460,52 @@ namespace game
 
 		// The disk decides: a triplet that is missing or older than the sources it was composited from
 		// cannot be sampled, so the material falls back to the routes that produced it -- when those
-		// are still there to fall back to. A surface has no triplet and no routes, so it is neither.
+		// are still there to fall back to. A surface has no shader-side loose path: a stale routed
+		// slot recomposites at load instead (below, ADR-8 in the surface-material-panel plan).
 		const bool loose = !surface && m_Store.DrawsLoose(material);
 
-		// Acquire the textures first: the desc the scene needs is built out of their handles.
-		const std::vector<std::string> paths = MaterialTextures(material, loose);
+		// A routed slot whose bake is stale or absent is composited here and uploaded under its
+		// *resolved* baked name, so the material renders the same however it is loaded and two
+		// materials sharing routes share one upload. Only when the sources are all readable --
+		// otherwise the document's names stand and a missing map samples default -- and never
+		// under a caller's prefetch, whose guarantee is that this thread decodes nothing: there a
+		// stale slot degrades to the map the caller decoded, exactly what it prefetched.
+		assetlib::BMaterial        resolved;
+		const assetlib::BMaterial* source = &material;
+		TexturePrefetch            composed;
+		if (surface && prefetch == nullptr && m_Store.BakeIsStale(material) &&
+		    m_Store.CanComposeSurfaceSlots(material))
+		{
+			resolved = material;
+			m_Store.ResolveMaterialBake(resolved);
+			source = &resolved;
+
+			// After the resolve only one staleness is left: a fresh name not on disk yet.
+			for (const assetlib::SurfaceTextureBinding& slot : resolved.surface.textures)
+			{
+				if (!assetlib::slotIsRouted(slot) || !m_Store.SurfaceSlotBakeIsStale(slot))
+					continue;
+
+				ZoneScopedN("gamelib compose surface slot");
+				ZoneTextF("%s", slot.name.c_str());
+
+				composed.emplace(slot.baked, m_Store.ComposeSurfaceSlot(material, slot.name));
+			}
+		}
+
+		// Acquire the textures first: the desc the scene needs is built out of their handles. The
+		// composed maps stand in only for their own paths -- a prefetch is authoritative for
+		// whatever it is handed to, and the whole-bound slots still read their files.
+		const std::vector<std::string> paths = MaterialTextures(*source, loose);
 
 		auto textures = std::vector<bgl::TextureAssetHandle>(paths.size());
-		for (size_t i = 0; i < paths.size(); ++i) textures[i] = AcquireTexture(paths[i], prefetch);
+		for (size_t i = 0; i < paths.size(); ++i)
+			textures[i] =
+				AcquireTexture(paths[i], composed.contains(paths[i]) ? &composed : prefetch);
 
 		auto record     = MaterialRecord();
 		record.key      = key;
-		record.source   = material;
+		record.source   = *source;
 		record.textures = std::move(textures);
 		record.loose    = loose;
 		record.refCount = 1;
