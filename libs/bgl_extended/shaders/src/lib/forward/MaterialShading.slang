@@ -33,11 +33,11 @@ public extension MaterialData
      * The one BRDF entry for an opaque, cutout or hashed fragment. Every source of a PbrSurface lights
      * through here or through ShadeSurfaceBlended; nothing else sums the lobes.
      */
-    public float4 ShadeSurface(ForwardVSOut input, PbrSurface surface, bool isFrontFace)
+    public float3 ShadeSurface(ForwardVSOut input, PbrSurface surface, bool isFrontFace)
     {
         let lobes = EvaluateLobes(input, surface, isFrontFace);
 
-        return float4(lobes.diffuse + lobes.specular + lobes.emissive, 1.0);
+        return lobes.diffuse + lobes.specular + lobes.emissive;
     }
 
     /**
@@ -59,7 +59,7 @@ public extension MaterialData
     {
         M material = M.Load(input.materialOffset);
 
-        return ShadeSurface(input, SurfaceOf(material, input.uv, material.GetBaseColor(input.uv)), isFrontFace);
+        return float4(ShadeSurface(input, SurfaceOf(material, input.uv, material.GetBaseColor(input.uv)), isFrontFace), 1.0);
     }
 
     public float4 ShadeBlended<M : IPbrMaterial>(ForwardVSOut input, bool isFrontFace)
@@ -80,7 +80,7 @@ public extension MaterialData
             discard;
         }
 
-        return ShadeSurface(input, SurfaceOf(material, input.uv, baseColor), isFrontFace);
+        return float4(ShadeSurface(input, SurfaceOf(material, input.uv, baseColor), isFrontFace), 1.0);
     }
 
     // Stochastic coverage in place of a cutoff: the fragment survives with probability equal to its
@@ -112,6 +112,6 @@ public extension MaterialData
             discard;
         }
 
-        return float4(ShadeSurface(input, SurfaceOf(material, input.uv, baseColor), isFrontFace).rgb, 0.0);
+        return float4(ShadeSurface(input, SurfaceOf(material, input.uv, baseColor), isFrontFace), 0.0);
     }
 }

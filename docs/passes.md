@@ -191,8 +191,8 @@ The two lobes are kept apart for this: `PbrShading::EvaluateSurface` reads a `Pb
 material's half, from the contract tree ([bgl/PbrSurface.slang](libs/bgl/shaders/src/bgl/PbrSurface.slang)) —
 and returns a `SurfaceLobes` (diffuse, specular, the reflectance the specular lobe returns, and the
 emissive) instead of a summed colour, and the callers weight it. `MaterialData::ShadeSurface` sums
-them, which is the opaque answer; `MaterialData::ShadeSurfaceBlended` is the only caller of
-`BlendedSurface`, the one function that weights them apart, which lives beside `SurfaceLobes` in
+them into RGB radiance; opaque, cutout and hashed callers attach the TAA depth-validity alpha.
+`MaterialData::ShadeSurfaceBlended` is the only caller of `BlendedSurface`, the one function that weights them apart, which lives beside `SurfaceLobes` in
 [lib/math/PbrShading.slang](libs/bgl_common/shaders/src/lib/math/PbrShading.slang). Those two are the
 only BRDF entries; the four shading entry points the programs call (`Shade`, `ShadeBlended`,
 `ShadeAlphaTested`, `ShadeHashedAlpha`) each fill a `PbrSurface` from the engine's record and hand it to
