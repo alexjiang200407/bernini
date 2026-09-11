@@ -55,6 +55,7 @@
 #include "Windows/MaterialEditor/material_graph.h"
 #include "Windows/MaterialEditor/material_io.h"
 #include "Windows/MaterialEditor/nodes/MaterialOutputNode.h"
+#include "Windows/MaterialEditor/nodes/MaterialSinkNode.h"
 #include "Windows/MaterialEditor/nodes/TextureNode.h"
 #include <QtNodes/internal/Definitions.hpp>
 #include <assetlib_structs/Node.h>
@@ -220,7 +221,7 @@ MaterialEditorWindow::~MaterialEditorWindow()
 		m_GraphView->setScene(nullptr);
 }
 
-MaterialOutputNode*
+MaterialSinkNode*
 MaterialEditorWindow::ResetGraph(int graphIndex, const QJsonObject& graph)
 {
 	MaterialGraphSet::Graph& entry = m_Graphs.At(graphIndex);
@@ -247,7 +248,7 @@ MaterialEditorWindow::ResetGraph(int graphIndex, const QJsonObject& graph)
 	if (current)
 		m_GraphView->setScene(entry.scene.get());
 
-	MaterialOutputNode* output = WatchOutputNode(graphIndex);
+	MaterialSinkNode* output = WatchOutputNode(graphIndex);
 
 	if (current)
 	{
@@ -280,15 +281,15 @@ MaterialEditorWindow::FrameOnOutput()
 	}
 }
 
-MaterialOutputNode*
+MaterialSinkNode*
 MaterialEditorWindow::WatchOutputNode(int graphIndex)
 {
 	// Recompile whenever anything the material depends on changes. The sink is the only one, and every
 	// upstream edit reaches it through setInData.
-	MaterialOutputNode* output = m_Graphs.At(graphIndex).model->OutputNode();
+	MaterialSinkNode* output = m_Graphs.At(graphIndex).model->OutputNode();
 	if (output != nullptr)
 	{
-		connect(output, &MaterialOutputNode::Changed, this, [this, graphIndex]() {
+		connect(output, &MaterialSinkNode::Changed, this, [this, graphIndex]() {
 			CompileGraph(graphIndex);
 		});
 	}
@@ -326,7 +327,7 @@ MaterialEditorWindow::SyncOutputSelector()
 	if (graphIndex < 0)
 		return;
 
-	const MaterialOutputNode* output = m_Graphs.At(graphIndex).model->OutputNode();
+	const MaterialSinkNode* output = m_Graphs.At(graphIndex).model->OutputNode();
 	if (output == nullptr)
 		return;
 
@@ -443,8 +444,8 @@ MaterialEditorWindow::RefreshTangentWarning()
 {
 	const int graphIndex = m_Graphs.Current();
 
-	const MaterialOutputNode* output =
-		graphIndex >= 0 ? m_Graphs.At(graphIndex).model->OutputNode() : nullptr;
+	const auto* output = qobject_cast<const MaterialOutputNode*>(
+		graphIndex >= 0 ? m_Graphs.At(graphIndex).model->OutputNode() : nullptr);
 
 	// Only where it is actionable: a mesh on disk to rewrite, a normal map that is being thrown
 	// away, and a submesh that has no tangent to throw it away with.
@@ -890,7 +891,8 @@ MaterialEditorWindow::OpenMaterialInto(int graphIndex, const QString& path, bool
 		}
 	}
 
-	MaterialOutputNode* output = ResetGraph(graphIndex, graph);
+	// The seed reads PBR factors, so it wants the PBR sink -- the one an empty ResetGraph builds.
+	auto* output = qobject_cast<MaterialOutputNode*>(ResetGraph(graphIndex, graph));
 
 	// Without a graph, the board is seeded from the material itself. Only the factors survive: the
 	// routes name textures but not how the artist arranged the nodes that produced them.

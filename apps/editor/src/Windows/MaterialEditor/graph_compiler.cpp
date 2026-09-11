@@ -9,6 +9,7 @@
 #include <bgl/LayerType.h>
 
 #include <QDebug>
+#include <qobject.h>
 
 #include <assetlib/image_io.h>
 #include <assetlib_structs/BMaterial.h>
@@ -179,7 +180,9 @@ namespace editor
 			return;
 		}
 
-		const MaterialOutputNode* output = graph.model->OutputNode();
+		// The PBR preview reads the PBR sink's factors and routes; a sink of another kind has no
+		// preview path here yet.
+		const auto* output = qobject_cast<const MaterialOutputNode*>(graph.model->OutputNode());
 		if (output == nullptr)
 			return;
 
