@@ -874,6 +874,30 @@ AnimationPreviewWindow::SetPoseSource(const bgl::PoseSource source, const float 
 	Q_EMIT PoseSourceChanged(m_Source);
 }
 
+QString
+AnimationPreviewWindow::RetargetBlendParameters(const std::vector<game::BlendSpaceInfo>& spaces)
+{
+	if (m_Assets == nullptr || m_AnimatedDraws.empty())
+		return QStringLiteral("Nothing is loaded to retarget.");
+
+	auto refusal = QString();
+
+	// One geom, not all of them: every animated entry here came from one file against one clip set,
+	// so they are on one rig, and the manager writes the rig and sweeps every geom sharing it.
+	GetRenderer()->Invoke([&] {
+		try
+		{
+			m_Assets->SetBlendParameters(m_AnimatedDraws.front().geom, spaces);
+		}
+		catch (const std::exception& e)
+		{
+			refusal = QString::fromUtf8(e.what());
+		}
+	});
+
+	return refusal;
+}
+
 void
 AnimationPreviewWindow::SetActiveClip(const uint32_t index, const float nowSeconds)
 {

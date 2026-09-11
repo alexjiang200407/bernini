@@ -1,8 +1,10 @@
 #include "AnimationEditorWindow.h"
 
 #include "Windows/AnimationEditor/AnimationPreviewWindow.h"
+#include "Windows/AnimationEditor/PlaybackTransport.h"
 #include "Windows/AnimationEditor/Scrubber.h"
 #include "Windows/AnimationEditor/TransitionStrip.h"
+#include "Windows/AnimationEditor/blend_edits.h"
 #include "Windows/AnimationEditor/blend_sets.h"
 #include "Windows/AnimationEditor/foot_ik_weights.h"
 #include "Windows/AnimationEditor/playback_writes.h"
@@ -16,6 +18,7 @@
 #include <exception>
 #include <gamelib/BlendSpaceInfo.h>
 #include <string>
+#include <string_view>
 
 #include <QCheckBox>
 #include <QComboBox>
@@ -27,7 +30,9 @@
 #include <QFrame>
 #include <QGroupBox>
 #include <QHBoxLayout>
+#include <QInputDialog>
 #include <QLabel>
+#include <QLineEdit>
 #include <QListWidget>
 #include <QMessageBox>
 #include <QMimeData>
@@ -35,17 +40,21 @@
 #include <QScrollArea>
 #include <QSplitter>
 #include <QStackedWidget>
+#include <QStandardItemModel>
 #include <QStyle>
 #include <QTabWidget>
 #include <QTimer>
 #include <QToolButton>
 #include <QVBoxLayout>
+#include <QtTypes>
 #include <cmath>
 #include <cstdint>
 #include <filesystem>
+#include <limits>
 #include <optional>
 #include <qcontainerfwd.h>
 #include <qlatin1stringview.h>
+#include <qlogging.h>
 #include <qnamespace.h>
 #include <qobject.h>
 #include <qsizepolicy.h>
@@ -55,6 +64,15 @@
 
 namespace
 {
+	// What the threshold box shows and steps by, and the rule every insertion is measured against:
+	// two samples are "apart" when they display apart, so the box's step *is* the rule (ADR-5).
+	constexpr int   c_ParameterDecimals = 2;
+	constexpr float c_ParameterStep     = 0.01f;
+
+	// What a new sample sits past the run's last, and what a new space's two samples sit at. A whole
+	// unit rather than a step: the point of the default is to be seen and then dragged, and a sample
+	// one hundredth past its neighbour is neither.
+	constexpr float c_ParameterGap = 1.0f;
 
 	// Where a previewed fade is stamped, and what is shown either side of it. The clock has to be
 	// able to sit before t0, so it is not zero; the rest is how much run-up and settle reads.
@@ -451,10 +469,73 @@ AnimationEditorWindow::BuildSpaceTab()
 	});
 	layout->addWidget(m_SpaceSelector);
 
+	m_AddSpace    = new QPushButton(QStringLiteral("New"), m_SpaceGroup);
+	m_RenameSpace = new QPushButton(QStringLiteral("Rename"), m_SpaceGroup);
+	m_RemoveSpace = new QPushButton(QStringLiteral("Delete"), m_SpaceGroup);
+	connect(m_AddSpace, &QPushButton::clicked, this, &AnimationEditorWindow::AddSpace);
+	connect(m_RenameSpace, &QPushButton::clicked, this, &AnimationEditorWindow::RenameSpace);
+	connect(m_RemoveSpace, &QPushButton::clicked, this, &AnimationEditorWindow::RemoveSpace);
+
+	auto* spaceRow = new QHBoxLayout();
+	spaceRow->addWidget(m_SpaceSelector, /*stretch*/ 1);
+	spaceRow->addWidget(m_AddSpace);
+	spaceRow->addWidget(m_RenameSpace);
+	spaceRow->addWidget(m_RemoveSpace);
+	layout->addLayout(spaceRow);
+
 	// Clip and threshold per row, in parameter order -- Unity's Motion list, which is what ADR-1
-	// chose over a canvas. Read-only until the task that makes it editable.
+	// chose over a canvas.
 	m_SampleList = new QListWidget(m_SpaceGroup);
+	connect(m_SampleList, &QListWidget::currentRowChanged, this, [this](int) {
+		if (!m_SyncingUi)
+			UpdateSpaceControls();
+	});
 	layout->addWidget(m_SampleList, /*stretch*/ 1);
+
+	m_SampleClip   = new QComboBox(m_SpaceGroup);
+	m_AddSample    = new QPushButton(QStringLiteral("Add"), m_SpaceGroup);
+	m_RemoveSample = new QPushButton(QStringLiteral("Remove"), m_SpaceGroup);
+	connect(m_AddSample, &QPushButton::clicked, this, &AnimationEditorWindow::AddSample);
+	connect(m_RemoveSample, &QPushButton::clicked, this, &AnimationEditorWindow::RemoveSample);
+	connect(m_SampleClip, &QComboBox::currentIndexChanged, this, [this](int) {
+		if (!m_SyncingUi)
+			UpdateSpaceControls();
+	});
+
+	auto* sampleRow = new QHBoxLayout();
+	sampleRow->addWidget(m_SampleClip, /*stretch*/ 1);
+	sampleRow->addWidget(m_AddSample);
+	sampleRow->addWidget(m_RemoveSample);
+	layout->addLayout(sampleRow);
+
+	m_SampleParameter = new QDoubleSpinBox(m_SpaceGroup);
+	m_SampleParameter->setDecimals(c_ParameterDecimals);
+	m_SampleParameter->setSingleStep(c_ParameterStep);
+	// Wide enough that no finite parameter is clamped on its way into the box: a `.bblend` written
+	// by hand can carry anything, and a box that clamped would show a number the document does not
+	// hold.
+	m_SampleParameter->setRange(
+		-static_cast<double>(std::numeric_limits<float>::max()),
+		static_cast<double>(std::numeric_limits<float>::max()));
+	m_SampleParameter->setKeyboardTracking(false);
+
+	// Live while it moves, written when the edit ends: the pose under a dragged threshold is the
+	// whole argument for authoring here (ADR-3), and a file rewritten per keystroke is not.
+	connect(m_SampleParameter, &QDoubleSpinBox::valueChanged, this, [this](double value) {
+		if (!m_SyncingUi)
+			RetargetSample(static_cast<float>(value));
+	});
+	connect(m_SampleParameter, &QDoubleSpinBox::editingFinished, this, [this] {
+		// editingFinished fires on losing focus as well, so an unmoved threshold would otherwise
+		// rewrite the whole document every time the box was clicked away from.
+		if (!m_SyncingUi && m_BlendSetDirty)
+			CommitBlendSet();
+	});
+
+	auto* thresholdRow = new QHBoxLayout();
+	thresholdRow->addWidget(new QLabel(QStringLiteral("Threshold"), m_SpaceGroup));
+	thresholdRow->addWidget(m_SampleParameter, /*stretch*/ 1);
+	layout->addLayout(thresholdRow);
 
 	m_SpaceNote = new QLabel(m_SpaceGroup);
 	m_SpaceNote->setWordWrap(true);
@@ -758,14 +839,42 @@ AnimationEditorWindow::ShowSpaces(const std::vector<game::BlendSpaceInfo>& space
 {
 	m_Spaces = spaces;
 
+	// The document behind them, which is what is edited and saved. A set that will not read leaves
+	// the tab listing what the rig resolved and refusing every edit -- the acquire already took it,
+	// so an empty list here would be the panel disagreeing with the pose on screen.
+	m_BlendSet = assetlib::BlendSet();
+	if (!m_BlendRelPath.isEmpty() && !m_DataRoot.isEmpty())
+	{
+		const QByteArray key = m_BlendRelPath.toUtf8();
+		try
+		{
+			m_BlendSet = editor::LoadBlendSet(
+				std::filesystem::path(m_DataRoot.toStdWString()),
+				std::string_view(key.constData(), static_cast<size_t>(key.size())));
+		}
+		catch (const std::exception& e)
+		{
+			qWarning("AnimationEditor: cannot edit '%s': %s", key.constData(), e.what());
+		}
+	}
+
+	// What the rig was uploaded with, kept so an edit can be compared against it. Taken here rather
+	// than at the save: this runs on every acquire, which is the only thing that moves the rig.
+	m_AcquiredSpaces = m_BlendSet.spaces;
+
 	m_SyncingUi = true;
 	m_SpaceSelector->clear();
 	for (const game::BlendSpaceInfo& space : spaces)
 		m_SpaceSelector->addItem(QString::fromStdString(space.name));
 	m_SpaceSelector->setEnabled(!spaces.empty());
-	m_SyncingUi = false;
 
-	SelectSpace(spaces.empty() ? -1 : 0);
+	// By name, because an added or removed space moves every index after it and the author was
+	// editing a space rather than a position. Adding a sample reloads the mesh (ADR-3), so without
+	// this the selector walks back to the first space on every edit.
+	const int restored = m_SpaceSelector->findText(m_SelectedSpace);
+	m_SyncingUi        = false;
+
+	SelectSpace(spaces.empty() ? -1 : std::max(restored, 0));
 }
 
 void
@@ -779,10 +888,13 @@ AnimationEditorWindow::SelectSpace(const int index)
 			m_BlendRelPath.isEmpty() ?
 				QStringLiteral("No blend set open. Choose one above, or create the first.") :
 				QStringLiteral("This set holds no blend spaces yet."));
+		UpdateSpaceControls();
 		return;
 	}
 
 	const game::BlendSpaceInfo& space = m_Spaces[static_cast<size_t>(index)];
+	m_SelectedSpace                   = QString::fromStdString(space.name);
+
 	for (const game::BlendSpaceSampleInfo& sample : space.samples)
 	{
 		// The clip by name rather than by index: an index is what the acquire resolved to, and the
@@ -791,13 +903,383 @@ AnimationEditorWindow::SelectSpace(const int index)
 		                         m_ClipList->item(static_cast<int>(sample.clipIndex))->text() :
 		                         QStringLiteral("<clip %1>").arg(sample.clipIndex);
 
-		m_SampleList->addItem(
-			QStringLiteral("%1    %2").arg(clip).arg(sample.parameter, 0, 'f', 2));
+		m_SampleList->addItem(QStringLiteral("%1    %2")
+		                          .arg(clip)
+		                          .arg(sample.parameter, 0, 'f', c_ParameterDecimals));
 	}
 
+	const int wanted   = m_PendingSampleRow >= 0 ? m_PendingSampleRow : 0;
+	m_PendingSampleRow = -1;
+
+	m_SyncingUi = true;
+	m_SampleList->setCurrentRow(
+		space.samples.empty() ? -1 : std::min(wanted, static_cast<int>(space.samples.size()) - 1));
+	m_SyncingUi = false;
+
 	m_SpaceNote->setText(QStringLiteral("Parameter %1 to %2")
-	                         .arg(space.ParameterMin(), 0, 'f', 2)
-	                         .arg(space.ParameterMax(), 0, 'f', 2));
+	                         .arg(space.ParameterMin(), 0, 'f', c_ParameterDecimals)
+	                         .arg(space.ParameterMax(), 0, 'f', c_ParameterDecimals));
+
+	UpdateSpaceControls();
+}
+
+void
+AnimationEditorWindow::UpdateSpaceControls()
+{
+	const int             index = m_SpaceSelector->currentIndex();
+	assetlib::BlendSpace* space = EditedSpace(index);
+	const bool            open  = !m_BlendRelPath.isEmpty() && !m_DataRoot.isEmpty();
+
+	// The document is what an edit writes, so an open set whose document would not read leaves the
+	// tab listing what the rig resolved and editing nothing.
+	const bool editable = open && m_BlendSet.spaces.size() == m_Spaces.size();
+
+	ShowSampleClips();
+
+	m_AddSpace->setEnabled(editable && LoopingClipCount() >= 2);
+	m_AddSpace->setToolTip(
+		editable && LoopingClipCount() < 2 ?
+			QStringLiteral("A blend space needs two looping clips; this set has fewer.") :
+			QString());
+	m_RenameSpace->setEnabled(editable && space != nullptr);
+	m_RemoveSpace->setEnabled(editable && space != nullptr);
+
+	const int  row = m_SampleList->currentRow();
+	const bool onSample =
+		space != nullptr && row >= 0 && static_cast<size_t>(row) < space->samples.size();
+
+	m_SampleClip->setEnabled(editable && space != nullptr);
+	m_AddSample->setEnabled(editable && space != nullptr && m_SampleClip->currentIndex() >= 0);
+	m_RemoveSample->setEnabled(editable && onSample && editor::CanRemoveSample(space->samples));
+	m_SampleParameter->setEnabled(editable && onSample);
+
+	m_SyncingUi = true;
+	if (onSample)
+		m_SampleParameter->setValue(
+			static_cast<double>(space->samples[static_cast<size_t>(row)].parameter));
+	m_SyncingUi = false;
+}
+
+void
+AnimationEditorWindow::ShowSampleClips()
+{
+	// Saved and restored rather than set and cleared: this runs inside UpdateSpaceControls, which is
+	// itself reached from a sync, and clearing here would let the rest of that sync fire signals.
+	const bool syncing = m_SyncingUi;
+	m_SyncingUi        = true;
+
+	const QString wanted = m_SampleClip->currentText();
+	m_SampleClip->clear();
+
+	auto* model = qobject_cast<QStandardItemModel*>(m_SampleClip->model());
+	for (const editor::ClipInfo& clip : m_Transport.GetClips())
+	{
+		m_SampleClip->addItem(QString::fromStdString(clip.name));
+
+		const std::string_view reason = editor::ClipRefusalReason(clip);
+		if (reason.empty() || model == nullptr)
+			continue;
+
+		// Listed and disabled rather than dropped: the author is looking for the clip, and an
+		// absence would read as a bad clip set rather than as one a blend space cannot hold.
+		if (QStandardItem* item = model->item(m_SampleClip->count() - 1); item != nullptr)
+		{
+			item->setEnabled(false);
+			item->setToolTip(
+				QString::fromUtf8(reason.data(), static_cast<qsizetype>(reason.size())));
+		}
+	}
+
+	const int restored = m_SampleClip->findText(wanted);
+	m_SampleClip->setCurrentIndex(restored >= 0 ? restored : NthLoopingClip(0));
+
+	m_SyncingUi = syncing;
+}
+
+int
+AnimationEditorWindow::LoopingClipCount() const
+{
+	return static_cast<int>(
+		std::ranges::count_if(m_Transport.GetClips(), [](const editor::ClipInfo& clip) {
+			return editor::ClipRefusalReason(clip).empty();
+		}));
+}
+
+int
+AnimationEditorWindow::NthLoopingClip(const int n) const
+{
+	int seen = 0;
+	for (size_t i = 0; i < m_Transport.GetClips().size(); ++i)
+	{
+		if (!editor::ClipRefusalReason(m_Transport.GetClips()[i]).empty())
+			continue;
+
+		if (seen++ == n)
+			return static_cast<int>(i);
+	}
+
+	return -1;
+}
+
+assetlib::BlendSpace*
+AnimationEditorWindow::EditedSpace(const int index)
+{
+	if (index < 0 || static_cast<size_t>(index) >= m_BlendSet.spaces.size())
+		return nullptr;
+
+	return &m_BlendSet.spaces[static_cast<size_t>(index)];
+}
+
+void
+AnimationEditorWindow::CommitBlendSet()
+{
+	if (m_BlendRelPath.isEmpty() || m_DataRoot.isEmpty())
+		return;
+
+	const QByteArray key = m_BlendRelPath.toUtf8();
+	try
+	{
+		editor::SaveBlendSet(
+			std::filesystem::path(m_DataRoot.toStdWString()),
+			std::string_view(key.constData(), static_cast<size_t>(key.size())),
+			m_BlendSet);
+	}
+	catch (const std::exception& e)
+	{
+		// The edit stays on screen: it is the author's, and reverting it would throw away the work
+		// rather than the mistake.
+		QMessageBox::warning(window(), QStringLiteral("Blend Set"), QString::fromUtf8(e.what()));
+		return;
+	}
+
+	m_BlendSetDirty = false;
+
+	// ADR-3's fork, asked of the document rather than of the caller: anything but a threshold that
+	// moved is a node table that has to be built again, and the reload is the one opening a set
+	// already performs. Computed here so a caller cannot take the wrong branch by naming it.
+	if (!editor::IsParameterMove(m_AcquiredSpaces, m_BlendSet.spaces))
+	{
+		LoadShownMesh(m_SourceSelector->currentText(), m_BlendRelPath);
+		return;
+	}
+
+	// Nothing but thresholds moved, so the rig already uploaded takes them where it stands.
+	if (!editor::ApplyParameters(m_BlendSet.spaces, m_Spaces))
+		return;
+
+	const QString refusal = m_Preview->RetargetBlendParameters(m_Spaces);
+	if (!refusal.isEmpty())
+		qWarning("AnimationEditor: a threshold did not go live: %s", qUtf8Printable(refusal));
+}
+
+void
+AnimationEditorWindow::AddSpace()
+{
+	bool          accepted = false;
+	const QString name     = QInputDialog::getText(
+		window(),
+		QStringLiteral("New Blend Space"),
+		QStringLiteral("Name"),
+		QLineEdit::Normal,
+		QString(),
+		&accepted);
+
+	if (!accepted)
+		return;
+
+	const std::string wanted = name.trimmed().toStdString();
+	if (!editor::CanNameSpace(m_BlendSet.spaces, wanted))
+	{
+		QMessageBox::warning(
+			window(),
+			QStringLiteral("New Blend Space"),
+			QStringLiteral("A space needs a name of its own; '%1' is empty or already taken.")
+				.arg(name));
+		return;
+	}
+
+	// Two samples, because one is a clip and every clip is already a node under its own name --
+	// `validateBlendSet` refuses a shorter run, so there is no such thing as an empty space to add
+	// and fill in. The first two looping clips at 0 and 1 are a run to edit, not a guess at intent.
+	auto space = assetlib::BlendSpace();
+	space.name = wanted;
+	for (int n = 0; n < 2; ++n)
+	{
+		const int clip = NthLoopingClip(n);
+		if (clip < 0)
+			return;
+
+		space.samples.emplace_back(
+			m_Transport.GetClips()[static_cast<size_t>(clip)].name,
+			static_cast<float>(n) * c_ParameterGap);
+	}
+
+	m_BlendSet.spaces.push_back(std::move(space));
+	CommitBlendSet();
+}
+
+void
+AnimationEditorWindow::RemoveSpace()
+{
+	const int index = m_SpaceSelector->currentIndex();
+	if (EditedSpace(index) == nullptr)
+		return;
+
+	m_BlendSet.spaces.erase(m_BlendSet.spaces.begin() + static_cast<ptrdiff_t>(index));
+	CommitBlendSet();
+}
+
+void
+AnimationEditorWindow::RenameSpace()
+{
+	const assetlib::BlendSpace* selected = EditedSpace(m_SpaceSelector->currentIndex());
+	if (selected == nullptr)
+		return;
+
+	bool          accepted = false;
+	const QString name     = QInputDialog::getText(
+		window(),
+		QStringLiteral("Rename Blend Space"),
+		QStringLiteral("Name"),
+		QLineEdit::Normal,
+		QString::fromStdString(selected->name),
+		&accepted);
+
+	if (!accepted)
+		return;
+
+	// Resolved again rather than carried across the dialog: getText runs a nested event loop, and a
+	// pointer into the document cannot be trusted to survive one.
+	assetlib::BlendSpace* space = EditedSpace(m_SpaceSelector->currentIndex());
+	if (space == nullptr)
+		return;
+
+	const std::string wanted = name.trimmed().toStdString();
+	if (wanted == space->name)
+		return;
+
+	if (!editor::CanNameSpace(m_BlendSet.spaces, wanted))
+	{
+		QMessageBox::warning(
+			window(),
+			QStringLiteral("Rename Blend Space"),
+			QStringLiteral("A space needs a name of its own; '%1' is empty or already taken.")
+				.arg(name));
+		return;
+	}
+
+	space->name = wanted;
+
+	// A rename moves no node, but the name is what the selector and every later resolve read, so the
+	// rig is built again rather than left disagreeing with the document.
+	CommitBlendSet();
+}
+
+void
+AnimationEditorWindow::AddSample()
+{
+	assetlib::BlendSpace* space = EditedSpace(m_SpaceSelector->currentIndex());
+	const int             index = m_SampleClip->currentIndex();
+	if (space == nullptr || index < 0 ||
+	    static_cast<size_t>(index) >= m_Transport.GetClips().size())
+	{
+		return;
+	}
+
+	const editor::ClipInfo& clip = m_Transport.GetClips()[static_cast<size_t>(index)];
+
+	// The combo lists a one-shot disabled rather than hiding it, so the refusal is still owed here:
+	// a selection is restored by name when the clip set changes under it, and a name can come back
+	// on a clip that no longer loops.
+	if (const std::string_view reason = editor::ClipRefusalReason(clip); !reason.empty())
+	{
+		QMessageBox::warning(
+			window(),
+			QStringLiteral("Add Sample"),
+			QStringLiteral("'%1' %2.")
+				.arg(QString::fromStdString(clip.name))
+				.arg(QString::fromUtf8(reason.data(), static_cast<qsizetype>(reason.size()))));
+		return;
+	}
+
+	// Past the last sample: the end of the run is the one place a new sample always fits, whatever
+	// the run already holds.
+	const float parameter =
+		space->samples.empty() ? 0.0f : space->samples.back().parameter + c_ParameterGap;
+
+	if (!editor::CanInsertAt(space->samples, parameter, c_ParameterStep))
+	{
+		// Reachable off a run authored by hand, where the last parameter is large enough that one
+		// gap past it is the same number again.
+		QMessageBox::warning(
+			window(),
+			QStringLiteral("Add Sample"),
+			QStringLiteral("There is no room past the last sample for another threshold."));
+		return;
+	}
+
+	const size_t at = editor::InsertionIndex(space->samples, parameter);
+
+	// Where the reload should leave the cursor: the author added this sample to work on it.
+	m_PendingSampleRow = static_cast<int>(at);
+
+	space->samples.insert(
+		space->samples.begin() + static_cast<ptrdiff_t>(at),
+		{ clip.name, parameter });
+
+	CommitBlendSet();
+}
+
+void
+AnimationEditorWindow::RemoveSample()
+{
+	assetlib::BlendSpace* space = EditedSpace(m_SpaceSelector->currentIndex());
+	const int             row   = m_SampleList->currentRow();
+	if (space == nullptr || row < 0 || static_cast<size_t>(row) >= space->samples.size())
+		return;
+
+	if (!editor::CanRemoveSample(space->samples))
+		return;
+
+	space->samples.erase(space->samples.begin() + static_cast<ptrdiff_t>(row));
+	CommitBlendSet();
+}
+
+void
+AnimationEditorWindow::RetargetSample(const float parameter)
+{
+	assetlib::BlendSpace* space = EditedSpace(m_SpaceSelector->currentIndex());
+	const int             row   = m_SampleList->currentRow();
+	if (space == nullptr || row < 0 || static_cast<size_t>(row) >= space->samples.size())
+		return;
+
+	// Held between its neighbours rather than reordered: a row that jumped position mid-drag would
+	// move the thing under the cursor.
+	const float held = editor::ClampedParameter(
+		space->samples,
+		static_cast<size_t>(row),
+		parameter,
+		c_ParameterStep);
+
+	space->samples[static_cast<size_t>(row)].parameter = held;
+	m_BlendSetDirty                                    = true;
+
+	if (editor::ApplyParameters(m_BlendSet.spaces, m_Spaces))
+	{
+		const QString refusal = m_Preview->RetargetBlendParameters(m_Spaces);
+		if (!refusal.isEmpty())
+			qWarning("AnimationEditor: a threshold did not go live: %s", qUtf8Printable(refusal));
+	}
+
+	// The list carries the value, so it is redrawn as the threshold moves rather than at the save.
+	m_SyncingUi = true;
+	if (QListWidgetItem* item = m_SampleList->item(row); item != nullptr)
+		item->setText(
+			QStringLiteral("%1    %2")
+				.arg(QString::fromStdString(space->samples[static_cast<size_t>(row)].clip))
+				.arg(held, 0, 'f', c_ParameterDecimals));
+	m_SampleParameter->setValue(static_cast<double>(held));
+	m_SyncingUi = false;
 }
 
 void
@@ -1041,10 +1523,13 @@ AnimationEditorWindow::SetClips(const std::vector<editor::ClipInfo>& clips)
 		m_FromClip->addItem(name);
 		m_ToClip->addItem(name);
 	}
+	// By name and not by index: an edit that reloads the mesh comes back through here, and the
+	// author was watching a clip rather than a row. A name that is gone falls back to the first.
+	const int wasClip = m_ClipList->count() > 0 ? m_SelectedClip : -1;
 	if (!clips.empty())
 	{
-		m_ClipList->setCurrentRow(0);
-		m_FromClip->setCurrentIndex(0);
+		m_ClipList->setCurrentRow(wasClip >= 0 ? wasClip : 0);
+		m_FromClip->setCurrentIndex(wasClip >= 0 ? wasClip : 0);
 	}
 	// -1 after the fill, which is what the placeholder shows: a clip set arrives with one clip
 	// playing and no transition pending.
@@ -1066,7 +1551,7 @@ AnimationEditorWindow::SetClips(const std::vector<editor::ClipInfo>& clips)
 	}
 
 	m_Preview->SetTime(0.0f);
-	SelectClip(playable ? 0 : -1);
+	SelectClip(playable ? m_ClipList->currentRow() : -1);
 	UpdateTransitionControls();
 	SyncTransportUi();
 }
@@ -1074,6 +1559,8 @@ AnimationEditorWindow::SetClips(const std::vector<editor::ClipInfo>& clips)
 void
 AnimationEditorWindow::SelectClip(const int index)
 {
+	m_SelectedClip = index;
+
 	if (m_SyncingUi && index >= 0)
 		return;
 

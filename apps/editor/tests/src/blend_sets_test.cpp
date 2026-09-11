@@ -108,3 +108,50 @@ TEST_CASE("The first blend set is written empty, beside its clip set", "[animati
 		CHECK_THROWS(editor::CreateEmptyBlendSet(root, ""));
 	}
 }
+
+TEST_CASE("An edited set is written back over what it was read from", "[animation][blend]")
+{
+	QTemporaryDir dir;
+	REQUIRE(dir.isValid());
+	const std::filesystem::path root = std::filesystem::path(dir.path().toStdWString());
+	const std::string           key  = "Authored/Animations/loco.bblend";
+
+	auto written       = assetlib::BlendSet();
+	written.name       = "authored by hand";
+	written.animations = "Derived/Animations/loco.banim";
+	written.extraJson  = R"({"authoredBy":"a tool that came later"})";
+	auto space         = assetlib::BlendSpace();
+	space.name         = "locomotion";
+	space.samples      = { { "walk", 1.5f }, { "run", 6.0f } };
+	written.spaces.push_back(space);
+	assetlib::AssetStore(root).Save(written, key);
+
+	SECTION("what comes back is what an edit takes, and a save puts it all back")
+	{
+		assetlib::BlendSet set = editor::LoadBlendSet(root, key);
+		REQUIRE(set.spaces.size() == 1);
+		CHECK(set.spaces[0].samples.size() == 2);
+
+		set.spaces[0].samples[1].parameter = 4.0f;
+		editor::SaveBlendSet(root, key, set);
+
+		const assetlib::BlendSet read = editor::LoadBlendSet(root, key);
+		CHECK(read.spaces[0].samples[1].parameter == 4.0f);
+
+		// The reason an edit loads the document rather than rebuilding it from what the acquire
+		// resolved: neither the name nor a key written by something else survives that trip.
+		CHECK(read.name == "authored by hand");
+		CHECK_THAT(read.extraJson, Catch::Matchers::ContainsSubstring("a tool that came later"));
+	}
+
+	SECTION("a set the format refuses is not written at all")
+	{
+		assetlib::BlendSet set = editor::LoadBlendSet(root, key);
+		set.spaces[0].samples.pop_back();  // one sample is a clip, not a space
+
+		CHECK_THROWS(editor::SaveBlendSet(root, key, set));
+
+		// Nothing was written, so what stands is still the set that was there.
+		CHECK(editor::LoadBlendSet(root, key).spaces[0].samples.size() == 2);
+	}
+}

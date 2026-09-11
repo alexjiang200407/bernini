@@ -135,6 +135,13 @@ resolved spaces per rig *and* per geom, so a move that reached `bgl` alone would
 acquire describing the set the rig was uploaded with. The caches move only once the scene has
 accepted, and across every geom on the rig rather than the one that was named.
 
+**Which of the two an edit is, is decided on the authored sets.** The editor's
+`editor::IsParameterMove` compares the `.bblend` as it was acquired against the `.bblend` as it now
+stands -- clips by name -- and only a run differing in nothing but its parameters takes the live
+door. Comparing the *resolved* spaces instead would miss the one case that matters: those hold clip
+indices, so a sample retargeted onto another clip reads as no change at all and arrives at a rig that
+refuses it. Everything else reloads the mesh, which is the reacquire opening a set already performs.
+
 ## Risky / Non-obvious Contracts
 
 * **A slot's `nodeIndex` is checked against the rig's node count, not its clip count.** They differ by the
