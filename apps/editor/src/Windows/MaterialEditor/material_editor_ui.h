@@ -6,7 +6,11 @@
 #include <vector>
 
 class MaterialGraphView;
+class SurfaceOutputNode;
+class QCheckBox;
 class QComboBox;
+class QDoubleSpinBox;
+class QFormLayout;
 class QLabel;
 class QPushButton;
 class QWidget;
@@ -53,7 +57,23 @@ namespace editor
 		QLabel*            materialLabel    = nullptr;
 		QLabel*            bakedTextures    = nullptr;
 		QLabel*            tangentWarning   = nullptr;
+
+		// The surface layer (ADR-9), edited here rather than on the node; FillLayerSection shows,
+		// hides and fills it.
+		QWidget*        layerSection  = nullptr;
+		QFormLayout*    layerForm     = nullptr;
+		QComboBox*      layerSelector = nullptr;
+		QDoubleSpinBox* alphaCutoff   = nullptr;
+		QCheckBox*      doubleSided   = nullptr;
 	};
+
+	/**
+	 * Shows the Layer section and fills it from `sink`, or hides it for null -- a PBR board,
+	 * whose layer is the Output selector's sink choice. The cutoff row shows on a mask layer
+	 * alone. Signal-blocked, so a fill never writes back through the window's connects.
+	 */
+	void
+	FillLayerSection(const SurfaceOutputNode* sink, const MaterialEditorWidgets& widgets);
 
 	/**
 	 * Builds the material editor's properties column and graph board under `parent`, in the state they

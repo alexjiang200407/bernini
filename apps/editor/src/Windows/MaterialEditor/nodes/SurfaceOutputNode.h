@@ -20,15 +20,13 @@
 #include <QtNodes/internal/Definitions.hpp>
 #include <QtNodes/internal/NodeData.hpp>
 
-class QCheckBox;
-class QComboBox;
 class QDoubleSpinBox;
 class SurfaceTextureData;
 
 /**
  * The sink for a material drawn by a game-defined surface, generated from reflection: one input
- * port per texture slot, one spin-box row per value with the declaration's default prefilled, and
- * the layer keys -- which are every model's, chosen per material -- as widgets of its own.
+ * port per texture slot, one spin-box row per value with the declaration's default prefilled.
+ * The layer keys are its state too, edited from the properties panel (ADR-9).
  *
  * One is registered per surface the engine reflected, named `SurfaceOutput:<surface>`. A slot
  * port carries SurfaceTextureData, never ChannelData: a surface texture is bound, not composited,
@@ -131,6 +129,17 @@ public:
 		return m_DoubleSided;
 	}
 
+	// The layer keys are authored in the properties panel (ADR-9); these are what its widgets
+	// write. Each emits Changed, so the preview follows a panel edit as it follows a board edit.
+	void
+	SetAlphaMode(assetlib::AlphaMode mode);
+
+	void
+	SetAlphaCutoff(float cutoff);
+
+	void
+	SetDoubleSided(bool doubleSided);
+
 private:
 	void
 	SyncWidgets();
@@ -150,7 +159,4 @@ private:
 
 	QWidget*                                  m_Widget = nullptr;
 	std::vector<std::vector<QDoubleSpinBox*>> m_Spins;
-	QComboBox*                                m_LayerBox       = nullptr;
-	QDoubleSpinBox*                           m_CutoffSpin     = nullptr;
-	QCheckBox*                                m_DoubleSidedBox = nullptr;
 };

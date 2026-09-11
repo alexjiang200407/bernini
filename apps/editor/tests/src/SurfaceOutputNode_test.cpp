@@ -1,5 +1,6 @@
 #include "Windows/MaterialEditor/MaterialGraphModel.h"
 #include "Windows/MaterialEditor/material_graph.h"
+#include "Windows/MaterialEditor/nodes/MaterialSinkNode.h"
 #include "Windows/MaterialEditor/nodes/SurfaceOutputNode.h"
 #include "Windows/MaterialEditor/nodes/TextureNode.h"
 #include <QtNodes/internal/Definitions.hpp>
@@ -14,7 +15,7 @@
 #include <catch2/catch_message.hpp>
 #include <catch2/catch_test_macros.hpp>
 
-#include <QApplication>
+#include <QCheckBox>
 #include <QComboBox>
 #include <QJsonArray>
 #include <QJsonObject>
@@ -389,27 +390,41 @@ TEST_CASE("The node re-measures when its widget resizes", "[materialgraph][surfa
 }
 
 TEST_CASE(
-	"Hiding the cutoff row shrinks the widget, and re-measures",
+	"The layer setters write the state the material compiles from",
 	"[materialgraph][surfacesink]")
 {
-	// The gap half of the hazard: a hidden row invalidates the layout without resizing the
-	// widget, since nothing lays the proxied widget out from outside. The sink adopts the shrunk
-	// size hint itself and asks for the re-measure.
+	// The layer keys are authored in the properties panel (ADR-9); these setters are what its
+	// widgets write, and each change recompiles the preview exactly as a board edit does.
+	SurfaceOutputNode sink(RimSurface());
+	QSignalSpy        changed(&sink, &MaterialSinkNode::Changed);
+
+	sink.SetAlphaMode(assetlib::AlphaMode::kMask);
+	sink.SetAlphaCutoff(0.25f);
+	sink.SetDoubleSided(false);
+	CHECK(changed.count() == 3);
+
+	// Setting what already holds is not a change, so the preview is not recompiled for it.
+	sink.SetAlphaMode(assetlib::AlphaMode::kMask);
+	CHECK(changed.count() == 3);
+
+	CHECK(sink.GetAlphaMode() == assetlib::AlphaMode::kMask);
+	CHECK(sink.GetAlphaCutoff() == 0.25f);
+	CHECK_FALSE(sink.GetDoubleSided());
+
+	assetlib::BMaterial material;
+	sink.CompileInto(material, c_DataRoot);
+	CHECK(material.layer.alphaMode == assetlib::AlphaMode::kMask);
+	CHECK(material.layer.alphaCutoff == 0.25f);
+	CHECK_FALSE(material.layer.doubleSided);
+}
+
+TEST_CASE("The node carries no layer widgets", "[materialgraph][surfacesink]")
+{
+	// ADR-9: a combo popup is a child window the proxy embeds unscaled into the zoomed scene, so
+	// the layer moved to the panel and the node's widget holds value spins alone.
 	SurfaceOutputNode sink(RimSurface());
 	QWidget*          widget = sink.embeddedWidget();
-	widget->show();
-
-	auto* layer = widget->findChild<QComboBox*>();
-	REQUIRE(layer != nullptr);
-
-	layer->setCurrentIndex(1);  // Alpha Test: the cutoff row appears
-	QApplication::processEvents();
-	const int tall = widget->height();
-
-	QSignalSpy remeasured(&sink, &QtNodes::NodeDelegateModel::requestNodeUpdate);
-	layer->setCurrentIndex(0);  // Opaque: the row hides, and the widget must follow it down
-	QApplication::processEvents();
-
-	CHECK(widget->height() < tall);
-	CHECK(remeasured.count() >= 1);
+	REQUIRE(widget != nullptr);
+	CHECK(widget->findChild<QComboBox*>() == nullptr);
+	CHECK(widget->findChild<QCheckBox*>() == nullptr);
 }
