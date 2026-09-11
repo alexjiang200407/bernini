@@ -3,6 +3,7 @@
 #include "Windows/MaterialEditor/nodes/SurfaceOutputNode.h"
 #include "Windows/MaterialEditor/nodes/TextureNode.h"
 #include <QtNodes/internal/Definitions.hpp>
+#include <QtNodes/internal/NodeDelegateModel.hpp>
 #include <QtNodes/internal/NodeDelegateModelRegistry.hpp>
 
 #include "util/QtSupport.h"  // IWYU pragma: keep
@@ -13,9 +14,13 @@
 #include <catch2/catch_message.hpp>
 #include <catch2/catch_test_macros.hpp>
 
+#include <QApplication>
+#include <QComboBox>
 #include <QJsonArray>
 #include <QJsonObject>
 #include <QPointF>
+#include <QSignalSpy>
+#include <QWidget>
 #include <QtNodes/NodeDelegateModelRegistry>
 #include <bgl/glm.h>
 #include <filesystem>
@@ -364,4 +369,47 @@ TEST_CASE(
 	REQUIRE(model.SetOutputType(QStringLiteral("MaterialOutput")));
 	CHECK(Sink(model) == nullptr);
 	CHECK(model.OutputNode() != nullptr);
+}
+
+TEST_CASE("The node re-measures when its widget resizes", "[materialgraph][surfacesink]")
+{
+	// QtNodes reads the embedded widget's size only when the node is created, so a widget that
+	// settles on first show -- or a form row shown or hidden later -- must ask for a re-measure
+	// itself, or its contents overflow the frame.
+	SurfaceOutputNode sink(RimSurface());
+	QWidget*          widget = sink.embeddedWidget();
+	REQUIRE(widget != nullptr);
+
+	// A hidden widget defers its resize events; the proxied one in the graph is shown.
+	widget->show();
+
+	QSignalSpy remeasured(&sink, &QtNodes::NodeDelegateModel::requestNodeUpdate);
+	widget->resize(widget->width() + 40, widget->height() + 25);
+	CHECK(remeasured.count() == 1);
+}
+
+TEST_CASE(
+	"Hiding the cutoff row shrinks the widget, and re-measures",
+	"[materialgraph][surfacesink]")
+{
+	// The gap half of the hazard: a hidden row invalidates the layout without resizing the
+	// widget, since nothing lays the proxied widget out from outside. The sink adopts the shrunk
+	// size hint itself and asks for the re-measure.
+	SurfaceOutputNode sink(RimSurface());
+	QWidget*          widget = sink.embeddedWidget();
+	widget->show();
+
+	auto* layer = widget->findChild<QComboBox*>();
+	REQUIRE(layer != nullptr);
+
+	layer->setCurrentIndex(1);  // Alpha Test: the cutoff row appears
+	QApplication::processEvents();
+	const int tall = widget->height();
+
+	QSignalSpy remeasured(&sink, &QtNodes::NodeDelegateModel::requestNodeUpdate);
+	layer->setCurrentIndex(0);  // Opaque: the row hides, and the widget must follow it down
+	QApplication::processEvents();
+
+	CHECK(widget->height() < tall);
+	CHECK(remeasured.count() >= 1);
 }
