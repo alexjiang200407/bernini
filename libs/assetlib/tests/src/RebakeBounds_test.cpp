@@ -166,7 +166,7 @@ TEST_CASE("The rebake writes the box a load then finds", "[rebake]")
 
 		const AnimationSet read =
 			StoreAt(root.path).Load<AnimationSet>("Derived/Animations/rig.banim");
-		CHECK_FALSE(read.plantWeights.Empty());
+		CHECK_FALSE(plantWeightsEmpty(read.plantWeights));
 		CHECK(read.plantWeights.legCount == 1);
 
 		// And it settles: a second run has nothing left to measure.

@@ -1,4 +1,5 @@
 #include <assetlib/skinning.h>
+#include <assetlib/transform.h>
 #include <assetlib_structs/Animation.h>
 #include <assetlib_structs/Node.h>
 #include <assetlib_structs/Skeleton.h>

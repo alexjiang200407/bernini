@@ -1,6 +1,8 @@
-# assetlib_structs holds the PODs assetlib decodes into, and its free functions are read in the
-# same expression as assetlib's own -- `toMatrix(node.localTransform)` beside `loadKTX2(path)` --
-# so they are spelled the same way. Types and methods keep the engine's PascalCase.
+# assetlib_structs holds the PODs assetlib decodes into, and holds no function: a question about a
+# container is answered in assetlib, which is the library that has the answers. See the root
+# CLAUDE.md. What this case setting still governs is selfcheck.cpp's one anchor definition, spelled
+# the way assetlib spells a free function so the two never disagree.
+
 InheritParentConfig: true
 
 CheckOptions:

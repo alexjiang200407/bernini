@@ -94,6 +94,27 @@ Concretely, before adding to `include/assetlib/`:
   `-Wall -Werror` turns a new `AssetType` into a compile error there. Do not add a `default:` to
   one; that is the guarantee.
 
+## A question about a container is answered here
+
+`assetlib_structs` is data: structs, the constants that address them, and the `static_assert`s that
+pin their layout. Nothing that computes lives there, so every question one of those containers
+raises is a free function in this library -- `toMatrix` ([include/assetlib/transform.h]), the
+layout's `formatSize` / `findAttribute` / `attributeOffset`
+([include/assetlib/vertex_layout.h]), `channelIndex` and `groupIsRouted`
+([include/assetlib/bmaterial.h]), `effectiveExposure` ([include/assetlib/benv.h]).
+
+The reason is who links what. `bgl` and `bgl_extended` link `assetlib_structs` and never link this,
+so a function put down there is one the renderer may call. Keeping that surface to data is what
+makes *the renderer cannot ask a container anything* a fact about the build rather than an
+observation about where somebody happened to leave a file -- and `bgl_extended` pays for it visibly,
+with its own joints/weights loop in `Scene.cpp` and its own `static_cast<size_t>` where it wants
+`channelIndex`. That duplication is the boundary being enforced, not a gap in it.
+
+So do not add a declaration to an `assetlib_structs` header. `assetlib_structs_selfcheck` compiles
+that whole surface against the POD library alone and fails the build on a reach into this one; what
+it cannot catch is a declaration with no definition anywhere, which is why the rule is written here
+rather than only enforced there.
+
 ## Headers forward declare
 
 A header forward declares the types it names from its **own** namespace — `BMesh`, `BMaterial`,

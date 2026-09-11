@@ -717,8 +717,8 @@ disagree.
 
 ## Risky / Non-obvious Contracts
 
-* **The skeleton signature is checked in `gamelib`, not `bgl_extended`.** Computing one needs `assetlib`, which
-  `bgl_extended` does not link. `bgl_extended` can only check that the bone *counts* agree — and a reordered rig has the
+* **The skeleton signature is checked in `gamelib`, not `bgl_extended`.** `assetlib_structs` is data by
+  rule, so computing one lives in `assetlib`, which `bgl_extended` does not link. `bgl_extended` can only check that the bone *counts* agree — and a reordered rig has the
   same count, so a stale clip set or mesh would reach the shader and animate the wrong joints
   silently. `AcquireSkinnedMesh` is the only door that catches it; anything constructing a geom
   another way inherits the gap, which is why `AddSkinnedMeshGeom` documents it.

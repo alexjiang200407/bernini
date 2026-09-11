@@ -16,9 +16,6 @@ namespace assetlib
 
 	static_assert(sizeof(Transform) == 40);
 
-	glm::mat4
-	toMatrix(const Transform& transform) noexcept;
-
 	/**
 	 * A hierarchy node. Children are encoded as a first-child / next-sibling linked list of indices
 	 * into the owning mesh's `nodes`, keeping the node a fixed-size, trivially-copyable POD. A

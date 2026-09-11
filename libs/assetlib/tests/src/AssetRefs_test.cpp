@@ -1,5 +1,6 @@
 #include <algorithm>
 #include <assetlib/asset_refs.h>
+#include <assetlib/bmaterial.h>
 #include <assetlib/bmesh.h>
 
 #include <assetlib/skinning.h>

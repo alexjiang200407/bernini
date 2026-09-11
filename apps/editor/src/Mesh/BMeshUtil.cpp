@@ -1,5 +1,6 @@
 #include "Mesh/BMeshUtil.h"
 #include <assetlib/bmesh.h>
+#include <assetlib/transform.h>
 #include <assetlib_structs/Mesh.h>
 #include <assetlib_structs/Node.h>
 #include <cstdint>

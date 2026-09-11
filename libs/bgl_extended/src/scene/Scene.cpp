@@ -89,8 +89,8 @@ namespace bgl
 	{
 		constexpr uint32_t c_MaxDispatchMeshGroups = 65535;
 
-		// bgl links assetlib_structs, not assetlib, so findAttribute() is out of reach here -- the
-		// layout is a small fixed array and this is the whole of what the check needs.
+		// assetlib_structs is data by rule, so a question about a layout is answered in assetlib,
+		// which this does not link. The layout is a small fixed array and this is the whole of it.
 		bool
 		HasSkinBinding(const assetlib::VertexLayout& layout) noexcept
 		{
@@ -2039,13 +2039,15 @@ namespace bgl
 		static_assert(
 			idl::cLooseChannelCount == assetlib::c_LooseChannelCount,
 			"The GPU and the .bmaterial file must agree on how many loose channels there are");
+		// assetlib::channelIndex is the same cast and lives in assetlib, which this does not link:
+		// assetlib_structs is data, so a question about a container is answered a library up.
 		static_assert(
 			static_cast<size_t>(idl::PbrChannel::kBaseColorR) ==
-					assetlib::channelIndex(assetlib::PbrChannel::kBaseColorR) &&
+					static_cast<size_t>(assetlib::PbrChannel::kBaseColorR) &&
 				static_cast<size_t>(idl::PbrChannel::kAo) ==
-					assetlib::channelIndex(assetlib::PbrChannel::kAo) &&
+					static_cast<size_t>(assetlib::PbrChannel::kAo) &&
 				static_cast<size_t>(idl::PbrChannel::kNormalX) ==
-					assetlib::channelIndex(assetlib::PbrChannel::kNormalX),
+					static_cast<size_t>(assetlib::PbrChannel::kNormalX),
 			"idl::PbrChannel and assetlib::PbrChannel must index BMaterial::routes identically");
 
 		auto material = idl::LoosePbrMaterial();

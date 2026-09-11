@@ -424,6 +424,13 @@ namespace assetlib
 		std::span<const AvatarLegChain> chains);
 
 	/**
+	 * Whether `weights` holds nothing to plant -- the ordinary case, since most rigs author no
+	 * avatar and so most clip sets carry none.
+	 */
+	[[nodiscard]] bool
+	plantWeightsEmpty(const PlantWeights& weights) noexcept;
+
+	/**
 	 * What a baked plant weight was measured against: the rig, the avatar resolved on it -- legs
 	 * and clip weights both -- and the geometry the soles were fitted to. A re-imported mesh, a
 	 * re-authored bind or an edited avatar changes it; renames and material swaps do not.

@@ -1,5 +1,6 @@
 #include "Import/import_writers.h"
 #include <array>
+#include <assetlib/bmaterial.h>
 #include <assetlib/bmesh.h>
 
 #include <assetlib/asset_import.h>

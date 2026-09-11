@@ -22,7 +22,9 @@
 
 #include <assetlib/RegenMesh.h>
 #include <assetlib/avatar.h>
+#include <assetlib/benv.h>
 #include <assetlib/blend.h>
+#include <assetlib/bmaterial.h>
 #include <assetlib/container_info.h>
 #include <assetlib/image_io.h>
 #include <assetlib/skinning.h>

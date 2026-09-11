@@ -1,3 +1,4 @@
+#include <assetlib/vertex_layout.h>
 #include <assetlib_structs/Mesh.h>
 #include <assetlib_structs/VertexLayout.h>
 #include <cstddef>

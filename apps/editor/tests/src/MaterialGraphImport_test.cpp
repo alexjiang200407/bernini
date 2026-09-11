@@ -2,6 +2,7 @@
 #include "Windows/MaterialEditor/material_graph.h"
 #include "Windows/MaterialEditor/nodes/MaterialOutputNode.h"
 #include <QtNodes/internal/Definitions.hpp>
+#include <assetlib/bmaterial.h>
 #include <assetlib_structs/BMaterial.h>
 #include <assetlib_structs/BMaterialImport.h>
 

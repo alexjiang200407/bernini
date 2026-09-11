@@ -206,8 +206,9 @@ namespace assetlib
 
 				const uint64_t wantedPlant =
 					avatar.legs.empty() ? 0 : plantWeightsSignature(planted, skeleton, avatar);
-				const uint64_t storedPlant =
-					animations.plantWeights.Empty() ? 0 : animations.plantWeights.signature;
+				const uint64_t storedPlant = plantWeightsEmpty(animations.plantWeights) ?
+				                                 0 :
+				                                 animations.plantWeights.signature;
 
 				if (wanted == stored && wantedPlant == storedPlant)
 				{

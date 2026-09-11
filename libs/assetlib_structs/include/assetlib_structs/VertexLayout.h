@@ -2,7 +2,6 @@
 
 #include <array>
 #include <cstdint>
-#include <optional>
 namespace assetlib
 {
 	enum class VertexSemantic : uint8_t
@@ -27,17 +26,6 @@ namespace assetlib
 		kUnorm16x4,
 		kUint16x4
 	};
-
-	/** Byte size of a single attribute encoded in `format`. */
-	[[nodiscard]] uint32_t
-	formatSize(VertexFormat format) noexcept;
-
-	struct VertexAttribute;
-	struct VertexLayout;
-
-	/** The attribute carrying `semantic`, or nullptr when the layout has none. */
-	[[nodiscard]] const VertexAttribute*
-	findAttribute(const VertexLayout& layout, VertexSemantic semantic) noexcept;
 
 	struct VertexAttribute
 	{
@@ -69,10 +57,4 @@ namespace assetlib
 	 */
 	inline constexpr uint32_t c_InfluencesPerVertex = 4;
 
-	/**
-	 * Byte offset of `semantic` within one interleaved vertex, empty when the layout does not carry
-	 * it -- which is the ordinary case, since the importer packs only what the source provided.
-	 */
-	[[nodiscard]] std::optional<uint16_t>
-	attributeOffset(const VertexLayout& layout, VertexSemantic semantic) noexcept;
 }

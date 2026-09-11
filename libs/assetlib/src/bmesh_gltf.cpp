@@ -20,6 +20,8 @@
 
 #include "bmesh_texture.h"
 #include <assetlib/cancel.h>
+#include <assetlib/transform.h>
+#include <assetlib/vertex_layout.h>
 #include <assetlib_structs/BMaterial.h>
 #include <assetlib_structs/BMaterialImport.h>
 #include <assetlib_structs/Mesh.h>

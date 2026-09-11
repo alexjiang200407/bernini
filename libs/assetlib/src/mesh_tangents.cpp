@@ -1,4 +1,5 @@
 #include <assetlib/mesh_tangents.h>
+#include <assetlib/vertex_layout.h>
 #include <assetlib_structs/Mesh.h>
 #include <assetlib_structs/VertexLayout.h>
 

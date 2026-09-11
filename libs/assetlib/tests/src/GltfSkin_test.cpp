@@ -5,6 +5,7 @@
 #include <assetlib/codecs.h>
 #include <assetlib/mesh_tangents.h>
 #include <assetlib/skinning.h>
+#include <assetlib/vertex_layout.h>
 #include <assetlib_structs/Animation.h>
 #include <assetlib_structs/BMesh.h>
 #include <assetlib_structs/BMeshImport.h>

@@ -615,7 +615,7 @@ TEST_CASE(
 
 	bakePlantWeights(leg.animations, leg.Meshes(), leg.skeleton, plant);
 
-	REQUIRE_FALSE(leg.animations.plantWeights.Empty());
+	REQUIRE_FALSE(plantWeightsEmpty(leg.animations.plantWeights));
 	CHECK(leg.animations.plantWeights.legCount == 1);
 
 	const std::optional<std::vector<uint8_t>> found =
@@ -669,7 +669,7 @@ TEST_CASE(
 	{
 		bakePlantWeights(leg.animations, leg.Meshes(), leg.skeleton, ResolvedAvatar());
 
-		CHECK(leg.animations.plantWeights.Empty());
+		CHECK(plantWeightsEmpty(leg.animations.plantWeights));
 		CHECK_FALSE(findPlantWeights(leg.animations, leg.Meshes(), leg.skeleton, ResolvedAvatar())
 		                .has_value());
 	}

@@ -125,7 +125,7 @@ namespace assetlib
 
 		// Both chunks or neither: the count is what makes the bytes addressable, so a file carrying
 		// one without the other would read as a measurement nobody can index.
-		if (!animations.plantWeights.Empty())
+		if (!plantWeightsEmpty(animations.plantWeights))
 		{
 			const auto ref = std::array<PlantWeightsRef, 1>{
 				{ { animations.plantWeights.signature, animations.plantWeights.legCount } }

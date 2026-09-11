@@ -12,6 +12,7 @@
 
 #include <assetlib/mesh_tangents.h>
 #include <assetlib/skinning.h>
+#include <assetlib/vertex_layout.h>
 
 #include "cache_io.h"
 #include "fs_util.h"
