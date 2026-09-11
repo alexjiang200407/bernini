@@ -136,10 +136,11 @@ namespace bgl
 		 *         nonzero, or a `plantWeights` that is not one byte per leg for every frame in the
 		 *         sample pool.
 		 *
-		 * `AnimationSet::skeletonSignature` is deliberately **not** checked here: computing a
-		 * skeleton's signature needs assetlib, which bgl does not link. A clip set cooked against a
-		 * since-reordered rig of the same bone count therefore passes this door and animates
-		 * wrongly. Whoever loaded the two containers owns that check -- gamelib's acquire makes it.
+		 * `AnimationSet::skeletonSignature` is deliberately **not** checked here. `assetlib_structs`
+		 * is data by rule, so computing a signature lives in assetlib, which bgl does not link -- a
+		 * clip set cooked against a since-reordered rig of the same bone count therefore passes this
+		 * door and animates wrongly. Whoever loaded the two containers owns that check, and
+		 * gamelib's acquire makes it.
 		 *
 		 * `blendSet`'s spaces become nodes after the one-per-clip nodes this synthesizes, so a
 		 * playback slot may name either and adding a set never moves a clip's node. bgl reads no
