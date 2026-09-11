@@ -27,6 +27,8 @@
 #include <assetlib/mesh_tangents.h>
 #include <assetlib_structs/BMaterial.h>
 #include <assetlib_structs/BMesh.h>
+#include <bgl/IGraphics.h>
+#include <bgl/SurfaceType.h>
 #include <cstddef>
 #include <cstdint>
 #include <exception>
@@ -41,8 +43,10 @@
 #include <qobject.h>
 #include <qstringliteral.h>
 #include <qstringview.h>
+#include <span>
 #include <string>
 #include <utility>
+#include <vector>
 
 #include "Async/BackgroundTask.h"
 #include "Render/Renderer.h"
@@ -188,7 +192,19 @@ MaterialEditorWindow::MaterialEditorWindow(QWidget* parent, MaterialEditorWindow
 
 	m_TexturePreviews = new TexturePreviewCache(this);
 
-	m_Registry = MakeMaterialNodeRegistry(m_Desc.renderer, m_TexturePreviews);
+	// The reflected surfaces, copied off the render thread once -- the set is fixed inside
+	// CreateGraphics, so this is all of them for the editor's lifetime.
+	auto surfaces = std::vector<bgl::SurfaceType>();
+	if (m_Desc.renderer != nullptr)
+	{
+		surfaces = m_Desc.renderer->Invoke([&] {
+			const std::span<const bgl::SurfaceType> types =
+				m_Desc.renderer->GetGraphics()->GetSurfaceTypes();
+			return std::vector<bgl::SurfaceType>(types.begin(), types.end());
+		});
+	}
+
+	m_Registry = MakeMaterialNodeRegistry(m_Desc.renderer, m_TexturePreviews, surfaces);
 
 	splitter->addWidget(ui.leftPanel);
 	splitter->addWidget(rightPanel);

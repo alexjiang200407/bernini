@@ -6,6 +6,7 @@
 #include <QJsonDocument>
 #include <QPointF>
 #include <algorithm>
+#include <bgl/SurfaceType.h>
 #include <cmath>
 #include <cstddef>
 #include <filesystem>
@@ -16,6 +17,7 @@
 #include <qobject.h>
 #include <qsize.h>
 #include <qstringliteral.h>
+#include <span>
 #include <system_error>
 #include <tuple>
 #include <vector>
@@ -26,6 +28,7 @@
 #include "Windows/MaterialEditor/nodes/HashedAlphaMaterialOutputNode.h"
 #include "Windows/MaterialEditor/nodes/MaterialOutputNode.h"
 #include "Windows/MaterialEditor/nodes/MaterialSinkNode.h"
+#include "Windows/MaterialEditor/nodes/SurfaceOutputNode.h"
 #include "Windows/MaterialEditor/nodes/TextureNode.h"
 #include <QtNodes/internal/Definitions.hpp>
 #include <QtNodes/internal/NodeDelegateModelRegistry.hpp>
@@ -147,7 +150,10 @@ RebaseGraphTextures(QJsonObject& graph, const std::filesystem::path& dir, bool t
 }
 
 std::shared_ptr<QtNodes::NodeDelegateModelRegistry>
-MakeMaterialNodeRegistry(Renderer* renderer, TexturePreviewCache* previews)
+MakeMaterialNodeRegistry(
+	Renderer*                         renderer,
+	TexturePreviewCache*              previews,
+	std::span<const bgl::SurfaceType> surfaces)
 {
 	auto registry = std::make_shared<QtNodes::NodeDelegateModelRegistry>();
 
@@ -169,6 +175,15 @@ MakeMaterialNodeRegistry(Renderer* renderer, TexturePreviewCache* previews)
 	registry->registerModel<HashedAlphaMaterialOutputNode>(
 		[]() { return std::make_unique<HashedAlphaMaterialOutputNode>(); },
 		QLatin1String(c_OutputCategory));
+
+	// One sink per reflected surface, each carrying its SurfaceType by value so the registry owns
+	// what its creators read.
+	for (const bgl::SurfaceType& surface : surfaces)
+	{
+		registry->registerModel<SurfaceOutputNode>(
+			[surface]() { return std::make_unique<SurfaceOutputNode>(surface); },
+			QLatin1String(c_OutputCategory));
+	}
 
 	return registry;
 }

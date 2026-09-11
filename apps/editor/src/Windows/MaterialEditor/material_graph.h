@@ -9,9 +9,11 @@
 
 #include <assetlib_structs/BMaterial.h>
 #include <assetlib_structs/BMaterialImport.h>
+#include <bgl/SurfaceType.h>
 #include <filesystem>
 #include <memory>
 #include <optional>
+#include <span>
 
 class MaterialGraphModel;
 class TexturePreviewCache;
@@ -55,9 +57,17 @@ SortGraph(QJsonObject& graph);
  *
  * `renderer` and `previews` may be null: a TextureNode then shows no image, which is what lets a graph
  * be built and compiled with no graphics device.
+ *
+ * `surfaces` registers one surface sink per entry, named `SurfaceOutput:<name>` -- what the engine
+ * reflected at startup, or hand-built types in a test. Each entry is copied into its creator, so
+ * the span need not outlive the call. Empty registers none, and a saved graph naming one then
+ * fails to restore that node -- the same as any unregistered model.
  */
 [[nodiscard]] std::shared_ptr<QtNodes::NodeDelegateModelRegistry>
-MakeMaterialNodeRegistry(Renderer* renderer, TexturePreviewCache* previews);
+MakeMaterialNodeRegistry(
+	Renderer*                         renderer,
+	TexturePreviewCache*              previews,
+	std::span<const bgl::SurfaceType> surfaces = {});
 
 /**
  * Compiles `model` into the material it authors: what its sink writes (MaterialSinkNode::

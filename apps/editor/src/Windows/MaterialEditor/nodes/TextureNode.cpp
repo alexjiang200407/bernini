@@ -26,6 +26,7 @@
 #include "Thumbnails/StampedPixmapCache.h"
 #include "Thumbnails/TexturePreviewCache.h"
 #include "Windows/MaterialEditor/nodes/ChannelData.h"
+#include "Windows/MaterialEditor/nodes/SurfaceTextureData.h"
 #include <QtNodes/internal/Definitions.hpp>
 #include <QtNodes/internal/NodeData.hpp>
 #include <QtNodes/internal/NodeDelegateModel.hpp>
@@ -101,6 +102,9 @@ TextureNode::outData(QtNodes::PortIndex port)
 
 	const auto index = static_cast<unsigned int>(port);
 
+	if (index == c_TexturePort)
+		return std::make_shared<SurfaceTextureData>(m_Texture, m_Path);
+
 	if (index < c_BundleCount)
 		return std::make_shared<ChannelData>(ChannelData::Bundle(m_Texture, m_Path, ArityOf(port)));
 
@@ -111,7 +115,8 @@ TextureNode::outData(QtNodes::PortIndex port)
 QString
 TextureNode::portCaption(QtNodes::PortType, QtNodes::PortIndex port) const
 {
-	static const char* const c_Captions[c_PortCount] = { "RGBA", "RGB", "RG", "R", "G", "B", "A" };
+	static const char* const c_Captions[c_PortCount] = { "RGBA", "RGB", "RG", "R",
+		                                                 "G",    "B",   "A",  "Texture" };
 
 	if (port < 0 || static_cast<unsigned int>(port) >= c_PortCount)
 		return {};
