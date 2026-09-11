@@ -1,4 +1,4 @@
-// What the temporal resolve reads, as the math reads it: five lookups at a uv, every one at mip
+// What the temporal resolve reads, as the math reads it: six lookups at a uv, every one at mip
 // zero, so the resolve takes no derivative and its driver can be compute. The resolve is generic
 // over this so it names no texture; the one implementation today is the pass's constant buffer of
 // bindless handles, and a renderer without them supplies its own.
@@ -6,7 +6,9 @@ public interface IResolveInputs
 {
     /// The accumulated history, filtered: the Catmull-Rom taps land between texels.
     float3 History(float2 uv);
-    /// This frame's colour at a texel centre, unfiltered.
+    /// Previous view depth at a texel centre, unfiltered; zero means unavailable.
+    float HistoryDepth(float2 uv);
+    /// This frame's colour, unfiltered; alpha one marks reliable opaque coverage.
     float4 Scene(float2 uv);
     /// The same colour filtered onto the output grid; only a frame with no history reads it.
     float3 SceneLinear(float2 uv);
@@ -25,6 +27,8 @@ public struct ResolveParams
     // draw fed the frame.
     public float4x4 clipToView;
     public float4x4 viewToPrevClip;
+    // Current view space into previous view space, for depth validation.
+    public float4x4 viewToPrevView;
     public float cameraPairValid;
 
     // This frame's sub-pixel offset in NDC: a pixel's depth is the fragment's at the jittered

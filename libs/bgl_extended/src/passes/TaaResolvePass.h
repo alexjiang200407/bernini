@@ -5,6 +5,7 @@
 #include "resource/Srv.h"
 #include "types/ViewportState.h"
 #include <bgl/Viewport.h>
+#include <core/glm.h>
 #include <spdlog/spdlog.h>
 #include <string>
 
@@ -43,6 +44,7 @@ namespace bgl
 			// so a frame of several draws leaves the pair invalid.
 			glm::mat4 clipToView{ 1.0f };
 			glm::mat4 viewToPrevClip{ 1.0f };
+			glm::mat4 viewToPrevView{ 1.0f };
 			glm::vec2 jitter{ 0.0f };
 			bool      cameraPairValid = false;
 

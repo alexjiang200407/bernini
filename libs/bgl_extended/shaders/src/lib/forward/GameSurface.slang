@@ -131,7 +131,7 @@ public extension MaterialData
     {
         let record = GameRecord<G>.Load(input.materialOffset);
 
-        return ShadeSurface(input, record.Evaluate(input), isFrontFace);
+        return float4(ShadeSurface(input, record.Evaluate(input), isFrontFace), 1.0);
     }
 
     public float4 ShadeGameAlphaTested<G : ISurfaceSource>(ForwardVSOut input, bool isFrontFace)
@@ -143,7 +143,7 @@ public extension MaterialData
             discard;
         }
 
-        return ShadeSurface(input, record.Evaluate(input), isFrontFace);
+        return float4(ShadeSurface(input, record.Evaluate(input), isFrontFace), 1.0);
     }
 
     // Stochastic coverage in place of a cutoff, as ShadeHashedAlpha does it for a PBR record: the
@@ -172,7 +172,7 @@ public extension MaterialData
             discard;
         }
 
-        return ShadeSurface(input, record.Evaluate(input), isFrontFace);
+        return float4(ShadeSurface(input, record.Evaluate(input), isFrontFace), 0.0);
     }
 
     // Premultiplied, against the transparent PSOs' SrcBlend = One; see ShadeSurfaceBlended.

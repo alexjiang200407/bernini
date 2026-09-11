@@ -47,8 +47,8 @@ held frame, and what it costs is the frames a moving pixel waits for the jitter 
 of 1 it does nothing at all: each output pixel has a sample of its own there.
 
 **The resolve is deliberately the standard recipe** — jittered accumulation, YCoCg variance
-clipping, Catmull-Rom history, luma-weighted blending, silhouette dilation — and nothing else. It
-once carried a bespoke resting shelter (a per-pixel variance store that widened the clamp box and
+clipping, Catmull-Rom history, luma-weighted blending, silhouette dilation and opaque disocclusion
+rejection. It once carried a bespoke resting shelter (a per-pixel variance store that widened the clamp box and
 deepened the blend at rest, guarding converged stochastic coverage), removed 2026-08-22: it
 ghosted on any surface that rested and then moved faster than its neighbourhood could witness, and
 holding it correct cost machinery a standard resolve does not need. What the removal spends is
@@ -181,21 +181,36 @@ alpha-tested, read dimmer — judged acceptable by eye against keeping the machi
   that spawned or despawned every frame would never accumulate, and would need a batched-placement
   API rather than a wider epoch.
 
-* **Depth is read for one thing only: what the camera alone would move a pixel by.** Depth-based
-  disocclusion rejection — store linear depth in history alpha, reject history whose stored depth belongs to a
-  surface nearer than the neighbourhood shows — was built and measured once the SRV existed, and
-  rejected on those measurements. Every ghost instrument scored it at parity: the wake a receding
-  occluder leaves is already scrubbed by the neighbourhood clamp within a frame or two, over empty
-  *and* detailed backgrounds (the wake-over-slats test measures 1.2e-4 with and without it). What
-  it did move was flicker on stochastic coverage — a grazing hashed pan trebled, 0.0024 → 0.0067 —
-  because a hashed pixel's depth flips between strand and backdrop every frame, so single-frame
-  depth cannot tell "the strand left" from "the strand's coin came up tails", and the ghost halo
-  that *is* visible on hair hugs the sprinkle zone where that ambiguity lives. What the resolve
-  does read depth for is the next bullet's discriminator — reconstructing a pixel's world position
-  and reprojecting it through last frame's unjittered camera, so a written vector minus that is
-  the surface's *own* motion — which never gates on depth flipping frame to frame, only on the
-  velocity a surviving fragment wrote against its own depth. The SRV and its frame-graph tracking
-  are in [Passes Overview](docs/passes.md).
+* **Opaque camera disocclusions reject history before colour clipping.** A fast orbit can expose
+  ribbed fabric previously hidden by a glove. Its neighbourhood spans enough colours to admit the
+  old glove shading, leaving a recognisable imprint. The earlier wake-over-slats measurement,
+  taken after a longer pan, missed this first-frame failure.
+
+  History alpha stores positive view-space depth without accumulation. The resolve reconstructs
+  the current position with `clipToView` and maps it through `viewToPrevView`, so a zoom compares
+  depths in the previous camera's space. It rejects only when all nine depths in the reprojected
+  footprint are available and nearer than the predicted depth by more than 1%. The footprint uses
+  the coarser grid's texel spacing; its maximum tolerates sampling at a silhouette, and the margin
+  covers half-float quantisation and shallow depth slopes. Rejected pixels take this frame whole,
+  filtered when reconstructing a different output grid. Valid history keeps the 5% blend, with
+  reconstruction weights bounded to a convex blend.
+
+  Rejection requires motion above the noise floor and no detected independent object motion:
+  camera matrices do not describe an object's previous depth. Resting accumulation is unchanged.
+  The motion discriminator subtracts a binary16 rounding bound before measuring that residual:
+  half-float velocity error grows with speed and would otherwise classify a rapid camera move as
+  object motion, disabling rejection on static geometry.
+  Zero means unavailable: multi-draw frames, depths beyond the half-float range, hashed coverage
+  and transparent overlays use that fallback. Scene alpha explicitly marks reliable opaque
+  coverage; it is not inferred from material opacity. Built-in and game-defined hashed paths write
+  zero, and transparent blending clears destination alpha. Any unavailable historical tap leaves
+  colour clipping in charge. This avoids treating a stochastic discard as a departing surface,
+  which made the earlier unrestricted depth experiment flicker.
+
+  `[taaghosting]` covers a first-frame reveal over fine stripes against the same jittered frame
+  with history discarded, plus depth-space, coverage, invalid-history and reconstruction cases in
+  [TaaHistory_test.cpp](libs/bgl_extended/tests/src/TaaHistory_test.cpp). The depth SRV and history
+  resources retain their existing frame-graph tracking; see [Passes Overview](passes.md).
 
 * **Velocity-dilated by the neighbour that moves most on its own.** Reprojecting by the longest
   velocity in the 3×3 — the no-depth stand-in for closest-fragment dilation — was first measured on
@@ -271,13 +286,15 @@ alpha-tested, read dimmer — judged acceptable by eye against keeping the machi
 
 ```mermaid
 flowchart TD
-    FWD["Forward + Skybox<br/>(jittered projection)"] --> SC["sceneColor<br/>RGBA16F linear HDR"]
+    FWD["Forward + Skybox<br/>(jittered projection)"] --> SC["sceneColor<br/>RGB radiance, A depth validity"]
     FWD --> MV["motionVectors<br/>RG16F, de-jittered"]
+    FWD --> D["depth"]
 
     SC --> RES["TaaResolve"]
     MV --> RES
+    D --> RES
     HPREV["history[prev]"] --> RES
-    RES --> HCUR["history[current]"]
+    RES --> HCUR["history[current]<br/>RGB accumulated, A view depth"]
 
     HCUR --> PP["PostProcess<br/>(AgX)"]
     PP --> BB["backbuffer"]
@@ -406,11 +423,10 @@ Two couplings worth knowing:
   neighbourhood clamp happens to launder NaN, since IEEE `min`/`max` return the non-NaN operand.
   Deleting the clamp turned every resolved frame black, which is how it surfaced.
 
-* **The history's alpha carries nothing, and it is not scene alpha.** The resolve writes it as
-  zero and never reads it; nothing downstream sees scene alpha through it either (`PostProcess`
-  writes the backbuffer opaque). It once carried the removed resting shelter's variance store,
-  which is why the channel exists at all — anything revived there must remember the no-history
-  early return writes zero.
+* **History alpha is depth, not opacity or an accumulated statistic.** Every return path writes
+  the current sample's view depth or the unavailable marker, including the no-history path.
+  `HistoryDepth` point-samples it separately from the filtered RGB history. `PostProcess` ignores
+  it and writes the backbuffer opaque. See opaque disocclusion rejection above for validity rules.
 
 * **The ping-pong is per target, not per frame counter — and so is the jitter index.**
   `GetCurrentHistoryIndex()` is state the target owns and `AdvanceHistory()` flips at `EndFrame`;
@@ -488,4 +504,3 @@ Two couplings worth knowing:
   `MotionVectors_test` reads it back and compares against a displacement derived independently of
   the shader. The resolve cannot tell whether a velocity came from a camera or a placement — it
   consumes one texture — so the cases above already gate what it does with a correct one.
-

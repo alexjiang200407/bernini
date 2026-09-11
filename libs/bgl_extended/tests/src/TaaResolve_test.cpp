@@ -22,6 +22,7 @@
 #include <catch2/catch_message.hpp>
 #include <catch2/catch_test_macros.hpp>
 #include <cmath>
+#include <core/glm.h>
 #include <cstdint>
 #include <cstdlib>
 #include <limits>
@@ -251,7 +252,8 @@ namespace
 		ClockProvider      clockAt             = StoppedClock,
 		float              renderScale         = 1.0f,
 		int                outputScale         = 1,
-		float              reconstructionWidth = bgl::RenderTargetDesc().taaReconstructionWidth)
+		float              reconstructionWidth = bgl::RenderTargetDesc().taaReconstructionWidth,
+		bool               resetLastHistory    = false)
 	{
 		auto gfx = bgl::CreateGraphics(TestOptions());
 		REQUIRE(gfx != nullptr);
@@ -282,6 +284,11 @@ namespace
 
 		for (int frame = 0; frame < frames; ++frame)
 		{
+			if (resetLastHistory && frame == frames - 1)
+			{
+				target->SetTaaEnabled(false);
+				target->SetTaaEnabled(true);
+			}
 			job.camera = cameraAt(frame);
 			job.time   = clockAt(frame);
 			gfx->DrawFrame(target, job);
@@ -1832,4 +1839,33 @@ TEST_CASE("The reconstruction width is measured against the truth", "[taa][rende
 	// pins the direction rather than the gap -- a width that stopped sharpening a held frame would
 	// mean the kernel had stopped selecting between phases.
 	CHECK(narrowest < widest);
+}
+
+TEST_CASE(
+	"A rapid camera move rejects an occluder on newly exposed fine detail",
+	"[taa][render][taaghosting]")
+{
+	auto populate = [](const bgl::SceneRef& scene, const bgl::SceneViewRef& view) {
+		bgl::test::ApplyEnvironment(scene.Get(), view.Get());
+		AddSlatWall(
+			scene,
+			view,
+			120,
+			-9.0f,
+			scene->CreatePbrMaterial(Grey(0.9f)),
+			scene->CreatePbrMaterial(Grey(0.02f)),
+			0.15f);
+		auto quad = scene->AddPlaneGeom(1, 1, 6.0f, 6.0f, scene->CreatePbrMaterial(Grey(0.2f)));
+		(void)view->CreateStaticMeshInstance(
+			quad,
+			glm::translate(glm::mat4(1.0f), glm::vec3(0, 0, c_ParallaxQuadZ)));
+	};
+	auto moving = [](int frame) { return CameraAt(frame < c_ConvergeFrames ? -6.0f : 0.0f); };
+	const std::string moved = "assets/golden/taa_rapid_disocclusion.got.png";
+	const std::string held  = "assets/golden/taa_rapid_disocclusion_held.got.png";
+	RenderTo(moved, true, c_ConvergeFrames + 1, populate, moving);
+	RenderTo(held, true, c_ConvergeFrames + 1, populate, moving, StoppedClock, 1.0f, 1, 0.4f, true);
+	float error = bgl::test::FrameDelta(moved, held, 188, 80, 28, 96);
+	INFO("first-frame disocclusion error = " << error);
+	CHECK(error < 0.001f);
 }
