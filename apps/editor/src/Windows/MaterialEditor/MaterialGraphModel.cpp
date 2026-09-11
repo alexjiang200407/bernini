@@ -6,7 +6,7 @@
 #include <unordered_set>
 #include <vector>
 
-#include "Windows/MaterialEditor/nodes/MaterialOutputNode.h"
+#include "Windows/MaterialEditor/nodes/MaterialSinkNode.h"
 #include <QtNodes/internal/DataFlowGraphModel.hpp>
 #include <QtNodes/internal/Definitions.hpp>
 #include <QtNodes/internal/NodeData.hpp>
@@ -23,23 +23,23 @@ MaterialGraphModel::OutputNodeId()
 {
 	for (const NodeId nodeId : allNodeIds())
 	{
-		if (delegateModel<MaterialOutputNode>(nodeId) != nullptr)
+		if (delegateModel<MaterialSinkNode>(nodeId) != nullptr)
 			return nodeId;
 	}
 	return InvalidNodeId;
 }
 
-MaterialOutputNode*
+MaterialSinkNode*
 MaterialGraphModel::OutputNode()
 {
 	const NodeId nodeId = OutputNodeId();
-	return nodeId == InvalidNodeId ? nullptr : delegateModel<MaterialOutputNode>(nodeId);
+	return nodeId == InvalidNodeId ? nullptr : delegateModel<MaterialSinkNode>(nodeId);
 }
 
 bool
 MaterialGraphModel::deleteNode(NodeId nodeId)
 {
-	if (!m_ReplacingOutput && delegateModel<MaterialOutputNode>(nodeId) != nullptr)
+	if (!m_ReplacingOutput && delegateModel<MaterialSinkNode>(nodeId) != nullptr)
 		return false;
 
 	return DataFlowGraphModel::deleteNode(nodeId);
@@ -69,7 +69,7 @@ MaterialGraphModel::SetOutputType(const QString& modelName)
 	if (oldId == InvalidNodeId)
 		return false;
 
-	const MaterialOutputNode* old = delegateModel<MaterialOutputNode>(oldId);
+	const MaterialSinkNode* old = delegateModel<MaterialSinkNode>(oldId);
 	if (old->name() == modelName)
 		return false;
 
@@ -98,7 +98,7 @@ MaterialGraphModel::SetOutputType(const QString& modelName)
 	// outright, so going through it would silently drop the factors and the split layout the artist
 	// had dialled in -- and switching a material between opaque and cutout would quietly reset it.
 	// Loading straight after the node is created is what QtNodes' own loadNode does.
-	if (MaterialOutputNode* sink = delegateModel<MaterialOutputNode>(newId); sink != nullptr)
+	if (MaterialSinkNode* sink = delegateModel<MaterialSinkNode>(newId); sink != nullptr)
 		sink->load(state);
 
 	for (const ConnectionId& wire : incoming)

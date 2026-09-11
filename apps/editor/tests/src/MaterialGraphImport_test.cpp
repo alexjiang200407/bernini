@@ -55,6 +55,13 @@ namespace
 		BuildImportedMaterialGraph(model, imported, maps);
 		return CompileMaterial(model, QStringLiteral("hydrant"), c_DataRoot);
 	}
+
+	/** The sink as the PBR-family node, which is the only kind an import builds. */
+	MaterialOutputNode*
+	PbrSink(MaterialGraphModel& model)
+	{
+		return qobject_cast<MaterialOutputNode*>(model.OutputNode());
+	}
 }
 
 TEST_CASE("Opening a material does not round its factors", "[materialimport]")
@@ -209,11 +216,11 @@ TEST_CASE("A blend import routes its alpha into a blend sink", "[materialimport]
 	MaterialGraphModel model(MakeMaterialNodeRegistry(nullptr, nullptr));
 	BuildImportedMaterialGraph(model, imported, AllMaps());
 
-	REQUIRE(model.OutputNode() != nullptr);
-	CHECK(model.OutputNode()->name() == QStringLiteral("BlendedMaterialOutput"));
-	CHECK(model.OutputNode()->GetAlphaMode() == assetlib::AlphaMode::kBlend);
+	REQUIRE(PbrSink(model) != nullptr);
+	CHECK(PbrSink(model)->name() == QStringLiteral("BlendedMaterialOutput"));
+	CHECK(PbrSink(model)->GetAlphaMode() == assetlib::AlphaMode::kBlend);
 	// It is not the cutout sink: blend keeps the alpha but tests nothing against a cutoff.
-	CHECK_FALSE(model.OutputNode()->IsAlphaTested());
+	CHECK_FALSE(PbrSink(model)->IsAlphaTested());
 
 	const assetlib::BMaterial material =
 		CompileMaterial(model, QStringLiteral("hydrant"), c_DataRoot);
@@ -239,8 +246,8 @@ TEST_CASE("A blend import carries its transmission through the graph", "[materia
 	MaterialGraphModel model(MakeMaterialNodeRegistry(nullptr, nullptr));
 	BuildImportedMaterialGraph(model, imported, AllMaps());
 
-	REQUIRE(model.OutputNode() != nullptr);
-	CHECK(model.OutputNode()->GetTransmission() == Catch::Approx(0.85f));
+	REQUIRE(PbrSink(model) != nullptr);
+	CHECK(PbrSink(model)->GetTransmission() == Catch::Approx(0.85f));
 
 	const assetlib::BMaterial material =
 		CompileMaterial(model, QStringLiteral("hydrant"), c_DataRoot);
@@ -259,7 +266,7 @@ TEST_CASE("A cut-out import carries its double-sidedness through the graph", "[m
 	MaterialGraphModel model(MakeMaterialNodeRegistry(nullptr, nullptr));
 	BuildImportedMaterialGraph(model, imported, AllMaps());
 
-	const MaterialOutputNode* output = model.OutputNode();
+	const MaterialOutputNode* output = PbrSink(model);
 	REQUIRE(output != nullptr);
 	CHECK(!output->GetDoubleSided());
 
@@ -292,8 +299,8 @@ TEST_CASE("An import carries its specular factors through the graph", "[material
 	MaterialGraphModel model(MakeMaterialNodeRegistry(nullptr, nullptr));
 	BuildImportedMaterialGraph(model, imported, AllMaps());
 
-	REQUIRE(model.OutputNode() != nullptr);
-	CHECK(model.OutputNode()->GetSpecularFactor() == 0.0f);
+	REQUIRE(PbrSink(model) != nullptr);
+	CHECK(PbrSink(model)->GetSpecularFactor() == 0.0f);
 
 	const assetlib::BMaterial material =
 		CompileMaterial(model, QStringLiteral("squirrel"), c_DataRoot);

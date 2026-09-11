@@ -60,8 +60,8 @@ SortGraph(QJsonObject& graph);
 MakeMaterialNodeRegistry(Renderer* renderer, TexturePreviewCache* previews);
 
 /**
- * Compiles `model` into the material it authors: the factors and alpha mode of its sink, the nine
- * routes wired into it, and the graph itself as `editorGraph` so reopening restores the board. Texture
+ * Compiles `model` into the material it authors: what its sink writes (MaterialSinkNode::
+ * CompileInto), and the graph itself as `editorGraph` so reopening restores the board. Texture
  * paths are stored relative to `dataRoot`, like every asset reference.
  *
  * The routes are read back out of the graph rather than tracked beside it, so a material's routes and

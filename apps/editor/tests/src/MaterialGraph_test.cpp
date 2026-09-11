@@ -30,6 +30,7 @@
 #include <qcoreapplication.h>
 #include <qcoreevent.h>
 #include <qjsonobject.h>
+#include <qlatin1stringview.h>
 #include <qlist.h>
 #include <qnamespace.h>
 #include <qobject.h>
@@ -53,6 +54,13 @@ namespace
 	Registry()
 	{
 		return MakeMaterialNodeRegistry(nullptr, nullptr);
+	}
+
+	/** The sink as the PBR-family node, for the cases that read its factors and modes. */
+	MaterialOutputNode*
+	PbrSink(MaterialGraphModel& model)
+	{
+		return qobject_cast<MaterialOutputNode*>(model.OutputNode());
 	}
 
 	/** The scene's node items: a node's caption and widgets are children of it, and are not nodes. */
@@ -182,7 +190,7 @@ TEST_CASE("Switching the output type replaces the sink", "[materialgraph]")
 	const NodeId cutout = model.OutputNodeId();
 	REQUIRE(cutout != InvalidNodeId);
 	REQUIRE(cutout != opaque);
-	REQUIRE(model.OutputNode()->IsAlphaTested());
+	REQUIRE(PbrSink(model)->IsAlphaTested());
 
 	// Exactly one sink, always: the old one is gone, not merely hidden behind the new one.
 	REQUIRE(model.allNodeIds().size() == 1);
@@ -198,7 +206,7 @@ TEST_CASE("The hashed-alpha sink is reachable and reports its mode", "[materialg
 	model.addNode("MaterialOutput");
 	REQUIRE(model.SetOutputType("HashedAlphaMaterialOutput"));
 
-	MaterialOutputNode* sink = model.OutputNode();
+	MaterialOutputNode* sink = PbrSink(model);
 	REQUIRE(sink != nullptr);
 
 	// What the compile step reads to fill BMaterial::layer.alphaMode.
@@ -208,6 +216,38 @@ TEST_CASE("The hashed-alpha sink is reachable and reports its mode", "[materialg
 	CHECK(sink->IsAlphaTested());
 
 	CHECK(model.allNodeIds().size() == 1);
+}
+
+TEST_CASE("Every registered sink is found as the graph's sink", "[materialgraph]")
+{
+	const auto registry = Registry();
+
+	// The model finds, guards and swaps its sink through MaterialSinkNode. A sink type that fell
+	// out of that would be deletable, invisible to the Output selector, and compiled as nothing.
+	// Walked off the registry's Output category rather than a list here, so a sink registered
+	// later is covered without this case being edited.
+	unsigned int sinks = 0;
+	for (const auto& [modelName, category] : registry->registeredModelsCategoryAssociation())
+	{
+		if (category != QLatin1String(c_OutputCategory))
+			continue;
+		++sinks;
+
+		INFO(modelName.toStdString());
+
+		MaterialGraphModel model(registry);
+
+		const NodeId sink = model.addNode(modelName);
+		REQUIRE(sink != InvalidNodeId);
+
+		CHECK(model.OutputNodeId() == sink);
+		REQUIRE(model.OutputNode() != nullptr);
+		CHECK(model.OutputNode()->name() == modelName);
+		CHECK_FALSE(model.deleteNode(sink));
+	}
+
+	// The four PBR-family sinks, at least: an empty category would pass the loop by never running.
+	CHECK(sinks >= 4u);
 }
 
 TEST_CASE("Switching to what the sink already is changes nothing", "[materialgraph]")
@@ -261,7 +301,7 @@ TEST_CASE("Switching the output type keeps the sink's settings", "[materialgraph
 
 	// The factors the artist dialled in belong to the material, not to the sink that happened to be
 	// carrying them.
-	const MaterialOutputNode* sink = model.OutputNode();
+	const MaterialOutputNode* sink = PbrSink(model);
 	REQUIRE(sink->MetallicFactor() == 0.25f);
 	REQUIRE(sink->RoughnessFactor() == 0.75f);
 

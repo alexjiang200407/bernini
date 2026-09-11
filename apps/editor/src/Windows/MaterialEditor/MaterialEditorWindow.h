@@ -118,7 +118,7 @@ private:
 	void
 	SyncOutputSelector();
 
-	class MaterialOutputNode*
+	class MaterialSinkNode*
 	WatchOutputNode(int graphIndex);
 
 	/** Frames the graph view on the current submesh's output node, at 1:1. The sink is what you author
@@ -186,7 +186,7 @@ private:
 	void
 	OpenMaterialInto(int graphIndex, const QString& path, bool interactive = true);
 
-	class MaterialOutputNode*
+	class MaterialSinkNode*
 	ResetGraph(int graphIndex, const QJsonObject& graph);
 
 	void

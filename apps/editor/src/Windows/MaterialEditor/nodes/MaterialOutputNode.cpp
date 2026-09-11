@@ -1,4 +1,5 @@
 #include "Windows/MaterialEditor/nodes/MaterialOutputNode.h"
+#include "Windows/MaterialEditor/material_graph.h"
 #include "Windows/MaterialEditor/nodes/ChannelData.h"
 #include <QtNodes/internal/Definitions.hpp>
 #include <QtNodes/internal/NodeData.hpp>
@@ -16,6 +17,7 @@
 #include <QSignalBlocker>
 #include <algorithm>
 #include <assetlib_structs/BMaterial.h>
+#include <filesystem>
 #include <memory>
 #include <qlatin1stringview.h>
 #include <qnamespace.h>
@@ -68,6 +70,37 @@ MaterialOutputNode::MaterialOutputNode(unsigned int baseColorArity)
 void
 MaterialOutputNode::AddExtraRows(QWidget*, QFormLayout*)
 {}
+
+void
+MaterialOutputNode::CompileInto(
+	assetlib::BMaterial&         material,
+	const std::filesystem::path& dataRoot) const
+{
+	material.shadingModel = assetlib::ShadingModel::kPbr;
+
+	assetlib::PbrParams& pbr = material.pbr;
+
+	pbr.baseColorFactor = BaseColorFactor();
+	pbr.metallicFactor  = MetallicFactor();
+	pbr.roughnessFactor = RoughnessFactor();
+
+	material.layer.alphaMode   = GetAlphaMode();
+	material.layer.alphaCutoff = GetAlphaCutoff();
+	material.layer.doubleSided = GetDoubleSided();
+
+	pbr.transmissionFactor = GetTransmission();
+
+	pbr.specularColorFactor = GetSpecularColorFactor();
+	pbr.specularFactor      = GetSpecularFactor();
+
+	for (unsigned int i = 0; i < assetlib::c_LooseChannelCount; ++i)
+	{
+		const ChannelData::Route wired = Route(i);
+
+		pbr.routes[i].texture = Rebase(wired.path, dataRoot, true).toStdString();
+		pbr.routes[i].channel = wired.channel;
+	}
+}
 
 unsigned int
 MaterialOutputNode::GroupChannelOffset(unsigned int group)

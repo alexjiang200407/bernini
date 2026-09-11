@@ -23,9 +23,9 @@
 #include "Windows/MaterialEditor/MaterialGraphModel.h"
 #include "Windows/MaterialEditor/nodes/AlphaTestedMaterialOutputNode.h"
 #include "Windows/MaterialEditor/nodes/BlendedMaterialOutputNode.h"
-#include "Windows/MaterialEditor/nodes/ChannelData.h"
 #include "Windows/MaterialEditor/nodes/HashedAlphaMaterialOutputNode.h"
 #include "Windows/MaterialEditor/nodes/MaterialOutputNode.h"
+#include "Windows/MaterialEditor/nodes/MaterialSinkNode.h"
 #include "Windows/MaterialEditor/nodes/TextureNode.h"
 #include <QtNodes/internal/Definitions.hpp>
 #include <QtNodes/internal/NodeDelegateModelRegistry.hpp>
@@ -181,35 +181,12 @@ CompileMaterial(
 {
 	auto material = assetlib::BMaterial();
 
-	material.shadingModel = assetlib::ShadingModel::kPbr;
-
 	material.name = name.toStdString();
 
-	if (const MaterialOutputNode* output = model.OutputNode())
-	{
-		assetlib::PbrParams& pbr = material.pbr;
-
-		pbr.baseColorFactor = output->BaseColorFactor();
-		pbr.metallicFactor  = output->MetallicFactor();
-		pbr.roughnessFactor = output->RoughnessFactor();
-
-		material.layer.alphaMode   = output->GetAlphaMode();
-		material.layer.alphaCutoff = output->GetAlphaCutoff();
-		material.layer.doubleSided = output->GetDoubleSided();
-
-		pbr.transmissionFactor = output->GetTransmission();
-
-		pbr.specularColorFactor = output->GetSpecularColorFactor();
-		pbr.specularFactor      = output->GetSpecularFactor();
-
-		for (unsigned int i = 0; i < assetlib::c_LooseChannelCount; ++i)
-		{
-			const ChannelData::Route wired = output->Route(i);
-
-			pbr.routes[i].texture = Rebase(wired.path, dataRoot, true).toStdString();
-			pbr.routes[i].channel = wired.channel;
-		}
-	}
+	// The sink decides what the material is; a graph with no sink compiles to the document's
+	// defaults.
+	if (const MaterialSinkNode* output = model.OutputNode())
+		output->CompileInto(material, dataRoot);
 
 	QJsonObject graph = model.save();
 	RebaseGraphTextures(graph, dataRoot, true);

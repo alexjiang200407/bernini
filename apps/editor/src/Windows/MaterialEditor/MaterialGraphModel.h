@@ -6,7 +6,7 @@
 #include <qobject.h>
 #include <qtmetamacros.h>
 
-class MaterialOutputNode;
+class MaterialSinkNode;
 
 // The registry category the sink nodes are registered under. MaterialGraphScene hides it from the
 // context menu, so the sink is chosen from the toolbar rather than added like an ordinary node.
@@ -28,7 +28,7 @@ public:
 	using QtNodes::DataFlowGraphModel::DataFlowGraphModel;
 
 	// The graph's sink, or nullptr if it somehow has none
-	[[nodiscard]] MaterialOutputNode*
+	[[nodiscard]] MaterialSinkNode*
 	OutputNode();
 
 	[[nodiscard]] QtNodes::NodeId
