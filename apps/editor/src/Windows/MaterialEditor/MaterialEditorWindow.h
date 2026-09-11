@@ -8,6 +8,7 @@
 
 #include <cstdint>
 #include <filesystem>
+#include <functional>
 #include <memory>
 #include <qcontainerfwd.h>
 #include <qobject.h>
@@ -188,6 +189,11 @@ private:
 
 	class MaterialSinkNode*
 	ResetGraph(int graphIndex, const QJsonObject& graph);
+
+	/** Replaces a submesh's model and scene, letting `build` populate the fresh model -- the core
+	 *  ResetGraph and the surface-document seed share. */
+	class MaterialSinkNode*
+	RebuildGraph(int graphIndex, const std::function<void(class MaterialGraphModel&)>& build);
 
 	void
 	RefreshActions();

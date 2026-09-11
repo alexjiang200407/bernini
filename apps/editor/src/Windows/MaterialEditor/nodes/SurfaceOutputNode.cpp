@@ -24,6 +24,7 @@
 #include <iterator>
 #include <memory>
 #include <qlatin1stringview.h>
+#include <qlogging.h>
 #include <qstringliteral.h>
 #include <qtmetamacros.h>
 #include <string>
@@ -39,6 +40,12 @@ namespace
 		                                          "Alpha Tested",
 		                                          "Alpha Blend",
 		                                          "Hashed Alpha" };
+
+	// A fifth AlphaMode must extend both tables, or a mode would save as nothing and load as
+	// opaque.
+	static_assert(
+		std::size(c_AlphaModeNames) == static_cast<size_t>(assetlib::AlphaMode::kHashed) + 1);
+	static_assert(std::size(c_AlphaModeLabels) == std::size(c_AlphaModeNames));
 
 	const char*
 	KindWord(bgl::SurfaceTextureKind kind)
@@ -298,6 +305,23 @@ SurfaceOutputNode::load(const QJsonObject& json)
 		m_Values[i] = loaded;
 	}
 
+	// A key naming no declared value is dropped, like a texture binding naming no slot -- both
+	// are refused at CreateSurfaceMaterial, and the board cannot show them.
+	for (auto it = parameters.begin(); it != parameters.end(); ++it)
+	{
+		const auto declared =
+			std::ranges::any_of(m_Surface.params.values, [&](const bgl::SurfaceValue& value) {
+				return it.key() == value.name.c_str();
+			});
+		if (!declared)
+		{
+			qWarning(
+				"MaterialEditor: value '%s' is not declared by surface '%s'",
+				qPrintable(it.key()),
+				m_Surface.name.c_str());
+		}
+	}
+
 	const QString mode = json["alphaMode"].toString();
 	for (size_t i = 0; i < std::size(c_AlphaModeNames); ++i)
 	{
@@ -352,6 +376,28 @@ SurfaceOutputNode::CompileInto(assetlib::BMaterial& material, const std::filesys
 		binding.texture = Rebase(m_Bound[slot]->Path(), dataRoot, true).toStdString();
 		surface.textures.push_back(std::move(binding));
 	}
+}
+
+QJsonObject
+SurfaceOutputNode::DocumentState(const assetlib::BMaterial& material)
+{
+	auto parameters = QJsonObject();
+	for (const assetlib::SurfaceValueBinding& value : material.surface.values)
+	{
+		auto components = QJsonArray();
+		for (const float component : value.value) components.append(static_cast<double>(component));
+		parameters[QString::fromStdString(value.name)] = components;
+	}
+
+	auto state          = QJsonObject();
+	state["parameters"] = parameters;
+
+	state["alphaMode"] =
+		QLatin1String(c_AlphaModeNames[static_cast<size_t>(material.layer.alphaMode)]);
+	state["alphaCutoff"] = static_cast<double>(material.layer.alphaCutoff);
+	state["doubleSided"] = material.layer.doubleSided;
+
+	return state;
 }
 
 glm::vec4

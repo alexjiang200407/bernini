@@ -106,6 +106,28 @@ struct ImportedMaterialMaps
 	QString occlusion;
 };
 
+/** Whether a saved board holds a node of the registered node type `modelName` -- QtNodes' model
+ *  name, nothing to do with a shading model. */
+[[nodiscard]] bool
+GraphHoldsNodeType(const QJsonObject& graph, const QString& modelName);
+
+/**
+ * Lays out the board a surface material document describes in `model`, which must be empty: the
+ * surface's sink, loaded with the document's values and layer keys, and a Texture node wired into
+ * each slot the document binds -- one node per distinct file, exactly as an import lays one out.
+ * A binding naming a slot the surface does not declare is skipped with a warning; the same
+ * document is refused at CreateSurfaceMaterial, so the board simply cannot show it.
+ *
+ * @return false -- with `model` left holding no sink -- when the registry has no sink for the
+ *         document's surface: one the engine did not register this session. The caller must not
+ *         fall back to a PBR board, which a Save would compile into a demotion.
+ */
+[[nodiscard]] bool
+BuildSurfaceMaterialGraph(
+	MaterialGraphModel&          model,
+	const assetlib::BMaterial&   material,
+	const std::filesystem::path& dataRoot);
+
 /**
  * Lays out the board a glTF material describes in `model`, which must be empty: a Texture node per
  * distinct map it names, wired into the ports of a sink of the alpha mode the material declares.

@@ -33,6 +33,7 @@
 #include <cstdint>
 #include <exception>
 #include <filesystem>
+#include <functional>
 #include <iterator>
 #include <memory>
 #include <optional>
@@ -60,6 +61,7 @@
 #include "Windows/MaterialEditor/material_io.h"
 #include "Windows/MaterialEditor/nodes/MaterialOutputNode.h"
 #include "Windows/MaterialEditor/nodes/MaterialSinkNode.h"
+#include "Windows/MaterialEditor/nodes/SurfaceOutputNode.h"
 #include "Windows/MaterialEditor/nodes/TextureNode.h"
 #include <QtNodes/internal/Definitions.hpp>
 #include <assetlib_structs/Node.h>
@@ -240,6 +242,25 @@ MaterialEditorWindow::~MaterialEditorWindow()
 MaterialSinkNode*
 MaterialEditorWindow::ResetGraph(int graphIndex, const QJsonObject& graph)
 {
+	return RebuildGraph(graphIndex, [&graph](MaterialGraphModel& model) {
+		if (graph.isEmpty())
+		{
+			const QtNodes::NodeId outputId =
+				model.addNode(QLatin1String(editor::c_OutputTypes[0].modelName));
+			model.setNodeData(outputId, QtNodes::NodeRole::Position, QPointF(220.0, 40.0));
+		}
+		else
+		{
+			model.load(graph);
+		}
+	});
+}
+
+MaterialSinkNode*
+MaterialEditorWindow::RebuildGraph(
+	int                                             graphIndex,
+	const std::function<void(MaterialGraphModel&)>& build)
+{
 	MaterialGraphSet::Graph& entry = m_Graphs.At(graphIndex);
 
 	const bool current = m_Graphs.Current() == graphIndex;
@@ -250,16 +271,7 @@ MaterialEditorWindow::ResetGraph(int graphIndex, const QJsonObject& graph)
 	entry.model = std::make_unique<MaterialGraphModel>(m_Registry);
 	entry.scene = std::make_unique<MaterialGraphScene>(*entry.model);
 
-	if (graph.isEmpty())
-	{
-		const QtNodes::NodeId outputId =
-			entry.model->addNode(QLatin1String(editor::c_OutputTypes[0].modelName));
-		entry.model->setNodeData(outputId, QtNodes::NodeRole::Position, QPointF(220.0, 40.0));
-	}
-	else
-	{
-		entry.model->load(graph);
-	}
+	build(*entry.model);
 
 	if (current)
 		m_GraphView->setScene(entry.scene.get());
@@ -346,6 +358,15 @@ MaterialEditorWindow::SyncOutputSelector()
 	const MaterialSinkNode* output = m_Graphs.At(graphIndex).model->OutputNode();
 	if (output == nullptr)
 		return;
+
+	// The selector lists only the PBR sinks, so on a surface board it would show a lie and one
+	// click would swap the surface sink for a PBR one -- silently demoting the document on the
+	// next Save. Disabled while the board's sink is one it cannot name.
+	if (qobject_cast<const MaterialOutputNode*>(output) == nullptr)
+	{
+		m_OutputSelector->setEnabled(false);
+		return;
+	}
 
 	const auto it =
 		std::ranges::find_if(editor::c_OutputTypes, [&output](const editor::OutputType& type) {
@@ -905,6 +926,57 @@ MaterialEditorWindow::OpenMaterialInto(int graphIndex, const QString& path, bool
 				qPrintable(path),
 				qPrintable(error.errorString()));
 		}
+	}
+
+	// A surface document never opens behind a PBR board: Save compiles the board, so the board is
+	// the surface's or nothing -- the fallback PBR seed would be compiled into a demotion.
+	if (material.shadingModel == assetlib::ShadingModel::kPbrSurface)
+	{
+		const QString sinkName = SurfaceOutputNode::ModelNameFor(material.surface.name);
+		if (m_Registry->registeredModelCreators().count(sinkName) == 0)
+		{
+			// Surfaces are registered once, inside CreateGraphics, from the startup project's
+			// shader directory -- a second project's surface, or one added since launch, has no
+			// sink to show until the next launch.
+			qWarning(
+				"MaterialEditor: cannot open '%s': surface '%s' is not registered in this session",
+				qPrintable(path),
+				material.surface.name.c_str());
+			if (interactive)
+			{
+				QMessageBox::warning(
+					window(),
+					QStringLiteral("Open Material"),
+					QStringLiteral(
+						"'%1' is drawn by surface '%2', which this session has not "
+						"registered. Open the project that provides it and relaunch.")
+						.arg(path, QString::fromStdString(material.surface.name)));
+			}
+			return;
+		}
+
+		if (GraphHoldsNodeType(graph, sinkName))
+		{
+			ResetGraph(graphIndex, graph);
+		}
+		else
+		{
+			// A hand-authored document, or a board saved while surface boards could not be
+			// authored -- either way the document is what there is to show.
+			RebuildGraph(graphIndex, [this, &material](MaterialGraphModel& model) {
+				if (!BuildSurfaceMaterialGraph(model, material, m_DataRoot))
+				{
+					qWarning(
+						"MaterialEditor: could not build the surface board for '%s'",
+						material.name.c_str());
+				}
+			});
+		}
+
+		m_Graphs.At(graphIndex).materialPath = path;
+		CompileGraph(graphIndex);
+		RefreshActions();
+		return;
 	}
 
 	// The seed reads PBR factors, so it wants the PBR sink -- the one an empty ResetGraph builds.
