@@ -227,13 +227,14 @@ A material editor wants the eye on the material, and a soft backdrop reads as de
 sharp one competes for attention. It also decouples the background from the source's resolution, so
 the ceiling above stops showing as pixelation.
 
-That is an effect, and it belongs to the **viewport** rather than to the environment: a level viewport
-is judged on the world it is building and wants the same sky sharp. So the bake writes the whole
-range — `skyChain`, mip 0 sharp, each level below convolved to its own texel — and
+That is an effect, and it belongs to the **viewport** rather than to the environment: a viewport
+judged on the world it draws wants the same sky sharp. So the bake writes the whole range —
+`skyChain`, mip 0 sharp, each level below convolved to its own texel — and
 `BEnv::skyMipLevel` picks one. `--skybox-mips` sets how many levels; `--skybox-mip` sets which one
 the `.benv` document presents,
 and `editor::ApplyEnvironment`'s `skyMipLevelOverride` lets a viewport overrule even that. The
-material preview and the thumbnail cache default to mip 3; the level viewport takes the file's own.
+material and animation previews and the thumbnail cache default to mip 3; a viewport judged on the
+world it draws takes the file's own.
 
 Mip 3 of a **512** chain is a lobe of about roughness 0.157, which is where `--skybox-blur 0.15` used
 to put it — the level that was chosen by eye when the blur was destructive, and why the preview's
@@ -263,9 +264,9 @@ because the only environment shipped has `skyRotationY` 0 — `EnvOrientation_te
 composes the camera's rotation under the authored yaw each frame, so a direction in view space always
 looks up the same texel and the light arrives from the same screen direction however the camera
 orbits — lighting and backdrop alike, since both read the one rotation. It is what Blender's Material
-Preview does with World Space Lighting off, and what the asset previews want; a level viewport keeps
-the world locked. `SkyboxDesc::opacity` and `backdrop` fade the backdrop toward a scene-linear grey
-without touching the lighting, Blender's World Opacity. In the editor both are the viewport's
+Preview does with World Space Lighting off, and what the asset previews want; a viewport judged on
+the world keeps it locked. `SkyboxDesc::opacity` and `backdrop` fade the backdrop toward a
+scene-linear grey without touching the lighting, Blender's World Opacity. In the editor both are the viewport's
 `SkyPresentation` ([apps/editor/src/Render/environment.h](apps/editor/src/Render/environment.h)),
 defaulted to that look for the material and animation previews and the thumbnails, and set per
 viewport in `config.json` — `skyMipLevel`, `backdropOpacity`, `backdropGrey`, `followView`.

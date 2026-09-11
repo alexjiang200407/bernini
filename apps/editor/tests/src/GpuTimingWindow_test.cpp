@@ -39,7 +39,7 @@ namespace
 TEST_CASE("The window records the frames it is given", "[gputiming]")
 {
 	editor::GpuTimingWindow window;
-	window.SetSource("Level Editor");
+	window.SetSource("Material Editor");
 
 	window.AddFrames(Frames(1, 5));
 
@@ -49,10 +49,10 @@ TEST_CASE("The window records the frames it is given", "[gputiming]")
 TEST_CASE("A different viewport forgets the frames of the one before", "[gputiming]")
 {
 	editor::GpuTimingWindow window;
-	window.SetSource("Level Editor");
+	window.SetSource("Material Editor");
 	window.AddFrames(Frames(1, 5));
 
-	window.SetSource("Material Editor");
+	window.SetSource("Animation Editor");
 
 	// One viewport's frame cost says nothing about another's, and the two would be plotted as one
 	// series if the history carried over.
@@ -62,10 +62,10 @@ TEST_CASE("A different viewport forgets the frames of the one before", "[gputimi
 TEST_CASE("The same viewport reported again keeps the history", "[gputiming]")
 {
 	editor::GpuTimingWindow window;
-	window.SetSource("Level Editor");
+	window.SetSource("Material Editor");
 	window.AddFrames(Frames(1, 5));
 
-	window.SetSource("Level Editor");
+	window.SetSource("Material Editor");
 
 	CHECK(window.History().SampleCount() == 5);
 }
@@ -87,7 +87,7 @@ TEST_CASE("A window on screen asks for timing, and stops asking when it closes",
 TEST_CASE("An export writes every frame the graph holds, and nothing else", "[gputiming]")
 {
 	editor::GpuTimingWindow window;
-	window.SetSource("Level Editor");
+	window.SetSource("Material Editor");
 	window.AddFrames(Frames(1, 30));
 
 	const QTemporaryDir directory;
@@ -123,7 +123,7 @@ TEST_CASE("An export with nothing recorded writes no files", "[gputiming]")
 TEST_CASE("Paused, the window records nothing until it resumes", "[gputiming]")
 {
 	editor::GpuTimingWindow window;
-	window.SetSource("Level Editor");
+	window.SetSource("Material Editor");
 	window.AddFrames(Frames(1, 3));
 
 	// The button is what a person reaches for, and pausing is the only way a spike stays on screen

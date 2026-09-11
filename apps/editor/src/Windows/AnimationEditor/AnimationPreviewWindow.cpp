@@ -200,8 +200,8 @@ AnimationPreviewWindow::showEvent(QShowEvent* event)
 {
 	RenderTargetWindow::showEvent(event);
 
-	// The ground is the scene's, and the scene is shared with the Level Editor: a slope set here
-	// is a slope every skinned instance anywhere in it plants against. So it stands only while
+	// The ground is the scene's, and the scene is shared with every other viewport: a slope set
+	// here is a slope every skinned instance anywhere in it plants against. So it stands only while
 	// this panel is on screen, and goes flat the moment it is not.
 	ReplaceGround();
 }

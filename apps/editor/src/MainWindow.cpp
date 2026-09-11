@@ -14,12 +14,12 @@
 
 #include "Async/BackgroundTask.h"
 #include "Render/Renderer.h"
+#include "Render/environment.h"
 #include "Thumbnails/AssetThumbnailCache.h"
 #include "Windows/AnimationEditor/AnimationEditorWindow.h"
 #include "Windows/AnimationEditor/AnimationPreviewWindow.h"
 #include "Windows/ContentExplorer/ContentExplorerWindow.h"
 #include "Windows/GpuTiming/GpuTimingWindow.h"
-#include "Windows/LevelEditor/LevelEditorWindow.h"
 #include "Windows/MaterialEditor/MaterialEditorWindow.h"
 #include "Windows/RenderTarget/RenderTargetWindow.h"
 #include "main_window_ui.h"
@@ -68,7 +68,6 @@
 #include <qnumeric.h>
 #include <qobject.h>
 #include <qobjectdefs.h>
-#include <qsizepolicy.h>
 #include <qtypes.h>
 #include <qwidget.h>
 #include <string>
@@ -150,8 +149,8 @@ MainWindow::Build(const std::filesystem::path& configPath)
 				assetlib::c_ShadersDirectoryName;
 		}
 
-		// The editor's one Scene. Every viewport (the Level Editor, the Material Editor's model
-		// preview) renders it through a SceneView of its own, so geometry, textures and materials
+		// The editor's one Scene. Every viewport (the Material Editor's model preview, the Animation
+		// Editor's) renders it through a SceneView of its own, so geometry, textures and materials
 		// are pooled here once and these budgets must cover all of them together.
 		auto sceneDesc             = bgl::SceneDesc();
 		auto sceneSettings         = settings["scene"];
@@ -184,37 +183,6 @@ MainWindow::Build(const std::filesystem::path& configPath)
 			sceneDesc,
 			m_StartupProgress ? RendererWait::kPumpEventLoop : RendererWait::kBlock);
 
-		auto levelDesc             = RenderTargetWindowDesc();
-		levelDesc.renderer         = m_Renderer.get();
-		levelDesc.initialInstances = settings["levelEditor"]["initialInstances"].GetOrDefault(1000);
-
-		// Per viewport, not graphics-wide: it sizes what this window's render target allocates, the
-		// way initialInstances above sizes its instance buffer. The thumbnail cache is not offered
-		// it -- it renders single frames, loading hashed alpha as the blend it converges to.
-		levelDesc.taaEnabled = settings["levelEditor"]["temporalAA"].GetOrDefault(true);
-
-		// A starting density, so a machine that must always reproduce another display's can say so
-		// once. The Render menu moves every viewport from here.
-		levelDesc.renderScale = settings["levelEditor"]["renderScale"].GetOrDefault(1.0f);
-
-		// What the resolve reconstructs a scaled frame with. Beside the scale because it is only
-		// legible against one: at scale 1 it changes nothing.
-		levelDesc.taaReconstructionWidth =
-			settings["levelEditor"]["taaReconstructionWidth"].GetOrDefault(0.4f);
-
-		// Every viewport together, not one at a time: a headless editor is a whole editor built
-		// without windows, which is the only shape a test can construct.
-		levelDesc.headless = headless;
-
-		auto levelEnv = LevelEditorEnv();
-		levelEnv.environmentMap =
-			settings["levelEditor"]["environmentMap"].GetOrDefault(std::string());
-		levelEnv.dataRoot = settings["levelEditor"]["dataRoot"].GetOrDefault(std::string());
-
-		// A level viewport shows the world as authored, where the previews present it as Blender's
-		// Material Preview does -- see editor::SkyPresentation.
-		levelEnv.sky = editor::SkyPresentation::World();
-
 		// The preview look, each knob overridable per viewport; absent keeps what `sky` came with.
 		const auto readSky = [](const auto& section, editor::SkyPresentation sky) {
 			if (auto mip = section["skyMipLevel"])
@@ -225,12 +193,9 @@ MainWindow::Build(const std::filesystem::path& configPath)
 			return sky;
 		};
 
-		// Absent, and the .benv's own exposure stands -- which is the correct one for its maps.
-		if (auto exposure = settings["levelEditor"]["exposure"])
-			levelEnv.exposureOverride = exposure.GetOrDefault(1.0f);
-
-		m_LevelEditor = new LevelEditorWindow(this, std::move(levelDesc), std::move(levelEnv));
-
+		// temporalAA, renderScale and taaReconstructionWidth are each viewport's own rather than
+		// graphics-wide -- see docs/taa.md. `headless` is every viewport together: a headless editor
+		// is a whole editor built without windows, which is the only shape a test can construct.
 		auto matSettings                = settings["materialEditor"];
 		auto matDesc                    = MaterialEditorWindowDesc();
 		matDesc.renderer                = m_Renderer.get();
@@ -291,22 +256,11 @@ MainWindow::Build(const std::filesystem::path& configPath)
 	setDockNestingEnabled(true);
 	setTabPosition(Qt::AllDockWidgetAreas, QTabWidget::North);
 
-	m_LevelEditor->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
-	m_LevelEditor->setMinimumSize(256, 256);
-
-	m_LevelEditorDock = new QDockWidget("Level Editor", this);
-	m_LevelEditorDock->setObjectName("LevelEditorDock");
-	m_LevelEditorDock->setWidget(m_LevelEditor);
-	m_LevelEditorDock->setTitleBarWidget(new QWidget(m_LevelEditorDock));
-	addDockWidget(Qt::TopDockWidgetArea, m_LevelEditorDock);
-
 	m_MaterialEditorDock = new QDockWidget("Material Editor", this);
 	m_MaterialEditorDock->setObjectName("MaterialEditorDock");
 	m_MaterialEditorDock->setWidget(m_MaterialEditor);
 	m_MaterialEditorDock->setTitleBarWidget(new QWidget(m_MaterialEditorDock));
 	addDockWidget(Qt::TopDockWidgetArea, m_MaterialEditorDock);
-
-	tabifyDockWidget(m_LevelEditorDock, m_MaterialEditorDock);
 
 	m_AnimationEditorDock = new QDockWidget("Animation Editor", this);
 	m_AnimationEditorDock->setObjectName("AnimationEditorDock");
@@ -316,12 +270,12 @@ MainWindow::Build(const std::filesystem::path& configPath)
 
 	tabifyDockWidget(m_MaterialEditorDock, m_AnimationEditorDock);
 
-	// Neither movable nor floatable, so the three stay one tab group and exactly one viewport is
+	// Neither movable nor floatable, so the two stay one tab group and exactly one viewport is
 	// ever in the frame loop. Tabifying alone only arranges them that way to begin with: a tab
 	// dragged to another area, or out into a window of its own, would put a second viewport into the
 	// loop -- which costs a vsync-locked present per frame and leaves the status bar's frame-time
 	// readout describing one of two viewports with nothing to say which.
-	for (QDockWidget* dock : { m_LevelEditorDock, m_MaterialEditorDock, m_AnimationEditorDock })
+	for (QDockWidget* dock : { m_MaterialEditorDock, m_AnimationEditorDock })
 		dock->setFeatures(QDockWidget::DockWidgetClosable);
 
 	m_ContentExplorerDock = new QDockWidget("Content Explorer", this);
@@ -359,7 +313,6 @@ MainWindow::Build(const std::filesystem::path& configPath)
 	m_ContentExplorerDock->setWidget(m_ContentExplorer);
 	addDockWidget(Qt::BottomDockWidgetArea, m_ContentExplorerDock);
 
-	DriveViewportsFromTab(m_LevelEditorDock);
 	DriveViewportsFromTab(m_MaterialEditorDock);
 	DriveViewportsFromTab(m_AnimationEditorDock);
 
@@ -387,7 +340,6 @@ MainWindow::Build(const std::filesystem::path& configPath)
 			m_MaterialEditor->SetDockVisible(editor::IsPanelShown(visible, this));
 		}));
 
-	m_Ui.windowMenu->addAction(m_LevelEditorDock->toggleViewAction());
 	m_Ui.windowMenu->addAction(m_MaterialEditorDock->toggleViewAction());
 	m_Ui.windowMenu->addAction(m_AnimationEditorDock->toggleViewAction());
 	m_Ui.windowMenu->addAction(m_ContentExplorerDock->toggleViewAction());
@@ -591,9 +543,6 @@ MainWindow::ReleaseRenderResources() noexcept
 	// After the thumbnails, which release their materials back through it, and before the viewports,
 	// so the instances it deletes leave views that are still standing.
 	m_Renderer->Invoke([&] { m_Assets.reset(); });
-
-	delete m_LevelEditor;
-	m_LevelEditor = nullptr;
 
 	delete m_MaterialEditor;
 	m_MaterialEditor = nullptr;
@@ -1073,7 +1022,7 @@ MainWindow::SetUpGpuTimingEntry()
 void
 MainWindow::SetUpFrameStats()
 {
-	if (m_LevelEditor == nullptr)
+	if (m_MaterialEditor == nullptr)
 		return;
 
 	m_FrameStats = new QLabel(this);
@@ -1092,7 +1041,7 @@ MainWindow::SetUpFrameStats()
 	// unambiguously about that one. A hidden viewport stops reporting rather than reporting zero, so
 	// the label has to be cleared on the way out: left alone, the tab you just left keeps its last
 	// figures on screen and they read as the tab you are now looking at.
-	for (QDockWidget* dock : { m_LevelEditorDock, m_MaterialEditorDock, m_AnimationEditorDock })
+	for (QDockWidget* dock : { m_MaterialEditorDock, m_AnimationEditorDock })
 	{
 		for (RenderTargetWindow* view : dock->findChildren<RenderTargetWindow*>())
 		{
@@ -1163,7 +1112,6 @@ MainWindow::ShowEmptyState()
 {
 	setWindowTitle(editor::WindowTitle(m_InstanceName, QString()));
 
-	m_LevelEditorDock->hide();
 	m_MaterialEditorDock->hide();
 	m_AnimationEditorDock->hide();
 	m_ContentExplorerDock->hide();
@@ -1188,16 +1136,15 @@ MainWindow::ShowProjectState()
 {
 	setCentralWidget(nullptr);
 
-	m_LevelEditorDock->show();
 	m_MaterialEditorDock->show();
 	m_AnimationEditorDock->show();
 	m_ContentExplorerDock->show();
-	m_LevelEditorDock->raise();
+	m_MaterialEditorDock->raise();
 
 	m_Ui.save->setEnabled(true);
 	m_Ui.cleanUnusedTextures->setEnabled(true);
 	m_Ui.editMenu->setEnabled(true);
 	m_Ui.windowMenu->setEnabled(true);
 
-	resizeDocks({ m_LevelEditorDock, m_ContentExplorerDock }, { 700, 220 }, Qt::Vertical);
+	resizeDocks({ m_MaterialEditorDock, m_ContentExplorerDock }, { 700, 220 }, Qt::Vertical);
 }
