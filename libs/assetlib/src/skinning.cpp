@@ -806,10 +806,10 @@ namespace assetlib
 	posedBoundsSignature(const BMesh& mesh, const Skeleton& skeleton) noexcept
 	{
 		// The cooked value where there is one: this is read once per skinned-mesh acquire, and
-		// geometrySignature walks the whole vertex blob.
-		uint64_t hash = core::hash_pod(
-			mesh.geometrySignature != 0 ? mesh.geometrySignature : geometrySignature(mesh),
-			core::hash_seed());
+		// geometrySignature walks the whole vertex blob. Chained on directly, never re-hashed --
+		// this number is stored in every baked PosedBox, so a wrap here would strand them all.
+		uint64_t hash =
+			mesh.geometrySignature != 0 ? mesh.geometrySignature : geometrySignature(mesh);
 
 		// Only the bones the mesh has weight on. An unweighted bone sweeps no box, and its own
 		// inverse bind reaches no vertex -- a pose composes an ancestor's *samples*, never its
