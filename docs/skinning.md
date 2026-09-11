@@ -749,10 +749,20 @@ disagree.
   walk, and it is paid at **import**:
   `bakePosedBounds` stores the result in the `.banim` — one box per rigged mesh entry, because it is that geom's
   culling volume and a `.bmesh` may hold two rigged meshes. Each box is keyed by a signature over
-  the vertex data and the inverse binds of the bones the mesh has **weight on** (`posedBoundsSignature`),
+  the geometry and the inverse binds of the bones the mesh has **weight on** (`posedBoundsSignature`),
   so a source re-authored since the bake simply stops matching, while a bone nothing is weighted to —
   an appended socket — leaves the measurement alone. A mesh whose layout will not decode is keyed on
-  every bone instead, since a pairing that cannot be read cannot be narrowed against. `AcquireSkinnedMesh` reads the bake (`findPosedBounds`) and walks only
+  every bone instead, since a pairing that cannot be read cannot be narrowed against.
+
+  **The geometry half of that key is cooked, not walked.** `geometrySignature` hashes the vertex blob
+  and the entry and submesh tables addressing it, and the `.bmesh` writer stores the result in
+  `BMesh::geometrySignature` — computed from the bytes it is emitting rather than copied off the
+  struct, so a file cannot carry a hash that disagrees with its own geometry. A reader takes the
+  stored value; zero means "not recorded" — a file written before the field existed, or a blob
+  `remapMesh` has rewritten since — and is the one value the hash never returns, so the fallback can
+  never be confused with a real answer. It is worth the field because this key is read once per
+  skinned-mesh acquire: on the reference rig the whole signature falls from ~18 ms to ~0.8 ms, the
+  remainder being the walk that finds the weighted bones. `AcquireSkinnedMesh` reads the bake (`findPosedBounds`) and walks only
   a pairing the cook never measured — a caller that cannot block still hands over its own box. A
   project imported before the boxes existed is retrofitted with
   `assetlib_cli bakebounds -p <project>`.

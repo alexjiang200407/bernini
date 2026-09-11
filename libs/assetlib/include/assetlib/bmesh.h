@@ -84,6 +84,18 @@ namespace assetlib
 	animationFileName(std::string_view name);
 
 	/**
+	 * The mesh's geometry as one number: the vertex blob and the entry and submesh tables that
+	 * address it. Everything a measurement taken over posed vertices reads, and nothing that cannot
+	 * move one -- materials, names and the rig are all outside it.
+	 *
+	 * Hashed once at cook time into `BMesh::geometrySignature` and read back from there, because
+	 * this walks the whole blob and its callers are on a load path. Call it directly only to
+	 * produce that field, or where a mesh carries a zero one.
+	 */
+	[[nodiscard]] uint64_t
+	geometrySignature(const BMesh& mesh) noexcept;
+
+	/**
 	 * Whether any submesh carries joint indices. Such a mesh is only drawable against a skeleton, so
 	 * one that names none is a mesh whose joint indices mean nothing.
 	 */

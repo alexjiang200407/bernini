@@ -753,6 +753,11 @@ namespace assetlib
 
 		mesh.skeletonSignature = skeletonSignature(skeleton);
 		mesh.skeletonBoneNames = skeletonBoneNames(skeleton);
+
+		// The blob just changed, so the cooked hash describes geometry this mesh no longer holds.
+		// Zeroed rather than recomputed: a remapped mesh is usually on its way to a re-serialize,
+		// and the codec computes a fresh one there.
+		mesh.geometrySignature = 0;
 		return true;
 	}
 
@@ -800,30 +805,11 @@ namespace assetlib
 	uint64_t
 	posedBoundsSignature(const BMesh& mesh, const Skeleton& skeleton) noexcept
 	{
-		uint64_t hash =
-			core::hash_bytes(mesh.vertexData.data(), mesh.vertexData.size(), core::hash_seed());
-
-		// The tables that say which of those bytes a mesh index means: without them, a re-export
-		// that regroups entries over identical bytes would keep matching a box that no longer
-		// holds. Materials are left out -- swapping one does not move a vertex.
-		for (const Mesh& entry : mesh.meshes)
-		{
-			hash = core::hash_pod(entry.firstSubmesh, hash);
-			hash = core::hash_pod(entry.submeshCount, hash);
-		}
-		for (const Submesh& submesh : mesh.submeshes)
-		{
-			hash = core::hash_pod(submesh.vertexByteOffset, hash);
-			hash = core::hash_pod(submesh.vertexCount, hash);
-			hash = core::hash_pod(submesh.layout.stride, hash);
-			for (uint32_t i = 0; i < submesh.layout.attributeCount; ++i)
-			{
-				const VertexAttribute& attribute = submesh.layout.attributes[i];
-				hash                             = core::hash_pod(attribute.semantic, hash);
-				hash                             = core::hash_pod(attribute.format, hash);
-				hash                             = core::hash_pod(attribute.offset, hash);
-			}
-		}
+		// The cooked value where there is one: this is read once per skinned-mesh acquire, and
+		// geometrySignature walks the whole vertex blob.
+		uint64_t hash = core::hash_pod(
+			mesh.geometrySignature != 0 ? mesh.geometrySignature : geometrySignature(mesh),
+			core::hash_seed());
 
 		// Only the bones the mesh has weight on. An unweighted bone sweeps no box, and its own
 		// inverse bind reaches no vertex -- a pose composes an ancestor's *samples*, never its

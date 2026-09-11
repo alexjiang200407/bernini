@@ -1220,6 +1220,58 @@ TEST_CASE("An added bone does not move the posed-bounds key", "[skinning][perf][
 	}
 }
 
+// The cooked hash is an optimisation, so the one thing it must never do is answer differently
+// from the walk it replaces -- a mesh read off disk and the same mesh built in memory key the same.
+TEST_CASE("The cooked geometry hash and the walk agree", "[skinning][perf][remap]")
+{
+	const auto cooked = RigFrom({ { "hips", c_InvalidIndex }, { "spine", 0 }, { "head", 1 } });
+
+	SkinnedMesh fixture;
+	fixture.Add(
+		glm::vec3(1.0f, 2.0f, 3.0f),
+		glm::vec3(0.0f, 1.0f, 0.0f),
+		{ { 0, 1, 0, 0 } },
+		{ { c_Unorm16Max / 2, c_Unorm16Max / 2, 0, 0 } });
+
+	// Weighted to the last bone, so an insert ahead of it actually renumbers something -- a remap
+	// that moved no index would leave the blob alone and prove nothing below.
+	fixture.Add(
+		glm::vec3(-4.0f, 0.5f, 7.25f),
+		glm::vec3(1.0f, 0.0f, 0.0f),
+		{ { 2, 0, 0, 0 } },
+		{ { c_Unorm16Max, 0, 0, 0 } });
+	fixture.mesh.submeshes = { fixture.submesh };
+
+	REQUIRE(fixture.mesh.geometrySignature == 0);
+	const uint64_t walked = posedBoundsSignature(fixture.mesh, cooked);
+
+	SECTION("a mesh carrying the cook's answer keys identically")
+	{
+		auto carried              = fixture.mesh;
+		carried.geometrySignature = geometrySignature(carried);
+
+		CHECK(posedBoundsSignature(carried, cooked) == walked);
+	}
+
+	SECTION("remapMesh clears it, because the blob it described has been rewritten")
+	{
+		const auto grown =
+			RigFrom({ { "hips", c_InvalidIndex }, { "spine", 0 }, { "grip", 1 }, { "head", 1 } });
+
+		auto remapped              = fixture.mesh;
+		remapped.skeletonSignature = skeletonSignature(cooked);
+		remapped.skeletonBoneNames = skeletonBoneNames(cooked);
+		remapped.geometrySignature = geometrySignature(remapped);
+
+		REQUIRE(remapMesh(remapped, grown));
+		CHECK(remapped.geometrySignature == 0);
+
+		// And the cleared field is not merely tidy: the rewritten blob hashes to something else,
+		// so keeping the old one would have kept a box measured on the indices it replaced.
+		CHECK(geometrySignature(remapped) != geometrySignature(fixture.mesh));
+	}
+}
+
 TEST_CASE("An added bone does not move the plant-weights key", "[skinning][perf][remap]")
 {
 	const auto cooked =

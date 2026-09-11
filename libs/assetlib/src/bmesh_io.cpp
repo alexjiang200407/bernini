@@ -113,7 +113,8 @@ namespace assetlib
 			kMaterialPaths,
 			kSkeletonPath,
 			kSkeletonSignature,
-			kSkeletonBoneNames  // the cooked rig's bone names, in bone order
+			kSkeletonBoneNames,  // the cooked rig's bone names, in bone order
+			kGeometrySignature   // the vertex blob and the tables addressing it, hashed at cook
 		};
 
 		bool
@@ -167,6 +168,11 @@ namespace assetlib
 			ChunkId::kSkeletonSignature,
 			std::span<const uint64_t>(&mesh.skeletonSignature, 1));
 		writer.Add(ChunkId::kSkeletonBoneNames, cache::packStrings(mesh.skeletonBoneNames));
+
+		// Computed here rather than taken from the struct, so a producer that rewrote the blob and
+		// forgot the field cannot write a file that disagrees with its own geometry.
+		const uint64_t geometry = geometrySignature(mesh);
+		writer.Add(ChunkId::kGeometrySignature, std::span<const uint64_t>(&geometry, 1));
 		return writer.Finish(magic::c_BMesh, AssetCodec<BMesh>::c_BakeToken, mesh.source);
 	}
 
@@ -196,6 +202,9 @@ namespace assetlib
 		mesh.skeletonSignature = signature.empty() ? 0 : signature.front();
 		mesh.skeletonBoneNames =
 			cache::unpackStrings(reader.Read<char>(ChunkId::kSkeletonBoneNames));
+
+		const auto geometry    = reader.Read<uint64_t>(ChunkId::kGeometrySignature);
+		mesh.geometrySignature = geometry.empty() ? 0 : geometry.front();
 
 		requireSkeletonIfSkinned(mesh);
 		return mesh;
@@ -268,6 +277,39 @@ namespace assetlib
 		for (Submesh& submesh : out.submeshes) submesh.material = c_InvalidIndex;
 
 		return out;
+	}
+
+	uint64_t
+	geometrySignature(const BMesh& mesh) noexcept
+	{
+		uint64_t hash =
+			core::hash_bytes(mesh.vertexData.data(), mesh.vertexData.size(), core::hash_seed());
+
+		// The tables that say which of those bytes a mesh index means: without them, a re-export
+		// that regroups entries over identical bytes would keep matching a measurement that no
+		// longer holds. Materials are left out -- swapping one does not move a vertex.
+		for (const Mesh& entry : mesh.meshes)
+		{
+			hash = core::hash_pod(entry.firstSubmesh, hash);
+			hash = core::hash_pod(entry.submeshCount, hash);
+		}
+		for (const Submesh& submesh : mesh.submeshes)
+		{
+			hash = core::hash_pod(submesh.vertexByteOffset, hash);
+			hash = core::hash_pod(submesh.vertexCount, hash);
+			hash = core::hash_pod(submesh.layout.stride, hash);
+			for (uint32_t i = 0; i < submesh.layout.attributeCount; ++i)
+			{
+				const VertexAttribute& attribute = submesh.layout.attributes[i];
+				hash                             = core::hash_pod(attribute.semantic, hash);
+				hash                             = core::hash_pod(attribute.format, hash);
+				hash                             = core::hash_pod(attribute.offset, hash);
+			}
+		}
+
+		// Never zero, which the field reserves for "not recorded": a mesh whose geometry happened
+		// to hash to it would be re-hashed on every load, silently and forever.
+		return hash != 0 ? hash : 1;
 	}
 
 	bool

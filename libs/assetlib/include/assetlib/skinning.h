@@ -284,11 +284,11 @@ namespace assetlib
 		const AnimationSet& animations);
 
 	/**
-	 * What a baked posed box was measured against: the mesh's vertex data, the entry and submesh
-	 * tables that address it, and the inverse binds of the bones it has weight on -- everything
-	 * posedBounds reads that does not live in the `.banim` itself. A re-imported mesh or a
-	 * re-authored bind changes it; renames, material swaps, clip edits and a bone nothing is
-	 * weighted to do not.
+	 * What a baked posed box was measured against: the mesh's geometry (assetlib::geometrySignature,
+	 * taken from `BMesh::geometrySignature` where the cook recorded one) and the inverse binds of
+	 * the bones it has weight on -- everything posedBounds reads that does not live in the `.banim`
+	 * itself. A re-imported mesh or a re-authored bind changes it; renames, material swaps, clip
+	 * edits and a bone nothing is weighted to do not.
 	 *
 	 * A mesh whose vertex layout will not decode keys on every bone instead: a pairing that cannot
 	 * be read cannot be narrowed against, and this may not throw.

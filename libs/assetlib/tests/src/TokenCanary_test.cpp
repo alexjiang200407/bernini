@@ -38,8 +38,14 @@ using namespace assetlib;
  *     a fresh random value, then re-pin both values here.
  *   - the token moved: re-pin both values here.
  *
- * The fixtures are hand-built from literals -- no bake, no file, no stamp of anything real -- so
- * the bytes are identical on every platform. That determinism is itself load-bearing: `migrate`
+ * One value is not a literal and cannot be: the `.bmesh` writer computes BMesh::geometrySignature
+ * from the bytes it is emitting, so that a file cannot carry a hash disagreeing with its own
+ * geometry. That makes this pin depend on core::hash_bytes, which core/hash.h disclaims stability
+ * for -- so a fourth cause belongs on the list above: core::hash changed, in which case re-pin and
+ * expect every .bmesh to re-cook, since the signatures stored in them all moved with it.
+ *
+ * The fixtures are otherwise hand-built from literals -- no bake, no file, no stamp of anything
+ * real -- so the bytes are identical on every platform. That determinism is itself load-bearing: `migrate`
  * byte-compares a re-serialization against disk, so a writer whose bytes varied by machine would
  * re-report every file on every other machine. Within one struct every assigned field holds a
  * *distinct* value, so a field reorder -- which `sizeof` static_asserts cannot see -- moves the
@@ -284,7 +290,7 @@ TEST_CASE("a writer's output cannot change without its bake token", "[canary][io
 	{
 		CheckCanary(
 			AssetCodec<BMesh>::c_BakeToken,
-			Pin{ .token = 0xd1e0a078615445ecull, .hash = 0xa5ecdccbe5d177eaull },
+			Pin{ .token = 0x9e3cad8f352072e9ull, .hash = 0x30f92bf7f85ad992ull },
 			AssetCodec<BMesh>::Serialize(CanaryMesh()));
 	}
 
