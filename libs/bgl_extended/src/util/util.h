@@ -5,6 +5,7 @@
 #include <bgl/LayerType.h>
 #include <bgl/MaterialHandle.h>
 #include <bgl/MaterialType.h>
+#include <bgl/SurfaceType.h>
 #include <bgl/glm.h>
 #include <bgl_common/idl/MeshInstance.h>
 #include <bgl_common/idl/PsoType.h>
@@ -39,6 +40,23 @@ namespace bgl
 		return static_cast<uint32_t>(idl::PsoType::kGameRowsStart) + slot * idl::cGameSlotRows;
 	}
 
+	/**
+	 * Which of a surface's textures its coverage is measured against, or empty for a surface that
+	 * declares none.
+	 *
+	 * Hashed alpha relates a UV footprint to texels, so it needs one texture's resolution out of the
+	 * eight a surface may bind -- and a surface answers coverage with arithmetic the engine cannot
+	 * read the texture out of. The surface says which by the kind it declared the field as: a
+	 * `CoverageSlot` is the claim itself, and a surface without one falls back to its first `ColorSlot`,
+	 * where alpha rides in the colour exactly as it does on a PBR record.
+	 *
+	 * It supplies a resolution and nothing else: what `Coverage` samples is the surface's business,
+	 * so a surface sampling a mask while declaring a larger colour is measured against the colour.
+	 * That is what a `CoverageSlot` is for.
+	 */
+	[[nodiscard]] std::optional<uint32_t>
+	CoverageCarrierSlot(const SurfaceParams& params) noexcept;
+
 	/** Whether `pso` is one of the reserved game slots' rows at all. */
 	[[nodiscard]] bool
 	IsGameRow(uint32_t pso) noexcept;
@@ -48,12 +66,12 @@ namespace bgl
 	GameRowOffset(uint32_t pso) noexcept;
 
 	/**
-	 * A slot's row for a geometry tier and a layer, from its first row. Opaque and alpha-test are
-	 * per tier, since their geometry stage is the tier's own; blended is one row both tiers share,
-	 * because the blended pipeline's geometry stage branches tier per instance.
+	 * A slot's row for a geometry tier and a layer, from its first row. Opaque, alpha-test and
+	 * hashed are per tier, since their geometry stage is the tier's own; blended is one row both
+	 * tiers share, because the blended pipeline's geometry stage branches tier per instance.
 	 *
-	 * Hashed is closed to game surfaces at the door that creates one, so it is bgl's own bug here,
-	 * as is a tier that is neither static nor skinned.
+	 * A tier that is neither static nor skinned is bgl's own bug here, as is a layer that is
+	 * none of the four.
 	 */
 	[[nodiscard]] idl::PsoType
 	GameSlotRow(uint32_t slot, GeomType geom, LayerType layer);

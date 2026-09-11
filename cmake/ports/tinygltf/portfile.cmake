@@ -5,8 +5,8 @@
 # Verified before adopting the new hash: the two archives differ by exactly one file, a removed
 # prebuilt tools/windows/premake5.exe, and all 1354 others are byte-identical.
 #
-# Delete this directory once microsoft/vcpkg updates the hash, and drop the overlay-ports entry
-# from vcpkg-configuration.json with it.
+# Delete this directory once microsoft/vcpkg updates the hash. The overlay-ports entry in
+# vcpkg-configuration.json names the parent directory and stays while any port still lives there.
 
 # Header-only library
 vcpkg_from_github(

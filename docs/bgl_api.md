@@ -379,9 +379,11 @@ flowchart TD
   surface declared; anything the desc does not name takes the surface's own default, and a name the
   surface never declared throws rather than landing somewhere harmless — including a name declared as
   the *other* kind of field, which says so. An unbound texture reads the default its declared kind
-  implies: white for a colour or a data map, a flat normal for a normal map. `kHashed` throws: hashed
-  alpha needs texel counts a surface's coverage cannot give, so no game row draws it. An update
-  cannot change the surface, which is what the record's kind and size were fixed by. @throws
+  implies: white for a colour or a data map, a flat normal for a normal map. `kHashed` needs one
+  texture to measure minification against and takes the surface's `CoverageSlot`, or its first
+  `ColorSlot` where alpha rides in the colour; a surface declaring neither throws for that layer
+  alone (see [Game-Defined Surfaces § Hashed alpha](game_defined_surfaces.md#hashed-alpha)). An
+  update cannot change the surface, which is what the record's kind and size were fixed by. @throws
   `SceneError` for all of the above.
 * **`AddStaticMeshGeom(mesh, meshIndex, materials)`** — `materials` is parallel to `mesh.materials`, and a
   submesh whose material index is out of range is left unlit rather than rejected. Resolving those

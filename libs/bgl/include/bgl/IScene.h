@@ -251,8 +251,9 @@ namespace bgl
 		 * what decides the pipelines it draws through.
 		 *
 		 * @throws SceneError if no registered surface has that name, if a value or texture names a
-		 *         field the surface does not declare, or if the layer is kHashed -- hashed alpha
-		 *         needs texel counts the surface reader does not give, so no game row draws it.
+		 *         field the surface does not declare, or if the layer is kHashed and the surface
+		 *         declares no coverage carrier -- hashed alpha measures minification against one
+		 *         texture's texel counts, and takes a `CoverageSlot` or a `ColorSlot` as that.
 		 */
 		virtual MaterialHandle
 		CreateSurfaceMaterial(const SurfaceMaterialDesc& desc) = 0;

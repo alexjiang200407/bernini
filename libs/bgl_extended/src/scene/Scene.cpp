@@ -1757,18 +1757,23 @@ namespace bgl
 					desc.surface));
 		}
 
-		// No game row draws hashed alpha: it needs the texel counts of the texture behind a
-		// coverage, and a surface answers with a number rather than a sample the engine can measure.
-		if (desc.layerType == LayerType::kHashed)
+		const SurfaceType&   surface = *found;
+		const SurfaceParams& params  = surface.params;
+
+		const std::optional<uint32_t> carrier = CoverageCarrierSlot(params);
+
+		// Hashed alpha relates a UV footprint to texels, so it needs one of the surface's textures
+		// to measure against -- and a surface answers coverage with arithmetic the engine cannot
+		// read a texture out of. Every other layer draws either way.
+		if (desc.layerType == LayerType::kHashed && !carrier)
 		{
 			throw SceneError(
 				std::format(
-					"surface material '{}' asks for hashed alpha, which no game row draws",
+					"surface '{}' is asked for hashed alpha but declares no coverage carrier: "
+					"hashed measures minification against a CoverageSlot, or a ColorSlot where "
+					"alpha rides in the colour",
 					desc.surface));
 		}
-
-		const SurfaceType&   surface = *found;
-		const SurfaceParams& params  = surface.params;
 
 		std::vector<std::byte> payload(sizeof(idl::GameSurfaceRecord) + params.byteSize);
 
@@ -1824,6 +1829,10 @@ namespace bgl
 		idl::GameSurfaceRecord record{};
 		record.doubleSided = desc.doubleSided ? 1u : 0u;
 		record.alphaCutoff = desc.alphaCutoff;
+
+		// Written whatever the layer. A record carries no layer -- the handle does -- so this is the
+		// surface's property, resolved once, and only the hashed rows read it.
+		record.coverageSlot = carrier.value_or(idl::cNoCoverageSlot);
 
 		// Every handle is filled, so a slot the material never named still samples something rather
 		// than a null descriptor. What that something is comes from the kind the surface declared:

@@ -77,7 +77,7 @@ game-defined lighting model.
 
 `Coverage` runs first on an alpha-tested layer and discards before `Evaluate` is called, so a cheap
 coverage answers without the rest of the surface's samples. It is not read at all on an opaque
-layer.
+layer, and a **hashed** layer calls it *twice* — see § Hashed alpha below.
 
 ## Where the file goes, and when it is read
 
@@ -105,8 +105,8 @@ startup rather than ignored.
 
 ## What it draws on
 
-Static and skinned geometry both, at every layer but hashed. A slot holds five pipeline rows: an
-opaque and an alpha-test row per tier, and one blended row the two tiers share, because the blended
+Static and skinned geometry both, at every layer. A slot holds seven pipeline rows: an opaque, an
+alpha-test and a hashed row per tier, and one blended row the two tiers share, because the blended
 pipeline's geometry stage is `AnyMesh` and branches tier per instance. The tiers differ in nothing
 else — a slot's pixel shader reads a `ForwardVSOut` and a material offset, and neither says which
 geometry stage filled them, so a surface is written once and a rig costs it nothing.
@@ -114,6 +114,45 @@ geometry stage filled them, so a surface is written once and a rig costs it noth
 What the reader gives is the same on both: the interpolants, the camera and the material's own
 fields. A surface cannot see the pose, the palette or the bone it was skinned by; by the time it
 runs, a skinned vertex is a world-space position like any other.
+
+## Hashed alpha
+
+A hashed layer replaces the cutoff with stochastic coverage: a fragment survives with probability
+equal to its coverage and writes real depth, and the blend is what the ensemble over pixels and
+frames averages to — so it is usable only with temporal AA running. The mechanism and every figure
+behind it are in [docs/taa.md](taa.md); what is a surface's business is the two things the engine
+needs from one, and neither is in `ISurfaceSource`.
+
+**`Coverage` is called twice, through a reader that displaces every sample along the mip chain.**
+The hash reads coverage one level finer than the pixel's footprint, where a sub-texel strand still
+has shape, and the mean it is steepened about an octave coarser than that. A surface answers with
+arithmetic rather than a texel, so the engine cannot sample two levels of it — it evaluates the
+*function* at two levels instead, by handing `Coverage` a `BiasedArenaReader`
+([GameSurface.slang](../libs/bgl_extended/shaders/src/lib/forward/GameSurface.slang)). The surface
+is written once and says nothing about any of it; a shader that never heard of a mip gets the
+correction.
+
+**The minification is measured against one declared texture — the coverage carrier.** Steepening
+needs to know how many texels of the coverage map a pixel spans, and a surface may bind eight
+textures or none. So the surface says which by the kind it declared the field as:
+
+| What the surface declares | The carrier |
+|---|---|
+| a `CoverageSlot` | that slot, whatever else it declares |
+| no `CoverageSlot`, one or more `ColorSlot`s | the first `ColorSlot`, where alpha rides in the colour |
+| neither | none — `CreateSurfaceMaterial` refuses the hashed layer, naming the surface |
+
+The fallback is PBR's own rule, which is why a surface whose alpha is its base colour's needs no
+extra field to be drawn hashed, and why `PbrLike` — the parity gate for the whole contract — is
+measured exactly as the engine's own record is.
+
+**The carrier supplies a resolution and constrains nothing.** What `Coverage` samples is the
+surface's business and the engine cannot see it, so a surface that takes coverage off a 512 mask
+while declaring a 4K `ColorSlot` is steepened three octaves too hard. Declaring the mask a
+`CoverageSlot` is the fix, and it is the reason that kind exists.
+
+The material's `alphaCutoff` is unread on a hashed layer, exactly as it is for a PBR material: a
+cutoff is the thing being replaced.
 
 ## The document
 
@@ -169,15 +208,13 @@ cooked — so a name is checked at the one place a surface is in hand, which is
 | a surface no shader declared | `CreateSurfaceMaterial`, naming the surface |
 | a value or texture the surface does not declare | `CreateSurfaceMaterial`, naming both |
 | a value bound to a name declared as a texture, or the reverse | `CreateSurfaceMaterial`, saying which it is |
-| `alphaMode: "hashed"` | `CreateSurfaceMaterial` — no game row draws hashed alpha |
+| `alphaMode: "hashed"` on a surface declaring no `CoverageSlot` and no `ColorSlot` | `CreateSurfaceMaterial`, naming the surface and both kinds |
 | a file that will not compile, or a fifth surface | `CreateGraphics`, naming the file |
 
 ## Boundaries
 
 Deliberate, and each is a decision rather than an omission:
 
-* **No hashed alpha.** Hashed alpha needs the texel counts of the texture behind a coverage, and a
-  surface answers coverage with arithmetic there is nothing to measure.
 * **No bake.** A slot names a `.ktx2` the project already holds. Slot kinds are reflected and
   reported through `IGraphics::GetSurfaceTypes()`, but they drive no format or colour-space rule
   yet.

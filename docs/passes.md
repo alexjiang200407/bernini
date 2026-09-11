@@ -474,14 +474,16 @@ and calls whichever of the two an instance's `MeshInstance` names — see the tr
 
 The pixel shader varies per bucket instead (`Null`, `PBR`, `PBR_Loose`, `PBR_AlphaTest`,
 `PBR_Loose_AlphaTest`, `PBR_HashedAlpha`, `PBR_Loose_HashedAlpha`, `Transparent`, `Assert`, and
-`GameSlot0..3` with their `_AlphaTest` variants), and is chosen by layer alone — every tier draws
-every layer, so the buckets are the (tier × layer) product with the loose material type static-only.
-A game slot has five rows: an opaque and an alpha-test row per tier, and one bucket in the shared
-transparent pipeline that both tiers use — the blended pipeline's geometry stage is `AnyMesh`, which
-branches tier per instance, so a second blended row would name the same pipeline. All five draw
-whatever surface `game.slotN` binds, the null surface
-until one is registered ([lib/forward/GameSurface.slang](libs/bgl_extended/shaders/src/lib/forward/GameSurface.slang));
-hashed is closed to them. The two tiers' rows differ only in their geometry stage: a game slot's
+`GameSlot0..3` with their `_AlphaTest` and `_HashedAlpha` variants), and is chosen by layer alone —
+every tier draws every layer, so the buckets are the (tier × layer) product with the loose material
+type static-only.
+A game slot has seven rows: an opaque, an alpha-test and a hashed row per tier, and one bucket in the
+shared transparent pipeline that both tiers use — the blended pipeline's geometry stage is `AnyMesh`,
+which branches tier per instance, so a second blended row would name the same pipeline. All seven
+draw whatever surface `game.slotN` binds, the null surface
+until one is registered ([lib/forward/GameSurface.slang](libs/bgl_extended/shaders/src/lib/forward/GameSurface.slang)).
+A slot's rows group by tier and then by layer, so the skinned block starts `cGameSlotTierRows` along
+and the shared blended row is last. The two tiers' rows differ only in their geometry stage: a game slot's
 pixel shader reads a `ForwardVSOut` and a material offset, and neither says which tier filled them. **`c_Psos` order must match `PsoType`** — a `static_assert` catches an
 empty row but not a misordering.
 

@@ -40,8 +40,8 @@ namespace bgl
 		LayerType layerType   = LayerType::kOpaque;
 		float     alphaCutoff = 0.5f;
 
-		// Whether a kMask or kBlend surface draws its back faces; a kOpaque one draws its front
-		// faces whatever this says, as with a PBR material.
+		// Whether a kMask, kHashed or kBlend surface draws its back faces; a kOpaque one draws its
+		// front faces whatever this says, as with a PBR material.
 		bool doubleSided = true;
 
 		std::vector<SurfaceValueBinding>   values;

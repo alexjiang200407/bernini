@@ -102,17 +102,26 @@ namespace bgl
 		constexpr auto c_TransparentSrc      = "programs.forward.Transparent"sv;
 		constexpr auto c_AssertPixelSrc      = "programs.forward.Assert"sv;
 
-		// A program is a file with an entry point, so the reserved slots are one pair each.
+		// A program is a file with an entry point, so the reserved slots are one triple each.
 		struct GameSlotSrcs
 		{
 			std::string_view opaque;
 			std::string_view cutout;
+			std::string_view hashed;
 		};
 		constexpr std::array<GameSlotSrcs, cGameSlots> c_GameSlotSrcs = { {
-			{ "programs.forward.GameSlot0"sv, "programs.forward.GameSlot0_AlphaTest"sv },
-			{ "programs.forward.GameSlot1"sv, "programs.forward.GameSlot1_AlphaTest"sv },
-			{ "programs.forward.GameSlot2"sv, "programs.forward.GameSlot2_AlphaTest"sv },
-			{ "programs.forward.GameSlot3"sv, "programs.forward.GameSlot3_AlphaTest"sv },
+			{ "programs.forward.GameSlot0"sv,
+			  "programs.forward.GameSlot0_AlphaTest"sv,
+			  "programs.forward.GameSlot0_HashedAlpha"sv },
+			{ "programs.forward.GameSlot1"sv,
+			  "programs.forward.GameSlot1_AlphaTest"sv,
+			  "programs.forward.GameSlot1_HashedAlpha"sv },
+			{ "programs.forward.GameSlot2"sv,
+			  "programs.forward.GameSlot2_AlphaTest"sv,
+			  "programs.forward.GameSlot2_HashedAlpha"sv },
+			{ "programs.forward.GameSlot3"sv,
+			  "programs.forward.GameSlot3_AlphaTest"sv,
+			  "programs.forward.GameSlot3_HashedAlpha"sv },
 		} };
 
 		struct PsoConfig
@@ -194,17 +203,26 @@ namespace bgl
 			} };
 
 			// The two tiers differ only in their geometry stage: the pixel shader reads a
-			// ForwardVSOut and a material offset, and neither says which tier filled them.
+			// ForwardVSOut and a material offset, and neither says which tier filled them. Hashed
+			// takes the cutout's shape -- the coverage is stochastic, the depth is not.
 			for (uint32_t slot = 0; slot < cGameSlots; ++slot)
 			{
-				const uint32_t row = GameSlotRowBase(slot);
-				psos[row]     = { c_GameSlotSrcs[slot].opaque, RasterCullMode::kBack, true, false };
-				psos[row + 1] = { c_GameSlotSrcs[slot].cutout, RasterCullMode::kNone, true, false };
-				psos[row + 2] = { c_GameSlotSrcs[slot].opaque, RasterCullMode::kBack, true, false,
-					              ComparisonFunc::kLess,       c_SkinnedGeomSrc };
-				psos[row + 3] = { c_GameSlotSrcs[slot].cutout, RasterCullMode::kNone, true, false,
-					              ComparisonFunc::kLess,       c_SkinnedGeomSrc };
-				psos[row + idl::cGameSlotBlendRow] = {
+				const GameSlotSrcs& srcs = c_GameSlotSrcs[slot];
+
+				for (uint32_t tier = 0; tier < idl::cGameSlotTiers; ++tier)
+				{
+					const uint32_t row = GameSlotRowBase(slot) + tier * idl::cGameSlotTierRows;
+					const std::string_view geom = tier == 0 ? c_GeomSrc : c_SkinnedGeomSrc;
+
+					psos[row]     = { srcs.opaque, RasterCullMode::kBack, true,
+						              false,       ComparisonFunc::kLess, geom };
+					psos[row + 1] = { srcs.cutout, RasterCullMode::kNone, true,
+						              false,       ComparisonFunc::kLess, geom };
+					psos[row + 2] = { srcs.hashed, RasterCullMode::kNone, true,
+						              false,       ComparisonFunc::kLess, geom };
+				}
+
+				psos[GameSlotRowBase(slot) + idl::cGameSlotBlendRow] = {
 					c_TransparentSrc,      RasterCullMode::kNone, false, true,
 					ComparisonFunc::kLess, c_AnyGeomSrc
 				};
