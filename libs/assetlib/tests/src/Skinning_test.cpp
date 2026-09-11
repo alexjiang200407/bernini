@@ -15,6 +15,7 @@
 #include <catch2/catch_message.hpp>
 #include <catch2/catch_test_macros.hpp>
 #include <cmath>
+#include <core/hash.h>
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
@@ -1217,6 +1218,83 @@ TEST_CASE("An added bone does not move the posed-bounds key", "[skinning][perf][
 		moved.vertexData[0] ^= std::byte{ 0x01 };
 
 		CHECK(posedBoundsSignature(moved, cooked) != before);
+	}
+}
+
+// This number is written into every baked PosedBox and compared byte-for-byte on the way back in,
+// so moving it strands every box already on disk -- silently, since a mismatch is a fallback and
+// not an error, and the .banim's own cache key knows nothing about it. Cooking the geometry half
+// did move it once, by hashing the cooked value instead of chaining on it. So the shape is pinned:
+// the geometry signature *is* the running hash, and the weighted bones chain onto it.
+TEST_CASE("The posed-bounds key chains onto the geometry signature", "[skinning][remap]")
+{
+	const auto cooked = RigFrom({ { "hips", c_InvalidIndex }, { "spine", 0 }, { "head", 1 } });
+
+	SkinnedMesh fixture;
+	fixture.Add(
+		glm::vec3(1.0f, 2.0f, 3.0f),
+		glm::vec3(0.0f, 1.0f, 0.0f),
+		{ { 0, 2, 0, 0 } },
+		{ { c_Unorm16Max / 2, c_Unorm16Max / 2, 0, 0 } });
+	fixture.mesh.submeshes = { fixture.submesh };
+
+	// Bones 0 and 2 carry weight, bone 1 does not -- so this also states which bones are chained.
+	uint64_t expected = geometrySignature(fixture.mesh);
+	expected          = core::hash_pod(cooked.bones[0].inverseBind, expected);
+	expected          = core::hash_pod(cooked.bones[2].inverseBind, expected);
+
+	CHECK(posedBoundsSignature(fixture.mesh, cooked) == expected);
+}
+
+// The cooked hash is an optimisation, so the one thing it must never do is answer differently
+// from the walk it replaces -- a mesh read off disk and the same mesh built in memory key the same.
+TEST_CASE("The cooked geometry hash and the walk agree", "[skinning][perf][remap]")
+{
+	const auto cooked = RigFrom({ { "hips", c_InvalidIndex }, { "spine", 0 }, { "head", 1 } });
+
+	SkinnedMesh fixture;
+	fixture.Add(
+		glm::vec3(1.0f, 2.0f, 3.0f),
+		glm::vec3(0.0f, 1.0f, 0.0f),
+		{ { 0, 1, 0, 0 } },
+		{ { c_Unorm16Max / 2, c_Unorm16Max / 2, 0, 0 } });
+
+	// Weighted to the last bone, so an insert ahead of it actually renumbers something -- a remap
+	// that moved no index would leave the blob alone and prove nothing below.
+	fixture.Add(
+		glm::vec3(-4.0f, 0.5f, 7.25f),
+		glm::vec3(1.0f, 0.0f, 0.0f),
+		{ { 2, 0, 0, 0 } },
+		{ { c_Unorm16Max, 0, 0, 0 } });
+	fixture.mesh.submeshes = { fixture.submesh };
+
+	REQUIRE(fixture.mesh.geometrySignature == 0);
+	const uint64_t walked = posedBoundsSignature(fixture.mesh, cooked);
+
+	SECTION("a mesh carrying the cook's answer keys identically")
+	{
+		auto carried              = fixture.mesh;
+		carried.geometrySignature = geometrySignature(carried);
+
+		CHECK(posedBoundsSignature(carried, cooked) == walked);
+	}
+
+	SECTION("remapMesh clears it, because the blob it described has been rewritten")
+	{
+		const auto grown =
+			RigFrom({ { "hips", c_InvalidIndex }, { "spine", 0 }, { "grip", 1 }, { "head", 1 } });
+
+		auto remapped              = fixture.mesh;
+		remapped.skeletonSignature = skeletonSignature(cooked);
+		remapped.skeletonBoneNames = skeletonBoneNames(cooked);
+		remapped.geometrySignature = geometrySignature(remapped);
+
+		REQUIRE(remapMesh(remapped, grown));
+		CHECK(remapped.geometrySignature == 0);
+
+		// And the cleared field is not merely tidy: the rewritten blob hashes to something else,
+		// so keeping the old one would have kept a box measured on the indices it replaced.
+		CHECK(geometrySignature(remapped) != geometrySignature(fixture.mesh));
 	}
 }
 
