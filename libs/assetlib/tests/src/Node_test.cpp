@@ -1,3 +1,4 @@
+#include <assetlib/transform.h>
 #include <assetlib_structs/BMeshImport.h>
 #include <assetlib_structs/Node.h>
 

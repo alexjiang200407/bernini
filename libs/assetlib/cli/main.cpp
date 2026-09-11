@@ -8,6 +8,7 @@
 #include <assetlib/asset_refs.h>
 #include <assetlib/assetlib.h>
 #include <assetlib/avatar.h>
+#include <assetlib/benv.h>
 #include <assetlib/blend.h>
 #include <assetlib/bmesh.h>
 #include <assetlib/bmesh_gltf.h>

@@ -635,7 +635,7 @@ namespace assetlib
 		out += std::format("  bones        {}\n", animations.boneCount);
 		out += std::format("  signature    {:016x}\n", animations.skeletonSignature);
 
-		if (animations.plantWeights.Empty())
+		if (plantWeightsEmpty(animations.plantWeights))
 		{
 			out += "  plants       none\n";
 		}
@@ -692,7 +692,7 @@ namespace assetlib
 			// Frames each leg carries any weight in, so a person can see which clips plant
 			// without reading bytes -- and which the avatar switched off.
 			const PlantWeights& plants = animations.plantWeights;
-			if (!plants.Empty() && animations.boneCount != 0 &&
+			if (!plantWeightsEmpty(plants) && animations.boneCount != 0 &&
 			    clip.firstSample % animations.boneCount == 0)
 			{
 				const size_t first = clip.firstSample / animations.boneCount;

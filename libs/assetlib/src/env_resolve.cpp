@@ -1,4 +1,5 @@
 #include <algorithm>
+#include <assetlib/benv.h>
 #include <assetlib/codecs.h>
 #include <assetlib/envmap.h>
 

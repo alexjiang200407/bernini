@@ -9,6 +9,12 @@
 
 namespace assetlib
 {
+	bool
+	plantWeightsEmpty(const PlantWeights& weights) noexcept
+	{
+		return weights.legCount == 0 || weights.weights.empty();
+	}
+
 	void
 	groundClipsForRig(
 		const core::file::IFileSystem&   files,

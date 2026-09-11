@@ -101,10 +101,4 @@ namespace assetlib
 		float exposure = 1.0f;
 	};
 
-	/** What was authored on the environment, or the bake's derivation until something is. */
-	[[nodiscard]] inline float
-	effectiveExposure(const BEnv& env, const BEnvLighting& lighting) noexcept
-	{
-		return env.exposureOverride.value_or(lighting.exposure);
-	}
 }

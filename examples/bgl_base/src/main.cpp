@@ -1,4 +1,5 @@
 #include <SDL3/SDL_messagebox.h>
+#include <assetlib/transform.h>
 #include <assetlib_structs/Node.h>
 #include <bgl/GeomHandle.h>
 #include <bgl/IGraphics.h>

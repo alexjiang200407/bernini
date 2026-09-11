@@ -4,6 +4,7 @@
 #include <algorithm>
 #include <assetlib/AssetStore.h>
 #include <assetlib/bmesh.h>
+#include <assetlib/transform.h>
 #include <assetlib_structs/BMesh.h>
 #include <assetlib_structs/Mesh.h>
 #include <assetlib_structs/Node.h>

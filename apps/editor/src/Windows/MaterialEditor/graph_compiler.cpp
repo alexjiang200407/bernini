@@ -1,4 +1,5 @@
 #include "graph_compiler.h"
+#include <assetlib/bmaterial.h>
 
 #include "Render/Renderer.h"
 #include "Windows/MaterialEditor/MaterialGraphModel.h"

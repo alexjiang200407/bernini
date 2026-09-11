@@ -1,4 +1,5 @@
 #include <assetlib/AssetStore.h>
+#include <assetlib/benv.h>
 #include <assetlib/codecs.h>
 #include <assetlib/envmap.h>
 #include <assetlib_structs/BEnv.h>

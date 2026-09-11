@@ -1,6 +1,7 @@
 #include "MaterialEditorWindow.h"
 #include "Mesh/mesh_load.h"
 #include <algorithm>
+#include <assetlib/bmaterial.h>
 #include <assetlib/bmesh.h>
 
 #include <QComboBox>

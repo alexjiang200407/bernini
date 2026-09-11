@@ -2039,13 +2039,15 @@ namespace bgl
 		static_assert(
 			idl::cLooseChannelCount == assetlib::c_LooseChannelCount,
 			"The GPU and the .bmaterial file must agree on how many loose channels there are");
+		// assetlib::channelIndex is the same cast and lives in assetlib, which this does not link:
+		// assetlib_structs is data, so a question about a container is answered a library up.
 		static_assert(
 			static_cast<size_t>(idl::PbrChannel::kBaseColorR) ==
-					assetlib::channelIndex(assetlib::PbrChannel::kBaseColorR) &&
+					static_cast<size_t>(assetlib::PbrChannel::kBaseColorR) &&
 				static_cast<size_t>(idl::PbrChannel::kAo) ==
-					assetlib::channelIndex(assetlib::PbrChannel::kAo) &&
+					static_cast<size_t>(assetlib::PbrChannel::kAo) &&
 				static_cast<size_t>(idl::PbrChannel::kNormalX) ==
-					assetlib::channelIndex(assetlib::PbrChannel::kNormalX),
+					static_cast<size_t>(assetlib::PbrChannel::kNormalX),
 			"idl::PbrChannel and assetlib::PbrChannel must index BMaterial::routes identically");
 
 		auto material = idl::LoosePbrMaterial();

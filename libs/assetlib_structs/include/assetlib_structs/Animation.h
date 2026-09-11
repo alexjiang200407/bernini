@@ -89,13 +89,6 @@ namespace assetlib
 		uint32_t             legCount  = 0;
 		std::vector<uint8_t> weights;
 
-		/** Empty is the ordinary case: most rigs author no avatar, so most clip sets carry none. */
-		[[nodiscard]] bool
-		Empty() const noexcept
-		{
-			return legCount == 0 || weights.empty();
-		}
-
 		bool
 		operator==(const PlantWeights&) const = default;
 	};

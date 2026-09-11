@@ -1,5 +1,6 @@
 #include <algorithm>
 #include <array>
+#include <assetlib/bmaterial.h>
 #include <assetlib/codecs.h>
 #include <assetlib/container_info.h>
 #include <assetlib/image_io.h>

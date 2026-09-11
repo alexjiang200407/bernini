@@ -68,19 +68,6 @@ namespace assetlib
 	inline constexpr ChannelGroup c_OrmChannels{ PbrChannel::kAo, 3 };
 	inline constexpr ChannelGroup c_NormalChannels{ PbrChannel::kNormalX, 2 };
 
-	[[nodiscard]] inline constexpr size_t
-	channelIndex(PbrChannel channel) noexcept
-	{
-		return static_cast<size_t>(channel);
-	}
-
-	/** The index of the `component`-th channel of `group` in `PbrParams::routes`. */
-	[[nodiscard]] inline constexpr size_t
-	channelIndex(const ChannelGroup& group, size_t component) noexcept
-	{
-		return channelIndex(group.first) + component;
-	}
-
 	static_assert(
 		c_BaseColorChannels.count + c_OrmChannels.count + c_NormalChannels.count ==
 			c_LooseChannelCount,
@@ -127,21 +114,6 @@ namespace assetlib
 		// in a material from before it existed.
 		uint64_t bakeToken = 0;
 	};
-
-	/**
-	 * Whether anything routes into `group`.
-	 *
-	 * A group with nothing routed bakes to no map at all, which is a complete bake rather than a
-	 * missing one: the runtime substitutes white, flat normal or the factors alone.
-	 */
-	[[nodiscard]] inline bool
-	groupIsRouted(const PbrParams& pbr, const ChannelGroup& group) noexcept
-	{
-		for (size_t i = 0; i < group.count; ++i)
-			if (!pbr.routes[channelIndex(group, i)].texture.empty())
-				return true;
-		return false;
-	}
 
 	/**
 	 * One value a surface material sets, under the name the surface declared it as.

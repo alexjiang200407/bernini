@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <assetlib/skinning.h>
+#include <assetlib/transform.h>
 
 #include "gltf_util.h"
 #include <assetlib_structs/Animation.h>
