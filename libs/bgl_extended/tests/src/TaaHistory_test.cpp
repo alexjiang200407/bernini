@@ -92,25 +92,27 @@ TEST_CASE(
 	const auto* mapped = static_cast<const glm::vec2*>(resourceManager->MapReadback(rb));
 	REQUIRE(mapped != nullptr);
 
-	constexpr std::array<const char*, c_Count> c_Scenarios = { "opaque disocclusion",
-		                                                       "matching depth",
-		                                                       "uncertain current coverage",
-		                                                       "uncertain history",
-		                                                       "partially uncertain footprint",
-		                                                       "partially visible footprint",
-		                                                       "invalid history",
-		                                                       "invalid camera pair",
-		                                                       "resting camera",
-		                                                       "independent object motion",
-		                                                       "unrepresentable depth",
-		                                                       "camera depth change",
-		                                                       "uninitialised history",
-		                                                       "depth quantisation margin",
-		                                                       "offscreen history",
-		                                                       "upscaled disocclusion",
-		                                                       "bounded reconstruction weight",
-		                                                       "rounded camera velocity",
-		                                                       "object motion above quantisation" };
+	constexpr std::array<const char*, c_Count> c_Scenarios = {
+		{ "opaque disocclusion",
+		  "matching depth",
+		  "uncertain current coverage",
+		  "uncertain history",
+		  "partially uncertain footprint",
+		  "partially visible footprint",
+		  "invalid history",
+		  "invalid camera pair",
+		  "resting camera",
+		  "independent object motion",
+		  "unrepresentable depth",
+		  "camera depth change",
+		  "uninitialised history",
+		  "depth quantisation margin",
+		  "offscreen history",
+		  "upscaled disocclusion",
+		  "bounded reconstruction weight",
+		  "rounded camera velocity",
+		  "object motion above quantisation" }
+	};
 	for (uint32_t i = 0; i < c_Count; ++i)
 	{
 		INFO(c_Scenarios[i]);
