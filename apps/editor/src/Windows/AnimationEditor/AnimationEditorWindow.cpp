@@ -428,6 +428,15 @@ AnimationEditorWindow::BuildPropertiesColumn()
 	scrollBox->setFrameShape(QFrame::NoFrame);
 	scrollBox->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
 	scrollBox->setMinimumWidth(column->sizeHint().width());
+
+	// The viewport gets a surface of its own, and that is not cosmetic: a scroll is a blit of the
+	// top-level's backing store, and the preview beside this one is `WA_PaintOnScreen` -- a native
+	// view Qt does not composite through that store. The bookkeeping then disagrees with what is
+	// actually on screen, and the blit lands outside this widget entirely: scrolling here smeared a
+	// copy of the *main tab bar*, which is not even inside the scroll area. A native viewport cannot
+	// blit past itself. See docs/known_issues.md.
+	scrollBox->viewport()->setAttribute(Qt::WA_NativeWindow);
+
 	return scrollBox;
 }
 

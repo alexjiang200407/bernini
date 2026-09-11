@@ -173,3 +173,39 @@ drop it when the tab is left. Three of its assertions fail against the unfixed w
 `QDockWidget::visibilityChanged`, since only the two connections are guarded, not the signal. Check
 that first; `dock->isHidden()` is not the discriminator to reach for instead, because a tab switch
 does not hide the unselected dock — Qt moves it off-screen, so it reads unhidden either way.
+
+## Scrolling a panel's properties column smears the main tab bar
+
+**Symptom.** Scroll the Animation panel's left column and a second copy of the window's tab strip —
+*Level Editor | Material Editor | Animation Editor* — appears below the real one, offset by roughly
+the scroll delta. The duplicate is stale pixels, not a live widget: it does not respond to clicks and
+the next full repaint of that region clears it. It shows up wherever a viewport shares a top-level
+with a scrolling column, so the Animation panel is where it was found rather than where it lives.
+
+**Cause.** A `QScrollArea` scrolls by **blitting the top-level's backing store** and repainting only
+the strip that was exposed. `RenderTargetWindow` takes `Qt::WA_PaintOnScreen`
+([RenderTargetWindow.cpp](../apps/editor/src/Windows/RenderTarget/RenderTargetWindow.cpp)), which
+implies `WA_NativeWindow` and realises a native view through `winId()` — deliberately, since the
+swapchain needs a real surface. Qt does not composite that widget through the backing store, so the
+store's idea of the window disagrees with what is on screen, and the blit is computed against the
+wrong geometry. The give-away is *where* the smear lands: the tab strip is not inside the scroll
+area at all, so the blit wrote outside the widget that issued it. That also rules out the obvious
+guess — forcing `viewport()->update()` on scroll repaints the viewport and cannot clean a region
+outside it.
+
+The bug predates the Animation panel's blend-space editor; that work only added enough controls to
+the column to make it scroll in an ordinary window, which is why it surfaced then.
+
+**Fixed by** giving the scroll area's viewport a surface of its own —
+`scrollBox->viewport()->setAttribute(Qt::WA_NativeWindow)` in
+`AnimationEditorWindow::BuildPropertiesColumn`. A native viewport cannot blit past itself, whatever
+the top-level's store believes. The cost is one extra native view per scrolling column.
+
+**Gates.** None, and that is the honest state of it: the artifact is stale pixels in a compositor
+surface, which nothing the suite can assert reaches — an offscreen render is composited correctly and
+shows nothing. It is checked by eye, by scrolling the column with a viewport on screen.
+
+**If it comes back.** Suspect a *new* scrolling column that did not get the attribute, rather than a
+regression in this one — the fix is per scroll area and nothing enforces it. `WA_PaintOnScreen` on
+the viewport is not the remedy to reach for instead: that stops the widget being composited at all,
+which is what caused this in the first place.
