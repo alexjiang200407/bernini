@@ -218,9 +218,13 @@ Deliberate, and each is a decision rather than an omission:
 * **No bake.** A slot names a `.ktx2` the project already holds. Slot kinds are reflected and
   reported through `IGraphics::GetSurfaceTypes()`, but they drive no format or colour-space rule
   yet.
-* **No editor UI.** A surface material opens in the Material Editor as a graphless material and
-  draws in the viewport; there is no panel for its parameters, and the document is authored by
-  hand.
+* **Editor UI is reflected, never authored twice.** A surface material opens in the Material
+  Editor as a sink node generated from `GetSurfaceTypes()` — one port per texture slot, one row
+  per value, the layer keys beside them — and Save writes the document from that board. The
+  `.slang` stays the only declaration of what a material may say; the panel edits the *material*.
+  A surface the session did not register has no board: the editor refuses to open its materials,
+  naming the surface, because the only board it could offer is a PBR one a Save would compile
+  into a demotion.
 * **No hot reload**, and no export-time compile.
 * **No scene inputs.** The reader gives interpolants, the camera and the material's own fields.
   Nothing of the frame — no depth, no history, no lights.

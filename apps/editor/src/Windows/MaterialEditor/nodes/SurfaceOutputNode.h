@@ -85,6 +85,14 @@ public:
 	CompileInto(assetlib::BMaterial& material, const std::filesystem::path& dataRoot)
 		const override;
 
+	/**
+	 * The document's surface bindings and layer keys as this node's own load() state -- what seeds
+	 * a board for a material that has no authored surface board. Values the document does not set
+	 * are absent, so load() leaves them at the declaration's defaults.
+	 */
+	[[nodiscard]] static QJsonObject
+	DocumentState(const assetlib::BMaterial& material);
+
 	[[nodiscard]] const bgl::SurfaceType&
 	Surface() const noexcept
 	{

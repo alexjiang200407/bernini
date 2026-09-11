@@ -10,10 +10,12 @@
 #include <cmath>
 #include <cstddef>
 #include <filesystem>
+#include <iterator>
 #include <memory>
 #include <optional>
 #include <qjsonobject.h>
 #include <qlatin1stringview.h>
+#include <qlogging.h>
 #include <qobject.h>
 #include <qsize.h>
 #include <qstringliteral.h>
@@ -61,6 +63,55 @@ namespace
 	{
 		constexpr auto c_Steps = 1000.0;
 		return std::round(static_cast<double>(factor) * c_Steps) / c_Steps;
+	}
+
+	/** One wire from a texture file into a sink: the file, its port on the Texture node, and the
+	 *  sink port it feeds. */
+	struct TextureWire
+	{
+		QString      path;
+		unsigned int texturePort;
+		unsigned int outputPort;
+	};
+
+	// Places a Texture node per distinct file -- one feeding several ports is placed once -- and
+	// wires each into `outputId`. A wire with no file is skipped.
+	void
+	PlaceTextureWires(
+		MaterialGraphModel&             model,
+		QtNodes::NodeId                 outputId,
+		const std::vector<TextureWire>& wires)
+	{
+		auto   nodeForPath = QHash<QString, QtNodes::NodeId>();
+		double y           = 0.0;
+
+		for (const TextureWire& wire : wires)
+		{
+			if (wire.path.isEmpty())
+				continue;
+
+			auto placed = nodeForPath.find(wire.path);
+			if (placed == nodeForPath.end())
+			{
+				const QtNodes::NodeId textureId = model.addNode(QStringLiteral("Texture"));
+				model.setNodeData(
+					textureId,
+					QtNodes::NodeRole::Position,
+					QPointF(c_TextureNodeX, y));
+				y += c_TextureNodeGap;
+
+				if (auto* texture = model.delegateModel<TextureNode>(textureId))
+					texture->SetTexturePath(wire.path);
+
+				placed = nodeForPath.insert(wire.path, textureId);
+			}
+
+			model.addConnection(
+				QtNodes::ConnectionId{ *placed,
+			                           static_cast<QtNodes::PortIndex>(wire.texturePort),
+			                           outputId,
+			                           static_cast<QtNodes::PortIndex>(wire.outputPort) });
+		}
 	}
 }
 
@@ -188,6 +239,69 @@ MakeMaterialNodeRegistry(
 	return registry;
 }
 
+bool
+GraphHoldsNodeType(const QJsonObject& graph, const QString& modelName)
+{
+	const QJsonArray nodes = graph["nodes"].toArray();
+	for (const QJsonValue& node : nodes)
+	{
+		if (node.toObject()["internal-data"].toObject()["model-name"].toString() == modelName)
+			return true;
+	}
+	return false;
+}
+
+bool
+BuildSurfaceMaterialGraph(
+	MaterialGraphModel&          model,
+	const assetlib::BMaterial&   material,
+	const std::filesystem::path& dataRoot)
+{
+	const QtNodes::NodeId outputId =
+		model.addNode(SurfaceOutputNode::ModelNameFor(material.surface.name));
+	if (outputId == QtNodes::InvalidNodeId)
+		return false;
+
+	model.setNodeData(outputId, QtNodes::NodeRole::Position, QPointF(c_OutputNodeX, c_OutputNodeY));
+
+	auto* output = model.delegateModel<SurfaceOutputNode>(outputId);
+	if (output == nullptr)
+		return false;
+
+	output->load(SurfaceOutputNode::DocumentState(material));
+
+	// Not named `slots`: Qt claims that word as a macro.
+	const std::vector<bgl::SurfaceTexture>& declared = output->Surface().params.textures;
+
+	auto wires = std::vector<TextureWire>();
+	wires.reserve(material.surface.textures.size());
+
+	for (const assetlib::SurfaceTextureBinding& binding : material.surface.textures)
+	{
+		const auto slot = std::ranges::find_if(declared, [&](const bgl::SurfaceTexture& texture) {
+			return texture.name == binding.name;
+		});
+		if (slot == declared.end())
+		{
+			qWarning(
+				"MaterialEditor: '%s' binds '%s', which surface '%s' does not declare",
+				material.name.c_str(),
+				binding.name.c_str(),
+				material.surface.name.c_str());
+			continue;
+		}
+
+		wires.push_back(
+			{ Rebase(QString::fromStdString(binding.texture), dataRoot, false),
+		      TextureNode::c_TexturePort,
+		      static_cast<unsigned int>(std::distance(declared.begin(), slot)) });
+	}
+
+	PlaceTextureWires(model, outputId, wires);
+
+	return true;
+}
+
 assetlib::BMaterial
 CompileMaterial(
 	MaterialGraphModel&          model,
@@ -267,19 +381,12 @@ BuildImportedMaterialGraph(
 	factors["split"]        = QJsonArray{ false, splitOrm, false };
 	output->load(factors);
 
-	struct Wire
-	{
-		QString      path;
-		unsigned int texturePort;
-		unsigned int outputPort;
-	};
-
 	// A whole map feeds its group's wide port: glTF puts roughness in G and metallic in B, which is
 	// where ORM wants them, and a normal map's Z is reconstructed in the shader, so only RG is taken.
 	// Base colour
 	// draws alpha only for a cutout -- the opaque sink's port is 3-wide, and routing an alpha that
 	// nothing tests against is what turns a project into cutouts that cut nothing out.
-	auto wires = std::vector<Wire>{
+	auto wires = std::vector<TextureWire>{
 		{ maps.baseColor,
 		  carriesAlpha ? c_TextureRgba : c_TextureRgb,
 		  output->GroupPort(c_BaseColorGroup, 0) },
@@ -299,34 +406,7 @@ BuildImportedMaterialGraph(
 		wires.push_back({ maps.orm, c_TextureRgb, output->GroupPort(c_OrmGroup, 0) });
 	}
 
-	// One node per distinct map, so a texture feeding two channels of a split group is placed once.
-	auto   nodeForPath = QHash<QString, QtNodes::NodeId>();
-	double y           = 0.0;
-
-	for (const Wire& wire : wires)
-	{
-		if (wire.path.isEmpty())
-			continue;
-
-		auto placed = nodeForPath.find(wire.path);
-		if (placed == nodeForPath.end())
-		{
-			const QtNodes::NodeId textureId = model.addNode(QStringLiteral("Texture"));
-			model.setNodeData(textureId, QtNodes::NodeRole::Position, QPointF(c_TextureNodeX, y));
-			y += c_TextureNodeGap;
-
-			if (auto* texture = model.delegateModel<TextureNode>(textureId))
-				texture->SetTexturePath(wire.path);
-
-			placed = nodeForPath.insert(wire.path, textureId);
-		}
-
-		model.addConnection(
-			QtNodes::ConnectionId{ *placed,
-		                           static_cast<QtNodes::PortIndex>(wire.texturePort),
-		                           outputId,
-		                           static_cast<QtNodes::PortIndex>(wire.outputPort) });
-	}
+	PlaceTextureWires(model, outputId, wires);
 }
 
 std::optional<QPointF>
