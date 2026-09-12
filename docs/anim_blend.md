@@ -142,10 +142,23 @@ door. Comparing the *resolved* spaces instead would miss the one case that matte
 indices, so a sample retargeted onto another clip reads as no change at all and arrives at a rig that
 refuses it. Everything else reloads the mesh, which is the reacquire opening a set already performs.
 
+**A clip carries the speed it was animated at.** `ClipInfo::locomotionSpeed` is measured at cook
+(`gltf_skin.cpp`) and travels with the acquire's clip table, which is what lets a locomotion space's
+thresholds be *taken* from the clips rather than guessed at: a walk at 1.4 and a run at 4.2 blend
+correctly at 2.8 precisely because those are the speeds they were animated at. Zero for a clip that
+does not travel, so two such clips cannot share a run -- they measure the same threshold, and the
+span between two samples is what a weight divides by.
+
 ## Risky / Non-obvious Contracts
 
 * **A slot's `nodeIndex` is checked against the rig's node count, not its clip count.** They differ by the
   number of authored spaces.
+* **A blend space is reached through the *record*, never through the spawn.**
+  `SkinnedInstanceDesc::clip` is checked against the **clip** count and a space is past the end of
+  it, so `CreateSkinnedMeshInstance` refuses one; a `PlaybackSlot` is checked against the **node**
+  count and accepts it. To play a space: spawn onto any clip, then `SetSkinnedPlayback` a record
+  naming the space. Getting this backwards throws *after* the old instance is destroyed, so the
+  symptom is a mesh that silently disappears rather than a refusal anybody sees.
 * **A space needs at least two samples**, with strictly increasing parameters — two at one parameter
   have no defined weighting between them and the span between them is a divisor. Refused at both
   doors: the document's own validation, and `AddRig`.

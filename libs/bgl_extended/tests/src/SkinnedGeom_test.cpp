@@ -1414,3 +1414,78 @@ TEST_CASE("SetRigBlendParameters moves a run without moving the table", "[skinne
 		}
 	}
 }
+
+// The two doors onto a rig's node table are not the same door, and a caller that mixes them up
+// destroys an instance and never gets it back. A spawn desc names a *clip* and is checked against
+// the clip count; a playback slot names a *node* and is checked against the node count. So a blend
+// space -- which lives past the clips -- is reached by writing the record, never by spawning onto
+// it. Pinned here because the editor got this wrong and the symptom was a mesh that vanished.
+TEST_CASE("A blend space is reached through the record, not through the spawn", "[skinned][blend]")
+{
+	auto gfx = bgl::CreateGraphics(HeadlessOptions());
+	REQUIRE(gfx != nullptr);
+
+	auto  sceneHandle = gfx->CreateScene(TestSceneDesc());
+	auto* scene       = sceneHandle->As<bgl::Scene>();
+	REQUIRE(scene != nullptr);
+
+	auto  viewHandle = gfx->CreateSceneView(sceneHandle, 8);
+	auto* view       = viewHandle->As<bgl::SceneView>();
+	REQUIRE(view != nullptr);
+
+	const std::array<bgl::MaterialHandle, 1> materials = { { OpaquePbr(scene) } };
+	const auto                               rig =
+		scene->AddRig(MakeRig(), MakeBlendClips(), bgl::FootPlantDesc(), MakeBlendSet());
+	REQUIRE(rig.IsValid());
+
+	const auto geom = scene->AddSkinnedMeshGeom(MakeSkinnedMesh(), 0, materials, rig, c_AnyPose);
+	REQUIRE(geom.IsValid());
+
+	// Two clips, then one space: the space is node 2, one past the clip table.
+	constexpr uint32_t c_ClipCount = 2;
+	constexpr uint32_t c_SpaceNode = c_ClipCount;
+
+	SECTION("spawning onto the space node is refused, since a spawn desc names a clip")
+	{
+		auto onSpace = bgl::SkinnedInstanceDesc();
+		onSpace.clip = c_SpaceNode;
+
+		CHECK_THROWS_AS(
+			view->CreateSkinnedMeshInstance(geom, glm::mat4(1.0f), onSpace),
+			bgl::SceneError);
+	}
+
+	SECTION("a record naming the space is accepted on an instance spawned onto a clip")
+	{
+		auto onClip = bgl::SkinnedInstanceDesc();
+		onClip.clip = 0;
+
+		const auto instance = view->CreateSkinnedMeshInstance(geom, glm::mat4(1.0f), onClip);
+		REQUIRE(instance.IsValid());
+
+		auto playing           = bgl::SkinnedPlaybackDesc::FromClip(c_SpaceNode);
+		playing.slot[0].param0 = 0.5f;
+		playing.slot[0].param1 = 0.5f;
+
+		CHECK_NOTHROW(view->SetSkinnedPlayback(instance, playing));
+
+		// And it took: the slot the pose pass reads names the space, not the clip spawned onto.
+		const bgl::SkinnedPlaybackDesc got = view->GetSkinnedPlayback(instance);
+		CHECK(got.slot[0].nodeIndex == c_SpaceNode);
+		CHECK(got.slot[0].param0 == 0.5f);
+		CHECK(got.slot[0].param1 == 0.5f);
+	}
+
+	SECTION("a record past the node table is still refused")
+	{
+		auto onClip = bgl::SkinnedInstanceDesc();
+		onClip.clip = 0;
+
+		const auto instance = view->CreateSkinnedMeshInstance(geom, glm::mat4(1.0f), onClip);
+		REQUIRE(instance.IsValid());
+
+		CHECK_THROWS_AS(
+			view->SetSkinnedPlayback(instance, bgl::SkinnedPlaybackDesc::FromClip(c_SpaceNode + 1)),
+			bgl::SceneError);
+	}
+}
