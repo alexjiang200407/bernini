@@ -1,3 +1,4 @@
+#include <algorithm>
 #include <assetlib/AssetStore.h>
 #include <assetlib/codecs.h>
 #include <assetlib_structs/Mesh.h>
@@ -15,6 +16,8 @@
 #include <cstdint>
 #include <exception>
 #include <filesystem>
+#include <fmt/format.h>
+#include <fmt/ranges.h>
 #include <format>
 #include <gamelib/AssetManager.h>
 #include <gamelib/ClipInfo.h>
@@ -546,6 +549,56 @@ namespace game
 		core::str::unordered_str_map<Cached<assetlib::AnimationSet>> animations;
 	};
 
+	namespace
+	{
+		/**
+		 * The bones `skeleton` has that `cooked` never carried, by name -- what a remapped pairing
+		 * gained, and the one thing a reader of the log below cannot work out for themselves.
+		 */
+		std::vector<std::string>
+		BonesWithoutSamples(
+			const std::span<const std::string> cooked,
+			const assetlib::Skeleton&          skeleton)
+		{
+			auto out = std::vector<std::string>();
+			for (const assetlib::Bone& bone : skeleton.bones)
+			{
+				const std::string_view name = skeleton.stringPool.at(bone.nameOffset);
+				if (std::ranges::find(cooked, name) == cooked.end())
+					out.emplace_back(name);
+			}
+			return out;
+		}
+
+		/**
+		 * Re-addresses the container `path` names to `skeleton`, in the cache and in place: a
+		 * `.banim` names exactly one `.bskel`, so the remap is a function of a fixed pair and
+		 * cannot differ between acquires (ADR-8). False where it will not resolve, leaving the
+		 * entry as it was for the caller to refuse.
+		 *
+		 * @pre `path` has been read through ReadCached, so the entry is there.
+		 */
+		template <std::movable T, std::invocable<T&, const assetlib::Skeleton&> Remap>
+		bool
+		RemapCached(
+			core::str::unordered_str_map<Cached<T>>& reads,
+			const std::string_view                   path,
+			const assetlib::Skeleton&                skeleton,
+			Remap&&                                  remap)
+		{
+			const auto it = reads.find(path);
+			assert(it != reads.end() && "RemapCached before the container was read");
+
+			if (!remap(it->second.value, skeleton))
+				return false;
+
+			// The remap moves what the container holds -- a clip set gains a bone's worth of
+			// samples per frame -- so the charge is re-seated rather than left at the read size.
+			it->second.tracked = Charged(it->second.value);
+			return true;
+		}
+	}
+
 	const assetlib::BMesh&
 	AssetManager::ReadMesh(const std::string_view path)
 	{
@@ -628,12 +681,34 @@ namespace game
 		// shows in the pose it produces.
 		const assetlib::Skeleton& skeleton = ReadSkeleton(animations.skeleton);
 
-		core::throw_runtime_error_if(
-			!assetlib::animationsMatchSkeleton(animations, skeleton),
-			"AssetManager: '{}' was cooked against a different version of '{}'; a bone has been "
-			"inserted, removed or reordered since, so its joint indices name different bones now",
-			animationsNorm,
-			animations.skeleton);
+		if (!assetlib::animationsMatchSkeleton(animations, skeleton))
+		{
+			// Gathered before the remap rewrites the list it reads.
+			const std::vector<std::string> gained =
+				BonesWithoutSamples(animations.skeletonBoneNames, skeleton);
+
+			core::throw_runtime_error_if(
+				!RemapCached(
+					m_Reads->animations,
+					animationsNorm,
+					skeleton,
+					assetlib::remapAnimations),
+				"AssetManager: '{}' was cooked against a different version of '{}'; a bone has "
+				"been inserted, removed or reordered since, so its joint indices name different "
+				"bones now",
+				animationsNorm,
+				animations.skeleton);
+
+			// Said out loud, once per pairing: the remap is a cost nobody can see, and a rig that
+			// silently re-addresses every load is one nobody thinks to bake down (ADR-6).
+			spdlog::info(
+				"AssetManager: '{}' re-addressed to '{}', which has gained {}; "
+				"`assetlib_cli migrate` bakes this down",
+				animationsNorm,
+				animations.skeleton,
+				gained.empty() ? std::string("no bone it does not already carry") :
+								 fmt::format("{}", fmt::join(gained, ", ")));
+		}
 
 		// Loaded before anything is taken, so a set that will not read or names another clip set
 		// refuses while the acquire still owns nothing.
@@ -656,12 +731,21 @@ namespace game
 
 		const assetlib::BMesh& mesh = ReadMesh(relPath);
 
-		core::throw_runtime_error_if(
-			!assetlib::meshMatchesSkeleton(mesh, skeleton),
-			"AssetManager: '{}' was cooked against a different rig than '{}'; its joint indices "
-			"name different bones now, so it would be posed by the wrong bones",
-			relPath,
-			animations.skeleton);
+		if (!assetlib::meshMatchesSkeleton(mesh, skeleton))
+		{
+			core::throw_runtime_error_if(
+				!RemapCached(m_Reads->meshes, relPath, skeleton, assetlib::remapMesh),
+				"AssetManager: '{}' was cooked against a different rig than '{}'; its joint "
+				"indices name different bones now, so it would be posed by the wrong bones",
+				relPath,
+				animations.skeleton);
+
+			spdlog::info(
+				"AssetManager: the mesh '{}' re-addressed to '{}'; `assetlib_cli migrate` bakes "
+				"this down",
+				relPath,
+				animations.skeleton);
+		}
 
 		core::throw_runtime_error_if(
 			meshIndex >= mesh.meshes.size(),

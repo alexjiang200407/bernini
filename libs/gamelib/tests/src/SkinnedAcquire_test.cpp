@@ -1,5 +1,6 @@
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers.hpp>
+#include <cstddef>
 #include <filesystem>
 #include <gamelib/AssetManager.h>
 
@@ -66,6 +67,48 @@ namespace
 		mesh.skeletonSignature ^= 0x9E3779B97F4A7C15ull;
 
 		assetlib::AssetStore(dataRoot).Save(mesh, "Derived/Meshes/rig.bmesh");
+	}
+
+	/**
+	 * Appends a bone to the rig on disk and leaves the mesh and clips as they were cooked -- the
+	 * shape this feature exists for: a socket added in the editor after a character shipped its
+	 * animation library.
+	 */
+	void
+	AppendBoneToRig(const std::filesystem::path& dataRoot)
+	{
+		const auto store = assetlib::AssetStore(dataRoot);
+
+		auto skeleton = store.Load<assetlib::Skeleton>("Derived/Skeletons/rig.bskel");
+
+		auto grip       = assetlib::Bone();
+		grip.bindPose   = { glm::vec3(0.0f, 0.5f, 0.0f),
+			                glm::quat(1.0f, 0.0f, 0.0f, 0.0f),
+			                glm::vec3(1.0f) };
+		grip.parent     = 0;
+		grip.nameOffset = skeleton.stringPool.add("grip");
+		skeleton.bones.push_back(grip);
+
+		const auto binds = assetlib::bindPoseModelTransforms(skeleton);
+		for (size_t i = 0; i < skeleton.bones.size(); ++i)
+			skeleton.bones[i].inverseBind = glm::inverse(binds[i]);
+
+		store.Save(skeleton, "Derived/Skeletons/rig.bskel");
+	}
+
+	/** Drops the bone names from both containers -- a pair cooked before the list existed. */
+	void
+	ForgetTheBoneNames(const std::filesystem::path& dataRoot)
+	{
+		const auto store = assetlib::AssetStore(dataRoot);
+
+		auto animations = store.Load<assetlib::AnimationSet>("Derived/Animations/rig.banim");
+		animations.skeletonBoneNames.clear();
+		store.Save(animations, "Derived/Animations/rig.banim");
+
+		auto mesh = store.Load<assetlib::BMesh>("Derived/Meshes/rig.bmesh");
+		mesh.skeletonBoneNames.clear();
+		store.Save(mesh, "Derived/Meshes/rig.bmesh");
 	}
 
 	/** Repoints the mesh at a second rig, so it and the clips were never cooked as a pair. */
@@ -203,6 +246,65 @@ TEST_CASE("a mesh cooked against a since-changed rig is refused", "[skinned][acq
 	// The other half of the same hazard, and the one nothing checked: a cache key holds only its
 	// own bake token, so re-cooking the rig leaves this mesh current. Uncaught, its joint indices
 	// address the wrong bones and the rig draws as a heap with no error anywhere.
+	CHECK_THROWS_AS(
+		assets.AcquireSkinnedMesh("Derived/Meshes/rig.bmesh", "Derived/Animations/rig.banim"),
+		std::runtime_error);
+}
+
+// Task 6's gate, and the first point at which anything on this feature changes behaviour: until
+// now the remap was reachable only from a test. A rig that has grown a bone since its mesh and
+// clips were cooked acquires, re-addressed in memory, instead of refusing.
+TEST_CASE("a rig that has grown a bone still acquires", "[skinned][acquire][remap]")
+{
+	DataRoot root("bernini_skinned_appended");
+	WriteRig(root.path);
+	AppendBoneToRig(root.path);
+
+	auto gfx = bgl::CreateGraphics(HeadlessOptions());
+	REQUIRE(gfx != nullptr);
+
+	auto scene  = gfx->CreateScene(bgl::SceneDesc());
+	auto assets = game::AssetManager(scene, root.path);
+
+	SECTION("the pairing acquires rather than throwing")
+	{
+		const game::AssetManager::SkinnedMesh skinned =
+			assets.AcquireSkinnedMesh("Derived/Meshes/rig.bmesh", "Derived/Animations/rig.banim");
+
+		CHECK(skinned.geom.IsValid());
+		CHECK(skinned.geom.geomType == bgl::GeomType::kSkinnedMesh);
+		CHECK_FALSE(skinned.clips.empty());
+	}
+
+	SECTION("and the remap is not re-done per acquire")
+	{
+		// ADR-8: the store's cached container is remapped in place, so the second acquire finds a
+		// pairing that already matches. Asserted through the seam a caller can see -- both hand
+		// back the same geom -- since the remap itself leaves no other trace.
+		const game::AssetManager::SkinnedMesh first =
+			assets.AcquireSkinnedMesh("Derived/Meshes/rig.bmesh", "Derived/Animations/rig.banim");
+		const game::AssetManager::SkinnedMesh second =
+			assets.AcquireSkinnedMesh("Derived/Meshes/rig.bmesh", "Derived/Animations/rig.banim");
+
+		CHECK(first.geom.handle.index == second.geom.handle.index);
+	}
+}
+
+// The remap resolves by name, so a container from before the names were stored has nothing to
+// resolve. It must refuse exactly as it did before this feature, not accept on a guess.
+TEST_CASE("a grown rig still refuses a pairing with no bone names", "[skinned][acquire][remap]")
+{
+	DataRoot root("bernini_skinned_appended_nameless");
+	WriteRig(root.path);
+	ForgetTheBoneNames(root.path);
+	AppendBoneToRig(root.path);
+
+	auto gfx = bgl::CreateGraphics(HeadlessOptions());
+	REQUIRE(gfx != nullptr);
+
+	auto scene  = gfx->CreateScene(bgl::SceneDesc());
+	auto assets = game::AssetManager(scene, root.path);
+
 	CHECK_THROWS_AS(
 		assets.AcquireSkinnedMesh("Derived/Meshes/rig.bmesh", "Derived/Animations/rig.banim"),
 		std::runtime_error);

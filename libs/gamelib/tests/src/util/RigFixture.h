@@ -94,6 +94,7 @@ namespace game::test
 		auto animations              = assetlib::AnimationSet();
 		animations.skeleton          = "Derived/Skeletons/rig.bskel";
 		animations.skeletonSignature = assetlib::skeletonSignature(skeleton);
+		animations.skeletonBoneNames = assetlib::skeletonBoneNames(skeleton);
 		animations.boneCount         = 1;
 
 		auto slide        = assetlib::AnimationClip();
@@ -188,6 +189,7 @@ namespace game::test
 		mesh.materials.emplace_back("Authored/Materials/skin.bmaterial");
 		mesh.skeleton          = "Derived/Skeletons/rig.bskel";
 		mesh.skeletonSignature = assetlib::skeletonSignature(skeleton);
+		mesh.skeletonBoneNames = assetlib::skeletonBoneNames(skeleton);
 
 		const assetlib::AssetStore store(dataRoot);
 		store.Save(mesh, "Derived/Meshes/rig.bmesh");
@@ -216,6 +218,7 @@ namespace game::test
 		auto animations              = assetlib::AnimationSet();
 		animations.skeleton          = "Derived/Skeletons/rig.bskel";
 		animations.skeletonSignature = assetlib::skeletonSignature(skeleton);
+		animations.skeletonBoneNames = assetlib::skeletonBoneNames(skeleton);
 		animations.boneCount         = 1;
 
 		auto clip        = assetlib::AnimationClip();
@@ -254,6 +257,7 @@ namespace game::test
 		auto animations              = assetlib::AnimationSet();
 		animations.skeleton          = "Derived/Skeletons/rig.bskel";
 		animations.skeletonSignature = assetlib::skeletonSignature(skeleton);
+		animations.skeletonBoneNames = assetlib::skeletonBoneNames(skeleton);
 		animations.boneCount         = 1;
 
 		const std::array<std::pair<const char*, uint32_t>, 2> c_Clips = { { { "walk", 2 },
@@ -337,6 +341,7 @@ namespace game::test
 		auto animations              = assetlib::AnimationSet();
 		animations.skeleton          = "Derived/Skeletons/leg.bskel";
 		animations.skeletonSignature = assetlib::skeletonSignature(skeleton);
+		animations.skeletonBoneNames = assetlib::skeletonBoneNames(skeleton);
 		animations.boneCount         = 4;
 
 		auto stand        = assetlib::AnimationClip();
@@ -418,6 +423,7 @@ namespace game::test
 		mesh.materials.emplace_back("Authored/Materials/skin.bmaterial");
 		mesh.skeleton          = "Derived/Skeletons/leg.bskel";
 		mesh.skeletonSignature = assetlib::skeletonSignature(skeleton);
+		mesh.skeletonBoneNames = assetlib::skeletonBoneNames(skeleton);
 
 		const assetlib::AssetStore store(dataRoot);
 		store.Save(mesh, "Derived/Meshes/leg.bmesh");

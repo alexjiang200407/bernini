@@ -733,6 +733,18 @@ disagree.
   `.bskel` leaves a `.bmesh` current by design — the signature is what turns that from a mesh
   posed by the wrong bones into a refusal naming it.
 
+  **A mismatch the bone names can resolve is re-addressed rather than refused.** Where the rig has
+  only *gained* bones — a socket added in the editor after a library of clips was cooked — every
+  bone the container stores still exists, and `skeletonRemap`
+  ([skinning.h](libs/assetlib/include/assetlib/skinning.h)) says where each one moved to.
+  `AcquireSkinnedMesh` applies it to the cached clip set and mesh in place, once, and logs a line
+  naming the bones that gained no sample. The refusal above is what remains for a rename, a
+  deletion or a reparent, and for a container written before the bone names were stored — the
+  remap resolves by name, so one with no names has nothing to resolve.
+
+  The re-addressing is a cost per load, not per frame, and `assetlib_cli migrate` is what removes
+  it: it bakes the remap down and returns the pairing to signature equality.
+
 * **One rig serves any number of sources.** An import binds a `.bskel` whose signature matches
   rather than writing its own, and the `.bimport` records which one
   ([import_document.h](libs/assetlib/include/assetlib/import_document.h)) — nothing derives it, so a
