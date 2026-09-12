@@ -38,6 +38,19 @@ namespace assetlib
 			operator<=>(const BoxKey&, const BoxKey&) = default;
 		};
 
+		/**
+		 * Everything a `.banim` is matched on: one key per posed box, sorted, and the plant-weight
+		 * signature beside them. Equal means the file already holds what a bake would write.
+		 */
+		struct BakeKeys
+		{
+			std::vector<BoxKey> boxes;
+			uint64_t            plant = 0;
+
+			friend bool
+			operator==(const BakeKeys&, const BakeKeys&) = default;
+		};
+
 		std::vector<std::string>
 		containersUnder(const fs::path& dataRoot, std::string_view extension)
 		{
@@ -181,26 +194,26 @@ namespace assetlib
 				// The keys the bake would write. Boxes are keyed by content, so "already current"
 				// is exactly "every key is stored" -- and a stored key no mesh produces any more
 				// is a source that changed since, worth clearing out.
-				auto wanted = std::vector<BoxKey>();
+				auto wanted = BakeKeys();
 				for (const std::string& meshPath : paired->second)
 				{
 					const BMesh&   mesh      = meshAt(meshPath);
 					const uint64_t signature = signatureAt(meshPath, rigPath);
 					for (uint32_t meshIndex = 0; meshIndex < mesh.meshes.size(); ++meshIndex)
 						if (isSkinned(mesh, meshIndex))
-							wanted.push_back(BoxKey{ signature, meshIndex });
+							wanted.boxes.push_back(BoxKey{ signature, meshIndex });
 				}
 
-				auto stored = std::vector<BoxKey>();
-				stored.reserve(animations.posedBoxes.size());
+				auto stored = BakeKeys();
+				stored.boxes.reserve(animations.posedBoxes.size());
 				for (const PosedBox& box : animations.posedBoxes)
-					stored.push_back(BoxKey{ box.sourceSignature, box.meshIndex });
+					stored.boxes.push_back(BoxKey{ box.sourceSignature, box.meshIndex });
 
 				// Two identical meshes want identical keys; the bake stores one box for both.
-				std::ranges::sort(wanted);
-				const auto duplicates = std::ranges::unique(wanted);
-				wanted.erase(duplicates.begin(), duplicates.end());
-				std::ranges::sort(stored);
+				std::ranges::sort(wanted.boxes);
+				const auto duplicates = std::ranges::unique(wanted.boxes);
+				wanted.boxes.erase(duplicates.begin(), duplicates.end());
+				std::ranges::sort(stored.boxes);
 
 				// The plant weights ride the same retrofit, and are asked about the same way: an
 				// avatar authored after its rig was cooked leaves a `.banim` whose boxes are current
@@ -217,17 +230,16 @@ namespace assetlib
 					for (const std::string& meshPath : paired->second)
 						planted.push_back(meshAt(meshPath));
 
-				const uint64_t wantedPlant =
+				wanted.plant =
 					avatar.legs.empty() ? 0 : plantWeightsSignature(planted, skeleton, avatar);
-				const uint64_t storedPlant =
+				stored.plant =
 					animations.plantWeights.Empty() ? 0 : animations.plantWeights.signature;
 
-				// A re-addressing is a rewrite even when no box moves, and after ADR-5 narrowed
-				// these keys an appended bone moves none of them: the mesh was never rewritten, so
-				// its geometry hashes the same and an unweighted bone sweeps no box. Without this
-				// the remap above would be recomputed and thrown away on every run, and the file
-				// would report current while its own signature named a rig it no longer addresses.
-				if (!remapped && wanted == stored && wantedPlant == storedPlant)
+				// `remapped` and not only the keys: after ADR-5 narrowed them an appended bone
+				// moves neither -- the mesh was never rewritten, so its geometry hashes the same,
+				// and an unweighted bone sweeps no box -- so a re-addressed clip set whose bake is
+				// otherwise current would report current and be re-addressed again every run.
+				if (!remapped && wanted == stored)
 				{
 					entry.outcome = RebakedFile::Outcome::kCurrent;
 					continue;
