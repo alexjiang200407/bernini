@@ -190,7 +190,7 @@ TEST_CASE("A surface board compiles to the surface document", "[materialgraph][s
 	// surface samples its default.
 	REQUIRE(material.surface.textures.size() == 1);
 	CHECK(material.surface.textures[0].name == "baseColor");
-	CHECK(material.surface.textures[0].texture == "Derived/SourceTextures/head/rim.ktx2");
+	CHECK(material.surface.textures[0].texturePath == "Derived/SourceTextures/head/rim.ktx2");
 
 	// The layer keys are every model's, and the sink authors them.
 	CHECK(material.layer.alphaMode == assetlib::AlphaMode::kOpaque);
@@ -268,7 +268,7 @@ TEST_CASE("A surface document builds its board", "[materialgraph][surfacesink]")
 	CHECK(compiled.layer.alphaMode == assetlib::AlphaMode::kHashed);
 	CHECK_FALSE(compiled.layer.doubleSided);
 	REQUIRE(compiled.surface.textures.size() == 1u);
-	CHECK(compiled.surface.textures[0].texture == "Derived/SourceTextures/head/rim.ktx2");
+	CHECK(compiled.surface.textures[0].texturePath == "Derived/SourceTextures/head/rim.ktx2");
 }
 
 TEST_CASE(

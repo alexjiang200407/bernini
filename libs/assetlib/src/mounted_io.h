@@ -18,6 +18,7 @@ namespace assetlib
 	struct MeshRefs;
 	struct ResolvedEnvironment;
 	struct SourceStamp;
+	struct SurfaceTextureBinding;
 
 	/**
 	 * Every read addressed to a mount, gathered here because a mount alone is not a way anyone
@@ -79,6 +80,11 @@ namespace assetlib
 
 	[[nodiscard]] bool
 	bakeIsStale(const BMaterial& material, const core::file::IFileSystem& fileSystem);
+
+	[[nodiscard]] bool
+	surfaceSlotBakeIsStale(
+		const SurfaceTextureBinding&   slot,
+		const core::file::IFileSystem& fileSystem);
 
 	[[nodiscard]] bool
 	drawsLoose(const BMaterial& material, const core::file::IFileSystem& fileSystem);

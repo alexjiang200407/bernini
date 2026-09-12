@@ -292,7 +292,7 @@ BuildSurfaceMaterialGraph(
 		}
 
 		wires.push_back(
-			{ Rebase(QString::fromStdString(binding.texture), dataRoot, false),
+			{ Rebase(QString::fromStdString(binding.texturePath), dataRoot, false),
 		      TextureNode::c_TexturePort,
 		      static_cast<unsigned int>(std::distance(declared.begin(), slot)) });
 	}

@@ -35,6 +35,7 @@ namespace assetlib
 	struct ResolvedEnvironment;
 	struct Skeleton;
 	struct SourceStamp;
+	struct SurfaceTextureBinding;
 	struct TexturePruneDesc;
 	struct TexturePruneResult;
 	struct TexturePruneScan;
@@ -199,8 +200,9 @@ namespace assetlib
 		// --- Bakes ---------------------------------------------------------------------------
 
 		/**
-		 * Composites `material`'s routes down to its baked triplet, in place, writing the maps into
-		 * `c_BakedTexturesDirectoryName`.
+		 * Composites `material`'s routes down to its baked maps, in place, writing them into
+		 * `c_BakedTexturesDirectoryName`: the PBR triplet, or -- for a surface material -- one
+		 * packed map per routed slot.
 		 *
 		 * Where the maps land is the layout's to decide, not a caller's: the routes this writes into
 		 * `material` are references, and one naming a directory outside `Derived/` would be a
@@ -216,7 +218,8 @@ namespace assetlib
 		BakeMaterial(BMaterial& material, const CancelToken& cancel = {}) const;
 
 		/**
-		 * Writes `material`'s triplet the way BakeMaterial would, and encodes nothing.
+		 * Writes the names BakeMaterial would -- the triplet, or each routed surface slot's
+		 * `baked`/`bakeToken` -- and encodes nothing.
 		 *
 		 * A map is named for everything that determines its bytes, so what a bake *would* produce
 		 * costs a stamp of each source and no decode -- which is what tells a dry run whether a bake
@@ -228,6 +231,30 @@ namespace assetlib
 		 */
 		void
 		ResolveMaterialBake(BMaterial& material) const;
+
+		/**
+		 * Composites one routed surface slot in memory -- the map BakeMaterial would write for it,
+		 * as uncompressed RGBA8 with its mip chain -- without touching the disk.
+		 *
+		 * The load-time half of the bake (ADR-8 in the surface-material-panel plan): a routed slot
+		 * whose bake is stale or absent is composited here and uploaded directly, so the material
+		 * renders the same however it is loaded. Only a loose development tree reaches this -- a
+		 * shipped tree is baked and stripped -- which is why it may read the sources by host path.
+		 *
+		 * @throws std::runtime_error if `slotName` names no slot of `material`, the slot routes
+		 *         nothing, or a routed source cannot be read.
+		 */
+		[[nodiscard]] ImageData
+		ComposeSurfaceSlot(const BMaterial& material, std::string_view slotName) const;
+
+		/**
+		 * Whether every source `material`'s routed slots name can be read where the compositor
+		 * reads -- the host data root. The guard in front of a load-time compose: false on a
+		 * packed mount, whose sources resolve through the archive but cannot be composited (and
+		 * whose routed materials should have been stripped).
+		 */
+		[[nodiscard]] bool
+		CanComposeSurfaceSlots(const BMaterial& material) const;
 
 		/** @throws std::runtime_error / Cancelled as bakeSky. */
 		void
@@ -451,13 +478,20 @@ namespace assetlib
 		[[nodiscard]] SourceStamp
 		StampOf(std::string_view path) const;
 
-		/** Whether `material`'s baked triplet no longer reflects its routed sources. */
+		/** Whether `material`'s baked maps -- the triplet, or a surface's per-slot maps -- no
+		 *  longer reflect its routed sources. */
 		[[nodiscard]] bool
 		BakeIsStale(const BMaterial& material) const;
 
-		/** Whether `material` draws from its routes rather than its triplet. */
+		/** Whether `material` draws from its routes rather than its triplet. PBR only: a stale
+		 *  *surface* slot recomposites at load instead (ComposeSurfaceSlot). */
 		[[nodiscard]] bool
 		DrawsLoose(const BMaterial& material) const;
+
+		/** Whether `slot`'s baked map no longer reflects its routed sources. False for a slot
+		 *  bound whole -- there is no bake to have gone stale. */
+		[[nodiscard]] bool
+		SurfaceSlotBakeIsStale(const SurfaceTextureBinding& slot) const;
 
 		[[nodiscard]] bool
 		IsSkyBakeStale(const BSky& sky) const;
