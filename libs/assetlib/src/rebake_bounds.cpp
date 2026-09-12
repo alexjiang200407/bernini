@@ -155,13 +155,17 @@ namespace assetlib
 			{
 				AnimationSet animations = Load<AnimationSet>(animPath);
 
+				bool remapped = false;
+
 				auto paired = meshesBySkeleton.find(animations.skeletonSignature);
 				if (paired == meshesBySkeleton.end())
 				{
 					// The buckets are keyed on each rig as it stands now, so a clip set cooked
 					// before its rig grew a bone misses every one of them. Re-addressed here as
-					// the acquire does, and written down by the save below.
-					if (remapAnimations(animations, skeletonAt(normalizePath(animations.skeleton))))
+					// the acquire does.
+					remapped =
+						remapAnimations(animations, skeletonAt(normalizePath(animations.skeleton)));
+					if (remapped)
 						paired = meshesBySkeleton.find(animations.skeletonSignature);
 				}
 
@@ -218,7 +222,12 @@ namespace assetlib
 				const uint64_t storedPlant =
 					animations.plantWeights.Empty() ? 0 : animations.plantWeights.signature;
 
-				if (wanted == stored && wantedPlant == storedPlant)
+				// A re-addressing is a rewrite even when no box moves, and after ADR-5 narrowed
+				// these keys an appended bone moves none of them: the mesh was never rewritten, so
+				// its geometry hashes the same and an unweighted bone sweeps no box. Without this
+				// the remap above would be recomputed and thrown away on every run, and the file
+				// would report current while its own signature named a rig it no longer addresses.
+				if (!remapped && wanted == stored && wantedPlant == storedPlant)
 				{
 					entry.outcome = RebakedFile::Outcome::kCurrent;
 					continue;

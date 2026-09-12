@@ -534,6 +534,7 @@ namespace assetlib
 			}
 		}
 
+		const bool bySignature = !matches.empty();
 		if (matches.empty())
 			matches = std::move(grown);
 
@@ -554,10 +555,11 @@ namespace assetlib
 			}
 
 			core::throw_runtime_error(
-				"this project holds {} skeletons with the same signature, so which one this "
+				"this project holds {} skeletons this file's rig could be {}, so which one this "
 				"import binds to is ambiguous: {}. Delete the duplicates, keeping one, and "
 				"re-import what named the others",
 				matches.size(),
+				bySignature ? "cooked against" : "an earlier version of",
 				named);
 		}
 
@@ -648,7 +650,16 @@ namespace assetlib
 		// That rig may have gained a bone since this file was exported -- which is what let it be
 		// found at all above. Re-addressed before anything is measured, so the container is cooked
 		// against the rig it names rather than re-addressed on every load.
-		(void)remapAnimations(clips, bound);
+		//
+		// Only where the two actually differ: a rig matched outright needs no re-addressing, and
+		// remapAnimations says so by refusing. Where they do differ the refusal is a real one, and
+		// the alternative to reporting it is saving a `.banim` whose signature names one rig while
+		// its `skeleton` names another -- which nothing downstream can tell from a cooked one.
+		if (clips.skeletonSignature != skeletonSignature(bound))
+			core::throw_runtime_error_if(
+				!remapAnimations(clips, bound),
+				"'{}' matched this file's rig but its clips cannot be re-addressed to it",
+				clips.skeleton);
 
 		bakeBoundsForRig(
 			*this,

@@ -199,6 +199,10 @@ TEST_CASE("The rebake writes the box a load then finds", "[rebake]")
 	SECTION("a clip set whose rig has grown a bone is re-addressed, not called orphaned")
 	{
 		{
+			// Boxes first, against the rig as it was -- otherwise they are simply absent below and
+			// every key differs for a reason that has nothing to do with the append.
+			(void)AssetStore(root.path).RebakePosedBounds(false);
+
 			auto skeleton = StoreAt(root.path).Load<Skeleton>("Derived/Skeletons/rig.bskel");
 
 			auto grip       = Bone();
@@ -209,28 +213,61 @@ TEST_CASE("The rebake writes the box a load then finds", "[rebake]")
 			grip.nameOffset = skeleton.stringPool.add("grip");
 			skeleton.bones.push_back(grip);
 
-			const auto binds = bindPoseModelTransforms(skeleton);
-			for (size_t i = 0; i < skeleton.bones.size(); ++i)
-				skeleton.bones[i].inverseBind = glm::inverse(binds[i]);
+			// Only the new bone's: an append does not re-author the bones already there, and
+			// recomputing one moves every key that hashes it -- glm::inverse of an identity is
+			// numerically identity and not bit-for-bit one.
+			const auto binds                  = bindPoseModelTransforms(skeleton);
+			skeleton.bones.back().inverseBind = glm::inverse(binds.back());
 
 			StoreAt(root.path).Save(skeleton, "Derived/Skeletons/rig.bskel");
-
-			// The mesh is re-addressed with it; only the clip set is left behind, which is the
-			// case the whole feature was written for.
-			auto mesh = StoreAt(root.path).Load<BMesh>("Derived/Meshes/rig.bmesh");
-			REQUIRE(remapMesh(mesh, skeleton));
-			StoreAt(root.path).Save(mesh, "Derived/Meshes/rig.bmesh");
 		}
 
-		const RebakeBoundsReport report = AssetStore(root.path).RebakePosedBounds(false);
-		CHECK(report.Count(RebakedFile::Outcome::kOrphaned) == 0);
-		CHECK(report.Count(RebakedFile::Outcome::kRebaked) == 1);
-
-		// Written down, not just used: the clip set comes back addressed to the rig as it stands.
 		const auto grown = StoreAt(root.path).Load<Skeleton>("Derived/Skeletons/rig.bskel");
-		CHECK(animationsMatchSkeleton(
-			StoreAt(root.path).Load<AnimationSet>("Derived/Animations/rig.banim"),
-			grown));
+
+		// The socket is appended last, so the mesh's joint indices still name the bones they were
+		// cooked against and it needs no re-addressing at all -- only the clip set is left behind.
+		// This is the case the feature was written for, and the one where every box key holds
+		// still: ADR-5 narrowed them, so an unweighted bone moves neither. If a re-addressing did
+		// not force the write by itself, the remap would be recomputed and discarded every run.
+		SECTION("the clip set alone, with every box key unmoved")
+		{
+			// The premise, checked rather than assumed: appended last, so re-addressing the mesh
+			// would rewrite nothing in its blob. Its stored signature has still moved -- that is
+			// what a signature is -- but no box key depends on one.
+			{
+				auto       probe  = StoreAt(root.path).Load<BMesh>("Derived/Meshes/rig.bmesh");
+				const auto before = probe.vertexData;
+				REQUIRE(remapMesh(probe, grown));
+				REQUIRE(probe.vertexData == before);
+			}
+
+			const RebakeBoundsReport report = AssetStore(root.path).RebakePosedBounds(false);
+			CHECK(report.Count(RebakedFile::Outcome::kOrphaned) == 0);
+			CHECK(report.Count(RebakedFile::Outcome::kCurrent) == 0);
+
+			CHECK(animationsMatchSkeleton(
+				StoreAt(root.path).Load<AnimationSet>("Derived/Animations/rig.banim"),
+				grown));
+
+			// And once written down it is settled: the next run has nothing left to do.
+			const RebakeBoundsReport again = AssetStore(root.path).RebakePosedBounds(false);
+			CHECK(again.Count(RebakedFile::Outcome::kCurrent) == 1);
+		}
+
+		SECTION("and when the mesh was re-addressed with it")
+		{
+			auto mesh = StoreAt(root.path).Load<BMesh>("Derived/Meshes/rig.bmesh");
+			REQUIRE(remapMesh(mesh, grown));
+			StoreAt(root.path).Save(mesh, "Derived/Meshes/rig.bmesh");
+
+			const RebakeBoundsReport report = AssetStore(root.path).RebakePosedBounds(false);
+			CHECK(report.Count(RebakedFile::Outcome::kOrphaned) == 0);
+			CHECK(report.Count(RebakedFile::Outcome::kRebaked) == 1);
+
+			CHECK(animationsMatchSkeleton(
+				StoreAt(root.path).Load<AnimationSet>("Derived/Animations/rig.banim"),
+				grown));
+		}
 	}
 
 	SECTION("a clip set no mesh skins to is reported, not guessed at")
