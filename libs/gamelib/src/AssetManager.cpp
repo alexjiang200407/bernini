@@ -854,8 +854,21 @@ namespace game
 		const assetlib::BMesh&        mesh,
 		const assetlib::BlendSet*     blendSet)
 	{
+		const uint64_t rigSignature = assetlib::skeletonSignature(skeleton);
+
 		if (const auto it = m_Rigs.find(animationsNorm); it != m_Rigs.end())
 		{
+			// The uploaded tables are the rig this was built for, and AddRig's own bone-count
+			// check is not reached on this path. Before an acquire could re-address a grown rig
+			// the mismatch threw earlier, in AcquireSkinnedMesh; now it resolves, so it is refused
+			// here instead of sharing tables the caller's joint indices overrun.
+			core::throw_runtime_error_if(
+				it->second.skeletonSignature != rigSignature,
+				"AssetManager: the rig from '{}' is live against a different version of '{}'; it "
+				"has changed since, so release this rig to zero and acquire it again",
+				animationsNorm,
+				animations.skeleton);
+
 			// One-sided on purpose: the tables are the rig's and nothing attaches a set to one
 			// already uploaded, but a caller that asked for no spaces is not wrong to find some.
 			// Checked before the reference is taken, so a refusal owns nothing.
@@ -881,9 +894,10 @@ namespace game
 			animations,
 			FootPlantFor(mesh, skeleton, animations),
 			BlendSetFor(animations, blendSet, spaces));
-		record.refCount = 1;
-		record.blend    = std::string(blendNorm);
-		record.spaces   = std::move(spaces);
+		record.refCount          = 1;
+		record.blend             = std::string(blendNorm);
+		record.spaces            = std::move(spaces);
+		record.skeletonSignature = rigSignature;
 
 		const auto it = m_Rigs.emplace(std::string(animationsNorm), std::move(record)).first;
 		return AcquiredRig{ it->second.handle, it->second.blend, it->second.spaces };

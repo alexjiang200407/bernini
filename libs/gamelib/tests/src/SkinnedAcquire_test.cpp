@@ -276,18 +276,61 @@ TEST_CASE("a rig that has grown a bone still acquires", "[skinned][acquire][rema
 		CHECK_FALSE(skinned.clips.empty());
 	}
 
-	SECTION("and the remap is not re-done per acquire")
+	SECTION("and a second mesh on the same clip set acquires off the already-remapped one")
 	{
-		// ADR-8: the store's cached container is remapped in place, so the second acquire finds a
-		// pairing that already matches. Asserted through the seam a caller can see -- both hand
-		// back the same geom -- since the remap itself leaves no other trace.
-		const game::AssetManager::SkinnedMesh first =
-			assets.AcquireSkinnedMesh("Derived/Meshes/rig.bmesh", "Derived/Animations/rig.banim");
-		const game::AssetManager::SkinnedMesh second =
-			assets.AcquireSkinnedMesh("Derived/Meshes/rig.bmesh", "Derived/Animations/rig.banim");
+		// ADR-8: the clip set is remapped in the store's cache, so the *second* mesh's acquire
+		// finds it already matching. Two different meshes, so this is a second trip through the
+		// remap path rather than the geom share, which returns before reading anything.
+		{
+			const auto source =
+				assetlib::AssetStore(root.path).Load<assetlib::BMesh>("Derived/Meshes/rig.bmesh");
+			assetlib::AssetStore(root.path).Save(source, "Derived/Meshes/slot.bmesh");
+		}
 
-		CHECK(first.geom.handle.index == second.geom.handle.index);
+		const game::AssetManager::SkinnedMesh body =
+			assets.AcquireSkinnedMesh("Derived/Meshes/rig.bmesh", "Derived/Animations/rig.banim");
+		const game::AssetManager::SkinnedMesh piece =
+			assets.AcquireSkinnedMesh("Derived/Meshes/slot.bmesh", "Derived/Animations/rig.banim");
+
+		CHECK(body.geom.handle.index != piece.geom.handle.index);
+		CHECK(piece.geom.IsValid());
 	}
+}
+
+// The hazard the remap itself opened. A rig uploads its bone tables once and later acquires of the
+// same clip set share them; before this, an acquire whose rig had changed threw before it ever got
+// there. Now it re-addresses instead, so the share is the one place left where N+1 joint indices
+// could meet an N-bone table -- and AddRig's own bone-count check is not on that path.
+TEST_CASE(
+	"a live rig is not shared with an acquire whose rig has grown",
+	"[skinned][acquire][remap]")
+{
+	DataRoot root("bernini_skinned_appended_live");
+	WriteRig(root.path);
+
+	{
+		const auto source =
+			assetlib::AssetStore(root.path).Load<assetlib::BMesh>("Derived/Meshes/rig.bmesh");
+		assetlib::AssetStore(root.path).Save(source, "Derived/Meshes/slot.bmesh");
+	}
+
+	auto gfx = bgl::CreateGraphics(HeadlessOptions());
+	REQUIRE(gfx != nullptr);
+
+	auto scene  = gfx->CreateScene(bgl::SceneDesc());
+	auto assets = game::AssetManager(scene, root.path);
+
+	// Live, and uploaded against the rig as it stands.
+	const game::AssetManager::SkinnedMesh body =
+		assets.AcquireSkinnedMesh("Derived/Meshes/rig.bmesh", "Derived/Animations/rig.banim");
+	REQUIRE(body.geom.IsValid());
+
+	// The artist adds a socket while it is drawing.
+	AppendBoneToRig(root.path);
+
+	CHECK_THROWS_AS(
+		assets.AcquireSkinnedMesh("Derived/Meshes/slot.bmesh", "Derived/Animations/rig.banim"),
+		std::runtime_error);
 }
 
 // The remap resolves by name, so a container from before the names were stored has nothing to

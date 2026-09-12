@@ -501,6 +501,12 @@ namespace game
 			// The spaces as source-asset names, so a shared acquire answers without re-reading
 			// either container.
 			std::vector<BlendSpaceInfo> spaces;
+
+			// The rig these tables were uploaded for. A later acquire of the same clip set can
+			// reach a *different* rig -- the `.bskel` grows a bone while this is live, and the
+			// acquire re-addresses its containers to it -- and the uploaded tables are still the
+			// old rig's, so sharing them would pose N+1 joint indices against N bones.
+			uint64_t skeletonSignature = 0;
 		};
 
 		struct GeomRecord
