@@ -474,3 +474,68 @@ TEST_CASE("Thresholds can be taken from the speed each clip was animated at", "[
 		CHECK_THAT(taken.refusal, Catch::Matchers::ContainsSubstring("canter"));
 	}
 }
+
+namespace
+{
+	editor::ClipInfo
+	RatedClip(const std::string& name, const float sampleRate)
+	{
+		auto clip       = editor::ClipInfo();
+		clip.name       = name;
+		clip.loop       = true;
+		clip.sampleRate = sampleRate;
+		return clip;
+	}
+}
+
+TEST_CASE("A cut's sample interval is read off the node table", "[animation][blend]")
+{
+	// The Blend tab's ends are nodes, and a node past the clips is a space. An unblended fade meets
+	// over one sample of what is *playing*, which for a space is whichever of its two straddling
+	// clips carries the cursor -- not an average of the pair, which is no clip's interval at all.
+	const std::vector<editor::ClipInfo> clips = { RatedClip("idle", 24.0f),
+		                                          RatedClip("walk", 30.0f),
+		                                          RatedClip("run", 60.0f) };
+
+	auto space    = game::BlendSpaceInfo();
+	space.name    = "locomotion";
+	space.samples = { { 1, 0.0f }, { 2, 4.0f } };  // walk at 0, run at 4
+	const std::vector<game::BlendSpaceInfo> spaces = { space };
+
+	SECTION("a clip node is its own rate")
+	{
+		CHECK(editor::NodeSampleRate(clips, spaces, 0, 0.0f) == Catch::Approx(24.0f));
+		CHECK(editor::NodeSampleRate(clips, spaces, 2, 0.0f) == Catch::Approx(60.0f));
+	}
+
+	SECTION("a space node is the lower of the two samples it straddles")
+	{
+		// Node 3: three clips, so the first space. Below the upper threshold the lower sample is
+		// still the one the phase is being read against.
+		CHECK(editor::NodeSampleRate(clips, spaces, 3, 0.0f) == Catch::Approx(30.0f));
+		CHECK(editor::NodeSampleRate(clips, spaces, 3, 3.9f) == Catch::Approx(30.0f));
+		CHECK(editor::NodeSampleRate(clips, spaces, 3, 4.0f) == Catch::Approx(60.0f));
+	}
+
+	SECTION("past either end the end sample plays alone, and its rate is what a cut takes")
+	{
+		CHECK(editor::NodeSampleRate(clips, spaces, 3, -10.0f) == Catch::Approx(30.0f));
+		CHECK(editor::NodeSampleRate(clips, spaces, 3, 99.0f) == Catch::Approx(60.0f));
+	}
+
+	SECTION("a node naming nothing is zero, which is no cut rather than a wrong one")
+	{
+		CHECK(editor::NodeSampleRate(clips, spaces, -1, 0.0f) == 0.0f);
+		CHECK(editor::NodeSampleRate(clips, spaces, 4, 0.0f) == 0.0f);
+		CHECK(editor::NodeSampleRate({}, spaces, 0, 0.0f) == 0.0f);
+	}
+
+	SECTION("a sample naming a clip the table does not hold is zero, not a read past the end")
+	{
+		auto stale                                   = game::BlendSpaceInfo();
+		stale.samples                                = { { 7, 0.0f }, { 8, 1.0f } };
+		const std::vector<game::BlendSpaceInfo> gone = { stale };
+
+		CHECK(editor::NodeSampleRate(clips, gone, 3, 0.0f) == 0.0f);
+	}
+}

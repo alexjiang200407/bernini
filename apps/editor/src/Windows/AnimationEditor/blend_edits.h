@@ -182,4 +182,31 @@ namespace editor
 	ThresholdsFromSpeed(
 		std::span<const assetlib::BlendSpaceSample> run,
 		std::span<const ClipInfo>                   clips);
+
+	/**
+	 * The space `node` names, or null when it names a clip, nothing, or a space `spaces` lost.
+	 *
+	 * `node` is into the rig's node table -- every clip in clip order, then `spaces` -- so this is
+	 * the one place the boundary between the two halves is decided. A second reading of it is a
+	 * second chance to be off by one.
+	 */
+	[[nodiscard]] const game::BlendSpaceInfo*
+	SpaceForNode(std::span<const game::BlendSpaceInfo> spaces, size_t clipCount, int node) noexcept;
+
+	/**
+	 * One sample interval of what node `node` plays at `parameter`, in Hz -- which is what an
+	 * unblended fade meets over.
+	 *
+	 * A space has no rate of its own, so it is the rate of the lower of the two samples it straddles
+	 * there -- the clip that is actually playing, rather than an average of a pair.
+	 *
+	 * Zero when `node` names nothing, when a space's sample names a clip `clips` does not hold, or
+	 * when `clips` is empty. A caller reads that as "no cut is expressible", never as a rate.
+	 */
+	[[nodiscard]] float
+	NodeSampleRate(
+		std::span<const ClipInfo>             clips,
+		std::span<const game::BlendSpaceInfo> spaces,
+		int                                   node,
+		float                                 parameter) noexcept;
 }

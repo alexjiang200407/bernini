@@ -495,8 +495,6 @@ AnimationEditorWindow::BuildSpaceTab()
 		if (!m_SyncingUi)
 			SelectSpace(index);
 	});
-	layout->addWidget(m_SpaceSelector);
-
 	m_AddSpace    = new QPushButton(QStringLiteral("New"), m_SpaceGroup);
 	m_RenameSpace = new QPushButton(QStringLiteral("Rename"), m_SpaceGroup);
 	m_RemoveSpace = new QPushButton(QStringLiteral("Delete"), m_SpaceGroup);
@@ -608,15 +606,39 @@ AnimationEditorWindow::BuildBlendTab()
 
 	auto* ends = new QHBoxLayout();
 	ends->setContentsMargins(0, 0, 0, 0);
-	m_FromClip = new QComboBox(m_TransitionGroup);
-	m_ToClip   = new QComboBox(m_TransitionGroup);
+	m_FromEnd = new QComboBox(m_TransitionGroup);
+	m_ToEnd   = new QComboBox(m_TransitionGroup);
 	// Nothing to fade to until somebody says so: the panel's resting state is one clip playing, and
 	// a second end filled in by default would offer a transition nobody asked for.
-	m_ToClip->setPlaceholderText(QStringLiteral("fade to..."));
-	ends->addWidget(m_FromClip, /*stretch*/ 1);
+	m_ToEnd->setPlaceholderText(QStringLiteral("fade to..."));
+
+	ends->addWidget(m_FromEnd, /*stretch*/ 1);
 	ends->addWidget(new QLabel(QStringLiteral("→"), m_TransitionGroup));
-	ends->addWidget(m_ToClip, /*stretch*/ 1);
+	ends->addWidget(m_ToEnd, /*stretch*/ 1);
 	fade->addLayout(ends);
+
+	// A row of its own rather than an entry in the To combo. A space is not another clip to pick
+	// from: it is a different kind of destination, and one worth seeing is there without opening
+	// anything. Checked, it *is* the To end and the combo above goes insensitive, so the two
+	// controls never both claim to say what the fade arrives at.
+	auto* spaceRow = new QHBoxLayout();
+	spaceRow->setContentsMargins(0, 0, 0, 0);
+	m_SpaceEnabled = new QCheckBox(QStringLiteral("Blend space"), m_TransitionGroup);
+	m_SpaceEnabled->setToolTip(QStringLiteral(
+		"Fade onto one of the open set's blend spaces instead of a clip, at the parameter "
+		"beside it."));
+	m_SpaceEnd = new QComboBox(m_TransitionGroup);
+	m_SpaceEnd->setPlaceholderText(QStringLiteral("no blend set open"));
+
+	m_SpaceEndParameter = new QDoubleSpinBox(m_TransitionGroup);
+	m_SpaceEndParameter->setDecimals(c_ParameterDecimals);
+	m_SpaceEndParameter->setSingleStep(c_ParameterStep);
+	m_SpaceEndParameter->setKeyboardTracking(false);
+
+	spaceRow->addWidget(m_SpaceEnabled);
+	spaceRow->addWidget(m_SpaceEnd, /*stretch*/ 1);
+	spaceRow->addWidget(m_SpaceEndParameter);
+	fade->addLayout(spaceRow);
 
 	auto* timing = new QHBoxLayout();
 	timing->setContentsMargins(0, 0, 0, 0);
@@ -653,8 +675,28 @@ AnimationEditorWindow::BuildBlendTab()
 	// Re-stamped from a clean record each time, with the clock parked at the window's start, so no
 	// stamp is ever a fade interrupting a live one.
 	const auto restamp = [this] { StampTransition(); };
-	connect(m_FromClip, &QComboBox::activated, this, [restamp](int) { restamp(); });
-	connect(m_ToClip, &QComboBox::activated, this, [restamp](int) { restamp(); });
+
+	connect(m_FromEnd, &QComboBox::activated, this, [restamp](int) { restamp(); });
+	connect(m_ToEnd, &QComboBox::activated, this, [this, restamp](int) {
+		m_ToClip = m_ToEnd->currentText();
+		restamp();
+	});
+
+	// The box is re-ranged before the stamp, not after: a space carries an axis of its own, and a
+	// value clamped into it afterwards would leave the record naming a parameter the box no longer
+	// shows.
+	const auto spaceChosen = [this, restamp](int) {
+		UpdateParameterBoxes();
+		restamp();
+	};
+	connect(m_SpaceEnd, &QComboBox::activated, this, spaceChosen);
+	connect(m_SpaceEnabled, &QCheckBox::toggled, this, [this, restamp](bool) {
+		UpdateTransitionControls();
+		restamp();
+	});
+	connect(m_SpaceEndParameter, &QDoubleSpinBox::valueChanged, this, [restamp](double) {
+		restamp();
+	});
 	connect(m_FadeSeconds, &QDoubleSpinBox::valueChanged, this, [restamp](double) { restamp(); });
 	connect(m_BlendEnabled, &QCheckBox::toggled, this, [this, restamp](bool) {
 		UpdateTransitionControls();
@@ -928,12 +970,33 @@ AnimationEditorWindow::ShowSpaces(const std::vector<game::BlendSpaceInfo>& space
 	const int restored = m_SpaceSelector->findText(m_SelectedSpace);
 	m_SyncingUi        = false;
 
+	// The Blend tab's space row is filled from these.
+	RefreshTransitionEnds();
+
 	SelectSpace(spaces.empty() ? -1 : std::max(restored, 0));
+
+	// The last thing the load emits, so this is where a fade the reload dropped can be put back.
+	// Opening a blend set re-acquires the rig, which walks SetClips -> SelectClip and clears the
+	// transport's window; the ends are still on screen saying what they said, so leaving it cleared
+	// is the panel disagreeing with itself. StampTransition is a no-op off the Blend tab and clears
+	// on an incomplete pair, so this restores a fade exactly when there was one to restore.
+	StampTransition();
 }
 
 void
 AnimationEditorWindow::SelectSpace(const int index)
 {
+	// The combo is pushed to `index` rather than assumed to be there. It is only there when this
+	// came *from* the combo: a QComboBox carrying a placeholder does not select its first item on
+	// insert -- that is what the placeholder is for -- so a fresh fill leaves it at -1 while
+	// ShowSpaces asks for space 0. Everything below reads currentIndex(), never `index`, so the two
+	// disagreeing is a tab listing one space's samples with every control saying none is chosen.
+	if (m_SpaceSelector->currentIndex() != index)
+	{
+		const QSignalBlocker blocker(m_SpaceSelector);
+		m_SpaceSelector->setCurrentIndex(index);
+	}
+
 	m_SampleList->clear();
 
 	if (index < 0 || static_cast<size_t>(index) >= m_Spaces.size())
@@ -1574,8 +1637,16 @@ AnimationEditorWindow::StampTransition()
 		return;
 	}
 
-	const int from = m_FromClip->currentIndex();
-	const int to   = m_ToClip->currentIndex();
+	const int from = m_FromEnd->currentIndex();
+
+	// The destination is the space row when it is on, and the To combo otherwise -- never both. A
+	// space is node `clipCount + its row`, which is the rig's node table.
+	const bool toSpace = SpaceIsDestination();
+	const int  to =
+		toSpace ? static_cast<int>(m_Transport.GetClips().size()) + m_SpaceEnd->currentIndex() :
+				  m_ToEnd->currentIndex();
+	const float parameter = toSpace ? static_cast<float>(m_SpaceEndParameter->value()) : 0.0f;
+
 	if (from < 0 || to < 0 || from == to)
 	{
 		ClearTransition();
@@ -1584,13 +1655,14 @@ AnimationEditorWindow::StampTransition()
 
 	// t0 is arbitrary and only has to be somewhere the clock can sit before it, since every ramp is
 	// stamped in absolute time and read by moving the clock across them.
-	// Unblended, the two clips still meet -- they just meet over one sample interval instead of the
-	// authored window, which is a cut. Not a duration of zero: that evicts the outgoing clip from
+	// Unblended, the two ends still meet -- they just meet over one sample interval instead of the
+	// authored window, which is a cut. Not a duration of zero: that evicts the outgoing end from
 	// the record and shows the destination across the whole window (editor::CutSeconds).
 	const float fadeSeconds =
 		m_BlendEnabled->isChecked() ?
 			static_cast<float>(m_FadeSeconds->value()) :
-			editor::CutSeconds(m_Transport.GetClips().at(static_cast<unsigned>(from)).sampleRate);
+			editor::CutSeconds(
+				editor::NodeSampleRate(m_Transport.GetClips(), m_Spaces, from, 0.0f));
 
 	const auto layout =
 		editor::WindowFor(c_TransitionStart, fadeSeconds, c_TransitionLead, c_TransitionTail);
@@ -1604,15 +1676,25 @@ AnimationEditorWindow::StampTransition()
 	m_Preview->StampTransition(
 		static_cast<uint32_t>(from),
 		static_cast<uint32_t>(to),
+		/*fromParameter*/ 0.0f,
+		parameter,
 		layout.start,
 		layout.duration);
 
 	m_TransitionLayout = layout;
 	m_Strip->SetLayout(layout);
-	m_Strip->SetClipNames(m_FromClip->currentText(), m_ToClip->currentText());
+	m_Strip->SetEndNames(
+		m_FromEnd->currentText(),
+		toSpace ? m_SpaceEnd->currentText() : m_ToEnd->currentText());
 
 	UpdateTransitionControls();
 	SyncTransportUi();
+}
+
+bool
+AnimationEditorWindow::SpaceIsDestination() const
+{
+	return m_SpaceEnabled->isChecked() && ChosenSpace() != nullptr;
 }
 
 void
@@ -1635,8 +1717,31 @@ AnimationEditorWindow::UpdateTransitionControls()
 	const bool playable   = m_Transport.HasClips();
 	const bool usable     = rewritable && playable;
 
-	m_FromClip->setEnabled(usable);
-	m_ToClip->setEnabled(usable);
+	// A space with nothing chosen cannot be switched on, so the box is insensitive rather than a
+	// switch that does nothing. Switched on, the To combo is no longer what says where the fade
+	// lands, so it goes insensitive too -- two controls never both claim the destination.
+	m_SpaceEnabled->setEnabled(usable && ChosenSpace() != nullptr);
+	m_SpaceEnd->setEnabled(usable && !m_Spaces.empty());
+	m_SpaceEndParameter->setEnabled(usable && SpaceIsDestination());
+
+	m_FromEnd->setEnabled(usable);
+
+	// Blanked as well as greyed while the space is the destination, and the placeholder says why.
+	// A disabled combo still showing a clip name reads as the answer to "what does this fade land
+	// on", which is the one question it is no longer answering.
+	const bool toSpace = SpaceIsDestination();
+	m_ToEnd->setEnabled(usable && !toSpace);
+	m_ToEnd->setPlaceholderText(
+		toSpace ? QStringLiteral("using the blend space") : QStringLiteral("fade to..."));
+
+	m_SyncingUi = true;
+	if (toSpace)
+		m_ToEnd->setCurrentIndex(-1);
+	else if (m_ToEnd->currentIndex() < 0 && !m_ToClip.isEmpty())
+		m_ToEnd->setCurrentIndex(m_ToEnd->findText(m_ToClip));
+	m_SyncingUi = false;
+
+	UpdateParameterBoxes();
 	// Nothing to set while the fade is a cut.
 	m_FadeSeconds->setEnabled(usable && m_BlendEnabled->isChecked());
 	m_BlendEnabled->setEnabled(usable);
@@ -1652,7 +1757,7 @@ AnimationEditorWindow::UpdateTransitionControls()
 	if (!live)
 	{
 		m_TransitionLayout = editor::TransitionLayout();
-		m_Strip->SetClipNames(
+		m_Strip->SetEndNames(
 			m_Transport.HasClips() ? QString::fromStdString(m_Transport.GetActiveClip().name) :
 									 QString(),
 			QString());
@@ -1671,13 +1776,96 @@ AnimationEditorWindow::UpdateTransitionControls()
 	}
 	else if (!live)
 	{
-		m_TransitionNote->setText(QStringLiteral("Playing one clip. Choose what to fade to."));
+		// The space row says the rest; what the note owes is the case where that row has nothing
+		// in it, which no control on this tab can explain by being empty.
+		m_TransitionNote->setText(
+			m_Spaces.empty() ?
+				QStringLiteral(
+					"Playing one clip. Choose what to fade to. The open set holds no blend "
+					"spaces -- author one on the Space tab to fade onto it.") :
+				QStringLiteral("Playing one clip. Choose what to fade to."));
 	}
 	else
 		m_TransitionNote->clear();
 
 	if (!usable)
 		ClearTransition();
+}
+
+void
+AnimationEditorWindow::RefreshTransitionEnds()
+{
+	const auto chosen = [](const QComboBox* box) {
+		return box->currentIndex() >= 0 ? box->currentText() : QString();
+	};
+	const QString wasFrom  = chosen(m_FromEnd);
+	const QString wasTo    = chosen(m_ToEnd);
+	const QString wasSpace = chosen(m_SpaceEnd);
+
+	m_SyncingUi = true;
+	m_FromEnd->clear();
+	m_ToEnd->clear();
+	m_SpaceEnd->clear();
+
+	// Both ends are clips. A space is the other row's, so exactly one control says the fade arrives
+	// at a space and there is no second way to ask for the same thing.
+	const std::vector<editor::ClipInfo>& clips = m_Transport.GetClips();
+	for (const editor::ClipInfo& clip : clips)
+	{
+		const QString name = QString::fromStdString(clip.name);
+		m_FromEnd->addItem(name);
+		m_ToEnd->addItem(name);
+	}
+
+	for (const game::BlendSpaceInfo& space : m_Spaces)
+		m_SpaceEnd->addItem(QString::fromStdString(space.name));
+
+	// By name and not by row: removing a space moves every space after it, and an edit that
+	// re-acquires the rig comes back through here with the author still watching what they chose.
+	const auto restore = [](QComboBox* box, const QString& name, const int fallback) {
+		const int row = name.isEmpty() ? -1 : box->findText(name);
+		box->setCurrentIndex(row >= 0 ? row : fallback);
+	};
+	const int playing =
+		clips.empty() ? -1 : std::clamp(m_SelectedClip, 0, static_cast<int>(clips.size()) - 1);
+	restore(m_FromEnd, wasFrom, playing);
+	restore(m_ToEnd, wasTo.isEmpty() ? m_ToClip : wasTo, -1);
+	restore(m_SpaceEnd, wasSpace, m_Spaces.empty() ? -1 : 0);
+	m_SyncingUi = false;
+
+	UpdateParameterBoxes();
+}
+
+void
+AnimationEditorWindow::UpdateParameterBoxes()
+{
+	const game::BlendSpaceInfo* space = ChosenSpace();
+
+	m_SpaceEndParameter->setVisible(space != nullptr);
+	if (space == nullptr)
+		return;
+
+	// Blocked, because setRange clamps: a space narrower than the last one would otherwise report
+	// the clamp as an edit and re-stamp from inside the sync.
+	const QSignalBlocker blocker(m_SpaceEndParameter);
+	m_SpaceEndParameter->setRange(
+		static_cast<double>(space->ParameterMin()),
+		static_cast<double>(space->ParameterMax()));
+}
+
+const game::BlendSpaceInfo*
+AnimationEditorWindow::ChosenSpace() const
+{
+	const int row = m_SpaceEnd->currentIndex();
+	return row >= 0 && static_cast<size_t>(row) < m_Spaces.size() ?
+	           &m_Spaces[static_cast<size_t>(row)] :
+	           nullptr;
+}
+
+const game::BlendSpaceInfo*
+AnimationEditorWindow::SpaceForNode(const int node) const
+{
+	return editor::SpaceForNode(m_Spaces, m_Transport.GetClips().size(), node);
 }
 
 void
@@ -1728,27 +1916,20 @@ AnimationEditorWindow::SetClips(const std::vector<editor::ClipInfo>& clips)
 
 	m_SyncingUi = true;
 	m_ClipList->clear();
-	m_FromClip->clear();
-	m_ToClip->clear();
 	for (const editor::ClipInfo& clip : clips)
-	{
-		const QString name = QString::fromStdString(clip.name);
-		m_ClipList->addItem(name);
-		m_FromClip->addItem(name);
-		m_ToClip->addItem(name);
-	}
+		m_ClipList->addItem(QString::fromStdString(clip.name));
+
 	// By name and not by index: an edit that reloads the mesh comes back through here, and the
 	// author was watching a clip rather than a row. A name that is gone falls back to the first.
 	const int wasClip = m_ClipList->count() > 0 ? m_SelectedClip : -1;
 	if (!clips.empty())
-	{
 		m_ClipList->setCurrentRow(wasClip >= 0 ? wasClip : 0);
-		m_FromClip->setCurrentIndex(wasClip >= 0 ? wasClip : 0);
-	}
-	// -1 after the fill, which is what the placeholder shows: a clip set arrives with one clip
-	// playing and no transition pending.
-	m_ToClip->setCurrentIndex(-1);
 	m_SyncingUi = false;
+
+	// After the clip list, which is where the From falls back to when its name is gone. The ends are
+	// rebuilt again by ShowSpaces: ClipsChanged is emitted before SpacesChanged, so what is filled
+	// in here still holds the previous acquire's spaces for the length of one call.
+	RefreshTransitionEnds();
 
 	const bool playable = !clips.empty();
 	m_TransportBar->setEnabled(playable);

@@ -299,6 +299,71 @@ TEST_CASE("a crossfade onto what is already arriving does not restart it", "[gam
 	CHECK(arriving->rampEnd == 11.0f);
 }
 
+TEST_CASE("a crossfade says what parameter a space arrives at", "[gamelib][animblend]")
+{
+	// A fade names a node, and a space node plays nothing until something says where on its axis.
+	// Without this the slot arrives at zero -- the bottom of the run -- with nothing refused.
+	constexpr uint32_t c_SpaceNode = 2;  // two clips, so the space is node 2
+	constexpr float    c_Now       = 10.0f;
+	constexpr float    c_Duration  = 0.5f;
+	constexpr float    c_Parameter = 2.5f;
+
+	SECTION("the arriving slot holds the parameter it was given, at every clock")
+	{
+		const auto after =
+			CrossfadeTo(Playing(0), c_SpaceNode, c_Now, c_Duration, 0.0f, 1.0f, c_Parameter);
+
+		const bgl::PlaybackSlot* arriving = SlotFor(after, c_SpaceNode);
+		REQUIRE(arriving != nullptr);
+
+		// One value rather than a ramp, so the fade reads the same before, during and after its
+		// window -- a parameter that moves is RetargetParameter's write, not this one's.
+		CHECK(SlotParameterAt(*arriving, c_Now - 1.0f) == Catch::Approx(c_Parameter));
+		CHECK(SlotParameterAt(*arriving, c_Now) == Catch::Approx(c_Parameter));
+		CHECK(SlotParameterAt(*arriving, c_Now + c_Duration) == Catch::Approx(c_Parameter));
+
+		// The ends as fields, because no clock reaches param0 here: a fresh slot's window is
+		// degenerate -- paramStart and paramEnd both zero -- so SlotParameterAt returns param1 at
+		// every time a record is ever read at. param0 == param1 *is* the "one value" claim, and it
+		// is what a later retarget ramps away from.
+		CHECK(arriving->param0 == Catch::Approx(c_Parameter));
+		CHECK(arriving->param1 == Catch::Approx(c_Parameter));
+		CHECK(arriving->paramStart == arriving->paramEnd);
+	}
+
+	SECTION("a slot already at that node keeps the parameter it had")
+	{
+		// Fading back to what is showing reuses its slot rather than uploading a second copy, and
+		// the parameter goes with the phase and the rate: where it already is, steering is a
+		// retarget's job.
+		auto playing              = bgl::SkinnedPlaybackDesc();
+		playing.slot[0].nodeIndex = c_SpaceNode;
+		playing.slot[0].weight0   = 1.0f;
+		playing.slot[0].weight1   = 1.0f;
+		playing.slot[0].param0    = 4.0f;
+		playing.slot[0].param1    = 4.0f;
+
+		const auto after =
+			CrossfadeTo(playing, c_SpaceNode, c_Now, c_Duration, 0.0f, 1.0f, c_Parameter);
+
+		const bgl::PlaybackSlot* arriving = SlotFor(after, c_SpaceNode);
+		REQUIRE(arriving != nullptr);
+		CHECK(SlotParameterAt(*arriving, c_Now) == Catch::Approx(4.0f));
+	}
+
+	SECTION("the default is what every caller before this said")
+	{
+		const auto after = CrossfadeTo(Playing(0), 1, c_Now, c_Duration);
+
+		const bgl::PlaybackSlot* arriving = SlotFor(after, 1);
+		REQUIRE(arriving != nullptr);
+		CHECK(arriving->param0 == 0.0f);
+		CHECK(arriving->param1 == 0.0f);
+		CHECK(arriving->paramStart == 0.0f);
+		CHECK(arriving->paramEnd == 0.0f);
+	}
+}
+
 TEST_CASE("a retarget rebases the phase it had already reached", "[gamelib][animblend]")
 {
 	const std::vector<game::ClipInfo> clips = MakeClips();

@@ -4,6 +4,7 @@
 #include <assetlib/blend.h>
 #include <cmath>
 #include <cstddef>
+#include <cstdint>
 #include <gamelib/BlendSpaceInfo.h>
 #include <limits>
 #include <span>
@@ -222,5 +223,41 @@ namespace editor
 		}
 
 		return { std::move(taken), {} };
+	}
+
+	const game::BlendSpaceInfo*
+	SpaceForNode(
+		const std::span<const game::BlendSpaceInfo> spaces,
+		const size_t                                clipCount,
+		const int                                   node) noexcept
+	{
+		if (node < 0 || static_cast<size_t>(node) < clipCount)
+			return nullptr;
+
+		const size_t index = static_cast<size_t>(node) - clipCount;
+		return index < spaces.size() ? &spaces[index] : nullptr;
+	}
+
+	float
+	NodeSampleRate(
+		const std::span<const ClipInfo>             clips,
+		const std::span<const game::BlendSpaceInfo> spaces,
+		const int                                   node,
+		const float                                 parameter) noexcept
+	{
+		if (node < 0 || clips.empty())
+			return 0.0f;
+
+		const game::BlendSpaceInfo* space = SpaceForNode(spaces, clips.size(), node);
+		if (space == nullptr)
+			return static_cast<size_t>(node) < clips.size() ?
+			           clips[static_cast<size_t>(node)].sampleRate :
+			           0.0f;
+
+		if (space->samples.empty())
+			return 0.0f;
+
+		const uint32_t clip = space->samples[space->StraddleAt(parameter).lower].clipIndex;
+		return clip < clips.size() ? clips[clip].sampleRate : 0.0f;
 	}
 }

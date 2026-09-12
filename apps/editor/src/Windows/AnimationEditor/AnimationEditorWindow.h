@@ -325,6 +325,37 @@ private:
 	void
 	UpdateTransitionControls();
 
+	/**
+	 * Fills the two end combos with the clip set and the space row's combo with the open set's
+	 * spaces. A space is never an entry in an end combo: exactly one control says the fade arrives
+	 * at a space, so the two can never disagree about the destination.
+	 *
+	 * Everything is restored by name, because an edit that re-acquires the rig comes back through
+	 * here and removing a space moves every space after it. A From whose name is gone falls back to
+	 * the playing clip, a To to nothing -- the resting state: one clip playing, no fade pending.
+	 */
+	void
+	RefreshTransitionEnds();
+
+	/**
+	 * Ranges the space row's parameter box to the chosen space's authored axis, and hides it when
+	 * no space is chosen -- there is then nothing for it to name, which is not a refusal.
+	 */
+	void
+	UpdateParameterBoxes();
+
+	// The space the row's combo names, or null when it names none.
+	[[nodiscard]] const game::BlendSpaceInfo*
+	ChosenSpace() const;
+
+	// Whether the fade's destination is that space rather than the To combo's clip.
+	[[nodiscard]] bool
+	SpaceIsDestination() const;
+
+	// The space `node` names, or null when it names a clip or nothing.
+	[[nodiscard]] const game::BlendSpaceInfo*
+	SpaceForNode(int node) const;
+
 	AnimationPreviewWindow* m_Preview = nullptr;
 	QStackedWidget*         m_Stage   = nullptr;  // the drop prompt, or the viewport + transport
 
@@ -439,13 +470,22 @@ private:
 	// Previewing a crossfade: which two clips, how long, and the strip that is all three at once.
 	// The duration is typed rather than dragged because the question it answers is whether 0.2 s
 	// beats 0.35 s, and two values have to be reachable exactly to be compared at all.
-	QWidget*         m_TransitionGroup = nullptr;
-	QComboBox*       m_FromClip        = nullptr;
-	QComboBox*       m_ToClip          = nullptr;
-	QDoubleSpinBox*  m_FadeSeconds     = nullptr;
-	QCheckBox*       m_BlendEnabled    = nullptr;
-	TransitionStrip* m_Strip           = nullptr;
-	QLabel*          m_TransitionNote  = nullptr;
+	QWidget*   m_TransitionGroup = nullptr;
+	QComboBox* m_FromEnd         = nullptr;
+	QComboBox* m_ToEnd           = nullptr;
+	// The clip m_ToEnd last named, kept while the space row takes the destination over and across
+	// a re-acquire, so unchecking puts back what was chosen rather than nothing.
+	QString m_ToClip;
+
+	// The destination when it is on, in place of m_ToEnd: a checkbox, which space, and where on
+	// its axis the fade arrives.
+	QCheckBox*       m_SpaceEnabled      = nullptr;
+	QComboBox*       m_SpaceEnd          = nullptr;
+	QDoubleSpinBox*  m_SpaceEndParameter = nullptr;
+	QDoubleSpinBox*  m_FadeSeconds       = nullptr;
+	QCheckBox*       m_BlendEnabled      = nullptr;
+	TransitionStrip* m_Strip             = nullptr;
+	QLabel*          m_TransitionNote    = nullptr;
 
 	QWidget*        m_TransportBar = nullptr;
 	QToolButton*    m_PlayButton   = nullptr;

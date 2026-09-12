@@ -357,8 +357,32 @@ to keep in agreement beyond the one below.
   optimisation — the ramps are stamped in absolute time, so the same scrub position is the same pose
   every time, two durations compare against each other rather than against a memory, and the record
   still says at `prevTime` what the previous frame drew, so the motion vector stays exact mid-drag.
-  A stamp always rebuilds from the From clip with the clock parked before the window, so it is never
+  A stamp always rebuilds from the From end with the clock parked before the window, so it is never
   a fade interrupting a live one.
+
+  **A fade can land on a blend space, and that is a row of its own** — a checkbox, which space, and
+  where on its axis it arrives. Not an entry in the To combo: a space is a different kind of
+  destination from a clip, and one worth having is worth seeing without opening anything. Checked,
+  the space *is* the To end and the combo above goes insensitive *and blank*, its placeholder saying
+  which control took over: a greyed combo still showing a clip name reads as the answer to what the
+  fade lands on, which is the one question it has stopped answering. The clip it held is remembered,
+  so unchecking puts it back. The checkbox is itself insensitive while no space is chosen,
+  rather than a switch that does nothing. The fade reaches it as a node — the rig's table is its
+  clips in clip order, then its spaces — so the row's selection is node `clipCount + its row`.
+  Unblended, the cut is still one sample interval of what is *playing* (`editor::NodeSampleRate`,
+  which for a space is the lower of the two clips it straddles, since a space has no rate of its own
+  and an average of a pair is no clip's interval at all).
+
+  **Opening a set re-acquires the rig, and the fade survives it.** The acquire walks the panel back
+  through `SetClips`, which clears the transport's window — but the ends are still on screen saying
+  what they said, so a cleared record is the panel disagreeing with itself. The load's last emission
+  re-stamps, which restores a fade exactly when there was one.
+
+  **The parameter here is standing in for a machine variable.** Unity's blend tree reads an Animator
+  parameter, Unreal's Blend Space player takes its X on a pin, Godot's `BlendSpace1D` is reached
+  through a parameter path — in all three a transition names a state and the value is whatever the
+  graph feeds. There is no graph here, so the box stands in for the variable exactly as the From and
+  To combos stand in for the edge, and it retires the same way.
 
   The panel's properties column is a header over a `QTabWidget` for this: the header holds what the
   clip set *is* -- its `.banim`, and now the `.bblend` whose spaces the rig carries -- and the tabs

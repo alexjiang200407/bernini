@@ -20,9 +20,9 @@ namespace game
 	/**
 	 * The two samples a parameter sits between, and how far between them it sits.
 	 *
-	 * `weight` is the *upper* sample's; the lower carries `1 - weight`. Outside the authored range
-	 * both name the end sample and `weight` is zero, which is that sample playing alone whichever
-	 * of the two a caller reads.
+	 * `weight` is the *upper* sample's; the lower carries `1 - weight`. Past the top of the run both
+	 * name the last sample; below the bottom they are the first two with `weight` zero. So the
+	 * sample playing alone at either end is `lower`, and `upper` means nothing without `weight`.
 	 */
 	struct BlendSpaceStraddle
 	{
