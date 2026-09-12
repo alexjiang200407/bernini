@@ -50,6 +50,7 @@ namespace
 		auto animations              = AnimationSet();
 		animations.skeleton          = "Derived/Skeletons/rig.bskel";
 		animations.skeletonSignature = skeletonSignature(skeleton);
+		animations.skeletonBoneNames = skeletonBoneNames(skeleton);
 		animations.boneCount         = 1;
 
 		auto clip        = AnimationClip();
@@ -67,7 +68,7 @@ namespace
 
 	/** Two vertices at opposite corners of a unit box, both welded to bone 0. */
 	BMesh
-	MakeSkinnedMesh(const glm::vec3& corner)
+	MakeSkinnedMesh(const glm::vec3& corner, const Skeleton& skeleton)
 	{
 		BMesh mesh;
 
@@ -98,6 +99,11 @@ namespace
 		mesh.submeshes.push_back(submesh);
 		mesh.meshes.push_back({ .firstSubmesh = 0, .submeshCount = 1, .nameOffset = 0 });
 		mesh.skeleton = "Derived/Skeletons/rig.bskel";
+
+		// Stamped as a cook does: a container that records no bone names is one nothing can
+		// re-address, which is a case worth writing on purpose rather than inheriting.
+		mesh.skeletonSignature = skeletonSignature(skeleton);
+		mesh.skeletonBoneNames = skeletonBoneNames(skeleton);
 		return mesh;
 	}
 
@@ -109,7 +115,9 @@ namespace
 		fs::create_directories(root.path / "Derived/Meshes");
 		fs::create_directories(root.path / "Derived/Skeletons");
 		fs::create_directories(root.path / "Derived/Animations");
-		StoreAt(root.path).Save(MakeSkinnedMesh(glm::vec3(1.0f)), "Derived/Meshes/rig.bmesh");
+		StoreAt(root.path).Save(
+			MakeSkinnedMesh(glm::vec3(1.0f), skeleton),
+			"Derived/Meshes/rig.bmesh");
 		StoreAt(root.path).Save(skeleton, "Derived/Skeletons/rig.bskel");
 		SaveAt(MakeClips(skeleton), root.path / "Derived/Animations/rig.banim");
 	}
@@ -177,10 +185,52 @@ TEST_CASE("The rebake writes the box a load then finds", "[rebake]")
 	SECTION("a mesh re-authored since the bake makes its clip set stale again")
 	{
 		(void)AssetStore(root.path).RebakePosedBounds(false);
-		StoreAt(root.path).Save(MakeSkinnedMesh(glm::vec3(3.0f)), "Derived/Meshes/rig.bmesh");
+		StoreAt(root.path).Save(
+			MakeSkinnedMesh(glm::vec3(3.0f), MakeRig()),
+			"Derived/Meshes/rig.bmesh");
 
 		const RebakeBoundsReport preview = AssetStore(root.path).RebakePosedBounds(true);
 		CHECK(preview.Count(RebakedFile::Outcome::kRebaked) == 1);
+	}
+
+	// The buckets are keyed on each rig as it stands, so a clip set cooked before its rig grew
+	// matches none of them and was reported orphaned -- the retrofit refusing exactly the project
+	// it exists to bring current.
+	SECTION("a clip set whose rig has grown a bone is re-addressed, not called orphaned")
+	{
+		{
+			auto skeleton = StoreAt(root.path).Load<Skeleton>("Derived/Skeletons/rig.bskel");
+
+			auto grip       = Bone();
+			grip.bindPose   = { glm::vec3(0.0f, 0.5f, 0.0f),
+				                glm::quat(1.0f, 0.0f, 0.0f, 0.0f),
+				                glm::vec3(1.0f) };
+			grip.parent     = 0;
+			grip.nameOffset = skeleton.stringPool.add("grip");
+			skeleton.bones.push_back(grip);
+
+			const auto binds = bindPoseModelTransforms(skeleton);
+			for (size_t i = 0; i < skeleton.bones.size(); ++i)
+				skeleton.bones[i].inverseBind = glm::inverse(binds[i]);
+
+			StoreAt(root.path).Save(skeleton, "Derived/Skeletons/rig.bskel");
+
+			// The mesh is re-addressed with it; only the clip set is left behind, which is the
+			// case the whole feature was written for.
+			auto mesh = StoreAt(root.path).Load<BMesh>("Derived/Meshes/rig.bmesh");
+			REQUIRE(remapMesh(mesh, skeleton));
+			StoreAt(root.path).Save(mesh, "Derived/Meshes/rig.bmesh");
+		}
+
+		const RebakeBoundsReport report = AssetStore(root.path).RebakePosedBounds(false);
+		CHECK(report.Count(RebakedFile::Outcome::kOrphaned) == 0);
+		CHECK(report.Count(RebakedFile::Outcome::kRebaked) == 1);
+
+		// Written down, not just used: the clip set comes back addressed to the rig as it stands.
+		const auto grown = StoreAt(root.path).Load<Skeleton>("Derived/Skeletons/rig.bskel");
+		CHECK(animationsMatchSkeleton(
+			StoreAt(root.path).Load<AnimationSet>("Derived/Animations/rig.banim"),
+			grown));
 	}
 
 	SECTION("a clip set no mesh skins to is reported, not guessed at")

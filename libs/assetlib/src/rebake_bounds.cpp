@@ -155,7 +155,16 @@ namespace assetlib
 			{
 				AnimationSet animations = Load<AnimationSet>(animPath);
 
-				const auto paired = meshesBySkeleton.find(animations.skeletonSignature);
+				auto paired = meshesBySkeleton.find(animations.skeletonSignature);
+				if (paired == meshesBySkeleton.end())
+				{
+					// The buckets are keyed on each rig as it stands now, so a clip set cooked
+					// before its rig grew a bone misses every one of them. Re-addressed here as
+					// the acquire does, and written down by the save below.
+					if (remapAnimations(animations, skeletonAt(normalizePath(animations.skeleton))))
+						paired = meshesBySkeleton.find(animations.skeletonSignature);
+				}
+
 				if (paired == meshesBySkeleton.end())
 				{
 					entry.outcome = RebakedFile::Outcome::kOrphaned;

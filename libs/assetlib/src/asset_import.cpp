@@ -499,10 +499,18 @@ namespace assetlib
 		if (!fs::exists(root, ec))
 			return {};
 
-		const uint64_t wanted = skeletonSignature(skeleton);
+		const uint64_t                 wanted = skeletonSignature(skeleton);
+		const std::vector<std::string> names  = skeletonBoneNames(skeleton);
 
-		auto       matches = std::vector<fs::path>();
-		const auto walk    = fs::directory_options::skip_permission_denied;
+		auto matches = std::vector<fs::path>();
+
+		// A project rig that has *gained* bones since this one was exported still addresses every
+		// bone this one has, so it is the rig these clips attach to -- skeletonRemap is the same
+		// question the acquire asks. Only consulted where nothing matches outright, so a project
+		// holding both the rig as it was and the rig as it grew still binds to the exact one.
+		auto grown = std::vector<fs::path>();
+
+		const auto walk = fs::directory_options::skip_permission_denied;
 
 		for (const fs::directory_entry& entry : fs::recursive_directory_iterator(root, walk, ec))
 		{
@@ -511,10 +519,13 @@ namespace assetlib
 
 			try
 			{
-				if (skeletonSignature(
-						AssetCodec<Skeleton>::Deserialize(
-							core::file::read_file_bytes(entry.path().string()))) == wanted)
+				const Skeleton candidate = AssetCodec<Skeleton>::Deserialize(
+					core::file::read_file_bytes(entry.path().string()));
+
+				if (skeletonSignature(candidate) == wanted)
 					matches.push_back(entry.path());
+				else if (skeletonRemap(names, wanted, candidate))
+					grown.push_back(entry.path());
 			}
 			catch (const std::exception&)
 			{
@@ -522,6 +533,9 @@ namespace assetlib
 				// where a broken one gets reported.
 			}
 		}
+
+		if (matches.empty())
+			matches = std::move(grown);
 
 		if (matches.empty())
 			return {};
@@ -627,13 +641,20 @@ namespace assetlib
 		clips.skeleton     = KeyFor(rig);
 		clips.source       = source;
 
-		// Measured against the rig the clips will resolve at load, not the imported copy: the two
-		// share a signature but a re-authored bind pose deliberately does not change one.
+		// The rig the clips will resolve at load, not the imported copy: the two share a signature
+		// but a re-authored bind pose deliberately does not change one.
+		const Skeleton bound = Load<Skeleton>(clips.skeleton);
+
+		// That rig may have gained a bone since this file was exported -- which is what let it be
+		// found at all above. Re-addressed before anything is measured, so the container is cooked
+		// against the rig it names rather than re-addressed on every load.
+		(void)remapAnimations(clips, bound);
+
 		bakeBoundsForRig(
 			*this,
 			clips,
 			normalizePath(clips.skeleton),
-			Load<Skeleton>(clips.skeleton),
+			bound,
 			authoredFloors(GetFiles(), source));
 
 		Save(clips, banimKey);
