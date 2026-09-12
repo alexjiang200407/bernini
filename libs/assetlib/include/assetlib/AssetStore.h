@@ -247,15 +247,6 @@ namespace assetlib
 		[[nodiscard]] ImageData
 		ComposeSurfaceSlot(const BMaterial& material, std::string_view slotName) const;
 
-		/**
-		 * Whether every source `material`'s routed slots name can be read where the compositor
-		 * reads -- the host data root. The guard in front of a load-time compose: false on a
-		 * packed mount, whose sources resolve through the archive but cannot be composited (and
-		 * whose routed materials should have been stripped).
-		 */
-		[[nodiscard]] bool
-		CanComposeSurfaceSlots(const BMaterial& material) const;
-
 		/** @throws std::runtime_error / Cancelled as bakeSky. */
 		void
 		BakeSky(BSky& sky, const CancelToken& cancel = {}) const;
@@ -483,10 +474,19 @@ namespace assetlib
 		[[nodiscard]] bool
 		BakeIsStale(const BMaterial& material) const;
 
-		/** Whether `material` draws from its routes rather than its triplet. PBR only: a stale
-		 *  *surface* slot recomposites at load instead (ComposeSurfaceSlot). */
+		/** Whether `material` draws from its routes rather than its triplet. PBR only: a
+		 *  surface's per-slot answer is LooseSurfaceSlots. */
 		[[nodiscard]] bool
 		DrawsLoose(const BMaterial& material) const;
+
+		/**
+		 * Which of `material`'s surface slots draw from their routes rather than a baked map,
+		 * as a bit per position in `material.surface.textures`: set where the slot is routed
+		 * and its bake is stale or absent. The surface twin of DrawsLoose, decided against the
+		 * disk once at load, and zero for every whole-bound slot -- the shipped, stripped form.
+		 */
+		[[nodiscard]] uint32_t
+		LooseSurfaceSlots(const BMaterial& material) const;
 
 		/** Whether `slot`'s baked map no longer reflects its routed sources. False for a slot
 		 *  bound whole -- there is no bake to have gone stale. */

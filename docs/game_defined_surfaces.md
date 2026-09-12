@@ -193,10 +193,11 @@ write one.
   editor's offer on *data* slots only — a colour or a normal map is authored whole — and the bake
   behind it is `AssetStore::BakeMaterial`, the same compositor the PBR triplet uses, writing one
   linear BC7 map per routed slot under the shared `slot_` prefix. A routed slot whose bake is
-  stale or absent is composited in memory at load (`AssetStore::ComposeSurfaceSlot`), so the
-  material renders the same either way; the bake is the shipping form, and it is also what removes
-  the stand-in's cost — the in-memory map is uncompressed RGBA8, several times the baked BC7's
-  device memory, held for the material's lifetime.
+  stale or absent draws each channel from its own source instead: the routes ride the material's
+  record and the shader gathers them at draw (`AssetStore::LooseSurfaceSlots` decides per slot,
+  against the disk once at load), so the material renders the same either way and nothing is
+  composited outside the bake — which remains the shipping form, one BC7 map and a single fetch
+  where the loose form samples up to four sources.
 * **The layer keys are every model's** and sit beside `shadingModel`, not inside the parameters —
   `alphaMode`, `alphaCutoff`, `doubleSided`.
 * **Everything else is PBR's.** `baseColorFactor`, `routes`, `baked` and the rest belong to
