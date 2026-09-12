@@ -351,8 +351,24 @@ to keep in agreement beyond the one below.
   optimisation — the ramps are stamped in absolute time, so the same scrub position is the same pose
   every time, two durations compare against each other rather than against a memory, and the record
   still says at `prevTime` what the previous frame drew, so the motion vector stays exact mid-drag.
-  A stamp always rebuilds from the From clip with the clock parked before the window, so it is never
+  A stamp always rebuilds from the From end with the clock parked before the window, so it is never
   a fade interrupting a live one.
+
+  **Either end may be a space, and the combos are the rig's node table.** They list every clip in
+  clip order, then the open set's spaces, and carry the *node index* as each item's data rather than
+  relying on its row — a separator sits between the two groups, so past it a row is one ahead of the
+  node it names. Choosing a space reveals a parameter box beside that end, ranged to its authored
+  axis; beside a clip the box is hidden rather than disabled, which is the opposite of what the tier
+  note does, because a clip reads no parameter and there is nothing for the box to name. Unblended,
+  the cut is still one sample interval of what is *playing* — for a space, the lower of the two
+  clips it straddles at that parameter (`editor::NodeSampleRate`), since a space has no rate of its
+  own and an average of a pair is no clip's interval at all.
+
+  **The parameter here is standing in for a machine variable.** Unity's blend tree reads an Animator
+  parameter, Unreal's Blend Space player takes its X on a pin, Godot's `BlendSpace1D` is reached
+  through a parameter path — in all three a transition names a state and the value is whatever the
+  graph feeds. There is no graph here, so the box stands in for the variable exactly as the From and
+  To combos stand in for the edge, and it retires the same way.
 
   The panel's properties column is a header over a `QTabWidget` for this: the header holds what the
   clip set *is* -- its `.banim`, and now the `.bblend` whose spaces the rig carries -- and the tabs

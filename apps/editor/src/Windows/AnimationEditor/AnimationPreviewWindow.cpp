@@ -269,9 +269,15 @@ AnimationPreviewWindow::Clear()
 	RestoreConfiguredEnvironment();
 	SetTime(0.0f);
 
+	// Both tables, because both are node halves: a panel left listing the old rig's spaces would
+	// offer a fade onto a node nothing holds.
+	m_Clips.clear();
+	m_Spaces.clear();
+
 	Q_EMIT MeshChanged(QString());
 	Q_EMIT AnimationSourcesChanged(QStringList(), -1);
 	Q_EMIT ClipsChanged({});
+	Q_EMIT SpacesChanged({});
 }
 
 void
@@ -636,6 +642,8 @@ AnimationPreviewWindow::LoadMesh(
 
 		Q_EMIT MeshChanged(QString::fromStdString(rel));
 		Q_EMIT AnimationSourcesChanged(candidates, active < candidates.size() ? active : -1);
+		// Before SpacesChanged, and the order is read: a space is a node past the clips, so the
+		// panel cannot place one until it knows how many clips there are.
 		Q_EMIT ClipsChanged(editor::ToClipInfos(loaded.clips));
 		Q_EMIT BlendSetsChanged(
 			setNames,
@@ -808,17 +816,32 @@ void
 AnimationPreviewWindow::StampTransition(
 	const uint32_t fromNode,
 	const uint32_t toNode,
+	const float    fromParameter,
+	const float    toParameter,
 	const float    startSeconds,
 	const float    duration)
 {
 	if (m_Assets == nullptr || m_AnimatedDraws.empty() || !editor::RewritesPlayback(m_Source))
 		return;
 
-	m_Playback = game::CrossfadeTo(
-		bgl::SkinnedPlaybackDesc::FromClip(fromNode),
-		toNode,
-		startSeconds,
-		duration);
+	const auto nodes = static_cast<uint32_t>(m_Clips.size() + m_Spaces.size());
+	if (fromNode >= nodes || toNode >= nodes)
+	{
+		qWarning(
+			"AnimationPreview: a transition names node %u or %u, past the rig's %u",
+			fromNode,
+			toNode,
+			nodes);
+		return;
+	}
+
+	// FromClip seeds a slot's phase and rate but has no parameter, so a space at the outgoing end
+	// is written here; CrossfadeTo carries the incoming one.
+	auto from           = bgl::SkinnedPlaybackDesc::FromClip(fromNode);
+	from.slot[0].param0 = fromParameter;
+	from.slot[0].param1 = fromParameter;
+
+	m_Playback = game::CrossfadeTo(from, toNode, startSeconds, duration, 0.0f, 1.0f, toParameter);
 
 	GetRenderer()->Invoke([&] {
 		for (const AnimatedDraw& draw : m_AnimatedDraws)

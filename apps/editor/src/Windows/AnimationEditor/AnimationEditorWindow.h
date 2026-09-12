@@ -324,6 +324,35 @@ private:
 	void
 	UpdateTransitionControls();
 
+	/**
+	 * Fills both end combos from the rig's node table -- every clip in clip order, then the open
+	 * set's spaces -- carrying each node index as the item's data.
+	 *
+	 * The data and not the row is what a stamp reads: a separator sits between the two groups, so
+	 * past it a row is one ahead of the node it names.
+	 *
+	 * An end is restored by name, because an edit that re-acquires the rig comes back through here
+	 * and removing a space moves the node of every space after it. A From whose name is gone falls
+	 * back to the playing clip, a To to nothing -- which is the resting state: one clip playing and
+	 * no transition pending.
+	 */
+	void
+	RefreshTransitionEnds();
+
+	/**
+	 * Shows each end's parameter box when that end is a space, ranged to its authored axis.
+	 *
+	 * Hidden rather than disabled beside a clip, which is the opposite of what the tier note does:
+	 * a clip reads no parameter, so there is nothing for the box to name. The tier's controls are
+	 * refused something that exists, and a refusal has to be visible to be read.
+	 */
+	void
+	UpdateParameterBoxes();
+
+	// The space `node` names, or null when it names a clip or nothing.
+	[[nodiscard]] const game::BlendSpaceInfo*
+	SpaceForNode(int node) const;
+
 	AnimationPreviewWindow* m_Preview = nullptr;
 	QStackedWidget*         m_Stage   = nullptr;  // the drop prompt, or the viewport + transport
 
@@ -434,8 +463,10 @@ private:
 	// The duration is typed rather than dragged because the question it answers is whether 0.2 s
 	// beats 0.35 s, and two values have to be reachable exactly to be compared at all.
 	QWidget*         m_TransitionGroup = nullptr;
-	QComboBox*       m_FromClip        = nullptr;
-	QComboBox*       m_ToClip          = nullptr;
+	QComboBox*       m_FromEnd         = nullptr;
+	QComboBox*       m_ToEnd           = nullptr;
+	QDoubleSpinBox*  m_FromParameter   = nullptr;
+	QDoubleSpinBox*  m_ToParameter     = nullptr;
 	QDoubleSpinBox*  m_FadeSeconds     = nullptr;
 	QCheckBox*       m_BlendEnabled    = nullptr;
 	TransitionStrip* m_Strip           = nullptr;
