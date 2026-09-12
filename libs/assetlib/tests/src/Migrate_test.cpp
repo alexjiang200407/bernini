@@ -4,8 +4,13 @@
 #include <assetlib/container_info.h>
 #include <assetlib/image_io.h>
 #include <assetlib/migrate.h>
+#include <assetlib/skinning.h>
+#include <assetlib_structs/Animation.h>
 #include <assetlib_structs/BMaterial.h>
 #include <assetlib_structs/BMesh.h>
+#include <assetlib_structs/Node.h>
+#include <assetlib_structs/Skeleton.h>
+#include <core/glm.h>
 
 #include "CacheTamper.h"
 #include "ImportUnitGroup.h"
@@ -181,6 +186,63 @@ TEST_CASE("migrate regenerates a stale group on disk, once", "[migrate][regen]")
 		const auto report = AssetStore(project.root).Migrate(false);
 		CHECK(report.Count(MigratedFile::Outcome::kRewritten) == 0);
 		CHECK(report.Count(MigratedFile::Outcome::kFailed) == 3);
+	}
+}
+
+// Task 7's gate. AcquireSkinnedMesh re-addresses a grown rig's containers on every load; this is
+// what makes it stop having to -- the remap written down, so the pairing is signature-equal again.
+TEST_CASE("migrate bakes down the remap a grown rig would cost per load", "[migrate][remap]")
+{
+	const Project           project;
+	const test::SkinnedGltf source("bernini_migrate_remap_gltf");
+	test::ImportUnitGroup(project.root, source.PackGlb());
+
+	const auto bskelPath = project.root / "Derived/Skeletons/unit.bskel";
+	const auto meshPath  = project.root / "Derived/Meshes/unit.bmesh";
+	const auto banimPath = project.root / "Derived/Animations/unit.banim";
+
+	// A socket appended to the rig, exactly as the editor would: the mesh and clips on disk are
+	// left as they were cooked, so both now name a rig they no longer match.
+	{
+		auto skeleton = LoadAt<Skeleton>(bskelPath);
+
+		auto grip       = Bone();
+		grip.bindPose   = { glm::vec3(0.0f, 0.5f, 0.0f),
+			                glm::quat(1.0f, 0.0f, 0.0f, 0.0f),
+			                glm::vec3(1.0f) };
+		grip.parent     = 0;
+		grip.nameOffset = skeleton.stringPool.add("grip");
+		skeleton.bones.push_back(grip);
+
+		const auto binds = bindPoseModelTransforms(skeleton);
+		for (size_t i = 0; i < skeleton.bones.size(); ++i)
+			skeleton.bones[i].inverseBind = glm::inverse(binds[i]);
+
+		AssetStore(project.root).Save(skeleton, "Derived/Skeletons/unit.bskel");
+	}
+
+	const Skeleton grown = LoadAt<Skeleton>(bskelPath);
+	REQUIRE_FALSE(meshMatchesSkeleton(LoadAt<BMesh>(meshPath), grown));
+	REQUIRE_FALSE(animationsMatchSkeleton(LoadAt<AnimationSet>(banimPath), grown));
+
+	const auto first = AssetStore(project.root).Migrate(false);
+	CHECK(first.Count(MigratedFile::Outcome::kFailed) == 0);
+
+	SECTION("both halves come back addressed to the rig as it stands")
+	{
+		CHECK(meshMatchesSkeleton(LoadAt<BMesh>(meshPath), grown));
+		CHECK(animationsMatchSkeleton(LoadAt<AnimationSet>(banimPath), grown));
+
+		// Re-addressed, not re-cooked from nothing: the clips still hold what they held.
+		CHECK_FALSE(LoadAt<AnimationSet>(banimPath).clips.empty());
+		CHECK(LoadAt<AnimationSet>(banimPath).boneCount == grown.bones.size());
+	}
+
+	SECTION("and a second run finds nothing left to do")
+	{
+		const auto second = AssetStore(project.root).Migrate(false);
+		CHECK(second.Count(MigratedFile::Outcome::kRewritten) == 0);
+		CHECK(second.Count(MigratedFile::Outcome::kFailed) == 0);
 	}
 }
 
