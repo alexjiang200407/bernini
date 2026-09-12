@@ -6,6 +6,7 @@
 #include "util/follows_project.h"
 #include "util/held_open_assets.h"
 
+#include <cstddef>
 #include <cstdint>
 #include <filesystem>
 #include <functional>
@@ -19,6 +20,7 @@
 #include "Windows/MaterialEditor/MaterialPreviewWindow.h"
 #include "Windows/MaterialEditor/material_editor_ui.h"
 
+class SlotComposer;
 class TexturePreviewCache;
 
 class QComboBox;
@@ -33,6 +35,7 @@ class MaterialGraphView;
 namespace assetlib
 {
 	struct BMaterial;
+	struct ImageData;
 }
 
 namespace QtNodes
@@ -151,6 +154,19 @@ private:
 	void
 	CompileGraph(int graphIndex);
 
+	/**
+	 * Lands a finished slot compose: uploads it, fills the cache entry the compile left pending,
+	 * and recompiles so the preview rebinds through it. A delivery the board outran -- rewired,
+	 * rebuilt, or already landed -- is dropped; the board's current routes have a compose of
+	 * their own in flight.
+	 */
+	void
+	OnSlotComposed(
+		int                                  graphIndex,
+		size_t                               slot,
+		const QString&                       key,
+		std::shared_ptr<assetlib::ImageData> image);
+
 	/** Destroys every graph's preview material. The graphs must not be drawn after this. */
 	void
 	ReleasePreviewMaterials();
@@ -219,6 +235,8 @@ private:
 	MaterialPreviewWindow* m_Preview = nullptr;
 
 	TexturePreviewCache* m_TexturePreviews = nullptr;
+
+	SlotComposer* m_SlotComposer = nullptr;
 
 	std::shared_ptr<QtNodes::NodeDelegateModelRegistry> m_Registry;
 

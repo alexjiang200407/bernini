@@ -1,4 +1,7 @@
 #include "Windows/MaterialEditor/MaterialGraphModel.h"
+#include "Windows/MaterialEditor/MaterialGraphScene.h"  // IWYU pragma: keep -- Graph's unique_ptr deletes it
+#include "Windows/MaterialEditor/MaterialGraphSet.h"
+#include "Windows/MaterialEditor/graph_compiler.h"
 #include "Windows/MaterialEditor/material_graph.h"
 #include "Windows/MaterialEditor/nodes/MaterialSinkNode.h"
 #include "Windows/MaterialEditor/nodes/SurfaceOutputNode.h"
@@ -23,11 +26,13 @@
 #include <QSignalSpy>
 #include <QWidget>
 #include <QtNodes/NodeDelegateModelRegistry>
+#include <bgl/TextureAssetHandle.h>
 #include <bgl/glm.h>
 #include <filesystem>
 #include <memory>
 #include <qjsonobject.h>
 #include <qobject.h>
+#include <qstring.h>
 #include <qstringliteral.h>
 
 namespace
@@ -567,4 +572,63 @@ TEST_CASE("The node carries no layer widgets", "[materialgraph][surfacesink]")
 	REQUIRE(widget != nullptr);
 	CHECK(widget->findChild<QComboBox*>() == nullptr);
 	CHECK(widget->findChild<QCheckBox*>() == nullptr);
+}
+
+TEST_CASE(
+	"A delivered compose fills only the slot that still routes it",
+	"[materialgraph][surfacesink]")
+{
+	// The async half of ADR-8's editor side: the compose the compile queued lands later, and by
+	// then the board may have moved on. PendingComposedSlot is the rule that decides -- the
+	// window fills the entry it returns and drops the image on null.
+	auto graph  = MaterialGraphSet::Graph();
+	graph.model = std::make_unique<MaterialGraphModel>(Registry());
+
+	const NodeId       ao     = graph.model->addNode(QStringLiteral("Texture"));
+	const NodeId       mr     = graph.model->addNode(QStringLiteral("Texture"));
+	const NodeId       sinkId = graph.model->addNode(QStringLiteral("SurfaceOutput:Rim"));
+	SurfaceOutputNode* sink   = Sink(*graph.model);
+	REQUIRE(sink != nullptr);
+
+	if (auto* node = graph.model->delegateModel<TextureNode>(ao))
+		node->SetTexturePath(QStringLiteral("C:/proj/Data/Derived/SourceTextures/head/ao.ktx2"));
+	if (auto* node = graph.model->delegateModel<TextureNode>(mr))
+		node->SetTexturePath(QStringLiteral("C:/proj/Data/Derived/SourceTextures/head/mr.ktx2"));
+
+	constexpr auto c_TextureR = QtNodes::PortIndex(TextureNode::c_BundleCount);
+	const auto     ormR       = QtNodes::PortIndex(sink->ChannelPortFor(2, 0));
+	graph.model->addConnection(ConnectionId{ ao, c_TextureR, sinkId, ormR });
+	REQUIRE(sink->SlotIsRouted(2));
+
+	// What EnsureComposedSlots leaves behind when it queues the compose.
+	const QString key = editor::SlotRouteKey(*sink, 2);
+	graph.composed.push_back({ 2, { key, {} } });
+
+	SECTION("the pending entry under the live key is the one to fill")
+	{
+		CHECK(editor::PendingComposedSlot(graph, 2, key) == &graph.composed.front().second);
+	}
+
+	SECTION("a rewire outruns the delivery, and the stale key finds nothing")
+	{
+		graph.model->deleteConnection(ConnectionId{ ao, c_TextureR, sinkId, ormR });
+		graph.model->addConnection(ConnectionId{ mr, c_TextureR, sinkId, ormR });
+		REQUIRE(editor::SlotRouteKey(*sink, 2) != key);
+
+		CHECK(editor::PendingComposedSlot(graph, 2, key) == nullptr);
+	}
+
+	SECTION("a slot already delivered is not filled twice")
+	{
+		graph.composed.front().second.handle = bgl::TextureAssetHandle{ { 0, 1 }, 0 };
+		CHECK(editor::PendingComposedSlot(graph, 2, key) == nullptr);
+	}
+
+	SECTION("a slot no longer routed drops its delivery")
+	{
+		graph.model->deleteConnection(ConnectionId{ ao, c_TextureR, sinkId, ormR });
+		REQUIRE_FALSE(sink->SlotIsRouted(2));
+
+		CHECK(editor::PendingComposedSlot(graph, 2, key) == nullptr);
+	}
 }
