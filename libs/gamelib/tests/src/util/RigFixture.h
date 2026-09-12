@@ -1,6 +1,7 @@
 #pragma once
 #include "StoreAt.h"
 
+#include <array>
 #include <assetlib/AssetStore.h>
 #include <assetlib/avatar.h>
 #include <assetlib/blend.h>
@@ -11,6 +12,7 @@
 #include <assetlib_structs/BMesh.h>
 #include <assetlib_structs/ImageData.h>
 #include <assetlib_structs/Skeleton.h>
+#include <tuple>
 
 // A rig on disk, as an importer would leave one: the .bmesh with its skin binding, the .bskel it
 // names, a .banim cooked against that skeleton, and the material and texture the submesh needs.
@@ -96,12 +98,13 @@ namespace game::test
 		animations.skeletonSignature = assetlib::skeletonSignature(skeleton);
 		animations.boneCount         = 1;
 
-		auto slide        = assetlib::AnimationClip();
-		slide.nameOffset  = animations.stringPool.add("slide");
-		slide.firstSample = 0;
-		slide.frameCount  = 2;
-		slide.sampleRate  = 30.0f;
-		slide.duration    = 1.0f / 30.0f;
+		auto slide            = assetlib::AnimationClip();
+		slide.nameOffset      = animations.stringPool.add("slide");
+		slide.firstSample     = 0;
+		slide.frameCount      = 2;
+		slide.sampleRate      = 30.0f;
+		slide.duration        = 1.0f / 30.0f;
+		slide.locomotionSpeed = 2.5f;
 		animations.clips.push_back(slide);
 
 		for (uint32_t frame = 0; frame < 2; ++frame)
@@ -256,18 +259,21 @@ namespace game::test
 		animations.skeletonSignature = assetlib::skeletonSignature(skeleton);
 		animations.boneCount         = 1;
 
-		const std::array<std::pair<const char*, uint32_t>, 2> c_Clips = { { { "walk", 2 },
-			                                                                { "run", 3 } } };
+		// Speeds as well as lengths, since a locomotion space's thresholds are taken from them.
+		const std::array<std::tuple<const char*, uint32_t, float>, 2> c_Clips = {
+			{ { "walk", 2, 1.4f }, { "run", 3, 4.2f } }
+		};
 
-		for (const auto& [name, frameCount] : c_Clips)
+		for (const auto& [name, frameCount, speed] : c_Clips)
 		{
-			auto clip        = assetlib::AnimationClip();
-			clip.nameOffset  = animations.stringPool.add(name);
-			clip.firstSample = static_cast<uint32_t>(animations.samples.size());
-			clip.frameCount  = frameCount;
-			clip.sampleRate  = 30.0f;
-			clip.duration    = static_cast<float>(frameCount - 1) / 30.0f;
-			clip.loop        = 1;
+			auto clip            = assetlib::AnimationClip();
+			clip.nameOffset      = animations.stringPool.add(name);
+			clip.firstSample     = static_cast<uint32_t>(animations.samples.size());
+			clip.frameCount      = frameCount;
+			clip.sampleRate      = 30.0f;
+			clip.duration        = static_cast<float>(frameCount - 1) / 30.0f;
+			clip.loop            = 1;
+			clip.locomotionSpeed = speed;
 			animations.clips.push_back(clip);
 
 			for (uint32_t frame = 0; frame < frameCount; ++frame)

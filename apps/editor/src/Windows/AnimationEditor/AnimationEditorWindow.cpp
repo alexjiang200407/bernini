@@ -73,6 +73,14 @@ namespace
 	// one hundredth past its neighbour is neither.
 	constexpr float c_ParameterGap = 1.0f;
 
+	// The cursor's resolution. A Scrubber is integer-valued on a closed range, so this is how finely
+	// the bar can address a run rather than anything about the run itself.
+	constexpr int c_CursorTicks = 1000;
+
+	// How long the pose takes to reach a parameter the cursor jumped to. Short enough to read as
+	// immediate, long enough that a click across the bar is not a pop.
+	constexpr float c_CursorGlide = 0.08f;
+
 	// Where a previewed fade is stamped, and what is shown either side of it. The clock has to be
 	// able to sit before t0, so it is not zero; the rest is how much run-up and settle reads.
 	constexpr float  c_TransitionStart         = 10.0f;
@@ -171,7 +179,13 @@ AnimationEditorWindow::AnimationEditorWindow(QWidget* parent, AnimationEditorWin
 			m_SyncingUi = true;
 			m_TierSelector->setCurrentIndex(TierIndexFor(source));
 			m_SyncingUi = false;
+
+			// Both tabs hold controls the tier can refuse, and both have to hear about it: a cursor
+			// left enabled over a tier that cannot show a space is one whose weights describe a
+			// pose nobody is drawing.
 			UpdateTransitionControls();
+			SyncCursor();
+			ShowSelectedSpace();
 		});
 
 	connect(
@@ -389,9 +403,14 @@ AnimationEditorWindow::BuildPropertiesColumn()
 		// Only the Blend tab stamps anything into the record; Clip and Space both leave the clip
 		// the list selected playing, which is what clearing restores.
 		if (m_Surfaces->currentWidget() == m_TransitionGroup)
+		{
 			StampTransition();
+		}
 		else
+		{
 			ClearTransition();
+			ShowSelectedSpace();
+		}
 	});
 	layout->addWidget(m_Surfaces, /*stretch*/ 1);
 
@@ -409,6 +428,15 @@ AnimationEditorWindow::BuildPropertiesColumn()
 	scrollBox->setFrameShape(QFrame::NoFrame);
 	scrollBox->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
 	scrollBox->setMinimumWidth(column->sizeHint().width());
+
+	// The viewport gets a surface of its own, and that is not cosmetic: a scroll is a blit of the
+	// top-level's backing store, and the preview beside this one is `WA_PaintOnScreen` -- a native
+	// view Qt does not composite through that store. The bookkeeping then disagrees with what is
+	// actually on screen, and the blit lands outside this widget entirely: scrolling here smeared a
+	// copy of the *main tab bar*, which is not even inside the scroll area. A native viewport cannot
+	// blit past itself. See docs/known_issues.md.
+	scrollBox->viewport()->setAttribute(Qt::WA_NativeWindow);
+
 	return scrollBox;
 }
 
@@ -513,6 +541,32 @@ AnimationEditorWindow::BuildSpaceTab()
 	thresholdRow->addWidget(new QLabel(QStringLiteral("Threshold"), m_SpaceGroup));
 	thresholdRow->addWidget(m_SampleParameter, /*stretch*/ 1);
 	layout->addLayout(thresholdRow);
+
+	m_FromSpeed = new QPushButton(QStringLiteral("Thresholds from speed"), m_SpaceGroup);
+	m_FromSpeed->setToolTip(
+		QStringLiteral("Take every threshold from the speed its clip was animated at."));
+	connect(m_FromSpeed, &QPushButton::clicked, this, &AnimationEditorWindow::ThresholdsFromSpeed);
+	layout->addWidget(m_FromSpeed);
+
+	auto* cursorLine = new QFrame(m_SpaceGroup);
+	cursorLine->setFrameShape(QFrame::HLine);
+	cursorLine->setFrameShadow(QFrame::Sunken);
+	layout->addWidget(cursorLine);
+
+	m_CursorLabel = new QLabel(m_SpaceGroup);
+	layout->addWidget(m_CursorLabel);
+
+	m_SpaceCursor = new Scrubber(m_SpaceGroup);
+	m_SpaceCursor->SetRange(0, c_CursorTicks);
+	connect(m_SpaceCursor, &Scrubber::ValueChanged, this, [this](const int tick) {
+		if (!m_SyncingUi)
+			MoveCursor(tick);
+	});
+	layout->addWidget(m_SpaceCursor);
+
+	m_SpaceWeights = new QLabel(m_SpaceGroup);
+	m_SpaceWeights->setWordWrap(true);
+	layout->addWidget(m_SpaceWeights);
 
 	m_SpaceNote = new QLabel(m_SpaceGroup);
 	m_SpaceNote->setWordWrap(true);
@@ -905,6 +959,8 @@ AnimationEditorWindow::SelectSpace(const int index)
 	                         .arg(space.ParameterMax(), 0, 'f', c_ParameterDecimals));
 
 	UpdateSpaceControls();
+	SyncCursor();
+	ShowSelectedSpace();
 }
 
 void
@@ -1255,6 +1311,10 @@ AnimationEditorWindow::RetargetSample(const float parameter)
 			qWarning("AnimationEditor: a threshold did not go live: %s", qUtf8Printable(refusal));
 	}
 
+	// The run's extent may have moved with it, so the cursor is re-ranged and not merely re-read --
+	// and the weights beneath it are a different pair of clips once a neighbour crosses it.
+	SyncCursor();
+
 	// The list carries the value, so it is redrawn as the threshold moves rather than at the save.
 	m_SyncingUi = true;
 	if (QListWidgetItem* item = m_SampleList->item(row); item != nullptr)
@@ -1264,6 +1324,160 @@ AnimationEditorWindow::RetargetSample(const float parameter)
 				.arg(held, 0, 'f', c_ParameterDecimals));
 	m_SampleParameter->setValue(static_cast<double>(held));
 	m_SyncingUi = false;
+}
+
+void
+AnimationEditorWindow::ShowSelectedSpace()
+{
+	const int index = m_SpaceSelector->currentIndex();
+	if (m_Surfaces->currentWidget() != m_SpaceGroup || index < 0 ||
+	    static_cast<size_t>(index) >= m_Spaces.size())
+	{
+		// Off the Space tab the clip list is what is watched again, which is what leaving Blend
+		// already does.
+		if (m_Surfaces->currentWidget() != m_SpaceGroup && m_ClipList->currentRow() >= 0)
+			m_Preview->SetActiveClip(
+				static_cast<uint32_t>(m_ClipList->currentRow()),
+				m_Transport.GetTimeSeconds());
+		return;
+	}
+
+	m_Preview->ShowSpace(
+		static_cast<uint32_t>(index),
+		m_SpaceParameter,
+		m_Transport.GetTimeSeconds());
+
+	ShowCursorWeights();
+}
+
+void
+AnimationEditorWindow::MoveCursor(const int tick)
+{
+	const int index = m_SpaceSelector->currentIndex();
+	if (index < 0 || static_cast<size_t>(index) >= m_Spaces.size())
+		return;
+
+	const game::BlendSpaceInfo& space = m_Spaces[static_cast<size_t>(index)];
+	m_SpaceParameter =
+		editor::ParameterForTick(space.ParameterMin(), space.ParameterMax(), c_CursorTicks, tick);
+
+	// Retargeted rather than restamped: the slot's phase is rebased onto now first, so the pose
+	// keeps the cycle it was already walking instead of jumping on the frame of the write.
+	m_Preview->RetargetSpace(
+		static_cast<uint32_t>(index),
+		m_SpaceParameter,
+		m_Transport.GetTimeSeconds(),
+		c_CursorGlide);
+
+	ShowCursorWeights();
+}
+
+void
+AnimationEditorWindow::SyncCursor()
+{
+	const int  index      = m_SpaceSelector->currentIndex();
+	const bool selected   = index >= 0 && static_cast<size_t>(index) < m_Spaces.size();
+	const bool rewritable = editor::RewritesPlayback(m_Preview->GetPoseSource());
+	const bool shown      = selected && rewritable;
+
+	m_SpaceCursor->setEnabled(shown);
+	m_FromSpeed->setEnabled(selected);
+
+	// Disabled with the reason rather than hidden, exactly as the Blend tab's controls are: this is
+	// a constraint of the tier, and a control that vanishes on a tier switch reads as a bug. The
+	// thresholds stay editable either way -- authoring a space does not need one on screen.
+	m_SpaceWeights->setText(
+		selected && !rewritable ?
+			QStringLiteral(
+				"The shared bone table plays one clip per instance and holds no slots, "
+				"so a blend space cannot be shown on it. Switch to the per-instance "
+				"source to watch one.") :
+			QString());
+
+	if (!shown)
+	{
+		m_CursorLabel->clear();
+		return;
+	}
+
+	const game::BlendSpaceInfo& space = m_Spaces[static_cast<size_t>(index)];
+
+	// Held inside the run the cursor now addresses: a space selected after another one leaves the
+	// parameter somewhere its range may not reach.
+	m_SpaceParameter = std::clamp(m_SpaceParameter, space.ParameterMin(), space.ParameterMax());
+
+	m_SyncingUi = true;
+	m_SpaceCursor->SetValue(
+		editor::TickForParameter(
+			space.ParameterMin(),
+			space.ParameterMax(),
+			c_CursorTicks,
+			m_SpaceParameter));
+	m_SyncingUi = false;
+
+	ShowCursorWeights();
+}
+
+void
+AnimationEditorWindow::ShowCursorWeights()
+{
+	const int index = m_SpaceSelector->currentIndex();
+	if (index < 0 || static_cast<size_t>(index) >= m_Spaces.size() ||
+	    !editor::RewritesPlayback(m_Preview->GetPoseSource()))
+	{
+		// The tier's refusal is already in this label and is the truer thing to say: weights under
+		// a cursor mean nothing while no pose is being blended from them.
+		return;
+	}
+
+	const game::BlendSpaceInfo&    space = m_Spaces[static_cast<size_t>(index)];
+	const game::BlendSpaceStraddle at    = space.StraddleAt(m_SpaceParameter);
+
+	m_CursorLabel->setText(
+		QStringLiteral("Parameter %1").arg(m_SpaceParameter, 0, 'f', c_ParameterDecimals));
+
+	const auto clipName = [this, &space](const size_t sample) {
+		const uint32_t clip = space.samples[sample].clipIndex;
+		return clip < static_cast<uint32_t>(m_ClipList->count()) ?
+		           m_ClipList->item(static_cast<int>(clip))->text() :
+		           QStringLiteral("<clip %1>").arg(clip);
+	};
+
+	// Both ends name the same sample outside the authored range, which is that clip playing alone.
+	if (at.lower == at.upper)
+	{
+		m_SpaceWeights->setText(QStringLiteral("%1  100%").arg(clipName(at.lower)));
+		return;
+	}
+
+	m_SpaceWeights->setText(QStringLiteral("%1  %2%     %3  %4%")
+	                            .arg(clipName(at.lower))
+	                            .arg((1.0f - at.weight) * 100.0f, 0, 'f', 0)
+	                            .arg(clipName(at.upper))
+	                            .arg(at.weight * 100.0f, 0, 'f', 0));
+}
+
+void
+AnimationEditorWindow::ThresholdsFromSpeed()
+{
+	assetlib::BlendSpace* space = EditedSpace(m_SpaceSelector->currentIndex());
+	if (space == nullptr)
+		return;
+
+	editor::SpeedThresholds taken =
+		editor::ThresholdsFromSpeed(space->samples, m_Transport.GetClips());
+
+	if (!taken.refusal.empty())
+	{
+		QMessageBox::warning(
+			window(),
+			QStringLiteral("Thresholds from speed"),
+			QString::fromStdString(taken.refusal));
+		return;
+	}
+
+	space->samples = std::move(taken.run);
+	CommitBlendSet();
 }
 
 void

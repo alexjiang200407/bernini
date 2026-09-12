@@ -4,6 +4,9 @@
 #include <catch2/catch_approx.hpp>
 #include <catch2/catch_message.hpp>
 #include <catch2/catch_test_macros.hpp>
+#include <catch2/matchers/catch_matchers.hpp>
+#include <catch2/matchers/catch_matchers_string.hpp>
+#include <cstddef>
 #include <gamelib/BlendSpaceInfo.h>
 #include <limits>
 #include <string>
@@ -384,5 +387,90 @@ TEST_CASE("A clip that does not loop cannot be a sample", "[animation][blend]")
 	{
 		clip.loop = true;
 		CHECK(editor::ClipRefusalReason(clip).empty());
+	}
+}
+
+namespace
+{
+	editor::ClipInfo
+	Clip(const std::string& name, const float speed)
+	{
+		auto clip            = editor::ClipInfo();
+		clip.name            = name;
+		clip.loop            = true;
+		clip.locomotionSpeed = speed;
+		return clip;
+	}
+}
+
+TEST_CASE("Thresholds can be taken from the speed each clip was animated at", "[animation][blend]")
+{
+	const std::vector<editor::ClipInfo> clips = { Clip("walk", 1.4f),
+		                                          Clip("run", 4.2f),
+		                                          Clip("jog", 2.8f) };
+
+	SECTION("each threshold becomes its clip's measured speed")
+	{
+		const std::vector<assetlib::BlendSpaceSample> run = { { "walk", 0.0f }, { "run", 1.0f } };
+
+		const editor::SpeedThresholds taken = editor::ThresholdsFromSpeed(run, clips);
+
+		REQUIRE(taken.refusal.empty());
+		REQUIRE(taken.run.size() == 2);
+		CHECK(taken.run[0].clip == "walk");
+		CHECK(taken.run[0].parameter == Catch::Approx(1.4f));
+		CHECK(taken.run[1].clip == "run");
+		CHECK(taken.run[1].parameter == Catch::Approx(4.2f));
+	}
+
+	SECTION("the run follows the measurement, not the order it was authored in")
+	{
+		// Authored fastest-first. Taking speeds without re-sorting would leave a run that does not
+		// strictly increase, which is the one thing a blend space cannot be.
+		const std::vector<assetlib::BlendSpaceSample> run = { { "run", 0.0f },
+			                                                  { "jog", 1.0f },
+			                                                  { "walk", 2.0f } };
+
+		const editor::SpeedThresholds taken = editor::ThresholdsFromSpeed(run, clips);
+
+		REQUIRE(taken.refusal.empty());
+		REQUIRE(taken.run.size() == 3);
+		CHECK(taken.run[0].clip == "walk");
+		CHECK(taken.run[1].clip == "jog");
+		CHECK(taken.run[2].clip == "run");
+
+		for (size_t i = 1; i < taken.run.size(); ++i)
+			CHECK(taken.run[i].parameter > taken.run[i - 1].parameter);
+	}
+
+	SECTION("two clips animated at one speed have no run between them")
+	{
+		const std::vector<editor::ClipInfo> tied = { Clip("walk", 2.0f), Clip("stroll", 2.0f) };
+		const std::vector<assetlib::BlendSpaceSample> run = { { "walk", 0.0f },
+			                                                  { "stroll", 1.0f } };
+
+		const editor::SpeedThresholds taken = editor::ThresholdsFromSpeed(run, tied);
+
+		CHECK(taken.run.empty());
+		CHECK_THAT(taken.refusal, Catch::Matchers::ContainsSubstring("same speed"));
+	}
+
+	SECTION("clips that do not travel are the same refusal, since both measure zero")
+	{
+		const std::vector<editor::ClipInfo> still = { Clip("idle", 0.0f), Clip("look", 0.0f) };
+		const std::vector<assetlib::BlendSpaceSample> run = { { "idle", 0.0f }, { "look", 1.0f } };
+
+		CHECK(editor::ThresholdsFromSpeed(run, still).run.empty());
+	}
+
+	SECTION("a sample naming a clip the set does not hold is refused, not skipped")
+	{
+		const std::vector<assetlib::BlendSpaceSample> run = { { "walk", 0.0f },
+			                                                  { "canter", 1.0f } };
+
+		const editor::SpeedThresholds taken = editor::ThresholdsFromSpeed(run, clips);
+
+		CHECK(taken.run.empty());
+		CHECK_THAT(taken.refusal, Catch::Matchers::ContainsSubstring("canter"));
 	}
 }

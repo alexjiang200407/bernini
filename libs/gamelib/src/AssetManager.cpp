@@ -703,7 +703,8 @@ namespace game
 					clip.frameCount,
 					clip.sampleRate,
 					clip.duration,
-					clip.loop != 0);
+					clip.loop != 0,
+					clip.locomotionSpeed);
 			}
 
 			// The box the geom culls by. Not the bind pose's: a clip carrying root motion walks the

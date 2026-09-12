@@ -18,6 +18,10 @@ namespace editor
 		float       sampleRate = 30.0f;
 		float       duration   = 0.0f;
 		bool        loop       = false;
+
+		// Units per second over the ground, measured at cook; zero for a clip that does not travel.
+		// What a locomotion space's thresholds are taken from.
+		float locomotionSpeed = 0.0f;
 	};
 
 	/**
