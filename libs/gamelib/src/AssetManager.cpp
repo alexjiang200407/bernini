@@ -244,7 +244,7 @@ namespace game
 
 				// A routed slot samples its composited map, never a source: the whole binding and
 				// the routes are exclusive, and the routes win where a document carries both.
-				paths[i] = assetlib::slotIsRouted(slot) ? slot.baked : slot.texture;
+				paths[i] = assetlib::slotIsRouted(slot) ? slot.bakedPath : slot.texturePath;
 			}
 			return paths;
 		}
@@ -489,7 +489,7 @@ namespace game
 				ZoneScopedN("gamelib compose surface slot");
 				ZoneTextF("%s", slot.name.c_str());
 
-				composed.emplace(slot.baked, m_Store.ComposeSurfaceSlot(material, slot.name));
+				composed.emplace(slot.bakedPath, m_Store.ComposeSurfaceSlot(material, slot.name));
 			}
 		}
 

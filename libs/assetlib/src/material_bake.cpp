@@ -563,7 +563,7 @@ namespace assetlib
 				// A slot that stopped routing loses its map with it. The PBR triplet stays after a
 				// de-route because the material still draws it; an unrouted slot samples its whole
 				// binding instead, so a kept map would be dead yet marked live by texture pruning.
-				slot.baked.clear();
+				slot.bakedPath.clear();
 				slot.bakeToken = 0;
 				continue;
 			}
@@ -589,7 +589,7 @@ namespace assetlib
 				writeKTX2(image, target, false, c_SlotCompression);
 			}
 
-			slot.baked     = (desc.textureDir / name).generic_string();
+			slot.bakedPath = (desc.textureDir / name).generic_string();
 			slot.bakeToken = c_TextureBakeToken;
 		}
 	}
@@ -655,7 +655,7 @@ namespace assetlib
 		{
 			for (const SurfaceTextureBinding& slot : material.surface.textures)
 				core::throw_runtime_error_if(
-					slotIsRouted(slot) && slot.baked.empty(),
+					slotIsRouted(slot) && slot.bakedPath.empty(),
 					"assetlib::stripAuthoringData: slot '{}' has never been baked; stripping its "
 					"routes would leave nothing to render",
 					slot.name);

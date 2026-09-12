@@ -169,7 +169,7 @@ namespace assetlib
 	/**
 	 * One texture a surface material binds, under the name the surface declared it as.
 	 *
-	 * A slot is either bound whole (`texture`) or composited from channel routes -- the editor
+	 * A slot is either bound whole (`texturePath`) or composited from channel routes -- the editor
 	 * refuses wiring both, and the routes win where a document carries both anyway. Which slots
 	 * *may* route is the declaring surface's business (the editor offers routes on data slots
 	 * only); this side stores and bakes whatever the document says, exactly as it stores a value
@@ -178,15 +178,16 @@ namespace assetlib
 	struct SurfaceTextureBinding
 	{
 		std::string name;
-		std::string texture;  // path to the texture file (empty when unbound)
+		std::string texturePath;  // data-root-relative; empty when unbound
 
 		std::array<ChannelRoute, c_SurfaceSlotChannelCount> routes{};
 		std::array<SourceStamp, c_SurfaceSlotChannelCount>  routeStamps{};
 
 		// The composited map, data-root-relative; empty until the slot is baked.
-		std::string baked{};
+		std::string bakedPath{};
 
-		// assetlib::c_TextureBakeToken as it stood when `baked` was written; zero before a bake.
+		// assetlib::c_TextureBakeToken as it stood when `bakedPath` was written; zero before a
+		// bake.
 		uint64_t bakeToken = 0;
 	};
 

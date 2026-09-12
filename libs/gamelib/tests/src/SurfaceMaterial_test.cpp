@@ -358,7 +358,7 @@ TEST_CASE("A routed slot composites at load when its bake is absent", "[gamelib]
 	auto store    = assetlib::AssetStore(root.path);
 	auto resolved = material;
 	store.ResolveMaterialBake(resolved);
-	const std::string& baked = resolved.surface.textures[0].baked;
+	const std::string& baked = resolved.surface.textures[0].bakedPath;
 	REQUIRE_FALSE(baked.empty());
 	REQUIRE(store.BakeIsStale(material));
 

@@ -276,8 +276,8 @@ namespace assetlib
 				auto& slot = out.emplace_back(name);
 
 				const doc::Taker taker(value, c_What);
-				taker.Take("texture", slot.texture);
-				taker.Take("baked", slot.baked);
+				taker.Take("texture", slot.texturePath);
+				taker.Take("baked", slot.bakedPath);
 
 				if (const auto token = value.find("token"); token != value.end())
 				{
@@ -440,7 +440,7 @@ namespace assetlib
 			for (const SurfaceTextureBinding& slot : surface.textures)
 			{
 				const bool routedState =
-					slot.bakeToken != 0 || !slot.baked.empty() || slotIsRouted(slot) ||
+					slot.bakeToken != 0 || !slot.bakedPath.empty() || slotIsRouted(slot) ||
 					std::ranges::any_of(slot.routeStamps, [](const SourceStamp& stamp) {
 						return stamp != SourceStamp{};
 					});
@@ -449,8 +449,8 @@ namespace assetlib
 				if (!routedState && (preserved == textures.end() || !preserved->is_object()))
 				{
 					// The whole binding, in the shorthand every pre-ADR-7 document used.
-					if (!slot.texture.empty())
-						textures[slot.name] = slot.texture;
+					if (!slot.texturePath.empty())
+						textures[slot.name] = slot.texturePath;
 					else
 						textures.erase(slot.name);
 					continue;
@@ -461,8 +461,8 @@ namespace assetlib
 				auto& entry = textures[slot.name];
 				if (!entry.is_object())
 					entry = nlohmann::json::object();
-				setOrErase(entry, "texture", slot.texture);
-				setOrErase(entry, "baked", slot.baked);
+				setOrErase(entry, "texture", slot.texturePath);
+				setOrErase(entry, "baked", slot.bakedPath);
 				if (slot.bakeToken != 0)
 					entry["token"] = slot.bakeToken;
 				else
@@ -792,7 +792,7 @@ namespace assetlib
 			return true;
 
 		// Routed and every source matches -- but the map has to be there to sample.
-		return slot.baked.empty() || stampOf(fileSystem, slot.baked).size == 0;
+		return slot.bakedPath.empty() || stampOf(fileSystem, slot.bakedPath).size == 0;
 	}
 
 	bool

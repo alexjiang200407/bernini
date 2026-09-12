@@ -55,8 +55,8 @@ namespace assetlib
 			// samples, and a route is what the bake reads (ADR-7).
 			for (SurfaceTextureBinding& texture : material.surface.textures)
 			{
-				mapOne(texture.texture, RefKind::kBakedMap, map, seen);
-				mapOne(texture.baked, RefKind::kBakedMap, map, seen);
+				mapOne(texture.texturePath, RefKind::kBakedMap, map, seen);
+				mapOne(texture.bakedPath, RefKind::kBakedMap, map, seen);
 				for (ChannelRoute& route : texture.routes)
 					mapOne(route.texture, RefKind::kChannelRoute, map, seen);
 			}

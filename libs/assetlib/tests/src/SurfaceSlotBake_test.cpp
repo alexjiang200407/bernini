@@ -64,9 +64,9 @@ namespace
 		mat.shadingModel = ShadingModel::kPbrSurface;
 		mat.surface.name = "Rim";
 
-		auto& baseColor   = mat.surface.textures.emplace_back();
-		baseColor.name    = "baseColor";
-		baseColor.texture = "albedo.ktx2";
+		auto& baseColor       = mat.surface.textures.emplace_back();
+		baseColor.name        = "baseColor";
+		baseColor.texturePath = "albedo.ktx2";
 
 		auto& orm     = mat.surface.textures.emplace_back();
 		orm.name      = "orm";
@@ -96,17 +96,17 @@ TEST_CASE(
 	REQUIRE_NOTHROW(StoreAt(dir.path).BakeMaterial(mat));
 
 	const SurfaceTextureBinding& baseColor = mat.surface.textures[0];
-	CHECK(baseColor.texture == "albedo.ktx2");
-	CHECK(baseColor.baked.empty());
+	CHECK(baseColor.texturePath == "albedo.ktx2");
+	CHECK(baseColor.bakedPath.empty());
 	CHECK(baseColor.bakeToken == 0);
 
 	const SurfaceTextureBinding& orm = mat.surface.textures[1];
-	REQUIRE_FALSE(orm.baked.empty());
-	CHECK(orm.baked.find("slot_") != std::string::npos);
+	REQUIRE_FALSE(orm.bakedPath.empty());
+	CHECK(orm.bakedPath.find("slot_") != std::string::npos);
 	CHECK(orm.bakeToken != 0);
 
 	// Linear data, block-compressed: the format ADR-7 fixes for a slot's map.
-	CHECK(loadKTX2(dir.path / orm.baked).vkFormat == VkFormat::BC7_UNORM_BLOCK);
+	CHECK(loadKTX2(dir.path / orm.bakedPath).vkFormat == VkFormat::BC7_UNORM_BLOCK);
 
 	SECTION("and the bake is not stale, however many times it is asked")
 	{
@@ -114,7 +114,7 @@ TEST_CASE(
 
 		BMaterial again = mat;
 		REQUIRE_NOTHROW(StoreAt(dir.path).BakeMaterial(again));
-		CHECK(again.surface.textures[1].baked == orm.baked);
+		CHECK(again.surface.textures[1].bakedPath == orm.bakedPath);
 	}
 
 	SECTION("an edited source reports the bake stale, and rebaking renames the map")
@@ -125,7 +125,7 @@ TEST_CASE(
 
 		BMaterial again = mat;
 		REQUIRE_NOTHROW(StoreAt(dir.path).BakeMaterial(again));
-		CHECK(again.surface.textures[1].baked != orm.baked);
+		CHECK(again.surface.textures[1].bakedPath != orm.bakedPath);
 		CHECK_FALSE(StoreAt(dir.path).BakeIsStale(again));
 	}
 
@@ -144,7 +144,7 @@ TEST_CASE(
 		REQUIRE_NOTHROW(StoreAt(dir.path).BakeMaterial(rerouted));
 
 		const SurfaceTextureBinding& cleared = rerouted.surface.textures[1];
-		CHECK(cleared.baked.empty());
+		CHECK(cleared.bakedPath.empty());
 		CHECK(cleared.bakeToken == 0);
 		CHECK(cleared.routeStamps[0] == SourceStamp{});
 
@@ -217,7 +217,7 @@ TEST_CASE("a routed slot round-trips through the document", "[bmaterial][surface
 	CHECK(orm.routes[2].channel == 2);
 	CHECK(orm.routes[3].texture.empty());
 	CHECK(orm.routeStamps[0] == mat.surface.textures[1].routeStamps[0]);
-	CHECK(orm.baked == mat.surface.textures[1].baked);
+	CHECK(orm.bakedPath == mat.surface.textures[1].bakedPath);
 	CHECK(orm.bakeToken == mat.surface.textures[1].bakeToken);
 
 	// And the load-side verdicts read the same off the round-tripped struct.
@@ -279,6 +279,6 @@ TEST_CASE(
 	const SurfaceTextureBinding& orm = baked.surface.textures[1];
 	CHECK_FALSE(slotIsRouted(orm));
 	CHECK(orm.routeStamps[0] == SourceStamp{});
-	CHECK_FALSE(orm.baked.empty());
-	CHECK(baked.surface.textures[0].texture == "albedo.ktx2");
+	CHECK_FALSE(orm.bakedPath.empty());
+	CHECK(baked.surface.textures[0].texturePath == "albedo.ktx2");
 }

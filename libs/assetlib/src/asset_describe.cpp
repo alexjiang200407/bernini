@@ -253,7 +253,7 @@ namespace assetlib
 				{
 					// A routed slot samples its composited map (ADR-7); its own stamps say whether
 					// that bake still reflects the sources.
-					out += std::format("    {:<15} {}\n", texture.name, pathOr(texture.baked));
+					out += std::format("    {:<15} {}\n", texture.name, pathOr(texture.bakedPath));
 					if (fileSystem != nullptr)
 						out += std::format(
 							"                    routed, bake {}\n",
@@ -261,12 +261,12 @@ namespace assetlib
 					continue;
 				}
 
-				out += std::format("    {:<15} {}\n", texture.name, pathOr(texture.texture));
+				out += std::format("    {:<15} {}\n", texture.name, pathOr(texture.texturePath));
 
 				// A whole binding has no stamp to compare -- the one thing worth reporting is
 				// whether the file is still there.
-				if (fileSystem != nullptr && !texture.texture.empty() &&
-				    stampOf(*fileSystem, texture.texture) == SourceStamp{})
+				if (fileSystem != nullptr && !texture.texturePath.empty() &&
+				    stampOf(*fileSystem, texture.texturePath) == SourceStamp{})
 					out += "                    file is missing\n";
 			}
 		}

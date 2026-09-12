@@ -339,9 +339,9 @@ SurfaceOutputNode::CompileInto(assetlib::BMaterial& material, const std::filesys
 		if (m_Bound[slot] == nullptr || m_Bound[slot]->Path().isEmpty())
 			continue;
 
-		auto binding    = assetlib::SurfaceTextureBinding();
-		binding.name    = m_Surface.params.textures[slot].name;
-		binding.texture = Rebase(m_Bound[slot]->Path(), dataRoot, true).toStdString();
+		auto binding        = assetlib::SurfaceTextureBinding();
+		binding.name        = m_Surface.params.textures[slot].name;
+		binding.texturePath = Rebase(m_Bound[slot]->Path(), dataRoot, true).toStdString();
 		surface.textures.push_back(std::move(binding));
 	}
 }

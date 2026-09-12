@@ -733,15 +733,15 @@ TEST_CASE("MaterialTextures names a material's textures in slot order", "[gameli
 	auto surface         = assetlib::BMaterial();
 	surface.shadingModel = assetlib::ShadingModel::kPbrSurface;
 
-	auto& whole   = surface.surface.textures.emplace_back();
-	whole.name    = "baseColor";
-	whole.texture = "Textures/albedo.ktx2";
+	auto& whole       = surface.surface.textures.emplace_back();
+	whole.name        = "baseColor";
+	whole.texturePath = "Textures/albedo.ktx2";
 
-	auto& routed     = surface.surface.textures.emplace_back();
-	routed.name      = "orm";
-	routed.texture   = "Textures/ignored.ktx2";
-	routed.routes[0] = { "Textures/ao.ktx2", 0 };
-	routed.baked     = "Derived/BakedTextures/slot_abc.ktx2";
+	auto& routed       = surface.surface.textures.emplace_back();
+	routed.name        = "orm";
+	routed.texturePath = "Textures/ignored.ktx2";
+	routed.routes[0]   = { "Textures/ao.ktx2", 0 };
+	routed.bakedPath   = "Derived/BakedTextures/slot_abc.ktx2";
 
 	CHECK(
 		game::MaterialTextures(surface, false) ==
