@@ -1065,7 +1065,7 @@ MaterialEditorWindow::CompileGraph(int graphIndex)
 
 	MaterialGraphSet::Graph& graph = m_Graphs.At(graphIndex);
 
-	editor::CompilePreviewMaterial(graph, *m_Desc.renderer, *m_Preview);
+	editor::CompilePreviewMaterial(graph, *m_Desc.renderer, *m_Preview, m_DataRoot);
 }
 
 void
@@ -1079,19 +1079,37 @@ MaterialEditorWindow::ReleasePreviewMaterials()
 	m_Desc.renderer->Invoke([&] {
 		for (MaterialGraphSet::Graph& entry : m_Graphs.All())
 		{
-			if (!entry.preview.IsValid())
-				continue;
-
-			try
+			// The material goes before the maps it routes: a texture may not be deleted while a
+			// live material still references it.
+			if (entry.preview.IsValid())
 			{
-				m_Desc.renderer->GetScene()->DeleteMaterial(entry.preview);
-			}
-			catch (const std::exception& e)
-			{
-				qWarning("MaterialEditor: could not release a preview material: %s", e.what());
+				try
+				{
+					m_Desc.renderer->GetScene()->DeleteMaterial(entry.preview);
+				}
+				catch (const std::exception& e)
+				{
+					qWarning("MaterialEditor: could not release a preview material: %s", e.what());
+				}
+
+				entry.preview = {};
 			}
 
-			entry.preview = {};
+			for (auto& [slot, composed] : entry.composed)
+			{
+				if (composed.handle.textureSlot.is_null())
+					continue;
+
+				try
+				{
+					m_Desc.renderer->GetScene()->DeleteTextureAsset(composed.handle);
+				}
+				catch (const std::exception& e)
+				{
+					qWarning("MaterialEditor: could not release a composited map: %s", e.what());
+				}
+			}
+			entry.composed.clear();
 		}
 	});
 }

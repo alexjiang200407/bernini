@@ -47,10 +47,19 @@ public:
 	bool
 	deleteNode(QtNodes::NodeId nodeId) override;
 
+	// The base's type check, plus the sink's own refusals: a data slot is bound whole or
+	// composited from routes, never both (ADR-7).
+	bool
+	connectionPossible(QtNodes::ConnectionId const connectionId) const override;
+
 private:
 	// Whether `connection` could be made by hand: the port exists, and the two ends agree on a type.
 	[[nodiscard]] bool
 	PortsAreCompatible(const QtNodes::ConnectionId& connection) const;
+
+	// The sink-side half of connectionPossible, also honoured when a sink swap moves wires.
+	[[nodiscard]] bool
+	SinkAccepts(const QtNodes::ConnectionId& connection) const;
 
 	// Lets SetOutputType through the deleteNode guard, and nothing else.
 	bool m_ReplacingOutput = false;

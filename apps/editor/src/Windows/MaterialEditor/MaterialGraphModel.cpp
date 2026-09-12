@@ -7,6 +7,7 @@
 #include <vector>
 
 #include "Windows/MaterialEditor/nodes/MaterialSinkNode.h"
+#include "Windows/MaterialEditor/nodes/SurfaceOutputNode.h"
 #include <QtNodes/internal/DataFlowGraphModel.hpp>
 #include <QtNodes/internal/Definitions.hpp>
 #include <QtNodes/internal/NodeData.hpp>
@@ -59,7 +60,26 @@ MaterialGraphModel::PortsAreCompatible(const ConnectionId& connection) const
 		portData(connection.inNodeId, PortType::In, connection.inPortIndex, PortRole::DataType)
 			.value<QtNodes::NodeDataType>();
 
-	return out.id == in.id;
+	return out.id == in.id && SinkAccepts(connection);
+}
+
+bool
+MaterialGraphModel::SinkAccepts(const QtNodes::ConnectionId& connection) const
+{
+	// A data slot is bound whole or composited from routes, never both (ADR-7): the sink refuses
+	// the second kind while the first is wired.
+	// delegateModel has no const overload in the vendored QtNodes; this reads only.
+	if (const auto* sink = const_cast<MaterialGraphModel*>(this)->delegateModel<SurfaceOutputNode>(
+			connection.inNodeId))
+		return sink->PortAccepts(connection.inPortIndex);
+
+	return true;
+}
+
+bool
+MaterialGraphModel::connectionPossible(QtNodes::ConnectionId const connectionId) const
+{
+	return DataFlowGraphModel::connectionPossible(connectionId) && SinkAccepts(connectionId);
 }
 
 bool

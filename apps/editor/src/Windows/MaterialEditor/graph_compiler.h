@@ -4,6 +4,7 @@
 #include "Windows/MaterialEditor/nodes/SurfaceOutputNode.h"
 
 #include <bgl/types/SurfaceMaterialDesc.h>
+#include <filesystem>
 
 class MaterialPreviewWindow;
 class Renderer;
@@ -31,13 +32,17 @@ namespace editor
 	 * bound.
 	 *
 	 * A surface board is drawn by its surface: the desc above, compiled from the live sink, so an
-	 * edited value reaches the viewport per keystroke exactly as a PBR factor does.
+	 * edited value reaches the viewport per keystroke exactly as a PBR factor does. A *routed*
+	 * data slot is composited through the project's own compositor and uploaded once per route
+	 * set (ADR-8's editor half, cached on the graph) -- `dataRoot` is what the sources resolve
+	 * against, and with none the slot samples the default map.
 	 *
 	 * Does nothing for a graph with no sink.
 	 */
 	void
 	CompilePreviewMaterial(
-		MaterialGraphSet::Graph& graph,
-		Renderer&                renderer,
-		MaterialPreviewWindow&   preview);
+		MaterialGraphSet::Graph&     graph,
+		Renderer&                    renderer,
+		MaterialPreviewWindow&       preview,
+		const std::filesystem::path& dataRoot);
 }

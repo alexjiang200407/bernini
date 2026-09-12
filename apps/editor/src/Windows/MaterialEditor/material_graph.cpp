@@ -9,6 +9,7 @@
 #include <bgl/SurfaceType.h>
 #include <cmath>
 #include <cstddef>
+#include <cstdint>
 #include <filesystem>
 #include <iterator>
 #include <memory>
@@ -291,10 +292,30 @@ BuildSurfaceMaterialGraph(
 			continue;
 		}
 
+		const auto slotIndex = static_cast<size_t>(std::distance(declared.begin(), slot));
+
+		// A routed slot's wires are its channel routes, one per component, into the slot's channel
+		// ports -- the board says what the bake reads. A whole binding is the single wire it was.
+		if (assetlib::slotIsRouted(binding))
+		{
+			for (uint32_t c = 0; c < assetlib::c_SurfaceSlotChannelCount; ++c)
+			{
+				const assetlib::ChannelRoute& route = binding.routes[c];
+				if (route.texture.empty())
+					continue;
+
+				wires.push_back(
+					{ Rebase(QString::fromStdString(route.texture), dataRoot, false),
+				      TextureNode::c_BundleCount + static_cast<unsigned int>(route.channel),
+				      output->ChannelPortFor(slotIndex, c) });
+			}
+			continue;
+		}
+
 		wires.push_back(
 			{ Rebase(QString::fromStdString(binding.texturePath), dataRoot, false),
 		      TextureNode::c_TexturePort,
-		      static_cast<unsigned int>(std::distance(declared.begin(), slot)) });
+		      output->WholePortFor(slotIndex) });
 	}
 
 	PlaceTextureWires(model, outputId, wires);
