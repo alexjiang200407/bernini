@@ -853,6 +853,13 @@ disagree.
   rigs of one signature are refused as ambiguous rather than picked between, because directory order
   would otherwise decide which one a clip set names.
 
+  Where nothing matches outright, a project rig that has only **gained** bones since the file was
+  exported still addresses every bone it has, and is bound instead — the same question
+  `AcquireSkinnedMesh` asks above, and the clips are re-addressed to it before anything is measured,
+  so the container is cooked against the rig it names. An exact match always wins, so a project
+  holding both the rig as it was and the rig as it grew binds to the exact one, and two candidates
+  of either kind are still refused as ambiguous.
+
 * **Culling bounds are the caller's posed box, and `bgl_extended` cannot measure it.** `AddSkinnedMeshGeom`
   takes one and derives every submesh's sphere from it. The bind pose is
   not a substitute: it stops holding the moment a limb moves, and a clip carrying root motion walks

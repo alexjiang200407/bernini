@@ -649,8 +649,13 @@ the clips across: no second `.bmesh`, no second `.bskel`, and the `.banim` names
 the project — found by `skeletonSignature`, not by filename. The signature covers bone names and
 parents and deliberately not the bind pose, which is what makes this sound: a per-animation export
 whose rest pose drifted still matches, because a clip replaces the pose wholesale and only the
-hierarchy has to agree. An import with no matching rig is refused rather than left naming a file
-that does not exist.
+hierarchy has to agree.
+
+A rig that has **gained** bones since the file was exported matches too — a socket added after the
+animation library was authored still addresses every bone the clips carry, so they are bound to it
+and re-addressed as they are cooked (see [Skinned Meshes](skinning.md)). An exact match wins where
+there is one. An import with no matching rig at all is refused rather than left naming a file that
+does not exist.
 
 They land in `Derived/Skeletons/` and `Derived/Animations/`, one category directory each, the way the environment
 family splits across `Authored/Environments/` / `Derived/Sky/` / `Derived/EnvLighting/` — and for the same reason, sharpened:
