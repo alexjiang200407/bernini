@@ -22,7 +22,8 @@ public static const uint cGameSurfaceRouteChannelsByteOffset = 336;
 public static const uint cGameSurfaceRoutedMaskByteOffset = 476;
 
 // Where a game surface's parameters start, measured from the record's header: past
-// cRawPayloadOffset and this struct. The C++ side asserts the arithmetic.
+// cRawPayloadOffset and this struct -- 16 + 8 slot handles (64) + 32 route handles (256) + 32
+// channel selectors (128) + the four tail scalars (16). The C++ side asserts the arithmetic.
 public static const uint cGameSurfaceParamsByteOffset = 480;
 
 // What `coverageSlot` holds for a surface declaring no texture hashed alpha could measure against.
@@ -36,12 +37,14 @@ public struct GameSurfaceRecord
 {
     public RawTextureHandle textures[cGameSurfaceTextureSlots];
 
-    // A data slot's four channel routes (ADR-11 of the surface-material-panel plan): the reader
-    // gathers component c of slot i from routeTextures[i * cGameSurfaceRouteChannels + c]'s
-    // routeChannels-named component, exactly as LoosePbrMaterial routes the engine's own
-    // channels. A whole binding is the identity routing -- the bound texture four times,
-    // channels 0..3 -- so there is one record shape and one sampling path. Only the reader's
-    // DataSlot specialization reads these; the other slot kinds sample `textures` whole.
+    // A data slot's four channel routes: the reader gathers component c of slot i from
+    // routeTextures[i * cGameSurfaceRouteChannels + c]'s routeChannels-named component, exactly
+    // as LoosePbrMaterial routes the engine's own channels. They exist so a slot packed from
+    // other textures' channels -- an ORM split across two maps -- draws with no CPU composite:
+    // authoring rewires a channel by rewriting the record, not by rebuilding a texture. A whole
+    // binding is written as the identity routing -- the bound texture four times, channels 0..3
+    // -- so there is one record shape. Only the reader's DataSlot specialization reads these;
+    // the other slot kinds sample `textures` whole.
     public RawTextureHandle routeTextures[cGameSurfaceTextureSlots * cGameSurfaceRouteChannels];
 
     public uint routeChannels[cGameSurfaceTextureSlots * cGameSurfaceRouteChannels];

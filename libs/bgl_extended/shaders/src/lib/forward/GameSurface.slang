@@ -10,12 +10,13 @@ import lib.forward.common;
 import lib.math.HashedAlpha;
 import lib.types.Texture;
 
-// A data slot gathered from its record's channel routes (ADR-11 of the surface-material-panel
-// plan): component c of slot `slot` reads the routeChannels-named component of
-// routeTextures[slot * cGameSurfaceRouteChannels + c], as SampleLooseChannel routes the engine's
-// own channels. A whole binding is the identity routing, so this is every data slot's one
-// sampling path. The route handles sit contiguously behind the slot handles in the arena's typed
-// view, which is what GetTextureAt's index arithmetic rests on.
+// A data slot gathered from its record's channel routes: component c of slot `slot` reads the
+// routeChannels-named component of routeTextures[slot * cGameSurfaceRouteChannels + c], as
+// SampleLooseChannel routes the engine's own channels. This exists so a slot packed from other
+// textures' channels -- an ORM split across two maps -- draws unbaked with no CPU composite:
+// rewiring a channel rewrites the record instead of rebuilding a texture. The route handles sit
+// contiguously behind the slot handles in the arena's typed view, which is what GetTextureAt's
+// index arithmetic rests on.
 // Whether the record composes `slot` from its routes, written at record build (GameSurfaceRecord
 // .routedMask): the whole-bound and unbound cases stay on the single fetch they always took.
 bool SlotIsRouted(uint byteOffset, uint slot)

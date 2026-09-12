@@ -302,7 +302,7 @@ TEST_CASE("A surface material the engine cannot pack is refused", "[surface][ren
 				ContainsSubstring("surface 'Rim' declares 'rimColor' as a value, not a texture")));
 	}
 
-	// ADR-11's refusals: routes compose data slots alone, and a binding is whole or routed,
+	// The routing refusals: routes compose data slots alone, and a binding is whole or routed,
 	// never both. The handle is fabricated and never dereferenced -- each refusal must fire
 	// before the engine looks a route's texture up.
 	const auto fake = TextureAssetHandle{ { 0, 1 }, 0 };
@@ -521,7 +521,7 @@ namespace
 	}
 }
 
-// ADR-11's gate: a data slot composed from channel routes draws exactly what the same values
+// The routing gate: a data slot composed from channel routes draws exactly what the same values
 // bound whole draw. AO rides one source's R and roughness/metallic another's G and B -- the
 // shape that motivated routing -- and both sources carry decoy values in their other channels,
 // so a gather off the wrong channel or the wrong texture moves the frame.

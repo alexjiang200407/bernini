@@ -36,11 +36,13 @@ namespace bgl
 		TextureAssetHandle texture;
 
 		/**
-		 * A data slot's alternative to `texture`: component c gathered from routes[c], drawn by
-		 * the reader with no composite anywhere (ADR-11). Four wide because a sample is — a
-		 * route left null samples white for its component. Only a data slot takes routes, and a
-		 * binding carrying both a texture and routes is refused: a whole binding *is* the
-		 * identity routing, and the engine writes it as one.
+		 * A data slot's alternative to `texture`: component c gathered from routes[c] by the
+		 * shader at draw time, with no composited texture existing anywhere — which is what
+		 * lets a caller rewire a channel by updating the material rather than by building a
+		 * map. Four wide because a sample is — a route left null samples white for its
+		 * component. Only a data slot takes routes, and a binding carrying both a texture and
+		 * routes is refused: a whole binding *is* the identity routing, and the engine writes
+		 * it as one.
 		 */
 		std::array<SurfaceChannelRoute, 4> routes{};
 	};
