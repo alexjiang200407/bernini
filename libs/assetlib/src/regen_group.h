@@ -41,6 +41,19 @@ namespace assetlib
 	class RigResolver
 	{
 	public:
+		RigResolver() = default;
+
+		// Spelled out rather than left implicit: the mutex deletes them anyway, and MSVC's /Wall
+		// makes an implicitly deleted copy or move an error.
+		RigResolver(const RigResolver&) = delete;
+		RigResolver(RigResolver&&)      = delete;
+		RigResolver&
+		operator=(const RigResolver&) = delete;
+		RigResolver&
+		operator=(RigResolver&&) = delete;
+
+		~RigResolver() = default;
+
 		/** @throws what AssetStore::LoadRegenSkeleton throws. */
 		[[nodiscard]] Skeleton
 		Resolve(const AssetStore& store, std::string_view key);
