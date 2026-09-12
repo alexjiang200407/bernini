@@ -654,7 +654,10 @@ AnimationEditorWindow::BuildBlendTab()
 	const auto restamp = [this] { StampTransition(); };
 
 	connect(m_FromEnd, &QComboBox::activated, this, [restamp](int) { restamp(); });
-	connect(m_ToEnd, &QComboBox::activated, this, [restamp](int) { restamp(); });
+	connect(m_ToEnd, &QComboBox::activated, this, [this, restamp](int) {
+		m_ToClip = m_ToEnd->currentText();
+		restamp();
+	});
 
 	// The box is re-ranged before the stamp, not after: a space carries an axis of its own, and a
 	// value clamped into it afterwards would leave the record naming a parameter the box no longer
@@ -1706,7 +1709,22 @@ AnimationEditorWindow::UpdateTransitionControls()
 	m_SpaceEndParameter->setEnabled(usable && SpaceIsDestination());
 
 	m_FromEnd->setEnabled(usable);
-	m_ToEnd->setEnabled(usable && !SpaceIsDestination());
+
+	// Blanked as well as greyed while the space is the destination, and the placeholder says why.
+	// A disabled combo still showing a clip name reads as the answer to "what does this fade land
+	// on", which is the one question it is no longer answering.
+	const bool toSpace = SpaceIsDestination();
+	m_ToEnd->setEnabled(usable && !toSpace);
+	m_ToEnd->setPlaceholderText(
+		toSpace ? QStringLiteral("using the blend space") : QStringLiteral("fade to..."));
+
+	m_SyncingUi = true;
+	if (toSpace)
+		m_ToEnd->setCurrentIndex(-1);
+	else if (m_ToEnd->currentIndex() < 0 && !m_ToClip.isEmpty())
+		m_ToEnd->setCurrentIndex(m_ToEnd->findText(m_ToClip));
+	m_SyncingUi = false;
+
 	UpdateParameterBoxes();
 	// Nothing to set while the fade is a cut.
 	m_FadeSeconds->setEnabled(usable && m_BlendEnabled->isChecked());
@@ -1795,7 +1813,7 @@ AnimationEditorWindow::RefreshTransitionEnds()
 	const int playing =
 		clips.empty() ? -1 : std::clamp(m_SelectedClip, 0, static_cast<int>(clips.size()) - 1);
 	restore(m_FromEnd, wasFrom, playing);
-	restore(m_ToEnd, wasTo, -1);
+	restore(m_ToEnd, wasTo.isEmpty() ? m_ToClip : wasTo, -1);
 	restore(m_SpaceEnd, wasSpace, m_Spaces.empty() ? -1 : 0);
 	m_SyncingUi = false;
 

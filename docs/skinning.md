@@ -357,8 +357,10 @@ to keep in agreement beyond the one below.
   **A fade can land on a blend space, and that is a row of its own** — a checkbox, which space, and
   where on its axis it arrives. Not an entry in the To combo: a space is a different kind of
   destination from a clip, and one worth having is worth seeing without opening anything. Checked,
-  the space *is* the To end and the combo above goes insensitive, so two controls never both claim
-  to say what the fade arrives at; the checkbox is itself insensitive while no space is chosen,
+  the space *is* the To end and the combo above goes insensitive *and blank*, its placeholder saying
+  which control took over: a greyed combo still showing a clip name reads as the answer to what the
+  fade lands on, which is the one question it has stopped answering. The clip it held is remembered,
+  so unchecking puts it back. The checkbox is itself insensitive while no space is chosen,
   rather than a switch that does nothing. The fade reaches it as a node — the rig's table is its
   clips in clip order, then its spaces — so the row's selection is node `clipCount + its row`.
   Unblended, the cut is still one sample interval of what is *playing* (`editor::NodeSampleRate`,

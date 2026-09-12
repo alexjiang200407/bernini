@@ -467,6 +467,10 @@ private:
 	QWidget*   m_TransitionGroup = nullptr;
 	QComboBox* m_FromEnd         = nullptr;
 	QComboBox* m_ToEnd           = nullptr;
+	// The clip m_ToEnd last named, kept while the space row takes the destination over and across
+	// a re-acquire, so unchecking puts back what was chosen rather than nothing.
+	QString m_ToClip;
+
 	// The destination when it is on, in place of m_ToEnd: a checkbox, which space, and where on
 	// its axis the fade arrives.
 	QCheckBox*       m_SpaceEnabled      = nullptr;
