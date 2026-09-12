@@ -354,7 +354,9 @@ to keep in agreement beyond the one below.
   A stamp always rebuilds from the From end with the clock parked before the window, so it is never
   a fade interrupting a live one.
 
-  **Either end may be a space, and the combos are the rig's node table.** They list every clip in
+  **Either end may be a space, and the combos are the rig's node table.** The note under them says
+  so, and says to open a set when none is: a space sits below a separator inside a combo, which
+  nothing announces until the combo is opened. They list every clip in
   clip order, then the open set's spaces, and carry the *node index* as each item's data rather than
   relying on its row — a separator sits between the two groups, so past it a row is one ahead of the
   node it names. Choosing a space reveals a parameter box beside that end, ranged to its authored

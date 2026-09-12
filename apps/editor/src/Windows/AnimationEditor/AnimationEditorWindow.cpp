@@ -1702,7 +1702,19 @@ AnimationEditorWindow::UpdateTransitionControls()
 	}
 	else if (!live)
 	{
-		m_TransitionNote->setText(QStringLiteral("Playing one clip. Choose what to fade to."));
+		// A space sits below a separator inside the two combos, which is invisible until one is
+		// opened -- so the note is the only thing that can say the ends are not just clips, and
+		// the only thing that can say a set has to be open before they are.
+		m_TransitionNote->setText(
+			m_Spaces.empty() ?
+				QStringLiteral(
+					"Playing one clip. Choose what to fade to. Open a blend set above "
+					"to fade onto one of its spaces.") :
+				QStringLiteral(
+					"Playing one clip. Choose what to fade to -- either end may be a "
+					"clip or one of this set's %1 blend space%2, listed below it.")
+					.arg(m_Spaces.size())
+					.arg(m_Spaces.size() == 1 ? QString() : QStringLiteral("s")));
 	}
 	else
 		m_TransitionNote->clear();
