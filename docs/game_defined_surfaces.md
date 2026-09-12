@@ -220,7 +220,8 @@ Deliberate, and each is a decision rather than an omission:
   yet.
 * **Editor UI is reflected, never authored twice.** A surface material opens in the Material
   Editor as a sink node generated from `GetSurfaceTypes()` — one port per texture slot, one row
-  per value, the layer keys beside them — and Save writes the document from that board. The
+  per value — the layer keys are edited in the properties panel beside the board, and Save writes
+  the document from that board. The
   Output selector lists every registered surface beside the four PBR sinks, which is how a
   surface material is created from scratch: pick the surface, and its board replaces the PBR
   one. The

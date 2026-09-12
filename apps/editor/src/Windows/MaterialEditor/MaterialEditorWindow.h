@@ -121,6 +121,18 @@ private:
 	void
 	SyncOutputSelector();
 
+	/**
+	 * Shows the panel's Layer section for a surface board and fills it from the sink, or hides it
+	 * for a PBR one, whose layer is the Output selector's sink choice (ADR-9). Also called on the
+	 * sink's Changed, so a loaded or seeded document reaches the panel.
+	 */
+	void
+	SyncLayerSection();
+
+	/** The current graph's sink as a surface sink, or null while the board is a PBR one. */
+	[[nodiscard]] class SurfaceOutputNode*
+	CurrentSurfaceSink() const;
+
 	class MaterialSinkNode*
 	WatchOutputNode(int graphIndex);
 
@@ -215,17 +227,20 @@ private:
 
 	MaterialGraphSet m_Graphs;
 
-	QComboBox*         m_SubmeshSelector    = nullptr;
-	QComboBox*         m_OutputSelector     = nullptr;
-	MaterialGraphView* m_GraphView          = nullptr;
-	QPushButton*       m_OpenButton         = nullptr;
-	QPushButton*       m_SaveButton         = nullptr;
-	QPushButton*       m_SaveAsButton       = nullptr;
-	QPushButton*       m_SaveAllButton      = nullptr;
-	QPushButton*       m_BakeAllButton      = nullptr;
-	QPushButton*       m_SetDefaultButton   = nullptr;
-	QLabel*            m_MaterialLabel      = nullptr;
-	QLabel*            m_BakedTexturesLabel = nullptr;
-	QLabel*            m_TangentWarning     = nullptr;
-	QPushButton*       m_GenerateTangents   = nullptr;
+	QComboBox* m_SubmeshSelector = nullptr;
+	QComboBox* m_OutputSelector  = nullptr;
+
+	// The built widgets, kept whole for the free functions that take them (FillLayerSection).
+	editor::MaterialEditorWidgets m_Ui;
+	MaterialGraphView*            m_GraphView          = nullptr;
+	QPushButton*                  m_OpenButton         = nullptr;
+	QPushButton*                  m_SaveButton         = nullptr;
+	QPushButton*                  m_SaveAsButton       = nullptr;
+	QPushButton*                  m_SaveAllButton      = nullptr;
+	QPushButton*                  m_BakeAllButton      = nullptr;
+	QPushButton*                  m_SetDefaultButton   = nullptr;
+	QLabel*                       m_MaterialLabel      = nullptr;
+	QLabel*                       m_BakedTexturesLabel = nullptr;
+	QLabel*                       m_TangentWarning     = nullptr;
+	QPushButton*                  m_GenerateTangents   = nullptr;
 };

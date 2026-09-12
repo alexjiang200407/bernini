@@ -4,10 +4,13 @@
 #include <assetlib/bmaterial.h>
 #include <assetlib/bmesh.h>
 
+#include <QCheckBox>
 #include <QComboBox>
 #include <QDebug>
+#include <QDoubleSpinBox>
 #include <QFileDialog>
 #include <QFileInfo>
+#include <QFormLayout>
 #include <QHBoxLayout>
 #include <QJsonArray>
 #include <QJsonDocument>
@@ -106,6 +109,7 @@ MaterialEditorWindow::MaterialEditorWindow(QWidget* parent, MaterialEditorWindow
 	m_MaterialLabel      = ui.materialLabel;
 	m_BakedTexturesLabel = ui.bakedTextures;
 	m_TangentWarning     = ui.tangentWarning;
+	m_Ui                 = ui;
 
 	connect(m_OpenButton, &QPushButton::clicked, this, [this]() {
 		const QString path = QFileDialog::getOpenFileName(
@@ -148,6 +152,26 @@ MaterialEditorWindow::MaterialEditorWindow(QWidget* parent, MaterialEditorWindow
 			activated,  // activated, not currentIndexChanged: only a user's pick swaps the sink
 		this,
 		&MaterialEditorWindow::SetOutputType);
+
+	// The panel edits the surface sink's layer (ADR-9). activated, not currentIndexChanged, for
+	// the Output selector's reason: only a user's pick writes, so the sync can set the combo
+	// without echoing.
+	connect(m_Ui.layerSelector, &QComboBox::activated, this, [this](int index) {
+		SurfaceOutputNode* sink = CurrentSurfaceSink();
+		if (sink == nullptr || index < 0 || index > static_cast<int>(assetlib::AlphaMode::kHashed))
+			return;
+		sink->SetAlphaMode(static_cast<assetlib::AlphaMode>(index));
+	});
+
+	connect(m_Ui.alphaCutoff, &QDoubleSpinBox::valueChanged, this, [this](double edited) {
+		if (SurfaceOutputNode* sink = CurrentSurfaceSink())
+			sink->SetAlphaCutoff(static_cast<float>(edited));
+	});
+
+	connect(m_Ui.doubleSided, &QCheckBox::toggled, this, [this](bool checked) {
+		if (SurfaceOutputNode* sink = CurrentSurfaceSink())
+			sink->SetDoubleSided(checked);
+	});
 
 	connect(
 		m_GraphView,
@@ -283,6 +307,7 @@ MaterialEditorWindow::RebuildGraph(
 	if (current)
 	{
 		SyncOutputSelector();
+		SyncLayerSection();
 		FrameOnOutput();
 	}
 
@@ -321,6 +346,11 @@ MaterialEditorWindow::WatchOutputNode(int graphIndex)
 	{
 		connect(output, &MaterialSinkNode::Changed, this, [this, graphIndex]() {
 			CompileGraph(graphIndex);
+
+			// A load or a seed changes the sink's layer without touching the panel; the panel
+			// follows only while this graph is the one on screen.
+			if (graphIndex == m_Graphs.Current())
+				SyncLayerSection();
 		});
 	}
 	return output;
@@ -343,6 +373,7 @@ MaterialEditorWindow::SetOutputType(int comboIndex)
 
 	// The old sink took its Changed connection with it, and the new one starts unwatched.
 	WatchOutputNode(graphIndex);
+	SyncLayerSection();
 	CompileGraph(graphIndex);
 	RefreshActions();
 }
@@ -368,6 +399,26 @@ MaterialEditorWindow::SyncOutputSelector()
 
 	const QSignalBlocker blocker(m_OutputSelector);
 	m_OutputSelector->setCurrentIndex(static_cast<int>(std::distance(m_OutputTypes.begin(), it)));
+}
+
+SurfaceOutputNode*
+MaterialEditorWindow::CurrentSurfaceSink() const
+{
+	const int graphIndex = m_Graphs.Current();
+	if (graphIndex < 0)
+		return nullptr;
+
+	const MaterialGraphSet::Graph& entry = m_Graphs.At(graphIndex);
+	if (entry.model == nullptr)
+		return nullptr;
+
+	return qobject_cast<SurfaceOutputNode*>(entry.model->OutputNode());
+}
+
+void
+MaterialEditorWindow::SyncLayerSection()
+{
+	editor::FillLayerSection(CurrentSurfaceSink(), m_Ui);
 }
 
 void
@@ -437,7 +488,12 @@ MaterialEditorWindow::SelectSubmesh(int index)
 			valid ? std::optional(static_cast<uint32_t>(index)) : std::nullopt);
 
 	if (!valid)
+	{
+		// A cleared selector -- the mesh swapped out, or emptied -- must not leave the previous
+		// board's Layer section standing over no graph.
+		SyncLayerSection();
 		return;
+	}
 
 	// Switching submesh swaps the blackboard to the graph backing it -- which submeshes sharing a
 	// material have in common.
@@ -447,6 +503,7 @@ MaterialEditorWindow::SelectSubmesh(int index)
 	m_GraphView->setScene(graphIndex >= 0 ? m_Graphs.At(graphIndex).scene.get() : nullptr);
 
 	SyncOutputSelector();
+	SyncLayerSection();
 	FrameOnOutput();
 	RefreshActions();
 }

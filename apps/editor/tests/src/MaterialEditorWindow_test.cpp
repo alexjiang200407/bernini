@@ -7,10 +7,15 @@
 
 #include "util/QtSupport.h"  // IWYU pragma: keep
 
+#include <QCheckBox>
+#include <QComboBox>
 #include <QDir>
+#include <QDoubleSpinBox>
+#include <QFormLayout>
 #include <QJsonArray>
 #include <QJsonObject>
 #include <QTemporaryDir>
+#include <QWidget>
 
 #include <assetlib/AssetStore.h>
 #include <assetlib_structs/BMaterial.h>
@@ -455,4 +460,61 @@ TEST_CASE("The Output selector lists the four PBR sinks, then every surface", "[
 	CHECK(types[4].modelName == QStringLiteral("SurfaceOutput:Rim"));
 	CHECK(types[5].label == QStringLiteral("Fur"));
 	CHECK(types[5].modelName == QStringLiteral("SurfaceOutput:Fur"));
+}
+
+TEST_CASE("The panel's Layer section starts hidden, with the four modes", "[materialeditor]")
+{
+	// ADR-9: the surface layer is authored here rather than on the node. Hidden until a surface
+	// board is on screen -- a PBR board's layer is the Output selector's sink choice -- and its
+	// combo indexes match assetlib::AlphaMode, which is what the window writes through.
+	QWidget parent;
+
+	const editor::MaterialEditorWidgets ui = editor::BuildMaterialEditorUi(&parent);
+
+	REQUIRE(ui.layerSection != nullptr);
+	REQUIRE(ui.layerSelector != nullptr);
+	CHECK(ui.layerSection->isHidden());
+
+	REQUIRE(ui.layerSelector->count() == 4);
+	CHECK(ui.layerSelector->itemText(0) == QStringLiteral("Opaque"));
+	CHECK(ui.layerSelector->itemText(1) == QStringLiteral("Alpha Tested"));
+	CHECK(ui.layerSelector->itemText(2) == QStringLiteral("Alpha Blend"));
+	CHECK(ui.layerSelector->itemText(3) == QStringLiteral("Hashed Alpha"));
+
+	CHECK(ui.alphaCutoff != nullptr);
+	CHECK(ui.doubleSided != nullptr);
+	CHECK(ui.layerForm != nullptr);
+}
+
+TEST_CASE(
+	"FillLayerSection shows a surface sink's layer and hides for a PBR board",
+	"[materialeditor]")
+{
+	QWidget parent;
+
+	const editor::MaterialEditorWidgets ui = editor::BuildMaterialEditorUi(&parent);
+
+	auto rim = bgl::SurfaceType();
+	rim.name = "Rim";
+	SurfaceOutputNode sink(rim);
+	sink.SetAlphaMode(assetlib::AlphaMode::kMask);
+	sink.SetAlphaCutoff(0.25f);
+	sink.SetDoubleSided(false);
+
+	editor::FillLayerSection(&sink, ui);
+
+	CHECK_FALSE(ui.layerSection->isHidden());
+	CHECK(ui.layerSelector->currentIndex() == static_cast<int>(assetlib::AlphaMode::kMask));
+	CHECK(ui.alphaCutoff->value() == 0.25);
+	CHECK_FALSE(ui.doubleSided->isChecked());
+
+	// The cutoff row is a mask layer's alone.
+	CHECK(ui.layerForm->isRowVisible(ui.alphaCutoff));
+	sink.SetAlphaMode(assetlib::AlphaMode::kOpaque);
+	editor::FillLayerSection(&sink, ui);
+	CHECK_FALSE(ui.layerForm->isRowVisible(ui.alphaCutoff));
+
+	// A PBR board -- no surface sink -- hides the section; its layer is the Output selector's.
+	editor::FillLayerSection(nullptr, ui);
+	CHECK(ui.layerSection->isHidden());
 }

@@ -287,3 +287,32 @@ shows nothing. It is checked by eye, by scrolling the column with a viewport on 
 regression in this one — the fix is per scroll area and nothing enforces it. `WA_PaintOnScreen` on
 the viewport is not the remedy to reach for instead: that stops the widget being composited at all,
 which is what caused this in the first place.
+---
+
+## Flat skin-coloured patches over a blended, double-sided character
+
+**Symptom.** A closed mesh — a head, a body — set to the Alpha Blend layer with Double Sided on
+draws unshaded, flat-toned patches over its front: mouth and nostril interiors compositing over the
+face, moving with the camera. Reported first from the Material Editor's Layer controls, on a
+material whose base colour carries no alpha channel at all.
+
+**Cause.** Not a defect, and not this feature's: the transparent phase sorts instances, never the
+triangles inside one, and writes no depth among them — so within one mesh the last-rasterized
+triangle wins. Double Sided is what lets the interior faces reach the rasterizer, and their flipped
+normals are why they shade flat. With no alpha channel every fragment lands at coverage 1, so the
+whole head pays the transparent path's ordering hazards for an image Opaque would draw correctly.
+The full mechanism is [passes.md § Two-sided surfaces](passes.md) — "it is the geometry showing
+through, not a defect in the sort". The engine's own PBR blend materials do exactly the same; a
+game-defined surface inherits it from the shared blend bucket.
+
+**The answer** is a material choice, not a fix: Double Sided off where a translucent solid has no
+inside worth drawing, or the Hashed Alpha layer, which writes real depth and self-occludes (and
+needs TAA running). Alpha Blend earns its keep only when something feeds alpha below 1.
+
+**Gates.** `just run bgl_extended_tests -- "[twosided]"` pins the facing and the mesh-stage cull the
+paragraph above rests on. There is no gate that could pin per-triangle sorting, because the engine
+deliberately has none.
+
+**If it comes back.** It never left; this entry exists so the symptom is recognised as the blend
+bucket's documented behaviour rather than diagnosed as a regression of whatever feature last
+touched the material path.

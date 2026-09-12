@@ -3,19 +3,40 @@
 #include "Windows/MaterialEditor/MaterialGraphView.h"
 #include "Windows/MaterialEditor/nodes/SurfaceOutputNode.h"
 
+#include <QCheckBox>
 #include <QComboBox>
+#include <QDoubleSpinBox>
+#include <QFormLayout>
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QPushButton>
+#include <QSignalBlocker>
 #include <QSplitter>
 #include <QVBoxLayout>
+#include <assetlib_structs/BMaterial.h>
 #include <bgl/SurfaceType.h>
+#include <cstddef>
+#include <iterator>
+#include <qlatin1stringview.h>
 #include <qnamespace.h>
 #include <qsizepolicy.h>
 #include <qstring.h>
 #include <qstringliteral.h>
 #include <span>
 #include <vector>
+
+namespace
+{
+	// The Layer combo's entries, indexed by assetlib::AlphaMode -- what the window writes through.
+	constexpr const char* c_LayerLabels[] = { "Opaque",
+		                                      "Alpha Tested",
+		                                      "Alpha Blend",
+		                                      "Hashed Alpha" };
+
+	// A fifth AlphaMode must extend the table, or the new mode would be unpickable.
+	static_assert(
+		std::size(c_LayerLabels) == static_cast<size_t>(assetlib::AlphaMode::kHashed) + 1);
+}
 
 namespace editor
 {
@@ -38,6 +59,33 @@ namespace editor
 		}
 
 		return types;
+	}
+
+	void
+	FillLayerSection(const SurfaceOutputNode* sink, const MaterialEditorWidgets& widgets)
+	{
+		widgets.layerSection->setVisible(sink != nullptr);
+		if (sink == nullptr)
+			return;
+
+		{
+			const QSignalBlocker blocker(widgets.layerSelector);
+			widgets.layerSelector->setCurrentIndex(static_cast<int>(sink->GetAlphaMode()));
+		}
+		{
+			const QSignalBlocker blocker(widgets.alphaCutoff);
+			widgets.alphaCutoff->setValue(static_cast<double>(sink->GetAlphaCutoff()));
+		}
+		{
+			const QSignalBlocker blocker(widgets.doubleSided);
+			widgets.doubleSided->setChecked(sink->GetDoubleSided());
+		}
+
+		// The cutoff is read on a mask layer alone -- hashed replaces it with stochastic
+		// coverage.
+		widgets.layerForm->setRowVisible(
+			widgets.alphaCutoff,
+			sink->GetAlphaMode() == assetlib::AlphaMode::kMask);
 	}
 
 	MaterialEditorWidgets
@@ -133,6 +181,37 @@ namespace editor
 			"cutoff. A surface entry hands the material to that game surface, whose parameters "
 			"appear on its output node."));
 		propertiesLayout->addWidget(widgets.outputSelector);
+
+		// The surface layer (ADR-9), filled by FillLayerSection below.
+		widgets.layerSection = new QWidget(propertiesPanel);
+		widgets.layerForm    = new QFormLayout(widgets.layerSection);
+		widgets.layerForm->setContentsMargins(0, 0, 0, 0);
+
+		widgets.layerSelector = new QComboBox(widgets.layerSection);
+		for (const char* label : c_LayerLabels)
+			widgets.layerSelector->addItem(QLatin1String(label));
+		widgets.layerSelector->setToolTip(QStringLiteral(
+			"How this surface material's alpha is read: discarded below a cutoff (Alpha Tested), "
+			"blended back-to-front (Alpha Blend), or stochastic coverage under temporal AA "
+			"(Hashed Alpha)."));
+		widgets.layerForm->addRow(QStringLiteral("Layer"), widgets.layerSelector);
+
+		widgets.alphaCutoff = new QDoubleSpinBox(widgets.layerSection);
+		widgets.alphaCutoff->setRange(0.0, 1.0);
+		widgets.alphaCutoff->setSingleStep(0.05);
+		widgets.alphaCutoff->setDecimals(3);
+
+		// Commit, not keystroke: per-keystroke writes reach the sink, whose Changed re-fills this
+		// very box and rewrites the text under the user's caret -- and recompile the preview once
+		// per digit besides.
+		widgets.alphaCutoff->setKeyboardTracking(false);
+		widgets.layerForm->addRow(QStringLiteral("Alpha Cutoff"), widgets.alphaCutoff);
+
+		widgets.doubleSided = new QCheckBox(widgets.layerSection);
+		widgets.layerForm->addRow(QStringLiteral("Double Sided"), widgets.doubleSided);
+
+		widgets.layerSection->hide();
+		propertiesLayout->addWidget(widgets.layerSection);
 
 		// The material's current baked textures, if any. Read-only: the graph authors the routes they are
 		// composited from, and Bake All above -- or the Content Explorer's Bake -- is what rewrites them.
