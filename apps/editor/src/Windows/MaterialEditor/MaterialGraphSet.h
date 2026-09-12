@@ -11,6 +11,8 @@
 
 #include "Windows/MaterialEditor/CachedMaterial.h"
 #include <bgl/MaterialHandle.h>
+#include <bgl/TextureAssetHandle.h>
+#include <utility>
 
 class MaterialGraphModel;
 class MaterialGraphScene;
@@ -43,6 +45,16 @@ public:
 		// every edit, rather than created anew: a graph compiles on each keystroke, and the scene's
 		// loose-material buffer is a fixed-size slot pool.
 		bgl::MaterialHandle preview;
+
+		/** One composited map per routed data slot (ADR-8's editor half): the upload the preview
+		 *  samples, keyed by the routes that composed it, so a rewire recomposes and a value
+		 *  keystroke does not. */
+		struct ComposedSlot
+		{
+			QString                 key;
+			bgl::TextureAssetHandle handle;
+		};
+		std::vector<std::pair<size_t, ComposedSlot>> composed;
 
 		std::vector<uint32_t> submeshes;
 	};

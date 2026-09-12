@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstddef>
+#include <cstdint>
 #include <glm/vec4.hpp>
 #include <memory>
 #include <string>
@@ -16,9 +17,11 @@
 #include <qtmetamacros.h>
 #include <qwidget.h>
 
+#include "Windows/MaterialEditor/nodes/ChannelData.h"
 #include "Windows/MaterialEditor/nodes/MaterialSinkNode.h"
 #include <QtNodes/internal/Definitions.hpp>
 #include <QtNodes/internal/NodeData.hpp>
+#include <array>
 
 class QDoubleSpinBox;
 class SurfaceTextureData;
@@ -28,9 +31,11 @@ class SurfaceTextureData;
  * port per texture slot, one spin-box row per value with the declaration's default prefilled.
  * The layer keys are its state too, edited from the properties panel (ADR-9).
  *
- * One is registered per surface the engine reflected, named `SurfaceOutput:<surface>`. A slot
- * port carries SurfaceTextureData, never ChannelData: a surface texture is bound, not composited,
- * so a routed channel cannot be wired here at all.
+ * One is registered per surface the engine reflected, named `SurfaceOutput:<surface>`. A slot's
+ * whole-texture port carries SurfaceTextureData; a *data* slot also offers one channel port per
+ * component, carrying single-channel ChannelData, and the two kinds are mutually exclusive per
+ * slot (ADR-7) -- the model asks PortAccepts before offering a wire. Colour, normal and coverage
+ * slots stay whole-bound.
  */
 class SurfaceOutputNode : public MaterialSinkNode
 {
@@ -102,6 +107,42 @@ public:
 	[[nodiscard]] glm::vec4
 	Value(size_t index) const;
 
+	/** How a port index maps onto the declared slots: every slot has a whole-texture port, and a
+	 *  data slot puts one channel port per component after its own. */
+	struct PortRef
+	{
+		size_t   slot      = SIZE_MAX;  // == textures.size() when the index is out of range
+		bool     whole     = true;
+		uint32_t component = 0;
+	};
+
+	[[nodiscard]] PortRef
+	ResolvePort(QtNodes::PortIndex port) const;
+
+	/** The whole-texture port of `slot`. */
+	[[nodiscard]] unsigned int
+	WholePortFor(size_t slot) const;
+
+	/** The `component`-th channel port of data slot `slot`. */
+	[[nodiscard]] unsigned int
+	ChannelPortFor(size_t slot, uint32_t component) const;
+
+	/** Whether anything is wired into `slot`'s channel ports. */
+	[[nodiscard]] bool
+	SlotIsRouted(size_t slot) const;
+
+	/**
+	 * Whether `port` may take a wire: a slot is bound whole or composited from routes, never both
+	 * (ADR-7), so each kind refuses while the other is wired. The model asks on every offered
+	 * connection.
+	 */
+	[[nodiscard]] bool
+	PortAccepts(QtNodes::PortIndex port) const;
+
+	/** The route wired into `slot`'s `component` channel port; empty path when unwired. */
+	[[nodiscard]] ChannelData::Route
+	RouteFor(size_t slot, uint32_t component) const;
+
 	/** The path bound into texture slot `slot`, empty while nothing is wired there. */
 	[[nodiscard]] QString
 	BoundTexture(size_t slot) const;
@@ -152,6 +193,11 @@ private:
 
 	// One entry per texture slot; null while nothing is wired.
 	std::vector<std::shared_ptr<SurfaceTextureData>> m_Bound;
+
+	// One entry per texture slot and component; only a data slot's are reachable, null while
+	// nothing is wired there.
+	std::vector<std::array<std::shared_ptr<ChannelData>, assetlib::c_SurfaceSlotChannelCount>>
+		m_Routes;
 
 	assetlib::AlphaMode m_AlphaMode   = assetlib::AlphaMode::kOpaque;
 	float               m_AlphaCutoff = 0.5f;

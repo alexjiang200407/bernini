@@ -41,8 +41,8 @@ namespace
 
 	/**
 	 * A surface as registration would reflect it: two values with their declared defaults, a colour
-	 * slot and a coverage slot. Hand-built, which is exactly what the registry accepts a span of --
-	 * no device, no .slang.
+	 * slot, a coverage slot and a data slot. Hand-built, which is exactly what the registry accepts
+	 * a span of -- no device, no .slang.
 	 */
 	bgl::SurfaceType
 	RimSurface()
@@ -69,8 +69,13 @@ namespace
 		mask.kind  = bgl::SurfaceTextureKind::kCoverage;
 		mask.index = 1;
 
+		auto orm  = bgl::SurfaceTexture();
+		orm.name  = "orm";
+		orm.kind  = bgl::SurfaceTextureKind::kData;
+		orm.index = 2;
+
 		surface.params.values   = { power, colour };
-		surface.params.textures = { base, mask };
+		surface.params.textures = { base, mask, orm };
 		return surface;
 	}
 
@@ -98,12 +103,20 @@ TEST_CASE("A surface sink is its surface, reflected", "[materialgraph][surfacesi
 	SurfaceOutputNode* sink = Sink(model);
 	REQUIRE(sink != nullptr);
 
-	// One port per texture slot, captioned by name and kind; nothing flows out of a sink.
-	CHECK(sink->nPorts(PortType::In) == 2u);
+	// A whole-texture port per slot, and a data slot adds one channel port per component
+	// (ADR-7); nothing flows out of a sink.
+	CHECK(sink->nPorts(PortType::In) == 7u);
 	CHECK(sink->nPorts(PortType::Out) == 0u);
 	CHECK(sink->portCaption(PortType::In, 0) == QStringLiteral("baseColor (Color)"));
 	CHECK(sink->portCaption(PortType::In, 1) == QStringLiteral("mask (Coverage)"));
+	CHECK(sink->portCaption(PortType::In, 2) == QStringLiteral("orm (Data)"));
+	CHECK(sink->portCaption(PortType::In, 3) == QStringLiteral("orm.r"));
+	CHECK(sink->portCaption(PortType::In, 6) == QStringLiteral("orm.a"));
 	CHECK(sink->dataType(PortType::In, 0).id == QStringLiteral("surfacetexture"));
+	CHECK(sink->dataType(PortType::In, 2).id == QStringLiteral("surfacetexture"));
+	CHECK(sink->dataType(PortType::In, 3).id != QStringLiteral("surfacetexture"));
+	CHECK(sink->WholePortFor(2) == 2u);
+	CHECK(sink->ChannelPortFor(2, 0) == 3u);
 
 	// The declaration's defaults arrive prefilled, components past the type's staying zero.
 	CHECK(sink->Value(0).x == 8.0f);
@@ -114,16 +127,15 @@ TEST_CASE("A surface sink is its surface, reflected", "[materialgraph][surfacesi
 	CHECK_FALSE(model.deleteNode(id));
 }
 
-TEST_CASE("A routed channel cannot wire into a surface slot", "[materialgraph][surfacesink]")
+TEST_CASE("A routed channel cannot wire into a whole-texture port", "[materialgraph][surfacesink]")
 {
 	MaterialGraphModel model(Registry());
 
 	const NodeId texture = model.addNode(QStringLiteral("Texture"));
 	const NodeId sink    = model.addNode(QStringLiteral("SurfaceOutput:Rim"));
 
-	// A surface texture is bound, not composited: every channel port -- bundle or scalar -- is
-	// refused by type, and only the whole-texture port fits. The rule the contract states is
-	// enforced by the wire.
+	// A whole-texture port is bound, not composited: every channel port -- bundle or scalar -- is
+	// refused by type there, and only the whole-texture output fits.
 	for (QtNodes::PortIndex port = 0; port < QtNodes::PortIndex(TextureNode::c_TexturePort); ++port)
 	{
 		INFO("texture port " << port);
@@ -132,6 +144,134 @@ TEST_CASE("A routed channel cannot wire into a surface slot", "[materialgraph][s
 
 	CHECK(model.connectionPossible(
 		ConnectionId{ texture, QtNodes::PortIndex(TextureNode::c_TexturePort), sink, 0 }));
+}
+
+TEST_CASE(
+	"A data slot routes single channels, exclusively with its whole port",
+	"[materialgraph][surfacesink]")
+{
+	MaterialGraphModel model(Registry());
+
+	const NodeId       texture = model.addNode(QStringLiteral("Texture"));
+	const NodeId       sinkId  = model.addNode(QStringLiteral("SurfaceOutput:Rim"));
+	SurfaceOutputNode* sink    = Sink(model);
+	REQUIRE(sink != nullptr);
+
+	const auto ormWhole = QtNodes::PortIndex(sink->WholePortFor(2));
+	const auto ormR     = QtNodes::PortIndex(sink->ChannelPortFor(2, 0));
+	const auto ormG     = QtNodes::PortIndex(sink->ChannelPortFor(2, 1));
+
+	// A channel port takes a single channel and nothing wider -- a bundle or the whole texture
+	// would silently drop the swizzle it carries.
+	constexpr auto c_TextureR = QtNodes::PortIndex(TextureNode::c_BundleCount);
+	CHECK(model.connectionPossible(ConnectionId{ texture, c_TextureR, sinkId, ormR }));
+	CHECK_FALSE(model.connectionPossible(ConnectionId{ texture, 0, sinkId, ormR }));
+	CHECK_FALSE(model.connectionPossible(
+		ConnectionId{ texture, QtNodes::PortIndex(TextureNode::c_TexturePort), sinkId, ormR }));
+
+	if (auto* node = model.delegateModel<TextureNode>(texture))
+		node->SetTexturePath(QStringLiteral("C:/proj/Data/Derived/SourceTextures/head/ao.ktx2"));
+
+	// Routed and whole are one slot's two mutually exclusive forms (ADR-7): wiring a channel
+	// closes the whole port, and unwiring it opens the port again.
+	model.addConnection(ConnectionId{ texture, c_TextureR, sinkId, ormR });
+	CHECK(sink->SlotIsRouted(2));
+	CHECK_FALSE(model.connectionPossible(
+		ConnectionId{ texture, QtNodes::PortIndex(TextureNode::c_TexturePort), sinkId, ormWhole }));
+	CHECK(model.connectionPossible(ConnectionId{ texture, c_TextureR + 1, sinkId, ormG }));
+
+	model.deleteConnection(ConnectionId{ texture, c_TextureR, sinkId, ormR });
+	CHECK_FALSE(sink->SlotIsRouted(2));
+	CHECK(model.connectionPossible(
+		ConnectionId{ texture, QtNodes::PortIndex(TextureNode::c_TexturePort), sinkId, ormWhole }));
+
+	// And the reverse: a whole binding closes the channel ports.
+	model.addConnection(
+		ConnectionId{ texture, QtNodes::PortIndex(TextureNode::c_TexturePort), sinkId, ormWhole });
+	CHECK_FALSE(model.connectionPossible(ConnectionId{ texture, c_TextureR, sinkId, ormR }));
+}
+
+TEST_CASE("A routed slot compiles to its routes, not a binding", "[materialgraph][surfacesink]")
+{
+	MaterialGraphModel model(Registry());
+
+	const NodeId       ao     = model.addNode(QStringLiteral("Texture"));
+	const NodeId       mr     = model.addNode(QStringLiteral("Texture"));
+	const NodeId       sinkId = model.addNode(QStringLiteral("SurfaceOutput:Rim"));
+	SurfaceOutputNode* sink   = Sink(model);
+	REQUIRE(sink != nullptr);
+
+	if (auto* node = model.delegateModel<TextureNode>(ao))
+		node->SetTexturePath(QStringLiteral("C:/proj/Data/Derived/SourceTextures/head/ao.ktx2"));
+	if (auto* node = model.delegateModel<TextureNode>(mr))
+		node->SetTexturePath(QStringLiteral("C:/proj/Data/Derived/SourceTextures/head/mr.ktx2"));
+
+	// The angelica shape: AO from one texture's R, roughness/metallic from another's G and B.
+	constexpr auto c_R = QtNodes::PortIndex(TextureNode::c_BundleCount);
+	model.addConnection(
+		ConnectionId{ ao, c_R, sinkId, QtNodes::PortIndex(sink->ChannelPortFor(2, 0)) });
+	model.addConnection(
+		ConnectionId{ mr, c_R + 1, sinkId, QtNodes::PortIndex(sink->ChannelPortFor(2, 1)) });
+	model.addConnection(
+		ConnectionId{ mr, c_R + 2, sinkId, QtNodes::PortIndex(sink->ChannelPortFor(2, 2)) });
+
+	const assetlib::BMaterial material =
+		CompileMaterial(model, QStringLiteral("head_rim"), c_DataRoot);
+
+	REQUIRE(material.surface.textures.size() == 1);
+	const assetlib::SurfaceTextureBinding& orm = material.surface.textures[0];
+	CHECK(orm.name == "orm");
+	CHECK(orm.texturePath.empty());
+	CHECK(orm.routes[0].texture == "Derived/SourceTextures/head/ao.ktx2");
+	CHECK(orm.routes[0].channel == 0);
+	CHECK(orm.routes[1].texture == "Derived/SourceTextures/head/mr.ktx2");
+	CHECK(orm.routes[1].channel == 1);
+	CHECK(orm.routes[2].texture == "Derived/SourceTextures/head/mr.ktx2");
+	CHECK(orm.routes[2].channel == 2);
+	CHECK(orm.routes[3].texture.empty());
+}
+
+TEST_CASE("A routed document builds its board", "[materialgraph][surfacesink]")
+{
+	auto material         = assetlib::BMaterial();
+	material.shadingModel = assetlib::ShadingModel::kPbrSurface;
+	material.surface.name = "Rim";
+
+	auto& orm     = material.surface.textures.emplace_back();
+	orm.name      = "orm";
+	orm.routes[0] = { "Derived/SourceTextures/head/ao.ktx2", 0 };
+	orm.routes[1] = { "Derived/SourceTextures/head/mr.ktx2", 1 };
+	orm.routes[2] = { "Derived/SourceTextures/head/mr.ktx2", 2 };
+
+	MaterialGraphModel model(Registry());
+	REQUIRE(BuildSurfaceMaterialGraph(model, material, c_DataRoot));
+
+	SurfaceOutputNode* sink = Sink(model);
+	REQUIRE(sink != nullptr);
+	REQUIRE(sink->SlotIsRouted(2));
+
+	// Absolute like every live-graph path, per the whole-binding case above.
+	CHECK(
+		sink->RouteFor(2, 0).path.endsWith(QStringLiteral("Derived/SourceTextures/head/ao.ktx2")));
+	CHECK(sink->RouteFor(2, 0).channel == 0);
+	CHECK(
+		sink->RouteFor(2, 1).path.endsWith(QStringLiteral("Derived/SourceTextures/head/mr.ktx2")));
+	CHECK(sink->RouteFor(2, 1).channel == 1);
+	CHECK(sink->RouteFor(2, 2).channel == 2);
+	CHECK(sink->RouteFor(2, 3).path.isEmpty());
+
+	// One texture node per distinct source, not per route: mr feeds two channels through one node.
+	auto textureNodes = 0;
+	for (const NodeId id : model.allNodeIds())
+		if (model.delegateModel<TextureNode>(id) != nullptr)
+			++textureNodes;
+	CHECK(textureNodes == 2);
+
+	// And back out: the board compiles to the document it was built from.
+	const assetlib::BMaterial back = CompileMaterial(model, QStringLiteral("rim"), c_DataRoot);
+	REQUIRE(back.surface.textures.size() == 1);
+	CHECK(back.surface.textures[0].routes[0].texture == "Derived/SourceTextures/head/ao.ktx2");
+	CHECK(back.surface.textures[0].routes[1].texture == "Derived/SourceTextures/head/mr.ktx2");
 }
 
 TEST_CASE("The whole-texture port binds a slot", "[materialgraph][surfacesink]")
