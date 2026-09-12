@@ -13,10 +13,11 @@
 #include <QDebug>
 #include <qobject.h>
 
-#include "Windows/MaterialEditor/SlotComposer.h"
 #include "Windows/MaterialEditor/material_graph.h"
 #include <algorithm>
+#include <assetlib/AssetStore.h>
 #include <assetlib_structs/BMaterial.h>
+#include <assetlib_structs/ImageData.h>
 #include <bgl/MaterialHandle.h>
 #include <bgl/MaterialType.h>
 #include <bgl/TextureAssetHandle.h>
@@ -116,18 +117,16 @@ namespace
 {
 	/**
 	 * The composited upload for every routed data slot, reusing the graph's cache: a slot whose
-	 * route set is unchanged keeps its handle, a rewired one queues a compose on `composer` and
-	 * rides a null handle until the delivery lands it, and the handles the rewires orphaned come
-	 * back in `stale` for the caller to delete once the new desc is bound. The null covers a
-	 * pending and a failed compose alike -- either way the slot samples the default map: a
-	 * visible beat or mistake, not a lost material.
+	 * route set is unchanged keeps its handle, a rewired one composes and uploads anew, and the
+	 * handles the rewires orphaned come back in `stale` for the caller to delete once the new
+	 * desc is bound. A compose that fails -- an unreadable source, no data root -- leaves a null
+	 * handle, so the slot samples the default map: a visible mistake, not a lost material.
 	 */
 	std::vector<std::pair<size_t, bgl::TextureAssetHandle>>
 	EnsureComposedSlots(
 		MaterialGraphSet::Graph&              graph,
-		int                                   graphIndex,
+		Renderer&                             renderer,
 		const SurfaceOutputNode&              sink,
-		SlotComposer&                         composer,
 		const std::filesystem::path&          dataRoot,
 		std::vector<bgl::TextureAssetHandle>& stale)
 	{
@@ -141,7 +140,13 @@ namespace
 			if (!sink.SlotIsRouted(slot))
 				continue;
 
-			const QString key = editor::SlotRouteKey(sink, slot);
+			auto key = QString();
+			for (uint32_t c = 0; c < assetlib::c_SurfaceSlotChannelCount; ++c)
+			{
+				const ChannelData::Route route = sink.RouteFor(slot, c);
+				key += route.path + QLatin1Char(':') + QString::number(route.channel) +
+				       QLatin1Char('|');
+			}
 
 			const auto kept = std::ranges::find_if(previous, [&](const auto& entry) {
 				return entry.first == slot && entry.second.key == key;
@@ -154,6 +159,7 @@ namespace
 				continue;
 			}
 
+			auto handle = bgl::TextureAssetHandle();
 			if (!dataRoot.empty())
 			{
 				// The compositor the bake uses, over the same document shape the board compiles
@@ -174,17 +180,26 @@ namespace
 				}
 				temp.surface.textures.push_back(std::move(binding));
 
-				composer.Compose(
-					graphIndex,
-					slot,
-					key,
-					std::move(temp),
-					sink.Surface().params.textures[slot].name,
-					dataRoot);
+				try
+				{
+					assetlib::ImageData image = assetlib::AssetStore(dataRoot).ComposeSurfaceSlot(
+						temp,
+						sink.Surface().params.textures[slot].name);
+
+					handle = renderer.Invoke([&]() -> bgl::TextureAssetHandle {
+						return renderer.GetScene()->AddTextureAsset(
+							std::move(image),
+							"composed slot preview");
+					});
+				}
+				catch (const std::exception& e)
+				{
+					qWarning("MaterialEditor: could not composite a routed slot: %s", e.what());
+				}
 			}
 
-			graph.composed.push_back({ slot, { key, bgl::TextureAssetHandle() } });
-			composed.emplace_back(slot, bgl::TextureAssetHandle());
+			graph.composed.push_back({ slot, { key, handle } });
+			composed.emplace_back(slot, handle);
 		}
 
 		// Whatever the rewires left behind is dead once the new desc is bound.
@@ -198,39 +213,6 @@ namespace
 
 namespace editor
 {
-	QString
-	SlotRouteKey(const SurfaceOutputNode& sink, size_t slot)
-	{
-		auto key = QString();
-		for (uint32_t c = 0; c < assetlib::c_SurfaceSlotChannelCount; ++c)
-		{
-			const ChannelData::Route route = sink.RouteFor(slot, c);
-			key +=
-				route.path + QLatin1Char(':') + QString::number(route.channel) + QLatin1Char('|');
-		}
-		return key;
-	}
-
-	MaterialGraphSet::Graph::ComposedSlot*
-	PendingComposedSlot(MaterialGraphSet::Graph& graph, size_t slot, const QString& key)
-	{
-		if (graph.model == nullptr)
-			return nullptr;
-
-		const auto* sink = qobject_cast<const SurfaceOutputNode*>(graph.model->OutputNode());
-		if (sink == nullptr || slot >= sink->Surface().params.textures.size() ||
-		    !sink->SlotIsRouted(slot) || SlotRouteKey(*sink, slot) != key)
-			return nullptr;
-
-		const auto entry = std::ranges::find_if(graph.composed, [&](const auto& e) {
-			return e.first == slot && e.second.key == key;
-		});
-		if (entry == graph.composed.end() || !entry->second.handle.textureSlot.is_null())
-			return nullptr;
-
-		return &entry->second;
-	}
-
 	bgl::SurfaceMaterialDesc
 	SurfaceDescOfBoard(const SurfaceOutputNode& sink)
 	{
@@ -263,10 +245,8 @@ namespace editor
 	void
 	CompilePreviewMaterial(
 		MaterialGraphSet::Graph&     graph,
-		int                          graphIndex,
 		Renderer&                    renderer,
 		MaterialPreviewWindow&       preview,
-		SlotComposer&                composer,
 		const std::filesystem::path& dataRoot)
 	{
 		if (const auto* surface = qobject_cast<const SurfaceOutputNode*>(graph.model->OutputNode()))
@@ -275,7 +255,7 @@ namespace editor
 
 			bgl::SurfaceMaterialDesc desc = SurfaceDescOfBoard(*surface);
 			for (const auto& [slot, handle] :
-			     EnsureComposedSlots(graph, graphIndex, *surface, composer, dataRoot, stale))
+			     EnsureComposedSlots(graph, renderer, *surface, dataRoot, stale))
 				desc.textures.emplace_back(surface->Surface().params.textures[slot].name, handle);
 
 			BindSurfacePreview(graph, renderer, preview, surface->Surface().kind, desc);

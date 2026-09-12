@@ -30,10 +30,8 @@
 #include <assetlib/mesh_tangents.h>
 #include <assetlib_structs/BMaterial.h>
 #include <assetlib_structs/BMesh.h>
-#include <assetlib_structs/ImageData.h>
 #include <bgl/IGraphics.h>
 #include <bgl/SurfaceType.h>
-#include <bgl/TextureAssetHandle.h>
 #include <cstddef>
 #include <cstdint>
 #include <exception>
@@ -59,7 +57,6 @@
 #include "Windows/MaterialEditor/MaterialGraphModel.h"
 #include "Windows/MaterialEditor/MaterialGraphScene.h"
 #include "Windows/MaterialEditor/MaterialGraphView.h"
-#include "Windows/MaterialEditor/SlotComposer.h"
 #include "Windows/MaterialEditor/graph_compiler.h"
 #include "Windows/MaterialEditor/material_editor_ui.h"
 #include "Windows/MaterialEditor/material_graph.h"
@@ -219,9 +216,6 @@ MaterialEditorWindow::MaterialEditorWindow(QWidget* parent, MaterialEditorWindow
 	}
 
 	m_TexturePreviews = new TexturePreviewCache(this);
-
-	m_SlotComposer = new SlotComposer(this);
-	connect(m_SlotComposer, &SlotComposer::Composed, this, &MaterialEditorWindow::OnSlotComposed);
 
 	// The reflected surfaces, copied off the render thread once -- the set is fixed inside
 	// CreateGraphics, so this is all of them for the editor's lifetime.
@@ -1070,46 +1064,7 @@ MaterialEditorWindow::CompileGraph(int graphIndex)
 
 	MaterialGraphSet::Graph& graph = m_Graphs.At(graphIndex);
 
-	editor::CompilePreviewMaterial(
-		graph,
-		graphIndex,
-		*m_Desc.renderer,
-		*m_Preview,
-		*m_SlotComposer,
-		m_DataRoot);
-}
-
-void
-MaterialEditorWindow::OnSlotComposed(
-	int                                  graphIndex,
-	size_t                               slot,
-	const QString&                       key,
-	std::shared_ptr<assetlib::ImageData> image)
-{
-	if (m_Desc.renderer == nullptr || m_Preview == nullptr || !m_Graphs.Holds(graphIndex))
-		return;
-
-	MaterialGraphSet::Graph& graph = m_Graphs.At(graphIndex);
-
-	MaterialGraphSet::Graph::ComposedSlot* entry = editor::PendingComposedSlot(graph, slot, key);
-	if (entry == nullptr || image == nullptr)
-		return;
-
-	try
-	{
-		entry->handle = m_Desc.renderer->Invoke([&]() -> bgl::TextureAssetHandle {
-			return m_Desc.renderer->GetScene()->AddTextureAsset(
-				std::move(*image),
-				"composed slot preview");
-		});
-	}
-	catch (const std::exception& e)
-	{
-		qWarning("MaterialEditor: could not upload a composited slot: %s", e.what());
-		return;
-	}
-
-	CompileGraph(graphIndex);
+	editor::CompilePreviewMaterial(graph, *m_Desc.renderer, *m_Preview, m_DataRoot);
 }
 
 void
