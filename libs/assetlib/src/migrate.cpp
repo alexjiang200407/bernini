@@ -13,12 +13,13 @@
 #include <assetlib/project_layout.h>
 #include <assetlib/reimport.h>
 #include <assetlib/skinning.h>
+
+#include "regen_group.h"
 #include <assetlib_structs/Animation.h>
 #include <assetlib_structs/BEnv.h>
 #include <assetlib_structs/BMaterial.h>
 #include <assetlib_structs/BMesh.h>
 #include <assetlib_structs/Skeleton.h>
-#include <concepts>
 
 #include "cook_threads.h"
 #include "fs_util.h"
@@ -92,32 +93,6 @@ namespace assetlib
 		}
 
 		/**
-		 * Re-addresses `container` to the rig it names, where that rig has grown a bone since the
-		 * container was cooked -- what AcquireSkinnedMesh does at load, done once to the file so no
-		 * load has to (ADR-1).
-		 *
-		 * A pairing the remap will not resolve is left exactly as it was: there is no current state
-		 * to put it at, and the acquire refuses it by name where it is read. One that names no rig
-		 * is a static mesh and has nothing to address.
-		 */
-		template <typename T, std::invocable<T&, const Skeleton&> Remap>
-		void
-		remapToItsRig(const AssetStore& store, T& container, Remap&& remap)
-		{
-			if (container.skeleton.empty())
-				return;
-
-			// Through the regeneration seam, not a plain load: migrate walks meshes before rigs,
-			// so the `.bskel` beside this one may still be stale on disk, and a plain load refuses
-			// a stale container rather than re-cooking it.
-			const Skeleton rig = store.LoadRegenSkeleton(container.skeleton);
-			if (container.skeletonSignature == skeletonSignature(rig))
-				return;
-
-			(void)remap(container, rig);
-		}
-
-		/**
 		 * The bytes the project's current state says `key` should hold, or nullopt for a type
 		 * this does not migrate. Geometry goes through the regeneration seam, so a stale group
 		 * re-cooks from its copied source and a binding-only document edit reaches disk without
@@ -127,6 +102,7 @@ namespace assetlib
 		std::optional<std::vector<std::byte>>
 		resave(
 			const AssetStore&          store,
+			RigResolver&               rigs,
 			AssetType                  type,
 			std::string_view           key,
 			std::span<const std::byte> bytes,
@@ -147,7 +123,7 @@ namespace assetlib
 						"rebind or re-export",
 						current.unboundBindings.front());
 				}
-				remapToItsRig(store, current.mesh, remapMesh);
+				remapToItsRig(rigs, store, current.mesh);
 				return AssetCodec<BMesh>::Serialize(current.mesh);
 			}
 			case AssetType::kSkeleton:
@@ -155,7 +131,7 @@ namespace assetlib
 			case AssetType::kAnimation:
 			{
 				AnimationSet clips = store.LoadRegenAnimations(key);
-				remapToItsRig(store, clips, remapAnimations);
+				remapToItsRig(rigs, store, clips);
 				return AssetCodec<AnimationSet>::Serialize(clips);
 			}
 			case AssetType::kMaterial:
@@ -293,6 +269,10 @@ namespace assetlib
 		// Before everything: the walk below regenerates through documents that must already name
 		// their rig, and a project written before that field existed has none.
 		const auto facts = factsFromDerived(*this, paths);
+
+		// One per run, shared by every container: a modular unit's meshes and its clip library all
+		// name one rig, and resolving a stale one is a parse of its source.
+		RigResolver rigs;
 
 		auto documentKeys = std::vector<std::string>();
 		for (const std::string& documentKey : GetFiles().Enumerate(c_MeshSourcesDirectoryName))
@@ -474,7 +454,7 @@ namespace assetlib
 			try
 			{
 				const auto bytes   = core::file::read_file_bytes(path.string());
-				const auto current = resave(*this, *type, key, bytes, dryRun);
+				const auto current = resave(*this, rigs, *type, key, bytes, dryRun);
 				if (!current)
 					return;
 				if (*current != bytes)

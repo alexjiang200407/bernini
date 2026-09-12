@@ -25,6 +25,7 @@
 #include <vector>
 
 #include "ref_paths.h"
+#include "regen_group.h"
 #include <core/file/IFileSystem.h>
 
 #include "mounted_io.h"
@@ -120,7 +121,11 @@ namespace assetlib
 		 * from what a staleness question inside it later reads.
 		 */
 		std::vector<std::byte>
-		currentGeometryBytes(const AssetStore& store, AssetType type, std::string_view key)
+		currentGeometryBytes(
+			const AssetStore& store,
+			RigResolver&      rigs,
+			AssetType         type,
+			std::string_view  key)
 		{
 			switch (type)
 			{
@@ -135,12 +140,20 @@ namespace assetlib
 						key,
 						current.unboundBindings.front());
 				}
+				// A shipped mount is read-only and cannot re-cook, so a pairing left mismatched
+				// here re-addresses on every load of the game for as long as it ships -- there is
+				// no later migrate to bake it down.
+				remapToItsRig(rigs, store, current.mesh);
 				return AssetCodec<BMesh>::Serialize(current.mesh);
 			}
 			case AssetType::kSkeleton:
 				return AssetCodec<Skeleton>::Serialize(store.LoadRegenSkeleton(key));
 			case AssetType::kAnimation:
-				return AssetCodec<AnimationSet>::Serialize(store.LoadRegenAnimations(key));
+			{
+				AnimationSet clips = store.LoadRegenAnimations(key);
+				remapToItsRig(rigs, store, clips);
+				return AssetCodec<AnimationSet>::Serialize(clips);
+			}
 			case AssetType::kMaterial:
 			case AssetType::kTexture:
 			case AssetType::kSky:
@@ -176,7 +189,8 @@ namespace assetlib
 			{
 				auto found = m_Bytes.find(key);
 				if (found == m_Bytes.end())
-					found = m_Bytes.emplace(key, currentGeometryBytes(m_Store, type, key)).first;
+					found = m_Bytes.emplace(key, currentGeometryBytes(m_Store, m_Rigs, type, key))
+					            .first;
 				return found->second;
 			}
 
@@ -199,6 +213,7 @@ namespace assetlib
 
 		private:
 			const AssetStore&                                       m_Store;
+			RigResolver                                             m_Rigs;
 			std::unordered_map<std::string, std::vector<std::byte>> m_Bytes;
 		};
 	}

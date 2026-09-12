@@ -256,7 +256,9 @@ re-addressed on its own is unaffected — its geometry never moved.
 
 `pack` is the other writer: stale geometry and env bakes are made current *in the archive* (and
 for env, on disk first), because a shipped read-only mount has nowhere to regenerate — see
-[Asset Archives](archives.md).
+[Asset Archives](archives.md). It bakes down a re-addressing for the same reason, and the reason is
+sharper there: a loose project can run `migrate` later, and an archive cannot, so a pairing left
+mismatched on the way in re-addresses on every load of the shipped game for as long as it ships.
 
 ## Files from before either regime
 
