@@ -1845,6 +1845,16 @@ namespace bgl
 		for (idl::RawTextureHandle& handle : record.textures)
 			handle = RawHandleOf(m_Textures.GetDescriptor(white));
 
+		// The identity routing over white: a data slot nothing binds gathers exactly what an
+		// unbound whole slot samples, and a partially routed one fills its gaps with white.
+		for (uint32_t route = 0;
+		     route < idl::cGameSurfaceTextureSlots * idl::cGameSurfaceRouteChannels;
+		     ++route)
+		{
+			record.routeTextures[route] = RawHandleOf(m_Textures.GetDescriptor(white));
+			record.routeChannels[route] = route % idl::cGameSurfaceRouteChannels;
+		}
+
 		for (const SurfaceTexture& texture : params.textures)
 		{
 			if (texture.kind == SurfaceTextureKind::kNormal)
@@ -1879,10 +1889,74 @@ namespace bgl
 								  binding.name));
 			}
 
+			const bool routed =
+				std::ranges::any_of(binding.routes, [](const SurfaceChannelRoute& route) {
+					return !route.texture.textureSlot.is_null();
+				});
+
+			if (routed && declared->kind != SurfaceTextureKind::kData)
+			{
+				throw SceneError(
+					std::format(
+						"surface '{}' declares '{}' as a slot that binds whole; routes compose "
+						"data slots only",
+						desc.surface,
+						binding.name));
+			}
+
+			if (routed && binding.texture.textureSlot)
+			{
+				throw SceneError(
+					std::format(
+						"'{}' binds a texture and routes at once; a data slot is one or the other",
+						binding.name));
+			}
+
+			if (routed)
+			{
+				record.routedMask |= 1u << declared->index;
+
+				for (uint32_t c = 0; c < idl::cGameSurfaceRouteChannels; ++c)
+				{
+					const SurfaceChannelRoute& route = binding.routes[c];
+					if (route.texture.textureSlot.is_null())
+						continue;
+
+					if (route.channel >= idl::cGameSurfaceRouteChannels)
+					{
+						throw SceneError(
+							std::format(
+								"'{}' routes component {} from channel {}; a texture has "
+								"channels 0..3",
+								binding.name,
+								c,
+								route.channel));
+					}
+
+					const uint32_t at = declared->index * idl::cGameSurfaceRouteChannels + c;
+					record.routeTextures[at] =
+						RawHandleOf(m_Textures.GetDescriptor(route.texture.textureSlot));
+					record.routeChannels[at] = route.channel;
+				}
+				continue;
+			}
+
 			if (binding.texture.textureSlot)
 			{
 				record.textures[declared->index] =
 					RawHandleOf(m_Textures.GetDescriptor(binding.texture.textureSlot));
+
+				// The reader only ever gathers a data slot, so a whole binding on one becomes
+				// its identity routing here.
+				if (declared->kind == SurfaceTextureKind::kData)
+				{
+					for (uint32_t c = 0; c < idl::cGameSurfaceRouteChannels; ++c)
+					{
+						const uint32_t at = declared->index * idl::cGameSurfaceRouteChannels + c;
+						record.routeTextures[at] = record.textures[declared->index];
+						record.routeChannels[at] = c;
+					}
+				}
 			}
 		}
 
@@ -2021,6 +2095,22 @@ namespace bgl
 		static_assert(
 			sizeof(idl::GameSurfaceRecord::textures) ==
 			idl::cGameSurfaceTextureSlots * sizeof(idl::RawTextureHandle));
+		// The routes ride the same typed view as the slot handles, contiguously, indexed
+		// cGameSurfaceTextureSlots past them; their channel selectors sit where the shader's
+		// constant says. A gap in either is a gather off a neighbouring record's bytes.
+		static_assert(
+			offsetof(idl::GameSurfaceRecord, routeTextures) ==
+			sizeof(idl::GameSurfaceRecord::textures));
+		static_assert(
+			idl::cRawPayloadOffset + offsetof(idl::GameSurfaceRecord, routeChannels) ==
+			idl::cGameSurfaceRouteChannelsByteOffset);
+		static_assert(
+			idl::cRawPayloadOffset + offsetof(idl::GameSurfaceRecord, routedMask) ==
+			idl::cGameSurfaceRoutedMaskByteOffset);
+		// The contract's route array is four wide because a sample is; the record agrees.
+		static_assert(
+			std::tuple_size_v<decltype(SurfaceTextureBinding::routes)> ==
+			idl::cGameSurfaceRouteChannels);
 		// A game surface's parameters follow the fixed part at an offset the shader holds as a
 		// constant; the struct growing without it is a record read one field late.
 		static_assert(
