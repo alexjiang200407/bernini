@@ -354,17 +354,21 @@ to keep in agreement beyond the one below.
   A stamp always rebuilds from the From end with the clock parked before the window, so it is never
   a fade interrupting a live one.
 
-  **Either end may be a space, and the combos are the rig's node table.** The note under them says
-  so, and says to open a set when none is: a space sits below a separator inside a combo, which
-  nothing announces until the combo is opened. They list every clip in
-  clip order, then the open set's spaces, and carry the *node index* as each item's data rather than
-  relying on its row — a separator sits between the two groups, so past it a row is one ahead of the
-  node it names. Choosing a space reveals a parameter box beside that end, ranged to its authored
-  axis; beside a clip the box is hidden rather than disabled, which is the opposite of what the tier
-  note does, because a clip reads no parameter and there is nothing for the box to name. Unblended,
-  the cut is still one sample interval of what is *playing* — for a space, the lower of the two
-  clips it straddles at that parameter (`editor::NodeSampleRate`), since a space has no rate of its
-  own and an average of a pair is no clip's interval at all.
+  **A fade can land on a blend space, and that is a row of its own** — a checkbox, which space, and
+  where on its axis it arrives. Not an entry in the To combo: a space is a different kind of
+  destination from a clip, and one worth having is worth seeing without opening anything. Checked,
+  the space *is* the To end and the combo above goes insensitive, so two controls never both claim
+  to say what the fade arrives at; the checkbox is itself insensitive while no space is chosen,
+  rather than a switch that does nothing. The fade reaches it as a node — the rig's table is its
+  clips in clip order, then its spaces — so the row's selection is node `clipCount + its row`.
+  Unblended, the cut is still one sample interval of what is *playing* (`editor::NodeSampleRate`,
+  which for a space is the lower of the two clips it straddles, since a space has no rate of its own
+  and an average of a pair is no clip's interval at all).
+
+  **Opening a set re-acquires the rig, and the fade survives it.** The acquire walks the panel back
+  through `SetClips`, which clears the transport's window — but the ends are still on screen saying
+  what they said, so a cleared record is the panel disagreeing with itself. The load's last emission
+  re-stamps, which restores a fade exactly when there was one.
 
   **The parameter here is standing in for a machine variable.** Unity's blend tree reads an Animator
   parameter, Unreal's Blend Space player takes its X on a pin, Godot's `BlendSpace1D` is reached
