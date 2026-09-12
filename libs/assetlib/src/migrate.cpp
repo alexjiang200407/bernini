@@ -13,6 +13,8 @@
 #include <assetlib/project_layout.h>
 #include <assetlib/reimport.h>
 #include <assetlib/skinning.h>
+
+#include "regen_group.h"
 #include <assetlib_structs/Animation.h>
 #include <assetlib_structs/BEnv.h>
 #include <assetlib_structs/BMaterial.h>
@@ -100,6 +102,7 @@ namespace assetlib
 		std::optional<std::vector<std::byte>>
 		resave(
 			const AssetStore&          store,
+			RigResolver&               rigs,
 			AssetType                  type,
 			std::string_view           key,
 			std::span<const std::byte> bytes,
@@ -120,12 +123,17 @@ namespace assetlib
 						"rebind or re-export",
 						current.unboundBindings.front());
 				}
+				remapToItsRig(rigs, store, current.mesh);
 				return AssetCodec<BMesh>::Serialize(current.mesh);
 			}
 			case AssetType::kSkeleton:
 				return AssetCodec<Skeleton>::Serialize(store.LoadRegenSkeleton(key));
 			case AssetType::kAnimation:
-				return AssetCodec<AnimationSet>::Serialize(store.LoadRegenAnimations(key));
+			{
+				AnimationSet clips = store.LoadRegenAnimations(key);
+				remapToItsRig(rigs, store, clips);
+				return AssetCodec<AnimationSet>::Serialize(clips);
+			}
 			case AssetType::kMaterial:
 			{
 				BMaterial material = AssetCodec<BMaterial>::Deserialize(bytes);
@@ -261,6 +269,10 @@ namespace assetlib
 		// Before everything: the walk below regenerates through documents that must already name
 		// their rig, and a project written before that field existed has none.
 		const auto facts = factsFromDerived(*this, paths);
+
+		// One per run, shared by every container: a modular unit's meshes and its clip library all
+		// name one rig, and resolving a stale one is a parse of its source.
+		RigResolver rigs;
 
 		auto documentKeys = std::vector<std::string>();
 		for (const std::string& documentKey : GetFiles().Enumerate(c_MeshSourcesDirectoryName))
@@ -442,7 +454,7 @@ namespace assetlib
 			try
 			{
 				const auto bytes   = core::file::read_file_bytes(path.string());
-				const auto current = resave(*this, *type, key, bytes, dryRun);
+				const auto current = resave(*this, rigs, *type, key, bytes, dryRun);
 				if (!current)
 					return;
 				if (*current != bytes)
