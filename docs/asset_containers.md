@@ -243,6 +243,13 @@ current meshes), everything else as read. A second run rewrites nothing; a file 
 reported per-file, and the CLI exits non-zero. `assetlib_cli describe -p <project> <key> --key`
 prints a cache entry's key without loading its payload.
 
+**An import binds a rig that has grown, too.** `FindMatchingSkeleton` pairs an imported rig to the
+project's by signature; where nothing matches outright, a project rig that has only *gained* bones
+still addresses every bone the imported one has, and is bound instead — the clips being re-addressed
+to it before anything is measured, so the container is cooked against the rig it names. An exact
+match always wins, so a project holding both the rig as it was and the rig as it grew binds to the
+exact one. `assetlib_cli bakebounds` pairs the same way.
+
 **It also bakes down a re-addressing.** A mesh or clip set cooked against a rig that has since
 *gained* a bone is re-addressed at load, every load, by `AssetManager::AcquireSkinnedMesh` (see
 [Skinned Meshes](skinning.md)). `migrate` applies the same remap to the file, so the pairing is
