@@ -1,5 +1,6 @@
 #include "Windows/MaterialEditor/nodes/SurfaceOutputNode.h"
 #include "Windows/MaterialEditor/material_graph.h"
+#include "Windows/MaterialEditor/nodes/ChannelData.h"
 #include "Windows/MaterialEditor/nodes/SurfaceTextureData.h"
 #include <QtNodes/internal/Definitions.hpp>
 #include <QtNodes/internal/NodeData.hpp>
@@ -79,6 +80,7 @@ SurfaceOutputNode::SurfaceOutputNode(bgl::SurfaceType surface) : m_Surface(std::
 		m_Values.push_back(value.defaultValue);
 
 	m_Bound.resize(m_Surface.params.textures.size());
+	m_Routes.resize(m_Surface.params.textures.size());
 }
 
 QString
@@ -102,39 +104,126 @@ SurfaceOutputNode::ModelNameFor(const std::string& surfaceName)
 unsigned int
 SurfaceOutputNode::nPorts(QtNodes::PortType portType) const
 {
-	return portType == QtNodes::PortType::In ?
-	           static_cast<unsigned int>(m_Surface.params.textures.size()) :
-	           0u;
+	if (portType != QtNodes::PortType::In)
+		return 0u;
+
+	auto count = 0u;
+	for (const bgl::SurfaceTexture& texture : m_Surface.params.textures)
+		count += 1u + (texture.kind == bgl::SurfaceTextureKind::kData ?
+		                   static_cast<unsigned int>(assetlib::c_SurfaceSlotChannelCount) :
+		                   0u);
+	return count;
+}
+
+SurfaceOutputNode::PortRef
+SurfaceOutputNode::ResolvePort(QtNodes::PortIndex port) const
+{
+	auto remaining = port;
+	for (size_t slot = 0; slot < m_Surface.params.textures.size(); ++slot)
+	{
+		if (remaining == 0)
+			return { slot, true, 0 };
+		--remaining;
+
+		if (m_Surface.params.textures[slot].kind != bgl::SurfaceTextureKind::kData)
+			continue;
+
+		if (remaining < QtNodes::PortIndex(assetlib::c_SurfaceSlotChannelCount))
+			return { slot, false, static_cast<uint32_t>(remaining) };
+		remaining -= QtNodes::PortIndex(assetlib::c_SurfaceSlotChannelCount);
+	}
+	return { m_Surface.params.textures.size(), true, 0 };
+}
+
+unsigned int
+SurfaceOutputNode::WholePortFor(size_t slot) const
+{
+	auto port = 0u;
+	for (size_t i = 0; i < slot && i < m_Surface.params.textures.size(); ++i)
+		port += 1u + (m_Surface.params.textures[i].kind == bgl::SurfaceTextureKind::kData ?
+		                  static_cast<unsigned int>(assetlib::c_SurfaceSlotChannelCount) :
+		                  0u);
+	return port;
+}
+
+unsigned int
+SurfaceOutputNode::ChannelPortFor(size_t slot, uint32_t component) const
+{
+	return WholePortFor(slot) + 1u + component;
 }
 
 QtNodes::NodeDataType
-SurfaceOutputNode::dataType(QtNodes::PortType, QtNodes::PortIndex) const
+SurfaceOutputNode::dataType(QtNodes::PortType, QtNodes::PortIndex port) const
 {
-	return SurfaceTextureData::Type();
+	return ResolvePort(port).whole ? SurfaceTextureData::Type() : ChannelData::Type(1);
 }
 
 void
 SurfaceOutputNode::setInData(std::shared_ptr<QtNodes::NodeData> data, QtNodes::PortIndex port)
 {
-	const auto slot = static_cast<size_t>(port);
-	if (slot >= m_Bound.size())
+	const PortRef ref = ResolvePort(port);
+	if (ref.slot >= m_Bound.size())
 		return;
 
-	m_Bound[slot] = std::dynamic_pointer_cast<SurfaceTextureData>(data);
+	// QtNodes pushes a null payload when a wire is removed, so this covers connect and disconnect.
+	if (ref.whole)
+		m_Bound[ref.slot] = std::dynamic_pointer_cast<SurfaceTextureData>(data);
+	else
+		m_Routes[ref.slot][ref.component] = std::dynamic_pointer_cast<ChannelData>(data);
+
 	Q_EMIT Changed();
+}
+
+bool
+SurfaceOutputNode::SlotIsRouted(size_t slot) const
+{
+	if (slot >= m_Routes.size())
+		return false;
+
+	return std::ranges::any_of(m_Routes[slot], [](const std::shared_ptr<ChannelData>& channel) {
+		return channel != nullptr;
+	});
+}
+
+bool
+SurfaceOutputNode::PortAccepts(QtNodes::PortIndex port) const
+{
+	const PortRef ref = ResolvePort(port);
+	if (ref.slot >= m_Bound.size())
+		return false;
+
+	if (ref.whole)
+		return !SlotIsRouted(ref.slot);
+	return m_Bound[ref.slot] == nullptr;
+}
+
+ChannelData::Route
+SurfaceOutputNode::RouteFor(size_t slot, uint32_t component) const
+{
+	if (slot >= m_Routes.size() || component >= m_Routes[slot].size())
+		return {};
+
+	const std::shared_ptr<ChannelData>& channel = m_Routes[slot][component];
+	return channel != nullptr ? channel->At(0) : ChannelData::Route{};
 }
 
 QString
 SurfaceOutputNode::portCaption(QtNodes::PortType, QtNodes::PortIndex port) const
 {
-	const auto slot = static_cast<size_t>(port);
-	if (slot >= m_Surface.params.textures.size())
+	const PortRef ref = ResolvePort(port);
+	if (ref.slot >= m_Surface.params.textures.size())
 		return {};
 
-	const bgl::SurfaceTexture& texture = m_Surface.params.textures[slot];
-	return QStringLiteral("%1 (%2)").arg(
+	const bgl::SurfaceTexture& texture = m_Surface.params.textures[ref.slot];
+	if (ref.whole)
+		return QStringLiteral("%1 (%2)").arg(
+			QString::fromStdString(texture.name),
+			QLatin1String(KindWord(texture.kind)));
+
+	constexpr const char* c_ChannelLetters[] = { "r", "g", "b", "a" };
+	return QStringLiteral("%1.%2").arg(
 		QString::fromStdString(texture.name),
-		QLatin1String(KindWord(texture.kind)));
+		QLatin1String(c_ChannelLetters[ref.component]));
 }
 
 QWidget*
@@ -336,12 +425,31 @@ SurfaceOutputNode::CompileInto(assetlib::BMaterial& material, const std::filesys
 	surface.textures.clear();
 	for (size_t slot = 0; slot < m_Bound.size(); ++slot)
 	{
-		if (m_Bound[slot] == nullptr || m_Bound[slot]->Path().isEmpty())
+		const bool routed = SlotIsRouted(slot);
+		const bool bound  = m_Bound[slot] != nullptr && !m_Bound[slot]->Path().isEmpty();
+		if (!routed && !bound)
 			continue;
 
-		auto binding        = assetlib::SurfaceTextureBinding();
-		binding.name        = m_Surface.params.textures[slot].name;
-		binding.texturePath = Rebase(m_Bound[slot]->Path(), dataRoot, true).toStdString();
+		auto binding = assetlib::SurfaceTextureBinding();
+		binding.name = m_Surface.params.textures[slot].name;
+
+		if (routed)
+		{
+			// The wires are the routes, exactly as on the PBR board; the bake's stamps and the
+			// baked map are the document's own state, which material_io preserves across a save.
+			for (uint32_t c = 0; c < assetlib::c_SurfaceSlotChannelCount; ++c)
+			{
+				const ChannelData::Route route = RouteFor(slot, c);
+				if (route.path.isEmpty())
+					continue;
+
+				binding.routes[c].texture = Rebase(route.path, dataRoot, true).toStdString();
+				binding.routes[c].channel = route.channel;
+			}
+		}
+		else
+			binding.texturePath = Rebase(m_Bound[slot]->Path(), dataRoot, true).toStdString();
+
 		surface.textures.push_back(std::move(binding));
 	}
 }

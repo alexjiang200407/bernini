@@ -13,14 +13,24 @@
 #include <QDebug>
 #include <qobject.h>
 
+#include "Windows/MaterialEditor/material_graph.h"
+#include <algorithm>
+#include <assetlib/AssetStore.h>
 #include <assetlib_structs/BMaterial.h>
+#include <assetlib_structs/ImageData.h>
 #include <bgl/MaterialHandle.h>
 #include <bgl/MaterialType.h>
+#include <bgl/TextureAssetHandle.h>
 #include <bgl/types/SurfaceMaterialDesc.h>
 #include <cstddef>
 #include <cstdint>
 #include <exception>
+#include <filesystem>
+#include <qchar.h>
 #include <qlogging.h>
+#include <qstring.h>
+#include <utility>
+#include <vector>
 
 namespace
 {
@@ -103,6 +113,104 @@ namespace
 	}
 }
 
+namespace
+{
+	/**
+	 * The composited upload for every routed data slot, reusing the graph's cache: a slot whose
+	 * route set is unchanged keeps its handle, a rewired one composes and uploads anew, and the
+	 * handles the rewires orphaned come back in `stale` for the caller to delete once the new
+	 * desc is bound. A compose that fails -- an unreadable source, no data root -- leaves a null
+	 * handle, so the slot samples the default map: a visible mistake, not a lost material.
+	 */
+	std::vector<std::pair<size_t, bgl::TextureAssetHandle>>
+	EnsureComposedSlots(
+		MaterialGraphSet::Graph&              graph,
+		Renderer&                             renderer,
+		const SurfaceOutputNode&              sink,
+		const std::filesystem::path&          dataRoot,
+		std::vector<bgl::TextureAssetHandle>& stale)
+	{
+		auto composed = std::vector<std::pair<size_t, bgl::TextureAssetHandle>>();
+
+		auto previous = std::move(graph.composed);
+		graph.composed.clear();
+
+		for (size_t slot = 0; slot < sink.Surface().params.textures.size(); ++slot)
+		{
+			if (!sink.SlotIsRouted(slot))
+				continue;
+
+			auto key = QString();
+			for (uint32_t c = 0; c < assetlib::c_SurfaceSlotChannelCount; ++c)
+			{
+				const ChannelData::Route route = sink.RouteFor(slot, c);
+				key += route.path + QLatin1Char(':') + QString::number(route.channel) +
+				       QLatin1Char('|');
+			}
+
+			const auto kept = std::ranges::find_if(previous, [&](const auto& entry) {
+				return entry.first == slot && entry.second.key == key;
+			});
+			if (kept != previous.end())
+			{
+				graph.composed.push_back(std::move(*kept));
+				previous.erase(kept);
+				composed.emplace_back(slot, graph.composed.back().second.handle);
+				continue;
+			}
+
+			auto handle = bgl::TextureAssetHandle();
+			if (!dataRoot.empty())
+			{
+				// The compositor the bake uses, over the same document shape the board compiles
+				// to -- one rule for what a routed slot's texels are.
+				auto temp         = assetlib::BMaterial();
+				temp.shadingModel = assetlib::ShadingModel::kPbrSurface;
+				temp.surface.name = sink.Surface().name;
+
+				auto binding = assetlib::SurfaceTextureBinding();
+				binding.name = sink.Surface().params.textures[slot].name;
+				for (uint32_t c = 0; c < assetlib::c_SurfaceSlotChannelCount; ++c)
+				{
+					const ChannelData::Route route = sink.RouteFor(slot, c);
+					if (route.path.isEmpty())
+						continue;
+					binding.routes[c].texture = Rebase(route.path, dataRoot, true).toStdString();
+					binding.routes[c].channel = route.channel;
+				}
+				temp.surface.textures.push_back(std::move(binding));
+
+				try
+				{
+					assetlib::ImageData image = assetlib::AssetStore(dataRoot).ComposeSurfaceSlot(
+						temp,
+						sink.Surface().params.textures[slot].name);
+
+					handle = renderer.Invoke([&]() -> bgl::TextureAssetHandle {
+						return renderer.GetScene()->AddTextureAsset(
+							std::move(image),
+							"composed slot preview");
+					});
+				}
+				catch (const std::exception& e)
+				{
+					qWarning("MaterialEditor: could not composite a routed slot: %s", e.what());
+				}
+			}
+
+			graph.composed.push_back({ slot, { key, handle } });
+			composed.emplace_back(slot, handle);
+		}
+
+		// Whatever the rewires left behind is dead once the new desc is bound.
+		for (auto& [slot, entry] : previous)
+			if (!entry.handle.textureSlot.is_null())
+				stale.push_back(entry.handle);
+
+		return composed;
+	}
+}
+
 namespace editor
 {
 	bgl::SurfaceMaterialDesc
@@ -136,18 +244,38 @@ namespace editor
 
 	void
 	CompilePreviewMaterial(
-		MaterialGraphSet::Graph& graph,
-		Renderer&                renderer,
-		MaterialPreviewWindow&   preview)
+		MaterialGraphSet::Graph&     graph,
+		Renderer&                    renderer,
+		MaterialPreviewWindow&       preview,
+		const std::filesystem::path& dataRoot)
 	{
 		if (const auto* surface = qobject_cast<const SurfaceOutputNode*>(graph.model->OutputNode()))
 		{
-			BindSurfacePreview(
-				graph,
-				renderer,
-				preview,
-				surface->Surface().kind,
-				SurfaceDescOfBoard(*surface));
+			auto stale = std::vector<bgl::TextureAssetHandle>();
+
+			bgl::SurfaceMaterialDesc desc = SurfaceDescOfBoard(*surface);
+			for (const auto& [slot, handle] :
+			     EnsureComposedSlots(graph, renderer, *surface, dataRoot, stale))
+				desc.textures.emplace_back(surface->Surface().params.textures[slot].name, handle);
+
+			BindSurfacePreview(graph, renderer, preview, surface->Surface().kind, desc);
+
+			// After the bind: the new desc no longer references what the rewires orphaned.
+			for (const bgl::TextureAssetHandle orphan : stale)
+			{
+				renderer.Post([owner = &renderer, orphan] {
+					try
+					{
+						owner->GetScene()->DeleteTextureAsset(orphan);
+					}
+					catch (const std::exception& e)
+					{
+						qWarning(
+							"MaterialEditor: could not delete a composited preview map: %s",
+							e.what());
+					}
+				});
+			}
 			return;
 		}
 

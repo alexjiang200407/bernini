@@ -50,8 +50,23 @@ namespace editor
 	QString
 	BakedTexturesSummary(const assetlib::BMaterial& material)
 	{
+		// A surface material's bake is per routed slot (ADR-7); a slot bound whole has none.
+		if (material.shadingModel == assetlib::ShadingModel::kPbrSurface)
+		{
+			auto lines = QStringList();
+			for (const assetlib::SurfaceTextureBinding& slot : material.surface.textures)
+				if (!slot.bakedPath.empty())
+					lines << QStringLiteral("%1: %2").arg(
+						QString::fromStdString(slot.name),
+						QString::fromStdString(slot.bakedPath));
+
+			return lines.isEmpty() ?
+			           QString() :
+			           QStringLiteral("Baked textures\n%1").arg(lines.join(QLatin1Char('\n')));
+		}
+
 		// A baked triplet is a PBR notion, and a material carries one only once it has been baked -- so a
-		// never-baked or non-PBR material has nothing to list. A kLoose material keeps the triplet of its
+		// never-baked material has nothing to list. A kLoose material keeps the triplet of its
 		// last bake, which is still worth showing: "current baked textures, if any".
 		if (material.shadingModel != assetlib::ShadingModel::kPbr)
 			return {};
@@ -95,6 +110,24 @@ namespace editor
 				material.pbr.ormTexture       = existing.pbr.ormTexture;
 				material.pbr.routeStamps      = existing.pbr.routeStamps;
 				material.pbr.bakeToken        = existing.pbr.bakeToken;
+
+				// The surface twin of the triplet lines above: the board authors the routes, the
+				// bake owns the stamps and the map. A rewired slot's stale stamps are what report
+				// the bake stale, exactly as a rerouted PBR channel's do.
+				for (assetlib::SurfaceTextureBinding& slot : material.surface.textures)
+				{
+					const auto was = std::ranges::find_if(
+						existing.surface.textures,
+						[&](const assetlib::SurfaceTextureBinding& before) {
+							return before.name == slot.name;
+						});
+					if (was == existing.surface.textures.end())
+						continue;
+
+					slot.routeStamps = was->routeStamps;
+					slot.bakedPath   = was->bakedPath;
+					slot.bakeToken   = was->bakeToken;
+				}
 
 				// Document keys this build does not know ride through a save untouched -- a
 				// sibling branch's field must survive this editor's round-trip.

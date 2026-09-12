@@ -370,6 +370,56 @@ TEST_CASE("A surface board's save writes the board, not the disk", "[materialedi
 	CHECK(saved.extraJson.find("studio") != std::string::npos);
 }
 
+TEST_CASE("A save keeps a routed slot's bake state", "[materialeditor][surface]")
+{
+	// The board authors the routes; the bake owns the stamps and the map. A save must carry the
+	// bake's state through by slot name, exactly as it carries the PBR triplet -- staleness is
+	// the bake machinery's question, not the save's.
+	QTemporaryDir temp;
+	REQUIRE(temp.isValid());
+
+	const std::filesystem::path root = std::filesystem::path(temp.path().toStdWString());
+	const QString               path = temp.filePath("Authored/Materials/rim.bmaterial");
+
+	{
+		auto material         = assetlib::BMaterial();
+		material.name         = "rim";
+		material.shadingModel = assetlib::ShadingModel::kPbrSurface;
+		material.surface.name = "Rim";
+
+		auto& orm          = material.surface.textures.emplace_back();
+		orm.name           = "orm";
+		orm.routes[0]      = { "Derived/SourceTextures/ao.ktx2", 0 };
+		orm.routeStamps[0] = { 123, 456 };
+		orm.bakedPath      = "Derived/BakedTextures/slot_abc.ktx2";
+		orm.bakeToken      = 42;
+
+		assetlib::AssetStore(root).Save(material, "Authored/Materials/rim.bmaterial");
+	}
+
+	auto surface            = bgl::SurfaceType();
+	surface.name            = "Rim";
+	auto orm                = bgl::SurfaceTexture();
+	orm.name                = "orm";
+	orm.kind                = bgl::SurfaceTextureKind::kData;
+	surface.params.textures = { orm };
+
+	MaterialGraphModel        model(MakeMaterialNodeRegistry(nullptr, nullptr, { &surface, 1 }));
+	const assetlib::BMaterial onDisk =
+		assetlib::AssetStore(root).Load<assetlib::BMaterial>("Authored/Materials/rim.bmaterial");
+	REQUIRE(BuildSurfaceMaterialGraph(model, onDisk, root));
+
+	const assetlib::BMaterial saved = editor::BuildMaterial(model, path, root);
+
+	REQUIRE(saved.surface.textures.size() == 1u);
+	const assetlib::SurfaceTextureBinding& slot = saved.surface.textures[0];
+	CHECK(slot.routes[0].texture == "Derived/SourceTextures/ao.ktx2");
+	CHECK(slot.routeStamps[0].size == 123u);
+	CHECK(slot.routeStamps[0].hash == 456u);
+	CHECK(slot.bakedPath == "Derived/BakedTextures/slot_abc.ktx2");
+	CHECK(slot.bakeToken == 42u);
+}
+
 // A surface material previews from its live board. What the renderer gets has to say what the
 // panel shows -- values as dialled in, layer as chosen, textures as wired -- and this is the
 // translation that does it, bar the texture upload the Texture nodes own.
