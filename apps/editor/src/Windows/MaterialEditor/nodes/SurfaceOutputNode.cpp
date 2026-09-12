@@ -5,8 +5,6 @@
 #include <QtNodes/internal/NodeData.hpp>
 #include <QtNodes/internal/NodeDelegateModel.hpp>
 
-#include <QCheckBox>
-#include <QComboBox>
 #include <QDoubleSpinBox>
 #include <QFormLayout>
 #include <QHBoxLayout>
@@ -33,20 +31,14 @@
 
 namespace
 {
-	// The saved graph's words for AlphaMode, indexed by the enum -- also the layer combo's order.
-	// The graph is the editor's own blob; matching the document's words is convenience, not
-	// contract.
-	constexpr const char* c_AlphaModeNames[]  = { "opaque", "mask", "blend", "hashed" };
-	constexpr const char* c_AlphaModeLabels[] = { "Opaque",
-		                                          "Alpha Tested",
-		                                          "Alpha Blend",
-		                                          "Hashed Alpha" };
+	// The saved graph's words for AlphaMode, indexed by the enum. The graph is the editor's own
+	// blob; matching the document's words is convenience, not contract. The user-facing labels
+	// live with the panel that shows them (material_editor_ui, ADR-9).
+	constexpr const char* c_AlphaModeNames[] = { "opaque", "mask", "blend", "hashed" };
 
-	// A fifth AlphaMode must extend both tables, or a mode would save as nothing and load as
-	// opaque.
+	// A fifth AlphaMode must extend the table, or a mode would save as nothing and load as opaque.
 	static_assert(
 		std::size(c_AlphaModeNames) == static_cast<size_t>(assetlib::AlphaMode::kHashed) + 1);
-	static_assert(std::size(c_AlphaModeLabels) == std::size(c_AlphaModeNames));
 
 	const char*
 	KindWord(bgl::SurfaceTextureKind kind)
@@ -181,45 +173,36 @@ SurfaceOutputNode::embeddedWidget()
 		form->addRow(QString::fromStdString(value.name), field);
 	}
 
-	// The layer keys are every model's, and with the Output selector holding the surface they are
-	// authored here.
-	m_LayerBox = new QComboBox(m_Widget);
-	for (const char* label : c_AlphaModeLabels) m_LayerBox->addItem(QLatin1String(label));
-	m_LayerBox->setCurrentIndex(static_cast<int>(m_AlphaMode));
-	form->addRow(QStringLiteral("Layer"), m_LayerBox);
-
-	connect(m_LayerBox, &QComboBox::currentIndexChanged, this, [this](int index) {
-		if (index < 0 || index > static_cast<int>(assetlib::AlphaMode::kHashed))
-			return;
-		m_AlphaMode = static_cast<assetlib::AlphaMode>(index);
-		SyncWidgets();
-		Q_EMIT Changed();
-	});
-
-	m_CutoffSpin = new QDoubleSpinBox(m_Widget);
-	m_CutoffSpin->setRange(0.0, 1.0);
-	m_CutoffSpin->setSingleStep(0.05);
-	m_CutoffSpin->setDecimals(3);
-	m_CutoffSpin->setValue(static_cast<double>(m_AlphaCutoff));
-	form->addRow(QStringLiteral("Alpha Cutoff"), m_CutoffSpin);
-
-	connect(m_CutoffSpin, &QDoubleSpinBox::valueChanged, this, [this](double edited) {
-		m_AlphaCutoff = static_cast<float>(edited);
-		Q_EMIT Changed();
-	});
-
-	m_DoubleSidedBox = new QCheckBox(m_Widget);
-	m_DoubleSidedBox->setChecked(m_DoubleSided);
-	form->addRow(QStringLiteral("Double Sided"), m_DoubleSidedBox);
-
-	connect(m_DoubleSidedBox, &QCheckBox::toggled, this, [this](bool checked) {
-		m_DoubleSided = checked;
-		Q_EMIT Changed();
-	});
-
 	SyncWidgets();
 	WatchEmbeddedWidget(m_Widget);
 	return m_Widget;
+}
+
+void
+SurfaceOutputNode::SetAlphaMode(assetlib::AlphaMode mode)
+{
+	if (m_AlphaMode == mode)
+		return;
+	m_AlphaMode = mode;
+	Q_EMIT Changed();
+}
+
+void
+SurfaceOutputNode::SetAlphaCutoff(float cutoff)
+{
+	if (m_AlphaCutoff == cutoff)
+		return;
+	m_AlphaCutoff = cutoff;
+	Q_EMIT Changed();
+}
+
+void
+SurfaceOutputNode::SetDoubleSided(bool doubleSided)
+{
+	if (m_DoubleSided == doubleSided)
+		return;
+	m_DoubleSided = doubleSided;
+	Q_EMIT Changed();
 }
 
 void
@@ -236,23 +219,6 @@ SurfaceOutputNode::SyncWidgets()
 			m_Spins[i][c]->setValue(static_cast<double>(m_Values[i][static_cast<int>(c)]));
 		}
 	}
-
-	{
-		const QSignalBlocker blocker(m_LayerBox);
-		m_LayerBox->setCurrentIndex(static_cast<int>(m_AlphaMode));
-	}
-	{
-		const QSignalBlocker blocker(m_CutoffSpin);
-		m_CutoffSpin->setValue(static_cast<double>(m_AlphaCutoff));
-	}
-	{
-		const QSignalBlocker blocker(m_DoubleSidedBox);
-		m_DoubleSidedBox->setChecked(m_DoubleSided);
-	}
-
-	// The cutoff is read on a mask layer alone -- hashed replaces it with stochastic coverage.
-	auto* form = static_cast<QFormLayout*>(m_Widget->layout());
-	form->setRowVisible(m_CutoffSpin, m_AlphaMode == assetlib::AlphaMode::kMask);
 }
 
 QJsonObject
