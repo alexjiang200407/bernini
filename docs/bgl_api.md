@@ -379,7 +379,11 @@ flowchart TD
   surface declared; anything the desc does not name takes the surface's own default, and a name the
   surface never declared throws rather than landing somewhere harmless — including a name declared as
   the *other* kind of field, which says so. An unbound texture reads the default its declared kind
-  implies: white for a colour or a data map, a flat normal for a normal map. `kHashed` needs one
+  implies: white for a colour or a data map, a flat normal for a normal map. A *data* slot may be
+  routed instead of bound: the binding's `routes` gather component c from the named channel of its
+  own texture, drawn in the shader with no composite anywhere — a whole binding is the identity
+  routing, a route left null samples white for its component. Routes on any other slot kind, or a
+  binding carrying both a texture and routes, throw. `kHashed` needs one
   texture to measure minification against and takes the surface's `CoverageSlot`, or its first
   `ColorSlot` where alpha rides in the colour; a surface declaring neither throws for that layer
   alone (see [Game-Defined Surfaces § Hashed alpha](game_defined_surfaces.md#hashed-alpha)). An

@@ -3,6 +3,8 @@
 #include <bgl/TextureAssetHandle.h>
 #include <bgl/glm.h>
 
+#include <array>
+#include <cstdint>
 #include <string>
 #include <vector>
 
@@ -17,11 +19,32 @@ namespace bgl
 		glm::vec4 value = glm::vec4(0.0f);
 	};
 
+	/// One channel of a data slot's composite: the named component of one texture, feeding the
+	/// component whose position in SurfaceTextureBinding::routes this route occupies.
+	struct SurfaceChannelRoute
+	{
+		TextureAssetHandle texture;
+
+		// 0..3 for r..a of `texture`; anything else throws at create.
+		uint32_t channel = 0;
+	};
+
 	/// One texture a material binds, under the name the surface declared it as.
 	struct SurfaceTextureBinding
 	{
 		std::string        name;
 		TextureAssetHandle texture;
+
+		/**
+		 * A data slot's alternative to `texture`: component c gathered from routes[c] by the
+		 * shader at draw time, with no composited texture existing anywhere — which is what
+		 * lets a caller rewire a channel by updating the material rather than by building a
+		 * map. Four wide because a sample is — a route left null samples white for its
+		 * component. Only a data slot takes routes, and a binding carrying both a texture and
+		 * routes is refused: a whole binding *is* the identity routing, and the engine writes
+		 * it as one.
+		 */
+		std::array<SurfaceChannelRoute, 4> routes{};
 	};
 
 	/**

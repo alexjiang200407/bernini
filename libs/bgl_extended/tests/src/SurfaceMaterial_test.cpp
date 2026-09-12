@@ -13,16 +13,22 @@
 #include <bgl/MaterialHandle.h>
 #include <bgl/MaterialType.h>
 #include <bgl/SurfaceType.h>
+#include <bgl/TextureAssetHandle.h>
 #include <bgl/error.h>
 #include <bgl/glm.h>
 #include <glm/gtc/matrix_transform.hpp>
 
 #include <array>
+#include <assetlib_structs/ImageData.h>
+#include <assetlib_structs/VkFormat.h>
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers.hpp>
 #include <catch2/matchers/catch_matchers_exception.hpp>
 #include <catch2/matchers/catch_matchers_string.hpp>
+#include <core/containers/fixed_buffer.h>
+#include <cstddef>
 #include <cstdint>
+#include <filesystem>
 #include <utility>
 
 using namespace bgl;
@@ -296,6 +302,43 @@ TEST_CASE("A surface material the engine cannot pack is refused", "[surface][ren
 				ContainsSubstring("surface 'Rim' declares 'rimColor' as a value, not a texture")));
 	}
 
+	// The routing refusals: routes compose data slots alone, and a binding is whole or routed,
+	// never both. The handle is fabricated and never dereferenced -- each refusal must fire
+	// before the engine looks a route's texture up.
+	const auto fake = TextureAssetHandle{ { 0, 1 }, 0 };
+
+	SECTION("routes on a slot that binds whole")
+	{
+		CHECK_THROWS_MATCHES(
+			scene->CreateSurfaceMaterial(
+				{ .surface  = "Rim",
+		          .textures = { { .name = "baseColor", .routes = { { { fake, 0 } } } } } }),
+			SceneError,
+			MessageMatches(ContainsSubstring("routes compose data slots only")));
+	}
+
+	SECTION("a texture and routes at once")
+	{
+		CHECK_THROWS_MATCHES(
+			scene->CreateSurfaceMaterial(
+				{ .surface  = "PbrLike",
+		          .textures = { { .name    = "orm",
+		                          .texture = fake,
+		                          .routes  = { { { fake, 0 } } } } } }),
+			SceneError,
+			MessageMatches(ContainsSubstring("one or the other")));
+	}
+
+	SECTION("a route naming a channel a texture does not have")
+	{
+		CHECK_THROWS_MATCHES(
+			scene->CreateSurfaceMaterial(
+				{ .surface  = "PbrLike",
+		          .textures = { { .name = "orm", .routes = { { { fake, 7 } } } } } }),
+			SceneError,
+			MessageMatches(ContainsSubstring("channels 0..3")));
+	}
+
 	// An update keeps the record's kind and its size, so the surface is the one thing it cannot
 	// change -- and the handle is checked before the desc, as UpdatePbrMaterial checks it.
 	SECTION("an update naming a surface the material was not created with")
@@ -457,4 +500,104 @@ TEST_CASE("A surface material draws on skinned geometry", "[surface][render][ski
 	gfx->ScreenshotPng(target, blendPng);
 
 	CHECK(bgl::test::FrameDelta(emptyPng, blendPng, 0, 0, 400, 300) > 1e-3f);
+}
+
+namespace
+{
+	// A `size` x `size` single-mip RGBA8 image whose every texel is `rgba`.
+	assetlib::ImageData
+	FlatImage(uint32_t size, std::array<uint8_t, 4> rgba)
+	{
+		auto image     = assetlib::ImageData();
+		image.width    = size;
+		image.height   = size;
+		image.vkFormat = assetlib::VkFormat::R8G8B8A8_UNORM;
+		image.pixels   = core::fixed_buffer<std::byte>(static_cast<size_t>(size) * size * 4);
+		for (size_t t = 0; t < static_cast<size_t>(size) * size; ++t)
+			for (size_t c = 0; c < 4; ++c)
+				image.pixels[t * 4 + c] = static_cast<std::byte>(rgba[c]);
+		image.subresources = { { 0, size * 4ull, static_cast<uint64_t>(size) * size * 4 } };
+		return image;
+	}
+}
+
+// The routing gate: a data slot composed from channel routes draws exactly what the same values
+// bound whole draw. AO rides one source's R and roughness/metallic another's G and B -- the
+// shape that motivated routing -- and both sources carry decoy values in their other channels,
+// so a gather off the wrong channel or the wrong texture moves the frame.
+TEST_CASE("A routed data slot draws what its composited map draws", "[surface][render]")
+{
+	auto gfx = bgl::CreateGraphics(SurfaceOptions());
+	REQUIRE(gfx != nullptr);
+
+	auto targetDesc     = bgl::RenderTargetDesc();
+	targetDesc.width    = 400;
+	targetDesc.height   = 300;
+	targetDesc.headless = true;
+	auto target         = gfx->CreateRenderTarget(targetDesc);
+	REQUIRE(target != nullptr);
+
+	auto scene = gfx->CreateScene(SphereScene());
+	auto view  = gfx->CreateSceneView(scene, 8);
+
+	bgl::test::ApplyEnvironment(scene.Get(), view.Get());
+
+	const auto ao        = scene->AddTextureAsset(FlatImage(8, { { 200, 7, 9, 255 } }), "ao");
+	const auto mr        = scene->AddTextureAsset(FlatImage(8, { { 3, 60, 90, 255 } }), "mr");
+	const auto composite = scene->AddTextureAsset(FlatImage(8, { { 200, 60, 90, 255 } }), "whole");
+
+	auto whole     = bgl::SurfaceMaterialDesc();
+	whole.surface  = "PbrLike";
+	whole.textures = { { .name = "orm", .texture = composite } };
+
+	auto material = scene->CreateSurfaceMaterial(whole);
+	auto sphere   = scene->AddSphereGeom(32, 32, 5.0f, material);
+	view->CreateStaticMeshInstance(sphere, glm::mat4(1.0f));
+
+	auto job     = bgl::RenderJob();
+	job.view     = view;
+	job.camera   = SphereCamera();
+	job.viewport = bgl::Viewport(400.0f, 300.0f);
+
+	const auto shoot = [&](const char* path) {
+		for (int i = 0; i < 6; ++i) gfx->DrawFrame(target, job);
+		gfx->ScreenshotPng(target, path);
+	};
+
+	shoot("assets/golden/surface_routed_whole.got.png");
+
+	// The same channels as routes, landed as an update: the handle and the instance stand, only
+	// the record's routes are rewritten.
+	auto routed     = whole;
+	routed.textures = { { .name = "orm", .routes = { { { ao, 0 }, { mr, 1 }, { mr, 2 } } } } };
+	scene->UpdateSurfaceMaterial(material, routed);
+	shoot("assets/golden/surface_routed_gather.got.png");
+
+	CHECK(
+		bgl::test::MatchesGolden(
+			"assets/golden/surface_routed_whole.got.png",
+			"assets/golden/surface_routed_gather.got.png"));
+
+	// Rewired -- roughness now from ao's decoy G -- and its whole-bound equivalent, so the update
+	// provably moved the routes and the moved routes still match their composite.
+	auto rewired     = whole;
+	rewired.textures = { { .name = "orm", .routes = { { { ao, 0 }, { ao, 1 }, { mr, 2 } } } } };
+	scene->UpdateSurfaceMaterial(material, rewired);
+	shoot("assets/golden/surface_rewired_gather.got.png");
+
+	const auto rewiredWhole =
+		scene->AddTextureAsset(FlatImage(8, { { 200, 7, 90, 255 } }), "rewired");
+	auto back     = whole;
+	back.textures = { { .name = "orm", .texture = rewiredWhole } };
+	scene->UpdateSurfaceMaterial(material, back);
+	shoot("assets/golden/surface_rewired_whole.got.png");
+
+	CHECK(
+		bgl::test::MatchesGolden(
+			"assets/golden/surface_rewired_whole.got.png",
+			"assets/golden/surface_rewired_gather.got.png"));
+
+	// MatchesGolden only deletes its `got` half; these were both gots.
+	std::filesystem::remove("assets/golden/surface_routed_whole.got.png");
+	std::filesystem::remove("assets/golden/surface_rewired_whole.got.png");
 }
